@@ -54,9 +54,19 @@ Y vzdolž `box.h_mm`, Z navzgor od dna.
 Ločena sta zato, ker napačna goriščna razdalja skoraj natanko skalira globino,
 lateralnih koordinat pa ne pokvari (glej `ROADMAP.md`, ugotovitev K2).
 
-**Pri strogo navpični kameri `f_px` iz scene ni določljiv** — to je fizikalna
-lastnost, ne pomanjkljivost kode. Za absolutno višino podaj
-`camera.working_distance_mm` (dovolj je ±5 %) ali nagni kamero za nekaj stopinj.
+**Pri strogo navpični kameri `f_px` iz ravninske scene ni določljiv** — to je
+fizikalna lastnost, ne pomanjkljivost kode: napačna goriščna razdalja da natanko
+podobnostno preslikavo scene. Za absolutno višino podaj enega od teh:
+
+| Podatek | Napaka `f_px` |
+|---|---|
+| `box.wall_height_mm` + `box.wall_thickness_mm` | **2.3 %** |
+| `camera.working_distance_mm` | 4 % |
+| nič (rezervna vrednost) | 12 % |
+
+Prva možnost je najboljša in stane le dve meri zaboja: dno in zgornji rob sta
+dve vzporedni ravnini na znani razdalji, kar je edini vir absolutnega merila,
+ki deluje tudi pri povsem navpični kameri.
 
 ## Nagnjeni kosi
 

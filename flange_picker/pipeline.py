@@ -19,8 +19,8 @@ import numpy as np
 from . import autocalib as autocalib_mod
 from .config import Config, load_config
 from .edges import detect_edges
-from .ellipse import (compute_polarity, compute_support, deduplicate, fit_contour,
-                      pair_ellipses)
+from .ellipse import (apply_edge_bias, compute_polarity, compute_support, deduplicate,
+                      estimate_edge_bias, fit_contour, pair_ellipses)
 from .pose import build_flange_pose
 from .preprocess import preprocess, to_gray
 from .scoring import Candidate, score_candidates
@@ -120,7 +120,15 @@ def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool =
         "rejected": pair_rejected[:20],
     }
 
-    calib = autocalib_mod.calibrate(pre.gray, pairs, cfg, edge_points=edge_map.points)
+    # Odmik roba se oceni sele po parjenju (potrebuje oba premera) in se odsteje,
+    # preden se iz elips racuna poza - sicer se prenese naravnost v Z.
+    edge_bias, bias_diag = estimate_edge_bias(pairs, cfg)
+    diagnostics["edge_bias"] = bias_diag
+    if abs(edge_bias) > 0:
+        apply_edge_bias(ellipses, edge_bias)
+
+    calib = autocalib_mod.calibrate(pre.gray, pairs, cfg, edge_points=edge_map.points,
+                                    raw_gray=pre.raw_gray)
     diagnostics["autocalib"] = calib.diagnostics
     warnings.extend(calib.warnings)
 

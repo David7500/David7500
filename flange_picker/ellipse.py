@@ -321,6 +321,73 @@ class EllipsePair:
         return self.inner is not None
 
 
+def estimate_edge_bias(pairs: Sequence["EllipsePair"], cfg: Config) -> Tuple[float, dict]:
+    """Oceni sistematicni odmik lege roba [px] iz znanega razmerja premerov.
+
+    Detekcija roba ima majhen sistematicni odmik (senca ob robu, kontrast,
+    zaokrozitev roba kosa). Ker sta ZNANA oba premera, je ta odmik opazljiv:
+    ce sta izmerjeni polosi a_out in a_in obe prevelike za d, potem njuno
+    razmerje ni vec D_out/D_in. Iz
+
+        (a_out - d) / (a_in - d) = R,   R = D_out / D_in
+
+    sledi d = (R * a_in - a_out) / (R - 1).
+
+    Odmik d se nato odsteje obema elipsama. Brez tega se prenese naravnost v
+    oceno Z: 0.13 px pri polosi 35 px pomeni 0.4 % globine, kar je pri 700 mm
+    ze 2.6 mm.
+    """
+    diag: dict = {"n_used": 0}
+    if not bool(cfg["ellipse.estimate_edge_bias"]):
+        diag["reason"] = "izklopljeno v configu"
+        return 0.0, diag
+    ratio = float(cfg["flange.d_out_mm"]) / float(cfg["flange.d_in_mm"])
+    if abs(ratio - 1.0) < 1e-6:
+        diag["reason"] = "premera sta enaka - odmika ni mogoce oceniti"
+        return 0.0, diag
+    estimates = []
+    for pair in pairs:
+        if pair.inner is None or pair.role != "outer":
+            continue
+        for a_out, a_in in ((pair.outer.a, pair.inner.a), (pair.outer.b, pair.inner.b)):
+            if a_in <= 0 or a_out <= 0:
+                continue
+            estimates.append((ratio * a_in - a_out) / (ratio - 1.0))
+    diag["n_used"] = len(estimates)
+    if len(estimates) < int(cfg["ellipse.edge_bias_min_samples"]):
+        diag["reason"] = "premalo parov za oceno odmika"
+        return 0.0, diag
+    bias = float(np.median(estimates))
+    limit = float(cfg["ellipse.edge_bias_max_px"])
+    spread = float(np.percentile(np.abs(np.array(estimates) - bias), 68))
+    diag["raw_px"] = round(bias, 4)
+    diag["spread_px"] = round(spread, 4)
+    if abs(bias) > limit:
+        diag["reason"] = f"ocenjeni odmik {bias:.2f} px presega mejo {limit} px - zavrnjeno"
+        return 0.0, diag
+    # Sumna ocena je slabsa od nobene: napacno skrcenje majhne notranje elipse
+    # razbije ujemanje para in s tem pozo. Popravek zato zahteva, da je ocena
+    # tudi natancna, ne le majhna.
+    if spread > float(cfg["ellipse.edge_bias_max_spread_px"]):
+        diag["reason"] = (f"razpsenost ocene {spread:.3f} px je prevelika - popravek bi bil "
+                          "ugibanje")
+        return 0.0, diag
+    return bias, diag
+
+
+def apply_edge_bias(ellipses: Sequence[Ellipse], bias_px: float) -> None:
+    """Skrci vsako elipso za ocenjeni odmik roba (in razveljavi predpomnjeno koniko)."""
+    if abs(bias_px) < 1e-9:
+        return
+    for ell in ellipses:
+        new_a = ell.a - bias_px
+        new_b = ell.b - bias_px
+        if new_a <= 1e-6 or new_b <= 1e-6:
+            continue
+        ell.a, ell.b = new_a, new_b
+        ell.conic = None
+
+
 def pair_ellipses(ellipses: Sequence[Ellipse], cfg: Config) -> Tuple[List[EllipsePair], List[dict]]:
     """Poveze vsako notranjo elipso z zunanjo istega kosa.
 

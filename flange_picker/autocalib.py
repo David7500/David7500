@@ -100,7 +100,8 @@ def _order_quad(quad: np.ndarray) -> np.ndarray:
     return np.roll(pts, -start, axis=0)
 
 
-def detect_box_quad(gray: np.ndarray, cfg: Config) -> Tuple[Optional[np.ndarray], dict]:
+def detect_box_quad(gray: np.ndarray, cfg: Config,
+                    raw_gray: Optional[np.ndarray] = None) -> Tuple[Optional[np.ndarray], dict]:
     """Poisce notranji pravokotnik dna zaboja. Vrne (4x2 vogali, diagnostika)."""
     diag: dict = {"source": None, "n_candidates": 0}
     manual = cfg.get("box.corners_px", None)
@@ -138,6 +139,18 @@ def detect_box_quad(gray: np.ndarray, cfg: Config) -> Tuple[Optional[np.ndarray]
             continue
         cands.append((float(cv2.contourArea(approx)), quad))
 
+    diag["n_contour_candidates"] = len(cands)
+    # Drugi, neodvisen vir kandidatov: velika homogena obmocja. Deluje tudi
+    # takrat, ko prirobnica ob robu prekine konturo dna.
+    region_quads = _quad_from_regions(raw_gray if raw_gray is not None else gray, cfg)
+    diag["n_region_candidates"] = len(region_quads)
+    for quad in region_quads:
+        area = float(cv2.contourArea(quad.astype(np.float32)))
+        if any(np.mean(np.linalg.norm(quad - other, axis=1))
+               < float(cfg["box.detect.candidate_merge_px"]) for _, other in cands):
+            continue
+        cands.append((area, quad))
+
     diag["n_candidates"] = len(cands)
     if not cands:
         quad, hough_diag = _quad_from_hough(edges, cfg)
@@ -170,9 +183,104 @@ def detect_box_quad(gray: np.ndarray, cfg: Config) -> Tuple[Optional[np.ndarray]
             break
     if chosen is None:
         chosen = cands[-1][1]
-    diag["source"] = "contour"
+    diag["source"] = "contour+region"
     diag["candidates"] = [quad for _, quad in cands]
     return chosen, diag
+
+
+def _quad_from_regions(gray: np.ndarray, cfg: Config) -> List[np.ndarray]:
+    """Kandidatni pravokotniki iz velikih homogenih obmocij, ne iz kontur.
+
+    Kadar se prirobnica dotakne roba dna, se kontura dna prekine in fit
+    kvadrilaterala po konturah odpove. Dno pa ostane veliko homogeno obmocje,
+    zato ga poiscemo kot najvecjo povezano komponento Otsujeve segmentacije -
+    v obeh polaritetah, ker dno ni nujno svetlejse od sten.
+
+    Vhod mora biti SUROVA slika: CLAHE lokalno preslika nivoje in dno se zlije
+    s steno, zato Otsu na izboljsani sliki zajame tudi steno.
+    """
+    out: List[np.ndarray] = []
+    ksize = int(cfg["box.detect.blur_ksize"]) | 1
+    blur = cv2.GaussianBlur(gray, (ksize, ksize), 0)
+    area_img = float(gray.shape[0] * gray.shape[1])
+    min_area = float(cfg["box.detect.min_area_frac"]) * area_img
+    max_area = float(cfg["box.detect.max_area_frac"]) * area_img
+    close = int(cfg["box.detect.region_close_px"])
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close, close)) if close > 0 else None
+
+    # Vec nivojev, ne le en Otsu: prizorisce ima tri sloje svetlosti (ozadje,
+    # stena, dno), zato en sam prag lahko poda le eno od obeh meja. Z rekurzivnim
+    # Otsujem dobimo tudi obris zaboja, ki je potreben za oceno f iz dveh ravnin.
+    masks = []
+    for thr in _recursive_otsu_thresholds(blur):
+        _, mask = cv2.threshold(blur, thr, 255, cv2.THRESH_BINARY)
+        masks.append(mask)
+        masks.append(cv2.bitwise_not(mask))
+
+    for mask in masks:
+        if kernel is not None:
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        num, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+        if num <= 1:
+            continue
+        idx = int(np.argmax(stats[1:, cv2.CC_STAT_AREA])) + 1
+        area = float(stats[idx, cv2.CC_STAT_AREA])
+        if area < min_area or area > max_area:
+            continue
+        blob = (labels == idx).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            continue
+        hull = cv2.convexHull(max(contours, key=cv2.contourArea))
+        quad = _hull_to_quad(hull, cfg)
+        if quad is None:
+            continue
+        # Povrsino je treba preveriti na samem kvadrilateralu: konveksna ovojnica
+        # razpotegnjene komponente je lahko mnogo vecja od nje (npr. cel kader).
+        quad_area = float(cv2.contourArea(quad.astype(np.float32)))
+        if quad_area < min_area or quad_area > max_area:
+            continue
+        if not (_quad_angles_ok(quad, cfg) and _aspect_plausible(quad, cfg)):
+            continue
+        merge = float(cfg["box.detect.candidate_merge_px"])
+        if any(np.mean(np.linalg.norm(quad - other, axis=1)) < merge for other in out):
+            continue
+        out.append(quad)
+    return out
+
+
+def _recursive_otsu_thresholds(gray: np.ndarray) -> List[int]:
+    """Otsu na celotni sliki in nato se na vsaki od obeh podpopulacij."""
+    base, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    base = int(base)
+    thresholds = [base]
+    lower = gray[gray <= base]
+    upper = gray[gray > base]
+    for part in (lower, upper):
+        if part.size < 64:
+            continue
+        thr, _ = cv2.threshold(part.reshape(-1, 1).astype(np.uint8), 0, 255,
+                               cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        thresholds.append(int(thr))
+    return sorted(set(t for t in thresholds if 0 < t < 255))
+
+
+def _hull_to_quad(hull: np.ndarray, cfg: Config) -> Optional[np.ndarray]:
+    """Poisce stiri oglisca konveksne ovojnice s prilagodljivim approxPolyDP."""
+    perim = cv2.arcLength(hull, True)
+    if perim < 1e-6:
+        return None
+    lo, hi = 0.005, 0.12
+    for _ in range(int(cfg["box.detect.hull_search_iterations"])):
+        eps = 0.5 * (lo + hi)
+        approx = cv2.approxPolyDP(hull, eps * perim, True)
+        if len(approx) == 4:
+            return _order_quad(approx.reshape(4, 2).astype(float))
+        if len(approx) > 4:
+            lo = eps
+        else:
+            hi = eps
+    return None
 
 
 def select_quad_by_flange_scale(candidates: List[np.ndarray], pairs, cfg: Config
@@ -234,15 +342,38 @@ def refine_quad_with_edges(quad: np.ndarray, edge_points: Optional[np.ndarray], 
                            ) -> Tuple[np.ndarray, dict]:
     """Izostri vogale z ortogonalno regresijo stranic na subpixel robnih tockah.
 
-    Lega izginjajoce tocke je izjemno obcutljiva na kot stranice, approxPolyDP pa
-    da vogale le na piksel natancno. Fit celotne stranice cez stotine tock ta kot
-    bistveno stabilizira.
+    Lega izginjajoce tocke je izjemno obcutljiva na kot stranice, approxPolyDP in
+    konveksna ovojnica pa dasta vogale le grobo. Fit celotne stranice cez stotine
+    tock ta kot bistveno stabilizira.
+
+    Postopek je grobo-fin: prvi prehod z siroko okolico pobere stranico tudi, ce
+    je zacetna ocena zgresena za nekaj deset pikslov, drugi prehod z ozko okolico
+    pa jo izostri. Izmerjeno: konvergira na ~0.5 px ne glede na zacetno lego.
     """
-    diag: dict = {"sides_fitted": 0}
+    diag: dict = {"sides_fitted": 0, "passes": []}
     if edge_points is None or len(edge_points) < 4:
         diag["reason"] = "ni robnih tock"
         return quad, diag
-    band = float(cfg["box.detect.side_band_px"])
+    bands = [float(cfg["box.detect.side_band_coarse_px"]), float(cfg["box.detect.side_band_px"])]
+    current = quad
+    for band in bands:
+        refined, pass_diag = _refine_quad_once(current, edge_points, band, cfg)
+        diag["passes"].append(pass_diag)
+        if refined is None:
+            break
+        # Izostritev sprejmemo le, ce rezultat se vedno izgleda kot dno zaboja.
+        if not _quad_angles_ok(refined, cfg) or not _aspect_plausible(refined, cfg):
+            diag["reason"] = "izostren kvadrilateral ni vec verjeten - zavrnjeno"
+            break
+        current = refined
+        diag["sides_fitted"] = pass_diag.get("sides_fitted", 0)
+    diag["max_corner_shift_px"] = float(np.max(np.linalg.norm(current - quad, axis=1)))
+    return current, diag
+
+
+def _refine_quad_once(quad: np.ndarray, edge_points: np.ndarray, band: float, cfg: Config
+                      ) -> Tuple[Optional[np.ndarray], dict]:
+    diag: dict = {"band_px": band, "sides_fitted": 0}
     corner_frac = float(cfg["box.detect.side_corner_skip_frac"])
     min_pts = int(cfg["box.detect.side_min_points"])
     pts = np.asarray(edge_points, dtype=float)
@@ -264,6 +395,23 @@ def refine_quad_with_edges(quad: np.ndarray, edge_points: Optional[np.ndarray], 
         if len(chosen) < min_pts:
             lines.append(None)
             continue
+        # V pasu je lahko vec vzporednih robov (dno in zgornji rob zaboja sta le
+        # nekaj deset pikslov narazen). Navadna regresija bi ju povprecila, zato
+        # najprej poiscemo prevladujoci nivo in obdrzimo le tocke ob njem.
+        offsets = perp[sel]
+        bin_px = float(cfg["box.detect.side_peak_bin_px"])
+        hist, bin_edges = np.histogram(offsets, bins=max(3, int(2.0 * band / bin_px)),
+                                       range=(-band, band))
+        centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        strong = hist >= float(cfg["box.detect.side_peak_min_fraction"]) * hist.max()
+        if strong.any():
+            # Med dovolj mocnimi robovi vzamemo NAJBLIZJEGA zacetni oceni, ne
+            # najmocnejsega: zacetna ocena je prior, mocnejsi rob pa je lahko
+            # sosednji (npr. zgornji rob zaboja namesto dna).
+            peak = float(centres[strong][int(np.argmin(np.abs(centres[strong])))])
+            near_peak = np.abs(offsets - peak) < float(cfg["box.detect.side_peak_window_px"])
+            if near_peak.sum() >= min_pts:
+                chosen = chosen[near_peak]
         for _ in range(int(cfg["box.detect.side_trim_iterations"])):
             mean = chosen.mean(axis=0)
             _, _, vt = np.linalg.svd(chosen - mean, full_matrices=False)
@@ -286,7 +434,7 @@ def refine_quad_with_edges(quad: np.ndarray, edge_points: Optional[np.ndarray], 
 
     if any(line is None for line in lines):
         diag["reason"] = "vseh stirih stranic ni bilo mogoce fitati"
-        return quad, diag
+        return None, diag
 
     refined = []
     for i in range(4):
@@ -295,14 +443,12 @@ def refine_quad_with_edges(quad: np.ndarray, edge_points: Optional[np.ndarray], 
         mat = np.stack([n_a, n_b])
         if abs(np.linalg.det(mat)) < 1e-9:
             diag["reason"] = "sosednji stranici sta skoraj vzporedni"
-            return quad, diag
+            return None, diag
         refined.append(np.linalg.solve(mat, np.array([c_a, c_b])))
     refined = np.asarray(refined, dtype=float)
-    shift = float(np.max(np.linalg.norm(refined - quad, axis=1)))
-    if shift > float(cfg["box.detect.side_max_shift_px"]):
-        diag["reason"] = f"izostritev bi vogale premaknila za {shift:.1f} px - zavrnjeno"
-        return quad, diag
-    diag["max_corner_shift_px"] = shift
+    if not np.all(np.isfinite(refined)):
+        diag["reason"] = "presecisca stranic niso koncna"
+        return None, diag
     diag["n_side_points"] = [line[2] for line in lines]
     return refined, diag
 
@@ -366,7 +512,9 @@ def _quad_from_hough(edges: np.ndarray, cfg: Config) -> Tuple[Optional[np.ndarra
 # --------------------------------------------------------------------------
 # homografija in izginjajoce tocke
 # --------------------------------------------------------------------------
-def box_frame_points(quad: np.ndarray, cfg: Config) -> Tuple[np.ndarray, np.ndarray]:
+def box_frame_points(quad: np.ndarray, cfg: Config,
+                     dims_mm: Optional[Tuple[float, float]] = None
+                     ) -> Tuple[np.ndarray, np.ndarray]:
     """Vrne (zasukan quad, mm koordinate) tako, da stranica P0->P1 ustreza box.w_mm.
 
     S tem je os X vedno vzdolz w_mm in os Y vzdolz h_mm. Preostane 2-kratna
@@ -374,14 +522,141 @@ def box_frame_points(quad: np.ndarray, cfg: Config) -> Tuple[np.ndarray, np.ndar
     zaboj je pravokotnik brez oznak. Ce robot potrebuje absolutno orientacijo,
     je treba dodati oznako na enem vogalu ali podati box.corners_px.
     """
-    w_mm = float(cfg["box.w_mm"])
-    h_mm = float(cfg["box.h_mm"])
+    w_mm, h_mm = dims_mm if dims_mm else (float(cfg["box.w_mm"]), float(cfg["box.h_mm"]))
     side_a = 0.5 * (np.linalg.norm(quad[1] - quad[0]) + np.linalg.norm(quad[3] - quad[2]))
     side_b = 0.5 * (np.linalg.norm(quad[2] - quad[1]) + np.linalg.norm(quad[0] - quad[3]))
     if (side_a >= side_b) != (w_mm >= h_mm):
         quad = np.roll(quad, -1, axis=0)
     obj = np.array([[0.0, 0.0], [w_mm, 0.0], [w_mm, h_mm], [0.0, h_mm]], dtype=float)
     return quad, obj
+
+
+def _plane_scale_of_quad(quad: np.ndarray, dims_mm: Tuple[float, float], cfg: Config
+                         ) -> Optional[float]:
+    """Merilo px/mm ravnine, ki jo doloca pravokotnik znanih dimenzij."""
+    quad_o, obj = box_frame_points(quad, cfg, dims_mm)
+    h_mat, _ = cv2.findHomography(obj.astype(np.float32), quad_o.astype(np.float32), 0)
+    if h_mat is None:
+        return None
+    return _homography_scale(h_mat, obj.mean(axis=0))
+
+
+def f_from_box_rim(bottom_quad: np.ndarray, candidates: List[np.ndarray], cfg: Config,
+                   principal: Tuple[float, float],
+                   edge_points: Optional[np.ndarray] = None
+                   ) -> Tuple[Optional[float], dict]:
+    """f_px iz dveh vzporednih pravokotnikov na znani medsebojni visini.
+
+    Dno in zgornji rob zaboja sta dve vzporedni ravnini, razmaknjeni za visino
+    stene. Za vsako velja merilo s = f / Z, torej
+
+        Z_dno - Z_rob = h   =>   f / s_dno - f / s_rob = h
+        f = h * s_dno * s_rob / (s_rob - s_dno)
+
+    To je edini vir absolutnega merila, ki deluje tudi pri strogo navpicni
+    kameri, kjer sta izginjajoci tocki v neskoncnosti in je f iz ravninske
+    scene nacelno neopazljiv. Zahteva le visino stene in njeno debelino -
+    podatka, ki ju uporabnik o svojem zaboju ima.
+    """
+    diag: dict = {}
+    wall_h = cfg.get("box.wall_height_mm", None)
+    if not wall_h:
+        diag["reason"] = "box.wall_height_mm ni podan"
+        return None, diag
+    wall_t = float(cfg.get("box.wall_thickness_mm", 0.0) or 0.0)
+    w_mm, h_mm = float(cfg["box.w_mm"]), float(cfg["box.h_mm"])
+
+    rim = None
+    bottom_area = float(cv2.contourArea(bottom_quad.astype(np.float32)))
+    for cand in candidates:
+        area = float(cv2.contourArea(cand.astype(np.float32)))
+        if area <= bottom_area * float(cfg["box.detect.rim_min_area_ratio"]):
+            continue
+        if all(cv2.pointPolygonTest(cand.astype(np.float32), (float(p[0]), float(p[1])), False) >= 0
+               for p in bottom_quad):
+            if rim is None or area < float(cv2.contourArea(rim.astype(np.float32))):
+                rim = cand
+    if rim is None:
+        diag["reason"] = "zgornjega roba zaboja ni med kandidati"
+        return None, diag
+
+    # Relativna napaka f je ~ Z/h krat relativna napaka razmerja meril (pri
+    # tipicni geometriji faktor ~12), zato morata biti OBA pravokotnika
+    # izostrena na subpiksel - sicer ojacana napaka pozre celotno prednost.
+    if edge_points is not None:
+        rim, rim_refine = refine_quad_with_edges(rim, edge_points, cfg)
+        bottom_quad, bottom_refine = refine_quad_with_edges(bottom_quad, edge_points, cfg)
+        diag["rim_refine"] = rim_refine.get("max_corner_shift_px")
+        diag["bottom_refine"] = bottom_refine.get("max_corner_shift_px")
+
+    rim_w = cfg.get("box.rim_w_mm", None)
+    rim_h = cfg.get("box.rim_h_mm", None)
+    rim_dims = ((float(rim_w), float(rim_h)) if rim_w and rim_h
+                else (w_mm + 2.0 * wall_t, h_mm + 2.0 * wall_t))
+    diag["rim_dims_mm"] = list(rim_dims)
+    s_bottom = _plane_scale_of_quad(bottom_quad, (w_mm, h_mm), cfg)
+    s_rim = _plane_scale_of_quad(rim, rim_dims, cfg)
+    diag["scale_bottom_px_per_mm"] = s_bottom
+    diag["scale_rim_px_per_mm"] = s_rim
+    if not s_bottom or not s_rim or s_rim <= s_bottom:
+        diag["reason"] = ("merilo zgornjega roba ni vecje od merila dna - rob ni bil "
+                          "pravilno prepoznan")
+        return None, diag
+    f = float(wall_h) * s_bottom * s_rim / (s_rim - s_bottom)
+    if not (float(cfg["autocalib.vanishing.min_f_px"]) <= f
+            <= float(cfg["autocalib.vanishing.max_f_px"])):
+        diag["reason"] = f"f={f:.0f} px izven dovoljenega obsega"
+        return None, diag
+    diag["f_px"] = f
+    # Obcutljivost: relativna napaka f je priblizno Z/h krat relativna napaka
+    # razmerja meril, zato pri nizki steni ocena hitro razpade.
+    diag["depth_over_wall_height"] = float((f / s_bottom) / float(wall_h))
+
+    # Neodvisno preverjanje, da je najdeni pravokotnik res zgornji rob: dno in rob
+    # sta soosna in vzporedna. Napacen kandidat (npr. notranji rob stene ali
+    # ponesreceni fit) to takoj prekrsi, ocena f pa je takrat lahko povsem mimo.
+    valid, check = _rim_geometry_valid(bottom_quad, rim, rim_dims, f, principal, cfg)
+    diag.update(check)
+    if not valid:
+        diag["reason"] = ("najdeni pravokotnik ni soosen in vzporeden z dnom - "
+                          "najbrz ni zgornji rob zaboja")
+        return None, diag
+    return f, diag
+
+
+def _rim_geometry_valid(bottom_quad: np.ndarray, rim_quad: np.ndarray,
+                        rim_dims: Tuple[float, float], f: float,
+                        principal: Tuple[float, float], cfg: Config
+                        ) -> Tuple[bool, dict]:
+    """Ali sta rekonstruirani ravnini dna in roba vzporedni in soosni."""
+    check: dict = {}
+    k_mat = k_from_f(f, principal)
+    w_mm, h_mm = float(cfg["box.w_mm"]), float(cfg["box.h_mm"])
+    poses = []
+    for quad, dims in ((bottom_quad, (w_mm, h_mm)), (rim_quad, rim_dims)):
+        quad_o, obj = box_frame_points(quad, cfg, dims)
+        h_mat, _ = cv2.findHomography(obj.astype(np.float32), quad_o.astype(np.float32), 0)
+        if h_mat is None:
+            return False, {"rim_check": "homografije ni bilo mogoce izracunati"}
+        rot, tvec = decompose_plane_homography(h_mat, k_mat)
+        poses.append((rot, tvec, obj))
+    (rot_b, t_b, obj_b), (rot_r, t_r, obj_r) = poses
+
+    angle = math.degrees(math.acos(float(np.clip(abs(rot_b[:, 2] @ rot_r[:, 2]), -1.0, 1.0))))
+    centre_b = rot_b @ np.array([obj_b[:, 0].mean(), obj_b[:, 1].mean(), 0.0]) + t_b
+    centre_r = rot_r @ np.array([obj_r[:, 0].mean(), obj_r[:, 1].mean(), 0.0]) + t_r
+    normal = rot_b[:, 2] / np.linalg.norm(rot_b[:, 2])
+    delta = centre_r - centre_b
+    lateral = float(np.linalg.norm(delta - normal * float(delta @ normal)))
+    check["rim_plane_angle_deg"] = round(angle, 3)
+    check["rim_lateral_offset_mm"] = round(lateral, 2)
+    ok = (angle <= float(cfg["box.detect.rim_max_plane_angle_deg"])
+          and lateral <= float(cfg["box.detect.rim_max_lateral_offset_mm"]))
+    return ok, check
+
+
+def _quad_area(quad: np.ndarray) -> float:
+    return float(cv2.contourArea(np.asarray(quad, dtype=np.float32)))
 
 
 def f_from_vanishing_points(quad: np.ndarray, principal: Tuple[float, float], cfg: Config
@@ -563,7 +838,8 @@ def refine_f(pairs, h_mat: Optional[np.ndarray], principal: Tuple[float, float],
 # glavna funkcija
 # --------------------------------------------------------------------------
 def calibrate(gray: np.ndarray, pairs, cfg: Config,
-              edge_points: Optional[np.ndarray] = None) -> Calibration:
+              edge_points: Optional[np.ndarray] = None,
+              raw_gray: Optional[np.ndarray] = None) -> Calibration:
     """Vrne kalibracijo; nikoli ne vrze izjeme in nikoli ne odpove tiho.
 
     Kljucna locnica: koordinatni sistem zaboja (in s tem X, Y ter naklon) je
@@ -578,7 +854,7 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
     warnings: List[str] = []
     diag: dict = {"principal_point": list(principal)}
 
-    quad, quad_diag = detect_box_quad(gray, cfg)
+    quad, quad_diag = detect_box_quad(gray, cfg, raw_gray=raw_gray)
     quad_candidates = quad_diag.pop("candidates", None)
     diag["box_detect"] = quad_diag
 
@@ -612,6 +888,11 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
     f_refined, refine_diag = refine_f(pairs, homography, principal, f_vp, cfg)
     diag["refine"] = refine_diag
 
+    f_rim: Optional[float] = None
+    if quad is not None and quad_candidates:
+        f_rim, rim_diag = f_from_box_rim(quad, quad_candidates, cfg, principal, edge_points)
+        diag["box_rim"] = rim_diag
+
     prior = cfg.get("camera.f_px_prior", None)
     wd = cfg.get("camera.working_distance_mm", None)
     f_wd: Optional[float] = None
@@ -628,6 +909,8 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
     f_confidence = 0.0
     if prior:
         f_px, method, f_confidence = float(prior), "config_prior", 0.9
+    elif f_rim is not None:
+        f_px, method, f_confidence = f_rim, "box_rim_two_planes", 0.8
     elif f_wd is not None:
         f_px, method, f_confidence = f_wd, "working_distance_prior", 0.75
     elif f_refined is not None:
@@ -638,6 +921,13 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
         # blizje kot sta izginjajoci tocki, mocnejsa je perspektiva in ocena
         f_confidence = 0.6 if vp_ratio is None else float(np.clip(6.0 / max(vp_ratio, 1e-6), 0.1, 0.8))
 
+    if f_vp is not None and f_rim is not None:
+        rel = abs(f_rim - f_vp) / f_vp
+        diag["vp_vs_rim_rel_diff"] = float(rel)
+        if rel > float(cfg["autocalib.max_f_disagreement"]):
+            warnings.append(f"oceni f_px iz izginjajocih tock in iz roba zaboja se "
+                            f"razlikujeta za {rel:.0%}")
+            f_confidence *= 0.5
     if f_vp is not None and f_refined is not None:
         rel = abs(f_refined - f_vp) / f_vp
         diag["vp_vs_refine_rel_diff"] = float(rel)
@@ -714,6 +1004,11 @@ def scale_consistency_check(candidates, calib: Calibration, cfg: Config) -> dict
     for cand in candidates:
         pose = cand.pose
         if pose.center_box is None or pose.tilt_deg > flat_max:
+            continue
+        # Le sparjeni kandidati: pri nesparjenem `pair.outer` sploh ni obris kosa
+        # (lahko je luknja ali obroc sence), zato primerjava z D_out ni smiselna
+        # in je preverjanje merila po nepotrebnem zavrnilo dober okvir.
+        if not cand.pair.paired:
             continue
         scale = _homography_scale(calib.homography, pose.center_box[:2])
         if not scale:

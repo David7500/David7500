@@ -12,19 +12,17 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
 
 ## Zdaj
 
-- [ ] **Detekcija dna zaboja je najšibkejši člen.** Na 2 od 12 scen (17 %)
-  pravokotnik dna ni najden in sistem se degradira na relativno rangiranje.
-  Vzrok: kontura dna se prekine tam, kjer se prirobnica dotika roba, ali pa
-  Canny združi rob dna s steno. Ideje: iskanje dna z znanim merilom kot
-  predznanjem (iz zgornjega roba napovej, kje mora biti dno), aktivni model
-  pravokotnika, ali segmentacija po svetlosti dna namesto po robovih.
-- [ ] **Odpoved detekcije pri močnem prekrivanju.** Detekcija v sliki najde
-  91.8 % kosov; manjkajo predvsem tisti, ki jim je viden le kratek lok.
-  Naslednji korak: razbijanje kontur po krivinskih vrhovih in združevanje
-  lokov iste elipse namesto slepega razpolavljanja.
-- [ ] **Lažni kandidati (detekcijska preciznost 82.7 %).** Večina jih je robov
-  senc in odsevov. Polariteta roba je večino že odstranila; ostanek zahteva
-  bodisi RANSAC bodisi preverjanje na ponovni projekciji.
+- [ ] **Preciznost detekcije 96 %.** Preostali lažni kandidati nastanejo v
+  gručah prekrivajočih se kosov, kjer razpolavljanje konture rodi vec fitov
+  istega roba. Naslednji korak: razbijanje kontur po krivinskih vrhovih in
+  združevanje lokov iste elipse namesto slepega razpolavljanja.
+- [ ] **Z RMSE 2.0–2.2 mm, odmik ~1.0–1.5 mm.** Omejuje ga sistematični odmik
+  lege roba (+0.13 px na zunanjem robu). Iz razmerja premerov ga ni mogoče
+  izluščiti (glej K11) — potrebna je referenčna meritev na znanem kosu ali
+  model debeline.
+- [ ] **`f_px` brez podatka o steni ostaja pri 11.9 %.** Pri navpični kameri je
+  to fizikalna meja (K1). Priporočena rešitev je podati `box.wall_height_mm` in
+  `box.wall_thickness_mm` (napaka 2.3 %) ali `camera.working_distance_mm` (4 %).
 
 ## Naslednje
 
@@ -55,18 +53,19 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
 
 ### Izmerjene metrike (12 scen, seed 100)
 
-| Metrika | Brez prior | Z znano delovno razdaljo (±3 %) |
-|---|---|---|
-| detekcija — recall (v sliki) | 0.918 | 0.918 |
-| detekcija — preciznost | 0.827 | 0.827 |
-| okvir zaboja na voljo | 83 % | 83 % |
-| XY RMSE | **0.36 mm** | 0.39 mm |
-| Z RMSE | **1.97 mm** | 2.43 mm |
-| Z odmik (bias) | +1.07 mm | +1.52 mm |
-| naklon RMSE | 2.09° | **1.56°** |
-| relativna napaka `f_px` | 11.0 % | **4.0 %** |
-| prvi kandidat je iz vrhnje plasti | 80 % | 80 % |
+| Metrika | Prvi mejnik | Po izboljšavah | + podana stena |
+|---|---|---|---|
+| detekcija — recall (v sliki) | 0.918 | **0.986** | 0.986 |
+| detekcija — preciznost | 0.827 | **0.960** | 0.947 |
+| okvir zaboja na voljo | 83 % | **100 %** | 100 % |
+| ujemanje poze — recall | 0.891 | **0.973** | 0.973 |
+| XY RMSE | 0.36 mm | 0.36 mm | 0.36 mm |
+| Z RMSE | 1.97 mm | 2.03 mm | 2.25 mm |
+| naklon RMSE | 2.09° | 1.78° | **1.30°** |
+| relativna napaka `f_px` | 11.0 % | 11.9 % | **2.3 %** |
+| prvi kandidat je iz vrhnje plasti | 80 % | **83 %** | 83 % |
 
+Zadnji stolpec: podana `box.wall_height_mm` in `box.wall_thickness_mm`.
 Metrike poze so računane le na scenah z veljavnim okvirom; detekcija se meri v
 sliki in je zato neodvisna od kalibracije.
 
@@ -78,8 +77,9 @@ scene: dno, prirobnice na njem in vsa razmerja ostanejo skladni. Izmerjeno:
 pri kameri z 0° nagiba je cenilka skladnosti po `f` popolnoma ravna (0.000° za
 vse `f` med 800 in 2000). Šele nagib kamere naredi problem rešljiv — pri 5°
 nagiba je razlika 0.24° za 8 % napake v `f`.
-Praktična posledica: za absolutno višino podaj `camera.working_distance_mm`
-(zniža napako `f` z 11 % na 5 %) ali nagni kamero za nekaj stopinj.
+Praktična posledica: za absolutno višino potrebuješ dodatno informacijo. Najboljša
+je višina stene zaboja (glej K9, napaka 2.3 %), sledi `camera.working_distance_mm`
+(4 %); pomaga tudi nagib kamere za nekaj stopinj.
 
 **K2 — napaka `f` skoraj ne pokvari X, Y in naklona.** Napačen `f` skalira
 globino, lateralne koordinate na dnu pa določa homografija, ki `f` ne
@@ -108,6 +108,40 @@ vrženi senci pa raste (≈ +1.0). Po velikosti tega ni mogoče ločiti, ker je 
 višje v kupu videti večji. Vgrajeno v parjenje in v izbiro polmera pri
 nesparjenih elipsah — brez tega je globina osamljene luknje 2.5-krat napačna.
 Ta popravek je dvignil recall poze s 0.55 na 0.89.
+
+**K9 — zgornji rob zaboja je druga ravnina na znani višini in edini vir
+absolutnega merila pri navpični kameri.** Za vsako ravnino velja `s = f/Z`,
+zato iz `Z_dno − Z_rob = h` sledi `f = h·s_dno·s_rob/(s_rob − s_dno)`. Izmerjeno:
+napaka `f` pade z 11.9 % na **2.3 %** (mediana 2.8 %, najslabša 6.0 %), kar je
+bolje od prioritete delovne razdalje (4.0 %). Zahteva le višino in debelino
+stene — podatka, ki ju uporabnik o svojem zaboju ima.
+
+Dvoje je bilo pri tem bistveno:
+- Napaka se **ojači za faktor Z/h ≈ 12**, zato morata biti oba pravokotnika
+  izostrena subpikselsko; brez tega je metoda slabša od rezervne vrednosti.
+- Potreben je neodvisen test veljavnosti, sicer napačno prepoznan "rob" da
+  napako 27–49 %. Dno in rob sta soosna, zato **bočni odmik njunih središč**
+  čisto loči dobre ocene (0.0–0.8 mm) od slabih (4.0–8.5 mm).
+
+**K10 — fit stranice se prilepi na napačen vzporedni rob.** Dno in zgornji rob
+zaboja sta v sliki le nekaj deset pikslov narazen. Regresija čez širok pas ju
+povpreči, izbira najmočnejšega roba pa lahko vzame sosednjega. Pravilno je
+vzeti **najbližji dovolj močan** rob: začetna ocena je prior. Brez tega je
+izostritev roba odnesla za 13.9 px in podrla oceno `f` iz dveh ravnin.
+
+**K11 — odmik roba je iz razmerja premerov opazljiv le kot skupna komponenta.**
+Iz `(a_out − d)/(a_in − d) = D_out/D_in` sledi `d = (R·a_in − a_out)/(R − 1)`.
+Ocena je natančna (razpršenost 0.02 px), a izmeri le *skupni* odmik obeh robov;
+ta je bil na testnem setu −0.00 px, medtem ko je dejanski zunanji +0.13 px in
+notranji +0.04 px. Model razlike po zasnovi ne vidi. Ob premalo parih postane
+ocena šumna (+0.24 px pri dveh kosih) in popravek podre ujemanje para, zato je
+privzeto **izklopljen** in dodatno varovan s pragom razpršenosti. Za odpravo
+preostalega odmika Z je potrebna referenčna meritev na znanem kosu.
+
+**K12 — preverjanje merila je smiselno le na sparjenih kandidatih.** Obroč
+sence je natanko 10 % večji od kosa; ko je vstopil v preverjanje, je to zavrnilo
+popolnoma dober okvir (zaboj zaznan na 1.1 px). Ta ena vrstica je dvignila
+razpoložljivost okvira z 83 % na 92 %.
 
 **K8 — močno nagnjeni kosi: luknja je tista, ki reši smer nagiba.** Izmerjeno
 na kosih, nagnjenih za 45°:
@@ -163,7 +197,8 @@ enem vogalu ali `box.corners_px` v configu.
       pristranski za +0.5 px), perspektivo, senčenjem, odsevi, šumom in
       zlaganjem kosov.
 - [x] `pipeline` + `cli.py` + `--debug` overlay-i za vsak korak.
-- [x] 34 testov (geometrija, cevovod, robni primeri) — vsi zeleni.
+- [x] 56 testov (geometrija, autokalibracija, cevovod, nagnjeni kosi, robni
+      primeri) — vsi zeleni.
 
 ### Odprto vprašanje za naročnika
 
