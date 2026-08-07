@@ -52,6 +52,7 @@ class FlangePose:
     pair_center_ratio: float = 0.0
     confidence: float = 0.0
     paired: bool = False
+    orientation_ambiguous: bool = False   # smeri nagiba (azimuta) ni mogoce zanesljivo dolociti
     reasons: List[str] = field(default_factory=list)
 
 
@@ -254,6 +255,13 @@ def build_flange_pose(pair: EllipsePair, k_mat: np.ndarray, cfg: Config,
                       confidence=float(max(confidence, float(cfg["pose.min_confidence"]))),
                       paired=paired, reasons=reasons)
 
+    # Dvoumnost poze iz kroga razresi soglasje notranje in zunanje elipse. Brez
+    # para te opore ni: obe resitvi dasta isto elipso, zato je smer nagiba pri
+    # izrazito nagnjenem kosu (izmerjeno) priblizno met kovanca. Velikost naklona
+    # ostane pravilna, napacna je lahko le smer - zato to oznacimo posebej,
+    # namesto da bi kandidata tiho izpustili.
+    ambiguous_tilt = float(cfg["pose.unpaired_ambiguous_tilt_deg"])
+
     if rot_box is not None and t_box is not None:
         pose.center_box = rot_box.T @ (sol.center - t_box)
         pose.normal_box = rot_box.T @ sol.normal
@@ -263,10 +271,25 @@ def build_flange_pose(pair: EllipsePair, k_mat: np.ndarray, cfg: Config,
         pose.tilt_deg = math.degrees(math.acos(nz))
         pose.azimuth_deg = math.degrees(math.atan2(float(pose.normal_box[1]),
                                                    float(pose.normal_box[0]))) % 360.0
+        _flag_orientation(pose, ambiguous_tilt)
     else:
         n_cam = sol.normal
         # brez zaboja: tilt glede na opticno os
         nz = float(np.clip(abs(n_cam[2]), -1.0, 1.0))
         pose.tilt_deg = math.degrees(math.acos(nz))
         pose.azimuth_deg = math.degrees(math.atan2(float(n_cam[1]), float(n_cam[0]))) % 360.0
+        _flag_orientation(pose, ambiguous_tilt)
     return pose
+
+
+def _flag_orientation(pose: FlangePose, ambiguous_tilt_deg: float) -> None:
+    """Oznaci nesparjene kandidate, katerim smeri nagiba ni mogoce zaupati."""
+    if pose.paired or pose.tilt_deg <= ambiguous_tilt_deg:
+        return
+    pose.orientation_ambiguous = True
+    pose.reasons.append(
+        f"smer nagiba (azimut) ni zanesljiva: kos je nagnjen za {pose.tilt_deg:.0f} deg, "
+        "luknja pa ni vidna, zato zrcalne resitve ni mogoce izlociti - "
+        "azimut je lahko zasukan za 180 deg")
+    # Napaka smeri je nicelna pri ravnem kosu in najvecja pri mocnem naklonu.
+    pose.confidence *= float(np.clip(ambiguous_tilt_deg / max(pose.tilt_deg, 1e-6), 0.1, 1.0))

@@ -20,11 +20,11 @@ box:
     min_area_frac: 0.08     # min. delez slike, ki ga mora pokrivati kvadrilateral
     max_area_frac: 0.98
     approx_eps_frac: 0.02   # eps za approxPolyDP kot delez oboda
-    nested_inner_ratio: 0.35
+    nested_inner_ratio: 0.35    # ce je znotraj kandidata drug kvadrilateral s tem
+                                # delezem povrsine, je kandidat zunanji rob zaboja
     scale_select_min_flanges: 3      # izbira pravega pravokotnika po premerih prirobnic
     scale_select_quantile: 25.0      # spodnja plast prirobnic lezi na dnu => razmerje 1
-    scale_select_max_error: 0.04  # ce je znotraj kandidata drug kvadrilateral s
-                              # tem delezem povrsine, je zunanji rob zaboja
+    scale_select_max_error: 0.04
     max_aspect_deviation: 0.35  # dovoljeno odstopanje razmerja stranic v sliki od w:h
     min_corner_angle_deg: 55  # kvadrilateral mora biti priblizno pravokoten
     max_corner_angle_deg: 125
@@ -119,6 +119,7 @@ pose:
   max_pair_center_ratio: 0.30      # |C_in - C_out| / r_out
   max_tilt_deg: 75.0
   unpaired_confidence: 0.25        # samostojna elipsa brez para
+  unpaired_ambiguous_tilt_deg: 10.0  # nad tem naklonom je smer nagiba brez para nezanesljiva
   min_confidence: 0.05
 
 scoring:

@@ -58,6 +58,20 @@ lateralnih koordinat pa ne pokvari (glej `ROADMAP.md`, ugotovitev K2).
 lastnost, ne pomanjkljivost kode. Za absolutno višino podaj
 `camera.working_distance_mm` (dovolj je ±5 %) ali nagni kamero za nekaj stopinj.
 
+## Nagnjeni kosi
+
+Kos, nagnjen za 45°, se zanesljivo zazna (38/38 naključnih poz), z napako
+naklona ≤ 3° in azimuta ≤ 3°. Enako velja za kos, naslonjen na drugega
+(prekritje do 30 mm), in za kos ob steni. Praktična meja je ~65–70°; nad 75°
+je kos viden le kot črtica in ni več zaznaven.
+
+**Ključno je, da je luknja vidna.** Smer nagiba (azimut) se razreši s soglasjem
+notranje in zunanje elipse — obe rešitvi poze iz kroga dasta namreč isto elipso,
+a nasprotno smer nagiba. Če luknja ni vidna, ostane velikost naklona pravilna,
+smer pa je približno met kovanca (izmerjeno 4/8 napačnih). Tak kandidat dobi
+`"orientation_ambiguous": true`, opombo v `notes` in zaupanje, ki pada z
+naklonom. **Robot ne sme nagniti prijemala po kandidatu s to zastavico.**
+
 ## Degradacija
 
 Sistem nikoli ne odpove tiho:

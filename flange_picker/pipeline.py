@@ -61,6 +61,7 @@ class Result:
                 "cup_fit_ratio": r(cand.cup_fit_ratio),
                 "wall_margin_mm": None if math.isnan(cand.wall_margin_mm) else r(cand.wall_margin_mm),
                 "paired": bool(pose.paired),
+                "orientation_ambiguous": bool(pose.orientation_ambiguous),
                 "ellipse_px": {k: r(v) if isinstance(v, float) else v
                                for k, v in cand.pair.outer.to_dict().items()},
                 "notes": pose.reasons + cand.notes,

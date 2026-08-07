@@ -109,6 +109,27 @@ višje v kupu videti večji. Vgrajeno v parjenje in v izbiro polmera pri
 nesparjenih elipsah — brez tega je globina osamljene luknje 2.5-krat napačna.
 Ta popravek je dvignil recall poze s 0.55 na 0.89.
 
+**K8 — močno nagnjeni kosi: luknja je tista, ki reši smer nagiba.** Izmerjeno
+na kosih, nagnjenih za 45°:
+
+| primer | najden | napaka naklona | napaka azimuta | zrcalni preobrati |
+|---|---|---|---|---|
+| sam, 8 azimutov × 3 lege | 24/24 | ≤ 3.2° | ≤ 2.8° | 0/24 |
+| sam, 38 naključnih poz | 38/38 | — | ≤ 2.9° | **0/38** |
+| naslonjen na drug kos (prekritje do 30 mm) | 4/4 | ≤ 1.8° | ≤ 1.7° | 0/4 |
+| ob steni (do 22 mm od stene) | 3/3 | ≤ 1.4° | ≤ 0.9° | 0/3 |
+| **ista elipsa brez vidne luknje** | — | — | — | **4/8** |
+
+Dokler je luknja vidna, soglasje notranje in zunanje elipse zrcalno rešitev
+zanesljivo izloči. Brez luknje pa opore ni: velikost naklona ostane pravilna,
+smer pa je približno met kovanca. Zato je dodana zastavica
+`orientation_ambiguous`, zaupanje pa pada z naklonom
+(`pose.unpaired_ambiguous_tilt_deg`). Pri ravnem kosu zrcalna rešitev sovpada s
+pravo, zato se zastavica takrat ne postavi.
+
+Praktična meja naklona je ~65–70°; pri 75° in več kosa ni več mogoče zanesljivo
+zaznati (viden je kot črtica).
+
 **K7 — zaupanje mora biti del ocene, ne le poročano ob njej.** Brez tega so se
 v degradiranem načinu nesparjeni kandidati (robovi senc, zaupanje 0.25)
 uvrstili pred trdno detektirane prirobnice (zaupanje 0.97), ker jim je napačna
