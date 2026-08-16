@@ -113,6 +113,23 @@ def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool =
         "n_kept": len(ellipses), "n_low_support": len(weak),
     }
 
+    # Predfilter po pricakovani velikosti. Kosi s perforirano povrsino dajo na
+    # stotine drobnih elips; parjenje med njimi je kombinatorno brezupno in rodi
+    # navlako. Ce je pricakovan polmer znan, obdrzimo le elipse velikosti obrisa
+    # ali luknje.
+    hint = cfg.get("flange.expected_outer_radius_px", None)
+    if hint:
+        window = float(cfg["flange.radius_window"])
+        r_out_px = float(hint)
+        r_in_px = r_out_px * float(cfg["flange.d_in_mm"]) / float(cfg["flange.d_out_mm"])
+        before = len(ellipses)
+        ellipses = [e for e in ellipses
+                    if abs(e.a - r_out_px) <= window * r_out_px
+                    or abs(e.a - r_in_px) <= window * r_in_px]
+        diagnostics["size_prefilter"] = {
+            "expected_outer_px": round(r_out_px, 1), "expected_inner_px": round(r_in_px, 1),
+            "kept": len(ellipses), "dropped": before - len(ellipses)}
+
     pairs, pair_rejected = pair_ellipses(ellipses, cfg)
     diagnostics["pairs"] = {
         "n_pairs": sum(1 for p in pairs if p.paired),

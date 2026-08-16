@@ -3,8 +3,16 @@
 
 flange:
   d_out_mm: 49.0            # zunanji premer prirobnice (podal uporabnik)
-  d_in_mm: 23.0             # OCENA z fotografije (~0.47 zunanjega) - IZMERI in popravi;
-                            # od tega je odvisno parjenje notranje in zunanje elipse
+  d_in_mm: 25.3             # izmerjeno IZ FOTOGRAFIJE: razmerje luknja/obris = 0.517
+                            # (mediana cez stiri jasne kose); potrdi s kljunastim merilom
+  # Pricakovan polmer obrisa v pikslih. Ce je podan, se elipse drugih velikosti
+  # zavrzejo se pred parjenjem - nujno pri kosih s perforirano povrsino, ki dajo
+  # na stotine drobnih elips. Odcitaj ga z ene debug slike ali izracunaj iz
+  # merila zaboja.
+  # Izmerjeno na IMG_20260816_173932.jpg, zmanjsani na 1600 px sirine.
+  # Pri drugi locljivosti PRERACUNAJ (sorazmerno s sirino slike).
+  expected_outer_radius_px: 91.5
+  radius_window: 0.30
   diameter_tolerance_mm: 0.5
   thickness_min_mm: 1.0
   thickness_max_mm: 2.0
@@ -22,13 +30,19 @@ box:
   rim_h_mm: null            # merilo neposredno (namesto izpeljave iz debeline)
   # Referencna ravnina za koordinatni sistem:
   #   auto - dno zaboja (privzeto),
+  #   none - zaboja sploh ne uporabi (koritasti zaboji s posevnimi stenami, kjer
+  #          noben viden pravokotnik ni dno; naklon se meri glede na opticno os),
   #   rim  - zgornji rob zaboja. Uporabi pri POLNEM zaboju, kjer dna ni videti;
   #          zahteva wall_height_mm (in debelino ali dimenzije roba). Izhodisce
   #          se prestavi z roba na dno, tako da koordinate ostanejo iste.
   # EKSPERIMENTALNO: 'rim' pravilno postavi X in Y (izmerjeno 4 mm na polnem
   # zaboju, proti 34 mm z nevidnim dnom), visina Z pa je zanesljiva le ob dobrem
   # f_px - podaj camera.working_distance_mm.
-  reference_plane: auto
+  # Za ta zaboj: 'none'. Zaboj je koritast s posevnimi stenami in poln do vrha,
+  # zato noben viden pravokotnik ni ravnina dna. Lazen okvir je dal naklon 50-67
+  # stopinj namesto pravih 7-18. Brez okvira so nakloni pravilni, koordinate pa
+  # niso v milimetrih - za robota zadosca relativno rangiranje.
+  reference_plane: none
   detect:
     blur_ksize: 5
     canny_low: 30

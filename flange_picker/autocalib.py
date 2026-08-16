@@ -884,6 +884,25 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
     warnings: List[str] = []
     diag: dict = {"principal_point": list(principal)}
 
+    if str(cfg.get("box.reference_plane", "auto")) == "none":
+        # Zaboj se namenoma ne uporablja. Smiselno pri koritastih zabojih s
+        # posevnimi stenami, kjer noben viden pravokotnik ni ravnina dna:
+        # lazen okvir tam popaci naklon in f_px, relativno rangiranje pa ostane
+        # pravilno. Naklon se takrat meri glede na opticno os.
+        diag["box_detect"] = {"source": "izklopljeno (box.reference_plane: none)"}
+        f_prior = cfg.get("camera.f_px_prior", None)
+        f_used = float(f_prior) if f_prior else float(cfg["autocalib.fallback_f_px"])
+        if not f_prior:
+            warnings.append("zaboj se namenoma ne uporablja in f_px ni podan - koordinate "
+                            "niso v milimetrih, uporabno je relativno rangiranje")
+        calib = Calibration(k_mat=k_from_f(f_used, principal), f_px=f_used,
+                            principal_point=principal,
+                            method="camera_frame_only" if f_prior else "degraded_relative_only",
+                            confidence=0.0, frame_reliable=False,
+                            f_confidence=0.6 if f_prior else 0.0,
+                            diagnostics=diag, warnings=warnings)
+        return calib
+
     quad, quad_diag = detect_box_quad(gray, cfg, raw_gray=raw_gray)
     quad_candidates = quad_diag.pop("candidates", None)
     diag["box_detect"] = quad_diag
