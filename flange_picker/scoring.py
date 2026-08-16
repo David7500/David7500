@@ -12,6 +12,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from .autocalib import _homography_scale
 from .config import Config
 from .ellipse import EllipsePair
 from .pose import FlangePose, project_points
@@ -189,9 +190,33 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
 
     z_lo = float(cfg["scoring.z_min_mm"])
     z_hi = float(cfg["scoring.z_max_mm"])
+    # Ko je okvir zaboja znan, je znana tudi pricakovana velikost kosa v sliki.
+    # Referenca mora biti NEODVISNA od elipse: merilo dna iz homografije. (Globina,
+    # izpeljana iz iste elipse, da razmerje 1 po konstrukciji in ne pove nicesar.)
+    # Kos visje v kupu je videti vecji, zato je zgornja meja ohlapna; zlepek kontur
+    # vec dotikajocih se kosov pa je vecji za faktor 2 in vec.
+    size_lo = float(cfg["scoring.size_ratio_min"])
+    size_hi = float(cfg["scoring.size_ratio_max"])
+    r_out_mm = float(cfg["flange.d_out_mm"]) / 2.0
+    h_inv = None
+    if calib.homography is not None:
+        try:
+            h_inv = np.linalg.inv(calib.homography)
+        except np.linalg.LinAlgError:
+            h_inv = None
     kept: List[Candidate] = []
     for cand, height in zip(candidates, heights):
-        if calib.frame_reliable and cand.pose.center_box is not None and not (
+        size_ratio = None
+        if h_inv is not None and cand.pair.role == "outer":
+            hom = h_inv @ np.array([cand.pair.outer.cx, cand.pair.outer.cy, 1.0])
+            if abs(hom[2]) > 1e-12:
+                scale = _homography_scale(calib.homography, hom[:2] / hom[2])
+                if scale and scale > 0:
+                    size_ratio = cand.pair.outer.a / (scale * r_out_mm)
+        if size_ratio is not None and not (size_lo <= size_ratio <= size_hi):
+            cand.rejected = (f"velikost elipse ne ustreza kosu: izmerjena je {size_ratio:.2f}-krat "
+                             "pricakovana za ta polozaj (najbrz zlepek kontur vec kosov)")
+        elif calib.frame_reliable and cand.pose.center_box is not None and not (
                 z_lo <= float(cand.pose.center_box[2]) <= z_hi):
             cand.rejected = (f"visina {float(cand.pose.center_box[2]):.1f} mm nad dnom je izven "
                              f"verjetnega obsega [{z_lo:.0f}, {z_hi:.0f}] mm - elipsa najbrz "

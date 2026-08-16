@@ -2,15 +2,16 @@
 # koda bere izkljucno iz te datoteke (glej config.py).
 
 flange:
-  d_out_mm: 40.0            # zunanji premer prirobnice
-  d_in_mm: 16.0             # premer notranje luknje (koncentricna z zunanjo)
+  d_out_mm: 49.0            # zunanji premer prirobnice (podal uporabnik)
+  d_in_mm: 23.0             # OCENA z fotografije (~0.47 zunanjega) - IZMERI in popravi;
+                            # od tega je odvisno parjenje notranje in zunanje elipse
   diameter_tolerance_mm: 0.5
   thickness_min_mm: 1.0
   thickness_max_mm: 2.0
 
 box:
-  w_mm: 400.0               # notranja sirina zaboja (X os)
-  h_mm: 300.0               # notranja globina zaboja (Y os)
+  w_mm: 400.0               # notranja sirina zaboja (X os) - IZMERI
+  h_mm: 300.0               # notranja globina zaboja (Y os) - IZMERI
   corners_px: null          # rocni fallback: [[x,y],[x,y],[x,y],[x,y]] vogali dna
   # Visina in debelina stene sta neobvezni. Ce sta podani, postane zgornji rob
   # zaboja druga ravnina na znani visini - to je edini vir absolutnega merila,
@@ -64,7 +65,7 @@ box:
     side_trim_iterations: 2
 
 gripper:
-  suction_cup_diameter_mm: 15.0
+  suction_cup_diameter_mm: 7.0   # podal uporabnik
   require_full_cup_clearance: false   # true => kandidat brez polnega naleganja cascice pade ven
 
 camera:
@@ -172,6 +173,10 @@ scoring:
     confidence: 0.20
   tilt_full_penalty_deg: 45.0
   wall_margin_good_mm: 40.0
+  # Dovoljeno odstopanje velikosti elipse od pricakovane pri njeni globini.
+  # Ozko okno, ker je globina ze ocenjena iz iste elipse - razmerje mora biti ~1.
+  size_ratio_min: 0.80
+  size_ratio_max: 1.60
   ring_samples: 72
   occluder_min_confidence: 0.3   # dvomljiva detekcija ne sme blokirati kolobarja trdne
   same_piece_distance_mm: 12.0   # blizje od tega je ista prirobnica, ne oviranje
