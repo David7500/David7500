@@ -61,6 +61,31 @@ def _look_down_camera(box_w: float, box_h: float, distance_mm: float,
     return rot, t
 
 
+def _place_flanges_dense(cfg: Config, rng: np.random.Generator, n: int) -> List[Dict]:
+    """Poln zaboj: kosi v vec plasteh, dno ni vec vidno.
+
+    Realna slika iz proizvodnje je taka - zaboj je poln, dna ni videti, zato
+    koordinatnega sistema iz dna ni mogoce dobiti. To je kljucen testni primer.
+    """
+    d_out = float(cfg["flange.d_out_mm"])
+    thick = 0.5 * (float(cfg["flange.thickness_min_mm"]) + float(cfg["flange.thickness_max_mm"]))
+    w_mm, h_mm = float(cfg["box.w_mm"]), float(cfg["box.h_mm"])
+    margin = float(cfg["synth.dense_wall_margin_mm"])
+    max_tilt = float(cfg["synth.dense_tilt_deg_max"])
+    placed: List[Dict] = []
+    for _ in range(n):
+        x = float(rng.uniform(margin, w_mm - margin))
+        y = float(rng.uniform(margin, h_mm - margin))
+        below = [p for p in placed if math.hypot(p["x_mm"] - x, p["y_mm"] - y) < d_out * 0.9]
+        z = (max(p["z_mm"] for p in below) + thick) if below else thick / 2.0
+        tilt = float(abs(rng.normal(0.0, max_tilt / 2.0))) if below else \
+            abs(float(rng.normal(0.0, float(cfg["synth.flat_tilt_deg_sigma"]))))
+        placed.append({"x_mm": x, "y_mm": y, "z_mm": z,
+                       "tilt_deg": min(tilt, max_tilt),
+                       "azimuth_deg": float(rng.uniform(0.0, 360.0))})
+    return placed
+
+
 def _place_flanges(cfg: Config, rng: np.random.Generator, n: int) -> List[Dict]:
     d_out = float(cfg["flange.d_out_mm"])
     thick = 0.5 * (float(cfg["flange.thickness_min_mm"]) + float(cfg["flange.thickness_max_mm"]))
@@ -90,6 +115,15 @@ def _place_flanges(cfg: Config, rng: np.random.Generator, n: int) -> List[Dict]:
                            "tilt_deg": tilt, "azimuth_deg": az})
             break
     return placed
+
+
+def _plane_axes(normal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    n = np.asarray(normal, dtype=float)
+    n = n / np.linalg.norm(n)
+    helper = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u = np.cross(n, helper)
+    u /= np.linalg.norm(u)
+    return u, np.cross(n, u)
 
 
 def _normal_from_angles(tilt_deg: float, az_deg: float) -> np.ndarray:
@@ -156,7 +190,12 @@ def render_scene(cfg: Optional[Config] = None, seed: int = 0,
         cv2.fillPoly(img, [quad], float(cfg["synth.wall_level"]), shift=_SHIFT)
     cv2.fillPoly(img, [_poly(bottom_px)], float(cfg["synth.bottom_level"]), shift=_SHIFT)
 
-    specs = flanges if flanges is not None else _place_flanges(cfg, rng, n_flanges)
+    if flanges is not None:
+        specs = flanges
+    elif bool(cfg.get("synth.dense_fill", False)):
+        specs = _place_flanges_dense(cfg, rng, n_flanges)
+    else:
+        specs = _place_flanges(cfg, rng, n_flanges)
     r_out = float(cfg["flange.d_out_mm"]) / 2.0
     r_in = float(cfg["flange.d_in_mm"]) / 2.0
     light = np.array(cfg["synth.light_direction"], dtype=float)
@@ -195,6 +234,20 @@ def render_scene(cfg: Optional[Config] = None, seed: int = 0,
         cv2.fillPoly(img, [_poly(outer)], shade, shift=_SHIFT)
         hole = np.zeros(img.shape, dtype=np.uint8)
         cv2.fillPoly(hole, [_poly(inner)], 255, shift=_SHIFT)
+        n_bolts = int(cfg.get("synth.bolt_hole_count", 0) or 0)
+        if n_bolts:
+            # Vijacne luknje na kolobarju: v resnicnih kosih jih je vec in so
+            # dodaten vir kroznih robov, ki lahko zmedejo parjenje.
+            r_bolt_circle = 0.5 * (r_out + r_in) * float(cfg["synth.bolt_circle_factor"])
+            r_bolt = 0.5 * float(cfg["synth.bolt_hole_diameter_mm"])
+            base_ang = float(rng.uniform(0.0, 2.0 * math.pi))
+            u_vec, v_vec = _plane_axes(normal_cam)
+            for k in range(n_bolts):
+                ang = base_ang + 2.0 * math.pi * k / n_bolts
+                centre = (center_cam + r_bolt_circle
+                          * (math.cos(ang) * u_vec + math.sin(ang) * v_vec))
+                poly = project_points(circle_points_3d(centre, normal_cam, r_bolt, 48), k_render)
+                cv2.fillPoly(hole, [_poly(poly)], 255, shift=_SHIFT)
         img[hole > 0] = before[hole > 0]
         if specular and rng.random() < float(cfg["synth.specular_probability"]):
             theta = float(rng.uniform(0, 2 * math.pi))

@@ -19,6 +19,15 @@ box:
   wall_thickness_mm: null
   rim_w_mm: null            # neobvezno: zunanji dimenziji zgornjega roba, ce ju
   rim_h_mm: null            # merilo neposredno (namesto izpeljave iz debeline)
+  # Referencna ravnina za koordinatni sistem:
+  #   auto - dno zaboja (privzeto),
+  #   rim  - zgornji rob zaboja. Uporabi pri POLNEM zaboju, kjer dna ni videti;
+  #          zahteva wall_height_mm (in debelino ali dimenzije roba). Izhodisce
+  #          se prestavi z roba na dno, tako da koordinate ostanejo iste.
+  # EKSPERIMENTALNO: 'rim' pravilno postavi X in Y (izmerjeno 4 mm na polnem
+  # zaboju, proti 34 mm z nevidnim dnom), visina Z pa je zanesljiva le ob dobrem
+  # f_px - podaj camera.working_distance_mm.
+  reference_plane: auto
   detect:
     blur_ksize: 5
     canny_low: 30
@@ -69,11 +78,15 @@ autocalib:
     min_f_px: 150.0
     max_f_px: 30000.0
   refine:
-    enabled: true
+    # PRIVZETO IZKLOPLJENO. Obe cenilki sta izmerjeno presibki: na redkih scenah
+    # se sploh ne sprozita (obcutljivost ~0), na gosti sceni pa se je
+    # plane_consensus sprozil in dal f = 3600 namesto 1300 (177 % napake).
+    # Zanesljivi viri f so: podatek o steni zaboja, delovna razdalja in
+    # izginjajoce tocke. Glej ROADMAP, ugotovitvi K1 in K13.
+    enabled: false
     # plane_consensus: normale plosko lezecih prirobnic morajo biti vzporedne z
-    #   normalo dna (ucinek prvega reda, uporabno).
-    # pair_consistency: nesoglasje notranje in zunanje elipse (drugi red v r/Z,
-    #   izmerjeno presibko pri teh dimenzijah - glej ROADMAP).
+    #   normalo dna (ucinek prvega reda).
+    # pair_consistency: nesoglasje notranje in zunanje elipse (drugi red v r/Z).
     method: plane_consensus
     min_pairs: 2                 # za pair_consistency
     min_flanges: 3               # za plane_consensus
@@ -211,6 +224,13 @@ synth:
   shadow_expand: 1.10
   shadow_darkening: 0.62
   light_direction: [0.25, 0.15, -1.0]
+  # Poln zaboj (dno ni vidno) in vijacne luknje - lastnosti resnicnih slik.
+  dense_fill: false
+  dense_wall_margin_mm: 25.0
+  dense_tilt_deg_max: 30.0
+  bolt_hole_count: 0
+  bolt_circle_factor: 1.0
+  bolt_hole_diameter_mm: 3.5
   specular_enabled: true
   specular_probability: 0.45
   blur_sigma: 0.9

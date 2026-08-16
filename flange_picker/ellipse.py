@@ -413,11 +413,17 @@ def pair_ellipses(ellipses: Sequence[Ellipse], cfg: Config) -> Tuple[List[Ellips
             if i == j or inner.a >= outer.a or roles[j] == "outer":
                 continue
             off = float(np.linalg.norm(outer.center - inner.center)) / outer.a
-            if off > max_off:
-                continue
             ratio = inner.a / outer.a
             size_err = abs(ratio - target_ratio) / target_ratio
+            # Zavrnitve se belezijo - brez tega je pri gostih scenah nemogoce
+            # ugotoviti, zakaj parjenje odpove.
+            if off > max_off:
+                rejected.append({"outer": i, "inner": j, "reason": "sredisci sta preveč narazen",
+                                 "offset_ratio": round(off, 3)})
+                continue
             if size_err > size_tol:
+                rejected.append({"outer": i, "inner": j, "reason": "neujemanje velikosti",
+                                 "size_ratio": round(ratio, 3), "target": round(target_ratio, 3)})
                 continue
             axis_err = abs(inner.axis_ratio - outer.axis_ratio)
             if axis_err > axis_tol:

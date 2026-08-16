@@ -12,6 +12,14 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
 
 ## Zdaj
 
+- [ ] **Poln zaboj: višina Z v načinu `reference_plane: rim`.** X in Y sta
+  pravilna (4 mm), Z pa zahteva dober `f_px`; pot prek delovne razdalje v tem
+  načinu še ni skladna (uporabi merilo roba namesto dna). Do takrat je način
+  eksperimentalen.
+- [ ] **Čas obdelave 7.7 s pri 90 kosih** (267 elips). Za takt celice je
+  treba fit omejiti na kandidate prave velikosti — velikost kosa v pikslih je
+  po detekciji zaboja znana, zato je predfiltriranje poceni.
+
 - [ ] **Preciznost detekcije 96 %.** Preostali lažni kandidati nastanejo v
   gručah prekrivajočih se kosov, kjer razpolavljanje konture rodi vec fitov
   istega roba. Naslednji korak: razbijanje kontur po krivinskih vrhovih in
@@ -137,6 +145,36 @@ notranji +0.04 px. Model razlike po zasnovi ne vidi. Ob premalo parih postane
 ocena šumna (+0.24 px pri dveh kosih) in popravek podre ujemanje para, zato je
 privzeto **izklopljen** in dodatno varovan s pragom razpršenosti. Za odpravo
 preostalega odmika Z je potrebna referenčna meritev na znanem kosu.
+
+**K13 — poln zaboj je drugačen problem kot redko posut.** Mock-up po realni
+fotografiji (90 kosov v več plasteh, vijačne luknje, dno popolnoma pokrito):
+
+| Meritev | Rezultat |
+|---|---|
+| detekcija vrhnje plasti | 25/30 = **83 %** |
+| pravilnih med prvimi 5 kandidati | **5/5** |
+| pravilnih med prvimi 10 | **10/10** |
+| pravilnih med prvimi 20 | 19/20 |
+| kosov z obema robovoma vidnima | 18/30 |
+| kosov z vidno le luknjo | 7/30 |
+| čas obdelave | 7.7 s |
+
+Trije nauki:
+- Preciznost čez celoten seznam (50 %) je zavajajoča — dolgi rep nizko
+  uvrščenih zavrne že rangiranje. Merodajna je natančnost prvih N.
+- Parjenje pri 18/30 ni napaka algoritma, ampak **fizikalna meja**: v polnem
+  zaboju je pri dobri tretjini kosov vidna le luknja. Ti dobijo nizko zaupanje
+  in zastavico `orientation_ambiguous` (K8).
+- Dno ni vidno, zato koordinatnega sistema iz njega ni. Dodan je način
+  `box.reference_plane: rim`, ki za referenco vzame zgornji rob zaboja:
+  napaka XY pade s 34 mm na **4 mm**.
+
+**K14 — izboljšava `f` iz scene je nevarna in je izklopljena.** Na redkih
+scenah se ne sproži (občutljivost ~0, glej K1 in K3), na gosti sceni pa se je
+`plane_consensus` sprožil in dal **f = 3600 namesto 1300** (177 % napake).
+Cenilka je pri velikem številu nagnjenih kosov zavedena. Privzeto je zdaj
+`autocalib.refine.enabled: false`; zanesljivi viri `f` ostajajo podatek o steni
+zaboja, delovna razdalja in izginjajoče točke.
 
 **K12 — preverjanje merila je smiselno le na sparjenih kandidatih.** Obroč
 sence je natanko 10 % večji od kosa; ko je vstopil v preverjanje, je to zavrnilo

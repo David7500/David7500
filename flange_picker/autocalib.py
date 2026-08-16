@@ -655,6 +655,36 @@ def _rim_geometry_valid(bottom_quad: np.ndarray, rim_quad: np.ndarray,
     return ok, check
 
 
+def _rim_reference_frame(bottom_quad: Optional[np.ndarray], candidates: Optional[List[np.ndarray]],
+                         cfg: Config):
+    """Vrne (quad roba, mm koordinate roba, premik izhodisca na dno) ali None."""
+    diag: dict = {}
+    wall_h = cfg.get("box.wall_height_mm", None)
+    if not wall_h:
+        diag["reason"] = "box.wall_height_mm ni podan"
+        return None, diag
+    wall_t = float(cfg.get("box.wall_thickness_mm", 0.0) or 0.0)
+    rim_w, rim_h = cfg.get("box.rim_w_mm", None), cfg.get("box.rim_h_mm", None)
+    if rim_w and rim_h:
+        dims = (float(rim_w), float(rim_h))
+        offset = 0.5 * (float(dims[0]) - float(cfg["box.w_mm"]))
+        offset_y = 0.5 * (float(dims[1]) - float(cfg["box.h_mm"]))
+    else:
+        dims = (float(cfg["box.w_mm"]) + 2.0 * wall_t, float(cfg["box.h_mm"]) + 2.0 * wall_t)
+        offset = offset_y = wall_t
+    pool = list(candidates or [])
+    if bottom_quad is not None:
+        pool.append(bottom_quad)
+    if not pool:
+        diag["reason"] = "ni kandidatnih pravokotnikov"
+        return None, diag
+    rim = max(pool, key=lambda q: float(cv2.contourArea(q.astype(np.float32))))
+    quad_o, obj = box_frame_points(rim, cfg, dims)
+    diag["rim_dims_mm"] = list(dims)
+    diag["origin_shift_mm"] = [offset, offset_y, -float(wall_h)]
+    return (quad_o, obj, (offset, offset_y, -float(wall_h))), diag
+
+
 def _quad_area(quad: np.ndarray) -> float:
     return float(cv2.contourArea(np.asarray(quad, dtype=np.float32)))
 
@@ -935,6 +965,22 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
             warnings.append(f"oceni f_px iz izginjajocih tock in iz scene se razlikujeta za {rel:.0%}")
             f_confidence *= 0.5
 
+    # Poln zaboj: dna ni videti, zgornji rob pa je. Referencna ravnina je takrat
+    # rob, koordinatni sistem dna pa iz njega dobimo s premikom za visino stene.
+    reference = str(cfg.get("box.reference_plane", "auto"))
+    rim_frame = None
+    if reference == "rim":
+        rim_frame, rim_frame_diag = _rim_reference_frame(quad, quad_candidates, cfg)
+        diag["rim_reference"] = rim_frame_diag
+        if rim_frame is not None:
+            quad, obj, rim_shift = rim_frame
+            homography, _ = cv2.findHomography(obj.astype(np.float32), quad.astype(np.float32), 0)
+            f_vp, vp_diag = f_from_vanishing_points(quad, principal, cfg)
+            diag["vanishing"] = vp_diag
+        else:
+            warnings.append("zgornjega roba zaboja ni bilo mogoce uporabiti kot referencne "
+                            "ravnine: " + str(rim_frame_diag.get("reason", "")))
+
     rot_box = t_box = None
     frame_reliable = False
     if f_px is None:
@@ -954,6 +1000,10 @@ def calibrate(gray: np.ndarray, pairs, cfg: Config,
             homography, _ = cv2.findHomography(obj.astype(np.float32),
                                                quad.astype(np.float32), 0)
             rot_box, t_box = decompose_plane_homography(homography, k_from_f(f_px, principal))
+        if rim_frame is not None:
+            # Izhodisce prestavimo z roba na dno: v ravnini roba je vogal dna pri
+            # (t, t), dno pa lezi za visino stene nizje.
+            t_box = rot_box @ np.array(rim_shift) + t_box
         frame_reliable = True
     else:
         method = "degraded_relative_only"

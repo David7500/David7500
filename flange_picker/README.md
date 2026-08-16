@@ -82,6 +82,20 @@ smer pa je približno met kovanca (izmerjeno 4/8 napačnih). Tak kandidat dobi
 `"orientation_ambiguous": true`, opombo v `notes` in zaupanje, ki pada z
 naklonom. **Robot ne sme nagniti prijemala po kandidatu s to zastavico.**
 
+## Poln zaboj
+
+Če je zaboj poln in dna ni videti, koordinatnega sistema iz dna ni mogoče
+dobiti. Nastavi `box.reference_plane: rim` (potrebna je `wall_height_mm`) —
+za referenco se vzame zgornji rob, izhodišče pa se prestavi na dno, tako da
+koordinate ostanejo iste. Izmerjeno na maketi polnega zaboja: napaka XY pade
+s 34 mm na 4 mm. Nastavi tudi `scoring.z_max_mm` na globino zaboja, sicer
+filter verjetnosti višine zavrne kose z vrha kupa.
+
+Pri gosti sceni je pri približno tretjini vidnih kosov vidna le luknja, ne pa
+tudi obris. Ti dobijo nizko zaupanje in `orientation_ambiguous` — kar je prav,
+saj je smer nagiba pri njih neznana. Merodajna metrika ni preciznost čez ves
+seznam, ampak natančnost prvih N: izmerjeno 5/5 in 10/10.
+
 ## Degradacija
 
 Sistem nikoli ne odpove tiho:
