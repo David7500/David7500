@@ -24,8 +24,9 @@ def cfg():
     return load_config().with_overrides({
         # Testi postavijo mere sami, da niso odvisni od trenutnih privzetkov
         # v config.yaml (ti so nastavljeni na uporabnikov kos).
-        "flange": {"d_out_mm": 40.0, "d_in_mm": 16.0},
+        "flange": {"d_out_mm": 40.0, "d_in_mm": 16.0, "expected_outer_radius_px": None},
         "gripper": {"suction_cup_diameter_mm": 15.0},
+        "box": {"reference_plane": "auto"},
         "camera": {"working_distance_mm": 590.0},   # resnicna je 560-620 mm
         # Goriscna razdalja in delovna razdalja sta izbrani tako, da je zaboj z
         # vred robom v celoti v kadru - sicer se meri kadriranje, ne algoritem.
