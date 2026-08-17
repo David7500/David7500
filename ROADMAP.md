@@ -12,6 +12,15 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
 
 ## Zdaj
 
+- [ ] **Vrstni red plasti iz prekrivanja, ne iz globine.** Povratna informacija
+  z resnicne slike: prvi kandidat je bil pravi, uvrstitve 2-6 pa so bili
+  zakopani kosi. Vzrok je nacelen - globina iz velikosti elipse ima negotovost
+  ~2-3 mm, plasti pri 1-2 mm debelih kosih pa so razmaknjene manj od tega.
+  Visina zato ne more lociti, kdo je na vrhu. Resitev je 2D sklepanje: kjer se
+  obrisa dveh kosov sekata, je zgoraj tisti, ki mu obris tam ni prekinjen.
+  Iz teh parnih relacij se sestavi delna urejenost in kosi brez nikogar nad
+  seboj so kandidati za prijem. Neodvisno od kalibracije in od f_px.
+
 - [ ] **Poln zaboj: višina Z v načinu `reference_plane: rim`.** X in Y sta
   pravilna (4 mm), Z pa zahteva dober `f_px`; pot prek delovne razdalje v tem
   načinu še ni skladna (uporabi merilo roba namesto dna). Do takrat je način
@@ -145,6 +154,15 @@ notranji +0.04 px. Model razlike po zasnovi ne vidi. Ob premalo parih postane
 ocena šumna (+0.24 px pri dveh kosih) in popravek podre ujemanje para, zato je
 privzeto **izklopljen** in dodatno varovan s pragom razpršenosti. Za odpravo
 preostalega odmika Z je potrebna referenčna meritev na znanem kosu.
+
+**K15 — na resnični fotografiji je bila pravilna le prva uvrstitev.** Zaboj
+(koritast, poševne stene, poln do vrha) je razkril troje, česar sintetične
+scene niso: pri 8000×6000 kos preseže `max_semi_major_px`; perforirana površina
+da 931 elips, od tega ~900 iz vzorčka na kosu; in napačno prepoznana ravnina
+dna je nagnila okvir tako, da je naklon narasel s pravih 7-18° na 50-67°.
+Prvi dve rešita zmanjšanje slike in predfilter po pričakovani velikosti, tretjo
+`box.reference_plane: none`. Kar ostaja odprto, je vrstni red plasti - glej
+prvo postavko v `## Zdaj`.
 
 **K13 — poln zaboj je drugačen problem kot redko posut.** Mock-up po realni
 fotografiji (90 kosov v več plasteh, vijačne luknje, dno popolnoma pokrito):
