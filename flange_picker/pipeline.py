@@ -19,8 +19,9 @@ import numpy as np
 from . import autocalib as autocalib_mod
 from .config import Config, load_config
 from .edges import detect_edges
-from .ellipse import (apply_edge_bias, compute_polarity, compute_support, deduplicate,
-                      estimate_edge_bias, fit_contour, pair_ellipses)
+from .ellipse import (apply_edge_bias, compute_polarity, compute_support,
+                      compute_support_gradient, deduplicate, estimate_edge_bias, fit_contour,
+                      pair_ellipses)
 from .pose import build_flange_pose
 from .preprocess import preprocess, to_gray
 from .scoring import Candidate, score_candidates
@@ -103,7 +104,10 @@ def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool =
     for contour in edge_map.contours:
         raw_ellipses.extend(fit_contour(contour, cfg))
     ellipses = deduplicate(raw_ellipses, cfg)
-    compute_support(ellipses, edge_map.points, cfg)
+    if str(cfg["ellipse.support_method"]) == "gradient":
+        compute_support_gradient(ellipses, edge_map.gx, edge_map.gy, cfg)
+    else:
+        compute_support(ellipses, edge_map.points, cfg)
     compute_polarity(ellipses, edge_map.gx, edge_map.gy, cfg)
     min_support = float(cfg["ellipse.min_support_ratio"])
     weak = [e for e in ellipses if e.support_ratio < min_support]

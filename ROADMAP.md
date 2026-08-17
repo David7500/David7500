@@ -70,19 +70,19 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
 
 ### Izmerjene metrike (12 scen, seed 100)
 
-| Metrika | Prvi mejnik | Po izboljšavah | + podana stena |
+| Metrika | Prvi mejnik | Po izboljšavah | + vrata prekritosti |
 |---|---|---|---|
-| detekcija — recall (v sliki) | 0.918 | **0.986** | 0.986 |
-| detekcija — preciznost | 0.827 | **0.960** | 0.947 |
+| detekcija — recall (v sliki) | 0.918 | **0.986** | 0.973 |
+| detekcija — preciznost | 0.827 | 0.960 | **1.000** |
 | okvir zaboja na voljo | 83 % | **100 %** | 100 % |
 | ujemanje poze — recall | 0.891 | **0.973** | 0.973 |
-| XY RMSE | 0.36 mm | 0.36 mm | 0.36 mm |
-| Z RMSE | 1.97 mm | 2.03 mm | 2.25 mm |
+| XY RMSE | 0.36 mm | 0.36 mm | **0.26 mm** |
+| Z RMSE | 1.97 mm | 2.03 mm | **1.54 mm** |
 | naklon RMSE | 2.09° | 1.78° | **1.30°** |
 | relativna napaka `f_px` | 11.0 % | 11.9 % | **2.3 %** |
 | prvi kandidat je iz vrhnje plasti | 80 % | **83 %** | 83 % |
 
-Zadnji stolpec: podana `box.wall_height_mm` in `box.wall_thickness_mm`.
+Zadnji stolpec: z gradientno mero vidnosti in `scoring.max_occlusion`.
 Metrike poze so računane le na scenah z veljavnim okvirom; detekcija se meri v
 sliki in je zato neodvisna od kalibracije.
 
@@ -154,6 +154,34 @@ notranji +0.04 px. Model razlike po zasnovi ne vidi. Ob premalo parih postane
 ocena šumna (+0.24 px pri dveh kosih) in popravek podre ujemanje para, zato je
 privzeto **izklopljen** in dodatno varovan s pragom razpršenosti. Za odpravo
 preostalega odmika Z je potrebna referenčna meritev na znanem kosu.
+
+**K16 — vidnost obrisa se najbolje meri iz gradienta, ne iz bližine robnih
+točk.** Primerjava štirih mer proti resnični vidnosti (210 kosov na gostih
+sintetičnih scenah z vzorčkom na površini):
+
+| mera | korelacija | AUC |
+|---|---|---|
+| bližina robnih točk (prejšnja) | 0.935 | 0.998 |
+| bližina + ujemanje smeri gradienta | 0.983 | 0.999 |
+| **radialni gradient vzdolž oboda** | **0.992** | **1.000** |
+| profil svetlosti znotraj/zunaj | 0.970 | 0.996 |
+
+Zmagovalka je hkrati najpreprostejša: ne potrebuje robnih točk ne KD-drevesa,
+le gradient slike v točkah oboda. Bližina robnih točk je pri perforiranih kosih
+zavedena, ker robne točke ležijo povsod po površini — vzorček na kosu je bilo
+treba dodati v generator, sicer so bile vse štiri mere videti enako dobre
+(AUC 1.000).
+
+Dvoje je bilo pri vgradnji bistveno:
+- Predznak mora priti iz same elipse. Obris je svetel znotraj, luknja temna;
+  fiksen predznak je zavrgel vse luknje in s tem podrl parjenje.
+- Na sintetičnih scenah popolnoma viden kos doseže ~1.0, na resnični fotografiji
+  pa 0.81 (fit ni popoln, deli obrisa se dotikajo sosedov enake svetlosti).
+  Prag `scoring.max_occlusion` je zato 0.25, ne 0.10.
+
+Učinek na sintetičnem setu: **preciznost detekcije 0.96 → 1.00**, XY RMSE
+0.36 → 0.26 mm, Z RMSE 2.03 → 1.54 mm, ob majhni ceni v recallu (0.986 → 0.973
+— prav zakopani kosi, ki jih vrata namenoma zavržejo).
 
 **K15 — na resnični fotografiji je bila pravilna le prva uvrstitev.** Zaboj
 (koritast, poševne stene, poln do vrha) je razkril troje, česar sintetične

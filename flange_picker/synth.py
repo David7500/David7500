@@ -117,6 +117,37 @@ def _place_flanges(cfg: Config, rng: np.random.Generator, n: int) -> List[Dict]:
     return placed
 
 
+def _annotate_visibility(entries: List[Dict], r_out: float, k_mat: np.ndarray,
+                         image_size: Tuple[int, int], n_samples: int = 180) -> None:
+    """Doda vsakemu kosu delez oboda, ki ga ne prekriva noben blizji kos."""
+    width, height = image_size
+    discs = []
+    for e in entries:
+        centre = np.array(e["center_cam"])
+        normal = np.array(e["normal_cam"])
+        poly = project_points(circle_points_3d(centre, normal, r_out, 96), k_mat)
+        discs.append((float(e["depth_mm"]), poly.astype(np.float32)))
+        e["centre_px"] = project_points(centre[None, :], k_mat)[0].tolist()
+    for e, (depth, _) in zip(entries, discs):
+        centre = np.array(e["center_cam"])
+        normal = np.array(e["normal_cam"])
+        rim = project_points(circle_points_3d(centre, normal, r_out, n_samples), k_mat)
+        visible = 0
+        for pt in rim:
+            if not (0 <= pt[0] < width and 0 <= pt[1] < height):
+                continue
+            blocked = False
+            for other_depth, poly in discs:
+                if other_depth >= depth - 1e-9:
+                    continue
+                if cv2.pointPolygonTest(poly, (float(pt[0]), float(pt[1])), False) >= 0:
+                    blocked = True
+                    break
+            if not blocked:
+                visible += 1
+        e["visible_fraction"] = float(visible) / float(n_samples)
+
+
 def _plane_axes(normal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     n = np.asarray(normal, dtype=float)
     n = n / np.linalg.norm(n)
@@ -249,6 +280,27 @@ def render_scene(cfg: Optional[Config] = None, seed: int = 0,
                 poly = project_points(circle_points_3d(centre, normal_cam, r_bolt, 48), k_render)
                 cv2.fillPoly(hole, [_poly(poly)], 255, shift=_SHIFT)
         img[hole > 0] = before[hole > 0]
+        # Vzorcek (perforacija) na kolobarju: resnicni kosi ga imajo gostega in
+        # je glavni vir laznih robov - brez njega je sinteticna scena prelahka.
+        n_dots = int(cfg.get("synth.texture_dot_count", 0) or 0)
+        if n_dots:
+            r_dot = 0.5 * float(cfg["synth.texture_dot_diameter_mm"])
+            u_vec, v_vec = _plane_axes(normal_cam)
+            rings = max(1, int(round(math.sqrt(n_dots / 6.0))))
+            drawn = 0
+            for ring in range(rings):
+                rr = r_in * 1.18 + (r_out * 0.92 - r_in * 1.18) * (ring + 0.5) / rings
+                per_ring = max(6, int(2.0 * math.pi * rr / (2.6 * r_dot)))
+                for k in range(per_ring):
+                    if drawn >= n_dots:
+                        break
+                    ang = 2.0 * math.pi * (k + 0.5 * (ring % 2)) / per_ring
+                    centre_dot = center_cam + rr * (math.cos(ang) * u_vec + math.sin(ang) * v_vec)
+                    poly = project_points(circle_points_3d(centre_dot, normal_cam, r_dot, 12),
+                                          k_render)
+                    cv2.fillPoly(img, [_poly(poly)],
+                                 shade * float(cfg["synth.texture_darkening"]), shift=_SHIFT)
+                    drawn += 1
         if specular and rng.random() < float(cfg["synth.specular_probability"]):
             theta = float(rng.uniform(0, 2 * math.pi))
             r_spec = float(rng.uniform(r_in * 1.15, r_out * 0.92))
@@ -269,6 +321,11 @@ def render_scene(cfg: Optional[Config] = None, seed: int = 0,
         img = img + rng.normal(0.0, noise, img.shape).astype(np.float32)
     image = np.clip(img, 0, 255).astype(np.uint8)
 
+    # Resnicna vidnost oboda vsakega kosa: delez tock zunanjega kroga, ki jih ne
+    # prekriva noben blizji kos. To je merilo, proti kateremu se primerjajo
+    # razlicne mere podprtosti obrisa.
+    _annotate_visibility(entries, r_out, k_mat, (width, height))
+
     gt = {
         "f_px": float(f_px),
         "image_size": [width, height],
@@ -277,7 +334,8 @@ def render_scene(cfg: Optional[Config] = None, seed: int = 0,
         "box": {"w_mm": w_mm, "h_mm": h_mm,
                 "corners_px": bottom_px_img.tolist()},
         "flanges": [{k: e[k] for k in
-                     ("x_mm", "y_mm", "z_mm", "tilt_deg", "azimuth_deg", "normal", "depth_mm")}
+                     ("x_mm", "y_mm", "z_mm", "tilt_deg", "azimuth_deg", "normal", "depth_mm",
+                      "visible_fraction", "centre_px")}
                     for e in entries],
         "seed": int(seed),
     }

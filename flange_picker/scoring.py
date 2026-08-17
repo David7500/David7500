@@ -204,6 +204,7 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
             h_inv = np.linalg.inv(calib.homography)
         except np.linalg.LinAlgError:
             h_inv = None
+    max_occ = float(cfg["scoring.max_occlusion"])
     kept: List[Candidate] = []
     for cand, height in zip(candidates, heights):
         size_ratio = None
@@ -213,7 +214,10 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
                 scale = _homography_scale(calib.homography, hom[:2] / hom[2])
                 if scale and scale > 0:
                     size_ratio = cand.pair.outer.a / (scale * r_out_mm)
-        if size_ratio is not None and not (size_lo <= size_ratio <= size_hi):
+        if cand.occlusion_ratio < 1.0 - max_occ:
+            cand.rejected = (f"prekritih {100.0 * (1.0 - cand.occlusion_ratio):.0f} % oboda, "
+                             f"dovoljeno je {100.0 * max_occ:.0f} % - kos ni na vrhu")
+        elif size_ratio is not None and not (size_lo <= size_ratio <= size_hi):
             cand.rejected = (f"velikost elipse ne ustreza kosu: izmerjena je {size_ratio:.2f}-krat "
                              "pricakovana za ta polozaj (najbrz zlepek kontur vec kosov)")
         elif calib.frame_reliable and cand.pose.center_box is not None and not (

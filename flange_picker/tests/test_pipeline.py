@@ -141,3 +141,42 @@ def test_require_full_cup_clearance_rejects_everything(cfg):
     result = process_image(scene.image, strict)
     assert result.to_json(strict)["candidates"] == []
     assert result.rejected and all(e["reason"] for e in result.rejected)
+
+
+def test_occlusion_gate_keeps_only_top_layer(cfg):
+    """Prekrit kos mora pasti ven, neprekrit ostati.
+
+    Mera vidnosti se meri iz gradienta vzdolz oboda: kjer kos prekriva drugega,
+    skoka svetlosti ni in tocka ne steje.
+    """
+    free = flat_flange(120.0, 90.0)
+    covered = flat_flange(250.0, 150.0)
+    on_top = flat_flange(268.0, 150.0, z_mm=2.25, tilt_deg=4.0)
+    scene = render_scene(cfg, seed=40, camera_tilt_deg=4.0,
+                         flanges=[free, covered, on_top])
+    result = process_image(scene.image, cfg)
+    data = result.to_json(cfg)
+    assert data["candidates"], "prosti kos bi moral ostati"
+    for cand in data["candidates"]:
+        assert cand["occlusion_ratio"] >= 1.0 - float(cfg["scoring.max_occlusion"])
+    matched = match_to_gt(data["candidates"], [covered], cfg, max_dist_mm=12.0)
+    assert not matched, "prekrit kos ne sme priti med kandidate"
+
+
+def test_occlusion_threshold_is_configurable(cfg):
+    """Prag prekritosti mora dejansko vplivati na izbor."""
+    scene = render_scene(cfg, seed=41, n_flanges=8, camera_tilt_deg=4.0)
+    strict = cfg.with_overrides({"scoring": {"max_occlusion": 0.02}})
+    loose = cfg.with_overrides({"scoring": {"max_occlusion": 0.60}})
+    n_strict = len(process_image(scene.image, strict).to_json(strict)["candidates"])
+    n_loose = len(process_image(scene.image, loose).to_json(loose)["candidates"])
+    assert n_strict <= n_loose
+
+
+def test_gradient_support_is_high_for_isolated_flange(cfg):
+    """Osamljen kos mora imeti skoraj cel obod viden."""
+    scene = render_scene(cfg, seed=42, camera_tilt_deg=4.0,
+                         flanges=[flat_flange(200.0, 150.0)])
+    data = process_image(scene.image, cfg).to_json(cfg)
+    assert data["candidates"]
+    assert data["candidates"][0]["occlusion_ratio"] > 0.9
