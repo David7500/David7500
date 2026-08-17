@@ -140,6 +140,21 @@ edges:
   min_contour_points: 24
 
 ellipse:
+  # Vir kandidatnih elips:
+  #   contours     - lastni fit po konturah (razpolavljanje ob visokem residualu),
+  #   edge_drawing - OpenCV EdgeDrawing (zdruzevanje lokov, po vzoru ELSD),
+  #   both         - oboje, nato zdruzevanje podvojenih.
+  # Izmerjeno na resnicni fotografiji: contours 11 elips prave velikosti,
+  # edge_drawing 30. Kateri so res kosi, odlocijo sele polariteta, parjenje in
+  # mera vidnosti.
+  detector: both
+  edge_drawing:
+    pf_mode: false
+    gradient_threshold: 6      # nizek prag; navlako odstranijo poznejsa preverjanja
+    anchor_threshold: 1
+    min_path_length: 30
+    nfa_validation: true
+    sigma: 1.0
   min_points: 24
   max_split_depth: 3
   max_rms_px: 1.2              # Sampsonov RMS, nad katerim se kontura razbije
@@ -155,6 +170,11 @@ ellipse:
   # fotografiji: pri 0.25 da pravi vrhnji kos vidnost 0.81, zakopana pa 0.59 in
   # 0.50 - locitev je jasna. Vecji prag locitev ohrani, a znizuje vse vrednosti.
   support_gradient_factor: 0.25
+  # Merilo kontrasta: lokalno (iz okolice kosa) ali globalno (iz cele slike).
+  # Lokalno je nujno pri neenakomerni osvetlitvi - sicer je enakomerno a slabse
+  # osvetljen kos videti prekrit, ceprav je popolnoma viden.
+  support_local_scale: true
+  support_gradient_floor: 5.2   # ~ q/sin(tau) iz LSD; prepreci "robove" v sumu
   support_scale_percentile: 95.0
   min_support_ratio: 0.25      # delez vidnega oboda, pod katerim kandidat pade
   # Sistematicni odmik lege roba se lahko oceni iz znanega razmerja premerov.

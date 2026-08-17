@@ -20,8 +20,8 @@ from . import autocalib as autocalib_mod
 from .config import Config, load_config
 from .edges import detect_edges
 from .ellipse import (apply_edge_bias, compute_polarity, compute_support,
-                      compute_support_gradient, deduplicate, estimate_edge_bias, fit_contour,
-                      pair_ellipses)
+                      compute_support_gradient, deduplicate, detect_ellipses_edge_drawing,
+                      estimate_edge_bias, fit_contour, pair_ellipses)
 from .pose import build_flange_pose
 from .preprocess import preprocess, to_gray
 from .scoring import Candidate, score_candidates
@@ -100,9 +100,20 @@ def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool =
                             gradient_image=pre.raw_gray)
     diagnostics["edges"] = edge_map.diagnostics
 
+    detector = str(cfg["ellipse.detector"])
     raw_ellipses = []
-    for contour in edge_map.contours:
-        raw_ellipses.extend(fit_contour(contour, cfg))
+    if detector in ("contours", "both"):
+        for contour in edge_map.contours:
+            raw_ellipses.extend(fit_contour(contour, cfg))
+    n_contour = len(raw_ellipses)
+    n_ed = 0
+    if detector in ("edge_drawing", "both"):
+        ed_ellipses, ed_diag = detect_ellipses_edge_drawing(pre.gray, cfg)
+        diagnostics["edge_drawing"] = ed_diag
+        n_ed = len(ed_ellipses)
+        raw_ellipses.extend(ed_ellipses)
+        if not ed_diag.get("available") and detector == "edge_drawing":
+            warnings.append("EdgeDrawing ni na voljo: " + str(ed_diag.get("reason", "")))
     ellipses = deduplicate(raw_ellipses, cfg)
     if str(cfg["ellipse.support_method"]) == "gradient":
         compute_support_gradient(ellipses, edge_map.gx, edge_map.gy, cfg)
@@ -113,7 +124,8 @@ def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool =
     weak = [e for e in ellipses if e.support_ratio < min_support]
     ellipses = [e for e in ellipses if e.support_ratio >= min_support]
     diagnostics["ellipses"] = {
-        "n_raw": len(raw_ellipses), "n_after_dedup": len(ellipses) + len(weak),
+        "n_raw": len(raw_ellipses), "n_from_contours": n_contour, "n_from_edge_drawing": n_ed,
+        "n_after_dedup": len(ellipses) + len(weak),
         "n_kept": len(ellipses), "n_low_support": len(weak),
     }
 

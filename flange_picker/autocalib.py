@@ -294,7 +294,12 @@ def select_quad_by_flange_scale(candidates: List[np.ndarray], pairs, cfg: Config
     """
     diag: dict = {"ratios": []}
     r_out = float(cfg["flange.d_out_mm"]) / 2.0
-    usable = [p for p in pairs if p.outer is not None]
+    # Le trdni pari: merilo, izbrano po dvomljivih detekcijah, pokvari homografijo
+    # in s tem vse, kar iz nje sledi (izmerjeno: pravi kos zavrnjen kot "3.7-krat
+    # prevelik", ker je merilo prislo iz napacnega pravokotnika).
+    usable = [p for p in pairs
+              if p.outer is not None and p.paired and p.role == "outer"
+              and p.outer.support_ratio >= float(cfg["ellipse.min_support_ratio"])]
     if not candidates or len(usable) < int(cfg["box.detect.scale_select_min_flanges"]):
         diag["reason"] = "premalo prirobnic za izbiro po merilu"
         return None, diag

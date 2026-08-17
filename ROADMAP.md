@@ -155,6 +155,35 @@ ocena šumna (+0.24 px pri dveh kosih) in popravek podre ujemanje para, zato je
 privzeto **izklopljen** in dodatno varovan s pragom razpršenosti. Za odpravo
 preostalega odmika Z je potrebna referenčna meritev na znanem kosu.
 
+**K17 — moj generator kandidatov je bil ozko grlo, ne mera vidnosti.**
+Domneval sem, da slabse osvetljeni kosi padejo na meri vidnosti. Meritev na
+resnicni fotografiji je to ovrgla: obrisov prave velikosti je sploh nastalo le
+**11**, vidnih kosov pa je ~30. Vecina jih nikoli ni prisla do elipse.
+
+Primerjava z uveljavljenimi detektorji na isti sliki:
+
+| detektor | elips prave velikosti | cas |
+|---|---|---|
+| moj (kontura → fit → razpolovi) | 11 | 7 s |
+| `cv2.HoughCircles` | 22 | 0.3 s |
+| **`cv2.ximgproc.EdgeDrawing.detectEllipses`** | **30** | **0.1 s** |
+
+EdgeDrawing gradi robne verige po ujemanju smeri gradienta, jih razbije na loke
+in loke iste elipse zdruzi — po vzoru ELSD in Fornaciarija. Ravno to manjka
+mojemu razpolavljanju konture, kadar je obris razbit na vec kratkih lokov.
+Uporabljen je kot drugi vir kandidatov (`ellipse.detector: both`); o tem, kateri
+so kosi, se naprej odlocajo polariteta, parjenje in vidnost. Ucinek: parov na
+fotografiji 3 → **13**.
+
+Iz iste literature (LSD) je prevzeta se spodnja meja jakosti gradienta iz
+**kvantizacijske napake** (ρ = q/sin τ ≈ 5 sivinskih nivojev) namesto praga
+glede na kontrast scene, in merilo kontrasta iz **okolice kosa**, ne cele slike.
+
+**K18 — izbira merila sme upostevati le trdne pare.** Ko so dodatni kandidati
+vstopili v izbiro pravokotnika zaboja, se je merilo spremenilo in filter
+velikosti je zavrnil pravi kos kot "3.7-krat prevelik". Izbira merila zdaj
+uposteva le sparjene kandidate z zadostno podprtostjo.
+
 **K16 — vidnost obrisa se najbolje meri iz gradienta, ne iz bližine robnih
 točk.** Primerjava štirih mer proti resnični vidnosti (210 kosov na gostih
 sintetičnih scenah z vzorčkom na površini):

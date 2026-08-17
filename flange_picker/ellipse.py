@@ -13,6 +13,7 @@ import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence, Tuple
 
+import cv2
 import numpy as np
 
 from .config import Config
@@ -229,6 +230,61 @@ def fit_contour(points: np.ndarray, cfg: Config, depth: int = 0) -> List[Ellipse
     return out
 
 
+def detect_ellipses_edge_drawing(gray: np.ndarray, cfg: Config) -> Tuple[List[Ellipse], dict]:
+    """Kandidatne elipse z EdgeDrawing (OpenCV contrib), po vzoru ELSD/Fornaciari.
+
+    Namesto "vsaka kontura -> fit -> razpolovi" ta detektor gradi robne verige po
+    ujemanju smeri gradienta, jih razbije na loke in loke iste elipse zdruzi.
+    Ravno to manjka mojemu pristopu, kadar je obris kosa razbit na vec kratkih
+    lokov - izmerjeno na resnicni fotografiji: 30 elips prave velikosti proti 11.
+
+    Vrne kandidate; o tem, kateri so kosi, odlocajo sele polariteta, parjenje z
+    luknjo in mera vidnosti.
+    """
+    diag: dict = {"available": hasattr(cv2, "ximgproc")}
+    if not diag["available"]:
+        diag["reason"] = "cv2.ximgproc ni na voljo (namesti opencv-contrib-python-headless)"
+        return [], diag
+    try:
+        detector = cv2.ximgproc.createEdgeDrawing()
+        params = cv2.ximgproc.EdgeDrawing.Params()
+        params.PFmode = bool(cfg["ellipse.edge_drawing.pf_mode"])
+        params.GradientThresholdValue = int(cfg["ellipse.edge_drawing.gradient_threshold"])
+        params.AnchorThresholdValue = int(cfg["ellipse.edge_drawing.anchor_threshold"])
+        params.MinPathLength = int(cfg["ellipse.edge_drawing.min_path_length"])
+        params.NFAValidation = bool(cfg["ellipse.edge_drawing.nfa_validation"])
+        params.Sigma = float(cfg["ellipse.edge_drawing.sigma"])
+        detector.setParams(params)
+        detector.detectEdges(gray)
+        found = detector.detectEllipses()
+    except cv2.error as exc:
+        diag["reason"] = f"EdgeDrawing je odpovedal: {exc}"
+        return [], diag
+    if found is None:
+        diag["n_found"] = 0
+        return [], diag
+    found = np.asarray(found, dtype=float).reshape(-1, 6)
+    diag["n_found"] = int(len(found))
+    out: List[Ellipse] = []
+    for row in found:
+        # Zapis OpenCV: krog ima polmer v row[2], elipsa pa polosi v row[3:5];
+        # sestevek pokrije oba primera.
+        axis_a = float(row[2] + row[3])
+        axis_b = float(row[2] + row[4])
+        if axis_a <= 0 or axis_b <= 0:
+            continue
+        major, minor = max(axis_a, axis_b), min(axis_a, axis_b)
+        theta = math.radians(float(row[5]))
+        if axis_b > axis_a:
+            theta += math.pi / 2.0
+        ell = Ellipse(cx=float(row[0]), cy=float(row[1]), a=major, b=minor,
+                      theta=theta % math.pi, meta={"source": "edge_drawing"})
+        if _acceptable(ell, cfg):
+            out.append(ell)
+    diag["n_accepted"] = len(out)
+    return out, diag
+
+
 def deduplicate(ellipses: Sequence[Ellipse], cfg: Config) -> List[Ellipse]:
     """Zdruzi skoraj enake fite (npr. notranja in zunanja stran istega roba)."""
     center_tol = float(cfg["ellipse.duplicate_center_px"])
@@ -289,11 +345,27 @@ def compute_support_gradient(ellipses: Sequence[Ellipse], gx: Optional[np.ndarra
             ell.support_ratio = 0.0
         return
     mag = np.hypot(gx, gy)
-    strong = mag[mag > np.percentile(mag, float(cfg["ellipse.support_scale_percentile"]))]
-    scale = float(np.median(strong)) if strong.size else 1.0
-    threshold = float(cfg["ellipse.support_gradient_factor"]) * scale
+    pct = float(cfg["ellipse.support_scale_percentile"])
+    strong = mag[mag > np.percentile(mag, pct)]
+    global_scale = float(np.median(strong)) if strong.size else 1.0
+    factor = float(cfg["ellipse.support_gradient_factor"])
+    local = bool(cfg["ellipse.support_local_scale"])
+    floor = float(cfg["ellipse.support_gradient_floor"])
     h, w = gx.shape[:2]
     for ell in ellipses:
+        if local:
+            # Merilo kontrasta iz OKOLICE kosa, ne iz cele slike. Enakomerno a
+            # slabse osvetljen kos ima sibkejsi gradient povsod; z globalnim
+            # merilom bi bil videti prekrit, ceprav je popolnoma viden.
+            x0 = max(0, int(ell.cx - 1.3 * ell.a)); x1 = min(w, int(ell.cx + 1.3 * ell.a) + 1)
+            y0 = max(0, int(ell.cy - 1.3 * ell.a)); y1 = min(h, int(ell.cy + 1.3 * ell.a) + 1)
+            patch = mag[y0:y1, x0:x1]
+            scale = (float(np.percentile(patch, pct)) if patch.size > 16 else global_scale)
+        else:
+            scale = global_scale
+        # Spodnja meja iz kvantizacije (LSD: rho = q / sin(tau)) prepreci, da bi
+        # se v ravnem, brezsumnem obmocju za rob steli sami zaokrozitveni ostanki.
+        threshold = max(factor * scale, floor)
         pts = ell.perimeter_points(n_samples)
         nrm = ell.outward_normals(n_samples)
         xi = np.clip(np.round(pts[:, 0]).astype(int), 0, w - 1)
