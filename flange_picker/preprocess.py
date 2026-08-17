@@ -55,15 +55,35 @@ def specular_mask(gray: np.ndarray, cfg: Config) -> np.ndarray:
     return mask
 
 
+def apply_gamma(gray: np.ndarray, gamma: float) -> np.ndarray:
+    """Gama korekcija. gamma < 1 dvigne temne dele - kose v senci ob steni zaboja.
+
+    Za razliko od CLAHE je globalna in monotona: ne izmislja si lokalnega
+    kontrasta, zato ne rodi navideznih robov v gladkih obmocjih.
+    """
+    if abs(gamma - 1.0) < 1e-6:
+        return gray
+    lut = np.clip(((np.arange(256) / 255.0) ** float(gamma)) * 255.0, 0, 255).astype(np.uint8)
+    return cv2.LUT(gray, lut)
+
+
 def preprocess(image: np.ndarray, cfg: Config) -> Preprocessed:
     raw = to_gray(image)
-    clahe = cv2.createCLAHE(clipLimit=float(cfg["preprocess.clahe_clip"]),
-                            tileGridSize=(int(cfg["preprocess.clahe_grid"]),) * 2)
-    enhanced = clahe.apply(raw)
-    filtered = cv2.bilateralFilter(enhanced,
-                                   int(cfg["preprocess.bilateral_d"]),
-                                   float(cfg["preprocess.bilateral_sigma_color"]),
-                                   float(cfg["preprocess.bilateral_sigma_space"]))
+    working = apply_gamma(raw, float(cfg.get("preprocess.gamma", 1.0)))
+    clip = float(cfg["preprocess.clahe_clip"])
+    if clip > 0:
+        clahe = cv2.createCLAHE(clipLimit=clip,
+                                tileGridSize=(int(cfg["preprocess.clahe_grid"]),) * 2)
+        enhanced = clahe.apply(working)
+    else:
+        enhanced = working
+    bil_d = int(cfg["preprocess.bilateral_d"])
+    if bil_d > 0:
+        filtered = cv2.bilateralFilter(enhanced, bil_d,
+                                       float(cfg["preprocess.bilateral_sigma_color"]),
+                                       float(cfg["preprocess.bilateral_sigma_space"]))
+    else:
+        filtered = enhanced
     mask = specular_mask(raw, cfg)
     diag = {
         "shape": [int(raw.shape[1]), int(raw.shape[0])],

@@ -29,6 +29,7 @@ class Candidate:
     grasp_point_mm: Optional[np.ndarray] = None
     grasp_point_px: Optional[np.ndarray] = None
     visibility_raw: float = 0.0
+    ring_clutter_excess: float = float("nan")
     score: float = 0.0
     terms: dict = field(default_factory=dict)
     rejected: Optional[str] = None
@@ -150,6 +151,11 @@ def analyse_ring(cand: Candidate, others: Sequence[Candidate], calib, cfg: Confi
         cand.grasp_point_mm = grasp_cam
 
 
+def _role_size_ok(cand: Candidate, r_out_px: float, r_in_px: float, window: float) -> bool:
+    expected = r_in_px if cand.pair.role == "inner" else r_out_px
+    return abs(cand.pair.outer.a - expected) <= window * expected
+
+
 def score_candidates(candidates: List[Candidate], calib, cfg: Config,
                      image_shape: Tuple[int, int]) -> Tuple[List[Candidate], List[dict]]:
     rejected: List[dict] = []
@@ -178,6 +184,9 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
         normalisation = {"applied": False, "reason": "izklopljeno v configu"}
 
     for cand in candidates:
+        cand.ring_clutter_excess = float(cand.pair.ring_clutter_excess)
+
+    for cand in candidates:
         analyse_ring(cand, candidates, calib, cfg, image_shape)
 
     w_mm = float(cfg["box.w_mm"])
@@ -200,6 +209,10 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
     span = h_hi - h_lo
 
     weights = dict(cfg.section("scoring.weights").as_dict())
+    if not any(math.isfinite(c.pair.ring_clutter) for c in candidates):
+        weights.pop("ring_clean", None)     # mera ni bila izracunana
+    if not any(c.pair.outer.meta.get("votes") for c in candidates):
+        weights.pop("consensus", None)      # enoprehodni tecaj: soglasja ni
     if not calib.frame_reliable:
         # Brez okvira zaboja visina izhaja iz globine, ta pa ima pri 1-2 mm
         # debelih kosih vecjo negotovost od razmika plasti - clen je cist sum.
@@ -231,6 +244,18 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
         except np.linalg.LinAlgError:
             h_inv = None
     max_occ = float(cfg["scoring.max_occlusion"])
+    max_clutter = float(cfg["scoring.max_ring_clutter_excess"])
+    reject_lone_hole = bool(cfg["scoring.reject_lone_hole"])
+    min_virtual_hole = float(cfg["ellipse.pairing.min_virtual_hole_support"])
+    # Preverjanje velikosti glede na VLOGO roba. Predfilter velikosti spusti skozi
+    # oba premera (obris in luknjo), ker vloga takrat se ni znana. Ko polariteta
+    # vlogo doloci, mora velikost ustrezati prav tej: elipsa velikosti luknje s
+    # polariteto obrisa je bodisi napacno razvrscena bodisi sploh ni kos.
+    hint_px = cfg.get("flange.expected_outer_radius_px", None)
+    role_window = float(cfg["flange.radius_window"]) if hint_px else None
+    r_out_px = float(hint_px) if hint_px else 0.0
+    r_in_px = r_out_px * float(cfg["flange.d_in_mm"]) / float(cfg["flange.d_out_mm"])
+    total_passes = max(len(cfg.get("multipass.passes", []) or []), 1)
     kept: List[Candidate] = []
     for cand, height in zip(candidates, heights):
         size_ratio = None
@@ -251,6 +276,24 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
             cand.rejected = (f"visina {float(cand.pose.center_box[2]):.1f} mm nad dnom je izven "
                              f"verjetnega obsega [{z_lo:.0f}, {z_hi:.0f}] mm - elipsa najbrz "
                              "ni obris prirobnice")
+        elif reject_lone_hole and cand.pair.role == "inner":
+            cand.rejected = ("vidna je samo luknja, obrisa kosa pa ne - obris je torej "
+                             "prekrit in kos ni na vrhu")
+        elif (math.isfinite(cand.pair.virtual_hole_support)
+              and cand.pair.virtual_hole_support < min_virtual_hole):
+            cand.rejected = (f"na polmeru luknje ni roba (podprtost "
+                             f"{cand.pair.virtual_hole_support:.2f} < {min_virtual_hole:.2f}) - "
+                             "obris brez luknje ni prirobnica")
+        elif role_window and not _role_size_ok(cand, r_out_px, r_in_px, role_window):
+            expected = r_in_px if cand.pair.role == "inner" else r_out_px
+            cand.rejected = (f"polos {cand.pair.outer.a:.0f} px ne ustreza vlogi "
+                             f"'{cand.pair.role}' (pricakovano {expected:.0f} px "
+                             f"+-{100.0 * role_window:.0f} %)")
+        elif (max_clutter < 1.0 and math.isfinite(cand.ring_clutter_excess)
+              and cand.ring_clutter_excess > max_clutter):
+            cand.rejected = (f"kolobar je neenakomerno zamasan: {100.0 * cand.ring_clutter_excess:.0f} % "
+                             f"vec kot v najcistejsem izseku istega kolobarja (dovoljeno "
+                             f"{100.0 * max_clutter:.0f} %) - cez kos lezi drug kos")
         elif cand.pose.tilt_deg > max_tilt:
             cand.rejected = f"naklon {cand.pose.tilt_deg:.1f} deg presega mejo {max_tilt:.0f} deg"
         elif cand.free_arc_deg < min_arc:
@@ -273,14 +316,29 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
             np.clip(cand.wall_margin_mm / max(wall_good, 1e-6), 0.0, 1.0))
         t_cup = float(np.clip(cand.free_arc_deg / 360.0, 0.0, 1.0)) * cand.cup_fit_ratio
         t_conf = float(np.clip(cand.pose.confidence, 0.0, 1.0))
+        votes = int(cand.pair.outer.meta.get("votes", 0))
+        t_consensus = float(np.clip(votes / total_passes, 0.0, 1.0))
+        # Ce mere ni (kolobar je izven slike), ne nagradimo in ne kaznujemo.
+        t_clean = (0.5 if not math.isfinite(cand.ring_clutter_excess)
+                   else float(np.clip(1.0 - cand.ring_clutter_excess / max(max_clutter, 1e-6),
+                                      0.0, 1.0)))
         cand.terms = {"height": t_height, "tilt": t_tilt, "occlusion": t_occl,
                       "wall_margin": t_wall, "cup_clearance": t_cup,
-                      "confidence": t_conf}
+                      "confidence": t_conf, "consensus": t_consensus,
+                      "ring_clean": t_clean}
         cand.score = float(sum(float(w) * cand.terms[k] for k, w in weights.items()) / w_sum)
         kept.append(cand)
 
     for cand in candidates:
         cand.notes.append(f"vidnost surova={cand.visibility_raw:.2f}")
+        votes = cand.pair.outer.meta.get("votes")
+        if votes:
+            found_in = ", ".join(cand.pair.outer.meta.get("passes", []))
+            cand.notes.append(f"najden v {votes}/{total_passes} prehodih ({found_in})")
+        if math.isfinite(cand.pair.ring_clutter):
+            cand.notes.append(f"zamasanost kolobarja={cand.pair.ring_clutter:.2f} "
+                              f"(presezek {cand.ring_clutter_excess:.2f} nad najcistejsim "
+                              "izsekom istega kolobarja)")
     kept.sort(key=lambda c: -c.score)
 
     # Potlacitev podvojenih: vec fitov istega kosa (iz razlicnih virov ali lokov)

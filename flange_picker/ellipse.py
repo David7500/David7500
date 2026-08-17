@@ -413,6 +413,148 @@ def compute_polarity(ellipses: Sequence[Ellipse], gx: Optional[np.ndarray],
         ell.polarity = float(np.mean(radial) / scale) if scale > 1e-9 else 0.0
 
 
+def verify_virtual_hole(pairs: Sequence["EllipsePair"], gx: Optional[np.ndarray],
+                        gy: Optional[np.ndarray], cfg: Config) -> None:
+    """Za obris brez najdenega para preveri, ali je na mestu luknje sploh rob.
+
+    Prava prirobnica ima luknjo na znanem polmeru (D_in/D_out) in soosno z
+    obrisom. Ce fit luknje ni uspel, se rob luknje vseeno MORA videti. Navidezno
+    elipso zato zgradimo iz geometrije in na njej izmerimo isto podprtost kot
+    sicer: pri pravem kosu je visoka, pri nakljucnem krogu cez kup stakanih kosov
+    pa tam ni nicesar. To je parjenje s sintetizirano luknjo - dokaz o kosu tudi
+    takrat, ko detektor luknje odpove.
+    """
+    if gx is None or gy is None:
+        return
+    ratio = float(cfg["flange.d_in_mm"]) / float(cfg["flange.d_out_mm"])
+    if ratio <= 1e-6:
+        return
+    todo = [p for p in pairs if not p.paired and p.role == "outer"]
+    if not todo:
+        return
+    virtual = [Ellipse(cx=p.outer.cx, cy=p.outer.cy, a=p.outer.a * ratio,
+                       b=p.outer.b * ratio, theta=p.outer.theta) for p in todo]
+    compute_support_gradient(virtual, gx, gy, cfg)
+    compute_polarity(virtual, gx, gy, cfg)
+    for pair, ghost in zip(todo, virtual):
+        # Predznaka NE zahtevamo. V polnem zaboju luknja ni temna - skoznjo se
+        # vidi kos pod njo, ki je enako svetel ali svetlejsi. Izmerjeno na
+        # resnicni fotografiji: pravi kos je imel polariteto luknje -0.35, torej
+        # ravno nasprotno od pricakovane. Steje samo, da rob NA TEM POLMERU
+        # obstaja; mera podprtosti predznak itak vzame iz same elipse.
+        pair.virtual_hole_support = float(ghost.support_ratio)
+        pair.reasons["virtual_hole"] = {
+            "support": round(float(ghost.support_ratio), 3),
+            "polarity": round(float(ghost.polarity), 3),
+        }
+
+
+def _sector_excess(hit: np.ndarray, valid: np.ndarray, n_sectors: int,
+                   min_sector_frac: float) -> float:
+    """Presezek zamasanosti nad najcistejsim izsekom istega kolobarja.
+
+    Kolobar razdelimo na kotne izseke. Prost kos je enakomerno teksturiran, zato
+    so vsi izseki podobni in presezek je blizu nic. Kos, cez katerega lezi drug
+    kos, ima nekaj izsekov mocno umazanih - povprecje se dvigne, najcistejsi
+    izsek pa ostane cist, in razlika to pokaze.
+    """
+    n_ang = hit.shape[1]
+    if n_sectors < 2 or n_ang < n_sectors:
+        return float("nan")
+    per_sector = []
+    bounds = np.linspace(0, n_ang, n_sectors + 1).astype(int)
+    for lo, hi in zip(bounds[:-1], bounds[1:]):
+        n_valid = int(valid[:, lo:hi].sum())
+        if n_valid < min_sector_frac * valid[:, lo:hi].size:
+            continue                      # izsek je vecinoma izven slike
+        per_sector.append(float(hit[:, lo:hi].sum()) / n_valid)
+    if len(per_sector) < 3:
+        return float("nan")
+    values = np.sort(np.asarray(per_sector))
+    # Izhodisce je najcistejsa cetrtina izsekov (ne absolutni minimum - ta je pri
+    # majhnem vzorcu sum).
+    baseline = float(np.mean(values[:max(1, len(values) // 4)]))
+    return float(max(0.0, float(np.mean(values)) - baseline))
+
+
+def measure_ring_clutter(pairs: Sequence["EllipsePair"], gx: Optional[np.ndarray],
+                         gy: Optional[np.ndarray], cfg: Config) -> None:
+    """Delez povrsine kolobarja, cez katerega tece tuj rob.
+
+    Mera vidnosti obrisa gleda le OBOD. Kos, ki mu drug kos lezi cez sredino,
+    ima lahko obod skoraj cel, a je vseeno neprijemljiv - in ravno taki so se
+    prebijali med najbolje ocenjene kandidate. Zato tu vzorcimo POVRSINO
+    kolobarja med luknjo in obrisom: gladka kovinska ploskev da sibek gradient,
+    rob kosa, ki lezi cez njo, pa mocnega.
+
+    Isto merilo kontrasta kot pri vidnosti (lokalni percentil + spodnja meja iz
+    kvantizacije), zato je vrednost primerljiva med svetlimi in temnimi deli
+    zaboja.
+
+    Absolutna vrednost pove malo: perforirana povrsina in vijacne luknje dajo
+    gradient tudi na povsem prostem kosu (izmerjeno: sinteticna scena s teksturo
+    0.31 pri polni vidnosti, resnicna fotografija 0.03-0.05). Merodajen je zato
+    PRESEZEK glede na NAJCISTEJSI IZSEK ISTEGA kolobarja (`pair.ring_clutter_excess`):
+    prost kos je enakomerno teksturiran, kos s tujim kosom cez sebe pa ima nekaj
+    izsekov mocno umazanih. Mera je s tem sama sebi referenca - ne potrebuje ne
+    drugih kandidatov v sceni ne poznavanja povrsinske obdelave.
+    """
+    if gx is None or gy is None:
+        return
+    mag = np.hypot(gx, gy)
+    pct = float(cfg["ellipse.support_scale_percentile"])
+    factor = float(cfg["ellipse.ring_clutter_factor"])
+    floor = float(cfg["ellipse.support_gradient_floor"])
+    n_ang = int(cfg["ellipse.ring_clutter_angular_samples"])
+    n_rad = int(cfg["ellipse.ring_clutter_radial_samples"])
+    margin = float(cfg["ellipse.ring_clutter_margin"])
+    n_sectors = int(cfg["ellipse.ring_clutter_sectors"])
+    min_sector_frac = float(cfg["ellipse.ring_clutter_min_sector_fraction"])
+    ratio = float(cfg["flange.d_in_mm"]) / float(cfg["flange.d_out_mm"])
+    h, w = mag.shape[:2]
+
+    strong = mag[mag > np.percentile(mag, pct)]
+    global_scale = float(np.median(strong)) if strong.size else 1.0
+
+    angles = np.linspace(0.0, 2.0 * math.pi, n_ang, endpoint=False)
+    # Vzorcimo v NORMIRANIH koordinatah elipse in jih preslikamo z isto afino
+    # preslikavo kot obod - tako pas ostane kolobar tudi pri mocnem naklonu.
+    fracs = np.linspace(ratio + margin, 1.0 - margin, n_rad)
+    for pair in pairs:
+        if fracs[0] >= fracs[-1]:
+            continue
+        ell = pair.outer
+        if pair.role == "inner":
+            # Vidna je le luknja; obris kosa je znan po geometriji (D_out/D_in),
+            # zato kolobar vseeno lahko preverimo - in ravno pri teh kandidatih je
+            # to najbolj pomembno, saj obrisa ne vidimo ravno zato, ker je prekrit.
+            if ratio <= 1e-6:
+                continue
+            ell = Ellipse(cx=ell.cx, cy=ell.cy, a=ell.a / ratio, b=ell.b / ratio,
+                          theta=ell.theta)
+        ct, st = math.cos(ell.theta), math.sin(ell.theta)
+        x0 = max(0, int(ell.cx - 1.3 * ell.a)); x1 = min(w, int(ell.cx + 1.3 * ell.a) + 1)
+        y0 = max(0, int(ell.cy - 1.3 * ell.a)); y1 = min(h, int(ell.cy + 1.3 * ell.a) + 1)
+        patch = mag[y0:y1, x0:x1]
+        scale = float(np.percentile(patch, pct)) if patch.size > 16 else global_scale
+        threshold = max(factor * scale, floor)
+        hit = np.zeros((len(fracs), n_ang), dtype=bool)
+        valid = np.zeros((len(fracs), n_ang), dtype=bool)
+        for k, frac in enumerate(fracs):
+            ex = frac * ell.a * np.cos(angles)
+            ey = frac * ell.b * np.sin(angles)
+            px = ell.cx + ct * ex - st * ey
+            py = ell.cy + st * ex + ct * ey
+            inside = (px >= 0) & (px < w) & (py >= 0) & (py < h)
+            xi = np.clip(np.round(px).astype(int), 0, w - 1)
+            yi = np.clip(np.round(py).astype(int), 0, h - 1)
+            valid[k] = inside
+            hit[k] = inside & (mag[yi, xi] > threshold)
+        total = int(valid.sum())
+        pair.ring_clutter = float(hit.sum() / total) if total else float("nan")
+        pair.ring_clutter_excess = _sector_excess(hit, valid, n_sectors, min_sector_frac)
+
+
 def classify_role(ell: Ellipse, cfg: Config) -> Optional[str]:
     """'outer' (obris kosa), 'inner' (luknja) ali None, ce polariteta ni jasna."""
     thr = float(cfg["ellipse.polarity_threshold"])
@@ -433,6 +575,9 @@ class EllipsePair:
     score: float
     reasons: dict = field(default_factory=dict)
     role: str = "outer"      # kaj predstavlja `outer`: 'outer' obris ali 'inner' luknja
+    ring_clutter: float = float("nan")          # delez kolobarja s tujim robom cez njega
+    ring_clutter_excess: float = float("nan")   # presezek nad najcistejsim izsekom istega kolobarja
+    virtual_hole_support: float = float("nan")  # podprtost roba luknje, kadar para ni
 
     @property
     def paired(self) -> bool:

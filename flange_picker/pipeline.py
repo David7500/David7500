@@ -17,11 +17,13 @@ import cv2
 import numpy as np
 
 from . import autocalib as autocalib_mod
+from . import multipass
 from .config import Config, load_config
 from .edges import detect_edges
 from .ellipse import (apply_edge_bias, compute_polarity, compute_support,
                       compute_support_gradient, deduplicate, detect_ellipses_edge_drawing,
-                      estimate_edge_bias, fit_contour, pair_ellipses)
+                      estimate_edge_bias, fit_contour, measure_ring_clutter, pair_ellipses,
+                      verify_virtual_hole)
 from .pose import build_flange_pose
 from .preprocess import preprocess, to_gray
 from .scoring import Candidate, score_candidates
@@ -78,6 +80,28 @@ class Result:
         }
 
 
+def _size_prefilter(ellipses: List, cfg: Config, diagnostics: Dict) -> List:
+    """Obdrzi le elipse velikosti obrisa ali luknje, ce je pricakovan polmer znan.
+
+    Kosi s perforirano povrsino dajo na stotine drobnih elips; parjenje med njimi
+    je kombinatorno brezupno in rodi navlako.
+    """
+    hint = cfg.get("flange.expected_outer_radius_px", None)
+    if not hint:
+        return ellipses
+    window = float(cfg["flange.radius_window"])
+    r_out_px = float(hint)
+    r_in_px = r_out_px * float(cfg["flange.d_in_mm"]) / float(cfg["flange.d_out_mm"])
+    before = len(ellipses)
+    kept = [e for e in ellipses
+            if abs(e.a - r_out_px) <= window * r_out_px
+            or abs(e.a - r_in_px) <= window * r_in_px]
+    diagnostics["size_prefilter"] = {
+        "expected_outer_px": round(r_out_px, 1), "expected_inner_px": round(r_in_px, 1),
+        "kept": len(kept), "dropped": before - len(kept)}
+    return kept
+
+
 def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool = False,
                   debug_dir: Optional[str] = None, debug_prefix: str = "step") -> Result:
     cfg = cfg or load_config()
@@ -93,63 +117,81 @@ def process_image(image: np.ndarray, cfg: Optional[Config] = None, debug: bool =
                       warnings=["prazna slika - prazna lista kandidatov"])
 
     gray_raw = to_gray(image)
-    pre = preprocess(gray_raw, cfg)
-    diagnostics["preprocess"] = pre.diagnostics
 
-    edge_map = detect_edges(pre.gray, cfg, exclude_mask=pre.specular_mask,
-                            gradient_image=pre.raw_gray)
-    diagnostics["edges"] = edge_map.diagnostics
-
-    detector = str(cfg["ellipse.detector"])
-    raw_ellipses = []
-    if detector in ("contours", "both"):
-        for contour in edge_map.contours:
-            raw_ellipses.extend(fit_contour(contour, cfg))
-    n_contour = len(raw_ellipses)
-    n_ed = 0
-    if detector in ("edge_drawing", "both"):
-        ed_ellipses, ed_diag = detect_ellipses_edge_drawing(pre.gray, cfg)
-        diagnostics["edge_drawing"] = ed_diag
-        n_ed = len(ed_ellipses)
-        raw_ellipses.extend(ed_ellipses)
-        if not ed_diag.get("available") and detector == "edge_drawing":
-            warnings.append("EdgeDrawing ni na voljo: " + str(ed_diag.get("reason", "")))
-    ellipses = deduplicate(raw_ellipses, cfg)
-    if str(cfg["ellipse.support_method"]) == "gradient":
-        compute_support_gradient(ellipses, edge_map.gx, edge_map.gy, cfg)
+    if bool(cfg.get("multipass.enabled", False)):
+        passes, pass_diag = multipass.run_passes(gray_raw, cfg)
+        diagnostics["multipass"] = pass_diag
+        base = next((p for p in passes if p.full_scale), passes[0])
+        pre, edge_map = base.pre, base.edges
+        diagnostics["preprocess"] = pre.diagnostics
+        diagnostics["edges"] = edge_map.diagnostics
+        raw_ellipses = [e for p in passes for e in p.ellipses]
+        ellipses, cons_diag = multipass.consolidate(passes, cfg)
+        diagnostics["multipass"]["consolidation"] = cons_diag
+        min_votes = int(cfg["multipass.min_votes"])
+        thin = [e for e in ellipses if e.meta.get("votes", 1) < min_votes]
+        ellipses = [e for e in ellipses if e.meta.get("votes", 1) >= min_votes]
+        diagnostics["multipass"]["n_below_min_votes"] = len(thin)
+        # Vidnost se meri sele po predfiltru velikosti: merjenje v vseh prehodih
+        # je najdrazji korak, na tisocih drobnih elips s perforirane povrsine pa
+        # brez pomena. Vrstni red na rezultat ne vpliva - predfilter gleda samo
+        # polos.
+        ellipses = _size_prefilter(ellipses, cfg, diagnostics)
+        diagnostics["multipass"]["measure"] = multipass.measure_across_passes(ellipses, passes, cfg)
+        n_contour = sum(int(p.diagnostics.get("n_from_contours", 0)) for p in passes)
+        n_ed = sum(int(p.diagnostics.get("n_from_edge_drawing", 0)) for p in passes)
     else:
-        compute_support(ellipses, edge_map.points, cfg)
-    compute_polarity(ellipses, edge_map.gx, edge_map.gy, cfg)
+        pre = preprocess(gray_raw, cfg)
+        diagnostics["preprocess"] = pre.diagnostics
+
+        edge_map = detect_edges(pre.gray, cfg, exclude_mask=pre.specular_mask,
+                                gradient_image=pre.raw_gray)
+        diagnostics["edges"] = edge_map.diagnostics
+
+        detector = str(cfg["ellipse.detector"])
+        raw_ellipses = []
+        if detector in ("contours", "both"):
+            for contour in edge_map.contours:
+                raw_ellipses.extend(fit_contour(contour, cfg))
+        n_contour = len(raw_ellipses)
+        n_ed = 0
+        if detector in ("edge_drawing", "both"):
+            ed_ellipses, ed_diag = detect_ellipses_edge_drawing(pre.gray, cfg)
+            diagnostics["edge_drawing"] = ed_diag
+            n_ed = len(ed_ellipses)
+            raw_ellipses.extend(ed_ellipses)
+            if not ed_diag.get("available") and detector == "edge_drawing":
+                warnings.append("EdgeDrawing ni na voljo: " + str(ed_diag.get("reason", "")))
+        ellipses = deduplicate(raw_ellipses, cfg)
+        if str(cfg["ellipse.support_method"]) == "gradient":
+            compute_support_gradient(ellipses, edge_map.gx, edge_map.gy, cfg)
+        else:
+            compute_support(ellipses, edge_map.points, cfg)
+        compute_polarity(ellipses, edge_map.gx, edge_map.gy, cfg)
+
+    n_before_support = len(ellipses)
     min_support = float(cfg["ellipse.min_support_ratio"])
     weak = [e for e in ellipses if e.support_ratio < min_support]
     ellipses = [e for e in ellipses if e.support_ratio >= min_support]
     diagnostics["ellipses"] = {
         "n_raw": len(raw_ellipses), "n_from_contours": n_contour, "n_from_edge_drawing": n_ed,
-        "n_after_dedup": len(ellipses) + len(weak),
+        "n_after_dedup": n_before_support,
         "n_kept": len(ellipses), "n_low_support": len(weak),
     }
 
-    # Predfilter po pricakovani velikosti. Kosi s perforirano povrsino dajo na
-    # stotine drobnih elips; parjenje med njimi je kombinatorno brezupno in rodi
-    # navlako. Ce je pricakovan polmer znan, obdrzimo le elipse velikosti obrisa
-    # ali luknje.
-    hint = cfg.get("flange.expected_outer_radius_px", None)
-    if hint:
-        window = float(cfg["flange.radius_window"])
-        r_out_px = float(hint)
-        r_in_px = r_out_px * float(cfg["flange.d_in_mm"]) / float(cfg["flange.d_out_mm"])
-        before = len(ellipses)
-        ellipses = [e for e in ellipses
-                    if abs(e.a - r_out_px) <= window * r_out_px
-                    or abs(e.a - r_in_px) <= window * r_in_px]
-        diagnostics["size_prefilter"] = {
-            "expected_outer_px": round(r_out_px, 1), "expected_inner_px": round(r_in_px, 1),
-            "kept": len(ellipses), "dropped": before - len(ellipses)}
+    if "size_prefilter" not in diagnostics:
+        ellipses = _size_prefilter(ellipses, cfg, diagnostics)
 
     pairs, pair_rejected = pair_ellipses(ellipses, cfg)
+    # Zamasanost kolobarja se meri sele po parjenju: sele takrat je znano, kateri
+    # rob je obris kosa in kje je torej njegova povrsina.
+    measure_ring_clutter(pairs, edge_map.gx, edge_map.gy, cfg)
+    verify_virtual_hole(pairs, edge_map.gx, edge_map.gy, cfg)
+    clutter = [p.ring_clutter for p in pairs if p.ring_clutter == p.ring_clutter]
     diagnostics["pairs"] = {
         "n_pairs": sum(1 for p in pairs if p.paired),
         "n_unpaired": sum(1 for p in pairs if not p.paired),
+        "ring_clutter_median": round(float(np.median(clutter)), 3) if clutter else None,
         "rejected": pair_rejected[:20],
     }
 

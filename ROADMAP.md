@@ -25,14 +25,10 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
   pravilna (4 mm), Z pa zahteva dober `f_px`; pot prek delovne razdalje v tem
   načinu še ni skladna (uporabi merilo roba namesto dna). Do takrat je način
   eksperimentalen.
-- [ ] **Čas obdelave 7.7 s pri 90 kosih** (267 elips). Za takt celice je
-  treba fit omejiti na kandidate prave velikosti — velikost kosa v pikslih je
-  po detekciji zaboja znana, zato je predfiltriranje poceni.
-
-- [ ] **Preciznost detekcije 96 %.** Preostali lažni kandidati nastanejo v
-  gručah prekrivajočih se kosov, kjer razpolavljanje konture rodi vec fitov
-  istega roba. Naslednji korak: razbijanje kontur po krivinskih vrhovih in
-  združevanje lokov iste elipse namesto slepega razpolavljanja.
+- [ ] **Prag `min_virtual_hole_support` je izmerjen na eni fotografiji.**
+  Ločnica 0.40 leži med 0.38 (lažen) in 0.42 (pravi) — to je tesno. Potrebuje
+  potrditev na več posnetkih istega zaboja; sicer ga je bolje spustiti na 0.35
+  in razliko prenesti v oceno (člen `ring_clean` že deluje tako).
 - [ ] **Z RMSE 2.0–2.2 mm, odmik ~1.0–1.5 mm.** Omejuje ga sistematični odmik
   lege roba (+0.13 px na zunanjem robu). Iz razmerja premerov ga ni mogoče
   izluščiti (glej K11) — potrebna je referenčna meritev na znanem kosu ali
@@ -70,19 +66,22 @@ Ground truth je znana po konstrukciji (generator `flange_picker/synth.py`).
 
 ### Izmerjene metrike (12 scen, seed 100)
 
-| Metrika | Prvi mejnik | Po izboljšavah | + vrata prekritosti |
-|---|---|---|---|
-| detekcija — recall (v sliki) | 0.918 | **0.986** | 0.973 |
-| detekcija — preciznost | 0.827 | 0.960 | **1.000** |
-| okvir zaboja na voljo | 83 % | **100 %** | 100 % |
-| ujemanje poze — recall | 0.891 | **0.973** | 0.973 |
-| XY RMSE | 0.36 mm | 0.36 mm | **0.26 mm** |
-| Z RMSE | 1.97 mm | 2.03 mm | **1.54 mm** |
-| naklon RMSE | 2.09° | 1.78° | **1.30°** |
-| relativna napaka `f_px` | 11.0 % | 11.9 % | **2.3 %** |
-| prvi kandidat je iz vrhnje plasti | 80 % | **83 %** | 83 % |
+| Metrika | Prvi mejnik | Po izboljšavah | + vrata prekritosti | + več prehodov |
+|---|---|---|---|---|
+| detekcija — recall (v sliki) | 0.918 | **0.986** | 0.973 | 0.959 |
+| detekcija — preciznost | 0.827 | 0.960 | **1.000** | **1.000** |
+| okvir zaboja na voljo | 83 % | **100 %** | 100 % | **100 %** |
+| ujemanje poze — recall | 0.891 | **0.973** | 0.973 | 0.945 |
+| XY RMSE | 0.36 mm | 0.36 mm | 0.26 mm | **0.25 mm** |
+| Z RMSE | 1.97 mm | 2.03 mm | **1.54 mm** | **1.54 mm** |
+| naklon RMSE | 2.09° | 1.78° | 1.30° | **0.96°** |
+| relativna napaka `f_px` | 11.0 % | 11.9 % | **2.3 %** | **2.3 %** |
+| prvi kandidat je iz vrhnje plasti | 80 % | **83 %** | 83 % | **83 %** |
+| čas obdelave (1600 px, poln zaboj) | — | 7.7 s | 7.7 s | **6.0 s** |
 
-Zadnji stolpec: z gradientno mero vidnosti in `scoring.max_occlusion`.
+Predzadnji stolpec: z gradientno mero vidnosti in `scoring.max_occlusion`.
+Zadnji: večprehodna detekcija (K20–K23). Na sintetičnih scenah je učinek majhen
+(tam ena obdelava zadošča), na resnični fotografiji pa odločilen — glej K20.
 Metrike poze so računane le na scenah z veljavnim okvirom; detekcija se meri v
 sliki in je zato neodvisna od kalibracije.
 
@@ -200,6 +199,83 @@ glede na kontrast scene, in merilo kontrasta iz **okolice kosa**, ne cele slike.
 vstopili v izbiro pravokotnika zaboja, se je merilo spremenilo in filter
 velikosti je zavrnil pravi kos kot "3.7-krat prevelik". Izbira merila zdaj
 uposteva le sparjene kandidate z zadostno podprtostjo.
+
+**K20 — ena obdelava slike ima eno delovno točko; kosi ob steni zahtevajo
+drugo.** Na resnični fotografiji je zaboj neenakomerno osvetljen: kosi ob steni
+so enakomerno, a šibkeje osvetljeni. CLAHE, ki jih dvigne, na dobro osvetljenih
+kosih napihne šum; prag gradienta, ki najde zabrisan obris, pobere teksturo
+površine. Noben posamezen nabor parametrov ni našel vsega. Rešitev so **štirje
+prehodi polne ločljivosti** (referenčni, močan CLAHE, gama 0.55, močno glajenje)
+in **en pomanjšan** (0.6×), vsak s svojimi pragovi `EdgeDrawing`. Kandidati vseh
+prehodov se združijo v gruče; vidnost se izmeri v **vseh** prehodih in obvelja
+najboljša — ker nas zanima, ali obstaja obdelava, v kateri je obris cel.
+
+Izmerjeno na `IMG_20260816_173932.jpg` (1600 px): 4923 kandidatnih elips proti
+1056 pri enem prehodu, 3944 gruč, sparjenih 22 proti 13. Končni rezultat: **11
+kandidatov, vsi na resničnih, dobro vidnih kosih** (prej 3 pravilni od 8).
+
+**K21 — koliko prehodov je elipso našlo, je neodvisen dokaz.** Naključna elipsa,
+sestavljena iz lokov različnih kosov, preživi eno obdelavo, redko pa več
+različnih; pravi obris preživi večino. Izmerjeno na resnični fotografiji:
+vseh 12 pravilnih detekcij je imelo 2–5 glasov, 20 od 23 lažnih pa natanko 1.
+`multipass.min_votes: 2` je zato najcenejše sito v celotnem cevovodu — brez
+kakršnegakoli modela videza.
+
+Gruča se uporablja **samo za štetje glasov**. Prvi poskus je vzel mediano
+parametrov čez člane in poslabšal RMSE naklona z 0.81° na 2.96° — grobi člani
+(`EdgeDrawing` vrača celoštevilčne polosi, pomanjšana slika ima 0.6× ločljivost)
+potegnejo dober fit stran. Geometrijo zato prispeva **najboljši član**, po
+prednosti referenčnega prehoda.
+
+**K22 — vidnost obrisa meri le obod; kos je lahko prekrit čez sredino.** Prav
+taki kandidati so se prebijali med najbolje ocenjene: obod skoraj cel, čez
+kolobar pa leži drug kos. Zato se vzorči tudi **površina kolobarja** med luknjo
+in obrisom.
+
+Absolutna vrednost pove malo — perforirana površina in vijačne luknje dajo
+gradient tudi na povsem prostem kosu (sintetična scena s teksturo 0.31 pri polni
+vidnosti, resnična fotografija 0.03–0.05). Prvi poskus z absolutnim pragom je
+zavrgel cele sintetične scene (recall 0.914 → 0.543). Drugi poskus — izhodišče iz
+najčistejšega kosa v sceni — je padel na sceni z enim samim kosom, ker so izhodišče
+potegnile gladke ploskve dna. Deluje šele **primerjava s samim seboj**: kolobar se
+razdeli na 12 kotnih izsekov in meri se presežek povprečja nad najčistejšo
+četrtino. Prost kos je enakomerno teksturiran, kos s tujim kosom čez sebe pa ima
+nekaj izsekov močno umazanih.
+
+| ground truth vidnost | presežek zamašenosti |
+|---|---|
+| 1.00 (13 kosov, 4 scene) | 0.000 – 0.098 |
+| 0.84 | 0.096 |
+| 0.73 | 0.196 |
+| 0.71 | 0.144 |
+
+Na resnični fotografiji: pravilne detekcije 0.04–0.14, kandidat na kupu stakanih
+kosov 0.16, drobec 0.22. Prag `scoring.max_ring_clutter_excess: 0.15`.
+
+**K23 — v polnem zaboju luknja ni temna.** Obris brez najdenega para se preveri
+z **navidezno luknjo**: iz razmerja `D_in/D_out` se zgradi elipsa na mestu, kjer
+luknja mora biti, in na njej izmeri ista podprtost. Pri pravem kosu 0.42 in 0.85,
+pri naključnem krogu čez kup stakanih kosov 0.23–0.38.
+
+Prvotna izvedba je zahtevala tudi pravilno polariteto (luknja = temno znotraj) in
+je s tem zavrgla pravilen kos: skozi njegovo luknjo se vidi kos pod njo, ki je
+enako svetel, in polariteta je bila **−0.35**, torej ravno nasprotna od
+pričakovane. Konvencija "luknja je temna" velja za osamljen kos na podlagi, ne
+za poln zaboj. Šteje samo, da rob na tem polmeru sploh obstaja.
+
+Obratno pa velja brez izjeme: **sama luknja brez vidnega obrisa** pomeni, da je
+obris prekrit. Rob luknje ima poleg tega vedno močan kontrast (temna odprtina
+proti svetli kovini), zato so taki kandidati po vidnosti krivično prehitevali
+trdne detekcije — na resnični fotografiji je tak kandidat pristal na 3. mestu.
+`scoring.reject_lone_hole: true`.
+
+**K24 — združevanje kandidatov je bilo dražje od same detekcije.** Petih prehodov
+skupaj teče 5.2 s, kvadratično združevanje 4923 kandidatov pa je trajalo 35 s.
+S prostorskim kazalom (celica = največja možna toleranca, pregled 3×3 soseščine)
+je celoten cevovod padel s 41.5 s na **6.0 s** ob **enakem rezultatu**. Drugi del
+prihranka: predfilter velikosti se izvede pred merjenjem vidnosti v vseh
+prehodih, ne po njem (vrstni red na rezultat ne vpliva — predfilter gleda samo
+polos).
 
 **K16 — vidnost obrisa se najbolje meri iz gradienta, ne iz bližine robnih
 točk.** Primerjava štirih mer proti resnični vidnosti (210 kosov na gostih
@@ -326,8 +402,12 @@ enem vogalu ali `box.corners_px` v configu.
 - [x] `synth`: generator scen z nadvzorčenjem (brez tega je fit polmera
       pristranski za +0.5 px), perspektivo, senčenjem, odsevi, šumom in
       zlaganjem kosov.
+- [x] `multipass`: pet obdelav iste slike, združevanje kandidatov v gruče s
+      prostorskim kazalom, štetje glasov, merjenje vidnosti v vseh prehodih.
+- [x] Preverjanje kolobarja: zamašenost površine glede na najčistejši izsek
+      istega kolobarja in navidezna luknja za obrise brez para.
 - [x] `pipeline` + `cli.py` + `--debug` overlay-i za vsak korak.
-- [x] 56 testov (geometrija, autokalibracija, cevovod, nagnjeni kosi, robni
+- [x] 59 testov (geometrija, autokalibracija, cevovod, nagnjeni kosi, robni
       primeri) — vsi zeleni.
 
 ### Odprto vprašanje za naročnika

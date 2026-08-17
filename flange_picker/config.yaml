@@ -120,9 +120,13 @@ autocalib:
   fallback_f_px: 1200.0          # zadnja sila, ko ni nobenega drugega vira
 
 preprocess:
-  clahe_clip: 2.5
+  # gama < 1 dvigne temne dele slike (kosi ob steni zaboja, v senci). Deluje le
+  # na sliko za iskanje robov; lega robov se meri na surovi sliki, zato tonska
+  # krivulja ne vnese sistematicnega odmika.
+  gamma: 1.0
+  clahe_clip: 2.5      # 0 ali manj = brez CLAHE
   clahe_grid: 8
-  bilateral_d: 7
+  bilateral_d: 7       # 0 = brez bilateralnega filtra
   bilateral_sigma_color: 40
   bilateral_sigma_space: 7
   specular_abs_threshold: 245    # nasiceni piksli
@@ -178,6 +182,19 @@ ellipse:
   support_gradient_floor: 5.2   # ~ q/sin(tau) iz LSD; prepreci "robove" v sumu
   support_scale_percentile: 95.0
   min_support_ratio: 0.25      # delez vidnega oboda, pod katerim kandidat pade
+  # Zamasanost kolobarja: delez POVRSINE med luknjo in obrisom, cez katero tece
+  # tuj rob. Vidnost meri le obod - kos, ki mu drug kos lezi cez sredino, ima
+  # lahko obod skoraj cel, a je neprijemljiv. Prag je isti kot pri vidnosti
+  # (delez lokalnega percentila gradienta).
+  ring_clutter_factor: 0.35
+  ring_clutter_angular_samples: 96
+  ring_clutter_radial_samples: 5
+  ring_clutter_margin: 0.06    # odmik od obeh robov, da se ne steje robov samega kosa
+  # Kolobar se razdeli na kotne izseke; merodajen je presezek povprecja nad
+  # najcistejso cetrtino izsekov. Tako je mera sama sebi referenca in ne potrebuje
+  # ne drugih kandidatov v sceni ne poznavanja povrsinske obdelave kosa.
+  ring_clutter_sectors: 12
+  ring_clutter_min_sector_fraction: 0.5   # izsek z manj vidnimi tockami se ne steje
   # Sistematicni odmik lege roba se lahko oceni iz znanega razmerja premerov.
   # Privzeto izklopljeno: izmerjeno je, da tako dobimo le SKUPNO komponento
   # odmika obeh robov, ta pa je bila na testnem setu ~0 (zunanji rob ima +0.13 px,
@@ -194,9 +211,66 @@ ellipse:
     max_center_offset_ratio: 0.22   # |c_in - c_out| / a_out
     size_ratio_tolerance: 0.10      # odstopanje (a_in/a_out) od D_in/D_out;
                                     # ohlapnejsa toleranca sprejme sence in odseve kot 'zunanjo' elipso
+    # Obris brez najdenega para: luknja se mora na znanem polmeru vseeno videti.
+    # Navidezna elipsa se zgradi iz geometrije (D_in/D_out) in se na njej izmeri
+    # ista podprtost kot sicer. Izmerjeno na resnicni fotografiji: pravi kos 0.42
+    # in 0.85, nakljucen krog cez kup stakanih kosov 0.23-0.38.
+    min_virtual_hole_support: 0.40
     axis_ratio_tolerance: 0.22      # ujemanje sploscenosti
     angle_tolerance_deg: 22.0       # ujemanje orientacije (le pri izrazitih elipsah)
     angle_check_min_eccentricity: 0.35
+
+# Vecprehodna detekcija: ista slika, vec razlicnih obdelav, nato skupna analiza.
+# Ena sama obdelava ima eno samo delovno tocko - CLAHE, ki dvigne slabo osvetljen
+# kos ob steni zaboja, na dobro osvetljenih napihne sum. Kandidati vseh prehodov
+# se zdruzijo v gruce; koliko prehodov je gruco naslo, je NEODVISEN dokaz o njeni
+# resnicnosti (nakljucna elipsa iz lokov vec kosov prezivi eno obdelavo, redko vec).
+multipass:
+  enabled: true
+  cluster_center_frac: 0.10     # dve elipsi sta ista, ce sta sredisci blizje od tega
+  cluster_center_floor_px: 3.0  # deleza polosi (oz. te spodnje meje v px)
+  cluster_axis_ratio: 0.10      # in se polosi ujemata na ta delez
+  # Koliko razlicnih obdelav mora najti isto elipso (1 = brez vrat). Izmerjeno na
+  # resnicni fotografiji: vseh 12 pravilnih detekcij ima 2-5 glasov, medtem ko ima
+  # 20 od 23 laznih natanko 1. En sam glas pomeni, da je elipsa obstala le pri eni
+  # nastavitvi kontrasta - to je znacilnost nakljucnega zlepka lokov, ne kosa.
+  min_votes: 2
+  # Prehod, katerega fit se uporabi za geometrijo, kadar je kos v njem najden.
+  # Ostali prehodi so tu zato, da kos sploh NAJDEJO; pragovi referencnega pa so
+  # umerjeni na natancnost lege roba.
+  geometry_pass: osnovni
+  passes:
+    # Referencni prehod - isti parametri kot pri enoprehodnem tecaju.
+    - name: osnovni
+      overrides: {}
+    # Mocan lokalni kontrast + nizji prag gradienta: za kose ob robu zaboja, ki so
+    # enakomerno, a slabse osvetljeni. Na dobro osvetljenih delih doda navlako -
+    # to poberejo polariteta, parjenje in vidnost.
+    - name: kontrast
+      overrides:
+        preprocess: {clahe_clip: 6.0, clahe_grid: 12}
+        ellipse:
+          edge_drawing: {gradient_threshold: 4, anchor_threshold: 0}
+    # Gama dvigne sence globalno in monotono, brez izmisljenega lokalnega kontrasta.
+    - name: gama
+      overrides:
+        preprocess: {gamma: 0.55, clahe_clip: 2.0}
+        ellipse:
+          edge_drawing: {gradient_threshold: 8}
+    # Malo CLAHE, mocnejse glajenje in daljsa najkrajsa pot: samo veliki, gladki
+    # obrisi. Teksture povrsine in perforacij ta prehod ne vidi.
+    - name: gladko
+      overrides:
+        preprocess: {clahe_clip: 1.0, bilateral_d: 9, bilateral_sigma_color: 60}
+        ellipse:
+          edge_drawing: {sigma: 1.6, min_path_length: 45, gradient_threshold: 10}
+    # Pomanjsana slika: sum in tekstura se povprecita, obris kosa pa ostane.
+    # Zdruzevanje lokov v elipso je pri manj tockah bolj popustljivo.
+    - name: pomanjsano
+      scale: 0.6
+      overrides:
+        ellipse:
+          edge_drawing: {min_path_length: 20, gradient_threshold: 5}
 
 pose:
   max_pair_normal_angle_deg: 25.0  # neujemanje normal notranje/zunanje elipse
@@ -220,6 +294,11 @@ scoring:
     # Zaupanje mora steti pri rangiranju: kandidat brez para (npr. rob sence)
     # sicer prehiti trdno detektirano prirobnico in robot seze v prazno.
     confidence: 0.20
+    # Soglasje prehodov: koliko razlicnih obdelav slike je naslo isto elipso.
+    # Neodvisno od vseh drugih clenov - meri stabilnost detekcije, ne geometrije.
+    consensus: 0.10
+    # Cistost kolobarja: 1 - delez povrsine kolobarja s tujim robom cez njo.
+    ring_clean: 0.15
   tilt_full_penalty_deg: 45.0
   wall_margin_good_mm: 40.0
   # Dovoljeno odstopanje velikosti elipse od pricakovane pri njeni globini.
@@ -238,7 +317,11 @@ scoring:
   # Na sinteticnih scenah popolnoma vidni kos dosega vidnost ~1.0, na resnicni
   # fotografiji pa 0.81 - fit ni popoln, deli obrisa se dotikajo sosedov enake
   # svetlosti. Zato je prag 0.25 in ne 0.10; pri sinteticnih scenah lahko ostrejsi.
-  max_occlusion: 0.25
+  # 0.30 in ne 0.25: z vecprehodno detekcijo se je najbolje viden kos v sceni
+  # izboljsal (surova vidnost 0.76 -> 0.83), s tem pa se je dvignila referenca
+  # normiranja. Pri 0.25 sta izpadla dva izmerjeno pravilna kosa (26 in 27 %),
+  # pri 0.30 sta nazaj in noben lazen kandidat ne pride zraven.
+  max_occlusion: 0.30
   # Mera vidnosti je scensko odvisna: popolnoma viden kos doseze ~1.0 na
   # sinteticni sceni, na resnicni fotografiji pa 0.67-0.76 - del obrisa se dotika
   # sosedov iste kovine, kjer kontrasta preprosto ni. Absolutni prag zato ni
@@ -248,6 +331,28 @@ scoring:
   occlusion_normalise: true
   occlusion_reference_percentile: 90.0
   occlusion_reference_floor: 0.45
+  # Vrata zamasanosti kolobarja: nad tem delezem povrsine s tujim robom cez njo
+  # kos ni prost, tudi ce mu je obod skoraj cel viden. Gladka kovinska ploskev da
+  # nekaj odstotkov (tekstura, odsevi); prekrit kos znatno vec.
+  # 1.0 = vrata izklopljena.
+  # Meri se PRESEZEK nad najcistejsimi izseki istega kolobarja, ne absolutna
+  # vrednost: perforirana povrsina in vijacne luknje dajo gradient tudi na povsem
+  # prostem kosu (sinteticna scena s teksturo 0.31 pri polni vidnosti, resnicna
+  # fotografija 0.03-0.05). Prost kos je enakomerno teksturiran, kos s tujim
+  # kosom cez sebe pa ima nekaj izsekov mocno umazanih.
+  # 1.0 = vrata izklopljena.
+  # Izmerjeno: sinteticne scene - popolnoma vidni kosi 0.00-0.10, delno prekriti
+  # (vidnih 71-84 %) 0.10-0.20; resnicna fotografija - pravilne detekcije
+  # 0.04-0.14, kandidat na kupu stakanih kosov 0.16, drobec 0.22.
+  max_ring_clutter_excess: 0.15
+  # Sama luknja brez vidnega obrisa pomeni, da obrisa kosa NE vidimo - najpogosteje
+  # zato, ker ga prekriva sosed. Rob luknje ima poleg tega vedno mocan kontrast
+  # (temna luknja proti svetli kovini), zato taki kandidati po vidnosti krivicno
+  # prehitijo trdne detekcije - na resnicni fotografiji je tak kandidat pristal na
+  # 3. mestu. Obratno NE velja: sam obris brez najdene luknje je legitimen (luknja
+  # je lahko le slabo fitana), zato se ne zavrne, ampak nosi nizje zaupanje.
+  # Izklopi le, ce potrebujes zasilno rezervo, ko ni nic drugega.
+  reject_lone_hole: true
   min_free_arc_deg: 25.0
   min_score: 0.0
   # Preverjanje verjetnosti visine (le ko je okvir zaboja na voljo): kos ne more
