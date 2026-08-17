@@ -368,9 +368,17 @@ def compute_support_gradient(ellipses: Sequence[Ellipse], gx: Optional[np.ndarra
         threshold = max(factor * scale, floor)
         pts = ell.perimeter_points(n_samples)
         nrm = ell.outward_normals(n_samples)
-        xi = np.clip(np.round(pts[:, 0]).astype(int), 0, w - 1)
-        yi = np.clip(np.round(pts[:, 1]).astype(int), 0, h - 1)
-        radial = gx[yi, xi] * nrm[:, 0] + gy[yi, xi] * nrm[:, 1]
+        # Rob iscemo v ozkem pasu vzdolz normale: fit elipse ni popoln in vzorec
+        # tocno na njej lahko zgresi rob za piksel ali dva.
+        band = float(cfg["ellipse.support_search_band_px"])
+        radial = None
+        offsets = np.arange(-band, band + 0.5, 1.0) if band > 0 else np.array([0.0])
+        for offset in offsets:
+            q = pts + nrm * offset
+            xq = np.clip(np.round(q[:, 0]).astype(int), 0, w - 1)
+            yq = np.clip(np.round(q[:, 1]).astype(int), 0, h - 1)
+            r = gx[yq, xq] * nrm[:, 0] + gy[yq, xq] * nrm[:, 1]
+            radial = r if radial is None else np.where(np.abs(r) > np.abs(radial), r, radial)
         inside_image = ((pts[:, 0] >= 0) & (pts[:, 0] < w)
                         & (pts[:, 1] >= 0) & (pts[:, 1] < h))
         # Predznak vzamemo iz same elipse: obris kosa je svetel znotraj

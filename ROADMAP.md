@@ -155,6 +155,23 @@ ocena šumna (+0.24 px pri dveh kosih) in popravek podre ujemanje para, zato je
 privzeto **izklopljen** in dodatno varovan s pragom razpršenosti. Za odpravo
 preostalega odmika Z je potrebna referenčna meritev na znanem kosu.
 
+**K19 — mera vidnosti je scensko odvisna; absolutni prag ni smiseln.**
+Izmerjeno na resnicni fotografiji: popolnoma viden kos doseze surovo vidnost
+0.67-0.83, ne 1.0, ker se del obrisa dotika sosedov iste kovine, kjer kontrasta
+ni. Absolutni prag 0.75 je zato prepustil 2 kosa od ~30. **Razvrscanje** mere pa
+je pravilno - na vrhu so bili res vidni kosi. Resitev je normiranje na najbolje
+viden kos v isti sceni (`scoring.occlusion_normalise`); sele tako prag
+"10 % prekritosti" pomeni to, kar naj bi. Varovalo: ce je tudi najboljsi kos pod
+`occlusion_reference_floor`, se normiranje ne izvede in scena dobi opozorilo.
+
+Ob tem se dvoje:
+- Rob se isce v ozkem pasu vzdolz normale (fit ni popoln), kar dvigne vidnost
+  dobrih kosov za ~0.1 brez ucinka na prekrite.
+- Brez okvira zaboja se clena "visina" in "oddaljenost od sten" izlocita iz
+  ocene: visina izhaja iz globine, ta pa ima pri 1-2 mm kosih vecjo negotovost
+  od razmika plasti - clen je cist sum. Rangiranje takrat nosita vidnost in
+  zaupanje.
+
 **K17 — moj generator kandidatov je bil ozko grlo, ne mera vidnosti.**
 Domneval sem, da slabse osvetljeni kosi padejo na meri vidnosti. Meritev na
 resnicni fotografiji je to ovrgla: obrisov prave velikosti je sploh nastalo le

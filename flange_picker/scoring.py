@@ -28,6 +28,7 @@ class Candidate:
     wall_margin_mm: float = float("nan")
     grasp_point_mm: Optional[np.ndarray] = None
     grasp_point_px: Optional[np.ndarray] = None
+    visibility_raw: float = 0.0
     score: float = 0.0
     terms: dict = field(default_factory=dict)
     rejected: Optional[str] = None
@@ -157,6 +158,24 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
 
     for cand in candidates:
         cand.occlusion_ratio = float(cand.pair.outer.support_ratio)
+        cand.visibility_raw = float(cand.pair.outer.support_ratio)
+
+    # Normiranje na najbolje viden kos v sceni (glej opombo v config.yaml).
+    if bool(cfg["scoring.occlusion_normalise"]):
+        solid = [c.visibility_raw for c in candidates if c.pair.paired]
+        pool = solid if solid else [c.visibility_raw for c in candidates]
+        reference = float(np.percentile(pool, float(cfg["scoring.occlusion_reference_percentile"]))) \
+            if pool else 0.0
+        if reference >= float(cfg["scoring.occlusion_reference_floor"]):
+            for cand in candidates:
+                cand.occlusion_ratio = float(np.clip(cand.visibility_raw / reference, 0.0, 1.0))
+            normalisation = {"reference": round(reference, 3), "applied": True}
+        else:
+            normalisation = {"reference": round(reference, 3), "applied": False,
+                             "reason": "tudi najbolje viden kos ima presibek kontrast - "
+                                       "normiranje bi napihnilo vse vidnosti"}
+    else:
+        normalisation = {"applied": False, "reason": "izklopljeno v configu"}
 
     for cand in candidates:
         analyse_ring(cand, candidates, calib, cfg, image_shape)
@@ -180,7 +199,14 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
     h_lo, h_hi = float(heights.min()), float(heights.max())
     span = h_hi - h_lo
 
-    weights = cfg.section("scoring.weights").as_dict()
+    weights = dict(cfg.section("scoring.weights").as_dict())
+    if not calib.frame_reliable:
+        # Brez okvira zaboja visina izhaja iz globine, ta pa ima pri 1-2 mm
+        # debelih kosih vecjo negotovost od razmika plasti - clen je cist sum.
+        # Enako velja za oddaljenost od sten. Rangiranje takrat nosita vidnost
+        # in zaupanje.
+        weights.pop("height", None)
+        weights.pop("wall_margin", None)
     w_sum = sum(float(v) for v in weights.values()) or 1.0
     tilt_full = float(cfg["scoring.tilt_full_penalty_deg"])
     wall_good = float(cfg["scoring.wall_margin_good_mm"])
@@ -250,10 +276,34 @@ def score_candidates(candidates: List[Candidate], calib, cfg: Config,
         cand.terms = {"height": t_height, "tilt": t_tilt, "occlusion": t_occl,
                       "wall_margin": t_wall, "cup_clearance": t_cup,
                       "confidence": t_conf}
-        cand.score = float(sum(float(weights[k]) * cand.terms[k] for k in weights) / w_sum)
+        cand.score = float(sum(float(w) * cand.terms[k] for k, w in weights.items()) / w_sum)
         kept.append(cand)
 
+    for cand in candidates:
+        cand.notes.append(f"vidnost surova={cand.visibility_raw:.2f}")
     kept.sort(key=lambda c: -c.score)
+
+    # Potlacitev podvojenih: vec fitov istega kosa (iz razlicnih virov ali lokov)
+    # se v sliki prekriva. Obdrzimo najbolje ocenjenega.
+    nms_frac = float(cfg["scoring.duplicate_centre_frac"])
+    if nms_frac > 0:
+        survivors: List[Candidate] = []
+        for cand in kept:
+            duplicate = False
+            for other in survivors:
+                dist = float(np.linalg.norm(cand.pair.outer.center - other.pair.outer.center))
+                if dist < nms_frac * max(cand.pair.outer.a, other.pair.outer.a):
+                    duplicate = True
+                    break
+            if duplicate:
+                cand.rejected = "podvojena detekcija istega kosa"
+                rejected.append({"center_px": [round(float(cand.pair.outer.cx), 1),
+                                               round(float(cand.pair.outer.cy), 1)],
+                                 "reason": cand.rejected})
+            else:
+                survivors.append(cand)
+        kept = survivors
+
     min_score = float(cfg["scoring.min_score"])
     final = []
     for cand in kept:

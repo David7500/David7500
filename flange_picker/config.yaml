@@ -174,6 +174,7 @@ ellipse:
   # Lokalno je nujno pri neenakomerni osvetlitvi - sicer je enakomerno a slabse
   # osvetljen kos videti prekrit, ceprav je popolnoma viden.
   support_local_scale: true
+  support_search_band_px: 1.0   # iskanje roba vzdolz normale (fit ni popoln)
   support_gradient_floor: 5.2   # ~ q/sin(tau) iz LSD; prepreci "robove" v sumu
   support_scale_percentile: 95.0
   min_support_ratio: 0.25      # delez vidnega oboda, pod katerim kandidat pade
@@ -207,11 +208,15 @@ pose:
 
 scoring:
   weights:
-    height: 0.35          # visji Z = manj zakopan
-    tilt: 0.15
-    occlusion: 0.15
-    wall_margin: 0.08
-    cup_clearance: 0.07
+    # Operativno merilo je "kos je na vrhu in prost" - to meri neposredno
+    # vidnost oboda, zato ima najvecjo tezo. Naklon pod ~30 stopinj je za sesek
+    # vseeno, zato je njegova teza majhna. Visina iz globine je pri 1-2 mm
+    # debelih kosih sum in se brez okvira zaboja sploh ne uposteva.
+    occlusion: 0.40       # delez vidnega oboda
+    height: 0.15          # visji Z = manj zakopan (le ob veljavnem okviru)
+    tilt: 0.10
+    wall_margin: 0.05
+    cup_clearance: 0.05
     # Zaupanje mora steti pri rangiranju: kandidat brez para (npr. rob sence)
     # sicer prehiti trdno detektirano prirobnico in robot seze v prazno.
     confidence: 0.20
@@ -221,6 +226,9 @@ scoring:
   # Ozko okno, ker je globina ze ocenjena iz iste elipse - razmerje mora biti ~1.
   size_ratio_min: 0.80
   size_ratio_max: 1.60
+  # Dva kandidata, katerih sredisci sta blizje od tega deleza polosi, sta ista
+  # prirobnica, detektirana veckrat (iz razlicnih lokov ali virov).
+  duplicate_centre_frac: 0.55
   ring_samples: 72
   occluder_min_confidence: 0.3   # dvomljiva detekcija ne sme blokirati kolobarja trdne
   same_piece_distance_mm: 12.0   # blizje od tega je ista prirobnica, ne oviranje
@@ -231,6 +239,15 @@ scoring:
   # fotografiji pa 0.81 - fit ni popoln, deli obrisa se dotikajo sosedov enake
   # svetlosti. Zato je prag 0.25 in ne 0.10; pri sinteticnih scenah lahko ostrejsi.
   max_occlusion: 0.25
+  # Mera vidnosti je scensko odvisna: popolnoma viden kos doseze ~1.0 na
+  # sinteticni sceni, na resnicni fotografiji pa 0.67-0.76 - del obrisa se dotika
+  # sosedov iste kovine, kjer kontrasta preprosto ni. Absolutni prag zato ni
+  # smiseln. Merilo je najbolje viden kos v tem zaboju; sele tako "10 % prekritosti"
+  # pomeni to, kar naj bi. Ce je tudi najboljsi kos pod spodnjo mejo, scena nima
+  # dovolj kontrasta in normiranje se ne izvede (z opozorilom).
+  occlusion_normalise: true
+  occlusion_reference_percentile: 90.0
+  occlusion_reference_floor: 0.45
   min_free_arc_deg: 25.0
   min_score: 0.0
   # Preverjanje verjetnosti visine (le ko je okvir zaboja na voljo): kos ne more
