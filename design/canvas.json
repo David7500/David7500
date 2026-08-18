@@ -1,0 +1,21 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",       "x": 0,    "y": 0,    "w": 1280, "h": 800, "title": "A — Nadzorna soba" },
+    { "file": "Voznired.dc.html",   "x": 1400, "y": 0,    "w": 1180, "h": 860, "title": "B — Vozni red" },
+    { "file": "Analitika.dc.html",  "x": 0,    "y": 1000, "w": 1280, "h": 880, "title": "C — Analitika" },
+    { "file": "Sledilnik.dc.html",  "x": 1400, "y": 1000, "w": 390,  "h": 844, "title": "D — Sledilnik" }
+  ],
+  "annotations": [
+    { "id": "smer-a", "x": 0, "y": -150, "w": 560,
+      "text": "A — NADZORNA SOBA\nZemljevid je aplikacija. Temno, gosto, za gledanje cele mreže naenkrat.\n\nZa: takoj vidiš, kje je težava. Najbolje izkoristi to, kar podatki res so — mreža in trenutno stanje.\nProti: na telefonu je nepraktično. Zgodovina in statistika se stlačita v stranske panele." },
+    { "id": "smer-b", "x": 1400, "y": -150, "w": 560,
+      "text": "B — VOZNI RED\nTipografija je aplikacija. Svetlo, po vzoru tiskanih postajnih voznih redov.\n\nZa: en vlak, brano od zgoraj navzdol — točno tako, kot ljudje o vlakih razmišljajo. Razdalje odsekov se naravno vklopijo.\nProti: zemljevid je stranski. Slabo za vprašanje »kaj se dogaja na mreži«." },
+    { "id": "smer-c", "x": 0, "y": 850, "w": 560,
+      "text": "C — ANALITIKA\nŠtevilke so aplikacija. Gosta plošča: porazdelitve, lestvice, hitrosti.\n\nZa: edina smer, ki izkoristi zajeto zgodovino. Tu se vidi, ali je vlak kronično zamujen.\nProti: brez nekaj mesecev zajema je prazna. Za naključnega potnika preveč." },
+    { "id": "smer-d", "x": 1400, "y": 850, "w": 560,
+      "text": "D — SLEDILNIK\nEn vlak je aplikacija. Telefon, velika številka, postaje do cilja.\n\nZa: reši dejansko vprašanje potnika v treh sekundah. Prečrtan vozni red proti dejanskemu času je iskren prikaz.\nProti: ne odgovori na nič širšega. Rabi ločen zaslon za iskanje vlaka." },
+    { "id": "opomba-podatki", "x": 700, "y": 1930, "w": 620,
+      "text": "Zemljevidi so narisani iz prave geometrije mreže — 267 postaj, 283 elementarnih odsekov, iz današnjega GTFS.\nV pravi aplikaciji je to Leaflet z OSM ploščicami, tu so ploščice narisane kot SVG, ker mockup nima dostopa do mreže.\n\nŽivi podatki (LPV 2206 z zamudami po postajah, lestvica največjih zamud) so resnični, z današnjega zajema.\n30-dnevna zgodovina in porazdelitev sta ponazoritveni — toliko podatkov še nimaš." }
+  ],
+  "launch": { "view": "canvas" }
+}

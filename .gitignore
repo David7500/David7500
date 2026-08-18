@@ -6,3 +6,6 @@ __pycache__/
 *.sqlite-wal
 *.sqlite-shm
 .venv/
+
+# generirano platno (seeded iz design/)
+sztrack-smeri.html
