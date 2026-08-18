@@ -1,0 +1,14 @@
+[Unit]
+Description=sztrack -- zajem zamud SŽ
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sztrack
+Environment=SZ_DATA_DIR=/var/lib/sztrack
+ExecStart=/opt/sztrack/.venv/bin/python -m sztrack.cli poll
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target
