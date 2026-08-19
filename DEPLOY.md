@@ -15,7 +15,18 @@ seed/sz.sqlite     pripravljen vozni red (1,7 MB) za takojšen zagon
 
 ## Zagon
 
-Zagonski ukaz je `python main.py`. Vrata prebere iz `PORT`; če ga ni, uporabi 8000.
+Delujeta oba načina — kar koli od tega gostitelj že uporablja:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT   # gostitelj vodi strežnik (Pella)
+python main.py                                 # strežnik zaženemo sami
+```
+
+`app` je zato izpostavljen na ravni modula `main`. Če gostitelj javi
+`Error loading ASGI app. Attribute "app" not found in module "main"`, pomeni,
+da poganja prvo obliko — in prav zato je `app` tam.
+
+Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, uporabi 8000.
 
 ## Nastavitve prek okolja
 
