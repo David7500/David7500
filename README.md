@@ -56,7 +56,11 @@ sztrack stats --days 90                        # lestvica vlakov
 sztrack export --out export/                   # GeoJSON mreže in postaj
 
 uvicorn sztrack.api:app --reload   # JSON API na :8000
+python main.py                     # API + zajem v enem procesu
 ```
+
+Za objavo na gostitelju glej [DEPLOY.md](DEPLOY.md); paket sestavi
+`scripts/build_deploy_zip.sh`.
 
 Za trajni zajem so v `deploy/` systemd enote (poll kot servis, `update` kot dnevni timer).
 

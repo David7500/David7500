@@ -12,10 +12,12 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db, stats
+from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
 app = FastAPI(title="sztrack", version="0.1.0",
-              description="Vozni redi, zamude in statistika Slovenskih železnic")
+              description="Vozni redi, zamude in statistika Slovenskih železnic",
+              lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
 

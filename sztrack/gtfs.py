@@ -100,71 +100,76 @@ def _to_seconds(hhmmss: str) -> int | None:
     return h * 3600 + m * 60 + s
 
 
-def _build_edges(stops, seq_by_trip, trips, shapes):
-    """Razdalje in geometrija med zaporednimi postanki.
+def _edge_builder(stops):
+    """Zbira dolžine in geometrijo odsekov, shape po shape.
 
-    Postaje projiciramo na polilinijo proge; razlika kumulativnih razdalj je
-    dolžina odseka. Čez vse vlake, ki vozijo isti odsek, vzamemo mediano.
+    Shapes.txt je zvezno grupiran po shape_id, zato ga beremo pretočno in
+    obdržimo v pomnilniku vedno le eno progo -- celotna datoteka je 135 MB in
+    je naenkrat ne moremo naložiti na majhnem strežniku.
     """
     lengths: dict[tuple[str, str], list[float]] = defaultdict(list)
     geoms: dict[tuple[str, str], list] = {}
-    cache: dict[str, tuple[list, list]] = {}
 
-    for trip_id, stop_seq in seq_by_trip.items():
-        shape_id = trips[trip_id]["shape_id"]
-        pts = shapes.get(shape_id)
-        if not pts:
-            continue
-        if shape_id not in cache:
-            cache[shape_id] = (pts, geo.cumulative(pts))
-        pts, cums = cache[shape_id]
+    def feed(points, stop_sequences):
+        """points: polilinija ene proge; stop_sequences: postanki vlakov po njej."""
+        if len(points) < 2:
+            return
+        cums = geo.cumulative(points)
+        cache: dict[str, tuple[float, float]] = {}
+        for stop_seq in stop_sequences:
+            projected = []
+            for _, stop_id in stop_seq:
+                if stop_id not in cache:
+                    st = stops[stop_id]
+                    cache[stop_id] = geo.project(points, cums, st["lat"], st["lon"])
+                along, off = cache[stop_id]
+                projected.append((stop_id, along, off))
 
-        projected = []
-        for _, stop_id in stop_seq:
-            st = stops[stop_id]
-            along, off = geo.project(pts, cums, st["lat"], st["lon"])
-            projected.append((stop_id, along, off))
+            for (a, along_a, off_a), (b, along_b, off_b) in zip(projected, projected[1:]):
+                dist = abs(along_b - along_a)
+                if max(off_a, off_b) > config.MAX_STATION_OFFSET_M or dist < 50:
+                    continue
+                key = (a, b) if a < b else (b, a)
+                lengths[key].append(dist)
+                line = geo.slice_between(points, cums, along_a, along_b)
+                if len(line) >= 2 and len(line) > len(geoms.get(key, ())):
+                    geoms[key] = line
 
-        for (a, along_a, off_a), (b, along_b, off_b) in zip(projected, projected[1:]):
-            dist = abs(along_b - along_a)
-            if max(off_a, off_b) > config.MAX_STATION_OFFSET_M or dist < 50:
+    def finish():
+        # Odsek je "elementaren", če na njem ne leži nobena druga postaja.
+        grid: dict[tuple[float, float], list] = defaultdict(list)
+        for st in stops.values():
+            grid[(round(st["lat"], 1), round(st["lon"], 1))].append(st)
+
+        def nearby(lat, lon):
+            for dla in (-0.1, 0.0, 0.1):
+                for dlo in (-0.1, 0.0, 0.1):
+                    yield from grid.get((round(lat + dla, 1), round(lon + dlo, 1)), ())
+
+        out = []
+        for key, lens in lengths.items():
+            line = geoms.get(key)
+            if not line:
                 continue
-            key = (a, b) if a < b else (b, a)
-            lengths[key].append(dist)
-            line = geo.slice_between(pts, cums, along_a, along_b)
-            if len(line) >= 2 and len(line) > len(geoms.get(key, ())):
-                geoms[key] = line
+            simple = geo.simplify(line, 1e-4)
+            elementary = True
+            for lat, lon in simple[1:-1]:
+                if any(
+                    st["stop_id"] not in key
+                    and geo.haversine(lat, lon, st["lat"], st["lon"]) < 300
+                    for st in nearby(lat, lon)
+                ):
+                    elementary = False
+                    break
+            coords = [[round(lon, 6), round(lat, 6)] for lat, lon in simple]
+            out.append((
+                key[0], key[1], round(statistics.median(lens) / 1000, 3),
+                int(elementary), len(lens),
+                json.dumps({"type": "LineString", "coordinates": coords}),
+            ))
+        return out
 
-    # Odsek je "elementaren", če na njem ne leži nobena druga postaja.
-    grid: dict[tuple[float, float], list] = defaultdict(list)
-    for st in stops.values():
-        grid[(round(st["lat"], 1), round(st["lon"], 1))].append(st)
-
-    def nearby(lat, lon):
-        for dla in (-0.1, 0.0, 0.1):
-            for dlo in (-0.1, 0.0, 0.1):
-                yield from grid.get((round(lat + dla, 1), round(lon + dlo, 1)), ())
-
-    out = []
-    for key, lens in lengths.items():
-        line = geoms.get(key)
-        if not line:
-            continue
-        a, b = key
-        elementary = True
-        for lat, lon in geo.simplify(line, 1e-4)[1:-1]:
-            if any(
-                st["stop_id"] not in key and geo.haversine(lat, lon, st["lat"], st["lon"]) < 300
-                for st in nearby(lat, lon)
-            ):
-                elementary = False
-                break
-        coords = [[round(lon, 6), round(lat, 6)] for lat, lon in geo.simplify(line, 1e-4)]
-        out.append(
-            (a, b, round(statistics.median(lens) / 1000, 3), int(elementary), len(lens),
-             json.dumps({"type": "LineString", "coordinates": coords}))
-        )
-    return out
+    return feed, finish
 
 
 def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
@@ -202,18 +207,27 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
             if s["stop_id"] in rail_stops
         }
 
-        wanted_shapes = {t["shape_id"] for t in trips.values() if t["shape_id"]}
-        raw: dict[str, list] = defaultdict(list)
+        by_shape: dict[str, list] = defaultdict(list)
+        for trip_id, t in trips.items():
+            if t["shape_id"]:
+                by_shape[t["shape_id"]].append(seq_by_trip[trip_id])
+
+        feed, finish = _edge_builder(stops)
+        current, points = None, []
         for p in _rows(zf, "shapes.txt"):
-            if p["shape_id"] in wanted_shapes:
-                raw[p["shape_id"]].append(
-                    (int(p["shape_pt_sequence"]), float(p["shape_pt_lat"]), float(p["shape_pt_lon"]))
-                )
-        shapes = {k: [(lat, lon) for _, lat, lon in sorted(v)] for k, v in raw.items()}
+            shape_id = p["shape_id"]
+            if shape_id != current:
+                if current in by_shape:
+                    feed([pt for _, pt in sorted(points)], by_shape[current])
+                current, points = shape_id, []
+            if shape_id in by_shape:
+                points.append((int(p["shape_pt_sequence"]),
+                               (float(p["shape_pt_lat"]), float(p["shape_pt_lon"]))))
+        if current in by_shape:
+            feed([pt for _, pt in sorted(points)], by_shape[current])
+        edges = finish()
 
         days = _service_days(zf, {t["service_id"] for t in trips.values()})
-
-    edges = _build_edges(stops, seq_by_trip, trips, shapes)
 
     with conn:
         for table in ("station", "edge", "trip", "sched", "service_day"):

@@ -9,3 +9,6 @@ __pycache__/
 
 # generirano platno (seeded iz design/)
 sztrack-smeri.html
+
+# paket za objavo (sestavi ga scripts/build_deploy_zip.sh)
+sztrack-deploy.zip
