@@ -25,6 +25,32 @@ def _conn():
     return db.connect()
 
 
+@app.get("/api/health")
+def api_health():
+    """Stanje zajema. Po ponovnem zagonu gostitelja preveri prav to --
+    če `runs_recorded` pade nazaj na 0, disk ne preživi zagona."""
+    from pathlib import Path
+
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT (SELECT COUNT(*) FROM trip) AS trips,"
+            "       (SELECT COUNT(*) FROM station) AS stations,"
+            "       (SELECT COUNT(*) FROM obs) AS observations,"
+            "       (SELECT COUNT(*) FROM run) AS runs_recorded,"
+            "       (SELECT COUNT(DISTINCT service_date) FROM run) AS days_covered,"
+            "       (SELECT MAX(feed_ts) FROM run) AS last_feed_ts"
+        ).fetchone()
+        out = dict(row)
+    path = Path(config.DB_PATH)
+    out["db_bytes"] = path.stat().st_size if path.exists() else 0
+    out["db_path"] = str(path)
+    out["last_feed_at"] = (
+        datetime.fromtimestamp(out["last_feed_ts"], TZ).isoformat()
+        if out["last_feed_ts"] else None
+    )
+    return out
+
+
 @app.get("/api/stations")
 def api_stations():
     with _conn() as conn:

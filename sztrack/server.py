@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -53,12 +55,43 @@ def bootstrap() -> None:
         path.unlink(missing_ok=True)      # 41 MB ne rabimo obdržati
 
 
-def _worker(interval: int, refresh_hour: int) -> None:
+def refresh_timetable(conn, mode: str) -> None:
+    """Osveži vozni red. `mode`: off | inprocess | subprocess.
+
+    Uvoz je najdražji trenutek v življenju procesa. Izmerjeno na tem paketu:
+    v istem procesu vrh 89 MB (in ostane pri 85 MB, ker Python arene vrne
+    operacijskemu sistemu redko), v podprocesu 54 MB poleg 57 MB starša.
+    Na stroju s 100 MB torej nobena od obeh ni varna -- zato je privzeto `off`
+    in vozni red osvežiš z novo priloženo bazo ali z `sztrack update` drugje.
+    """
+    if mode == "off":
+        return
+    if mode == "subprocess":
+        # Lasten naslovni prostor: ob koncu se ves pomnilnik vrne sistemu.
+        proc = subprocess.run(
+            [sys.executable, "-m", "sztrack.cli", "update"],
+            capture_output=True, text=True, timeout=1800,
+        )
+        _log(f"osvežitev (podproces): {proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]}")
+        return
+
+    path = gtfs.download(conn)
+    if path is None:
+        _log("vozni red nespremenjen")
+        return
+    _log(f"nov vozni red: {gtfs.import_static(conn, path)}")
+    path.unlink(missing_ok=True)
+
+
+def _worker(interval: int, refresh_hour: int, refresh_mode: str) -> None:
     conn = db.connect()
     db.init(conn)
-    next_refresh = datetime.now(TZ).replace(hour=refresh_hour, minute=20, second=0, microsecond=0)
-    if next_refresh <= datetime.now(TZ):
-        next_refresh += timedelta(days=1)
+    next_refresh = None
+    if refresh_mode != "off" and refresh_hour >= 0:
+        next_refresh = datetime.now(TZ).replace(
+            hour=refresh_hour, minute=20, second=0, microsecond=0)
+        if next_refresh <= datetime.now(TZ):
+            next_refresh += timedelta(days=1)
 
     while not _stop.is_set():
         started = time.monotonic()
@@ -69,15 +102,10 @@ def _worker(interval: int, refresh_hour: int) -> None:
         except Exception as exc:            # feed občasno resetira povezavo
             _log(f"zajem ni uspel: {exc}")
 
-        if datetime.now(TZ) >= next_refresh:
+        if next_refresh and datetime.now(TZ) >= next_refresh:
             next_refresh += timedelta(days=1)
             try:
-                path = gtfs.download(conn)
-                if path is None:
-                    _log("vozni red nespremenjen")
-                else:
-                    _log(f"nov vozni red: {gtfs.import_static(conn, path)}")
-                    path.unlink(missing_ok=True)
+                refresh_timetable(conn, refresh_mode)
             except Exception as exc:
                 _log(f"osvežitev voznega reda ni uspela: {exc}")
 
@@ -90,12 +118,15 @@ async def lifespan(app):
     thread = None
     if os.environ.get("SZ_COLLECTOR", "1") != "0":
         interval = int(os.environ.get("SZ_POLL_SECONDS", config.POLL_SECONDS))
+        mode = os.environ.get("SZ_REFRESH", "off").lower()
+        hour = int(os.environ.get("SZ_REFRESH_HOUR", "4"))
         thread = threading.Thread(
-            target=_worker, args=(interval, int(os.environ.get("SZ_REFRESH_HOUR", "4"))),
+            target=_worker, args=(interval, hour, mode),
             daemon=True, name="sztrack-collector",
         )
         thread.start()
-        _log(f"zajem teče vsakih {interval} s")
+        note = "brez osveževanja voznega reda" if mode == "off" else f"osvežitev ob {hour}:20 ({mode})"
+        _log(f"zajem teče vsakih {interval} s, {note}")
     else:
         _log("zajem izklopljen (SZ_COLLECTOR=0)")
     try:

@@ -78,6 +78,7 @@ Za trajni zajem so v `deploy/` systemd enote (poll kot servis, `update` kot dnev
 | `GET /api/speeds?train_no=` | voznoredna vs. izmerjena hitrost po odsekih |
 | `GET /api/stats?days=` | lestvica vlakov po zamudi |
 | `GET /api/live` | vlaki trenutno v feedu |
+| `GET /api/health` | stanje zajema: število voženj, dni, velikost baze |
 
 ## Razdalje med postajami
 

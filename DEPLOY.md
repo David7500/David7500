@@ -36,7 +36,8 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, uporabi 8000.
 | `SZ_DATA_DIR` | `data` | kam gre baza (naj bo na trajnem disku) |
 | `SZ_POLL_SECONDS` | 30 | razmik med zajemi |
 | `SZ_COLLECTOR` | 1 | `0` izklopi zajem (samo API) |
-| `SZ_REFRESH_HOUR` | 4 | ura dnevne osvežitve voznega reda |
+| `SZ_REFRESH` | `off` | osveževanje voznega reda: `off`, `inprocess`, `subprocess` |
+| `SZ_REFRESH_HOUR` | 4 | ura osvežitve, kadar ni `off` |
 
 ## Kaj se zgodi ob prvem zagonu
 
@@ -62,6 +63,41 @@ Merjeno na tem paketu:
 Pri 100 MB pomnilnika ostane okoli 25 MB rezerve. Če jo bo zmanjkalo, je prvi
 korak `SZ_POLL_SECONDS=60` in izogibanje `/api/network.geojson` v vroči zanki
 (odgovor je ~1 MB — postavi ga raje kot statično datoteko prek `sztrack export`).
+
+## Zakaj je osveževanje voznega reda privzeto izklopljeno
+
+Uvoz GTFS je najdražji trenutek v življenju procesa. Izmerjeno na tem paketu:
+
+| način | vrh pomnilnika | opomba |
+|---|---|---|
+| `inprocess` | **89 MB** | in ostane pri 85 MB — Python aren skoraj ne vrne sistemu |
+| `subprocess` | 54 MB v otroku **poleg 57 MB starša** = ~111 MB skupaj | oboje je hkrati rezidentno |
+| `off` | — | privzeto |
+
+Pri 100 MB pomnilnika nobena od obeh ni varna: proces bi ob osvežitvi lahko
+dobil OOM, in to vsak dan ob isti uri. Zato je privzeto `off`.
+
+Vozni red osvežiš tako, da drugje pognaš `sztrack update`, novo `sz.sqlite`
+daš v `seed/` in objaviš paket — obstoječa baza se ne povozi, ker se seed
+uporabi le, kadar baze še ni. (Za to je treba staro bazo enkrat odstraniti
+oziroma preimenovati.) Vsebinsko se vozni red spremeni nekajkrat na leto.
+
+Na stroju z več pomnilnika nastavi `SZ_REFRESH=subprocess`.
+
+## Preverjanje, da zajem res teče
+
+```
+GET /api/health
+```
+
+```json
+{"trips": 723, "stations": 267, "observations": 271,
+ "runs_recorded": 271, "days_covered": 1,
+ "db_bytes": 1708032, "last_feed_at": "2026-08-19T13:51:04+02:00"}
+```
+
+Po ponovnem zagonu gostitelja poglej prav to: če `runs_recorded` pade nazaj
+na 0, disk ne preživi zagona in zbrano se izgublja.
 
 ## Trajnost diska je pogoj
 
