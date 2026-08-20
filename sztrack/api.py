@@ -25,6 +25,17 @@ def _conn():
     return db.connect()
 
 
+@app.get("/")
+def index():
+    """Kazalo. Nekateri gostitelji preverjajo živost prav na korenski poti."""
+    return {
+        "service": "sztrack",
+        "version": app.version,
+        "docs": "/docs",
+        "endpoints": [r.path for r in app.routes if getattr(r, "path", "").startswith("/api/")],
+    }
+
+
 @app.get("/api/health")
 def api_health():
     """Stanje zajema. Po ponovnem zagonu gostitelja preveri prav to --
