@@ -64,6 +64,12 @@ def cmd_stats(args):
               f"{r['p90_s'] / 60:>7.1f}m{r['max_s'] / 60:>10.1f}m{r['on_time_share']:>9.0%}")
 
 
+def cmd_merge(args):
+    conn = db.connect()
+    db.init(conn)
+    print(json.dumps(db.merge_from(conn, Path(args.source)), indent=2, ensure_ascii=False))
+
+
 def cmd_export(args):
     conn = db.connect()
     out = Path(args.out)
@@ -99,6 +105,10 @@ def main(argv=None):
     a.add_argument("--days", type=int, default=90)
     a.add_argument("--limit", type=int, default=25)
     a.set_defaults(func=cmd_stats)
+
+    a = sub.add_parser("merge", help="prilij zajem iz druge baze (npr. s prejsnjega gostitelja)")
+    a.add_argument("source", help="pot do druge sz.sqlite")
+    a.set_defaults(func=cmd_merge)
 
     a = sub.add_parser("export", help="izvozi GeoJSON mreze in postaj")
     a.add_argument("--out", default="export")

@@ -1,0 +1,10 @@
+[Unit]
+Description=sztrack — varnostna kopija baze
+
+[Service]
+Type=oneshot
+User=sztrack
+Group=sztrack
+# .backup dela konsistentno kopijo tudi med pisanjem, kar navadni cp ne.
+ExecStart=/bin/sh -c 'sqlite3 /var/lib/sztrack/sz.sqlite ".backup /var/lib/sztrack/backup/sz-$(date +%%Y%%m%%d).sqlite"'
+ExecStartPost=/bin/sh -c 'find /var/lib/sztrack/backup -name "sz-*.sqlite" -mtime +14 -delete'

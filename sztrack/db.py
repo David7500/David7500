@@ -128,3 +128,55 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (key, value),
     )
+
+
+def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
+    """Prilije zajem iz druge baze v to.
+
+    Uporabno ob selitvi: zajeto drugje se ne sme izgubiti. Vrstice v `obs` so
+    ključene po (trip_id, service_date, stop_seq, feed_ts), zato je združevanje
+    varno tudi, če sta bazi nekaj časa tekli vzporedno -- podvojene meritve se
+    tiho zavržejo. V `run` obdržimo novejši zapis, torej tistega z višjim
+    `feed_ts`.
+    """
+    other = Path(other)
+    if not other.exists():
+        raise FileNotFoundError(other)
+
+    before = {
+        t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("obs", "run")
+    }
+    conn.execute("ATTACH DATABASE ? AS src", (str(other),))
+    try:
+        src_obs = conn.execute("SELECT COUNT(*) FROM src.obs").fetchone()[0]
+        with conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO obs"
+                "(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts, observed_at) "
+                "SELECT trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts, observed_at "
+                "FROM src.obs"
+            )
+            conn.execute(
+                "INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
+                "SELECT trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts FROM src.run "
+                "WHERE true "
+                "ON CONFLICT(trip_id, service_date, stop_seq) DO UPDATE SET "
+                "  delay_arr = excluded.delay_arr, delay_dep = excluded.delay_dep, "
+                "  feed_ts   = excluded.feed_ts "
+                "WHERE excluded.feed_ts > run.feed_ts"
+            )
+    finally:
+        conn.execute("DETACH DATABASE src")
+
+    after = {
+        t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("obs", "run")
+    }
+    return {
+        "source_observations": src_obs,
+        "observations_added": after["obs"] - before["obs"],
+        "runs_touched": after["run"] - before["run"],
+        "observations_total": after["obs"],
+        "days_covered": conn.execute(
+            "SELECT COUNT(DISTINCT service_date) FROM run"
+        ).fetchone()[0],
+    }

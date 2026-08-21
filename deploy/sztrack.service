@@ -1,0 +1,32 @@
+[Unit]
+Description=sztrack — zajem zamud SŽ in API
+Documentation=https://github.com/David7500/David7500
+Wants=network-online.target
+After=network-online.target
+# Feed občasno resetira povezavo; naj ponovni zagon nikoli ne obvelja za "prepogost".
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=sztrack
+Group=sztrack
+WorkingDirectory=/opt/sztrack
+Environment=SZ_DATA_DIR=/var/lib/sztrack
+Environment=PORT=8000
+Environment=SZ_POLL_SECONDS=30
+# Na Pi je dovolj pomnilnika, da vozni red osvežuje sam.
+# Uvoz teče v podprocesu, da se pomnilnik po njem vrne sistemu.
+Environment=SZ_REFRESH=subprocess
+Environment=SZ_REFRESH_HOUR=4
+ExecStart=/opt/sztrack/.venv/bin/python -m uvicorn sztrack.api:app --host 0.0.0.0 --port ${PORT} --no-access-log
+Restart=always
+RestartSec=15
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sztrack
+
+[Install]
+WantedBy=multi-user.target

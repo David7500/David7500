@@ -1,9 +1,87 @@
-# Objava na majhnem strežniku (Pella in podobni)
+# Objava
+
+Priporočen način je **Raspberry Pi doma** — glej spodaj. Za majhne gostitelje,
+ki sprejmejo zip, velja poglavje »Paket za gostitelja« naprej.
+
+## Raspberry Pi
+
+Za ta projekt je Pi boljši od brezplačnih gostiteljev iz enega razloga:
+zajem mora teči **neprekinjeno**, ker zgodovine zamud ni mogoče dobiti za nazaj.
+Brezplačni paketi bodisi zaspijo, bodisi zavržejo disk, bodisi zahtevajo ročno
+podaljševanje. Pi ne dela nič od tega.
+
+### Namestitev
+
+```bash
+sudo bash deploy/install-rpi.sh
+```
+
+Skripta je idempotentna — poženeš jo lahko znova za posodobitev. Naredi:
+
+* sistemskega uporabnika `sztrack` brez lupine,
+* kodo v `/opt/sztrack`, podatke v `/var/lib/sztrack`,
+* virtualno okolje in odvisnosti,
+* priloženo bazo voznega reda, **če je še ni** (obstoječe nikoli ne povozi),
+* storitev `sztrack.service` in dnevno varnostno kopijo `sztrack-backup.timer`.
+
+Po namestitvi:
+
+```bash
+curl -s http://localhost:8000/api/health
+journalctl -u sztrack -f
+```
+
+Iz domačega omrežja je dosegljiv na `http://<ip-pija>:8000/docs`.
+
+### Kaj je na Pi drugače
+
+**Vozni red se osvežuje sam.** V `sztrack.service` je `SZ_REFRESH=subprocess` —
+uvoz teče v podprocesu, ki po koncu ves pomnilnik vrne sistemu (vrh 54 MB).
+Na Pelli je bilo to izklopljeno zaradi 100 MB omejitve.
+
+**Ura mora biti točna.** Obratovalni dan vožnje se ugotavlja z ujemanjem
+voznorednega okna s trenutnim časom, zato naj `systemd-timesyncd` teče.
+Časovni pas sistema ni pomemben — koda povsod uporablja `Europe/Ljubljana`.
+
+**Zapisovanje je majhno.** Piše se samo ob spremembi zamude, torej nekaj tisoč
+vrstic na dan; za SD kartico zanemarljivo. Če imaš USB SSD, je vseeno boljše
+mesto — nastavi `SZ_DATA_DIR` nanj v enoti storitve.
+
+**Varnostne kopije** nastanejo vsak dan ob 3:30 v `/var/lib/sztrack/backup/`
+prek `sqlite3 .backup`, kar je konsistentno tudi med pisanjem. Hranijo se
+14 dni. Občasno prekopiraj katero z Pija — kartice odpovedo.
+
+### Prenos zajema s prejšnjega gostitelja
+
+Zajeto drugje se ne sme izgubiti. Prenesi staro `sz.sqlite` in jo prilij:
+
+```bash
+sudo -u sztrack /opt/sztrack/.venv/bin/python -m sztrack.cli merge ~/sz-pella.sqlite
+```
+
+```json
+{"source_observations": 271, "observations_added": 271,
+ "runs_touched": 222, "observations_total": 727, "days_covered": 2}
+```
+
+Postopek je varen tudi, če sta bazi nekaj časa tekli vzporedno: meritve so
+ključene po `(trip_id, service_date, stop_seq, feed_ts)`, zato se podvojene
+tiho zavržejo, v `run` pa obvelja zapis z novejšim `feed_ts`. Ponovni zagon
+istega ukaza doda 0 vrstic.
+
+### Dostop od zunaj
+
+Za zajem ni potreben — Pi sam kliče ven. Ko bo frontend rabil API z interneta,
+je najmanj dela s Tailscalom (zasebno omrežje, brez odpiranja vrat) ali s
+Cloudflare Tunnelom (javno, s samodejnim HTTPS in brez javnega IP-ja).
+Vrat na usmerjevalniku ne odpiraj — API nima avtentikacije.
+
+## Paket za gostitelja
 
 En sam proces streže API in hkrati zajema zamude — ločenega delavca ni.
 Zajem teče v ozadnji niti, ki jo zažene FastAPI ob zagonu.
 
-## Vsebina paketa
+### Vsebina paketa
 
 ```
 main.py            vstopna točka: uvicorn na $PORT
@@ -13,7 +91,7 @@ sztrack/           koda
 seed/sz.sqlite     pripravljen vozni red (1,7 MB) za takojšen zagon
 ```
 
-## Zagon
+### Zagon
 
 Delujeta oba načina — kar koli od tega gostitelj že uporablja:
 
@@ -28,7 +106,7 @@ da poganja prvo obliko — in prav zato je `app` tam.
 
 Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, uporabi 8000.
 
-## Nastavitve prek okolja
+### Nastavitve prek okolja
 
 | Spremenljivka | Privzeto | Kaj počne |
 |---|---|---|
@@ -39,7 +117,7 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, uporabi 8000.
 | `SZ_REFRESH` | `off` | osveževanje voznega reda: `off`, `inprocess`, `subprocess` |
 | `SZ_REFRESH_HOUR` | 4 | ura osvežitve, kadar ni `off` |
 
-## Kaj se zgodi ob prvem zagonu
+### Kaj se zgodi ob prvem zagonu
 
 Če baze še ni, se prekopira `seed/sz.sqlite` — zagon je takojšen. Če je tudi
 seed ni, si vozni red prenese sam (41 MB, uvoz ~23 s pri polnem jedru; na 0,1
@@ -48,7 +126,7 @@ jedra računaj nekaj minut) in zip nato pobriše.
 **Obstoječa baza se nikoli ne povozi.** Ponovna objava paketa torej ne izbriše
 zajete zgodovine — dokler je `SZ_DATA_DIR` na disku, ki preživi objavo.
 
-## Poraba
+### Poraba
 
 Merjeno na tem paketu:
 
@@ -64,7 +142,7 @@ Pri 100 MB pomnilnika ostane okoli 25 MB rezerve. Če jo bo zmanjkalo, je prvi
 korak `SZ_POLL_SECONDS=60` in izogibanje `/api/network.geojson` v vroči zanki
 (odgovor je ~1 MB — postavi ga raje kot statično datoteko prek `sztrack export`).
 
-## Zakaj je osveževanje voznega reda privzeto izklopljeno
+### Zakaj je osveževanje voznega reda privzeto izklopljeno
 
 Uvoz GTFS je najdražji trenutek v življenju procesa. Izmerjeno na tem paketu:
 
@@ -84,7 +162,7 @@ oziroma preimenovati.) Vsebinsko se vozni red spremeni nekajkrat na leto.
 
 Na stroju z več pomnilnika nastavi `SZ_REFRESH=subprocess`.
 
-## Preverjanje, da zajem res teče
+### Preverjanje, da zajem res teče
 
 ```
 GET /api/health
@@ -99,7 +177,7 @@ GET /api/health
 Po ponovnem zagonu gostitelja poglej prav to: če `runs_recorded` pade nazaj
 na 0, disk ne preživi zagona in zbrano se izgublja.
 
-## Trajnost diska je pogoj
+### Trajnost diska je pogoj
 
 Zgodovine zamud ni od nikoder dobiti nazaj — GTFS-RT nosi samo trenutno stanje.
 Če gostitelj ob vsaki objavi ali ponovnem zagonu zavrže disk, se zbrano izgubi.
