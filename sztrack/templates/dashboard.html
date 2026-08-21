@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sztrack — nadzorna soba</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f0934f" stroke-width="1.8" stroke-linecap="round">
+        <rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
+        <circle cx="9" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle>
+      </svg>
+      <span class="brand-name">sztrack</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="train-count">
+      <span id="train-count-n">—</span>
+      <span class="label">vlakov v prometu</span>
+    </div>
+    <div class="divider"></div>
+    <div class="clock-wrap">
+      <span id="feed-dot" class="dot"></span>
+      <span id="clock" class="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar">
+      <div class="sidebar-title">Največje zamude</div>
+      <div id="delay-list" class="delay-list">
+        <div class="empty-state">nalagam …</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#7c8698"></span><span>točno</span></div>
+        <div class="legend-item"><span class="legend-dot" style="background:#f2a87e"></span><span>1–5 min</span></div>
+        <div class="legend-item"><span class="legend-dot" style="background:#e07b45"></span><span>5–15 min</span></div>
+        <div class="legend-item"><span class="legend-dot" style="background:#b85417"></span><span>nad 15 min</span></div>
+      </div>
+    </aside>
+
+    <main class="map-area">
+      <div id="map"></div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>

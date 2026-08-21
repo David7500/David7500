@@ -6,10 +6,14 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from . import config, db, stats
 from .server import lifespan
@@ -19,6 +23,11 @@ app = FastAPI(title="sztrack", version="0.1.0",
               description="Vozni redi, zamude in statistika Slovenskih železnic",
               lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
+
+# Poti relativno na paket, da delajo enako v dev checkoutu in na /opt/sztrack.
+_PKG_DIR = Path(__file__).parent
+app.mount("/static", StaticFiles(directory=_PKG_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=_PKG_DIR / "templates")
 
 
 def _conn():
@@ -36,12 +45,16 @@ def index():
     }
 
 
+@app.get("/app", response_class=HTMLResponse)
+def dashboard(request: Request):
+    """Živi nadzorni pregled -- podatke si pobere sam prek /api/* v JS-u."""
+    return templates.TemplateResponse(request, "dashboard.html", {})
+
+
 @app.get("/api/health")
 def api_health():
     """Stanje zajema. Po ponovnem zagonu gostitelja preveri prav to --
     če `runs_recorded` pade nazaj na 0, disk ne preživi zagona."""
-    from pathlib import Path
-
     with _conn() as conn:
         row = conn.execute(
             "SELECT (SELECT COUNT(*) FROM trip) AS trips,"
