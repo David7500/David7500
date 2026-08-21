@@ -33,16 +33,23 @@ fi
 
 echo "==> odvisnosti"
 [ -d "$APP/.venv" ] || python3 -m venv "$APP/.venv"
-"$APP/.venv/bin/pip" install --quiet --upgrade pip
-"$APP/.venv/bin/pip" install --quiet -r "$APP/requirements.txt" uvicorn
+# Omrezje do piwheels zna zatajiti; retries so ceneje od ponovnega zagona skripte.
+PIP="$APP/.venv/bin/pip"
+"$PIP" install --quiet --retries 5 --timeout 60 --upgrade pip
+"$PIP" install --quiet --retries 5 --timeout 60 -r "$APP/requirements.txt"
 chown -R sztrack:sztrack "$APP"
 
 echo "==> vozni red"
-if [ ! -f "$DATA/sz.sqlite" ]; then
-    install -o sztrack -g sztrack -m 644 "$APP/seed/sz.sqlite" "$DATA/sz.sqlite"
-    echo "    priložena baza nameščena (obstoječe se nikoli ne povozi)"
-else
+if [ -f "$DATA/sz.sqlite" ]; then
     echo "    baza že obstaja, puščam pri miru"
+elif [ -f "$APP/seed/sz.sqlite" ]; then
+    install -o sztrack -g sztrack -m 644 "$APP/seed/sz.sqlite" "$DATA/sz.sqlite"
+    echo "    priložena baza nameščena"
+else
+    # Rezerva, kadar priloženo bazo kaj izpusti: sestavimo jo na mestu.
+    # 41 MB prenosa in nekaj minut na Pi; vrh pomnilnika okoli 54 MB.
+    echo "    priložene baze ni -- gradim vozni red iz GTFS (nekaj minut) ..."
+    sudo -u sztrack env SZ_DATA_DIR="$DATA" "$APP/.venv/bin/python" -m sztrack.cli update
 fi
 
 echo "==> storitve"

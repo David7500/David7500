@@ -5,6 +5,8 @@ __pycache__/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+# ...razen pripravljenega voznega reda, ki ga rabi namestitev
+!seed/sz.sqlite
 .venv/
 
 # generirano platno (seeded iz design/)
