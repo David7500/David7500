@@ -55,6 +55,8 @@ sztrack show "LPV 2206" --date 2026-08-18      # konkretna vožnja z zamudami
 sztrack stats --days 90                        # lestvica vlakov
 sztrack export --out export/                   # GeoJSON mreže in postaj
 sztrack merge /pot/do/druge/sz.sqlite           # prilij zajem z drugega stroja
+sztrack weather --days 7                       # dopolni vreme za nazaj
+sztrack weather --show                         # kateri dnevi so pokriti
 
 uvicorn sztrack.api:app --reload   # JSON API na :8000
 python main.py                     # API + zajem v enem procesu

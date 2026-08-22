@@ -90,6 +90,25 @@ CREATE TABLE IF NOT EXISTS run (
 );
 CREATE INDEX IF NOT EXISTS run_date ON run(service_date);
 
+-- ---------- vreme (iz Open-Meteo, dopolnjeno za nazaj) ----------
+
+-- Mreza 0,1 stopinje (~8 km) x ena ura. `cell` je sredisce celice ("46.1,14.5").
+-- `source`: 'archive' je reanaliza za nazaj, 'forecast' napoved za danes --
+-- naslednji dan jo dnevno opravilo zamenja z arhivsko vrednostjo.
+CREATE TABLE IF NOT EXISTS weather (
+    cell          TEXT NOT NULL,
+    hour_ts       INTEGER NOT NULL,   -- zacetek ure, unix UTC
+    temp_c        REAL,
+    precip_mm     REAL,
+    snowfall_cm   REAL,
+    wind_gust_kmh REAL,
+    code          INTEGER,            -- WMO sifra vremena
+    source        TEXT NOT NULL,
+    fetched_at    INTEGER NOT NULL,
+    PRIMARY KEY (cell, hour_ts)
+);
+CREATE INDEX IF NOT EXISTS weather_hour ON weather(hour_ts);
+
 CREATE TABLE IF NOT EXISTS alert (
     alert_id     TEXT NOT NULL,
     first_seen   INTEGER NOT NULL,
@@ -165,6 +184,25 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
                 "  feed_ts   = excluded.feed_ts "
                 "WHERE excluded.feed_ts > run.feed_ts"
             )
+            # Vreme je izpeljano in bi se dalo znova pobrati, a prilivanje je
+            # zastonj. Starejsa baza te tabele nima -- takrat korak preskocimo.
+            has_weather = conn.execute(
+                "SELECT 1 FROM src.sqlite_master WHERE type='table' AND name='weather'"
+            ).fetchone()
+            if has_weather:
+                conn.execute(
+                    "INSERT INTO weather(cell, hour_ts, temp_c, precip_mm, snowfall_cm,"
+                    "                    wind_gust_kmh, code, source, fetched_at) "
+                    "SELECT cell, hour_ts, temp_c, precip_mm, snowfall_cm,"
+                    "       wind_gust_kmh, code, source, fetched_at FROM src.weather "
+                    "WHERE true "
+                    "ON CONFLICT(cell, hour_ts) DO UPDATE SET "
+                    "  temp_c = excluded.temp_c, precip_mm = excluded.precip_mm, "
+                    "  snowfall_cm = excluded.snowfall_cm, wind_gust_kmh = excluded.wind_gust_kmh, "
+                    "  code = excluded.code, source = excluded.source, "
+                    "  fetched_at = excluded.fetched_at "
+                    "WHERE excluded.source = 'archive' OR weather.source = excluded.source"
+                )
     finally:
         conn.execute("DETACH DATABASE src")
 

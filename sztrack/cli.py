@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import config, collector, db, gtfs, stats
+from . import config, collector, db, gtfs, stats, weather
 
 
 def cmd_init(args):
@@ -70,6 +70,21 @@ def cmd_merge(args):
     print(json.dumps(db.merge_from(conn, Path(args.source)), indent=2, ensure_ascii=False))
 
 
+def cmd_weather(args):
+    conn = db.connect()
+    db.init(conn)
+    if args.show:
+        rows = weather.covered_days(conn)
+        if not rows:
+            print("vremena se ni -- pozeni 'weather --days 7'")
+            return
+        print(f"{'dan':<12}{'vir':<10}{'celic':>7}{'vrstic':>8}")
+        for r in rows:
+            print(f"{r['day']:<12}{r['source']:<10}{r['cells']:>7}{r['rows_n']:>8}")
+        return
+    print(json.dumps(weather.backfill(conn, args.days), indent=2, ensure_ascii=False))
+
+
 def cmd_export(args):
     conn = db.connect()
     out = Path(args.out)
@@ -109,6 +124,11 @@ def main(argv=None):
     a = sub.add_parser("merge", help="prilij zajem iz druge baze (npr. s prejsnjega gostitelja)")
     a.add_argument("source", help="pot do druge sz.sqlite")
     a.set_defaults(func=cmd_merge)
+
+    a = sub.add_parser("weather", help="dopolni vreme za nazaj (Open-Meteo)")
+    a.add_argument("--days", type=int, default=7, help="koliko dni nazaj do danes")
+    a.add_argument("--show", action="store_true", help="samo izpisi, kaj je ze shranjeno")
+    a.set_defaults(func=cmd_weather)
 
     a = sub.add_parser("export", help="izvozi GeoJSON mreze in postaj")
     a.add_argument("--out", default="export")

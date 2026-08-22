@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import collector, config, db, gtfs
+from . import collector, config, db, gtfs, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -83,15 +83,22 @@ def refresh_timetable(conn, mode: str) -> None:
     path.unlink(missing_ok=True)
 
 
-def _worker(interval: int, refresh_hour: int, refresh_mode: str) -> None:
+def _next_at(hour: int, minute: int) -> datetime:
+    when = datetime.now(TZ).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return when + timedelta(days=1) if when <= datetime.now(TZ) else when
+
+
+def _worker(interval: int, refresh_hour: int, refresh_mode: str,
+            weather_hour: int) -> None:
     conn = db.connect()
     db.init(conn)
     next_refresh = None
     if refresh_mode != "off" and refresh_hour >= 0:
-        next_refresh = datetime.now(TZ).replace(
-            hour=refresh_hour, minute=20, second=0, microsecond=0)
-        if next_refresh <= datetime.now(TZ):
-            next_refresh += timedelta(days=1)
+        next_refresh = _next_at(refresh_hour, 20)
+    # Vreme se dopolnjuje za nazaj, ne sproti -- arhiv je na voljo sele naslednji
+    # dan, zato vsakic pobere zadnje tri dni in s tem povozi vcerajsnjo napoved
+    # z arhivsko vrednostjo.
+    next_weather = _next_at(weather_hour, 10) if weather_hour >= 0 else None
 
     while not _stop.is_set():
         started = time.monotonic()
@@ -109,6 +116,14 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str) -> None:
             except Exception as exc:
                 _log(f"osvežitev voznega reda ni uspela: {exc}")
 
+        if next_weather and datetime.now(TZ) >= next_weather:
+            next_weather += timedelta(days=1)
+            try:
+                info = weather.backfill(conn, days=3)
+                _log(f"vreme: {info['rows']} vrstic za {info['cells']} celic")
+            except Exception as exc:      # vreme ni kriticno -- zajem tece naprej
+                _log(f"vremena ni bilo mogoče dopolniti: {exc}")
+
         _stop.wait(max(1.0, interval - (time.monotonic() - started)))
 
 
@@ -120,13 +135,17 @@ async def lifespan(app):
         interval = int(os.environ.get("SZ_POLL_SECONDS", config.POLL_SECONDS))
         mode = os.environ.get("SZ_REFRESH", "off").lower()
         hour = int(os.environ.get("SZ_REFRESH_HOUR", "4"))
+        weather_hour = int(os.environ.get("SZ_WEATHER_HOUR", "5"))
+        if os.environ.get("SZ_WEATHER", "1") == "0":
+            weather_hour = -1
         thread = threading.Thread(
-            target=_worker, args=(interval, hour, mode),
+            target=_worker, args=(interval, hour, mode, weather_hour),
             daemon=True, name="sztrack-collector",
         )
         thread.start()
         note = "brez osveževanja voznega reda" if mode == "off" else f"osvežitev ob {hour}:20 ({mode})"
-        _log(f"zajem teče vsakih {interval} s, {note}")
+        wnote = "vreme izklopljeno" if weather_hour < 0 else f"vreme ob {weather_hour}:10"
+        _log(f"zajem teče vsakih {interval} s, {note}, {wnote}")
     else:
         _log("zajem izklopljen (SZ_COLLECTOR=0)")
     try:

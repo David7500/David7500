@@ -116,6 +116,8 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, uporabi 8000.
 | `SZ_COLLECTOR` | 1 | `0` izklopi zajem (samo API) |
 | `SZ_REFRESH` | `off` | osveževanje voznega reda: `off`, `inprocess`, `subprocess` |
 | `SZ_REFRESH_HOUR` | 4 | ura osvežitve, kadar ni `off` |
+| `SZ_WEATHER` | 1 | `0` izklopi dnevno dopolnjevanje vremena |
+| `SZ_WEATHER_HOUR` | 5 | ura, ob kateri se vreme dopolni za zadnje 3 dni |
 
 ### Kaj se zgodi ob prvem zagonu
 
