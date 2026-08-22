@@ -128,9 +128,12 @@ def api_run(train_no: str, date: str | None = None):
 
 
 @app.get("/api/train/{train_no}/history")
-def api_history(train_no: str, days: int = Query(90, ge=1, le=3650)):
+def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
+                exclude_date: str | None = None):
+    """Zgodovina te poti. `exclude_date` izpusti en prometni dan -- prikaz
+    tekoče vožnje ga rabi, da povprečje ne vsebuje vožnje, ki jo riše zraven."""
     with _conn() as conn:
-        return stats.history(conn, train_no, days)
+        return stats.history(conn, train_no, days, exclude_date)
 
 
 @app.get("/api/train/{train_no}/predict")

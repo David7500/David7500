@@ -11,11 +11,11 @@
 <body class="train-page" data-train-no="{{ train_no }}">
 
   <header class="topbar">
-    <a class="back-link" href="/app" title="nazaj na zemljevid">
+    <a class="back-link" href="/app" title="nazaj na iskalnik">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M15 5l-7 7 7 7"></path>
       </svg>
-      <span>zemljevid</span>
+      <span>iskalnik</span>
     </a>
     <div class="divider"></div>
     <div class="train-head">
@@ -23,6 +23,8 @@
       <span id="train-headsign" class="train-head-sub"></span>
     </div>
     <div class="spacer"></div>
+    <a class="top-link" href="/app/map">zemljevid</a>
+    <div class="divider"></div>
     <div class="clock-wrap">
       <span id="feed-dot" class="dot"></span>
       <span id="clock" class="clock">--:--:--</span>
@@ -38,13 +40,19 @@
     </section>
 
     <section class="col col-hist">
-      <div class="section-title">Zgodovina te poti</div>
+      <div class="hist-top">
+        <div class="section-title">Zgodovina te poti</div>
+        <button id="speeds-toggle" class="toggle" type="button" aria-expanded="false" aria-controls="fig-speeds">
+          Hitrost po odsekih
+        </button>
+      </div>
       <div id="hist-note" class="hist-note"></div>
       <div id="hist-tiles" class="tile-row"></div>
 
       <figure class="figure" id="fig-profile">
         <figcaption class="fig-title">Zamuda po postajah</figcaption>
         <div class="fig-sub" id="profile-sub"></div>
+        <div class="fig-legend" id="profile-legend"></div>
         <div class="fig-body" id="profile-chart"></div>
       </figure>
 
@@ -54,8 +62,12 @@
         <div class="fig-body" id="runs-chart"></div>
       </figure>
 
-      <figure class="figure" id="fig-speeds">
+      <figure class="figure" id="fig-speeds" hidden>
         <figcaption class="fig-title">Hitrost po odsekih</figcaption>
+        <div class="fig-note">
+          Ni nova meritev: hitrost je preračunana iz istih zamud in voznega reda,
+          zato pove isto zgodbo z druge strani.
+        </div>
         <div class="fig-sub" id="speeds-sub"></div>
         <div class="fig-body" id="speeds-chart"></div>
       </figure>

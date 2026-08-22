@@ -179,12 +179,20 @@ async function fetchRunAndForecast(trainNo, date) {
   const run = await res.json();
 
   const cur = lastMeasured(run.stops);
+  // Dokler vlak se ni odpeljal, meritve ni, feed pa ima za prvo postajo ze
+  // napoved. Oceno za naprej takrat zgradimo na njej -- ozaljsana je z oznako
+  // "ocena", da nihce ne bere napovedi na napovedi kot izmerjeno.
+  let base = cur;
+  if (!base) {
+    for (const s of run.stops) if (stopDelay(s) != null) { base = s; break; }
+  }
+
   let forecast = [];
   const lastSeq = run.stops.length ? run.stops[run.stops.length - 1].stop_seq : 0;
-  if (cur && stopDelay(cur) != null && cur.stop_seq < lastSeq) {
+  if (base && stopDelay(base) != null && base.stop_seq < lastSeq) {
     try {
       const p = await fetch(
-        `/api/train/${enc}/predict?stop_seq=${cur.stop_seq}&delay_s=${stopDelay(cur)}`
+        `/api/train/${enc}/predict?stop_seq=${base.stop_seq}&delay_s=${stopDelay(base)}`
       ).then((r) => (r.ok ? r.json() : null));
       forecast = (p && p.forecast) || [];
     } catch (err) {

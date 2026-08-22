@@ -30,6 +30,50 @@
 }
 .col-hist .section-title { padding-left: 0; padding-right: 0; }
 
+.hist-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-bottom: 1px solid #1e2229;
+}
+.hist-top .section-title { border-bottom: none; flex-grow: 1; }
+
+.toggle {
+  flex-shrink: 0;
+  padding: 6px 11px;
+  background: none;
+  border: 1px solid #2b303a;
+  border-radius: 6px;
+  color: #9aa3b0;
+  cursor: pointer;
+  font: 500 11px/1.2 'IBM Plex Sans', system-ui, sans-serif;
+}
+.toggle:hover { color: #e7eaf0; border-color: #3d434f; }
+.toggle.is-on { color: #14161a; background: #e07b45; border-color: #e07b45; }
+
+.fig-note {
+  margin-top: 6px;
+  font: 400 11px/1.6 'IBM Plex Sans', system-ui, sans-serif;
+  color: #79828f;
+  border-left: 2px solid #2b303a;
+  padding-left: 9px;
+}
+
+/* ---------- legenda ---------- */
+
+.fig-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 9px; }
+.lg {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0;
+}
+.lg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.lg-dot.is-hollow { background: none; border: 2px solid; }
+.lg-dash { width: 16px; height: 0; border-top: 1.5px dashed; flex-shrink: 0; }
+/* Odtenek na tej postavki pomeni velikost zamude, ne identitete serije --
+   zato prikazan kot lestvica in ne kot ena pika. */
+.lg-ramp {
+  width: 34px; height: 9px; border-radius: 2px; flex-shrink: 0;
+  background: linear-gradient(90deg, #7c8698 0 25%, #f2a87e 25% 50%, #e07b45 50% 75%, #b85417 75% 100%);
+}
+
 .hist-note {
   padding: 12px 0 0;
   font: 400 12px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;

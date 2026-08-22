@@ -105,8 +105,14 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str) -> li
     return out
 
 
-def history(conn: sqlite3.Connection, train_no: str, days: int = 90) -> dict:
-    """Zgodovina zamud enega vlaka: po dnevih in po postajah."""
+def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
+            exclude_date: str | None = None) -> dict:
+    """Zgodovina zamud enega vlaka: po dnevih in po postajah.
+
+    `exclude_date` izpusti en prometni dan. Rabi ga prikaz tekoce voznje:
+    "povprecje preteklih voznj" ne sme vsebovati voznje, ki jo risemo zraven,
+    sicer bi krivulja delno primerjala podatek sam s seboj.
+    """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     rows = conn.execute(
         "SELECT r.service_date, r.stop_seq, st.name, r.delay_arr, r.delay_dep "
@@ -114,8 +120,9 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90) -> dict:
         "       ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
         "JOIN station st ON st.stop_id = s.stop_id "
         "WHERE t.train_no = ? AND r.service_date >= ? "
+        "  AND (? IS NULL OR r.service_date <> ?) "
         "ORDER BY r.service_date, r.stop_seq",
-        (train_no, since),
+        (train_no, since, exclude_date, exclude_date),
     ).fetchall()
 
     by_day: dict[str, list] = {}
@@ -143,6 +150,9 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90) -> dict:
     profile = [
         {
             "stop_seq": seq, "name": v["name"], "n": len(v["delays"]),
+            # Mediana je odpornejsa, povprecje je tisto, kar clovek pricakuje --
+            # zato oboje, da prikaz ne rabi izbirati na slepo.
+            "mean_s": round(statistics.mean(v["delays"]), 1),
             "median_s": _pct(v["delays"], 0.5),
             "p90_s": _pct(v["delays"], 0.9),
             "max_s": max(v["delays"]),
@@ -151,6 +161,7 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90) -> dict:
     ]
     return {
         "train_no": train_no,
+        "excluded_date": exclude_date,
         "runs_observed": len(runs),
         "summary": {
             "median_final_s": _pct(finals, 0.5),
