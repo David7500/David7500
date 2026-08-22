@@ -56,23 +56,25 @@ function pluralRuns(n) {
 
 const WEATHER_INK = "#6f8fa8";
 
-function weatherIconHtml(w, size) {
+function weatherIconHtml(w, size, tint) {
   if (!w || w.temp_c == null) return "";
   const px = size || 14;
+  // Oblika pove, KAJ je (dez, sneg, megla), barva pa KAKO hudo je.
+  const c = tint || (w.severity_label ? severityColor(w.severity_label) : null);
   const a = `width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"`;
   if ((w.snowfall_cm || 0) > 0) {
-    return `<svg ${a} stroke="#a8d8ff"><path d="M12 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11 1.8A3.6 3.6 0 0 0 4.6 16"></path><path d="M8 20h.01M12 21h.01M16 20h.01"></path></svg>`;
+    return `<svg ${a} stroke="${c || '#a8d8ff'}"><path d="M12 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11 1.8A3.6 3.6 0 0 0 4.6 16"></path><path d="M8 20h.01M12 21h.01M16 20h.01"></path></svg>`;
   }
   if ((w.precip_mm || 0) >= 0.1) {
-    return `<svg ${a} stroke="${WEATHER_INK}"><path d="M12 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11 1.8A3.6 3.6 0 0 0 4.6 16"></path><path d="M8 19l-1 2.5M12 19l-1 2.5M16 19l-1 2.5"></path></svg>`;
+    return `<svg ${a} stroke="${c || WEATHER_INK}"><path d="M12 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11 1.8A3.6 3.6 0 0 0 4.6 16"></path><path d="M8 19l-1 2.5M12 19l-1 2.5M16 19l-1 2.5"></path></svg>`;
   }
   if (w.code === 45 || w.code === 48) {
-    return `<svg ${a} stroke="#79828f"><path d="M3 9h18M4 13h16M6 17h12"></path></svg>`;
+    return `<svg ${a} stroke="${c || '#79828f'}"><path d="M3 9h18M4 13h16M6 17h12"></path></svg>`;
   }
   if (w.code != null && w.code <= 1) {
-    return `<svg ${a} stroke="#c8a06a"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg>`;
+    return `<svg ${a} stroke="${c || '#c8a06a'}"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path></svg>`;
   }
-  return `<svg ${a} stroke="#5b6472"><path d="M12 18a5 5 0 0 0 0-10 6.5 6.5 0 0 0-12 2 4 4 0 0 0 4 4h8"></path></svg>`;
+  return `<svg ${a} stroke="${c || '#5b6472'}"><path d="M12 18a5 5 0 0 0 0-10 6.5 6.5 0 0 0-12 2 4 4 0 0 0 4 4h8"></path></svg>`;
 }
 
 function num(v, digits) {
@@ -80,17 +82,25 @@ function num(v, digits) {
   return v.toFixed(digits == null ? 1 : digits).replace(".", ",");
 }
 
-// Sekvencna lestvica enega odtenka, svetlost narasca s stopnjo -- locena od
-// lestvice zamud, da se razmere in zamuda ne zamenjata. Enako kot v weather.py.
-const SEVERITY_COLORS = ["#4a515c", "#5f8296", "#7aa6c2", "#9cc6de", "#c3e2f2"];
+// Semafor, ne lestvica enega odtenka: stopnje se morajo lociti na prvi pogled.
+// Tople barve tu ne trkajo z lestvico zamud, ker je v pogledu Vreme zamuda
+// narisana nevtralno. Enako kot v weather.py.
+const SEVERITY_STYLE = {
+  "mirne": "#6b7480",
+  "blage": "#5aa87d",
+  "zahtevne": "#d9b33c",
+  "hude": "#d1495b",
+};
+const SEVERITY_ORDER = ["mirne", "blage", "zahtevne", "hude"];
 
-function severityColor(score) {
-  if (score == null) return "#3d434f";
-  if (score <= 0) return SEVERITY_COLORS[0];
-  if (score <= 2) return SEVERITY_COLORS[1];
-  if (score <= 4) return SEVERITY_COLORS[2];
-  if (score <= 7) return SEVERITY_COLORS[3];
-  return SEVERITY_COLORS[4];
+function severityColor(scoreOrLabel) {
+  if (typeof scoreOrLabel === "string") return SEVERITY_STYLE[scoreOrLabel] || "#3d434f";
+  const s = scoreOrLabel;
+  if (s == null) return "#3d434f";
+  if (s <= 0) return SEVERITY_STYLE["mirne"];
+  if (s <= 3) return SEVERITY_STYLE["blage"];
+  if (s <= 6) return SEVERITY_STYLE["zahtevne"];
+  return SEVERITY_STYLE["hude"];
 }
 
 function severityTitle(w) {
@@ -138,9 +148,12 @@ function stopWeatherHtml(w) {
   if (!w || w.severity == null) return "";
   // Potnika ne zanima 0,4 mm/h -- zanima ga, ali so razmere hude. Surove
   // stevilke ostanejo v naslovu in v oknu ob grafu.
-  return `<span class="stop-weather" title="${escapeHtml(severityTitle(w))}">` +
+  const color = severityColor(w.severity_label);
+  const loud = w.severity_label === "zahtevne" || w.severity_label === "hude";
+  return `<span class="stop-weather${loud ? " is-loud" : ""}" title="${escapeHtml(severityTitle(w))}"` +
+    (loud ? ` style="background:${color}1f;border-color:${color}66"` : "") + `>` +
     weatherIconHtml(w, 13) +
-    `<span class="stop-sev" style="color:${severityColor(w.severity)}">${w.severity}</span></span>`;
+    `<span class="stop-sev" style="color:${color}">${w.severity}</span></span>`;
 }
 
 function measuredStopHtml(s, isCurrent, w) {

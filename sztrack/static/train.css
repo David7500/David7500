@@ -77,6 +77,7 @@
 .lg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .lg-dot.is-hollow { background: none; border: 2px solid; }
 .lg-dash { width: 16px; height: 0; border-top: 1.5px dashed; flex-shrink: 0; }
+.lg-swatch { width: 14px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 /* Odtenek na tej postavki pomeni velikost zamude, ne identitete serije --
    zato prikazan kot lestvica in ne kot ena pika. */
 .lg-ramp {
@@ -180,7 +181,13 @@
 .stop-weather {
   display: flex; align-items: center; gap: 4px; flex-shrink: 0;
   margin-right: 2px;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
 }
+/* Barva se prizge sele, ko je kaj vredno pozornosti -- mirne postaje ostanejo
+   tihe, hude izstopijo, ne da bi vsaka vrstica krizala. */
+.stop-weather.is-loud { border-style: solid; }
 .stop-sev {
   font: 600 11px/1 'IBM Plex Mono', ui-monospace, monospace;
   min-width: 12px; text-align: right;

@@ -112,7 +112,7 @@ function runHeadHtml(cur) {
       ${wx && wx.severity != null ? `
         <div class="detail-weather">
           ${weatherIconHtml(wx, 15)}
-          <span>razmere <strong style="color:${severityColor(wx.severity)}">${wx.severity}/10</strong> · ${escapeHtml(wx.severity_label)}</span>
+          <span>razmere <strong style="color:${severityColor(wx.severity_label)}">${wx.severity}/10</strong> · ${escapeHtml(wx.severity_label)}</span>
         </div>
         <div class="detail-weather-raw">${escapeHtml(weatherSummary(wx))}</div>` : ""}
       <div class="detail-caveat">
@@ -213,7 +213,7 @@ function crosshair(svg, x, top, bottom) {
 function weatherTipRows(w) {
   if (!w || w.temp_c == null) return "";
   const head = w.severity == null ? "" :
-    `<div class="tt-row"><span>razmere</span><b style="color:${severityColor(w.severity)}">${w.severity}/10 ${escapeHtml(w.severity_label)}</b></div>`;
+    `<div class="tt-row"><span>razmere</span><b style="color:${severityColor(w.severity_label)}">${w.severity}/10 ${escapeHtml(w.severity_label)}</b></div>`;
   // Indeks brez razclenitve je crna skatla -- iz cesa je sestavljen, mora biti vidno.
   const parts = (w.severity_parts || []).map((x) =>
     `<div class="tt-row is-part"><span>${escapeHtml(x.what)}</span><b>+${x.points}</b></div>`).join("");
@@ -465,10 +465,11 @@ function drawWeather(w, pts) {
   }
   pts.forEach((p, i) => {
     if (p.value == null) return;
+    // Nevtralno, ne po lestvici zamud: v tem pogledu barvo nosijo razmere.
     svg.appendChild(svgEl("circle", {
-      cx: x(i), cy: dy(p.value), r: p.seq === hoverSeq ? 5.5 : 3.5,
-      fill: p.kind === "measured" ? delayColor(p.value) : ESTIMATE_COLOR,
-      stroke: p.seq === hoverSeq ? "#e7eaf0" : SURFACE, "stroke-width": 1.5,
+      cx: x(i), cy: dy(p.value), r: p.seq === hoverSeq ? 5.5 : 3,
+      fill: p.kind === "measured" ? INK_LINE : "none",
+      stroke: p.seq === hoverSeq ? "#e7eaf0" : INK_LINE, "stroke-width": 1.5,
     }));
   });
 
@@ -491,7 +492,7 @@ function drawWeather(w, pts) {
     const h = Math.max(1.5, (p.wx.severity / sevMax) * (rainBot - split));
     svg.appendChild(svgEl("rect", {
       x: x(i) - bw / 2, y: rainBot - h, width: bw, height: h, rx: 2,
-      fill: severityColor(p.wx.severity),
+      fill: severityColor(p.wx.severity_label),
       stroke: p.seq === hoverSeq ? "#e7eaf0" : "none",
       "stroke-width": p.seq === hoverSeq ? 1.5 : 0,
     }));
@@ -531,11 +532,11 @@ function renderWeather() {
   }
   const worst = withWx.reduce((a, b) => (b.wx.severity > a.wx.severity ? b : a));
   sub.textContent = `${withWx.length} postaj · najhuje ${worst.wx.severity}/10 (${worst.wx.severity_label}) v ${worst.name}`
-    + " · zgoraj ista zamuda kot v prvem pogledu";
+    + " · zamuda zgoraj je narisana nevtralno, barvo tu nosijo razmere";
   legend.innerHTML =
-    `<span class="lg"><span class="lg-dash" style="border-color:${INK_LINE};border-top-style:solid"></span>zamuda</span>` +
-    ["mirno", "blage", "poslabšano", "zahtevno", "hudo"].map((lab, i) =>
-      `<span class="lg"><span class="lg-dot" style="background:${SEVERITY_COLORS[i]}"></span>${lab}</span>`).join("");
+    `<span class="lg"><span class="lg-dash" style="border-color:${INK_LINE};border-top-style:solid"></span>zamuda (le za primerjavo)</span>` +
+    SEVERITY_ORDER.map((lab) =>
+      `<span class="lg"><span class="lg-swatch" style="background:${SEVERITY_STYLE[lab]}"></span>${lab}</span>`).join("");
   note.innerHTML =
     "Stopnja 0–10 je sešteta iz padavin, snega, sunkov vetra, megle, nevihte in mraza — " +
     "razčlenitev je vidna ob dotiku stolpca. <strong>Ni napoved zamude</strong> in ne trdi vzroka: " +
