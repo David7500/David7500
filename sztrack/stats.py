@@ -391,3 +391,66 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         d.pop("from_delay_s", None)
         d.pop("to_delay_s", None)
     return out
+
+
+# ---------------------------------------------------------------- vreme ob vožnji
+
+def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str) -> list[dict]:
+    """Vreme na vsaki postaji te vožnje.
+
+    Ura se vzame po dejanskem času (vozni red + zamuda), kadar ga imamo, sicer
+    po voznorednem -- vreme mora opisovati trenutek, ko je vlak tam, ne ure
+    odhoda z izhodišča. Vrednost je modelska za celico 8 x 8 km, ne meritev na
+    peronu, in prikaz mora to povedati.
+    """
+    from . import weather as weather_mod
+
+    rows = conn.execute(
+        "SELECT s.stop_seq, st.name, st.lat, st.lon, "
+        "       COALESCE(s.dep_s, s.arr_s) AS t_s, "
+        "       COALESCE(r.delay_dep, r.delay_arr) AS delay_s "
+        "FROM trip t JOIN sched s USING (trip_id) JOIN station st ON st.stop_id = s.stop_id "
+        "LEFT JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = s.stop_seq "
+        "                AND r.service_date = ? "
+        "WHERE t.train_no = ? ORDER BY s.stop_seq",
+        (service_date, train_no),
+    ).fetchall()
+    if not rows:
+        return []
+
+    base = datetime.combine(date.fromisoformat(service_date), datetime.min.time(), tzinfo=TZ)
+    wanted = []
+    for r in rows:
+        if r["t_s"] is None:
+            wanted.append(None)
+            continue
+        when = base + timedelta(seconds=r["t_s"] + (r["delay_s"] or 0))
+        hour_ts = int(when.timestamp()) // 3600 * 3600
+        wanted.append((weather_mod.cell_key(r["lat"], r["lon"]), hour_ts))
+
+    keys = {k for k in wanted if k}
+    found: dict[tuple, dict] = {}
+    if keys:
+        # Ena poizvedba za vse pare -- po postajah bi jih bilo do 30 na vožnjo.
+        clause = " OR ".join(["(cell = ? AND hour_ts = ?)"] * len(keys))
+        params = [v for pair in keys for v in pair]
+        for w in conn.execute(f"SELECT * FROM weather WHERE {clause}", params):
+            found[(w["cell"], w["hour_ts"])] = dict(w)
+
+    out = []
+    for r, key in zip(rows, wanted):
+        w = found.get(key) if key else None
+        out.append({
+            "stop_seq": r["stop_seq"],
+            "name": r["name"],
+            "at": _abs_time(service_date, (r["t_s"] or 0) + (r["delay_s"] or 0))
+                 if r["t_s"] is not None else None,
+            "cell": key[0] if key else None,
+            "temp_c": w["temp_c"] if w else None,
+            "precip_mm": w["precip_mm"] if w else None,
+            "snowfall_cm": w["snowfall_cm"] if w else None,
+            "wind_gust_kmh": w["wind_gust_kmh"] if w else None,
+            "code": w["code"] if w else None,
+            "source": w["source"] if w else None,
+        })
+    return out

@@ -136,6 +136,17 @@ def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
         return stats.history(conn, train_no, days, exclude_date)
 
 
+@app.get("/api/train/{train_no}/weather")
+def api_run_weather(train_no: str, date: str | None = None):
+    """Vreme na vsaki postaji te vožnje, po uri, ko je vlak tam."""
+    date = date or datetime.now(TZ).date().isoformat()
+    with _conn() as conn:
+        rows = stats.run_weather(conn, train_no, date)
+        if not rows:
+            raise HTTPException(404, f"vlak {train_no} ne obstaja")
+        return {"train_no": train_no, "service_date": date, "stops": rows}
+
+
 @app.get("/api/train/{train_no}/predict")
 def api_predict(train_no: str, stop_seq: int, delay_s: int,
                 days: int = Query(90, ge=1, le=3650)):

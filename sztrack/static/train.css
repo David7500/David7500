@@ -36,18 +36,28 @@
 }
 .hist-top .section-title { border-bottom: none; flex-grow: 1; }
 
-.toggle {
+/* Vrstica pogledov: hitrost ni stikalo, ampak eden od pogledov -- ko pride
+   se vreme, se seznam podaljsa, namesto da bi ob naslovu viseli trije gumbi. */
+.viewtabs {
   flex-shrink: 0;
-  padding: 6px 11px;
-  background: none;
-  border: 1px solid #2b303a;
-  border-radius: 6px;
-  color: #9aa3b0;
-  cursor: pointer;
-  font: 500 11px/1.2 'IBM Plex Sans', system-ui, sans-serif;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: #101216;
+  border: 1px solid #23272f;
+  border-radius: 8px;
 }
-.toggle:hover { color: #e7eaf0; border-color: #3d434f; }
-.toggle.is-on { color: #14161a; background: #e07b45; border-color: #e07b45; }
+.viewtab {
+  padding: 6px 13px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #79828f;
+  cursor: pointer;
+  font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;
+}
+.viewtab:hover { background: #191c22; color: #9aa3b0; }
+.viewtab.is-on { background: #23272f; color: #e7eaf0; font-weight: 600; }
 
 .fig-note {
   margin-top: 6px;
@@ -147,4 +157,29 @@
   .col { overflow: visible; }
   .col-run { width: auto; border-right: none; border-bottom: 1px solid #23272f; }
   .col-hist { padding: 0 14px 24px; }
+}
+
+/* ---------- vreme ---------- */
+
+.detail-weather {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid #1e2229;
+  font: 400 11.5px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0;
+}
+.detail-weather svg { flex-shrink: 0; }
+
+.stop-weather {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  margin-right: 2px;
+}
+.stop-temp {
+  font: 400 11px/1 'IBM Plex Mono', ui-monospace, monospace; color: #79828f;
+  min-width: 24px; text-align: right;
+}
+
+.tt-split { height: 1px; background: #23272f; margin: 6px 0 5px; }
+
+.empty-state code {
+  font: 400 11px/1 'IBM Plex Mono', ui-monospace, monospace;
+  color: #9aa3b0; background: #1a1d23; padding: 1px 4px; border-radius: 3px;
 }

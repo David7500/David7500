@@ -19,6 +19,7 @@ const INK_GRID = "#23272f";
 const INK_AXIS = "#79828f";
 const INK_BAR = "#3d434f";
 const PAST_COLOR = "#79828f";
+const TEMP_COLOR = "#b8724a";
 const SURFACE = "#14161a";
 
 const tooltipEl = document.getElementById("tooltip");
@@ -69,7 +70,10 @@ window.addEventListener("resize", () => {
 
 // Skupno stanje: profil zamude potrebuje tekoco voznjo IN zgodovino, ki se
 // nalagata loceno in z razlicnim ritmom.
-const state = { run: null, forecast: null, past: null, pastRuns: 0 };
+const state = { run: null, forecast: null, past: null, pastRuns: 0, weather: new Map() };
+// Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
+// ob preklopu pogleda.
+let hoverSeq = null;
 
 // ---------- ta voznja ----------
 
@@ -80,6 +84,7 @@ const feedDotEl = document.getElementById("feed-dot");
 
 function runHeadHtml(cur) {
   const d = cur ? stopDelay(cur) : null;
+  const wx = cur ? state.weather.get(cur.stop_seq) : null;
   const color = delayColor(d);
   return `
     <div class="detail-now">
@@ -92,6 +97,7 @@ function runHeadHtml(cur) {
           ? `izmerjeno v <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(stopActualIso(cur))}`
           : "za ta vlak danes še ni nobene meritve"}
       </div>
+      ${wx ? `<div class="detail-weather">${weatherIconHtml(wx, 15)}<span>${escapeHtml(weatherSummary(wx))}</span></div>` : ""}
       <div class="detail-caveat">
         Meritev ima ločljivost 60 s in je zajeta v prometnem mestu, ne nujno na peronu.
         Vlaki v feedu nimajo GPS — lega je zadnja postaja z meritvijo, ne dejanski položaj.
@@ -106,10 +112,11 @@ async function loadRun() {
     state.run = run;
     state.forecast = forecast;
     runHeadEl.innerHTML = runHeadHtml(current);
-    runTimelineEl.innerHTML = runTimelineHtml(run.stops, forecast) +
+    runTimelineEl.innerHTML = runTimelineHtml(run.stops, forecast, state.weather) +
       `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj</div>`;
     feedDotEl.classList.remove("stale");
     renderProfile();
+    renderWeather();
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
@@ -153,6 +160,49 @@ function renderTiles(h) {
   document.getElementById("hist-tiles").innerHTML = tiles.join("");
 }
 
+// ---------- skupno: tarca za misko cez vso visino ----------
+
+// Pika s polmerom 4,5 px je pretezka tarca -- na 29 postajah je zadetek
+// loterija. Vsaka postaja dobi nevidno obmocje cez vso visino grafa.
+function addHoverBands(svg, xs, top, height, seqs, onHover) {
+  if (xs.length < 2) return;
+  const step = (xs[xs.length - 1] - xs[0]) / (xs.length - 1);
+  xs.forEach((cx, i) => {
+    const band = svgEl("rect", {
+      x: cx - step / 2, y: top, width: step, height,
+      fill: seqs[i] === hoverSeq ? "rgba(255,255,255,0.035)" : "transparent",
+    });
+    band.addEventListener("mousemove", (ev) => {
+      if (hoverSeq !== seqs[i]) {
+        hoverSeq = seqs[i];
+        redrawers.forEach((f) => f());
+      }
+      onHover(i, ev);
+    });
+    band.addEventListener("mouseleave", () => {
+      hideTip();
+    });
+    svg.appendChild(band);
+  });
+}
+
+function crosshair(svg, x, top, bottom) {
+  svg.appendChild(svgEl("line", {
+    x1: x, x2: x, y1: top, y2: bottom,
+    stroke: "#3d434f", "stroke-width": 1, "stroke-dasharray": "3 3",
+  }));
+}
+
+function weatherTipRows(w) {
+  if (!w || w.temp_c == null) return "";
+  const rain = (w.snowfall_cm || 0) > 0
+    ? `<div class="tt-row"><span>sneg</span><b>${num(w.snowfall_cm)} cm</b></div>`
+    : `<div class="tt-row"><span>padavine</span><b>${num(w.precip_mm)} mm/h</b></div>`;
+  return rain +
+    `<div class="tt-row"><span>temperatura</span><b>${num(w.temp_c)} °C</b></div>` +
+    `<div class="tt-row"><span>sunki vetra</span><b>${num(w.wind_gust_kmh, 0)} km/h</b></div>`;
+}
+
 // ---------- graf 1: zamuda po VSEH postajah poti ----------
 
 const KIND = {
@@ -170,7 +220,11 @@ function profilePoints() {
   const past = state.past || new Map();
 
   return stops.map((s) => {
-    const p = { seq: s.stop_seq, name: s.name, past: past.get(s.stop_seq) || null };
+    const p = {
+      seq: s.stop_seq, name: s.name,
+      past: past.get(s.stop_seq) || null,
+      wx: state.weather.get(s.stop_seq) || null,
+    };
     if (cur && s.stop_seq <= cur.stop_seq) {
       if (stopActualIso(s)) { p.kind = "measured"; p.value = stopDelay(s); }
       else { p.kind = "none"; p.value = null; }
@@ -186,8 +240,25 @@ function profilePoints() {
   });
 }
 
-function pointColor(p) {
-  return p.kind === "measured" ? delayColor(p.value) : ESTIMATE_COLOR;
+function stopTipHtml(p) {
+  const rows = [];
+  if (p.value != null) {
+    rows.push(`<div class="tt-row"><span>${KIND[p.kind].label}</span><b>${delayLabel(p.value)} min</b></div>`);
+    if (p.kind === "estimate") {
+      rows.push(`<div class="tt-note">${p.samples > 0
+        ? `mediana ${escapeHtml(pluralRuns(p.samples))}`
+        : "le prenos trenutne zamude, brez zgodovine"}</div>`);
+    }
+  } else {
+    rows.push('<div class="tt-row"><span>zamuda</span><b>—</b></div>');
+  }
+  if (p.past) {
+    rows.push(`<div class="tt-row"><span>povprečje preteklih</span><b>${delayLabel(p.past.mean_s)} min</b></div>`);
+    rows.push(`<div class="tt-note">${escapeHtml(pluralRuns(p.past.n))}</div>`);
+  }
+  const wxRows = weatherTipRows(p.wx);
+  return `<div class="tt-title">${escapeHtml(p.name)}</div>${rows.join("")}` +
+    (wxRows ? `<div class="tt-split"></div>${wxRows}` : "");
 }
 
 function drawProfile(w, pts) {
@@ -227,6 +298,9 @@ function drawProfile(w, pts) {
     fill: INK_AXIS, "font-size": 9, "font-family": "'IBM Plex Sans', sans-serif",
   }, "min"));
 
+  const hoverIdx = pts.findIndex((p) => p.seq === hoverSeq);
+  if (hoverIdx >= 0) crosshair(svg, x(hoverIdx), M.t, M.t + ih);
+
   // povprecje preteklih voznj -- referenca v ozadju, brez markerjev
   const pastPts = pts.map((p, i) => (p.past && p.past.mean_s != null ? [i, p.past.mean_s] : null));
   let segment = [];
@@ -257,27 +331,12 @@ function drawProfile(w, pts) {
   pts.forEach((p, i) => {
     if (p.value == null) return;
     const filled = p.kind !== "estimate";
-    const c = svgEl("circle", {
-      cx: x(i), cy: y(p.value), r: 4.5,
-      fill: filled ? pointColor(p) : SURFACE,
-      stroke: filled ? SURFACE : ESTIMATE_COLOR, "stroke-width": 2,
-    });
-    c.addEventListener("mousemove", (ev) => {
-      const rows = [`<div class="tt-row"><span>${KIND[p.kind].label}</span><b>${delayLabel(p.value)} min</b></div>`];
-      if (p.kind === "estimate") {
-        rows.push(`<div class="tt-note">${p.samples > 0
-          ? `mediana ${escapeHtml(pluralRuns(p.samples))}`
-          : "le prenos trenutne zamude, brez zgodovine"}</div>`);
-      }
-      if (p.past) {
-        rows.push(`<div class="tt-row"><span>povprečje preteklih</span><b>${delayLabel(p.past.mean_s)} min</b></div>`);
-        rows.push(`<div class="tt-row"><span>mediana preteklih</span><b>${delayLabel(p.past.median_s)} min</b></div>`);
-        rows.push(`<div class="tt-note">${escapeHtml(pluralRuns(p.past.n))}</div>`);
-      }
-      showTip(`<div class="tt-title">${escapeHtml(p.name)}</div>${rows.join("")}`, ev);
-    });
-    c.addEventListener("mouseleave", hideTip);
-    svg.appendChild(c);
+    const on = p.seq === hoverSeq;
+    svg.appendChild(svgEl("circle", {
+      cx: x(i), cy: y(p.value), r: on ? 7 : 4.5,
+      fill: filled ? (p.kind === "measured" ? delayColor(p.value) : ESTIMATE_COLOR) : SURFACE,
+      stroke: on ? "#e7eaf0" : (filled ? SURFACE : ESTIMATE_COLOR), "stroke-width": 2,
+    }));
   });
 
   // neposredne oznake samo tam, kjer nekaj povedo: vrh in cilj
@@ -295,7 +354,6 @@ function drawProfile(w, pts) {
     });
   }
 
-  // os x: imena postaj so dolga, zato samo zacetek, konec in vrh
   const labels = [[0, "start"], [pts.length - 1, "end"]];
   for (const [i, anchor] of labels) {
     svg.appendChild(svgEl("text", {
@@ -303,6 +361,10 @@ function drawProfile(w, pts) {
       fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
     }, pts[i].name));
   }
+
+  addHoverBands(svg, pts.map((_, i) => x(i)), M.t - 6, ih + 12,
+                pts.map((p) => p.seq),
+                (i, ev) => showTip(stopTipHtml(pts[i]), ev));
   return svg;
 }
 
@@ -341,11 +403,123 @@ function renderProfile() {
     el.innerHTML = '<div class="empty-state">premalo točk za profil</div>';
     return;
   }
-  sub.textContent = state.pastRuns
+  sub.textContent = (state.pastRuns
     ? `celotna pot, ${pts.length} postaj · povprečje iz ${pluralRuns(state.pastRuns)} pred današnjo`
-    : `celotna pot, ${pts.length} postaj · preteklih voženj za primerjavo še ni`;
+    : `celotna pot, ${pts.length} postaj · preteklih voženj za primerjavo še ni`)
+    + " · miška kjerkoli nad stolpcem postaje";
   legend.innerHTML = profileLegendHtml(pts);
   mountChart(el, (w) => drawProfile(w, pts));
+}
+
+// ---------- graf: vreme po postajah ----------
+
+function drawWeather(w, pts) {
+  const H = 260;
+  const M = { t: 16, r: 44, b: 34, l: 42 };
+  const iw = Math.max(40, w - M.l - M.r);
+  const svg = svgEl("svg", { width: w, height: H, role: "img" });
+  const split = M.t + 92;               // zgoraj zamuda, spodaj padavine in temperatura
+  const rainBot = H - M.b;
+  const x = (i) => M.l + (pts.length === 1 ? iw / 2 : (i * iw) / (pts.length - 1));
+
+  // zgoraj: zamuda kot referenca -- brez nje vreme ne pove nicesar
+  const dvals = pts.map((p) => p.value).filter((v) => v != null);
+  const dMax = Math.max(60, ...dvals);
+  const dy = (v) => split - 10 - (v / dMax) * (split - 10 - M.t);
+  svg.appendChild(svgEl("line", {
+    x1: M.l, x2: M.l + iw, y1: split - 10, y2: split - 10,
+    stroke: INK_AXIS, "stroke-width": 1,
+  }));
+  svg.appendChild(svgEl("text", {
+    x: M.l - 8, y: M.t + 4, "text-anchor": "end",
+    fill: INK_AXIS, "font-size": 9, "font-family": "'IBM Plex Sans', sans-serif",
+  }, "zamuda"));
+  const dpts = pts.map((p, i) => (p.value == null ? null : `${x(i)},${dy(p.value)}`)).filter(Boolean);
+  if (dpts.length > 1) {
+    svg.appendChild(svgEl("polyline", {
+      points: dpts.join(" "), fill: "none", stroke: INK_LINE, "stroke-width": 2,
+      "stroke-linejoin": "round",
+    }));
+  }
+  pts.forEach((p, i) => {
+    if (p.value == null) return;
+    svg.appendChild(svgEl("circle", {
+      cx: x(i), cy: dy(p.value), r: p.seq === hoverSeq ? 5.5 : 3.5,
+      fill: p.kind === "measured" ? delayColor(p.value) : ESTIMATE_COLOR,
+      stroke: p.seq === hoverSeq ? "#e7eaf0" : SURFACE, "stroke-width": 1.5,
+    }));
+  });
+
+  // spodaj: padavine kot stolpci, temperatura kot crta
+  const rains = pts.map((p) => (p.wx ? (p.wx.precip_mm || 0) + (p.wx.snowfall_cm || 0) * 10 : 0));
+  const rMax = Math.max(0.5, ...rains);
+  const bw = Math.max(2, (iw / pts.length) * 0.55);
+  svg.appendChild(svgEl("text", {
+    x: M.l - 8, y: rainBot + 4, "text-anchor": "end",
+    fill: INK_AXIS, "font-size": 9, "font-family": "'IBM Plex Sans', sans-serif",
+  }, "mm"));
+  pts.forEach((p, i) => {
+    if (!p.wx) return;
+    const h = Math.max(1.5, (rains[i] / rMax) * (rainBot - split));
+    svg.appendChild(svgEl("rect", {
+      x: x(i) - bw / 2, y: rainBot - h, width: bw, height: h, rx: 2,
+      fill: p.seq === hoverSeq ? "#8fb0c9" : WEATHER_INK,
+    }));
+  });
+
+  const temps = pts.map((p) => (p.wx ? p.wx.temp_c : null));
+  const tv = temps.filter((t) => t != null);
+  if (tv.length > 1) {
+    const tMin = Math.min(...tv) - 1;
+    const tMax = Math.max(...tv) + 1;
+    const ty = (t) => rainBot - ((t - tMin) / (tMax - tMin || 1)) * (rainBot - split);
+    const tp = temps.map((t, i) => (t == null ? null : `${x(i)},${ty(t)}`)).filter(Boolean);
+    svg.appendChild(svgEl("polyline", {
+      points: tp.join(" "), fill: "none", stroke: TEMP_COLOR, "stroke-width": 1.5,
+    }));
+    svg.appendChild(svgEl("text", {
+      x: M.l + iw + 6, y: ty(tv[tv.length - 1]) + 4, "text-anchor": "start",
+      fill: TEMP_COLOR, "font-size": 10, "font-family": "'IBM Plex Mono', monospace",
+    }, `${num(tv[tv.length - 1], 0)}°`));
+  }
+
+  const labels = [[0, "start"], [pts.length - 1, "end"]];
+  for (const [i, anchor] of labels) {
+    svg.appendChild(svgEl("text", {
+      x: x(i), y: H - 12, "text-anchor": anchor === "start" ? "start" : "end",
+      fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
+    }, pts[i].name));
+  }
+
+  const hoverIdx = pts.findIndex((p) => p.seq === hoverSeq);
+  if (hoverIdx >= 0) crosshair(svg, x(hoverIdx), M.t - 6, rainBot);
+
+  addHoverBands(svg, pts.map((_, i) => x(i)), M.t - 6, rainBot - M.t + 12,
+                pts.map((p) => p.seq),
+                (i, ev) => showTip(stopTipHtml(pts[i]), ev));
+  return svg;
+}
+
+function renderWeather() {
+  const sub = document.getElementById("weather-sub");
+  const el = document.getElementById("weather-chart");
+  const legend = document.getElementById("weather-legend");
+  if (!state.run) return;
+  const pts = profilePoints();
+  const withWx = pts.filter((p) => p.wx && p.wx.temp_c != null);
+  if (withWx.length < 2) {
+    sub.textContent = "";
+    legend.innerHTML = "";
+    el.innerHTML = '<div class="empty-state">za to vožnjo vremena še ni — poženi <code>sztrack weather</code></div>';
+    return;
+  }
+  const wet = withWx.filter((p) => (p.wx.precip_mm || 0) >= 0.1).length;
+  sub.textContent = `${withWx.length} postaj z vremenom · padavine na ${wet} · zgoraj ista zamuda kot v prvem pogledu`;
+  legend.innerHTML =
+    `<span class="lg"><span class="lg-dash" style="border-color:${INK_LINE};border-top-style:solid"></span>zamuda</span>` +
+    `<span class="lg"><span class="lg-dot" style="background:${WEATHER_INK}"></span>padavine (mm/h)</span>` +
+    `<span class="lg"><span class="lg-dash" style="border-color:${TEMP_COLOR};border-top-style:solid"></span>temperatura</span>`;
+  mountChart(el, (w) => drawWeather(w, pts));
 }
 
 // ---------- graf 2: koncna zamuda po dnevih ----------
@@ -490,21 +664,55 @@ async function loadSpeeds() {
   }
 }
 
-const speedsFigEl = document.getElementById("fig-speeds");
-const speedsToggleEl = document.getElementById("speeds-toggle");
+// ---------- vrstica pogledov ----------
 
-speedsToggleEl.addEventListener("click", () => {
-  const open = speedsFigEl.hidden;
-  speedsFigEl.hidden = !open;
-  speedsToggleEl.classList.toggle("is-on", open);
-  speedsToggleEl.setAttribute("aria-expanded", String(open));
-  if (open && !speedsLoaded) {
+const VIEWS = ["zamude", "vreme", "hitrost"];
+let activeView = "zamude";
+
+function showView(name) {
+  activeView = name;
+  for (const v of VIEWS) {
+    document.getElementById(`view-${v}`).hidden = v !== name;
+  }
+  for (const btn of document.querySelectorAll(".viewtab")) {
+    const on = btn.dataset.view === name;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-selected", String(on));
+  }
+  if (name === "hitrost" && !speedsLoaded) {
     speedsLoaded = true;
     loadSpeeds();
-  } else if (open) {
-    redrawers.get(document.getElementById("speeds-chart"))?.();
   }
+  // Skriti graf ima sirino 0 -- ob prikazu ga je treba izrisati znova.
+  requestAnimationFrame(() => redrawers.forEach((f) => f()));
+}
+
+document.getElementById("viewtabs").addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".viewtab");
+  if (btn) showView(btn.dataset.view);
 });
+
+// ---------- vreme ----------
+
+async function loadWeather() {
+  try {
+    const res = await fetch(`/api/train/${ENC}/weather`);
+    if (!res.ok) return;
+    const data = await res.json();
+    state.weather = new Map((data.stops || []).map((s) => [s.stop_seq, s]));
+    // Vreme pride pozneje kot voznja -- kar je ze izrisano, je treba osveziti.
+    if (state.run) {
+      const cur = lastMeasured(state.run.stops);
+      runHeadEl.innerHTML = runHeadHtml(cur);
+      runTimelineEl.innerHTML = runTimelineHtml(state.run.stops, state.forecast, state.weather) +
+        `<div class="detail-foot">${escapeHtml(state.run.service_date)} · ${state.run.stops.length} postaj</div>`;
+      renderProfile();
+      renderWeather();
+    }
+  } catch (err) {
+    console.error("vremena ni bilo mogoče naložiti", err);
+  }
+}
 
 // ---------- zgodovina ----------
 
@@ -530,6 +738,7 @@ async function loadHistory() {
 
   renderTiles(h);
   renderProfile();
+  renderWeather();
 
   const runs = (h.runs || []).filter((r) => r.final_delay_s != null);
   const runsSub = document.getElementById("runs-sub");
@@ -578,6 +787,7 @@ setInterval(tickClock, 1000);
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
 // za njo.
 loadRun().then(loadHistory);
+loadWeather();
 setInterval(loadRun, RUN_POLL_MS);
 setInterval(loadHistory, HIST_POLL_MS);
 loadHeadsign();

@@ -15,3 +15,6 @@ sztrack-smeri.html
 # paket za objavo (sestavi ga scripts/build_deploy_zip.sh)
 sztrack-deploy.zip
 venv/
+
+# sestavljeno platno (seeded iz design/okno-vlaka/)
+design/okno-vlaka/okno-vlaka-prenova.html

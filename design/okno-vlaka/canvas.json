@@ -1,0 +1,55 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 960,
+      "title": "Okno vlaka — prenova"
+    },
+    {
+      "file": "Graf.dc.html",
+      "x": 1560,
+      "y": 0,
+      "w": 900,
+      "h": 620,
+      "title": "Graf: tarča za miško"
+    },
+    {
+      "file": "Vreme.dc.html",
+      "x": 1560,
+      "y": 740,
+      "w": 900,
+      "h": 900,
+      "title": "Vreme po postajah"
+    },
+    {
+      "file": "Kontrole.dc.html",
+      "x": 0,
+      "y": 1040,
+      "w": 900,
+      "h": 660,
+      "title": "Gumb za hitrost"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -150,
+      "w": 420,
+      "text": "Tri težave iz pripombe:\n1. gumb za hitrost visi osamljen ob naslovu\n2. podrobnosti na grafu se odprejo šele, ko zadeneš 4,5 px piko\n3. vreme je zajeto, a nikjer prikazano po postajah"
+    },
+    {
+      "id": "podatki",
+      "x": 1560,
+      "y": -150,
+      "w": 420,
+      "text": "Vsi podatki so pravi: LPV 2010, 22. 8. 2026, Ljubljana–Maribor, 29 postaj. Zamude iz zajema, vreme iz shranjenih celic 8 × 8 km. Edina ponazoritev je pretekla krivulja na glavni skici — zajem traja šele dva dni."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

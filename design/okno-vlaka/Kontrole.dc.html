@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0f1115; color: #e7eaf0;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #e07b45; } a:hover { color: #f0934f; }
+  </style>
+</helmet>
+
+<div style="width: 900px; height: 660px; padding: 22px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px;">
+
+  <div>
+    <div style="font: 600 14px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #e7eaf0;">Gumb za hitrost: dve poti</div>
+    <div style="font: 400 11.5px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; margin-top: 4px;">
+      Zdaj je osamljen čip, ki visi ob naslovu in ne pove, ali je vklopljen ali kaj skriva.
+      Ker prihaja še vreme, gre za izbiro pogleda, ne za stikalo.
+    </div>
+  </div>
+
+  <!-- sedanje stanje -->
+  <div style="background: #14161a; border: 1px dashed #2b303a; border-radius: 10px; padding: 14px 16px;">
+    <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 12px;">Zdaj</div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #1e2229; padding-bottom: 11px;">
+      <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.09em; text-transform: uppercase;">Zgodovina te poti</div>
+      <div style="padding: 6px 11px; border: 1px solid #2b303a; border-radius: 6px; color: #9aa3b0; font: 500 11px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Hitrost po odsekih</div>
+    </div>
+  </div>
+
+  <!-- A -->
+  <div style="background: #14161a; border: 1px solid #2b3f4d; border-radius: 10px; padding: 14px 16px;">
+    <div style="display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px;">
+      <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #e07b45; letter-spacing: 0.07em; text-transform: uppercase;">A — vrstica pogledov</div>
+      <div style="font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;">priporočeno</div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #1e2229; padding-bottom: 11px;">
+      <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.09em; text-transform: uppercase;">Zgodovina te poti</div>
+      <div style="display: flex; background: #101216; border: 1px solid #23272f; border-radius: 8px; padding: 3px; gap: 2px;">
+        <span style="padding: 6px 13px; border-radius: 6px; background: #23272f; color: #e7eaf0; font: 600 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Zamude</span>
+        <span style="padding: 6px 13px; border-radius: 6px; background: #191c22; color: #9aa3b0; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Vreme</span>
+        <span style="padding: 6px 13px; border-radius: 6px; color: #79828f; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Hitrost</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 22px; margin-top: 11px;">
+      <div style="font: 400 11px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; flex: 1 1 0;">
+        <span style="color: #e7eaf0; font-weight: 600;">Za:</span> vsi trije pogledi so enakovredni in vidni naenkrat; vreme dobi mesto, ne da bi kaj izrinilo. Izbrani pogled je nedvoumen.
+      </div>
+      <div style="font: 400 11px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; flex: 1 1 0;">
+        <span style="color: #e7eaf0; font-weight: 600;">Proti:</span> naenkrat je viden samo en pogled — primerjave zamude in hitrosti drug ob drugem ni več.
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; margin-top: 13px; padding-top: 11px; border-top: 1px solid #1e2229;">
+      <span style="font: 400 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; letter-spacing: 0.06em; text-transform: uppercase;">stanja</span>
+      <span style="padding: 6px 13px; border-radius: 6px; background: #23272f; color: #e7eaf0; font: 600 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">izbran</span>
+      <span style="padding: 6px 13px; border-radius: 6px; background: #191c22; color: #9aa3b0; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">nad njim</span>
+      <span style="padding: 6px 13px; border-radius: 6px; color: #79828f; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">mirujoč</span>
+      <span style="padding: 6px 13px; border-radius: 6px; color: #3d434f; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">brez podatkov</span>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div style="background: #14161a; border: 1px solid #23272f; border-radius: 10px; padding: 14px 16px;">
+    <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 12px;">B — razkrivalnik</div>
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #1e2229; padding-bottom: 11px;">
+      <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.09em; text-transform: uppercase;">Zgodovina te poti</div>
+      <div style="display: flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid #2b303a; border-radius: 7px; color: #e7eaf0; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa3b0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 4 5-8"></path><path d="M17 7h4v4"></path></svg>
+        <span>Hitrost po odsekih</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7480" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+    <div style="display: flex; gap: 22px; margin-top: 11px;">
+      <div style="font: 400 11px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; flex: 1 1 0;">
+        <span style="color: #e7eaf0; font-weight: 600;">Za:</span> pogled ostane en sam, dodatek se razpre pod njim; nič ne izgine izpred oči.
+      </div>
+      <div style="font: 400 11px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; flex: 1 1 0;">
+        <span style="color: #e7eaf0; font-weight: 600;">Proti:</span> ne raste — ko pride še vreme, sta ob naslovu dva gumba in znova smo tam, kjer smo bili.
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

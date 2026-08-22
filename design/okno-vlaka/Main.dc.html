@@ -1,0 +1,277 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0f1115; color: #e7eaf0;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+    a { color: #e07b45; } a:hover { color: #f0934f; }
+    .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 960px; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- glava -->
+  <div style="height: 52px; flex-shrink: 0; background: #16181c; border-bottom: 1px solid #23272f; display: flex; align-items: center; gap: 16px; padding: 0 18px;">
+    <div style="display: flex; align-items: center; gap: 6px; color: #9aa3b0; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg>
+      <span>iskalnik</span>
+    </div>
+    <div style="width: 1px; height: 20px; background: #262b33;"></div>
+    <div style="display: flex; align-items: baseline; gap: 10px;">
+      <span style="font: 600 16px/1 'IBM Plex Sans', system-ui, sans-serif; color: #e7eaf0;">LPV 2010</span>
+      <span style="font: 400 12px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;">Ljubljana – Maribor</span>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <span style="color: #9aa3b0; font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif;">zemljevid</span>
+    <div style="width: 1px; height: 20px; background: #262b33;"></div>
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <span style="width: 7px; height: 7px; border-radius: 50%; background: #4ba36b;"></span>
+      <span class="mono" style="font-size: 12px; color: #9aa3b0;">15:36:12</span>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+
+    <!-- levo: ta voznja -->
+    <div style="width: 340px; flex-shrink: 0; background: #14161a; border-right: 1px solid #23272f; display: flex; flex-direction: column; min-height: 0;">
+      <div style="padding: 14px 14px 10px; border-bottom: 1px solid #1e2229; font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.09em; text-transform: uppercase;">Ta vožnja</div>
+
+      <div style="padding: 14px; border-bottom: 1px solid #1e2229;">
+        <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.09em; text-transform: uppercase;">Trenutna zamuda</div>
+        <div style="display: flex; align-items: baseline; gap: 7px; margin-top: 9px; color: #f2a87e;">
+          <span class="mono" style="font-size: 38px; font-weight: 600; line-height: 1; letter-spacing: -0.02em;">+7</span>
+          <span style="font: 400 14px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;">min</span>
+        </div>
+        <div style="font: 400 12px/1.5 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; margin-top: 9px;">izmerjeno v <span style="color: #e7eaf0; font-weight: 600;">Mariboru</span> ob 15:32</div>
+        <div style="display: flex; align-items: center; gap: 7px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #1e2229;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#79828f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18a5 5 0 0 0 0-10 6.5 6.5 0 0 0-12 2 4 4 0 0 0 4 4"></path><path d="M8 20l-1 2M12 20l-1 2M16 20l-1 2"></path></svg>
+          <span style="font: 400 11.5px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0;">brez padavin · 20,8 °C · sunki 17 km/h</span>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1; overflow: hidden; padding: 4px 14px 0;">
+        <sc-for list="{{stops}}" as="s" hint-placeholder-count="9">
+          <div style="display: flex; gap: 11px; min-height: 34px;">
+            <div style="display: flex; flex-direction: column; align-items: center; width: 10px; flex-shrink: 0; padding-top: 4px;">
+              <span style="width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: {{s.dot}};"></span>
+              <span style="width: 2px; flex-grow: 1; background: #23272f; border-radius: 1px; margin-top: 3px;"></span>
+            </div>
+            <div style="flex-grow: 1; min-width: 0; padding-bottom: 10px;">
+              <div style="font: 500 13px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #e7eaf0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{s.name}}</div>
+              <div style="display: flex; align-items: baseline; gap: 7px; margin-top: 3px;">
+                <span class="mono" style="font-size: 12px; color: #9aa3b0;">{{s.actual}}</span>
+                <span class="mono" style="font-size: 11px; color: #6b7480; text-decoration: line-through;">{{s.sched}}</span>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding-top: 1px;">
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <sc-if value="{{s.isRain}}" hint-placeholder-val="{{true}}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6f8fa8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11 1.8A3.6 3.6 0 0 0 4.6 16"></path><path d="M8 19l-1 2.5M12 19l-1 2.5M16 19l-1 2.5"></path></svg>
+                </sc-if>
+                <sc-if value="{{s.isCloud}}" hint-placeholder-val="{{false}}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5b6472" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18a5 5 0 0 0 0-10 6.5 6.5 0 0 0-12 2 4 4 0 0 0 4 4h8"></path></svg>
+                </sc-if>
+                <span class="mono" style="font-size: 11px; color: #79828f; min-width: 34px; text-align: right;">{{s.temp}}</span>
+              </div>
+              <span class="mono" style="font-size: 13px; font-weight: 600; color: {{s.dot}}; min-width: 22px; text-align: right;">{{s.delay}}</span>
+            </div>
+          </div>
+        </sc-for>
+        <div style="font: 400 10.5px/1.5 'IBM Plex Sans', system-ui, sans-serif; color: #4a515c; padding: 6px 0 0 21px;">… še 20 postaj</div>
+      </div>
+    </div>
+
+    <!-- desno: analiza -->
+    <div style="flex-grow: 1; min-width: 0; padding: 0 20px 24px; overflow: hidden;">
+
+      <!-- vrstica pogledov namesto osamljenega gumba -->
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0 11px; border-bottom: 1px solid #1e2229;">
+        <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.09em; text-transform: uppercase;">Zgodovina te poti</div>
+        <div style="display: flex; background: #101216; border: 1px solid #23272f; border-radius: 8px; padding: 3px; gap: 2px;">
+          <span style="padding: 6px 13px; border-radius: 6px; background: #23272f; color: #e7eaf0; font: 600 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Zamude</span>
+          <span style="padding: 6px 13px; border-radius: 6px; color: #79828f; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Vreme</span>
+          <span style="padding: 6px 13px; border-radius: 6px; color: #79828f; font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;">Hitrost</span>
+        </div>
+      </div>
+
+      <div style="padding: 12px 0 0; font: 400 12px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;">Zajeta 1 vožnja pred današnjo, od 21. 8. <span style="color: #e07b45; font-weight: 600;">Premalo za porazdelitev</span> — številke spodaj opisujejo teh nekaj voženj, ne značilnega dne.</div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px;">
+        <sc-for list="{{tiles}}" as="t" hint-placeholder-count="3">
+          <div style="flex: 1 1 150px; min-width: 150px; background: #16181c; border: 1px solid #23272f; border-radius: 8px; padding: 12px 13px 11px;">
+            <div style="font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; letter-spacing: 0.07em; text-transform: uppercase;">{{t.label}}</div>
+            <div class="mono" style="font-size: 26px; font-weight: 600; line-height: 1; margin-top: 9px; letter-spacing: -0.02em; color: {{t.color}};">{{t.value}}</div>
+            <div style="font: 400 10.5px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; margin-top: 6px;">{{t.sub}}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- graf: zamuda + vremenski pas na isti osi -->
+      <div style="margin-top: 22px;">
+        <div style="font: 600 13px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #e7eaf0;">Zamuda in vreme po postajah</div>
+        <div style="font: 400 11px/1.5 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; margin-top: 3px;">celotna pot, 29 postaj · miška kjerkoli nad stolpcem postaje pokaže vse troje</div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 9px;">
+          <sc-for list="{{legend}}" as="l" hint-placeholder-count="4">
+            <span style="display: inline-flex; align-items: center; gap: 6px; font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0;">
+              <sc-if value="{{l.isRamp}}" hint-placeholder-val="{{false}}">
+                <span style="width: 34px; height: 9px; border-radius: 2px; flex-shrink: 0; background: linear-gradient(90deg, #7c8698 0 25%, #f2a87e 25% 50%, #e07b45 50% 75%, #b85417 75% 100%);"></span>
+              </sc-if>
+              <sc-if value="{{l.isDot}}" hint-placeholder-val="{{true}}">
+                <span style="width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: {{l.color}};"></span>
+              </sc-if>
+              <sc-if value="{{l.isDash}}" hint-placeholder-val="{{false}}">
+                <span style="width: 16px; height: 0; border-top: 1.5px dashed {{l.color}}; flex-shrink: 0;"></span>
+              </sc-if>
+              <span>{{l.text}}</span>
+            </span>
+          </sc-for>
+        </div>
+
+        <div style="margin-top: 12px; background: #121419; border: 1px solid #1e2229; border-radius: 10px; padding: 12px 12px 8px;">
+          <svg viewBox="0 0 1010 300" width="100%" style="display: block;">
+            <!-- mreza zamud -->
+            <sc-for list="{{yTicks}}" as="t" hint-placeholder-count="4">
+              <line x1="42" x2="1000" y1="{{t.y}}" y2="{{t.y}}" stroke="{{t.color}}" stroke-width="1"></line>
+              <text x="34" y="{{t.ty}}" text-anchor="end" fill="#79828f" font-size="10" font-family="'IBM Plex Mono', monospace">{{t.label}}</text>
+            </sc-for>
+            <text x="34" y="14" text-anchor="end" fill="#79828f" font-size="9" font-family="'IBM Plex Sans', sans-serif">min</text>
+
+            <!-- pretekla voznja (ponazoritev) -->
+            <polyline points="{{pastPath}}" fill="none" stroke="#79828f" stroke-width="1.5" stroke-dasharray="5 4"></polyline>
+
+            <!-- tekoca voznja -->
+            <polyline points="{{nowPath}}" fill="none" stroke="#4a515c" stroke-width="2" stroke-linejoin="round"></polyline>
+            <sc-for list="{{pts}}" as="p" hint-placeholder-count="12">
+              <circle cx="{{p.x}}" cy="{{p.y}}" r="4.5" fill="{{p.color}}" stroke="#121419" stroke-width="2"></circle>
+            </sc-for>
+
+            <!-- locnica: spodaj vreme -->
+            <line x1="42" x2="1000" y1="196" y2="196" stroke="#23272f" stroke-width="1"></line>
+            <text x="34" y="214" text-anchor="end" fill="#79828f" font-size="9" font-family="'IBM Plex Sans', sans-serif">mm</text>
+            <sc-for list="{{rain}}" as="r" hint-placeholder-count="12">
+              <rect x="{{r.x}}" y="{{r.y}}" width="{{r.w}}" height="{{r.h}}" rx="2" fill="#6f8fa8"></rect>
+            </sc-for>
+            <polyline points="{{tempPath}}" fill="none" stroke="#b8724a" stroke-width="1.5"></polyline>
+            <text x="1000" y="292" text-anchor="end" fill="#79828f" font-size="10" font-family="'IBM Plex Sans', sans-serif">Maribor</text>
+            <text x="42" y="292" text-anchor="start" fill="#79828f" font-size="10" font-family="'IBM Plex Sans', sans-serif">Ljubljana</text>
+          </svg>
+        </div>
+
+        <div style="font: 400 10.5px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; margin-top: 9px; border-left: 2px solid #2b303a; padding-left: 9px;">
+          Vreme je modelska vrednost za celico 8 × 8 km ob uri meritve, ne meritev na peronu.
+          Pretekla krivulja je tu ponazoritvena — zajem traja šele dva dni.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  data() {
+    // Prava vožnja LPV 2010, 22. 8. 2026: zamuda in vreme iz zajema.
+    return [
+      ['Ljubljana','12:50',null,18.4,0.1,1],['Ljubljana Polje','12:56',0,19.2,0.6,1],
+      ['Ljubljana Zalog','13:00',0,18.8,0.1,1],['Laze','13:08',0,18.0,0.0,0],
+      ['Jevnica','13:11',0,18.0,0.0,0],['Kresnice','13:16',0,18.9,0.0,0],
+      ['Litija','13:23',120,18.9,0.0,0],['Sava','13:29',60,18.1,0.0,1],
+      ['Zagorje','13:38',60,18.3,0.3,1],['Trbovlje','13:43',0,18.3,0.3,1],
+      ['Hrastnik','13:48',0,16.5,0.4,1],['Zidani Most','14:08',0,18.5,0.3,1],
+      ['Rimske Toplice','14:16',360,18.5,0.3,1],['Laško','14:22',360,18.0,0.3,1],
+      ['Celje','14:32',360,17.8,0.5,1],['Štore','14:36',360,17.8,0.5,1],
+      ['Šentjur','14:41',360,18.9,0.4,1],['Grobelno','14:45',360,18.9,0.4,1],
+      ['Ponikva','14:49',360,18.9,0.4,1],['Ostrožno','14:53',360,20.0,0.4,1],
+      ['Dolga Gora','14:56',360,20.5,0.0,1],['Poljčane','15:03',360,20.0,0.0,0],
+      ['Slovenska Bistrica','15:10',360,20.6,0.0,0],['Pragersko','15:15',360,21.2,0.0,0],
+      ['Rače','15:20',420,20.6,0.0,0],['Orehova vas','15:23',420,20.6,0.0,0],
+      ['Hoče','15:26',420,20.6,0.0,0],['Maribor Tezno','15:29',420,20.6,0.0,0],
+      ['Maribor','15:32',420,20.8,0.0,1],
+    ];
+  }
+
+  color(s) {
+    if (s === null) return '#6b7480';
+    if (s <= 60) return '#7c8698';
+    if (s <= 300) return '#f2a87e';
+    if (s <= 900) return '#e07b45';
+    return '#b85417';
+  }
+
+  label(s) { return s === null ? '—' : (Math.round(s / 60) > 0 ? '+' : '') + Math.round(s / 60); }
+
+  addMin(hm, m) {
+    const [h, mm] = hm.split(':').map(Number);
+    const t = h * 60 + mm + m;
+    return String(Math.floor(t / 60) % 24).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  }
+
+  renderVals() {
+    const rows = this.data();
+    const L = 42, R = 1000, TOP = 26, BOT = 176;
+    const x = (i) => L + (i * (R - L)) / (rows.length - 1);
+    const yMax = 600;                          // 10 min zgoraj
+    const y = (s) => BOT - (s / yMax) * (BOT - TOP);
+
+    const stops = rows.slice(0, 9).map((r) => ({
+      name: r[0],
+      sched: r[1],
+      actual: r[2] === null ? '—' : this.addMin(r[1], Math.round(r[2] / 60)),
+      delay: this.label(r[2]),
+      dot: this.color(r[2]),
+      temp: String(r[3]).replace('.', ',') + ' °C',
+      isRain: r[4] > 0,
+      isCloud: r[4] === 0,
+    }));
+
+    const pts = rows.map((r, i) => (r[2] === null ? null : { x: x(i), y: y(r[2]), color: this.color(r[2]) }))
+      .filter(Boolean);
+    const nowPath = pts.map((p) => `${p.x},${p.y}`).join(' ');
+    // ponazoritvena pretekla krivulja -- oznaceno pod grafom
+    const pastPath = rows.map((r, i) => `${x(i)},${y(Math.min(560, 90 + i * 14))}`).join(' ');
+
+    const rainTop = 206, rainBot = 274, rainMax = 0.8;
+    const bw = ((R - L) / rows.length) * 0.55;
+    const rain = rows.map((r, i) => {
+      const h = Math.max(1.5, (r[4] / rainMax) * (rainBot - rainTop));
+      return { x: x(i) - bw / 2, y: rainBot - h, w: bw, h };
+    });
+    const tMin = 16, tMax = 22;
+    const tempPath = rows.map((r, i) =>
+      `${x(i)},${rainBot - ((r[3] - tMin) / (tMax - tMin)) * (rainBot - rainTop)}`).join(' ');
+
+    const yTicks = [0, 2, 4, 6, 8, 10].map((m) => ({
+      y: y(m * 60), ty: y(m * 60) + 4, label: String(m),
+      color: m === 0 ? '#79828f' : '#23272f',
+    }));
+
+    return {
+      stops, pts, nowPath, pastPath, rain, tempPath, yTicks,
+      tiles: [
+        { label: 'Končna zamuda', value: '+7', sub: '1 vožnja', color: '#f2a87e' },
+        { label: 'Najslabša vožnja', value: '+7', sub: 'končna zamuda', color: '#f2a87e' },
+        { label: 'Delež točnih', value: '0 %', sub: 'končna zamuda do 5 min', color: '#e7eaf0' },
+      ],
+      legend: [
+        { isRamp: true, isDot: false, isDash: false, text: 'izmerjena zamuda', color: '' },
+        { isRamp: false, isDot: true, isDash: false, color: '#a8d8ff', text: 'ocena (prenos zamude)' },
+        { isRamp: false, isDot: false, isDash: true, color: '#79828f', text: 'povprečje preteklih' },
+        { isRamp: false, isDot: true, isDash: false, color: '#6f8fa8', text: 'padavine (mm/h)' },
+        { isRamp: false, isDot: false, isDash: true, color: '#b8724a', text: 'temperatura' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
