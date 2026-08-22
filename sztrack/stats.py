@@ -29,6 +29,10 @@ def _abs_time(service_date: str, seconds: int | None) -> str | None:
     return (base + timedelta(seconds=seconds)).isoformat()
 
 
+# Javno ime za isto pretvorbo -- uporablja ga tudi api.py za /api/live.
+abs_time = _abs_time
+
+
 def stations(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in conn.execute("SELECT * FROM station ORDER BY name")]
 
@@ -268,4 +272,111 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             "p90_delay_s": (current_delay_s + round(_pct(deltas, 0.9)) if deltas else None),
             "basis": "historicna mediana" if deltas else "prenos trenutne zamude",
         })
+    return out
+
+
+# ---------------------------------------------------------------- povezave A -> B
+
+_CONNECTIONS_SQL = """
+SELECT t.trip_id, t.train_no, t.headsign,
+       sa.stop_seq AS from_seq, COALESCE(sa.dep_s, sa.arr_s) AS dep_s,
+       sb.stop_seq AS to_seq,   COALESCE(sb.arr_s, sb.dep_s) AS arr_s,
+       COALESCE(ra.delay_dep, ra.delay_arr) AS from_delay_s,
+       COALESCE(rb.delay_arr, rb.delay_dep) AS to_delay_s
+FROM trip t
+JOIN sched sa   ON sa.trip_id = t.trip_id
+JOIN station za ON za.stop_id = sa.stop_id AND za.name = :a
+JOIN sched sb   ON sb.trip_id = t.trip_id AND sb.stop_seq > sa.stop_seq
+JOIN station zb ON zb.stop_id = sb.stop_id AND zb.name = :b
+JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
+LEFT JOIN run ra ON ra.trip_id = t.trip_id AND ra.service_date = :day AND ra.stop_seq = sa.stop_seq
+LEFT JOIN run rb ON rb.trip_id = t.trip_id AND rb.service_date = :day AND rb.stop_seq = sb.stop_seq
+ORDER BY dep_s
+"""
+
+# Zadnja postaja vsake voznje, katere (voznored + zamuda) cas je ze minil.
+# Ista logika kot pri /api/live: kar je naprej, je napoved, ne meritev.
+_LAST_MEASURED_SQL = """
+WITH t AS (
+    SELECT r.trip_id, r.stop_seq, s.stop_id,
+           COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
+           COALESCE(s.dep_s, s.arr_s) AS t_s
+    FROM run r
+    JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
+    WHERE r.service_date = ? AND r.trip_id IN (%s)
+),
+passed AS (
+    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
+    FROM t WHERE t.t_s + COALESCE(t.delay_s, 0) <= ?
+)
+SELECT p.trip_id, p.stop_seq, p.delay_s, st.name
+FROM passed p JOIN station st ON st.stop_id = p.stop_id
+WHERE p.rn = 1
+"""
+
+
+def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
+                service_date: str, now_s: int | None = None) -> list[dict]:
+    """Vse vožnje, ki na dani dan peljejo od `from_name` do `to_name`.
+
+    Relacija ni v številki vlaka in ne v `route_id` -- ta je v tem feedu
+    ena-na-ena s tripom. Edini vir je zaporedje postaj: izhodišče mora imeti
+    manjši `stop_seq` od cilja.
+    """
+    rows = conn.execute(_CONNECTIONS_SQL,
+                        {"a": from_name, "b": to_name, "day": service_date}).fetchall()
+
+    # Vlak lahko isto postajo obišče dvakrat (obrat) -- obdrži najzgodnejši par.
+    best: dict[str, dict] = {}
+    for r in rows:
+        d = dict(r)
+        prev = best.get(d["trip_id"])
+        if prev is None or d["dep_s"] < prev["dep_s"]:
+            best[d["trip_id"]] = d
+    out = sorted(best.values(), key=lambda d: d["dep_s"])
+    if not out:
+        return []
+
+    # Zadnja meritev vsake voznje -- za vlake, ki so ze na poti.
+    if now_s is not None:
+        ids = [d["trip_id"] for d in out]
+        # Vsi vezani parametri morajo biti istega sloga: sqlite jih ob mesanju
+        # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
+        sql = _LAST_MEASURED_SQL % ",".join("?" * len(ids))
+        last = {r["trip_id"]: dict(r)
+                for r in conn.execute(sql, (service_date, *ids, now_s))}
+    else:
+        last = {}
+
+    for d in out:
+        d["stops_between"] = d["to_seq"] - d["from_seq"]
+        d["sched_dep"] = _abs_time(service_date, d["dep_s"])
+        d["sched_arr"] = _abs_time(service_date, d["arr_s"])
+        d["duration_s"] = d["arr_s"] - d["dep_s"]
+
+        lm = last.get(d["trip_id"])
+        # Kaj potnik res rabi: zamudo na SVOJI postaji, ce je ze izmerjena;
+        # sicer zadnjo znano zamudo in kje je bila izmerjena.
+        if lm and lm["stop_seq"] >= d["from_seq"]:
+            d["delay_s"] = d["from_delay_s"] if d["from_delay_s"] is not None else lm["delay_s"]
+            d["delay_at"] = from_name if d["from_delay_s"] is not None else lm["name"]
+            d["delay_kind"] = "izmerjeno"
+        elif lm:
+            d["delay_s"] = lm["delay_s"]
+            d["delay_at"] = lm["name"]
+            d["delay_kind"] = "izmerjeno"
+        elif d["from_delay_s"] is not None:
+            # Feed ima vrednost, a cas se ni minil -- to je napoved prevoznika.
+            d["delay_s"] = d["from_delay_s"]
+            d["delay_at"] = from_name
+            d["delay_kind"] = "napoved prevoznika"
+        else:
+            d["delay_s"] = None
+            d["delay_at"] = None
+            d["delay_kind"] = "brez podatka"
+
+        d["expected_dep"] = (_abs_time(service_date, d["dep_s"] + d["delay_s"])
+                             if d["delay_s"] is not None else None)
+        d.pop("from_delay_s", None)
+        d.pop("to_delay_s", None)
     return out

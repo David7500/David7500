@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -46,9 +46,22 @@ def index():
 
 
 @app.get("/app", response_class=HTMLResponse)
+def connections_page(request: Request):
+    """Vstopna stran: od postaje do postaje. Zemljevid je pogled dispecerja,
+    povprecen potnik sprasuje "kdaj mi pelje vlak" -- zato je iskalnik prvi."""
+    return templates.TemplateResponse(request, "connections.html", {})
+
+
+@app.get("/app/map", response_class=HTMLResponse)
 def dashboard(request: Request):
     """Živi nadzorni pregled -- podatke si pobere sam prek /api/* v JS-u."""
     return templates.TemplateResponse(request, "dashboard.html", {})
+
+
+@app.get("/app/train/{train_no}", response_class=HTMLResponse)
+def dashboard_train(request: Request, train_no: str):
+    """Svoje okno za en vlak: ta vožnja + zgodovina zamud te poti."""
+    return templates.TemplateResponse(request, "train.html", {"train_no": train_no})
 
 
 @app.get("/api/health")
@@ -144,23 +157,100 @@ def api_stats(days: int = Query(90, ge=1, le=3650)):
         return stats.network_stats(conn, days)
 
 
+# Vlak ostane na seznamu se toliko sekund po voznorednem (z zamudo popravljenem)
+# prihodu na cilj -- da ne izgine iz zemljevida v isti sekundi, ko pripelje.
+_LIVE_GRACE_S = 300
+
+_LIVE_SQL = """
+WITH t AS (
+    SELECT r.trip_id, r.stop_seq, r.feed_ts, s.stop_id,
+           COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
+           COALESCE(s.dep_s, s.arr_s) AS t_s
+    FROM run r
+    JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
+    WHERE r.service_date = :day
+),
+win AS (
+    SELECT trip_id,
+           MIN(COALESCE(dep_s, arr_s)) AS start_s,
+           MAX(COALESCE(arr_s, dep_s)) AS end_s
+    FROM sched GROUP BY trip_id
+),
+passed AS (
+    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
+    FROM t WHERE t.t_s + COALESCE(t.delay_s, 0) <= :now_s
+),
+tail AS (
+    SELECT trip_id, delay_s AS end_delay_s,
+           ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
+    FROM t
+)
+SELECT tr.train_no, tr.headsign, st.name AS last_stop, p.stop_seq,
+       p.delay_s, p.feed_ts, p.t_s AS sched_s
+FROM passed p
+JOIN tail  ON tail.trip_id = p.trip_id AND tail.rn = 1
+JOIN win   ON win.trip_id = p.trip_id
+JOIN trip tr ON tr.trip_id = p.trip_id
+JOIN station st ON st.stop_id = p.stop_id
+WHERE p.rn = 1
+  AND :now_s <= win.end_s + COALESCE(tail.end_delay_s, 0) + :grace
+ORDER BY p.delay_s DESC
+"""
+
+
+def _live_rows(conn, service_date: str, now_s: int) -> list[dict]:
+    """Vlaki, ki na dani prometni dan ob `now_s` (sekunde od polnoci tega dne)
+    dejansko vozijo. Zadnja znana postaja je zadnja, katere cas je ze minil --
+    ne zadnja, o kateri feed porocá: feed poslje napoved tudi za naslednjo
+    postajo, po koncu voznje pa ostane zapisan cilj."""
+    rows = conn.execute(_LIVE_SQL, {"day": service_date, "now_s": now_s,
+                                    "grace": _LIVE_GRACE_S}).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["service_date"] = service_date
+        # Kje in kdaj je bila zamuda nazadnje izmerjena -- prikaz mora to povedati.
+        d["measured_at"] = stats.abs_time(service_date, d.pop("sched_s") + (d["delay_s"] or 0))
+        out.append(d)
+    return out
+
+
+@app.get("/api/connections")
+def api_connections(
+    from_: str = Query(..., alias="from", description="ime izhodiščne postaje"),
+    to: str = Query(..., description="ime ciljne postaje"),
+    date: str | None = None,
+):
+    """Vožnje od postaje do postaje na dani dan, z zadnjo znano zamudo.
+
+    Relacija se izračuna iz zaporedja postaj, ne iz številke vlaka: `train_no`
+    označuje eno konkretno vožnjo, `route_id` pa je v tem feedu ena-na-ena
+    s tripom in za grupiranje neuporaben.
+    """
+    now = datetime.now(TZ)
+    date = date or now.date().isoformat()
+    now_s = (now.hour * 3600 + now.minute * 60 + now.second
+             if date == now.date().isoformat() else None)
+    with _conn() as conn:
+        rows = stats.connections(conn, from_, to, date, now_s)
+    return {"from": from_, "to": to, "date": date, "connections": rows}
+
+
 @app.get("/api/live")
 def api_live():
-    """Vlaki, ki so trenutno v feedu, z zadnjo znano zamudo."""
-    today = datetime.now(TZ).date().isoformat()
+    """Vlaki, ki so zdaj na progi, z zadnjo izmerjeno zamudo.
+
+    Ni isto kot "vse, kar je danes v feedu": vozila, ki so vozila zjutraj,
+    ostanejo v tabeli `run` do konca dneva in bi jih naiven MAX(stop_seq)
+    pokazal kot vlak, ki stoji na cilju z zamudo izpred nekaj ur.
+    """
+    now = datetime.now(TZ)
+    now_s = now.hour * 3600 + now.minute * 60 + now.second
+    today = now.date().isoformat()
+    # Nocni vlaki: po polnoci se vozijo pod vcerajsnjim prometnim dnem,
+    # njihove voznoredne sekunde pa tecejo naprej cez 86400.
+    yesterday = (now.date() - timedelta(days=1)).isoformat()
     with _conn() as conn:
-        rows = conn.execute(
-            "WITH last AS ("
-            "  SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.trip_id"
-            "                                 ORDER BY r.stop_seq DESC) AS rn"
-            "  FROM run r WHERE r.service_date = ?"
-            ") "
-            "SELECT t.train_no, t.headsign, st.name AS last_stop, "
-            "       COALESCE(l.delay_arr, l.delay_dep) AS delay_s, l.feed_ts "
-            "FROM last l JOIN trip t USING (trip_id) "
-            "JOIN sched s ON s.trip_id = l.trip_id AND s.stop_seq = l.stop_seq "
-            "JOIN station st ON st.stop_id = s.stop_id "
-            "WHERE l.rn = 1 ORDER BY delay_s DESC",
-            (today,),
-        )
-        return [dict(r) for r in rows]
+        rows = _live_rows(conn, today, now_s) + _live_rows(conn, yesterday, now_s + 86400)
+    rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
+    return rows

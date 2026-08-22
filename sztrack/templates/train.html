@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ train_no }} — sztrack</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/train.css">
+</head>
+<body class="train-page" data-train-no="{{ train_no }}">
+
+  <header class="topbar">
+    <a class="back-link" href="/app" title="nazaj na zemljevid">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 5l-7 7 7 7"></path>
+      </svg>
+      <span>zemljevid</span>
+    </a>
+    <div class="divider"></div>
+    <div class="train-head">
+      <span class="train-head-code">{{ train_no }}</span>
+      <span id="train-headsign" class="train-head-sub"></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="clock-wrap">
+      <span id="feed-dot" class="dot"></span>
+      <span id="clock" class="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <div class="train-body">
+
+    <section class="col col-run">
+      <div class="section-title">Ta vožnja</div>
+      <div id="run-head"></div>
+      <div id="run-timeline"><div class="empty-state">nalagam …</div></div>
+    </section>
+
+    <section class="col col-hist">
+      <div class="section-title">Zgodovina te poti</div>
+      <div id="hist-note" class="hist-note"></div>
+      <div id="hist-tiles" class="tile-row"></div>
+
+      <figure class="figure" id="fig-profile">
+        <figcaption class="fig-title">Zamuda po postajah</figcaption>
+        <div class="fig-sub" id="profile-sub"></div>
+        <div class="fig-body" id="profile-chart"></div>
+      </figure>
+
+      <figure class="figure" id="fig-runs">
+        <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
+        <div class="fig-sub" id="runs-sub"></div>
+        <div class="fig-body" id="runs-chart"></div>
+      </figure>
+
+      <figure class="figure" id="fig-speeds">
+        <figcaption class="fig-title">Hitrost po odsekih</figcaption>
+        <div class="fig-sub" id="speeds-sub"></div>
+        <div class="fig-body" id="speeds-chart"></div>
+      </figure>
+    </section>
+
+  </div>
+
+  <div id="tooltip" class="chart-tooltip" hidden></div>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/train.js"></script>
+</body>
+</html>

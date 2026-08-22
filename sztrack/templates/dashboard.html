@@ -19,9 +19,11 @@
       <span class="brand-name">sztrack</span>
     </div>
     <div class="spacer"></div>
+    <a class="top-link" href="/app">iskalnik</a>
+    <div class="divider"></div>
     <div class="train-count">
       <span id="train-count-n">—</span>
-      <span class="label">vlakov v prometu</span>
+      <span class="label">vlakov na progi</span>
     </div>
     <div class="divider"></div>
     <div class="clock-wrap">
@@ -46,10 +48,12 @@
 
     <main class="map-area">
       <div id="map"></div>
+      <div id="label-note" class="label-note" hidden></div>
     </main>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/common.js"></script>
   <script src="/static/dashboard.js"></script>
 </body>
 </html>
