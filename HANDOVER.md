@@ -123,6 +123,14 @@ ima pip zdaj `--retries 5 --timeout 60`.
 5. Izbrati oblikovno smer in narediti frontend: **Leaflet + OSM rastrske
    ploščice** (uporabnikova izbira; MapLibre in OpenFreeMap sta bila alternativa).
 
+## Kakšna bo aplikacija
+
+Dogovorjeno je zapisano v [docs/APLIKACIJA.md](docs/APLIKACIJA.md): Leaflet z
+OSM ploščicami, prikaz ločen od zaledja po JSON API-ju, štiri oblikovne smeri
+med katerimi izbira še ni padla, barvna lestvica zamud in tisto, kar mora
+prikaz priznati o naravi podatkov (60 s ločljivost, meritve v prometnih
+mestih, napoved proti meritvi, interpoliran položaj).
+
 ## Odprta vprašanja
 
 * Katera oblikovna smer (A nadzorna soba / B vozni red / C analitika / D sledilnik).
