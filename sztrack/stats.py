@@ -440,9 +440,13 @@ def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str) -> l
     out = []
     for r, key in zip(rows, wanted):
         w = found.get(key) if key else None
+        sev = weather_mod.severity(w) if w else None
         out.append({
             "stop_seq": r["stop_seq"],
             "name": r["name"],
+            "severity": sev["score"] if sev else None,
+            "severity_label": sev["label"] if sev else None,
+            "severity_parts": sev["parts"] if sev else None,
             "at": _abs_time(service_date, (r["t_s"] or 0) + (r["delay_s"] or 0))
                  if r["t_s"] is not None else None,
             "cell": key[0] if key else None,

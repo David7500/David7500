@@ -1,44 +1,3 @@
-      <div class="view" id="view-zamude">
-        <figure class="figure" id="fig-profile">
-          <figcaption class="fig-title">Zamuda po postajah</figcaption>
-          <div class="fig-sub" id="profile-sub"></div>
-          <div class="fig-legend" id="profile-legend"></div>
-          <div class="fig-body" id="profile-chart"></div>
-        </figure>
-
-        <figure class="figure" id="fig-runs">
-          <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
-          <div class="fig-sub" id="runs-sub"></div>
-          <div class="fig-body" id="runs-chart"></div>
-        </figure>
-      </div>
-
-      <div class="view" id="view-vreme" hidden>
-        <figure class="figure" id="fig-weather">
-          <figcaption class="fig-title">Vreme po postajah</figcaption>
-          <div class="fig-sub" id="weather-sub"></div>
-          <div class="fig-legend" id="weather-legend"></div>
-          <div class="fig-body" id="weather-chart"></div>
-          <div class="fig-note">
-            Modelska vrednost za celico 8 × 8 km ob uri, ko je vlak na tej postaji —
-            ne meritev na peronu. Da bi vreme pojasnjevalo zamude, bo treba nekaj
-            mesecev zajema; dotlej je to opis, ne vzrok.
-          </div>
-        </figure>
-      </div>
-
-      <div class="view" id="view-hitrost" hidden>
-        <figure class="figure" id="fig-speeds">
-          <figcaption class="fig-title">Hitrost po odsekih</figcaption>
-          <div class="fig-note">
-            Ni nova meritev: hitrost je preračunana iz istih zamud in voznega reda,
-            zato pove isto zgodbo z druge strani.
-          </div>
-          <div class="fig-sub" id="speeds-sub"></div>
-          <div class="fig-body" id="speeds-chart"></div>
-        </figure>
-      </div>
-
 <!doctype html>
 <html lang="sl">
 <head>
@@ -92,28 +51,42 @@
       <div id="hist-note" class="hist-note"></div>
       <div id="hist-tiles" class="tile-row"></div>
 
-      <figure class="figure" id="fig-profile">
-        <figcaption class="fig-title">Zamuda po postajah</figcaption>
-        <div class="fig-sub" id="profile-sub"></div>
-        <div class="fig-legend" id="profile-legend"></div>
-        <div class="fig-body" id="profile-chart"></div>
-      </figure>
+      <div class="view" id="view-zamude">
+        <figure class="figure" id="fig-profile">
+          <figcaption class="fig-title">Zamuda po postajah</figcaption>
+          <div class="fig-sub" id="profile-sub"></div>
+          <div class="fig-legend" id="profile-legend"></div>
+          <div class="fig-body" id="profile-chart"></div>
+        </figure>
 
-      <figure class="figure" id="fig-runs">
-        <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
-        <div class="fig-sub" id="runs-sub"></div>
-        <div class="fig-body" id="runs-chart"></div>
-      </figure>
+        <figure class="figure" id="fig-runs">
+          <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
+          <div class="fig-sub" id="runs-sub"></div>
+          <div class="fig-body" id="runs-chart"></div>
+        </figure>
+      </div>
 
-      <figure class="figure" id="fig-speeds" hidden>
-        <figcaption class="fig-title">Hitrost po odsekih</figcaption>
-        <div class="fig-note">
-          Ni nova meritev: hitrost je preračunana iz istih zamud in voznega reda,
-          zato pove isto zgodbo z druge strani.
-        </div>
-        <div class="fig-sub" id="speeds-sub"></div>
-        <div class="fig-body" id="speeds-chart"></div>
-      </figure>
+      <div class="view" id="view-vreme" hidden>
+        <figure class="figure" id="fig-weather">
+          <figcaption class="fig-title">Razmere po postajah</figcaption>
+          <div class="fig-sub" id="weather-sub"></div>
+          <div class="fig-legend" id="weather-legend"></div>
+          <div class="fig-body" id="weather-chart"></div>
+          <div class="fig-note" id="weather-note"></div>
+        </figure>
+      </div>
+
+      <div class="view" id="view-hitrost" hidden>
+        <figure class="figure" id="fig-speeds">
+          <figcaption class="fig-title">Hitrost po odsekih</figcaption>
+          <div class="fig-note">
+            Ni nova meritev: hitrost je preračunana iz istih zamud in voznega reda,
+            zato pove isto zgodbo z druge strani.
+          </div>
+          <div class="fig-sub" id="speeds-sub"></div>
+          <div class="fig-body" id="speeds-chart"></div>
+        </figure>
+      </div>
     </section>
 
   </div>

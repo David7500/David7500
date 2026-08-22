@@ -80,6 +80,26 @@ function num(v, digits) {
   return v.toFixed(digits == null ? 1 : digits).replace(".", ",");
 }
 
+// Sekvencna lestvica enega odtenka, svetlost narasca s stopnjo -- locena od
+// lestvice zamud, da se razmere in zamuda ne zamenjata. Enako kot v weather.py.
+const SEVERITY_COLORS = ["#4a515c", "#5f8296", "#7aa6c2", "#9cc6de", "#c3e2f2"];
+
+function severityColor(score) {
+  if (score == null) return "#3d434f";
+  if (score <= 0) return SEVERITY_COLORS[0];
+  if (score <= 2) return SEVERITY_COLORS[1];
+  if (score <= 4) return SEVERITY_COLORS[2];
+  if (score <= 7) return SEVERITY_COLORS[3];
+  return SEVERITY_COLORS[4];
+}
+
+function severityTitle(w) {
+  if (!w || w.severity == null) return "";
+  const parts = (w.severity_parts || []).map((x) => `${x.what} +${x.points}`).join(", ");
+  return `razmere ${w.severity}/10 · ${w.severity_label}` +
+    (parts ? ` (${parts})` : "") + ` — ${weatherSummary(w)}`;
+}
+
 function weatherSummary(w) {
   if (!w || w.temp_c == null) return "";
   const bits = [];
@@ -115,10 +135,12 @@ function lastMeasured(stops) {
 }
 
 function stopWeatherHtml(w) {
-  if (!w || w.temp_c == null) return "";
-  return `<span class="stop-weather" title="${escapeHtml(weatherSummary(w))}">` +
+  if (!w || w.severity == null) return "";
+  // Potnika ne zanima 0,4 mm/h -- zanima ga, ali so razmere hude. Surove
+  // stevilke ostanejo v naslovu in v oknu ob grafu.
+  return `<span class="stop-weather" title="${escapeHtml(severityTitle(w))}">` +
     weatherIconHtml(w, 13) +
-    `<span class="stop-temp">${num(w.temp_c, 0)}°</span></span>`;
+    `<span class="stop-sev" style="color:${severityColor(w.severity)}">${w.severity}</span></span>`;
 }
 
 function measuredStopHtml(s, isCurrent, w) {

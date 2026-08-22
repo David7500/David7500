@@ -154,3 +154,83 @@ def covered_days(conn: sqlite3.Connection) -> list[dict]:
         "SELECT DATE(hour_ts, 'unixepoch') AS day, source,"
         "       COUNT(*) AS rows_n, COUNT(DISTINCT cell) AS cells "
         "FROM weather GROUP BY day, source ORDER BY day")]
+
+
+# ---------------------------------------------------------------- stopnja razmer
+
+# Surove stevilke (mm, °C, km/h) so za potnika prevec. Indeks 0-10 pove,
+# kako hude so razmere -- a mora ostati preverljiv, zato vsak prispevek
+# potuje zraven in prikaz ga pokaze ob dotiku.
+#
+# Ni napoved zamude in ne trdi vzrocnosti: opisuje vreme, nic drugega.
+
+_PRECIP_STEPS = ((10.0, 8), (5.0, 6), (2.0, 4), (0.5, 2), (0.1, 1))
+_SNOW_STEPS = ((3.0, 7), (1.0, 5), (0.1, 3))
+_GUST_STEPS = ((90.0, 7), (70.0, 5), (50.0, 3), (30.0, 1))
+
+
+def _step(value: float | None, steps) -> int:
+    if value is None:
+        return 0
+    for threshold, points in steps:
+        if value >= threshold:
+            return points
+    return 0
+
+
+def severity(row: dict) -> dict:
+    """Indeks razmer 0-10 z razclenitvijo, iz katere je sestavljen."""
+    parts = []
+
+    p = _step(row.get("precip_mm"), _PRECIP_STEPS)
+    if p:
+        parts.append({"what": "padavine", "points": p})
+    s = _step(row.get("snowfall_cm"), _SNOW_STEPS)
+    if s:
+        parts.append({"what": "sneg", "points": s})
+    g = _step(row.get("wind_gust_kmh"), _GUST_STEPS)
+    if g:
+        parts.append({"what": "sunki vetra", "points": g})
+
+    code = row.get("code")
+    if code in (45, 48):
+        parts.append({"what": "megla", "points": 2})
+    if code in (95, 96, 99):
+        parts.append({"what": "nevihta", "points": 3})
+
+    t = row.get("temp_c")
+    if t is not None and t <= -5:
+        parts.append({"what": "mraz", "points": 2})
+    elif t is not None and t >= 32:
+        # Vrocina pomeni omejitve hitrosti zaradi tirnic, ne udobja.
+        parts.append({"what": "vročina", "points": 1})
+
+    score = min(10, sum(x["points"] for x in parts))
+    if score == 0:
+        label = "mirno"
+    elif score <= 2:
+        label = "blage"
+    elif score <= 4:
+        label = "poslabšano"
+    elif score <= 7:
+        label = "zahtevno"
+    else:
+        label = "hudo"
+    return {"score": score, "label": label, "parts": parts}
+
+
+# Sekvencna lestvica enega odtenka, svetlost narasca s stopnjo -- locena od
+# lestvice zamud, da se razmere in zamuda ne zamenjata.
+SEVERITY_COLORS = ("#4a515c", "#5f8296", "#7aa6c2", "#9cc6de", "#c3e2f2")
+
+
+def severity_color(score: int) -> str:
+    if score <= 0:
+        return SEVERITY_COLORS[0]
+    if score <= 2:
+        return SEVERITY_COLORS[1]
+    if score <= 4:
+        return SEVERITY_COLORS[2]
+    if score <= 7:
+        return SEVERITY_COLORS[3]
+    return SEVERITY_COLORS[4]
