@@ -40,53 +40,41 @@
     </section>
 
     <section class="col col-hist">
-      <div class="hist-top">
-        <div class="section-title">Zgodovina te poti</div>
-        <div class="viewtabs" role="tablist" id="viewtabs">
-          <button class="viewtab is-on" type="button" role="tab" data-view="zamude" aria-selected="true">Zamude</button>
-          <button class="viewtab" type="button" role="tab" data-view="vreme" aria-selected="false">Vreme</button>
-          <button class="viewtab" type="button" role="tab" data-view="hitrost" aria-selected="false">Hitrost</button>
-        </div>
-      </div>
+      <div class="section-title">Zgodovina te poti</div>
       <div id="hist-note" class="hist-note"></div>
       <div id="hist-tiles" class="tile-row"></div>
 
-      <div class="view" id="view-zamude">
-        <figure class="figure" id="fig-profile">
-          <figcaption class="fig-title">Zamuda po postajah</figcaption>
-          <div class="fig-sub" id="profile-sub"></div>
-          <div class="fig-legend" id="profile-legend"></div>
-          <div class="fig-body" id="profile-chart"></div>
-        </figure>
+      <figure class="figure" id="fig-profile">
+        <figcaption class="fig-title">Zamuda po postajah</figcaption>
+        <div class="fig-sub" id="profile-sub"></div>
+        <div class="fig-legend" id="profile-legend"></div>
+        <div class="fig-body" id="profile-chart"></div>
+        <div class="fig-note" id="weather-note" hidden></div>
+      </figure>
 
-        <figure class="figure" id="fig-runs">
-          <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
-          <div class="fig-sub" id="runs-sub"></div>
-          <div class="fig-body" id="runs-chart"></div>
-        </figure>
-      </div>
+      <figure class="figure" id="fig-runs">
+        <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
+        <div class="fig-sub" id="runs-sub"></div>
+        <div class="fig-body" id="runs-chart"></div>
+      </figure>
 
-      <div class="view" id="view-vreme" hidden>
-        <figure class="figure" id="fig-weather">
-          <figcaption class="fig-title">Razmere po postajah</figcaption>
-          <div class="fig-sub" id="weather-sub"></div>
-          <div class="fig-legend" id="weather-legend"></div>
-          <div class="fig-body" id="weather-chart"></div>
-          <div class="fig-note" id="weather-note"></div>
-        </figure>
-      </div>
-
-      <div class="view" id="view-hitrost" hidden>
-        <figure class="figure" id="fig-speeds">
-          <figcaption class="fig-title">Hitrost po odsekih</figcaption>
+      <details class="drawer" id="speeds-drawer">
+        <summary class="drawer-head">
+          <svg class="drawer-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 5l7 7-7 7"></path>
+          </svg>
+          <span class="drawer-title">Hitrost po odsekih</span>
+          <span class="drawer-why">ni nova meritev — isti podatki, druga enota</span>
+        </summary>
+        <div class="drawer-body">
           <div class="fig-note">
-            Ni nova meritev: hitrost je preračunana iz istih zamud in voznega reda,
-            zato pove isto zgodbo z druge strani.
+            Hitrost je preračunana iz istih zamud in voznega reda, zato pove isto
+            zgodbo z druge strani. Samo odseki nad 5 km.
           </div>
           <div class="fig-sub" id="speeds-sub"></div>
           <div class="fig-body" id="speeds-chart"></div>
-        </figure>
-      </div>
+        </div>
+      </details>
     </section>
 
   </div>

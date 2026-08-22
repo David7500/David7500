@@ -30,35 +30,6 @@
 }
 .col-hist .section-title { padding-left: 0; padding-right: 0; }
 
-.hist-top {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  border-bottom: 1px solid #1e2229;
-}
-.hist-top .section-title { border-bottom: none; flex-grow: 1; }
-
-/* Vrstica pogledov: hitrost ni stikalo, ampak eden od pogledov -- ko pride
-   se vreme, se seznam podaljsa, namesto da bi ob naslovu viseli trije gumbi. */
-.viewtabs {
-  flex-shrink: 0;
-  display: flex;
-  gap: 2px;
-  padding: 3px;
-  background: #101216;
-  border: 1px solid #23272f;
-  border-radius: 8px;
-}
-.viewtab {
-  padding: 6px 13px;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  color: #79828f;
-  cursor: pointer;
-  font: 500 11.5px/1.2 'IBM Plex Sans', system-ui, sans-serif;
-}
-.viewtab:hover { background: #191c22; color: #9aa3b0; }
-.viewtab.is-on { background: #23272f; color: #e7eaf0; font-weight: 600; }
-
 .fig-note {
   margin-top: 6px;
   font: 400 11px/1.6 'IBM Plex Sans', system-ui, sans-serif;
@@ -78,6 +49,10 @@
 .lg-dot.is-hollow { background: none; border: 2px solid; }
 .lg-dash { width: 16px; height: 0; border-top: 1.5px dashed; flex-shrink: 0; }
 .lg-swatch { width: 14px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+/* Razmere dobijo svojo vrstico legende -- dve lestvici v eni vrsti bralec bere
+   kot eno. */
+.lg-break { flex-basis: 100%; height: 0; }
+.lg.is-cap { color: #6b7480; }
 /* Odtenek na tej postavki pomeni velikost zamude, ne identitete serije --
    zato prikazan kot lestvica in ne kot ena pika. */
 .lg-ramp {
@@ -206,3 +181,31 @@
   font: 400 11px/1 'IBM Plex Mono', ui-monospace, monospace;
   color: #9aa3b0; background: #1a1d23; padding: 1px 4px; border-radius: 3px;
 }
+
+
+/* ---------- zlozena vsebina (hitrost) ---------- */
+
+.drawer { margin-top: 26px; border-top: 1px solid #1e2229; }
+.drawer-head {
+  display: flex; align-items: center; gap: 9px;
+  padding: 14px 2px; cursor: pointer;
+  list-style: none;
+}
+.drawer-head::-webkit-details-marker { display: none; }
+.drawer-caret { color: #6b7480; flex-shrink: 0; transition: transform 0.15s ease; }
+.drawer[open] .drawer-caret { transform: rotate(90deg); }
+.drawer-title { font: 600 13px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; }
+.drawer-head:hover .drawer-title { color: #e7eaf0; }
+.drawer-why { font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; }
+.drawer-body { padding: 2px 0 20px; }
+.drawer-body .fig-sub { margin-top: 8px; }
+
+/* ---------- drsniki ---------- */
+
+/* Stolpca drsita, kadar je vsebine vec -- naj bo to tanka crta ob robu in ne
+   siroka sistemska letev cez postajo. */
+.col { scrollbar-width: thin; scrollbar-color: #2b303a transparent; }
+.col::-webkit-scrollbar { width: 8px; height: 8px; }
+.col::-webkit-scrollbar-track { background: transparent; }
+.col::-webkit-scrollbar-thumb { background: #2b303a; border-radius: 4px; }
+.col::-webkit-scrollbar-thumb:hover { background: #3d434f; }
