@@ -47,12 +47,38 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   npr. "Slovenska Bistrica" za vlak, ki tam ne ustavlja). Prikaz naj pove, kje.
 * **Položaj vlaka je interpoliran, ne GPS.** `vehicle_positions` vsebuje
   avtobuse, vlakov ne. Dashboard zato riše vlake na zadnji znani postaji.
+* **Odhodne zamude s prve postaje ni.** Feed ni nikoli poročal `stop_seq = 1`
+  — najnižji zajeti je 2. Prva meritev pride šele na drugi postaji, in 29 %
+  voženj (179 od 628) je tam že čez minuto. Vlak, ki *"štarta z zamudo"*, je
+  v podatkih viden šele pozneje in nikoli na izhodišču.
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
 * **Ni** cen, sestave vlaka, perona, zasedenosti. Mednarodni vlaki (EN/MV)
   pogosto brez realtime pokritja.
 
 Izjema je **vreme**: Open-Meteo ima arhiv za nazaj, zato ga ni treba zbirati
 vnaprej — `sztrack weather` ga dopolni za že zajete zamude kadarkoli.
+
+## Kam gre
+
+Ciljni uporabnik ni dispečer, ampak potnik z vprašanjem *"kdaj mi pelje vlak
+in koliko zamuja"*. Iz tega izhaja vrstni red:
+
+1. **Iskalnik povezav postaja → postaja je vstopna stran** (`/app`), kot v
+   aplikaciji Grem z vlakom. Zemljevid je pogled dispečerja — ostane, ker je
+   uporaben, a ni vhod in ni cilj razvoja.
+2. Klik na vlak odpre **okno tega vlaka** z analizo poti.
+3. Globlja analiza (porazdelitve, vzroki, vreme kot **dejavnik** zamude) čaka
+   2–3 mesece zajema. Do takrat ne graditi napovednih modelov in ne trditi
+   vzročnosti — vreme se zdaj samo *pokaže ob* zamudi, ne pojasnjuje je.
+
+Česar ne bo, ker podatka ni: cene, sestava vlaka, peron, zasedenost.
+
+## Številke vlakov
+
+`LPV 2010` ni oznaka proge, ampak **ena vožnja** (trip): 721 različnih številk
+na 723 tripov. `route_id` je 1 : 1 s tripom in za združevanje neuporaben —
+zgodovino poti gradi po `train_no`. Parnost številke nosi smer, v zajetih
+podatkih brez izjeme. Predpona (`LP`, `LPV`, `IC`, `MV`, `EN` …) je vrsta vlaka.
 
 ## Koda
 
@@ -82,7 +108,13 @@ Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih v
 |---|---|
 | `/app` | iskalnik povezav — vstopna stran |
 | `/app/map` | živi zemljevid (Leaflet + OSM rastrske ploščice) |
-| `/app/train/{no}` | okno enega vlaka: profil vožnje, zgodovina, vreme, hitrosti |
+| `/app/train/{no}` | okno enega vlaka: profil poti, zgodovina, razmere, hitrosti |
+
+Okno vlaka je **ena slika, ne zavihki**. Krivulja zamude čez vse postaje poti
+in pod njo, v istem grafu, pas razmer: vprašanje ni *"kakšno je vreme"*, ampak
+*"je zamuda tam, kjer je bilo vreme hudo"*. Hitrost po odsekih je isti podatek
+v drugi enoti, zato leži na dnu v zaprtem `<details>` in se naloži šele ob
+odprtju. Zavihkov ne vračaj — eno vprašanje so razbili na tri strani.
 
 Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.
@@ -107,6 +139,25 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
 * Kjer meritve ni (ocena, napoved), nastopi rezervirana `#a8d8ff`, ki je
   lestvica ne uporablja.
 * Vreme ima **svoj semafor**, ne odtenek lestvice zamud.
+
+### Semafor razmer
+
+| stopnja | oznaka | barva |
+|---|---|---|
+| 0 | mirne | `#6b7480` |
+| 1–3 | blage | `#5aa87d` |
+| 4–6 | zahtevne | `#d9b33c` |
+| 7–10 | hude | `#d1495b` |
+
+Stopnja 0–10 je seštevek točk za padavine, sneg, sunke vetra, meglo, nevihto in
+mraz (`weather.severity()`). Razčlenitev gre v tooltip — indeks brez razčlenitve
+je črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
+
+**Lestvic ne mešaj v istem registru.** Rumena razmer `#d9b33c` proti svetli
+oranžni zamud `#f2a87e` je pri deutanu ΔE 5,5 — nerazločljivo. Zato je zamuda
+krivulja s pikami zgoraj, razmere pa stolpci v ločenem pasu spodaj, in vsak
+stolpec od stopnje 4 naprej nosi svojo številko. Paleto preverjaj z
+validatorjem (skill `dataviz`, `scripts/validate_palette.js`), ne na oko.
 
 ## Razdalje med postajami
 
@@ -133,8 +184,19 @@ dejanskemu paru zaporednih postankov danega vlaka.
 
 ## Objava
 
-Priporočena pot je Raspberry Pi doma: `sudo bash deploy/install-rpi.sh`
-(idempotentna). Podrobnosti v [DEPLOY.md](DEPLOY.md).
+Ciljni gostitelj je Raspberry Pi doma: **`david@192.168.1.166`**. Tam ob
+koncu teče produkcijski zajem — malina je gor ves čas, ta računalnik ne, zato
+je merodajna baza na malini in se z nje vleče (`sztrack merge`), ne obratno.
+
+Namestitev/posodobitev: `sudo bash deploy/install-rpi.sh && sudo systemctl
+restart sztrack.service` (idempotentna; restart je nujen posebej, `enable --now`
+aktivne storitve ne restarta). Podrobnosti v [DEPLOY.md](DEPLOY.md).
+
+**Deploy mora pognati uporabnik sam** — `david` na malini za sudo rabi geslo,
+agent nima terminala zanj. `sudo -n true` lahko uspe, a le zaradi predpomnjene
+sudo-znamke po uporabnikovem lastnem ukazu; NOPASSWD velja samo za
+`/usr/bin/tee /sys/class/leds/…`. Pripravi ukaz in ga daj uporabniku, ne
+poskušaj sam.
 
 Pella je bila slepa ulica — zajem je delal, javni API pa je vračal Cloudflare
 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
@@ -154,11 +216,22 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
   `seed/sz.sqlite`, ki ga rabi namestitev (izjema `!seed/sz.sqlite`).
 * Ne dodajaj odvisnosti brez razloga; `requirements.txt` ima pet vrstic in
   naj tako ostane.
+* **V enem SQL stavku ne mešaj `?` in `:ime`.** sqlite veže po vrstnem redu
+  pojavitve in tiho vrne napačne vrstice, brez izjeme. Cel stavek naj bo enega
+  sloga.
+* `run` hrani **zadnje stanje** postanka, zato je `MAX(stop_seq)` po koncu
+  vožnje terminus — ne dokaz, da vlak še vozi. Živost sklepaj iz voznoredne
+  ure in prevoženih postankov (`_LIVE_SQL`).
+* **Spremembo prikaza poglej, preden jo razglasiš za končano.** Posnetek:
+  `chromium --headless --disable-gpu --window-size=1850,1000
+  --virtual-time-budget=7000 --screenshot=$HOME/x.png <url>` — v `/tmp`
+  chromium ne more pisati, zato v `$HOME`.
 
 ## Stanje zajema
 
-Lokalno zajeto od 2026-08-19: ~6800 meritev, 5048 postankov, 5 dni,
-21312 vremenskih vrstic. Baza `data/sz.sqlite` ~4,5 MB.
+Lokalna baza `data/sz.sqlite` (2026-08-23): 11913 meritev, 7176 postankov,
+3 obratovalni dnevi, 21312 vremenskih vrstic, 267 postaj, 5,4 MB. Merodajen je
+zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
 Za napoved zamude (`stats.predict`) je zaenkrat izhodiščni model: prenos
 trenutne zamude naprej, popravljen za historično mediano spremembe na odseku.
@@ -168,8 +241,12 @@ Za kaj boljšega rabi 2–3 mesece zajema.
 
 * Dostop do API-ja od zunaj (Tailscale ali Cloudflare Tunnel).
   **Vrat na usmerjevalniku ne odpiraj — API nima avtentikacije.**
-* Oblikovne smeri in mockupi: `design/`, platno
-  https://claude.ai/code/artifact/189e04ee-26e3-4c2e-916a-26da4e9ae709
+* Oblikovne smeri in mockupi v `design/`, dve platni:
+  * smeri in barve — https://claude.ai/code/artifact/189e04ee-26e3-4c2e-916a-26da4e9ae709
+  * prenova okna vlaka (`design/okno-vlaka/`) —
+    https://claude.ai/code/artifact/c219b447-a3b8-4d5a-b5a8-267953914791
+  Platni sta skica, **koda je merodajna**: okno vlaka je od takrat dobilo
+  semafor razmer namesto enega modrega odtenka in izgubilo zavihke.
 
 Daljši zapisi: [HANDOVER.md](HANDOVER.md) (stanje projekta),
 [docs/APLIKACIJA.md](docs/APLIKACIJA.md) (dogovorjeno o prikazu),
