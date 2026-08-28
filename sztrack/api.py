@@ -127,15 +127,22 @@ def api_departures(
         # se vedno tisto, kar clovek na peronu isce.
         from_s = max(0, journey.now_seconds(now) - 10 * 60)
     else:
+        # Drug dan nima "zdaj". Kdor gleda vceraj ali cez teden, hoce cel dan,
+        # ne prvih sest ur od polnoci.
         from_s = 0
+        if window == 180:
+            window = 1440
 
     with _conn() as conn:
         exact = journey.resolve_station(conn, station)
         if not exact:
             raise HTTPException(404, f"postaje {station!r} ne poznam")
         rows = journey.board(conn, exact, date, from_s, window, kind)
+        notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
+                                    mentions=[exact])
     return {"station": exact, "date": date, "kind": kind,
-            "from_s": from_s, "window_min": window, "board": rows}
+            "from_s": from_s, "window_min": window,
+            "board": rows, "alerts": notices}
 
 
 @app.get("/api/alerts")
@@ -327,8 +334,12 @@ def api_connections(
         legs = (journey.transfers(conn, a, b, date, earliest_s=(now_s or 0),
                                   direct=rows)
                 if with_transfers else [])
+        # Obvestila pobere streznik, ne brskalnik: prikaz jih je sicer iskal
+        # z eno zahtevo na vlak, torej z dvanajstimi za eno iskanje.
+        nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
+        notices = alerts.for_trains(conn, nos, mentions=[a, b])
     return {"from": a, "to": b, "date": date,
-            "connections": rows, "transfers": legs}
+            "connections": rows, "transfers": legs, "alerts": notices}
 
 
 @app.get("/api/live")

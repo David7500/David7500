@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config
-from .stats import _abs_time
+from .stats import _abs_time, typical_at_stops
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -107,6 +107,8 @@ SELECT t.trip_id, t.train_no, t.headsign,
        ends.first_seq, ends.last_seq,
        origin.name AS origin, dest.name AS destination,
        COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
+       COALESCE(rn.delay_arr, rn.delay_dep) AS next_delay_s,
+       zn.name AS next_stop,
        r.feed_ts
 FROM sched s
 JOIN station here ON here.stop_id = s.stop_id AND here.name = :station
@@ -117,8 +119,15 @@ JOIN station origin ON origin.stop_id = so.stop_id
 JOIN sched sd     ON sd.trip_id = s.trip_id AND sd.stop_seq = ends.last_seq
 JOIN station dest ON dest.stop_id = sd.stop_id
 JOIN service_day sday ON sday.service_id = t.service_id AND sday.date = :day
-LEFT JOIN run r ON r.trip_id = t.trip_id AND r.service_date = :day
-                AND r.stop_seq = s.stop_seq
+LEFT JOIN run r  ON r.trip_id = t.trip_id AND r.service_date = :day
+                 AND r.stop_seq = s.stop_seq
+-- Feed ni nikoli porocal stop_seq = 1: prva meritev pride sele na drugi
+-- postaji. Za odhod z izhodisca je torej edini priblizek zamuda na naslednji
+-- postaji -- vzamemo jo, prikaz pa mora povedati, da je od tam.
+LEFT JOIN run rn ON rn.trip_id = t.trip_id AND rn.service_date = :day
+                 AND rn.stop_seq = s.stop_seq + 1
+LEFT JOIN sched sn   ON sn.trip_id = t.trip_id AND sn.stop_seq = s.stop_seq + 1
+LEFT JOIN station zn ON zn.stop_id = sn.stop_id
 WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s AND :to_s
 ORDER BY t_s
 """
@@ -126,7 +135,7 @@ ORDER BY t_s
 
 def board(conn: sqlite3.Connection, station: str, service_date: str,
           from_s: int, window_min: int = 180, kind: str = "odhodi",
-          limit: int = 40) -> list[dict]:
+          limit: int = 150) -> list[dict]:
     """Odhodna (ali prihodna) tabla postaje.
 
     `kind`: "odhodi" izpusti končno postajo vožnje (tam se nič ne odpelje),
@@ -146,6 +155,13 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         if kind == "prihodi" and d["stop_seq"] == d["first_seq"]:
             continue
         d["sched"] = _abs_time(service_date, d["t_s"])
+        # Kadar meritve na tej postaji ni, a jo ima naslednja, jo uporabimo za
+        # priblizek in to povemo. Vlak, ki je na drugi postaji +8, z izhodisca
+        # skoraj gotovo ni odpeljal tocno.
+        d["delay_from"] = None
+        if d["delay_s"] is None and d["next_delay_s"] is not None:
+            d["delay_s"] = d["next_delay_s"]
+            d["delay_from"] = d["next_stop"]
         d["expected"] = (_abs_time(service_date, d["t_s"] + d["delay_s"])
                          if d["delay_s"] is not None else None)
         # Za odhodno tablo je zanimiv cilj, za prihodno izhodisce.
@@ -157,6 +173,21 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         out.append(d)
         if len(out) >= limit:
             break
+
+    # Obicajna zamuda iz zgodovine: za dan brez meritev je to edino, kar o
+    # vlaku vemo. Ni napoved za ta dan in prikaz jo tako tudi imenuje.
+    typ = typical_at_stops(conn, [(d["trip_id"], d["stop_seq"]) for d in out]
+                                 + [(d["trip_id"], d["stop_seq"] + 1) for d in out])
+    for d in out:
+        d["typical"] = typ.get((d["trip_id"], d["stop_seq"]))
+        d["typical_from"] = None
+        if d["typical"] is None:
+            nxt = typ.get((d["trip_id"], d["stop_seq"] + 1))
+            if nxt:
+                d["typical"] = nxt
+                d["typical_from"] = d["next_stop"]
+        for k in ("next_delay_s", "next_stop"):
+            d.pop(k, None)
     return out
 
 

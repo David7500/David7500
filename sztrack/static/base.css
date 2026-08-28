@@ -1,0 +1,234 @@
+/* Skupna podlaga vseh strani: barve, tipografija, glava, gumbi, žetoni.
+ *
+ * Barve so spremenljivke in ne več zapisane trikrat. Lestvica zamud je
+ * validirana na monotonost svetlosti in kontrast (glej design/README.md);
+ * kdor jo spreminja, naj jo znova preveri z validatorjem, ne na oko.
+ */
+
+:root {
+  /* podlage */
+  --bg:        #0f1115;
+  --bg-raised: #16181c;
+  --bg-panel:  #14161a;
+  --bg-hover:  #191c22;
+  --line:      #23272f;
+  --line-soft: #1e2229;
+  --line-firm: #2b303a;
+
+  /* črnilo */
+  --ink:       #e7eaf0;
+  --ink-dim:   #9aa3b0;
+  --ink-mute:  #79828f;
+  --ink-faint: #6b7480;
+  --ink-ghost: #4a515c;
+
+  /* lestvica zamud -- ordinalna, en odtenek, temna tema */
+  --d-ontime:  #7c8698;
+  --d-small:   #f2a87e;
+  --d-mid:     #e07b45;
+  --d-big:     #b85417;
+  /* rezervirano za "meritve ni" -- lestvica te barve ne uporablja nikoli */
+  --d-none:    #a8d8ff;
+
+  /* semafor razmer -- svoja lestvica, da se ne meša z zamudami */
+  --sev-calm:  #6b7480;
+  --sev-mild:  #5aa87d;
+  --sev-hard:  #d9b33c;
+  --sev-bad:   #d1495b;
+
+  --accent:    #e07b45;
+  --accent-lit:#f0934f;
+  --ok:        #4ba36b;
+
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --r-sm: 5px;
+  --r:    7px;
+  --r-lg: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  /* Nic ne sme sili strani v vodoravno drsenje -- na telefonu je to
+     najhitrejsi nacin, da je aplikacija videti pokvarjena. */
+  overflow-x: hidden;
+  background: var(--bg);
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: inherit; }
+
+/* ---------- glava ---------- */
+
+.topbar {
+  height: 52px;
+  flex-shrink: 0;
+  min-width: 0;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.brand { display: flex; align-items: center; gap: 9px; text-decoration: none; min-width: 0; }
+.brand svg { flex-shrink: 0; }
+.brand-name {
+  font: 600 15px/1 var(--sans);
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.spacer { flex-grow: 1; }
+
+.top-link {
+  color: var(--ink-dim);
+  text-decoration: none;
+  font: 500 12px/1 var(--sans);
+  white-space: nowrap;
+}
+.top-link:hover { color: var(--ink); }
+
+.divider { width: 1px; height: 20px; background: #262b33; flex-shrink: 0; }
+
+.clock-wrap { display: flex; align-items: center; gap: 7px; }
+.clock-wrap .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ok); flex-shrink: 0;
+}
+.clock-wrap .dot.stale { background: var(--ink-faint); }
+.clock { font: 400 12px/1 var(--mono); color: var(--ink-dim); }
+
+/* ---------- preklop preprosto / napredno ----------
+ * Napreden pogled ne odpre druge strani -- pokaze vec na isti. Potnik in
+ * radovednez gledata isto vozjnjo, le da drugi hoce zraven se stevilke.
+ */
+
+.mode-switch {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  padding: 2px;
+  flex-shrink: 0;
+}
+.mode-switch button {
+  border: none;
+  background: none;
+  color: var(--ink-mute);
+  font: 500 11.5px/1 var(--sans);
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mode-switch button:hover { color: var(--ink); }
+.mode-switch button[aria-pressed="true"] {
+  background: var(--line-firm);
+  color: var(--ink);
+}
+
+/* Vse, kar je samo za napreden pogled, je v DOM-u vedno -- preklop je
+ * en atribut na <body>, ne ponovno risanje strani. */
+body:not(.is-advanced) .adv-only { display: none !important; }
+
+/* ---------- gumbi ---------- */
+
+.btn {
+  padding: 10px 18px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r);
+  color: #14161a;
+  cursor: pointer;
+  font: 600 13px/1.2 var(--sans);
+}
+.btn:hover { background: var(--accent-lit); }
+
+.btn-quiet {
+  background: none;
+  border: 1px solid var(--line-firm);
+  color: var(--ink-dim);
+}
+.btn-quiet:hover { background: var(--bg-hover); color: var(--ink); border-color: #3d434f; }
+
+/* ---------- žetoni zamude ----------
+ * Barva nikoli ne nosi pomena sama: v zetonu je vedno tudi stevilka minut.
+ */
+
+.chip {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  border: 1px solid transparent; border-radius: 6px;
+  padding: 3px 8px;
+}
+.chip-n { font: 600 15px/1.1 var(--mono); }
+.chip-unit { font: 400 10px/1.1 var(--sans); opacity: 0.75; }
+/* Crtkan rob = napoved, ne meritev. Enak jezik kot crtkana crta na progi. */
+.chip-forecast { border-style: dashed; }
+.chip-none {
+  color: var(--ink-faint); border-color: #262b33;
+  font: 400 11px/1.5 var(--sans);
+}
+
+.tag {
+  font: 400 10px/1.5 var(--sans);
+  color: var(--ink-faint);
+  border: 1px solid #262b33;
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.empty-state {
+  padding: 26px 14px;
+  font: 400 13px/1.6 var(--sans);
+  color: var(--ink-faint);
+}
+.empty-state strong { color: var(--ink-dim); }
+
+/* ---------- obvestila o ovirah ----------
+ * Svoja barva, ne lestvica zamud: ovira ni "velika zamuda", ampak drugo
+ * dejstvo. Modra je rezervirana za "meritve ni", zato tu nastopi rumena
+ * semaforja razmer -- ta pomeni "bodi pozoren", kar je natanko to.
+ */
+
+.alert-box {
+  border: 1px solid rgba(217, 179, 60, 0.35);
+  background: rgba(217, 179, 60, 0.07);
+  border-radius: var(--r-lg);
+  padding: 11px 13px;
+  margin: 16px 0 0;
+}
+.alert-head {
+  display: flex; align-items: center; gap: 8px;
+  font: 600 12px/1.4 var(--sans);
+  color: var(--sev-hard);
+  cursor: pointer;
+  user-select: none;
+}
+.alert-head::-webkit-details-marker { display: none; }
+.alert-head .alert-count { color: var(--ink-mute); font-weight: 400; }
+.alert-list { margin: 9px 0 2px; display: flex; flex-direction: column; gap: 9px; }
+.alert-item { font: 400 12px/1.5 var(--sans); color: var(--ink-dim); }
+.alert-item strong { color: var(--ink); font-weight: 600; display: block; }
+.alert-item a { color: var(--ink-mute); }
+.alert-meta { font: 400 10.5px/1.5 var(--sans); color: var(--ink-faint); margin-top: 2px; }
+
+/* ---------- starost meritve ----------
+ * "+20 min" ob polnoci, izmerjeno ob 17h, je laz brez te oznake.
+ */
+.stale-note {
+  font: 400 10px/1.4 var(--sans);
+  color: var(--sev-hard);
+}
+
+@media (max-width: 640px) {
+  .topbar { padding: 0 12px; gap: 10px; }
+  .brand-name { font-size: 14px; }
+}

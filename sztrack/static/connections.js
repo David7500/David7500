@@ -1,35 +1,161 @@
 "use strict";
 
-// Vstopna stran: od postaje do postaje. Skupne funkcije so v common.js.
+// Vstopna stran. Dve vprašanji na isti strani: "od kod do kam" in "kaj gre
+// s te postaje". Skupne funkcije (barve, čas, vreme) so v common.js.
+
 const POLL_MS = 30000;
 
-const fromEl = document.getElementById("from");
-const toEl = document.getElementById("to");
-const dateEl = document.getElementById("date");
-const formEl = document.getElementById("search");
-const resultsEl = document.getElementById("results");
-const resultHeadEl = document.getElementById("result-head");
-const feedDotEl = document.getElementById("feed-dot");
+const $ = (id) => document.getElementById(id);
+const resultsEl = $("results");
+const resultHeadEl = $("result-head");
+const alertsEl = $("alerts");
+const feedDotEl = $("feed-dot");
 
 const todayIso = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
 
 let pollTimer = null;
-let lastQuery = null;
+let activeTab = "ab";
 
-// ---------- postaje za samodopolnjevanje ----------
+// ---------- preprosto / napredno ----------
+// Napreden pogled ne pelje na drugo stran: doda stolpce in razlage na tej.
 
-async function loadStations() {
-  try {
-    const stations = await fetch("/api/stations").then((r) => r.json());
-    const dl = document.getElementById("stations");
-    dl.replaceChildren(...stations.map((s) => {
-      const o = document.createElement("option");
-      o.value = s.name;
-      return o;
-    }));
-  } catch (err) {
-    console.error("postaj ni bilo mogoče naložiti", err);
+function setMode(mode) {
+  document.body.classList.toggle("is-advanced", mode === "advanced");
+  for (const b of $("mode-switch").querySelectorAll("button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
   }
+  try {
+    localStorage.setItem("sztrack:mode", mode);
+  } catch (err) {
+    /* zaseben zavihek ni razlog, da stran ne dela */
+  }
+  if (mode === "advanced") loadHealth();
+}
+
+$("mode-switch").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-mode]");
+  if (b) setMode(b.dataset.mode);
+});
+
+async function loadHealth() {
+  const el = $("foot-health");
+  if (!el || el.dataset.done) return;
+  try {
+    const h = await fetch("/api/health").then((r) => r.json());
+    el.textContent =
+      ` · zajetih ${h.observations.toLocaleString("sl-SI")} meritev v ${h.days_covered} dneh` +
+      (h.last_feed_at ? `, zadnja ob ${hhmm(h.last_feed_at)}` : "");
+    el.dataset.done = "1";
+  } catch (err) {
+    /* stanje zajema je postranska informacija */
+  }
+}
+
+// ---------- samodopolnjevanje postaj ----------
+
+function attachSuggest(input, listEl) {
+  let items = [];
+  let active = -1;
+  let seq = 0;
+
+  const close = () => { listEl.hidden = true; active = -1; };
+
+  const paint = () => {
+    if (!items.length) return close();
+    const q = input.value.trim();
+    listEl.replaceChildren(...items.map((s, i) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.className = i === active ? "is-active" : "";
+      li.innerHTML = highlight(s.name, q);
+      li.addEventListener("mousedown", (ev) => {
+        ev.preventDefault();          // ne izgubi fokusa pred klikom
+        input.value = s.name;
+        close();
+        input.form.requestSubmit();
+      });
+      return li;
+    }));
+    listEl.hidden = false;
+  };
+
+  input.addEventListener("input", async () => {
+    const q = input.value.trim();
+    if (q.length < 2) return close();
+    const mine = ++seq;
+    try {
+      const res = await fetch(`/api/stations/search?q=${encodeURIComponent(q)}&limit=8`)
+        .then((r) => r.json());
+      if (mine !== seq) return;       // prehitelo ga je novejse tipkanje
+      items = res;
+      active = -1;
+      paint();
+    } catch (err) {
+      close();
+    }
+  });
+
+  input.addEventListener("keydown", (ev) => {
+    if (listEl.hidden) return;
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      active = (active + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      paint();
+    } else if (ev.key === "Enter" && active >= 0) {
+      ev.preventDefault();
+      input.value = items[active].name;
+      close();
+      input.form.requestSubmit();
+    } else if (ev.key === "Escape") {
+      close();
+    }
+  });
+
+  input.addEventListener("blur", () => setTimeout(close, 120));
+}
+
+function highlight(name, q) {
+  const i = fold(name).indexOf(fold(q));
+  if (i < 0 || !q) return escapeHtml(name);
+  return escapeHtml(name.slice(0, i)) +
+    "<mark>" + escapeHtml(name.slice(i, i + q.length)) + "</mark>" +
+    escapeHtml(name.slice(i + q.length));
+}
+
+// Isto sklanjanje kot v journey.py: brez tega bi se poudarek pri "sentjur"
+// ujel na napacnem mestu ali sploh ne.
+function fold(s) {
+  return s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// ---------- obvestila o ovirah ----------
+
+function alertsHtml(list, note) {
+  if (!list || !list.length) return "";
+  const items = list.map((a) => `
+    <div class="alert-item">
+      <strong>${escapeHtml(a.header || "")}</strong>
+      <div class="alert-meta">
+        ${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
+        ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
+      </div>
+    </div>`).join("");
+  return `<details class="alert-box"${list.length <= 2 ? " open" : ""}>
+    <summary class="alert-head">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+      </svg>
+      ${escapeHtml(note)}
+      <span class="alert-count">— ${list.length} ${list.length === 1 ? "obvestilo" : "obvestil"}</span>
+    </summary>
+    <div class="alert-list">${items}</div>
+  </details>`;
+}
+
+function renderAlerts(list, note) {
+  // Obvestila pride ze urejena s streznika: najprej tista, ki imenujejo
+  // postajo s te poti. Prikaz jih samo izpise.
+  alertsEl.innerHTML = alertsHtml(list, note);
 }
 
 // ---------- izpis ----------
@@ -40,146 +166,365 @@ function durationLabel(s) {
   return h ? `${h} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`;
 }
 
-function delayChipHtml(c) {
-  if (c.delay_s == null) {
-    return '<span class="chip chip-none">brez podatka</span>';
-  }
-  const color = delayColor(c.delay_s);
-  const isForecast = c.delay_kind !== "izmerjeno";
-  // Stevilka in kraj meritve gresta vedno zraven -- barva sama ne sme nositi pomena.
-  return `<span class="chip${isForecast ? " chip-forecast" : ""}" style="color:${color};border-color:${color}44">
-    <span class="chip-n">${delayLabel(c.delay_s)}</span>
-    <span class="chip-unit">min</span>
-  </span>
-  <div class="chip-where">${escapeHtml(c.delay_kind)}${c.delay_at ? ` v ${escapeHtml(c.delay_at)}` : ""}</div>`;
+function stopsLabel(n) {
+  if (n === 1) return "1 postaja";
+  if (n === 2) return "2 postaji";
+  if (n === 3 || n === 4) return `${n} postaje`;
+  return `${n} postaj`;
 }
 
-function connectionRowHtml(c, nowMs) {
+function countdownLabel(iso, nowMs) {
+  const min = Math.round((new Date(iso).getTime() - nowMs) / 60000);
+  if (min < 0 || min > 90) return "";
+  if (min === 0) return "zdaj";
+  return `čez ${min} min`;
+}
+
+function typicalChipHtml(t, fromStop) {
+  // Za dan, ki se ni prisel, meritve ni -- povemo pa lahko, kako je bilo
+  // doslej. To NI napoved za ta dan in oznaka mora to jasno povedati.
+  if (!t) return '<span class="chip chip-none">brez podatka</span>';
+  const color = delayColor(t.median_s);
+  return `<span class="chip chip-forecast" style="color:${color};border-color:${color}44">
+      <span class="chip-n">${delayLabel(t.median_s)}</span><span class="chip-unit">min</span>
+    </span>
+    <div class="conn-where">običajno · ${pluralRuns(t.n)}</div>
+    ${fromStop ? `<div class="conn-where">merjeno v ${escapeHtml(fromStop)}</div>` : ""}
+    <div class="conn-where adv-only">točnih ${Math.round(t.on_time_share * 100)} % · p90 ${delayLabel(t.p90_s)} min</div>`;
+}
+
+function delayChipHtml(delay, kind, at) {
+  if (delay == null) return '<span class="chip chip-none">brez podatka</span>';
+  const color = delayColor(delay);
+  const forecast = kind && kind !== "izmerjeno";
+  return `<span class="chip${forecast ? " chip-forecast" : ""}" style="color:${color};border-color:${color}44">
+      <span class="chip-n">${delayLabel(delay)}</span><span class="chip-unit">min</span>
+    </span>
+    ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at ? ` v ${escapeHtml(at)}` : ""}</div>` : ""}`;
+}
+
+function connectionRowHtml(c, nowMs, isNext, date) {
   const dep = new Date(c.sched_dep).getTime();
-  const gone = dep < nowMs;
-  const expected = c.expected_dep && c.expected_dep !== c.sched_dep ? hhmm(c.expected_dep) : null;
+  const gone = nowMs && dep < nowMs;
+  const late = c.delay_s != null && c.delay_s >= 60;
+  const color = delayColor(c.delay_s);
+  const cd = isNext && nowMs ? countdownLabel(c.expected_dep || c.sched_dep, nowMs) : "";
+
+  // Pricakovani prihod = voznoredni + ista zamuda. To je prenos, ne meritev,
+  // zato v naprednem pogledu pise, od kod je.
+  const expArr = late && c.sched_arr
+    ? hhmm(new Date(new Date(c.sched_arr).getTime() + c.delay_s * 1000).toISOString())
+    : null;
+
   return `
-    <a class="conn-row${gone ? " is-gone" : ""}" href="/app/train/${encodeURIComponent(c.train_no)}" target="_blank" rel="noopener">
+    <a class="conn-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
+       href="/app/train/${encodeURIComponent(c.train_no)}?date=${encodeURIComponent(date)}">
       <div class="conn-times">
         <div class="conn-clock">
           <span class="conn-dep">${hhmm(c.sched_dep)}</span>
           <span class="conn-dash">–</span>
           <span class="conn-arr">${hhmm(c.sched_arr)}</span>
         </div>
-        <div class="conn-dur">${durationLabel(c.duration_s)} · ${c.stops_between} ${c.stops_between === 1 ? "postaja" : "postaj"}</div>
+        ${late ? `<div class="conn-expected" style="color:${color}">
+            <span>${hhmm(c.expected_dep)}</span><span class="conn-dash">–</span><span>${expArr || "?"}</span>
+          </div>` : ""}
       </div>
       <div class="conn-train">
         <div class="conn-no">${escapeHtml(c.train_no)}</div>
         <div class="conn-headsign">${escapeHtml(c.headsign || "")}</div>
       </div>
-      <div class="conn-delay">
-        ${delayChipHtml(c)}
-        ${expected ? `<div class="conn-expected">predviden odhod ${expected}</div>` : ""}
+      <div class="conn-delay">${c.delay_s != null
+        ? delayChipHtml(c.delay_s, c.delay_kind, c.delay_at)
+        : typicalChipHtml(c.typical_arr || c.typical_dep)}</div>
+      <div class="conn-meta">
+        ${cd ? `<span class="countdown">${cd}</span>` : ""}
+        <span>${durationLabel(c.duration_s)}</span>
+        <span>${stopsLabel(c.stops_between)}</span>
+        <span class="adv-only">neposredno</span>
       </div>
-    </a>
-  `;
+    </a>`;
 }
 
-function renderResults(data) {
-  const list = data.connections || [];
-  const isToday = data.date === todayIso();
-  const nowMs = Date.now();
+function transferRowHtml(t, nowMs, date) {
+  const legs = t.legs.map((l, i) => `
+    <div class="leg">
+      <span class="leg-time">${hhmm(l.dep)}–${hhmm(l.arr)}</span>
+      <span class="leg-train">${escapeHtml(l.train_no)}</span>
+      <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
+    </div>
+    ${i === 0 ? `<div class="leg"><span class="leg-wait">prestop v ${escapeHtml(t.via)} · ${Math.round(t.wait_s / 60)} min</span></div>` : ""}
+  `).join("");
 
-  resultHeadEl.innerHTML = list.length
-    ? `<strong>${escapeHtml(data.from)}</strong> → <strong>${escapeHtml(data.to)}</strong> ·
-       ${escapeHtml(data.date)} · ${list.length} ${list.length === 1 ? "vožnja" : "voženj"}`
-    : "";
+  return `
+    <a class="conn-row is-transfer" href="/app/train/${encodeURIComponent(t.train1)}?date=${encodeURIComponent(date)}">
+      <div class="conn-times">
+        <div class="conn-clock">
+          <span class="conn-dep">${hhmm(t.sched_dep)}</span>
+          <span class="conn-dash">–</span>
+          <span class="conn-arr">${hhmm(t.sched_arr)}</span>
+        </div>
+      </div>
+      <div class="conn-train">
+        <div class="conn-no">${escapeHtml(t.train1)} → ${escapeHtml(t.train2)}</div>
+        <div class="conn-headsign">prestop v ${escapeHtml(t.via)}</div>
+      </div>
+      <div class="conn-delay"><span class="tag">1 prestop</span></div>
+      <div class="conn-meta">
+        <span>${durationLabel(t.duration_s)}</span>
+        <span>${Math.round(t.wait_s / 60)} min za prestop</span>
+      </div>
+      <div class="legs">${legs}</div>
+    </a>`;
+}
+
+function renderConnections(data) {
+  const list = data.connections || [];
+  const legs = data.transfers || [];
+  const isToday = data.date === todayIso();
+  const nowMs = isToday ? Date.now() : 0;
+
+  resultHeadEl.innerHTML =
+    `<span><strong>${escapeHtml(data.from)}</strong> → <strong>${escapeHtml(data.to)}</strong></span>
+     <span>${dayLabel(data.date)}</span>
+     <span>${list.length} ${list.length === 1 ? "neposredna vožnja" : "neposrednih"}${legs.length ? ` · ${legs.length} s prestopom` : ""}</span>`;
+
+  if (!list.length && !legs.length) {
+    resultsEl.innerHTML = `<div class="empty-state">
+      Na ta dan ni vožnje od <strong>${escapeHtml(data.from)}</strong>
+      do <strong>${escapeHtml(data.to)}</strong> — ne neposredne ne z enim prestopom.<br>
+      Preveri drug dan; ob koncu tedna vozi bistveno manj vlakov.
+    </div>`;
+    renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
+    return;
+  }
+
+  // Naslednja vozjna je prva, ki se ni odpeljala. Prav to clovek isce, zato
+  // je poudarjena, ne le prva po vrsti.
+  let nextIdx = -1;
+  if (isToday) nextIdx = list.findIndex((c) => new Date(c.sched_dep).getTime() >= nowMs);
+
+  const rows = list.map((c, i) => connectionRowHtml(c, nowMs, i === nextIdx, data.date));
+  if (legs.length) {
+    rows.push(`<div class="result-head"><span>Z enim prestopom</span></div>`);
+    rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date)));
+  }
+  resultsEl.innerHTML = rows.join("");
+
+  const next = resultsEl.querySelector(".conn-row.is-next");
+  if (next) next.scrollIntoView({ block: "center", behavior: "smooth" });
+
+  renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
+}
+
+function boardRowHtml(r, nowMs, isNext, date) {
+  const t = new Date(r.sched).getTime();
+  const gone = nowMs && t < nowMs;
+  const late = r.delay_s != null && r.delay_s >= 60;
+  const color = delayColor(r.delay_s);
+  const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
+  return `
+    <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
+       href="/app/train/${encodeURIComponent(r.train_no)}?date=${encodeURIComponent(date)}">
+      <div>
+        <div class="board-time">${hhmm(r.sched)}</div>
+        ${late ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}
+      </div>
+      <div>
+        <div class="board-towards">${escapeHtml(r.towards)}</div>
+        <div class="board-train">${escapeHtml(r.train_no)}${r.headsign ? ` · ${escapeHtml(r.headsign)}` : ""}</div>
+      </div>
+      <div class="conn-delay">${r.delay_s != null
+        ? delayChipHtml(r.delay_s, r.delay_from ? "izmerjeno" : null, r.delay_from)
+        : typicalChipHtml(r.typical, r.typical_from)}</div>
+      <div class="board-meta">
+        ${cd ? `<span class="countdown">${cd}</span> · ` : ""}
+        ${r.is_origin ? '<span class="adv-only">izhodišče — feed odhodne zamude ne poroča</span> ' : ""}
+        <span class="adv-only">postanek ${r.stop_seq}${r.is_terminus ? " · konec" : ""}</span>
+      </div>
+    </a>`;
+}
+
+function renderBoard(data) {
+  const list = data.board || [];
+  const isToday = data.date === todayIso();
+  const nowMs = isToday ? Date.now() : 0;
+
+  resultHeadEl.innerHTML =
+    `<span><strong>${escapeHtml(data.station)}</strong></span>
+     <span>${data.kind}</span><span>${dayLabel(data.date)}</span>
+     <span>${list.length} ${data.kind}${data.window_min >= 1440 ? " ta dan" : ` v naslednjih ${Math.round(data.window_min / 60)} h`}</span>`;
 
   if (!list.length) {
     resultsEl.innerHTML = `<div class="empty-state">
-      Na ta dan ni neposredne vožnje od <strong>${escapeHtml(data.from)}</strong>
-      do <strong>${escapeHtml(data.to)}</strong>.<br>
-      sztrack ne računa prestopov — išče samo vlake, ki peljejo čez obe postaji.
+      V tem oknu s postaje <strong>${escapeHtml(data.station)}</strong> ni ${escapeHtml(data.kind)}.<br>
+      Poskusi večje časovno okno ali drug dan.
     </div>`;
+    alertsEl.innerHTML = "";
     return;
   }
 
-  resultsEl.innerHTML = list.map((c) => connectionRowHtml(c, isToday ? nowMs : 0)).join("");
-
-  // Skoci na prvo vozjo, ki se ni odpeljala -- tisto uporabnik isce.
-  if (isToday) {
-    const next = resultsEl.querySelector(".conn-row:not(.is-gone)");
-    if (next) next.scrollIntoView({ block: "center" });
-  }
+  let nextIdx = -1;
+  if (isToday) nextIdx = list.findIndex((r) => new Date(r.sched).getTime() >= nowMs);
+  resultsEl.innerHTML = list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date)).join("");
+  renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 
-// ---------- iskanje ----------
+// ---------- poizvedbe ----------
 
-async function search(push) {
-  const from = fromEl.value.trim();
-  const to = toEl.value.trim();
-  const date = dateEl.value || todayIso();
+function schedulePoll(fn, isToday) {
+  clearTimeout(pollTimer);
+  if (isToday) pollTimer = setTimeout(fn, POLL_MS);
+}
+
+async function searchAB(push) {
+  const from = $("from").value.trim();
+  const to = $("to").value.trim();
+  const date = $("date").value || todayIso();
   if (!from || !to) return;
-  if (from === to) {
-    resultsEl.innerHTML = '<div class="empty-state">izhodišče in cilj sta ista postaja</div>';
+  if (fold(from) === fold(to)) {
+    resultsEl.innerHTML = '<div class="empty-state">Izhodišče in cilj sta ista postaja.</div>';
     return;
   }
-
-  lastQuery = { from, to, date };
-  localStorage.setItem("sztrack:last", JSON.stringify(lastQuery));
-  if (push) {
-    const q = new URLSearchParams({ from, to, date });
-    history.replaceState(null, "", `?${q}`);
-  }
+  remember({ tab: "ab", from, to, date });
+  if (push) history.replaceState(null, "", `?${new URLSearchParams({ from, to, date })}`);
 
   try {
     const url = `/api/connections?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(date)}`;
-    const data = await fetch(url).then((r) => r.json());
-    renderResults(data);
+    const res = await fetch(url);
+    if (res.status === 404) {
+      resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
+      return;
+    }
+    const data = await res.json();
+    renderConnections(data);
     feedDotEl.classList.remove("stale");
+    schedulePoll(() => searchAB(false), data.date === todayIso());
   } catch (err) {
     console.error("iskanje ni uspelo", err);
     feedDotEl.classList.add("stale");
-    resultsEl.innerHTML = '<div class="empty-state">iskanje ni uspelo</div>';
+    resultsEl.innerHTML = '<div class="empty-state">Iskanje ni uspelo. Strežnik morda ni dosegljiv.</div>';
   }
-
-  clearTimeout(pollTimer);
-  if (date === todayIso()) pollTimer = setTimeout(() => search(false), POLL_MS);
 }
 
-formEl.addEventListener("submit", (ev) => {
-  ev.preventDefault();
-  search(true);
+async function searchBoard(push) {
+  const station = $("station").value.trim();
+  const date = $("board-date").value || todayIso();
+  const kind = $("board-kind").value;
+  if (!station) return;
+  remember({ tab: "board", station, date, kind });
+  if (push) history.replaceState(null, "", `?${new URLSearchParams({ station, date, kind })}`);
+
+  try {
+    const url = `/api/departures?station=${encodeURIComponent(station)}&date=${encodeURIComponent(date)}&kind=${kind}`;
+    const res = await fetch(url);
+    if (res.status === 404) {
+      resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
+      return;
+    }
+    const data = await res.json();
+    renderBoard(data);
+    feedDotEl.classList.remove("stale");
+    schedulePoll(() => searchBoard(false), data.date === todayIso());
+  } catch (err) {
+    console.error("tabla ni uspela", err);
+    feedDotEl.classList.add("stale");
+    resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
+  }
+}
+
+function remember(obj) {
+  try {
+    localStorage.setItem("sztrack:last", JSON.stringify(obj));
+  } catch (err) {
+    /* zaseben zavihek */
+  }
+}
+
+// ---------- zavihka ----------
+
+function setTab(tab) {
+  activeTab = tab;
+  for (const b of document.querySelectorAll(".tab")) {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle("is-on", on);
+    b.setAttribute("aria-selected", String(on));
+  }
+  $("search-ab").hidden = tab !== "ab";
+  $("search-board").hidden = tab !== "board";
+  resultsEl.innerHTML = "";
+  resultHeadEl.innerHTML = "";
+  alertsEl.innerHTML = "";
+  clearTimeout(pollTimer);
+}
+
+document.querySelector(".tabs").addEventListener("click", (ev) => {
+  const b = ev.target.closest(".tab");
+  if (!b) return;
+  setTab(b.dataset.tab);
+  if (b.dataset.tab === "board" && $("station").value) searchBoard(true);
+  if (b.dataset.tab === "ab" && $("from").value && $("to").value) searchAB(true);
 });
 
-document.getElementById("swap").addEventListener("click", () => {
-  [fromEl.value, toEl.value] = [toEl.value, fromEl.value];
-  if (fromEl.value && toEl.value) search(true);
+$("search-ab").addEventListener("submit", (ev) => { ev.preventDefault(); searchAB(true); });
+$("search-board").addEventListener("submit", (ev) => { ev.preventDefault(); searchBoard(true); });
+
+$("swap").addEventListener("click", () => {
+  const a = $("from"), b = $("to");
+  [a.value, b.value] = [b.value, a.value];
+  if (a.value && b.value) searchAB(true);
 });
 
-// ---------- zagon: URL, nato zadnje iskanje ----------
+// ---------- zagon ----------
 
 function restore() {
   const q = new URLSearchParams(location.search);
-  let from = q.get("from");
-  let to = q.get("to");
-  let date = q.get("date");
-  if (!from || !to) {
-    try {
-      const saved = JSON.parse(localStorage.getItem("sztrack:last") || "null");
-      if (saved) ({ from, to } = saved);
-    } catch (err) {
-      /* pokvarjen zapis ni razlog, da stran ne dela */
-    }
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem("sztrack:last") || "null");
+  } catch (err) {
+    /* pokvarjen zapis ni razlog, da stran ne dela */
   }
-  fromEl.value = from || "";
-  toEl.value = to || "";
-  dateEl.value = date || todayIso();
-  if (fromEl.value && toEl.value) search(false);
+
+  const station = q.get("station") || (saved && saved.tab === "board" ? saved.station : "");
+  const from = q.get("from") || (saved && saved.from) || "";
+  const to = q.get("to") || (saved && saved.to) || "";
+
+  $("date").value = q.get("date") || todayIso();
+  $("board-date").value = q.get("date") || todayIso();
+  $("board-kind").value = q.get("kind") || (saved && saved.kind) || "odhodi";
+  $("from").value = from;
+  $("to").value = to;
+  $("station").value = station;
+
+  const wantBoard = q.has("station") || (!q.has("from") && saved && saved.tab === "board");
+  if (wantBoard && station) {
+    setTab("board");
+    searchBoard(false);
+  } else if (from && to) {
+    setTab("ab");
+    searchAB(false);
+  }
 }
 
 function tickClock() {
-  const fmt = new Intl.DateTimeFormat("sl-SI", {
-    timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  });
-  document.getElementById("clock").textContent = fmt.format(new Date());
+  $("clock").textContent = new Intl.DateTimeFormat("sl-SI", {
+    timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit",
+    second: "2-digit", hour12: false,
+  }).format(new Date());
 }
+
+attachSuggest($("from"), $("suggest-from"));
+attachSuggest($("to"), $("suggest-to"));
+attachSuggest($("station"), $("suggest-station"));
+
+let startMode = "simple";
+try {
+  startMode = localStorage.getItem("sztrack:mode") || "simple";
+} catch (err) {
+  /* zaseben zavihek */
+}
+setMode(startMode);
 
 tickClock();
 setInterval(tickClock, 1000);
-loadStations().then(restore);
+restore();

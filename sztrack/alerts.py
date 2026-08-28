@@ -236,6 +236,50 @@ def active(conn: sqlite3.Connection, lang: str = "sl") -> list[dict]:
     return out
 
 
+def for_trains(conn: sqlite3.Connection, train_nos: list[str],
+               mentions: list[str] | None = None, lang: str = "sl",
+               limit: int = 6) -> list[dict]:
+    """Ovire za skupino vlakov, urejene po tem, kako verjetno zadevajo potnika.
+
+    Brez urejanja je to neuporabno: generično obvestilo visi na 75 vlakih in
+    se pojavi ob vsaki poizvedbi. Zato dvoje:
+
+    * obvestilo, ki v naslovu imenuje postajo s te poti, gre naprej -- "zapora
+      Celje - Šentjur" je pri vožnji čez Celje nekaj drugega kot pri vožnji
+      po Bohinjski progi;
+    * med ostalimi je zgoraj tisto, ki zadeva manj vlakov, ker je bolj določno.
+
+    To ni sklepanje o vzroku zamude. Je razvrščanje besedila po tem, ali
+    omenja kraje, skozi katere se pelje.
+    """
+    if not train_nos:
+        return []
+    now = int(time.time())
+    marks = ",".join("?" * len(train_nos))
+    rows = conn.execute(
+        f"SELECT a.*, COUNT(DISTINCT t.train_no) AS hits "
+        f"FROM alert a "
+        f"JOIN alert_entity ae ON ae.alert_id = a.alert_id "
+        f"JOIN trip t ON t.route_id = ae.route_id "
+        f"WHERE t.train_no IN ({marks}) AND a.kind = 'ovira' AND a.lang = ? "
+        f"  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
+        f"  AND (a.start_ts IS NULL OR a.start_ts <= ?) "
+        f"GROUP BY a.alert_id",
+        (*train_nos, lang, now, now),
+    ).fetchall()
+
+    folded = [m.lower() for m in (mentions or []) if m]
+    out = []
+    for r in rows:
+        d = _alert_row(r)
+        text = f"{d.get('header') or ''} {d.get('description') or ''}".lower()
+        d["mentions_route"] = any(m in text for m in folded)
+        out.append(d)
+    # Najprej imenovane postaje, nato bolj dolocena obvestila (manj vlakov).
+    out.sort(key=lambda d: (not d["mentions_route"], d["hits"], d.get("header") or ""))
+    return out[:limit]
+
+
 def live_delays(conn: sqlite3.Connection, service_date: str | None = None) -> list[dict]:
     """Zadnje poročilo o zamudi za vsak vlak na dani dan.
 

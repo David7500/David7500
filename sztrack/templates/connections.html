@@ -4,21 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>sztrack — kdaj mi pelje vlak</title>
+  <meta name="description" content="Odhodi, povezave in zamude slovenskih vlakov iz odprtih podatkov.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/base.css">
   <link rel="stylesheet" href="/static/connections.css">
 </head>
 <body class="conn-page">
 
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" href="/app">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f0934f" stroke-width="1.8" stroke-linecap="round">
         <rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
         <circle cx="9" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle>
       </svg>
       <span class="brand-name">sztrack</span>
-    </div>
+    </a>
     <div class="spacer"></div>
+    <div class="mode-switch" id="mode-switch">
+      <button type="button" data-mode="simple" aria-pressed="true">preprosto</button>
+      <button type="button" data-mode="advanced" aria-pressed="false">napredno</button>
+    </div>
     <a class="top-link" href="/app/map">zemljevid</a>
     <div class="divider"></div>
     <div class="clock-wrap">
@@ -28,30 +34,70 @@
   </header>
 
   <main class="conn-main">
-    <form id="search" class="search-card" autocomplete="off">
-      <div class="field">
+
+    <!-- Dva vprašanja, ne dva obrazca: "od kod do kam" in "kaj gre s te postaje".
+         Drugo je pogostejše in ga aplikacija doslej ni znala odgovoriti. -->
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab is-on" data-tab="ab" role="tab" aria-selected="true">Od–do</button>
+      <button type="button" class="tab" data-tab="board" role="tab" aria-selected="false">Odhodi s postaje</button>
+    </div>
+
+    <form id="search-ab" class="search-card">
+      <div class="field station-field">
         <label for="from">Od</label>
-        <input id="from" name="from" list="stations" placeholder="izhodiščna postaja" required>
+        <input id="from" name="from" placeholder="izhodiščna postaja" autocomplete="off"
+               autocapitalize="off" spellcheck="false" required>
+        <ul class="suggest" id="suggest-from" role="listbox" hidden></ul>
       </div>
       <button type="button" id="swap" class="swap" title="zamenjaj postaji" aria-label="zamenjaj postaji">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
         </svg>
       </button>
-      <div class="field">
+      <div class="field station-field">
         <label for="to">Do</label>
-        <input id="to" name="to" list="stations" placeholder="ciljna postaja" required>
+        <input id="to" name="to" placeholder="ciljna postaja" autocomplete="off"
+               autocapitalize="off" spellcheck="false" required>
+        <ul class="suggest" id="suggest-to" role="listbox" hidden></ul>
       </div>
       <div class="field field-date">
         <label for="date">Dan</label>
         <input id="date" name="date" type="date">
       </div>
-      <button type="submit" class="go">Poišči</button>
+      <button type="submit" class="btn go">Poišči</button>
     </form>
-    <datalist id="stations"></datalist>
 
+    <form id="search-board" class="search-card" hidden>
+      <div class="field station-field">
+        <label for="station">Postaja</label>
+        <input id="station" name="station" placeholder="npr. Ljubljana" autocomplete="off"
+               autocapitalize="off" spellcheck="false" required>
+        <ul class="suggest" id="suggest-station" role="listbox" hidden></ul>
+      </div>
+      <div class="field field-date">
+        <label for="board-date">Dan</label>
+        <input id="board-date" name="date" type="date">
+      </div>
+      <div class="field field-kind">
+        <label for="board-kind">Smer</label>
+        <select id="board-kind" name="kind">
+          <option value="odhodi">odhodi</option>
+          <option value="prihodi">prihodi</option>
+        </select>
+      </div>
+      <button type="submit" class="btn go">Pokaži</button>
+    </form>
+
+    <div id="alerts"></div>
     <div id="result-head" class="result-head"></div>
     <div id="results" class="results"></div>
+
+    <footer class="page-foot">
+      Podatki: SŽ in IJPP prek NAP (CC BY-SA 4.0), obdelava DERP.
+      Zamude imajo ločljivost ene minute in so izmerjene v prometnem mestu,
+      ne nujno na peronu.
+      <span class="adv-only" id="foot-health"></span>
+    </footer>
   </main>
 
   <script src="/static/common.js"></script>

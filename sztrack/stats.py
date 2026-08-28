@@ -204,6 +204,54 @@ def network_stats(conn: sqlite3.Connection, days: int = 90) -> list[dict]:
     return out
 
 
+# Kolikokrat mora biti vozjna zajeta, da o njej sploh kaj recemo. Pri dveh
+# voznjah je "mediana" samo povprecje dveh stevilk in bralec ji bo verjel bolj,
+# kot zasluzi.
+MIN_RUNS_FOR_TYPICAL = 3
+
+
+def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
+                     days: int = 90) -> dict[tuple[str, int], dict]:
+    """Običajna zamuda na danih (trip_id, stop_seq) iz zajete zgodovine.
+
+    Rabi jo prikaz za dan, ki še ni prišel: brez tega je ob vsaki vožnji
+    v prihodnjem voznem redu napisano "brez podatka", čeprav o tem vlaku
+    nekaj vemo -- pravkar ne tega, kar bi radi. Vrednost NI napoved za tisti
+    dan; je opis preteklih voženj in prikaz jo mora tako tudi imenovati.
+    """
+    if not pairs:
+        return {}
+    since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    out: dict[tuple[str, int], dict] = {}
+    # Po tripih, ne po parih: en trip ima obicajno dva zanimiva postanka in
+    # ena poizvedba na trip je ceneje od ene na par.
+    by_trip: dict[str, list[int]] = {}
+    for trip_id, seq in pairs:
+        by_trip.setdefault(trip_id, []).append(seq)
+
+    for trip_id, seqs in by_trip.items():
+        marks = ",".join("?" * len(seqs))
+        rows = conn.execute(
+            f"SELECT stop_seq, COALESCE(delay_arr, delay_dep) AS d "
+            f"FROM run WHERE trip_id = ? AND service_date >= ? "
+            f"  AND stop_seq IN ({marks}) AND d IS NOT NULL",
+            (trip_id, since, *seqs),
+        ).fetchall()
+        grouped: dict[int, list[int]] = {}
+        for r in rows:
+            grouped.setdefault(r["stop_seq"], []).append(r["d"])
+        for seq, vals in grouped.items():
+            if len(vals) < MIN_RUNS_FOR_TYPICAL:
+                continue
+            out[(trip_id, seq)] = {
+                "n": len(vals),
+                "median_s": _pct(vals, 0.5),
+                "p90_s": _pct(vals, 0.9),
+                "on_time_share": round(sum(1 for v in vals if v <= 300) / len(vals), 2),
+            }
+    return out
+
+
 def segment_speeds(conn: sqlite3.Connection, train_no: str | None = None) -> list[dict]:
     """Hitrosti po odsekih: voznoredna in dejansko izmerjena.
 
@@ -390,6 +438,14 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
                              if d["delay_s"] is not None else None)
         d.pop("from_delay_s", None)
         d.pop("to_delay_s", None)
+
+    # Obicajna zamuda iz zgodovine. Za dan, ki se ni prisel, je to edino, kar
+    # o vlaku sploh vemo -- brez tega je vsaka vrstica "brez podatka".
+    typ = typical_at_stops(conn, [(d["trip_id"], d["from_seq"]) for d in out]
+                                 + [(d["trip_id"], d["to_seq"]) for d in out])
+    for d in out:
+        d["typical_dep"] = typ.get((d["trip_id"], d["from_seq"]))
+        d["typical_arr"] = typ.get((d["trip_id"], d["to_seq"]))
     return out
 
 
