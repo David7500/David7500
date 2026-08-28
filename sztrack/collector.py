@@ -133,6 +133,11 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     trips_seen = 0
     skipped = 0
     blips = 0
+    # GTFS-RT zna povedati, da je voznja odpovedana (`schedule_relationship`),
+    # a SZ tega polja ne uporablja -- odpovedi sporocajo z besedilom obvestila
+    # (`effect = 6`, "vlak vozi samo do ..."). Vseeno stejemo: ce se to kdaj
+    # spremeni, hocemo izvedeti takoj in ne cez pol leta.
+    non_scheduled = 0
 
     for entity in feed.entity:
         tu = entity.trip_update
@@ -150,8 +155,13 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             skipped += 1
             continue
 
+        if tu.trip.schedule_relationship != 0:
+            non_scheduled += 1
+
         ts = tu.timestamp or feed_ts
         for stu in tu.stop_time_update:
+            if stu.schedule_relationship != 0:
+                non_scheduled += 1
             arr = stu.arrival.delay if stu.HasField("arrival") else None
             dep = stu.departure.delay if stu.HasField("departure") else None
             seq = stu.stop_sequence
@@ -199,7 +209,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
 
     conn.commit()
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
-            "blips": blips, "feed_ts": feed_ts}
+            "blips": blips, "non_scheduled": non_scheduled, "feed_ts": feed_ts}
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:

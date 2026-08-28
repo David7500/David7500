@@ -109,6 +109,11 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             info = collector.poll_once(conn)
             if info.get("changed"):
                 _log(f"zajem: {info['trips']} vlakov, {info['changed']} sprememb")
+            if info.get("non_scheduled"):
+                # Doslej vedno 0. Ce se kdaj oglasi, je feed dobil odpovedi in
+                # jih zna povedati strukturirano -- to je vredno vedeti.
+                _log(f"POZOR: feed poroča {info['non_scheduled']} zapisov, "
+                     f"ki niso 'SCHEDULED' (odpoved ali izpuščen postanek)")
         except Exception as exc:            # feed občasno resetira povezavo
             _log(f"zajem ni uspel: {exc}")
 

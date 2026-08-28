@@ -87,6 +87,13 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   12. decembra, zapore enega tira Celje–Šentjur, Poljčane–Pragersko,
   Maribor–Hoče. **To pojasni, zakaj so zamude v zajetih dneh tako velike.**
 
+* **Odpovedi niso strukturirane.** GTFS-RT ima za to `schedule_relationship`
+  (CANCELED, SKIPPED), a SŽ ga ne uporablja -- v vseh zajetih zapisih je
+  vrednost `SCHEDULED`. Odpoved sporočijo z besedilom obvestila ("Vlak vozi
+  samo do postaje Ljubljana Šiška", `effect = 6`). Zajem polje vseeno šteje in
+  ob prvi neničelni vrednosti zavpije v dnevnik; prikaza zanj namenoma še ni,
+  ker bi bil to prikaz za podatek, ki ne obstaja.
+
 * **Ni** cen, sestave vlaka, perona, zasedenosti. Mednarodni vlaki (EN/MV)
   pogosto brez realtime pokritja.
 
