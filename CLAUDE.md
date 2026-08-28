@@ -34,7 +34,13 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vreme | `archive-api.open-meteo.com` + `api.open-meteo.com` | — | dnevno, za nazaj |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, stari SOAP je mrtev.
-Oba GTFS vira podpirata pogojni GET (ETag) — ob nespremenjenem se ne prenese nič.
+Vsi GTFS viri podpirajo pogojni GET (ETag) — ob nespremenjenem se ne prenese nič.
+
+V zipu je **ves** slovenski javni potniški promet, ne le železnica: 20 592
+voženj petih agencij (Arriva 8914, Nomago 6864, LPP 3060, AP Murska Sobota 965,
+SŽ 789). Uvoz jemlje samo SŽ — vlake in **njihove nadomestne prevoze**
+(`route_type = 3`, 56 voženj). Ostale agencije so izpuščene, ne pa nedosegljive;
+`config.RAIL_AGENCY_ID` je edino, kar jih loči.
 
 ## Kaj podatki so in česa ni — to omejuje prikaz
 
@@ -104,10 +110,16 @@ in koliko zamuja"*. Iz tega izhaja vrstni red:
 
 ## Številke vlakov
 
-`LPV 2010` ni oznaka proge, ampak **ena vožnja** (trip): 721 različnih številk
-na 723 tripov. `route_id` je 1 : 1 s tripom in za združevanje neuporaben —
+`LPV 2010` ni oznaka proge, ampak **ena vožnja** (trip): ~730 različnih številk
+na prav toliko tripov. `route_id` je 1 : 1 s tripom in za združevanje neuporaben —
 zgodovino poti gradi po `train_no`. Parnost številke nosi smer, v zajetih
-podatkih brez izjeme. Predpona (`LP`, `LPV`, `IC`, `MV`, `EN` …) je vrsta vlaka.
+podatkih brez izjeme. Predpona (`LP`, `LPV`, `IC`, `MV`, `EN` …) je vrsta vlaka; `BUS …` je
+nadomestni prevoz (`trip.mode = 'bus'`).
+
+**`trip_id` so med regeneracijami GTFS stabilni.** Preverjeno ob uvozu novega
+voznega reda: vseh 60 409 zajetih meritev se je še vedno ujemalo s tripom.
+Zajema torej ni treba varovati pred `sztrack update` — statične tabele se
+zamenjajo, `obs` in `run` pa ostaneta veljavna.
 
 ## Koda
 
@@ -130,6 +142,10 @@ sztrack/
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
 scripts/         dev-restart.sh, build_deploy_zip.sh
 ```
+
+`trip.mode` loči `vlak` od `bus`. Nadomestni prevozi so v istih tabelah, ker
+jih GTFS modelira enako in ker sodijo v isti odgovor -- **ne pa v `edge`**:
+vozijo po cesti in bi mreži prog dodali odseke, ki niso proge.
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·
