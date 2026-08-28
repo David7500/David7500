@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, db, stats
+from . import alerts, config, db, journey, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -92,6 +92,75 @@ def api_health():
 def api_stations():
     with _conn() as conn:
         return stats.stations(conn)
+
+
+@app.get("/api/stations/search")
+def api_station_search(q: str = Query(..., min_length=1), limit: int = Query(12, ge=1, le=50)):
+    """Postaje po delnem imenu, brez šumnikov. Iskalnik na telefonu rabi prav to."""
+    with _conn() as conn:
+        return journey.search_stations(conn, q, limit)
+
+
+@app.get("/api/departures")
+def api_departures(
+    station: str = Query(..., description="ime postaje; delno ime je dovolj"),
+    date: str | None = None,
+    from_time: str | None = Query(None, alias="from", description="HH:MM; privzeto zdaj"),
+    window: int = Query(180, ge=15, le=1440, description="minut naprej"),
+    kind: str = Query("odhodi", pattern="^(odhodi|prihodi)$"),
+):
+    """Odhodna ali prihodna tabla postaje.
+
+    Najpogostejše vprašanje potnika in doslej edino, na katero API ni znal
+    odgovoriti -- `connections` je zahteval izhodišče in cilj hkrati.
+    """
+    now = datetime.now(TZ)
+    date = date or now.date().isoformat()
+    if from_time:
+        try:
+            h, m = (int(x) for x in from_time.split(":")[:2])
+        except ValueError:
+            raise HTTPException(400, "from mora biti HH:MM")
+        from_s = h * 3600 + m * 60
+    elif date == now.date().isoformat():
+        # Nekaj minut nazaj: vlak, ki je ravnokar odpeljal (ali zamuja), je
+        # se vedno tisto, kar clovek na peronu isce.
+        from_s = max(0, journey.now_seconds(now) - 10 * 60)
+    else:
+        from_s = 0
+
+    with _conn() as conn:
+        exact = journey.resolve_station(conn, station)
+        if not exact:
+            raise HTTPException(404, f"postaje {station!r} ne poznam")
+        rows = journey.board(conn, exact, date, from_s, window, kind)
+    return {"station": exact, "date": date, "kind": kind,
+            "from_s": from_s, "window_min": window, "board": rows}
+
+
+@app.get("/api/alerts")
+def api_alerts(lang: str = Query("sl", pattern="^(sl|en)$")):
+    """Veljavne ovire: dela na progi, nadomestni prevozi, združene garniture."""
+    with _conn() as conn:
+        return alerts.active(conn, lang)
+
+
+@app.get("/api/train/{train_no}/alerts")
+def api_train_alerts(train_no: str, lang: str = Query("sl", pattern="^(sl|en)$")):
+    """Ovire, ki zadevajo prav ta vlak -- odgovor na 'zakaj zamuja'."""
+    with _conn() as conn:
+        return alerts.for_train(conn, train_no, lang)
+
+
+@app.get("/api/train/{train_no}/reports")
+def api_train_reports(train_no: str, date: str | None = None):
+    """Zaporedje poročil prevoznika o tej vožnji: kje je bil vlak in koliko
+    je zamujal. Prometno mesto pogosto ni voznoredni postanek, zato je to
+    edini vir imena kraja, kjer je zamuda dejansko izmerjena."""
+    date = date or datetime.now(TZ).date().isoformat()
+    with _conn() as conn:
+        return {"train_no": train_no, "service_date": date,
+                "reports": alerts.train_reports(conn, train_no, date)}
 
 
 @app.get("/api/network.geojson")
@@ -234,6 +303,7 @@ def api_connections(
     from_: str = Query(..., alias="from", description="ime izhodiščne postaje"),
     to: str = Query(..., description="ime ciljne postaje"),
     date: str | None = None,
+    with_transfers: bool = Query(True, description="poišči tudi zveze z enim prestopom"),
 ):
     """Vožnje od postaje do postaje na dani dan, z zadnjo znano zamudo.
 
@@ -243,11 +313,22 @@ def api_connections(
     """
     now = datetime.now(TZ)
     date = date or now.date().isoformat()
-    now_s = (now.hour * 3600 + now.minute * 60 + now.second
-             if date == now.date().isoformat() else None)
+    is_today = date == now.date().isoformat()
+    now_s = journey.now_seconds(now) if is_today else None
     with _conn() as conn:
-        rows = stats.connections(conn, from_, to, date, now_s)
-    return {"from": from_, "to": to, "date": date, "connections": rows}
+        a = journey.resolve_station(conn, from_)
+        b = journey.resolve_station(conn, to)
+        if not a or not b:
+            missing = from_ if not a else to
+            raise HTTPException(404, f"postaje {missing!r} ne poznam")
+        rows = stats.connections(conn, a, b, date, now_s)
+        # Prestop ponudimo vedno, ne sele ko neposredne ni: cez dan je
+        # neposrednih voznj lahko pet, med njimi pa stiri ure luknje.
+        legs = (journey.transfers(conn, a, b, date, earliest_s=(now_s or 0),
+                                  direct=rows)
+                if with_transfers else [])
+    return {"from": a, "to": b, "date": date,
+            "connections": rows, "transfers": legs}
 
 
 @app.get("/api/live")
@@ -266,5 +347,20 @@ def api_live():
     yesterday = (now.date() - timedelta(days=1)).isoformat()
     with _conn() as conn:
         rows = _live_rows(conn, today, now_s) + _live_rows(conn, yesterday, now_s + 86400)
+        # Prevoznikovo porocilo je merodajno in edino pozna prometno mesto:
+        # nasa `run` pozna samo voznoredne postanke, zamuda pa se meri tudi
+        # tam, kjer vlak ne ustavlja.
+        reported = {r["train_no"]: r for r in alerts.live_delays(conn, today)}
+    now_ts = int(now.timestamp())
+    for r in rows:
+        rep = reported.get(r["train_no"])
+        if rep:
+            r["reported_delay_s"] = rep["delay_min"] * 60
+            r["reported_at_station"] = rep["station"]
+            r["reported_severe"] = bool(rep["severe"])
+            r["reported_age_s"] = now_ts - rep["seen_ts"]
+        # Koliko je stara meritev, na katero se sklicujemo. Brez tega prikaz
+        # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
+        r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     return rows
