@@ -1,0 +1,3 @@
+# Samo za razvoj. `requirements.txt` je namenoma pri petih vrsticah
+# in ostane pri petih -- to je tisto, kar rabi streznik.
+pytest>=8.0

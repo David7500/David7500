@@ -82,6 +82,45 @@ def resolve_service_date(trip_id, window, valid_dates, now: datetime) -> str | N
     return best
 
 
+# Zamuda, pod katero skok na niclo ni sumljiv. Vlak, ki je bil dve minuti v
+# zamudi in je zdaj tocen, je vsakdanji dogodek; vlak, ki je bil dvajset minut
+# v zamudi in je cez pol minute tocen, ni.
+SUSPECT_DROP_S = 300
+
+
+def is_zero_blip(prev, last, arr, dep) -> bool:
+    """Ali je to prehodna nicla, ki jo feed vrine med dve pravi vrednosti?
+
+    V zajetih podatkih se pri 14 % postankov z vec kot dvema zapisoma pojavi
+    vzorec X, 0, X -- ista nenicelna vrednost, med njima ena sama nicla, vse
+    v razmiku ene minute. Osemnajst vrstic v `run` je zaradi tega trdilo, da
+    je bil vlak tocen, ceprav je zamujal pet minut ali vec.
+
+    Fizikalno je to nemogoce: pri ze prevozenem postanku je zamuda razlika med
+    dejanskim in voznorednim casom in se med dvema klicema ne more zmanjsati
+    za vec, kot je vmes minilo casa.
+
+    Pravilo je zato ozko: niclo sprejmemo sele, ko jo potrdi drugi zaporedni
+    poll. Dnevnik `obs` obdrzi vse, kar je feed rekel -- zavrzemo nicesar,
+    samo `run` pocaka en korak.
+    """
+    if arr not in (0, None) or dep not in (0, None):
+        return False
+    if arr is None and dep is None:
+        return False
+    before = None
+    if prev is not None:
+        before = prev["delay_arr"] if prev["delay_arr"] is not None else prev["delay_dep"]
+    if before is None or before < SUSPECT_DROP_S:
+        return False
+    # Ce je ze prejsnji zapis v dnevniku govoril niclo, je to potrditev in ne blip.
+    if last is not None:
+        prior = last["delay_arr"] if last["delay_arr"] is not None else last["delay_dep"]
+        if prior == 0:
+            return False
+    return True
+
+
 def ingest(conn: sqlite3.Connection, feed) -> dict:
     """Zapiše spremembe zamud. Vrne števce za log."""
     now = datetime.now(TZ)
@@ -93,6 +132,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     changed = 0
     trips_seen = 0
     skipped = 0
+    blips = 0
 
     for entity in feed.entity:
         tu = entity.trip_update
@@ -124,12 +164,30 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             if prev and prev["delay_arr"] == arr and prev["delay_dep"] == dep:
                 continue    # nespremenjeno -- ne pisi
 
+            # Zadnji zapis v dnevniku rabimo, preden vanj pisemo: na njem
+            # sloni preverjanje sumljivega skoka na niclo (glej spodaj).
+            last = conn.execute(
+                "SELECT delay_arr, delay_dep FROM obs "
+                "WHERE trip_id=? AND service_date=? AND stop_seq=? "
+                "ORDER BY feed_ts DESC LIMIT 1",
+                (trip_id, service_date, seq),
+            ).fetchone()
+
             conn.execute(
                 "INSERT OR IGNORE INTO obs"
                 "(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts,observed_at) "
                 "VALUES(?,?,?,?,?,?,?)",
                 (trip_id, service_date, seq, arr, dep, ts, observed_at),
             )
+            changed += 1
+
+            if is_zero_blip(prev, last, arr, dep):
+                # Dnevnik obdrzi vse, `run` pa ne prevzame vrednosti, dokler je
+                # ne potrdi naslednji poll. Zamuda se v pol minute ne more
+                # zmanjsati za dvajset minut.
+                blips += 1
+                continue
+
             conn.execute(
                 "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
                 "VALUES(?,?,?,?,?,?) "
@@ -138,10 +196,10 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
                 "feed_ts=excluded.feed_ts WHERE excluded.feed_ts >= run.feed_ts",
                 (trip_id, service_date, seq, arr, dep, ts),
             )
-            changed += 1
 
     conn.commit()
-    return {"trips": trips_seen, "changed": changed, "skipped": skipped, "feed_ts": feed_ts}
+    return {"trips": trips_seen, "changed": changed, "skipped": skipped,
+            "blips": blips, "feed_ts": feed_ts}
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:
@@ -164,3 +222,54 @@ def run_forever(conn: sqlite3.Connection, interval: int | None = None) -> None:
         except Exception as exc:               # feed občasno resetira povezavo
             print(f"{datetime.now(TZ):%H:%M:%S}  napaka: {exc}", flush=True)
         time.sleep(max(1.0, interval - (time.monotonic() - started)))
+
+
+def rebuild_run(conn: sqlite3.Connection) -> dict:
+    """Znova zgradi `run` iz dnevnika `obs` po istem pravilu kot zajem.
+
+    Rabi se enkrat, po uvedbi preverjanja prehodnih nicel: vrstice, ki so
+    nastale prej, so lahko obtičale na nicli, ki jo je feed vrnil za en klic.
+    Idempotentno -- ponovni zagon ne spremeni nič, ker je pravilo isto.
+
+    Dnevnik je merodajen in ostane nedotaknjen; popravlja se samo povzetek.
+    """
+    rows = conn.execute(
+        "SELECT trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts "
+        "FROM obs ORDER BY trip_id, service_date, stop_seq, feed_ts"
+    ).fetchall()
+
+    accepted: dict[tuple, tuple] = {}
+    fixed = 0
+    key = None
+    prev = last = None
+    for r in rows:
+        k = (r["trip_id"], r["service_date"], r["stop_seq"])
+        if k != key:
+            key, prev, last = k, None, None
+        if not is_zero_blip(prev, last, r["delay_arr"], r["delay_dep"]):
+            accepted[k] = (r["delay_arr"], r["delay_dep"], r["feed_ts"])
+            prev = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"]}
+        else:
+            fixed += 1
+        last = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"]}
+
+    changed = 0
+    with conn:
+        for (trip_id, day, seq), (arr, dep, ts) in accepted.items():
+            cur = conn.execute(
+                "SELECT delay_arr, delay_dep FROM run "
+                "WHERE trip_id=? AND service_date=? AND stop_seq=?",
+                (trip_id, day, seq),
+            ).fetchone()
+            if cur and cur["delay_arr"] == arr and cur["delay_dep"] == dep:
+                continue
+            conn.execute(
+                "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                "VALUES(?,?,?,?,?,?) "
+                "ON CONFLICT(trip_id,service_date,stop_seq) DO UPDATE SET "
+                "delay_arr=excluded.delay_arr, delay_dep=excluded.delay_dep, "
+                "feed_ts=excluded.feed_ts",
+                (trip_id, day, seq, arr, dep, ts),
+            )
+            changed += 1
+    return {"stops": len(accepted), "blips_skipped": fixed, "run_rows_corrected": changed}

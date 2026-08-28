@@ -85,6 +85,12 @@ def cmd_weather(args):
     print(json.dumps(weather.backfill(conn, args.days), indent=2, ensure_ascii=False))
 
 
+def cmd_repair(args):
+    conn = db.connect()
+    db.init(conn)
+    print(json.dumps(collector.rebuild_run(conn), indent=2, ensure_ascii=False))
+
+
 def cmd_alerts(args):
     conn = db.connect()
     db.init(conn)
@@ -155,6 +161,9 @@ def main(argv=None):
     a.add_argument("--days", type=int, default=7, help="koliko dni nazaj do danes")
     a.add_argument("--show", action="store_true", help="samo izpisi, kaj je ze shranjeno")
     a.set_defaults(func=cmd_weather)
+
+    a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
+    a.set_defaults(func=cmd_repair)
 
     a = sub.add_parser("alerts", help="obvestila o ovirah in zive zamude")
     a.add_argument("--fetch", action="store_true", help="poberi feed zdaj")
