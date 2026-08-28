@@ -266,9 +266,21 @@ win AS (
            MAX(COALESCE(arr_s, dep_s)) AS end_s
     FROM sched GROUP BY trip_id
 ),
+-- Feed za se nedosezene postanke pogosto objavi niclo, dokler nima prave
+-- napovedi. Brez tega bi tak zapis pomenil, da je (voznored + 0) ze minil,
+-- in vlak bi na zemljevidu skocil naprej. Zamuda ne pade z dvajsetih minut
+-- na nic med dvema sosednjima postajama, zato tako vrstico preskocimo.
+ranked AS (
+    SELECT t.*, MAX(COALESCE(t.delay_s, 0)) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+    FROM t
+),
 passed AS (
-    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
-    FROM t WHERE t.t_s + COALESCE(t.delay_s, 0) <= :now_s
+    SELECT r.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
+    FROM ranked r
+    WHERE r.t_s + COALESCE(r.delay_s, 0) <= :now_s
+      AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
 ),
 tail AS (
     SELECT trip_id, delay_s AS end_delay_s,
@@ -361,7 +373,10 @@ def api_live():
         # Prevoznikovo porocilo je merodajno in edino pozna prometno mesto:
         # nasa `run` pozna samo voznoredne postanke, zamuda pa se meri tudi
         # tam, kjer vlak ne ustavlja.
-        reported = {r["train_no"]: r for r in alerts.live_delays(conn, today)}
+        # Tudi vcerajsnji prometni dan: nocni vlak po polnoci se vedno vozi
+        # pod vcerajsnjim datumom, enako kot vrstice zgoraj.
+        reported = {r["train_no"]: r for r in alerts.live_delays(conn, yesterday)}
+        reported.update({r["train_no"]: r for r in alerts.live_delays(conn, today)})
     now_ts = int(now.timestamp())
     for r in rows:
         rep = reported.get(r["train_no"])

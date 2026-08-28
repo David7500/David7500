@@ -364,9 +364,19 @@ WITH t AS (
     JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
     WHERE r.service_date = ? AND r.trip_id IN (%s)
 ),
+-- Isto varovalo kot v /api/live: nicla za se nedosezen postanek ne sme
+-- pomeniti, da je vlak tam ze bil.
+ranked AS (
+    SELECT t.*, MAX(COALESCE(t.delay_s, 0)) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+    FROM t
+),
 passed AS (
-    SELECT t.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
-    FROM t WHERE t.t_s + COALESCE(t.delay_s, 0) <= ?
+    SELECT r.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
+    FROM ranked r
+    WHERE r.t_s + COALESCE(r.delay_s, 0) <= ?
+      AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
 )
 SELECT p.trip_id, p.stop_seq, p.delay_s, st.name
 FROM passed p JOIN station st ON st.stop_id = p.stop_id

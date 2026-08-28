@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import alerts, config, collector, db, gtfs, stats, weather
+from . import alerts, backtest, config, collector, db, gtfs, stats, weather
 
 
 def cmd_init(args):
@@ -85,6 +85,33 @@ def cmd_weather(args):
     print(json.dumps(weather.backfill(conn, args.days), indent=2, ensure_ascii=False))
 
 
+def cmd_backtest(args):
+    conn = db.connect()
+    if args.operator:
+        res = backtest.evaluate_operator(conn)
+        if not res.get("tasks"):
+            print("premalo dnevnika za primerjavo -- pozeni 'poll' nekaj dni")
+            return
+        print(f"nalog, kjer je feed ze imel vrednost za cilj: {res['tasks']}\n")
+    else:
+        res = backtest.evaluate(conn, by_horizon=args.by_horizon)
+        print(f"dni: {len(res['days'])} · nalog: {res['tasks']}\n")
+
+    print(f"{'model':18s}{'MAE':>9}{'mediana':>10}{'v 5 min':>10}{'odklon':>10}")
+    for name, sc in res["models"].items():
+        print(f"{name:18s}{sc['mae_s'] / 60:>8.2f}m{sc['median_s'] / 60:>9.2f}m"
+              f"{sc['within_5min']:>10.1%}{sc['bias_s'] / 60:>9.2f}m")
+
+    if res.get("by_horizon"):
+        print("\npo oddaljenosti (postankov naprej):")
+        names = list(res["by_horizon"])
+        print("  " + "".join(f"{n:>18s}" for n in ["postankov"] + names))
+        horizons = sorted(res["by_horizon"][names[0]])
+        for h in horizons[:12]:
+            cells = "".join(f"{res['by_horizon'][n][h]['mae_s'] / 60:>17.2f}m" for n in names)
+            print(f"  {h:>18d}{cells}")
+
+
 def cmd_repair(args):
     conn = db.connect()
     db.init(conn)
@@ -161,6 +188,12 @@ def main(argv=None):
     a.add_argument("--days", type=int, default=7, help="koliko dni nazaj do danes")
     a.add_argument("--show", action="store_true", help="samo izpisi, kaj je ze shranjeno")
     a.set_defaults(func=cmd_weather)
+
+    a = sub.add_parser("backtest", help="izmeri napako napovedi (izpuscanje enega dne)")
+    a.add_argument("--operator", action="store_true",
+                   help="primerjaj prevoznikovo napoved s prenosom zamude")
+    a.add_argument("--by-horizon", action="store_true", help="razclenjeno po oddaljenosti")
+    a.set_defaults(func=cmd_backtest)
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)

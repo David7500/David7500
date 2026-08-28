@@ -135,11 +135,21 @@ function lastMeasured(stops) {
   // Feed nosi vrednost tudi za postaje, ki jih vlak se ni dosegel -- to je
   // napoved prevoznika, ne meritev. Za izmerjeno steje samo postaja, katere
   // (voznored + zamuda) cas je ze minil.
+  //
+  // Nicla za se nedosezen postanek je pri tem past: (voznored + 0) je pri
+  // zamujajocem vlaku ze minil in postaja bi se stela za prevozeno. Zamuda
+  // med sosednjima postajama ne pade z dvajsetih minut na nic, zato tako
+  // vrstico preskocimo -- isto pravilo kot v collector.py in /api/live.
   const now = Date.now();
   let found = null;
+  let prevMax = 0;
   for (const s of stops) {
+    const d = stopDelay(s);
     const iso = stopActualIso(s);
-    if (iso && new Date(iso).getTime() <= now) found = s;
+    if (iso && new Date(iso).getTime() <= now && !(d === 0 && prevMax >= 300)) {
+      found = s;
+    }
+    if (d != null && d > prevMax) prevMax = d;
   }
   return found;
 }
@@ -189,28 +199,16 @@ function gapStopHtml(s) {
   `;
 }
 
-function operatorEtaStopHtml(s) {
-  // Feed ima za to postajo vrednost, a cas se ni minil -- napoved prevoznika.
-  const d = stopDelay(s);
-  const color = delayColor(d);
-  const eta = hhmm(stopActualIso(s));
-  const sched = hhmm(s.sched_dep || s.sched_arr);
-  const schedHtml = eta !== sched ? `<span class="stop-sched">${sched}</span>` : "";
-  return `
-    <div class="stop-row is-eta">
-      <div class="stop-rail"><span class="stop-dot is-hollow" style="border-color:${color}"></span><span class="stop-line is-dashed"></span></div>
-      <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}</div>
-        <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">napoved prevoznika</span></div>
-      </div>
-      <div class="stop-delay is-forecast" style="color:${color}">${delayLabel(d)}</div>
-    </div>
-  `;
-}
-
 function forecastStopHtml(s, f) {
-  // Feed za to postajo nima nicesar -- ostane nasa ocena. Ce zgodovine na tem
-  // odseku ni, je to zgolj prenos trenutne zamude naprej in tako mora tudi pisati.
+  // Postaja, ki je vlak se ni dosegel. Uporabimo LASTNO oceno, ne vrednosti
+  // iz feeda -- ta je za postanke naprej izmerjeno slaba (glej backtest.py):
+  //
+  //   feed pravi 0, vlak pa zdaj zamuja >= 5 min:  napaka 18,5 min, v 5 min  6 %
+  //   prenos trenutne zamude naprej:               napaka  1,6 min, v 5 min 91 %
+  //
+  // Feed za se nedosezene postanke pogosto objavi niclo, dokler nima prave
+  // napovedi. Prevoznikovo stevilko zato pokazemo le v naprednem pogledu,
+  // da ni skrita, a nanjo ne racunamo.
   const schedIso = s.sched_dep || s.sched_arr;
   const sched = hhmm(schedIso);
   const d = f ? f.predicted_delay_s : null;
@@ -220,12 +218,14 @@ function forecastStopHtml(s, f) {
   const tag = !f ? "brez ocene"
     : f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}`
     : "ocena · le prenos zamude";
+  const feedSaid = stopDelay(s);
   return `
     <div class="stop-row is-forecast">
       <div class="stop-rail"><span class="stop-dot is-hollow" style="border-color:${color}"></span><span class="stop-line is-dashed"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">${escapeHtml(tag)}</span></div>
+        ${feedSaid != null ? `<div class="stop-times adv-only"><span class="stop-tag">feed pravi ${delayLabel(feedSaid)} min</span></div>` : ""}
       </div>
       <div class="stop-delay is-forecast" style="color:${color}">${delayLabel(d)}</div>
     </div>
@@ -246,12 +246,10 @@ function runTimelineHtml(stops, forecast, weatherBySeq) {
       continue;
     }
     if (!seenAheadHead) {
-      rows.push('<div class="stop-sep">naprej po progi — napoved, ne meritev</div>');
+      rows.push('<div class="stop-sep">naprej po progi — ocena, ne meritev</div>');
       seenAheadHead = true;
     }
-    // Feedova vrednost za se nedoseženo postajo je napoved prevoznika in ima
-    // prednost pred naso historicno oceno; ta pokrije ostanek proge.
-    rows.push(stopActualIso(s) ? operatorEtaStopHtml(s) : forecastStopHtml(s, forecastBySeq.get(s.stop_seq)));
+    rows.push(forecastStopHtml(s, forecastBySeq.get(s.stop_seq)));
   }
   return `<div class="stop-list">${rows.join("")}</div>`;
 }
