@@ -7,6 +7,11 @@
 
 const TRAIN_NO = document.body.dataset.trainNo;
 const ENC = encodeURIComponent(TRAIN_NO);
+// Datum iz naslova: povezava z iskalnika kaze na konkreten prometni dan.
+// Brez njega bi klik na vcerajsnjo vozjno odprl danasnjo.
+const URL_DATE = new URLSearchParams(location.search).get("date") || null;
+const DATE_Q = URL_DATE ? `?date=${encodeURIComponent(URL_DATE)}` : "";
+
 const RUN_POLL_MS = 30000;
 const HIST_POLL_MS = 600000;
 
@@ -85,7 +90,8 @@ window.addEventListener("resize", () => {
 
 // Skupno stanje: profil zamude potrebuje tekoco voznjo IN zgodovino, ki se
 // nalagata loceno in z razlicnim ritmom.
-const state = { run: null, forecast: null, past: null, pastRuns: 0, weather: new Map() };
+const state = { run: null, forecast: null, past: null, pastRuns: 0,
+                weather: new Map(), report: null };
 // Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
 // ob preklopu pogleda.
 let hoverSeq = null;
@@ -97,21 +103,49 @@ const runTimelineEl = document.getElementById("run-timeline");
 const headsignEl = document.getElementById("train-headsign");
 const feedDotEl = document.getElementById("feed-dot");
 
+// Koliko casa sme meritev veljati za "trenutno". Cez to je vrednost zgodovina
+// in prikaz mora to povedati -- "+20 min" ob polnoci, izmerjeno ob 17h, je laz.
+const FRESH_S = 20 * 60;
+
+function ageLabel(iso) {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return "pravkar";
+  if (min < 60) return `pred ${min} min`;
+  const h = Math.floor(min / 60);
+  return `pred ${h} h ${String(min % 60).padStart(2, "0")} min`;
+}
+
 function runHeadHtml(cur) {
   const d = cur ? stopDelay(cur) : null;
   const wx = cur ? state.weather.get(cur.stop_seq) : null;
   const color = delayColor(d);
+  const atIso = cur ? stopActualIso(cur) : null;
+  const ageS = atIso ? (Date.now() - new Date(atIso).getTime()) / 1000 : null;
+  const stale = ageS != null && ageS > FRESH_S;
+
+  // Prevoznikovo porocilo pozna prometno mesto, ki ga nas vozni red nima --
+  // zamuda se meri tudi tam, kjer vlak ne ustavlja.
+  const rep = state.report;
+
   return `
     <div class="detail-now">
-      <div class="detail-now-label">Trenutna zamuda</div>
+      <div class="detail-now-label">${stale ? "Zadnja znana zamuda" : "Trenutna zamuda"}</div>
       <div class="detail-now-value" style="color:${color}">
         <span class="detail-now-n">${delayLabel(d)}</span><span class="detail-now-unit">min</span>
       </div>
       <div class="detail-now-where">
         ${cur
-          ? `izmerjeno v <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(stopActualIso(cur))}`
+          ? `izmerjeno v <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
           : "za ta vlak danes še ni nobene meritve"}
       </div>
+      ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
+        ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale ? " — vlak je od takrat verjetno že pripeljal" : ""}
+      </div>` : ""}
+      ${rep ? `<div class="detail-report">
+        Prevoznik poroča <strong style="color:${delayColor(rep.delay_min * 60)}">${rep.delay_min > 0 ? "+" : ""}${rep.delay_min} min</strong>
+        ob ${escapeHtml(rep.event)}u v <strong>${escapeHtml(rep.station)}</strong>
+        ${rep.severe ? '<span class="tag">izjemna zamuda</span>' : ""}
+      </div>` : ""}
       ${wx && wx.severity != null ? `
         <div class="detail-weather">
           ${weatherIconHtml(wx, 15)}
@@ -126,9 +160,49 @@ function runHeadHtml(cur) {
   `;
 }
 
+async function loadReport() {
+  // Zadnje porocilo prevoznika o tej voznji: koliko in KJE. Prometno mesto
+  // pogosto ni voznoredni postanek, zato ga iz `run` ni mogoce dobiti.
+  try {
+    const r = await fetch(`/api/train/${ENC}/reports${DATE_Q}`).then((x) => (x.ok ? x.json() : null));
+    const list = (r && r.reports) || [];
+    state.report = list.length ? list[list.length - 1] : null;
+  } catch (err) {
+    state.report = null;
+  }
+}
+
+async function loadAlerts() {
+  // Edini vir odgovora, ZAKAJ vlak zamuja. Vse drugo v bazi pove le koliko.
+  const box = document.getElementById("train-alerts");
+  try {
+    const list = await fetch(`/api/train/${ENC}/alerts`).then((r) => (r.ok ? r.json() : []));
+    if (!list.length) { box.innerHTML = ""; return; }
+    box.innerHTML = `<details class="alert-box"${list.length <= 2 ? " open" : ""}>
+      <summary class="alert-head">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+        </svg>
+        Obvestila o ovirah na tej poti
+        <span class="alert-count">— ${list.length}</span>
+      </summary>
+      <div class="alert-list">${list.map((a) => `
+        <div class="alert-item">
+          <strong>${escapeHtml(a.header || "")}</strong>
+          <div class="alert-meta">${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
+          ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}</div>
+          <div class="alert-body adv-only">${escapeHtml((a.description || "").slice(0, 400))}</div>
+        </div>`).join("")}</div>
+    </details>`;
+  } catch (err) {
+    box.innerHTML = "";
+  }
+}
+
 async function loadRun() {
   try {
-    const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO);
+    await loadReport();
+    const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE);
     state.run = run;
     state.forecast = forecast;
     runHeadEl.innerHTML = runHeadHtml(current);
@@ -231,7 +305,6 @@ function weatherTipRows(w) {
 
 const KIND = {
   measured: { label: "izmerjeno" },
-  eta: { label: "napoved prevoznika" },
   estimate: { label: "ocena (prenos zamude)" },
   none: { label: "brez podatka" },
 };
@@ -252,13 +325,16 @@ function profilePoints() {
     if (cur && s.stop_seq <= cur.stop_seq) {
       if (stopActualIso(s)) { p.kind = "measured"; p.value = stopDelay(s); }
       else { p.kind = "none"; p.value = null; }
-    } else if (stopActualIso(s)) {
-      p.kind = "eta"; p.value = stopDelay(s);
     } else {
+      // Naprej po progi vedno nasa ocena, tudi ce feed ze ima vrednost:
+      // izmerjeno je prevoznikova napoved za postanke naprej precej slabsa
+      // od prenosa trenutne zamude (backtest.py). Njegovo stevilko obdrzimo
+      // v oknu ob dotiku, da ni skrita.
       const f = fc.get(s.stop_seq);
       p.kind = f ? "estimate" : "none";
       p.value = f ? f.predicted_delay_s : null;
       p.samples = f ? f.n_samples : 0;
+      p.feedSaid = stopDelay(s);
     }
     return p;
   });
@@ -272,6 +348,9 @@ function stopTipHtml(p) {
       rows.push(`<div class="tt-note">${p.samples > 0
         ? `mediana ${escapeHtml(pluralRuns(p.samples))}`
         : "le prenos trenutne zamude, brez zgodovine"}</div>`);
+      if (p.feedSaid != null) {
+        rows.push(`<div class="tt-row is-part"><span>feed pravi</span><b>${delayLabel(p.feedSaid)} min</b></div>`);
+      }
     }
   } else {
     rows.push('<div class="tt-row"><span>zamuda</span><b>—</b></div>');
@@ -395,19 +474,42 @@ function drawProfile(w, pts) {
 
   if (hasWx) drawSeverityStrip(svg, pts, x, iw, M.l, stripTop, stripBot);
 
-  const labels = [[0, "start"], [pts.length - 1, "end"]];
-  for (const [i, anchor] of labels) {
-    svg.appendChild(svgEl("text", {
-      x: x(i), y: H - 12, "text-anchor": anchor === "start" ? "start" : "end",
-      fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
-    }, pts[i].name));
-  }
+  drawStopAxis(svg, pts, x, iw, H);
 
   addHoverBands(svg, pts.map((_, i) => x(i)), M.t - 6, bottom - M.t + 12,
                 pts.map((p) => p.seq),
                 (i, ev) => showTip(stopTipHtml(pts[i]), ev));
   return svg;
 }
+
+// Na osi so doslej stali samo zacetek in konec. Pri 25 postajah to pomeni,
+// da bralec vidi skok zamude, ne more pa povedati, KJE se je zgodil -- prav
+// to pa je vprasanje. Vmesne oznake postavimo tako gosto, kot dopusca sirina.
+const AXIS_LABEL_PX = 74;
+
+function drawStopAxis(svg, pts, x, iw, H) {
+  const y = H - 12;
+  const put = (i, anchor) => {
+    const name = pts[i].name.length > 14 ? `${pts[i].name.slice(0, 13)}…` : pts[i].name;
+    svg.appendChild(svgEl("text", {
+      x: x(i), y, "text-anchor": anchor,
+      fill: pts[i].seq === hoverSeq ? "#e7eaf0" : INK_AXIS,
+      "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
+    }, name));
+  };
+  put(0, "start");
+  if (pts.length > 1) put(pts.length - 1, "end");
+
+  const fits = Math.floor(iw / AXIS_LABEL_PX);
+  if (fits < 3 || pts.length < 4) return;
+  const step = Math.ceil((pts.length - 1) / fits);
+  for (let i = step; i < pts.length - 1; i += step) {
+    // Ob krajiscih ne podvajaj -- oznaki bi se prekrivali.
+    if (x(i) - x(0) < AXIS_LABEL_PX || x(pts.length - 1) - x(i) < AXIS_LABEL_PX) continue;
+    put(i, "middle");
+  }
+}
+
 
 function drawSeverityStrip(svg, pts, x, iw, left, top, bot) {
   svg.appendChild(svgEl("line", {
@@ -670,7 +772,7 @@ speedsDrawer.addEventListener("toggle", () => {
 
 async function loadWeather() {
   try {
-    const res = await fetch(`/api/train/${ENC}/weather`);
+    const res = await fetch(`/api/train/${ENC}/weather${DATE_Q}`);
     if (!res.ok) return;
     const data = await res.json();
     state.weather = new Map((data.stops || []).map((s) => [s.stop_seq, s]));
@@ -763,8 +865,41 @@ if (new URLSearchParams(location.search).get("view") === "hitrost") {
   speedsDrawer.open = true;
 }
 
+// ---------- preprosto / napredno ----------
+// Isti preklop kot na vstopni strani: napredni pogled doda stevilke in
+// razlage na isti strani, ne odpre drugega prikaza.
+
+function setMode(mode) {
+  document.body.classList.toggle("is-advanced", mode === "advanced");
+  for (const b of document.querySelectorAll("#mode-switch button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  }
+  try {
+    localStorage.setItem("sztrack:mode", mode);
+  } catch (err) {
+    /* zaseben zavihek ni razlog, da stran ne dela */
+  }
+  // Grafi se morajo prerisati: napreden pogled spremeni sirino stolpca.
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => redrawers.forEach((f) => f()), 60);
+}
+
+document.getElementById("mode-switch").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-mode]");
+  if (b) setMode(b.dataset.mode);
+});
+
+let startMode = "simple";
+try {
+  startMode = localStorage.getItem("sztrack:mode") || "simple";
+} catch (err) {
+  /* zaseben zavihek */
+}
+setMode(startMode);
+
 loadRun().then(loadHistory);
 loadWeather();
+loadAlerts();
 setInterval(loadRun, RUN_POLL_MS);
 setInterval(loadHistory, HIST_POLL_MS);
 loadHeadsign();

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ train_no }} — sztrack</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/base.css">
   <link rel="stylesheet" href="/static/dashboard.css">
   <link rel="stylesheet" href="/static/train.css">
 </head>
@@ -23,6 +25,10 @@
       <span id="train-headsign" class="train-head-sub"></span>
     </div>
     <div class="spacer"></div>
+    <div class="mode-switch" id="mode-switch">
+      <button type="button" data-mode="simple" aria-pressed="true">preprosto</button>
+      <button type="button" data-mode="advanced" aria-pressed="false">napredno</button>
+    </div>
     <a class="top-link" href="/app/map">zemljevid</a>
     <div class="divider"></div>
     <div class="clock-wrap">
@@ -36,6 +42,7 @@
     <section class="col col-run">
       <div class="section-title">Ta vožnja</div>
       <div id="run-head"></div>
+      <div id="train-alerts"></div>
       <div id="run-timeline"><div class="empty-state">nalagam …</div></div>
     </section>
 

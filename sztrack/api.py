@@ -88,6 +88,41 @@ def api_health():
     return out
 
 
+def _active_service_date(conn, train_no: str, now: datetime) -> str:
+    """Kateri prometni dan te vožnje je "zdaj".
+
+    Nočni vlak se po polnoči še vedno vozi pod včerajšnjim datumom in njegove
+    voznoredne sekunde tečejo čez 86400. Brez tega je EC 79 ob 00:20 videti,
+    kot da danes še ni vozil, čeprav je prav takrat na progi z dvema urama in
+    pol zamude -- in prav takrat ga potnik gleda.
+
+    Izbiramo med včeraj in danes; zmaga dan, katerega voznoredno okno vsebuje
+    trenutni čas. Če ga ne vsebuje nobeno, ostane današnji.
+    """
+    today = now.date().isoformat()
+    row = conn.execute(
+        "SELECT MIN(COALESCE(s.dep_s, s.arr_s)) AS a, MAX(COALESCE(s.arr_s, s.dep_s)) AS b "
+        "FROM trip t JOIN sched s USING (trip_id) WHERE t.train_no = ?",
+        (train_no,),
+    ).fetchone()
+    if not row or row["a"] is None:
+        return today
+
+    now_s = journey.now_seconds(now)
+    yesterday = (now.date() - timedelta(days=1)).isoformat()
+    # Vceraj gledamo z zamikom cez polnoc; grace pokrije vlak, ki zamuja.
+    grace = 3 * 3600
+    if row["a"] <= now_s + 86400 <= row["b"] + grace:
+        has = conn.execute(
+            "SELECT 1 FROM run r JOIN trip t USING (trip_id) "
+            "WHERE t.train_no = ? AND r.service_date = ? LIMIT 1",
+            (train_no, yesterday),
+        ).fetchone()
+        if has:
+            return yesterday
+    return today
+
+
 @app.get("/api/stations")
 def api_stations():
     with _conn() as conn:
@@ -164,8 +199,8 @@ def api_train_reports(train_no: str, date: str | None = None):
     """Zaporedje poročil prevoznika o tej vožnji: kje je bil vlak in koliko
     je zamujal. Prometno mesto pogosto ni voznoredni postanek, zato je to
     edini vir imena kraja, kjer je zamuda dejansko izmerjena."""
-    date = date or datetime.now(TZ).date().isoformat()
     with _conn() as conn:
+        date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         return {"train_no": train_no, "service_date": date,
                 "reports": alerts.train_reports(conn, train_no, date)}
 
@@ -195,8 +230,8 @@ def api_train(train_no: str):
 @app.get("/api/train/{train_no}/run")
 def api_run(train_no: str, date: str | None = None):
     """Ena vožnja: vozni red, zamuda in izračunani dejanski časi."""
-    date = date or datetime.now(TZ).date().isoformat()
     with _conn() as conn:
+        date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         rows = stats.run_detail(conn, train_no, date)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
@@ -215,8 +250,8 @@ def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
 @app.get("/api/train/{train_no}/weather")
 def api_run_weather(train_no: str, date: str | None = None):
     """Vreme na vsaki postaji te vožnje, po uri, ko je vlak tam."""
-    date = date or datetime.now(TZ).date().isoformat()
     with _conn() as conn:
+        date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         rows = stats.run_weather(conn, train_no, date)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")

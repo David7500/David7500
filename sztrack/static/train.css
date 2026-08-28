@@ -209,3 +209,41 @@
 .col::-webkit-scrollbar-track { background: transparent; }
 .col::-webkit-scrollbar-thumb { background: #2b303a; border-radius: 4px; }
 .col::-webkit-scrollbar-thumb:hover { background: #3d434f; }
+
+/* ---------- starost meritve in poročilo prevoznika ----------
+ * Zamuda brez ure meritve je trditev o sedanjosti, ki morda ni več resnična.
+ */
+
+.detail-now-age {
+  font: 400 11px/1.4 var(--sans);
+  color: var(--ink-faint);
+  margin-top: 4px;
+}
+
+.detail-now .stale-note { margin-top: 4px; }
+
+.detail-report {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line-soft);
+  font: 400 12px/1.55 var(--sans);
+  color: var(--ink-dim);
+}
+.detail-report strong { color: var(--ink); font-weight: 600; }
+.detail-report .tag { margin-left: 5px; }
+
+#train-alerts .alert-box { margin: 0 14px 12px; }
+.alert-body {
+  font: 400 11px/1.55 var(--sans);
+  color: var(--ink-faint);
+  margin-top: 5px;
+}
+
+@media (max-width: 560px) {
+  /* V glavi se tepejo nazaj-povezava, oznaka vlaka, preklop in zemljevid.
+     Oznaka vlaka je edina, ki ne sme v dve vrstici -- je naslov strani. */
+  .train-head-code { white-space: nowrap; }
+  .train-head-sub { display: none; }
+  .back-link span { display: none; }
+  .topbar .top-link { display: none; }
+}
