@@ -175,3 +175,24 @@ def test_obicajna_zamuda_v_enem_svezni_za_vec_tripov(conn):
     got = stats.typical_at_stops(conn, [("t1", 2), ("t2", 2)])
     assert set(got) == {("t1", 2), ("t2", 2)}
     assert got[("t1", 2)]["median_s"] == 120
+
+
+def test_naslednja_postaja_tudi_pri_vrzeli_v_zaporedju(conn):
+    """GTFS ne zahteva strnjenega `stop_sequence`.
+
+    V tem feedu so zaporedja sicer strnjena od 1, a če bi se to kdaj
+    spremenilo, bi se odhodna tabla tiho sklicevala na napačno postajo --
+    "izmerjeno v Divači" ob meritvi, ki je iz Celja. Zato preverimo z vrzeljo.
+    """
+    c = conn
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('t9','r9','LP 9','A - C','S1')")
+    _sched(c, "t9", [(1, "A", None, 20000), (5, "Z", 22000, 22100), (9, "C", 24000, None)])
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
+              "VALUES('t9','2026-08-31',5,420,420,1)")
+    c.commit()
+
+    row = next(r for r in journey.board(c, "Ajdovščina", "2026-08-31", 0, 1440)
+               if r["train_no"] == "LP 9")
+    assert row["delay_s"] == 420
+    assert row["delay_from"] == "Zidani Most"

@@ -108,6 +108,7 @@ SELECT t.trip_id, t.train_no, t.headsign, t.mode,
        origin.name AS origin, dest.name AS destination,
        COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
        COALESCE(rn.delay_arr, rn.delay_dep) AS next_delay_s,
+       sn.stop_seq AS next_seq,
        zn.name AS next_stop,
        r.feed_ts
 FROM sched s
@@ -124,9 +125,16 @@ LEFT JOIN run r  ON r.trip_id = t.trip_id AND r.service_date = :day
 -- Feed ni nikoli porocal stop_seq = 1: prva meritev pride sele na drugi
 -- postaji. Za odhod z izhodisca je torej edini priblizek zamuda na naslednji
 -- postaji -- vzamemo jo, prikaz pa mora povedati, da je od tam.
-LEFT JOIN run rn ON rn.trip_id = t.trip_id AND rn.service_date = :day
-                 AND rn.stop_seq = s.stop_seq + 1
-LEFT JOIN sched sn   ON sn.trip_id = t.trip_id AND sn.stop_seq = s.stop_seq + 1
+--
+-- "Naslednja" je najmanjsi vecji stop_seq, ne stop_seq + 1. V tem feedu so
+-- zaporedja sicer strnjena od 1, a GTFS tega ne zahteva in ob prvi vrzeli bi
+-- se tabla tiho nehala sklicevati na pravo postajo.
+LEFT JOIN sched sn ON sn.trip_id = t.trip_id
+                  AND sn.stop_seq = (SELECT MIN(x.stop_seq) FROM sched x
+                                     WHERE x.trip_id = t.trip_id
+                                       AND x.stop_seq > s.stop_seq)
+LEFT JOIN run rn   ON rn.trip_id = t.trip_id AND rn.service_date = :day
+                  AND rn.stop_seq = sn.stop_seq
 LEFT JOIN station zn ON zn.stop_id = sn.stop_id
 WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s AND :to_s
 ORDER BY t_s
@@ -176,17 +184,20 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
 
     # Obicajna zamuda iz zgodovine: za dan brez meritev je to edino, kar o
     # vlaku vemo. Ni napoved za ta dan in prikaz jo tako tudi imenuje.
-    typ = typical_at_stops(conn, [(d["trip_id"], d["stop_seq"]) for d in out]
-                                 + [(d["trip_id"], d["stop_seq"] + 1) for d in out])
+    typ = typical_at_stops(
+        conn,
+        [(d["trip_id"], d["stop_seq"]) for d in out]
+        + [(d["trip_id"], d["next_seq"]) for d in out if d["next_seq"] is not None],
+    )
     for d in out:
         d["typical"] = typ.get((d["trip_id"], d["stop_seq"]))
         d["typical_from"] = None
-        if d["typical"] is None:
-            nxt = typ.get((d["trip_id"], d["stop_seq"] + 1))
+        if d["typical"] is None and d["next_seq"] is not None:
+            nxt = typ.get((d["trip_id"], d["next_seq"]))
             if nxt:
                 d["typical"] = nxt
                 d["typical_from"] = d["next_stop"]
-        for k in ("next_delay_s", "next_stop"):
+        for k in ("next_delay_s", "next_stop", "next_seq"):
             d.pop(k, None)
     return out
 
