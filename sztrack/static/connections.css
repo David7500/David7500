@@ -44,6 +44,7 @@
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
 .field-date { flex: 0 0 150px; }
 .field-kind { flex: 0 0 120px; }
+.field-time { flex: 0 0 118px; }
 
 .field label {
   font: 600 10px/1 var(--sans); color: var(--ink-mute);
@@ -63,7 +64,8 @@
 .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
 .field input::placeholder { color: var(--ink-faint); }
 /* Ikona koledarja je v temni temi privzeto crna -- brez tega se ne vidi. */
-.field input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.65); cursor: pointer; }
+.field input[type="date"]::-webkit-calendar-picker-indicator,
+.field input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.65); cursor: pointer; }
 
 /* ---------- samodopolnjevanje postaj ----------
  * Lasten seznam namesto <datalist>: ta se ravna po brskalniku, ujema se samo
@@ -257,7 +259,7 @@
     max-width: 34px;
     margin: -2px auto;
   }
-  .field-date, .field-kind { flex: 1 1 calc(50% - 5px); order: 3; }
+  .field-date, .field-kind, .field-time { flex: 1 1 calc(50% - 5px); order: 3; }
   .go { flex: 1 1 100%; margin-bottom: 0; order: 4; }
 
   .conn-row { grid-template-columns: 1fr auto; gap: 3px 12px; }

@@ -159,30 +159,8 @@ function tileHtml(label, value, sub, color) {
 
 // ---------- zagon ----------
 
-function setMode(mode) {
-  document.body.classList.toggle("is-advanced", mode === "advanced");
-  for (const b of document.querySelectorAll("#mode-switch button")) {
-    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
-  }
-  try {
-    localStorage.setItem("sztrack:mode", mode);
-  } catch (err) {
-    /* zaseben zavihek */
-  }
-}
-
-document.getElementById("mode-switch").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-mode]");
-  if (b) setMode(b.dataset.mode);
-});
-
-let startMode = "simple";
-try {
-  startMode = localStorage.getItem("sztrack:mode") || "simple";
-} catch (err) {
-  /* zaseben zavihek */
-}
-setMode(startMode);
+// Preklop pogleda je skupen vsem stranem in zivi v common.js.
+initMode();
 
 async function load() {
   const [b, ranking] = await Promise.all([

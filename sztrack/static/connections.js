@@ -16,26 +16,8 @@ const todayIso = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europ
 let pollTimer = null;
 let activeTab = "ab";
 
-// ---------- preprosto / napredno ----------
-// Napreden pogled ne pelje na drugo stran: doda stolpce in razlage na tej.
-
-function setMode(mode) {
-  document.body.classList.toggle("is-advanced", mode === "advanced");
-  for (const b of $("mode-switch").querySelectorAll("button")) {
-    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
-  }
-  try {
-    localStorage.setItem("sztrack:mode", mode);
-  } catch (err) {
-    /* zaseben zavihek ni razlog, da stran ne dela */
-  }
-  if (mode === "advanced") loadHealth();
-}
-
-$("mode-switch").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-mode]");
-  if (b) setMode(b.dataset.mode);
-});
+// Preklop pogleda je skupen vsem stranem in zivi v common.js.
+initMode((mode) => { if (mode === "advanced") loadHealth(); });
 
 async function loadHealth() {
   const el = $("foot-health");
@@ -384,7 +366,9 @@ function renderBoard(data) {
   resultHeadEl.innerHTML =
     `<span><strong>${escapeHtml(data.station)}</strong></span>
      <span>${data.kind}</span><span>${dayLabel(data.date)}</span>
-     <span>${list.length} ${data.kind}${data.window_min >= 1440 ? " ta dan" : ` v naslednjih ${Math.round(data.window_min / 60)} h`}</span>`;
+     <span>${list.length} ${data.kind}${data.window_min >= 1440
+        ? " ta dan"
+        : ` od ${String(Math.floor(data.from_s / 3600)).padStart(2, "0")}:${String(Math.floor(data.from_s % 3600 / 60)).padStart(2, "0")}, ${Math.round(data.window_min / 60)} h naprej`}</span>`;
 
   if (!list.length) {
     resultsEl.innerHTML = `<div class="empty-state">
@@ -554,12 +538,21 @@ async function searchBoard(push) {
   const station = $("station").value.trim();
   const date = $("board-date").value || todayIso();
   const kind = $("board-kind").value;
+  const from = $("board-time").value;
   if (!station) return;
-  remember({ tab: "board", station, date, kind });
-  if (push) history.replaceState(null, "", `?${new URLSearchParams({ station, date, kind })}`);
+  remember({ tab: "board", station, date, kind, from });
+  if (push) {
+    const q = new URLSearchParams({ station, date, kind });
+    if (from) q.set("from", from);
+    history.replaceState(null, "", `?${q}`);
+  }
 
   try {
-    const url = `/api/departures?station=${encodeURIComponent(station)}&date=${encodeURIComponent(date)}&kind=${kind}`;
+    // Brez ure streznik izbere sam: za danes tri ure naprej od zdaj, za drug
+    // dan cel dan. Vpisana ura to povozi.
+    const q = from ? `&from=${encodeURIComponent(from)}&window=360` : "";
+    const url = `/api/departures?station=${encodeURIComponent(station)}`
+      + `&date=${encodeURIComponent(date)}&kind=${kind}${q}`;
     const res = await fetch(url);
     if (res.status === 404) {
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
@@ -638,6 +631,7 @@ function restore() {
   $("date").value = q.get("date") || todayIso();
   $("board-date").value = q.get("date") || todayIso();
   $("board-kind").value = q.get("kind") || (saved && saved.kind) || "odhodi";
+  $("board-time").value = q.get("from") || "";
   $("from").value = from;
   $("to").value = to;
   $("station").value = station;
@@ -664,14 +658,6 @@ function tickClock() {
 attachSuggest($("from"), $("suggest-from"));
 attachSuggest($("to"), $("suggest-to"));
 attachSuggest($("station"), $("suggest-station"));
-
-let startMode = "simple";
-try {
-  startMode = localStorage.getItem("sztrack:mode") || "simple";
-} catch (err) {
-  /* zaseben zavihek */
-}
-setMode(startMode);
 
 tickClock();
 setInterval(tickClock, 1000);

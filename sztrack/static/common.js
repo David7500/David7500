@@ -52,6 +52,50 @@ function pluralRuns(n) {
   return `${n} voženj`;
 }
 
+// ---------- preprosto / napredno ----------
+// Isto na vseh straneh, zato tu in ne trikrat. Napreden pogled ni druga stran:
+// je razred na <body>, ki odkrije elemente z razredom `adv-only`.
+//
+// Izbira gre v localStorage, da preklop drzi cez strani. Naslov jo lahko
+// povozi (`?pogled=napredno`) -- brez tega naprednega pogleda ni mogoce
+// deliti s povezavo, kar je pri strani s stevilkami prva stvar, ki jo kdo
+// hoce narediti.
+
+const MODE_KEY = "sztrack:mode";
+
+function applyMode(mode, onChange) {
+  document.body.classList.toggle("is-advanced", mode === "advanced");
+  for (const b of document.querySelectorAll("#mode-switch button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  }
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch (err) {
+    /* zaseben zavihek ni razlog, da stran ne dela */
+  }
+  if (onChange) onChange(mode);
+}
+
+function initMode(onChange) {
+  const asked = new URLSearchParams(location.search).get("pogled");
+  let mode = asked === "napredno" ? "advanced" : asked === "preprosto" ? "simple" : null;
+  if (!mode) {
+    try {
+      mode = localStorage.getItem(MODE_KEY) || "simple";
+    } catch (err) {
+      mode = "simple";
+    }
+  }
+  const box = document.getElementById("mode-switch");
+  if (box) {
+    box.addEventListener("click", (ev) => {
+      const b = ev.target.closest("button[data-mode]");
+      if (b) applyMode(b.dataset.mode, onChange);
+    });
+  }
+  applyMode(mode, onChange);
+}
+
 // ---------- vlak ali nadomestni prevoz ----------
 // Nadomestni prevoz je v istem iskalniku kot vlaki, ker je na tej relaciji
 // edina dejanska povezava. Prav zato mora biti oznaka nedvoumna: potnik, ki

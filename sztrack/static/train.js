@@ -875,37 +875,12 @@ if (new URLSearchParams(location.search).get("view") === "hitrost") {
   speedsDrawer.open = true;
 }
 
-// ---------- preprosto / napredno ----------
-// Isti preklop kot na vstopni strani: napredni pogled doda stevilke in
-// razlage na isti strani, ne odpre drugega prikaza.
-
-function setMode(mode) {
-  document.body.classList.toggle("is-advanced", mode === "advanced");
-  for (const b of document.querySelectorAll("#mode-switch button")) {
-    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
-  }
-  try {
-    localStorage.setItem("sztrack:mode", mode);
-  } catch (err) {
-    /* zaseben zavihek ni razlog, da stran ne dela */
-  }
-  // Grafi se morajo prerisati: napreden pogled spremeni sirino stolpca.
+// Preklop pogleda je skupen vsem stranem in zivi v common.js. Grafi se morajo
+// ob preklopu prerisati: napreden pogled spremeni sirino stolpca.
+initMode(() => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => redrawers.forEach((f) => f()), 60);
-}
-
-document.getElementById("mode-switch").addEventListener("click", (ev) => {
-  const b = ev.target.closest("button[data-mode]");
-  if (b) setMode(b.dataset.mode);
 });
-
-let startMode = "simple";
-try {
-  startMode = localStorage.getItem("sztrack:mode") || "simple";
-} catch (err) {
-  /* zaseben zavihek */
-}
-setMode(startMode);
 
 loadRun().then(loadHistory);
 loadWeather();
