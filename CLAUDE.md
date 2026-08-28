@@ -272,7 +272,7 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
 Lokalna baza `data/sz.sqlite` (2026-08-29): 60402 meritev,
 38749 postankov, 9 obratovalnih dni,
 34632 vremenskih vrstic, 267 postaj,
-44 veljavnih obvestil o ovirah, 13.7 MB.
+44 zapisanih obvestil o ovirah (~20 hkrati veljavnih), 13.7 MB.
 Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
 Za napoved zamude (`stats.predict`): prenos trenutne zamude naprej, popravljen

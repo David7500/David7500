@@ -252,6 +252,51 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     return out
 
 
+# Meja "tocnosti". Pet minut je obicajen prag pri zeleznicah in isti prag
+# uporablja `history()`; ce ga kdaj spremenis, spremeni na obeh mestih.
+ON_TIME_S = 300
+
+
+def day_summary(conn: sqlite3.Connection, service_date: str) -> dict:
+    """Kako je mreža vozila ta dan: porazdelitev končnih zamud po vožnjah.
+
+    Ena vožnja = en vzorec, ne en postanek. Sicer bi vlak s tridesetimi
+    postanki tridesetkrat glasoval, kratki lokalni pa enkrat, in "delež
+    točnih" bi meril dolžino poti namesto točnosti.
+    """
+    rows = conn.execute(
+        "WITH last AS ("
+        "  SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d,"
+        "         ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn"
+        "  FROM run r WHERE r.service_date = ?"
+        ") SELECT d FROM last WHERE rn = 1 AND d IS NOT NULL",
+        (service_date,),
+    ).fetchall()
+    vals = [r["d"] for r in rows]
+    if not vals:
+        return {"date": service_date, "runs": 0}
+
+    buckets = {"točno": 0, "1–5 min": 0, "5–15 min": 0, "nad 15 min": 0}
+    for v in vals:
+        if v <= 60:
+            buckets["točno"] += 1
+        elif v <= 300:
+            buckets["1–5 min"] += 1
+        elif v <= 900:
+            buckets["5–15 min"] += 1
+        else:
+            buckets["nad 15 min"] += 1
+    return {
+        "date": service_date,
+        "runs": len(vals),
+        "median_s": _pct(vals, 0.5),
+        "p90_s": _pct(vals, 0.9),
+        "worst_s": max(vals),
+        "on_time_share": round(sum(1 for v in vals if v <= ON_TIME_S) / len(vals), 3),
+        "buckets": buckets,
+    }
+
+
 def segment_speeds(conn: sqlite3.Connection, train_no: str | None = None) -> list[dict]:
     """Hitrosti po odsekih: voznoredna in dejansko izmerjena.
 

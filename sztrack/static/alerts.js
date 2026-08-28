@@ -1,0 +1,126 @@
+"use strict";
+
+// Stran z ovirami. Obvestil je nekaj deset in vsako visi na desetinah vlakov,
+// zato je filtriranje po besedilu tu bolj koristno kot razvrscanje po datumu.
+
+const listEl = document.getElementById("list");
+const countEl = document.getElementById("count");
+const qEl = document.getElementById("q");
+
+let all = [];
+
+function fold(s) {
+  return String(s).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// Naslovi obvestil so oblike "DELA NA PROGI: ...", "Vozni red nadomestnega
+// prevoza: ...", "OBVESTILO: ...". Vrsta je uporabnejsa od ucinka iz feeda,
+// ki je pri skoraj vseh enak ("spremenjen promet").
+function kindOf(a) {
+  const h = fold(a.header || "");
+  if (h.startsWith("dela na progi")) return "dela na progi";
+  if (h.includes("nadomestn") || h.includes("avtobusni prevoz")) return "nadomestni prevoz";
+  if (h.includes("zdruzen")) return "združene garniture";
+  return "obvestilo";
+}
+
+const KIND_COLOR = {
+  "dela na progi": "#d9b33c",
+  "nadomestni prevoz": "#e07b45",
+  "združene garniture": "#5aa87d",
+  "obvestilo": "#79828f",
+};
+
+function periodLabel(a) {
+  if (!a.start_ts && !a.end_ts) return "";
+  const f = (ts) => new Date(ts * 1000).toLocaleDateString("sl-SI",
+    { timeZone: "Europe/Ljubljana", day: "numeric", month: "numeric", year: "numeric" });
+  if (a.start_ts && a.end_ts) return `${f(a.start_ts)} – ${f(a.end_ts)}`;
+  return a.start_ts ? `od ${f(a.start_ts)}` : `do ${f(a.end_ts)}`;
+}
+
+function itemHtml(a) {
+  const kind = kindOf(a);
+  const color = KIND_COLOR[kind];
+  const trains = a.trains || [];
+  // Vec kot dvanajst stevilk je stena, ki je nihce ne bere; ostale so za
+  // napreden pogled.
+  const head = trains.slice(0, 12);
+  const rest = trains.slice(12);
+  return `
+    <article class="alert-card">
+      <div class="alert-card-top">
+        <span class="kind-tag" style="color:${color};border-color:${color}55">${escapeHtml(kind)}</span>
+        <span class="alert-period">${escapeHtml(periodLabel(a))}</span>
+      </div>
+      <h3 class="alert-card-title">${escapeHtml(a.header || "")}</h3>
+      <p class="alert-card-body">${escapeHtml(a.description || "")}</p>
+      ${trains.length ? `
+        <div class="alert-trains">
+          <span class="alert-trains-label">${trains.length} ${trains.length === 1 ? "vlak" : "vlakov"}:</span>
+          ${head.map((t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join("")}
+          ${rest.length ? `<span class="adv-only">${rest.map((t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join("")}</span>
+                           <span class="more-note">+${rest.length} še (napredni pogled)</span>` : ""}
+        </div>` : ""}
+      <div class="alert-card-foot adv-only">
+        ${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
+        · <code>${escapeHtml(a.alert_id)}</code>
+        ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
+      </div>
+    </article>`;
+}
+
+function render() {
+  const q = fold(qEl.value.trim());
+  const shown = q
+    ? all.filter((a) => fold(`${a.header} ${a.description} ${(a.trains || []).join(" ")}`).includes(q))
+    : all;
+
+  countEl.textContent = q
+    ? `${shown.length} od ${all.length}`
+    : `${all.length} veljavnih`;
+
+  listEl.innerHTML = shown.length
+    ? shown.map(itemHtml).join("")
+    : '<div class="empty-state">Za ta filter ni obvestila.</div>';
+}
+
+qEl.addEventListener("input", render);
+
+function setMode(mode) {
+  document.body.classList.toggle("is-advanced", mode === "advanced");
+  for (const b of document.querySelectorAll("#mode-switch button")) {
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  }
+  try {
+    localStorage.setItem("sztrack:mode", mode);
+  } catch (err) {
+    /* zaseben zavihek */
+  }
+}
+
+document.getElementById("mode-switch").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-mode]");
+  if (b) setMode(b.dataset.mode);
+});
+
+let startMode = "simple";
+try {
+  startMode = localStorage.getItem("sztrack:mode") || "simple";
+} catch (err) {
+  /* zaseben zavihek */
+}
+setMode(startMode);
+
+fetch("/api/alerts")
+  .then((r) => r.json())
+  .then((data) => {
+    // Najprej dela in nadomestni prevozi -- ta dvoje potnika res zadeva.
+    const rank = { "dela na progi": 0, "nadomestni prevoz": 1, "združene garniture": 2, "obvestilo": 3 };
+    all = data.sort((a, b) => rank[kindOf(a)] - rank[kindOf(b)] ||
+                              (b.trains || []).length - (a.trains || []).length);
+    render();
+  })
+  .catch(() => {
+    listEl.innerHTML = '<div class="empty-state">Obvestil ni bilo mogoče naložiti.</div>';
+  });

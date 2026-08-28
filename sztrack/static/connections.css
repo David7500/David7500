@@ -276,3 +276,151 @@
   .clock { display: none; }
   .divider { display: none; }
 }
+
+/* ---------- vstopni pregled ----------
+ * Prva stran brez vpisane poizvedbe je bila prazen obrazec. Tu odgovori na
+ * vprašanje, ki ga ima obiskovalec, še preden karkoli vpiše.
+ */
+
+.overview { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+
+.ov-head { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.ov-head h2 { margin: 0; font: 600 13px/1.3 var(--sans); color: var(--ink); }
+.ov-sub { font: 400 12px/1.4 var(--sans); color: var(--ink-mute); }
+
+.ov-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 13px 14px;
+}
+.ov-card-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font: 400 12px/1.4 var(--sans); color: var(--ink-mute);
+}
+.ov-card-head strong { font: 600 13px/1.4 var(--mono); }
+.ov-card-foot { font: 400 11px/1.5 var(--sans); color: var(--ink-faint); margin-top: 9px; }
+
+/* Deleži kot en trak, ne štirje stolpci: vprašanje je razmerje, ne vrednosti. */
+.bucket-bar {
+  display: flex; height: 9px; margin-top: 11px;
+  border-radius: 3px; overflow: hidden; background: var(--line);
+}
+.bucket { display: block; height: 100%; }
+.bucket-keys { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 9px; }
+.bucket-key { font: 400 11px/1.4 var(--sans); color: var(--ink-mute); display: flex; align-items: center; gap: 5px; }
+.bucket-key b { color: var(--ink-dim); font-weight: 600; }
+.bucket-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+.live-list { display: flex; flex-direction: column; margin-top: 4px; }
+.live-row {
+  display: grid;
+  grid-template-columns: 78px 1fr auto;
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+  text-decoration: none; color: inherit;
+}
+.live-row:last-child { border-bottom: none; }
+.live-row:hover .live-where { color: var(--ink); }
+.live-no { font: 600 12.5px/1.3 var(--sans); color: var(--ink); }
+.live-where {
+  font: 400 12px/1.3 var(--sans); color: var(--ink-mute);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.live-delay { font: 600 13px/1.3 var(--mono); }
+.live-row .stale-note { grid-column: 2 / -1; }
+
+.ov-link {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid rgba(217, 179, 60, 0.35);
+  background: rgba(217, 179, 60, 0.07);
+  border-radius: var(--r-lg);
+  font: 500 12px/1.4 var(--sans); color: var(--sev-hard);
+  text-decoration: none;
+}
+.ov-link:hover { background: rgba(217, 179, 60, 0.12); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.route-chip {
+  background: var(--bg-raised);
+  border: 1px solid var(--line-firm);
+  border-radius: 100px;
+  padding: 7px 13px;
+  color: var(--ink-dim);
+  font: 400 12px/1.3 var(--sans);
+  cursor: pointer;
+}
+.route-chip:hover { color: var(--ink); border-color: var(--accent); }
+
+/* ---------- stran z ovirami ---------- */
+
+.page-name { font: 600 14px/1 var(--sans); color: var(--ink); white-space: nowrap; }
+
+.lead {
+  font: 400 13px/1.65 var(--sans); color: var(--ink-dim);
+  max-width: 62ch; margin: 4px 0 18px;
+}
+.lead strong { color: var(--ink); font-weight: 600; }
+
+.filter-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.filter-row input {
+  flex: 1 1 auto; min-width: 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  padding: 9px 11px;
+  color: var(--ink);
+  font: 400 13.5px/1.2 var(--sans);
+}
+.filter-row input:focus { outline: none; border-color: var(--accent); }
+.filter-count { font: 400 12px/1 var(--sans); color: var(--ink-mute); white-space: nowrap; }
+
+.alert-page-list { display: flex; flex-direction: column; gap: 10px; }
+
+.alert-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 14px 15px;
+}
+.alert-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.kind-tag {
+  font: 500 10.5px/1.5 var(--sans);
+  border: 1px solid; border-radius: 3px; padding: 1px 6px;
+  text-transform: lowercase;
+}
+.alert-period { font: 400 11px/1.4 var(--mono); color: var(--ink-faint); }
+
+.alert-card-title { margin: 0 0 6px; font: 600 14px/1.45 var(--sans); color: var(--ink); }
+.alert-card-body {
+  margin: 0; font: 400 12.5px/1.65 var(--sans); color: var(--ink-dim);
+  max-width: 74ch;
+}
+
+.alert-trains {
+  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+}
+.alert-trains-label { font: 400 11px/1.4 var(--sans); color: var(--ink-mute); margin-right: 3px; }
+.alert-trains .adv-only { display: contents; }
+body:not(.is-advanced) .alert-trains .adv-only { display: none; }
+.train-pill {
+  font: 500 11px/1.5 var(--mono);
+  color: var(--ink-dim);
+  background: var(--bg);
+  border: 1px solid var(--line-firm);
+  border-radius: 4px;
+  padding: 1px 6px;
+  text-decoration: none;
+}
+.train-pill:hover { color: var(--ink); border-color: var(--accent); }
+.more-note { font: 400 10.5px/1.5 var(--sans); color: var(--ink-faint); }
+
+.alert-card-foot {
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line-soft);
+  font: 400 10.5px/1.5 var(--sans); color: var(--ink-faint);
+}
+.alert-card-foot code { font-family: var(--mono); }

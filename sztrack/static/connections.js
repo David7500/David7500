@@ -369,6 +369,118 @@ function renderBoard(data) {
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 
+
+// ---------- vstopni pregled ----------
+// Brez tega je prva stran prazen obrazec. "Kako vozijo vlaki danes" je pri
+// prometni aplikaciji enako pogosto vprasanje kot vprasanje o svoji poti.
+
+const POPULAR = [
+  ["Ljubljana", "Maribor"],
+  ["Ljubljana", "Koper"],
+  ["Ljubljana", "Jesenice"],
+  ["Ljubljana", "Novo mesto"],
+  ["Maribor", "Murska Sobota"],
+  ["Celje", "Ljubljana"],
+];
+
+function bucketBarHtml(b, total) {
+  const order = [["točno", 60], ["1–5 min", 300], ["5–15 min", 900], ["nad 15 min", 1800]];
+  const segs = order.map(([label, ref]) => {
+    const n = b[label] || 0;
+    if (!n) return "";
+    const pct = (n / total) * 100;
+    return `<span class="bucket" style="width:${pct}%;background:${delayColor(ref)}"
+              title="${escapeHtml(label)}: ${n}"></span>`;
+  }).join("");
+  const keys = order.map(([label, ref]) => `<span class="bucket-key">
+      <span class="bucket-dot" style="background:${delayColor(ref)}"></span>
+      ${escapeHtml(label)} <b>${b[label] || 0}</b></span>`).join("");
+  return `<div class="bucket-bar">${segs}</div><div class="bucket-keys">${keys}</div>`;
+}
+
+function overviewHtml(o) {
+  // Streznik da `yesterday` samo takrat, kadar je danasnji vzorec premajhen.
+  const useYesterday = o.yesterday && o.yesterday.runs;
+  const day = useYesterday ? o.yesterday : o.today;
+  const dayNote = useYesterday ? "včeraj" : "danes";
+
+  const live = (o.live_worst || []).map((t) => {
+    const color = delayColor(t.delay_s);
+    // Kje je vlak, pove prevoznik natancneje od nas: prometno mesto pogosto
+    // ni voznoredni postanek.
+    // Kraj in starost morata biti iz istega vira, sicer pise "Dobova" in
+    // "meritev stara 40 min", ceprav je porocilo o Dobovi staro 11 minut.
+    const fromOperator = !!t.reported_at_station;
+    const where = fromOperator ? t.reported_at_station : t.last_stop;
+    const age = fromOperator ? t.reported_age_s : t.age_s;
+    const stale = age != null && age > 1200;
+    return `<a class="live-row" href="/app/train/${encodeURIComponent(t.train_no)}">
+      <span class="live-no">${escapeHtml(t.train_no)}</span>
+      <span class="live-where">${escapeHtml(where)}</span>
+      <span class="live-delay" style="color:${color}">${delayLabel(t.delay_s)} min</span>
+      ${stale ? `<span class="stale-note">podatek star ${Math.round(age / 60)} min</span>` : ""}
+    </a>`;
+  }).join("");
+
+  return `
+    <section class="overview">
+      <div class="ov-head">
+        <h2>Kako vozijo vlaki</h2>
+        <span class="ov-sub">${o.live_trains} ${o.live_trains === 1 ? "vlak" : "vlakov"} zdaj na progi</span>
+      </div>
+
+      ${day && day.runs ? `
+        <div class="ov-card">
+          <div class="ov-card-head">
+            <span>Končna zamuda, ${dayNote}</span>
+            <strong style="color:${delayColor(day.median_s)}">mediana ${delayLabel(day.median_s)} min</strong>
+          </div>
+          ${bucketBarHtml(day.buckets, day.runs)}
+          <div class="ov-card-foot">
+            ${day.runs} zajetih voženj · točnih ${Math.round(day.on_time_share * 100)} %
+            <span class="adv-only">· p90 ${delayLabel(day.p90_s)} min · najslabša ${delayLabel(day.worst_s)} min</span>
+          </div>
+        </div>` : ""}
+
+      ${live ? `<div class="ov-card">
+        <div class="ov-card-head"><span>Največje zamude zdaj</span></div>
+        <div class="live-list">${live}</div>
+      </div>` : ""}
+
+      ${o.disruptions ? `<a class="ov-link" href="/app/ovire">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+        </svg>
+        ${o.disruptions} veljavnih obvestil o ovirah na progah
+      </a>` : ""}
+
+      <div class="ov-head"><h2>Pogoste relacije</h2></div>
+      <div class="chips">
+        ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
+            data-from="${escapeHtml(a)}" data-to="${escapeHtml(b)}">${escapeHtml(a)} → ${escapeHtml(b)}</button>`).join("")}
+      </div>
+    </section>`;
+}
+
+async function showOverview() {
+  try {
+    const o = await fetch("/api/overview").then((r) => r.json());
+    resultsEl.innerHTML = overviewHtml(o);
+    resultsEl.querySelectorAll(".route-chip").forEach((b) => {
+      b.addEventListener("click", () => {
+        $("from").value = b.dataset.from;
+        $("to").value = b.dataset.to;
+        setTab("ab");
+        $("from").value = b.dataset.from;
+        $("to").value = b.dataset.to;
+        searchAB(true);
+      });
+    });
+  } catch (err) {
+    resultsEl.innerHTML = '<div class="empty-state">Vpiši izhodišče in cilj ali izberi postajo.</div>';
+  }
+}
+
 // ---------- poizvedbe ----------
 
 function schedulePoll(fn, isToday) {
@@ -503,6 +615,8 @@ function restore() {
   } else if (from && to) {
     setTab("ab");
     searchAB(false);
+  } else {
+    showOverview();
   }
 }
 

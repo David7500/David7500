@@ -58,6 +58,12 @@ def dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard.html", {})
 
 
+@app.get("/app/ovire", response_class=HTMLResponse)
+def alerts_page(request: Request):
+    """Dela na progi in nadomestni prevozi -- edini vir odgovora, ZAKAJ."""
+    return templates.TemplateResponse(request, "alerts.html", {})
+
+
 @app.get("/app/train/{train_no}", response_class=HTMLResponse)
 def dashboard_train(request: Request, train_no: str):
     """Svoje okno za en vlak: ta vožnja + zgodovina zamud te poti."""
@@ -121,6 +127,44 @@ def _active_service_date(conn, train_no: str, now: datetime) -> str:
         if has:
             return yesterday
     return today
+
+
+# Koliko voženj mora imeti dan, da o njem sploh govorimo. Pod tem je "delež
+# točnih" bolj podatek o uri kot o železnici.
+MIN_RUNS_FOR_DAY = 20
+
+
+@app.get("/api/overview")
+def api_overview():
+    """Kaj se dogaja zdaj -- za obiskovalca, ki še ni nič vpisal.
+
+    Brez tega je vstopna stran prazen obrazec. Vprašanje "kako vozijo vlaki
+    danes" je pri prometni aplikaciji enako pogosto kot vprašanje o svoji poti.
+    """
+    now = datetime.now(TZ)
+    today = now.date().isoformat()
+    live = api_live()
+    with _conn() as conn:
+        day = stats.day_summary(conn, today)
+        disruptions = len(alerts.active(conn))
+        # Zgodaj zjutraj je danasnji vzorec prazen ali droben. "Mediana 0 min,
+        # tocnih 100 %" iz ene same voznje ob pol enih zvecer ni slika dneva,
+        # ampak nakljucje -- takrat raje povemo za vceraj in tako tudi napisemo.
+        fallback = None
+        if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
+            fallback = stats.day_summary(conn, yesterday_iso(now))
+    return {
+        "now": now.isoformat(),
+        "live_trains": len(live),
+        "live_worst": live[:5],
+        "today": day,
+        "yesterday": fallback,
+        "disruptions": disruptions,
+    }
+
+
+def yesterday_iso(now: datetime) -> str:
+    return (now.date() - timedelta(days=1)).isoformat()
 
 
 @app.get("/api/stations")

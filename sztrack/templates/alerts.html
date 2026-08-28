@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ovire na progah — sztrack</title>
+  <meta name="description" content="Dela na progi, nadomestni prevozi in združene garniture na slovenskem železniškem omrežju.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/base.css">
+  <link rel="stylesheet" href="/static/connections.css">
+</head>
+<body class="conn-page">
+
+  <header class="topbar">
+    <a class="brand" href="/app">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f0934f" stroke-width="1.8" stroke-linecap="round">
+        <rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
+        <circle cx="9" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle>
+      </svg>
+      <span class="brand-name">sztrack</span>
+    </a>
+    <div class="divider"></div>
+    <span class="page-name">Ovire na progah</span>
+    <div class="spacer"></div>
+    <div class="mode-switch" id="mode-switch">
+      <button type="button" data-mode="simple" aria-pressed="true">preprosto</button>
+      <button type="button" data-mode="advanced" aria-pressed="false">napredno</button>
+    </div>
+    <a class="top-link" href="/app/map">zemljevid</a>
+  </header>
+
+  <main class="conn-main">
+    <p class="lead">
+      Obvestila prevoznika o delih na progi, nadomestnih prevozih in združenih
+      garniturah. To je edini vir odgovora, <strong>zakaj</strong> vlak zamuja —
+      vse drugo v tej aplikaciji pove le, koliko.
+    </p>
+
+    <div class="filter-row">
+      <input id="q" type="search" placeholder="filtriraj po besedilu ali postaji"
+             autocomplete="off" spellcheck="false">
+      <span id="count" class="filter-count"></span>
+    </div>
+
+    <div id="list" class="alert-page-list"><div class="empty-state">nalagam …</div></div>
+
+    <footer class="page-foot">
+      Vir: GTFS-RT <code>service_alerts</code> (SŽ prek NAP, obdelava DERP).
+      Vsako obvestilo je vezano na poti, iz njih pa na številke vlakov.
+      Obvestila prihajajo v slovenščini in angleščini; tu je slovenska različica.
+    </footer>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/alerts.js"></script>
+</body>
+</html>
