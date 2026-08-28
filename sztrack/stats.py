@@ -81,6 +81,14 @@ def timetable(conn: sqlite3.Connection, train_no: str) -> list[dict]:
     ]
 
 
+def trip_mode(conn: sqlite3.Connection, train_no: str) -> str:
+    """'vlak' ali 'bus'. Nadomestni prevoz je v istem iskalniku, a potnik mora
+    vedeti, na kaj čaka -- na peronu ali na postajališču."""
+    row = conn.execute("SELECT mode FROM trip WHERE train_no = ? LIMIT 1",
+                       (train_no,)).fetchone()
+    return row["mode"] if row else "vlak"
+
+
 def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str) -> list[dict]:
     """Ena konkretna vožnja: vozni red + zamuda + izračunani dejanski čas."""
     rows = conn.execute(
@@ -386,7 +394,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
 # ---------------------------------------------------------------- povezave A -> B
 
 _CONNECTIONS_SQL = """
-SELECT t.trip_id, t.train_no, t.headsign,
+SELECT t.trip_id, t.train_no, t.headsign, t.mode,
        sa.stop_seq AS from_seq, COALESCE(sa.dep_s, sa.arr_s) AS dep_s,
        sb.stop_seq AS to_seq,   COALESCE(sb.arr_s, sb.dep_s) AS arr_s,
        COALESCE(ra.delay_dep, ra.delay_arr) AS from_delay_s,

@@ -269,7 +269,8 @@ def api_train(train_no: str):
         rows = stats.timetable(conn, train_no)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
-        return {"train_no": train_no, "timetable": rows}
+        return {"train_no": train_no, "mode": stats.trip_mode(conn, train_no),
+                "timetable": rows}
 
 
 @app.get("/api/train/{train_no}/run")
@@ -280,7 +281,8 @@ def api_run(train_no: str, date: str | None = None):
         rows = stats.run_detail(conn, train_no, date)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
-        return {"train_no": train_no, "service_date": date, "stops": rows}
+        return {"train_no": train_no, "service_date": date,
+                "mode": stats.trip_mode(conn, train_no), "stops": rows}
 
 
 @app.get("/api/train/{train_no}/history")
@@ -367,7 +369,7 @@ tail AS (
            ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
     FROM t
 )
-SELECT tr.train_no, tr.headsign, st.name AS last_stop, p.stop_seq,
+SELECT tr.train_no, tr.headsign, tr.mode, st.name AS last_stop, p.stop_seq,
        p.delay_s, p.feed_ts, p.t_s AS sched_s
 FROM passed p
 JOIN tail  ON tail.trip_id = p.trip_id AND tail.rn = 1

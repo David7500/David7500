@@ -203,6 +203,11 @@ async function loadRun() {
   try {
     await loadReport();
     const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE);
+    // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
+    // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
+    if (isBus(run.mode)) {
+      document.getElementById("train-mode").innerHTML = modeBadgeHtml(run.mode);
+    }
     state.run = run;
     state.forecast = forecast;
     runHeadEl.innerHTML = runHeadHtml(current);

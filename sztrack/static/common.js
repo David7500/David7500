@@ -52,6 +52,29 @@ function pluralRuns(n) {
   return `${n} voženj`;
 }
 
+// ---------- vlak ali nadomestni prevoz ----------
+// Nadomestni prevoz je v istem iskalniku kot vlaki, ker je na tej relaciji
+// edina dejanska povezava. Prav zato mora biti oznaka nedvoumna: potnik, ki
+// caka na peronu avtobus, ga zamudi.
+
+function isBus(mode) {
+  return mode === "bus";
+}
+
+function modeBadgeHtml(mode) {
+  if (!isBus(mode)) return "";
+  return `<span class="mode-bus" title="nadomestni prevoz namesto vlaka">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="13" rx="2"></rect>
+      <path d="M4 11h16M8 21l-1 1M16 21l1 1M7 17v3M17 17v3"></path>
+      <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"></circle>
+      <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"></circle>
+    </svg>
+    avtobus
+  </span>`;
+}
+
 // ---------- vreme ----------
 
 const WEATHER_INK = "#6f8fa8";

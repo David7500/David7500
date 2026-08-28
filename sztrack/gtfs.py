@@ -173,15 +173,27 @@ def _edge_builder(stops):
 
 
 def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
-    """Uvozi železniški del GTFS zipa. Statične tabele se v celoti zamenjajo."""
+    """Uvozi železniški del GTFS zipa (in nadomestne prevoze SŽ).
+
+    Statične tabele se v celoti zamenjajo -- zajem (`obs`, `run`) ostane.
+    """
     with zipfile.ZipFile(zip_path) as zf:
+        wanted_types = {config.RAIL_ROUTE_TYPE}
+        if config.INCLUDE_REPLACEMENT_BUS:
+            wanted_types.add(config.BUS_ROUTE_TYPE)
         routes = {
             r["route_id"]: r
             for r in _rows(zf, "routes.txt")
-            if r["agency_id"] == config.RAIL_AGENCY_ID
-            and r["route_type"] == config.RAIL_ROUTE_TYPE
+            if r["agency_id"] == config.RAIL_AGENCY_ID and r["route_type"] in wanted_types
         }
         trips = {t["trip_id"]: t for t in _rows(zf, "trips.txt") if t["route_id"] in routes}
+        # Nadomestni prevozi vozijo po cesti. Njihova geometrija ne sme v
+        # `edge`: mreza prog bi dobila odseke, ki niso proge, in dolzine, ki
+        # niso zelezniske. Za vozni red in iskanje povezav pa so enakovredni.
+        rail_trips = {
+            tid for tid, t in trips.items()
+            if routes[t["route_id"]]["route_type"] == config.RAIL_ROUTE_TYPE
+        }
 
         seq_by_trip: dict[str, list[tuple[int, str]]] = defaultdict(list)
         sched_rows = []
@@ -197,22 +209,26 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         for v in seq_by_trip.values():
             v.sort()
 
-        rail_stops = {sid for v in seq_by_trip.values() for _, sid in v}
+        used_stops = {sid for v in seq_by_trip.values() for _, sid in v}
         stops = {
             s["stop_id"]: {
                 "stop_id": s["stop_id"], "name": s["stop_name"],
                 "lat": float(s["stop_lat"]), "lon": float(s["stop_lon"]),
             }
             for s in _rows(zf, "stops.txt")
-            if s["stop_id"] in rail_stops
+            if s["stop_id"] in used_stops
         }
 
         by_shape: dict[str, list] = defaultdict(list)
         for trip_id, t in trips.items():
-            if t["shape_id"]:
+            if t["shape_id"] and trip_id in rail_trips:
                 by_shape[t["shape_id"]].append(seq_by_trip[trip_id])
 
-        feed, finish = _edge_builder(stops)
+        # Elementarnost odseka se presoja po tem, ali na njem lezi kaksna druga
+        # postaja. Avtobusna postajalisca sem ne sodijo -- ce bi, bi odsek
+        # Divaca - Koper nehal biti elementaren zaradi Rodika ob cesti.
+        rail_stop_ids = {sid for tid in rail_trips for _, sid in seq_by_trip.get(tid, ())}
+        feed, finish = _edge_builder({k: v for k, v in stops.items() if k in rail_stop_ids})
         current, points = None, []
         for p in _rows(zf, "shapes.txt"):
             shape_id = p["shape_id"]
@@ -240,11 +256,13 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
             "INSERT INTO edge(from_id,to_id,km,elementary,trips,geojson) VALUES(?,?,?,?,?,?)", edges
         )
         conn.executemany(
-            "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color) "
-            "VALUES(?,?,?,?,?,?)",
+            "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color,mode,agency) "
+            "VALUES(?,?,?,?,?,?,?,?)",
             [
                 (tid, t["route_id"], routes[t["route_id"]]["route_short_name"],
-                 t.get("trip_headsign"), t["service_id"], routes[t["route_id"]].get("route_color"))
+                 t.get("trip_headsign"), t["service_id"], routes[t["route_id"]].get("route_color"),
+                 "vlak" if tid in rail_trips else "bus",
+                 routes[t["route_id"]].get("agency_id"))
                 for tid, t in trips.items()
             ],
         )
@@ -258,6 +276,8 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         db.set_meta(conn, "gtfs_imported_at", datetime.now().isoformat(timespec="seconds"))
 
     return {
-        "stations": len(stops), "edges": len(edges), "trips": len(trips),
+        "stations": len(stops), "edges": len(edges),
+        "trips": len(trips), "trips_rail": len(rail_trips),
+        "trips_bus": len(trips) - len(rail_trips),
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),
     }

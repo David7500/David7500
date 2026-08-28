@@ -232,3 +232,21 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   .topbar { padding: 0 12px; gap: 10px; }
   .brand-name { font-size: 14px; }
 }
+
+/* ---------- nadomestni prevoz ----------
+ * Svoja barva, ne lestvica zamud in ne semafor razmer: to ni stopnja nečesa,
+ * ampak druga vrsta prevoza. Modra je v projektu rezervirana za "ni meritve",
+ * zato tu vijolična, ki je nobena lestvica ne uporablja.
+ */
+.mode-bus {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 600 10px/1.5 var(--sans);
+  color: #b48ad8;
+  border: 1px solid #b48ad855;
+  background: #b48ad814;
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.mode-bus svg { flex-shrink: 0; }

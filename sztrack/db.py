@@ -37,15 +37,22 @@ CREATE TABLE IF NOT EXISTS edge (
     PRIMARY KEY (from_id, to_id)
 );
 
+-- `mode`: 'vlak' ali 'bus'. Nadomestni prevozi SZ so v istem feedu pod
+-- route_type = 3 in sodijo v isti iskalnik -- potnik na relaciji Ljubljana -
+-- Logatec do 12. decembra ne bo sel na vlak, ker ta ne vozi. Locimo ju
+-- s stolpcem, ne z locenimi tabelami: GTFS ju modelira enako.
 CREATE TABLE IF NOT EXISTS trip (
     trip_id    TEXT PRIMARY KEY,
     route_id   TEXT NOT NULL,
-    train_no   TEXT NOT NULL,   -- npr. "LPV 2206"
+    train_no   TEXT NOT NULL,   -- npr. "LPV 2206" ali "BUS 44201"
     headsign   TEXT,
     service_id TEXT NOT NULL,
-    color      TEXT
+    color      TEXT,
+    mode       TEXT NOT NULL DEFAULT 'vlak',
+    agency     TEXT
 );
 CREATE INDEX IF NOT EXISTS trip_train_no ON trip(train_no);
+CREATE INDEX IF NOT EXISTS trip_mode ON trip(mode);
 
 -- Vozni red. arr_s/dep_s sta sekundi od polnoci in lahko presezeta 86400.
 CREATE TABLE IF NOT EXISTS sched (
@@ -176,6 +183,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
     prizadetih poti. Nikoli ni bila napolnjena -- zajema obvestil takrat ni
     bilo -- zato je vrzenje stran varno in cenejse od dodajanja stolpcev.
     """
+    # `trip` je dobil `mode` in `agency`, ko so se pridruzili nadomestni
+    # prevozi. Stolpca dodamo -- vsebina tabele je izpeljana iz GTFS zipa in
+    # se ob naslednjem uvozu tako ali tako zamenja, dotlej pa je vse `vlak`.
+    have = {r[1] for r in conn.execute("PRAGMA table_info(trip)")}
+    if have and "mode" not in have:
+        conn.execute("ALTER TABLE trip ADD COLUMN mode TEXT NOT NULL DEFAULT 'vlak'")
+        conn.execute("ALTER TABLE trip ADD COLUMN agency TEXT")
+        conn.commit()
+
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
     ).fetchone()

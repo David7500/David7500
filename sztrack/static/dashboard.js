@@ -130,6 +130,7 @@ function groupByStation(trains) {
 function trainLineHtml(t) {
   // Barva na markerju sama ne sme nositi pomena -- vedno zraven pise tudi minuta.
   return `<span class="train-label-code">${escapeHtml(t.train_no)}</span>` +
+    modeBadgeHtml(t.mode) +
     `<span class="train-label-delay" style="color:${delayColor(bestDelay(t).value)}">${delayLabel(bestDelay(t).value)}</span>`;
 }
 
@@ -144,7 +145,7 @@ function groupLabelHtml(g) {
 function groupPopupHtml(g) {
   const rows = g.trains.map((t) => `
     <button class="popup-train" data-train="${escapeHtml(t.train_no)}">
-      <span class="popup-train-code">${escapeHtml(t.train_no)}</span>
+      <span class="popup-train-code">${escapeHtml(t.train_no)}</span>${modeBadgeHtml(t.mode)}
       <span class="popup-train-headsign">${escapeHtml(t.headsign || "")}</span>
       <span class="popup-train-delay" style="color:${delayColor(bestDelay(t).value)}">${delayLabel(bestDelay(t).value)}</span>
     </button>
