@@ -14,7 +14,11 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 Venv je `venv/` (Python 3.12), ne `.venv`. Med razvojem strežnik pogosto že
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
 
-CLI: `./venv/bin/python -m sztrack.cli <init|update|poll|show|stats|merge|weather|export>`
+CLI: `./venv/bin/python -m sztrack.cli <ukaz>` — `init`, `update`, `poll`,
+`show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`.
+
+Med razvojem: `./scripts/dev-restart.sh` (počaka na sproščen port; `pkill -f`
+z golim vzorcem ubije tudi lupino, v kateri je ukaz zapisan).
 
 ## Od kod podatki
 
@@ -26,7 +30,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 |---|---|---|---|
 | Vozni red | `gitlab.com/api/v4/projects/derp-si%2Fgtfs-generators/packages/generic/IJPP/latest/ijpp_gtfs.zip` | 41 MB | ~1×/dan |
 | Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 250 KB | 30 s |
-| Ovire | `rt.gtfs.derp.si/sources/ijpp/service_alerts` | 80 KB | — |
+| Ovire in žive zamude | `rt.gtfs.derp.si/sources/ijpp/service_alerts` | 110 KB | 60 s |
 | Vreme | `archive-api.open-meteo.com` + `api.open-meteo.com` | — | dnevno, za nazaj |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, stari SOAP je mrtev.
@@ -41,17 +45,42 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   odsekih ≥ 5 km (`segment_speeds()` to že filtrira).
 * **Feed je drseče okno** — en klic da le postanke okoli trenutnega položaja.
   Celo vožnjo sestavljamo iz zaporednih pollov.
-* **Zamude naprej po progi so napoved, ne meritev.** Merodajna je zadnja znana
-  vrednost (`run`). V prikazu morajo biti označene drugače kot potrjene.
-* **Zamuda je izmerjena v prometnem mestu, ne nujno na postaji** (SŽ appa piše
-  npr. "Slovenska Bistrica" za vlak, ki tam ne ustavlja). Prikaz naj pove, kje.
+* **Zamude naprej po progi so napoved, ne meritev** -- in ta napoved je
+  **izmerjeno slaba**. Feed za še nedosežene postanke pogosto objavi 0, dokler
+  nima prave vrednosti. Merjeno (`sztrack backtest --operator`, 11 310 nalog):
+  prevoznikova napoved MAE 7,9 min in 58 % v petih minutah, prenos trenutne
+  zamude naprej MAE 1,3 min in 94 %. V najhujšem rezu -- feed pravi 0, vlak pa
+  zamuja ≥ 5 min -- je napaka 18,5 min in v petih minutah je 6 % napovedi.
+  **Zato prikaz naprej po progi uporablja lastno oceno, ne feedove vrednosti**;
+  prevoznikova številka ostane vidna v naprednem pogledu.
+
+* **Ne verjemi ničli, ki jo feed vrne za en klic.** Pri 14 % postankov z več
+  kot dvema zapisoma se pojavi vzorec X, 0, X v razmiku ene minute. Zamuda med
+  dvema klicema ne more pasti za več, kot je vmes minilo časa. `run` zato ničlo
+  po zamudi ≥ 5 min sprejme šele, ko jo potrdi drugi zaporedni poll
+  (`collector.is_zero_blip`); dnevnik `obs` obdrži vse. Isto varovalo velja pri
+  določanju lege vlaka -- sicer (vozni red + 0) pomeni, da je postanek že minil,
+  in vlak na zemljevidu skoči naprej.
+* **Zamuda je izmerjena v prometnem mestu, ne nujno na postaji.** Ime tega
+  mesta **imamo** -- v `SZ-DELAY-*` obvestilih ("Vlak EC 79 ima izjemno zamudo
+  161 min ob prihodu na postajo Sevnica"). `run` pozna samo voznoredne postanke,
+  zato je to edini vir. Hrani se v `delay_report`, prikaz ga postavi ob našo
+  vrednost.
 * **Položaj vlaka je interpoliran, ne GPS.** `vehicle_positions` vsebuje
   avtobuse, vlakov ne. Dashboard zato riše vlake na zadnji znani postaji.
 * **Odhodne zamude s prve postaje ni.** Feed ni nikoli poročal `stop_seq = 1`
-  — najnižji zajeti je 2. Prva meritev pride šele na drugi postaji, in 29 %
-  voženj (179 od 628) je tam že čez minuto. Vlak, ki *"štarta z zamudo"*, je
-  v podatkih viden šele pozneje in nikoli na izhodišču.
+  — najnižji zajeti je 2. Vlak, ki *"štarta z zamudo"*, je v podatkih viden
+  šele na drugi postaji. Odhodna tabla zato za izhodišče vzame meritev
+  naslednje postaje in zraven napiše, od kod je ("izmerjeno v Grosuplje") --
+  brez tega je tabla prazna prav tam, kjer potnik vstopa.
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
+* **Zakaj vlak zamuja, pove `service_alerts`.** `SZ-OVIRA-*` so dela na progi,
+  nadomestni prevozi in združene garniture, vezani na `route_id` (ta je 1 : 1
+  s tripom, zato jih znamo pripeti na številko vlaka). Avgusta 2026 jih je bilo
+  ~45 hkrati -- nadomestni prevoz Ljubljana–Logatec in Divača–Koper do
+  12. decembra, zapore enega tira Celje–Šentjur, Poljčane–Pragersko,
+  Maribor–Hoče. **To pojasni, zakaj so zamude v zajetih dneh tako velike.**
+
 * **Ni** cen, sestave vlaka, perona, zasedenosti. Mednarodni vlaki (EN/MV)
   pogosto brez realtime pokritja.
 
@@ -85,20 +114,26 @@ podatkih brez izjeme. Predpona (`LP`, `LPV`, `IC`, `MV`, `EN` …) je vrsta vlak
 ```
 sztrack/
   geo.py         haversine, projekcija postaj na progo, Douglas-Peucker
-  db.py          SQLite shema + merge_from()
+  db.py          SQLite shema + merge_from() + migracije
   gtfs.py        pogojni prenos zipa, uvoz železniškega dela
-  collector.py   poll zamud, razreševanje obratovalnega dne
+  collector.py   poll zamud, razreševanje obratovalnega dne, prehodne ničle
+  alerts.py      ovire (SZ-OVIRA) in žive zamude s prometnim mestom (SZ-DELAY)
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, hitrosti, napoved, povezave
+  journey.py     odhodna tabla, iskanje postaj, zveze z enim prestopom
+  backtest.py    merjenje napovedi z izpuščanjem enega dne
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
   cli.py         ukazna vrstica
   templates/     connections.html (vstopna), dashboard.html, train.html
-  static/        common.js + connections/dashboard/train .js/.css
+  static/        base.css (barvni žetoni) + common.js + connections/dashboard/train
+tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
+scripts/         dev-restart.sh, build_deploy_zip.sh
 ```
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
-`obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` · `alert`.
+`obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·
+`alert` + `alert_entity` (ovire) · `delay_report` (kje in koliko, po prevozniku).
 
 Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih vrstic.
 
@@ -106,9 +141,14 @@ Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih v
 
 | pot | kaj |
 |---|---|
-| `/app` | iskalnik povezav — vstopna stran |
+| `/app` | iskalnik povezav **in odhodna tabla** — vstopna stran |
 | `/app/map` | živi zemljevid (Leaflet + OSM rastrske ploščice) |
 | `/app/train/{no}` | okno enega vlaka: profil poti, zgodovina, razmere, hitrosti |
+
+Vsaka stran ima preklop **preprosto / napredno**. To ni druga stran: napredni
+pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom
+`adv-only` (p90, delež točnih, številka postanka, kaj pravi feed). Potnik in
+radovednež gledata isto vožnjo.
 
 Okno vlaka je **ena slika, ne zavihki**. Krivulja zamude čez vse postaje poti
 in pod njo, v istem grafu, pas razmer: vprašanje ni *"kakšno je vreme"*, ampak
@@ -229,13 +269,34 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
 
 ## Stanje zajema
 
-Lokalna baza `data/sz.sqlite` (2026-08-23): 11913 meritev, 7176 postankov,
-3 obratovalni dnevi, 21312 vremenskih vrstic, 267 postaj, 5,4 MB. Merodajen je
-zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
+Lokalna baza `data/sz.sqlite` (2026-08-29): 60402 meritev,
+38749 postankov, 9 obratovalnih dni,
+34632 vremenskih vrstic, 267 postaj,
+44 veljavnih obvestil o ovirah, 13.7 MB.
+Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
-Za napoved zamude (`stats.predict`) je zaenkrat izhodiščni model: prenos
-trenutne zamude naprej, popravljen za historično mediano spremembe na odseku.
-Za kaj boljšega rabi 2–3 mesece zajema.
+Za napoved zamude (`stats.predict`): prenos trenutne zamude naprej, popravljen
+za historično mediano spremembe pri **tem vlaku**. To ni ugibanje -- izmerjeno
+je (`sztrack backtest`, 258 137 nalog, izpuščanje enega dne):
+
+| model | MAE | v 5 min |
+|---|---|---|
+| prenos (referenca) | 2,91 min | 82,8 % |
+| **vlak (v uporabi)** | **2,00 min** | **90,3 %** |
+| odsek | 2,22 min | 88,1 % |
+| odsek + razred zamude | 2,26 min | 87,8 % |
+| združen (krčenje) | 1,98 min | 89,6 % |
+
+Iz tega dvoje, kar velja spoštovati, preden kdo piše nov model:
+
+* **Združevanje po odseku model poslabša.** Na istem tiru se IC in lokalni vlak
+  ne obnašata enako, zato skupna mediana zabriše prav tisto, kar šteje.
+* **Združen model prihrani 1 % MAE in izgubi pri deležu v petih minutah.** To
+  ni vredno zapletenosti. Prag `MIN_SAMPLES` 1–3 da isti rezultat, 4 in več
+  poslabša.
+
+Vsak nov model naj se najprej pomeri s `prenos`. Kar ga ne premaga, ne sodi
+v prikaz, pa naj bo še tako domiseln.
 
 ## Odprto
 
@@ -246,7 +307,13 @@ Za kaj boljšega rabi 2–3 mesece zajema.
   * prenova okna vlaka (`design/okno-vlaka/`) —
     https://claude.ai/code/artifact/c219b447-a3b8-4d5a-b5a8-267953914791
   Platni sta skica, **koda je merodajna**: okno vlaka je od takrat dobilo
-  semafor razmer namesto enega modrega odtenka in izgubilo zavihke.
+  semafor razmer namesto enega modrega odtenka, izgubilo zavihke ter dobilo
+  preklop preprosto/napredno, obvestila o ovirah in poročilo prevoznika.
+* Zemljevid še vedno stoji na svetlih OSM ploščicah pod temno temo. Ni napaka
+  podatkov, je pa edina stran, kjer se aplikacija bori sama s sabo.
+* Avtobusi: `vehicle_positions` nosi ~20 vozil z GPS (LPP in medkrajevni),
+  vlakov pa ne. Isti GTFS zip že vsebuje avtobusni del, ki ga uvoz namenoma
+  izpusti (`RAIL_ROUTE_TYPE`).
 
 Daljši zapisi: [HANDOVER.md](HANDOVER.md) (stanje projekta),
 [docs/APLIKACIJA.md](docs/APLIKACIJA.md) (dogovorjeno o prikazu),
