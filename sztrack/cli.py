@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import config, collector, db, gtfs, stats, weather
+from . import alerts, config, collector, db, gtfs, stats, weather
 
 
 def cmd_init(args):
@@ -85,6 +85,32 @@ def cmd_weather(args):
     print(json.dumps(weather.backfill(conn, args.days), indent=2, ensure_ascii=False))
 
 
+def cmd_alerts(args):
+    conn = db.connect()
+    db.init(conn)
+    if args.fetch:
+        print(json.dumps(alerts.poll_once(conn), indent=2, ensure_ascii=False))
+        return
+    if args.live:
+        rows = alerts.live_delays(conn)
+        if not rows:
+            print("danes se ni porocil o zamudi")
+            return
+        print(f"{'vlak':<12}{'zamuda':>8}  prometno mesto")
+        for r in rows:
+            mark = "!" if r["severe"] else " "
+            print(f"{r['train_no']:<12}{r['delay_min']:>6} min{mark} {r['station']}")
+        return
+    rows = alerts.active(conn)
+    if not rows:
+        print("ni veljavnih obvestil -- pozeni 'alerts --fetch'")
+        return
+    for r in rows:
+        print(f"- {r['header']}")
+        print(f"  {r['effect_label'] or r['effect']} · {r['cause_label'] or r['cause']}"
+              f" · {len(r['trains'])} vlakov")
+
+
 def cmd_export(args):
     conn = db.connect()
     out = Path(args.out)
@@ -129,6 +155,11 @@ def main(argv=None):
     a.add_argument("--days", type=int, default=7, help="koliko dni nazaj do danes")
     a.add_argument("--show", action="store_true", help="samo izpisi, kaj je ze shranjeno")
     a.set_defaults(func=cmd_weather)
+
+    a = sub.add_parser("alerts", help="obvestila o ovirah in zive zamude")
+    a.add_argument("--fetch", action="store_true", help="poberi feed zdaj")
+    a.add_argument("--live", action="store_true", help="zadnja porocila o zamudi po vlakih")
+    a.set_defaults(func=cmd_alerts)
 
     a = sub.add_parser("export", help="izvozi GeoJSON mreze in postaj")
     a.add_argument("--out", default="export")

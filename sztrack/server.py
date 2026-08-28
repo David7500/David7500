@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import collector, config, db, gtfs, weather
+from . import alerts, collector, config, db, gtfs, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -89,7 +89,7 @@ def _next_at(hour: int, minute: int) -> datetime:
 
 
 def _worker(interval: int, refresh_hour: int, refresh_mode: str,
-            weather_hour: int) -> None:
+            weather_hour: int, alert_interval: int) -> None:
     conn = db.connect()
     db.init(conn)
     next_refresh = None
@@ -99,6 +99,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # dan, zato vsakic pobere zadnje tri dni in s tem povozi vcerajsnjo napoved
     # z arhivsko vrednostjo.
     next_weather = _next_at(weather_hour, 10) if weather_hour >= 0 else None
+    # Obvestila so vecji prenos od zamud in se pocasneje spreminjajo (razen
+    # SZ-DELAY), zato imajo svoj, redkejsi ritem.
+    next_alerts = 0.0
 
     while not _stop.is_set():
         started = time.monotonic()
@@ -108,6 +111,16 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 _log(f"zajem: {info['trips']} vlakov, {info['changed']} sprememb")
         except Exception as exc:            # feed občasno resetira povezavo
             _log(f"zajem ni uspel: {exc}")
+
+        if alert_interval > 0 and time.monotonic() >= next_alerts:
+            next_alerts = time.monotonic() + alert_interval
+            try:
+                info = alerts.poll_once(conn)
+                if info.get("changed"):
+                    _log(f"obvestila: {info['alerts']} zapisov, "
+                         f"{info['changed']} novih poročil o zamudi")
+            except Exception as exc:      # obvestila niso kriticna za zajem
+                _log(f"obvestil ni bilo mogoče pobrati: {exc}")
 
         if next_refresh and datetime.now(TZ) >= next_refresh:
             next_refresh += timedelta(days=1)
@@ -138,14 +151,17 @@ async def lifespan(app):
         weather_hour = int(os.environ.get("SZ_WEATHER_HOUR", "5"))
         if os.environ.get("SZ_WEATHER", "1") == "0":
             weather_hour = -1
+        alert_interval = int(os.environ.get("SZ_ALERT_SECONDS", "60"))
         thread = threading.Thread(
-            target=_worker, args=(interval, hour, mode, weather_hour),
+            target=_worker, args=(interval, hour, mode, weather_hour, alert_interval),
             daemon=True, name="sztrack-collector",
         )
         thread.start()
         note = "brez osveževanja voznega reda" if mode == "off" else f"osvežitev ob {hour}:20 ({mode})"
         wnote = "vreme izklopljeno" if weather_hour < 0 else f"vreme ob {weather_hour}:10"
-        _log(f"zajem teče vsakih {interval} s, {note}, {wnote}")
+        anote = ("obvestila izklopljena" if alert_interval <= 0
+                 else f"obvestila vsakih {alert_interval} s")
+        _log(f"zajem teče vsakih {interval} s, {note}, {wnote}, {anote}")
     else:
         _log("zajem izklopljen (SZ_COLLECTOR=0)")
     try:

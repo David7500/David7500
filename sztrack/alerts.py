@@ -1,0 +1,267 @@
+"""Obvestila o ovirah in žive zamude iz GTFS-RT `service_alerts`.
+
+Ta vir je bil dolgo spregledan, čeprav nosi dvoje, česar `trip_updates` nima:
+
+* **`SZ-OVIRA-*`** -- dela na progi, nadomestni prevozi, združene garniture.
+  Vezana so na `route_id`, ta pa je v tem feedu ena-na-ena s tripom, zato jih
+  znamo pripeti naravnost na številko vlaka. To je edini vir odgovora na
+  vprašanje *zakaj* vlak zamuja; vse drugo v bazi pove le *koliko*.
+
+* **`SZ-DELAY-*`** -- živa zamuda z **imenom prometnega mesta**, kjer je
+  izmerjena ("Vlak EC 79 ima izjemno zamudo 161 min ob prihodu na postajo
+  Sevnica"). Prav to je vrednost, ki jo kaže tudi aplikacija SŽ, in prav to
+  je podatek, ki ga iz `trip_updates` ne moremo dobiti: tam imamo samo
+  `stop_sequence` voznorednega postanka, prometno mesto pa pogosto ni postanek.
+
+Obvestila prihajajo v parih sl + en pod različnima `alert_id`. Obeh ne
+združujemo -- shranimo jezik in prikaz izbere svojega.
+"""
+from __future__ import annotations
+
+import re
+import sqlite3
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from . import config, db
+from .collector import fetch, resolve_service_date, _rail_trip_windows, _service_dates
+
+TZ = ZoneInfo(config.TIMEZONE)
+
+# "Vlak LP 3224 ima izjemno zamudo 42 min ob prihodu na postajo Ljubljana Rakovnik."
+# Pika na koncu je neobvezna, ker se je feed glede nje ze premislil.
+_DELAY_RE = re.compile(
+    r"Vlak\s+(?P<train>.+?)\s+ima\s+(?P<severe>izjemno\s+)?zamudo\s+"
+    r"(?P<min>-?\d+)\s*min\s+ob\s+(?P<what>prihodu|odhodu)\s+"
+    r"(?:na|s|z)\s+postaj[eo]\s+(?P<station>.+?)\.?$",
+    re.IGNORECASE,
+)
+
+# GTFS-RT Alert.Cause / Alert.Effect -- samo tiste, ki jih ta feed dejansko
+# uporablja; ostale pustimo kot stevilko, da prikaz ne lazniv.
+CAUSE_SL = {
+    1: "neznano", 2: "drug vzrok", 3: "tehnična težava", 4: "stavka",
+    5: "demonstracije", 6: "nesreča", 7: "praznik", 8: "vreme",
+    9: "vzdrževalna dela", 10: "gradbena dela", 11: "policijska aktivnost",
+    12: "medicinska pomoč",
+}
+EFFECT_SL = {
+    1: "vlak odpovedan", 2: "spremenjena pot", 3: "izjemna zamuda",
+    4: "sprememba voznega reda", 5: "postaja zaprta", 6: "spremenjen promet",
+    7: "ni vpliva", 8: "gneča", 9: "redkejši promet", 10: "postanek prestavljen",
+}
+
+
+def _kind(alert_id: str) -> str:
+    if alert_id.startswith("SZ-DELAY"):
+        return "delay"
+    if alert_id.startswith("SZ-OVIRA"):
+        return "ovira"
+    return "drugo"
+
+
+def _pick(translated, want: str = "sl") -> tuple[str | None, str | None]:
+    """Vrne (besedilo, jezik). Feed da vsak alert v enem jeziku, a se
+    zanasati na to ni treba -- ce je prevodov vec, ima slovenscina prednost."""
+    trs = list(translated.translation)
+    if not trs:
+        return None, None
+    for t in trs:
+        if t.language == want:
+            return t.text, t.language
+    return trs[0].text, trs[0].language or None
+
+
+def parse_delay_text(text: str) -> dict | None:
+    """Razčleni besedilo `SZ-DELAY` obvestila.
+
+    Vrne None, kadar se oblika ne ujema -- takrat obvestilo shranimo kot
+    navadno besedilo in ga ne poskušamo razumeti. Tiho ugibanje bi bilo
+    slabše od priznanja, da oblike ne poznamo.
+    """
+    if not text:
+        return None
+    m = _DELAY_RE.search(text.strip())
+    if not m:
+        return None
+    return {
+        "train_no": m.group("train").strip(),
+        "delay_min": int(m.group("min")),
+        "station": m.group("station").strip(),
+        "severe": bool(m.group("severe")),
+        "event": "prihod" if m.group("what").lower().startswith("prihod") else "odhod",
+    }
+
+
+def ingest(conn: sqlite3.Connection, feed) -> dict:
+    """Zapiše obvestila in žive zamude. Vrne števce za dnevnik."""
+    now = datetime.now(TZ)
+    seen_at = int(time.time())
+    windows = _rail_trip_windows(conn)
+    valid = _service_dates(conn)
+
+    n_alerts = n_entities = n_reports = n_changed = 0
+
+    for entity in feed.entity:
+        a = entity.alert
+        kind = _kind(entity.id)
+        header, lang = _pick(a.header_text)
+        desc, _ = _pick(a.description_text)
+        url, _ = _pick(a.url)
+        period = a.active_period[0] if a.active_period else None
+
+        conn.execute(
+            "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
+            "                  header, description, url, lang, first_seen, last_seen) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(alert_id) DO UPDATE SET "
+            "  last_seen = excluded.last_seen, header = excluded.header,"
+            "  description = excluded.description, cause = excluded.cause,"
+            "  effect = excluded.effect, start_ts = excluded.start_ts,"
+            "  end_ts = excluded.end_ts",
+            (entity.id, kind, a.cause or None, a.effect or None,
+             period.start or None if period else None,
+             period.end or None if period else None,
+             header, desc, url, lang, seen_at, seen_at),
+        )
+        n_alerts += 1
+
+        for ie in a.informed_entity:
+            conn.execute(
+                "INSERT OR IGNORE INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
+                "VALUES(?,?,?,?)",
+                (entity.id, ie.route_id or "", ie.trip.trip_id or "", ie.stop_id or ""),
+            )
+            n_entities += 1
+
+        if kind != "delay":
+            continue
+
+        # Ziva zamuda: povezi jo s tripom in zapisi samo ob spremembi.
+        parsed = parse_delay_text(desc) or parse_delay_text(header)
+        trip_id = next((ie.trip.trip_id for ie in a.informed_entity if ie.trip.trip_id), None)
+        if not (parsed and trip_id and trip_id in windows):
+            continue
+        service_date = resolve_service_date(trip_id, windows.get(trip_id),
+                                            valid.get(trip_id), now)
+        if not service_date:
+            continue
+        n_reports += 1
+
+        prev = conn.execute(
+            "SELECT delay_min, station FROM delay_report "
+            "WHERE trip_id=? AND service_date=? ORDER BY seen_ts DESC LIMIT 1",
+            (trip_id, service_date),
+        ).fetchone()
+        if prev and prev["delay_min"] == parsed["delay_min"] and prev["station"] == parsed["station"]:
+            continue    # nespremenjeno -- ne pisi
+
+        conn.execute(
+            "INSERT OR IGNORE INTO delay_report"
+            "(trip_id, service_date, seen_ts, train_no, delay_min, station, event, severe) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            (trip_id, service_date, seen_at, parsed["train_no"], parsed["delay_min"],
+             parsed["station"], parsed["event"], int(parsed["severe"])),
+        )
+        n_changed += 1
+
+    conn.commit()
+    return {"alerts": n_alerts, "entities": n_entities,
+            "delay_reports": n_reports, "changed": n_changed}
+
+
+def poll_once(conn: sqlite3.Connection) -> dict:
+    """En zajem obvestil. Pogojni GET -- ob nespremenjenem feedu ne prenese nič.
+
+    Pozor: ETag velja za celoten feed. Ker `SZ-DELAY` obvestila nosijo živo
+    zamudo, se feed spreminja skoraj ob vsakem klicu; 304 je tu redkejši kot
+    pri voznem redu, a nas nič ne stane.
+    """
+    feed = fetch(config.SERVICE_ALERTS_URL, conn, "alerts_etag")
+    if feed is None:
+        return {"alerts": 0, "changed": 0, "unchanged": True}
+    return ingest(conn, feed)
+
+
+# ---------------------------------------------------------------- branje
+
+def _alert_row(r: sqlite3.Row) -> dict:
+    d = dict(r)
+    d["cause_label"] = CAUSE_SL.get(d.get("cause"))
+    d["effect_label"] = EFFECT_SL.get(d.get("effect"))
+    return d
+
+
+def for_train(conn: sqlite3.Connection, train_no: str, lang: str = "sl") -> list[dict]:
+    """Obvestila o ovirah, ki zadevajo ta vlak.
+
+    Vez gre prek `route_id`: obvestila naštevajo poti, `trip` pa ima route_id
+    vsake vožnje. `SZ-DELAY` sem ne sodi -- to ni ovira, ampak trenutno stanje,
+    ki ga prikaz že ima iz `run`.
+    """
+    now = int(time.time())
+    rows = conn.execute(
+        "SELECT DISTINCT a.* FROM alert a "
+        "JOIN alert_entity ae ON ae.alert_id = a.alert_id "
+        "JOIN trip t ON t.route_id = ae.route_id "
+        "WHERE t.train_no = ? AND a.kind = 'ovira' AND a.lang = ? "
+        "  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
+        "ORDER BY a.start_ts DESC",
+        (train_no, lang, now),
+    )
+    return [_alert_row(r) for r in rows]
+
+
+def active(conn: sqlite3.Connection, lang: str = "sl") -> list[dict]:
+    """Vse veljavne ovire, z vlaki, ki jih zadevajo."""
+    now = int(time.time())
+    rows = conn.execute(
+        "SELECT a.* FROM alert a WHERE a.kind = 'ovira' AND a.lang = ? "
+        "  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
+        "  AND (a.start_ts IS NULL OR a.start_ts <= ?) "
+        "ORDER BY a.start_ts DESC",
+        (lang, now, now),
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = _alert_row(r)
+        d["trains"] = [x["train_no"] for x in conn.execute(
+            "SELECT DISTINCT t.train_no FROM alert_entity ae "
+            "JOIN trip t ON t.route_id = ae.route_id "
+            "WHERE ae.alert_id = ? ORDER BY t.train_no",
+            (r["alert_id"],),
+        )]
+        out.append(d)
+    return out
+
+
+def live_delays(conn: sqlite3.Connection, service_date: str | None = None) -> list[dict]:
+    """Zadnje poročilo o zamudi za vsak vlak na dani dan.
+
+    To je merodajna vrednost prevoznika, vključno s prometnim mestom -- naša
+    `run` tabela pozna samo voznoredne postanke in tega imena nima.
+    """
+    service_date = service_date or datetime.now(TZ).date().isoformat()
+    rows = conn.execute(
+        "WITH last AS ("
+        "  SELECT *, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY seen_ts DESC) rn"
+        "  FROM delay_report WHERE service_date = ?"
+        ") SELECT * FROM last WHERE rn = 1 ORDER BY delay_min DESC",
+        (service_date,),
+    )
+    return [{k: r[k] for k in r.keys() if k != "rn"} for r in rows]
+
+
+def train_reports(conn: sqlite3.Connection, train_no: str, service_date: str) -> list[dict]:
+    """Zaporedje poročil o eni vožnji -- kje je bil vlak in koliko je zamujal.
+
+    Bližje "sledenju" kot karkoli drugega, kar imamo: prometna mesta se
+    zvrstijo po progi, čeprav vlak tam ne ustavlja.
+    """
+    rows = conn.execute(
+        "SELECT * FROM delay_report WHERE train_no = ? AND service_date = ? "
+        "ORDER BY seen_ts",
+        (train_no, service_date),
+    )
+    return [dict(r) for r in rows]

@@ -109,14 +109,52 @@ CREATE TABLE IF NOT EXISTS weather (
 );
 CREATE INDEX IF NOT EXISTS weather_hour ON weather(hour_ts);
 
+-- ---------- obvestila (iz GTFS-RT service_alerts) ----------
+
+-- Dvoje v enem viru: `ovira` so dela in nadomestni prevozi (edini vir odgovora
+-- ZAKAJ vlak zamuja), `delay` pa ziva zamuda z imenom prometnega mesta.
+-- Isto obvestilo pride v paru sl + en pod razlicnima id-jema; `lang` ju loci.
 CREATE TABLE IF NOT EXISTS alert (
-    alert_id     TEXT NOT NULL,
-    first_seen   INTEGER NOT NULL,
-    last_seen    INTEGER NOT NULL,
+    alert_id     TEXT PRIMARY KEY,
+    kind         TEXT NOT NULL,      -- ovira | delay | drugo
+    cause        INTEGER,
+    effect       INTEGER,
+    start_ts     INTEGER,
+    end_ts       INTEGER,
     header       TEXT,
     description  TEXT,
-    PRIMARY KEY (alert_id)
+    url          TEXT,
+    lang         TEXT,
+    first_seen   INTEGER NOT NULL,
+    last_seen    INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS alert_kind ON alert(kind, lang);
+
+CREATE TABLE IF NOT EXISTS alert_entity (
+    alert_id TEXT NOT NULL,
+    route_id TEXT NOT NULL DEFAULT '',
+    trip_id  TEXT NOT NULL DEFAULT '',
+    stop_id  TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (alert_id, route_id, trip_id, stop_id)
+);
+CREATE INDEX IF NOT EXISTS alert_entity_route ON alert_entity(route_id);
+
+-- Zaporedje porocil o eni voznji: kje je bil vlak in koliko je zamujal.
+-- Prometno mesto pogosto ni voznoredni postanek, zato ga `run` ne pozna.
+-- Pisemo samo ob spremembi (zamuda ali mesto), sicer bi bilo to vsakih 30 s.
+CREATE TABLE IF NOT EXISTS delay_report (
+    trip_id      TEXT NOT NULL,
+    service_date TEXT NOT NULL,
+    seen_ts      INTEGER NOT NULL,
+    train_no     TEXT NOT NULL,
+    delay_min    INTEGER NOT NULL,
+    station      TEXT NOT NULL,
+    event        TEXT,               -- prihod | odhod
+    severe       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (trip_id, service_date, seen_ts)
+);
+CREATE INDEX IF NOT EXISTS delay_report_train ON delay_report(train_no, service_date);
+CREATE INDEX IF NOT EXISTS delay_report_date ON delay_report(service_date);
 """
 
 
@@ -131,7 +169,27 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     return conn
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Popravi sheme, ki so nastale pred to razlicico.
+
+    Tabela `alert` je prvotno hranila samo besedilo brez vzroka, ucinka in
+    prizadetih poti. Nikoli ni bila napolnjena -- zajema obvestil takrat ni
+    bilo -- zato je vrzenje stran varno in cenejse od dodajanja stolpcev.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
+    ).fetchone()
+    if row and "kind" not in (row[0] or ""):
+        n = conn.execute("SELECT COUNT(*) FROM alert").fetchone()[0]
+        if n:                       # ce bi kdaj vendarle kaj bilo, ne brisi tiho
+            conn.execute("ALTER TABLE alert RENAME TO alert_stara")
+        else:
+            conn.execute("DROP TABLE alert")
+        conn.commit()
+
+
 def init(conn: sqlite3.Connection) -> None:
+    _migrate(conn)
     conn.executescript(SCHEMA)
     conn.commit()
 
@@ -147,6 +205,13 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         (key, value),
     )
+
+
+def _has(conn: sqlite3.Connection, table: str) -> bool:
+    """Ali priklopljena baza (`src`) pozna to tabelo? Starejsi posnetki je ne."""
+    return conn.execute(
+        "SELECT 1 FROM src.sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone() is not None
 
 
 def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
@@ -186,10 +251,7 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
             )
             # Vreme je izpeljano in bi se dalo znova pobrati, a prilivanje je
             # zastonj. Starejsa baza te tabele nima -- takrat korak preskocimo.
-            has_weather = conn.execute(
-                "SELECT 1 FROM src.sqlite_master WHERE type='table' AND name='weather'"
-            ).fetchone()
-            if has_weather:
+            if _has(conn, "weather"):
                 conn.execute(
                     "INSERT INTO weather(cell, hour_ts, temp_c, precip_mm, snowfall_cm,"
                     "                    wind_gust_kmh, code, source, fetched_at) "
@@ -202,6 +264,29 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
                     "  code = excluded.code, source = excluded.source, "
                     "  fetched_at = excluded.fetched_at "
                     "WHERE excluded.source = 'archive' OR weather.source = excluded.source"
+                )
+            # Obvestila in porocila o zamudi: starejsa baza teh tabel nima.
+            if _has(conn, "alert"):
+                conn.execute(
+                    "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
+                    "                  header, description, url, lang, first_seen, last_seen) "
+                    "SELECT alert_id, kind, cause, effect, start_ts, end_ts,"
+                    "       header, description, url, lang, first_seen, last_seen "
+                    "FROM src.alert WHERE true "
+                    "ON CONFLICT(alert_id) DO UPDATE SET "
+                    "  first_seen = MIN(alert.first_seen, excluded.first_seen), "
+                    "  last_seen  = MAX(alert.last_seen,  excluded.last_seen)"
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
+                    "SELECT alert_id, route_id, trip_id, stop_id FROM src.alert_entity"
+                )
+            if _has(conn, "delay_report"):
+                conn.execute(
+                    "INSERT OR IGNORE INTO delay_report"
+                    "(trip_id, service_date, seen_ts, train_no, delay_min, station, event, severe) "
+                    "SELECT trip_id, service_date, seen_ts, train_no, delay_min, station,"
+                    "       event, severe FROM src.delay_report"
                 )
     finally:
         conn.execute("DETACH DATABASE src")
