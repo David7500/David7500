@@ -213,7 +213,10 @@ je črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
 oranžni zamud `#f2a87e` je pri deutanu ΔE 5,5 — nerazločljivo. Zato je zamuda
 krivulja s pikami zgoraj, razmere pa stolpci v ločenem pasu spodaj, in vsak
 stolpec od stopnje 4 naprej nosi svojo številko. Paleto preverjaj z
-validatorjem (skill `dataviz`, `scripts/validate_palette.js`), ne na oko.
+`scripts/preveri_paleto.py`, ne na oko. Ta izmeri kontrast (WCAG), monotonost
+svetlosti in razločljivost pri barvni slepoti (CIEDE2000 na simulaciji
+protan/deutan/tritan). Trk obeh lestvic je pri tritanu **ΔE 1,6**, torej hujši
+od tu prej zapisanih 5,5 — ločena registra sta nujna, ne okrasna.
 
 ## Razdalje med postajami
 

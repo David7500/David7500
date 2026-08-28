@@ -61,7 +61,7 @@
   width: 100%;
 }
 .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
-.field input::placeholder { color: var(--ink-ghost); }
+.field input::placeholder { color: var(--ink-faint); }
 /* Ikona koledarja je v temni temi privzeto crna -- brez tega se ne vidi. */
 .field input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.65); cursor: pointer; }
 
@@ -238,7 +238,7 @@
   padding-top: 14px;
   border-top: 1px solid var(--line-soft);
   font: 400 11px/1.6 var(--sans);
-  color: var(--ink-ghost);
+  color: var(--ink-faint);
 }
 
 /* ---------- telefon ---------- */

@@ -20,6 +20,9 @@
   --ink-dim:   #9aa3b0;
   --ink-mute:  #79828f;
   --ink-faint: #6b7480;
+  /* Samo za okras -- pomišljaj med urama, puščica predala. Kontrast proti
+     podlagi je 2,4 : 1 in za besedilo ne zadošča; besedilo naj vzame
+     --ink-faint (4,0 : 1). Preveri s scripts/preveri_paleto.py. */
   --ink-ghost: #4a515c;
 
   /* lestvica zamud -- ordinalna, en odtenek, temna tema */
