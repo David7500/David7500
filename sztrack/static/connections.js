@@ -203,9 +203,15 @@ function delayChipHtml(delay, kind, at) {
     ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at ? ` v ${escapeHtml(at)}` : ""}</div>` : ""}`;
 }
 
+// Vožnja je "mimo" šele, ko je minil PRIČAKOVANI odhod, ne voznoredni.
+// Vlak, ki zamuja pol ure, je ob voznorednem času še vedno na postaji in je
+// še vedno možnost -- prav to je razlika, ki jo aplikacija o zamudah dolguje.
+function departedMs(c) {
+  return new Date(c.expected_dep || c.sched_dep).getTime();
+}
+
 function connectionRowHtml(c, nowMs, isNext, date) {
-  const dep = new Date(c.sched_dep).getTime();
-  const gone = nowMs && dep < nowMs;
+  const gone = nowMs && departedMs(c) < nowMs;
   const late = c.delay_s != null && c.delay_s >= 60;
   const color = delayColor(c.delay_s);
   const cd = isNext && nowMs ? countdownLabel(c.expected_dep || c.sched_dep, nowMs) : "";
@@ -301,24 +307,33 @@ function renderConnections(data) {
   // Naslednja vozjna je prva, ki se ni odpeljala. Prav to clovek isce, zato
   // je poudarjena, ne le prva po vrsti.
   let nextIdx = -1;
-  if (isToday) nextIdx = list.findIndex((c) => new Date(c.sched_dep).getTime() >= nowMs);
+  if (isToday) nextIdx = list.findIndex((c) => departedMs(c) >= nowMs);
 
-  const rows = list.map((c, i) => connectionRowHtml(c, nowMs, i === nextIdx, data.date));
+  // Ze odpeljane vozjne so kontekst, ne izbira. Ostanejo dosegljive -- kdor
+  // preverja, ali je zamudil vlak, jih rabi -- a ne stojijo pred odgovorom.
+  const gone = nextIdx > 0 ? list.slice(0, nextIdx) : [];
+  const ahead = nextIdx >= 0 ? list.slice(nextIdx) : list;
+
+  const rows = [];
+  if (gone.length) {
+    rows.push(`<details class="past-box"><summary class="past-head">
+        pokaži ${gone.length} ${gone.length === 1 ? "prejšnjo vožnjo" : "prejšnjih"}
+      </summary>
+      ${gone.map((c) => connectionRowHtml(c, nowMs, false, data.date)).join("")}
+    </details>`);
+  }
+  rows.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date)));
   if (legs.length) {
     rows.push(`<div class="result-head"><span>Z enim prestopom</span></div>`);
     rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date)));
   }
   resultsEl.innerHTML = rows.join("");
 
-  const next = resultsEl.querySelector(".conn-row.is-next");
-  if (next) next.scrollIntoView({ block: "center", behavior: "smooth" });
-
   renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
 }
 
 function boardRowHtml(r, nowMs, isNext, date) {
-  const t = new Date(r.sched).getTime();
-  const gone = nowMs && t < nowMs;
+  const gone = nowMs && new Date(r.expected || r.sched).getTime() < nowMs;
   const late = r.delay_s != null && r.delay_s >= 60;
   const color = delayColor(r.delay_s);
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
@@ -364,7 +379,7 @@ function renderBoard(data) {
   }
 
   let nextIdx = -1;
-  if (isToday) nextIdx = list.findIndex((r) => new Date(r.sched).getTime() >= nowMs);
+  if (isToday) nextIdx = list.findIndex((r) => new Date(r.expected || r.sched).getTime() >= nowMs);
   resultsEl.innerHTML = list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date)).join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }

@@ -424,3 +424,19 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
   font: 400 10.5px/1.5 var(--sans); color: var(--ink-faint);
 }
 .alert-card-foot code { font-family: var(--mono); }
+
+/* Že odpeljane vožnje: dosegljive, a ne pred odgovorom. Kdor preverja, ali je
+ * zamudil vlak, jih rabi; kdor išče naslednjega, jih ne. */
+.past-box { border-bottom: 1px solid var(--line-soft); }
+.past-head {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  font: 400 12px/1.4 var(--sans);
+  color: var(--ink-mute);
+  user-select: none;
+}
+.past-head::-webkit-details-marker { display: none; }
+.past-head::before { content: "▸ "; color: var(--ink-ghost); }
+.past-box[open] .past-head::before { content: "▾ "; }
+.past-head:hover { color: var(--ink); }
