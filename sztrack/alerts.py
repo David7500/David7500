@@ -209,8 +209,44 @@ def for_train(conn: sqlite3.Connection, train_no: str, lang: str = "sl") -> list
         "  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
         "ORDER BY a.start_ts DESC",
         (train_no, lang, now),
-    )
-    return [_alert_row(r) for r in rows]
+    ).fetchall()
+    if rows:
+        return [_alert_row(r) for r in rows]
+    return _by_endpoints(conn, train_no, lang, now)
+
+
+def _by_endpoints(conn: sqlite3.Connection, train_no: str, lang: str, now: int) -> list[dict]:
+    """Obvestila, ki v naslovu imenujejo obe krajišči te vožnje.
+
+    Rabijo jo nadomestni prevozi. Obvestila naštevajo `route_id` **vlakov**,
+    ki jih avtobus nadomešča, ne avtobusnih poti -- zato po `alert_entity`
+    z avtobusa ni poti do razlage, zakaj sploh vozi. Njegova krajišči pa sta
+    v naslovu obvestila dobesedno: "Vozni red nadomestnega prevoza:
+    Ljubljana - Logatec in obratno".
+
+    Zahtevamo obe imeni, ne enega: "Ljubljana" je v polovici vseh naslovov.
+    """
+    ends = conn.execute(
+        "WITH s AS (SELECT sc.stop_id, sc.stop_seq FROM trip t JOIN sched sc USING (trip_id) "
+        "           WHERE t.train_no = ?) "
+        "SELECT st.name FROM s JOIN station st ON st.stop_id = s.stop_id "
+        "WHERE s.stop_seq = (SELECT MIN(stop_seq) FROM s) "
+        "   OR s.stop_seq = (SELECT MAX(stop_seq) FROM s)",
+        (train_no,),
+    ).fetchall()
+    names = [r["name"] for r in ends]
+    if len(names) < 2:
+        return []
+    rows = conn.execute(
+        "SELECT * FROM alert WHERE kind = 'ovira' AND lang = ? "
+        "  AND (end_ts IS NULL OR end_ts >= ?) AND (start_ts IS NULL OR start_ts <= ?)",
+        (lang, now, now),
+    ).fetchall()
+    out = [_alert_row(r) for r in rows
+           if all(n.lower() in (r["header"] or "").lower() for n in names)]
+    for d in out:
+        d["matched_by"] = "krajišči vožnje"
+    return out
 
 
 def active(conn: sqlite3.Connection, lang: str = "sl") -> list[dict]:

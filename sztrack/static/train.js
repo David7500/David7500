@@ -91,7 +91,7 @@ window.addEventListener("resize", () => {
 // Skupno stanje: profil zamude potrebuje tekoco voznjo IN zgodovino, ki se
 // nalagata loceno in z razlicnim ritmom.
 const state = { run: null, forecast: null, past: null, pastRuns: 0,
-                weather: new Map(), report: null };
+                weather: new Map(), report: null, mode: "vlak" };
 // Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
 // ob preklopu pogleda.
 let hoverSeq = null;
@@ -116,6 +116,7 @@ function ageLabel(iso) {
 }
 
 function runHeadHtml(cur) {
+  const bus = isBus(state.mode);
   const d = cur ? stopDelay(cur) : null;
   const wx = cur ? state.weather.get(cur.stop_seq) : null;
   const color = delayColor(d);
@@ -136,7 +137,7 @@ function runHeadHtml(cur) {
       <div class="detail-now-where">
         ${cur
           ? `izmerjeno v <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
-          : "za ta vlak danes še ni nobene meritve"}
+          : `za ${bus ? "ta prevoz" : "ta vlak"} na ta dan še ni nobene meritve`}
       </div>
       ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
         ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale ? " — vlak je od takrat verjetno že pripeljal" : ""}
@@ -153,8 +154,10 @@ function runHeadHtml(cur) {
         </div>
         <div class="detail-weather-raw">${escapeHtml(weatherSummary(wx))}</div>` : ""}
       <div class="detail-caveat">
-        Meritev ima ločljivost 60 s in je zajeta v prometnem mestu, ne nujno na peronu.
-        Vlaki v feedu nimajo GPS — lega je zadnja postaja z meritvijo, ne dejanski položaj.
+        ${bus
+          ? "Nadomestni prevoz vozi po cesti in po svojem voznem redu, ne po železniškem. Čakaj na postajališču, ne na peronu."
+          : "Meritev ima ločljivost 60 s in je zajeta v prometnem mestu, ne nujno na peronu. " +
+            "Vlaki v feedu nimajo GPS — lega je zadnja postaja z meritvijo, ne dejanski položaj."}
       </div>
     </div>
   `;
@@ -205,6 +208,7 @@ async function loadRun() {
     const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE);
     // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
     // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
+    state.mode = run.mode;
     if (isBus(run.mode)) {
       document.getElementById("train-mode").innerHTML = modeBadgeHtml(run.mode);
     }
@@ -218,7 +222,8 @@ async function loadRun() {
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
-    runTimelineEl.innerHTML = '<div class="empty-state">za ta vlak danes ni podatkov o vožnji</div>';
+    runTimelineEl.innerHTML =
+      '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
     feedDotEl.classList.add("stale");
   }
 }
