@@ -74,7 +74,27 @@ async function loadStatic() {
 
 function worstDelay(trains) {
   // null (brez meritve) se ne sme obnasati kot 0 -- zato -Infinity kot izhodisce.
-  return trains.reduce((acc, t) => (t.delay_s != null && t.delay_s > acc ? t.delay_s : acc), -Infinity);
+  return trains.reduce((acc, t) => {
+    const v = bestDelay(t).value;
+    return v != null && v > acc ? v : acc;
+  }, -Infinity);
+}
+
+
+// Kraj in zamuda morata biti iz istega vira. Prevoznikovo porocilo pozna
+// prometno mesto in je obicajno svezje; nasa `run` pozna samo voznoredne
+// postanke. Kadar imamo oboje, vzamemo prevoznikovo -- a nikoli pol enega
+// in pol drugega, sicer pise "Dobova" ob zamudi, izmerjeni v Sevnici.
+function bestDelay(t) {
+  if (t.reported_lat != null) {
+    return {
+      value: t.reported_delay_s,
+      where: t.reported_at_station,
+      ageS: t.reported_age_s,
+      fromOperator: true,
+    };
+  }
+  return { value: t.delay_s, where: t.last_stop, ageS: t.age_s, fromOperator: false };
 }
 
 function groupByStation(trains) {
@@ -82,20 +102,27 @@ function groupByStation(trains) {
   // in njihove oznake v vozliscih (Ljubljana, Zidani Most) prekrivajo.
   const groups = new Map();
   for (const t of trains) {
-    const station = stationsByName.get(t.last_stop);
+    // Prevoznikovo prometno mesto je tocnejse od nase zadnje prevozene
+    // postaje: zamuda se meri tudi tam, kjer vlak ne ustavlja, in prav to
+    // mesto feed imenuje. Uporabimo ga, kadar ga poznamo kot postajo.
+    const useReported = t.reported_lat != null;
+    const where = useReported ? t.reported_at_station : t.last_stop;
+    const station = useReported
+      ? { lat: t.reported_lat, lon: t.reported_lon }
+      : stationsByName.get(t.last_stop);
     if (!station) {
-      console.warn(`postaja "${t.last_stop}" (vlak ${t.train_no}) ni najdena v /api/stations`);
+      console.warn(`postaja "${where}" (vlak ${t.train_no}) ni najdena v /api/stations`);
       continue;
     }
-    let g = groups.get(t.last_stop);
+    let g = groups.get(where);
     if (!g) {
-      g = { name: t.last_stop, station, trains: [] };
-      groups.set(t.last_stop, g);
+      g = { name: where, station, trains: [] };
+      groups.set(where, g);
     }
     g.trains.push(t);
   }
   for (const g of groups.values()) {
-    g.trains.sort((a, b) => (b.delay_s ?? -1) - (a.delay_s ?? -1));
+    g.trains.sort((a, b) => (bestDelay(b).value ?? -1) - (bestDelay(a).value ?? -1));
   }
   return groups;
 }
@@ -103,7 +130,7 @@ function groupByStation(trains) {
 function trainLineHtml(t) {
   // Barva na markerju sama ne sme nositi pomena -- vedno zraven pise tudi minuta.
   return `<span class="train-label-code">${escapeHtml(t.train_no)}</span>` +
-    `<span class="train-label-delay" style="color:${delayColor(t.delay_s)}">${delayLabel(t.delay_s)}</span>`;
+    `<span class="train-label-delay" style="color:${delayColor(bestDelay(t).value)}">${delayLabel(bestDelay(t).value)}</span>`;
 }
 
 function groupLabelHtml(g) {
@@ -119,7 +146,7 @@ function groupPopupHtml(g) {
     <button class="popup-train" data-train="${escapeHtml(t.train_no)}">
       <span class="popup-train-code">${escapeHtml(t.train_no)}</span>
       <span class="popup-train-headsign">${escapeHtml(t.headsign || "")}</span>
-      <span class="popup-train-delay" style="color:${delayColor(t.delay_s)}">${delayLabel(t.delay_s)}</span>
+      <span class="popup-train-delay" style="color:${delayColor(bestDelay(t).value)}">${delayLabel(bestDelay(t).value)}</span>
     </button>
   `).join("");
   const measured = g.trains.map((t) => t.measured_at).filter(Boolean).sort().pop();
@@ -243,17 +270,24 @@ function renderSidebar(trains) {
     delayListEl.innerHTML = '<div class="empty-state">trenutno ni vlakov na progi</div>';
     return;
   }
-  const top = trains.slice(0, 15); // /api/live je ze razvrscen padajoce po delay_s
+  // Lestvica mora biti urejena po isti vrednosti, kot jo pokaze -- /api/live
+  // razvrsca po nasi zamudi, tu pa lahko prevlada prevoznikova.
+  const top = [...trains]
+    .sort((a, b) => (bestDelay(b).value ?? -1) - (bestDelay(a).value ?? -1))
+    .slice(0, 15);
   delayListEl.innerHTML = top.map((t) => {
-    const color = delayColor(t.delay_s);
+    const d = bestDelay(t);
+    const color = delayColor(d.value);
+    const stale = d.ageS != null && d.ageS > 1200;
     return `
       <div class="delay-row" data-train="${escapeHtml(t.train_no)}">
         <span class="delay-dot" style="background:${color}"></span>
         <div class="delay-info">
           <div class="delay-train">${escapeHtml(t.train_no)}</div>
-          <div class="delay-stop">${escapeHtml(t.last_stop)}</div>
+          <div class="delay-stop">${escapeHtml(d.where)}${stale
+            ? ` · <span class="stale-note">star ${Math.round(d.ageS / 60)} min</span>` : ""}</div>
         </div>
-        <div class="delay-value" style="color:${color}">${delayLabel(t.delay_s)}</div>
+        <div class="delay-value" style="color:${color}">${delayLabel(d.value)}</div>
       </div>
     `;
   }).join("");

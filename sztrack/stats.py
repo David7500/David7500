@@ -222,33 +222,37 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     if not pairs:
         return {}
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
-    out: dict[tuple[str, int], dict] = {}
-    # Po tripih, ne po parih: en trip ima obicajno dva zanimiva postanka in
-    # ena poizvedba na trip je ceneje od ene na par.
-    by_trip: dict[str, list[int]] = {}
-    for trip_id, seq in pairs:
-        by_trip.setdefault(trip_id, []).append(seq)
+    wanted = sorted(set(pairs))
 
-    for trip_id, seqs in by_trip.items():
-        marks = ",".join("?" * len(seqs))
+    grouped: dict[tuple[str, int], list[int]] = {}
+    # Ena poizvedba na svezenj, ne ena na trip: odhodna tabla velike postaje
+    # ima cez cel dan sto in vec voznj, pri avtobusih pa bo tega desetkrat vec.
+    # Meja spremenljivk v sqlite je 32766; 400 parov (800 vezav) je varno tudi
+    # na starejsih razlicicah.
+    for i in range(0, len(wanted), 400):
+        chunk = wanted[i:i + 400]
+        values = ",".join(["(?,?)"] * len(chunk))
+        params = [x for pair in chunk for x in pair]
         rows = conn.execute(
-            f"SELECT stop_seq, COALESCE(delay_arr, delay_dep) AS d "
-            f"FROM run WHERE trip_id = ? AND service_date >= ? "
-            f"  AND stop_seq IN ({marks}) AND d IS NOT NULL",
-            (trip_id, since, *seqs),
+            f"WITH want(trip_id, stop_seq) AS (VALUES {values}) "
+            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d "
+            f"FROM run r JOIN want w ON w.trip_id = r.trip_id AND w.stop_seq = r.stop_seq "
+            f"WHERE r.service_date >= ? AND d IS NOT NULL",
+            (*params, since),
         ).fetchall()
-        grouped: dict[int, list[int]] = {}
         for r in rows:
-            grouped.setdefault(r["stop_seq"], []).append(r["d"])
-        for seq, vals in grouped.items():
-            if len(vals) < MIN_RUNS_FOR_TYPICAL:
-                continue
-            out[(trip_id, seq)] = {
-                "n": len(vals),
-                "median_s": _pct(vals, 0.5),
-                "p90_s": _pct(vals, 0.9),
-                "on_time_share": round(sum(1 for v in vals if v <= 300) / len(vals), 2),
-            }
+            grouped.setdefault((r["trip_id"], r["stop_seq"]), []).append(r["d"])
+
+    out: dict[tuple[str, int], dict] = {}
+    for key, vals in grouped.items():
+        if len(vals) < MIN_RUNS_FOR_TYPICAL:
+            continue
+        out[key] = {
+            "n": len(vals),
+            "median_s": _pct(vals, 0.5),
+            "p90_s": _pct(vals, 0.9),
+            "on_time_share": round(sum(1 for v in vals if v <= 300) / len(vals), 2),
+        }
     return out
 
 

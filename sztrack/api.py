@@ -185,7 +185,8 @@ def api_departures(
     station: str = Query(..., description="ime postaje; delno ime je dovolj"),
     date: str | None = None,
     from_time: str | None = Query(None, alias="from", description="HH:MM; privzeto zdaj"),
-    window: int = Query(180, ge=15, le=1440, description="minut naprej"),
+    window: int | None = Query(None, ge=15, le=1440,
+                               description="minut naprej; privzeto 3 h za danes, cel dan sicer"),
     kind: str = Query("odhodi", pattern="^(odhodi|prihodi)$"),
 ):
     """Odhodna ali prihodna tabla postaje.
@@ -206,11 +207,11 @@ def api_departures(
         # se vedno tisto, kar clovek na peronu isce.
         from_s = max(0, journey.now_seconds(now) - 10 * 60)
     else:
-        # Drug dan nima "zdaj". Kdor gleda vceraj ali cez teden, hoce cel dan,
-        # ne prvih sest ur od polnoci.
         from_s = 0
-        if window == 180:
-            window = 1440
+    # Drug dan nima "zdaj". Kdor gleda vceraj ali cez teden, hoce cel dan,
+    # ne prvih treh ur od polnoci.
+    if window is None:
+        window = 180 if (not from_time and date == now.date().isoformat()) else 1440
 
     with _conn() as conn:
         exact = journey.resolve_station(conn, station)
@@ -464,6 +465,12 @@ def api_live():
             r["reported_at_station"] = rep["station"]
             r["reported_severe"] = bool(rep["severe"])
             r["reported_age_s"] = now_ts - rep["seen_ts"]
+            # Lega, kadar prometno mesto poznamo kot postajo. Zemljevid jo ima
+            # raje od nase: nasa je zadnji voznoredni postanek z meritvijo,
+            # prevoznikova pa kraj, kjer je bila zamuda dejansko izmerjena.
+            if rep["station_lat"] is not None:
+                r["reported_lat"] = rep["station_lat"]
+                r["reported_lon"] = rep["station_lon"]
         # Koliko je stara meritev, na katero se sklicujemo. Brez tega prikaz
         # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None

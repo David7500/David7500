@@ -287,11 +287,18 @@ def live_delays(conn: sqlite3.Connection, service_date: str | None = None) -> li
     `run` tabela pozna samo voznoredne postanke in tega imena nima.
     """
     service_date = service_date or datetime.now(TZ).date().isoformat()
+    # Prometno mesto pripnemo koordinati, kadar ga poznamo kot postajo. Ni
+    # samoumevno -- prometnih mest je vec kot postajalisc -- a v zajetem
+    # vzorcu se je doslej ujelo vseh 23 imen, in tam, kjer se ujame, je to
+    # tocnejsa lega vlaka od nase "zadnje prevozene postaje z meritvijo".
     rows = conn.execute(
         "WITH last AS ("
         "  SELECT *, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY seen_ts DESC) rn"
         "  FROM delay_report WHERE service_date = ?"
-        ") SELECT * FROM last WHERE rn = 1 ORDER BY delay_min DESC",
+        ") "
+        "SELECT last.*, st.lat AS station_lat, st.lon AS station_lon "
+        "FROM last LEFT JOIN station st ON st.name = last.station "
+        "WHERE rn = 1 ORDER BY delay_min DESC",
         (service_date,),
     )
     return [{k: r[k] for k in r.keys() if k != "rn"} for r in rows]
