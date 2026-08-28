@@ -67,6 +67,12 @@ def dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard.html", {})
 
 
+@app.get("/app/statistika", response_class=HTMLResponse)
+def stats_page(request: Request):
+    """Razrezi zajetega: po vrsti vlaka, uri, dnevu. Za napreden pogled."""
+    return templates.TemplateResponse(request, "stats.html", {})
+
+
 @app.get("/app/ovire", response_class=HTMLResponse)
 def alerts_page(request: Request):
     """Dela na progi in nadomestni prevozi -- edini vir odgovora, ZAKAJ."""
@@ -322,6 +328,13 @@ def api_predict(train_no: str, stop_seq: int, delay_s: int,
         return {"train_no": train_no, "from_stop_seq": stop_seq,
                 "current_delay_s": delay_s,
                 "forecast": stats.predict(conn, train_no, stop_seq, delay_s, days)}
+
+
+@app.get("/api/stats/breakdowns")
+def api_breakdowns(days: int = Query(90, ge=1, le=3650)):
+    """Končne zamude po vrsti vlaka, uri odhoda, dnevu v tednu in dnevu."""
+    with _conn() as conn:
+        return stats.breakdowns(conn, days)
 
 
 @app.get("/api/speeds")

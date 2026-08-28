@@ -137,10 +137,10 @@ sztrack/
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
   cli.py         ukazna vrstica
-  templates/     connections.html (vstopna), dashboard.html, train.html
-  static/        base.css (barvni žetoni) + common.js + connections/dashboard/train
+  templates/     connections.html (vstopna), dashboard, train, alerts, stats
+  static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
-scripts/         dev-restart.sh, build_deploy_zip.sh
+scripts/         dev-restart.sh, preveri_paleto.py, vzorci_feeda.py, build_deploy_zip.sh
 ```
 
 `trip.mode` loči `vlak` od `bus`. Nadomestni prevozi so v istih tabelah, ker
@@ -160,6 +160,8 @@ Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih v
 | `/app` | iskalnik povezav **in odhodna tabla** — vstopna stran |
 | `/app/map` | živi zemljevid (Leaflet + OSM rastrske ploščice) |
 | `/app/train/{no}` | okno enega vlaka: profil poti, zgodovina, razmere, hitrosti |
+| `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |
+| `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu v tednu |
 
 Vsaka stran ima preklop **preprosto / napredno**. To ni druga stran: napredni
 pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom

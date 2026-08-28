@@ -309,6 +309,96 @@ def day_summary(conn: sqlite3.Connection, service_date: str) -> dict:
     }
 
 
+def _bucket_counts(values: list[int]) -> dict:
+    out = {"točno": 0, "1–5 min": 0, "5–15 min": 0, "nad 15 min": 0}
+    for v in values:
+        if v <= 60:
+            out["točno"] += 1
+        elif v <= 300:
+            out["1–5 min"] += 1
+        elif v <= 900:
+            out["5–15 min"] += 1
+        else:
+            out["nad 15 min"] += 1
+    return out
+
+
+def _group_stats(groups: dict[str, list[int]], min_n: int) -> list[dict]:
+    out = []
+    for key, vals in groups.items():
+        if len(vals) < min_n:
+            continue
+        out.append({
+            "key": key, "n": len(vals),
+            "median_s": _pct(vals, 0.5), "p90_s": _pct(vals, 0.9),
+            "on_time_share": round(sum(1 for v in vals if v <= ON_TIME_S) / len(vals), 3),
+            "buckets": _bucket_counts(vals),
+        })
+    return out
+
+
+# Koliko voznj mora imeti skupina, da jo sploh pokazemo. Pri desetih je
+# "delez tocnih" se vedno grob, a razlike med vrstami vlakov so ze vidne;
+# pri treh bi risali sum.
+MIN_RUNS_FOR_GROUP = 10
+
+
+def breakdowns(conn: sqlite3.Connection, days: int = 90) -> dict:
+    """Končne zamude, razrezane po vrsti vlaka, uri odhoda in dnevu v tednu.
+
+    Enota je **ena vožnja**, ne en postanek: sicer bi vlak s tridesetimi
+    postanki glasoval tridesetkrat in "delež točnih" bi meril dolžino poti.
+
+    Vsak rez pove tudi, koliko voženj stoji za njim. Pri devetih dneh zajema
+    je dan v tednu še vedno ena ali dve vožnji na vlak in prikaz mora to
+    povedati, ne pa risati krivulje čez šum.
+    """
+    since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    rows = conn.execute(
+        "WITH last AS ("
+        "  SELECT r.trip_id, r.service_date, r.stop_seq,"
+        "         COALESCE(r.delay_arr, r.delay_dep) AS d,"
+        "         ROW_NUMBER() OVER (PARTITION BY r.trip_id, r.service_date"
+        "                            ORDER BY r.stop_seq DESC) AS rn"
+        "  FROM run r WHERE r.service_date >= ?"
+        ") "
+        "SELECT t.train_no, t.mode, l.service_date, l.d, "
+        "       (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s"
+        "        WHERE s.trip_id = l.trip_id) AS start_s "
+        "FROM last l JOIN trip t USING (trip_id) "
+        "WHERE l.rn = 1 AND l.d IS NOT NULL",
+        (since,),
+    ).fetchall()
+
+    by_kind: dict[str, list[int]] = {}
+    by_hour: dict[str, list[int]] = {}
+    by_dow: dict[str, list[int]] = {}
+    by_day: dict[str, list[int]] = {}
+    dow_names = ("ponedeljek", "torek", "sreda", "četrtek", "petek", "sobota", "nedelja")
+
+    for r in rows:
+        d = r["d"]
+        # Predpona stevilke je vrsta vlaka (LP, LPV, IC, EC, MV, RG, EN ...).
+        kind = (r["train_no"].split(" ")[0] or "?") if r["mode"] == "vlak" else "nadomestni bus"
+        by_kind.setdefault(kind, []).append(d)
+        if r["start_s"] is not None:
+            by_hour.setdefault(f"{(r['start_s'] // 3600) % 24:02d}", []).append(d)
+        day = date.fromisoformat(r["service_date"])
+        by_dow.setdefault(dow_names[day.weekday()], []).append(d)
+        by_day.setdefault(r["service_date"], []).append(d)
+
+    return {
+        "runs": len(rows),
+        "days": sorted(by_day),
+        "by_kind": sorted(_group_stats(by_kind, MIN_RUNS_FOR_GROUP),
+                          key=lambda x: -(x["median_s"] or 0)),
+        "by_hour": sorted(_group_stats(by_hour, MIN_RUNS_FOR_GROUP), key=lambda x: x["key"]),
+        "by_weekday": sorted(_group_stats(by_dow, MIN_RUNS_FOR_GROUP),
+                             key=lambda x: dow_names.index(x["key"])),
+        "by_day": sorted(_group_stats(by_day, 1), key=lambda x: x["key"]),
+    }
+
+
 def segment_speeds(conn: sqlite3.Connection, train_no: str | None = None) -> list[dict]:
     """Hitrosti po odsekih: voznoredna in dejansko izmerjena.
 
