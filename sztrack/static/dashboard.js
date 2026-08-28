@@ -14,6 +14,14 @@ function openTrainWindow(trainNo) {
 
 const map = L.map("map").setView([46.05, 14.95], 8);
 
+// Ostajamo pri OpenStreetMap. CARTO dark_all od nekod zahteva kljuc in
+// ploscice pride s cez pol zaslona napisom "API KEY REQUIRED"; pri zunanjem
+// viru je to vedno mogoce, zato raje nic novega.
+//
+// Podlago potemnimo v CSS (glej .leaflet-tile v dashboard.css). To ni samo
+// okras: na svetli podlagi oranzen vlak tekmuje z zeleno pokrajino in rdecimi
+// cestami, se pravi z barvami, ki ne pomenijo nicesar. Podlaga naj bo brez
+// barve, barvo nosijo podatki.
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 18,
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -34,7 +42,7 @@ async function loadStatic() {
     const latlngs = [];
     for (const s of stations) {
       L.circleMarker([s.lat, s.lon], {
-        radius: 2, color: "#3d434f", fillColor: "#3d434f", fillOpacity: 1,
+        radius: 2, color: "#78818f", fillColor: "#78818f", fillOpacity: 1,
         weight: 0, interactive: false,
       }).addTo(stationLayer);
       latlngs.push([s.lat, s.lon]);
@@ -49,7 +57,10 @@ async function loadStatic() {
     const geojson = await fetch("/api/network.geojson").then((r) => r.json());
     // L.geoJSON sam pretvori [lon, lat] iz GeoJSON-a v Leafletov [lat, lon].
     L.geoJSON(geojson, {
-      style: { color: "#2a2f38", weight: 1.5 },
+      // Proga mora biti svetlejsa od podlage, ne temnejsa: podlaga je zdaj
+      // temna in #2a2f38 se je v njej izgubila. Nevtralna siva, ker odtenek
+      // v tem prikazu ne pomeni nicesar -- pomen nosijo vlaki na njej.
+      style: { color: "#5b6472", weight: 1.4, opacity: 0.85 },
       interactive: false,
     }).addTo(map);
   } catch (err) {
