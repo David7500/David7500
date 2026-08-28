@@ -319,3 +319,45 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
             "SELECT COUNT(DISTINCT service_date) FROM run"
         ).fetchone()[0],
     }
+
+
+# Tabele, ki jih prinese GTFS zip. Vse ostalo je zajem in v priloženo bazo
+# ne sodi -- namestitev dobi vozni red, zgodovino pa si posname sama.
+STATIC_TABLES = ("station", "edge", "trip", "sched", "service_day")
+
+
+def build_seed(conn: sqlite3.Connection, target: Path) -> dict:
+    """Zgradi priloženo bazo za namestitev: samo vozni red, brez zajema.
+
+    Zakaj sploh obstaja: uvoz iz GTFS zipa pomeni 43 MB prenosa in nekaj minut
+    na počasnem jedru, česar nova namestitev ne bi smela čakati. Doslej je bila
+    ta datoteka narejena ročno in je zaostala -- imela je staro shemo, star
+    vozni red in nič nadomestnih prevozov.
+
+    Kopira se s `.backup` in nato izprazni zajem, ne obratno: tako je rezultat
+    zagotovo iste sheme kot delujoča baza.
+    """
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(".tmp")
+    tmp.unlink(missing_ok=True)
+
+    dst = sqlite3.connect(tmp)
+    conn.backup(dst)
+    dst.row_factory = sqlite3.Row
+    with dst:
+        for table in ("obs", "run", "weather", "alert", "alert_entity", "delay_report"):
+            try:
+                dst.execute(f"DELETE FROM {table}")
+            except sqlite3.OperationalError:
+                pass        # starejsa baza te tabele nima
+        # ETagi so vezani na vsebino, ki je ne prilagamo -- ce ostanejo, prva
+        # osvezitev dobi 304 in namestitev obtici na tem voznem redu.
+        dst.execute("DELETE FROM meta WHERE key LIKE '%etag%' OR key LIKE '%last_modified%'")
+    counts = {t: dst.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in STATIC_TABLES}
+    dst.execute("VACUUM")
+    dst.close()
+
+    tmp.replace(target)
+    counts["bytes"] = target.stat().st_size
+    return counts

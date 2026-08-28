@@ -112,6 +112,12 @@ def cmd_backtest(args):
             print(f"  {h:>18d}{cells}")
 
 
+def cmd_seed(args):
+    conn = db.connect()
+    db.init(conn)
+    print(json.dumps(db.build_seed(conn, Path(args.out)), indent=2, ensure_ascii=False))
+
+
 def cmd_repair(args):
     conn = db.connect()
     db.init(conn)
@@ -194,6 +200,10 @@ def main(argv=None):
                    help="primerjaj prevoznikovo napoved s prenosom zamude")
     a.add_argument("--by-horizon", action="store_true", help="razclenjeno po oddaljenosti")
     a.set_defaults(func=cmd_backtest)
+
+    a = sub.add_parser("seed", help="zgradi prilozeno bazo za namestitev (samo vozni red)")
+    a.add_argument("--out", default="seed/sz.sqlite")
+    a.set_defaults(func=cmd_seed)
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)

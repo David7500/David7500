@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -35,14 +35,23 @@ def _conn():
 
 
 @app.get("/")
-def index():
-    """Kazalo. Nekateri gostitelji preverjajo živost prav na korenski poti."""
-    return {
+def index(request: Request):
+    """Korenska pot streže dvoje.
+
+    Gostitelji in nadzor preverjajo živost prav tu in pričakujejo JSON, zato
+    ta ostane. Človek, ki v naslovno vrstico vtipka domeno, pa ni prišel po
+    seznam endpointov -- brskalnik prosi za HTML in dobi preusmeritev na
+    aplikacijo.
+    """
+    if "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse("/app", status_code=307)
+    return JSONResponse({
         "service": "sztrack",
         "version": app.version,
         "docs": "/docs",
+        "app": "/app",
         "endpoints": [r.path for r in app.routes if getattr(r, "path", "").startswith("/api/")],
-    }
+    })
 
 
 @app.get("/app", response_class=HTMLResponse)
