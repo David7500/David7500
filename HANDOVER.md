@@ -1,141 +1,129 @@
 # sztrack — stanje projekta
 
 Povzetek za nadaljevanje dela. Vse spodaj je preverjeno na živih podatkih,
-ne po spominu.
+ne po spominu. Navodila za delo so v [CLAUDE.md](CLAUDE.md), pregled projekta
+v [README.md](README.md).
 
-## Kaj je to
+Stanje na dan **2026-08-29**. Veja `claude/slovenske-zeleznice-api-ql84hf`.
 
-Zajem in analiza **zamud slovenskih vlakov** iz odprtih podatkov. Cilj:
-shranjevati zamude, računati hitrosti, delati statistiko po vlakih in
-napovedovati zamudo. Prikaz (frontend) še ni izbran.
+## Kaj je narejeno
 
-Veja: `claude/slovenske-zeleznice-api-ql84hf`
+Delujoča aplikacija, ne več samo zaledje. Iskalnik povezav in odhodna tabla,
+okno ene vožnje, stran z ovirami, statistika zajetega, živi zemljevid — vse
+s preklopom preprosto / napredno.
 
-## Od kod podatki — preverjena veriga
+Zajem teče v ozadnji niti istega procesa: zamude vsakih 30 s, obvestila
+vsakih 60 s, vreme dnevno za nazaj.
 
-```
-SŽ + IJPP  →  NAP (b2b.nap.si, CC BY-SA 4.0, za registracijo)
-                  ↓
-           DERP "gtfs-generators" (gitlab.com/derp-si)
-                  ↓
-   ijpp_gtfs.zip  +  rt.gtfs.derp.si/sources/ijpp/{trip_updates,service_alerts}
-```
+## Kaj je odkrilo merjenje
 
-| Kaj | URL | Velikost | Pogostost |
+Trije rezultati, ki so spremenili, kaj aplikacija sploh kaže. Vsi so
+ponovljivi z ukazom, ne trditev iz spomina.
+
+### 1. Prevoznikova napoved za postanke naprej je slabša od prenosa zamude
+
+`sztrack backtest --operator`, 11 310 nalog iz devetih dni:
+
+| model | MAE | v 5 min | odklon |
 |---|---|---|---|
-| Vozni red (GTFS) | `gitlab.com/api/v4/projects/derp-si%2Fgtfs-generators/packages/generic/IJPP/latest/ijpp_gtfs.zip` | 41 MB | ~1×/dan |
-| Zamude (GTFS-RT) | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 250 KB | 30 s |
-| Ovire/obvestila | `rt.gtfs.derp.si/sources/ijpp/service_alerts` | 80 KB | — |
+| prenos trenutne zamude | 1,29 min | 94,1 % | −0,48 min |
+| prevoznikova napoved | 7,87 min | 58,2 % | −7,85 min |
 
-Oba vira podpirata pogojni GET (ETag), zato ob nespremenjenih podatkih ne
-prenesemo nič.
+Vzrok je viden v dnevniku: feed za še nedosežene postanke objavi 0, dokler
+nima prave napovedi. V najhujšem rezu — feed pravi 0, vlak pa zamuja ≥ 5 min —
+je napaka **18,5 minute** in v petih minutah je le 6 % napovedi.
 
-**SŽ nimajo javnega API-ja.** `potniski.sz.si` je za Cloudflarom, stari SOAP
-(`91.209.49.139/webse/se.asmx`) je mrtev. Uradni odprti podatki so na NAP-u.
+Prikaz je prej to vrednost postavljal pred lastno oceno. Zdaj je obratno.
 
-## Kaj podatki so in česa ni
+### 2. Naš model je že blizu najboljšemu, kar ti podatki dajo
 
-Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa prihoda (avtobusi
-ga imajo, vlaki ne). Dejanski čas = `vozni red + zamuda`. Iz tega sledi:
+`sztrack backtest`, 258 137 nalog, izpuščanje enega dne:
 
-* **Ločljivost 60 s**, z `uncertainty: 120`. Hitrosti na kratkih odsekih so
-  nesmiselne — `segment_speeds()` upošteva samo odseke ≥ 5 km.
-* **Feed je drseče okno** — v enem klicu dobiš le postanke okoli trenutnega
-  položaja vlaka. Celo vožnjo sestaviš iz zaporednih pollov.
-* **Zamude naprej po progi so napoved, ne meritev.** Popravijo se, ko postaja
-  mine; merodajna je zadnja znana vrednost (tabela `run`).
-* **Zgodovine ni nikjer.** Če je ne posnameš sam, je ni. Preverjeno: MOTIS
-  poizvedba za včeraj vrne `rt=False` in `real == sched`.
-* **Ni**: cen, sestave vlaka, perona, zasedenosti, GPS pozicij vlakov
-  (`vehicle_positions` vsebuje avtobuse, vlakov ne).
-* Mednarodni vlaki (EN/MV) pogosto nimajo realtime pokritja.
+| model | MAE | v 5 min |
+|---|---|---|
+| prenos (referenca) | 2,91 min | 82,8 % |
+| **vlak (v uporabi)** | **2,00 min** | **90,3 %** |
+| odsek | 2,22 min | 88,1 % |
+| odsek + razred zamude | 2,26 min | 87,8 % |
+| združen (krčenje) | 1,98 min | 89,6 % |
 
-## Koda
+Združevanje po odseku model **poslabša** — na istem tiru se IC in lokalni
+vlak ne obnašata enako. Združen model prihrani 1 % MAE in izgubi pri deležu
+v petih minutah; ni vredno zapletenosti. Kdor bo pisal nov model, naj se
+najprej pomeri s `prenos`.
 
-```
-sztrack/
-  geo.py         haversine, projekcija postaj na progo, Douglas-Peucker
-  db.py          SQLite shema + merge_from() za združevanje baz
-  gtfs.py        pogojni prenos zipa, uvoz železniškega dela
-  collector.py   poll zamud, razreševanje obratovalnega dne
-  stats.py       zgodovina, porazdelitve, hitrosti, napoved
-  server.py      lifespan: bootstrap + zajem v ozadnji niti
-  api.py         FastAPI endpointi
-  cli.py         init / update / poll / show / stats / merge / export
-main.py          `app` na ravni modula + `python main.py`
-deploy/          systemd enote in install-rpi.sh
-design/          štiri oblikovne smeri (artboardi)
-seed/sz.sqlite   pripravljen vozni red (1,7 MB)
-```
+### 3. Feed vrine ničlo, ki ni res
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
-`obs` (dnevnik sprememb), `run` (zadnje stanje na postanek), `alert`.
+Pri 14 % postankov z več kot dvema zapisoma se pojavi vzorec X, 0, X v
+razmiku ene minute (npr. `1320 · 0 · 1320 · 420 · 0 · 420`). Zamuda med dvema
+klicema ne more pasti za več, kot je vmes minilo časa. 45 vrstic v `run` je
+zaradi tega trdilo, da je bil vlak točen, čeprav je zamujal pet minut ali več
+— prav te vrstice hranijo "delež točnih".
 
-Piše se **samo ob spremembi vrednosti** — brez tega bi bilo milijone praznih
-vrstic.
+Pravilo je ozko: ničlo po zamudi ≥ 5 min sprejmemo šele ob drugem zaporednem
+pollu. `sztrack repair` po istem pravilu znova zgradi `run` iz dnevnika.
+
+## Kaj je bilo spregledano v virih
+
+* **`service_alerts` se ni pobiral.** V njem je ~45 hkrati veljavnih obvestil
+  o delih in nadomestnih prevozih, vezanih na `route_id` in s tem na številko
+  vlaka. To je edini vir odgovora, **zakaj** vlak zamuja — in pojasni, zakaj
+  so zamude v zajetih dneh tako velike (nadomestni prevoz Ljubljana–Logatec in
+  Divača–Koper do 12. decembra, zapore enega tira na petih odsekih).
+* **`SZ-DELAY` obvestila nosijo ime prometnega mesta**, kjer je zamuda
+  izmerjena. `run` pozna samo voznoredne postanke; to je edini vir kraja.
+  Vseh 23 poročanih imen se je ujelo s postajo, ki ji poznamo koordinato.
+* **Nadomestni prevozi SŽ so v istem zipu** (`route_type = 3`, 56 voženj) in
+  jih je uvoz izpuščal. Iskalnik je za Ljubljana–Logatec ponujal dvanajst
+  vlakov, ki po obvestilu istega prevoznika ne vozijo.
 
 ## Izmerjeno
 
 | | |
 |---|---|
-| Postaje (železnica) | 267 |
+| Postaje | 271 (267 železniških + 4 postajališča nadomestnih prevozov) |
 | Odseki | 389, od tega 275 elementarnih |
-| Elementarna mreža | 1253,8 km (realna slovenska mreža ~1200–1300) ✅ |
-| Vlaki v voznem redu | 723 |
-| Uvoz GTFS | 23 s, vrh **54 MB** (pred pretočnim branjem 269 MB) |
+| Elementarna mreža | 1253,8 km (realna slovenska mreža ~1200–1300) |
+| Vožnje v voznem redu | 733 vlakov + 56 nadomestnih prevozov |
+| Zajeto (lokalno, 2026-08-29) | 60 409 meritev, 9 obratovalnih dni, 3296 voženj |
+| Uvoz GTFS | 17 s, vrh 54 MB (pretočno branje `shapes.txt`) |
 | Strežnik ob zagonu | 57–60 MB RSS |
-| Po prvem zajemu | 74 MB RSS |
-| Osvežitev v istem procesu | vrh **89 MB**, ostane 85 MB |
-| Baza po uvozu | 1,7 MB |
+| Odziv `/api/*` | vse pod 120 ms; `/api/overview` je najpočasnejši |
+| Priložena baza | 1,9 MB |
 
-Razdalje: postaje projiciramo na polilinijo iz `shapes.txt`, razlika
-kumulativnih razdalj je dolžina odseka, mediana čez vse vlake. Razpršenost med
-vlaki po istem odseku je **0 m**. To niso uradne km-lege — odstopanje ~2–4 %
-(Zidani Most–Ljubljana da 63,63 km proti uradnim ~61 km).
+`trip_id` so med regeneracijami GTFS **stabilni** — po ponovnem uvozu se
+vseh 60 409 zajetih meritev še vedno ujema s tripom. Zajema torej ni treba
+varovati pred `sztrack update`.
 
-## Kje smo z objavo
+## Objava
 
-**Pella** (`ivoryfalcon.onpella.app`) — zajem je delal, baza je rasla, preživela
-je noč pri 58 % RAM. Ampak: javni API vrača **Cloudflare 526 na vseh poteh,
-tudi na `/`** — edge ne vzpostavi TLS do izvora. Aplikacija posluša na
-`http://0.0.0.0:80`, kot ji naroči `PORT=80`. To je napaka na njihovi strani.
-Free paket ima 100 MB RAM in ročno podaljševanje na 16 h.
-**Podatke od tam je treba pobrati** (Files → `data/sz.sqlite`) in priliti z
-`sztrack merge`.
+**Raspberry Pi** (`david@192.168.1.166`) je izbrana pot in tam teče
+produkcijski zajem. Malina je gor ves čas, ta računalnik ne, zato je
+**merodajna baza na malini** in se z nje vleče (`sztrack merge`), ne obratno.
 
-**Raspberry Pi** — izbrana pot. Prvi poskus namestitve je padel:
-`install: cannot stat '/opt/sztrack/seed/sz.sqlite'`, ker je bil `seed/sz.sqlite`
-ujet v `.gitignore` (`*.sqlite`) in ga v repozitoriju sploh ni bilo.
-Popravljeno: izjema v `.gitignore`, datoteka je zdaj v gitu, skripta pa ima
-rezervo — če seeda ni, vozni red sestavi na mestu iz GTFS.
+Namestitev/posodobitev mora pognati uporabnik sam — `david` na malini za sudo
+rabi geslo, agent nima terminala zanj:
 
-Pi je **armhf/armv6l** (32-bit), Python 3.13, Debian 13. Odvisnosti se
-nameščajo prek piwheels; med namestitvijo je bil en `RemoteDisconnected`, zato
-ima pip zdaj `--retries 5 --timeout 60`.
+```bash
+sudo bash deploy/install-rpi.sh && sudo systemctl restart sztrack.service
+```
 
-## Naslednji koraki
+Enota že nastavlja `SZ_REFRESH=subprocess` in `SZ_REFRESH_HOUR=4`, zato se
+vozni red na malini osvežuje sam, v podprocesu, da se pomnilnik vrne sistemu.
 
-1. Na Piju znova pognati `sudo bash deploy/install-rpi.sh` (idempotentna).
-2. Preveriti `curl -s http://localhost:8000/api/health` in `journalctl -u sztrack -f`.
-3. S Pelle prenesti `sz.sqlite` in pognati
-   `sudo -u sztrack /opt/sztrack/.venv/bin/python -m sztrack.cli merge ~/sz-pella.sqlite`.
-4. Ugasniti Pello, da ne zbira vzporedno (ali pustiti — `merge` je varen in idempotenten).
-5. Izbrati oblikovno smer in narediti frontend: **Leaflet + OSM rastrske
-   ploščice** (uporabnikova izbira; MapLibre in OpenFreeMap sta bila alternativa).
+**Pella je bila slepa ulica** — zajem je delal, javni API pa je vračal
+Cloudflare 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
-## Kakšna bo aplikacija
+## Odprto
 
-Dogovorjeno je zapisano v [docs/APLIKACIJA.md](docs/APLIKACIJA.md): Leaflet z
-OSM ploščicami, prikaz ločen od zaledja po JSON API-ju, štiri oblikovne smeri
-med katerimi izbira še ni padla, barvna lestvica zamud in tisto, kar mora
-prikaz priznati o naravi podatkov (60 s ločljivost, meritve v prometnih
-mestih, napoved proti meritvi, interpoliran položaj).
-
-## Odprta vprašanja
-
-* Katera oblikovna smer (A nadzorna soba / B vozni red / C analitika / D sledilnik).
-  Platno: https://claude.ai/code/artifact/189e04ee-26e3-4c2e-916a-26da4e9ae709
-* Dostop do API-ja od zunaj, ko bo frontend pripravljen — Tailscale ali
-  Cloudflare Tunnel. Vrat na usmerjevalniku ne odpirati: API nima avtentikacije.
-* Napoved zamude je zaenkrat izhodiščna (prenos zamude + historična mediana
-  spremembe na odseku). Za kaj boljšega rabi 2–3 mesece zajema.
+* **Dostop od zunaj** — Tailscale ali Cloudflare Tunnel.
+  **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije.**
+* **Avtobusi drugih agencij.** V zipu je ves slovenski javni promet: Arriva
+  8914 voženj, Nomago 6864, LPP 3060, AP Murska Sobota 965. Uvoz jemlje samo
+  SŽ. `scripts/vzorci_feeda.py` vzorči, katere agencije sploh imajo realtime —
+  brez tega je odločitev ugibanje. Ponoči vozi pet vlakov in nič drugega, zato
+  en sam pogled ne pove ničesar.
+* **Napoved bo boljša šele z več zajema.** Kar se je dalo iztisniti iz devetih
+  dni, je iztisnjeno in izmerjeno. Naslednji korak rabi mesece, ne trikov.
+* **Vzročnost vremena.** Vreme se zaenkrat samo *pokaže ob* zamudi. Trditve o
+  vzroku počakajo na 2–3 mesece zajema, kot je bilo dogovorjeno.

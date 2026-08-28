@@ -1,115 +1,112 @@
 # sztrack
 
-Zajem in analiza voznih redov ter zamud **Slovenskih železnic** iz odprtih podatkov.
+**Kdaj mi pelje vlak in koliko zamuja.** Zajem, prikaz in analiza zamud
+slovenskih vlakov iz odprtih podatkov.
 
-Prikaz ni vključen namerno — vse teče skozi JSON API, tako da lahko frontend
-(zemljevid, dashboard, mobilna aplikacija) izbereš kasneje brez predelave zaledja.
+Zaledje je Python (FastAPI + SQLite), prikaz vanilla JS brez ogrodja.
+Vse teče skozi isti JSON API, tako da je prikaz zamenljiv.
+
+```bash
+./venv/bin/python -m uvicorn sztrack.api:app --host 127.0.0.1 --port 8001 --reload
+# nato http://127.0.0.1:8001/app
+```
+
+## Strani
+
+| pot | kaj |
+|---|---|
+| `/app` | iskalnik povezav in odhodna tabla — vstopna stran |
+| `/app/train/{št}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
+| `/app/ovire` | dela na progi in nadomestni prevozi |
+| `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu |
+| `/app/map` | živi zemljevid |
+| `/docs` | OpenAPI |
+
+Vsaka stran ima preklop **preprosto / napredno**. Napredni pogled ne odpre
+druge strani — na isti doda p90, deleže, številke postankov in to, kaj je
+o vrednosti rekel feed.
 
 ## Od kod podatki
 
-| | vir | velikost | pogostost |
+```
+SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS + GTFS-RT
+```
+
+| Kaj | vir | velikost | pogostost |
 |---|---|---|---|
-| Vozni redi | [`ijpp_gtfs.zip`](https://gitlab.com/derp-si/gtfs-generators) (GTFS) | 41 MB | ~1× dnevno |
-| Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` (GTFS-RT) | 250 KB | 30 s |
+| Vozni red | [`ijpp_gtfs.zip`](https://gitlab.com/derp-si/gtfs-generators) | 43 MB | ~1×/dan |
+| Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 250 KB | 30 s |
+| Ovire in žive zamude | `rt.gtfs.derp.si/sources/ijpp/service_alerts` | 110 KB | 60 s |
+| Vreme | `open-meteo.com` (arhiv + napoved) | — | dnevno, za nazaj |
 
-Izvorno gre za podatke SŽ/IJPP z [NAP](https://www.nap.si) (licenca **CC BY-SA 4.0**),
-ki jih [DERP](https://derp.si) pretvarja v GTFS in GTFS-RT.
+Vsi viri podpirajo pogojni GET — ob nespremenjenih podatkih se ne prenese nič.
+V zipu je **ves** slovenski javni promet (20 592 voženj petih agencij); uvoz
+jemlje SŽ: vlake in njihove nadomestne prevoze.
 
-Oba vira podpirata pogojni GET, zato se ob nespremenjenih podatkih ne prenese nič.
-41 MB zipa ni treba prenašati zaradi zamud — to sta ločena vira.
+## Kaj podatki so in česa ni
 
-## Kaj se da in česa ne
+To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
 
-Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa prihoda
-(avtobusi ga imajo, vlaki ne). Dejanski čas se zato računa kot
-`vozni red + zamuda`. Iz tega sledita dve omejitvi:
+* **Feed pri vlakih nosi samo `delay`**, brez absolutnega časa. Dejanski čas =
+  vozni red + zamuda. Ločljivost 60 s, zato sekund ne kažemo nikoli in hitrosti
+  računamo le na odsekih ≥ 5 km.
+* **Feed je drseče okno.** En klic da postanke okoli trenutnega položaja; celo
+  vožnjo sestavimo iz zaporednih pollov.
+* **Zamude naprej po progi so napoved — in izmerjeno slaba.** Prevoznikova
+  napoved za še nedosežene postanke ima MAE 7,9 min proti 1,3 min za preprost
+  prenos trenutne zamude naprej. Prikaz zato uporablja lastno oceno.
+  Merljivo: `sztrack backtest --operator`.
+* **Ničli, ki jo feed vrne za en klic, ne verjamemo.** Pri 14 % postankov se
+  pojavi vzorec X, 0, X v razmiku ene minute; zamuda med dvema klicema ne pade
+  za več, kot je vmes minilo časa.
+* **Zamuda je izmerjena v prometnem mestu, ne na peronu.** Ime tega mesta je v
+  `SZ-DELAY` obvestilih in ga prikaz pove.
+* **Odhodne zamude s prve postaje ni** — feed nikoli ne poroča `stop_seq = 1`.
+  Odhodna tabla zato vzame meritev naslednje postaje in napiše, od kod je.
+* **Vlaki nimajo GPS.** `vehicle_positions` vsebuje avtobuse, vlakov ne; lega
+  na zemljevidu je zadnje znano prometno mesto.
+* **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
+* **Ni** cen, sestave vlaka, perona, zasedenosti. Odpovedi feed pozna
+  strukturirano, a jih SŽ pošiljajo kot besedilo obvestila.
 
-* **Ločljivost je 60 s**, z zastavico `uncertainty: 120`. Hitrosti na kratkih
-  odsekih so zato nesmiselne — `segment_speeds()` upošteva samo odseke ≥ 5 km.
-* **Feed je drseče okno** — v enem klicu dobiš le postanke okoli trenutnega
-  položaja vlaka, ne cele vožnje. Zgodovine ni: če je ne posnameš sam,
-  je ni nikjer. Zato `poll` teče neprekinjeno in piše ob vsaki spremembi.
-
-Zamude naprej po progi so **napoved, ne meritev** — sistem predvideva, da vlak
-nadoknadi. Vrednost se popravi, ko postaja dejansko mine, zato je merodajna
-zadnja znana vrednost (tabela `run`).
-
-V podatkih **ni** cen, sestave vlaka, perona, zasedenosti ne GPS pozicije vlakov.
-
-## Namestitev
+## Ukazna vrstica
 
 ```bash
-pip install -e ".[api]"
+sztrack init                      # ustvari bazo
+sztrack update                    # prenesi + uvozi vozni red (304 -> preskoči)
+sztrack poll                      # neprekinjen zajem zamud
+sztrack alerts --live             # zadnja poročila prevoznika o zamudi
+sztrack show "LPV 2206" --date 2026-08-28
+sztrack stats --days 90           # lestvica vlakov
+sztrack backtest                  # izmeri napako napovedi
+sztrack backtest --operator       # prevoznikova napoved proti prenosu zamude
+sztrack repair                    # znova zgradi `run` iz dnevnika `obs`
+sztrack weather --days 7          # dopolni vreme za nazaj
+sztrack merge druga.sqlite        # prilij zajem z drugega stroja
+sztrack seed                      # zgradi priloženo bazo za namestitev
+sztrack export --out export/      # GeoJSON mreže in postaj
 ```
 
-## Uporaba
+## Razvoj
 
 ```bash
-sztrack init                       # ustvari bazo
-sztrack update                     # prenesi + uvozi vozni red (304 -> preskoči)
-sztrack poll --once                # en zajem zamud
-sztrack poll                       # neprekinjeno, vsakih 30 s
-
-sztrack show "LPV 2206"                        # vozni red
-sztrack show "LPV 2206" --date 2026-08-18      # konkretna vožnja z zamudami
-sztrack stats --days 90                        # lestvica vlakov
-sztrack export --out export/                   # GeoJSON mreže in postaj
-sztrack merge /pot/do/druge/sz.sqlite           # prilij zajem z drugega stroja
-sztrack weather --days 7                       # dopolni vreme za nazaj
-sztrack weather --show                         # kateri dnevi so pokriti
-
-uvicorn sztrack.api:app --reload   # JSON API na :8000
-python main.py                     # API + zajem v enem procesu
+./scripts/dev-restart.sh          # ponovni zagon strežnika na 8001
+./venv/bin/python -m pytest tests/ -q
+./venv/bin/python scripts/preveri_paleto.py    # kontrast in barvna slepota
 ```
 
-Za namestitev na Raspberry Pi (priporočeno) ali objavo pri gostitelju glej
-[DEPLOY.md](DEPLOY.md): `sudo bash deploy/install-rpi.sh` oziroma
-`scripts/build_deploy_zip.sh`.
+Odvisnosti v `requirements.txt` je pet in naj tako ostane; razvojne so
+v `requirements-dev.txt`.
 
-Za trajni zajem so v `deploy/` systemd enote (poll kot servis, `update` kot dnevni timer).
+## Objava
 
-## API
+Ciljni gostitelj je Raspberry Pi doma. Podrobnosti v [DEPLOY.md](DEPLOY.md),
+navodila za delo na projektu v [CLAUDE.md](CLAUDE.md).
 
-| endpoint | kaj vrne |
-|---|---|
-| `GET /api/stations` | 267 železniških postaj s koordinatami |
-| `GET /api/network.geojson` | geometrija prog, vsak odsek z dolžino v km |
-| `GET /api/trains` | vsi vlaki v voznem redu |
-| `GET /api/train/{no}` | vozni red vlaka |
-| `GET /api/train/{no}/run?date=` | ena vožnja: red, zamuda, dejanski časi |
-| `GET /api/train/{no}/history?days=` | zgodovina po dnevih in po postajah |
-| `GET /api/train/{no}/predict?stop_seq=&delay_s=` | napoved zamude naprej |
-| `GET /api/speeds?train_no=` | voznoredna vs. izmerjena hitrost po odsekih |
-| `GET /api/stats?days=` | lestvica vlakov po zamudi |
-| `GET /api/live` | vlaki trenutno v feedu |
-| `GET /api/health` | stanje zajema: število voženj, dni, velikost baze |
-
-## Razdalje med postajami
-
-`stop_times.txt` nima `shape_dist_traveled`, zato se dolžine odsekov računajo:
-postaje se pravokotno projicirajo na polilinijo proge iz `shapes.txt`, razlika
-kumulativnih razdalj je dolžina odseka, čez vse vlake se vzame mediana.
-
-Rezultat: **267 postaj**, **389 odsekov**, elementarna mreža ~**1250 km**
-(ujema se z dejansko slovensko mrežo). Razpršenost med vlaki po istem odseku
-je 0 m — geometrija je konsistentna.
-
-Odseki z `elementary = 0` so »preskoki« hitrih vlakov čez vmesne postaje;
-za risanje zemljevida filtriraj `elementary = 1`, za hitrosti pa uporabi tisti
-odsek, ki ustreza dejanskemu paru zaporednih postankov danega vlaka.
-
-⚠️ To niso uradne kilometrske lege, ampak dolžine GTFS shapeov — odstopanje
-~2–4 % (Zidani Most–Ljubljana da 63,6 km proti uradnim ~61 km). Za primerjave
-med vlaki povsem uporabno, za absolutne trditve o hitrosti pa upoštevaj napako.
-
-## Napoved zamude
-
-`stats.predict()` je namenoma preprost: zamuda se prenese naprej, popravljena za
-historično mediano spremembe na tem odseku pri tem vlaku. Pri vlakih je to trdna
-izhodiščna točka — dokler nimaš nekaj mesecev zajema, kompleksnejši model nima
-česa izkoristiti. Ko podatki narastejo, so naslednji koraki ura v dnevu, dan v
-tednu in zamuda povezanih voženj iste kompozicije.
+**API nima avtentikacije — vrat na usmerjevalniku ne odpiraj.**
 
 ## Licenca podatkov
 
-Podatki so **CC BY-SA 4.0** (NAP / DUJPP) — pri objavi navedi vir.
+Podatki SŽ in IJPP prek [NAP](https://www.nap.si), **CC BY-SA 4.0**,
+obdelava [DERP](https://derp.si). Vreme [Open-Meteo](https://open-meteo.com)
+(CC BY 4.0). Zemljevid © OpenStreetMap contributors.
