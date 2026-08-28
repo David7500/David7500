@@ -89,8 +89,10 @@
       <button type="submit" class="btn go">Pokaži</button>
     </form>
 
-    <div id="alerts"></div>
-    <div id="result-head" class="result-head"></div>
+    <div id="alerts" aria-live="polite"></div>
+    <!-- Rezultati se zamenjajo brez ponovnega nalaganja strani; bralnik
+         zaslona mora izvedeti, da je odgovor tu. `polite`, ker ni nujno. -->
+    <div id="result-head" class="result-head" aria-live="polite"></div>
     <div id="results" class="results"></div>
 
     <footer class="page-foot">

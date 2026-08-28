@@ -58,14 +58,28 @@ function attachSuggest(input, listEl) {
   let active = -1;
   let seq = 0;
 
-  const close = () => { listEl.hidden = true; active = -1; };
+  // Bralnik zaslona mora vedeti, da je polje spustni seznam, ali je odprt in
+  // katera moznost je izbrana. Brez tega je tipkovnicna izbira nevidna.
+  input.setAttribute("role", "combobox");
+  input.setAttribute("aria-autocomplete", "list");
+  input.setAttribute("aria-expanded", "false");
+  input.setAttribute("aria-controls", listEl.id);
+
+  const close = () => {
+    listEl.hidden = true;
+    active = -1;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+  };
 
   const paint = () => {
     if (!items.length) return close();
     const q = input.value.trim();
     listEl.replaceChildren(...items.map((s, i) => {
       const li = document.createElement("li");
+      li.id = `${listEl.id}-${i}`;
       li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", String(i === active));
       li.className = i === active ? "is-active" : "";
       li.innerHTML = highlight(s.name, q);
       li.addEventListener("mousedown", (ev) => {
@@ -77,6 +91,9 @@ function attachSuggest(input, listEl) {
       return li;
     }));
     listEl.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    if (active >= 0) input.setAttribute("aria-activedescendant", `${listEl.id}-${active}`);
+    else input.removeAttribute("aria-activedescendant");
   };
 
   input.addEventListener("input", async () => {
@@ -598,6 +615,8 @@ $("search-board").addEventListener("submit", (ev) => { ev.preventDefault(); sear
 $("swap").addEventListener("click", () => {
   const a = $("from"), b = $("to");
   [a.value, b.value] = [b.value, a.value];
+  // Fokus na izhodisce: kdor je gumb dosegel s tipkovnico, mora videti izid.
+  a.focus();
   if (a.value && b.value) searchAB(true);
 });
 

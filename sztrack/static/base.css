@@ -253,3 +253,33 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   vertical-align: middle;
 }
 .mode-bus svg { flex-shrink: 0; }
+
+/* ---------- vidna izostritev ----------
+ * Brskalnikova privzeta izostritev je na temni podlagi komaj vidna, na
+ * elementih z lastnim robom pa je pogosto sploh ni. Kdor se po strani premika
+ * s tipkovnico, mora videti, kje je.
+ */
+:where(a, button, input, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-lit);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Bralnik zaslona to prebere, oko ne vidi. Za napise, ki jih nosi oblika. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Nic na teh straneh se ne premika zaradi pomena, samo zaradi udobja. */
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
