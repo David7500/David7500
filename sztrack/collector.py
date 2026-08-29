@@ -186,11 +186,63 @@ def is_zero_blip(prev, last, arr, dep) -> bool:
     return True
 
 
+def _delay_of(stu, kaj: str, sched_row, service_date: str) -> int | None:
+    """Zamuda iz enega `stop_time_update`, ali None, kadar je feed ne pove.
+
+    **Ne beri `stu.arrival.delay` naravnost.** Protobuf za neizpolnjeno polje
+    vrne 0, kar je videti kot "tocno". Izmerjeno na zivem feedu: `arrival`
+    ima `delay` pri vlakih v 100 % primerov, pri avtobusih pa le v 31-61 % --
+    ostalo so bile zapisane nicle. V bazi je to 11 906 od 20 523 avtobusnih
+    vrstic (58 %) in delez tocnih je zaradi tega bral 84,3 % namesto 71,2 %.
+
+    Kadar zamude ni, a je absolutni cas, jo izracunamo iz njega -- to je
+    meritev, ne ugibanje. Vlaki absolutnega casa nimajo nikoli, avtobusi
+    skoraj vedno (87-100 %).
+    """
+    if not stu.HasField(kaj):
+        return None
+    m = getattr(stu, kaj)
+    if m.HasField("delay"):
+        return m.delay
+    if not m.HasField("time") or sched_row is None:
+        return None
+    t_s = sched_row[0] if kaj == "arrival" else sched_row[1]
+    if t_s is None:
+        t_s = sched_row[1] if kaj == "arrival" else sched_row[0]
+    if t_s is None:
+        return None
+    base = datetime.combine(date.fromisoformat(service_date),
+                            datetime.min.time(), tzinfo=TZ)
+    return int(m.time - (base.timestamp() + t_s))
+
+
+def _sched_times(conn: sqlite3.Connection, trip_ids: set[str]) -> dict:
+    """(trip_id, stop_seq) -> (arr_s, dep_s) za vozjne iz tega klica.
+
+    Samo zanje: cel vozni red je 403 000 vrstic, en poll pa jih zadeva 1 700.
+    """
+    if not trip_ids:
+        return {}
+    ids = list(trip_ids)
+    out = {}
+    for i in range(0, len(ids), 400):      # sqlite ima mejo vezanih vrednosti
+        kos = ids[i:i + 400]
+        for r in conn.execute(
+            f"SELECT trip_id, stop_seq, arr_s, dep_s FROM sched "
+            f"WHERE trip_id IN ({','.join('?' * len(kos))})", kos
+        ):
+            out[(r["trip_id"], r["stop_seq"])] = (r["arr_s"], r["dep_s"])
+    return out
+
+
 def ingest(conn: sqlite3.Connection, feed) -> dict:
     """Zapiše spremembe zamud. Vrne števce za log."""
     now = datetime.now(TZ)
     windows = _rail_trip_windows(conn)
     valid = _service_dates(conn, now)
+    # Vozni red postankov rabimo, kadar feed da absolutni cas namesto zamude.
+    sched = _sched_times(conn, {e.trip_update.trip.trip_id for e in feed.entity
+                                if e.trip_update.trip.trip_id in windows})
     feed_ts = feed.header.timestamp or int(time.time())
     observed_at = int(time.time())
 
@@ -228,9 +280,11 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
         for stu in tu.stop_time_update:
             if stu.schedule_relationship != 0:
                 non_scheduled += 1
-            arr = stu.arrival.delay if stu.HasField("arrival") else None
-            dep = stu.departure.delay if stu.HasField("departure") else None
             seq = stu.stop_sequence
+            arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date)
+            dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date)
+            if arr is None and dep is None:
+                continue        # feed o tem postanku ni povedal nicesar
 
             prev = conn.execute(
                 "SELECT delay_arr, delay_dep FROM run "

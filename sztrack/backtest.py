@@ -45,7 +45,7 @@ def _delays_by_day(conn: sqlite3.Connection,
     """(train_no, dan) -> {stop_seq: zamuda}. Iz `run`, torej zadnje znano stanje."""
     rows = conn.execute(
         "SELECT t.train_no, r.service_date, r.stop_seq, "
-        "       COALESCE(r.delay_arr, r.delay_dep) AS d "
+        "       COALESCE(r.delay_dep, r.delay_arr) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
         "WHERE d IS NOT NULL AND t.network = ? "
         "ORDER BY t.train_no, r.service_date, r.stop_seq",

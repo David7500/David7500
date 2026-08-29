@@ -48,6 +48,29 @@ SŽ 789). Uvoz jemlje samo SŽ — vlake in **njihove nadomestne prevoze**
 
 ## Kaj podatki so in česa ni — to omejuje prikaz
 
+**Vlaki in avtobusi ne pošiljajo istega.** Izmerjeno na živem feedu, po
+prevozniku (delež postankov v enem klicu):
+
+| | `arrival.delay` | `departure.delay` | absolutni čas | `uncertainty` | `vehicle.id` |
+|---|---|---|---|---|---|
+| SŽ | 100 % | 100 % | **0 %** | 100 % | ne |
+| Arriva | 61 % | 100 % | 92 % | 0 % | da |
+| Nomago | 42 % | 100 % | 97 % | 0 % | da |
+| LPP | 39 % | 99 % | 100 % | 0 % | da |
+| AP MS | 31 % | 100 % | 94 % | 0 % | da |
+
+Iz tega dvoje, kar velja spoštovati:
+
+* **Nikoli ne beri `stu.arrival.delay` naravnost.** Protobuf za neizpolnjeno
+  polje vrne 0, kar je videti kot „točno". Prav ta napaka je v bazo zapisala
+  11 906 od 20 523 avtobusnih vrstic (58 %) kot točne; delež točnih je bral
+  **84,3 % namesto 71,2 %**. Pri železnici ni prizadeta nobena vrstica.
+  Uporabljaj `collector._delay_of()`, ki polje preveri in ob absolutnem času
+  zamudo **izračuna** — preverjeno proti poročani odhodni zamudi: mediana
+  razlike −9 s, 87 % v eni minuti.
+* **Zato povsod `COALESCE(delay_dep, delay_arr)`, ne obratno.**
+  `departure.delay` je izpolnjen pri vseh prevoznikih stoodstotno.
+
 Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
 `vozni red + zamuda`. Iz tega:
 

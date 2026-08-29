@@ -518,7 +518,7 @@ def _annotate_transfer_risk(conn: sqlite3.Connection, legs: list[dict],
         (r["trip_id"], r["stop_seq"]): r["d"]
         for r in conn.execute(
             f"WITH want(trip_id, stop_seq) AS (VALUES {marks}) "
-            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d "
+            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
             f"FROM run r JOIN want w ON w.trip_id = r.trip_id AND w.stop_seq = r.stop_seq "
             f"WHERE r.service_date = ? AND d IS NOT NULL",
             (*params, service_date),

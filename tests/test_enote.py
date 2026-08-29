@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from sztrack import weather
 from sztrack.alerts import parse_delay_text
-from sztrack.collector import is_zero_blip, worth_logging
+from sztrack.collector import _delay_of, is_zero_blip, worth_logging
 from sztrack.journey import _fold
 
 
@@ -141,3 +141,58 @@ def test_lezenje_se_sesteva():
 def test_pojav_in_izginotje_vrednosti_sta_sprememba():
     assert worth_logging(_row(120), None, None)
     assert worth_logging({"delay_arr": None, "delay_dep": None}, 10, 10)
+
+
+# ---------------------------------------------------------------- manjkajoca zamuda
+
+def _stu(seq, *, arr_delay=None, arr_time=None, dep_delay=None):
+    """Zgradi `stop_time_update`, kakršnega pošlje feed."""
+    from google.transit import gtfs_realtime_pb2
+    s = gtfs_realtime_pb2.TripUpdate.StopTimeUpdate()
+    s.stop_sequence = seq
+    if arr_delay is not None:
+        s.arrival.delay = arr_delay
+    if arr_time is not None:
+        s.arrival.time = arr_time
+    if dep_delay is not None:
+        s.departure.delay = dep_delay
+    return s
+
+
+def test_manjkajoca_zamuda_ni_nicla():
+    """Protobuf za neizpolnjeno polje vrne 0 — to ni „točno", ampak „ne vem".
+
+    Izmerjeno na živem feedu: `arrival` ima `delay` pri vlakih v 100 %
+    primerov, pri avtobusih pa le v 31–61 %. Zajem je ostalo pisal kot ničlo
+    in delež točnih avtobusov je zaradi tega bral 84,3 % namesto 71,2 %.
+    """
+    prazen = _stu(3)                       # `arrival` sploh ni
+    assert _delay_of(prazen, "arrival", (36000, 36060), "2026-08-31") is None
+
+
+def test_zamuda_se_izracuna_iz_absolutnega_casa():
+    """Kadar feed da čas namesto zamude, je zamuda razlika — to je meritev.
+
+    Preverjeno na živem feedu proti poročani odhodni zamudi istega postanka:
+    mediana razlike −9 s, 87 % v eni minuti. Negativna je pravilno — vozilo
+    na postanku izgubi nekaj časa.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Europe/Ljubljana")
+    polnoc = datetime(2026, 8, 31, tzinfo=tz).timestamp()
+    # Voznoredni prihod ob 10:00 (36000 s), dejanski ob 10:07.
+    s = _stu(3, arr_time=int(polnoc + 36000 + 420))
+    assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31") == 420
+
+
+def test_porocana_zamuda_ima_prednost_pred_izracunano():
+    # Ce feed zamudo pove, je to njegova beseda in ne ugibamo iz casa.
+    s = _stu(3, arr_delay=120, arr_time=999999999)
+    assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31") == 120
+
+
+def test_nicla_ostane_nicla_kadar_jo_feed_res_pove():
+    # Vlaki posljejo `delay = 0` in to POMENI tocno -- tega ne smemo zavreci.
+    s = _stu(3, arr_delay=0)
+    assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31") == 0

@@ -14,6 +14,21 @@ from . import config
 TZ = ZoneInfo(config.TIMEZONE)
 
 
+# Zakaj povsod `COALESCE(delay_dep, delay_arr)` in ne obratno.
+#
+# Feed pri avtobusih pogosto poslje `arrival` BREZ polja `delay` -- namesto
+# zamude da absolutni cas. Protobuf za manjkajoce polje vrne 0, zato je zajem
+# to zapisoval kot "tocno". Izmerjeno: 11 906 od 20 523 avtobusnih vrstic
+# (58 %) ima `delay_arr = 0` ob nenicelnem `delay_dep`; pri zeleznici tega ni
+# v NOBENI vrstici, ker vlaki vedno posljejo obe polji.
+#
+# Posledica je bila 13 odstotnih tock razlike: delez tocnih avtobusov je bral
+# 84,3 % namesto 71,2 %. `departure.delay` je izpolnjen pri vseh prevoznikih
+# stoodstotno, zato je merodajen on.
+#
+# Zajem od zdaj naprej pise NULL namesto lazne nicle (`collector.ingest`),
+# stare vrstice pa ostanejo -- iz njih se prava vrednost ne da izvleci, ker
+# surovega feeda ne hranimo.
 def _pct(values: list[float], q: float) -> float | None:
     if not values:
         return None
@@ -287,11 +302,11 @@ WITH mx AS (
 ),
 last AS (
     SELECT mx.trip_id, mx.service_date, mx.stop_seq,
-           COALESCE(r.delay_arr, r.delay_dep) AS d
+           COALESCE(r.delay_dep, r.delay_arr) AS d
     FROM mx JOIN run r ON r.trip_id = mx.trip_id
                       AND r.service_date = mx.service_date
                       AND r.stop_seq = mx.stop_seq
-    WHERE COALESCE(r.delay_arr, r.delay_dep) IS NOT NULL
+    WHERE COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL
 )
 """
 
@@ -349,7 +364,7 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
         params = [x for pair in chunk for x in pair]
         rows = conn.execute(
             f"WITH want(trip_id, stop_seq) AS (VALUES {values}) "
-            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d "
+            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
             f"FROM run r JOIN want w ON w.trip_id = r.trip_id AND w.stop_seq = r.stop_seq "
             f"WHERE r.service_date >= ? AND d IS NOT NULL",
             (*params, since),
@@ -385,7 +400,7 @@ def day_summary(conn: sqlite3.Connection, service_date: str,
     """
     rows = conn.execute(
         "WITH last AS ("
-        "  SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d,"
+        "  SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d,"
         "         ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn"
         "  FROM run r JOIN trip t USING (trip_id)"
         "  WHERE r.service_date = ? AND (? IS NULL OR t.network = ?)"
@@ -593,7 +608,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     rows = conn.execute(
-        "SELECT r.service_date, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d "
+        "SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
         "WHERE t.train_no = ? AND r.service_date >= ? AND d IS NOT NULL "
         "ORDER BY r.service_date, r.stop_seq",
