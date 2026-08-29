@@ -995,7 +995,7 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 1000);
 refreshFeedDot();
-setInterval(refreshFeedDot, 30000);
+pollWhileVisible(refreshFeedDot, 30000);
 
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
 // za njo.
@@ -1022,9 +1022,12 @@ initMode(() => {
   resizeTimer = setTimeout(() => redrawers.forEach((f) => f()), 60);
 });
 
-loadRun().then(loadHistory);
 loadWeather();
 loadAlerts();
-setInterval(loadRun, RUN_POLL_MS);
-setInterval(loadHistory, HIST_POLL_MS);
 loadHeadsign();
+
+// Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja ("zajetih N
+// PRED danasnjo"), zato sele za prvim `loadRun`. Vzporeden zagon bi danasnjo
+// voznjo stel v svoje lastno povprecje.
+pollWhileVisible(loadRun, RUN_POLL_MS);
+loadRun().then(() => pollWhileVisible(loadHistory, HIST_POLL_MS));

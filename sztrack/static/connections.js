@@ -1007,5 +1007,5 @@ attachSuggest($("station"), $("suggest-station"));
 tickClock();
 setInterval(tickClock, 1000);
 refreshFeedDot();
-setInterval(refreshFeedDot, 30000);
+pollWhileVisible(refreshFeedDot, 30000);
 restore();

@@ -100,6 +100,49 @@ async function refreshFeedDot() {
   }
 }
 
+// ---------- osvezevanje, ki ve za vidnost strani ----------
+//
+// Aplikacija je predvsem telefonska. Navaden `setInterval` tam tece naprej,
+// ko je stran v ozadju -- to je poraba baterije in prenosa za sliko, ki je
+// nihce ne gleda. Ob vrnitvi pa clovek gleda vrednost, staro do pol minute,
+// in prav takrat je najbolj pomembna: stoji na peronu.
+//
+// Zato: v ozadju ne osvezujemo, ob vrnitvi osvezimo TAKOJ. Enako ob vrnitvi
+// omrezja -- telefon, ki je bil v predoru, ima sicer prazno stran, dokler ne
+// potece naslednji interval.
+function pollWhileVisible(fn, ms) {
+  let timer = null;
+  let zadnji = 0;
+
+  const tick = async () => {
+    zadnji = Date.now();
+    try {
+      await fn();
+    } catch (err) {
+      /* posamezna zahteva sme spodleteti; ritem se ne sme ustaviti */
+    }
+    if (!document.hidden) timer = setTimeout(tick, ms);
+  };
+
+  const wake = () => {
+    if (document.hidden) {
+      clearTimeout(timer);
+      timer = null;
+      return;
+    }
+    if (timer) return;                    // ze tece
+    // Ce je od zadnjega osvezevanja minilo manj kot pol intervala, ne
+    // podvajamo zahteve -- kratek preklop med aplikacijama ni razlog zanjo.
+    const potekel = Date.now() - zadnji >= ms / 2;
+    timer = setTimeout(tick, potekel ? 0 : ms - (Date.now() - zadnji));
+  };
+
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("online", wake);
+  wake();
+  return { stop: () => { clearTimeout(timer); timer = null; } };
+}
+
 // ---------- preprosto / napredno ----------
 // Isto na vseh straneh, zato tu in ne trikrat. Napreden pogled ni druga stran:
 // je razred na <body>, ki odkrije elemente z razredom `adv-only`.
