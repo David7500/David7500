@@ -373,7 +373,7 @@ def test_breakdowns_loci_vrsto_vlaka_od_prevoznika(conn):
     rail = {r["key"] for r in stats.breakdowns(conn, network="zeleznica")["by_kind"]}
     bus = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
     assert rail == {"IC", "nadomestni prevoz"}
-    assert bus == {"avtobus 1118"}
+    assert bus == {"LPP"}
 
 
 def test_prag_za_prestop_je_odvisen_od_omrezja(conn):

@@ -422,6 +422,14 @@ def _group_stats(groups: dict[str, list[int]], min_n: int) -> list[dict]:
     return out
 
 
+# GTFS `agency_id` -> ime, kot ga clovek pozna. Surova stevilka v prikazu
+# ("avtobus 1118") ne pove nikomur nicesar.
+AGENCY_NAMES = {
+    "1161": "SŽ", "1118": "LPP", "1123": "Arriva",
+    "1119": "Nomago", "1121": "AP Murska Sobota",
+}
+
+
 # Koliko voznj mora imeti skupina, da jo sploh pokazemo. Pri desetih je
 # "delez tocnih" se vedno grob, a razlike med vrstami vlakov so ze vidne;
 # pri treh bi risali sum.
@@ -472,7 +480,7 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
         elif r["network"] == "zeleznica":
             kind = "nadomestni prevoz"
         else:
-            kind = f"avtobus {r['agency'] or '?'}"
+            kind = AGENCY_NAMES.get(r["agency"], r["agency"] or "neznan prevoznik")
         by_kind.setdefault(kind, []).append(d)
         if r["start_s"] is not None:
             by_hour.setdefault(f"{(r['start_s'] // 3600) % 24:02d}", []).append(d)

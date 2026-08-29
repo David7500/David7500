@@ -162,10 +162,14 @@ function tileHtml(label, value, sub, color) {
 // Preklop pogleda je skupen vsem stranem in zivi v common.js.
 initMode();
 
+// Katero omrežje kaže stran. Skupna številka bi bila povprečje vlaka in
+// mestnega avtobusa, kar ne opisuje ne enega ne drugega.
+let NET = "zeleznica";
+
 async function load() {
   const [b, ranking] = await Promise.all([
-    fetch("/api/stats/breakdowns").then((r) => r.json()),
-    fetch("/api/stats?days=90").then((r) => r.json()),
+    fetch(`/api/stats/breakdowns?network=${NET}`).then((r) => r.json()),
+    fetch(`/api/stats?days=90&network=${NET}`).then((r) => r.json()),
   ]);
 
   const allRuns = b.runs;
@@ -173,11 +177,19 @@ async function load() {
   const medians = b.by_day.map((d) => d.median_s).sort((x, y) => x - y);
   const overallMedian = medians.length ? medians[Math.floor(medians.length / 2)] : null;
 
-  $("lead").innerHTML =
-    `Iz lastnega zajema: <strong>${allRuns.toLocaleString("sl-SI")}</strong> voženj
-     v <strong>${b.days.length}</strong> dneh, od ${escapeHtml(b.days[0] || "—")}.
-     Vsaka vožnja prispeva svojo <strong>končno</strong> zamudo — tisto, s katero
-     pripelje na cilj.`;
+  const what = NET === "avtobus" ? "avtobusnih voženj" : "voženj";
+  $("lead").innerHTML = allRuns
+    ? `Iz lastnega zajema: <strong>${allRuns.toLocaleString("sl-SI")}</strong> ${what}
+       v <strong>${b.days.length}</strong> ${b.days.length === 1 ? "dnevu" : "dneh"},
+       od ${escapeHtml(b.days[0] || "—")}.
+       Vsaka vožnja prispeva svojo <strong>končno</strong> zamudo — tisto, s katero
+       pripelje na cilj.`
+    : `Za to omrežje še ni zajetih voženj. Zajem avtobusov se je začel danes;
+       številke se bodo nabrale same.`;
+  $("kind-title").textContent = NET === "avtobus" ? "Po prevozniku" : "Po vrsti vlaka";
+  $("worst-title").textContent = NET === "avtobus"
+    ? "Linije z največjo mediano zamude"
+    : "Vlaki z največjo mediano zamude";
 
   $("tiles").innerHTML = [
     tileHtml("Zajetih voženj", allRuns.toLocaleString("sl-SI"), `v ${b.days.length} dneh`),
@@ -206,13 +218,29 @@ async function load() {
     </a>`).join("")}</div>`;
 }
 
-load().catch((err) => {
-  console.error(err);
-  $("lead").textContent = "Statistike ni bilo mogoče naložiti.";
+function reload() {
+  load().catch((err) => {
+    console.error(err);
+    $("lead").textContent = "Statistike ni bilo mogoče naložiti.";
+  });
+}
+
+document.querySelector(".tabs").addEventListener("click", (ev) => {
+  const b = ev.target.closest(".tab");
+  if (!b || b.dataset.net === NET) return;
+  NET = b.dataset.net;
+  for (const t of document.querySelectorAll(".tab")) {
+    const on = t.dataset.net === NET;
+    t.classList.toggle("is-on", on);
+    t.setAttribute("aria-selected", String(on));
+  }
+  reload();
 });
+
+reload();
 
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => load().catch(() => {}), 200);
+  resizeTimer = setTimeout(() => reload(), 200);
 });
