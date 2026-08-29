@@ -374,8 +374,9 @@ def api_run(train_no: str, date: str | None = None,
         rows = stats.run_detail(conn, train_no, date, trip)
         if not rows:
             raise HTTPException(404, f"vožnje {train_no} ne poznam")
+        ident = stats.trip_identity(conn, train_no, trip)
         return {"train_no": train_no, "service_date": date, "trip_id": trip,
-                "mode": stats.trip_mode(conn, train_no), "stops": rows}
+                **ident, "stops": rows}
 
 
 @app.get("/api/train/{train_no}/history")

@@ -142,12 +142,28 @@ def timetable(conn: sqlite3.Connection, train_no: str,
     ]
 
 
+def trip_identity(conn: sqlite3.Connection, train_no: str,
+                  trip_id: str | None = None) -> dict:
+    """Kaj ta vožnja sploh je: vrsta vozila, omrežje, prevoznik.
+
+    Prikaz brez tega govori o vlaku tudi tam, kjer vozi mestni avtobus --
+    "vlak je od takrat verjetno že pripeljal" pod linijo 47 ni le netočno,
+    ampak zveni kot napaka programa.
+    """
+    sql = "SELECT mode, network, agency FROM trip WHERE train_no = ?"
+    params: tuple = (train_no,)
+    if trip_id:
+        sql += " AND trip_id = ?"
+        params = (train_no, trip_id)
+    row = conn.execute(sql + " LIMIT 1", params).fetchone()
+    if not row:
+        return {"mode": "vlak", "network": "zeleznica", "agency": None}
+    return {"mode": row["mode"], "network": row["network"], "agency": row["agency"]}
+
+
 def trip_mode(conn: sqlite3.Connection, train_no: str) -> str:
-    """'vlak' ali 'bus'. Nadomestni prevoz je v istem iskalniku, a potnik mora
-    vedeti, na kaj čaka -- na peronu ali na postajališču."""
-    row = conn.execute("SELECT mode FROM trip WHERE train_no = ? LIMIT 1",
-                       (train_no,)).fetchone()
-    return row["mode"] if row else "vlak"
+    """Samo vrsta vozila. Za celotno sliko glej `trip_identity`."""
+    return trip_identity(conn, train_no)["mode"]
 
 
 def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,

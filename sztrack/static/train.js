@@ -99,7 +99,8 @@ window.addEventListener("resize", () => {
 // Skupno stanje: profil zamude potrebuje tekoco voznjo IN zgodovino, ki se
 // nalagata loceno in z razlicnim ritmom.
 const state = { run: null, forecast: null, past: null, pastRuns: 0,
-                weather: new Map(), report: null, mode: "vlak" };
+                weather: new Map(), report: null,
+                mode: "vlak", network: "zeleznica", agency: null };
 // Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
 // ob preklopu pogleda.
 let hoverSeq = null;
@@ -110,6 +111,43 @@ const runHeadEl = document.getElementById("run-head");
 const runTimelineEl = document.getElementById("run-timeline");
 const headsignEl = document.getElementById("train-headsign");
 const feedDotEl = document.getElementById("feed-dot");
+
+
+// Prikaz mora govoriti o tem, kar je pred potnikom. "Vlak je od takrat verjetno
+// že pripeljal" pod mestno linijo 47 ni le netočno -- zveni kot napaka programa.
+
+function vehicleNoun() {
+  if (!isBus(state.mode)) return "vlak";
+  return state.network === "zeleznica" ? "nadomestni prevoz" : "avtobus";
+}
+
+function vehicleWord() {
+  if (!isBus(state.mode)) return "ta vlak";
+  return state.network === "zeleznica" ? "ta prevoz" : "ta avtobus";
+}
+
+function caveatText() {
+  if (!isBus(state.mode)) {
+    return "Meritev ima ločljivost 60 s in je zajeta v prometnem mestu, ne nujno na peronu. "
+      + "Vlaki v feedu nimajo GPS — lega je zadnja postaja z meritvijo, ne dejanski položaj.";
+  }
+  if (state.network === "zeleznica") {
+    return "Nadomestni prevoz vozi po cesti in po svojem voznem redu, ne po železniškem. "
+      + "Čakaj na postajališču, ne na peronu.";
+  }
+  return "Mestni avtobus ima GPS, zato je njegova lega na zemljevidu izmerjena, "
+    + "ne sklepana. Zamude so iz istega feeda kot pri vlakih, z ločljivostjo ene minute.";
+}
+
+// Nazaj na tisto stran, s katere se pride: iskalnik vlakov ali avtobusov.
+function applyNetworkWording() {
+  const back = document.querySelector(".back-link");
+  if (back && state.network === "avtobus") {
+    back.setAttribute("href", "/app/bus");
+    const label = back.querySelector("span");
+    if (label) label.textContent = "avtobusi";
+  }
+}
 
 // Koliko casa sme meritev veljati za "trenutno". Cez to je vrednost zgodovina
 // in prikaz mora to povedati -- "+20 min" ob polnoci, izmerjeno ob 17h, je laz.
@@ -124,7 +162,7 @@ function ageLabel(iso) {
 }
 
 function runHeadHtml(cur) {
-  const bus = isBus(state.mode);
+  const bus = isBus(state.mode);   // glej vehicleNoun() za besedilo
   const d = cur ? stopDelay(cur) : null;
   const wx = cur ? state.weather.get(cur.stop_seq) : null;
   const color = delayColor(d);
@@ -145,10 +183,12 @@ function runHeadHtml(cur) {
       <div class="detail-now-where">
         ${cur
           ? `izmerjeno na postaji <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
-          : `za ${bus ? "ta prevoz" : "ta vlak"} na ta dan še ni nobene meritve`}
+          : `za ${vehicleWord()} na ta dan še ni nobene meritve`}
       </div>
       ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
-        ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale ? " — vlak je od takrat verjetno že pripeljal" : ""}
+        ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale
+          ? ` — ${vehicleNoun()} je od takrat verjetno že pripeljal`
+          : ""}
       </div>` : ""}
       ${rep ? `<div class="detail-report">
         Prevoznik poroča <strong style="color:${delayColor(rep.delay_min * 60)}">${rep.delay_min > 0 ? "+" : ""}${rep.delay_min} min</strong>
@@ -162,10 +202,7 @@ function runHeadHtml(cur) {
         </div>
         <div class="detail-weather-raw">${escapeHtml(weatherSummary(wx))}</div>` : ""}
       <div class="detail-caveat">
-        ${bus
-          ? "Nadomestni prevoz vozi po cesti in po svojem voznem redu, ne po železniškem. Čakaj na postajališču, ne na peronu."
-          : "Meritev ima ločljivost 60 s in je zajeta v prometnem mestu, ne nujno na peronu. " +
-            "Vlaki v feedu nimajo GPS — lega je zadnja postaja z meritvijo, ne dejanski položaj."}
+        ${caveatText()}
       </div>
     </div>
   `;
@@ -217,9 +254,12 @@ async function loadRun() {
     // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
     // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
     state.mode = run.mode;
+    state.network = run.network || "zeleznica";
+    state.agency = run.agency || null;
     if (isBus(run.mode)) {
-      document.getElementById("train-mode").innerHTML = modeBadgeHtml(run.mode);
+      document.getElementById("train-mode").innerHTML = lineBadgeHtml(run);
     }
+    applyNetworkWording();
     state.run = run;
     state.forecast = forecast;
     runHeadEl.innerHTML = runHeadHtml(current);
@@ -536,7 +576,7 @@ function drawSeverityStrip(svg, pts, x, iw, left, top, bot) {
   svg.appendChild(svgEl("text", {
     x: left + iw, y: top - 5, "text-anchor": "end", fill: INK_AXIS, "font-size": 9,
     "font-family": "'IBM Plex Sans', sans-serif",
-  }, "razmere ob vlaku, 0–10"));
+  }, `razmere ob ${vehicleNoun() === "vlak" ? "vlaku" : "vozilu"}, 0–10`));
 
   const step = pts.length > 1 ? iw / (pts.length - 1) : iw;
   const bw = Math.max(2, Math.min(18, step * 0.62));
