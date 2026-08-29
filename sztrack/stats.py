@@ -481,6 +481,12 @@ def segment_speeds(conn: sqlite3.Connection, train_no: str | None = None) -> lis
 
     Pozor: zamude imajo ločljivost 60 s, zato so hitrosti na kratkih odsekih
     zelo grobe. Odseki pod 5 km so izpuščeni.
+
+    Filtra po omrežju tu ni in ga ne rabi: `edge` nastane samo iz železniških
+    shapeov, zato avtobusni par postaj vanj ne more zadeti. Preverjeno na
+    zajetih podatkih -- 0 avtobusnih parov v `edge`, 0 avtobusnih linij med
+    14 132 izmerjenimi odseki. Če bi kdaj v `edge` prišle ceste, to preneha
+    veljati in filter je treba dodati.
     """
     sql = (
         "SELECT t.train_no, r1.service_date, a.name AS from_name, b.name AS to_name, "
