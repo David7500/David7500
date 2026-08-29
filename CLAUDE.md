@@ -215,6 +215,18 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   pri vlaku lovljenje; čakanje pol ure na liniji, ki vozi vsakih deset minut,
   pa ni prestop, ampak znak, da smo zamudili tri boljše.
 
+`trip.start_s` / `trip.end_s` sta **prvi odhod in zadnji prihod vožnje**,
+izpeljana iz `sched`, a shranjena v `trip`, ker ju rabi najbolj vroča
+poizvedba — "kaj se zdaj vozi". Polni ju `db.fill_trip_window()` ob uvozu
+GTFS in ob migraciji. Kdor vstavlja vožnje mimo uvoza (test, ročni popravek),
+ju mora zapolniti, sicer vožnja **ni na seznamu živih**.
+
+**Vožnja, ki zamuja več kot `api.MAX_LIVE_DELAY_S` (6 h), ni živa.** To je
+pravilo prikaza, ne pospešek. Pri železnici ni nobene zamude čez tri ure
+(najhujša EC 79 z 2,9 h); pri avtobusih je nad šest ur 0,67 % vrstic in te
+niso zamude — Nomagov N6571 je imel 27 060 s enako na vseh 44 postankih
+vožnje, ki je vozila ob 04:15, kar je feedova zamenjava prometnega dne.
+
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·
 `alert` + `alert_entity` (ovire) · `delay_report` (kje in koliko, po prevozniku).
@@ -352,6 +364,37 @@ dejanskemu paru zaporednih postankov danega vlaka.
 | Po prvem zajemu | 74 MB RSS |
 | Osvežitev v istem procesu | vrh 89 MB, ostane 85 MB → zato `SZ_REFRESH=off` privzeto |
 
+## Hitrost pri velikih podatkih
+
+Izmerjeno na **sintetični bazi z letom zajema vseh prevoznikov**: 52 122 000
+vrstic `run`, 365 dni, 5,9 GB (generator je v scratchpadu, ne v repozitoriju).
+To je stanje, do katerega bo baza prišla sama; pri devetih dneh je vse hitro
+in ne pove nič.
+
+| pot | čas |
+|---|---|
+| vstopna stran (`/api/overview`) | 29 ms |
+| zemljevid, obe omrežji (`/api/live`) | 460 ms |
+| živi seznam, samo železnica | 20 ms |
+| odhodna tabla | 93 ms |
+| prestopi | 46 ms |
+| načrt poti do treh prestopov | 2 ms |
+| iskanje postaj (avtobusi) | 145 ms |
+| statistika, razrez 90 dni | 0,1 ms (dnevni povzetek) |
+
+Trije vzorci, ki so bili vsak po enkrat vzrok počasnosti in se v novi kodi
+ne smejo ponoviti:
+
+1. **Filtriraj znotraj poizvedbe, ne za njo.** Okenska funkcija čez oba
+   omrežja, filter `t.network` šele za njo: železniško vprašanje (700 000
+   vrstic) plača avtobusne (12 M). Bilo je dvakrat — v `_LIVE_SQL` in v
+   `stats.breakdowns` (38 s).
+2. **Koreliran `EXISTS` teče enkrat na vrstico.** Ista pogoja kot
+   nekorelirana podpoizvedba: 392 ms → 65 ms.
+3. **Preveri `EXPLAIN QUERY PLAN`, preden verjameš, da je indeks.**
+   `SCAN t USING INDEX trip_train_no` **ni** iskanje po indeksu, ampak
+   pregled cele tabele po napačnem — manjkal je `trip(route_id)`.
+
 ## Objava
 
 Ciljni gostitelj je Raspberry Pi doma: **`david@192.168.1.166`**. Tam ob
@@ -455,8 +498,6 @@ v prikaz, pa naj bo še tako domiseln.
   Platni sta skica, **koda je merodajna**: okno vlaka je od takrat dobilo
   semafor razmer namesto enega modrega odtenka, izgubilo zavihke ter dobilo
   preklop preprosto/napredno, obvestila o ovirah in poročilo prevoznika.
-* Zemljevid še vedno stoji na svetlih OSM ploščicah pod temno temo. Ni napaka
-  podatkov, je pa edina stran, kjer se aplikacija bori sama s sabo.
 * Avtobusi: `vehicle_positions` nosi ~20 vozil z GPS (LPP in medkrajevni),
   vlakov pa ne. Isti GTFS zip že vsebuje avtobusni del, ki ga uvoz namenoma
   izpusti (`RAIL_ROUTE_TYPE`).

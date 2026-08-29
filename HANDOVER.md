@@ -160,6 +160,40 @@ sudo bash deploy/install-rpi.sh && sudo systemctl restart sztrack.service
 **Pella je bila slepa ulica** — zajem je delal, javni API pa je vračal
 Cloudflare 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
+## Hitrost pri velikih podatkih
+
+Vprašanje ni bilo prostor (3,4 GB na leto ni nič), ampak ali bo aplikacija
+ob letu zajema še uporabna. Izmerjeno na sintetični bazi s **52 122 000
+vrsticami `run`** (365 dni vseh prevoznikov, 5,9 GB):
+
+| pot | prej | zdaj |
+|---|---|---|
+| statistika, razrez 90 dni (avtobusi) | 45,8 s | 0,1 ms |
+| zemljevid, obe omrežji | 2,2 s | 460 ms |
+| živi seznam, železnica | 504 ms | 20 ms |
+| vstopna stran | 340 ms | 29 ms |
+| odhodna tabla, prestopi, iskanje | že v redu | 46–145 ms |
+
+Trije popravki, vsak z lastnim vzrokom:
+
+1. **Statistika se računa enkrat na dan**, ne ob obisku (tabela `povzetek`,
+   3:30, `SZ_MAINT_HOUR`). Izmerjeno na pravem zajemu: od tretjega dne naprej
+   en nov dan premakne mediano 90-dnevnega okna za 0–1 minuto in delež točnih
+   za manj kot odstotno točko. Stran zato pove **čas izračuna** — predpomnjena
+   številka brez datuma je laž, ki čaka na priložnost.
+2. **Voznoredni okvir vožnje je stolpec** (`trip.start_s` / `trip.end_s`),
+   ne grupiranje 403 000 vrstic `sched` ob vsakem klicu. Vožnje, ki se zdaj
+   ne morejo voziti, s tem sploh ne pridejo do okenskih funkcij.
+3. **Manjkal je indeks `trip(route_id)`.** Vsako obvestilo o oviri je bilo
+   poln pregled 20 736 voženj.
+
+Pri (2) se je pokazala ena razlika v izpisu in ni bila napaka: **vožnja z
+več kot šesturno zamudo ni več na seznamu živih** (`api.MAX_LIVE_DELAY_S`).
+Prej je meja veljala samo za včerajšnji prometni dan. Nomagov N6571 je imel
+27 060 s (7 h 31 min) enako na vseh 44 postankih vožnje, ki je po voznem redu
+vozila ob 04:15 — to je feedova zamenjava prometnega dne, ne avtobus, ki bi
+se opoldne še vozil, in na zemljevidu ni imel kaj iskati.
+
 ## Odprto
 
 * **Dostop od zunaj** — Tailscale ali Cloudflare Tunnel.
