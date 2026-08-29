@@ -101,8 +101,15 @@ prevoznik:
   prevoznika, zato oznaka nosi tudi ime prevoznika ("LPP 25");
 * mestno postajališče ima svoj `stop_id` za vsako smer — iskanje po imenu
   združuje;
-* zemljevid je železniški (`?mode=vlak`), sicer glava šteje 37 vozil, riše
-  pa 24.
+* zemljevid je železniški (`?network=zeleznica`), sicer glava šteje 37 vozil,
+  riše pa 24;
+* **pragova za prestop sta drugačna** (3–30 min proti 6–120): tri minute so
+  pri mestni liniji prestop, pri vlaku lovljenje;
+* **dnevnik je bilo treba prižgati na prag.** Mestni avtobusi imajo 23,3
+  zapisa na postanek proti 1,6 pri vlakih, z mediano spremembe 15 sekund —
+  14 000 vrstic na uro za nihanje pod ločljivostjo prikaza. Z minutnim pragom
+  504/h, torej 28-krat manj; pri vlakih se ne izgubi nič, ker so vse njihove
+  spremembe večkratniki minute. Brez tega bi vlaki + LPP dali ~20 GB na leto.
 
 ## Izmerjeno
 
