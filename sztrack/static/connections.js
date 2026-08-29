@@ -893,8 +893,12 @@ document.querySelector(".tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest(".tab");
   if (!b) return;
   setTab(b.dataset.tab);
-  if (b.dataset.tab === "board" && $("station").value) searchBoard(true);
-  if (b.dataset.tab === "ab" && $("from").value && $("to").value) searchAB(true);
+  const board = b.dataset.tab === "board";
+  if (board && $("station").value) searchBoard(true);
+  else if (!board && $("from").value && $("to").value) searchAB(true);
+  // Prazna polja ne pomenijo prazne strani: `setTab` je rezultate pobrisal,
+  // zato vrnemo pregled. Brez tega preklop zavihka pokaze bel prostor.
+  else showOverview();
 });
 
 $("search-ab").addEventListener("submit", (ev) => { ev.preventDefault(); searchAB(true); });
