@@ -333,3 +333,78 @@ def evaluate_operator(conn: sqlite3.Connection) -> dict:
             },
         },
     }
+
+
+def model_vlak_dan(train_tasks):
+    """Vlak + popravek za stanje mreže na ta dan.
+
+    Zamisel: če cel dan zamuja bolj kot običajno (nesreča, nevihta, zapora),
+    bo tudi ta vlak zamujal bolj, kot pravi njegova zgodovina. Popravek je
+    razlika med današnjo mediano spremembe zamude čez vso mrežo in mediano
+    čez vse dni.
+
+    Pozor na tisto, kar bi bilo goljufanje: popravek se računa iz **drugih
+    voženj istega dne**, ne iz te. V resnici bi ga aplikacija poznala, ker so
+    te vožnje že prevožene, ko gledaš svojo.
+
+    **Izmerjeno: ne pomaga.** MAE 2,00 -> 2,06 min, delež v petih minutah
+    90,2 % -> 89,1 %. Povprečna sprememba zamude se čez zajete dni giblje med
+    115 in 142 s, torej pod pol minute -- premalo, da bi popravek česa rešil,
+    dovolj, da doda šum. Zamisel je pustena tu z ukazom
+    `sztrack backtest --day-offset`, da je ni treba znova preizkušati.
+    """
+    per_train = defaultdict(list)
+    for t in train_tasks:
+        per_train[(t["train_no"], t["i"], t["j"])].append(t["d_j"] - t["d_i"])
+    base = statistics.mean([t["d_j"] - t["d_i"] for t in train_tasks]) if train_tasks else 0.0
+
+    def predict_with(day_offset):
+        def predict(t):
+            own = per_train.get((t["train_no"], t["i"], t["j"]))
+            delta = statistics.median(own) if own and len(own) >= MIN_SAMPLES else 0.0
+            return t["d_i"] + delta + day_offset
+        return predict
+
+    predict_with.base = base
+    return predict_with
+
+
+def evaluate_day_offset(conn: sqlite3.Connection) -> dict:
+    """Ali stanje mreže na ta dan izboljša napoved?
+
+    Model brez popravka proti modelu s popravkom, na istih nalogah in po istem
+    protokolu (izpuščanje enega dne). Popravek se za vsak dan izračuna iz
+    voženj tistega dne, ki niso ocenjevana naloga.
+    """
+    tasks = build_tasks(conn)
+    days = sorted({t["day"] for t in tasks})
+    errs_plain: list[float] = []
+    errs_offset: list[float] = []
+
+    for day in days:
+        train = [t for t in tasks if t["day"] != day]
+        test = [t for t in tasks if t["day"] == day]
+        if not train or not test:
+            continue
+        factory = model_vlak_dan(train)
+        plain = factory(0.0)
+
+        # Stanje dneva: POVPRECNA sprememba zamude na ta dan, minus povprecje
+        # cez vse dni. Mediana je tu neuporabna -- pri vecini sosednjih
+        # postankov se zamuda ne spremeni, zato je mediana vsak dan 0 in
+        # popravek vedno nic. Povprecje se giblje med 115 in 142 s.
+        day_mean = statistics.mean([t["d_j"] - t["d_i"] for t in test])
+        offset = day_mean - factory.base
+        adjusted = factory(offset)
+
+        for t in test:
+            errs_plain.append(plain(t) - t["d_j"])
+            errs_offset.append(adjusted(t) - t["d_j"])
+
+    return {
+        "tasks": len(tasks),
+        "models": {
+            "vlak": _score(errs_plain),
+            "vlak + stanje dneva": _score(errs_offset),
+        },
+    }

@@ -87,7 +87,10 @@ def cmd_weather(args):
 
 def cmd_backtest(args):
     conn = db.connect()
-    if args.operator:
+    if args.day_offset:
+        res = backtest.evaluate_day_offset(conn)
+        print(f"nalog: {res['tasks']}\n")
+    elif args.operator:
         res = backtest.evaluate_operator(conn)
         if not res.get("tasks"):
             print("premalo dnevnika za primerjavo -- pozeni 'poll' nekaj dni")
@@ -198,6 +201,8 @@ def main(argv=None):
     a = sub.add_parser("backtest", help="izmeri napako napovedi (izpuscanje enega dne)")
     a.add_argument("--operator", action="store_true",
                    help="primerjaj prevoznikovo napoved s prenosom zamude")
+    a.add_argument("--day-offset", action="store_true",
+                   help="ali stanje mreze na ta dan izboljsa napoved (ne izboljsa)")
     a.add_argument("--by-horizon", action="store_true", help="razclenjeno po oddaljenosti")
     a.set_defaults(func=cmd_backtest)
 

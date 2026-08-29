@@ -323,6 +323,14 @@ Iz tega dvoje, kar velja spoštovati, preden kdo piše nov model:
   ni vredno zapletenosti. Prag `MIN_SAMPLES` 1–3 da isti rezultat, 4 in več
   poslabša.
 
+**Preizkušeno in ne pomaga** (`sztrack backtest --day-offset`): popravek za
+stanje mreže na ta dan. Zamisel je razumna -- če cel dan zamuja bolj kot
+običajno, bo tudi ta vlak -- a povprečna sprememba zamude se čez zajete dni
+giblje le med 115 in 142 s. Premalo, da bi kaj rešilo, dovolj, da doda šum:
+MAE 2,00 → 2,06 min, delež v petih minutah 90,2 % → 89,1 %. (Mediana je za to
+neuporabna: pri večini sosednjih postankov se zamuda ne spremeni, zato je
+vsak dan 0.)
+
 Vsak nov model naj se najprej pomeri s `prenos`. Kar ga ne premaga, ne sodi
 v prikaz, pa naj bo še tako domiseln.
 
