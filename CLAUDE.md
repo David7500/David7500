@@ -172,6 +172,20 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   postaji: enak simbol za oboje bi zabrisal razliko med izmerjeno lego in
   zadnjo znano postajo. Hrani se samo trenutna lega (`vehicle_now`, upsert):
   sled bi bila ~300 000 točk na dan, prikaz "kje je zdaj" pa rabi eno vrstico.
+* **Zamude ne prenašaj naprej čez dolg postanek — tabla je zato lagala.**
+  RG 1604 stoji v Ljubljani 21 minut (22:44 → 23:05): pride +15 in odpelje
+  **po voznem redu**. Odhodna tabla je zamudo prenesla naravnost in pisala
+  23:20 — potnik bi prišel na že prazen peron. Napaka v najslabšo smer, ker
+  vlaka ne zamudiš, če prideš prezgodaj.
+
+  `journey.board()` in `stats.connections()` zato med zadnjo meritvijo in
+  potnikovo postajo odštejeta **rezervo voznega reda** (`stats._slack_ahead()`
+  + `_after_slack()`), enako kot `stats.predict()`. Pri **prihodni** tabli se
+  postanek na tej postaji ne šteje — vozilo šele pride, postanek je za tem.
+
+  Poceni je: `_slack_ahead()` bere samo postanke nad `MIN_DWELL_S`, teh je na
+  vsej železnici 406 od 10 019.
+
 * **Odhodne zamude s prve postaje ni — pri vlakih.** Feed za vlak nikoli ni
   poročal `stop_seq = 1`; najnižji zajeti je 2. Vlak, ki *"štarta z zamudo"*,
   je v podatkih viden šele na drugi postaji. Odhodna tabla zato za izhodišče
@@ -431,6 +445,10 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot
   številka poleg nje.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
+* **Padca zamude na postaji ne riši, kadar je manjši od sedmih pik.** Prazen
+  krogec prihoda in polna pika odhoda se prekrijeta in vrstica je videti kot
+  pretrgana črta, ne kot padec. Ena minuta razlike je tudi na meji ločljivosti
+  feeda; v seznamu ostane zapisana s številkami (`+16 → +15`).
 * Kjer meritve ni (ocena, napoved), nastopi rezervirana `#a8d8ff`, ki je
   lestvica ne uporablja.
 * Vreme ima **svoj semafor**, ne odtenek lestvice zamud.

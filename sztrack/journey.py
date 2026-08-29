@@ -21,7 +21,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import _abs_time, last_measured, typical_at_stops
+from .stats import (_abs_time, _after_slack, _slack_ahead, last_measured,
+                    typical_at_stops)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -317,6 +318,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     # trenutek za koncem vseh voznj -- varovalo za lazne nicle vseeno velja.
     last = last_measured(conn, service_date, [d["trip_id"] for d in out],
                          now_s if now_s is not None else 48 * 3600)
+    slack = _slack_ahead(conn, [d["trip_id"] for d in out])
     for d in out:
         lm = last.get(d["trip_id"])
         own = d["delay_s"]
@@ -331,7 +333,20 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             # Vozilo je se pred to postajo. Prenesemo njegovo trenutno zamudo
             # naprej -- merjeno je to bistveno bolje od feedove napovedi
             # (MAE 1,3 min proti 7,9) -- in povemo, da je ocena.
-            d["delay_s"] = lm["delay_s"]
+            #
+            # A goli prenos je na dolgih postankih narobe, in to v NAJSLABSO
+            # smer: RG 1604 stoji v Ljubljani 21 minut, torej pride +15 in
+            # odpelje ob 23:05 po voznem redu. Tabla je pisala 23:20 in
+            # potnik bi prisel na ze prazen peron. Zato vozilo najprej porabi
+            # rezervo voznega reda med svojo lego in to postajo.
+            # Pri odhodih steje tudi postanek na TEJ postaji -- vozilo ga
+            # bo skrajsalo, preden odpelje. Pri prihodih ne: takrat vozilo
+            # se pride in postanek je sele za tem.
+            zadnji = d["stop_seq"] if kind == "odhodi" else d["stop_seq"] - 1
+            rez = sum(w for seq, w in slack.get(d["trip_id"], ())
+                      if lm["stop_seq"] < seq <= zadnji)
+            d["delay_s"] = _after_slack(lm["delay_s"], rez)
+            d["slack_s"] = rez
             d["delay_from"] = lm["name"]
             d["delay_kind"] = "ocena"
         else:

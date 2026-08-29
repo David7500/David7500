@@ -703,7 +703,8 @@ function drawProfile(w, pts) {
     // kar se zgodi med postajama, je voznja, kar se zgodi na postaji, je
     // postanek. Padec potem narise navpicnica spodaj, tam, kjer se je res
     // zgodil.
-    const konec = b.arrival != null ? b.arrival : b.value;
+    const konec = (b.arrival != null && Math.abs(y(b.arrival) - y(b.value)) >= 7)
+      ? b.arrival : b.value;
     svg.appendChild(svgEl("line", {
       x1: x(i), y1: y(a.value), x2: x(i + 1), y2: y(konec),
       stroke: guessed ? ESTIMATE_COLOR : INK_LINE, "stroke-width": 2,
@@ -716,6 +717,10 @@ function drawProfile(w, pts) {
   // graf sicer pusti odprto -- "kako je zamuda padla za osem minut naenkrat".
   pts.forEach((p, i) => {
     if (p.arrival == null || p.value == null) return;
+    // Pod nekaj pikami se prazen krogec in polna pika prekrijeta in vrstica
+    // je videti kot pretrgana crta, ne kot padec. Ena minuta razlike je tudi
+    // na meji locljivosti feeda; v seznamu ostane zapisana s stevilkami.
+    if (Math.abs(y(p.arrival) - y(p.value)) < 7) return;
     const ocena = p.kind === "estimate";
     const barva = ocena ? ESTIMATE_COLOR : delayColor(p.arrival);
     svg.appendChild(svgEl("line", {

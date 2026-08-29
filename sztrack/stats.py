@@ -629,6 +629,28 @@ def _after_slack(delay_s: int, slack_s: int) -> int:
     return delay_s - min(max(delay_s, 0), slack_s)
 
 
+def _slack_ahead(conn: sqlite3.Connection, trip_ids: list[str]) -> dict:
+    """trip_id -> [(stop_seq, rezerva)] za postanke, ki rezervo sploh imajo.
+
+    Vrne samo postanke z zadrzevanjem nad `MIN_DWELL_S` -- teh je na vsej
+    slovenski zeleznici 406 od 10 019, zato je seznam kratek in vsota po njem
+    poceni. Postanki brez rezerve za racun nic ne pomenijo.
+    """
+    ids = list(dict.fromkeys(trip_ids))
+    out: dict[str, list] = {}
+    for i in range(0, len(ids), 400):
+        kos = ids[i:i + 400]
+        marks = ",".join("?" * len(kos))
+        for r in conn.execute(
+            f"SELECT trip_id, stop_seq, dep_s - arr_s AS w FROM sched "
+            f"WHERE trip_id IN ({marks}) AND arr_s IS NOT NULL AND dep_s IS NOT NULL "
+            f"  AND dep_s - arr_s > ? ORDER BY trip_id, stop_seq",
+            (*kos, MIN_DWELL_S),
+        ):
+            out.setdefault(r["trip_id"], []).append((r["stop_seq"], r["w"] - MIN_DWELL_S))
+    return out
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90,
             exclude_date: str | None = None) -> list[dict]:
@@ -772,6 +794,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
 
     # Zadnja meritev vsake voznje -- za vlake, ki so ze na poti.
     last = last_measured(conn, service_date, [d["trip_id"] for d in out], now_s)
+    slack = _slack_ahead(conn, [d["trip_id"] for d in out])
 
     for d in out:
         d["stops_between"] = d["to_seq"] - d["from_seq"]
@@ -791,7 +814,12 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             # njegove trenutne zamude, torej OCENA za to postajo. Ista beseda
             # kot na odhodni tabli -- dve imeni za isto stvar na dveh straneh
             # iste aplikacije sta dve razlicni stvari za bralca.
-            d["delay_s"] = lm["delay_s"]
+            #
+            # Prej rezerva voznega reda, isto kot na tabli: vlak, ki stoji na
+            # vmesni postaji dvajset minut, do potnika zamude ne prinese.
+            rez = sum(w for seq, w in slack.get(d["trip_id"], ())
+                      if lm["stop_seq"] < seq <= d["from_seq"])
+            d["delay_s"] = _after_slack(lm["delay_s"], rez)
             d["delay_at"] = lm["name"]
             d["delay_kind"] = "ocena"
         elif d["from_delay_s"] is not None:

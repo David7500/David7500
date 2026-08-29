@@ -822,3 +822,45 @@ def test_rezerva_se_sesteva_po_postajah(conn):
     assert f["Divača"]["slack_s"] == 2 * ena
     assert f["Celje"]["slack_s"] == 2 * ena          # zadnja postaja nima odhoda
     assert f["Divača"]["predicted_delay_s"] == 3000 - 2 * ena
+
+
+def test_tabla_upostevaj_rezervo_dolgega_postanka(conn):
+    """Vlak, ki na vmesni postaji stoji dolgo, zamude naprej ne prinese.
+
+    RG 1604 stoji v Ljubljani 21 minut: pride +15 in odpelje ob 23:05 po
+    voznem redu. Tabla je pisala 23:20 -- potnik bi prisel na prazen peron.
+    Napaka v najslabso smer, zato ima test svoje mesto.
+    """
+    dan = _pred(0)
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    # A (08:00) -> Z: stoji 20 min (09:00 - 09:20) -> C (10:00)
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id) "
+                 "VALUES('tr','rr','LP 7','A - C','S1')")
+    _sched(conn, "tr", [(1, "A", None, 28800), (2, "Z", 32400, 33600), (3, "C", 36000, None)])
+    # Izmerjeno na izhodiscu: +15 min.
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('tr',?,1,900,900,0)", (dan,))
+    conn.commit()
+
+    # Ob 08:30 je vlak med A in Z; tabla v Zidanem Mostu velja za odhod 09:20.
+    b = journey.board(conn, "Zidani Most", dan, 30000, 240, now_s=30600)
+    vrstica = next(r for r in b if r["train_no"] == "LP 7")
+    assert vrstica["delay_kind"] == "ocena"
+    # 20 min postanka - 2 min najkrajsega = 18 min rezerve, zamuda 15 -> 0.
+    assert vrstica["delay_s"] == 0
+
+
+def test_prihodna_tabla_ne_steje_lastnega_postanka(conn):
+    """Pri prihodu vozilo se pride -- postanek je sele za tem."""
+    dan = _pred(0)
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id) "
+                 "VALUES('tr','rr','LP 7','A - C','S1')")
+    _sched(conn, "tr", [(1, "A", None, 28800), (2, "Z", 32400, 33600), (3, "C", 36000, None)])
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('tr',?,1,900,900,0)", (dan,))
+    conn.commit()
+
+    b = journey.board(conn, "Zidani Most", dan, 30000, 240, kind="prihodi", now_s=30600)
+    vrstica = next(r for r in b if r["train_no"] == "LP 7")
+    assert vrstica["delay_s"] == 900        # rezerve pred prihodom ni
