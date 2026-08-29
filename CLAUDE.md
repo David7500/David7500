@@ -15,7 +15,10 @@ Venv je `venv/` (Python 3.12), ne `.venv`. Med razvojem strežnik pogosto že
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
 
 CLI: `./venv/bin/python -m sztrack.cli <ukaz>` — `init`, `update`, `poll`,
-`show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`.
+`show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
+`seed`.
+
+Avtobusi se uvozijo z `SZ_AGENCIES=1118` (LPP). Brez tega so v bazi samo SŽ.
 
 Med razvojem: `./scripts/dev-restart.sh` (počaka na sproščen port; `pkill -f`
 z golim vzorcem ubije tudi lupino, v kateri je ukaz zapisan).
@@ -155,6 +158,7 @@ sztrack/
   cli.py         ukazna vrstica
   templates/     connections.html (vstopna), dashboard, train, alerts, stats
   static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
+                 (iskalnik in avtobusna stran si delita connections.js)
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
 scripts/         dev-restart.sh, preveri_paleto.py, vzorci_feeda.py, build_deploy_zip.sh
 ```
@@ -207,10 +211,15 @@ Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih v
 |---|---|
 | `/app` | vlaki: iskalnik povezav in odhodna tabla — vstopna stran |
 | `/app/bus` | avtobusi (LPP …): ista stran, drugo omrežje |
-| `/app/map` | živi zemljevid (Leaflet + OSM rastrske ploščice) |
-| `/app/train/{no}` | okno enega vlaka: profil poti, zgodovina, razmere, hitrosti |
+| `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
+| `/app/train/{no}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
 | `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |
 | `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu v tednu |
+
+Okno vožnje je isto za vlak in avtobus, a govori o tem, kar je pred potnikom:
+besedo (vlak / nadomestni prevoz / avtobus), opozorilo in povezavo nazaj
+izbere iz `network`. Pri avtobusu z več vožnjami na isto številko linije je
+v naslovu `?trip=<id>`.
 
 Vsaka stran ima preklop **preprosto / napredno**. To ni druga stran: napredni
 pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom
