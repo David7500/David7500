@@ -347,10 +347,14 @@ function renderConnections(data) {
      <span>${list.length} ${list.length === 1 ? "neposredna vožnja" : "neposrednih"}${legs.length ? ` · ${legs.length} s prestopom` : ""}</span>`;
 
   if (!list.length && !legs.length) {
+    // "od Metlika do Bohinjska Bistrica" je napačno; sklanja se "postaja",
+    // ime ostane v imenovalniku -- ista rešitev kot pri "na postaji X".
     resultsEl.innerHTML = `<div class="empty-state">
-      Na ta dan ni vožnje od <strong>${escapeHtml(data.from)}</strong>
-      do <strong>${escapeHtml(data.to)}</strong> — ne neposredne ne z enim prestopom.<br>
-      Preveri drug dan; ob koncu tedna vozi bistveno manj vlakov.
+      Na ta dan ni vožnje od postaje <strong>${escapeHtml(data.from)}</strong>
+      do postaje <strong>${escapeHtml(data.to)}</strong> — ne neposredne
+      ne z enim prestopom.<br>
+      sztrack išče največ en prestop; z dvema morda gre. Preveri tudi drug dan —
+      ${IS_BUS ? "ob koncu tedna vozi manj avtobusov" : "ob koncu tedna vozi bistveno manj vlakov"}.
     </div>`;
     renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
     return;
@@ -433,8 +437,9 @@ function renderBoard(data) {
 
   if (!list.length) {
     resultsEl.innerHTML = `<div class="empty-state">
-      V tem oknu s postaje <strong>${escapeHtml(data.station)}</strong> ni ${escapeHtml(data.kind)}.<br>
-      Poskusi večje časovno okno ali drug dan.
+      V tem oknu s postaje <strong>${escapeHtml(data.station)}</strong>
+      ni ${escapeHtml(data.kind)}.<br>
+      Poskusi drugo uro ali drug dan.
     </div>`;
     alertsEl.innerHTML = "";
     return;
