@@ -388,6 +388,11 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
 
 * **Vsaka oznaka poleg barve vedno nosi tudi minute.** Barva nikoli ne nosi
   pomena sama — barvna slepota, in +4 proti +14 je za potnika bistvena razlika.
+* **Razred se določi iz zaokrožene minute, ne iz sekund.** Meje v `DELAY_RAMP`
+  so v minutah in gredo skozi isto zaokroževanje kot `delayLabel`. Prej so bile
+  v sekundah (`<= 60` = točno): 60 s je pisalo „+1" sivo, 61 s „+1" oranžno —
+  ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot
+  številka poleg nje.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
 * Kjer meritve ni (ocena, napoved), nastopi rezervirana `#a8d8ff`, ki je
   lestvica ne uporablja.
@@ -405,6 +410,11 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
 Stopnja 0–10 je seštevek točk za padavine, sneg, sunke vetra, meglo, nevihto in
 mraz (`weather.severity()`). Razčlenitev gre v tooltip — indeks brez razčlenitve
 je črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
+
+**Pri stopnji 0 žeton kaže temperaturo, ne stopnje.** „0" potniku ne pove nič,
+„22°" pa nekaj — stopnja se vrne takoj, ko je kaj za povedati (≥ 1). Žetoni so
+v preprostem pogledu na **postajah naprej po progi** (napoved, črtkan rob);
+prevožene postaje so tam itak skrite in mirno vreme za nazaj ne pove ničesar.
 
 **Lestvic ne mešaj v istem registru.** Rumena razmer `#d9b33c` proti svetli
 oranžni zamud `#f2a87e` je pri deutanu ΔE 5,5 — nerazločljivo. Zato je zamuda

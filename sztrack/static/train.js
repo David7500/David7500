@@ -423,11 +423,7 @@ async function loadRun() {
     state.run = run;
     state.forecast = forecast;
     state.current = current;
-    // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in
-    // gre nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
-    const veriga = vehicleChainHtml();
-    runHeadEl.innerHTML = yourStopHtml(run.stops, forecast, current)
-      + (current ? runHeadHtml(current) + veriga : veriga + runHeadHtml(current));
+    renderRunHead();
     renderTimeline();
     renderProfile();
   } catch (err) {
@@ -437,6 +433,20 @@ async function loadRun() {
       '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
   }
+}
+
+// Glava okna: postanek potnika, trenutna zamuda in veriga vozila. Svoja
+// funkcija, ker jo prerisujeta dva vira (vozjna in vreme) in mora biti obakrat
+// enaka -- dva neodvisna izrisa sta se ze razsla.
+function renderRunHead() {
+  const run = state.run;
+  if (!run) return;
+  // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in gre
+  // nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
+  const veriga = vehicleChainHtml();
+  const cur = state.current;
+  runHeadEl.innerHTML = yourStopHtml(run.stops, state.forecast, cur)
+    + (cur ? runHeadHtml(cur) + veriga : veriga + runHeadHtml(cur));
 }
 
 // Casovnica se med pogledoma razlikuje, zato je svoja funkcija: preklop je
@@ -1022,11 +1032,12 @@ async function loadWeather() {
     const data = await res.json();
     state.weather = new Map((data.stops || []).map((s) => [s.stop_seq, s]));
     // Vreme pride pozneje kot voznja -- kar je ze izrisano, je treba osveziti.
+    // Po ISTI poti kot `loadRun`: prej je to risalo po svoje in ob neugodnem
+    // vrstnem redu odgovorov pobrisalo blok "pri tebi" in verigo vozila,
+    // casovnico pa izrisalo brez omejitve na postaje naprej.
     if (state.run) {
-      const cur = lastMeasured(state.run.stops);
-      runHeadEl.innerHTML = runHeadHtml(cur);
-      runTimelineEl.innerHTML = runTimelineHtml(state.run.stops, state.forecast, state.weather) +
-        `<div class="detail-foot">${escapeHtml(state.run.service_date)} · ${state.run.stops.length} postaj</div>`;
+      renderRunHead();
+      renderTimeline();
       renderProfile();
     }
   } catch (err) {

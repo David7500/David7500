@@ -2,16 +2,21 @@
 
 // Skupno za /app in /app/train/{st}. Nalozi se pred dashboard.js oz. train.js.
 
+// Meje so v MINUTAH in barva se doloci iz iste zaokrozene vrednosti, kot jo
+// izpise `delayLabel`. Prej so bile v sekundah (<= 60 s = tocno) in 61 s je
+// pisalo "+1" oranzno, 60 s pa "+1" sivo -- ista stevilka, dve barvi. Barva
+// ne sme pripovedovati druge zgodbe kot stevilka poleg nje.
 const DELAY_RAMP = [
-  { max: 60, color: "#7c8698", label: "točno" },
-  { max: 300, color: "#f2a87e", label: "1–5 min" },
-  { max: 900, color: "#e07b45", label: "5–15 min" },
-  { max: Infinity, color: "#b85417", label: "nad 15 min" },
+  { maxMin: 0, color: "#7c8698", label: "točno" },
+  { maxMin: 5, color: "#f2a87e", label: "1–5 min" },
+  { maxMin: 15, color: "#e07b45", label: "5–15 min" },
+  { maxMin: Infinity, color: "#b85417", label: "nad 15 min" },
 ];
 
 function delayColor(s) {
   if (s == null) return "#6b7480";
-  return (DELAY_RAMP.find((step) => s <= step.max) || DELAY_RAMP[DELAY_RAMP.length - 1]).color;
+  const min = Math.round(s / 60);
+  return (DELAY_RAMP.find((step) => min <= step.maxMin) || DELAY_RAMP[DELAY_RAMP.length - 1]).color;
 }
 
 function delayLabel(s) {
@@ -362,12 +367,20 @@ function stopWeatherHtml(w, isForecast) {
   // Stopnja 0 pomeni "ni kaj povedati". Dvajsetkrat ponovljena nicla na
   // telefonu tekmuje s stevilko zamude, ki je edina, zaradi katere je clovek
   // tu; v naprednem pogledu ostane, ker tam vrstica sme biti gostejsa.
-  const quiet = w.severity === 0 ? " is-quiet adv-only" : "";
+  // Stopnja 0 pomeni "ni kaj povedati" in dvajsetkrat ponovljena nicla na
+  // telefonu tekmuje s stevilko zamude. Zato pri mirnih razmerah namesto
+  // stopnje pise TEMPERATURA: potniku, ki ceka na peronu, "12°" pove nekaj,
+  // "0" pa nic. Stopnja se vrne takoj, ko je kaj za povedati (>= 1).
+  const mirno = w.severity === 0;
+  const znak = mirno && w.temp_c != null ? `${Math.round(w.temp_c)}°` : w.severity;
+  // Ze prevozene postaje so v preprostem pogledu skrite; kadar so vidne
+  // (napredni pogled), mirno vreme za nazaj ne pove nicesar in gre v ozadje.
+  const quiet = mirno ? " is-quiet" + (isForecast ? "" : " adv-only") : "";
   return `<span class="stop-weather${loud ? " is-loud" : ""}${isForecast ? " is-forecast" : ""}${quiet}"` +
     ` title="${escapeHtml(title)}"` +
     (loud ? ` style="background:${color}1f;border-color:${color}66"` : "") + `>` +
     weatherIconHtml(w, 13) +
-    `<span class="stop-sev" style="color:${color}">${w.severity}</span></span>`;
+    `<span class="stop-sev"${mirno ? "" : ` style="color:${color}"`}>${znak}</span></span>`;
 }
 
 function measuredStopHtml(s, isCurrent, w) {

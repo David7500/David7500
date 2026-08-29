@@ -358,6 +358,10 @@
 /* Razmere naprej po progi so NAPOVED. Črtkan rob pove razliko brez besede;
    ista oblika kot pri postaji, ki je vlak še ni dosegel. */
 .stop-weather.is-forecast { border-style: dashed; opacity: .85; }
+/* Mirne razmere: zeton je tam, a ne tekmuje s stevilko zamude, ki je edina,
+   zaradi katere je clovek na tej strani. Pise temperaturo, ne stopnje 0. */
+.stop-weather.is-quiet { opacity: .6; }
+.stop-weather.is-quiet .stop-sev { font-weight: 400; color: var(--ink-faint); }
 
 .stop-sep.is-quiet {
   color: var(--ink-faint);
