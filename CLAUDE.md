@@ -107,6 +107,25 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   Kar bi to razrešilo, je sled skozi `obs`: ali se postanki v zaporednih
   pollih premikajo. Do takrat velja samo `api.MAX_LIVE_DELAY_S`.
 
+* **Iz `obs` se ne da ugotoviti, kdaj je bila vrednost nazadnje POTRJENA.**
+  Dnevnik piše samo ob spremembi (`OBS_MIN_DELTA_S`), zato je zadnji zapis
+  zadnja *sprememba*, ne zadnja potrditev — feed isto vrednost pošilja naprej
+  vsakih 30 s, mi je ne zapišemo. Posledica: za nazaj **ni mogoče ločiti
+  meritve od napovedi, ki se ni nikoli popravila.** Živi prikaz to reši z
+  `stats.last_measured()` (vozni red + zamuda ≤ zdaj), zgodovina pa ne more.
+
+  Kako se to pokaže: RG 1604 ima v `run` na Ljubljani Zalogu 15, 2, 7, 14, 13,
+  11, 16 min — na **štirih od osmih dni natanko toliko, kolikor je bila zamuda
+  ob prihodu v Ljubljano**, torej feedova napoved izpred postaje. Na Litiji,
+  devetnajst minut pozneje, so vrednosti 0, 2, 6, 0, 1, 1, 2 in se ujemajo z
+  Zagorjem za njo. Biti +13 na Zalogu in +1 v Litiji je fizično nemogoče, a iz
+  zapisa samega se ne vidi, katera od obeh je napoved.
+
+  **Preizkušeno in ne pomaga:** vsiliti modelovo fiziko zaporedju napovedi
+  (v točki j ne moreš biti bolj pozen, kot boš v j+1, plus rezerva vmes).
+  MAE 1,92 → 1,96 min, delež v petih minutah 91,0 → 90,8 %. Rezerva je tudi v
+  voznem času, ne le v postankih, zato pravilo prereže preveč pravih okrevanj.
+
 * **Ne verjemi ničli, ki jo feed vrne za en klic.** Pri 14 % postankov z več
   kot dvema zapisoma se pojavi vzorec X, 0, X v razmiku ene minute. Zamuda med
   dvema klicema ne more pasti za več, kot je vmes minilo časa. `run` zato ničlo

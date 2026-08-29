@@ -667,8 +667,12 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     out = []
     slack = 0
     for seq in sorted(s for s in names if s > stop_seq):
+        prej = _after_slack(current_delay_s, slack)
         slack += dwell.get(seq, 0)
         osnova = _after_slack(current_delay_s, slack)
+        # Koliko rezerve se porabi PRAV TU. Prikaz iz tega nariše padec na
+        # postaji namesto na odseku -- padec se zgodi med prihodom in odhodom.
+        tu = prej - osnova
         # Ostanek: kar se je zgodilo POLEG rezerve -- zamude, ki nastanejo, in
         # rezerva, ki je v resnici ni bilo. Loceno po razredu zamude, ker
         # postanek vlaku z 11 minutami vzame dve, tocnemu pa nic.
@@ -683,6 +687,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             "n_samples": len(ostanki),
             "same_class": len(podobni) >= MIN_PREDICT_SAMPLES,
             "slack_s": slack,
+            "slack_here_s": tu,
             "predicted_delay_s": osnova + (round(statistics.median(ostanki)) if ostanki else 0),
             "p90_delay_s": (osnova + round(_pct(ostanki, 0.9)) if ostanki else None),
             "basis": "rezerva + historicni ostanek" if ostanki else "rezerva voznega reda",

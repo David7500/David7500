@@ -588,6 +588,11 @@ function profilePoints() {
       p.value = f ? f.predicted_delay_s : null;
       p.samples = f ? f.n_samples : 0;
       p.feedSaid = stopDelay(s);
+      // Rezerva, ki jo model porabi prav na tej postaji: ocena za prihod je
+      // za toliko visja od ocene za odhod. Brez tega je padec videti, kot da
+      // se je zgodil na odseku -- enako kot pri meritvah.
+      p.arrival = f && f.slack_here_s ? f.predicted_delay_s + f.slack_here_s : null;
+      p.slackHere = f ? f.slack_here_s || 0 : 0;
     }
     return p;
   });
@@ -630,7 +635,9 @@ const SEV_GAP = 18;
 
 function drawProfile(w, pts) {
   const hasWx = pts.some((p) => p.wx && p.wx.severity != null);
-  const M = { t: 26, r: 16, b: 34, l: 42 };
+  // Desni rob mora nositi zadnjo tocko, njeno oznako, njen stolpec razmer in
+  // napis nad pasom. Pri 16 px je bilo vse to na robu okvirja in odrezano.
+  const M = { t: 26, r: 46, b: 34, l: 46 };
   const ih = 200;
   const stripTop = M.t + ih + SEV_GAP;
   const stripBot = stripTop + SEV_STRIP_H;
@@ -709,13 +716,16 @@ function drawProfile(w, pts) {
   // graf sicer pusti odprto -- "kako je zamuda padla za osem minut naenkrat".
   pts.forEach((p, i) => {
     if (p.arrival == null || p.value == null) return;
+    const ocena = p.kind === "estimate";
+    const barva = ocena ? ESTIMATE_COLOR : delayColor(p.arrival);
     svg.appendChild(svgEl("line", {
       x1: x(i), y1: y(p.arrival), x2: x(i), y2: y(p.value),
-      stroke: delayColor(p.arrival), "stroke-width": 2, "stroke-linecap": "round",
+      stroke: barva, "stroke-width": 2, "stroke-linecap": "round",
+      "stroke-dasharray": ocena ? "4 4" : null,
     }));
     svg.appendChild(svgEl("circle", {
       cx: x(i), cy: y(p.arrival), r: 4,
-      fill: SURFACE, stroke: delayColor(p.arrival), "stroke-width": 2,
+      fill: SURFACE, stroke: barva, "stroke-width": 2,
     }));
   });
 
@@ -802,8 +812,10 @@ function drawSeverityStrip(svg, pts, x, iw, left, top, bot) {
     if (!p.wx || p.wx.severity == null) return;
     const h = Math.max(1.5, (p.wx.severity / 10) * (bot - top));
     const on = p.seq === hoverSeq;
+    // Prvi in zadnji stolpec bi pol sirine molela cez os; drzimo ju znotraj.
+    const bx = Math.min(Math.max(x(i) - bw / 2, left), left + iw - bw);
     svg.appendChild(svgEl("rect", {
-      x: x(i) - bw / 2, y: bot - h, width: bw, height: h, rx: 2,
+      x: bx, y: bot - h, width: bw, height: h, rx: 2,
       fill: severityColor(p.wx.severity_label),
       stroke: on ? "#e7eaf0" : "none", "stroke-width": on ? 1.5 : 0,
     }));
