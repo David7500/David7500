@@ -69,6 +69,21 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   **Zato prikaz naprej po progi uporablja lastno oceno, ne feedove vrednosti**;
   prevoznikova številka ostane vidna v naprednem pogledu.
 
+* **Enotna zamuda čez vso vožnjo je pri avtobusih sumljiva, a ni dokaz.**
+  Merjeno na 3 636 vožnjah z vsaj petimi zajetimi postanki: pri **železnici**
+  je enotna zamuda pogosta (19,7 % voženj), a **nikoli nad 60 min** — to je
+  vlak, ki je ves čas dve minuti pozen. Pri **avtobusih** je enotnih le 2,2 %
+  voženj, a **11 od teh 20 je nad 60 min**, in od 19 avtobusnih voženj z
+  zamudo nad uro jih je 11 takih. A6345 je imel 7 800 s enako na vseh 46
+  postankih.
+
+  **Prikaza za to (še) ni namenoma.** Feed te zapise pošilja z današnjim
+  `start_date`, torej naša razrešitev obratovalnega dne ni kriva, in enotna
+  zamuda je fizično mogoča: vozilo odpelje pozno in nato vozi po voznem redu.
+  Devet dni in dvajset primerov je premalo za pravilo, ki bi skrival podatke.
+  Kar bi to razrešilo, je sled skozi `obs`: ali se postanki v zaporednih
+  pollih premikajo. Do takrat velja samo `api.MAX_LIVE_DELAY_S`.
+
 * **Ne verjemi ničli, ki jo feed vrne za en klic.** Pri 14 % postankov z več
   kot dvema zapisoma se pojavi vzorec X, 0, X v razmiku ene minute. Zamuda med
   dvema klicema ne more pasti za več, kot je vmes minilo časa. `run` zato ničlo

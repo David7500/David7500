@@ -274,6 +274,8 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
       </div>
       <div class="conn-delay">${c.delay_s != null
         ? delayChipHtml(c.delay_s, c.delay_kind, c.delay_at)
+          + feedNoteHtml({ delay_kind: c.delay_kind, delay_s: c.delay_s,
+                           feed_delay_s: c.feed_delay_s })
         : typicalChipHtml(c.typical_arr || c.typical_dep)}</div>
       <div class="conn-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}

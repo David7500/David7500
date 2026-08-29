@@ -715,9 +715,13 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             d["delay_at"] = from_name if d["from_delay_s"] is not None else lm["name"]
             d["delay_kind"] = "izmerjeno"
         elif lm:
+            # Vozilo je se pred izhodiscno postajo potnika: to je prenos
+            # njegove trenutne zamude, torej OCENA za to postajo. Ista beseda
+            # kot na odhodni tabli -- dve imeni za isto stvar na dveh straneh
+            # iste aplikacije sta dve razlicni stvari za bralca.
             d["delay_s"] = lm["delay_s"]
             d["delay_at"] = lm["name"]
-            d["delay_kind"] = "izmerjeno"
+            d["delay_kind"] = "ocena"
         elif d["from_delay_s"] is not None:
             # Feed ima vrednost, a cas se ni minil -- to je napoved prevoznika.
             d["delay_s"] = d["from_delay_s"]
@@ -730,6 +734,9 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
 
         d["expected_dep"] = (_abs_time(service_date, d["dep_s"] + d["delay_s"])
                              if d["delay_s"] is not None else None)
+        # Kaj je o tej postaji rekel feed. Kadar je vozilo se pred njo, je to
+        # napoved prevoznika in prikaz je ne uporablja -- a je tudi ne skriva.
+        d["feed_delay_s"] = d["from_delay_s"]
         d.pop("from_delay_s", None)
         d.pop("to_delay_s", None)
 
