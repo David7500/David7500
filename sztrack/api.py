@@ -239,7 +239,7 @@ def api_overview():
     live = _live("zeleznica")
     with _conn() as conn:
         day = stats.day_summary(conn, today)
-        disruptions = len(alerts.active(conn))
+        disruptions = alerts.active_count(conn)
         # Zgodaj zjutraj je danasnji vzorec prazen ali droben. "Mediana 0 min,
         # tocnih 100 %" iz ene same voznje ob pol enih zvecer ni slika dneva,
         # ampak nakljucje -- takrat raje povemo za vceraj in tako tudi napisemo.

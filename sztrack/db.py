@@ -71,6 +71,10 @@ CREATE INDEX IF NOT EXISTS trip_train_no ON trip(train_no);
 CREATE INDEX IF NOT EXISTS trip_running ON trip(network, start_s, end_s);
 CREATE INDEX IF NOT EXISTS trip_mode ON trip(mode);
 CREATE INDEX IF NOT EXISTS trip_network ON trip(network);
+-- Obvestila o ovirah so vezana na `route_id` in edini most do stevilke vlaka
+-- je ta stolpec. Brez indeksa je vsako obvestilo poln pregled 20 736 voznj:
+-- pri 21 hkrati veljavnih obvestilih 435 000 vrstic za en klic /api/overview.
+CREATE INDEX IF NOT EXISTS trip_route ON trip(route_id);
 
 -- Vozni red. arr_s/dep_s sta sekundi od polnoci in lahko presezeta 86400.
 CREATE TABLE IF NOT EXISTS sched (

@@ -278,6 +278,21 @@ def active(conn: sqlite3.Connection, lang: str = "sl") -> list[dict]:
     return out
 
 
+def active_count(conn: sqlite3.Connection, lang: str = "sl") -> int:
+    """Koliko ovir je zdaj veljavnih.
+
+    Vstopna stran hoce samo stevilko. `active()` bi zanjo za vsako obvestilo
+    poiskala se prizadete vlake -- seznam, ki ga nihce ne pogleda.
+    """
+    now = int(time.time())
+    return conn.execute(
+        "SELECT COUNT(*) FROM alert a WHERE a.kind = 'ovira' AND a.lang = ? "
+        "  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
+        "  AND (a.start_ts IS NULL OR a.start_ts <= ?)",
+        (lang, now, now),
+    ).fetchone()[0]
+
+
 def for_trains(conn: sqlite3.Connection, train_nos: list[str],
                mentions: list[str] | None = None, lang: str = "sl",
                limit: int = 6) -> list[dict]:
