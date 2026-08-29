@@ -70,7 +70,8 @@ def trains(conn: sqlite3.Connection) -> list[dict]:
 
 
 def resolve_trip(conn: sqlite3.Connection, train_no: str,
-                 service_date: str | None = None) -> str | None:
+                 service_date: str | None = None,
+                 trip_id: str | None = None) -> str | None:
     """Ena vožnja izmed tistih, ki nosijo to številko.
 
     Številka vlaka **ni** ključ. Devet vlakov v zajetem voznem redu ima dva ali
@@ -84,7 +85,18 @@ def resolve_trip(conn: sqlite3.Connection, train_no: str,
 
     Izbira: trip, ki vozi na dani dan; med več takimi tisti z največ
     obratovalnimi dnevi (glavna različica, ne sezonska izjema).
+
+    `trip_id` to izbiro povozi -- odhodna tabla in iskalnik vesta, katero
+    vožnjo je človek kliknil, in je ni treba uganiti. Preverimo, da res nosi
+    to številko, sicer bi naslov lahko pokazal tujo vožnjo.
     """
+    if trip_id:
+        row = conn.execute(
+            "SELECT trip_id FROM trip WHERE trip_id = ? AND train_no = ?",
+            (trip_id, train_no),
+        ).fetchone()
+        if row:
+            return row["trip_id"]
     rows = conn.execute(
         "SELECT t.trip_id, "
         "       (SELECT COUNT(*) FROM service_day sd WHERE sd.service_id = t.service_id) AS days, "
@@ -98,8 +110,9 @@ def resolve_trip(conn: sqlite3.Connection, train_no: str,
 
 
 def timetable(conn: sqlite3.Connection, train_no: str,
-              service_date: str | None = None) -> list[dict]:
-    trip_id = resolve_trip(conn, train_no, service_date)
+              service_date: str | None = None,
+              trip_id: str | None = None) -> list[dict]:
+    trip_id = resolve_trip(conn, train_no, service_date, trip_id)
     if not trip_id:
         return []
     return [
@@ -121,9 +134,10 @@ def trip_mode(conn: sqlite3.Connection, train_no: str) -> str:
     return row["mode"] if row else "vlak"
 
 
-def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str) -> list[dict]:
+def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
+               trip_id: str | None = None) -> list[dict]:
     """Ena konkretna vožnja: vozni red + zamuda + izračunani dejanski čas."""
-    trip_id = resolve_trip(conn, train_no, service_date)
+    trip_id = resolve_trip(conn, train_no, service_date, trip_id)
     if not trip_id:
         return []
     rows = conn.execute(
@@ -643,7 +657,8 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
 
 # ---------------------------------------------------------------- vreme ob vožnji
 
-def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str) -> list[dict]:
+def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str,
+                trip_id: str | None = None) -> list[dict]:
     """Vreme na vsaki postaji te vožnje.
 
     Ura se vzame po dejanskem času (vozni red + zamuda), kadar ga imamo, sicer
@@ -653,7 +668,7 @@ def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str) -> l
     """
     from . import weather as weather_mod
 
-    trip_id = resolve_trip(conn, train_no, service_date)
+    trip_id = resolve_trip(conn, train_no, service_date, trip_id)
     if not trip_id:
         return []
     rows = conn.execute(

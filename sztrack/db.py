@@ -223,11 +223,22 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     )
 
 
-def _has(conn: sqlite3.Connection, table: str) -> bool:
-    """Ali priklopljena baza (`src`) pozna to tabelo? Starejsi posnetki je ne."""
-    return conn.execute(
+def _has(conn: sqlite3.Connection, table: str, *columns: str) -> bool:
+    """Ali priklopljena baza (`src`) pozna to tabelo -- in te stolpce?
+
+    Stolpci niso pretiravanje: baza na malini je imela tabelo `alert` po stari
+    shemi, brez `kind` in `cause`. Preverjanje samo imena bi prilivanje pognalo
+    v `no such column` sredi transakcije, torej ob najslabšem trenutku --
+    med selitvijo zajema, ki ga ne smemo izgubiti.
+    """
+    if conn.execute(
         "SELECT 1 FROM src.sqlite_master WHERE type='table' AND name=?", (table,)
-    ).fetchone() is not None
+    ).fetchone() is None:
+        return False
+    if not columns:
+        return True
+    have = {r[1] for r in conn.execute(f"PRAGMA src.table_info({table})")}
+    return set(columns) <= have
 
 
 def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
@@ -267,7 +278,7 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
             )
             # Vreme je izpeljano in bi se dalo znova pobrati, a prilivanje je
             # zastonj. Starejsa baza te tabele nima -- takrat korak preskocimo.
-            if _has(conn, "weather"):
+            if _has(conn, "weather", "source"):
                 conn.execute(
                     "INSERT INTO weather(cell, hour_ts, temp_c, precip_mm, snowfall_cm,"
                     "                    wind_gust_kmh, code, source, fetched_at) "
@@ -282,7 +293,7 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
                     "WHERE excluded.source = 'archive' OR weather.source = excluded.source"
                 )
             # Obvestila in porocila o zamudi: starejsa baza teh tabel nima.
-            if _has(conn, "alert"):
+            if _has(conn, "alert", "kind", "cause", "effect", "lang"):
                 conn.execute(
                     "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
                     "                  header, description, url, lang, first_seen, last_seen) "
@@ -293,11 +304,12 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
                     "  first_seen = MIN(alert.first_seen, excluded.first_seen), "
                     "  last_seen  = MAX(alert.last_seen,  excluded.last_seen)"
                 )
+            if _has(conn, "alert_entity", "route_id"):
                 conn.execute(
                     "INSERT OR IGNORE INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
                     "SELECT alert_id, route_id, trip_id, stop_id FROM src.alert_entity"
                 )
-            if _has(conn, "delay_report"):
+            if _has(conn, "delay_report", "train_no", "station"):
                 conn.execute(
                     "INSERT OR IGNORE INTO delay_report"
                     "(trip_id, service_date, seen_ts, train_no, delay_min, station, event, severe) "
