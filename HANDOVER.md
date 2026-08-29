@@ -136,7 +136,7 @@ varovati pred `sztrack update`.
 pomnilnika, 426 MB swapa, eno počasno jedro, 20 GB prostega na kartici.
 
 Od 29. 8. 2026 tam teče **`sztrack-zajem.service`** — zajem brez strežnika,
-z **vsemi prevozniki** (`SZ_AGENCIES=1118,1123,1119,1121`). Namен je, da ima
+z **vsemi prevozniki** (`SZ_AGENCIES=1118,1123,1119,1121`). Namen je, da ima
 malina celo bazo za aplikacijo in da lahko razvojni računalnik ugasneš;
 obdeluje tisti, ki bazo potegne dol.
 
