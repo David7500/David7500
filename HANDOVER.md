@@ -112,7 +112,7 @@ prevoznik:
 | Odseki | 389, od tega 275 elementarnih |
 | Elementarna mreža | 1253,8 km (realna slovenska mreža ~1200–1300) |
 | Vožnje v voznem redu | 733 vlakov + 56 nadomestnih prevozov |
-| Zajeto (lokalno, 2026-08-29) | 60 409 meritev, 9 obratovalnih dni, 3296 voženj |
+| Zajeto (lokalno, 2026-08-29) | 69205 meritev, 9 obratovalnih dni, 661 poročil prevoznika |
 | Uvoz GTFS | 17 s, vrh 54 MB (pretočno branje `shapes.txt`) |
 | Strežnik ob zagonu | 57–60 MB RSS |
 | Odziv `/api/*` | vse pod 120 ms; `/api/overview` je najpočasnejši |
@@ -124,19 +124,30 @@ varovati pred `sztrack update`.
 
 ## Objava
 
-**Raspberry Pi** (`david@192.168.1.166`) je izbrana pot in tam teče
-produkcijski zajem. Malina je gor ves čas, ta računalnik ne, zato je
-**merodajna baza na malini** in se z nje vleče (`sztrack merge`), ne obratno.
+**Raspberry Pi** (`david@192.168.1.166`) je **Pi Zero W**: armv6, 427 MB
+pomnilnika, eno počasno jedro. Tam teče produkcijski zajem in ga je treba
+pustiti teči — malina je gor ves čas, ta računalnik ne. Zamenjava z močnejšim
+strojem je odločena; do takrat malina ostane na **stari kodi**, torej brez
+obvestil, brez varovala za lažne ničle in brez avtobusov.
 
-Namestitev/posodobitev mora pognati uporabnik sam — `david` na malini za sudo
-rabi geslo, agent nima terminala zanj:
+Posledica, ki jo je treba imeti v mislih: `alert`, `delay_report` in
+`vehicle_now` nastajajo **samo lokalno**. Če ta računalnik ugasne, se ta
+zgodovina ne nabira nikjer.
+
+Zajem zamud z maline se prilije brez sudo, ker je baza berljiva za vse:
+
+```bash
+ssh david@192.168.1.166 'sqlite3 /var/lib/sztrack/sz.sqlite ".backup /tmp/sz.sqlite"'
+scp david@192.168.1.166:/tmp/sz.sqlite /tmp/sz-malina.sqlite
+./venv/bin/python -m sztrack.cli merge /tmp/sz-malina.sqlite
+./venv/bin/python -m sztrack.cli repair    # malina nima varovala za ničle
+```
+
+Namestitev/posodobitev pa mora pognati uporabnik sam (sudo rabi geslo):
 
 ```bash
 sudo bash deploy/install-rpi.sh && sudo systemctl restart sztrack.service
 ```
-
-Enota že nastavlja `SZ_REFRESH=subprocess` in `SZ_REFRESH_HOUR=4`, zato se
-vozni red na malini osvežuje sam, v podprocesu, da se pomnilnik vrne sistemu.
 
 **Pella je bila slepa ulica** — zajem je delal, javni API pa je vračal
 Cloudflare 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
