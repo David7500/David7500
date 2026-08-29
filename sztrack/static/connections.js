@@ -340,6 +340,7 @@ function renderConnections(data) {
   const isToday = data.date === todayIso();
   const nowMs = isToday ? Date.now() : 0;
 
+  paintFavButton();
   resultHeadEl.innerHTML =
     `<span><strong>${escapeHtml(data.from)}</strong> → <strong>${escapeHtml(data.to)}</strong></span>
      <span>${dayLabel(data.date)}</span>
@@ -422,6 +423,7 @@ function renderBoard(data) {
   const isToday = data.date === todayIso();
   const nowMs = isToday ? Date.now() : 0;
 
+  paintFavButton();
   resultHeadEl.innerHTML =
     `<span><strong>${escapeHtml(data.station)}</strong></span>
      <span>${data.kind}</span><span>${dayLabel(data.date)}</span>
@@ -529,6 +531,7 @@ function overviewHtml(o) {
         ${o.disruptions} veljavnih obvestil o ovirah na progah
       </a>` : ""}
 
+      ${favChipsHtml()}
       <div class="ov-head"><h2>Pogoste relacije</h2></div>
       <div class="chips">
         ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
@@ -598,7 +601,8 @@ async function showOverview() {
   if (IS_BUS) {
     try {
       const o = await fetch("/api/overview/bus").then((r) => r.json());
-      resultsEl.innerHTML = busOverviewHtml(o);
+      resultsEl.innerHTML = busOverviewHtml(o) + favChipsHtml();
+      wireFavChips(resultsEl);
     } catch (err) {
       resultsEl.innerHTML = '<div class="empty-state">Vpiši postajališče ali izhodišče in cilj.</div>';
     }
@@ -607,7 +611,8 @@ async function showOverview() {
   try {
     const o = await fetch("/api/overview").then((r) => r.json());
     resultsEl.innerHTML = overviewHtml(o);
-    resultsEl.querySelectorAll(".route-chip").forEach((b) => {
+    wireFavChips(resultsEl);
+    resultsEl.querySelectorAll(".route-chip:not(.fav-chip)").forEach((b) => {
       b.addEventListener("click", () => {
         $("from").value = b.dataset.from;
         $("to").value = b.dataset.to;
@@ -620,6 +625,109 @@ async function showOverview() {
   } catch (err) {
     resultsEl.innerHTML = '<div class="empty-state">Vpiši izhodišče in cilj ali izberi postajo.</div>';
   }
+}
+
+
+// ---------- shranjene poti ----------
+// Potnik vozi isto pot vsak dan. Zadnje iskanje smo si zapomnili ze prej, a
+// eno samo -- kdor ima sluzbo in tesco, ima dve. Hranimo jih po omrezjih,
+// ker sta strani loceni in bi mesan seznam vodil nazaj v isto zmedo.
+
+const FAV_KEY = "sztrack:fav";
+const FAV_MAX = 8;
+
+function favLoad() {
+  try {
+    const all = JSON.parse(localStorage.getItem(FAV_KEY) || "[]");
+    return Array.isArray(all) ? all.filter((f) => f && f.net === NETWORK) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function favSave(list) {
+  try {
+    const others = (JSON.parse(localStorage.getItem(FAV_KEY) || "[]") || [])
+      .filter((f) => f && f.net !== NETWORK);
+    localStorage.setItem(FAV_KEY, JSON.stringify([...others, ...list.slice(0, FAV_MAX)]));
+  } catch (err) {
+    /* zaseben zavihek ni razlog, da stran ne dela */
+  }
+}
+
+function favKey(f) {
+  return f.kind === "board" ? `b:${f.station}:${f.dir || "odhodi"}` : `a:${f.from}:${f.to}`;
+}
+
+function favLabel(f) {
+  return f.kind === "board"
+    ? `${f.station}${f.dir === "prihodi" ? " · prihodi" : ""}`
+    : `${f.from} → ${f.to}`;
+}
+
+function favCurrent() {
+  if (activeTab === "board") {
+    const station = $("station").value.trim();
+    return station ? { net: NETWORK, kind: "board", station, dir: $("board-kind").value } : null;
+  }
+  const from = $("from").value.trim();
+  const to = $("to").value.trim();
+  return from && to ? { net: NETWORK, kind: "ab", from, to } : null;
+}
+
+function favToggle() {
+  const cur = favCurrent();
+  if (!cur) return;
+  const list = favLoad();
+  const at = list.findIndex((f) => favKey(f) === favKey(cur));
+  if (at >= 0) list.splice(at, 1);
+  else list.unshift(cur);
+  favSave(list);
+  paintFavButton();
+}
+
+function paintFavButton() {
+  const btn = $("fav-toggle");
+  if (!btn) return;
+  const cur = favCurrent();
+  btn.hidden = !cur;
+  if (!cur) return;
+  const on = favLoad().some((f) => favKey(f) === favKey(cur));
+  btn.setAttribute("aria-pressed", String(on));
+  btn.title = on ? "odstrani med shranjenimi" : "shrani to pot";
+  btn.textContent = on ? "★ shranjeno" : "☆ shrani";
+}
+
+function favChipsHtml() {
+  const list = favLoad();
+  if (!list.length) return "";
+  return `<div class="ov-head"><h2>Shranjeno</h2></div>
+    <div class="chips">${list.map((f) => `
+      <button type="button" class="route-chip fav-chip" data-fav="${escapeHtml(favKey(f))}">
+        ${escapeHtml(favLabel(f))}
+      </button>`).join("")}</div>`;
+}
+
+function openFav(key) {
+  const f = favLoad().find((x) => favKey(x) === key);
+  if (!f) return;
+  if (f.kind === "board") {
+    setTab("board");
+    $("station").value = f.station;
+    $("board-kind").value = f.dir || "odhodi";
+    searchBoard(true);
+  } else {
+    setTab("ab");
+    $("from").value = f.from;
+    $("to").value = f.to;
+    searchAB(true);
+  }
+}
+
+function wireFavChips(root) {
+  root.querySelectorAll(".fav-chip").forEach((b) => {
+    b.addEventListener("click", () => openFav(b.dataset.fav));
+  });
 }
 
 // ---------- poizvedbe ----------
@@ -762,6 +870,7 @@ async function showNearby() {
 }
 
 $("near-me").addEventListener("click", showNearby);
+$("fav-toggle").addEventListener("click", favToggle);
 
 // ---------- zavihka ----------
 

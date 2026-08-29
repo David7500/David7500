@@ -107,7 +107,10 @@
     <div id="alerts" aria-live="polite"></div>
     <!-- Rezultati se zamenjajo brez ponovnega nalaganja strani; bralnik
          zaslona mora izvedeti, da je odgovor tu. `polite`, ker ni nujno. -->
-    <div id="result-head" class="result-head" aria-live="polite"></div>
+    <div class="result-bar">
+      <div id="result-head" class="result-head" aria-live="polite"></div>
+      <button type="button" id="fav-toggle" class="fav-toggle" aria-pressed="false" hidden></button>
+    </div>
     <div id="results" class="results"></div>
 
     <footer class="page-foot">

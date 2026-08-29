@@ -479,3 +479,22 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
 .near-row:hover { background: var(--bg-raised); }
 .near-name { font: 500 14px/1.3 var(--sans); color: var(--ink); }
 .near-dist { font: 400 12px/1.3 var(--mono); color: var(--ink-mute); white-space: nowrap; }
+
+/* Shranjene poti. Potnik vozi isto pot vsak dan; zadnje iskanje smo si
+ * zapomnili že prej, a eno samo — kdor ima službo in tečaj, ima dve. */
+.result-bar { display: flex; align-items: baseline; gap: 12px; }
+.result-bar .result-head { flex: 1 1 auto; }
+
+.fav-toggle {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  padding: 5px 10px;
+  color: var(--ink-mute);
+  font: 500 11.5px/1 var(--sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fav-toggle:hover { color: var(--ink); border-color: #3d434f; }
+.fav-toggle[aria-pressed="true"] { color: var(--accent-lit); border-color: #e07b4555; }
