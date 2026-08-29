@@ -633,13 +633,12 @@ function stopTipHtml(p) {
 const SEV_STRIP_H = 38;
 const SEV_GAP = 18;
 
-// Koliko pik mora biti med prihodom in odhodom, da padec na postaji sploh
-// narisemo. Prazen krogec prihoda meri v premeru 10 pik, polna pika odhoda 11
-// -- pri manjsem razmiku se prekrijeta in navpicnica med njima je docela pod
-// njima. Videti je kot dva nepovezana krogca, ne kot padec. Petnajst pik pusti
-// stiri pike vidne crte. Pod tem stevilki ostaneta v seznamu, kjer sta besedilo
-// ("+16 -> +15") in ne potrebujeta prostora; ena minuta je tudi na meji
-// locljivosti feeda, ki prilaga `uncertainty: 120`.
+// Koliko pik mora biti med prihodom in odhodom, da poleg navpicnice narisemo
+// se PRAZEN KROGEC prihoda. Krogec meri v premeru 10 pik, polna pika odhoda 11
+// -- pri manjsem razmiku se prekrijeta, navpicnica med njima izgine pod njima
+// in videti je kot dva nepovezana krogca. Navpicnica se v takem primeru risze
+// vseeno: enominutni padec je resnicen podatek in kot stopnica ob piki je
+// viden, kot par krogcev pa ne.
 const MIN_SPLIT_PX = 15;
 
 function drawProfile(w, pts) {
@@ -712,8 +711,9 @@ function drawProfile(w, pts) {
     // kar se zgodi med postajama, je voznja, kar se zgodi na postaji, je
     // postanek. Padec potem narise navpicnica spodaj, tam, kjer se je res
     // zgodil.
-    const konec = (b.arrival != null
-      && Math.abs(y(b.arrival) - y(b.value)) >= MIN_SPLIT_PX) ? b.arrival : b.value;
+    // Odsek se konca pri PRIHODNI vrednosti -- kar se zgodi med postajama, je
+    // voznja. Padec potem nariše navpicnica na postaji, tudi ce je majhen.
+    const konec = b.arrival != null ? b.arrival : b.value;
     svg.appendChild(svgEl("line", {
       x1: x(i), y1: y(a.value), x2: x(i + 1), y2: y(konec),
       stroke: guessed ? ESTIMATE_COLOR : INK_LINE, "stroke-width": 2,
@@ -726,7 +726,6 @@ function drawProfile(w, pts) {
   // graf sicer pusti odprto -- "kako je zamuda padla za osem minut naenkrat".
   pts.forEach((p, i) => {
     if (p.arrival == null || p.value == null) return;
-    if (Math.abs(y(p.arrival) - y(p.value)) < MIN_SPLIT_PX) return;
     const ocena = p.kind === "estimate";
     const barva = ocena ? ESTIMATE_COLOR : delayColor(p.arrival);
     svg.appendChild(svgEl("line", {
@@ -734,10 +733,14 @@ function drawProfile(w, pts) {
       stroke: barva, "stroke-width": 2, "stroke-linecap": "round",
       "stroke-dasharray": ocena ? "4 4" : null,
     }));
-    svg.appendChild(svgEl("circle", {
-      cx: x(i), cy: y(p.arrival), r: 4,
-      fill: SURFACE, stroke: barva, "stroke-width": 2,
-    }));
+    // Krogec prihoda samo, kadar je zanj prostor; sicer je navpicnica stopnica
+    // ob piki odhoda in se bere sama.
+    if (Math.abs(y(p.arrival) - y(p.value)) >= MIN_SPLIT_PX) {
+      svg.appendChild(svgEl("circle", {
+        cx: x(i), cy: y(p.arrival), r: 4,
+        fill: SURFACE, stroke: barva, "stroke-width": 2,
+      }));
+    }
   });
 
   pts.forEach((p, i) => {
