@@ -98,6 +98,8 @@ a { color: inherit; }
 }
 .top-link:hover { color: var(--ink); }
 
+.top-nav { display: flex; align-items: center; gap: 14px; }
+
 .divider { width: 1px; height: 20px; background: #262b33; flex-shrink: 0; }
 
 .clock-wrap { display: flex; align-items: center; gap: 7px; }
@@ -234,6 +236,27 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 @media (max-width: 640px) {
   .topbar { padding: 0 12px; gap: 10px; }
   .brand-name { font-size: 14px; }
+}
+
+@media (max-width: 560px) {
+  /* Znamka, preklop pogleda in štiri povezave se v 390 px ne izidejo. Doslej
+     je flex stisnil ime znamke na nič -- stran je izgubila naslov, namesto da
+     bi se prelomila. Zato dve vrstici in povezave v svoji. */
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    row-gap: 6px;
+  }
+  .brand-name { flex-shrink: 0; }
+  .topbar .spacer { display: none; }
+  .mode-switch { margin-left: auto; }
+  /* Povezave se prelomijo kot skupina, ne vsaka zase. */
+  /* Povezave in pika o živosti si delijo drugo vrstico; brez `auto` bi
+     pika padla v tretjo, ki bi bila skoraj prazna. */
+  .top-nav { order: 10; flex: 1 1 auto; gap: 16px; }
+  .topbar .top-link { font-size: 12px; }
+  .clock-wrap { order: 11; margin-left: auto; }
 }
 
 /* ---------- nadomestni prevoz ----------

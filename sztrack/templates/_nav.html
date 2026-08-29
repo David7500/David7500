@@ -8,7 +8,9 @@
   `{"here": "ovire"}`.
 #}
 {%- set here = here | default('') -%}
-{%- if here != 'iskalnik' %}<a class="top-link" href="/app">iskalnik</a>{% endif %}
-{%- if here != 'statistika' %}<a class="top-link" href="/app/statistika">statistika</a>{% endif %}
-{%- if here != 'ovire' %}<a class="top-link" href="/app/ovire">ovire</a>{% endif %}
-{%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}
+<nav class="top-nav" aria-label="Strani">
+  {%- if here != 'iskalnik' %}<a class="top-link" href="/app">iskalnik</a>{% endif %}
+  {%- if here != 'statistika' %}<a class="top-link" href="/app/statistika">statistika</a>{% endif %}
+  {%- if here != 'ovire' %}<a class="top-link" href="/app/ovire">ovire</a>{% endif %}
+  {%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}
+</nav>
