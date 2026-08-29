@@ -82,10 +82,43 @@ def resolve_service_date(trip_id, window, valid_dates, now: datetime) -> str | N
     return best
 
 
+# Najmanjsa sprememba, ki si zasluzi novo vrstico v dnevniku `obs`.
+#
+# Prikaz ima locljivost ene minute in sekund ne kaze nikoli; feed sam prilaga
+# `uncertainty: 120`. Sprememba za 15 sekund torej ni sprememba, ampak sum.
+#
+# Pri vlakih to nic ne spremeni -- ti porocajo v celih minutah in imajo 1,6
+# zapisa na postanek. Pri mestnih avtobusih pa 23,3, z mediano spremembe
+# 15 sekund: to je 14 000 vrstic na uro za nihanje, ki ga ne pokazemo.
+#
+# `run` ostane TOCEN -- prag velja samo za dnevnik. Trenutno stanje je vedno
+# tisto, kar je feed nazadnje rekel.
+OBS_MIN_DELTA_S = 60
+
+
 # Zamuda, pod katero skok na niclo ni sumljiv. Vlak, ki je bil dve minuti v
 # zamudi in je zdaj tocen, je vsakdanji dogodek; vlak, ki je bil dvajset minut
 # v zamudi in je cez pol minute tocen, ni.
 SUSPECT_DROP_S = 300
+
+
+def worth_logging(last, arr, dep) -> bool:
+    """Ali je ta vrednost dovolj drugacna od zadnje zapisane v dnevniku?
+
+    Prva vrednost za postanek gre vedno noter. Kasnejse samo, ce se od zadnje
+    ZAPISANE razlikujejo vsaj za `OBS_MIN_DELTA_S` -- primerjamo z zapisano,
+    ne s prejsnjo prebrano, da se pocasno lezenje sesteva in ne izgine.
+    """
+    if last is None:
+        return True
+    for new, old in ((arr, last["delay_arr"]), (dep, last["delay_dep"])):
+        if new is None and old is None:
+            continue
+        if new is None or old is None:
+            return True
+        if abs(new - old) >= OBS_MIN_DELTA_S:
+            return True
+    return False
 
 
 def is_zero_blip(prev, last, arr, dep) -> bool:
@@ -133,6 +166,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     trips_seen = 0
     skipped = 0
     blips = 0
+    smoothed = 0
     # GTFS-RT zna povedati, da je voznja odpovedana (`schedule_relationship`),
     # a SZ tega polja ne uporablja -- odpovedi sporocajo z besedilom obvestila
     # (`effect = 6`, "vlak vozi samo do ..."). Vseeno stejemo: ce se to kdaj
@@ -175,7 +209,8 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
                 continue    # nespremenjeno -- ne pisi
 
             # Zadnji zapis v dnevniku rabimo, preden vanj pisemo: na njem
-            # sloni preverjanje sumljivega skoka na niclo (glej spodaj).
+            # sloni preverjanje sumljivega skoka na niclo (glej spodaj) in
+            # presoja, ali je sprememba dovolj velika za novo vrstico.
             last = conn.execute(
                 "SELECT delay_arr, delay_dep FROM obs "
                 "WHERE trip_id=? AND service_date=? AND stop_seq=? "
@@ -183,13 +218,16 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
                 (trip_id, service_date, seq),
             ).fetchone()
 
-            conn.execute(
-                "INSERT OR IGNORE INTO obs"
-                "(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts,observed_at) "
-                "VALUES(?,?,?,?,?,?,?)",
-                (trip_id, service_date, seq, arr, dep, ts, observed_at),
-            )
-            changed += 1
+            if worth_logging(last, arr, dep):
+                conn.execute(
+                    "INSERT OR IGNORE INTO obs"
+                    "(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts,observed_at) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (trip_id, service_date, seq, arr, dep, ts, observed_at),
+                )
+                changed += 1
+            else:
+                smoothed += 1
 
             if is_zero_blip(prev, last, arr, dep):
                 # Dnevnik obdrzi vse, `run` pa ne prevzame vrednosti, dokler je
@@ -209,7 +247,8 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
 
     conn.commit()
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
-            "blips": blips, "non_scheduled": non_scheduled, "feed_ts": feed_ts}
+            "blips": blips, "smoothed": smoothed,
+            "non_scheduled": non_scheduled, "feed_ts": feed_ts}
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:

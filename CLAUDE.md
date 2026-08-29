@@ -203,7 +203,20 @@ Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·
 `alert` + `alert_entity` (ovire) · `delay_report` (kje in koliko, po prevozniku).
 
-Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih vrstic.
+Zajem piše **samo ob spremembi vrednosti**, in sprememba mora biti vsaj
+`collector.OBS_MIN_DELTA_S` (60 s) od zadnje **zapisane**. Prikaz ima
+ločljivost ene minute in sekund ne kaže nikoli, feed sam prilaga
+`uncertainty: 120` -- sprememba za petnajst sekund torej ni sprememba, ampak
+šum.
+
+Pri vlakih to nič ne spremeni: ti poročajo v celih minutah in imajo **1,6
+zapisa na postanek**. Pri mestnih avtobusih pa **23,3**, z mediano spremembe
+15 sekund — 14 000 vrstic na uro za nihanje, ki ga ne pokažemo. Brez praga bi
+vlaki + LPP dali ~20 GB na leto, kar na malini ni izvedljivo.
+
+Primerjamo z zadnjo **zapisano** vrednostjo, ne s prejšnjo prebrano, da se
+počasno lezenje sešteva in ne izgine. `run` ostane točen -- prag velja samo
+za dnevnik.
 
 ## Strani
 

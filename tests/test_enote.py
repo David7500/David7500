@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from sztrack import weather
 from sztrack.alerts import parse_delay_text
-from sztrack.collector import is_zero_blip
+from sztrack.collector import is_zero_blip, worth_logging
 from sztrack.journey import _fold
 
 
@@ -109,3 +109,35 @@ def test_barva_sledi_stopnji():
     # Semafor mora biti monoton: vsaka stopnja svoja barva, brez preskokov.
     seen = [weather.severity_color(n) for n in (0, 2, 5, 9)]
     assert seen == [weather.SEVERITY_STYLE[k] for k in weather.SEVERITY_ORDER]
+
+
+# ---------------------------------------------------------------- prag dnevnika
+
+def test_prva_vrednost_gre_vedno_v_dnevnik():
+    assert worth_logging(None, 120, 120)
+
+
+def test_drobna_sprememba_ni_vredna_vrstice():
+    # Prikaz ima locljivost ene minute; 15 sekund ni sprememba, ampak sum.
+    assert not worth_logging(_row(120), 135, 135)
+
+
+def test_velika_sprememba_gre_v_dnevnik():
+    assert worth_logging(_row(120), 200, 200)
+
+
+def test_lezenje_se_sesteva():
+    """Primerjamo z ZADNJO ZAPISANO vrednostjo, ne s prejšnjo prebrano.
+
+    Sicer bi zamuda, ki raste po petnajst sekund, rasla v neskončnost in v
+    dnevniku ne bi bilo nikoli nič -- vsak korak zase je premajhen.
+    """
+    logged = _row(120)
+    for value in (135, 150, 165):
+        assert not worth_logging(logged, value, value)
+    assert worth_logging(logged, 180, 180)      # 60 s od zapisane
+
+
+def test_pojav_in_izginotje_vrednosti_sta_sprememba():
+    assert worth_logging(_row(120), None, None)
+    assert worth_logging({"delay_arr": None, "delay_dep": None}, 10, 10)
