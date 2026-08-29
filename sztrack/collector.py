@@ -391,8 +391,9 @@ def poll_positions(conn: sqlite3.Connection) -> dict:
 # brise nikoli -- ta je zgodovina, iz katere zivijo statistika, "obicajna
 # zamuda" in backtest.
 #
-# Zakaj sploh: z vsemi prevozniki nastane ~300 000 vrstic `obs` na dan, torej
-# ~29 GB na leto. Zeleznica jih naredi 4 000 -- 1 % tega.
+# Zakaj sploh: z vsemi prevozniki nastane ~300 000 vrstic `obs` na dan.
+# Ena vrstica stane 79 B (41 B tabela + 38 B kljuc, merjeno z `dbstat`),
+# torej 24 MB na dan in 8,7 GB na leto. Zeleznica jih naredi 4 000 -- 1 %.
 #
 # Zato dve meji. Zeleznica je jedro projekta in njen dnevnik je poceni, zato
 # ga hranimo cetrt leta (toliko, kolikor projekt naceruje za analizo vremena

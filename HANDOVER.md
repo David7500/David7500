@@ -110,7 +110,7 @@ prevoznik:
   zapisa na postanek proti 1,6 pri vlakih, z mediano spremembe 15 sekund —
   14 000 vrstic na uro za nihanje pod ločljivostjo prikaza. Z minutnim pragom
   504/h, torej 28-krat manj; pri vlakih se ne izgubi nič, ker so vse njihove
-  spremembe večkratniki minute. Brez tega bi vlaki + LPP dali ~20 GB na leto.
+  spremembe večkratniki minute.
 
 ## Izmerjeno
 

@@ -228,23 +228,30 @@ ločljivost ene minute in sekund ne kaže nikoli, feed sam prilaga
 Pri vlakih to nič ne spremeni: ti poročajo v celih minutah in imajo **1,6
 zapisa na postanek**. Pri mestnih avtobusih pa **23,3**, z mediano spremembe
 15 sekund — 14 000 vrstic na uro za nihanje, ki ga ne pokažemo. Brez praga bi
-vlaki + LPP dali ~20 GB na leto, kar na malini ni izvedljivo.
+vlaki + LPP dali ~1,5 GB na leto, z vsemi prevozniki pa 8,7 GB.
 
 Primerjamo z zadnjo **zapisano** vrednostjo, ne s prejšnjo prebrano, da se
 počasno lezenje sešteva in ne izgine. `run` ostane točen -- prag velja samo
 za dnevnik.
 
 **Dnevnik se obrezuje, `run` nikoli.** Tudi s pragom nastane z vsemi
-prevozniki ~300 000 vrstic `obs` na dan (~29 GB na leto); železnica jih naredi
-4 000, torej 1 %. Zato dve meji (`collector.prune_obs`, dnevno ob osvežitvi
+prevozniki ~300 000 vrstic `obs` na dan; železnica jih naredi 4 000, torej 1 %.
+Ena vrstica stane 79 B (41 B tabela + 38 B ključ, merjeno z `dbstat`) — torej
+24 MB na dan in 8,7 GB na leto brez obrezovanja. Zato dve meji (`collector.prune_obs`, dnevno ob osvežitvi
 vremena, ali `sztrack prune`): železnica 90 dni, avtobusi 14. Železnica je
 jedro in njen dnevnik je poceni; pri avtobusih za prikaz zadošča `run`.
 `run` je zgodovina, iz katere živijo statistika, "običajna zamuda" in
 backtest -- te se ne briše.
 
-Kar to pomeni za disk, izmerjeno: `run` dobi največ toliko vrstic, kolikor je
-na dan prevoženih postankov -- železnica 7 832, avtobusi 134 859. Na leto je
-to 2,9 M proti 49 M vrstic, torej ~0,2 GB proti ~2,5 GB. Zavestna izbira, ne
+Kar to pomeni za disk, izmerjeno (`dbstat`, 69 B na vrstico): `run` dobi
+največ toliko vrstic, kolikor je na dan prevoženih postankov -- železnica
+7 832, avtobusi 134 859. Na leto je to 0,2 GB proti 3,4 GB.
+
+**Dolgoročno raste `run`, ne `obs`.** Dnevnik se z obrezovanjem ustali pri
+~356 MB (železnica 90 dni = 28 MB, avtobusi 14 dni = 327 MB) in naprej ne
+raste. `run` pa raste za vedno in ga po enem letu prekaša za desetkrat.
+**Lega vozil ne stane nič**: `vehicle_now` je upsert na vožnjo in starejše od
+ure se brišejo -- sled se ne hrani. Zavestna izbira, ne
 spregled: `run` je edino, iz česar se da kasneje karkoli izračunati, in
 brisati ga pomeni brisati projekt. Če bo kdaj treba, je najprej na vrsti
 avtobusni `run`, ne železniški.

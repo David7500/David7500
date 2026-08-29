@@ -153,8 +153,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
 
             # Ob istem dnevnem opravilu obrezemo dnevnik. Z vsemi prevozniki
-            # nastane ~300 000 vrstic `obs` na dan; brez tega baza raste za
-            # ~29 GB na leto. `run` se ne brise nikoli -- ta je zgodovina.
+            # nastane ~300 000 vrstic `obs` na dan (24 MB, 8,7 GB na leto).
+            # `run` se ne brise nikoli -- ta je zgodovina.
             try:
                 info = collector.prune_obs(conn)
                 if info["rail_deleted"] or info["bus_deleted"]:
