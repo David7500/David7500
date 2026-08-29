@@ -185,8 +185,12 @@ Kar je pri avtobusih drugače in se hitro pozabi:
 * **Mestno postajališče ima svoj `stop_id` za vsako smer.** "Bavarski dvor"
   je v `station` dvakrat. Vse v aplikaciji teče po imenu postaje, zato iskanje
   po imenu združuje.
-* **Zemljevid je železniški.** `/api/live?mode=vlak` in
-  `/api/stations?mode=vlak` -- avtobusi nimajo ne mreže ne postaj nanjo.
+* **Zemljevid je edini skupni pogled.** Vlak je krog na zadnji postaji z
+  meritvijo, avtobus puščica na izmerjeni legi; plast avtobusov se da odložiti.
+* **Pragovi za prestop so odvisni od omrežja** (`journey.TRANSFER_LIMITS`):
+  železnica 6–120 min, avtobus 3–30. Tri minute so pri mestni liniji prestop,
+  pri vlaku lovljenje; čakanje pol ure na liniji, ki vozi vsakih deset minut,
+  pa ni prestop, ampak znak, da smo zamudili tri boljše.
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·

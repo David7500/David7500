@@ -24,11 +24,20 @@ from .stats import _abs_time, typical_at_stops
 
 TZ = ZoneInfo(config.TIMEZONE)
 
-# Koliko minut mora potnik imeti za prestop, da povezavo sploh ponudimo.
-# SŽ jamči zvezo pri 5 minutah na istem peronu, a to velja le za načrtovane
-# zveze; za tujo kombinacijo je 5 minut lovljenje vlaka, ne potovanje.
-MIN_TRANSFER_MIN = 6
-MAX_TRANSFER_MIN = 120
+# Koliko minut mora potnik imeti za prestop, da povezavo sploh ponudimo, in
+# koliko čakanja še šteje za eno potovanje. Pragova sta odvisna od omrežja:
+#
+# * Železnica: SŽ jamči zvezo pri 5 minutah na istem peronu, a to velja le za
+#   načrtovane zveze; za tujo kombinacijo je 5 minut lovljenje vlaka. Čakanje
+#   do dveh ur je pri vlaku, ki vozi vsake tri ure, še vedno potovanje.
+# * Mestni avtobus: postajališča so blizu, tri minute so dovolj. Čakanje pol
+#   ure pa ni prestop -- na liniji, ki vozi vsakih deset minut, bi tak predlog
+#   pomenil, da smo zamudili tri boljše.
+TRANSFER_LIMITS = {
+    "zeleznica": (6, 120),
+    "avtobus": (3, 30),
+}
+MIN_TRANSFER_MIN, MAX_TRANSFER_MIN = TRANSFER_LIMITS["zeleznica"]
 
 
 # ---------------------------------------------------------------- iskanje postaj
@@ -297,9 +306,11 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
     Več prestopov namenoma ne iščemo. Slovenska mreža jih skoraj ne potrebuje,
     dva prestopa pa bi iz preproste poizvedbe naredila iskanje poti z utežmi.
     """
+    min_min, max_min = TRANSFER_LIMITS.get(network or "zeleznica",
+                                           TRANSFER_LIMITS["zeleznica"])
     rows = conn.execute(_TRANSFER_SQL, {
         "a": from_name, "b": to_name, "day": service_date, "network": network,
-        "min_gap": MIN_TRANSFER_MIN * 60, "max_gap": MAX_TRANSFER_MIN * 60,
+        "min_gap": min_min * 60, "max_gap": max_min * 60,
         "earliest": earliest_s,
     }).fetchall()
 
@@ -334,6 +345,8 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
                if not any(dep >= d["dep_s"] and arr <= d["arr_s"] for dep, arr in pairs)]
 
     _annotate_transfer_risk(conn, out, service_date)
+    for d in out:
+        d["min_transfer_min"] = min_min
 
     for d in out:
         d["sched_dep"] = _abs_time(service_date, d["dep_s"])
@@ -351,8 +364,8 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
     return out
 
 
-# Koliko minut mora ostati, da zvezo se imenujemo "drzi". Isti prag kot pri
-# iskanju -- pod njim je lovljenje vlaka, ne prestop.
+# Koliko minut mora ostati, da zvezo se imenujemo "drzi". Pod tem je ujeti
+# vlak, ne prestop.
 TIGHT_TRANSFER_MIN = 3
 
 

@@ -374,3 +374,37 @@ def test_breakdowns_loci_vrsto_vlaka_od_prevoznika(conn):
     bus = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
     assert rail == {"IC", "nadomestni prevoz"}
     assert bus == {"avtobus 1118"}
+
+
+def test_prag_za_prestop_je_odvisen_od_omrezja(conn):
+    """Tri minute so pri mestnem avtobusu prestop, pri vlaku lovljenje.
+
+    Postajališči sta blizu in linija vozi pogosto; enoten železniški prag
+    šestih minut bi veljavne zveze skril. V drugo smer velja isto: čakanje
+    pol ure na liniji, ki vozi vsakih deset minut, ni prestop, ampak znak,
+    da smo zamudili tri boljše -- zato je zgornja meja pri avtobusu 30 minut
+    in ne dve uri.
+    """
+    c = conn
+    _add_bus(c)     # ustvari postajališče Q = "Bavarski dvor"
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('M','Vmesna',46.0,14.5)")
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('K','Konec',46.0,14.6)")
+    for tid, no, stops in (
+        ("x1", "11", [(1, "Q", None, 30000), (2, "M", 30300, None)]),
+        ("x2", "22", [(1, "M", None, 30480), (2, "K", 31000, None)]),   # 3 min pozneje
+    ):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+                  "                 mode, agency, network) "
+                  "VALUES(?,?,?,'x','S1','bus','1118','avtobus')", (tid, "r" + tid, no))
+        _sched(c, tid, stops)
+    c.commit()
+
+    bus = journey.transfers(c, "Bavarski dvor", "Konec", "2026-08-31",
+                            direct=[], network="avtobus")
+    assert [t["train2"] for t in bus] == ["22"], "tri minute morajo zadoščati"
+
+    # Isti vozni red na železniškem omrežju: pod šestimi minutami ne ponudimo.
+    c.execute("UPDATE trip SET network='zeleznica' WHERE trip_id IN ('x1','x2')")
+    c.commit()
+    assert journey.transfers(c, "Bavarski dvor", "Konec", "2026-08-31",
+                             direct=[], network="zeleznica") == []
