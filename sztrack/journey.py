@@ -474,13 +474,19 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
         d["sched_arr"] = _abs_time(service_date, d["arr_s"])
         d["via_arr"] = _abs_time(service_date, d["x_arr_s"])
         d["via_dep"] = _abs_time(service_date, d["x_dep_s"])
+        # Ista oblika noge kot pri `plan()`: `dep_s`/`arr_s` sta bila samo tam
+        # in prikaz je cakanje racunal iz njiju -- pri enem prestopu je zato
+        # pisalo "prestop na postaji Zidani Most · NaN min". Dve poti, ki
+        # vracata isto stvar, morata vracati enake kljuce.
         d["legs"] = [
             {"train_no": d["train1"], "headsign": d["headsign1"],
-             "from": from_name, "to": d["via"],
-             "dep": d["sched_dep"], "arr": d["via_arr"]},
+             "trip_id": d["trip1"], "from": from_name, "to": d["via"],
+             "dep": d["sched_dep"], "arr": d["via_arr"],
+             "dep_s": d["dep_s"], "arr_s": d["x_arr_s"]},
             {"train_no": d["train2"], "headsign": d["headsign2"],
-             "from": d["via"], "to": to_name,
-             "dep": d["via_dep"], "arr": d["sched_arr"]},
+             "trip_id": d["trip2"], "from": d["via"], "to": to_name,
+             "dep": d["via_dep"], "arr": d["sched_arr"],
+             "dep_s": d["x_dep_s"], "arr_s": d["arr_s"]},
         ]
     return out
 

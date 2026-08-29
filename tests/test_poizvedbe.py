@@ -674,3 +674,33 @@ def test_tabla_prevozeni_postanek_je_meritev(conn):
     assert r["delay_kind"] == "izmerjeno"
     assert r["delay_s"] == 600
     assert r["delay_from"] is None        # meritev je s te postaje
+
+
+def test_obe_poti_do_prestopa_vrneta_enake_kljuce(conn):
+    """`transfers()` in `plan()` odgovarjata na isto vprašanje — enaka oblika.
+
+    Noga iz `transfers()` je imela samo `dep`/`arr`, noga iz `plan()` pa še
+    `dep_s`/`arr_s`. Prikaz je čakanje računal iz sekund, zato je pri enem
+    prestopu pisalo „prestop na postaji Zidani Most · NaN min", pri treh pa
+    pravilno. Dve poti, ki vračata isto stvar, morata vračati enake ključe.
+    """
+    # `plan()` se oglasi šele, ko en prestop ne da ničesar -- zato postaja,
+    # do katere je treba dvakrat prestopiti (ista postavitev kot pri testu
+    # treh nog).
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('K','Konec',46.5,15.9)")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('t5','r5','LP 5','C - K','S1')")
+    _sched(conn, "t5", [(1, "C", None, 36300), (2, "K", 40000, None)])
+    conn.commit()
+
+    ena = journey.transfers(conn, "Ajdovščina", "Celje", "2026-08-31", direct=[])
+    vec = journey.plan(conn, "Ajdovščina", "Konec", "2026-08-31")
+    assert ena and vec, "obe poti morata kaj najti, sicer test ne preveri ničesar"
+    nujni = {"train_no", "trip_id", "from", "to", "dep", "arr", "dep_s", "arr_s"}
+    assert nujni <= set(ena[0]["legs"][0])
+    assert nujni <= set(vec[0]["legs"][0])
+
+    # In sekunde se morajo ujemati s časi, sicer je "NaN min" le drugače napisan.
+    for pot in (ena[0], vec[0]):
+        for a, b in zip(pot["legs"], pot["legs"][1:]):
+            assert b["dep_s"] - a["arr_s"] >= 0
