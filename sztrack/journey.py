@@ -19,7 +19,7 @@ import unicodedata
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config
+from . import config, geo
 from .stats import _abs_time, typical_at_stops
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -129,6 +129,50 @@ def resolve_station(conn: sqlite3.Connection, name: str,
         return exact["name"]
     hits = search_stations(conn, name, limit=1, network=network)
     return hits[0]["name"] if hits else None
+
+
+def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
+                    network: str | None = None, limit: int = 8,
+                    max_km: float = 3.0) -> list[dict]:
+    """Postajališča blizu dane točke, urejena po zračni razdalji.
+
+    Za mestni avtobus je to najpogostejši način, kako človek najde postajo:
+    ne ve, kako se imenuje, ve pa, kje stoji. Pri vlakih je manj uporabno --
+    postaj je 267 na vso državo -- a isti klic pokrije oboje.
+
+    Razdalja je zračna, ne po poti. Za "katero postajališče je najbližje" to
+    zadošča; za "koliko časa hodim" ne bi, zato tega tudi ne trdimo.
+
+    Groba omejitev po pravokotniku pred haversinom: 1015 postajališč je malo,
+    a poizvedba tece ob vsakem premiku in nima smisla racunati kosinusov za
+    vso drzavo.
+    """
+    dlat = max_km / 111.0
+    dlon = max_km / (111.0 * max(0.2, abs(__import__("math").cos(__import__("math").radians(lat)))))
+    sql = ("SELECT DISTINCT st.stop_id, st.name, st.lat, st.lon FROM station st "
+           "JOIN sched s ON s.stop_id = st.stop_id "
+           "JOIN trip t ON t.trip_id = s.trip_id "
+           "WHERE st.lat BETWEEN ? AND ? AND st.lon BETWEEN ? AND ? ")
+    params: list = [lat - dlat, lat + dlat, lon - dlon, lon + dlon]
+    if network:
+        sql += "AND t.network = ? "
+        params.append(network)
+    rows = conn.execute(sql, params).fetchall()
+
+    out = []
+    for r in rows:
+        m = geo.haversine(lat, lon, r["lat"], r["lon"])
+        if m <= max_km * 1000:
+            d = dict(r)
+            d["meters"] = round(m)
+            out.append(d)
+    out.sort(key=lambda d: d["meters"])
+
+    # Isto ime na vec postajaliscih (smeri) -- obdrzi najblizje.
+    seen: dict[str, dict] = {}
+    for d in out:
+        seen.setdefault(d["name"], d)
+    return list(seen.values())[:limit]
 
 
 # ---------------------------------------------------------------- odhodi

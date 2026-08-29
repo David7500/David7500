@@ -282,6 +282,16 @@ def api_station_search(q: str = Query(..., min_length=1), limit: int = Query(12,
         return journey.search_stations(conn, q, limit, network=network)
 
 
+@app.get("/api/stations/near")
+def api_stations_near(lat: float = Query(..., ge=-90, le=90),
+                      lon: float = Query(..., ge=-180, le=180),
+                      network: str = NETWORK_Q,
+                      limit: int = Query(8, ge=1, le=30)):
+    """Postajališča blizu dane točke. Razdalja je zračna, ne po poti."""
+    with _conn() as conn:
+        return journey.nearby_stations(conn, lat, lon, network, limit)
+
+
 @app.get("/api/departures")
 def api_departures(
     station: str = Query(..., description="ime postaje; delno ime je dovolj"),

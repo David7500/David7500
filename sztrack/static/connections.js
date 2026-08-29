@@ -703,6 +703,66 @@ function remember(obj) {
   }
 }
 
+// ---------- postajališča v bližini ----------
+// Za mestni avtobus je to najpogostejši način, kako človek najde postajo:
+// imena ne ve, ve pa, kje stoji.
+
+function nearMeUnavailable(msg) {
+  resultHeadEl.innerHTML = "";
+  resultsEl.innerHTML = `<div class="empty-state">${escapeHtml(msg)}</div>`;
+}
+
+async function showNearby() {
+  if (!navigator.geolocation) {
+    return nearMeUnavailable("Brskalnik ne pozna lokacije.");
+  }
+  // Brskalniki dovolijo lokacijo samo na HTTPS ali localhostu. Po HTTP na
+  // domacem naslovu klic tiho odpove, zato to povemo vnaprej in ne cakamo.
+  if (!window.isSecureContext) {
+    return nearMeUnavailable(
+      "Lokacija je na voljo samo prek HTTPS ali na localhostu. "
+      + "Vpiši ime postajališča.");
+  }
+  resultsEl.innerHTML = '<div class="empty-state">iščem lokacijo …</div>';
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude } = pos.coords;
+    try {
+      const list = await fetch(
+        `/api/stations/near?lat=${latitude}&lon=${longitude}&network=${NETWORK}&limit=8`
+      ).then((r) => r.json());
+      if (!list.length) {
+        return nearMeUnavailable(IS_BUS
+          ? "V treh kilometrih ni postajališča."
+          : "V treh kilometrih ni železniške postaje.");
+      }
+      resultHeadEl.innerHTML = `<span>Najbližja ${IS_BUS ? "postajališča" : "postaje"}</span>
+        <span>zračna razdalja, ne po poti</span>`;
+      resultsEl.innerHTML = `<div class="near-list">${list.map((x) => `
+        <button type="button" class="near-row" data-name="${escapeHtml(x.name)}">
+          <span class="near-name">${escapeHtml(x.name)}</span>
+          <span class="near-dist">${x.meters < 1000
+            ? `${x.meters} m`
+            : `${(x.meters / 1000).toFixed(1).replace(".", ",")} km`}</span>
+        </button>`).join("")}</div>`;
+      resultsEl.querySelectorAll(".near-row").forEach((b) => {
+        b.addEventListener("click", () => {
+          $("station").value = b.dataset.name;
+          searchBoard(true);
+        });
+      });
+    } catch (err) {
+      nearMeUnavailable("Postajališč ni bilo mogoče poiskati.");
+    }
+  }, (err) => {
+    nearMeUnavailable(err.code === err.PERMISSION_DENIED
+      ? "Dostop do lokacije je zavrnjen. Vpiši ime postajališča."
+      : "Lokacije ni bilo mogoče dobiti.");
+  }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+}
+
+$("near-me").addEventListener("click", showNearby);
+
 // ---------- zavihka ----------
 
 function setTab(tab) {

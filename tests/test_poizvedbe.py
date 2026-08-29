@@ -408,3 +408,26 @@ def test_prag_za_prestop_je_odvisen_od_omrezja(conn):
     c.commit()
     assert journey.transfers(c, "Bavarski dvor", "Konec", "2026-08-31",
                              direct=[], network="zeleznica") == []
+
+
+def test_najblizja_postajalisca_po_omrezju(conn):
+    """Bližina je za mestni avtobus glavni način iskanja postaje.
+
+    Preveri tudi, da razdalja ureja rezultat in da se omrežji ne mešata:
+    železniška postaja se ne sme pojaviti med avtobusnimi postajališči,
+    čeprav je morda bližja.
+    """
+    _add_bus(conn)     # Q = Bavarski dvor (46.06, 14.51), P = Ajdovščina/Lj. (46.05, 14.51)
+    here = (46.06, 14.51)
+
+    bus = journey.nearby_stations(conn, *here, network="avtobus")
+    assert [x["name"] for x in bus] == ["Bavarski dvor", "Ajdovščina/Lj."]
+    assert bus[0]["meters"] < bus[1]["meters"]
+
+    # Ajdovščina (železniška, 45.9/13.9) je predaleč; v treh kilometrih je nič.
+    assert journey.nearby_stations(conn, *here, network="zeleznica") == []
+
+
+def test_najblizja_upostevajo_polmer(conn):
+    _add_bus(conn)
+    assert journey.nearby_stations(conn, 45.5, 14.0, network="avtobus") == []
