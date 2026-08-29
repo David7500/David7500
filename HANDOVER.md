@@ -133,14 +133,35 @@ varovati pred `sztrack update`.
 ## Objava
 
 **Raspberry Pi** (`david@192.168.1.166`) je **Pi Zero W**: armv6, 427 MB
-pomnilnika, eno počasno jedro. Tam teče produkcijski zajem in ga je treba
-pustiti teči — malina je gor ves čas, ta računalnik ne. Zamenjava z močnejšim
-strojem je odločena; do takrat malina ostane na **stari kodi**, torej brez
-obvestil, brez varovala za lažne ničle in brez avtobusov.
+pomnilnika, 426 MB swapa, eno počasno jedro, 20 GB prostega na kartici.
 
-Posledica, ki jo je treba imeti v mislih: `alert`, `delay_report` in
-`vehicle_now` nastajajo **samo lokalno**. Če ta računalnik ugasne, se ta
-zgodovina ne nabira nikjer.
+Od 29. 8. 2026 tam teče **`sztrack-zajem.service`** — zajem brez strežnika,
+z **vsemi prevozniki** (`SZ_AGENCIES=1118,1123,1119,1121`). Namен je, da ima
+malina celo bazo za aplikacijo in da lahko razvojni računalnik ugasneš;
+obdeluje tisti, ki bazo potegne dol.
+
+Izmerjeno na njej po prehodu: **34 MB RSS**, obremenitev 0,40, 20 003
+avtobusnih voženj v voznem redu poleg 733 vlakov, avtobusnih meritev ~34 na
+minuto. Obremenitev je enaka kot prej pri samih vlakih, ker je feed drseče
+okno: naenkrat vozi ~150 voženj ne glede na velikost voznega reda.
+
+Pravilo, ki to vodi: **zajema se samo tisto, česar kasneje ni mogoče dobiti.**
+Zamude in obvestila da; vreme ne (Open-Meteo ima arhiv za nazaj), statistika
+ne (izpeljanka `run`), lega vozil ne (je samo „zdaj" in se ne hrani).
+
+Namestitev:
+
+```bash
+sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash ~/sztrack-src/deploy/install-rpi.sh
+```
+
+Skripta sama ugotovi, da leži v izvornem drevesu, in vzame kodo od tam — na
+GitHubu teh commitov ni. Ob spremembi `SZ_AGENCIES` sproži ponovni uvoz
+voznega reda z `--force`; ta zamenja samo statične tabele, `obs` in `run`
+ostaneta (preverjeno: 9 dni in 46 085 meritev je prehod preživelo).
+
+Paket zgradi `./scripts/build_deploy_zip.sh` (`git archive HEAD`) in prekopiraj
+z `scp` v `~/`, nato `unzip -o ~/sztrack-deploy.zip -d ~/sztrack-src`.
 
 Zajem zamud z maline se prilije brez sudo, ker je baza berljiva za vse:
 

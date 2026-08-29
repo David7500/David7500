@@ -175,7 +175,8 @@ if [ "$MODE" = "zajem" ]; then
     echo "  sqlite3 $DATA/sz.sqlite 'SELECT COUNT(*) FROM run'"
     echo
     echo "Bazo preneseš na računalnik z:"
-    echo "  ssh $(id -un 2>/dev/null || echo david)@\$(hostname -I | awk '{print \$1}') \\"
+    # Pod sudo je `id -un` root; hocemo uporabnika, ki je sudo pognal.
+    echo "  ssh ${SUDO_USER:-$(id -un)}@$(hostname -I 2>/dev/null | awk '{print $1}') \\"
     echo "      'sqlite3 $DATA/sz.sqlite \".backup /tmp/sz.sqlite\"'"
 else
     echo "Gotovo. Preveri:"
