@@ -383,21 +383,70 @@ function stopWeatherHtml(w, isForecast) {
     `<span class="stop-sev"${mirno ? "" : ` style="color:${color}"`}>${znak}</span></span>`;
 }
 
+// Postanek, na katerem se zamuda spremeni. Vlak ne odide vedno takrat, ko
+// pride: na Most na Soci ima LP 4219 v voznem redu devet minut postanka
+// (krizanje na enotirni progi), zato prispe +10 in odide +3. Ena sama
+// stevilka na vrstico to skrije in v grafu nastane skok, ki je videti
+// nemogoc -- prav to vprasanje je sprozilo tale izpis.
+//
+// Redko, a ne zanemarljivo: 406 postankov v voznem redu ima nad dve minuti
+// zadrzevanja, in v devetih dneh zajema se prihodna in odhodna zamuda
+// razlikujeta pri 1 307 postankih (362 od tega za pet minut ali vec).
+function dwellSplit(s) {
+  const a = s.delay_arr;
+  const b = s.delay_dep;
+  if (a == null || b == null || Math.abs(a - b) < 60) return null;
+  if (s.arr_s == null || s.dep_s == null) return null;
+  const sched = (s.dep_s - s.arr_s) / 60;          // voznoredno zadrzevanje
+  return {
+    arr: a, dep: b,
+    sched: Math.round(sched),
+    real: Math.round(sched + (b - a) / 60),
+    gained: Math.round((a - b) / 60),
+  };
+}
+
+function dwellNoteHtml(d) {
+  if (d.gained > 0) {
+    return `vozni red tu čaka ${d.sched} min, vlak je stal ${Math.max(d.real, 0)}`
+      + ` — nadoknadil ${d.gained} min`;
+  }
+  return `vlak je stal ${d.real} min namesto ${d.sched} — izgubil ${-d.gained} min`;
+}
+
 function measuredStopHtml(s, isCurrent, w) {
   const d = stopDelay(s);
   const color = delayColor(d);
   const actual = hhmm(stopActualIso(s));
   const sched = hhmm(s.sched_dep || s.sched_arr);
   const schedHtml = actual !== sched ? `<span class="stop-sched">${sched}</span>` : "";
+  const split = dwellSplit(s);
+
+  // Vsak par (beseda + cas + vozni red) je svoj nedeljiv kos: na telefonu se
+  // sme vrstica prelomiti MED prihodom in odhodom, ne pa sredi enega od njiju.
+  const leg = (lab, act, sch) =>
+    `<span class="stop-leg"><span class="stop-lab">${lab}</span> `
+    + `<span class="stop-actual">${hhmm(act)}</span>`
+    + `<span class="stop-sched">${hhmm(sch)}</span></span>`;
+  const times = split
+    ? leg("prihod", s.actual_arr, s.sched_arr) + leg("odhod", s.actual_dep, s.sched_dep)
+    : `<span class="stop-actual">${actual}</span>${schedHtml}`;
+  const delay = split
+    ? `<span style="color:${delayColor(split.arr)}">${delayLabel(split.arr)}</span>`
+      + `<span class="stop-arrow">→</span>`
+      + `<span style="color:${delayColor(split.dep)}">${delayLabel(split.dep)}</span>`
+    : `<span style="color:${color}">${delayLabel(d)}</span>`;
+
   return `
     <div class="stop-row${isCurrent ? " is-current" : ""}">
       <div class="stop-rail"><span class="stop-dot" style="background:${color}"></span><span class="stop-line"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
-        <div class="stop-times"><span class="stop-actual">${actual}</span>${schedHtml}</div>
+        <div class="stop-times">${times}</div>
+        ${split ? `<div class="stop-dwell">${escapeHtml(dwellNoteHtml(split))}</div>` : ""}
       </div>
       ${stopWeatherHtml(w)}
-      <div class="stop-delay" style="color:${color}">${delayLabel(d)}</div>
+      <div class="stop-delay">${delay}</div>
     </div>
   `;
 }

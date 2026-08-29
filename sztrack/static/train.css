@@ -358,6 +358,17 @@
 /* Razmere naprej po progi so NAPOVED. Črtkan rob pove razliko brez besede;
    ista oblika kot pri postaji, ki je vlak še ni dosegel. */
 .stop-weather.is-forecast { border-style: dashed; opacity: .85; }
+
+/* Postanek, kjer se zamuda spremeni: prihod -> odhod. Vrstica sme biti tu
+   visja -- to je postanek, pri katerem se clovek ustavi in vprasa "kako". */
+.stop-lab { font: 400 10px/1 var(--sans); color: var(--ink-ghost); }
+.stop-leg { white-space: nowrap; margin-right: 9px; }
+.stop-arrow { color: var(--ink-ghost); margin: 0 3px; }
+.stop-dwell {
+  margin-top: 3px;
+  font: 400 10.5px/1.45 var(--sans);
+  color: var(--ink-faint);
+}
 /* Mirne razmere: zeton je tam, a ne tekmuje s stevilko zamude, ki je edina,
    zaradi katere je clovek na tej strani. Pise temperaturo, ne stopnje 0. */
 .stop-weather.is-quiet { opacity: .6; }

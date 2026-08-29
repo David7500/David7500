@@ -568,8 +568,16 @@ function profilePoints() {
       wx: state.weather.get(s.stop_seq) || null,
     };
     if (cur && s.stop_seq <= cur.stop_seq) {
-      if (stopActualIso(s)) { p.kind = "measured"; p.value = stopDelay(s); }
-      else { p.kind = "none"; p.value = null; }
+      if (stopActualIso(s)) {
+        p.kind = "measured";
+        p.value = stopDelay(s);
+        // Kadar vlak ne odide takrat, ko pride (voznoredno krizanje), sta to
+        // dve razlicni stevilki. Brez prihodne je padec videti, kot da se je
+        // zgodil na odseku -- zgodil pa se je NA postaji.
+        const split = dwellSplit(s);
+        p.arrival = split ? split.arr : null;
+        p.dwell = split;
+      } else { p.kind = "none"; p.value = null; }
     } else {
       // Naprej po progi vedno nasa ocena, tudi ce feed ze ima vrednost:
       // izmerjeno je prevoznikova napoved za postanke naprej precej slabsa
@@ -684,12 +692,32 @@ function drawProfile(w, pts) {
     const b = pts[i + 1];
     if (a.value == null || b.value == null) continue;
     const guessed = a.kind !== "measured" || b.kind !== "measured";
+    // Odsek se konca pri PRIHODNI zamudi naslednje postaje, ne pri odhodni:
+    // kar se zgodi med postajama, je voznja, kar se zgodi na postaji, je
+    // postanek. Padec potem narise navpicnica spodaj, tam, kjer se je res
+    // zgodil.
+    const konec = b.arrival != null ? b.arrival : b.value;
     svg.appendChild(svgEl("line", {
-      x1: x(i), y1: y(a.value), x2: x(i + 1), y2: y(b.value),
+      x1: x(i), y1: y(a.value), x2: x(i + 1), y2: y(konec),
       stroke: guessed ? ESTIMATE_COLOR : INK_LINE, "stroke-width": 2,
       "stroke-dasharray": guessed ? "4 4" : null, "stroke-linecap": "round",
     }));
   }
+
+  // Sprememba zamude NA postaji: navpicnica od prihoda do odhoda in prazen
+  // krogec pri prihodu. Redko (3 % postankov), a prav to je vprasanje, ki ga
+  // graf sicer pusti odprto -- "kako je zamuda padla za osem minut naenkrat".
+  pts.forEach((p, i) => {
+    if (p.arrival == null || p.value == null) return;
+    svg.appendChild(svgEl("line", {
+      x1: x(i), y1: y(p.arrival), x2: x(i), y2: y(p.value),
+      stroke: delayColor(p.arrival), "stroke-width": 2, "stroke-linecap": "round",
+    }));
+    svg.appendChild(svgEl("circle", {
+      cx: x(i), cy: y(p.arrival), r: 4,
+      fill: SURFACE, stroke: delayColor(p.arrival), "stroke-width": 2,
+    }));
+  });
 
   pts.forEach((p, i) => {
     if (p.value == null) return;
@@ -800,7 +828,11 @@ function profileLegendHtml(pts) {
     items.push(`<span class="lg"><span class="lg-dot" style="background:${ESTIMATE_COLOR}"></span>napoved prevoznika</span>`);
   }
   if (kinds.has("estimate")) {
-    items.push(`<span class="lg"><span class="lg-dot is-hollow" style="border-color:${ESTIMATE_COLOR}"></span>ocena (prenos zamude)</span>`);
+    items.push(`<span class="lg"><span class="lg-dot is-hollow" style="border-color:${ESTIMATE_COLOR}"></span>ocena (mediana te poti)</span>`);
+  }
+  if (pts.some((p) => p.arrival != null)) {
+    items.push('<span class="lg"><span class="lg-dot is-hollow" style="border-color:#9aa3b0"></span>'
+      + 'prihod (kjer se zamuda spremeni na postaji)</span>');
   }
   if (pts.some((p) => p.past)) {
     items.push(`<span class="lg"><span class="lg-dash" style="border-color:${PAST_COLOR}"></span>povprečje preteklih voženj</span>`);

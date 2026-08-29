@@ -114,6 +114,24 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   (`collector.is_zero_blip`); dnevnik `obs` obdrži vse. Isto varovalo velja pri
   določanju lege vlaka -- sicer (vozni red + 0) pomeni, da je postanek že minil,
   in vlak na zemljevidu skoči naprej.
+* **Zamuda ni ena številka na postanek: prihodna in odhodna sta lahko različni.**
+  Vlak ne odide takrat, ko pride. LP 4219 ima na Mostu na Soči v voznem redu
+  **devet minut postanka** (20:38 → 20:47, križanje na enotirni bohinjski
+  progi): 29. 8. je pripeljal +10 in odpeljal +3 — stal je dve minuti namesto
+  devetih. Feed je oboje tudi povedal (`prihod 600 / odhod 180`).
+
+  Redko, a ne zanemarljivo: 406 postankov v voznem redu ima nad dve minuti
+  zadrževanja, in v devetih dneh se prihodna in odhodna zamuda razlikujeta pri
+  1 307 postankih, od tega 362 za pet minut ali več.
+
+  Prikaz kaže `COALESCE(delay_dep, delay_arr)`, torej **odhodno**. To je prav —
+  potnika zanima, kdaj gre vlak naprej — a ena številka na vrstico naredi v
+  grafu prepad, ki je videti nemogoč („kako je zamuda padla za osem minut med
+  dvema postajama"). Zato: kadar se številki razlikujeta za minuto ali več,
+  vrstica pokaže **obe** (`+10 → +3`) z razlago postanka, krivulja pa gre v
+  naslednjo postajo na **prihodno** vrednost in pade **navpično** na postaji.
+  Padec se je zgodil tam, ne na odseku.
+
 * **Zamuda je izmerjena v prometnem mestu, ne nujno na postaji.** Ime tega
   mesta **imamo** -- v `SZ-DELAY-*` obvestilih ("Vlak EC 79 ima izjemno zamudo
   161 min ob prihodu na postajo Sevnica"). `run` pozna samo voznoredne postanke,
