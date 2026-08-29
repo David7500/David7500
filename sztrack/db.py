@@ -49,10 +49,17 @@ CREATE TABLE IF NOT EXISTS trip (
     service_id TEXT NOT NULL,
     color      TEXT,
     mode       TEXT NOT NULL DEFAULT 'vlak',
-    agency     TEXT
+    agency     TEXT,
+    -- Kateri strani aplikacije voznja pripada. NI isto kot `mode`:
+    -- nadomestni prevoz SZ je `mode = 'bus'`, a `network = 'zeleznica'`,
+    -- ker na tisti relaciji ZAMENJUJE vlak in sodi v isti odgovor kot vlaki.
+    -- LPP in medkrajevni prevozniki so `avtobus` in imajo svojo stran:
+    -- potnik ve, ali gre z vlakom ali z busom, in ju ne isce skupaj.
+    network    TEXT NOT NULL DEFAULT 'zeleznica'
 );
 CREATE INDEX IF NOT EXISTS trip_train_no ON trip(train_no);
 CREATE INDEX IF NOT EXISTS trip_mode ON trip(mode);
+CREATE INDEX IF NOT EXISTS trip_network ON trip(network);
 
 -- Vozni red. arr_s/dep_s sta sekundi od polnoci in lahko presezeta 86400.
 CREATE TABLE IF NOT EXISTS sched (
@@ -213,6 +220,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if have and "mode" not in have:
         conn.execute("ALTER TABLE trip ADD COLUMN mode TEXT NOT NULL DEFAULT 'vlak'")
         conn.execute("ALTER TABLE trip ADD COLUMN agency TEXT")
+        conn.commit()
+        have.add("mode")
+    if have and "network" not in have:
+        conn.execute("ALTER TABLE trip ADD COLUMN network TEXT NOT NULL DEFAULT 'zeleznica'")
         conn.commit()
 
     row = conn.execute(

@@ -156,6 +156,19 @@ tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
 scripts/         dev-restart.sh, preveri_paleto.py, vzorci_feeda.py, build_deploy_zip.sh
 ```
 
+**`trip.network` loči strani aplikacije: `zeleznica` in `avtobus`.**
+To NI isto kot `mode`. Nadomestni prevoz SŽ je `mode = 'bus'`, a
+`network = 'zeleznica'`, ker na svoji relaciji **zamenjuje vlak** in sodi v
+isti odgovor kot vlaki. LPP in ostali prevozniki so `avtobus` in imajo svojo
+stran `/app/bus`: potnik ve, ali gre z vlakom ali z busom, in ju ne išče
+skupaj. Mešanje ni bilo le nepregledno, ampak merljivo škodljivo -- iskanje
+"ljublj" je vračalo mestna postajališča (LPP ima tam desetkrat več postankov)
+in postajo Ljubljana potisnilo iz prvih petih zadetkov.
+
+Vsi potniški endpointi imajo `network` in **privzeto `zeleznica`** -- tako
+mešanja ne more povzročiti pozabljen parameter. Skupen ostane samo zemljevid,
+kjer sta vlak in avtobus različna simbola.
+
 `trip.mode` loči `vlak` od `bus`, `trip.agency` pa prevoznika. Avtobusi so v
 istih tabelah, ker jih GTFS modelira enako in ker sodijo v isti odgovor --
 **ne pa v `edge`**: vozijo po cesti in bi mreži prog dodali odseke, ki niso proge.
@@ -185,7 +198,8 @@ Zajem piše **samo ob spremembi vrednosti** — sicer bi bilo milijone praznih v
 
 | pot | kaj |
 |---|---|
-| `/app` | iskalnik povezav **in odhodna tabla** — vstopna stran |
+| `/app` | vlaki: iskalnik povezav in odhodna tabla — vstopna stran |
+| `/app/bus` | avtobusi (LPP …): ista stran, drugo omrežje |
 | `/app/map` | živi zemljevid (Leaflet + OSM rastrske ploščice) |
 | `/app/train/{no}` | okno enega vlaka: profil poti, zgodovina, razmere, hitrosti |
 | `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |

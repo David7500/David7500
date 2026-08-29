@@ -33,22 +33,22 @@ def _abs_time(service_date: str, seconds: int | None) -> str | None:
 abs_time = _abs_time
 
 
-def stations(conn: sqlite3.Connection, mode: str | None = None) -> list[dict]:
-    """Postaje, po želji samo tiste, ki jih streže dana vrsta prevoza.
+def stations(conn: sqlite3.Connection, network: str | None = None) -> list[dict]:
+    """Postaje, po želji samo tiste na danem omrežju.
 
     Rabi se, ko so v bazi tudi avtobusi: LPP prinese tisoč postajališč in
     zemljevid železniške mreže bi jih narisal vsa. Postajališče ni lastnost
     postaje, ampak tega, kdo tam ustavlja -- zato pogoj in ne stolpec.
     """
-    if not mode:
+    if not network:
         return [dict(r) for r in conn.execute("SELECT * FROM station ORDER BY name")]
     return [
         dict(r)
         for r in conn.execute(
             "SELECT st.* FROM station st WHERE EXISTS ("
             "  SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
-            "  WHERE s.stop_id = st.stop_id AND t.mode = ?) ORDER BY st.name",
-            (mode,),
+            "  WHERE s.stop_id = st.stop_id AND t.network = ?) ORDER BY st.name",
+            (network,),
         )
     ]
 
@@ -560,6 +560,7 @@ JOIN station za ON za.stop_id = sa.stop_id AND za.name = :a
 JOIN sched sb   ON sb.trip_id = t.trip_id AND sb.stop_seq > sa.stop_seq
 JOIN station zb ON zb.stop_id = sb.stop_id AND zb.name = :b
 JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
+                   AND (:network IS NULL OR t.network = :network)
 LEFT JOIN run ra ON ra.trip_id = t.trip_id AND ra.service_date = :day AND ra.stop_seq = sa.stop_seq
 LEFT JOIN run rb ON rb.trip_id = t.trip_id AND rb.service_date = :day AND rb.stop_seq = sb.stop_seq
 ORDER BY dep_s
@@ -597,7 +598,8 @@ WHERE p.rn = 1
 
 
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
-                service_date: str, now_s: int | None = None) -> list[dict]:
+                service_date: str, now_s: int | None = None,
+                network: str | None = None) -> list[dict]:
     """Vse vožnje, ki na dani dan peljejo od `from_name` do `to_name`.
 
     Relacija ni v številki vlaka in ne v `route_id` -- ta je v tem feedu
@@ -605,7 +607,8 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     manjši `stop_seq` od cilja.
     """
     rows = conn.execute(_CONNECTIONS_SQL,
-                        {"a": from_name, "b": to_name, "day": service_date}).fetchall()
+                        {"a": from_name, "b": to_name, "day": service_date,
+                         "network": network}).fetchall()
 
     # Vlak lahko isto postajo obišče dvakrat (obrat) -- obdrži najzgodnejši par.
     best: dict[str, dict] = {}

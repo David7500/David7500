@@ -259,13 +259,18 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
             "INSERT INTO edge(from_id,to_id,km,elementary,trips,geojson) VALUES(?,?,?,?,?,?)", edges
         )
         conn.executemany(
-            "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color,mode,agency) "
-            "VALUES(?,?,?,?,?,?,?,?)",
+            "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color,"
+            "                 mode,agency,network) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
             [
                 (tid, t["route_id"], routes[t["route_id"]]["route_short_name"],
                  t.get("trip_headsign"), t["service_id"], routes[t["route_id"]].get("route_color"),
                  "vlak" if tid in rail_trips else "bus",
-                 routes[t["route_id"]].get("agency_id"))
+                 routes[t["route_id"]].get("agency_id"),
+                 # Nadomestni prevoz SZ je avtobus, a pripada zeleznici: na
+                 # tisti relaciji zamenjuje vlak. LPP in ostali imajo svojo stran.
+                 "zeleznica" if routes[t["route_id"]]["agency_id"] == config.RAIL_AGENCY_ID
+                 else "avtobus")
                 for tid, t in trips.items()
             ],
         )

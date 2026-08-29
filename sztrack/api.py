@@ -24,6 +24,17 @@ app = FastAPI(title="sztrack", version="0.1.0",
               lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
+# Dve locheni omrezji, ne en kup. `zeleznica` so vlaki IN nadomestni prevozi SZ
+# (ti na svoji relaciji zamenjujejo vlak in sodijo v isti odgovor), `avtobus`
+# pa LPP in ostali prevozniki. Potnik ve, ali gre z vlakom ali z busom, in ju
+# ne isce skupaj -- mesanje je bilo tudi merljivo skodljivo: iskanje "ljublj"
+# je vracalo mestna postajalisca in postajo Ljubljana potisnilo iz prvih petih.
+#
+# Privzeto je zeleznica: projekt je sledilnik SZ, avtobusi so dodatek in se
+# zahtevajo izrecno. Tako mesanja ne more povzrociti pozabljen parameter.
+NETWORK_Q = Query("zeleznica", pattern="^(zeleznica|avtobus)$",
+                  description="zeleznica (vlaki + nadomestni prevozi) ali avtobus")
+
 # Poti relativno na paket, da delajo enako v dev checkoutu in na /opt/sztrack.
 _PKG_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=_PKG_DIR / "static"), name="static")
@@ -58,7 +69,33 @@ def index(request: Request):
 def connections_page(request: Request):
     """Vstopna stran: od postaje do postaje. Zemljevid je pogled dispecerja,
     povprecen potnik sprasuje "kdaj mi pelje vlak" -- zato je iskalnik prvi."""
-    return templates.TemplateResponse(request, "connections.html", {"here": "iskalnik"})
+    return templates.TemplateResponse(request, "connections.html", {
+        "here": "iskalnik", "network": "zeleznica",
+    })
+
+
+@app.get("/app/bus", response_class=HTMLResponse)
+def bus_page(request: Request):
+    """Avtobusi imajo SVOJO stran, ne skupne z vlaki.
+
+    Potnik ve, ali gre z vlakom ali z avtobusom, in ju ne išče skupaj; skupen
+    seznam je le manj pregleden. Mešanje je bilo tudi merljivo škodljivo:
+    iskanje "ljublj" je vračalo mestna postajališča in postajo Ljubljana
+    potisnilo iz prvih petih zadetkov.
+
+    Nadomestni prevozi SŽ sem NE sodijo -- ti na svoji relaciji zamenjujejo
+    vlak in ostanejo pri vlakih (`trip.network = 'zeleznica'`).
+    """
+    return templates.TemplateResponse(request, "connections.html", {
+        "here": "avtobusi", "network": "avtobus",
+        "section": "Avtobusi",
+        "page_title": "sztrack — kdaj mi pelje avtobus",
+        "page_desc": "Odhodi in zamude slovenskih avtobusov iz odprtih podatkov.",
+        "from_ph": "izhodiščno postajališče",
+        "to_ph": "ciljno postajališče",
+        "stop_label": "Postajališče",
+        "stop_ph": "npr. Bavarski dvor",
+    })
 
 
 @app.get("/app/map", response_class=HTMLResponse)
@@ -186,17 +223,18 @@ def yesterday_iso(now: datetime) -> str:
 
 
 @app.get("/api/stations")
-def api_stations(mode: str | None = Query(None, pattern="^(vlak|bus)$",
-                                          description="samo postaje te vrste prevoza")):
+def api_stations(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
+                                             description="samo postaje tega omrežja")):
     with _conn() as conn:
-        return stats.stations(conn, mode)
+        return stats.stations(conn, network)
 
 
 @app.get("/api/stations/search")
-def api_station_search(q: str = Query(..., min_length=1), limit: int = Query(12, ge=1, le=50)):
+def api_station_search(q: str = Query(..., min_length=1), limit: int = Query(12, ge=1, le=50),
+                       network: str = NETWORK_Q):
     """Postaje po delnem imenu, brez šumnikov. Iskalnik na telefonu rabi prav to."""
     with _conn() as conn:
-        return journey.search_stations(conn, q, limit)
+        return journey.search_stations(conn, q, limit, network=network)
 
 
 @app.get("/api/departures")
@@ -207,6 +245,7 @@ def api_departures(
     window: int | None = Query(None, ge=15, le=1440,
                                description="minut naprej; privzeto 3 h za danes, cel dan sicer"),
     kind: str = Query("odhodi", pattern="^(odhodi|prihodi)$"),
+    network: str = NETWORK_Q,
 ):
     """Odhodna ali prihodna tabla postaje.
 
@@ -233,13 +272,14 @@ def api_departures(
         window = 180 if (not from_time and date == now.date().isoformat()) else 1440
 
     with _conn() as conn:
-        exact = journey.resolve_station(conn, station)
+        exact = journey.resolve_station(conn, station, network)
         if not exact:
             raise HTTPException(404, f"postaje {station!r} ne poznam")
-        rows = journey.board(conn, exact, date, from_s, window, kind)
-        notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
-                                    mentions=[exact])
-    return {"station": exact, "date": date, "kind": kind,
+        rows = journey.board(conn, exact, date, from_s, window, kind, network=network)
+        # Obvestila o ovirah so SZ-jeva; pri avtobusih jih ni.
+        notices = (alerts.for_trains(conn, [r["train_no"] for r in rows], mentions=[exact])
+                   if network == "zeleznica" else [])
+    return {"station": exact, "date": date, "kind": kind, "network": network,
             "from_s": from_s, "window_min": window,
             "board": rows, "alerts": notices}
 
@@ -426,7 +466,7 @@ tail AS (
            ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
     FROM t
 )
-SELECT tr.train_no, tr.headsign, tr.mode, st.name AS last_stop, p.stop_seq,
+SELECT tr.train_no, tr.headsign, tr.mode, tr.network, st.name AS last_stop, p.stop_seq,
        p.delay_s, p.feed_ts, p.t_s AS sched_s
 FROM passed p
 JOIN tail  ON tail.trip_id = p.trip_id AND tail.rn = 1
@@ -462,6 +502,7 @@ def api_connections(
     to: str = Query(..., description="ime ciljne postaje"),
     date: str | None = None,
     with_transfers: bool = Query(True, description="poišči tudi zveze z enim prestopom"),
+    network: str = NETWORK_Q,
 ):
     """Vožnje od postaje do postaje na dani dan, z zadnjo znano zamudo.
 
@@ -474,28 +515,29 @@ def api_connections(
     is_today = date == now.date().isoformat()
     now_s = journey.now_seconds(now) if is_today else None
     with _conn() as conn:
-        a = journey.resolve_station(conn, from_)
-        b = journey.resolve_station(conn, to)
+        a = journey.resolve_station(conn, from_, network)
+        b = journey.resolve_station(conn, to, network)
         if not a or not b:
             missing = from_ if not a else to
             raise HTTPException(404, f"postaje {missing!r} ne poznam")
-        rows = stats.connections(conn, a, b, date, now_s)
+        rows = stats.connections(conn, a, b, date, now_s, network=network)
         # Prestop ponudimo vedno, ne sele ko neposredne ni: cez dan je
         # neposrednih voznj lahko pet, med njimi pa stiri ure luknje.
         legs = (journey.transfers(conn, a, b, date, earliest_s=(now_s or 0),
-                                  direct=rows)
+                                  direct=rows, network=network)
                 if with_transfers else [])
         # Obvestila pobere streznik, ne brskalnik: prikaz jih je sicer iskal
         # z eno zahtevo na vlak, torej z dvanajstimi za eno iskanje.
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
-        notices = alerts.for_trains(conn, nos, mentions=[a, b])
-    return {"from": a, "to": b, "date": date,
+        notices = (alerts.for_trains(conn, nos, mentions=[a, b])
+                   if network == "zeleznica" else [])
+    return {"from": a, "to": b, "date": date, "network": network,
             "connections": rows, "transfers": legs, "alerts": notices}
 
 
 @app.get("/api/live")
-def api_live(mode: str | None = Query(None, pattern="^(vlak|bus)$",
-                                      description="samo ta vrsta prevoza")):
+def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
+                                         description="samo to omrežje")):
     """Vlaki, ki so zdaj na progi, z zadnjo izmerjeno zamudo.
 
     Ni isto kot "vse, kar je danes v feedu": vozila, ki so vozila zjutraj,
@@ -534,7 +576,7 @@ def api_live(mode: str | None = Query(None, pattern="^(vlak|bus)$",
         # Koliko je stara meritev, na katero se sklicujemo. Brez tega prikaz
         # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
-    if mode:
-        rows = [r for r in rows if r["mode"] == mode]
+    if network:
+        rows = [r for r in rows if r["network"] == network]
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     return rows

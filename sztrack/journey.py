@@ -45,21 +45,30 @@ def _fold(s: str) -> str:
     )
 
 
-def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12) -> list[dict]:
+def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
+                    network: str | None = None) -> list[dict]:
     """Postaje, ki ustrezajo nizu. Urejene po tem, kako dobro se ujemajo.
 
     Rang: točno ime < začetek imena < začetek besede < kjerkoli. Znotraj
     istega ranga odloča promet -- "Ljubljana" mora biti pred "Ljubljana Vodmat",
     ker je stokrat pogostejši cilj, ne zato, ker je krajša.
+
+    `network` omeji na postaje enega omrežja. Brez tega bi iskalnik vlakov
+    ponujal mestna postajališča, iskalnik avtobusov pa železniške postaje --
+    obakrat imena, na katerih tam ni mogoče nič najti.
     """
     needle = _fold(q.strip())
     if not needle:
         return []
-    rows = conn.execute(
-        "SELECT st.stop_id, st.name, st.lat, st.lon, COUNT(s.trip_id) AS trips "
-        "FROM station st LEFT JOIN sched s ON s.stop_id = st.stop_id "
-        "GROUP BY st.stop_id"
-    ).fetchall()
+    sql = ("SELECT st.stop_id, st.name, st.lat, st.lon, COUNT(s.trip_id) AS trips "
+           "FROM station st JOIN sched s ON s.stop_id = st.stop_id "
+           "JOIN trip t ON t.trip_id = s.trip_id ")
+    params: tuple = ()
+    if network:
+        sql += "WHERE t.network = ? "
+        params = (network,)
+    sql += "GROUP BY st.stop_id"
+    rows = conn.execute(sql, params).fetchall()
 
     scored = []
     for r in rows:
@@ -91,16 +100,25 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12) -> list[d
     return list(seen.values())[:limit]
 
 
-def resolve_station(conn: sqlite3.Connection, name: str) -> str | None:
+def resolve_station(conn: sqlite3.Connection, name: str,
+                    network: str | None = None) -> str | None:
     """Vpisano ime -> točno ime postaje v bazi, ali None.
 
     Iskalnik sme dobiti "murska" in vseeno najti povezavo; brez tega bi vsaka
     tipkarska nenatančnost dala prazen rezultat, kar je videti kot okvara.
     """
-    exact = conn.execute("SELECT name FROM station WHERE name = ?", (name,)).fetchone()
+    if network:
+        exact = conn.execute(
+            "SELECT st.name FROM station st WHERE st.name = ? AND EXISTS ("
+            "  SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
+            "  WHERE s.stop_id = st.stop_id AND t.network = ?) LIMIT 1",
+            (name, network),
+        ).fetchone()
+    else:
+        exact = conn.execute("SELECT name FROM station WHERE name = ?", (name,)).fetchone()
     if exact:
         return exact["name"]
-    hits = search_stations(conn, name, limit=1)
+    hits = search_stations(conn, name, limit=1, network=network)
     return hits[0]["name"] if hits else None
 
 
@@ -132,6 +150,7 @@ JOIN station origin ON origin.stop_id = so.stop_id
 JOIN sched sd     ON sd.trip_id = s.trip_id AND sd.stop_seq = ends.last_seq
 JOIN station dest ON dest.stop_id = sd.stop_id
 JOIN service_day sday ON sday.service_id = t.service_id AND sday.date = :day
+                     AND (:network IS NULL OR t.network = :network)
 LEFT JOIN run r  ON r.trip_id = t.trip_id AND r.service_date = :day
                  AND r.stop_seq = s.stop_seq
 -- Feed ni nikoli porocal stop_seq = 1: prva meritev pride sele na drugi
@@ -155,7 +174,7 @@ ORDER BY t_s
 
 def board(conn: sqlite3.Connection, station: str, service_date: str,
           from_s: int, window_min: int = 180, kind: str = "odhodi",
-          limit: int = 150) -> list[dict]:
+          limit: int = 150, network: str | None = None) -> list[dict]:
     """Odhodna (ali prihodna) tabla postaje.
 
     `kind`: "odhodi" izpusti končno postajo vožnje (tam se nič ne odpelje),
@@ -163,7 +182,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     dvakrat -- kot prihod in kot odhod na isti vrstici.
     """
     rows = conn.execute(_BOARD_SQL, {
-        "station": station, "day": service_date,
+        "station": station, "day": service_date, "network": network,
         "from_s": from_s, "to_s": from_s + window_min * 60,
     }).fetchall()
 
@@ -222,12 +241,14 @@ WITH a AS (
     FROM sched s JOIN station z ON z.stop_id = s.stop_id AND z.name = :a
     JOIN trip t ON t.trip_id = s.trip_id
     JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
+                       AND (:network IS NULL OR t.network = :network)
 ),
 b AS (
     SELECT s.trip_id, s.stop_seq, COALESCE(s.arr_s, s.dep_s) AS arr_s
     FROM sched s JOIN station z ON z.stop_id = s.stop_id AND z.name = :b
     JOIN trip t ON t.trip_id = s.trip_id
     JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
+                       AND (:network IS NULL OR t.network = :network)
 )
 SELECT t1.train_no AS train1, t1.trip_id AS trip1, t1.headsign AS headsign1,
        t2.train_no AS train2, t2.trip_id AS trip2, t2.headsign AS headsign2,
@@ -264,7 +285,8 @@ WHERE t1.trip_id <> t2.trip_id
 
 def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
               service_date: str, earliest_s: int = 0, limit: int = 8,
-              direct: list[dict] | None = None) -> list[dict]:
+              direct: list[dict] | None = None,
+              network: str | None = None) -> list[dict]:
     """Povezave z enim prestopom.
 
     Brez tega iskalnik na velikem delu države ne najde ničesar -- neposredne
@@ -276,7 +298,7 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
     dva prestopa pa bi iz preproste poizvedbe naredila iskanje poti z utežmi.
     """
     rows = conn.execute(_TRANSFER_SQL, {
-        "a": from_name, "b": to_name, "day": service_date,
+        "a": from_name, "b": to_name, "day": service_date, "network": network,
         "min_gap": MIN_TRANSFER_MIN * 60, "max_gap": MAX_TRANSFER_MIN * 60,
         "earliest": earliest_s,
     }).fetchall()

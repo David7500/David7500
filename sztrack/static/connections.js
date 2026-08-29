@@ -13,6 +13,13 @@ const feedDotEl = $("feed-dot");
 
 const todayIso = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
 
+// Katero omrezje isce ta stran. Vlaki in avtobusi imata SVOJO stran, ker
+// potnik ve, s cim gre, in ju ne isce skupaj -- mesanje je bilo tudi merljivo
+// skodljivo: iskanje "ljublj" je vracalo mestna postajalisca in postajo
+// Ljubljana potisnilo iz prvih petih zadetkov.
+const NETWORK = document.body.dataset.network || "zeleznica";
+const IS_BUS = NETWORK === "avtobus";
+
 let pollTimer = null;
 let activeTab = "ab";
 
@@ -83,7 +90,7 @@ function attachSuggest(input, listEl) {
     if (q.length < 2) return close();
     const mine = ++seq;
     try {
-      const res = await fetch(`/api/stations/search?q=${encodeURIComponent(q)}&limit=8`)
+      const res = await fetch(`/api/stations/search?q=${encodeURIComponent(q)}&limit=8&network=${NETWORK}`)
         .then((r) => r.json());
       if (mine !== seq) return;       // prehitelo ga je novejse tipkanje
       items = res;
@@ -527,6 +534,15 @@ function overviewHtml(o) {
 }
 
 async function showOverview() {
+  if (IS_BUS) {
+    // Pregled ("kako vozijo vlaki") je železniški. Za avtobuse ga nimamo:
+    // zajem je star nekaj ur in bi vsaka številka obljubljala več, kot ve.
+    resultsEl.innerHTML = `<div class="empty-state">
+      Vpiši postajališče ali izhodišče in cilj.<br>
+      Zajem avtobusov je nov, zato zgodovine za primerjavo še skoraj ni.
+    </div>`;
+    return;
+  }
   try {
     const o = await fetch("/api/overview").then((r) => r.json());
     resultsEl.innerHTML = overviewHtml(o);
@@ -565,7 +581,8 @@ async function searchAB(push) {
   if (push) history.replaceState(null, "", `?${new URLSearchParams({ from, to, date })}`);
 
   try {
-    const url = `/api/connections?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${encodeURIComponent(date)}`;
+    const url = `/api/connections?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      + `&date=${encodeURIComponent(date)}&network=${NETWORK}`;
     const res = await fetch(url);
     if (res.status === 404) {
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
@@ -600,7 +617,7 @@ async function searchBoard(push) {
     // dan cel dan. Vpisana ura to povozi.
     const q = from ? `&from=${encodeURIComponent(from)}&window=360` : "";
     const url = `/api/departures?station=${encodeURIComponent(station)}`
-      + `&date=${encodeURIComponent(date)}&kind=${kind}${q}`;
+      + `&date=${encodeURIComponent(date)}&kind=${kind}&network=${NETWORK}${q}`;
     const res = await fetch(url);
     if (res.status === 404) {
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';

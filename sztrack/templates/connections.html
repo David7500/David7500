@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>sztrack — kdaj mi pelje vlak</title>
-  <meta name="description" content="Odhodi, povezave in zamude slovenskih vlakov iz odprtih podatkov.">
+  <title>{{ page_title | default("sztrack — kdaj mi pelje vlak") }}</title>
+  <meta name="description" content="{{ page_desc | default('Odhodi, povezave in zamude slovenskih vlakov iz odprtih podatkov.') }}">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/static/base.css">
   <link rel="stylesheet" href="/static/connections.css">
 </head>
-<body class="conn-page">
+<body class="conn-page" data-network="{{ network | default('zeleznica') }}">
 
   <header class="topbar">
     <a class="brand" href="/app">
@@ -20,6 +20,8 @@
       </svg>
       <span class="brand-name">sztrack</span>
     </a>
+    {% if section %}<div class="divider"></div>
+    <span class="page-name">{{ section }}</span>{% endif %}
     <div class="spacer"></div>
     <div class="mode-switch" id="mode-switch">
       <button type="button" data-mode="simple" aria-pressed="true">preprosto</button>
@@ -45,7 +47,7 @@
     <form id="search-ab" class="search-card">
       <div class="field station-field">
         <label for="from">Od</label>
-        <input id="from" name="from" placeholder="izhodiščna postaja" autocomplete="off"
+        <input id="from" name="from" placeholder="{{ from_ph | default('izhodiščna postaja') }}" autocomplete="off"
                autocapitalize="off" spellcheck="false" required>
         <ul class="suggest" id="suggest-from" role="listbox" hidden></ul>
       </div>
@@ -56,7 +58,7 @@
       </button>
       <div class="field station-field">
         <label for="to">Do</label>
-        <input id="to" name="to" placeholder="ciljna postaja" autocomplete="off"
+        <input id="to" name="to" placeholder="{{ to_ph | default('ciljna postaja') }}" autocomplete="off"
                autocapitalize="off" spellcheck="false" required>
         <ul class="suggest" id="suggest-to" role="listbox" hidden></ul>
       </div>
@@ -69,8 +71,8 @@
 
     <form id="search-board" class="search-card" hidden>
       <div class="field station-field">
-        <label for="station">Postaja</label>
-        <input id="station" name="station" placeholder="npr. Ljubljana" autocomplete="off"
+        <label for="station">{{ stop_label | default("Postaja") }}</label>
+        <input id="station" name="station" placeholder="{{ stop_ph | default('npr. Ljubljana') }}" autocomplete="off"
                autocapitalize="off" spellcheck="false" required>
         <ul class="suggest" id="suggest-station" role="listbox" hidden></ul>
       </div>
@@ -99,9 +101,14 @@
     <div id="results" class="results"></div>
 
     <footer class="page-foot">
+      {% if network == 'avtobus' %}
+      Podatki: IJPP prek NAP (CC BY-SA 4.0), obdelava DERP. Avtobusi imajo
+      GPS lego; zamude so iz istega feeda kot pri vlakih.
+      {% else %}
       Podatki: SŽ in IJPP prek NAP (CC BY-SA 4.0), obdelava DERP.
       Zamude imajo ločljivost ene minute in so izmerjene v prometnem mestu,
       ne nujno na peronu.
+      {% endif %}
       <span class="adv-only" id="foot-health"></span>
     </footer>
   </main>

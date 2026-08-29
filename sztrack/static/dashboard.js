@@ -40,7 +40,7 @@ async function loadStatic() {
   try {
     // Samo zelezniske postaje: ko so v bazi tudi avtobusi, bi jih LPP dodal
     // tisoc in mreza prog bi izginila pod postajalisci.
-    const stations = await fetch("/api/stations?mode=vlak").then((r) => r.json());
+    const stations = await fetch("/api/stations?network=zeleznica").then((r) => r.json());
     stationsByName = new Map(stations.map((s) => [s.name, s]));
 
     const stationLayer = L.layerGroup();
@@ -367,7 +367,7 @@ async function pollLive() {
     const trains = await // Zemljevid rise zelezniska mreza in postaje; avtobusi nimajo ne enega
     // ne drugega, zato bi njihovi markerji viseli v praznem. Steti jih v
     // glavo, risati pa ne, bi bilo se slabse.
-    fetch("/api/live?mode=vlak").then((r) => r.json());
+    fetch("/api/live?network=zeleznica").then((r) => r.json());
     trainCountEl.textContent = trains.length;
     renderSidebar(trains);
     renderTrains(trains);

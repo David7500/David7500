@@ -61,8 +61,27 @@ def conn():
               "VALUES('t3','r3','LP 3','Z - C','S1')")
     _sched(c, "t3", [(1, "Z", None, 30600), (2, "C", 34200, None)])
 
+    # vlak 4: B -> D. Brez njega bi bili Bled Jezero in Divača postaji, ki ju
+    # ne streže nič -- takih v pravih podatkih ni (postaje nastanejo iz
+    # `stop_times`) in iskanje jih namenoma ne vraca.
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('t4','r4','LP 4','B - D','S1')")
+    _sched(c, "t4", [(1, "B", None, 40000), (2, "D", 44000, None)])
+
     c.commit()
     return c
+
+
+def test_postaja_brez_voznje_ni_v_iskanju(conn):
+    """Postaja, ki je ne streže nič, ni koristen zadetek.
+
+    V pravih podatkih takih ni -- `station` nastane iz `stop_times` -- a
+    poizvedba to zdaj tudi izraža, namesto da bi se zanašala na uvoz.
+    """
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('X','Nikogaršnja',46.0,14.0)")
+    conn.commit()
+    assert journey.search_stations(conn, "nikogar") == []
 
 
 # ---------------------------------------------------------------- iskanje postaj
@@ -241,3 +260,67 @@ def test_run_detail_ne_podvoji_postankov(conn):
     _sched(c, "tB", [(1, "A", None, 31000), (2, "Z", 34000, None)])
     c.commit()
     assert len(stats.run_detail(c, "LP 8", "2026-08-31")) == 2
+
+
+# ---------------------------------------------------------------- ločeni omrežji
+
+def _add_bus(conn):
+    """LPP linija in njeni postajališči. Ločeno omrežje, ne ločena tabela.
+
+    Postajališči sta svoji -- avtobus, ki bi ustavljal tudi na železniški
+    postaji, bi se v obeh iskanjih pojavil upravičeno in test ne bi meril
+    ločitve omrežij, ampak nekaj drugega.
+    """
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('P','Ajdovščina/Lj.',46.05,14.51)")
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('Q','Bavarski dvor',46.06,14.51)")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+                 "                 mode, agency, network) "
+                 "VALUES('b1','rb','6B','Center - Črnuče','S1','bus','1118','avtobus')")
+    _sched(conn, "b1", [(1, "Q", None, 30000), (2, "P", 31000, None)])
+    conn.commit()
+
+
+def test_omrezji_se_ne_mesata_v_iskanju(conn):
+    """Iskalnik vlakov ne sme ponujati mestnih postajališč in obratno.
+
+    Ni le vprašanje preglednosti: pri pravih podatkih ima LPP na "Ljubljana..."
+    veliko več postankov kot železnica, zato je mešano iskanje "ljublj"
+    vračalo postajališča in postajo Ljubljana potisnilo iz prvih petih.
+    """
+    _add_bus(conn)
+    rail = [s["name"] for s in journey.search_stations(conn, "ajdov", network="zeleznica")]
+    bus = [s["name"] for s in journey.search_stations(conn, "ajdov", network="avtobus")]
+    assert rail == ["Ajdovščina"]
+    assert bus == ["Ajdovščina/Lj."]
+
+
+def test_omrezji_se_ne_mesata_na_tabli(conn):
+    _add_bus(conn)
+    rail = journey.board(conn, "Ajdovščina", "2026-08-31", 0, 1440, network="zeleznica")
+    assert {r["train_no"] for r in rail} == {"IC 1", "LP 2"}
+    # Ista postaja na avtobusnem omrežju ne obstaja -- tam nič ne ustavlja.
+    assert journey.board(conn, "Ajdovščina", "2026-08-31", 0, 1440, network="avtobus") == []
+    bus = journey.board(conn, "Bavarski dvor", "2026-08-31", 0, 1440, network="avtobus")
+    assert {r["train_no"] for r in bus} == {"6B"}
+    assert journey.board(conn, "Bavarski dvor", "2026-08-31", 0, 1440, network="zeleznica") == []
+
+
+def test_nadomestni_prevoz_ostane_pri_vlakih(conn):
+    """Avtobus SŽ na relaciji, kjer vlak ne vozi, sodi med vlake.
+
+    To je edini avtobus, ki pripada železnici: na tisti relaciji ZAMENJUJE
+    vlak in bi bil na avtobusni strani neuporaben -- tam ga nihče ne išče.
+    """
+    c = conn
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              "                 mode, agency, network) "
+              "VALUES('n1','rn','BUS 111','Ajdovščina - Celje','S1','bus','1161','zeleznica')")
+    _sched(c, "n1", [(1, "A", None, 35000), (2, "C", 39000, None)])
+    c.commit()
+
+    rail = stats.connections(c, "Ajdovščina", "Celje", "2026-08-31", network="zeleznica")
+    bus = stats.connections(c, "Ajdovščina", "Celje", "2026-08-31", network="avtobus")
+    assert "BUS 111" in {r["train_no"] for r in rail}
+    assert bus == []
