@@ -34,6 +34,16 @@ AGENCIES="${SZ_AGENCIES-__ohrani__}"
 
 [ "$(id -u)" -eq 0 ] || { echo "Poženi kot root (sudo)."; exit 1; }
 
+# Kadar skripta lezi v polnem izvornem drevesu, je TO vir -- ne GitHub.
+# Brez tega je pozabljen `SZ_SRC=` tiho pomenil `git clone` cez vse: koda,
+# ki na GitHubu se ni, je izginila in `sztrack-zajem.service` z njo.
+HERE=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || echo "")
+if [ -z "${SZ_SRC:-}" ] && [ -n "$HERE" ] && [ -d "$HERE/sztrack" ] \
+   && [ -f "$HERE/deploy/sztrack-zajem.service" ] && [ "$HERE" != "$APP" ]; then
+    SZ_SRC="$HERE"
+    echo "==> vir: $SZ_SRC (skripta tece iz izvornega drevesa)"
+fi
+
 echo "==> paketi"
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip git sqlite3
@@ -58,6 +68,18 @@ else
     rm -rf "$APP"
     git clone --quiet --branch "$BRANCH" --depth 1 "$REPO" "$APP"
 fi
+
+# Ce tu cesa ni, je bil vir napacen. Bolje pasti zdaj kot pustiti storitev,
+# ki se ne bo zagnala ob naslednjem ponovnem zagonu.
+for f in deploy/sztrack.service deploy/sztrack-zajem.service \
+         deploy/sztrack-backup.service deploy/sztrack-backup.timer; do
+    [ -f "$APP/$f" ] || {
+        echo "NAPAKA: v namesceni kodi manjka $f."
+        echo "Vir je bil ${SZ_SRC:-GitHub ($BRANCH)}. Ce commiti se niso potisnjeni,"
+        echo "pozeni z izvornega drevesa:  sudo SZ_SRC=~/sztrack-src bash ~/sztrack-src/deploy/install-rpi.sh"
+        exit 1
+    }
+done
 
 echo "==> odvisnosti"
 [ -d "$APP/.venv" ] || python3 -m venv "$APP/.venv"
