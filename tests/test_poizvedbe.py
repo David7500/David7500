@@ -431,3 +431,35 @@ def test_najblizja_postajalisca_po_omrezju(conn):
 def test_najblizja_upostevajo_polmer(conn):
     _add_bus(conn)
     assert journey.nearby_stations(conn, 45.5, 14.0, network="avtobus") == []
+
+
+# ---------------------------------------------------------------- nočne vožnje
+
+def test_nocna_voznja_ostane_na_seznamu_tudi_ob_veliki_zamudi(conn):
+    """Vožnja z voznorednim koncem pred polnočjo in veliko zamudo je po
+    polnoči še vedno na progi.
+
+    Optimizacija, ki vključi le vožnje z `arr_s > 86400`, jo izpusti — prav
+    to je primer, ki potnika najbolj zanima (EC 79 je imel 161 minut zamude
+    in je pripeljal ob 00:29). Zato pogoj računa z dopustno zamudo.
+    """
+    from sztrack import api
+
+    c = conn
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('nz','rz','EC 9','A - C','S1')")
+    # Voznoredni prihod na cilj ob 21:48; nič ne kaže na vožnjo čez polnoč.
+    _sched(c, "nz", [(1, "A", None, 70000), (2, "Z", 74000, 74100), (3, "C", 78480, None)])
+    # ...a zamuja 161 minut. Vmesno postajo je s to zamudo že prevozil
+    # (74100 + 9660 = 83760, torej ob 23:16), cilj pa doseže ob 00:29.
+    for seq in (2, 3):
+        c.execute("INSERT INTO run(trip_id, service_date, stop_seq,"
+                  "                delay_arr, delay_dep, feed_ts) "
+                  "VALUES('nz','2026-08-31',?,9660,9660,1)", (seq,))
+    c.commit()
+
+    now_s = 20 * 60 + 86400          # 00:20 naslednjega dne
+    strict = api._live_rows(c, "2026-08-31", now_s, overnight_only=True)
+    full = api._live_rows(c, "2026-08-31", now_s, overnight_only=False)
+    assert "EC 9" in {r["train_no"] for r in strict}
+    assert {r["train_no"] for r in strict} == {r["train_no"] for r in full}

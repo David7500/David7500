@@ -486,6 +486,13 @@ def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
 # prihodu na cilj -- da ne izgine iz zemljevida v isti sekundi, ko pripelje.
 _LIVE_GRACE_S = 300
 
+# Koliko zamude dopuscamo, ko presojamo, ali voznja vceraj se tece cez polnoc.
+# Sest ur je velikodusno: najhujsa zamuda v devetih dneh zajema je bila 161 min.
+# Voznja z voznorednim koncem pred 18:00 in vec kot sesturno zamudo bi po
+# polnoci izpadla s seznama -- to je zavestna menjava za desetkrat hitrejso
+# poizvedbo (173 ms -> 17 ms), ne spregled.
+OVERNIGHT_SLACK_S = 6 * 3600
+
 _LIVE_SQL = """
 WITH t AS (
     SELECT r.trip_id, r.stop_seq, r.feed_ts, s.stop_id,
@@ -493,13 +500,35 @@ WITH t AS (
            COALESCE(s.dep_s, s.arr_s) AS t_s
     FROM run r
     JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
+    -- Omrezje omejimo TU, ne sele v Pythonu: z LPP v bazi je vrstic vec kot
+    -- petkrat toliko in okenske funkcije spodaj tecejo cez vse. Na tem
+    -- prenosniku 190 ms proti 90 ms, na Pi Zero bi bila razlika sekunde.
+    JOIN trip tn ON tn.trip_id = r.trip_id
+                AND (:network IS NULL OR tn.network = :network)
     WHERE r.service_date = :day
+      -- Vcerajsnji prometni dan gledamo SAMO zaradi voznj, ki segajo cez
+      -- polnoc. Brez tega pogoja gre cel vcerajsnji dan skozi okenske
+      -- funkcije, da na koncu vrne nic: 173 ms za prazen odgovor.
+      --
+      -- Zamuda mora biti v racunu. Vlak z voznorednim prihodom ob 21:48 in
+      -- 161 minutami zamude pripelje ob 00:29 in JE cez polnoc, ceprav
+      -- njegov vozni red tega ne pove. Prvi poskus je to izpustil in prav
+      -- ta primer je tisti, ki potnika najbolj zanima.
+      -- Ne po voznem redu samem in ne z zdruzevanjem `run` (oboje je bilo
+      -- 170 ms): dovolj je voznoredni konec, zamaknjen za dopustno zamudo.
+      AND (:overnight_only = 0 OR EXISTS (
+            SELECT 1 FROM sched x WHERE x.trip_id = r.trip_id
+              AND COALESCE(x.arr_s, x.dep_s) > 86400 - :overnight_slack))
 ),
 win AS (
-    SELECT trip_id,
-           MIN(COALESCE(dep_s, arr_s)) AS start_s,
-           MAX(COALESCE(arr_s, dep_s)) AS end_s
-    FROM sched GROUP BY trip_id
+    -- Samo vozjne, ki so v `t`. Brez tega se grupira vseh 80 000 vrstic
+    -- `sched` (obeh omrezij) za vsak klic in prav to je bilo 200 od 210 ms.
+    SELECT s.trip_id,
+           MIN(COALESCE(s.dep_s, s.arr_s)) AS start_s,
+           MAX(COALESCE(s.arr_s, s.dep_s)) AS end_s
+    FROM sched s
+    WHERE s.trip_id IN (SELECT trip_id FROM t)
+    GROUP BY s.trip_id
 ),
 -- Feed za se nedosezene postanke pogosto objavi niclo, dokler nima prave
 -- napovedi. Brez tega bi tak zapis pomenil, da je (voznored + 0) ze minil,
@@ -536,13 +565,17 @@ ORDER BY p.delay_s DESC
 """
 
 
-def _live_rows(conn, service_date: str, now_s: int) -> list[dict]:
+def _live_rows(conn, service_date: str, now_s: int,
+               network: str | None = None, overnight_only: bool = False) -> list[dict]:
     """Vlaki, ki na dani prometni dan ob `now_s` (sekunde od polnoci tega dne)
     dejansko vozijo. Zadnja znana postaja je zadnja, katere cas je ze minil --
     ne zadnja, o kateri feed porocá: feed poslje napoved tudi za naslednjo
     postajo, po koncu voznje pa ostane zapisan cilj."""
     rows = conn.execute(_LIVE_SQL, {"day": service_date, "now_s": now_s,
-                                    "grace": _LIVE_GRACE_S}).fetchall()
+                                    "grace": _LIVE_GRACE_S,
+                                    "network": network,
+                                    "overnight_only": int(overnight_only),
+                                    "overnight_slack": OVERNIGHT_SLACK_S}).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -606,7 +639,9 @@ def _live(network: str | None = None) -> list[dict]:
     # njihove voznoredne sekunde pa tecejo naprej cez 86400.
     yesterday = (now.date() - timedelta(days=1)).isoformat()
     with _conn() as conn:
-        rows = _live_rows(conn, today, now_s) + _live_rows(conn, yesterday, now_s + 86400)
+        rows = (_live_rows(conn, today, now_s, network)
+                + _live_rows(conn, yesterday, now_s + 86400, network,
+                             overnight_only=True))
         # Prevoznikovo porocilo je merodajno in edino pozna prometno mesto:
         # nasa `run` pozna samo voznoredne postanke, zamuda pa se meri tudi
         # tam, kjer vlak ne ustavlja.
@@ -632,8 +667,6 @@ def _live(network: str | None = None) -> list[dict]:
         # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
 
-    if network:
-        rows = [r for r in rows if r["network"] == network]
     with _conn() as conn:
         _add_gps_position(conn, rows)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
