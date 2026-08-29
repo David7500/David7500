@@ -5,9 +5,19 @@
 // ta vrednost ni izpostavljena prek API-ja, zato je tu locena kopija privzetka.
 const POLL_MS = 30000;
 
-function openTrainWindow(trainNo) {
+function openTrainWindow(trainNo, tripId, serviceDate) {
   // Posamezen vlak dobi svoje okno -- tam je poleg te voznje se zgodovina.
-  window.open(`/app/train/${encodeURIComponent(trainNo)}`, `sztrack-${trainNo}`);
+  //
+  // `trip` in `date` gresta zraven, kadar ju poznamo: stevilka linije pri
+  // avtobusu ni enolicna, devet vlakov pa ima sezonske razlicice. Brez njiju
+  // bi se okno odprlo na glavni razlicici, ne na tisti, ki si jo kliknil.
+  const q = new URLSearchParams();
+  if (serviceDate) q.set("date", serviceDate);
+  if (tripId) q.set("trip", tripId);
+  window.open(
+    `/app/train/${encodeURIComponent(trainNo)}${q.toString() ? `?${q}` : ""}`,
+    `sztrack-${trainNo}`,
+  );
 }
 
 // ---------- zemljevid ----------
@@ -149,7 +159,8 @@ function groupLabelHtml(g) {
 
 function groupPopupHtml(g) {
   const rows = g.trains.map((t) => `
-    <button class="popup-train" data-train="${escapeHtml(t.train_no)}">
+    <button class="popup-train" data-train="${escapeHtml(t.train_no)}" data-trip="${escapeHtml(t.trip_id || "")}"
+            data-date="${escapeHtml(t.service_date || "")}">
       <span class="popup-train-code">${escapeHtml(t.train_no)}</span>${modeBadgeHtml(t.mode)}
       <span class="popup-train-headsign">${escapeHtml(t.headsign || "")}</span>
       <span class="popup-train-delay" style="color:${delayColor(bestDelay(t).value)}">${delayLabel(bestDelay(t).value)}</span>
@@ -190,7 +201,8 @@ function renderTrains(trains) {
       marker.on("click", () => {
         if (marker.__trains.length === 1) {
           marker.closePopup();
-          openTrainWindow(marker.__trains[0].train_no);
+          const t0 = marker.__trains[0];
+          openTrainWindow(t0.train_no, t0.trip_id, t0.service_date);
         }
       });
       marker.addTo(trainLayer);
@@ -264,7 +276,7 @@ document.addEventListener("click", (ev) => {
   const btn = ev.target.closest(".popup-train");
   if (!btn) return;
   map.closePopup();
-  openTrainWindow(btn.dataset.train);
+  openTrainWindow(btn.dataset.train, btn.dataset.trip, btn.dataset.date);
 });
 
 // ---------- stranski seznam ----------
@@ -286,7 +298,8 @@ function renderSidebar(trains) {
     const color = delayColor(d.value);
     const stale = d.ageS != null && d.ageS > 1200;
     return `
-      <div class="delay-row" data-train="${escapeHtml(t.train_no)}">
+      <div class="delay-row" data-train="${escapeHtml(t.train_no)}" data-trip="${escapeHtml(t.trip_id || "")}"
+            data-date="${escapeHtml(t.service_date || "")}">
         <span class="delay-dot" style="background:${color}"></span>
         <div class="delay-info">
           <div class="delay-train">${escapeHtml(t.train_no)}</div>
@@ -302,7 +315,7 @@ function renderSidebar(trains) {
 delayListEl.addEventListener("click", (ev) => {
   const row = ev.target.closest(".delay-row");
   if (!row) return;
-  openTrainWindow(row.dataset.train);
+  openTrainWindow(row.dataset.train, row.dataset.trip, row.dataset.date);
 });
 
 // ---------- avtobusi: prava lega iz GPS ----------
@@ -327,6 +340,9 @@ function busMarker(v) {
     iconAnchor: [9, 9],
   });
   const m = L.marker([v.lat, v.lon], { icon, keyboard: false });
+  // Puscica je bila doslej samo oznaka. Klik naj odpre voznjo, kot pri vlaku;
+  // `trip_id` je nujen, ker stevilka linije ni stevilka voznje.
+  m.on("click", () => openTrainWindow(v.train_no, v.trip_id, v.service_date));
   m.bindTooltip(
     `<div class="train-label-line">` +
       `<span class="train-label-code" style="color:${BUS_INK}">${escapeHtml(v.train_no)}</span>` +
