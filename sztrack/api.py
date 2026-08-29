@@ -608,8 +608,54 @@ def _live(network: str | None = None) -> list[dict]:
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
     if network:
         rows = [r for r in rows if r["network"] == network]
+    _add_gps_position(conn_rows := rows)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
-    return rows
+    return conn_rows
+
+
+# Hitrost, pod katero vozilo stejemo za stojece. Merjeno iz `speed`, NE iz
+# `current_status`: to polje je v tem feedu nezanesljivo -- med vozili s
+# STOPPED_AT so bila taka pri 23, 28 in 32 km/h, med IN_TRANSIT_TO pa taka
+# pri 0. Hitrost je meritev, status je trditev; verjamemo meritvi.
+STOPPED_KMH = 3
+
+
+def _add_gps_position(rows: list[dict]) -> None:
+    """Avtobusu pripiše, kje JE, namesto kje je bil nazadnje izmerjen.
+
+    Za vlak je lega sklepana iz voznega reda in zamude -- drugega vira ni.
+    Avtobus pa poroča `current_stop_sequence` in status, torej natanko, na
+    katerem postajališču stoji ali h kateremu se pelje. Sklepati tam, kjer
+    imamo meritev, bi bilo slabše iz navade.
+    """
+    ids = [r["trip_id"] for r in rows if r.get("network") == "avtobus"]
+    if not ids:
+        return
+    marks = ",".join("?" * len(ids))
+    with _conn() as conn:
+        found = {
+            r["trip_id"]: r
+            for r in conn.execute(
+                f"SELECT v.trip_id, v.stop_seq, v.status, v.speed_ms, st.name "
+                f"FROM vehicle_now v "
+                f"JOIN sched s ON s.trip_id = v.trip_id AND s.stop_seq = v.stop_seq "
+                f"JOIN station st ON st.stop_id = s.stop_id "
+                f"WHERE v.trip_id IN ({marks})",
+                ids,
+            )
+        }
+    for r in rows:
+        gps = found.get(r["trip_id"])
+        if not gps:
+            continue
+        kmh = round(gps["speed_ms"] * 3.6) if gps["speed_ms"] is not None else None
+        r["speed_kmh"] = kmh
+        r["gps_stopped"] = kmh is not None and kmh < STOPPED_KMH
+        # `current_stop_sequence` pove, pri katerem postajaliscu vozilo je ali
+        # h kateremu se pelje. Katero od tega, bi moral povedati `current_status`,
+        # a ta ni zanesljiv -- zato "pri", ne "stoji na" ali "proti".
+        r["last_stop"] = gps["name"]
+        r["position_source"] = "GPS"
 
 
 @app.get("/api/live")

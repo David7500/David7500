@@ -544,9 +544,15 @@ function busOverviewHtml(o) {
   const worst = (o.worst || []).map((t) => {
     const color = delayColor(t.delay_s);
     const stale = t.age_s != null && t.age_s > 1200;
+    // "pri", ne "stoji na": feed ima za to `current_status`, a ta ni
+    // zanesljiv (STOPPED_AT pri 32 km/h). Hitrost je meritev in jo povemo.
+    const where = t.position_source === "GPS"
+      ? `pri ${t.last_stop}${t.speed_kmh != null
+          ? ` · ${t.gps_stopped ? "stoji" : `${t.speed_kmh} km/h`}` : ""}`
+      : t.last_stop;
     return `<a class="live-row" href="${journeyHref(t.train_no, null, t.trip_id)}">
       <span class="live-no">${escapeHtml(t.train_no)}</span>
-      <span class="live-where">${escapeHtml(t.last_stop)}</span>
+      <span class="live-where">${escapeHtml(where)}</span>
       <span class="live-delay" style="color:${color}">${delayLabel(t.delay_s)} min</span>
       ${stale ? `<span class="stale-note">podatek star ${Math.round(t.age_s / 60)} min</span>` : ""}
     </a>`;
