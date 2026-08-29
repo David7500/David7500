@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -43,6 +43,21 @@ templates = Jinja2Templates(directory=_PKG_DIR / "templates")
 
 def _conn():
     return db.connect()
+
+
+def _check_date(value: str | None) -> str | None:
+    """Datum mora biti YYYY-MM-DD ali nič.
+
+    Brez tega gre napačen niz naravnost v `WHERE service_date = ?`, se ne
+    ujame z nicimer in vrne prazen seznam z 200. Prikaz to prebere kot
+    "ta dan ni odhodov", kar je za tipkarsko napako napacen odgovor.
+    """
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        raise HTTPException(400, f"datum {value!r} ni oblike YYYY-MM-DD") from None
 
 
 @app.get("/")
@@ -308,7 +323,7 @@ def api_departures(
     odgovoriti -- `connections` je zahteval izhodišče in cilj hkrati.
     """
     now = datetime.now(TZ)
-    date = date or now.date().isoformat()
+    date = _check_date(date) or now.date().isoformat()
     if from_time:
         try:
             h, m = (int(x) for x in from_time.split(":")[:2])
@@ -358,6 +373,7 @@ def api_train_reports(train_no: str, date: str | None = None):
     """Zaporedje poročil prevoznika o tej vožnji: kje je bil vlak in koliko
     je zamujal. Prometno mesto pogosto ni voznoredni postanek, zato je to
     edini vir imena kraja, kjer je zamuda dejansko izmerjena."""
+    date = _check_date(date)
     with _conn() as conn:
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         return {"train_no": train_no, "service_date": date,
@@ -421,6 +437,7 @@ def api_run(train_no: str, date: str | None = None,
     LPP linija 3G ima 388 voženj. Odhodna tabla in iskalnik id poznata, zato
     ga podata naprej; brez njega izberemo glavno različico.
     """
+    date = _check_date(date)
     with _conn() as conn:
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         rows = stats.run_detail(conn, train_no, date, trip)
@@ -443,6 +460,7 @@ def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
 @app.get("/api/train/{train_no}/weather")
 def api_run_weather(train_no: str, date: str | None = None, trip: str | None = None):
     """Vreme na vsaki postaji te vožnje, po uri, ko je vlak tam."""
+    date = _check_date(date)
     with _conn() as conn:
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         rows = stats.run_weather(conn, train_no, date, trip)
@@ -601,7 +619,7 @@ def api_connections(
     s tripom in za grupiranje neuporaben.
     """
     now = datetime.now(TZ)
-    date = date or now.date().isoformat()
+    date = _check_date(date) or now.date().isoformat()
     is_today = date == now.date().isoformat()
     now_s = journey.now_seconds(now) if is_today else None
     with _conn() as conn:
