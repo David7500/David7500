@@ -115,6 +115,15 @@ def cmd_backtest(args):
             print(f"  {h:>18d}{cells}")
 
 
+def cmd_prune(args):
+    conn = db.connect()
+    db.init(conn)
+    print(f"brišem dnevnik `obs`: železnica starejša od {args.rail_days} dni, "
+          f"avtobusi od {args.bus_days}. `run` ostane nedotaknjen.")
+    print(json.dumps(collector.prune_obs(conn, args.rail_days, args.bus_days),
+                     indent=2, ensure_ascii=False))
+
+
 def cmd_seed(args):
     conn = db.connect()
     db.init(conn)
@@ -205,6 +214,11 @@ def main(argv=None):
                    help="ali stanje mreze na ta dan izboljsa napoved (ne izboljsa)")
     a.add_argument("--by-horizon", action="store_true", help="razclenjeno po oddaljenosti")
     a.set_defaults(func=cmd_backtest)
+
+    a = sub.add_parser("prune", help="pobrisi stare vrstice dnevnika `obs`")
+    a.add_argument("--rail-days", type=int, default=collector.OBS_KEEP_DAYS)
+    a.add_argument("--bus-days", type=int, default=collector.OBS_KEEP_DAYS_BUS)
+    a.set_defaults(func=cmd_prune)
 
     a = sub.add_parser("seed", help="zgradi prilozeno bazo za namestitev (samo vozni red)")
     a.add_argument("--out", default="seed/sz.sqlite")

@@ -234,6 +234,14 @@ Primerjamo z zadnjo **zapisano** vrednostjo, ne s prejšnjo prebrano, da se
 počasno lezenje sešteva in ne izgine. `run` ostane točen -- prag velja samo
 za dnevnik.
 
+**Dnevnik se obrezuje, `run` nikoli.** Tudi s pragom nastane z vsemi
+prevozniki ~300 000 vrstic `obs` na dan (~29 GB na leto); železnica jih naredi
+4 000, torej 1 %. Zato dve meji (`collector.prune_obs`, dnevno ob osvežitvi
+vremena, ali `sztrack prune`): železnica 90 dni, avtobusi 14. Železnica je
+jedro in njen dnevnik je poceni; pri avtobusih za prikaz zadošča `run`.
+`run` je zgodovina, iz katere živijo statistika, "običajna zamuda" in
+backtest -- te se ne briše.
+
 ## Strani
 
 | pot | kaj |

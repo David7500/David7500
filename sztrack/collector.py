@@ -383,3 +383,49 @@ def poll_positions(conn: sqlite3.Connection) -> dict:
     if feed is None:
         return {"vehicles": 0, "unchanged": True}
     return ingest_positions(conn, feed)
+
+
+# ---------------------------------------------------------------- obrezovanje
+
+# Koliko dni dnevnika `obs` obdrzimo. `run` (zadnje stanje na postanek) se NE
+# brise nikoli -- ta je zgodovina, iz katere zivijo statistika, "obicajna
+# zamuda" in backtest.
+#
+# Zakaj sploh: z vsemi prevozniki nastane ~300 000 vrstic `obs` na dan, torej
+# ~29 GB na leto. Zeleznica jih naredi 4 000 -- 1 % tega.
+#
+# Zato dve meji. Zeleznica je jedro projekta in njen dnevnik je poceni, zato
+# ga hranimo cetrt leta (toliko, kolikor projekt naceruje za analizo vremena
+# kot dejavnika). Avtobusi so dodatek, kjer za prikaz zadosca `run`, njihov
+# dnevnik pa je 75-krat drazji.
+OBS_KEEP_DAYS = 90
+OBS_KEEP_DAYS_BUS = 14
+
+
+def prune_obs(conn: sqlite3.Connection, rail_days: int = OBS_KEEP_DAYS,
+              bus_days: int = OBS_KEEP_DAYS_BUS) -> dict:
+    """Pobriše stare vrstice dnevnika `obs`. `run` pusti pri miru.
+
+    Idempotentno. Brisanje je nepovratno, zato meji nista skriti v kodi,
+    ampak sta argumenta in ju `sztrack prune` izpiše, preden briše.
+    """
+    today = datetime.now(TZ).date()
+    rail_before = (today - timedelta(days=rail_days)).isoformat()
+    bus_before = (today - timedelta(days=bus_days)).isoformat()
+
+    with conn:
+        rail = conn.execute(
+            "DELETE FROM obs WHERE service_date < ? AND trip_id IN "
+            "(SELECT trip_id FROM trip WHERE network = 'zeleznica')",
+            (rail_before,),
+        ).rowcount
+        bus = conn.execute(
+            "DELETE FROM obs WHERE service_date < ? AND trip_id IN "
+            "(SELECT trip_id FROM trip WHERE network = 'avtobus')",
+            (bus_before,),
+        ).rowcount
+    return {
+        "rail_deleted": rail, "rail_before": rail_before,
+        "bus_deleted": bus, "bus_before": bus_before,
+        "obs_left": conn.execute("SELECT COUNT(*) FROM obs").fetchone()[0],
+    }

@@ -152,6 +152,17 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:      # vreme ni kriticno -- zajem tece naprej
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
 
+            # Ob istem dnevnem opravilu obrezemo dnevnik. Z vsemi prevozniki
+            # nastane ~300 000 vrstic `obs` na dan; brez tega baza raste za
+            # ~29 GB na leto. `run` se ne brise nikoli -- ta je zgodovina.
+            try:
+                info = collector.prune_obs(conn)
+                if info["rail_deleted"] or info["bus_deleted"]:
+                    _log(f"dnevnik obrezan: {info['rail_deleted']} železniških, "
+                         f"{info['bus_deleted']} avtobusnih vrstic")
+            except Exception as exc:
+                _log(f"dnevnika ni bilo mogoče obrezati: {exc}")
+
         _stop.wait(max(1.0, interval - (time.monotonic() - started)))
 
 
