@@ -33,8 +33,24 @@ def _abs_time(service_date: str, seconds: int | None) -> str | None:
 abs_time = _abs_time
 
 
-def stations(conn: sqlite3.Connection) -> list[dict]:
-    return [dict(r) for r in conn.execute("SELECT * FROM station ORDER BY name")]
+def stations(conn: sqlite3.Connection, mode: str | None = None) -> list[dict]:
+    """Postaje, po želji samo tiste, ki jih streže dana vrsta prevoza.
+
+    Rabi se, ko so v bazi tudi avtobusi: LPP prinese tisoč postajališč in
+    zemljevid železniške mreže bi jih narisal vsa. Postajališče ni lastnost
+    postaje, ampak tega, kdo tam ustavlja -- zato pogoj in ne stolpec.
+    """
+    if not mode:
+        return [dict(r) for r in conn.execute("SELECT * FROM station ORDER BY name")]
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT st.* FROM station st WHERE EXISTS ("
+            "  SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
+            "  WHERE s.stop_id = st.stop_id AND t.mode = ?) ORDER BY st.name",
+            (mode,),
+        )
+    ]
 
 
 def network_geojson(conn: sqlite3.Connection, elementary_only: bool = True) -> dict:
@@ -533,7 +549,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
 # ---------------------------------------------------------------- povezave A -> B
 
 _CONNECTIONS_SQL = """
-SELECT t.trip_id, t.train_no, t.headsign, t.mode,
+SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency,
        sa.stop_seq AS from_seq, COALESCE(sa.dep_s, sa.arr_s) AS dep_s,
        sb.stop_seq AS to_seq,   COALESCE(sb.arr_s, sb.dep_s) AS arr_s,
        COALESCE(ra.delay_dep, ra.delay_arr) AS from_delay_s,

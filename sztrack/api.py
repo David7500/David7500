@@ -161,7 +161,7 @@ def api_overview():
     """
     now = datetime.now(TZ)
     today = now.date().isoformat()
-    live = api_live()
+    live = api_live()   # vse vrste; pregled govori o vsem prometu
     with _conn() as conn:
         day = stats.day_summary(conn, today)
         disruptions = len(alerts.active(conn))
@@ -186,9 +186,10 @@ def yesterday_iso(now: datetime) -> str:
 
 
 @app.get("/api/stations")
-def api_stations():
+def api_stations(mode: str | None = Query(None, pattern="^(vlak|bus)$",
+                                          description="samo postaje te vrste prevoza")):
     with _conn() as conn:
-        return stats.stations(conn)
+        return stats.stations(conn, mode)
 
 
 @app.get("/api/stations/search")
@@ -292,14 +293,20 @@ def api_train(train_no: str):
 
 
 @app.get("/api/train/{train_no}/run")
-def api_run(train_no: str, date: str | None = None):
-    """Ena vožnja: vozni red, zamuda in izračunani dejanski časi."""
+def api_run(train_no: str, date: str | None = None,
+            trip: str | None = Query(None, description="id vožnje, kadar številka ni enolična")):
+    """Ena vožnja: vozni red, zamuda in izračunani dejanski časi.
+
+    `trip` je potreben pri avtobusih: `route_short_name` je številka linije in
+    LPP linija 3G ima 388 voženj. Odhodna tabla in iskalnik id poznata, zato
+    ga podata naprej; brez njega izberemo glavno različico.
+    """
     with _conn() as conn:
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
-        rows = stats.run_detail(conn, train_no, date)
+        rows = stats.run_detail(conn, train_no, date, trip)
         if not rows:
-            raise HTTPException(404, f"vlak {train_no} ne obstaja")
-        return {"train_no": train_no, "service_date": date,
+            raise HTTPException(404, f"vožnje {train_no} ne poznam")
+        return {"train_no": train_no, "service_date": date, "trip_id": trip,
                 "mode": stats.trip_mode(conn, train_no), "stops": rows}
 
 
@@ -313,11 +320,11 @@ def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
 
 
 @app.get("/api/train/{train_no}/weather")
-def api_run_weather(train_no: str, date: str | None = None):
+def api_run_weather(train_no: str, date: str | None = None, trip: str | None = None):
     """Vreme na vsaki postaji te vožnje, po uri, ko je vlak tam."""
     with _conn() as conn:
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
-        rows = stats.run_weather(conn, train_no, date)
+        rows = stats.run_weather(conn, train_no, date, trip)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
         return {"train_no": train_no, "service_date": date, "stops": rows}
@@ -462,7 +469,8 @@ def api_connections(
 
 
 @app.get("/api/live")
-def api_live():
+def api_live(mode: str | None = Query(None, pattern="^(vlak|bus)$",
+                                      description="samo ta vrsta prevoza")):
     """Vlaki, ki so zdaj na progi, z zadnjo izmerjeno zamudo.
 
     Ni isto kot "vse, kar je danes v feedu": vozila, ki so vozila zjutraj,
@@ -501,5 +509,7 @@ def api_live():
         # Koliko je stara meritev, na katero se sklicujemo. Brez tega prikaz
         # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
+    if mode:
+        rows = [r for r in rows if r["mode"] == mode]
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     return rows

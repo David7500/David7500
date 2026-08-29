@@ -105,6 +105,30 @@ function isBus(mode) {
   return mode === "bus";
 }
 
+// Prevoznik po GTFS agency_id. Pri avtobusu je oznaka linije brez prevoznika
+// dvoumna: "25" je lahko LPP ali kaj drugega.
+const AGENCY = {
+  "1161": "SŽ",
+  "1118": "LPP",
+  "1123": "Arriva",
+  "1119": "Nomago",
+  "1121": "AP MS",
+};
+
+// Vsi LPP-jevi route_color so ista zelena prevoznika, ne barva linije, zato
+// barva ne loci linij in je ne sme. Ime linije nosi oznaka sama; barva samo
+// pove, cigav avtobus je. Zato je v zetonu vedno tudi ime prevoznika.
+const LINE_INK = "#4db97f";
+
+function lineBadgeHtml(row) {
+  if (!isBus(row.mode)) return "";
+  const who = AGENCY[row.agency];
+  // Nadomestni prevoz SZ ima ze v stevilki "BUS 26729" -- ne podvajaj.
+  const label = who && who !== "SŽ" ? `${who} ${row.train_no}` : row.train_no;
+  return `<span class="line-badge" style="color:${LINE_INK};border-color:${LINE_INK}55">
+    ${escapeHtml(label)}</span>`;
+}
+
 function modeBadgeHtml(mode) {
   if (!isBus(mode)) return "";
   return `<span class="mode-bus" title="nadomestni prevoz namesto vlaka">
@@ -321,9 +345,13 @@ function runTimelineHtml(stops, forecast, weatherBySeq) {
   return `<div class="stop-list">${rows.join("")}</div>`;
 }
 
-async function fetchRunAndForecast(trainNo, date) {
+async function fetchRunAndForecast(trainNo, date, tripId) {
   const enc = encodeURIComponent(trainNo);
-  const q = date ? `?date=${encodeURIComponent(date)}` : "";
+  // `trip` je nujen pri avtobusih: stevilka linije ni stevilka voznje.
+  const p = new URLSearchParams();
+  if (date) p.set("date", date);
+  if (tripId) p.set("trip", tripId);
+  const q = p.toString() ? `?${p}` : "";
   const res = await fetch(`/api/train/${enc}/run${q}`);
   if (!res.ok) throw new Error(`run ${res.status}`);
   const run = await res.json();

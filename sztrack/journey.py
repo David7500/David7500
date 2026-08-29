@@ -76,7 +76,19 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12) -> list[d
             continue
         scored.append((rank, -r["trips"], r["name"], dict(r)))
     scored.sort(key=lambda x: x[:3])
-    return [d for *_, d in scored[:limit]]
+
+    # Isto ime, vec `stop_id`: mestna postajalisca imajo svojega za vsako smer
+    # ("Bavarski dvor" dvakrat). Vse naprej v aplikaciji tece po IMENU postaje,
+    # zato bi bila dvojnica v seznamu samo dva enaka gumba. Obdrzimo najbolj
+    # prometnega in mu prištejemo postanke ostalih, da razvrscanje ostane posteno.
+    seen: dict[str, dict] = {}
+    for *_, d in scored:
+        prev = seen.get(d["name"])
+        if prev is None:
+            seen[d["name"]] = d
+        else:
+            prev["trips"] += d["trips"]
+    return list(seen.values())[:limit]
 
 
 def resolve_station(conn: sqlite3.Connection, name: str) -> str | None:
@@ -101,7 +113,7 @@ WITH ends AS (
            MAX(stop_seq) AS last_seq
     FROM sched GROUP BY trip_id
 )
-SELECT t.trip_id, t.train_no, t.headsign, t.mode,
+SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency,
        s.stop_seq, s.arr_s, s.dep_s,
        COALESCE(s.dep_s, s.arr_s) AS t_s,
        ends.first_seq, ends.last_seq,

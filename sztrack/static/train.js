@@ -9,8 +9,16 @@ const TRAIN_NO = document.body.dataset.trainNo;
 const ENC = encodeURIComponent(TRAIN_NO);
 // Datum iz naslova: povezava z iskalnika kaze na konkreten prometni dan.
 // Brez njega bi klik na vcerajsnjo vozjno odprl danasnjo.
-const URL_DATE = new URLSearchParams(location.search).get("date") || null;
-const DATE_Q = URL_DATE ? `?date=${encodeURIComponent(URL_DATE)}` : "";
+const URL_PARAMS = new URLSearchParams(location.search);
+const URL_DATE = URL_PARAMS.get("date") || null;
+// Id voznje: stevilka linije pri avtobusih ni enolicna.
+const URL_TRIP = URL_PARAMS.get("trip") || null;
+const DATE_Q = (() => {
+  const p = new URLSearchParams();
+  if (URL_DATE) p.set("date", URL_DATE);
+  if (URL_TRIP) p.set("trip", URL_TRIP);
+  return p.toString() ? `?${p}` : "";
+})();
 
 const RUN_POLL_MS = 30000;
 const HIST_POLL_MS = 600000;
@@ -205,7 +213,7 @@ async function loadAlerts() {
 async function loadRun() {
   try {
     await loadReport();
-    const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE);
+    const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE, URL_TRIP);
     // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
     // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
     state.mode = run.mode;

@@ -35,7 +35,9 @@ let stationsByName = new Map(); // ime postaje -> {stop_id, lat, lon}
 
 async function loadStatic() {
   try {
-    const stations = await fetch("/api/stations").then((r) => r.json());
+    // Samo zelezniske postaje: ko so v bazi tudi avtobusi, bi jih LPP dodal
+    // tisoc in mreza prog bi izginila pod postajalisci.
+    const stations = await fetch("/api/stations?mode=vlak").then((r) => r.json());
     stationsByName = new Map(stations.map((s) => [s.name, s]));
 
     const stationLayer = L.layerGroup();
@@ -307,7 +309,10 @@ const trainCountEl = document.getElementById("train-count-n");
 
 async function pollLive() {
   try {
-    const trains = await fetch("/api/live").then((r) => r.json());
+    const trains = await // Zemljevid rise zelezniska mreza in postaje; avtobusi nimajo ne enega
+    // ne drugega, zato bi njihovi markerji viseli v praznem. Steti jih v
+    // glavo, risati pa ne, bi bilo se slabse.
+    fetch("/api/live?mode=vlak").then((r) => r.json());
     trainCountEl.textContent = trains.length;
     renderSidebar(trains);
     renderTrains(trains);

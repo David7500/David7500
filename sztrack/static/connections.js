@@ -157,6 +157,15 @@ function renderAlerts(list, note) {
   alertsEl.innerHTML = alertsHtml(list, note);
 }
 
+// Povezava na eno vožnjo. `trip` gre zraven, ker številka linije pri
+// avtobusih ni številka vožnje -- LPP linija 3G ima 388 voženj.
+function journeyHref(trainNo, date, tripId) {
+  const p = new URLSearchParams();
+  if (date) p.set("date", date);
+  if (tripId) p.set("trip", tripId);
+  return `/app/train/${encodeURIComponent(trainNo)}${p.toString() ? `?${p}` : ""}`;
+}
+
 // ---------- izpis ----------
 
 function durationLabel(s) {
@@ -223,7 +232,7 @@ function connectionRowHtml(c, nowMs, isNext, date) {
 
   return `
     <a class="conn-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
-       href="/app/train/${encodeURIComponent(c.train_no)}?date=${encodeURIComponent(date)}">
+       href="${journeyHref(c.train_no, date, c.trip_id)}">
       <div class="conn-times">
         <div class="conn-clock">
           <span class="conn-dep">${hhmm(c.sched_dep)}</span>
@@ -235,7 +244,9 @@ function connectionRowHtml(c, nowMs, isNext, date) {
           </div>` : ""}
       </div>
       <div class="conn-train">
-        <div class="conn-no">${escapeHtml(c.train_no)} ${modeBadgeHtml(c.mode)}</div>
+        <div class="conn-no">${isBus(c.mode)
+          ? lineBadgeHtml(c)
+          : escapeHtml(c.train_no)}</div>
         <div class="conn-headsign">${escapeHtml(c.headsign || "")}</div>
       </div>
       <div class="conn-delay">${c.delay_s != null
@@ -295,7 +306,7 @@ function transferRowHtml(t, nowMs, date) {
 
   return `
     <a class="conn-row is-transfer" style="border-left-color:${st.color}"
-       href="/app/train/${encodeURIComponent(t.train1)}?date=${encodeURIComponent(date)}">
+       href="${journeyHref(t.train1, date, t.trip1)}">
       <div class="conn-times">
         <div class="conn-clock">
           <span class="conn-dep">${hhmm(t.sched_dep)}</span>
@@ -372,14 +383,17 @@ function boardRowHtml(r, nowMs, isNext, date) {
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
   return `
     <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
-       href="/app/train/${encodeURIComponent(r.train_no)}?date=${encodeURIComponent(date)}">
+       href="${journeyHref(r.train_no, date, r.trip_id)}">
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
         ${late ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}
       </div>
       <div>
-        <div class="board-towards">${escapeHtml(r.towards)}</div>
-        <div class="board-train">${escapeHtml(r.train_no)} ${modeBadgeHtml(r.mode)}${r.headsign ? ` · ${escapeHtml(r.headsign)}` : ""}</div>
+        <div class="board-towards">
+          ${isBus(r.mode) ? lineBadgeHtml(r) : ""}
+          <span>${escapeHtml(r.towards)}</span>
+        </div>
+        <div class="board-train">${isBus(r.mode) ? "" : `${escapeHtml(r.train_no)} `}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
       </div>
       <div class="conn-delay">${r.delay_s != null
         ? delayChipHtml(r.delay_s, r.delay_from ? "izmerjeno" : null, r.delay_from)

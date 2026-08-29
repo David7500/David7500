@@ -283,3 +283,16 @@ body:not(.is-advanced) .adv-only { display: none !important; }
     scroll-behavior: auto !important;
   }
 }
+
+/* Oznaka linije mestnega avtobusa. Pri LPP je številka linije to, kar je pri
+ * vlaku številka vlaka -- prva stvar, ki jo človek prebere. Barva je zelena
+ * prevoznika in NE loči linij (vsi LPP route_color so isti), zato oznaka
+ * vedno nosi tudi ime prevoznika: "25" je lahko čigar koli. */
+.line-badge {
+  display: inline-block;
+  font: 600 12px/1.5 var(--mono);
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
