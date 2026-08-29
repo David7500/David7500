@@ -324,3 +324,53 @@ def test_nadomestni_prevoz_ostane_pri_vlakih(conn):
     bus = stats.connections(c, "Ajdovščina", "Celje", "2026-08-31", network="avtobus")
     assert "BUS 111" in {r["train_no"] for r in rail}
     assert bus == []
+
+
+def test_statistika_ne_steje_mestnih_avtobusov(conn):
+    """Avtobus ne sme šteti med vlake v nobeni številki.
+
+    Iskalnik je bil le prvo mesto, kjer je mešanje bolelo. `day_summary`,
+    `network_stats` in `breakdowns` berejo `run` in bi brez filtra LPP
+    prištele k železnici -- pri 3060 LPP vožnjah proti 733 vlakom bi to
+    "delež točnih vlakov" spremenilo v delež točnih avtobusov.
+    """
+    _add_bus(conn)
+    for trip, day, d in (("t1", "2026-08-31", 600), ("b1", "2026-08-31", 60)):
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
+                     "VALUES(?,?,2,?,?,1)", (trip, day, d, d))
+    conn.commit()
+
+    rail = stats.day_summary(conn, "2026-08-31", network="zeleznica")
+    bus = stats.day_summary(conn, "2026-08-31", network="avtobus")
+    assert rail["runs"] == 1 and rail["median_s"] == 600
+    assert bus["runs"] == 1 and bus["median_s"] == 60
+
+    assert {r["train_no"] for r in stats.network_stats(conn, network="zeleznica")} == {"IC 1"}
+    assert {r["train_no"] for r in stats.network_stats(conn, network="avtobus")} == {"6B"}
+
+
+def test_breakdowns_loci_vrsto_vlaka_od_prevoznika(conn):
+    """Pri vlaku je predpona številke vrsta, pri avtobusu je ni.
+
+    "3G" ni vrsta avtobusa, ampak linija; skupina po njej bi dala 134 skupin
+    po eno vožnjo. Zato avtobusi po prevozniku, nadomestni prevoz pa svoja
+    skupina -- ta ni linija in ni vrsta vlaka.
+    """
+    _add_bus(conn)
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+                 "                 mode, agency, network) "
+                 "VALUES('n1','rn','BUS 111','A - C','S1','bus','1161','zeleznica')")
+    _sched(conn, "n1", [(1, "A", None, 35000), (2, "C", 39000, None)])
+    # Skupina pod desetimi vožnjami se namenoma ne pokaže (MIN_RUNS_FOR_GROUP),
+    # zato jih je tu deset na vožnjo -- sicer bi test meril prag, ne razvrstitve.
+    for trip in ("t1", "b1", "n1"):
+        for i in range(10):
+            conn.execute("INSERT INTO run(trip_id, service_date, stop_seq,"
+                         "                delay_arr, delay_dep, feed_ts) "
+                         "VALUES(?,?,2,120,120,1)", (trip, _pred(i + 1)))
+    conn.commit()
+
+    rail = {r["key"] for r in stats.breakdowns(conn, network="zeleznica")["by_kind"]}
+    bus = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
+    assert rail == {"IC", "nadomestni prevoz"}
+    assert bus == {"avtobus 1118"}

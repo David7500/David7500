@@ -248,8 +248,9 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
     }
 
 
-def network_stats(conn: sqlite3.Connection, days: int = 90) -> list[dict]:
-    """Lestvica vlakov po zamudi na koncu vožnje."""
+def network_stats(conn: sqlite3.Connection, days: int = 90,
+                  network: str | None = "zeleznica") -> list[dict]:
+    """Lestvica voženj po zamudi na koncu poti."""
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     rows = conn.execute(
         "WITH last AS ("
@@ -259,8 +260,9 @@ def network_stats(conn: sqlite3.Connection, days: int = 90) -> list[dict]:
         "  FROM run r WHERE r.service_date >= ?"
         ") "
         "SELECT t.train_no, l.service_date, COALESCE(l.delay_arr, l.delay_dep) AS d "
-        "FROM last l JOIN trip t USING (trip_id) WHERE l.rn = 1 AND d IS NOT NULL",
-        (since,),
+        "FROM last l JOIN trip t USING (trip_id) "
+        "WHERE l.rn = 1 AND d IS NOT NULL AND (? IS NULL OR t.network = ?)",
+        (since, network, network),
     ).fetchall()
     grouped: dict[str, list[int]] = {}
     for r in rows:
@@ -334,7 +336,8 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
 ON_TIME_S = 300
 
 
-def day_summary(conn: sqlite3.Connection, service_date: str) -> dict:
+def day_summary(conn: sqlite3.Connection, service_date: str,
+                network: str | None = "zeleznica") -> dict:
     """Kako je mreža vozila ta dan: porazdelitev končnih zamud po vožnjah.
 
     Ena vožnja = en vzorec, ne en postanek. Sicer bi vlak s tridesetimi
@@ -345,9 +348,10 @@ def day_summary(conn: sqlite3.Connection, service_date: str) -> dict:
         "WITH last AS ("
         "  SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d,"
         "         ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn"
-        "  FROM run r WHERE r.service_date = ?"
+        "  FROM run r JOIN trip t USING (trip_id)"
+        "  WHERE r.service_date = ? AND (? IS NULL OR t.network = ?)"
         ") SELECT d FROM last WHERE rn = 1 AND d IS NOT NULL",
-        (service_date,),
+        (service_date, network, network),
     ).fetchall()
     vals = [r["d"] for r in rows]
     if not vals:
@@ -408,7 +412,8 @@ def _group_stats(groups: dict[str, list[int]], min_n: int) -> list[dict]:
 MIN_RUNS_FOR_GROUP = 10
 
 
-def breakdowns(conn: sqlite3.Connection, days: int = 90) -> dict:
+def breakdowns(conn: sqlite3.Connection, days: int = 90,
+               network: str | None = "zeleznica") -> dict:
     """Končne zamude, razrezane po vrsti vlaka, uri odhoda in dnevu v tednu.
 
     Enota je **ena vožnja**, ne en postanek: sicer bi vlak s tridesetimi
@@ -427,12 +432,12 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90) -> dict:
         "                            ORDER BY r.stop_seq DESC) AS rn"
         "  FROM run r WHERE r.service_date >= ?"
         ") "
-        "SELECT t.train_no, t.mode, l.service_date, l.d, "
+        "SELECT t.train_no, t.mode, t.network, t.agency, l.service_date, l.d, "
         "       (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s"
         "        WHERE s.trip_id = l.trip_id) AS start_s "
         "FROM last l JOIN trip t USING (trip_id) "
-        "WHERE l.rn = 1 AND l.d IS NOT NULL",
-        (since,),
+        "WHERE l.rn = 1 AND l.d IS NOT NULL AND (? IS NULL OR t.network = ?)",
+        (since, network, network),
     ).fetchall()
 
     by_kind: dict[str, list[int]] = {}
@@ -444,7 +449,14 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90) -> dict:
     for r in rows:
         d = r["d"]
         # Predpona stevilke je vrsta vlaka (LP, LPV, IC, EC, MV, RG, EN ...).
-        kind = (r["train_no"].split(" ")[0] or "?") if r["mode"] == "vlak" else "nadomestni bus"
+        # Pri avtobusih predpone ni -- "3G" ni vrsta -- zato skupina po
+        # prevozniku. Nadomestni prevoz SZ je svoja skupina, ker to ni linija.
+        if r["mode"] == "vlak":
+            kind = r["train_no"].split(" ")[0] or "?"
+        elif r["network"] == "zeleznica":
+            kind = "nadomestni prevoz"
+        else:
+            kind = f"avtobus {r['agency'] or '?'}"
         by_kind.setdefault(kind, []).append(d)
         if r["start_s"] is not None:
             by_hour.setdefault(f"{(r['start_s'] // 3600) % 24:02d}", []).append(d)

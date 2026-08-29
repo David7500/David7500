@@ -198,7 +198,10 @@ def api_overview():
     """
     now = datetime.now(TZ)
     today = now.date().isoformat()
-    live = api_live()   # vse vrste; pregled govori o vsem prometu
+    # Pregled je zeleznicki ("kako vozijo vlaki"), zato filter. Endpointa
+    # `api_live` se tu ne klice: Python bi kot argument podal FastAPIjev
+    # objekt Query namesto None in filter se ne bi ujel z nicimer.
+    live = _live("zeleznica")
     with _conn() as conn:
         day = stats.day_summary(conn, today)
         disruptions = len(alerts.active(conn))
@@ -406,10 +409,10 @@ def api_predict(train_no: str, stop_seq: int, delay_s: int,
 
 
 @app.get("/api/stats/breakdowns")
-def api_breakdowns(days: int = Query(90, ge=1, le=3650)):
+def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
     """Končne zamude po vrsti vlaka, uri odhoda, dnevu v tednu in dnevu."""
     with _conn() as conn:
-        return stats.breakdowns(conn, days)
+        return stats.breakdowns(conn, days, network)
 
 
 @app.get("/api/speeds")
@@ -420,10 +423,10 @@ def api_speeds(train_no: str | None = None):
 
 
 @app.get("/api/stats")
-def api_stats(days: int = Query(90, ge=1, le=3650)):
-    """Lestvica vlakov po zamudi ob koncu vožnje."""
+def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
+    """Lestvica voženj po zamudi ob koncu poti."""
     with _conn() as conn:
-        return stats.network_stats(conn, days)
+        return stats.network_stats(conn, days, network)
 
 
 # Vlak ostane na seznamu se toliko sekund po voznorednem (z zamudo popravljenem)
@@ -535,9 +538,7 @@ def api_connections(
             "connections": rows, "transfers": legs, "alerts": notices}
 
 
-@app.get("/api/live")
-def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
-                                         description="samo to omrežje")):
+def _live(network: str | None = None) -> list[dict]:
     """Vlaki, ki so zdaj na progi, z zadnjo izmerjeno zamudo.
 
     Ni isto kot "vse, kar je danes v feedu": vozila, ki so vozila zjutraj,
@@ -580,3 +581,10 @@ def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
         rows = [r for r in rows if r["network"] == network]
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     return rows
+
+
+@app.get("/api/live")
+def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
+                                         description="samo to omrežje")):
+    """Vozila, ki so zdaj na poti, z zadnjo izmerjeno zamudo."""
+    return _live(network)

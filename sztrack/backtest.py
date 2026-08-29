@@ -34,14 +34,22 @@ MAX_HORIZON = 12
 # Koliko vzorcev mora imeti skupina, da ji verjamemo mediano.
 MIN_SAMPLES = 3
 
+# Merimo napoved za zeleznico. Mestni avtobus se na svoji liniji obnasa
+# drugace (kratki odseki, gneca, semaforji) in bi v isti meritvi zamegljal
+# oboje -- stevilke ne bi opisovale ne enega ne drugega.
+NETWORK = "zeleznica"
 
-def _delays_by_day(conn: sqlite3.Connection) -> dict[tuple[str, str], dict[int, int]]:
+
+def _delays_by_day(conn: sqlite3.Connection,
+                   network: str = NETWORK) -> dict[tuple[str, str], dict[int, int]]:
     """(train_no, dan) -> {stop_seq: zamuda}. Iz `run`, torej zadnje znano stanje."""
     rows = conn.execute(
         "SELECT t.train_no, r.service_date, r.stop_seq, "
         "       COALESCE(r.delay_arr, r.delay_dep) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
-        "WHERE d IS NOT NULL ORDER BY t.train_no, r.service_date, r.stop_seq"
+        "WHERE d IS NOT NULL AND t.network = ? "
+        "ORDER BY t.train_no, r.service_date, r.stop_seq",
+        (network,),
     )
     out: dict[tuple[str, str], dict[int, int]] = defaultdict(dict)
     for r in rows:
@@ -49,11 +57,13 @@ def _delays_by_day(conn: sqlite3.Connection) -> dict[tuple[str, str], dict[int, 
     return out
 
 
-def _stop_ids(conn: sqlite3.Connection) -> dict[tuple[str, int], str]:
+def _stop_ids(conn: sqlite3.Connection, network: str = NETWORK) -> dict[tuple[str, int], str]:
     """(train_no, stop_seq) -> stop_id. Rabi ga zdruzevanje po odsekih:
     isti fizicni odsek vozi vec vlakov in skupaj jih je dovolj za mediano."""
     rows = conn.execute(
-        "SELECT t.train_no, s.stop_seq, s.stop_id FROM trip t JOIN sched s USING (trip_id)"
+        "SELECT t.train_no, s.stop_seq, s.stop_id FROM trip t JOIN sched s USING (trip_id) "
+        "WHERE t.network = ?",
+        (network,),
     )
     return {(r["train_no"], r["stop_seq"]): r["stop_id"] for r in rows}
 
@@ -261,8 +271,9 @@ def operator_forecast_tasks(conn: sqlite3.Connection) -> list[dict]:
         "SELECT t.train_no, o.trip_id, o.service_date, o.stop_seq, o.feed_ts, "
         "       COALESCE(o.delay_arr, o.delay_dep) AS d "
         "FROM obs o JOIN trip t USING (trip_id) "
-        "WHERE d IS NOT NULL "
-        "ORDER BY o.trip_id, o.service_date, o.stop_seq, o.feed_ts"
+        "WHERE d IS NOT NULL AND t.network = ? "
+        "ORDER BY o.trip_id, o.service_date, o.stop_seq, o.feed_ts",
+        (NETWORK,),
     ).fetchall()
 
     log: dict[tuple, list[tuple[int, int]]] = defaultdict(list)
@@ -273,7 +284,8 @@ def operator_forecast_tasks(conn: sqlite3.Connection) -> list[dict]:
         final[key] = r["d"]
 
     names = {r["trip_id"]: r["train_no"]
-             for r in conn.execute("SELECT trip_id, train_no FROM trip")}
+             for r in conn.execute("SELECT trip_id, train_no FROM trip WHERE network = ?",
+                                   (NETWORK,))}
 
     by_run: dict[tuple, list[int]] = defaultdict(list)
     for trip_id, day, seq in log:
