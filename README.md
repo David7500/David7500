@@ -76,9 +76,16 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
   zemljevidu je zadnje znano prometno mesto, lega avtobusa je izmerjena.
   `current_status` pa ni zanesljiv — med vozili s `STOPPED_AT` so bila taka
   pri 32 km/h — zato ali vozilo stoji, presodi izmerjena hitrost.
+* **Kje je avtobus, ki se še ni začel voziti, pove veriga vozila.** GTFS
+  `block_id` veže vožnje istega vozila; imajo ga samo avtobusi in tam le
+  tretjina voženj. Zamude prejšnje vožnje **ne prenašamo naprej** -- izmerjeno
+  je slabše od nevednosti (MAE 4,53 min proti 2,29 min za „predpostavi
+  točno"), ker vozilo zamudo med vožnjama nadoknadi. Prikaz zato pove, kje
+  vozilo je, ne kdaj bo.
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
 * **Ni** cen, sestave vlaka, perona, zasedenosti. Odpovedi feed pozna
-  strukturirano, a jih SŽ pošiljajo kot besedilo obvestila.
+  strukturirano, a jih SŽ pošiljajo kot besedilo obvestila. `bikes_allowed`
+  je pri vseh 20 736 vožnjah `0` -- polje obstaja, podatka ni.
 
 ## Ukazna vrstica
 

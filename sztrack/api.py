@@ -488,6 +488,28 @@ def api_predict(train_no: str, stop_seq: int, delay_s: int,
                 "forecast": stats.predict(conn, train_no, stop_seq, delay_s, days)}
 
 
+@app.get("/api/train/{train_no}/vehicle")
+def api_vehicle_chain(train_no: str, date: str | None = None,
+                      trip: str | None = None):
+    """Veriga voznj istega vozila: kje je zdaj in kam gre potem.
+
+    Edini nacin, da povemo kaj o avtobusu, ki se ni zacel voziti -- takrat
+    zanj ni ne zamude ne lege, vozilo pa obstaja in je na prejsnji voznji.
+
+    Vrne prazno pri vlakih in pri avtobusih brez `block_id`: SZ ga nimajo,
+    ostali prevozniki pa le pri tretjini voznj. Podrobno v `stats.vehicle_chain`.
+    """
+    date = _check_date(date)
+    now = datetime.now(TZ)
+    with _conn() as conn:
+        date = date or _active_service_date(conn, train_no, now)
+        chain = stats.vehicle_chain(
+            conn, train_no, date, trip,
+            now_ts=int(now.timestamp()),
+            now_s=journey.now_seconds(now) if date == now.date().isoformat() else None)
+    return {"train_no": train_no, "service_date": date, **chain}
+
+
 @app.get("/api/stats/breakdowns")
 def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
                    fresh: bool = False):

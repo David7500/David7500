@@ -105,7 +105,7 @@ window.addEventListener("resize", () => {
 const state = { run: null, forecast: null, past: null, pastRuns: 0,
                 weather: new Map(), report: null,
                 mode: "vlak", network: "zeleznica", agency: null,
-                current: null };
+                current: null, chain: null };
 // Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
 // ob preklopu pogleda.
 let hoverSeq = null;
@@ -166,6 +166,18 @@ function ageLabel(iso) {
   return `pred ${h} h ${String(min % 60).padStart(2, "0")} min`;
 }
 
+// Voznja, ki se ni zacela, NI voznja brez podatkov -- to je razlika, ki jo
+// potnik bere kot "aplikacija ne dela" proti "avtobus se ni odpeljal".
+function notStartedText() {
+  const first = state.run && state.run.stops && state.run.stops[0];
+  const iso = first && (first.sched_dep || first.sched_arr);
+  if (iso && new Date(iso).getTime() > Date.now()) {
+    return `${vehicleNoun()} se še ni odpeljal — po voznem redu ob
+            <strong>${hhmm(iso)}</strong>`;
+  }
+  return `za ${vehicleWord()} na ta dan še ni nobene meritve`;
+}
+
 function runHeadHtml(cur) {
   const bus = isBus(state.mode);   // glej vehicleNoun() za besedilo
   const d = cur ? stopDelay(cur) : null;
@@ -188,7 +200,7 @@ function runHeadHtml(cur) {
       <div class="detail-now-where">
         ${cur
           ? `izmerjeno na postaji <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
-          : `za ${vehicleWord()} na ta dan še ni nobene meritve`}
+          : notStartedText()}
       </div>
       ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
         ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale
@@ -264,6 +276,91 @@ function yourStopHtml(stops, forecast, current) {
     </div>`;
 }
 
+// ---------- veriga vozila ----------
+
+// Odgovor na vprasanje, ki ga zamuda ne more dati: KJE JE MOJ AVTOBUS, ki se
+// se ni zacel voziti. Takrat zanj ni ne zamude ne lege -- vozilo pa obstaja
+// in je na prejsnji voznji, kjer GPS ima. Vlaki tega nimajo: `block_id` je
+// samo v avtobusnem delu GTFS.
+//
+// Zamude prejsnje voznje NE prenasamo naprej. Izmerjeno na 195 parih:
+// prenos MAE 4,53 min, "predpostavi tocno" 2,29 min -- torej je prenos slabsi
+// od nevednosti, ker vozilo zamudo med voznjama nadoknadi. Zato je spodaj
+// dejstvo o vozilu, ne napoved o odhodu.
+
+function chainLink(leg) {
+  const p = new URLSearchParams();
+  if (state.run && state.run.service_date) p.set("date", state.run.service_date);
+  p.set("trip", leg.trip_id);
+  return `/app/train/${encodeURIComponent(leg.train_no)}?${p}`;
+}
+
+function minLabel(sec) {
+  const m = Math.round(sec / 60);
+  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`
+                 : `${m} min`;
+}
+
+function vehicleChainHtml() {
+  const c = state.chain;
+  if (!c || (!c.prev && !c.next)) return "";
+  const started = state.current != null;
+  const prev = c.prev;
+  const parts = [];
+
+  // Prejsnjo voznjo kazemo samo, dokler ta se ni zacela -- potem je vozilo tu
+  // in "kje je" ni vec vprasanje.
+  if (prev && !started) {
+    const gps = prev.gps;
+    // "pri" sme veljati samo za nekaj sto metrov. Dlje povemo razdaljo, in
+    // sicer zracno -- vozilo je lahko onstran reke in cestna pot je daljsa.
+    const ime = gps && (gps.at_stop || gps.near_stop);
+    const dalec = gps && !gps.at_stop && gps.near_m != null && gps.near_m > 500;
+    const kje = !gps ? null
+      : !ime ? "lega znana"
+      : dalec ? `zdaj ${(gps.near_m / 1000).toFixed(1)} km od
+                 <strong>${escapeHtml(ime)}</strong> (zračno)`
+              : `zdaj pri postajališču <strong>${escapeHtml(ime)}</strong>`;
+    const zam = prev.delay_s != null
+      ? `<span style="color:${delayColor(prev.delay_s)}">${delayLabel(prev.delay_s)} min</span>`
+        + `<span class="adv-only"> (izmerjeno v ${escapeHtml(prev.delay_stop || "?")})</span>`
+      : null;
+    parts.push(`
+      <div class="chain-line">
+        <span class="chain-tag">vozilo</span>
+        <span>${kje ? kje + " · " : ""}konča vožnjo
+          <a href="${chainLink(prev)}">${escapeHtml(prev.train_no)}</a>
+          ${prev.headsign ? escapeHtml(prev.headsign) : ""}${zam ? ", zamuja " + zam : ""}</span>
+      </div>
+      ${prev.layover_s != null ? `<div class="chain-sub">vmes ${minLabel(prev.layover_s)} postanka —
+        zamuda prejšnje vožnje <strong>ni</strong> napoved za tvojo, vozilo jo med
+        postankom večinoma nadoknadi</div>` : ""}`);
+  }
+
+  if (c.next) {
+    parts.push(`
+      <div class="chain-line adv-only">
+        <span class="chain-tag">nato</span>
+        <span>isto vozilo nadaljuje kot
+          <a href="${chainLink(c.next)}">${escapeHtml(c.next.train_no)}</a>
+          ${c.next.headsign ? escapeHtml(c.next.headsign) : ""}</span>
+      </div>`);
+  }
+  return parts.length ? `<div class="chain">${parts.join("")}</div>` : "";
+}
+
+async function loadChain() {
+  // Prazno pri vlakih in pri dveh tretjinah avtobusnih voznj -- `block_id`
+  // ima v GTFS le tretjina. Zato tiho: manjkajoc podatek ni napaka.
+  try {
+    const r = await fetch(`/api/train/${ENC}/vehicle${DATE_Q}`)
+      .then((x) => (x.ok ? x.json() : null));
+    state.chain = r && (r.prev || r.next) ? r : null;
+  } catch (err) {
+    state.chain = null;
+  }
+}
+
 async function loadReport() {
   // Zadnje porocilo prevoznika o tej voznji: koliko in KJE. Prometno mesto
   // pogosto ni voznoredni postanek, zato ga iz `run` ni mogoce dobiti.
@@ -305,7 +402,7 @@ async function loadAlerts() {
 
 async function loadRun() {
   try {
-    await loadReport();
+    await Promise.all([loadReport(), loadChain()]);
     const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE, URL_TRIP);
     // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
     // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
@@ -319,7 +416,11 @@ async function loadRun() {
     state.run = run;
     state.forecast = forecast;
     state.current = current;
-    runHeadEl.innerHTML = yourStopHtml(run.stops, forecast, current) + runHeadHtml(current);
+    // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in
+    // gre nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
+    const veriga = vehicleChainHtml();
+    runHeadEl.innerHTML = yourStopHtml(run.stops, forecast, current)
+      + (current ? runHeadHtml(current) + veriga : veriga + runHeadHtml(current));
     renderTimeline();
     renderProfile();
   } catch (err) {

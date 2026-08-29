@@ -704,3 +704,73 @@ def test_obe_poti_do_prestopa_vrneta_enake_kljuce(conn):
     for pot in (ena[0], vec[0]):
         for a, b in zip(pot["legs"], pot["legs"][1:]):
             assert b["dep_s"] - a["arr_s"] >= 0
+
+
+# ---------------------------------------------------------------- veriga vozila
+
+def _blok(conn):
+    """Dve avtobusni voznji istega vozila in ena tuja z istim casom.
+
+    Tuja je nujna: brez nje bi test prestal tudi koda, ki `block_id` ignorira
+    in vzame prvo voznjo, ki se konca pravocasno.
+    """
+    # S2 vozi DRUG dan: `b4` je v istem bloku in bi bil casovno pravi
+    # predhodnik, a tega dne ne vozi.
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S2','2026-09-01')")
+    for tid, no, blok, sid in (("b1", "LPP 3", "BL1", "S1"),
+                               ("b2", "LPP 6", "BL1", "S1"),
+                               ("b3", "LPP 9", "BL2", "S1"),
+                               ("b4", "LPP 11", "BL1", "S2")):
+        conn.execute(
+            "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,"
+            "                 mode,agency,network,block_id) "
+            "VALUES(?,?,?,'x',?, 'bus','1118','avtobus',?)",
+            (tid, "r" + tid, no, sid, blok))
+    _sched(conn, "b1", [(1, "A", None, 28800), (2, "Z", 30600, None)])   # 08:00-08:30
+    _sched(conn, "b2", [(1, "Z", None, 32400), (2, "C", 34200, None)])   # 09:00-09:30
+    _sched(conn, "b3", [(1, "A", None, 28800), (2, "Z", 30600, None)])   # ista ura, drug blok
+    _sched(conn, "b4", [(1, "A", None, 25200), (2, "Z", 27000, None)])   # isti blok, drug dan
+    conn.commit()
+
+
+def test_veriga_najde_prejsnjo_in_naslednjo_voznjo(conn):
+    _blok(conn)
+    c = stats.vehicle_chain(conn, "LPP 6", "2026-08-31", "b2")
+    assert c["prev"]["trip_id"] == "b1"
+    assert c["prev"]["layover_s"] == 1800          # 08:30 -> 09:00
+    assert c["next"] is None
+
+    c = stats.vehicle_chain(conn, "LPP 3", "2026-08-31", "b1")
+    assert c["prev"] is None
+    assert c["next"]["trip_id"] == "b2"
+
+
+def test_veriga_ne_prestopi_v_drug_blok(conn):
+    """`b3` se konca ob isti uri kot `b1`, a je drugo vozilo."""
+    _blok(conn)
+    c = stats.vehicle_chain(conn, "LPP 6", "2026-08-31", "b2")
+    assert c["prev"]["trip_id"] != "b3"
+
+
+def test_veriga_upostevaj_obratovalni_dan(conn):
+    """Isti `block_id` nastopa pri vec `service_id` -- v GTFS pri 788 od 1385.
+
+    Brez preverjanja dneva bi vozilo "prislo" z voznje, ki danes ne vozi.
+    """
+    _blok(conn)
+    assert stats.vehicle_chain(conn, "LPP 3", "2026-08-31", "b1")["prev"] is None
+    # Isti blok, ista ura -- razlika je samo v tem, ali ta dan vozi.
+    conn.execute("INSERT INTO service_day(service_id,date) VALUES('S2','2026-08-31')")
+    conn.commit()
+    assert stats.vehicle_chain(conn, "LPP 3", "2026-08-31", "b1")["prev"]["trip_id"] == "b4"
+
+
+def test_vlak_nima_verige(conn):
+    """`block_id` je v GTFS samo pri avtobusih -- vseh 789 voznj SZ je brez."""
+    assert stats.vehicle_chain(conn, "IC 1", "2026-08-31", "t1") == {}
+
+
+def test_najblizja_postaja_ima_mejo(conn):
+    assert stats.nearest_station(conn, 45.9, 13.9) == ("Ajdovščina", 0)
+    # Sredi Madzarske ni slovenskega postajalisca in izmisliti si ga ne smemo.
+    assert stats.nearest_station(conn, 47.5, 19.0) is None

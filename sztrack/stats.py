@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import statistics
 import threading
@@ -9,7 +10,7 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config
+from . import config, geo
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -945,3 +946,141 @@ def refresh_summaries(conn: sqlite3.Connection, windows=SUMMARY_WINDOWS,
                     out.append({"kind": kind, "network": network, "days": days,
                                 "runs": got.get("runs"), "took_ms": got["took_ms"]})
     return out
+
+
+# ---------------------------------------------------------------- veriga vozila
+
+#: Koliko casa je GPS lega se uporabna. Feed osvezuje na 30 s; cetrt ure
+#: pomeni, da je vozilo od takrat prevozilo kilometre in "je pri X" ne drzi.
+VEHICLE_STALE_S = 15 * 60
+
+_BLOCK_SQL = """
+SELECT t.trip_id, t.train_no, t.headsign, t.start_s, t.end_s
+FROM trip t
+JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :date
+WHERE t.block_id = :block AND t.trip_id <> :self AND %s
+ORDER BY %s
+LIMIT 1
+"""
+
+
+def _block_neighbour(conn: sqlite3.Connection, block_id: str, service_date: str,
+                     trip_id: str, at_s: int, back: bool) -> dict | None:
+    """Sosednja voznja istega vozila: prejsnja (back) ali naslednja."""
+    if at_s is None:
+        return None
+    where = "t.end_s <= :at" if back else "t.start_s >= :at"
+    order = "t.end_s DESC" if back else "t.start_s ASC"
+    row = conn.execute(_BLOCK_SQL % (where, order),
+                       {"date": service_date, "block": block_id,
+                        "self": trip_id, "at": at_s}).fetchone()
+    return dict(row) if row else None
+
+
+def vehicle_chain(conn: sqlite3.Connection, train_no: str, service_date: str,
+                  trip_id: str | None = None, now_ts: int | None = None,
+                  now_s: int | None = None) -> dict:
+    """Kje je vozilo te voznje in kam gre potem -- po GTFS `block_id`.
+
+    Odgovarja na vprasanje, ki ga zamuda ne more: **kje je moj avtobus, ki se
+    se ni zacel**. Vozilo je takrat na prejsnji voznji v bloku in tam ima GPS
+    lego, ker avtobusi lego posiljajo (vlaki ne). Ob 20:22 je 13 od 20 voznj,
+    ki so se zacenjale v naslednji uri, imelo prejsnjo voznjo v bloku, in 9 od
+    teh svezo lego.
+
+    **Zamude prejsnje voznje NE prenasamo naprej in prikaz je ne sme sesteti
+    z odhodom.** Izmerjeno na 195 parih zajetih voznj: prenos zamude na
+    naslednjo voznjo ima MAE 4,53 min, "predpostavi tocno" pa 2,29 min --
+    torej je slabsi od tega, da o prejsnji voznji ne vemo nic. Vozilo zamudo
+    med voznjama nadoknadi: kadar prejsnja zamuja >= 5 min (mediana 12 min) in
+    ima vmes 15-60 min postanka, se na naslednjo prenese 11 %. To je fizikalno
+    razumljivo -- postanek med voznjama je rezerva prav za to.
+
+    Zato je prejsnja voznja tu **dejstvo o vozilu**, ne napoved: "vozilo je
+    zdaj pri Vicu, na prejsnji voznji zamuja 12 min". Potnik iz tega vidi, da
+    avtobus obstaja in se blizja; sklep o svojem odhodu naredi sam.
+
+    Vlaki tu ne dobijo nicesar: `block_id` ima v celotnem GTFS samo avtobusni
+    del in tudi tam le tretjina voznj.
+    """
+    tid = resolve_trip(conn, train_no, service_date, trip_id)
+    if not tid:
+        return {}
+    me = conn.execute(
+        "SELECT block_id, start_s, end_s FROM trip WHERE trip_id = ?", (tid,)
+    ).fetchone()
+    if not me or not me["block_id"]:
+        return {}
+
+    prev = _block_neighbour(conn, me["block_id"], service_date, tid,
+                            me["start_s"], back=True)
+    nxt = _block_neighbour(conn, me["block_id"], service_date, tid,
+                           me["end_s"], back=False)
+
+    if prev:
+        prev["layover_s"] = (me["start_s"] - prev["end_s"]
+                             if me["start_s"] is not None else None)
+        _add_live_state(conn, prev, service_date, now_ts, now_s)
+    if nxt:
+        nxt["layover_s"] = (nxt["start_s"] - me["end_s"]
+                            if me["end_s"] is not None else None)
+
+    return {"block_id": me["block_id"], "trip_id": tid,
+            "prev": prev, "next": nxt}
+
+
+def _add_live_state(conn: sqlite3.Connection, leg: dict, service_date: str,
+                    now_ts: int | None, now_s: int | None) -> None:
+    """Voznji pripise, koliko zamuja in kje je -- oboje samo, ce je res znano."""
+    lm = last_measured(conn, service_date, [leg["trip_id"]],
+                       now_s if now_s is not None else 48 * 3600)
+    m = lm.get(leg["trip_id"])
+    if m:
+        leg["delay_s"] = m["delay_s"]
+        leg["delay_stop"] = m["name"]
+        leg["delay_stop_seq"] = m["stop_seq"]
+
+    gps = conn.execute(
+        "SELECT v.seen_ts, v.lat, v.lon, v.speed_ms, st.name "
+        "FROM vehicle_now v "
+        "LEFT JOIN sched s ON s.trip_id = v.trip_id AND s.stop_seq = v.stop_seq "
+        "LEFT JOIN station st ON st.stop_id = s.stop_id "
+        "WHERE v.trip_id = ?", (leg["trip_id"],)
+    ).fetchone()
+    if gps and now_ts is not None and now_ts - gps["seen_ts"] <= VEHICLE_STALE_S:
+        pos = {
+            "lat": gps["lat"], "lon": gps["lon"], "seen_ts": gps["seen_ts"],
+            "at_stop": gps["name"],
+            "speed_kmh": (round(gps["speed_ms"] * 3.6)
+                          if gps["speed_ms"] is not None else None),
+        }
+        # `current_stop_sequence` posilja le 17 od 128 vozil, zato ime kraja
+        # skoraj vedno pride od tod, ne iz feeda.
+        if not pos["at_stop"]:
+            near = nearest_station(conn, gps["lat"], gps["lon"])
+            if near:
+                pos["near_stop"], pos["near_m"] = near
+        leg["gps"] = pos
+
+
+def nearest_station(conn: sqlite3.Connection, lat: float, lon: float,
+                    max_m: float = 5000) -> tuple[str, int] | None:
+    """Najblizje postajalisce in zracna razdalja do njega, ali None.
+
+    Zracna, ne cestna -- vozilo je lahko onstran reke. Zato jo prikaz pove kot
+    "pri X", ne kot "N minut do X": drugo bi bila trditev, ki je nimamo s cim
+    podpreti.
+    """
+    d = max_m / 111_320                      # stopinje sirine, groba omejitev
+    dlon = d / max(math.cos(math.radians(lat)), 0.1)
+    rows = conn.execute(
+        "SELECT name, lat, lon FROM station "
+        "WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+        (lat - d, lat + d, lon - dlon, lon + dlon),
+    ).fetchall()
+    best = None
+    for r in rows:
+        m = geo.haversine(lat, lon, r["lat"], r["lon"])
+        if m <= max_m and (best is None or m < best[1]):
+            best = (r["name"], m)
+    return (best[0], round(best[1])) if best else None

@@ -260,8 +260,8 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         )
         conn.executemany(
             "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color,"
-            "                 mode,agency,network) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            "                 mode,agency,network,block_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
             [
                 (tid, t["route_id"], routes[t["route_id"]]["route_short_name"],
                  t.get("trip_headsign"), t["service_id"], routes[t["route_id"]].get("route_color"),
@@ -270,7 +270,10 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
                  # Nadomestni prevoz SZ je avtobus, a pripada zeleznici: na
                  # tisti relaciji zamenjuje vlak. LPP in ostali imajo svojo stran.
                  "zeleznica" if routes[t["route_id"]]["agency_id"] == config.RAIL_AGENCY_ID
-                 else "avtobus")
+                 else "avtobus",
+                 # Prazen niz je v GTFS "nimam podatka" -- shranimo NULL, da
+                 # se poizvedbe ne lovijo na razliko med '' in NULL.
+                 t.get("block_id") or None)
                 for tid, t in trips.items()
             ],
         )
@@ -290,4 +293,5 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),
+        "trips_blocked": sum(1 for t in trips.values() if t.get("block_id")),
     }

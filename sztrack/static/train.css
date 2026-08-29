@@ -232,6 +232,41 @@
 .detail-report strong { color: var(--ink); font-weight: 600; }
 .detail-report .tag { margin-left: 5px; }
 
+/* Veriga vozila: kje je zdaj avtobus, ki se ni zacel voziti. Lastna barva
+   (rezervirana za "ni meritev te voznje") -- to je dejstvo o DRUGI voznji in
+   se ne sme brati kot zamuda te. */
+.chain {
+  margin: 0 14px 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid #a8d8ff;
+  border-radius: 4px;
+  background: var(--bg-raised);
+}
+.chain-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font: 400 12px/1.55 var(--sans);
+  color: var(--ink-dim);
+}
+.chain-line + .chain-line { margin-top: 6px; }
+.chain-line strong { color: var(--ink); font-weight: 600; }
+.chain-line a { color: var(--ink); }
+.chain-tag {
+  flex: none;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #a8d8ff;
+  padding-top: 2px;
+}
+.chain-sub {
+  margin-top: 5px;
+  font: 400 11px/1.5 var(--sans);
+  color: var(--ink-faint);
+}
+
 #train-alerts .alert-box { margin: 0 14px 12px; }
 .alert-body {
   font: 400 11px/1.55 var(--sans);

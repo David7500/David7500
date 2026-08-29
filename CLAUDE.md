@@ -246,6 +246,33 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   po imenu združuje.
 * **Zemljevid je edini skupni pogled.** Vlak je krog na zadnji postaji z
   meritvijo, avtobus puščica na izmerjeni legi; plast avtobusov se da odložiti.
+* **Veriga vozila je edini vir odgovora, kje je avtobus, ki se še ni začel.**
+  `trips.txt` nosi `block_id` -- zaporedje voženj istega fizičnega vozila.
+  Imajo ga **samo avtobusi** (vseh 789 voženj SŽ je brez) in tudi tam le
+  7 547 od 20 736 voženj (36 %), v 1 385 blokih. Veriga je resnična: med
+  zaporednima vožnjama je le 0,9 % prekrivanj, mediana postanka 14 min, v
+  69 % se konec ene ujema z začetkom naslednje. Isti `block_id` nastopa pri
+  več `service_id` (788 od 1385), zato se sosed **išče po obratovalnem dnevu**,
+  ne po `service_id`.
+
+  Merjeno ob 20:22: od 25 voženj, ki so se začenjale v naslednji uri in pol,
+  jih je 17 imelo prejšnjo vožnjo v bloku in 11 od teh svežo GPS lego. To je
+  edini način, da o avtobusu pred odhodom sploh kaj povemo -- zanj takrat ni
+  ne zamude ne lege, vozilo pa obstaja.
+
+  **Zamude prejšnje vožnje ne prenašaj naprej.** Izmerjeno na 195 parih
+  zajetih voženj: prenos zamude MAE 4,53 min, „predpostavi točno" 2,29 min --
+  prenos je torej **slabši od nevednosti**. Vozilo zamudo med vožnjama
+  nadoknadi: kadar prejšnja zamuja ≥ 5 min (mediana 12 min) in ima vmes
+  15--60 min postanka, se na naslednjo prenese 11 %. Zato je prejšnja vožnja
+  v prikazu **dejstvo o vozilu** („zdaj pri postajališču X, na prejšnji vožnji
+  +1 min"), ne napoved odhoda, in prikaz to tudi pove.
+
+* **`bikes_allowed` je v celotnem GTFS ničla.** Vseh 20 736 voženj petih
+  agencij ima `0` = „ni podatka". Polje obstaja, podatka ni -- zato ga uvoz
+  ne bere in ga v shemi ni. Isto velja za `wheelchair_accessible`, ki ga
+  `trips.txt` sploh nima. Če se to kdaj spremeni, je oboje en stolpec dela.
+
 * **Prestopov je lahko do trije.** `journey.transfers()` išče enega v SQL in
   zna pri njem povedati, ali zveza drži (meritev obeh vlakov na prestopni
   postaji). Kadar ne najde nič, prevzame `journey.plan()`: dnevni vozni red v
@@ -269,6 +296,10 @@ pravilo prikaza, ne pospešek. Pri železnici ni nobene zamude čez tri ure
 (najhujša EC 79 z 2,9 h); pri avtobusih je nad šest ur 0,67 % vrstic in te
 niso zamude — Nomagov N6571 je imel 27 060 s enako na vseh 44 postankih
 vožnje, ki je vozila ob 04:15, kar je feedova zamenjava prometnega dne.
+
+`trip.block_id` je veriga voženj istega vozila (glej zgoraj). Indeks
+`trip_block` je **delen** (`WHERE block_id IS NOT NULL`): dve tretjini voženj
+in vsi vlaki ga nimajo in v indeksu nimajo kaj iskati.
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·

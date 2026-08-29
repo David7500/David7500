@@ -64,7 +64,15 @@ CREATE TABLE IF NOT EXISTS trip (
     -- zdaj vozi" -- in grupiranje 403 000 vrstic `sched` ob vsakem klicu
     -- je bilo pri vseh prevoznikih sekunda. Polni se ob uvozu GTFS.
     start_s    INTEGER,
-    end_s      INTEGER
+    end_s      INTEGER,
+    -- Veriga voznj istega fizicnega vozila (GTFS `trips.block_id`). Imajo ga
+    -- SAMO avtobusi -- vseh 789 voznj SZ je brez njega -- in tudi tam le
+    -- 7 547 od 20 736 (36 %). Zato je stolpec pogosto NULL in indeks delen.
+    --
+    -- Sluzi za vprasanje "kje je zdaj moj avtobus, ki se se ni zacel":
+    -- vozilo je na prejsnji voznji v bloku in tam ima GPS lego. NE sluzi za
+    -- napoved zamude -- to je izmerjeno in ne drzi (glej `vehicle_chain`).
+    block_id   TEXT
 );
 CREATE INDEX IF NOT EXISTS trip_train_no ON trip(train_no);
 -- Za "kaj se zdaj vozi": omrezje in casovno okno v enem branju indeksa.
@@ -75,6 +83,10 @@ CREATE INDEX IF NOT EXISTS trip_network ON trip(network);
 -- je ta stolpec. Brez indeksa je vsako obvestilo poln pregled 20 736 voznj:
 -- pri 21 hkrati veljavnih obvestilih 435 000 vrstic za en klic /api/overview.
 CREATE INDEX IF NOT EXISTS trip_route ON trip(route_id);
+-- Delen: block_id ima le tretjina avtobusnih voznj in noben vlak. Poln indeks
+-- bi hranil 13 000 NULL vrstic, ki jih nobena poizvedba ne isce.
+CREATE INDEX IF NOT EXISTS trip_block ON trip(block_id, start_s)
+    WHERE block_id IS NOT NULL;
 
 -- Vozni red. arr_s/dep_s sta sekundi od polnoci in lahko presezeta 86400.
 CREATE TABLE IF NOT EXISTS sched (
@@ -272,6 +284,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE trip ADD COLUMN end_s INTEGER")
         conn.commit()
         fill_trip_window(conn)
+        have.add("start_s")
+    # Veriga vozila. Tega izracunati ne moremo -- je v GTFS zipu -- zato ostane
+    # prazen do naslednjega `sztrack update`, prikaz pa ga zna pogresati.
+    if have and "block_id" not in have:
+        conn.execute("ALTER TABLE trip ADD COLUMN block_id TEXT")
+        conn.commit()
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
