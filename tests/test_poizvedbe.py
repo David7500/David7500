@@ -774,3 +774,51 @@ def test_najblizja_postaja_ima_mejo(conn):
     assert stats.nearest_station(conn, 45.9, 13.9) == ("Ajdovščina", 0)
     # Sredi Madzarske ni slovenskega postajalisca in izmisliti si ga ne smemo.
     assert stats.nearest_station(conn, 47.5, 19.0) is None
+
+
+# ---------------------------------------------------------------- rezerva voznega reda
+
+def test_rezerva_se_porabi_le_do_visine_zamude():
+    """Vlak lahko nadoknadi najvec toliko, kolikor zamuja -- ne prihiti."""
+    assert stats._after_slack(600, 180) == 420      # 10 min zamude, 3 min rezerve
+    assert stats._after_slack(120, 600) == 0        # rezerve je vec kot zamude
+    assert stats._after_slack(0, 600) == 0
+    # Prehiter avtobus ostane prehiter; rezerve nima cesa porabiti.
+    assert stats._after_slack(-120, 600) == -120
+
+
+def test_napoved_porabi_rezervo_tudi_brez_zgodovine(conn):
+    """Rezerva je vozni red, ne statistika -- zna jo prvi dan zajema.
+
+    Prav to je locilo staro napoved od nove: LP 4219 ima na Mostu na Soci
+    devet minut postanka in je iz +11 pripeljal +3, model s konstantno
+    mediano spremembe pa je napovedal +9.
+    """
+    # t1 stoji v Zidanem Mostu pet minut (32400 -> 32700).
+    f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600)}
+    rezerva = 300 - stats.MIN_DWELL_S
+    assert f["Zidani Most"]["slack_s"] == rezerva
+    assert f["Zidani Most"]["predicted_delay_s"] == 600 - rezerva
+    assert f["Zidani Most"]["basis"] == "rezerva voznega reda"
+
+
+def test_brez_postanka_ni_rezerve_in_zamuda_se_prenese(conn):
+    """`t3` nikjer ne stoji, zato se zamuda prenese nespremenjena."""
+    f = {p["name"]: p for p in stats.predict(conn, "LP 3", 1, 600)}
+    assert f["Celje"]["slack_s"] == 0
+    assert f["Celje"]["predicted_delay_s"] == 600
+
+
+def test_rezerva_se_sesteva_po_postajah(conn):
+    """Dve postaji s postankom dasta vec rezerve kot ena."""
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id) "
+                 "VALUES('t9','r9','LP 9','A - C','S1')")
+    _sched(conn, "t9", [(1, "A", None, 28800), (2, "Z", 32400, 33000),
+                        (3, "D", 34200, 34800), (4, "C", 36000, None)])
+    conn.commit()
+    f = {p["name"]: p for p in stats.predict(conn, "LP 9", 1, 3000)}
+    ena = 600 - stats.MIN_DWELL_S
+    assert f["Zidani Most"]["slack_s"] == ena
+    assert f["Divača"]["slack_s"] == 2 * ena
+    assert f["Celje"]["slack_s"] == 2 * ena          # zadnja postaja nima odhoda
+    assert f["Divača"]["predicted_delay_s"] == 3000 - 2 * ena

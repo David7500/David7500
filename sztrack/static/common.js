@@ -563,8 +563,10 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   const lastSeq = run.stops.length ? run.stops[run.stops.length - 1].stop_seq : 0;
   if (base && stopDelay(base) != null && base.stop_seq < lastSeq) {
     try {
+      // Prikazani dan izpustimo iz ucenja -- isto kot pri zgodovini.
       const p = await fetch(
         `/api/train/${enc}/predict?stop_seq=${base.stop_seq}&delay_s=${stopDelay(base)}`
+        + `&exclude_date=${encodeURIComponent(run.service_date)}`
       ).then((r) => (r.ok ? r.json() : null));
       forecast = (p && p.forecast) || [];
     } catch (err) {

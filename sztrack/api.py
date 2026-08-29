@@ -480,12 +480,19 @@ def api_run_weather(train_no: str, date: str | None = None, trip: str | None = N
 
 @app.get("/api/train/{train_no}/predict")
 def api_predict(train_no: str, stop_seq: int, delay_s: int,
-                days: int = Query(90, ge=1, le=3650)):
-    """Napoved zamude naprej po progi, glede na trenutno zamudo."""
+                days: int = Query(90, ge=1, le=3650),
+                exclude_date: str | None = None):
+    """Napoved zamude naprej po progi, glede na trenutno zamudo.
+
+    `exclude_date` izpusti prikazani prometni dan iz učenja -- isto kot pri
+    zgodovini, sicer bi ogled končanega dne deloma napovedoval iz odgovora.
+    """
+    exclude_date = _check_date(exclude_date)
     with _conn() as conn:
         return {"train_no": train_no, "from_stop_seq": stop_seq,
                 "current_delay_s": delay_s,
-                "forecast": stats.predict(conn, train_no, stop_seq, delay_s, days)}
+                "forecast": stats.predict(conn, train_no, stop_seq, delay_s, days,
+                                          exclude_date)}
 
 
 @app.get("/api/train/{train_no}/vehicle")

@@ -606,14 +606,32 @@ MIN_PREDICT_SAMPLES = 3
 #: Meje razredov zamude v sekundah. Ista delitev kot `backtest._bucket`.
 DELAY_BUCKETS = (120, 600, 1800)
 
+#: Najkrajsi postanek, ki ga vozilo se zmore; vse cez to je rezerva voznega
+#: reda, ki jo zamujajoc vlak lahko porabi. Izmerjeno: mediana dejanskega
+#: postanka na slovenski zeleznici je 1,0 min (43 680 postankov), LP 4219 na
+#: Mostu na Soci pa se pri +16 min ni sel pod 2 min. Backtest je med 60 in
+#: 180 s raven (MAE 1,932 / 1,924 / 1,928), zato velja izmerjeni prag.
+MIN_DWELL_S = 120
+
 
 def delay_bucket(delay_s: int) -> int:
     """Razred trenutne zamude: okrevanje pri +1 in pri +40 min ni isto."""
     return sum(1 for meja in DELAY_BUCKETS if delay_s >= meja)
 
 
+def _after_slack(delay_s: int, slack_s: int) -> int:
+    """Zamuda, potem ko je vozilo porabilo rezervo voznega reda.
+
+    Porabi lahko najvec toliko, kolikor je zamuja -- in nikoli toliko, da bi
+    prisel pred vozni red. Prehiter vlak ostane prehiter (pri zeleznici tega
+    ni nikoli, pri avtobusih pa je vsakdanje).
+    """
+    return delay_s - min(max(delay_s, 0), slack_s)
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
-            current_delay_s: int, days: int = 90) -> list[dict]:
+            current_delay_s: int, days: int = 90,
+            exclude_date: str | None = None) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
 
     Osnovni model: zamuda se prenaša naprej, popravljena za historično mediano
@@ -622,38 +640,52 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     podatkov, kompleksnejši model nima česa izkoristiti.
     """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    # Dan, ki ga prikazujemo, ne sme biti v svoji lastni ucni mnozici. Pri
+    # tekoci voznji naprej po progi meritev tako ali tako ni, pri ogledu
+    # koncanega dne pa bi model deloma napovedoval iz odgovora.
     rows = conn.execute(
         "SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
         "WHERE t.train_no = ? AND r.service_date >= ? AND d IS NOT NULL "
+        "  AND (? IS NULL OR r.service_date <> ?) "
         "ORDER BY r.service_date, r.stop_seq",
-        (train_no, since),
+        (train_no, since, exclude_date, exclude_date),
     ).fetchall()
 
     by_day: dict[str, dict[int, int]] = {}
     for r in rows:
         by_day.setdefault(r["service_date"], {})[r["stop_seq"]] = r["d"]
 
-    names = {t["stop_seq"]: t["name"] for t in timetable(conn, train_no)}
+    stops = timetable(conn, train_no)
+    names = {t["stop_seq"]: t["name"] for t in stops}
+    # Rezerva voznega reda: presezek postanka nad najkrajsim, ki ga vozilo se
+    # zmore. To je edini vhod v napoved, ki ni statistika -- rezerva je znana
+    # vnaprej in obstaja ne glede na to, ali smo jo kdaj videli porabljeno.
+    dwell = {t["stop_seq"]: max(0, (t["dep_s"] or 0) - (t["arr_s"] or 0) - MIN_DWELL_S)
+             for t in stops if t["arr_s"] is not None and t["dep_s"] is not None}
     razred = delay_bucket(current_delay_s)
     out = []
+    slack = 0
     for seq in sorted(s for s in names if s > stop_seq):
-        pari = [(day[stop_seq], day[seq] - day[stop_seq])
+        slack += dwell.get(seq, 0)
+        osnova = _after_slack(current_delay_s, slack)
+        # Ostanek: kar se je zgodilo POLEG rezerve -- zamude, ki nastanejo, in
+        # rezerva, ki je v resnici ni bilo. Loceno po razredu zamude, ker
+        # postanek vlaku z 11 minutami vzame dve, tocnemu pa nic.
+        pari = [(day[stop_seq], day[seq] - _after_slack(day[stop_seq], slack))
                 for day in by_day.values()
                 if stop_seq in day and seq in day]
-        # Najprej samo dnevi s podobno veliko zamudo: postanek s pol minute
-        # rezerve vlaku z 11 minutami vzame dve, tocnemu pa nic, ker ta nima
-        # cesa nadoknaditi. Mediana cez oba opisuje nobenega od njiju.
-        podobni = [d for d0, d in pari if delay_bucket(d0) == razred]
-        deltas = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [d for _, d in pari]
+        podobni = [r for d0, r in pari if delay_bucket(d0) == razred]
+        ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
         out.append({
             "stop_seq": seq,
             "name": names[seq],
-            "n_samples": len(deltas),
+            "n_samples": len(ostanki),
             "same_class": len(podobni) >= MIN_PREDICT_SAMPLES,
-            "predicted_delay_s": current_delay_s + (round(statistics.median(deltas)) if deltas else 0),
-            "p90_delay_s": (current_delay_s + round(_pct(deltas, 0.9)) if deltas else None),
-            "basis": "historicna mediana" if deltas else "prenos trenutne zamude",
+            "slack_s": slack,
+            "predicted_delay_s": osnova + (round(statistics.median(ostanki)) if ostanki else 0),
+            "p90_delay_s": (osnova + round(_pct(ostanki, 0.9)) if ostanki else None),
+            "basis": "rezerva + historicni ostanek" if ostanki else "rezerva voznega reda",
         })
     return out
 

@@ -64,6 +64,11 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
   napoved za še nedosežene postanke ima MAE 7,9 min proti 1,3 min za preprost
   prenos trenutne zamude naprej. Prikaz zato uporablja lastno oceno.
   Merljivo: `sztrack backtest --operator`.
+* **Vlak zamudo porabi na rezervi voznega reda.** Napoved zato ni statistika
+  sama: `slack = Σ max(0, postanek − 2 min)` med izhodiščem in ciljem se
+  odšteje od trenutne zamude, ostanek popravi zgodovina te poti. LP 4219 ima
+  na Mostu na Soči devet minut postanka in ni nikoli nadoknadil več kot sedem.
+  MAE 1,92 min proti 2,94 min za prenos (`sztrack backtest`).
 * **Ničli, ki jo feed vrne za en klic, ne verjamemo.** Pri 14 % postankov se
   pojavi vzorec X, 0, X v razmiku ene minute; zamuda med dvema klicema ne pade
   za več, kot je vmes minilo časa.

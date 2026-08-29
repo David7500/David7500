@@ -70,10 +70,33 @@ def _stop_ids(conn: sqlite3.Connection, network: str = NETWORK) -> dict[tuple[st
     return {(r["train_no"], r["stop_seq"]): r["stop_id"] for r in rows}
 
 
+#: Najkrajsi postanek, ki ga vlak se zmore -- skupen s `stats`, sicer bi
+#: merili en model in uporabljali drugega.
+MIN_DWELL_S = stats.MIN_DWELL_S
+
+
+def _dwells(conn: sqlite3.Connection, network: str = NETWORK) -> dict[str, dict[int, int]]:
+    """train_no -> {stop_seq: voznoredno zadrzevanje v sekundah}.
+
+    Iz voznega reda, ne iz meritev: rezerva je lastnost voznega reda in je
+    znana vnaprej -- to je edini vhod v napoved, ki ni statistika.
+    """
+    out: dict[str, dict[int, int]] = defaultdict(dict)
+    for r in conn.execute(
+        "SELECT t.train_no, s.stop_seq, s.dep_s - s.arr_s AS w "
+        "FROM trip t JOIN sched s USING (trip_id) "
+        "WHERE t.network = ? AND s.arr_s IS NOT NULL AND s.dep_s IS NOT NULL",
+        (network,),
+    ):
+        out[r["train_no"]][r["stop_seq"]] = r["w"]
+    return out
+
+
 def build_tasks(conn: sqlite3.Connection) -> list[dict]:
     """Vse naloge (vlak, dan, i, j, zamuda_i, zamuda_j)."""
     by_day = _delays_by_day(conn)
     stops = _stop_ids(conn)
+    dwells = _dwells(conn)
     tasks = []
     for (train_no, day), delays in by_day.items():
         seqs = sorted(delays)
@@ -84,11 +107,17 @@ def build_tasks(conn: sqlite3.Connection) -> list[dict]:
                 si, sj = stops.get((train_no, i)), stops.get((train_no, j))
                 if not si or not sj:
                     continue
+                # Rezerva med i in j: vsota presezkov voznorednih postankov
+                # na VSEH vmesnih postajah, tudi tistih, ki jih feed ni
+                # porocal -- rezerva obstaja ne glede na to, ali smo jo videli.
+                w = dwells.get(train_no, {})
+                slack = sum(max(0, v - MIN_DWELL_S)
+                            for k, v in w.items() if i < k <= j)     # rezerva
                 tasks.append({
                     "train_no": train_no, "day": day,
                     "i": i, "j": j, "horizon": j - i,
                     "d_i": delays[i], "d_j": delays[j],
-                    "seg": (si, sj),
+                    "seg": (si, sj), "slack": slack,
                 })
     return tasks
 
@@ -257,14 +286,74 @@ def model_vlak_premica(train_tasks):
     return predict
 
 
+def model_fizika(train_tasks):
+    """Samo rezerva, brez ucenja: d_j = d_i - min(d_i, rezerva).
+
+    Brez ucenja -- vhod je samo vozni red. Sluzi kot dokaz, da rezerva sploh
+    kaj pove; sama zase ne zna napovedati, da zamuda tudi NASTAJA.
+    """
+    return lambda t: stats._after_slack(t["d_i"], t["slack"])
+
+
+def model_fizika_mediana(train_tasks):
+    """Najprej fizika, nato historicni ostanek -- brez razreda zamude."""
+    table = defaultdict(list)
+    for t in train_tasks:
+        table[(t["train_no"], t["i"], t["j"])].append(
+            t["d_j"] - stats._after_slack(t["d_i"], t["slack"]))
+
+    def predict(t):
+        osnova = stats._after_slack(t["d_i"], t["slack"])
+        vals = table.get((t["train_no"], t["i"], t["j"]))
+        if not vals or len(vals) < MIN_SAMPLES:
+            return osnova
+        return osnova + statistics.median(vals)
+    return predict
+
+
+def model_fizika_razred(train_tasks):
+    """SEDANJI model: rezerva voznega reda, nato ostanek po razredu zamude.
+
+    Vlak najprej porabi REZERVO -- presezek voznorednega postanka nad
+    najkrajsim, ki ga se zmore. To ni statistika, ampak vozni red, in je
+    edini vhod v napoved, ki ga poznamo vnaprej. LP 4219 ima na Mostu na Soci
+    devet minut postanka in v devetih dneh zajema ni nikoli nadoknadil vec kot
+    sedem minut niti stal manj kot dve: +16 -> +9, +11 -> +4, +10 -> +3.
+    Konstantna mediana spremembe tega ne more izraziti, ker je okrevanje
+    odvisno od tega, koliko zamude sploh je.
+
+    Kar rezerva ne pojasni, popravi mediana ostanka pri tem vlaku na tem
+    odseku, locena po razredu trenutne zamude.
+    """
+    razred = defaultdict(list)
+    skupno = defaultdict(list)
+    for t in train_tasks:
+        o = t["d_j"] - stats._after_slack(t["d_i"], t["slack"])
+        razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(o)
+        skupno[(t["train_no"], t["i"], t["j"])].append(o)
+
+    def predict(t):
+        osnova = stats._after_slack(t["d_i"], t["slack"])
+        vals = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        if not vals or len(vals) < MIN_SAMPLES:
+            vals = skupno.get((t["train_no"], t["i"], t["j"]))
+        if not vals or len(vals) < MIN_SAMPLES:
+            return osnova
+        return osnova + statistics.median(vals)
+    return predict
+
+
 MODELS = {
     "prenos": model_prenos,
     "vlak": model_vlak,
     "odsek": model_odsek,
     "odsek+razred": model_odsek_razred,
     "združen": model_zdruzen,
-    "vlak+razred (sedanji)": model_vlak_razred,
+    "vlak+razred": model_vlak_razred,
     "vlak premica": model_vlak_premica,
+    "rezerva sama": model_fizika,
+    "rezerva+mediana": model_fizika_mediana,
+    "rezerva+razred (sedanji)": model_fizika_razred,
 }
 
 

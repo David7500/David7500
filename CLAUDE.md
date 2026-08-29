@@ -560,9 +560,10 @@ Lokalna baza `data/sz.sqlite` (2026-08-29): 60402 meritev,
 44 zapisanih obvestil o ovirah (~20 hkrati veljavnih), 13.7 MB.
 Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
-Za napoved zamude (`stats.predict`): prenos trenutne zamude naprej, popravljen
-za historično mediano spremembe pri **tem vlaku**. To ni ugibanje -- izmerjeno
-je (`sztrack backtest`, 258 137 nalog, izpuščanje enega dne):
+Za napoved zamude (`stats.predict`): vlak najprej porabi **rezervo voznega
+reda**, kar ostane, popravi historična mediana ostanka pri **tem vlaku**,
+ločena po razredu trenutne zamude. Izmerjeno (`sztrack backtest`, 292 736
+nalog, izpuščanje enega dne):
 
 | model | MAE | v 5 min |
 |---|---|---|
@@ -571,8 +572,37 @@ je (`sztrack backtest`, 258 137 nalog, izpuščanje enega dne):
 | odsek | 2,25 min | 87,9 % |
 | odsek + razred zamude | 2,27 min | 87,7 % |
 | združen (krčenje) | 1,98 min | 89,7 % |
-| **vlak + razred zamude (v uporabi)** | **1,99 min** | **90,5 %** |
+| vlak + razred zamude | 1,99 min | 90,5 % |
 | vlak, premica `d_j = a + b·d_i` | 2,08 min | 89,5 % |
+| rezerva sama (brez učenja) | 3,01 min | 82,3 % |
+| **rezerva + razred zamude (v uporabi)** | **1,92 min** | **91,0 %** |
+
+**Rezerva voznega reda je edini vhod v napoved, ki ni statistika.**
+`slack = Σ max(0, postanek − MIN_DWELL_S)` čez postaje med izhodiščem in
+ciljem; `stats._after_slack()` jo porabi, a največ toliko, kolikor vlak
+zamuja, in nikoli tako, da bi prihitel. Zna delati **prvi dan zajema**, ker
+je vozni red znan vnaprej.
+
+Od kod: LP 4219 ima na Mostu na Soči **devet minut postanka** (križanje na
+enotirni bohinjski progi) in v devetih dneh ni nikoli nadoknadil več kot sedem
+minut niti stal manj kot dve — +16 → +9, +11 → +4, +10 → +3, vsakič natanko
+sedem. Konstantna mediana spremembe tega ne more izraziti: iz +11 je
+napovedala +9, vlak je pripeljal +3. Z rezervo napove +4.
+
+`MIN_DWELL_S = 120`. Backtest je med 60 in 180 s raven (1,932 / 1,924 /
+1,928 min), pri 0 pa vidno slabši (2,214) — rezerva brez najkrajšega postanka
+šteje ves postanek za prihranek. 120 s se ujema z izmerjenim dnom.
+
+Sama rezerva je **slabša od prenosa** (3,01 min): zna samo brisati zamudo, ne
+pa je ustvarjati. Šele ostanek — kar rezerva ne pojasni — jo naredi uporabno.
+Razrez po trenutni zamudi, kjer je razlika največja:
+
+| trenutna zamuda | vlak + razred | rezerva + razred |
+|---|---|---|
+| 0–2 min | 1,73 min · 91,3 % | 1,71 min · 91,4 % |
+| 2–10 min | 2,06 min · 90,6 % | 1,96 min · 91,4 % |
+| 10–30 min | 2,30 min · 89,1 % | 2,20 min · 90,0 % |
+| nad 30 min | 3,32 min · 83,7 % | **2,93 min · 85,9 %** |
 
 Iz tega troje, kar velja spoštovati, preden kdo piše nov model:
 
@@ -598,14 +628,14 @@ Iz tega troje, kar velja spoštovati, preden kdo piše nov model:
   in `backtest._bucket` sta **ista funkcija** — sicer bi merili en model in
   uporabljali drugega.
 
-**Model ne zna popraviti postanka, ki zamudo pobriše.** Merjeno na LP 4219:
-Podmelec → Most na Soči se v osmih od devetih dni konča na 0, ne glede na to,
-koliko je vlak zamujal ob prihodu — postanek ima v voznem redu rezervo.
-Model doda konstanto (mediana spremembe −2 min), zato je iz +11 napovedal +9,
-vlak pa je pripeljal +3. Premica `d_j = a + b·d_i` to zna izraziti (b ≈ 0) in
-je bila zato preizkušena — a je **slabša** (MAE 2,08 min, nad 30 min celo
-4,78 min): pri osmih dneh je naklon prešumen. Pri tem vlaku razred zamude ne
-pomaga, ker v razredu 10–30 min ni treh dni. **To reši zajem, ne model.**
+**Premica `d_j = a + b·d_i` je bila preizkušena in je slabša** (MAE 2,08 min,
+nad 30 min celo 4,78 min). Zna izraziti postanek, ki zamudo pobriše (`b ≈ 0`),
+a je pri devetih dneh naklon prešumen — in kar naklon lovi iz podatkov, piše
+vozni red zastonj.
+
+**Prikazani dan je izpuščen iz učenja** (`stats.predict(exclude_date=...)`,
+enako kot `history`). Pri tekoči vožnji naprej po progi meritve ni, pri ogledu
+končanega dne pa bi model deloma napovedoval iz odgovora.
 
 **Preizkušeno in ne pomaga** (`sztrack backtest --day-offset`): popravek za
 stanje mreže na ta dan. Zamisel je razumna -- če cel dan zamuja bolj kot

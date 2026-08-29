@@ -101,9 +101,9 @@ def cmd_backtest(args):
         res = backtest.evaluate(conn, by_horizon=args.by_horizon)
         print(f"dni: {len(res['days'])} · nalog: {res['tasks']}\n")
 
-    print(f"{'model':23s}{'MAE':>9}{'mediana':>10}{'v 5 min':>10}{'odklon':>10}")
+    print(f"{'model':26s}{'MAE':>9}{'mediana':>10}{'v 5 min':>10}{'odklon':>10}")
     for name, sc in res["models"].items():
-        print(f"{name:23s}{sc['mae_s'] / 60:>8.2f}m{sc['median_s'] / 60:>9.2f}m"
+        print(f"{name:26s}{sc['mae_s'] / 60:>8.2f}m{sc['median_s'] / 60:>9.2f}m"
               f"{sc['within_5min']:>10.1%}{sc['bias_s'] / 60:>9.2f}m")
 
     if res.get("by_horizon"):
