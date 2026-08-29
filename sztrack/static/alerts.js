@@ -9,10 +9,6 @@ const qEl = document.getElementById("q");
 
 let all = [];
 
-function fold(s) {
-  return String(s).normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
-
 // Naslovi obvestil so oblike "DELA NA PROGI: ...", "Vozni red nadomestnega
 // prevoza: ...", "OBVESTILO: ...". Vrsta je uporabnejsa od ucinka iz feeda,
 // ki je pri skoraj vseh enak ("spremenjen promet").

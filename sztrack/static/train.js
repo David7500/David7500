@@ -13,6 +13,10 @@ const URL_PARAMS = new URLSearchParams(location.search);
 const URL_DATE = URL_PARAMS.get("date") || null;
 // Id voznje: stevilka linije pri avtobusih ni enolicna.
 const URL_TRIP = URL_PARAMS.get("trip") || null;
+// Postaja, s katere je potnik prisel (odhodna tabla, iskalnik zvez). Okno jo
+// izpostavi -- brez tega mora clovek svojo vrstico iskati med tridesetimi
+// postanki, in to na telefonu.
+const URL_STATION = URL_PARAMS.get("postaja") || null;
 const DATE_Q = (() => {
   const p = new URLSearchParams();
   if (URL_DATE) p.set("date", URL_DATE);
@@ -101,7 +105,7 @@ window.addEventListener("resize", () => {
 const state = { run: null, forecast: null, past: null, pastRuns: 0,
                 weather: new Map(), report: null,
                 mode: "vlak", network: "zeleznica", agency: null,
-                reportLog: [] };
+                current: null };
 // Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
 // ob preklopu pogleda.
 let hoverSeq = null;
@@ -209,49 +213,55 @@ function runHeadHtml(cur) {
   `;
 }
 
-// Dnevnik prevoznika: zaporedje njegovih porocil o tej voznji. To je edini
-// zapis, kje je vlak dejansko bil in koliko je takrat zamujal -- prometna
-// mesta, ne voznoredni postanki. Nihce drug ga ne hrani.
-function reportLogHtml(list) {
-  if (!list || list.length < 2) return "";
-  // Zaporedna porocila z isto zamudo IN istim mestom so ista novica.
-  const steps = [];
-  for (const r of list) {
-    const prev = steps[steps.length - 1];
-    if (prev && prev.delay_min === r.delay_min && prev.station === r.station) continue;
-    steps.push(r);
-  }
-  const rows = steps.map((r, i) => {
-    const prev = i ? steps[i - 1] : null;
-    const diff = prev ? r.delay_min - prev.delay_min : 0;
-    const color = delayColor(r.delay_min * 60);
-    return `<div class="log-row">
-      <span class="log-time">${hhmm(new Date(r.seen_ts * 1000).toISOString())}</span>
-      <span class="log-delay" style="color:${color}">${r.delay_min > 0 ? "+" : ""}${r.delay_min}</span>
-      <span class="log-diff">${diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : ""}</span>
-      <span class="log-where">${escapeHtml(r.station)}</span>
-      ${r.severe ? '<span class="tag">izjemna</span>' : ""}
-    </div>`;
-  }).join("");
+// Postanek, ki ga je potnik izbral -- tisti, na katerem stoji. Iscemo po
+// imenu, ker isto ime nosi vec `stop_id` (mestno postajalisce ima svojega za
+// vsako smer) in ker naslov nosi ime, ne ida.
+function yourStop(stops) {
+  if (!URL_STATION || !stops) return null;
+  const want = fold(URL_STATION);
+  return stops.find((s) => fold(s.name) === want) || null;
+}
 
-  return `<details class="drawer adv-only" id="log-drawer">
-    <summary class="drawer-head">
-      <svg class="drawer-caret" width="11" height="11" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 5l7 7-7 7"></path>
-      </svg>
-      <span class="drawer-title">Dnevnik prevoznika</span>
-      <span class="drawer-why">${steps.length} poročil — kje je bil in koliko je zamujal</span>
-    </summary>
-    <div class="drawer-body">
-      <div class="fig-note">
-        Prevoznikova lastna poročila, ne naša meritev. Kraji so <strong>prometna
-        mesta</strong> — vlak tam ni nujno ustavil. Tega zapisa ni nikjer drugje,
-        ker ga nihče ne hrani; ta nastaja tu, ko aplikacija teče.
+// "Kdaj pride po mene in koliko bo takrat zamujal" -- edino vprasanje, ki ga
+// ima potnik na peronu. Zato je to prva stvar v oknu, nad vsem drugim.
+function yourStopHtml(stops, forecast, current) {
+  const s = yourStop(stops);
+  if (!s) return "";
+  const passed = current && s.stop_seq <= current.stop_seq;
+  const f = (forecast || []).find((x) => x.stop_seq === s.stop_seq);
+  const schedIso = s.sched_dep || s.sched_arr;
+
+  let d = null;
+  let kdaj = null;
+  let znak = "";
+  if (passed) {
+    d = stopDelay(s);
+    kdaj = stopActualIso(s);
+    znak = "izmerjeno";
+  } else if (f) {
+    d = f.predicted_delay_s;
+    kdaj = schedIso && d != null
+      ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
+    znak = f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}` : "ocena";
+  } else {
+    kdaj = schedIso;
+    znak = "po voznem redu — ocene še ni";
+  }
+  const color = delayColor(d);
+  const sched = hhmm(schedIso);
+  const cas = hhmm(kdaj);
+
+  return `
+    <div class="yours">
+      <div class="yours-label">Pri tebi — ${escapeHtml(s.name)}</div>
+      <div class="yours-line">
+        <span class="yours-time" style="color:${color}">${cas}</span>
+        ${cas !== sched ? `<span class="yours-sched">${sched}</span>` : ""}
+        <span class="yours-delay" style="color:${color}">${delayLabel(d)} min</span>
       </div>
-      <div class="log-list">${rows}</div>
-    </div>
-  </details>`;
+      <div class="yours-tag">${escapeHtml(znak)}${passed
+        ? ` — ${vehicleNoun()} je tu že bil` : ""}</div>
+    </div>`;
 }
 
 async function loadReport() {
@@ -261,7 +271,6 @@ async function loadReport() {
     const r = await fetch(`/api/train/${ENC}/reports${DATE_Q}`).then((x) => (x.ok ? x.json() : null));
     const list = (r && r.reports) || [];
     state.report = list.length ? list[list.length - 1] : null;
-    state.reportLog = list;
   } catch (err) {
     state.report = null;
   }
@@ -309,10 +318,9 @@ async function loadRun() {
     applyNetworkWording();
     state.run = run;
     state.forecast = forecast;
-    runHeadEl.innerHTML = runHeadHtml(current);
-    runTimelineEl.innerHTML = runTimelineHtml(run.stops, forecast, state.weather) +
-      reportLogHtml(state.reportLog) +
-      `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj</div>`;
+    state.current = current;
+    runHeadEl.innerHTML = yourStopHtml(run.stops, forecast, current) + runHeadHtml(current);
+    renderTimeline();
     renderProfile();
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
@@ -321,6 +329,20 @@ async function loadRun() {
       '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
   }
+}
+
+// Casovnica se med pogledoma razlikuje, zato je svoja funkcija: preklop je
+// mora prerisati, ne le odkriti skritih elementov.
+function renderTimeline() {
+  const run = state.run;
+  if (!run) return;
+  const yours = yourStop(run.stops);
+  runTimelineEl.innerHTML =
+    runTimelineHtml(run.stops, state.forecast, state.weather, {
+      aheadOnly: !document.body.classList.contains("is-advanced"),
+      highlight: yours ? yours.stop_seq : null,
+    }) +
+    `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj</div>`;
 }
 
 // ---------- zgodovina: stevilke ----------
@@ -768,7 +790,7 @@ function drawSpeeds(w, segs) {
   const rowH = 30;
   // Levi rob po najdaljsem imenu odseka -- fiksnih 148 px je rezalo zacetke.
   const longest = segs.reduce((n, s) => Math.max(n, `${s.from} → ${s.to}`.length), 0);
-  const M = { t: 6, r: 96, b: 6, l: Math.min(270, Math.max(150, longest * 6.1 + 14)) };
+  const M = { t: 6, r: 108, b: 6, l: Math.min(270, Math.max(150, longest * 6.1 + 14)) };
   const H = M.t + M.b + segs.length * rowH;
   const iw = Math.max(40, w - M.l - M.r);
   const svg = svgEl("svg", { width: w, height: H, role: "img" });
@@ -801,11 +823,21 @@ function drawSpeeds(w, segs) {
       x1: rx, x2: rx, y1: cy - 11, y2: cy + 11, stroke: INK_AXIS, "stroke-width": 2,
     }));
 
+    // Stolpec se imenuje "hitrost po odsekih", zato mora stevilka biti
+    // HITROST. Prej je tu pisalo odstopanje od voznega reda (+/-) -- to je
+    // druga kolicina in ob besedi "km/h" jo je bilo brati kot hitrost samo.
+    // Odstopanje ostane, a manjse in za njo.
     const diff = s.actual_kmh - s.sched_kmh;
     svg.appendChild(svgEl("text", {
+      x: w - 46, y: cy + 4, "text-anchor": "end",
+      fill: "#c9d1dc", "font-size": 11.5, "font-family": "'IBM Plex Mono', monospace",
+    }, `${s.actual_kmh.toFixed(0)} km/h`));
+    svg.appendChild(svgEl("text", {
       x: w - 6, y: cy + 4, "text-anchor": "end",
-      fill: "#9aa3b0", "font-size": 11, "font-family": "'IBM Plex Mono', monospace",
-    }, `${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)} km/h`));
+      fill: Math.abs(diff) < 1 ? "#79828f" : diff < 0 ? "#dd6a26" : "#5aa87d",
+      "font-size": 10, "font-family": "'IBM Plex Mono', monospace",
+    }, Math.abs(diff) < 0.5 ? "0"
+        : `${diff > 0 ? "+" : "−"}${Math.abs(diff).toFixed(0)}`));
   });
   return svg;
 }
@@ -847,7 +879,7 @@ async function loadSpeeds() {
       return;
     }
     const shown = segs.slice(0, 12);
-    sub.textContent = "stolpec = izmerjeno, črtica = vozni red; samo odseki nad 5 km"
+    sub.textContent = "stolpec in številka = izmerjena hitrost, črtica = vozni red, desno odstopanje v km/h; samo odseki nad 5 km"
       + (segs.length > shown.length ? ` · prikazanih ${shown.length} od ${segs.length}` : "");
     mountChart(el, (w) => drawSpeeds(w, shown));
   } catch (err) {
@@ -974,7 +1006,18 @@ if (new URLSearchParams(location.search).get("view") === "hitrost") {
 
 // Preklop pogleda je skupen vsem stranem in zivi v common.js. Grafi se morajo
 // ob preklopu prerisati: napreden pogled spremeni sirino stolpca.
+const toAdvBtn = document.getElementById("to-advanced");
+if (toAdvBtn) {
+  toAdvBtn.addEventListener("click", () => {
+    // Isti preklop kot v glavi -- klik na gumb mora premakniti tudi njo.
+    const b = document.querySelector('#mode-switch [data-mode="advanced"]');
+    if (b) b.click();
+    document.getElementById("fig-profile").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 initMode(() => {
+  renderTimeline();     // preprosto kaze samo naprej, napredno vso pot
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => redrawers.forEach((f) => f()), 60);
 });

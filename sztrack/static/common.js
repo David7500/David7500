@@ -52,6 +52,13 @@ function stampLabel(iso) {
   return `${when} ob ${TIME_FMT.format(t)}`;
 }
 
+// Isto sklanjanje kot `journey._fold` v Pythonu: brez tega se iskanje in
+// poudarek ne ujameta pri sumnikih ("sentjur" proti "Šentjur"). Bilo je
+// prepisano v dveh datotekah -- ista funkcija dvakrat je ista napaka dvakrat.
+function fold(s) {
+  return String(s).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -298,13 +305,23 @@ function lastMeasured(stops) {
   return found;
 }
 
-function stopWeatherHtml(w) {
+function stopWeatherHtml(w, isForecast) {
   if (!w || w.severity == null) return "";
   // Potnika ne zanima 0,4 mm/h -- zanima ga, ali so razmere hude. Surove
   // stevilke ostanejo v naslovu in v oknu ob grafu.
+  //
+  // Pri postajah naprej po progi je to NAPOVED (Open-Meteo forecast), ne
+  // izmerjeno stanje. Razlika je vidna -- crtkan rob in beseda v naslovu --
+  // ker bi enak zeton pomenil, da o prihodnosti vemo enako kot o preteklosti.
   const color = severityColor(w.severity_label);
   const loud = w.severity_label === "zahtevne" || w.severity_label === "hude";
-  return `<span class="stop-weather${loud ? " is-loud" : ""}" title="${escapeHtml(severityTitle(w))}"` +
+  const title = (isForecast ? "napoved · " : "") + severityTitle(w);
+  // Stopnja 0 pomeni "ni kaj povedati". Dvajsetkrat ponovljena nicla na
+  // telefonu tekmuje s stevilko zamude, ki je edina, zaradi katere je clovek
+  // tu; v naprednem pogledu ostane, ker tam vrstica sme biti gostejsa.
+  const quiet = w.severity === 0 ? " is-quiet adv-only" : "";
+  return `<span class="stop-weather${loud ? " is-loud" : ""}${isForecast ? " is-forecast" : ""}${quiet}"` +
+    ` title="${escapeHtml(title)}"` +
     (loud ? ` style="background:${color}1f;border-color:${color}66"` : "") + `>` +
     weatherIconHtml(w, 13) +
     `<span class="stop-sev" style="color:${color}">${w.severity}</span></span>`;
@@ -343,7 +360,7 @@ function gapStopHtml(s) {
   `;
 }
 
-function forecastStopHtml(s, f) {
+function forecastStopHtml(s, f, w) {
   // Postaja, ki je vlak se ni dosegel. Uporabimo LASTNO oceno, ne vrednosti
   // iz feeda -- ta je za postanke naprej izmerjeno slaba (glej backtest.py):
   //
@@ -371,29 +388,52 @@ function forecastStopHtml(s, f) {
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">${escapeHtml(tag)}</span></div>
         ${feedSaid != null ? `<div class="stop-times adv-only"><span class="stop-tag">feed pravi ${delayLabel(feedSaid)} min</span></div>` : ""}
       </div>
+      ${stopWeatherHtml(w, true)}
       <div class="stop-delay is-forecast" style="color:${color}">${delayLabel(d)}</div>
     </div>
   `;
 }
 
-function runTimelineHtml(stops, forecast, weatherBySeq) {
+function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
   const cur = lastMeasured(stops);
   const forecastBySeq = new Map((forecast || []).map((f) => [f.stop_seq, f]));
   const wx = weatherBySeq || new Map();
+  const highlight = (opts && opts.highlight) || null;
+
+  // Preprosti pogled kaze samo, kar je pred potnikom: trenutno lego in naprej.
+  // Postaje, ki jih je vozilo ze prevozilo, so odgovor na drugo vprasanje --
+  // "kako je bilo" -- in ta sodi v napredni pogled. Kadar je voznja koncana in
+  // naprej ni nicesar, pokazemo vse: prazen seznam ne pove nicesar.
+  let from = null;
+  if (opts && opts.aheadOnly && cur) {
+    const zadnji = stops.length ? stops[stops.length - 1].stop_seq : 0;
+    if (cur.stop_seq < zadnji) from = cur.stop_seq;
+  }
+  const shown = from == null ? stops : stops.filter((s) => s.stop_seq >= from);
+  const skipped = stops.length - shown.length;
+
   const rows = [];
+  if (skipped > 0) {
+    rows.push(`<div class="stop-sep is-quiet">${skipped} ${skipped === 1
+      ? "prevožena postaja" : skipped === 2 ? "prevoženi postaji"
+      : skipped < 5 ? "prevožene postaje" : "prevoženih postaj"} — v naprednem pogledu</div>`);
+  }
   let seenAheadHead = false;
-  for (const s of stops) {
+  for (const s of shown) {
+    const isHi = highlight != null && s.stop_seq === highlight;
+    let html;
     if (cur && s.stop_seq <= cur.stop_seq) {
-      rows.push(stopActualIso(s)
+      html = stopActualIso(s)
         ? measuredStopHtml(s, s.stop_seq === cur.stop_seq, wx.get(s.stop_seq))
-        : gapStopHtml(s));
-      continue;
+        : gapStopHtml(s);
+    } else {
+      if (!seenAheadHead) {
+        rows.push('<div class="stop-sep">naprej po progi — ocena, ne meritev</div>');
+        seenAheadHead = true;
+      }
+      html = forecastStopHtml(s, forecastBySeq.get(s.stop_seq), wx.get(s.stop_seq));
     }
-    if (!seenAheadHead) {
-      rows.push('<div class="stop-sep">naprej po progi — ocena, ne meritev</div>');
-      seenAheadHead = true;
-    }
-    rows.push(forecastStopHtml(s, forecastBySeq.get(s.stop_seq)));
+    rows.push(isHi ? html.replace('class="stop-row', 'class="stop-row is-yours') : html);
   }
   return `<div class="stop-list">${rows.join("")}</div>`;
 }

@@ -246,25 +246,88 @@
   .train-head-sub { display: none; }
   .back-link span { display: none; }
   .topbar .top-link { display: none; }
+
+  /* Fiksna visina 52 px je bila za namizje. Na telefonu se vsebina prelomi
+     v drugo vrstico in je ta pod glavo -- ura se je risala cez naslov
+     "Ta vožnja". Glava naj raste, gap naj bo manjsi, sekunde odpadejo:
+     na peronu steje minuta, ne sekunda, in prostor je dragocen. */
+  .topbar {
+    height: auto;
+    min-height: 50px;
+    gap: 10px;
+    padding: 6px 12px;
+    flex-wrap: nowrap;
+  }
+  .topbar .divider { display: none; }
+  .topbar .clock { display: none; }
+  .train-head { min-width: 0; overflow: hidden; }
+  .mode-switch { flex-shrink: 0; }
 }
 
-/* Dnevnik prevoznika: zaporedje njegovih poročil o tej vožnji. Edini zapis,
- * kje je vlak dejansko bil — prometna mesta, ne voznoredni postanki. */
-#log-drawer { margin: 4px 14px 14px; }
-.log-list { display: flex; flex-direction: column; margin-top: 8px; }
-.log-row {
-  display: grid;
-  grid-template-columns: 44px 40px 30px 1fr auto;
-  gap: 8px;
+/* ---------- "pri tebi": postaja, s katere je potnik prišel ---------- */
+/* Prvo vprašanje potnika na peronu je eno samo — kdaj pride pome in koliko
+   bo zamujal. Zato stoji nad vsem drugim in je edino, kar se vidi brez
+   pomikanja. */
+.yours {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-firm);
+  border-left: 3px solid var(--accent, #f0934f);
+  border-radius: 8px;
+  background: var(--surface-2, #16181d);
+}
+.yours-label {
+  font: 600 10.5px/1.3 var(--sans);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.yours-line {
+  display: flex;
   align-items: baseline;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--line-soft);
+  gap: 9px;
+  margin-top: 5px;
+  flex-wrap: wrap;
 }
-.log-row:last-child { border-bottom: none; }
-.log-time { font: 400 11px/1.4 var(--mono); color: var(--ink-mute); }
-.log-delay { font: 600 11.5px/1.4 var(--mono); text-align: right; }
-.log-diff { font: 400 10.5px/1.4 var(--mono); color: var(--ink-faint); text-align: right; }
-.log-where {
-  font: 400 11.5px/1.4 var(--sans); color: var(--ink-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.yours-time { font: 600 26px/1 var(--mono); }
+.yours-sched {
+  font: 400 13px/1 var(--mono);
+  color: var(--ink-faint);
+  text-decoration: line-through;
 }
+.yours-delay { font: 600 15px/1 var(--mono); margin-left: auto; }
+.yours-tag { margin-top: 5px; font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }
+
+/* Postanek potnika v časovnici — da ga najde med tridesetimi. */
+.stop-row.is-yours {
+  background: color-mix(in srgb, var(--accent, #f0934f) 9%, transparent);
+  border-radius: 6px;
+  box-shadow: inset 2px 0 0 var(--accent, #f0934f);
+}
+
+/* Razmere naprej po progi so NAPOVED. Črtkan rob pove razliko brez besede;
+   ista oblika kot pri postaji, ki je vlak še ni dosegel. */
+.stop-weather.is-forecast { border-style: dashed; opacity: .85; }
+
+.stop-sep.is-quiet {
+  color: var(--ink-faint);
+  font-style: italic;
+  opacity: .75;
+}
+
+/* Vstop v napredni pogled iz preprostega — brez tega je videti, da strani
+   preprosto manjka polovica. */
+.to-advanced {
+  display: block;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 11px 14px;
+  border: 1px dashed var(--line-firm);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-mute);
+  font: 400 12px/1.4 var(--sans);
+  cursor: pointer;
+}
+.to-advanced:hover { border-color: var(--ink-faint); color: var(--ink); }
+body.is-advanced .to-advanced { display: none; }

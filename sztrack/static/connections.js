@@ -132,12 +132,6 @@ function highlight(name, q) {
     escapeHtml(name.slice(i + q.length));
 }
 
-// Isto sklanjanje kot v journey.py: brez tega bi se poudarek pri "sentjur"
-// ujel na napacnem mestu ali sploh ne.
-function fold(s) {
-  return s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
-
 // ---------- obvestila o ovirah ----------
 
 function alertsHtml(list, note) {
@@ -170,10 +164,14 @@ function renderAlerts(list, note) {
 
 // Povezava na eno vožnjo. `trip` gre zraven, ker številka linije pri
 // avtobusih ni številka vožnje -- LPP linija 3G ima 388 voženj.
-function journeyHref(trainNo, date, tripId) {
+// `postaja` je postaja, na kateri potnik stoji -- okno vozjne jo zna
+// izpostaviti ("pri tebi ob 17:47, +12 min"). Brez nje mora clovek sam iskati
+// svojo vrstico med tridesetimi postanki, in to na telefonu.
+function journeyHref(trainNo, date, tripId, station) {
   const p = new URLSearchParams();
   if (date) p.set("date", date);
   if (tripId) p.set("trip", tripId);
+  if (station) p.set("postaja", station);
   return `/app/train/${encodeURIComponent(trainNo)}${p.toString() ? `?${p}` : ""}`;
 }
 
@@ -229,7 +227,7 @@ function departedMs(c) {
   return new Date(c.expected_dep || c.sched_dep).getTime();
 }
 
-function connectionRowHtml(c, nowMs, isNext, date) {
+function connectionRowHtml(c, nowMs, isNext, date, odKod) {
   const gone = nowMs && departedMs(c) < nowMs;
   const late = c.delay_s != null && c.delay_s >= 60;
   const color = delayColor(c.delay_s);
@@ -243,7 +241,7 @@ function connectionRowHtml(c, nowMs, isNext, date) {
 
   return `
     <a class="conn-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
-       href="${journeyHref(c.train_no, date, c.trip_id)}">
+       href="${journeyHref(c.train_no, date, c.trip_id, odKod)}">
       <div class="conn-times">
         <div class="conn-clock">
           <span class="conn-dep">${hhmm(c.sched_dep)}</span>
@@ -293,7 +291,7 @@ function transferBadgeHtml(tr, plannedS) {
       : `${mins} min za prestop · ${escapeHtml(tr.source)}`}</div>`;
 }
 
-function transferRowHtml(t, nowMs, date) {
+function transferRowHtml(t, nowMs, date, odKod) {
   const tr = t.transfer;
   const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
   const planned = Math.round(t.wait_s / 60);
@@ -332,7 +330,7 @@ function transferRowHtml(t, nowMs, date) {
 
   return `
     <a class="conn-row is-transfer" style="border-left-color:${count === 1 ? st.color : "var(--line-firm)"}"
-       href="${journeyHref(t.train1, date, t.trip1)}">
+       href="${journeyHref(t.train1, date, t.trip1, odKod)}">
       <div class="conn-times">
         <div class="conn-clock">
           <span class="conn-dep">${hhmm(t.sched_dep)}</span>
@@ -396,10 +394,10 @@ function renderConnections(data) {
     rows.push(`<details class="past-box"><summary class="past-head">
         pokaži ${gone.length} ${gone.length === 1 ? "prejšnjo vožnjo" : "prejšnjih"}
       </summary>
-      ${gone.map((c) => connectionRowHtml(c, nowMs, false, data.date)).join("")}
+      ${gone.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)).join("")}
     </details>`);
   }
-  rows.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date)));
+  rows.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date, data.from)));
   if (legs.length) {
     // Naslov naj pove, kaj je spodaj: en prestop ali vec. Ko en prestop ne
     // da nicesar, iscemo naprej in rezultat je lahko tri- ali stirinozen.
@@ -407,21 +405,21 @@ function renderConnections(data) {
     rows.push(`<div class="result-head"><span>${most === 1
       ? "Z enim prestopom"
       : "S prestopi — neposredne vožnje ni"}</span></div>`);
-    rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date)));
+    rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date, data.from)));
   }
   resultsEl.innerHTML = rows.join("");
 
   renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
 }
 
-function boardRowHtml(r, nowMs, isNext, date) {
+function boardRowHtml(r, nowMs, isNext, date, station) {
   const gone = nowMs && new Date(r.expected || r.sched).getTime() < nowMs;
   const late = r.delay_s != null && r.delay_s >= 60;
   const color = delayColor(r.delay_s);
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
   return `
     <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
-       href="${journeyHref(r.train_no, date, r.trip_id)}">
+       href="${journeyHref(r.train_no, date, r.trip_id, station)}">
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
         ${late ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}
@@ -473,7 +471,7 @@ function renderBoard(data) {
 
   let nextIdx = -1;
   if (isToday) nextIdx = list.findIndex((r) => new Date(r.expected || r.sched).getTime() >= nowMs);
-  resultsEl.innerHTML = list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date)).join("");
+  resultsEl.innerHTML = list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station)).join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 
