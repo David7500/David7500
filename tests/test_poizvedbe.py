@@ -24,11 +24,18 @@ def _pred(dni: int) -> str:
 # ---------------------------------------------------------------- pripravljena baza
 
 def _sched(conn, trip_id, stops):
-    """stops: [(stop_seq, stop_id, arr_s, dep_s)]"""
+    """stops: [(stop_seq, stop_id, arr_s, dep_s)]
+
+    Za voznim redom takoj tudi voznoredni okvir vozjne (`trip.start_s/end_s`),
+    kot to dela uvoz GTFS. Brez njega poizvedba "kaj se zdaj vozi" vozjne ne
+    vidi -- in test, ki bi to spregledal, bi bil test na drugacni bazi, kot
+    jo ima aplikacija.
+    """
     conn.executemany(
         "INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
         [(trip_id, *row) for row in stops],
     )
+    db.fill_trip_window(conn)
 
 
 @pytest.fixture()
@@ -591,3 +598,35 @@ def test_prestar_povzetek_se_izracuna_znova(conn):
     conn.execute("UPDATE povzetek SET computed_at = ?", (_pred(3) + "T03:30:00+02:00",))
     conn.commit()
     assert stats.summary_get(conn, "breakdowns", "zeleznica", 90)["cached"] is False
+
+
+def test_voznja_z_nemogoco_zamudo_ni_ziva(conn):
+    """Vožnja, ki po feedu zamuja več kot `MAX_LIVE_DELAY_S`, ni na seznamu živih.
+
+    To je pravilo prikaza, ne pospešek. Nomagov N6571 je imel 27 060 s
+    (7 h 31 min) enako na vseh 44 postankih vožnje, ki je vozila ob 04:15 —
+    to je feedova zamenjava prometnega dne, ne avtobus, ki bi se opoldne še
+    vozil. Prej je tak zapis pristal na zemljevidu kot vozilo na progi.
+    """
+    from sztrack import api
+
+    c = conn
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              " mode, agency, network) VALUES('nz2','rz2','N 6571','A - C','S1',"
+              "'bus','1119','avtobus')")
+    _sched(c, "nz2", [(1, "A", None, 15300), (2, "Z", 18000, 18000), (3, "C", 20640, None)])
+    for seq in (2, 3):
+        c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                  " delay_dep, feed_ts) VALUES('nz2','2026-08-31',?,27060,27060,1)", (seq,))
+    c.commit()
+
+    opoldne = 12 * 3600 + 1800
+    assert "N 6571" not in {r["train_no"]
+                            for r in api._live_rows(c, "2026-08-31", opoldne, "avtobus")}
+
+    # Ista vožnja z dvourno zamudo pa je živa -- meja ni "vsaka velika zamuda".
+    c.execute("UPDATE run SET delay_arr = 7200, delay_dep = 7200 WHERE trip_id = 'nz2'")
+    c.commit()
+    zdaj = 20640 + 7200 - 60         # tik pred voznorednim koncem z zamudo
+    assert "N 6571" in {r["train_no"]
+                        for r in api._live_rows(c, "2026-08-31", zdaj, "avtobus")}

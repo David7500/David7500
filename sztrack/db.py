@@ -57,9 +57,18 @@ CREATE TABLE IF NOT EXISTS trip (
     -- ker na tisti relaciji ZAMENJUJE vlak in sodi v isti odgovor kot vlaki.
     -- LPP in medkrajevni prevozniki so `avtobus` in imajo svojo stran:
     -- potnik ve, ali gre z vlakom ali z busom, in ju ne isce skupaj.
-    network    TEXT NOT NULL DEFAULT 'zeleznica'
+    network    TEXT NOT NULL DEFAULT 'zeleznica',
+    -- Voznoredni okvir voznje: prvi odhod in zadnji prihod, sekundi od
+    -- polnoci prometnega dne (zna cez 86400). Izpeljano iz `sched`, a
+    -- shranjeno tu, ker ga potrebuje najbolj vroca poizvedba -- "kaj se
+    -- zdaj vozi" -- in grupiranje 403 000 vrstic `sched` ob vsakem klicu
+    -- je bilo pri vseh prevoznikih sekunda. Polni se ob uvozu GTFS.
+    start_s    INTEGER,
+    end_s      INTEGER
 );
 CREATE INDEX IF NOT EXISTS trip_train_no ON trip(train_no);
+-- Za "kaj se zdaj vozi": omrezje in casovno okno v enem branju indeksa.
+CREATE INDEX IF NOT EXISTS trip_running ON trip(network, start_s, end_s);
 CREATE INDEX IF NOT EXISTS trip_mode ON trip(mode);
 CREATE INDEX IF NOT EXISTS trip_network ON trip(network);
 
@@ -250,6 +259,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if have and "network" not in have:
         conn.execute("ALTER TABLE trip ADD COLUMN network TEXT NOT NULL DEFAULT 'zeleznica'")
         conn.commit()
+        have.add("network")
+    # Voznoredni okvir voznje. Za razliko od `mode` in `network` ga ne moremo
+    # pustiti praznega do naslednjega uvoza -- poizvedba "kaj se zdaj vozi"
+    # bi brez njega vrnila nic -- zato ga tu tudi izracunamo.
+    if have and "start_s" not in have:
+        conn.execute("ALTER TABLE trip ADD COLUMN start_s INTEGER")
+        conn.execute("ALTER TABLE trip ADD COLUMN end_s INTEGER")
+        conn.commit()
+        fill_trip_window(conn)
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
@@ -261,6 +279,22 @@ def _migrate(conn: sqlite3.Connection) -> None:
         else:
             conn.execute("DROP TABLE alert")
         conn.commit()
+
+
+def fill_trip_window(conn: sqlite3.Connection) -> int:
+    """Zapolni `trip.start_s` / `trip.end_s` iz `sched`.
+
+    Klicano ob uvozu GTFS in ob migraciji obstojece baze. Idempotentno.
+    """
+    conn.execute("""
+        UPDATE trip SET
+            start_s = (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s
+                       WHERE s.trip_id = trip.trip_id),
+            end_s   = (SELECT MAX(COALESCE(s.arr_s, s.dep_s)) FROM sched s
+                       WHERE s.trip_id = trip.trip_id)
+    """)
+    conn.commit()
+    return conn.execute("SELECT COUNT(*) FROM trip WHERE start_s IS NOT NULL").fetchone()[0]
 
 
 def init(conn: sqlite3.Connection) -> None:

@@ -281,6 +281,8 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
             "INSERT INTO service_day(service_id,date) VALUES(?,?)",
             [(sid, d) for sid, ds in days.items() for d in ds],
         )
+        # Voznoredni okvir voznje se da izracunati sele, ko je `sched` poln.
+        db.fill_trip_window(conn)
         db.set_meta(conn, "gtfs_imported_at", datetime.now().isoformat(timespec="seconds"))
 
     return {

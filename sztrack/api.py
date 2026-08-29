@@ -519,12 +519,46 @@ def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
 # prihodu na cilj -- da ne izgine iz zemljevida v isti sekundi, ko pripelje.
 _LIVE_GRACE_S = 300
 
-# Koliko zamude dopuscamo, ko presojamo, ali voznja vceraj se tece cez polnoc.
-# Sest ur je velikodusno: najhujsa zamuda v devetih dneh zajema je bila 161 min.
-# Voznja z voznorednim koncem pred 18:00 in vec kot sesturno zamudo bi po
-# polnoci izpadla s seznama -- to je zavestna menjava za desetkrat hitrejso
+# Najvecja zamuda, pri kateri voznjo se stejemo za zivo. To ni okrasna
+# konstanta, ampak pravilo prikaza, in velja na obeh straneh polnoci.
+#
+# Sest ur je velikodusno. Merjeno na zajetih podatkih: pri zeleznici ni
+# NOBENE zamude cez tri ure (najhujsa je EC 79 z 2,9 h), pri avtobusih pa je
+# nad sest ur 0,67 % vrstic -- in te niso zamude. Nomagov N6571 je imel
+# 27 060 s (7 h 31 min) enako na vseh 44 postankih vozjne, ki je po voznem
+# redu vozila ob 04:15; to je feedova zamenjava prometnega dne, ne avtobus,
+# ki se ob pol enih popoldne se vedno vozi. Prej je tak zapis pristal na
+# zemljevidu kot vozilo na progi.
+#
+# Isto stevilo je tudi meja za vcerajsnji prometni dan: vozjna z voznorednim
+# koncem pred 18:00 in vec kot sesturno zamudo po polnoci izpade s seznama.
 # poizvedbo (173 ms -> 17 ms), ne spregled.
-OVERNIGHT_SLACK_S = 6 * 3600
+MAX_LIVE_DELAY_S = 6 * 3600
+
+# Najpoznejsi voznoredni cas v omrezju, predpomnjeno po zigu GTFS uvoza.
+# Sluzi enemu vprasanju: se sme voznja z vcerajsnjim prometnim dnem zdaj se
+# voziti? Ce ne, vcerajsnje poizvedbe sploh ne pozenemo.
+_LAST_SCHED_CACHE: dict[tuple, int | None] = {}
+
+
+def _last_sched_s(conn, network: str | None) -> int | None:
+    """Najpoznejsa voznoredna sekunda tega omrezja (zna cez 86400)."""
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, network, stamp)
+    # Brez ziga ne predpomnimo -- sveza ali testna baza se lahko spremeni
+    # pod nami in nam tega nihce ne pove.
+    if stamp and key in _LAST_SCHED_CACHE:
+        return _LAST_SCHED_CACHE[key]
+    row = conn.execute(
+        "SELECT MAX(end_s) FROM trip WHERE (? IS NULL OR network = ?)",
+        (network, network)).fetchone()
+    val = row[0] if row else None
+    if stamp:
+        _LAST_SCHED_CACHE[key] = val
+    return val
 
 _LIVE_SQL = """
 WITH t AS (
@@ -538,6 +572,12 @@ WITH t AS (
     -- prenosniku 190 ms proti 90 ms, na Pi Zero bi bila razlika sekunde.
     JOIN trip tn ON tn.trip_id = r.trip_id
                 AND (:network IS NULL OR tn.network = :network)
+                -- Vozjne, ki se po voznem redu zdaj lahko vozijo. Brez tega
+                -- gre skozi okenske funkcije spodaj cel dan -- pri vseh
+                -- prevoznikih 135 000 vrstic za 735 vozil. Okvir je zato
+                -- stolpec v `trip` in ne grupiranje `sched` ob vsakem klicu.
+                AND tn.start_s <= :now_s
+                AND tn.end_s >= :now_s - :max_delay
     WHERE r.service_date = :day
       -- Vcerajsnji prometni dan gledamo SAMO zaradi voznj, ki segajo cez
       -- polnoc. Brez tega pogoja gre cel vcerajsnji dan skozi okenske
@@ -549,19 +589,15 @@ WITH t AS (
       -- ta primer je tisti, ki potnika najbolj zanima.
       -- Ne po voznem redu samem in ne z zdruzevanjem `run` (oboje je bilo
       -- 170 ms): dovolj je voznoredni konec, zamaknjen za dopustno zamudo.
-      AND (:overnight_only = 0 OR EXISTS (
-            SELECT 1 FROM sched x WHERE x.trip_id = r.trip_id
-              AND COALESCE(x.arr_s, x.dep_s) > 86400 - :overnight_slack))
-),
-win AS (
-    -- Samo vozjne, ki so v `t`. Brez tega se grupira vseh 80 000 vrstic
-    -- `sched` (obeh omrezij) za vsak klic in prav to je bilo 200 od 210 ms.
-    SELECT s.trip_id,
-           MIN(COALESCE(s.dep_s, s.arr_s)) AS start_s,
-           MAX(COALESCE(s.arr_s, s.dep_s)) AS end_s
-    FROM sched s
-    WHERE s.trip_id IN (SELECT trip_id FROM t)
-    GROUP BY s.trip_id
+      --
+      -- Podpoizvedba, ne EXISTS: EXISTS je koreliran in tece enkrat na
+      -- vrstico `run`, torej 142 000-krat na dan vseh prevoznikov. Tale se
+      -- ovrednoti enkrat, da 3 551 voznj cez polnoc, in `run` se potem
+      -- pobira po svojem prvotnem kljucu. Merjeno na letu zajema, obe
+      -- omrezji: 392 ms -> 65 ms.
+      AND (:overnight_only = 0 OR r.trip_id IN (
+            SELECT x.trip_id FROM sched x GROUP BY x.trip_id
+            HAVING MAX(COALESCE(x.arr_s, x.dep_s)) > 86400 - :max_delay))
 ),
 -- Feed za se nedosezene postanke pogosto objavi niclo, dokler nima prave
 -- napovedi. Brez tega bi tak zapis pomenil, da je (voznored + 0) ze minil,
@@ -589,11 +625,10 @@ SELECT tr.train_no, tr.headsign, tr.mode, tr.network, p.trip_id,
        p.delay_s, p.feed_ts, p.t_s AS sched_s
 FROM passed p
 JOIN tail  ON tail.trip_id = p.trip_id AND tail.rn = 1
-JOIN win   ON win.trip_id = p.trip_id
 JOIN trip tr ON tr.trip_id = p.trip_id
 JOIN station st ON st.stop_id = p.stop_id
 WHERE p.rn = 1
-  AND :now_s <= win.end_s + COALESCE(tail.end_delay_s, 0) + :grace
+  AND :now_s <= tr.end_s + COALESCE(tail.end_delay_s, 0) + :grace
 ORDER BY p.delay_s DESC
 """
 
@@ -608,7 +643,7 @@ def _live_rows(conn, service_date: str, now_s: int,
                                     "grace": _LIVE_GRACE_S,
                                     "network": network,
                                     "overnight_only": int(overnight_only),
-                                    "overnight_slack": OVERNIGHT_SLACK_S}).fetchall()
+                                    "max_delay": MAX_LIVE_DELAY_S}).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -678,9 +713,15 @@ def _live(network: str | None = None) -> list[dict]:
     # njihove voznoredne sekunde pa tecejo naprej cez 86400.
     yesterday = (now.date() - timedelta(days=1)).isoformat()
     with _conn() as conn:
-        rows = (_live_rows(conn, today, now_s, network)
-                + _live_rows(conn, yesterday, now_s + 86400, network,
-                             overnight_only=True))
+        rows = _live_rows(conn, today, now_s, network)
+        # Vcerajsnji prometni dan ima smisel samo, dokler bi po njem se kaj
+        # lahko vozilo. Zeleznica ima najpoznejsi voznoredni cas ob 26,4 h,
+        # torej je po 08:35 odgovor zagotovo prazen -- prej pa smo ga vseeno
+        # racunali in pri letu zajema placali 324 ms za nic.
+        last_s = _last_sched_s(conn, network)
+        if last_s is not None and now_s + 86400 <= last_s + MAX_LIVE_DELAY_S + _LIVE_GRACE_S:
+            rows += _live_rows(conn, yesterday, now_s + 86400, network,
+                               overnight_only=True)
         # Prevoznikovo porocilo je merodajno in edino pozna prometno mesto:
         # nasa `run` pozna samo voznoredne postanke, zamuda pa se meri tudi
         # tam, kjer vlak ne ustavlja.
