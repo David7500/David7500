@@ -111,6 +111,8 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
         url, _ = _pick(a.url)
         period = a.active_period[0] if a.active_period else None
 
+        known = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
+                             (entity.id,)).fetchone() is not None
         conn.execute(
             "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
             "                  header, description, url, lang, first_seen, last_seen) "
@@ -127,13 +129,17 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
         )
         n_alerts += 1
 
-        for ie in a.informed_entity:
-            conn.execute(
-                "INSERT OR IGNORE INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
-                "VALUES(?,?,?,?)",
-                (entity.id, ie.route_id or "", ie.trip.trip_id or "", ie.stop_id or ""),
-            )
-            n_entities += 1
+        # Prizadete poti se pri obstojecem obvestilu ne spreminjajo. Brez tega
+        # pogoja gre vsako minuto 3359 stavkov INSERT OR IGNORE, ki ne
+        # naredijo nicesar -- na mocnem stroju neopazno, na malini ne.
+        if not known:
+            for ie in a.informed_entity:
+                conn.execute(
+                    "INSERT OR IGNORE INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
+                    "VALUES(?,?,?,?)",
+                    (entity.id, ie.route_id or "", ie.trip.trip_id or "", ie.stop_id or ""),
+                )
+                n_entities += 1
 
         if kind != "delay":
             continue
