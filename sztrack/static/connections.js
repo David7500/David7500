@@ -893,6 +893,9 @@ function setTab(tab) {
   resultsEl.innerHTML = "";
   resultHeadEl.innerHTML = "";
   alertsEl.innerHTML = "";
+  // Gumb za shranjevanje se nanasa na trenutno poizvedbo; ob preklopu zavihka
+  // je ta druga in gumb mora to pokazati (ali izginiti, ce polja so prazna).
+  paintFavButton();
   clearTimeout(pollTimer);
 }
 
