@@ -139,6 +139,21 @@ def api_health():
             "       (SELECT MAX(feed_ts) FROM run) AS last_feed_ts"
         ).fetchone()
         out = dict(row)
+        # Po omrežjih: skupna številka ne pove, ali je odpadel zajem vlakov ali
+        # avtobusov, in prav to je tisto, kar hoče nadzor vedeti.
+        out["by_network"] = {
+            r["network"]: {"trips": r["trips"], "runs": r["runs"],
+                           "last_feed_ts": r["last_feed_ts"]}
+            for r in conn.execute(
+                "SELECT t.network, COUNT(DISTINCT t.trip_id) AS trips,"
+                "       COUNT(r.trip_id) AS runs, MAX(r.feed_ts) AS last_feed_ts "
+                "FROM trip t LEFT JOIN run r USING (trip_id) GROUP BY t.network"
+            )
+        }
+        out["vehicles_with_gps"] = conn.execute(
+            "SELECT COUNT(*) FROM vehicle_now").fetchone()[0]
+        out["alerts_active"] = conn.execute(
+            "SELECT COUNT(*) FROM alert WHERE kind='ovira' AND lang='sl'").fetchone()[0]
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
     out["db_path"] = str(path)

@@ -80,11 +80,14 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   postaji: enak simbol za oboje bi zabrisal razliko med izmerjeno lego in
   zadnjo znano postajo. Hrani se samo trenutna lega (`vehicle_now`, upsert):
   sled bi bila ~300 000 točk na dan, prikaz "kje je zdaj" pa rabi eno vrstico.
-* **Odhodne zamude s prve postaje ni.** Feed ni nikoli poročal `stop_seq = 1`
-  — najnižji zajeti je 2. Vlak, ki *"štarta z zamudo"*, je v podatkih viden
-  šele na drugi postaji. Odhodna tabla zato za izhodišče vzame meritev
-  naslednje postaje in zraven napiše, od kod je ("izmerjeno v Grosuplje") --
-  brez tega je tabla prazna prav tam, kjer potnik vstopa.
+* **Odhodne zamude s prve postaje ni — pri vlakih.** Feed za vlak nikoli ni
+  poročal `stop_seq = 1`; najnižji zajeti je 2. Vlak, ki *"štarta z zamudo"*,
+  je v podatkih viden šele na drugi postaji. Odhodna tabla zato za izhodišče
+  vzame meritev naslednje postaje in zraven napiše, od kod je ("izmerjeno na
+  postaji Grosuplje") -- brez tega je tabla prazna prav tam, kjer potnik
+  vstopa. **Pri avtobusih to ne velja**: ti poročajo tudi `stop_seq = 1`, zato
+  tabla uporabi njihovo lastno meritev. Ista koda pokrije oboje, ker vzame
+  naslednjo postajo šele, kadar lastne ni.
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
 * **Zakaj vlak zamuja, pove `service_alerts`.** `SZ-OVIRA-*` so dela na progi,
   nadomestni prevozi in združene garniture, vezani na `route_id` (ta je 1 : 1
