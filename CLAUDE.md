@@ -242,6 +242,13 @@ jedro in njen dnevnik je poceni; pri avtobusih za prikaz zadošča `run`.
 `run` je zgodovina, iz katere živijo statistika, "običajna zamuda" in
 backtest -- te se ne briše.
 
+Kar to pomeni za disk, izmerjeno: `run` dobi največ toliko vrstic, kolikor je
+na dan prevoženih postankov -- železnica 7 832, avtobusi 134 859. Na leto je
+to 2,9 M proti 49 M vrstic, torej ~0,2 GB proti ~2,5 GB. Zavestna izbira, ne
+spregled: `run` je edino, iz česar se da kasneje karkoli izračunati, in
+brisati ga pomeni brisati projekt. Če bo kdaj treba, je najprej na vrsti
+avtobusni `run`, ne železniški.
+
 ## Strani
 
 | pot | kaj |
