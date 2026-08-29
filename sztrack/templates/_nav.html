@@ -1,0 +1,14 @@
+{#
+  Skupne povezave v glavi. Bile so prepisane v petih predlogah in so razšle:
+  zemljevid ni imel nobene, obvestila niso imela statistike, statistika ni
+  imela statistike (kar je prav) niti ovir (kar ni bilo).
+
+  `here` pove, katera stran je trenutna -- ta povezava odpade, ker povezava
+  nase je šum. Klic:  {% include "_nav.html" with context %}  in v pogledu
+  `{"here": "ovire"}`.
+#}
+{%- set here = here | default('') -%}
+{%- if here != 'iskalnik' %}<a class="top-link" href="/app">iskalnik</a>{% endif %}
+{%- if here != 'statistika' %}<a class="top-link" href="/app/statistika">statistika</a>{% endif %}
+{%- if here != 'ovire' %}<a class="top-link" href="/app/ovire">ovire</a>{% endif %}
+{%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}

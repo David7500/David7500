@@ -58,31 +58,34 @@ def index(request: Request):
 def connections_page(request: Request):
     """Vstopna stran: od postaje do postaje. Zemljevid je pogled dispecerja,
     povprecen potnik sprasuje "kdaj mi pelje vlak" -- zato je iskalnik prvi."""
-    return templates.TemplateResponse(request, "connections.html", {})
+    return templates.TemplateResponse(request, "connections.html", {"here": "iskalnik"})
 
 
 @app.get("/app/map", response_class=HTMLResponse)
 def dashboard(request: Request):
     """Živi nadzorni pregled -- podatke si pobere sam prek /api/* v JS-u."""
-    return templates.TemplateResponse(request, "dashboard.html", {})
+    return templates.TemplateResponse(request, "dashboard.html", {"here": "zemljevid"})
 
 
 @app.get("/app/statistika", response_class=HTMLResponse)
 def stats_page(request: Request):
     """Razrezi zajetega: po vrsti vlaka, uri, dnevu. Za napreden pogled."""
-    return templates.TemplateResponse(request, "stats.html", {})
+    return templates.TemplateResponse(request, "stats.html", {"here": "statistika"})
 
 
 @app.get("/app/ovire", response_class=HTMLResponse)
 def alerts_page(request: Request):
     """Dela na progi in nadomestni prevozi -- edini vir odgovora, ZAKAJ."""
-    return templates.TemplateResponse(request, "alerts.html", {})
+    return templates.TemplateResponse(request, "alerts.html", {"here": "ovire"})
 
 
 @app.get("/app/train/{train_no}", response_class=HTMLResponse)
 def dashboard_train(request: Request, train_no: str):
     """Svoje okno za en vlak: ta vožnja + zgodovina zamud te poti."""
-    return templates.TemplateResponse(request, "train.html", {"train_no": train_no})
+    # `here`: okno vlaka ima svojo povezavo nazaj na iskalnik, zato je v
+    # vrstici povezav ne ponavljamo.
+    return templates.TemplateResponse(
+        request, "train.html", {"train_no": train_no, "here": "iskalnik"})
 
 
 @app.get("/api/health")
