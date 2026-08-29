@@ -74,8 +74,17 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
 * **Zamuda je izmerjena v prometnem mestu, ne nujno na postaji.** Ime tega
   mesta **imamo** -- v `SZ-DELAY-*` obvestilih ("Vlak EC 79 ima izjemno zamudo
   161 min ob prihodu na postajo Sevnica"). `run` pozna samo voznoredne postanke,
-  zato je to edini vir. Hrani se v `delay_report`, prikaz ga postavi ob našo
-  vrednost.
+  zato je to edini vir. Hrani se v `delay_report`.
+
+  Prevoznikovo poročilo je tudi **svežejše od naše meritve**: izmerjeno na 64
+  primerjanih vožnjah je novejše v 97 % primerov, mediana razlike +40 s. Zato
+  ga zemljevid in glava okna vožnje postavita pred našo vrednost -- a kraj in
+  zamuda morata biti **iz istega vira**, sicer piše "Dobova" ob zamudi,
+  izmerjeni v Sevnici.
+
+  Zaporedje teh poročil je **dnevnik vožnje**, kakršnega ni nikjer drugje:
+  IC 503 je šel s +6 v Ormožu na +29 v Litiji, v Borovnici nadoknadil osem
+  minut in do Postojne spet zdrsnil na +25. V oknu vožnje, napredni pogled.
 * **Položaj vlaka je interpoliran, ne GPS.** `vehicle_positions` vsebuje
   avtobuse, vlakov ne. Dashboard zato riše vlake na zadnji znani postaji.
   **Avtobusi pa GPS imajo** -- z legendo, smerjo in hitrostjo (do 130 vozil
