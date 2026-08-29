@@ -338,20 +338,45 @@ function busMarker(v) {
   return m;
 }
 
+// Zemljevid je edini pogled, ki ga vlaki in avtobusi delita, zato mora biti
+// mogoce enega odloziti. Izbira se zapomni -- kdor gleda vlake, jih gleda
+// tudi jutri.
+let busVisible = true;
+try {
+  busVisible = localStorage.getItem("sztrack:map-bus") !== "0";
+} catch (err) {
+  /* zaseben zavihek */
+}
+
+function setBusVisible(on) {
+  busVisible = on;
+  if (on) {
+    if (!map.hasLayer(busLayer)) busLayer.addTo(map);
+  } else if (map.hasLayer(busLayer)) {
+    map.removeLayer(busLayer);
+  }
+  const btn = document.getElementById("bus-toggle");
+  if (btn) btn.setAttribute("aria-pressed", String(on));
+  try {
+    localStorage.setItem("sztrack:map-bus", on ? "1" : "0");
+  } catch (err) {
+    /* zaseben zavihek */
+  }
+}
+
 async function loadVehicles() {
   try {
     const list = await fetch("/api/vehicles").then((r) => r.json());
     busLayer.clearLayers();
     for (const v of list) busLayer.addLayer(busMarker(v));
-    // Plast dodamo sele, ko je kaj v njej -- prazna legenda zavaja.
-    if (list.length && !map.hasLayer(busLayer)) busLayer.addTo(map);
-    const el = document.getElementById("bus-count");
-    if (el) {
-      el.textContent = list.length ? `${list.length} avtobusov z GPS` : "";
-      el.hidden = !list.length;
-    }
+    if (list.length && busVisible && !map.hasLayer(busLayer)) busLayer.addTo(map);
     const leg = document.getElementById("legend-bus");
     if (leg) leg.hidden = !list.length;
+    const btn = document.getElementById("bus-toggle");
+    if (btn) {
+      btn.hidden = !list.length;
+      btn.textContent = `${list.length} avtobusov`;
+    }
   } catch (err) {
     console.warn("lege vozil ni bilo mogoce nalozit", err);
   }
@@ -394,6 +419,9 @@ loadStatic().then(() => {
   // Lega avtobusov ima svoj ritem: feed jo osvezuje na ~30 s, zamude pa se
   // spreminjajo redkeje. Ce avtobusov v bazi ni, seznam je prazen in plast
   // ostane skrita.
+  const toggle = document.getElementById("bus-toggle");
+  if (toggle) toggle.addEventListener("click", () => setBusVisible(!busVisible));
+  setBusVisible(busVisible);
   loadVehicles();
   setInterval(loadVehicles, 20000);
 });

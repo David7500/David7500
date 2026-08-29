@@ -339,3 +339,18 @@ body {
   white-space: nowrap;
 }
 .legend-arrow { width: 11px; height: 11px; display: flex; flex-shrink: 0; }
+
+/* Preklop avtobusne plasti. Zemljevid je edini pogled, ki ga vlaki in
+ * avtobusi delita, zato mora biti mogoče enega odložiti. */
+.bus-toggle {
+  background: none;
+  border: 1px solid #2b303a;
+  border-radius: 7px;
+  padding: 5px 10px;
+  color: #6b7480;
+  font: 500 11.5px/1 'IBM Plex Sans', system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bus-toggle:hover { color: #e7eaf0; border-color: #3d434f; }
+.bus-toggle[aria-pressed="true"] { color: #4db97f; border-color: #4db97f55; }
