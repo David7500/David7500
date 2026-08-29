@@ -555,7 +555,7 @@ function busOverviewHtml(o) {
     // "pri", ne "stoji na": feed ima za to `current_status`, a ta ni
     // zanesljiv (STOPPED_AT pri 32 km/h). Hitrost je meritev in jo povemo.
     const where = t.position_source === "GPS"
-      ? `pri ${t.last_stop}${t.speed_kmh != null
+      ? `pri postajališču ${t.last_stop}${t.speed_kmh != null
           ? ` · ${t.gps_stopped ? "stoji" : `${t.speed_kmh} km/h`}` : ""}`
       : t.last_stop;
     return `<a class="live-row" href="${journeyHref(t.train_no, null, t.trip_id)}">

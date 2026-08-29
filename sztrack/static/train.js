@@ -658,7 +658,7 @@ function renderProfile() {
   sub.textContent = (state.pastRuns
     ? `celotna pot, ${pts.length} postaj · povprečje iz ${pluralRuns(state.pastRuns)} pred današnjo`
     : `celotna pot, ${pts.length} postaj · preteklih voženj za primerjavo še ni`)
-    + (worst ? ` · najhujše razmere ${worst.wx.severity}/10 v ${worst.name}` : "")
+    + (worst ? ` · najhujše razmere ${worst.wx.severity}/10 na postaji ${worst.name}` : "")
     + " · miška kjerkoli nad stolpcem postaje";
   legend.innerHTML = profileLegendHtml(pts);
   note.innerHTML = WEATHER_NOTE;
