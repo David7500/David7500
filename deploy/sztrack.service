@@ -18,6 +18,11 @@ Environment=SZ_POLL_SECONDS=30
 # Uvoz teče v podprocesu, da se pomnilnik po njem vrne sistemu.
 Environment=SZ_REFRESH=subprocess
 Environment=SZ_REFRESH_HOUR=4
+# Avtobusi. Prazno = samo vlaki (in nadomestni prevozi SŽ).
+# `1118` doda LPP: baza 1,9 -> 6,3 MB, vrh pomnilnika ob uvozu 59 -> 86 MB.
+# Pi Zero W ima 427 MB in to prenese; VSEH agencij (vrh 216 MB) ne.
+# Uvoz teče v podprocesu, zato se ta vrh po njem vrne sistemu.
+Environment=SZ_AGENCIES=
 ExecStart=/opt/sztrack/.venv/bin/python -m uvicorn sztrack.api:app --host 0.0.0.0 --port ${PORT} --no-access-log
 Restart=always
 RestartSec=15

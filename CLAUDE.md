@@ -150,9 +150,24 @@ tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
 scripts/         dev-restart.sh, preveri_paleto.py, vzorci_feeda.py, build_deploy_zip.sh
 ```
 
-`trip.mode` loči `vlak` od `bus`. Nadomestni prevozi so v istih tabelah, ker
-jih GTFS modelira enako in ker sodijo v isti odgovor -- **ne pa v `edge`**:
-vozijo po cesti in bi mreži prog dodali odseke, ki niso proge.
+`trip.mode` loči `vlak` od `bus`, `trip.agency` pa prevoznika. Avtobusi so v
+istih tabelah, ker jih GTFS modelira enako in ker sodijo v isti odgovor --
+**ne pa v `edge`**: vozijo po cesti in bi mreži prog dodali odseke, ki niso proge.
+
+Kar je pri avtobusih drugače in se hitro pozabi:
+
+* **Številka linije ni številka vožnje.** LPP linija 3G ima 388 voženj. Vsaka
+  poizvedba po `train_no` mora skozi `stats.resolve_trip()`; povezave na eno
+  vožnjo nosijo `?trip=<id>`. Isto velja za devet vlakov s sezonskimi
+  različicami -- prav ta napaka je vozni red vlaka 4292 podvojila.
+* **Barva linije ni barva linije.** Vsi LPP `route_color` so ista zelena
+  prevoznika. Barva torej linij ne loči in ne sme; oznaka nosi ime prevoznika
+  in številko ("LPP 25"), ker je "25" lahko čigar koli.
+* **Mestno postajališče ima svoj `stop_id` za vsako smer.** "Bavarski dvor"
+  je v `station` dvakrat. Vse v aplikaciji teče po imenu postaje, zato iskanje
+  po imenu združuje.
+* **Zemljevid je železniški.** `/api/live?mode=vlak` in
+  `/api/stations?mode=vlak` -- avtobusi nimajo ne mreže ne postaj nanjo.
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` ·
