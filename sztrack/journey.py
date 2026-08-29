@@ -299,6 +299,8 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
         out = [d for d in out
                if not any(dep >= d["dep_s"] and arr <= d["arr_s"] for dep, arr in pairs)]
 
+    _annotate_transfer_risk(conn, out, service_date)
+
     for d in out:
         d["sched_dep"] = _abs_time(service_date, d["dep_s"])
         d["sched_arr"] = _abs_time(service_date, d["arr_s"])
@@ -313,6 +315,77 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
              "dep": d["via_dep"], "arr": d["sched_arr"]},
         ]
     return out
+
+
+# Koliko minut mora ostati, da zvezo se imenujemo "drzi". Isti prag kot pri
+# iskanju -- pod njim je lovljenje vlaka, ne prestop.
+TIGHT_TRANSFER_MIN = 3
+
+
+def _annotate_transfer_risk(conn: sqlite3.Connection, legs: list[dict],
+                            service_date: str) -> None:
+    """Ali bo zveza držala, če prvi vlak zamuja.
+
+    Iskalnik, ki ponudi šest minut za prestop in zamolči, da prvi vlak zamuja
+    dvanajst, ne odgovarja na vprašanje, s katerim je človek prišel. Meritev
+    imamo -- za oba vlaka, na prestopni postaji.
+
+    Račun je preprost in namenoma tak: čas za prestop = (odhod drugega +
+    njegova zamuda) − (prihod prvega + njegova zamuda). Ne trdimo, da bo
+    drugi vlak počakal; **prevoznik zveze pogosto drži in ta račun tega ne
+    ve**, zato prikaz govori o tem, kaj kaže, ne o tem, kaj bo.
+    """
+    if not legs:
+        return
+    pairs = [(d["trip1"], d["x1_seq"]) for d in legs] + [(d["trip2"], d["x2_seq"]) for d in legs]
+    marks = ",".join(["(?,?)"] * len(pairs))
+    params = [x for pair in pairs for x in pair]
+    live = {
+        (r["trip_id"], r["stop_seq"]): r["d"]
+        for r in conn.execute(
+            f"WITH want(trip_id, stop_seq) AS (VALUES {marks}) "
+            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_arr, r.delay_dep) AS d "
+            f"FROM run r JOIN want w ON w.trip_id = r.trip_id AND w.stop_seq = r.stop_seq "
+            f"WHERE r.service_date = ? AND d IS NOT NULL",
+            (*params, service_date),
+        )
+    }
+    typical = typical_at_stops(conn, pairs)
+
+    for d in legs:
+        a_live = live.get((d["trip1"], d["x1_seq"]))
+        b_live = live.get((d["trip2"], d["x2_seq"]))
+        source = "izmerjeno"
+        a = a_live
+        b = b_live
+        if a is None:
+            t = typical.get((d["trip1"], d["x1_seq"]))
+            a = round(t["median_s"]) if t else None
+            source = "običajno"
+        if b is None:
+            t = typical.get((d["trip2"], d["x2_seq"]))
+            b = round(t["median_s"]) if t else None
+            if source == "izmerjeno":
+                source = "delno izmerjeno"
+
+        if a is None and b is None:
+            d["transfer"] = {"wait_s": d["wait_s"], "status": "brez podatka", "source": None}
+            continue
+
+        wait = d["wait_s"] + (b or 0) - (a or 0)
+        if wait < 0:
+            status = "ne drži"
+        elif wait < TIGHT_TRANSFER_MIN * 60:
+            status = "tesno"
+        else:
+            status = "drži"
+        d["transfer"] = {
+            "wait_s": wait,
+            "status": status,
+            "source": source,
+            "delay1_s": a,
+            "delay2_s": b,
+        }
 
 
 def now_seconds(when: datetime | None = None) -> int:

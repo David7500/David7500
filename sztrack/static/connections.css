@@ -442,3 +442,15 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
 .past-head::before { content: "▸ "; color: var(--ink-ghost); }
 .past-box[open] .past-head::before { content: "▾ "; }
 .past-head:hover { color: var(--ink); }
+
+/* Zveza, ki je ne drži, ni povezava. Barva je semafor razmer, ne lestvica
+ * zamud: vprašanje ni "koliko", ampak "ali gre". Zraven vedno tudi minute. */
+.transfer-badge {
+  display: inline-block;
+  font: 600 11px/1.5 var(--sans);
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.leg-note { font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }

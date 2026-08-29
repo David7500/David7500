@@ -188,7 +188,7 @@ function typicalChipHtml(t, fromStop) {
       <span class="chip-n">${delayLabel(t.median_s)}</span><span class="chip-unit">min</span>
     </span>
     <div class="conn-where">običajno · ${pluralRuns(t.n)}</div>
-    ${fromStop ? `<div class="conn-where">merjeno v ${escapeHtml(fromStop)}</div>` : ""}
+    ${fromStop ? `<div class="conn-where">merjeno na postaji ${escapeHtml(fromStop)}</div>` : ""}
     <div class="conn-where adv-only">točnih ${Math.round(t.on_time_share * 100)} % · p90 ${delayLabel(t.p90_s)} min</div>`;
 }
 
@@ -199,7 +199,7 @@ function delayChipHtml(delay, kind, at) {
   return `<span class="chip${forecast ? " chip-forecast" : ""}" style="color:${color};border-color:${color}44">
       <span class="chip-n">${delayLabel(delay)}</span><span class="chip-unit">min</span>
     </span>
-    ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at ? ` v ${escapeHtml(at)}` : ""}</div>` : ""}`;
+    ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at ? ` na postaji ${escapeHtml(at)}` : ""}</div>` : ""}`;
 }
 
 // Vožnja je "mimo" šele, ko je minil PRIČAKOVANI odhod, ne voznoredni.
@@ -250,18 +250,52 @@ function connectionRowHtml(c, nowMs, isNext, date) {
     </a>`;
 }
 
+// Zveza, ki je ne drzi, ni povezava. Barva je semafor razmer, ne lestvica
+// zamud: to ni "koliko", ampak "ali gre" -- druga vrsta vprasanja.
+const TRANSFER_STYLE = {
+  "drži": { color: "var(--sev-mild)", note: "zveza drži" },
+  "tesno": { color: "var(--sev-hard)", note: "tesno" },
+  "ne drži": { color: "var(--sev-bad)", note: "zveza ne drži" },
+  "brez podatka": { color: "var(--ink-faint)", note: "brez podatka o zamudi" },
+};
+
+function transferBadgeHtml(tr, plannedS) {
+  if (!tr) return '<span class="tag">1 prestop</span>';
+  const st = TRANSFER_STYLE[tr.status] || TRANSFER_STYLE["brez podatka"];
+  const mins = Math.round(tr.wait_s / 60);
+  return `<span class="transfer-badge" style="color:${st.color};border-color:${st.color}55">
+      ${escapeHtml(st.note)}
+    </span>
+    <div class="conn-where">${tr.status === "brez podatka"
+      ? `${Math.round(plannedS / 60)} min za prestop`
+      : `${mins} min za prestop · ${escapeHtml(tr.source)}`}</div>`;
+}
+
 function transferRowHtml(t, nowMs, date) {
+  const tr = t.transfer;
+  const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
+  const planned = Math.round(t.wait_s / 60);
+  const actual = tr && tr.wait_s != null ? Math.round(tr.wait_s / 60) : null;
+
   const legs = t.legs.map((l, i) => `
     <div class="leg">
       <span class="leg-time">${hhmm(l.dep)}–${hhmm(l.arr)}</span>
       <span class="leg-train">${escapeHtml(l.train_no)}</span>
       <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
     </div>
-    ${i === 0 ? `<div class="leg"><span class="leg-wait">prestop v ${escapeHtml(t.via)} · ${Math.round(t.wait_s / 60)} min</span></div>` : ""}
+    ${i === 0 ? `<div class="leg">
+        <span class="leg-wait" style="color:${st.color}">
+          prestop na postaji ${escapeHtml(t.via)} · ${actual != null && actual !== planned
+            ? `${actual} min (po voznem redu ${planned})`
+            : `${planned} min`}
+        </span>
+        ${tr && tr.delay1_s ? `<span class="leg-note">prvi vlak ${delayLabel(tr.delay1_s)} min</span>` : ""}
+      </div>` : ""}
   `).join("");
 
   return `
-    <a class="conn-row is-transfer" href="/app/train/${encodeURIComponent(t.train1)}?date=${encodeURIComponent(date)}">
+    <a class="conn-row is-transfer" style="border-left-color:${st.color}"
+       href="/app/train/${encodeURIComponent(t.train1)}?date=${encodeURIComponent(date)}">
       <div class="conn-times">
         <div class="conn-clock">
           <span class="conn-dep">${hhmm(t.sched_dep)}</span>
@@ -271,12 +305,12 @@ function transferRowHtml(t, nowMs, date) {
       </div>
       <div class="conn-train">
         <div class="conn-no">${escapeHtml(t.train1)} → ${escapeHtml(t.train2)}</div>
-        <div class="conn-headsign">prestop v ${escapeHtml(t.via)}</div>
+        <div class="conn-headsign">prestop na postaji ${escapeHtml(t.via)}</div>
       </div>
-      <div class="conn-delay"><span class="tag">1 prestop</span></div>
+      <div class="conn-delay">${transferBadgeHtml(tr, t.wait_s)}</div>
       <div class="conn-meta">
         <span>${durationLabel(t.duration_s)}</span>
-        <span>${Math.round(t.wait_s / 60)} min za prestop</span>
+        <span class="adv-only">načrtovano ${planned} min za prestop</span>
       </div>
       <div class="legs">${legs}</div>
     </a>`;

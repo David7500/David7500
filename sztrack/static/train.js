@@ -136,7 +136,7 @@ function runHeadHtml(cur) {
       </div>
       <div class="detail-now-where">
         ${cur
-          ? `izmerjeno v <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
+          ? `izmerjeno na postaji <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
           : `za ${bus ? "ta prevoz" : "ta vlak"} na ta dan še ni nobene meritve`}
       </div>
       ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
@@ -144,7 +144,7 @@ function runHeadHtml(cur) {
       </div>` : ""}
       ${rep ? `<div class="detail-report">
         Prevoznik poroča <strong style="color:${delayColor(rep.delay_min * 60)}">${rep.delay_min > 0 ? "+" : ""}${rep.delay_min} min</strong>
-        ob ${escapeHtml(rep.event)}u v <strong>${escapeHtml(rep.station)}</strong>
+        ob ${escapeHtml(rep.event)}u na postajo <strong>${escapeHtml(rep.station)}</strong>
         ${rep.severe ? '<span class="tag">izjemna zamuda</span>' : ""}
       </div>` : ""}
       ${wx && wx.severity != null ? `
