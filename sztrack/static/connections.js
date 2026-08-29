@@ -764,11 +764,10 @@ async function searchAB(push) {
     }
     const data = await res.json();
     renderConnections(data);
-    feedDotEl.classList.remove("stale");
     schedulePoll(() => searchAB(false), data.date === todayIso());
   } catch (err) {
     console.error("iskanje ni uspelo", err);
-    feedDotEl.classList.add("stale");
+    refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
     resultsEl.innerHTML = '<div class="empty-state">Iskanje ni uspelo. Strežnik morda ni dosegljiv.</div>';
   }
 }
@@ -799,11 +798,10 @@ async function searchBoard(push) {
     }
     const data = await res.json();
     renderBoard(data);
-    feedDotEl.classList.remove("stale");
     schedulePoll(() => searchBoard(false), data.date === todayIso());
   } catch (err) {
     console.error("tabla ni uspela", err);
-    feedDotEl.classList.add("stale");
+    refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
     resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
   }
 }
@@ -965,4 +963,6 @@ attachSuggest($("station"), $("suggest-station"));
 
 tickClock();
 setInterval(tickClock, 1000);
+refreshFeedDot();
+setInterval(refreshFeedDot, 30000);
 restore();

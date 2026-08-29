@@ -52,6 +52,32 @@ function pluralRuns(n) {
   return `${n} voženj`;
 }
 
+// ---------- pika o zivosti ----------
+// Pika je doslej kazala, ali je ODGOVOR prisel, ne ali so PODATKI sveži.
+// Če zajem odmre, API pa tece naprej, bi ostala zelena in bi trdila nekaj,
+// česar ne ve. Zdaj bere `last_feed_at` iz stanja zajema.
+
+// Feed se osvezuje na 30 s. Trikratnik je dovolj, da ena izpuscena zahteva
+// ne prizge opozorila, in dovolj malo, da odmrl zajem opazimo v minuti.
+const FEED_STALE_S = 90;
+
+async function refreshFeedDot() {
+  const dot = document.getElementById("feed-dot");
+  if (!dot) return;
+  try {
+    const h = await fetch("/api/health").then((r) => r.json());
+    const age = h.last_feed_ts ? Date.now() / 1000 - h.last_feed_ts : Infinity;
+    const stale = age > FEED_STALE_S;
+    dot.classList.toggle("stale", stale);
+    dot.title = h.last_feed_at
+      ? `zadnji zajem ob ${hhmm(h.last_feed_at)}${stale ? ` — pred ${Math.round(age / 60)} min` : ""}`
+      : "zajema še ni bilo";
+  } catch (err) {
+    dot.classList.add("stale");
+    dot.title = "strežnik ni dosegljiv";
+  }
+}
+
 // ---------- preprosto / napredno ----------
 // Isto na vseh straneh, zato tu in ne trikrat. Napreden pogled ni druga stran:
 // je razred na <body>, ki odkrije elemente z razredom `adv-only`.

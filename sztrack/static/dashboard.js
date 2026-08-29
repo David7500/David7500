@@ -412,10 +412,9 @@ async function pollLive() {
     trainCountEl.textContent = trains.length;
     renderSidebar(trains);
     renderTrains(trains);
-    feedDotEl.classList.remove("stale");
   } catch (err) {
     console.error("/api/live ni uspel", err);
-    feedDotEl.classList.add("stale");
+    refreshFeedDot();
   }
 }
 
@@ -428,6 +427,8 @@ function tickClock() {
 
 tickClock();
 setInterval(tickClock, 1000);
+refreshFeedDot();
+setInterval(refreshFeedDot, 30000);
 
 loadStatic().then(() => {
   pollLive();

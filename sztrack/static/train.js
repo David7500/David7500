@@ -265,14 +265,13 @@ async function loadRun() {
     runHeadEl.innerHTML = runHeadHtml(current);
     runTimelineEl.innerHTML = runTimelineHtml(run.stops, forecast, state.weather) +
       `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj</div>`;
-    feedDotEl.classList.remove("stale");
     renderProfile();
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
     runTimelineEl.innerHTML =
       '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
-    feedDotEl.classList.add("stale");
+    refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
   }
 }
 
@@ -915,6 +914,8 @@ function tickClock() {
 
 tickClock();
 setInterval(tickClock, 1000);
+refreshFeedDot();
+setInterval(refreshFeedDot, 30000);
 
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
 // za njo.
