@@ -523,3 +523,71 @@ def test_iskanje_ne_zaide_med_omrezji(conn):
     c.commit()
     # Na zelezniskem omrezju avtobusne noge ni, zato do 'Konec' ni poti.
     assert journey.plan(c, "Ajdovščina", "Konec", "2026-08-31", network="zeleznica") == []
+
+
+# ---------------------------------------------------------------- dnevni povzetek
+
+def _vozba(conn, trip, day, stops):
+    """stops: [(stop_seq, delay_s)] -- zadnji je koncna zamuda vozjne."""
+    for seq, d in stops:
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                     " delay_dep, feed_ts) VALUES(?,?,?,?,?,1)", (trip, day, seq, d, d))
+
+
+def test_povzetek_vzame_zadnji_postanek(conn):
+    """Konca zamuda je zamuda na zadnjem zajetem postanku, ne najvecja."""
+    _vozba(conn, "t1", _pred(2), [(2, 600), (3, 120)])
+    conn.commit()
+    got = stats.summary_build(conn, "network_stats", "zeleznica", 90)
+    row = next(r for r in got["rows"] if r["train_no"] == "IC 1")
+    assert row["median_s"] == 120
+
+
+def test_povzetek_ne_mesa_omrezij(conn):
+    """Statistika vlakov ne sme vsebovati avtobusov in obratno.
+
+    Filter mora biti **znotraj** poizvedbe, ne za njo: sicer jo pri milijonih
+    vrstic zeleznisko vprasanje placa z avtobusnimi vrsticami.
+    """
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+                 " mode, agency, network) VALUES('b1','rb','LPP 6','B','S1',"
+                 "'bus','1118','avtobus')")
+    _sched(conn, "b1", [(1, "A", None, 30000), (2, "C", 33000, None)])
+    _vozba(conn, "t1", _pred(2), [(3, 120)])
+    _vozba(conn, "b1", _pred(2), [(2, 900)])
+    conn.commit()
+
+    rail = stats.summary_build(conn, "network_stats", "zeleznica", 90)["rows"]
+    bus = stats.summary_build(conn, "network_stats", "avtobus", 90)["rows"]
+    assert [r["train_no"] for r in rail] == ["IC 1"]
+    assert [r["train_no"] for r in bus] == ["LPP 6"]
+
+
+def test_povzetek_se_postreze_iz_predpomnilnika(conn):
+    """Drugi klic ne sme znova racunati -- in mora povedati, iz kdaj je."""
+    _vozba(conn, "t1", _pred(2), [(3, 120)])
+    conn.commit()
+    prvi = stats.summary_get(conn, "breakdowns", "zeleznica", 90)
+    assert prvi["cached"] is False and prvi["computed_at"]
+
+    # Nova meritev, ki je predpomnilnik se ne pozna: odgovor ostane stari.
+    _vozba(conn, "t2", _pred(1), [(2, 3000)])
+    conn.commit()
+    drugi = stats.summary_get(conn, "breakdowns", "zeleznica", 90)
+    assert drugi["cached"] is True
+    assert drugi["runs"] == prvi["runs"] == 1
+    assert drugi["computed_at"] == prvi["computed_at"]
+
+    # Sele osvezitev jo vkljuci.
+    stats.refresh_summaries(conn, windows=(90,), networks=("zeleznica",))
+    assert stats.summary_get(conn, "breakdowns", "zeleznica", 90)["runs"] == 2
+
+
+def test_prestar_povzetek_se_izracuna_znova(conn):
+    """Ce nocno opravilo ni teklo, sme zahteva placati racun sama."""
+    _vozba(conn, "t1", _pred(2), [(3, 120)])
+    conn.commit()
+    stats.summary_build(conn, "breakdowns", "zeleznica", 90)
+    conn.execute("UPDATE povzetek SET computed_at = ?", (_pred(3) + "T03:30:00+02:00",))
+    conn.commit()
+    assert stats.summary_get(conn, "breakdowns", "zeleznica", 90)["cached"] is False

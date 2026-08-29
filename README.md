@@ -20,7 +20,7 @@ Vse teče skozi isti JSON API, tako da je prikaz zamenljiv.
 | `/app/bus` | avtobusi: ista stran, drugo omrežje |
 | `/app/train/{št}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
 | `/app/ovire` | dela na progi in nadomestni prevozi |
-| `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu |
+| `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu (dnevni povzetek) |
 | `/app/map` | živi zemljevid |
 | `/docs` | OpenAPI |
 
@@ -91,6 +91,7 @@ sztrack show "LPV 2206" --date 2026-08-28
 sztrack stats --days 90           # lestvica vlakov
 sztrack backtest                  # izmeri napako napovedi
 sztrack backtest --operator       # prevoznikova napoved proti prenosu zamude
+sztrack summarize                 # znova izracunaj dnevne razreze statistike
 sztrack repair                    # znova zgradi `run` iz dnevnika `obs`
 sztrack prune                     # pobriši star dnevnik (`run` ostane)
 sztrack weather --days 7          # dopolni vreme za nazaj

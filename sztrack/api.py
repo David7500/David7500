@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -23,6 +24,10 @@ app = FastAPI(title="sztrack", version="0.1.0",
               description="Vozni redi, zamude in statistika Slovenskih železnic",
               lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
+# Odgovori so JSON s ponavljajocimi se imeni polj in se stisnejo na desetino.
+# Pri letu zajema ima lestvica avtobusnih linij 167 KB, stisnjena 20 KB --
+# in to prek Tailscala ali tunela ni vseeno. Brez nove odvisnosti (starlette).
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Dve locheni omrezji, ne en kup. `zeleznica` so vlaki IN nadomestni prevozi SZ
 # (ti na svoji relaciji zamenjujejo vlak in sodijo v isti odgovor), `avtobus`
@@ -480,10 +485,17 @@ def api_predict(train_no: str, stop_seq: int, delay_s: int,
 
 
 @app.get("/api/stats/breakdowns")
-def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
-    """Končne zamude po vrsti vlaka, uri odhoda, dnevu v tednu in dnevu."""
+def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
+                   fresh: bool = False):
+    """Končne zamude po vrsti vlaka, uri odhoda, dnevu v tednu in dnevu.
+
+    Postrezeno iz dnevnega povzetka. `fresh=1` obide predpomnilnik -- pri letu
+    zajema je to nekaj sekund, zato ni privzeto.
+    """
     with _conn() as conn:
-        return stats.breakdowns(conn, days, network)
+        if fresh:
+            return stats.summary_build(conn, "breakdowns", network, days)
+        return stats.summary_get(conn, "breakdowns", network, days)
 
 
 @app.get("/api/speeds")
@@ -494,10 +506,13 @@ def api_speeds(train_no: str | None = None):
 
 
 @app.get("/api/stats")
-def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
-    """Lestvica voženj po zamudi ob koncu poti."""
+def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
+              fresh: bool = False):
+    """Lestvica voženj po zamudi ob koncu poti (iz dnevnega povzetka)."""
     with _conn() as conn:
-        return stats.network_stats(conn, days, network)
+        if fresh:
+            return stats.summary_build(conn, "network_stats", network, days)
+        return stats.summary_get(conn, "network_stats", network, days)
 
 
 # Vlak ostane na seznamu se toliko sekund po voznorednem (z zamudo popravljenem)

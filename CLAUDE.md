@@ -159,7 +159,7 @@ sztrack/
   collector.py   poll zamud, razreševanje obratovalnega dne, prehodne ničle
   alerts.py      ovire (SZ-OVIRA) in žive zamude s prometnim mestom (SZ-DELAY)
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
-  stats.py       zgodovina, porazdelitve, hitrosti, napoved, povezave
+  stats.py       zgodovina, porazdelitve, hitrosti, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   server.py      lifespan: bootstrap + zajem v ozadnji niti
@@ -386,6 +386,14 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
   `seed/sz.sqlite`, ki ga rabi namestitev (izjema `!seed/sz.sqlite`).
 * Ne dodajaj odvisnosti brez razloga; `requirements.txt` ima pet vrstic in
   naj tako ostane.
+* **Agregat čez vso zgodovino se ne računa v zahtevi.** Razrezi statistike
+  gredo skozi `stats.summary_get()` in se izračunajo enkrat na dan (ob 3:30,
+  `SZ_MAINT_HOUR`). Pri letu zajema je razlika 17 s proti 0,3 ms. Vsaka taka
+  številka mora na strani nositi **čas izračuna** — predpomnjena vrednost
+  brez datuma je laž, ki čaka na priložnost.
+* **Omrežje filtriraj znotraj poizvedbe, ne za njo.** `WHERE t.network = ?`
+  za okenskim izračunom pomeni, da železniško vprašanje (700 000 vrstic)
+  plača avtobusne (12 M). Isti vzorec je bil že dvakrat vzrok počasnosti.
 * **V enem SQL stavku ne mešaj `?` in `:ime`.** sqlite veže po vrstnem redu
   pojavitve in tiho vrne napačne vrstice, brez izjeme. Cel stavek naj bo enega
   sloga.

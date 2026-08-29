@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import sqlite3
 import statistics
+import threading
+import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -264,22 +266,43 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
     }
 
 
+# Zadnji postanek vsake vožnje vsakega dne -- torej končna zamuda.
+#
+# Prvotno je bilo to `ROW_NUMBER() OVER (PARTITION BY ...)` nad `run` s samim
+# pogojem `service_date >= ?`, omrežje pa se je filtriralo šele po tem. Pri
+# 52 milijonih vrstic je to pomenilo okensko funkcijo in razvrščanje čez
+# 12,6 milijona vrstic **tudi za poizvedbo o železnici**, ki jih ima 700 000:
+# 38 sekund.
+#
+# Zdaj se najprej zožimo na vožnje izbranega omrežja (železnica jih ima 789 od
+# 21 000) in šele nato beremo `run`. Ključ `run` je (trip_id, service_date,
+# stop_seq), zato je to za vsako vožnjo obseg po indeksu, ne pregled tabele.
+# `MAX(stop_seq)` namesto ROW_NUMBER pa odpravi razvrščanje.
+LAST_STOP_SQL = """
+WITH mx AS (
+    SELECT r.trip_id, r.service_date, MAX(r.stop_seq) AS stop_seq
+    FROM trip t JOIN run r ON r.trip_id = t.trip_id
+    WHERE (:network IS NULL OR t.network = :network) AND r.service_date >= :since
+    GROUP BY r.trip_id, r.service_date
+),
+last AS (
+    SELECT mx.trip_id, mx.service_date, mx.stop_seq,
+           COALESCE(r.delay_arr, r.delay_dep) AS d
+    FROM mx JOIN run r ON r.trip_id = mx.trip_id
+                      AND r.service_date = mx.service_date
+                      AND r.stop_seq = mx.stop_seq
+    WHERE COALESCE(r.delay_arr, r.delay_dep) IS NOT NULL
+)
+"""
+
+
 def network_stats(conn: sqlite3.Connection, days: int = 90,
                   network: str | None = "zeleznica") -> list[dict]:
     """Lestvica voženj po zamudi na koncu poti."""
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
-    rows = conn.execute(
-        "WITH last AS ("
-        "  SELECT r.trip_id, r.service_date, r.stop_seq, r.delay_arr, r.delay_dep,"
-        "         ROW_NUMBER() OVER (PARTITION BY r.trip_id, r.service_date"
-        "                            ORDER BY r.stop_seq DESC) AS rn"
-        "  FROM run r WHERE r.service_date >= ?"
-        ") "
-        "SELECT t.train_no, l.service_date, COALESCE(l.delay_arr, l.delay_dep) AS d "
-        "FROM last l JOIN trip t USING (trip_id) "
-        "WHERE l.rn = 1 AND d IS NOT NULL AND (? IS NULL OR t.network = ?)",
-        (since, network, network),
-    ).fetchall()
+    rows = conn.execute(LAST_STOP_SQL + "SELECT t.train_no, l.service_date, l.d "
+                        "FROM last l JOIN trip t USING (trip_id)",
+                        {"network": network, "since": since}).fetchall()
     grouped: dict[str, list[int]] = {}
     for r in rows:
         grouped.setdefault(r["train_no"], []).append(r["d"])
@@ -449,19 +472,12 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
     """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     rows = conn.execute(
-        "WITH last AS ("
-        "  SELECT r.trip_id, r.service_date, r.stop_seq,"
-        "         COALESCE(r.delay_arr, r.delay_dep) AS d,"
-        "         ROW_NUMBER() OVER (PARTITION BY r.trip_id, r.service_date"
-        "                            ORDER BY r.stop_seq DESC) AS rn"
-        "  FROM run r WHERE r.service_date >= ?"
-        ") "
+        LAST_STOP_SQL +
         "SELECT t.train_no, t.mode, t.network, t.agency, l.service_date, l.d, "
         "       (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s"
         "        WHERE s.trip_id = l.trip_id) AS start_s "
-        "FROM last l JOIN trip t USING (trip_id) "
-        "WHERE l.rn = 1 AND l.d IS NOT NULL AND (? IS NULL OR t.network = ?)",
-        (since, network, network),
+        "FROM last l JOIN trip t USING (trip_id)",
+        {"network": network, "since": since},
     ).fetchall()
 
     by_kind: dict[str, list[int]] = {}
@@ -784,4 +800,115 @@ def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str,
             "code": w["code"] if w else None,
             "source": w["source"] if w else None,
         })
+    return out
+
+
+# ---------------------------------------------------------------- dnevni povzetek
+#
+# Statistika cez vso zgodovino je agregat, ki mora prebrati vsako meritev v
+# oknu. Pri devetih dneh zajema je to 70 000 vrstic in traja 40 ms; pri letu
+# dni vseh prevoznikov je 12 milijonov vrstic in traja sekunde. Izmerjeno na
+# sinteticni bazi z letom zajema (52 M vrstic `run`, 5,9 GB):
+#
+#     breakdowns 90 dni, avtobusi ..... 17,3 s
+#     breakdowns 90 dni, vlaki .........  3,0 s
+#
+# Racunati to ob vsakem obisku strani ni smiselno, ker se odgovor med obiskoma
+# skoraj ne spremeni: en nov dan je 1/90 vzorca. Zato se izracuna enkrat na dan,
+# shrani cel in postreze iz baze. Stran ob tem **pove cas izracuna** -- brez
+# njega bralec ne loci vceraj izracunane stevilke od zdajsnje.
+#
+# Dvakratno racunanje istega ob hkratnih zahtevah prepreci `_SUMMARY_LOCK`:
+# brez njega dva obiska ob praznem predpomnilniku pozeneta dva 17-sekundna
+# agregata na isti bazi.
+
+SUMMARY_BUILDERS = {
+    "network_stats": lambda conn, days, network: {
+        "rows": network_stats(conn, days, network)},
+    "breakdowns": breakdowns,
+}
+
+# Katera okna vzdrzujemo. Sirse okno ni drazje od ozjega toliko, kolikor je
+# sirse -- glavnina stroska je pregled `run` -- zato jih ni smiselno imeti vec.
+SUMMARY_WINDOWS = (90,)
+SUMMARY_NETWORKS = ("zeleznica", "avtobus")
+
+# Kdaj velja predpomnjeni odgovor za prestar, ce dnevno opravilo ni teklo.
+SUMMARY_MAX_AGE_S = 36 * 3600
+
+_SUMMARY_LOCK = threading.Lock()
+
+
+def _summary_row(conn: sqlite3.Connection, kind: str, network: str, days: int):
+    return conn.execute(
+        "SELECT computed_at, through, took_ms, runs, payload FROM povzetek "
+        "WHERE kind = ? AND network = ? AND days = ?", (kind, network, days)
+    ).fetchone()
+
+
+def summary_build(conn: sqlite3.Connection, kind: str, network: str,
+                  days: int = 90) -> dict:
+    """Izracunaj razrez in ga shrani. Vrne shranjeni odgovor."""
+    builder = SUMMARY_BUILDERS[kind]
+    started = time.monotonic()
+    payload = builder(conn, days, network)
+    took_ms = int((time.monotonic() - started) * 1000)
+    computed_at = datetime.now(TZ).isoformat(timespec="seconds")
+    days_seen = payload.get("days") or []
+    through = days_seen[-1] if days_seen else None
+    runs = payload.get("runs")
+    if runs is None:
+        runs = sum(r["runs"] for r in payload.get("rows", []))
+    conn.execute(
+        "INSERT INTO povzetek (kind, network, days, computed_at, through,"
+        "                      took_ms, runs, payload) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(kind, network, days) DO UPDATE SET "
+        "  computed_at = excluded.computed_at, through = excluded.through,"
+        "  took_ms = excluded.took_ms, runs = excluded.runs,"
+        "  payload = excluded.payload",
+        (kind, network, days, computed_at, through, took_ms, runs,
+         json.dumps(payload, ensure_ascii=False)),
+    )
+    conn.commit()
+    return {**payload, "runs": runs, "computed_at": computed_at,
+            "through": through, "took_ms": took_ms, "cached": False}
+
+
+def summary_get(conn: sqlite3.Connection, kind: str, network: str, days: int = 90,
+                max_age_s: int = SUMMARY_MAX_AGE_S) -> dict:
+    """Predpomnjeni razrez; ce ga ni ali je prestar, ga izracuna zdaj.
+
+    Sveze racunanje v zahtevi je zasilni izhod, ne pot: prvi obisk po namestitvi
+    in dan, ko dnevno opravilo ni teklo. Sicer to opravi ozadnja nit.
+    """
+    row = _summary_row(conn, kind, network, days)
+    if row is not None:
+        age = (datetime.now(TZ) - datetime.fromisoformat(row["computed_at"])).total_seconds()
+        if age <= max_age_s:
+            return {**json.loads(row["payload"]), "runs": row["runs"],
+                    "computed_at": row["computed_at"], "through": row["through"],
+                    "took_ms": row["took_ms"], "cached": True}
+
+    with _SUMMARY_LOCK:
+        # Med cakanjem na kljucavnico ga je morda ze izracunal nekdo drug.
+        again = _summary_row(conn, kind, network, days)
+        if again is not None and (again["computed_at"] != (row["computed_at"] if row else None)):
+            return {**json.loads(again["payload"]), "runs": again["runs"],
+                    "computed_at": again["computed_at"], "through": again["through"],
+                    "took_ms": again["took_ms"], "cached": True}
+        return summary_build(conn, kind, network, days)
+
+
+def refresh_summaries(conn: sqlite3.Connection, windows=SUMMARY_WINDOWS,
+                      networks=SUMMARY_NETWORKS) -> list[dict]:
+    """Znova izracunaj vse razreze. To pozene dnevno opravilo in `sztrack summarize`."""
+    out = []
+    with _SUMMARY_LOCK:
+        for network in networks:
+            for days in windows:
+                for kind in SUMMARY_BUILDERS:
+                    got = summary_build(conn, kind, network, days)
+                    out.append({"kind": kind, "network": network, "days": days,
+                                "runs": got.get("runs"), "took_ms": got["took_ms"]})
     return out

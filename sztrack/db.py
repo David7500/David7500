@@ -199,6 +199,24 @@ CREATE TABLE IF NOT EXISTS delay_report (
 );
 CREATE INDEX IF NOT EXISTS delay_report_train ON delay_report(train_no, service_date);
 CREATE INDEX IF NOT EXISTS delay_report_date ON delay_report(service_date);
+
+-- Statistika cez vso zgodovino, izracunana enkrat na dan.
+--
+-- Razrez 90 dni je agregat cez milijone vrstic `run` in ga ni smiselno racunati
+-- ob vsakem obisku strani: en nov dan premakne mediano 90-dnevnega okna za
+-- odstotek. Zato se rezultat shrani cel (JSON) skupaj s casom izracuna, ki ga
+-- stran pokaze -- predpomnjena stevilka brez datuma je laz, ki caka na priloznost.
+CREATE TABLE IF NOT EXISTS povzetek (
+    kind        TEXT NOT NULL,      -- network_stats | breakdowns
+    network     TEXT NOT NULL,      -- zeleznica | avtobus
+    days        INTEGER NOT NULL,   -- sirina okna
+    computed_at TEXT NOT NULL,      -- ISO 8601 z obmocjem
+    through     TEXT,               -- zadnji obratovalni dan v izracunu
+    took_ms     INTEGER,            -- koliko je racun trajal
+    runs        INTEGER,            -- koliko vozenj je zajel
+    payload     TEXT NOT NULL,      -- JSON odgovora
+    PRIMARY KEY (kind, network, days)
+);
 """
 
 

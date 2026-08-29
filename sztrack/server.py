@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import alerts, collector, config, db, gtfs, weather
+from . import alerts, collector, config, db, gtfs, stats, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -89,7 +89,7 @@ def _next_at(hour: int, minute: int) -> datetime:
 
 
 def _worker(interval: int, refresh_hour: int, refresh_mode: str,
-            weather_hour: int, alert_interval: int) -> None:
+            weather_hour: int, alert_interval: int, maint_hour: int) -> None:
     conn = db.connect()
     db.init(conn)
     # Lega vozil je smiselna samo, ce so v bazi avtobusi: feed nosi izkljucno
@@ -106,6 +106,14 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Obvestila so vecji prenos od zamud in se pocasneje spreminjajo (razen
     # SZ-DELAY), zato imajo svoj, redkejsi ritem.
     next_alerts = 0.0
+    # Ob treh zjutraj je vceraj sklenjen, vlaki pa skoraj ne vozijo -- 34
+    # sekund agregata takrat nikogar ne moti.
+    next_maint = _next_at(maint_hour, 30) if maint_hour >= 0 else None
+    # Ce povzetkov se ni (prva namestitev, nova sirina okna), jih zgradi ob
+    # prvem obhodu -- sicer bi racun placal prvi obiskovalec strani, in pri
+    # letu zajema je to 34 sekund cakanja.
+    if next_maint and not conn.execute("SELECT 1 FROM povzetek LIMIT 1").fetchone():
+        next_maint = datetime.now(TZ)
 
     while not _stop.is_set():
         started = time.monotonic()
@@ -152,9 +160,14 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:      # vreme ni kriticno -- zajem tece naprej
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
 
-            # Ob istem dnevnem opravilu obrezemo dnevnik. Z vsemi prevozniki
-            # nastane ~300 000 vrstic `obs` na dan (24 MB, 8,7 GB na leto).
-            # `run` se ne brise nikoli -- ta je zgodovina.
+        # Nocno vzdrzevanje: obrez dnevnika in razrezi statistike. Prej je bilo
+        # oboje priklopljeno na vremensko opravilo in z `SZ_WEATHER=0` ni teklo
+        # nikoli -- zato ima zdaj svojo uro.
+        if next_maint and datetime.now(TZ) >= next_maint:
+            next_maint += timedelta(days=1)
+
+            # Z vsemi prevozniki nastane ~300 000 vrstic `obs` na dan (24 MB,
+            # 8,7 GB na leto). `run` se ne brise nikoli -- ta je zgodovina.
             try:
                 info = collector.prune_obs(conn)
                 if info["rail_deleted"] or info["bus_deleted"]:
@@ -162,6 +175,17 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                          f"{info['bus_deleted']} avtobusnih vrstic")
             except Exception as exc:
                 _log(f"dnevnika ni bilo mogoče obrezati: {exc}")
+
+            # Razrezi cez vso zgodovino. Pri letu zajema je to agregat cez 12
+            # milijonov vrstic in traja 34 s, odgovor pa se med dvema dnevoma
+            # skoraj ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na
+            # dan tu, strani pa ga preberejo iz baze v milisekundi.
+            try:
+                done = stats.refresh_summaries(conn)
+                worst = max((d["took_ms"] for d in done), default=0)
+                _log(f"povzetki osveženi: {len(done)} razrezov, najdlje {worst / 1000:.1f} s")
+            except Exception as exc:      # statistika ni kriticna za zajem
+                _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
 
         _stop.wait(max(1.0, interval - (time.monotonic() - started)))
 
@@ -178,8 +202,10 @@ async def lifespan(app):
         if os.environ.get("SZ_WEATHER", "1") == "0":
             weather_hour = -1
         alert_interval = int(os.environ.get("SZ_ALERT_SECONDS", "60"))
+        maint_hour = int(os.environ.get("SZ_MAINT_HOUR", "3"))
         thread = threading.Thread(
-            target=_worker, args=(interval, hour, mode, weather_hour, alert_interval),
+            target=_worker,
+            args=(interval, hour, mode, weather_hour, alert_interval, maint_hour),
             daemon=True, name="sztrack-collector",
         )
         thread.start()
@@ -187,7 +213,9 @@ async def lifespan(app):
         wnote = "vreme izklopljeno" if weather_hour < 0 else f"vreme ob {weather_hour}:10"
         anote = ("obvestila izklopljena" if alert_interval <= 0
                  else f"obvestila vsakih {alert_interval} s")
-        _log(f"zajem teče vsakih {interval} s, {note}, {wnote}, {anote}")
+        mnote = ("vzdrževanje izklopljeno" if maint_hour < 0
+                 else f"povzetki in obrez ob {maint_hour}:30")
+        _log(f"zajem teče vsakih {interval} s, {note}, {wnote}, {anote}, {mnote}")
     else:
         _log("zajem izklopljen (SZ_COLLECTOR=0)")
     try:

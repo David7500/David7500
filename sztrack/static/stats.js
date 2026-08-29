@@ -203,13 +203,21 @@ async function load() {
   $("by-weekday").innerHTML = barsHtml(b.by_weekday);
   $("by-day").innerHTML = barsHtml(b.by_day, (r) => dayLabel(r.key));
 
+  // Predpomnjena stevilka brez casa izracuna je laz, ki caka na priloznost:
+  // bralec ne more vedeti, ali gleda danasnje ali tedensko staro stanje.
+  $("stamp").textContent = b.computed_at
+    ? `Izračunano ${stampLabel(b.computed_at)}, čez ${b.days.length} dni zajema` +
+      (b.through ? `, do vključno ${b.through}.` : ".") +
+      " Razrez se osveži enkrat na dan; današnje vožnje so v njem šele jutri."
+    : "";
+
   const weekdayN = b.by_weekday.reduce((a, r) => a + r.n, 0);
   $("dow-note").textContent = b.by_weekday.length < 7
     ? `Zajetih je ${b.days.length} dni, zato nekateri dnevi še nimajo dovolj voženj in jih ni na seznamu.`
     : `Vsi dnevi imajo vzorec (skupaj ${weekdayN} voženj), a pri ${b.days.length} dneh zajema ` +
       "je vsak dan v tednu zastopan le enkrat ali dvakrat — razlike med njimi so še sum.";
 
-  const worst = ranking.filter((r) => r.runs >= 3).slice(0, 20);
+  const worst = ranking.rows.filter((r) => r.runs >= 3).slice(0, 20);
   $("worst").innerHTML = `<div class="rank">${worst.map((r) => `
     <a class="rank-row" href="/app/train/${encodeURIComponent(r.train_no)}">
       <span class="rank-no">${escapeHtml(r.train_no)}</span>

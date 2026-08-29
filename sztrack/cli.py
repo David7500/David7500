@@ -124,6 +124,19 @@ def cmd_prune(args):
                      indent=2, ensure_ascii=False))
 
 
+def cmd_summarize(args):
+    """Znova izracunaj dnevne razreze statistike.
+
+    V strezniku to opravi ozadnja nit enkrat na dan; tu je za rocni zagon in
+    za cron na stroju, kjer strezniku zajem ne tece.
+    """
+    conn = db.connect()
+    db.init(conn)
+    for row in stats.refresh_summaries(conn, windows=(args.days,)):
+        print(f"{row['network']:>10s}  {row['kind']:<14s} {args.days:>4d} dni  "
+              f"{row['runs'] or 0:>8,} voženj  {row['took_ms']:>7d} ms")
+
+
 def cmd_seed(args):
     conn = db.connect()
     db.init(conn)
@@ -219,6 +232,10 @@ def main(argv=None):
     a.add_argument("--rail-days", type=int, default=collector.OBS_KEEP_DAYS)
     a.add_argument("--bus-days", type=int, default=collector.OBS_KEEP_DAYS_BUS)
     a.set_defaults(func=cmd_prune)
+
+    a = sub.add_parser("summarize", help="znova izracunaj dnevne razreze statistike")
+    a.add_argument("--days", type=int, default=90, help="sirina okna (privzeto 90)")
+    a.set_defaults(func=cmd_summarize)
 
     a = sub.add_parser("seed", help="zgradi prilozeno bazo za namestitev (samo vozni red)")
     a.add_argument("--out", default="seed/sz.sqlite")
