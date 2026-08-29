@@ -651,9 +651,25 @@ def _slack_ahead(conn: sqlite3.Connection, trip_ids: list[str]) -> dict:
     return out
 
 
+#: Prevoznikova napoved za se nedosezen postanek je izmerjeno slaba -- MAE
+#: 8,25 min proti 1,37 min za naso oceno -- a napaka je **enosmerna**. Merjeno
+#: na 12 026 primerih z znano prevoznikovo vrednostjo:
+#:
+#:   napove VEC kot mi (10 % primerov):  prevoznik MAE 0,21 min, mi 2,66 min
+#:   napove manj ali enako   (90 %):     prevoznik MAE 9,17 min, mi 1,22 min
+#:
+#: Nizka vrednost je namrec privzeta nicla za postanek, ki ga feed se ni
+#: razrešil; visoka pa pomeni, da prevoznik VE nekaj, cesar iz zgodovine ni
+#: mogoce vedeti -- okvaro, zaporo, krizanje. Zato: `max(nasa ocena, njegova)`.
+#: Nikoli navzdol, vedno navzgor.
+def _with_operator(ocena: int, prevoznik: int | None) -> int:
+    return ocena if prevoznik is None else max(ocena, prevoznik)
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90,
-            exclude_date: str | None = None) -> list[dict]:
+            exclude_date: str | None = None,
+            service_date: str | None = None) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
 
     Osnovni model: zamuda se prenaša naprej, popravljena za historično mediano
@@ -680,6 +696,15 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
 
     stops = timetable(conn, train_no)
     names = {t["stop_seq"]: t["name"] for t in stops}
+    # Kaj o teh postankih pravi feed prav zdaj. Za se nedosezen postanek je to
+    # prevoznikova napoved -- uporabimo jo samo navzgor (glej `_with_operator`).
+    feed: dict[int, int] = {}
+    if service_date:
+        feed = {r["stop_seq"]: r["d"] for r in conn.execute(
+            "SELECT r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
+            "FROM run r JOIN trip t USING (trip_id) "
+            "WHERE t.train_no = ? AND r.service_date = ? AND r.stop_seq > ? AND d IS NOT NULL",
+            (train_no, service_date, stop_seq))}
     # Rezerva voznega reda: presezek postanka nad najkrajsim, ki ga vozilo se
     # zmore. To je edini vhod v napoved, ki ni statistika -- rezerva je znana
     # vnaprej in obstaja ne glede na to, ali smo jo kdaj videli porabljeno.
@@ -703,6 +728,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
                 if stop_seq in day and seq in day]
         podobni = [r for d0, r in pari if delay_bucket(d0) == razred]
         ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
+        nasa = osnova + (round(statistics.median(ostanki)) if ostanki else 0)
+        prevoznik = feed.get(seq)
         out.append({
             "stop_seq": seq,
             "name": names[seq],
@@ -710,9 +737,15 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             "same_class": len(podobni) >= MIN_PREDICT_SAMPLES,
             "slack_s": slack,
             "slack_here_s": tu,
-            "predicted_delay_s": osnova + (round(statistics.median(ostanki)) if ostanki else 0),
-            "p90_delay_s": (osnova + round(_pct(ostanki, 0.9)) if ostanki else None),
-            "basis": "rezerva + historicni ostanek" if ostanki else "rezerva voznega reda",
+            "own_delay_s": nasa,
+            "operator_delay_s": prevoznik,
+            "from_operator": prevoznik is not None and prevoznik > nasa,
+            "predicted_delay_s": _with_operator(nasa, prevoznik),
+            "p90_delay_s": (_with_operator(osnova + round(_pct(ostanki, 0.9)), prevoznik)
+                            if ostanki else None),
+            "basis": ("prevoznik ve več" if prevoznik is not None and prevoznik > nasa
+                      else "rezerva + historicni ostanek" if ostanki
+                      else "rezerva voznega reda"),
         })
     return out
 
@@ -819,7 +852,10 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             # vmesni postaji dvajset minut, do potnika zamude ne prinese.
             rez = sum(w for seq, w in slack.get(d["trip_id"], ())
                       if lm["stop_seq"] < seq <= d["from_seq"])
-            d["delay_s"] = _after_slack(lm["delay_s"], rez)
+            # Prevoznikova vrednost samo navzgor: nizka je nerazresena nicla,
+            # visoka pa pomeni, da ve nekaj, cesar iz zgodovine ni mogoce vedeti.
+            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez),
+                                          d["from_delay_s"])
             d["delay_at"] = lm["name"]
             d["delay_kind"] = "ocena"
         elif d["from_delay_s"] is not None:

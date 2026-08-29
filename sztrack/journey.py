@@ -21,8 +21,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import (_abs_time, _after_slack, _slack_ahead, last_measured,
-                    typical_at_stops)
+from .stats import (_abs_time, _after_slack, _slack_ahead, _with_operator,
+                    last_measured, typical_at_stops)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -345,7 +345,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             zadnji = d["stop_seq"] if kind == "odhodi" else d["stop_seq"] - 1
             rez = sum(w for seq, w in slack.get(d["trip_id"], ())
                       if lm["stop_seq"] < seq <= zadnji)
-            d["delay_s"] = _after_slack(lm["delay_s"], rez)
+            # Prevoznikova vrednost samo navzgor (glej `stats._with_operator`).
+            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez), own)
             d["slack_s"] = rez
             d["delay_from"] = lm["name"]
             d["delay_kind"] = "ocena"

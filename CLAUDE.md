@@ -83,6 +83,23 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   je feedova napoved. Ta napaka je bila že dvakrat -- v `/api/live` in v
   odhodni tabli, kjer je IC 502 pri +17 min v Borovnici na tabli v Litiji
   pisal **0 min**. Potnik bi bral, da je vlak točen.
+* **Prevoznikova napoved šteje samo navzgor.** Njegova vrednost za še
+  nedosežen postanek je v povprečju smet (MAE 8,26 min), a napaka je
+  **enosmerna**. Merjeno na 12 026 primerih z znano prevoznikovo vrednostjo:
+
+  | | delež | prevoznik | naš model |
+  |---|---|---|---|
+  | napove **več** kot mi | 10 % | **0,21 min** | 2,66 min |
+  | napove manj ali enako | 90 % | 9,17 min | **1,22 min** |
+
+  Nizka vrednost je namreč privzeta ničla za postanek, ki ga feed še ni
+  razrešil; visoka pa pomeni, da prevoznik **ve** za nekaj, česar iz zgodovine
+  ni mogoče vedeti — okvaro, zaporo, križanje. Zato `stats._with_operator()`:
+  `max(naša ocena, njegova)`, nikoli navzdol. Na teh nalogah MAE 1,36 → 1,12
+  min, delež v petih minutah 93,7 → 94,8 %, in boljše je v **vseh** razredih
+  zamude. Velja v `predict`, na odhodni tabli in v iskalniku zvez.
+  Merljivo: `sztrack backtest --operator`.
+
 * **Zamude naprej po progi so napoved, ne meritev** -- in ta napoved je
   **izmerjeno slaba**. Feed za še nedosežene postanke pogosto objavi 0, dokler
   nima prave vrednosti. Merjeno (`sztrack backtest --operator`, 11 310 nalog):
@@ -680,6 +697,25 @@ vozni red zastonj.
 **Prikazani dan je izpuščen iz učenja** (`stats.predict(exclude_date=...)`,
 enako kot `history`). Pri tekoči vožnji naprej po progi meritve ni, pri ogledu
 končanega dne pa bi model deloma napovedoval iz odgovora.
+
+**Preizkušeno in ne pomaga** — vse merjeno z izpuščanjem enega dne, vse
+slabše ali enako `rezerva + razred` (1,914 min · 91,0 %):
+
+| zamisel | MAE | v 5 min |
+|---|---|---|
+| rezerva iz voznega reda **in** največjega opaženega okrevanja | 1,921 | 90,9 % |
+| rezerva samo iz opaženega okrevanja (brez voznega reda) | 1,935 | 90,9 % |
+| dodaten člen za trend zamude (raste/pada) | 1,917 | 91,0 % |
+| stanje odseka danes: kaj so tam delali drugi vlaki pred nami (30 % teže) | 1,921 | 90,9 % |
+| isto, s polno težo | 2,089 | 89,6 % |
+| zamuda nasprotnega vlaka na isti postaji (križanje), 10 % teže | 2,020 | 90,4 % |
+
+Zakaj nobena: pri devetih dneh mediana po `(vlak, i, j, razred)` že zajame
+skoraj vso strukturo. **Strop je izmerjen**: mediana, ki bi poznala tudi
+testni dan, da MAE 1,198 min in 95,0 % — torej je razlika do naših 1,914 min
+vrzel v **številu dni**, ne v domiselnosti modela. Obvestila o ovirah so za
+model neuporabna iz drugega razloga: 522 od 779 vlakov ima kakšno, vsa pa so
+veljala ves čas zajema, zato med dnevi ne ločijo ničesar.
 
 **Preizkušeno in ne pomaga** (`sztrack backtest --day-offset`): popravek za
 stanje mreže na ta dan. Zamisel je razumna -- če cel dan zamuja bolj kot

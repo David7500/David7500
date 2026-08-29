@@ -481,11 +481,34 @@ def evaluate_operator(conn: sqlite3.Connection) -> dict:
     tasks = operator_forecast_tasks(conn)
     if not tasks:
         return {"tasks": 0}
+
+    # Nas model na istih nalogah, z izpuscanjem enega dne. Rezervo voznega
+    # reda mu je treba dodati posebej -- te naloge jo nimajo.
+    dwells = _dwells(conn)
+    for t in tasks:
+        w = dwells.get(t["train_no"], {})
+        t["slack"] = sum(max(0, v - MIN_DWELL_S) for k, v in w.items() if t["i"] < k <= t["j"])
+    vse = build_tasks(conn)
+    nase, skupaj = {}, {}
+    for day in sorted({t["day"] for t in tasks}):
+        predict = model_fizika_razred([t for t in vse if t["day"] != day])
+        for t in tasks:
+            if t["day"] != day:
+                continue
+            k = (t["train_no"], t["day"], t["i"], t["j"])
+            nase[k] = predict(t)
+            skupaj[k] = stats._with_operator(nase[k], t["operator"])
+
+    def kljuc(t):
+        return (t["train_no"], t["day"], t["i"], t["j"])
+
     return {
         "tasks": len(tasks),
         "models": {
             "prenos": _score([t["d_i"] - t["d_j"] for t in tasks]),
             "prevoznik": _score([t["operator"] - t["d_j"] for t in tasks]),
+            "nas model": _score([nase[kljuc(t)] - t["d_j"] for t in tasks]),
+            "nas + prevoznik navzgor": _score([skupaj[kljuc(t)] - t["d_j"] for t in tasks]),
         },
         "by_horizon": {
             "prevoznik": {

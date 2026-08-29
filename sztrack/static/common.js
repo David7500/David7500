@@ -481,7 +481,11 @@ function forecastStopHtml(s, f, w) {
   const color = delayColor(d);
   const eta = d != null && schedIso ? hhmm(new Date(new Date(schedIso).getTime() + d * 1000)) : "—";
   const schedHtml = eta !== sched ? `<span class="stop-sched">${sched}</span>` : "";
+  // Kadar prevoznik napove VEC od nase ocene, je njegova stevilka merjeno
+  // skoraj tocna (MAE 0,21 min proti nasim 2,66) -- takrat ve za nekaj, cesar
+  // iz zgodovine ni mogoce vedeti. Povejmo, da stevilka pride od njega.
   const tag = !f ? "brez ocene"
+    : f.from_operator ? "prevoznik napoveduje več"
     : f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}`
     : "ocena · le prenos zamude";
   const feedSaid = stopDelay(s);
@@ -491,7 +495,10 @@ function forecastStopHtml(s, f, w) {
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">${escapeHtml(tag)}</span></div>
-        ${feedSaid != null ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>` : ""}
+        ${feedSaid != null && !(f && f.from_operator)
+          ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`
+          : ""}
+        ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.own_delay_s)} min</span></div>` : ""}
       </div>
       ${stopWeatherHtml(w, true)}
       <div class="stop-delay is-forecast" style="color:${color}">${delayLabel(d)}</div>

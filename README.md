@@ -61,8 +61,10 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
 * **Feed je drseče okno.** En klic da postanke okoli trenutnega položaja; celo
   vožnjo sestavimo iz zaporednih pollov.
 * **Zamude naprej po progi so napoved — in izmerjeno slaba.** Prevoznikova
-  napoved za še nedosežene postanke ima MAE 7,9 min proti 1,3 min za preprost
-  prenos trenutne zamude naprej. Prikaz zato uporablja lastno oceno.
+  napoved za še nedosežene postanke ima MAE 8,3 min proti 1,4 min za našo
+  oceno. Njegova napaka je pa **enosmerna**: kadar napove *več* kot mi, ima
+  MAE 0,21 min — takrat ve za oviro, ki je iz zgodovine ni mogoče vedeti.
+  Zato `max(naša ocena, njegova)`, nikoli navzdol.
   Merljivo: `sztrack backtest --operator`.
 * **Vlak zamudo porabi na rezervi voznega reda.** Napoved zato ni statistika
   sama: `slack = Σ max(0, postanek − 2 min)` med izhodiščem in ciljem se

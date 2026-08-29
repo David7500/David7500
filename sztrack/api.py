@@ -492,7 +492,7 @@ def api_predict(train_no: str, stop_seq: int, delay_s: int,
         return {"train_no": train_no, "from_stop_seq": stop_seq,
                 "current_delay_s": delay_s,
                 "forecast": stats.predict(conn, train_no, stop_seq, delay_s, days,
-                                          exclude_date)}
+                                          exclude_date, service_date=exclude_date)}
 
 
 @app.get("/api/train/{train_no}/vehicle")

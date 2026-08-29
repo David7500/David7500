@@ -864,3 +864,43 @@ def test_prihodna_tabla_ne_steje_lastnega_postanka(conn):
     b = journey.board(conn, "Zidani Most", dan, 30000, 240, kind="prihodi", now_s=30600)
     vrstica = next(r for r in b if r["train_no"] == "LP 7")
     assert vrstica["delay_s"] == 900        # rezerve pred prihodom ni
+
+
+# ---------------------------------------------------------------- prevoznikova napoved
+
+def test_prevoznikova_napoved_steje_samo_navzgor():
+    """Nizka je nerazrešena ničla, visoka pomeni, da prevoznik ve za oviro.
+
+    Izmerjeno na 12 026 primerih: kadar napove več od nas, ima MAE 0,21 min
+    (mi 2,66); kadar napove manj ali enako, 9,17 min (mi 1,22).
+    """
+    assert stats._with_operator(300, 900) == 900     # ve za oviro -- verjamemo
+    assert stats._with_operator(900, 0) == 900       # nerazresena nicla -- ne
+    assert stats._with_operator(900, None) == 900    # o tem postanku ne pravi nic
+
+
+def test_napoved_dvigne_kadar_prevoznik_ve_vec(conn):
+    dan = _pred(0)
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.commit()
+    # Feed za Zidani Most (stop_seq 2) trdi +30 min, nasa ocena bi bila +10.
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('t1',?,2,1800,1800,0)", (dan,))
+    conn.commit()
+    f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600, service_date=dan)}
+    z = f["Zidani Most"]
+    assert z["operator_delay_s"] == 1800
+    assert z["from_operator"] is True
+    assert z["predicted_delay_s"] == 1800
+    assert z["own_delay_s"] < 1800          # nasa ocena je bila nizja
+
+
+def test_napoved_ne_pade_na_prevoznikovo_niclo(conn):
+    dan = _pred(0)
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('t1',?,3,0,0,0)", (dan,))
+    conn.commit()
+    f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600, service_date=dan)}
+    assert f["Celje"]["from_operator"] is False
+    assert f["Celje"]["predicted_delay_s"] == f["Celje"]["own_delay_s"]
