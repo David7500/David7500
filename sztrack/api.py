@@ -281,7 +281,7 @@ def api_trains():
 @app.get("/api/train/{train_no}")
 def api_train(train_no: str):
     with _conn() as conn:
-        rows = stats.timetable(conn, train_no)
+        rows = stats.timetable(conn, train_no, datetime.now(TZ).date().isoformat())
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
         return {"train_no": train_no, "mode": stats.trip_mode(conn, train_no),

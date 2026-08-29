@@ -181,11 +181,14 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         wanted_types = {config.RAIL_ROUTE_TYPE}
         if config.INCLUDE_REPLACEMENT_BUS:
             wanted_types.add(config.BUS_ROUTE_TYPE)
-        routes = {
-            r["route_id"]: r
-            for r in _rows(zf, "routes.txt")
-            if r["agency_id"] == config.RAIL_AGENCY_ID and r["route_type"] in wanted_types
-        }
+        extra = set(config.EXTRA_AGENCIES)
+
+        def _wanted(r) -> bool:
+            if r["agency_id"] == config.RAIL_AGENCY_ID:
+                return r["route_type"] in wanted_types
+            return r["agency_id"] in extra
+
+        routes = {r["route_id"]: r for r in _rows(zf, "routes.txt") if _wanted(r)}
         trips = {t["trip_id"]: t for t in _rows(zf, "trips.txt") if t["route_id"] in routes}
         # Nadomestni prevozi vozijo po cesti. Njihova geometrija ne sme v
         # `edge`: mreza prog bi dobila odseke, ki niso proge, in dolzine, ki

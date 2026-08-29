@@ -69,14 +69,46 @@ def trains(conn: sqlite3.Connection) -> list[dict]:
     ]
 
 
-def timetable(conn: sqlite3.Connection, train_no: str) -> list[dict]:
+def resolve_trip(conn: sqlite3.Connection, train_no: str,
+                 service_date: str | None = None) -> str | None:
+    """Ena vožnja izmed tistih, ki nosijo to številko.
+
+    Številka vlaka **ni** ključ. Devet vlakov v zajetem voznem redu ima dva ali
+    tri tripe -- sezonske različice iste poti z različnimi obdobji veljavnosti
+    (npr. 4292 Nova Gorica--Jesenice, 68 dni in 24 dni). Poizvedba brez tega
+    izbora je vrnila vse skupaj: vozni red vlaka 4292 je imel 38 postankov
+    namesto 19, vsako postajo dvakrat.
+
+    Pri avtobusih je isto pravilo nujno: `route_short_name` je številka linije
+    in LPP linija 3G ima 388 voženj.
+
+    Izbira: trip, ki vozi na dani dan; med več takimi tisti z največ
+    obratovalnimi dnevi (glavna različica, ne sezonska izjema).
+    """
+    rows = conn.execute(
+        "SELECT t.trip_id, "
+        "       (SELECT COUNT(*) FROM service_day sd WHERE sd.service_id = t.service_id) AS days, "
+        "       (SELECT COUNT(*) FROM service_day sd WHERE sd.service_id = t.service_id "
+        "        AND sd.date = ?) AS runs_today "
+        "FROM trip t WHERE t.train_no = ? "
+        "ORDER BY runs_today DESC, days DESC, t.trip_id",
+        (service_date, train_no),
+    ).fetchall()
+    return rows[0]["trip_id"] if rows else None
+
+
+def timetable(conn: sqlite3.Connection, train_no: str,
+              service_date: str | None = None) -> list[dict]:
+    trip_id = resolve_trip(conn, train_no, service_date)
+    if not trip_id:
+        return []
     return [
         dict(r)
         for r in conn.execute(
             "SELECT s.stop_seq, s.stop_id, st.name, st.lat, st.lon, s.arr_s, s.dep_s "
-            "FROM trip t JOIN sched s USING (trip_id) JOIN station st ON st.stop_id = s.stop_id "
-            "WHERE t.train_no = ? ORDER BY s.stop_seq",
-            (train_no,),
+            "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
+            "WHERE s.trip_id = ? ORDER BY s.stop_seq",
+            (trip_id,),
         )
     ]
 
@@ -91,13 +123,16 @@ def trip_mode(conn: sqlite3.Connection, train_no: str) -> str:
 
 def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str) -> list[dict]:
     """Ena konkretna vožnja: vozni red + zamuda + izračunani dejanski čas."""
+    trip_id = resolve_trip(conn, train_no, service_date)
+    if not trip_id:
+        return []
     rows = conn.execute(
         "SELECT s.stop_seq, st.name, s.arr_s, s.dep_s, r.delay_arr, r.delay_dep "
-        "FROM trip t JOIN sched s USING (trip_id) JOIN station st ON st.stop_id = s.stop_id "
-        "LEFT JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = s.stop_seq "
+        "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
+        "LEFT JOIN run r ON r.trip_id = s.trip_id AND r.stop_seq = s.stop_seq "
         "                AND r.service_date = ? "
-        "WHERE t.train_no = ? ORDER BY s.stop_seq",
-        (service_date, train_no),
+        "WHERE s.trip_id = ? ORDER BY s.stop_seq",
+        (service_date, trip_id),
     )
     out = []
     for r in rows:
@@ -618,15 +653,18 @@ def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str) -> l
     """
     from . import weather as weather_mod
 
+    trip_id = resolve_trip(conn, train_no, service_date)
+    if not trip_id:
+        return []
     rows = conn.execute(
         "SELECT s.stop_seq, st.name, st.lat, st.lon, "
         "       COALESCE(s.dep_s, s.arr_s) AS t_s, "
         "       COALESCE(r.delay_dep, r.delay_arr) AS delay_s "
-        "FROM trip t JOIN sched s USING (trip_id) JOIN station st ON st.stop_id = s.stop_id "
-        "LEFT JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = s.stop_seq "
+        "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
+        "LEFT JOIN run r ON r.trip_id = s.trip_id AND r.stop_seq = s.stop_seq "
         "                AND r.service_date = ? "
-        "WHERE t.train_no = ? ORDER BY s.stop_seq",
-        (service_date, train_no),
+        "WHERE s.trip_id = ? ORDER BY s.stop_seq",
+        (service_date, trip_id),
     ).fetchall()
     if not rows:
         return []

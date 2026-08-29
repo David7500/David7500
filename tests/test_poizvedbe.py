@@ -196,3 +196,48 @@ def test_naslednja_postaja_tudi_pri_vrzeli_v_zaporedju(conn):
                if r["train_no"] == "LP 9")
     assert row["delay_s"] == 420
     assert row["delay_from"] == "Zidani Most"
+
+
+def test_stevilka_vlaka_z_vec_tripi_ne_podvoji_voznega_reda(conn):
+    """Številka vlaka ni ključ.
+
+    Devet vlakov v voznem redu ima dva ali tri tripe -- sezonske različice
+    iste poti. Brez izbora je vozni red vlaka 4292 vračal 38 postankov
+    namesto 19, vsako postajo dvakrat. Pri avtobusih je isto pravilo nujno:
+    LPP linija 3G ima 388 voženj.
+    """
+    c = conn
+    # Ista stevilka, dve razlicici: glavna vozi vsak dan, sezonska en dan.
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S2','2026-08-31')")
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S2','2026-09-01')")
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S3','2026-08-31')")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('tA','rA','LP 7','A - Z','S2')")
+    _sched(c, "tA", [(1, "A", None, 30000), (2, "Z", 33000, None)])
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('tB','rB','LP 7','A - Z','S3')")
+    _sched(c, "tB", [(1, "A", None, 31000), (2, "Z", 34000, None)])
+    c.commit()
+
+    tt = stats.timetable(c, "LP 7", "2026-08-31")
+    assert len(tt) == 2, "vozni red ene vožnje, ne obeh različic"
+    assert [r["stop_seq"] for r in tt] == [1, 2]
+
+    # Na dan, ko vozi samo glavna, mora izbrati njo.
+    assert stats.resolve_trip(c, "LP 7", "2026-09-01") == "tA"
+    # Ko vozita obe, zmaga tista z več obratovalnimi dnevi.
+    assert stats.resolve_trip(c, "LP 7", "2026-08-31") == "tA"
+
+
+def test_run_detail_ne_podvoji_postankov(conn):
+    c = conn
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S2','2026-08-31')")
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S3','2026-08-31')")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('tA','rA','LP 8','A - Z','S2')")
+    _sched(c, "tA", [(1, "A", None, 30000), (2, "Z", 33000, None)])
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('tB','rB','LP 8','A - Z','S3')")
+    _sched(c, "tB", [(1, "A", None, 31000), (2, "Z", 34000, None)])
+    c.commit()
+    assert len(stats.run_detail(c, "LP 8", "2026-08-31")) == 2
