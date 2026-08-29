@@ -87,7 +87,8 @@ ponoči vozi pet vlakov in nič drugega in en sam pogled ne pove ničesar.
 (Arriva 62, Nomago 54, SŽ 28, LPP 19, AP MS 3). Avtobusi imajo poleg tega
 **GPS lego** s smerjo in hitrostjo (do 138 vozil hkrati); vlaki je nimajo.
 
-Uvožen je LPP (`SZ_AGENCIES=1118`). Odhodna tabla za Bavarski dvor kaže
+Uvoženi so **vsi** (`SZ_AGENCIES=1118,1123,1119,1121`): 20 736 voženj,
+9 791 postajališč, 403 208 postankov, baza 45 MB, uvoz 14 s z vrhom 217 MB. Odhodna tabla za Bavarski dvor kaže
 "LPP 60 → Ljubljana Železna, 09:36 → 09:40, čez 2 min, +4 min" z živo zamudo.
 Na zemljevidu je avtobus **puščica v smeri vožnje**, vlak pa krog na postaji —
 razlika med izmerjeno lego in zadnjo znano postajo mora ostati vidna.
@@ -163,10 +164,9 @@ Cloudflare 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
 * **Dostop od zunaj** — Tailscale ali Cloudflare Tunnel.
   **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije.**
-* **Avtobusi drugih agencij.** Arriva 8914 voženj in Nomago 6864 sta zunaj.
-  Razlog ni več ugibanje: uvoz vseh agencij ima vrh pomnilnika 216 MB, malina
-  pa je Pi Zero W s 427 MB in 270 MB prostega. Ko jo zamenja močnejši stroj,
-  je to `SZ_AGENCIES=1118,1123,1119,1121` in nič drugega — koda je pripravljena.
+* **Malina.** Na njej je smiselno `SZ_AGENCIES=1118` (SŽ + LPP, vrh 86 MB);
+  vseh agencij Pi Zero W s 427 MB ne prenese (vrh 217 MB). Na tem prenosniku
+  tečejo vse.
 * **Napoved bo boljša šele z več zajema.** Kar se je dalo iztisniti iz devetih
   dni, je iztisnjeno in izmerjeno. Naslednji korak rabi mesece, ne trikov.
 * **Vzročnost vremena.** Vreme se zaenkrat samo *pokaže ob* zamudi. Trditve o

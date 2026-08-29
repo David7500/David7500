@@ -1,7 +1,8 @@
 # sztrack
 
-**Kdaj mi pelje vlak in koliko zamuja.** Zajem, prikaz in analiza zamud
-slovenskih vlakov iz odprtih podatkov.
+**Kdaj mi pelje in koliko zamuja.** Zajem, prikaz in analiza zamud
+slovenskega javnega potniškega prometa iz odprtih podatkov —
+vlaki SŽ in avtobusi (LPP, Arriva, Nomago, AP Murska Sobota).
 
 Zaledje je Python (FastAPI + SQLite), prikaz vanilla JS brez ogrodja.
 Vse teče skozi isti JSON API, tako da je prikaz zamenljiv.
@@ -15,7 +16,8 @@ Vse teče skozi isti JSON API, tako da je prikaz zamenljiv.
 
 | pot | kaj |
 |---|---|
-| `/app` | iskalnik povezav in odhodna tabla — vstopna stran |
+| `/app` | vlaki: iskalnik povezav in odhodna tabla — vstopna stran |
+| `/app/bus` | avtobusi: ista stran, drugo omrežje |
 | `/app/train/{št}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
 | `/app/ovire` | dela na progi in nadomestni prevozi |
 | `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu |
@@ -40,8 +42,14 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vreme | `open-meteo.com` (arhiv + napoved) | — | dnevno, za nazaj |
 
 Vsi viri podpirajo pogojni GET — ob nespremenjenih podatkih se ne prenese nič.
-V zipu je **ves** slovenski javni promet (20 592 voženj petih agencij); uvoz
-jemlje SŽ: vlake in njihove nadomestne prevoze.
+V zipu je **ves** slovenski javni promet: 20 736 voženj petih agencij, 9 791
+postajališč, 403 208 postankov. Privzeto se uvozi samo SŽ; ostale doda
+`SZ_AGENCIES=1118,1123,1119,1121`.
+
+**Dve ločeni omrežji, ne en kup.** `/app` so vlaki in nadomestni prevozi SŽ
+(ti na svoji relaciji zamenjujejo vlak), `/app/bus` so avtobusi. Potnik ve,
+ali gre z vlakom ali z busom. Skupen je samo zemljevid: vlak je krog na zadnji
+postaji z meritvijo, avtobus puščica na izmerjeni legi iz GPS.
 
 ## Kaj podatki so in česa ni
 
@@ -63,8 +71,11 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
   `SZ-DELAY` obvestilih in ga prikaz pove.
 * **Odhodne zamude s prve postaje ni** — feed nikoli ne poroča `stop_seq = 1`.
   Odhodna tabla zato vzame meritev naslednje postaje in napiše, od kod je.
-* **Vlaki nimajo GPS.** `vehicle_positions` vsebuje avtobuse, vlakov ne; lega
-  na zemljevidu je zadnje znano prometno mesto.
+* **Vlaki nimajo GPS, avtobusi ga imajo.** `vehicle_positions` vsebuje
+  izključno avtobuse (do 130 hkrati, s smerjo in hitrostjo). Lega vlaka na
+  zemljevidu je zadnje znano prometno mesto, lega avtobusa je izmerjena.
+  `current_status` pa ni zanesljiv — med vozili s `STOPPED_AT` so bila taka
+  pri 32 km/h — zato ali vozilo stoji, presodi izmerjena hitrost.
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
 * **Ni** cen, sestave vlaka, perona, zasedenosti. Odpovedi feed pozna
   strukturirano, a jih SŽ pošiljajo kot besedilo obvestila.
@@ -81,6 +92,7 @@ sztrack stats --days 90           # lestvica vlakov
 sztrack backtest                  # izmeri napako napovedi
 sztrack backtest --operator       # prevoznikova napoved proti prenosu zamude
 sztrack repair                    # znova zgradi `run` iz dnevnika `obs`
+sztrack prune                     # pobriši star dnevnik (`run` ostane)
 sztrack weather --days 7          # dopolni vreme za nazaj
 sztrack merge druga.sqlite        # prilij zajem z drugega stroja
 sztrack seed                      # zgradi priloženo bazo za namestitev
