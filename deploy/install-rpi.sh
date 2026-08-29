@@ -8,6 +8,13 @@
 #
 #   sudo SZ_MODE=zajem bash deploy/install-rpi.sh
 #
+# SZ_AGENCIES pove, katere prevoznike zajemati (prazno = samo SŽ):
+#
+#   sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash deploy/install-rpi.sh
+#
+# Ob spremembi te vrednosti se vozni red uvozi znova (sicer bi ETag rekel
+# "nespremenjeno" in novih prevoznikov v bazi ne bi bilo).
+#
 # To je za stroj, ki naj le polni bazo, da lahko računalnik ugasneš. Zajema
 # se samo tisto, česar kasneje ni mogoče dobiti -- zamude in obvestila;
 # vreme in statistiko izračunaš pozneje tam, kjer je baza.
@@ -20,6 +27,10 @@ BRANCH="${SZ_BRANCH:-claude/slovenske-zeleznice-api-ql84hf}"
 APP=/opt/sztrack
 DATA=/var/lib/sztrack
 MODE="${SZ_MODE:-polno}"
+# Prevozniki. Prazno = samo SŽ. `1118,1123,1119,1121` = vsi (LPP, Arriva,
+# Nomago, AP Murska Sobota). Sprememba te vrednosti sproži ponovni uvoz
+# voznega reda -- brez tega bi ETag rekel "nespremenjeno" in avtobusov ne bi bilo.
+AGENCIES="${SZ_AGENCIES-__ohrani__}"
 
 [ "$(id -u)" -eq 0 ] || { echo "Poženi kot root (sudo)."; exit 1; }
 
@@ -74,7 +85,42 @@ install -m 644 "$APP/deploy/sztrack.service" \
                "$APP/deploy/sztrack-zajem.service" \
                "$APP/deploy/sztrack-backup.service" \
                "$APP/deploy/sztrack-backup.timer" /etc/systemd/system/
+
+# Prevozniki gredo v enoto, da preživijo ponovni zagon.
+if [ "$AGENCIES" != "__ohrani__" ]; then
+    for u in sztrack.service sztrack-zajem.service; do
+        sed -i "s/^Environment=SZ_AGENCIES=.*/Environment=SZ_AGENCIES=$AGENCIES/" \
+            "/etc/systemd/system/$u"
+    done
+    echo "    prevozniki: ${AGENCIES:-samo SŽ}"
+fi
 systemctl daemon-reload
+
+# Vozni red mora vsebovati prevoznike, ki jih hocemo zajemati. Uvozimo znova
+# samo, kadar kateri manjka -- primerjamo mnozici, ne stevil: stara baza ima
+# `agency` NULL pri vseh voznjah, ker je nastala, preden je stolpec obstajal.
+# `--force` je nujen: zip je nespremenjen in ETag bi uvoz sicer preskocil.
+if [ "$AGENCIES" != "__ohrani__" ] && [ -f "$DATA/sz.sqlite" ]; then
+    if ! "$APP/.venv/bin/python" - "$DATA/sz.sqlite" "$AGENCIES" <<'PYEOF'
+import sqlite3, sys
+db, want = sys.argv[1], sys.argv[2]
+zeleznica = "1161"          # config.RAIL_AGENCY_ID
+hoceno = {zeleznica} | {a.strip() for a in want.split(",") if a.strip()}
+c = sqlite3.connect(db)
+imamo = {r[0] for r in c.execute("SELECT DISTINCT agency FROM trip") if r[0]}
+manjka = hoceno - imamo
+print(f"    v bazi: {', '.join(sorted(imamo)) or 'brez oznak (stara shema)'}")
+sys.exit(1 if manjka else 0)
+PYEOF
+    then
+        echo "==> vozni red nima vseh prevoznikov -- uvazam znova"
+        echo "    (na Pi Zero nekaj minut; vrh pomnilnika ~217 MB pri vseh stirih)"
+        systemctl stop sztrack.service sztrack-zajem.service 2>/dev/null || true
+        sudo -u sztrack env SZ_DATA_DIR="$DATA" SZ_AGENCIES="$AGENCIES" \
+             "$APP/.venv/bin/python" -m sztrack.cli update --force
+        echo "    zajete meritve ostanejo -- uvoz zamenja samo vozni red"
+    fi
+fi
 
 if [ "$MODE" = "zajem" ]; then
     UNIT=sztrack-zajem.service

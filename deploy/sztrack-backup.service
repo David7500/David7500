@@ -5,6 +5,24 @@ Description=sztrack — varnostna kopija baze
 Type=oneshot
 User=sztrack
 Group=sztrack
-# .backup dela konsistentno kopijo tudi med pisanjem, kar navadni cp ne.
-ExecStart=/bin/sh -c 'sqlite3 /var/lib/sztrack/sz.sqlite ".backup /var/lib/sztrack/backup/sz-$(date +%%Y%%m%%d).sqlite"'
-ExecStartPost=/bin/sh -c 'find /var/lib/sztrack/backup -name "sz-*.sqlite" -mtime +14 -delete'
+Environment=DATA=/var/lib/sztrack
+Environment=KEEP=3
+# Koliko prostora mora ostati, da se kopija sploh splaca. Pod tem raje ne
+# naredimo nicesar in to povemo -- polna kartica ustavi tudi ZAJEM, kopija pa
+# je le kratkorocna varovalka. Dolgorocni arhiv je racunalnik, ki bazo potegne.
+Environment=MIN_FREE_MB=2000
+ExecStart=/bin/sh -c '\
+  free_mb=$(df -Pm "$DATA" | awk "NR==2{print \\$4}"); \
+  if [ "$free_mb" -lt "$MIN_FREE_MB" ]; then \
+    echo "premalo prostora ($free_mb MB) -- kopija preskocena"; exit 0; \
+  fi; \
+  tmp="$DATA/backup/.tekoca.sqlite"; \
+  sqlite3 "$DATA/sz.sqlite" ".backup $tmp" && \
+  gzip -1 -c "$tmp" > "$DATA/backup/sz-$(date +%%Y%%m%%d).sqlite.gz" && \
+  rm -f "$tmp"'
+# Kopije so gzipane (~3x manjse) in hranimo jih tri, ne stirinajst. Z vsemi
+# prevozniki zraste baza ~3,4 GB na leto; stirinajst polnih kopij bi kartico
+# zapolnilo, tri stisnjene pa so ob koncu leta ~4 GB.
+ExecStartPost=/bin/sh -c '\
+  ls -1t "$DATA"/backup/sz-*.sqlite.gz 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -f; \
+  rm -f "$DATA"/backup/sz-*.sqlite'

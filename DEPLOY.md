@@ -48,8 +48,32 @@ vrstic na dan; za SD kartico zanemarljivo. Če imaš USB SSD, je vseeno boljše
 mesto — nastavi `SZ_DATA_DIR` nanj v enoti storitve.
 
 **Varnostne kopije** nastanejo vsak dan ob 3:30 v `/var/lib/sztrack/backup/`
-prek `sqlite3 .backup`, kar je konsistentno tudi med pisanjem. Hranijo se
-14 dni. Občasno prekopiraj katero z Pija — kartice odpovedo.
+prek `sqlite3 .backup`, kar je konsistentno tudi med pisanjem, in se stisnejo
+z `gzip -1` (~3,1× manjše, merjeno). Hranijo se **tri**, ne štirinajst: z vsemi
+prevozniki zraste baza ~3,4 GB na leto in štirinajst polnih kopij bi kartico
+zapolnilo. Če bi po kopiji ostalo manj kot 2 GB prostega, se ta preskoči in to
+zapiše v dnevnik — polna kartica ustavi tudi zajem, kopija pa je le
+kratkoročna varovalka.
+
+**Dolgoročni arhiv je računalnik**, ki bazo potegne dol (`sztrack merge`), ne
+Pi. Kartice odpovedo.
+
+## Samo zajem, brez strežnika
+
+Kadar naj stroj le polni bazo — da lahko računalnik ugasneš — se namesti
+`sztrack-zajem.service` namesto strežnika:
+
+```bash
+sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash deploy/install-rpi.sh
+```
+
+Zajema se **samo tisto, česar kasneje ni mogoče dobiti**: zamude in obvestila.
+Vreme ima arhiv za nazaj, statistika je izpeljanka `run` — oboje se izračuna
+tam, kjer je baza. Lege vozil ni, ker je samo "zdaj" in se ne hrani.
+
+`SZ_AGENCIES` se zapiše v enoto in ob spremembi sproži ponovni uvoz voznega
+reda (`--force`; brez tega bi ETag rekel "nespremenjeno"). Uvoz **zamenja samo
+statične tabele** — `obs` in `run` ostaneta.
 
 ### Prenos zajema s prejšnjega gostitelja
 
