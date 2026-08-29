@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerts, config, db, journey, stats
+from . import alerts, collector, config, db, journey, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -267,6 +267,31 @@ def api_train_reports(train_no: str, date: str | None = None):
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
         return {"train_no": train_no, "service_date": date,
                 "reports": alerts.train_reports(conn, train_no, date)}
+
+
+@app.get("/api/vehicles")
+def api_vehicles():
+    """Trenutna lega vozil z GPS.
+
+    Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
+    ta seznam nikoli ne bo vseboval -- kar aplikacija riše za vlake, je
+    zadnja postaja z meritvijo, ne položaj.
+    """
+    now = int(datetime.now(TZ).timestamp())
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign "
+            "FROM vehicle_now v JOIN trip t USING (trip_id) "
+            "WHERE v.seen_ts >= ? ORDER BY t.train_no",
+            (now - collector.POSITION_FRESH_S,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["age_s"] = now - d["seen_ts"]
+        d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
+        out.append(d)
+    return out
 
 
 @app.get("/api/network.geojson")

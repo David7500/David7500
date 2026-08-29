@@ -121,6 +121,29 @@ CREATE INDEX IF NOT EXISTS weather_hour ON weather(hour_ts);
 -- Dvoje v enem viru: `ovira` so dela in nadomestni prevozi (edini vir odgovora
 -- ZAKAJ vlak zamuja), `delay` pa ziva zamuda z imenom prometnega mesta.
 -- Isto obvestilo pride v paru sl + en pod razlicnima id-jema; `lang` ju loci.
+-- ---------- lega vozil (iz GTFS-RT vehicle_positions) ----------
+
+-- Samo TRENUTNA lega, ena vrstica na vožnjo, brez zgodovine. Sled bi pri 130
+-- vozilih na 30 s pomenila ~300 000 točk na dan; za prikaz "kje je zdaj" pa
+-- zadošča zadnja. Zgodovino zamud imamo v `obs`, ta tabela je drugo vprašanje.
+--
+-- Vlakov tu ni: feed nosi samo avtobuse. Zato je to edini vir prave lege v
+-- projektu -- vse drugo je zadnja postaja z meritvijo.
+CREATE TABLE IF NOT EXISTS vehicle_now (
+    trip_id      TEXT PRIMARY KEY,
+    service_date TEXT,
+    seen_ts      INTEGER NOT NULL,
+    lat          REAL NOT NULL,
+    lon          REAL NOT NULL,
+    bearing      REAL,
+    speed_ms     REAL,
+    stop_seq     INTEGER,
+    status       INTEGER,     -- GTFS-RT VehicleStopStatus
+    vehicle_id   TEXT,
+    plate        TEXT
+);
+CREATE INDEX IF NOT EXISTS vehicle_now_seen ON vehicle_now(seen_ts);
+
 CREATE TABLE IF NOT EXISTS alert (
     alert_id     TEXT PRIMARY KEY,
     kind         TEXT NOT NULL,      -- ovira | delay | drugo

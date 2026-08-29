@@ -27,6 +27,7 @@
       <span id="train-count-n">—</span>
       <span class="label">vlakov na progi</span>
     </div>
+    <span id="bus-count" class="bus-count" hidden></span>
     <div class="divider"></div>
     <div class="clock-wrap">
       <span id="feed-dot" class="dot"></span>
@@ -45,6 +46,12 @@
         <div class="legend-item"><span class="legend-dot" style="background:#f2a87e"></span><span>1–5 min</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:#e07b45"></span><span>5–15 min</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:#b85417"></span><span>nad 15 min</span></div>
+      <div class="legend-item" id="legend-bus" hidden>
+        <span class="legend-arrow">
+          <svg width="11" height="11" viewBox="0 0 24 24"><path d="M12 3 L18 20 L12 16 L6 20 Z" fill="#4db97f"></path></svg>
+        </span>
+        <span>avtobus (prava lega, GPS)</span>
+      </div>
       </div>
     </aside>
 

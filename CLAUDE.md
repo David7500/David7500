@@ -31,6 +31,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vozni red | `gitlab.com/api/v4/projects/derp-si%2Fgtfs-generators/packages/generic/IJPP/latest/ijpp_gtfs.zip` | 41 MB | ~1×/dan |
 | Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 250 KB | 30 s |
 | Ovire in žive zamude | `rt.gtfs.derp.si/sources/ijpp/service_alerts` | 110 KB | 60 s |
+| Lega vozil | `rt.gtfs.derp.si/sources/ijpp/vehicle_positions` | 2 KB | 30 s |
 | Vreme | `archive-api.open-meteo.com` + `api.open-meteo.com` | — | dnevno, za nazaj |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, stari SOAP je mrtev.
@@ -74,6 +75,11 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   vrednost.
 * **Položaj vlaka je interpoliran, ne GPS.** `vehicle_positions` vsebuje
   avtobuse, vlakov ne. Dashboard zato riše vlake na zadnji znani postaji.
+  **Avtobusi pa GPS imajo** -- z legendo, smerjo in hitrostjo (do 130 vozil
+  hkrati). Na zemljevidu so zato puščica v smeri vožnje, vlak pa krog na
+  postaji: enak simbol za oboje bi zabrisal razliko med izmerjeno lego in
+  zadnjo znano postajo. Hrani se samo trenutna lega (`vehicle_now`, upsert):
+  sled bi bila ~300 000 točk na dan, prikaz "kje je zdaj" pa rabi eno vrstico.
 * **Odhodne zamude s prve postaje ni.** Feed ni nikoli poročal `stop_seq = 1`
   — najnižji zajeti je 2. Vlak, ki *"štarta z zamudo"*, je v podatkih viden
   šele na drugi postaji. Odhodna tabla zato za izhodišče vzame meritev

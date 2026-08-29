@@ -328,3 +328,14 @@ body {
 .leaflet-tile {
   filter: invert(1) hue-rotate(180deg) grayscale(0.85) brightness(0.78) contrast(1.08);
 }
+
+/* Avtobus je puščica v smeri vožnje, vlak krog na postaji -- ker sta to
+ * dve različni stvari: avtobusova lega je iz GPS, vlakova je zadnja postaja
+ * z meritvijo. Enak simbol za oboje bi to razliko zabrisal. */
+.bus-marker { background: none; border: none; }
+.bus-count {
+  font: 400 12px/1 'IBM Plex Sans', system-ui, sans-serif;
+  color: #4db97f;
+  white-space: nowrap;
+}
+.legend-arrow { width: 11px; height: 11px; display: flex; flex-shrink: 0; }

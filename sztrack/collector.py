@@ -283,3 +283,64 @@ def rebuild_run(conn: sqlite3.Connection) -> dict:
             )
             changed += 1
     return {"stops": len(accepted), "blips_skipped": fixed, "run_rows_corrected": changed}
+
+
+# ---------------------------------------------------------------- lega vozil
+
+# Koliko sekund je lega še "zdaj". Feed osvežuje na ~30 s; nad tem je vozilo
+# ali končalo vožnjo ali izgubilo signal in prikaz ga ne sme risati kot živega.
+POSITION_FRESH_S = 180
+
+
+def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
+    """Zapiše trenutno lego vozil.
+
+    Feed `vehicle_positions` nosi **samo avtobuse** -- vlakov v njem ni. Za
+    avtobus je to torej edina prava lega v celem projektu: vse drugo, kar
+    aplikacija riše, je zadnja postaja z meritvijo, ne dejanski položaj.
+
+    Zgodovine ne vodimo. 130 vozil na 30 s je ~300 000 točk na dan, prikaz
+    "kje je zdaj" pa rabi eno vrstico na vožnjo -- zato upsert.
+    """
+    known = {r["trip_id"] for r in conn.execute("SELECT trip_id FROM trip")}
+    seen_at = int(time.time())
+    written = 0
+
+    for entity in feed.entity:
+        v = entity.vehicle
+        trip_id = v.trip.trip_id
+        if trip_id not in known or not v.HasField("position"):
+            continue
+        day = v.trip.start_date or ""
+        if len(day) == 8:
+            day = f"{day[:4]}-{day[4:6]}-{day[6:]}"
+        conn.execute(
+            "INSERT INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon, bearing,"
+            "                        speed_ms, stop_seq, status, vehicle_id, plate) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(trip_id) DO UPDATE SET "
+            "  service_date=excluded.service_date, seen_ts=excluded.seen_ts,"
+            "  lat=excluded.lat, lon=excluded.lon, bearing=excluded.bearing,"
+            "  speed_ms=excluded.speed_ms, stop_seq=excluded.stop_seq,"
+            "  status=excluded.status, vehicle_id=excluded.vehicle_id, plate=excluded.plate "
+            "WHERE excluded.seen_ts >= vehicle_now.seen_ts",
+            (trip_id, day or None, v.timestamp or seen_at,
+             v.position.latitude, v.position.longitude,
+             v.position.bearing if v.position.HasField("bearing") else None,
+             v.position.speed if v.position.HasField("speed") else None,
+             v.current_stop_sequence or None, v.current_status,
+             v.vehicle.id or None, v.vehicle.license_plate or None),
+        )
+        written += 1
+
+    # Stare lege pobrisi -- tabela naj ostane "zdaj", ne smetisce.
+    conn.execute("DELETE FROM vehicle_now WHERE seen_ts < ?", (seen_at - 3600,))
+    conn.commit()
+    return {"vehicles": written}
+
+
+def poll_positions(conn: sqlite3.Connection) -> dict:
+    feed = fetch(config.VEHICLE_POSITIONS_URL, conn, "positions_etag")
+    if feed is None:
+        return {"vehicles": 0, "unchanged": True}
+    return ingest_positions(conn, feed)

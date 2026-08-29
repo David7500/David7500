@@ -20,6 +20,11 @@ TRIP_UPDATES_URL = os.environ.get(
 SERVICE_ALERTS_URL = os.environ.get(
     "SZ_SERVICE_ALERTS_URL", "https://rt.gtfs.derp.si/sources/ijpp/service_alerts"
 )
+# Lega vozil (~2 KB). Nosi SAMO avtobuse -- vlakov v njem ni, zato je za
+# železnico brez pomena in se pobira le, kadar so uvožene tudi druge agencije.
+VEHICLE_POSITIONS_URL = os.environ.get(
+    "SZ_VEHICLE_POSITIONS_URL", "https://rt.gtfs.derp.si/sources/ijpp/vehicle_positions"
+)
 
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in

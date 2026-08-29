@@ -92,6 +92,10 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             weather_hour: int, alert_interval: int) -> None:
     conn = db.connect()
     db.init(conn)
+    # Lega vozil je smiselna samo, ce so v bazi avtobusi: feed nosi izkljucno
+    # njih. Pri zeleznici bi bila to zahteva vsakih 30 s za prazen odgovor.
+    has_bus = conn.execute("SELECT 1 FROM trip WHERE mode = 'bus' LIMIT 1").fetchone()
+    track_vehicles = bool(has_bus) and os.environ.get("SZ_POSITIONS", "1") != "0"
     next_refresh = None
     if refresh_mode != "off" and refresh_hour >= 0:
         next_refresh = _next_at(refresh_hour, 20)
@@ -116,6 +120,12 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                      f"ki niso 'SCHEDULED' (odpoved ali izpuščen postanek)")
         except Exception as exc:            # feed občasno resetira povezavo
             _log(f"zajem ni uspel: {exc}")
+
+        if track_vehicles:
+            try:
+                collector.poll_positions(conn)
+            except Exception as exc:      # lega ni kriticna za zajem zamud
+                _log(f"lege vozil ni bilo mogoče pobrati: {exc}")
 
         if alert_interval > 0 and time.monotonic() >= next_alerts:
             next_alerts = time.monotonic() + alert_interval

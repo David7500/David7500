@@ -29,6 +29,9 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 // Brez addTo(map) tukaj -- doda se sele po progah/postajah, da so vlaki narisani zgoraj.
 const trainLayer = L.layerGroup();
+// Avtobusi so svoja plast: imajo PRAVO lego iz GPS, ne zadnje postaje z
+// meritvijo. Ceste, po katerih vozijo, so ze na podlagi, zato pika ni v praznem.
+const busLayer = L.layerGroup();
 const stationMarkers = new Map(); // ime postaje -> L.CircleMarker
 
 let stationsByName = new Map(); // ime postaje -> {stop_id, lat, lon}
@@ -302,6 +305,58 @@ delayListEl.addEventListener("click", (ev) => {
   openTrainWindow(row.dataset.train);
 });
 
+// ---------- avtobusi: prava lega iz GPS ----------
+// Vlaki v feedu nimajo GPS, avtobusi ga imajo. Zato sta to dve razlicni
+// stvari na isti sliki in ju je treba lociti tudi na pogled: vlak je krog
+// na postaji, avtobus je pušcica v smeri vožnje.
+
+const BUS_INK = "#4db97f";
+
+function busMarker(v) {
+  const angle = v.bearing == null ? 0 : v.bearing;
+  const moving = (v.speed_kmh || 0) >= 3;
+  const icon = L.divIcon({
+    className: "bus-marker",
+    html: `<svg width="18" height="18" viewBox="0 0 24 24"
+                style="transform:rotate(${angle}deg)">
+        <path d="M12 3 L18 20 L12 16 L6 20 Z"
+              fill="${BUS_INK}" fill-opacity="${moving ? 1 : 0.45}"
+              stroke="#0f1115" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+  const m = L.marker([v.lat, v.lon], { icon, keyboard: false });
+  m.bindTooltip(
+    `<div class="train-label-line">` +
+      `<span class="train-label-code" style="color:${BUS_INK}">${escapeHtml(v.train_no)}</span>` +
+      `<span class="train-label-more">${escapeHtml(v.headsign || "")}</span></div>` +
+      `<div class="train-label-more">${v.speed_kmh != null ? `${v.speed_kmh} km/h` : "brez hitrosti"}` +
+      ` · lega stara ${v.age_s} s</div>`,
+    { className: "sztrack-tooltip", direction: "top", offset: [0, -8] },
+  );
+  return m;
+}
+
+async function loadVehicles() {
+  try {
+    const list = await fetch("/api/vehicles").then((r) => r.json());
+    busLayer.clearLayers();
+    for (const v of list) busLayer.addLayer(busMarker(v));
+    // Plast dodamo sele, ko je kaj v njej -- prazna legenda zavaja.
+    if (list.length && !map.hasLayer(busLayer)) busLayer.addTo(map);
+    const el = document.getElementById("bus-count");
+    if (el) {
+      el.textContent = list.length ? `${list.length} avtobusov z GPS` : "";
+      el.hidden = !list.length;
+    }
+    const leg = document.getElementById("legend-bus");
+    if (leg) leg.hidden = !list.length;
+  } catch (err) {
+    console.warn("lege vozil ni bilo mogoce nalozit", err);
+  }
+}
+
 // ---------- glava: stevec vlakov, ura, indikator svezine ----------
 
 const feedDotEl = document.getElementById("feed-dot");
@@ -336,4 +391,9 @@ setInterval(tickClock, 1000);
 loadStatic().then(() => {
   pollLive();
   setInterval(pollLive, POLL_MS);
+  // Lega avtobusov ima svoj ritem: feed jo osvezuje na ~30 s, zamude pa se
+  // spreminjajo redkeje. Ce avtobusov v bazi ni, seznam je prazen in plast
+  // ostane skrita.
+  loadVehicles();
+  setInterval(loadVehicles, 20000);
 });
