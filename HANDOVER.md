@@ -77,6 +77,33 @@ pollu. `sztrack repair` po istem pravilu znova zgradi `run` iz dnevnika.
   jih je uvoz izpuščal. Iskalnik je za Ljubljana–Logatec ponujal dvanajst
   vlakov, ki po obvestilu istega prevoznika ne vozijo.
 
+## Avtobusi
+
+`scripts/vzorci_feeda.py` je čez cel dan vzorčil sestavo obeh RT feedov, ker
+ponoči vozi pet vlakov in nič drugega in en sam pogled ne pove ničesar.
+
+**Vse agencije imajo polno realtime pokritost.** Ob 06:42 v soboto je bilo v
+`trip_updates` 100 % ali več voženj, ki bi po voznem redu takrat vozile
+(Arriva 62, Nomago 54, SŽ 28, LPP 19, AP MS 3). Avtobusi imajo poleg tega
+**GPS lego** s smerjo in hitrostjo (do 138 vozil hkrati); vlaki je nimajo.
+
+Uvožen je LPP (`SZ_AGENCIES=1118`). Odhodna tabla za Bavarski dvor kaže
+"LPP 60 → Ljubljana Železna, 09:36 → 09:40, čez 2 min, +4 min" z živo zamudo.
+Na zemljevidu je avtobus **puščica v smeri vožnje**, vlak pa krog na postaji —
+razlika med izmerjeno lego in zadnjo znano postajo mora ostati vidna.
+
+Kar je bilo treba popraviti, da to ni laž, in kar velja za vsak nadaljnji
+prevoznik:
+
+* številka linije ni številka vožnje (LPP 3G ima 388 voženj) — vse gre skozi
+  `stats.resolve_trip()`, povezave nosijo `?trip=<id>`;
+* barva linije ni barva linije — vsi LPP `route_color` so ista zelena
+  prevoznika, zato oznaka nosi tudi ime prevoznika ("LPP 25");
+* mestno postajališče ima svoj `stop_id` za vsako smer — iskanje po imenu
+  združuje;
+* zemljevid je železniški (`?mode=vlak`), sicer glava šteje 37 vozil, riše
+  pa 24.
+
 ## Izmerjeno
 
 | | |
@@ -118,11 +145,10 @@ Cloudflare 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
 * **Dostop od zunaj** — Tailscale ali Cloudflare Tunnel.
   **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije.**
-* **Avtobusi drugih agencij.** V zipu je ves slovenski javni promet: Arriva
-  8914 voženj, Nomago 6864, LPP 3060, AP Murska Sobota 965. Uvoz jemlje samo
-  SŽ. `scripts/vzorci_feeda.py` vzorči, katere agencije sploh imajo realtime —
-  brez tega je odločitev ugibanje. Ponoči vozi pet vlakov in nič drugega, zato
-  en sam pogled ne pove ničesar.
+* **Avtobusi drugih agencij.** Arriva 8914 voženj in Nomago 6864 sta zunaj.
+  Razlog ni več ugibanje: uvoz vseh agencij ima vrh pomnilnika 216 MB, malina
+  pa je Pi Zero W s 427 MB in 270 MB prostega. Ko jo zamenja močnejši stroj,
+  je to `SZ_AGENCIES=1118,1123,1119,1121` in nič drugega — koda je pripravljena.
 * **Napoved bo boljša šele z več zajema.** Kar se je dalo iztisniti iz devetih
   dni, je iztisnjeno in izmerjeno. Naslednji korak rabi mesece, ne trikov.
 * **Vzročnost vremena.** Vreme se zaenkrat samo *pokaže ob* zamudi. Trditve o
