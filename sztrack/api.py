@@ -350,7 +350,11 @@ def api_departures(
         exact = journey.resolve_station(conn, station, network)
         if not exact:
             raise HTTPException(404, f"postaje {station!r} ne poznam")
-        rows = journey.board(conn, exact, date, from_s, window, kind, network=network)
+        # `now_s` samo za danasnji dan: le takrat obstaja meja med tem, kar je
+        # vozilo ze prevozilo, in tem, kar je se pred njim.
+        now_s = journey.now_seconds(now) if date == now.date().isoformat() else None
+        rows = journey.board(conn, exact, date, from_s, window, kind,
+                             network=network, now_s=now_s)
         # Obvestila o ovirah so SZ-jeva; pri avtobusih jih ni.
         notices = (alerts.for_trains(conn, [r["train_no"] for r in rows], mentions=[exact])
                    if network == "zeleznica" else [])

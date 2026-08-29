@@ -55,6 +55,11 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   odsekih ≥ 5 km (`segment_speeds()` to že filtrira).
 * **Feed je drseče okno** — en klic da le postanke okoli trenutnega položaja.
   Celo vožnjo sestavljamo iz zaporednih pollov.
+* **Meja med meritvijo in napovedjo je `stats.last_measured()`.** Vsak prikaz,
+  ki kaže zamudo, jo mora upoštevati: kar je za zadnjim prevoženim postankom,
+  je feedova napoved. Ta napaka je bila že dvakrat -- v `/api/live` in v
+  odhodni tabli, kjer je IC 502 pri +17 min v Borovnici na tabli v Litiji
+  pisal **0 min**. Potnik bi bral, da je vlak točen.
 * **Zamude naprej po progi so napoved, ne meritev** -- in ta napoved je
   **izmerjeno slaba**. Feed za še nedosežene postanke pogosto objavi 0, dokler
   nima prave vrednosti. Merjeno (`sztrack backtest --operator`, 11 310 nalog):

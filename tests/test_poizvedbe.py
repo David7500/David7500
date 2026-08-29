@@ -630,3 +630,47 @@ def test_voznja_z_nemogoco_zamudo_ni_ziva(conn):
     zdaj = 20640 + 7200 - 60         # tik pred voznorednim koncem z zamudo
     assert "N 6571" in {r["train_no"]
                         for r in api._live_rows(c, "2026-08-31", zdaj, "avtobus")}
+
+
+# ---------------------------------------------------------------- tabla: meritev proti oceni
+
+def test_tabla_ne_kaze_feedove_napovedi_kot_meritve(conn):
+    """Feedova vrednost za še nedosežen postanek ni zamuda na tej postaji.
+
+    Živ primer, ki je to odkril: IC 502 je bil v Borovnici +17 min, feed je
+    za Litijo dve postaji naprej objavil 0, tabla pa je to pokazala kot
+    zamudo. Potnik bi bral, da je vlak točen.
+
+    Merjeno (`sztrack backtest --operator`): prevoznikova napoved naprej ima
+    MAE 7,9 min, prenos trenutne zamude 1,3 min. Zato prenos in oznaka
+    „ocena", feedova številka pa samo v naprednem pogledu.
+    """
+    # IC 1: A(1) -> Z(2) -> C(3). Vlak je pri Z, feed za C pravi 0.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,1020,1020,1)")
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',3,0,0,1)")
+    conn.commit()
+
+    # Ob 09:30 je vlak Z že prevozil (32700 + 1020 = 09:22), C (10:00) pa je
+    # še pred njim -- torej je feedova ničla za C napoved, ne meritev.
+    ob = 9 * 3600 + 30 * 60
+    vrstice = journey.board(conn, "Celje", "2026-08-31", 0, 1440,
+                            kind="prihodi", now_s=ob)
+    r = next(x for x in vrstice if x["train_no"] == "IC 1")
+    assert r["delay_kind"] == "ocena"
+    assert r["delay_s"] == 1020          # prenos, ne feedova nicla
+    assert r["feed_delay_s"] == 0        # ostane vidna v naprednem pogledu
+
+
+def test_tabla_prevozeni_postanek_je_meritev(conn):
+    """Kar je vozilo že prevozilo, je meritev in se tako tudi imenuje."""
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,600,600,1)")
+    conn.commit()
+    ob = 10 * 3600                        # Z je ob 09:05 + 10 min = mimo
+    r = next(x for x in journey.board(conn, "Zidani Most", "2026-08-31", 0, 1440,
+                                      now_s=ob) if x["train_no"] == "IC 1")
+    assert r["delay_kind"] == "izmerjeno"
+    assert r["delay_s"] == 600
+    assert r["delay_from"] is None        # meritev je s te postaje

@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import _abs_time, typical_at_stops
+from .stats import _abs_time, last_measured, typical_at_stops
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -270,12 +270,17 @@ ORDER BY t_s
 
 def board(conn: sqlite3.Connection, station: str, service_date: str,
           from_s: int, window_min: int = 180, kind: str = "odhodi",
-          limit: int = 150, network: str | None = None) -> list[dict]:
+          limit: int = 150, network: str | None = None,
+          now_s: int | None = None) -> list[dict]:
     """Odhodna (ali prihodna) tabla postaje.
 
     `kind`: "odhodi" izpusti končno postajo vožnje (tam se nič ne odpelje),
     "prihodi" izpusti izhodiščno. Brez tega bi tabla vsakega vlaka štela
     dvakrat -- kot prihod in kot odhod na isti vrstici.
+
+    `now_s` je trenutek, glede na katerega ločimo meritev od napovedi. Brez
+    njega (drug dan) so vse vrednosti feeda enakovredne in tabla se opre na
+    zgodovino.
     """
     rows = conn.execute(_BOARD_SQL, {
         "station": station, "day": service_date, "network": network,
@@ -290,15 +295,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         if kind == "prihodi" and d["stop_seq"] == d["first_seq"]:
             continue
         d["sched"] = _abs_time(service_date, d["t_s"])
-        # Kadar meritve na tej postaji ni, a jo ima naslednja, jo uporabimo za
-        # priblizek in to povemo. Vlak, ki je na drugi postaji +8, z izhodisca
-        # skoraj gotovo ni odpeljal tocno.
         d["delay_from"] = None
-        if d["delay_s"] is None and d["next_delay_s"] is not None:
-            d["delay_s"] = d["next_delay_s"]
-            d["delay_from"] = d["next_stop"]
-        d["expected"] = (_abs_time(service_date, d["t_s"] + d["delay_s"])
-                         if d["delay_s"] is not None else None)
+        d["delay_kind"] = None
         # Za odhodno tablo je zanimiv cilj, za prihodno izhodisce.
         d["towards"] = d["destination"] if kind == "odhodi" else d["origin"]
         d["is_terminus"] = d["stop_seq"] == d["last_seq"]
@@ -308,6 +306,42 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         out.append(d)
         if len(out) >= limit:
             break
+
+    # Meja med meritvijo in napovedjo. Brez tega je tabla kazala feedovo
+    # vrednost za se nedosezen postanek kot izmerjeno zamudo -- in ta je
+    # izmerjeno slaba: IC 502 je bil v Borovnici +17 min, tabla v Litiji
+    # (dve postaji naprej) pa je pisala 0 min. Potnik bi bral, da je vlak
+    # tocen. Isto pravilo ze velja pri /api/live in v oknu vozjne.
+    # Za dan, ki ni danes, meje ni: pretekli dan je koncan in vse, kar je v
+    # `run`, JE meritev; prihodnji dan tam nima nicesar. Zato takrat vzamemo
+    # trenutek za koncem vseh voznj -- varovalo za lazne nicle vseeno velja.
+    last = last_measured(conn, service_date, [d["trip_id"] for d in out],
+                         now_s if now_s is not None else 48 * 3600)
+    for d in out:
+        lm = last.get(d["trip_id"])
+        own = d["delay_s"]
+        if lm and lm["stop_seq"] >= d["stop_seq"]:
+            # Vozilo je tu ze bilo -- vrednost je meritev. Kadar je za TO
+            # postajo nimamo (vlaki ne porocajo `stop_seq = 1`), vzamemo
+            # zadnjo znano in povemo, od kod je.
+            d["delay_s"] = own if own is not None else lm["delay_s"]
+            d["delay_from"] = None if own is not None else lm["name"]
+            d["delay_kind"] = "izmerjeno"
+        elif lm:
+            # Vozilo je se pred to postajo. Prenesemo njegovo trenutno zamudo
+            # naprej -- merjeno je to bistveno bolje od feedove napovedi
+            # (MAE 1,3 min proti 7,9) -- in povemo, da je ocena.
+            d["delay_s"] = lm["delay_s"]
+            d["delay_from"] = lm["name"]
+            d["delay_kind"] = "ocena"
+        else:
+            # Nobene meritve na tej voznji: feedova vrednost je napoved
+            # prevoznika in ostane samo v naprednem pogledu.
+            d["delay_s"] = None
+            d["delay_kind"] = None
+        d["feed_delay_s"] = own
+        d["expected"] = (_abs_time(service_date, d["t_s"] + d["delay_s"])
+                         if d["delay_s"] is not None else None)
 
     # Obicajna zamuda iz zgodovine: za dan brez meritev je to edino, kar o
     # vlaku vemo. Ni napoved za ta dan in prikaz jo tako tudi imenuje.

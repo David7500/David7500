@@ -563,6 +563,25 @@ def segment_speeds(conn: sqlite3.Connection, train_no: str | None = None) -> lis
     return out
 
 
+def last_measured(conn: sqlite3.Connection, service_date: str,
+                  trip_ids: list[str], now_s: int | None) -> dict[str, dict]:
+    """Zadnji postanek vsake vozjne, ki ga je vozilo res ze prevozilo.
+
+    Meja med meritvijo in napovedjo. Vse, kar je za njo, je feedova vrednost
+    za se nedosezen postanek -- in ta je izmerjeno slaba (`sztrack backtest
+    --operator`: MAE 7,9 min proti 1,3 min za prenos trenutne zamude).
+    Prikaz je zato ne sme kazati kot meritev.
+    """
+    if now_s is None or not trip_ids:
+        return {}
+    ids = list(dict.fromkeys(trip_ids))
+    # Vsi vezani parametri morajo biti istega sloga: sqlite jih ob mesanju
+    # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
+    sql = _LAST_MEASURED_SQL % ",".join("?" * len(ids))
+    return {r["trip_id"]: dict(r)
+            for r in conn.execute(sql, (service_date, *ids, now_s))}
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
@@ -680,15 +699,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         return []
 
     # Zadnja meritev vsake voznje -- za vlake, ki so ze na poti.
-    if now_s is not None:
-        ids = [d["trip_id"] for d in out]
-        # Vsi vezani parametri morajo biti istega sloga: sqlite jih ob mesanju
-        # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
-        sql = _LAST_MEASURED_SQL % ",".join("?" * len(ids))
-        last = {r["trip_id"]: dict(r)
-                for r in conn.execute(sql, (service_date, *ids, now_s))}
-    else:
-        last = {}
+    last = last_measured(conn, service_date, [d["trip_id"] for d in out], now_s)
 
     for d in out:
         d["stops_between"] = d["to_seq"] - d["from_seq"]

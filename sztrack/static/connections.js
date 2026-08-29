@@ -210,6 +210,17 @@ function typicalChipHtml(t, fromStop) {
     <div class="conn-where adv-only">točnih ${Math.round(t.on_time_share * 100)} % · p90 ${delayLabel(t.p90_s)} min</div>`;
 }
 
+// Kaj je o tej postaji rekel feed. Kadar vozilo postaje se ni doseglo, je to
+// napoved prevoznika in ta je izmerjeno slaba -- pogosto 0, dokler nima prave
+// vrednosti (`sztrack backtest --operator`: MAE 7,9 min proti 1,3 za prenos).
+// Prikaz je zato ne uporablja, a je tudi ne skriva: v naprednem pogledu se
+// vidi, kadar se od nase ocene razlikuje.
+function feedNoteHtml(r) {
+  if (r.delay_kind !== "ocena" || r.feed_delay_s == null) return "";
+  if (Math.abs(r.feed_delay_s - r.delay_s) < 60) return "";
+  return `<div class="conn-where adv-only">feed pravi ${delayLabel(r.feed_delay_s)} min</div>`;
+}
+
 function delayChipHtml(delay, kind, at) {
   if (delay == null) return '<span class="chip chip-none">brez podatka</span>';
   const color = delayColor(delay);
@@ -217,7 +228,10 @@ function delayChipHtml(delay, kind, at) {
   return `<span class="chip${forecast ? " chip-forecast" : ""}" style="color:${color};border-color:${color}44">
       <span class="chip-n">${delayLabel(delay)}</span><span class="chip-unit">min</span>
     </span>
-    ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at ? ` na postaji ${escapeHtml(at)}` : ""}</div>` : ""}`;
+    ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at
+      ? (kind === "ocena" ? ` — vozilo je pri postaji ${escapeHtml(at)}`
+                          : ` na postaji ${escapeHtml(at)}`)
+      : ""}</div>` : ""}`;
 }
 
 // Vožnja je "mimo" šele, ko je minil PRIČAKOVANI odhod, ne voznoredni.
@@ -436,7 +450,7 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
           : ""}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
       </div>
       <div class="conn-delay">${r.delay_s != null
-        ? delayChipHtml(r.delay_s, r.delay_from ? "izmerjeno" : null, r.delay_from)
+        ? delayChipHtml(r.delay_s, r.delay_kind, r.delay_from) + feedNoteHtml(r)
         : typicalChipHtml(r.typical, r.typical_from)}</div>
       <div class="board-meta">
         ${cd ? `<span class="countdown">${cd}</span> · ` : ""}
