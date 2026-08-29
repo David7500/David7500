@@ -369,6 +369,7 @@
   font: 400 10.5px/1.45 var(--sans);
   color: var(--ink-faint);
 }
+.stop-dwell strong { color: var(--ink-dim); font-weight: 600; }
 /* Mirne razmere: zeton je tam, a ne tekmuje s stevilko zamude, ki je edina,
    zaradi katere je clovek na tej strani. Pise temperaturo, ne stopnje 0. */
 .stop-weather.is-quiet { opacity: .6; }

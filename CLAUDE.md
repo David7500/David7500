@@ -150,6 +150,19 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   (`collector.is_zero_blip`); dnevnik `obs` obdrži vse. Isto varovalo velja pri
   določanju lege vlaka -- sicer (vozni red + 0) pomeni, da je postanek že minil,
   in vlak na zemljevidu skoči naprej.
+* **Odhodni zamudi na dolgem postanku ne verjemi.** Feed jo objavi kot ničlo,
+  še preden vlak pride, in je pogosto ne popravi. Ujeto v živo 29. 8.: RG 1604
+  je imel v Ljubljani zapisan prihod +19 in **odhod 0** — torej dve minuti
+  stanja — na Ljubljani Zalogu osem minut pozneje pa **+5**, torej sedem minut
+  stanja. Oboje hkrati ne drži, in tokrat prvič vemo, katera stran je napačna:
+  Zalog in Litija (+3) sta skladna med sabo, odhodna ničla ni skladna z nikomer.
+
+  Isti vzorec je na tej postaji **pet dni od devetih**. `stats.typical_dwell()`
+  zato dan sploh šteje le, kadar sta naslednja dva postanka skladna med sabo
+  (razlika pod 2 min), postanek pa izračuna iz **naslednjega** postanka, ne iz
+  odhodne vrednosti. RG 1604 v Ljubljani: štirje uporabni dnevi od devetih,
+  postanki 7, 9, 11 in 17 min proti 21 po voznem redu.
+
 * **Zamuda ni ena številka na postanek: prihodna in odhodna sta lahko različni.**
   Vlak ne odide takrat, ko pride. LP 4219 ima na Mostu na Soči v voznem redu
   **devet minut postanka** (20:38 → 20:47, križanje na enotirni bohinjski
@@ -637,6 +650,18 @@ nalog, izpuščanje enega dne):
 | vlak, premica `d_j = a + b·d_i` | 2,08 min | 89,5 % |
 | rezerva sama (brez učenja) | 3,01 min | 82,3 % |
 | **rezerva + razred zamude (v uporabi)** | **1,92 min** | **91,0 %** |
+
+**Običajni postanek se kaže, ne uporablja.** `MIN_DWELL_S = 120` je
+predpostavka, da vlak postanek skrajša na dve minuti. Preizkušeno je, da
+zamenjava s **historično mediano dejanskega postanka** natančnosti ne izboljša
+(MAE 1,911 → 1,912 min; enako na odsekih z dolgim postankom in tam, kjer za
+odsek ni zgodovine) — ker se rezerva in historični popravek seštejeta in
+premikanje predpostavke med njima vsote ne spremeni.
+
+Prikazu pa je namenjena: pri postanku nad pet minut okno vožnje napiše
+„vozni red tu čaka 18 min; ta vlak, kadar zamuja, stoji običajno 15". Skriti
+dvominutni prag je predpostavka, ki je nihče ne vidi in ki zna biti močno
+mimo; ta stavek potnik lahko preveri.
 
 **Rezerva voznega reda je edini vhod v napoved, ki ni statistika.**
 `slack = Σ max(0, postanek − MIN_DWELL_S)` čez postaje med izhodiščem in

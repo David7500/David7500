@@ -406,6 +406,24 @@ function dwellSplit(s) {
   };
 }
 
+// Dolg postanek pred potnikom: povej, na cem ocena stoji. Model racuna, da bo
+// vlak postanek skrajsal na dve minuti -- to je skrita predpostavka, ki zna
+// biti mocno mimo (RG 1604 v Ljubljani: vozni red 21 min, model 2, resnica 7).
+// Zato pokazemo, koliko ta vlak tam RES stoji, kadar zamuja.
+const DWELL_SHOW_S = 300;
+
+function dwellPlanHtml(s) {
+  if (!s || !s.sched_dwell_s || s.sched_dwell_s < DWELL_SHOW_S) return "";
+  const red = Math.round(s.sched_dwell_s / 60);
+  if (s.typical_dwell_s == null) {
+    return `<div class="stop-dwell">vozni red tu čaka ${red} min</div>`;
+  }
+  const res = Math.round(s.typical_dwell_s / 60);
+  return `<div class="stop-dwell">vozni red tu čaka ${red} min;`
+    + ` ta vlak, kadar zamuja, stoji običajno <strong>${res}</strong>`
+    + `<span class="adv-only"> (${escapeHtml(pluralRuns(s.dwell_samples))})</span></div>`;
+}
+
 function dwellNoteHtml(d) {
   if (d.gained > 0) {
     return `vozni red tu čaka ${d.sched} min, vlak je stal ${Math.max(d.real, 0)}`
@@ -495,6 +513,7 @@ function forecastStopHtml(s, f, w) {
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">${escapeHtml(tag)}</span></div>
+        ${dwellPlanHtml(s)}
         ${feedSaid != null && !(f && f.from_operator)
           ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`
           : ""}

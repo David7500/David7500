@@ -198,9 +198,16 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
         "WHERE s.trip_id = ? ORDER BY s.stop_seq",
         (service_date, trip_id),
     )
+    typ = typical_dwell(conn, train_no)
     out = []
     for r in rows:
         d = dict(r)
+        if r["arr_s"] is not None and r["dep_s"] is not None:
+            d["sched_dwell_s"] = r["dep_s"] - r["arr_s"]
+        t = typ.get(r["stop_seq"])
+        if t:
+            d["typical_dwell_s"] = t["typical_dwell_s"]
+            d["dwell_samples"] = t["n_samples"]
         d["sched_arr"] = _abs_time(service_date, r["arr_s"])
         d["sched_dep"] = _abs_time(service_date, r["dep_s"])
         # Feed nosi samo zamudo -- dejanski cas je vozni red + zamuda.
@@ -627,6 +634,73 @@ def _after_slack(delay_s: int, slack_s: int) -> int:
     ni nikoli, pri avtobusih pa je vsakdanje).
     """
     return delay_s - min(max(delay_s, 0), slack_s)
+
+
+#: Od kod naprej je postanek vreden razlage. Pod tem je vsak postanek eno- ali
+#: dvominuten in "obicajno stoji 1 min" ni podatek, ampak sum.
+DWELL_WORTH_SHOWING_S = 300
+
+#: Koliko dni s pozno voznjo mora biti, da o obicajnem postanku sploh govorimo.
+MIN_DWELL_SAMPLES = 3
+
+
+def typical_dwell(conn: sqlite3.Connection, train_no: str, days: int = 90) -> dict:
+    """stop_seq -> koliko ta vlak na tej postaji RES stoji, kadar zamuja.
+
+    Model tega ne uporablja -- preverjeno je, da natancnosti ne izboljsa
+    (MAE 1,911 proti 1,912 min): rezervo in historicni popravek se sestejeta,
+    zato premikanje predpostavke med njima vsote ne spremeni.
+
+    Prikazu pa **je** namenjeno. `MIN_DWELL_S` (2 min) je skrita predpostavka,
+    ki je nihce ne vidi in ki zna biti mocno mimo: RG 1604 ima v Ljubljani 21
+    minut postanka in model racuna z dvema, v resnici pa tam stoji sedem.
+    "Vozni red tu caka 21 min, ta vlak obicajno stoji 7" je stavek, ki ga
+    potnik lahko preveri.
+
+    Steje samo dneve, ko je vlak prisel pozen (>= 5 min): takrat je postanek
+    izbira in ne vozni red. Kadar pride tocen, stoji predpisano in to o
+    njegovi sposobnosti nadoknaditi ne pove nicesar.
+    """
+    since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    vzorci: dict[int, list[int]] = {}
+    sched: dict[int, int] = {}
+    # Odhodni zamudi na dolgem postanku se ne da verjeti kar tako: feed jo
+    # objavi kot nicelno napoved, se preden vlak pride, in je pogosto ne
+    # popravi. Izmerjeno v zivo 29. 8.: RG 1604 je imel v Ljubljani zapisan
+    # odhod 0 (torej dve minuti stanja), na Zalogu osem minut pozneje pa +5
+    # (torej sedem). Oboje hkrati ne drzi.
+    #
+    # Zato dan steje samo, ce sta NASLEDNJA dva postanka skladna med sabo --
+    # takrat vemo, s kaksno zamudo je vlak s postaje res odpeljal, in postanek
+    # izracunamo iz tega, ne iz odhodne vrednosti.
+    for r in conn.execute(
+        "SELECT r.stop_seq, r.service_date, s.dep_s - s.arr_s AS red, "
+        "       r.delay_arr, "
+        "       (SELECT COALESCE(n.delay_arr, n.delay_dep) FROM run n "
+        "         WHERE n.trip_id = r.trip_id AND n.service_date = r.service_date "
+        "           AND n.stop_seq = r.stop_seq + 1) AS naslednji, "
+        "       (SELECT COALESCE(n.delay_arr, n.delay_dep) FROM run n "
+        "         WHERE n.trip_id = r.trip_id AND n.service_date = r.service_date "
+        "           AND n.stop_seq = r.stop_seq + 2) AS naslednji2 "
+        "FROM run r JOIN trip t USING (trip_id) "
+        "JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+        "WHERE t.train_no = ? AND r.service_date >= ? "
+        "  AND r.delay_arr IS NOT NULL AND r.delay_arr >= 300 "
+        "  AND s.arr_s IS NOT NULL AND s.dep_s IS NOT NULL "
+        "  AND s.dep_s - s.arr_s >= ?",
+        (train_no, since, DWELL_WORTH_SHOWING_S),
+    ):
+        a, b = r["naslednji"], r["naslednji2"]
+        if a is None or b is None or abs(a - b) > 120:
+            continue                       # zaporedje si ni skladno -- dan izpustimo
+        vzorci.setdefault(r["stop_seq"], []).append(r["red"] + a - r["delay_arr"])
+        sched[r["stop_seq"]] = r["red"]
+    return {
+        seq: {"sched_dwell_s": sched[seq],
+              "typical_dwell_s": round(statistics.median(v)),
+              "n_samples": len(v)}
+        for seq, v in vzorci.items() if len(v) >= MIN_DWELL_SAMPLES
+    }
 
 
 def _slack_ahead(conn: sqlite3.Connection, trip_ids: list[str]) -> dict:
