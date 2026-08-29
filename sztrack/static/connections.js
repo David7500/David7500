@@ -537,14 +537,65 @@ function overviewHtml(o) {
     </section>`;
 }
 
+// Avtobusni pregled govori o SEDANJOSTI, ne o zgodovini: zajem je nov in
+// vsaka številka o preteklosti bi obljubljala več, kot ve. Zato koliko jih
+// vozi, koliko jih ima GPS in kako hitro se premikajo -- to o njih res vemo.
+function busOverviewHtml(o) {
+  const worst = (o.worst || []).map((t) => {
+    const color = delayColor(t.delay_s);
+    const stale = t.age_s != null && t.age_s > 1200;
+    return `<a class="live-row" href="${journeyHref(t.train_no, null, t.trip_id)}">
+      <span class="live-no">${escapeHtml(t.train_no)}</span>
+      <span class="live-where">${escapeHtml(t.last_stop)}</span>
+      <span class="live-delay" style="color:${color}">${delayLabel(t.delay_s)} min</span>
+      ${stale ? `<span class="stale-note">podatek star ${Math.round(t.age_s / 60)} min</span>` : ""}
+    </a>`;
+  }).join("");
+
+  return `
+    <section class="overview">
+      <div class="ov-head">
+        <h2>Kako vozijo avtobusi</h2>
+        <span class="ov-sub">${o.live_vehicles} zdaj na poti</span>
+      </div>
+
+      <div class="ov-card">
+        <div class="ov-card-head">
+          <span>Zdaj</span>
+          ${o.median_speed_kmh != null
+            ? `<strong>mediana hitrosti ${o.median_speed_kmh} km/h</strong>` : ""}
+        </div>
+        <div class="ov-card-foot">
+          ${o.with_gps} vozil z GPS lego, od tega ${o.moving} v vožnji.
+          Avtobusi imajo pravo lego, vlaki je nimajo — na zemljevidu so puščica,
+          ne krog na postaji.
+          ${o.today && o.today.runs
+            ? `<span class="adv-only"> · danes ${o.today.runs} zajetih voženj</span>` : ""}
+        </div>
+      </div>
+
+      ${worst ? `<div class="ov-card">
+        <div class="ov-card-head"><span>Največje zamude zdaj</span></div>
+        <div class="live-list">${worst}</div>
+      </div>` : ""}
+
+      <div class="ov-card">
+        <div class="ov-card-foot">
+          Zajem avtobusov je nov, zato „običajne“ zamude za primerjavo še ni.
+          Nabira se od danes naprej.
+        </div>
+      </div>
+    </section>`;
+}
+
 async function showOverview() {
   if (IS_BUS) {
-    // Pregled ("kako vozijo vlaki") je železniški. Za avtobuse ga nimamo:
-    // zajem je star nekaj ur in bi vsaka številka obljubljala več, kot ve.
-    resultsEl.innerHTML = `<div class="empty-state">
-      Vpiši postajališče ali izhodišče in cilj.<br>
-      Zajem avtobusov je nov, zato zgodovine za primerjavo še skoraj ni.
-    </div>`;
+    try {
+      const o = await fetch("/api/overview/bus").then((r) => r.json());
+      resultsEl.innerHTML = busOverviewHtml(o);
+    } catch (err) {
+      resultsEl.innerHTML = '<div class="empty-state">Vpiši postajališče ali izhodišče in cilj.</div>';
+    }
     return;
   }
   try {

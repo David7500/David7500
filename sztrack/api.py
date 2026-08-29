@@ -225,6 +225,33 @@ def yesterday_iso(now: datetime) -> str:
     return (now.date() - timedelta(days=1)).isoformat()
 
 
+@app.get("/api/overview/bus")
+def api_overview_bus():
+    """Kaj se dogaja z avtobusi zdaj.
+
+    Ločeno od `/api/overview`, ki je železniški. Zgodovine tu skoraj ni --
+    zajem avtobusov je nov -- zato pregled govori o **sedanjosti**: koliko
+    vozil je na poti, koliko jih ima GPS in kako hitro se premikajo. To je
+    tisto, kar o njih res vemo.
+    """
+    now = datetime.now(TZ)
+    live = _live("avtobus")
+    with _conn() as conn:
+        vehicles = api_vehicles()
+        day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
+    moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
+    return {
+        "now": now.isoformat(),
+        "live_vehicles": len(live),
+        "with_gps": len(vehicles),
+        "moving": len(moving),
+        "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
+                             if moving else None),
+        "worst": live[:5],
+        "today": day,
+    }
+
+
 @app.get("/api/stations")
 def api_stations(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
                                              description="samo postaje tega omrežja")):
@@ -470,7 +497,8 @@ tail AS (
            ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
     FROM t
 )
-SELECT tr.train_no, tr.headsign, tr.mode, tr.network, st.name AS last_stop, p.stop_seq,
+SELECT tr.train_no, tr.headsign, tr.mode, tr.network, p.trip_id,
+       st.name AS last_stop, p.stop_seq,
        p.delay_s, p.feed_ts, p.t_s AS sched_s
 FROM passed p
 JOIN tail  ON tail.trip_id = p.trip_id AND tail.rn = 1
