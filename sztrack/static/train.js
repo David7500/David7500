@@ -633,6 +633,15 @@ function stopTipHtml(p) {
 const SEV_STRIP_H = 38;
 const SEV_GAP = 18;
 
+// Koliko pik mora biti med prihodom in odhodom, da padec na postaji sploh
+// narisemo. Prazen krogec prihoda meri v premeru 10 pik, polna pika odhoda 11
+// -- pri manjsem razmiku se prekrijeta in navpicnica med njima je docela pod
+// njima. Videti je kot dva nepovezana krogca, ne kot padec. Petnajst pik pusti
+// stiri pike vidne crte. Pod tem stevilki ostaneta v seznamu, kjer sta besedilo
+// ("+16 -> +15") in ne potrebujeta prostora; ena minuta je tudi na meji
+// locljivosti feeda, ki prilaga `uncertainty: 120`.
+const MIN_SPLIT_PX = 15;
+
 function drawProfile(w, pts) {
   const hasWx = pts.some((p) => p.wx && p.wx.severity != null);
   // Desni rob mora nositi zadnjo tocko, njeno oznako, njen stolpec razmer in
@@ -703,8 +712,8 @@ function drawProfile(w, pts) {
     // kar se zgodi med postajama, je voznja, kar se zgodi na postaji, je
     // postanek. Padec potem narise navpicnica spodaj, tam, kjer se je res
     // zgodil.
-    const konec = (b.arrival != null && Math.abs(y(b.arrival) - y(b.value)) >= 7)
-      ? b.arrival : b.value;
+    const konec = (b.arrival != null
+      && Math.abs(y(b.arrival) - y(b.value)) >= MIN_SPLIT_PX) ? b.arrival : b.value;
     svg.appendChild(svgEl("line", {
       x1: x(i), y1: y(a.value), x2: x(i + 1), y2: y(konec),
       stroke: guessed ? ESTIMATE_COLOR : INK_LINE, "stroke-width": 2,
@@ -717,10 +726,7 @@ function drawProfile(w, pts) {
   // graf sicer pusti odprto -- "kako je zamuda padla za osem minut naenkrat".
   pts.forEach((p, i) => {
     if (p.arrival == null || p.value == null) return;
-    // Pod nekaj pikami se prazen krogec in polna pika prekrijeta in vrstica
-    // je videti kot pretrgana crta, ne kot padec. Ena minuta razlike je tudi
-    // na meji locljivosti feeda; v seznamu ostane zapisana s stevilkami.
-    if (Math.abs(y(p.arrival) - y(p.value)) < 7) return;
+    if (Math.abs(y(p.arrival) - y(p.value)) < MIN_SPLIT_PX) return;
     const ocena = p.kind === "estimate";
     const barva = ocena ? ESTIMATE_COLOR : delayColor(p.arrival);
     svg.appendChild(svgEl("line", {

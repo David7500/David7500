@@ -445,10 +445,14 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot
   številka poleg nje.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
-* **Padca zamude na postaji ne riši, kadar je manjši od sedmih pik.** Prazen
-  krogec prihoda in polna pika odhoda se prekrijeta in vrstica je videti kot
-  pretrgana črta, ne kot padec. Ena minuta razlike je tudi na meji ločljivosti
-  feeda; v seznamu ostane zapisana s številkami (`+16 → +15`).
+* **Padca zamude na postaji ne riši, kadar je manjši od `MIN_SPLIT_PX` (15).**
+  Prazen krogec prihoda meri v premeru 10 pik, polna pika odhoda 11 — pri
+  manjšem razmiku se prekrijeta in navpičnica med njima je docela pod njima.
+  Videti je kot **dva nepovezana krogca**, ne kot padec; prav to je bilo
+  prijavljeno pri Divači (+16 → +15, razmik natanko 10 pik). Petnajst pik
+  pusti štiri pike vidne črte. Pod tem številki ostaneta v seznamu, kjer sta
+  besedilo in ne potrebujeta prostora — in ena minuta je itak na meji
+  ločljivosti feeda, ki prilaga `uncertainty: 120`.
 * Kjer meritve ni (ocena, napoved), nastopi rezervirana `#a8d8ff`, ki je
   lestvica ne uporablja.
 * Vreme ima **svoj semafor**, ne odtenek lestvice zamud.
