@@ -218,7 +218,7 @@ function typicalChipHtml(t, fromStop) {
 function feedNoteHtml(r) {
   if (r.delay_kind !== "ocena" || r.feed_delay_s == null) return "";
   if (Math.abs(r.feed_delay_s - r.delay_s) < 60) return "";
-  return `<div class="conn-where adv-only">feed pravi ${delayLabel(r.feed_delay_s)} min</div>`;
+  return `<div class="conn-where adv-only">prevoznik napoveduje ${delayLabel(r.feed_delay_s)} min</div>`;
 }
 
 function delayChipHtml(delay, kind, at) {

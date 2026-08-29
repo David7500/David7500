@@ -491,7 +491,7 @@ function forecastStopHtml(s, f, w) {
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">${escapeHtml(tag)}</span></div>
-        ${feedSaid != null ? `<div class="stop-times adv-only"><span class="stop-tag">feed pravi ${delayLabel(feedSaid)} min</span></div>` : ""}
+        ${feedSaid != null ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>` : ""}
       </div>
       ${stopWeatherHtml(w, true)}
       <div class="stop-delay is-forecast" style="color:${color}">${delayLabel(d)}</div>

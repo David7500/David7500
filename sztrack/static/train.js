@@ -602,7 +602,7 @@ function stopTipHtml(p) {
         ? `mediana ${escapeHtml(pluralRuns(p.samples))}`
         : "le prenos trenutne zamude, brez zgodovine"}</div>`);
       if (p.feedSaid != null) {
-        rows.push(`<div class="tt-row is-part"><span>feed pravi</span><b>${delayLabel(p.feedSaid)} min</b></div>`);
+        rows.push(`<div class="tt-row is-part"><span>prevoznik napoveduje</span><b>${delayLabel(p.feedSaid)} min</b></div>`);
       }
     }
   } else {
