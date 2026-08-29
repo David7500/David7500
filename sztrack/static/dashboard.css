@@ -354,3 +354,35 @@ body {
 }
 .bus-toggle:hover { color: #e7eaf0; border-color: #3d434f; }
 .bus-toggle[aria-pressed="true"] { color: #4db97f; border-color: #4db97f55; }
+
+/* ---------- zemljevid na telefonu ----------
+ * Stranski stolpec je 300 px; na 390 px zaslonu je za zemljevid ostalo 90 px
+ * in ta ni bil za nobeno rabo. Zato v stolpec: najprej zemljevid, pod njim
+ * lestvica zamud. Zemljevid dobi večino višine, ker je on razlog za obisk.
+ */
+@media (max-width: 720px) {
+  body { overflow: auto; }
+  .body { flex-direction: column; }
+
+  .map-area {
+    order: 1;
+    height: 58vh;
+    min-height: 260px;
+    flex: 0 0 auto;
+  }
+
+  .sidebar {
+    order: 2;
+    width: auto;
+    border-right: none;
+    border-top: 1px solid #23272f;
+    flex: 1 1 auto;
+  }
+  .delay-list { max-height: none; }
+
+  /* Legenda pod seznamom je na telefonu daleč od zemljevida in tam nikomur
+     ne koristi; barve so razložene ob vsaki vrstici z minutami. */
+  .legend { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+
+  .detail { width: auto; border-left: none; border-top: 1px solid #23272f; order: 3; }
+}

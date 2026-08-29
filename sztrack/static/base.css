@@ -249,6 +249,9 @@ body:not(.is-advanced) .adv-only { display: none !important; }
     row-gap: 6px;
   }
   .brand-name { flex-shrink: 0; }
+  /* Ime strani ob znamki potisne preklop v svojo vrstico in glava zraste na
+     tri. Naslov je v zavihku brskalnika in v vsebini strani; tu je odveč. */
+  .page-name, .topbar .divider { display: none; }
   .topbar .spacer { display: none; }
   .mode-switch { margin-left: auto; }
   /* Povezave se prelomijo kot skupina, ne vsaka zase. */
