@@ -160,7 +160,7 @@ sztrack/
   alerts.py      ovire (SZ-OVIRA) in žive zamude s prometnim mestom (SZ-DELAY)
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, hitrosti, napoved, povezave
-  journey.py     odhodna tabla, iskanje postaj, zveze z enim prestopom
+  journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
@@ -203,6 +203,13 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   po imenu združuje.
 * **Zemljevid je edini skupni pogled.** Vlak je krog na zadnji postaji z
   meritvijo, avtobus puščica na izmerjeni legi; plast avtobusov se da odložiti.
+* **Prestopov je lahko do trije.** `journey.transfers()` išče enega v SQL in
+  zna pri njem povedati, ali zveza drži (meritev obeh vlakov na prestopni
+  postaji). Kadar ne najde nič, prevzame `journey.plan()`: dnevni vozni red v
+  pomnilnik in krog na nogo, do štirih nog. Vzorec 80 parov železniških postaj
+  je imel **36 % brez odgovora**; s tem jih ostane **4 %**. Ljutomer mesto →
+  Ribnica in Stara Cerkev → Prevalje rabita tri prestope, kar ni izmišljen
+  primer. Cena: 28 ms na železnici, 60 ms na avtobusnem omrežju.
 * **Pragovi za prestop so odvisni od omrežja** (`journey.TRANSFER_LIMITS`):
   železnica 6–120 min, avtobus 3–30. Tri minute so pri mestni liniji prestop,
   pri vlaku lovljenje; čakanje pol ure na liniji, ki vozi vsakih deset minut,

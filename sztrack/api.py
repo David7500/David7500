@@ -634,6 +634,12 @@ def api_connections(
         legs = (journey.transfers(conn, a, b, date, earliest_s=(now_s or 0),
                                   direct=rows, network=network)
                 if with_transfers else [])
+        # Sele ko neposredna voznja in en prestop ne dasta nic. V vzorcu 80
+        # parov zeleznickih postaj je bilo takih 36 % -- pot je obstajala, le
+        # dva ali tri prestope je rabila.
+        if with_transfers and not rows and not legs:
+            legs = journey.plan(conn, a, b, date, earliest_s=(now_s or 0),
+                                network=network)
         # Obvestila pobere streznik, ne brskalnik: prikaz jih je sicer iskal
         # z eno zahtevo na vlak, torej z dvanajstimi za eno iskanje.
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]

@@ -298,25 +298,40 @@ function transferRowHtml(t, nowMs, date) {
   const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
   const planned = Math.round(t.wait_s / 60);
   const actual = tr && tr.wait_s != null ? Math.round(tr.wait_s / 60) : null;
+  // Pot ima lahko dve nogi (en prestop) ali stiri (trije prestopi) -- prikaz
+  // ne sme predpostavljati dveh. Prestop se izpise ZA vsako nogo razen zadnje.
+  const count = t.transfers != null ? t.transfers : t.legs.length - 1;
 
-  const legs = t.legs.map((l, i) => `
-    <div class="leg">
-      <span class="leg-time">${hhmm(l.dep)}–${hhmm(l.arr)}</span>
-      <span class="leg-train">${escapeHtml(l.train_no)}</span>
-      <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
-    </div>
-    ${i === 0 ? `<div class="leg">
-        <span class="leg-wait" style="color:${st.color}">
-          prestop na postaji ${escapeHtml(t.via)} · ${actual != null && actual !== planned
-            ? `${actual} min (po voznem redu ${planned})`
-            : `${planned} min`}
-        </span>
-        ${tr && tr.delay1_s ? `<span class="leg-note">prvi vlak ${delayLabel(tr.delay1_s)} min</span>` : ""}
-      </div>` : ""}
-  `).join("");
+  const legs = t.legs.map((l, i) => {
+    const next = t.legs[i + 1];
+    const wait = next ? Math.round((next.dep_s - l.arr_s) / 60) : null;
+    return `
+      <div class="leg">
+        <span class="leg-time">${hhmm(l.dep)}–${hhmm(l.arr)}</span>
+        <span class="leg-train">${escapeHtml(l.train_no)}</span>
+        <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
+      </div>
+      ${next ? `<div class="leg">
+          <span class="leg-wait" style="color:${count === 1 ? st.color : "var(--sev-hard)"}">
+            prestop na postaji ${escapeHtml(l.to)} · ${wait} min
+          </span>
+          ${count === 1 && tr && tr.delay1_s
+            ? `<span class="leg-note">prvi vlak ${delayLabel(tr.delay1_s)} min</span>` : ""}
+        </div>` : ""}`;
+  }).join("");
+
+  // Pri enem prestopu znamo povedati, ali zveza drzi (imamo meritev obeh
+  // vlakov na prestopni postaji). Pri vec prestopih tega ne racunamo in zato
+  // ne trdimo -- pise samo, koliko jih je.
+  const badge = count === 1
+    ? transferBadgeHtml(tr, t.wait_s)
+    : `<span class="transfer-badge" style="color:var(--ink-mute);border-color:var(--line-firm)">
+         ${count} ${count === 2 ? "prestopa" : count === 3 || count === 4 ? "prestopi" : "prestopov"}
+       </span>
+       <div class="conn-where">najkrajše čakanje ${planned} min</div>`;
 
   return `
-    <a class="conn-row is-transfer" style="border-left-color:${st.color}"
+    <a class="conn-row is-transfer" style="border-left-color:${count === 1 ? st.color : "var(--line-firm)"}"
        href="${journeyHref(t.train1, date, t.trip1)}">
       <div class="conn-times">
         <div class="conn-clock">
@@ -326,13 +341,13 @@ function transferRowHtml(t, nowMs, date) {
         </div>
       </div>
       <div class="conn-train">
-        <div class="conn-no">${escapeHtml(t.train1)} → ${escapeHtml(t.train2)}</div>
-        <div class="conn-headsign">prestop na postaji ${escapeHtml(t.via)}</div>
+        <div class="conn-no">${t.legs.map((l) => escapeHtml(l.train_no)).join(" → ")}</div>
+        <div class="conn-headsign">prek ${escapeHtml(t.via)}</div>
       </div>
-      <div class="conn-delay">${transferBadgeHtml(tr, t.wait_s)}</div>
+      <div class="conn-delay">${badge}</div>
       <div class="conn-meta">
         <span>${durationLabel(t.duration_s)}</span>
-        <span class="adv-only">načrtovano ${planned} min za prestop</span>
+        ${count === 1 ? `<span class="adv-only">načrtovano ${planned} min za prestop</span>` : ""}
       </div>
       <div class="legs">${legs}</div>
     </a>`;
@@ -348,7 +363,9 @@ function renderConnections(data) {
   resultHeadEl.innerHTML =
     `<span><strong>${escapeHtml(data.from)}</strong> → <strong>${escapeHtml(data.to)}</strong></span>
      <span>${dayLabel(data.date)}</span>
-     <span>${list.length} ${list.length === 1 ? "neposredna vožnja" : "neposrednih"}${legs.length ? ` · ${legs.length} s prestopom` : ""}</span>`;
+     <span>${list.length} ${list.length === 1 ? "neposredna vožnja" : "neposrednih"}${legs.length
+        ? ` · ${legs.length} s ${legs.some((t) => (t.transfers || 1) > 1) ? "prestopi" : "prestopom"}`
+        : ""}</span>`;
 
   if (!list.length && !legs.length) {
     // "od Metlika do Bohinjska Bistrica" je napačno; sklanja se "postaja",
@@ -384,7 +401,12 @@ function renderConnections(data) {
   }
   rows.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date)));
   if (legs.length) {
-    rows.push(`<div class="result-head"><span>Z enim prestopom</span></div>`);
+    // Naslov naj pove, kaj je spodaj: en prestop ali vec. Ko en prestop ne
+    // da nicesar, iscemo naprej in rezultat je lahko tri- ali stirinozen.
+    const most = Math.max(...legs.map((t) => t.transfers || t.legs.length - 1));
+    rows.push(`<div class="result-head"><span>${most === 1
+      ? "Z enim prestopom"
+      : "S prestopi — neposredne vožnje ni"}</span></div>`);
     rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date)));
   }
   resultsEl.innerHTML = rows.join("");

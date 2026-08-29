@@ -463,3 +463,63 @@ def test_nocna_voznja_ostane_na_seznamu_tudi_ob_veliki_zamudi(conn):
     full = api._live_rows(c, "2026-08-31", now_s, overnight_only=False)
     assert "EC 9" in {r["train_no"] for r in strict}
     assert {r["train_no"] for r in strict} == {r["train_no"] for r in full}
+
+
+# ---------------------------------------------------------------- več prestopov
+
+def test_pot_s_tremi_nogami_se_najde(conn):
+    """En prestop ni dovolj za slovensko mrežo.
+
+    Vzorec 80 parov železniških postaj: 15 neposredno, 36 z enim prestopom,
+    **29 brez odgovora**, čeprav pot obstaja. Z iskanjem do treh prestopov
+    jih brez odgovora ostane 3.
+    """
+    c = conn
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('K','Konec',46.5,15.9)")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('t5','r5','LP 5','C - K','S1')")
+    # Odpelje iz C ob 36300. IC 1 (neposredno A -> C) pripelje ob 36000, torej
+    # pet minut prej -- premalo za prestop. Počasna pot prek Z pripelje ob
+    # 34200 in zvezo ujame. Tako je edini odgovor tri noge, ne ena in ne dve.
+    _sched(c, "t5", [(1, "C", None, 36300), (2, "K", 40000, None)])
+    c.commit()
+
+    assert stats.connections(c, "Ajdovščina", "Konec", "2026-08-31") == []
+    assert journey.transfers(c, "Ajdovščina", "Konec", "2026-08-31", direct=[]) == []
+
+    found = journey.plan(c, "Ajdovščina", "Konec", "2026-08-31")
+    assert len(found) == 1
+    p = found[0]
+    assert p["transfers"] == 2
+    assert [l["train_no"] for l in p["legs"]] == ["LP 2", "LP 3", "LP 5"]
+    assert p["legs"][-1]["to"] == "Konec"
+
+
+def test_iskanje_z_vec_prestopi_spostuje_cas_za_prestop(conn):
+    """Prestop, ki je prekratek, ni pot.
+
+    Če drugi vlak odpelje minuto po prihodu prvega, ga ne ponudimo — enako
+    kot pri enem prestopu, le da tu prag velja med vsakima nogama.
+    """
+    c = conn
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('K','Konec',46.5,15.9)")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('t5','r5','LP 5','C - K','S1')")
+    # LP 3 pride v C ob 34200; ta odpelje ze ob 34260, torej cez eno minuto.
+    _sched(c, "t5", [(1, "C", None, 34260), (2, "K", 40000, None)])
+    c.commit()
+    assert journey.plan(c, "Ajdovščina", "Konec", "2026-08-31") == []
+
+
+def test_iskanje_ne_zaide_med_omrezji(conn):
+    """Pot čez tri noge ne sme skočiti z vlaka na mestni avtobus in nazaj."""
+    _add_bus(conn)
+    c = conn
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('K','Konec',46.5,15.9)")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              "                 mode, agency, network) "
+              "VALUES('b9','rb9','9X','P - K','S1','bus','1118','avtobus')")
+    _sched(c, "b9", [(1, "P", None, 34000), (2, "K", 36000, None)])
+    c.commit()
+    # Na zelezniskem omrezju avtobusne noge ni, zato do 'Konec' ni poti.
+    assert journey.plan(c, "Ajdovščina", "Konec", "2026-08-31", network="zeleznica") == []

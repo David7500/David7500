@@ -491,3 +491,171 @@ def today(when: datetime | None = None) -> str:
 
 def yesterday(when: datetime | None = None) -> str:
     return ((when or datetime.now(TZ)).date() - timedelta(days=1)).isoformat()
+
+
+# ---------------------------------------------------------------- dva prestopa
+
+# Koliko nog (voznj) najvec. Stiri noge = trije prestopi.
+#
+# Dva nista dovolj: Ljutomer mesto -> Ribnica in Stara Cerkev -> Prevalje
+# rabita tri, in to nista izmisljena primera -- prisla sta iz vzorca, v
+# katerem 36 % parov postaj ni imelo odgovora. Cena je majhna: iskanje tece
+# 28 ms na zeleznici in 60 ms na avtobusnem omrezju.
+MAX_LEGS = 4
+
+# Varovalka: iskanje tece nad celim dnevnim voznim redom v pomnilniku. Pri
+# zeleznici je to ~10 000 postankov, pri avtobusih 80 000. Ce bi kdaj naraslo
+# cez to, raje ne odgovorimo, kot da stran obvisi.
+MAX_STOP_TIMES = 200_000
+
+
+def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
+                       network: str | None) -> tuple[dict, dict]:
+    """Ves dnevni vozni red v pomnilnik: po vožnjah in po postajališčih.
+
+    Iskanje z dvema prestopoma je zaporedje "vkrcaj se, pelji, izstopi" in bi
+    v SQL pomenilo trojni kartezični zmnožek. V pomnilniku je to nekaj
+    slovarjev in nekaj deset milisekund.
+    """
+    rows = conn.execute(
+        "SELECT s.trip_id, s.stop_seq, s.stop_id, s.arr_s, s.dep_s "
+        "FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
+        "JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
+        "WHERE (? IS NULL OR t.network = ?) "
+        "ORDER BY s.trip_id, s.stop_seq",
+        (service_date, network, network),
+    ).fetchall()
+    if len(rows) > MAX_STOP_TIMES:
+        return {}, {}
+
+    by_trip: dict[str, list] = {}
+    at_stop: dict[str, list] = {}
+    for r in rows:
+        entry = (r["stop_seq"], r["stop_id"],
+                 r["arr_s"] if r["arr_s"] is not None else r["dep_s"],
+                 r["dep_s"] if r["dep_s"] is not None else r["arr_s"])
+        by_trip.setdefault(r["trip_id"], []).append(entry)
+        if entry[3] is not None:
+            at_stop.setdefault(r["stop_id"], []).append((entry[3], r["trip_id"], r["stop_seq"]))
+    for v in at_stop.values():
+        v.sort()
+    return by_trip, at_stop
+
+
+def _stop_ids_of(conn: sqlite3.Connection, name: str) -> set[str]:
+    """Vsi `stop_id` tega imena. Mestno postajališče jih ima po enega na smer."""
+    return {r["stop_id"] for r in conn.execute(
+        "SELECT stop_id FROM station WHERE name = ?", (name,))}
+
+
+def plan(conn: sqlite3.Connection, from_name: str, to_name: str,
+         service_date: str, earliest_s: int = 0,
+         network: str | None = None, max_legs: int = MAX_LEGS) -> list[dict]:
+    """Najzgodnejši prihod z največ `max_legs - 1` prestopi.
+
+    Uporablja se **šele**, ko neposredna vožnja in en prestop ne dasta nič.
+    Vzorec 80 parov železniških postaj: 15 neposredno, 36 z enim prestopom,
+    29 brez odgovora — 36 % vprašanj je ostalo brez odgovora, čeprav pot
+    obstaja (Ljutomer mesto -> Ribnica, Narin -> Kranj).
+
+    Postopek je krog na nogo: iz vsakega dosezenega postajališča se vkrcaj na
+    vsako vožnjo, ki odpelje dovolj pozno, in sprosti čase prihoda naprej po
+    njej. Ohranjamo najzgodnejši prihod na postajališče; to ni nujno pot z
+    najmanj prestopi, je pa pot, ki te najprej pripelje -- in prav to je
+    vprašanje, ko drugega odgovora ni.
+    """
+    by_trip, at_stop = _timetable_for_day(conn, service_date, network)
+    if not by_trip:
+        return []
+    starts = _stop_ids_of(conn, from_name)
+    targets = _stop_ids_of(conn, to_name)
+    if not starts or not targets:
+        return []
+
+    min_gap = TRANSFER_LIMITS.get(network or "zeleznica",
+                                  TRANSFER_LIMITS["zeleznica"])[0] * 60
+
+    best: dict[str, int] = {sid: earliest_s for sid in starts}
+    # od kod smo prisli: stop_id -> (trip_id, vstopno postajalisce, vstopni seq, izstopni seq)
+    parent: dict[str, tuple] = {}
+    frontier = set(starts)
+
+    for leg in range(max_legs):
+        marked: set[str] = set()
+        for sid in frontier:
+            ready = best[sid] + (0 if leg == 0 else min_gap)
+            for dep_s, trip_id, seq in at_stop.get(sid, ()):
+                if dep_s < ready:
+                    continue
+                # Po tej voznji naprej: sprosti prihode na vse nadaljnje postanke.
+                for nseq, nstop, narr, _ in by_trip[trip_id]:
+                    if nseq <= seq or narr is None:
+                        continue
+                    if narr < best.get(nstop, 1 << 30):
+                        best[nstop] = narr
+                        parent[nstop] = (trip_id, sid, seq, nseq)
+                        marked.add(nstop)
+        frontier = marked
+        if not frontier:
+            break
+
+    reached = [t for t in targets if t in parent]
+    if not reached:
+        return []
+    end = min(reached, key=lambda t: best[t])
+
+    # Pot nazaj do izhodisca.
+    legs: list[tuple] = []
+    cur = end
+    while cur in parent:
+        trip_id, board, bseq, aseq = parent[cur]
+        legs.append((trip_id, board, bseq, cur, aseq))
+        cur = board
+        if len(legs) > max_legs:
+            return []            # varovalka pred ciklom, ki ga ne bi smelo biti
+    legs.reverse()
+    if len(legs) <= 2:
+        return []                # to zna ze `transfers()`, in bolje
+
+    return [_build_itinerary(conn, legs, service_date, by_trip)]
+
+
+def _build_itinerary(conn: sqlite3.Connection, legs: list[tuple],
+                     service_date: str, by_trip: dict) -> dict:
+    """Iz zaporedja nog sestavi isto obliko, kot jo vrne `transfers()`.
+
+    Prikaz tako ne rabi vedeti, od kod je pot prišla -- ena oblika, en izris.
+    """
+    names = {r["stop_id"]: r["name"] for r in conn.execute("SELECT stop_id, name FROM station")}
+    info = {r["trip_id"]: r for r in conn.execute(
+        "SELECT trip_id, train_no, headsign, mode, network, agency FROM trip "
+        f"WHERE trip_id IN ({','.join('?' * len(legs))})", [x[0] for x in legs])}
+
+    out_legs = []
+    for trip_id, board, bseq, alight, aseq in legs:
+        stops = {s[0]: s for s in by_trip[trip_id]}
+        t = info[trip_id]
+        out_legs.append({
+            "train_no": t["train_no"], "trip_id": trip_id, "headsign": t["headsign"],
+            "mode": t["mode"], "network": t["network"], "agency": t["agency"],
+            "from": names.get(board, board), "to": names.get(alight, alight),
+            "dep": _abs_time(service_date, stops[bseq][3]),
+            "arr": _abs_time(service_date, stops[aseq][2]),
+            "dep_s": stops[bseq][3], "arr_s": stops[aseq][2],
+        })
+
+    first, last = out_legs[0], out_legs[-1]
+    waits = [b["dep_s"] - a["arr_s"] for a, b in zip(out_legs, out_legs[1:])]
+    return {
+        "train1": first["train_no"], "trip1": first["trip_id"],
+        "train2": last["train_no"], "trip2": last["trip_id"],
+        "via": " · ".join(l["to"] for l in out_legs[:-1]),
+        "dep_s": first["dep_s"], "arr_s": last["arr_s"],
+        "sched_dep": first["dep"], "sched_arr": last["arr"],
+        "duration_s": last["arr_s"] - first["dep_s"],
+        "wait_s": min(waits) if waits else 0,
+        "transfers": len(out_legs) - 1,
+        "legs": out_legs,
+        "transfer": {"wait_s": min(waits) if waits else 0,
+                     "status": "brez podatka", "source": None},
+    }
