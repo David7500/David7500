@@ -31,8 +31,12 @@ async function loadHealth() {
   if (!el || el.dataset.done) return;
   try {
     const h = await fetch("/api/health").then((r) => r.json());
+    // Po omrezju, ne skupno: na strani vlakov je stevilka avtobusnih meritev
+    // le zavajajoca -- enako kot vse drugo na tej strani.
+    const mine = (h.by_network || {})[NETWORK] || {};
+    const runs = mine.runs != null ? mine.runs : h.runs_recorded;
     el.textContent =
-      ` · zajetih ${h.observations.toLocaleString("sl-SI")} meritev v ${h.days_covered} dneh` +
+      ` · zajetih ${runs.toLocaleString("sl-SI")} meritev v ${h.days_covered} dneh` +
       (h.last_feed_at ? `, zadnja ob ${hhmm(h.last_feed_at)}` : "");
     el.dataset.done = "1";
   } catch (err) {
