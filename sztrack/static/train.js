@@ -207,7 +207,7 @@ function runHeadHtml(cur) {
           ? ` — ${vehicleNoun()} je od takrat verjetno že pripeljal`
           : ""}
       </div>` : ""}
-      ${rep ? `<div class="detail-report">
+      ${rep ? `<div class="detail-report adv-only">
         Prevoznik poroča <strong style="color:${delayColor(rep.delay_min * 60)}">${rep.delay_min > 0 ? "+" : ""}${rep.delay_min} min</strong>
         ob ${escapeHtml(rep.event)}u na postajo <strong>${escapeHtml(rep.station)}</strong>
         ${rep.severe ? '<span class="tag">izjemna zamuda</span>' : ""}
@@ -218,7 +218,7 @@ function runHeadHtml(cur) {
           <span>razmere <strong style="color:${severityColor(wx.severity_label)}">${wx.severity}/10</strong> · ${escapeHtml(wx.severity_label)}</span>
         </div>
         <div class="detail-weather-raw">${escapeHtml(weatherSummary(wx))}</div>` : ""}
-      <div class="detail-caveat">
+      <div class="detail-caveat adv-only">
         ${caveatText()}
       </div>
     </div>
@@ -245,19 +245,24 @@ function yourStopHtml(stops, forecast, current) {
 
   let d = null;
   let kdaj = null;
-  let znak = "";
+  // Beseda gre NAD stevilko, ne pod cas: "+9 min" brez nje je videti kot
+  // meritev, in prav ta postanek je edini, ki ga potnik dejansko prebere.
+  let znak = "ocena";
+  let odkod = "";
   if (passed) {
     d = stopDelay(s);
     kdaj = stopActualIso(s);
     znak = "izmerjeno";
+    odkod = `${vehicleNoun()} je tu že bil`;
   } else if (f) {
     d = f.predicted_delay_s;
     kdaj = schedIso && d != null
       ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
-    znak = f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}` : "ocena";
+    odkod = f.n_samples > 0 ? `mediana ${pluralRuns(f.n_samples)}` : "prenos trenutne zamude";
   } else {
     kdaj = schedIso;
-    znak = "po voznem redu — ocene še ni";
+    znak = "vozni red";
+    odkod = "ocene še ni";
   }
   const color = delayColor(d);
   const sched = hhmm(schedIso);
@@ -269,10 +274,12 @@ function yourStopHtml(stops, forecast, current) {
       <div class="yours-line">
         <span class="yours-time" style="color:${color}">${cas}</span>
         ${cas !== sched ? `<span class="yours-sched">${sched}</span>` : ""}
-        <span class="yours-delay" style="color:${color}">${delayLabel(d)} min</span>
+        <span class="yours-delay-box">
+          <span class="yours-kind">${escapeHtml(znak)}</span>
+          <span class="yours-delay" style="color:${color}">${delayLabel(d)} min</span>
+        </span>
       </div>
-      <div class="yours-tag">${escapeHtml(znak)}${passed
-        ? ` — ${vehicleNoun()} je tu že bil` : ""}</div>
+      <div class="yours-tag">${escapeHtml(odkod)}</div>
     </div>`;
 }
 

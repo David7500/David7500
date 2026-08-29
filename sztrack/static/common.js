@@ -453,14 +453,10 @@ function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
     if (cur.stop_seq < zadnji) from = cur.stop_seq;
   }
   const shown = from == null ? stops : stops.filter((s) => s.stop_seq >= from);
-  const skipped = stops.length - shown.length;
 
+  // Koliko postaj je vlak ze prevozil, ne pove nicesar, kar bi potnik rabil:
+  // seznam se zacne pri vozilu in to je vidno samo po sebi.
   const rows = [];
-  if (skipped > 0) {
-    rows.push(`<div class="stop-sep is-quiet">${skipped} ${skipped === 1
-      ? "prevožena postaja" : skipped === 2 ? "prevoženi postaji"
-      : skipped < 5 ? "prevožene postaje" : "prevoženih postaj"} — v naprednem pogledu</div>`);
-  }
   let seenAheadHead = false;
   for (const s of shown) {
     const isHi = highlight != null && s.stop_seq === highlight;

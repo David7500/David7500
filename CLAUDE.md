@@ -538,19 +538,46 @@ je (`sztrack backtest`, 258 137 nalog, izpuščanje enega dne):
 
 | model | MAE | v 5 min |
 |---|---|---|
-| prenos (referenca) | 2,91 min | 82,8 % |
-| **vlak (v uporabi)** | **2,00 min** | **90,3 %** |
-| odsek | 2,22 min | 88,1 % |
-| odsek + razred zamude | 2,26 min | 87,8 % |
-| združen (krčenje) | 1,98 min | 89,6 % |
+| prenos (referenca) | 2,94 min | 82,7 % |
+| vlak (mediana spremembe) | 2,00 min | 90,3 % |
+| odsek | 2,25 min | 87,9 % |
+| odsek + razred zamude | 2,27 min | 87,7 % |
+| združen (krčenje) | 1,98 min | 89,7 % |
+| **vlak + razred zamude (v uporabi)** | **1,99 min** | **90,5 %** |
+| vlak, premica `d_j = a + b·d_i` | 2,08 min | 89,5 % |
 
-Iz tega dvoje, kar velja spoštovati, preden kdo piše nov model:
+Iz tega troje, kar velja spoštovati, preden kdo piše nov model:
 
 * **Združevanje po odseku model poslabša.** Na istem tiru se IC in lokalni vlak
   ne obnašata enako, zato skupna mediana zabriše prav tisto, kar šteje.
 * **Združen model prihrani 1 % MAE in izgubi pri deležu v petih minutah.** To
   ni vredno zapletenosti. Prag `MIN_SAMPLES` 1–3 da isti rezultat, 4 in več
   poslabša.
+* **Razred zamude šteje, a le pri velikih zamudah.** Skupno je razlika
+  komaj 0,7 %; razrez po trenutni zamudi pa pokaže, kje je:
+
+  | trenutna zamuda | vlak | vlak + razred | nalog |
+  |---|---|---|---|
+  | 0–2 min | 1,74 min · 91,2 % | 1,73 min · 91,3 % | 137 180 |
+  | 2–10 min | 2,05 min · 90,7 % | 2,06 min · 90,6 % | 80 531 |
+  | 10–30 min | 2,33 min · 88,7 % | 2,30 min · 89,1 % | 68 876 |
+  | **nad 30 min** | 3,62 min · 82,1 % | **3,31 min · 83,8 %** | 5 602 |
+
+  Fizikalno je razumljivo: postanek s pol minute rezerve vlaku z 11 minutami
+  vzame dve, točnemu pa nič — ta nima česa nadoknaditi. Mediana čez oba
+  opisuje nobenega od njiju. Prag treh dni s podobno zamudo je izmerjen:
+  pri 1 je MAE 2,19 min, pri 2 2,11 min, pri 3 1,99 min. `stats.delay_bucket`
+  in `backtest._bucket` sta **ista funkcija** — sicer bi merili en model in
+  uporabljali drugega.
+
+**Model ne zna popraviti postanka, ki zamudo pobriše.** Merjeno na LP 4219:
+Podmelec → Most na Soči se v osmih od devetih dni konča na 0, ne glede na to,
+koliko je vlak zamujal ob prihodu — postanek ima v voznem redu rezervo.
+Model doda konstanto (mediana spremembe −2 min), zato je iz +11 napovedal +9,
+vlak pa je pripeljal +3. Premica `d_j = a + b·d_i` to zna izraziti (b ≈ 0) in
+je bila zato preizkušena — a je **slabša** (MAE 2,08 min, nad 30 min celo
+4,78 min): pri osmih dneh je naklon prešumen. Pri tem vlaku razred zamude ne
+pomaga, ker v razredu 10–30 min ni treh dni. **To reši zajem, ne model.**
 
 **Preizkušeno in ne pomaga** (`sztrack backtest --day-offset`): popravek za
 stanje mreže na ta dan. Zamisel je razumna -- če cel dan zamuja bolj kot

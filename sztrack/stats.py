@@ -598,6 +598,20 @@ def last_measured(conn: sqlite3.Connection, service_date: str,
             for r in conn.execute(sql, (service_date, *ids, now_s))}
 
 
+#: Koliko dni s podobno zamudo mora biti, da jim verjamemo mediano. Merjeno:
+#: pri 1 ali 2 je model slabsi od nepogojenega (MAE 2,19 in 2,11 proti 2,00),
+#: pri 3 boljsi (1,99). Ista meja kot v `backtest.MIN_SAMPLES`.
+MIN_PREDICT_SAMPLES = 3
+
+#: Meje razredov zamude v sekundah. Ista delitev kot `backtest._bucket`.
+DELAY_BUCKETS = (120, 600, 1800)
+
+
+def delay_bucket(delay_s: int) -> int:
+    """Razred trenutne zamude: okrevanje pri +1 in pri +40 min ni isto."""
+    return sum(1 for meja in DELAY_BUCKETS if delay_s >= meja)
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
@@ -621,17 +635,22 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
         by_day.setdefault(r["service_date"], {})[r["stop_seq"]] = r["d"]
 
     names = {t["stop_seq"]: t["name"] for t in timetable(conn, train_no)}
+    razred = delay_bucket(current_delay_s)
     out = []
     for seq in sorted(s for s in names if s > stop_seq):
-        deltas = [
-            day[seq] - day[stop_seq]
-            for day in by_day.values()
-            if stop_seq in day and seq in day
-        ]
+        pari = [(day[stop_seq], day[seq] - day[stop_seq])
+                for day in by_day.values()
+                if stop_seq in day and seq in day]
+        # Najprej samo dnevi s podobno veliko zamudo: postanek s pol minute
+        # rezerve vlaku z 11 minutami vzame dve, tocnemu pa nic, ker ta nima
+        # cesa nadoknaditi. Mediana cez oba opisuje nobenega od njiju.
+        podobni = [d for d0, d in pari if delay_bucket(d0) == razred]
+        deltas = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [d for _, d in pari]
         out.append({
             "stop_seq": seq,
             "name": names[seq],
             "n_samples": len(deltas),
+            "same_class": len(podobni) >= MIN_PREDICT_SAMPLES,
             "predicted_delay_s": current_delay_s + (round(statistics.median(deltas)) if deltas else 0),
             "p90_delay_s": (current_delay_s + round(_pct(deltas, 0.9)) if deltas else None),
             "basis": "historicna mediana" if deltas else "prenos trenutne zamude",

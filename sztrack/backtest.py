@@ -27,6 +27,8 @@ import sqlite3
 import statistics
 from collections import defaultdict
 
+from . import stats
+
 # Nalog s premikom cez vec kot toliko postankov ne sestavljamo: cez pol proge
 # je "napoved" bolj opis voznega reda kot napoved.
 MAX_HORIZON = 12
@@ -100,14 +102,12 @@ def build_tasks(conn: sqlite3.Connection) -> list[dict]:
 def _bucket(d_i: int) -> int:
     """Razred trenutne zamude. Okrevanje ni enako pri +1 in pri +40 minutah:
     vlak z veliko zamudo del nadoknadi na rezervi v voznem redu, tocen vlak
-    pa je nima kaj nadoknaditi. Ena sama mediana to razliko zabrise."""
-    if d_i < 120:
-        return 0
-    if d_i < 600:
-        return 1
-    if d_i < 1800:
-        return 2
-    return 3
+    pa je nima kaj nadoknaditi. Ena sama mediana to razliko zabrise.
+
+    Delitev je skupna s `stats.delay_bucket`, sicer bi merili en model in
+    uporabljali drugega -- razlika, ki je meritev ne bi pokazala.
+    """
+    return stats.delay_bucket(d_i)
 
 
 def model_prenos(train_tasks):
@@ -116,7 +116,7 @@ def model_prenos(train_tasks):
 
 
 def model_vlak(train_tasks):
-    """Sedanji model: historicna mediana spremembe pri TEM vlaku."""
+    """Historicna mediana spremembe pri TEM vlaku, brez pogojevanja."""
     table = defaultdict(list)
     for t in train_tasks:
         table[(t["train_no"], t["i"], t["j"])].append(t["d_j"] - t["d_i"])
@@ -195,12 +195,76 @@ def model_zdruzen(train_tasks):
     return predict
 
 
+def model_vlak_razred(train_tasks):
+    """SEDANJI model: mediana spremembe pri tem vlaku po razredu zamude.
+
+    Zamisel je fizikalna: postanek s pol minute rezerve v voznem redu vlaku,
+    ki zamuja 11 minut, vzame dve minuti, tocnemu pa nic -- ker nima cesa
+    nadoknaditi. Mediana cez oba primera opisuje nobenega od njiju.
+    """
+    razred = defaultdict(list)
+    skupno = defaultdict(list)
+    for t in train_tasks:
+        delta = t["d_j"] - t["d_i"]
+        razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(delta)
+        skupno[(t["train_no"], t["i"], t["j"])].append(delta)
+
+    def predict(t):
+        vals = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        if not vals or len(vals) < MIN_SAMPLES:
+            vals = skupno.get((t["train_no"], t["i"], t["j"]))
+        if not vals or len(vals) < MIN_SAMPLES:
+            return t["d_i"]
+        return t["d_i"] + statistics.median(vals)
+    return predict
+
+
+def model_vlak_premica(train_tasks):
+    """Premica d_j = a + b*d_i, prilagojena na zgodovino tega para postankov.
+
+    Sedanji model je poseben primer s trdim b = 1 -- zamudo prestavi za
+    konstanto. Kadar postanek zamudo POBRISE (Most na Soci: osem dni od
+    devetih konca na 0, ne glede na prihod), je pravi b blizu 0 in konstantni
+    premik tega ne zna izraziti.
+
+    b krcimo proti 1 z utezjo n/(n+K): pri treh vzorcih premici ne verjamemo,
+    pri dvajsetih ji. Omejitev na [0, 1.5] je fizikalna -- zamuda se na odseku
+    ne obrne v prednost in se ne podvoji.
+    """
+    pari = defaultdict(list)
+    for t in train_tasks:
+        pari[(t["train_no"], t["i"], t["j"])].append((t["d_i"], t["d_j"]))
+
+    K = 6.0
+
+    def predict(t):
+        xy = pari.get((t["train_no"], t["i"], t["j"]))
+        if not xy or len(xy) < MIN_SAMPLES:
+            return t["d_i"]
+        xs = [x for x, _ in xy]
+        ys = [y for _, y in xy]
+        mx, my = statistics.mean(xs), statistics.mean(ys)
+        var = sum((x - mx) ** 2 for x in xs)
+        premik = t["d_i"] + statistics.median([y - x for x, y in xy])
+        if var == 0:
+            return premik
+        b = sum((x - mx) * (y - my) for x, y in xy) / var
+        b = min(max(b, 0.0), 1.5)
+        n = len(xy)
+        w = n / (n + K)
+        b = w * b + (1 - w) * 1.0
+        return (my - b * mx) + b * t["d_i"]
+    return predict
+
+
 MODELS = {
     "prenos": model_prenos,
-    "vlak (sedanji)": model_vlak,
+    "vlak": model_vlak,
     "odsek": model_odsek,
     "odsek+razred": model_odsek_razred,
     "združen": model_zdruzen,
+    "vlak+razred (sedanji)": model_vlak_razred,
+    "vlak premica": model_vlak_premica,
 }
 
 

@@ -330,7 +330,22 @@
   color: var(--ink-faint);
   text-decoration: line-through;
 }
-.yours-delay { font: 600 15px/1 var(--mono); margin-left: auto; }
+/* Stevilka in beseda nad njo sta en blok, poravnan desno: "ocena" mora biti
+   nad "+9 min" tudi takrat, ko se vrstica prelomi na ozkem zaslonu. */
+.yours-delay-box {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.yours-kind {
+  font: 600 9.5px/1 var(--sans);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.yours-delay { font: 600 15px/1 var(--mono); }
 .yours-tag { margin-top: 5px; font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }
 
 /* Postanek potnika v časovnici — da ga najde med tridesetimi. */
