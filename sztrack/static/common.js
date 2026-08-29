@@ -122,9 +122,21 @@ const LINE_INK = "#4db97f";
 
 function lineBadgeHtml(row) {
   if (!isBus(row.mode)) return "";
+  // Na zeleznicni strani avtobus pomeni NADOMESTNI PREVOZ -- torej "namesto
+  // vlaka, ki tu ne vozi". To ni linija mestnega prevoza in ne sme biti
+  // videti kot ona; potnik mora prebrati, zakaj tu stoji avtobus.
+  if (row.network === "zeleznica") {
+    return `<span class="mode-bus" title="namesto vlaka, ki na tej relaciji ne vozi">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="4" width="16" height="13" rx="2"></rect>
+        <path d="M4 11h16M8 21l-1 1M16 21l1 1M7 17v3M17 17v3"></path>
+      </svg>
+      nadomestni prevoz
+    </span>`;
+  }
   const who = AGENCY[row.agency];
-  // Nadomestni prevoz SZ ima ze v stevilki "BUS 26729" -- ne podvajaj.
-  const label = who && who !== "SŽ" ? `${who} ${row.train_no}` : row.train_no;
+  const label = who ? `${who} ${row.train_no}` : row.train_no;
   return `<span class="line-badge" style="color:${LINE_INK};border-color:${LINE_INK}55">
     ${escapeHtml(label)}</span>`;
 }

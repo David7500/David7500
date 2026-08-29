@@ -549,7 +549,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
 # ---------------------------------------------------------------- povezave A -> B
 
 _CONNECTIONS_SQL = """
-SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency,
+SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
        sa.stop_seq AS from_seq, COALESCE(sa.dep_s, sa.arr_s) AS dep_s,
        sb.stop_seq AS to_seq,   COALESCE(sb.arr_s, sb.dep_s) AS arr_s,
        COALESCE(ra.delay_dep, ra.delay_arr) AS from_delay_s,

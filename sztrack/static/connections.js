@@ -251,9 +251,9 @@ function connectionRowHtml(c, nowMs, isNext, date) {
           </div>` : ""}
       </div>
       <div class="conn-train">
-        <div class="conn-no">${isBus(c.mode)
-          ? lineBadgeHtml(c)
-          : escapeHtml(c.train_no)}</div>
+        <div class="conn-no">${escapeHtml(c.train_no)}${isBus(c.mode)
+          ? ` ${lineBadgeHtml(c)}`
+          : ""}</div>
         <div class="conn-headsign">${escapeHtml(c.headsign || "")}</div>
       </div>
       <div class="conn-delay">${c.delay_s != null
@@ -397,10 +397,14 @@ function boardRowHtml(r, nowMs, isNext, date) {
       </div>
       <div>
         <div class="board-towards">
-          ${isBus(r.mode) ? lineBadgeHtml(r) : ""}
+          ${isBus(r.mode) && r.network === "avtobus" ? lineBadgeHtml(r) : ""}
           <span>${escapeHtml(r.towards)}</span>
         </div>
-        <div class="board-train">${isBus(r.mode) ? "" : `${escapeHtml(r.train_no)} `}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
+        <div class="board-train">${isBus(r.mode) && r.network === "avtobus"
+          ? ""
+          : `${escapeHtml(r.train_no)} `}${isBus(r.mode) && r.network === "zeleznica"
+          ? lineBadgeHtml(r) + " "
+          : ""}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
       </div>
       <div class="conn-delay">${r.delay_s != null
         ? delayChipHtml(r.delay_s, r.delay_from ? "izmerjeno" : null, r.delay_from)

@@ -131,7 +131,7 @@ WITH ends AS (
            MAX(stop_seq) AS last_seq
     FROM sched GROUP BY trip_id
 )
-SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency,
+SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
        s.stop_seq, s.arr_s, s.dep_s,
        COALESCE(s.dep_s, s.arr_s) AS t_s,
        ends.first_seq, ends.last_seq,
