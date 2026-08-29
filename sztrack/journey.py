@@ -40,6 +40,9 @@ TRANSFER_LIMITS = {
 }
 MIN_TRANSFER_MIN, MAX_TRANSFER_MIN = TRANSFER_LIMITS["zeleznica"]
 
+# Koliko zadetkov po imenu sploh pretehtamo po prometu. Glej `search_stations`.
+CANDIDATE_CAP = 300
+
 
 # ---------------------------------------------------------------- iskanje postaj
 
@@ -70,30 +73,55 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
     needle = _fold(q.strip())
     if not needle:
         return []
-    sql = ("SELECT st.stop_id, st.name, st.lat, st.lon, COUNT(s.trip_id) AS trips "
-           "FROM station st JOIN sched s ON s.stop_id = st.stop_id "
-           "JOIN trip t ON t.trip_id = s.trip_id ")
-    params: tuple = ()
-    if network:
-        sql += "WHERE t.network = ? "
-        params = (network,)
-    sql += "GROUP BY st.stop_id"
-    rows = conn.execute(sql, params).fetchall()
+    # Dva koraka namesto enega. Prej je poizvedba pri VSAKEM pritisku tipke
+    # grupirala vseh 403 000 vrstic `sched`, da je izracunala promet postaj,
+    # od katerih jih je nato v Pythonu obdrzala pescico. Zdaj najprej ujamemo
+    # imena (9791 vrstic), promet pa stejemo samo za zadetke.
+    rows = conn.execute("SELECT stop_id, name, lat, lon FROM station").fetchall()
+
+    def rank_of(name: str) -> int:
+        folded = _fold(name)
+        if folded == needle:
+            return 0
+        if folded.startswith(needle):
+            return 1
+        if any(w.startswith(needle) for w in folded.split()):
+            return 2
+        return 3 if needle in folded else 9
+
+    hits = [(rank_of(r["name"]), r["name"], r) for r in rows]
+    hits = [h for h in hits if h[0] < 9]
+    if not hits:
+        return []
+    # Ena sama crka se ujame s tisoci postajalisc in stetje prometa za vsa je
+    # pol sekunde. Najprej razvrstimo po tem, KAKO se ujemajo -- to je zastonj --
+    # in promet stejemo le za verjetne kandidate. Meja je velikodusna glede na
+    # `limit`, ki je obicajno osem.
+    hits.sort(key=lambda h: h[:2])
+    hits = [h[2] for h in hits[:CANDIDATE_CAP]]
+
+    counts: dict[str, int] = {}
+    for i in range(0, len(hits), 400):
+        chunk = hits[i:i + 400]
+        marks = ",".join("?" * len(chunk))
+        sql = (f"SELECT s.stop_id, COUNT(*) AS n FROM sched s "
+               f"JOIN trip t ON t.trip_id = s.trip_id "
+               f"WHERE s.stop_id IN ({marks}) ")
+        params = [r["stop_id"] for r in chunk]
+        if network:
+            sql += "AND t.network = ? "
+            params.append(network)
+        sql += "GROUP BY s.stop_id"
+        for r in conn.execute(sql, params):
+            counts[r["stop_id"]] = r["n"]
 
     scored = []
-    for r in rows:
-        folded = _fold(r["name"])
-        if folded == needle:
-            rank = 0
-        elif folded.startswith(needle):
-            rank = 1
-        elif any(w.startswith(needle) for w in folded.split()):
-            rank = 2
-        elif needle in folded:
-            rank = 3
-        else:
-            continue
-        scored.append((rank, -r["trips"], r["name"], dict(r)))
+    for r in hits:
+        trips = counts.get(r["stop_id"], 0)
+        if not trips:
+            continue        # na tem omrezju te postaje ne strezhe nic
+        scored.append((rank_of(r["name"]), -trips, r["name"],
+                       {**dict(r), "trips": trips}))
     scored.sort(key=lambda x: x[:3])
 
     # Isto ime, vec `stop_id`: mestna postajalisca imajo svojega za vsako smer
@@ -150,24 +178,38 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
     """
     dlat = max_km / 111.0
     dlon = max_km / (111.0 * max(0.2, abs(math.cos(math.radians(lat)))))
-    sql = ("SELECT DISTINCT st.stop_id, st.name, st.lat, st.lon FROM station st "
-           "JOIN sched s ON s.stop_id = st.stop_id "
-           "JOIN trip t ON t.trip_id = s.trip_id "
-           "WHERE st.lat BETWEEN ? AND ? AND st.lon BETWEEN ? AND ? ")
-    params: list = [lat - dlat, lat + dlat, lon - dlon, lon + dlon]
-    if network:
-        sql += "AND t.network = ? "
-        params.append(network)
-    rows = conn.execute(sql, params).fetchall()
+    # Najprej pravokotnik in razdalja -- to je poceni. Sele za preziveli
+    # pescici preverimo, ali jih to omrezje sploh strezhe; zdruzen JOIN cez
+    # `sched` bi tekel po 403 000 vrsticah za odgovor, ki ima deset postavk.
+    rows = conn.execute(
+        "SELECT stop_id, name, lat, lon FROM station "
+        "WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+        (lat - dlat, lat + dlat, lon - dlon, lon + dlon),
+    ).fetchall()
 
-    out = []
+    near = []
     for r in rows:
         m = geo.haversine(lat, lon, r["lat"], r["lon"])
         if m <= max_km * 1000:
             d = dict(r)
             d["meters"] = round(m)
-            out.append(d)
-    out.sort(key=lambda d: d["meters"])
+            near.append(d)
+    near.sort(key=lambda d: d["meters"])
+    near = near[:200]
+    if not near:
+        return []
+
+    served: set[str] = set()
+    marks = ",".join("?" * len(near))
+    sql = (f"SELECT DISTINCT s.stop_id FROM sched s "
+           f"JOIN trip t ON t.trip_id = s.trip_id "
+           f"WHERE s.stop_id IN ({marks}) ")
+    params = [d["stop_id"] for d in near]
+    if network:
+        sql += "AND t.network = ? "
+        params.append(network)
+    served = {r["stop_id"] for r in conn.execute(sql, params)}
+    out = [d for d in near if d["stop_id"] in served]
 
     # Isto ime na vec postajaliscih (smeri) -- obdrzi najblizje.
     seen: dict[str, dict] = {}
@@ -509,6 +551,14 @@ MAX_LEGS = 4
 MAX_STOP_TIMES = 200_000
 
 
+# Dnevni vozni red v pomnilniku, da ga ne beremo znova ob vsakem iskanju.
+# Veljaven je, dokler se ne spremeni GTFS uvoz -- `gtfs_imported_at` je zig,
+# ki se ob uvozu premakne, in s tem pade cel predpomnilnik. Hranimo najvec
+# nekaj dni; vec jih naenkrat nihce ne gleda.
+_TT_CACHE: dict[tuple, tuple] = {}
+_TT_CACHE_MAX = 4
+
+
 def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
                        network: str | None) -> tuple[dict, dict]:
     """Ves dnevni vozni red v pomnilnik: po vožnjah in po postajališčih.
@@ -517,6 +567,21 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
     v SQL pomenilo trojni kartezični zmnožek. V pomnilniku je to nekaj
     slovarjev in nekaj deset milisekund.
     """
+    # Kljuc mora vsebovati TUDI bazo. Sicer si dve bazi z istim zigom delita
+    # predpomnilnik -- v testih se je to takoj pokazalo, ker vsak test dobi
+    # svojo bazo v pomnilniku in vse imajo zig prazen.
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, service_date, network, stamp)
+    # Brez ziga ne predpomnimo: to je sveza ali testna baza, kjer se vsebina
+    # lahko spremeni pod nami in nam nihce ne pove.
+    if stamp:
+        cached = _TT_CACHE.get(key)
+        if cached is not None:
+            return cached
+
     rows = conn.execute(
         "SELECT s.trip_id, s.stop_seq, s.stop_id, s.arr_s, s.dep_s "
         "FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
@@ -539,6 +604,11 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
             at_stop.setdefault(r["stop_id"], []).append((entry[3], r["trip_id"], r["stop_seq"]))
     for v in at_stop.values():
         v.sort()
+
+    if stamp:
+        if len(_TT_CACHE) >= _TT_CACHE_MAX:
+            _TT_CACHE.clear()   # brez vrstnega reda; teh je par in so poceni
+        _TT_CACHE[key] = (by_trip, at_stop)
     return by_trip, at_stop
 
 

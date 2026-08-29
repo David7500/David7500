@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS station (
     lat     REAL NOT NULL,
     lon     REAL NOT NULL
 );
+-- Vse potniske poizvedbe se zacnejo pri IMENU postaje, ne pri stop_id.
+CREATE INDEX IF NOT EXISTS station_name ON station(name);
 
 -- Odsek med dvema postajama. Shranjen neusmerjeno (from_id < to_id).
 -- elementary = 0 pomeni "preskok" hitrega vlaka cez vmesne postaje.
@@ -70,6 +72,11 @@ CREATE TABLE IF NOT EXISTS sched (
     dep_s    INTEGER,
     PRIMARY KEY (trip_id, stop_seq)
 );
+-- Kljuc je (trip_id, stop_seq), iskanje pa gre v drugo smer: "kaj ustavlja
+-- na tej postaji". Brez tega indeksa je vsaka poizvedba po postaji poln
+-- pregled 403 000 vrstic -- pri sami zeleznici neopazno, pri vseh
+-- prevoznikih pol sekunde.
+CREATE INDEX IF NOT EXISTS sched_stop ON sched(stop_id);
 
 CREATE TABLE IF NOT EXISTS service_day (
     service_id TEXT NOT NULL,
