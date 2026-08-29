@@ -1,6 +1,7 @@
 """Ukazna vrstica: python -m sztrack.cli <ukaz>"""
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import sys
@@ -124,6 +125,22 @@ def cmd_prune(args):
                      indent=2, ensure_ascii=False))
 
 
+def cmd_collect(args):
+    """Zajem brez streznika. Za stroj, ki samo polni bazo."""
+    from . import server           # uvozimo sele tu -- `server` potegne gtfs
+    if args.no_alerts:
+        os.environ["SZ_ALERT_SECONDS"] = "0"
+    if args.weather:
+        os.environ.setdefault("SZ_WEATHER", "1")
+    else:
+        os.environ["SZ_WEATHER"] = "0"
+    os.environ.setdefault("SZ_SUMMARIES", "0")
+    os.environ.setdefault("SZ_POSITIONS", "0")
+    if args.interval:
+        os.environ["SZ_POLL_SECONDS"] = str(args.interval)
+    server.run_collector()
+
+
 def cmd_summarize(args):
     """Znova izracunaj dnevne razreze statistike.
 
@@ -232,6 +249,19 @@ def main(argv=None):
     a.add_argument("--rail-days", type=int, default=collector.OBS_KEEP_DAYS)
     a.add_argument("--bus-days", type=int, default=collector.OBS_KEEP_DAYS_BUS)
     a.set_defaults(func=cmd_prune)
+
+    a = sub.add_parser(
+        "collect",
+        help="zajem brez streznika (za stroj, ki samo polni bazo)",
+        description="Zajema samo tisto, cesar se kasneje ne da dobiti: zamude in "
+                    "obvestila. Vreme ima arhiv za nazaj, statistika pa se izracuna "
+                    "iz `run` kadarkoli in kjerkoli -- zato oboje privzeto odpade.")
+    a.add_argument("--interval", type=int, help="sekunde med zajemi (privzeto 30)")
+    a.add_argument("--no-alerts", action="store_true",
+                   help="brez obvestil o ovirah (izgubis edini vir vzroka zamude)")
+    a.add_argument("--weather", action="store_true",
+                   help="dopolnjuj tudi vreme (na sibkem stroju nepotrebno)")
+    a.set_defaults(func=cmd_collect)
 
     a = sub.add_parser("summarize", help="znova izracunaj dnevne razreze statistike")
     a.add_argument("--days", type=int, default=90, help="sirina okna (privzeto 90)")

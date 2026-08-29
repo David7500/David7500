@@ -37,23 +37,55 @@ def fetch(url: str, conn: sqlite3.Connection, etag_key: str):
     return feed
 
 
+# Vozni red se med dvema uvozoma GTFS ne spremeni, zajem pa tece vsakih 30 s.
+# Oboje spodaj je bilo prej zgrajeno ob VSAKEM pollu. Izmerjeno na bazi vseh
+# prevoznikov: okna 75 ms in 4 MB, koledar **5,3 s in 557 MB** -- vsakih
+# trideset sekund, za podatek, ki je enak kot prej. Pri sami zeleznici (789
+# voznj) se to ni videlo; z avtobusi je proces jedel 290-518 MB in bi malino
+# s 427 MB ubil.
+_STATIC_CACHE: dict[tuple, object] = {}
+
+
+def _cached(conn: sqlite3.Connection, name: str, extra, build):
+    key = db.cache_key(conn)
+    if key is None:                 # sveza ali testna baza -- ne predpomni
+        return build()
+    key = (key, name, extra)
+    if key not in _STATIC_CACHE:
+        _STATIC_CACHE.clear()       # nov uvoz razveljavi vse, tudi vcerajsnji koledar
+        _STATIC_CACHE[key] = build()
+    return _STATIC_CACHE[key]
+
+
 def _rail_trip_windows(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:
     """trip_id -> (prvi odhod, zadnji prihod) v sekundah od polnoči."""
-    rows = conn.execute(
-        "SELECT trip_id, MIN(COALESCE(dep_s, arr_s)) AS a, MAX(COALESCE(arr_s, dep_s)) AS b "
-        "FROM sched GROUP BY trip_id"
-    )
-    return {r["trip_id"]: (r["a"], r["b"]) for r in rows}
+    def build():
+        # Iz `trip`, ne z grupiranjem 403 000 vrstic `sched`: okvir vozjne je
+        # od uvoza naprej stolpec (`db.fill_trip_window`).
+        return {r["trip_id"]: (r["start_s"], r["end_s"]) for r in conn.execute(
+            "SELECT trip_id, start_s, end_s FROM trip WHERE start_s IS NOT NULL")}
+    return _cached(conn, "windows", None, build)
 
 
-def _service_dates(conn: sqlite3.Connection) -> dict[str, set[str]]:
-    rows = conn.execute(
-        "SELECT t.trip_id, sd.date FROM trip t JOIN service_day sd USING (service_id)"
-    )
-    out: dict[str, set[str]] = {}
-    for r in rows:
-        out.setdefault(r["trip_id"], set()).add(r["date"])
-    return out
+def _service_dates(conn: sqlite3.Connection, now: datetime) -> dict[str, set[str]]:
+    """trip_id -> obratovalni dnevi, ki pridejo v postev **zdaj**.
+
+    `resolve_service_date` gleda samo vceraj, danes in jutri, zato ni razloga
+    nositi celega koledarja: ta ima 4 650 807 parov (trip, datum) in v Pythonu
+    zasede 557 MB. Trije dnevi jih imajo 60 000.
+    """
+    days = tuple((now.date() + timedelta(days=o)).isoformat() for o in (-1, 0, 1))
+
+    def build():
+        out: dict[str, set[str]] = {}
+        for r in conn.execute(
+            "SELECT t.trip_id, sd.date FROM trip t JOIN service_day sd USING (service_id) "
+            "WHERE sd.date IN (?, ?, ?)", days
+        ):
+            out.setdefault(r["trip_id"], set()).add(r["date"])
+        return out
+
+    return _cached(conn, "dates", days, build)
 
 
 def resolve_service_date(trip_id, window, valid_dates, now: datetime) -> str | None:
@@ -158,7 +190,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     """Zapiše spremembe zamud. Vrne števce za log."""
     now = datetime.now(TZ)
     windows = _rail_trip_windows(conn)
-    valid = _service_dates(conn)
+    valid = _service_dates(conn, now)
     feed_ts = feed.header.timestamp or int(time.time())
     observed_at = int(time.time())
 

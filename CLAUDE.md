@@ -445,8 +445,10 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
   ure in prevoženih postankov (`_LIVE_SQL`).
 * **Spremembo prikaza poglej, preden jo razglasiš za končano.** Posnetek:
   `chromium --headless --disable-gpu --window-size=1850,1000
-  --virtual-time-budget=7000 --screenshot=$HOME/x.png <url>` — v `/tmp`
-  chromium ne more pisati, zato v `$HOME`.
+  --virtual-time-budget=7000 --screenshot=$PWD/posnetki/x.png <url>`.
+  V `/tmp` chromium ne more pisati (tudi ne v scratchpad, ki je pod njim),
+  zato v `posnetki/` v projektu — ta je v `.gitignore`. **Ne v `$HOME`**:
+  tam je uporabnikova mapa in tja se ne odlaga smeti.
 
 ## Stanje zajema
 

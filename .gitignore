@@ -19,3 +19,6 @@ venv/
 # sestavljeno platno (seeded iz design/okno-vlaka/)
 design/okno-vlaka/okno-vlaka-prenova.html
 backup/
+
+# Posnetki zaslona za preverjanje prikaza -- chromium ne more pisati v /tmp.
+posnetki/

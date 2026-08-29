@@ -285,6 +285,22 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
+def cache_key(conn: sqlite3.Connection) -> tuple | None:
+    """Kljuc za predpomnjenje staticnih podatkov, ali None, ce ne gre.
+
+    Vsebuje **tudi pot do baze**: sicer si dve bazi z istim zigom delita
+    predpomnilnik, kar se v testih pokaze takoj -- vsak test dobi svojo bazo
+    v pomnilniku in vse imajo zig prazen. Brez ziga vrne None: to je sveza
+    ali testna baza, ki se lahko spremeni pod nami, ne da bi nam kdo povedal.
+    """
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    if not row or not row[0]:
+        return None
+    where = conn.execute("PRAGMA database_list").fetchone()[2]
+    return (where, row[0])
+
+
 def fill_trip_window(conn: sqlite3.Connection) -> int:
     """Zapolni `trip.start_s` / `trip.end_s` iz `sched`.
 

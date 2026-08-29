@@ -89,7 +89,8 @@ def _next_at(hour: int, minute: int) -> datetime:
 
 
 def _worker(interval: int, refresh_hour: int, refresh_mode: str,
-            weather_hour: int, alert_interval: int, maint_hour: int) -> None:
+            weather_hour: int, alert_interval: int, maint_hour: int,
+            summaries: bool = True) -> None:
     conn = db.connect()
     db.init(conn)
     # Lega vozil je smiselna samo, ce so v bazi avtobusi: feed nosi izkljucno
@@ -112,7 +113,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Ce povzetkov se ni (prva namestitev, nova sirina okna), jih zgradi ob
     # prvem obhodu -- sicer bi racun placal prvi obiskovalec strani, in pri
     # letu zajema je to 34 sekund cakanja.
-    if next_maint and not conn.execute("SELECT 1 FROM povzetek LIMIT 1").fetchone():
+    if (next_maint and summaries
+            and not conn.execute("SELECT 1 FROM povzetek LIMIT 1").fetchone()):
         next_maint = datetime.now(TZ)
 
     while not _stop.is_set():
@@ -180,14 +182,70 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             # milijonov vrstic in traja 34 s, odgovor pa se med dvema dnevoma
             # skoraj ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na
             # dan tu, strani pa ga preberejo iz baze v milisekundi.
-            try:
-                done = stats.refresh_summaries(conn)
-                worst = max((d["took_ms"] for d in done), default=0)
-                _log(f"povzetki osveženi: {len(done)} razrezov, najdlje {worst / 1000:.1f} s")
-            except Exception as exc:      # statistika ni kriticna za zajem
-                _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
+            # Na stroju, ki samo zajema, tega ne racunamo: razrez se da
+            # kadarkoli izracunati iz `run`, izgubljena meritev pa nikoli.
+            if summaries:
+                try:
+                    done = stats.refresh_summaries(conn)
+                    worst = max((d["took_ms"] for d in done), default=0)
+                    _log(f"povzetki osveženi: {len(done)} razrezov, "
+                         f"najdlje {worst / 1000:.1f} s")
+                except Exception as exc:  # statistika ni kriticna za zajem
+                    _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
 
         _stop.wait(max(1.0, interval - (time.monotonic() - started)))
+
+
+def _settings() -> dict:
+    """Nastavitve zajema iz okolja. Skupne strezniku in `sztrack collect`."""
+    mode = os.environ.get("SZ_REFRESH", "off").lower()
+    weather_hour = int(os.environ.get("SZ_WEATHER_HOUR", "5"))
+    if os.environ.get("SZ_WEATHER", "1") == "0":
+        weather_hour = -1
+    return {
+        "interval": int(os.environ.get("SZ_POLL_SECONDS", config.POLL_SECONDS)),
+        "refresh_hour": int(os.environ.get("SZ_REFRESH_HOUR", "4")),
+        "refresh_mode": mode,
+        "weather_hour": weather_hour,
+        "alert_interval": int(os.environ.get("SZ_ALERT_SECONDS", "60")),
+        "maint_hour": int(os.environ.get("SZ_MAINT_HOUR", "3")),
+        "summaries": os.environ.get("SZ_SUMMARIES", "1") != "0",
+    }
+
+
+def _describe(s: dict) -> str:
+    parts = [f"zajem vsakih {s['interval']} s"]
+    parts.append("brez osveževanja voznega reda" if s["refresh_mode"] == "off"
+                 else f"osvežitev ob {s['refresh_hour']}:20 ({s['refresh_mode']})")
+    parts.append("vreme izklopljeno" if s["weather_hour"] < 0
+                 else f"vreme ob {s['weather_hour']}:10")
+    parts.append("obvestila izklopljena" if s["alert_interval"] <= 0
+                 else f"obvestila vsakih {s['alert_interval']} s")
+    if s["maint_hour"] < 0:
+        parts.append("vzdrževanje izklopljeno")
+    else:
+        parts.append(f"{'povzetki in obrez' if s['summaries'] else 'obrez dnevnika'}"
+                     f" ob {s['maint_hour']}:30")
+    return ", ".join(parts)
+
+
+def run_collector() -> None:
+    """Zajem brez streznika, v ospredju. To poganja `sztrack collect`.
+
+    Namenjeno stroju, ki samo polni bazo -- tipicno malini, ki je gor ves cas.
+    Razlika proti strezniku ni le HTTP: odpadeta FastAPI in uvicorn (uvoz sam
+    je 20 MB RSS) in odpade racunanje, ki se da opraviti kasneje drugje.
+    **Zajemati je treba samo tisto, cesar kasneje ni mogoce dobiti** -- zamude
+    in obvestila. Vreme ima arhiv za nazaj, statistika pa je izpeljanka `run`.
+    """
+    bootstrap()
+    s = _settings()
+    _log(_describe(s))
+    try:
+        _worker(**s)
+    except KeyboardInterrupt:
+        _stop.set()
+        _log("ustavljeno")
 
 
 @asynccontextmanager
@@ -195,27 +253,13 @@ async def lifespan(app):
     bootstrap()
     thread = None
     if os.environ.get("SZ_COLLECTOR", "1") != "0":
-        interval = int(os.environ.get("SZ_POLL_SECONDS", config.POLL_SECONDS))
-        mode = os.environ.get("SZ_REFRESH", "off").lower()
-        hour = int(os.environ.get("SZ_REFRESH_HOUR", "4"))
-        weather_hour = int(os.environ.get("SZ_WEATHER_HOUR", "5"))
-        if os.environ.get("SZ_WEATHER", "1") == "0":
-            weather_hour = -1
-        alert_interval = int(os.environ.get("SZ_ALERT_SECONDS", "60"))
-        maint_hour = int(os.environ.get("SZ_MAINT_HOUR", "3"))
+        settings = _settings()
         thread = threading.Thread(
-            target=_worker,
-            args=(interval, hour, mode, weather_hour, alert_interval, maint_hour),
+            target=_worker, kwargs=settings,
             daemon=True, name="sztrack-collector",
         )
         thread.start()
-        note = "brez osveževanja voznega reda" if mode == "off" else f"osvežitev ob {hour}:20 ({mode})"
-        wnote = "vreme izklopljeno" if weather_hour < 0 else f"vreme ob {weather_hour}:10"
-        anote = ("obvestila izklopljena" if alert_interval <= 0
-                 else f"obvestila vsakih {alert_interval} s")
-        mnote = ("vzdrževanje izklopljeno" if maint_hour < 0
-                 else f"povzetki in obrez ob {maint_hour}:30")
-        _log(f"zajem teče vsakih {interval} s, {note}, {wnote}, {anote}, {mnote}")
+        _log(_describe(settings))
     else:
         _log("zajem izklopljen (SZ_COLLECTOR=0)")
     try:

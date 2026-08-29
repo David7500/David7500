@@ -99,7 +99,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     now = datetime.now(TZ)
     seen_at = int(time.time())
     windows = _rail_trip_windows(conn)
-    valid = _service_dates(conn)
+    valid = _service_dates(conn, now)
 
     n_alerts = n_entities = n_reports = n_changed = 0
 
