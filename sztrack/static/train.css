@@ -247,3 +247,24 @@
   .back-link span { display: none; }
   .topbar .top-link { display: none; }
 }
+
+/* Dnevnik prevoznika: zaporedje njegovih poročil o tej vožnji. Edini zapis,
+ * kje je vlak dejansko bil — prometna mesta, ne voznoredni postanki. */
+#log-drawer { margin: 4px 14px 14px; }
+.log-list { display: flex; flex-direction: column; margin-top: 8px; }
+.log-row {
+  display: grid;
+  grid-template-columns: 44px 40px 30px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.log-row:last-child { border-bottom: none; }
+.log-time { font: 400 11px/1.4 var(--mono); color: var(--ink-mute); }
+.log-delay { font: 600 11.5px/1.4 var(--mono); text-align: right; }
+.log-diff { font: 400 10.5px/1.4 var(--mono); color: var(--ink-faint); text-align: right; }
+.log-where {
+  font: 400 11.5px/1.4 var(--sans); color: var(--ink-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -100,7 +100,8 @@ window.addEventListener("resize", () => {
 // nalagata loceno in z razlicnim ritmom.
 const state = { run: null, forecast: null, past: null, pastRuns: 0,
                 weather: new Map(), report: null,
-                mode: "vlak", network: "zeleznica", agency: null };
+                mode: "vlak", network: "zeleznica", agency: null,
+                reportLog: [] };
 // Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
 // ob preklopu pogleda.
 let hoverSeq = null;
@@ -208,6 +209,51 @@ function runHeadHtml(cur) {
   `;
 }
 
+// Dnevnik prevoznika: zaporedje njegovih porocil o tej voznji. To je edini
+// zapis, kje je vlak dejansko bil in koliko je takrat zamujal -- prometna
+// mesta, ne voznoredni postanki. Nihce drug ga ne hrani.
+function reportLogHtml(list) {
+  if (!list || list.length < 2) return "";
+  // Zaporedna porocila z isto zamudo IN istim mestom so ista novica.
+  const steps = [];
+  for (const r of list) {
+    const prev = steps[steps.length - 1];
+    if (prev && prev.delay_min === r.delay_min && prev.station === r.station) continue;
+    steps.push(r);
+  }
+  const rows = steps.map((r, i) => {
+    const prev = i ? steps[i - 1] : null;
+    const diff = prev ? r.delay_min - prev.delay_min : 0;
+    const color = delayColor(r.delay_min * 60);
+    return `<div class="log-row">
+      <span class="log-time">${hhmm(new Date(r.seen_ts * 1000).toISOString())}</span>
+      <span class="log-delay" style="color:${color}">${r.delay_min > 0 ? "+" : ""}${r.delay_min}</span>
+      <span class="log-diff">${diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : ""}</span>
+      <span class="log-where">${escapeHtml(r.station)}</span>
+      ${r.severe ? '<span class="tag">izjemna</span>' : ""}
+    </div>`;
+  }).join("");
+
+  return `<details class="drawer adv-only" id="log-drawer">
+    <summary class="drawer-head">
+      <svg class="drawer-caret" width="11" height="11" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 5l7 7-7 7"></path>
+      </svg>
+      <span class="drawer-title">Dnevnik prevoznika</span>
+      <span class="drawer-why">${steps.length} poročil — kje je bil in koliko je zamujal</span>
+    </summary>
+    <div class="drawer-body">
+      <div class="fig-note">
+        Prevoznikova lastna poročila, ne naša meritev. Kraji so <strong>prometna
+        mesta</strong> — vlak tam ni nujno ustavil. Tega zapisa ni nikjer drugje,
+        ker ga nihče ne hrani; ta nastaja tu, ko aplikacija teče.
+      </div>
+      <div class="log-list">${rows}</div>
+    </div>
+  </details>`;
+}
+
 async function loadReport() {
   // Zadnje porocilo prevoznika o tej voznji: koliko in KJE. Prometno mesto
   // pogosto ni voznoredni postanek, zato ga iz `run` ni mogoce dobiti.
@@ -215,6 +261,7 @@ async function loadReport() {
     const r = await fetch(`/api/train/${ENC}/reports${DATE_Q}`).then((x) => (x.ok ? x.json() : null));
     const list = (r && r.reports) || [];
     state.report = list.length ? list[list.length - 1] : null;
+    state.reportLog = list;
   } catch (err) {
     state.report = null;
   }
@@ -264,6 +311,7 @@ async function loadRun() {
     state.forecast = forecast;
     runHeadEl.innerHTML = runHeadHtml(current);
     runTimelineEl.innerHTML = runTimelineHtml(run.stops, forecast, state.weather) +
+      reportLogHtml(state.reportLog) +
       `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj</div>`;
     renderProfile();
   } catch (err) {
