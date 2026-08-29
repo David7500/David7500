@@ -31,6 +31,15 @@ MODE="${SZ_MODE:-polno}"
 # Nomago, AP Murska Sobota). Sprememba te vrednosti sproži ponovni uvoz
 # voznega reda -- brez tega bi ETag rekel "nespremenjeno" in avtobusov ne bi bilo.
 AGENCIES="${SZ_AGENCIES-__ohrani__}"
+# Katera storitev je "ta prava". Doloceno tu, ker jo rabi ze varovalka pri
+# uvozu voznega reda -- ta zajem ustavi in ga mora znati prizgati nazaj.
+if [ "${SZ_MODE:-polno}" = "zajem" ]; then
+    UNIT=sztrack-zajem.service
+    DRUGA=sztrack.service
+else
+    UNIT=sztrack.service
+    DRUGA=sztrack-zajem.service
+fi
 
 [ "$(id -u)" -eq 0 ] || { echo "Poženi kot root (sudo)."; exit 1; }
 
@@ -99,7 +108,8 @@ else
     # Rezerva, kadar priloženo bazo kaj izpusti: sestavimo jo na mestu.
     # 41 MB prenosa in nekaj minut na Pi; vrh pomnilnika okoli 54 MB.
     echo "    priložene baze ni -- gradim vozni red iz GTFS (nekaj minut) ..."
-    sudo -u sztrack env SZ_DATA_DIR="$DATA" "$APP/.venv/bin/python" -m sztrack.cli update
+    (cd "$APP" && sudo -u sztrack env SZ_DATA_DIR="$DATA" \
+        "$APP/.venv/bin/python" -m sztrack.cli update)
 fi
 
 echo "==> storitve"
@@ -138,20 +148,18 @@ PYEOF
         echo "==> vozni red nima vseh prevoznikov -- uvazam znova"
         echo "    (na Pi Zero nekaj minut; vrh pomnilnika ~217 MB pri vseh stirih)"
         systemctl stop sztrack.service sztrack-zajem.service 2>/dev/null || true
-        sudo -u sztrack env SZ_DATA_DIR="$DATA" SZ_AGENCIES="$AGENCIES" \
-             "$APP/.venv/bin/python" -m sztrack.cli update --force
+        # Zajem je zdaj ustavljen. Karkoli spodaj pade, ga moramo prizgati
+        # nazaj -- ustavljen zajem je izgubljena zgodovina, ki je ni nikjer.
+        trap 'systemctl start "$UNIT" 2>/dev/null || true' EXIT
+        (cd "$APP" && sudo -u sztrack env SZ_DATA_DIR="$DATA" SZ_AGENCIES="$AGENCIES" \
+             "$APP/.venv/bin/python" -m sztrack.cli update --force)
+        trap - EXIT
         echo "    zajete meritve ostanejo -- uvoz zamenja samo vozni red"
     fi
 fi
 
-if [ "$MODE" = "zajem" ]; then
-    UNIT=sztrack-zajem.service
-    # Obe hkrati bi pisali v isto bazo in se prepirali za feed.
-    systemctl disable --now sztrack.service 2>/dev/null || true
-else
-    UNIT=sztrack.service
-    systemctl disable --now sztrack-zajem.service 2>/dev/null || true
-fi
+# Obe hkrati bi pisali v isto bazo in se prepirali za feed.
+systemctl disable --now "$DRUGA" 2>/dev/null || true
 systemctl enable --now "$UNIT" sztrack-backup.timer
 # `enable --now` že delujoče storitve NE restarta, posodobljena koda pa mora
 # stopiti v veljavo -- zato restart posebej.
