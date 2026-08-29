@@ -631,11 +631,13 @@ def _live(network: str | None = None) -> list[dict]:
         # Koliko je stara meritev, na katero se sklicujemo. Brez tega prikaz
         # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
+
     if network:
         rows = [r for r in rows if r["network"] == network]
-    _add_gps_position(conn_rows := rows)
+    with _conn() as conn:
+        _add_gps_position(conn, rows)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
-    return conn_rows
+    return rows
 
 
 # Hitrost, pod katero vozilo stejemo za stojece. Merjeno iz `speed`, NE iz
@@ -645,7 +647,7 @@ def _live(network: str | None = None) -> list[dict]:
 STOPPED_KMH = 3
 
 
-def _add_gps_position(rows: list[dict]) -> None:
+def _add_gps_position(conn, rows: list[dict]) -> None:
     """Avtobusu pripiše, kje JE, namesto kje je bil nazadnje izmerjen.
 
     Za vlak je lega sklepana iz voznega reda in zamude -- drugega vira ni.
@@ -657,18 +659,17 @@ def _add_gps_position(rows: list[dict]) -> None:
     if not ids:
         return
     marks = ",".join("?" * len(ids))
-    with _conn() as conn:
-        found = {
-            r["trip_id"]: r
-            for r in conn.execute(
-                f"SELECT v.trip_id, v.stop_seq, v.status, v.speed_ms, st.name "
-                f"FROM vehicle_now v "
-                f"JOIN sched s ON s.trip_id = v.trip_id AND s.stop_seq = v.stop_seq "
-                f"JOIN station st ON st.stop_id = s.stop_id "
-                f"WHERE v.trip_id IN ({marks})",
-                ids,
-            )
-        }
+    found = {
+        r["trip_id"]: r
+        for r in conn.execute(
+            f"SELECT v.trip_id, v.stop_seq, v.speed_ms, st.name "
+            f"FROM vehicle_now v "
+            f"JOIN sched s ON s.trip_id = v.trip_id AND s.stop_seq = v.stop_seq "
+            f"JOIN station st ON st.stop_id = s.stop_id "
+            f"WHERE v.trip_id IN ({marks})",
+            ids,
+        )
+    }
     for r in rows:
         gps = found.get(r["trip_id"])
         if not gps:

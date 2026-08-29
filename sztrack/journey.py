@@ -14,6 +14,7 @@ Trije odgovori:
 """
 from __future__ import annotations
 
+import math
 import sqlite3
 import unicodedata
 from datetime import datetime, timedelta
@@ -148,7 +149,7 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
     vso drzavo.
     """
     dlat = max_km / 111.0
-    dlon = max_km / (111.0 * max(0.2, abs(__import__("math").cos(__import__("math").radians(lat)))))
+    dlon = max_km / (111.0 * max(0.2, abs(math.cos(math.radians(lat)))))
     sql = ("SELECT DISTINCT st.stop_id, st.name, st.lat, st.lon FROM station st "
            "JOIN sched s ON s.stop_id = st.stop_id "
            "JOIN trip t ON t.trip_id = s.trip_id "
