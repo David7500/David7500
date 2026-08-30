@@ -183,23 +183,6 @@
 }
 
 
-/* ---------- zlozena vsebina (hitrost) ---------- */
-
-.drawer { margin-top: 26px; border-top: 1px solid #1e2229; }
-.drawer-head {
-  display: flex; align-items: center; gap: 9px;
-  padding: 14px 2px; cursor: pointer;
-  list-style: none;
-}
-.drawer-head::-webkit-details-marker { display: none; }
-.drawer-caret { color: #6b7480; flex-shrink: 0; transition: transform 0.15s ease; }
-.drawer[open] .drawer-caret { transform: rotate(90deg); }
-.drawer-title { font: 600 13px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0; }
-.drawer-head:hover .drawer-title { color: #e7eaf0; }
-.drawer-why { font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #6b7480; }
-.drawer-body { padding: 2px 0 20px; }
-.drawer-body .fig-sub { margin-top: 8px; }
-
 /* ---------- drsniki ---------- */
 
 /* Stolpca drsita, kadar je vsebine vec -- naj bo to tanka crta ob robu in ne

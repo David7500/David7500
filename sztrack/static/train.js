@@ -961,127 +961,6 @@ function drawRuns(w, runs) {
   return svg;
 }
 
-// ---------- graf 3: hitrost po odsekih (na zahtevo) ----------
-
-function drawSpeeds(w, segs) {
-  const rowH = 30;
-  // Levi rob po najdaljsem imenu odseka -- fiksnih 148 px je rezalo zacetke.
-  const longest = segs.reduce((n, s) => Math.max(n, `${s.from} → ${s.to}`.length), 0);
-  const M = { t: 6, r: 108, b: 6, l: Math.min(270, Math.max(150, longest * 6.1 + 14)) };
-  const H = M.t + M.b + segs.length * rowH;
-  const iw = Math.max(40, w - M.l - M.r);
-  const svg = svgEl("svg", { width: w, height: H, role: "img" });
-  const maxV = Math.max(...segs.map((s) => Math.max(s.actual_kmh, s.sched_kmh))) * 1.05;
-
-  segs.forEach((s, i) => {
-    const top = M.t + i * rowH;
-    const cy = top + rowH / 2;
-    svg.appendChild(svgEl("text", {
-      x: M.l - 10, y: cy + 4, "text-anchor": "end",
-      fill: "#9aa3b0", "font-size": 11, "font-family": "'IBM Plex Sans', sans-serif",
-    }, `${s.from} → ${s.to}`));
-
-    const bw = (s.actual_kmh / maxV) * iw;
-    const bar = svgEl("rect", {
-      x: M.l, y: cy - 7, width: Math.max(2, bw), height: 14, rx: 4, fill: INK_BAR,
-    });
-    bar.addEventListener("mousemove", (ev) => showTip(
-      `<div class="tt-title">${escapeHtml(s.from)} → ${escapeHtml(s.to)}</div>` +
-      `<div class="tt-row"><span>izmerjeno</span><b>${s.actual_kmh.toFixed(1)} km/h</b></div>` +
-      `<div class="tt-row"><span>vozni red</span><b>${s.sched_kmh.toFixed(1)} km/h</b></div>` +
-      `<div class="tt-row"><span>odsek</span><b>${s.km.toFixed(1)} km</b></div>` +
-      `<div class="tt-note">${escapeHtml(pluralRuns(s.n))}</div>`, ev));
-    bar.addEventListener("mouseleave", hideTip);
-    svg.appendChild(bar);
-
-    // vozni red kot referenca, ne kot druga serija
-    const rx = M.l + (s.sched_kmh / maxV) * iw;
-    svg.appendChild(svgEl("line", {
-      x1: rx, x2: rx, y1: cy - 11, y2: cy + 11, stroke: INK_AXIS, "stroke-width": 2,
-    }));
-
-    // Stolpec se imenuje "hitrost po odsekih", zato mora stevilka biti
-    // HITROST. Prej je tu pisalo odstopanje od voznega reda (+/-) -- to je
-    // druga kolicina in ob besedi "km/h" jo je bilo brati kot hitrost samo.
-    // Odstopanje ostane, a manjse in za njo.
-    const diff = s.actual_kmh - s.sched_kmh;
-    svg.appendChild(svgEl("text", {
-      x: w - 46, y: cy + 4, "text-anchor": "end",
-      fill: "#c9d1dc", "font-size": 11.5, "font-family": "'IBM Plex Mono', monospace",
-    }, `${s.actual_kmh.toFixed(0)} km/h`));
-    svg.appendChild(svgEl("text", {
-      x: w - 6, y: cy + 4, "text-anchor": "end",
-      fill: Math.abs(diff) < 1 ? "#79828f" : diff < 0 ? "#dd6a26" : "#5aa87d",
-      "font-size": 10, "font-family": "'IBM Plex Mono', monospace",
-    }, Math.abs(diff) < 0.5 ? "0"
-        : `${diff > 0 ? "+" : "−"}${Math.abs(diff).toFixed(0)}`));
-  });
-  return svg;
-}
-
-function medianOf(xs) {
-  const a = [...xs].sort((p, q) => p - q);
-  const m = Math.floor(a.length / 2);
-  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-}
-
-function aggregateSpeeds(rows) {
-  const by = new Map();
-  for (const r of rows) {
-    const key = `${r.from}→${r.to}`;
-    let g = by.get(key);
-    if (!g) {
-      g = { from: r.from, to: r.to, km: r.km, sched_kmh: r.sched_kmh, actual: [] };
-      by.set(key, g);
-    }
-    g.actual.push(r.actual_kmh);
-  }
-  return [...by.values()].map((g) => ({
-    from: g.from, to: g.to, km: g.km, sched_kmh: g.sched_kmh,
-    actual_kmh: medianOf(g.actual), n: g.actual.length,
-  }));
-}
-
-let speedsLoaded = false;
-
-async function loadSpeeds() {
-  const sub = document.getElementById("speeds-sub");
-  const el = document.getElementById("speeds-chart");
-  try {
-    const raw = await fetch(`/api/speeds?train_no=${ENC}`).then((r) => r.json());
-    const segs = aggregateSpeeds(raw);
-    if (!segs.length) {
-      sub.textContent = "";
-      el.innerHTML = '<div class="empty-state">ni odseka nad 5 km z dvema meritvama</div>';
-      return;
-    }
-    const shown = segs.slice(0, 12);
-    sub.textContent = "stolpec in številka = izmerjena hitrost, črtica = vozni red, desno odstopanje v km/h; samo odseki nad 5 km"
-      + (segs.length > shown.length ? ` · prikazanih ${shown.length} od ${segs.length}` : "");
-    mountChart(el, (w) => drawSpeeds(w, shown));
-  } catch (err) {
-    console.error("hitrosti ni bilo mogoče naložiti", err);
-    el.innerHTML = '<div class="empty-state">hitrosti ni bilo mogoče naložiti</div>';
-  }
-}
-
-// ---------- hitrost: zlozena vsebina ----------
-
-// Hitrost ni svoj pogled in tudi ne zavihek ob zamudi: je isti podatek v drugi
-// enoti, zato lezi spodaj zaprta in se nalozi sele, ko jo kdo odpre.
-const speedsDrawer = document.getElementById("speeds-drawer");
-
-speedsDrawer.addEventListener("toggle", () => {
-  if (!speedsDrawer.open) return;
-  if (!speedsLoaded) {
-    speedsLoaded = true;
-    loadSpeeds();
-    return;
-  }
-  // Zaprt graf ima sirino 0 -- ob odprtju ga je treba izrisati znova.
-  requestAnimationFrame(() => redrawers.forEach((f) => f()));
-});
-
 // ---------- vreme ----------
 
 async function loadWeather() {
@@ -1181,11 +1060,6 @@ pollWhileVisible(refreshFeedDot, 30000);
 
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
 // za njo.
-// Stare povezave s ?view=hitrost naj se odprejo na hitrosti, ne v prazno.
-if (new URLSearchParams(location.search).get("view") === "hitrost") {
-  speedsDrawer.open = true;
-}
-
 // Preklop pogleda je skupen vsem stranem in zivi v common.js. Grafi se morajo
 // ob preklopu prerisati: napreden pogled spremeni sirino stolpca.
 const toAdvBtn = document.getElementById("to-advanced");

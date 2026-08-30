@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>sztrack — nadzorna soba</title>
+  <title>sztrack — živi zemljevid</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -13,22 +13,15 @@
 <body>
 
   <header class="topbar">
-    <div class="brand">
+    <a class="brand" href="/">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f0934f" stroke-width="1.8" stroke-linecap="round">
         <rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
         <circle cx="9" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle>
       </svg>
       <span class="brand-name">sztrack</span>
-    </div>
+    </a>
     <div class="spacer"></div>
     {% include "_nav.html" with context %}
-    <div class="divider"></div>
-    <div class="train-count">
-      <span id="train-count-n">—</span>
-      <span class="label">vlakov na progi</span>
-    </div>
-    <button type="button" id="bus-toggle" class="bus-toggle"
-            aria-pressed="true" title="pokaži ali skrij avtobuse z GPS" hidden></button>
     <div class="divider"></div>
     <div class="clock-wrap">
       <span id="feed-dot" class="dot"></span>
@@ -38,22 +31,64 @@
 
   <div class="body">
     <aside class="sidebar">
-      <div class="sidebar-title">Največje zamude</div>
-      <div id="delay-list" class="delay-list">
-        <div class="empty-state">nalagam …</div>
+
+      <!-- Iskalnik namesto lestvice najvecjih zamud. Lestvica je odgovarjala
+           na vprasanje "kdo danes najbolj zamuja", ki ga na zemljevidu nihce
+           nima; vprasanje pred zemljevidom je "kje je MOJ avtobus". -->
+      <div class="find">
+        <label class="find-label" for="find">Poišči vozilo</label>
+        <div class="find-box">
+          <input id="find" placeholder="številka vlaka ali linije" autocomplete="off"
+                 autocapitalize="off" spellcheck="false">
+          <button type="button" class="field-clear" id="find-clear" tabindex="-1"
+                  aria-label="izbriši" hidden>&times;</button>
+        </div>
+        <div id="find-list" class="find-list"></div>
       </div>
+
+      <div class="layers">
+        <div class="sidebar-title">Kaj naj kaže</div>
+        <label class="layer"><input type="checkbox" id="lay-train" checked>
+          <span class="layer-key layer-key-train"></span>
+          <span class="layer-name">Vlaki</span><span class="layer-n" id="n-train">—</span></label>
+        <label class="layer"><input type="checkbox" id="lay-bus" checked>
+          <span class="layer-key layer-key-bus"></span>
+          <span class="layer-name">Avtobusi</span><span class="layer-n" id="n-bus">—</span></label>
+        <label class="layer"><input type="checkbox" id="lay-net" checked>
+          <span class="layer-key layer-key-net"></span>
+          <span class="layer-name">Železniške proge</span><span class="layer-n"></span></label>
+        <label class="layer"><input type="checkbox" id="lay-stations" checked>
+          <span class="layer-key layer-key-stop"></span>
+          <span class="layer-name">Postaje</span><span class="layer-n"></span></label>
+        <label class="layer"><input type="checkbox" id="lay-base" checked>
+          <span class="layer-key"></span>
+          <span class="layer-name">Podlaga (ceste)</span><span class="layer-n"></span></label>
+        <label class="layer"><input type="checkbox" id="lay-quiet" checked>
+          <span class="layer-key"></span>
+          <span class="layer-name">Pomirjena podlaga</span><span class="layer-n"></span></label>
+        <label class="layer"><input type="checkbox" id="lay-labels">
+          <span class="layer-key"></span>
+          <span class="layer-name">Dodatna imena krajev</span><span class="layer-n"></span></label>
+        <p class="layer-note">
+          Imena ulic so vpečena v podlago in jih ni mogoče ugasniti posebej:
+          brezplačne podlage brez napisov ni. „Pomirjena“ jih potisne nazaj,
+          izklop podlage jih odstrani skupaj s cestami.
+        </p>
+      </div>
+
       <div class="legend">
+        <div class="sidebar-title">Zamuda</div>
         <div class="legend-item"><span class="legend-dot" style="background:#7c8698"></span><span>točno</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:#f2a87e"></span><span>1–5 min</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:#e07b45"></span><span>5–15 min</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:#b85417"></span><span>nad 15 min</span></div>
-      <div class="legend-item" id="legend-bus" hidden>
-        <span class="legend-arrow">
-          <svg width="11" height="11" viewBox="0 0 24 24"><path d="M12 3 L18 20 L12 16 L6 20 Z" fill="#4db97f"></path></svg>
-        </span>
-        <span>avtobus (prava lega, GPS)</span>
       </div>
-      </div>
+
+      <p class="sidebar-note">
+        Vlak je <strong>krog na postaji</strong>: feed zanj nima lege, zato ga
+        rišemo na zadnji postaji z meritvijo. Avtobus je <strong>oblika
+        vozila</strong> na izmerjeni GPS legi in kaže v smer vožnje.
+      </p>
     </aside>
 
     <main class="map-area">

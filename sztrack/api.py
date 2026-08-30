@@ -428,13 +428,15 @@ def api_trains():
 
 
 @app.get("/api/train/{train_no}")
-def api_train(train_no: str):
+def api_train(train_no: str, trip: str | None = None):
+    """Vozni red ene vožnje. `trip` je nujen pri avtobusu -- številka linije
+    ni številka vožnje in brez njega dobiš poljubno od 217 voženj."""
     with _conn() as conn:
-        rows = stats.timetable(conn, train_no, datetime.now(TZ).date().isoformat())
+        rows = stats.timetable(conn, train_no, datetime.now(TZ).date().isoformat(), trip)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
-        return {"train_no": train_no, "mode": stats.trip_mode(conn, train_no),
-                "timetable": rows}
+        return {"train_no": train_no, "trip_id": trip,
+                "mode": stats.trip_mode(conn, train_no), "timetable": rows}
 
 
 @app.get("/api/train/{train_no}/run")
