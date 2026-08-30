@@ -401,7 +401,13 @@
   font: 500 11px/1 var(--sans); color: var(--ink-mute); text-decoration: none;
 }
 .run-map-full:hover { color: var(--accent-lit); }
-.run-map { height: 260px; background: #0f1115; }
+/* `.leaflet-container` ima svoj `background: #ddd` in Leafletov CSS se nalozi
+   SELE ob prvi legi -- torej za nasim. Enaka specificnost, poznejsi zmaga,
+   zato mora biti nas selektor sestavljen. Pri 260 px se to ni videlo, ker
+   ploscice pokrijejo cel okvir; cez celo stran pa je bila polovica bela. */
+.run-map { height: 260px; }
+/* Samo ozadje rabi sestavljen selektor -- prav to Leaflet nastavlja. */
+.run-map.leaflet-container { background: #0f1115; }
 
 /* Legenda pod zemljevidom: dve oznaki, dva pomena. Brez nje je moder avtobus
    ob zeleni piki uganka -- in prav razlika med njima je bistvo tega okvira. */
@@ -416,7 +422,7 @@
 }
 .key-dot {
   width: 8px; height: 8px; border-radius: 50%;
-  background: #4db97f; border: 1.5px solid #e7eaf0;
+  background: #ff4d5e; border: 1.5px solid #e7eaf0;
 }
 .key-bus {
   width: 7px; height: 11px; border-radius: 2px;
@@ -434,12 +440,16 @@
 .run-map-fs:hover { color: var(--ink); border-color: var(--line-strong, #3d434f); }
 .run-map-fs[hidden] { display: none; }
 
-/* Na celem zaslonu naj zemljevid vzame ves prostor, glava in legenda pa
-   ostaneta -- brez njiju ne bi bilo ne hitrosti ne pomena obeh oznak. */
-.run-map-wrap:fullscreen { display: flex; flex-direction: column; border-radius: 0; }
-.run-map-wrap:fullscreen .run-map { flex: 1 1 auto; height: auto; }
+/* Cez celo STRAN, ne cez cel zaslon (glej opombo v train.js). Glava in
+   legenda ostaneta -- brez njiju ne bi bilo ne hitrosti ne pomena oznak. */
+.run-map-wrap.is-max {
+  position: fixed; inset: 0; z-index: 1200;
+  margin: 0; border-radius: 0; border: 0;
+  display: flex; flex-direction: column;
+}
+.run-map-wrap.is-max .run-map { flex: 1 1 auto; height: auto; }
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
-.run-map .leaflet-container { background: #0f1115; font-family: var(--sans); }
+.run-map.leaflet-container { font-family: var(--sans); }
 @media (max-width: 720px) { .run-map { height: 210px; } }
 
 /* ---------- preprost pogled na sirokem zaslonu ----------

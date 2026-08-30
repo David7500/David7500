@@ -792,15 +792,29 @@ in nikoli čez konec trase. Podnapis pove „ocenjeno iz lege pred 42 s", ne
 **Barva loči meritev od ocene.** Vozilo na tem zemljevidu ni zeleno kot
 drugod, ampak v `ESTIMATE_COLOR` (`#a8d8ff`) in rahlo prosojno — ta odtenek je
 v projektu rezerviran prav za „tu meritve ni" in ga lestvica zamud ne uporablja.
-Zadnja **izmerjena** lega je zelena pika s **svetlim obročem**: zelena pove, da
-je izmerjena, obroč pa jo loči od postajališč, ki so tudi zelene pike. Riše se
-vedno — kadar vozilo stoji, jo oblika vozila pokrije in dveh oznak ni videti.
-Pod zemljevidom je enovrstična legenda; brez nje je moder avtobus ob zeleni
-piki uganka, in prav razlika med njima je bistvo tega okvira.
+Zadnja **izmerjena** lega je **rdeča** pika s svetlim obročem: trasa in
+postajališča so zeleni, zato se zelena pika med njimi izgubi, rdeča pa ni iz
+nobene lestvice — ne iz zamud in ne iz razmer — in tu ne more pomeniti nič
+drugega. Pika se **dvigne nad traso** (`bringToFront()`): črta in pika sta v
+isti plasti, vrstni red risanja je vrstni red dodajanja, in 3 px široka trasa
+jo je prerezala tako, da je bila videti kot del proge. Riše se vedno — kadar
+vozilo stoji, jo oblika vozila pokrije in dveh oznak ni videti. Pod
+zemljevidom je enovrstična legenda; brez nje je moder avtobus ob rdeči piki
+uganka, in prav razlika med njima je bistvo tega okvira.
 
-Zemljevid ima **gumb za cel zaslon** (Fullscreen API na okvir, ne na `<div>`
-zemljevida, da glava in legenda ostaneta). Skrit je, kadar ga brskalnik ne
-podpira — gumb, ki ne naredi ničesar, je slabši od manjkajočega.
+**Gumb razširi zemljevid čez celo stran, ne čez cel zaslon.** Fullscreen API
+vzame ves monitor in skrije brskalnik; za „hočem videti več zemljevida" je to
+preveč — človek izgubi naslovno vrstico, gumb nazaj in vsak drug orientir,
+izhod pa je tipka, ki je na telefonu ni. Razred `is-max` na okviru
+(`position: fixed; inset: 0`) naredi isto koristno stvar in nič od tega; glava
+in legenda ostaneta, ker brez njiju ni ne hitrosti ne pomena oznak.
+
+**Ozadje zemljevida rabi sestavljen selektor.** `.leaflet-container` ima svoj
+`background: #ddd`, Leafletov CSS pa se naloži **šele ob prvi legi**, torej za
+našim — enaka specifičnost, poznejši zmaga. Pri 260 px se to ni videlo, ker
+ploščice pokrijejo cel okvir; čez celo stran je bila polovica bela. Zato
+`.run-map.leaflet-container { background }`. Višina ostane pri enem razredu,
+sicer bi sestavljeni selektor povozil telefonsko pravilo v `@media`.
 
 **Na velikem zemljevidu tega ni**, in to je odločitev, ne opustitev: tam je
 vprašanje „kje je vse skupaj" in ocena za osemdeset vozil je osemdeset

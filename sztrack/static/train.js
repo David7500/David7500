@@ -1225,17 +1225,22 @@ function postaviVozilo(prvic) {
   // (vozilo stoji), jo oblika vozila pokrije in dveh oznak ni videti, opomba
   // pod zemljevidom pa ostane resnicna v obeh primerih.
   if (!runMap.gps) {
-    // Svetel obroc, ne temen: postajalisca so tudi zelene pike s temnim
-    // robom in ta bi se od njih ne locila. Obroc pove "to je vozilo, ne
-    // postaja", zelena sredica pa "to je izmerjeno".
+    // Rdeca s svetlim obrocem: postajalisca in trasa so zeleni, zato se
+    // zelena pika med njimi izgubi. Rdeca ni iz nobene lestvice -- ne iz
+    // zamud in ne iz razmer -- zato tu ne more pomeniti nicesar drugega.
     runMap.gps = L.circleMarker([v.lat, v.lon], {
       radius: 5.5, color: "#e7eaf0", weight: 2, opacity: 0.95,
-      fillColor: "#4db97f", fillOpacity: 1,
+      fillColor: "#ff4d5e", fillOpacity: 1,
     }).addTo(runMap.map);
     bindFlashName(runMap.gps, "zadnja izmerjena lega");
   } else {
     runMap.gps.setLatLng([v.lat, v.lon]);
   }
+  // Crta in pika sta v isti plasti (overlayPane) in vrstni red risanja je
+  // vrstni red dodajanja. Trasa se doda enkrat, pika enkrat -- a postajalisca
+  // vmes, zato jo eksplicitno dvignemo. Sicer 3 px siroka trasa prerezhe piko
+  // in ta je videti kot del proge.
+  runMap.gps.bringToFront();
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
   // sekundno osvezevanje trgalo izpod prsta.
@@ -1256,20 +1261,35 @@ setInterval(() => {
   if (runMap.marker) postaviVozilo(false);
 }, 1000);
 
-// Cel zaslon. Gumb je skrit, kadar ga brskalnik ne podpira -- gumb, ki ne
-// naredi nicesar, je slabsi od manjkajocega. Po vsaki spremembi je treba
-// Leafletu povedati, da je okvir drugacen, sicer ostane siv.
+// Zemljevid cez celo STRAN, ne cez cel zaslon. Fullscreen API vzame ves
+// monitor in skrije brskalnik -- za "hocem videti vec zemljevida" je to
+// prevec: clovek izgubi naslovno vrstico, gumb nazaj in vsak drug orientir,
+// izhod pa je tipka, ki je na telefonu ni. Razred na okviru naredi isto
+// koristno stvar in nic od tega.
+function setMapMax(on) {
+  const wrap = document.getElementById("run-map-wrap");
+  const btn = document.getElementById("run-map-fs");
+  if (!wrap) return;
+  wrap.classList.toggle("is-max", on);
+  if (btn) {
+    btn.setAttribute("aria-pressed", String(on));
+    btn.title = on ? "Pomanjšaj" : "Čez celo stran";
+  }
+  // Leaflet meri okvir sam in ga po spremembi velikosti ne premeri.
+  if (runMap.map) requestAnimationFrame(() => runMap.map.invalidateSize());
+}
+
 function initFullscreen() {
   const btn = document.getElementById("run-map-fs");
-  const wrap = document.getElementById("run-map-wrap");
-  if (!btn || !wrap || !document.fullscreenEnabled || !wrap.requestFullscreen) return;
+  if (!btn) return;
   btn.hidden = false;
   btn.addEventListener("click", () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else wrap.requestFullscreen().catch(() => { /* brskalnik lahko zavrne */ });
+    const wrap = document.getElementById("run-map-wrap");
+    setMapMax(!(wrap && wrap.classList.contains("is-max")));
   });
-  document.addEventListener("fullscreenchange", () => {
-    if (runMap.map) requestAnimationFrame(() => runMap.map.invalidateSize());
+  // Escape je pricakovan izhod, tudi ce gumb ostane viden.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setMapMax(false);
   });
 }
 
