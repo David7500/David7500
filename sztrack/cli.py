@@ -98,8 +98,10 @@ def cmd_backtest(args):
             return
         print(f"nalog, kjer je feed ze imel vrednost za cilj: {res['tasks']}\n")
     else:
-        res = backtest.evaluate(conn, by_horizon=args.by_horizon)
-        print(f"dni: {len(res['days'])} · nalog: {res['tasks']}\n")
+        res = backtest.evaluate(conn, by_horizon=args.by_horizon,
+                                network=args.network)
+        print(f"omrezje: {args.network} · dni: {len(res['days'])}"
+              f" · nalog: {res['tasks']}\n")
 
     print(f"{'model':26s}{'MAE':>9}{'mediana':>10}{'v 5 min':>10}{'odklon':>10}")
     for name, sc in res["models"].items():
@@ -243,6 +245,9 @@ def main(argv=None):
     a.add_argument("--day-offset", action="store_true",
                    help="ali stanje mreze na ta dan izboljsa napoved (ne izboljsa)")
     a.add_argument("--by-horizon", action="store_true", help="razclenjeno po oddaljenosti")
+    a.add_argument("--network", default=backtest.NETWORK,
+                   choices=("zeleznica", "avtobus"),
+                   help="katero omrezje meriti (privzeto zeleznica)")
     a.set_defaults(func=cmd_backtest)
 
     a = sub.add_parser("prune", help="pobrisi stare vrstice dnevnika `obs`")

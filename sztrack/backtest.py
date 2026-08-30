@@ -44,13 +44,20 @@ NETWORK = "zeleznica"
 
 def _delays_by_day(conn: sqlite3.Connection,
                    network: str = NETWORK) -> dict[tuple[str, str], dict[int, int]]:
-    """(train_no, dan) -> {stop_seq: zamuda}. Iz `run`, torej zadnje znano stanje."""
+    """(voznja, dan) -> {stop_seq: zamuda}. Iz `run`, torej zadnje znano stanje.
+
+    Kljuc je `trip_id`, ne `train_no`. Pri zeleznici je to isto -- 0 od 663
+    stevilk z meritvami ima vec kot eno voznjo -- pri avtobusu pa nikakor:
+    LPP linija 25 ima 217 voznj obeh smeri in "postanek 2" bi zdruzil dva
+    razlicna kraja. Model bi se ucil mediano spremembe med krajema, ki nista
+    sosednja in nista niti v isti smeri.
+    """
     rows = conn.execute(
-        "SELECT t.train_no, r.service_date, r.stop_seq, "
+        "SELECT r.trip_id AS train_no, r.service_date, r.stop_seq, "
         "       COALESCE(r.delay_dep, r.delay_arr) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
         "WHERE d IS NOT NULL AND t.network = ? "
-        "ORDER BY t.train_no, r.service_date, r.stop_seq",
+        "ORDER BY r.trip_id, r.service_date, r.stop_seq",
         (network,),
     )
     out: dict[tuple[str, str], dict[int, int]] = defaultdict(dict)
@@ -63,7 +70,8 @@ def _stop_ids(conn: sqlite3.Connection, network: str = NETWORK) -> dict[tuple[st
     """(train_no, stop_seq) -> stop_id. Rabi ga zdruzevanje po odsekih:
     isti fizicni odsek vozi vec vlakov in skupaj jih je dovolj za mediano."""
     rows = conn.execute(
-        "SELECT t.train_no, s.stop_seq, s.stop_id FROM trip t JOIN sched s USING (trip_id) "
+        "SELECT t.trip_id AS train_no, s.stop_seq, s.stop_id "
+        "FROM trip t JOIN sched s USING (trip_id) "
         "WHERE t.network = ?",
         (network,),
     )
@@ -83,7 +91,7 @@ def _dwells(conn: sqlite3.Connection, network: str = NETWORK) -> dict[str, dict[
     """
     out: dict[str, dict[int, int]] = defaultdict(dict)
     for r in conn.execute(
-        "SELECT t.train_no, s.stop_seq, s.dep_s - s.arr_s AS w "
+        "SELECT t.trip_id AS train_no, s.stop_seq, s.dep_s - s.arr_s AS w "
         "FROM trip t JOIN sched s USING (trip_id) "
         "WHERE t.network = ? AND s.arr_s IS NOT NULL AND s.dep_s IS NOT NULL",
         (network,),
@@ -92,11 +100,11 @@ def _dwells(conn: sqlite3.Connection, network: str = NETWORK) -> dict[str, dict[
     return out
 
 
-def build_tasks(conn: sqlite3.Connection) -> list[dict]:
-    """Vse naloge (vlak, dan, i, j, zamuda_i, zamuda_j)."""
-    by_day = _delays_by_day(conn)
-    stops = _stop_ids(conn)
-    dwells = _dwells(conn)
+def build_tasks(conn: sqlite3.Connection, network: str = NETWORK) -> list[dict]:
+    """Vse naloge (voznja, dan, i, j, zamuda_i, zamuda_j)."""
+    by_day = _delays_by_day(conn, network)
+    stops = _stop_ids(conn, network)
+    dwells = _dwells(conn, network)
     tasks = []
     for (train_no, day), delays in by_day.items():
         seqs = sorted(delays)
@@ -372,9 +380,10 @@ def _score(errors: list[float]) -> dict:
     }
 
 
-def evaluate(conn: sqlite3.Connection, by_horizon: bool = False) -> dict:
+def evaluate(conn: sqlite3.Connection, by_horizon: bool = False,
+             network: str = NETWORK) -> dict:
     """Primerja modele z izpuščanjem enega dne."""
-    tasks = build_tasks(conn)
+    tasks = build_tasks(conn, network)
     days = sorted({t["day"] for t in tasks})
     errors: dict[str, list[float]] = {name: [] for name in MODELS}
     per_h: dict[str, dict[int, list[float]]] = {n: defaultdict(list) for n in MODELS}
@@ -463,7 +472,7 @@ def operator_forecast_tasks(conn: sqlite3.Connection) -> list[dict]:
                 if said is None:
                     continue        # o j takrat se ni povedal nicesar
                 tasks.append({
-                    "train_no": names.get(trip_id, "?"), "day": day,
+                    "train_no": trip_id, "day": day,
                     "i": i, "j": j, "horizon": j - i,
                     "d_i": d_i, "d_j": final[(trip_id, day, j)],
                     "operator": said,

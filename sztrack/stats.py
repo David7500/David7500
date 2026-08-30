@@ -799,47 +799,58 @@ def _operator_is_stale(prevoznik: int | None, arr_i: int | None, dep_i: int,
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90,
             exclude_date: str | None = None,
-            service_date: str | None = None) -> list[dict]:
+            service_date: str | None = None,
+            trip_id: str | None = None) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
 
     Osnovni model: zamuda se prenaša naprej, popravljena za historično mediano
-    spremembe zamude na tem odseku pri tem vlaku. Enostavno, a je pri vlakih
+    spremembe zamude na tem odseku pri tej vožnji. Enostavno, a je pri vlakih
     presenetljivo trdna izhodiščna točka -- dokler ne nabereš nekaj mesecev
     podatkov, kompleksnejši model nima česa izkoristiti.
+
+    **Ključ je vožnja, ne številka.** Pri železnici je to isto (0 od 663
+    številk z meritvami ima več kot eno vožnjo), pri avtobusu pa nikakor:
+    LPP linija 25 ima 217 voženj obeh smeri, in ker se model uči po
+    `stop_seq`, bi se „postanek 2" naučil mediane spremembe med dvema
+    krajema, ki nista sosednja in nista niti v isti smeri.
     """
+    trip_id = resolve_trip(conn, train_no, service_date, trip_id)
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     # Dan, ki ga prikazujemo, ne sme biti v svoji lastni ucni mnozici. Pri
     # tekoci voznji naprej po progi meritev tako ali tako ni, pri ogledu
     # koncanega dne pa bi model deloma napovedoval iz odgovora.
     rows = conn.execute(
-        "SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
-        "FROM run r JOIN trip t USING (trip_id) "
-        "WHERE t.train_no = ? AND r.service_date >= ? AND d IS NOT NULL "
-        "  AND (? IS NULL OR r.service_date <> ?) "
-        "ORDER BY r.service_date, r.stop_seq",
-        (train_no, since, exclude_date, exclude_date),
+        f"SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
+        f"FROM run r JOIN trip t USING (trip_id) "
+        f"WHERE {'r.trip_id = ?' if trip_id else 't.train_no = ?'} "
+        f"  AND r.service_date >= ? AND d IS NOT NULL "
+        f"  AND (? IS NULL OR r.service_date <> ?) "
+        f"ORDER BY r.service_date, r.stop_seq",
+        (trip_id or train_no, since, exclude_date, exclude_date),
     ).fetchall()
 
     by_day: dict[str, dict[int, int]] = {}
     for r in rows:
         by_day.setdefault(r["service_date"], {})[r["stop_seq"]] = r["d"]
 
-    stops = timetable(conn, train_no)
+    stops = timetable(conn, train_no, service_date, trip_id)
     names = {t["stop_seq"]: t["name"] for t in stops}
     # Kaj o teh postankih pravi feed prav zdaj. Za se nedosezen postanek je to
     # prevoznikova napoved -- uporabimo jo samo navzgor (glej `_with_operator`).
     feed: dict[int, int] = {}
     arr_i = None
     if service_date:
+        kje = "r.trip_id = ?" if trip_id else "t.train_no = ?"
+        kdo = trip_id or train_no
         feed = {r["stop_seq"]: r["d"] for r in conn.execute(
-            "SELECT r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
-            "FROM run r JOIN trip t USING (trip_id) "
-            "WHERE t.train_no = ? AND r.service_date = ? AND r.stop_seq > ? AND d IS NOT NULL",
-            (train_no, service_date, stop_seq))}
+            f"SELECT r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
+            f"FROM run r JOIN trip t USING (trip_id) "
+            f"WHERE {kje} AND r.service_date = ? AND r.stop_seq > ? AND d IS NOT NULL",
+            (kdo, service_date, stop_seq))}
         row = conn.execute(
-            "SELECT r.delay_arr FROM run r JOIN trip t USING (trip_id) "
-            "WHERE t.train_no = ? AND r.service_date = ? AND r.stop_seq = ?",
-            (train_no, service_date, stop_seq)).fetchone()
+            f"SELECT r.delay_arr FROM run r JOIN trip t USING (trip_id) "
+            f"WHERE {kje} AND r.service_date = ? AND r.stop_seq = ?",
+            (kdo, service_date, stop_seq)).fetchone()
         arr_i = row["delay_arr"] if row else None
     # Rezerva voznega reda: presezek postanka nad najkrajsim, ki ga vozilo se
     # zmore. To je edini vhod v napoved, ki ni statistika -- rezerva je znana

@@ -610,6 +610,9 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
       const p = await fetch(
         `/api/train/${enc}/predict?stop_seq=${base.stop_seq}&delay_s=${stopDelay(base)}`
         + `&exclude_date=${encodeURIComponent(run.service_date)}`
+        // Brez `trip` se model pri avtobusu uci iz vseh voznj te linije,
+        // obeh smeri skupaj. Pri vlaku je isti trip in sprememba nicesar.
+        + (run.trip_id ? `&trip=${encodeURIComponent(run.trip_id)}` : "")
       ).then((r) => (r.ok ? r.json() : null));
       forecast = (p && p.forecast) || [];
     } catch (err) {
