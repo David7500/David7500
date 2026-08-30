@@ -185,6 +185,11 @@ function runHeadHtml(cur) {
   const atIso = cur ? stopActualIso(cur) : null;
   const ageS = atIso ? (Date.now() - new Date(atIso).getTime()) / 1000 : null;
   const stale = ageS != null && ageS > FRESH_S;
+  // "-6 min" je uganka, beseda ni -- in prezgoden avtobus je za potnika hujsa
+  // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
+  // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
+  // "6 min prej" si nasprotuje, "6 min prej" pod njim pa besedo ponovi.
+  const early = d != null && d <= -60;
 
   // Prevoznikovo porocilo pozna prometno mesto, ki ga nas vozni red nima --
   // zamuda se meri tudi tam, kjer vlak ne ustavlja.
@@ -192,9 +197,11 @@ function runHeadHtml(cur) {
 
   return `
     <div class="detail-now">
-      <div class="detail-now-label">${stale ? "Zadnja znana zamuda" : "Trenutna zamuda"}</div>
+      <div class="detail-now-label">${
+        stale ? "Zadnja znana zamuda" : early ? "Vozi prezgodaj" : "Trenutna zamuda"}</div>
       <div class="detail-now-value" style="color:${color}">
-        <span class="detail-now-n">${delayLabel(d)}</span><span class="detail-now-unit">min</span>
+        <span class="detail-now-n">${early ? Math.abs(Math.round(d / 60)) : delayLabel(d)}</span>
+        <span class="detail-now-unit">min</span>
       </div>
       <div class="detail-now-where">
         ${cur
@@ -275,7 +282,7 @@ function yourStopHtml(stops, forecast, current) {
         ${cas !== sched ? `<span class="yours-sched">${sched}</span>` : ""}
         <span class="yours-delay-box">
           <span class="yours-kind">${escapeHtml(znak)}</span>
-          <span class="yours-delay" style="color:${color}">${delayLabel(d)} min</span>
+          <span class="yours-delay" style="color:${color}">${delayText(d)}</span>
         </span>
       </div>
       <div class="yours-tag">${escapeHtml(odkod)}</div>
@@ -1111,8 +1118,8 @@ async function drawRunMap(v) {
   const kje = L.latLng(v.lat, v.lon);
   if (prvic || !runMap.map.getBounds().contains(kje)) runMap.map.panTo(kje);
 
-  document.getElementById("run-map-sub").textContent =
-    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · lega stara ${v.age_s} s`;
+  document.getElementById("run-map-sub").innerHTML =
+    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · lega stara ${ageHtml(v.age_s)}`;
   document.getElementById("run-map-full").href =
     `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
   wrap.hidden = false;

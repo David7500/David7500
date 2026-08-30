@@ -486,7 +486,7 @@ function measuredStopHtml(s, isCurrent, w) {
     ? `<span style="color:${delayColor(split.arr)}">${delayLabel(split.arr)}</span>`
       + `<span class="stop-arrow">→</span>`
       + `<span style="color:${delayColor(split.dep)}">${delayLabel(split.dep)}</span>`
-    : `<span style="color:${color}">${delayLabel(d)}</span>`;
+    : `<span style="color:${color}">${delayText(d, true)}</span>`;
 
   return `
     <div class="stop-row${isCurrent ? " is-current" : ""}">
@@ -553,7 +553,7 @@ function forecastStopHtml(s, f, w) {
         ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.own_delay_s)} min</span></div>` : ""}
       </div>
       ${stopWeatherHtml(w, true)}
-      <div class="stop-delay is-forecast" style="color:${color}">${delayLabel(d)}</div>
+      <div class="stop-delay is-forecast" style="color:${color}">${delayText(d, true)}</div>
     </div>
   `;
 }
@@ -637,6 +637,36 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   }
   return { run, forecast, current: cur };
 }
+
+// ---------- starost lege, ki tece sama ----------
+
+// "lega stara 59 s" je stala pri miru, dokler ni prisel naslednji poll, in
+// nato skocila nazaj na 38. Starost je edina stevilka na strani, ki se
+// spreminja tudi takrat, ko se ne zgodi nic, zato jo mora steti brskalnik:
+// strezniska vrednost je izhodisce, mi pa pristevamo cas od trenutka, ko je
+// odgovor prispel. Ura odjemalca v racun NE gre -- merimo razliko dveh
+// lastnih meritev, zato zamik ure ne skodi.
+function ageText(baseS, sinceMs) {
+  const s = Math.max(0, Math.round(baseS + (Date.now() - sinceMs) / 1000));
+  return s < 100 ? `${s} s` : `${Math.round(s / 60)} min`;
+}
+
+// Vrne HTML, ki se osvezuje sam. Iscemo po razredu in ne po registru, ker se
+// kartica na zemljevidu gradi iz niza HTML in nanjo ni kam obesiti sklica.
+function ageHtml(ageS) {
+  const t = Date.now();
+  return `<span class="age-live" data-base="${ageS}" data-since="${t}">`
+    + `${ageText(ageS, t)}</span>`;
+}
+
+setInterval(() => {
+  // V ozadju ne risemo: sekundnik za sliko, ki je nihce ne gleda, je poraba
+  // baterije. Ob vrnitvi je prva vrednost pravilna, ker se racuna, ne steje.
+  if (document.visibilityState === "hidden") return;
+  for (const el of document.querySelectorAll(".age-live")) {
+    el.textContent = ageText(+el.dataset.base, +el.dataset.since);
+  }
+}, 1000);
 
 // ---------- osvezevanje leg ----------
 

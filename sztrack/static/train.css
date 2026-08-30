@@ -445,5 +445,18 @@
     border-bottom: none;
     padding-left: 0; padding-right: 0;
   }
-  body:not(.is-advanced) .col-run .run-map { height: 320px; }
+  /* Zemljevid je iskalec lege, ne zemljevid za raziskovanje -- za to je
+     povezava "na velik zemljevid". Pri 320 px je bil visji od privzetih 260
+     in je sam nosil 53 % visine levega stolpca (320 od 599). Pri 400 px
+     sirine je 240 razmerje 5:3 in se cesta okoli vozila se vedno vidi. */
+  body:not(.is-advanced) .col-run .run-map { height: 240px; }
+
+  /* Na namizju je prostora v sirino, ne v visino: isti podatek v manj
+     vrsticah. Sprememba velja samo tu -- na telefonu je zrak med vrsticami
+     tisto, kar loci dotik od dotika. */
+  body:not(.is-advanced) .col-run .detail-now { padding: 12px 14px 13px; }
+  body:not(.is-advanced) .col-run .detail-now-value { margin-top: 5px; }
+  body:not(.is-advanced) .col-run .detail-now-where { margin-top: 6px; }
+  body:not(.is-advanced) .col-run .detail-weather { margin-top: 9px; }
+  body:not(.is-advanced) .col-run .run-map-wrap { margin-top: 12px; }
 }

@@ -397,8 +397,13 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   Zdaj je prag `abs(delay_s) >= 60`, žeton pa pove „3 min prej", ne „−3 min":
   minus pred številko je uganka, beseda ni. Barva ostane siva, ker to res ni
   zamuda — in prav zato mora povedati beseda. Pravilo je v `common.delayText()`
-  in velja **povsod**, tudi na kartici zemljevida in v iskalniku vozila, kjer
-  je prej pisalo golo „-5"; za ozke stolpce ima kratko obliko („5 prej").
+  in velja **povsod**: kartica zemljevida, iskalnik vozila, stolpec zamude v
+  časovnici in postanek potnika. Za ozke stolpce ima kratko obliko („5 prej").
+
+  **V glavi okna vožnje smer nosi naslov, ne enota.** „Trenutna zamuda" nad
+  „6 min prej" si nasprotuje, „Vozi prezgodaj" nad „6 min prej" pa besedo
+  ponovi. Zato naslov pove smer in številka velikost: **„Vozi prezgodaj" ·
+  „6 min"**.
 
   Ali je prezgodnja vrednost resnična, je bilo preverjeno na LPP 25
   (Medvode ↔ Zadobrova). V smeri proti Zadobrovi je bila na Gosposvetski
@@ -719,12 +724,29 @@ zdaj" je pri avtobusu prvo vprašanje. Leaflet se naloži šele, ko lega res
 obstaja — vlaki je nimajo nikoli in zanje tega okvira ni; prazen bi obljubljal
 podatek, ki ne obstaja.
 
+**Starost lege mora teči sama.** „lega stara 59 s" je stala pri miru do
+naslednjega polla in nato skočila nazaj na 38 -- videti kot okvara, čeprav je
+bila vsaka vrednost pravilna. Starost je edina številka na strani, ki se
+spreminja tudi takrat, ko se ne zgodi nič, zato jo šteje brskalnik:
+`common.ageHtml()` vrne `<span class="age-live">` z izhodiščem v
+`data-`atributih, ena sekundna zanka pa jih poišče po razredu. Iščemo po
+razredu in ne po registru, ker se kartica na zemljevidu gradi iz niza HTML in
+nanjo ni kam obesiti sklica. **Ura odjemalca ni v računu** — prištevamo
+razliko dveh lastnih meritev, zato zamik ure ne škodi.
+
 **Preprost pogled ni samo za telefon.** Okno vožnje je bilo en stolpec 340 px;
 ker je zgodovina v preprostem pogledu skrita, je na namizju ostal ozek trak ob
 praznem zaslonu. Nad 1000 px se vsebina razdeli: levo, kar velja **zdaj**
 (zamuda, razmere, kje je vozilo), desno pot po postajah. Flex in ne grid —
 časovnica je visoka in bi kot element čez več grid vrstic te vrstice
 raztegnila, levi stolpec pa bi visel v praznem.
+
+Izmerjeno pri 1920 × 993: levi stolpec je bil **599 px, od tega zemljevid
+320** — torej 53 % višine za okvir, ki samo pove „kje je zdaj", medtem ko je
+bil desni stolpec 360. Na namizju je zato zemljevid 240 px (na telefonu 210,
+privzeto 260) in blok trenutne zamude tesnejši; stolpec meri **506 px**.
+Zrak med vrsticami se stiska **samo tu** — na telefonu je prav on tisto, kar
+loči dotik od dotika.
 
 **Statične datoteke gredo z `Cache-Control: no-cache`.** Brez glave brskalnik
 ugiba in datoteko, ki se dolgo ni spremenila, drži ure. Posledica je bila

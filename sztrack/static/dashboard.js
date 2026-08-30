@@ -217,7 +217,7 @@ function busCardHtml(v) {
     rows: rows.concat([
       ["hitrost", v.speed_kmh == null ? "ni podatka"
         : v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji"],
-      ["lega stara", `${v.age_s} s`],
+      ["lega stara", ageHtml(v.age_s)],
     ]),
   });
 }
@@ -383,7 +383,7 @@ function busTooltipHtml(v) {
     + `<span class="train-label-more">${escapeHtml(v.headsign || "")}</span></div>`
     + `<div class="train-label-more">`
     + `${v.speed_kmh != null ? (v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji") : "brez hitrosti"}`
-    + ` · lega stara ${v.age_s} s</div>`;
+    + ` · lega stara ${ageHtml(v.age_s)}</div>`;
 }
 
 const busMarkers = new Map();       // trip_id -> L.Marker
