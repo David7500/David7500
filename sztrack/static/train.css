@@ -429,7 +429,10 @@
     display: flex;
     align-items: flex-start;
     gap: 30px;
-    padding: 0 24px 30px;
+    /* Zgornjega roba ni bilo: prva postaja desnega stolpca je stala 9 px pod
+       glavo, kot da je nanjo prilepljena. Oba stolpca zdaj zacneta na isti
+       visini -- levi ima svoj rob iz `section-title`, ki ga zato tu ugasnemo. */
+    padding: 22px 24px 30px;
   }
   body:not(.is-advanced) .col-run > .run-now {
     width: 400px;
@@ -443,7 +446,7 @@
      tekla samo cez levega in bi izgledala kot napaka. */
   body:not(.is-advanced) .col-run .section-title {
     border-bottom: none;
-    padding-left: 0; padding-right: 0;
+    padding: 0 0 10px;
   }
   /* Zemljevid je iskalec lege, ne zemljevid za raziskovanje -- za to je
      povezava "na velik zemljevid". Pri 320 px je bil visji od privzetih 260

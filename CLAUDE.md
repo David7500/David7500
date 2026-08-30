@@ -248,6 +248,19 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   se po njej ravna, z zamikom 0--2 s (sto brskalnikov ne sme udariti hkrati) in
   brez spraševanja, dokler je stran skrita. Izmerjeno: naš prispevek k starosti
   **15 s → 5 s**.
+
+  **Zdaj ne dodamo praktično ničesar, in to je izmerjeno po vozilih.** V istem
+  trenutku prebrana feed in naš `/api/vehicles`, 409 primerjanih vozil: lega je
+  ob našem branju **že 28,8 s stara** (p90 42,1), mi pokažemo 32,0 s (p90 47,0),
+  razlika pa je **mediana −0,1 s** in p90 19,3 s. Polovico časa je torej naša
+  vrednost natanko tako sveža kot feedova — ker vozilo objavlja na 20 s in ima
+  ista žiga; p90 je večji od 10-sekundnega cikla zato, ker vozilo med našim
+  branjem in primerjavo objavi nov, do 20 s novejši žig.
+
+  Iz tega sledi, kaj **ne** bi pomagalo: gostejše branje. Pri 5 s bi mediana
+  ostala 0 in pridobili bi le v repu, plačali pa dvakratno breme tuje javne
+  storitve. Številka, ki jo potnik vidi, ni naš zaostanek — je starost meritve
+  GPS v vozilu. Zato ima žeton naslov, ki to pove.
 * **Okno vožnje je lego naložilo enkrat in nikoli več.** Kdor je stran pustil
   odprto, je gledal, kje je bil avtobus ob odprtju -- in prav tam je vprašanje
   „kje je zdaj" najbolj neposredno. Zdaj se osvežuje z istim

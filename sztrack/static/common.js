@@ -655,7 +655,10 @@ function ageText(baseS, sinceMs) {
 // kartica na zemljevidu gradi iz niza HTML in nanjo ni kam obesiti sklica.
 function ageHtml(ageS) {
   const t = Date.now();
-  return `<span class="age-live" data-base="${ageS}" data-since="${t}">`
+  // Naslov namesto opombe: stevilka je videti kot nas zaostanek, pa ni --
+  // izmerjeno dodamo mediano 0 s, ostalo je starost, s katero lego dobimo.
+  return `<span class="age-live" data-base="${ageS}" data-since="${t}"`
+    + ` title="čas od meritve GPS v vozilu; feed nam jo pošlje že okoli pol minute staro">`
     + `${ageText(ageS, t)}</span>`;
 }
 
