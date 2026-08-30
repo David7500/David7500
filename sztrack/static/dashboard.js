@@ -518,11 +518,26 @@ function renderFind() {
   findListEl.__found = found;
 }
 
-// Postajališča izbrane vožnje. To NI trasa po cesti -- te za avtobuse nimamo
-// (GTFS shapes uvažamo samo za železnico) -- ampak zaporedje postankov, in
-// oznaka to tudi pove.
+// Trasa izbrane vožnje po cesti oziroma progi (GTFS `shapes.txt`) in njena
+// postajališča. Traso rišemo za VSE prevoznike -- uvoz jo hrani v `shape`,
+// 2 897 oblik in 10,3 MB, kar je proti bazi enkraten strošek, ki ne raste.
+// Kadar je iz kakršnega koli razloga ni, ostane črta skozi postajališča;
+// ta ni pot po cesti in videti mora drugače (črtkano).
 async function drawStops(trainNo, tripId) {
   routeLayer.clearLayers();
+  let trasa = null;
+  if (tripId) {
+    try {
+      const r = await fetch(`/api/trip/${encodeURIComponent(tripId)}/shape`);
+      if (r.ok) trasa = (await r.json()).points;
+    } catch (err) {
+      /* brez trase narišemo postajališča */
+    }
+  }
+  if (trasa && trasa.length > 1) {
+    L.polyline(trasa, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(routeLayer);
+    L.polyline(trasa, { color: BUS_INK, weight: 3, opacity: 0.95 }).addTo(routeLayer);
+  }
   try {
     const q = tripId ? `?trip=${encodeURIComponent(tripId)}` : "";
     const res = await fetch(
@@ -530,17 +545,18 @@ async function drawStops(trainNo, tripId) {
     const pts = (res.timetable || [])
       .filter((s) => s.lat != null && s.lon != null)
       .map((s) => [s.lat, s.lon]);
-    if (pts.length < 2) return;
-    L.polyline(pts, { color: BUS_INK, weight: 2.5, opacity: 0.75, dashArray: "5 5" })
-      .addTo(routeLayer);
+    if (!trasa && pts.length > 1) {
+      L.polyline(pts, { color: BUS_INK, weight: 2.5, opacity: 0.7, dashArray: "5 5" })
+        .addTo(routeLayer);
+    }
     for (const p of pts) {
       L.circleMarker(p, {
-        radius: 2.6, color: BUS_INK, fillColor: BUS_INK, fillOpacity: 1,
-        weight: 0, interactive: false,
+        radius: 3.2, color: "#0f1115", weight: 1.4,
+        fillColor: BUS_INK, fillOpacity: 1, interactive: false,
       }).addTo(routeLayer);
     }
   } catch (err) {
-    /* brez postankov je zemljevid še vedno uporaben */
+    /* brez postajališč je trasa še vedno uporabna */
   }
 }
 

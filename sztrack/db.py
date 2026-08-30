@@ -43,6 +43,21 @@ CREATE TABLE IF NOT EXISTS edge (
 -- route_type = 3 in sodijo v isti iskalnik -- potnik na relaciji Ljubljana -
 -- Logatec do 12. decembra ne bo sel na vlak, ker ta ne vozi. Locimo ju
 -- s stolpcem, ne z locenimi tabelami: GTFS ju modelira enako.
+-- Trasa vožnje po cesti oz. progi (GTFS `shapes.txt`), poenostavljena z
+-- Douglas-Peuckerjem na ~10 m. Statična tabela: ob uvozu se zamenja in ne
+-- raste. Izmerjeno na celotnem slovenskem GTFS: 2 897 oblik in 519 490 točk
+-- po poenostavitvi (iz 4,85 milijona), kar je 11,4 MB -- proti bazi, ki iz
+-- `run` zraste za 0,2--3,4 GB na leto, je to nič.
+--
+-- Zakaj sploh: `edge` ima železniško mrežo, sestavljeno iz odsekov med
+-- postajami, avtobusi pa vanjo namenoma ne gredo (vozijo po cesti in bi mreži
+-- prog dodali odseke, ki niso proge). Za vprašanje "kod pelje MOJ avtobus" je
+-- torej to edini vir.
+CREATE TABLE IF NOT EXISTS shape (
+    shape_id TEXT PRIMARY KEY,
+    points   TEXT NOT NULL      -- JSON [[lat,lon], ...], 5 decimalk (~1 m)
+);
+
 CREATE TABLE IF NOT EXISTS trip (
     trip_id    TEXT PRIMARY KEY,
     route_id   TEXT NOT NULL,
@@ -65,6 +80,9 @@ CREATE TABLE IF NOT EXISTS trip (
     -- je bilo pri vseh prevoznikih sekunda. Polni se ob uvozu GTFS.
     start_s    INTEGER,
     end_s      INTEGER,
+    -- Katera trasa pripada tej vožnji (`shape.shape_id`). Vsaka vožnja v
+    -- zajetem GTFS jo ima -- 0 od 20 736 je brez.
+    shape_id   TEXT,
     -- Veriga voznj istega fizicnega vozila (GTFS `trips.block_id`). Imajo ga
     -- SAMO avtobusi -- vseh 789 voznj SZ je brez njega -- in tudi tam le
     -- 7 547 od 20 736 (36 %). Zato je stolpec pogosto NULL in indeks delen.
@@ -289,6 +307,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # prazen do naslednjega `sztrack update`, prikaz pa ga zna pogresati.
     if have and "block_id" not in have:
         conn.execute("ALTER TABLE trip ADD COLUMN block_id TEXT")
+        conn.commit()
+    # Trasa voznje. Kot `block_id`: v GTFS zipu je, izracunati je ni mogoce,
+    # zato ostane prazna do naslednjega `sztrack update`. Prikaz jo zna
+    # pogresati -- brez trase se zemljevid ne pokvari, samo manj pove.
+    if have and "shape_id" not in have:
+        conn.execute("ALTER TABLE trip ADD COLUMN shape_id TEXT")
         conn.commit()
 
     row = conn.execute(

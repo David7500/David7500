@@ -109,6 +109,8 @@ def _edge_builder(stops):
     """
     lengths: dict[tuple[str, str], list[float]] = defaultdict(list)
     geoms: dict[tuple[str, str], list] = {}
+    # Zaporedja postankov vseh voznj -- iz njih se presoja elementarnost.
+    orders: list[list[str]] = []
 
     def feed(points, stop_sequences):
         """points: polilinija ene proge; stop_sequences: postanki vlakov po njej."""
@@ -117,6 +119,7 @@ def _edge_builder(stops):
         cums = geo.cumulative(points)
         cache: dict[str, tuple[float, float]] = {}
         for stop_seq in stop_sequences:
+            orders.append([sid for _, sid in stop_seq])
             projected = []
             for _, stop_id in stop_seq:
                 if stop_id not in cache:
@@ -136,15 +139,38 @@ def _edge_builder(stops):
                     geoms[key] = line
 
     def finish():
-        # Odsek je "elementaren", če na njem ne leži nobena druga postaja.
-        grid: dict[tuple[float, float], list] = defaultdict(list)
-        for st in stops.values():
-            grid[(round(st["lat"], 1), round(st["lon"], 1))].append(st)
+        """Odsek je "elementaren", kadar med njegovima postajama ne ustavi
+        nihce -- torej kadar ni preskok hitrega vlaka cez vmesne postaje.
 
-        def nearby(lat, lon):
-            for dla in (-0.1, 0.0, 0.1):
-                for dlo in (-0.1, 0.0, 0.1):
-                    yield from grid.get((round(lat + dla, 1), round(lon + dlo, 1)), ())
+        **Merilo je vozni red, ne geometrija.** Prej je bilo geometrijsko:
+        odsek ni bil elementaren, ce je katero od poenostavljenih ogljisc
+        lezalo v 300 m od kake postaje. To je odpovedalo na obe strani:
+
+        * Kratek mestni odsek po poenostavitvi nima nobenega vmesnega
+          ogljisca -- Ljubljana - Ljubljana Tivoli (1,99 km) je imel natanko
+          dve tocki in zanka je tekla cez prazen seznam. Glavna postaja je
+          bila zato na zemljevidu narisana kot slepo crevo: proge z zahoda in
+          juga so se koncale nekaj sto metrov pred njo.
+        * Postaja na VZPOREDNI progi v 300 m je odsek razglasila za preskok,
+          ceprav vlak mimo nje samo pelje. Zaostritev praga je Ljubljano
+          resila, a mrezo razrezala na tri kose (bohinjska proga in Novo
+          mesto sta odpadla) -- prag, ki je enkrat prevelik in drugic
+          premajhen, ni prag, ampak ugibanje.
+
+        Zdaj: postaji sta elementarno sosednji, kadar sta v kaksni voznji
+        SOSEDNJI in v nobeni voznji med njima ne lezi tretja postaja. To je
+        natanko pomen besede "preskok", nima prostega parametra in ne
+        potrebuje geometrije.
+        """
+        # (postaja -> mesto v zaporedju) za vsako voznjo. Isto postajo lahko
+        # voznja obisce dvakrat (obracanje); takrat vzamemo prvo pojavitev,
+        # ker za sosednost steje najkrajsi razmik.
+        indeksi = []
+        for seq in orders:
+            pos: dict[str, int] = {}
+            for i, sid in enumerate(seq):
+                pos.setdefault(sid, i)
+            indeksi.append(pos)
 
         out = []
         for key, lens in lengths.items():
@@ -152,13 +178,13 @@ def _edge_builder(stops):
             if not line:
                 continue
             simple = geo.simplify(line, 1e-4)
+            a, b = key
+            # Ce kaksna voznja obisce obe postaji in med njima se katero, je
+            # to preskok in odsek ni elementaren.
             elementary = True
-            for lat, lon in simple[1:-1]:
-                if any(
-                    st["stop_id"] not in key
-                    and geo.haversine(lat, lon, st["lat"], st["lon"]) < 300
-                    for st in nearby(lat, lon)
-                ):
+            for pos in indeksi:
+                ia, ib = pos.get(a), pos.get(b)
+                if ia is not None and ib is not None and abs(ia - ib) > 1:
                     elementary = False
                     break
             coords = [[round(lon, 6), round(lat, 6)] for lat, lon in simple]
@@ -232,24 +258,45 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         # Divaca - Koper nehal biti elementaren zaradi Rodika ob cesti.
         rail_stop_ids = {sid for tid in rail_trips for _, sid in seq_by_trip.get(tid, ())}
         feed, finish = _edge_builder({k: v for k, v in stops.items() if k in rail_stop_ids})
+        # Trase VSEH uvozenih voznj, ne le zeleznicnih: "kod pelje moj avtobus"
+        # je vprasanje, na katero `edge` ne zna odgovoriti -- ta ima mrezo
+        # prog, avtobusi pa vozijo po cesti in vanjo namenoma ne gredo.
+        #
+        # Beremo v istem prehodu cez `shapes.txt` kot odseke: datoteka ima
+        # 4,85 milijona vrstic in dva prehoda bi bila dve minuti za nic.
+        want_shapes = {t["shape_id"] for t in trips.values() if t["shape_id"]}
+        shapes: dict[str, list] = {}
+
+        def _shrani(sid, pts):
+            if sid in want_shapes and len(pts) >= 2:
+                # ~10 m je pod locljivostjo prikaza; iz 4,85 M tock ostane
+                # 519 000, torej 11,4 MB namesto 107 MB.
+                shapes[sid] = geo.simplify(pts)
+
         current, points = None, []
         for p in _rows(zf, "shapes.txt"):
             shape_id = p["shape_id"]
             if shape_id != current:
+                urejeno = [pt for _, pt in sorted(points)]
                 if current in by_shape:
-                    feed([pt for _, pt in sorted(points)], by_shape[current])
+                    feed(urejeno, by_shape[current])
+                if current is not None:
+                    _shrani(current, urejeno)
                 current, points = shape_id, []
-            if shape_id in by_shape:
+            if shape_id in by_shape or shape_id in want_shapes:
                 points.append((int(p["shape_pt_sequence"]),
                                (float(p["shape_pt_lat"]), float(p["shape_pt_lon"]))))
+        urejeno = [pt for _, pt in sorted(points)]
         if current in by_shape:
-            feed([pt for _, pt in sorted(points)], by_shape[current])
+            feed(urejeno, by_shape[current])
+        if current is not None:
+            _shrani(current, urejeno)
         edges = finish()
 
         days = _service_days(zf, {t["service_id"] for t in trips.values()})
 
     with conn:
-        for table in ("station", "edge", "trip", "sched", "service_day"):
+        for table in ("station", "edge", "trip", "sched", "service_day", "shape"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany(
             "INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
@@ -259,9 +306,15 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
             "INSERT INTO edge(from_id,to_id,km,elementary,trips,geojson) VALUES(?,?,?,?,?,?)", edges
         )
         conn.executemany(
+            "INSERT INTO shape(shape_id, points) VALUES(?,?)",
+            [(sid, json.dumps([[round(a, 5), round(b, 5)] for a, b in pts],
+                              separators=(",", ":")))
+             for sid, pts in shapes.items()],
+        )
+        conn.executemany(
             "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color,"
-            "                 mode,agency,network,block_id) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "                 mode,agency,network,block_id,shape_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             [
                 (tid, t["route_id"], routes[t["route_id"]]["route_short_name"],
                  t.get("trip_headsign"), t["service_id"], routes[t["route_id"]].get("route_color"),
@@ -273,7 +326,10 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
                  else "avtobus",
                  # Prazen niz je v GTFS "nimam podatka" -- shranimo NULL, da
                  # se poizvedbe ne lovijo na razliko med '' in NULL.
-                 t.get("block_id") or None)
+                 t.get("block_id") or None,
+                 # Trasa te voznje. Shranimo le, kadar smo jo res uvozili --
+                 # sicer bi prikaz iskal vrstico, ki je v `shape` ni.
+                 t["shape_id"] if t["shape_id"] in shapes else None)
                 for tid, t in trips.items()
             ],
         )

@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -415,6 +416,22 @@ def api_vehicles(trip: str | None = None):
         d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
         out.append(d)
     return out
+
+
+@app.get("/api/trip/{trip_id}/shape")
+def api_shape(trip_id: str):
+    """Trasa ene vožnje po cesti oziroma progi.
+
+    Za avtobuse je to edini vir: `edge` ima mrežo železniških prog, avtobusi
+    pa vozijo po cesti in vanjo namenoma ne gredo.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT sh.points FROM trip t JOIN shape sh USING (shape_id) "
+            "WHERE t.trip_id = ?", (trip_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "za to vožnjo trase ni")
+    return {"trip_id": trip_id, "points": json.loads(row["points"])}
 
 
 @app.get("/api/network.geojson")

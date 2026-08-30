@@ -1025,18 +1025,32 @@ async function drawRunMap(v) {
       + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 })
       .addTo(runMap.map);
 
-    // Zaporedje postankov te voznje. To NI trasa po cesti -- te za avtobuse
-    // nimamo, ker GTFS shapes uvazamo samo za zeleznico.
+    // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
+    // postajalisca -- ta ni pot in mora biti videti drugace (crtkano).
+    let trasa = null;
+    try {
+      const r = await fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`);
+      if (r.ok) trasa = (await r.json()).points;
+    } catch (err) {
+      /* brez trase narisemo postajalisca */
+    }
+    if (trasa && trasa.length > 1) {
+      L.polyline(trasa, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(runMap.map);
+      runMap.line = L.polyline(trasa, { color: "#4db97f", weight: 3, opacity: 0.95 })
+        .addTo(runMap.map);
+    }
     const pts = (state.run.stops || [])
       .filter((s) => s.lat != null && s.lon != null)
       .map((s) => [s.lat, s.lon]);
-    if (pts.length > 1) {
+    if (!trasa && pts.length > 1) {
       runMap.line = L.polyline(pts, {
         color: "#4db97f", weight: 2.5, opacity: 0.55, dashArray: "5 5",
       }).addTo(runMap.map);
+    }
+    if (pts.length) {
       runMap.stops = L.layerGroup(pts.map((p) => L.circleMarker(p, {
-        radius: 2.6, color: "#4db97f", fillColor: "#4db97f", fillOpacity: 1,
-        weight: 0, interactive: false,
+        radius: 3.2, color: "#0f1115", weight: 1.4,
+        fillColor: "#4db97f", fillOpacity: 1, interactive: false,
       }))).addTo(runMap.map);
     }
 
