@@ -331,7 +331,7 @@ def api_overview_bus():
     now = datetime.now(TZ)
     live = _live("avtobus")
     with _conn() as conn:
-        vehicles = api_vehicles()
+        vehicles, _ = _vehicles_now()
         day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
     moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
     return {
@@ -499,19 +499,13 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     return out
 
 
-@app.get("/api/vehicles")
-def api_vehicles(trip: str | None = None):
-    """Trenutna lega vozil z GPS.
+def _vehicles_now(trip: str | None = None) -> tuple[list[dict], int]:
+    """Vozila z GPS kot NAVADEN seznam in sekunde do naslednjega branja.
 
-    Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
-    ta seznam nikoli ne bo vseboval -- kar aplikacija riše za vlake, je
-    zadnja postaja z meritvijo, ne položaj.
-
-    `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
-
-    Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
-    Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
-    podatek, ki v bazi že leži.
+    Loceno od endpointa namenoma: ta vraca `JSONResponse` zaradi glave
+    `X-Osvezi-Cez`, in `JSONResponse` ni iterabilen. Ko je `/api/overview/bus`
+    klical endpoint naravnost, je zato vracal 500 -- domaca stran je pisala
+    "podatki trenutno niso dosegljivi" in obe stevilki kot "-".
     """
     zdaj = datetime.now(TZ)
     now = int(zdaj.timestamp())
@@ -535,6 +529,24 @@ def api_vehicles(trip: str | None = None):
     cez = config.POSITION_SECONDS
     if brano:
         cez = max(1, config.POSITION_SECONDS - (now - int(brano)))
+    return out, cez
+
+
+@app.get("/api/vehicles")
+def api_vehicles(trip: str | None = None):
+    """Trenutna lega vozil z GPS.
+
+    Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
+    ta seznam nikoli ne bo vseboval -- kar aplikacija riše za vlake, je
+    zadnja postaja z meritvijo, ne položaj.
+
+    `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
+
+    Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
+    Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
+    podatek, ki v bazi že leži.
+    """
+    out, cez = _vehicles_now(trip)
     return JSONResponse(out, headers={"X-Osvezi-Cez": str(cez)})
 
 

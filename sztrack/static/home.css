@@ -51,6 +51,7 @@
 .pick-bus { color: #4db97f; }
 
 .pick-icon { display: flex; margin-bottom: 8px; }
+.pick-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .pick-name { font: 600 18px/1.2 var(--sans); color: var(--ink); }
 .pick-sub { font: 400 11.5px/1.45 var(--sans); color: var(--ink-mute); }
 /* Stevilo na poti je edini ziv podatek na tej strani -- zato v kot in ne
@@ -86,7 +87,38 @@
   .pick { flex-direction: row; align-items: center; gap: 14px; padding: 16px; }
   .pick-icon { margin: 0; }
   .pick-name { font-size: 16px; }
-  /* V vrstici ni stolpca za podnaslov -- ime in stevilo povesta dovolj. */
-  .pick-sub { display: none; }
+  /* Podnaslov se je na telefonu skrival in s tem je odpadel edini podatek o
+     tem, KOGA stran sploh pokriva ("LPP, Arriva, Nomago, AP MS"). V vrstici
+     zanj ni stolpca, zato ime in podnaslov zlozimo v svojega. */
+  .pick-sub { font-size: 11px; }
   .pick-n { position: static; margin-left: auto; }
 }
+
+/* ---------- shranjene in nedavne poti ---------- */
+
+.home-saved { margin-top: 22px; }
+.home-saved-title {
+  margin: 0 0 9px;
+  font: 600 10px/1 var(--sans); color: var(--ink-mute);
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 11px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 400 12.5px/1 var(--sans); color: var(--ink-dim);
+  text-decoration: none;
+}
+/* Barva pove omrezje -- ista dogovorjena para kot povsod: vlak oranzno,
+   avtobus zeleno. Znacka brez nje bi poslala cloveka v napacen iskalnik. */
+.chip-train:hover { border-color: #f0934f; color: #f0934f; }
+.chip-bus:hover { border-color: #4db97f; color: #4db97f; }
+.chip-train .chip-star, .chip-bus .chip-star { font-size: 10px; }
+.chip-train { border-left: 2px solid #f0934f; }
+.chip-bus { border-left: 2px solid #4db97f; }
+/* Zvezdica pomeni PRILJUBLJENO, ne omrezja -- to nosi levi rob. Oranzna bi
+   bila barva vlaka in bi na avtobusni znacki trdila nekaj drugega. */
+.chip-star { color: var(--ink-mute); }

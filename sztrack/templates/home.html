@@ -42,8 +42,10 @@
             <circle cx="15" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle>
           </svg>
         </span>
-        <span class="pick-name">Vlaki</span>
-        <span class="pick-sub">SŽ in nadomestni prevozi</span>
+        <span class="pick-text">
+          <span class="pick-name">Vlaki</span>
+          <span class="pick-sub">SŽ in nadomestni prevozi</span>
+        </span>
         <span class="pick-n" id="n-train">—</span>
       </a>
       <a class="pick pick-bus" href="/app/bus">
@@ -53,11 +55,22 @@
             <path d="M4 11h16M8 21l-1.5 2M16 21l1.5 2M7 20h10"></path>
           </svg>
         </span>
-        <span class="pick-name">Avtobusi</span>
-        <span class="pick-sub">LPP, Arriva, Nomago, AP MS</span>
+        <span class="pick-text">
+          <span class="pick-name">Avtobusi</span>
+          <span class="pick-sub">LPP, Arriva, Nomago, AP MS</span>
+        </span>
         <span class="pick-n" id="n-bus">—</span>
       </a>
     </div>
+
+    <!-- Shranjene in nedavne poti. Iskalnik jih ze hrani, domaca stran pa je
+         edino mesto, kjer se povratnik znajde PRED izbiro omrezja -- brez
+         njih mora tudi za vsakodnevno pot skozi dva zaslona. Ce jih ni,
+         odseka ni: prazen naslov ne pove nicesar. -->
+    <section class="home-saved" id="home-saved" hidden>
+      <h2 class="home-saved-title">Tvoje poti</h2>
+      <div class="chips" id="home-chips"></div>
+    </section>
 
     <nav class="home-more" aria-label="Ostalo">
       <a class="more-link" href="/app/map">
@@ -66,11 +79,11 @@
       </a>
       <a class="more-link" href="/app/ovire">
         <strong>Ovire na progah</strong>
-        <span>dela, zapore in nadomestni prevozi</span>
+        <span>dela, zapore in nadomestni prevozi — samo železnica</span>
       </a>
       <a class="more-link" href="/app/statistika">
         <strong>Statistika</strong>
-        <span>razrezi zajetega po vrsti vlaka, uri in dnevu</span>
+        <span>razrezi zajetega po vrsti vozila, uri in dnevu</span>
       </a>
     </nav>
 
