@@ -278,3 +278,38 @@ def test_enaka_prihodna_in_odhodna_vrednost_ni_dokaz_o_prevozu():
     # Enaki, a nenicelni vrednosti prav tako ne stejeta: feed ju za nedosezen
     # postanek objavi enaki, ker je to ista prenesena stevilka.
     assert not undoes_passing(_row(120, 120), RED, DAN, 6840, 6840, _at(13, 57, 41))
+
+
+def _row_ts(arr, dep, ts):
+    r = _row(arr, dep)
+    r["feed_ts"] = ts
+    return r
+
+
+def test_nicla_ki_popravlja_napoved_ni_blip():
+    """LPP 25 (452632), 30. 8., Medvode novo naselje -- vozni red 11:41.
+
+    Feed je za ta postanek ze od 11:11 objavljal rastoco zamudo vozila s
+    PREJSNJE voznje: +8, +10, +11, +12, +13 in ob 11:33:55 +14 min. Vsaka od
+    teh vrednosti je ob svojem nastanku postanek postavljala v prihodnost,
+    torej ni bila meritev. Ob 11:35:44 jo je feed popravil na 0 in avtobus je
+    odpeljal skoraj tocno.
+
+    Brez tega pravila je `is_zero_blip` popravek zavrnil in `run` je obtical
+    na +14 za vedno -- feed je niclo povedal enkrat samkrat, drsece okno pa
+    je slo naprej in potrditve ni bilo nikoli.
+    """
+    from sztrack.collector import is_zero_blip
+    red = (42060, 42060)                       # 11:41
+    prej = _row_ts(835, 835, _at(11, 33, 55))  # objavljeno, ko je 11:54 se v prihodnosti
+    assert not is_zero_blip(prej, None, 0, 0, red, "2026-08-30")
+
+
+def test_nicla_po_izmerjeni_zamudi_ostane_blip():
+    # Varovalka mora se naprej loviti tisto, zaradi cesar je nastala: niclo,
+    # ki pride za ZE IZMERJENO veliko zamudo. Tu je vrednost nastala, ko je
+    # bil postanek ze prevozen, zato je meritev in nicla je sumljiva.
+    from sztrack.collector import is_zero_blip
+    red = (42060, 42060)
+    prej = _row_ts(835, 835, _at(11, 58, 0))   # 11:41 + 14 min = 11:55, ze mimo
+    assert is_zero_blip(prej, None, 0, 0, red, "2026-08-30")

@@ -223,7 +223,30 @@ def undoes_passing(prev, sched_row, service_date, arr, dep, ts) -> bool:
     return (t0 + old) < ts - PASSED_MARGIN_S and (t0 + new) > ts
 
 
-def is_zero_blip(prev, last, arr, dep) -> bool:
+def is_forecast(prev, sched_row, service_date) -> bool:
+    """Ali je bila zapisana vrednost NAPOVED -- objavljena, preden bi vozilo
+    lahko bilo tam?
+
+    Feed za voznjo, ki se ni odpeljala, objavi zamudo vozila s prejsnje
+    voznje. LPP 25 (452632) 30. 8.: postanek Medvode novo naselje ima vozni
+    red 11:41, feed pa je zanj ze od 11:11 objavljal +8, +10, +11, +12, +13
+    in ob 11:33:55 +14 min -- vsakic cas, ki je bil takrat se v prihodnosti.
+    Ob 11:35:44 je vrednost popravil na 0 in avtobus je odpeljal skoraj
+    tocno.
+
+    Merilo je zato brez prostih parametrov: vrednost, ki ob svojem nastanku
+    postanek postavlja v prihodnost, ni meritev.
+    """
+    if prev is None or prev["feed_ts"] is None:
+        return False
+    d = prev["delay_dep"] if prev["delay_dep"] is not None else prev["delay_arr"]
+    if d is None:
+        return False
+    t0 = _sched_abs(service_date, sched_row)
+    return t0 is not None and (t0 + d) > prev["feed_ts"]
+
+
+def is_zero_blip(prev, last, arr, dep, sched_row=None, service_date=None) -> bool:
     """Ali je to prehodna nicla, ki jo feed vrine med dve pravi vrednosti?
 
     V zajetih podatkih se pri 14 % postankov z vec kot dvema zapisoma pojavi
@@ -247,6 +270,14 @@ def is_zero_blip(prev, last, arr, dep) -> bool:
     if prev is not None:
         before = prev["delay_arr"] if prev["delay_arr"] is not None else prev["delay_dep"]
     if before is None or before < SUSPECT_DROP_S:
+        return False
+    # Nicla, ki popravlja NAPOVED, ni blip, ampak popravek -- in prav ta je
+    # najbolj dragocen. Brez tega je `run` obtical na napovedi izpred odhoda
+    # za vedno: feed jo je popravil enkrat samkrat, drseče okno pa je slo
+    # naprej in potrditve ni bilo nikoli. V grafu LPP 25 je bilo to videti
+    # kot devet postaj pri +14 in nato padec za petnajst minut v enem koraku
+    # -- tam se je koncala napoved in zacela meritev.
+    if service_date is not None and is_forecast(prev, sched_row, service_date):
         return False
     # Ce je ze prejsnji zapis v dnevniku govoril niclo, je to potrditev in ne blip.
     if last is not None:
@@ -358,7 +389,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
                 continue        # feed o tem postanku ni povedal nicesar
 
             prev = conn.execute(
-                "SELECT delay_arr, delay_dep FROM run "
+                "SELECT delay_arr, delay_dep, feed_ts FROM run "
                 "WHERE trip_id=? AND service_date=? AND stop_seq=?",
                 (trip_id, service_date, seq),
             ).fetchone()
@@ -386,7 +417,8 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             else:
                 smoothed += 1
 
-            if is_zero_blip(prev, last, arr, dep):
+            if is_zero_blip(prev, last, arr, dep,
+                            sched.get((trip_id, seq)), service_date):
                 # Dnevnik obdrzi vse, `run` pa ne prevzame vrednosti, dokler je
                 # ne potrdi naslednji poll. Zamuda se v pol minute ne more
                 # zmanjsati za dvajset minut.
@@ -463,7 +495,6 @@ def rebuild_run(conn: sqlite3.Connection) -> dict:
                  "WHERE trip_id IN (SELECT DISTINCT trip_id FROM obs)")}
 
     accepted: dict[tuple, tuple] = {}
-    sumljivi: set[tuple] = set()
     fixed = 0
     unpassed = 0
     key = None
@@ -472,37 +503,37 @@ def rebuild_run(conn: sqlite3.Connection) -> dict:
         k = (r["trip_id"], r["service_date"], r["stop_seq"])
         if k != key:
             key, prev, last = k, None, None
-        if is_zero_blip(prev, last, r["delay_arr"], r["delay_dep"]):
+        if is_zero_blip(prev, last, r["delay_arr"], r["delay_dep"],
+                        sched.get((r["trip_id"], r["stop_seq"])), r["service_date"]):
             fixed += 1
-            sumljivi.add(k)
         elif undoes_passing(prev, sched.get((r["trip_id"], r["stop_seq"])),
                             r["service_date"], r["delay_arr"], r["delay_dep"],
                             r["feed_ts"]):
             unpassed += 1
-            sumljivi.add(k)
         else:
             accepted[k] = (r["delay_arr"], r["delay_dep"], r["feed_ts"])
-            prev = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"]}
+            prev = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"],
+                    "feed_ts": r["feed_ts"]}
         last = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"]}
 
-    # Popravimo SAMO postanke, na katerih je varovalka res sprozila. Dnevnik
-    # namrec belezi le spremembe nad `OBS_MIN_DELTA_S`, `run` pa vsako -- kdor
-    # bi cez `run` prepisal ves ponovljeni dnevnik, bi 16 696 vrstic zamenjal
-    # za do minuto grobejse, da bi popravil 4 217 pokvarjenih. Popravilo mora
-    # popravljati, ne glajenja.
+    # Pisemo samo tam, kjer se ponovitev od `run` razlikuje za vsaj minuto.
+    # Dnevnik belezi le spremembe nad `OBS_MIN_DELTA_S`, `run` pa vsako -- kdor
+    # bi cezenj prepisal ves ponovljeni dnevnik, bi 16 696 vrstic zamenjal za
+    # do minuto grobejse, da bi popravil 4 217 pokvarjenih. Minuta je hkrati
+    # locljivost prikaza: pod njo ni kaj popravljati.
     changed = 0
     with conn:
-        for k in sumljivi:
-            if k not in accepted:
-                continue
-            (trip_id, day, seq) = k
-            (arr, dep, ts) = accepted[k]
+        for (trip_id, day, seq), (arr, dep, ts) in accepted.items():
             cur = conn.execute(
                 "SELECT delay_arr, delay_dep FROM run "
                 "WHERE trip_id=? AND service_date=? AND stop_seq=?",
                 (trip_id, day, seq),
             ).fetchone()
-            if cur and cur["delay_arr"] == arr and cur["delay_dep"] == dep:
+            if cur is None:
+                continue
+            staro = cur["delay_dep"] if cur["delay_dep"] is not None else cur["delay_arr"]
+            novo = dep if dep is not None else arr
+            if staro is None or novo is None or abs(novo - staro) < OBS_MIN_DELTA_S:
                 continue
             conn.execute(
                 "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "

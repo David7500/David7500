@@ -459,11 +459,15 @@ def api_run(train_no: str, date: str | None = None,
 
 @app.get("/api/train/{train_no}/history")
 def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
-                exclude_date: str | None = None):
+                exclude_date: str | None = None, trip: str | None = None):
     """Zgodovina te poti. `exclude_date` izpusti en prometni dan -- prikaz
-    tekoče vožnje ga rabi, da povprečje ne vsebuje vožnje, ki jo riše zraven."""
+    tekoče vožnje ga rabi, da povprečje ne vsebuje vožnje, ki jo riše zraven.
+
+    `trip` zamejí na eno vožnjo. Brez njega se pri avtobusu sešteje vseh 217
+    voženj linije, in ker profil teče po zaporedni številki postanka, se pod
+    isto oznako znajdeta obe smeri."""
     with _conn() as conn:
-        return stats.history(conn, train_no, days, exclude_date)
+        return stats.history(conn, train_no, days, exclude_date, trip)
 
 
 @app.get("/api/train/{train_no}/weather")

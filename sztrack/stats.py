@@ -220,29 +220,46 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
 
 
 def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
-            exclude_date: str | None = None) -> dict:
-    """Zgodovina zamud enega vlaka: po dnevih in po postajah.
+            exclude_date: str | None = None, trip_id: str | None = None) -> dict:
+    """Zgodovina zamud ene voznje: po dnevih in po postajah.
 
     `exclude_date` izpusti en prometni dan. Rabi ga prikaz tekoce voznje:
     "povprecje preteklih voznj" ne sme vsebovati voznje, ki jo risemo zraven,
     sicer bi krivulja delno primerjala podatek sam s seboj.
+
+    **`trip_id` ni okras.** Brez njega poizvedba zdruzi vse voznje te
+    stevilke, in pri avtobusu je to katastrofa: LPP linija 25 ima 217 voznj
+    in profil se gradi po `stop_seq`, torej po **zaporedni stevilki** postanka.
+    Pod "postanek 2" se je zato sestalo Medvode novo naselje (drugi postanek
+    v smeri proti Zadobrovi, povprecje +7 min) in **Novo Polje** (drugi
+    postanek v NASPROTNI smeri, +1 min) -- dva razlicna kraja pod eno oznako.
+    V grafu je bilo to videti kot devet postaj pri +14 in nato padec za
+    petnajst minut v enem koraku; v resnici se je tam koncala ena smer in
+    zacela druga. Isto velja za devet vlakov s sezonskimi razlicicami.
+
+    `trip_id` je med regeneracijami GTFS stabilen, zato isti `trip_id` na
+    drugem dnevu je res isti odhod.
     """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    kje = "t.train_no = ?" if trip_id is None else "r.trip_id = ?"
     rows = conn.execute(
         "SELECT r.service_date, r.stop_seq, st.name, r.delay_arr, r.delay_dep "
         "FROM run r JOIN trip t USING (trip_id) JOIN sched s "
         "       ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
         "JOIN station st ON st.stop_id = s.stop_id "
-        "WHERE t.train_no = ? AND r.service_date >= ? "
+        f"WHERE {kje} AND r.service_date >= ? "
         "  AND (? IS NULL OR r.service_date <> ?) "
         "ORDER BY r.service_date, r.stop_seq",
-        (train_no, since, exclude_date, exclude_date),
+        (trip_id or train_no, since, exclude_date, exclude_date),
     ).fetchall()
 
     by_day: dict[str, list] = {}
     by_stop: dict[int, dict] = {}
     for r in rows:
-        delay = r["delay_arr"] if r["delay_arr"] is not None else r["delay_dep"]
+        # Odhodna vrednost je izpolnjena pri vseh prevoznikih stoodstotno,
+        # prihodna pri avtobusih le v 31-61 %. Tu je bilo obratno in je bralo
+        # niclo tam, kjer je feed odhod povedal -- edina taka poizvedba.
+        delay = r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"]
         if delay is None:
             continue
         by_day.setdefault(r["service_date"], []).append((r["stop_seq"], delay))

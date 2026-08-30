@@ -299,6 +299,43 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   minuto grobejše, da bi popravil 4 217 pokvarjenih. Popravilo mora
   popravljati, ne glajenja.
 
+* **Feed objavlja zamudo za vožnjo, ki se še ni začela — in to je zamuda
+  PREJŠNJE vožnje istega vozila.** LPP 25 (452632) 30. 8.: postanek Medvode
+  novo naselje ima vozni red 11:41, feed pa je zanj že od 11:11 objavljal
+  +8, +10, +11, +12, +13 in ob 11:33:55 **+14 min** — vsakič čas, ki je bil
+  takrat še v prihodnosti, torej napoved. Ob 11:35:44 je vrednost popravil
+  na 0 in avtobus je odpeljal skoraj točno.
+
+  `run` je vseeno obtičal na +14, ker je popravek zavrnil `is_zero_blip`:
+  ta čaka na potrditev druge ničle, feed pa je ničlo povedal **enkrat
+  samkrat** in drseče okno je šlo naprej. V grafu je bilo to videti kot
+  devet postaj pri +14 in nato **padec za petnajst minut v enem koraku** —
+  tam se je končala napoved in začela meritev.
+
+  Zato `collector.is_forecast`: vrednost, ki ob svojem nastanku postanek
+  postavlja v prihodnost, **ni meritev**, in ničla, ki jo popravlja, ni blip.
+  Merilo je brez prostih parametrov.
+
+* **Zgodovina poti mora biti zamejena na `trip_id`.** `stats.history()` je
+  filtrirala po `train_no` in gradila profil po `stop_seq` — po **zaporedni
+  številki** postanka. Pri LPP liniji 25 (217 voženj) se je pod „postanek 2"
+  sešlo *Medvode novo naselje* (drugi postanek proti Zadobrovi, povprečje
+  +7 min) in *Novo Polje* (drugi postanek v **nasprotni smeri**, +1 min) —
+  dva različna kraja pod eno oznako, in stolpec je pisal „1 vožnja" nad 850
+  meritvami iz 25 voženj. Isto velja za devet vlakov s sezonskimi različicami.
+
+  Pri železnici je to brez posledic: **0 od 663 številk z meritvami ima več
+  kot eno vožnjo**. Pri avtobusih jih ima 205 od 242, največ 42.
+
+  Ista funkcija je edina v projektu brala `delay_arr` pred `delay_dep` —
+  natanko obratno od pravila, ki velja povsod drugod. Popravljeno.
+
+* **Na izhodišču prihoda ni.** Feed ga za `stop_seq = 1` vseeno pošlje in je
+  smet: LPP 25 je 30. 8. na Medvodah naselju poročal prihod −267 s ob odhodu
+  −2 s, na drugi vožnji istega dne −1771 s. Prikaz je iz tega sestavil
+  „vlak je stal 4 min namesto 0 — izgubil 4 min", torej zgodbo o dogodku, ki
+  se ni zgodil. `common.dwellSplit()` zdaj prvi postanek preskoči.
+
 * **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** V 45 146
   železniških vrsticah `run` ni niti ene negativne vrednosti — najmanjša je
   natanko 0. Pri avtobusih je 12,0 % vrstic vsaj minuto prezgodnjih in 4,5 %

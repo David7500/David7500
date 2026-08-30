@@ -392,9 +392,24 @@ function stopWeatherHtml(w, isForecast) {
 // Redko, a ne zanemarljivo: 406 postankov v voznem redu ima nad dve minuti
 // zadrzevanja, in v devetih dneh zajema se prihodna in odhodna zamuda
 // razlikujeta pri 1 307 postankih (362 od tega za pet minut ali vec).
+// Beseda za vozilo. Postanek opisuje stran, ki ve, ali gleda vlak, avtobus
+// ali nadomestni prevoz -- "vlak je stal 4 min" pod mestno linijo 25 ni le
+// netocno, ampak zveni kot napaka programa.
+let VEHICLE_NOUN = "vlak";
+
+function setVehicleNoun(noun) {
+  VEHICLE_NOUN = noun || "vlak";
+}
+
 function dwellSplit(s) {
   const a = s.delay_arr;
   const b = s.delay_dep;
+  // Na IZHODISCU prihoda ni: vozilo tam zacne. Feed vseeno posilja vrednost
+  // in ta je smet -- LPP 25 je 30. 8. na Medvodah naselju porocal prihod
+  // -267 s ob odhodu -2 s, na drugi voznji istega dne celo -1771 s. Iz tega
+  // je prikaz sestavil zgodbo "stal 4 min namesto 0". Zgodbe o dogodku, ki
+  // se ni zgodil, ni.
+  if (s.stop_seq === 1) return null;
   if (a == null || b == null || Math.abs(a - b) < 60) return null;
   if (s.arr_s == null || s.dep_s == null) return null;
   const sched = (s.dep_s - s.arr_s) / 60;          // voznoredno zadrzevanje
@@ -420,16 +435,18 @@ function dwellPlanHtml(s) {
   }
   const res = Math.round(s.typical_dwell_s / 60);
   return `<div class="stop-dwell">vozni red tu čaka ${red} min;`
-    + ` ta vlak, kadar zamuja, stoji običajno <strong>${res}</strong>`
+    + ` ${VEHICLE_NOUN === "vlak" ? "ta vlak" : "ta " + VEHICLE_NOUN},`
+    + ` kadar zamuja, stoji običajno <strong>${res}</strong>`
     + `<span class="adv-only"> (${escapeHtml(pluralRuns(s.dwell_samples))})</span></div>`;
 }
 
 function dwellNoteHtml(d) {
   if (d.gained > 0) {
-    return `vozni red tu čaka ${d.sched} min, vlak je stal ${Math.max(d.real, 0)}`
+    return `vozni red tu čaka ${d.sched} min, ${VEHICLE_NOUN} je stal ${Math.max(d.real, 0)}`
       + ` — nadoknadil ${d.gained} min`;
   }
-  return `vlak je stal ${d.real} min namesto ${d.sched} — izgubil ${-d.gained} min`;
+  return `${VEHICLE_NOUN} je stal ${d.real} min namesto ${d.sched}`
+    + ` — izgubil ${-d.gained} min`;
 }
 
 function measuredStopHtml(s, isCurrent, w) {

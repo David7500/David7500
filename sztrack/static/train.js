@@ -415,6 +415,7 @@ async function loadRun() {
     // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
     state.mode = run.mode;
     state.network = run.network || "zeleznica";
+    setVehicleNoun(vehicleNoun());     // besedo o postanku pise common.js
     state.agency = run.agency || null;
     if (isBus(run.mode)) {
       document.getElementById("train-mode").innerHTML = lineBadgeHtml(run);
@@ -1109,7 +1110,11 @@ async function loadHistory() {
   let h;
   const today = state.run ? state.run.service_date : null;
   try {
-    const q = today ? `&exclude_date=${encodeURIComponent(today)}` : "";
+    // `trip` je nujen, ne okrasen: brez njega zgodovina zdruzi vse voznje te
+    // stevilke in pri avtobusu pomesa obe smeri pod isto zaporedno stevilko.
+    const q = (today ? `&exclude_date=${encodeURIComponent(today)}` : "")
+      + ((state.run && state.run.trip_id) || URL_TRIP
+          ? `&trip=${encodeURIComponent((state.run && state.run.trip_id) || URL_TRIP)}` : "");
     h = await fetch(`/api/train/${ENC}/history?days=90${q}`).then((r) => r.json());
   } catch (err) {
     console.error("zgodovine ni bilo mogoče naložiti", err);
