@@ -876,6 +876,15 @@ razredu in ne po registru, ker se kartica na zemljevidu gradi iz niza HTML in
 nanjo ni kam obesiti sklica. **Ura odjemalca ni v računu** — prištevamo
 razliko dveh lastnih meritev, zato zamik ure ne škodi.
 
+**Kdor izpiše `ageHtml()`, ponastavi števec.** Funkcija ob vsakem klicu zapiše
+novo izhodišče, zato izpis ne sme teči v sekundni zanki. Prav to se je zgodilo,
+ko je pike začel premikati `postaviVozilo()`: ta je vsako sekundo prepisal tudi
+podnapis, števec se je vrnil na izvorno vrednost, zanka v `common.js` ga je
+vmes povečala in naslednji izris povozil — videti je bilo kot utripanje.
+Podnapis se zato prepiše **samo ob novih podatkih** (`nova`), premik pike pa
+teče vsako sekundo. Pravilno je videti tako: 55, 56, …, 60, **50** (prispela
+nova lega), 51, 52.
+
 **Preprost pogled ni samo za telefon.** Okno vožnje je bilo en stolpec 340 px;
 ker je zgodovina v preprostem pogledu skrita, je na namizju ostal ozek trak ob
 praznem zaslonu. Nad 1000 px se vsebina razdeli: levo, kar velja **zdaj**

@@ -1203,7 +1203,7 @@ async function drawRunMap(v) {
 
   runMap.v = v;
   runMap.since = Date.now();
-  postaviVozilo(prvic);
+  postaviVozilo(prvic, true);
 
   document.getElementById("run-map-full").href =
     `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
@@ -1216,7 +1216,12 @@ async function drawRunMap(v) {
   }
 }
 
-function postaviVozilo(prvic) {
+// `nova` loci osvezitev PODATKOV od sekundnega premika pike. Podnapis se sme
+// prepisati samo ob novih podatkih: `ageHtml()` ob vsakem izpisu postavi novo
+// izhodisce, zato ga je sekundno prepisovanje ponastavljalo na izvorno
+// vrednost -- stevilka je stala, sekundna zanka v common.js jo je vmes
+// povecala, naslednji izris pa povozil. Videti je bilo kot utripanje.
+function postaviVozilo(prvic, nova) {
   const v = runMap.v;
   if (!v || !runMap.map) return;
   const moving = (v.speed_kmh || 0) >= 3;
@@ -1258,10 +1263,12 @@ function postaviVozilo(prvic) {
   const ll = L.latLng(kje);
   if (prvic || !runMap.map.getBounds().contains(ll)) runMap.map.panTo(ll);
 
-  document.getElementById("run-map-sub").innerHTML =
-    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `
-    + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
-                  : `lega stara ${ageHtml(v.age_s)}`);
+  if (nova) {
+    document.getElementById("run-map-sub").innerHTML =
+      `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `
+      + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
+                    : `lega stara ${ageHtml(v.age_s)}`);
+  }
 }
 
 // Med dvema meritvama pika drsi naprej. To ni okras: vozilo se v 30 s pri
@@ -1269,7 +1276,7 @@ function postaviVozilo(prvic) {
 // je clovek odprl to stran.
 setInterval(() => {
   if (document.visibilityState === "hidden") return;
-  if (runMap.marker) postaviVozilo(false);
+  if (runMap.marker) postaviVozilo(false, false);
 }, 1000);
 
 // Zemljevid cez celo STRAN, ne cez cel zaslon. Fullscreen API vzame ves
