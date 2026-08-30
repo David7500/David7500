@@ -625,3 +625,52 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   }
   return { run, forecast, current: cur };
 }
+
+// ---------- osvezevanje leg ----------
+
+// Lege beremo **v koraku s strezbo**, ne na slepo. Odgovor nosi glavo
+// `X-Osvezi-Cez`: cez koliko sekund bo streznik feed prebral znova. Slep
+// ritem je polovico svojega casa cakal na podatek, ki je v bazi ze lezal --
+// izmerjeno je bilo to 10 od 45 sekund starosti pike na zaslonu.
+//
+// Vrne funkcijo za ustavitev. Klic tece, dokler je stran vidna: telefon v
+// zepu ne sme spraševati, ker odgovora nihce ne gleda -- to je hkrati
+// najcenejsi prihranek na strezniku, kar jih je.
+function pollVehicles(url, onData) {
+  let timer = null;
+  let ustavljen = false;
+
+  async function tick() {
+    if (ustavljen) return;
+    if (document.visibilityState === "hidden") {
+      timer = setTimeout(tick, 5000);   // skrita stran samo caka, ne sprasuje
+      return;
+    }
+    let cez = 10;
+    try {
+      const r = await fetch(url);
+      const h = parseInt(r.headers.get("X-Osvezi-Cez"), 10);
+      if (Number.isFinite(h)) cez = h;
+      onData(await r.json());
+    } catch (err) {
+      cez = 30;                         // ob napaki ne tolcemo naprej
+      console.warn("leg vozil ni bilo mogoče naložiti", err);
+    }
+    if (ustavljen) return;
+    // Zamik 0-2 s: sto brskalnikov ne sme udariti v isti trenutek. Spodnja
+    // meja 3 s velja, kadar streznik zaostaja in glava pade na 1.
+    timer = setTimeout(tick, Math.max(3, cez + 1) * 1000 + Math.random() * 2000);
+  }
+
+  // Ob vrnitvi na stran vprasaj takoj: prva stvar, ki jo clovek pogleda, je
+  // kje je vozilo, in cakati nanjo cel cikel je slabse kot ena zahteva vec.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && !ustavljen) {
+      clearTimeout(timer);
+      tick();
+    }
+  });
+
+  tick();
+  return () => { ustavljen = true; clearTimeout(timer); };
+}

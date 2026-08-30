@@ -604,7 +604,12 @@ def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
 
 def poll_positions(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.VEHICLE_POSITIONS_URL, conn, "positions_etag")
+    # Cas branja zapisemo tudi ob 304: pomeni "ob tem casu smo lege potrdili".
+    # Iz njega prikaz ve, kdaj ima smisel vprasati znova -- brez tega brskalnik
+    # ugiba in polovico svojega ritma zapravi za cakanje na podatek, ki ze je.
+    db.set_meta(conn, "positions_fetched", str(int(time.time())))
     if feed is None:
+        conn.commit()
         return {"vehicles": 0, "unchanged": True}
     return ingest_positions(conn, feed)
 

@@ -225,15 +225,44 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   sled bi bila ~300 000 točk na dan, prikaz "kje je zdaj" pa rabi eno vrstico.
 
   **Ritem je izmerjen, ne domnevan** (86 vozil, 492 prehodov med legami):
-  vozilo objavi novo lego vsakih **20 s** (404 od 492 razmikov je natanko 20 s,
-  mediana 20 s), in ko se ta v feedu prvič pojavi, je že **20 s stara**
-  (p90 30 s, najstarejša 104 s). Glava feeda je sveža -- naš prenos je od nje
-  oddaljen 0,5--3 s -- torej zaostanek ni na naši strani, ampak med vozilom in
-  virom. Skupna veriga do pike na zaslonu: 20 s (vozilo) + 20 s (feed) +
-  30 s (`config.POLL_SECONDS`) + 20 s (`loadVehicles` v brskalniku), kar da
-  **mediano ~45 s in najslabši primer ~90 s**. Pri izmerjeni mediani hitrosti
-  29 km/h je to ~360 m poti. Zato kartica pove `lega stara N s`: brez tega bi
-  pika obljubljala natančnost, ki je nima.
+  vozilo objavi novo lego vsakih **20 s** (404 od 492 razmikov je natanko 20 s),
+  in ko se ta v feedu prvič pojavi, je že **20 s stara** (p90 30 s, najstarejša
+  104 s). Glava feeda je sveža -- naš prenos je od nje oddaljen 0,5--3 s --
+  torej zaostanek ni na naši strani, ampak med vozilom in virom.
+
+  **Spodnja meja je feed in je ni mogoče obiti.** Merjeno na glavi feeda samega
+  je mediana starosti lege 21 s ob 19:44 in **33 s ob 21:03** (59 vozil namesto
+  86) -- z uro se slabša, ker vozila proti koncu obratovanja poročajo redkeje.
+  Hitreje od tega ne more nihče, tudi brskalnik ne, če bi bral naravnost.
+
+  **Naravnost tudi ne more.** Feed nima nobene `Access-Control-Allow-Origin`
+  glave, zato CORS branje iz JS blokira; edina pot je posrednik, in ta smo mi.
+  Tudi če bi šlo, bi to pomenilo protobuf knjižnico v brskalniku (odvisnost) in
+  vsak obiskovalec bi tolkel po tuji javni storitvi namesto po naši.
+
+  Kar je torej naše, je **vzorčenje**, in to je bilo prej večje od potrebnega:
+  zajem na 30 s je prispeval mediano 15 s, brskalnik na 20 s še 10 s. Zdaj
+  `config.POSITION_SECONDS = 10` (pol vozilovega ritma; pod tem ni česa dobiti)
+  in brskalnik vpraša **v koraku s strežbo** -- odgovor nosi glavo
+  `X-Osvezi-Cez` s sekundami do naslednjega branja, `common.pollVehicles()` pa
+  se po njej ravna, z zamikom 0--2 s (sto brskalnikov ne sme udariti hkrati) in
+  brez spraševanja, dokler je stran skrita. Izmerjeno: naš prispevek k starosti
+  **15 s → 5 s**.
+* **Okno vožnje je lego naložilo enkrat in nikoli več.** Kdor je stran pustil
+  odprto, je gledal, kje je bil avtobus ob odprtju -- in prav tam je vprašanje
+  „kje je zdaj" najbolj neposredno. Zdaj se osvežuje z istim
+  `pollVehicles()` kot zemljevid. Pogled se **premakne le, kadar vozilo uide
+  iz okvira**: brezpogojni `setView` bi zemljevid vsakih deset sekund trgal
+  izpod prsta človeku, ki si ogleduje kaj drugega.
+
+* **`/api/vehicles` je predpomnjen na cikel zajema.** Odgovor se med dvema
+  branjema leg ne spremeni, zato se izračuna enkrat in vsem strežejo iste
+  vrstice; ključ je `positions_fetched`, ne ura, da se razveljavi natanko ob
+  novem podatku. Izjema je `age_s`, ki se računa ob vsaki strežbi -- starost
+  lege je edino, kar se med cikloma res spreminja, in predpomnjena bi lagala.
+  To je edini del prikaza, kjer je število uporabnikov sploh vidno: brez tega
+  bi sto obiskovalcev pomenilo sto enakih poizvedb desetkrat na minuto.
+
 * **`vehicle_now` pozna samo lego, zamude v njej ni.** `/api/vehicles` je
   vračal `v.*` in prikaz je bral `v.delay_s`, ki ni obstajal -- kartica na
   zemljevidu je zato pri vsakem avtobusu pisala „? min", njegova stran pa
@@ -828,7 +857,14 @@ ne smejo ponoviti:
    `stats.breakdowns` (38 s).
 2. **Koreliran `EXISTS` teče enkrat na vrstico.** Ista pogoja kot
    nekorelirana podpoizvedba: 392 ms → 65 ms.
-3. **Preveri `EXPLAIN QUERY PLAN`, preden verjameš, da je indeks.**
+3. **Ponavljajoče se opravilo naslednji čas računa od tika, ne od „zdaj".**
+   Zanka zajema je tiknila na 10 s, `next_positions` pa se je nastavljal na
+   `time.monotonic() + 10` **po** opravljenem delu -- torej vedno za drobec
+   pozneje od naslednjega tika, ki ga je zato zgrešil in preskočil cel obhod.
+   Izmerjeno: lege so se brale v razmikih **19, 11, 19, 11 s namesto 10**,
+   mediana 15 s. Zanka zdaj spi do prvega naslednjega opravila
+   (`min(next_*) - now`), ne fiksen tik, in razmiki so 10, 11, 10, 10, 10.
+4. **Preveri `EXPLAIN QUERY PLAN`, preden verjameš, da je indeks.**
    `SCAN t USING INDEX trip_train_no` **ni** iskanje po indeksu, ampak
    pregled cele tabele po napačnem — manjkal je `trip(route_id)`.
 

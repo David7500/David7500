@@ -47,6 +47,12 @@ EXTRA_AGENCIES = tuple(
 )
 
 POLL_SECONDS = int(os.environ.get("SZ_POLL_SECONDS", "30"))
+
+# Lege imajo svoj, hitrejsi ritem od zamud -- feeda se ne spreminjata enako.
+# Vozilo objavi novo lego vsakih 20 s (izmerjeno), zamuda pa se zapise sele ob
+# spremembi nad 60 s. Branje obojega na 30 s je torej lege bralo prepocasi in
+# zamude prepogosto. 10 s je pol vozilovega ritma; pod tem ni cesa dobiti.
+POSITION_SECONDS = int(os.environ.get("SZ_POSITION_SECONDS", "10"))
 USER_AGENT = os.environ.get("SZ_USER_AGENT", "sztrack/0.1 (+https://github.com/David7500)")
 TIMEZONE = "Europe/Ljubljana"
 

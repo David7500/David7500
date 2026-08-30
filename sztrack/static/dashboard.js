@@ -715,15 +715,11 @@ async function loadRoutes() {
   }
 }
 
-async function loadVehicles() {
-  try {
-    liveBuses = await fetch("/api/vehicles").then((r) => r.json());
-    document.getElementById("n-bus").textContent = liveBuses.length;
-    renderBuses(liveBuses);
-    if (findEl.value.trim()) renderFind();
-  } catch (err) {
-    console.warn("lege vozil ni bilo mogoče naložiti", err);
-  }
+function onVehicles(list) {
+  liveBuses = list;
+  document.getElementById("n-bus").textContent = liveBuses.length;
+  renderBuses(liveBuses);
+  if (findEl.value.trim()) renderFind();
 }
 
 function tickClock() {
@@ -761,8 +757,7 @@ loadStatic().then(() => {
   setInterval(pollLive, POLL_MS);
   // Lega avtobusov ima svoj ritem: feed jo osvežuje na ~30 s, zamude pa se
   // spreminjajo redkeje.
-  loadVehicles();
-  setInterval(loadVehicles, 20000);
+  pollVehicles("/api/vehicles", onVehicles);
   loadRoutes();
   setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
 });

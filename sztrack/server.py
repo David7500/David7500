@@ -90,7 +90,8 @@ def _next_at(hour: int, minute: int) -> datetime:
 
 def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             weather_hour: int, alert_interval: int, maint_hour: int,
-            summaries: bool = True) -> None:
+            summaries: bool = True,
+            position_interval: int = config.POSITION_SECONDS) -> None:
     conn = db.connect()
     db.init(conn)
     # Lega vozil je smiselna samo, ce so v bazi avtobusi: feed nosi izkljucno
@@ -106,7 +107,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     next_weather = _next_at(weather_hour, 10) if weather_hour >= 0 else None
     # Obvestila so vecji prenos od zamud in se pocasneje spreminjajo (razen
     # SZ-DELAY), zato imajo svoj, redkejsi ritem.
-    next_alerts = 0.0
+    next_alerts = 0.0 if alert_interval > 0 else float("inf")
     # Ob treh zjutraj je vceraj sklenjen, vlaki pa skoraj ne vozijo -- 34
     # sekund agregata takrat nikogar ne moti.
     next_maint = _next_at(maint_hour, 30) if maint_hour >= 0 else None
@@ -117,28 +118,39 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             and not conn.execute("SELECT 1 FROM povzetek LIMIT 1").fetchone()):
         next_maint = datetime.now(TZ)
 
+    # Zamude in lege imata SVOJ ritem, ker se feeda ne spreminjata enako:
+    # vozilo objavi novo lego vsakih 20 s, zamuda pa se zapise sele ob
+    # spremembi nad OBS_MIN_DELTA_S (60 s). Prej je oboje teklo na 30 s, kar
+    # je lege bralo prepocasi -- pol nasega zaostanka na zaslonu je bilo tu.
+    # Zanka zato tikne na krajsem od obeh, vsako opravilo pa ima svoj cas.
+    next_trips = 0.0
+    next_positions = 0.0 if track_vehicles else float("inf")
+
     while not _stop.is_set():
         started = time.monotonic()
-        try:
-            info = collector.poll_once(conn)
-            if info.get("changed"):
-                _log(f"zajem: {info['trips']} vlakov, {info['changed']} sprememb")
-            if info.get("non_scheduled"):
-                # Doslej vedno 0. Ce se kdaj oglasi, je feed dobil odpovedi in
-                # jih zna povedati strukturirano -- to je vredno vedeti.
-                _log(f"POZOR: feed poroča {info['non_scheduled']} zapisov, "
-                     f"ki niso 'SCHEDULED' (odpoved ali izpuščen postanek)")
-        except Exception as exc:            # feed občasno resetira povezavo
-            _log(f"zajem ni uspel: {exc}")
+        if started >= next_trips:
+            next_trips = started + interval
+            try:
+                info = collector.poll_once(conn)
+                if info.get("changed"):
+                    _log(f"zajem: {info['trips']} vlakov, {info['changed']} sprememb")
+                if info.get("non_scheduled"):
+                    # Doslej vedno 0. Ce se kdaj oglasi, je feed dobil odpovedi in
+                    # jih zna povedati strukturirano -- to je vredno vedeti.
+                    _log(f"POZOR: feed poroča {info['non_scheduled']} zapisov, "
+                         f"ki niso 'SCHEDULED' (odpoved ali izpuščen postanek)")
+            except Exception as exc:        # feed občasno resetira povezavo
+                _log(f"zajem ni uspel: {exc}")
 
-        if track_vehicles:
+        if started >= next_positions:
+            next_positions = started + position_interval
             try:
                 collector.poll_positions(conn)
             except Exception as exc:      # lega ni kriticna za zajem zamud
                 _log(f"lege vozil ni bilo mogoče pobrati: {exc}")
 
-        if alert_interval > 0 and time.monotonic() >= next_alerts:
-            next_alerts = time.monotonic() + alert_interval
+        if started >= next_alerts:
+            next_alerts = started + alert_interval
             try:
                 info = alerts.poll_once(conn)
                 if info.get("changed"):
@@ -193,7 +205,14 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 except Exception as exc:  # statistika ni kriticna za zajem
                     _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
 
-        _stop.wait(max(1.0, interval - (time.monotonic() - started)))
+        # Spimo do PRVEGA naslednjega opravila, ne fiksen tik. Prej je bil
+        # tik 10 s, naslednji cas pa se je racunal od trenutka PO delu -- zato
+        # ga je vsak obhod zgresil za drobec in preskocil cel tik. Izmerjeno:
+        # lege so se brale v razmikih 19, 11, 19, 11 s namesto 10.
+        # Dnevna opravila (vozni red, vreme, vzdrzevanje) so v tem ritmu
+        # preverjena tako ali tako veckrat na minuto.
+        cakaj = min(next_trips, next_positions, next_alerts) - time.monotonic()
+        _stop.wait(max(0.5, min(cakaj, interval)))
 
 
 def _settings() -> dict:
@@ -204,6 +223,8 @@ def _settings() -> dict:
         weather_hour = -1
     return {
         "interval": int(os.environ.get("SZ_POLL_SECONDS", config.POLL_SECONDS)),
+        "position_interval": int(os.environ.get("SZ_POSITION_SECONDS",
+                                                config.POSITION_SECONDS)),
         "refresh_hour": int(os.environ.get("SZ_REFRESH_HOUR", "4")),
         "refresh_mode": mode,
         "weather_hour": weather_hour,
@@ -214,7 +235,8 @@ def _settings() -> dict:
 
 
 def _describe(s: dict) -> str:
-    parts = [f"zajem vsakih {s['interval']} s"]
+    parts = [f"zajem vsakih {s['interval']} s",
+             f"lege vsakih {s['position_interval']} s"]
     parts.append("brez osveževanja voznega reda" if s["refresh_mode"] == "off"
                  else f"osvežitev ob {s['refresh_hour']}:20 ({s['refresh_mode']})")
     parts.append("vreme izklopljeno" if s["weather_hour"] < 0

@@ -25,7 +25,11 @@ TZ = ZoneInfo(config.TIMEZONE)
 app = FastAPI(title="sztrack", version="0.1.0",
               description="Vozni redi, zamude in statistika Slovenskih železnic",
               lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
+# `expose_headers`: brez tega JS lastnih glav ne vidi. Nasa stran je z istega
+# izvora in bi delovala tudi brez, a `X-Osvezi-Cez` je del odgovora in mora
+# biti berljiva vsakomur, ki API uporablja.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"],
+                   allow_headers=["*"], expose_headers=["X-Osvezi-Cez"])
 # Odgovori so JSON s ponavljajocimi se imeni polj in se stisnejo na desetino.
 # Pri letu zajema ima lestvica avtobusnih linij 167 KB, stisnjena 20 KB --
 # in to prek Tailscala ali tunela ni vseeno. Brez nove odvisnosti (starlette).
@@ -444,6 +448,57 @@ def api_train_reports(train_no: str, date: str | None = None):
                 "reports": alerts.train_reports(conn, train_no, date)}
 
 
+# Odgovor se med dvema branjema leg ne spremeni, zato ga izracunamo enkrat na
+# cikel in vsem strezemo iste vrstice. Brez tega bi sto hkratnih obiskovalcev
+# pomenilo sto enakih poizvedb -- pri legah, ki se osvezijo desetkrat na
+# minuto, je to edini del prikaza, kjer je stevilo uporabnikov sploh vidno.
+# Kljuc je cas nasega zadnjega branja (`positions_fetched`), ne ura: tako se
+# predpomnilnik razveljavi natanko takrat, ko je res kaj novega.
+_VEHICLES_CACHE: dict = {"key": None, "rows": []}
+
+
+def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
+    """Vsa vozila z GPS, brez `age_s`. Ta je odvisen od trenutka in se doda
+    ob strezbi -- sicer bi predpomnjen odgovor lagal o starosti lege."""
+    now = int(zdaj.timestamp())
+    now_s = journey.now_seconds(zdaj)
+    rows = conn.execute(
+        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign "
+        "FROM vehicle_now v JOIN trip t USING (trip_id) "
+        "WHERE v.seen_ts >= ? ORDER BY t.train_no",
+        (now - collector.POSITION_FRESH_S,),
+    ).fetchall()
+    out = [dict(r) for r in rows]
+    for d in out:
+        d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
+
+    # Zamude v `vehicle_now` NI -- ta tabela pozna samo lego. Doda se iz
+    # zadnje **prevozene** postaje, po istem pravilu kot zivi seznam in
+    # okno voznje (`stats.last_measured`). Brez tega je kartica na
+    # zemljevidu pisala "? min" za avtobus, ki je na svoji strani imel
+    # +15 -- dve stevilki o istem vozilu, in ena od njiju izmisljena.
+    po_dnevih: dict[str, list[str]] = {}
+    for d in out:
+        po_dnevih.setdefault(d["service_date"] or zdaj.date().isoformat(),
+                             []).append(d["trip_id"])
+    izmerjeno: dict[str, dict] = {}
+    for dan, ids in po_dnevih.items():
+        # Voznja cez polnoc ima vcerajsnji prometni dan, zato je "zdaj" v
+        # njenih sekundah cez 86400.
+        try:
+            zamik = (zdaj.date() - date.fromisoformat(dan)).days * 86400
+        except ValueError:
+            zamik = 0
+        izmerjeno.update(stats.last_measured(conn, dan, ids, now_s + zamik))
+
+    for d in out:
+        m = izmerjeno.get(d["trip_id"])
+        d["delay_s"] = m["delay_s"] if m else None
+        d["last_stop"] = m["name"] if m else None
+        d["measured_seq"] = m["stop_seq"] if m else None
+    return out
+
+
 @app.get("/api/vehicles")
 def api_vehicles(trip: str | None = None):
     """Trenutna lega vozil z GPS.
@@ -453,50 +508,34 @@ def api_vehicles(trip: str | None = None):
     zadnja postaja z meritvijo, ne položaj.
 
     `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
+
+    Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
+    Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
+    podatek, ki v bazi že leži.
     """
     zdaj = datetime.now(TZ)
     now = int(zdaj.timestamp())
-    now_s = journey.now_seconds(zdaj)
     with _conn() as conn:
-        rows = conn.execute(
-            "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign "
-            "FROM vehicle_now v JOIN trip t USING (trip_id) "
-            "WHERE v.seen_ts >= :od AND (:trip IS NULL OR v.trip_id = :trip) "
-            "ORDER BY t.train_no",
-            {"od": now - collector.POSITION_FRESH_S, "trip": trip},
-        ).fetchall()
-        out = []
-        for r in rows:
-            d = dict(r)
-            d["age_s"] = now - d["seen_ts"]
-            d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
-            out.append(d)
+        brano = db.get_meta(conn, "positions_fetched")
+        if _VEHICLES_CACHE["key"] != brano or brano is None:
+            _VEHICLES_CACHE["rows"] = _vehicles_rows(conn, zdaj)
+            _VEHICLES_CACHE["key"] = brano
 
-        # Zamude v `vehicle_now` NI -- ta tabela pozna samo lego. Doda se iz
-        # zadnje **prevozene** postaje, po istem pravilu kot zivi seznam in
-        # okno voznje (`stats.last_measured`). Brez tega je kartica na
-        # zemljevidu pisala "? min" za avtobus, ki je na svoji strani imel
-        # +15 -- dve stevilki o istem vozilu, in ena od njiju izmisljena.
-        po_dnevih: dict[str, list[str]] = {}
-        for d in out:
-            po_dnevih.setdefault(d["service_date"] or zdaj.date().isoformat(),
-                                 []).append(d["trip_id"])
-        izmerjeno: dict[str, dict] = {}
-        for dan, ids in po_dnevih.items():
-            # Voznja cez polnoc ima vcerajsnji prometni dan, zato je "zdaj" v
-            # njenih sekundah cez 86400.
-            try:
-                zamik = (zdaj.date() - date.fromisoformat(dan)).days * 86400
-            except ValueError:
-                zamik = 0
-            izmerjeno.update(stats.last_measured(conn, dan, ids, now_s + zamik))
+    # `age_s` se racuna ob vsaki strezbi, ne ob predpomnjenju: starost lege je
+    # edino, kar se med dvema branjema res spreminja, in prav ona pove, koliko
+    # je piki na zaslonu mogoce verjeti.
+    out = []
+    for d in _VEHICLES_CACHE["rows"]:
+        if trip is not None and d["trip_id"] != trip:
+            continue
+        d = dict(d)
+        d["age_s"] = now - d["seen_ts"]
+        out.append(d)
 
-    for d in out:
-        m = izmerjeno.get(d["trip_id"])
-        d["delay_s"] = m["delay_s"] if m else None
-        d["last_stop"] = m["name"] if m else None
-        d["measured_seq"] = m["stop_seq"] if m else None
-    return out
+    cez = config.POSITION_SECONDS
+    if brano:
+        cez = max(1, config.POSITION_SECONDS - (now - int(brano)))
+    return JSONResponse(out, headers={"X-Osvezi-Cez": str(cez)})
 
 
 @app.get("/api/trip/{trip_id}/shape")

@@ -1044,13 +1044,16 @@ async function drawRunMap(v) {
   const wrap = document.getElementById("run-map-wrap");
   await loadLeaflet();
 
-  if (!runMap.map) {
+  const prvic = !runMap.map;
+  if (prvic) {
     runMap.map = L.map("run-map", {
       zoomControl: false, attributionControl: false, scrollWheelZoom: false,
     }).setView([v.lat, v.lon], 14);
     L.control.zoom({ position: "topright" }).addTo(runMap.map);
+    // Esri ima prave ploscice do z16; nad tem raztegnemo zadnjo (glej dashboard).
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
-      + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 })
+      + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, maxNativeZoom: 16 })
       .addTo(runMap.map);
 
     // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
@@ -1102,7 +1105,11 @@ async function drawRunMap(v) {
     runMap.marker.setLatLng([v.lat, v.lon]);
     runMap.marker.setIcon(busDivIcon(v.bearing, moving));
   }
-  runMap.map.setView([v.lat, v.lon], runMap.map.getZoom());
+  // Pogled premaknemo samo, kadar vozilo uide iz okvira. Lega se osvezuje
+  // vsakih ~11 s in brezpogojni `setView` bi zemljevid trgal izpod prsta
+  // vsakic, ko si clovek ogleduje kaj drugega.
+  const kje = L.latLng(v.lat, v.lon);
+  if (prvic || !runMap.map.getBounds().contains(kje)) runMap.map.panTo(kje);
 
   document.getElementById("run-map-sub").textContent =
     `${moving ? `${v.speed_kmh} km/h` : "stoji"} · lega stara ${v.age_s} s`;
@@ -1110,23 +1117,21 @@ async function drawRunMap(v) {
     `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
   wrap.hidden = false;
   // Okvir je bil skrit, ko je Leaflet meril prostor -- brez tega je siv.
-  requestAnimationFrame(() => runMap.map.invalidateSize());
+  if (prvic) requestAnimationFrame(() => runMap.map.invalidateSize());
 }
 
-async function loadPosition() {
+function loadPosition() {
   const trip = (state.run && state.run.trip_id) || URL_TRIP;
   if (!trip || !state.run) return;
   // Lega obstaja samo za tekoci dan; za ogled preteklega dne je vprasanje
   // "kje je zdaj" brez pomena.
   if (state.run.service_date !== todayIso()) return;
-  try {
-    const list = await fetch(`/api/vehicles?trip=${encodeURIComponent(trip)}`)
-      .then((r) => r.json());
-    if (!list.length) return;
-    await drawRunMap(list[0]);
-  } catch (err) {
-    /* brez lege je okno voznje se vedno uporabno */
-  }
+  // Prej se je lega nalozila ENKRAT in nikoli vec: kdor je okno pustil odprto,
+  // je gledal, kje je bil avtobus ob odprtju strani. Prav tu je vprasanje
+  // "kje je zdaj" najbolj neposredno, zato se osvezuje v koraku s strezbo.
+  pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
+    if (list.length) drawRunMap(list[0]);
+  });
 }
 
 // ---------- vreme ----------
