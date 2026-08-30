@@ -417,7 +417,7 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
  * in ta ni bil za nobeno rabo. Zato v stolpec: najprej zemljevid, pod njim
  * lestvica zamud. Zemljevid dobi večino višine, ker je on razlog za obisk.
  */
-.sheet-toggle { display: none; }
+.sheet-toggle, .sheet-close { display: none; }
 
 /* ---------- zemljevid na telefonu ----------
  * Stranski stolpec je 320 px in je na 390 px zaslonu pojedel pol slike, ne da
@@ -440,7 +440,7 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
     display: flex;
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    z-index: 620;
+    z-index: 1100;
     align-items: center;
     justify-content: center;
     gap: 9px;
@@ -460,7 +460,7 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
   .sidebar {
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    z-index: 630;
+    z-index: 1100;
     width: auto;
     max-height: 76vh;
     border-right: none;
@@ -474,12 +474,27 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
     box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.5);
   }
   body.sheet-open .sidebar { transform: translateY(0); }
-  body.sheet-open .sheet-toggle { background: transparent; border-top: 0; }
-  body.sheet-open .sheet-label { display: none; }
+  /* Odprta plosca gumb pod sabo prekrije -- zato ga takrat ni, zapira pa se
+     z lastnim rocajem na vrhu. Prej je bil gumb pod plosco in "odpri" je bilo
+     dejanje brez povratka. */
+  body.sheet-open .sheet-toggle { display: none; }
+
+  .sheet-close {
+    display: flex;
+    position: sticky;
+    top: 0; z-index: 2;
+    width: 100%;
+    justify-content: center;
+    padding: 10px 0 8px;
+    background: #14161a;
+    border: 0; border-radius: 14px 14px 0 0;
+    cursor: pointer;
+  }
 
   .legend { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
   .find-list { max-height: 40vh; }
-  /* Leafletovi gumbi ne smejo pod plosco. */
+  /* Zaprta plosca je 46 px visoka; Leafletova noga se ji umakne. Odprta jo
+     tako ali tako prekrije, ker je nad njo. */
   .leaflet-bottom { bottom: 46px; }
 }
 

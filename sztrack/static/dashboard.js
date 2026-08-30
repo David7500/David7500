@@ -734,12 +734,15 @@ const sheetBtn = document.getElementById("sheet-toggle");
 function setSheet(on) {
   document.body.classList.toggle("sheet-open", on);
   if (sheetBtn) sheetBtn.setAttribute("aria-expanded", String(on));
-  if (on) setTimeout(() => findEl.focus(), 180);
+  // Polja NE fokusiramo sami: na telefonu bi se dvignila tipkovnica in
+  // pokrila prav plosco, ki se je pravkar odprla.
 }
-if (sheetBtn) {
-  sheetBtn.addEventListener("click", () =>
-    setSheet(!document.body.classList.contains("sheet-open")));
-}
+if (sheetBtn) sheetBtn.addEventListener("click", () => setSheet(true));
+const sheetClose = document.getElementById("sheet-close");
+if (sheetClose) sheetClose.addEventListener("click", () => setSheet(false));
+// Dotik zemljevida plosco zapre -- to je najbolj pricakovana gesta in
+// deluje tudi, ce kdo rocaja ne opazi.
+map.on("click", () => setSheet(false));
 
 initLayers();
 loadStatic().then(() => {
