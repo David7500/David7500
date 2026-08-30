@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sztrack — kdaj mi pelje</title>
+  <meta name="description" content="Zamude slovenskih vlakov in avtobusov iz odprtih podatkov, izmerjene in ne prepisane.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/base.css">
+  <link rel="stylesheet" href="/static/home.css">
+</head>
+<body class="home-page">
+
+  <main class="home">
+    <header class="home-head">
+      <div class="home-brand">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#f0934f" stroke-width="1.8" stroke-linecap="round">
+          <rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
+          <circle cx="9" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle>
+        </svg>
+        <span>sztrack</span>
+      </div>
+      <p class="home-lead">
+        Kdaj ti pelje in koliko zamuja — izmerjeno iz odprtih podatkov,
+        ne prepisano od prevoznika.
+      </p>
+      <div class="home-live" id="home-live"></div>
+    </header>
+
+    <!-- Dve poti, ne ena z izbiro znotraj: potnik ve, ali gre z vlakom ali z
+         busom, in ju ne isce skupaj. Mesanje je bilo tudi merljivo skodljivo --
+         iskanje "ljublj" je vracalo mestna postajalisca in postajo Ljubljana
+         potisnilo iz prvih petih zadetkov. -->
+    <div class="home-picks">
+      <a class="pick pick-train" href="/app">
+        <span class="pick-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <rect x="6" y="3" width="12" height="14" rx="3"></rect>
+            <path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
+            <circle cx="9" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle>
+            <circle cx="15" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle>
+          </svg>
+        </span>
+        <span class="pick-name">Vlaki</span>
+        <span class="pick-sub">SŽ in nadomestni prevozi</span>
+        <span class="pick-n" id="n-train">—</span>
+      </a>
+      <a class="pick pick-bus" href="/app/bus">
+        <span class="pick-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <rect x="4" y="4" width="16" height="13" rx="2.6"></rect>
+            <path d="M4 11h16M8 21l-1.5 2M16 21l1.5 2M7 20h10"></path>
+          </svg>
+        </span>
+        <span class="pick-name">Avtobusi</span>
+        <span class="pick-sub">LPP, Arriva, Nomago, AP MS</span>
+        <span class="pick-n" id="n-bus">—</span>
+      </a>
+    </div>
+
+    <nav class="home-more" aria-label="Ostalo">
+      <a class="more-link" href="/app/map">
+        <strong>Živi zemljevid</strong>
+        <span>kje je zdaj kaj — edini skupni pogled obeh omrežij</span>
+      </a>
+      <a class="more-link" href="/app/ovire">
+        <strong>Ovire na progah</strong>
+        <span>dela, zapore in nadomestni prevozi</span>
+      </a>
+      <a class="more-link" href="/app/statistika">
+        <strong>Statistika</strong>
+        <span>razrezi zajetega po vrsti vlaka, uri in dnevu</span>
+      </a>
+    </nav>
+
+    <footer class="home-foot">
+      Podatki: SŽ in IJPP prek NAP (CC BY-SA 4.0), obdelava DERP.
+      Zamude imajo ločljivost ene minute in so izmerjene v prometnem mestu,
+      ne nujno na peronu.
+      <span id="home-health"></span>
+    </footer>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/home.js"></script>
+</body>
+</html>

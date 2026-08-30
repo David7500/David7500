@@ -446,7 +446,23 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   je v `station` dvakrat. Vse v aplikaciji teče po imenu postaje, zato iskanje
   po imenu združuje.
 * **Zemljevid je edini skupni pogled.** Vlak je krog na zadnji postaji z
-  meritvijo, avtobus puščica na izmerjeni legi; plast avtobusov se da odložiti.
+  meritvijo, avtobus **oblika vozila** na izmerjeni legi, ki raste s
+  približkom (15–34 px) in kaže v smer vožnje. Puščica je bila premalo: pri
+  velikem približku je bila videti kot pika in se od vlaka ni ločila.
+
+  Vsaka plast se da izklopiti posebej (vlaki, avtobusi, proge, postaje,
+  podlaga, dodatna imena), ne le avtobusi. Namesto lestvice „največje zamude"
+  je **iskalnik vozila**: vprašanje pred zemljevidom je „kje je moj avtobus",
+  ne „kdo danes najbolj zamuja".
+
+  Podlaga je Esri „Dark Gray Canvas". **Imena ulic so vanjo vpečena in jih ni
+  mogoče ugasniti posebej** — preverjeno je, da brezplačne podlage brez
+  napisov ni: CARTO `*_nolabels` pride z vodnim žigom „API KEY REQUIRED",
+  `tiles.wmflabs.org` je ugasnjen, Wikimedia zunanjo rabo zavrača s 403. Zato
+  dvoje, kar res dela: „pomirjena podlaga" jih zatemni
+  (`brightness(0.42) contrast(0.7)`), izklop podlage jih odstrani s cestami
+  vred. Proga je narisana dvakrat — temna obroba, svetla črta — sicer se na
+  temni podlagi izgubi ali je videti kot cesta.
 * **Veriga vozila je edini vir odgovora, kje je avtobus, ki se še ni začel.**
   `trips.txt` nosi `block_id` -- zaporedje voženj istega fizičnega vozila.
   Imajo ga **samo avtobusi** (vseh 789 voženj SŽ je brez) in tudi tam le
@@ -547,12 +563,17 @@ avtobusni `run`, ne železniški.
 
 | pot | kaj |
 |---|---|
-| `/app` | vlaki: iskalnik povezav in odhodna tabla — vstopna stran |
+| `/` | domača stran: s čim greš — vlak ali avtobus |
+| `/app` | vlaki: iskalnik povezav in odhodna tabla |
 | `/app/bus` | avtobusi (LPP …): ista stran, drugo omrežje |
 | `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
 | `/app/train/{no}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
 | `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |
 | `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu v tednu |
+
+**Hitrosti po odsekih ni več nikjer.** Bila je isti podatek v drugi enoti,
+zložen v zaprt `<details>` na dnu okna vožnje. `/api/speeds` in
+`stats.segment_speeds()` ostaneta — rabi ju izvoz in mreža razdalj.
 
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
 vprašanji: `sztrack:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
@@ -587,6 +608,23 @@ Druge strani imajo preklop **preprosto / napredno**. To ni druga stran: napredni
 pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom
 `adv-only` (p90, delež točnih, številka postanka, kaj pravi feed). Potnik in
 radovednež gledata isto vožnjo.
+
+**Omrežji sta ločeni tudi na pogled.** V glavi je segmentni preklop
+`Vlaki | Avtobusi`, ne dve povezavi med štirimi, in avtobusna stran ima svojo
+barvo (`body.net-avtobus` prestavi `--accent` na zeleno, isto kot vozila na
+zemljevidu). Doslej je bila trenutna stran samo izpuščena iz seznama povezav
+in razlika ni bila vidna nikjer — kdor je na `/app/bus` iskal „Ljubljana",
+je dobil postajališče LPP in ni razumel, zakaj.
+
+**Iskanje na vstopni strani sproži samo gumb.** Izbira postaje iz predlogov
+ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib pa je
+zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
+(deljena povezava) — tam je odgovor prav to, po kar je človek prišel.
+
+**Okno vožnje z GPS ima živ zemljevid, in to v preprostem pogledu.** „Kje je
+zdaj" je pri avtobusu prvo vprašanje. Leaflet se naloži šele, ko lega res
+obstaja — vlaki je nimajo nikoli in zanje tega okvira ni; prazen bi obljubljal
+podatek, ki ne obstaja.
 
 Okno vlaka je **ena slika, ne zavihki**. Krivulja zamude čez vse postaje poti
 in pod njo, v istem grafu, pas razmer: vprašanje ni *"kakšno je vreme"*, ampak

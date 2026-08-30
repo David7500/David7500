@@ -191,7 +191,10 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
     if not trip_id:
         return []
     rows = conn.execute(
-        "SELECT s.stop_seq, st.name, s.arr_s, s.dep_s, r.delay_arr, r.delay_dep "
+        # `lat`/`lon` rabi zemljevid ene voznje v oknu: postanke narise kot
+        # crto in pike. Poizvedba postajo ze pridruzuje, zato je to zastonj.
+        "SELECT s.stop_seq, st.name, st.lat, st.lon, s.arr_s, s.dep_s, "
+        "       r.delay_arr, r.delay_dep "
         "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
         "LEFT JOIN run r ON r.trip_id = s.trip_id AND r.stop_seq = s.stop_seq "
         "                AND r.service_date = ? "

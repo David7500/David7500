@@ -380,3 +380,35 @@
 }
 .to-advanced:hover { border-color: var(--ink-faint); color: var(--ink); }
 body.is-advanced .to-advanced { display: none; }
+
+
+/* ---------- zemljevid ene voznje ----------
+ * "Kje je zdaj" je pri avtobusu prvo vprasanje in edino, na katero zna
+ * odgovoriti GPS. Zato je v PREPROSTEM pogledu in ne skrit za preklopom;
+ * pri vlaku ga ni, ker lege zanj ni -- prazen okvir bi obljubljal podatek,
+ * ki ne obstaja.
+ */
+.run-map-wrap {
+  margin: 14px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--bg-raised);
+}
+.run-map-wrap[hidden] { display: none; }
+.run-map-head {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.run-map-title { font: 600 12px/1 var(--sans); color: var(--ink); }
+.run-map-sub { font: 400 11px/1.4 var(--sans); color: var(--ink-mute); }
+.run-map-full {
+  margin-left: auto;
+  font: 500 11px/1 var(--sans); color: var(--ink-mute); text-decoration: none;
+}
+.run-map-full:hover { color: var(--accent-lit); }
+.run-map { height: 260px; background: #0f1115; }
+.run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
+.run-map .leaflet-container { background: #0f1115; font-family: var(--sans); }
+@media (max-width: 720px) { .run-map { height: 210px; } }

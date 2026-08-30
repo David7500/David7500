@@ -30,6 +30,10 @@ const TIME_FMT = new Intl.DateTimeFormat("sl-SI", {
   timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit", hour12: false,
 });
 
+// Danasnji prometni dan po ljubljanskem casu. "sv-SE" je najkrajsa pot do
+// ISO oblike; `toISOString()` bi dal UTC in bi se cez polnoc zlagal za dan.
+const todayIso = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+
 function hhmm(iso) {
   return iso ? TIME_FMT.format(new Date(iso)) : "—";
 }

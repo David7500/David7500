@@ -344,6 +344,7 @@ function vehicleChainHtml() {
         postankom večinoma nadoknadi</div>` : ""}`);
   }
 
+  const napredne = parts.length === 0;      // ostane samo "nato", ki je adv-only
   if (c.next) {
     parts.push(`
       <div class="chain-line adv-only">
@@ -353,7 +354,11 @@ function vehicleChainHtml() {
           ${c.next.headsign ? escapeHtml(c.next.headsign) : ""}</span>
       </div>`);
   }
-  return parts.length ? `<div class="chain">${parts.join("")}</div>` : "";
+  // Okvir mora izginiti skupaj s svojo vsebino. Kadar je edina vrstica
+  // `adv-only`, je v preprostem pogledu ostal prazen obrobljen pravokotnik --
+  // skatla brez ničesar v njej je videti kot napaka programa.
+  if (!parts.length) return "";
+  return `<div class="chain${napredne ? " adv-only" : ""}">${parts.join("")}</div>`;
 }
 
 async function loadChain() {
@@ -427,6 +432,7 @@ async function loadRun() {
     renderRunHead();
     renderTimeline();
     renderProfile();
+    loadPosition();     // ziv zemljevid; pri vlaku tiho odpade, ker lege ni
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
@@ -959,6 +965,126 @@ function drawRuns(w, runs) {
     }, dayLabel(r.service_date)));
   });
   return svg;
+}
+
+// ---------- zemljevid ene voznje ----------
+// "Kje je zdaj" je pri avtobusu prvo vprasanje in nanj zna odgovoriti samo
+// GPS. Vlaki lege nimajo, zato zanje tega okvira ni -- prazen bi obljubljal
+// podatek, ki ne obstaja.
+//
+// Leaflet se nalozi SELE, ko je lega res na voljo: sicer bi vsako okno vlaka
+// vleklo knjiznico, ki je ne bo nikoli uporabilo.
+
+let leafletReady = null;
+
+function loadLeaflet() {
+  if (leafletReady) return leafletReady;
+  leafletReady = new Promise((resolve, reject) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(css);
+    const js = document.createElement("script");
+    js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    js.onload = resolve;
+    js.onerror = reject;
+    document.head.appendChild(js);
+  });
+  return leafletReady;
+}
+
+const runMap = { map: null, marker: null, line: null, stops: null };
+
+// Ista oblika kot na velikem zemljevidu -- avtobus je vozilo, ne pika, in
+// kaze v smer voznje.
+function busDivIcon(bearing, moving) {
+  const s = 30;
+  return L.divIcon({
+    className: "bus-marker",
+    html: `<div style="transform:rotate(${bearing || 0}deg);width:${s}px;height:${s}px">
+      <svg width="${s}" height="${s}" viewBox="0 0 24 24">
+        <rect x="7.5" y="2.5" width="9" height="19" rx="3.2" fill="#4db97f"
+              fill-opacity="${moving ? 1 : 0.5}" stroke="#0f1115" stroke-width="1.5"/>
+        <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
+              fill="#0f1115" fill-opacity="0.65"/>
+      </svg></div>`,
+    iconSize: [s, s], iconAnchor: [s / 2, s / 2],
+  });
+}
+
+async function drawRunMap(v) {
+  const wrap = document.getElementById("run-map-wrap");
+  await loadLeaflet();
+
+  if (!runMap.map) {
+    runMap.map = L.map("run-map", {
+      zoomControl: false, attributionControl: false, scrollWheelZoom: false,
+    }).setView([v.lat, v.lon], 14);
+    L.control.zoom({ position: "topright" }).addTo(runMap.map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
+      + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16 })
+      .addTo(runMap.map);
+
+    // Zaporedje postankov te voznje. To NI trasa po cesti -- te za avtobuse
+    // nimamo, ker GTFS shapes uvazamo samo za zeleznico.
+    const pts = (state.run.stops || [])
+      .filter((s) => s.lat != null && s.lon != null)
+      .map((s) => [s.lat, s.lon]);
+    if (pts.length > 1) {
+      runMap.line = L.polyline(pts, {
+        color: "#4db97f", weight: 2.5, opacity: 0.55, dashArray: "5 5",
+      }).addTo(runMap.map);
+      runMap.stops = L.layerGroup(pts.map((p) => L.circleMarker(p, {
+        radius: 2.6, color: "#4db97f", fillColor: "#4db97f", fillOpacity: 1,
+        weight: 0, interactive: false,
+      }))).addTo(runMap.map);
+    }
+
+    // Postaja, na kateri stoji potnik, mora biti vidna -- brez nje je to
+    // zemljevid o vozilu in ne o njegovi poti.
+    const yours = yourStop(state.run.stops);
+    if (yours && yours.lat != null) {
+      L.circleMarker([yours.lat, yours.lon], {
+        radius: 6, color: "#0f1115", fillColor: "#f0934f", fillOpacity: 1, weight: 2,
+      }).addTo(runMap.map).bindTooltip(yours.name, {
+        className: "sztrack-tooltip", permanent: true, direction: "right", offset: [8, 0],
+      });
+    }
+  }
+
+  const moving = (v.speed_kmh || 0) >= 3;
+  if (!runMap.marker) {
+    runMap.marker = L.marker([v.lat, v.lon], { icon: busDivIcon(v.bearing, moving) })
+      .addTo(runMap.map);
+  } else {
+    runMap.marker.setLatLng([v.lat, v.lon]);
+    runMap.marker.setIcon(busDivIcon(v.bearing, moving));
+  }
+  runMap.map.setView([v.lat, v.lon], runMap.map.getZoom());
+
+  document.getElementById("run-map-sub").textContent =
+    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · lega stara ${v.age_s} s`;
+  document.getElementById("run-map-full").href =
+    `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
+  wrap.hidden = false;
+  // Okvir je bil skrit, ko je Leaflet meril prostor -- brez tega je siv.
+  requestAnimationFrame(() => runMap.map.invalidateSize());
+}
+
+async function loadPosition() {
+  const trip = (state.run && state.run.trip_id) || URL_TRIP;
+  if (!trip || !state.run) return;
+  // Lega obstaja samo za tekoci dan; za ogled preteklega dne je vprasanje
+  // "kje je zdaj" brez pomena.
+  if (state.run.service_date !== todayIso()) return;
+  try {
+    const list = await fetch(`/api/vehicles?trip=${encodeURIComponent(trip)}`)
+      .then((r) => r.json());
+    if (!list.length) return;
+    await drawRunMap(list[0]);
+  } catch (err) {
+    /* brez lege je okno voznje se vedno uporabno */
+  }
 }
 
 // ---------- vreme ----------

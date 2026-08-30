@@ -43,6 +43,17 @@
     <section class="col col-run">
       <div class="section-title">Ta vožnja</div>
       <div id="run-head"></div>
+      <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo GPS lego
+           -- vlaki je nimajo nikoli in zanje ta okvir ne obstaja. Leaflet se
+           zato prinese sele takrat in ne obtezi vsake strani z vlakom. -->
+      <div id="run-map-wrap" class="run-map-wrap" hidden>
+        <div class="run-map-head">
+          <span class="run-map-title">Kje je zdaj</span>
+          <span class="run-map-sub" id="run-map-sub"></span>
+          <a class="run-map-full" id="run-map-full" href="/app/map">na velik zemljevid</a>
+        </div>
+        <div id="run-map" class="run-map"></div>
+      </div>
       <div id="train-alerts"></div>
       <div id="run-timeline"><div class="empty-state">nalagam …</div></div>
       <button type="button" class="to-advanced" id="to-advanced">

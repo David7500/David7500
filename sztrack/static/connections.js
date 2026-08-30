@@ -11,8 +11,6 @@ const resultHeadEl = $("result-head");
 const alertsEl = $("alerts");
 const feedDotEl = $("feed-dot");
 
-const todayIso = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
-
 // Katero omrezje isce ta stran. Vlaki in avtobusi imata SVOJO stran, ker
 // potnik ve, s cim gre, in ju ne isce skupaj -- mesanje je bilo tudi merljivo
 // skodljivo: iskanje "ljublj" je vracalo mestna postajalisca in postajo
@@ -56,22 +54,22 @@ function attachSuggest(input, listEl) {
   let active = -1;
   let seq = 0;
 
-  // Kaj naredimo z izbrano postajo. Pri "Od–do" je iskanje smiselno sele, ko
-  // sta obe polji polna -- doslej je izbira izhodisca takoj sprozila obrazec
-  // in brskalnik je odgovoril z opozorilom nad praznim ciljem. Skok na
-  // naslednje polje je isti klik manj in brez opozorila.
+  // Kaj naredimo z izbrano postajo. Izbira postaje NE sprozi iskanja: pri
+  // "Od-do" clovek pogosto popravi se drugo polje ali dan, vsak vmesni ugib
+  // pa je zahteva na streznik za odgovor, ki ga nihce ni prosil. Iskanje
+  // sprozi gumb "Poisci" in nic drugega.
+  //
+  // Kar naredimo, je skok na prazno naslednje polje -- to je klik manj in
+  // hkrati pove, da vprasanje se ni celo.
   const takeIt = (name) => {
     input.value = name;
     close();
+    paintClear(input);
+    paintFavButton();
     const next = [...input.form.querySelectorAll(".station-field input")]
       .find((el) => el !== input && !el.value.trim());
-    paintClear(input);
-    if (next) {
-      next.focus();
-      paintFavButton();
-    } else {
-      input.form.requestSubmit();
-    }
+    if (next) next.focus();
+    else input.blur();
   };
 
   // Bralnik zaslona mora vedeti, da je polje spustni seznam, ali je odprt in
@@ -1121,8 +1119,13 @@ function restore() {
     setTab("board");
     searchBoard(false);
   } else if (from && to) {
+    // Polji sta izpolnjeni iz spomina ali naslova, iskanja pa NE sprozimo,
+    // razen ce je pot prislo iz naslova (deljena povezava -- tam je odgovor
+    // prav to, po kar je clovek prisel). Vrnitev na stran je drugo: takrat
+    // je vprasanje samo predlog in odgovor caka na "Poisci".
     setTab("ab");
-    searchAB(false);
+    if (q.has("from") && q.has("to")) searchAB(false);
+    else showOverview();
   } else {
     showOverview();
   }

@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/base.css">
   <link rel="stylesheet" href="/static/connections.css">
 </head>
-<body class="conn-page" data-network="{{ network | default('zeleznica') }}">
+<body class="conn-page net-{{ network | default('zeleznica') }}" data-network="{{ network | default('zeleznica') }}">
 
   <header class="topbar">
     <a class="brand" href="/app">

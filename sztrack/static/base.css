@@ -66,6 +66,14 @@ html, body {
 
 a { color: inherit; }
 
+/* Avtobusna stran ima svojo barvo. To ni okras: obe omrezji imata isto
+ * postavitev in isti iskalnik, zato je barva glave najhitrejsi znak, na
+ * kateri od njiju si. Zelena je ista, s kakrsno so avtobusi na zemljevidu. */
+body.net-avtobus {
+  --accent:     #3fa96f;
+  --accent-lit: #4db97f;
+}
+
 /* ---------- glava ---------- */
 
 .topbar {
@@ -98,7 +106,43 @@ a { color: inherit; }
 }
 .top-link:hover { color: var(--ink); }
 
-.top-nav { display: flex; align-items: center; gap: 14px; }
+.top-nav { display: flex; align-items: center; gap: 12px; }
+.nav-sep { width: 1px; height: 18px; background: #262b33; flex-shrink: 0; }
+
+/* Preklop omrezja. Segmentni gumb, ne dve povezavi med stirimi: potnik mora
+ * na prvi pogled videti, ali gleda vlake ali avtobuse -- doslej je bila
+ * trenutna stran samo izpuscena iz seznama in razlika ni bila vidna nikjer. */
+.net-switch {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--line-firm);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.net-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  color: var(--ink-mute);
+  text-decoration: none;
+  font: 500 12px/1 var(--sans);
+  white-space: nowrap;
+}
+.net-tab:hover { color: var(--ink); }
+.net-tab svg { flex-shrink: 0; }
+.net-tab.is-on {
+  background: var(--bg-raised);
+  color: var(--accent-lit);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-lit) 34%, transparent);
+}
+
+@media (max-width: 560px) {
+  /* Ime omrezja je pri 390 px predrago -- ikona pove isto, ker sta samo dve. */
+  .net-tab { padding: 5px 9px; }
+  .net-tab .net-name { display: none; }
+}
 
 .divider { width: 1px; height: 20px; background: #262b33; flex-shrink: 0; }
 

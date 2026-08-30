@@ -75,7 +75,7 @@ def index(request: Request):
     aplikacijo.
     """
     if "text/html" in request.headers.get("accept", ""):
-        return RedirectResponse("/app", status_code=307)
+        return templates.TemplateResponse(request, "home.html", {})
     return JSONResponse({
         "service": "sztrack",
         "version": app.version,
@@ -390,20 +390,23 @@ def api_train_reports(train_no: str, date: str | None = None):
 
 
 @app.get("/api/vehicles")
-def api_vehicles():
+def api_vehicles(trip: str | None = None):
     """Trenutna lega vozil z GPS.
 
     Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
     ta seznam nikoli ne bo vseboval -- kar aplikacija riše za vlake, je
     zadnja postaja z meritvijo, ne položaj.
+
+    `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
     """
     now = int(datetime.now(TZ).timestamp())
     with _conn() as conn:
         rows = conn.execute(
             "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign "
             "FROM vehicle_now v JOIN trip t USING (trip_id) "
-            "WHERE v.seen_ts >= ? ORDER BY t.train_no",
-            (now - collector.POSITION_FRESH_S,),
+            "WHERE v.seen_ts >= :od AND (:trip IS NULL OR v.trip_id = :trip) "
+            "ORDER BY t.train_no",
+            {"od": now - collector.POSITION_FRESH_S, "trip": trip},
         ).fetchall()
     out = []
     for r in rows:
