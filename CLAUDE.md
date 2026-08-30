@@ -257,10 +257,25 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   ista žiga; p90 je večji od 10-sekundnega cikla zato, ker vozilo med našim
   branjem in primerjavo objavi nov, do 20 s novejši žig.
 
-  Iz tega sledi, kaj **ne** bi pomagalo: gostejše branje. Pri 5 s bi mediana
-  ostala 0 in pridobili bi le v repu, plačali pa dvakratno breme tuje javne
-  storitve. Številka, ki jo potnik vidi, ni naš zaostanek — je starost meritve
-  GPS v vozilu. Zato ima žeton naslov, ki to pove.
+  **Naš zaostanek za feedom ni „nekaj sekund", ampak dvovrednosten.** Merjeno
+  na 490 primerjavah: v **66 %** imamo natanko isti žig kot feed (razlika −1 s),
+  v **25 %** pa smo eno vozilovo objavo zadaj (19--20 s). Vmesnih vrednosti
+  skoraj ni. Razlog je aritmetičen in se ujema do odstotka: vozilo objavlja na
+  20 s, mi beremo na 10 s, torej je verjetnost, da je nova lega prispela po
+  našem zadnjem branju, ≈ 5/20 = 25 % (opaženo 122 od 490). Mediana 0 s,
+  povprečje 5,5 s, p90 19 s, največ 41 s.
+
+  **Pogojni GET pri legah ne pomaga.** Feed se spreminja **vsaki 2 s** (39 od
+  40 zahtev je vrnilo 200, en sam 304) — različna vozila poročajo v različnih
+  fazah, zato datoteka skoraj nikoli ni ista. Pri voznem redu in obvestilih
+  ETag prihrani prenos, tu ne.
+
+  Iz tega sledi, kaj bi gostejše branje res dalo: pri 5 s bi bila verjetnost
+  zaostanka ≈ 12,5 % in povprečje ~2,5 s namesto 5,5. Torej **3 sekunde od 32**,
+  za dvakratno breme tuje javne storitve (63 → 127 MB/dan). Zato ostane 10 s;
+  kdor hoče preizkusiti, ima `SZ_POSITION_SECONDS` in ne rabi spreminjati kode.
+  Številka, ki jo potnik vidi, ni naš zaostanek — je starost meritve GPS v
+  vozilu. Zato ima žeton naslov, ki to pove.
 * **Okno vožnje je lego naložilo enkrat in nikoli več.** Kdor je stran pustil
   odprto, je gledal, kje je bil avtobus ob odprtju -- in prav tam je vprašanje
   „kje je zdaj" najbolj neposredno. Zdaj se osvežuje z istim
