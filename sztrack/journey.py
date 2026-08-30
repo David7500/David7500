@@ -21,8 +21,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import (_abs_time, _after_slack, _slack_ahead, _with_operator,
-                    last_measured, typical_at_stops)
+from .stats import (_abs_time, _after_slack, _operator_is_stale, _slack_ahead,
+                    _with_operator, dwell_at, last_measured, typical_at_stops)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -343,10 +343,15 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             # bo skrajsalo, preden odpelje. Pri prihodih ne: takrat vozilo
             # se pride in postanek je sele za tem.
             zadnji = d["stop_seq"] if kind == "odhodi" else d["stop_seq"] - 1
-            rez = sum(w for seq, w in slack.get(d["trip_id"], ())
-                      if lm["stop_seq"] < seq <= zadnji)
-            # Prevoznikova vrednost samo navzgor (glej `stats._with_operator`).
-            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez), own)
+            vrsta = slack.get(d["trip_id"], ())
+            rez = sum(w for seq, w in vrsta if lm["stop_seq"] < seq <= zadnji)
+            # Prevoznikova vrednost samo navzgor (glej `stats._with_operator`),
+            # razen dokler vlak stoji na dolgem postanku -- takrat je to le
+            # prenos prihodne zamude (`stats._operator_is_stale`).
+            prev = None if _operator_is_stale(
+                own, lm["delay_arr"], lm["delay_s"],
+                dwell_at(vrsta, lm["stop_seq"])) else own
+            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez), prev)
             d["slack_s"] = rez
             d["delay_from"] = lm["name"]
             d["delay_kind"] = "ocena"

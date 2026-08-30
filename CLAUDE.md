@@ -95,10 +95,31 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   Nizka vrednost je namreč privzeta ničla za postanek, ki ga feed še ni
   razrešil; visoka pa pomeni, da prevoznik **ve** za nekaj, česar iz zgodovine
   ni mogoče vedeti — okvaro, zaporo, križanje. Zato `stats._with_operator()`:
-  `max(naša ocena, njegova)`, nikoli navzdol. Na teh nalogah MAE 1,36 → 1,12
+  `max(naša ocena, njegova)`, nikoli navzdol.
+
+  **Ena izjema, in ta je izmerjena** (`stats._operator_is_stale`): dokler vlak
+  **stoji na postaji z dolgim postankom**, njegova vrednost za naprej ni
+  napoved, ampak prenos zamude, s katero je prišel — koliko postanka bo
+  skrajšal, se še ne ve. Ujeto v živo 29. 8.: RG 1604 je stal v Ljubljani
+  (postanek 21 min, prišel +19), ob 23:04 je prevoznik za Zalog objavil +19 in
+  ob 23:12, ko je vlak odpeljal, to popravil na +5. Vlak je prišel +5.
+
+  Podpis: prevoznikova vrednost je **natanko** zamuda ob prihodu na postajo,
+  kjer vlak stoji (±1 min), postanek tam je ≥ 5 min, vrednost pa je večja od
+  tega, kar že vemo. Pojavi se v 926 od 63 967 primerov in tam je `max`
+  **slabši** — MAE 4,19 proti 3,31 min, delež v petih minutah 71,2 proti
+  81,4 %. Z izjemo skupno 1,189 → 1,177 min in 94,27 → 94,42 %. Na teh nalogah MAE 1,36 → 1,12
   min, delež v petih minutah 93,7 → 94,8 %, in boljše je v **vseh** razredih
   zamude. Velja v `predict`, na odhodni tabli in v iskalniku zvez.
   Merljivo: `sztrack backtest --operator`.
+
+  **Merilo samo je bilo prekratko.** `backtest.operator_forecast_tasks()` vzame
+  eno nalogo na par postankov — kaj je feed trdil o cilju v trenutku, ko je bilo
+  izhodišče zadnjič potrjeno. Prav zaradi te konstrukcije zgornjega podpisa
+  **sploh ne vsebuje** (0 primerov od 12 154): prevoznikova prenesena vrednost
+  se pojavi šele **po** zadnji spremembi na izhodišču. Pošteno merilo je vsak
+  poll posebej — 63 967 nalog namesto 12 154 — in šele tam se vidi tudi slaba
+  stran pravila. Kdor pravilo spreminja, naj meri tako.
 
 * **Zamude naprej po progi so napoved, ne meritev** -- in ta napoved je
   **izmerjeno slaba**. Feed za še nedosežene postanke pogosto objavi 0, dokler

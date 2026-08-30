@@ -904,3 +904,40 @@ def test_napoved_ne_pade_na_prevoznikovo_niclo(conn):
     f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600, service_date=dan)}
     assert f["Celje"]["from_operator"] is False
     assert f["Celje"]["predicted_delay_s"] == f["Celje"]["own_delay_s"]
+
+
+def test_prevoznikove_vrednosti_ne_vzamemo_dokler_vlak_stoji():
+    """Dokler vlak stoji na dolgem postanku, njegova vrednost za naprej ni
+    napoved, ampak prenos zamude, s katero je prišel.
+
+    Ujeto v živo 29. 8.: RG 1604 je stal v Ljubljani (21 min postanka, prišel
+    +19); prevoznik je za naslednjo postajo objavil +19 in to čez osem minut
+    popravil na +5. Vlak je prišel +5.
+    """
+    # prišel +19 (1140), odpelje po voznem redu (0), postanek 21 min
+    assert stats._operator_is_stale(1140, 1140, 0, 1260) is True
+    # ista številka, a postanek je kratek -- vlak ne stoji, vrednost je napoved
+    assert stats._operator_is_stale(1140, 1140, 0, 60) is False
+    # prevoznik pove NEKAJ DRUGEGA kot zamudo ob prihodu -- to je znanje
+    assert stats._operator_is_stale(1800, 1140, 0, 1260) is False
+    # ni vecja od tega, kar ze vemo -- pravilo tako ali tako ne bi ugriznilo
+    assert stats._operator_is_stale(1140, 1140, 1140, 1260) is False
+
+
+def test_napoved_ne_prevzame_prenesene_zamude(conn):
+    """Isto, na celotni poti: model ne sme prevzeti prevoznikovega prenosa."""
+    dan = _pred(0)
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    # t1 dobi v Zidanem Mostu dolg postanek: 09:00 -> 09:25
+    conn.execute("UPDATE sched SET dep_s = 34200 WHERE trip_id='t1' AND stop_seq=2")
+    db.fill_trip_window(conn)
+    # vlak stoji v Zidanem Mostu: prišel +20, odhod po voznem redu
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('t1',?,2,1200,0,0)", (dan,))
+    # prevoznik za Celje objavi natanko zamudo ob prihodu -- prenos, ne napoved
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('t1',?,3,1200,1200,0)", (dan,))
+    conn.commit()
+    f = {p["name"]: p for p in stats.predict(conn, "IC 1", 2, 0, service_date=dan)}
+    assert f["Celje"]["from_operator"] is False
+    assert f["Celje"]["predicted_delay_s"] == f["Celje"]["own_delay_s"]

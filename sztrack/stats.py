@@ -703,6 +703,18 @@ def typical_dwell(conn: sqlite3.Connection, train_no: str, days: int = 90) -> di
     }
 
 
+def dwell_at(slack_list, stop_seq: int) -> int:
+    """Voznoredni postanek na tem postanku, iz tabele `_slack_ahead`.
+
+    Tam so samo postanki nad `MIN_DWELL_S`; kar ni v seznamu, je kratko in za
+    presojo "vlak se stoji" nezanimivo.
+    """
+    for seq, w in slack_list or ():
+        if seq == stop_seq:
+            return w + MIN_DWELL_S
+    return 0
+
+
 def _slack_ahead(conn: sqlite3.Connection, trip_ids: list[str]) -> dict:
     """trip_id -> [(stop_seq, rezerva)] za postanke, ki rezervo sploh imajo.
 
@@ -740,6 +752,33 @@ def _with_operator(ocena: int, prevoznik: int | None) -> int:
     return ocena if prevoznik is None else max(ocena, prevoznik)
 
 
+#: Postanek, od katerega naprej velja, da vozilo na postaji "stoji dlje casa".
+STANDING_DWELL_S = 300
+
+
+def _operator_is_stale(prevoznik: int | None, arr_i: int | None, dep_i: int,
+                       dwell_i: int) -> bool:
+    """Je prevoznikova vrednost samo prenos zamude z ze doseZene postaje?
+
+    Izjema od pravila "prevoznik navzgor". Dokler vlak stoji na postaji z
+    dolgim postankom, prevoznik za naprej objavi zamudo, s katero je vlak
+    PRISEL -- ne ve se, koliko postanka bo skrajsal. Ko odpelje, jo popravi.
+
+    Ujeto v zivo 29. 8.: RG 1604 je stal v Ljubljani (21 min postanka, prisel
+    +19). Ob 23:04 je prevoznik za Ljubljano Zalog objavil +19, ob 23:12 pa
+    to popravil na +5. Vlak je prisel +5.
+
+    Merjeno na 63 967 primerih (vsak poll, ne le eden na nalogo): podpis se
+    pojavi 926-krat in tam je pravilo "vzemi vecjo" **slabse** -- MAE 4,19
+    proti 3,31 min, delez v petih minutah 71,2 proti 81,4 %. Skupno izpustitev
+    teh primerov pomeni 1,189 -> 1,177 min in 94,27 -> 94,42 %.
+    """
+    return (prevoznik is not None and arr_i is not None
+            and dwell_i >= STANDING_DWELL_S
+            and abs(prevoznik - arr_i) <= 60
+            and prevoznik > dep_i + 60)
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90,
             exclude_date: str | None = None,
@@ -773,17 +812,27 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     # Kaj o teh postankih pravi feed prav zdaj. Za se nedosezen postanek je to
     # prevoznikova napoved -- uporabimo jo samo navzgor (glej `_with_operator`).
     feed: dict[int, int] = {}
+    arr_i = None
     if service_date:
         feed = {r["stop_seq"]: r["d"] for r in conn.execute(
             "SELECT r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
             "FROM run r JOIN trip t USING (trip_id) "
             "WHERE t.train_no = ? AND r.service_date = ? AND r.stop_seq > ? AND d IS NOT NULL",
             (train_no, service_date, stop_seq))}
+        row = conn.execute(
+            "SELECT r.delay_arr FROM run r JOIN trip t USING (trip_id) "
+            "WHERE t.train_no = ? AND r.service_date = ? AND r.stop_seq = ?",
+            (train_no, service_date, stop_seq)).fetchone()
+        arr_i = row["delay_arr"] if row else None
     # Rezerva voznega reda: presezek postanka nad najkrajsim, ki ga vozilo se
     # zmore. To je edini vhod v napoved, ki ni statistika -- rezerva je znana
     # vnaprej in obstaja ne glede na to, ali smo jo kdaj videli porabljeno.
     dwell = {t["stop_seq"]: max(0, (t["dep_s"] or 0) - (t["arr_s"] or 0) - MIN_DWELL_S)
              for t in stops if t["arr_s"] is not None and t["dep_s"] is not None}
+    # Postanek na izhodiscu -- za presojo, ali vlak tam se stoji.
+    dwell_i = next((( t["dep_s"] or 0) - (t["arr_s"] or 0) for t in stops
+                    if t["stop_seq"] == stop_seq
+                    and t["arr_s"] is not None and t["dep_s"] is not None), 0)
     razred = delay_bucket(current_delay_s)
     out = []
     slack = 0
@@ -804,6 +853,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
         ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
         nasa = osnova + (round(statistics.median(ostanki)) if ostanki else 0)
         prevoznik = feed.get(seq)
+        if _operator_is_stale(prevoznik, arr_i, current_delay_s, dwell_i):
+            prevoznik = None            # samo prenos zamude, ne napoved
         out.append({
             "stop_seq": seq,
             "name": names[seq],
@@ -848,7 +899,7 @@ ORDER BY dep_s
 # Ista logika kot pri /api/live: kar je naprej, je napoved, ne meritev.
 _LAST_MEASURED_SQL = """
 WITH t AS (
-    SELECT r.trip_id, r.stop_seq, s.stop_id,
+    SELECT r.trip_id, r.stop_seq, s.stop_id, r.delay_arr,
            COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
            COALESCE(s.dep_s, s.arr_s) AS t_s
     FROM run r
@@ -869,7 +920,7 @@ passed AS (
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= ?
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
 )
-SELECT p.trip_id, p.stop_seq, p.delay_s, st.name
+SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, st.name
 FROM passed p JOIN station st ON st.stop_id = p.stop_id
 WHERE p.rn = 1
 """
@@ -924,12 +975,18 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             #
             # Prej rezerva voznega reda, isto kot na tabli: vlak, ki stoji na
             # vmesni postaji dvajset minut, do potnika zamude ne prinese.
-            rez = sum(w for seq, w in slack.get(d["trip_id"], ())
+            vrsta = slack.get(d["trip_id"], ())
+            rez = sum(w for seq, w in vrsta
                       if lm["stop_seq"] < seq <= d["from_seq"])
             # Prevoznikova vrednost samo navzgor: nizka je nerazresena nicla,
             # visoka pa pomeni, da ve nekaj, cesar iz zgodovine ni mogoce vedeti.
-            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez),
-                                          d["from_delay_s"])
+            # Izjema: dokler vlak stoji na dolgem postanku, je njegova vrednost
+            # le prenos prihodne zamude (glej `_operator_is_stale`).
+            prev = d["from_delay_s"]
+            if _operator_is_stale(prev, lm["delay_arr"], lm["delay_s"],
+                                  dwell_at(vrsta, lm["stop_seq"])):
+                prev = None
+            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez), prev)
             d["delay_at"] = lm["name"]
             d["delay_kind"] = "ocena"
         elif d["from_delay_s"] is not None:
