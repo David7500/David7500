@@ -809,16 +809,26 @@ kolešček približuje" ima odgovor „ne, dokler je to element" — kazalec zai
 | | vgrajen | čez celo stran |
 |---|---|---|
 | kolešček | ne (Ctrl/⌘ + kolešček da) | da |
+| **miška** | **vleče zemljevid** | isto |
 | en prst | pomika **stran** | pomika zemljevid |
 | dva prsta | pomikata in približujeta | isto |
 | gumba +/− | vedno | vedno |
 
 Resnična napaka tu **ni bila** manjkajoča povečava, ampak `dragging`: ta je
 privzeto vklopljen in je en prst pomikal zemljevid namesto strani — na
-telefonu se s tega okvira ni dalo odpomakniti. Zdaj je izklopljen, dva prsta
-pa zemljevid vseeno pomikata in približujeta, ker to opravi `touchZoom` (med
-širjenjem prstov premika tudi središče). Dvoprstna povečava je torej **delala
-že prej**; manjkalo je nasprotno.
+telefonu se s tega okvira ni dalo odpomakniti. Dva prsta zemljevid vseeno
+pomikata in približujeta, ker to opravi `touchZoom` (med širjenjem prstov
+premika tudi središče); dvoprstna povečava je torej **delala že prej**,
+manjkalo je nasprotno.
+
+**Vlečenje se preklaplja po vhodni napravi, ne po napravi nasploh.** Prvi
+popravek je `dragging` preprosto ugasnil in s tem vzel tudi vlečenje z miško,
+ki strani ne pomika in ni v konfliktu z ničimer. `initDragPolicy()` ga zato
+ugasne ob `touchstart` in prižge ob `mousedown` — prenosnik z zaslonom na
+dotik mora imeti oboje, in odloči tisti vhod, ki je pravkar v rabi.
+Poslušalca sta v **zajemni** fazi na ovoju: Leaflet svojega obesi na zabojnik
+zemljevida in ga dobi v mehurčni, torej za nama, zato je ob njegovem branju
+`dragging` že v pravem stanju.
 
 Na sledilni ploščici brskalnik širjenje prstov pošlje prav kot `wheel` s
 `ctrlKey`, zato ista koda pokrije Ctrl + kolešček in ščipanje. Namig se pokaže

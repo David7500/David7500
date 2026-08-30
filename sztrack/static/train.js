@@ -1129,17 +1129,14 @@ async function drawRunMap(v) {
   const prvic = !runMap.map;
   if (prvic) {
     // Zemljevid je ELEMENT na strani, ne stran, zato geste, ki bi ukradle
-    // pomikanje strani, tu ne veljajo:
-    //   * kolesce ne priblizuje (klasicna nadloga: kazalec zaide cez
-    //     zemljevid in stran se neha pomikati), pac pa Ctrl/Cmd + kolesce --
-    //     isti dogovor kot pri vgrajenem Google Maps;
-    //   * `dragging` je izklopljen, zato en prst pomika STRAN. Dva prsta
-    //     zemljevid vseeno pomikata in priblizujeta, ker to opravi
-    //     `touchZoom` -- ta med sipanjem prstov premika tudi sredisce.
-    // Cez celo stran (`is-max`) je zemljevid stran in vse to se odklene.
+    // pomikanje strani, tu ne veljajo -- a samo tiste, ki ga res ukradejo.
+    // Kolesce ne priblizuje (klasicna nadloga: kazalec zaide cez zemljevid in
+    // stran se neha pomikati), pac pa Ctrl/Cmd + kolesce. `dragging` pa ostane
+    // VKLOPLJEN: vlecenje z misko strani ne pomika in ni v konfliktu z nicimer.
+    // Preklopi ga `initDragPolicy()`, in sicer po VHODNI NAPRAVI, ne po
+    // napravi nasploh -- prenosnik z zaslonom na dotik mora imeti oboje.
     runMap.map = L.map("run-map", {
-      zoomControl: false, attributionControl: false,
-      scrollWheelZoom: false, dragging: false,
+      zoomControl: false, attributionControl: false, scrollWheelZoom: false,
     }).setView([v.lat, v.lon], 14);
     L.control.zoom({ position: "topright" }).addTo(runMap.map);
     // Esri ima prave ploscice do z16; nad tem raztegnemo zadnjo (glej dashboard).
@@ -1213,6 +1210,7 @@ async function drawRunMap(v) {
     requestAnimationFrame(() => runMap.map.invalidateSize());
     initFullscreen();
     initWheelZoom();
+    initDragPolicy();
   }
 }
 
@@ -1289,10 +1287,11 @@ function setMapMax(on) {
   const btn = document.getElementById("run-map-fs");
   if (!wrap) return;
   wrap.classList.toggle("is-max", on);
-  // Cez celo stran ni ni cesar krasti: zemljevid JE stran.
+  // Cez celo stran ni nicesar krasti: zemljevid JE stran, zato oboje prosto.
+  runMap.prosto = on;
   if (runMap.map) {
     if (on) { runMap.map.dragging.enable(); runMap.map.scrollWheelZoom.enable(); }
-    else { runMap.map.dragging.disable(); runMap.map.scrollWheelZoom.disable(); }
+    else { runMap.map.scrollWheelZoom.disable(); }
   }
   if (btn) {
     btn.setAttribute("aria-pressed", String(on));
@@ -1306,6 +1305,29 @@ function setMapMax(on) {
 // ploscici brskalnik sipanje prstov posilja prav kot `wheel` s `ctrlKey`,
 // zato ista koda pokrije oboje. Namig se pokaze SAMO ob poskusu brez tipke --
 // takrat, ko clovek res ne ve, zakaj se nic ne zgodi.
+// En prst mora pomikati STRAN, miska pa zemljevid. Zato preklapljamo po
+// vhodni napravi ob vsakem dotiku oziroma pritisku, ne enkrat za vselej.
+//
+// Poslusamo v ZAJEMNI fazi na ovoju: Leaflet svoj `touchstart` obesi na
+// zabojnik zemljevida in ga dobi v mehurcni fazi, torej za nami. Ce dragging
+// izklopimo prej, Leaflet svojega poslusalca sploh nima vec in vlecenja ne
+// zacne. Obratno pri miski.
+//
+// Dva prsta zemljevid vseeno pomikata in priblizujeta -- to opravi
+// `touchZoom`, ki med sirjenjem prstov premika tudi sredisce.
+function initDragPolicy() {
+  const wrap = document.getElementById("run-map-wrap");
+  if (!wrap || !runMap.map) return;
+  const nastavi = (naj) => {
+    if (runMap.prosto) return;             // cez celo stran je vse prosto
+    if (naj) runMap.map.dragging.enable();
+    else runMap.map.dragging.disable();
+  };
+  wrap.addEventListener("touchstart", () => nastavi(false),
+                        { capture: true, passive: true });
+  wrap.addEventListener("mousedown", () => nastavi(true), { capture: true });
+}
+
 function initWheelZoom() {
   const el = runMap.map && runMap.map.getContainer();
   if (!el) return;
