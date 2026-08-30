@@ -44,7 +44,24 @@ NETWORK_Q = Query("zeleznica", pattern="^(zeleznica|avtobus)$",
 
 # Poti relativno na paket, da delajo enako v dev checkoutu in na /opt/sztrack.
 _PKG_DIR = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=_PKG_DIR / "static"), name="static")
+class _RevalidatingStatic(StaticFiles):
+    """Statične datoteke z obvezno revalidacijo.
+
+    Brez `Cache-Control` brskalnik ugiba: datoteko, ki se dolgo ni
+    spremenila, drži v predpomnilniku ure. Posledica je bila prijavljena --
+    popravek spodnje plošče na zemljevidu je bil na strežniku, uporabnik pa
+    je dobival staro CSS in gumba ni bilo. `no-cache` ni "ne shranjuj":
+    datoteka se shrani, a se pred vsako rabo preveri, in ker imamo `ETag`,
+    je odgovor 304 brez telesa.
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/static", _RevalidatingStatic(directory=_PKG_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_PKG_DIR / "templates")
 
 

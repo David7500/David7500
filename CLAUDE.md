@@ -658,6 +658,19 @@ praznem zaslonu. Nad 1000 px se vsebina razdeli: levo, kar velja **zdaj**
 časovnica je visoka in bi kot element čez več grid vrstic te vrstice
 raztegnila, levi stolpec pa bi visel v praznem.
 
+**Statične datoteke gredo z `Cache-Control: no-cache`.** Brez glave brskalnik
+ugiba in datoteko, ki se dolgo ni spremenila, drži ure. Posledica je bila
+prijavljena: popravek spodnje plošče je bil na strežniku, uporabnik pa je
+dobival staro CSS in gumba ni bilo. `no-cache` ni „ne shranjuj" — datoteka se
+shrani in se pred vsako rabo preveri; z `ETag` je odgovor 304 brez telesa.
+
+**Opomb naj bo malo.** Prikaz je imel na zemljevidu tri odstavke razlage, v
+oknu vožnje pa štirivrstično opombo o vremenu in drugo o virih podatkov.
+Zapisano dvakrat je bilo prebrano nikoli. Velja: opomba pove tisto, kar
+spremeni potnikovo ravnanje („čakaj na postajališču, ne na peronu"), ostalo
+gre v tooltip ali odpade. Razlaga o virih podatkov ne sodi tja, kjer človek
+gleda svojo vožnjo.
+
 **Stranska plošča zemljevida je na telefonu spodnja plošča.** 320 px stolpca
 je na 390 px zaslonu pojedlo pol slike in ga ni bilo mogoče skriti; zdaj je
 privzeto zaprt in se odpre na dotik. Izbira vozila ga spet zapre — naslednje,

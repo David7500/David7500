@@ -131,17 +131,16 @@ function vehicleWord() {
   return state.network === "zeleznica" ? "ta prevoz" : "ta avtobus";
 }
 
+// Kratko in samo tisto, kar spremeni potnikovo ravnanje. Ostalo je bilo
+// razlaga o virih podatkov na mestu, kjer clovek gleda svojo voznjo.
 function caveatText() {
   if (!isBus(state.mode)) {
-    return "Meritev ima ločljivost 60 s in je zajeta v prometnem mestu, ne nujno na peronu. "
-      + "Vlaki v feedu nimajo GPS — lega je zadnja postaja z meritvijo, ne dejanski položaj.";
+    return "Zamuda je izmerjena v prometnem mestu, ne nujno na peronu.";
   }
   if (state.network === "zeleznica") {
-    return "Nadomestni prevoz vozi po cesti in po svojem voznem redu, ne po železniškem. "
-      + "Čakaj na postajališču, ne na peronu.";
+    return "Nadomestni prevoz: čakaj na postajališču, ne na peronu.";
   }
-  return "Mestni avtobus ima GPS, zato je njegova lega na zemljevidu izmerjena, "
-    + "ne sklepana. Zamude so iz istega feeda kot pri vlakih, z ločljivostjo ene minute.";
+  return "Lega je izmerjena z GPS, zamuda ima ločljivost ene minute.";
 }
 
 // Nazaj na tisto stran, s katere se pride: iskalnik vlakov ali avtobusov.
@@ -883,11 +882,11 @@ function profileLegendHtml(pts) {
   return items.join("");
 }
 
+// Ena poved. Kar je bilo tu prej -- iz cesa je stopnja sestavljena, kako
+// velika je celica modela -- se vidi ob dotiku stolpca; napisano dvakrat je
+// bilo dvakrat prebrano nikoli.
 const WEATHER_NOTE =
-  "Stopnja razmer 0–10 je sešteta iz padavin, snega, sunkov vetra, megle, nevihte in mraza — " +
-  "razčlenitev je vidna ob dotiku postaje. <strong>Ni napoved zamude</strong> in ne trdi vzroka: " +
-  "opisuje vreme. Vrednost je modelska za celico 8 × 8 km ob uri, ko je vlak na tej postaji, " +
-  "ne meritev na peronu.";
+  "Razmere 0–10 opisujejo vreme, <strong>niso napoved zamude</strong>.";
 
 function renderProfile() {
   const sub = document.getElementById("profile-sub");
