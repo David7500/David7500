@@ -412,3 +412,45 @@ body.is-advanced .to-advanced { display: none; }
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
 .run-map .leaflet-container { background: #0f1115; font-family: var(--sans); }
 @media (max-width: 720px) { .run-map { height: 210px; } }
+
+/* ---------- preprost pogled na sirokem zaslonu ----------
+ * Okno voznje je bilo postavljeno za telefon: en stolpec 340 px. V preprostem
+ * pogledu je zgodovina skrita, zato je na namizju ostal ozek trak ob praznem
+ * zaslonu -- vsa vsebina stisnjena v desetino sirine.
+ *
+ * Zdaj se vsebina razdeli na dvoje: levo, kar velja ZDAJ (zamuda, razmere,
+ * kje je vozilo), desno pot po postajah. Isto vprasanje, ista vsebina, samo
+ * prostor je izrabljen.
+ *
+ * Flex in ne grid: casovnica je visoka in bi kot element cez vec grid vrstic
+ * te vrstice raztegnila -- levi stolpec bi visel v praznem.
+ */
+@media (min-width: 1000px) {
+  body:not(.is-advanced) .train-body { justify-content: center; }
+
+  body:not(.is-advanced) .col-run {
+    width: min(100%, 1180px);
+    flex-shrink: 1;
+    border-right: none;
+    background: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 30px;
+    padding: 0 24px 30px;
+  }
+  body:not(.is-advanced) .col-run > .run-now {
+    width: 400px;
+    flex-shrink: 0;
+  }
+  body:not(.is-advanced) .col-run > #run-timeline {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* Naslov razdelka je bil obroba celega stolpca; v dveh stolpcih bi crta
+     tekla samo cez levega in bi izgledala kot napaka. */
+  body:not(.is-advanced) .col-run .section-title {
+    border-bottom: none;
+    padding-left: 0; padding-right: 0;
+  }
+  body:not(.is-advanced) .col-run .run-map { height: 320px; }
+}

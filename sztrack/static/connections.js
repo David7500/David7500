@@ -226,7 +226,11 @@ function journeyHref(trainNo, date, tripId, station) {
   if (date) p.set("date", date);
   if (tripId) p.set("trip", tripId);
   if (station) p.set("postaja", station);
-  return `/app/train/${encodeURIComponent(trainNo)}${p.toString() ? `?${p}` : ""}`;
+  // Pot mora ustrezati omrezju: `/app/train/25` za mestno linijo 25 je
+  // napacen naslov, ki ga bo nekdo delil naprej. Streznik zna popraviti, a
+  // preusmeritev je zahteva vec in v naslovni vrstici za hip napacen naslov.
+  const pot = IS_BUS ? "/app/bus/" : "/app/train/";
+  return `${pot}${encodeURIComponent(trainNo)}${p.toString() ? `?${p}` : ""}`;
 }
 
 // ---------- izpis ----------

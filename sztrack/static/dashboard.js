@@ -6,15 +6,16 @@
 // API-ja, zato je tu ločena kopija privzetka.
 const POLL_MS = 30000;
 
-function openTrainWindow(trainNo, tripId, serviceDate) {
+function openTrainWindow(trainNo, tripId, serviceDate, network) {
   // Posamezno vozilo dobi svoje okno -- tam je poleg te vožnje še zgodovina.
   // `trip` in `date` gresta zraven, kadar ju poznamo: številka linije pri
   // avtobusu ni enolična, devet vlakov pa ima sezonske različice.
   const q = new URLSearchParams();
   if (serviceDate) q.set("date", serviceDate);
   if (tripId) q.set("trip", tripId);
+  const pot = network === "avtobus" ? "/app/bus/" : "/app/train/";
   window.open(
-    `/app/train/${encodeURIComponent(trainNo)}${q.toString() ? `?${q}` : ""}`,
+    `${pot}${encodeURIComponent(trainNo)}${q.toString() ? `?${q}` : ""}`,
     `sztrack-${trainNo}`,
   );
 }
@@ -317,7 +318,8 @@ function renderBuses(list) {
     let m = busMarkers.get(key);
     if (!m) {
       m = L.marker([v.lat, v.lon], { icon: busIcon(v, z), keyboard: false });
-      m.on("click", () => openTrainWindow(m.__v.train_no, m.__v.trip_id, m.__v.service_date));
+      m.on("click", () => openTrainWindow(
+        m.__v.train_no, m.__v.trip_id, m.__v.service_date, "avtobus"));
       m.bindTooltip(busTooltipHtml(v), {
         className: "sztrack-tooltip", direction: "top", offset: [0, -10],
       });
@@ -582,6 +584,7 @@ function focusVehicle(key) {
     if (mk) mk.openPopup();
   }
   drawStops(m.v.train_no, m.v.trip_id);
+  setSheet(false);        // naslednje, kar clovek hoce videti, je zemljevid
 }
 
 findEl.addEventListener("input", renderFind);
@@ -635,6 +638,20 @@ tickClock();
 setInterval(tickClock, 1000);
 refreshFeedDot();
 setInterval(refreshFeedDot, 30000);
+
+// Spodnja plosca na telefonu. Zaprta se odpre na dotik gumba; iskanje jo
+// odpre samo (kdor tipka, jo rabi odprto), izbira vozila pa jo zapre, ker je
+// naslednje, kar clovek hoce videti, zemljevid.
+const sheetBtn = document.getElementById("sheet-toggle");
+function setSheet(on) {
+  document.body.classList.toggle("sheet-open", on);
+  if (sheetBtn) sheetBtn.setAttribute("aria-expanded", String(on));
+  if (on) setTimeout(() => findEl.focus(), 180);
+}
+if (sheetBtn) {
+  sheetBtn.addEventListener("click", () =>
+    setSheet(!document.body.classList.contains("sheet-open")));
+}
 
 initLayers();
 loadStatic().then(() => {

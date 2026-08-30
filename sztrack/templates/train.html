@@ -10,14 +10,16 @@
   <link rel="stylesheet" href="/static/dashboard.css">
   <link rel="stylesheet" href="/static/train.css">
 </head>
-<body class="train-page" data-train-no="{{ train_no }}">
+<body class="train-page net-{{ network | default('zeleznica') }}"
+      data-train-no="{{ train_no }}" data-network="{{ network | default('zeleznica') }}">
 
   <header class="topbar">
-    <a class="back-link" href="/app" title="nazaj na iskalnik">
+    <a class="back-link" href="{{ '/app/bus' if network == 'avtobus' else '/app/train' }}"
+       title="nazaj na iskalnik">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M15 5l-7 7 7 7"></path>
       </svg>
-      <span>iskalnik</span>
+      <span>{{ 'avtobusi' if network == 'avtobus' else 'vlaki' }}</span>
     </a>
     <div class="divider"></div>
     <div class="train-head">
@@ -41,6 +43,9 @@
   <div class="train-body">
 
     <section class="col col-run">
+      <!-- Kar velja ZDAJ. Na sirokem zaslonu v preprostem pogledu je to levi
+           stolpec, casovnica pa desni; na telefonu je oboje eno za drugim. -->
+      <div class="run-now">
       <div class="section-title">Ta vožnja</div>
       <div id="run-head"></div>
       <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo GPS lego
@@ -55,10 +60,11 @@
         <div id="run-map" class="run-map"></div>
       </div>
       <div id="train-alerts"></div>
-      <div id="run-timeline"><div class="empty-state">nalagam …</div></div>
       <button type="button" class="to-advanced" id="to-advanced">
         Pokaži zgodovino te poti in grafe
       </button>
+      </div>
+      <div id="run-timeline"><div class="empty-state">nalagam …</div></div>
     </section>
 
     <section class="col col-hist adv-only">

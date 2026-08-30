@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -87,8 +88,16 @@ def index(request: Request):
 
 
 @app.get("/app", response_class=HTMLResponse)
+def app_root():
+    """Stara vstopna pot. Vlaki imajo zdaj svojo `/app/train`, tako kot imajo
+    avtobusi `/app/bus` -- `/app` je bil vlakovni samo po dogovoru in to je
+    bilo iz naslova nevidno. Deljene povezave morajo ostati veljavne."""
+    return RedirectResponse("/app/train", status_code=308)
+
+
+@app.get("/app/train", response_class=HTMLResponse)
 def connections_page(request: Request):
-    """Vstopna stran: od postaje do postaje. Zemljevid je pogled dispecerja,
+    """Vlaki: od postaje do postaje. Zemljevid je pogled dispecerja,
     povprecen potnik sprasuje "kdaj mi pelje vlak" -- zato je iskalnik prvi."""
     return templates.TemplateResponse(request, "connections.html", {
         "here": "iskalnik", "network": "zeleznica",
@@ -137,13 +146,41 @@ def alerts_page(request: Request):
     return templates.TemplateResponse(request, "alerts.html", {"here": "ovire"})
 
 
+def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
+    """Okno ene vožnje. Pot mora ustrezati omrežju vožnje.
+
+    Ista predloga streže oboje, a naslov ne sme lagati: `/app/train/25` za
+    mestno linijo 25 je napačen naslov, ki ga bo nekdo delil naprej. Zato
+    poizvedba po omrežju in preusmeritev na pravo pot.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT network FROM trip "
+            "WHERE (:trip IS NOT NULL AND trip_id = :trip) "
+            "   OR (:trip IS NULL AND train_no = :no) LIMIT 1",
+            {"trip": trip, "no": train_no}).fetchone()
+    prava = row["network"] if row else network
+    if prava != network:
+        pot = "/app/bus/" if prava == "avtobus" else "/app/train/"
+        q = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(f"{pot}{quote(train_no)}{q}", status_code=307)
+    return templates.TemplateResponse(request, "train.html", {
+        "train_no": train_no, "network": prava,
+        "here": "avtobusi" if prava == "avtobus" else "iskalnik",
+    })
+
+
 @app.get("/app/train/{train_no}", response_class=HTMLResponse)
-def dashboard_train(request: Request, train_no: str):
-    """Svoje okno za en vlak: ta vožnja + zgodovina zamud te poti."""
-    # `here`: okno vlaka ima svojo povezavo nazaj na iskalnik, zato je v
-    # vrstici povezav ne ponavljamo.
-    return templates.TemplateResponse(
-        request, "train.html", {"train_no": train_no, "here": "iskalnik"})
+def train_trip_page(request: Request, train_no: str, trip: str | None = None):
+    """Okno ene vlakovne vožnje: ta vožnja + zgodovina zamud te poti."""
+    return _trip_page(request, train_no, trip, "zeleznica")
+
+
+@app.get("/app/bus/{train_no}", response_class=HTMLResponse)
+def bus_trip_page(request: Request, train_no: str, trip: str | None = None):
+    """Okno ene avtobusne vožnje. Ista predloga, druga pot in druga barva --
+    potnik mora iz naslova videti, s čim gre."""
+    return _trip_page(request, train_no, trip, "avtobus")
 
 
 @app.get("/api/health")

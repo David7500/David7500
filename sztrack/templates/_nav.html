@@ -13,7 +13,7 @@
 {%- set here = here | default('') -%}
 <nav class="top-nav" aria-label="Strani">
   <div class="net-switch" role="group" aria-label="Omrežje">
-    <a class="net-tab{% if here == 'iskalnik' %} is-on{% endif %}" href="/app"
+    <a class="net-tab{% if here == 'iskalnik' %} is-on{% endif %}" href="/app/train"
        {% if here == 'iskalnik' %}aria-current="page"{% endif %}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
@@ -34,6 +34,10 @@
   </div>
   <span class="nav-sep"></span>
   {%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}
-  {%- if here != 'ovire' %}<a class="top-link" href="/app/ovire">ovire</a>{% endif %}
+  {#- Ovire so `SZ-OVIRA` obvestila SŽ: dela na progi, zapore tira, nadomestni
+      prevozi. Za avtobuse takih obvestil ni in povezava tja bi obljubljala
+      podatek, ki zanje ne obstaja. #}
+  {%- if here != 'ovire' and (network | default('zeleznica')) != 'avtobus' %}
+  <a class="top-link" href="/app/ovire">ovire</a>{% endif %}
   {%- if here != 'statistika' %}<a class="top-link" href="/app/statistika">statistika</a>{% endif %}
 </nav>

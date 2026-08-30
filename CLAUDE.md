@@ -564,10 +564,11 @@ avtobusni `run`, ne železniški.
 | pot | kaj |
 |---|---|
 | `/` | domača stran: s čim greš — vlak ali avtobus |
-| `/app` | vlaki: iskalnik povezav in odhodna tabla |
+| `/app/train` | vlaki: iskalnik povezav in odhodna tabla |
 | `/app/bus` | avtobusi (LPP …): ista stran, drugo omrežje |
 | `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
-| `/app/train/{no}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
+| `/app/train/{no}` | okno ene **vlakovne** vožnje |
+| `/app/bus/{no}` | okno ene **avtobusne** vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |
 | `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu v tednu |
 
@@ -609,6 +610,17 @@ pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom
 `adv-only` (p90, delež točnih, številka postanka, kaj pravi feed). Potnik in
 radovednež gledata isto vožnjo.
 
+**Pot mora povedati, s čim greš.** `/app` je bil vlakovni samo po dogovoru in
+iz naslova to ni bilo vidno; zdaj je `/app/train` in `/app` nanj preusmerja
+(308). Okno vožnje ima obe poti: `/app/train/{no}` in `/app/bus/{no}`.
+Streženo je z isto predlogo, a naslov ne sme lagati — `/app/train/25` za
+mestno linijo 25 je napačen naslov, ki ga bo nekdo delil naprej, zato ga
+strežnik pogleda v `trip.network` in preusmeri (307).
+
+**Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila so dela na progi, zapore
+tira in nadomestni prevozi SŽ; za avtobuse takih obvestil ni in povezava tja
+bi obljubljala podatek, ki zanje ne obstaja.
+
 **Omrežji sta ločeni tudi na pogled.** V glavi je segmentni preklop
 `Vlaki | Avtobusi`, ne dve povezavi med štirimi, in avtobusna stran ima svojo
 barvo (`body.net-avtobus` prestavi `--accent` na zeleno, isto kot vozila na
@@ -625,6 +637,18 @@ zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
 zdaj" je pri avtobusu prvo vprašanje. Leaflet se naloži šele, ko lega res
 obstaja — vlaki je nimajo nikoli in zanje tega okvira ni; prazen bi obljubljal
 podatek, ki ne obstaja.
+
+**Preprost pogled ni samo za telefon.** Okno vožnje je bilo en stolpec 340 px;
+ker je zgodovina v preprostem pogledu skrita, je na namizju ostal ozek trak ob
+praznem zaslonu. Nad 1000 px se vsebina razdeli: levo, kar velja **zdaj**
+(zamuda, razmere, kje je vozilo), desno pot po postajah. Flex in ne grid —
+časovnica je visoka in bi kot element čez več grid vrstic te vrstice
+raztegnila, levi stolpec pa bi visel v praznem.
+
+**Stranska plošča zemljevida je na telefonu spodnja plošča.** 320 px stolpca
+je na 390 px zaslonu pojedlo pol slike in ga ni bilo mogoče skriti; zdaj je
+privzeto zaprt in se odpre na dotik. Izbira vozila ga spet zapre — naslednje,
+kar človek hoče videti, je zemljevid.
 
 Okno vlaka je **ena slika, ne zavihki**. Krivulja zamude čez vse postaje poti
 in pod njo, v istem grafu, pas razmer: vprašanje ni *"kakšno je vreme"*, ampak

@@ -299,7 +299,8 @@ function chainLink(leg) {
   const p = new URLSearchParams();
   if (state.run && state.run.service_date) p.set("date", state.run.service_date);
   p.set("trip", leg.trip_id);
-  return `/app/train/${encodeURIComponent(leg.train_no)}?${p}`;
+  const pot = state.network === "avtobus" ? "/app/bus/" : "/app/train/";
+  return `${pot}${encodeURIComponent(leg.train_no)}?${p}`;
 }
 
 function minLabel(sec) {

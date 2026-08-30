@@ -414,30 +414,68 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
  * in ta ni bil za nobeno rabo. Zato v stolpec: najprej zemljevid, pod njim
  * lestvica zamud. Zemljevid dobi večino višine, ker je on razlog za obisk.
  */
-@media (max-width: 720px) {
-  body { overflow: auto; }
-  .body { flex-direction: column; }
+.sheet-toggle { display: none; }
 
-  .map-area {
-    order: 1;
-    height: 58vh;
-    min-height: 260px;
-    flex: 0 0 auto;
+/* ---------- zemljevid na telefonu ----------
+ * Stranski stolpec je 320 px in je na 390 px zaslonu pojedel pol slike, ne da
+ * bi ga bilo mogoce skriti. Zato je na telefonu SPODNJA PLOSCA, privzeto
+ * zaprta: zemljevid dobi ves prostor, plosca pa se odpre na dotik in se
+ * spet zapre. Vsebina je ista, samo prostor ni vec njen po privzetku.
+ */
+@media (max-width: 720px) {
+  body { overflow: hidden; }
+  .body { position: relative; }
+
+  /* dashboard.css je nalozen za base.css in je s `height: 52px` povozil
+     njen prelom glave v dve vrstici -- ura je bila zato odrezana pod
+     zemljevidom. Tu jo spustimo, da glava dobi svojo visino. */
+  .topbar { height: auto; }
+
+  .map-area { position: absolute; inset: 0; }
+
+  .sheet-toggle {
+    display: flex;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 620;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    flex-direction: column;
+    padding: 9px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: #14161a;
+    border: 0;
+    border-top: 1px solid #23272f;
+    color: #9aa3b0;
+    font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .sheet-grip {
+    width: 34px; height: 4px; border-radius: 2px; background: #3d434f;
   }
 
   .sidebar {
-    order: 2;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 630;
     width: auto;
+    max-height: 76vh;
     border-right: none;
     border-top: 1px solid #23272f;
-    flex: 1 1 auto;
+    border-radius: 14px 14px 0 0;
     overflow-y: auto;
+    /* Zaprta plosca je cisto izven zaslona -- ne "skoraj", ker bi rob
+       nad gumbom izgledal kot napaka izrisa. */
+    transform: translateY(101%);
+    transition: transform 0.18s ease;
+    box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.5);
   }
-  /* Iskalnik je na telefonu POD zemljevidom in bi bil brez tega izven
-     zaslona -- prav on je razlog, da je stran odprta. */
-  .map-area { order: 2; }
-  .find { order: 1; }
-  .legend { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+  body.sheet-open .sidebar { transform: translateY(0); }
+  body.sheet-open .sheet-toggle { background: transparent; border-top: 0; }
+  body.sheet-open .sheet-label { display: none; }
 
-  .detail { width: auto; border-left: none; border-top: 1px solid #23272f; order: 3; }
+  .legend { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+  .find-list { max-height: 40vh; }
+  /* Leafletovi gumbi ne smejo pod plosco. */
+  .leaflet-bottom { bottom: 46px; }
 }
