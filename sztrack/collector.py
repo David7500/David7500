@@ -153,6 +153,76 @@ def worth_logging(last, arr, dep) -> bool:
     return False
 
 
+# Postanek, ki je bil prevozen, ne more spet postati prihodnji. Rezerva je
+# 120 s, kolikor feed sam prilaga kot `uncertainty`.
+PASSED_MARGIN_S = 120
+
+
+def _sched_abs(service_date: str, sched_row) -> float | None:
+    """Absolutni cas voznorednega odhoda (ali prihoda, ce odhoda ni)."""
+    if sched_row is None:
+        return None
+    t_s = sched_row[1] if sched_row[1] is not None else sched_row[0]
+    if t_s is None:
+        return None
+    base = datetime.combine(date.fromisoformat(service_date),
+                            datetime.min.time(), tzinfo=TZ)
+    return base.timestamp() + t_s
+
+
+def undoes_passing(prev, sched_row, service_date, arr, dep, ts) -> bool:
+    """Ali nova vrednost trdi, da vozilo postanka se ni doseglo, ceprav smo
+    ze zapisali, da ga je?
+
+    Feed obcasno izgubi vozilo in za postanke, ki jih je to ze prevozilo,
+    zacne objavljati `zdaj - vozni red`: vrednost, ki raste natanko za minuto
+    na minuto. Ujeto v zivo 30. 8. na LPP 25 (voznja 452632, Poliklinika):
+    ob 12:19:36 je feed porocal prihod +58 s in odhod +126 s, torej pravo
+    meritev z razlicnima vrednostma; ob 12:23:48 je skocil na +482 in nato
+    sedem klicev zapored rasel natanko za 60 s na 60 s do +842 (+14 min),
+    ob 12:30:29 pa se vrnil na +58/+126. Vlak je bil ves ta cas ze davno
+    mimo -- rasla je ura, ne zamuda.
+
+    V zajetih podatkih je takih zaporedij 11 827 pri 947 voznjah, od tega
+    2 731 takih, kjer se feed ni popravil in je tekoca vrednost obticala v
+    `run` (mediana 9 min, p90 71 min, najvec 11 h). To pojasni tudi doslej
+    nepojasnjeno "enotno zamudo cez vso voznjo": Nomagov N6571 s 27 060 s na
+    vseh postankih je natanko ta vzorec, ujet po tem, ko se je ustavil.
+
+    Pravilo je zato ozko in brez prostih parametrov: zavrnemo samo vrednost,
+    ki bi postanek, za katerega smo ze zapisali, da je bil prevozen pred vec
+    kot `PASSED_MARGIN_S`, prestavila nazaj v prihodnost. Popravek navzgor,
+    ki postanek pusti v preteklosti, je meritev in gre skozi. Ce je
+    obratovalni dan razresen narobe, je varovalka neucinkovita, nikoli pa ne
+    napacna -- oba casa se premakneta skupaj.
+
+    Dnevnik `obs` obdrzi vse, kar je feed rekel; caka samo `run`.
+    """
+    if prev is None:
+        return False
+    old = prev["delay_dep"] if prev["delay_dep"] is not None else prev["delay_arr"]
+    new = dep if dep is not None else arr
+    if old is None or new is None or new <= old:
+        return False
+    # Zapisana vrednost je dokaz o prevozu samo, ce je bila MERITEV. Feed za
+    # se nedosezen postanek pogosto objavi niclo -- in prav ta nicla je bila
+    # prva past: EN 1276 je 28. 8. ob 00:03 imel v Celju zapisano 0 (napoved
+    # pred prihodom), ob 01:57 pa pravih +114 min. Brez tega pogoja bi
+    # varovalka resnicno dvourno zamudo nocnega vlaka zavrgla.
+    #
+    # Za meritev steje samo zapis, kjer je feed dal RAZLICNI vrednosti za
+    # prihod in odhod: tega za nedosezen postanek ne naredi. Vlaki tako ali
+    # tako niso prizadeti -- 11 794 od 11 827 zaporedij je avtobusnih.
+    if prev["delay_arr"] is None or prev["delay_dep"] is None:
+        return False
+    if prev["delay_arr"] == prev["delay_dep"]:
+        return False
+    t0 = _sched_abs(service_date, sched_row)
+    if t0 is None:
+        return False
+    return (t0 + old) < ts - PASSED_MARGIN_S and (t0 + new) > ts
+
+
 def is_zero_blip(prev, last, arr, dep) -> bool:
     """Ali je to prehodna nicla, ki jo feed vrine med dve pravi vrednosti?
 
@@ -256,6 +326,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     # (`effect = 6`, "vlak vozi samo do ..."). Vseeno stejemo: ce se to kdaj
     # spremeni, hocemo izvedeti takoj in ne cez pol leta.
     non_scheduled = 0
+    unpassed = 0
 
     for entity in feed.entity:
         tu = entity.trip_update
@@ -322,6 +393,13 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
                 blips += 1
                 continue
 
+            if undoes_passing(prev, sched.get((trip_id, seq)), service_date,
+                              arr, dep, ts):
+                # Feed je izgubil vozilo in za ze prevozen postanek objavlja
+                # `zdaj - vozni red`. To je ura, ne zamuda.
+                unpassed += 1
+                continue
+
             conn.execute(
                 "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
                 "VALUES(?,?,?,?,?,?) "
@@ -333,7 +411,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
 
     conn.commit()
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
-            "blips": blips, "smoothed": smoothed,
+            "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts}
 
 
@@ -362,9 +440,14 @@ def run_forever(conn: sqlite3.Connection, interval: int | None = None) -> None:
 def rebuild_run(conn: sqlite3.Connection) -> dict:
     """Znova zgradi `run` iz dnevnika `obs` po istem pravilu kot zajem.
 
-    Rabi se enkrat, po uvedbi preverjanja prehodnih nicel: vrstice, ki so
-    nastale prej, so lahko obtičale na nicli, ki jo je feed vrnil za en klic.
-    Idempotentno -- ponovni zagon ne spremeni nič, ker je pravilo isto.
+    Rabi se po uvedbi vsake nove varovalke: vrstice, ki so nastale prej, so
+    lahko obtičale na nicli, ki jo je feed vrnil za en klic
+    (`is_zero_blip`), ali na tekoči uri za postanek, ki je bil že prevožen
+    (`undoes_passing`). Idempotentno -- ponovni zagon ne spremeni nič, ker
+    je pravilo isto.
+
+    Popravi se le, kar je še v dnevniku: ta se obrezuje (železnica 90 dni,
+    avtobusi 14), `run` pa nikoli. Starejšega ni iz česa graditi.
 
     Dnevnik je merodajen in ostane nedotaknjen; popravlja se samo povzetek.
     """
@@ -373,24 +456,47 @@ def rebuild_run(conn: sqlite3.Connection) -> dict:
         "FROM obs ORDER BY trip_id, service_date, stop_seq, feed_ts"
     ).fetchall()
 
+    # Vozni red rabi `undoes_passing`, da ve, kdaj bi postanek moral biti.
+    sched = {(r["trip_id"], r["stop_seq"]): (r["arr_s"], r["dep_s"])
+             for r in conn.execute(
+                 "SELECT trip_id, stop_seq, arr_s, dep_s FROM sched "
+                 "WHERE trip_id IN (SELECT DISTINCT trip_id FROM obs)")}
+
     accepted: dict[tuple, tuple] = {}
+    sumljivi: set[tuple] = set()
     fixed = 0
+    unpassed = 0
     key = None
     prev = last = None
     for r in rows:
         k = (r["trip_id"], r["service_date"], r["stop_seq"])
         if k != key:
             key, prev, last = k, None, None
-        if not is_zero_blip(prev, last, r["delay_arr"], r["delay_dep"]):
+        if is_zero_blip(prev, last, r["delay_arr"], r["delay_dep"]):
+            fixed += 1
+            sumljivi.add(k)
+        elif undoes_passing(prev, sched.get((r["trip_id"], r["stop_seq"])),
+                            r["service_date"], r["delay_arr"], r["delay_dep"],
+                            r["feed_ts"]):
+            unpassed += 1
+            sumljivi.add(k)
+        else:
             accepted[k] = (r["delay_arr"], r["delay_dep"], r["feed_ts"])
             prev = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"]}
-        else:
-            fixed += 1
         last = {"delay_arr": r["delay_arr"], "delay_dep": r["delay_dep"]}
 
+    # Popravimo SAMO postanke, na katerih je varovalka res sprozila. Dnevnik
+    # namrec belezi le spremembe nad `OBS_MIN_DELTA_S`, `run` pa vsako -- kdor
+    # bi cez `run` prepisal ves ponovljeni dnevnik, bi 16 696 vrstic zamenjal
+    # za do minuto grobejse, da bi popravil 4 217 pokvarjenih. Popravilo mora
+    # popravljati, ne glajenja.
     changed = 0
     with conn:
-        for (trip_id, day, seq), (arr, dep, ts) in accepted.items():
+        for k in sumljivi:
+            if k not in accepted:
+                continue
+            (trip_id, day, seq) = k
+            (arr, dep, ts) = accepted[k]
             cur = conn.execute(
                 "SELECT delay_arr, delay_dep FROM run "
                 "WHERE trip_id=? AND service_date=? AND stop_seq=?",
@@ -407,7 +513,8 @@ def rebuild_run(conn: sqlite3.Connection) -> dict:
                 (trip_id, day, seq, arr, dep, ts),
             )
             changed += 1
-    return {"stops": len(accepted), "blips_skipped": fixed, "run_rows_corrected": changed}
+    return {"stops": len(accepted), "blips_skipped": fixed,
+            "unpassed_skipped": unpassed, "run_rows_corrected": changed}
 
 
 # ---------------------------------------------------------------- lega vozil

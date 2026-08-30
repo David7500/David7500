@@ -260,6 +260,45 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   ob prvi neničelni vrednosti zavpije v dnevnik; prikaza zanj namenoma še ni,
   ker bi bil to prikaz za podatek, ki ne obstaja.
 
+* **Ko feed izgubi vozilo, začne objavljati uro namesto zamude.** Za postanke,
+  ki jih je vozilo *že prevozilo*, zna objaviti vrednost, ki raste natanko za
+  minuto na minuto. Ujeto v živo 30. 8., LPP 25 (vožnja 452632, Poliklinika):
+  ob 12:19:36 prihod +58 s in odhod +126 s — prava meritev z **različnima**
+  vrednostma — nato ob 12:23:48 skok na +482 in sedem klicev zapored rast
+  natanko +60 s na +60 s do **+842 (+14 min)**, ob 12:30:29 pa vrnitev na
+  +58/+126. Vozilo je bilo ves ta čas že davno mimo.
+
+  V zajetem je takih zaporedij **11 827 pri 947 vožnjah**. To pojasni tudi
+  doslej odprto vprašanje o **enotni zamudi čez vso vožnjo**: Nomagov N6571 s
+  27 060 s na vseh postankih je natanko ta vzorec, ujet po tem, ko se je
+  ustavil (4 od 12 takih voženj imajo zaporedje v `obs`; pri ostalih smo se
+  priključili šele po tem, ko je vrednost že zmrznila).
+
+  Varovalka je `collector.undoes_passing`: zavrne vrednost, ki bi postanek,
+  za katerega smo **že zapisali meritev** o prevozu pred več kot 120 s,
+  prestavila nazaj v prihodnost. Dnevnik `obs` obdrži vse; čaka samo `run`.
+
+  **Prva različica pravila je bila preširoka in to je bilo merljivo.**
+  Brez dodatnega pogoja je vzela pravo dvourno zamudo nočnega vlaka: EN 1276
+  je 28. 8. ob 00:03 imel za Celje zapisano `0/0` — feedovo napoved pred
+  prihodom, ne meritev — in ob 01:57 pravih +114 min. Zato **za dokaz o
+  prevozu šteje samo zapis z različnima vrednostma za prihod in odhod**: te
+  feed za nerazrešen postanek ne objavi. Ista past je v projektu zapisana že
+  dvakrat („ne verjemi ničli, ki jo feed vrne za en klic").
+
+  Učinek `sztrack repair` na 10 dneh zajema: **852 vrstic** v `run`, od tega
+  277 avtobusnih (mediana 51 min, največ 11 h) in **300 železniških**
+  (mediana 14 min, največ 80 min). Povprečna zamuda pade pri avtobusih z 9,8
+  na 8,8 min, pri železnici s 6,7 na 6,5. Železniški primeri so isti vzorec:
+  LPV 2252 je bil 22. 8. ob 08:23 v Zagorju izmerjen s prihodom +2 in
+  odhodom +1, uro in četrt pozneje pa je feed zanj objavil +79 min.
+
+  **`repair` popravlja samo postanke, na katerih je varovalka sprožila.**
+  Prej je čez `run` prepisal ves ponovljeni dnevnik — in ker `obs` beleži le
+  spremembe nad `OBS_MIN_DELTA_S`, je s tem 16 696 vrstic zamenjal za do
+  minuto grobejše, da bi popravil 4 217 pokvarjenih. Popravilo mora
+  popravljati, ne glajenja.
+
 * **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** V 45 146
   železniških vrsticah `run` ni niti ene negativne vrednosti — najmanjša je
   natanko 0. Pri avtobusih je 12,0 % vrstic vsaj minuto prezgodnjih in 4,5 %

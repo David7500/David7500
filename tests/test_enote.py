@@ -196,3 +196,85 @@ def test_nicla_ostane_nicla_kadar_jo_feed_res_pove():
     # Vlaki posljejo `delay = 0` in to POMENI tocno -- tega ne smemo zavreci.
     s = _stu(3, arr_delay=0)
     assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31") == 0
+
+
+# ---------------------------------------------------------------- tekoca ura
+
+def _at(h, m, s=0):
+    """Absolutni cas 30. 8. 2026 ob dani uri."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime(2026, 8, 30, h, m, s, tzinfo=ZoneInfo("Europe/Ljubljana")).timestamp()
+
+
+DAN = "2026-08-30"
+RED = (44220, 44220)        # voznoredni prihod in odhod ob 12:17
+
+
+def test_ura_za_prevozen_postanek_se_zavrne():
+    """Vzorec, ujet v zivo na LPP 25 (Poliklinika, 30. 8.).
+
+    Ob 12:19:36 je feed porocal +126 s -- vozilo je bilo torej ob 12:19:06
+    mimo. Ob 12:23:48 je objavil +482 s, kar bi postanek prestavilo na
+    12:25:02, torej v prihodnost. To ni popravek meritve, ampak `zdaj -
+    vozni red`: naslednjih sedem klicev je vrednost rasla natanko za 60 s
+    na 60 s do +842 (+14 min).
+    """
+    from sztrack.collector import undoes_passing
+    assert undoes_passing(_row(58, 126), RED, DAN, 482, 482, _at(12, 23, 48))
+
+
+def test_ura_ostane_zavrnjena_ves_cas_rasti():
+    # `prev` ostane zadnja SPREJETA vrednost, zato mora varovalka drzati
+    # skozi vse zaporedje in ne le pri prvem skoku.
+    from sztrack.collector import undoes_passing
+    for minuta, vrednost in ((24, 542), (25, 602), (29, 842)):
+        assert undoes_passing(_row(58, 126), RED, DAN, vrednost, vrednost,
+                              _at(12, minuta, 48))
+
+
+def test_popravek_navzgor_ki_pusti_postanek_v_preteklosti_gre_skozi():
+    # Feed sme povedati, da je bilo vozilo tam pozneje, kot smo mislili --
+    # dokler trdi, da je bilo. To je meritev in je ne smemo zavreci.
+    from sztrack.collector import undoes_passing
+    assert not undoes_passing(_row(58, 126), RED, DAN, 200, 200, _at(12, 23, 48))
+
+
+def test_rast_za_se_nedosezen_postanek_je_zakonita():
+    # Vozilo, ki stoji, bo na naslednji postaji res vedno bolj pozno.
+    # Zamuda, ki raste s hitrostjo ure, je tam pravilna napoved.
+    from sztrack.collector import undoes_passing
+    assert not undoes_passing(_row(30, 60), RED, DAN, 300, 300, _at(12, 17, 30))
+
+
+def test_padec_ni_nikoli_tekoca_ura():
+    from sztrack.collector import undoes_passing
+    assert not undoes_passing(_row(400, 482), RED, DAN, 126, 126, _at(12, 30, 29))
+
+
+def test_brez_prejsnje_vrednosti_ali_voznega_reda_varovalka_miruje():
+    from sztrack.collector import undoes_passing
+    assert not undoes_passing(None, RED, DAN, 482, 482, _at(12, 23, 48))
+    assert not undoes_passing(_row(58, 126), None, DAN, 482, 482, _at(12, 23, 48))
+    assert not undoes_passing(_row(58, 126), (None, None), DAN, 482, 482, _at(12, 23, 48))
+
+
+def test_napacen_obratovalni_dan_naredi_varovalko_nemocno_ne_napacno():
+    """Oba casa se premakneta skupaj, zato zgresi -- nikoli ne zavrne po krivem."""
+    from sztrack.collector import undoes_passing
+    assert not undoes_passing(_row(58, 126), RED, "2026-08-29", 482, 482, _at(12, 23, 48))
+    assert not undoes_passing(_row(58, 126), RED, "2026-08-31", 482, 482, _at(12, 23, 48))
+
+
+def test_enaka_prihodna_in_odhodna_vrednost_ni_dokaz_o_prevozu():
+    """Prva razlicica varovalke je EN 1276 vzela pravo dvourno zamudo.
+
+    Feed je 28. 8. ob 00:03 za Celje objavil `0/0` -- napoved pred prihodom,
+    ne meritev -- in ob 01:57 pravih +114 min. Ker je bila zapisana vrednost
+    nicla za oba dogodka, ni bila dokaz, da je vlak tam ze bil.
+    """
+    from sztrack.collector import undoes_passing
+    assert not undoes_passing(_row(0, 0), RED, DAN, 6840, 6840, _at(13, 57, 41))
+    # Enaki, a nenicelni vrednosti prav tako ne stejeta: feed ju za nedosezen
+    # postanek objavi enaki, ker je to ista prenesena stevilka.
+    assert not undoes_passing(_row(120, 120), RED, DAN, 6840, 6840, _at(13, 57, 41))
