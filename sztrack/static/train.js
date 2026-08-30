@@ -1077,19 +1077,22 @@ async function drawRunMap(v) {
       runMap.line = L.polyline(trasa, { color: "#4db97f", weight: 3, opacity: 0.95 })
         .addTo(runMap.map);
     }
-    const pts = (state.run.stops || [])
-      .filter((s) => s.lat != null && s.lon != null)
-      .map((s) => [s.lat, s.lon]);
+    const postaje = (state.run.stops || []).filter((s) => s.lat != null && s.lon != null);
+    const pts = postaje.map((s) => [s.lat, s.lon]);
     if (!trasa && pts.length > 1) {
       runMap.line = L.polyline(pts, {
         color: "#4db97f", weight: 2.5, opacity: 0.55, dashArray: "5 5",
       }).addTo(runMap.map);
     }
-    if (pts.length) {
-      runMap.stops = L.layerGroup(pts.map((p) => L.circleMarker(p, {
-        radius: 3.2, color: "#0f1115", weight: 1.4,
-        fillColor: "#4db97f", fillOpacity: 1, interactive: false,
-      }))).addTo(runMap.map);
+    if (postaje.length) {
+      // Pike so bile `interactive: false` in zato nema tocka na zemljevidu.
+      // Ime ob dotiku je edini nacin, da se izve, katera postaja to je --
+      // trajne oznake bi na mestni liniji zakrile progo pod sabo.
+      runMap.stops = L.layerGroup(postaje.map((s) => bindFlashName(
+        L.circleMarker([s.lat, s.lon], {
+          radius: 3.6, color: "#0f1115", weight: 1.4,
+          fillColor: "#4db97f", fillOpacity: 1,
+        }), s.name))).addTo(runMap.map);
     }
 
     // Postaja, na kateri stoji potnik, mora biti vidna -- brez nje je to

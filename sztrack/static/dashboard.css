@@ -159,6 +159,9 @@ body {
 .layer-key-stop::before {
   content: ""; width: 5px; height: 5px; border-radius: 50%; background: #8b95a4;
 }
+.layer-key-busstop::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%; background: #4db97f;
+}
 .layer-name {
   flex: 1 1 auto;
   font: 400 12.5px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #c8cedb;
@@ -276,6 +279,11 @@ body {
   color: #9aa3b0;
   pointer-events: none;
 }
+
+/* Dve opombi se ne smeta prekrivati: ta o postajaliscih stoji nad ono o
+   skritih oznakah. Mora biti ZA `.label-note`, sicer jo ta povozi -- enaka
+   specificnost, odloca vrstni red. */
+.label-note-2 { bottom: 46px; }
 
 /* ---------- podrobnosti vlaka (smer D) ---------- */
 

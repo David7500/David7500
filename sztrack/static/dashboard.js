@@ -81,10 +81,13 @@ async function loadStatic() {
     stationsByName = new Map(stations.map((s) => [s.name, s]));
     const latlngs = [];
     for (const s of stations) {
-      L.circleMarker([s.lat, s.lon], {
-        radius: 2.4, color: "#8b95a4", fillColor: "#8b95a4", fillOpacity: 1,
-        weight: 0, interactive: false,
-      }).addTo(stationLayer);
+      // Pika brez imena ne pove nicesar; trajna oznaka pri 267 postajah
+      // zakrije progo. Zato ime ob dotiku. Polmer 3,4 namesto 2,4: pika
+      // 2,4 px je manjsa od prsta in je ni mogoce zadeti.
+      bindFlashName(L.circleMarker([s.lat, s.lon], {
+        radius: 3.4, color: "#8b95a4", fillColor: "#8b95a4", fillOpacity: 1,
+        weight: 0,
+      }), s.name).addTo(stationLayer);
       latlngs.push([s.lat, s.lon]);
     }
     if (latlngs.length && !HAS_START) map.fitBounds(latlngs, { padding: [24, 24] });
@@ -476,6 +479,71 @@ function declutterLabels() {
 
 map.on("zoomend moveend", () => requestAnimationFrame(declutterLabels));
 
+// ---------- avtobusna postajalisca ----------
+//
+// 9 519 postajalisc, 211 kB z gzipom in 167 ms. Zato izbirno, privzeto
+// ugasnjeno in nalozeno sele ob prvem vklopu -- enako kot trase.
+//
+// Risejo se sele od z13 naprej. Izmerjeno na ljubljanskem oknu 1200 x 800:
+// pri z13 je v njem 253 postajalisc, pri z12 600, pri z11 pa 1 694 in mreza
+// prog izgine pod njimi. Zato ni to pospesek, ampak pravilo prikaza -- ista
+// misel kot pri trasah, ki so tudi privzeto ugasnjene.
+const BUSSTOP_MIN_Z = 13;
+const busStopLayer = L.layerGroup();
+let busStops = null;
+let busStopsLoading = false;
+
+const stopNoteEl = document.getElementById("stop-note");
+function setStopNote(text) {
+  if (!stopNoteEl) return;
+  stopNoteEl.textContent = text || "";
+  stopNoteEl.hidden = !text;
+}
+
+async function loadBusStops() {
+  if (busStops || busStopsLoading) return;
+  busStopsLoading = true;
+  try {
+    busStops = await fetch("/api/stations?network=avtobus").then((r) => r.json());
+  } catch (err) {
+    console.warn("postajališč ni bilo mogoče naložiti", err);
+  } finally {
+    busStopsLoading = false;
+  }
+  renderBusStops();
+}
+
+function renderBusStops() {
+  const el = document.getElementById("n-busstops");
+  if (!map.hasLayer(busStopLayer)) { setStopNote(null); return; }
+  busStopLayer.clearLayers();
+  if (!busStops) return;
+  if (map.getZoom() < BUSSTOP_MIN_Z) {
+    setStopNote("Postajališča se pokažejo, ko približaš — zdaj bi jih bilo "
+      + "toliko, da bi zakrila proge.");
+    if (el) el.textContent = "";
+    return;
+  }
+  setStopNote(null);
+  const b = map.getBounds();
+  let n = 0;
+  for (const st of busStops) {
+    if (st.lat == null || !b.contains([st.lat, st.lon])) continue;
+    bindFlashName(L.circleMarker([st.lat, st.lon], {
+      radius: 3.2, color: "#0f1115", weight: 1,
+      fillColor: BUS_INK, fillOpacity: 0.85,
+    }), st.name).addTo(busStopLayer);
+    n += 1;
+  }
+  if (el) el.textContent = n;
+}
+
+let stopTimer = null;
+map.on("zoomend moveend", () => {
+  clearTimeout(stopTimer);
+  stopTimer = setTimeout(renderBusStops, 120);   // med vlecenjem ne prerisuj
+});
+
 // ---------- plasti ----------
 // Zemljevid je edini pogled, ki ga omrežji delita, zato mora biti mogoče
 // vsako odložiti -- doslej se je dalo skriti samo avtobuse. Izbira se
@@ -487,6 +555,7 @@ const LAYERS = [
   { id: "lay-net", key: "net", layer: () => netLayer, def: true },
   { id: "lay-routes", key: "routes", layer: () => allRoutesLayer, def: false },
   { id: "lay-stations", key: "stations", layer: () => stationLayer, def: true },
+  { id: "lay-busstops", key: "busstops", layer: () => busStopLayer, def: false },
   { id: "lay-labels", key: "labels", layer: () => labelLayer, def: false },
   { id: "lay-base", key: "base", layer: () => baseLayer, def: true },
 ];
@@ -535,11 +604,16 @@ function initLayers() {
   for (const spec of LAYERS) {
     const box = document.getElementById(spec.id);
     setLayer(spec, layerPref(spec.key, spec.def));
+    if (spec.key === "busstops" && map.hasLayer(busStopLayer)) loadBusStops();
     if (box) {
       box.addEventListener("change", () => {
         setLayer(spec, box.checked);
         // Prvi vklop mora tudi kaj narisati -- plast je ob zagonu prazna.
         if (spec.key === "routes" && box.checked && !routesLoaded) loadRoutes();
+        if (spec.key === "busstops") {
+          if (box.checked) loadBusStops();
+          renderBusStops();
+        }
       });
     }
   }
@@ -639,18 +713,17 @@ async function drawStops(trainNo, tripId) {
     const q = tripId ? `?trip=${encodeURIComponent(tripId)}` : "";
     const res = await fetch(
       `/api/train/${encodeURIComponent(trainNo)}${q}`).then((r) => r.json());
-    const pts = (res.timetable || [])
-      .filter((s) => s.lat != null && s.lon != null)
-      .map((s) => [s.lat, s.lon]);
+    const postaje = (res.timetable || []).filter((s) => s.lat != null && s.lon != null);
+    const pts = postaje.map((s) => [s.lat, s.lon]);
     if (!trasa && pts.length > 1) {
       L.polyline(pts, { color: BUS_INK, weight: 2.5, opacity: 0.7, dashArray: "5 5" })
         .addTo(routeLayer);
     }
-    for (const p of pts) {
-      L.circleMarker(p, {
-        radius: 3.2, color: "#0f1115", weight: 1.4,
-        fillColor: BUS_INK, fillOpacity: 1, interactive: false,
-      }).addTo(routeLayer);
+    for (const st of postaje) {
+      bindFlashName(L.circleMarker([st.lat, st.lon], {
+        radius: 3.6, color: "#0f1115", weight: 1.4,
+        fillColor: BUS_INK, fillOpacity: 1,
+      }), st.name).addTo(routeLayer);
     }
   } catch (err) {
     /* brez postajališč je trasa še vedno uporabna */

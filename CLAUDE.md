@@ -542,8 +542,27 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   približkom (15–34 px) in kaže v smer vožnje. Puščica je bila premalo: pri
   velikem približku je bila videti kot pika in se od vlaka ni ločila.
 
+  **Ime postaje se pokaže na dotik in po petih sekundah odide.** Pike so bile
+  `interactive: false`, torej nema točka na zemljevidu -- iz nje se ni dalo
+  izvedeti, katera postaja to je. Trajne oznake pa na mestni liniji zakrijejo
+  progo pod sabo. Zato `common.bindFlashName()`: klik odpre oblaček,
+  `setTimeout` ga zapre. Brez gumba za zapiranje -- ta bi bil na telefonu
+  manjši od prsta in bi zahteval natančnejši dotik od tistega, ki je ime
+  odprl. Klik ustavi razširjanje dogodka, sicer na telefonu zapre spodnjo
+  ploščo. Velja na velikem zemljevidu, na trasi izbranega vozila in v oknu
+  vožnje. Polmer pike je zato 3,4 namesto 2,4 px: 2,4 je manj od prsta.
+
+  **Avtobusna postajališča so svoja plast in privzeto ugasnjena.** Vseh je
+  9 519 (211 kB z gzipom, 167 ms), zato se naložijo šele ob prvem vklopu --
+  enako kot trase. Rišejo se **od z13 naprej**, in ta meja je izmerjena na
+  ljubljanskem oknu 1200 × 800: pri z13 jih je v njem 253, pri z12 600, pri
+  z11 pa 1 694 in mreža prog izgine pod njimi. Pod pragom plast ne riše nič
+  in pove, zakaj. Železniške postaje ostanejo svoja, privzeto vklopljena
+  plast -- teh je 271 in progo prav opisujejo.
+
   Vsaka plast se da izklopiti posebej (vlaki, avtobusi, železniške proge,
-  **trase vozil na poti**, postaje, podlaga, dodatna imena), ne le avtobusi.
+  **trase vozil na poti**, železniške postaje, avtobusna postajališča,
+  podlaga, dodatna imena), ne le avtobusi.
   Trase so privzeto ugasnjene in se naložijo šele ob vklopu: gost snop črt čez
   vso Ljubljano odgovarja na „kod vozijo linije", ne na „kje je moj avtobus",
   in drugo je razlog za obisk te strani. 128 različnih oblik, 108 kB z gzipom.

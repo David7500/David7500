@@ -638,6 +638,29 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   return { run, forecast, current: cur };
 }
 
+// ---------- ime postaje na dotik ----------
+
+// Postajalisce brez imena je pika, trajen oblacek pa cez pol Ljubljane
+// pobrise zemljevid pod sabo. Zato: ime se pokaze ob dotiku in cez pet sekund
+// samo odide. Brez gumba za zapiranje -- ta bi bil na telefonu manjsi od
+// prsta in bi zahteval drugi, natancnejsi dotik od tistega, ki je ime odprl.
+const NAME_MS = 5000;
+
+function bindFlashName(marker, name) {
+  marker.bindTooltip(name, {
+    className: "sztrack-tooltip", direction: "top", offset: [0, -4],
+  });
+  marker.on("click", (e) => {
+    // Brez tega dotik na postajo velja tudi za dotik na zemljevid in ta
+    // na telefonu zapre spodnjo plosco.
+    if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+    clearTimeout(marker.__nameT);
+    marker.openTooltip();
+    marker.__nameT = setTimeout(() => marker.closeTooltip(), NAME_MS);
+  });
+  return marker;
+}
+
 // ---------- starost lege, ki tece sama ----------
 
 // "lega stara 59 s" je stala pri miru, dokler ni prisel naslednji poll, in

@@ -67,7 +67,11 @@
           <span class="layer-name">Trase vozil na poti</span><span class="layer-n" id="n-routes"></span></label>
         <label class="layer"><input type="checkbox" id="lay-stations" checked>
           <span class="layer-key layer-key-stop"></span>
-          <span class="layer-name">Postaje</span><span class="layer-n"></span></label>
+          <span class="layer-name">Železniške postaje</span><span class="layer-n"></span></label>
+        <label class="layer"><input type="checkbox" id="lay-busstops">
+          <span class="layer-key layer-key-busstop"></span>
+          <span class="layer-name">Avtobusna postajališča</span>
+          <span class="layer-n" id="n-busstops"></span></label>
         <label class="layer"><input type="checkbox" id="lay-base" checked>
           <span class="layer-key"></span>
           <span class="layer-name">Podlaga (ceste)</span><span class="layer-n"></span></label>
@@ -95,6 +99,7 @@
 
     <main class="map-area">
       <div id="map"></div>
+      <div id="stop-note" class="label-note label-note-2" hidden></div>
       <div id="label-note" class="label-note" hidden></div>
     </main>
   </div>
