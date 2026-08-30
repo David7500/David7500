@@ -31,11 +31,17 @@ function delayLabel(s) {
 // stolpce, kjer za "min" ni prostora.
 function delayText(s, kratko) {
   if (s == null) return kratko ? "?" : "? min";
-  if (s <= -60) {
-    const n = Math.abs(Math.round(s / 60));
-    return kratko ? `${n} prej` : `${n} min prej`;
-  }
+  // Prag mora biti na ZAOKROZENI minuti, ne na sekundah. Pri `s <= -60` je
+  // -45 s dalo "-1", ker `delayLabel` zaokrozi -- ista minuta, dva zapisa.
+  // Isto pravilo kot pri barvni lestvici, ki je iz sekund ze bilo popravljeno.
+  const m = Math.round(s / 60);
+  if (m <= -1) return kratko ? `${-m} prej` : `${-m} min prej`;
   return kratko ? delayLabel(s) : `${delayLabel(s)} min`;
+}
+
+// Ali je vrednost "prezgodaj" -- po isti zaokrozeni minuti kot `delayText`.
+function isEarly(s) {
+  return s != null && Math.round(s / 60) <= -1;
 }
 
 const TIME_FMT = new Intl.DateTimeFormat("sl-SI", {

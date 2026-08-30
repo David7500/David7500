@@ -402,6 +402,42 @@
 }
 .run-map-full:hover { color: var(--accent-lit); }
 .run-map { height: 260px; background: #0f1115; }
+
+/* Legenda pod zemljevidom: dve oznaki, dva pomena. Brez nje je moder avtobus
+   ob zeleni piki uganka -- in prav razlika med njima je bistvo tega okvira. */
+.run-map-key {
+  margin: 0; padding: 7px 10px;
+  border-top: 1px solid var(--line);
+  font: 400 10.5px/1.45 var(--sans); color: var(--ink-faint);
+}
+.run-map-key strong { color: var(--ink-dim); font-weight: 600; }
+.key-dot, .key-bus {
+  display: inline-block; vertical-align: -1px; margin-right: 2px;
+}
+.key-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #4db97f; border: 1.5px solid #e7eaf0;
+}
+.key-bus {
+  width: 7px; height: 11px; border-radius: 2px;
+  background: #a8d8ff; opacity: 0.78; border: 1px solid #0f1115;
+}
+
+/* Gumb za cel zaslon. Skrit, kadar ga brskalnik ne podpira -- gumb, ki ne
+   naredi nicesar, je slabsi od manjkajocega. */
+.run-map-fs {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-left: 8px;
+  padding: 0; background: none; border: 1px solid var(--line);
+  border-radius: 5px; color: var(--ink-faint); cursor: pointer;
+}
+.run-map-fs:hover { color: var(--ink); border-color: var(--line-strong, #3d434f); }
+.run-map-fs[hidden] { display: none; }
+
+/* Na celem zaslonu naj zemljevid vzame ves prostor, glava in legenda pa
+   ostaneta -- brez njiju ne bi bilo ne hitrosti ne pomena obeh oznak. */
+.run-map-wrap:fullscreen { display: flex; flex-direction: column; border-radius: 0; }
+.run-map-wrap:fullscreen .run-map { flex: 1 1 auto; height: auto; }
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
 .run-map .leaflet-container { background: #0f1115; font-family: var(--sans); }
 @media (max-width: 720px) { .run-map { height: 210px; } }

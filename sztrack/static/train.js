@@ -189,7 +189,7 @@ function runHeadHtml(cur) {
   // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
   // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
   // "6 min prej" si nasprotuje, "6 min prej" pod njim pa besedo ponovi.
-  const early = d != null && d <= -60;
+  const early = isEarly(d);
 
   // Prevoznikovo porocilo pozna prometno mesto, ki ga nas vozni red nima --
   // zamuda se meri tudi tam, kjer vlak ne ustavlja.
@@ -1103,16 +1103,20 @@ function ocenjenaLega(v, starostS) {
 
 // Ista oblika kot na velikem zemljevidu -- avtobus je vozilo, ne pika, in
 // kaze v smer voznje.
+// Na tem zemljevidu vozilo NI meritev, ampak ocena, zato ni zeleno: zelena je
+// v projektu barva izmerjenega (postajalisca, trasa), `ESTIMATE_COLOR` pa je
+// rezervirana prav za "tu meritve ni". Prosojnost pove isto se enkrat, za
+// tistega, ki barv ne loci.
 function busDivIcon(bearing, moving) {
   const s = 30;
   return L.divIcon({
     className: "bus-marker",
     html: `<div style="transform:rotate(${bearing || 0}deg);width:${s}px;height:${s}px">
       <svg width="${s}" height="${s}" viewBox="0 0 24 24">
-        <rect x="7.5" y="2.5" width="9" height="19" rx="3.2" fill="#4db97f"
-              fill-opacity="${moving ? 1 : 0.5}" stroke="#0f1115" stroke-width="1.5"/>
+        <rect x="7.5" y="2.5" width="9" height="19" rx="3.2" fill="${ESTIMATE_COLOR}"
+              fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
         <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
-              fill="#0f1115" fill-opacity="0.65"/>
+              fill="#0f1115" fill-opacity="0.55"/>
       </svg></div>`,
     iconSize: [s, s], iconAnchor: [s / 2, s / 2],
   });
@@ -1195,7 +1199,10 @@ async function drawRunMap(v) {
     `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
   wrap.hidden = false;
   // Okvir je bil skrit, ko je Leaflet meril prostor -- brez tega je siv.
-  if (prvic) requestAnimationFrame(() => runMap.map.invalidateSize());
+  if (prvic) {
+    requestAnimationFrame(() => runMap.map.invalidateSize());
+    initFullscreen();
+  }
 }
 
 function postaviVozilo(prvic) {
@@ -1213,25 +1220,21 @@ function postaviVozilo(prvic) {
     runMap.marker.setIcon(busDivIcon(v.bearing, moving));
   }
 
-  // Zadnja RESNICNA meritev ostane vidna kot bleda pika -- a samo takrat, ko
-  // je ocena od nje dovolj dalec, da je razlika kaj pove. Pri stojecem
-  // vozilu bi bili dve piki druga na drugi in bi samo zmedli.
-  if (odmik > 40) {
-    if (!runMap.gps) {
-      // Siv obroc, ne zelena pika: zelene so postajalisca in dve zeleni
-      // piki na isti trasi se ne dasta lociti. Prazen obroc pove "tu je
-      // bilo", polna oblika vozila pa "tu je zdaj".
-      runMap.gps = L.circleMarker([v.lat, v.lon], {
-        radius: 5, color: "#8b95a4", weight: 1.6, opacity: 0.75,
-        fillOpacity: 0, dashArray: "3 2",
-      }).addTo(runMap.map);
-      bindFlashName(runMap.gps, "zadnja izmerjena lega");
-    } else {
-      runMap.gps.setLatLng([v.lat, v.lon]);
-      if (!runMap.map.hasLayer(runMap.gps)) runMap.gps.addTo(runMap.map);
-    }
-  } else if (runMap.gps && runMap.map.hasLayer(runMap.gps)) {
-    runMap.map.removeLayer(runMap.gps);
+  // Zadnja RESNICNA meritev je edina trdna tocka na tem zemljevidu, zato je
+  // polna in vidna -- ne bleda. Riše se VEDNO: kadar se ocena ni premaknila
+  // (vozilo stoji), jo oblika vozila pokrije in dveh oznak ni videti, opomba
+  // pod zemljevidom pa ostane resnicna v obeh primerih.
+  if (!runMap.gps) {
+    // Svetel obroc, ne temen: postajalisca so tudi zelene pike s temnim
+    // robom in ta bi se od njih ne locila. Obroc pove "to je vozilo, ne
+    // postaja", zelena sredica pa "to je izmerjeno".
+    runMap.gps = L.circleMarker([v.lat, v.lon], {
+      radius: 5.5, color: "#e7eaf0", weight: 2, opacity: 0.95,
+      fillColor: "#4db97f", fillOpacity: 1,
+    }).addTo(runMap.map);
+    bindFlashName(runMap.gps, "zadnja izmerjena lega");
+  } else {
+    runMap.gps.setLatLng([v.lat, v.lon]);
   }
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
@@ -1252,6 +1255,23 @@ setInterval(() => {
   if (document.visibilityState === "hidden") return;
   if (runMap.marker) postaviVozilo(false);
 }, 1000);
+
+// Cel zaslon. Gumb je skrit, kadar ga brskalnik ne podpira -- gumb, ki ne
+// naredi nicesar, je slabsi od manjkajocega. Po vsaki spremembi je treba
+// Leafletu povedati, da je okvir drugacen, sicer ostane siv.
+function initFullscreen() {
+  const btn = document.getElementById("run-map-fs");
+  const wrap = document.getElementById("run-map-wrap");
+  if (!btn || !wrap || !document.fullscreenEnabled || !wrap.requestFullscreen) return;
+  btn.hidden = false;
+  btn.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else wrap.requestFullscreen().catch(() => { /* brskalnik lahko zavrne */ });
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (runMap.map) requestAnimationFrame(() => runMap.map.invalidateSize());
+  });
+}
 
 function loadPosition() {
   const trip = (state.run && state.run.trip_id) || URL_TRIP;

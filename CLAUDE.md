@@ -787,9 +787,20 @@ Vzorec je majhen (41 vozil ob desetih zvečer) — smer je jasna, natančnost
 Varovala, brez katerih bi ocena lagala: ne premikamo **stoječega** vozila
 (`speed_ms < 1`), ne vozila, ki je od trase oddaljeno nad 120 m (ni na njej),
 in nikoli čez konec trase. Podnapis pove „ocenjeno iz lege pred 42 s", ne
-„lega stara 42 s", zadnja **izmerjena** lega pa ostane kot siv črtkan obroč —
-a le, kadar je ocena od nje nad 40 m stran; sicer bi bili dve oznaki druga na
-drugi. Obroč je siv namenoma: zelene pike so postajališča.
+„lega stara 42 s".
+
+**Barva loči meritev od ocene.** Vozilo na tem zemljevidu ni zeleno kot
+drugod, ampak v `ESTIMATE_COLOR` (`#a8d8ff`) in rahlo prosojno — ta odtenek je
+v projektu rezerviran prav za „tu meritve ni" in ga lestvica zamud ne uporablja.
+Zadnja **izmerjena** lega je zelena pika s **svetlim obročem**: zelena pove, da
+je izmerjena, obroč pa jo loči od postajališč, ki so tudi zelene pike. Riše se
+vedno — kadar vozilo stoji, jo oblika vozila pokrije in dveh oznak ni videti.
+Pod zemljevidom je enovrstična legenda; brez nje je moder avtobus ob zeleni
+piki uganka, in prav razlika med njima je bistvo tega okvira.
+
+Zemljevid ima **gumb za cel zaslon** (Fullscreen API na okvir, ne na `<div>`
+zemljevida, da glava in legenda ostaneta). Skrit je, kadar ga brskalnik ne
+podpira — gumb, ki ne naredi ničesar, je slabši od manjkajočega.
 
 **Na velikem zemljevidu tega ni**, in to je odločitev, ne opustitev: tam je
 vprašanje „kje je vse skupaj" in ocena za osemdeset vozil je osemdeset
@@ -879,6 +890,11 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   v sekundah (`<= 60` = točno): 60 s je pisalo „+1" sivo, 61 s „+1" oranžno —
   ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot
   številka poleg nje.
+
+  **Ista past se je ponovila pri „prej".** Prag je bil `s <= -60`, zaokroževanje
+  pa se prelomi pri −30 s: −45 s je zato izpisalo golo **„−1"** namesto
+  „1 min prej". Pravilo je zdaj v `common.isEarly()` in ga uporabljata okno
+  vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
 * **Padec zamude na postaji riši vedno, krogec prihoda pa le, kadar je zanj
   prostor** (`MIN_SPLIT_PX = 15`). Krogec meri v premeru 10 pik, polna pika

@@ -274,7 +274,7 @@ function delayChipHtml(delay, kind, at) {
   const forecast = kind && kind !== "izmerjeno";
   // "-4 min" je za potnika uganka, "4 min prej" ni. Barva ostane siva: to res
   // ni zamuda -- a prav zato mora povedati beseda, kar barva ne bo.
-  const early = delay <= -60;
+  const early = isEarly(delay);
   return `<span class="chip${forecast ? " chip-forecast" : ""}${early ? " chip-early" : ""}"
         style="color:${color};border-color:${color}44">
       <span class="chip-n">${early ? Math.abs(Math.round(delay / 60)) : delayLabel(delay)}</span>
