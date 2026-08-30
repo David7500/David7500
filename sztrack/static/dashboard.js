@@ -6,20 +6,6 @@
 // API-ja, zato je tu ločena kopija privzetka.
 const POLL_MS = 30000;
 
-function openTrainWindow(trainNo, tripId, serviceDate, network) {
-  // Posamezno vozilo dobi svoje okno -- tam je poleg te vožnje še zgodovina.
-  // `trip` in `date` gresta zraven, kadar ju poznamo: številka linije pri
-  // avtobusu ni enolična, devet vlakov pa ima sezonske različice.
-  const q = new URLSearchParams();
-  if (serviceDate) q.set("date", serviceDate);
-  if (tripId) q.set("trip", tripId);
-  const pot = network === "avtobus" ? "/app/bus/" : "/app/train/";
-  window.open(
-    `${pot}${encodeURIComponent(trainNo)}${q.toString() ? `?${q}` : ""}`,
-    `sztrack-${trainNo}`,
-  );
-}
-
 // ---------- podlaga ----------
 
 const map = L.map("map", { zoomControl: true }).setView([46.05, 14.95], 8);
@@ -170,12 +156,66 @@ function groupByStation(trains) {
   return groups;
 }
 
+// Kartica vozila. Klik na zemljevidu je doslej odprl novo stran -- to je
+// veliko za vprasanje "kaj pa je to". Kartica odgovori na mestu in ponudi
+// stran tistemu, ki jo res hoce.
+function vehCardHtml(o) {
+  const rows = o.rows.map(([k, v, color]) => `
+    <div class="veh-row"><span>${escapeHtml(k)}</span>
+      <b${color ? ` style="color:${color}"` : ""}>${v}</b></div>`).join("");
+  return `<div class="veh-card">
+      <div class="veh-head">
+        <span class="veh-no">${escapeHtml(o.no)}</span>${o.badge || ""}
+        <span class="veh-headsign">${escapeHtml(o.headsign || "")}</span>
+      </div>
+      <div class="veh-rows">${rows}</div>
+      <a class="veh-open" href="${o.href}" target="_blank" rel="noopener">
+        Odpri stran o vozilu →</a>
+    </div>`;
+}
+
+function tripHref(trainNo, tripId, serviceDate, network) {
+  const q = new URLSearchParams();
+  if (serviceDate) q.set("date", serviceDate);
+  if (tripId) q.set("trip", tripId);
+  const pot = network === "avtobus" ? "/app/bus/" : "/app/train/";
+  return `${pot}${encodeURIComponent(trainNo)}${q.toString() ? `?${q}` : ""}`;
+}
+
+function trainCardHtml(t) {
+  const d = bestDelay(t);
+  return vehCardHtml({
+    no: t.train_no, badge: modeBadgeHtml(t.mode), headsign: t.headsign,
+    href: tripHref(t.train_no, t.trip_id, t.service_date, "zeleznica"),
+    rows: [
+      ["zamuda", `${delayLabel(d.value)} min`, delayColor(d.value)],
+      ["zadnja meritev", escapeHtml(d.where || "—")],
+      [d.fromOperator ? "poročal prevoznik" : "izmerjeno",
+       t.measured_at ? `ob ${hhmm(t.measured_at)}` : "—"],
+    ],
+  });
+}
+
+function busCardHtml(v) {
+  return vehCardHtml({
+    no: v.train_no, badge: "", headsign: v.headsign,
+    href: tripHref(v.train_no, v.trip_id, v.service_date, "avtobus"),
+    rows: [
+      ["zamuda", `${delayLabel(v.delay_s)} min`, delayColor(v.delay_s)],
+      ["hitrost", v.speed_kmh == null ? "ni podatka"
+        : v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji"],
+      ["lega stara", `${v.age_s} s`],
+    ],
+  });
+}
+
+// Oznaka nosi SAMO stevilko. Zamuda je odsla s zemljevida na kartico: kdor
+// gleda zemljevid, sprasuje "kje je", ne "koliko zamuja". Iz tega sledi tudi,
+// da marker vlaka nima barve lestvice -- barva brez minute poleg sebe bi
+// nosila pomen sama, in prav to je v projektu prepovedano.
 function trainLineHtml(t) {
-  // Barva na markerju sama ne sme nositi pomena -- vedno zraven piše minuta.
   return `<span class="train-label-code">${escapeHtml(t.train_no)}</span>`
-    + modeBadgeHtml(t.mode)
-    + `<span class="train-label-delay" style="color:${delayColor(bestDelay(t).value)}">`
-    + `${delayLabel(bestDelay(t).value)}</span>`;
+    + modeBadgeHtml(t.mode);
 }
 
 function groupLabelHtml(g) {
@@ -188,55 +228,71 @@ function groupLabelHtml(g) {
 }
 
 function groupPopupHtml(g) {
-  const rows = g.trains.map((t) => `
-    <button class="popup-train" data-train="${escapeHtml(t.train_no)}"
-            data-trip="${escapeHtml(t.trip_id || "")}"
-            data-date="${escapeHtml(t.service_date || "")}">
-      <span class="popup-train-code">${escapeHtml(t.train_no)}</span>${modeBadgeHtml(t.mode)}
-      <span class="popup-train-headsign">${escapeHtml(t.headsign || "")}</span>
-      <span class="popup-train-delay" style="color:${delayColor(bestDelay(t).value)}">${delayLabel(bestDelay(t).value)}</span>
-    </button>`).join("");
-  const measured = g.trains.map((t) => t.measured_at).filter(Boolean).sort().pop();
   return `
     <div class="popup-station">${escapeHtml(g.name)}</div>
-    <div class="popup-note">zadnja postaja z meritvijo — ${g.trains.length === 1 ? "1 vlak" : `${g.trains.length} vlakov`}</div>
-    <div class="popup-list">${rows}</div>
-    <div class="popup-note">${measured ? `nazadnje izmerjeno ob ${hhmm(measured)} · ` : ""}klikni vlak za svoje okno</div>`;
+    <div class="popup-note">zadnja postaja z meritvijo — ${g.trains.length === 1
+      ? "1 vlak" : `${g.trains.length} vlakov`}</div>
+    <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>`;
+}
+
+const TRAIN_INK = "#f0934f";
+
+function trainSize(z) {
+  if (z >= 13) return 30;
+  if (z >= 11) return 24;
+  if (z >= 9) return 19;
+  return 15;
+}
+
+// Vlak od zgoraj, na obrocu. Obroc ni okras: pove, da je to POSTAJA in ne
+// izmerjena lega -- feed za vlake GPS nima in marker stoji na zadnji postaji
+// z meritvijo. Avtobus obroca nima, ker je njegova lega prava.
+function trainIcon(n, z) {
+  const s = trainSize(z);
+  const vec = n > 1;
+  return L.divIcon({
+    className: "train-marker",
+    html: `<div style="width:${s}px;height:${s}px">
+      <svg width="${s}" height="${s}" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="11" fill="none"
+                stroke="${TRAIN_INK}" stroke-opacity="0.45" stroke-width="1.4"/>
+        <rect x="7" y="3.5" width="10" height="17" rx="3.4"
+              fill="${TRAIN_INK}" stroke="#0f1115" stroke-width="1.5"/>
+        <path d="M8.8 6.6 Q12 5.5 15.2 6.6 L15.2 9.2 Q12 8.2 8.8 9.2 Z"
+              fill="#0f1115" fill-opacity="0.7"/>
+        <circle cx="9.8" cy="18" r="1" fill="#0f1115" fill-opacity="0.8"/>
+        <circle cx="14.2" cy="18" r="1" fill="#0f1115" fill-opacity="0.8"/>
+        ${vec ? `<circle cx="19" cy="5" r="4" fill="#0f1115"/>
+          <text x="19" y="7.4" text-anchor="middle" font-size="6"
+                font-family="monospace" fill="${TRAIN_INK}">${n}</text>` : ""}
+      </svg></div>`,
+    iconSize: [s, s], iconAnchor: [s / 2, s / 2],
+  });
 }
 
 function renderTrains(trains) {
   // Vlaki NIMAJO GPS lege -- marker je vedno točno na zadnji znani postaji,
-  // nikoli interpoliran vzdolž proge.
+  // nikoli interpoliran vzdolž proge. Obroč okoli ikone to pove na pogled.
   const groups = groupByStation(trains);
+  const z = map.getZoom();
   for (const [name, g] of groups) {
     const worst = worstDelay(g.trains);
-    const color = delayColor(worst === -Infinity ? null : worst);
     const latlng = [g.station.lat, g.station.lon];
 
     let marker = stationMarkers.get(name);
     if (!marker) {
-      marker = L.circleMarker(latlng, {
-        radius: g.trains.length > 1 ? 7 : 6, weight: 1.6,
-        color: "#0f1115", fillColor: color, fillOpacity: 1,
-      });
+      marker = L.marker(latlng, { icon: trainIcon(g.trains.length, z), keyboard: false });
       // interactive: true doda oznaki razred leaflet-interactive in jo
       // registrira kot cilj -- brez tega klik na oznako ne sproži ničesar.
       marker.bindTooltip(groupLabelHtml(g), {
         className: "sztrack-tooltip sztrack-label", permanent: true,
         direction: "right", offset: [8, 0], interactive: true,
       });
-      marker.bindPopup(groupPopupHtml(g));
-      marker.on("click", () => {
-        if (marker.__trains.length === 1) {
-          marker.closePopup();
-          const t0 = marker.__trains[0];
-          openTrainWindow(t0.train_no, t0.trip_id, t0.service_date);
-        }
-      });
+      marker.bindPopup(groupPopupHtml(g), { maxWidth: 280 });
       marker.addTo(trainLayer);
       stationMarkers.set(name, marker);
     } else {
-      marker.setStyle({ fillColor: color, radius: g.trains.length > 1 ? 7 : 6 });
+      marker.setIcon(trainIcon(g.trains.length, z));
       marker.setTooltipContent(groupLabelHtml(g));
       marker.setPopupContent(groupPopupHtml(g));
     }
@@ -322,8 +378,9 @@ function renderBuses(list) {
     let m = busMarkers.get(key);
     if (!m) {
       m = L.marker([v.lat, v.lon], { icon: busIcon(v, z), keyboard: false });
-      m.on("click", () => openTrainWindow(
-        m.__v.train_no, m.__v.trip_id, m.__v.service_date, "avtobus"));
+      // Klik odpre KARTICO, ne nove strani. Nova stran je velika za
+      // vprasanje "kaj pa je to"; kartica odgovori na mestu in ponudi stran.
+      m.bindPopup(busCardHtml(v), { maxWidth: 280 });
       m.bindTooltip(busTooltipHtml(v), {
         className: "sztrack-tooltip", direction: "top", offset: [0, -10],
       });
@@ -333,6 +390,7 @@ function renderBuses(list) {
       m.setLatLng([v.lat, v.lon]);
       m.setIcon(busIcon(v, z));
       m.setTooltipContent(busTooltipHtml(v));
+      m.setPopupContent(busCardHtml(v));
     }
     m.__v = v;
   }
@@ -349,7 +407,10 @@ function renderBuses(list) {
 let zoomTimer = null;
 map.on("zoomend", () => {
   clearTimeout(zoomTimer);
-  zoomTimer = setTimeout(() => renderBuses(liveBuses), 60);
+  zoomTimer = setTimeout(() => {
+    renderBuses(liveBuses);
+    renderTrains(liveTrains);        // ikona vlaka prav tako raste s priblizkom
+  }, 60);
 });
 
 // ---------- razvrščanje oznak ----------
@@ -395,13 +456,6 @@ function declutterLabels() {
 }
 
 map.on("zoomend moveend", () => requestAnimationFrame(declutterLabels));
-
-document.addEventListener("click", (ev) => {
-  const btn = ev.target.closest(".popup-train");
-  if (!btn) return;
-  map.closePopup();
-  openTrainWindow(btn.dataset.train, btn.dataset.trip, btn.dataset.date);
-});
 
 // ---------- plasti ----------
 // Zemljevid je edini pogled, ki ga omrežji delita, zato mora biti mogoče

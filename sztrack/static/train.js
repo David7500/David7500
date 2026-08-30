@@ -649,6 +649,9 @@ const SEV_GAP = 18;
 // viden, kot par krogcev pa ne.
 const MIN_SPLIT_PX = 15;
 
+//: Koliko prostora rabi ena postaja, da je krivulja se krivulja in ne crta.
+const MIN_STOP_PX = 30;
+
 function drawProfile(w, pts) {
   const hasWx = pts.some((p) => p.wx && p.wx.severity != null);
   // Desni rob mora nositi zadnjo tocko, njeno oznako, njen stolpec razmer in
@@ -916,17 +919,34 @@ function renderProfile() {
   legend.innerHTML = profileLegendHtml(pts);
   note.innerHTML = WEATHER_NOTE;
   note.hidden = !withWx.length;
-  mountChart(el, (w) => drawProfile(w, pts));
+  // Na telefonu je 29 postaj na 390 px deset pik na postajo -- krivulja je
+  // stisnjena v crto in na osi sta samo zacetek in konec. Graf zato dobi
+  // najmanjso sirino na postajo in se, kadar je ozko, VODORAVNO PREMIKA
+  // (`.fig-body` ima `overflow-x: auto`). Bolje je drseti kot ne videti.
+  mountChart(el, (w) => drawProfile(Math.max(w, MIN_STOP_PX * pts.length + 92), pts));
+  el.classList.toggle("is-wide", el.clientWidth < MIN_STOP_PX * pts.length + 92);
 }
 
 // ---------- graf 2: koncna zamuda po dnevih ----------
 
-function drawRuns(w, runs) {
+//: Najozji stolpec, ki je se stolpec in ne crta.
+const MIN_BAR_PX = 7;
+
+function drawRuns(w, runs, onSlice) {
   const H = 190;
   const M = { t: 14, r: 12, b: 30, l: 40 };
   const iw = Math.max(40, w - M.l - M.r);
   const ih = H - M.t - M.b;
   const svg = svgEl("svg", { width: w, height: H, role: "img" });
+
+  // Pri pol leta zajema bi bilo 180 stolpcev na 300 px, torej 1,7 px na dan
+  // in 180 datumov drug cez drugega. Zato pokazemo zadnjih toliko, kolikor
+  // jih gre citljivo noter, in povemo, koliko jih je vseh -- graf, ki se ne
+  // da brati, ni graf.
+  const zmore = Math.max(6, Math.floor(iw / MIN_BAR_PX));
+  const vsi = runs.length;
+  runs = runs.slice(-zmore);
+  if (onSlice) onSlice(runs.length, vsi);
 
   const ticks = niceTicks(Math.max(60, ...runs.map((r) => r.final_delay_s)), 5);
   const yMax = ticks.top;
@@ -960,8 +980,16 @@ function drawRuns(w, runs) {
     rect.addEventListener("mouseleave", hideTip);
     svg.appendChild(rect);
 
+  });
+
+  // Datumi pod stolpci: toliko, kolikor jih gre brez prekrivanja. Vsak
+  // datum rabi ~34 px; kadar jih je vec, pisemo vsakega k-tega in vedno
+  // zadnjega -- ta je "danes" in je edini, ki ga clovek isce.
+  const naK = Math.max(1, Math.ceil(34 / step));
+  runs.forEach((r, i) => {
+    if (i % naK !== 0 && i !== runs.length - 1) return;
     svg.appendChild(svgEl("text", {
-      x: cx, y: H - 10, "text-anchor": "middle",
+      x: M.l + step * i + step / 2, y: H - 10, "text-anchor": "middle",
       fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
     }, dayLabel(r.service_date)));
   });
@@ -1157,8 +1185,11 @@ async function loadHistory() {
   const runsSub = document.getElementById("runs-sub");
   const runsEl = document.getElementById("runs-chart");
   if (runs.length >= 3) {
-    runsSub.textContent = "ena vožnja = en stolpec";
-    mountChart(runsEl, (w) => drawRuns(w, runs));
+    mountChart(runsEl, (w) => drawRuns(w, runs, (n, vsi) => {
+      runsSub.textContent = n < vsi
+        ? `ena vožnja = en stolpec · zadnjih ${n} od ${vsi} zajetih`
+        : "ena vožnja = en stolpec";
+    }));
   } else if (runs.length) {
     // Pod tremi voznjami stolpci ne povedo nic vec kot seznam -- in namigujejo
     // na trend, ki ga ni.
@@ -1201,17 +1232,6 @@ pollWhileVisible(refreshFeedDot, 30000);
 
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
 // za njo.
-// Preklop pogleda je skupen vsem stranem in zivi v common.js. Grafi se morajo
-// ob preklopu prerisati: napreden pogled spremeni sirino stolpca.
-const toAdvBtn = document.getElementById("to-advanced");
-if (toAdvBtn) {
-  toAdvBtn.addEventListener("click", () => {
-    // Isti preklop kot v glavi -- klik na gumb mora premakniti tudi njo.
-    const b = document.querySelector('#mode-switch [data-mode="advanced"]');
-    if (b) b.click();
-    document.getElementById("fig-profile").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-}
 
 initMode(() => {
   renderTimeline();     // preprosto kaze samo naprej, napredno vso pot

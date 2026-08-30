@@ -103,6 +103,13 @@
   padding: 12px;
 }
 .fig-body svg { display: block; }
+/* Kadar je graf sirsi od okvirja, mora biti vidno, da se da premikati --
+   sicer je videti kot odrezan. Senca ob desnem robu pove, da je se kaj. */
+.fig-body.is-wide {
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+}
+.fig-body.is-wide::after { content: ""; }
 .fig-body .empty-state { padding: 10px 2px; }
 
 .run-row {
@@ -366,20 +373,6 @@
 
 /* Vstop v napredni pogled iz preprostega — brez tega je videti, da strani
    preprosto manjka polovica. */
-.to-advanced {
-  display: block;
-  width: 100%;
-  margin: 14px 0 0;
-  padding: 11px 14px;
-  border: 1px dashed var(--line-firm);
-  border-radius: 8px;
-  background: none;
-  color: var(--ink-mute);
-  font: 400 12px/1.4 var(--sans);
-  cursor: pointer;
-}
-.to-advanced:hover { border-color: var(--ink-faint); color: var(--ink); }
-body.is-advanced .to-advanced { display: none; }
 
 
 /* ---------- zemljevid ene voznje ----------

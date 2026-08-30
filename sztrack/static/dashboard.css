@@ -482,3 +482,40 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
   /* Leafletovi gumbi ne smejo pod plosco. */
   .leaflet-bottom { bottom: 46px; }
 }
+
+/* ---------- kartica vozila ----------
+ * Klik na zemljevidu je doslej odprl novo stran. To je veliko za vprasanje
+ * "kaj pa je to": kartica odgovori na mestu in ponudi stran tistemu, ki jo
+ * res hoce.
+ */
+.veh-card { min-width: 210px; }
+.veh-card + .veh-card { margin-top: 10px; padding-top: 10px; border-top: 1px solid #23272f; }
+.veh-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.veh-no {
+  font: 600 14px/1.2 'IBM Plex Mono', ui-monospace, monospace; color: #e7eaf0;
+}
+.veh-headsign {
+  flex: 1 1 100%;
+  font: 400 11.5px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;
+}
+.veh-rows { margin: 9px 0 10px; display: flex; flex-direction: column; gap: 3px; }
+.veh-row { display: flex; align-items: baseline; gap: 10px; }
+.veh-row span {
+  flex: 1 1 auto;
+  font: 400 11px/1.5 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;
+}
+.veh-row b {
+  font: 600 12.5px/1.4 'IBM Plex Mono', ui-monospace, monospace; color: #e7eaf0;
+}
+.veh-open {
+  display: block;
+  padding: 7px 10px;
+  border: 1px solid #2b303a; border-radius: 6px;
+  color: #9aa3b0; text-decoration: none; text-align: center;
+  font: 500 11.5px/1 'IBM Plex Sans', system-ui, sans-serif;
+}
+.veh-open:hover { color: #e7eaf0; border-color: #f0934f; }
+
+/* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
+ * Avtobus obroča nima, ker je njegova lega prava. */
+.train-marker { background: none; border: none; }
