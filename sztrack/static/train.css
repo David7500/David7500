@@ -457,13 +457,28 @@
 
 /* Cez celo STRAN, ne cez cel zaslon (glej opombo v train.js). Glava in
    legenda ostaneta -- brez njiju ne bi bilo ne hitrosti ne pomena oznak. */
+/* Razsirjen zemljevid je iztrgan iz postavitve in mora prezreti VSA pravila o
+   velikosti in robovih. `!important` je tu pravo orodje, ne daljsi selektor:
+   namizna pravila v `@media` (`body:not(.is-advanced) .col-run .run-map`) imajo
+   specificnost (0,3,1) in so `is-max` (0,2,0) tiho premagala -- zemljevid je
+   ostal visok 240 px in zamaknjen za 12 px margine, vse ostalo pa crno. Na
+   telefonu se to ni videlo, ker tistih pravil tam ni. Isti vzorec kot
+   `adv-only` v base.css. */
 .run-map-wrap.is-max {
-  position: fixed; inset: 0; z-index: 1200;
-  margin: 0; border-radius: 0; border: 0;
+  position: fixed !important;
+  inset: 0 !important;
+  margin: 0 !important;
+  z-index: 1200;
+  border-radius: 0; border: 0;
   display: flex; flex-direction: column;
 }
-.run-map-wrap.is-max .run-map-holder { flex: 1 1 auto; min-height: 0; display: flex; }
-.run-map-wrap.is-max .run-map { flex: 1 1 auto; height: auto; }
+.run-map-wrap.is-max .run-map-holder {
+  flex: 1 1 auto; min-height: 0; display: flex;
+}
+.run-map-wrap.is-max .run-map {
+  flex: 1 1 auto !important;
+  height: auto !important;
+}
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
 .run-map.leaflet-container { font-family: var(--sans); }
 @media (max-width: 720px) { .run-map { height: 210px; } }

@@ -833,6 +833,16 @@ izhod pa je tipka, ki je na telefonu ni. Razred `is-max` na okviru
 (`position: fixed; inset: 0`) naredi isto koristno stvar in nič od tega; glava
 in legenda ostaneta, ker brez njiju ni ne hitrosti ne pomena oznak.
 
+**Razširjen zemljevid mora prezreti postavitev, in to zahteva `!important`.**
+Namizna pravila v `@media` (`body:not(.is-advanced) .col-run .run-map`) imajo
+specifičnost **(0,3,1)** in so `.run-map-wrap.is-max .run-map` **(0,3,0)** tiho
+premagala: zemljevid je čez celo stran ostal visok **240 px** in zamaknjen za
+**12 px** margine, vse ostalo pa črno. Na telefonu se to **ni videlo**, ker
+tistih pravil tam ni — zato je bilo popravljeno šele, ko je bilo prijavljeno z
+namizja. Rešitev ni daljši selektor, ampak `!important` na `position`, `inset`,
+`margin` in `height`: element je iztrgan iz postavitve in mora prezreti vsa
+pravila o njej. Isti vzorec kot `adv-only` v `base.css`.
+
 **Ozadje zemljevida rabi sestavljen selektor.** `.leaflet-container` ima svoj
 `background: #ddd`, Leafletov CSS pa se naloži **šele ob prvi legi**, torej za
 našim — enaka specifičnost, poznejši zmaga. Pri 260 px se to ni videlo, ker
