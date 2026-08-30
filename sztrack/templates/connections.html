@@ -23,10 +23,6 @@
     {% if section %}<div class="divider"></div>
     <span class="page-name">{{ section }}</span>{% endif %}
     <div class="spacer"></div>
-    <div class="mode-switch" id="mode-switch">
-      <button type="button" data-mode="simple" aria-pressed="true">preprosto</button>
-      <button type="button" data-mode="advanced" aria-pressed="false">napredno</button>
-    </div>
     {% include "_nav.html" with context %}
     <div class="divider"></div>
     <div class="clock-wrap">
@@ -49,6 +45,8 @@
         <label for="from">Od</label>
         <input id="from" name="from" placeholder="{{ from_ph | default('izhodiščna postaja') }}" autocomplete="off"
                autocapitalize="off" spellcheck="false" required>
+        <button type="button" class="field-clear" data-clear="from"
+                tabindex="-1" aria-label="izbriši izhodišče" hidden>&times;</button>
         <ul class="suggest" id="suggest-from" role="listbox" hidden></ul>
       </div>
       <button type="button" id="swap" class="swap" title="zamenjaj postaji" aria-label="zamenjaj postaji">
@@ -60,6 +58,8 @@
         <label for="to">Do</label>
         <input id="to" name="to" placeholder="{{ to_ph | default('ciljna postaja') }}" autocomplete="off"
                autocapitalize="off" spellcheck="false" required>
+        <button type="button" class="field-clear" data-clear="to"
+                tabindex="-1" aria-label="izbriši cilj" hidden>&times;</button>
         <ul class="suggest" id="suggest-to" role="listbox" hidden></ul>
       </div>
       <div class="field field-date">
@@ -74,6 +74,8 @@
         <label for="station">{{ stop_label | default("Postaja") }}</label>
         <input id="station" name="station" placeholder="{{ stop_ph | default('npr. Ljubljana') }}" autocomplete="off"
                autocapitalize="off" spellcheck="false" required>
+        <button type="button" class="field-clear" data-clear="station"
+                tabindex="-1" aria-label="izbriši postajo" hidden>&times;</button>
         <ul class="suggest" id="suggest-station" role="listbox" hidden></ul>
       </div>
       <div class="field field-date">
@@ -104,6 +106,8 @@
       </button>
     </form>
 
+    <div id="recents" class="recents"></div>
+
     <div id="alerts" aria-live="polite"></div>
     <!-- Rezultati se zamenjajo brez ponovnega nalaganja strani; bralnik
          zaslona mora izvedeti, da je odgovor tu. `polite`, ker ni nujno. -->
@@ -122,7 +126,7 @@
       Zamude imajo ločljivost ene minute in so izmerjene v prometnem mestu,
       ne nujno na peronu.
       {% endif %}
-      <span class="adv-only" id="foot-health"></span>
+      <span id="foot-health"></span>
     </footer>
   </main>
 

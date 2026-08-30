@@ -260,6 +260,29 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   ob prvi neničelni vrednosti zavpije v dnevnik; prikaza zanj namenoma še ni,
   ker bi bil to prikaz za podatek, ki ne obstaja.
 
+* **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** V 45 146
+  železniških vrsticah `run` ni niti ene negativne vrednosti — najmanjša je
+  natanko 0. Pri avtobusih je 12,0 % vrstic vsaj minuto prezgodnjih in 4,5 %
+  vsaj tri; **41,7 % avtobusnih voženj ima vsaj en prezgodnji postanek**
+  (LPP 22,6 % vrstic, Nomago 10,6 %, Arriva 8,9 %).
+
+  Prikaz je to do zdaj **skrival**: vrstica je pričakovano uro izpisala samo
+  ob `delay_s >= 60`, torej je prezgoden avtobus kazal zgolj voznoredno uro.
+  Napaka v najslabšo smer — potnik pride ob objavljeni uri in avtobusa ni več.
+  Zdaj je prag `abs(delay_s) >= 60`, žeton pa pove „3 min prej", ne „−3 min":
+  minus pred številko je uganka, beseda ni. Barva ostane siva, ker to res ni
+  zamuda — in prav zato mora povedati beseda.
+
+  Ali je prezgodnja vrednost resnična, je bilo preverjeno na LPP 25
+  (Medvode ↔ Zadobrova). V smeri proti Zadobrovi je bila na Gosposvetski
+  prezgodnja v **vseh 17 zajetih vožnjah**, povprečno −4,4 min, najpozneje
+  −5 s; profil čez progo je lok, ki na obeh koncih izgine (Prušnikova −74 s,
+  Kompas −224, Gosposvetska −265, Kolodvor −73, konec +123). GPS to potrdi:
+  30. 8. ob 12:10:44 je bilo vozilo LJ LPP-124 že za postankom, ki ima vozni
+  red 12:13. To torej ni napaka zajema, ampak **prevelika rezerva voznega reda
+  skozi Šiško** — v nasprotni smeri je ista postaja povprečno +370 s. Zajem
+  LPP je za zdaj samo vikendski (od 29. 8.); ali velja med tednom, se bo videlo.
+
 * **Ni** cen, sestave vlaka, perona, zasedenosti. Mednarodni vlaki (EN/MV)
   pogosto brez realtime pokritja.
 
@@ -455,12 +478,36 @@ avtobusni `run`, ne železniški.
 | `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |
 | `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu v tednu |
 
+**Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
+vprašanji: `sztrack:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
+`sztrack:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).
+Oba sta v žetonih **pod iskalnikom**, ne v pregledu — pregled prva poizvedba
+pobriše prav takrat, ko bi seznam rabil za naslednjo. Prazno polje za postajo
+ob dotiku ponudi imena iz teh poizvedb; drugega ugiba za prazno polje nimamo.
+
+Oba seznama sta **ločena po omrežju**. Prejšnji `sztrack:last` ni bil, in to
+je bilo videti: kdor je na `/app` iskal Celje–Ljubljana in nato odprl
+`/app/bus`, je tam dobil isto vprašanje, razrešeno na avtobusnem omrežju
+(„Ljubljana AP"), in prazen odgovor. Zadnja poizvedba je zdaj preprosto prva
+med nedavnimi in svojega zapisa nima več.
+
 Okno vožnje je isto za vlak in avtobus, a govori o tem, kar je pred potnikom:
 besedo (vlak / nadomestni prevoz / avtobus), opozorilo in povezavo nazaj
 izbere iz `network`. Pri avtobusu z več vožnjami na isto številko linije je
 v naslovu `?trip=<id>`.
 
-Vsaka stran ima preklop **preprosto / napredno**. To ni druga stran: napredni
+**Vstopna stran preklopa preprosto/napredno nima namenoma.** Izbira med dvema
+odgovoroma je pri vprašanju „kdaj mi pelje vlak" sama po sebi breme: potnik ne
+vidi, kaj mu drugi pogled skriva, in dokler ne vidi, ga ni razloga vklopiti.
+Kar je bilo na njej naprednega, se je razdelilo na dvoje in nič ni ostalo
+skrito: razumljivo vsakomur (**neposredno**, **načrtovano N min za prestop**,
+**točnih N %**, **najslabša**, koliko je zajetega) je zdaj vedno vidno, ostalo
+pa je s te strani odšlo, ker tja ni sodilo — številka postanka, „izhodišče —
+feed odhodne zamude ne poroča" in prevoznikova napoved, ki je prikaz tako ali
+tako ne uporablja. Preklop obdržijo okno vožnje, statistika in ovire: tam gre
+za eno vožnjo ali eno številko, ne več za izbiro poti.
+
+Druge strani imajo preklop **preprosto / napredno**. To ni druga stran: napredni
 pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom
 `adv-only` (p90, delež točnih, številka postanka, kaj pravi feed). Potnik in
 radovednež gledata isto vožnjo.

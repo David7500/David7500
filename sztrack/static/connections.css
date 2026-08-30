@@ -99,6 +99,38 @@
 .suggest li:hover, .suggest li.is-active { background: var(--line-firm); color: var(--ink); }
 .suggest li mark { background: none; color: var(--accent-lit); font-weight: 600; }
 
+/* Gumb za brisanje vnosa. Sidran na DNO polja, ne na vrh: nad vnosnim
+ * poljem je oznaka in ta ni povsod enako visoka. */
+.field-clear {
+  position: absolute;
+  right: 1px; bottom: 1px;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; border-radius: var(--r);
+  color: var(--ink-faint);
+  font: 400 20px/1 var(--sans);
+  cursor: pointer;
+}
+.field-clear:hover { color: var(--ink); }
+.field-clear[hidden] { display: none; }
+/* Besedilo se ne sme skriti pod gumb. */
+.station-field input { padding-right: 34px; }
+
+/* Postaja iz prejsnjega iskanja -- lociti se mora od zadetka iskanja, sicer
+ * je videti, kot da smo ze nekaj nasli, preden je clovek karkoli natipkal. */
+.suggest li.is-recent { color: var(--ink-mute); }
+.suggest li.is-recent::before {
+  content: "↩";
+  margin-right: 7px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+/* Shranjene in nedavne poti: pod iskalnikom, kjer so vedno pri roki. */
+.recents { margin-top: 12px; }
+.recents:empty { display: none; }
+.recents .fav-chip { color: var(--ink); border-color: #e07b4544; }
+
 .swap {
   flex-shrink: 0;
   width: 34px; height: 34px;
@@ -265,6 +297,10 @@
   }
   .field-date, .field-kind, .field-time { flex: 1 1 calc(50% - 5px); order: 3; }
   .go { flex: 1 1 100%; margin-bottom: 0; order: 4; }
+  /* Brez tega ima gumb privzeti `order: 0` in se na telefonu postavi NAD
+     polje za postajo -- prvo, kar clovek vidi, je bliznja postaja namesto
+     iskalnika. */
+  .near-me { flex: 1 1 100%; order: 5; justify-content: center; }
 
   .conn-row { grid-template-columns: 1fr auto; gap: 3px 12px; }
   .conn-times { grid-column: 1; }

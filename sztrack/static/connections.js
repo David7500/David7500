@@ -23,8 +23,13 @@ const IS_BUS = NETWORK === "avtobus";
 let pollTimer = null;
 let activeTab = "ab";
 
-// Preklop pogleda je skupen vsem stranem in zivi v common.js.
-initMode((mode) => { if (mode === "advanced") loadHealth(); });
+// Vstopna stran nima preklopa preprosto/napredno. Ce je vprasanje "kdaj mi
+// pelje vlak", je izbira med dvema odgovoroma sama po sebi breme: potnik ne ve,
+// kaj mu drugi pogled skriva, in dokler ne ve, ga ni razloga vklopiti. Kar je
+// bilo tu naprednega, je bodisi razumljivo vsakomur (in je zdaj vedno vidno)
+// bodisi ni sodilo na to stran (stevilka postanka, prevoznikova napoved).
+// Okno ene voznje preklop obdrzi -- tam gre za eno vozjno in ne vec za izbiro.
+loadHealth();
 
 async function loadHealth() {
   const el = $("foot-health");
@@ -51,6 +56,24 @@ function attachSuggest(input, listEl) {
   let active = -1;
   let seq = 0;
 
+  // Kaj naredimo z izbrano postajo. Pri "Od–do" je iskanje smiselno sele, ko
+  // sta obe polji polna -- doslej je izbira izhodisca takoj sprozila obrazec
+  // in brskalnik je odgovoril z opozorilom nad praznim ciljem. Skok na
+  // naslednje polje je isti klik manj in brez opozorila.
+  const takeIt = (name) => {
+    input.value = name;
+    close();
+    const next = [...input.form.querySelectorAll(".station-field input")]
+      .find((el) => el !== input && !el.value.trim());
+    paintClear(input);
+    if (next) {
+      next.focus();
+      paintFavButton();
+    } else {
+      input.form.requestSubmit();
+    }
+  };
+
   // Bralnik zaslona mora vedeti, da je polje spustni seznam, ali je odprt in
   // katera moznost je izbrana. Brez tega je tipkovnicna izbira nevidna.
   input.setAttribute("role", "combobox");
@@ -74,12 +97,11 @@ function attachSuggest(input, listEl) {
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", String(i === active));
       li.className = i === active ? "is-active" : "";
+      if (s.recent) li.classList.add("is-recent");
       li.innerHTML = highlight(s.name, q);
       li.addEventListener("mousedown", (ev) => {
         ev.preventDefault();          // ne izgubi fokusa pred klikom
-        input.value = s.name;
-        close();
-        input.form.requestSubmit();
+        takeIt(s.name);
       });
       return li;
     }));
@@ -89,8 +111,17 @@ function attachSuggest(input, listEl) {
     else input.removeAttribute("aria-activedescendant");
   };
 
-  input.addEventListener("input", async () => {
+  // Prazno polje ni nic za pokazati -- razen ce clovek tu ze je bil. Postaje
+  // iz prejsnjih iskanj so v tem primeru najboljsi ugib, kar ga imamo.
+  const query = async () => {
     const q = input.value.trim();
+    if (!q) {
+      seq += 1;                       // razveljavi morebitno tekoco zahtevo
+      items = recentStations();
+      active = -1;
+      if (!items.length) return close();
+      return paint();
+    }
     if (q.length < 2) return close();
     const mine = ++seq;
     try {
@@ -103,7 +134,10 @@ function attachSuggest(input, listEl) {
     } catch (err) {
       close();
     }
-  });
+  };
+
+  input.addEventListener("input", () => { paintClear(input); query(); });
+  input.addEventListener("focus", () => { if (!input.value.trim()) query(); });
 
   input.addEventListener("keydown", (ev) => {
     if (listEl.hidden) return;
@@ -113,15 +147,37 @@ function attachSuggest(input, listEl) {
       paint();
     } else if (ev.key === "Enter" && active >= 0) {
       ev.preventDefault();
-      input.value = items[active].name;
-      close();
-      input.form.requestSubmit();
+      takeIt(items[active].name);
     } else if (ev.key === "Escape") {
       close();
     }
   });
 
   input.addEventListener("blur", () => setTimeout(close, 120));
+  paintClear(input);
+}
+
+// ---------- brisanje vnosa ----------
+// Na telefonu je popravek imena postaje sicer sedem pritiskov vracalke. Gumb
+// se pokaze samo, kadar je kaj brisati, in ne jemlje tipkovnicnega vrstnega
+// reda (`tabindex="-1"`) -- pot skozi obrazec s tipkovnico ostane ista.
+
+function paintClear(input) {
+  const btn = input.parentElement.querySelector(".field-clear");
+  if (btn) btn.hidden = !input.value;
+}
+
+function attachClear(input) {
+  const btn = input.parentElement.querySelector(".field-clear");
+  if (!btn) return;
+  btn.addEventListener("mousedown", (ev) => ev.preventDefault());   // obdrzi fokus
+  btn.addEventListener("click", () => {
+    input.value = "";
+    paintClear(input);
+    paintFavButton();
+    input.focus();
+    input.dispatchEvent(new Event("input"));    // odpre nedavne postaje
+  });
 }
 
 function highlight(name, q) {
@@ -207,26 +263,20 @@ function typicalChipHtml(t, fromStop) {
     </span>
     <div class="conn-where">običajno · ${pluralRuns(t.n)}</div>
     ${fromStop ? `<div class="conn-where">merjeno na postaji ${escapeHtml(fromStop)}</div>` : ""}
-    <div class="conn-where adv-only">točnih ${Math.round(t.on_time_share * 100)} % · p90 ${delayLabel(t.p90_s)} min</div>`;
-}
-
-// Kaj je o tej postaji rekel feed. Kadar vozilo postaje se ni doseglo, je to
-// napoved prevoznika in ta je izmerjeno slaba -- pogosto 0, dokler nima prave
-// vrednosti (`sztrack backtest --operator`: MAE 7,9 min proti 1,3 za prenos).
-// Prikaz je zato ne uporablja, a je tudi ne skriva: v naprednem pogledu se
-// vidi, kadar se od nase ocene razlikuje.
-function feedNoteHtml(r) {
-  if (r.delay_kind !== "ocena" || r.feed_delay_s == null) return "";
-  if (Math.abs(r.feed_delay_s - r.delay_s) < 60) return "";
-  return `<div class="conn-where adv-only">prevoznik napoveduje ${delayLabel(r.feed_delay_s)} min</div>`;
+    <div class="conn-where">točnih ${Math.round(t.on_time_share * 100)} %</div>`;
 }
 
 function delayChipHtml(delay, kind, at) {
   if (delay == null) return '<span class="chip chip-none">brez podatka</span>';
   const color = delayColor(delay);
   const forecast = kind && kind !== "izmerjeno";
-  return `<span class="chip${forecast ? " chip-forecast" : ""}" style="color:${color};border-color:${color}44">
-      <span class="chip-n">${delayLabel(delay)}</span><span class="chip-unit">min</span>
+  // "-4 min" je za potnika uganka, "4 min prej" ni. Barva ostane siva: to res
+  // ni zamuda -- a prav zato mora povedati beseda, kar barva ne bo.
+  const early = delay <= -60;
+  return `<span class="chip${forecast ? " chip-forecast" : ""}${early ? " chip-early" : ""}"
+        style="color:${color};border-color:${color}44">
+      <span class="chip-n">${early ? Math.abs(Math.round(delay / 60)) : delayLabel(delay)}</span>
+      <span class="chip-unit">${early ? "min prej" : "min"}</span>
     </span>
     ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at
       ? (kind === "ocena" ? ` — vozilo je pri postaji ${escapeHtml(at)}`
@@ -243,12 +293,11 @@ function departedMs(c) {
 
 function connectionRowHtml(c, nowMs, isNext, date, odKod) {
   const gone = nowMs && departedMs(c) < nowMs;
-  const late = c.delay_s != null && c.delay_s >= 60;
+  const late = c.delay_s != null && Math.abs(c.delay_s) >= 60;
   const color = delayColor(c.delay_s);
   const cd = isNext && nowMs ? countdownLabel(c.expected_dep || c.sched_dep, nowMs) : "";
 
-  // Pricakovani prihod = voznoredni + ista zamuda. To je prenos, ne meritev,
-  // zato v naprednem pogledu pise, od kod je.
+  // Pricakovani prihod = voznoredni + ista zamuda, torej prenos, ne meritev.
   const expArr = late && c.sched_arr
     ? hhmm(new Date(new Date(c.sched_arr).getTime() + c.delay_s * 1000).toISOString())
     : null;
@@ -274,14 +323,12 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
       </div>
       <div class="conn-delay">${c.delay_s != null
         ? delayChipHtml(c.delay_s, c.delay_kind, c.delay_at)
-          + feedNoteHtml({ delay_kind: c.delay_kind, delay_s: c.delay_s,
-                           feed_delay_s: c.feed_delay_s })
         : typicalChipHtml(c.typical_arr || c.typical_dep)}</div>
       <div class="conn-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         <span>${durationLabel(c.duration_s)}</span>
         <span>${stopsLabel(c.stops_between)}</span>
-        <span class="adv-only">neposredno</span>
+        <span>neposredno</span>
       </div>
     </a>`;
 }
@@ -361,7 +408,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
       <div class="conn-delay">${badge}</div>
       <div class="conn-meta">
         <span>${durationLabel(t.duration_s)}</span>
-        ${count === 1 ? `<span class="adv-only">načrtovano ${planned} min za prestop</span>` : ""}
+        ${count === 1 ? `<span>načrtovano ${planned} min za prestop</span>` : ""}
       </div>
       <div class="legs">${legs}</div>
     </a>`;
@@ -430,15 +477,18 @@ function renderConnections(data) {
 
 function boardRowHtml(r, nowMs, isNext, date, station) {
   const gone = nowMs && new Date(r.expected || r.sched).getTime() < nowMs;
-  const late = r.delay_s != null && r.delay_s >= 60;
+  // Ne "zamuja", ampak "ne vozi po voznem redu": mestni avtobus je pogosto
+  // PREZGODEN in doslej se to ni videlo nikjer -- vrstica je kazala samo
+  // voznoredno uro. Prav ta primer potnik zamudi, ker pride ob njej.
+  const off = r.delay_s != null && Math.abs(r.delay_s) >= 60;
   const color = delayColor(r.delay_s);
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
   return `
-    <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
+    <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
        href="${journeyHref(r.train_no, date, r.trip_id, station)}">
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
-        ${late ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}
+        ${off ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}
       </div>
       <div>
         <div class="board-towards">
@@ -452,12 +502,11 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
           : ""}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
       </div>
       <div class="conn-delay">${r.delay_s != null
-        ? delayChipHtml(r.delay_s, r.delay_kind, r.delay_from) + feedNoteHtml(r)
+        ? delayChipHtml(r.delay_s, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from)}</div>
       <div class="board-meta">
-        ${cd ? `<span class="countdown">${cd}</span> · ` : ""}
-        ${r.is_origin ? '<span class="adv-only">izhodišče — feed odhodne zamude ne poroča</span> ' : ""}
-        <span class="adv-only">postanek ${r.stop_seq}${r.is_terminus ? " · konec" : ""}</span>
+        ${cd ? `<span class="countdown">${cd}</span>` : ""}
+        ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
     </a>`;
 }
@@ -560,7 +609,7 @@ function overviewHtml(o) {
           ${bucketBarHtml(day.buckets, day.runs)}
           <div class="ov-card-foot">
             ${day.runs} zajetih voženj · točnih ${Math.round(day.on_time_share * 100)} %
-            <span class="adv-only">· p90 ${delayLabel(day.p90_s)} min · najslabša ${delayLabel(day.worst_s)} min</span>
+            · najslabša ${delayLabel(day.worst_s)} min
           </div>
         </div>` : ""}
 
@@ -576,7 +625,6 @@ function overviewHtml(o) {
         ${o.disruptions} veljavnih obvestil o ovirah na progah
       </a>` : ""}
 
-      ${favChipsHtml()}
       <div class="ov-head"><h2>Pogoste relacije</h2></div>
       <div class="chips">
         ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
@@ -624,7 +672,7 @@ function busOverviewHtml(o) {
           Avtobusi imajo pravo lego, vlaki je nimajo — na zemljevidu so puščica,
           ne krog na postaji.
           ${o.today && o.today.runs
-            ? `<span class="adv-only"> · danes ${o.today.runs} zajetih voženj</span>` : ""}
+            ? ` · danes ${o.today.runs} zajetih voženj` : ""}
         </div>
       </div>
 
@@ -646,8 +694,7 @@ async function showOverview() {
   if (IS_BUS) {
     try {
       const o = await fetch("/api/overview/bus").then((r) => r.json());
-      resultsEl.innerHTML = busOverviewHtml(o) + favChipsHtml();
-      wireFavChips(resultsEl);
+      resultsEl.innerHTML = busOverviewHtml(o);
     } catch (err) {
       resultsEl.innerHTML = '<div class="empty-state">Vpiši postajališče ali izhodišče in cilj.</div>';
     }
@@ -656,14 +703,12 @@ async function showOverview() {
   try {
     const o = await fetch("/api/overview").then((r) => r.json());
     resultsEl.innerHTML = overviewHtml(o);
-    wireFavChips(resultsEl);
-    resultsEl.querySelectorAll(".route-chip:not(.fav-chip)").forEach((b) => {
+    resultsEl.querySelectorAll(".route-chip").forEach((b) => {
       b.addEventListener("click", () => {
-        $("from").value = b.dataset.from;
-        $("to").value = b.dataset.to;
         setTab("ab");
         $("from").value = b.dataset.from;
         $("to").value = b.dataset.to;
+        paintAllClears();
         searchAB(true);
       });
     });
@@ -673,13 +718,20 @@ async function showOverview() {
 }
 
 
-// ---------- shranjene poti ----------
+// ---------- shranjene in nedavne poti ----------
 // Potnik vozi isto pot vsak dan. Zadnje iskanje smo si zapomnili ze prej, a
 // eno samo -- kdor ima sluzbo in tesco, ima dve. Hranimo jih po omrezjih,
 // ker sta strani loceni in bi mesan seznam vodil nazaj v isto zmedo.
+//
+// Dva seznama, ker sta dve vprasanji: `fav` je "to je moja pot" in ga clovek
+// pove sam (zvezdica), `recent` je "tu sem pravkar bil" in se napise sam.
+// Oba sta pod iskalnikom in ne v pregledu: pregled prva poizvedba pobrise
+// prav takrat, ko bi seznam rabil za naslednjo.
 
 const FAV_KEY = "sztrack:fav";
 const FAV_MAX = 8;
+const RECENT_KEY = "sztrack:recent";
+const RECENT_MAX = 6;
 
 function favLoad() {
   try {
@@ -729,6 +781,7 @@ function favToggle() {
   else list.unshift(cur);
   favSave(list);
   paintFavButton();
+  renderRecents();
 }
 
 function paintFavButton() {
@@ -743,39 +796,115 @@ function paintFavButton() {
   btn.textContent = on ? "★ shranjeno" : "☆ shrani";
 }
 
-function favChipsHtml() {
-  const list = favLoad();
-  if (!list.length) return "";
-  return `<div class="ov-head"><h2>Shranjeno</h2></div>
-    <div class="chips">${list.map((f) => `
-      <button type="button" class="route-chip fav-chip" data-fav="${escapeHtml(favKey(f))}">
-        ${escapeHtml(favLabel(f))}
-      </button>`).join("")}</div>`;
+function recentLoad() {
+  try {
+    const all = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(all) ? all.filter((f) => f && f.net === NETWORK) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function recentAdd(entry) {
+  const list = recentLoad();
+  if (list.length && favKey(list[0]) === favKey(entry)) return false;   // ista kot prej
+  const rest = list.filter((f) => favKey(f) !== favKey(entry));
+  try {
+    const others = (JSON.parse(localStorage.getItem(RECENT_KEY) || "[]") || [])
+      .filter((f) => f && f.net !== NETWORK);
+    localStorage.setItem(RECENT_KEY,
+      JSON.stringify([...others, entry, ...rest.slice(0, RECENT_MAX - 1)]));
+  } catch (err) {
+    return false;
+  }
+  return true;
+}
+
+// Imena postaj iz prejsnjih iskanj -- to je vse, kar znamo ponuditi praznemu
+// polju. Vrstni red je vrstni red obiska, ne abecedni: zadnja je najverjetnejsa.
+function recentStations() {
+  const seen = new Set();
+  const out = [];
+  for (const f of recentLoad()) {
+    for (const name of [f.station, f.from, f.to]) {
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ name, recent: true });
+    }
+  }
+  return out.slice(0, 6);
+}
+
+function chipHtml(f, saved) {
+  return `<button type="button" class="route-chip${saved ? " fav-chip" : ""}"
+      data-fav="${escapeHtml(favKey(f))}">${saved ? "★ " : ""}${escapeHtml(favLabel(f))}</button>`;
+}
+
+let recentsSig = null;
+
+function renderRecents() {
+  const el = $("recents");
+  if (!el) return;
+  const cur = favCurrent();
+  const curKey = cur ? favKey(cur) : null;
+  const saved = favLoad();
+  const savedKeys = new Set(saved.map(favKey));
+  // Zeton za poizvedbo, ki je pravkar odprta, je klik nikamor -- in na
+  // telefonu vrstica zetonov drugo vsebino potiska navzdol.
+  const recent = recentLoad()
+    .filter((f) => !savedKeys.has(favKey(f)) && favKey(f) !== curKey);
+
+  // Tabla se osvezuje vsakih 30 s. Ce se seznam ni spremenil, ga ne
+  // prerisujemo -- sicer bi zetoni pod prstom utripali.
+  const sig = `${saved.map(favKey).join(",")}|${recent.map(favKey).join(",")}`;
+  if (sig === recentsSig) return;
+  recentsSig = sig;
+
+  el.innerHTML = saved.length || recent.length
+    ? `<div class="chips">
+        ${saved.map((f) => chipHtml(f, true)).join("")}
+        ${recent.map((f) => chipHtml(f, false)).join("")}
+      </div>`
+    : "";
+  wireFavChips(el);
 }
 
 function openFav(key) {
-  const f = favLoad().find((x) => favKey(x) === key);
+  const f = [...favLoad(), ...recentLoad()].find((x) => favKey(x) === key);
   if (!f) return;
   if (f.kind === "board") {
     setTab("board");
     $("station").value = f.station;
     $("board-kind").value = f.dir || "odhodi";
+    paintAllClears();
     searchBoard(true);
   } else {
     setTab("ab");
     $("from").value = f.from;
     $("to").value = f.to;
+    paintAllClears();
     searchAB(true);
   }
 }
 
 function wireFavChips(root) {
-  root.querySelectorAll(".fav-chip").forEach((b) => {
+  root.querySelectorAll("[data-fav]").forEach((b) => {
     b.addEventListener("click", () => openFav(b.dataset.fav));
   });
 }
 
 // ---------- poizvedbe ----------
+
+// Na telefonu je obrazec cel zaslon in odgovor pade pod pregib: po pritisku
+// na "Poisci" clovek vidi isto sliko kot prej. Pomik naredimo samo ob lastnem
+// iskanju -- ob osvezitvi vsakih 30 s bi stran skakala med branjem.
+function revealResults() {
+  if (window.innerWidth > 720) return;
+  const bar = document.querySelector(".result-bar");
+  if (!bar) return;
+  if (bar.getBoundingClientRect().top < window.innerHeight * 0.75) return;
+  bar.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 function schedulePoll(fn, isToday) {
   clearTimeout(pollTimer);
@@ -804,6 +933,7 @@ async function searchAB(push) {
     }
     const data = await res.json();
     renderConnections(data);
+    if (push) revealResults();
     schedulePoll(() => searchAB(false), data.date === todayIso());
   } catch (err) {
     console.error("iskanje ni uspelo", err);
@@ -838,6 +968,7 @@ async function searchBoard(push) {
     }
     const data = await res.json();
     renderBoard(data);
+    if (push) revealResults();
     schedulePoll(() => searchBoard(false), data.date === todayIso());
   } catch (err) {
     console.error("tabla ni uspela", err);
@@ -846,12 +977,17 @@ async function searchBoard(push) {
   }
 }
 
+// Doslej je bila zapomnjena poizvedba svoj zapis (`sztrack:last`) in ta NI
+// bil locen po omrezju: kdor je na /app iskal Celje–Ljubljana in nato odprl
+// /app/bus, je tam dobil isto vprasanje, resemo na avtobusnem omrezju
+// ("Ljubljana AP") in prazen odgovor. Zdaj je zadnja poizvedba preprosto
+// prva v seznamu nedavnih, ta pa je po omrezju locen ze od zacetka.
 function remember(obj) {
-  try {
-    localStorage.setItem("sztrack:last", JSON.stringify(obj));
-  } catch (err) {
-    /* zaseben zavihek */
-  }
+  const cur = obj.tab === "board"
+    ? { net: NETWORK, kind: "board", station: obj.station, dir: obj.kind }
+    : { net: NETWORK, kind: "ab", from: obj.from, to: obj.to };
+  recentAdd(cur);
+  renderRecents();
 }
 
 // ---------- postajališča v bližini ----------
@@ -899,6 +1035,7 @@ async function showNearby() {
       resultsEl.querySelectorAll(".near-row").forEach((b) => {
         b.addEventListener("click", () => {
           $("station").value = b.dataset.name;
+          paintAllClears();
           searchBoard(true);
         });
       });
@@ -953,6 +1090,7 @@ $("search-board").addEventListener("submit", (ev) => { ev.preventDefault(); sear
 $("swap").addEventListener("click", () => {
   const a = $("from"), b = $("to");
   [a.value, b.value] = [b.value, a.value];
+  paintAllClears();
   // Fokus na izhodisce: kdor je gumb dosegel s tipkovnico, mora videti izid.
   a.focus();
   if (a.value && b.value) searchAB(true);
@@ -962,26 +1100,23 @@ $("swap").addEventListener("click", () => {
 
 function restore() {
   const q = new URLSearchParams(location.search);
-  let saved = null;
-  try {
-    saved = JSON.parse(localStorage.getItem("sztrack:last") || "null");
-  } catch (err) {
-    /* pokvarjen zapis ni razlog, da stran ne dela */
-  }
+  const saved = recentLoad()[0] || null;
+  const wasBoard = saved && saved.kind === "board";
 
-  const station = q.get("station") || (saved && saved.tab === "board" ? saved.station : "");
+  const station = q.get("station") || (wasBoard ? saved.station : "");
   const from = q.get("from") || (saved && saved.from) || "";
   const to = q.get("to") || (saved && saved.to) || "";
 
   $("date").value = q.get("date") || todayIso();
   $("board-date").value = q.get("date") || todayIso();
-  $("board-kind").value = q.get("kind") || (saved && saved.kind) || "odhodi";
+  $("board-kind").value = q.get("kind") || (wasBoard && saved.dir) || "odhodi";
   $("board-time").value = q.get("from") || "";
   $("from").value = from;
   $("to").value = to;
   $("station").value = station;
+  paintAllClears();
 
-  const wantBoard = q.has("station") || (!q.has("from") && saved && saved.tab === "board");
+  const wantBoard = q.has("station") || (!q.has("from") && wasBoard);
   if (wantBoard && station) {
     setTab("board");
     searchBoard(false);
@@ -1000,9 +1135,17 @@ function tickClock() {
   }).format(new Date());
 }
 
-attachSuggest($("from"), $("suggest-from"));
-attachSuggest($("to"), $("suggest-to"));
-attachSuggest($("station"), $("suggest-station"));
+const STATION_INPUTS = ["from", "to", "station"];
+
+function paintAllClears() {
+  for (const id of STATION_INPUTS) paintClear($(id));
+}
+
+for (const id of STATION_INPUTS) {
+  attachSuggest($(id), $(`suggest-${id}`));
+  attachClear($(id));
+}
+renderRecents();
 
 tickClock();
 setInterval(tickClock, 1000);
