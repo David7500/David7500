@@ -463,7 +463,7 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     now = int(zdaj.timestamp())
     now_s = journey.now_seconds(zdaj)
     rows = conn.execute(
-        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign "
+        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign, t.network "
         "FROM vehicle_now v JOIN trip t USING (trip_id) "
         "WHERE v.seen_ts >= ? ORDER BY t.train_no",
         (now - collector.POSITION_FRESH_S,),

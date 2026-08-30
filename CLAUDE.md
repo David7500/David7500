@@ -396,7 +396,9 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   Napaka v najslabšo smer — potnik pride ob objavljeni uri in avtobusa ni več.
   Zdaj je prag `abs(delay_s) >= 60`, žeton pa pove „3 min prej", ne „−3 min":
   minus pred številko je uganka, beseda ni. Barva ostane siva, ker to res ni
-  zamuda — in prav zato mora povedati beseda.
+  zamuda — in prav zato mora povedati beseda. Pravilo je v `common.delayText()`
+  in velja **povsod**, tudi na kartici zemljevida in v iskalniku vozila, kjer
+  je prej pisalo golo „-5"; za ozke stolpce ima kratko obliko („5 prej").
 
   Ali je prezgodnja vrednost resnična, je bilo preverjeno na LPP 25
   (Medvode ↔ Zadobrova). V smeri proti Zadobrovi je bila na Gosposvetski
@@ -491,6 +493,14 @@ Kar je pri avtobusih drugače in se hitro pozabi:
 * **Barva linije ni barva linije.** Vsi LPP `route_color` so ista zelena
   prevoznika. Barva torej linij ne loči in ne sme; oznaka nosi ime prevoznika
   in številko ("LPP 25"), ker je "25" lahko čigar koli.
+
+  **To velja tudi za iskanje, ne le za izpis.** Iskalnik vozila na zemljevidu
+  je poznal samo `train_no` in smer, zato „lpp 25" ni našlo ničesar -- človek
+  pa piše prav to, ker je tako videl na postajališču. Išče se po celem imenu,
+  kot ga vidi na zaslonu (`AGENCY[agency] + train_no + headsign`), več besed
+  pomeni presek in ne unijo, zadetek na začetku številke pa gre naprej -- sicer
+  „25" postavi A2505 pred linijo 25. Prevoznik je v `trip.agency` **kot
+  GTFS ID** (1118, 1123 …); ime je samo v `common.AGENCY` in `stats.AGENCY_NAMES`.
 * **Mestno postajališče ima svoj `stop_id` za vsako smer.** "Bavarski dvor"
   je v `station` dvakrat. Vse v aplikaciji teče po imenu postaje, zato iskanje
   po imenu združuje.

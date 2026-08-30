@@ -26,6 +26,18 @@ function delayLabel(s) {
   return (m > 0 ? "+" : "") + m;
 }
 
+// "-5 min" je za potnika uganka, "5 min prej" ni. Barva ostane siva, ker to
+// res ni zamuda -- in prav zato mora povedati beseda. `kratko` je za ozke
+// stolpce, kjer za "min" ni prostora.
+function delayText(s, kratko) {
+  if (s == null) return kratko ? "?" : "? min";
+  if (s <= -60) {
+    const n = Math.abs(Math.round(s / 60));
+    return kratko ? `${n} prej` : `${n} min prej`;
+  }
+  return kratko ? delayLabel(s) : `${delayLabel(s)} min`;
+}
+
 const TIME_FMT = new Intl.DateTimeFormat("sl-SI", {
   timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit", hour12: false,
 });

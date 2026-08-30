@@ -159,6 +159,13 @@ function groupByStation(trains) {
 // Kartica vozila. Klik na zemljevidu je doslej odprl novo stran -- to je
 // veliko za vprasanje "kaj pa je to". Kartica odgovori na mestu in ponudi
 // stran tistemu, ki jo res hoce.
+// Pri vlaku je stevilka enolicna in prevoznik je vedno SZ, zato ga ne pisemo;
+// pri avtobusu je "25" brez prevoznika dvoumna.
+function agencyPrefix(v) {
+  const ime = AGENCY[v.agency];
+  return ime && v.network !== "zeleznica" ? `${ime} ` : "";
+}
+
 function vehCardHtml(o) {
   const rows = o.rows.map(([k, v, color]) => `
     <div class="veh-row"><span>${escapeHtml(k)}</span>
@@ -188,7 +195,7 @@ function trainCardHtml(t) {
     no: t.train_no, badge: modeBadgeHtml(t.mode), headsign: t.headsign,
     href: tripHref(t.train_no, t.trip_id, t.service_date, "zeleznica"),
     rows: [
-      ["zamuda", `${delayLabel(d.value)} min`, delayColor(d.value)],
+      ["zamuda", delayText(d.value), delayColor(d.value)],
       ["zadnja meritev", escapeHtml(d.where || "—")],
       [d.fromOperator ? "poročal prevoznik" : "izmerjeno",
        t.measured_at ? `ob ${hhmm(t.measured_at)}` : "—"],
@@ -202,10 +209,10 @@ function busCardHtml(v) {
   // dalec naprej.
   const rows = v.delay_s == null
     ? [["zamuda", "ni meritve"]]
-    : [["zamuda", `${delayLabel(v.delay_s)} min`, delayColor(v.delay_s)],
+    : [["zamuda", delayText(v.delay_s), delayColor(v.delay_s)],
        ["zadnja meritev", escapeHtml(v.last_stop || "—")]];
   return vehCardHtml({
-    no: v.train_no, badge: "", headsign: v.headsign,
+    no: agencyPrefix(v) + v.train_no, badge: "", headsign: v.headsign,
     href: tripHref(v.train_no, v.trip_id, v.service_date, "avtobus"),
     rows: rows.concat([
       ["hitrost", v.speed_kmh == null ? "ni podatka"
@@ -371,7 +378,8 @@ function busIcon(v, z) {
 
 function busTooltipHtml(v) {
   return `<div class="train-label-line">`
-    + `<span class="train-label-code" style="color:${BUS_INK}">${escapeHtml(v.train_no)}</span>`
+    + `<span class="train-label-code" style="color:${BUS_INK}">`
+    + `${escapeHtml(agencyPrefix(v))}${escapeHtml(v.train_no)}</span>`
     + `<span class="train-label-more">${escapeHtml(v.headsign || "")}</span></div>`
     + `<div class="train-label-more">`
     + `${v.speed_kmh != null ? (v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji") : "brez hitrosti"}`
@@ -545,20 +553,31 @@ const findEl = document.getElementById("find");
 const findListEl = document.getElementById("find-list");
 let selectedKey = null;
 
+// "25" je lahko cigar koli, zato clovek pise "lpp 25" -- in prav to doslej ni
+// naslo nicesar, ker je iskalnik poznal samo stevilko in smer. Iscemo po
+// celem imenu, kot ga vidi na zaslonu: "LPP 25 Medvode naselje - Zadobrova".
+function vehText(v) {
+  return `${AGENCY[v.agency] || ""} ${v.train_no} ${v.headsign || ""}`;
+}
+
 function findMatches(q) {
   const f = fold(q);
   if (!f) return [];
+  // Vec besed pomeni "vse hkrati": "lpp 25" ne sme najti vsakega LPP-ja in
+  // vsake petindvajsetice, ampak samo presek.
+  const deli = f.split(/\s+/).filter(Boolean);
+  const ujame = (v) => {
+    const t = fold(vehText(v));
+    return deli.every((d) => t.includes(d));
+  };
   const out = [];
-  for (const v of liveBuses) {
-    if (fold(v.train_no).startsWith(f) || fold(v.headsign || "").includes(f)) {
-      out.push({ kind: "bus", v });
-    }
-  }
-  for (const t of liveTrains) {
-    if (fold(t.train_no).includes(f) || fold(t.headsign || "").includes(f)) {
-      out.push({ kind: "train", v: t });
-    }
-  }
+  for (const v of liveBuses) if (ujame(v)) out.push({ kind: "bus", v });
+  for (const t of liveTrains) if (ujame(t)) out.push({ kind: "train", v: t });
+  // Zadetek na zacetku stevilke je skoraj vedno tisti, ki ga clovek isce:
+  // "25" naj da linijo 25 pred vsemi, ki jo imajo le v imenu smeri.
+  const prvi = deli[0];
+  out.sort((a, b) => Number(fold(b.v.train_no).startsWith(prvi))
+                   - Number(fold(a.v.train_no).startsWith(prvi)));
   return out.slice(0, 12);
 }
 
@@ -570,9 +589,9 @@ function findRowHtml(m) {
     : bestDelay(v).where;
   return `<button type="button" class="find-row" data-key="${escapeHtml(m.key)}">
       <span class="find-kind find-kind-${m.kind}"></span>
-      <span class="find-no">${escapeHtml(v.train_no)}</span>
+      <span class="find-no">${escapeHtml(agencyPrefix(v))}${escapeHtml(v.train_no)}</span>
       <span class="find-where">${escapeHtml(kje || "")}</span>
-      <span class="find-delay" style="color:${delayColor(delay)}">${delayLabel(delay)}</span>
+      <span class="find-delay" style="color:${delayColor(delay)}">${delayText(delay, true)}</span>
     </button>`;
 }
 
