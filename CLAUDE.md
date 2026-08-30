@@ -802,6 +802,30 @@ vozilo stoji, jo oblika vozila pokrije in dveh oznak ni videti. Pod
 zemljevidom je enovrstična legenda; brez nje je moder avtobus ob rdeči piki
 uganka, in prav razlika med njima je bistvo tega okvira.
 
+**Geste so omejene, dokler je zemljevid element strani.** Vprašanje „naj
+kolešček približuje" ima odgovor „ne, dokler je to element" — kazalec zaide
+čez zemljevid in stran se neha pomikati. Zato:
+
+| | vgrajen | čez celo stran |
+|---|---|---|
+| kolešček | ne (Ctrl/⌘ + kolešček da) | da |
+| en prst | pomika **stran** | pomika zemljevid |
+| dva prsta | pomikata in približujeta | isto |
+| gumba +/− | vedno | vedno |
+
+Resnična napaka tu **ni bila** manjkajoča povečava, ampak `dragging`: ta je
+privzeto vklopljen in je en prst pomikal zemljevid namesto strani — na
+telefonu se s tega okvira ni dalo odpomakniti. Zdaj je izklopljen, dva prsta
+pa zemljevid vseeno pomikata in približujeta, ker to opravi `touchZoom` (med
+širjenjem prstov premika tudi središče). Dvoprstna povečava je torej **delala
+že prej**; manjkalo je nasprotno.
+
+Na sledilni ploščici brskalnik širjenje prstov pošlje prav kot `wheel` s
+`ctrlKey`, zato ista koda pokrije Ctrl + kolešček in ščipanje. Namig se pokaže
+**samo ob poskusu brez tipke** in po 2,2 s izgine — takrat človek res ne ve,
+zakaj se nič ne zgodi; opomba, ki visi ves čas, bi bila četrta razlaga na tem
+okviru.
+
 **Gumb razširi zemljevid čez celo stran, ne čez cel zaslon.** Fullscreen API
 vzame ves monitor in skrije brskalnik; za „hočem videti več zemljevida" je to
 preveč — človek izgubi naslovno vrstico, gumb nazaj in vsak drug orientir,

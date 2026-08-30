@@ -1128,8 +1128,18 @@ async function drawRunMap(v) {
 
   const prvic = !runMap.map;
   if (prvic) {
+    // Zemljevid je ELEMENT na strani, ne stran, zato geste, ki bi ukradle
+    // pomikanje strani, tu ne veljajo:
+    //   * kolesce ne priblizuje (klasicna nadloga: kazalec zaide cez
+    //     zemljevid in stran se neha pomikati), pac pa Ctrl/Cmd + kolesce --
+    //     isti dogovor kot pri vgrajenem Google Maps;
+    //   * `dragging` je izklopljen, zato en prst pomika STRAN. Dva prsta
+    //     zemljevid vseeno pomikata in priblizujeta, ker to opravi
+    //     `touchZoom` -- ta med sipanjem prstov premika tudi sredisce.
+    // Cez celo stran (`is-max`) je zemljevid stran in vse to se odklene.
     runMap.map = L.map("run-map", {
-      zoomControl: false, attributionControl: false, scrollWheelZoom: false,
+      zoomControl: false, attributionControl: false,
+      scrollWheelZoom: false, dragging: false,
     }).setView([v.lat, v.lon], 14);
     L.control.zoom({ position: "topright" }).addTo(runMap.map);
     // Esri ima prave ploscice do z16; nad tem raztegnemo zadnjo (glej dashboard).
@@ -1202,6 +1212,7 @@ async function drawRunMap(v) {
   if (prvic) {
     requestAnimationFrame(() => runMap.map.invalidateSize());
     initFullscreen();
+    initWheelZoom();
   }
 }
 
@@ -1271,12 +1282,41 @@ function setMapMax(on) {
   const btn = document.getElementById("run-map-fs");
   if (!wrap) return;
   wrap.classList.toggle("is-max", on);
+  // Cez celo stran ni ni cesar krasti: zemljevid JE stran.
+  if (runMap.map) {
+    if (on) { runMap.map.dragging.enable(); runMap.map.scrollWheelZoom.enable(); }
+    else { runMap.map.dragging.disable(); runMap.map.scrollWheelZoom.disable(); }
+  }
   if (btn) {
     btn.setAttribute("aria-pressed", String(on));
     btn.title = on ? "Pomanjšaj" : "Čez celo stran";
   }
   // Leaflet meri okvir sam in ga po spremembi velikosti ne premeri.
   if (runMap.map) requestAnimationFrame(() => runMap.map.invalidateSize());
+}
+
+// Ctrl/Cmd + kolesce priblizuje tudi v vgrajenem zemljevidu. Na sledilni
+// ploscici brskalnik sipanje prstov posilja prav kot `wheel` s `ctrlKey`,
+// zato ista koda pokrije oboje. Namig se pokaze SAMO ob poskusu brez tipke --
+// takrat, ko clovek res ne ve, zakaj se nic ne zgodi.
+function initWheelZoom() {
+  const el = runMap.map && runMap.map.getContainer();
+  if (!el) return;
+  let namigT = null;
+  el.addEventListener("wheel", (e) => {
+    if (runMap.map.scrollWheelZoom.enabled()) return;   // razsirjen pogled
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      runMap.map.setZoomAround(runMap.map.mouseEventToContainerPoint(e),
+                               runMap.map.getZoom() + (e.deltaY < 0 ? 1 : -1));
+      return;
+    }
+    const n = document.getElementById("run-map-hint");
+    if (!n) return;
+    n.hidden = false;
+    clearTimeout(namigT);
+    namigT = setTimeout(() => { n.hidden = true; }, 2200);
+  }, { passive: false });
 }
 
 function initFullscreen() {

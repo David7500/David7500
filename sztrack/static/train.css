@@ -405,7 +405,22 @@
    SELE ob prvi legi -- torej za nasim. Enaka specificnost, poznejsi zmaga,
    zato mora biti nas selektor sestavljen. Pri 260 px se to ni videlo, ker
    ploscice pokrijejo cel okvir; cez celo stran pa je bila polovica bela. */
+/* Ovoj rabi namig, ki lezi cez zemljevid. */
+.run-map-holder { position: relative; }
 .run-map { height: 260px; }
+
+/* Namig se pokaze samo ob poskusu povecave s koleskom brez tipke in sam
+   izgine. Opomba, ki visi ves cas, bi bila cetrta razlaga na tem okviru. */
+.run-map-hint {
+  position: absolute; inset: auto 10px 10px 10px;
+  z-index: 500; padding: 7px 9px;
+  background: rgba(22, 24, 28, 0.93);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 400 11px/1.35 var(--sans); color: var(--ink-dim);
+  text-align: center; pointer-events: none;
+}
+.run-map-hint[hidden] { display: none; }
 /* Samo ozadje rabi sestavljen selektor -- prav to Leaflet nastavlja. */
 .run-map.leaflet-container { background: #0f1115; }
 
@@ -447,6 +462,7 @@
   margin: 0; border-radius: 0; border: 0;
   display: flex; flex-direction: column;
 }
+.run-map-wrap.is-max .run-map-holder { flex: 1 1 auto; min-height: 0; display: flex; }
 .run-map-wrap.is-max .run-map { flex: 1 1 auto; height: auto; }
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
 .run-map.leaflet-container { font-family: var(--sans); }
