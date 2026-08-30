@@ -153,6 +153,9 @@ body {
   content: ""; width: 9px; height: 9px; border-radius: 2px; background: #4db97f;
 }
 .layer-key-net::before { content: ""; width: 11px; height: 2px; background: #7d8899; }
+.layer-key-route::before {
+  content: ""; width: 11px; height: 2px; background: #4db97f; opacity: 0.6;
+}
 .layer-key-stop::before {
   content: ""; width: 5px; height: 5px; border-radius: 50%; background: #8b95a4;
 }

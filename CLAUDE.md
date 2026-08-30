@@ -450,8 +450,21 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   približkom (15–34 px) in kaže v smer vožnje. Puščica je bila premalo: pri
   velikem približku je bila videti kot pika in se od vlaka ni ločila.
 
-  Vsaka plast se da izklopiti posebej (vlaki, avtobusi, proge, postaje,
-  podlaga, dodatna imena), ne le avtobusi. Namesto lestvice „največje zamude"
+  Vsaka plast se da izklopiti posebej (vlaki, avtobusi, železniške proge,
+  **trase vozil na poti**, postaje, podlaga, dodatna imena), ne le avtobusi.
+  Trase so privzeto ugasnjene in se naložijo šele ob vklopu: gost snop črt čez
+  vso Ljubljano odgovarja na „kod vozijo linije", ne na „kje je moj avtobus",
+  in drugo je razlog za obisk te strani. 128 različnih oblik, 108 kB z gzipom.
+
+  **Trase so lahko pretrgane in ravna črta čez pol Slovenije je laž.** V
+  zajetem GTFS je 2 185 razmikov od 4,85 milijona (0,045 %) daljših od
+  kilometra, pri 193 oblikah; najdaljši je 40 km. Uvoz zato traso razreže na
+  kose (`gtfs.SHAPE_BREAK_M`) in vsakega nariše posebej — 2 897 oblik da
+  4 732 kosov. Meja je izmerjena, ne izbrana: surove točke so 17 m narazen
+  (mediana), 105 m pri 99 % in 514 m pri 99,9 %, nato pa skočijo na 22,8 km.
+  Med pol kilometra in dvajsetimi ni ničesar. Na **poenostavljenih** točkah
+  tega praga ni mogoče postaviti — tam je dolg raven odsek videti enako kot
+  preskok. Namesto lestvice „največje zamude"
   je **iskalnik vozila**: vprašanje pred zemljevidom je „kje je moj avtobus",
   ne „kdo danes najbolj zamuja".
 

@@ -471,6 +471,28 @@ def api_shape(trip_id: str):
     return {"trip_id": trip_id, "points": json.loads(row["points"])}
 
 
+@app.get("/api/shapes/live")
+def api_shapes_live():
+    """Trase vseh vozil, ki so zdaj na poti — po obliki, ne po vožnji.
+
+    Dve vozili iste linije v isti smeri imata isto traso, zato jih zdruzimo:
+    izmerjeno je 128 razlicnih oblik namesto ~100 voznj, 539 kB pred gzipom.
+    Plast je izbirna in privzeto ugasnjena -- gost snop crt cez vso Ljubljano
+    je odgovor na vprasanje "kod vozijo linije", ne na "kje je moj avtobus".
+    """
+    now = int(datetime.now(TZ).timestamp())
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT sh.shape_id, sh.points, t.network "
+            "FROM vehicle_now v JOIN trip t USING (trip_id) "
+            "JOIN shape sh ON sh.shape_id = t.shape_id "
+            "WHERE v.seen_ts >= ?",
+            (now - collector.POSITION_FRESH_S,),
+        ).fetchall()
+    return [{"shape_id": r["shape_id"], "network": r["network"],
+             "points": json.loads(r["points"])} for r in rows]
+
+
 @app.get("/api/network.geojson")
 def api_network(elementary_only: bool = True):
     """Geometrija prog z dolžino odseka v km. Za risanje zemljevida."""

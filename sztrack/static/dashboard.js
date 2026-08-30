@@ -74,7 +74,11 @@ const labelLayer = L.tileLayer(
 // zgoraj. Brez tega vlak izgine pod progo, po kateri vozi.
 const netLayer = L.layerGroup().addTo(map);
 const stationLayer = L.layerGroup().addTo(map);
-const routeLayer = L.layerGroup().addTo(map);   // postajališča izbrane vožnje
+const routeLayer = L.layerGroup().addTo(map);   // trasa izbrane vožnje
+// Trase vseh vozil, ki so zdaj na poti. Svoja plast in privzeto ugasnjena:
+// gost snop črt čez vso Ljubljano odgovarja na vprašanje "kod vozijo linije",
+// ne na "kje je moj avtobus" -- in drugo je razlog za obisk te strani.
+const allRoutesLayer = L.layerGroup();
 const trainLayer = L.layerGroup().addTo(map);
 const busLayer = L.layerGroup().addTo(map);
 
@@ -408,6 +412,7 @@ const LAYERS = [
   { id: "lay-train", key: "train", layer: () => trainLayer, def: true },
   { id: "lay-bus", key: "bus", layer: () => busLayer, def: true },
   { id: "lay-net", key: "net", layer: () => netLayer, def: true },
+  { id: "lay-routes", key: "routes", layer: () => allRoutesLayer, def: false },
   { id: "lay-stations", key: "stations", layer: () => stationLayer, def: true },
   { id: "lay-labels", key: "labels", layer: () => labelLayer, def: false },
   { id: "lay-base", key: "base", layer: () => baseLayer, def: true },
@@ -457,7 +462,13 @@ function initLayers() {
   for (const spec of LAYERS) {
     const box = document.getElementById(spec.id);
     setLayer(spec, layerPref(spec.key, spec.def));
-    if (box) box.addEventListener("change", () => setLayer(spec, box.checked));
+    if (box) {
+      box.addEventListener("change", () => {
+        setLayer(spec, box.checked);
+        // Prvi vklop mora tudi kaj narisati -- plast je ob zagonu prazna.
+        if (spec.key === "routes" && box.checked && !routesLoaded) loadRoutes();
+      });
+    }
   }
 }
 
@@ -616,6 +627,29 @@ async function pollLive() {
   }
 }
 
+// Trase se nalozijo SELE, ko jih kdo prizge, in nato osvezujejo z legami --
+// pol megabajta za plast, ki je privzeto ugasnjena, ne sme na zicu vsakic.
+let routesLoaded = false;
+
+async function loadRoutes() {
+  if (!map.hasLayer(allRoutesLayer)) return;
+  try {
+    const list = await fetch("/api/shapes/live").then((r) => r.json());
+    allRoutesLayer.clearLayers();
+    for (const r of list) {
+      allRoutesLayer.addLayer(L.polyline(r.points, {
+        color: r.network === "avtobus" ? BUS_INK : "#7d8899",
+        weight: 1.6, opacity: 0.42, interactive: false,
+      }));
+    }
+    routesLoaded = true;
+    const el = document.getElementById("n-routes");
+    if (el) el.textContent = list.length;
+  } catch (err) {
+    console.warn("tras ni bilo mogoce naloziti", err);
+  }
+}
+
 async function loadVehicles() {
   try {
     liveBuses = await fetch("/api/vehicles").then((r) => r.json());
@@ -661,4 +695,6 @@ loadStatic().then(() => {
   // spreminjajo redkeje.
   loadVehicles();
   setInterval(loadVehicles, 20000);
+  loadRoutes();
+  setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
 });

@@ -100,6 +100,12 @@ def _to_seconds(hhmmss: str) -> int | None:
     return h * 3600 + m * 60 + s
 
 
+#: Nad koliko metrov med dvema zaporednima tockama trase gre za pretrgano
+#: geometrijo in ne za dolg raven odsek. Izmerjeno: surovi razmiki so 17 m
+#: (mediana) do 514 m (99,9. percentil), naslednji je 22,8 km.
+SHAPE_BREAK_M = 1000.0
+
+
 def _edge_builder(stops):
     """Zbira dolžine in geometrijo odsekov, shape po shape.
 
@@ -268,10 +274,30 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         shapes: dict[str, list] = {}
 
         def _shrani(sid, pts):
-            if sid in want_shapes and len(pts) >= 2:
-                # ~10 m je pod locljivostjo prikaza; iz 4,85 M tock ostane
-                # 519 000, torej 11,4 MB namesto 107 MB.
-                shapes[sid] = geo.simplify(pts)
+            if sid not in want_shapes or len(pts) < 2:
+                return
+            # Trasa je lahko PRETRGANA. V zajetem GTFS je 2 185 razmikov od
+            # 4,85 milijona (0,045 %) daljsih od kilometra, pri 193 oblikah;
+            # najdaljsi je 40 km. Ravna crta cez pol Slovenije je trditev,
+            # da vozilo tam vozi, in ta ni resnicna -- zato traso razrezemo
+            # na kose in vsakega narisemo posebej.
+            #
+            # Meja je izmerjena in ne izbrana na oko: surove tocke so 17 m
+            # narazen (mediana), 105 m pri 99 % in 514 m pri 99,9 %, nato pa
+            # skocijo na 22,8 km. Med 0,5 in 20 km ni nicesar.
+            kosi, tekoci = [], [pts[0]]
+            for a, b in zip(pts, pts[1:]):
+                if geo.haversine(a[0], a[1], b[0], b[1]) > SHAPE_BREAK_M:
+                    kosi.append(tekoci)
+                    tekoci = [b]
+                else:
+                    tekoci.append(b)
+            kosi.append(tekoci)
+            # ~10 m je pod locljivostjo prikaza; iz 4,85 M tock ostane
+            # pol milijona, torej 10 MB namesto 107.
+            out = [geo.simplify(k) for k in kosi if len(k) >= 2]
+            if out:
+                shapes[sid] = out
 
         current, points = None, []
         for p in _rows(zf, "shapes.txt"):
@@ -307,9 +333,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         )
         conn.executemany(
             "INSERT INTO shape(shape_id, points) VALUES(?,?)",
-            [(sid, json.dumps([[round(a, 5), round(b, 5)] for a, b in pts],
-                              separators=(",", ":")))
-             for sid, pts in shapes.items()],
+            [(sid, json.dumps([[[round(a, 5), round(b, 5)] for a, b in kos]
+                               for kos in kosi], separators=(",", ":")))
+             for sid, kosi in shapes.items()],
         )
         conn.executemany(
             "INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,color,"
