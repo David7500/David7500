@@ -1028,7 +1028,78 @@ function loadLeaflet() {
   return leafletReady;
 }
 
-const runMap = { map: null, marker: null, line: null, stops: null };
+const runMap = { map: null, marker: null, line: null, stops: null,
+                 trasa: null, cums: null, v: null, since: 0 };
+
+// ---------- ocena lege med dvema meritvama ----------
+//
+// Lega je ob strezbi ze ~30 s stara (izmerjeno), kar je pri 30 km/h cetrt
+// kilometra. Piko zato premaknemo naprej po trasi za `hitrost x starost`.
+//
+// Izmerjeno na 79 primerih (razmik 15-60 s), napaka proti dejanski naslednji
+// legi: pika pri miru mediana 63 m in 63 % v 100 m, premik po smeri 36 m in
+// 72 %, **premik po trasi 30 m in 80 %**. Trasa je boljsa od smeri, ker cesta
+// zavija, vozilo pa ne pove, da bo zavilo.
+//
+// Ocena, ne meritev -- zato se ne premika, kadar vozilo stoji ali kadar ni na
+// tej trasi, in podnapis pove, da je ocenjena.
+const OCENA_MAX_ODMIK_M = 120;
+
+function metriNaStopinjo(lat) {
+  return { lat: 111320, lon: 111320 * Math.cos(lat * Math.PI / 180) };
+}
+
+function razdaljaM(a, b) {
+  const k = metriNaStopinjo((a[0] + b[0]) / 2);
+  const dy = (a[0] - b[0]) * k.lat;
+  const dx = (a[1] - b[1]) * k.lon;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Kumulativne dolzine vzdolz trase, izracunane enkrat ob nalaganju.
+function kumulative(pts) {
+  const out = [0];
+  for (let i = 1; i < pts.length; i++) out.push(out[i - 1] + razdaljaM(pts[i - 1], pts[i]));
+  return out;
+}
+
+// Projicira tocko na traso in gre po njej naprej za `m` metrov.
+// Vrne null, kadar tocka ni na tej trasi -- takrat ne ugibamo.
+function naprejPoTrasi(pts, cums, lat, lon, m) {
+  const k = metriNaStopinjo(lat);
+  let najOdmik = Infinity, vzdolz = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ay, ax] = pts[i], [by, bx] = pts[i + 1];
+    const vx = (bx - ax) * k.lon, vy = (by - ay) * k.lat;
+    const wx = (lon - ax) * k.lon, wy = (lat - ay) * k.lat;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2));
+    const odmik = razdaljaM([lat, lon], [ay + t * (by - ay), ax + t * (bx - ax)]);
+    if (odmik < najOdmik) {
+      najOdmik = odmik;
+      vzdolz = cums[i] + t * (cums[i + 1] - cums[i]);
+    }
+  }
+  if (najOdmik > OCENA_MAX_ODMIK_M) return null;
+  const cilj = Math.min(vzdolz + m, cums[cums.length - 1]);
+  for (let i = 0; i < cums.length - 1; i++) {
+    if (cilj >= cums[i] && cilj <= cums[i + 1]) {
+      const d = cums[i + 1] - cums[i];
+      const f = d === 0 ? 0 : (cilj - cums[i]) / d;
+      return [pts[i][0] + f * (pts[i + 1][0] - pts[i][0]),
+              pts[i][1] + f * (pts[i + 1][1] - pts[i][1])];
+    }
+  }
+  return pts[pts.length - 1];
+}
+
+// Kje je vozilo priblizno ZDAJ. Brez trase ali med mirovanjem vrne izmerjeno
+// lego -- ocena, ki ne ve, kam naprej, ni boljsa od meritve.
+function ocenjenaLega(v, starostS) {
+  if (!runMap.trasa || !v.speed_ms || v.speed_ms < 1) return [v.lat, v.lon];
+  const p = naprejPoTrasi(runMap.trasa, runMap.cums, v.lat, v.lon, v.speed_ms * starostS);
+  return p || [v.lat, v.lon];
+}
 
 // Ista oblika kot na velikem zemljevidu -- avtobus je vozilo, ne pika, in
 // kaze v smer voznje.
@@ -1072,14 +1143,23 @@ async function drawRunMap(v) {
     } catch (err) {
       /* brez trase narisemo postajalisca */
     }
-    if (trasa && trasa.length > 1) {
-      L.polyline(trasa, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(runMap.map);
-      runMap.line = L.polyline(trasa, { color: "#4db97f", weight: 3, opacity: 0.95 })
+    // `trasa` je seznam KOSOV, ne tock: uvoz jo razreze tam, kjer je v GTFS
+    // razmik nad kilometer. Pogoj `trasa.length > 1` je bil napisan se za
+    // ravno listo tock in je zato izlocil vsako enodelno traso -- 2 706 od
+    // 2 897 oblik, torej 93 %. Proga se ni risala skoraj nikoli.
+    const kosi = (trasa || []).filter((k) => k && k.length > 1);
+    if (kosi.length) {
+      L.polyline(kosi, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(runMap.map);
+      runMap.line = L.polyline(kosi, { color: "#4db97f", weight: 3, opacity: 0.95 })
         .addTo(runMap.map);
+      // Za projekcijo vzamemo najdaljsi kos -- vozilo je skoraj vedno na njem.
+      const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
+      runMap.trasa = kos;
+      runMap.cums = kumulative(kos);
     }
     const postaje = (state.run.stops || []).filter((s) => s.lat != null && s.lon != null);
     const pts = postaje.map((s) => [s.lat, s.lon]);
-    if (!trasa && pts.length > 1) {
+    if (!kosi.length && pts.length > 1) {
       runMap.line = L.polyline(pts, {
         color: "#4db97f", weight: 2.5, opacity: 0.55, dashArray: "5 5",
       }).addTo(runMap.map);
@@ -1107,28 +1187,71 @@ async function drawRunMap(v) {
     }
   }
 
-  const moving = (v.speed_kmh || 0) >= 3;
-  if (!runMap.marker) {
-    runMap.marker = L.marker([v.lat, v.lon], { icon: busDivIcon(v.bearing, moving) })
-      .addTo(runMap.map);
-  } else {
-    runMap.marker.setLatLng([v.lat, v.lon]);
-    runMap.marker.setIcon(busDivIcon(v.bearing, moving));
-  }
-  // Pogled premaknemo samo, kadar vozilo uide iz okvira. Lega se osvezuje
-  // vsakih ~11 s in brezpogojni `setView` bi zemljevid trgal izpod prsta
-  // vsakic, ko si clovek ogleduje kaj drugega.
-  const kje = L.latLng(v.lat, v.lon);
-  if (prvic || !runMap.map.getBounds().contains(kje)) runMap.map.panTo(kje);
+  runMap.v = v;
+  runMap.since = Date.now();
+  postaviVozilo(prvic);
 
-  document.getElementById("run-map-sub").innerHTML =
-    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · lega stara ${ageHtml(v.age_s)}`;
   document.getElementById("run-map-full").href =
     `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
   wrap.hidden = false;
   // Okvir je bil skrit, ko je Leaflet meril prostor -- brez tega je siv.
   if (prvic) requestAnimationFrame(() => runMap.map.invalidateSize());
 }
+
+function postaviVozilo(prvic) {
+  const v = runMap.v;
+  if (!v || !runMap.map) return;
+  const moving = (v.speed_kmh || 0) >= 3;
+  const starost = v.age_s + (Date.now() - runMap.since) / 1000;
+  const kje = ocenjenaLega(v, starost);
+  const odmik = razdaljaM(kje, [v.lat, v.lon]);
+
+  if (!runMap.marker) {
+    runMap.marker = L.marker(kje, { icon: busDivIcon(v.bearing, moving) }).addTo(runMap.map);
+  } else {
+    runMap.marker.setLatLng(kje);
+    runMap.marker.setIcon(busDivIcon(v.bearing, moving));
+  }
+
+  // Zadnja RESNICNA meritev ostane vidna kot bleda pika -- a samo takrat, ko
+  // je ocena od nje dovolj dalec, da je razlika kaj pove. Pri stojecem
+  // vozilu bi bili dve piki druga na drugi in bi samo zmedli.
+  if (odmik > 40) {
+    if (!runMap.gps) {
+      // Siv obroc, ne zelena pika: zelene so postajalisca in dve zeleni
+      // piki na isti trasi se ne dasta lociti. Prazen obroc pove "tu je
+      // bilo", polna oblika vozila pa "tu je zdaj".
+      runMap.gps = L.circleMarker([v.lat, v.lon], {
+        radius: 5, color: "#8b95a4", weight: 1.6, opacity: 0.75,
+        fillOpacity: 0, dashArray: "3 2",
+      }).addTo(runMap.map);
+      bindFlashName(runMap.gps, "zadnja izmerjena lega");
+    } else {
+      runMap.gps.setLatLng([v.lat, v.lon]);
+      if (!runMap.map.hasLayer(runMap.gps)) runMap.gps.addTo(runMap.map);
+    }
+  } else if (runMap.gps && runMap.map.hasLayer(runMap.gps)) {
+    runMap.map.removeLayer(runMap.gps);
+  }
+
+  // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
+  // sekundno osvezevanje trgalo izpod prsta.
+  const ll = L.latLng(kje);
+  if (prvic || !runMap.map.getBounds().contains(ll)) runMap.map.panTo(ll);
+
+  document.getElementById("run-map-sub").innerHTML =
+    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `
+    + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
+                  : `lega stara ${ageHtml(v.age_s)}`);
+}
+
+// Med dvema meritvama pika drsi naprej. To ni okras: vozilo se v 30 s pri
+// 30 km/h premakne cetrt kilometra, in prav to je vprasanje, zaradi katerega
+// je clovek odprl to stran.
+setInterval(() => {
+  if (document.visibilityState === "hidden") return;
+  if (runMap.marker) postaviVozilo(false);
+}, 1000);
 
 function loadPosition() {
   const trip = (state.run && state.run.trip_id) || URL_TRIP;

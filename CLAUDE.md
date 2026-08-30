@@ -766,6 +766,42 @@ ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib pa 
 zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
 (deljena povezava) — tam je odgovor prav to, po kar je človek prišel.
 
+**Med dvema meritvama pika drsi naprej po trasi — samo v oknu vožnje.**
+Lega je ob strežbi ~30 s stara (izmerjeno), kar je pri 50 km/h **več kot pol
+kilometra**. Ocena je zato `hitrost × starost` vzdolž trase linije, osvežena
+vsako sekundo.
+
+Izmerjeno na 79 primerih (šestminutni zajem sledi iz feeda, razmik 15–60 s),
+napaka proti dejanski naslednji legi:
+
+| kaj naredimo s piko | mediana | v 100 m |
+|---|---|---|
+| pustimo pri miru (prej) | 63 m | 63 % |
+| premaknemo po smeri (`bearing`) | 36 m | 72 % |
+| **premaknemo po trasi** | **30 m** | **80 %** |
+
+Trasa je boljša od smeri, ker cesta zavija, vozilo pa ne pove, da bo zavilo.
+Vzorec je majhen (41 vozil ob desetih zvečer) — smer je jasna, natančnost
+številk pa ne; kdor to spreminja, naj izmeri znova.
+
+Varovala, brez katerih bi ocena lagala: ne premikamo **stoječega** vozila
+(`speed_ms < 1`), ne vozila, ki je od trase oddaljeno nad 120 m (ni na njej),
+in nikoli čez konec trase. Podnapis pove „ocenjeno iz lege pred 42 s", ne
+„lega stara 42 s", zadnja **izmerjena** lega pa ostane kot siv črtkan obroč —
+a le, kadar je ocena od nje nad 40 m stran; sicer bi bili dve oznaki druga na
+drugi. Obroč je siv namenoma: zelene pike so postajališča.
+
+**Na velikem zemljevidu tega ni**, in to je odločitev, ne opustitev: tam je
+vprašanje „kje je vse skupaj" in ocena za osemdeset vozil je osemdeset
+izmišljenih leg. V oknu vožnje gledaš eno vozilo in vprašanje je natanko
+„kje je zdaj".
+
+**Trasa se skoraj nikoli ni risala.** Pogoj `trasa.length > 1` je bil napisan,
+ko je bil `points` ravna lista točk; odkar jih uvoz reže na kose
+(`SHAPE_BREAK_M`), je enodelna trasa dolga 1 in je pogoj ni spustil skozi.
+To je bilo **2 706 od 2 897 oblik, torej 93 %** — v oknu vožnje in na velikem
+zemljevidu. Pravilen pogoj je „vsaj en kos z vsaj dvema točkama".
+
 **Okno vožnje z GPS ima živ zemljevid, in to v preprostem pogledu.** „Kje je
 zdaj" je pri avtobusu prvo vprašanje. Leaflet se naloži šele, ko lega res
 obstaja — vlaki je nimajo nikoli in zanje tega okvira ni; prazen bi obljubljal

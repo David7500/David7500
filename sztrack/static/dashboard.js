@@ -705,9 +705,12 @@ async function drawStops(trainNo, tripId) {
       /* brez trase narišemo postajališča */
     }
   }
-  if (trasa && trasa.length > 1) {
-    L.polyline(trasa, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(routeLayer);
-    L.polyline(trasa, { color: BUS_INK, weight: 3, opacity: 0.95 }).addTo(routeLayer);
+  // Kosi, ne tocke -- glej isto opombo v train.js. `trasa.length > 1` je
+  // izlocalo 93 % vseh oblik.
+  const kosi = (trasa || []).filter((k) => k && k.length > 1);
+  if (kosi.length) {
+    L.polyline(kosi, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(routeLayer);
+    L.polyline(kosi, { color: BUS_INK, weight: 3, opacity: 0.95 }).addTo(routeLayer);
   }
   try {
     const q = tripId ? `?trip=${encodeURIComponent(tripId)}` : "";
@@ -715,7 +718,7 @@ async function drawStops(trainNo, tripId) {
       `/api/train/${encodeURIComponent(trainNo)}${q}`).then((r) => r.json());
     const postaje = (res.timetable || []).filter((s) => s.lat != null && s.lon != null);
     const pts = postaje.map((s) => [s.lat, s.lon]);
-    if (!trasa && pts.length > 1) {
+    if (!kosi.length && pts.length > 1) {
       L.polyline(pts, { color: BUS_INK, weight: 2.5, opacity: 0.7, dashArray: "5 5" })
         .addTo(routeLayer);
     }
