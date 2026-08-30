@@ -454,7 +454,9 @@ def api_vehicles(trip: str | None = None):
 
     `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
     """
-    now = int(datetime.now(TZ).timestamp())
+    zdaj = datetime.now(TZ)
+    now = int(zdaj.timestamp())
+    now_s = journey.now_seconds(zdaj)
     with _conn() as conn:
         rows = conn.execute(
             "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign "
@@ -463,12 +465,37 @@ def api_vehicles(trip: str | None = None):
             "ORDER BY t.train_no",
             {"od": now - collector.POSITION_FRESH_S, "trip": trip},
         ).fetchall()
-    out = []
-    for r in rows:
-        d = dict(r)
-        d["age_s"] = now - d["seen_ts"]
-        d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
-        out.append(d)
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["age_s"] = now - d["seen_ts"]
+            d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
+            out.append(d)
+
+        # Zamude v `vehicle_now` NI -- ta tabela pozna samo lego. Doda se iz
+        # zadnje **prevozene** postaje, po istem pravilu kot zivi seznam in
+        # okno voznje (`stats.last_measured`). Brez tega je kartica na
+        # zemljevidu pisala "? min" za avtobus, ki je na svoji strani imel
+        # +15 -- dve stevilki o istem vozilu, in ena od njiju izmisljena.
+        po_dnevih: dict[str, list[str]] = {}
+        for d in out:
+            po_dnevih.setdefault(d["service_date"] or zdaj.date().isoformat(),
+                                 []).append(d["trip_id"])
+        izmerjeno: dict[str, dict] = {}
+        for dan, ids in po_dnevih.items():
+            # Voznja cez polnoc ima vcerajsnji prometni dan, zato je "zdaj" v
+            # njenih sekundah cez 86400.
+            try:
+                zamik = (zdaj.date() - date.fromisoformat(dan)).days * 86400
+            except ValueError:
+                zamik = 0
+            izmerjeno.update(stats.last_measured(conn, dan, ids, now_s + zamik))
+
+    for d in out:
+        m = izmerjeno.get(d["trip_id"])
+        d["delay_s"] = m["delay_s"] if m else None
+        d["last_stop"] = m["name"] if m else None
+        d["measured_seq"] = m["stop_seq"] if m else None
     return out
 
 

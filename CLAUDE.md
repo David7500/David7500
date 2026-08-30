@@ -223,6 +223,26 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   postaji: enak simbol za oboje bi zabrisal razliko med izmerjeno lego in
   zadnjo znano postajo. Hrani se samo trenutna lega (`vehicle_now`, upsert):
   sled bi bila ~300 000 točk na dan, prikaz "kje je zdaj" pa rabi eno vrstico.
+
+  **Ritem je izmerjen, ne domnevan** (86 vozil, 492 prehodov med legami):
+  vozilo objavi novo lego vsakih **20 s** (404 od 492 razmikov je natanko 20 s,
+  mediana 20 s), in ko se ta v feedu prvič pojavi, je že **20 s stara**
+  (p90 30 s, najstarejša 104 s). Glava feeda je sveža -- naš prenos je od nje
+  oddaljen 0,5--3 s -- torej zaostanek ni na naši strani, ampak med vozilom in
+  virom. Skupna veriga do pike na zaslonu: 20 s (vozilo) + 20 s (feed) +
+  30 s (`config.POLL_SECONDS`) + 20 s (`loadVehicles` v brskalniku), kar da
+  **mediano ~45 s in najslabši primer ~90 s**. Pri izmerjeni mediani hitrosti
+  29 km/h je to ~360 m poti. Zato kartica pove `lega stara N s`: brez tega bi
+  pika obljubljala natančnost, ki je nima.
+* **`vehicle_now` pozna samo lego, zamude v njej ni.** `/api/vehicles` je
+  vračal `v.*` in prikaz je bral `v.delay_s`, ki ni obstajal -- kartica na
+  zemljevidu je zato pri vsakem avtobusu pisala „? min", njegova stran pa
+  +15. Dve številki o istem vozilu, ena izmišljena. Zamudo doda
+  `stats.last_measured()` -- **isto pravilo kot živi seznam in okno vožnje**,
+  ne nova poizvedba: sicer se razideta spet. Preverjeno na 67 vozilih z
+  meritvijo, vsa se ujemajo z vrstico v `run`. Poceni je, ker gre za ~80
+  voženj z GPS in ne za vse omrežje (20 ms).
+
 * **Zamude ne prenašaj naprej čez dolg postanek — tabla je zato lagala.**
   RG 1604 stoji v Ljubljani 21 minut (22:44 → 23:05): pride +15 in odpelje
   **po voznem redu**. Odhodna tabla je zamudo prenesla naravnost in pisala
@@ -476,6 +496,15 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   (`brightness(0.42) contrast(0.7)`), izklop podlage jih odstrani s cestami
   vred. Proga je narisana dvakrat — temna obroba, svetla črta — sicer se na
   temni podlagi izgubi ali je videti kot cesta.
+
+  **Esri ima prave ploščice samo do z16.** Nad tem vrne 200 in sličico, ki je
+  za vsak kraj **bajt za bajt ista** (2521 B proti 15 647 B pri z16) — prazno
+  polje. Zato ne `maxZoom: 16` (približevanje se ustavi prezgodaj in ulice se
+  ne razločijo) in ne `maxZoom: 19` (nad 16 sivina), ampak
+  **`maxNativeZoom: 16, maxZoom: 19`**: Leaflet zadnjo pravo ploščico raztegne.
+  Podlaga je pri z17--19 mehka, naši sloji pa ostanejo ostri, ker so SVG —
+  in prav ti so razlog za približevanje. Vozili pri z17+ zrasteta (bus 44 px,
+  vlak 38 px), da ostaneta v razmerju z ulico pod sabo.
 * **Veriga vozila je edini vir odgovora, kje je avtobus, ki se še ni začel.**
   `trips.txt` nosi `block_id` -- zaporedje voženj istega fizičnega vozila.
   Imajo ga **samo avtobusi** (vseh 789 voženj SŽ je brez) in tudi tam le

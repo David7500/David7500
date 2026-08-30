@@ -43,7 +43,7 @@ const ESRI_ATTR = 'podlaga &copy; <a href="https://www.esri.com/">Esri</a>, HERE
   + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 const baseLayer = L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
-  maxZoom: 16, attribution: ESRI_ATTR,
+  maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
 }).addTo(map);
 
 // Dodatna imena (kraji, znamenitosti). Podlaga sama ima pri velikem
@@ -53,7 +53,7 @@ const baseLayer = L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{
 // res dela: to plast se da izklopiti, podlago pa v celoti odloziti.
 const labelLayer = L.tileLayer(
   `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-  { maxZoom: 16, opacity: 0.9 },
+  { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 },
 );
 
 // Vrstni red plasti je vrstni red risanja: proge in postaje spodaj, vozila
@@ -197,15 +197,21 @@ function trainCardHtml(t) {
 }
 
 function busCardHtml(v) {
+  // Zamuda in kraj morata biti iz istega vira: "+15 min" brez postaje, kjer
+  // je bila izmerjena, je stevilka brez pomena, ce je vozilo od takrat ze
+  // dalec naprej.
+  const rows = v.delay_s == null
+    ? [["zamuda", "ni meritve"]]
+    : [["zamuda", `${delayLabel(v.delay_s)} min`, delayColor(v.delay_s)],
+       ["zadnja meritev", escapeHtml(v.last_stop || "—")]];
   return vehCardHtml({
     no: v.train_no, badge: "", headsign: v.headsign,
     href: tripHref(v.train_no, v.trip_id, v.service_date, "avtobus"),
-    rows: [
-      ["zamuda", `${delayLabel(v.delay_s)} min`, delayColor(v.delay_s)],
+    rows: rows.concat([
       ["hitrost", v.speed_kmh == null ? "ni podatka"
         : v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji"],
       ["lega stara", `${v.age_s} s`],
-    ],
+    ]),
   });
 }
 
@@ -238,6 +244,7 @@ function groupPopupHtml(g) {
 const TRAIN_INK = "#f0934f";
 
 function trainSize(z) {
+  if (z >= 17) return 38;
   if (z >= 13) return 30;
   if (z >= 11) return 24;
   if (z >= 9) return 19;
@@ -319,6 +326,10 @@ const BUS_INK = "#4db97f";
 // in majhna oblika je edina, ki se ne slepi; ko kdo približa na eno ulico,
 // pa je iskal prav to vozilo in mora biti veliko.
 function busSize(z) {
+  // Nad z16 Esri prave podlage nima in Leaflet zadnjo raztegne; nasi sloji so
+  // SVG in ostanejo ostri, zato ima globok priblizek smisel -- vozilo naj bo
+  // takrat priblizno tako veliko kot ulica pod njim.
+  if (z >= 17) return 44;
   if (z >= 14) return 34;
   if (z >= 12) return 26;
   if (z >= 10) return 20;
