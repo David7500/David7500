@@ -157,13 +157,27 @@ def model_vlak(train_tasks):
     table = defaultdict(list)
     for t in train_tasks:
         table[(t["train_no"], t["i"], t["j"])].append(t["d_j"] - t["d_i"])
+    table = _medians(table)
 
     def predict(t):
-        vals = table.get((t["train_no"], t["i"], t["j"]))
-        if not vals or len(vals) < MIN_SAMPLES:
+        e = table.get((t["train_no"], t["i"], t["j"]))
+        if not e or e[1] < MIN_SAMPLES:
             return t["d_i"]
-        return t["d_i"] + statistics.median(vals)
+        return t["d_i"] + e[0]
     return predict
+
+
+def _medians(table: dict) -> dict:
+    """Iz {kljuc: [vrednosti]} naredi {kljuc: (mediana, koliko)}.
+
+    Mediano izracunamo ENKRAT ob ucenju, ne ob vsaki napovedi. Pri zeleznici
+    je bila razlika nevidna -- seznam po odseku je kratek. Pri mestnem
+    avtobusu isti fizicni odsek vozi vec linij, seznam zraste na desettisoce
+    in `statistics.median` se je klical enkrat na napoved: `odsek+razred` je
+    za en dan porabil 6,5 minute namesto 0,3 sekunde in meritev avtobusov
+    sploh ni bilo mogoce pognati. Rezultat je do zadnje decimalke isti.
+    """
+    return {k: (statistics.median(v), len(v)) for k, v in table.items()}
 
 
 def model_odsek(train_tasks):
@@ -171,12 +185,13 @@ def model_odsek(train_tasks):
     table = defaultdict(list)
     for t in train_tasks:
         table[t["seg"]].append(t["d_j"] - t["d_i"])
+    table = _medians(table)
 
     def predict(t):
-        vals = table.get(t["seg"])
-        if not vals or len(vals) < MIN_SAMPLES:
+        e = table.get(t["seg"])
+        if not e or e[1] < MIN_SAMPLES:
             return t["d_i"]
-        return t["d_i"] + statistics.median(vals)
+        return t["d_i"] + e[0]
     return predict
 
 
@@ -189,15 +204,16 @@ def model_odsek_razred(train_tasks):
     fallback = defaultdict(list)
     for t in train_tasks:
         fallback[_bucket(t["d_i"])].append(t["d_j"] - t["d_i"])
+    table, fallback = _medians(table), _medians(fallback)
 
     def predict(t):
         b = _bucket(t["d_i"])
-        vals = table.get((t["seg"], b))
-        if not vals or len(vals) < MIN_SAMPLES:
-            vals = fallback.get(b)
-        if not vals or len(vals) < MIN_SAMPLES:
+        e = table.get((t["seg"], b))
+        if not e or e[1] < MIN_SAMPLES:
+            e = fallback.get(b)
+        if not e or e[1] < MIN_SAMPLES:
             return t["d_i"]
-        return t["d_i"] + statistics.median(vals)
+        return t["d_i"] + e[0]
     return predict
 
 
@@ -217,18 +233,19 @@ def model_zdruzen(train_tasks):
         per_seg[(t["seg"], _bucket(t["d_i"]))].append(delta)
         per_bucket[_bucket(t["d_i"])].append(delta)
 
+    per_train = _medians(per_train)
+    per_seg, per_bucket = _medians(per_seg), _medians(per_bucket)
     K = 4.0
 
     def predict(t):
         b = _bucket(t["d_i"])
         seg = per_seg.get((t["seg"], b)) or per_bucket.get(b)
-        base = statistics.median(seg) if seg and len(seg) >= MIN_SAMPLES else 0.0
+        base = seg[0] if seg and seg[1] >= MIN_SAMPLES else 0.0
         own = per_train.get((t["train_no"], t["i"], t["j"]))
         if not own:
             return t["d_i"] + base
-        n = len(own)
-        w = n / (n + K)
-        return t["d_i"] + w * statistics.median(own) + (1 - w) * base
+        w = own[1] / (own[1] + K)
+        return t["d_i"] + w * own[0] + (1 - w) * base
     return predict
 
 
@@ -245,14 +262,15 @@ def model_vlak_razred(train_tasks):
         delta = t["d_j"] - t["d_i"]
         razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(delta)
         skupno[(t["train_no"], t["i"], t["j"])].append(delta)
+    razred, skupno = _medians(razred), _medians(skupno)
 
     def predict(t):
-        vals = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
-        if not vals or len(vals) < MIN_SAMPLES:
-            vals = skupno.get((t["train_no"], t["i"], t["j"]))
-        if not vals or len(vals) < MIN_SAMPLES:
+        e = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        if not e or e[1] < MIN_SAMPLES:
+            e = skupno.get((t["train_no"], t["i"], t["j"]))
+        if not e or e[1] < MIN_SAMPLES:
             return t["d_i"]
-        return t["d_i"] + statistics.median(vals)
+        return t["d_i"] + e[0]
     return predict
 
 
@@ -309,13 +327,14 @@ def model_fizika_mediana(train_tasks):
     for t in train_tasks:
         table[(t["train_no"], t["i"], t["j"])].append(
             t["d_j"] - stats._after_slack(t["d_i"], t["slack"]))
+    table = _medians(table)
 
     def predict(t):
         osnova = stats._after_slack(t["d_i"], t["slack"])
-        vals = table.get((t["train_no"], t["i"], t["j"]))
-        if not vals or len(vals) < MIN_SAMPLES:
+        e = table.get((t["train_no"], t["i"], t["j"]))
+        if not e or e[1] < MIN_SAMPLES:
             return osnova
-        return osnova + statistics.median(vals)
+        return osnova + e[0]
     return predict
 
 
@@ -339,15 +358,16 @@ def model_fizika_razred(train_tasks):
         o = t["d_j"] - stats._after_slack(t["d_i"], t["slack"])
         razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(o)
         skupno[(t["train_no"], t["i"], t["j"])].append(o)
+    razred, skupno = _medians(razred), _medians(skupno)
 
     def predict(t):
         osnova = stats._after_slack(t["d_i"], t["slack"])
-        vals = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
-        if not vals or len(vals) < MIN_SAMPLES:
-            vals = skupno.get((t["train_no"], t["i"], t["j"]))
-        if not vals or len(vals) < MIN_SAMPLES:
+        e = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        if not e or e[1] < MIN_SAMPLES:
+            e = skupno.get((t["train_no"], t["i"], t["j"]))
+        if not e or e[1] < MIN_SAMPLES:
             return osnova
-        return osnova + statistics.median(vals)
+        return osnova + e[0]
     return predict
 
 

@@ -897,6 +897,25 @@ vsak dan 0.)
 Vsak nov model naj se najprej pomeri s `prenos`. Kar ga ne premaga, ne sodi
 v prikaz, pa naj bo še tako domiseln.
 
+**Avtobusi bodo dobili svoj model; zdaj ga nimajo in to je izmerjeno.**
+`backtest --network avtobus`, 2 dneva in 326 685 nalog: sedanji model da
+**natanko isto kot prenos zamude** (2,74 min · 92,5 %), ker z dvema dnevoma
+ni niti enega para (vožnja, i, j) z dovolj vzorci. Edini, ki kaj pridobi, je
+`odsek` (2,63 min · 92,9 %) -- združevanje po fizičnem odseku čez vse linije.
+Model torej avtobusom ne škodi, a jim tudi ne pomaga.
+
+Ko bo meritev dovolj, gresta modela **narazen**: pri avtobusu so smiselni
+vhodi, ki jih železnica nima ali jih tam ni vredno gledati -- ura dneva
+(gneča), vreme, GPS hitrost in lega, gostota postajališč. Do takrat velja
+isto pravilo: kar ne premaga prenosa, ne gre v prikaz.
+
+**Meritev je bila neizvedljiva, dokler mediane niso bile predračunane.**
+`statistics.median` se je klical enkrat na napoved. Pri železnici je bil
+seznam po odseku kratek in razlike ni bilo; pri mestnem avtobusu isti odsek
+vozi več linij, seznam zraste na desettisoče in `odsek+razred` je za en dan
+porabil 6,5 minute namesto 0,3 sekunde. `backtest._medians()` jih izračuna
+enkrat ob učenju -- rezultat do zadnje decimalke isti.
+
 ## Odprto
 
 * Dostop do API-ja od zunaj (Tailscale ali Cloudflare Tunnel).
