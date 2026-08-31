@@ -652,6 +652,18 @@ poizvedba — "kaj se zdaj vozi". Polni ju `db.fill_trip_window()` ob uvozu
 GTFS in ob migraciji. Kdor vstavlja vožnje mimo uvoza (test, ročni popravek),
 ju mora zapolniti, sicer vožnja **ni na seznamu živih**.
 
+**Feed občasno objavi vožnjo z JUTRIŠNJIM obratovalnim dnem.** Izmerjeno
+31. 8.: 44 vrstic v `run` (0,026 %) v **dveh** vožnjah ima `service_date` v
+prihodnosti — Nomagov N6507 z voznorednim odhodom 04:25 in enotno zamudo
+48 240 s (13,4 h) na vseh postankih. To je isti vzorec kot pri N6571: feed
+zamenja prometni dan in razliko objavi kot zamudo.
+
+**Pravila za to ni namenoma.** Vseh 44 vrstic ima zamudo nad 6 h, torej jih
+`api.MAX_LIVE_DELAY_S` že drži izven živega prikaza. Dve vožnji sta premalo
+za varovalko ob zajemu — isti razlog kot pri enotni zamudi čez vso vožnjo.
+Meri se z `SELECT COUNT(*) FROM run WHERE service_date > date('now','localtime')`;
+če delež kdaj zraste, je čas za pravilo.
+
 **Vožnja, ki zamuja več kot `api.MAX_LIVE_DELAY_S` (6 h), ni živa.** To je
 pravilo prikaza, ne pospešek. Pri železnici ni nobene zamude čez tri ure
 (najhujša EC 79 z 2,9 h); pri avtobusih je nad šest ur 0,67 % vrstic in te
@@ -722,8 +734,13 @@ vsaka deljena povezava odprla železnico — tudi tista z domače strani. Izbira
 zavihka zdaj tudi piše nazaj v naslov, sicer se stran ne da deliti.
 
 **Hitrosti po odsekih ni več nikjer.** Bila je isti podatek v drugi enoti,
-zložen v zaprt `<details>` na dnu okna vožnje. `/api/speeds` in
-`stats.segment_speeds()` ostaneta — rabi ju izvoz in mreža razdalj.
+zložen v zaprt `<details>` na dnu okna vožnje. Tu je nekaj časa pisalo, da
+`/api/speeds` in `stats.segment_speeds()` ostaneta, „ker ju rabi izvoz in
+mreža razdalj" — **to ni držalo**: `sztrack export` zapiše `network.geojson`
+in `stations.json`, oba iz `network_geojson()`, in `segment_speeds()` ni
+klical nihče. Odstranjena sta (45 + 4 vrstice); v zgodovini sta, če bi kdaj
+zares zatrebala. Skupaj z njima je odpadel še `/api/trains` s
+`stats.trains()`, ki ga prav tako ni klical nihče.
 
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
 vprašanji: `sztrack:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
@@ -1139,10 +1156,10 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
 
 ## Stanje zajema
 
-Lokalna baza `data/sz.sqlite` (2026-08-29): 60402 meritev,
-38749 postankov, 9 obratovalnih dni,
-34632 vremenskih vrstic, 267 postaj,
-44 zapisanih obvestil o ovirah (~20 hkrati veljavnih), 13.7 MB.
+Lokalna baza `data/sz.sqlite` (2026-08-31): 168 123 meritev,
+403 208 postankov, 12 obratovalnih dni,
+57 816 vremenskih vrstic, 9 791 postaj,
+377 zapisanih obvestil o ovirah, 161 MB.
 Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
 Za napoved zamude (`stats.predict`): vlak najprej porabi **rezervo voznega

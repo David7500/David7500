@@ -595,12 +595,6 @@ def api_network(elementary_only: bool = True):
         return stats.network_geojson(conn, elementary_only)
 
 
-@app.get("/api/trains")
-def api_trains():
-    with _conn() as conn:
-        return stats.trains(conn)
-
-
 @app.get("/api/train/{train_no}")
 def api_train(train_no: str, trip: str | None = None):
     """Vozni red ene vožnje. `trip` je nujen pri avtobusu -- številka linije
@@ -710,13 +704,6 @@ def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_
         if fresh:
             return stats.summary_build(conn, "breakdowns", network, days)
         return stats.summary_get(conn, "breakdowns", network, days)
-
-
-@app.get("/api/speeds")
-def api_speeds(train_no: str | None = None):
-    """Voznoredna in izmerjena hitrost po odsekih (odseki >= 5 km)."""
-    with _conn() as conn:
-        return stats.segment_speeds(conn, train_no)
 
 
 @app.get("/api/stats")

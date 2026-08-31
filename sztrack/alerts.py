@@ -24,7 +24,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import config, db
+from . import config
 from .collector import fetch, resolve_service_date, _rail_trip_windows, _service_dates
 
 TZ = ZoneInfo(config.TIMEZONE)

@@ -91,18 +91,6 @@ def network_geojson(conn: sqlite3.Connection, elementary_only: bool = True) -> d
     return {"type": "FeatureCollection", "features": feats}
 
 
-def trains(conn: sqlite3.Connection) -> list[dict]:
-    return [
-        dict(r)
-        for r in conn.execute(
-            "SELECT t.train_no, t.trip_id, t.headsign, COUNT(s.stop_seq) AS stops, "
-            "       MIN(s.dep_s) AS first_dep_s "
-            "FROM trip t JOIN sched s USING (trip_id) "
-            "GROUP BY t.trip_id ORDER BY t.train_no"
-        )
-    ]
-
-
 def resolve_trip(conn: sqlite3.Connection, train_no: str,
                  service_date: str | None = None,
                  trip_id: str | None = None) -> str | None:
@@ -557,53 +545,6 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
                              key=lambda x: dow_names.index(x["key"])),
         "by_day": sorted(_group_stats(by_day, 1), key=lambda x: x["key"]),
     }
-
-
-def segment_speeds(conn: sqlite3.Connection, train_no: str | None = None) -> list[dict]:
-    """Hitrosti po odsekih: voznoredna in dejansko izmerjena.
-
-    Pozor: zamude imajo ločljivost 60 s, zato so hitrosti na kratkih odsekih
-    zelo grobe. Odseki pod 5 km so izpuščeni.
-
-    Filtra po omrežju tu ni in ga ne rabi: `edge` nastane samo iz železniških
-    shapeov, zato avtobusni par postaj vanj ne more zadeti. Preverjeno na
-    zajetih podatkih -- 0 avtobusnih parov v `edge`, 0 avtobusnih linij med
-    14 132 izmerjenimi odseki. Če bi kdaj v `edge` prišle ceste, to preneha
-    veljati in filter je treba dodati.
-    """
-    sql = (
-        "SELECT t.train_no, r1.service_date, a.name AS from_name, b.name AS to_name, "
-        "       s1.dep_s, s2.arr_s, r1.delay_dep, r2.delay_arr, e.km "
-        "FROM sched s1 "
-        "JOIN sched s2 ON s2.trip_id = s1.trip_id AND s2.stop_seq = s1.stop_seq + 1 "
-        "JOIN trip t ON t.trip_id = s1.trip_id "
-        "JOIN station a ON a.stop_id = s1.stop_id JOIN station b ON b.stop_id = s2.stop_id "
-        "JOIN edge e ON e.from_id = MIN(s1.stop_id, s2.stop_id) "
-        "           AND e.to_id = MAX(s1.stop_id, s2.stop_id) "
-        "JOIN run r1 ON r1.trip_id = s1.trip_id AND r1.stop_seq = s1.stop_seq "
-        "JOIN run r2 ON r2.trip_id = s2.trip_id AND r2.stop_seq = s2.stop_seq "
-        "            AND r2.service_date = r1.service_date "
-        "WHERE e.km >= 5 AND s1.dep_s IS NOT NULL AND s2.arr_s IS NOT NULL "
-        "  AND r1.delay_dep IS NOT NULL AND r2.delay_arr IS NOT NULL"
-    )
-    params: tuple = ()
-    if train_no:
-        sql += " AND t.train_no = ?"
-        params = (train_no,)
-
-    out = []
-    for r in conn.execute(sql, params):
-        sched_s = r["arr_s"] - r["dep_s"]
-        actual_s = sched_s + (r["delay_arr"] - r["delay_dep"])
-        if sched_s <= 0 or actual_s <= 0:
-            continue
-        out.append({
-            "train_no": r["train_no"], "service_date": r["service_date"],
-            "from": r["from_name"], "to": r["to_name"], "km": r["km"],
-            "sched_kmh": round(r["km"] / (sched_s / 3600), 1),
-            "actual_kmh": round(r["km"] / (actual_s / 3600), 1),
-        })
-    return out
 
 
 def last_measured(conn: sqlite3.Connection, service_date: str,

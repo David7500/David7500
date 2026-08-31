@@ -422,7 +422,7 @@
 }
 .run-map-hint[hidden] { display: none; }
 /* Samo ozadje rabi sestavljen selektor -- prav to Leaflet nastavlja. */
-.run-map.leaflet-container { background: #0f1115; }
+.run-map.leaflet-container { background: #0f1115; font-family: var(--sans); }
 
 /* Legenda pod zemljevidom: dve oznaki, dva pomena. Brez nje je moder avtobus
    ob zeleni piki uganka -- in prav razlika med njima je bistvo tega okvira. */
@@ -480,7 +480,6 @@
   height: auto !important;
 }
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
-.run-map.leaflet-container { font-family: var(--sans); }
 @media (max-width: 720px) { .run-map { height: 210px; } }
 
 /* ---------- preprost pogled na sirokem zaslonu ----------

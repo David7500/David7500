@@ -34,9 +34,7 @@ const ESTIMATE_COLOR = "#a8d8ff";
 const INK_LINE = "#4a515c";
 const INK_GRID = "#23272f";
 const INK_AXIS = "#79828f";
-const INK_BAR = "#3d434f";
 const PAST_COLOR = "#79828f";
-const TEMP_COLOR = "#b8724a";
 const SURFACE = "#14161a";
 
 const tooltipEl = document.getElementById("tooltip");
