@@ -396,8 +396,14 @@
 }
 .run-map-title { font: 600 12px/1 var(--sans); color: var(--ink); }
 .run-map-sub { font: 400 11px/1.4 var(--sans); color: var(--ink-mute); }
+/* Povezava in gumba so ena skupina: prej so se ob dodatnem gumbu prelomili
+   v drugo vrstico in glava zemljevida je zrasla za cel red. */
+.run-map-acts {
+  margin-left: auto; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+
 .run-map-full {
-  margin-left: auto;
   font: 500 11px/1 var(--sans); color: var(--ink-mute); text-decoration: none;
 }
 .run-map-full:hover { color: var(--accent-lit); }
@@ -426,6 +432,17 @@
 
 /* Legenda pod zemljevidom: dve oznaki, dva pomena. Brez nje je moder avtobus
    ob zeleni piki uganka -- in prav razlika med njima je bistvo tega okvira. */
+/* Razdalja do vozila po poti. Svoja vrstica, ne del legende: legenda pove,
+   kaj oznake pomenijo (stalno), ta pa odgovarja na vprasanje (obcasno). */
+.run-map-me {
+  margin: 0; padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  font: 400 11.5px/1.45 var(--sans); color: var(--ink-dim);
+}
+.run-map-me[hidden] { display: none; }
+.run-map-me strong { color: var(--ink); font-weight: 600; }
+.run-map-me .slabo { color: var(--ink-faint); }
+
 .run-map-key {
   margin: 0; padding: 7px 10px;
   border-top: 1px solid var(--line);
@@ -448,7 +465,7 @@
    naredi nicesar, je slabsi od manjkajocega. */
 .run-map-fs {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; margin-left: 8px;
+  width: 22px; height: 22px;
   padding: 0; background: none; border: 1px solid var(--line);
   border-radius: 5px; color: var(--ink-faint); cursor: pointer;
 }

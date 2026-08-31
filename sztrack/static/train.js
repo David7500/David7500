@@ -1027,7 +1027,8 @@ function loadLeaflet() {
 }
 
 const runMap = { map: null, marker: null, line: null, stops: null,
-                 trasa: null, cums: null, v: null, since: 0 };
+                 trasa: null, cums: null, v: null, since: 0,
+                 me: null, loc: null, gps: null, prosto: false };
 
 // ---------- ocena lege med dvema meritvama ----------
 //
@@ -1061,9 +1062,10 @@ function kumulative(pts) {
   return out;
 }
 
-// Projicira tocko na traso in gre po njej naprej za `m` metrov.
-// Vrne null, kadar tocka ni na tej trasi -- takrat ne ugibamo.
-function naprejPoTrasi(pts, cums, lat, lon, m) {
+// Najblizja tocka na trasi: kako dalec vzdolz nje lezi in kako dalec od nje
+// je iskana tocka. Odmik je merilo zaupanja -- velik pomeni, da tocka tej
+// trasi ne pripada in racun po poti nima smisla.
+function projekcijaNaTraso(pts, cums, lat, lon) {
   const k = metriNaStopinjo(lat);
   let najOdmik = Infinity, vzdolz = 0;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -1078,6 +1080,13 @@ function naprejPoTrasi(pts, cums, lat, lon, m) {
       vzdolz = cums[i] + t * (cums[i + 1] - cums[i]);
     }
   }
+  return { vzdolz, odmik: najOdmik };
+}
+
+// Projicira tocko na traso in gre po njej naprej za `m` metrov.
+// Vrne null, kadar tocka ni na tej trasi -- takrat ne ugibamo.
+function naprejPoTrasi(pts, cums, lat, lon, m) {
+  const { vzdolz, odmik: najOdmik } = projekcijaNaTraso(pts, cums, lat, lon);
   if (najOdmik > OCENA_MAX_ODMIK_M) return null;
   const cilj = Math.min(vzdolz + m, cums[cums.length - 1]);
   for (let i = 0; i < cums.length - 1; i++) {
@@ -1209,6 +1218,7 @@ async function drawRunMap(v) {
     initFullscreen();
     initWheelZoom();
     initDragPolicy();
+    initLocate();
   }
 }
 
@@ -1258,6 +1268,9 @@ function postaviVozilo(prvic, nova) {
   // sekundno osvezevanje trgalo izpod prsta.
   const ll = L.latLng(kje);
   if (prvic || !runMap.map.getBounds().contains(ll)) runMap.map.panTo(ll);
+
+  // Vozilo se premika, torej se razdalja spreminja tudi brez novega dotika.
+  if (runMap.loc) izracunajRazdaljo(runMap.loc);
 
   if (nova) {
     document.getElementById("run-map-sub").innerHTML =
@@ -1344,6 +1357,85 @@ function initWheelZoom() {
     clearTimeout(namigT);
     namigT = setTimeout(() => { n.hidden = true; }, 2200);
   }, { passive: false });
+}
+
+// ---------- moja lega na malem zemljevidu ----------
+//
+// Vprasanje ni "kako dalec je vozilo zracno", ampak "koliko poti ima se do
+// mene". Zato oboje projiciramo na traso in odstejemo razdalji vzdolz nje:
+// zracna crta cez Golovec je pri mestnem avtobusu lahko trikrat krajsa od
+// prave in bi obljubljala prihod, ki ga ne bo.
+//
+// Kadar clovek ni ob tej progi, racuna ne delamo. Meja je 1 km: blok ali dva
+// stran se je "pri postajaliscu", cez to pa projekcija ni vec smiselna in
+// stevilka bi bila izmisljena.
+const OB_PROGI_M = 1000;
+
+function razdaljaText(m) {
+  // Decimalno vejico, ne pike: "1.5 km" je angleski zapis.
+  if (m >= 10000) return `${Math.round(m / 1000)} km`;
+  if (m >= 950) return `${(m / 1000).toFixed(1).replace(".", ",")} km`;
+  return `${Math.round(m / 10) * 10} m`;
+}
+
+function izracunajRazdaljo(loc) {
+  const el = document.getElementById("run-map-me-line");
+  if (!el) return;
+  const v = runMap.v;
+  if (!v || !runMap.trasa) {
+    el.innerHTML = '<span class="slabo">Za to vožnjo trase ni, zato razdalje '
+      + 'po poti ni mogoče izmeriti.</span>';
+    el.hidden = false;
+    return;
+  }
+  const jaz = projekcijaNaTraso(runMap.trasa, runMap.cums, loc.lat, loc.lon);
+  if (jaz.odmik > OB_PROGI_M) {
+    el.innerHTML = `<span class="slabo">Od te proge si ${razdaljaText(jaz.odmik)} `
+      + `stran, zato razdalje po poti ni mogoče izmeriti.</span>`;
+    el.hidden = false;
+    return;
+  }
+  // Vozilo jemljemo na OCENJENI legi -- isti, ki je narisana. Dve stevilki o
+  // istem vozilu, ena s slike in ena iz besedila, se ne smeta razhajati.
+  const starost = v.age_s + (Date.now() - runMap.since) / 1000;
+  const kje = ocenjenaLega(v, starost);
+  const vozilo = projekcijaNaTraso(runMap.trasa, runMap.cums, kje[0], kje[1]);
+  const d = vozilo.vzdolz - jaz.vzdolz;
+  // "je 1,5 km pred tvojo lego" se bere dvoumno -- lahko kot "ze mimo tebe".
+  // Zato povemo, koliko POTI mu ostane, in loceno, ce je ze mimo.
+  el.innerHTML = d <= 0
+    ? `Do tebe ima še <strong>${razdaljaText(-d)}</strong> poti.`
+    : `Tvojo lego je že prevozil — <strong>${razdaljaText(d)}</strong> naprej po poti.`;
+  el.hidden = false;
+}
+
+function initLocate() {
+  const btn = document.getElementById("run-map-me");
+  if (!btn) return;
+  btn.hidden = false;
+  btn.addEventListener("click", async () => {
+    const el = document.getElementById("run-map-me-line");
+    el.innerHTML = '<span class="slabo">iščem lokacijo …</span>';
+    el.hidden = false;
+    try {
+      const loc = await locateMe();
+      if (!runMap.me) runMap.me = L.layerGroup().addTo(runMap.map);
+      drawMe(runMap.me, loc);
+      // Pogled naj zajame OBOJE -- vprasanje je razmerje med tabo in vozilom,
+      // ne ena ali druga tocka.
+      if (runMap.marker) {
+        runMap.map.fitBounds(
+          L.latLngBounds([[loc.lat, loc.lon], runMap.marker.getLatLng()]),
+          { padding: [40, 40], maxZoom: 16 });
+      } else {
+        runMap.map.setView([loc.lat, loc.lon], 15);
+      }
+      runMap.loc = loc;
+      izracunajRazdaljo(loc);
+    } catch (err) {
+      el.innerHTML = `<span class="slabo">${escapeHtml(err.message)}</span>`;
+    }
+  });
 }
 
 function initFullscreen() {

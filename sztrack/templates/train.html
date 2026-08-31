@@ -55,14 +55,24 @@
         <div class="run-map-head">
           <span class="run-map-title">Kje je zdaj</span>
           <span class="run-map-sub" id="run-map-sub"></span>
-          <a class="run-map-full" id="run-map-full" href="/app/map">na velik zemljevid</a>
-          <button type="button" class="run-map-fs" id="run-map-fs"
-                  title="Celoten zaslon" aria-label="Celoten zaslon" hidden>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-              <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path>
-            </svg>
-          </button>
+          <span class="run-map-acts">
+            <a class="run-map-full" id="run-map-full" href="/app/map">na velik zemljevid</a>
+            <button type="button" class="run-map-fs" id="run-map-me"
+                    title="Pokaži mojo lego" aria-label="Pokaži mojo lego" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="3.4"></circle>
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+              </svg>
+            </button>
+            <button type="button" class="run-map-fs" id="run-map-fs"
+                    title="Celoten zaslon" aria-label="Celoten zaslon" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path>
+              </svg>
+            </button>
+          </span>
         </div>
         <div class="run-map-holder">
           <div id="run-map" class="run-map"></div>
@@ -70,6 +80,7 @@
             Ctrl + kolešček približa · ali razširi zemljevid
           </div>
         </div>
+        <p class="run-map-me" id="run-map-me-line" hidden></p>
         <p class="run-map-key">
           <span class="key-dot"></span> zadnja izmerjena lega ·
           <span class="key-bus"></span> ocena, kje je zdaj — <strong>približna</strong>

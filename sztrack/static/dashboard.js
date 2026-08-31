@@ -479,6 +479,62 @@ function declutterLabels() {
 
 map.on("zoomend moveend", () => requestAnimationFrame(declutterLabels));
 
+// ---------- moja lega ----------
+//
+// Gumb pod priblizevanjem, kot je navada pri zemljevidih. Klik jo poisce in
+// priblizka nanjo; drugi klik jo skrije -- to je hkrati "moznost prikaza",
+// zato zanjo ni se ene izbire v seznamu plasti.
+//
+// Lokacije ne zahtevamo sami ob nalaganju (glej `locateMe` v common.js).
+const meLayer = L.layerGroup().addTo(map);
+let meLoc = null;
+
+function meNote(text) {
+  const n = document.getElementById("me-note");
+  if (!n) return;
+  n.textContent = text || "";
+  n.hidden = !text;
+  if (text) setTimeout(() => { if (n.textContent === text) n.hidden = true; }, 4000);
+}
+
+const LocateControl = L.Control.extend({
+  options: { position: "topright" },
+  onAdd() {
+    const el = L.DomUtil.create("div", "leaflet-bar locate-ctl");
+    const a = L.DomUtil.create("a", "", el);
+    a.href = "#";
+    a.title = "Moja lega";
+    a.setAttribute("aria-label", "Moja lega");
+    a.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3.4"></circle>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>`;
+    L.DomEvent.on(a, "click", async (e) => {
+      L.DomEvent.stop(e);
+      if (meLoc) {                       // drugi klik skrije
+        meLayer.clearLayers();
+        meLoc = null;
+        el.classList.remove("is-on");
+        return;
+      }
+      el.classList.add("is-busy");
+      try {
+        const loc = await locateMe();
+        drawMe(meLayer, loc);
+        meLoc = loc;
+        el.classList.add("is-on");
+        map.setView([loc.lat, loc.lon], Math.max(map.getZoom(), 15), { animate: true });
+      } catch (err) {
+        meNote(err.message);
+      } finally {
+        el.classList.remove("is-busy");
+      }
+    });
+    return el;
+  },
+});
+map.addControl(new LocateControl());
+
 // ---------- avtobusna postajalisca ----------
 //
 // 9 519 postajalisc, 211 kB z gzipom in 167 ms. Zato izbirno, privzeto

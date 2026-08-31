@@ -246,6 +246,18 @@ body {
    skritih oznakah. Mora biti ZA `.label-note`, sicer jo ta povozi -- enaka
    specificnost, odloca vrstni red. */
 .label-note-2 { bottom: 46px; }
+/* Tretja opomba (lokacija) nad drugo -- vse tri se lahko pojavijo hkrati. */
+.label-note-3 { bottom: 80px; }
+
+/* Gumb za lastno lego. Videz podeduje od Leafletove vrstice, da je videti
+   kot del zemljevida in ne kot nalepka na njem. */
+.locate-ctl a {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; color: #79828f;
+}
+.locate-ctl a:hover { color: #e7eaf0; }
+.locate-ctl.is-on a { color: #2f7fff; }
+.locate-ctl.is-busy a { opacity: 0.45; }
 
 /* ---------- podrobnosti vlaka (smer D) ---------- */
 

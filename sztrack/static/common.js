@@ -748,3 +748,55 @@ function pollVehicles(url, onData) {
   tick();
   return () => { ustavljen = true; clearTimeout(timer); };
 }
+
+// ---------- moja lega ----------
+//
+// Prikaz lastne lege je na obeh zemljevidih ista stvar, zato zivi tu.
+// Lokacije NE zahtevamo sami ob nalaganju: dovoljenje, ki ga nihce ni prosil,
+// je vsiljivo in ga brskalnik ob zavrnitvi pogosto zapomni za vedno. Zahteva
+// se sele ob dotiku gumba.
+//
+// Modra `#2f7fff` ne nastopa v nobeni lestvici -- ne med zamudami (oranzna),
+// ne v semaforju razmer, in je dovolj nasicena, da se loci od blede `#a8d8ff`,
+// ki pomeni oceno. Modro proti oranzni loci tudi vsaka oblika barvne slepote.
+const ME_COLOR = "#2f7fff";
+
+function locateMe() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      return reject(new Error("Brskalnik ne pozna lokacije."));
+    }
+    // Brskalniki dovolijo lokacijo samo na HTTPS ali localhostu. Po HTTP na
+    // domacem naslovu klic tiho odpove, zato to povemo vnaprej in ne cakamo.
+    if (!window.isSecureContext) {
+      return reject(new Error("Lokacija je na voljo samo prek HTTPS ali na localhostu."));
+    }
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude,
+                       acc: p.coords.accuracy }),
+      (e) => reject(new Error(e.code === 1
+        ? "Dostop do lokacije je zavrnjen."
+        : "Lokacije ni bilo mogoče dobiti.")),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  });
+}
+
+// Pika z obrocem tocnosti. Obroc ni okras: GPS v mestu zna zgresiti za sto
+// metrov in pika brez njega trdi natancnost, ki je nima -- ista napaka, kot
+// bi bila pika vozila brez "lega stara N s".
+function drawMe(group, loc) {
+  group.clearLayers();
+  if (loc.acc && loc.acc > 25) {
+    L.circle([loc.lat, loc.lon], {
+      radius: loc.acc, color: ME_COLOR, weight: 1, opacity: 0.35,
+      fillColor: ME_COLOR, fillOpacity: 0.1, interactive: false,
+    }).addTo(group);
+  }
+  const pika = L.circleMarker([loc.lat, loc.lon], {
+    radius: 6, color: "#ffffff", weight: 2,
+    fillColor: ME_COLOR, fillOpacity: 1,
+  }).addTo(group);
+  bindFlashName(pika, loc.acc ? `tvoja lega (±${Math.round(loc.acc)} m)` : "tvoja lega");
+  return pika;
+}

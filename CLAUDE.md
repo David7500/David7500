@@ -835,6 +835,28 @@ vozilo stoji, jo oblika vozila pokrije in dveh oznak ni videti. Pod
 zemljevidom je enovrstična legenda; brez nje je moder avtobus ob rdeči piki
 uganka, in prav razlika med njima je bistvo tega okvira.
 
+**Lastna lega je na obeh zemljevidih, a je nikoli ne zahtevamo sami.**
+Dovoljenje, ki ga nihče ni prosil, je vsiljivo in ga brskalnik ob zavrnitvi
+pogosto zapomni za vedno — zato se `locateMe()` sproži šele ob dotiku gumba.
+Na velikem zemljevidu je gumb pod približevanjem (drugi klik lego skrije, kar
+je hkrati „možnost prikaza" in zato ne rabi še ene izbire med plastmi), v oknu
+vožnje pa v glavi okvira. Barva je `#2f7fff`: ne nastopa v nobeni lestvici in
+je dovolj nasičena, da se loči od blede `#a8d8ff`, ki pomeni oceno. **Obroč
+točnosti ni okras** — GPS v mestu zna zgrešiti za sto metrov in pika brez
+njega trdi natančnost, ki je nima; ista napaka, kot bi bila pika vozila brez
+„lega stara N s".
+
+**Razdalja do vozila se meri po poti, ne zračno.** Obe točki — tvojo in
+ocenjeno lego vozila — projiciramo na traso in odštejemo razdalji vzdolž nje
+(`projekcijaNaTraso`). Zračna črta čez Golovec je pri mestnem avtobusu lahko
+trikrat krajša od prave in bi obljubljala prihod, ki ga ne bo. Vozilo se vzame
+na **ocenjeni** legi, isti, ki je narisana: dve številki o istem vozilu, ena s
+slike in ena iz besedila, se ne smeta razhajati. Kadar je človek od proge več
+kot **1 km** (`OB_PROGI_M`), računa ne delamo in to povemo — blok ali dva stran
+je še „pri postajališču", čez to pa bi bila številka izmišljena. Besedilo pove
+smer: „Do tebe ima še 1,2 km poti" oziroma „Tvojo lego je že prevozil — 420 m
+naprej po poti"; „je 1,5 km pred tvojo lego" se bere dvoumno.
+
 **Geste so omejene, dokler je zemljevid element strani.** Vprašanje „naj
 kolešček približuje" ima odgovor „ne, dokler je to element" — kazalec zaide
 čez zemljevid in stran se neha pomikati. Zato:
