@@ -51,6 +51,10 @@ def conn():
         ("Z", "Zidani Most", 46.1, 15.0),
     ]
     c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)", stations)
+    # Trd datum: nanj se sklicuje 55 preizkusov. Testi, ki dan racunajo
+    # (`_pred`), morajo zato vstavljati z `INSERT OR IGNORE` -- sicer padejo
+    # natanko na tisti koledarski dan, ko se datuma ujameta. To se je zgodilo
+    # 31. 8. 2026 in podrlo pet preizkusov, ki so bili prejsnji dan zeleni.
     c.execute("INSERT INTO service_day(service_id, date) VALUES('S1', '2026-08-31')")
 
     # vlak 1: A -> Z -> C  (neposredno do C)
@@ -832,7 +836,8 @@ def test_tabla_upostevaj_rezervo_dolgega_postanka(conn):
     Napaka v najslabso smer, zato ima test svoje mesto.
     """
     dan = _pred(0)
-    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
+                 "VALUES('S1', ?)", (dan,))
     # A (08:00) -> Z: stoji 20 min (09:00 - 09:20) -> C (10:00)
     conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id) "
                  "VALUES('tr','rr','LP 7','A - C','S1')")
@@ -853,7 +858,8 @@ def test_tabla_upostevaj_rezervo_dolgega_postanka(conn):
 def test_prihodna_tabla_ne_steje_lastnega_postanka(conn):
     """Pri prihodu vozilo se pride -- postanek je sele za tem."""
     dan = _pred(0)
-    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
+                 "VALUES('S1', ?)", (dan,))
     conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id) "
                  "VALUES('tr','rr','LP 7','A - C','S1')")
     _sched(conn, "tr", [(1, "A", None, 28800), (2, "Z", 32400, 33600), (3, "C", 36000, None)])
@@ -881,7 +887,8 @@ def test_prevoznikova_napoved_steje_samo_navzgor():
 
 def test_napoved_dvigne_kadar_prevoznik_ve_vec(conn):
     dan = _pred(0)
-    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
+                 "VALUES('S1', ?)", (dan,))
     conn.commit()
     # Feed za Zidani Most (stop_seq 2) trdi +30 min, nasa ocena bi bila +10.
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
@@ -897,7 +904,8 @@ def test_napoved_dvigne_kadar_prevoznik_ve_vec(conn):
 
 def test_napoved_ne_pade_na_prevoznikovo_niclo(conn):
     dan = _pred(0)
-    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
+                 "VALUES('S1', ?)", (dan,))
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
                  "VALUES('t1',?,3,0,0,0)", (dan,))
     conn.commit()
@@ -927,7 +935,8 @@ def test_prevoznikove_vrednosti_ne_vzamemo_dokler_vlak_stoji():
 def test_napoved_ne_prevzame_prenesene_zamude(conn):
     """Isto, na celotni poti: model ne sme prevzeti prevoznikovega prenosa."""
     dan = _pred(0)
-    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
+                 "VALUES('S1', ?)", (dan,))
     # t1 dobi v Zidanem Mostu dolg postanek: 09:00 -> 09:25
     conn.execute("UPDATE sched SET dep_s = 34200 WHERE trip_id='t1' AND stop_seq=2")
     db.fill_trip_window(conn)

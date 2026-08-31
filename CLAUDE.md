@@ -497,6 +497,17 @@ sztrack/
   static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
                  (iskalnik in avtobusna stran si delita connections.js)
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
+                 **Trd datum v pripravi + računan datum v testu = bomba.**
+                 Priprava vstavlja `service_day('S1','2026-08-31')`, testi pa
+                 dan računajo (`_pred`). Na koledarski dan, ko se datuma
+                 ujameta, je to `UNIQUE constraint failed` -- zgodilo se je
+                 31. 8. 2026 in podrlo pet preizkusov, ki so bili prejšnji dan
+                 zeleni. Računani vstavki gredo zato skozi `INSERT OR IGNORE`.
+                 Preverjeno z zagonom, kot da je +1, +2, +3, +5, +7, +10, +30
+                 in +95 dni: vse zeleno. (Edina izjema,
+                 `test_prestar_povzetek_se_izracuna_znova`, pade samo v tej
+                 simulaciji -- `summary_get` bere pravi `datetime.now()`,
+                 premakniti pa je mogoče le `_pred`.)
 scripts/         dev-restart.sh, preveri_paleto.py, vzorci_feeda.py, build_deploy_zip.sh
 ```
 
