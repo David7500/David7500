@@ -705,6 +705,11 @@ avtobusni `run`, ne železniški.
 | `/app/ovire` | dela na progi in nadomestni prevozi, s filtrom po besedilu |
 | `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu v tednu |
 
+Statistika zna **obe omrežji** in izbiro bere iz naslova (`?network=avtobus`).
+Prej je bila `NET` trdo zapisana na `zeleznica` in parameter prezrt, zato je
+vsaka deljena povezava odprla železnico — tudi tista z domače strani. Izbira
+zavihka zdaj tudi piše nazaj v naslov, sicer se stran ne da deliti.
+
 **Hitrosti po odsekih ni več nikjer.** Bila je isti podatek v drugi enoti,
 zložen v zaprt `<details>` na dnu okna vožnje. `/api/speeds` in
 `stats.segment_speeds()` ostaneta — rabi ju izvoz in mreža razdalj.

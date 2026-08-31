@@ -164,7 +164,20 @@ initMode();
 
 // Katero omrežje kaže stran. Skupna številka bi bila povprečje vlaka in
 // mestnega avtobusa, kar ne opisuje ne enega ne drugega.
-let NET = "zeleznica";
+//
+// Bere se iz naslova: `?network=avtobus` je bil doslej prezrt, zato je
+// deljena povezava vedno odprla železnico -- tudi tista z domače strani.
+// Privzeto ostane železnica, enako kot pri vseh potniških endpointih.
+let NET = new URLSearchParams(location.search).get("network") === "avtobus"
+  ? "avtobus" : "zeleznica";
+
+// Naslov mora slediti izbiri, sicer se stran ne da deliti in osvezitev
+// zavihek pobrise. Tiho (`replaceState`), da gumb nazaj ostane gumb nazaj.
+function netToUrl() {
+  const q = new URLSearchParams(location.search);
+  q.set("network", NET);
+  history.replaceState(null, "", `?${q}`);
+}
 
 async function load() {
   const [b, ranking] = await Promise.all([
@@ -233,18 +246,24 @@ function reload() {
   });
 }
 
-document.querySelector(".tabs").addEventListener("click", (ev) => {
-  const b = ev.target.closest(".tab");
-  if (!b || b.dataset.net === NET) return;
-  NET = b.dataset.net;
+function oznaciZavihek() {
   for (const t of document.querySelectorAll(".tab")) {
     const on = t.dataset.net === NET;
     t.classList.toggle("is-on", on);
     t.setAttribute("aria-selected", String(on));
   }
+}
+
+document.querySelector(".tabs").addEventListener("click", (ev) => {
+  const b = ev.target.closest(".tab");
+  if (!b || b.dataset.net === NET) return;
+  NET = b.dataset.net;
+  oznaciZavihek();
+  netToUrl();
   reload();
 });
 
+oznaciZavihek();     // naslov je lahko ze izbral avtobuse
 reload();
 
 let resizeTimer = null;
