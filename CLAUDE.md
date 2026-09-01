@@ -1212,11 +1212,24 @@ varno tudi pri vzporednem teku, ker so meritve ključene po
 
 ## Stanje zajema
 
-Lokalna baza `data/sz.sqlite` (2026-08-31): 168 123 meritev,
-403 208 postankov, 12 obratovalnih dni,
-57 816 vremenskih vrstic, 9 791 postaj,
-377 zapisanih obvestil o ovirah, 161 MB.
+Lokalna baza `data/sz.sqlite` (2026-09-01): 251 031 meritev,
+1 838 411 vrstic dnevnika, 12 obratovalnih dni,
+64 272 vremenskih vrstic, 9 791 postaj, 478 obvestil, 233 MB.
 Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
+
+**Malina zajema samo železnico.** V `sztrack-zajem.service` je
+`SZ_AGENCIES=` prazen, zato uvoz vzame le SŽ in `trip` ima 789 voženj.
+Storitev se imenuje **`sztrack-zajem`**, ne `sztrack` — ta obstaja, a je
+`inactive`, in kdor preverja napačno ime, sklepa, da zajem stoji.
+
+Posledica, ki jo je bilo videti šele ob prilitju: malina je 29.–31. 8. nekaj
+avtobusov vseeno posnela (takrat je imela njihove vožnje uvožene), potem pa
+jih je uvoz brez `SZ_AGENCIES` iz `trip` odstranil in **43 362 meritev je
+ostalo sirot** — vrstic v `run` brez vožnje, ki jih tam ni mogoče prebrati.
+Lokalna baza te vožnje ima, zato jih je `sztrack merge` rešil (sirot 0).
+Prilitje je dodalo 217 545 vrstic dnevnika in 31. 8. dvignilo železnico s
+4 645 na 6 912 meritev; `sztrack repair` je nato popravil 1 511 vrstic, ki
+niso šle skozi novejše varovalke (malina teče starejšo kodo).
 
 Za napoved zamude (`stats.predict`): vlak najprej porabi **rezervo voznega
 reda**, kar ostane, popravi historična mediana ostanka pri **tem vlaku**,
@@ -1355,6 +1368,53 @@ seznam po odseku kratek in razlike ni bilo; pri mestnem avtobusu isti odsek
 vozi več linij, seznam zraste na desettisoče in `odsek+razred` je za en dan
 porabil 6,5 minute namesto 0,3 sekunde. `backtest._medians()` jih izračuna
 enkrat ob učenju -- rezultat do zadnje decimalke isti.
+
+## Prvi šolski dan (1. 9. 2026)
+
+Izmerjeno na jutru do 9:00, primerjano z istim oknom prejšnjih dni — sicer bi
+primerjal pol dneva s celim.
+
+**Šolski vozni red je avtobusni dogodek, ne železniški.** Razpisanih voženj
+31. 8. → 1. 9.: železnica **638 → 655** (+2,7 %), avtobusi **6 812 → 9 880**
+(**+45 %**). Od 9 880 avtobusnih jih 8 167 prejšnji dan sploh ni bilo.
+
+**Železnica prvega šolskega dne ni bila slabša — bila je celo malenkost
+boljša.** Jutro do 9:00, mediana zamude in delež do 5 minut:
+
+| dan | meritev | mediana | do 5 min | p90 |
+|---|---|---|---|---|
+| 24. 8. pon | 1 988 | 2,0 min | 66 % | 13 min |
+| 25. 8. tor | 1 990 | 2,0 min | 73 % | 11 min |
+| 26. 8. sre | 1 989 | 2,0 min | 68 % | 13 min |
+| 28. 8. pet | 1 948 | 1,0 min | 78 % | 10 min |
+| 31. 8. pon | 1 913 | 1,0 min | 76 % | 12 min |
+| **1. 9. tor (šola)** | **2 012** | **2,0 min** | **75 %** | **11 min** |
+
+Tudi **40 vlakov, ki 31. 8. niso vozili** (šolski), se ne loči: mediana 2,0 min
+in 69 % do petih minut proti 75 % pri ostalih, na 97 meritvah — premalo za
+razliko. Najhujši tega jutra so bili običajni osumljenci na dolgih relacijah
+(IC 503 Hodoš–Koper mediana +20 min, LPV 2803 Maribor–Dobova +18, RG 318 +18),
+ne šolski vlaki.
+
+**Zadrževanje na postajah se pri železnici ni spremenilo** — mediana razlike
+med odhodno in prihodno zamudo je 0 s in nad 60 s je 0 % postankov, enako kot
+prejšnje dni. S tem odpade skrb, da bi šolska gneča podrla `MIN_DWELL_S`; pri
+avtobusih je mediana 5 s in 5 % postankov nad minuto, a je 31. 8. za primerjavo
+le 911 postankov proti 51 344 današnjim, zato to **ni** primerjava.
+
+**Avtobusov ni s čim primerjati in to je odgovor.** Jutranji zajem avtobusov
+pred 1. 9. praktično ne obstaja (31. 8. do 9:00 le 1 142 meritev, in te so
+polne zmrznjenih vrednosti). Današnje jutro je zato prva izmerjena avtobusna
+konica in postane izhodišče: Nomago mediana 2,0 min in 79 % do petih minut,
+Arriva 2,1 min in 76 %, LPP 2,0 min in 76 %, AP MS 1,6 min in 87 %.
+
+**Kar je resnično boleče, ni zamuda, ampak izguba zgodovine.** Model se uči po
+`trip_id`, šolski vozni red pa je prinesel 8 167 novih voženj — zato ima danes
+zgodovino **le 11 % avtobusnih voženj** (1 133 od 9 880) proti **87 %
+železniških** (568 od 655). Napoved in „običajna zamuda" sta pri avtobusih
+torej od 1. 9. slepi in se bosta polnili znova; pri železnici se ni zgodilo nič.
+`trip_id` so sicer ostali stabilni (0 sirot v `run`) — nove vožnje so res nove
+storitve, ne preimenovane stare.
 
 ## Odprto
 
