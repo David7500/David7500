@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import (_abs_time, _after_slack, _operator_is_stale, _slack_ahead,
+from .stats import (_abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, typical_at_stops)
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -351,7 +351,19 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             prev = None if _operator_is_stale(
                 own, lm["delay_arr"], lm["delay_s"],
                 dwell_at(vrsta, lm["stop_seq"])) else own
-            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez), prev)
+            # Ista ocena kot v oknu voznje in v iskalniku zvez -- glej
+            # `stats.estimate_at`. Sam prenos z rezervo je izmerjeno slabsi.
+            #
+            # Samo pri ODHODIH: `predict` racuna odhodno zamudo in v rezervo
+            # steje tudi postanek na ciljni postaji, kar je pri odhodu prav.
+            # Pri prihodih vozilo tega postanka se ni opravilo, `zadnji` pa je
+            # tam PREJSNJA postaja -- model bi torej odgovarjal o napacnem
+            # kraju. Prihodi zato ostanejo pri prenosu z rezervo.
+            ocena = (estimate_at(conn, d["train_no"], d["trip_id"], lm["stop_seq"],
+                                 lm["delay_s"], d["stop_seq"], service_date)
+                     if kind == "odhodi" else None)
+            d["delay_s"] = (ocena if ocena is not None
+                            else _with_operator(_after_slack(lm["delay_s"], rez), prev))
             d["slack_s"] = rez
             d["delay_from"] = lm["name"]
             d["delay_kind"] = "ocena"

@@ -323,8 +323,27 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
 
   `journey.board()` in `stats.connections()` zato med zadnjo meritvijo in
   potnikovo postajo odštejeta **rezervo voznega reda** (`stats._slack_ahead()`
-  + `_after_slack()`), enako kot `stats.predict()`. Pri **prihodni** tabli se
-  postanek na tej postaji ne šteje — vozilo šele pride, postanek je za tem.
+  + `_after_slack()`). Pri **prihodni** tabli se postanek na tej postaji ne
+  šteje — vozilo šele pride, postanek je za tem.
+
+  **Rezerva sama pa ni cel model, in dolgo je bila.** Okno vožnje je isti
+  postanek računalo s `predict()` — torej z rezervo **in** historičnim
+  ostankom — iskalnik in tabla pa samo z rezervo. Razhajanje je bilo vidno na
+  zaslonu: 1. 9. je RG 318 za Ljubljano Polje v iskalniku pisal **+11 min**, v
+  oknu iste vožnje pa **+24**; LPV 2250 +3 proti +18. Dve številki o istem
+  vlaku na isti postaji, obe označeni „ocena" — in slabša od njiju je bila na
+  vstopni strani. Backtest pravi, kaj je boljše: prenos 2,94 min MAE in 82,7 %
+  v petih minutah, rezerva + razred 1,92 min in 91,0 %.
+
+  Zdaj gre vse troje skozi `stats.estimate_at()`, ki pokliče `predict()` in
+  vzame vrednost za potnikovo postajo; kadar je model nima, ostane prenos z
+  rezervo. Izmerjeno po popravku: **3 od 3 zvez se ujema z oknom vožnje**.
+  Cena je nič, ker model teče samo na vrsticah, ki so „ocena", teh pa je 2–3:
+  iskalnik 2 → 3 ms, odhodna tabla brez merljive razlike (52 ms prej in potem).
+
+  **Prihodna tabla ostane pri prenosu z rezervo.** `predict()` računa
+  **odhodno** zamudo in v rezervo šteje tudi postanek na ciljni postaji, kar je
+  pri odhodu prav; pri prihodu vozilo tega postanka še ni opravilo.
 
   Poceni je: `_slack_ahead()` bere samo postanke nad `MIN_DWELL_S`, teh je na
   vsej železnici 406 od 10 019.

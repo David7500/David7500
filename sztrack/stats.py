@@ -898,6 +898,33 @@ WHERE p.rn = 1
 """
 
 
+def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
+                from_stop_seq: int, current_delay_s: int, target_seq: int,
+                service_date: str | None = None) -> int | None:
+    """Ocena zamude na `target_seq` po ISTEM modelu kot okno vožnje.
+
+    Iskalnik zvez in odhodna tabla sta prej računala samo prenos zamude minus
+    rezervo voznega reda. Okno vožnje pa isti postanek računa s `predict()`,
+    torej z rezervo **in** historičnim ostankom -- in ta je izmerjeno boljši
+    (`sztrack backtest`: prenos 2,94 min MAE in 82,7 % v petih minutah,
+    rezerva + razred 1,92 min in 91,0 %).
+
+    Posledica razhajanja je bila vidna: RG 318 je 1. 9. ob 06:46 v iskalniku
+    za Ljubljano Polje pisal **+11 min**, v oknu iste vožnje pa **+24**, in
+    LPV 2250 +3 proti +18. Dve številki o istem vlaku na isti postaji, obe
+    označeni „ocena".
+
+    Vrne `None`, kadar modela ni mogoče uporabiti (postanka ni v napovedi);
+    klicatelj takrat ostane pri prenosu z rezervo.
+    """
+    for x in predict(conn, train_no, from_stop_seq, current_delay_s,
+                     exclude_date=service_date, service_date=service_date,
+                     trip_id=trip_id):
+        if x["stop_seq"] == target_seq:
+            return x["predicted_delay_s"]
+    return None
+
+
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
                 service_date: str, now_s: int | None = None,
                 network: str | None = None) -> list[dict]:
@@ -958,7 +985,10 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             if _operator_is_stale(prev, lm["delay_arr"], lm["delay_s"],
                                   dwell_at(vrsta, lm["stop_seq"])):
                 prev = None
-            d["delay_s"] = _with_operator(_after_slack(lm["delay_s"], rez), prev)
+            ocena = estimate_at(conn, d["train_no"], d["trip_id"], lm["stop_seq"],
+                                lm["delay_s"], d["from_seq"], service_date)
+            d["delay_s"] = (ocena if ocena is not None
+                            else _with_operator(_after_slack(lm["delay_s"], rez), prev))
             d["delay_at"] = lm["name"]
             d["delay_kind"] = "ocena"
         elif d["from_delay_s"] is not None:
