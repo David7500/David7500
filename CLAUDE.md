@@ -23,6 +23,21 @@ Avtobusi se uvozijo z `SZ_AGENCIES=1118` (LPP). Brez tega so v bazi samo SŽ.
 Med razvojem: `./scripts/dev-restart.sh` (počaka na sproščen port; `pkill -f`
 z golim vzorcem ubije tudi lupino, v kateri je ukaz zapisan).
 
+**Razvojni strežnik posluša na vseh vmesnikih** (`SZ_HOST`, privzeto
+`0.0.0.0`), ker je telefon glavna naprava, na kateri se ta aplikacija
+preizkuša — z `127.0.0.1` je bila iz omrežja nedosegljiva in to je bilo videti
+kot okvara. Skripta ob zagonu izpiše naslove. To **ni** isto kot odpiranje
+vrat na usmerjevalniku: API nima avtentikacije in ga sme videti samo domače
+omrežje. Za samo ta računalnik: `SZ_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
+
+**Prek omrežnega naslova lastna lega ne dela in to ni naša napaka.** Brskalniki
+dajo `navigator.geolocation` samo v varnem kontekstu — HTTPS ali `localhost` —
+in `http://192.168.1.58:8001` ni ne eno ne drugo. Izmerjeno: tam je
+`window.isSecureContext = false` in prikaz pove „Lokacija je na voljo samo prek
+HTTPS ali na localhostu", namesto da bi tiho čakal. Isto velja za „v bližini"
+v iskalniku. Kdor to potrebuje na telefonu, rabi pravi certifikat — Tailscale
+(`tailscale cert`) je za to najmanj dela in je itak že v načrtu.
+
 ## Od kod podatki
 
 ```

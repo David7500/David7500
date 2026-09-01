@@ -3,13 +3,15 @@
 # nujno: uvicorn potrebuje trenutek za zaustavitev in nov proces sicer umre
 # na "address already in use", kar je videti kot okvara aplikacije.
 #
-# `SZ_HOST=0.0.0.0` odpre streznik za lokalno omrezje (telefon, druga naprava).
-# To ni isto kot odpiranje vrat na usmerjevalniku: API nima avtentikacije in
-# ga sme videti samo domace omrezje.
+# Privzeto poslusa na VSEH vmesnikih, ker je telefon glavna naprava, na kateri
+# se ta aplikacija preizkusa -- z `127.0.0.1` je bila iz omrezja nedosegljiva
+# in to je bilo videti kot okvara. To NI isto kot odpiranje vrat na
+# usmerjevalniku: API nima avtentikacije in ga sme videti samo domace omrezje.
+# Za samo ta racunalnik: `SZ_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
 set -u
 cd "$(dirname "$0")/.."
 LOG="${SZ_DEV_LOG:-/tmp/sztrack-dev.log}"
-HOST="${SZ_HOST:-127.0.0.1}"
+HOST="${SZ_HOST:-0.0.0.0}"
 PORT="${SZ_PORT:-8001}"
 pkill -f "[u]vicorn sztrack.api.*--port $PORT" 2>/dev/null
 for _ in $(seq 1 40); do
