@@ -17,9 +17,17 @@ Environment=SZ_POLL_SECONDS=30
 # vrne sistemu. Brez tega bi nove vožnje sčasoma odpadle iz zajema.
 Environment=SZ_REFRESH=subprocess
 Environment=SZ_REFRESH_HOUR=4
-# Avtobusi. Prazno = samo vlaki (in nadomestni prevozi SŽ).
-# `1118` doda LPP, `1118,1123,1119,1121` vse prevoznike.
-Environment=SZ_AGENCIES=
+# Vsi prevozniki. Malina je edina naprava, ki teče ves čas, zato mora zajeti
+# VSE -- meritev, ki je ta trenutek nihče ne posname, ne obstaja nikoli več.
+#
+# Pomnilnik to prenese, izmerjeno na tej malini (Pi Zero W): 427 MB RAM in
+# 426 MB swapa, od tega v rabi 122 + 11. Zajem sam je pri sami železnici
+# 38 MB RSS; vrh ob uvozu voznega reda je pri vseh štirih agencijah ~216 MB,
+# in ker teče v podprocesu (`SZ_REFRESH=subprocess`), se po njem vrne sistemu.
+#
+# Disk: dnevnik `obs` se obrezuje (železnica 90 dni, avtobusi 14) in se ustali
+# pri ~356 MB; `run` raste ~3,4 GB na leto. Na kartici je 20 GB prostega.
+Environment=SZ_AGENCIES=1118,1119,1121,1123
 # Zajema se SAMO tisto, česar kasneje ni mogoče dobiti: zamude in obvestila.
 # Vreme ima arhiv za nazaj, statistika je izpeljanka `run` -- oboje se izračuna
 # na računalniku, ko je baza tam. Lega vozil je samo "zdaj" in se ne hrani.
