@@ -8,23 +8,25 @@ Zaledje je Python (FastAPI + SQLite), prikaz vanilla JS brez ogrodja.
 Vse teče skozi isti JSON API, tako da je prikaz zamenljiv.
 
 ```bash
-./venv/bin/python -m uvicorn sztrack.api:app --host 127.0.0.1 --port 8001 --reload
-# nato http://127.0.0.1:8001/app
+./scripts/dev-restart.sh
+# nato http://127.0.0.1:8001/
 ```
 
 ## Strani
 
 | pot | kaj |
 |---|---|
-| `/app` | vlaki: iskalnik povezav in odhodna tabla — vstopna stran |
+| `/` | domača stran: s čim greš — vlak ali avtobus |
+| `/app/train` | vlaki: iskalnik povezav in odhodna tabla |
 | `/app/bus` | avtobusi: ista stran, drugo omrežje |
 | `/app/train/{št}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
 | `/app/ovire` | dela na progi in nadomestni prevozi |
-| `/app/statistika` | razrezi zajetega: po vrsti vlaka, uri, dnevu (dnevni povzetek) |
 | `/app/map` | živi zemljevid |
 | `/docs` | OpenAPI |
 
-Vsaka stran ima preklop **preprosto / napredno**. Napredni pogled ne odpre
+Statistična stran je odstranjena do prenove.
+
+Okno vožnje in ovire imajo preklop **preprosto / napredno**. Napredni pogled ne odpre
 druge strani — na isti doda p90, deleže, številke postankov in to, kaj je
 o vrednosti rekel feed.
 

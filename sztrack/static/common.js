@@ -64,21 +64,6 @@ function dayLabel(isoDate) {
   return isoDate ? DATE_FMT.format(new Date(isoDate + "T12:00:00")) : "—";
 }
 
-// "danes ob 05:12" / "včeraj ob 05:12" / "26. 8. ob 05:12".
-// Absolutni datum je pri predpomnjenem izracunu pomembnejsi od "pred 3 urami":
-// bralec hoce vedeti, do katerega dne stevilka sega, ne kako stara je.
-function stampLabel(iso) {
-  if (!iso) return "—";
-  const t = new Date(iso);
-  const dayKey = (d) => DATE_FMT.format(d);
-  const now = new Date();
-  const yday = new Date(now.getTime() - 86400000);
-  const when = dayKey(t) === dayKey(now) ? "danes"
-             : dayKey(t) === dayKey(yday) ? "včeraj"
-             : `${dayKey(t)}`;
-  return `${when} ob ${TIME_FMT.format(t)}`;
-}
-
 // Isto sklanjanje kot `journey._fold` v Pythonu: brez tega se iskanje in
 // poudarek ne ujameta pri sumnikih ("sentjur" proti "Šentjur"). Bilo je
 // prepisano v dveh datotekah -- ista funkcija dvakrat je ista napaka dvakrat.

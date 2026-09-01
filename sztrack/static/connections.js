@@ -577,24 +577,6 @@ function overviewHtml(o) {
   const day = useYesterday ? o.yesterday : o.today;
   const dayNote = useYesterday ? "včeraj" : "danes";
 
-  const live = (o.live_worst || []).map((t) => {
-    const color = delayColor(t.delay_s);
-    // Kje je vlak, pove prevoznik natancneje od nas: prometno mesto pogosto
-    // ni voznoredni postanek.
-    // Kraj in starost morata biti iz istega vira, sicer pise "Dobova" in
-    // "meritev stara 40 min", ceprav je porocilo o Dobovi staro 11 minut.
-    const fromOperator = !!t.reported_at_station;
-    const where = fromOperator ? t.reported_at_station : t.last_stop;
-    const age = fromOperator ? t.reported_age_s : t.age_s;
-    const stale = age != null && age > 1200;
-    return `<a class="live-row" href="/app/train/${encodeURIComponent(t.train_no)}">
-      <span class="live-no">${escapeHtml(t.train_no)}</span>
-      <span class="live-where">${escapeHtml(where)}</span>
-      <span class="live-delay" style="color:${color}">${delayLabel(t.delay_s)} min</span>
-      ${stale ? `<span class="stale-note">podatek star ${Math.round(age / 60)} min</span>` : ""}
-    </a>`;
-  }).join("");
-
   return `
     <section class="overview">
       <div class="ov-head">
@@ -615,11 +597,6 @@ function overviewHtml(o) {
           </div>
         </div>` : ""}
 
-      ${live ? `<div class="ov-card">
-        <div class="ov-card-head"><span>Največje zamude zdaj</span></div>
-        <div class="live-list">${live}</div>
-      </div>` : ""}
-
       ${o.disruptions ? `<a class="ov-link" href="/app/ovire">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
@@ -639,23 +616,6 @@ function overviewHtml(o) {
 // vsaka številka o preteklosti bi obljubljala več, kot ve. Zato koliko jih
 // vozi, koliko jih ima GPS in kako hitro se premikajo -- to o njih res vemo.
 function busOverviewHtml(o) {
-  const worst = (o.worst || []).map((t) => {
-    const color = delayColor(t.delay_s);
-    const stale = t.age_s != null && t.age_s > 1200;
-    // "pri", ne "stoji na": feed ima za to `current_status`, a ta ni
-    // zanesljiv (STOPPED_AT pri 32 km/h). Hitrost je meritev in jo povemo.
-    const where = t.position_source === "GPS"
-      ? `pri postajališču ${t.last_stop}${t.speed_kmh != null
-          ? ` · ${t.gps_stopped ? "stoji" : `${t.speed_kmh} km/h`}` : ""}`
-      : t.last_stop;
-    return `<a class="live-row" href="${journeyHref(t.train_no, null, t.trip_id)}">
-      <span class="live-no">${escapeHtml(t.train_no)}</span>
-      <span class="live-where">${escapeHtml(where)}</span>
-      <span class="live-delay" style="color:${color}">${delayLabel(t.delay_s)} min</span>
-      ${stale ? `<span class="stale-note">podatek star ${Math.round(t.age_s / 60)} min</span>` : ""}
-    </a>`;
-  }).join("");
-
   return `
     <section class="overview">
       <div class="ov-head">
@@ -677,11 +637,6 @@ function busOverviewHtml(o) {
             ? ` · danes ${o.today.runs} zajetih voženj` : ""}
         </div>
       </div>
-
-      ${worst ? `<div class="ov-card">
-        <div class="ov-card-head"><span>Največje zamude zdaj</span></div>
-        <div class="live-list">${worst}</div>
-      </div>` : ""}
 
       <div class="ov-card">
         <div class="ov-card-foot">

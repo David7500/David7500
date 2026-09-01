@@ -354,26 +354,6 @@
 .bucket-key b { color: var(--ink-dim); font-weight: 600; }
 .bucket-dot { width: 8px; height: 8px; border-radius: 2px; }
 
-.live-list { display: flex; flex-direction: column; margin-top: 4px; }
-.live-row {
-  display: grid;
-  grid-template-columns: 78px 1fr auto;
-  gap: 4px 12px;
-  align-items: baseline;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line-soft);
-  text-decoration: none; color: inherit;
-}
-.live-row:last-child { border-bottom: none; }
-.live-row:hover .live-where { color: var(--ink); }
-.live-no { font: 600 12.5px/1.3 var(--sans); color: var(--ink); }
-.live-where {
-  font: 400 12px/1.3 var(--sans); color: var(--ink-mute);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.live-delay { font: 600 13px/1.3 var(--mono); }
-.live-row .stale-note { grid-column: 2 / -1; }
-
 .ov-link {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 13px;

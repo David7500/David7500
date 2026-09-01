@@ -4,13 +4,14 @@ Povzetek za nadaljevanje dela. Vse spodaj je preverjeno na živih podatkih,
 ne po spominu. Navodila za delo so v [CLAUDE.md](CLAUDE.md), pregled projekta
 v [README.md](README.md).
 
-Stanje na dan **2026-08-29**. Veja `claude/slovenske-zeleznice-api-ql84hf`.
+Posnetek stanja na dan **2026-09-01**. Tekoča pravila so v `CLAUDE.md` in
+`.claude/rules/`, izmerjeno stanje v [docs/MERITVE.md](docs/MERITVE.md);
+ta zapis je pripoved o poti in se ne posodablja ob vsaki spremembi. Veja `claude/slovenske-zeleznice-api-ql84hf`.
 
 ## Kaj je narejeno
 
 Delujoča aplikacija, ne več samo zaledje. Iskalnik povezav in odhodna tabla,
-okno ene vožnje, stran z ovirami, statistika zajetega, živi zemljevid — vse
-s preklopom preprosto / napredno.
+okno ene vožnje, stran z ovirami in živi zemljevid.
 
 Zajem teče v ozadnji niti istega procesa: zamude vsakih 30 s, obvestila
 vsakih 60 s, vreme dnevno za nazaj.

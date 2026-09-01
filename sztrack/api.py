@@ -155,12 +155,6 @@ def dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard.html", {"here": "zemljevid"})
 
 
-@app.get("/app/statistika", response_class=HTMLResponse)
-def stats_page(request: Request):
-    """Razrezi zajetega: po vrsti vlaka, uri, dnevu. Za napreden pogled."""
-    return templates.TemplateResponse(request, "stats.html", {"here": "statistika"})
-
-
 @app.get("/app/ovire", response_class=HTMLResponse)
 def alerts_page(request: Request):
     """Dela na progi in nadomestni prevozi -- edini vir odgovora, ZAKAJ."""
@@ -308,7 +302,6 @@ def api_overview():
     return {
         "now": now.isoformat(),
         "live_trains": len(live),
-        "live_worst": live[:5],
         "today": day,
         "yesterday": fallback,
         "disruptions": disruptions,
@@ -341,7 +334,6 @@ def api_overview_bus():
         "moving": len(moving),
         "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
                              if moving else None),
-        "worst": live[:5],
         "today": day,
     }
 
@@ -692,6 +684,12 @@ def api_vehicle_chain(train_no: str, date: str | None = None,
     return {"train_no": train_no, "service_date": date, **chain}
 
 
+# Stran `/app/statistika` je odstranjena, ker jo bomo preuredili -- ta dva
+# endpointa in dnevni povzetek za njima pa ostaneta. To NI spregledan mrtev
+# kod: razrez je izmerjen, pokrit s testi in se enkrat na dan ze racuna
+# (`SZ_MAINT_HOUR`); brisati ga zato, da bi ga cez teden dni pisali znova,
+# bi bilo drazje od tega komentarja. Kdor ju cez cas najde brez odjemalca in
+# nove strani ni, naj ju odstrani.
 @app.get("/api/stats/breakdowns")
 def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
                    fresh: bool = False):

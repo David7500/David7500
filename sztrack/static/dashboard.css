@@ -317,9 +317,7 @@ body {
 .stop-delay.is-forecast { opacity: 0.75; }
 
 .stop-row.is-muted .stop-name { color: #79828f; font-weight: 400; }
-.stop-row.is-forecast .stop-name,
-.stop-row.is-eta .stop-name { color: #9aa3b0; font-weight: 400; }
-.stop-row.is-eta .stop-actual,
+.stop-row.is-forecast .stop-name { color: #9aa3b0; font-weight: 400; }
 .stop-row.is-forecast .stop-actual { color: #79828f; }
 .stop-row.is-current .stop-name { font-weight: 600; }
 .stop-row.is-current .stop-dot { box-shadow: 0 0 0 4px rgba(240, 147, 79, 0.16); }
