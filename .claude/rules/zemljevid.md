@@ -1,46 +1,12 @@
 ---
 paths:
-  - "sztrack/static/**"
-  - "sztrack/templates/**"
+  - "sztrack/static/dashboard.js"
+  - "sztrack/static/dashboard.css"
+  - "sztrack/static/train.js"
+  - "sztrack/static/train.css"
 ---
 
-# Prikaz: strani, zemljevidi, barve
-
-Ciljni uporabnik je potnik z vprašanjem „kdaj mi pelje in koliko zamuja“, ne
-dispečer. Vsaka odločitev spodaj ima razlog, ki je bil enkrat napaka na
-zaslonu.
-
-## Prezgodnja vožnja
-
-* **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** V 45 146
-  železniških vrsticah `run` ni niti ene negativne vrednosti — najmanjša je
-  natanko 0. Pri avtobusih je 12,0 % vrstic vsaj minuto prezgodnjih in 4,5 %
-  vsaj tri; **41,7 % avtobusnih voženj ima vsaj en prezgodnji postanek**
-  (LPP 22,6 % vrstic, Nomago 10,6 %, Arriva 8,9 %).
-
-  Prikaz je to do zdaj **skrival**: vrstica je pričakovano uro izpisala samo
-  ob `delay_s >= 60`, torej je prezgoden avtobus kazal zgolj voznoredno uro.
-  Napaka v najslabšo smer — potnik pride ob objavljeni uri in avtobusa ni več.
-  Zdaj je prag `abs(delay_s) >= 60`, žeton pa pove „3 min prej", ne „−3 min":
-  minus pred številko je uganka, beseda ni. Barva ostane siva, ker to res ni
-  zamuda — in prav zato mora povedati beseda. Pravilo je v `common.delayText()`
-  in velja **povsod**: kartica zemljevida, iskalnik vozila, stolpec zamude v
-  časovnici in postanek potnika. Za ozke stolpce ima kratko obliko („5 prej").
-
-  **V glavi okna vožnje smer nosi naslov, ne enota.** „Trenutna zamuda" nad
-  „6 min prej" si nasprotuje, „Vozi prezgodaj" nad „6 min prej" pa besedo
-  ponovi. Zato naslov pove smer in številka velikost: **„Vozi prezgodaj" ·
-  „6 min"**.
-
-  Ali je prezgodnja vrednost resnična, je bilo preverjeno na LPP 25
-  (Medvode ↔ Zadobrova). V smeri proti Zadobrovi je bila na Gosposvetski
-  prezgodnja v **vseh 17 zajetih vožnjah**, povprečno −4,4 min, najpozneje
-  −5 s; profil čez progo je lok, ki na obeh koncih izgine (Prušnikova −74 s,
-  Kompas −224, Gosposvetska −265, Kolodvor −73, konec +123). GPS to potrdi:
-  30. 8. ob 12:10:44 je bilo vozilo LJ LPP-124 že za postankom, ki ima vozni
-  red 12:13. To torej ni napaka zajema, ampak **prevelika rezerva voznega reda
-  skozi Šiško** — v nasprotni smeri je ista postaja povprečno +370 s. Zajem
-  LPP je za zdaj samo vikendski (od 29. 8.); ali velja med tednom, se bo videlo.
+# Zemljevida: veliki in tisti v oknu vožnje
 
 ## Zemljevid
 
@@ -103,74 +69,6 @@ zaslonu.
   Podlaga je pri z17--19 mehka, naši sloji pa ostanejo ostri, ker so SVG —
   in prav ti so razlog za približevanje. Vozili pri z17+ zrasteta (bus 44 px,
   vlak 38 px), da ostaneta v razmerju z ulico pod sabo.
-
-## Strani
-
-**Hitrosti po odsekih ni več nikjer.** Bila je isti podatek v drugi enoti,
-zložen v zaprt `<details>` na dnu okna vožnje. Tu je nekaj časa pisalo, da
-`/api/speeds` in `stats.segment_speeds()` ostaneta, „ker ju rabi izvoz in
-mreža razdalj" — **to ni držalo**: `sztrack export` zapiše `network.geojson`
-in `stations.json`, oba iz `network_geojson()`, in `segment_speeds()` ni
-klical nihče. Odstranjena sta (45 + 4 vrstice); v zgodovini sta, če bi kdaj
-zares zatrebala. Skupaj z njima je odpadel še `/api/trains` s
-`stats.trains()`, ki ga prav tako ni klical nihče.
-
-**Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
-vprašanji: `sztrack:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
-`sztrack:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).
-Oba sta v žetonih **pod iskalnikom**, ne v pregledu — pregled prva poizvedba
-pobriše prav takrat, ko bi seznam rabil za naslednjo. Prazno polje za postajo
-ob dotiku ponudi imena iz teh poizvedb; drugega ugiba za prazno polje nimamo.
-
-Oba seznama sta **ločena po omrežju**. Prejšnji `sztrack:last` ni bil, in to
-je bilo videti: kdor je na `/app` iskal Celje–Ljubljana in nato odprl
-`/app/bus`, je tam dobil isto vprašanje, razrešeno na avtobusnem omrežju
-(„Ljubljana AP"), in prazen odgovor. Zadnja poizvedba je zdaj preprosto prva
-med nedavnimi in svojega zapisa nima več.
-
-Okno vožnje je isto za vlak in avtobus, a govori o tem, kar je pred potnikom:
-besedo (vlak / nadomestni prevoz / avtobus), opozorilo in povezavo nazaj
-izbere iz `network`. Pri avtobusu z več vožnjami na isto številko linije je
-v naslovu `?trip=<id>`.
-
-**Vstopna stran preklopa preprosto/napredno nima namenoma.** Izbira med dvema
-odgovoroma je pri vprašanju „kdaj mi pelje vlak" sama po sebi breme: potnik ne
-vidi, kaj mu drugi pogled skriva, in dokler ne vidi, ga ni razloga vklopiti.
-Kar je bilo na njej naprednega, se je razdelilo na dvoje in nič ni ostalo
-skrito: razumljivo vsakomur (**neposredno**, **načrtovano N min za prestop**,
-**točnih N %**, **najslabša**, koliko je zajetega) je zdaj vedno vidno, ostalo
-pa je s te strani odšlo, ker tja ni sodilo — številka postanka, „izhodišče —
-feed odhodne zamude ne poroča" in prevoznikova napoved, ki je prikaz tako ali
-tako ne uporablja. Preklop obdržita okno vožnje in ovire: tam gre
-za eno vožnjo ali eno številko, ne več za izbiro poti.
-
-Druge strani imajo preklop **preprosto / napredno**. To ni druga stran: napredni
-pogled je razred `is-advanced` na `<body>`, ki odkrije elemente z razredom
-`adv-only` (p90, delež točnih, številka postanka, kaj pravi feed). Potnik in
-radovednež gledata isto vožnjo.
-
-**Pot mora povedati, s čim greš.** `/app` je bil vlakovni samo po dogovoru in
-iz naslova to ni bilo vidno; zdaj je `/app/train` in `/app` nanj preusmerja
-(308). Okno vožnje ima obe poti: `/app/train/{no}` in `/app/bus/{no}`.
-Streženo je z isto predlogo, a naslov ne sme lagati — `/app/train/25` za
-mestno linijo 25 je napačen naslov, ki ga bo nekdo delil naprej, zato ga
-strežnik pogleda v `trip.network` in preusmeri (307).
-
-**Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila so dela na progi, zapore
-tira in nadomestni prevozi SŽ; za avtobuse takih obvestil ni in povezava tja
-bi obljubljala podatek, ki zanje ne obstaja.
-
-**Omrežji sta ločeni tudi na pogled.** V glavi je segmentni preklop
-`Vlaki | Avtobusi`, ne dve povezavi med štirimi, in avtobusna stran ima svojo
-barvo (`body.net-avtobus` prestavi `--accent` na zeleno, isto kot vozila na
-zemljevidu). Doslej je bila trenutna stran samo izpuščena iz seznama povezav
-in razlika ni bila vidna nikjer — kdor je na `/app/bus` iskal „Ljubljana",
-je dobil postajališče LPP in ni razumel, zakaj.
-
-**Iskanje na vstopni strani sproži samo gumb.** Izbira postaje iz predlogov
-ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib pa je
-zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
-(deljena povezava) — tam je odgovor prav to, po kar je človek prišel.
 
 **Med dvema meritvama pika drsi naprej po trasi — samo v oknu vožnje.**
 Lega je ob strežbi ~30 s stara (izmerjeno), kar je pri 50 km/h **več kot pol
@@ -364,71 +262,3 @@ odprtju. Zavihkov ne vračaj — eno vprašanje so razbili na tri strani.
 Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.
 Leaflet se nalaga z unpkg CDN.
-
-## Barve zamud
-
-Ordinalni ramp v enem odtenku, validiran na monotonost svetlosti in kontrast:
-
-| razred | svetla | temna |
-|---|---|---|
-| točno | `#8a8175` | `#7c8698` |
-| 1–5 min | `#f0934f` | `#f2a87e` |
-| 5–15 min | `#dd6a26` | `#e07b45` |
-| nad 15 min | `#a83f10` | `#b85417` |
-
-Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
-
-* **Vsaka oznaka poleg barve vedno nosi tudi minute.** Barva nikoli ne nosi
-  pomena sama — barvna slepota, in +4 proti +14 je za potnika bistvena razlika.
-* **Razred se določi iz zaokrožene minute, ne iz sekund.** Meje v `DELAY_RAMP`
-  so v minutah in gredo skozi isto zaokroževanje kot `delayLabel`. Prej so bile
-  v sekundah (`<= 60` = točno): 60 s je pisalo „+1" sivo, 61 s „+1" oranžno —
-  ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot
-  številka poleg nje.
-
-  **Ista past se je ponovila pri „prej".** Prag je bil `s <= -60`, zaokroževanje
-  pa se prelomi pri −30 s: −45 s je zato izpisalo golo **„−1"** namesto
-  „1 min prej". Pravilo je zdaj v `common.isEarly()` in ga uporabljata okno
-  vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
-* Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
-* **Padec zamude na postaji riši vedno, krogec prihoda pa le, kadar je zanj
-  prostor** (`MIN_SPLIT_PX = 15`). Krogec meri v premeru 10 pik, polna pika
-  odhoda 11 — pri manjšem razmiku se prekrijeta, navpičnica med njima izgine
-  pod njima in videti je kot **dva nepovezana krogca**. Prav to je bilo
-  prijavljeno pri Divači (+16 → +15, razmik natanko 10 pik).
-
-  Rešitev ni skrivanje: enominutni padec je resničen podatek. Odsek se konča
-  pri **prihodni** vrednosti, navpičnica pa pade na odhodno — pri majhni
-  razliki je to stopnica ob piki in se bere, pri veliki (Ljubljana, 170 pik)
-  dobi še krogec. Skrivanje bi izgubilo prav tisto, zaradi česar je padec
-  narisan.
-* Kjer meritve ni (ocena, napoved), nastopi rezervirana `#a8d8ff`, ki je
-  lestvica ne uporablja.
-* Vreme ima **svoj semafor**, ne odtenek lestvice zamud.
-
-### Semafor razmer
-
-| stopnja | oznaka | barva |
-|---|---|---|
-| 0 | mirne | `#6b7480` |
-| 1–3 | blage | `#5aa87d` |
-| 4–6 | zahtevne | `#d9b33c` |
-| 7–10 | hude | `#d1495b` |
-
-Stopnja 0–10 je seštevek točk za padavine, sneg, sunke vetra, meglo, nevihto in
-mraz (`weather.severity()`). Razčlenitev gre v tooltip — indeks brez razčlenitve
-je črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
-
-**Pri stopnji 0 žeton kaže temperaturo, ne stopnje.** „0" potniku ne pove nič,
-„22°" pa nekaj — stopnja se vrne takoj, ko je kaj za povedati (≥ 1). Žetoni so
-v preprostem pogledu na **postajah naprej po progi** (napoved, črtkan rob);
-prevožene postaje so tam itak skrite in mirno vreme za nazaj ne pove ničesar.
-
-**Lestvic ne mešaj v istem registru.** Rumena razmer `#d9b33c` proti svetli
-oranžni zamud `#f2a87e` je pri deutanu ΔE 5,5 — nerazločljivo. Zato je zamuda
-krivulja s pikami zgoraj, razmere pa stolpci v ločenem pasu spodaj, in vsak
-stolpec od stopnje 4 naprej nosi svojo številko. Paleto preverjaj z
-`scripts/preveri_paleto.py`, ne na oko. Ta izmeri kontrast (WCAG), monotonost
-svetlosti in razločljivost pri barvni slepoti (CIEDE2000 na simulaciji
-protan/deutan/tritan). Trk obeh lestvic je pri tritanu **ΔE 1,6**, torej hujši
-od tu prej zapisanih 5,5 — ločena registra sta nujna, ne okrasna.

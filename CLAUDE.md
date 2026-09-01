@@ -195,10 +195,18 @@ ustreznih datotek:
 
 | datoteka | velja za | o čem |
 |---|---|---|
-| `podatki.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py`, `api.py` | kaj feed je in česa ne pove; varovalke pred smetmi |
+| `zajem.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py` | kaj feed pošlje in kje laže; varovalke pred smetmi |
+| `strezba.md` | `api.py` | meja meritve, omrežje, živa vožnja, predpomnilnik leg |
 | `model.md` | `stats.py`, `backtest.py`, `journey.py` | napoved zamude, prestopi, kaj je bilo preizkušeno in ne pomaga |
-| `prikaz.md` | `static/**`, `templates/**` | strani, zemljevidi, barve, geste |
+| `oznake.md` | `static/**`, `templates/**` | kako je zamuda napisana in pobarvana |
+| `zemljevid.md` | `dashboard.*`, `train.*` | plasti, geste, ocena lege, pasti CSS |
+| `strani.md` | `connections.*`, `home.*`, `templates/**` | katera stran odgovarja na katero vprašanje |
 | `objava.md` | `deploy/**`, `scripts/**` | malina, namestitev, vleka baze |
+
+Razrez ni po temah, ampak **po datotekah, ki znanje res rabijo**: to je edino,
+kar se pozna pri porabi konteksta. Popravek v `connections.js` naloži 10 kB
+(`oznake` + `strani`), ne 25 kB o zemljevidih; popravek v `api.py` 6 kB
+namesto 25 kB o zajemu.
 
 Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
 [docs/MERITVE.md](docs/MERITVE.md). Daljši zapisi: [HANDOVER.md](HANDOVER.md),
