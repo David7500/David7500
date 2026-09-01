@@ -16,7 +16,11 @@ Venv je `venv/` (Python 3.12), **ne** `.venv`. Strežnik med razvojem pogosto ž
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
 CLI: `./venv/bin/python -m sztrack.cli <ukaz>` — `init`, `update`, `poll`,
 `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
-`prune`, `seed`. Testi: `./venv/bin/python -m pytest -q` (92 preizkusov).
+`prune`, `seed`.
+
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
+strani, konzola brskalnika in paleta v enem, z izhodno kodo. Sami testi:
+`./venv/bin/python -m pytest -q` (92 preizkusov).
 
 Avtobusi se uvozijo z `SZ_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi
 samo SŽ.
@@ -92,7 +96,7 @@ sztrack/
   templates/     home, connections (vstopna), dashboard, train, alerts
   static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
-scripts/         dev-restart.sh, potegni.sh, preveri_paleto.py, vzorci_feeda.py
+scripts/         dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
 ```
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja
