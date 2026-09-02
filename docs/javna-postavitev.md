@@ -71,6 +71,57 @@ Ker so vsi endpointi brati-samo in ni zapisov, je to majhno, ni pa nič.
 **Ko bo kdo prišel: Hetzner.** Ločen stroj, doma ne izpostavi ničesar in ga
 nihče ne pobere. Sedem evrov na mesec je natanko to, za kar bi zbirala denar.
 
+## Cloudflare Tunnel: kaj to je
+
+**Obrnjena smer.** Preusmeritev vrat na usmerjevalniku prebije luknjo navznoter:
+svetu poveš svoj naslov in čakaš, kdo potrka. Tunel dela nasprotno — na malini
+teče majhen program (`cloudflared`), ki **sam pokliče ven** k Cloudflaru in to
+povezavo drži odprto. Obiskovalec pride do Cloudflara, Cloudflare pa ga spusti
+po tisti že odprti povezavi do maline.
+
+Posledica: na usmerjevalniku ni odprtih vrat, malina nima javnega naslova in
+domači IP ni nikjer viden. Ni luknja v zidu, ampak telefonska linija, ki jo
+hiša vzpostavi sama.
+
+```
+obiskovalec → Cloudflare ⇠(povezava, ki jo vzpostavi malina)⇢ cloudflared → 127.0.0.1:8001
+```
+
+**Kaj dobimo zraven, brezplačno:**
+
+* **HTTPS s pravim potrdilom**, samodejno. To reši tudi napako, ki je zapisana
+  v `CLAUDE.md`: `navigator.geolocation` zahteva varen kontekst, zato lastna
+  lega prek `http://192.168.1.164:8001` ne dela. S tunelom dela.
+* Cloudflare spredaj: zaščita pred navalom, predpomnjenje, pravila za omejitev
+  hitrosti — natanko to, kar rabimo za `/api/stations`.
+* Prometne omejitve ni in tuneli ne potečejo.
+* **Cloudflare Access** (Zero Trust, brezplačno do 50 uporabnikov) zna predenj
+  postaviti prijavo. To je odgovor na „API nima avtentikacije“ brez vrstice
+  kode: za zaprt preizkus spustiš noter samo povabljene naslove.
+
+**Dve različici, in razlika je pomembna:**
+
+| | hitri tunel (TryCloudflare) | imenovani tunel |
+|---|---|---|
+| ukaz | `cloudflared tunnel --url http://localhost:8001` | nastavitev + systemd |
+| račun | ni ga | Cloudflare račun |
+| domena | ni je | **potrebna**, z DNS pri Cloudflaru |
+| naslov | naključen `*.trycloudflare.com` | naš, stalen |
+| omejitve | 200 sočasnih zahtev (nato 429), brez SSE, brez SLA | ni jih |
+| ob ustavitvi | **naslov izgine** | ostane |
+
+Hitri tunel je za „pokaži mi zdaj“ — v eni minuti in brez računa. Za naslov,
+ki ga daš ljudem, ne pride v poštev. Imenovani tunel rabi domeno, torej tistih
+~20 € na leto iz proračuna; sam Cloudflare in DNS pri njem sta brezplačna.
+
+**Česar tunel ne naredi:**
+
+* **Aplikacije ne naredi varne** — naredi jo javno, kar je ravno namen. Vsi
+  endpointi so brati-samo, zato je to sprejemljivo, a hrošč v aplikaciji je
+  odslej dosegljiv z interneta, in aplikacija teče doma.
+* **Cloudflare vidi ves promet** (pri njem se konča TLS). Za odprte prometne
+  podatke to ni težava, je pa treba vedeti.
+
 ## Varnostni recept za javni stroj
 
 Velja za Hetzner enako kot za Oracle.
@@ -98,3 +149,5 @@ Velja za Hetzner enako kot za Oracle.
 * [Oracle: Always Free Resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
   (omejitve in merila za pobiranje nedejavnih strojev)
 * [Oracle: FAQ o brezplačnem nivoju](https://www.oracle.com/cloud/free/faq/) (brez nadgradnje ni zaračunavanja)
+* [Cloudflare Tunnel: kako deluje](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/)
+* [Cloudflare: hitri tuneli in njihove omejitve](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)
