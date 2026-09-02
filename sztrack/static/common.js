@@ -261,8 +261,10 @@ function lineBadgeHtml(row) {
     return `<span class="mode-bus" title="namesto vlaka, ki na tej relaciji ne vozi">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="4" y="4" width="16" height="13" rx="2"></rect>
-        <path d="M4 11h16M8 21l-1 1M16 21l1 1M7 17v3M17 17v3"></path>
+        <rect x="3.5" y="3.5" width="17" height="15" rx="2.6"></rect>
+        <path d="M3.5 10.5h17M3.5 5.8 1.4 6.8M20.5 5.8l2.1 1M6.5 18.6v2.4M17.5 18.6v2.4"></path>
+        <circle cx="8" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
+        <circle cx="16" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
       </svg>
       nadomestni prevoz
     </span>`;
@@ -278,10 +280,10 @@ function modeBadgeHtml(mode) {
   return `<span class="mode-bus" title="nadomestni prevoz namesto vlaka">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="4" y="4" width="16" height="13" rx="2"></rect>
-      <path d="M4 11h16M8 21l-1 1M16 21l1 1M7 17v3M17 17v3"></path>
-      <circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"></circle>
-      <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none"></circle>
+      <rect x="3.5" y="3.5" width="17" height="15" rx="2.6"></rect>
+      <path d="M3.5 10.5h17M3.5 5.8 1.4 6.8M20.5 5.8l2.1 1M6.5 18.6v2.4M17.5 18.6v2.4"></path>
+      <circle cx="8" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
+      <circle cx="16" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
     </svg>
     avtobus
   </span>`;
