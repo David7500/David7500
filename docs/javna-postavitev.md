@@ -114,6 +114,36 @@ Hitri tunel je za „pokaži mi zdaj“ — v eni minuti in brez računa. Za nas
 ki ga daš ljudem, ne pride v poštev. Imenovani tunel rabi domeno, torej tistih
 ~20 € na leto iz proračuna; sam Cloudflare in DNS pri njem sta brezplačna.
 
+**Kje se to nastavi:**
+
+* **Hitri tunel nima strani.** Naslov izpiše `cloudflared` v terminal —
+  `https://<naključne-besede>.trycloudflare.com`. Ne izbereš ga in ob ustavitvi
+  procesa je konec.
+* **Imenovani tunel: `dash.cloudflare.com`.** Tam narediš račun in dodaš
+  domeno (pri registrarju domene nato preusmeriš imenske strežnike na
+  Cloudflare). Tuneli in Access so pod `dash.cloudflare.com/one/` —
+  stari naslov `one.dash.cloudflare.com` se zdaj preusmeri tja.
+* Na malini `cloudflared tunnel login` izpiše povezavo, ki jo odpreš v
+  brskalniku **na drugem računalniku** (malina je brez zaslona), in shrani
+  potrdilo v `~/.cloudflared/cert.pem`.
+* Naslov je **naš**, ne Cloudflarov: izbereš poddomeno svoje domene, Cloudflare
+  zanjo naredi `CNAME` na `<uuid>.cfargotunnel.com`.
+
+**Past pri naši malini — izmerjeno 2. 9. 2026.** Malina je **Raspberry Pi
+Zero W**: en sam jedro `armv6l`, 427 MB pomnilnika, Raspbian 13, `armhf`.
+Uradni paket za `armhf` je preveden z `GOARM=7` in na ARMv6 pade z
+*Illegal instruction* — to je znan hrošč `cloudflared` in ne naša napaka.
+Deluje pa binarna datoteka **`cloudflared-linux-arm`**:
+
+```bash
+curl -sL -o /tmp/cfd \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm
+chmod +x /tmp/cfd && /tmp/cfd --version    # cloudflared version 2026.8.3, izhod 0
+```
+
+Torej: **ne** `apt install cloudflared` in **ne** paket `armhf`, ampak ta
+binarna datoteka. Preizkušeno na sami malini, ne prebrano.
+
 **Česar tunel ne naredi:**
 
 * **Aplikacije ne naredi varne** — naredi jo javno, kar je ravno namen. Vsi
