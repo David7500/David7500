@@ -305,7 +305,7 @@ modela, ni pa pošteno do **prikaza**: potnik ne vpraša „kakšna bo zamuda na
 postanku j, če poznam zamudo na i“, ampak pogleda v aplikacijo, preden gre od
 doma, in prebere eno številko.
 
-`ocena.py` zato teče ob strežniku (vsakih `SZ_OCENA_SECONDS`, privzeto 120 s)
+`ocena.py` zato teče ob strežniku (vsakih `KAJROS_OCENA_SECONDS`, privzeto 120 s)
 in v tabelo `napoved` posname, kaj bi prikaz **ta hip** povedal za postanek,
 ki je **25 minut pred vlakom** oziroma **15 pred avtobusom** (`HORIZONT_S`).
 Ko vozilo tisti postanek prevozi, se v isto vrstico dopiše resnica.

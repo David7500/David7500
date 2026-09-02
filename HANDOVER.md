@@ -88,7 +88,7 @@ ponoči vozi pet vlakov in nič drugega in en sam pogled ne pove ničesar.
 (Arriva 62, Nomago 54, SŽ 28, LPP 19, AP MS 3). Avtobusi imajo poleg tega
 **GPS lego** s smerjo in hitrostjo (do 138 vozil hkrati); vlaki je nimajo.
 
-Uvoženi so **vsi** (`SZ_AGENCIES=1118,1123,1119,1121`): 20 736 voženj,
+Uvoženi so **vsi** (`KAJROS_AGENCIES=1118,1123,1119,1121`): 20 736 voženj,
 9 791 postajališč, 403 208 postankov, baza 45 MB, uvoz 14 s z vrhom 217 MB. Odhodna tabla za Bavarski dvor kaže
 "LPP 60 → Ljubljana Železna, 09:36 → 09:40, čez 2 min, +4 min" z živo zamudo.
 Na zemljevidu je avtobus **puščica v smeri vožnje**, vlak pa krog na postaji —
@@ -137,7 +137,7 @@ varovati pred `kajros update`.
 pomnilnika, 426 MB swapa, eno počasno jedro, 20 GB prostega na kartici.
 
 Od 29. 8. 2026 tam teče **`kajros-zajem.service`** — zajem brez strežnika,
-z **vsemi prevozniki** (`SZ_AGENCIES=1118,1123,1119,1121`). Namen je, da ima
+z **vsemi prevozniki** (`KAJROS_AGENCIES=1118,1123,1119,1121`). Namen je, da ima
 malina celo bazo za aplikacijo in da lahko razvojni računalnik ugasneš;
 obdeluje tisti, ki bazo potegne dol.
 
@@ -153,11 +153,11 @@ ne (izpeljanka `run`), lega vozil ne (je samo „zdaj" in se ne hrani).
 Namestitev:
 
 ```bash
-sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash ~/kajros-src/deploy/install-rpi.sh
+sudo KAJROS_MODE=zajem KAJROS_AGENCIES=1118,1123,1119,1121 bash ~/kajros-src/deploy/install-rpi.sh
 ```
 
 Skripta sama ugotovi, da leži v izvornem drevesu, in vzame kodo od tam — na
-GitHubu teh commitov ni. Ob spremembi `SZ_AGENCIES` sproži ponovni uvoz
+GitHubu teh commitov ni. Ob spremembi `KAJROS_AGENCIES` sproži ponovni uvoz
 voznega reda z `--force`; ta zamenja samo statične tabele, `obs` in `run`
 ostaneta (preverjeno: 9 dni in 46 085 meritev je prehod preživelo).
 
@@ -199,7 +199,7 @@ vrsticami `run`** (365 dni vseh prevoznikov, 5,9 GB):
 Trije popravki, vsak z lastnim vzrokom:
 
 1. **Statistika se računa enkrat na dan**, ne ob obisku (tabela `povzetek`,
-   3:30, `SZ_MAINT_HOUR`). Izmerjeno na pravem zajemu: od tretjega dne naprej
+   3:30, `KAJROS_MAINT_HOUR`). Izmerjeno na pravem zajemu: od tretjega dne naprej
    en nov dan premakne mediano 90-dnevnega okna za 0–1 minuto in delež točnih
    za manj kot odstotno točko. Stran zato pove **čas izračuna** — predpomnjena
    številka brez datuma je laž, ki čaka na priložnost.
@@ -220,7 +220,7 @@ se opoldne še vozil, in na zemljevidu ni imel kaj iskati.
 
 * **Dostop od zunaj** — Tailscale ali Cloudflare Tunnel.
   **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije.**
-* **Malina.** Na njej je smiselno `SZ_AGENCIES=1118` (SŽ + LPP, vrh 86 MB);
+* **Malina.** Na njej je smiselno `KAJROS_AGENCIES=1118` (SŽ + LPP, vrh 86 MB);
   vseh agencij Pi Zero W s 427 MB ne prenese (vrh 217 MB). Na tem prenosniku
   tečejo vse.
 * **Napoved bo boljša šele z več zajema.** Kar se je dalo iztisniti iz devetih

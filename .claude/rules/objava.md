@@ -29,7 +29,7 @@ Pella je bila slepa ulica — zajem je delal, javni API pa je vračal Cloudflare
 (`kajros.cli collect`) je edina omogočena enota; `kajros.service` s
 strežnikom je `disabled` in tak ostane — hkrati ne smeta teči, ker bi pisali
 v isto bazo in se prepirali za feed (`install-rpi.sh` drugo sam ugasne).
-`SZ_AGENCIES=1118,1119,1121,1123`: meritev, ki je ta trenutek nihče ne
+`KAJROS_AGENCIES=1118,1119,1121,1123`: meritev, ki je ta trenutek nihče ne
 posname, ne obstaja nikoli več, malina pa je edina naprava, ki teče ves čas.
 
 Da to ni preveč za Pi Zero W, je izmerjeno **na njem**: 427 MB RAM in
@@ -53,6 +53,6 @@ zavržejo in skripto je varno pognati večkrat na dan. Tudi `repair` je
 idempotenten; preverjeno s tremi zaporednimi zagoni (0, 0, 0 popravkov).
 
 **Koda na malini ni iz gita.** `install-rpi.sh` privzeto klonira z GitHuba, kjer
-naših commitov ni — zagon brez `SZ_SRC` bi malino torej **nazadoval**. Zato se
+naših commitov ni — zagon brez `KAJROS_SRC` bi malino torej **nazadoval**. Zato se
 drevo najprej prenese (`rsync` v `~/kajros-src`), installer pa se požene od
 tam.

@@ -78,7 +78,7 @@ feedova zamenjava prometnega dne.
   Iz tega sledi, kaj bi gostejše branje res dalo: pri 5 s bi bila verjetnost
   zaostanka ≈ 12,5 % in povprečje ~2,5 s namesto 5,5. Torej **3 sekunde od 32**,
   za dvakratno breme tuje javne storitve (63 → 127 MB/dan). Zato ostane 10 s;
-  kdor hoče preizkusiti, ima `SZ_POSITION_SECONDS` in ne rabi spreminjati kode.
+  kdor hoče preizkusiti, ima `KAJROS_POSITION_SECONDS` in ne rabi spreminjati kode.
   Številka, ki jo potnik vidi, ni naš zaostanek — je starost meritve GPS v
   vozilu. Zato ima žeton naslov, ki to pove.
 * **Okno vožnje je lego naložilo enkrat in nikoli več.** Kdor je stran pustil

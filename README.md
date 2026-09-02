@@ -46,7 +46,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 Vsi viri podpirajo pogojni GET — ob nespremenjenih podatkih se ne prenese nič.
 V zipu je **ves** slovenski javni promet: 20 736 voženj petih agencij, 9 791
 postajališč, 403 208 postankov. Privzeto se uvozi samo SŽ; ostale doda
-`SZ_AGENCIES=1118,1123,1119,1121`.
+`KAJROS_AGENCIES=1118,1123,1119,1121`.
 
 **Dve ločeni omrežji, ne en kup.** `/app` so vlaki in nadomestni prevozi SŽ
 (ti na svoji relaciji zamenjujejo vlak), `/app/bus` so avtobusi. Potnik ve,

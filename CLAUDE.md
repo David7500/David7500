@@ -24,13 +24,13 @@ CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 strani, konzola brskalnika in paleta v enem, z izhodno kodo. Sami testi:
 `./venv/bin/python -m pytest -q` (92 preizkusov).
 
-Avtobusi se uvozijo z `SZ_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi
+Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi
 samo SŽ.
 
-**Strežnik posluša na vseh vmesnikih** (`SZ_HOST`, privzeto `0.0.0.0`), ker je
+**Strežnik posluša na vseh vmesnikih** (`KAJROS_HOST`, privzeto `0.0.0.0`), ker je
 telefon glavna preizkusna naprava. To **ni** isto kot odpiranje vrat na
 usmerjevalniku: API nima avtentikacije in ga sme videti samo domače omrežje.
-Za samo ta računalnik: `SZ_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
+Za samo ta računalnik: `KAJROS_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
 
 **Prek omrežnega naslova lastna lega ne dela in to ni naša napaka.**
 `navigator.geolocation` zahteva varen kontekst — HTTPS ali `localhost` — in
@@ -48,7 +48,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vozni red | `gitlab.com/.../IJPP/latest/ijpp_gtfs.zip` (41 MB) | ~1×/dan |
 | Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 30 s |
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
-| Lega vozil | `.../vehicle_positions` | 10 s (`SZ_POSITION_SECONDS`) |
+| Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, stari SOAP je
@@ -121,7 +121,7 @@ Vsakih nekaj minut posname, kaj bi prikaz **ta hip** povedal za postanek, ki je
 25 minut pred vlakom (15 pred avtobusom) — našo oceno, prevoznikovo in prenos
 zamude — in ko vozilo tja pride, v isto vrstico dopiše resnico. Izid:
 `kajros ocena`. To ni backtest: backtest meri model na zgodovini, to meri
-**številko, ki jo je potnik res videl**. Ugasne se s `SZ_OCENA=0`.
+**številko, ki jo je potnik res videl**. Ugasne se s `KAJROS_OCENA=0`.
 
 ## Omrežji: `network` ni `mode`
 
@@ -187,7 +187,7 @@ uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude)
 * `venv/`, `data/`, `export/`, `posnetki/`, `*.sqlite` so v `.gitignore` —
   **razen** `seed/kajros.sqlite`, ki ga rabi namestitev.
 * **Agregat čez vso zgodovino se ne računa v zahtevi** (`stats.summary_get()`,
-  enkrat na dan ob 3:30, `SZ_MAINT_HOUR`). Vsaka taka številka mora na strani
+  enkrat na dan ob 3:30, `KAJROS_MAINT_HOUR`). Vsaka taka številka mora na strani
   nositi **čas izračuna**.
 * **Mrtve kode ne puščaj.** Kar nima klicatelja, gre ven — v git zgodovini
   ostane. Izjema mora biti napisana v komentarju, z rokom.

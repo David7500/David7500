@@ -24,7 +24,7 @@ dejanskemu paru zaporednih postankov danega vlaka.
 | Uvoz GTFS | 23 s, vrh 54 MB (pretočno branje `shapes.txt`; prej 269 MB) |
 | Strežnik ob zagonu | 57–60 MB RSS |
 | Po prvem zajemu | 74 MB RSS |
-| Osvežitev v istem procesu | vrh 89 MB, ostane 85 MB → zato `SZ_REFRESH=off` privzeto |
+| Osvežitev v istem procesu | vrh 89 MB, ostane 85 MB → zato `KAJROS_REFRESH=off` privzeto |
 
 ## Hitrost pri velikih podatkih
 
@@ -74,13 +74,13 @@ Lokalna baza `data/kajros.sqlite` (2026-09-01): 251 031 meritev,
 Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
 **Malina zajema samo železnico.** V `kajros-zajem.service` je
-`SZ_AGENCIES=` prazen, zato uvoz vzame le SŽ in `trip` ima 789 voženj.
+`KAJROS_AGENCIES=` prazen, zato uvoz vzame le SŽ in `trip` ima 789 voženj.
 Storitev se imenuje **`kajros-zajem`**, ne `kajros` — ta obstaja, a je
 `inactive`, in kdor preverja napačno ime, sklepa, da zajem stoji.
 
 Posledica, ki jo je bilo videti šele ob prilitju: malina je 29.–31. 8. nekaj
 avtobusov vseeno posnela (takrat je imela njihove vožnje uvožene), potem pa
-jih je uvoz brez `SZ_AGENCIES` iz `trip` odstranil in **43 362 meritev je
+jih je uvoz brez `KAJROS_AGENCIES` iz `trip` odstranil in **43 362 meritev je
 ostalo sirot** — vrstic v `run` brez vožnje, ki jih tam ni mogoče prebrati.
 Lokalna baza te vožnje ima, zato jih je `kajros merge` rešil (sirot 0).
 Prilitje je dodalo 217 545 vrstic dnevnika in 31. 8. dvignilo železnico s
