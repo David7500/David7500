@@ -164,6 +164,21 @@ def alerts_page(request: Request):
     return templates.TemplateResponse(request, "alerts.html", {"here": "ovire"})
 
 
+@app.get("/app/statistika", response_class=HTMLResponse)
+@app.get("/app/statistika/{omrezje}", response_class=HTMLResponse)
+def stats_page(request: Request, omrezje: str = "vlak"):
+    """Kdaj se splaca potovati: zamuda po uri, dnevu in vrsti.
+
+    Ime poti je slovensko in ne "stats", ker je naslov tudi besedilo -- kdor
+    ga deli naprej, deli poved. Omrezje je v poti iz istega razloga kot pri
+    oknu voznje: `/app/statistika` brez pripone bi bila vlakovna samo po
+    dogovoru in iz naslova to ne bi bilo vidno.
+    """
+    network = "avtobus" if omrezje == "bus" else "zeleznica"
+    return templates.TemplateResponse(request, "statistika.html",
+                                      {"here": "statistika", "network": network})
+
+
 def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     """Okno ene vožnje. Pot mora ustrezati omrežju vožnje.
 

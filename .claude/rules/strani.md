@@ -20,6 +20,26 @@ klical nihče. Odstranjena sta (45 + 4 vrstice); v zgodovini sta, če bi kdaj
 zares zatrebala. Skupaj z njima je odpadel še `/api/trains` s
 `stats.trains()`, ki ga prav tako ni klical nihče.
 
+**`/app/statistika` odgovarja na „kdaj se splača potovati", ne „kakšna je
+statistika".** Stran je bila prej odstranjena do prenove; vrnjena je s tem
+vprašanjem, ker je edino, ki ga potnik res ima. Na vrhu je ena poved
+(najboljša in najslabša ura), pod njo razrezi po uri, dnevu v tednu in vrsti
+vlaka, na dnu pa dan za dnem, ki je `adv-only`.
+
+Tri pravila, ki so se pokazala šele na posnetku prve različice:
+
+* **Merilo stolpcev postavijo samo vrstice z dovolj vzorca** (`MIN_VZOREC`,
+  30 voženj). Prva različica je pustila nočno uro z 13 vožnjami in mediano
+  24 min, da je določila merilo — cel dan se je stisnil v pahljačo po dve
+  piki. Vrstica, ki ji ne verjamemo dovolj za naslov, ne sme voditi slike;
+  presežek se odreže na 100 % in dobi znak `›`.
+* **Število meritev ostane vidno tudi na telefonu.** Prvi poskus ga je tam
+  skril („širina je dragocenejša") — a telefon je glavna naprava in prav tam
+  bi „sreda je najhujša" ostala brez vzorca. Skrči se ime, ne vzorec.
+* **Blok po dnevu v tednu sam pove, kdaj mu ni za verjeti.** Pri manj kot
+  štirih ponovitvah vsakega dne (28 dni zajema) podnaslov to napiše z
+  izračunano številko, ne z občutkom.
+
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
 vprašanji: `kajros:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
 `kajros:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).

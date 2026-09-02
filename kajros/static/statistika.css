@@ -1,0 +1,148 @@
+/* Stran "kdaj se splača potovati".
+ *
+ * Vodoravni stolpci in nič drugega: vsaka vrstica je ena ura, en dan ali ena
+ * vrsta vlaka, dolžina je mediana zamude, barva pa isti ordinalni ramp kot
+ * povsod (`--d-*`). Grafične knjižnice ni -- odvisnosti so pri tem projektu
+ * draga stvar, `<div>` s širino v odstotkih pa naredi isto.
+ */
+
+.stat-main { max-width: 760px; }
+
+/* ---------- glava: ena poved, ki jo je vredno odnesti ---------- */
+
+.stat-glava {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 22px;
+}
+
+.stat-poved {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.stat-poved strong { color: var(--accent-lit); font-weight: 600; }
+.stat-poved .stat-slabo { color: var(--d-big); }
+
+.stat-obseg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.stat-obseg b { color: var(--ink-dim); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* ---------- bloki ---------- */
+
+.stat-blok { margin: 26px 0; }
+.stat-blok h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 2px;
+  color: var(--ink);
+}
+.stat-pod {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+.stat-pod.stat-tanko { color: var(--sev-hard); }
+
+/* ---------- vrstice ---------- */
+
+.stat-vrstice { display: grid; gap: 3px; }
+
+.stat-vrsta {
+  display: grid;
+  grid-template-columns: 4.6em 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.stat-ime {
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-vrsta.je-najboljsa .stat-ime,
+.stat-vrsta.je-najslabsa .stat-ime { color: var(--ink); font-weight: 600; }
+
+/* Tir stolpca je viden tudi pri ničli -- brez njega vrstica z majhno zamudo
+   izgleda kot manjkajoč podatek, ne kot dobra novica. */
+.stat-tir {
+  position: relative;
+  height: 16px;
+  background: var(--line-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.stat-stolpec {
+  height: 100%;
+  border-radius: 3px;
+  min-width: 2px;
+  transition: width .25s ease;
+}
+
+.stat-vrednost {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+  min-width: 4.2em;
+  text-align: right;
+}
+.stat-vrsta.je-tanka .stat-vrednost,
+.stat-vrsta.je-tanka .stat-ime { color: var(--ink-ghost); }
+/* Vrstica s premajhnim vzorcem se ne skriva -- podatek je -- ampak se umakne,
+   da je ne bereš kot ugotovitev. */
+.stat-vrsta.je-tanka .stat-stolpec { opacity: .38; }
+
+/* Vrstica, ki presega merilo, mora to povedati; drugače je videti kot da je
+   enaka najdaljši. */
+.stat-vrsta.gre-cez .stat-tir::after {
+  content: "›";
+  position: absolute;
+  right: 3px; top: 50%; transform: translateY(-50%);
+  font: 600 13px/1 var(--mono);
+  color: var(--bg);
+}
+
+/* Število meritev za vrstico. Brez njega je "sreda je najhujša" trditev brez
+   vzorca -- in ravno to je pri dvanajstih dneh zajema najlažje narobe brati. */
+.stat-n {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-ghost);
+  min-width: 3.4em;
+  text-align: right;
+}
+
+.stat-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+.stat-legenda span { display: inline-flex; align-items: center; gap: 5px; }
+.stat-legenda i {
+  width: 10px; height: 10px; border-radius: 2px; display: inline-block;
+}
+
+/* Število meritev ostane tudi na telefonu. Prvi poskus ga je tam skril, ker
+   je "širina dragocenejša" -- a telefon je glavna naprava in prav tam bi
+   "sreda je najhujša" ostala brez vzorca. Namesto tega se skrči ime. */
+@media (max-width: 430px) {
+  .stat-vrsta { grid-template-columns: 3.9em 1fr auto auto; gap: 7px; }
+  .stat-vrednost { min-width: 3.8em; font-size: 11.5px; }
+  .stat-n { min-width: 2.8em; font-size: 10.5px; }
+}

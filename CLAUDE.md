@@ -166,6 +166,7 @@ update` ni treba varovati.
 | `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
+| `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
 
 ## Kam gre
 
@@ -228,8 +229,6 @@ Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
 
 ## Odprto
 
-* Statistična stran je odstranjena do prenove; endpointa `/api/stats*` sta
-  ostala (glej komentar v `api.py`).
 * Dostop od zunaj: **Tailscale Funnel**, ker da stalen `https://<stroj>.
   <tailnet>.ts.net` brez domene; Cloudflarov hitri tunel ima naključen naslov,
   ki umre s procesom. **Vrat na usmerjevalniku ne odpiraj.**

@@ -36,6 +36,9 @@
   </div>
   <span class="nav-sep"></span>
   {%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}
+  {#- Statistika velja za obe omrezji, zato pot nosi omrezje s sabo. #}
+  {%- if here != 'statistika' %}
+  <a class="top-link" href="/app/statistika{% if (network | default('zeleznica')) == 'avtobus' %}/bus{% endif %}">kdaj se splača</a>{% endif %}
   {#- Ovire so `SZ-OVIRA` obvestila SŽ: dela na progi, zapore tira, nadomestni
       prevozi. Za avtobuse takih obvestil ni in povezava tja bi obljubljala
       podatek, ki zanje ne obstaja. #}
