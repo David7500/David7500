@@ -365,6 +365,60 @@ def model_fizika_razred(train_tasks):
         e = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
         if not e or e[1] < MIN_SAMPLES:
             e = skupno.get((t["train_no"], t["i"], t["j"]))
+        if not e:
+            return osnova
+        # Isti dve pravili kot `stats.predict`, sicer bi merili en model in
+        # uporabljali drugega. Prag `MIN_SAMPLES` je veljal TUDI za nepogojeno
+        # mediano -- tu, ne pa v strezeni kodi; razlika je bila vidna sele v
+        # senci (v petih minutah 80,8 % s pragom proti 84,7 % brez).
+        return osnova + round(stats._omejen_ostanek(e[0], t["d_i"]))
+    return predict
+
+
+def model_fizika_razred_brez_meje(train_tasks):
+    """Kar je streznik delal do 2. 9. 2026: brez praga in brez meje ostanka.
+
+    Obdrzan zato, da se vidi, koliko prispeva sama meja. Backtest ga komaj
+    loci od sedanjega, senca pa mocno (MAE 3,59 proti 3,14 min) -- razlika je
+    v repu, ki ga zgodovinska naloga s kratkim skokom skoraj ne vsebuje.
+    """
+    razred = defaultdict(list)
+    skupno = defaultdict(list)
+    for t in train_tasks:
+        o = t["d_j"] - stats._after_slack(t["d_i"], t["slack"])
+        razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(o)
+        skupno[(t["train_no"], t["i"], t["j"])].append(o)
+    razred, skupno = _medians(razred), _medians(skupno)
+
+    def predict(t):
+        osnova = stats._after_slack(t["d_i"], t["slack"])
+        e = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        if not e or e[1] < MIN_SAMPLES:
+            e = skupno.get((t["train_no"], t["i"], t["j"]))
+        return osnova + e[0] if e else osnova
+    return predict
+
+
+def model_fizika_razred_prag(train_tasks):
+    """Kar je backtest meril PREJ: ostanek sele od treh dni naprej.
+
+    Obdrzan zato, da je razlika merljiva. V potnikovem oknu je slabsi
+    (MAE 3,63 proti 3,14 min, v petih minutah 80,8 proti 84,9 %) -- prag
+    zavrze prav tiste primere, kjer je zgodovine malo, teh pa je vecina.
+    """
+    razred = defaultdict(list)
+    skupno = defaultdict(list)
+    for t in train_tasks:
+        o = t["d_j"] - stats._after_slack(t["d_i"], t["slack"])
+        razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(o)
+        skupno[(t["train_no"], t["i"], t["j"])].append(o)
+    razred, skupno = _medians(razred), _medians(skupno)
+
+    def predict(t):
+        osnova = stats._after_slack(t["d_i"], t["slack"])
+        e = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        if not e or e[1] < MIN_SAMPLES:
+            e = skupno.get((t["train_no"], t["i"], t["j"]))
         if not e or e[1] < MIN_SAMPLES:
             return osnova
         return osnova + e[0]
@@ -382,6 +436,8 @@ MODELS = {
     "rezerva sama": model_fizika,
     "rezerva+mediana": model_fizika_mediana,
     "rezerva+razred (sedanji)": model_fizika_razred,
+    "rezerva+razred, prag 3 dni": model_fizika_razred_prag,
+    "rezerva+razred, brez meje": model_fizika_razred_brez_meje,
 }
 
 

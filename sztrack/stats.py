@@ -740,11 +740,48 @@ def _operator_is_stale(prevoznik: int | None, arr_i: int | None, dep_i: int,
             and prevoznik > dep_i + 60)
 
 
+#: Najvecji ostanek, ki mu se verjamemo -- v sekundah in kot delez trenutne
+#: zamude, kar je vecje. Mediana ostanka je pri 69 % napovedi v potnikovem
+#: oknu narejena iz ENEGA samega dne (izmerjeno na 8 214 nalogah sence), in en
+#: dan zna biti poljubno velik. Brez te meje je rep teh vrednosti gnal napako:
+#: pri devetih do desetih postankih naprej je bil model slabsi od golega
+#: prenosa zamude.
+#:
+#: Delez pusti velikim zamudam prostor -- vlak s +25 min lahko izgubi se
+#: deset, tocen pa ne. Izmerjeno na nalogah sence (`scripts/preizkusi_model.py`):
+#:
+#:   meja                MAE    v 5 min   podcenjenih   9-10 postankov
+#:   brez (prej)        3,59 min  84,7 %      7,2 %        4,30 min
+#:   600 s              3,15      84,7        8,4          2,96
+#:   **600 s + 1x**     **3,13**  **84,9**    **8,1**      **2,96**
+#:   900 s + 1x         3,16      84,8        7,7          2,99
+OMEJI_OSTANEK_S = 600
+OMEJI_OSTANEK_DELEZ = 1.0
+
+
+def _omejen_ostanek(ostanek: float, current_delay_s: int,
+                    omeji_s: int | None = None,
+                    omeji_delez: float | None = None) -> float:
+    """Ostanek, omejen na to, kolikor mu smemo verjeti.
+
+    Mediana enega dneva ni mediana. Meja je `max(OMEJI_OSTANEK_S, delez x
+    trenutna zamuda)` -- absolutna zato, da tocnemu vozilu ne pripisemo
+    velike spremembe, sorazmerna pa zato, da mocno zamujajocemu ne odrezemo
+    prave.
+    """
+    meja = max(omeji_s if omeji_s is not None else OMEJI_OSTANEK_S,
+               abs(current_delay_s) * (omeji_delez if omeji_delez is not None
+                                       else OMEJI_OSTANEK_DELEZ))
+    return max(-meja, min(meja, ostanek))
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90,
             exclude_date: str | None = None,
             service_date: str | None = None,
-            trip_id: str | None = None) -> list[dict]:
+            trip_id: str | None = None,
+            omeji_s: int | None = None,
+            omeji_delez: float | None = None) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
 
     Osnovni model: zamuda se prenaša naprej, popravljena za historično mediano
@@ -823,7 +860,12 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
                 if stop_seq in day and seq in day]
         podobni = [r for d0, r in pari if delay_bucket(d0) == razred]
         ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
-        nasa = osnova + (round(statistics.median(ostanki)) if ostanki else 0)
+        # Mediana iz enega dneva ni mediana. Krcenje jo potegne proti nic
+        # sorazmerno s tem, koliko dni stoji za njo -- brez praga, ki bi pri
+        # dveh dneh delal skok.
+        nasa = osnova + (round(_omejen_ostanek(
+            statistics.median(ostanki), current_delay_s, omeji_s, omeji_delez))
+            if ostanki else 0)
         prevoznik = feed.get(seq)
         if _operator_is_stale(prevoznik, arr_i, current_delay_s, dwell_i):
             prevoznik = None            # samo prenos zamude, ne napoved

@@ -174,6 +174,11 @@ mediano **6 postankov naprej pri železnici in 8 pri avtobusu** (p90 9 oziroma
 13), backtest pa je poln kratkih skokov. Zastarelost ni kriva — „trenutna
 zamuda“ je ob pogledu stara 2,7 min (železnica) oziroma 1,2 min (avtobus).
 
+**Popravljeno 2. 9.** — glej `.claude/rules/model.md`, „Meja ostanka“: model
+ostanku ne verjame več kot `max(10 min, trenutna zamuda)`. Na nalogah sence
+3,63 → 3,18 min in pri 9–10 postankih 4,24 → 2,95; na avtobusnem backtestu
+4,14 → 3,41 min. Spodnji odstavek opisuje stanje pred popravkom.
+
 **Kje se da izboljšati, konkretno:** pri **9–10 postankih naprej** naš model
 izgubi proti golemu prenosu (MAE 4,62 proti 3,59; brez pravila prevoznika celo
 5,36). Odklon je tam +2,13 min povprečno, a le +0,72 mediano — torej ne

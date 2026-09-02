@@ -55,6 +55,10 @@ mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
 
 ## Pravila, ki veljajo povsod
 
+* **Model se meri na dveh merilih, ne enem.** `sztrack backtest` je zgodovina
+  s kratkimi skoki, `sztrack ocena` pa številka, ki jo je potnik res videl 25
+  minut prej. Zadnja sprememba je bila na prvem merilu za las slabša in na
+  drugem mnogo boljša — brez obojega bi jo zavrgli.
 * **Meri, ne domnevaj.** Vsaka trditev v teh zapisih ima za sabo številko.
   Kar ni izmerjeno, se ne zapiše kot dejstvo — in kar je, se zapiše z
   vzorcem („na 79 primerih“), da naslednji ve, koliko zaupati.

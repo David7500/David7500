@@ -259,6 +259,45 @@ porabil 6,5 minute namesto 0,3 sekunde. `backtest._medians()` jih izračuna
 enkrat ob učenju -- rezultat do zadnje decimalke isti.
 
 
+## Meja ostanka: mediana enega dneva ni mediana
+
+`predict()` ostanku ne verjame več kot **`max(10 min, trenutna zamuda)`**
+(`OMEJI_OSTANEK_S`, `OMEJI_OSTANEK_DELEZ`). Razlog je izmerjen na nalogah
+sence: pri **69 %** napovedi v potnikovem oknu stoji za mediano ostanka **en
+sam dan**, pri devetih do desetih postankih naprej pa jih ima 92 % največ dva.
+En dan zna biti poljubno velik in prav ta rep je gnal napako — tam je bil
+model **slabši od golega prenosa zamude** (4,30 proti 3,59 min).
+
+Meja je absolutna **in** sorazmerna: absolutna zato, da točnemu vozilu ne
+pripišemo velike spremembe, sorazmerna pa zato, da močno zamujajočemu ne
+odrežemo prave (vlak s +25 min lahko izgubi še deset, točen ne).
+
+Izmerjeno na treh merilih hkrati — številke so iz 2. 9. 2026:
+
+| | naloge sence (8 557) | backtest železnica (445 419) | backtest avtobusi |
+|---|---|---|---|
+| brez meje (prej) | 3,63 min · 84,8 % | **2,07** · **90,1 %** | 4,14 · 91,5 % |
+| **z mejo (zdaj)** | **3,18** · **85,0 %** | 2,10 · 89,7 % | **3,41** · **91,5 %** |
+
+Pri devetih do desetih postankih naprej 4,24 → 2,95 min. Železnica na
+zgodovinski nalogi izgubi 0,03 min in 0,4 odstotne točke — to je cena, ki je
+bila sprejeta zavestno: zgodovinska naloga je poln kratkih skokov, kjer meja
+skoraj ne prime, potnikovo okno pa je šest do osem postankov daleč.
+
+**Preizkušeno in ne pomaga** (vse na istih nalogah sence):
+
+| zamisel | MAE | v 5 min | podcenjenih |
+|---|---|---|---|
+| sorazmerno krčenje `ostanek × n/(n+1)` | 3,36 | 83,7 % | 10,5 % |
+| isto, asimetrično (le navzdol) | 3,57 | 84,7 % | 7,2 % |
+| manj rezerve voznega reda (×0,5 ali ×0) | brez razlike | | |
+| ostanek šele od 3 dni naprej (kot je meril backtest) | 3,63 | 80,8 % | 13,9 % |
+
+Zadnja vrstica je bila **napaka v merilu, ne zamisel**: `backtest` je prag
+`MIN_SAMPLES` uporabljal tudi za nepogojeno mediano, `stats.predict` pa ne —
+torej smo merili en model in stregli drugega. Zdaj sta poravnana, prejšnja
+različica pa ostaja v tabeli kot `rezerva+razred, prag 3 dni`.
+
 ## Senčno merjenje: kaj je potnik res videl (`ocena.py`)
 
 Backtest meri model na zgodovini z izpuščanjem enega dne. To je pošteno do
