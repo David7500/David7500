@@ -106,6 +106,53 @@ def test_iskanje_ujame_sredino_besede(conn):
     assert [s["name"] for s in journey.search_stations(conn, "jezero")] == ["Bled Jezero"]
 
 
+def test_beseda_sredi_imena_ne_pade_za_neprometno_postajo(conn):
+    """Zacetek imena in zacetek besede sta za potnika enako dober zadetek.
+
+    Prava napaka, prijavljena 2. 9. 2026: na avtobusni strani je "polje"
+    vrnilo samo postaje, ki se tako ZACNEJO. "Polje (Tolmin)" z dvema
+    voznjama je bilo pred "Kranj Zlato Polje P+R" s 586, "Novo Polje" s 199
+    pa je padlo na deveto mesto -- stran zahteva osem in ga ni bilo videti.
+    """
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('P1','Polje (Tolmin)',46.2,13.7)")
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('P2','Novo Polje',46.0,14.6)")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('tp','rp','LP 9','P1 - P2','S1')")
+    _sched(conn, "tp", [(1, "P1", None, 30000), (2, "P2", 31000, None)])
+    for i, tid in enumerate(("tq1", "tq2", "tq3")):
+        conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                     f"VALUES('{tid}','r{tid}','LP {10 + i}','P2 - C','S1')")
+        _sched(conn, tid, [(1, "P2", None, 30000 + i), (2, "C", 34000, None)])
+    conn.commit()
+    names = [s["name"] for s in journey.search_stations(conn, "polje")]
+    assert names[:2] == ["Novo Polje", "Polje (Tolmin)"]
+
+
+def test_isto_ime_se_sesteje_pred_razvrscanjem(conn):
+    """Mestno postajalisce ima svoj `stop_id` za vsako smer.
+
+    Prej se je razvrscalo po postankih ENEGA `stop_id`, izpisala pa se je
+    vsota vseh -- seznam je bil torej urejen po drugi stevilki, kot jo je
+    kazal. Tu ima "Beli dvor" dve smeri po dve voznji (skupaj stiri),
+    "Dvorec" pa eno smer s tremi: po vsoti mora biti prvi Beli dvor.
+    """
+    for sid, ime in (("B1", "Beli dvor"), ("B2", "Beli dvor"), ("B3", "Dvorec")):
+        conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,46.1,14.5)",
+                     (sid, ime))
+    for i, (tid, sid) in enumerate((("td1", "B1"), ("td2", "B1"),
+                                    ("td3", "B2"), ("td4", "B2"),
+                                    ("td5", "B3"), ("td6", "B3"), ("td7", "B3"))):
+        conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                     f"VALUES('{tid}','r{tid}','LP {20 + i}','x','S1')")
+        _sched(conn, tid, [(1, sid, None, 30000 + i), (2, "C", 34000, None)])
+    conn.commit()
+    hits = journey.search_stations(conn, "dvor")
+    assert [h["name"] for h in hits] == ["Beli dvor", "Dvorec"]
+    assert hits[0]["trips"] == 4        # obe smeri skupaj, ne le najmocnejsa
+
+
 def test_tocno_ime_je_pred_delnim(conn):
     conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('C2','Celje Center',46.2,15.3)")
     names = [s["name"] for s in journey.search_stations(conn, "celje")]

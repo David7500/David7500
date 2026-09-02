@@ -90,6 +90,20 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
             return 2
         return 3 if needle in folded else 9
 
+    def _razred(rang: int) -> int:
+        """Zacetek imena in zacetek besede sta za potnika ISTO dobra zadetka.
+
+        Locevanje ju je razvrscalo pred prometom in to je bilo merljivo
+        narobe: kdor je vtipkal "polje", je dobil "Polje (Tolmin)" z dvema
+        voznjama pred "Kranj Zlato Polje P+R" s 314, "Novo Polje" pa je padlo
+        na deveto mesto -- stran zahteva osem in ga zato ni bilo videti. Enako
+        pri "most" (Most na Soci pred Zidanim Mostom) in "gora" (Gora pri
+        Pecah pred Kranjsko Goro). Tocno ime ostane prvo, ostalo odloca promet.
+
+        Za IZBOR kandidatov ostane locevanje smiselno -- glej `CANDIDATE_CAP`.
+        """
+        return 1 if rang == 2 else rang
+
     hits = [(rank_of(r["name"]), r["name"], r) for r in rows]
     hits = [h for h in hits if h[0] < 9]
     if not hits:
@@ -116,27 +130,33 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
         for r in conn.execute(sql, params):
             counts[r["stop_id"]] = r["n"]
 
-    scored = []
+    # Isto ime, vec `stop_id`: mestna postajalisca imajo svojega za vsako smer
+    # ("Bavarski dvor" dvakrat). Vse naprej v aplikaciji tece po IMENU postaje,
+    # zato bi bila dvojnica v seznamu samo dva enaka gumba.
+    #
+    # Sesteti je treba PRED razvrscanjem, ne po njem. Prej se je razvrscalo po
+    # postankih enega `stop_id`, izpisala pa se je vsota vseh smeri -- seznam je
+    # bil torej urejen po drugi stevilki, kot jo je kazal.
+    po_imenu: dict[str, dict] = {}
     for r in hits:
         trips = counts.get(r["stop_id"], 0)
         if not trips:
             continue        # na tem omrezju te postaje ne strezhe nic
-        scored.append((rank_of(r["name"]), -trips, r["name"],
-                       {**dict(r), "trips": trips}))
-    scored.sort(key=lambda x: x[:3])
-
-    # Isto ime, vec `stop_id`: mestna postajalisca imajo svojega za vsako smer
-    # ("Bavarski dvor" dvakrat). Vse naprej v aplikaciji tece po IMENU postaje,
-    # zato bi bila dvojnica v seznamu samo dva enaka gumba. Obdrzimo najbolj
-    # prometnega in mu prištejemo postanke ostalih, da razvrscanje ostane posteno.
-    seen: dict[str, dict] = {}
-    for *_, d in scored:
-        prev = seen.get(d["name"])
-        if prev is None:
-            seen[d["name"]] = d
+        prej = po_imenu.get(r["name"])
+        if prej is None:
+            po_imenu[r["name"]] = {**dict(r), "trips": trips, "_naj": trips}
+        elif trips > prej["_naj"]:
+            # Lego in `stop_id` vzame najbolj prometna smer, promet pa je vsota.
+            prej.update(stop_id=r["stop_id"], lat=r["lat"], lon=r["lon"],
+                        trips=prej["trips"] + trips, _naj=trips)
         else:
-            prev["trips"] += d["trips"]
-    return list(seen.values())[:limit]
+            prej["trips"] += trips
+
+    out = sorted(po_imenu.values(),
+                 key=lambda d: (_razred(rank_of(d["name"])), -d["trips"], d["name"]))
+    for d in out:
+        d.pop("_naj")
+    return out[:limit]
 
 
 def resolve_station(conn: sqlite3.Connection, name: str,

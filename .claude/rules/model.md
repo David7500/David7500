@@ -342,3 +342,25 @@ Kar velja spoštovati, če se ga kdo dotakne:
 * Tabela se obrezuje (`OCENA_KEEP_DAYS`, 30 dni). `run` je zgodovina in se ne
   briše nikoli; to je merilo, in merilo, staro pol leta, meri model, ki ga ni
   več.
+
+## Iskanje postaj: promet odloča prej kot oblika ujemanja
+
+`journey.search_stations()` razvršča po `(razred, -promet, ime)`. Razredi so
+**točno ime (0)** in **vse ostalo (1)** — začetek imena in začetek besede sta
+za potnika enako dober zadetek in ju ne ločimo.
+
+Ločevanje je bilo tam do 2. 9. 2026 in je bilo merljivo narobe: „polje“ je
+dalo „Polje (Tolmin)“ z **2** vožnjama pred „Kranj Zlato Polje P+R“ s **586**,
+„Novo Polje“ s 199 pa je padlo na **deveto** mesto — stran zahteva osem in ga
+ni bilo videti. Isto pri „most“ (Most na Soči 34 pred Zidanim Mostom 142),
+„gora“ (Gora pri Pečah 26 pred Kranjsko Goro 285) in „vas“ (Vaše/Medvodah 29
+pred Latkovo vasjo 218). Preverjeno na dvanajstih poizvedbah: „ljublj“,
+„mesto“, „bavarski“ in „maribor“ se niso spremenili, ostali so se popravili.
+
+**Ločevanje pa ostane pri IZBORU kandidatov** (`CANDIDATE_CAP`, 300): ena
+črka se ujame s tisoči postajališč in promet se šteje samo za verjetne.
+
+**Postanke istega imena seštej PRED razvrščanjem.** Mestno postajališče ima
+svoj `stop_id` za vsako smer; prej se je razvrščalo po postankih enega, izpisala
+pa se je vsota vseh — seznam je bil urejen po drugi številki, kot jo je kazal
+(„Bavarski dvor“ pokaže 1 137, razvrstil pa se je po 573).
