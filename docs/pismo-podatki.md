@@ -76,6 +76,19 @@ Izmerjeno na `ijpp_gtfs.zip` in `rt.gtfs.derp.si`, 2. 9. 2026.
 
 ---
 
+## Poslano
+
+**2. 9. 2026** na **mzi.ncup@gov.si** (Nacionalni center za upravljanje
+prometa, Ministrstvo za infrastrukturo in energijo — naslov je z uradne strani
+nap.si). Sledi se mu kot niti #5 v `~/Dokumenti/Razno/mailbot`; odgovor pobere
+`posta.py preveri`.
+
+Poslano je bilo **samo NAP-u**. SŽ ne: `potniski.sz.si` in `sz.si` sta za
+Cloudflarom in naslova ni bilo mogoče preveriti pri viru, iskalnik pa ga je
+vrnil prikritega. Namesto ugibanja pismo NAP vpraša, **na koga pri SŽ naj se
+obrnemo** — če odgovorijo, gre drugo pismo na pravega človeka in ne na splošni
+naslov.
+
 ## Zapiski k pošiljanju (ne pošiljaj tega dela)
 
 * **„Odprti vozni red“ je vstavljeno ime — zamenjaj ga ali preveri.** Preden
