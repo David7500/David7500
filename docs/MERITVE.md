@@ -186,3 +186,46 @@ sistematično precenjevanje, ampak **rep**: manjšina primerov, kjer napovemo
 veliko zamudo, ki se ne zgodi. Najhuje je pri avtobusih (+2,22) in takrat, ko
 je vozilo ob pogledu skoraj točno (odklon +3,89 min pri zamudi pod 2 min).
 Pri drugih razdaljah (4–8 in 11+) model prenos prepričljivo premaga.
+
+## Neverjetne zamude pri avtobusih (3. 9. 2026)
+
+Domača stran je ob 00:20 kazala **„avtobusi +833 min“**. Vzrok je bil dvojen.
+
+**Prvi vzrok — manjkajoča varovalka, popravljeno.** `MIN_RUNS_FOR_DAY = 20`
+je bil uporabljen samo v `/api/overview` (železnica), ne pa v
+`/api/overview/bus`. Zato je avtobusni pregled ob 00:20 računal mediano iz
+**šestih** voženj. `home.js` je `yesterday` že bral — samo poslali ga nismo.
+
+**Drugi vzrok — vrednosti, ki niso zamude.** V bazi je **2 541 avtobusnih
+vrstic z zamudo nad 4 h**, največ **16,3 h**. Primer: N0556 (Nomago), vozni
+red 05:50, „zamuda“ 58 800 s na vseh postankih.
+
+Porazdelitev pove, da to ni rep prave porazdelitve:
+
+| nad | železnica (68 156 vrstic) | avtobusi (489 244) |
+|---|---|---|
+| 30 min | 1 443 (2,1 %) | 18 018 (3,7 %) |
+| 60 min | 257 (0,38 %) | 7 255 (1,48 %) |
+| 90 min | 74 (0,11 %) | 4 214 (0,86 %) |
+| 120 min | 7 (0,01 %) | 3 464 (0,71 %) |
+| 180 min | **0** | 2 735 (0,56 %) |
+| 240 min | 0 | 2 541 (0,52 %) |
+| 480 min | 0 | 1 588 (0,33 %) |
+| 720 min | 0 | 137 (0,03 %) |
+
+**Železnica nima nobene vrstice nad 3 h v 68 tisoč meritvah.** Pri avtobusih
+pa padanje med 120 in 240 minutami skoraj zastane (3 464 → 2 541, razmerje
+0,73 na dvakratni razdalji), kar je oblika **drugega procesa**, ne repa zamud.
+
+**Kar ni dokaz, in zakaj to tu piše.** Preizkusil sem domnevo, da gre za
+prevoznikovo napako ujemanja: vozilo, ki vozi zdaj, pripeto voznemu redu
+izpred ur. Podpis bi bil „vozni red + zamuda ≈ čas branja feeda“ in pri
+vrsticah nad 4 h se je pojavil v 75,4 %. **Kontrola ga je podrla:** pri
+običajnih zamudah 0–5 min je isti podpis v 72,3 %. Seveda — pri prvem
+postanku je „vozni red + zamuda = zdaj“ ravno to, kar živi feed je. Domneva
+je še vedno verjetna, dokazana pa ni.
+
+**Odprto: kje je meja.** Rez pri 3 h bi vrgel 2 735 avtobusnih vrstic
+(0,56 %), pri 2 h pa 3 464 (0,71 %). Ker meja ni izmerjena, ampak sklepana,
+zajema **nisem** spreminjal — podatki se ne brišejo na domnevo. Odločitev
+čaka.

@@ -326,6 +326,14 @@ def api_overview_bus():
     with _conn() as conn:
         vehicles, _ = _vehicles_now()
         day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
+        # Ista varovalka kot pri vlakih, ki je tu manjkala. Brez nje je stran
+        # 3. 9. 2026 ob 00:20 kazala "avtobusi +833 min": mediana sestih voznj,
+        # od katerih jih je pet nosilo prevoznikovo napako ujemanja (vozilo,
+        # ki vozi zdaj, pripeto voznemu redu izpred ur). `home.js` je `yesterday`
+        # ze bral -- samo poslali ga nismo.
+        fallback = None
+        if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
+            fallback = stats.day_summary(conn, yesterday_iso(now), network="avtobus")
     moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
     return {
         "now": now.isoformat(),
@@ -335,6 +343,7 @@ def api_overview_bus():
         "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
                              if moving else None),
         "today": day,
+        "yesterday": fallback,
     }
 
 
