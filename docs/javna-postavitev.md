@@ -152,6 +152,52 @@ binarna datoteka. Preizkušeno na sami malini, ne prebrano.
 * **Cloudflare vidi ves promet** (pri njem se konča TLS). Za odprte prometne
   podatke to ni težava, je pa treba vedeti.
 
+## Koliko uporabnikov zmore malina
+
+Izmerjeno 2. 9. 2026. Isti posel (SQLite v pomnilniku, 200 000 vrstic, 20
+agregatov) na obeh strojih:
+
+| | pisanje + indeks | 20× agregat |
+|---|---|---|
+| ta računalnik (Core Ultra 7 255U) | 0,12 s | 0,90 s |
+| malina (Pi Zero W, armv6) | 29,36 s | 88,68 s |
+
+**Pi Zero W je ~100× počasnejši** od tega računalnika. Pi 4B je po enem jedru
+~10× hitrejši od Zeroja (A72 1,5 GHz proti ARM11 1 GHz), torej **~10×
+počasnejši od tega računalnika**. Iz tega sledijo odzivi, ki so tu izmerjeni
+topli (mediana 10 zahtev):
+
+| pot | tu | ocena Pi 4B |
+|---|---|---|
+| `/api/live` | 253 ms | **~2,5 s** |
+| `/api/overview` | 224 ms | ~2,2 s |
+| `/api/stations` | 77 ms | ~0,8 s |
+| `/api/departures` | 53 ms | ~0,5 s |
+| `/api/connections` | 17 ms | ~0,2 s |
+
+Vseh 32 endpointov je `def`, ne `async def` — Starlette jih zato požene v
+nitih in SQLite med poizvedbo spusti GIL, tako da štiri jedra res štejejo.
+
+**Zgornja meja brez predpomnjenja.** Zemljevid poizve `/api/live` vsakih 30 s,
+kar je 2,5 s procesorja na uporabnika na 30 s = 8 % enega jedra. S tremi
+prostimi jedri je to ~35 hkratnih uporabnikov po prepustnosti, a čakalna vrsta
+odziv pokvari mnogo prej: **pri ~10–15 hkratnih na zemljevidu** gre `/api/live`
+čez pet sekund. Iskalnik povezav je desetkrat cenejši in zdrži ~100 hkratnih.
+V jutranji konici je 10–15 hkratnih približno **200–400 uporabnikov na dan**.
+
+**S predpomnjenjem meja skoraj izgine.** `/api/live` se spremeni vsakih 10–30 s
+in `/api/stations` enkrat na dan; če se odgovor izračuna enkrat in postreže
+vsem, tisoč uporabnikov stane toliko kot eden. Predpomnilnika odgovorov zdaj
+**ni** (`grep lru_cache|Cache-Control` po `api.py` najde samo statične
+datoteke). To je najcenejša izboljšava, kar jih je, in jo je treba narediti
+pred objavo, ne po njej.
+
+**SD kartica je večja težava od procesorja.** Baza bo čez leto ~8 GB, kar je
+več od 4 GB pomnilnika — od tam naprej gredo naključna branja na kartico, ki
+je 10–40× počasnejša od NVMe, in zgornji faktor 10 se slabša. Poleg tega se v
+`obs` piše ~1,5 M vrstic na dan; ceneno kartico to pobije. **Zaganjaj z USB
+SSD, ne s kartice** — ~25 € in odpade največje tveganje.
+
 ## Varnostni recept za javni stroj
 
 Velja za Hetzner enako kot za Oracle.
