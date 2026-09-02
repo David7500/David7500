@@ -1,11 +1,11 @@
 [Unit]
-Description=sztrack — varnostna kopija baze
+Description=kajros — varnostna kopija baze
 
 [Service]
 Type=oneshot
-User=sztrack
-Group=sztrack
-Environment=DATA=/var/lib/sztrack
+User=kajros
+Group=kajros
+Environment=DATA=/var/lib/kajros
 Environment=KEEP=3
 # Koliko prostora mora ostati, da se kopija sploh splaca. Pod tem raje ne
 # naredimo nicesar in to povemo -- polna kartica ustavi tudi ZAJEM, kopija pa
@@ -17,7 +17,7 @@ ExecStart=/bin/sh -c '\
     echo "premalo prostora ($free_mb MB) -- kopija preskocena"; exit 0; \
   fi; \
   tmp="$DATA/backup/.tekoca.sqlite"; \
-  sqlite3 "$DATA/sz.sqlite" ".backup $tmp" && \
+  sqlite3 "$DATA/kajros.sqlite" ".backup $tmp" && \
   gzip -1 -c "$tmp" > "$DATA/backup/sz-$(date +%%Y%%m%%d).sqlite.gz" && \
   rm -f "$tmp"'
 # Kopije so gzipane (~3x manjse) in hranimo jih tri, ne stirinajst. Z vsemi

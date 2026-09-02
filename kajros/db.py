@@ -304,12 +304,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
         fill_trip_window(conn)
         have.add("start_s")
     # Veriga vozila. Tega izracunati ne moremo -- je v GTFS zipu -- zato ostane
-    # prazen do naslednjega `sztrack update`, prikaz pa ga zna pogresati.
+    # prazen do naslednjega `kajros update`, prikaz pa ga zna pogresati.
     if have and "block_id" not in have:
         conn.execute("ALTER TABLE trip ADD COLUMN block_id TEXT")
         conn.commit()
     # Trasa voznje. Kot `block_id`: v GTFS zipu je, izracunati je ni mogoce,
-    # zato ostane prazna do naslednjega `sztrack update`. Prikaz jo zna
+    # zato ostane prazna do naslednjega `kajros update`. Prikaz jo zna
     # pogresati -- brez trase se zemljevid ne pokvari, samo manj pove.
     if have and "shape_id" not in have:
         conn.execute("ALTER TABLE trip ADD COLUMN shape_id TEXT")

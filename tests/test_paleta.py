@@ -10,8 +10,8 @@ import re
 from pathlib import Path
 
 KOREN = Path(__file__).resolve().parent.parent
-CSS = (KOREN / "sztrack/static/base.css").read_text()
-JS = (KOREN / "sztrack/static/common.js").read_text()
+CSS = (KOREN / "kajros/static/base.css").read_text()
+JS = (KOREN / "kajros/static/common.js").read_text()
 SKRIPTA = (KOREN / "scripts/preveri_paleto.py").read_text()
 
 
@@ -59,7 +59,7 @@ def test_rezervirana_barva_ni_v_lestvici():
 
 def test_okno_voznje_uporablja_rezervirano_barvo_za_oceno():
     """Ocena lege ni meritev in mora biti v rezervirani barvi, ne v zeleni."""
-    train = (KOREN / "sztrack/static/train.js").read_text()
+    train = (KOREN / "kajros/static/train.js").read_text()
     m = re.search(r'const ESTIMATE_COLOR = "(#[0-9a-fA-F]{6})"', train)
     assert m, "train.js nima ESTIMATE_COLOR"
     assert m.group(1).lower() == _css("d-none")

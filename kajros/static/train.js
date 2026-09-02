@@ -1245,7 +1245,7 @@ async function drawRunMap(v) {
       L.circleMarker([yours.lat, yours.lon], {
         radius: 6, color: "#0f1115", fillColor: "#f0934f", fillOpacity: 1, weight: 2,
       }).addTo(runMap.map).bindTooltip(yours.name, {
-        className: "sztrack-tooltip", permanent: true, direction: "right", offset: [8, 0],
+        className: "kajros-tooltip", permanent: true, direction: "right", offset: [8, 0],
       });
     }
   }

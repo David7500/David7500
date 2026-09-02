@@ -321,7 +321,7 @@ function renderTrains(trains) {
       // interactive: true doda oznaki razred leaflet-interactive in jo
       // registrira kot cilj -- brez tega klik na oznako ne sproži ničesar.
       marker.bindTooltip(groupLabelHtml(g), {
-        className: "sztrack-tooltip sztrack-label", permanent: true,
+        className: "kajros-tooltip kajros-label", permanent: true,
         direction: "right", offset: [8, 0], interactive: true,
       });
       marker.bindPopup(groupPopupHtml(g), { maxWidth: 280 });
@@ -423,7 +423,7 @@ function renderBuses(list) {
       // vprasanje "kaj pa je to"; kartica odgovori na mestu in ponudi stran.
       m.bindPopup(busCardHtml(v), { maxWidth: 280 });
       m.bindTooltip(busTooltipHtml(v), {
-        className: "sztrack-tooltip", direction: "top", offset: [0, -10],
+        className: "kajros-tooltip", direction: "top", offset: [0, -10],
       });
       m.addTo(busLayer);
       busMarkers.set(key, m);
@@ -637,7 +637,7 @@ const LAYERS = [
 
 function layerPref(key, def) {
   try {
-    const v = localStorage.getItem(`sztrack:map-${key}`);
+    const v = localStorage.getItem(`kajros:map-${key}`);
     return v === null ? def : v === "1";
   } catch (err) {
     return def;
@@ -651,7 +651,7 @@ function setLayer(spec, on) {
   const box = document.getElementById(spec.id);
   if (box) box.checked = on;
   try {
-    localStorage.setItem(`sztrack:map-${spec.key}`, on ? "1" : "0");
+    localStorage.setItem(`kajros:map-${spec.key}`, on ? "1" : "0");
   } catch (err) {
     /* zaseben zavihek ni razlog, da stran ne dela */
   }
@@ -666,7 +666,7 @@ function setQuiet(on) {
   const box = document.getElementById("lay-quiet");
   if (box) box.checked = on;
   try {
-    localStorage.setItem("sztrack:map-quiet", on ? "1" : "0");
+    localStorage.setItem("kajros:map-quiet", on ? "1" : "0");
   } catch (err) {
     /* zaseben zavihek */
   }

@@ -1,5 +1,5 @@
 [Unit]
-Description=sztrack — dnevna varnostna kopija
+Description=kajros — dnevna varnostna kopija
 
 [Timer]
 OnCalendar=*-*-* 03:30:00

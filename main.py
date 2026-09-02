@@ -11,7 +11,7 @@ import os
 
 # Pella in podobni naložijo ASGI objekt po imenu `main:app`, zato mora biti
 # dosegljiv na ravni modula -- ne samo pod __main__.
-from sztrack.api import app
+from kajros.api import app
 
 __all__ = ["app"]
 

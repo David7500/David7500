@@ -34,7 +34,7 @@ def bootstrap() -> None:
     nikoli ne povozimo, sicer bi vsaka nova objava izbrisala zajeto zgodovino.
     """
     target = Path(config.DB_PATH)
-    seed = Path(__file__).resolve().parent.parent / "seed" / "sz.sqlite"
+    seed = Path(__file__).resolve().parent.parent / "seed" / "kajros.sqlite"
     if not target.exists() and seed.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(seed, target)
@@ -62,14 +62,14 @@ def refresh_timetable(conn, mode: str) -> None:
     v istem procesu vrh 89 MB (in ostane pri 85 MB, ker Python arene vrne
     operacijskemu sistemu redko), v podprocesu 54 MB poleg 57 MB starša.
     Na stroju s 100 MB torej nobena od obeh ni varna -- zato je privzeto `off`
-    in vozni red osvežiš z novo priloženo bazo ali z `sztrack update` drugje.
+    in vozni red osvežiš z novo priloženo bazo ali z `kajros update` drugje.
     """
     if mode == "off":
         return
     if mode == "subprocess":
         # Lasten naslovni prostor: ob koncu se ves pomnilnik vrne sistemu.
         proc = subprocess.run(
-            [sys.executable, "-m", "sztrack.cli", "update"],
+            [sys.executable, "-m", "kajros.cli", "update"],
             capture_output=True, text=True, timeout=1800,
         )
         _log(f"osvežitev (podproces): {proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]}")
@@ -97,11 +97,11 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Sencno merjenje napovedi. Samo bere `run` in `sched` in pise v svojo
     # tabelo -- na zajem ne vpliva, zato tece v isti niti in ne v svoji.
     ocena.init(conn)
-    meri_napovedi = os.environ.get("SZ_OCENA", "1") != "0"
+    meri_napovedi = config.okolje("OCENA", "1") != "0"
     # Lega vozil je smiselna samo, ce so v bazi avtobusi: feed nosi izkljucno
     # njih. Pri zeleznici bi bila to zahteva vsakih 30 s za prazen odgovor.
     has_bus = conn.execute("SELECT 1 FROM trip WHERE mode = 'bus' LIMIT 1").fetchone()
-    track_vehicles = bool(has_bus) and os.environ.get("SZ_POSITIONS", "1") != "0"
+    track_vehicles = bool(has_bus) and config.okolje("POSITIONS", "1") != "0"
     next_refresh = None
     if refresh_mode != "off" and refresh_hour >= 0:
         next_refresh = _next_at(refresh_hour, 20)
@@ -192,7 +192,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
 
         # Nocno vzdrzevanje: obrez dnevnika in razrezi statistike. Prej je bilo
-        # oboje priklopljeno na vremensko opravilo in z `SZ_WEATHER=0` ni teklo
+        # oboje priklopljeno na vremensko opravilo in z `KAJROS_WEATHER=0` ni teklo
         # nikoli -- zato ima zdaj svojo uro.
         if next_maint and datetime.now(TZ) >= next_maint:
             next_maint += timedelta(days=1)
@@ -241,21 +241,21 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
 
 
 def _settings() -> dict:
-    """Nastavitve zajema iz okolja. Skupne strezniku in `sztrack collect`."""
-    mode = os.environ.get("SZ_REFRESH", "off").lower()
-    weather_hour = int(os.environ.get("SZ_WEATHER_HOUR", "5"))
-    if os.environ.get("SZ_WEATHER", "1") == "0":
+    """Nastavitve zajema iz okolja. Skupne strezniku in `kajros collect`."""
+    mode = config.okolje("REFRESH", "off").lower()
+    weather_hour = int(config.okolje("WEATHER_HOUR", "5"))
+    if config.okolje("WEATHER", "1") == "0":
         weather_hour = -1
     return {
-        "interval": int(os.environ.get("SZ_POLL_SECONDS", config.POLL_SECONDS)),
-        "position_interval": int(os.environ.get("SZ_POSITION_SECONDS",
+        "interval": int(config.okolje("POLL_SECONDS", config.POLL_SECONDS)),
+        "position_interval": int(config.okolje("POSITION_SECONDS",
                                                 config.POSITION_SECONDS)),
-        "refresh_hour": int(os.environ.get("SZ_REFRESH_HOUR", "4")),
+        "refresh_hour": int(config.okolje("REFRESH_HOUR", "4")),
         "refresh_mode": mode,
         "weather_hour": weather_hour,
-        "alert_interval": int(os.environ.get("SZ_ALERT_SECONDS", "60")),
-        "maint_hour": int(os.environ.get("SZ_MAINT_HOUR", "3")),
-        "summaries": os.environ.get("SZ_SUMMARIES", "1") != "0",
+        "alert_interval": int(config.okolje("ALERT_SECONDS", "60")),
+        "maint_hour": int(config.okolje("MAINT_HOUR", "3")),
+        "summaries": config.okolje("SUMMARIES", "1") != "0",
     }
 
 
@@ -277,7 +277,7 @@ def _describe(s: dict) -> str:
 
 
 def run_collector() -> None:
-    """Zajem brez streznika, v ospredju. To poganja `sztrack collect`.
+    """Zajem brez streznika, v ospredju. To poganja `kajros collect`.
 
     Namenjeno stroju, ki samo polni bazo -- tipicno malini, ki je gor ves cas.
     Razlika proti strezniku ni le HTTP: odpadeta FastAPI in uvicorn (uvoz sam
@@ -299,16 +299,16 @@ def run_collector() -> None:
 async def lifespan(app):
     bootstrap()
     thread = None
-    if os.environ.get("SZ_COLLECTOR", "1") != "0":
+    if config.okolje("COLLECTOR", "1") != "0":
         settings = _settings()
         thread = threading.Thread(
             target=_worker, kwargs=settings,
-            daemon=True, name="sztrack-collector",
+            daemon=True, name="kajros-collector",
         )
         thread.start()
         _log(_describe(settings))
     else:
-        _log("zajem izklopljen (SZ_COLLECTOR=0)")
+        _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
     finally:

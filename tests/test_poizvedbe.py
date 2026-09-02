@@ -1,6 +1,6 @@
 """Testi poizvedb nad shemo, na majhni bazi v pomnilniku.
 
-Zakaj sintetična baza in ne `data/sz.sqlite`: pravila, ki jih tu preverjamo,
+Zakaj sintetična baza in ne `data/kajros.sqlite`: pravila, ki jih tu preverjamo,
 so robna. V pravih podatkih se pojavijo redko in nepredvidljivo, tako da bi
 test enkrat lovil, drugič ne. Tu je vsak primer postavljen namenoma.
 
@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from sztrack import db, journey, ocena, stats
+from kajros import db, journey, ocena, stats
 
 
 def _pred(dni: int) -> str:
@@ -501,7 +501,7 @@ def test_nocna_voznja_ostane_na_seznamu_tudi_ob_veliki_zamudi(conn):
     to je primer, ki potnika najbolj zanima (EC 79 je imel 161 minut zamude
     in je pripeljal ob 00:29). Zato pogoj računa z dopustno zamudo.
     """
-    from sztrack import api
+    from kajros import api
 
     c = conn
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
@@ -659,7 +659,7 @@ def test_voznja_z_nemogoco_zamudo_ni_ziva(conn):
     to je feedova zamenjava prometnega dne, ne avtobus, ki bi se opoldne še
     vozil. Prej je tak zapis pristal na zemljevidu kot vozilo na progi.
     """
-    from sztrack import api
+    from kajros import api
 
     c = conn
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
@@ -692,7 +692,7 @@ def test_tabla_ne_kaze_feedove_napovedi_kot_meritve(conn):
     za Litijo dve postaji naprej objavil 0, tabla pa je to pokazala kot
     zamudo. Potnik bi bral, da je vlak točen.
 
-    Merjeno (`sztrack backtest --operator`): prevoznikova napoved naprej ima
+    Merjeno (`kajros backtest --operator`): prevoznikova napoved naprej ima
     MAE 7,9 min, prenos trenutne zamude 1,3 min. Zato prenos in oznaka
     „ocena", feedova številka pa samo v naprednem pogledu.
     """

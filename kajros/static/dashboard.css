@@ -200,7 +200,7 @@ body {
 .leaflet-popup-close-button { color: #6b7480 !important; }
 
 
-.leaflet-tooltip.sztrack-tooltip {
+.leaflet-tooltip.kajros-tooltip {
   background: #1a1d23;
   border: 1px solid #2b303a;
   color: #e7eaf0;
@@ -208,9 +208,9 @@ body {
   border-radius: 5px;
   box-shadow: none;
 }
-.leaflet-tooltip.sztrack-tooltip::before { display: none; }
+.leaflet-tooltip.kajros-tooltip::before { display: none; }
 
-.leaflet-tooltip.sztrack-label {
+.leaflet-tooltip.kajros-label {
   padding: 2px 6px;
   white-space: nowrap;
   cursor: pointer;

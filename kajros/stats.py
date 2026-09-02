@@ -552,7 +552,7 @@ def last_measured(conn: sqlite3.Connection, service_date: str,
     """Zadnji postanek vsake vozjne, ki ga je vozilo res ze prevozilo.
 
     Meja med meritvijo in napovedjo. Vse, kar je za njo, je feedova vrednost
-    za se nedosezen postanek -- in ta je izmerjeno slaba (`sztrack backtest
+    za se nedosezen postanek -- in ta je izmerjeno slaba (`kajros backtest
     --operator`: MAE 7,9 min proti 1,3 min za prenos trenutne zamude).
     Prikaz je zato ne sme kazati kot meritev.
     """
@@ -948,7 +948,7 @@ def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
     Iskalnik zvez in odhodna tabla sta prej računala samo prenos zamude minus
     rezervo voznega reda. Okno vožnje pa isti postanek računa s `predict()`,
     torej z rezervo **in** historičnim ostankom -- in ta je izmerjeno boljši
-    (`sztrack backtest`: prenos 2,94 min MAE in 82,7 % v petih minutah,
+    (`kajros backtest`: prenos 2,94 min MAE in 82,7 % v petih minutah,
     rezerva + razred 1,92 min in 91,0 %).
 
     Posledica razhajanja je bila vidna: RG 318 je 1. 9. ob 06:46 v iskalniku
@@ -1231,7 +1231,7 @@ def summary_get(conn: sqlite3.Connection, kind: str, network: str, days: int = 9
 
 def refresh_summaries(conn: sqlite3.Connection, windows=SUMMARY_WINDOWS,
                       networks=SUMMARY_NETWORKS) -> list[dict]:
-    """Znova izracunaj vse razreze. To pozene dnevno opravilo in `sztrack summarize`."""
+    """Znova izracunaj vse razreze. To pozene dnevno opravilo in `kajros summarize`."""
     out = []
     with _SUMMARY_LOCK:
         for network in networks:

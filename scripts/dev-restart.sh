@@ -7,18 +7,18 @@
 # se ta aplikacija preizkusa -- z `127.0.0.1` je bila iz omrezja nedosegljiva
 # in to je bilo videti kot okvara. To NI isto kot odpiranje vrat na
 # usmerjevalniku: API nima avtentikacije in ga sme videti samo domace omrezje.
-# Za samo ta racunalnik: `SZ_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
+# Za samo ta racunalnik: `KAJROS_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
 set -u
 cd "$(dirname "$0")/.."
-LOG="${SZ_DEV_LOG:-/tmp/sztrack-dev.log}"
-HOST="${SZ_HOST:-0.0.0.0}"
-PORT="${SZ_PORT:-8001}"
-pkill -f "[u]vicorn sztrack.api.*--port $PORT" 2>/dev/null
+LOG="${KAJROS_DEV_LOG:-/tmp/kajros-dev.log}"
+HOST="${KAJROS_HOST:-0.0.0.0}"
+PORT="${KAJROS_PORT:-8001}"
+pkill -f "[u]vicorn kajros.api.*--port $PORT" 2>/dev/null
 for _ in $(seq 1 40); do
-  pgrep -f "[u]vicorn sztrack.api.*--port $PORT" >/dev/null || break
+  pgrep -f "[u]vicorn kajros.api.*--port $PORT" >/dev/null || break
   sleep 0.25
 done
-setsid nohup ./venv/bin/python -m uvicorn sztrack.api:app \
+setsid nohup ./venv/bin/python -m uvicorn kajros.api:app \
   --host "$HOST" --port "$PORT" > "$LOG" 2>&1 < /dev/null &
 disown
 for _ in $(seq 1 60); do

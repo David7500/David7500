@@ -1,4 +1,4 @@
-"""Ukazna vrstica: python -m sztrack.cli <ukaz>"""
+"""Ukazna vrstica: python -m kajros.cli <ukaz>"""
 from __future__ import annotations
 
 import os
@@ -176,15 +176,15 @@ def cmd_collect(args):
     """Zajem brez streznika. Za stroj, ki samo polni bazo."""
     from . import server           # uvozimo sele tu -- `server` potegne gtfs
     if args.no_alerts:
-        os.environ["SZ_ALERT_SECONDS"] = "0"
+        os.environ["KAJROS_ALERT_SECONDS"] = "0"
     if args.weather:
-        os.environ.setdefault("SZ_WEATHER", "1")
+        os.environ.setdefault("KAJROS_WEATHER", "1")
     else:
-        os.environ["SZ_WEATHER"] = "0"
-    os.environ.setdefault("SZ_SUMMARIES", "0")
-    os.environ.setdefault("SZ_POSITIONS", "0")
+        os.environ["KAJROS_WEATHER"] = "0"
+    os.environ.setdefault("KAJROS_SUMMARIES", "0")
+    os.environ.setdefault("KAJROS_POSITIONS", "0")
     if args.interval:
-        os.environ["SZ_POLL_SECONDS"] = str(args.interval)
+        os.environ["KAJROS_POLL_SECONDS"] = str(args.interval)
     server.run_collector()
 
 
@@ -251,7 +251,7 @@ def cmd_export(args):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="sztrack", description=__doc__)
+    p = argparse.ArgumentParser(prog="kajros", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("init", help="ustvari bazo").set_defaults(func=cmd_init)
@@ -276,7 +276,7 @@ def main(argv=None):
     a.set_defaults(func=cmd_stats)
 
     a = sub.add_parser("merge", help="prilij zajem iz druge baze (npr. s prejsnjega gostitelja)")
-    a.add_argument("source", help="pot do druge sz.sqlite")
+    a.add_argument("source", help="pot do druge kajros.sqlite")
     a.set_defaults(func=cmd_merge)
 
     a = sub.add_parser("weather", help="dopolni vreme za nazaj (Open-Meteo)")
@@ -326,7 +326,7 @@ def main(argv=None):
     a.set_defaults(func=cmd_summarize)
 
     a = sub.add_parser("seed", help="zgradi prilozeno bazo za namestitev (samo vozni red)")
-    a.add_argument("--out", default="seed/sz.sqlite")
+    a.add_argument("--out", default="seed/kajros.sqlite")
     a.set_defaults(func=cmd_seed)
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")

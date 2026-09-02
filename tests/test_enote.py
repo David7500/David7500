@@ -7,10 +7,10 @@ zajema, naj se preveri hitro. Poizvedbe nad shemo so v `test_poizvedbe.py`.
 """
 from __future__ import annotations
 
-from sztrack import weather
-from sztrack.alerts import parse_delay_text
-from sztrack.collector import _delay_of, is_zero_blip, worth_logging
-from sztrack.journey import _fold
+from kajros import weather
+from kajros.alerts import parse_delay_text
+from kajros.collector import _delay_of, is_zero_blip, worth_logging
+from kajros.journey import _fold
 
 
 # ---------------------------------------------------------------- prehodne nicle
@@ -220,14 +220,14 @@ def test_ura_za_prevozen_postanek_se_zavrne():
     vozni red`: naslednjih sedem klicev je vrednost rasla natanko za 60 s
     na 60 s do +842 (+14 min).
     """
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert undoes_passing(_row(58, 126), RED, DAN, 482, 482, _at(12, 23, 48))
 
 
 def test_ura_ostane_zavrnjena_ves_cas_rasti():
     # `prev` ostane zadnja SPREJETA vrednost, zato mora varovalka drzati
     # skozi vse zaporedje in ne le pri prvem skoku.
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     for minuta, vrednost in ((24, 542), (25, 602), (29, 842)):
         assert undoes_passing(_row(58, 126), RED, DAN, vrednost, vrednost,
                               _at(12, minuta, 48))
@@ -236,24 +236,24 @@ def test_ura_ostane_zavrnjena_ves_cas_rasti():
 def test_popravek_navzgor_ki_pusti_postanek_v_preteklosti_gre_skozi():
     # Feed sme povedati, da je bilo vozilo tam pozneje, kot smo mislili --
     # dokler trdi, da je bilo. To je meritev in je ne smemo zavreci.
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert not undoes_passing(_row(58, 126), RED, DAN, 200, 200, _at(12, 23, 48))
 
 
 def test_rast_za_se_nedosezen_postanek_je_zakonita():
     # Vozilo, ki stoji, bo na naslednji postaji res vedno bolj pozno.
     # Zamuda, ki raste s hitrostjo ure, je tam pravilna napoved.
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert not undoes_passing(_row(30, 60), RED, DAN, 300, 300, _at(12, 17, 30))
 
 
 def test_padec_ni_nikoli_tekoca_ura():
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert not undoes_passing(_row(400, 482), RED, DAN, 126, 126, _at(12, 30, 29))
 
 
 def test_brez_prejsnje_vrednosti_ali_voznega_reda_varovalka_miruje():
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert not undoes_passing(None, RED, DAN, 482, 482, _at(12, 23, 48))
     assert not undoes_passing(_row(58, 126), None, DAN, 482, 482, _at(12, 23, 48))
     assert not undoes_passing(_row(58, 126), (None, None), DAN, 482, 482, _at(12, 23, 48))
@@ -261,7 +261,7 @@ def test_brez_prejsnje_vrednosti_ali_voznega_reda_varovalka_miruje():
 
 def test_napacen_obratovalni_dan_naredi_varovalko_nemocno_ne_napacno():
     """Oba casa se premakneta skupaj, zato zgresi -- nikoli ne zavrne po krivem."""
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert not undoes_passing(_row(58, 126), RED, "2026-08-29", 482, 482, _at(12, 23, 48))
     assert not undoes_passing(_row(58, 126), RED, "2026-08-31", 482, 482, _at(12, 23, 48))
 
@@ -273,7 +273,7 @@ def test_enaka_prihodna_in_odhodna_vrednost_ni_dokaz_o_prevozu():
     ne meritev -- in ob 01:57 pravih +114 min. Ker je bila zapisana vrednost
     nicla za oba dogodka, ni bila dokaz, da je vlak tam ze bil.
     """
-    from sztrack.collector import undoes_passing
+    from kajros.collector import undoes_passing
     assert not undoes_passing(_row(0, 0), RED, DAN, 6840, 6840, _at(13, 57, 41))
     # Enaki, a nenicelni vrednosti prav tako ne stejeta: feed ju za nedosezen
     # postanek objavi enaki, ker je to ista prenesena stevilka.
@@ -299,7 +299,7 @@ def test_nicla_ki_popravlja_napoved_ni_blip():
     na +14 za vedno -- feed je niclo povedal enkrat samkrat, drsece okno pa
     je slo naprej in potrditve ni bilo nikoli.
     """
-    from sztrack.collector import is_zero_blip
+    from kajros.collector import is_zero_blip
     red = (42060, 42060)                       # 11:41
     prej = _row_ts(835, 835, _at(11, 33, 55))  # objavljeno, ko je 11:54 se v prihodnosti
     assert not is_zero_blip(prej, None, 0, 0, red, "2026-08-30")
@@ -309,7 +309,7 @@ def test_nicla_po_izmerjeni_zamudi_ostane_blip():
     # Varovalka mora se naprej loviti tisto, zaradi cesar je nastala: niclo,
     # ki pride za ZE IZMERJENO veliko zamudo. Tu je vrednost nastala, ko je
     # bil postanek ze prevozen, zato je meritev in nicla je sumljiva.
-    from sztrack.collector import is_zero_blip
+    from kajros.collector import is_zero_blip
     red = (42060, 42060)
     prej = _row_ts(835, 835, _at(11, 58, 0))   # 11:41 + 14 min = 11:55, ze mimo
     assert is_zero_blip(prej, None, 0, 0, red, "2026-08-30")

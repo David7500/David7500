@@ -15,7 +15,7 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, ".")
-from sztrack import db, stats                                    # noqa: E402
+from kajros import db, stats                                    # noqa: E402
 
 RAZLICICE = [tuple(float(x) for x in a.split(":")) for a in sys.argv[1:]] \
     or [(0, 0), (300, 0), (600, 0), (600, 1), (900, 1), (1200, 1)]

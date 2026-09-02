@@ -637,7 +637,7 @@ def prune_obs(conn: sqlite3.Connection, rail_days: int = OBS_KEEP_DAYS,
     """Pobriše stare vrstice dnevnika `obs`. `run` pusti pri miru.
 
     Idempotentno. Brisanje je nepovratno, zato meji nista skriti v kodi,
-    ampak sta argumenta in ju `sztrack prune` izpiše, preden briše.
+    ampak sta argumenta in ju `kajros prune` izpiše, preden briše.
     """
     today = datetime.now(TZ).date()
     rail_before = (today - timedelta(days=rail_days)).isoformat()

@@ -437,7 +437,7 @@ function renderConnections(data) {
       Na ta dan ni vožnje od postaje <strong>${escapeHtml(data.from)}</strong>
       do postaje <strong>${escapeHtml(data.to)}</strong> — ne neposredne
       ne z enim prestopom.<br>
-      sztrack išče največ en prestop; z dvema morda gre. Preveri tudi drug dan —
+      kajros išče največ en prestop; z dvema morda gre. Preveri tudi drug dan —
       ${IS_BUS ? "ob koncu tedna vozi manj avtobusov" : "ob koncu tedna vozi bistveno manj vlakov"}.
     </div>`;
     renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
@@ -703,9 +703,9 @@ async function showOverview() {
 // Oba sta pod iskalnikom in ne v pregledu: pregled prva poizvedba pobrise
 // prav takrat, ko bi seznam rabil za naslednjo.
 
-const FAV_KEY = "sztrack:fav";
+const FAV_KEY = "kajros:fav";
 const FAV_MAX = 8;
-const RECENT_KEY = "sztrack:recent";
+const RECENT_KEY = "kajros:recent";
 const RECENT_MAX = 6;
 
 function favLoad() {
@@ -952,7 +952,7 @@ async function searchBoard(push) {
   }
 }
 
-// Doslej je bila zapomnjena poizvedba svoj zapis (`sztrack:last`) in ta NI
+// Doslej je bila zapomnjena poizvedba svoj zapis (`kajros:last`) in ta NI
 // bil locen po omrezju: kdor je na /app iskal Celje–Ljubljana in nato odprl
 // /app/bus, je tam dobil isto vprasanje, resemo na avtobusnem omrezju
 // ("Ljubljana AP") in prazen odgovor. Zdaj je zadnja poizvedba preprosto

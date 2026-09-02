@@ -624,7 +624,7 @@ def model_vlak_dan(train_tasks):
     90,2 % -> 89,1 %. Povprečna sprememba zamude se čez zajete dni giblje med
     115 in 142 s, torej pod pol minute -- premalo, da bi popravek česa rešil,
     dovolj, da doda šum. Zamisel je pustena tu z ukazom
-    `sztrack backtest --day-offset`, da je ni treba znova preizkušati.
+    `kajros backtest --day-offset`, da je ni treba znova preizkušati.
     """
     per_train = defaultdict(list)
     for t in train_tasks:

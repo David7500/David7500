@@ -193,7 +193,7 @@ function pollWhileVisible(fn, ms) {
 // deliti s povezavo, kar je pri strani s stevilkami prva stvar, ki jo kdo
 // hoce narediti.
 
-const MODE_KEY = "sztrack:mode";
+const MODE_KEY = "kajros:mode";
 
 function applyMode(mode, onChange) {
   document.body.classList.toggle("is-advanced", mode === "advanced");
@@ -677,7 +677,7 @@ const NAME_MS = 5000;
 
 function bindFlashName(marker, name) {
   marker.bindTooltip(name, {
-    className: "sztrack-tooltip", direction: "top", offset: [0, -4],
+    className: "kajros-tooltip", direction: "top", offset: [0, -4],
   });
   marker.on("click", (e) => {
     // Brez tega dotik na postajo velja tudi za dotik na zemljevid in ta

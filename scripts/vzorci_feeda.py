@@ -30,7 +30,7 @@ from google.transit import gtfs_realtime_pb2
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from sztrack import config  # noqa: E402
+from kajros import config  # noqa: E402
 
 AGENCY_NAMES = {
     "1123": "Arriva", "1121": "AP Murska Sobota", "1118": "LPP",

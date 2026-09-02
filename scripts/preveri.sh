@@ -8,7 +8,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-PORT="${SZ_PORT:-8001}"
+PORT="${KAJROS_PORT:-8001}"
 BASE="http://127.0.0.1:$PORT"
 STRANI=(/ /app/train /app/bus /app/map /app/ovire)
 NAPAKE=0

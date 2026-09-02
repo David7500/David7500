@@ -47,7 +47,7 @@ async function load() {
 
 // ---------- shranjene in nedavne poti ----------
 //
-// Iskalnik ju hrani po omrezju (`sztrack:fav`, `sztrack:recent`), domaca stran
+// Iskalnik ju hrani po omrezju (`kajros:fav`, `kajros:recent`), domaca stran
 // pa je edino mesto pred izbiro omrezja -- zato ju bere obe hkrati in vsaka
 // znacka nosi svoje omrezje s sabo. Priljubljene gredo pred nedavne: prve je
 // clovek povedal sam, druge se je napisalo samo.
@@ -87,8 +87,8 @@ function kljucPoti(f) {
 function izrisiPoti() {
   const seen = new Set();
   const poti = [];
-  for (const [vir, list] of [["fav", beri("sztrack:fav")],
-                             ["recent", beri("sztrack:recent")]]) {
+  for (const [vir, list] of [["fav", beri("kajros:fav")],
+                             ["recent", beri("kajros:recent")]]) {
     for (const f of list) {
       const k = kljucPoti(f);
       if (seen.has(k)) continue;         // priljubljena ne sme se enkrat kot nedavna

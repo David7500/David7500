@@ -10,15 +10,15 @@
 # zavržejo. Skripto je varno pognati večkrat na dan.
 set -euo pipefail
 
-PI="${SZ_PI:-david@192.168.1.166}"
-ODDALJENA="${SZ_PI_DB:-/var/lib/sztrack/sz.sqlite}"
-KAM="${SZ_TMP:-/tmp/sztrack-malina.sqlite}"
+PI="${KAJROS_PI:-david@192.168.1.166}"
+ODDALJENA="${KAJROS_PI_DB:-}"
+KAM="${KAJROS_TMP:-/tmp/kajros-malina.sqlite}"
 cd "$(dirname "$0")/.."
 PY=./venv/bin/python
 
 stanje() {   # meritve, dnevnik, dnevi -- da se vidi, kaj je prilitje dodalo
   $PY - <<'PYEOF'
-from sztrack import db
+from kajros import db
 c = db.connect()
 q = lambda s: c.execute(s).fetchone()[0]
 print(q("SELECT COUNT(*) FROM run"), q("SELECT COUNT(*) FROM obs"),
@@ -32,6 +32,20 @@ if ! timeout 10 ssh -o BatchMode=yes -o ConnectTimeout=5 "$PI" true 2>/dev/null;
   exit 1
 fi
 
+# Malina do prve ponovne namestitve tece STARO kodo pod starim imenom, zato
+# poti ne ugibamo, ampak jo poiscemo. Vrstni red je od najnovejse nazaj; brez
+# tega bi vleka baze med preimenovanjem in deployem tiho crknila.
+if [ -z "$ODDALJENA" ]; then
+  ODDALJENA=$(timeout 20 ssh -o BatchMode=yes "$PI" \
+    'for p in /var/lib/kajros/kajros.sqlite /var/lib/kajros/sz.sqlite \
+              /var/lib/sztrack/sz.sqlite; do [ -f "$p" ] && echo "$p" && break; done')
+  if [ -z "$ODDALJENA" ]; then
+    echo "  baze na malini ni najti (poskusil /var/lib/{kajros,sztrack})" >&2
+    exit 1
+  fi
+  echo "  baza na malini: $ODDALJENA"
+fi
+
 # Dosledna kopija, ne golo kopiranje datoteke: baza je v načinu WAL in
 # `sz.sqlite` sam po sebi ne vsebuje zadnjih zapisov. `backup()` jih zajame,
 # bere pa samo -- zajema na malini ne prekine in ne zaklene.
@@ -39,14 +53,14 @@ echo "  delam dosledno kopijo …"
 timeout 300 ssh -o BatchMode=yes "$PI" "python3 - <<'PYEOF'
 import sqlite3, os
 src = sqlite3.connect('file:${ODDALJENA}?mode=ro', uri=True)
-dst = sqlite3.connect('/tmp/sztrack-prenos.sqlite')
+dst = sqlite3.connect('/tmp/kajros-prenos.sqlite')
 src.backup(dst); dst.close(); src.close()
-print('  ', round(os.path.getsize('/tmp/sztrack-prenos.sqlite') / 1e6), 'MB')
+print('  ', round(os.path.getsize('/tmp/kajros-prenos.sqlite') / 1e6), 'MB')
 PYEOF"
 
 echo "  prenašam …"
-timeout 900 scp -q -o BatchMode=yes "$PI:/tmp/sztrack-prenos.sqlite" "$KAM"
-timeout 30 ssh -o BatchMode=yes "$PI" "rm -f /tmp/sztrack-prenos.sqlite"
+timeout 900 scp -q -o BatchMode=yes "$PI:/tmp/kajros-prenos.sqlite" "$KAM"
+timeout 30 ssh -o BatchMode=yes "$PI" "rm -f /tmp/kajros-prenos.sqlite"
 
 # Pokvarjena kopija bi prilila smeti. Preverimo, preden se je dotaknemo baze.
 $PY - "$KAM" <<'PYEOF'
@@ -59,13 +73,13 @@ PYEOF
 
 echo "== prilivam =="
 read -r PRE_RUN PRE_OBS PRE_DNI <<<"$(stanje)"
-$PY -m sztrack.cli merge "$KAM"
+$PY -m kajros.cli merge "$KAM"
 
 # Malina teče starejšo kodo, zato prilite meritve niso šle skozi novejše
 # varovalke (`undoes_passing`, `is_forecast`). `repair` popravi samo postanke,
 # na katerih se varovalka sproži -- ne prepisuje celega dnevnika.
 echo "== popravljam =="
-$PY -m sztrack.cli repair
+$PY -m kajros.cli repair
 
 read -r PO_RUN PO_OBS PO_DNI <<<"$(stanje)"
 echo

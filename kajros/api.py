@@ -1,7 +1,7 @@
 """JSON API. Prikaz je namerno ločen -- karkoli si izbereš za frontend
 (MapLibre, Streamlit, mobilna aplikacija) govori s temi endpointi.
 
-    uvicorn sztrack.api:app --reload
+    uvicorn kajros.api:app --reload
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from . import alerts, collector, config, db, journey, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
-app = FastAPI(title="sztrack", version="0.1.0",
+app = FastAPI(title="kajros", version="0.1.0",
               description="Vozni redi, zamude in statistika Slovenskih železnic",
               lifespan=lifespan)
 # `expose_headers`: brez tega JS lastnih glav ne vidi. Nasa stran je z istega
@@ -46,7 +46,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 NETWORK_Q = Query("zeleznica", pattern="^(zeleznica|avtobus)$",
                   description="zeleznica (vlaki + nadomestni prevozi) ali avtobus")
 
-# Poti relativno na paket, da delajo enako v dev checkoutu in na /opt/sztrack.
+# Poti relativno na paket, da delajo enako v dev checkoutu in na /opt/kajros.
 _PKG_DIR = Path(__file__).parent
 class _RevalidatingStatic(StaticFiles):
     """Statične datoteke z obvezno revalidacijo.
@@ -100,7 +100,7 @@ def index(request: Request):
     if "text/html" in request.headers.get("accept", ""):
         return templates.TemplateResponse(request, "home.html", {})
     return JSONResponse({
-        "service": "sztrack",
+        "service": "kajros",
         "version": app.version,
         "docs": "/docs",
         "app": "/app",
@@ -140,7 +140,7 @@ def bus_page(request: Request):
     return templates.TemplateResponse(request, "connections.html", {
         "here": "avtobusi", "network": "avtobus",
         "section": "Avtobusi",
-        "page_title": "sztrack — kdaj mi pelje avtobus",
+        "page_title": "kajros — kdaj mi pelje avtobus",
         "page_desc": "Odhodi in zamude slovenskih avtobusov iz odprtih podatkov.",
         "from_ph": "izhodiščno postajališče",
         "to_ph": "ciljno postajališče",
@@ -687,7 +687,7 @@ def api_vehicle_chain(train_no: str, date: str | None = None,
 # Stran `/app/statistika` je odstranjena, ker jo bomo preuredili -- ta dva
 # endpointa in dnevni povzetek za njima pa ostaneta. To NI spregledan mrtev
 # kod: razrez je izmerjen, pokrit s testi in se enkrat na dan ze racuna
-# (`SZ_MAINT_HOUR`); brisati ga zato, da bi ga cez teden dni pisali znova,
+# (`KAJROS_MAINT_HOUR`); brisati ga zato, da bi ga cez teden dni pisali znova,
 # bi bilo drazje od tega komentarja. Kdor ju cez cas najde brez odjemalca in
 # nove strani ni, naj ju odstrani.
 @app.get("/api/stats/breakdowns")
