@@ -13,10 +13,26 @@ async function load() {
     const nb = b.live_vehicles || 0;
     document.getElementById("n-train").textContent = nt;
     document.getElementById("n-bus").textContent = nb;
-    document.getElementById("home-live").innerHTML =
-      `<span class="live-dot"></span>`
-      + `zdaj na poti <strong>${nt}</strong> ${nt === 1 ? "vlak" : "vlakov"}`
-      + ` in <strong>${nb}</strong> ${nb === 1 ? "avtobus" : "avtobusov"}`;
+    // Stevili "na poti" sta ze na karticah, 60 px nizje. Ista dva podatka
+    // dvakrat sta zapravljena vrstica -- tu zato pove, kako danes vozijo,
+    // kar je vprasanje, zaradi katerega je clovek prisel.
+    // Zjutraj je danasnji vzorec droben (ob 6:50 nekaj koncanih voznj) in
+    // "0 min" iz treh vozenj ni slika dneva. Streznik zato posilja `yesterday`
+    // natanko takrat, kadar je danasnjih premalo -- in beseda nad stevilko
+    // mora povedati, kateri dan to je.
+    const dan = (x) => (x && x.yesterday && x.yesterday.runs ? x.yesterday : x.today);
+    const del = (x) => {
+      const d = dan(x);
+      return d && d.runs ? `${delayLabel(d.median_s)} min` : null;
+    };
+    const dv = del(o), da = del(b);
+    const vceraj = !!(o.yesterday && o.yesterday.runs) || !!(b.yesterday && b.yesterday.runs);
+    document.getElementById("home-live").innerHTML = dv || da
+      ? `<span class="live-dot"></span>${vceraj ? "včeraj" : "danes"} običajno:`
+        + (dv ? ` vlaki <strong>${dv}</strong>` : "")
+        + (dv && da ? " ·" : "")
+        + (da ? ` avtobusi <strong>${da}</strong>` : "")
+      : `<span class="live-dot"></span>zajem teče`;
   } catch (err) {
     document.getElementById("home-live").textContent = "podatki trenutno niso dosegljivi";
   }

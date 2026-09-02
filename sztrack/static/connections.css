@@ -43,13 +43,33 @@
 
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
 .field-date { flex: 0 0 150px; }
-.field-kind { flex: 0 0 120px; }
+.field-kind { flex: 0 0 168px; }
 .field-time { flex: 0 0 118px; }
 
-.field label {
+.field label, .field-label {
   font: 600 10px/1 var(--sans); color: var(--ink-mute);
   letter-spacing: 0.08em; text-transform: uppercase;
 }
+
+/* Preklop v obrazcu: enaka visina kot polje ob njem, sicer vrstica poskoci. */
+.seg {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  padding: 2px;
+}
+.seg button {
+  flex: 1 1 0;
+  border: none; background: none; cursor: pointer;
+  color: var(--ink-mute);
+  font: 500 13px/1 var(--sans);
+  padding: 8px 4px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--line-firm); color: var(--ink); }
 
 .field input, .field select {
   background: var(--bg);
@@ -366,6 +386,9 @@
 .ov-link:hover { background: rgba(217, 179, 60, 0.12); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+/* Pogoste relacije stojijo tik pod obrazcem: so vhodni pripomocek in ne
+   zanimivost, na telefonu pa je vsak odstavek nad njimi ovira. */
+.chips-top { margin-bottom: 18px; }
 .route-chip {
   background: var(--bg-raised);
   border: 1px solid var(--line-firm);
@@ -514,3 +537,6 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
 }
 .fav-toggle:hover { color: var(--ink); border-color: #3d434f; }
 .fav-toggle[aria-pressed="true"] { color: var(--accent-lit); border-color: #e07b4555; }
+
+/* Prazno okno ponudi dejanje, ne nasveta. */
+.empty-act { margin-top: 12px; }

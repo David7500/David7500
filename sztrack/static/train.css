@@ -534,6 +534,11 @@
   body:not(.is-advanced) .col-run > #run-timeline {
     flex: 1 1 auto;
     min-width: 0;
+    /* Vrstica postaje ima ime levo in zamudo desno. Pri 750 px je med njima
+       pol metra praznine in oko mora potovati cez cel zaslon, da poveze
+       "Ljubljana Zalog" z "+37". Sirina vrstice je zato omejena; stolpec
+       ostane levo poravnan, ker je casovnica seznam, ne tabela. */
+    max-width: 520px;
   }
   /* Naslov razdelka je bil obroba celega stolpca; v dveh stolpcih bi crta
      tekla samo cez levega in bi izgledala kot napaka. */

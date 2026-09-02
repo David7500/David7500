@@ -192,7 +192,7 @@ function alertsHtml(list, note) {
   if (!list || !list.length) return "";
   const items = list.map((a) => `
     <div class="alert-item">
-      <strong>${escapeHtml(a.header || "")}</strong>
+      <strong>${escapeHtml(alertTitle(a.header))}</strong>
       <div class="alert-meta">
         ${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
         ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
@@ -513,6 +513,16 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
     </a>`;
 }
 
+// Preklop smeri drzi vrednost v skritem polju, da ostane `.value` isti kot
+// pri prejsnjem `<select>`.
+function setBoardKind(v) {
+  const el = $("board-kind");
+  if (el) el.value = v;
+  document.querySelectorAll("#board-kind-seg button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.kind === v));
+  });
+}
+
 function renderBoard(data) {
   const list = data.board || [];
   const isToday = data.date === todayIso();
@@ -522,16 +532,30 @@ function renderBoard(data) {
   resultHeadEl.innerHTML =
     `<span><strong>${escapeHtml(data.station)}</strong></span>
      <span>${data.kind}</span><span>${dayLabel(data.date)}</span>
-     <span>${list.length} ${data.kind}${data.window_min >= 1440
+     <span>${list.length} ${sklon(list.length, data.kind)}${data.window_min >= 1440
         ? " ta dan"
         : ` od ${String(Math.floor(data.from_s / 3600)).padStart(2, "0")}:${String(Math.floor(data.from_s % 3600 / 60)).padStart(2, "0")}, ${Math.round(data.window_min / 60)} h naprej`}</span>`;
 
   if (!list.length) {
+    // "Poskusi drugo uro" je nasvet, ne dejanje -- ponoci je odgovor vedno
+    // isti: jutri zjutraj. Gumb ga opravi.
+    const jutri = new Date(data.date + "T12:00:00");
+    jutri.setDate(jutri.getDate() + 1);
+    const jutriIso = jutri.toISOString().slice(0, 10);
     resultsEl.innerHTML = `<div class="empty-state">
       V tem oknu s postaje <strong>${escapeHtml(data.station)}</strong>
-      ni ${escapeHtml(data.kind)}.<br>
-      Poskusi drugo uro ali drug dan.
+      ni ${escapeHtml(sklon(0, data.kind))}.
+      <div class="empty-act">
+        <button type="button" class="btn btn-quiet" id="board-tomorrow"
+                data-date="${jutriIso}">pokaži ${dayLabel(jutriIso)} od 05:00</button>
+      </div>
     </div>`;
+    const gumb = $("board-tomorrow");
+    if (gumb) gumb.addEventListener("click", () => {
+      $("board-date").value = gumb.dataset.date;
+      $("board-time").value = "05:00";
+      searchBoard(true);
+    });
     alertsEl.innerHTML = "";
     return;
   }
@@ -579,6 +603,11 @@ function overviewHtml(o) {
 
   return `
     <section class="overview">
+      <div class="chips chips-top">
+        ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
+            data-from="${escapeHtml(a)}" data-to="${escapeHtml(b)}">${escapeHtml(a)} → ${escapeHtml(b)}</button>`).join("")}
+      </div>
+
       <div class="ov-head">
         <h2>Kako vozijo vlaki</h2>
         <span class="ov-sub">${o.live_trains} ${o.live_trains === 1 ? "vlak" : "vlakov"} zdaj na progi</span>
@@ -604,11 +633,6 @@ function overviewHtml(o) {
         ${o.disruptions} veljavnih obvestil o ovirah na progah
       </a>` : ""}
 
-      <div class="ov-head"><h2>Pogoste relacije</h2></div>
-      <div class="chips">
-        ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
-            data-from="${escapeHtml(a)}" data-to="${escapeHtml(b)}">${escapeHtml(a)} → ${escapeHtml(b)}</button>`).join("")}
-      </div>
     </section>`;
 }
 
@@ -623,27 +647,21 @@ function busOverviewHtml(o) {
         <span class="ov-sub">${o.live_vehicles} zdaj na poti</span>
       </div>
 
-      <div class="ov-card">
-        <div class="ov-card-head">
-          <span>Zdaj</span>
-          ${o.median_speed_kmh != null
-            ? `<strong>mediana hitrosti ${o.median_speed_kmh} km/h</strong>` : ""}
-        </div>
-        <div class="ov-card-foot">
-          ${o.with_gps} vozil z GPS lego, od tega ${o.moving} v vožnji.
-          Avtobusi imajo pravo lego, vlaki je nimajo — na zemljevidu so puščica,
-          ne krog na postaji.
-          ${o.today && o.today.runs
-            ? ` · danes ${o.today.runs} zajetih voženj` : ""}
-        </div>
-      </div>
-
-      <div class="ov-card">
-        <div class="ov-card-foot">
-          Zajem avtobusov je nov, zato „običajne“ zamude za primerjavo še ni.
-          Nabira se od danes naprej.
-        </div>
-      </div>
+      ${o.today && o.today.runs ? `
+        <div class="ov-card">
+          <div class="ov-card-head">
+            <span>Končna zamuda, danes</span>
+            <strong style="color:${delayColor(o.today.median_s)}">mediana ${delayLabel(o.today.median_s)} min</strong>
+          </div>
+          ${bucketBarHtml(o.today.buckets, o.today.runs)}
+          <div class="ov-card-foot">
+            ${o.today.runs} zajetih voženj · točnih ${Math.round(o.today.on_time_share * 100)} %
+            ${o.with_gps ? `· ${o.with_gps} vozil oddaja svojo lego` : ""}
+          </div>
+        </div>` : `
+        <div class="ov-card">
+          <div class="ov-card-foot">Danes še ni dovolj zajetih voženj za sliko dneva.</div>
+        </div>`}
     </section>`;
 }
 
@@ -832,7 +850,7 @@ function openFav(key) {
   if (f.kind === "board") {
     setTab("board");
     $("station").value = f.station;
-    $("board-kind").value = f.dir || "odhodi";
+    setBoardKind(f.dir || "odhodi");
     paintAllClears();
     searchBoard(true);
   } else {
@@ -1053,6 +1071,18 @@ $("swap").addEventListener("click", () => {
   if (a.value && b.value) searchAB(true);
 });
 
+// Preklop smeri: kadar je tabla ze na zaslonu, jo takoj osvezi -- gumb, ki
+// vidno stanje pusti pri miru, je videti kot okvara. Dokler ni izida, samo
+// zapise izbiro (isto pravilo kot pri predlogah postaj: isce samo gumb).
+document.querySelectorAll("#board-kind-seg button").forEach((b) => {
+  b.addEventListener("click", () => {
+    setBoardKind(b.dataset.kind);
+    if ($("station").value.trim() && resultsEl.querySelector(".board-row, .empty-state")) {
+      searchBoard(true);
+    }
+  });
+});
+
 // ---------- zagon ----------
 
 function restore() {
@@ -1066,7 +1096,7 @@ function restore() {
 
   $("date").value = q.get("date") || todayIso();
   $("board-date").value = q.get("date") || todayIso();
-  $("board-kind").value = q.get("kind") || (wasBoard && saved.dir) || "odhodi";
+  setBoardKind(q.get("kind") || (wasBoard && saved.dir) || "odhodi");
   $("board-time").value = q.get("from") || "";
   $("from").value = from;
   $("to").value = to;

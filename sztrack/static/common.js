@@ -64,6 +64,30 @@ function dayLabel(isoDate) {
   return isoDate ? DATE_FMT.format(new Date(isoDate + "T12:00:00")) : "—";
 }
 
+// Naslovi obvestil SŽ kricijo in ponavljajo znacko nad sabo: "DELA NA PROGI:
+// Obcasna zapora ..." stoji pod zetonom "dela na progi". Predpono odrezemo --
+// v sestih od sestnajstih obvestil je ista beseda dvakrat, v verzalkah.
+function alertTitle(header) {
+  const m = /^[A-ZČŠŽĆĐ][A-ZČŠŽĆĐ0-9 .\-]{2,40}:\s*/.exec(header || "");
+  const t = m ? header.slice(m[0].length) : (header || "");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+// Slovenscina ima dvojino in rodilnik mnozine, zato "0 odhodi" in "2 vlakov"
+// nista pravilna. Oblike so [1, 2, 3-4, 0 in 5+]; odloca n mod 100.
+const SKLONI = {
+  odhodi: ["odhod", "odhoda", "odhodi", "odhodov"],
+  prihodi: ["prihod", "prihoda", "prihodi", "prihodov"],
+  vlak: ["vlak", "vlaka", "vlaki", "vlakov"],
+  voznja: ["vožnja", "vožnji", "vožnje", "voženj"],
+};
+
+function sklon(n, kljuc) {
+  const o = SKLONI[kljuc] || SKLONI.vlak;
+  const m = Math.abs(n) % 100;
+  return m === 1 ? o[0] : m === 2 ? o[1] : (m === 3 || m === 4) ? o[2] : o[3];
+}
+
 // Isto sklanjanje kot `journey._fold` v Pythonu: brez tega se iskanje in
 // poudarek ne ujameta pri sumnikih ("sentjur" proti "Šentjur"). Bilo je
 // prepisano v dveh datotekah -- ista funkcija dvakrat je ista napaka dvakrat.
@@ -530,13 +554,20 @@ function forecastStopHtml(s, f, w) {
     : f.from_operator ? "prevoznik napoveduje več"
     : f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}`
     : "ocena · le prenos zamude";
+  // "ocena - mediana 11 vozenj" je stala v vsaki vrstici naprej po progi:
+  // sest enakih zetonov pod seboj, medtem ko locilna vrstica nad njimi ze
+  // pove "naprej po progi -- ocena, ne meritev". Stevilo vzorcev je podatek
+  // za radovednega, ne za potnika, zato v preprostem pogledu odpade.
+  // Ostanejo zetoni, ki povedo nekaj DRUGEGA: da napoveduje prevoznik, da
+  // ocene ni ali da za njo ni zgodovine.
+  const rutinska = !!f && !f.from_operator && f.n_samples > 0;
   const feedSaid = stopDelay(s);
   return `
     <div class="stop-row is-forecast">
       <div class="stop-rail"><span class="stop-dot is-hollow" style="border-color:${color}"></span><span class="stop-line is-dashed"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
-        <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag">${escapeHtml(tag)}</span></div>
+        <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span></div>
         ${dwellPlanHtml(s)}
         ${feedSaid != null && !(f && f.from_operator)
           ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`

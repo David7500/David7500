@@ -14,9 +14,9 @@
 
   <header class="topbar">
     <a class="brand" href="/">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f0934f" stroke-width="1.8" stroke-linecap="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
         <rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
-        <circle cx="9" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="#f0934f" stroke="none"></circle>
+        <circle cx="9" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle><circle cx="15" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle>
       </svg>
       <span class="brand-name">sztrack</span>
     </a>
@@ -86,12 +86,16 @@
         <label for="board-time">Od ure</label>
         <input id="board-time" name="from" type="time" placeholder="zdaj">
       </div>
+      {# Dve moznosti nista spustni seznam: ta se na telefonu odpre cez pol
+         zaslona in zahteva dva dotika za preklop, ki ga pove ena beseda.
+         Skrito polje ostane, da se `$("board-kind").value` bere kot prej. #}
       <div class="field field-kind">
-        <label for="board-kind">Smer</label>
-        <select id="board-kind" name="kind">
-          <option value="odhodi">odhodi</option>
-          <option value="prihodi">prihodi</option>
-        </select>
+        <span class="field-label">Smer</span>
+        <div class="seg" id="board-kind-seg" role="group" aria-label="Smer">
+          <button type="button" data-kind="odhodi" aria-pressed="true">odhodi</button>
+          <button type="button" data-kind="prihodi" aria-pressed="false">prihodi</button>
+        </div>
+        <input type="hidden" id="board-kind" name="kind" value="odhodi">
       </div>
       <button type="submit" class="btn go">Pokaži</button>
       <button type="button" id="near-me" class="btn btn-quiet near-me"

@@ -57,20 +57,29 @@
 /* Stevilo na poti je edini ziv podatek na tej strani -- zato v kot in ne
  * v vrsto s poimenovanjem, ki je stalno. */
 .pick-n {
-  position: absolute; top: 18px; right: 18px;
+  position: absolute; top: 16px; right: 18px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
   font: 600 15px/1 var(--mono);
 }
+/* Gola "15" v kotu je uganka; beseda pod njo stane eno vrstico. */
+.pick-n small { font: 400 9.5px/1 var(--sans); color: var(--ink-mute);
+                letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* ---------- ostalo ---------- */
 
-.home-more { margin-top: 26px; display: flex; flex-direction: column; gap: 1px; }
+/* Zemljevid in ovire sta bila gola crtkana seznama pod dvema karticama --
+   videti kot noga, ne kot pot naprej. Zdaj sta kartici, le tisji: hierarhija
+   pove, da sta drugotna, videz pa, da sta dotakljiva. */
+.home-more { margin-top: 26px; display: flex; flex-direction: column; gap: 8px; }
 .more-link {
   display: flex; flex-direction: column; gap: 3px;
-  padding: 13px 2px;
-  border-top: 1px solid var(--line-soft);
+  padding: 12px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
   text-decoration: none;
 }
-.more-link:last-child { border-bottom: 1px solid var(--line-soft); }
+.more-link:hover { border-color: var(--line-firm); }
 .more-link strong { font: 600 13.5px/1.3 var(--sans); color: var(--ink); }
 .more-link span { font: 400 11.5px/1.5 var(--sans); color: var(--ink-mute); }
 .more-link:hover strong { color: var(--accent-lit); }

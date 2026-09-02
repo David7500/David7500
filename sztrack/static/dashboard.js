@@ -73,13 +73,37 @@ let stationsByName = new Map();     // ime postaje -> {stop_id, lat, lon}
 let liveTrains = [];
 let liveBuses = [];
 
+// Zacetni pogled se prilagodi VOZILOM, ne postajam. Prej je bil okvir
+// izracunan iz vseh 9 791 postajalisc -- ta segajo od Breginja do Pinc, torej
+// cez vso sirino drzave, in na telefonu (430 px sirine, 900 visine) je zoom
+// dolocila sirina: Slovenija je zapolnila trak na sredini, nad njo in pod njo
+// pa sta bili Avstrija in Jadran. Stran odgovarja na "kje je zdaj kaj",
+// zato okvir dolocajo vozila; kadar so razkropljena po drzavi, je to itak
+// spet cela Slovenija.
+let pogledPrilagojen = HAS_START;
+let vlakiPrispeli = false, vozilaPrispela = false;
+
+function prilagodiPogledVozilom() {
+  if (pogledPrilagojen || !vlakiPrispeli || !vozilaPrispela) return;
+  const tocke = [];
+  for (const t of liveTrains) {
+    if (t.reported_lat != null) { tocke.push([t.reported_lat, t.reported_lon]); continue; }
+    const st = stationsByName.get(t.last_stop);
+    if (st && st.lat != null) tocke.push([st.lat, st.lon]);
+  }
+  for (const v of liveBuses) if (v.lat != null) tocke.push([v.lat, v.lon]);
+  pogledPrilagojen = true;
+  if (!tocke.length) return;                 // ponoci se zgodi; ostane cela drzava
+  // maxZoom: dve vozili na isti postaji ne smeta priblizati na ulico.
+  map.fitBounds(tocke, { padding: [30, 30], maxZoom: 12 });
+}
+
 async function loadStatic() {
   try {
     // Samo železniške postaje: avtobusnih je nekaj tisoč in mreža prog bi
     // izginila pod postajališči.
     const stations = await fetch("/api/stations?network=zeleznica").then((r) => r.json());
     stationsByName = new Map(stations.map((s) => [s.name, s]));
-    const latlngs = [];
     for (const s of stations) {
       // Pika brez imena ne pove nicesar; trajna oznaka pri 267 postajah
       // zakrije progo. Zato ime ob dotiku. Polmer 3,4 namesto 2,4: pika
@@ -88,9 +112,7 @@ async function loadStatic() {
         radius: 3.4, color: "#8b95a4", fillColor: "#8b95a4", fillOpacity: 1,
         weight: 0,
       }), s.name).addTo(stationLayer);
-      latlngs.push([s.lat, s.lon]);
     }
-    if (latlngs.length && !HAS_START) map.fitBounds(latlngs, { padding: [24, 24] });
   } catch (err) {
     console.error("postaj ni bilo mogoče naložiti", err);
   }
@@ -836,6 +858,8 @@ async function pollLive() {
     liveTrains = await fetch("/api/live?network=zeleznica").then((r) => r.json());
     document.getElementById("n-train").textContent = liveTrains.length;
     renderTrains(liveTrains);
+    vlakiPrispeli = true;
+    prilagodiPogledVozilom();
     if (findEl.value.trim()) renderFind();
   } catch (err) {
     console.error("/api/live ni uspel", err);
@@ -870,6 +894,8 @@ function onVehicles(list) {
   liveBuses = list;
   document.getElementById("n-bus").textContent = liveBuses.length;
   renderBuses(liveBuses);
+  vozilaPrispela = true;
+  prilagodiPogledVozilom();
   if (findEl.value.trim()) renderFind();
 }
 

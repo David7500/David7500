@@ -406,7 +406,7 @@ async function loadAlerts() {
       </summary>
       <div class="alert-list">${list.map((a) => `
         <div class="alert-item">
-          <strong>${escapeHtml(a.header || "")}</strong>
+          <strong>${escapeHtml(alertTitle(a.header))}</strong>
           <div class="alert-meta">${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
           ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}</div>
           <div class="alert-body adv-only">${escapeHtml((a.description || "").slice(0, 400))}</div>

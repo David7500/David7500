@@ -89,7 +89,10 @@ body.net-avtobus {
 }
 
 .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; min-width: 0; }
-.brand svg { flex-shrink: 0; }
+/* Znak nosi barvo omrezja (`body.net-avtobus` prestavi --accent na zeleno).
+   Prej je bil trdo oranzen in je bil na avtobusni strani edini kos glave,
+   ki ni vedel, kje je. */
+.brand svg { flex-shrink: 0; color: var(--accent); }
 .brand-name {
   font: 600 15px/1 var(--sans);
   color: var(--ink);

@@ -35,6 +35,10 @@ function periodLabel(a) {
   return a.start_ts ? `od ${f(a.start_ts)}` : `do ${f(a.end_ts)}`;
 }
 
+// Vsak opis se konca z isto vljudnostjo in naslovom strani SŽ (ta je ze
+// povezava v nogi kartice). Petnajstkrat prebrano nikoli.
+const REP = /\s*Potnikom se opravičujemo[\s\S]*$/;
+
 function itemHtml(a) {
   const kind = kindOf(a);
   const color = KIND_COLOR[kind];
@@ -49,11 +53,13 @@ function itemHtml(a) {
         <span class="kind-tag" style="color:${color};border-color:${color}55">${escapeHtml(kind)}</span>
         <span class="alert-period">${escapeHtml(periodLabel(a))}</span>
       </div>
-      <h3 class="alert-card-title">${escapeHtml(a.header || "")}</h3>
-      <p class="alert-card-body">${escapeHtml(a.description || "")}</p>
+      <h3 class="alert-card-title">${escapeHtml(alertTitle(a.header))}</h3>
+      <p class="alert-card-body">${escapeHtml((a.description || "").replace(REP, ""))}
+        ${REP.test(a.description || "")
+          ? `<span class="adv-only">${escapeHtml((REP.exec(a.description) || [""])[0].trim())}</span>` : ""}</p>
       ${trains.length ? `
         <div class="alert-trains">
-          <span class="alert-trains-label">${trains.length} ${trains.length === 1 ? "vlak" : "vlakov"}:</span>
+          <span class="alert-trains-label">${trains.length} ${sklon(trains.length, "vlak")}:</span>
           ${head.map((t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join("")}
           ${rest.length ? `<span class="adv-only">${rest.map((t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join("")}</span>
                            <span class="more-note">+${rest.length} še (napredni pogled)</span>` : ""}
