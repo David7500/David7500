@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
@@ -14,7 +16,8 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
+                               Response)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -285,27 +288,30 @@ def api_overview():
     danes" je pri prometni aplikaciji enako pogosto kot vprašanje o svoji poti.
     """
     now = datetime.now(TZ)
-    today = now.date().isoformat()
-    # Pregled je zeleznicki ("kako vozijo vlaki"), zato filter. Endpointa
-    # `api_live` se tu ne klice: Python bi kot argument podal FastAPIjev
-    # objekt Query namesto None in filter se ne bi ujel z nicimer.
-    live = _live("zeleznica")
-    with _conn() as conn:
-        day = stats.day_summary(conn, today)
-        disruptions = alerts.active_count(conn)
-        # Zgodaj zjutraj je danasnji vzorec prazen ali droben. "Mediana 0 min,
-        # tocnih 100 %" iz ene same voznje ob pol enih zvecer ni slika dneva,
-        # ampak nakljucje -- takrat raje povemo za vceraj in tako tudi napisemo.
-        fallback = None
-        if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
-            fallback = stats.day_summary(conn, yesterday_iso(now))
-    return {
-        "now": now.isoformat(),
-        "live_trains": len(live),
-        "today": day,
-        "yesterday": fallback,
-        "disruptions": disruptions,
-    }
+
+    def izracun():
+        today = now.date().isoformat()
+        # Pregled je zeleznicki ("kako vozijo vlaki"), zato filter. Endpointa
+        # `api_live` se tu ne klice: Python bi kot argument podal FastAPIjev
+        # objekt Query namesto None in filter se ne bi ujel z nicimer.
+        live = _live("zeleznica")
+        with _conn() as conn:
+            day = stats.day_summary(conn, today)
+            disruptions = alerts.active_count(conn)
+            # Zgodaj zjutraj je danasnji vzorec prazen ali droben. "Mediana
+            # 0 min, tocnih 100 %" iz ene same voznje ob pol enih zvecer ni
+            # slika dneva, ampak nakljucje -- takrat raje povemo za vceraj in
+            # tako tudi napisemo.
+            fallback = None
+            if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
+                fallback = stats.day_summary(conn, yesterday_iso(now))
+        return {"live_trains": len(live), "today": day,
+                "yesterday": fallback, "disruptions": disruptions}
+
+    # Dan v kljucu, ker se ob polnoci vsebina spremeni tudi brez novega feeda.
+    odgovor = _predpomni(f"overview:{now.date()}", _znacka("rt_fetched"), 60, izracun)
+    # `now` je edino, kar mora biti sveze -- kot `age_s` pri legah.
+    return {"now": now.isoformat(), **odgovor}
 
 
 def yesterday_iso(now: datetime) -> str:
@@ -322,36 +328,48 @@ def api_overview_bus():
     tisto, kar o njih res vemo.
     """
     now = datetime.now(TZ)
-    live = _live("avtobus")
-    with _conn() as conn:
-        vehicles, _ = _vehicles_now()
-        day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
-        # Ista varovalka kot pri vlakih, ki je tu manjkala. Brez nje je stran
-        # 3. 9. 2026 ob 00:20 kazala "avtobusi +833 min": mediana sestih voznj,
-        # od katerih jih je pet nosilo prevoznikovo napako ujemanja (vozilo,
-        # ki vozi zdaj, pripeto voznemu redu izpred ur). `home.js` je `yesterday`
-        # ze bral -- samo poslali ga nismo.
-        fallback = None
-        if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
-            fallback = stats.day_summary(conn, yesterday_iso(now), network="avtobus")
-    moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
-    return {
-        "now": now.isoformat(),
-        "live_vehicles": len(live),
-        "with_gps": len(vehicles),
-        "moving": len(moving),
-        "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
-                             if moving else None),
-        "today": day,
-        "yesterday": fallback,
-    }
+
+    def izracun():
+        live = _live("avtobus")
+        with _conn() as conn:
+            vehicles, _ = _vehicles_now()
+            day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
+            # Ista varovalka kot pri vlakih, ki je tu manjkala. Brez nje je
+            # stran 3. 9. 2026 ob 00:20 kazala "avtobusi +833 min": mediana
+            # sestih voznj, od katerih jih je pet nosilo feedovo zamenjavo
+            # prometnega dne (glej `.claude/rules/strezba.md`, MAX_LIVE_DELAY_S).
+            # `home.js` je `yesterday` ze bral -- samo poslali ga nismo.
+            fallback = None
+            if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
+                fallback = stats.day_summary(conn, yesterday_iso(now), network="avtobus")
+        moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
+        return {
+            "live_vehicles": len(live),
+            "with_gps": len(vehicles),
+            "moving": len(moving),
+            "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
+                                 if moving else None),
+            "today": day,
+            "yesterday": fallback,
+        }
+
+    odgovor = _predpomni(f"overview-bus:{now.date()}",
+                         _znacka("rt_fetched", "positions_fetched"), 60, izracun)
+    return {"now": now.isoformat(), **odgovor}
 
 
 @app.get("/api/stations")
 def api_stations(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
                                              description="samo postaje tega omrežja")):
-    with _conn() as conn:
-        return stats.stations(conn, network)
+    # 863 kB in 77 ms, vsebina pa se spremeni enkrat na dan ob uvozu GTFS.
+    # Predpomnimo ze SERIALIZIRAN JSON, ne seznama slovarjev: sama poizvedba
+    # je manjsi del cene, vecino poje pretvorba 9 791 postaj v niz. Zato
+    # `Response`, ne navadna vrnitev -- FastAPI bi jo sicer serializiral znova.
+    telo = _predpomni(
+        f"stations:{network}", _znacka("gtfs_imported_at"), 3600,
+        lambda: json.dumps(_conn_klic(lambda c: stats.stations(c, network)),
+                           ensure_ascii=False, separators=(",", ":")).encode())
+    return Response(content=telo, media_type="application/json")
 
 
 @app.get("/api/stations/search")
@@ -456,6 +474,64 @@ def api_train_reports(train_no: str, date: str | None = None):
 # Kljuc je cas nasega zadnjega branja (`positions_fetched`), ne ura: tako se
 # predpomnilnik razveljavi natanko takrat, ko je res kaj novega.
 _VEHICLES_CACHE: dict = {"key": None, "rows": []}
+
+
+# ---------------------------------------------------------------- predpomnilnik
+# Isti razlog kot pri legah, le za ostale drage odgovore. Izmerjeno 3. 9. 2026
+# na tem racunalniku: `/api/live` 253 ms, `/api/overview` 224 ms,
+# `/api/stations` 77 ms (863 kB, 217 kB stisnjeno). Na malini Pi 4B je to
+# desetkrat toliko, torej `/api/live` okoli 2,5 s -- in vsak obiskovalec ga
+# vprasa vsakih 30 s. Brez tega je zgornja meja ~10-15 hkratnih uporabnikov;
+# z njim tisoc obiskovalcev stane toliko kot eden.
+#
+# Kljuc je ZNACKA PODATKA (`rt_fetched`, `positions_fetched`,
+# `gtfs_imported_at`), ne ura -- predpomnilnik se razveljavi natanko takrat,
+# ko je res kaj novega. `najvec_s` je varovalka za primer, ko zajem ne tece
+# (`KAJROS_COLLECTOR=0`): znacka se takrat ne spreminja in odgovor bi sicer
+# obstal za vedno.
+_ODGOVORI: dict[str, tuple] = {}
+_ODGOVORI_LOCK = threading.Lock()
+_KLJUCAVNICE: dict[str, threading.Lock] = {}
+
+
+def _kljucavnica(kljuc: str) -> threading.Lock:
+    with _ODGOVORI_LOCK:
+        return _KLJUCAVNICE.setdefault(kljuc, threading.Lock())
+
+
+def _predpomni(kljuc: str, znacka, najvec_s: float, izracun):
+    """Vrne predpomnjen odgovor ali ga izracuna in shrani.
+
+    Kljucavnica je NA KLJUC, ne skupna: sicer bi ob izteku vsi hkratni
+    obiskovalci racunali isto stvar (naval na prazen predpomnilnik), skupna
+    kljucavnica pa bi drage odgovore med sabo serializirala.
+    """
+    zdaj = time.monotonic()
+    zapis = _ODGOVORI.get(kljuc)
+    if zapis and zapis[0] == znacka and zdaj - zapis[2] < najvec_s:
+        return zapis[1]
+    with _kljucavnica(kljuc):
+        zapis = _ODGOVORI.get(kljuc)          # medtem ga je morda izracunal kdo drug
+        if zapis and zapis[0] == znacka and time.monotonic() - zapis[2] < najvec_s:
+            return zapis[1]
+        vrednost = izracun()
+        _ODGOVORI[kljuc] = (znacka, vrednost, time.monotonic())
+        return vrednost
+
+
+def _conn_klic(f):
+    """Odpre povezavo in poklice `f(conn)`.
+
+    Za predpomnjene izracune: `with` v lambdi ni mogoc, ta jo pa lepo zavije.
+    """
+    with _conn() as conn:
+        return f(conn)
+
+
+def _znacka(*kljuci: str) -> tuple:
+    """Trenutne znacke podatkov iz `meta`, kot n-terica za primerjavo."""
+    with _conn() as conn:
+        return tuple(db.get_meta(conn, k) for k in kljuci)
 
 
 def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
@@ -576,6 +652,11 @@ def api_shapes_live():
     Plast je izbirna in privzeto ugasnjena -- gost snop crt cez vso Ljubljano
     je odgovor na vprasanje "kod vozijo linije", ne na "kje je moj avtobus".
     """
+    # Vezano na lege: dokler se vozila ne premaknejo, so trase iste.
+    return _predpomni("shapes-live", _znacka("positions_fetched"), 60, _shapes_live_rows)
+
+
+def _shapes_live_rows():
     now = int(datetime.now(TZ).timestamp())
     with _conn() as conn:
         rows = conn.execute(
@@ -592,8 +673,12 @@ def api_shapes_live():
 @app.get("/api/network.geojson")
 def api_network(elementary_only: bool = True):
     """Geometrija prog z dolžino odseka v km. Za risanje zemljevida."""
-    with _conn() as conn:
-        return stats.network_geojson(conn, elementary_only)
+    # Cista statika: spremeni se samo ob uvozu voznega reda.
+    telo = _predpomni(
+        f"geojson:{elementary_only}", _znacka("gtfs_imported_at"), 3600,
+        lambda: json.dumps(_conn_klic(lambda c: stats.network_geojson(c, elementary_only)),
+                           ensure_ascii=False, separators=(",", ":")).encode())
+    return Response(content=telo, media_type="application/json")
 
 
 @app.get("/api/train/{train_no}")
@@ -1009,4 +1094,7 @@ def _add_gps_position(conn, rows: list[dict]) -> None:
 def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
                                          description="samo to omrežje")):
     """Vozila, ki so zdaj na poti, z zadnjo izmerjeno zamudo."""
-    return _live(network)
+    # Najdrazji odgovor, ki ga zemljevid vprasa vsakih 30 s. Med dvema
+    # branjema zamud se ne spremeni, zato ga racunamo enkrat za vse.
+    return _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
+                      lambda: _live(network))

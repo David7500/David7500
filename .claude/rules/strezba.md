@@ -88,6 +88,34 @@ feedova zamenjava prometnega dne.
   iz okvira**: brezpogojni `setView` bi zemljevid vsakih deset sekund trgal
   izpod prsta človeku, ki si ogleduje kaj drugega.
 
+* **Vsi dragi odgovori so predpomnjeni na značko podatka, ne na uro.**
+  Značke so `rt_fetched` (zamude, 30 s), `positions_fetched` (lege, 10 s) in
+  `gtfs_imported_at` (vozni red, ~1×/dan); `_predpomni()` ima še varovalko
+  `najvec_s` za primer, ko zajem ne teče (`KAJROS_COLLECTOR=0`) in se značka
+  nikoli ne spremeni. Ključavnica je **na ključ**, ne skupna: skupna bi drage
+  odgovore serializirala med sabo, brez nje pa bi ob izteku vsi hkratni
+  obiskovalci računali isto stvar.
+
+  Izmerjeno 3. 9. 2026 (mediana 12 zahtev, topel predpomnilnik):
+
+  | pot | prej | zdaj |
+  |---|---|---|
+  | `/api/live` | 253 ms | **3,8 ms** |
+  | `/api/overview` | 224 ms | 2,9 ms |
+  | `/api/overview/bus` | 230 ms | 2,6 ms |
+  | `/api/stations` | 77 ms | 3,3 ms |
+  | `/api/network.geojson` | 51 ms | 3,3 ms |
+  | `/api/shapes/live` | 33 ms | 3,0 ms |
+
+  **`/api/stations` in `/api/network.geojson` predpomnita že serializiran
+  JSON**, ne seznama slovarjev: sama poizvedba je manjši del cene, večino
+  poje pretvorba 9 791 postaj v niz. Samo predpomnjenje poizvedbe je dalo
+  77 → 41 ms, predpomnjenje niza pa 41 → 3,3. Zato vračata `Response`, sicer
+  bi FastAPI serializiral znova.
+
+  **Kar mora ostati sveže, se doda po predpomnilniku**: `now` v pregledih in
+  `age_s` pri legah. Predpomnjena bi lagala.
+
 * **`/api/vehicles` je predpomnjen na cikel zajema.** Odgovor se med dvema
   branjema leg ne spremeni, zato se izračuna enkrat in vsem strežejo iste
   vrstice; ključ je `positions_fetched`, ne ura, da se razveljavi natanko ob

@@ -449,7 +449,12 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
 
 def poll_once(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.TRIP_UPDATES_URL, conn, "rt_etag")
+    # Znacka za predpomnilnik strezbe, po vzoru `positions_fetched`. Pise se
+    # tudi ob 304 ("ob tem casu smo zamude potrdili"), ker mora predpomnilnik
+    # vedeti, da je odgovor se vedno tocen, in ne le, da se je spremenil.
+    db.set_meta(conn, "rt_fetched", str(int(time.time())))
     if feed is None:
+        conn.commit()
         return {"trips": 0, "changed": 0, "skipped": 0, "unchanged": True}
     return ingest(conn, feed)
 
