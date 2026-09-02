@@ -53,6 +53,16 @@ POLL_SECONDS = int(os.environ.get("SZ_POLL_SECONDS", "30"))
 # spremembi nad 60 s. Branje obojega na 30 s je torej lege bralo prepocasi in
 # zamude prepogosto. 10 s je pol vozilovega ritma; pod tem ni cesa dobiti.
 POSITION_SECONDS = int(os.environ.get("SZ_POSITION_SECONDS", "10"))
+# Sencno merjenje napovedi (`ocena.py`). Tece ob strezniku in samo bere.
+# Razmik 120 s: posnetek se zapise enkrat na postanek (kljuc tabele), zato
+# gostejsi obhod ne da vec vrstic, le vec praznih poizvedb.
+OCENA_SECONDS = int(os.environ.get("SZ_OCENA_SECONDS", "120"))
+# Vsak avtobusni postanek bi bil ~135 000 vrstic na dan (13 MB); vzorec vsake
+# pete voznje jih da 27 000, kar je za mediano in delez vec kot dovolj.
+# Vzorci se po `trip_id`, ne po postanku -- voznja mora biti cela ali nobena.
+OCENA_BUS_VZOREC = int(os.environ.get("SZ_OCENA_BUS_VZOREC", "5"))
+OCENA_KEEP_DAYS = int(os.environ.get("SZ_OCENA_KEEP_DAYS", "30"))
+
 USER_AGENT = os.environ.get("SZ_USER_AGENT", "sztrack/0.1 (+https://github.com/David7500)")
 TIMEZONE = "Europe/Ljubljana"
 

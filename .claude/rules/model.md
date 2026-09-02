@@ -3,6 +3,7 @@ paths:
   - "sztrack/stats.py"
   - "sztrack/backtest.py"
   - "sztrack/journey.py"
+  - "sztrack/ocena.py"
 ---
 
 # Napoved zamude, zveze in prestopi
@@ -256,3 +257,49 @@ seznam po odseku kratek in razlike ni bilo; pri mestnem avtobusu isti odsek
 vozi več linij, seznam zraste na desettisoče in `odsek+razred` je za en dan
 porabil 6,5 minute namesto 0,3 sekunde. `backtest._medians()` jih izračuna
 enkrat ob učenju -- rezultat do zadnje decimalke isti.
+
+
+## Senčno merjenje: kaj je potnik res videl (`ocena.py`)
+
+Backtest meri model na zgodovini z izpuščanjem enega dne. To je pošteno do
+modela, ni pa pošteno do **prikaza**: potnik ne vpraša „kakšna bo zamuda na
+postanku j, če poznam zamudo na i“, ampak pogleda v aplikacijo, preden gre od
+doma, in prebere eno številko.
+
+`ocena.py` zato teče ob strežniku (vsakih `SZ_OCENA_SECONDS`, privzeto 120 s)
+in v tabelo `napoved` posname, kaj bi prikaz **ta hip** povedal za postanek,
+ki je **25 minut pred vlakom** oziroma **15 pred avtobusom** (`HORIZONT_S`).
+Ko vozilo tisti postanek prevozi, se v isto vrstico dopiše resnica.
+
+Kar velja spoštovati, če se ga kdo dotakne:
+
+* **Primerjava je parna.** V eni vrstici so naša ocena, prevoznikova vrednost
+  in prenos zamude ob istem trenutku, za isti postanek. Kdor bi vsak model
+  meril na svojem vzorcu, bi meril tudi razliko med vzorci.
+* **Zapiše se prvi posnetek in nobeden več** (ključ je `(trip_id,
+  service_date, stop_seq)`). Potnik pogleda enkrat; drugi obhod čez dve minuti
+  bi meril napoved s krajšim horizontom in razred bi se tiho premaknil.
+  Dejanski horizont je vseeno v `horizon_s`, da se da po njem razrezati.
+* **Meja „prevozil“ je `stats.last_measured()`, ne obstoj vrstice v `run`.**
+  Feed za še nedosežen postanek objavi vrednost, ki ni meritev — in prav ta
+  razlika je tisto, kar tu merimo. Če bi resnico brali iz `run` brez te meje,
+  bi za resnico vzeli prevoznikovo napoved in prevoznik bi zmagal sam proti
+  sebi.
+* **Vožnje brez izmerjenega postanka se ne merijo, ampak štejejo**
+  (`brez_meritve`). To ni izpuščen primer, ampak ugotovitev: to je okno, v
+  katerem potniku ne znamo povedati ničesar.
+* **Avtobusi se vzorčijo** (`OCENA_BUS_VZOREC`, vsaka peta vožnja), sicer bi
+  bilo ~135 000 vrstic na dan. Vzorči se po `trip_id` in ne po postanku:
+  vožnja mora biti cela ali nobena, sicer se razrez po zamudi meri na kosih
+  poti. Vzorec mora biti **stabilen med zagoni**, zato vsota bajtov in ne
+  vgrajeni `hash` (ta je soljen s `PYTHONHASHSEED`).
+* **`ours_s` je to, kar prikaz res pokaže** — torej z pravilom „prevoznik ve
+  več“ (`_with_operator`). Naša vrednost brez tega pravila je v `ours_own_s`,
+  da se da pravilo preveriti tudi v potnikovem oknu, kjer je horizont krajši
+  od tistega, na katerem je bilo izmerjeno.
+* **`podcenjenih` ni simetričen podatek.** Kdor pride na peron in vlaka ni,
+  čaka; kdor pride in je vlak že šel, ga je zamudil. Napoved, ki kaže manj od
+  resnice, je zato hujša napaka od enako velike v drugo smer.
+* Tabela se obrezuje (`OCENA_KEEP_DAYS`, 30 dni). `run` je zgodovina in se ne
+  briše nikoli; to je merilo, in merilo, staro pol leta, meri model, ki ga ni
+  več.

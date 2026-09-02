@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import alerts, backtest, config, collector, db, gtfs, stats, weather
+from . import alerts, backtest, config, collector, db, gtfs, ocena, stats, weather
 
 
 def cmd_init(args):
@@ -116,6 +116,44 @@ def cmd_backtest(args):
         for h in horizons[:12]:
             cells = "".join(f"{res['by_horizon'][n][h]['mae_s'] / 60:>17.2f}m" for n in names)
             print(f"  {h:>18d}{cells}")
+
+
+def _vrstica_modela(ime, m):
+    if not m.get("n"):
+        return f"{ime:24s}{'—':>10}"
+    return (f"{ime:24s}{m['mae_min']:>9.2f}m{m['v2min']:>9.1f}%{m['v5min']:>9.1f}%"
+            f"{m['podcenjenih']:>9.1f}%{m['n']:>9d}")
+
+
+def cmd_ocena(args):
+    """Kako dobra je bila napoved, ki jo je potnik RES videl."""
+    conn = db.connect()
+    ocena.init(conn)
+    if args.tick:
+        print(json.dumps(ocena.tick(conn), indent=2, ensure_ascii=False))
+        return
+    r = ocena.report(conn, days=args.days, network=args.network)
+    print(f"od {r['od']} · razrešenih vrstic {r['vrstic']} · čaka na resnico {r['cakajo']}")
+    if not r["vrstic"]:
+        print("\nŠe nič razrešenega. Senca teče ob strežniku; prvi izidi so čez"
+              " dobro uro.")
+        return
+
+    def blok(naslov, x):
+        print(f"\n{naslov}")
+        print(f"{'model':24s}{'MAE':>10}{'v 2 min':>10}{'v 5 min':>10}"
+              f"{'podcenj.':>10}{'n':>9}")
+        for ime, kljuc in (("naša ocena", "nasa"), ("naša brez prevoznika", "nasa_brez_prevoznika"),
+                           ("prevoznik", "prevoznik"), ("prenos zamude", "prenos")):
+            print(_vrstica_modela(ime, x[kljuc]))
+        if x.get("prevoznik_molci") is not None:
+            print(f"  (prevoznik za ta postanek ni imel vrednosti v {x['prevoznik_molci']} % primerov)")
+
+    blok("SKUPAJ", r["skupaj"])
+    for net, x in r["po_omrezju"].items():
+        blok(net.upper(), x)
+    for ime, x in r["po_zamudi"].items():
+        blok(f"ZAMUDA OB POGLEDU {ime}", x)
 
 
 def cmd_prune(args):
@@ -249,6 +287,14 @@ def main(argv=None):
                    choices=("zeleznica", "avtobus"),
                    help="katero omrezje meriti (privzeto zeleznica)")
     a.set_defaults(func=cmd_backtest)
+
+    a = sub.add_parser("ocena", help="kako dobra je bila napoved, ki jo je potnik videl")
+    a.add_argument("--days", type=int, default=30)
+    a.add_argument("--network", choices=("zeleznica", "avtobus"),
+                   help="samo eno omrezje (privzeto obe)")
+    a.add_argument("--tick", action="store_true",
+                   help="pozeni en obhod rocno (posnetek + resevanje)")
+    a.set_defaults(func=cmd_ocena)
 
     a = sub.add_parser("prune", help="pobrisi stare vrstice dnevnika `obs`")
     a.add_argument("--rail-days", type=int, default=collector.OBS_KEEP_DAYS)

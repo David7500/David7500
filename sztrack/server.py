@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import alerts, collector, config, db, gtfs, stats, weather
+from . import alerts, collector, config, db, gtfs, ocena, stats, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -94,6 +94,10 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             position_interval: int = config.POSITION_SECONDS) -> None:
     conn = db.connect()
     db.init(conn)
+    # Sencno merjenje napovedi. Samo bere `run` in `sched` in pise v svojo
+    # tabelo -- na zajem ne vpliva, zato tece v isti niti in ne v svoji.
+    ocena.init(conn)
+    meri_napovedi = os.environ.get("SZ_OCENA", "1") != "0"
     # Lega vozil je smiselna samo, ce so v bazi avtobusi: feed nosi izkljucno
     # njih. Pri zeleznici bi bila to zahteva vsakih 30 s za prazen odgovor.
     has_bus = conn.execute("SELECT 1 FROM trip WHERE mode = 'bus' LIMIT 1").fetchone()
@@ -125,6 +129,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Zanka zato tikne na krajsem od obeh, vsako opravilo pa ima svoj cas.
     next_trips = 0.0
     next_positions = 0.0 if track_vehicles else float("inf")
+    # Prvi obhod sele cez minuto: ob zagonu je `run` se prazen (bootstrap tece
+    # vzporedno) in posnetek bi bil posnetek nicesar.
+    next_ocena = (time.monotonic() + 60) if meri_napovedi else float("inf")
 
     while not _stop.is_set():
         started = time.monotonic()
@@ -148,6 +155,16 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 collector.poll_positions(conn)
             except Exception as exc:      # lega ni kriticna za zajem zamud
                 _log(f"lege vozil ni bilo mogoče pobrati: {exc}")
+
+        if started >= next_ocena:
+            next_ocena = started + config.OCENA_SECONDS
+            try:
+                info = ocena.tick(conn)
+                if info["zapisanih"] or info["resenih"]:
+                    _log(f"ocena: {info['zapisanih']} novih napovedi, "
+                         f"{info['resenih']} razrešenih")
+            except Exception as exc:      # merjenje ni kriticno za zajem
+                _log(f"ocene napovedi ni bilo mogoče posneti: {exc}")
 
         if started >= next_alerts:
             next_alerts = started + alert_interval
@@ -190,6 +207,13 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:
                 _log(f"dnevnika ni bilo mogoče obrezati: {exc}")
 
+            try:
+                n = ocena.prune(conn)
+                if n:
+                    _log(f"merjenje napovedi obrezano: {n} vrstic")
+            except Exception as exc:
+                _log(f"merjenja napovedi ni bilo mogoče obrezati: {exc}")
+
             # Razrezi cez vso zgodovino. Pri letu zajema je to agregat cez 12
             # milijonov vrstic in traja 34 s, odgovor pa se med dvema dnevoma
             # skoraj ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na
@@ -211,7 +235,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         # lege so se brale v razmikih 19, 11, 19, 11 s namesto 10.
         # Dnevna opravila (vozni red, vreme, vzdrzevanje) so v tem ritmu
         # preverjena tako ali tako veckrat na minuto.
-        cakaj = min(next_trips, next_positions, next_alerts) - time.monotonic()
+        cakaj = min(next_trips, next_positions, next_alerts,
+                    next_ocena) - time.monotonic()
         _stop.wait(max(0.5, min(cakaj, interval)))
 
 

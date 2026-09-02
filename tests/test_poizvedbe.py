@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from sztrack import db, journey, stats
+from sztrack import db, journey, ocena, stats
 
 
 def _pred(dni: int) -> str:
@@ -950,3 +950,66 @@ def test_napoved_ne_prevzame_prenesene_zamude(conn):
     f = {p["name"]: p for p in stats.predict(conn, "IC 1", 2, 0, service_date=dan)}
     assert f["Celje"]["from_operator"] is False
     assert f["Celje"]["predicted_delay_s"] == f["Celje"]["own_delay_s"]
+
+
+# --------------------------------------------------------------- senca napovedi
+#
+# `ocena.py` meri, kar je potnik RES videl: kaj je prikaz trdil 25 minut pred
+# vlakom in kaj se je potem zgodilo. Preizkus pelje cel krog -- posnetek,
+# vozilo prevozi postanek, resnica se dopise -- ker je prav ta krog tisto, kar
+# se lahko tiho pokvari: posnetek brez resevanja je tabela, ki samo raste.
+
+def _ob(ura_s):
+    """Datum priprave (`2026-08-31`) ob dani sekundi dneva."""
+    from datetime import datetime
+    return datetime(2026, 8, 31, tzinfo=ocena.TZ) + timedelta(seconds=ura_s)
+
+
+def test_senca_posname_napoved_in_dopise_resnico(conn):
+    ocena.init(conn)
+    # Vlak t1: A 08:00 -> Z 09:00/09:05 -> C 10:00. Izmerjen je na Z (+10 min),
+    # torej je bil tam ob 09:15 -- ob 09:35 je C se 25 minut proc.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+                 " feed_ts) VALUES('t1','2026-08-31',2,600,600,0)")
+
+    izid = ocena.snapshot(conn, _ob(34500))
+    assert izid["zapisanih"] == 1
+
+    vrstica = conn.execute("SELECT * FROM napoved").fetchone()
+    assert (vrstica["stop_seq"], vrstica["from_seq"]) == (3, 2)
+    assert vrstica["current_s"] == 600
+    assert vrstica["carry_s"] == 600          # referenca je prenos zamude
+    assert vrstica["horizon_s"] == 1500       # natanko potnikovo okno
+    assert vrstica["actual_s"] is None
+
+    # Dokler vlak ni tam, resnice ni -- to je bistvo meje `last_measured`.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+                 " feed_ts) VALUES('t1','2026-08-31',3,300,300,0)")
+    assert ocena.resolve(conn, _ob(34500))["resenih"] == 0
+    assert conn.execute("SELECT actual_s FROM napoved").fetchone()["actual_s"] is None
+
+    # Ob 10:10 je vlak (vozni red 10:00 + 5 min) mimo: resnica je +5 min.
+    assert ocena.resolve(conn, _ob(36600))["resenih"] == 1
+    assert conn.execute("SELECT actual_s FROM napoved").fetchone()["actual_s"] == 300
+
+
+def test_senca_ne_meri_voznje_brez_meritve(conn):
+    """Brez izmerjenega postanka nase ocene ni -- in izmisljena ocena je
+    slabsa od priznanja, da je ne poznamo. Tak primer se sam presteje."""
+    ocena.init(conn)
+    izid = ocena.snapshot(conn, _ob(34500))
+    assert izid["zapisanih"] == 0
+    assert izid["brez_meritve"] >= 1
+
+
+def test_senca_posname_postanek_samo_enkrat(conn):
+    """Potnik pogleda enkrat. Drugi obhod cez minuto ne sme prepisati prvega,
+    sicer bi merili napoved z vedno krajsim horizontom."""
+    ocena.init(conn)
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+                 " feed_ts) VALUES('t1','2026-08-31',2,600,600,0)")
+    ocena.snapshot(conn, _ob(34500))
+    prvi = conn.execute("SELECT made_ts, horizon_s FROM napoved").fetchone()
+    assert ocena.snapshot(conn, _ob(34560))["zapisanih"] == 0
+    drugi = conn.execute("SELECT made_ts, horizon_s FROM napoved").fetchone()
+    assert (drugi["made_ts"], drugi["horizon_s"]) == (prvi["made_ts"], prvi["horizon_s"])

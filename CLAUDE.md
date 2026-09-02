@@ -16,7 +16,7 @@ Venv je `venv/` (Python 3.12), **ne** `.venv`. Strežnik med razvojem pogosto ž
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
 CLI: `./venv/bin/python -m sztrack.cli <ukaz>` — `init`, `update`, `poll`,
 `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
-`prune`, `seed`.
+`prune`, `ocena`, `seed`.
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika in paleta v enem, z izhodno kodo. Sami testi:
@@ -90,6 +90,7 @@ sztrack/
   stats.py       zgodovina, porazdelitve, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
   backtest.py    merjenje napovedi z izpuščanjem enega dne
+  ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
   cli.py         ukazna vrstica
@@ -107,7 +108,14 @@ in podrlo pet zelenih preizkusov. Računani vstavki gredo zato skozi
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` ·
-`weather` · `alert` + `alert_entity` · `delay_report` · `summary`.
+`weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved`.
+
+**Senčno merjenje napovedi teče ob strežniku** (`ocena.py`, vsakih 120 s).
+Vsakih nekaj minut posname, kaj bi prikaz **ta hip** povedal za postanek, ki je
+25 minut pred vlakom (15 pred avtobusom) — našo oceno, prevoznikovo in prenos
+zamude — in ko vozilo tja pride, v isto vrstico dopiše resnico. Izid:
+`sztrack ocena`. To ni backtest: backtest meri model na zgodovini, to meri
+**številko, ki jo je potnik res videl**. Ugasne se s `SZ_OCENA=0`.
 
 ## Omrežji: `network` ni `mode`
 
