@@ -1,4 +1,4 @@
-# sztrack — stanje projekta
+# kajros — stanje projekta
 
 Povzetek za nadaljevanje dela. Vse spodaj je preverjeno na živih podatkih,
 ne po spominu. Navodila za delo so v [CLAUDE.md](CLAUDE.md), pregled projekta
@@ -23,7 +23,7 @@ ponovljivi z ukazom, ne trditev iz spomina.
 
 ### 1. Prevoznikova napoved za postanke naprej je slabša od prenosa zamude
 
-`sztrack backtest --operator`, 11 310 nalog iz devetih dni:
+`kajros backtest --operator`, 11 310 nalog iz devetih dni:
 
 | model | MAE | v 5 min | odklon |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Prikaz je prej to vrednost postavljal pred lastno oceno. Zdaj je obratno.
 
 ### 2. Naš model je že blizu najboljšemu, kar ti podatki dajo
 
-`sztrack backtest`, 258 137 nalog, izpuščanje enega dne:
+`kajros backtest`, 258 137 nalog, izpuščanje enega dne:
 
 | model | MAE | v 5 min |
 |---|---|---|
@@ -62,7 +62,7 @@ zaradi tega trdilo, da je bil vlak točen, čeprav je zamujal pet minut ali več
 — prav te vrstice hranijo "delež točnih".
 
 Pravilo je ozko: ničlo po zamudi ≥ 5 min sprejmemo šele ob drugem zaporednem
-pollu. `sztrack repair` po istem pravilu znova zgradi `run` iz dnevnika.
+pollu. `kajros repair` po istem pravilu znova zgradi `run` iz dnevnika.
 
 ## Kaj je bilo spregledano v virih
 
@@ -129,14 +129,14 @@ prevoznik:
 
 `trip_id` so med regeneracijami GTFS **stabilni** — po ponovnem uvozu se
 vseh 60 409 zajetih meritev še vedno ujema s tripom. Zajema torej ni treba
-varovati pred `sztrack update`.
+varovati pred `kajros update`.
 
 ## Objava
 
 **Raspberry Pi** (`david@192.168.1.166`) je **Pi Zero W**: armv6, 427 MB
 pomnilnika, 426 MB swapa, eno počasno jedro, 20 GB prostega na kartici.
 
-Od 29. 8. 2026 tam teče **`sztrack-zajem.service`** — zajem brez strežnika,
+Od 29. 8. 2026 tam teče **`kajros-zajem.service`** — zajem brez strežnika,
 z **vsemi prevozniki** (`SZ_AGENCIES=1118,1123,1119,1121`). Namen je, da ima
 malina celo bazo za aplikacijo in da lahko razvojni računalnik ugasneš;
 obdeluje tisti, ki bazo potegne dol.
@@ -153,7 +153,7 @@ ne (izpeljanka `run`), lega vozil ne (je samo „zdaj" in se ne hrani).
 Namestitev:
 
 ```bash
-sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash ~/sztrack-src/deploy/install-rpi.sh
+sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash ~/kajros-src/deploy/install-rpi.sh
 ```
 
 Skripta sama ugotovi, da leži v izvornem drevesu, in vzame kodo od tam — na
@@ -162,21 +162,21 @@ voznega reda z `--force`; ta zamenja samo statične tabele, `obs` in `run`
 ostaneta (preverjeno: 9 dni in 46 085 meritev je prehod preživelo).
 
 Paket zgradi `./scripts/build_deploy_zip.sh` (`git archive HEAD`) in prekopiraj
-z `scp` v `~/`, nato `unzip -o ~/sztrack-deploy.zip -d ~/sztrack-src`.
+z `scp` v `~/`, nato `unzip -o ~/kajros-deploy.zip -d ~/kajros-src`.
 
 Zajem zamud z maline se prilije brez sudo, ker je baza berljiva za vse:
 
 ```bash
-ssh david@192.168.1.166 'sqlite3 /var/lib/sztrack/sz.sqlite ".backup /tmp/sz.sqlite"'
-scp david@192.168.1.166:/tmp/sz.sqlite /tmp/sz-malina.sqlite
-./venv/bin/python -m sztrack.cli merge /tmp/sz-malina.sqlite
-./venv/bin/python -m sztrack.cli repair    # malina nima varovala za ničle
+ssh david@192.168.1.166 'sqlite3 /var/lib/kajros/kajros.sqlite ".backup /tmp/kajros.sqlite"'
+scp david@192.168.1.166:/tmp/kajros.sqlite /tmp/sz-malina.sqlite
+./venv/bin/python -m kajros.cli merge /tmp/sz-malina.sqlite
+./venv/bin/python -m kajros.cli repair    # malina nima varovala za ničle
 ```
 
 Namestitev/posodobitev pa mora pognati uporabnik sam (sudo rabi geslo):
 
 ```bash
-sudo bash deploy/install-rpi.sh && sudo systemctl restart sztrack.service
+sudo bash deploy/install-rpi.sh && sudo systemctl restart kajros.service
 ```
 
 **Pella je bila slepa ulica** — zajem je delal, javni API pa je vračal

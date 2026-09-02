@@ -10,10 +10,10 @@ paths:
 
 Ciljni gostitelj je Raspberry Pi doma: **`david@192.168.1.166`**. Tam ob
 koncu teče produkcijski zajem — malina je gor ves čas, ta računalnik ne, zato
-je merodajna baza na malini in se z nje vleče (`sztrack merge`), ne obratno.
+je merodajna baza na malini in se z nje vleče (`kajros merge`), ne obratno.
 
 Namestitev/posodobitev: `sudo bash deploy/install-rpi.sh && sudo systemctl
-restart sztrack.service` (idempotentna; restart je nujen posebej, `enable --now`
+restart kajros.service` (idempotentna; restart je nujen posebej, `enable --now`
 aktivne storitve ne restarta). Podrobnosti v [DEPLOY.md](DEPLOY.md).
 
 **Deploy mora pognati uporabnik sam** — `david` na malini za sudo rabi geslo,
@@ -25,8 +25,8 @@ poskušaj sam.
 Pella je bila slepa ulica — zajem je delal, javni API pa je vračal Cloudflare
 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
-**Na malini teče izključno zajem, in zajema vse.** `sztrack-zajem.service`
-(`sztrack.cli collect`) je edina omogočena enota; `sztrack.service` s
+**Na malini teče izključno zajem, in zajema vse.** `kajros-zajem.service`
+(`kajros.cli collect`) je edina omogočena enota; `kajros.service` s
 strežnikom je `disabled` in tak ostane — hkrati ne smeta teči, ker bi pisali
 v isto bazo in se prepirali za feed (`install-rpi.sh` drugo sam ugasne).
 `SZ_AGENCIES=1118,1119,1121,1123`: meritev, ki je ta trenutek nihče ne
@@ -41,7 +41,7 @@ enoti je trdil, da malina vseh agencij *ne* prenese — zapisan je bil brez
 swapa v računu.
 
 **Prilitje: `./scripts/potegni.sh`.** Naredi dosledno kopijo (`backup()`, ne
-golo kopiranje — baza je v WAL in `sz.sqlite` sam po sebi nima zadnjih
+golo kopiranje — baza je v WAL in `kajros.sqlite` sam po sebi nima zadnjih
 zapisov), jo prenese, preveri s `PRAGMA quick_check`, prilije z `merge` in
 požene `repair`, ker malina teče starejšo kodo in prilite meritve niso šle
 skozi novejše varovalke. Izpiše, koliko je pribilo.
@@ -54,5 +54,5 @@ idempotenten; preverjeno s tremi zaporednimi zagoni (0, 0, 0 popravkov).
 
 **Koda na malini ni iz gita.** `install-rpi.sh` privzeto klonira z GitHuba, kjer
 naših commitov ni — zagon brez `SZ_SRC` bi malino torej **nazadoval**. Zato se
-drevo najprej prenese (`rsync` v `~/sztrack-src`), installer pa se požene od
+drevo najprej prenese (`rsync` v `~/kajros-src`), installer pa se požene od
 tam.

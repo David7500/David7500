@@ -14,7 +14,7 @@
 ## Podatki v mockupih
 
 Zemljevidi so narisani iz prave geometrije mreže (267 postaj, 283 elementarnih
-odsekov) — projekcija je web-mercator, generirana iz `sztrack export`.
+odsekov) — projekcija je web-mercator, generirana iz `kajros export`.
 V pravi aplikaciji je to **Leaflet z OSM rastrskimi ploščicami**; v mockupih so
 ploščice narisane kot SVG, ker platno nima dostopa do mreže.
 
@@ -39,4 +39,4 @@ pomena sama.
 
 ## Ponovno sestavljanje platna
 
-Platno se generira iz teh datotek; rezultat (`sztrack-smeri.html`) ni v gitu.
+Platno se generira iz teh datotek; rezultat (`kajros-smeri.html`) ni v gitu.

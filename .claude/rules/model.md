@@ -1,15 +1,15 @@
 ---
 paths:
-  - "sztrack/stats.py"
-  - "sztrack/backtest.py"
-  - "sztrack/journey.py"
-  - "sztrack/ocena.py"
+  - "kajros/stats.py"
+  - "kajros/backtest.py"
+  - "kajros/journey.py"
+  - "kajros/ocena.py"
 ---
 
 # Napoved zamude, zveze in prestopi
 
 Vsak nov model se najprej pomeri s **prenosom trenutne zamude naprej**
-(`sztrack backtest`). Kar ga ne premaga, ne sodi v prikaz.
+(`kajros backtest`). Kar ga ne premaga, ne sodi v prikaz.
 
 ## Prevoznikova napoved
 
@@ -41,7 +41,7 @@ Vsak nov model se najprej pomeri s **prenosom trenutne zamude naprej**
   81,4 %. Z izjemo skupno 1,189 → 1,177 min in 94,27 → 94,42 %. Na teh nalogah MAE 1,36 → 1,12
   min, delež v petih minutah 93,7 → 94,8 %, in boljše je v **vseh** razredih
   zamude. Velja v `predict`, na odhodni tabli in v iskalniku zvez.
-  Merljivo: `sztrack backtest --operator`.
+  Merljivo: `kajros backtest --operator`.
 
   **Merilo samo je bilo prekratko.** `backtest.operator_forecast_tasks()` vzame
   eno nalogo na par postankov — kaj je feed trdil o cilju v trenutku, ko je bilo
@@ -53,7 +53,7 @@ Vsak nov model se najprej pomeri s **prenosom trenutne zamude naprej**
 
 * **Zamude naprej po progi so napoved, ne meritev** -- in ta napoved je
   **izmerjeno slaba**. Feed za še nedosežene postanke pogosto objavi 0, dokler
-  nima prave vrednosti. Merjeno (`sztrack backtest --operator`, 11 310 nalog):
+  nima prave vrednosti. Merjeno (`kajros backtest --operator`, 11 310 nalog):
   prevoznikova napoved MAE 7,9 min in 58 % v petih minutah, prenos trenutne
   zamude naprej MAE 1,3 min in 94 %. V najhujšem rezu -- feed pravi 0, vlak pa
   zamuja ≥ 5 min -- je napaka 18,5 min in v petih minutah je 6 % napovedi.
@@ -122,7 +122,7 @@ Vsak nov model se najprej pomeri s **prenosom trenutne zamude naprej**
 
 Za napoved zamude (`stats.predict`): vlak najprej porabi **rezervo voznega
 reda**, kar ostane, popravi historična mediana ostanka pri **tem vlaku**,
-ločena po razredu trenutne zamude. Izmerjeno (`sztrack backtest`, 292 736
+ločena po razredu trenutne zamude. Izmerjeno (`kajros backtest`, 292 736
 nalog, izpuščanje enega dne):
 
 | model | MAE | v 5 min |
@@ -228,7 +228,7 @@ vrzel v **številu dni**, ne v domiselnosti modela. Obvestila o ovirah so za
 model neuporabna iz drugega razloga: 522 od 779 vlakov ima kakšno, vsa pa so
 veljala ves čas zajema, zato med dnevi ne ločijo ničesar.
 
-**Preizkušeno in ne pomaga** (`sztrack backtest --day-offset`): popravek za
+**Preizkušeno in ne pomaga** (`kajros backtest --day-offset`): popravek za
 stanje mreže na ta dan. Zamisel je razumna -- če cel dan zamuja bolj kot
 običajno, bo tudi ta vlak -- a povprečna sprememba zamude se čez zajete dni
 giblje le med 115 in 142 s. Premalo, da bi kaj rešilo, dovolj, da doda šum:

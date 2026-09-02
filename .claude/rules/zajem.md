@@ -1,9 +1,9 @@
 ---
 paths:
-  - "sztrack/collector.py"
-  - "sztrack/alerts.py"
-  - "sztrack/gtfs.py"
-  - "sztrack/db.py"
+  - "kajros/collector.py"
+  - "kajros/alerts.py"
+  - "kajros/gtfs.py"
+  - "kajros/db.py"
 ---
 
 # Kaj feed pošlje in kje laže
@@ -177,7 +177,7 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   feed za nerazrešen postanek ne objavi. Ista past je v projektu zapisana že
   dvakrat („ne verjemi ničli, ki jo feed vrne za en klic").
 
-  Učinek `sztrack repair` na 10 dneh zajema: **852 vrstic** v `run`, od tega
+  Učinek `kajros repair` na 10 dneh zajema: **852 vrstic** v `run`, od tega
   277 avtobusnih (mediana 51 min, največ 11 h) in **300 železniških**
   (mediana 14 min, največ 80 min). Povprečna zamuda pade pri avtobusih z 9,8
   na 8,8 min, pri železnici s 6,7 na 6,5. Železniški primeri so isti vzorec:
@@ -231,7 +231,7 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   pogosto brez realtime pokritja.
 
 Izjema je **vreme**: Open-Meteo ima arhiv za nazaj, zato ga ni treba zbirati
-vnaprej — `sztrack weather` ga dopolni za že zajete zamude kadarkoli.
+vnaprej — `kajros weather` ga dopolni za že zajete zamude kadarkoli.
 
 ## Kar je pri avtobusih drugače
 
@@ -315,7 +315,7 @@ za dnevnik.
 prevozniki ~300 000 vrstic `obs` na dan; železnica jih naredi 4 000, torej 1 %.
 Ena vrstica stane 79 B (41 B tabela + 38 B ključ, merjeno z `dbstat`) — torej
 24 MB na dan in 8,7 GB na leto brez obrezovanja. Zato dve meji (`collector.prune_obs`, dnevno ob osvežitvi
-vremena, ali `sztrack prune`): železnica 90 dni, avtobusi 14. Železnica je
+vremena, ali `kajros prune`): železnica 90 dni, avtobusi 14. Železnica je
 jedro in njen dnevnik je poceni; pri avtobusih za prikaz zadošča `run`.
 `run` je zgodovina, iz katere živijo statistika, "običajna zamuda" in
 backtest -- te se ne briše.

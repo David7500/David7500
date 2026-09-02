@@ -2,6 +2,26 @@
 
 // Skupno za /app in /app/train/{st}. Nalozi se pred dashboard.js oz. train.js.
 
+// Preimenovanje sztrack -> kajros (3. 9. 2026) je premaknilo tudi kljuce v
+// localStorage. Brez tega bi shranjene poti, nedavne iskanja in izbrani nacin
+// prikaza ob prvem obisku tiho izginili -- za uporabnika izguba podatkov, ki
+// je ni povzrocil. Selitev je enkratna in samo kopira; starega ne brise, da se
+// da na staro razlicico se vrniti. **Odstrani po 1. 12. 2026.**
+(function preseliKljuce() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const star = localStorage.key(i);
+      if (!star || !star.startsWith("sztrack:")) continue;
+      const nov = "kajros:" + star.slice("sztrack:".length);
+      if (localStorage.getItem(nov) === null) {
+        localStorage.setItem(nov, localStorage.getItem(star));
+      }
+    }
+  } catch (e) {
+    // Zasebno okno ali blokiran dostop do shrambe: selitev ni nujna.
+  }
+})();
+
 // Meje so v MINUTAH in barva se doloci iz iste zaokrozene vrednosti, kot jo
 // izpise `delayLabel`. Prej so bile v sekundah (<= 60 s = tocno) in 61 s je
 // pisalo "+1" oranzno, 60 s pa "+1" sivo -- ista stevilka, dve barvi. Barva

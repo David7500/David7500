@@ -1,4 +1,4 @@
-# sztrack
+# Kajros
 
 **Kdaj mi pelje in koliko zamuja.** Zajem, prikaz in analiza zamud
 slovenskega javnega potniškega prometa iz odprtih podatkov —
@@ -67,12 +67,12 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
   oceno. Njegova napaka je pa **enosmerna**: kadar napove *več* kot mi, ima
   MAE 0,21 min — takrat ve za oviro, ki je iz zgodovine ni mogoče vedeti.
   Zato `max(naša ocena, njegova)`, nikoli navzdol.
-  Merljivo: `sztrack backtest --operator`.
+  Merljivo: `kajros backtest --operator`.
 * **Vlak zamudo porabi na rezervi voznega reda.** Napoved zato ni statistika
   sama: `slack = Σ max(0, postanek − 2 min)` med izhodiščem in ciljem se
   odšteje od trenutne zamude, ostanek popravi zgodovina te poti. LP 4219 ima
   na Mostu na Soči devet minut postanka in ni nikoli nadoknadil več kot sedem.
-  MAE 1,92 min proti 2,94 min za prenos (`sztrack backtest`).
+  MAE 1,92 min proti 2,94 min za prenos (`kajros backtest`).
 * **Ničli, ki jo feed vrne za en klic, ne verjamemo.** Pri 14 % postankov se
   pojavi vzorec X, 0, X v razmiku ene minute; zamuda med dvema klicema ne pade
   za več, kot je vmes minilo časa.
@@ -99,21 +99,21 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
 ## Ukazna vrstica
 
 ```bash
-sztrack init                      # ustvari bazo
-sztrack update                    # prenesi + uvozi vozni red (304 -> preskoči)
-sztrack poll                      # neprekinjen zajem zamud
-sztrack alerts --live             # zadnja poročila prevoznika o zamudi
-sztrack show "LPV 2206" --date 2026-08-28
-sztrack stats --days 90           # lestvica vlakov
-sztrack backtest                  # izmeri napako napovedi
-sztrack backtest --operator       # prevoznikova napoved proti prenosu zamude
-sztrack summarize                 # znova izracunaj dnevne razreze statistike
-sztrack repair                    # znova zgradi `run` iz dnevnika `obs`
-sztrack prune                     # pobriši star dnevnik (`run` ostane)
-sztrack weather --days 7          # dopolni vreme za nazaj
-sztrack merge druga.sqlite        # prilij zajem z drugega stroja
-sztrack seed                      # zgradi priloženo bazo za namestitev
-sztrack export --out export/      # GeoJSON mreže in postaj
+kajros init                      # ustvari bazo
+kajros update                    # prenesi + uvozi vozni red (304 -> preskoči)
+kajros poll                      # neprekinjen zajem zamud
+kajros alerts --live             # zadnja poročila prevoznika o zamudi
+kajros show "LPV 2206" --date 2026-08-28
+kajros stats --days 90           # lestvica vlakov
+kajros backtest                  # izmeri napako napovedi
+kajros backtest --operator       # prevoznikova napoved proti prenosu zamude
+kajros summarize                 # znova izracunaj dnevne razreze statistike
+kajros repair                    # znova zgradi `run` iz dnevnika `obs`
+kajros prune                     # pobriši star dnevnik (`run` ostane)
+kajros weather --days 7          # dopolni vreme za nazaj
+kajros merge druga.sqlite        # prilij zajem z drugega stroja
+kajros seed                      # zgradi priloženo bazo za namestitev
+kajros export --out export/      # GeoJSON mreže in postaj
 ```
 
 ## Razvoj
@@ -141,9 +141,9 @@ obdelava [DERP](https://derp.si). Vreme [Open-Meteo](https://open-meteo.com)
 (CC BY 4.0). Podlaga zemljevida © Esri, HERE, Garmin in
 © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
-**`seed/sz.sqlite` v tem repozitoriju je izpeljanka podatkov CC BY-SA 4.0**
+**`seed/kajros.sqlite` v tem repozitoriju je izpeljanka podatkov CC BY-SA 4.0**
 (vozni red IJPP, brez meritev). Deljenje naprej je zato dovoljeno pod isto
-licenco in z navedbo vira — to velja tudi za vsak izvoz iz `sztrack export`
+licenco in z navedbo vira — to velja tudi za vsak izvoz iz `kajros export`
 in za odgovore API-ja. Koda sama ni ista stvar kot podatki in svoje licence
 še nima.
 

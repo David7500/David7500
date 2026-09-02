@@ -68,23 +68,23 @@ ne smejo ponoviti:
 
 ## Stanje zajema
 
-Lokalna baza `data/sz.sqlite` (2026-09-01): 251 031 meritev,
+Lokalna baza `data/kajros.sqlite` (2026-09-01): 251 031 meritev,
 1 838 411 vrstic dnevnika, 12 obratovalnih dni,
 64 272 vremenskih vrstic, 9 791 postaj, 478 obvestil, 233 MB.
 Merodajen je zajem na malini; lokalna kopija je posnetek in za njim zaostaja.
 
-**Malina zajema samo železnico.** V `sztrack-zajem.service` je
+**Malina zajema samo železnico.** V `kajros-zajem.service` je
 `SZ_AGENCIES=` prazen, zato uvoz vzame le SŽ in `trip` ima 789 voženj.
-Storitev se imenuje **`sztrack-zajem`**, ne `sztrack` — ta obstaja, a je
+Storitev se imenuje **`kajros-zajem`**, ne `kajros` — ta obstaja, a je
 `inactive`, in kdor preverja napačno ime, sklepa, da zajem stoji.
 
 Posledica, ki jo je bilo videti šele ob prilitju: malina je 29.–31. 8. nekaj
 avtobusov vseeno posnela (takrat je imela njihove vožnje uvožene), potem pa
 jih je uvoz brez `SZ_AGENCIES` iz `trip` odstranil in **43 362 meritev je
 ostalo sirot** — vrstic v `run` brez vožnje, ki jih tam ni mogoče prebrati.
-Lokalna baza te vožnje ima, zato jih je `sztrack merge` rešil (sirot 0).
+Lokalna baza te vožnje ima, zato jih je `kajros merge` rešil (sirot 0).
 Prilitje je dodalo 217 545 vrstic dnevnika in 31. 8. dvignilo železnico s
-4 645 na 6 912 meritev; `sztrack repair` je nato popravil 1 511 vrstic, ki
+4 645 na 6 912 meritev; `kajros repair` je nato popravil 1 511 vrstic, ki
 niso šle skozi novejše varovalke (malina teče starejšo kodo).
 
 ## Prvi šolski dan (1. 9. 2026)
@@ -137,7 +137,7 @@ storitve, ne preimenovane stare.
 
 ## Senčno merjenje: kaj je potnik res videl (2. 9. 2026)
 
-Prvi izid `sztrack ocena` — 7 776 razrešenih napovedi v treh dneh (1 008
+Prvi izid `kajros ocena` — 7 776 razrešenih napovedi v treh dneh (1 008
 železniških, 6 768 avtobusnih), posnetih 25 minut pred vlakom in 15 pred
 avtobusom.
 

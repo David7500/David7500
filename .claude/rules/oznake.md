@@ -1,7 +1,7 @@
 ---
 paths:
-  - "sztrack/static/**"
-  - "sztrack/templates/**"
+  - "kajros/static/**"
+  - "kajros/templates/**"
   - "scripts/preveri_paleto.py"
 ---
 

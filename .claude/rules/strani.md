@@ -1,10 +1,10 @@
 ---
 paths:
-  - "sztrack/static/connections.js"
-  - "sztrack/static/connections.css"
-  - "sztrack/static/home.js"
-  - "sztrack/static/home.css"
-  - "sztrack/templates/**"
+  - "kajros/static/connections.js"
+  - "kajros/static/connections.css"
+  - "kajros/static/home.js"
+  - "kajros/static/home.css"
+  - "kajros/templates/**"
 ---
 
 # Strani in kaj je na njih
@@ -14,20 +14,20 @@ paths:
 **Hitrosti po odsekih ni več nikjer.** Bila je isti podatek v drugi enoti,
 zložen v zaprt `<details>` na dnu okna vožnje. Tu je nekaj časa pisalo, da
 `/api/speeds` in `stats.segment_speeds()` ostaneta, „ker ju rabi izvoz in
-mreža razdalj" — **to ni držalo**: `sztrack export` zapiše `network.geojson`
+mreža razdalj" — **to ni držalo**: `kajros export` zapiše `network.geojson`
 in `stations.json`, oba iz `network_geojson()`, in `segment_speeds()` ni
 klical nihče. Odstranjena sta (45 + 4 vrstice); v zgodovini sta, če bi kdaj
 zares zatrebala. Skupaj z njima je odpadel še `/api/trains` s
 `stats.trains()`, ki ga prav tako ni klical nihče.
 
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
-vprašanji: `sztrack:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
-`sztrack:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).
+vprašanji: `kajros:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
+`kajros:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).
 Oba sta v žetonih **pod iskalnikom**, ne v pregledu — pregled prva poizvedba
 pobriše prav takrat, ko bi seznam rabil za naslednjo. Prazno polje za postajo
 ob dotiku ponudi imena iz teh poizvedb; drugega ugiba za prazno polje nimamo.
 
-Oba seznama sta **ločena po omrežju**. Prejšnji `sztrack:last` ni bil, in to
+Oba seznama sta **ločena po omrežju**. Prejšnji `kajros:last` ni bil, in to
 je bilo videti: kdor je na `/app` iskal Celje–Ljubljana in nato odprl
 `/app/bus`, je tam dobil isto vprašanje, razrešeno na avtobusnem omrežju
 („Ljubljana AP"), in prazen odgovor. Zadnja poizvedba je zdaj preprosto prva

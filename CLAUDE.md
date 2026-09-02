@@ -1,6 +1,8 @@
-# sztrack
+# Kajros
 
 Zajem in analiza **zamud slovenskega javnega prevoza** iz odprtih podatkov.
+Ime je grški *kairos* — pravi trenutek, v nasprotju s *chronosom*, urnim
+časom. Vozni red je chronos, resnica je kairos; razlika med njima je projekt.
 Zaledje v Pythonu (FastAPI + SQLite), prikaz v vanilla JS. Zgodovine teh
 podatkov ni nikjer drugje — če je ne posnamemo sami, je ni.
 
@@ -14,7 +16,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
 Venv je `venv/` (Python 3.12), **ne** `.venv`. Strežnik med razvojem pogosto že
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
-CLI: `./venv/bin/python -m sztrack.cli <ukaz>` — `init`, `update`, `poll`,
+CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
 `prune`, `ocena`, `seed`.
 
@@ -55,8 +57,8 @@ mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
 
 ## Pravila, ki veljajo povsod
 
-* **Model se meri na dveh merilih, ne enem.** `sztrack backtest` je zgodovina
-  s kratkimi skoki, `sztrack ocena` pa številka, ki jo je potnik res videl 25
+* **Model se meri na dveh merilih, ne enem.** `kajros backtest` je zgodovina
+  s kratkimi skoki, `kajros ocena` pa številka, ki jo je potnik res videl 25
   minut prej. Zadnja sprememba je bila na prvem merilu za las slabša in na
   drugem mnogo boljša — brez obojega bi jo zavrgli.
 * **Meri, ne domnevaj.** Vsaka trditev v teh zapisih ima za sabo številko.
@@ -84,7 +86,7 @@ mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
 ## Koda
 
 ```
-sztrack/
+kajros/
   geo.py         haversine, projekcija postaj na progo, Douglas-Peucker
   db.py          SQLite shema + merge_from() + migracije
   gtfs.py        pogojni prenos zipa, uvoz voznega reda
@@ -118,7 +120,7 @@ Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
 Vsakih nekaj minut posname, kaj bi prikaz **ta hip** povedal za postanek, ki je
 25 minut pred vlakom (15 pred avtobusom) — našo oceno, prevoznikovo in prenos
 zamude — in ko vozilo tja pride, v isto vrstico dopiše resnico. Izid:
-`sztrack ocena`. To ni backtest: backtest meri model na zgodovini, to meri
+`kajros ocena`. To ni backtest: backtest meri model na zgodovini, to meri
 **številko, ki jo je potnik res videl**. Ugasne se s `SZ_OCENA=0`.
 
 ## Omrežji: `network` ni `mode`
@@ -152,7 +154,7 @@ tripom in za združevanje neuporaben — zgodovino gradi po `train_no` **znotraj
 `EN` …) je vrsta vlaka; `BUS …` je nadomestni prevoz.
 
 **`trip_id` so med regeneracijami GTFS stabilni** — preverjeno ob uvozu novega
-voznega reda (vseh 60 409 meritev se je še ujemalo). Zajema pred `sztrack
+voznega reda (vseh 60 409 meritev se je še ujemalo). Zajema pred `kajros
 update` ni treba varovati.
 
 ## Strani
@@ -183,7 +185,7 @@ uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude)
   posledice, ne naštevanja datotek.
 * Ne dodajaj odvisnosti brez razloga; `requirements.txt` ima pet vrstic.
 * `venv/`, `data/`, `export/`, `posnetki/`, `*.sqlite` so v `.gitignore` —
-  **razen** `seed/sz.sqlite`, ki ga rabi namestitev.
+  **razen** `seed/kajros.sqlite`, ki ga rabi namestitev.
 * **Agregat čez vso zgodovino se ne računa v zahtevi** (`stats.summary_get()`,
   enkrat na dan ob 3:30, `SZ_MAINT_HOUR`). Vsaka taka številka mora na strani
   nositi **čas izračuna**.
@@ -226,14 +228,16 @@ Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
 
 ## Odprto
 
-* **Ime projekta.** `sztrack` je bil mišljen samo za vlake; iščemo ironično
-  ime, tuja beseda, ki se dobro sliši v slovenščini. Ni še izbrano.
 * Statistična stran je odstranjena do prenove; endpointa `/api/stats*` sta
   ostala (glej komentar v `api.py`).
-* Dostop od zunaj (Tailscale ali Cloudflare Tunnel). **Vrat na usmerjevalniku
-  ne odpiraj — API nima avtentikacije.**
+* Dostop od zunaj: **Tailscale Funnel**, ker da stalen `https://<stroj>.
+  <tailnet>.ts.net` brez domene; Cloudflarov hitri tunel ima naključen naslov,
+  ki umre s procesom. **Vrat na usmerjevalniku ne odpiraj.**
 * Ločen model napovedi za avtobuse, ko bo meritev dovolj.
-* **Licenca kode ni izbrana.** Podatki so CC BY-SA 4.0 (navedeno v aplikaciji
-  in v README), `seed/sz.sqlite` je njihova izpeljanka. Koda je zaenkrat brez
-  licence, kar pomeni „vse pravice pridržane“ — za javni repozitorij je to
-  odločitev, ki jo je treba sprejeti zavestno.
+* **Koda je zaprta** (odločeno 3. 9. 2026): zasebni repozitorij, brez licence,
+  torej „vse pravice pridržane“. **Endpointi so odprti** — API sme brati vsak.
+  Podatki ostajajo CC BY-SA 4.0 in navedba vira je pogoj rabe, ne okras;
+  `seed/kajros.sqlite` je njihova izpeljanka.
+* **Delovni imenik se še vedno imenuje `sztrack`.** Preimenovanje mape bi
+  prekinilo tekočo sejo in poti v lupini; naredi se ločeno, git ostane cel:
+  `mv ~/Dokumenti/Projekti/{sztrack,kajros}`.

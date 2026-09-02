@@ -1,6 +1,6 @@
 ---
 paths:
-  - "sztrack/api.py"
+  - "kajros/api.py"
 ---
 
 # Kaj sme in česa ne sme API

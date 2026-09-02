@@ -116,7 +116,7 @@ Ta del je pomembnejši od izbire platforme.
    licence ni izbrane, kar pomeni „vse pravice pridržane“. Prositi javnost za
    denar za zaprto kodo je slabo — in GitHub Sponsors javen repozitorij
    **zahteva**.
-3. **Projekt nima imena.** `sztrack` je delovno ime za vlake in ne pokriva
+3. **Projekt nima imena.** `kajros` je delovno ime za vlake in ne pokriva
    avtobusov. Kampanja brez imena ne obstaja.
 4. **Zgodovine je 13 dni.** Čez dva ali tri mesece je to arhiv, ki ga nima
    nihče drug, in to je edini pravi argument za prispevek. Zdaj še ni.

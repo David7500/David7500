@@ -18,24 +18,24 @@ sudo bash deploy/install-rpi.sh
 
 Skripta je idempotentna — poženeš jo lahko znova za posodobitev. Naredi:
 
-* sistemskega uporabnika `sztrack` brez lupine,
-* kodo v `/opt/sztrack`, podatke v `/var/lib/sztrack`,
+* sistemskega uporabnika `kajros` brez lupine,
+* kodo v `/opt/kajros`, podatke v `/var/lib/kajros`,
 * virtualno okolje in odvisnosti,
 * priloženo bazo voznega reda, **če je še ni** (obstoječe nikoli ne povozi),
-* storitev `sztrack.service` in dnevno varnostno kopijo `sztrack-backup.timer`.
+* storitev `kajros.service` in dnevno varnostno kopijo `kajros-backup.timer`.
 
 Po namestitvi:
 
 ```bash
 curl -s http://localhost:8000/api/health
-journalctl -u sztrack -f
+journalctl -u kajros -f
 ```
 
 Iz domačega omrežja je dosegljiv na `http://<ip-pija>:8000/docs`.
 
 ### Kaj je na Pi drugače
 
-**Vozni red se osvežuje sam.** V `sztrack.service` je `SZ_REFRESH=subprocess` —
+**Vozni red se osvežuje sam.** V `kajros.service` je `SZ_REFRESH=subprocess` —
 uvoz teče v podprocesu, ki po koncu ves pomnilnik vrne sistemu (vrh 54 MB).
 Na Pelli je bilo to izklopljeno zaradi 100 MB omejitve.
 
@@ -47,7 +47,7 @@ voznorednega okna s trenutnim časom, zato naj `systemd-timesyncd` teče.
 vrstic na dan; za SD kartico zanemarljivo. Če imaš USB SSD, je vseeno boljše
 mesto — nastavi `SZ_DATA_DIR` nanj v enoti storitve.
 
-**Varnostne kopije** nastanejo vsak dan ob 3:30 v `/var/lib/sztrack/backup/`
+**Varnostne kopije** nastanejo vsak dan ob 3:30 v `/var/lib/kajros/backup/`
 prek `sqlite3 .backup`, kar je konsistentno tudi med pisanjem, in se stisnejo
 z `gzip -1` (~3,1× manjše, merjeno). Hranijo se **tri**, ne štirinajst: z vsemi
 prevozniki zraste baza ~3,4 GB na leto in štirinajst polnih kopij bi kartico
@@ -55,13 +55,13 @@ zapolnilo. Če bi po kopiji ostalo manj kot 2 GB prostega, se ta preskoči in to
 zapiše v dnevnik — polna kartica ustavi tudi zajem, kopija pa je le
 kratkoročna varovalka.
 
-**Dolgoročni arhiv je računalnik**, ki bazo potegne dol (`sztrack merge`), ne
+**Dolgoročni arhiv je računalnik**, ki bazo potegne dol (`kajros merge`), ne
 Pi. Kartice odpovedo.
 
 ## Samo zajem, brez strežnika
 
 Kadar naj stroj le polni bazo — da lahko računalnik ugasneš — se namesti
-`sztrack-zajem.service` namesto strežnika:
+`kajros-zajem.service` namesto strežnika:
 
 ```bash
 sudo SZ_MODE=zajem SZ_AGENCIES=1118,1123,1119,1121 bash deploy/install-rpi.sh
@@ -77,10 +77,10 @@ statične tabele** — `obs` in `run` ostaneta.
 
 ### Prenos zajema s prejšnjega gostitelja
 
-Zajeto drugje se ne sme izgubiti. Prenesi staro `sz.sqlite` in jo prilij:
+Zajeto drugje se ne sme izgubiti. Prenesi staro `kajros.sqlite` in jo prilij:
 
 ```bash
-sudo -u sztrack /opt/sztrack/.venv/bin/python -m sztrack.cli merge ~/sz-pella.sqlite
+sudo -u kajros /opt/kajros/.venv/bin/python -m kajros.cli merge ~/sz-pella.sqlite
 ```
 
 ```json
@@ -111,8 +111,8 @@ Zajem teče v ozadnji niti, ki jo zažene FastAPI ob zagonu.
 main.py            vstopna točka: uvicorn na $PORT
 requirements.txt   fastapi, uvicorn, requests, gtfs-realtime-bindings
 Procfile           web: python main.py
-sztrack/           koda
-seed/sz.sqlite     pripravljen vozni red (1,7 MB) za takojšen zagon
+kajros/           koda
+seed/kajros.sqlite     pripravljen vozni red (1,7 MB) za takojšen zagon
 ```
 
 ### Zagon
@@ -145,7 +145,7 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, uporabi 8000.
 
 ### Kaj se zgodi ob prvem zagonu
 
-Če baze še ni, se prekopira `seed/sz.sqlite` — zagon je takojšen. Če je tudi
+Če baze še ni, se prekopira `seed/kajros.sqlite` — zagon je takojšen. Če je tudi
 seed ni, si vozni red prenese sam (41 MB, uvoz ~23 s pri polnem jedru; na 0,1
 jedra računaj nekaj minut) in zip nato pobriše.
 
@@ -166,7 +166,7 @@ Merjeno na tem paketu:
 
 Pri 100 MB pomnilnika ostane okoli 25 MB rezerve. Če jo bo zmanjkalo, je prvi
 korak `SZ_POLL_SECONDS=60` in izogibanje `/api/network.geojson` v vroči zanki
-(odgovor je ~1 MB — postavi ga raje kot statično datoteko prek `sztrack export`).
+(odgovor je ~1 MB — postavi ga raje kot statično datoteko prek `kajros export`).
 
 ### Zakaj je osveževanje voznega reda privzeto izklopljeno
 
@@ -181,7 +181,7 @@ Uvoz GTFS je najdražji trenutek v življenju procesa. Izmerjeno na tem paketu:
 Pri 100 MB pomnilnika nobena od obeh ni varna: proces bi ob osvežitvi lahko
 dobil OOM, in to vsak dan ob isti uri. Zato je privzeto `off`.
 
-Vozni red osvežiš tako, da drugje pognaš `sztrack update`, novo `sz.sqlite`
+Vozni red osvežiš tako, da drugje pognaš `kajros update`, novo `kajros.sqlite`
 daš v `seed/` in objaviš paket — obstoječa baza se ne povozi, ker se seed
 uporabi le, kadar baze še ni. (Za to je treba staro bazo enkrat odstraniti
 oziroma preimenovati.) Vsebinsko se vozni red spremeni nekajkrat na leto.
@@ -208,4 +208,4 @@ na 0, disk ne preživi zagona in zbrano se izgublja.
 Zgodovine zamud ni od nikoder dobiti nazaj — GTFS-RT nosi samo trenutno stanje.
 Če gostitelj ob vsaki objavi ali ponovnem zagonu zavrže disk, se zbrano izgubi.
 Pred resnim zajemom preveri, ali `SZ_DATA_DIR` preživi ponovni zagon, in si
-uredi občasno kopijo `sz.sqlite`.
+uredi občasno kopijo `kajros.sqlite`.

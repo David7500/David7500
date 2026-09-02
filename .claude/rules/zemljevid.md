@@ -1,9 +1,9 @@
 ---
 paths:
-  - "sztrack/static/dashboard.js"
-  - "sztrack/static/dashboard.css"
-  - "sztrack/static/train.js"
-  - "sztrack/static/train.css"
+  - "kajros/static/dashboard.js"
+  - "kajros/static/dashboard.css"
+  - "kajros/static/train.js"
+  - "kajros/static/train.css"
 ---
 
 # Zemljevida: veliki in tisti v oknu vožnje

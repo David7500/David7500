@@ -112,7 +112,7 @@ To ni pedantnost — če se tega ne držimo, aplikacija laže.
 | `GET /api/health` | stanje zajema |
 
 `network.geojson` je ~1 MB; za prikaz ga postrezi kot statično datoteko
-(`sztrack export`) in ne kliči v vroči zanki.
+(`kajros export`) in ne kliči v vroči zanki.
 
 ## Dostop
 
