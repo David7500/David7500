@@ -124,10 +124,11 @@ Ta del je pomembnejši od izbire platforme.
 Vrstni red je torej: **ime → licenca → javen repozitorij → strežnik z domeno
 in HTTPS → šele nato gumb za prispevek.** Ne obratno.
 
-Vmesna možnost, ki nič ne stane: **brezplačni nivo** (Oracle Cloud Free Tier,
-fly.io). Za preizkus javne dostopnosti je dovolj; za storitev, na katero se
-kdo zanaša, ni — kapacitete ni zagotovljene in jo lahko vzamejo. Uporabno,
-da se javna različica postavi **pred** zbiranjem, ne namesto njega.
+Vmesna možnost, ki nič ne stane, je opisana v
+[docs/javna-postavitev.md](javna-postavitev.md). Na kratko: **Oracle Free Tier
+odpade** — njihovo pravilo o pobiranju nedejavnih strojev zadene natanko naš
+primer (poraba 89 MB od 12 GB in procesor pri nič). Za prvi javni preizkus je
+boljši Cloudflare Tunnel z maline, ki ne stane nič in ne odpre nobenih vrat.
 
 ## Viri
 
