@@ -58,7 +58,7 @@
 
 .stat-vrsta {
   display: grid;
-  grid-template-columns: 4.6em 1fr auto;
+  grid-template-columns: 4.6em 1fr auto auto;
   align-items: center;
   gap: 10px;
   padding: 3px 0;
