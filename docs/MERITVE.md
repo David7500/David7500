@@ -229,3 +229,42 @@ je še vedno verjetna, dokazana pa ni.
 (0,56 %), pri 2 h pa 3 464 (0,71 %). Ker meja ni izmerjena, ampak sklepana,
 zajema **nisem** spreminjal — podatki se ne brišejo na domnevo. Odločitev
 čaka.
+
+## Model ločeno po omrežjih (3. 9. 2026)
+
+Senca ima 11 787 razrešenih napovedi, od tega **2 001 železniških** — prvič
+dovolj, da se model pomeri na vlakih posebej.
+
+**Železnica** (2 001 vrstic, posneto 25 min pred vlakom):
+
+| model | MAE | v 2 min | v 5 min | podcenjenih | odklon |
+|---|---|---|---|---|---|
+| **naša ocena** | **3,56 min** | **64,1 %** | **82,0 %** | 13,2 % | **−1,71** |
+| prenos zamude | 4,40 | 54,8 % | 75,5 % | 21,9 % | −3,40 |
+| prevoznik | 3,73 | 73,3 % | 73,3 % | 26,7 % | −3,60 |
+
+**Prevoznik pri vlakih molči v 99,3 %** (vrednost je imel v 15 od 2 001
+primerov), zato je njegova vrstica anekdota, ne meritev. Proti prenosu zamude
+smo boljši po vseh merilih: MAE 3,56 proti 4,40 in 82,0 % proti 75,5 % v petih
+minutah.
+
+**Kar je novo in ni bilo vidno v skupni številki: predznak odklona se med
+omrežjema obrne.**
+
+| | odklon | pomen |
+|---|---|---|
+| železnica | **−1,71 min** | napovemo **manj** zamude, kot je je |
+| avtobusi | **+0,83 min** | napovemo **več** zamude, kot je je |
+| skupaj | +0,40 min | povprečje, ki obeh ne opiše |
+
+Verjetna razlaga, **ni preverjena**: meja ostanka (`max(10 min, trenutna
+zamuda)`, uvedena 2. 9.) pri vlakih veže, ker zamuda na dolgih relacijah raste
+naprej, pri avtobusih pa ne, ker se na kratkih relacijah pobere. Preveri se
+tako, da se meri delež primerov, kjer meja res odreže.
+
+**Odprto: katero smer napake hočemo.** Za *ujeti* vlak je varno podcenjevati —
+kdor pride prezgodaj, čaka; kdor prepozno, vlak zamudi. Za *načrtovanje
+prestopa* je varno ravno obratno. Model tega ne more imeti prav v obe smeri
+hkrati, zato je to odločitev o rabi in ne popravek. Do nje se model ne
+spreminja. Zapis v tem dokumentu, ki je trdil, da je pozitiven odklon „varna
+smer“, je bil zato prehiter.
