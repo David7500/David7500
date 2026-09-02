@@ -133,3 +133,51 @@ zgodovino **le 11 % avtobusnih voženj** (1 133 od 9 880) proti **87 %
 torej od 1. 9. slepi in se bosta polnili znova; pri železnici se ni zgodilo nič.
 `trip_id` so sicer ostali stabilni (0 sirot v `run`) — nove vožnje so res nove
 storitve, ne preimenovane stare.
+
+
+## Senčno merjenje: kaj je potnik res videl (2. 9. 2026)
+
+Prvi izid `sztrack ocena` — 7 776 razrešenih napovedi v treh dneh (1 008
+železniških, 6 768 avtobusnih), posnetih 25 minut pred vlakom in 15 pred
+avtobusom.
+
+**Parna primerjava** (samo vrstice, kjer imajo vrednost vsi trije; prevoznik
+je sicer meril na lažjem vzorcu in je bil videti boljši, kot je — 6 598 vrstic):
+
+| model | MAE | v 5 min | podcenjenih | odklon |
+|---|---|---|---|---|
+| **naša ocena** | **3,28 min** | **86,6 %** | **5,2 %** | +1,04 min |
+| naša brez pravila „prevoznik ve več“ | 3,59 | 85,8 % | 9,1 % | −0,61 |
+| prevoznik | 3,39 | 82,4 % | 13,5 % | −1,26 |
+| prenos zamude | 3,44 | 80,8 % | 14,8 % | −1,37 |
+
+Iz tega štiri stvari:
+
+* **Naša ocena premaga oboje — prevoznika in prenos — po vseh merilih.**
+  Prva različica poročila je trdila nasprotno (prevoznik MAE 3,39 proti našim
+  3,63), ker je vsak model merila na svojem vzorcu. To je natanko past, pred
+  katero svari `ocena.py`, in se ji je treba izogniti tudi pri branju.
+* **Pravilo „prevoznik ve več“ se izplača.** Sproži se v 41 % primerov (skoraj
+  samo pri avtobusih) in tam je MAE 2,65 proti 3,31 brez njega, delež v petih
+  minutah 88,6 proti 87,0.
+* **Vsi razen nas podcenjujejo.** Odklon prenosa je −1,37 min, prevoznika
+  −1,26; naša številka je +1,04, torej rahlo pesimistična. To je varna smer:
+  kdor pride prezgodaj, čaka, kdor prepozno, vlak zamudi.
+* **Pri železnici prevoznik v potnikovem oknu praktično molči** — vrednost za
+  ciljni postanek je imel v **4 od 1 008** primerov (0,4 %). Pri avtobusih je
+  molčal v 2,6 %. Za vlake smo torej edini vir odgovora in tam smo 3,52 min
+  proti 4,50 pri prenosu (78,5 proti 72,4 % v petih minutah).
+
+**Številka, ki jo potnik vidi, je dvakrat slabša od backtesta** (1,92 min in
+91 %). To ni napaka merjenja, ampak drugo vprašanje: v potnikovem oknu je cilj
+mediano **6 postankov naprej pri železnici in 8 pri avtobusu** (p90 9 oziroma
+13), backtest pa je poln kratkih skokov. Zastarelost ni kriva — „trenutna
+zamuda“ je ob pogledu stara 2,7 min (železnica) oziroma 1,2 min (avtobus).
+
+**Kje se da izboljšati, konkretno:** pri **9–10 postankih naprej** naš model
+izgubi proti golemu prenosu (MAE 4,62 proti 3,59; brez pravila prevoznika celo
+5,36). Odklon je tam +2,13 min povprečno, a le +0,72 mediano — torej ne
+sistematično precenjevanje, ampak **rep**: manjšina primerov, kjer napovemo
+veliko zamudo, ki se ne zgodi. Najhuje je pri avtobusih (+2,22) in takrat, ko
+je vozilo ob pogledu skoraj točno (odklon +3,89 min pri zamudi pod 2 min).
+Pri drugih razdaljah (4–8 in 11+) model prenos prepričljivo premaga.

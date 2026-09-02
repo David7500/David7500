@@ -122,7 +122,7 @@ def _vrstica_modela(ime, m):
     if not m.get("n"):
         return f"{ime:24s}{'—':>10}"
     return (f"{ime:24s}{m['mae_min']:>9.2f}m{m['v2min']:>9.1f}%{m['v5min']:>9.1f}%"
-            f"{m['podcenjenih']:>9.1f}%{m['n']:>9d}")
+            f"{m['podcenjenih']:>9.1f}%{m['odklon_min']:>9.2f}m{m['n']:>8d}")
 
 
 def cmd_ocena(args):
@@ -139,15 +139,22 @@ def cmd_ocena(args):
               " dobro uro.")
         return
 
+    modeli = (("naša ocena", "nasa"), ("naša brez prevoznika", "nasa_brez_prevoznika"),
+              ("prevoznik", "prevoznik"), ("prenos zamude", "prenos"))
+
     def blok(naslov, x):
         print(f"\n{naslov}")
         print(f"{'model':24s}{'MAE':>10}{'v 2 min':>10}{'v 5 min':>10}"
-              f"{'podcenj.':>10}{'n':>9}")
-        for ime, kljuc in (("naša ocena", "nasa"), ("naša brez prevoznika", "nasa_brez_prevoznika"),
-                           ("prevoznik", "prevoznik"), ("prenos zamude", "prenos")):
+              f"{'podcenj.':>10}{'odklon':>10}{'n':>8}")
+        for ime, kljuc in modeli:
             print(_vrstica_modela(ime, x[kljuc]))
-        if x.get("prevoznik_molci") is not None:
-            print(f"  (prevoznik za ta postanek ni imel vrednosti v {x['prevoznik_molci']} % primerov)")
+        molci = x.get("prevoznik_molci")
+        if molci:
+            print(f"  prevoznik za ta postanek ni imel vrednosti v {molci} % primerov;")
+            print("  spodaj isti izrez za vse tri -- primerjava na razlicnih vzorcih")
+            print("  meri tudi razliko med vzorcema:")
+            for ime, kljuc in modeli:
+                print("  " + _vrstica_modela(ime, x["parno"][kljuc]))
 
     blok("SKUPAJ", r["skupaj"])
     for net, x in r["po_omrezju"].items():

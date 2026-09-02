@@ -297,6 +297,9 @@ def _meritve(vals: list[tuple[int, int]]) -> dict:
         "v2min": round(sum(1 for x in napake if x <= 120) / n * 100, 1),
         "v5min": round(sum(1 for x in napake if x <= 300) / n * 100, 1),
         "podcenjenih": round(sum(1 for a, b in vals if a < b - 300) / n * 100, 1),
+        # Predznacena napaka: pove SMER. MAE 3 min iz same podcenjenosti in
+        # MAE 3 min okoli nicle sta za potnika dve razlicni stvari.
+        "odklon_min": round(sum(a - b for a, b in vals) / n / 60, 2),
     }
 
 
@@ -315,6 +318,12 @@ def report(conn: sqlite3.Connection, days: int = 30,
         (od, network) if network else (od,)).fetchall()
 
     def rez(rows: list[sqlite3.Row]) -> dict:
+        # Prevoznik za postanek v potnikovem oknu pogosto nima vrednosti. Ce
+        # ga merimo samo tam, kjer jo ima, ga merimo na LAZJEM vzorcu -- in
+        # primerjava dveh modelov na dveh vzorcih meri tudi razliko med
+        # vzorcema. Zato dve tabeli: vse vrstice (kjer prevoznika ni) in
+        # parni izrez, kjer imajo vrednost vsi trije.
+        parne = [r for r in rows if r["operator_s"] is not None]
         return {
             "nasa": _meritve([(r["ours_s"], r["actual_s"]) for r in rows
                               if r["ours_s"] is not None]),
@@ -333,6 +342,15 @@ def report(conn: sqlite3.Connection, days: int = 30,
             "prevoznik_molci": round(
                 sum(1 for r in rows if r["operator_s"] is None) / len(rows) * 100, 1)
             if rows else None,
+            "parno": {
+                "nasa": _meritve([(r["ours_s"], r["actual_s"]) for r in parne
+                                  if r["ours_s"] is not None]),
+                "nasa_brez_prevoznika": _meritve([(r["ours_own_s"], r["actual_s"])
+                                                  for r in parne if r["ours_own_s"] is not None]),
+                "prevoznik": _meritve([(r["operator_s"], r["actual_s"]) for r in parne]),
+                "prenos": _meritve([(r["carry_s"], r["actual_s"]) for r in parne
+                                    if r["carry_s"] is not None]),
+            },
         }
 
     izid = {"od": od, "vrstic": len(vrstice), "skupaj": rez(vrstice)}
