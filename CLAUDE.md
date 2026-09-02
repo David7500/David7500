@@ -229,3 +229,7 @@ Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
 * Dostop od zunaj (Tailscale ali Cloudflare Tunnel). **Vrat na usmerjevalniku
   ne odpiraj — API nima avtentikacije.**
 * Ločen model napovedi za avtobuse, ko bo meritev dovolj.
+* **Licenca kode ni izbrana.** Podatki so CC BY-SA 4.0 (navedeno v aplikaciji
+  in v README), `seed/sz.sqlite` je njihova izpeljanka. Koda je zaenkrat brez
+  licence, kar pomeni „vse pravice pridržane“ — za javni repozitorij je to
+  odločitev, ki jo je treba sprejeti zavestno.

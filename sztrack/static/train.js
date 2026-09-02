@@ -472,7 +472,10 @@ function renderTimeline() {
       aheadOnly: !document.body.classList.contains("is-advanced"),
       highlight: yours ? yours.stop_seq : null,
     }) +
-    `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj</div>`;
+    // Vira sta navedena tu in ne v opombi nad casovnico: navedba je pogoj
+    // rabe (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
+    `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj
+      · IJPP prek NAP (CC BY-SA 4.0), obdelava DERP · vreme Open-Meteo (CC BY 4.0)</div>`;
 }
 
 // ---------- zgodovina: stevilke ----------
@@ -1170,13 +1173,18 @@ async function drawRunMap(v) {
     // Preklopi ga `initDragPolicy()`, in sicer po VHODNI NAPRAVI, ne po
     // napravi nasploh -- prenosnik z zaslonom na dotik mora imeti oboje.
     runMap.map = L.map("run-map", {
-      zoomControl: false, attributionControl: false, scrollWheelZoom: false,
+      zoomControl: false, scrollWheelZoom: false,
+      // Navedba podlage je pogoj rabe (Esri in OpenStreetMap), ne okras --
+      // `attributionControl: false` jo je odstranil s cele strani. Ostane,
+      // le brez Leafletove lastne oznake, ker okvir meri 260 px.
+      attributionControl: true,
     }).setView([v.lat, v.lon], 14);
+    runMap.map.attributionControl.setPrefix("");
     L.control.zoom({ position: "topright" }).addTo(runMap.map);
     // Esri ima prave ploscice do z16; nad tem raztegnemo zadnjo (glej dashboard).
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
       + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19, maxNativeZoom: 16 })
+      { maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR })
       .addTo(runMap.map);
 
     // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi

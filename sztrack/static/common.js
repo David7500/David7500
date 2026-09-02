@@ -64,6 +64,11 @@ function dayLabel(isoDate) {
   return isoDate ? DATE_FMT.format(new Date(isoDate + "T12:00:00")) : "—";
 }
 
+// Navedba podlage. Pogoj rabe pri Esriju in OpenStreetMap, zato je na VSAKEM
+// zemljevidu, tudi na 260 px velikem v oknu voznje.
+const ESRI_ATTR = 'podlaga &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, '
+  + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
 // Naslovi obvestil SŽ kricijo in ponavljajo znacko nad sabo: "DELA NA PROGI:
 // Obcasna zapora ..." stoji pod zetonom "dela na progi". Predpono odrezemo --
 // v sestih od sestnajstih obvestil je ista beseda dvakrat, v verzalkah.

@@ -39,9 +39,6 @@ map.on("moveend zoomend", mapStateToUrl);
 // CARTO (dark_nolabels) zna isto, a ploscice pridejo z napisom "API KEY
 // REQUIRED" cez pol zaslona -- preverjeno, ne uporabljati brez kljuca.
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
-const ESRI_ATTR = 'podlaga &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, '
-  + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-
 const baseLayer = L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
   maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
 }).addTo(map);
