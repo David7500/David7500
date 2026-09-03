@@ -135,3 +135,25 @@ stolpec od stopnje 4 naprej nosi svojo številko. Paleto preverjaj z
 svetlosti in razločljivost pri barvni slepoti (CIEDE2000 na simulaciji
 protan/deutan/tritan). Trk obeh lestvic je pri tritanu **ΔE 1,6**, torej hujši
 od tu prej zapisanih 5,5 — ločena registra sta nujna, ne okrasna.
+
+
+## Znak
+
+Monogram **K**: navpično steblo in dve roki iz iste točke. Siva roka je vozni
+red, poudarjena resnica — ista misel kot ime (*chronos* proti *kairosu*).
+
+* **V glavi strani** (`brand-mark`) je znak brez podlage in bere `currentColor`,
+  zato na avtobusni strani pozeleni skupaj s poudarkom. Steblo in zgornja roka
+  imata `stroke-opacity="0.5"`.
+* **Kot ikona** (`static/ikone/`) ima podlago, ker stoji sam. Nastane s
+  `scripts/naredi-ikone.sh`, ne ročno.
+* **Vlakov znak ni več znamka.** Ostane samo tam, kjer pomeni **omrežje**:
+  preklop v glavi in izbira na domači strani. Znamka mora pokrivati oboje.
+* Znak mora zdržati **svetlo in temno podlago**. Prvi poskus monograma je imel
+  belo steblo in je na svetli podlagi izginil; Android si ozadje določi sam.
+
+**Chromium ne more brati iz `/tmp`** (isti razlog, kot da tja ne more pisati).
+Prva različica ikon je bila zato posnetek njegove strani z napako in je bila
+videti kot uspeh — datoteka je obstajala, imela 200 in pravo velikost v bajtih.
+Razkril jo je šele enak `md5` dveh različnih ikon. `naredi-ikone.sh` zato po
+vsaki sliki preveri **dejansko velikost slike**, ne le obstoja datoteke.
