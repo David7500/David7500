@@ -268,3 +268,33 @@ prestopa* je varno ravno obratno. Model tega ne more imeti prav v obe smeri
 hkrati, zato je to odločitev o rabi in ne popravek. Do nje se model ne
 spreminja. Zapis v tem dokumentu, ki je trdil, da je pozitiven odklon „varna
 smer“, je bil zato prehiter.
+
+
+## Strop zamude za statistiko (3. 9. 2026)
+
+Lestvica najbolj zamujajočih je bila pri avtobusih neuporabna: prva vrstica
+N6223 z mediano **654 min na dveh vožnjah**. Vzrok so vrednosti, ki niso
+zamude, ampak feedova zamenjava prometnega dne — isti pojav, ki ga pri
+prikazu že lovi `api.MAX_LIVE_DELAY_S` (6 h).
+
+Za statistiko je meja nižja in **izmerjena, ne izbrana** —
+`stats.MAX_REALNA_ZAMUDA_S = 3 h`:
+
+| | vrstic | odpade | mediana | povprečje | p99 |
+|---|---|---|---|---|---|
+| železnica | 69 803 | **0 (0,00 %)** | 2,00 → 2,00 | 6,25 → 6,25 | 39,0 → 39,0 |
+| avtobusi | 537 253 | 2 614 (0,49 %) | 2,18 → 2,15 | **7,25 → 4,86** | 73,4 → 59,0 |
+
+Dvoje to potrjuje. Prvič: **iz železnice strop ne vzame ničesar**, torej ne
+reže v prave zamude — in železnica je omrežje, kjer imamo največ zaupanja.
+Drugič: pri avtobusih se mediana komaj premakne, **povprečje pa pade za
+tretjino**. Robustna mera stabilna, občutljiva sesuta — to je podpis
+izstopajočih vrednosti, ne repa prave porazdelitve.
+
+Podatki se **ne brišejo**; to je filter branja in zajem hrani vse. Lestvica
+ima ob tem še spodnjo mejo vzorca (`MIN_RUNS_FOR_RANK = 5`): vožnja z dvema
+zajemoma na vrhu ni najslabši vlak, ampak najmanjši vzorec.
+
+Po popravku je najslabša avtobusna vožnja A5117 s **64 min na petih vožnjah**
+namesto 654 min na dveh; železniška lestvica se ni spremenila (EC 211,
+46 min, 12 voženj, 8 % točnih).

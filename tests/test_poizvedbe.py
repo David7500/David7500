@@ -393,7 +393,15 @@ def test_statistika_ne_steje_mestnih_avtobusov(conn):
     "delež točnih vlakov" spremenilo v delež točnih avtobusov.
     """
     _add_bus(conn)
-    for trip, day, d in (("t1", "2026-08-31", 600), ("b1", "2026-08-31", 60)):
+    # Dnevni povzetek preverjamo na 31. 8. (natanko ena vozjna na omrezje),
+    # lestvica pa ima prag `MIN_RUNS_FOR_RANK`, zato so ostali dnevi zraven.
+    # Datumi so trdi, ker jih testira tudi `day_summary`; v `service_day` se ne
+    # vstavlja nic, zato trka z vrstico iz priprave ni.
+    for trip, day, d in (("t1", "2026-08-31", 600), ("b1", "2026-08-31", 60),
+                         ("t1", "2026-08-30", 600), ("b1", "2026-08-30", 60),
+                         ("t1", "2026-08-29", 600), ("b1", "2026-08-29", 60),
+                         ("t1", "2026-08-28", 600), ("b1", "2026-08-28", 60),
+                         ("t1", "2026-08-27", 600), ("b1", "2026-08-27", 60)):
         conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
                      "VALUES(?,?,2,?,?,1)", (trip, day, d, d))
     conn.commit()
@@ -593,8 +601,13 @@ def _vozba(conn, trip, day, stops):
 
 
 def test_povzetek_vzame_zadnji_postanek(conn):
-    """Konca zamuda je zamuda na zadnjem zajetem postanku, ne najvecja."""
-    _vozba(conn, "t1", _pred(2), [(2, 600), (3, 120)])
+    """Konca zamuda je zamuda na zadnjem zajetem postanku, ne najvecja.
+
+    Pet dni, ker ima lestvica prag `MIN_RUNS_FOR_RANK`: vozjna z enim samim
+    zajemom na vrhu ni najslabsi vlak, ampak najmanjsi vzorec.
+    """
+    for dan in range(2, 7):
+        _vozba(conn, "t1", _pred(dan), [(2, 600), (3, 120)])
     conn.commit()
     got = stats.summary_build(conn, "network_stats", "zeleznica", 90)
     row = next(r for r in got["rows"] if r["train_no"] == "IC 1")
@@ -611,14 +624,57 @@ def test_povzetek_ne_mesa_omrezij(conn):
                  " mode, agency, network) VALUES('b1','rb','LPP 6','B','S1',"
                  "'bus','1118','avtobus')")
     _sched(conn, "b1", [(1, "A", None, 30000), (2, "C", 33000, None)])
-    _vozba(conn, "t1", _pred(2), [(3, 120)])
-    _vozba(conn, "b1", _pred(2), [(2, 900)])
+    for dan in range(2, 7):            # prag MIN_RUNS_FOR_RANK
+        _vozba(conn, "t1", _pred(dan), [(3, 120)])
+        _vozba(conn, "b1", _pred(dan), [(2, 900)])
     conn.commit()
 
     rail = stats.summary_build(conn, "network_stats", "zeleznica", 90)["rows"]
     bus = stats.summary_build(conn, "network_stats", "avtobus", 90)["rows"]
     assert [r["train_no"] for r in rail] == ["IC 1"]
     assert [r["train_no"] for r in bus] == ["LPP 6"]
+
+
+def test_lestvica_neverjetne_zamude_ne_steje(conn):
+    """Zamuda nad `MAX_REALNA_ZAMUDA_S` ni zamuda, ampak zamenjan prometni dan.
+
+    Izmerjeno 3. 9. 2026: zeleznica nima nobene vrstice nad 3 h v 69 803
+    meritvah, pri avtobusih pa jih je 2 614 (0,49 %) in povprecje zaradi njih
+    zraste s 4,86 na 7,25 min. Lestvica je bila prej polna voznj z mediano
+    cez deset ur.
+    """
+    for dan in range(2, 7):
+        _vozba(conn, "t1", _pred(dan), [(3, 10 * 3600)])     # 10 ur
+    conn.commit()
+    imena = {r["train_no"] for r in stats.network_stats(conn, network="zeleznica")}
+    assert "IC 1" not in imena
+
+
+def test_lestvica_potrebuje_dovolj_voznj(conn):
+    """Vozjna z dvema zajemoma ni najslabsi vlak, ampak najmanjsi vzorec."""
+    for dan in (2, 3):
+        _vozba(conn, "t1", _pred(dan), [(3, 3000)])
+    conn.commit()
+    assert stats.network_stats(conn, network="zeleznica") == []
+
+
+def test_ure_so_po_postanku_ne_po_odhodu(conn):
+    """`by_stop_hour` steje zamudo pri URI POSTANKA, ne uri odhoda vozjne.
+
+    Vlak t1 odpelje ob 08:00 (28 800 s) in ima drugi postanek ob 09:00
+    (32 400) ter tretjega ob 10:00 (36 000). Zamuda na zadnjem mora pasti v
+    deseto uro, ne v osmo -- sicer bi jo stran pripisala uri, ko na omrezju
+    se ni bilo nic narobe.
+    """
+    # Dvanajst dni, ker ima razrez prag `MIN_RUNS_FOR_GROUP` (10 postankov).
+    for dan in range(2, 14):
+        _vozba(conn, "t1", _pred(dan), [(2, 60), (3, 1800)])
+    conn.commit()
+    razrez = stats.breakdowns(conn, 90, "zeleznica")["by_stop_hour"]
+    po_urah = {v["key"]: v["median_s"] for v in razrez}
+    assert po_urah.get("10") == 1800, po_urah
+    assert po_urah.get("09") == 60, po_urah
+    assert "08" not in po_urah      # prvi postanek ni bil zajet
 
 
 def test_povzetek_se_postreze_iz_predpomnilnika(conn):

@@ -85,9 +85,36 @@ function skrajni(vrstice) {
 }
 
 // Ure po POSTANKU, ne po odhodu vožnje -- glej `stats.summary_build`.
-// Zasilni izhod na `by_hour`, dokler dnevni povzetek ni preračunan.
+// Zasilnega izhoda na `by_hour` NI namenoma: tisti rez šteje isto zamudo v
+// drugo uro in bi ga stran, ki obljublja "ob tej uri", predstavila napačno.
+// Prazno je boljše od tihe zamenjave.
 function urneVrstice(d) {
-  return (d.by_stop_hour && d.by_stop_hour.length) ? d.by_stop_hour : (d.by_hour || []);
+  return d.by_stop_hour || [];
+}
+
+const POT = (no) => `/app/${IS_BUS ? "bus" : "train"}/${encodeURIComponent(no)}`;
+
+/** Lestvica najbolj zamujajočih voženj. Ločen endpoint od razrezov. */
+async function lestvica() {
+  const cilj = el("lestvica");
+  try {
+    const res = await fetch(`/api/stats?days=${DNI}&network=${NETWORK}`);
+    if (!res.ok) throw new Error(res.status);
+    const vrstice = ((await res.json()).rows || []).slice(0, 8);
+    if (!vrstice.length) {
+      cilj.innerHTML = `<div class="empty-state">še ni dovolj zajetih voženj</div>`;
+      return;
+    }
+    cilj.innerHTML = vrstice.map((r) => `
+      <a class="stat-voznja" href="${POT(r.train_no)}">
+        <span class="stat-voznja-st">${escapeHtml(r.train_no)}</span>
+        <span class="stat-voznja-ob">${pluralRuns(r.runs)} · točnih
+          ${Math.round((r.on_time_share || 0) * 100)} %</span>
+        <span class="stat-voznja-z" style="color:${delayColor(r.median_s)}">${minute(r.median_s)}</span>
+      </a>`).join("");
+  } catch (e) {
+    cilj.innerHTML = `<div class="empty-state">lestvica trenutno ni dosegljiva</div>`;
+  }
 }
 
 function glava(d) {
@@ -140,6 +167,8 @@ function legenda() {
 
 async function zacni() {
   el("vrste-naslov").textContent = IS_BUS ? "Po prevozniku" : "Po vrsti vlaka";
+  el("lestvica-naslov").textContent = IS_BUS
+    ? "Vožnje, ki najbolj zamujajo" : "Vlaki, ki najbolj zamujajo";
   el("vrste-pod").textContent = IS_BUS
     ? "Mediana končne zamude po prevozniku."
     : "Mediana končne zamude po vrsti vlaka (IC, MV, LP …).";
@@ -163,6 +192,7 @@ async function zacni() {
     narisi(el("dnevi"), d.by_weekday, (k) => k);
     narisi(el("vrste"), d.by_kind, (k) => k);
     narisi(el("dan-za-dnem"), d.by_day, (k) => k.slice(5).replace("-", ". ") + ".");
+    lestvica();
 
     el("stat-noga").innerHTML =
       `Končna zamuda vožnje, mediana. Vir: IJPP prek NAP (CC BY-SA 4.0),`

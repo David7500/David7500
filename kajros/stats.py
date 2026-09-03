@@ -309,7 +309,21 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
 # 21 000) in šele nato beremo `run`. Ključ `run` je (trip_id, service_date,
 # stop_seq), zato je to za vsako vožnjo obseg po indeksu, ne pregled tabele.
 # `MAX(stop_seq)` namesto ROW_NUMBER pa odpravi razvrščanje.
-LAST_STOP_SQL = """
+# Nad to mejo vrednost ni zamuda, ampak feedova zamenjava prometnega dne --
+# ista napaka, ki jo pri prikazu lovi `api.MAX_LIVE_DELAY_S` (6 h). Za
+# STATISTIKO je meja nižja in izmerjena, ne izbrana:
+#
+#   * železnica nima **nobene** vrstice nad 3 h v 69 803 meritvah, torej strop
+#     iz nje ne vzame ničesar (0,00 %);
+#   * pri avtobusih odpade 2 614 vrstic (0,49 %), mediana se komaj premakne
+#     (2,18 → 2,15 min), **povprečje pa pade s 7,25 na 4,86 min** in p99 s
+#     73,4 na 59,0. Mediana stabilna, povprečje sesuto -- to je podpis
+#     izstopajočih vrednosti, ne repa prave porazdelitve.
+#
+# Podatki se NE brišejo; to je filter branja. Zajem hrani vse.
+MAX_REALNA_ZAMUDA_S = 3 * 3600
+
+LAST_STOP_SQL = f"""
 WITH mx AS (
     SELECT r.trip_id, r.service_date, MAX(r.stop_seq) AS stop_seq
     FROM trip t JOIN run r ON r.trip_id = t.trip_id
@@ -323,8 +337,13 @@ last AS (
                       AND r.service_date = mx.service_date
                       AND r.stop_seq = mx.stop_seq
     WHERE COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL
+      AND ABS(COALESCE(r.delay_dep, r.delay_arr)) <= {MAX_REALNA_ZAMUDA_S}
 )
 """
+
+
+# Koliko zajetih voznj mora imeti vozjna, da sme na lestvico.
+MIN_RUNS_FOR_RANK = 5
 
 
 def network_stats(conn: sqlite3.Connection, days: int = 90,
@@ -337,13 +356,16 @@ def network_stats(conn: sqlite3.Connection, days: int = 90,
     grouped: dict[str, list[int]] = {}
     for r in rows:
         grouped.setdefault(r["train_no"], []).append(r["d"])
+    # Vozjna z dvema zajemoma na vrhu lestvice ni "najslabsi vlak", ampak
+    # najmanjsi vzorec. Brez tega praga je bila prva vrstica pri avtobusih
+    # N6223 z mediano 654 min na DVEH voznjah.
     out = [
         {
             "train_no": k, "runs": len(v),
             "median_s": _pct(v, 0.5), "p90_s": _pct(v, 0.9), "max_s": max(v),
             "on_time_share": round(sum(1 for x in v if x <= 300) / len(v), 3),
         }
-        for k, v in grouped.items()
+        for k, v in grouped.items() if len(v) >= MIN_RUNS_FOR_RANK
     ]
     out.sort(key=lambda r: (-(r["median_s"] or 0), r["train_no"]))
     return out
@@ -504,15 +526,12 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     rows = conn.execute(
         LAST_STOP_SQL +
-        "SELECT t.train_no, t.mode, t.network, t.agency, l.service_date, l.d, "
-        "       (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s"
-        "        WHERE s.trip_id = l.trip_id) AS start_s "
+        "SELECT t.train_no, t.mode, t.network, t.agency, l.service_date, l.d "
         "FROM last l JOIN trip t USING (trip_id)",
         {"network": network, "since": since},
     ).fetchall()
 
     by_kind: dict[str, list[int]] = {}
-    by_hour: dict[str, list[int]] = {}
     by_dow: dict[str, list[int]] = {}
     by_day: dict[str, list[int]] = {}
     dow_names = ("ponedeljek", "torek", "sreda", "četrtek", "petek", "sobota", "nedelja")
@@ -529,8 +548,6 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
         else:
             kind = AGENCY_NAMES.get(r["agency"], r["agency"] or "neznan prevoznik")
         by_kind.setdefault(kind, []).append(d)
-        if r["start_s"] is not None:
-            by_hour.setdefault(f"{(r['start_s'] // 3600) % 24:02d}", []).append(d)
         day = date.fromisoformat(r["service_date"])
         by_dow.setdefault(dow_names[day.weekday()], []).append(d)
         by_day.setdefault(r["service_date"], []).append(d)
@@ -561,7 +578,8 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
         "JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
         "WHERE t.network = :network AND r.service_date >= :since "
         "  AND r.service_date < :danes "
-        "  AND COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL",
+        "  AND COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL "
+        f"  AND ABS(COALESCE(r.delay_dep, r.delay_arr)) <= {MAX_REALNA_ZAMUDA_S}",
         {"network": network, "since": since,
          "danes": datetime.now(TZ).date().isoformat()},
     ):
@@ -572,7 +590,6 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
         "days": sorted(by_day),
         "by_kind": sorted(_group_stats(by_kind, MIN_RUNS_FOR_GROUP),
                           key=lambda x: -(x["median_s"] or 0)),
-        "by_hour": sorted(_group_stats(by_hour, MIN_RUNS_FOR_GROUP), key=lambda x: x["key"]),
         "by_stop_hour": sorted(_group_stats(by_stop_hour, MIN_RUNS_FOR_GROUP),
                                key=lambda x: x["key"]),
         "by_weekday": sorted(_group_stats(by_dow, MIN_RUNS_FOR_GROUP),
