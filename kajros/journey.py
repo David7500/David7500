@@ -396,6 +396,29 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         d["expected"] = (_abs_time(service_date, d["t_s"] + d["delay_s"])
                          if d["delay_s"] is not None else None)
 
+    # Sezonske razlicice iste voznje: devet vlakov v zajetem voznem redu ima
+    # dva ali tri tripe z razlicnimi obdobji veljavnosti, in kadar oba veljata
+    # danes, je bila ista voznja na tabli DVAKRAT. Izmerjeno na Bled Jezeru
+    # 3. 9. 2026: LP 4208 ob 09:13 v dveh vrsticah, ena brez meritve in ena
+    # s +6 min -- potnik vidi dva vlaka, kjer je en.
+    #
+    # Kljuc je fizicni odhod (stevilka, voznoredna minuta, smer), ne `trip_id`.
+    # Obdrzimo vrstico, ki ima kaj povedati: najprej izmerjeno, nato kakrsnokoli
+    # vrednost, sicer prvo. `resolve_trip` isto stvar resuje za okno voznje,
+    # a tam po dnevih veljavnosti -- tu je bolje po podatku, ker feed porocaen
+    # za tisti trip, ki dejansko vozi.
+    def _kakovost(d):
+        return (d.get("delay_kind") == "izmerjeno", d.get("delay_s") is not None)
+
+    zdruzeno: dict[tuple, dict] = {}
+    for d in out:
+        k = (d["train_no"], d["t_s"], d.get("towards"))
+        if k not in zdruzeno or _kakovost(d) > _kakovost(zdruzeno[k]):
+            zdruzeno[k] = d
+    if len(zdruzeno) < len(out):
+        out = [d for d in out if d is zdruzeno.get(
+            (d["train_no"], d["t_s"], d.get("towards")))]
+
     # Obicajna zamuda iz zgodovine: za dan brez meritev je to edino, kar o
     # vlaku vemo. Ni napoved za ta dan in prikaz jo tako tudi imenuje.
     typ = typical_at_stops(

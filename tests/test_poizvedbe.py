@@ -635,6 +635,30 @@ def test_povzetek_ne_mesa_omrezij(conn):
     assert [r["train_no"] for r in bus] == ["LPP 6"]
 
 
+def test_tabla_zdruzi_sezonske_razlicice(conn):
+    """Ista voznja z dvema tripoma ne sme biti na tabli dvakrat.
+
+    Devet vlakov v zajetem voznem redu ima dva ali tri tripe -- sezonske
+    razlicice iste poti. Kadar oba veljata isti dan, je bila 3. 9. 2026 na
+    Bled Jezeru LP 4208 ob 09:13 v DVEH vrsticah, ena brez meritve in ena
+    s +6 min. Obdrzi se tista, ki ima kaj povedati.
+    """
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S2','2026-08-31')")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('t1b','r1','IC 1','A - C','S2')")
+    _sched(conn, "t1b", [(1, "A", None, 28800), (2, "Z", 32400, 32700), (3, "C", 36000, None)])
+    # Meritev ima samo sezonska razlicica.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+                 " feed_ts) VALUES('t1b','2026-08-31',1,300,300,1)")
+    conn.commit()
+
+    # Tabla isce po IMENU postaje, ne po `stop_id`.
+    vrstice = journey.board(conn, "Ajdovščina", "2026-08-31", 0, window_min=24 * 60)
+    ic = [r for r in vrstice if r["train_no"] == "IC 1"]
+    assert len(ic) == 1, [(r["trip_id"], r["t_s"]) for r in ic]
+    assert ic[0]["trip_id"] == "t1b"        # obdrzana je tista z meritvijo
+
+
 def test_neobstojec_trip_ne_vrne_druge_voznje(conn):
     """Zastarel `?trip=` mora dati napako, ne tujega voznega reda.
 

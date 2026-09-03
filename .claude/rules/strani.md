@@ -109,3 +109,15 @@ je dobil postajališče LPP in ni razumel, zakaj.
 ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib pa je
 zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
 (deljena povezava) — tam je odgovor prav to, po kar je človek prišel.
+
+**Odhodna tabla združi sezonske različice.** Devet vlakov ima dva ali tri
+tripe z različnimi obdobji veljavnosti; kadar oba veljata isti dan, je bila
+ista vožnja na tabli **dvakrat**. Izmerjeno na Bled Jezeru 3. 9. 2026: LP 4208
+ob 09:13 v dveh vrsticah, ena brez meritve in ena s +6 min — potnik vidi dva
+vlaka, kjer je en.
+
+Ključ združevanja je **fizični odhod** (številka, voznoredna minuta, smer), ne
+`trip_id`. Obdrži se vrstica, ki ima kaj povedati: najprej izmerjeno, nato
+kakršnakoli vrednost, sicer prva. `resolve_trip()` isto reč rešuje za okno
+vožnje, a po dnevih veljavnosti — na tabli je bolje po podatku, ker feed poroča
+za tisti trip, ki dejansko vozi.
