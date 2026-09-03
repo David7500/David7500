@@ -115,3 +115,40 @@ preusmeritve vrat.
 Zero W), a je počasna (obhod `ocena.tick()` 88,7 s proti 0,90 s na razvojnem
 računalniku). Javni promet nanjo brez predpomnjenja na Cloudflarovem robu ni
 premišljen.
+
+## Trije stroji: malina, prenosnik, razvoj
+
+Od 3. 9. 2026 stroji niso več dva:
+
+| stroj | naslov | vloga |
+|---|---|---|
+| malina (`raspberrypi`, Pi Zero W) | `192.168.1.166` | zajem, teče ves čas, **varovalo** |
+| prenosnik (`arwen`, x86_64) | `192.168.1.138` | **strežnik za `kajros.app`** + svoj zajem |
+| ta računalnik | — | razvoj |
+
+**Prenosnik zajema sam, ne vleče sproti z maline.** Prikaz mora biti živ, poteg
+pa je star toliko, kolikor je star zadnji poteg. Ko prenosnik nekaj časa ne
+teče, se vrzel zapolni z `scripts/potegni.sh` — ta je idempotenten (`obs` je
+ključen po `(trip_id, service_date, stop_seq, feed_ts)`), zato prilitje ne
+podvaja.
+
+**Malina zato ostane prižgana.** Dva zajema pomenita dva vira, a to je namen:
+prenosnik se zapira in seli, malina ne. Kdor ju kdaj združi v enega, naj ve,
+da s tem izgubi varovalo.
+
+Prenosnik je za to primeren tako, kot malina ni: 7,8 GB pomnilnika proti 427 MB
+in x86_64 proti armv6l. Senčno merjenje (`KAJROS_OCENA`) sme tam teči — na
+malini je ugasnjeno, ker bi en obhod vzel 88,7 s od vsakih 120.
+
+**Koda je na prenosniku v `/home/david/kajros`** (izvorno drevo za
+`KAJROS_SRC=`), nameščena pa v `/opt/kajros` z bazo v `/var/lib/kajros`, tako
+kot na malini. Osveži se z `rsync` z razvojnega računalnika, ker commiti
+pogosto še niso na GitHubu.
+
+**Prenosnik ne sme zaspati ob zaprtem pokrovu** — sicer strežnik ugasne, ko
+ga kdo zapre. To je `HandleLidSwitch=ignore` v `/etc/systemd/logind.conf`.
+
+**Stanje maline ob tem zapisu:** teče še STARA koda (`sztrack-zajem` aktivna,
+baza `/var/lib/sztrack/sz.sqlite`, 368 MB); `kajros.service` in
+`kajros-zajem.service` sta neaktivna. Preimenovalni deploy na njej še ni bil
+pognan in selitev v `install-rpi.sh` še čaka.
