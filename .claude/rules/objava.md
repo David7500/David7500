@@ -32,7 +32,16 @@ v isto bazo in se prepirali za feed (`install-rpi.sh` drugo sam ugasne).
 `KAJROS_AGENCIES=1118,1119,1121,1123`: meritev, ki je ta trenutek nihče ne
 posname, ne obstaja nikoli več, malina pa je edina naprava, ki teče ves čas.
 
-Da to ni preveč za Pi Zero W, je izmerjeno **na njem**: 427 MB RAM in
+**Senčno merjenje na malini ne teče** (`KAJROS_OCENA=0` v enoti). `ocena.tick()`
+je v isti zanki kot zajem, ne v svoji niti: en obhod je na razvojnem računalniku
+141 ms, malina pa je pri istem poslu ~100× počasnejša (SQLite v pomnilniku
+88,7 s proti 0,90 s), torej **~14 s vsakih 120**. Naslednji zajem bi se za
+toliko zamaknil — natanko drift, ki je v `docs/MERITVE.md` že zapisan kot
+napaka. Posledica, ki jo je treba imeti v mislih: **senca se polni samo, ko
+teče strežnik na tem računalniku**, zato dva tedna sence nista dva koledarska
+tedna. Ob prehodu na Pi 4B/5 (obhod ~1,4 s) to premisli znova.
+
+Da zajem ni preveč za Pi Zero W, je izmerjeno **na njem**: 427 MB RAM in
 **426 MB swapa**, v rabi 122 + 11. Zajem sam je pri sami železnici **38 MB
 RSS**; vrh ob uvozu voznega reda je pri vseh štirih agencijah ~216 MB in teče
 v podprocesu, zato se po njem vrne sistemu. Na kartici je 20 GB prostega,

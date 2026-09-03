@@ -28,6 +28,17 @@ Environment=KAJROS_REFRESH_HOUR=4
 # Disk: dnevnik `obs` se obrezuje (železnica 90 dni, avtobusi 14) in se ustali
 # pri ~356 MB; `run` raste ~3,4 GB na leto. Na kartici je 20 GB prostega.
 Environment=KAJROS_AGENCIES=1118,1119,1121,1123
+# Senčno merjenje napovedi je tu IZKLOPLJENO, čeprav je privzeto vklopljeno.
+#
+# `ocena.tick()` teče v isti zanki kot zajem, ne v svoji niti. Izmerjeno:
+# en obhod je na razvojnem računalniku 141 ms, Pi Zero W je pri istem poslu
+# ~100× počasnejši (SQLite v pomnilniku: 88,7 s proti 0,90 s), torej **~14 s**
+# vsakih 120. Naslednji zajem bi se za toliko zamaknil -- natanko drift, ki je
+# v docs/MERITVE.md že zapisan kot napaka (razmiki 19, 11, 19, 11 s namesto 10).
+#
+# Malina ima eno nalogo in ta je zajem. Senca se meri tam, kjer teče strežnik.
+# Ko bo malina 4B ali 5, je obhod ~1,4 s in to ponovno premisli.
+Environment=KAJROS_OCENA=0
 # Zajema se SAMO tisto, česar kasneje ni mogoče dobiti: zamude in obvestila.
 # Vreme ima arhiv za nazaj, statistika je izpeljanka `run` -- oboje se izračuna
 # na računalniku, ko je baza tam. Lega vozil je samo "zdaj" in se ne hrani.

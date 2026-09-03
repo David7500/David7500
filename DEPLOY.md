@@ -19,6 +19,10 @@ ki sprejmejo zip, velja poglavje »Paket za gostitelja« naprej.
 >      bash /home/david/kajros-src/deploy/install-rpi.sh
 > ```
 >
+> Enota ima **`KAJROS_OCENA=0`**: senčno merjenje teče v isti zanki kot zajem
+> in bi na Pi Zero W vzelo ~14 s vsakih 120 (izmerjeno), kar bi zamaknilo
+> zajem. Malina ima eno nalogo.
+>
 > Kaj naredi: preseli `/var/lib/sztrack/sz.sqlite` (z `-wal` in `-shm`) v
 > `/var/lib/kajros/kajros.sqlite`, ugasne in onemogoči `sztrack-zajem`,
 > postavi `kajros-zajem`. Selitev je preizkušena v peskovniku, na sami malini
