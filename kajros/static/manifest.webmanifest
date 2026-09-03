@@ -1,0 +1,27 @@
+{
+  "name": "kajros — zamude javnega prevoza",
+  "short_name": "kajros",
+  "description": "Kdaj mi pelje in koliko zamuja. Izmerjeno iz odprtih podatkov, ne prepisano iz voznega reda.",
+  "lang": "sl",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1115",
+  "theme_color": "#0f1115",
+  "categories": ["travel", "navigation", "utilities"],
+  "icons": [
+    { "src": "/static/ikone/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/ikone/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/ikone/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Vlaki", "short_name": "Vlaki", "url": "/app/train",
+      "icons": [{ "src": "/static/ikone/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Avtobusi", "short_name": "Avtobusi", "url": "/app/bus",
+      "icons": [{ "src": "/static/ikone/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Živi zemljevid", "short_name": "Zemljevid", "url": "/app/map",
+      "icons": [{ "src": "/static/ikone/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -21,13 +21,14 @@ maskirana = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="
              'stroke-linecap="round"><rect width="96" height="96" fill="#0f1115"/>'
              '<g transform="translate(48 48) scale(0.66) translate(-48 -48)">'
              + mark() + '</g></svg>')
-for ime, svg, px in (("i192", navadna, 192), ("i512", navadna, 512), ("imask", maskirana, 512)):
+for ime, svg, px in (("i180", navadna, 180), ("i192", navadna, 192),
+                     ("i512", navadna, 512), ("imask", maskirana, 512)):
     pathlib.Path("posnetki/%s.html" % ime).write_text(
         '<meta charset="utf-8"><style>html,body{margin:0;padding:0}'
         'svg{display:block;width:%dpx;height:%dpx}</style>%s' % (px, px, svg))
 PY
 
-for spec in "i192 192 icon-192" "i512 512 icon-512" "imask 512 icon-maskable-512"; do
+for spec in "i180 180 icon-180" "i192 192 icon-192" "i512 512 icon-512" "imask 512 icon-maskable-512"; do
   set -- $spec
   rm -f "kajros/static/ikone/$3.png"
   timeout 60 chromium --headless --disable-gpu --window-size="$2","$2" \

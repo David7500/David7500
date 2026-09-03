@@ -157,3 +157,26 @@ Prva različica ikon je bila zato posnetek njegove strani z napako in je bila
 videti kot uspeh — datoteka je obstajala, imela 200 in pravo velikost v bajtih.
 Razkril jo je šele enak `md5` dveh različnih ikon. `naredi-ikone.sh` zato po
 vsaki sliki preveri **dejansko velikost slike**, ne le obstoja datoteke.
+
+## Namestitev na telefon (PWA)
+
+`static/manifest.webmanifest` je povezan z vseh strani, skupaj z
+`apple-touch-icon` (180 px, ker iOS manifesta za ikono ne bere) in
+`theme-color` `#0f1115`. Bližnjice v manifestu so vlaki, avtobusi, zemljevid.
+
+**Kaj od tega po `http://` res dela, je izmerjeno, ne domnevano** (3. 9. 2026,
+chromium brez zaslona):
+
+| izvor | `isSecureContext` | `navigator.serviceWorker` |
+|---|---|---|
+| `http://127.0.0.1:8001` | `true` | obstaja |
+| `http://192.168.1.164:8001` | `false` | **ne obstaja** |
+
+Manifest se kljub temu **prenese tudi po nevarnem izvoru** — v dnevniku
+strežnika je `GET /static/manifest.webmanifest` ob nalaganju po omrežnem
+naslovu. Zato „dodaj na začetni zaslon" dobi pravo ime in ikono že zdaj;
+namestitev kot aplikacija (WebAPK) in delovanje brez omrežja pa ne, ker oboje
+visi na varnem kontekstu.
+
+**Service workerja zato (še) ni.** Registrirati se po omrežnem naslovu ne more,
+torej bi bil do Tailscale Funnela mrtva koda. Napiše se skupaj s HTTPS, ne prej.
