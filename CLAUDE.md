@@ -229,9 +229,11 @@ Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
 
 ## Odprto
 
-* Dostop od zunaj: **Tailscale Funnel**, ker da stalen `https://<stroj>.
-  <tailnet>.ts.net` brez domene; Cloudflarov hitri tunel ima naključen naslov,
-  ki umre s procesom. **Vrat na usmerjevalniku ne odpiraj.**
+* Dostop od zunaj: **`kajros.app`** (registrirana 3. 9. 2026, name.com). Ta
+  nakup je razveljavil prejšnjo izbiro Tailscale Funnela — ta zna samo
+  `*.ts.net` in domene ne postreže. Pot je **imenovani Cloudflarov tunel**,
+  ne hitri; podrobnosti in izmerjeno v `.claude/rules/objava.md`.
+  **Vrat na usmerjevalniku ne odpiraj.**
 * Ločen model napovedi za avtobuse, ko bo meritev dovolj.
 * **Koda je zaprta** (odločeno 3. 9. 2026): zasebni repozitorij, brez licence,
   torej „vse pravice pridržane“. **Endpointi so odprti** — API sme brati vsak.

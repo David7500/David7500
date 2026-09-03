@@ -80,3 +80,38 @@ Obnovitev: `git clone kajros-YYYYMMDD-HHMM.bundle kajros`.
 **Preizkušeno, ne domnevano:** sveženj (23 MB) je bil prenesen nazaj in
 kloniran — 197 commitov, tri veje, koda na mestu. Kopija, ki je nisi poskusil
 obnoviti, ni kopija.
+
+
+## Dostop od zunaj: `kajros.app`
+
+Domena je registrirana 3. 9. 2026 pri name.comu. Zaenkrat je parkirana
+(`91.195.240.94`) in **HTTPS ne dela** (`curl https://kajros.app` da `000`).
+Ker je `.app` na HSTS preload seznamu, brskalnik http sploh ne poskusi —
+chromium vrne prazen DOM. Za to domeno torej ni delne rešitve: ali HTTPS ali
+nič.
+
+**Tailscale Funnel odpade in to je izmerjeno, ne domnevano.** Dokumentacija
+pravi: „Funnel can only use DNS names in your tailnet's domain
+(`tailnet-name.ts.net`)." Funnel je bil izbran prav zato, ker da HTTPS **brez
+domene**; ko domena obstaja, ta razlog izgine.
+
+**Pot je imenovani Cloudflarov tunel, ne hitri.** Prejšnji zapis je zavrnil
+*hitri* tunel (naključen naslov, umre s procesom) — imenovani tega nima.
+
+**Cona mora biti na Cloudflaru.** Njihova dokumentacija trdi, da CNAME lahko
+stoji pri kateremkoli ponudniku; to je **narobe** in preverjeno je:
+`example.cfargotunnel.com` razreši v `fd10:aec2:5dae::`, naslov iz zasebnega
+razpona `fd00::/8`, ki po internetu ne gre. Zapis mora biti v Cloudflarovi
+coni in proksiran, sicer kaže v nič. Torej: imenske strežnike na name.comu
+prestavi na Cloudflarove.
+
+**Javna izpostavitev ne odpre pisanja.** V `api.py` ni nobene poti razen
+`GET` in nobenega pisanja v bazo iz zahteve; `delay_report` polni `alerts.py`
+iz feeda. To se ujema z odločitvijo „endpointi so odprti". Tunel tudi ne
+odpre vrat na usmerjevalniku in skrije domači naslov — nasprotno od
+preusmeritve vrat.
+
+**Odprto vprašanje: kateri stroj streže.** Merodajen zajem je malina (Pi
+Zero W), a je počasna (obhod `ocena.tick()` 88,7 s proti 0,90 s na razvojnem
+računalniku). Javni promet nanjo brez predpomnjenja na Cloudflarovem robu ni
+premišljen.
