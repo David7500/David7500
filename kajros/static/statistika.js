@@ -65,16 +65,33 @@ function narisi(cilj, vrstice, preslikaj, poudari) {
     .join("");
 }
 
-/** Najboljša in najslabša vrstica med tistimi z dovolj vzorca. */
+// Naslov sme primerjati samo ure, ko promet res teče. Brez tega je odgovor
+// "ob 03:00 vlaki zamujajo 0 min" -- resničen, a za izbiro poti neuporaben,
+// ker takrat skoraj nič ne vozi.
+//
+// Meja ni izbrana po občutku, ampak izmerjena: delež postankov glede na
+// najprometnejšo uro pade s 34 % (04:00) na 4,9 % (03:00) in z 39 % (22:00)
+// na 21,6 % (23:00). Prelom je čist, zato prag 25 %.
+const DELEZ_PROMETA = 0.25;
+
+/** Najboljša in najslabša vrstica med urami z rednim prometom. */
 function skrajni(vrstice) {
-  const dobre = (vrstice || []).filter((v) => v.n >= MIN_VZOREC);
+  const vse = vrstice || [];
+  const najvecN = Math.max(...vse.map((v) => v.n || 0), 1);
+  const dobre = vse.filter((v) => v.n >= MIN_VZOREC && v.n >= najvecN * DELEZ_PROMETA);
   if (dobre.length < 2) return null;
   const po = [...dobre].sort((a, b) => a.median_s - b.median_s);
   return { naj: po[0], nic: po[po.length - 1] };
 }
 
+// Ure po POSTANKU, ne po odhodu vožnje -- glej `stats.summary_build`.
+// Zasilni izhod na `by_hour`, dokler dnevni povzetek ni preračunan.
+function urneVrstice(d) {
+  return (d.by_stop_hour && d.by_stop_hour.length) ? d.by_stop_hour : (d.by_hour || []);
+}
+
 function glava(d) {
-  const ure = skrajni(d.by_hour);
+  const ure = skrajni(urneVrstice(d));
   const dni = (d.days || []).length;
   const obseg = `<div class="stat-obseg">
       <span>zajetih dni <b>${dni}</b></span>
@@ -91,11 +108,11 @@ function glava(d) {
        izstopala. Spodnji razrezi so že tu, a jih beri z vzorcem vred.</div>${obseg}`;
     return;
   }
-  const vozilo = IS_BUS ? "Avtobusi" : "Vlaki";
+  const vozilo = IS_BUS ? "avtobusi" : "vlaki";
   el("stat-glava").innerHTML = `<div class="stat-poved">
-      ${vozilo}, ki odpeljejo ob <strong>${imeUre(ure.naj.key)}</strong>, imajo
-      mediano zamude <strong>${minute(ure.naj.median_s)}</strong>;
-      tisti ob <span class="stat-slabo">${imeUre(ure.nic.key)}</span> pa
+      Ob <strong>${imeUre(ure.naj.key)}</strong> ${vozilo} zamujajo
+      <strong>${minute(ure.naj.median_s)}</strong>, ob
+      <span class="stat-slabo">${imeUre(ure.nic.key)}</span> pa
       <span class="stat-slabo">${minute(ure.nic.median_s)}</span>.
     </div>${obseg}`;
 }
@@ -133,8 +150,8 @@ async function zacni() {
 
     glava(d);
     // Ure zunaj obratovanja so prazne vrstice, ki samo stiskajo ostale.
-    narisi(el("ure"), (d.by_hour || []).filter((v) => v.n > 0), imeUre, (v) => {
-      const s = skrajni(d.by_hour);
+    narisi(el("ure"), urneVrstice(d).filter((v) => v.n > 0), imeUre, (v) => {
+      const s = skrajni(urneVrstice(d));
       if (!s) return "";
       if (v.key === s.naj.key) return "je-najboljsa";
       if (v.key === s.nic.key) return "je-najslabsa";

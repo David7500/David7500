@@ -36,6 +36,19 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
 * **Število meritev ostane vidno tudi na telefonu.** Prvi poskus ga je tam
   skril („širina je dragocenejša") — a telefon je glavna naprava in prav tam
   bi „sreda je najhujša" ostala brez vzorca. Skrči se ime, ne vzorec.
+* **Ure so po POSTANKU, ne po odhodu vožnje.** „Ura odhoda" odgovarja na
+  drugo vprašanje, kot ga potnik ima: vlak, ki odpelje ob 05:00 in nabira
+  zamudo do 09:00, jo v tistem rezu vso pripiše peti uri, ko na omrežju še ni
+  bilo nič narobe. Izmerjeno na železnici: ob 04:00 da rez po odhodu **4 min**,
+  rez po postanku **0 min**; ob 23:00 **10 min** proti **3 min**. Vzorec je
+  ob tem desetkrat večji (ob 06:00 4 485 postankov proti 367 vožnjam), zato
+  nobena ura ne pade pod prag. Polje je `by_stop_hour`; `by_hour` ostaja v
+  API-ju in je še vedno po vožnji.
+* **Naslov primerja samo ure z rednim prometom** (`DELEZ_PROMETA`, 25 %
+  postankov najprometnejše ure). Brez tega je odgovor „ob 03:00 vlaki zamujajo
+  0 min" — resničen, a za izbiro poti neuporaben. Prag je izmerjen, ne izbran:
+  delež pade s 34 % (04:00) na 4,9 % (03:00) in z 39 % (22:00) na 21,6 %
+  (23:00), torej je prelom čist.
 * **Blok po dnevu v tednu sam pove, kdaj mu ni za verjeti.** Pri manj kot
   štirih ponovitvah vsakega dne (28 dni zajema) podnaslov to napiše z
   izračunano številko, ne z občutkom.

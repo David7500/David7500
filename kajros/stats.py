@@ -535,12 +535,46 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
         by_dow.setdefault(dow_names[day.weekday()], []).append(d)
         by_day.setdefault(r["service_date"], []).append(d)
 
+    # `by_stop_hour` je edini rez, ki NI po vožnji, ampak po postanku -- in to
+    # je namerno. "Ura odhoda vožnje" odgovarja na drugo vprašanje, kot ga
+    # potnik ima: vlak, ki odpelje ob 05:00 in nabira zamudo do 09:00, jo v
+    # tistem rezu vso pripiše peti uri, ko na omrežju ni bilo še nič narobe.
+    # Izmerjeno na železnici: ob 04:00 da rez po odhodu 4 min, rez po postanku
+    # pa 0 min; ob 23:00 10 min proti 3 min.
+    #
+    # Drugi dobiček je vzorec, ki je desetkrat večji (ob 06:00 5 051 postankov
+    # proti 367 vožnjam), zato nobena ura ne pade pod prag in nočna ura s
+    # trinajstimi vožnjami ne določa merila cele slike.
+    #
+    # Tu vlak s tridesetimi postanki res "glasuje" tridesetkrat -- kar je pri
+    # vprašanju "kako zamuja omrežje ob tej uri" pravilno, saj je vsak postanek
+    # ena resnična priložnost za vstop. Pri ostalih rezih bi bilo narobe in
+    # tam ostaja enota ena vožnja.
+    #
+    # Samo pretekli dnevi: v `run` je za zadnjim prevoženim postankom feedova
+    # napoved, ne meritev, in ta bi današnje ure popačila.
+    by_stop_hour: dict[str, list[int]] = {}
+    for r in conn.execute(
+        "SELECT (COALESCE(s.dep_s, s.arr_s) / 3600) % 24 AS h, "
+        "       COALESCE(r.delay_dep, r.delay_arr) AS d "
+        "FROM run r JOIN trip t ON t.trip_id = r.trip_id "
+        "JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+        "WHERE t.network = :network AND r.service_date >= :since "
+        "  AND r.service_date < :danes "
+        "  AND COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL",
+        {"network": network, "since": since,
+         "danes": datetime.now(TZ).date().isoformat()},
+    ):
+        by_stop_hour.setdefault(f"{r['h']:02d}", []).append(r["d"])
+
     return {
         "runs": len(rows),
         "days": sorted(by_day),
         "by_kind": sorted(_group_stats(by_kind, MIN_RUNS_FOR_GROUP),
                           key=lambda x: -(x["median_s"] or 0)),
         "by_hour": sorted(_group_stats(by_hour, MIN_RUNS_FOR_GROUP), key=lambda x: x["key"]),
+        "by_stop_hour": sorted(_group_stats(by_stop_hour, MIN_RUNS_FOR_GROUP),
+                               key=lambda x: x["key"]),
         "by_weekday": sorted(_group_stats(by_dow, MIN_RUNS_FOR_GROUP),
                              key=lambda x: dow_names.index(x["key"])),
         "by_day": sorted(_group_stats(by_day, 1), key=lambda x: x["key"]),
