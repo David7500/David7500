@@ -145,8 +145,18 @@ malini je ugasnjeno, ker bi en obhod vzel 88,7 s od vsakih 120.
 kot na malini. Osveži se z `rsync` z razvojnega računalnika, ker commiti
 pogosto še niso na GitHubu.
 
-**Prenosnik ne sme zaspati ob zaprtem pokrovu** — sicer strežnik ugasne, ko
-ga kdo zapre. To je `HandleLidSwitch=ignore` v `/etc/systemd/logind.conf`.
+**Nastavitev pokrova pusti pri miru.** Prenosnik ob zaprtju zaspi in strežnik
+z njim; skušnjava je nastaviti `HandleLidSwitch=ignore` v
+`/etc/systemd/logind.conf`. **Ne.** Bilo je narejeno 3. 9. 2026 in takoj
+vrnjeno na privzeto: David pazi sam, da ostane odprt, vrzel po morebitnem
+spanju pa zapolni `scripts/potegni.sh` z maline — prav zato malina teče.
+
+Splošneje: **stroj ni naš.** Namestitev sme postaviti svojo aplikacijo in
+svoje enote, ne sme pa spreminjati, kako se stroj vede do lastnika. Kar
+namestitev vseeno spremeni zunaj sebe, mora biti našteto in povedano:
+paketi (`python3-venv`, `python3-pip`, `sqlite3`, `git`), sistemski
+uporabnik `kajros`, štiri enote v `/etc/systemd/system/` in `enable --now`
+za `kajros.service` ter `kajros-backup.timer`.
 
 **Stanje maline ob tem zapisu:** teče še STARA koda (`sztrack-zajem` aktivna,
 baza `/var/lib/sztrack/sz.sqlite`, 368 MB); `kajros.service` in
