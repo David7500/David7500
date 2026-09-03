@@ -405,7 +405,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     # Kljuc je fizicni odhod (stevilka, voznoredna minuta, smer), ne `trip_id`.
     # Obdrzimo vrstico, ki ima kaj povedati: najprej izmerjeno, nato kakrsnokoli
     # vrednost, sicer prvo. `resolve_trip` isto stvar resuje za okno voznje,
-    # a tam po dnevih veljavnosti -- tu je bolje po podatku, ker feed porocaen
+    # a tam po dnevih veljavnosti -- tu je bolje po podatku, ker feed poroca
     # za tisti trip, ki dejansko vozi.
     def _kakovost(d):
         return (d.get("delay_kind") == "izmerjeno", d.get("delay_s") is not None)
