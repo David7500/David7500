@@ -44,6 +44,13 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   ob tem desetkrat večji (ob 06:00 4 485 postankov proti 367 vožnjam), zato
   nobena ura ne pade pod prag. Polje je `by_stop_hour`; `by_hour` ostaja v
   API-ju in je še vedno po vožnji.
+* **Ista meja velja za sliko, ne le za naslov.** Prva različica je merilo
+  stolpcev postavljala po vzorcu (≥ 30 postankov), zato so ga postavljale
+  nočne ure: 02:00 s 6 min in 115 postanki je bila najdaljši stolpec, dnevne
+  ure pa so se stisnile v enako dolge palice. Kar ne sme voditi povedi, ne sme
+  voditi niti slike. Pri **vrstah vlaka to NE velja** — EN s 46 vožnjami je 2 %
+  prometa in hkrati resnična ugotovitev (nočni vlak, ki vedno zamuja), zato je
+  merilo prometa vklopljeno samo pri urah (`poPrometu`).
 * **Naslov primerja samo ure z rednim prometom** (`DELEZ_PROMETA`, 25 %
   postankov najprometnejše ure). Brez tega je odgovor „ob 03:00 vlaki zamujajo
   0 min" — resničen, a za izbiro poti neuporaben. Prag je izmerjen, ne izbran:

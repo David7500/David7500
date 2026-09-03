@@ -28,8 +28,7 @@ function imeUre(k) {
 }
 
 /** Ena vrstica: ime, tir s stolpcem, vrednost, vzorec. */
-function vrstica(ime, medianaS, n, najvecS, oznaka) {
-  const tanka = n < MIN_VZOREC;
+function vrstica(ime, medianaS, n, najvecS, oznaka, tanka) {
   // Presezek se odreze na 100 % in vrstica dobi znak "gre cez" -- brez tega
   // bi merilo spet doloceval izjemec.
   const surovo = najvecS > 0 ? (medianaS / najvecS) * 100 : 2;
@@ -47,21 +46,33 @@ function vrstica(ime, medianaS, n, najvecS, oznaka) {
   </div>`;
 }
 
+/** Vrstica, ki ji verjamemo dovolj, da sme voditi sliko in naslov.
+ *
+ * Pri URAH ne zadosca vzorec: ura z 2 % prometa najprometnejse je lahko
+ * stevilcna in vseeno brez pomena za izbiro poti. Zato ista meja kot pri
+ * naslovu -- kar ne sme voditi povedi, ne sme voditi niti stolpcev. Pri
+ * vrstah vlaka to NE velja: EN s 46 voznjami je 2 % prometa in hkrati
+ * resnicna ugotovitev (nocni vlak, ki vedno zamuja).
+ */
+function zanesljiva(v, najvecN, poPrometu) {
+  return v.n >= MIN_VZOREC && (!poPrometu || v.n >= najvecN * DELEZ_PROMETA);
+}
+
 /** Iz seznama razrezov naredi vrstice; `preslikaj` da ime iz ključa. */
-function narisi(cilj, vrstice, preslikaj, poudari) {
+function narisi(cilj, vrstice, preslikaj, opt) {
+  const { poudari, poPrometu } = opt || {};
   if (!vrstice || !vrstice.length) {
     cilj.innerHTML = `<div class="empty-state">za to omrežje še ni dovolj zajema</div>`;
     return;
   }
-  // Merilo postavijo SAMO vrstice z dovolj vzorca. Sicer ena nocna ura z
-  // devetimi voznjami in 24 minutami stisne cel dan v pahljace po dve piki --
-  // vrstica, ki ji ne verjamemo dovolj za naslov, ne sme voditi slike.
-  const zanesljive = vrstice.filter((v) => v.n >= MIN_VZOREC);
+  const najvecN = Math.max(...vrstice.map((v) => v.n || 0), 1);
+  const zanesljive = vrstice.filter((v) => zanesljiva(v, najvecN, poPrometu));
   const najvec = Math.max(...(zanesljive.length ? zanesljive : vrstice)
                             .map((v) => v.median_s || 0), 1);
   cilj.innerHTML = vrstice
     .map((v) => vrstica(preslikaj(v.key), v.median_s, v.n, najvec,
-                        poudari ? poudari(v) : ""))
+                        poudari ? poudari(v) : "",
+                        !zanesljiva(v, najvecN, poPrometu)))
     .join("");
 }
 
@@ -179,12 +190,12 @@ async function zacni() {
 
     glava(d);
     // Ure zunaj obratovanja so prazne vrstice, ki samo stiskajo ostale.
-    narisi(el("ure"), urneVrstice(d).filter((v) => v.n > 0), imeUre, (v) => {
-      const s = skrajni(urneVrstice(d));
-      if (!s) return "";
-      if (v.key === s.naj.key) return "je-najboljsa";
-      if (v.key === s.nic.key) return "je-najslabsa";
-      return "";
+    const s = skrajni(urneVrstice(d));
+    narisi(el("ure"), urneVrstice(d).filter((v) => v.n > 0), imeUre, {
+      poPrometu: true,
+      poudari: (v) => !s ? ""
+        : v.key === s.naj.key ? "je-najboljsa"
+        : v.key === s.nic.key ? "je-najslabsa" : "",
     });
     el("ure").insertAdjacentHTML("afterend", legenda());
 
