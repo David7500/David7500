@@ -344,10 +344,20 @@ const TRANSFER_STYLE = {
   "brez podatka": { color: "var(--ink-faint)", note: "brez podatka o zamudi" },
 };
 
+// Preostali cas za prestop se racuna iz ZAOKROZENIH minut, ne iz sekund.
+// Sicer si tri stevilke na zaslonu nasprotujejo: nacrtovano 52 min, prvi vlak
+// +5, preostane pa "48". Vsaka je zaokrozena prav (3120 s, 270 s, 2850 s), a
+// 52 - 5 ni 48 in bralec, ki sesteje, dobi drugacen rezultat kot mi. Isto
+// pravilo ze velja pri razredu zamude: zaokrozi enkrat, potem racunaj.
+function preostaliPrestop(tr, plannedS) {
+  if (plannedS == null || tr.delay1_s == null) return Math.round(tr.wait_s / 60);
+  return Math.round(plannedS / 60) - Math.round(tr.delay1_s / 60);
+}
+
 function transferBadgeHtml(tr, plannedS) {
   if (!tr) return '<span class="tag">1 prestop</span>';
   const st = TRANSFER_STYLE[tr.status] || TRANSFER_STYLE["brez podatka"];
-  const mins = Math.round(tr.wait_s / 60);
+  const mins = preostaliPrestop(tr, plannedS);
   return `<span class="transfer-badge" style="color:${st.color};border-color:${st.color}55">
       ${escapeHtml(st.note)}
     </span>
@@ -360,7 +370,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
   const tr = t.transfer;
   const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
   const planned = Math.round(t.wait_s / 60);
-  const actual = tr && tr.wait_s != null ? Math.round(tr.wait_s / 60) : null;
+  const actual = tr && tr.wait_s != null ? preostaliPrestop(tr, t.wait_s) : null;
   // Pot ima lahko dve nogi (en prestop) ali stiri (trije prestopi) -- prikaz
   // ne sme predpostavljati dveh. Prestop se izpise ZA vsako nogo razen zadnje.
   const count = t.transfers != null ? t.transfers : t.legs.length - 1;

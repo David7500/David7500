@@ -67,6 +67,12 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   pa se prelomi pri −30 s: −45 s je zato izpisalo golo **„−1"** namesto
   „1 min prej". Pravilo je zdaj v `common.isEarly()` in ga uporabljata okno
   vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
+* **Kar se na zaslonu sešteva, zaokroži enkrat in potem računaj.** Preostali
+  čas za prestop je bil `round(dejansko_s)`, poleg njega pa `round(načrtovano_s)`
+  in `round(zamuda_s)` — vsaka številka zaokrožena prav, skupaj pa
+  „načrtovano 52 min, prvi vlak +5, ostane 48". Bralec, ki sešteje, dobi 47 in
+  ima prav. Zdaj se preostanek računa iz **zaokroženih minut**
+  (`preostaliPrestop()`), ne iz sekund. Ista past kot pri razredu zamude.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
 * **Omrežje prestavi samo poudarek, ne lestvice.** `body.net-avtobus` premakne
   `--accent` na zeleno; `--d-*` ostanejo oranžni tudi tam. Ista barva mora
