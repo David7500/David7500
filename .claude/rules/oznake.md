@@ -109,8 +109,15 @@ Stopnja 0–10 je seštevek točk za padavine, sneg, sunke vetra, meglo, nevihto
 mraz (`weather.severity()`). Razčlenitev gre v tooltip — indeks brez razčlenitve
 je črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
 
-**Pri stopnji 0 žeton kaže temperaturo, ne stopnje.** „0" potniku ne pove nič,
-„22°" pa nekaj — stopnja se vrne takoj, ko je kaj za povedati (≥ 1). Žetoni so
+**Žeton nikoli ne pokaže gole stopnje.** „0" potniku ne pove nič — to je bilo
+popravljeno prej — a **„1" prav tako ne**: številka brez enote in brez lestvice
+je uganka, razlaga pa je v `title`, ki ga na telefonu ni mogoče doseči. Prvi
+popravek je torej rešil pol težave.
+
+Zato: do vključno **blagih (≤ 3) piše temperatura**, ki nekaj pove sama po sebi,
+od **zahtevnih (≥ 4) naprej pa beseda** („zahtevne", „hude"), ki pove, kaj je
+narobe. Barva ostane ista lestvica razmer. Besede so samo tam, kjer je kaj za
+povedati, in takih postankov je malo, zato širina ni težava. Žetoni so
 v preprostem pogledu na **postajah naprej po progi** (napoved, črtkan rob);
 prevožene postaje so tam itak skrite in mirno vreme za nazaj ne pove ničesar.
 

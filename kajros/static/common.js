@@ -422,23 +422,26 @@ function stopWeatherHtml(w, isForecast) {
   const color = severityColor(w.severity_label);
   const loud = w.severity_label === "zahtevne" || w.severity_label === "hude";
   const title = (isForecast ? "napoved · " : "") + severityTitle(w);
-  // Stopnja 0 pomeni "ni kaj povedati". Dvajsetkrat ponovljena nicla na
-  // telefonu tekmuje s stevilko zamude, ki je edina, zaradi katere je clovek
-  // tu; v naprednem pogledu ostane, ker tam vrstica sme biti gostejsa.
-  // Stopnja 0 pomeni "ni kaj povedati" in dvajsetkrat ponovljena nicla na
-  // telefonu tekmuje s stevilko zamude. Zato pri mirnih razmerah namesto
-  // stopnje pise TEMPERATURA: potniku, ki ceka na peronu, "12°" pove nekaj,
-  // "0" pa nic. Stopnja se vrne takoj, ko je kaj za povedati (>= 1).
-  const mirno = w.severity === 0;
-  const znak = mirno && w.temp_c != null ? `${Math.round(w.temp_c)}°` : w.severity;
+  // Zeton nikoli ne pokaze gole stopnje. "0" potniku ne pove nic -- to je bilo
+  // ze popravljeno -- a "1" prav tako ne: stevilka brez enote in brez lestvice
+  // je uganka, razlaga pa je v `title`, ki ga na telefonu ni mogoce doseci.
+  //
+  // Zato: do vkljucno "blagih" (<= 3) pise TEMPERATURA, ki nekaj pove sama po
+  // sebi, od "zahtevnih" naprej pa BESEDA, ki pove, kaj je narobe. Barva ostane
+  // ista lestvica; beseda je samo tam, kjer je kaj za povedati, in takih
+  // postankov je malo, zato sirina ni tezava.
+  const tiho = w.severity <= 3;
+  const znak = tiho
+    ? (w.temp_c != null ? `${Math.round(w.temp_c)}°` : "")
+    : w.severity_label;
   // Ze prevozene postaje so v preprostem pogledu skrite; kadar so vidne
   // (napredni pogled), mirno vreme za nazaj ne pove nicesar in gre v ozadje.
-  const quiet = mirno ? " is-quiet" + (isForecast ? "" : " adv-only") : "";
+  const quiet = tiho ? " is-quiet" + (isForecast ? "" : " adv-only") : "";
   return `<span class="stop-weather${loud ? " is-loud" : ""}${isForecast ? " is-forecast" : ""}${quiet}"` +
     ` title="${escapeHtml(title)}"` +
     (loud ? ` style="background:${color}1f;border-color:${color}66"` : "") + `>` +
     weatherIconHtml(w, 13) +
-    `<span class="stop-sev"${mirno ? "" : ` style="color:${color}"`}>${znak}</span></span>`;
+    `<span class="stop-sev"${tiho ? "" : ` style="color:${color}"`}>${znak}</span></span>`;
 }
 
 // Postanek, na katerem se zamuda spremeni. Vlak ne odide vedno takrat, ko
