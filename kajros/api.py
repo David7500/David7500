@@ -21,7 +21,7 @@ from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerts, collector, config, db, journey, stats, vozovnice
+from . import alerts, collector, config, db, journey, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -746,13 +746,9 @@ def api_run(train_no: str, date: str | None = None,
         now_s = (journey.now_seconds(zdaj) if date == zdaj.date().isoformat()
                  else 48 * 3600)
         meja = stats.last_measured(conn, date, [razresen], now_s).get(razresen)
-        # Vozovnica se kupi pri SZ in samo za zeleznico; relacija je izhodisce
-        # in cilj TE voznje, ker okno voznje ne ve, kje potnik vstopi.
-        vozovnica = (vozovnice.povezava(rows[0]["name"], rows[-1]["name"], date)
-                     if ident.get("network") == "zeleznica" else None)
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "last_measured_seq": meja["stop_seq"] if meja else None,
-                "vozovnica": vozovnica, "stops": rows}
+                "stops": rows}
 
 
 @app.get("/api/train/{train_no}/history")
@@ -1037,12 +1033,7 @@ def api_connections(
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
         notices = (alerts.for_trains(conn, nos, mentions=[a, b])
                    if network == "zeleznica" else [])
-    # Tu je relacija tista, ki jo je potnik SAM izbral, zato se globoka
-    # povezava ujame precej pogosteje kot v oknu voznje, kjer sta krajisci
-    # celotne voznje (te se pogosto zacnejo na majhni postaji brez kode).
     return {"from": a, "to": b, "date": date, "network": network,
-            "vozovnica": (vozovnice.povezava(a, b, date)
-                          if network == "zeleznica" else None),
             "connections": rows, "transfers": legs, "alerts": notices}
 
 

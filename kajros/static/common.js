@@ -309,6 +309,21 @@ function modeBadgeHtml(mode) {
   </span>`;
 }
 
+// ---------- vozovnica ----------
+
+const SZ_TRGOVINA = "https://eshop.sz.si/";
+
+/** Povezava na spletno trgovino SŽ. Relacije ni mogoce podati -- glej
+ *  `train.vozovnicaHtml()` za razlog. */
+function ticketLinkHtml() {
+  return `<a class="ticket-link" href="${SZ_TRGOVINA}" target="_blank"
+      rel="noopener noreferrer"
+      title="Spletna trgovina SŽ. Relacije ni mogoče podati v naslovu, zato jo tam vpišeš sam.">
+      Kupi vozovnico na <strong>eshop.sz.si</strong>
+      <span class="ticket-note">relacijo vpišeš tam</span>
+    </a>`;
+}
+
 // ---------- vreme ----------
 
 const WEATHER_INK = "#6f8fa8";

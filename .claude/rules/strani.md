@@ -130,29 +130,25 @@ vožnje, a po dnevih veljavnosti — na tabli je bolje po podatku, ker feed poro
 za tisti trip, ki dejansko vozi.
 
 
-**Nakup vozovnice: kjer se da, z relacijo.** `potniski.sz.si/vozni-redi-results/`
-**sprejme `GET`** z `entry-station`, `exit-station` in `departure-date`
-(`DD.MM.YYYY`). Številka postaje je **UIC koda brez državne predpone `79`** —
-Ljubljana UIC 7942300 → `42300`. Trgovina `eshop.sz.si` je nasprotno `POST`
-z internimi ID-ji in GET parametre tiho ignorira, zato je le zasilna pot.
+**Nakup vozovnice: povezava na `eshop.sz.si`, brez relacije.** Je v oknu
+vožnje in pod rezultati iskalnika, **samo pri železnici** (nadomestni prevoz SŽ
+vključno — `mode = bus`, a `network = zeleznica`; avtobusne vozovnice SŽ ne
+prodaja).
 
-**To, da mi na `potniski.sz.si` ne moremo (403 za Cloudflarom), povezave ne
-ovira** — povezavo odpre uporabnikov brskalnik, ne naš strežnik. Ta razloček
-sem enkrat spregledal in stran zavrgel prehitro.
+Relacije v naslov **ni mogoče podati** in to je bilo preizkušeno v dveh smereh:
 
-Kod ni v GTFS in seznama ni mogoče prebrati, zato jih ima `vozovnice.KODE`
-samo 19 (iz odprtega nabora `trainline-eu/stations`, polje `uic`). Pokritost:
-**40 % železniških voženj** ima obe krajišči s kodo. V iskalniku zvez je delež
-višji, ker relacijo izbere potnik sam.
+* `eshop.sz.si` je `POST` z internimi ID-ji postaj (`TravelFromId`); GET
+  parametri se tiho ignorirajo — `?TravelFrom=Ljubljana&TravelTo=Koper` pusti
+  polji prazni.
+* `potniski.sz.si/vozni-redi-results/` GET **sprejme** (`entry-station` je UIC
+  koda brez predpone `79`, Ljubljana 7942300 → `42300`), a **gumb za nakup
+  pelje v trgovino brez prenesene relacije** — torej ovinek brez koristi.
+  To je ugotovil uporabnik; z naše strani se ne da preveriti, ker je
+  `potniski.sz.si` za Cloudflarom (403 tudi iz brskalnika brez zaslona).
 
-Kjer kode ni: **v oknu vožnje** povezava vodi na trgovino in to piše
-(„relacijo vpišeš tam"), **v iskalniku zvez pa povezave ni** — tam aplikacija
-že ve, kam greš, in polovična povezava bi bila videti kot napaka.
+Zato povezava vodi na trgovino in **to tudi piše** („relacijo vpišeš tam“).
+Obljubiti izpolnjeno pot bi bila laž, ki bi jo potnik odkril šele tam.
 
-Povezava je **samo pri železniškem omrežju**, nadomestni prevoz SŽ vključno
-(`mode = bus`, a `network = zeleznica` — to je SŽ storitev in vozovnica velja).
-Pri mestnih in medkrajevnih avtobusih vsak prevoznik prodaja sam in povezava
-na SŽ bi bila napačna.
-
-`potniski.sz.si` je za Cloudflarom (403) in za povezavo neuporaben;
-`eshop.sz.si` odgovarja normalno.
+**Da mi na `potniski.sz.si` ne moremo, samo po sebi povezave ne bi oviralo** —
+odpre jo uporabnikov brskalnik, ne naš strežnik. Ta razloček je bil enkrat
+spregledan in stran prehitro zavržena; zavrnjena je zdaj iz drugega razloga.

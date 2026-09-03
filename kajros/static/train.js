@@ -571,32 +571,19 @@ const KIND = {
   none: { label: "brez podatka" },
 };
 
-// Nakup vozovnice je pri SZ na `eshop.sz.si`. Globoke povezave NI: obrazec je
-// POST z internimi ID-ji postaj (`TravelFromId`), GET parametri se tiho
-// ignorirajo -- preizkuseno 3. 9. 2026. Zato povezava vodi na trgovino in to
-// tudi pise; obljubiti izpolnjeno pot bi bilo laz, ki bi jo potnik odkril sele
-// tam.
+// Nakup vozovnice je pri SŽ na `eshop.sz.si`. Relacije v naslov ni mogoce
+// podati: obrazec trgovine je POST z internimi ID-ji postaj, GET parametri se
+// tiho ignorirajo. Poskusili smo tudi `potniski.sz.si/vozni-redi-results/`,
+// ki GET res sprejme -- a gumb tam pelje v trgovino BREZ prenesene relacije,
+// tako da bi bil ovinek brez koristi (uporabnikova ugotovitev 3. 9. 2026).
+// Zato: povezava na trgovino in poved, da relacijo vpises tam.
 //
 // Samo za zeleznicno omrezje. Nadomestni prevoz SZ je zraven (mode = bus, a
 // network = zeleznica): to je SZ storitev in vozovnica velja. Pri mestnih in
-// medkrajevnih avtobusih pa vsak prevoznik prodaja sam in povezava na SZ bi
-// bila napacna.
+// medkrajevnih avtobusih vsak prevoznik prodaja sam.
 function vozovnicaHtml(run) {
-  const v = run && run.vozovnica;
-  if (!v) return "";
-  // Ce imamo SZ stevilki obeh postaj, gre povezava naravnost na relacijo in
-  // datum; sicer na trgovino, in to tudi pise. Obljubiti izpolnjeno pot, ki
-  // je ne bo, bi bilo slabse od tega, da povemo, kaj bo treba vpisati.
-  const kam = v.z_relacijo
-    ? `<strong>${escapeHtml(run.stops[0].name)} → ${escapeHtml(run.stops[run.stops.length - 1].name)}</strong>`
-    : `<strong>eshop.sz.si</strong>`;
-  return `<a class="ticket-link" href="${escapeHtml(v.url)}" target="_blank"
-      rel="noopener noreferrer"
-      title="${v.z_relacijo ? "Odpre vozni red SŽ za to relacijo in dan."
-                            : "Spletna trgovina SŽ; relacijo vpišeš tam."}">
-      Kupi vozovnico ${v.z_relacijo ? "za" : "na"} ${kam}
-      <span class="ticket-note">${v.z_relacijo ? "pri SŽ" : "relacijo vpišeš tam"}</span>
-    </a>`;
+  if (!run || run.network !== "zeleznica") return "";
+  return ticketLinkHtml();
 }
 
 function profilePoints() {
