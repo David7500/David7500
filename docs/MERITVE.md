@@ -161,8 +161,12 @@ Iz tega štiri stvari:
   samo pri avtobusih) in tam je MAE 2,65 proti 3,31 brez njega, delež v petih
   minutah 88,6 proti 87,0.
 * **Vsi razen nas podcenjujejo.** Odklon prenosa je −1,37 min, prevoznika
-  −1,26; naša številka je +1,04, torej rahlo pesimistična. To je varna smer:
-  kdor pride prezgodaj, čaka, kdor prepozno, vlak zamudi.
+  −1,26; naša številka je +1,04, torej rahlo pesimistična.
+
+  **Popravek 3. 9. 2026:** tu je prej pisalo, da je to „varna smer“. Ni.
+  Pozitiven odklon pomeni, da vozilo napovemo **poznejše, kot je**, potnik
+  pride pozneje in mu odpelje pred nosom. Varna smer je negativna. Glej
+  „Smer napake“ spodaj.
 * **Pri železnici prevoznik v potnikovem oknu praktično molči** — vrednost za
   ciljni postanek je imel v **4 od 1 008** primerov (0,4 %). Pri avtobusih je
   molčal v 2,6 %. Za vlake smo torej edini vir odgovora in tam smo 3,52 min
@@ -298,3 +302,70 @@ zajemoma na vrhu ni najslabši vlak, ampak najmanjši vzorec.
 Po popravku je najslabša avtobusna vožnja A5117 s **64 min na petih vožnjah**
 namesto 654 min na dveh; železniška lestvica se ni spremenila (EC 211,
 46 min, 12 voženj, 8 % točnih).
+
+
+## Smer napake: kaj stane potnika (3. 9. 2026)
+
+Vprašanje je bilo, ali naj model raje podcenjuje ali precenjuje zamudo.
+Odgovor je odvisen od ene številke, ki je prej nismo imeli: **koliko stane
+zamujeno vozilo.**
+
+**Razmik do naslednjega odhoda z iste postaje v isto smer** (po `headsign`,
+06–20, zajeti vozni red):
+
+| | razmikov | mediana | p25 | p75 | p90 | nad uro |
+|---|---|---|---|---|---|---|
+| železnica | 5 205 | **87 min** | 55 | 153 | 260 | 66 % |
+| avtobusi | 194 231 | **40 min** | 15 | 70 | 139 | 28 % |
+
+Zamujen vlak torej stane mediano 87 minut, odvečno čakanje pa toliko minut,
+kolikor smo podcenili. Razmerje je 20 : 1 do 90 : 1 — asimetrija ni majhna.
+
+**Kje smo zdaj** (senca, delež primerov, kjer smo napovedali *več* zamude,
+kot je bila — to je smer, ki vozilo zamudi):
+
+| | > 0 | > 1 min | > 2 min | > 5 min | odklon | n |
+|---|---|---|---|---|---|---|
+| železnica | 29,6 % | 15,2 % | 9,9 % | 4,1 % | **−1,27 min** | 2 905 |
+| avtobusi | **63,6 %** | 46,4 % | **30,5 %** | 6,9 % | **+0,47 min** | 14 658 |
+
+**Kar je videti kot očiten sklep, a ni.** Če vsako oceno zamaknemo navzdol za
+`k` minut in stroške seštejemo (podcenitev = čakanje, precenitev = razmik do
+naslednjega), pade povprečen strošek s 27,9 na 10,1 min pri železnici in z
+26,9 na 7,8 pri avtobusih — najbolje pri `k = 5`. MAE pa zraste z 2,93 na
+6,65 oziroma s 3,36 na 5,53.
+
+**Zakaj tega vseeno ne naredimo.** Model predpostavlja, da potnik pride
+natanko ob napovedani minuti. Ne pride — pride z rezervo. In rezerva ter
+zamik sta **zamenljiva**:
+
+| potnikova rezerva | najboljši `k`, železnica | najboljši `k`, avtobusi |
+|---|---|---|
+| 0 min | 5 (strošek 10,1) | 5 (7,8) |
+| 2 min | 3 (10,1) | 3 (7,8) |
+| **5 min** | **0 (10,1)** | **0 (7,8)** |
+| 10 min | 0 (12,3) | 0 (10,6) |
+
+Strošek je pri vseh treh prvih vrsticah **enak**: šteje samo vsota `k + B`,
+in optimum je okoli **5 minut skupaj**. Potnik jih prispeva sam. Če jih
+dodamo še mi, je skupna rezerva 10 in strošek **zraste** (12,3 proti 10,1).
+
+**Sklep, ki iz tega sledi:**
+
+1. **Številke ne zamikamo.** Prikazana vrednost ostane najboljša ocena;
+   zamik bi podvojil rezervo, ki jo potnik že ima, in pokvaril MAE za nič.
+2. **Nikoli pa ne smemo biti sistematično pesimistični.** Pozitiven odklon
+   poje potnikovo lastno rezervo, ne da bi ta o tem vedel. Avtobusi so pri
+   **+0,47 min in 63,6 % precenitev** — to je edino, kar je treba popraviti,
+   in cilj je odklon ≈ 0, ne negativen.
+3. **Železnica pri −1,27 je v redu.** Pri 87-minutnem razmiku je rahla
+   previdnost poceni zavarovanje.
+4. **Če hočemo pomagati, pomagajmo naravnost, ne z lažjo v številki:**
+   ob „pričakovano 15:47“ sodi „bodi na peronu do 15:45“. Nasvet ločen od
+   meritve — številka naj pomeni to, kar piše.
+
+**Meje tega izračuna.** Predpostavlja, da zamujeno vozilo pomeni čakanje
+celega razmika (v resnici obstajajo obvozi in druge relacije) in da potnik
+cilja natanko na prikazano minuto. Zato je absolutni strošek precenjen;
+**razmerje** med možnostmi in ugotovitev, da sta `k` in rezerva zamenljiva,
+pa sta na te predpostavke neobčutljiva.
