@@ -37,6 +37,24 @@ for pot in "${STRANI[@]}"; do
   fi
 done
 
+# Robni primeri, ki so bili ze napaka: tiha zamenjava (druga voznja namesto
+# neobstojece) in nesmiselno vprasanje, na katerega je aplikacija odgovorila
+# (ista postaja na obeh straneh je vrnila osem zvez z enim prestopom).
+echo "== robni primeri API"
+api() {                     # opis, pot, pricakovana koda
+  koda=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE$2")
+  if [ "$koda" = "$3" ]; then
+    printf "  ok   %-34s %s\n" "$1" "$koda"
+  else
+    printf "  PADE %-34s %s (pricakoval %s)\n" "$1" "$koda" "$3"
+    NAPAKE=$((NAPAKE+1))
+  fi
+}
+api "ista postaja"        "/api/connections?from=Ljubljana&to=Ljubljana" 400
+api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
+api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404
+api "nesmiseln datum"     "/api/connections?from=Ljubljana&to=Maribor&date=neki" 400
+
 echo "== paleta"
 if ./venv/bin/python scripts/preveri_paleto.py >/dev/null 2>&1; then
   echo "  ok   kontrast in barvna slepota"

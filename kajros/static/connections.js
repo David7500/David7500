@@ -907,6 +907,15 @@ async function searchAB(push) {
       return;
     }
     const data = await res.json();
+    // Vsak drug neuspeh pove strežnik sam (npr. "izhodišče in cilj sta ista
+    // postaja"). Prej je `renderConnections` dobil `{detail: ...}` namesto
+    // odgovora in stran je ostala prazna brez pojasnila.
+    if (!res.ok) {
+      resultsEl.innerHTML = `<div class="empty-state">${
+        escapeHtml(data && data.detail ? data.detail : "Iskanje ni uspelo.")}</div>`;
+      if (push) revealResults();
+      return;
+    }
     renderConnections(data);
     if (push) revealResults();
     schedulePoll(() => searchAB(false), data.date === todayIso());

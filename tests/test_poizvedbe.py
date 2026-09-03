@@ -635,6 +635,19 @@ def test_povzetek_ne_mesa_omrezij(conn):
     assert [r["train_no"] for r in bus] == ["LPP 6"]
 
 
+def test_neobstojec_trip_ne_vrne_druge_voznje(conn):
+    """Zastarel `?trip=` mora dati napako, ne tujega voznega reda.
+
+    Prej je preverjanje bilo, a je ob neujemanju tiho padlo na izbiro po
+    dnevih: `/api/train/3G?trip=999999999` je vrnil 200 in vozni red povsem
+    druge voznje, neobstojeci id pa odzvanjal nazaj.
+    """
+    assert stats.resolve_trip(conn, "IC 1") == "t1"          # brez id-ja izbere sam
+    assert stats.resolve_trip(conn, "IC 1", trip_id="t1") == "t1"
+    assert stats.resolve_trip(conn, "IC 1", trip_id="ne-obstaja") is None
+    assert stats.resolve_trip(conn, "IC 1", trip_id="t2") is None   # tuja voznja
+
+
 def test_lestvica_neverjetne_zamude_ne_steje(conn):
     """Zamuda nad `MAX_REALNA_ZAMUDA_S` ni zamuda, ampak zamenjan prometni dan.
 

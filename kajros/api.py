@@ -986,6 +986,13 @@ def api_connections(
         if not a or not b:
             missing = from_ if not a else to
             raise HTTPException(404, f"postaje {missing!r} ne poznam")
+        # Ista postaja na obeh straneh ni prazno vprašanje, ampak napačno.
+        # Brez te straže je "Ljubljana -> Ljubljana" vrnilo osem zvez z enim
+        # prestopom: z IC 503 do Borovnice in z avtobusom nazaj, 2 h 09 min,
+        # da prideš tja, kjer si bil. Iskalnik to zadene sam, kadar kdo obe
+        # polji dopolni z istim imenom.
+        if a == b:
+            raise HTTPException(400, "izhodišče in cilj sta ista postaja")
         rows = stats.connections(conn, a, b, date, now_s, network=network)
         # Prestop ponudimo vedno, ne sele ko neposredne ni: cez dan je
         # neposrednih voznj lahko pet, med njimi pa stiri ure luknje.

@@ -111,14 +111,19 @@ def resolve_trip(conn: sqlite3.Connection, train_no: str,
     `trip_id` to izbiro povozi -- odhodna tabla in iskalnik vesta, katero
     vožnjo je človek kliknil, in je ni treba uganiti. Preverimo, da res nosi
     to številko, sicer bi naslov lahko pokazal tujo vožnjo.
+
+    **Ce dan `trip_id` ne obstaja ali ne nosi te stevilke, vrnemo None**, ne
+    druge voznje. Prej je preverjanje bilo, a je ob neujemanju tiho padlo na
+    izbiro po dnevih: `/api/train/3G?trip=999999999` je vrnil 200 in vozni red
+    POVSEM DRUGE voznje, neobstojeci id pa odzvanjal nazaj. Kdor odpre
+    zastarelo deljeno povezavo, mora dobiti napako, ne tujega voznega reda.
     """
     if trip_id:
         row = conn.execute(
             "SELECT trip_id FROM trip WHERE trip_id = ? AND train_no = ?",
             (trip_id, train_no),
         ).fetchone()
-        if row:
-            return row["trip_id"]
+        return row["trip_id"] if row else None
     rows = conn.execute(
         "SELECT t.trip_id, "
         "       (SELECT COUNT(*) FROM service_day sd WHERE sd.service_id = t.service_id) AS days, "
