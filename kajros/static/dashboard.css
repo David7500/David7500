@@ -1,3 +1,7 @@
+:root {
+  --ikona-drsniki: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 7h9M19 7h1M4 17h3M13 17h7'/%3E%3Ccircle cx='16' cy='7' r='2.4'/%3E%3Ccircle cx='10' cy='17' r='2.4'/%3E%3C/svg%3E");
+}
+
 /* Barve in postavitev povzete iz design/Main.dc.html -- glej design/README.md za ramp zamud. */
 
 * { box-sizing: border-box; }
@@ -376,36 +380,40 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
 
   .map-area { position: absolute; inset: 0; }
 
-  /* Gumb je bil vrstica v barvi podlage tik nad navedbo vira in se je z njo
-     zlil -- prijavljeno kot "ne vidim, kje kliknuti". Zdaj je plavajoca
-     tipka nad zemljevidom: ima poudarek, senco in ikono, torej je videti kot
-     stikalo in ne kot rob strani. */
+  /* Gumb za nastavitve stoji ZGORAJ DESNO, pod tipko za lastno lego.
+     Dvakrat je bil spodaj in dvakrat ga uporabnik ni videl:
+       1. kot vrstica v barvi podlage se je zlil z navedbo vira;
+       2. kot plavajoca tipka 14 px nad dnom je izginil POD Chromovo spodnjo
+          naslovno vrstico -- ta prekrije dno postavitvenega okna, ne da bi
+          ga skrajsala. Dokaz je bila opomba o skritih oznakah: postavljena
+          66 px nad dnom se je na telefonu risala tik nad URL vrstico.
+     Zgornji desni kot je edini, ki ga noben brskalnik ne prekrije, in tam
+     ze stoji tipka za lego -- dve okrogli tipki druga pod drugo se berta kot
+     orodji zemljevida. */
   .sheet-toggle {
     display: flex;
     position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    top: 62px;
+    right: 10px;
     z-index: 1100;
     align-items: center;
-    gap: 8px;
-    padding: 11px 18px;
+    justify-content: center;
+    width: 40px; height: 40px;
+    padding: 0;
     border: 1px solid var(--accent);
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--bg-raised);
     color: var(--accent-lit);
-    font: 600 13px/1 'IBM Plex Sans', system-ui, sans-serif;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, .55);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
     cursor: pointer;
-    white-space: nowrap;
   }
   .sheet-toggle:active { background: var(--bg-hover); }
-  /* Ročaj je zdaj ikona drsnikov -- pove, da gre za nastavitve. */
+  .sheet-label { display: none; }        /* na tipki je ikona, ne besedilo */
   .sheet-grip {
-    width: 15px; height: 11px; flex-shrink: 0;
+    width: 19px; height: 15px; flex-shrink: 0;
     background: currentColor;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 7h9M19 7h1M4 17h3M13 17h7'/%3E%3Ccircle cx='16' cy='7' r='2.4'/%3E%3Ccircle cx='10' cy='17' r='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 7h9M19 7h1M4 17h3M13 17h7'/%3E%3Ccircle cx='16' cy='7' r='2.4'/%3E%3Ccircle cx='10' cy='17' r='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
+    -webkit-mask: var(--ikona-drsniki) center / contain no-repeat;
+    mask: var(--ikona-drsniki) center / contain no-repeat;
   }
 
   .sidebar {
@@ -504,8 +512,3 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
    stojijo v spodnjem levem kotu -- pri 430 px se prekrivajo. Zato se opombe
    dvignejo nad tipko. Vrstni red pravil šteje: to mora biti za `.label-note`
    in za `.label-note-2/3`, sicer ga te povozijo. */
-@media (max-width: 720px) {
-  .label-note   { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
-  .label-note-2 { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
-  .label-note-3 { bottom: calc(134px + env(safe-area-inset-bottom, 0px)); }
-}

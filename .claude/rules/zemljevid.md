@@ -290,10 +290,22 @@ sama; to pravilo projekt že ima.
 bi njegova vozila brez nje tiho izginila — plast brez stikala je plast, ki je
 ni. Vrstica se skrije, kadar je števec 0.
 
-**Gumb za nastavitve na telefonu je bil neviden.** Bil je vrstica v barvi
-podlage tik nad navedbo vira in se je z njo zlil — prijavljeno kot „ne vidim,
-kje klikniti". Zdaj je plavajoča tipka s poudarkom, senco in ikono drsnikov;
-opombe v spodnjem levem kotu se pod 720 px dvignejo nadenj, sicer se prekrijeta.
+**Gumb za nastavitve stoji zgoraj desno, in to je bila draga lekcija.**
+Dvakrat je bil spodaj in dvakrat ga uporabnik ni videl:
+
+1. kot vrstica v barvi podlage se je zlil z navedbo vira;
+2. kot plavajoča tipka 14 px nad dnom je izginil **pod Chromovo spodnjo
+   naslovno vrstico**. Ta prekrije dno postavitvenega okna, ne da bi ga
+   skrajšala, zato `bottom: 0` ni viden. Dokaz je bila opomba o skritih
+   oznakah: postavljena 66 px nad dnom se je na telefonu risala **tik nad**
+   URL vrstico, torej je bilo spodnjih 66 px prekritih.
+
+**Dna zaslona v brskalniku ne uporabljaj za nadzor**, ki ga mora uporabnik
+najti. Zgornji desni kot je edini, ki ga noben brskalnik ne prekrije — in tam
+že stoji tipka za lastno lego, zato se dve okrogli tipki druga pod drugo bereta
+kot orodji zemljevida.
+
+Ker je na tipki ikona in ne besedilo, mora imeti `aria-label`.
 
 **`display: flex` povozi `[hidden]`.** Vrstica „Drugi prevozniki" se je kazala
 kljub ničli, ker ima `.layer` svoj `display`. Potrebno je izrecno
