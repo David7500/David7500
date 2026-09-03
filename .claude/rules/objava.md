@@ -65,3 +65,18 @@ idempotenten; preverjeno s tremi zaporednimi zagoni (0, 0, 0 popravkov).
 naših commitov ni — zagon brez `KAJROS_SRC` bi malino torej **nazadoval**. Zato se
 drevo najprej prenese (`rsync` v `~/kajros-src`), installer pa se požene od
 tam.
+
+
+## Varnostna kopija zgodovine
+
+`./scripts/varnostna-kopija.sh` nese **celotno zgodovino** na malino kot
+`git bundle`. Potisk na GitHub rabi ključ, ki ga nimamo, malina pa je imela
+samo delovno drevo brez `.git` — 3. 9. 2026 je **196 commitov obstajalo le na
+razvojnem disku**.
+
+Sveženj ni razlika, ampak popolna kopija, zato jih hranimo pet zadnjih.
+Obnovitev: `git clone kajros-YYYYMMDD-HHMM.bundle kajros`.
+
+**Preizkušeno, ne domnevano:** sveženj (23 MB) je bil prenesen nazaj in
+kloniran — 197 commitov, tri veje, koda na mestu. Kopija, ki je nisi poskusil
+obnoviti, ni kopija.
