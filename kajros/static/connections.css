@@ -149,7 +149,8 @@
 /* Shranjene in nedavne poti: pod iskalnikom, kjer so vedno pri roki. */
 .recents { margin-top: 12px; }
 .recents:empty { display: none; }
-.recents .fav-chip { color: var(--ink); border-color: #e07b4544; }
+.recents .fav-chip { color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 27%, transparent); }
 
 .swap {
   flex-shrink: 0;
@@ -536,7 +537,8 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
   white-space: nowrap;
 }
 .fav-toggle:hover { color: var(--ink); border-color: #3d434f; }
-.fav-toggle[aria-pressed="true"] { color: var(--accent-lit); border-color: #e07b4555; }
+.fav-toggle[aria-pressed="true"] { color: var(--accent-lit);
+  border-color: color-mix(in srgb, var(--accent) 33%, transparent); }
 
 /* Prazno okno ponudi dejanje, ne nasveta. */
 .empty-act { margin-top: 12px; }

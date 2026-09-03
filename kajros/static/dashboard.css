@@ -92,7 +92,7 @@ body {
   color: #e7eaf0;
   font: 400 14px/1.2 'IBM Plex Sans', system-ui, sans-serif;
 }
-.find-box input:focus { outline: none; border-color: #f0934f; }
+.find-box input:focus { outline: none; border-color: var(--accent-lit); }
 .find-box input::placeholder { color: #545c68; }
 .find-box .field-clear {
   position: absolute; right: 1px; top: 1px;
@@ -141,7 +141,7 @@ body {
   display: flex; align-items: center; gap: 8px;
   padding: 5px 0; cursor: pointer;
 }
-.layer input { accent-color: #f0934f; width: 14px; height: 14px; flex-shrink: 0; }
+.layer input { accent-color: var(--accent-lit); width: 14px; height: 14px; flex-shrink: 0; }
 .layer-key { width: 12px; flex-shrink: 0; display: inline-flex; align-items: center; }
 .layer-key-train::before {
   content: ""; width: 9px; height: 9px; border-radius: 50%; background: #f2a87e;
@@ -466,7 +466,7 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
   color: #9aa3b0; text-decoration: none; text-align: center;
   font: 500 11.5px/1 'IBM Plex Sans', system-ui, sans-serif;
 }
-.veh-open:hover { color: #e7eaf0; border-color: #f0934f; }
+.veh-open:hover { color: var(--ink); border-color: var(--accent-lit); }
 
 /* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
  * Avtobus obroča nima, ker je njegova lega prava. */

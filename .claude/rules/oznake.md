@@ -68,6 +68,19 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   „1 min prej". Pravilo je zdaj v `common.isEarly()` in ga uporabljata okno
   vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
+* **Omrežje prestavi samo poudarek, ne lestvice.** `body.net-avtobus` premakne
+  `--accent` na zeleno; `--d-*` ostanejo oranžni tudi tam. Ista barva mora
+  pomeniti isto zamudo povsod — sicer „+5 min“ na avtobusni in železniški
+  strani nista primerljiva. Lestvica je poleg tega validirana na monotonost
+  svetlosti in barvno slepoto; zelena različica bi rabila svojo validacijo in
+  bi trčila s poudarkom.
+
+  **Kar sme biti zeleno, gre skozi `var(--accent)`, nikoli skozi trdo zapisan
+  `#f0934f`.** Tega se koda ni držala: `.hist-note strong`, žetona shranjenih
+  poti in zvezdica na iskalniku so bili na avtobusni strani oranžni brez
+  razloga. Izjemi, ki ostaneta trdi, sta **legenda omrežij na zemljevidu**
+  (oranžna = vlak, zelena = avtobus, to je njun pomen) in **izbira na domači
+  strani** (`.pick-train` proti `.pick-bus`).
 * **Padec zamude na postaji riši vedno, krogec prihoda pa le, kadar je zanj
   prostor** (`MIN_SPLIT_PX = 15`). Krogec meri v premeru 10 pik, polna pika
   odhoda 11 — pri manjšem razmiku se prekrijeta, navpičnica med njima izgine

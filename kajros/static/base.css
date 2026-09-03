@@ -69,6 +69,13 @@ a { color: inherit; }
 /* Avtobusna stran ima svojo barvo. To ni okras: obe omrezji imata isto
  * postavitev in isti iskalnik, zato je barva glave najhitrejsi znak, na
  * kateri od njiju si. Zelena je ista, s kakrsno so avtobusi na zemljevidu. */
+/* Omrezje prestavi SAMO poudarek. Lestvica zamud (`--d-*`) ostane oranzna
+   tudi tu, in to je namerno: ista barva mora pomeniti isto zamudo povsod,
+   sicer "+5 min" na dveh straneh nista primerljiva. Lestvica je poleg tega
+   validirana na monotonost svetlosti in barvno slepoto (preveri_paleto.py);
+   zelena razlicica bi rabila svojo validacijo in bi trcila s poudarkom.
+   Kar sme biti zeleno, so poudarki -- in ti gredo skozi `var(--accent)`,
+   nikoli skozi trdo zapisan `#f0934f`. */
 body.net-avtobus {
   --accent:     #3fa96f;
   --accent-lit: #4db97f;

@@ -64,7 +64,7 @@
   padding: 12px 0 0;
   font: 400 12px/1.6 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;
 }
-.hist-note strong { color: #e07b45; font-weight: 600; }
+.hist-note strong { color: var(--accent); font-weight: 600; }
 
 /* ---------- stevilcne ploscice ---------- */
 
