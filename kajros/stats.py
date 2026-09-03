@@ -124,14 +124,21 @@ def resolve_trip(conn: sqlite3.Connection, train_no: str,
             (trip_id, train_no),
         ).fetchone()
         return row["trip_id"] if row else None
+    # Najmocnejsi dokaz, KATERA voznja danes res pelje, ni vozni red, ampak
+    # meritev. LP 4208 ima tri tripe; danes pelje 465938 (30 meritev), izbira
+    # po dnevih veljavnosti pa je vzela 456511 (232 dni, NIC meritev) -- kdor
+    # je vlak kliknil na zivem seznamu, je pristal na strani, ki o njem ne ve
+    # nicesar, ceprav je vlak vozil 8 minut pozno. Zato meritev odloca prva.
     rows = conn.execute(
         "SELECT t.trip_id, "
+        "       EXISTS(SELECT 1 FROM run r WHERE r.trip_id = t.trip_id "
+        "              AND r.service_date = ?) AS ima_meritve, "
         "       (SELECT COUNT(*) FROM service_day sd WHERE sd.service_id = t.service_id) AS days, "
         "       (SELECT COUNT(*) FROM service_day sd WHERE sd.service_id = t.service_id "
         "        AND sd.date = ?) AS runs_today "
         "FROM trip t WHERE t.train_no = ? "
-        "ORDER BY runs_today DESC, days DESC, t.trip_id",
-        (service_date, train_no),
+        "ORDER BY ima_meritve DESC, runs_today DESC, days DESC, t.trip_id",
+        (service_date, service_date, train_no),
     ).fetchall()
     return rows[0]["trip_id"] if rows else None
 

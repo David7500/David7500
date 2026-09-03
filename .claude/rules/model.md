@@ -414,3 +414,26 @@ ker:
 Ko bo sence za dva tedna, se to pomeri znova: če odklon ostane popravljen in
 MAE vsaj enak, se uvede. Prej ne — utemeljeno pravilo se ne ruši z razlago,
 ki je ni.
+
+
+## Katera vožnja danes pelje, pove meritev
+
+`resolve_trip()` je izbiral po dnevih veljavnosti. **LP 4208 ima tri tripe**;
+3. 9. 2026 je peljal 465938 (83 dni, **30 meritev**), izbira pa je vzela 456511
+(232 dni, **nič meritev**) — kdor je vlak kliknil na živem seznamu, je pristal
+na oknu vožnje, ki o njem ne ve nič, čeprav je vlak vozil 8 minut pozno.
+
+Vrstni red je zdaj **meritev → vozi danes → dni veljavnosti**. Meritev je
+najmočnejši dokaz, katera vožnja se v resnici pelje; vozni red pove samo,
+katera bi se lahko.
+
+**`/api/train/{no}/run` vrne razrešeno vožnjo, ne poslane.** Prej je bil
+`trip_id` pri vlaku brez `?trip=` vedno `null`, zato prikaz ni vedel, katero
+od več voženj gleda, in `predict()` se je učil iz vseh treh hkrati. Zahtevana
+vožnja, ki ne obstaja, ostaja 404 — razrešitev je ne sme tiho zamenjati.
+
+**Isto pravilo je napisano dvakrat.** `stats.last_measured()` v Pythonu in
+`common.lastMeasured()` v JS. Primerjano na 27 živih vožnjah: ujemata se v
+vseh, edina razlika je bila prav LP 4208 in je izvirala iz izbire vožnje, ne
+iz meje. Če se kdaj razideta, je to tiha napaka na zaslonu — ta je bila po
+zapisu v `CLAUDE.md` tam že dvakrat.

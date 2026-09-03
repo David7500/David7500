@@ -659,6 +659,28 @@ def test_tabla_zdruzi_sezonske_razlicice(conn):
     assert ic[0]["trip_id"] == "t1b"        # obdrzana je tista z meritvijo
 
 
+def test_izbere_voznjo_z_meritvami(conn):
+    """Katera voznja danes res pelje, pove MERITEV, ne vozni red.
+
+    LP 4208 ima tri tripe. Danes je peljal tisti s 30 meritvami, izbira po
+    dnevih veljavnosti pa je vzela tistega z 232 dnevi in NIC meritvami --
+    kdor je vlak kliknil na zivem seznamu, je pristal na strani, ki o njem ne
+    ve nicesar, ceprav je vlak vozil 8 minut pozno.
+    """
+    dan = _pred(1)
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S1',?)", (dan,))
+    # Druga voznja iste stevilke: vec dni veljavnosti, a brez meritev.
+    conn.execute("INSERT INTO service_day(service_id, date) "
+                 "SELECT 'S9', date FROM service_day WHERE service_id='S1'")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('t1x','r1','IC 1','A - C','S9')")
+    _sched(conn, "t1x", [(1, "A", None, 28800), (2, "Z", 32400, 32700), (3, "C", 36000, None)])
+    # Meritev ima SAMO t1.
+    _vozba(conn, "t1", dan, [(2, 480)])
+    conn.commit()
+    assert stats.resolve_trip(conn, "IC 1", dan) == "t1"
+
+
 def test_neobstojec_trip_ne_vrne_druge_voznje(conn):
     """Zastarel `?trip=` mora dati napako, ne tujega voznega reda.
 

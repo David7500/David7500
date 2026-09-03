@@ -720,11 +720,21 @@ def api_run(train_no: str, date: str | None = None,
     date = _check_date(date)
     with _conn() as conn:
         date = date or _active_service_date(conn, train_no, datetime.now(TZ))
-        rows = stats.run_detail(conn, train_no, date, trip)
+        # Vrnemo RAZRESENO vozjno, ne tistega, kar je poslal odjemalec. Prej je
+        # bil `trip_id` pri vlaku brez `?trip=` vedno None, zato prikaz naprej
+        # ni vedel, katero od vec voznj z isto stevilko gleda -- in `predict`
+        # se je ucil iz vseh treh hkrati. LP 4208 ima tri.
+        razresen = stats.resolve_trip(conn, train_no, date, trip)
+        # Zahtevana vozjna, ki ne obstaja, je napaka -- ne povod, da izberemo
+        # drugo. Brez te straze bi razresen=None spet pomenil "izberi sam" in
+        # zastarela deljena povezava bi pokazala tuj vozni red.
+        if trip and not razresen:
+            raise HTTPException(404, f"vožnje {trip!r} pod številko {train_no} ne poznam")
+        rows = stats.run_detail(conn, train_no, date, razresen)
         if not rows:
             raise HTTPException(404, f"vožnje {train_no} ne poznam")
-        ident = stats.trip_identity(conn, train_no, trip)
-        return {"train_no": train_no, "service_date": date, "trip_id": trip,
+        ident = stats.trip_identity(conn, train_no, razresen)
+        return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "stops": rows}
 
 
