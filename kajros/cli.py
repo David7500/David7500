@@ -138,7 +138,11 @@ def cmd_ocena(args):
         print(json.dumps(ocena.tick(conn), indent=2, ensure_ascii=False))
         return
     r = ocena.report(conn, days=args.days, network=args.network)
-    print(f"od {r['od']} · razrešenih vrstic {r['vrstic']} · čaka na resnico {r['cakajo']}")
+    # Ne "od <meja okna>": senca ima lahko dva dneva v tridesetdnevnem oknu.
+    razpon = (f"{r['prvi_dan']} .. {r['zadnji_dan']}" if r.get("prvi_dan")
+              else "brez podatkov")
+    print(f"senca {razpon} · pokritih obratovalnih dni {r.get('pokritih_dni', 0)}"
+          f" · razrešenih vrstic {r['vrstic']} · čaka na resnico {r['cakajo']}")
     if not r["vrstic"]:
         print("\nŠe nič razrešenega. Senca teče ob strežniku; prvi izidi so čez"
               " dobro uro.")

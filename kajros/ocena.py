@@ -406,7 +406,16 @@ def report(conn: sqlite3.Connection, days: int = 30,
             },
         }
 
-    izid = {"od": od, "vrstic": len(vrstice), "skupaj": rez(vrstice)}
+    # `od` je samo spodnja meja okna, NE zacetek podatkov -- in prav to je
+    # enkrat ze zavedlo: pisalo je "od 2026-08-04" ob dveh dneh sence. Zato
+    # gre v izpis se dejanski razpon in stevilo obratovalnih dni, ki jih
+    # senca res pokriva. Senca se polni samo, ko tece strezni proces, zato
+    # koledarski razpon in pokriti dnevi nista isto.
+    obr = sorted({r["service_date"] for r in vrstice})
+    izid = {"od": od, "vrstic": len(vrstice), "skupaj": rez(vrstice),
+            "prvi_dan": obr[0] if obr else None,
+            "zadnji_dan": obr[-1] if obr else None,
+            "pokritih_dni": len(obr)}
 
     po_omrezju = {}
     for net in sorted({r["network"] for r in vrstice}):
