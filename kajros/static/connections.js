@@ -8,6 +8,7 @@ const POLL_MS = 30000;
 const $ = (id) => document.getElementById(id);
 const resultsEl = $("results");
 const resultHeadEl = $("result-head");
+const vozovnicaEl = $("vozovnica");
 const alertsEl = $("alerts");
 const feedDotEl = $("feed-dot");
 
@@ -439,6 +440,19 @@ function renderConnections(data) {
      <span>${list.length} ${list.length === 1 ? "neposredna vožnja" : "neposrednih"}${legs.length
         ? ` · ${legs.length} s ${legs.some((t) => (t.transfers || 1) > 1) ? "prestopi" : "prestopom"}`
         : ""}</span>`;
+
+  // Vozovnica pod rezultatom, ne nad njim: potnik najprej hoce vedeti, ali
+  // sploh kaj pelje. Povezava z relacijo nastane le, kadar imamo SZ stevilki
+  // obeh postaj -- sicer ni nicesar, ker "kupi vozovnico, relacijo vpisi sam"
+  // je tu odvec: iskalnik zvez ze ve, kam gres, in polovicna povezava bi bila
+  // videti kot napaka.
+  const v = data.vozovnica;
+  vozovnicaEl.innerHTML = (v && v.z_relacijo)
+    ? `<a class="ticket-link" href="${escapeHtml(v.url)}" target="_blank"
+         rel="noopener noreferrer" title="Odpre vozni red SŽ za to relacijo in dan.">
+         Kupi vozovnico za <strong>${escapeHtml(data.from)} → ${escapeHtml(data.to)}</strong>
+         <span class="ticket-note">pri SŽ</span></a>`
+    : "";
 
   if (!list.length && !legs.length) {
     // "od Metlika do Bohinjska Bistrica" je napačno; sklanja se "postaja",

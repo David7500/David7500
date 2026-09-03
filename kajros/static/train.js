@@ -582,12 +582,20 @@ const KIND = {
 // medkrajevnih avtobusih pa vsak prevoznik prodaja sam in povezava na SZ bi
 // bila napacna.
 function vozovnicaHtml(run) {
-  if (!run || run.network !== "zeleznica") return "";
-  return `<a class="ticket-link" href="https://eshop.sz.si/" target="_blank"
+  const v = run && run.vozovnica;
+  if (!v) return "";
+  // Ce imamo SZ stevilki obeh postaj, gre povezava naravnost na relacijo in
+  // datum; sicer na trgovino, in to tudi pise. Obljubiti izpolnjeno pot, ki
+  // je ne bo, bi bilo slabse od tega, da povemo, kaj bo treba vpisati.
+  const kam = v.z_relacijo
+    ? `<strong>${escapeHtml(run.stops[0].name)} → ${escapeHtml(run.stops[run.stops.length - 1].name)}</strong>`
+    : `<strong>eshop.sz.si</strong>`;
+  return `<a class="ticket-link" href="${escapeHtml(v.url)}" target="_blank"
       rel="noopener noreferrer"
-      title="Spletna trgovina SŽ. Relacije ni mogoče podati v naslovu, zato jo tam vpišeš sam.">
-      Kupi vozovnico na <strong>eshop.sz.si</strong>
-      <span class="ticket-note">relacijo vpišeš tam</span>
+      title="${v.z_relacijo ? "Odpre vozni red SŽ za to relacijo in dan."
+                            : "Spletna trgovina SŽ; relacijo vpišeš tam."}">
+      Kupi vozovnico ${v.z_relacijo ? "za" : "na"} ${kam}
+      <span class="ticket-note">${v.z_relacijo ? "pri SŽ" : "relacijo vpišeš tam"}</span>
     </a>`;
 }
 

@@ -313,3 +313,39 @@ def test_nicla_po_izmerjeni_zamudi_ostane_blip():
     red = (42060, 42060)
     prej = _row_ts(835, 835, _at(11, 58, 0))   # 11:41 + 14 min = 11:55, ze mimo
     assert is_zero_blip(prej, None, 0, 0, red, "2026-08-30")
+
+
+# ---------------------------------------------------------------- vozovnice
+
+def test_vozovnica_z_relacijo():
+    """SZ stevilka postaje je UIC koda brez drzavne predpone 79.
+
+    Potrjeno na naslovu, ki ga je uporabnik prilepil iz svojega brskalnika:
+    Ljubljana = 42300 (UIC 7942300). Datum SZ pricakuje kot DD.MM.YYYY.
+    """
+    from kajros import vozovnice
+    v = vozovnice.povezava("Ljubljana", "Koper", "2026-09-03")
+    assert v["z_relacijo"] is True
+    assert "entry-station=42300" in v["url"]
+    assert "exit-station=44352" in v["url"]
+    assert "departure-date=03.09.2026" in v["url"]
+
+
+def test_vozovnica_brez_kode_pade_na_trgovino():
+    """Postaja brez kode ni napaka -- povezava gre na trgovino brez relacije.
+
+    Kod ni v GTFS in seznama ni mogoce prebrati (potniski.sz.si je za
+    Cloudflarom), zato jih imamo le za peščico velikih postaj.
+    """
+    from kajros import vozovnice
+    v = vozovnice.povezava("Hodoš", "Koper", "2026-09-03")
+    assert v["z_relacijo"] is False
+    assert v["url"] == vozovnice.TRGOVINA
+
+
+def test_vozovnica_prezre_sumnike_in_slab_datum():
+    from kajros import vozovnice
+    assert vozovnice.koda("divaca") == "44200"       # brez sumnikov
+    assert vozovnice.koda("DIVAČA") == "44200"       # velike crke
+    assert vozovnice.povezava("Ljubljana", "Koper", "neki")["z_relacijo"] is False
+    assert vozovnice.povezava("Ljubljana", "Koper", None)["z_relacijo"] is False

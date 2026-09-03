@@ -130,12 +130,24 @@ vožnje, a po dnevih veljavnosti — na tabli je bolje po podatku, ker feed poro
 za tisti trip, ki dejansko vozi.
 
 
-**Nakup vozovnice: povezava na `eshop.sz.si`, brez relacije.** Globoke povezave
-ni — obrazec trgovine je **POST** z internimi ID-ji postaj (`TravelFromId`) in
-GET parametri se tiho ignorirajo (preizkušeno 3. 9. 2026:
-`?TravelFrom=Ljubljana&TravelTo=Koper` pusti polji prazni). Zato povezava vodi
-na trgovino in **to tudi piše** („relacijo vpišeš tam"): obljubiti izpolnjeno
-pot bi bila laž, ki bi jo potnik odkril šele tam.
+**Nakup vozovnice: kjer se da, z relacijo.** `potniski.sz.si/vozni-redi-results/`
+**sprejme `GET`** z `entry-station`, `exit-station` in `departure-date`
+(`DD.MM.YYYY`). Številka postaje je **UIC koda brez državne predpone `79`** —
+Ljubljana UIC 7942300 → `42300`. Trgovina `eshop.sz.si` je nasprotno `POST`
+z internimi ID-ji in GET parametre tiho ignorira, zato je le zasilna pot.
+
+**To, da mi na `potniski.sz.si` ne moremo (403 za Cloudflarom), povezave ne
+ovira** — povezavo odpre uporabnikov brskalnik, ne naš strežnik. Ta razloček
+sem enkrat spregledal in stran zavrgel prehitro.
+
+Kod ni v GTFS in seznama ni mogoče prebrati, zato jih ima `vozovnice.KODE`
+samo 19 (iz odprtega nabora `trainline-eu/stations`, polje `uic`). Pokritost:
+**40 % železniških voženj** ima obe krajišči s kodo. V iskalniku zvez je delež
+višji, ker relacijo izbere potnik sam.
+
+Kjer kode ni: **v oknu vožnje** povezava vodi na trgovino in to piše
+(„relacijo vpišeš tam"), **v iskalniku zvez pa povezave ni** — tam aplikacija
+že ve, kam greš, in polovična povezava bi bila videti kot napaka.
 
 Povezava je **samo pri železniškem omrežju**, nadomestni prevoz SŽ vključno
 (`mode = bus`, a `network = zeleznica` — to je SŽ storitev in vozovnica velja).
