@@ -12,6 +12,14 @@ Pravila zajema (kaj feed sploh pove in kje laže) so v
 ki nosi zamudo, jo mora upoštevati -- kar je za zadnjim prevoženim postankom,
 je feedova napoved. Ta napaka je bila že dvakrat na zaslonu.
 
+**In izračuna se na enem mestu.** `/api/train/{no}/run` vrne
+`last_measured_seq`; prikaz ga bere in ga **ne računa sam**. Do 3. 9. 2026 je
+bilo isto pravilo napisano dvakrat -- v `stats.py` in v `common.lastMeasured()`
+-- z lastnim ravnanjem ob ničli za še nedosežen postanek. Dve različici istega
+pravila se prej ali slej razideta, razlika pa bi bila tiha: prikaz bi feedovo
+napoved pokazal kot izmerjeno zamudo. Primerjano ob poenotenju na 27 živih
+vožnjah: ujemali sta se povsod.
+
 **Vsi potniški endpointi imajo `network` in privzeto `zeleznica`.** Filter
 mora biti **znotraj** poizvedbe, ne za njo: železniško vprašanje (700 000
 vrstic) sicer plača avtobusne (12 M). Bil je že dvakrat vzrok počasnosti.

@@ -388,27 +388,18 @@ function stopActualIso(s) {
   return s.actual_dep || s.actual_arr;
 }
 
-function lastMeasured(stops) {
-  // Feed nosi vrednost tudi za postaje, ki jih vlak se ni dosegel -- to je
-  // napoved prevoznika, ne meritev. Za izmerjeno steje samo postaja, katere
-  // (voznored + zamuda) cas je ze minil.
+function lastMeasured(run) {
+  // Mejo med meritvijo in napovedjo pove STREZNIK (`last_measured_seq`), ne
+  // ta koda. Prej je bilo isto pravilo napisano dvakrat -- v `stats.py` in tu
+  // -- in dve razlicici istega pravila se prej ali slej razideta. Razlika bi
+  // bila tiha: prikaz bi feedovo napoved za se nedosezen postanek pokazal kot
+  // izmerjeno zamudo, in po zapisu v CLAUDE.md je bila ta napaka na zaslonu
+  // ze dvakrat.
   //
-  // Nicla za se nedosezen postanek je pri tem past: (voznored + 0) je pri
-  // zamujajocem vlaku ze minil in postaja bi se stela za prevozeno. Zamuda
-  // med sosednjima postajama ne pade z dvajsetih minut na nic, zato tako
-  // vrstico preskocimo -- isto pravilo kot v collector.py in /api/live.
-  const now = Date.now();
-  let found = null;
-  let prevMax = 0;
-  for (const s of stops) {
-    const d = stopDelay(s);
-    const iso = stopActualIso(s);
-    if (iso && new Date(iso).getTime() <= now && !(d === 0 && prevMax >= 300)) {
-      found = s;
-    }
-    if (d != null && d > prevMax) prevMax = d;
-  }
-  return found;
+  // `run` je cel odgovor `/api/train/{no}/run`, ne samo postanki.
+  const seq = run && run.last_measured_seq;
+  if (seq == null) return null;
+  return (run.stops || []).find((s) => s.stop_seq === seq) || null;
 }
 
 function stopWeatherHtml(w, isForecast) {
@@ -611,7 +602,9 @@ function forecastStopHtml(s, f, w) {
 }
 
 function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
-  const cur = lastMeasured(stops);
+  // Meja pride s streznikom in jo poda klicatelj (`opts.run`), ker jo pozna
+  // samo cel odgovor `/api/train/{no}/run`, ne seznam postankov.
+  const cur = lastMeasured((opts && opts.run) || null);
   const forecastBySeq = new Map((forecast || []).map((f) => [f.stop_seq, f]));
   const wx = weatherBySeq || new Map();
   const highlight = (opts && opts.highlight) || null;
@@ -661,7 +654,7 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   if (!res.ok) throw new Error(`run ${res.status}`);
   const run = await res.json();
 
-  const cur = lastMeasured(run.stops);
+  const cur = lastMeasured(run);
   // Dokler vlak se ni odpeljal, meritve ni, feed pa ima za prvo postajo ze
   // napoved. Oceno za naprej takrat zgradimo na njej -- ozaljsana je z oznako
   // "ocena", da nihce ne bere napovedi na napovedi kot izmerjeno.

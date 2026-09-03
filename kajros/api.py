@@ -734,8 +734,21 @@ def api_run(train_no: str, date: str | None = None,
         if not rows:
             raise HTTPException(404, f"vožnje {train_no} ne poznam")
         ident = stats.trip_identity(conn, train_no, razresen)
+        # Mejo med meritvijo in napovedjo pove STREZNIK, ne odjemalec.
+        # `common.lastMeasured()` jo je racunal sam -- isto pravilo v dveh
+        # jezikih, in ce se razideta, je razlika tiha napaka na zaslonu.
+        # Po zapisu v CLAUDE.md je bila ta napaka tam ze dvakrat.
+        #
+        # Za pretekli ali prihodnji dan meje ni: dan je koncan (vse v `run` JE
+        # meritev) ali se ni zacel. Takrat vzamemo trenutek za koncem vseh
+        # voznj -- isto kot `journey.board()`.
+        zdaj = datetime.now(TZ)
+        now_s = (journey.now_seconds(zdaj) if date == zdaj.date().isoformat()
+                 else 48 * 3600)
+        meja = stats.last_measured(conn, date, [razresen], now_s).get(razresen)
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
-                **ident, "stops": rows}
+                **ident, "last_measured_seq": meja["stop_seq"] if meja else None,
+                "stops": rows}
 
 
 @app.get("/api/train/{train_no}/history")

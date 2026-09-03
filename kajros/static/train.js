@@ -469,6 +469,7 @@ function renderTimeline() {
   const yours = yourStop(run.stops);
   runTimelineEl.innerHTML =
     runTimelineHtml(run.stops, state.forecast, state.weather, {
+      run,
       aheadOnly: !document.body.classList.contains("is-advanced"),
       highlight: yours ? yours.stop_seq : null,
     }) +
@@ -572,7 +573,7 @@ const KIND = {
 function profilePoints() {
   // Vse postaje poti, ne samo tiste z meritvijo -- graf mora pokazati celo pot.
   const stops = state.run.stops;
-  const cur = lastMeasured(stops);
+  const cur = lastMeasured(state.run);
   const fc = new Map((state.forecast || []).map((f) => [f.stop_seq, f]));
   const past = state.past || new Map();
 
