@@ -285,13 +285,47 @@ def tick(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
 
 # ---------------------------------------------------------------- porocilo
 
-def _meritve(vals: list[tuple[int, int]]) -> dict:
+#: Razmik do naslednjega odhoda z iste postaje **v isto smer** (po `headsign`,
+#: 06--20). Izmerjeno 3. 9. 2026 na zajetem voznem redu: mediana 87 min pri
+#: železnici (5 205 razmikov, 66 % nad uro) in 40 min pri avtobusih (194 231).
+#: To je cena zamujenega vozila.
+RAZMIK_S = {"zeleznica": 87 * 60, "avtobus": 40 * 60}
+
+#: Koliko prej pride potnik od prikazane minute. Ni izmerjeno -- ne vemo, kdaj
+#: kdo pride -- ampak izbrano tako, da je pri njem optimalni zamik napovedi
+#: natanko 0: pri tej rezervi je strošek najnižji brez vsakega popravka
+#: številke. Nižja vrednost bi delala videz, da se izplača napovedovati manj,
+#: kot merimo, in to bi bila past.
+POTNIKOVA_REZERVA_S = 5 * 60
+
+
+def _strosek(vals: list[tuple[int, int]], omrezje: str | None) -> float | None:
+    """Povprečna izguba potnika v minutah.
+
+    Podcenimo -- potnik pride prezgodaj in **čaka** razliko. Precenimo --
+    vozilo mu odpelje pred nosom in čaka **razmik do naslednjega**. Ta mera
+    obstaja zato, ker MAE obeh smeri ne loči, potnik pa ju loči zelo:
+    zamujen vlak stane mediano 87 minut, minuta odvečnega čakanja eno.
+    """
+    if not vals or omrezje not in RAZMIK_S:
+        return None
+    h = RAZMIK_S[omrezje]
+    skupaj = 0
+    for napoved, resnica in vals:
+        prihod = napoved - POTNIKOVA_REZERVA_S
+        skupaj += (resnica - prihod) if prihod <= resnica else h
+    return round(skupaj / len(vals) / 60, 2)
+
+
+def _meritve(vals: list[tuple[int, int]], omrezje: str | None = None) -> dict:
     """MAE in deleža v dveh in petih minutah za pare (napoved, resnica)."""
     if not vals:
         return {"n": 0}
     napake = [abs(a - b) for a, b in vals]
     n = len(napake)
     return {
+        "strosek_min": _strosek(vals, omrezje),
+        "precenjenih": round(sum(1 for a, b in vals if a > b) / n * 100, 1),
         "n": n,
         "mae_min": round(sum(napake) / n / 60, 2),
         "v2min": round(sum(1 for x in napake if x <= 120) / n * 100, 1),
@@ -317,7 +351,7 @@ def report(conn: sqlite3.Connection, days: int = 30,
         + (" AND network = ?" if network else ""),
         (od, network) if network else (od,)).fetchall()
 
-    def rez(rows: list[sqlite3.Row]) -> dict:
+    def rez(rows: list[sqlite3.Row], omrezje: str | None = None) -> dict:
         # Prevoznik za postanek v potnikovem oknu pogosto nima vrednosti. Ce
         # ga merimo samo tam, kjer jo ima, ga merimo na LAZJEM vzorcu -- in
         # primerjava dveh modelov na dveh vzorcih meri tudi razliko med
@@ -326,16 +360,17 @@ def report(conn: sqlite3.Connection, days: int = 30,
         parne = [r for r in rows if r["operator_s"] is not None]
         return {
             "nasa": _meritve([(r["ours_s"], r["actual_s"]) for r in rows
-                              if r["ours_s"] is not None]),
+                              if r["ours_s"] is not None], omrezje),
             "prevoznik": _meritve([(r["operator_s"], r["actual_s"]) for r in rows
-                                   if r["operator_s"] is not None]),
+                                   if r["operator_s"] is not None], omrezje),
             "prenos": _meritve([(r["carry_s"], r["actual_s"]) for r in rows
-                                if r["carry_s"] is not None]),
+                                if r["carry_s"] is not None], omrezje),
             # Nasa vrednost BREZ pravila "prevoznik ve vec" (`_with_operator`).
             # Pravilo je izmerjeno na zgodovini; tu se vidi, ali drzi tudi v
             # potnikovem oknu, kjer je horizont krajsi.
             "nasa_brez_prevoznika": _meritve([(r["ours_own_s"], r["actual_s"])
-                                              for r in rows if r["ours_own_s"] is not None]),
+                                              for r in rows if r["ours_own_s"] is not None],
+                                             omrezje),
             # Kolikokrat feed za postanek v potnikovem oknu sploh ni imel
             # vrednosti. Brez tega bi bila prevoznikova stevilka videti boljsa,
             # kot je: merjena bi bila samo tam, kjer je nekaj povedal.
@@ -344,12 +379,14 @@ def report(conn: sqlite3.Connection, days: int = 30,
             if rows else None,
             "parno": {
                 "nasa": _meritve([(r["ours_s"], r["actual_s"]) for r in parne
-                                  if r["ours_s"] is not None]),
+                                  if r["ours_s"] is not None], omrezje),
                 "nasa_brez_prevoznika": _meritve([(r["ours_own_s"], r["actual_s"])
-                                                  for r in parne if r["ours_own_s"] is not None]),
-                "prevoznik": _meritve([(r["operator_s"], r["actual_s"]) for r in parne]),
+                                                  for r in parne if r["ours_own_s"] is not None],
+                                                 omrezje),
+                "prevoznik": _meritve([(r["operator_s"], r["actual_s"]) for r in parne],
+                                      omrezje),
                 "prenos": _meritve([(r["carry_s"], r["actual_s"]) for r in parne
-                                    if r["carry_s"] is not None]),
+                                    if r["carry_s"] is not None], omrezje),
             },
         }
 
@@ -357,7 +394,7 @@ def report(conn: sqlite3.Connection, days: int = 30,
 
     po_omrezju = {}
     for net in sorted({r["network"] for r in vrstice}):
-        po_omrezju[net] = rez([r for r in vrstice if r["network"] == net])
+        po_omrezju[net] = rez([r for r in vrstice if r["network"] == net], net)
     izid["po_omrezju"] = po_omrezju
 
     # Razrez po trenutni zamudi ob pogledu: tam, kjer je vlak ze pozen, se

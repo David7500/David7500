@@ -121,8 +121,13 @@ def cmd_backtest(args):
 def _vrstica_modela(ime, m):
     if not m.get("n"):
         return f"{ime:24s}{'—':>10}"
-    return (f"{ime:24s}{m['mae_min']:>9.2f}m{m['v2min']:>9.1f}%{m['v5min']:>9.1f}%"
-            f"{m['podcenjenih']:>9.1f}%{m['odklon_min']:>9.2f}m{m['n']:>8d}")
+    # `strosek` je pri skupnem izrezu None, ker sta razmika omrezij razlicna in
+    # mesanica ne pomeni nicesar.
+    s = m.get("strosek_min")
+    return (f"{ime:24s}{m['mae_min']:>9.2f}m{m['v5min']:>9.1f}%"
+            f"{m['podcenjenih']:>9.1f}%{m.get('precenjenih', 0):>9.1f}%"
+            f"{m['odklon_min']:>9.2f}m"
+            f"{(f'{s:>9.2f}m' if s is not None else f'{chr(8212):>10}')}{m['n']:>8d}")
 
 
 def cmd_ocena(args):
@@ -144,8 +149,8 @@ def cmd_ocena(args):
 
     def blok(naslov, x):
         print(f"\n{naslov}")
-        print(f"{'model':24s}{'MAE':>10}{'v 2 min':>10}{'v 5 min':>10}"
-              f"{'podcenj.':>10}{'odklon':>10}{'n':>8}")
+        print(f"{'model':24s}{'MAE':>10}{'v 5 min':>10}"
+              f"{'podcenj.':>10}{'precenj.':>10}{'odklon':>10}{'strošek':>10}{'n':>8}")
         for ime, kljuc in modeli:
             print(_vrstica_modela(ime, x[kljuc]))
         molci = x.get("prevoznik_molci")

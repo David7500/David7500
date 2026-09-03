@@ -364,3 +364,53 @@ pred Latkovo vasjo 218). Preverjeno na dvanajstih poizvedbah: „ljublj“,
 svoj `stop_id` za vsako smer; prej se je razvrščalo po postankih enega, izpisala
 pa se je vsota vseh — seznam je bil urejen po drugi številki, kot jo je kazal
 („Bavarski dvor“ pokaže 1 137, razvrstil pa se je po 573).
+
+
+## Smer napake in strošek potnika
+
+**MAE ne loči smeri, potnik pa jo loči zelo.** Podcenimo — potnik pride
+prezgodaj in čaka razliko. Precenimo — vozilo mu odpelje pred nosom in čaka
+**razmik do naslednjega**, ki je izmerjeno mediano **87 min pri železnici** in
+**40 min pri avtobusih** (razmik z iste postaje v isto smer po `headsign`,
+06–20). Zato ima `kajros ocena` poleg MAE še stolpca `precenj.` in `strošek`.
+
+**Številke ne zamikamo navzdol, čeprav je videti, da bi se izplačalo.** Če
+vsako oceno znižamo za `k` minut, pade strošek s 27,9 na 10,1 min pri `k = 5`.
+A model predpostavlja, da potnik pride natanko ob prikazani minuti. Če ima
+lastno rezervo `B`, sta `k` in `B` **zamenljiva**: pri `B = 5` je najboljši
+`k = 0` z **istim** stroškom, pri `B = 10` pa strošek zraste (12,3 proti 10,1).
+Šteje samo vsota in optimum je okoli pet minut, ki jih potnik prispeva sam.
+`ocena.POTNIKOVA_REZERVA_S` je zato 5 min — izbrana tako, da je optimalni
+zamik natanko nič in mera ne dela videza, da se izplača napovedovati manj,
+kot merimo.
+
+## Avtobusni pozitivni odklon: diagnoza, brez popravka
+
+Naš odklon je pri avtobusih **+0,46 min** in precenimo v **63,5 %** primerov;
+pri železnici je −1,27 in 29,6 %. Izvor je izmerjen: **pravilo „prevoznik ve
+več“** (`_with_operator`, `max(naša, njegova)`).
+
+| | odklon | precenili |
+|---|---|---|
+| naša ocena s pravilom | **+0,85** | 64,5 % |
+| ista vrstica brez pravila | −0,65 | 44,3 % |
+
+Maksimum dveh šumnih ocen je navzgor pristranski — to je aritmetika, ne napaka
+pravila. Pravilo ima svojo izmerjeno utemeljitev (kadar prevoznik napove več,
+je njegov MAE 0,21 proti našim 2,66).
+
+**Preizkušeno in NE uvedeno:** povprečje naše in prevoznikove vrednosti da na
+parnem izrezu MAE 2,77 (proti 2,85), odklon **−0,03** (proti +0,85) in strošek
+7,09 (proti 7,27) — boljše po vseh treh merilih hkrati. Vseeno ni uvedeno,
+ker:
+
+* utemeljitev obstoječega pravila pravi, da je nizka prevoznikova vrednost
+  **privzeta ničla** za nerazrešen postanek; povprečenje z njo bi moralo
+  škoditi, pa ne škoduje, in **mehanizma, zakaj, nimam**;
+* podatka sta dva dneva in dobiček pri MAE se ne ponovi (2. 9.: 3,06 → 2,93;
+  3. 9.: 2,44 → 2,45), popravek odklona pa se ponovi oba dneva
+  (+0,95 → −0,01 in +0,63 → −0,07).
+
+Ko bo sence za dva tedna, se to pomeri znova: če odklon ostane popravljen in
+MAE vsaj enak, se uvede. Prej ne — utemeljeno pravilo se ne ruši z razlago,
+ki je ni.
