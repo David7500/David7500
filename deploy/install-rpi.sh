@@ -195,8 +195,10 @@ if [ "$MODE" = "zajem" ]; then
     echo
     echo "Bazo preneseš na računalnik z:"
     # Pod sudo je `id -un` root; hocemo uporabnika, ki je sudo pognal.
+    # V /var/tmp in NE v /tmp: na malini je /tmp tmpfs (214 MB v RAM-u),
+    # baza pa je ze cez 368 MB. Kopija bi padla sredi pisanja.
     echo "  ssh ${SUDO_USER:-$(id -un)}@$(hostname -I 2>/dev/null | awk '{print $1}') \\"
-    echo "      'sqlite3 $DATA/kajros.sqlite \".backup /tmp/kajros.sqlite\"'"
+    echo "      'sqlite3 $DATA/kajros.sqlite \".backup /var/tmp/kajros.sqlite\"'"
 else
     echo "Gotovo. Preveri:"
     echo "  curl -s http://localhost:8000/api/health"

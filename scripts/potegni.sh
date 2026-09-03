@@ -13,6 +13,10 @@ set -euo pipefail
 PI="${KAJROS_PI:-david@192.168.1.166}"
 ODDALJENA="${KAJROS_PI_DB:-}"
 KAM="${KAJROS_TMP:-/tmp/kajros-malina.sqlite}"
+# NE `/tmp` na malini: tam je tmpfs 214 MB v RAM-u, baza pa je presegla
+# 368 MB. Kopija bi padla, in to na napravi s 427 MB pomnilnika, kjer
+# teče merodajen zajem. `/var/tmp` je ext4 z 19 G.
+ODDALJENI_TMP="${KAJROS_PI_TMP:-/var/tmp/kajros-prenos.sqlite}"
 cd "$(dirname "$0")/.."
 PY=./venv/bin/python
 
@@ -46,21 +50,32 @@ if [ -z "$ODDALJENA" ]; then
   echo "  baza na malini: $ODDALJENA"
 fi
 
+# Preden se lotimo kopije: ali je zanjo sploh prostor? Brez tega se napaka
+# pokaze sele sredi pisanja, ko je ciljni sistem ze poln -- na malini je to
+# nekoc pomenilo poln RAM disk.
+echo "  preverjam prostor …"
+timeout 30 ssh -o BatchMode=yes "$PI" "
+  velikost=\$(stat -c%s '$ODDALJENA')
+  prosto=\$(df -B1 --output=avail '$(dirname "$ODDALJENI_TMP")' | tail -1)
+  echo \"   baza \$((velikost/1000000)) MB, prosto \$((prosto/1000000)) MB v $(dirname "$ODDALJENI_TMP")\"
+  [ \"\$prosto\" -gt \"\$((velikost + 100000000))\" ] || {
+    echo '   premalo prostora za kopijo' >&2; exit 1; }"
+
 # Dosledna kopija, ne golo kopiranje datoteke: baza je v načinu WAL in
 # `sz.sqlite` sam po sebi ne vsebuje zadnjih zapisov. `backup()` jih zajame,
 # bere pa samo -- zajema na malini ne prekine in ne zaklene.
 echo "  delam dosledno kopijo …"
-timeout 300 ssh -o BatchMode=yes "$PI" "python3 - <<'PYEOF'
+timeout 600 ssh -o BatchMode=yes "$PI" "python3 - <<'PYEOF'
 import sqlite3, os
 src = sqlite3.connect('file:${ODDALJENA}?mode=ro', uri=True)
-dst = sqlite3.connect('/tmp/kajros-prenos.sqlite')
+dst = sqlite3.connect('${ODDALJENI_TMP}')
 src.backup(dst); dst.close(); src.close()
-print('  ', round(os.path.getsize('/tmp/kajros-prenos.sqlite') / 1e6), 'MB')
+print('  ', round(os.path.getsize('${ODDALJENI_TMP}') / 1e6), 'MB')
 PYEOF"
 
 echo "  prenašam …"
-timeout 900 scp -q -o BatchMode=yes "$PI:/tmp/kajros-prenos.sqlite" "$KAM"
-timeout 30 ssh -o BatchMode=yes "$PI" "rm -f /tmp/kajros-prenos.sqlite"
+timeout 900 scp -q -o BatchMode=yes "$PI:$ODDALJENI_TMP" "$KAM"
+timeout 30 ssh -o BatchMode=yes "$PI" "rm -f '$ODDALJENI_TMP'"
 
 # Pokvarjena kopija bi prilila smeti. Preverimo, preden se je dotaknemo baze.
 $PY - "$KAM" <<'PYEOF'
