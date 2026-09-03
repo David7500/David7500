@@ -58,9 +58,27 @@
         <label class="layer"><input type="checkbox" id="lay-train" checked>
           <span class="layer-key layer-key-train"></span>
           <span class="layer-name">Vlaki</span><span class="layer-n" id="n-train">—</span></label>
-        <label class="layer"><input type="checkbox" id="lay-bus" checked>
+        {# Prevoznik na svojo vrstico in svojo barvo. Ena skupna plast je bila ob
+           konici 1 530 vozil in zemljevida se ni dalo brati; privzeto so vsi
+           ugasnjeni. #}
+        <label class="layer"><input type="checkbox" id="lay-lpp">
+          <span class="layer-key layer-key-lpp"></span>
+          <span class="layer-name">LPP</span><span class="layer-n" id="n-lpp">—</span></label>
+        <label class="layer"><input type="checkbox" id="lay-arriva">
+          <span class="layer-key layer-key-arriva"></span>
+          <span class="layer-name">Arriva</span><span class="layer-n" id="n-arriva">—</span></label>
+        <label class="layer"><input type="checkbox" id="lay-nomago">
+          <span class="layer-key layer-key-nomago"></span>
+          <span class="layer-name">Nomago</span><span class="layer-n" id="n-nomago">—</span></label>
+        <label class="layer"><input type="checkbox" id="lay-apms">
+          <span class="layer-key layer-key-apms"></span>
+          <span class="layer-name">AP Murska Sobota</span><span class="layer-n" id="n-apms">—</span></label>
+        {# Peta vrstica ni okras: ce v zajem pride nov prevoznik, njegova vozila
+           sicer tiho izginejo -- plast brez stikala je plast, ki je ni. #}
+        <label class="layer" id="row-bus-other" hidden><input type="checkbox" id="lay-bus-other">
           <span class="layer-key layer-key-bus"></span>
-          <span class="layer-name">Avtobusi</span><span class="layer-n" id="n-bus">—</span></label>
+          <span class="layer-name">Drugi prevozniki</span>
+          <span class="layer-n" id="n-bus-other">—</span></label>
         <label class="layer"><input type="checkbox" id="lay-net" checked>
           <span class="layer-key layer-key-net"></span>
           <span class="layer-name">Železniške proge</span><span class="layer-n"></span></label>

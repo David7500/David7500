@@ -141,6 +141,9 @@ body {
   display: flex; align-items: center; gap: 8px;
   padding: 5px 0; cursor: pointer;
 }
+/* `display: flex` povozi privzeto vrednost za `[hidden]`, zato vrstica
+   "Drugi prevozniki" ni izginila, ko je bil stevec 0. */
+.layer[hidden] { display: none; }
 .layer input { accent-color: var(--accent-lit); width: 14px; height: 14px; flex-shrink: 0; }
 .layer-key { width: 12px; flex-shrink: 0; display: inline-flex; align-items: center; }
 .layer-key-train::before {
@@ -373,25 +376,36 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
 
   .map-area { position: absolute; inset: 0; }
 
+  /* Gumb je bil vrstica v barvi podlage tik nad navedbo vira in se je z njo
+     zlil -- prijavljeno kot "ne vidim, kje kliknuti". Zdaj je plavajoca
+     tipka nad zemljevidom: ima poudarek, senco in ikono, torej je videti kot
+     stikalo in ne kot rob strani. */
   .sheet-toggle {
     display: flex;
     position: absolute;
-    left: 0; right: 0; bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     z-index: 1100;
     align-items: center;
-    justify-content: center;
-    gap: 9px;
-    flex-direction: column;
-    padding: 9px 14px calc(10px + env(safe-area-inset-bottom, 0px));
-    background: #14161a;
-    border: 0;
-    border-top: 1px solid #23272f;
-    color: #9aa3b0;
-    font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif;
+    gap: 8px;
+    padding: 11px 18px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: var(--bg-raised);
+    color: var(--accent-lit);
+    font: 600 13px/1 'IBM Plex Sans', system-ui, sans-serif;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .55);
     cursor: pointer;
+    white-space: nowrap;
   }
+  .sheet-toggle:active { background: var(--bg-hover); }
+  /* Ročaj je zdaj ikona drsnikov -- pove, da gre za nastavitve. */
   .sheet-grip {
-    width: 34px; height: 4px; border-radius: 2px; background: #3d434f;
+    width: 15px; height: 11px; flex-shrink: 0;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 7h9M19 7h1M4 17h3M13 17h7'/%3E%3Ccircle cx='16' cy='7' r='2.4'/%3E%3Ccircle cx='10' cy='17' r='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 7h9M19 7h1M4 17h3M13 17h7'/%3E%3Ccircle cx='16' cy='7' r='2.4'/%3E%3Ccircle cx='10' cy='17' r='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
   }
 
   .sidebar {
@@ -471,3 +485,27 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
 /* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
  * Avtobus obroča nima, ker je njegova lega prava. */
 .train-marker { background: none; border: none; }
+
+/* Barvni ključi prevoznikov. Iste vrednosti kot `AGENCY_INK` v dashboard.js
+   in `OPERATERJI` v scripts/preveri_paleto.py -- ce se spremenijo tu, se
+   morajo tam tudi, sicer legenda laze. */
+.layer-key-lpp::before,
+.layer-key-arriva::before,
+.layer-key-nomago::before,
+.layer-key-apms::before {
+  content: ""; width: 9px; height: 9px; border-radius: 2px;
+}
+.layer-key-lpp::before    { background: #4db97f; }
+.layer-key-arriva::before { background: #6fb8ff; }
+.layer-key-nomago::before { background: #9d7ae0; }
+.layer-key-apms::before   { background: #c9a227; }
+
+/* Na telefonu plavajoča tipka za nastavitve zasede dno na sredini, opombe pa
+   stojijo v spodnjem levem kotu -- pri 430 px se prekrivajo. Zato se opombe
+   dvignejo nad tipko. Vrstni red pravil šteje: to mora biti za `.label-note`
+   in za `.label-note-2/3`, sicer ga te povozijo. */
+@media (max-width: 720px) {
+  .label-note   { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); }
+  .label-note-2 { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  .label-note-3 { bottom: calc(134px + env(safe-area-inset-bottom, 0px)); }
+}

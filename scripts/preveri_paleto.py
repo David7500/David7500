@@ -47,6 +47,16 @@ SEVERITY = [
     ("hude", "#d1495b"),
 ]
 
+# Prevozniki na zemljevidu. Barva TU nosi pomen sama (kdo je vozilo), zato se
+# morajo lociti med sabo tudi pri barvni slepoti -- in od lestvice zamud, ki je
+# oranzna, sicer bi zeleni znak brali kot "tocno".
+OPERATERJI = [
+    ("LPP", "#4db97f"),
+    ("Arriva", "#6fb8ff"),
+    ("Nomago", "#9d7ae0"),
+    ("AP MS", "#c9a227"),
+]
+
 RESERVED = [
     ("ni meritve", "#a8d8ff"),
     ("nadomestni prevoz", "#b48ad8"),
@@ -199,7 +209,7 @@ def _line(ok: bool, text: str) -> str:
 
 def check_contrast(problems: list[str]) -> None:
     print("\nKONTRAST proti podlagi (WCAG 2.1; 4.5 za drobno besedilo, 3.0 za veliko)")
-    for group in (DELAY_RAMP, SEVERITY, RESERVED, INK):
+    for group in (DELAY_RAMP, SEVERITY, OPERATERJI, RESERVED, INK):
         for name, color in group:
             for bg_name, bg in (("bg", BG), ("kartica", BG_RAISED)):
                 ratio = contrast(color, bg)
@@ -236,7 +246,8 @@ def check_monotone(problems: list[str]) -> None:
 
 def check_cvd(problems: list[str]) -> None:
     print("\nRAZLOČLJIVOST pri barvni slepoti (CIEDE2000; <3 = ista barva)")
-    groups = {"lestvica zamud": DELAY_RAMP, "semafor razmer": SEVERITY}
+    groups = {"lestvica zamud": DELAY_RAMP, "semafor razmer": SEVERITY,
+              "prevozniki": OPERATERJI}
     for label, group in groups.items():
         print(f"  -- {label}")
         for i, (n1, c1) in enumerate(group):
@@ -251,6 +262,15 @@ def check_cvd(problems: list[str]) -> None:
                     problems.append(f"{n1} vs {n2}: ΔE {worst:.1f} ({worst_kind})")
                 mark = "" if worst >= DE_CLEAR else "   (barva sama ne sme nositi pomena)"
                 print(_line(ok, f"{n1:12s} vs {n2:12s} ΔE {worst:5.1f} ({worst_kind}){mark}"))
+
+    print("  -- prevoznik proti lestvici zamud (znak vozila ne sme brati kot zamuda)")
+    for n1, c1 in OPERATERJI:
+        for n2, c2 in DELAY_RAMP:
+            worst = min(ciede2000(lab(simulate(c1, k)), lab(simulate(c2, k))) for k in _SIM)
+            ok = worst >= DE_MIN
+            if not ok:
+                problems.append(f"{n1} vs {n2}: ΔE {worst:.1f}")
+            print(_line(ok, f"{n1:12s} vs {n2:12s} ΔE {worst:5.1f}"))
 
     print("  -- med lestvicama (ne smeta se brati kot ena)")
     for n1, c1 in DELAY_RAMP:

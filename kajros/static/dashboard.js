@@ -63,7 +63,19 @@ const routeLayer = L.layerGroup().addTo(map);   // trasa izbrane vožnje
 // ne na "kje je moj avtobus" -- in drugo je razlog za obisk te strani.
 const allRoutesLayer = L.layerGroup();
 const trainLayer = L.layerGroup().addTo(map);
-const busLayer = L.layerGroup().addTo(map);
+// Ena plast na prevoznika, ne ena skupna. Razlog je merjen: ob 15:10 je bilo
+// na zemljevidu 1 530 avtobusov in slika je bila zelena kasa, v kateri se
+// posamezno vozilo ni dalo najti. Zdaj je vsak prevoznik svoja plast in svoje
+// potrditveno polje, privzeto pa so VSI ugasnjeni -- zemljevid se odpre kot
+// zeleznicni, avtobuse prizges, ko jih res isces.
+const BUS_LAYERS = {
+  "1118": L.layerGroup(),   // LPP
+  "1123": L.layerGroup(),   // Arriva
+  "1119": L.layerGroup(),   // Nomago
+  "1121": L.layerGroup(),   // AP Murska Sobota
+};
+const busLayerOther = L.layerGroup();          // prevoznik, ki ga se ne poznamo
+const busLayerOf = (v) => BUS_LAYERS[v && v.agency] || busLayerOther;
 
 const stationMarkers = new Map();   // ime postaje -> L.CircleMarker
 let stationsByName = new Map();     // ime postaje -> {stop_id, lat, lon}
@@ -349,7 +361,20 @@ function renderTrains(trains) {
 // isti sliki in ju je treba ločiti tudi na pogled: vlak je krog na postaji,
 // avtobus je oblika vozila na izmerjeni legi.
 
-const BUS_INK = "#4db97f";
+// Barva na zemljevidu pove, CIGAV avtobus je. Izbrane so tako, da se locijo
+// tudi pri barvni slepoti: najslabsi par je pri deutan/protan ΔE 9,6 (prag 3)
+// in celo pri tritanopiji 4,8 -- preverjeno s scripts/preveri_paleto.py, ne na
+// oko. Proti lestvici zamud zelena in oranzna pri deutanu trcita (ΔE 1,2), a
+// to ni tezava: vozila locuje OBLIKA (avtobus je puscica, vlak krog), barva pa
+// nikoli ne nosi pomena sama -- oznaka poleg nosi ime prevoznika.
+const BUS_INK = "#4db97f";                    // privzeto, kadar prevoznik ni znan
+const AGENCY_INK = {
+  "1118": "#4db97f",   // LPP
+  "1123": "#6fb8ff",   // Arriva
+  "1119": "#9d7ae0",   // Nomago
+  "1121": "#c9a227",   // AP Murska Sobota
+};
+const busInk = (v) => AGENCY_INK[v && v.agency] || BUS_INK;
 
 // Velikost sledi približevanju. Pri pogledu na vso Slovenijo je vozil do sto
 // in majhna oblika je edina, ki se ne slepi; ko kdo približa na eno ulico,
@@ -368,12 +393,12 @@ function busSize(z) {
 // Avtobus od zgoraj: zaobljeno telo, svetlejše vetrobransko steklo spredaj in
 // zarezi za kolesi. Puščica je bila premalo -- pri približku je bila videti
 // kot pika in se od vlaka ni ločila.
-function busSvg(size, moving) {
+function busSvg(size, moving, ink) {
   const o = moving ? 1 : 0.5;
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24">
       <g>
         <rect x="7.5" y="2.5" width="9" height="19" rx="3.2"
-              fill="${BUS_INK}" fill-opacity="${o}"
+              fill="${ink || BUS_INK}" fill-opacity="${o}"
               stroke="#0f1115" stroke-width="1.5"/>
         <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
               fill="#0f1115" fill-opacity="0.65"/>
@@ -392,7 +417,7 @@ function busIcon(v, z) {
   return L.divIcon({
     className: "bus-marker",
     html: `<div style="transform:rotate(${angle}deg);width:${size}px;height:${size}px">`
-      + busSvg(size, moving) + "</div>",
+      + busSvg(size, moving, busInk(v)) + "</div>",
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -400,7 +425,7 @@ function busIcon(v, z) {
 
 function busTooltipHtml(v) {
   return `<div class="train-label-line">`
-    + `<span class="train-label-code" style="color:${BUS_INK}">`
+    + `<span class="train-label-code" style="color:${busInk(v)}">`
     + `${escapeHtml(agencyPrefix(v))}${escapeHtml(v.train_no)}</span>`
     + `<span class="train-label-more">${escapeHtml(v.headsign || "")}</span></div>`
     + `<div class="train-label-more">`
@@ -425,9 +450,19 @@ function renderBuses(list) {
       m.bindTooltip(busTooltipHtml(v), {
         className: "kajros-tooltip", direction: "top", offset: [0, -10],
       });
-      m.addTo(busLayer);
+      m.addTo(busLayerOf(v));
+      m.__layer = busLayerOf(v);
       busMarkers.set(key, m);
     } else {
+      // Vozjna lahko med osvezitvama zamenja prevoznika samo, ce se je kljuc
+      // ponovno uporabil; takrat mora marker v pravo plast, sicer ostane
+      // skrit pod ugasnjenim prevoznikom.
+      const naj = busLayerOf(v);
+      if (m.__layer !== naj) {
+        if (m.__layer) m.__layer.removeLayer(m);
+        naj.addLayer(m);
+        m.__layer = naj;
+      }
       m.setLatLng([v.lat, v.lon]);
       m.setIcon(busIcon(v, z));
       m.setTooltipContent(busTooltipHtml(v));
@@ -437,7 +472,7 @@ function renderBuses(list) {
   }
   for (const [key, m] of busMarkers) {
     if (!seen.has(key)) {
-      busLayer.removeLayer(m);
+      if (m.__layer) m.__layer.removeLayer(m);
       busMarkers.delete(key);
     }
   }
@@ -626,7 +661,11 @@ map.on("zoomend moveend", () => {
 
 const LAYERS = [
   { id: "lay-train", key: "train", layer: () => trainLayer, def: true },
-  { id: "lay-bus", key: "bus", layer: () => busLayer, def: true },
+  { id: "lay-lpp", key: "bus-lpp", layer: () => BUS_LAYERS["1118"], def: false },
+  { id: "lay-arriva", key: "bus-arriva", layer: () => BUS_LAYERS["1123"], def: false },
+  { id: "lay-nomago", key: "bus-nomago", layer: () => BUS_LAYERS["1119"], def: false },
+  { id: "lay-apms", key: "bus-apms", layer: () => BUS_LAYERS["1121"], def: false },
+  { id: "lay-bus-other", key: "bus-other", layer: () => busLayerOther, def: false },
   { id: "lay-net", key: "net", layer: () => netLayer, def: true },
   { id: "lay-routes", key: "routes", layer: () => allRoutesLayer, def: false },
   { id: "lay-stations", key: "stations", layer: () => stationLayer, def: true },
@@ -889,7 +928,23 @@ async function loadRoutes() {
 
 function onVehicles(list) {
   liveBuses = list;
-  document.getElementById("n-bus").textContent = liveBuses.length;
+  // Stevec na prevoznika. Vrstica "drugi" se pokaze samo, ce kdo tam res je --
+  // sicer je prazna izbira, ki nicesar ne pojasni.
+  const poAgenciji = { "1118": 0, "1123": 0, "1119": 0, "1121": 0, drugi: 0 };
+  for (const v of liveBuses) {
+    if (poAgenciji[v.agency] !== undefined) poAgenciji[v.agency] += 1;
+    else poAgenciji.drugi += 1;
+  }
+  const stevec = { "n-lpp": "1118", "n-arriva": "1123",
+                   "n-nomago": "1119", "n-apms": "1121" };
+  for (const [id, ag] of Object.entries(stevec)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = poAgenciji[ag];
+  }
+  const drugiEl = document.getElementById("n-bus-other");
+  if (drugiEl) drugiEl.textContent = poAgenciji.drugi;
+  const drugiRow = document.getElementById("row-bus-other");
+  if (drugiRow) drugiRow.hidden = poAgenciji.drugi === 0;
   renderBuses(liveBuses);
   vozilaPrispela = true;
   prilagodiPogledVozilom();

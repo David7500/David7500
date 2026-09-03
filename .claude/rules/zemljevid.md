@@ -262,3 +262,39 @@ odprtju. Zavihkov ne vračaj — eno vprašanje so razbili na tri strani.
 Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.
 Leaflet se nalaga z unpkg CDN.
+
+## Avtobusi: plast na prevoznika, privzeto ugasnjeni
+
+**Ena skupna avtobusna plast je zemljevid zadušila.** Ob 15:10 je bilo na njem
+1 530 vozil in slika je bila zelena kaša, v kateri posameznega avtobusa ni bilo
+mogoče najti. Zdaj je **vsak prevoznik svoja plast in svoje potrditveno polje**,
+in **vsi so privzeto ugasnjeni**: zemljevid se odpre kot železniški, avtobuse
+prižgeš, ko jih res iščeš.
+
+Barve niso izbrane na oko, ampak preverjene s `scripts/preveri_paleto.py`:
+
+| | | |
+|---|---|---|
+| LPP | `#4db97f` | zelena |
+| Arriva | `#6fb8ff` | modra |
+| Nomago | `#9d7ae0` | vijolična |
+| AP Murska Sobota | `#c9a227` | zlata |
+
+Najslabši par je pri deutan/protan **ΔE 9,6** (prag 3, „na prvi pogled“ 6) in
+celo pri tritanopiji 4,8. Proti lestvici zamud zelena in oranžna pri deutanu
+trčita (ΔE 1,2), a to ni težava: **vozila loči oblika** — avtobus je puščica,
+vlak krog — in oznaka poleg nosi ime prevoznika. Barva nikoli ne nosi pomena
+sama; to pravilo projekt že ima.
+
+**Peta vrstica „Drugi prevozniki" ni okras.** Če v zajem pride nov prevoznik,
+bi njegova vozila brez nje tiho izginila — plast brez stikala je plast, ki je
+ni. Vrstica se skrije, kadar je števec 0.
+
+**Gumb za nastavitve na telefonu je bil neviden.** Bil je vrstica v barvi
+podlage tik nad navedbo vira in se je z njo zlil — prijavljeno kot „ne vidim,
+kje klikniti". Zdaj je plavajoča tipka s poudarkom, senco in ikono drsnikov;
+opombe v spodnjem levem kotu se pod 720 px dvignejo nadenj, sicer se prekrijeta.
+
+**`display: flex` povozi `[hidden]`.** Vrstica „Drugi prevozniki" se je kazala
+kljub ničli, ker ima `.layer` svoj `display`. Potrebno je izrecno
+`.layer[hidden] { display: none; }`.
