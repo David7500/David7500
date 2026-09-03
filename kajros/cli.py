@@ -161,6 +161,12 @@ def cmd_ocena(args):
             for ime, kljuc in modeli:
                 print("  " + _vrstica_modela(ime, x["parno"][kljuc]))
 
+    # Brez tega se stolpca bereta kot poljubni odstotek. Prag je pri obeh
+    # isti, sicer nista primerljiva -- ta past je tu ze bila.
+    print("\npodcenj. / precenj. = zgrešeno za več kot potnikovo rezervo (5 min)")
+    print("v eno oziroma drugo smer. Nevarna je PRECENITEV: potnik pride prepozno")
+    print("in vozilo je že odpeljalo. Podcenitev pomeni čakanje, ne zamujenega vozila.")
+
     blok("SKUPAJ", r["skupaj"])
     for net, x in r["po_omrezju"].items():
         blok(net.upper(), x)

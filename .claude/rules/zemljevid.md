@@ -303,7 +303,9 @@ Dvakrat je bil spodaj in dvakrat ga uporabnik ni videl:
 **Dna zaslona v brskalniku ne uporabljaj za nadzor**, ki ga mora uporabnik
 najti. Zgornji desni kot je edini, ki ga noben brskalnik ne prekrije — in tam
 že stoji tipka za lastno lego, zato se dve okrogli tipki druga pod drugo bereta
-kot orodji zemljevida.
+kot orodji zemljevida. Uporabnik je to lego **potrdil na svojem telefonu**
+(3. 9. 2026); prejšnji dve sta padli prav zato, ker sta bili potrjeni samo na
+posnetku brez zaslona. Posnetek namizja ne dokaže dosegljivosti na telefonu.
 
 Ker je na tipki ikona in ne besedilo, mora imeti `aria-label`.
 

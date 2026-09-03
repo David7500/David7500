@@ -336,9 +336,28 @@ Kar velja spoštovati, če se ga kdo dotakne:
   več“ (`_with_operator`). Naša vrednost brez tega pravila je v `ours_own_s`,
   da se da pravilo preveriti tudi v potnikovem oknu, kjer je horizont krajši
   od tistega, na katerem je bilo izmerjeno.
-* **`podcenjenih` ni simetričen podatek.** Kdor pride na peron in vlaka ni,
-  čaka; kdor pride in je vlak že šel, ga je zamudil. Napoved, ki kaže manj od
-  resnice, je zato hujša napaka od enako velike v drugo smer.
+* **`podcenjenih` in `precenjenih` merita pri istem pragu** — zgrešeno za več
+  kot potnikovo rezervo (5 min), vsak v svojo smer. Prag ni izbran, ampak
+  izpeljan: precenitev, manjša od rezerve, potnika po `_strosek` ne stane nič.
+
+  Do 3. 9. 2026 to ni držalo: `precenjenih` je štel **vsako** precenitev, tudi
+  enosekundno, `podcenjenih` pa samo tiste nad pet minut — in stolpca sta stala
+  eden ob drugem kot primerjava. Na 35 325 vrsticah je tako pisalo **58,8 %
+  proti 6,3 %**, pri enakem pragu pa **6,6 % proti 6,3 %**. Prva slika je
+  trdila, da smo precenjevalec, druga, da smo uravnoteženi; resnična je druga.
+  Ista past kot „60 s sivo, 61 s oranžno“: dve sosednji številki, ki nista
+  merjeni enako, se bereta kot primerjava, tudi če to nista.
+* **Nevarna smer je PRECENITEV, ne podcenitev.** Kdor pride na peron prezgodaj,
+  čaka; kdor pride prepozno, je vozilo zamudil — in prepozno ga pripelje prav
+  precenitev. Prešteto na zajetih vrsticah: **2 318 primerov, kjer potnik po
+  `_strosek` vozilo zamudi, in nobeden ne izvira iz podcenitve.**
+
+  Tu je do 3. 9. 2026 pisalo nasprotno („napoved, ki kaže manj od resnice, je
+  hujša napaka“). Zapis je bil v protislovju s `_strosek` v istem modulu.
+
+  **Za prestop velja obratno** in tega ne posplošuj: kdor računa na zvezo,
+  ga podcenjena zamuda prvega vozila pripelje do zamujenega drugega. `ocena`
+  meri **vstop na postaji**, zato tam velja zgornja smer.
 * Tabela se obrezuje (`OCENA_KEEP_DAYS`, 30 dni). `run` je zgodovina in se ne
   briše nikoli; to je merilo, in merilo, staro pol leta, meri model, ki ga ni
   več.
@@ -386,18 +405,28 @@ kot merimo.
 
 ## Avtobusni pozitivni odklon: diagnoza, brez popravka
 
-Naš odklon je pri avtobusih **+0,46 min** in precenimo v **63,5 %** primerov;
-pri železnici je −1,27 in 29,6 %. Izvor je izmerjen: **pravilo „prevoznik ve
-več“** (`_with_operator`, `max(naša, njegova)`).
+Naš odklon je pri avtobusih **+0,42 min**, pri železnici −0,94. Izvor je
+izmerjen: **pravilo „prevoznik ve več“** (`_with_operator`, `max(naša,
+njegova)`). Maksimum dveh šumnih ocen je navzgor pristranski — to je
+aritmetika, ne napaka pravila.
 
-| | odklon | precenili |
-|---|---|---|
-| naša ocena s pravilom | **+0,85** | 64,5 % |
-| ista vrstica brez pravila | −0,65 | 44,3 % |
+**Kaj pravilo res zamenja, se vidi šele pri simetričnem pragu** (avtobusi,
+n = 29 642, 30 dni sence):
 
-Maksimum dveh šumnih ocen je navzgor pristranski — to je aritmetika, ne napaka
-pravila. Pravilo ima svojo izmerjeno utemeljitev (kadar prevoznik napove več,
-je njegov MAE 0,21 proti našim 2,66).
+| | odklon | precenili | podcenili | MAE | strošek |
+|---|---|---|---|---|---|
+| naša ocena **s** pravilom | +0,42 | **6,9 %** | 5,7 % | 3,16 | **7,73** |
+| ista vrstica **brez** pravila | −0,94 | 4,2 % | 9,4 % | 3,18 | 7,93 |
+
+Pravilo **skoraj podvoji nevarno smer** (4,2 → 6,9 %) in za toliko poreže
+varno (9,4 → 5,7 %). Dokler je to bral samo `odklon`, je bila to opomba o
+pristranskosti; zdaj je vidno kot menjava varne napake za nevarno.
+
+**Vseeno ostane**, ker je strošek — edina mera, ki obe smeri tehta s ceno —
+z njim nižji (7,73 proti 7,93 min). Ima tudi svojo izmerjeno utemeljitev:
+kadar prevoznik napove več, je njegov MAE 0,21 proti našim 2,66. A rezerva je
+tanka in odvisna od `RAZMIK_S`; kdor se ga dotakne, naj to številko pomeri
+znova.
 
 **Preizkušeno in NE uvedeno:** povprečje naše in prevoznikove vrednosti da na
 parnem izrezu MAE 2,77 (proti 2,85), odklon **−0,03** (proti +0,85) in strošek

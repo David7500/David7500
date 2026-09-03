@@ -323,14 +323,25 @@ def _meritve(vals: list[tuple[int, int]], omrezje: str | None = None) -> dict:
         return {"n": 0}
     napake = [abs(a - b) for a, b in vals]
     n = len(napake)
+    # Oba stolpca merita ISTO velikost napake, samo v drugo smer. Prej je
+    # `precenjenih` stel vsako precenitev, tudi enosekundno, `podcenjenih` pa
+    # samo tiste nad pet minut -- in sta stala eden ob drugem kot primerjava.
+    # Izmerjeno na 35 325 vrsticah: tako je pisalo 58,8 % proti 6,3 %, pri
+    # enakem pragu pa je 6,6 % proti 6,3 %. Prva slika je trdila, da smo
+    # precenjevalec, druga, da smo uravnotezeni; resnicna je druga.
+    #
+    # Prag ni izbran, ampak izpeljan: precenitev, manjsa od potnikove rezerve,
+    # ga vozila ne stane -- prav to pravi `_strosek`. Smer napake pove
+    # `odklon_min`, ki ostane brez praga.
+    r = POTNIKOVA_REZERVA_S
     return {
         "strosek_min": _strosek(vals, omrezje),
-        "precenjenih": round(sum(1 for a, b in vals if a > b) / n * 100, 1),
+        "precenjenih": round(sum(1 for a, b in vals if a > b + r) / n * 100, 1),
         "n": n,
         "mae_min": round(sum(napake) / n / 60, 2),
         "v2min": round(sum(1 for x in napake if x <= 120) / n * 100, 1),
         "v5min": round(sum(1 for x in napake if x <= 300) / n * 100, 1),
-        "podcenjenih": round(sum(1 for a, b in vals if a < b - 300) / n * 100, 1),
+        "podcenjenih": round(sum(1 for a, b in vals if a < b - r) / n * 100, 1),
         # Predznacena napaka: pove SMER. MAE 3 min iz same podcenjenosti in
         # MAE 3 min okoli nicle sta za potnika dve razlicni stvari.
         "odklon_min": round(sum(a - b for a, b in vals) / n / 60, 2),
@@ -341,9 +352,14 @@ def report(conn: sqlite3.Connection, days: int = 30,
            network: str | None = None) -> dict:
     """Kako dobre so bile napovedi, ki jih je potnik res videl.
 
-    `podcenjenih` je delež primerov, ko je napoved kazala **manj** od resnice
-    za več kot pet minut. Ta napaka ni simetrična: kdor pride na peron in
-    vlaka ni, čaka; kdor pride in je vlak že šel, ga je zamudil.
+    `podcenjenih` in `precenjenih` sta deleža, kjer je napoved zgrešila za več
+    kot potnikovo rezervo (5 min) — vsak v svojo smer, oba pri istem pragu,
+    zato sta primerljiva.
+
+    **Nevarna smer je precenitev**, ne podcenitev, in to ni stvar okusa:
+    kdor pride na peron prezgodaj, čaka, kdor pride prepozno, je vozilo
+    zamudil. Prav precenitev ga pripelje prepozno. Isto pravi `_strosek`,
+    ki precenitev nad rezervo zaračuna kot cel razmik do naslednjega vozila.
     """
     od = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     vrstice = conn.execute(

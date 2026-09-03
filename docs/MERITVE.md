@@ -326,8 +326,15 @@ kot je bila — to je smer, ki vozilo zamudi):
 
 | | > 0 | > 1 min | > 2 min | > 5 min | odklon | n |
 |---|---|---|---|---|---|---|
-| železnica | 29,6 % | 15,2 % | 9,9 % | 4,1 % | **−1,27 min** | 2 905 |
-| avtobusi | **63,6 %** | 46,4 % | **30,5 %** | 6,9 % | **+0,47 min** | 14 658 |
+| železnica | 32,1 % | 17,7 % | 11,1 % | 4,5 % | **−0,94 min** | 5 771 |
+| avtobusi | **64,0 %** | 46,8 % | **30,9 %** | 6,9 % | **+0,42 min** | 29 642 |
+
+**Prag odloči, katero zgodbo ta tabela pove**, in prav zato je tu razpisan v
+štirih stolpcih namesto v enem. Poročilo `kajros ocena` je do 3. 9. 2026
+kazalo precenitve pri pragu 0 in podcenitve pri pragu 5 min, eno poleg
+drugega: pisalo je 58,8 % proti 6,3 % in zvenelo kot sistematično
+precenjevanje. Pri istem pragu je 6,5 % proti 6,4 %. Odtlej oba stolpca
+merita pri potnikovi rezervi (5 min).
 
 **Kar je videti kot očiten sklep, a ni.** Če vsako oceno zamaknemo navzdol za
 `k` minut in stroške seštejemo (podcenitev = čakanje, precenitev = razmik do

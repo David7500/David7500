@@ -7,7 +7,7 @@ zajema, naj se preveri hitro. Poizvedbe nad shemo so v `test_poizvedbe.py`.
 """
 from __future__ import annotations
 
-from kajros import weather
+from kajros import ocena, weather
 from kajros.alerts import parse_delay_text
 from kajros.collector import _delay_of, is_zero_blip, worth_logging
 from kajros.journey import _fold
@@ -313,3 +313,35 @@ def test_nicla_po_izmerjeni_zamudi_ostane_blip():
     red = (42060, 42060)
     prej = _row_ts(835, 835, _at(11, 58, 0))   # 11:41 + 14 min = 11:55, ze mimo
     assert is_zero_blip(prej, None, 0, 0, red, "2026-08-30")
+
+
+# ---------------------------------------------------------------- ocena: smer napake
+
+def test_precenjenih_in_podcenjenih_merita_pri_istem_pragu():
+    """Sosednja stolpca sta primerljiva samo, če je prag isti.
+
+    Prej je `precenjenih` štel vsako precenitev, tudi enosekundno,
+    `podcenjenih` pa samo tiste nad pet minut. Na 35 325 zajetih vrsticah je
+    to pisalo 58,8 % proti 6,3 % in trdilo, da smo precenjevalec; pri enakem
+    pragu je 6,6 % proti 6,3 %, torej uravnoteženi.
+    """
+    r = ocena.POTNIKOVA_REZERVA_S
+    # (napoved, resnica): dve zgrešitvi tik pod pragom in dve nad njim.
+    vals = [(r - 30, 0), (0, r - 30), (r + 60, 0), (0, r + 60)]
+    m = ocena._meritve(vals)
+    assert m["precenjenih"] == 25.0
+    assert m["podcenjenih"] == 25.0
+
+
+def test_vozilo_zamudi_precenitev_in_ne_podcenitev():
+    """Nevarna smer je precenitev — to ni stvar okusa, ampak `_strosek`.
+
+    Kdor pride na peron prezgodaj, čaka; kdor pride prepozno, je vozilo
+    zamudil, in prepozno ga pripelje prav precenitev. V zajetih podatkih je
+    bilo 2 318 zamujenih vozil in nobeno ni izviralo iz podcenitve.
+    """
+    resnica, razmik = 10 * 60, ocena.RAZMIK_S["zeleznica"]
+    podcenili = ocena._strosek([(2 * 60, resnica)], "zeleznica")
+    precenili = ocena._strosek([(20 * 60, resnica)], "zeleznica")
+    assert podcenili < razmik / 60          # samo čakanje
+    assert precenili == razmik / 60         # zamujeno vozilo
