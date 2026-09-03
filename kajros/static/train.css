@@ -561,3 +561,23 @@
   body:not(.is-advanced) .col-run .detail-weather { margin-top: 9px; }
   body:not(.is-advanced) .col-run .run-map-wrap { margin-top: 12px; }
 }
+
+/* Nakup vozovnice: tuja povezava, zato vidno locena od nasih podatkov in z
+   `rel="noopener"`. Ni glavno dejanje na strani -- potnik je tu zaradi
+   vprasanja "kdaj in koliko zamuja" -- zato ni gumb, ampak vrstica. */
+.ticket-link {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg-panel);
+  color: var(--ink-dim);
+  font-size: 13px;
+  text-decoration: none;
+}
+.ticket-link:hover { border-color: var(--accent); color: var(--ink); }
+.ticket-link strong { color: var(--accent-lit); font-weight: 600; }
+.ticket-note { margin-left: auto; font-size: 11.5px; color: var(--ink-faint); }

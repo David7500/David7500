@@ -473,6 +473,7 @@ function renderTimeline() {
       aheadOnly: !document.body.classList.contains("is-advanced"),
       highlight: yours ? yours.stop_seq : null,
     }) +
+    vozovnicaHtml(run) +
     // Vira sta navedena tu in ne v opombi nad casovnico: navedba je pogoj
     // rabe (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
     `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj
@@ -569,6 +570,26 @@ const KIND = {
   estimate: { label: "ocena (prenos zamude)" },
   none: { label: "brez podatka" },
 };
+
+// Nakup vozovnice je pri SZ na `eshop.sz.si`. Globoke povezave NI: obrazec je
+// POST z internimi ID-ji postaj (`TravelFromId`), GET parametri se tiho
+// ignorirajo -- preizkuseno 3. 9. 2026. Zato povezava vodi na trgovino in to
+// tudi pise; obljubiti izpolnjeno pot bi bilo laz, ki bi jo potnik odkril sele
+// tam.
+//
+// Samo za zeleznicno omrezje. Nadomestni prevoz SZ je zraven (mode = bus, a
+// network = zeleznica): to je SZ storitev in vozovnica velja. Pri mestnih in
+// medkrajevnih avtobusih pa vsak prevoznik prodaja sam in povezava na SZ bi
+// bila napacna.
+function vozovnicaHtml(run) {
+  if (!run || run.network !== "zeleznica") return "";
+  return `<a class="ticket-link" href="https://eshop.sz.si/" target="_blank"
+      rel="noopener noreferrer"
+      title="Spletna trgovina SŽ. Relacije ni mogoče podati v naslovu, zato jo tam vpišeš sam.">
+      Kupi vozovnico na <strong>eshop.sz.si</strong>
+      <span class="ticket-note">relacijo vpišeš tam</span>
+    </a>`;
+}
 
 function profilePoints() {
   // Vse postaje poti, ne samo tiste z meritvijo -- graf mora pokazati celo pot.

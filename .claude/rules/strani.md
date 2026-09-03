@@ -128,3 +128,19 @@ Ključ združevanja je **fizični odhod** (številka, voznoredna minuta, smer), 
 kakršnakoli vrednost, sicer prva. `resolve_trip()` isto reč rešuje za okno
 vožnje, a po dnevih veljavnosti — na tabli je bolje po podatku, ker feed poroča
 za tisti trip, ki dejansko vozi.
+
+
+**Nakup vozovnice: povezava na `eshop.sz.si`, brez relacije.** Globoke povezave
+ni — obrazec trgovine je **POST** z internimi ID-ji postaj (`TravelFromId`) in
+GET parametri se tiho ignorirajo (preizkušeno 3. 9. 2026:
+`?TravelFrom=Ljubljana&TravelTo=Koper` pusti polji prazni). Zato povezava vodi
+na trgovino in **to tudi piše** („relacijo vpišeš tam"): obljubiti izpolnjeno
+pot bi bila laž, ki bi jo potnik odkril šele tam.
+
+Povezava je **samo pri železniškem omrežju**, nadomestni prevoz SŽ vključno
+(`mode = bus`, a `network = zeleznica` — to je SŽ storitev in vozovnica velja).
+Pri mestnih in medkrajevnih avtobusih vsak prevoznik prodaja sam in povezava
+na SŽ bi bila napačna.
+
+`potniski.sz.si` je za Cloudflarom (403) in za povezavo neuporaben;
+`eshop.sz.si` odgovarja normalno.
