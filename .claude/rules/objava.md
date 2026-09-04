@@ -128,9 +128,24 @@ Od 3. 9. 2026 stroji niso več dva:
 
 **Prenosnik zajema sam, ne vleče sproti z maline.** Prikaz mora biti živ, poteg
 pa je star toliko, kolikor je star zadnji poteg. Ko prenosnik nekaj časa ne
-teče, se vrzel zapolni z `scripts/potegni.sh` — ta je idempotenten (`obs` je
-ključen po `(trip_id, service_date, stop_seq, feed_ts)`), zato prilitje ne
-podvaja.
+teče, se vrzel zapolni — prilitje je idempotentno (`obs` je ključen po
+`(trip_id, service_date, stop_seq, feed_ts)`), zato ne podvaja.
+
+**Za to NE služi `scripts/potegni.sh`, ampak `deploy/zapolni-vrzel.sh`.**
+Prvi je za razvojni računalnik in na prenosniku ne more teči; to je bilo tu
+najprej zapisano kot rešitev, ne da bi bilo preizkušeno, in preizkus je
+pokazal **tri** ovire hkrati:
+
+* `potegni.sh` kliče `./venv/bin/python`, ki ga v `~/kajros` ni (rsync ga
+  izpušča); nameščeni je `/opt/kajros/.venv/bin/python`;
+* `david` ne sme pisati v `/var/lib/kajros/kajros.sqlite` — lastnik je
+  sistemski uporabnik `kajros`, zato gre prilitje skozi `sudo -u kajros`;
+* s prenosnika **ni ključa do maline**.
+
+Zadnje je **enkratna nastavitev, ki jo naredi David** (skript jo izpiše, če
+manjka): `ssh-keygen -t ed25519` in `ssh-copy-id david@192.168.1.166`.
+Agent tega ne naredi sam — vpis tujega ključa med pooblaščene je poseg v
+stroj, ne konfiguracija aplikacije.
 
 **Malina zato ostane prižgana.** Dva zajema pomenita dva vira, a to je namen:
 prenosnik se zapira in seli, malina ne. Kdor ju kdaj združi v enega, naj ve,
