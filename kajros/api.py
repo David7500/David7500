@@ -495,10 +495,16 @@ def api_departures(
 
 
 @app.get("/api/alerts")
-def api_alerts(lang: str = Query("sl", pattern="^(sl|en)$")):
-    """Veljavne ovire: dela na progi, nadomestni prevozi, združene garniture."""
+def api_alerts(lang: str = Query("sl", pattern="^(sl|en)$"),
+               napovedane: bool = Query(True, description="tudi tiste, ki se še niso začele")):
+    """Ovire: dela na progi, nadomestni prevozi, združene garniture.
+
+    Privzeto **tudi napovedane** (do 14 dni naprej), označene z
+    `napovedana: true`. Brez njih je stran ovir molčala o delih, ki se
+    začnejo jutri — glej `alerts.active()`.
+    """
     with _conn() as conn:
-        return alerts.active(conn, lang)
+        return alerts.active(conn, lang, tudi_napovedane=napovedane)
 
 
 @app.get("/api/train/{train_no}/alerts")

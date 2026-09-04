@@ -267,19 +267,37 @@ def _by_endpoints(conn: sqlite3.Connection, train_no: str, lang: str, now: int) 
     return out
 
 
-def active(conn: sqlite3.Connection, lang: str = "sl") -> list[dict]:
-    """Vse veljavne ovire, z vlaki, ki jih zadevajo."""
+#: Kako dalec naprej stran ovir gleda. Dva tedna: dlje je za potnika, ki
+#: nacrtuje pot, ze bolj arhiv kot vest, seznam pa se podvoji.
+NAPOVEDANO_DNI = 14
+
+
+def active(conn: sqlite3.Connection, lang: str = "sl",
+           tudi_napovedane: bool = False) -> list[dict]:
+    """Vse veljavne ovire, z vlaki, ki jih zadevajo.
+
+    `tudi_napovedane` doda tiste, ki se **se niso zacele**. Brez njih je stran
+    ovir molcala prav o tem, cemur je namenjena: izmerjeno 4. 9. 2026 je bilo
+    veljavnih 16, takih, ki se zacnejo naslednje dni, pa **32** -- najblizja
+    ze naslednji dan. Potnik, ki v cetrtek gleda sobotno pot, o sobotnem
+    nadomestnem prevozu ni izvedel nicesar.
+
+    Stevec na vstopni strani (`active_count`) ostane pri veljavnih: tam pise
+    "veljavnih obvestil" in napovedana bi to besedo naredila neresnicno.
+    """
     now = int(time.time())
+    do = now + NAPOVEDANO_DNI * 86400
     rows = conn.execute(
         "SELECT a.* FROM alert a WHERE a.kind = 'ovira' AND a.lang = ? "
         "  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
         "  AND (a.start_ts IS NULL OR a.start_ts <= ?) "
         "ORDER BY a.start_ts DESC",
-        (lang, now, now),
+        (lang, now, do if tudi_napovedane else now),
     ).fetchall()
     out = []
     for r in rows:
         d = _alert_row(r)
+        d["napovedana"] = bool(r["start_ts"] and r["start_ts"] > now)
         d["trains"] = [x["train_no"] for x in conn.execute(
             "SELECT DISTINCT t.train_no FROM alert_entity ae "
             "JOIN trip t ON t.route_id = ae.route_id "

@@ -542,3 +542,11 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
 
 /* Prazno okno ponudi dejanje, ne nasveta. */
 .empty-act { margin-top: 12px; }
+
+/* Ovira, ki se še ni začela. Stran ovir jih je doslej sploh ni pokazala —
+   izmerjeno 4. 9. 2026: 16 veljavnih proti 32 napovedanim, najbližja
+   naslednji dan. */
+.kind-tag.is-later {
+  color: var(--sev-hard);
+  border-color: color-mix(in srgb, var(--sev-hard) 35%, transparent);
+}

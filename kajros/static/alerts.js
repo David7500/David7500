@@ -51,6 +51,7 @@ function itemHtml(a) {
     <article class="alert-card">
       <div class="alert-card-top">
         <span class="kind-tag" style="color:${color};border-color:${color}55">${escapeHtml(kind)}</span>
+        ${a.napovedana ? '<span class="kind-tag is-later">napovedano</span>' : ""}
         <span class="alert-period">${escapeHtml(periodLabel(a))}</span>
       </div>
       <h3 class="alert-card-title">${escapeHtml(alertTitle(a.header))}</h3>
@@ -78,9 +79,14 @@ function render() {
     ? all.filter((a) => fold(`${a.header} ${a.description} ${(a.trains || []).join(" ")}`).includes(q))
     : all;
 
+  // "40 veljavnih" bi bilo neresnicno: 24 od njih se ni zacelo. Stevec zato
+  // loci, tako kot okno voznje.
+  const pozneje = all.filter((a) => a.napovedana).length;
   countEl.textContent = q
     ? `${shown.length} od ${all.length}`
-    : `${all.length} veljavnih`;
+    : pozneje
+      ? `${all.length - pozneje} veljavnih, ${pozneje} napovedanih`
+      : `${all.length} veljavnih`;
 
   listEl.innerHTML = shown.length
     ? shown.map(itemHtml).join("")
@@ -97,7 +103,9 @@ fetch("/api/alerts")
   .then((data) => {
     // Najprej dela in nadomestni prevozi -- ta dvoje potnika res zadeva.
     const rank = { "dela na progi": 0, "nadomestni prevoz": 1, "združene garniture": 2, "obvestilo": 3 };
-    all = data.sort((a, b) => rank[kindOf(a)] - rank[kindOf(b)] ||
+    // Veljavno pred napovedanim: potnika najprej zadeva to, kar velja danes.
+    all = data.sort((a, b) => (a.napovedana ? 1 : 0) - (b.napovedana ? 1 : 0) ||
+                              rank[kindOf(a)] - rank[kindOf(b)] ||
                               (b.trains || []).length - (a.trains || []).length);
     render();
   })

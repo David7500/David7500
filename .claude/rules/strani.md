@@ -156,6 +156,20 @@ To je konkretna posledica manjka, ki je naveden v pismu DUJPP-u
 (`docs/pismo-podatki.md`, nit #6). Če polje kdaj dobimo, je to eno mesto,
 kjer se takoj pozna.
 
+**Stran ovir kaže tudi napovedane, ne le veljavnih.** Doslej je `active()`
+filtrirala `start_ts <= zdaj` in stran je molčala prav o tem, čemur je
+namenjena: izmerjeno 4. 9. 2026 je bilo **16 veljavnih in 32 takih, ki se še
+niso začele**, najbližja že naslednji dan. Potnik, ki v četrtek gleda sobotno
+pot, o sobotnem nadomestnem prevozu ni izvedel ničesar.
+
+Zdaj gredo zraven tiste do **14 dni naprej** (`alerts.NAPOVEDANO_DNI`),
+označene z žetonom „napovedano“ in razvrščene za veljavne. Števec pove oboje:
+„16 veljavnih, 24 napovedanih“ — „40 veljavnih“ bi bilo neresnično.
+
+**Števec na vstopni strani ostane pri veljavnih** (`active_count`): tam piše
+„veljavnih obvestil“ in napovedana bi to besedo naredila neresnično. Zato
+`/api/alerts` privzeto vrne oboje z zastavico `napovedana`, števca pa ne.
+
 **Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila so dela na progi, zapore
 tira in nadomestni prevozi SŽ; za avtobuse takih obvestil ni in povezava tja
 bi obljubljala podatek, ki zanje ne obstaja.

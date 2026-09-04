@@ -106,12 +106,18 @@ def ovire_povsod_isto():
     `health.alerts_active` je štel VSE shranjene ovire, ne le veljavnih:
     62 proti 16, ki jih kaže stran. Tri mesta, dve številki.
     """
+    # `/api/alerts` odslej vraca TUDI napovedane (glej `alerts.active`), števca
+    # pa štejeta samo veljavne — to je namerno. Primerjamo veljavni del.
     al = json.load(urllib.request.urlopen(f"{BASE}/api/alerts", timeout=20))
-    n = len(al if isinstance(al, list) else al.get("alerts", []))
+    vrstice = al if isinstance(al, list) else al.get("alerts", [])
+    n = sum(1 for x in vrstice if not x.get("napovedana"))
     ov = json.load(urllib.request.urlopen(f"{BASE}/api/overview", timeout=20))["disruptions"]
     he = json.load(urllib.request.urlopen(f"{BASE}/api/health", timeout=20))["alerts_active"]
     if not (n == ov == he):
-        return f"/api/alerts {n}, overview {ov}, health {he}"
+        return f"/api/alerts (veljavnih) {n}, overview {ov}, health {he}"
+    # In da napovedane sploh pridejo skozi -- sicer bi stran spet molcala.
+    if not any(x.get("napovedana") for x in vrstice):
+        return "med ovirami ni nobene napovedane — ali jih endpoint spet izpušča?"
     return None
 
 
