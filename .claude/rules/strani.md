@@ -60,6 +60,27 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   štirih ponovitvah vsakega dne (28 dni zajema) podnaslov to napiše z
   izračunano številko, ne z občutkom.
 
+* **Lestvica najhujših nosi sidro čez vse vožnje.** Ta razrez je urejen
+  padajoče, zato je njegova prva vrstica najhujša in ne tipična — brez
+  primerjave se „EC 211 · 46 min“ bere kot opis omrežja. Mediana vseh
+  železniških voženj je **3 min**, p90 20 min, 60 % jih konča v petih
+  minutah (6 472 voženj); pri avtobusih 1,6 min in 74 % (38 272).
+  Zato uvodna poved doda „Čez vse vožnje je mediana …“, podnaslov lestvice
+  pa pove „najhujši, ne tipični“.
+
+  To ni domnevana zmeda: prvi, ki je `kajros stats` prebral kot „vlaki
+  zamujajo 46 minut“, je bil avtor te kode, ki je imel poizvedbo pred sabo.
+  Potnik nima niti te prednosti.
+
+  Polja so `median_s`, `p90_s` in `on_time_share` v `breakdowns()`; računajo
+  se iz vrstic, ki jih razrezi tako ali tako berejo, torej brez nove
+  poizvedbe in brez agregata v zahtevi.
+
+  **Ob spremembi polj povečaj `stats.SUMMARY_VERSION`.** Povzetek je
+  shranjen v `povzetek` in velja 36 ur; brez tega bi predpomnilnik stregel
+  staro obliko, stran bi novo polje izpustila in videti bi bilo, kot da
+  sprememba ne dela. Točno to se je zgodilo pri `median_s`.
+
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
 vprašanji: `kajros:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
 `kajros:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).

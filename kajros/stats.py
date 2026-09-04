@@ -597,9 +597,23 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
     ):
         by_stop_hour.setdefault(f"{r['h']:02d}", []).append(r["d"])
 
+    # Sidro za lestvico najhujsih. Brez njega je "EC 211 - 46 min" videti kot
+    # opis omrezja, ceprav je vrh lestvice, ki je urejena padajoce; mediana
+    # vseh zeleznickih vozenj je 3 min in p90 20 min (6 472 vozenj, 4. 9.
+    # 2026). Prvi, ki je to prebral narobe, sem bil jaz, in koda mi je bila
+    # pred nosom -- potnik nima niti te prednosti.
+    #
+    # Racuna se tu, ker so `vse` prav tiste vrstice, ki jih razrezi ze berejo:
+    # nobene nove poizvedbe in nobenega agregata v zahtevi.
+    vse = [r["d"] for r in rows]
+
     return {
         "runs": len(rows),
         "days": sorted(by_day),
+        "median_s": _pct(vse, 0.5),
+        "p90_s": _pct(vse, 0.9),
+        "on_time_share": (round(sum(1 for d in vse if d <= 300) / len(vse), 3)
+                          if vse else None),
         "by_kind": sorted(_group_stats(by_kind, MIN_RUNS_FOR_GROUP),
                           key=lambda x: -(x["median_s"] or 0)),
         "by_stop_hour": sorted(_group_stats(by_stop_hour, MIN_RUNS_FOR_GROUP),
@@ -1228,6 +1242,16 @@ SUMMARY_NETWORKS = ("zeleznica", "avtobus")
 # Kdaj velja predpomnjeni odgovor za prestar, ce dnevno opravilo ni teklo.
 SUMMARY_MAX_AGE_S = 36 * 3600
 
+#: Oblika shranjenega povzetka. **Povecaj ob vsaki spremembi polj**, ki jih
+#: vraca `breakdowns()` ali `network_stats()`.
+#:
+#: Brez tega je stara OBLIKA enako skodljiva kot star podatek, le tise:
+#: predpomnilnik se do 36 ur strezel payload brez novega polja, stran ga je
+#: izpustila in videti je bilo, kot da sprememba ne dela. Zgodilo se je pri
+#: dodajanju `median_s` (4. 9. 2026) -- API je vrnil `cached=true` in polja
+#: ni bilo, cetudi je bila koda pravilna.
+SUMMARY_VERSION = 2
+
 _SUMMARY_LOCK = threading.Lock()
 
 
@@ -1243,7 +1267,7 @@ def summary_build(conn: sqlite3.Connection, kind: str, network: str,
     """Izracunaj razrez in ga shrani. Vrne shranjeni odgovor."""
     builder = SUMMARY_BUILDERS[kind]
     started = time.monotonic()
-    payload = builder(conn, days, network)
+    payload = {**builder(conn, days, network), "v": SUMMARY_VERSION}
     took_ms = int((time.monotonic() - started) * 1000)
     computed_at = datetime.now(TZ).isoformat(timespec="seconds")
     days_seen = payload.get("days") or []
@@ -1277,15 +1301,18 @@ def summary_get(conn: sqlite3.Connection, kind: str, network: str, days: int = 9
     row = _summary_row(conn, kind, network, days)
     if row is not None:
         age = (datetime.now(TZ) - datetime.fromisoformat(row["computed_at"])).total_seconds()
-        if age <= max_age_s:
-            return {**json.loads(row["payload"]), "runs": row["runs"],
+        shranjeno = json.loads(row["payload"])
+        if age <= max_age_s and shranjeno.get("v") == SUMMARY_VERSION:
+            return {**shranjeno, "runs": row["runs"],
                     "computed_at": row["computed_at"], "through": row["through"],
                     "took_ms": row["took_ms"], "cached": True}
 
     with _SUMMARY_LOCK:
         # Med cakanjem na kljucavnico ga je morda ze izracunal nekdo drug.
         again = _summary_row(conn, kind, network, days)
-        if again is not None and (again["computed_at"] != (row["computed_at"] if row else None)):
+        if (again is not None
+                and again["computed_at"] != (row["computed_at"] if row else None)
+                and json.loads(again["payload"]).get("v") == SUMMARY_VERSION):
             return {**json.loads(again["payload"]), "runs": again["runs"],
                     "computed_at": again["computed_at"], "through": again["through"],
                     "took_ms": again["took_ms"], "cached": True}

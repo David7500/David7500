@@ -152,7 +152,22 @@ function glava(d) {
       <strong>${minute(ure.naj.median_s)}</strong>, ob
       <span class="stat-slabo">${imeUre(ure.nic.key)}</span> pa
       <span class="stat-slabo">${minute(ure.nic.median_s)}</span>.
+      ${sidro(d)}
     </div>${obseg}`;
+}
+
+/** Mediana čez vse vožnje: brez nje se posamezna številka bere kot opis omrežja.
+ *
+ * Lestvica spodaj je urejena PADAJOČE, zato je njena prva vrstica najhujša
+ * in ne tipična. Brez sidra "EC 211 · 46 min" pove, da železnica ne dela --
+ * mediana vseh voženj je 3 min. To napako je ob branju `kajros stats` naredil
+ * najprej avtor te kode; potnik nima niti prednosti, da bi kodo videl.
+ */
+function sidro(d) {
+  if (d.median_s == null) return "";
+  const del = d.on_time_share == null ? ""
+    : `, <strong>${Math.round(d.on_time_share * 100)} %</strong> jih konča v petih minutah`;
+  return `Čez vse vožnje je mediana <strong>${minute(d.median_s)}</strong>${del}.`;
 }
 
 function opozoriloDnevi(d) {
@@ -180,6 +195,9 @@ async function zacni() {
   el("vrste-naslov").textContent = IS_BUS ? "Po prevozniku" : "Po vrsti vlaka";
   el("lestvica-naslov").textContent = IS_BUS
     ? "Vožnje, ki najbolj zamujajo" : "Vlaki, ki najbolj zamujajo";
+  el("lestvica-pod").textContent = IS_BUS
+    ? "Osem voženj z najvišjo mediano — najhujše, ne tipične. Klikni za okno vožnje."
+    : "Osem vlakov z najvišjo mediano — najhujši, ne tipični. Klikni za okno vožnje.";
   el("vrste-pod").textContent = IS_BUS
     ? "Mediana končne zamude po prevozniku."
     : "Mediana končne zamude po vrsti vlaka (IC, MV, LP …).";

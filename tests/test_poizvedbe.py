@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import json
 import pytest
 
 from kajros import db, journey, ocena, stats
@@ -1175,3 +1176,47 @@ def test_senca_posname_postanek_samo_enkrat(conn):
     assert ocena.snapshot(conn, _ob(34560))["zapisanih"] == 0
     drugi = conn.execute("SELECT made_ts, horizon_s FROM napoved").fetchone()
     assert (drugi["made_ts"], drugi["horizon_s"]) == (prvi["made_ts"], prvi["horizon_s"])
+
+
+def test_povzetek_stare_oblike_se_ne_postreze(conn):
+    """Stara OBLIKA je enako neuporabna kot star podatek, le tišja.
+
+    Ko `breakdowns()` dobi novo polje, ga zapis v `povzetek` še nima. Brez te
+    varovalke bi ga predpomnilnik do 36 ur stregel naprej, stran bi polje
+    izpustila in videti bi bilo, kot da sprememba ne dela. Točno to se je
+    zgodilo pri `median_s` (4. 9. 2026).
+    """
+    _vozba(conn, "t1", _pred(2), [(3, 120)])
+    conn.commit()
+    prvi = stats.summary_get(conn, "breakdowns", "zeleznica", 90)
+    assert prvi["cached"] is False
+
+    # Isti zapis, samo s starejšo oznako oblike -- čas ostane svež.
+    star = json.loads(conn.execute(
+        "SELECT payload FROM povzetek WHERE kind='breakdowns'").fetchone()[0])
+    star["v"] = stats.SUMMARY_VERSION - 1
+    star.pop("median_s", None)
+    conn.execute("UPDATE povzetek SET payload = ? WHERE kind='breakdowns'",
+                 (json.dumps(star),))
+    conn.commit()
+
+    znova = stats.summary_get(conn, "breakdowns", "zeleznica", 90)
+    assert znova["cached"] is False, "stara oblika se ne sme postreči"
+    assert znova["v"] == stats.SUMMARY_VERSION
+    assert znova["median_s"] is not None
+
+
+def test_razrezi_nosijo_sidro_cez_vse_voznje(conn):
+    """Lestvica je urejena padajoče, zato njena prva vrstica ni tipična.
+
+    Brez mediane čez vse vožnje se `EC 211 · 46 min` bere kot opis omrežja,
+    čeprav je mediana vseh železniških voženj 3 min.
+    """
+    # Vozjne v testni bazi so t1..t4; `t0` ne obstaja in bi ga JOIN vrgel ven.
+    for trip, dan, zamuda in [("t1", 3, 60), ("t2", 2, 120), ("t3", 1, 3000)]:
+        _vozba(conn, trip, _pred(dan), [(2, zamuda)])
+    conn.commit()
+    d = stats.breakdowns(conn, 90, "zeleznica")
+    assert d["runs"] == 3
+    assert d["median_s"] == 120           # ne 3000 in ne 60
+    assert d["on_time_share"] == round(2 / 3, 3)
