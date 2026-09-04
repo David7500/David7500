@@ -557,6 +557,13 @@ function renderTiles(h) {
     tileHtml("Delež v 5 min", `${Math.round((s.on_time_share || 0) * 100)} %`,
              "končna zamuda do 5 min"),
   ];
+  // Prag 5: pod tem p90 ni percentil, ampak druga najvisja vrednost.
+  //
+  // Pri majhnem vzorcu p90 in "najslabsa" po zaokrozevanju na minute pogosto
+  // pokazeta ISTO stevilko -- izmerjeno 4. 9. 2026 na zeleznici: 40 % pri
+  // 3-4 voznjah, 23 % pri 5-9, 17 % pri 10-14, 0 % nad 15. To ni napaka, ki
+  // bi jo bilo treba skriti: `_pct` interpolira in vrednosti se res zblizata,
+  // oznaki pa povesta, kaj je kaj. Cela sekcija je poleg tega `adv-only`.
   if (n >= 5) {
     tiles.splice(2, 0, tileHtml("p90", delayLabel(s.p90_final_s), "9 od 10 voženj do tega",
                                 delayColor(s.p90_final_s)));
