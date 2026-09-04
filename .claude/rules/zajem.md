@@ -332,3 +332,20 @@ ure se brišejo -- sled se ne hrani. Zavestna izbira, ne
 spregled: `run` je edino, iz česar se da kasneje karkoli izračunati, in
 brisati ga pomeni brisati projekt. Če bo kdaj treba, je najprej na vrsti
 avtobusni `run`, ne železniški.
+
+## Obvestila SŽ: kaj feed res pošlje (izmerjeno 4. 9. 2026)
+
+* **Razčlemba živih zamud pokrije vse.** 474 `SZ-DELAY` obvestil, **474
+  razčlenjenih (100 %)**. Regex v `parse_delay_text()` torej ni približek,
+  ampak opis oblike, ki jo SŽ res uporablja.
+* **Poln zapis je v `description`, ne v `header`.** Glava je „Vlak zamuja
+  13 min“ — brez številke vlaka in brez postaje. `ingest` zato bere
+  `parse_delay_text(desc) or parse_delay_text(header)` in ta vrstni red ni
+  kozmetičen: pri obratnem se razčleni **nič**.
+* **Vsa poročila so `prihod`.** 31 196 vrstic v `delay_report`, nobene z
+  `odhod`; izjemnih (`severe`) je 2 369. Veja za odhod v kodi torej doslej ni
+  nikoli stekla — ostane, ker je poceni, a nanjo se ne zanašaj.
+* **Vrste „drugo“ ni.** Vsa obvestila so `SZ-DELAY` (474) ali `SZ-OVIRA`
+  (123); `_kind()` tretje veje doslej ni potreboval.
+* **Vsako obvestilo ima natanko eno obdobje veljavnosti.** Vseh 102 v živem
+  feedu; glej varovalo `vec_obdobij` v `ingest()`.
