@@ -52,11 +52,22 @@ def _ogrej_zive() -> None:
     # `/api/live?network=zeleznica`, pregled isto; `network=None` je 802 ms
     # dela za odgovor, ki ga aplikacija ne uporablja -- ogrevati ga pomeni
     # zamikati koristna dva.
-    for omrezje in ("zeleznica", "avtobus"):
+    #
+    # Zraven oba pregleda: `day_summary` je 200 ms pri zeleznici in 463 pri
+    # avtobusih, `/api/overview*` pa ima isto znacko `rt_fetched` -- torej se
+    # razveljavi vsakih 30 s in prvi obiskovalec po zajemu placa cel racun.
+    # **Klici morajo iti skozi ENDPOINT, ne skozi notranjo funkcijo.**
+    # `_live()` samo racuna; predpomnilnik napolni sele `api_live()`, ki ga
+    # ovije v `_predpomni`. Prva razlicica tega ogrevanja je klicala `_live()`
+    # -- delo je opravila in ga zavrgla, ucinka pa ni bilo nobenega.
+    for kaj, klic in (("žive vožnje (železnica)", lambda: api.api_live("zeleznica")),
+                      ("pregled (železnica)", api.api_overview),
+                      ("žive vožnje (avtobusi)", lambda: api.api_live("avtobus")),
+                      ("pregled (avtobusi)", api.api_overview_bus)):
         try:
-            api._live(omrezje)
+            klic()
         except Exception as exc:  # noqa: BLE001
-            _log(f"predpomnilnika živih voženj ni bilo mogoče ogreti: {exc}")
+            _log(f"predpomnilnika ni bilo mogoče ogreti ({kaj}): {exc}")
             return
 
 

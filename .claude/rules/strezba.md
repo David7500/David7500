@@ -152,6 +152,21 @@ Zdaj ga **zajemna nit izračuna vnaprej**, takoj po zajemu (`server._ogrej_zive`
 Dela je enako, le da ga ne opravi uporabnik med čakanjem. Izmerjeno 4. 9. 2026:
 `?network=zeleznica` 245 ms hladno, **6 ms toplo**.
 
+**Ogrevaj skozi ENDPOINT, ne skozi notranjo funkcijo.** Prva različica tega
+ogrevanja je klicala `api._live()`, predpomnilnik pa napolni šele
+`api_live()`, ki ga ovije v `_predpomni`. Delo je bilo opravljeno in zavrženo;
+učinka ni bilo nobenega, meritev „6 ms toplo“ pa je bila navadno predpomnjenje
+iz zaporednih zahtev. Po popravku: **0 od 16 klicev čez dve minuti nad
+100 ms** (prej 3 od 14 pri 245 ms).
+
+**Značka mora ustrezati temu, od česa je odgovor res odvisen.**
+`/api/overview/bus` je bil vezan na `rt_fetched` **in** `positions_fetched`,
+ta pa se osveži vsakih 10 s — predpomnilnik je razpadel prej, kot ga je
+ogrevanje (na 30 s) lahko ujelo, in z njim `day_summary` (463 ms) ter
+`_live("avtobus")` (768 ms), torej oboje, kar od leg sploh ni odvisno.
+Endpoint je bil dosledno **1,3 s**. Zdaj se drago predpomni na `rt_fetched`,
+števci vozil pa se berejo sveže (920 vrstic, poceni): **4–42 ms**.
+
 Dvoje, kar se pri tem hitro zgreši:
 
 * **Ogrevaj samo, kar strani res vprašajo.** Zemljevid in pregled kličeta

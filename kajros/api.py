@@ -382,10 +382,20 @@ def api_overview_bus():
     """
     now = datetime.now(TZ)
 
+    # Razdeljeno po tem, OD CESA je kaj odvisno.
+    #
+    # Prej je bil cel odgovor vezan na `rt_fetched` IN `positions_fetched`,
+    # ta pa se osvezi vsakih 10 s (`KAJROS_POSITION_SECONDS`). Predpomnilnik je
+    # zato razpadel vsakih deset sekund in z njim tudi `day_summary` (463 ms) in
+    # `_live("avtobus")` (768 ms) -- oboje, kar od leg sploh ni odvisno.
+    # Izmerjeno 4. 9. 2026: endpoint je bil dosledno 1,3 s, ogrevanje pa mu ni
+    # moglo pomagati, ker tece na 30 s.
+    #
+    # Zdaj se drago predpomni na `rt_fetched` (30 s), stevci vozil pa se
+    # preberejo sveze -- ti so poceni in prav oni se z legami spreminjajo.
     def izracun():
         live = _live("avtobus")
         with _conn() as conn:
-            vehicles, _ = _vehicles_now()
             day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
             # Ista varovalka kot pri vlakih, ki je tu manjkala. Brez nje je
             # stran 3. 9. 2026 ob 00:20 kazala "avtobusi +833 min": mediana
@@ -395,20 +405,21 @@ def api_overview_bus():
             fallback = None
             if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
                 fallback = stats.day_summary(conn, yesterday_iso(now), network="avtobus")
-        moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
-        return {
-            "live_vehicles": len(live),
-            "with_gps": len(vehicles),
-            "moving": len(moving),
-            "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
-                                 if moving else None),
-            "today": day,
-            "yesterday": fallback,
-        }
+        return {"live_vehicles": len(live), "today": day, "yesterday": fallback}
 
     odgovor = _predpomni(f"overview-bus:{now.date()}",
-                         _znacka("rt_fetched", "positions_fetched"), 60, izracun)
-    return {"now": now.isoformat(), **odgovor}
+                         _znacka("rt_fetched"), 60, izracun)
+    # Sveze in poceni: 920 vrstic `vehicle_now`, brez poizvedbe cez `run`.
+    vehicles, _ = _vehicles_now()
+    moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
+    return {
+        "now": now.isoformat(),
+        **odgovor,
+        "with_gps": len(vehicles),
+        "moving": len(moving),
+        "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
+                             if moving else None),
+    }
 
 
 @app.get("/api/stations")
