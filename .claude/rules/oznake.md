@@ -219,3 +219,26 @@ visi na varnem kontekstu.
 
 **Service workerja zato (še) ni.** Registrirati se po omrežnem naslovu ne more,
 torej bi bil do Tailscale Funnela mrtva koda. Napiše se skupaj s HTTPS, ne prej.
+
+
+## Ovire: kaj velja danes in kaj šele pozneje
+
+`alerts.for_train()` filtrira samo `end_ts >= zdaj`, ne pa `start_ts <= zdaj`,
+in to je **namerno**: nadomestni prevoz, ki se začne v petek, je za potnika,
+ki gleda četrtkov vlak, uporabna vest.
+
+Brez datuma pa je zavajajoča. Izmerjeno 4. 9. 2026: od 62 shranjenih ovir jih
+je bilo **16 veljavnih in 32 takih, ki se še niso začele** (5.–19. 9.). Na
+LPV 2250 je okno vožnje pisalo „Obvestila o ovirah na tej poti — 7“, od
+katerih so štiri začele šele 7.–19. 9.
+
+Zato dvoje:
+
+* vsaka ovira, ki se še ni začela, nosi **„velja od D. M.“** (`alert-later`,
+  barva `--sev-hard`);
+* **naslov razčleni števec** — „— 3 zdaj, 4 pozneje“ namesto „— 7“. Škatla je
+  zaprta, kadar jih je več kot dve, torej natanko takrat, ko je razlika
+  največja in je ni videti.
+
+Isto pravilo kot povsod: številka mora pomeniti tisto, kar bralec misli, da
+pomeni.

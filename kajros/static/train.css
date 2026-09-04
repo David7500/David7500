@@ -561,3 +561,11 @@
   body:not(.is-advanced) .col-run .detail-weather { margin-top: 9px; }
   body:not(.is-advanced) .col-run .run-map-wrap { margin-top: 12px; }
 }
+
+/* Ovira, ki se še ni začela. Brez te oznake je „obvestila o ovirah na tej
+   poti" videti kot stanje danes -- izmerjeno 4. 9. 2026: od 48 ovir v tem
+   oknu se jih 32 sploh še ni začelo. */
+.alert-later {
+  color: var(--sev-hard);
+  font-weight: 600;
+}

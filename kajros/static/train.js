@@ -404,6 +404,41 @@ async function loadReport() {
   }
 }
 
+/** Kdaj ovira sploh velja.
+ *
+ * `for_train` filtrira samo `end_ts >= zdaj`, ne pa `start_ts <= zdaj` — in
+ * to je namerno: nadomestni prevoz, ki se začne v petek, je za potnika, ki
+ * gleda četrtkov vlak, uporabna vest. Brez datuma pa je zavajajoča: izmerjeno
+ * 4. 9. 2026 je bilo od 48 ovir v tem oknu **32 takih, ki se še niso
+ * začele** (začetek 5.–7. 9.). Zato tiste dobijo „velja od D. M.“, da se
+ * ločijo od tega, kar velja danes.
+ */
+function veljavnostHtml(a) {
+  if (!a.start_ts) return "";
+  if (a.start_ts * 1000 <= Date.now()) return "";
+  const d = new Date(a.start_ts * 1000).toLocaleDateString("sl-SI", {
+    timeZone: "Europe/Ljubljana", day: "numeric", month: "numeric",
+  });
+  return `<span class="alert-later">velja od ${escapeHtml(d)}</span> · `;
+}
+
+/** Koliko jih velja DANES in koliko šele pozneje.
+ *
+ * Golo „— 7“ potnik bere kot sedem ovir danes. Izmerjeno 4. 9. 2026 na
+ * LPV 2250: sedem obvestil, od tega se jih je pet začelo šele 7.–19. 9.
+ * Razčlenitev je v naslovu, ker škatla ni odprta, kadar jih je več kot dve —
+ * torej natanko takrat, ko je razlika največja.
+ */
+function stevecOvir(list) {
+  const zdaj = Date.now();
+  const pozneje = list.filter((a) => a.start_ts && a.start_ts * 1000 > zdaj).length;
+  if (!pozneje) return `— ${list.length}`;
+  const danes = list.length - pozneje;
+  return danes
+    ? `— ${danes} zdaj, ${pozneje} pozneje`
+    : `— ${pozneje}, vse šele pozneje`;
+}
+
 async function loadAlerts() {
   // Edini vir odgovora, ZAKAJ vlak zamuja. Vse drugo v bazi pove le koliko.
   const box = document.getElementById("train-alerts");
@@ -416,12 +451,12 @@ async function loadAlerts() {
           <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
         </svg>
         Obvestila o ovirah na tej poti
-        <span class="alert-count">— ${list.length}</span>
+        <span class="alert-count">${stevecOvir(list)}</span>
       </summary>
       <div class="alert-list">${list.map((a) => `
         <div class="alert-item">
           <strong>${escapeHtml(alertTitle(a.header))}</strong>
-          <div class="alert-meta">${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
+          <div class="alert-meta">${veljavnostHtml(a)}${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
           ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}</div>
           <div class="alert-body adv-only">${escapeHtml((a.description || "").slice(0, 400))}</div>
         </div>`).join("")}</div>
