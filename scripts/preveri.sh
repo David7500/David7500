@@ -55,6 +55,9 @@ api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
 api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404
 api "nesmiseln datum"     "/api/connections?from=Ljubljana&to=Maribor&date=neki" 400
 
+echo "== celovitost in skladnost"
+if ./venv/bin/python scripts/preveri_skladnost.py; then :; else NAPAKE=$((NAPAKE+1)); fi
+
 echo "== paleta"
 if ./venv/bin/python scripts/preveri_paleto.py >/dev/null 2>&1; then
   echo "  ok   kontrast in barvna slepota"

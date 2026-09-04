@@ -234,17 +234,29 @@ def api_health():
     Minuta zastarelosti je pri tem nedolžna: feed se bere vsakih 30 s, zato
     "je zajem živ" nima boljše ločljivosti od tega niti v načelu.
     """
-    return _predpomni("health", None, 60, lambda: _conn_klic(_health_izracun))
+    # Razdeljeno: **svezina je sveza, stevci predpomnjeni**.
+    #
+    # Enotni predpomnilnik za minuto ni bil dovolj: stran anketira vsakih 30 s,
+    # zato je vsak drugi klic padel v prazno in placal celo ceno. Pika ob feedu
+    # pa svezine ne sme brati iz predpomnilnika -- prag "zajem stoji" je 90 s
+    # in desetminutni predpomnilnik bi jo prizgal na rdece brez razloga.
+    #
+    # `MAX(feed_ts)` je 105 ms, stevci pa 1 100 ms. Sveze torej samo prvo.
+    out = dict(_predpomni("health", None, 600, lambda: _conn_klic(_health_stevci)))
+    with _conn() as conn:
+        ts = conn.execute("SELECT MAX(feed_ts) FROM run").fetchone()[0]
+    out["last_feed_ts"] = ts
+    out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
+    return out
 
 
-def _health_izracun(conn):
+def _health_stevci(conn):
     row = conn.execute(
         "SELECT (SELECT COUNT(*) FROM trip) AS trips,"
         "       (SELECT COUNT(*) FROM station) AS stations,"
         "       (SELECT COUNT(*) FROM obs) AS observations,"
         "       (SELECT COUNT(*) FROM run) AS runs_recorded,"
-        "       (SELECT COUNT(DISTINCT service_date) FROM run) AS days_covered,"
-        "       (SELECT MAX(feed_ts) FROM run) AS last_feed_ts"
+        "       (SELECT COUNT(DISTINCT service_date) FROM run) AS days_covered"
     ).fetchone()
     out = dict(row)
     # Po omrežjih: skupna številka ne pove, ali je odpadel zajem vlakov ali
@@ -275,10 +287,6 @@ def _health_izracun(conn):
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
     out["db_path"] = str(path)
-    out["last_feed_at"] = (
-        datetime.fromtimestamp(out["last_feed_ts"], TZ).isoformat()
-        if out["last_feed_ts"] else None
-    )
     return out
 
 
