@@ -12,11 +12,24 @@ postanek potnika.
 
 ## Prezgodnja vožnja
 
-* **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** V 45 146
-  železniških vrsticah `run` ni niti ene negativne vrednosti — najmanjša je
-  natanko 0. Pri avtobusih je 12,0 % vrstic vsaj minuto prezgodnjih in 4,5 %
-  vsaj tri; **41,7 % avtobusnih voženj ima vsaj en prezgodnji postanek**
-  (LPP 22,6 % vrstic, Nomago 10,6 %, Arriva 8,9 %).
+* **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** Preverjeno
+  znova 4. 9. 2026 na **78 082** železniških vrsticah `run` (prej 45 146): še
+  vedno ni niti ene negativne vrednosti, najmanjša je natanko 0.
+
+  Pri avtobusih (**750 935** vrstic) je **10,7 %** vsaj minuto prezgodnjih in
+  **3,8 %** vsaj tri; **37,9 % voženj ima vsaj en prezgodnji postanek**.
+
+  | prevoznik | vsaj minuto prej | vrstic |
+  |---|---|---|
+  | LPP | 21,3 % | 104 780 |
+  | Nomago | 9,6 % | 296 293 |
+  | Arriva | 8,8 % | 314 621 |
+  | AP Murska Sobota | 5,9 % | 39 306 |
+
+  **Vse te številke so od prve meritve zdrsnile navzdol** (bilo je 12,0 / 4,5 /
+  41,7 %, LPP 22,6, Nomago 10,6). Smer ugotovitve drži, velikost pa se z
+  vzorcem spreminja — zato so tu odslej zapisane z vzorcem in kdor jih navaja,
+  naj jih pomeri znova.
 
   Prikaz je to do zdaj **skrival**: vrstica je pričakovano uro izpisala samo
   ob `delay_s >= 60`, torej je prezgoden avtobus kazal zgolj voznoredno uro.
