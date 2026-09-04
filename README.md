@@ -19,12 +19,11 @@ Vse teče skozi isti JSON API, tako da je prikaz zamenljiv.
 | `/` | domača stran: s čim greš — vlak ali avtobus |
 | `/app/train` | vlaki: iskalnik povezav in odhodna tabla |
 | `/app/bus` | avtobusi: ista stran, drugo omrežje |
-| `/app/train/{št}` | okno ene vožnje: profil poti, zgodovina, razmere, hitrosti |
-| `/app/ovire` | dela na progi in nadomestni prevozi |
-| `/app/map` | živi zemljevid |
+| `/app/train/{št}` · `/app/bus/{št}` | okno ene vožnje: profil poti, zgodovina, razmere |
+| `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
+| `/app/map` | živi zemljevid — edini skupni pogled obeh omrežij |
+| `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
 | `/docs` | OpenAPI |
-
-Statistična stran je odstranjena do prenove.
 
 Okno vožnje in ovire imajo preklop **preprosto / napredno**. Napredni pogled ne odpre
 druge strani — na isti doda p90, deleže, številke postankov in to, kaj je
@@ -81,7 +80,8 @@ To ni akademska opomba — vsaka postavka spodaj določa, kaj sme prikaz trditi.
 * **Odhodne zamude s prve postaje ni** — feed nikoli ne poroča `stop_seq = 1`.
   Odhodna tabla zato vzame meritev naslednje postaje in napiše, od kod je.
 * **Vlaki nimajo GPS, avtobusi ga imajo.** `vehicle_positions` vsebuje
-  izključno avtobuse (do 130 hkrati, s smerjo in hitrostjo). Lega vlaka na
+  izključno avtobuse (**do 622 hkrati** — ob prvi meritvi jih je bilo 130,
+  ker so bili takrat zajeti le nekateri prevozniki; s smerjo in hitrostjo). Lega vlaka na
   zemljevidu je zadnje znano prometno mesto, lega avtobusa je izmerjena.
   `current_status` pa ni zanesljiv — med vozili s `STOPPED_AT` so bila taka
   pri 32 km/h — zato ali vozilo stoji, presodi izmerjena hitrost.
