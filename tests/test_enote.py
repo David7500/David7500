@@ -630,3 +630,33 @@ def test_cell_key_je_stabilen_in_na_mrezi():
 def test_cell_key_nikoli_ne_vrne_negativne_nicle():
     """'-0.0' in '0.0' bi bila dva ključa za isto celico."""
     assert "-0.0" not in weather.cell_key(-0.02, -0.02)
+
+
+# --------------------------------------------------- rezerva voznega reda
+
+def test_rezerva_pobere_najvec_toliko_kolikor_vozilo_zamuja():
+    """Vlak s +3 min na rezervi 10 min ne pride 7 min PRED voznim redom."""
+    assert stats._after_slack(180, 600) == 0
+    assert stats._after_slack(600, 180) == 420      # porabi vso rezervo
+    assert stats._after_slack(600, 0) == 600        # brez rezerve ostane isto
+
+
+def test_rezerva_prezgodnjega_vozila_ne_potisne_se_naprej():
+    """Prehiter avtobus ostane prehiter — rezerva mu ne doda prednosti.
+
+    Pri železnici tega ni nikoli (0 negativnih na 78 082 vrsticah), pri
+    avtobusih pa je vsakdanje: 10,7 % vrstic je vsaj minuto prezgodnjih.
+    """
+    assert stats._after_slack(-300, 600) == -300
+    assert stats._after_slack(-300, 0) == -300
+
+
+def test_rezerva_je_monotona():
+    """Več rezerve nikoli ne pomeni večje zamude."""
+    prej = None
+    for slack in range(0, 1200, 60):
+        v = stats._after_slack(900, slack)
+        if prej is not None:
+            assert v <= prej
+        prej = v
+    assert stats._after_slack(900, 10000) == 0      # nikoli pod nič
