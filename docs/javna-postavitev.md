@@ -1,13 +1,20 @@
 # Kako aplikacijo javno postaviti in kako varno
 
-Analiza, 2. 9. 2026. Vprašanje: kako varno je dati to na Oracle Free Tier.
+Analiza, 2. 9. 2026, dopolnjena 4. 9. 2026. Vprašanje je bilo, kako varno je
+dati to na Oracle Free Tier.
+
+**Odločeno je bilo tako, kot ta analiza priporoča: Cloudflarov tunel.**
+Spremenil se je le stroj — tunel bo tekel s **prenosnika** `arwen`
+(192.168.1.138), ne z maline, ker prenosnik streže in je zmogljivejši; malina
+zajema naprej kot varovalo. Domena `kajros.app` je registrirana 3. 9. 2026.
 
 ## Kaj sploh izpostavljamo
 
 Izmerjeno na kodi in na tekočem strežniku, ne po občutku:
 
-* **Vseh 32 endpointov je `GET`. Zapisov ni nobenega** (`grep` po
-  `@app.post|put|delete|patch` vrne 0). Javni obiskovalec baze ne more
+* **Vseh 34 poti je `GET`. Zapisov ni nobenega** (`grep` po
+  `@app.post|put|delete|patch` vrne 0). Od tega je 24 `/api/*` in 10 strani;
+  preverjeno znova 4. 9. 2026. Javni obiskovalec baze ne more
   spremeniti — lahko jo samo bere.
 * **Ni uporabniških računov, gesel ne osebnih podatkov.** Podatki so tuji in
   že javni (CC BY-SA 4.0). Ni česa „ukrasti“.
@@ -58,12 +65,13 @@ ker ga bomo izgubili, in to tiho.
 
 | | cena | dom izpostavljen? | zdrži? |
 |---|---|---|---|
-| **Cloudflare Tunnel z maline** | 0 € | delno (aplikacija da, omrežje ne) | da |
+| **Cloudflare Tunnel z domačega stroja** | 0 € | delno (aplikacija da, omrežje ne) | da |
 | **Hetzner CX23** | ~7 €/mesec | ne | da |
 | Oracle Free | 0 € | ne | **ne** |
 
-**Za prvi javni preizkus: Cloudflare Tunnel z maline.** Na usmerjevalniku ne
-odpre nobenih vrat — povezava gre od maline navzven — javni naslov dobi HTTPS
+**Za prvi javni preizkus: Cloudflare Tunnel z domačega stroja** (odločeno;
+teče s prenosnika, ne z maline). Na usmerjevalniku ne
+odpre nobenih vrat — povezava gre od strežnega stroja navzven — javni naslov dobi HTTPS
 in Cloudflarovo zaščito pred navalom, novega stroja pa ni treba vzdrževati.
 Tveganje, ki ostane: če ima aplikacija hrošča, je to opora v domačem omrežju.
 Ker so vsi endpointi brati-samo in ni zapisov, je to majhno, ni pa nič.
@@ -74,17 +82,17 @@ nihče ne pobere. Sedem evrov na mesec je natanko to, za kar bi zbirala denar.
 ## Cloudflare Tunnel: kaj to je
 
 **Obrnjena smer.** Preusmeritev vrat na usmerjevalniku prebije luknjo navznoter:
-svetu poveš svoj naslov in čakaš, kdo potrka. Tunel dela nasprotno — na malini
+svetu poveš svoj naslov in čakaš, kdo potrka. Tunel dela nasprotno — na strežnem stroju
 teče majhen program (`cloudflared`), ki **sam pokliče ven** k Cloudflaru in to
 povezavo drži odprto. Obiskovalec pride do Cloudflara, Cloudflare pa ga spusti
-po tisti že odprti povezavi do maline.
+po tisti že odprti povezavi do njega.
 
 Posledica: na usmerjevalniku ni odprtih vrat, malina nima javnega naslova in
 domači IP ni nikjer viden. Ni luknja v zidu, ampak telefonska linija, ki jo
 hiša vzpostavi sama.
 
 ```
-obiskovalec → Cloudflare ⇠(povezava, ki jo vzpostavi malina)⇢ cloudflared → 127.0.0.1:8001
+obiskovalec → Cloudflare ⇠(povezava, ki jo vzpostavi malina)⇢ cloudflared → 127.0.0.1:8000
 ```
 
 **Kaj dobimo zraven, brezplačno:**
@@ -123,7 +131,7 @@ ki ga daš ljudem, ne pride v poštev. Imenovani tunel rabi domeno, torej tistih
   domeno (pri registrarju domene nato preusmeriš imenske strežnike na
   Cloudflare). Tuneli in Access so pod `dash.cloudflare.com/one/` —
   stari naslov `one.dash.cloudflare.com` se zdaj preusmeri tja.
-* Na malini `cloudflared tunnel login` izpiše povezavo, ki jo odpreš v
+* Na strežnem stroju `cloudflared tunnel login` izpiše povezavo, ki jo odpreš v
   brskalniku **na drugem računalniku** (malina je brez zaslona), in shrani
   potrdilo v `~/.cloudflared/cert.pem`.
 * Naslov je **naš**, ne Cloudflarov: izbereš poddomeno svoje domene, Cloudflare
