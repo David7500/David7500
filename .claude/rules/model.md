@@ -396,6 +396,23 @@ pa se je vsota vseh — seznam je bil urejen po drugi številki, kot jo je kazal
 („Bavarski dvor“ pokaže 1 137, razvrstil pa se je po 573).
 
 
+## „Končna zamuda“ je zadnja OPAŽENA, ne nujno zadnja
+
+`LAST_STOP_SQL` vzame `MAX(stop_seq)` iz `run`, torej zadnji postanek, ki smo
+ga videli — ne zadnjega iz voznega reda. Ujameta se v **96,3 %** primerov
+(6 581 celih proti 253 nepopolnim, izmerjeno 4. 9. 2026); pri nepopolnih
+manjka mediano **en** postanek, povprečno 2,8, največ 30.
+
+**Na agregate to ne vpliva:** mediana čez vse vožnje je 3,00 min, mediana samo
+čez cele prav tako 3,00. Zato nepopolnih ne izločamo — izločanje bi vrglo
+podatek, ne popravilo številke.
+
+**Pri posamezni vožnji pa pomeni.** MV 247 ima 27. 8. zajetih 5 postankov od
+15 in „končna zamuda 25 min“ je tam zamuda na petem. Ker na tej relaciji
+zamuda vzdolž poti raste (18 → 47 min v drugih dneh), je resnična končna
+skoraj gotovo višja. Kdor bere eno vrstico, naj pogleda tudi število zajetih
+postankov.
+
 ## Smer napake in strošek potnika
 
 **MAE ne loči smeri, potnik pa jo loči zelo.** Podcenimo — potnik pride
