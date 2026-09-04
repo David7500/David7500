@@ -1,7 +1,25 @@
 # Objava
 
-Priporočen način je **Raspberry Pi doma** — glej spodaj. Za majhne gostitelje,
-ki sprejmejo zip, velja poglavje »Paket za gostitelja« naprej.
+**Postavitev od 4. 9. 2026 je trojna** in vsak stroj ima svojo nalogo:
+
+| stroj | naslov | naloga |
+|---|---|---|
+| prenosnik `arwen` | `192.168.1.138` | **streže** `kajros.app` in zajema sam |
+| malina (Pi Zero W) | `192.168.1.166` | zajem, teče ves čas, **varovalo** |
+| ta računalnik | — | razvoj |
+
+Zakaj oboje zajema: prikaz mora biti živ, poteg pa je star toliko, kolikor je
+star zadnji poteg. Ko prenosnik nekaj časa ne teče, se vrzel zapolni z
+`deploy/zapolni-vrzel.sh` (bere z maline, nikoli ne piše nanjo). Malina zato
+ostane prižgana: prenosnik se zapira in seli, ona ne.
+
+**Posodobitev prenosnika:** `~/posodobi.sh` na njem — namesti kodo iz
+`~/kajros` (tja jo osveži razvojni računalnik z `rsync`) in preveri
+`/api/health`. Podrobnosti in past z `/tmp` na malini so v
+`.claude/rules/objava.md`.
+
+Spodaj je namestitev na Raspberry Pi; za majhne gostitelje, ki sprejmejo zip,
+velja poglavje »Paket za gostitelja« naprej.
 
 ## Raspberry Pi
 
