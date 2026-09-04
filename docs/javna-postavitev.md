@@ -137,7 +137,11 @@ ki ga daš ljudem, ne pride v poštev. Imenovani tunel rabi domeno, torej tistih
 * Naslov je **naš**, ne Cloudflarov: izbereš poddomeno svoje domene, Cloudflare
   zanjo naredi `CNAME` na `<uuid>.cfargotunnel.com`.
 
-**Past pri naši malini — izmerjeno 2. 9. 2026.** Malina je **Raspberry Pi
+**Ta past je z odločitvijo odpadla — a jo pustimo zapisano**, ker se vrne
+takoj, ko bi kdo hotel tunel pognati z maline. Strežni stroj je `arwen`,
+x86_64, kjer `cloudflared` deluje iz uradnega paketa brez posebnosti.
+
+**Past pri malini — izmerjeno 2. 9. 2026.** Malina je **Raspberry Pi
 Zero W**: en sam jedro `armv6l`, 427 MB pomnilnika, Raspbian 13, `armhf`.
 Uradni paket za `armhf` je preveden z `GOARM=7` in na ARMv6 pade z
 *Illegal instruction* — to je znan hrošč `cloudflared` in ne naša napaka.
@@ -160,7 +164,12 @@ binarna datoteka. Preizkušeno na sami malini, ne prebrano.
 * **Cloudflare vidi ves promet** (pri njem se konča TLS). Za odprte prometne
   podatke to ni težava, je pa treba vedeti.
 
-## Koliko uporabnikov zmore malina
+## Koliko uporabnikov zmore stroj
+
+**Ta razdelek je nastal, ko je bila kandidatka za strežnik malina.** Odločeno
+je drugače — streže prenosnik `arwen` (x86_64, 7,8 GB), ki je pri istem poslu
+enakega reda kot razvojni računalnik. Spodnje številke zato niso več omejitev,
+ampak razlog, **zakaj malina ne streže**.
 
 Izmerjeno 2. 9. 2026. Isti posel (SQLite v pomnilniku, 200 000 vrstic, 20
 agregatov) na obeh strojih:
@@ -175,7 +184,12 @@ agregatov) na obeh strojih:
 počasnejši od tega računalnika**. Iz tega sledijo odzivi, ki so tu izmerjeni
 topli (mediana 10 zahtev):
 
-| pot | tu | ocena Pi 4B |
+Odzivi, izmerjeni **4. 9. 2026 po popravkih hitrosti**, so poleg tega precej
+nižji od tistih, na katerih so spodnje ocene zgrajene: `/api/live` je 5 ms
+namesto 253, `/api/health` 80 ms namesto 1223. Ocene za Pi torej sorazmerno
+padejo, a sklep ostane isti.
+
+| pot | tu (2. 9.) | ocena Pi 4B |
 |---|---|---|
 | `/api/live` | 253 ms | **~2,5 s** |
 | `/api/overview` | 224 ms | ~2,2 s |
