@@ -133,7 +133,7 @@ function glava(d) {
   const dni = (d.days || []).length;
   const obseg = `<div class="stat-obseg">
       <span>zajetih dni <b>${dni}</b></span>
-      <span>voženj <b>${(d.runs || 0).toLocaleString("sl")}</b></span>
+      <span>voženj <b>${(d.runs || 0).toLocaleString("sl-SI")}</b></span>
       <span>zadnji dan <b>${escapeHtml(d.through || "—")}</b></span>
       <span class="adv-only">izračunano <b>${escapeHtml((d.computed_at || "").replace("T", " ").slice(0, 16))}</b></span>
     </div>`;
