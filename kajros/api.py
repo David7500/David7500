@@ -260,6 +260,16 @@ def _health_izracun(conn):
     }
     out["vehicles_with_gps"] = conn.execute(
         "SELECT COUNT(*) FROM vehicle_now").fetchone()[0]
+    # Senca: koliko obratovalnih dni je ze nabranih. Brez tega se da to
+    # prebrati samo iz baze, do katere na strezniku ni dostopa brez sudo --
+    # in prav strezni stroj je tisti, ki tece ves cas in katerega senca
+    # odloca. 21 ms na 47 892 vrsticah; health je itak predpomnjen.
+    sen = conn.execute(
+        "SELECT COUNT(*) AS vseh, SUM(actual_s IS NOT NULL) AS razresenih,"
+        "       MIN(service_date) AS od, MAX(service_date) AS do_,"
+        "       COUNT(DISTINCT service_date) AS dni FROM napoved").fetchone()
+    out["senca"] = {"dni": sen["dni"], "od": sen["od"], "do": sen["do_"],
+                    "vrstic": sen["vseh"], "razresenih": sen["razresenih"]}
     out["alerts_active"] = conn.execute(
         "SELECT COUNT(*) FROM alert WHERE kind='ovira' AND lang='sl'").fetchone()[0]
     path = Path(config.DB_PATH)
