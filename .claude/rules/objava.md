@@ -164,26 +164,33 @@ baza `/var/lib/sztrack/sz.sqlite`, 368 MB); `kajros.service` in
 pognan in selitev v `install-rpi.sh` še čaka.
 
 
-## Dve orodji, dve nalogi
+## Dostop od zunaj: samo Cloudflare
 
-Tailscale ni odpadel — izgubil je samo **serviranje** domene, ker zna le
-`*.ts.net`. Za **dosego strojev od zunaj** (ssh s telefona) ostaja pravo
-orodje in vrat na usmerjevalniku ne odpira.
+**Eno orodje za oboje.** Prvi predlog je bil Cloudflarov tunel za serviranje
+in Tailscale za upravljanje; to je bilo odveč in je bilo opuščeno 4. 9. 2026.
+Isti imenovani tunel zmore oboje:
 
-| naloga | orodje |
+| naloga | kako |
 |---|---|
-| javno streči `kajros.app` | imenovani Cloudflarov tunel |
-| priti do strojev za upravljanje | Tailscale (`--ssh`), **brez Funnela** |
+| javno streči `kajros.app` | `cloudflared` → `localhost:8000` |
+| ssh s telefona od zunaj | druga gostiteljica (npr. `ssh.kajros.app`) → `ssh://localhost:22`, za **Access** |
 
-Skripti na prenosniku (`/home/david/`), narejeni za rabo s telefona — en ukaz,
-eno geslo:
+**Na telefonu ni treba ničesar.** Cloudflare ima *brskalniški SSH terminal*:
+po njihovi dokumentaciji rabi `cloudflared` na strežniku in Access, na
+odjemalcu pa „no SSH client or Cloudflare One Client required“. Ocenjen čas
+postavitve je 20–30 min — več kot `tailscale up`, a en račun namesto dveh.
 
-* `posodobi.sh` — namesti kodo iz `~/kajros` in preveri `/api/health`.
-  Kodo tja osveži razvojni računalnik z `rsync`; skript izpiše, kateri commit
-  nameša, da se stara koda ne namesti tiho.
-* `nastavi-dostop.sh` — namesti Tailscale in ga prijavi.
+**Access ni nadloga, ampak pogoj.** SSH na javni gostiteljici brez njega bi
+bil odprt vsem; Access pred njim zahteva prijavo (npr. koda na e-pošto).
+Cena: tunel je brezplačen brez omejitev, Zero Trust do 50 uporabnikov
+brezplačno (iz sekundarnih virov, Cloudflarove cenike ni bilo mogoče
+prebrati — preveri ob postavitvi).
+
+Skript na prenosniku (`/home/david/posodobi.sh`), narejen za rabo s telefona —
+en ukaz, eno geslo: namesti kodo iz `~/kajros` in preveri `/api/health`.
+Kodo tja osveži razvojni računalnik z `rsync`; skript izpiše, kateri commit
+nameša, da se stara koda ne namesti tiho.
 
 **Kaj se da od zunaj in kaj ne.** Prestavitev imenskih strežnikov je spletni
 obrazec in ne rabi domačega omrežja. Vse, kar rabi `sudo` na strojih, rabi
-pot do njih — dokler Tailscala ni, to pomeni biti doma. To je bil 4. 9. 2026
-razlog, da je namestitev čakala.
+pot do njih — dokler tunela ni, to pomeni biti doma.
