@@ -165,3 +165,18 @@ Dvoje, kar se pri tem hitro zgreši:
 Ogrevanje po vsakem **uspešnem** zajemu, ne le ob spremembi: značka se osveži
 tudi takrat, ko feed ni prinesel ničesar novega, in kadar se ni premaknila,
 je ogrevanje 19 ms in ne stane nič.
+
+
+## Odhodna tabla: prvi in zadnji postanek sta statika
+
+`_BOARD_SQL` je imel `WITH ends AS (SELECT MIN/MAX(stop_seq) FROM sched GROUP
+BY trip_id)` — polni pregled **403 208** vrstic `sched` ob **vsaki** zahtevi.
+Izmerjeno 4. 9. 2026: 117 ms od 120 je bilo v tej eni poizvedbi.
+
+Vozni red se med uvozi ne spreminja, zato sta `first_seq` in `last_seq` zdaj
+stolpca na `trip`, ki ju napolni `db.fill_trip_window()` — isto kot že prej
+`start_s` in `end_s`. **120 ms → 7 ms** pri isti vsebini (18 vrstic).
+
+Vožnje brez `sched` (nagrobniki po uvozu, glej `gtfs.py`) imajo `first_seq`
+NULL in na tablo ne pridejo. To je pravilno: vožnja brez voznega reda nima
+odhoda, ki bi ga bilo mogoče napovedati.

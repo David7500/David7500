@@ -241,17 +241,16 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
 
 # ---------------------------------------------------------------- odhodi
 
+# `first_seq` in `last_seq` bereta iz `trip`, ne iz agregata cez `sched`.
+# Prej je bilo tu `WITH ends AS (SELECT MIN/MAX(stop_seq) FROM sched GROUP BY
+# trip_id)` -- polni pregled 403 208 vrstic ob VSAKI zahtevi, 117 ms od 120.
+# Vozni red se med uvozi ne spreminja, zato je to statika in sodi v `trip`
+# (napolni `db.fill_trip_window`).
 _BOARD_SQL = """
-WITH ends AS (
-    SELECT trip_id,
-           MIN(stop_seq) AS first_seq,
-           MAX(stop_seq) AS last_seq
-    FROM sched GROUP BY trip_id
-)
 SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
        s.stop_seq, s.arr_s, s.dep_s,
        COALESCE(s.dep_s, s.arr_s) AS t_s,
-       ends.first_seq, ends.last_seq,
+       t.first_seq, t.last_seq,
        origin.name AS origin, dest.name AS destination,
        COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
        COALESCE(rn.delay_arr, rn.delay_dep) AS next_delay_s,
@@ -261,10 +260,9 @@ SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
 FROM sched s
 JOIN station here ON here.stop_id = s.stop_id AND here.name = :station
 JOIN trip t       ON t.trip_id = s.trip_id
-JOIN ends         ON ends.trip_id = s.trip_id
-JOIN sched so     ON so.trip_id = s.trip_id AND so.stop_seq = ends.first_seq
+JOIN sched so     ON so.trip_id = s.trip_id AND so.stop_seq = t.first_seq
 JOIN station origin ON origin.stop_id = so.stop_id
-JOIN sched sd     ON sd.trip_id = s.trip_id AND sd.stop_seq = ends.last_seq
+JOIN sched sd     ON sd.trip_id = s.trip_id AND sd.stop_seq = t.last_seq
 JOIN station dest ON dest.stop_id = sd.stop_id
 JOIN service_day sday ON sday.service_id = t.service_id AND sday.date = :day
                      AND (:network IS NULL OR t.network = :network)

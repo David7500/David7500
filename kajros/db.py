@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS trip (
     -- LPP in medkrajevni prevozniki so `avtobus` in imajo svojo stran:
     -- potnik ve, ali gre z vlakom ali z busom, in ju ne isce skupaj.
     network    TEXT NOT NULL DEFAULT 'zeleznica',
+    -- Prvi in zadnji postanek voznje. Izpeljano iz `sched`, a shranjeno:
+    -- odhodna tabla je to prej racunala kot `MIN/MAX(stop_seq) GROUP BY
+    -- trip_id` cez vseh 403 208 vrstic `sched` ob VSAKI zahtevi -- 117 ms od
+    -- 120. Vozni red se med uvozi ne spreminja, zato je to statika.
+    first_seq  INTEGER,
+    last_seq   INTEGER,
     -- Voznoredni okvir voznje: prvi odhod in zadnji prihod, sekundi od
     -- polnoci prometnega dne (zna cez 86400). Izpeljano iz `sched`, a
     -- shranjeno tu, ker ga potrebuje najbolj vroca poizvedba -- "kaj se
@@ -314,6 +320,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if have and "shape_id" not in have:
         conn.execute("ALTER TABLE trip ADD COLUMN shape_id TEXT")
         conn.commit()
+    # Prvi in zadnji postanek. Kot okvir: izracunljivo iz `sched`, zato ga tu
+    # tudi izracunamo -- odhodna tabla bi brez njega vrnila prazno.
+    if have and "first_seq" not in have:
+        conn.execute("ALTER TABLE trip ADD COLUMN first_seq INTEGER")
+        conn.execute("ALTER TABLE trip ADD COLUMN last_seq INTEGER")
+        conn.commit()
+        fill_trip_window(conn)
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
@@ -344,16 +357,24 @@ def cache_key(conn: sqlite3.Connection) -> tuple | None:
 
 
 def fill_trip_window(conn: sqlite3.Connection) -> int:
-    """Zapolni `trip.start_s` / `trip.end_s` iz `sched`.
+    """Zapolni `trip.start_s` / `end_s` / `first_seq` / `last_seq` iz `sched`.
 
     Klicano ob uvozu GTFS in ob migraciji obstojece baze. Idempotentno.
+
+    `first_seq` in `last_seq` sta tu iz istega razloga kot okvir: odhodna
+    tabla ju je racunala kot `MIN/MAX(stop_seq) GROUP BY trip_id` cez vseh
+    403 208 vrstic `sched` ob vsaki zahtevi -- 117 ms od 120.
     """
     conn.execute("""
         UPDATE trip SET
             start_s = (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s
                        WHERE s.trip_id = trip.trip_id),
             end_s   = (SELECT MAX(COALESCE(s.arr_s, s.dep_s)) FROM sched s
-                       WHERE s.trip_id = trip.trip_id)
+                       WHERE s.trip_id = trip.trip_id),
+            first_seq = (SELECT MIN(s.stop_seq) FROM sched s
+                         WHERE s.trip_id = trip.trip_id),
+            last_seq  = (SELECT MAX(s.stop_seq) FROM sched s
+                         WHERE s.trip_id = trip.trip_id)
     """)
     conn.commit()
     return conn.execute("SELECT COUNT(*) FROM trip WHERE start_s IS NOT NULL").fetchone()[0]
