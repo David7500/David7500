@@ -13,7 +13,11 @@ from pathlib import Path
 
 import requests
 
+from zoneinfo import ZoneInfo
+
 from . import config, db, geo
+
+TZ = ZoneInfo(config.TIMEZONE)
 
 
 def _rows(zf: zipfile.ZipFile, name: str):
@@ -397,7 +401,10 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         )
         # Voznoredni okvir voznje se da izracunati sele, ko je `sched` poln.
         db.fill_trip_window(conn)
-        db.set_meta(conn, "gtfs_imported_at", datetime.now().isoformat(timespec="seconds"))
+        # S pasom, tako kot vse drugo v projektu: brez njega je to cas stroja,
+        # ki se od `config.TIMEZONE` lahko razlikuje.
+        db.set_meta(conn, "gtfs_imported_at",
+                    datetime.now(TZ).isoformat(timespec="seconds"))
 
     return {
         "stations": len(stops), "edges": len(edges),
