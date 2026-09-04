@@ -362,6 +362,17 @@ Kar velja spoštovati, če se ga kdo dotakne:
   briše nikoli; to je merilo, in merilo, staro pol leta, meri model, ki ga ni
   več.
 
+**Prestop upošteva OBA vlaka.** `journey.py` računa
+`wait = načrtovano + zamuda2 − zamuda1`: če zamuja tudi vlak, na katerega
+prestopaš, zveza morda vseeno drži. Prikaz je odšteval samo prvega, žeton pa
+je bral strežnikov `wait_s` — formuli se razideta natanko takrat, ko zamuja
+drugi, torej v primeru, ki potnika najbolj zanima. Zdaj oba računata isto in
+izpis pove „drugi +N min“, kadar ni nič.
+
+Ostane pravilo, zaradi katerega je bila razlika sploh uvedena: **zaokroži
+enkrat, potem računaj.** Vse tri številke na zaslonu so zaokrožene minute in
+njihova vsota se mora ujeti s četrto.
+
 ## Iskanje postaj: promet odloča prej kot oblika ujemanja
 
 `journey.search_stations()` razvršča po `(razred, -promet, ime)`. Razredi so

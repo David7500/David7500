@@ -352,7 +352,15 @@ const TRANSFER_STYLE = {
 // pravilo ze velja pri razredu zamude: zaokrozi enkrat, potem racunaj.
 function preostaliPrestop(tr, plannedS) {
   if (plannedS == null || tr.delay1_s == null) return Math.round(tr.wait_s / 60);
-  return Math.round(plannedS / 60) - Math.round(tr.delay1_s / 60);
+  // Tudi DRUGI vlak: streznik racuna `wait = nacrtovano + zamuda2 - zamuda1`
+  // (glej `journey.py`), prikaz pa je odsteval samo prvo. Formuli se razideta
+  // natanko takrat, ko zamuja tudi drugi -- in takrat je zeton ("zveza drzi")
+  // izracunan iz ene stevilke, izpis poleg njega pa iz druge. Danes je
+  // `delay2_s` skoraj vedno 0 (mediana tocnega vlaka), zato je bilo to
+  // latentno, ne vidno.
+  return Math.round(plannedS / 60)
+       - Math.round(tr.delay1_s / 60)
+       + Math.round((tr.delay2_s || 0) / 60);
 }
 
 // "-1 min za prestop" je uganka, beseda ni -- isto pravilo kot pri prezgodnji
@@ -401,6 +409,8 @@ function transferRowHtml(t, nowMs, date, odKod) {
           </span>
           ${count === 1 && tr && tr.delay1_s
             ? `<span class="leg-note">prvi vlak ${delayLabel(tr.delay1_s)} min</span>` : ""}
+          ${count === 1 && tr && tr.delay2_s
+            ? `<span class="leg-note">drugi ${delayLabel(tr.delay2_s)} min</span>` : ""}
         </div>` : ""}`;
   }).join("");
 
