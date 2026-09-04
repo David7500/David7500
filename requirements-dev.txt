@@ -1,3 +1,7 @@
 # Samo za razvoj. `requirements.txt` je namenoma pri petih vrsticah
 # in ostane pri petih -- to je tisto, kar rabi streznik.
 pytest>=8.0
+# Ujame nedefinirana imena in mrtvo kodo. Ni okras: `TZ` v `gtfs.py` je bil
+# nedefiniran in bi počil šele ob naslednjem `kajros update`, ker se tista
+# vrstica ob uvozu modula ne izvede.
+pyflakes>=3.0

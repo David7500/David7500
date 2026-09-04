@@ -55,6 +55,15 @@ api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
 api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404
 api "nesmiseln datum"     "/api/connections?from=Ljubljana&to=Maribor&date=neki" 400
 
+echo "== koda"
+# Ujame nedefinirana imena in mrtvo kodo. Uvoz modula tega ne ujame: vrstica,
+# ki se ob uvozu ne izvede, pade sele ob klicu.
+if ./venv/bin/python -m pyflakes kajros/ tests/ scripts/*.py; then
+  echo "  ok   pyflakes brez najdb"
+else
+  NAPAKE=$((NAPAKE+1))
+fi
+
 echo "== celovitost in skladnost"
 if ./venv/bin/python scripts/preveri_skladnost.py; then :; else NAPAKE=$((NAPAKE+1)); fi
 

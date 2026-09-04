@@ -521,10 +521,6 @@ def operator_forecast_tasks(conn: sqlite3.Connection) -> list[dict]:
         log[key].append((r["feed_ts"], r["d"]))
         final[key] = r["d"]
 
-    names = {r["trip_id"]: r["train_no"]
-             for r in conn.execute("SELECT trip_id, train_no FROM trip WHERE network = ?",
-                                   (NETWORK,))}
-
     by_run: dict[tuple, list[int]] = defaultdict(list)
     for trip_id, day, seq in log:
         by_run[(trip_id, day)].append(seq)

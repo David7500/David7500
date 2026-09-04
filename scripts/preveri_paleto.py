@@ -225,7 +225,7 @@ def check_monotone(problems: list[str]) -> None:
     print("\nMONOTONOST svetlosti lestvice zamud (mora rasti ali padati brez preskokov)")
     ls = [(name, lab(color)[0]) for name, color in DELAY_RAMP]
     for (n1, l1), (n2, l2) in zip(ls, ls[1:]):
-        ok = l2 < l1 or l2 > l1
+        # Izpis je informativen; o monotonosti odloči `same_sign` spodaj.
         print(_line(True, f"{n1:12s} L*={l1:5.1f}  ->  {n2:12s} L*={l2:5.1f}"))
     diffs = [b - a for (_, a), (_, b) in zip(ls, ls[1:])]
     same_sign = all(d > 0 for d in diffs) or all(d < 0 for d in diffs)

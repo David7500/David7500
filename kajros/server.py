@@ -5,7 +5,6 @@ storitev. Na majhnem strežniku je to tudi cenejše -- en Python interpreter.
 """
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys

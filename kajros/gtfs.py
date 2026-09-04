@@ -8,7 +8,7 @@ import sqlite3
 import statistics
 import zipfile
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
