@@ -132,6 +132,16 @@ Zato okno vožnje pove „feed **ne poroča zamud** — velja vozni red“, ne
 „še ni nobene meritve“. Beseda **„še“** obljublja številko, ki ne pride, in
 potnik čaka zaman. Pravilo je v `train.jeNadomestni()`.
 
+**Vrste vlaka ostanejo kratice, ker imena ni.** Na statistiki piše „AVT“ in
+„MO“ brez pojasnila — to sta avtovlak na bohinjski progi (10 voženj) in
+Maribor–Šentilj (20). Polnega imena ne moremo pripisati: `route_long_name` je
+v GTFS **prazen pri vseh 2 571 progah** (izmerjeno 2. 9. 2026) in ugibati
+pomen kratice bi pomenilo zapisati domnevo kot dejstvo.
+
+To je konkretna posledica manjka, ki je naveden v pismu DUJPP-u
+(`docs/pismo-podatki.md`, nit #6). Če polje kdaj dobimo, je to eno mesto,
+kjer se takoj pozna.
+
 **Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila so dela na progi, zapore
 tira in nadomestni prevozi SŽ; za avtobuse takih obvestil ni in povezava tja
 bi obljubljala podatek, ki zanje ne obstaja.
