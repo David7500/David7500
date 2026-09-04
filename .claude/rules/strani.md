@@ -170,6 +170,12 @@ označene z žetonom „napovedano“ in razvrščene za veljavne. Števec pove 
 „veljavnih obvestil“ in napovedana bi to besedo naredila neresnično. Zato
 `/api/alerts` privzeto vrne oboje z zastavico `napovedana`, števca pa ne.
 
+**Nadomestni prevoz pove „po voznem redu“, ne „brez podatka“.** Velja na
+odhodni tabli in v iskalniku, tako kot že v oknu vožnje: feed zanje ne poroča
+nikoli (56 voženj, 0 meritev v petnajstih dneh), zato je „brez podatka“
+obljuba številke, ki ne pride. Poleg žetona stoji razlog — brez njega je
+„po voznem redu“ videti kot izbira prikaza in ne kot dejstvo o viru.
+
 **Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila so dela na progi, zapore
 tira in nadomestni prevozi SŽ; za avtobuse takih obvestil ni in povezava tja
 bi obljubljala podatek, ki zanje ne obstaja.

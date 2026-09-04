@@ -256,9 +256,23 @@ function countdownLabel(iso, nowMs) {
   return `čez ${min} min`;
 }
 
-function typicalChipHtml(t, fromStop) {
+/** Ali je to nadomestni prevoz SŽ: `mode = bus`, a `network = zeleznica`. */
+function jeNadomestni(r) {
+  return isBus(r.mode) && r.network === "zeleznica";
+}
+
+function typicalChipHtml(t, fromStop, nadomestni) {
   // Za dan, ki se ni prisel, meritve ni -- povemo pa lahko, kako je bilo
   // doslej. To NI napoved za ta dan in oznaka mora to jasno povedati.
+  //
+  // Za NADOMESTNI prevoz meritve ne bo nikoli: feed zanje ne porocá (izmerjeno
+  // 4. 9. 2026: 56 voznj v voznem redu, 0 meritev v petnajstih dneh). "Brez
+  // podatka" tam obljublja stevilko, ki ne pride -- isto kot je pisalo v oknu
+  // voznje, preden je bilo popravljeno.
+  if (!t && nadomestni) {
+    return `<span class="chip chip-none">po voznem redu</span>
+      <div class="conn-where">feed za nadomestni prevoz ne poroča zamud</div>`;
+  }
   if (!t) return '<span class="chip chip-none">brez podatka</span>';
   const color = delayColor(t.median_s);
   return `<span class="chip chip-forecast" style="color:${color};border-color:${color}44">
@@ -326,7 +340,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
       </div>
       <div class="conn-delay">${c.delay_s != null
         ? delayChipHtml(c.delay_s, c.delay_kind, c.delay_at)
-        : typicalChipHtml(c.typical_arr || c.typical_dep)}</div>
+        : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}</div>
       <div class="conn-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         <span>${durationLabel(c.duration_s)}</span>
@@ -542,7 +556,7 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
       </div>
       <div class="conn-delay">${r.delay_s != null
         ? delayChipHtml(r.delay_s, r.delay_kind, r.delay_from)
-        : typicalChipHtml(r.typical, r.typical_from)}</div>
+        : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}</div>
       <div class="board-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
