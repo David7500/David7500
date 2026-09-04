@@ -119,8 +119,8 @@ async function lestvica() {
     cilj.innerHTML = vrstice.map((r) => `
       <a class="stat-voznja" href="${POT(r.train_no)}">
         <span class="stat-voznja-st">${escapeHtml(r.train_no)}</span>
-        <span class="stat-voznja-ob">${pluralRuns(r.runs)} · točnih
-          ${Math.round((r.on_time_share || 0) * 100)} %</span>
+        <span class="stat-voznja-ob">${pluralRuns(r.runs)} ·
+          ${Math.round((r.on_time_share || 0) * 100)} % v 5 min</span>
         <span class="stat-voznja-z" style="color:${delayColor(r.median_s)}">${minute(r.median_s)}</span>
       </a>`).join("");
   } catch (e) {

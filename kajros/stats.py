@@ -301,7 +301,7 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
             "median_final_s": _pct(finals, 0.5),
             "p90_final_s": _pct(finals, 0.9),
             "worst_final_s": max(finals) if finals else None,
-            "on_time_share": (round(sum(1 for f in finals if f <= 300) / len(finals), 3)
+            "on_time_share": (round(sum(1 for f in finals if _je_pravocasna(f)) / len(finals), 3)
                               if finals else None),
         },
         "runs": runs,
@@ -333,6 +333,63 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
 #     izstopajočih vrednosti, ne repa prave porazdelitve.
 #
 # Podatki se NE brišejo; to je filter branja. Zajem hrani vse.
+# Meja "tocnosti": pet minut, obicajen prag pri zeleznicah.
+#
+# **V MINUTAH in ne v sekundah**, ker je poleg nje na zaslonu razrez po
+# razredih in bralec sme obe stevilki sesteti. Dokler je bila 300 s, razred
+# "1-5 min" pa je segal do zaokrozenih pet minut (330 s), se 553 vozenj
+# (1,23 % od 45 043) ni ujelo: bila so v razredu, a ne med "tocnimi", in
+# vsota razredov ni dala izpisanega odstotka.
+#
+# Prej je stala nizje v datoteki in jo je uporabljalo le dvoje mest, stiri
+# druga pa so imela trdo zapisano 300 -- komentar je trdil "spremeni na obeh
+# mestih" in to ze takrat ni drzalo. Zdaj gre skoznjo vse.
+#
+# POZOR: to NI isto kot zeton "tocno" v `DELAY_RAMP`, ki pomeni zaokrozeno
+# NIC minut. Prikaz mora prag povedati z besedo ("69 % v 5 min"), sicer sta
+# v istem okvirju dve stevilki z isto besedo in razlicnim pragom -- 81 od 162
+# je 50 %, ne 69 %, in bralec tega ne more spraviti skupaj.
+ON_TIME_MIN = 5
+
+
+def _minute(v: int) -> int:
+    """Zamuda v minutah, zaokrozena tako kot `common.delayLabel()`.
+
+    `floor(x + 0.5)` in ne `round()`: JS `Math.round` zaokrozi pol navzgor,
+    Pythonov `round` pa bancno (`round(0.5) == 0`), zato bi se pri natanko
+    30 s prikaz in izracun razsla.
+    """
+    return math.floor(v / 60 + 0.5)
+
+
+def _je_pravocasna(v: int) -> bool:
+    """Ali je vozjna "tocna" -- po ISTI zaokrozeni minuti, kot jo prikaz izpise."""
+    return _minute(v) <= ON_TIME_MIN
+
+def _razred_zamude(v: int) -> str:
+    """Razred zamude iz ZAOKROZENE minute -- tako kot `common.delayLabel()`.
+
+    Prej je bila meja sekundna (`v <= 60` = "tocno"). To je natanko past, ki
+    jo `oznake.md` opisuje kot ze enkrat popravljeno: razred se doloca iz
+    zaokrozene minute, ne iz sekund, sicer ista izpisana stevilka dobi dve
+    barvi. Popravljena je bila na odjemalcu, tu pa ne -- in razlika ni majhna:
+    **3 280 voznj (7,29 % od 45 015)** pade v rezo 30-60 s, kjer je streznik
+    rekel "tocno" (sivo), barvna lestvica pa "1-5 min" (oranzno).
+
+    `floor(x + 0.5)` in ne `round()`: JS `Math.round` zaokrozi pol navzgor,
+    Pythonov `round` pa bancno (`round(0.5) == 0`), zato bi se razreda pri
+    natanko 30 s razsla.
+    """
+    m = _minute(v)
+    if m <= 0:
+        return "točno"
+    if m <= 5:
+        return "1–5 min"
+    if m <= 15:
+        return "5–15 min"
+    return "nad 15 min"
+
+
 MAX_REALNA_ZAMUDA_S = 3 * 3600
 
 LAST_STOP_SQL = f"""
@@ -375,7 +432,7 @@ def network_stats(conn: sqlite3.Connection, days: int = 90,
         {
             "train_no": k, "runs": len(v),
             "median_s": _pct(v, 0.5), "p90_s": _pct(v, 0.9), "max_s": max(v),
-            "on_time_share": round(sum(1 for x in v if x <= 300) / len(v), 3),
+            "on_time_share": round(sum(1 for x in v if _je_pravocasna(x)) / len(v), 3),
         }
         for k, v in grouped.items() if len(v) >= MIN_RUNS_FOR_RANK
     ]
@@ -430,14 +487,11 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
             "n": len(vals),
             "median_s": _pct(vals, 0.5),
             "p90_s": _pct(vals, 0.9),
-            "on_time_share": round(sum(1 for v in vals if v <= 300) / len(vals), 2),
+            "on_time_share": round(sum(1 for v in vals if _je_pravocasna(v)) / len(vals), 2),
         }
     return out
 
 
-# Meja "tocnosti". Pet minut je obicajen prag pri zeleznicah in isti prag
-# uporablja `history()`; ce ga kdaj spremenis, spremeni na obeh mestih.
-ON_TIME_S = 300
 
 
 def day_summary(conn: sqlite3.Connection, service_date: str,
@@ -461,23 +515,14 @@ def day_summary(conn: sqlite3.Connection, service_date: str,
     if not vals:
         return {"date": service_date, "runs": 0}
 
-    buckets = {"točno": 0, "1–5 min": 0, "5–15 min": 0, "nad 15 min": 0}
-    for v in vals:
-        if v <= 60:
-            buckets["točno"] += 1
-        elif v <= 300:
-            buckets["1–5 min"] += 1
-        elif v <= 900:
-            buckets["5–15 min"] += 1
-        else:
-            buckets["nad 15 min"] += 1
+    buckets = _bucket_counts(vals)
     return {
         "date": service_date,
         "runs": len(vals),
         "median_s": _pct(vals, 0.5),
         "p90_s": _pct(vals, 0.9),
         "worst_s": max(vals),
-        "on_time_share": round(sum(1 for v in vals if v <= ON_TIME_S) / len(vals), 3),
+        "on_time_share": round(sum(1 for v in vals if _je_pravocasna(v)) / len(vals), 3),
         "buckets": buckets,
     }
 
@@ -485,14 +530,7 @@ def day_summary(conn: sqlite3.Connection, service_date: str,
 def _bucket_counts(values: list[int]) -> dict:
     out = {"točno": 0, "1–5 min": 0, "5–15 min": 0, "nad 15 min": 0}
     for v in values:
-        if v <= 60:
-            out["točno"] += 1
-        elif v <= 300:
-            out["1–5 min"] += 1
-        elif v <= 900:
-            out["5–15 min"] += 1
-        else:
-            out["nad 15 min"] += 1
+        out[_razred_zamude(v)] += 1
     return out
 
 
@@ -504,7 +542,7 @@ def _group_stats(groups: dict[str, list[int]], min_n: int) -> list[dict]:
         out.append({
             "key": key, "n": len(vals),
             "median_s": _pct(vals, 0.5), "p90_s": _pct(vals, 0.9),
-            "on_time_share": round(sum(1 for v in vals if v <= ON_TIME_S) / len(vals), 3),
+            "on_time_share": round(sum(1 for v in vals if _je_pravocasna(v)) / len(vals), 3),
             "buckets": _bucket_counts(vals),
         })
     return out
@@ -612,7 +650,7 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
         "days": sorted(by_day),
         "median_s": _pct(vse, 0.5),
         "p90_s": _pct(vse, 0.9),
-        "on_time_share": (round(sum(1 for d in vse if d <= 300) / len(vse), 3)
+        "on_time_share": (round(sum(1 for d in vse if _je_pravocasna(d)) / len(vse), 3)
                           if vse else None),
         "by_kind": sorted(_group_stats(by_kind, MIN_RUNS_FOR_GROUP),
                           key=lambda x: -(x["median_s"] or 0)),
@@ -1242,15 +1280,18 @@ SUMMARY_NETWORKS = ("zeleznica", "avtobus")
 # Kdaj velja predpomnjeni odgovor za prestar, ce dnevno opravilo ni teklo.
 SUMMARY_MAX_AGE_S = 36 * 3600
 
-#: Oblika shranjenega povzetka. **Povecaj ob vsaki spremembi polj**, ki jih
-#: vraca `breakdowns()` ali `network_stats()`.
+#: Oblika IN pomen shranjenega povzetka. **Povecaj ob vsaki spremembi polj
+#: ali njihovega izracuna**, ki ju vraca `breakdowns()` ali `network_stats()`.
+#: Ni dovolj misliti na obliko: v3 je nastal, ker so se spremenile meje
+#: razredov (`_razred_zamude`), oblika pa je ostala ista -- shranjeni
+#: stevci bi bili do 36 ur tihi ostanek starega pravila.
 #:
 #: Brez tega je stara OBLIKA enako skodljiva kot star podatek, le tise:
 #: predpomnilnik se do 36 ur strezel payload brez novega polja, stran ga je
 #: izpustila in videti je bilo, kot da sprememba ne dela. Zgodilo se je pri
 #: dodajanju `median_s` (4. 9. 2026) -- API je vrnil `cached=true` in polja
 #: ni bilo, cetudi je bila koda pravilna.
-SUMMARY_VERSION = 2
+SUMMARY_VERSION = 4
 
 _SUMMARY_LOCK = threading.Lock()
 

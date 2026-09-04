@@ -73,6 +73,27 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   „načrtovano 52 min, prvi vlak +5, ostane 48". Bralec, ki sešteje, dobi 47 in
   ima prav. Zdaj se preostanek računa iz **zaokroženih minut**
   (`preostaliPrestop()`), ne iz sekund. Ista past kot pri razredu zamude.
+* **Razred se šteje na strežniku po ISTI zaokroženi minuti kot na zaslonu.**
+  Pravilo zgoraj je bilo popravljeno na odjemalcu, `stats.py` pa je razvrščal
+  po sekundah (`v <= 60` = „točno“) — v režo 30–60 s pade **3 280 od 45 015
+  voženj (7,29 %)**, ki jih je strežnik štel kot sive „točno“, barvna lestvica
+  pa bi jih pobarvala oranžno „1–5 min“. Zdaj gre vse skozi
+  `stats._razred_zamude()`.
+
+  **`floor(x + 0.5)`, ne `round()`:** JS `Math.round` zaokroži pol navzgor,
+  Pythonov `round` bančno (`round(0.5) == 0`), zato bi se pri natanko 30 s
+  prikaz in izračun razšla.
+* **„Točno“ in „delež točnih“ nista isto in ne smeta nositi iste besede.**
+  Žeton `točno` je zaokroženih **nič** minut, `on_time_share` pa **pet**. V
+  istem okvirju je pisalo „točno 81“ in „točnih 69 %“ — 81 od 162 je 50 % in
+  bralec tega ne more spraviti skupaj. Zato prikaz zdaj povsod pove prag:
+  **„72 % v 5 min“**.
+
+  In ker sta v istem okvirju, se morata **sešteti**: prag je zato
+  `ON_TIME_MIN = 5` v **minutah**, ne 300 s. Dokler je bil v sekundah, razred
+  „1–5 min“ pa je segal do zaokroženih pet (330 s), se 553 voženj (1,23 %) ni
+  ujelo — bile so v razredu, a ne med točnimi. Zdaj velja
+  `točno + 1–5 min = izpisani odstotek` in to je preverjeno v testu.
 * Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
 * **Omrežje prestavi samo poudarek, ne lestvice.** `body.net-avtobus` premakne
   `--accent` na zeleno; `--d-*` ostanejo oranžni tudi tam. Ista barva mora

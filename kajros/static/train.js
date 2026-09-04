@@ -505,7 +505,7 @@ function renderTiles(h) {
   const tiles = [
     tileHtml(medLabel, delayLabel(s.median_final_s), pluralRuns(n), delayColor(s.median_final_s)),
     tileHtml("Najslabša vožnja", delayLabel(s.worst_final_s), "končna zamuda", delayColor(s.worst_final_s)),
-    tileHtml("Delež točnih", `${Math.round((s.on_time_share || 0) * 100)} %`,
+    tileHtml("Delež v 5 min", `${Math.round((s.on_time_share || 0) * 100)} %`,
              "končna zamuda do 5 min"),
   ];
   if (n >= 5) {

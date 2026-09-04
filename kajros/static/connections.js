@@ -266,7 +266,7 @@ function typicalChipHtml(t, fromStop) {
     </span>
     <div class="conn-where">običajno · ${pluralRuns(t.n)}</div>
     ${fromStop ? `<div class="conn-where">merjeno na postaji ${escapeHtml(fromStop)}</div>` : ""}
-    <div class="conn-where">točnih ${Math.round(t.on_time_share * 100)} %</div>`;
+    <div class="conn-where">${Math.round(t.on_time_share * 100)} % v 5 min</div>`;
 }
 
 function delayChipHtml(delay, kind, at) {
@@ -638,7 +638,7 @@ function overviewHtml(o) {
           </div>
           ${bucketBarHtml(day.buckets, day.runs)}
           <div class="ov-card-foot">
-            ${day.runs} zajetih voženj · točnih ${Math.round(day.on_time_share * 100)} %
+            ${day.runs} zajetih voženj · ${Math.round(day.on_time_share * 100)} % v 5 min
             · najslabša ${delayLabel(day.worst_s)} min
           </div>
         </div>` : ""}
@@ -672,7 +672,7 @@ function busOverviewHtml(o) {
           </div>
           ${bucketBarHtml(o.today.buckets, o.today.runs)}
           <div class="ov-card-foot">
-            ${o.today.runs} zajetih voženj · točnih ${Math.round(o.today.on_time_share * 100)} %
+            ${o.today.runs} zajetih voženj · ${Math.round(o.today.on_time_share * 100)} % v 5 min
             ${o.with_gps ? `· ${o.with_gps} vozil oddaja svojo lego` : ""}
           </div>
         </div>` : `

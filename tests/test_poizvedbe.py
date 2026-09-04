@@ -1220,3 +1220,41 @@ def test_razrezi_nosijo_sidro_cez_vse_voznje(conn):
     assert d["runs"] == 3
     assert d["median_s"] == 120           # ne 3000 in ne 60
     assert d["on_time_share"] == round(2 / 3, 3)
+
+
+def test_razred_zamude_gre_po_zaokrozeni_minuti(conn):
+    """Razred mora slediti izpisani minuti, ne sekundam.
+
+    `common.delayLabel()` izpiše `Math.round(s/60)`, zato mora razred pri
+    30 s že biti „1–5 min“ — sicer je vrstica siva in piše „+1“. Meja je bila
+    sekundna (`v <= 60`) in v režo 30–60 s pade 3 280 od 45 015 voženj
+    (7,29 %). `floor(x+0.5)` in ne `round()`: Pythonov `round(0.5)` je 0,
+    JS `Math.round(0.5)` pa 1.
+    """
+    assert stats._razred_zamude(29) == "točno"
+    assert stats._razred_zamude(30) == "1–5 min"      # prej "točno"
+    assert stats._razred_zamude(60) == "1–5 min"      # prej "točno"
+    assert stats._razred_zamude(300) == "1–5 min"     # 5 min je še "1–5"
+    assert stats._razred_zamude(330) == "5–15 min"    # 6 min
+    assert stats._razred_zamude(900) == "5–15 min"    # 15 min je še "5–15"
+    assert stats._razred_zamude(930) == "nad 15 min"  # 16 min
+
+
+def test_delez_tocnih_se_ujame_z_vsoto_razredov(conn):
+    """Kar stoji v istem okvirju, mora dati isto vsoto.
+
+    `on_time_share` je meril `<= 300 s`, razred „1–5 min“ pa sega do
+    zaokroženih pet minut (330 s). V to režo je padlo 553 od 45 043 voženj
+    (1,23 %): bile so v razredu, a ne med točnimi, in bralec, ki sešteje
+    „točno“ in „1–5 min“, ni dobil izpisanega odstotka.
+    """
+    assert stats.ON_TIME_MIN == 5
+    # 310 s je zaokrozeno 5 min -> v razredu "1-5 min" IN med tocnimi.
+    for trip, zamuda in (("t1", 290), ("t2", 310), ("t3", 400)):
+        _vozba(conn, trip, _pred(2), [(2, zamuda)])
+    conn.commit()
+    d = stats.breakdowns(conn, 90, "zeleznica")
+    razredi = stats._bucket_counts([290, 310, 400])
+    v_pragu = razredi["točno"] + razredi["1–5 min"]
+    assert v_pragu == 2
+    assert d["on_time_share"] == round(v_pragu / 3, 3)
