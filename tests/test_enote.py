@@ -481,3 +481,60 @@ def test_med_dvema_moznima_zmaga_tisti_z_manjso_vrzeljo():
     dni = {"2026-09-03", "2026-09-04"}
     # ob 23:00 smo sredi današnjega okna -> danes, ne včeraj (ki je že mimo)
     assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 23)) == "2026-09-04"
+
+
+# --------------------------------------------------- vzorčenje sence pri avtobusih
+
+def test_zeleznica_ni_vzorcena():
+    """Vlakov je malo; vzorčimo samo avtobuse, ki bi sicer dali 135 000 vrstic
+    na dan."""
+    assert all(ocena._v_vzorcu(str(i), "zeleznica") for i in range(50))
+
+
+def test_vzorec_je_priblizno_vsaka_peta_voznja():
+    from kajros import config
+    n = config.OCENA_BUS_VZOREC
+    if n <= 1:
+        return                                     # vzorčenje izklopljeno
+    izbrani = sum(1 for i in range(100000, 105000)
+                  if ocena._v_vzorcu(str(i), "avtobus"))
+    delez = izbrani / 5000
+    assert abs(delez - 1 / n) < 0.03, f"delež {delez:.3f}, pričakoval ~{1/n:.3f}"
+
+
+def test_vzorec_je_stabilen_med_zagoni():
+    """Vzorec, ki se ob vsakem zagonu zamenja, ni vzorec.
+
+    Vgrajeni `hash` je soljen s `PYTHONHASHSEED`, zato ga `_v_vzorcu` ne sme
+    uporabljati. Ta test pokliče funkcijo v ločenem procesu z drugim soljenjem
+    in zahteva isti izid.
+    """
+    import os
+    import subprocess
+    import sys
+
+    ids = [str(i) for i in range(462170, 462200)]
+    tu = [ocena._v_vzorcu(i, "avtobus") for i in ids]
+
+    koda = (
+        "import sys; sys.path.insert(0, '.');"
+        "from kajros import ocena;"
+        f"print(''.join('1' if ocena._v_vzorcu(i, 'avtobus') else '0' for i in {ids!r}))"
+    )
+    izidi = set()
+    for sol in ("0", "1", "12345"):
+        okolje = dict(os.environ, PYTHONHASHSEED=sol)
+        r = subprocess.run([sys.executable, "-c", koda], capture_output=True,
+                           text=True, env=okolje, cwd=".")
+        assert r.returncode == 0, r.stderr
+        izidi.add(r.stdout.strip())
+    assert len(izidi) == 1, f"vzorec se med zagoni spreminja: {izidi}"
+    assert izidi.pop() == "".join("1" if x else "0" for x in tu)
+
+
+def test_ista_voznja_je_vedno_ista_odlocitev():
+    """Vožnja mora biti cela ali nobena — sicer se razrez po zamudi meri na
+    kosih poti."""
+    for tid in ("453041", "462170", "1"):
+        prvi = ocena._v_vzorcu(tid, "avtobus")
+        assert all(ocena._v_vzorcu(tid, "avtobus") is prvi for _ in range(5))
