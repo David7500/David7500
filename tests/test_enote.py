@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from kajros import ocena, weather
 from kajros.alerts import parse_delay_text
 from kajros.collector import (_delay_of, is_forecast, is_zero_blip,
-                               worth_logging)
+                               resolve_service_date, worth_logging)
 from kajros.journey import _fold
 
 
@@ -419,3 +419,65 @@ def test_prihodna_vrednost_se_uporabi_ko_odhodne_ni():
     sched = (11 * 3600 + 41 * 60, None)           # samo arr_s
     p = {"delay_dep": None, "delay_arr": 8 * 60, "feed_ts": _ob(dan, 11, 11)}
     assert is_forecast(p, sched, dan) is True
+
+
+# ------------------------------------------------- kateremu dnevu pripada vožnja
+
+def _zdaj(dan, ura, minuta=0):
+    d = date.fromisoformat(dan)
+    return datetime(d.year, d.month, d.day, ura, minuta,
+                    tzinfo=ZoneInfo("Europe/Ljubljana"))
+
+
+def test_dnevna_voznja_pripada_danasnjemu_dnevu():
+    okno = (8 * 3600, 11 * 3600)                 # 08:00-11:00
+    dni = {"2026-09-03", "2026-09-04"}
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 9)) == "2026-09-04"
+
+
+def test_nocni_vlak_po_polnoci_ostane_pri_vcerajsnjem_dnevu():
+    """EC 79 ob 00:20 vozi pod včerajšnjim datumom in njegove voznoredne
+    sekunde tečejo čez 86400. Brez tega je videti, kot da danes še ni vozil —
+    in prav takrat ga potnik gleda."""
+    okno = (22 * 3600, 26 * 3600)                # 22:00 -> 02:00 naslednjega dne
+    dni = {"2026-09-03", "2026-09-04"}
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 0, 20)) == "2026-09-03"
+
+
+def test_brez_veljavnih_dni_ni_odgovora():
+    assert resolve_service_date("t", (8 * 3600, 9 * 3600), set(), _zdaj("2026-09-04", 8)) is None
+    assert resolve_service_date("t", (8 * 3600, 9 * 3600), None, _zdaj("2026-09-04", 8)) is None
+
+
+def test_brez_okna_ni_odgovora():
+    assert resolve_service_date("t", None, {"2026-09-04"}, _zdaj("2026-09-04", 8)) is None
+
+
+def test_dan_brez_voznje_se_ne_izbere():
+    """Vožnja, ki danes ne vozi, ne sme dobiti današnjega datuma."""
+    okno = (8 * 3600, 11 * 3600)
+    assert resolve_service_date("t", okno, {"2026-09-03"}, _zdaj("2026-09-04", 9)) is None
+
+
+def test_rezerva_pred_odhodom_je_45_minut():
+    """Feed začne poročati, preden vožnja odpelje — a ne poljubno zgodaj."""
+    okno = (8 * 3600, 11 * 3600)
+    dni = {"2026-09-04"}
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 7, 30)) == "2026-09-04"
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 7, 0)) is None
+
+
+def test_rezerva_po_prihodu_je_tri_ure():
+    """Zamujajoča vožnja se še vedno pripiše svojemu dnevu."""
+    okno = (8 * 3600, 11 * 3600)
+    dni = {"2026-09-04"}
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 13, 30)) == "2026-09-04"
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 14, 30)) is None
+
+
+def test_med_dvema_moznima_zmaga_tisti_z_manjso_vrzeljo():
+    """Kadar sta oba dneva v dosegu rezerve, odloči bližina k oknu."""
+    okno = (22 * 3600, 26 * 3600)
+    dni = {"2026-09-03", "2026-09-04"}
+    # ob 23:00 smo sredi današnjega okna -> danes, ne včeraj (ki je že mimo)
+    assert resolve_service_date("t", okno, dni, _zdaj("2026-09-04", 23)) == "2026-09-04"
