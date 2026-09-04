@@ -3,6 +3,40 @@
 Številke, ki niso pravilo, ampak stanje: koliko je zajetega, koliko stane,
 kako hitro teče. Se starajo — ob vsaki spremembi popravi datum.
 
+## Pokritost zajema (4. 9. 2026)
+
+Koliko voženj iz voznega reda dejansko vidimo v realnem času:
+
+| kaj | v voznem redu | zajetih | pokritost |
+|---|---|---|---|
+| pravi vlaki | 601 | 598 | **99,5 %** |
+| nadomestni prevoz SŽ (`BUS …`) | 53 | 0 | **0 %** |
+| avtobusi | 10 007 | 9 799 | 97,9 % |
+
+Merjeno na 3. 9. 2026 in ponovljivo na 1.–3. 9. (nihanje pod odstotkom).
+**Skupna železniška pokritost je videti kot 91 % samo zato, ker nadomestne
+prevoze šteje zraven.** Teh je 56 v voznem redu in imajo v petnajstih dneh
+zajema **nič** meritev — feed zanje ne poroča.
+
+Avtobusi so 31. 8. pri 63,1 %, ker je bil zajem takrat še v vzponu; od 1. 9.
+naprej so nad 95 %.
+
+## Model po omrežjih (4. 9. 2026)
+
+`kajros backtest`, izpuščanje enega dne. Železnica 15 dni in **521 781**
+nalog, avtobusi 7 dni in **6 004 849**.
+
+| model | železnica MAE | v 5 min | avtobusi MAE | v 5 min |
+|---|---|---|---|---|
+| **rezerva+razred (v uporabi)** | **2,06** | 90,0 % | 2,98 | 93,0 % |
+| združen | 2,07 | 89,6 % | **2,85** | **93,6 %** |
+| odsek+razred | 2,36 | 87,5 % | 2,89 | 93,4 % |
+| rezerva+mediana | **2,00** | **90,5 %** | 3,16 | 92,4 % |
+| prenos | 3,04 | 82,3 % | 3,38 | 91,0 % |
+
+Zgodovino ima 88 % železniških voženj (82 % vsaj tri dni) in 77 % avtobusnih
+(47 %). Razlaga in kaj iz tega sledi: `.claude/rules/model.md`.
+
 ## Razdalje med postajami
 
 `stop_times.txt` nima `shape_dist_traveled`. Postaje projiciramo na polilinijo
