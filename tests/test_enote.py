@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from kajros import ocena, stats, weather
+from kajros import journey, ocena, stats, weather
 from kajros.alerts import parse_delay_text
 from kajros.collector import (_delay_of, is_forecast, is_zero_blip,
                                resolve_service_date, worth_logging)
@@ -569,3 +569,64 @@ def test_omejen_ostanek_spostuje_podane_parametre():
     """Backtest meri druge meje; funkcija jih mora sprejeti."""
     assert stats._omejen_ostanek(3000, 0, omeji_s=900) == 900
     assert stats._omejen_ostanek(3000, 600, omeji_s=0, omeji_delez=2.0) == 1200
+
+
+# ------------------------------------------------------- razred trenutne zamude
+
+def test_razred_zamude_ima_vkljucujoce_spodnje_meje():
+    """Okrevanje pri +1 in pri +40 min ni isto, zato razredi.
+
+    Meje `DELAY_BUCKETS` so (120, 600, 1800) in veljajo od spodaj navzgor:
+    120 s je že razred 1, ne še 0.
+    """
+    assert stats.DELAY_BUCKETS == (120, 600, 1800)
+    assert stats.delay_bucket(119) == 0
+    assert stats.delay_bucket(120) == 1
+    assert stats.delay_bucket(599) == 1
+    assert stats.delay_bucket(600) == 2
+    assert stats.delay_bucket(1799) == 2
+    assert stats.delay_bucket(1800) == 3
+    assert stats.delay_bucket(99999) == 3
+
+
+def test_prezgodnja_voznja_je_v_najnizjem_razredu():
+    """Prezgoden avtobus nima zamude, ki bi jo nadoknadil."""
+    assert stats.delay_bucket(-3000) == 0
+    assert stats.delay_bucket(0) == 0
+
+
+def test_backtest_uporablja_isto_delitev_kot_prikaz():
+    """Sicer bi merili en model in uporabljali drugega — razlika, ki je
+    meritev ne bi pokazala."""
+    from kajros import backtest
+    assert all(stats.delay_bucket(s) == backtest._bucket(s)
+               for s in range(-600, 3600, 7))
+
+
+# --------------------------------------------------------------- čas in datumi
+
+def test_now_seconds_je_sekunda_od_polnoci():
+    t = datetime(2026, 9, 4, 7, 30, 15, tzinfo=ZoneInfo("Europe/Ljubljana"))
+    assert journey.now_seconds(t) == 7 * 3600 + 30 * 60 + 15
+    assert journey.now_seconds(t.replace(hour=0, minute=0, second=0)) == 0
+
+
+def test_today_in_yesterday_sta_lokalna_dneva():
+    t = datetime(2026, 9, 4, 0, 5, tzinfo=ZoneInfo("Europe/Ljubljana"))
+    assert journey.today(t) == "2026-09-04"
+    assert journey.yesterday(t) == "2026-09-03"
+
+
+# ------------------------------------------------------------- vremenska celica
+
+def test_cell_key_je_stabilen_in_na_mrezi():
+    """Postaja mora vedno pasti v isto celico; mreža je 0,1 stopinje (~8 km)."""
+    assert weather.cell_key(46.058, 14.510) == weather.cell_key(46.058, 14.510)
+    assert weather.cell_key(46.058, 14.510) == "46.1,14.5"
+    # Sosednji točki znotraj iste celice dasta isti ključ.
+    assert weather.cell_key(46.07, 14.52) == weather.cell_key(46.08, 14.53)
+
+
+def test_cell_key_nikoli_ne_vrne_negativne_nicle():
+    """'-0.0' in '0.0' bi bila dva ključa za isto celico."""
+    assert "-0.0" not in weather.cell_key(-0.02, -0.02)
