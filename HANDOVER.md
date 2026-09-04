@@ -217,6 +217,8 @@ vrsticami `run`** (365 dni vseh prevoznikov, 5,9 GB):
 | živi seznam, železnica | 504 ms | 20 ms |
 | vstopna stran | 340 ms | 29 ms |
 | odhodna tabla, prestopi, iskanje | že v redu | 46–145 ms |
+| odhodna tabla (znova, 4. 9. 2026) | 145 ms | **15 ms** |
+| `/api/health` (znova, 4. 9. 2026) | 1223 ms | **80 ms** |
 
 Trije popravki, vsak z lastnim vzrokom:
 
@@ -228,6 +230,11 @@ Trije popravki, vsak z lastnim vzrokom:
 2. **Voznoredni okvir vožnje je stolpec** (`trip.start_s` / `trip.end_s`),
    ne grupiranje 403 000 vrstic `sched` ob vsakem klicu. Vožnje, ki se zdaj
    ne morejo voziti, s tem sploh ne pridejo do okenskih funkcij.
+
+   **Isti vzorec je 4. 9. 2026 dobil še dve rabi**, ker je bil isti agregat
+   še dvakrat v zahtevi: `trip.first_seq` / `last_seq` za odhodno tablo
+   (120 → 7 ms) in predpomnjenje `/api/health` (1223 → 80 ms). Pravilo je
+   splošno: **agregat, ki se med zahtevami ne spremeni, ne sodi v zahtevo.**
 3. **Manjkal je indeks `trip(route_id)`.** Vsako obvestilo o oviri je bilo
    poln pregled 20 736 voženj.
 
@@ -240,12 +247,19 @@ se opoldne še vozil, in na zemljevidu ni imel kaj iskati.
 
 ## Odprto
 
-* **Dostop od zunaj** — Tailscale ali Cloudflare Tunnel.
-  **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije.**
+* **Dostop od zunaj — odločeno: samo Cloudflare.** Domena `kajros.app` je
+  registrirana 3. 9. 2026. Tailscale Funnel odpade, ker zna samo `*.ts.net`;
+  isti imenovani tunel zmore tudi ssh prek brskalnika (za Accessom), zato
+  drugo orodje ni potrebno. Čaka na prestavitev imenskih strežnikov na
+  Cloudflarove. **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije**
+  — je pa samo za branje (v `api.py` ni poti razen `GET`).
 * **Malina.** Na njej je smiselno `KAJROS_AGENCIES=1118` (SŽ + LPP, vrh 86 MB);
   vseh agencij Pi Zero W s 427 MB ne prenese (vrh 217 MB). Na tem prenosniku
   tečejo vse.
 * **Napoved bo boljša šele z več zajema.** Kar se je dalo iztisniti iz devetih
   dni, je iztisnjeno in izmerjeno. Naslednji korak rabi mesece, ne trikov.
+  Prvi merljiv premik je že tu: pri **avtobusih** je model `združen` boljši od
+  sedanjega (2,85 proti 2,98 MAE), ker ima zdaj zgodovino 77 % voženj namesto
+  11 %. Zamenjava čaka na dva tedna sence, ne na trik.
 * **Vzročnost vremena.** Vreme se zaenkrat samo *pokaže ob* zamudi. Trditve o
   vzroku počakajo na 2–3 mesece zajema, kot je bilo dogovorjeno.
