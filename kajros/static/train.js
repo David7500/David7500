@@ -172,7 +172,21 @@ function notStartedText() {
     return `${vehicleNoun()} se še ni odpeljal — po voznem redu ob
             <strong>${hhmm(iso)}</strong>`;
   }
+  // Za NADOMESTNI prevoz SZ beseda "se" laze: feed zanje ne poroca nikoli.
+  // Izmerjeno 4. 9. 2026: 56 nadomestnih voznj v voznem redu, **0 meritev**
+  // v petnajstih dneh zajema, medtem ko je pri pravih vlakih pokritost 99,5 %.
+  // Potnik, ki caka na stevilko, caka zaman -- in prav to mu je treba povedati.
+  if (jeNadomestni()) {
+    return `za nadomestni prevoz feed <strong>ne poroča zamud</strong> —
+            velja vozni red`;
+  }
   return `za ${vehicleWord()} na ta dan še ni nobene meritve`;
+}
+
+// Nadomestni prevoz SZ: `mode = bus`, a `network = zeleznica`. Na tej relaciji
+// zamenjuje vlak, zato sodi med vlake -- podatkov v realnem casu pa nima.
+function jeNadomestni() {
+  return isBus(state.mode) && state.network === "zeleznica";
 }
 
 function runHeadHtml(cur) {

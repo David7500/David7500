@@ -122,6 +122,16 @@ Streženo je z isto predlogo, a naslov ne sme lagati — `/app/train/25` za
 mestno linijo 25 je napačen naslov, ki ga bo nekdo delil naprej, zato ga
 strežnik pogleda v `trip.network` in preusmeri (307).
 
+**Za nadomestni prevoz SŽ feed ne poroča zamud — nikoli.** Izmerjeno
+4. 9. 2026: 56 voženj `BUS …` v voznem redu, **0 meritev** v petnajstih dneh,
+medtem ko je pri pravih vlakih pokritost **99,5 %** (601 voženj v voznem redu,
+598 zajetih). Skupna železniška pokritost je videti kot 91 % samo zato, ker
+nadomestne prevoze šteje zraven.
+
+Zato okno vožnje pove „feed **ne poroča zamud** — velja vozni red“, ne
+„še ni nobene meritve“. Beseda **„še“** obljublja številko, ki ne pride, in
+potnik čaka zaman. Pravilo je v `train.jeNadomestni()`.
+
 **Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila so dela na progi, zapore
 tira in nadomestni prevozi SŽ; za avtobuse takih obvestil ni in povezava tja
 bi obljubljala podatek, ki zanje ne obstaja.
