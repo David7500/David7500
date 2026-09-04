@@ -219,32 +219,49 @@ def bus_trip_page(request: Request, train_no: str, trip: str | None = None):
 @app.get("/api/health")
 def api_health():
     """Stanje zajema. Po ponovnem zagonu gostitelja preveri prav to --
-    če `runs_recorded` pade nazaj na 0, disk ne preživi zagona."""
-    with _conn() as conn:
-        row = conn.execute(
-            "SELECT (SELECT COUNT(*) FROM trip) AS trips,"
-            "       (SELECT COUNT(*) FROM station) AS stations,"
-            "       (SELECT COUNT(*) FROM obs) AS observations,"
-            "       (SELECT COUNT(*) FROM run) AS runs_recorded,"
-            "       (SELECT COUNT(DISTINCT service_date) FROM run) AS days_covered,"
-            "       (SELECT MAX(feed_ts) FROM run) AS last_feed_ts"
-        ).fetchone()
-        out = dict(row)
-        # Po omrežjih: skupna številka ne pove, ali je odpadel zajem vlakov ali
-        # avtobusov, in prav to je tisto, kar hoče nadzor vedeti.
-        out["by_network"] = {
-            r["network"]: {"trips": r["trips"], "runs": r["runs"],
-                           "last_feed_ts": r["last_feed_ts"]}
-            for r in conn.execute(
-                "SELECT t.network, COUNT(DISTINCT t.trip_id) AS trips,"
-                "       COUNT(r.trip_id) AS runs, MAX(r.feed_ts) AS last_feed_ts "
-                "FROM trip t LEFT JOIN run r USING (trip_id) GROUP BY t.network"
-            )
-        }
-        out["vehicles_with_gps"] = conn.execute(
-            "SELECT COUNT(*) FROM vehicle_now").fetchone()[0]
-        out["alerts_active"] = conn.execute(
-            "SELECT COUNT(*) FROM alert WHERE kind='ovira' AND lang='sl'").fetchone()[0]
+    če `runs_recorded` pade nazaj na 0, disk ne preživi zagona.
+
+    **Predpomnjeno za minuto, ker to ni poceni.** Izmerjeno 4. 9. 2026 na
+    828 000 vrsticah `run` in 3,9 mio `obs`: 1 223 ms na klic, od tega 926 ms
+    razrez po omrežjih (`run JOIN trip`), 170 ms `COUNT(*) obs` in 105 ms
+    `MAX(feed_ts)`. Prepis razreza v dve poizvedbi da isti izid in ni hitrejši
+    (980 ms) -- cena je sam pregled `run`, ne `COUNT(DISTINCT)`.
+
+    Ceno plača vsak odprt zavihek: `connections.js` kliče ta endpoint vsakih
+    30 s za zeleno piko ob feedu. Brez predpomnilnika je to sekunda dela z
+    bazo na zavihek na pol minute, na istem disku, kjer piše zajem.
+
+    Minuta zastarelosti je pri tem nedolžna: feed se bere vsakih 30 s, zato
+    "je zajem živ" nima boljše ločljivosti od tega niti v načelu.
+    """
+    return _predpomni("health", None, 60, lambda: _conn_klic(_health_izracun))
+
+
+def _health_izracun(conn):
+    row = conn.execute(
+        "SELECT (SELECT COUNT(*) FROM trip) AS trips,"
+        "       (SELECT COUNT(*) FROM station) AS stations,"
+        "       (SELECT COUNT(*) FROM obs) AS observations,"
+        "       (SELECT COUNT(*) FROM run) AS runs_recorded,"
+        "       (SELECT COUNT(DISTINCT service_date) FROM run) AS days_covered,"
+        "       (SELECT MAX(feed_ts) FROM run) AS last_feed_ts"
+    ).fetchone()
+    out = dict(row)
+    # Po omrežjih: skupna številka ne pove, ali je odpadel zajem vlakov ali
+    # avtobusov, in prav to je tisto, kar hoče nadzor vedeti.
+    out["by_network"] = {
+        r["network"]: {"trips": r["trips"], "runs": r["runs"],
+                       "last_feed_ts": r["last_feed_ts"]}
+        for r in conn.execute(
+            "SELECT t.network, COUNT(DISTINCT t.trip_id) AS trips,"
+            "       COUNT(r.trip_id) AS runs, MAX(r.feed_ts) AS last_feed_ts "
+            "FROM trip t LEFT JOIN run r USING (trip_id) GROUP BY t.network"
+        )
+    }
+    out["vehicles_with_gps"] = conn.execute(
+        "SELECT COUNT(*) FROM vehicle_now").fetchone()[0]
+    out["alerts_active"] = conn.execute(
+        "SELECT COUNT(*) FROM alert WHERE kind='ovira' AND lang='sl'").fetchone()[0]
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
     out["db_path"] = str(path)
