@@ -38,15 +38,27 @@ Prikaz je prej to vrednost postavljal pred lastno oceno. Zdaj je obratno.
 
 ### 2. Naš model je že blizu najboljšemu, kar ti podatki dajo
 
-`kajros backtest`, 258 137 nalog, izpuščanje enega dne:
+`kajros backtest`, izpuščanje enega dne. **Železnica, 4. 9. 2026: 521 781
+nalog** (prej 258 137):
 
 | model | MAE | v 5 min |
 |---|---|---|
-| prenos (referenca) | 2,91 min | 82,8 % |
-| **vlak (v uporabi)** | **2,00 min** | **90,3 %** |
-| odsek | 2,22 min | 88,1 % |
-| odsek + razred zamude | 2,26 min | 87,8 % |
-| združen (krčenje) | 1,98 min | 89,6 % |
+| prenos (referenca) | 3,04 min | 82,3 % |
+| **rezerva + razred (v uporabi)** | **2,06 min** | **90,0 %** |
+| rezerva + mediana | 2,00 min | 90,5 % |
+| vlak | 2,07 min | 90,0 % |
+| združen (krčenje) | 2,07 min | 89,6 % |
+| odsek + razred zamude | 2,36 min | 87,5 % |
+| odsek | 2,37 min | 87,4 % |
+
+**Tu je prej pisalo, da je v uporabi model „vlak“ — to ni držalo.**
+`stats.predict()` kliče `_after_slack()` in `delay_bucket()`, torej
+**rezerva + razred**. Razlaga, kako je do tega prišlo in kaj je bilo
+preizkušeno brez uspeha, je v `.claude/rules/model.md`.
+
+**Pri avtobusih je slika druga**: tam je `združen` boljši od sedanjega
+(2,85 proti 2,98 MAE na 6 004 849 nalogah). Zamenjava čaka na dva tedna
+sence — glej `docs/MERITVE.md`.
 
 Združevanje po odseku model **poslabša** — na istem tiru se IC in lokalni
 vlak ne obnašata enako. Združen model prihrani 1 % MAE in izgubi pri deležu
