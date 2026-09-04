@@ -41,8 +41,16 @@ Zgodovino ima 88 % železniških voženj (82 % vsaj tri dni) in 77 % avtobusnih
 
 `stop_times.txt` nima `shape_dist_traveled`. Postaje projiciramo na polilinijo
 iz `shapes.txt`, razlika kumulativnih razdalj je dolžina odseka, mediana čez
-vse vlake. Rezultat: 267 postaj, 389 odsekov (275 elementarnih), **1253,8 km**
-elementarne mreže — ujema se z realno slovensko mrežo.
+vse vlake.
+
+**4. 9. 2026:** 271 postaj, 389 odsekov (268 elementarnih), **1140,8 km**
+elementarne mreže. Slovensko železniško omrežje meri ~1209 km, del pa je brez
+potniškega prometa — izračun je torej v pravem redu velikosti.
+
+**Prej je tu pisalo 267 postaj, 275 elementarnih in 1253,8 km.** Številka se z
+regeneracijo voznega reda premakne in nova je resničnosti celo bližja od
+stare. Kdor jo navaja, naj jo pomeri znova; kdor jo primerja s prejšnjo, naj
+ve, da se je spremenil vozni red, ne mreža.
 
 `elementary = 0` so "preskoki" hitrih vlakov čez vmesne postaje: za risanje
 mreže filtriraj `elementary = 1`, za hitrosti uporabi odsek, ki ustreza
