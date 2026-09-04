@@ -951,8 +951,13 @@ async function searchBoard(push) {
   if (!station) return;
   remember({ tab: "board", station, date, kind, from });
   if (push) {
+    // Ura se v naslovu imenuje `ob` in NE `from`. `from` je na tej strani že
+    // izhodiščna postaja iskanja A–B, in `restore()` ga tako tudi bere: naslov
+    // table z uro je zato v polje "OD" vpisal "08:00". Vidno ni bilo takoj --
+    // odprla se je tabla -- pokazalo pa se je ob preklopu na zavihek Od–do.
+    // Eno ime, en pomen; `/api/departures` ostane pri svojem `from`.
     const q = new URLSearchParams({ station, date, kind });
-    if (from) q.set("from", from);
+    if (from) q.set("ob", from);
     history.replaceState(null, "", `?${q}`);
   }
 
@@ -1117,13 +1122,15 @@ function restore() {
   const wasBoard = saved && saved.kind === "board";
 
   const station = q.get("station") || (wasBoard ? saved.station : "");
+  // `from` je tu SAMO izhodiščna postaja. Ura na tabli je `ob` -- glej
+  // `searchBoard()`. Dokler sta bila isto ime, je naslov table vpisal uro sem.
   const from = q.get("from") || (saved && saved.from) || "";
   const to = q.get("to") || (saved && saved.to) || "";
 
   $("date").value = q.get("date") || todayIso();
   $("board-date").value = q.get("date") || todayIso();
   setBoardKind(q.get("kind") || (wasBoard && saved.dir) || "odhodi");
-  $("board-time").value = q.get("from") || "";
+  $("board-time").value = q.get("ob") || "";
   $("from").value = from;
   $("to").value = to;
   $("station").value = station;

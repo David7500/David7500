@@ -133,6 +133,16 @@ zemljevidu). Doslej je bila trenutna stran samo izpuščena iz seznama povezav
 in razlika ni bila vidna nikjer — kdor je na `/app/bus` iskal „Ljubljana",
 je dobil postajališče LPP in ni razumel, zakaj.
 
+**Eno ime v naslovu, en pomen.** Ura na odhodni tabli je `ob`, ne `from`:
+`from` je na isti strani že izhodiščna postaja iskanja A–B in `restore()` ga
+tako tudi bere. Dokler sta bila isto ime, je deljena povezava na tablo z uro
+(`?station=Ljubljana&from=08:00`, ki jo je tvorila sama aplikacija) vpisala
+**„08:00“ v polje OD**. Vidno ni bilo takoj, ker se je odprla tabla — pokazalo
+se je šele ob preklopu na zavihek Od–do. `/api/departures` ostane pri svojem
+`from`; dvoumnost je bila v naslovu strani, ne v API-ju.
+
+Ista družina kot pravilo o mešanju `?` in `:ime` v SQL: ena reža, dva pomena.
+
 **Iskanje na vstopni strani sproži samo gumb.** Izbira postaje iz predlogov
 ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib pa je
 zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
