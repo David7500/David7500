@@ -117,19 +117,29 @@ prevoznik:
 
 | | |
 |---|---|
-| Postaje | 271 (267 železniških + 4 postajališča nadomestnih prevozov) |
-| Odseki | 389, od tega 275 elementarnih |
-| Elementarna mreža | 1253,8 km (realna slovenska mreža ~1200–1300) |
-| Vožnje v voznem redu | 733 vlakov + 56 nadomestnih prevozov |
-| Zajeto (lokalno, 2026-08-29) | 69205 meritev, 9 obratovalnih dni, 661 poročil prevoznika |
-| Uvoz GTFS | 17 s, vrh 54 MB (pretočno branje `shapes.txt`) |
-| Strežnik ob zagonu | 57–60 MB RSS |
-| Odziv `/api/*` | vse pod 120 ms; `/api/overview` je najpočasnejši |
-| Priložena baza | 1,9 MB |
+Stanje **4. 9. 2026** (prejšnje vrednosti so bile z 29. 8. in so se
+premaknile — številke se starajo, zato ob vsaki spremembi popravi datum):
 
-`trip_id` so med regeneracijami GTFS **stabilni** — po ponovnem uvozu se
-vseh 60 409 zajetih meritev še vedno ujema s tripom. Zajema torej ni treba
-varovati pred `kajros update`.
+| Postaje (železniška mreža) | 271 |
+| Odseki | 389, od tega **268** elementarnih |
+| Elementarna mreža | **1140,8 km** (slovensko omrežje ~1209 km, del brez potniškega prometa) |
+| Vožnje v voznem redu | 733 vlakov + 56 nadomestnih + **20 061 avtobusnih** |
+| Zajeto (lokalno) | **916 452** meritev, 16 obratovalnih dni, 31 863 poročil prevoznika |
+| Uvoz GTFS | 17 s, vrh 54 MB (pretočno branje `shapes.txt`) |
+| Strežnik | ~215 MB RSS z avtobusi (57–60 MB pri sami železnici) |
+| Odziv `/api/*` | `health` 80 ms, `departures` 15 ms, `live` 5 ms, `connections` 40 ms |
+| Priložena baza | **4,2 MB** (železniška; z avtobusi bi bila 53 MB, torej več od GTFS zipa) |
+
+**Prej je tu pisalo „vse pod 120 ms“ in to ni držalo:** `/api/health` je delal
+1223 ms na klic, `/api/departures` 145 in `/api/live` 245. Vse troje je
+popravljeno 4. 9. 2026 — glej `docs/MERITVE.md`, razdelek o hitrosti.
+
+`trip_id` so med regeneracijami GTFS **stabilni, a ne vsi.** Ob prehodu na
+šolski vozni red 1. 9. 2026 je iz `trip` izginilo **114 voženj s 3 043
+meritvami** (0,37 %); meritve so ostale, a jih ni videla nobena poizvedba, ker
+vse gredo skozi `JOIN trip`. Uvoz zato zdaj **obdrži vožnjo, ki ima meritve**,
+`kajros merge` jo prinese s seboj in `kajros repair` prešteje osirotele.
+Podrobneje v `CLAUDE.md`.
 
 ## Objava
 
