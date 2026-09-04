@@ -103,12 +103,20 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
 
     n_alerts = n_entities = n_reports = n_changed = 0
 
+    vec_obdobij = 0
     for entity in feed.entity:
         a = entity.alert
         kind = _kind(entity.id)
         header, lang = _pick(a.header_text)
         desc, _ = _pick(a.description_text)
         url, _ = _pick(a.url)
+        # GTFS-RT dopusca VEC locenih obdobij ("29.-30. avgusta in 7. septembra").
+        # Mi hranimo eno, ker jih feed danes tako posilja: izmerjeno 4. 9. 2026
+        # na zivem viru -- vseh 102 obvestil ima natanko eno obdobje. Ce se to
+        # kdaj spremeni, bi tiho obveljalo prvo in obvestilo bi bilo prikazano
+        # z napacno veljavnostjo; zato raje povemo, kot da bi molce skrajsali.
+        if len(a.active_period) > 1:
+            vec_obdobij += 1
         period = a.active_period[0] if a.active_period else None
 
         known = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
@@ -173,8 +181,12 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
         n_changed += 1
 
     conn.commit()
-    return {"alerts": n_alerts, "entities": n_entities,
+    izid = {"alerts": n_alerts, "entities": n_entities,
             "delay_reports": n_reports, "changed": n_changed}
+    # Samo kadar se zgodi -- v izpisu zajema naj ne stoji vsakih 60 s nicla.
+    if vec_obdobij:
+        izid["vec_obdobij"] = vec_obdobij
+    return izid
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:
