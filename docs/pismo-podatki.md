@@ -139,3 +139,25 @@ odstavku prosi za preusmeritev**, ne šele na koncu.
   pri SŽ. Vprašaj oba in to v pismu povej.
 * Če odgovorijo „podatka ni“, je to **odgovor**: gre v `CLAUDE.md` med stvari,
   ki jih ne bo, enako kot cene in zasedenost.
+
+
+## Poslano DUJPP-u in SŽ (4. 9. 2026)
+
+Obe pismi sta v `docs/pisma/`; sledita se kot niti **#6** (DUJPP) in **#7**
+(SŽ) v `~/Dokumenti/Razno/mailbot`.
+
+**Skrajšani sta bili namenoma** — 282 in 226 besed proti 480 pri prvem pismu.
+Uradna pisarna prebere kratko pismo; dolgo posreduje naprej in tam umre.
+Krajšati naprej bi pomenilo vreči ven izmerjene številke, in prav te ločijo
+prošnjo od pritožbe, zato se je krajšanje ustavilo tam.
+
+**Podpis je ostal „Odprti vozni red“**, isti kot pri NAP-u, čeprav projekt
+zdaj ima ime in domeno. Razlog: DUJPP dobi tudi NAP-ovo preposlano sporočilo
+in dve imeni istega pošiljatelja sta zmeda. Preimenovanje v **kajros** je
+ločena odločitev in sodi v trenutek, ko bo `kajros.app` živ — takrat ima ime
+kam pokazati.
+
+**Pri SŽ vemo, da naslov morda ni pravi.** `potnik.info@` je za potniška
+vprašanja; zato pismo za preusmeritev prosi **v prvem odstavku**, ne na koncu.
+Če odgovora ne bo v dveh tednih, je naslednji korak telefon (01 2912402) ali
+DUJPP kot posrednik — ne ugibanje drugega e-naslova.

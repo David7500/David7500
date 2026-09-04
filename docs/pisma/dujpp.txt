@@ -1,0 +1,41 @@
+Spoštovani,
+
+Nacionalni center za upravljanje prometa nam je 3. 9. 2026 odgovoril, da je
+lastnik podatkov GTFS za javni potniški promet vaša družba in da vam naše
+pripombe posreduje. Ker ne vemo, ali so prišle, jih pošiljamo še neposredno.
+
+Vaše odprte podatke uporabljamo za prostovoljni projekt, ki potniku pove,
+kdaj mu pelje in koliko zamuja. Redno so osveženi in to je za nas bistveno -
+hvala, da so sploh odprti.
+
+Manjkata dve stvari in obe zadeneta potnika neposredno.
+
+1. PERON OZIROMA TIR. V stops.txt ni polja platform_code in ni hierarhije
+parent_station / location_type. Potnik, ki ve, da vlak zamuja osem minut,
+vpraša naslednje: kje ga čakam. Na zaslonih na peronu podatek obstaja, v
+odprtih podatkih pa ne.
+
+2. ODPOVEDI. V podatkih v realnem času je schedule_relationship vedno
+SCHEDULED - izmerjeno 2. 9. 2026 na 5 135 postankih v 319 vožnjah, brez
+izjeme. Odpoved je zapisana le kot prosto besedilo v obvestilu, česar
+računalnik ne more zanesljivo prebrati. Za potnika je razlika med zamudo in
+odpovedjo največja, ki obstaja: zamuda pomeni čakanje, odpoved drugo pot.
+Standard GTFS-RT za to polje ima, le izpolnjeno ni.
+
+Ker so pri vas in pri SŽ v teku aktivnosti za uradno objavo podatkov v
+realnem času, je to morda pravi trenutek, da se odpovedi vključijo že v
+zasnovo.
+
+Manjše, izmerjeno na ijpp_gtfs.zip dne 2. 9. 2026: route_long_name je prazen
+pri vseh 2 571 progah; shape_dist_traveled v stop_times.txt ni; direction_id
+ni.
+
+Zanima nas, ali je kaj od tega mogoče dodati. Če katerega podatka v izvornih
+sistemih ni, nam je koristno vedeti tudi to - potem vsaj vemo, da ga ni
+smiselno čakati.
+
+Hvala za odgovor.
+
+Lep pozdrav,
+Odprti vozni red - prostovoljni projekt za prikaz zamud javnega prevoza
+kekec@eclipso.eu
