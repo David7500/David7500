@@ -7,9 +7,13 @@ zajema, naj se preveri hitro. Poizvedbe nad shemo so v `test_poizvedbe.py`.
 """
 from __future__ import annotations
 
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
 from kajros import ocena, weather
 from kajros.alerts import parse_delay_text
-from kajros.collector import _delay_of, is_zero_blip, worth_logging
+from kajros.collector import (_delay_of, is_forecast, is_zero_blip,
+                               worth_logging)
 from kajros.journey import _fold
 
 
@@ -345,3 +349,73 @@ def test_vozilo_zamudi_precenitev_in_ne_podcenitev():
     precenili = ocena._strosek([(20 * 60, resnica)], "zeleznica")
     assert podcenili < razmik / 60          # samo čakanje
     assert precenili == razmik / 60         # zamujeno vozilo
+
+
+# --------------------------------------------- meja med meritvijo in napovedjo
+
+def _prev(delay_s, feed_ts):
+    """Vrstica `run`, kot jo vidi `is_forecast`."""
+    return {"delay_dep": delay_s, "delay_arr": None, "feed_ts": feed_ts}
+
+
+def _ob(service_date, ura, minuta):
+    """Absolutni čas na dani obratovalni dan, v sekundah od epohe."""
+    d = date.fromisoformat(service_date)
+    return datetime(d.year, d.month, d.day, ura, minuta,
+                    tzinfo=ZoneInfo("Europe/Ljubljana")).timestamp()
+
+
+def test_vrednost_iz_prihodnosti_je_napoved():
+    """Feed za vožnjo, ki se ni odpeljala, objavi zamudo prejšnje vožnje.
+
+    Izmerjeni primer iz `collector.is_forecast`: LPP 25 je za postanek z
+    voznim redom 11:41 že ob 11:11 objavljal +8 min. Vrednost, ki ob svojem
+    nastanku postanek postavlja v PRIHODNOST, ni meritev.
+    """
+    dan = "2026-08-30"
+    sched = (None, 11 * 3600 + 41 * 60)          # (arr_s, dep_s) -> 11:41
+    # objavljeno ob 11:11 s +8 min: 11:41 + 8 = 11:49 je takrat še v prihodnosti
+    assert is_forecast(_prev(8 * 60, _ob(dan, 11, 11)), sched, dan) is True
+
+
+def test_vrednost_iz_preteklosti_je_meritev():
+    """Ista vrstica, objavljena po tem, ko je vozilo tam že bilo."""
+    dan = "2026-08-30"
+    sched = (None, 11 * 3600 + 41 * 60)
+    # objavljeno ob 11:55, postanek s +8 je bil ob 11:49 -> že mimo
+    assert is_forecast(_prev(8 * 60, _ob(dan, 11, 55)), sched, dan) is False
+
+
+def test_brez_prejsnje_vrstice_ni_napoved():
+    """Merilo potrebuje čas nastanka; brez njega ne trdimo ničesar."""
+    dan = "2026-08-30"
+    sched = (None, 11 * 3600 + 41 * 60)
+    assert is_forecast(None, sched, dan) is False
+    assert is_forecast(_prev(60, None), sched, dan) is False
+    assert is_forecast(_prev(None, _ob(dan, 11, 11)), sched, dan) is False
+
+
+def test_brez_voznega_reda_ni_napoved():
+    """Postanek brez voznorednega časa: merila ni na kaj postaviti."""
+    assert is_forecast(_prev(60, _ob("2026-08-30", 11, 11)), None, "2026-08-30") is False
+    assert is_forecast(_prev(60, _ob("2026-08-30", 11, 11)), (None, None), "2026-08-30") is False
+
+
+def test_merilo_nima_prostih_parametrov():
+    """Meja je natanko voznoredni čas + zamuda proti času objave.
+
+    Brez praga: minuto pred to mejo je napoved, minuto za njo meritev.
+    """
+    dan = "2026-08-30"
+    sched = (None, 12 * 3600)                     # 12:00
+    zamuda = 5 * 60                               # postanek pade na 12:05
+    assert is_forecast(_prev(zamuda, _ob(dan, 12, 4)), sched, dan) is True
+    assert is_forecast(_prev(zamuda, _ob(dan, 12, 6)), sched, dan) is False
+
+
+def test_prihodna_vrednost_se_uporabi_ko_odhodne_ni():
+    """`COALESCE(delay_dep, delay_arr)` — odhod ima prednost, prihod je rezerva."""
+    dan = "2026-08-30"
+    sched = (11 * 3600 + 41 * 60, None)           # samo arr_s
+    p = {"delay_dep": None, "delay_arr": 8 * 60, "feed_ts": _ob(dan, 11, 11)}
+    assert is_forecast(p, sched, dan) is True
