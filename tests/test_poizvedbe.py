@@ -1312,3 +1312,48 @@ def test_merge_ne_povozi_novejsega_voznega_reda(tmp_path, conn):
     db.merge_from(conn, vir)
     r = conn.execute("SELECT train_no, network FROM trip WHERE trip_id='t1'").fetchone()
     assert r["train_no"] == "IC 1" and r["network"] == "zeleznica"
+
+
+def test_seme_ne_prilaga_meritev(tmp_path, conn):
+    """Seme je vozni red, ne zajem.
+
+    Seznam praznjenih tabel je bil ročen in je zaostal: seme je prilagalo
+    `napoved` (5,4 MB sence meritev) in `povzetek`, ker sta tabeli nastali
+    kasneje. Zdaj se izprazni vse, kar ni v `STATIC_TABLES`.
+    """
+    ocena.init(conn)          # `napoved` nastane tu, ne v `db.init()`
+    _vozba(conn, "t1", _pred(1), [(2, 120)])
+    conn.execute("INSERT INTO napoved(trip_id, service_date, stop_seq, network,"
+                 " made_ts, horizon_s, from_seq, ours_s)"
+                 " VALUES('t1', ?, 2, 'zeleznica', 1, 1500, 1, 60)", (_pred(1),))
+    conn.execute("INSERT INTO meta(key, value) VALUES('rt_fetched','123')")
+    conn.execute("INSERT INTO meta(key, value) VALUES('rt_etag','abc')")
+    conn.commit()
+
+    cilj = tmp_path / "seme.sqlite"
+    db.build_seed(conn, cilj)
+
+    s = db.connect(cilj)
+    assert s.execute("SELECT COUNT(*) FROM run").fetchone()[0] == 0
+    assert s.execute("SELECT COUNT(*) FROM napoved").fetchone()[0] == 0
+    assert s.execute("SELECT COUNT(*) FROM obs").fetchone()[0] == 0
+    # Vozni red mora ostati.
+    assert s.execute("SELECT COUNT(*) FROM trip").fetchone()[0] > 0
+    # Stanje tega stroja ne sme z njim.
+    kljuci = {r[0] for r in s.execute("SELECT key FROM meta")}
+    assert "rt_fetched" not in kljuci and "rt_etag" not in kljuci
+
+
+def test_seme_privzeto_le_zeleznica(tmp_path, conn):
+    """Z avtobusi je seme 53 MB — več od GTFS zipa (41 MB), ki bi ga
+    namestitev sicer prenesla. Seme, dražje od tega, čemur se izogiba, nima
+    smisla."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign,"
+                 " service_id, mode, network)"
+                 " VALUES('bus1','r','3G','A - B','S1','bus','avtobus')")
+    conn.commit()
+    cilj = tmp_path / "seme.sqlite"
+    db.build_seed(conn, cilj)
+    s = db.connect(cilj)
+    assert s.execute("SELECT COUNT(*) FROM trip WHERE network='avtobus'").fetchone()[0] == 0
+    assert s.execute("SELECT COUNT(*) FROM trip WHERE network='zeleznica'").fetchone()[0] > 0

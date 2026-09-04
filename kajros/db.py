@@ -516,10 +516,14 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
 
 # Tabele, ki jih prinese GTFS zip. Vse ostalo je zajem in v priloženo bazo
 # ne sodi -- namestitev dobi vozni red, zgodovino pa si posname sama.
-STATIC_TABLES = ("station", "edge", "trip", "sched", "service_day")
+# Kar sodi v seme: vozni red in mreza. `shape` je zraven, ker je trasa del
+# staticne slike -- a se v semenu obreze na izbrano omrezje (12,3 MB tras je
+# vecinoma avtobusnih).
+STATIC_TABLES = ("station", "edge", "trip", "sched", "service_day", "shape")
 
 
-def build_seed(conn: sqlite3.Connection, target: Path) -> dict:
+def build_seed(conn: sqlite3.Connection, target: Path,
+               network: str | None = "zeleznica") -> dict:
     """Zgradi priloženo bazo za namestitev: samo vozni red, brez zajema.
 
     Zakaj sploh obstaja: uvoz iz GTFS zipa pomeni 43 MB prenosa in nekaj minut
@@ -529,6 +533,13 @@ def build_seed(conn: sqlite3.Connection, target: Path) -> dict:
 
     Kopira se s `.backup` in nato izprazni zajem, ne obratno: tako je rezultat
     zagotovo iste sheme kot delujoča baza.
+
+    **Privzeto samo železnica, in to je izmerjeno.** Z avtobusi vred je seme
+    53 MB -- torej vec od samega GTFS zipa (41 MB), ki bi ga namestitev sicer
+    prenesla. Seme, ki je drazje od tega, cemur se izogiba, nima smisla.
+    Zeleznisko je 1,9 MB. Avtobusi so izbirni (`KAJROS_AGENCIES`) in tako ali
+    tako sprozijo ponovni uvoz voznega reda, ker jih v semenu ni.
+    `network=None` zgradi vse -- za stroj, ki seme dobi drugace kot po zipu.
     """
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -539,14 +550,39 @@ def build_seed(conn: sqlite3.Connection, target: Path) -> dict:
     conn.backup(dst)
     dst.row_factory = sqlite3.Row
     with dst:
-        for table in ("obs", "run", "weather", "alert", "alert_entity", "delay_report"):
-            try:
-                dst.execute(f"DELETE FROM {table}")
-            except sqlite3.OperationalError:
-                pass        # starejsa baza te tabele nima
+        # Izprazni VSE, kar ni statika -- ne le nasteto. Prejsnji seznam je bil
+        # rocen in je zaostal: seme je prilagalo `napoved` (5,4 MB sence
+        # meritev) in `povzetek`, ker sta tabeli nastali kasneje. Kar se doda
+        # jutri, bo tu pravilno obravnavano brez popravka.
+        vse = [r[0] for r in dst.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%'")]
+        for table in vse:
+            if table in STATIC_TABLES or table == "meta":
+                continue
+            dst.execute(f"DELETE FROM {table}")
         # ETagi so vezani na vsebino, ki je ne prilagamo -- ce ostanejo, prva
         # osvezitev dobi 304 in namestitev obtici na tem voznem redu.
-        dst.execute("DELETE FROM meta WHERE key LIKE '%etag%' OR key LIKE '%last_modified%'")
+        # ETagi in casi zadnjega zajema: oboje je stanje TEGA stroja, ne vozni
+        # red. `gtfs_imported_at` ostane -- pove, iz kdaj je prilozeni red.
+        dst.execute("DELETE FROM meta WHERE key LIKE '%etag%' "
+                    "OR key LIKE '%last_modified%' OR key LIKE '%_fetched'")
+
+        if network:
+            # Vrstni red je pomemben: najprej odvisne tabele, sele nato `trip`.
+            # `station` pustimo pri miru -- postajalisce brez voznje ne skodi
+            # in brisanje bi zahtevalo se `edge` in `shape`.
+            dst.execute("DELETE FROM sched WHERE trip_id IN "
+                        "(SELECT trip_id FROM trip WHERE network != ?)", (network,))
+            dst.execute("DELETE FROM service_day WHERE service_id NOT IN "
+                        "(SELECT service_id FROM trip WHERE network = ?)", (network,))
+            dst.execute("DELETE FROM trip WHERE network != ?", (network,))
+            # Trase in postaje, ki jih po tem ne rabi nihce. Brez tega je seme
+            # 21 MB namesto 2 -- vecina tras je avtobusnih.
+            dst.execute("DELETE FROM shape WHERE shape_id NOT IN "
+                        "(SELECT shape_id FROM trip WHERE shape_id IS NOT NULL)")
+            dst.execute("DELETE FROM station WHERE stop_id NOT IN "
+                        "(SELECT stop_id FROM sched)")
     counts = {t: dst.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in STATIC_TABLES}
     dst.execute("VACUUM")
     dst.close()

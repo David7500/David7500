@@ -219,7 +219,9 @@ def cmd_summarize(args):
 def cmd_seed(args):
     conn = db.connect()
     db.init(conn)
-    print(json.dumps(db.build_seed(conn, Path(args.out)), indent=2, ensure_ascii=False))
+    omr = None if args.network == "vse" else args.network
+    print(json.dumps(db.build_seed(conn, Path(args.out), omr),
+                     indent=2, ensure_ascii=False))
 
 
 def cmd_repair(args):
@@ -356,6 +358,10 @@ def main(argv=None):
 
     a = sub.add_parser("seed", help="zgradi prilozeno bazo za namestitev (samo vozni red)")
     a.add_argument("--out", default="seed/kajros.sqlite")
+    # Z avtobusi je seme 53 MB, torej vec od samega GTFS zipa (41 MB), ki bi ga
+    # namestitev sicer prenesla -- glej `db.build_seed`.
+    a.add_argument("--network", default="zeleznica",
+                   help="katero omrezje naj bo v semenu; 'vse' za vsa")
     a.set_defaults(func=cmd_seed)
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
