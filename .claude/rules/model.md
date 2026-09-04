@@ -404,6 +404,17 @@ prezgodaj in čaka razliko. Precenimo — vozilo mu odpelje pred nosom in čaka
 **40 min pri avtobusih** (razmik z iste postaje v isto smer po `headsign`,
 06–20). Zato ima `kajros ocena` poleg MAE še stolpca `precenj.` in `strošek`.
 
+**`RAZMIK_S` je vreden ponovne meritve, a ne na slepo.** Neodvisna poizvedba
+4. 9. 2026 da pri železnici **mediano 80 min na 4 969 razmikih** in 64 % nad
+uro, zapisano pa je 87 min na 5 205 in 66 %; pri avtobusih 39 min proti 40.
+Razlika je 8 % pri železnici.
+
+Konstante **nisem spremenil**, ker ne vem, ali je vzrok premaknjen vozni red
+ali to, da moja poizvedba ni ista kot izvirna (razmik po `headsign` se da
+šteti na več načinov). Preden jo kdo popravi, naj obe poizvedbi postavi eno
+ob drugo — sicer se v mero vgradi razlika med dvema izračunoma, ne sprememba
+sveta. Mera `strošek` je od te konstante linearno odvisna.
+
 **Številke ne zamikamo navzdol, čeprav je videti, da bi se izplačalo.** Če
 vsako oceno znižamo za `k` minut, pade strošek s 27,9 na 10,1 min pri `k = 5`.
 A model predpostavlja, da potnik pride natanko ob prikazani minuti. Če ima
