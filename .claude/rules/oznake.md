@@ -67,6 +67,11 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
   pa se prelomi pri −30 s: −45 s je zato izpisalo golo **„−1"** namesto
   „1 min prej". Pravilo je zdaj v `common.isEarly()` in ga uporabljata okno
   vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
+* **Isto velja za prestop.** Preostanek pod ničlo je pisalo `-1 min za
+  prestop`; zdaj **„zmanjka 1 min“**. Negativna številka je natanko primer,
+  ko zveza NE drži — torej tisti, kjer mora potnik razumeti brez ugibanja.
+  Ničla ni „0 min za prestop“ (videti kot podatek), ampak **„brez rezerve“**.
+  Pravilo je v `connections.prestopText()`.
 * **Kar se na zaslonu sešteva, zaokroži enkrat in potem računaj.** Preostali
   čas za prestop je bil `round(dejansko_s)`, poleg njega pa `round(načrtovano_s)`
   in `round(zamuda_s)` — vsaka številka zaokrožena prav, skupaj pa

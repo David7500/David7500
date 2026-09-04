@@ -355,6 +355,17 @@ function preostaliPrestop(tr, plannedS) {
   return Math.round(plannedS / 60) - Math.round(tr.delay1_s / 60);
 }
 
+// "-1 min za prestop" je uganka, beseda ni -- isto pravilo kot pri prezgodnji
+// voznji, kjer pise "5 min prej" in ne "-5". Tu je se pomembnejse: negativna
+// stevilka je natanko primer, ko zveza NE drzi, in prav takrat mora potnik
+// razumeti brez ugibanja. Nic minut ni "0 min za prestop" -- to je videti kot
+// podatek, pomeni pa, da rezerve ni nic.
+function prestopText(mins) {
+  if (mins < 0) return `zmanjka ${Math.abs(mins)} min`;
+  if (mins === 0) return "brez rezerve";
+  return `${mins} min za prestop`;
+}
+
 function transferBadgeHtml(tr, plannedS) {
   if (!tr) return '<span class="tag">1 prestop</span>';
   const st = TRANSFER_STYLE[tr.status] || TRANSFER_STYLE["brez podatka"];
@@ -364,14 +375,13 @@ function transferBadgeHtml(tr, plannedS) {
     </span>
     <div class="conn-where">${tr.status === "brez podatka"
       ? `${Math.round(plannedS / 60)} min za prestop`
-      : `${mins} min za prestop · ${escapeHtml(tr.source)}`}</div>`;
+      : `${prestopText(mins)} · ${escapeHtml(tr.source)}`}</div>`;
 }
 
 function transferRowHtml(t, nowMs, date, odKod) {
   const tr = t.transfer;
   const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
   const planned = Math.round(t.wait_s / 60);
-  const actual = tr && tr.wait_s != null ? preostaliPrestop(tr, t.wait_s) : null;
   // Pot ima lahko dve nogi (en prestop) ali stiri (trije prestopi) -- prikaz
   // ne sme predpostavljati dveh. Prestop se izpise ZA vsako nogo razen zadnje.
   const count = t.transfers != null ? t.transfers : t.legs.length - 1;
