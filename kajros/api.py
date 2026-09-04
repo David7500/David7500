@@ -970,9 +970,13 @@ WITH t AS (
       -- ovrednoti enkrat, da 3 551 voznj cez polnoc, in `run` se potem
       -- pobira po svojem prvotnem kljucu. Merjeno na letu zajema, obe
       -- omrezji: 392 ms -> 65 ms.
+      --
+      -- `trip.end_s` in ne `MAX(COALESCE(arr_s, dep_s))` cez `sched`: to je
+      -- natanko ista vrednost (`db.fill_trip_window` jo tako racuna), le da
+      -- je ze shranjena. Preverjeno, da data isto mnozico 3 551 voznj;
+      -- 98,4 ms -> 5,1 ms. Isti vzorec kot `first_seq` pri odhodni tabli.
       AND (:overnight_only = 0 OR r.trip_id IN (
-            SELECT x.trip_id FROM sched x GROUP BY x.trip_id
-            HAVING MAX(COALESCE(x.arr_s, x.dep_s)) > 86400 - :max_delay))
+            SELECT trip_id FROM trip WHERE end_s > 86400 - :max_delay))
 ),
 -- Feed za se nedosezene postanke pogosto objavi niclo, dokler nima prave
 -- napovedi. Brez tega bi tak zapis pomenil, da je (voznored + 0) ze minil,
