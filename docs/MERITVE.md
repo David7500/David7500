@@ -3,6 +3,24 @@
 Številke, ki niso pravilo, ampak stanje: koliko je zajetega, koliko stane,
 kako hitro teče. Se starajo — ob vsaki spremembi popravi datum.
 
+## Hitrost odgovorov (4. 9. 2026)
+
+Merjeno na razvojnem računalniku pri 832 000 vrsticah `run` in 6,3 mio `obs`,
+z ogretim predpomnilnikom:
+
+| endpoint | prej | zdaj | kaj je bilo narobe |
+|---|---|---|---|
+| `/api/health` | 1223 ms | **80 ms** | `COUNT(*)` čez `obs` in razrez `run JOIN trip` ob vsakem klicu; stran ga kliče vsakih 30 s |
+| `/api/live?network=zeleznica` | 245 ms | **5 ms** | predpomnilnik se razveljavi ob vsakem zajemu, torej z isto periodo, kot ga zemljevid vprašuje |
+| `/api/departures?station=…` | 145 ms | **15 ms** | `MIN/MAX(stop_seq) GROUP BY trip_id` čez 403 208 vrstic `sched` ob vsaki zahtevi |
+| `/api/connections` | 87 ms | 40 ms | — (najtežja poizvedba je 25 ms, prostora ni veliko) |
+| `/api/stations/search` | 53 ms | 56 ms | — |
+
+Vzorec vseh treh popravkov je isti: **agregat, ki se med zahtevami ne
+spremeni, se ne sme računati v zahtevi.** Dvakrat je odgovor statika voznega
+reda (shrani se ob uvozu), enkrat pa delo, ki ga lahko opravi zajemna nit
+vnaprej.
+
 ## Pokritost zajema (4. 9. 2026)
 
 Koliko voženj iz voznega reda dejansko vidimo v realnem času:
