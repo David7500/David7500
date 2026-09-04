@@ -116,7 +116,17 @@ To ni pedantnost — če se tega ne držimo, aplikacija laže.
 
 ## Dostop
 
-Doma je API na `http://<ip-pija>:8000` in za razvoj to zadošča. Ko bo prikaz
-rabil dostop od zunaj: Tailscale (zasebno) ali Cloudflare Tunnel (javno, s
-HTTPS). **Vrat na usmerjevalniku ne odpiraj — API nima avtentikacije.**
-CORS je odprt za vse izvore, kar je namerno, da frontend lahko teče drugje.
+Doma je API na `http://<ip>:8000` in za razvoj to zadošča. Od zunaj je
+odločeno: **imenovani Cloudflarov tunel** na domeni `kajros.app`. Tailscale
+Funnel odpade, ker zna samo `*.ts.net`; isti tunel zmore tudi ssh prek
+brskalnika (za Accessom), zato drugo orodje ni potrebno.
+
+**Vrat na usmerjevalniku ne odpiraj — API nima avtentikacije.** Je pa samo
+za branje: v `api.py` ni nobene poti razen `GET` in nobenega pisanja v bazo
+iz zahteve. CORS je odprt za vse izvore, kar je namerno, da prikaz lahko
+teče drugje.
+
+**Odgovori so predpomnjeni tam, kjer se med zahtevami ne spremenijo.** Kdor
+piše svoj prikaz, naj ve, da so `/api/health` (60 s), `/api/live`,
+`/api/overview` in razrezi statistike predpomnjeni; glava `X-Osvezi-Cez` pri
+legah pove, čez koliko sekund je smiselno vprašati znova.
