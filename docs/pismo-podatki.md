@@ -89,6 +89,42 @@ vrnil prikritega. Namesto ugibanja pismo NAP vpraša, **na koga pri SŽ naj se
 obrnemo** — če odgovorijo, gre drugo pismo na pravega človeka in ne na splošni
 naslov.
 
+## Odgovor NAP-a (3. 9. 2026)
+
+Odgovoril je **Matej Vovk, vodja NCUP**, naslednje jutro. Vljudno, a vsebinsko
+brez odgovora na obe vprašanji:
+
+* „GTFS-RT podatki na NAP zaenkrat še niso na voljo. Na DUJPP in SŽ so v teku
+  aktivnosti, ki bodo omogočile dostop tudi do teh podatkov.“
+* **„Podatke, ki jih ustvarja DERP, ne moremo komentirat.“** — torej prav za
+  feed, ki ga uporabljamo, ni sogovornika.
+* „Ostale komentarje posredujemo DUJPP, ki je lastnik obstoječih podatkov
+  GTFS.“
+
+**Na vprašanje, na koga pri SŽ naj se obrnemo, ni odgovoril.** Dvoje pa je
+odgovor: lastnik GTFS je **DUJPP**, in uradni RT nastaja (torej DERP-ov feed
+ni večen).
+
+## Naslova, preverjena pri viru (3. 9. 2026)
+
+Oba sta iz poslovnega registra (bizi.si), ne iz ugibanja po vzorcu
+`ime.priimek@`:
+
+| kdo | e-naslov | naslov |
+|---|---|---|
+| DUJPP d.o.o. | `gp@dujpp.si` | Reška cesta 2, 6230 Postojna |
+| SŽ-Potniški promet d.o.o. | `potnik.info@slo-zeleznice.si` | Kolodvorska 11, 1000 Ljubljana |
+
+Dujppova lastna stran ima **samo obrazec in telefon** (080 45 77), e-naslova
+ne objavlja; `gp@` je glavna pisarna. `sz.si` je še vedno 403 (Cloudflare),
+zato je tudi ta naslov iz registra.
+
+**Slabost, ki jo je treba vedeti:** `potnik.info@` je naslov za **potniška**
+vprašanja, ne za podatke. Vprašanje o `platform_code` tam najbrž ne pristane
+na pravi mizi. Boljšega preverljivega ni — in ugibati `gp@slo-zeleznice.si`
+je natanko to, čemur se je prvo pismo izognilo. Zato naj pismo SŽ **v prvem
+odstavku prosi za preusmeritev**, ne šele na koncu.
+
 ## Zapiski k pošiljanju (ne pošiljaj tega dela)
 
 * **„Odprti vozni red“ je vstavljeno ime — zamenjaj ga ali preveri.** Preden
