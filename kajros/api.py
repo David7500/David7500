@@ -282,8 +282,11 @@ def _health_stevci(conn):
         "       COUNT(DISTINCT service_date) AS dni FROM napoved").fetchone()
     out["senca"] = {"dni": sen["dni"], "od": sen["od"], "do": sen["do_"],
                     "vrstic": sen["vseh"], "razresenih": sen["razresenih"]}
-    out["alerts_active"] = conn.execute(
-        "SELECT COUNT(*) FROM alert WHERE kind='ovira' AND lang='sl'").fetchone()[0]
+    # Ista funkcija kot pri `/api/alerts` in `overview.disruptions` -- sicer
+    # ime laze. Prej je bilo tu `COUNT(*) FROM alert WHERE kind='ovira'`, kar
+    # steje VSE shranjene ovire, ne le veljavnih: 62 proti 16. Tri mesta, dve
+    # stevilki, ista beseda.
+    out["alerts_active"] = alerts.active_count(conn)
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
     out["db_path"] = str(path)

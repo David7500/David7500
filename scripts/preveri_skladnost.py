@@ -100,12 +100,28 @@ def prestop_brez_minusa():
     return None
 
 
+def ovire_povsod_isto():
+    """Ista beseda mora povsod pomeniti isto število.
+
+    `health.alerts_active` je štel VSE shranjene ovire, ne le veljavnih:
+    62 proti 16, ki jih kaže stran. Tri mesta, dve številki.
+    """
+    al = json.load(urllib.request.urlopen(f"{BASE}/api/alerts", timeout=20))
+    n = len(al if isinstance(al, list) else al.get("alerts", []))
+    ov = json.load(urllib.request.urlopen(f"{BASE}/api/overview", timeout=20))["disruptions"]
+    he = json.load(urllib.request.urlopen(f"{BASE}/api/health", timeout=20))["alerts_active"]
+    if not (n == ov == he):
+        return f"/api/alerts {n}, overview {ov}, health {he}"
+    return None
+
+
 for opis, fn in (
     ("brez osirotelih meritev", brez_sirot),
     ("delež točnih = vsota razredov", vsota_razredov),
     ("razred zamude po zaokroženi minuti", razred_po_minuti),
     ("health je hiter (pod 200 ms)", health_je_hiter),
     ("prestop pod ničlo z besedo", prestop_brez_minusa),
+    ("ovire povsod ista številka", ovire_povsod_isto),
 ):
     preveri(opis, fn)
 
