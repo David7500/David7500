@@ -81,6 +81,20 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   staro obliko, stran bi novo polje izpustila in videti bi bilo, kot da
   sprememba ne dela. Točno to se je zgodilo pri `median_s`.
 
+**Predlogi poti so ločeni po omrežju in izračunani, ne ugibani.** Avtobusna
+stran jih doslej ni imela nobene — bila je prazen obrazec brez izhodišča —
+železniški seznam pa tja ne sodi, ker se „Ljubljana“ na avtobusnem omrežju
+razreši drugam. Avtobusnih šest je **šest najpogostejših relacij po številu
+voženj** v zajetem voznem redu (4. 9. 2026): Grosuplje ↔ Ljubljana Železna
+194×, Ljubljana AP → Kamnik 189×, → Škofja Loka 186×, → Kranj AP 129×,
+→ Vrhnika Voljčeva 118×. Preverjeno je, da se vsa imena razrešijo z
+`resolve_station()` in da predlog res da rezultat (Ljubljana AP → Kamnik:
+84 neposrednih).
+
+Žetone riše `popularChipsHtml()`, poslušalca pripne `wirePopularChips()` —
+oboje skupno. Prej je bil poslušalec pripet samo v železniški veji, zato
+avtobusna žetonov ne bi imela, tudi če bi jih izrisala.
+
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker sta dve
 vprašanji: `kajros:fav` je „to je moja pot" in ga človek pove sam (zvezdica),
 `kajros:recent` je „tu sem pravkar bil" in se napiše sam (šest zadnjih).

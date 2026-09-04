@@ -608,7 +608,15 @@ function renderBoard(data) {
 // Brez tega je prva stran prazen obrazec. "Kako vozijo vlaki danes" je pri
 // prometni aplikaciji enako pogosto vprasanje kot vprasanje o svoji poti.
 
-const POPULAR = [
+// Predlogi poti. Loceno po omrezju: avtobusna stran je doslej ni imela nobene
+// in je bila prazen obrazec brez izhodisca -- zelezniski seznam pa tja ne sodi,
+// ker se "Ljubljana" na avtobusnem omrezju razresi drugam.
+//
+// Avtobusni pari NISO ugibani: to je sest najpogostejsih relacij po stevilu
+// voznj v zajetem voznem redu (izmerjeno 4. 9. 2026, npr. Ljubljana AP ->
+// Kamnik 189, -> Skofja Loka 186, Grosuplje -> Ljubljana Zelezna 194).
+// Preverjeno je tudi, da se vsa imena razresijo z `resolve_station`.
+const POPULAR_RAIL = [
   ["Ljubljana", "Maribor"],
   ["Ljubljana", "Koper"],
   ["Ljubljana", "Jesenice"],
@@ -616,6 +624,17 @@ const POPULAR = [
   ["Maribor", "Murska Sobota"],
   ["Celje", "Ljubljana"],
 ];
+
+const POPULAR_BUS = [
+  ["Ljubljana AP", "Kamnik"],
+  ["Ljubljana AP", "Škofja Loka"],
+  ["Ljubljana AP", "Kranj AP"],
+  ["Ljubljana AP", "Vrhnika Voljčeva"],
+  ["Grosuplje", "Ljubljana Železna"],
+  ["Kamnik", "Ljubljana AP"],
+];
+
+const POPULAR = IS_BUS ? POPULAR_BUS : POPULAR_RAIL;
 
 function bucketBarHtml(b, total) {
   const order = [["točno", 60], ["1–5 min", 300], ["5–15 min", 900], ["nad 15 min", 1800]];
@@ -640,10 +659,7 @@ function overviewHtml(o) {
 
   return `
     <section class="overview">
-      <div class="chips chips-top">
-        ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
-            data-from="${escapeHtml(a)}" data-to="${escapeHtml(b)}">${escapeHtml(a)} → ${escapeHtml(b)}</button>`).join("")}
-      </div>
+      ${popularChipsHtml()}
 
       <div class="ov-head">
         <h2>Kako vozijo vlaki</h2>
@@ -676,9 +692,33 @@ function overviewHtml(o) {
 // Avtobusni pregled govori o SEDANJOSTI, ne o zgodovini: zajem je nov in
 // vsaka številka o preteklosti bi obljubljala več, kot ve. Zato koliko jih
 // vozi, koliko jih ima GPS in kako hitro se premikajo -- to o njih res vemo.
+/** Žetoni priljubljenih poti. Isti na obeh omrežjih, le vsebina je druga. */
+function popularChipsHtml() {
+  return `<div class="chips chips-top">
+      ${POPULAR.map(([a, b]) => `<button type="button" class="route-chip"
+          data-from="${escapeHtml(a)}" data-to="${escapeHtml(b)}">${escapeHtml(a)} → ${escapeHtml(b)}</button>`).join("")}
+    </div>`;
+}
+
+/** Klik na žeton izpolni obrazec in išče. Doslej je bilo to vezano samo na
+ *  železniško vejo, zato avtobusna žetonov ne bi imela, tudi če bi jih
+ *  izrisala. */
+function wirePopularChips() {
+  resultsEl.querySelectorAll(".route-chip").forEach((b) => {
+    b.addEventListener("click", () => {
+      setTab("ab");
+      $("from").value = b.dataset.from;
+      $("to").value = b.dataset.to;
+      paintAllClears();
+      searchAB(true);
+    });
+  });
+}
+
 function busOverviewHtml(o) {
   return `
     <section class="overview">
+      ${popularChipsHtml()}
       <div class="ov-head">
         <h2>Kako vozijo avtobusi</h2>
         <span class="ov-sub">${o.live_vehicles} zdaj na poti</span>
@@ -707,6 +747,7 @@ async function showOverview() {
     try {
       const o = await fetch("/api/overview/bus").then((r) => r.json());
       resultsEl.innerHTML = busOverviewHtml(o);
+      wirePopularChips();
     } catch (err) {
       resultsEl.innerHTML = '<div class="empty-state">Vpiši postajališče ali izhodišče in cilj.</div>';
     }
@@ -715,15 +756,7 @@ async function showOverview() {
   try {
     const o = await fetch("/api/overview").then((r) => r.json());
     resultsEl.innerHTML = overviewHtml(o);
-    resultsEl.querySelectorAll(".route-chip").forEach((b) => {
-      b.addEventListener("click", () => {
-        setTab("ab");
-        $("from").value = b.dataset.from;
-        $("to").value = b.dataset.to;
-        paintAllClears();
-        searchAB(true);
-      });
-    });
+    wirePopularChips();
   } catch (err) {
     resultsEl.innerHTML = '<div class="empty-state">Vpiši izhodišče in cilj ali izberi postajo.</div>';
   }
