@@ -162,3 +162,28 @@ za `kajros.service` ter `kajros-backup.timer`.
 baza `/var/lib/sztrack/sz.sqlite`, 368 MB); `kajros.service` in
 `kajros-zajem.service` sta neaktivna. Preimenovalni deploy na njej še ni bil
 pognan in selitev v `install-rpi.sh` še čaka.
+
+
+## Dve orodji, dve nalogi
+
+Tailscale ni odpadel — izgubil je samo **serviranje** domene, ker zna le
+`*.ts.net`. Za **dosego strojev od zunaj** (ssh s telefona) ostaja pravo
+orodje in vrat na usmerjevalniku ne odpira.
+
+| naloga | orodje |
+|---|---|
+| javno streči `kajros.app` | imenovani Cloudflarov tunel |
+| priti do strojev za upravljanje | Tailscale (`--ssh`), **brez Funnela** |
+
+Skripti na prenosniku (`/home/david/`), narejeni za rabo s telefona — en ukaz,
+eno geslo:
+
+* `posodobi.sh` — namesti kodo iz `~/kajros` in preveri `/api/health`.
+  Kodo tja osveži razvojni računalnik z `rsync`; skript izpiše, kateri commit
+  nameša, da se stara koda ne namesti tiho.
+* `nastavi-dostop.sh` — namesti Tailscale in ga prijavi.
+
+**Kaj se da od zunaj in kaj ne.** Prestavitev imenskih strežnikov je spletni
+obrazec in ne rabi domačega omrežja. Vse, kar rabi `sudo` na strojih, rabi
+pot do njih — dokler Tailscala ni, to pomeni biti doma. To je bil 4. 9. 2026
+razlog, da je namestitev čakala.
