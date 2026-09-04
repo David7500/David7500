@@ -322,6 +322,23 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         days = _service_days(zf, {t["service_id"] for t in trips.values()})
 
     with conn:
+        # Voznja, ki ima MERITVE, mora prezivati uvoz tudi takrat, ko je nov
+        # vozni red nima. Brez tega jo `DELETE FROM trip` osiroti: `run` in
+        # `obs` ostaneta, a vsaka poizvedba gre skozi `JOIN trip` (omrezje je
+        # tam), zato je od tedaj ne vidi nihce -- niti statistika niti okno
+        # voznje. Tiho, brez napake.
+        #
+        # Izmerjeno 4. 9. 2026: tako je izginilo 114 voznj s 3 043 meritvami
+        # (0,37 % vseh), vse ob prehodu na solski vozni red 1. 9. To hkrati
+        # pomeni, da trditev "trip_id so med regeneracijami stabilni" drzi za
+        # veliko vecino, ne pa za vse.
+        #
+        # Nagrobnik nima ne `sched` ne `service_day`, zato v iskanju, na tabli
+        # in med "danes vozi" ne nastopi -- vidi ga samo zgodovina, kamor sodi.
+        nagrobniki = [dict(r) for r in conn.execute(
+            "SELECT t.* FROM trip t "
+            "WHERE EXISTS (SELECT 1 FROM run r WHERE r.trip_id = t.trip_id)")]
+
         for table in ("station", "edge", "trip", "sched", "service_day", "shape"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany(
@@ -359,6 +376,18 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
                 for tid, t in trips.items()
             ],
         )
+        # Vrni tiste z meritvami, ki jih nov vozni red nima. `INSERT OR IGNORE`,
+        # ker je velika vecina ze vstavljena zgoraj -- vrnemo samo razliko.
+        vrnjenih = 0
+        for t in nagrobniki:
+            if t["trip_id"] in trips:
+                continue
+            stolpci = ",".join(t)
+            conn.execute(
+                f"INSERT OR IGNORE INTO trip({stolpci}) "
+                f"VALUES({','.join('?' * len(t))})", tuple(t.values()))
+            vrnjenih += 1
+
         conn.executemany(
             "INSERT INTO sched(trip_id,stop_seq,stop_id,arr_s,dep_s) VALUES(?,?,?,?,?)", sched_rows
         )
@@ -372,6 +401,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
 
     return {
         "stations": len(stops), "edges": len(edges),
+        # Koliko voznj je prezivelo uvoz samo zato, ker imajo meritve. Ce je
+        # to veliko, se je vozni red mocno premesal in je vredno pogledati.
+        "trips_obdrzanih": vrnjenih,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),

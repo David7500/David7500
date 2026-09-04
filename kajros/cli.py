@@ -225,7 +225,21 @@ def cmd_seed(args):
 def cmd_repair(args):
     conn = db.connect()
     db.init(conn)
-    print(json.dumps(collector.rebuild_run(conn), indent=2, ensure_ascii=False))
+    izid = collector.rebuild_run(conn)
+    # Meritev brez svoje voznje je nevidna, ne izgubljena -- a ucinek je isti:
+    # vsaka poizvedba gre skozi `JOIN trip`, ker je omrezje tam. Nastane, kadar
+    # uvoz voznega reda izbrise voznjo, ki ima meritve. Pove se tu, ker je to
+    # ukaz za "popravi podatke"; ceni ga je poln pregled `run`, zato ne sodi
+    # v vsako zahtevo.
+    sirote = conn.execute(
+        "SELECT COUNT(*) FROM run r LEFT JOIN trip t USING (trip_id) "
+        "WHERE t.trip_id IS NULL").fetchone()[0]
+    izid["osirotelih_meritev"] = sirote
+    if sirote:
+        izid["kako_popraviti"] = (
+            "prilij bazo s stroja, ki ima starejsi vozni red "
+            "(`kajros merge`) -- ta vrne tudi voznje z meritvami")
+    print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
 def cmd_alerts(args):

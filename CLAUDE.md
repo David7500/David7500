@@ -153,9 +153,13 @@ tripom in za združevanje neuporaben — zgodovino gradi po `train_no` **znotraj
 `trip_id`**. Parnost številke nosi smer. Predpona (`LP`, `LPV`, `IC`, `MV`,
 `EN` …) je vrsta vlaka; `BUS …` je nadomestni prevoz.
 
-**`trip_id` so med regeneracijami GTFS stabilni** — preverjeno ob uvozu novega
-voznega reda (vseh 60 409 meritev se je še ujemalo). Zajema pred `kajros
-update` ni treba varovati.
+**`trip_id` so med regeneracijami GTFS stabilni — a ne vsi.** Ob prehodu na
+šolski vozni red 1. 9. 2026 je iz `trip` izginilo **114 voženj s 3 043
+meritvami** (0,37 %). Meritve so ostale, a jih ni videla nobena poizvedba: vse
+gredo skozi `JOIN trip`, ker je omrežje tam. Zato uvoz zdaj **obdrži vožnjo,
+ki ima meritve**, tudi če je nov vozni red nima (`gtfs.py`, „nagrobnik“ brez
+`sched`), `kajros merge` pa take vožnje prinese s seboj. `kajros repair`
+prešteje osirotele meritve.
 
 ## Strani
 

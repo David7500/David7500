@@ -447,6 +447,32 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
                     "  fetched_at = excluded.fetched_at "
                     "WHERE excluded.source = 'archive' OR weather.source = excluded.source"
                 )
+            # VOZNJE, ki jih tu ni, a imajo v viru meritve.
+            #
+            # Brez tega prilitje pripelje meritve, njihove identitete pa ne:
+            # `run` dobi vrstice za `trip_id`, ki ga v `trip` ni, in ker gre
+            # vsaka poizvedba skozi `JOIN trip` (omrezje je tam), teh meritev
+            # od tedaj ne vidi nihce. Tiho, brez napake.
+            #
+            # Tako je nastalo 114 osirotelih voznj s 3 043 meritvami: uvoz
+            # novega voznega reda jih je izbrisal iz `trip`, prilitje z maline
+            # pa je vrnilo samo meritve. Izmerjeno 4. 9. 2026.
+            #
+            # `INSERT OR IGNORE`: kar ze imamo, je iz novejsega voznega reda in
+            # ostane. Pogoj EXISTS pa poskrbi, da ne vlecemo celega starega
+            # voznega reda -- samo tisto, kar nosi meritve.
+            if _has(conn, "trip", "train_no", "network", "mode"):
+                conn.execute(
+                    "INSERT OR IGNORE INTO trip"
+                    "(trip_id, route_id, train_no, headsign, service_id, color,"
+                    " mode, agency, network, start_s, end_s, block_id, shape_id) "
+                    "SELECT t.trip_id, t.route_id, t.train_no, t.headsign, t.service_id,"
+                    "       t.color, t.mode, t.agency, t.network, t.start_s, t.end_s,"
+                    "       t.block_id, t.shape_id "
+                    "FROM src.trip t "
+                    "WHERE EXISTS (SELECT 1 FROM src.run r WHERE r.trip_id = t.trip_id)"
+                )
+
             # Obvestila in porocila o zamudi: starejsa baza teh tabel nima.
             if _has(conn, "alert", "kind", "cause", "effect", "lang"):
                 conn.execute(

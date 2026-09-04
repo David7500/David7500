@@ -1258,3 +1258,57 @@ def test_delez_tocnih_se_ujame_z_vsoto_razredov(conn):
     v_pragu = razredi["točno"] + razredi["1–5 min"]
     assert v_pragu == 2
     assert d["on_time_share"] == round(v_pragu / 3, 3)
+
+
+# ------------------------------------------------------- prilivanje iz druge baze
+
+def test_merge_prinese_tudi_voznje_z_meritvami(tmp_path, conn):
+    """Meritev brez svoje vožnje je nevidna, ne izgubljena — a to je isto.
+
+    Vsaka poizvedba gre skozi `JOIN trip`, ker je omrežje tam. Če prilitje
+    prinese `run`, njegove vožnje pa ne, teh meritev od tedaj ne vidi nihče
+    in nihče tega ne opazi. Tako je nastalo 114 osirotelih voženj s 3 043
+    meritvami (4. 9. 2026): uvoz novega voznega reda jih je izbrisal iz
+    `trip`, prilitje z maline pa je vrnilo samo meritve.
+    """
+    vir = tmp_path / "vir.sqlite"
+    v = db.connect(vir)
+    db.init(v)
+    v.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              " mode, network) VALUES('tX','rX','LP 9','A - B','S1','vlak','zeleznica')")
+    v.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+              " feed_ts) VALUES('tX', ?, 2, 120, 120, 999)", (_pred(1),))
+    # Vožnja BREZ meritev se ne sme priliti -- sicer bi vlekli cel star vozni red.
+    v.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              " mode, network) VALUES('tPrazna','rX','LP 8','A - B','S1','vlak','zeleznica')")
+    v.commit()
+    v.close()
+
+    db.merge_from(conn, vir)
+
+    assert conn.execute("SELECT COUNT(*) FROM trip WHERE trip_id='tX'").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM trip WHERE trip_id='tPrazna'").fetchone()[0] == 0
+    sirote = conn.execute("SELECT COUNT(*) FROM run r LEFT JOIN trip t USING(trip_id)"
+                          " WHERE t.trip_id IS NULL").fetchone()[0]
+    assert sirote == 0
+
+
+def test_merge_ne_povozi_novejsega_voznega_reda(tmp_path, conn):
+    """Kar že imamo, je iz novejšega voznega reda in ostane.
+
+    `INSERT OR IGNORE`, ne `REPLACE`: sicer bi prilitje s stroja s starejšim
+    voznim redom vrnilo stara imena in omrežja.
+    """
+    vir = tmp_path / "vir.sqlite"
+    v = db.connect(vir)
+    db.init(v)
+    v.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              " mode, network) VALUES('t1','staro','STARO IME','X','S1','vlak','avtobus')")
+    v.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+              " feed_ts) VALUES('t1', ?, 2, 60, 60, 999)", (_pred(1),))
+    v.commit()
+    v.close()
+
+    db.merge_from(conn, vir)
+    r = conn.execute("SELECT train_no, network FROM trip WHERE trip_id='t1'").fetchone()
+    assert r["train_no"] == "IC 1" and r["network"] == "zeleznica"
