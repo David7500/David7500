@@ -21,9 +21,44 @@ from . import alerts, collector, config, db, gtfs, ocena, stats, weather
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
 
+#: Ali ta proces tudi strezhe. Postavi ga `lifespan` v `api.py`.
+#:
+#: Zajemna zanka je ISTA za streznik in za `kajros collect` -- torej tudi za
+#: malino, ki samo polni bazo. Ogrevanje predpomnilnika odgovorov tam ne sme
+#: teci: Pi Zero W je pri istem poslu ~100x pocasnejsi in bi si z ~1 s dela
+#: na obhod podrl ritem zajema. Isti razlog, zakaj je tam ugasnjena `ocena`.
+_strezemo = False
+
 
 def _log(msg: str) -> None:
     print(f"{datetime.now(TZ):%H:%M:%S}  {msg}", flush=True)
+
+
+def _ogrej_zive() -> None:
+    """Po novem feedu izracunaj `/api/live` vnaprej, da nihce ne caka nanj.
+
+    Predpomnilnik tega odgovora je vezan na `rt_fetched`, ki se spremeni ob
+    vsakem zajemu -- torej vsakih 30 s. Zemljevid anketira z isto periodo, zato
+    je doslej skoraj vsak njegov klic padel v prazen predpomnilnik in placal
+    **1,3 s** (izmerjeno 4. 9. 2026: 822 ms avtobusi, 200 ms zeleznica, 802 ms
+    oboje skupaj). Toplo pa je 19 ms.
+    
+    Dela je enako, le da ga opravi ta nit takoj po zajemu in ne uporabnik med
+    cakanjem. Napaka tu ni kriticna -- odgovor se izracuna ob zahtevi kot prej.
+    """
+    if not _strezemo:
+        return                   # `kajros collect`: odgovorov ni komu streci
+    from . import api            # pozen uvoz: `api` uvozi `server`, ne obratno
+    # Samo tisto, kar strani res vprasajo. Zemljevid klice
+    # `/api/live?network=zeleznica`, pregled isto; `network=None` je 802 ms
+    # dela za odgovor, ki ga aplikacija ne uporablja -- ogrevati ga pomeni
+    # zamikati koristna dva.
+    for omrezje in ("zeleznica", "avtobus"):
+        try:
+            api._live(omrezje)
+        except Exception as exc:  # noqa: BLE001
+            _log(f"predpomnilnika živih voženj ni bilo mogoče ogreti: {exc}")
+            return
 
 
 def bootstrap() -> None:
@@ -141,6 +176,11 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 info = collector.poll_once(conn)
                 if info.get("changed"):
                     _log(f"zajem: {info['trips']} vlakov, {info['changed']} sprememb")
+                # Ogrejemo po VSAKEM uspesnem zajemu, ne le ob spremembi:
+                # znacka predpomnilnika je `rt_fetched`, ta pa se osvezi tudi
+                # takrat, ko feed ni prinesel nicesar novega. Kadar se znacka
+                # ni premaknila, je to 19 ms in ne stane nic.
+                _ogrej_zive()
                 if info.get("non_scheduled"):
                     # Doslej vedno 0. Ce se kdaj oglasi, je feed dobil odpovedi in
                     # jih zna povedati strukturirano -- to je vredno vedeti.
@@ -297,6 +337,8 @@ def run_collector() -> None:
 
 @asynccontextmanager
 async def lifespan(app):
+    global _strezemo
+    _strezemo = True             # samo tu; `kajros collect` tega ne izvede
     bootstrap()
     thread = None
     if config.okolje("COLLECTOR", "1") != "0":

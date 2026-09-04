@@ -140,3 +140,28 @@ feedova zamenjava prometnega dne.
   ne nova poizvedba: sicer se razideta spet. Preverjeno na 67 vozilih z
   meritvijo, vsa se ujemajo z vrstico v `run`. Poceni je, ker gre za ~80
   voženj z GPS in ne za vse omrežje (20 ms).
+
+
+## Ogrevanje predpomnilnika: kdo dela in kdaj
+
+`/api/live` je najdražji odgovor, ki ga zemljevid vpraša vsakih 30 s. Njegov
+predpomnilnik je vezan na `rt_fetched`, ta pa se osveži ob vsakem zajemu —
+torej prav tako vsakih 30 s. Skoraj vsak klic je zato padel v prazno.
+
+Zdaj ga **zajemna nit izračuna vnaprej**, takoj po zajemu (`server._ogrej_zive`).
+Dela je enako, le da ga ne opravi uporabnik med čakanjem. Izmerjeno 4. 9. 2026:
+`?network=zeleznica` 245 ms hladno, **6 ms toplo**.
+
+Dvoje, kar se pri tem hitro zgreši:
+
+* **Ogrevaj samo, kar strani res vprašajo.** Zemljevid in pregled kličeta
+  `network=zeleznica`; `network=None` je 802 ms dela za odgovor, ki ga
+  aplikacija ne uporablja — ogrevati ga pomeni zamikati koristna dva.
+* **Na malini tega ne sme biti.** Zajemna zanka je ista za strežnik in za
+  `kajros collect`. Pi Zero W je pri istem poslu ~100× počasnejši in bi si z
+  ~1 s dela na obhod podrl ritem zajema — isti razlog, zakaj je tam ugasnjena
+  `ocena`. Varovalo je `server._strezemo`, ki ga postavi samo `lifespan`.
+
+Ogrevanje po vsakem **uspešnem** zajemu, ne le ob spremembi: značka se osveži
+tudi takrat, ko feed ni prinesel ničesar novega, in kadar se ni premaknila,
+je ogrevanje 19 ms in ne stane nič.
