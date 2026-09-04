@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from kajros import ocena, weather
+from kajros import ocena, stats, weather
 from kajros.alerts import parse_delay_text
 from kajros.collector import (_delay_of, is_forecast, is_zero_blip,
                                resolve_service_date, worth_logging)
@@ -538,3 +538,34 @@ def test_ista_voznja_je_vedno_ista_odlocitev():
     for tid in ("453041", "462170", "1"):
         prvi = ocena._v_vzorcu(tid, "avtobus")
         assert all(ocena._v_vzorcu(tid, "avtobus") is prvi for _ in range(5))
+
+
+# ------------------------------------------- koliko ostanku sploh smemo verjeti
+
+def test_omejen_ostanek_pri_tocnem_vozilu():
+    """Točnemu vozilu ne pripišemo velike spremembe.
+
+    Mediana enega dneva ni mediana. Absolutna meja je 600 s.
+    """
+    assert stats._omejen_ostanek(3000, 0) == 600
+    assert stats._omejen_ostanek(-3000, 0) == -600
+    assert stats._omejen_ostanek(120, 0) == 120        # pod mejo ostane, kar je
+
+
+def test_omejen_ostanek_pusti_prostor_veliki_zamudi():
+    """Vlak s +25 min lahko izgubi še deset, točen pa ne — zato sorazmerna
+    meja poleg absolutne."""
+    assert stats._omejen_ostanek(3000, 25 * 60) == 1500      # 1x trenutne
+    assert stats._omejen_ostanek(600, 25 * 60) == 600        # pod mejo
+
+
+def test_omejen_ostanek_upoteva_tudi_prezgodnjo_voznjo():
+    """Meja je na ABSOLUTNI vrednosti trenutne zamude — prezgoden avtobus je
+    prav tako daleč od nič."""
+    assert stats._omejen_ostanek(3000, -20 * 60) == 1200
+
+
+def test_omejen_ostanek_spostuje_podane_parametre():
+    """Backtest meri druge meje; funkcija jih mora sprejeti."""
+    assert stats._omejen_ostanek(3000, 0, omeji_s=900) == 900
+    assert stats._omejen_ostanek(3000, 600, omeji_s=0, omeji_delez=2.0) == 1200
