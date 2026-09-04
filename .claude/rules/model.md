@@ -466,3 +466,37 @@ vožnja, ki ne obstaja, ostaja 404 — razrešitev je ne sme tiho zamenjati.
 vseh, edina razlika je bila prav LP 4208 in je izvirala iz izbire vožnje, ne
 iz meje. Če se kdaj razideta, je to tiha napaka na zaslonu — ta je bila po
 zapisu v `CLAUDE.md` tam že dvakrat.
+
+
+## Avtobusni model: prva meritev, ki odločitev sploh omogoča (4. 9. 2026)
+
+Do zdaj je bila odločitev „ni dovolj podatkov“. Zdaj jih je: **77 %**
+avtobusnih voženj ima zgodovino (1. 9. jih je 11 %), **47 %** vsaj tri dni
+(prag `MIN_PREDICT_SAMPLES`); pri železnici 88 % oziroma 82 %.
+
+`kajros backtest` na obeh omrežjih — železnica 15 dni in **521 781** nalog,
+avtobusi 7 dni in **6 004 849** nalog:
+
+| model | železnica MAE | v 5 min | avtobusi MAE | v 5 min |
+|---|---|---|---|---|
+| **rezerva+razred (v uporabi)** | **2,06** | 90,0 % | 2,98 | 93,0 % |
+| združen | 2,07 | 89,6 % | **2,85** | **93,6 %** |
+| odsek+razred | 2,36 | 87,5 % | 2,89 | 93,4 % |
+| odsek | 2,37 | 87,4 % | 2,94 | 93,2 % |
+| rezerva+mediana | **2,00** | **90,5 %** | 3,16 | 92,4 % |
+| prenos | 3,04 | 82,3 % | 3,38 | 91,0 % |
+
+**Sedanji model je pisan za železnico in tam je blizu najboljšega; pri
+avtobusih ga „združen“ prekaša** za 0,13 min MAE in 0,6 odstotne točke.
+To je prvi merljiv razlog za omrežju lasten model — ne velik, a ponovljiv na
+šestih milijonih nalog.
+
+**Zamenjave zaenkrat NI**, in to ni oklevanje, ampak pravilo: model se meri na
+dveh merilih, backtest in `kajros ocena`. Senca je 4. 9. stara **tri dni**
+(47 892 vrstic) in na njej se razlika 0,13 min ne da ločiti od šuma. Ko bo
+sence za dva tedna, se to pomeri znova — skupaj s preizkusom povprečenja,
+ki čaka na isto.
+
+Opomba za tistega, ki to nadaljuje: `rezerva+razred, prag 3 dni` je pri
+avtobusih **slabši** od sedanjega (3,16 proti 2,98), pri železnici pa
+neznatno boljši (2,03 proti 2,06). Prag torej ni skupna nastavitev.
