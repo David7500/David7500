@@ -1010,7 +1010,12 @@ let recentsSig = null;
 function renderRecents() {
   const el = $("recents");
   if (!el) return;
-  const saved = favLoad();
+  // **In samo tisto, kar sodi v odprti zavihek.** Shranjena odhodna tabla
+  // ("Ljubljana · odhodi") pod obrazcem "Od-do" je zeton, ki obrazec nad sabo
+  // zavrze in preklopi zavihek -- torej odgovor na vprasanje, ki ga clovek ta
+  // hip ne postavlja. Vsak zavihek pokaze svoje.
+  const zaZavihek = activeTab === "board" ? "board" : "ab";
+  const saved = favLoad().filter((f) => (f.kind || "ab") === zaZavihek);
 
   // Tabla se osvezuje vsakih 30 s. Ce se seznam ni spremenil, ga ne
   // prerisujemo -- sicer bi zetoni pod prstom utripali.
@@ -1264,6 +1269,11 @@ function setTab(tab) {
   // Gumb za shranjevanje se nanasa na trenutno poizvedbo; ob preklopu zavihka
   // je ta druga in gumb mora to pokazati (ali izginiti, ce polja so prazna).
   paintFavButton();
+  // Zetoni so vezani na zavihek (glej `renderRecents`), zato jih je treba ob
+  // preklopu prerisati -- `recentsSig` sicer ustavi prerisovanje, ker se sam
+  // seznam shranjenih ni spremenil.
+  recentsSig = null;
+  renderRecents();
   clearTimeout(pollTimer);
 }
 
