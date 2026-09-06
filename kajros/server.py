@@ -71,6 +71,33 @@ def _ogrej_zive() -> None:
             return
 
 
+def _ogrej_health() -> None:
+    """`/api/health` na svojem, mnogo počasnejšem ritmu.
+
+    Ta odgovor ni vezan na značko, ampak samo na čas: TTL je 600 s. Ko poteče,
+    ga plača prvi obiskovalec -- in to je vsak obisk katerekoli strani, ker
+    `connections.js` kliče health za vrstico v nogi.
+
+    Cena, izmerjena na prenosniku 6. 9. 2026 (19 081 voženj, 778 114 vrstic
+    `run`, 5,3 mio `obs`): **2 683 ms**, od tega 2 390 ms sam razrez po
+    omrežjih (`run JOIN trip`, 778 k iskanj po `trip_id`), 150 ms
+    `COUNT(DISTINCT service_date)` in 124 ms `COUNT(*) obs`. Ostalo je pod
+    50 ms skupaj. Prepis razreza v dve poizvedbi ne pomaga (2 258 ms) -- cena
+    je sam pregled `run`, ne `COUNT(DISTINCT)`. Zožitev na en dan bi bila
+    43 ms, a bi spremenila pomen: v nogi piše, koliko je zajetega **vsega**.
+
+    Zato ne pocenimo poizvedbe, ampak preložimo, kdo jo plača. Vsakih 300 s
+    je varno znotraj 600 s TTL, tudi če kak obhod zamudi.
+    """
+    if not _strezemo:
+        return
+    from . import api
+    try:
+        api.api_health()          # skozi endpoint, sicer se rezultat zavrže
+    except Exception as exc:  # noqa: BLE001
+        _log(f"predpomnilnika ni bilo mogoče ogreti (health): {exc}")
+
+
 def bootstrap() -> None:
     """Poskrbi, da baza obstaja in ima vozni red.
 
@@ -177,6 +204,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Prvi obhod sele cez minuto: ob zagonu je `run` se prazen (bootstrap tece
     # vzporedno) in posnetek bi bil posnetek nicesar.
     next_ocena = (time.monotonic() + 60) if meri_napovedi else float("inf")
+    # Health je drag in ni vezan na feed; ogrevamo ga na svojem ritmu.
+    # Prvič takoj -- prvi obiskovalec po zagonu je sicer tisti, ki plača.
+    next_health = 0.0
 
     while not _stop.is_set():
         started = time.monotonic()
@@ -215,6 +245,10 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                          f"{info['resenih']} razrešenih")
             except Exception as exc:      # merjenje ni kriticno za zajem
                 _log(f"ocene napovedi ni bilo mogoče posneti: {exc}")
+
+        if started >= next_health:
+            next_health = started + 300
+            _ogrej_health()
 
         if started >= next_alerts:
             next_alerts = started + alert_interval
@@ -286,7 +320,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         # Dnevna opravila (vozni red, vreme, vzdrzevanje) so v tem ritmu
         # preverjena tako ali tako veckrat na minuto.
         cakaj = min(next_trips, next_positions, next_alerts,
-                    next_ocena) - time.monotonic()
+                    next_ocena, next_health) - time.monotonic()
         _stop.wait(max(0.5, min(cakaj, interval)))
 
 
