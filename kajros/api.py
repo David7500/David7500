@@ -473,6 +473,21 @@ def api_stations(network: str | None = Query(None, pattern="^(zeleznica|avtobus)
     return Response(content=telo, media_type="application/json")
 
 
+@app.get("/api/stations/index")
+def api_station_index(network: str = NETWORK_Q):
+    """Imena postaj omrežja, urejena po prometu — za iskanje brez omrežja.
+
+    Vsebina se spremeni enkrat na dan ob uvozu GTFS, zato je predpomnjena
+    enako kot `/api/stations`, in to **serializirana**: pretvorba v niz je
+    dražja od poizvedbe.
+    """
+    telo = _predpomni(
+        f"stations-index:{network}", _znacka("gtfs_imported_at"), 3600,
+        lambda: json.dumps(_conn_klic(lambda c: journey.station_index(c, network)),
+                           ensure_ascii=False, separators=(",", ":")).encode())
+    return Response(content=telo, media_type="application/json")
+
+
 @app.get("/api/stations/search")
 def api_station_search(q: str = Query(..., min_length=1), limit: int = Query(12, ge=1, le=50),
                        network: str = NETWORK_Q):

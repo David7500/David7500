@@ -142,6 +142,20 @@ class UraTest {
     }
 
     @Test
+    fun `potnikova rezerva zvoni prej, ne glede na zamudo`() {
+        // Rezerva je potnikova izbira, ne naš odbitek: velja pri obeh virih.
+        val zZamudo = Ura.izracunaj(ODHOD, 25, 12 * 60, DALEC, DALEC, true, rezervaS = 180)
+        assertEquals(ODHOD + min(12) - min(25) - min(3), zZamudo.zvoniOb)
+
+        val brezZveze = Ura.izracunaj(ODHOD, 25, null, 0, DALEC, true, rezervaS = 180)
+        assertEquals(ODHOD - min(25) - min(3), brezZveze.zvoniOb)
+
+        // Brez kljukice ostane račun gol.
+        val brez = Ura.izracunaj(ODHOD, 25, 12 * 60, DALEC, DALEC, true)
+        assertEquals(ODHOD + min(12) - min(25), brez.zvoniOb)
+    }
+
+    @Test
     fun `X vecji od casa do odhoda pomeni zvonjenje v preteklosti`() {
         // Ne popravljamo ga tu: klicatelj mora vedeti, da je zamujeno, in
         // zazvoniti takoj. Tiho prestavljanje naprej bi budilko utisalo.

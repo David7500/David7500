@@ -21,6 +21,8 @@ data class Budilka(
     val minutPrej: Int,
     /** true = celozaslonsko zvonjenje, false = navadno obvestilo z zvokom. */
     val zbudi: Boolean,
+    /** Kar je potnik sam obkljukal ("še 3 minute"), v sekundah. */
+    val rezervaS: Int = 0,
     val smer: String = "",
     /** Zadnja znana zamuda in kdaj smo jo dobili. */
     val zamudaS: Int? = null,
@@ -41,6 +43,7 @@ data class Budilka(
             zamudaObMs = zamudaObMs,
             zdajMs = zdajMs,
             vlak = vlak,
+            rezervaS = rezervaS,
         )
         // Odlog povozi racun: potnik je rekel "cez dve minuti" in to ni ocena.
         return if (odlozenoDoMs > 0) i.copy(zvoniOb = odlozenoDoMs) else i
@@ -50,7 +53,7 @@ data class Budilka(
         put("id", id); put("train_no", trainNo); put("trip", tripId ?: JSONObject.NULL)
         put("omrezje", omrezje); put("postaja", postaja); put("stop_seq", stopSeq)
         put("dan", dan); put("voznoredni_ms", voznoredniMs); put("minut_prej", minutPrej)
-        put("zbudi", zbudi); put("smer", smer)
+        put("zbudi", zbudi); put("rezerva_s", rezervaS); put("smer", smer)
         put("zamuda_s", zamudaS ?: JSONObject.NULL); put("zamuda_ob_ms", zamudaObMs)
         put("zvoni_ob_ms", zvoniObMs); put("odzvonjeno", odzvonjeno)
         put("odlozeno_do_ms", odlozenoDoMs)
@@ -72,6 +75,7 @@ data class Budilka(
                 voznoredniMs = vr,
                 minutPrej = o.optInt("minut_prej", 25),
                 zbudi = o.optBoolean("zbudi", true),
+                rezervaS = o.optInt("rezerva_s", 0),
                 smer = o.optString("smer"),
                 zamudaS = if (o.isNull("zamuda_s")) null else o.optInt("zamuda_s"),
                 zamudaObMs = o.optLong("zamuda_ob_ms"),

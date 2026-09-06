@@ -59,6 +59,9 @@ class Most(
             voznoredniMs = vr,
             minutPrej = minut,
             zbudi = o.optBoolean("zbudi", true),
+            // Rezerva je potnikova izbira, a ne sme biti orozje: pol ure
+            // "rezerve" bi budilko spremenilo v nekaj drugega.
+            rezervaS = o.optInt("rezerva_s", 0).coerceIn(0, 600),
             smer = o.optString("smer"),
         )
         val zdaj = System.currentTimeMillis()

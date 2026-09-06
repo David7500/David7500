@@ -60,6 +60,30 @@ def _fold(s: str) -> str:
     )
 
 
+def station_index(conn: sqlite3.Connection, network: str) -> list[dict]:
+    """Vsa imena postaj omrezja, ze urejena po prometu.
+
+    Za iskalnik v brskalniku. `search_stations()` razvrsca po
+    `(razred ujemanja, -promet, ime)`; razred je odvisen od poizvedbe, promet
+    in ime nista. Ce odjemalec dobi seznam, ze urejen po `(-promet, ime)`, in
+    ga stabilno razvrsti samo po razredu, dobi **isti vrstni red** kot bi ga
+    dobil od streznika -- brez zahteve na vsak pritisk tipke.
+
+    Imena so zdruzena kot v `search_stations()`: mestno postajalisce ima svoj
+    `stop_id` za vsako smer, aplikacija pa vse gradi po imenu.
+    """
+    rows = conn.execute(
+        "SELECT st.name AS n, COUNT(*) AS t"
+        "  FROM sched s"
+        "  JOIN trip tr ON tr.trip_id = s.trip_id"
+        "  JOIN station st ON st.stop_id = s.stop_id"
+        " WHERE tr.network = ?"
+        " GROUP BY st.name"
+        " ORDER BY t DESC, n",
+        (network,)).fetchall()
+    return [{"n": r["n"], "t": r["t"]} for r in rows]
+
+
 def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
                     network: str | None = None) -> list[dict]:
     """Postaje, ki ustrezajo nizu. Urejene po tem, kako dobro se ujemajo.

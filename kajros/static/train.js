@@ -312,6 +312,7 @@ function yourStopHtml(stops, forecast, current) {
 
 const BUD_KLJUC = "kajros:budilka";
 const BUD_MINUT = [10, 15, 25, 40];
+const BUD_REZERVA_S = 180;
 
 function budilkeZaPostanek(s) {
   if (!MOST) return [];
@@ -352,10 +353,13 @@ function odpriBudilko(stopSeq) {
   try { dovoljenja = JSON.parse(MOST.dovoljenja() || "{}"); } catch (e) { /* prazno */ }
   const manjka = !dovoljenja.obvestila || !dovoljenja.tocni_alarmi;
 
-  const shranjeno = JSON.parse(localStorage.getItem(BUD_KLJUC) || '{"minut":25,"zbudi":true}');
+  const shranjeno = JSON.parse(
+    localStorage.getItem(BUD_KLJUC) || '{"minut":25,"zbudi":true,"rezerva":true}');
   const obstoj = budilkeZaPostanek(s)[0];
   const minut = obstoj ? obstoj.minut_prej : shranjeno.minut;
   const zbudi = obstoj ? obstoj.zbudi : shranjeno.zbudi;
+  const rezerva = obstoj ? obstoj.rezerva_s > 0 : shranjeno.rezerva !== false;
+  const poMeri = !BUD_MINUT.includes(minut);
   const schedIso = s.sched_dep || s.sched_arr;
 
   plast.innerHTML = `
@@ -367,7 +371,12 @@ function odpriBudilko(stopSeq) {
       <div class="bud-vrsta">Zvoni koliko prej</div>
       <div class="bud-izbire" data-skupina="minut">
         ${BUD_MINUT.map((m) => `<button type="button" class="bud-izbira${
-          m === minut ? " is-on" : ""}" data-minut="${m}">${m} min</button>`).join("")}
+          !poMeri && m === minut ? " is-on" : ""}" data-minut="${m}">${m} min</button>`).join("")}
+        <button type="button" class="bud-izbira${poMeri ? " is-on" : ""}"
+                data-po-meri="1">po meri</button>
+        <input type="number" class="bud-meri" id="bud-meri" min="1" max="240" step="1"
+               inputmode="numeric" value="${minut}" ${poMeri ? "" : "hidden"}
+               aria-label="minut prej">
       </div>
 
       <div class="bud-vrsta">Kako</div>
@@ -376,12 +385,10 @@ function odpriBudilko(stopSeq) {
         <button type="button" class="bud-izbira${zbudi ? " is-on" : ""}" data-zbudi="1">zbudi me</button>
       </div>
 
-      <div class="bud-opomba">Zvoni ob <strong>voznoredni uri + zamuda − ${minut} min</strong>,
-        zamudo pa preverja vse pogosteje, bližje ko je ura. Če povezave ni, zazvoni malo
-        prej in to pove.<br>
-        Rezerva je v tvojem času: izmerjeno je, da bi bila prikazana zamuda prekratka
-        v tretjini primerov pri vlakih in dveh tretjinah pri avtobusih — pet minut več
-        to spravi pod dvajsetino.</div>
+      <label class="bud-rezerva">
+        <input type="checkbox" id="bud-rezerva" ${rezerva ? "checked" : ""}>
+        <span>še 3 minute rezerve</span>
+      </label>
 
       ${manjka ? `<button type="button" class="bud-dovoli" data-dovoli="1">
         Android še ne dovoli obvestil ali točnih alarmov — uredi</button>` : ""}
@@ -406,9 +413,13 @@ function shraniBudilko(stopSeq) {
   const plast = document.getElementById("budilka");
   const s = (state.run && state.run.stops || []).find((x) => x.stop_seq === stopSeq);
   if (!plast || !s || !MOST) return;
-  const minut = Number(plast.dataset.minut || 25);
+  const poMeri = document.getElementById("bud-meri");
+  const minut = poMeri && !poMeri.hidden
+    ? Math.min(240, Math.max(1, Math.round(Number(poMeri.value) || 25)))
+    : Number(plast.dataset.minut || 25);
   const zbudi = plast.dataset.zbudi === "1";
-  localStorage.setItem(BUD_KLJUC, JSON.stringify({ minut, zbudi }));
+  const rezerva = !!(document.getElementById("bud-rezerva") || {}).checked;
+  localStorage.setItem(BUD_KLJUC, JSON.stringify({ minut, zbudi, rezerva }));
 
   // Obstojeco budilko za isti postanek zamenjamo, ne podvojimo -- dve zvonjenji
   // za isti vlak sta napaka, ne dvojna varnost.
@@ -427,6 +438,7 @@ function shraniBudilko(stopSeq) {
     voznoredni_ms: new Date(schedIso).getTime(),
     minut_prej: minut,
     zbudi: zbudi,
+    rezerva_s: rezerva ? BUD_REZERVA_S : 0,
     smer: (state.run && state.run.headsign) || "",
   }));
   zapriBudilko();
@@ -446,7 +458,12 @@ document.addEventListener("click", (ev) => {
     const skupina = izbira.parentElement;
     skupina.querySelectorAll(".bud-izbira").forEach((b) => b.classList.remove("is-on"));
     izbira.classList.add("is-on");
-    if (izbira.dataset.minut) plast.dataset.minut = izbira.dataset.minut;
+    const meri = document.getElementById("bud-meri");
+    if (izbira.dataset.minut) {
+      plast.dataset.minut = izbira.dataset.minut;
+      if (meri) meri.hidden = true;
+    }
+    if (izbira.dataset.poMeri && meri) { meri.hidden = false; meri.focus(); }
     if (izbira.dataset.zbudi) plast.dataset.zbudi = izbira.dataset.zbudi;
     return;
   }

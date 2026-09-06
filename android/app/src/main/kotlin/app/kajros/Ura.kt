@@ -77,6 +77,7 @@ object Ura {
      * @param zamudaObMs   kdaj smo jo dobili (0 = nikoli)
      * @param zdajMs       zdaj
      * @param vlak         `network == "zeleznica"`
+     * @param rezervaS     kar je potnik sam obkljukal ("se 3 minute"), v sekundah
      */
     fun izracunaj(
         voznoredniMs: Long,
@@ -85,8 +86,9 @@ object Ura {
         zamudaObMs: Long,
         zdajMs: Long,
         vlak: Boolean,
+        rezervaS: Int = 0,
     ): Izid {
-        val poVoznemRedu = voznoredniMs - minutPrej * 60_000L
+        val poVoznemRedu = voznoredniMs - minutPrej * 60_000L - rezervaS * 1000L
         // `zamudaS == null` je tu zato, da `odhodMs` spodaj ne more pasti na
         // `!!`. Brez tega bi pokvarjen zapis v shrambi (zamuda null, cas pa
         // nastavljen) podrl budilko ravno ob prozenju.
@@ -101,7 +103,7 @@ object Ura {
             zamudaS == null -> 0
             vlak -> max(0, zamudaS)
             else -> zamudaS
-        }
+        } - rezervaS
         val izZamude = voznoredniMs + upostevana * 1000L - minutPrej * 60_000L
 
         // Brez povezave nikoli POZNEJE od voznega reda. Sicer bi dvajset minut

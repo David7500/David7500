@@ -155,6 +155,16 @@ function attachSuggest(input, listEl) {
       return paint();
     }
     if (q.length < 2) return close();
+
+    // Iz kazala, ce je ze tu: seznam se mora odpirati sproti, ne cez omrezje.
+    const iz = izKazala(q);
+    if (iz) {
+      seq += 1;
+      items = iz;
+      active = -1;
+      return items.length ? paint() : close();
+    }
+
     const mine = ++seq;
     try {
       const res = await fetch(`/api/stations/search?q=${encodeURIComponent(q)}&limit=8&network=${NETWORK}`)
@@ -200,6 +210,58 @@ function attachSuggest(input, listEl) {
 
   input.addEventListener("blur", () => setTimeout(close, 120));
   paintClear(input);
+}
+
+// ---------- kazalo postaj ----------
+//
+// Vsak pritisk tipke je bil doslej zahteva na streznik. Prek Cloudflara je to
+// desetinka sekunde ali dve in seznam se je odpiral s sunki. Kazalo se naloz
+// enkrat po strani (zeleznica 7 kB, avtobusi 147 kB, oboje predpomnjeno do
+// naslednjega uvoza GTFS) in nato tece vse v brskalniku.
+//
+// **Vrstni red je isti kot na strezniku.** `search_stations()` razvrsca po
+// `(razred ujemanja, -promet, ime)`; kazalo je ze urejeno po `(-promet, ime)`,
+// zato zadosca stabilno razvrscanje po razredu -- tri vedra v vrstnem redu
+// kazala. Ce bi tu razvrscali drugace, bi ista crka dala dva razlicna seznama.
+
+let KAZALO = null;
+
+function naloziKazalo() {
+  fetch(`/api/stations/index?network=${NETWORK}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v) => {
+      if (Array.isArray(v)) KAZALO = v.map((s) => ({ name: s.n, f: fold(s.n) }));
+    })
+    .catch(() => { /* ostane streznik */ });
+}
+
+// Vrne zadetke ali null, kadar kazala (se) ni -- takrat vprasa streznik.
+function izKazala(q) {
+  if (!KAZALO) return null;
+  const needle = fold(q);
+  const tocno = [];
+  const zacetek = [];
+  const kjerkoli = [];
+  for (const s of KAZALO) {
+    if (s.f === needle) tocno.push(s);
+    else if (s.f.startsWith(needle)) zacetek.push(s);
+    else if (s.f.indexOf(needle) < 0) continue;
+    // Zacetek besede je za potnika enako dober zadetek kot zacetek imena --
+    // izmerjeno, glej `_razred()` v journey.py. Zato v isto vedro.
+    else if (zacetekBesede(s.f, needle)) zacetek.push(s);
+    else kjerkoli.push(s);
+    if (tocno.length + zacetek.length >= 8 && kjerkoli.length >= 8) break;
+  }
+  return [...tocno, ...zacetek, ...kjerkoli].slice(0, 8);
+}
+
+function zacetekBesede(folded, needle) {
+  let i = folded.indexOf(needle);
+  while (i >= 0) {
+    if (i === 0 || folded[i - 1] === " ") return true;
+    i = folded.indexOf(needle, i + 1);
+  }
+  return false;
 }
 
 // ---------- brisanje vnosa ----------
@@ -1319,26 +1381,27 @@ document.querySelectorAll("#board-kind-seg button").forEach((b) => {
 
 function restore() {
   const q = new URLSearchParams(location.search);
-  const saved = recentLoad()[0] || null;
-  const wasBoard = saved && saved.kind === "board";
 
-  const station = q.get("station") || (wasBoard ? saved.station : "");
+  // **Polja se ne izpolnijo iz spomina.** Doslej je stran ob vrnitvi vpisala
+  // zadnjo postajo -- tudi po zaprtju aplikacije -- in ni bilo mogoce vedeti,
+  // od kod je prisla. Vpise ju samo naslov (deljena povezava). Nedavne postaje
+  // ostanejo v spustnem seznamu, kjer jih clovek izbere sam.
+  const station = q.get("station") || "";
   // `from` je tu SAMO izhodiščna postaja. Ura na tabli je `ob` -- glej
   // `searchBoard()`. Dokler sta bila isto ime, je naslov table vpisal uro sem.
-  const from = q.get("from") || (saved && saved.from) || "";
-  const to = q.get("to") || (saved && saved.to) || "";
+  const from = q.get("from") || "";
+  const to = q.get("to") || "";
 
   $("date").value = q.get("date") || todayIso();
   $("board-date").value = q.get("date") || todayIso();
-  setBoardKind(q.get("kind") || (wasBoard && saved.dir) || "odhodi");
+  setBoardKind(q.get("kind") || "odhodi");
   $("board-time").value = q.get("ob") || "";
   $("from").value = from;
   $("to").value = to;
   $("station").value = station;
   paintAllClears();
 
-  const wantBoard = q.has("station") || (!q.has("from") && wasBoard);
-  if (wantBoard && station) {
+  if (q.has("station") && station) {
     setTab("board");
     searchBoard(false);
   } else if (from && to) {
@@ -1390,6 +1453,8 @@ for (const btn of document.querySelectorAll("[data-day-for]")) {
   });
 }
 
+// Kazalo postaj se nalozi takoj po strani; iskalnik do takrat vprasa streznik.
+naloziKazalo();
 renderRecents();
 
 tickClock();

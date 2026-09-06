@@ -80,6 +80,7 @@ class BudilkeDejavnost : Activity() {
         v.findViewById<TextView>(R.id.kako).text = buildString {
             append(getString(if (b.zbudi) R.string.budilka_zbudi else R.string.budilka_obvesti))
             append(" · ").append(b.minutPrej).append(" min prej")
+            if (b.rezervaS > 0) append(" +").append(b.rezervaS / 60).append(" rezerve")
             if (b.smer.isNotBlank()) append(" · ").append(b.smer)
         }
         v.findViewById<Button>(R.id.odstrani).setOnClickListener {
