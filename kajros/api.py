@@ -14,6 +14,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
@@ -1204,3 +1205,33 @@ def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
     # branjema zamud se ne spremeni, zato ga racunamo enkrat za vse.
     return _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
+
+
+# --- HEAD -------------------------------------------------------------------
+# **Vse poti so `@app.get`, kar pomeni samo GET.** Starlettov `Route` ob GET
+# sam doda HEAD, FastAPIjev `APIRoute` pa ne -- izmerjeno: `r.methods` je
+# `{'GET'}` na vseh 34 poteh, in `HEAD https://kajros.app/` je vracal 405.
+#
+# Dokler je bila stran vidna samo domacemu omrezju, to ni motilo nikogar.
+# Javno pa je HEAD prva stvar, ki jo posljejo nadzorniki dosegljivosti
+# (UptimeRobot ga uporablja privzeto) in preverjalniki povezav -- vsi bi
+# porocali, da stran ne dela.
+#
+# Zanka mora teci PO vseh dekoratorjih, torej na koncu modula.
+for _r in app.routes:
+    if isinstance(_r, APIRoute) and _r.methods == {"GET"}:
+        _r.methods = {"GET", "HEAD"}
+
+# HEAD ne sme v dokumentacijo. Endpointi so javni in jih kdo bere; 34 vnosov,
+# ki povedo "isto kot GET, brez telesa", je samo dvakrat daljsi seznam.
+_openapi_z_head = app.openapi
+
+
+def _openapi_brez_head():
+    shema = _openapi_z_head()
+    for operacije in shema.get("paths", {}).values():
+        operacije.pop("head", None)
+    return shema
+
+
+app.openapi = _openapi_brez_head

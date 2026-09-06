@@ -1357,3 +1357,27 @@ def test_seme_privzeto_le_zeleznica(tmp_path, conn):
     s = db.connect(cilj)
     assert s.execute("SELECT COUNT(*) FROM trip WHERE network='avtobus'").fetchone()[0] == 0
     assert s.execute("SELECT COUNT(*) FROM trip WHERE network='zeleznica'").fetchone()[0] > 0
+
+
+def test_vse_poti_odgovarjajo_na_head():
+    """HEAD je prva stvar, ki jo posljejo nadzorniki dosegljivosti.
+
+    FastAPIjev `APIRoute` ob GET ne doda HEAD (Starlettov `Route` ga), zato so
+    vse poti vracale 405. Javno je to videti kot "stran ne dela".
+    """
+    from fastapi.routing import APIRoute
+    from kajros.api import app
+
+    brez = [r.path for r in app.routes
+            if isinstance(r, APIRoute) and "HEAD" not in r.methods]
+    assert brez == [], f"poti brez HEAD: {brez}"
+
+
+def test_head_ni_v_dokumentaciji():
+    """34 vnosov "isto kot GET, brez telesa" je samo dvakrat daljsi seznam."""
+    from kajros.api import app
+
+    app.openapi_schema = None
+    shema = app.openapi()
+    z_head = [p for p, o in shema["paths"].items() if "head" in o]
+    assert z_head == [], f"HEAD v shemi: {z_head}"
