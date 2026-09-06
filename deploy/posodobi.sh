@@ -42,8 +42,13 @@ PORT="${PORT:-8000}"
 for i in $(seq 1 30); do
     if curl -sf -o /dev/null "http://127.0.0.1:$PORT/api/health"; then
         krepko "streznik odgovarja (po $i s)"
-        curl -s "http://127.0.0.1:$PORT/api/health" \
-            | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(f"  {d[\"trips\"]} voženj · {d[\"observations\"]} meritev · {d[\"days_covered\"]} dni")'
+        # Brez `\"` v enojnih narekovajih: lupina jih ne odstrani in Python
+        # dobi `d[\"trips\"]`, kar je sintaksna napaka. Dvojni narekovaji
+        # znotraj enojnih so povsem v redu.
+        curl -s "http://127.0.0.1:$PORT/api/health" | "$PY" -c 'import json, sys
+d = json.load(sys.stdin)
+print("  %s voženj · %s meritev · %s dni"
+      % (d["trips"], d["observations"], d["days_covered"]))'
         exit 0
     fi
     sleep 1
