@@ -10,7 +10,9 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.GeolocationPermissions
@@ -39,6 +41,13 @@ class GlavnaDejavnost : Activity() {
     companion object {
         const val AKCIJA_NASTAVITVE = "app.kajros.NASTAVITVE"
         private const val ZAHTEVA_LEGA = 1
+        private const val ZAHTEVA_OBVESTILA = 2
+
+        /** Od Androida 13 je obvestilo dovoljenje, prej je bilo samoumevno. */
+        fun smeObvescati(c: android.content.Context): Boolean =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
 
         /**
          * Sheme, ki jih smemo predati drugemu programu. `intent:` je izpuscen
@@ -64,6 +73,8 @@ class GlavnaDejavnost : Activity() {
     /** Dovoljenje za lego zahteva sistem asinhrono; stran medtem caka na odgovor. */
     private var cakajocaLega: Pair<String, GeolocationPermissions.Callback>? = null
 
+    private lateinit var most: Most
+
     override fun onCreate(stanje: Bundle?) {
         super.onCreate(stanje)
         setContentView(R.layout.dejavnost)
@@ -76,6 +87,10 @@ class GlavnaDejavnost : Activity() {
 
         naslov = Nastavitve.naslov(this)
         pripraviWeb()
+        // Budilke prezivijo ponovni zagon telefona in posodobitev aplikacije,
+        // a `AlarmManager` jih ne -- ob vsakem zagonu jih nastavimo znova.
+        Nacrtovalec.vseZnova(this)
+        Zvonjenje.kanali(this)
 
         if (stanje != null) web.restoreState(stanje) else web.loadUrl(naslov)
         obravnavajNamero(intent)
@@ -118,6 +133,11 @@ class GlavnaDejavnost : Activity() {
         n.userAgentString = n.userAgentString + " Kajros/" + BuildConfig.VERSION_NAME
 
         web.setBackgroundColor(getColor(R.color.bg))
+        most = Most(this) { naslov }
+        // Most je viden vsaki strani v tem WebView. Da tuja ne pride do njega,
+        // sta dve varovalki: `shouldOverrideUrlLoading` tuje strani sploh ne
+        // nalozi, `Most` pa vsak klic preveri proti zadnjemu nalozenemu naslovu.
+        web.addJavascriptInterface(most, "Kajros")
         web.webViewClient = Odjemalec()
         web.webChromeClient = Krom()
 
@@ -138,6 +158,7 @@ class GlavnaDejavnost : Activity() {
 
         override fun onPageStarted(v: WebView, url: String?, ikona: Bitmap?) {
             bilaNapaka = false
+            most.trenutniUrl = url
         }
 
         override fun onReceivedError(v: WebView, z: WebResourceRequest, e: WebResourceError) {
@@ -157,11 +178,25 @@ class GlavnaDejavnost : Activity() {
         }
 
         override fun onPageFinished(v: WebView, url: String?) {
+            most.trenutniUrl = url
             if (!bilaNapaka) skrijNapako()
         }
     }
 
     private inner class Krom : WebChromeClient() {
+
+        /**
+         * Konzola strani v `logcat`. Brez tega je napaka v JavaScriptu v
+         * aplikaciji nevidna -- v brskalniku jo vidis, tu ne. Projekt ima
+         * pravilo, da mora biti konzola cista; to je nacin, da se to preveri.
+         */
+        override fun onConsoleMessage(m: android.webkit.ConsoleMessage): Boolean {
+            if (BuildConfig.DEBUG) {
+                android.util.Log.d("kajros-stran",
+                    "${m.messageLevel()} ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+            }
+            return true
+        }
         /**
          * Lastna lega. Prek `https://kajros.app` v WebView je kontekst varen in
          * `navigator.geolocation` dela -- prek `http://192.168…` v brskalniku ne
@@ -189,10 +224,38 @@ class GlavnaDejavnost : Activity() {
         }
     }
 
+    /**
+     * Kar budilka rabi od sistema: obvestila (13+) in tocne alarme (12+).
+     * Drugo ni dovoljenje, ampak nastavitev, zato zanj odpremo zaslon sistema.
+     */
+    fun zahtevajZaBudilko() {
+        if (!smeObvescati(this)) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                ZAHTEVA_OBVESTILA)
+            return
+        }
+        if (!Nacrtovalec.smeTocenAlarm(this)) {
+            Toast.makeText(this, R.string.ni_tocnih_alarmov, Toast.LENGTH_LONG).show()
+            try {
+                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:$packageName")))
+            } catch (e: ActivityNotFoundException) {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName")))
+            }
+        }
+    }
+
     override fun onRequestPermissionsResult(
         koda: Int, dovoljenja: Array<out String>, izidi: IntArray,
     ) {
         super.onRequestPermissionsResult(koda, dovoljenja, izidi)
+        if (koda == ZAHTEVA_OBVESTILA) {
+            // Ce so obvestila urejena, gremo takoj se na tocne alarme -- potnik
+            // je pritisnil en gumb in ne bi smel dvakrat iskati istega.
+            zahtevajZaBudilko()
+            return
+        }
         if (koda != ZAHTEVA_LEGA) return
         val (izvor, odgovor) = cakajocaLega ?: return
         cakajocaLega = null

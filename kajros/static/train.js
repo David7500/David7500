@@ -300,8 +300,160 @@ function yourStopHtml(stops, forecast, current) {
         </span>
       </div>
       <div class="yours-tag">${escapeHtml(odkod)}</div>
+      ${budilkaGumbHtml(s)}
     </div>`;
 }
+
+// ---------- budilka ----------
+//
+// Samo v aplikaciji (`MOST`): v brskalniku gumba ni, ker nativnega alarma ni.
+// Sedi v bloku "Pri tebi", ker je tam ze vse, kar budilka rabi -- ta voznja,
+// ta postanek in njegova voznoredna ura.
+
+const BUD_KLJUC = "kajros:budilka";
+const BUD_MINUT = [10, 15, 25, 40];
+
+function budilkeZaPostanek(s) {
+  if (!MOST) return [];
+  try {
+    return JSON.parse(MOST.seznam() || "[]")
+      .filter((b) => b.stop_seq === s.stop_seq && b.train_no === TRAIN_NO
+                     && !b.odzvonjeno);
+  } catch (e) {
+    return [];
+  }
+}
+
+function budilkaGumbHtml(s) {
+  if (!MOST) return "";
+  const obstoj = budilkeZaPostanek(s)[0];
+  const oznaka = obstoj
+    ? `budilka ob ${hhmm(new Date(obstoj.zvoni_ob_ms).toISOString())}`
+    : "budilka";
+  return `<button type="button" class="bud-gumb${obstoj ? " is-on" : ""}"
+      data-budilka="${s.stop_seq}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M12 3a6 6 0 0 0-6 6v4l-1.5 3h15L18 13V9a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0"/>
+      </svg>
+      <span>${escapeHtml(oznaka)}</span>
+    </button>`;
+}
+
+// Nastavitve budilke NISO v `#run-head`: tega prikaz vsakih 30 s prerise in
+// izbira bi izginila potniku pod prsti. Zato so v svojem sloju.
+function odpriBudilko(stopSeq) {
+  const s = (state.run && state.run.stops || []).find((x) => x.stop_seq === stopSeq);
+  if (!s || !MOST) return;
+  const plast = document.getElementById("budilka");
+  if (!plast) return;
+
+  let dovoljenja = {};
+  try { dovoljenja = JSON.parse(MOST.dovoljenja() || "{}"); } catch (e) { /* prazno */ }
+  const manjka = !dovoljenja.obvestila || !dovoljenja.tocni_alarmi;
+
+  const shranjeno = JSON.parse(localStorage.getItem(BUD_KLJUC) || '{"minut":25,"zbudi":true}');
+  const obstoj = budilkeZaPostanek(s)[0];
+  const minut = obstoj ? obstoj.minut_prej : shranjeno.minut;
+  const zbudi = obstoj ? obstoj.zbudi : shranjeno.zbudi;
+  const schedIso = s.sched_dep || s.sched_arr;
+
+  plast.innerHTML = `
+    <div class="bud-ozadje" data-zapri="1"></div>
+    <div class="bud-list" role="dialog" aria-label="Budilka">
+      <div class="bud-naslov">Budilka — ${escapeHtml(s.name)}</div>
+      <div class="bud-pod">${escapeHtml(TRAIN_NO)} · po voznem redu ob ${hhmm(schedIso)}</div>
+
+      <div class="bud-vrsta">Zvoni koliko prej</div>
+      <div class="bud-izbire" data-skupina="minut">
+        ${BUD_MINUT.map((m) => `<button type="button" class="bud-izbira${
+          m === minut ? " is-on" : ""}" data-minut="${m}">${m} min</button>`).join("")}
+      </div>
+
+      <div class="bud-vrsta">Kako</div>
+      <div class="bud-izbire" data-skupina="kako">
+        <button type="button" class="bud-izbira${zbudi ? "" : " is-on"}" data-zbudi="0">obvesti</button>
+        <button type="button" class="bud-izbira${zbudi ? " is-on" : ""}" data-zbudi="1">zbudi me</button>
+      </div>
+
+      <div class="bud-opomba">Zvoni 5 minut prej, kot bi sledilo iz zamude — izmerjeno je,
+        da bi brez te rezerve budilka zvonila prepozno v tretjini primerov pri vlakih
+        in dveh tretjinah pri avtobusih. Brez povezave zvoni po voznem redu.</div>
+
+      ${manjka ? `<button type="button" class="bud-dovoli" data-dovoli="1">
+        Android še ne dovoli obvestil ali točnih alarmov — uredi</button>` : ""}
+
+      <div class="bud-dno">
+        ${obstoj ? `<button type="button" class="btn-quiet bud-brisi" data-brisi="${obstoj.id}">Odstrani</button>` : ""}
+        <button type="button" class="btn-quiet" data-zapri="1">Prekliči</button>
+        <button type="button" class="btn" data-shrani="${s.stop_seq}">${obstoj ? "Zamenjaj" : "Nastavi"}</button>
+      </div>
+    </div>`;
+  plast.hidden = false;
+  plast.dataset.minut = String(minut);
+  plast.dataset.zbudi = zbudi ? "1" : "0";
+}
+
+function zapriBudilko() {
+  const plast = document.getElementById("budilka");
+  if (plast) { plast.hidden = true; plast.innerHTML = ""; }
+}
+
+function shraniBudilko(stopSeq) {
+  const plast = document.getElementById("budilka");
+  const s = (state.run && state.run.stops || []).find((x) => x.stop_seq === stopSeq);
+  if (!plast || !s || !MOST) return;
+  const minut = Number(plast.dataset.minut || 25);
+  const zbudi = plast.dataset.zbudi === "1";
+  localStorage.setItem(BUD_KLJUC, JSON.stringify({ minut, zbudi }));
+
+  // Obstojeco budilko za isti postanek zamenjamo, ne podvojimo -- dve zvonjenji
+  // za isti vlak sta napaka, ne dvojna varnost.
+  budilkeZaPostanek(s).forEach((b) => MOST.odstrani(b.id));
+
+  // Uro pretvori JS, ne Kotlin: brskalnik ta niz ze zna brati, in razclenjevanje
+  // datumov v dveh jezikih je nacin, kako se stvari razidejo.
+  const schedIso = s.sched_dep || s.sched_arr;
+  const id = MOST.nastavi(JSON.stringify({
+    train_no: TRAIN_NO,
+    trip: (state.run && state.run.trip_id) || null,
+    omrezje: state.network,
+    postaja: s.name,
+    stop_seq: s.stop_seq,
+    dan: (state.run && state.run.service_date) || "",
+    voznoredni_ms: new Date(schedIso).getTime(),
+    minut_prej: minut,
+    zbudi: zbudi,
+    smer: (state.run && state.run.headsign) || "",
+  }));
+  zapriBudilko();
+  if (id) renderRunHead();
+}
+
+document.addEventListener("click", (ev) => {
+  const gumb = ev.target.closest("[data-budilka]");
+  if (gumb) { odpriBudilko(Number(gumb.dataset.budilka)); return; }
+  const plast = document.getElementById("budilka");
+  if (!plast || plast.hidden) return;
+
+  const zapri = ev.target.closest("[data-zapri]");
+  if (zapri) { zapriBudilko(); return; }
+  const izbira = ev.target.closest(".bud-izbira");
+  if (izbira) {
+    const skupina = izbira.parentElement;
+    skupina.querySelectorAll(".bud-izbira").forEach((b) => b.classList.remove("is-on"));
+    izbira.classList.add("is-on");
+    if (izbira.dataset.minut) plast.dataset.minut = izbira.dataset.minut;
+    if (izbira.dataset.zbudi) plast.dataset.zbudi = izbira.dataset.zbudi;
+    return;
+  }
+  const dovoli = ev.target.closest("[data-dovoli]");
+  if (dovoli) { MOST.zahtevajDovoljenja(); zapriBudilko(); return; }
+  const brisi = ev.target.closest("[data-brisi]");
+  if (brisi) { MOST.odstrani(brisi.dataset.brisi); zapriBudilko(); renderRunHead(); return; }
+  const shrani = ev.target.closest("[data-shrani]");
+  if (shrani) shraniBudilko(Number(shrani.dataset.shrani));
+});
 
 // ---------- veriga vozila ----------
 

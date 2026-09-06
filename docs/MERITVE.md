@@ -472,3 +472,56 @@ z njo ostane 9).
 
 `android/zgradi.sh` isto revizijo ponovi ob vsaki gradnji in **pade**, če kaj
 uide — enkratna meritev tega razreda napake ne ujame.
+
+## Rezerva budilke: koliko prej naj zazvoni (6. 9. 2026)
+
+David: *„Uporabnik pa ne sme zamuditi, raje kej rezerve, če ni zihr."*
+Koliko rezerve, je vprašanje s številko. Vir je senca (`napoved`, 63 843
+razrešenih vrstic): `ours_s` je, kar bi prikaz **takrat** povedal, `actual_s`
+je resnica. Napaka budilke je `ours_s − actual_s` — pozitivna pomeni, da smo
+obljubili večjo zamudo, kot je bila, in bi budilka zvonila **prepozno**.
+
+**Brez rezerve bi budilka zvonila prepozno v 32 % primerov pri vlakih in
+64 % pri avtobusih.** Mediana napake je pri avtobusih +0,8 min, p95 +5,6.
+
+Strošek po isti metodi kot „Smer napake" zgoraj: `P(zamudi) × razmik +
+odvečno čakanje`, razmik 87 min (železnica) in 40 min (avtobusi).
+
+| R [min] | železnica, zamudi | strošek | avtobusi, zamudi | strošek |
+|---|---|---|---|---|
+| 0 | 32,2 % | 30,13 | 63,6 % | 27,06 |
+| 3 | 8,0 % | 11,48 | 17,4 % | 10,43 |
+| 4 | 5,7 % | 10,40 | 10,4 % | 8,48 |
+| **5** | **4,5 %** | **10,29** | **6,4 %** | **7,81** |
+| 6 | 3,4 % | 10,33 | 4,3 % | 7,93 |
+| 8 | 2,1 % | 11,10 | 2,3 % | 9,07 |
+
+Optimum je pri obeh omrežjih **R = 5 min** in krivulja je med 4 in 6 ravna,
+torej izbira ni krhka. (Pri ohlapnejši definiciji zamude — „manjka več kot
+2 min" — bi bil optimum 3; vzet je strogi, ker je tako zahteval David.)
+
+**Vlak v 10 775 meritvah ni odpeljal prezgodaj niti enkrat** (avtobus v
+25,3 %, več kot 2 min prezgodaj v 8,8 %, p01 = −6,2 min). Iz tega sledi
+popravek, ki je zastonj:
+
+| pravilo | železnica: zamudi / strošek | avtobusi: zamudi / strošek |
+|---|---|---|
+| `ours` | 32,2 % / 30,13 | 63,6 % / 27,06 |
+| `ours − 5` | 4,5 % / 10,29 | **6,4 % / 7,81** |
+| **`max(0, ours − 5)`** | **4,5 % / 8,32** | 28,9 % / 14,81 |
+
+Pri vlakih **isti delež zamud, a 2 minuti manj odvečnega čakanja**: budilka
+ne sme zvoniti pred voznim redom, ker vlak pred njim ne odpelje. Pri
+avtobusih bi ista omejitev delež zamud početverila — ti prezgodaj **gredo**.
+
+**Brez povezave**, ko zamude ne poznamo, velja isti račun na golem `actual_s`:
+
+| | najcenejši R | zakaj |
+|---|---|---|
+| železnica | **0** | vlak prezgodaj ne odpelje; vsaka rezerva je čisto čakanje |
+| avtobusi | **3** | 25,3 % jih odpelje prej; strošek 14,92 → 9,50 |
+
+**Česar ta meritev ne pove:** kako napaka raste s starostjo podatka.
+`ocena.py` snema pri stalnem horizontu (25 min vlaki, 15 avtobusi), zato v
+`napoved` razpona ni. Zastarel podatek zato ni obravnavan kot slabša napoved,
+ampak kot **odsotnost** povezave — konservativno, kot je bilo naročeno.

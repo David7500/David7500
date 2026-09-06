@@ -121,6 +121,11 @@
 
   <div id="tooltip" class="chart-tooltip" hidden></div>
 
+  {# Nastavitve budilke so svoj sloj in ne del `#run-head`: tega prikaz vsakih
+     30 s preriše in izbira bi izginila potniku pod prsti. V brskalniku ostane
+     prazen — gumb, ki ga odpre, nastane samo v aplikaciji. #}
+  <div id="budilka" class="bud-plast" hidden></div>
+
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('train.js') }}"></script>
 </body>

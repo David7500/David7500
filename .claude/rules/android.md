@@ -77,18 +77,61 @@ storitev, ista izbira kot pri telefonu.
 `variations_seed_loader.cc: Seed missing signature` v dnevniku ni naša napaka:
 to je WebViewova lastna konfiguracija, ki je na AOSP ni.
 
-## Budilka (načrtovano)
+## Budilka
 
 Davidovo pravilo, dobesedno: *„uporabnik vnese, koliko časa (x minut) preden
 pride vlak naj zazvoni (upošteva se zamude); če pa ni povezave, potem zazvoni
-x minut preden je napovedan vozni red tega vlaka (nič upoštevanja zamud)."*
+x minut preden je napovedan vozni red"* in *„uporabnik ne sme zamuditi, raje
+kej rezerve, če ni zihr"*.
 
-Iz tega sledi, da mora biti **voznoredna ura shranjena lokalno** ob nastavitvi
-budilke — sicer nadomestna pot rabi omrežje, ki ga ravno ni.
+Vse, kar budilka rabi, je **shranjeno lokalno** — predvsem voznoredna ura.
+Če bi jo bilo treba pridobiti, bi nadomestna pot rabila ravno tisto, česar
+takrat ni.
 
-Preverjanje ob `voznoredna − X − 5 min`, nato `GET /api/train/{no}/run`, ura
-zvonjenja `expected − X`, ponovno preverjanje vsakih 5 minut. Ura se sme
-premakniti tudi **nazaj**: mestni avtobus je pogosto prezgoden.
+**Aritmetika je v `Ura.kt` in je čista** (brez Androida), da jo je mogoče
+preizkusiti brez naprave. Tam je vse, kar je mogoče narediti narobe.
 
-Obvestilo vedno pove, kateri primer velja („upoštevana zamuda +7" proti „po
-voznem redu — zamude nisem mogel preveriti"). Ura brez razloga ni odgovor.
+### Rezerva ni ocena
+
+`REZERVA_S = 5 min`, `REZERVA_BREZ_ZVEZE_AVTOBUS_S = 3 min`. Obe sta izmerjeni
+na 63 843 vrsticah sence (`docs/MERITVE.md`, „Rezerva budilke"). Brez rezerve
+bi budilka zvonila prepozno v 32 % primerov pri vlakih in 64 % pri avtobusih.
+
+Pri vlakih je rezultat omejen na 0 (`max(0, zamuda − rezerva)`), ker **vlak
+pred voznim redom ne odpelje** — 0 primerov od 10 775. Pri avtobusih te
+omejitve NI in je ne sme biti: ti prezgodaj gredo v 25 % primerov, in z njo
+bi delež zamud zrasel s 6,4 na 28,9 %.
+
+### Kje budilka bere zamudo
+
+**`/api/departures`, ne `/api/train/{no}/run`.** Prva izbira je bila druga in
+je bila napačna: `run` vrne `zamuda: null` za vsak postanek, ki ga feed še ni
+dosegel — torej ravno za tistega, na katerem potnik čaka. Izmerjeno na EN 414:
+Zidani Most je imel napoved prevoznika, Ljubljana pa nič, medtem ko je tabla
+kazala +24 min iz naše ocene.
+
+Odhodna tabla vrne natanko številko, ki jo potnik vidi. **Na njej je umerjena
+tudi rezerva** (senca meri `ours_s`, kar je isti izračun `stats.predict`), zato
+bi vsak drug vir pomenil, da rezerva varuje pred napako, ki je ne merimo.
+
+### Obvestilo ne sme trditi ure, ki ji račun ni verjel
+
+Ta napaka je bila na zaslonu: naslov „ob 22:34" (iz zamude) in pod njim
+„po voznem redu — zamude nisem mogel preveriti". Zato `Ura.Izid` nosi
+`odhodMs`, ki ga izračuna **ista odločitev** kot uro zvonjenja.
+
+### Pasti, ki so se pokazale šele na napravi
+
+* **`setAlarmClock` brez dovoljenja vrže `SecurityException`.** Od Androida 12
+  točen alarm ni pravica. Ujet je in nadomeščen s `setAndAllowWhileIdle` —
+  slabša budilka je boljša od podrte aplikacije.
+* **`PendingIntent` brez `data` se zlije v enega.** `extras` se pri primerjavi
+  ne upoštevajo, zato bi `FLAG_UPDATE_CURRENT` vse budilke združil v eno.
+  Ločuje jih `kajros://budilka/<id>`.
+* **Zagon dejavnosti iz ozadja je blokiran** (`Background activity launch
+  blocked!` v dnevniku). Zaslon odpre obvestilo s `fullScreenIntent`, ne naš
+  `startActivity` — in to le, kadar je telefon **zaklenjen**; sicer je to
+  navadno obvestilo. Preizkušeno z `locksettings set-pin`.
+* **`display` iz razreda premaga `[hidden]`** iz brskalnikovega sloga.
+  `.bud-plast` brez `[hidden] { display: none }` leži čez vso stran in požira
+  vsak klik — tudi v brskalniku, kjer gumba za budilko sploh ni.

@@ -569,3 +569,82 @@
   color: var(--sev-hard);
   font-weight: 600;
 }
+
+/* ---------- budilka ----------
+ * Nastane samo v aplikaciji za Android (`window.Kajros`). V brskalniku teh
+ * pravil nič ne uporabi — in to je ceneje od ločene datoteke.
+ */
+
+.bud-gumb {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 9px;
+  padding: 7px 12px;
+  background: none;
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  color: var(--ink-dim);
+  font: 600 12px/1 var(--sans);
+  cursor: pointer;
+}
+.bud-gumb.is-on { border-color: var(--accent); color: var(--accent); }
+
+.bud-plast { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; }
+/* `display: flex` iz razreda premaga `[hidden]` iz brskalnikovega sloga, ker
+   je avtorski. Brez te vrstice prazen sloj leži čez vso stran in požira vsak
+   klik -- tudi v brskalniku, kjer gumba za budilko sploh ni. Izmerjeno tako,
+   da se list ni odprl in v konzoli ni bilo ničesar. */
+.bud-plast[hidden] { display: none; }
+.bud-ozadje { position: absolute; inset: 0; background: rgba(0, 0, 0, .55); }
+.bud-list {
+  position: relative;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  background: var(--bg-raised);
+  border-top: 1px solid var(--line-firm);
+  border-radius: 14px 14px 0 0;
+}
+/* Na širokem zaslonu list ne sme biti čez ves zaslon — tam je to okno. */
+@media (min-width: 640px) {
+  .bud-plast { align-items: center; justify-content: center; }
+  .bud-list { max-width: 420px; border-radius: 12px; border: 1px solid var(--line-firm); }
+}
+
+.bud-naslov { font: 600 16px/1.3 var(--sans); color: var(--ink); }
+.bud-pod { margin-top: 3px; font: 400 12px/1.4 var(--sans); color: var(--ink-faint); }
+.bud-vrsta {
+  margin: 16px 0 7px;
+  font: 600 10.5px/1.3 var(--sans);
+  letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+}
+.bud-izbire { display: flex; gap: 7px; flex-wrap: wrap; }
+.bud-izbira {
+  padding: 9px 13px;
+  background: none;
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  color: var(--ink-dim);
+  font: 600 13px/1 var(--sans);
+  cursor: pointer;
+}
+.bud-izbira.is-on {
+  border-color: var(--accent); background: var(--accent); color: #14161a;
+}
+.bud-opomba {
+  margin-top: 14px;
+  font: 400 11.5px/1.5 var(--sans);
+  color: var(--ink-faint);
+}
+.bud-dovoli {
+  display: block; width: 100%;
+  margin-top: 12px; padding: 10px;
+  background: none;
+  border: 1px solid var(--sev-hard); border-radius: var(--r);
+  color: var(--sev-hard);
+  font: 600 12px/1.35 var(--sans);
+  cursor: pointer;
+}
+.bud-dno { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+.bud-dno .btn, .bud-dno .btn-quiet { padding: 10px 16px; border-radius: var(--r); }
+.bud-brisi { margin-right: auto; color: var(--sev-bad); border-color: var(--sev-bad); }

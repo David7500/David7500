@@ -14,4 +14,16 @@
     <string name="preklici">Prekliči</string>
     <string name="naslov_ni_veljaven">Tega naslova ne razumem.</string>
     <string name="brez_sifriranja">Ta naslov ni šifriran in ga aplikacija ne bo odprla. Dovoljeni so samo naslovi v domačem omrežju, našteti v res/xml/omrezje.xml.</string>
+
+    <!-- budilka -->
+    <string name="kanal_zbudi">Budilka</string>
+    <string name="kanal_obvesti">Obvestila o odhodu</string>
+    <string name="zvoni_naslov">%1$s ob %2$s</string>
+    <string name="zvoni_zamuda">Upoštevana zamuda +%1$d min.</string>
+    <string name="zvoni_prezgodaj">Vozilo je %1$d min pred voznim redom.</string>
+    <string name="zvoni_tocno">Vozi po voznem redu.</string>
+    <string name="zvoni_vozni_red">Po voznem redu (%1$s) — zamude nisem mogel preveriti.</string>
+    <string name="ustavi">Ustavi</string>
+    <string name="se_malo">Še 2 minuti</string>
+    <string name="ni_tocnih_alarmov">Android ne dovoli točnih alarmov. Vklopi jih v nastavitvah aplikacije, sicer budilka ne bo zanesljiva.</string>
 </resources>

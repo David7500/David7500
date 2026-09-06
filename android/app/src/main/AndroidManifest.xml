@@ -10,6 +10,20 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Budilka. `USE_EXACT_ALARM` (33+) dobi aplikacija, ki JE budilka, brez
+         vprašanja; `SCHEDULE_EXACT_ALARM` je pot za starejše. Brez enega od
+         njiju `setAlarmClock` ne obstaja in budilka ni budilka. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Zaslon se mora prižgati sam, tudi ko je telefon zaklenjen. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Ob ponovnem zagonu telefona so vse načrtovane budnice izgubljene. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -40,5 +54,31 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/bliznjice" />
         </activity>
+
+        <!-- Zvonjenje čez ves zaslon. `singleInstance`, da se dve budilki ne
+             zložita ena na drugo, in brez zgodovine, da po ustavitvi ne ostane
+             v seznamu nedavnih. -->
+        <activity
+            android:name=".ZvonjenjeDejavnost"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=".zvonjenje"
+            android:theme="@style/Tema" />
+
+        <receiver
+            android:name=".Sprozilec"
+            android:exported="true"
+            android:directBootAware="true">
+            <!-- `PROZI` pride od nas samih prek `PendingIntent` in ga zunaj ni
+                 mogoče poslati; `BOOT_COMPLETED` pa mora biti viden sistemu. -->
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

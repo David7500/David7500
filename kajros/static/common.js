@@ -156,6 +156,24 @@ function pluralRuns(n) {
   return `${n} voženj`;
 }
 
+// ---------- most do nativne aplikacije ----------
+//
+// `window.Kajros` obstaja SAMO v aplikaciji za Android. V brskalniku ga ni in
+// nic, kar je vezano nanj, ne sme nastati -- gumb za budilko, ki ne dela, je
+// slabsi od gumba, ki ga ni.
+//
+// `razlicica()` ni vljudnost: stran se posodobi takoj, aplikacija pa cez
+// mesec, zato mora stran vedeti, s cim govori, preden karkoli poklice.
+const MOST = (() => {
+  const k = window.Kajros;
+  if (!k || typeof k.razlicica !== "function") return null;
+  try {
+    return k.razlicica() >= 1 ? k : null;
+  } catch (e) {
+    return null;
+  }
+})();
+
 // ---------- pika o zivosti ----------
 // Pika je doslej kazala, ali je ODGOVOR prisel, ne ali so PODATKI sveži.
 // Če zajem odmre, API pa tece naprej, bi ostala zelena in bi trdila nekaj,
