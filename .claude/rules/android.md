@@ -91,16 +91,29 @@ takrat ni.
 **Aritmetika je v `Ura.kt` in je čista** (brez Androida), da jo je mogoče
 preizkusiti brez naprave. Tam je vse, kar je mogoče narediti narobe.
 
-### Rezerva ni ocena
+### Rezervo določi potnik, ne aplikacija
 
-`REZERVA_S = 5 min`, `REZERVA_BREZ_ZVEZE_AVTOBUS_S = 3 min`. Obe sta izmerjeni
-na 63 843 vrsticah sence (`docs/MERITVE.md`, „Rezerva budilke"). Brez rezerve
-bi budilka zvonila prepozno v 32 % primerov pri vlakih in 64 % pri avtobusih.
+`zvoni = voznoredna + zamuda − X`. **Rezerve v računu ni** (odločeno
+6. 9. 2026): v X je že. Meritev, da bi 5 minut prihranilo tretjino zamujenih
+vlakov in dve tretjini avtobusov, ostaja — a je zapisana v vmesniku, kjer se
+X izbira, ne vgrajena v formulo.
 
-Pri vlakih je rezultat omejen na 0 (`max(0, zamuda − rezerva)`), ker **vlak
-pred voznim redom ne odpelje** — 0 primerov od 10 775. Pri avtobusih te
-omejitve NI in je ne sme biti: ti prezgodaj gredo v 25 % primerov, in z njo
-bi delež zamud zrasel s 6,4 na 28,9 %.
+Kar ostaja iz meritve v kodi, je eno: **vlak pred voznim redom ne odpelje**
+(0 primerov od 10 775), zato je pri vlakih zamuda omejena na `max(0, zamuda)`.
+Pri avtobusih te omejitve NI in je ne sme biti — ti prezgodaj gredo v 25 %
+primerov.
+
+### Izpad povezave ima svoje pravilo
+
+Zamuda se preverja do konca, korak pa se krajša: 5 min daleč, 60 s znotraj
+petnajstih minut, 30 s v zadnjih petih. Blizu ure poskusi trikrat zapored.
+
+Če zadnji uspešen odgovor ni mlajši od **30 s**, velja, da povezave ni. Takrat:
+
+* zvonjenje se **nikoli ne načrtuje pozneje od voznega reda** — sicer bi
+  dvajset minut stara „+15" držala uro, tudi ko vlak vmes nadoknadi;
+* v zadnjih **3,5 minute** pred zvonjenjem budilka zazvoni **takoj** in to
+  pove. Cena je do 3,5 minute spanca, in samo takrat, ko povezave res ni.
 
 ### Kje budilka bere zamudo
 

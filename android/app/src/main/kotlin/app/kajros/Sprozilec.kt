@@ -52,8 +52,19 @@ class Sprozilec : BroadcastReceiver() {
             return
         }
 
-        val nova = Preverjevalec.zamuda(c, stara)?.let {
-            stara.copy(zamudaS = it, zamudaObMs = zdaj)
+        // Blizu zvonjenja poskusimo veckrat: takrat je odgovor vreden vec kot
+        // sekunda cakanja, in prav takrat izpad povezave pomeni preventivno
+        // zvonjenje. Dalec od ure en poskus zadosca.
+        val nujno = stara.izracun(zdaj).zvoniOb - zdaj <= Ura.PREVENTIVA_MS
+        val poskusov = if (nujno) 3 else 1
+        var izmerjena: Int? = null
+        for (i in 0 until poskusov) {
+            izmerjena = Preverjevalec.zamuda(c, stara)
+            if (izmerjena != null) break
+            if (i + 1 < poskusov) Thread.sleep(2000)
+        }
+        val nova = izmerjena?.let {
+            stara.copy(zamudaS = it, zamudaObMs = System.currentTimeMillis())
         } ?: stara
 
         val izid = nova.izracun(zdaj)
@@ -67,7 +78,8 @@ class Sprozilec : BroadcastReceiver() {
     }
 
     private fun zvoni(c: Context, b: Budilka, zdajMs: Long) {
-        Shramba.shrani(c, b.copy(odzvonjeno = true, zvoniObMs = b.izracun(zdajMs).zvoniOb))
+        // Shranimo trenutek, ko je RES zazvonilo, ne nacrtovanega.
+        Shramba.shrani(c, b.copy(odzvonjeno = true, zvoniObMs = zdajMs))
         Nacrtovalec.preklici(c, b.id)
         Zvonjenje.sprozi(c, b, zdajMs)
     }

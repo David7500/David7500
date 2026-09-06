@@ -84,6 +84,11 @@ class GlavnaDejavnost : Activity() {
         opisNapake = findViewById(R.id.napaka_naslov)
         findViewById<Button>(R.id.poskusi).setOnClickListener { naloziZnova() }
         findViewById<Button>(R.id.nastavi).setOnClickListener { odpriNastavitve() }
+        // Ko strežnika ni, so shranjene budilke edino, kar aplikacija še ve --
+        // in ravno takrat te zanima, ob kateri uri gre tvoj vlak po voznem redu.
+        findViewById<Button>(R.id.na_budilke).setOnClickListener {
+            startActivity(Intent(this, BudilkeDejavnost::class.java))
+        }
 
         naslov = Nastavitve.naslov(this)
         pripraviWeb()

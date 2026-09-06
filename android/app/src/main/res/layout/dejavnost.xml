@@ -76,6 +76,20 @@
                 android:text="@string/poskusi_znova" />
 
             <Button
+                android:id="@+id/na_budilke"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/gumb_tih"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textAllCaps="false"
+                android:textColor="@color/ink_dim"
+                android:textSize="15sp"
+                android:text="@string/budilke" />
+
+            <Button
                 android:id="@+id/nastavi"
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_width="match_parent"

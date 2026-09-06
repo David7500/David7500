@@ -19,9 +19,6 @@ import android.os.Build
  */
 object Nacrtovalec {
 
-    /** Koliko pred najzgodnejsim moznim zvonjenjem zacnemo preverjati. */
-    private const val ZALET_MS = 10 * 60 * 1000L
-
     private fun namera(c: Context, id: String): PendingIntent {
         val i = Intent(c, Sprozilec::class.java).apply {
             action = Sprozilec.PROZI
@@ -47,7 +44,7 @@ object Nacrtovalec {
         val zvoni = b.izracun(zdajMs).zvoniOb
         // Avtobus zna biti prezgoden, zato racunamo z zaletom -- sicer bi prvo
         // preverjanje padlo sele za trenutkom, ko bi ze moralo zvoniti.
-        val zacetek = zvoni - ZALET_MS
+        val zacetek = zvoni - Ura.ZALET_MS
         if (zdajMs < zacetek) return zacetek
         return Ura.naslednjePreverjanje(zdajMs, zvoni) ?: zvoni
     }

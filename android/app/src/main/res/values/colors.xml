@@ -9,6 +9,8 @@
     <color name="ink">#e7eaf0</color>
     <color name="ink_dim">#9aa3b0</color>
     <color name="ink_mute">#79828f</color>
+    <color name="ink_faint">#6b7480</color>
+    <color name="sev_bad">#d1495b</color>
     <color name="accent">#e07b45</color>
     <color name="line_firm">#2b303a</color>
     <!-- Besedilo NA poudarku, ne poudarek sam: belo na oranzni ne bi

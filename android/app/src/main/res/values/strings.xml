@@ -23,7 +23,20 @@
     <string name="zvoni_prezgodaj">Vozilo je %1$d min pred voznim redom.</string>
     <string name="zvoni_tocno">Vozi po voznem redu.</string>
     <string name="zvoni_vozni_red">Po voznem redu (%1$s) — zamude nisem mogel preveriti.</string>
+    <string name="zvoni_preventivno">Ni povezave — zvonim prej, da ne zamudiš. Vozni red: %1$s.</string>
     <string name="ustavi">Ustavi</string>
     <string name="se_malo">Še 2 minuti</string>
     <string name="ni_tocnih_alarmov">Android ne dovoli točnih alarmov. Vklopi jih v nastavitvah aplikacije, sicer budilka ne bo zanesljiva.</string>
+
+    <!-- pregled budilk -->
+    <string name="budilke">Budilke</string>
+    <string name="budilk_ni">Nobene budilke ni nastavljene.</string>
+    <string name="budilk_ni_kako">Nastavi jo v aplikaciji: odpri vožnjo, pri svoji postaji pritisni „budilka".</string>
+    <string name="budilka_odstrani">Odstrani</string>
+    <string name="budilka_zvoni_ob">zvoni ob %1$s</string>
+    <string name="budilka_vozni_red">vozni red %1$s</string>
+    <string name="budilka_odzvonjeno">odzvonjeno</string>
+    <string name="budilka_zbudi">zbudi me</string>
+    <string name="budilka_obvesti">obvesti</string>
+    <string name="odpri_kajros">Odpri kajros</string>
 </resources>

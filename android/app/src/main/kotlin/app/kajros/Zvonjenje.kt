@@ -54,6 +54,8 @@ object Zvonjenje {
         val kaj = if (b.trainNo.isBlank()) b.postaja else "${b.trainNo} · ${b.postaja}"
         val naslov = c.getString(R.string.zvoni_naslov, kaj, URA.format(Date(odhod)))
         val zakaj = when {
+            izid.vir == Ura.Vir.PREVENTIVA ->
+                c.getString(R.string.zvoni_preventivno, URA.format(Date(b.voznoredniMs)))
             izid.vir == Ura.Vir.VOZNI_RED ->
                 c.getString(R.string.zvoni_vozni_red, URA.format(Date(b.voznoredniMs)))
             izid.surovaS != null && izid.surovaS >= 60 ->

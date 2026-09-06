@@ -521,6 +521,16 @@ avtobusih bi ista omejitev delež zamud početverila — ti prezgodaj **gredo**.
 | železnica | **0** | vlak prezgodaj ne odpelje; vsaka rezerva je čisto čakanje |
 | avtobusi | **3** | 25,3 % jih odpelje prej; strošek 14,92 → 9,50 |
 
+**Kaj je s to meritvijo narejeno.** Rezerve aplikacija **ne dodaja sama**
+(odločeno 6. 9. 2026): `zvoni = voznoredna + zamuda − X`, rezervo pa določi
+potnik s tem, koliko izbere X. Ta meritev je zato zapisana v vmesniku, kjer
+X izbira — da ve, kaj kupuje z vsako minuto. Številke veljajo naprej in bodo
+podlaga za ločeno možnost „+3 min", ko bo vmesnik prenovljen.
+
+Namesto pavšalne rezerve pokriva izpad povezave svoje pravilo: zadnjih
+3,5 minute pred zvonjenjem brez odgovora pomeni **takojšnje zvonjenje** z
+razlogom. Cena je do 3,5 minute spanca, in samo takrat, ko povezave res ni.
+
 **Česar ta meritev ne pove:** kako napaka raste s starostjo podatka.
 `ocena.py` snema pri stalnem horizontu (25 min vlaki, 15 avtobusi), zato v
 `napoved` razpona ni. Zastarel podatek zato ni obravnavan kot slabša napoved,

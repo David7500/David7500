@@ -55,6 +55,17 @@
                 android:resource="@xml/bliznjice" />
         </activity>
 
+        <activity
+            android:name=".BudilkeDejavnost"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Tema">
+            <intent-filter>
+                <action android:name="app.kajros.BUDILKE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Zvonjenje čez ves zaslon. `singleInstance`, da se dve budilki ne
              zložita ena na drugo, in brez zgodovine, da po ustavitvi ne ostane
              v seznamu nedavnih. -->

@@ -376,9 +376,12 @@ function odpriBudilko(stopSeq) {
         <button type="button" class="bud-izbira${zbudi ? " is-on" : ""}" data-zbudi="1">zbudi me</button>
       </div>
 
-      <div class="bud-opomba">Zvoni 5 minut prej, kot bi sledilo iz zamude — izmerjeno je,
-        da bi brez te rezerve budilka zvonila prepozno v tretjini primerov pri vlakih
-        in dveh tretjinah pri avtobusih. Brez povezave zvoni po voznem redu.</div>
+      <div class="bud-opomba">Zvoni ob <strong>voznoredni uri + zamuda − ${minut} min</strong>,
+        zamudo pa preverja vse pogosteje, bližje ko je ura. Če povezave ni, zazvoni malo
+        prej in to pove.<br>
+        Rezerva je v tvojem času: izmerjeno je, da bi bila prikazana zamuda prekratka
+        v tretjini primerov pri vlakih in dveh tretjinah pri avtobusih — pet minut več
+        to spravi pod dvajsetino.</div>
 
       ${manjka ? `<button type="button" class="bud-dovoli" data-dovoli="1">
         Android še ne dovoli obvestil ali točnih alarmov — uredi</button>` : ""}

@@ -6,6 +6,18 @@
 -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
+        android:shortcutId="budilke"
+        android:enabled="true"
+        android:icon="@drawable/ikona_obvestilo"
+        android:shortcutShortLabel="@string/budilke"
+        android:shortcutLongLabel="@string/budilke">
+        <intent
+            android:action="app.kajros.BUDILKE"
+            android:targetPackage="app.kajros"
+            android:targetClass="app.kajros.BudilkeDejavnost" />
+    </shortcut>
+
+    <shortcut
         android:shortcutId="nastavitve"
         android:enabled="true"
         android:icon="@drawable/ikona_znak_enobarvna"

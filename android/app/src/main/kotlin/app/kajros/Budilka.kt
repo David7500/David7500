@@ -38,8 +38,8 @@ data class Budilka(
             voznoredniMs = voznoredniMs,
             minutPrej = minutPrej,
             zamudaS = zamudaS,
-            starostS = if (zamudaObMs == 0L) Int.MAX_VALUE
-                       else ((zdajMs - zamudaObMs) / 1000).toInt(),
+            zamudaObMs = zamudaObMs,
+            zdajMs = zdajMs,
             vlak = vlak,
         )
         // Odlog povozi racun: potnik je rekel "cez dve minuti" in to ni ocena.
