@@ -22,3 +22,10 @@ backup/
 
 # Posnetki zaslona za preverjanje prikaza -- chromium ne more pisati v /tmp.
 posnetki/
+
+# Gradnja Androida. Orodja so v ~/kajros-android (glej android/orodja.sh) in
+# jih git ne vidi; tu gre samo za to, kar nastane ob gradnji v projektu.
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties

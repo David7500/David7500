@@ -436,3 +436,39 @@ celega razmika (v resnici obstajajo obvozi in druge relacije) in da potnik
 cilja natanko na prikazano minuto. Zato je absolutni strošek precenjen;
 **razmerje** med možnostmi in ugotovitev, da sta `k` in rezerva zamenljiva,
 pa sta na te predpostavke neobčutljiva.
+
+## Aplikacija za Android: velikost in čistost (6. 9. 2026)
+
+**APK.** Ovoj z WebView, brez AndroidX in brez česarkoli Googlovega; edina
+knjižnica v paketu je Kotlinova standardna.
+
+| različica | velikost | zakaj toliko |
+|---|---|---|
+| izdajna (R8) | **28 kB** | naša koda + kar od Kotlina res rabi |
+| razvojna | 824 kB | brez R8; 2,33 MB `classes.dex` pred stiskanjem je Kotlinova standardna knjižnica cela |
+
+Preverjeno v paketu: `aapt2 dump strings` najde **0** nizov z `com/google`,
+`gms`, `firebase` ali `androidx`. Dovoljenja so štiri (`INTERNET`,
+`ACCESS_NETWORK_STATE`, dvakrat lega), `minSdk` 26, `targetSdk` 35.
+
+**Orodja.** `~/kajros-android` = 2,4 GB brez emulatorja, 5,5 GB z njim.
+Nič sistemskega, nič sudota.
+
+**Tri uhajanja zunaj mape**, ki jih je našla revizija in ne domneva:
+
+| kaj | kdo | kaj to premakne |
+|---|---|---|
+| `~/.java/.userPrefs/google/prefs.xml` | JVM za sdkmanager | `-Djava.util.prefs.userRoot` |
+| `~/.android/adbkey` | `adb` | samo drugačen `HOME` (ne `ANDROID_USER_HOME`) |
+| `~/.android/analytics.settings` z obstojnim `userId` | AGP ob **vsaki** gradnji | samo `-Duser.home` |
+
+Zadnjega je bilo najtežje ujeti: preizkušeno je bilo troje in dve nista
+delovali — `ANDROID_USER_HOME` sam pušča, `HOME=$KOREN/domov` prav tako
+(za razliko od adb), `ANDROID_PREFS_ROOT` pa AGP sesuje, ker zahteva eno samo
+spremenljivko. Telemetrija `sdkmanagerja` se izklopi z `--no-metrics`, a samo
+na novem `android` CLI — na `sdkmanager` je zastavica tiha in brez učinka
+(izmerjeno na številu datotek v `analytics/metrics/spool/`: brez nje 8 → 9,
+z njo ostane 9).
+
+`android/zgradi.sh` isto revizijo ponovi ob vsaki gradnji in **pade**, če kaj
+uide — enkratna meritev tega razreda napake ne ujame.

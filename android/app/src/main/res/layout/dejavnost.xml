@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dva sloja: stran in nativni zaslon za primer, ko je ni. Drugi obstaja, ker
+  brez service workerja WebView ob nedosegljivem streznku pokaze brskalnikovo
+  stran z napako — v aplikaciji brez naslovne vrstice je ta videti kot okvara
+  aplikacije same.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:background="@color/bg">
+
+    <WebView
+        android:id="@+id/web"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <ScrollView
+        android:id="@+id/napaka"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="48dp"
+                android:text="@string/ni_zveze_naslov"
+                android:textColor="@color/ink"
+                android:textSize="21sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/napaka_zakaj"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/ni_zveze_zakaj"
+                android:textColor="@color/ink_dim"
+                android:textSize="15sp"
+                android:lineSpacingMultiplier="1.35" />
+
+            <TextView
+                android:id="@+id/napaka_naslov"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:padding="12dp"
+                android:background="@color/bg_raised"
+                android:fontFamily="monospace"
+                android:textColor="@color/ink_mute"
+                android:textSize="13sp"
+                android:textIsSelectable="true" />
+
+            <Button
+                android:id="@+id/poskusi"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:background="@drawable/gumb"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textAllCaps="false"
+                android:textColor="@color/na_poudarku"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:text="@string/poskusi_znova" />
+
+            <Button
+                android:id="@+id/nastavi"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/gumb_tih"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textAllCaps="false"
+                android:textColor="@color/ink_dim"
+                android:textSize="15sp"
+                android:text="@string/nastavi_naslov" />
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

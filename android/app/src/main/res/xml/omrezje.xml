@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Privzeto je nesifriran promet PREPOVEDAN. To ni le higiena: ce bi kdaj
+  `kajros.app` preusmeril na `http`, bi brez tega WebView tiho ubogal.
+
+  Izjeme so nasteta imena, ne obseg naslovov: `network-security-config` ne
+  pozna CIDR, `<domain>` sprejme samo eno ime ali en naslov. Nasteti so tisti,
+  ki jih res uporabljava — prenosnik, malina, ta racunalnik. Nov naslov v
+  domacem omrezju zahteva vrstico tu in novo gradnjo; to je namerno drazje od
+  `cleartextTrafficPermitted="true"` cez vse.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.164</domain>  <!-- prenosnik -->
+        <domain includeSubdomains="false">192.168.1.166</domain>  <!-- malina -->
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>       <!-- gostitelj v emulatorju -->
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- `minSdk 26` pomeni, da adaptivno ikono razume vsaka naprava; zato PNG
+     razlicic za nizje ravni ni. `monochrome` je za temo ikon v Androidu 13+. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/bg" />
+    <foreground android:drawable="@drawable/ikona_znak" />
+    <monochrome android:drawable="@drawable/ikona_znak_enobarvna" />
+</adaptive-icon>

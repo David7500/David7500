@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Lastna lega: prek `https://kajros.app` v WebView JE varen kontekst in
+         `navigator.geolocation` dela. Prek `http://192.168…` v brskalniku ne
+         (izmerjeno: window.isSecureContext = false) — to je edina omejitev
+         iz CLAUDE.md, ki jo aplikacija odpravi. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/ime"
+        android:networkSecurityConfig="@xml/omrezje"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="false"
+        android:theme="@style/Tema">
+
+        <activity
+            android:name=".GlavnaDejavnost"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density|fontScale">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Bliznjica ob dolgem pritisku na ikono: naslov streznika. -->
+            <intent-filter>
+                <action android:name="app.kajros.NASTAVITVE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/bliznjice" />
+        </activity>
+    </application>
+</manifest>

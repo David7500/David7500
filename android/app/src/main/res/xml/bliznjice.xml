@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nastavitve so tu in ne v aplikaciji sami: stran zavzame ves zaslon in v njej
+  ni mesta za nativni gumb, ki bi ga bilo videti. Dolg pritisk na ikono je
+  standardna pot Androida in ne izumljena gesta, ki bi je nihce ne nasel.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="nastavitve"
+        android:enabled="true"
+        android:icon="@drawable/ikona_znak_enobarvna"
+        android:shortcutShortLabel="@string/nastavi_naslov"
+        android:shortcutLongLabel="@string/nastavitve_naslov">
+        <intent
+            android:action="app.kajros.NASTAVITVE"
+            android:targetPackage="app.kajros"
+            android:targetClass="app.kajros.GlavnaDejavnost" />
+    </shortcut>
+</shortcuts>

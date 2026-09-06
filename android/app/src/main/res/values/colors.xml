@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Iste vrednosti kot `kajros/static/base.css`. Prepisane so, ker Android
+     CSS ne bere; ce se tam spremenijo, se morajo tudi tu — sicer se nativni
+     zaslon in stran razideta ravno v trenutku, ko stran ni dosegljiva. -->
+<resources>
+    <color name="bg">#0f1115</color>
+    <color name="bg_raised">#16181c</color>
+    <color name="line">#23272f</color>
+    <color name="ink">#e7eaf0</color>
+    <color name="ink_dim">#9aa3b0</color>
+    <color name="ink_mute">#79828f</color>
+    <color name="accent">#e07b45</color>
+    <color name="line_firm">#2b303a</color>
+    <!-- Besedilo NA poudarku, ne poudarek sam: belo na oranzni ne bi
+         doseglo kontrasta. Ista vrednost kot `.btn` v base.css. -->
+    <color name="na_poudarku">#14161a</color>
+</resources>

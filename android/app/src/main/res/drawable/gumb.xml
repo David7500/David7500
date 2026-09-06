@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Iste vrednosti kot `.btn` v base.css: poudarek, polmer 7, temno besedilo.
+     Nativni gumb, ki bi bil videti drugace od gumba na strani tik ob njem,
+     bi bil videti kot napaka aplikacije. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33000000">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent" />
+            <corners android:radius="7dp" />
+        </shape>
+    </item>
+</ripple>

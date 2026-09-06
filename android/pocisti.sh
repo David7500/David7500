@@ -12,7 +12,9 @@ KOREN="${KAJROS_ANDROID:-$HOME/kajros-android}"
 
 if [ -d "$KOREN" ]; then
     echo "brisem $KOREN ($(du -sh "$KOREN" | cut -f1))"
-    # Demon adb drzi vrata 5037 in bi tekel naprej iz izbrisane datoteke.
+    # Emulator in demon adb tecejo iz te mape; ce ju ne ustavimo, bosta po
+    # brisanju tekla naprej iz izbrisanih datotek in drzala vrata 5037.
+    "$KOREN/sdk/platform-tools/adb" emu kill >/dev/null 2>&1 || true
     "$KOREN/sdk/platform-tools/adb" kill-server >/dev/null 2>&1 || true
     rm -rf "$KOREN"
 else

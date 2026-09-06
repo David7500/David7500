@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- `Theme.Material` in ne AppCompat: AppCompat je AndroidX in bi potegnil
+         odvisnosti, ki jih ta aplikacija ne rabi. `NoActionBar`, ker je glava
+         ze na strani in dve glavi sta ena prevec. -->
+    <style name="Tema" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink_dim</item>
+        <item name="android:alertDialogTheme">@style/TemaOkna</item>
+    </style>
+
+    <!-- Brez tega je pogovorno okno svetlo sivo: `Theme.Material` ima svojo
+         podlago in ta ni nasa. Izmerjeno na posnetku — okno je bilo #545454
+         sredi strani, ki je #0f1115. -->
+    <style name="TemaOkna" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorBackground">@color/bg_raised</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:windowTitleStyle">@style/NaslovOkna</item>
+    </style>
+
+    <style name="NaslovOkna" parent="@android:style/TextAppearance.Material.Title">
+        <item name="android:textColor">@color/ink</item>
+    </style>
+</resources>

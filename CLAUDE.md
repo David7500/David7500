@@ -107,6 +107,7 @@ kajros/
   static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
 scripts/         dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
+android/         nativni ovoj z WebView (Kotlin); orodja ločeno v ~/kajros-android
 ```
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja
@@ -224,6 +225,7 @@ ustreznih datotek:
 | `zemljevid.md` | `dashboard.*`, `train.*` | plasti, geste, ocena lege, pasti CSS |
 | `strani.md` | `connections.*`, `home.*`, `templates/**` | katera stran odgovarja na katero vprašanje |
 | `objava.md` | `deploy/**`, `scripts/**` | malina, namestitev, vleka baze |
+| `android.md` | `android/**` | ovoj z WebView, meja izvora, budilka, orodja |
 
 Razrez ni po temah, ampak **po datotekah, ki znanje res rabijo**: to je edino,
 kar se pozna pri porabi konteksta. Popravek v `connections.js` naloži 10 kB

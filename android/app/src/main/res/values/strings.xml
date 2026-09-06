@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ime">Kajros</string>
+
+    <string name="ni_zveze_naslov">Kajrosa ni mogoče doseči</string>
+    <string name="ni_zveze_zakaj">Strežnik ne odgovarja. Če teče na prenosniku, je ta najbrž zaprt.</string>
+    <string name="ni_omrezja">Telefon ni na omrežju. Strežnik je morda čisto v redu.</string>
+    <string name="poskusi_znova">Poskusi znova</string>
+    <string name="nastavi_naslov">Nastavi naslov</string>
+
+    <string name="nastavitve_naslov">Naslov strežnika</string>
+    <string name="nastavitve_pomoc">https://kajros.app ali http://192.168.1.164:8001</string>
+    <string name="shrani">Shrani</string>
+    <string name="preklici">Prekliči</string>
+    <string name="naslov_ni_veljaven">Tega naslova ne razumem.</string>
+    <string name="brez_sifriranja">Ta naslov ni šifriran in ga aplikacija ne bo odprla. Dovoljeni so samo naslovi v domačem omrežju, našteti v res/xml/omrezje.xml.</string>
+</resources>

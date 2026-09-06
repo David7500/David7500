@@ -10,7 +10,7 @@
 #     `$KOREN/gradle` (`GRADLE_USER_HOME`) -- to je obicajno najvecja smet,
 #     lahko vec GB;
 #   * `adb` svojega kljuca ne pise v `~/.android`, ampak v `$KOREN/domov`
-#     (`ANDROID_USER_HOME`, pri starejsih orodjih `ANDROID_SDK_HOME`);
+#     (`ANDROID_USER_HOME`);
 #   * zacasne datoteke gredo v `$KOREN/tmp`, ne v `/tmp`.
 #
 # Odstranitev vsega, vkljucno z nastavitvami in licencami:
@@ -27,6 +27,12 @@ CMDLINE_BUILD="${CMDLINE_BUILD:-16111833}"
 # Android 15. Ciljna raven se doloci v `build.gradle`, tu gre za prevajalnik.
 PLATFORMA="${PLATFORMA:-android-35}"
 BUILD_TOOLS="${BUILD_TOOLS:-35.0.0}"
+# Gradle NE prek wrapperja: wrapper pomeni binarni .jar v gitu. Tu je orodje
+# in orodja zivijo v tej mapi. 8.9 je najnizja, ki jo zahteva AGP 8.7.
+GRADLE="${GRADLE:-8.9}"
+# Emulator je neobvezen: 2 GB za nekaj, kar rabi samo preverjanje prikaza.
+# Vklopi ga s `KAJROS_EMULATOR=1 ./orodja.sh`.
+SLIKA="${SLIKA:-system-images;android-35;default;x86_64}"
 
 krepko() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
@@ -57,18 +63,36 @@ echo "    $("$JAVA_HOME/bin/java" -version 2>&1 | head -1)"
 # --- Android SDK -----------------------------------------------------------
 export ANDROID_HOME="$KOREN/sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"          # starejsa orodja berejo tega
-export ANDROID_USER_HOME="$KOREN/domov"
-export ANDROID_SDK_HOME="$KOREN/domov"           # pred orodji 34
-export ANDROID_EMULATOR_HOME="$KOREN/domov/emulator"
-export ANDROID_AVD_HOME="$KOREN/domov/avd"
+# **Ena sama spremenljivka, ne stiri.** AGP pade, ce jih najde vec in ne kazejo
+# na isto mapo, in `ANDROID_SDK_HOME` pomeni STARSA mape `.android`, ne nje
+# same -- torej sta `ANDROID_SDK_HOME=$KOREN/domov` in
+# `ANDROID_USER_HOME=$KOREN/domov` po AGP dve razlicni poti. Izmerjeno:
+# "Several environment variables ... contain different paths".
+#
+# Zato ostane samo `ANDROID_USER_HOME`, in kaze natanko tja, kamor pise oviti
+# adb (`$HOME/.android` pri `HOME=$KOREN/domov`). Vse na eno mesto.
+export ANDROID_USER_HOME="$KOREN/domov/.android"
+# Emulator ima svojo spremenljivko in `ANDROID_USER_HOME` ne bere: isce po
+# `ANDROID_AVD_HOME`, `ANDROID_SDK_HOME/avd` in `$HOME/.android/avd`. Brez te
+# vrstice AVD-ja, ki smo ga naredili, ne najde. AGP jo prenese (preizkuseno --
+# ni na njegovem seznamu spremenljivk, ki morajo biti ena sama).
+export ANDROID_AVD_HOME="$KOREN/domov/.android/avd"
 export GRADLE_USER_HOME="$KOREN/gradle"
 export TMPDIR="$KOREN/tmp"
 # Brez tega JVM naredi `~/.java/.userPrefs` in vanj zapise nastavitve
 # sdkmanagerja. Izmerjeno: ob prvem zagonu je nastal `~/.java/google/prefs.xml`
 # -- 16 kB smeti natanko tam, kjer je ne sme biti. `JAVA_TOOL_OPTIONS` velja
 # za vsak JVM, tudi za Gradlov demon; cena je ena vrstica na stderr.
+#
+# `-Duser.home` je tu iz drugega razloga in ga je nasla sele meritev: gradnja
+# je kljub `ANDROID_USER_HOME` naredila `~/.android/analytics.settings` z
+# **obstojnim `userId`**. AGP-jeva telemetrija namrec ne gre skozi mapo
+# Androida, ampak skozi lastnost JVM `user.home`. Preizkuseno je bilo troje:
+# `ANDROID_USER_HOME` sam (pusca), `HOME=$KOREN/domov` (pusca -- za razliko od
+# adb), `ANDROID_PREFS_ROOT` (AGP pade, ker hoce eno samo spremenljivko).
+# Deluje samo `-Duser.home`, in datoteka pristane natanko v `ANDROID_USER_HOME`.
 mkdir -p "$KOREN/domov/prefs"
-export JAVA_TOOL_OPTIONS="-Djava.util.prefs.userRoot=$KOREN/domov/prefs -Djava.util.prefs.systemRoot=$KOREN/domov/prefs"
+export JAVA_TOOL_OPTIONS="-Djava.util.prefs.userRoot=$KOREN/domov/prefs -Djava.util.prefs.systemRoot=$KOREN/domov/prefs -Duser.home=$KOREN/domov"
 
 if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
     krepko "cmdline-tools ($CMDLINE_BUILD)"
@@ -83,7 +107,7 @@ if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
     mv "$KOREN/prenosi/raz/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
     rm -rf "$KOREN/prenosi/raz" "$ZIP"
 fi
-export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 
 krepko "licence in paketi"
 # **`--no-metrics` gre na `android`, NE na `sdkmanager`.** Ta je v teh
@@ -106,6 +130,25 @@ android --no-metrics sdk install "platform-tools" "platforms;$PLATFORMA" \
     "build-tools;$BUILD_TOOLS" >/dev/null 2>&1 || \
     sdkmanager --install "platform-tools" "platforms;$PLATFORMA" \
         "build-tools;$BUILD_TOOLS" >/dev/null
+
+# --- emulator (neobvezno) --------------------------------------------------
+# `default` in ne `google_apis`: to je AOSP brez Googlovih storitev, torej ista
+# izbira kot pri telefonu. Emulator rabimo zato, ker ima ta projekt pravilo, da
+# se spremembo prikaza POGLEDA, preden se razglasi za koncano -- brez njega je
+# vsako preverjanje odvisno od tega, ali je telefon priklopljen.
+#
+# KVM mora biti dostopen. Na tem racunalniku je prek ACL (`getfacl /dev/kvm`),
+# torej brez sudota in brez clanstva v skupini `kvm`.
+if [ "${KAJROS_EMULATOR:-0}" = "1" ]; then
+    krepko "emulator in sistemska slika ($SLIKA)"
+    android --no-metrics sdk install "emulator" "$SLIKA" >/dev/null 2>&1 || \
+        sdkmanager --install "emulator" "$SLIKA" >/dev/null
+    if ! "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" list avd 2>/dev/null \
+         | grep -q "Name: kajros"; then
+        echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" \
+            create avd -n kajros -k "$SLIKA" -d pixel_6 --force >/dev/null 2>&1
+    fi
+fi
 
 # Kar je med namescanjem vseeno pristalo v spoolu, naj ne odide nikamor.
 rm -rf "$KOREN/domov/cli/analytics/metrics/spool" 2>/dev/null || true
@@ -130,6 +173,19 @@ EOF
     chmod +x "$ADB"
 fi
 
+# --- Gradle ----------------------------------------------------------------
+if [ ! -x "$KOREN/gradle-dist/bin/gradle" ]; then
+    krepko "Gradle $GRADLE"
+    curl -fL --progress-bar -o "$KOREN/prenosi/gradle.zip" \
+        "https://services.gradle.org/distributions/gradle-${GRADLE}-bin.zip"
+    rm -rf "$KOREN/prenosi/graz" "$KOREN/gradle-dist"
+    unzip -q "$KOREN/prenosi/gradle.zip" -d "$KOREN/prenosi/graz"
+    mv "$KOREN/prenosi/graz/gradle-$GRADLE" "$KOREN/gradle-dist"
+    rm -rf "$KOREN/prenosi/graz" "$KOREN/prenosi/gradle.zip"
+fi
+export PATH="$KOREN/gradle-dist/bin:$PATH"
+echo "    $(gradle --version 2>/dev/null | grep -m1 '^Gradle')"
+
 # --- okolje ----------------------------------------------------------------
 cat > "$KOREN/okolje.sh" <<EOF
 # Poženi z: source ~/kajros-android/okolje.sh
@@ -139,14 +195,16 @@ cat > "$KOREN/okolje.sh" <<EOF
 export JAVA_HOME="$KOREN/jdk"
 export ANDROID_HOME="$KOREN/sdk"
 export ANDROID_SDK_ROOT="$KOREN/sdk"
-export ANDROID_USER_HOME="$KOREN/domov"
-export ANDROID_SDK_HOME="$KOREN/domov"
-export ANDROID_EMULATOR_HOME="$KOREN/domov/emulator"
-export ANDROID_AVD_HOME="$KOREN/domov/avd"
+export ANDROID_USER_HOME="$KOREN/domov/.android"
+# Emulator ima svojo spremenljivko in `ANDROID_USER_HOME` ne bere: isce po
+# `ANDROID_AVD_HOME`, `ANDROID_SDK_HOME/avd` in `$HOME/.android/avd`. Brez te
+# vrstice AVD-ja, ki smo ga naredili, ne najde. AGP jo prenese (preizkuseno --
+# ni na njegovem seznamu spremenljivk, ki morajo biti ena sama).
+export ANDROID_AVD_HOME="$KOREN/domov/.android/avd"
 export GRADLE_USER_HOME="$KOREN/gradle"
 export TMPDIR="$KOREN/tmp"
-export JAVA_TOOL_OPTIONS="-Djava.util.prefs.userRoot=$KOREN/domov/prefs -Djava.util.prefs.systemRoot=$KOREN/domov/prefs"
-export PATH="\$JAVA_HOME/bin:$KOREN/sdk/cmdline-tools/latest/bin:$KOREN/sdk/platform-tools:\$PATH"
+export JAVA_TOOL_OPTIONS="-Djava.util.prefs.userRoot=$KOREN/domov/prefs -Djava.util.prefs.systemRoot=$KOREN/domov/prefs -Duser.home=$KOREN/domov"
+export PATH="\$JAVA_HOME/bin:$KOREN/gradle-dist/bin:$KOREN/sdk/cmdline-tools/latest/bin:$KOREN/sdk/platform-tools:$KOREN/sdk/emulator:\$PATH"
 EOF
 
 # --- dokaz -----------------------------------------------------------------
