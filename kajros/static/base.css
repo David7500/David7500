@@ -387,3 +387,52 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .ticket-link:hover { border-color: var(--accent); color: var(--ink); }
 .ticket-link strong { color: var(--accent-lit); font-weight: 600; }
 .ticket-note { margin-left: auto; font-size: 11.5px; color: var(--ink-faint); }
+
+/* ---------- znak, da se nekaj dogaja ----------
+ * Ena črta čez vrh strani, dokler teče zahteva. Pokaže se šele po 400 ms
+ * (glej `common.js`): kar se zgodi hitro, ne potrebuje obvestila, kar traja
+ * petnajst sekund, pa ga.
+ */
+.nalaganje {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 200;
+  overflow: hidden;
+  pointer-events: none;
+  /* Stalna, komaj vidna podlaga: brez nje je črta ob začetku animacije
+     povsem prazna in prvi hip je videti, kot da se ni zgodilo nič. */
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.nalaganje::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--accent) 45%, var(--accent-lit) 50%, var(--accent) 55%,
+    transparent 100%);
+  animation: nalaganje-tek 1.1s linear infinite;
+}
+@keyframes nalaganje-tek {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+/* Kdor je izklopil animacije, dobi mirno črto -- še vedno vidi, da teče. */
+@media (prefers-reduced-motion: reduce) {
+  .nalaganje::after { animation: none; opacity: 0.7; }
+}
+
+/* Besedilo pove, KAJ se nalaga, in ne le „nalagam": na počasni povezavi je to
+ * edino, kar potrdi, da je klik sploh prijel. Utrip je počasen namenoma --
+ * hiter utrip je videti kot napaka. */
+.empty-state.is-busy {
+  color: var(--ink-dim);
+  animation: isce 1.6s ease-in-out infinite;
+}
+@keyframes isce {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .empty-state.is-busy { animation: none; opacity: 0.8; }
+}

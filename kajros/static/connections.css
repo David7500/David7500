@@ -647,3 +647,7 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
   color: var(--sev-hard);
   border-color: color-mix(in srgb, var(--sev-hard) 35%, transparent);
 }
+
+/* Gumb med iskanjem ne sme sprejeti drugega klika -- dve zahtevi hkrati sta
+   dva odgovora in zadnji ni nujno tisti, ki ga je človek naročil. */
+.go:disabled { opacity: 0.55; cursor: default; }

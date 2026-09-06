@@ -535,3 +535,30 @@ razlogom. Cena je do 3,5 minute spanca, in samo takrat, ko povezave res ni.
 `ocena.py` snema pri stalnem horizontu (25 min vlaki, 15 avtobusi), zato v
 `napoved` razpona ni. Zastarel podatek zato ni obravnavan kot slabša napoved,
 ampak kot **odsotnost** povezave — konservativno, kot je bilo naročeno.
+
+## Kaj LPP v IJPP sploh je (6. 9. 2026)
+
+Prijava: „odhodi iz postaje Polje najdejo samo LPP 25, čeprav so tam vsaj
+trije busi". Preverjeno v bazi — **prikaz je pravilen, feed je nepopoln.**
+
+Postajališči z imenom `Polje` (`1167324`, `1167325`, Ljubljana) strežeta v
+celotnem voznem redu **samo liniji 25** (199 postankov). V nedeljo 6. 9. je
+tam 31 odhodov, v ponedeljek 7. 9. jih je 80 — vsi linija 25.
+
+**Linij 20 in 22 v podatkih sploh ni**, pri nobeni agenciji. Znotraj 1,2 km od
+Polja je edina druga stvar železniška postaja Ljubljana Polje.
+
+| agencija | linij | voženj |
+|---|---|---|
+| 1123 (AP MS) | 486 | 8 981 |
+| 1119 (Nomago) | 922 | 6 941 |
+| 1118 (**LPP**) | **37** | 3 174 |
+| 1121 (Arriva) | 115 | 965 |
+
+LPP jih ima 37: `12D, 15, 19I, 21D, 25, 30, 3B, 3G, 40, 42, 44, 45, 46, 461,
+47, 48, 48P, 49, 50, 51, 52, 53, 54, 56, 60, 68, 69, 6B, 71, 72, 73, 74, 76,
+78, 80, 82, 84`. Mestnih linij 1, 2, 5, 6, 7, 9, 11, 13, 14, 18, 20, 22, 27 ni.
+Prisotne so večinoma primestne (40+) in nekaj mestnih.
+
+To je vrzel pri viru, ne pri nas, in je ni mogoče zapolniti iz drugega
+odprtega vira. Vredno vprašanja DUJPP, ko bo tekla korespondenca.

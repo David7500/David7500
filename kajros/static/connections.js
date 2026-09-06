@@ -1161,6 +1161,20 @@ function schedulePoll(fn, isToday) {
   if (isToday) pollTimer = setTimeout(fn, POLL_MS);
 }
 
+// Iskanje se mora videti TAKOJ, ne sele ko odgovor pride. Doslej je na
+// zaslonu ostal prejsnji izid in klik je bil videti, kot da ni delal.
+function zacniIskanje(kaj) {
+  resultHeadEl.innerHTML = "";
+  alertsEl.innerHTML = "";
+  vozovnicaEl.innerHTML = "";
+  resultsEl.innerHTML = `<div class="empty-state is-busy">${escapeHtml(kaj)}</div>`;
+  document.querySelectorAll(".go").forEach((b) => { b.disabled = true; });
+}
+
+function koncajIskanje() {
+  document.querySelectorAll(".go").forEach((b) => { b.disabled = false; });
+}
+
 async function searchAB(push) {
   const from = $("from").value.trim();
   const to = $("to").value.trim();
@@ -1172,6 +1186,7 @@ async function searchAB(push) {
   }
   remember({ tab: "ab", from, to, date });
   if (push) history.replaceState(null, "", `?${new URLSearchParams({ from, to, date })}`);
+  zacniIskanje(`iščem zveze ${from} → ${to} …`);
 
   try {
     const url = `/api/connections?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
@@ -1198,6 +1213,8 @@ async function searchAB(push) {
     console.error("iskanje ni uspelo", err);
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
     resultsEl.innerHTML = '<div class="empty-state">Iskanje ni uspelo. Strežnik morda ni dosegljiv.</div>';
+  } finally {
+    koncajIskanje();
   }
 }
 
@@ -1208,6 +1225,7 @@ async function searchBoard(push) {
   const from = $("board-time").value;
   if (!station) return;
   remember({ tab: "board", station, date, kind, from });
+  zacniIskanje(`iščem odhode — ${station} …`);
   if (push) {
     // Ura se v naslovu imenuje `ob` in NE `from`. `from` je na tej strani že
     // izhodiščna postaja iskanja A–B, in `restore()` ga tako tudi bere: naslov
@@ -1238,6 +1256,8 @@ async function searchBoard(push) {
     console.error("tabla ni uspela", err);
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
     resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
+  } finally {
+    koncajIskanje();
   }
 }
 

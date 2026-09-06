@@ -156,6 +156,47 @@ function pluralRuns(n) {
   return `${n} voženj`;
 }
 
+// ---------- znak, da se nekaj dogaja ----------
+//
+// Na slabi povezavi je klik izgledal, kot da ni delal: stara vsebina je
+// ostala na zaslonu in nic se ni premaknilo tudi petnajst sekund. Zato ena
+// sama crta na vrhu strani, ki tece, dokler je katerakoli zahteva v teku.
+//
+// Ovijemo `fetch` in ne vsakega klicatelja posebej: klicnih mest je cez
+// trideset, in tisto, ki bi ga kdo pozabil, bi bilo ravno najpocasnejse.
+//
+// **Crta se pokaze sele po 400 ms.** Hitre zahteve (in tiste v ozadju, ki
+// tecejo na 30 s) tako ne utripajo -- kar se zgodi hitro, ne rabi obvestila.
+(function () {
+  const izvirni = window.fetch;
+  if (typeof izvirni !== "function") return;
+  let vTeku = 0;
+  let cakalec = null;
+  let crta = null;
+
+  const pokazi = () => {
+    if (crta) return;
+    crta = document.createElement("div");
+    crta.className = "nalaganje";
+    crta.setAttribute("role", "status");
+    crta.setAttribute("aria-label", "nalagam");
+    document.body.appendChild(crta);
+  };
+  const skrij = () => {
+    if (cakalec) { clearTimeout(cakalec); cakalec = null; }
+    if (crta) { crta.remove(); crta = null; }
+  };
+
+  window.fetch = function (...args) {
+    vTeku += 1;
+    if (vTeku === 1 && !cakalec) cakalec = setTimeout(pokazi, 400);
+    return izvirni.apply(this, args).finally(() => {
+      vTeku -= 1;
+      if (vTeku <= 0) { vTeku = 0; skrij(); }
+    });
+  };
+})();
+
 // ---------- most do nativne aplikacije ----------
 //
 // `window.Kajros` obstaja SAMO v aplikaciji za Android. V brskalniku ga ni in
