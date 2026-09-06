@@ -12,8 +12,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="kajros">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/static/base.css">
-  <link rel="stylesheet" href="/static/connections.css">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('connections.css') }}">
 </head>
 <body class="conn-page net-{{ network | default('zeleznica') }}" data-network="{{ network | default('zeleznica') }}">
 
@@ -75,8 +75,13 @@
         <label for="date">Dan</label>
         <div class="date-row">
           <input id="date" name="date" type="date">
-          <button type="button" class="day-quick" data-day-for="date"
-                  aria-pressed="false">jutri</button>
+          <button type="button" class="day-next" data-day-for="date"
+                  aria-label="dan naprej" title="dan naprej">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <button type="submit" class="btn go">Poišči</button>
@@ -95,8 +100,13 @@
         <label for="board-date">Dan</label>
         <div class="date-row">
           <input id="board-date" name="date" type="date">
-          <button type="button" class="day-quick" data-day-for="board-date"
-                  aria-pressed="false">jutri</button>
+          <button type="button" class="day-next" data-day-for="board-date"
+                  aria-label="dan naprej" title="dan naprej">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <div class="field field-time">
@@ -147,7 +157,7 @@
     </footer>
   </main>
 
-  <script src="/static/common.js"></script>
-  <script src="/static/connections.js"></script>
+  <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('connections.js') }}"></script>
 </body>
 </html>

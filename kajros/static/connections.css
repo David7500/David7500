@@ -42,9 +42,9 @@
 .search-card[hidden] { display: none; }
 
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
-/* 150 px je bilo dovolj za sam datum; z gumbom "jutri" ob njem se je izpis
-   odrezal na "06. 09. 2". Sirina je vsota obojega, ne ugib. */
-.field-date { flex: 0 0 202px; }
+/* 150 px je bilo dovolj za sam datum; puscica v polju mu vzame 22 px, sicer
+   se izpis odreze na "06. 09. 2". */
+.field-date { flex: 0 0 178px; }
 .field-kind { flex: 0 0 168px; }
 .field-time { flex: 0 0 118px; }
 
@@ -437,24 +437,35 @@
   border-color: color-mix(in srgb, var(--sev-bad) 45%, transparent);
 }
 
-/* Datum in "jutri" v eni vrstici, gumb ozek. */
-.date-row { display: flex; gap: 6px; align-items: stretch; }
-.date-row input { flex: 1 1 auto; min-width: 0; }
-.day-quick {
-  flex: 0 0 auto;
-  background: var(--bg-raised);
-  border: 1px solid var(--line-firm);
-  border-radius: var(--r);
-  padding: 0 9px;
+/* Puščica za dan naprej živi V polju, levo od koledarskega gumbka brskalnika
+   -- ne kot lastni gumb ob njem. Datum in njegovo premikanje sta ena stvar in
+   tako je videti kot ena. Prostor zanjo naredi `padding-right` na vnosu. */
+.date-row { position: relative; display: block; }
+/* **`padding-right` premakne koledarski gumbek brskalnika navznoter**, ker ga
+   Chrome polozi na konec vsebinskega okvira. Pri 50 px je gumbek zdrsnil
+   levo od nase puscice in vrstni red je bil obrnjen. Vnos zato ostane pri
+   svojem robu, puscica pa se postavi LEVO od gumbka -- torej pri vecjem
+   odmiku od desne, kot ga ima on. */
+.date-row input { width: 100%; padding-right: 10px; }
+.day-next {
+  position: absolute;
+  right: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 3px;
   color: var(--ink-mute);
-  font: 500 11.5px/1 var(--sans);
   cursor: pointer;
-  white-space: nowrap;
 }
-.day-quick:hover { color: var(--ink); border-color: #3d434f; }
-.day-quick[aria-pressed="true"] {
-  color: var(--accent-lit);
-  border-color: color-mix(in srgb, var(--accent) 33%, transparent);
+.day-next:hover { color: var(--accent-lit); }
+/* Brez tega je puščica na tipkovnici nevidna -- obroba je edini znak fokusa. */
+.day-next:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 
 /* ---------- stran z ovirami ---------- */

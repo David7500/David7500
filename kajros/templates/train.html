@@ -11,9 +11,9 @@
   <meta name="theme-color" content="#0f1115">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="kajros">
-  <link rel="stylesheet" href="/static/base.css">
-  <link rel="stylesheet" href="/static/dashboard.css">
-  <link rel="stylesheet" href="/static/train.css">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('dashboard.css') }}">
+  <link rel="stylesheet" href="{{ s('train.css') }}">
 </head>
 <body class="train-page net-{{ network | default('zeleznica') }}"
       data-train-no="{{ train_no }}" data-network="{{ network | default('zeleznica') }}">
@@ -121,7 +121,7 @@
 
   <div id="tooltip" class="chart-tooltip" hidden></div>
 
-  <script src="/static/common.js"></script>
-  <script src="/static/train.js"></script>
+  <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('train.js') }}"></script>
 </body>
 </html>

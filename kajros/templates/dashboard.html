@@ -12,8 +12,8 @@
   <meta name="theme-color" content="#0f1115">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="kajros">
-  <link rel="stylesheet" href="/static/base.css">
-  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('dashboard.css') }}">
 </head>
 <body>
 
@@ -132,7 +132,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/common.js"></script>
-  <script src="/static/dashboard.js"></script>
+  <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('dashboard.js') }}"></script>
 </body>
 </html>

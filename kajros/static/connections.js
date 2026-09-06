@@ -50,10 +50,15 @@ async function loadHealth() {
 
 // ---------- samodopolnjevanje postaj ----------
 
+// Deljena med polji: `takeIt()` prestavi fokus na naslednje prazno polje in
+// tam se seznam ne sme odpreti sam od sebe.
+let preskociFokus = false;
+
 function attachSuggest(input, listEl) {
   let items = [];
   let active = -1;
   let seq = 0;
+  let izbrano = null;      // ime, ki smo ga sami vpisali v polje (glej `takeIt`)
 
   // Kaj naredimo z izbrano postajo. Izbira postaje NE sprozi iskanja: pri
   // "Od-do" clovek pogosto popravi se drugo polje ali dan, vsak vmesni ugib
@@ -64,13 +69,29 @@ function attachSuggest(input, listEl) {
   // hkrati pove, da vprasanje se ni celo.
   const takeIt = (name) => {
     input.value = name;
+    // **Postavitev `.value` je za telefonsko tipkovnico videti kot tipkanje.**
+    // Ko izberes "Ljubljana Polje" iz seznama, se napisano ("ljubljana p")
+    // zamenja z izbranim -- Android tipkovnica na to spremembo odgovori z
+    // lastnim `input` dogodkom in seznam se odpre nazaj. Tega ne resi
+    // zavracanje zapoznelih odgovorov: dogodek je nov in zahteva je nova.
+    // Zapomnimo si, kaj smo vpisali; dokler polje pise natanko to, ni kaj
+    // dopolnjevati. Prvi pravi znak vrednost spremeni in vajet spusti.
+    izbrano = name;
     close();
     paintClear(input);
     paintFavButton();
     const next = [...input.form.querySelectorAll(".station-field input")]
       .find((el) => el !== input && !el.value.trim());
-    if (next) next.focus();
-    else input.blur();
+    if (next) {
+      // Zastavica velja samo za ta klic: `focus()` sprozi dogodek sinhrono,
+      // zato je zunaj teh dveh vrstic spet `false` in noben pravi dotik ne
+      // more po nesreci pasti vanjo.
+      preskociFokus = true;
+      next.focus();
+      preskociFokus = false;
+    } else {
+      input.blur();
+    }
   };
 
   // Bralnik zaslona mora vedeti, da je polje spustni seznam, ali je odprt in
@@ -97,6 +118,10 @@ function attachSuggest(input, listEl) {
 
   const paint = () => {
     if (!items.length) return close();
+    // **Seznam se sme odpreti samo nad poljem, ki ima fokus.** Brez tega je
+    // vsak zapoznel ali odvecen izris odprl seznam nad poljem, ki ga clovek
+    // ze zdavnaj ne ureja vec -- v praksi seznam polja OD cez polje DO.
+    if (document.activeElement !== input) return close();
     const q = input.value.trim();
     listEl.replaceChildren(...items.map((s, i) => {
       const li = document.createElement("li");
@@ -143,8 +168,21 @@ function attachSuggest(input, listEl) {
     }
   };
 
-  input.addEventListener("input", () => { paintClear(input); query(); });
-  input.addEventListener("focus", () => { if (!input.value.trim()) query(); });
+  input.addEventListener("input", () => {
+    paintClear(input);
+    if (izbrano !== null && input.value === izbrano) return;   // odmev nase izbire
+    izbrano = null;
+    query();
+  });
+  // Fokus sam po sebi ne odpre nicesar. Doslej je prazno polje ob fokusu
+  // pokazalo nedavne postaje -- in ker `takeIt()` fokus PRESTAVI na naslednje
+  // prazno polje, se je seznam odprl brez enega samega dotika, natanko takrat,
+  // ko je clovek gledal, kaj je pravkar izbral. Nedavne se pokazejo, ko clovek
+  // v prazno polje sam tapne ali zacne tipkati.
+  input.addEventListener("focus", () => {
+    if (!input.value.trim() && !preskociFokus) query();
+    preskociFokus = false;
+  });
 
   input.addEventListener("keydown", (ev) => {
     if (listEl.hidden) return;
@@ -1323,23 +1361,21 @@ for (const id of STATION_INPUTS) {
   attachClear($(id));
 }
 
-// Bliznjica za jutri. En gumb in ne dva: ko je datum ze jutrisnji, je edina
-// smiselna naslednja poteza vrnitev na danes, zato gumb pove, kam pelje, in
-// ne, kje si. Prazno polje pomeni danes -- tako ga bere tudi `searchAB()`.
+// Puscica premakne datum za en dan naprej. Prazno polje pomeni danes -- tako
+// ga bere tudi `searchAB()` -- zato je prvi pritisk "jutri", naslednji pa
+// naprej po dnevih.
+//
+// Racunamo ob POLDNEVU in ne ob polnoci: dan ob prehodu na zimski cas traja
+// 25 ur, prištevanje 86 400 000 ms bi ostalo v istem dnevu, ura 12 pa nikoli
+// ne pade cez rob dneva.
 for (const btn of document.querySelectorAll("[data-day-for]")) {
   const input = $(btn.dataset.dayFor);
   if (!input) continue;
-  const paint = () => {
-    const jutri = input.value === tomorrowIso();
-    btn.setAttribute("aria-pressed", String(jutri));
-    btn.textContent = jutri ? "danes" : "jutri";
-  };
   btn.addEventListener("click", () => {
-    input.value = input.value === tomorrowIso() ? todayIso() : tomorrowIso();
-    paint();
+    const d = new Date(`${input.value || todayIso()}T12:00:00`);
+    d.setDate(d.getDate() + 1);
+    input.value = d.toLocaleDateString("sv-SE");
   });
-  input.addEventListener("change", paint);
-  paint();
 }
 
 renderRecents();

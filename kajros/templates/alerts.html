@@ -12,8 +12,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="kajros">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/static/base.css">
-  <link rel="stylesheet" href="/static/connections.css">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('connections.css') }}">
 </head>
 <body class="conn-page">
 
@@ -59,7 +59,7 @@
     </footer>
   </main>
 
-  <script src="/static/common.js"></script>
-  <script src="/static/alerts.js"></script>
+  <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('alerts.js') }}"></script>
 </body>
 </html>

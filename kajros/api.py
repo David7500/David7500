@@ -5,10 +5,12 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -71,6 +73,38 @@ class _RevalidatingStatic(StaticFiles):
 
 app.mount("/static", _RevalidatingStatic(directory=_PKG_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=_PKG_DIR / "templates")
+
+
+@lru_cache(maxsize=None)
+def _razlicica(rel: str) -> str:
+    """Osem znakov zgoščene vsebine datoteke. Med tekom se ne spreminja."""
+    try:
+        return hashlib.sha256((_PKG_DIR / "static" / rel).read_bytes()).hexdigest()[:8]
+    except OSError:
+        return ""
+
+
+def s(rel: str) -> str:
+    """Naslov statične datoteke z odtisom vsebine.
+
+    **`Cache-Control: no-cache` ni dovolj in to je izmerjeno.** Strežnik ga
+    pošilja (glej `_RevalidatingStatic`), Cloudflare pa ga na robu povozi s
+    svojim privzetim `max-age=14400` -- štiri ure, v katerih brskalnik
+    datoteke sploh ne vpraša znova. Popravek postavitve na telefonu je bil
+    6. 9. 2026 na strežniku, uporabnik pa je gledal staro. Ista napaka je
+    bila v tem projektu že enkrat odpravljena in se je vrnila skozi druga
+    vrata -- tokrat naj bo popravljena tam, kjer je noben posrednik ne more
+    razveljaviti.
+
+    Odtis vsebine in ne časa spremembe: `mtime` se premakne ob vsakem
+    `rsync`, tudi kadar je datoteka ista, in bi vsem obiskovalcem ob vsaki
+    objavi po nepotrebnem izpraznil predpomnilnik.
+    """
+    v = _razlicica(rel)
+    return f"/static/{rel}?v={v}" if v else f"/static/{rel}"
+
+
+templates.env.globals["s"] = s
 
 
 def _conn():
