@@ -69,7 +69,7 @@ print("  cela:", c.execute("SELECT COUNT(*) FROM run").fetchone()[0], "meritev")
 PYEOF
 
 stanje() {
-  sudo -u kajros env KAJROS_DATA_DIR="$DATA" "$PY" - <<'PYEOF'
+  env KAJROS_DATA_DIR="$DATA" "$PY" - <<'PYEOF'
 from kajros import db
 c = db.connect()
 q = lambda s: c.execute(s).fetchone()[0]
@@ -78,16 +78,22 @@ PYEOF
 }
 
 echo
-echo '== rabim sudo geslo: prilivam kot uporabnik kajros =='
-sudo -v
-# Kopija mora biti berljiva zanj -- /var/tmp je 1777, datoteka pa je od davida.
+# Brez sudota: `david` je v skupini `kajros` in podatkovni imenik je skupinsko
+# pisljiv (`deploy/brez-sudo.sh`). Prej je bilo tu `sudo -u kajros` in s tem
+# poziv za geslo sredi opravila, ki sicer tece samo od zacetka do konca.
+if ! [ -w "$DATA/kajros.sqlite" ]; then
+    echo "V '$DATA' ne morem pisati. Manjka enkratna nastavitev:"
+    echo "  sudo bash ~/kajros/deploy/brez-sudo.sh"
+    echo "(clanstvo v skupini velja sele od naslednje prijave)"
+    exit 1
+fi
 chmod 644 "$KAM"
 
 read -r PRE_RUN PRE_OBS <<<"$(stanje)"
-sudo -u kajros env KAJROS_DATA_DIR="$DATA" "$PY" -m kajros.cli merge "$KAM"
+env KAJROS_DATA_DIR="$DATA" "$PY" -m kajros.cli merge "$KAM"
 # Malina tece starejso kodo, zato prilite meritve niso sle skozi novejse
 # varovalke; `repair` popravi samo postanke, kjer se varovalka sprozi.
-sudo -u kajros env KAJROS_DATA_DIR="$DATA" "$PY" -m kajros.cli repair
+env KAJROS_DATA_DIR="$DATA" "$PY" -m kajros.cli repair
 read -r PO_RUN PO_OBS <<<"$(stanje)"
 
 rm -f "$KAM"

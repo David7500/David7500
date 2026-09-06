@@ -96,7 +96,16 @@ echo "==> odvisnosti"
 PIP="$APP/.venv/bin/pip"
 "$PIP" install --quiet --retries 5 --timeout 60 --upgrade pip
 "$PIP" install --quiet --retries 5 --timeout 60 -r "$APP/requirements.txt"
-chown -R kajros:kajros "$APP"
+# Ce je na stroju ze nastavljena posodobitev brez gesla (`brez-sudo.sh`), kodo
+# ima v lasti clovek in skupina jo samo bere. Brezpogojni `chown kajros:kajros`
+# bi to tiho razveljavil in naslednja posodobitev bi spet terjala geslo --
+# napaka, ki bi se pokazala sele cez teden dni in bila videti kot muhavost.
+if [ -f /etc/sudoers.d/kajros-posodobitev ] && [ -n "${SUDO_USER:-}" ]; then
+    chown -R "$SUDO_USER":kajros "$APP"
+    chmod -R g+rX,o-w "$APP"
+else
+    chown -R kajros:kajros "$APP"
+fi
 
 echo "==> vozni red"
 # Preimenovanje projekta 3. 9. 2026: do prve namestitve nove kode je zajem
