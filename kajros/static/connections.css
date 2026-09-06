@@ -33,6 +33,12 @@
 .search-card {
   display: flex;
   align-items: flex-end;
+  /* **Ovij, ne prelij.** Odhodna tabla ima šest elementov v vrsti in odkar
+     ima postaja spodnjo mejo širine, se vrstica ne more več skrčiti pod njo —
+     brez ovijanja je zadnji gumb („v bližini“) molel čez zaobljeni rob
+     kartice. Ovijanje je edino, kar zdrži tudi jutri, ko pride sedmi element
+     ali daljša beseda. */
+  flex-wrap: wrap;
   gap: 10px;
   background: var(--bg-raised);
   border: 1px solid var(--line);
