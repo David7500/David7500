@@ -660,3 +660,52 @@ def test_rezerva_je_monotona():
             assert v <= prej
         prej = v
     assert stats._after_slack(900, 10000) == 0      # nikoli pod nič
+
+
+def test_opis_zamude_je_edini_vir_pravila():
+    """Odjemalec ne sme izpeljevati minute, razreda in praga prezgodnjosti.
+
+    Ta pravila so bila zapisana dvakrat -- v `stats.py` in v `common.js` -- in
+    to je natanko oblika napake, ki jo CLAUDE.md ze belezi kot dvakrat videno
+    na zaslonu. Z drugim odjemalcem (Android) bi bila zapisana trikrat.
+    """
+    from kajros import stats
+
+    assert stats.opis_zamude(None) is None
+
+    # Zaokrozevanje: 29 s je se "tocno", 30 s ni. Ista meja kot v prikazu.
+    assert stats.opis_zamude(29)["min"] == 0
+    assert stats.opis_zamude(30)["min"] == 1
+    assert stats.opis_zamude(29)["razred"] == "tocno"
+    assert stats.opis_zamude(30)["razred"] == "1-5"
+
+    # Razred se doloca iz ZAOKROZENE minute -- glej `_razred_zamude`.
+    for s, kljuc in ((0, "tocno"), (300, "1-5"), (330, "5-15"),
+                     (900, "5-15"), (930, "nad-15")):
+        assert stats.opis_zamude(s)["razred"] == kljuc, s
+
+    # Kljuci morajo ustrezati prikaznim imenom, ki jih nosi `povzetek`.
+    assert set(stats._KLJUC_RAZREDA) == {"točno", "1–5 min", "5–15 min", "nad 15 min"}
+
+    # Prezgodaj je prag na ZAOKROZENI minuti, ne na sekundah, in meja je pri
+    # natanko -30 s: floor(-0.5 + 0.5) = 0, JS Math.round(-0.5) = -0. Pri -31 s
+    # sta oba ze -1. Prvic sem to napisal narobe -- prav zato je tu test.
+    assert stats.opis_zamude(-30)["prezgodaj"] is False
+    assert stats.opis_zamude(-30)["min"] == 0
+    assert stats.opis_zamude(-31)["prezgodaj"] is True
+    assert stats.opis_zamude(-31)["min"] == -1
+    assert stats.opis_zamude(-90)["min"] == -1
+
+    # Vrsta gre skozi nespremenjena in je omejena na znane vrednosti.
+    assert stats.opis_zamude(0, "izmerjeno")["vrsta"] == "izmerjeno"
+    for v in stats.VRSTE_ZAMUDE:
+        assert stats.opis_zamude(60, v)["vrsta"] == v
+
+
+def test_opis_zamude_se_ujema_z_razredi_povzetka():
+    """Ce se kljuc in prikazno ime razideta, bo graf kazal drugo kot zeton."""
+    from kajros import stats
+
+    for s in (0, 30, 200, 400, 1000, 5000):
+        prikazno = stats._razred_zamude(s)
+        assert stats.opis_zamude(s)["razred"] == stats._KLJUC_RAZREDA[prikazno]

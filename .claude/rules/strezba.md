@@ -195,3 +195,39 @@ stolpca na `trip`, ki ju napolni `db.fill_trip_window()` — isto kot že prej
 Vožnje brez `sched` (nagrobniki po uvozu, glej `gtfs.py`) imajo `first_seq`
 NULL in na tablo ne pridejo. To je pravilno: vožnja brez voznega reda nima
 odhoda, ki bi ga bilo mogoče napovedati.
+
+## `zamuda`: strežnik pove, kaj stvar JE
+
+Vsak odgovor, ki nosi zamudo, nosi zraven tudi **odločitev** o njej, da je
+odjemalcu ni treba izpeljati. Zgrajena je v `stats.opis_zamude()`:
+
+```json
+"zamuda": {"s": 320, "min": 5, "razred": "1-5",
+           "vrsta": "izmerjeno", "prezgodaj": false, "pravocasna": true}
+```
+
+Je na `/api/departures` (`board`), `/api/connections` (`connections`),
+`/api/train/{no}/run` (`stops`) in `/api/live`. `null` je, kadar zamude ni.
+
+**Meja je namenoma tu: strežnik pove, kaj stvar JE, odjemalec, kako je
+VIDETI.** Barve v objektu zato ni — ta je oblikovanje in sme biti na telefonu
+drugačna. Razred, minuta in vrsta pa so pravilo.
+
+Trije razlogi, zakaj to ni okras:
+
+* **`min` se ne sme računati na odjemalcu.** Zaokroženo je z `floor(x + 0,5)`.
+  JS `Math.round` dela isto in Javin `Math.round` tudi, `kotlin.math.round`
+  pa **ne** — drugi odjemalec bi se razšel pri natanko 30 s.
+* **`razred` gre po zaokroženi minuti, ne po sekundah.** Ta napaka je v tem
+  projektu že bila: 3 280 voženj (7,29 %) je padlo v režo 30–60 s, kjer je
+  strežnik rekel „točno“ (sivo), barvna lestvica pa „1–5 min“ (oranžno).
+  Ključ je strojni (`tocno`, `1-5`, `5-15`, `nad-15`); prikazna imena
+  („1–5 min“) ostanejo v `povzetek` in v odjemalcu.
+* **`vrsta` je meja med meritvijo in napovedjo.** Pri `/api/train/{no}/run` jo
+  dopiše endpoint, ker mejo (`last_measured_seq`) pozna šele on. Prav ta
+  razlika je bila po zapisu v CLAUDE.md že dvakrat na zaslonu narobe.
+
+Odjemalec, ki bere `delay_s` in sklepa sam, je zato **star način**. V
+`common.js` funkcije `delayLabel()`, `delayColor()`, `delayText()` in
+`isEarly()` sprejmejo oboje — objekt ali gole sekunde — a sekunde so rezerva
+za mesta, ki objekta še nimajo. **Nov odjemalec naj bere samo objekt.**

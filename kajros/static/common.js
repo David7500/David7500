@@ -33,35 +33,56 @@ const DELAY_RAMP = [
   { maxMin: Infinity, color: "#b85417", label: "nad 15 min" },
 ];
 
-function delayColor(s) {
-  if (s == null) return "#6b7480";
-  const min = Math.round(s / 60);
+// Barva po razredu, ki ga doloci STREZNIK. Pragovi so pravilo in zivijo v
+// `stats.opis_zamude()`; barva je oblikovanje in sme biti tu.
+const RAZRED_BARVA = {
+  "tocno": "#7c8698", "1-5": "#f2a87e", "5-15": "#e07b45", "nad-15": "#b85417",
+};
+
+// **Vse spodnje funkcije sprejmejo dvoje**: streznikov objekt `zamuda`
+// (`{s, min, razred, vrsta, prezgodaj}`) ali gole sekunde. Objekt ima minuto
+// in razred ze izracunana po enem samem pravilu na strezniku -- glej
+// `stats.opis_zamude()`. Sekunde ostanejo za mesta, kjer streznik objekta
+// (se) ne poslje; racun je tam isti, a je to podvojeno pravilo in naj se ne
+// siri. Nov odjemalec (Android) naj bere samo objekt.
+function delayMin(z) {
+  if (z == null) return null;
+  if (typeof z === "object") return z.min;
+  return Math.round(z / 60);
+}
+
+function delayColor(z) {
+  if (z == null) return "#6b7480";
+  if (typeof z === "object" && z.razred) return RAZRED_BARVA[z.razred] || "#6b7480";
+  const min = delayMin(z);
   return (DELAY_RAMP.find((step) => min <= step.maxMin) || DELAY_RAMP[DELAY_RAMP.length - 1]).color;
 }
 
-function delayLabel(s) {
+function delayLabel(z) {
   // Feed ima locljivost 60 s -- zaokrozimo na minute in sekund ne kazemo nikoli.
-  if (s == null) return "?";
-  const m = Math.round(s / 60);
+  const m = delayMin(z);
+  if (m == null) return "?";
   return (m > 0 ? "+" : "") + m;
 }
 
 // "-5 min" je za potnika uganka, "5 min prej" ni. Barva ostane siva, ker to
 // res ni zamuda -- in prav zato mora povedati beseda. `kratko` je za ozke
 // stolpce, kjer za "min" ni prostora.
-function delayText(s, kratko) {
-  if (s == null) return kratko ? "?" : "? min";
+function delayText(z, kratko) {
+  const m = delayMin(z);
+  if (m == null) return kratko ? "?" : "? min";
   // Prag mora biti na ZAOKROZENI minuti, ne na sekundah. Pri `s <= -60` je
   // -45 s dalo "-1", ker `delayLabel` zaokrozi -- ista minuta, dva zapisa.
-  // Isto pravilo kot pri barvni lestvici, ki je iz sekund ze bilo popravljeno.
-  const m = Math.round(s / 60);
   if (m <= -1) return kratko ? `${-m} prej` : `${-m} min prej`;
-  return kratko ? delayLabel(s) : `${delayLabel(s)} min`;
+  return kratko ? delayLabel(z) : `${delayLabel(z)} min`;
 }
 
-// Ali je vrednost "prezgodaj" -- po isti zaokrozeni minuti kot `delayText`.
-function isEarly(s) {
-  return s != null && Math.round(s / 60) <= -1;
+// Ali je vrednost "prezgodaj". Streznik to ze pove (`zamuda.prezgodaj`),
+// sicer po isti zaokrozeni minuti kot `delayText`.
+function isEarly(z) {
+  if (z == null) return false;
+  if (typeof z === "object") return !!z.prezgodaj;
+  return delayMin(z) <= -1;
 }
 
 const TIME_FMT = new Intl.DateTimeFormat("sl-SI", {
@@ -395,8 +416,19 @@ function weatherSummary(w) {
 
 // ---------- ena voznja: skupno branje /api/train/{st}/run ----------
 
+// Sekunde, ker jih risanje grafov in izracuni rabijo kot stevilo. Pravilo
+// `COALESCE(delay_dep, delay_arr)` -- in NE obratno, ker je `departure.delay`
+// izpolnjen pri vseh prevoznikih, `arrival.delay` pa ne -- je na strezniku
+// (`stats.opis_zamude()`); tu ga ne ponavljamo, le beremo. Rezerva velja za
+// odgovore, ki objekta se nimajo.
 function stopDelay(s) {
+  if (s && s.zamuda) return s.zamuda.s;
   return s.delay_dep != null ? s.delay_dep : s.delay_arr;
+}
+
+/** Streznikova odlocitev za postanek, kadar je na voljo. */
+function stopZamuda(s) {
+  return (s && s.zamuda) || null;
 }
 
 function stopActualIso(s) {

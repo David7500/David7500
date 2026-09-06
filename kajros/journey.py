@@ -22,7 +22,8 @@ from zoneinfo import ZoneInfo
 
 from . import config, geo
 from .stats import (_abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
-                    _with_operator, dwell_at, last_measured, typical_at_stops)
+                    _with_operator, dwell_at, last_measured, opis_zamude,
+                    typical_at_stops)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -393,6 +394,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         d["feed_delay_s"] = own
         d["expected"] = (_abs_time(service_date, d["t_s"] + d["delay_s"])
                          if d["delay_s"] is not None else None)
+        # Odlocitev o zamudi gre z vrstico vred -- glej `stats.opis_zamude()`.
+        d["zamuda"] = opis_zamude(d["delay_s"], d["delay_kind"])
 
     # Sezonske razlicice iste voznje: devet vlakov v zajetem voznem redu ima
     # dva ali tri tripe z razlicnimi obdobji veljavnosti, in kadar oba veljata

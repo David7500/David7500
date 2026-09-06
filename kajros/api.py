@@ -838,8 +838,19 @@ def api_run(train_no: str, date: str | None = None,
         now_s = (journey.now_seconds(zdaj) if date == zdaj.date().isoformat()
                  else 48 * 3600)
         meja = stats.last_measured(conn, date, [razresen], now_s).get(razresen)
+        meja_seq = meja["stop_seq"] if meja else None
+        # Vrsto zamude dopisemo tu, ker mejo pozna sele endpoint. Postanek za
+        # mejo nosi feedovo NAPOVED, ne meritve -- in prav to je razlika, ki
+        # je bila ze dvakrat na zaslonu narobe. Odjemalec zdaj ne sklepa:
+        # `zamuda.vrsta` mu pove naravnost.
+        for s in rows:
+            if s["zamuda"] is None:
+                continue
+            s["zamuda"]["vrsta"] = ("izmerjeno"
+                                    if meja_seq is not None and s["stop_seq"] <= meja_seq
+                                    else "napoved prevoznika")
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
-                **ident, "last_measured_seq": meja["stop_seq"] if meja else None,
+                **ident, "last_measured_seq": meja_seq,
                 "stops": rows}
 
 
@@ -1184,6 +1195,10 @@ def _live(network: str | None = None) -> list[dict]:
     with _conn() as conn:
         _add_gps_position(conn, rows)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
+    # Ziva vozjna je po definiciji ze prevozila `last_stop`, zato je njena
+    # zamuda meritev -- `_live_rows` bere natanko do meje.
+    for r in rows:
+        r["zamuda"] = stats.opis_zamude(r["delay_s"], "izmerjeno")
     return rows
 
 

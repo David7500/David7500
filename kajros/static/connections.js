@@ -329,16 +329,18 @@ function typicalChipHtml(t, fromStop, nadomestni) {
     <div class="conn-where">${Math.round(t.on_time_share * 100)} % v 5 min</div>`;
 }
 
-function delayChipHtml(delay, kind, at) {
-  if (delay == null) return '<span class="chip chip-none">brez podatka</span>';
-  const color = delayColor(delay);
+// `z` je strežnikov objekt `zamuda` -- minuta, razred in vrsta so izračunani
+// tam (`stats.opis_zamude()`), tu se samo riše.
+function delayChipHtml(z, kind, at) {
+  if (z == null) return '<span class="chip chip-none">brez podatka</span>';
+  const color = delayColor(z);
   const forecast = kind && kind !== "izmerjeno";
   // "-4 min" je za potnika uganka, "4 min prej" ni. Barva ostane siva: to res
   // ni zamuda -- a prav zato mora povedati beseda, kar barva ne bo.
-  const early = isEarly(delay);
+  const early = isEarly(z);
   return `<span class="chip${forecast ? " chip-forecast" : ""}${early ? " chip-early" : ""}"
         style="color:${color};border-color:${color}44">
-      <span class="chip-n">${early ? Math.abs(Math.round(delay / 60)) : delayLabel(delay)}</span>
+      <span class="chip-n">${early ? Math.abs(delayMin(z)) : delayLabel(z)}</span>
       <span class="chip-unit">${early ? "min prej" : "min"}</span>
     </span>
     ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at
@@ -357,7 +359,7 @@ function departedMs(c) {
 function connectionRowHtml(c, nowMs, isNext, date, odKod) {
   const gone = nowMs && departedMs(c) < nowMs;
   const late = c.delay_s != null && Math.abs(c.delay_s) >= 60;
-  const color = delayColor(c.delay_s);
+  const color = delayColor(c.zamuda);
   const cd = isNext && nowMs ? countdownLabel(c.expected_dep || c.sched_dep, nowMs) : "";
 
   // Pricakovani prihod = voznoredni + ista zamuda, torej prenos, ne meritev.
@@ -384,8 +386,8 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
           : ""}</div>
         <div class="conn-headsign">${escapeHtml(c.headsign || "")}</div>
       </div>
-      <div class="conn-delay">${c.delay_s != null
-        ? delayChipHtml(c.delay_s, c.delay_kind, c.delay_at)
+      <div class="conn-delay">${c.zamuda
+        ? delayChipHtml(c.zamuda, c.delay_kind, c.delay_at)
         : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}</div>
       <div class="conn-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
@@ -580,7 +582,7 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
   // PREZGODEN in doslej se to ni videlo nikjer -- vrstica je kazala samo
   // voznoredno uro. Prav ta primer potnik zamudi, ker pride ob njej.
   const off = r.delay_s != null && Math.abs(r.delay_s) >= 60;
-  const color = delayColor(r.delay_s);
+  const color = delayColor(r.zamuda);
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
   return `
     <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
@@ -600,8 +602,8 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
           ? lineBadgeHtml(r) + " "
           : ""}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
       </div>
-      <div class="conn-delay">${r.delay_s != null
-        ? delayChipHtml(r.delay_s, r.delay_kind, r.delay_from)
+      <div class="conn-delay">${r.zamuda
+        ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}</div>
       <div class="board-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}

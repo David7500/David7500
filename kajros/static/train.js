@@ -191,9 +191,11 @@ function jeNadomestni() {
 
 function runHeadHtml(cur) {
   const bus = isBus(state.mode);   // glej vehicleNoun() za besedilo
+  // Strezniku pustimo odlocitev (minuta, razred, prezgodaj); tu se le risze.
+  const z = cur ? stopZamuda(cur) : null;
   const d = cur ? stopDelay(cur) : null;
   const wx = cur ? state.weather.get(cur.stop_seq) : null;
-  const color = delayColor(d);
+  const color = delayColor(z || d);
   const atIso = cur ? stopActualIso(cur) : null;
   const ageS = atIso ? (Date.now() - new Date(atIso).getTime()) / 1000 : null;
   const stale = ageS != null && ageS > FRESH_S;
@@ -201,7 +203,7 @@ function runHeadHtml(cur) {
   // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
   // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
   // "6 min prej" si nasprotuje, "6 min prej" pod njim pa besedo ponovi.
-  const early = isEarly(d);
+  const early = isEarly(z || d);
 
   // Prevoznikovo porocilo pozna prometno mesto, ki ga nas vozni red nima --
   // zamuda se meri tudi tam, kjer vlak ne ustavlja.
@@ -212,7 +214,7 @@ function runHeadHtml(cur) {
       <div class="detail-now-label">${
         stale ? "Zadnja znana zamuda" : early ? "Vozi prezgodaj" : "Trenutna zamuda"}</div>
       <div class="detail-now-value" style="color:${color}">
-        <span class="detail-now-n">${early ? Math.abs(Math.round(d / 60)) : delayLabel(d)}</span>
+        <span class="detail-now-n">${early ? Math.abs(delayMin(z || d)) : delayLabel(z || d)}</span>
         <span class="detail-now-unit">min</span>
       </div>
       <div class="detail-now-where">

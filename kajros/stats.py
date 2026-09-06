@@ -218,6 +218,12 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
             if r["arr_s"] is not None and r["delay_arr"] is not None else None
         d["actual_dep"] = _abs_time(service_date, (r["dep_s"] or 0) + r["delay_dep"]) \
             if r["dep_s"] is not None and r["delay_dep"] is not None else None
+        # `COALESCE(delay_dep, delay_arr)` in NE obratno -- `departure.delay`
+        # je izpolnjen pri vseh prevoznikih, `arrival.delay` ne. To pravilo je
+        # bilo doslej zapisano tudi v `common.stopDelay()`; drugi odjemalec bi
+        # ga moral uganiti tretjic. Vrsta se doda spodaj, ko je znana meja.
+        d["zamuda"] = opis_zamude(
+            r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"])
         out.append(d)
     return out
 
@@ -388,6 +394,50 @@ def _razred_zamude(v: int) -> str:
     if m <= 15:
         return "5–15 min"
     return "nad 15 min"
+
+
+#: Strojni kljuc razreda. `_razred_zamude()` vraca **prikazno** ime ("1–5 min"),
+#: ki je slovensko in ima pomisljaj -- za odjemalca, ki po njem veja logiko, je
+#: to slab kljuc. Prikazna imena ostanejo, ker jih nosi `povzetek`.
+_KLJUC_RAZREDA = {"točno": "tocno", "1–5 min": "1-5",
+                  "5–15 min": "5-15", "nad 15 min": "nad-15"}
+
+#: Od kod je zamuda. Iste vrednosti kot `delay_kind`, na enem mestu.
+VRSTE_ZAMUDE = ("izmerjeno", "ocena", "napoved prevoznika", "običajno")
+
+
+def opis_zamude(v: int | None, vrsta: str | None = None) -> dict | None:
+    """Odločitev o zamudi, da je odjemalcu ni treba izpeljati samemu.
+
+    **Zakaj to sploh obstaja.** Doslej je strežnik poslal `delay_s` v sekundah,
+    brskalnik pa je sam sklepal troje: koliko je to minut, v kateri razred
+    spada in ali je vožnja prezgodnja. Vsa tri pravila so bila zapisana dvakrat
+    -- tu in v `common.js`. Dokler je odjemalec en, se to ne pozna; ko jih je
+    več (Android), se prej ali slej razideta, razlika pa je tiha. Ta projekt
+    to napako pozna: `stats.last_measured()` in `common.lastMeasured()` sta se
+    razšla in prikaz je feedovo napoved kazal kot izmerjeno zamudo.
+
+    Meja je namenoma tu: **strežnik pove, kaj stvar JE, odjemalec, kako je
+    VIDETI.** Barve tu zato ni -- ta je oblikovanje in sme biti drugačna na
+    telefonu kot v brskalniku. Razred, minuta in vrsta pa so pravilo.
+
+    `min` je zaokrozen z `floor(x + 0.5)`. JS `Math.round` dela isto, Javin
+    `Math.round` tudi, a `kotlin.math.round` NE -- in prav zato te vrednosti
+    odjemalec ne sme racunati sam.
+    """
+    if v is None:
+        return None
+    m = _minute(v)
+    return {
+        "s": v,
+        "min": m,
+        "razred": _KLJUC_RAZREDA[_razred_zamude(v)],
+        "vrsta": vrsta,
+        # "-5 min" je uganka, "5 min prej" ni -- prag pa je na zaokrozeni
+        # minuti in ne na sekundah, sicer ista minuta dobi dva zapisa.
+        "prezgodaj": m <= -1,
+        "pravocasna": _je_pravocasna(v),
+    }
 
 
 MAX_REALNA_ZAMUDA_S = 3 * 3600
@@ -1160,6 +1210,8 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
 
         d["expected_dep"] = (_abs_time(service_date, d["dep_s"] + d["delay_s"])
                              if d["delay_s"] is not None else None)
+        # Odlocitev o zamudi gre z vrstico vred -- glej `opis_zamude()`.
+        d["zamuda"] = opis_zamude(d["delay_s"], d["delay_kind"])
         # Kaj je o tej postaji rekel feed. Kadar je vozilo se pred njo, je to
         # napoved prevoznika in prikaz je ne uporablja -- a je tudi ne skriva.
         d["feed_delay_s"] = d["from_delay_s"]
