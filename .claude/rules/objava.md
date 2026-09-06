@@ -209,3 +209,27 @@ nameša, da se stara koda ne namesti tiho.
 **Kaj se da od zunaj in kaj ne.** Prestavitev imenskih strežnikov je spletni
 obrazec in ne rabi domačega omrežja. Vse, kar rabi `sudo` na strojih, rabi
 pot do njih — dokler tunela ni, to pomeni biti doma.
+
+## Kar Cloudflare stori brez vprašanja
+
+**Ponovni zagon strežnika stane 1,3 s, ne več.** Izmerjeno 6. 9. 2026 iz
+journala: `Stopping` → `Started` je **163 ms**, proces streže 1,25 s pozneje.
+Prva meritev je govorila o 11,5 s in je bila napačna — sonda je dobivala 403
+od Cloudflara, ne od nas, in to tudi dve sekundi *pred* restartom.
+
+**Cloudflare vrne 403 odjemalcu z UA `Python-urllib`.** Koda 1010,
+„banned your access based on your browser's signature" — to je *Browser
+Integrity Check*, na brezplačnem paketu privzeto vklopljen. Zavaja, ker ne
+blokira botov na splošno: `curl`, `Wget`, `python-requests`, lastni UA in
+celo zahteva **brez** UA dobijo 200. Blokiran je natanko podpis Pythonove
+standardne knjižnice — torej odjemalec, s katerim bi naše odprte podatke
+prebral nekdo brez odvisnosti.
+
+To je v nasprotju z odločitvijo „endpointi so odprti". Popravi se v nadzorni
+plošči (Security → Settings → Browser Integrity Check, ali pravilo WAF s
+`skip` za `/api/*`); iz kode se ne da.
+
+**Rob povozi tudi `Cache-Control`.** Strežnik pošilja `no-cache`, Cloudflare
+pa privzeto `max-age=14400`. Zato imajo naslovi statike odtis vsebine
+(`api.s()`); nastavitev „Respect Existing Headers" bi delovala enako, a bi
+bila nevidna in bi jo naslednja objava spet zasenčila.
