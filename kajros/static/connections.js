@@ -998,35 +998,34 @@ function chipHtml(f, saved) {
 
 let recentsSig = null;
 
+// **Zetoni so samo shranjeno, nic samodejnega.** Prej sta bila tu dva
+// seznama: `fav` (zvezdica, clovek pove sam) in `recent` (napise se sam ob
+// vsakem iskanju). Drugi je delal tri tezave hkrati -- ni ga bilo mogoce
+// odstraniti (kriz je samo na shranjenih), napolnil se je ze ob enem samem
+// pogledu na odhodno tablo, in ker so zetoni skupni obema zavihkoma, se je
+// tabla prikazala na strani "Od-do", kamor ne sodi.
+//
+// `recent` se hrani naprej, a samo za predloge IMEN POSTAJ v praznem polju
+// (`recentStations()`). Tam je koristen in neviden.
 function renderRecents() {
   const el = $("recents");
   if (!el) return;
-  const cur = favCurrent();
-  const curKey = cur ? favKey(cur) : null;
   const saved = favLoad();
-  const savedKeys = new Set(saved.map(favKey));
-  // Zeton za poizvedbo, ki je pravkar odprta, je klik nikamor -- in na
-  // telefonu vrstica zetonov drugo vsebino potiska navzdol.
-  const recent = recentLoad()
-    .filter((f) => !savedKeys.has(favKey(f)) && favKey(f) !== curKey);
 
   // Tabla se osvezuje vsakih 30 s. Ce se seznam ni spremenil, ga ne
   // prerisujemo -- sicer bi zetoni pod prstom utripali.
-  const sig = `${saved.map(favKey).join(",")}|${recent.map(favKey).join(",")}`;
+  const sig = saved.map(favKey).join(",");
   if (sig === recentsSig) return;
   recentsSig = sig;
 
-  el.innerHTML = saved.length || recent.length
-    ? `<div class="chips">
-        ${saved.map((f) => chipHtml(f, true)).join("")}
-        ${recent.map((f) => chipHtml(f, false)).join("")}
-      </div>`
+  el.innerHTML = saved.length
+    ? `<div class="chips">${saved.map((f) => chipHtml(f, true)).join("")}</div>`
     : "";
   wireFavChips(el);
 }
 
 function openFav(key) {
-  const f = [...favLoad(), ...recentLoad()].find((x) => favKey(x) === key);
+  const f = favLoad().find((x) => favKey(x) === key);   // zetoni so samo shranjeni
   if (!f) return;
   if (f.kind === "board") {
     setTab("board");
@@ -1361,9 +1360,9 @@ for (const id of STATION_INPUTS) {
   attachClear($(id));
 }
 
-// Puscica premakne datum za en dan naprej. Prazno polje pomeni danes -- tako
-// ga bere tudi `searchAB()` -- zato je prvi pritisk "jutri", naslednji pa
-// naprej po dnevih.
+// Puscici premakneta datum za dan naprej ali nazaj. Prazno polje pomeni danes
+// -- tako ga bere tudi `searchAB()` -- zato je prvi pritisk "jutri" oziroma
+// "vceraj", naslednji pa naprej po dnevih.
 //
 // Racunamo ob POLDNEVU in ne ob polnoci: dan ob prehodu na zimski cas traja
 // 25 ur, prištevanje 86 400 000 ms bi ostalo v istem dnevu, ura 12 pa nikoli
@@ -1371,9 +1370,10 @@ for (const id of STATION_INPUTS) {
 for (const btn of document.querySelectorAll("[data-day-for]")) {
   const input = $(btn.dataset.dayFor);
   if (!input) continue;
+  const korak = Number(btn.dataset.step) || 1;
   btn.addEventListener("click", () => {
     const d = new Date(`${input.value || todayIso()}T12:00:00`);
-    d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + korak);
     input.value = d.toLocaleDateString("sv-SE");
   });
 }

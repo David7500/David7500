@@ -42,9 +42,10 @@
 .search-card[hidden] { display: none; }
 
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
-/* 150 px je bilo dovolj za sam datum; puscica v polju mu vzame 22 px, sicer
-   se izpis odreze na "06. 09. 2". */
-.field-date { flex: 0 0 178px; }
+/* 150 px je bilo dovolj za sam datum; dve puscici v polju mu vzameta ~33 px,
+   sicer se izpis odreze na "06. 09. 2". Vec kot to pa polju za postajo pobere
+   toliko, da na tabli ostane "Ljublj" -- sirina je kompromis in izmerjena. */
+.field-date { flex: 0 0 180px; }
 .field-kind { flex: 0 0 168px; }
 .field-time { flex: 0 0 118px; }
 
@@ -94,7 +95,10 @@
  * na zacetku niza in ne zna prezreti sumnikov. "sentjur" mora najti Šentjur.
  */
 
-.station-field { position: relative; }
+/* Postaja se ne sme skrciti pod berljivo: ob rasti polja za datum je na
+   tabli ostalo "Ljublj". `.field` ima `min-width: 0`, kar dovoli poljubno
+   ozko polje -- tu ga vrnemo na spodnjo mejo. */
+.station-field { position: relative; min-width: 124px; }
 
 .suggest {
   position: absolute;
@@ -318,7 +322,12 @@
     max-width: 34px;
     margin: -2px auto;
   }
-  .field-date, .field-kind, .field-time { flex: 1 1 calc(50% - 5px); order: 3; }
+  /* **Dan dobi svojo vrstico.** Pri polovični širini se dve puščici in
+     koledarski gumbek prekrivajo z datumom -- na tabli, kjer je poleg še
+     "Od ure", je bilo to najbolj vidno. Smer in ura si vrstico delita naprej;
+     v njiju ni ničesar, kar bi rabilo prostor. */
+  .field-date { flex: 1 1 100%; order: 3; }
+  .field-kind, .field-time { flex: 1 1 calc(50% - 5px); order: 3; }
   .go { flex: 1 1 100%; margin-bottom: 0; order: 4; }
   /* Brez tega ima gumb privzeti `order: 0` in se na telefonu postavi NAD
      polje za postajo -- prvo, kar clovek vidi, je bliznja postaja namesto
@@ -447,22 +456,28 @@
    svojem robu, puscica pa se postavi LEVO od gumbka -- torej pri vecjem
    odmiku od desne, kot ga ima on. */
 .date-row input { width: 100%; padding-right: 10px; }
-.day-next {
+/* Obe puščici v enem zavoju: razmik med njima ureja `gap` in ne dva ločena
+   odmika, ki bi se ob spremembi velikosti ikone razšla. */
+.day-nav {
   position: absolute;
-  right: 34px;
+  right: 30px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  gap: 1px;
+}
+.day-step {
   display: flex;
   align-items: center;
   background: none;
   border: none;
-  padding: 3px;
+  padding: 3px 1px;
   color: var(--ink-mute);
   cursor: pointer;
 }
-.day-next:hover { color: var(--accent-lit); }
+.day-step:hover { color: var(--accent-lit); }
 /* Brez tega je puščica na tipkovnici nevidna -- obroba je edini znak fokusa. */
-.day-next:focus-visible {
+.day-step:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-radius: 4px;

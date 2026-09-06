@@ -84,25 +84,25 @@ function kljucPoti(f) {
     ? `b:${f.station}:${f.dir || "odhodi"}` : `a:${f.from}:${f.to}`}`;
 }
 
+// **Samo shranjeno, nic samodejnega.** Prej so bile tu tudi nedavne poti, ki
+// se napisejo same ob vsakem iskanju -- tudi ob enem samem pogledu na odhodno
+// tablo. Domaca stran je s tem postala seznam vsega, kar si kdaj pogledal,
+// odstraniti pa se ni dalo nicesar: kriz je samo na shranjenih.
 function izrisiPoti() {
   const seen = new Set();
   const poti = [];
-  for (const [vir, list] of [["fav", beri("kajros:fav")],
-                             ["recent", beri("kajros:recent")]]) {
-    for (const f of list) {
-      const k = kljucPoti(f);
-      if (seen.has(k)) continue;         // priljubljena ne sme se enkrat kot nedavna
-      seen.add(k);
-      poti.push({ f, vir });
-      if (poti.length >= 6) break;
-    }
+  for (const f of beri("kajros:fav")) {
+    const k = kljucPoti(f);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    poti.push(f);
     if (poti.length >= 6) break;
   }
   if (!poti.length) return;              // prazen naslov ne pove nicesar
-  document.getElementById("home-chips").innerHTML = poti.map(({ f, vir }) => `
+  document.getElementById("home-chips").innerHTML = poti.map((f) => `
     <a class="chip chip-${f.net === "avtobus" ? "bus" : "train"}"
        href="${escapeHtml(znackaHref(f))}">
-      ${vir === "fav" ? '<span class="chip-star">★</span>' : ""}
+      <span class="chip-star">★</span>
       <span>${escapeHtml(znackaOpis(f))}</span>
     </a>`).join("");
   document.getElementById("home-saved").hidden = false;
