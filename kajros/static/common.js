@@ -72,6 +72,15 @@ const TIME_FMT = new Intl.DateTimeFormat("sl-SI", {
 // ISO oblike; `toISOString()` bi dal UTC in bi se cez polnoc zlagal za dan.
 const todayIso = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
 
+// Jutri se NE racuna kot `todayIso() + 1`: ob prehodu na zimski cas ima dan
+// 25 ur in seštevanje 86 400 000 ms bi ostalo v istem dnevu. Prištejemo dan
+// koledarju in sele nato preberemo ljubljanski datum.
+const tomorrowIso = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+};
+
 function hhmm(iso) {
   return iso ? TIME_FMT.format(new Date(iso)) : "—";
 }

@@ -81,6 +81,14 @@ function attachSuggest(input, listEl) {
   input.setAttribute("aria-controls", listEl.id);
 
   const close = () => {
+    // **`seq += 1` tu ni podrobnost, ampak popravek napake.** `query()` si
+    // zapomni svojo stevilko in odgovor zavrze, ce ga je prehitelo novejse
+    // tipkanje -- izbira postaje pa stevilke doslej ni premaknila. Zaporedje
+    // na telefonu: clovek natipka "ljublj", zahteva odide, on tapne predlog,
+    // seznam se zapre -- in ko odgovor cez sekundo ali dve prispe, ga `paint()`
+    // odpre nazaj. Cez POLJE DO, ki ga je medtem zacel izpolnjevati.
+    // Doma se to skoraj ne zgodi, ker odgovor pride prej kot prst.
+    seq += 1;
     listEl.hidden = true;
     active = -1;
     input.setAttribute("aria-expanded", "false");
@@ -831,15 +839,58 @@ function favCurrent() {
   return from && to ? { net: NETWORK, kind: "ab", from, to } : null;
 }
 
-function favToggle() {
+/** Ali tako postajo sploh poznamo. Ime, ne ugib: iscemo tocno ujemanje med
+ *  zadetki, ne "nekaj podobnega". */
+async function stationExists(name) {
+  try {
+    const res = await fetch(
+      `/api/stations/search?q=${encodeURIComponent(name)}&limit=8&network=${NETWORK}`);
+    const list = await res.json();
+    return Array.isArray(list) && list.some((s) => fold(s.name) === fold(name));
+  } catch (err) {
+    // Brez omrezja ne zavracamo: shranjevanje ni kriticno, napacen vnos pa
+    // se da odstraniti s krizcem. Zavrniti veljavno pot bi bilo huje.
+    return true;
+  }
+}
+
+async function favToggle() {
   const cur = favCurrent();
   if (!cur) return;
   const list = favLoad();
   const at = list.findIndex((f) => favKey(f) === favKey(cur));
-  if (at >= 0) list.splice(at, 1);
-  else list.unshift(cur);
+
+  // **Odstranjevanje se NE preverja.** Ce bi slo skozi isto preverbo kot
+  // shranjevanje, bi bila pot z neveljavno postajo -- torej natanko tista,
+  // ki jo clovek hoce odstraniti -- edina, ki se je ne da. Ta asimetrija je
+  // namerna in je ni dovoljeno "poenostaviti".
+  if (at >= 0) {
+    list.splice(at, 1);
+    favSave(list);
+    paintFavButton();
+    recentsSig = null;
+    renderRecents();
+    return;
+  }
+
+  // Doslej se je shranilo, kar je bilo v polju -- tudi "asdf → qwer". Zeton
+  // je nato ostal na strani in ga ni bilo mogoce odpreti ne odstraniti.
+  const names = cur.kind === "board" ? [cur.station] : [cur.from, cur.to];
+  const znane = await Promise.all(names.map(stationExists));
+  if (znane.some((v) => !v)) {
+    const btn = $("fav-toggle");
+    if (btn) {
+      btn.textContent = "te postaje ne poznam";
+      btn.classList.add("is-refused");
+      setTimeout(() => { btn.classList.remove("is-refused"); paintFavButton(); }, 2200);
+    }
+    return;
+  }
+
+  list.unshift(cur);
   favSave(list);
   paintFavButton();
+  recentsSig = null;
   renderRecents();
 }
 
@@ -894,9 +945,17 @@ function recentStations() {
   return out.slice(0, 6);
 }
 
+// Krizec je LOCEN gumb ob zetonu, ne gumb v gumbu: vgnezdeni <button> je
+// neveljaven HTML in brskalniki ga razdruzijo, kar je bilo videti kot
+// naključno nedelujoč klik.
 function chipHtml(f, saved) {
-  return `<button type="button" class="route-chip${saved ? " fav-chip" : ""}"
-      data-fav="${escapeHtml(favKey(f))}">${saved ? "★ " : ""}${escapeHtml(favLabel(f))}</button>`;
+  const key = escapeHtml(favKey(f));
+  const chip = `<button type="button" class="route-chip${saved ? " fav-chip" : ""}"
+      data-fav="${key}">${saved ? "★ " : ""}${escapeHtml(favLabel(f))}</button>`;
+  if (!saved) return chip;
+  return `<span class="chip-wrap">${chip}<button type="button" class="chip-del"
+      data-fav-del="${key}" aria-label="odstrani ${escapeHtml(favLabel(f))} med shranjenimi"
+      title="odstrani med shranjenimi">&times;</button></span>`;
 }
 
 let recentsSig = null;
@@ -936,19 +995,45 @@ function openFav(key) {
     $("station").value = f.station;
     setBoardKind(f.dir || "odhodi");
     paintAllClears();
-    searchBoard(true);
   } else {
     setTab("ab");
     $("from").value = f.from;
     $("to").value = f.to;
     paintAllClears();
-    searchAB(true);
   }
+  // **Gumb mora vedeti, da je v obrazcu zdaj shranjena pot.** Brez tega je
+  // ostal skrit (`hidden = !favCurrent()` z zadnjega izracuna, ko je bil
+  // obrazec prazen) in shranjene poti ni bilo mogoce odstraniti -- pri
+  // neveljavni postaji pa se toliko manj, ker iskanje odneha pri 404 in
+  // do tega klica sploh ne pride.
+  paintFavButton();
+  if (f.kind === "board") searchBoard(true);
+  else searchAB(true);
+}
+
+function favRemove(key) {
+  const list = favLoad();
+  const at = list.findIndex((f) => favKey(f) === key);
+  if (at < 0) return;
+  list.splice(at, 1);
+  favSave(list);
+  recentsSig = null;        // seznam se je spremenil; prerisi ga
+  renderRecents();
+  paintFavButton();
 }
 
 function wireFavChips(root) {
   root.querySelectorAll("[data-fav]").forEach((b) => {
     b.addEventListener("click", () => openFav(b.dataset.fav));
+  });
+  // Odstranitev naravnost z zetona. Doslej je bila edina pot ta, da si pot
+  // najprej odprl in sele nato odzvezdil -- kar pri neveljavni postaji ni
+  // delovalo. Krizec je tudi krajsa pot za veljavne.
+  root.querySelectorAll("[data-fav-del]").forEach((b) => {
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation();          // ne odpri poti, ki jo brises
+      favRemove(b.dataset.favDel);
+    });
   });
 }
 
@@ -1237,6 +1322,26 @@ for (const id of STATION_INPUTS) {
   attachSuggest($(id), $(`suggest-${id}`));
   attachClear($(id));
 }
+
+// Bliznjica za jutri. En gumb in ne dva: ko je datum ze jutrisnji, je edina
+// smiselna naslednja poteza vrnitev na danes, zato gumb pove, kam pelje, in
+// ne, kje si. Prazno polje pomeni danes -- tako ga bere tudi `searchAB()`.
+for (const btn of document.querySelectorAll("[data-day-for]")) {
+  const input = $(btn.dataset.dayFor);
+  if (!input) continue;
+  const paint = () => {
+    const jutri = input.value === tomorrowIso();
+    btn.setAttribute("aria-pressed", String(jutri));
+    btn.textContent = jutri ? "danes" : "jutri";
+  };
+  btn.addEventListener("click", () => {
+    input.value = input.value === tomorrowIso() ? todayIso() : tomorrowIso();
+    paint();
+  });
+  input.addEventListener("change", paint);
+  paint();
+}
+
 renderRecents();
 
 tickClock();

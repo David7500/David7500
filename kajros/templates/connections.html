@@ -69,9 +69,15 @@
                 tabindex="-1" aria-label="izbriši cilj" hidden>&times;</button>
         <ul class="suggest" id="suggest-to" role="listbox" hidden></ul>
       </div>
+      {# Jutri je daleč najpogostejši "ne danes" -- vožnja zjutraj se načrtuje
+         zvečer. Prek koledarja so to trije dotiki, tu je en. #}
       <div class="field field-date">
         <label for="date">Dan</label>
-        <input id="date" name="date" type="date">
+        <div class="date-row">
+          <input id="date" name="date" type="date">
+          <button type="button" class="day-quick" data-day-for="date"
+                  aria-pressed="false">jutri</button>
+        </div>
       </div>
       <button type="submit" class="btn go">Poišči</button>
     </form>
@@ -87,7 +93,11 @@
       </div>
       <div class="field field-date">
         <label for="board-date">Dan</label>
-        <input id="board-date" name="date" type="date">
+        <div class="date-row">
+          <input id="board-date" name="date" type="date">
+          <button type="button" class="day-quick" data-day-for="board-date"
+                  aria-pressed="false">jutri</button>
+        </div>
       </div>
       <div class="field field-time">
         <label for="board-time">Od ure</label>
