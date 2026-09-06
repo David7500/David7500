@@ -289,7 +289,9 @@ def _health_stevci(conn):
     out["alerts_active"] = alerts.active_count(conn)
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
-    out["db_path"] = str(path)
+    # `db_path` je bil tu, dokler je bil health viden samo domacemu omrezju.
+    # Zdaj je endpoint javen: pot do datoteke na strezniku ni nicija stvar in
+    # nihce je ne bere -- velikost pove isto o zdravju, brez razkritja.
     return out
 
 
