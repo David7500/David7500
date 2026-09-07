@@ -39,8 +39,10 @@ testov ni pravilo.
 ## Nič odvisnosti
 
 Ne AndroidX, ne `appcompat`. Vse potrebno je v ogrodju od API 26: `WebView`,
-`AlarmManager`, `NotificationChannel`, `Ringtone`. Zato je izdajni APK 28 kB in
-v njem ni **nobenega** Googlovega niza (preverjeno z `aapt2 dump strings`).
+`AlarmManager`, `NotificationChannel`, `Ringtone`. Zato je izdajni APK **50 kB**
+(7. 9. 2026; 28 kB pred budilko in njenim vmesnikom) in v njem ni **nobenega**
+Googlovega niza — preverjeno z `aapt2 dump strings`, 0 zadetkov za
+„google", „firebase" in „gms".
 Če se v `dependencies` kdaj pojavi vrstica, mora biti zraven razlog.
 
 `-keepclassmembers` za `@JavascriptInterface` v `proguard-rules.pro` **mora
