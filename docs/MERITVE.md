@@ -654,3 +654,9 @@ Leg vozil je 145 (IJPP jih ima ~1 000), starost mediana 146 s.
 
 **Kar je bilo treba obiti:** `delay` v tem feedu je vedno 0. Zamuda pride iz
 absolutnih napovedanih časov prek `collector._delay_of()`.
+
+**V produkciji od 7. 9. 2026, 08:16.** Prvi zajem na arwenu: „LPP: 240 voženj,
+3 575 sprememb, 140 leg". Vozni red je 38 070 voženj (od tega 19 163 LPP) in
+10 493 postajališč; vozil z GPS je 1 235 namesto ~1 000. Bavarski dvor kaže
+150 odhodov z živimi zamudami mestnih linij (18L +4 min izmerjeno, 6B +11 min
+ocena), Polje pa 150 odhodov na petih linijah namesto 80 na eni.
