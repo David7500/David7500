@@ -879,6 +879,18 @@ def api_run(train_no: str, date: str | None = None,
             s["zamuda"]["vrsta"] = ("izmerjeno"
                                     if meja_seq is not None and s["stop_seq"] <= meja_seq
                                     else "napoved prevoznika")
+        # **Obicajna zamuda iz zgodovine, za postanke brez meritve.**
+        # Iskalnik jo je imel ze prej (`typical_dep`), okno vozjne pa ne --
+        # zato je bilo pri vozjni, ki se ni odpeljala, povsod "?" in "brez
+        # ocene", ceprav o njej vemo, kako je vozila zadnjih devetnajstkrat.
+        # Ni napoved za ta dan; je opis preteklih voznj in prikaz jo mora
+        # tako tudi imenovati.
+        if razresen:
+            typ = stats.typical_at_stops(
+                conn, [(razresen, s["stop_seq"]) for s in rows])
+            for s in rows:
+                s["typical"] = typ.get((razresen, s["stop_seq"]))
+            stats.typical_na_izhodisce(rows)
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "last_measured_seq": meja_seq,
                 "stops": rows}

@@ -790,3 +790,26 @@ Vrsta je `obvoz` in ne `ovira`, zato števci ovir (`/api/health`,
 na omejitvi, `INSERT OR IGNORE` pa jo je **tiho požrl** — obvestili sta bili
 zapisani, a brez enega samega postajališča, in videti je bilo, kot da zajem dela.
 Zdaj gre prazen niz in navaden `INSERT`, da bi se ista napaka slišala takoj.
+
+## Feed ne poroča prvega postanka (7. 9. 2026)
+
+Prijava: okno vožnje pri vlaku, ki še ni odpeljal, povsod kaže „?" in „brez
+ocene", iskalnik pa za isto vožnjo pove „običajno 0 min, 16 voženj, 100 %
+v 5 min".
+
+Vzroka sta dva in prvi je splošnejši od prijave:
+
+**1. Železniški feed prvega postanka ne poroča nikoli.** Od **716 voženj z
+meritvami jih ima 0** kdaj meritev na svojem prvem postanku. Ni naključje
+vzorca in ni splošno pravilo GTFS-RT — **pri avtobusih ga ima 14 555 od
+16 671 (87 %)**. Gre za lastnost SŽ-jevega vira. Zato „običajna zamuda" na
+izhodišču vlaka ne more obstajati, ne glede na to, koliko dni zajemamo; za
+LPV 2273 se meritve začnejo pri `stop_seq = 2` (Ljubljana Polje, 16 dni).
+
+**2. Okno vožnje ni imelo zgodovine.** `typical_at_stops()` obstaja od prej
+in ga iskalnik uporablja (`typical_dep`, `typical_arr`), `/api/train/{no}/run`
+pa ga ni vračal. Isti podatek, dva prikaza, ena številka manj.
+
+Endpoint ga zdaj vrne za vsak postanek. Za izhodišče, kjer ga po točki 1 ni,
+prikaz vzame naslednji postanek in to **pove** — ni napoved za ta dan, je
+opis preteklih voženj.

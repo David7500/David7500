@@ -496,6 +496,27 @@ def network_stats(conn: sqlite3.Connection, days: int = 90,
 MIN_RUNS_FOR_TYPICAL = 3
 
 
+def typical_na_izhodisce(rows: list[dict]) -> None:
+    """Prvim postankom brez zgodovine prepiše `typical` naslednjega.
+
+    Izhodišča **železniški** feed ne poroča nikoli -- izmerjeno 7. 9. 2026:
+    od 716 voženj z meritvami jih ima 0 kdaj meritev na prvem postanku, pri
+    avtobusih pa 14 555 od 16 671 (87 %). Tam je torej to prazen tek.
+    Zgodovine tam torej ne bo, koliko dni pa zajemamo. Ker je odhodna zamuda
+    ravno tista, ki jo naslednji postanek izmeri minuto zatem, jo tja
+    prepišemo -- in **označimo** (`od_seq`, `od_ime`), da prikaz ne trdi, da
+    je merjeno tu. Spreminja `rows` na mestu.
+    """
+    for i, s in enumerate(rows):
+        if s.get("typical") is not None:
+            return
+        sosed = rows[i + 1].get("typical") if i + 1 < len(rows) else None
+        if sosed is not None:
+            s["typical"] = {**sosed, "od_seq": rows[i + 1]["stop_seq"],
+                            "od_ime": rows[i + 1]["name"]}
+            return
+
+
 def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
                      days: int = 90) -> dict[tuple[str, int], dict]:
     """Običajna zamuda na danih (trip_id, stop_seq) iz zajete zgodovine.

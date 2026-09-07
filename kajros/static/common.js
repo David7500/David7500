@@ -681,14 +681,20 @@ function forecastStopHtml(s, f, w) {
   // da ni skrita, a nanjo ne racunamo.
   const schedIso = s.sched_dep || s.sched_arr;
   const sched = hhmm(schedIso);
-  const d = f ? f.predicted_delay_s : null;
+  // Kadar ocene ni -- voznja se ni zacela, zato ni cesa prenasati naprej --
+  // o njej vseeno nekaj vemo: kako je vozila doslej. Brez tega je bilo v oknu
+  // voznje povsod "?" in "brez ocene", medtem ko je iskalnik za ISTO voznjo
+  // pisal "obicajno 0 min, 16 voznj". Ni napoved za ta dan; je opis preteklih
+  // voznj in zeton to pove z besedo "obicajno", ne "ocena".
+  const t = !f && s.typical ? s.typical : null;
+  const d = f ? f.predicted_delay_s : t ? t.median_s : null;
   const color = delayColor(d);
   const eta = d != null && schedIso ? hhmm(new Date(new Date(schedIso).getTime() + d * 1000)) : "—";
   const schedHtml = eta !== sched ? `<span class="stop-sched">${sched}</span>` : "";
   // Kadar prevoznik napove VEC od nase ocene, je njegova stevilka merjeno
   // skoraj tocna (MAE 0,21 min proti nasim 2,66) -- takrat ve za nekaj, cesar
   // iz zgodovine ni mogoce vedeti. Povejmo, da stevilka pride od njega.
-  const tag = !f ? "brez ocene"
+  const tag = !f ? (t ? "običajno" : "brez ocene")
     : f.from_operator ? "prevoznik napoveduje več"
     : f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}`
     : "ocena · le prenos zamude";
@@ -711,6 +717,8 @@ function forecastStopHtml(s, f, w) {
           ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`
           : ""}
         ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.own_delay_s)} min</span></div>` : ""}
+        ${t ? `<div class="stop-times adv-only"><span class="stop-tag">mediana ${pluralRuns(t.n)}${
+          t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}
       </div>
       ${stopWeatherHtml(w, true)}
       <div class="stop-delay is-forecast" style="color:${color}">${delayText(d, true)}</div>

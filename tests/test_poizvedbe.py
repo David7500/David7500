@@ -1448,3 +1448,26 @@ def test_obvestila_lpp_se_zdruzijo_po_besedilu(conn):
     assert stops == {"S1", "S2"}
     assert [a["header"] for a in alerts.for_stops(conn, ["S1"])] == ["Postaja Čerinova na obvozu"]
     assert alerts.for_stops(conn, ["S9"]) == []
+
+
+def test_izhodisce_dobi_obicajno_zamudo_naslednje_postaje():
+    # Feed prvega postanka ne poroca nikoli (0 od 716 voznj), zato bi tam
+    # ostal "?" tudi po devetnajstih zajetih vozjnah. Prepis je dovoljen samo
+    # z oznako, od kod je -- brez nje bi prikaz trdil meritev, ki je ni bilo.
+    rows = [{"stop_seq": 1, "name": "Ljubljana", "typical": None},
+            {"stop_seq": 2, "name": "Ljubljana Polje",
+             "typical": {"n": 16, "median_s": 60.0}}]
+    stats.typical_na_izhodisce(rows)
+    assert rows[0]["typical"]["median_s"] == 60.0
+    assert rows[0]["typical"]["od_ime"] == "Ljubljana Polje"
+    assert "od_seq" not in rows[1]["typical"]
+
+
+def test_prepis_na_izhodisce_ne_preskoci_sredine():
+    # Vrzel sredi proge ni izhodisce: tam meritev MANJKA, kar je drugacna
+    # novica od "feed je ne posilja". Prepis sme zapolniti samo zacetek.
+    rows = [{"stop_seq": 1, "name": "A", "typical": {"n": 9, "median_s": 0.0}},
+            {"stop_seq": 2, "name": "B", "typical": None},
+            {"stop_seq": 3, "name": "C", "typical": {"n": 9, "median_s": 120.0}}]
+    stats.typical_na_izhodisce(rows)
+    assert rows[1]["typical"] is None

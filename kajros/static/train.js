@@ -207,23 +207,43 @@ function runHeadHtml(cur) {
   // "6 min prej" si nasprotuje, "6 min prej" pod njim pa besedo ponovi.
   const early = isEarly(z || d);
 
+  // Voznja se ni zacela: "trenutne" zamude ni in vprasaj v najvecji pisavi na
+  // strani ne pove nicesar, medtem ko o vozjni vemo, kako obicajno odpelje.
+  // Jemljemo PRVI postanek z zgodovino -- to je zamuda ob odhodu, ne tista na
+  // koncu proge, ki je po definiciji vecja.
+  // ...a le, kadar bloka "Pri tebi" ni. Ce je, je ista stevilka ze nad tem in
+  // dve enaki "+8" druga pod drugo nista dva podatka, ampak ena ponovitev.
+  const jeTvoj = !!(state.run && yourStop(state.run.stops));
+  const t0 = !cur && !jeTvoj && state.run && state.run.stops
+    ? (state.run.stops.find((x) => x.typical) || {}).typical || null
+    : null;
+  // Brez meritve in brez svoje stevilke glava ne postavlja vprasaja v najvecji
+  // pisavi na strani: stavek pod njim ze pove, da se voznja ni zacela.
+  const tiho = !cur && jeTvoj;
+
   // Prevoznikovo porocilo pozna prometno mesto, ki ga nas vozni red nima --
   // zamuda se meri tudi tam, kjer vlak ne ustavlja.
   const rep = state.report;
 
   return `
     <div class="detail-now">
-      <div class="detail-now-label">${
-        stale ? "Zadnja znana zamuda" : early ? "Vozi prezgodaj" : "Trenutna zamuda"}</div>
-      <div class="detail-now-value" style="color:${color}">
-        <span class="detail-now-n">${early ? Math.abs(delayMin(z || d)) : delayLabel(z || d)}</span>
+      ${tiho ? "" : `<div class="detail-now-label">${
+        stale ? "Zadnja znana zamuda" : early ? "Vozi prezgodaj"
+        : t0 ? "Običajno ob odhodu" : "Trenutna zamuda"}</div>
+      <div class="detail-now-value" style="color:${t0 ? delayColor(t0.median_s) : color}">
+        <span class="detail-now-n">${
+          t0 ? delayLabel(t0.median_s)
+          : early ? Math.abs(delayMin(z || d)) : delayLabel(z || d)}</span>
         <span class="detail-now-unit">min</span>
-      </div>
+      </div>`}
       <div class="detail-now-where">
         ${cur
           ? `izmerjeno na postaji <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
           : notStartedText()}
       </div>
+      ${t0 ? `<div class="detail-now-age">mediana ${pluralRuns(t0.n)}${
+        t0.od_seq ? `, merjeno na postaji ${escapeHtml(t0.od_ime)}` : ""} · ${
+        Math.round(t0.on_time_share * 100)} % v 5 min</div>` : ""}
       ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
         ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale
           ? ` — ${vehicleNoun()} je od takrat verjetno že pripeljal`
@@ -281,6 +301,19 @@ function yourStopHtml(stops, forecast, current) {
     kdaj = schedIso && d != null
       ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
     odkod = f.n_samples > 0 ? `mediana ${pluralRuns(f.n_samples)}` : "prenos trenutne zamude";
+  } else if (s.typical) {
+    // Voznja se ni zacela: napovedi ni, zgodovina pa je. "?" je bil tu tudi
+    // takrat, ko je iskalnik za isto voznjo pisal "obicajno 0 min, 16 voznj"
+    // -- ista stevilka, dva prikaza, en brez nje.
+    d = s.typical.median_s;
+    kdaj = schedIso && d != null
+      ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
+    znak = "običajno";
+    // Izhodisca feed ne poroca (0 od 716 voznj), zato tam mediana pripada
+    // NASLEDNJI postaji. Prepis je posten samo, ce je povedan.
+    odkod = s.typical.od_seq
+      ? `mediana ${pluralRuns(s.typical.n)}, merjeno na postaji ${s.typical.od_ime}`
+      : `mediana ${pluralRuns(s.typical.n)} · ${Math.round(s.typical.on_time_share * 100)} % v 5 min`;
   } else {
     kdaj = schedIso;
     znak = "vozni red";
