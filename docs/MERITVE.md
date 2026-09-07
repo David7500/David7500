@@ -660,3 +660,55 @@ absolutnih napovedanih časov prek `collector._delay_of()`.
 10 493 postajališč; vozil z GPS je 1 235 namesto ~1 000. Bavarski dvor kaže
 150 odhodov z živimi zamudami mestnih linij (18L +4 min izmerjeno, 6B +11 min
 ocena), Polje pa 150 odhodov na petih linijah namesto 80 na eni.
+
+## Kaj je LPP podrl in kaj je to stalo (7. 9. 2026)
+
+Vklop mestnega LPP je potrojil avtobusno omrežje in s tem odkril tri napake,
+ki so bile v kodi že prej, le da jih železnica ni sprožila. Vse tri so bile
+najdene s pregledom `preglej vse`, ne s prijavo uporabnika.
+
+**1. `/api/live` se ni odzival — 216 s.** `EXPLAIN QUERY PLAN` je pokazal
+`SCAN p` in za njim `SCAN tail`: CTE `tail` je bil materializiran brez
+indeksa, zato je bil za vsako vrstico `passed` pregledan cel. Železnica
+2 006 × 2 006, avtobusi **59 557 × 59 557 = 3,5 milijarde** primerjav.
+`tail` je bil samo „zamuda na zadnjem postanku", kar je okenska funkcija.
+
+| | prej | zdaj |
+|---|---|---|
+| avtobusi | 216,1 s | **4,3 s** (arwen), 0,14 s (razvojni) |
+| železnica | 2,27 s | 0,66 s |
+
+Izid pri železnici je enak vrstico za vrstico.
+
+**2. Iskanje zvez z enim prestopom — 26,5 s.** Poizvedba se razveji čez vse
+pare voženj, ki se kje srečata; na prometni mestni postaji je to izmerjeno
+26,5 s od trenutne ure in 40,5 s za cel dan, pri vlakih pa 0,0 s.
+
+Rešitev je merjena ločnica, ne pospešitev poizvedbe. Mediana razmika med
+zaporednimi neposrednimi odhodi:
+
+| relacija | zvez | mediana razmika |
+|---|---|---|
+| Bavarski dvor → Polje (mestni) | 161 | **6 min** |
+| Ljubljana AP → Maribor AP | 8 | 70 min |
+| Ljubljana → Maribor (vlak) | 11 | 120 min |
+| Ljubljana → Koper (vlak) | 3 | 520 min |
+
+Med 6 in 70 minutami ni ničesar, zato je meja **15 minut**: pri gostejšem
+taktu prestopa sploh ne iščemo, ker ne more nič prihraniti. Izid:
+Bavarski dvor → Polje **26,5 s → 0,13 s**, vlaki nespremenjeni.
+Mestni par brez neposredne zveze (ZALOG → Štajerska) ostane pri 3,0 s in
+osmih zvezah.
+
+**3. `plan()` je tiho vračal nič.** `MAX_STOP_TIMES = 200 000` je bil
+postavljen na domnevo „pri avtobusih 80 000"; z LPP jih je **247 346**, zato
+je `_timetable_for_day()` vračal prazen vozni red — in tega ni nihče povedal.
+Meja je zdaj izmerjena: cel avtobusni dan je 92 MB zadržano, 127 MB vrh,
+naloži se v 1,6 s. Nova meja 300 000, predpomnilnik z štirih na dva vnosa
+(najhujši primer ~184 MB namesto 370). Prazen izid se odslej predpomni, da se
+četrt milijona vrstic ne bere znova ob vsakem klicu.
+
+**Kar ostaja počasno in ni popravljeno:** `/api/stations/search` je na arwenu
+~4 s za vsako poizvedbo (lokalno 0,35 s). Brskalnika to ne prizadene, ker
+odkar obstaja `/api/stations/index`, išče sam; endpoint je še vedno v rabi kot
+zasilna pot in pri prvih pritiskih tipk, preden se kazalo naloži.

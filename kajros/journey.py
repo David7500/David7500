@@ -514,6 +514,45 @@ WHERE t1.trip_id <> t2.trip_id
 """
 
 
+# Kdaj prestop ne more pomagati, ker neposredne vozijo pogosto.
+#
+# Meja je izmerjena, ne izbrana. Mediana razmika med zaporednimi neposrednimi
+# odhodi (7. 9. 2026, isti dan, iste postaje):
+#
+#   Bavarski dvor -> Polje   mestni avtobus   161 zvez, mediana  **6 min**
+#   Ljubljana AP -> Maribor AP  medkrajevni      8 zvez, mediana   70 min
+#   Ljubljana -> Maribor     vlak              11 zvez, mediana  120 min
+#   Ljubljana -> Koper       vlak               3 zveze, mediana  520 min
+#
+# Med 6 in 70 minutami ni ničesar, zato je 15 minut varna sredina.
+GOSTO_S = 15 * 60
+# Pri treh vožnjah mediana ničesar ne pove; osem je najmanj, da je razmik
+# sploh razmik in ne naključje.
+GOSTO_MIN_ZVEZ = 8
+
+
+def dovolj_gosto(direct: list[dict] | None) -> bool:
+    """Ali neposredne vozijo tako pogosto, da prestop nima kaj prihraniti.
+
+    **Zakaj to sploh je.** Iskanje z enim prestopom je poizvedba, ki se
+    razveji čez vse pare voženj, ki se kje srečata. Na prometni mestni postaji
+    je to izmerjeno **26,5 s** (Bavarski dvor -> Polje, od trenutne ure) in
+    40,5 s za cel dan, medtem ko je isto pri vlakih 0,0 s. Odgovor je bil zato
+    počasnejši od Cloudflarove meje in stran je ostala prazna.
+
+    Kar s tem izgubimo, je pošteno povedati: prestop bi teoretično lahko bil
+    hitrejši tudi ob šestminutnem taktu, če neposredna linija vozi v veliki
+    zanki. Ob 161 neposrednih zvezah je to šum, ki stane pol minute čakanja.
+    """
+    if not direct or len(direct) < GOSTO_MIN_ZVEZ:
+        return False
+    casi = sorted(d["dep_s"] for d in direct if d.get("dep_s") is not None)
+    if len(casi) < GOSTO_MIN_ZVEZ:
+        return False
+    razmiki = sorted(casi[i + 1] - casi[i] for i in range(len(casi) - 1))
+    return razmiki[len(razmiki) // 2] <= GOSTO_S
+
+
 def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
               service_date: str, earliest_s: int = 0, limit: int = 8,
               direct: list[dict] | None = None,
@@ -686,10 +725,18 @@ def yesterday(when: datetime | None = None) -> str:
 # 28 ms na zeleznici in 60 ms na avtobusnem omrezju.
 MAX_LEGS = 4
 
-# Varovalka: iskanje tece nad celim dnevnim voznim redom v pomnilniku. Pri
-# zeleznici je to ~10 000 postankov, pri avtobusih 80 000. Ce bi kdaj naraslo
-# cez to, raje ne odgovorimo, kot da stran obvisi.
-MAX_STOP_TIMES = 200_000
+# Varovalka: iskanje tece nad celim dnevnim voznim redom v pomnilniku.
+#
+# Stevilka je bila 200 000 na domnevo "pri avtobusih 80 000". Z mestnim LPP
+# jih je **247 346** in varovalka je zacela tiho vracati prazen vozni red --
+# `plan()` torej ni nasel nicesar in tega ni nihce povedal. Prav ta razred
+# napake straži `preveri.sh`, a je ni ujel, ker `plan()` tece sele takrat, ko
+# ni ne neposredne ne prestopa.
+#
+# Nova meja je izmerjena: cel avtobusni dan je 92 MB zadrzano in 127 MB vrh,
+# nalozi se v 1,6 s. Predpomnilnik je zato zmanjsan na dva vnosa, da je
+# najhujsi primer ~184 MB in ne 370.
+MAX_STOP_TIMES = 300_000
 
 
 # Dnevni vozni red v pomnilniku, da ga ne beremo znova ob vsakem iskanju.
@@ -697,7 +744,7 @@ MAX_STOP_TIMES = 200_000
 # ki se ob uvozu premakne, in s tem pade cel predpomnilnik. Hranimo najvec
 # nekaj dni; vec jih naenkrat nihce ne gleda.
 _TT_CACHE: dict[tuple, tuple] = {}
-_TT_CACHE_MAX = 4
+_TT_CACHE_MAX = 2
 
 
 def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
@@ -732,6 +779,11 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
         (service_date, network, network),
     ).fetchall()
     if len(rows) > MAX_STOP_TIMES:
+        # Prazen izid tudi predpomnimo: brez tega bi vsak klic znova prebral
+        # cetrt milijona vrstic, da bi vrnil nic. Vsebina se brez novega ziga
+        # ne more spremeniti, zato je to varno.
+        if stamp:
+            _TT_CACHE[key] = ({}, {})
         return {}, {}
 
     by_trip: dict[str, list] = {}

@@ -1149,9 +1149,14 @@ def api_connections(
         rows = stats.connections(conn, a, b, date, now_s, network=network)
         # Prestop ponudimo vedno, ne sele ko neposredne ni: cez dan je
         # neposrednih voznj lahko pet, med njimi pa stiri ure luknje.
+        #
+        # **Izjema so goste linije.** Ta razlog velja za vlake in medkrajevne
+        # avtobuse, ne pa za mestne: pri sestminutnem taktu prestop nima kaj
+        # prihraniti, poizvedba pa je izmerjeno 26,5 s. Glej `dovolj_gosto()`.
+        gosto = journey.dovolj_gosto(rows)
         legs = (journey.transfers(conn, a, b, date, earliest_s=(now_s or 0),
                                   direct=rows, network=network)
-                if with_transfers else [])
+                if with_transfers and not gosto else [])
         # Sele ko neposredna voznja in en prestop ne dasta nic. V vzorcu 80
         # parov zeleznickih postaj je bilo takih 36 % -- pot je obstajala, le
         # dva ali tri prestope je rabila.
