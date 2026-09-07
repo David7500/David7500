@@ -883,3 +883,19 @@ Meja med meritvijo in napovedjo (`_LAST_MEASURED_SQL`) nosi le **lokalni** del
 pravila — postanek, osvežen prej kot kateri od prejšnjih — ker teče nad
 seznamom voženj hkrati in celotne verige ne zmore. Pri železnici lokalni del
 razloži vse primere (451 od 452), pri avtobusih dve petini.
+
+### Neskladne vrednosti statistike ne pokvarijo (7. 9. 2026)
+
+Vprašanje, ki se ponuja samo od sebe: če je 2,29 % avtobusnih postankov
+smeti, ali je treba očistiti tudi agregate? **Ne.** Primerjava vseh vrednosti
+proti tistim, ki ostanejo po `oznaci_neskladne()`:
+
+| omrežje | mediana | povprečje | p95 | v 5 min |
+|---|---|---|---|---|
+| avtobus | 2,2 → 2,2 min | 7,4 → 7,3 | 22,3 → 21,0 | 71,7 → 72,1 % |
+| železnica | 2,0 → 2,0 | 6,4 → 6,4 | 24,0 → 24,0 | 59,5 → 59,4 % |
+| LPP mestni | 0,7 → 0,7 | 1,6 → 1,6 | 7,5 → 7,3 | 89,5 → 89,7 % |
+
+Napaka je torej **lokalna**: uniči eno vrstico na zaslonu, agregata ne
+premakne. Filtriranje v statistiki bi bilo dodatna zapletenost brez učinka —
+in `povzetek` se računa v SQL, kjer verige ni mogoče pognati.
