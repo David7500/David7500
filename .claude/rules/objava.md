@@ -25,8 +25,10 @@ poskušaj sam.
 Pella je bila slepa ulica — zajem je delal, javni API pa je vračal Cloudflare
 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
-**Na malini teče izključno zajem, in zajema vse.** `kajros-zajem.service`
-(`kajros.cli collect`) je edina omogočena enota; `kajros.service` s
+**Na malini teče izključno zajem, in zajema vse.** Tako je zamišljeno in tako
+je tudi v resnici — le da je enota **še vedno `sztrack-zajem.service`**
+(`sztrack.cli collect`), ker preimenovalna namestitev tam še ni bila pognana;
+po njej bo to `kajros-zajem.service`. `kajros.service` s
 strežnikom je `disabled` in tak ostane — hkrati ne smeta teči, ker bi pisali
 v isto bazo in se prepirali za feed (`install-rpi.sh` drugo sam ugasne).
 `KAJROS_AGENCIES=1118,1119,1121,1123`: meritev, ki je ta trenutek nihče ne
@@ -173,10 +175,31 @@ paketi (`python3-venv`, `python3-pip`, `sqlite3`, `git`), sistemski
 uporabnik `kajros`, štiri enote v `/etc/systemd/system/` in `enable --now`
 za `kajros.service` ter `kajros-backup.timer`.
 
-**Stanje maline ob tem zapisu:** teče še STARA koda (`sztrack-zajem` aktivna,
-baza `/var/lib/sztrack/sz.sqlite`, 368 MB); `kajros.service` in
-`kajros-zajem.service` sta neaktivna. Preimenovalni deploy na njej še ni bil
-pognan in selitev v `install-rpi.sh` še čaka.
+**Stanje maline, preverjeno 7. 9. 2026** (ne po spominu — vse iz `systemctl`
+in `ls` na njej):
+
+| kaj | vrednost |
+|---|---|
+| koda | `/opt/sztrack`, stara, pod starim imenom |
+| enota | `sztrack-zajem.service`, aktivna, uporabnik `sztrack` |
+| baza | `/var/lib/sztrack/sz.sqlite` — **683 MB** + 23 MB WAL |
+| kopije | `sztrack-backup.timer` dnevno ~03:20, hrani 3, `.sqlite.gz` |
+| prevozniki | `SZ_AGENCIES=1118,1119,1121,1123` |
+| disk | 28 G, 19 G prosto |
+
+`kajros.service` in `kajros-zajem.service` na malini ne obstajata. Selitev v
+`install-rpi.sh` je napisana in preverjena z branjem: ustavi in onemogoči
+`sztrack-zajem`, prestavi `sz.sqlite` → `/var/lib/kajros/kajros.sqlite`,
+namesti nove enote. Rabi sudo, torej jo požene David.
+
+**Dvoje, kar je treba vedeti pred to selitvijo:**
+
+* **Malina ne zajema mestnega LPP** — stara koda zastavice `KAJROS_LPP` nima.
+  Nova jo ima in je **privzeto vklopljena**, kar pomeni še 42 MB GTFS na Pi
+  Zero W. Ali to prenese, **ni izmerjeno**; do takrat naj gre v enoto
+  `KAJROS_LPP=0`.
+* **Poizvedb na malini ne poganjaj.** `SELECT COUNT(*) FROM run` čez 683 MB
+  tam preseže 120 s. Analiza gre na kopijo, ne na izvirnik.
 
 
 ## Dostop od zunaj: samo Cloudflare
