@@ -1558,3 +1558,47 @@ def test_tabla_ne_kaze_nemogoce_meritve(conn):
     assert row["delay_kind"] == "izmerjeno"
     assert row["delay_s"] == 300
     assert row["delay_from"] == "Celje"
+
+
+def test_nicev_tocni_zadetek_ne_prehiti_prometne_postaje(conn):
+    """Šumniki se pri iskanju zlijejo, promet pa ne sme izginiti.
+
+    Prava napaka, izmerjena 7. 9. 2026: „celje" je na avtobusnem omrežju
+    vrnilo vas **Čelje** z dvema postankoma v vsem voznem redu pred
+    „Celje AP" s 1014 — in `resolve_station()` je iskalniku zvez tiho podtaknil
+    kraj 112 km stran. Točno ime ostane vidno, prvo mesto pa dobi promet.
+    """
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('CV','Čelje',45.6,14.2)")
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('CA','Celje AP',46.2,15.3)")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('tc','rc','N1','vas','S1')")
+    _sched(conn, "tc", [(1, "CV", None, 20000), (2, "A", 21000, None)])
+    # Celje AP je stokrat bolj prometno: ena vožnja proti stotim.
+    for i in range(100):
+        conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                     f"VALUES('ta{i}','ra','N2','mesto','S1')")
+        _sched(conn, f"ta{i}", [(1, "CA", None, 20000 + i), (2, "A", 21000 + i, None)])
+    conn.commit()
+    imena = [s["name"] for s in journey.search_stations(conn, "celje", 8)]
+    assert imena[0] == "Celje AP"
+    assert "Čelje" in imena, "točnega zadetka ni dovoljeno skriti"
+    # Tako, kot človek vtipka -- brez velike začetnice in brez šumnika.
+    assert journey.resolve_station(conn, "celje") == "Celje AP"
+
+
+def test_tocno_ime_s_podobnim_prometom_ostane_prvo(conn):
+    # Pravilo velja samo za nicev promet. Postaja, ki je le nekajkrat manj
+    # prometna od soseda, mora ostati prva -- sicer bi „Boršt" izgubil proti
+    # „Boršt/Krki K", ki je isti kraj.
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('B1','Boršt',45.8,13.9)")
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('B2','Boršt/Krki K',45.8,13.9)")
+    for i in range(3):
+        conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                     f"VALUES('tb{i}','rb','N3','x','S1')")
+        _sched(conn, f"tb{i}", [(1, "B1", None, 20000 + i), (2, "A", 21000 + i, None)])
+    for i in range(9):
+        conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                     f"VALUES('tk{i}','rk','N4','x','S1')")
+        _sched(conn, f"tk{i}", [(1, "B2", None, 22000 + i), (2, "A", 23000 + i, None)])
+    conn.commit()
+    assert [s["name"] for s in journey.search_stations(conn, "borst", 5)][0] == "Boršt"

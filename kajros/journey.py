@@ -45,6 +45,11 @@ MIN_TRANSFER_MIN, MAX_TRANSFER_MIN = TRANSFER_LIMITS["zeleznica"]
 # Koliko zadetkov po imenu sploh pretehtamo po prometu. Glej `search_stations`.
 CANDIDATE_CAP = 300
 
+#: Kolikokrat manj prometen sme biti TOCNI zadetek od najboljsega, preden
+#: izgubi prvo mesto. Izmerjeno na avtobusnem omrezju: pri 20 pade 12 iskanj
+#: (vsa prava napaka), pri 10 jih je 32 in med njimi pari, ki so isti kraj.
+TOCNO_NAJMANJ_DELEZ = 20
+
 
 # ---------------------------------------------------------------- iskanje postaj
 
@@ -201,11 +206,37 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
         else:
             prej["trips"] += trips
 
+    # **Tocno ime prvo -- razen kadar je nicevo.** Sumniki se pri iskanju
+    # zlijejo, zato je "Celje" tudi "Čelje": vas z DVEMA postankoma v vsem
+    # voznem redu je stala pred "Celje AP" s 1014. Isto pri "novo" ("Novo" 12
+    # proti "Novo mesto" 631) in "krizan" ("Križan" 31 proti "Križanke" 4818).
+    # Takih primerov je na avtobusnem omrezju 12, na zeleznickem nobenega.
+    #
+    # Prag je izmerjen, ne izbran: pri 20-kratniku pade teh 12, pri 10 pa jih
+    # je 32 in med njimi so pari, ki so ISTI kraj -- "Boršt" in "Boršt/Krki K",
+    # "Straža pri Raki" in "... K". Tam bi bila prestavitev napacna.
+    naj_promet = max((d["trips"] for d in po_imenu.values()), default=0)
+
+    def razred_z_prometom(d: dict) -> int:
+        rang = rank_of(d["name"])
+        if rang == 0 and d["trips"] * TOCNO_NAJMANJ_DELEZ < naj_promet:
+            return 1
+        return _razred(rang)
+
     out = sorted(po_imenu.values(),
-                 key=lambda d: (_razred(rank_of(d["name"])), -d["trips"], d["name"]))
+                 key=lambda d: (razred_z_prometom(d), -d["trips"], d["name"]))
+    # Prestavljeni tocni zadetek gre na DRUGO mesto, ne na konec. Prvo dobi
+    # najbolj prometna postaja, ker jo isce vec ljudi; tocno tisto, kar je
+    # clovek vtipkal, pa mora biti takoj pod njo in ne sme izginiti -- sumnika
+    # ni mogoce vtipkati drugace, zato bi bila "Čelje" sicer nedosegljiva.
+    vrnjeno = out[:limit]
+    tocni = next((d for d in out if rank_of(d["name"]) == 0), None)
+    if tocni is not None and limit > 1 and (not vrnjeno or vrnjeno[0] is not tocni):
+        vrnjeno = [d for d in vrnjeno if d is not tocni]
+        vrnjeno = vrnjeno[:1] + [tocni] + vrnjeno[1:limit - 1]
     for d in out:
         d.pop("_naj")
-    return out[:limit]
+    return vrnjeno
 
 
 def resolve_station(conn: sqlite3.Connection, name: str,

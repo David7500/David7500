@@ -929,3 +929,33 @@ prihod in odhod ves čas dajal isto vrednost.
 Ostaja torej odprto in zapisano. Kar se da povedati pošteno, je sam prikaz:
 seznam najhujših voženj **že** kaže število voženj in delež v petih minutah,
 torej „5 voženj · 20 % v 5 min" ob 111 min — bralec vidi, na čem stoji.
+
+## „Celje" je na avtobusni strani pomenilo vas 112 km stran (7. 9. 2026)
+
+Iskanje sklada šumnike, zato je „celje" **točno** ime vasi **Čelje** pri
+Ilirski Bistrici — in točno ime je bilo doslej vedno prvo. Posledica ni bila
+le vrstni red v spustnem seznamu: `resolve_station()` vzame prvi zadetek, zato
+je iskalnik zvez z vpisanim „Celje" tiho iskal iz **Čelja**.
+
+| | postankov v voznem redu | lega |
+|---|---|---|
+| Čelje | **2** | 45,592 / 14,154 |
+| Celje AP | **1 014** | 46,233 / 15,268 |
+
+Razdalja med njima je 112 km.
+
+Takih iskanj je na avtobusnem omrežju **26 od 5 361** (železniško nima
+nobenega): „novo" je dalo postajo „Novo" (12) pred „Novo mesto" (631),
+„krizan" pa „Križan" (31) pred „Križanke" (4 818).
+
+**Prag je izmerjen, ne izbran.** Točni zadetek izgubi prvo mesto, kadar je
+vsaj **20-krat** manj prometen od najboljšega:
+
+| prag | spremenjenih prvih zadetkov |
+|---|---|
+| 10 | 49 — med njimi pari, ki so ISTI kraj („Boršt" proti „Boršt/Krki K") |
+| **20** | **26** |
+| 50 | 14 — „celje" ostane, „novo" pade ven |
+
+Točni zadetek se ne skrije: gre na **drugo** mesto. Šumnika ni mogoče vtipkati
+tako, da bi ga ločil od nešumnika, zato bi bila „Čelje" sicer nedosegljiva.
