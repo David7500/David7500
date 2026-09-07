@@ -1245,3 +1245,39 @@ ostane samo prvi klic po zagonu, ko stare vrednosti še ni.
 
 Pokrito z dvema testoma: da se stara vrednost res postreže in nova res
 izračuna, in da se privzeto vedenje brez zastavice ne spremeni.
+
+## Prometni dan je pri LPP zapisan v `trip_id` (8. 9. 2026)
+
+Po selitvi malina mestnega LPP ni zajemala: `poll_lpp` je vračal `trips: 0`,
+brez napake. Videti je bilo, kot da ponoči pač nič ne vozi.
+
+Vzrok je v obliki id-ja. Trojni `trip_id` pri LPP ima **prometni dan v prvi
+komponenti** — izmerjeno na arwenu: devet različnih prvih komponent, vsaka
+~2 428 voženj, in vsaka pripada natanko enemu datumu:
+
+| prva komponenta | dan |
+|---|---|
+| `6bec7600-…` | 2026-09-07 |
+| `96959eb0-…` | 2026-09-08 |
+| `ceec99e5-…` | 2026-09-09 |
+
+Malina je uvozila ob 00:15 in dobila okno **od 8. 9. naprej**. Feed ob 01:10 pa
+je govoril o vožnji z dne **7. 9.** — nočni avtobus, ki je speljal pred
+polnočjo. Ujemanja ni bilo: `ujetih v trip: 0 od 1`.
+
+Popravek: okno se začne **včeraj**, ne danes. Cena je en dan, ~2 400 voženj in
+~62 000 postankov (celo okno je 19 163 voženj in 496 542 postankov na osem dni).
+
+Arwen tega ni pokazal, ker je uvozil prejšnji dan opoldne in ima 7. 9. v oknu.
+Napaka bi se torej pokazala šele ob prvem uvozu tik po polnoči — in bi bila
+videti kot mirna noč.
+
+### Malina po selitvi, izmerjeno
+
+| kaj | vrednost |
+|---|---|
+| uvoz voznega reda (IJPP + LPP) | ~50 min, **vrh RSS 213 MB** od 427 + 426 swapa |
+| vozni red po uvozu | 32 478 voženj (19 163 LPP mestni, 5 402 Arriva, 4 823 Nomago, 1 569 LPP primestni, 789 SŽ, 732 AP MS) |
+| postankov | 496 542 |
+| baza | 683 → 696 MB, disk 18 G prost |
+| selitev | 962 951 → 962 951 meritev |

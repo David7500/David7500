@@ -97,13 +97,25 @@ def download_lpp(conn: sqlite3.Connection, force: bool = False) -> Path | None:
 
 
 def beri_lpp(zip_path: Path, dni: int, danes: str | None = None) -> dict:
-    """Prebere LPP zip in vrne le okno `dni` dni od danes.
+    """Prebere LPP zip in vrne okno od **včeraj** do `dni` dni naprej.
 
     **Okno je nujno, ne varčnost.** LPP nima voznih vzorcev kot IJPP, ampak
     svojo vožnjo za vsak datum: 62 989 voženj in 1,6 milijona postankov za en
     mesec. Ves feed bi vozni red početveril; osem dni je primerljivo z IJPP.
+
+    **Zakaj se začne včeraj in ne danes.** Pri LPP je prometni dan zapisan kar
+    v `trip_id` -- prva komponenta trojnega id-ja je dan. Nočni avtobus, ki ob
+    01:00 še vozi, nosi **včerajšnji** dan, in če ga v bazi ni, se meritev ne
+    ujame z ničimer in tiho odpade. Ujeto 8. 9. 2026 na malini: uvoz ob 00:15
+    je postavil okno od 8. 9., feed ob 01:10 pa je govoril o vožnji z dne
+    7. 9. -- `poll_lpp` je vrnil `trips: 0` in to je bilo videti, kot da
+    ponoči pač nič ne vozi.
+
+    Cena je en dan: ~2 400 voženj in ~62 000 postankov (izmerjeno: 19 163
+    voženj in 496 542 postankov na osem dni).
     """
     danes = danes or datetime.now(TZ).date().isoformat()
+    zacetek = (date.fromisoformat(danes) - timedelta(days=1)).isoformat()
     konec = (date.fromisoformat(danes) + timedelta(days=dni)).isoformat()
 
     with zipfile.ZipFile(zip_path) as zf:
@@ -114,7 +126,7 @@ def beri_lpp(zip_path: Path, dni: int, danes: str | None = None) -> dict:
             if r["exception_type"] != "1":
                 continue
             d = datetime.strptime(r["date"], "%Y%m%d").date().isoformat()
-            if danes <= d <= konec:
+            if zacetek <= d <= konec:
                 dnevi[r["service_id"]].add(d)
         if not dnevi:
             return {"stops": {}, "trips": {}, "routes": {}, "sched": [],

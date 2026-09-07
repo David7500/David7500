@@ -1807,3 +1807,41 @@ def test_predpomnilnik_brez_ozadja_ostane_sinhron():
 
     assert api._predpomni(kljuc, None, 0, izracun) == 1
     assert api._predpomni(kljuc, None, 0, izracun) == 2   # takoj potekel, znova
+
+
+def test_okno_lpp_vkljuci_vcerajsnji_dan(tmp_path):
+    """Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan.
+
+    Pri LPP je dan zapisan v `trip_id` (prva komponenta trojnega id-ja), zato
+    vožnja, ki je v bazi ni, tiho odpade — `poll_lpp` vrne `trips: 0` in to je
+    videti, kot da ponoči nič ne vozi. Ujeto na malini 8. 9. 2026: uvoz ob
+    00:15 je postavil okno od 8. 9., feed ob 01:10 pa je govoril o 7. 9.
+    """
+    import zipfile
+    from kajros import gtfs
+
+    z = tmp_path / "lpp.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("calendar_dates.txt",
+                    "service_id,date,exception_type\n"
+                    "vceraj,20260907,1\n"
+                    "danes,20260908,1\n"
+                    "predvceraj,20260906,1\n")
+        zf.writestr("routes.txt", "route_id,route_short_name,route_long_name,route_type\n"
+                                  "r1,11,ZALOG - VIZMARJE,3\n")
+        zf.writestr("trips.txt", "trip_id,route_id,service_id,trip_headsign,direction_id\n"
+                                 "a|b|vceraj,r1,vceraj,VIZMARJE,0\n"
+                                 "a|b|danes,r1,danes,VIZMARJE,0\n"
+                                 "a|b|predvceraj,r1,predvceraj,VIZMARJE,0\n")
+        zf.writestr("stop_times.txt",
+                    "trip_id,stop_sequence,stop_id,arrival_time,departure_time\n"
+                    "a|b|vceraj,1,S1,23:50:00,23:50:00\n"
+                    "a|b|danes,1,S1,08:00:00,08:00:00\n"
+                    "a|b|predvceraj,1,S1,08:00:00,08:00:00\n")
+        zf.writestr("stops.txt", "stop_id,stop_name,stop_lat,stop_lon\n"
+                                 "S1,Zalog,46.06,14.60\n")
+
+    izid = gtfs.beri_lpp(z, dni=8, danes="2026-09-08")
+    assert "a|b|danes" in izid["trips"], "današnjega dne ni v oknu"
+    assert "a|b|vceraj" in izid["trips"], "včerajšnjega dne ni v oknu — nočne vožnje bodo odpadle"
+    assert "a|b|predvceraj" not in izid["trips"], "okno sega predaleč nazaj"
