@@ -440,7 +440,11 @@ def test_breakdowns_loci_vrsto_vlaka_od_prevoznika(conn):
     rail = {r["key"] for r in stats.breakdowns(conn, network="zeleznica")["by_kind"]}
     bus = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
     assert rail == {"IC", "nadomestni prevoz"}
-    assert bus == {"LPP"}
+    # Agencija 1118 je LPP-jev PRIMESTNI promet iz IJPP. Mestni je drug vir
+    # (`agency = 'lpp'`) in mora biti svoja skupina: izmerjeno na istem dnevu
+    # ima mestni mediano zamude 0 min in 91 % v petih minutah, primestni pa
+    # 2,6 min in 66 %. Skupna vrstica ni opisovala nobenega od njiju.
+    assert bus == {"LPP primestni"}
 
 
 def test_prag_za_prestop_je_odvisen_od_omrezja(conn):
@@ -1381,3 +1385,26 @@ def test_head_ni_v_dokumentaciji():
     shema = app.openapi()
     z_head = [p for p, o in shema["paths"].items() if "head" in o]
     assert z_head == [], f"HEAD v shemi: {z_head}"
+
+
+def test_mestni_in_primestni_lpp_nista_ista_skupina(conn):
+    """Dve agenciji, dve skupini — tudi ko na avtobusu piše isto.
+
+    Mestni LPP pride iz drugega vira (`agency = 'lpp'`, glej `config.LPP_*`),
+    primestni iz IJPP (`1118`). Dokler sta se preslikala v isto ime, je bila
+    v razrezu ena vrstica za dve različni storitvi.
+    """
+    _add_bus(conn)          # agencija 1118, linija 6B
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+                 "                 mode, agency, network) "
+                 "VALUES('m1','rm','6','ZALOG - BEŽIGRAD','S1','bus','lpp','avtobus')")
+    _sched(conn, "m1", [(1, "A", None, 35000), (2, "C", 39000, None)])
+    for trip in ("b1", "m1"):
+        for i in range(10):
+            conn.execute("INSERT INTO run(trip_id, service_date, stop_seq,"
+                         "                delay_arr, delay_dep, feed_ts) "
+                         "VALUES(?,?,2,120,120,1)", (trip, _pred(i + 1)))
+    conn.commit()
+
+    kljuci = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
+    assert kljuci == {"LPP primestni", "LPP mestni"}
