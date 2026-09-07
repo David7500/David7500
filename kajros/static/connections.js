@@ -942,8 +942,18 @@ function favCurrent() {
 }
 
 /** Ali tako postajo sploh poznamo. Ime, ne ugib: iscemo tocno ujemanje med
- *  zadetki, ne "nekaj podobnega". */
+ *  zadetki, ne "nekaj podobnega".
+ *
+ *  Kazalo, ki ga stran ze ima, ve to brez omrezja -- in prav zato je gumb
+ *  "shrani" cakal 1-2 s: dve zahtevi prek Cloudflara samo zato, da povemo,
+ *  da postajo poznamo. Streznik ostane za primer, ko se kazalo ni naloz'eno.
+ *  Iscemo po CELEM kazalu, ne po prvih osmih zadetkih -- tocno ujemanje sme
+ *  biti kjerkoli. */
 async function stationExists(name) {
+  if (KAZALO) {
+    const want = fold(name);
+    return KAZALO.some((s) => s.f === want);
+  }
   try {
     const res = await fetch(
       `/api/stations/search?q=${encodeURIComponent(name)}&limit=8&network=${NETWORK}`);

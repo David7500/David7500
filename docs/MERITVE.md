@@ -813,3 +813,18 @@ pa ga ni vračal. Isti podatek, dva prikaza, ena številka manj.
 Endpoint ga zdaj vrne za vsak postanek. Za izhodišče, kjer ga po točki 1 ni,
 prikaz vzame naslednji postanek in to **pove** — ni napoved za ta dan, je
 opis preteklih voženj.
+
+## Gumb „shrani" je čakal na omrežje po podatek, ki ga je stran že imela (7. 9. 2026)
+
+Klik na „shrani" je pokazal potrditev šele po 1–2 s. Vzrok ni bilo pisanje —
+shramba je `localStorage` — ampak **preverba, ali postaji sploh poznamo**:
+`stationExists()` je za vsako od obeh imen poklical `/api/stations/search`.
+
+Izmerjeno prek Cloudflara na `kajros.app` (`/api/stations/search?q=Ljubljana`,
+omrežje avtobusi): **0,69 / 0,67 / 0,63 s**. Dve zahteti vzporedno sta torej
+~0,7 s samo režije, na mobilnem omrežju pa še TLS in čakanje v vrsti.
+
+Kazalo postaj je bilo v pomnilniku že od nalaganja strani (`KAZALO`, za
+iskalnik brez sunkov). Zdaj preverba bere njega: **0 zahtev**. Strežnik ostane
+le za primer, ko se kazalo še ni naložilo. Iskanje gre po celem kazalu, ne po
+prvih osmih zadetkih — točno ujemanje sme biti kjerkoli.
