@@ -278,6 +278,9 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .alert-item strong { color: var(--ink); font-weight: 600; display: block; }
 .alert-item a { color: var(--ink-mute); }
 .alert-meta { font: 400 10.5px/1.5 var(--sans); color: var(--ink-faint); margin-top: 2px; }
+/* Opis nosi tisto, kar naslov ne pove -- „Vozilo se ne bo ustavilo na
+   postaji“. Bere se kot besedilo, ne kot drobni tisk pod njim. */
+.alert-desc { font: 400 12px/1.45 var(--sans); color: var(--ink-dim); margin-top: 3px; }
 
 /* ---------- starost meritve ----------
  * "+20 min" ob polnoci, izmerjeno ob 17h, je laz brez te oznake.

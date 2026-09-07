@@ -299,14 +299,27 @@ function highlight(name, q) {
 
 function alertsHtml(list, note) {
   if (!list || !list.length) return "";
-  const items = list.map((a) => `
+  const items = list.map((a) => {
+    // Pri SZ je naslov cela poved in opis jo ponovi; pri LPP je naslov kratek
+    // ("Postaja Tbilisijska na obvozu"), tisto, kar potnik rabi, pa je prav v
+    // opisu ("Vozilo se ne bo ustavilo na postaji"). Zato opis pokazemo, ko
+    // pove kaj novega, in ne, ko je naslov ze v njem.
+    const naslov = alertTitle(a.header);
+    const opis = (a.description || "").trim();
+    const nov = opis && !naslov.includes(opis) && !opis.includes(naslov);
+    // "neznano" ni podatek, ampak prazno polje s slovensko besedo -- feed
+    // pusti `cause` na 1, kadar vzroka ne pove.
+    const meta = [a.effect_label, a.cause_label]
+      .filter((x) => x && x !== "neznano").map(escapeHtml).join(" · ");
+    return `
     <div class="alert-item">
-      <strong>${escapeHtml(alertTitle(a.header))}</strong>
+      <strong>${escapeHtml(naslov)}</strong>
+      ${nov ? `<div class="alert-desc">${escapeHtml(opis)}</div>` : ""}
       <div class="alert-meta">
-        ${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
-        ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
+        ${meta}${a.url ? `${meta ? " · " : ""}<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   return `<details class="alert-box"${list.length <= 2 ? " open" : ""}>
     <summary class="alert-head">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
