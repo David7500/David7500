@@ -182,6 +182,14 @@ function notStartedText() {
     return `za nadomestni prevoz feed <strong>ne poroča zamud</strong> —
             velja vozni red`;
   }
+  // "Se ni nobene meritve" je res, a je stalo tik nad petnajstimi vrsticami
+  // "LPP v zivo - cez N min" in se je bralo kot "ne vemo nicesar". Ista past
+  // kot pri "mestnih linij LPP ni" nad zetoni LPP 25: poved mora govoriti o
+  // TEM, cesar ni, in takoj povedati, kaj je namesto tega.
+  if (state.run && state.run.zivi_vir) {
+    return `meritve za to vožnjo še ni — spodnje ure so
+            <strong>živa napoved ${escapeHtml(state.run.zivi_vir)}</strong>`;
+  }
   return `za ${vehicleWord()} na ta dan še ni nobene meritve`;
 }
 
