@@ -829,47 +829,57 @@ iskalnik brez sunkov). Zdaj preverba bere njega: **0 zahtev**. Strežnik ostane
 le za primer, ko se kazalo še ni naložilo. Iskanje gre po celem kazalu, ne po
 prvih osmih zadetkih — točno ujemanje sme biti kjerkoli.
 
-## Ura, ki teče nazaj: ostanek v `run`, ki ga feed ni več osvežil (7. 9. 2026)
+## Ura, ki teče nazaj: `run` hrani zadnje stanje, tudi kadar je smet (7. 9. 2026)
 
 Okno vožnje je pri **vsaki deseti** vožnji avtobusa in vsaki dvajseti vožnji
-vlaka kazalo nemogoč vozni red: naslednja postaja **pred** prejšnjo. Primer,
-RG 310 dne 4. 9.:
+vlaka kazalo nemogoč vozni red: naslednja postaja **pred** prejšnjo. Vozilo ne
+more priti na postajo, preden je odpeljalo s prejšnje.
 
-```
-seq 2 Litostroj        vr 17:32  d=1740  -> 18:01  feed 17:59:49
-seq 3 Ljubljana Stegne vr 17:35  d=0     -> 17:35  feed 17:32:20   ← ostanek
-seq 4 Lj. Vižmarje     vr 17:38  d=0     -> 17:38  feed 17:34:48   ← ostanek
-seq 5 Medno            vr 17:41  d=1320  -> 18:03  feed 18:00:49
-```
+Vzroki so trije in vsi izvirajo iz tega, da `run` hrani **zadnje** stanje
+postanka:
 
-`run` hrani **zadnje** stanje postanka. Kadar feed postanek nekaj časa pošilja
-in potem neha, ostane vrednost iz tistega trenutka — napoved, ki ni bila nikoli
-potrjena, na zaslonu pa je videti kot meritev.
+1. **Feed postanek neha pošiljati** in ostane nepotrjena napoved. RG 310,
+   4. 9.: Litostroj +29 min (feed 17:59), nato Stegne in Vižmarje z **ničlo**
+   in feedom iz 17:32 in 17:34, nato spet +22. Nezapolnjena ničla razloži 36 %
+   železniških in 7 % avtobusnih skokov — je torej podmnožica pojava, ne vzrok.
+2. **Feed za nazaj popravi že prevožen postanek.** N0507, 7. 9.: ob 16:14 je
+   dobil +30 min za postanek, prevožen ob 15:48, medtem ko je vsa vožnja
+   tekla nekaj minut pred voznim redom.
+3. **Mestni LPP pošilja samo postanke pred vozilom**, zato je vsaka vrednost
+   zadnja napoved pred prehodom in cel snop se lahko popravi hkrati.
 
-**Razpoznavni znak je mehanski:** postanek, ki je bil nazadnje osvežen prej kot
-kateri od prejšnjih, je ostanek. Izmerjeno na celi bazi:
+Točka 3 je bila izmerjena s projekcijo lege vozila na postaje vožnje: vozilo
+pri postaji 8 od 26, `stop_time_update` samo za 9–26. Pri mestnem LPP zato v
+`run` **nikoli ni meritve** — vedno le zadnja napoved pred prehodom (mediana
+42 s pred prehodom, p90 27 s po njem). IJPP je drugačen: 56 % voženj ima v
+seznamu še vedno prvi postanek, torej se prevoženi postanki osvežujejo.
 
-| omrežje | skokov ure nazaj | razloži zastarel `feed_ts` | delež vseh postankov |
+### Kaj pomaga
+
+Katera vrednost je napačna, iz nje same ni ugotovljivo. Ugotovljivo pa je,
+katere si nasprotujejo z največ drugimi: obdrži se **nepadajoče zaporedje ur z
+največjo skupno težo**, ostalo se označi (`stats.oznaci_neskladne()`).
+
+Dvoje je bilo treba izmeriti, ne uganiti:
+
+* **Utež.** Postanek, nazadnje osvežen prej kot kateri od prejšnjih, je lažji.
+  Brez tega bi štetje samih postankov pri RG 310 zavrglo **pravo** vrednost,
+  ker sta bili luknji dve in prava ena. Lahek postanek pa se obdrži, kadar
+  ničemur ne nasprotuje — sicer bi pri avtobusih padlo 4,73 % postankov
+  namesto 2,29 %.
+* **Zaokroževanje na minuto.** Prikaz kaže minute; skok za 20 s ni nemogoč
+  vozni red, ampak natančnost. Brez tega bi bilo pri mestnem LPP prizadetih
+  38,4 % voženj namesto 17,2 %.
+
+Izid na celi bazi (61 362 voženj, 1,1 s za vse skupaj — 18 µs na vožnjo):
+
+| omrežje | vožnje z uro nazaj prej | potem | izpuščenih postankov |
 |---|---|---|---|
-| železnica | 452 | **451 (100 %)** | 0,7 % |
-| avtobus | 6 930 | 2 957 (43 %) | 3,7 % |
-| LPP mestni | 48 | 4 (8 %) | 5,7 % |
+| železnica | 4,9 % (364/7 466) | **0** | 0,57 % |
+| avtobus | 10,1 % (5 347/52 680) | **0** | 2,29 % |
+| LPP mestni | 3,6 % (39/1 081) | **0** | 1,33 % |
 
-Vožnje z uro nazaj za več kot 2 min, pred stražnikom in po njem:
-
-| omrežje | prej | potem |
-|---|---|---|
-| železnica | 4,9 % (364/7 466) | **0,01 % (1/7 468)** |
-| avtobus | 10,1 % (5 347/52 680) | 7,2 % (3 784/52 728) |
-| LPP mestni | 3,6 % (39/1 081) | 3,1 % (34/1 095) |
-
-Preostanek pri avtobusih ima drug vzrok in ni razrešen. Ničla kot nezapolnjeno
-polje razloži 36 % železniških skokov in 7 % avtobusnih — je torej **podmnožica**
-tega pojava, ne glavni vzrok.
-
-Ob tem izmerjeno, kar velja naprej: **mestni LPP feed pošilja samo postanke
-pred vozilom.** Preverjeno s projekcijo lege vozila na postaje vožnje: vozilo
-pri postaji 8 od 26, `stop_time_update` samo za 9–26. Zato pri LPP mestnem
-`run` nikoli ne vsebuje meritve — vedno le zadnjo napoved pred prehodom
-(mediana −42 s pred prehodom, p90 +27 s). IJPP je drugačen: 56 % voženj ima
-v seznamu še vedno prvi postanek.
+Meja med meritvijo in napovedjo (`_LAST_MEASURED_SQL`) nosi le **lokalni** del
+pravila — postanek, osvežen prej kot kateri od prejšnjih — ker teče nad
+seznamom voženj hkrati in celotne verige ne zmore. Pri železnici lokalni del
+razloži vse primere (451 od 452), pri avtobusih dve petini.

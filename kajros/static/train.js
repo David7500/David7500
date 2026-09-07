@@ -281,9 +281,9 @@ function yourStop(stops) {
 function yourStopHtml(stops, forecast, current) {
   const s = yourStop(stops);
   if (!s) return "";
-  // Ostanka feed ne bo vec popravil: pri postanku potnika bi bila to
-  // "izmerjena" nicla pod vlakom, ki zamuja pol ure. Raje ocena.
-  const passed = current && s.stop_seq <= current.stop_seq && !jeZastarel(s);
+  // Neskladna vrednost pri postanku potnika bi bila "izmerjena" nicla pod
+  // vlakom, ki zamuja pol ure. Raje ocena.
+  const passed = current && s.stop_seq <= current.stop_seq && !jeNeskladen(s);
   const f = (forecast || []).find((x) => x.stop_seq === s.stop_seq);
   const schedIso = s.sched_dep || s.sched_arr;
 

@@ -876,10 +876,10 @@ def api_run(train_no: str, date: str | None = None,
         for s in rows:
             if s["zamuda"] is None:
                 continue
-            # Ostanek, ki ga feed ni vec osvezil, ni meritev -- glej
-            # `stats.oznaci_zastarele()`. Brez tega je bila na zaslonu ura,
-            # ki tece nazaj, in to pri vsaki deseti vozjni avtobusa.
-            s["zamuda"]["vrsta"] = ("zastarelo" if s.get("zastarelo")
+            # Postanek, katerega ura si nasprotuje z vecino ostalih, ni
+            # meritev -- glej `stats.oznaci_neskladne()`. Brez tega je bila
+            # na zaslonu ura, ki tece nazaj, pri vsaki deseti vozjni avtobusa.
+            s["zamuda"]["vrsta"] = ("neskladno" if s.get("neskladno")
                                     else "izmerjeno"
                                     if meja_seq is not None and s["stop_seq"] <= meja_seq
                                     else "napoved prevoznika")

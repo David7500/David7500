@@ -225,34 +225,107 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
         d["zamuda"] = opis_zamude(
             r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"])
         out.append(d)
-    oznaci_zastarele(out)
+    oznaci_neskladne(out)
     return out
 
 
-def oznaci_zastarele(rows: list[dict]) -> None:
-    """Označi postanke, ki jih feed po nekem trenutku ni več osvežil.
+def _najboljsa_veriga(ure: list[int], teze: list[int]) -> set[int]:
+    """Indeksi nepadajočega podzaporedja z največjo skupno težo."""
+    n = len(ure)
+    naj = list(teze)
+    prej = [-1] * n
+    for i in range(n):
+        for j in range(i):
+            if ure[j] <= ure[i] and naj[j] + teze[i] > naj[i]:
+                naj[i] = naj[j] + teze[i]
+                prej[i] = j
+    out: set[int] = set()
+    if not n:
+        return out
+    k = max(range(n), key=lambda i: naj[i])
+    while k >= 0:
+        out.add(k)
+        k = prej[k]
+    return out
 
-    `run` hrani ZADNJE stanje postanka. Kadar feed postanek nekaj časa
-    pošilja, potem pa neha, ostane v bazi vrednost iz tistega trenutka --
-    napoved, ki ni bila nikoli potrjena. Na zaslonu je bila videti kot
-    meritev in je delala **nemogoče vozne rede**: RG 310 je imel Litostroj
-    ob 18:01 in naslednjo postajo Ljubljana Stegne ob 17:35.
 
-    Razpoznavni znak je mehanski, ne ugib: postanek, ki je bil nazadnje
-    osvežen **prej kot kateri od prejšnjih**, je ostanek. Izmerjeno
-    7. 9. 2026: pri železnici to razloži **451 od 452** skokov ure nazaj
-    (100 %) ob 0,7 % vseh postankov, pri avtobusih 43 % ob 3,7 %.
+def oznaci_neskladne(rows: list[dict]) -> None:
+    """Označi postanke, katerih ura si nasprotuje z večino ostalih.
+
+    Vozilo ne more priti na postajo, preden je odpeljalo s prejšnje. Prikaz
+    je to vseeno kazal: **pri vsaki deseti vožnji avtobusa in vsaki dvajseti
+    vožnji vlaka** je bila naslednja postaja pred prejšnjo. RG 310 je imel
+    Litostroj ob 18:01 in Ljubljano Stegne ob 17:35.
+
+    Vzroki so trije in vsi izvirajo iz tega, da `run` hrani ZADNJE stanje
+    postanka:
+
+    * feed postanek neha pošiljati in ostane nepotrjena napoved (železnica,
+      pogosto kot nezapolnjena ničla -- 36 % primerov);
+    * feed **za nazaj** popravi že prevožen postanek s smetjo (avtobusi:
+      N0507 je ob 16:14 dobil +30 min za postanek, prevožen ob 15:48);
+    * mestni LPP pošilja samo postanke pred vozilom, zato je vsaka vrednost
+      zadnja napoved pred prehodom in cel snop se lahko popravi hkrati.
+
+    Katera vrednost je napačna, ni ugotovljivo iz ene same; ugotovljivo pa
+    je, **katere si nasprotujejo z največ drugimi**. Obdržimo nepadajoče
+    zaporedje ur z največjo skupno težo, ostalo označimo.
+
+    Teža ni povsod ista: postanek, nazadnje osvežen **prej kot kateri od
+    prejšnjih**, feed ni nikoli potrdil in je zato lažji. Brez te uteži bi
+    štetje samih postankov pri RG 310 zavrglo pravo vrednost -- luknji sta
+    bili dve (Stegne in Vižmarje, obe z ničlo), pravilna vrednost pa ena.
+    Lahek postanek pa se **obdrži**, kadar ničemur ne nasprotuje: sum ni
+    razlog, da bi vrgli stran podatek, ki se ujema z ostalimi.
+
+    Ure primerjamo **v minutah**, ker je minuta tisto, kar bralec vidi: skok
+    za 20 s ni nemogoč vozni red, ampak zaokroževanje.
+
+    Izmerjeno 7. 9. 2026 na celi bazi -- izpuščenih postankov in prizadetih
+    voženj: železnica 0,55 % / 5,2 %, avtobusi 1,86 % / 14,6 %, LPP mestni
+    1,31 % / 17,2 %. Brez zaokroževanja na minuto bi bilo pri LPP 38,4 %
+    voženj, torej bi pravilo lovilo lastno natančnost.
+
+    Kadar sta dve verigi enako dolgi, je izbira **poljubna** in tudi mora
+    biti: iz dveh nasprotujočih si vrednosti se ne da ugotoviti, katera je
+    prava. Svežina zapisa ni razsodnik -- pri N0507 je bil pravi ravno
+    starejši zapis, pri RG 310 pa novejši.
+
     Spreminja `rows` na mestu.
     """
+    # Sum: postanek, ki ga feed po nekem trenutku ni vec osvezil.
+    sumljiv: set[int] = set()
     najvecji = None
-    for d in rows:
+    for i, d in enumerate(rows):
         ts = d.get("feed_ts")
         if ts is None:
             continue
         if najvecji is not None and ts < najvecji:
-            d["zastarelo"] = True
+            sumljiv.add(i)
         else:
             najvecji = ts
+
+    idx: list[int] = []
+    ure: list[int] = []
+    for i, d in enumerate(rows):
+        # `COALESCE(delay_dep, delay_arr)`, tako kot povsod drugod.
+        z = d.get("delay_dep")
+        if z is None:
+            z = d.get("delay_arr")
+        t = d.get("dep_s")
+        if t is None:
+            t = d.get("arr_s")
+        if z is None or t is None:
+            continue
+        idx.append(i)
+        ure.append((t + z) // 60)
+    # Navaden postanek tehta toliko, da ga ne more prevladati noben snop
+    # sumljivih; sumljiv tehta 1, zato se obdrzi, kadar nicemur ne nasprotuje.
+    teze = [1 if i in sumljiv else len(idx) + 1 for i in idx]
+    obdrzi = _najboljsa_veriga(ure, teze)
+    for k, i in enumerate(idx):
+        if k not in obdrzi:
+            rows[i]["neskladno"] = True
 
 
 def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
@@ -1161,7 +1234,13 @@ passed AS (
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= ?
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
       -- Ostanek, ki ga feed ni vec osvezil, ni prevozen postanek: meja med
-      -- meritvijo in napovedjo bi sicer padla nanj. Glej oznaci_zastarele().
+      -- meritvijo in napovedjo bi sicer padla nanj. To je LOKALNO pravilo
+      -- (postanek, osvezen prej kot kateri od prejsnjih); celo vozjno gleda
+      -- `oznaci_neskladne()`, cesar ta poizvedba ne zmore -- tece nad
+      -- seznamom voznj hkrati. Pri zeleznici lokalno pravilo razlozi vse
+      -- primere (451 od 452), pri avtobusih dve petini.
+      -- POZOR: niz gre skozi odstotkovno formatiranje; znaka za odstotek
+      -- v komentarju zato ne sme biti (podre vezavo poizvedbe).
       AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
 SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, st.name

@@ -1473,24 +1473,68 @@ def test_prepis_na_izhodisce_ne_preskoci_sredine():
     assert rows[1]["typical"] is None
 
 
-def test_zastarel_postanek_je_oznacen_ne_meritev():
-    # Feed je postanek nekaj časa pošiljal, potem nehal: ostala je napoved,
-    # ki ni bila nikoli potrjena. Na zaslonu je delala nemogoč vozni red --
-    # naslednja postaja pol ure PRED prejšnjo.
-    rows = [{"stop_seq": 1, "feed_ts": 100},
-            {"stop_seq": 2, "feed_ts": 500},
-            {"stop_seq": 3, "feed_ts": 200},   # ostanek: starejši od prejšnjega
-            {"stop_seq": 4, "feed_ts": 600}]
-    stats.oznaci_zastarele(rows)
-    assert [r.get("zastarelo") for r in rows] == [None, None, True, None]
+def test_neskladna_ura_je_oznacena_ne_meritev():
+    # Vozilo ne more priti na postajo, preden je odpeljalo s prejšnje.
+    # Tretji postanek trdi 09:50, čeprav sta soseda ob 10:40 in 11:00 -- to
+    # je nepotrjena napoved, ki je ostala v `run`, ne meritev. Mora biti pod
+    # OBEMA sosedoma, sicer sta verigi enako dolgi in izbira je poljubna.
+    rows = [{"dep_s": 36000, "delay_dep": 0},        # 10:00
+            {"dep_s": 36600, "delay_dep": 1800},     # 10:40
+            {"dep_s": 37200, "delay_dep": -1800},    # 09:50  <- nasprotuje
+            {"dep_s": 37800, "delay_dep": 1800},     # 11:00
+            {"dep_s": 38400, "delay_dep": 1800}]     # 11:10
+    stats.oznaci_neskladne(rows)
+    assert [r.get("neskladno") for r in rows] == [None, None, True, None, None]
 
 
-def test_postanek_brez_zajema_ne_pretrga_verige():
-    # Manjkajoč `feed_ts` (postanek, o katerem feed ni povedal nič) ne sme
-    # veljati za ostanek in ne sme ponastaviti največjega časa osvežitve.
-    rows = [{"stop_seq": 1, "feed_ts": 500},
-            {"stop_seq": 2, "feed_ts": None},
-            {"stop_seq": 3, "feed_ts": 300}]
-    stats.oznaci_zastarele(rows)
-    assert rows[1].get("zastarelo") is None
-    assert rows[2].get("zastarelo") is True
+def test_neskladnost_obdrzi_daljso_verigo_in_ne_prve():
+    # Kadar se feed za nazaj popravi, je napačen ZAČETEK, ne konec: pravilo
+    # mora obdržati daljše zaporedje, ne prvega. Sicer bi ena smet na drugem
+    # postanku pobrisala vso ostalo vožnjo.
+    rows = ([{"dep_s": 0, "delay_dep": 7200}, {"dep_s": 60, "delay_dep": 7200}]
+            + [{"dep_s": 120 + 60 * i, "delay_dep": 0} for i in range(8)])
+    stats.oznaci_neskladne(rows)
+    assert [bool(r.get("neskladno")) for r in rows] == [True, True] + [False] * 8
+
+
+def test_skok_pod_minuto_ni_neskladje():
+    # 20 sekund nazaj ni nemogoč vozni red, ampak zaokroževanje: prikaz kaže
+    # minute. Brez tega bi pravilo lovilo lastno natančnost -- pri mestnem
+    # LPP bi zadelo 38 % voženj namesto 17 %.
+    rows = [{"dep_s": 36000, "delay_dep": 40},
+            {"dep_s": 36020, "delay_dep": 0}]
+    stats.oznaci_neskladne(rows)
+    assert all(r.get("neskladno") is None for r in rows)
+
+
+def test_postanek_brez_meritve_ne_pretrga_verige():
+    # Postanek, o katerem feed ni povedal nič, ni neskladen -- in ne sme
+    # pretrgati zaporedja okoli sebe.
+    rows = [{"dep_s": 36000, "delay_dep": 0},
+            {"dep_s": 36600, "delay_dep": None, "delay_arr": None},
+            {"dep_s": 37200, "delay_dep": 0}]
+    stats.oznaci_neskladne(rows)
+    assert all(r.get("neskladno") is None for r in rows)
+
+
+def test_sumljiv_a_skladen_postanek_se_obdrzi():
+    # Postanek, ki ga feed po nekem trenutku ni več osvežil, je sumljiv --
+    # ni pa to razlog, da bi vrgli stran vrednost, ki se z ostalimi ujema.
+    rows = [{"dep_s": 36000, "delay_dep": 0, "feed_ts": 900},
+            {"dep_s": 36600, "delay_dep": 0, "feed_ts": 300},   # star zapis
+            {"dep_s": 37200, "delay_dep": 0, "feed_ts": 1200}]
+    stats.oznaci_neskladne(rows)
+    assert all(r.get("neskladno") is None for r in rows)
+
+
+def test_sumljiva_luknja_ne_prevlada_ene_prave_vrednosti():
+    # RG 310: Litostroj +29 min, nato dve ničli (Stegne, Vižmarje), ki ju
+    # feed ni več osvežil, nato spet +22. Štetje samih postankov bi zavrglo
+    # Litostroj, ker sta ničli dve -- teža ju razkrije kot ostanek.
+    rows = [{"dep_s": 63120, "delay_dep": 1740, "feed_ts": 1000},   # 18:01
+            {"dep_s": 63300, "delay_dep": 0, "feed_ts": 100},       # 17:35 ostanek
+            {"dep_s": 63480, "delay_dep": 0, "feed_ts": 200},       # 17:38 ostanek
+            {"dep_s": 63660, "delay_dep": 1320, "feed_ts": 1100},   # 18:03
+            {"dep_s": 63900, "delay_dep": 1320, "feed_ts": 1200}]   # 18:07
+    stats.oznaci_neskladne(rows)
+    assert [bool(r.get("neskladno")) for r in rows] == [False, True, True, False, False]
