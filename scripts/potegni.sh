@@ -74,7 +74,17 @@ print('  ', round(os.path.getsize('${ODDALJENI_TMP}') / 1e6), 'MB')
 PYEOF"
 
 echo "  prenašam …"
-timeout 900 scp -q -o BatchMode=yes "$PI:$ODDALJENI_TMP" "$KAM"
+# `rsync --append-verify` in NE `scp`: prenos se da nadaljevati, kadar pade.
+# Izmerjeno 7. 9. 2026: baza je zrasla na 683 MB, WiFi Pi Zerota da ~730 kB/s,
+# torej je prenos ~16 minut -- prejsnji `timeout 900 scp` ga je ubil pri
+# 655 MB in skripta je tiho odnehala. Meja je zdaj velikodusna in vezana na
+# velikost, nadaljevanje pa pomeni, da drugi poskus prenese samo ostanek.
+if ! timeout 3600 rsync --append-verify --partial -q \
+        -e "ssh -o BatchMode=yes" "$PI:$ODDALJENI_TMP" "$KAM"; then
+  echo "  prenos ni uspel; kopija na malini OSTAJA v $ODDALJENI_TMP," >&2
+  echo "  zato je ponoven zagon poceni -- nadaljuje, kjer je ostal." >&2
+  exit 1
+fi
 timeout 30 ssh -o BatchMode=yes "$PI" "rm -f '$ODDALJENI_TMP'"
 
 # Pokvarjena kopija bi prilila smeti. Preverimo, preden se je dotaknemo baze.

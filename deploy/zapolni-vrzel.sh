@@ -56,7 +56,11 @@ print('  ', round(os.path.getsize('${ODDALJENA_KOPIJA}') / 1e6), 'MB')
 PYEOF"
 
 echo "== prenašam"
-timeout 1800 scp -q -o BatchMode=yes "$PI:$ODDALJENA_KOPIJA" "$KAM"
+# `rsync --append-verify`, ker se prenos da nadaljevati. Baza je 683 MB,
+# WiFi Pi Zerota ~730 kB/s -- to je ~16 minut in `scp` je ob prekinitvi
+# pomenil ponoven prenos od nule. Izmerjeno 7. 9. 2026.
+timeout 3600 rsync --append-verify --partial -q \
+    -e "ssh -o BatchMode=yes" "$PI:$ODDALJENA_KOPIJA" "$KAM"
 timeout 30 ssh -o BatchMode=yes "$PI" "rm -f '$ODDALJENA_KOPIJA'"
 
 echo "== preverjam kopijo"

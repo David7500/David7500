@@ -1129,3 +1129,44 @@ postajališču, ta pa pripada naslednjemu avtobusu iste linije. Z izbiro po
 
 Kar s tem virom **ni** rešeno: starost lege. Koordinat vozil v odprtem delu
 API-ja ni, zato ostaja 57–147 s iz prejšnjega razdelka.
+
+## Vleka z maline je prerasla svojo skripto (7. 9. 2026)
+
+`scripts/potegni.sh` je imel `timeout 900 scp`. Baza na malini je medtem
+zrasla na **683 MB**, WiFi Pi Zerota pa da **~730 kB/s** — prenos torej rabi
+~16 minut. Ob 23:05 je `timeout` ubil `scp` pri **655 MB od 683** in skripta
+je zaradi `set -e` tiho odnehala: v dnevniku je ostalo „prenašam …" in nič
+več. Videti je bilo, kot da še teče.
+
+Popravek ni večja meja, ampak **`rsync --append-verify --partial`**: prenos se
+da nadaljevati. Drugi poskus je prenesel manjkajočih 28 MB v 33 s. Kopija na
+malini se ob neuspehu **ne izbriše**, zato je ponoven zagon poceni.
+
+### Kaj je prilitje res prineslo
+
+| korak | `obs` | `run` |
+|---|---|---|
+| malina → prenosnik | **+3 007 323** | +90 338 |
+| prenosnik → arwen | **+6 309 794** | 1 010 766 → **1 249 005** |
+| arwen `obs` skupaj | 6 740 872 → **13 050 666** | |
+
+`repair` po prilitju: 3 535 popravljenih vrstic, **0 osirotelih meritev**.
+
+### Merilo ni vsota, ampak pokritost
+
+Vsota vrstic je zavajala: prenosnik jih je imel največ (1,15 M), a je bil
+pogosto ugasnjen; malina jih je imela najmanj (962 k), a **neprekinjeno in
+dlje nazaj**. Šele po prilitju obojega je pokritost taka:
+
+| dan | ur z meritvijo |
+|---|---|
+| 2026-08-21 | 9/24 — prvi dan zajema |
+| 2026-08-22 … 08-26 | **24/24** |
+| 2026-08-27 | **16/24 — edina prava luknja** |
+| 2026-08-28 … 09-07 | **24/24** |
+
+Osem ur 27. 8. nima nobena od treh naprav; te ni več od kod dobiti.
+
+Ob tem se je pokazalo še eno napačno branje: dnevi s tretjino običajnih
+meritev (5. in 6. 9.) **niso izpad**, ampak **sobota in nedelja** — takrat
+vozi mnogo manj avtobusov. Preden kdo lovi luknjo, naj pogleda dan v tednu.
