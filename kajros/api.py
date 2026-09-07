@@ -1102,7 +1102,14 @@ ranked AS (
            -- vrstico za vrstico.
            LAST_VALUE(t.delay_s) OVER (
                PARTITION BY t.trip_id ORDER BY t.stop_seq
-               ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS end_delay_s
+               ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS end_delay_s,
+           -- Zadnja osvezitev katerega od PREJSNJIH postankov. Postanek,
+           -- osvezen prej kot ta, je ostanek, ki ga feed ni vec potrdil --
+           -- isto varovalo kot v `stats._LAST_MEASURED_SQL`. Brez njega bi
+           -- zemljevid vozilo postavil na napacno postajo z napacno zamudo.
+           MAX(t.feed_ts) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts
     FROM t
 ),
 passed AS (
@@ -1110,6 +1117,7 @@ passed AS (
     FROM ranked r
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= :now_s
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
+      AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
 SELECT tr.train_no, tr.headsign, tr.mode, tr.network, p.trip_id,
        st.name AS last_stop, p.stop_seq,
