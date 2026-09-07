@@ -51,8 +51,12 @@ VEHICLE_POSITIONS_URL = okolje("VEHICLE_POSITIONS_URL", "https://rt.gtfs.derp.si
 # jemljemo IJPP — le drug vir. Oboje odprto, brez ključa; vir potrjen iz
 # konfiguracije projekta transitous (`feeds/si.json`, vnos `name: lpp`).
 #
-# Vklopi se z `KAJROS_LPP=1`. Privzeto izklopljeno, ker podvoji vozni red.
-LPP_ENABLED = okolje("LPP", "0") != "0"
+# **Privzeto vklopljeno.** Cena je merjena in znosna: vozni red zraste z
+# 20 850 na 39 899 voženj in s 403 208 na 889 731 postankov, uvoz traja 27 s.
+# Kar dobimo, je večji del tega, s čimer se v Ljubljani sploh vozi — brez
+# tega postajališče „Polje" pozna eno linijo namesto petih.
+# Izklopi se s `KAJROS_LPP=0`.
+LPP_ENABLED = okolje("LPP", "1") != "0"
 LPP_GTFS_URL = okolje("LPP_GTFS_URL", "https://avl.lpp.si/transit/api/gtfs")
 # En sam feed za vse troje: zamude, lege in obvestila.
 LPP_RT_URL = okolje("LPP_RT_URL", "https://rt.gtfs.derp.si/sources/lpp/all")
