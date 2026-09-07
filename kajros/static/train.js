@@ -6,6 +6,8 @@
 // nastopi rezervirana barva, ki je lestvica ne uporablja.
 
 const TRAIN_NO = document.body.dataset.trainNo;
+// Omrežje te strani. Znano je takoj, `state.network` pa šele iz odgovora.
+const OMREZJE = document.body.dataset.network || "zeleznica";
 const ENC = encodeURIComponent(TRAIN_NO);
 // Datum iz naslova: povezava z iskalnika kaze na konkreten prometni dan.
 // Brez njega bi klik na vcerajsnjo vozjno odprl danasnjo.
@@ -1838,7 +1840,12 @@ async function loadHistory() {
 
 async function loadHeadsign() {
   try {
-    const live = await fetch("/api/live").then((r) => r.json());
+    // **Z omrežjem, ne brez.** Brez parametra gre poizvedba čez obe omrežji
+    // hkrati: na strežniku 4,6 s proti 0,38 s, in to ob vsakem odprtju okna
+    // vožnje. Ta stran gleda eno vožnjo in njeno omrežje pozna.
+    // Omrežje strani, ne `state.network`: ta se napolni šele iz odgovora
+    // `/api/train/…/run`, `loadHeadsign()` pa teče takoj ob nalaganju.
+    const live = await fetch(`/api/live?network=${OMREZJE}`).then((r) => r.json());
     const me = live.find((t) => t.train_no === TRAIN_NO);
     if (me && me.headsign) headsignEl.textContent = me.headsign;
   } catch (err) {

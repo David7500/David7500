@@ -84,6 +84,43 @@ def station_index(conn: sqlite3.Connection, network: str) -> list[dict]:
     return [{"n": r["n"], "t": r["t"]} for r in rows]
 
 
+# Promet po postajaliscu, predpomnjen do naslednjega uvoza GTFS.
+#
+# Prej se je stel ob VSAKEM pritisku tipke: za do `CANDIDATE_CAP` kandidatov
+# poizvedba cez `sched JOIN trip`. Dokler je bilo `sched` 403 000 vrstic, je
+# bilo to znosno; z mestnim LPP jih je 890 000 in na arwenu je iskanje trajalo
+# **3,5-3,9 s na crko**. Vsebina se spremeni enkrat na dan, zato je to stetje
+# tam, kjer sodi -- enkrat, ne stokrat na minuto.
+_PROMET: dict[tuple, dict[str, int]] = {}
+_PROMET_MAX = 4
+
+
+def _promet(conn: sqlite3.Connection, network: str | None) -> dict[str, int]:
+    """`{stop_id: stevilo postankov}` za dano omrezje."""
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, network, stamp)
+    if stamp and key in _PROMET:
+        return _PROMET[key]
+
+    sql = ("SELECT s.stop_id AS sid, COUNT(*) AS n FROM sched s "
+           "JOIN trip t ON t.trip_id = s.trip_id ")
+    par: tuple = ()
+    if network:
+        sql += "WHERE t.network = ? "
+        par = (network,)
+    sql += "GROUP BY s.stop_id"
+    out = {r["sid"]: r["n"] for r in conn.execute(sql, par)}
+
+    if stamp:
+        if len(_PROMET) >= _PROMET_MAX:
+            _PROMET.clear()
+        _PROMET[key] = out
+    return out
+
+
 def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
                     network: str | None = None) -> list[dict]:
     """Postaje, ki ustrezajo nizu. Urejene po tem, kako dobro se ujemajo.
@@ -140,20 +177,7 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
     hits.sort(key=lambda h: h[:2])
     hits = [h[2] for h in hits[:CANDIDATE_CAP]]
 
-    counts: dict[str, int] = {}
-    for i in range(0, len(hits), 400):
-        chunk = hits[i:i + 400]
-        marks = ",".join("?" * len(chunk))
-        sql = (f"SELECT s.stop_id, COUNT(*) AS n FROM sched s "
-               f"JOIN trip t ON t.trip_id = s.trip_id "
-               f"WHERE s.stop_id IN ({marks}) ")
-        params = [r["stop_id"] for r in chunk]
-        if network:
-            sql += "AND t.network = ? "
-            params.append(network)
-        sql += "GROUP BY s.stop_id"
-        for r in conn.execute(sql, params):
-            counts[r["stop_id"]] = r["n"]
+    counts = _promet(conn, network)
 
     # Isto ime, vec `stop_id`: mestna postajalisca imajo svojega za vsako smer
     # ("Bavarski dvor" dvakrat). Vse naprej v aplikaciji tece po IMENU postaje,
