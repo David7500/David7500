@@ -899,3 +899,33 @@ proti tistim, ki ostanejo po `oznaci_neskladne()`:
 Napaka je torej **lokalna**: uniči eno vrstico na zaslonu, agregata ne
 premakne. Filtriranje v statistiki bi bilo dodatna zapletenost brez učinka —
 in `povzetek` se računa v SQL, kjer verige ni mogoče pognati.
+
+## Zamuda, ki lovi uro: potrjeno, brez poštenega filtra (7. 9. 2026)
+
+Na strani „Vožnje, ki najbolj zamujajo" je bil N0786 z **mediano 111 min**.
+Dnevnik `obs` pokaže, zakaj: vrednost raste v koraku z uro.
+
+```
+07:03:35  seq 1–2: 540 s   seq 3–5: 4260 s
+07:07:02  vsi:    4800 s
+07:12:18  vsi:    5400 s      … končno stanje 7 080 s (118 min)
+```
+
+To je pojav, ki ga `collector._je_nazaj_v_prihodnost()` že opisuje (vozilo
+obstane, feed pa zamudo pripisuje naprej). Njegova varovalka tega primera ne
+ujame, ker zahteva, da je bil prejšnji zapis **meritev** — feed pa je tu za
+prihod in odhod ves čas dajal isto vrednost.
+
+**Poštenega dodatnega filtra ni** in to je izmerjeno, ne domnevano:
+
+* „Zamuda raste 1 : 1 z uro" ni znak smeti: pri železnici to velja za
+  **29,9 %** zadnjih sprememb, ker vlak, ki stoji pred signalom, res nabira
+  zamudo minuto na minuto. Pri avtobusih 8,3 %, pri LPP 8,8 %.
+* „Zapis je meritev, kadar sta prihod in odhod različna" drži pri vlakih
+  (3,4 % vrstic ob 67,7 % voznorednih postankov), pri avtobusih pa ne:
+  **58,8 %** vrstic ima različna časa, čeprav ima vozni red postanek le pri
+  **0,6 %**. Filtrirati po tem bi zavrglo 41 % avtobusnih meritev.
+
+Ostaja torej odprto in zapisano. Kar se da povedati pošteno, je sam prikaz:
+seznam najhujših voženj **že** kaže število voženj in delež v petih minutah,
+torej „5 voženj · 20 % v 5 min" ob 111 min — bralec vidi, na čem stoji.
