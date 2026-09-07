@@ -980,3 +980,12 @@ Cena, izmerjena na tabli s 150 vrsticami: ob 00:30 avtobusi 17,5 → 35,0 ms,
 železnica 0,1 → 0,4 ms. **Podnevi nič** — ob 17:00 rekurzije ni (50,3 ms
 prej in potem). Poizvedba je ozka sama po sebi: pri `from_s` čez 86 400 se
 ujamejo samo postanki po polnoči.
+
+Ista vrzel je bila v **iskalniku zvez**: vstopnih postankov med polnočjo in
+tretjo uro je **2 145** (avtobusi) in **41** (vlaki), ponoči pa so pogosto
+edini. `stats.connections()` zdaj pogleda včerajšnji dan po istem pragu; cena
+ob 00:30 je 72,3 → 102,7 ms (avtobusi) in 2,3 → 4,5 ms (vlaki), podnevi nič.
+
+Past, na katero se je treba paziti: rep se mora izračunati **pred** zgodnjim
+`return []`. Kadar današnji dan nima nobene zveze, je včerajšnji rep edino,
+kar sploh obstaja — in ravno tam je bila napaka najbolj vidna.

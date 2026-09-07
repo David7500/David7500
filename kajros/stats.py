@@ -1276,9 +1276,17 @@ def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
     return None
 
 
+#: Kako dolgo v nov dan sega včeraj začet promet. Izmerjeno 7. 9. 2026:
+#: najdlje vozeča vožnja se konča ob 33:48 (avtobus) oziroma 26:23 (vlak),
+#: torej slabih deset ur čez polnoč. Pred to uro morata tabla in iskalnik
+#: pogledati tudi VČERAJŠNJI prometni dan -- sicer je bil ob 00:30 skrit
+#: vlak, ki pride ob 00:56, in 2 145 avtobusnih vstopnih postankov.
+NOCNI_REP_S = 10 * 3600
+
+
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
                 service_date: str, now_s: int | None = None,
-                network: str | None = None) -> list[dict]:
+                network: str | None = None, _vceraj: bool = True) -> list[dict]:
     """Vse vožnje, ki na dani dan peljejo od `from_name` do `to_name`.
 
     Relacija ni v številki vlaka in ne v `route_id` -- ta je v tem feedu
@@ -1297,8 +1305,27 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         if prev is None or d["dep_s"] < prev["dep_s"]:
             best[d["trip_id"]] = d
     out = sorted(best.values(), key=lambda d: d["dep_s"])
+
+    # Vceraj zacet promet, ki se ni koncan. Isti razlog kot pri `journey.board`:
+    # vozjna, ki odpelje ob 23:50, ima svoje postanke ob 24:21 in pripada
+    # VCERAJSNJEMU prometnemu dnevu. Vstopnih postankov med polnocjo in tretjo
+    # uro je 2 145 (avtobusi) in 41 (vlaki) -- ponoci so pogosto edini.
+    #
+    # Racuna se PRED zgodnjim izhodom: kadar danasnji dan nima nobene zveze,
+    # je vcerajsnji rep edino, kar sploh obstaja -- in prav tam je bila
+    # napaka najbolj vidna.
+    #
+    # Samo za danes in samo zgodaj: `now_s` obstaja le za danasnji dan, prag
+    # pa je izmerjen (`NOCNI_REP_S`). Za izrecno vprasan pretekli datum
+    # ostane pomen "prometni dan D", ker je to tisto, kar je bilo vprasano.
+    nocne: list[dict] = []
+    if _vceraj and now_s is not None and now_s < NOCNI_REP_S:
+        prej = (date.fromisoformat(service_date) - timedelta(days=1)).isoformat()
+        nocne = [d for d in connections(conn, from_name, to_name, prej,
+                                        now_s + 86400, network, _vceraj=False)
+                 if d["dep_s"] >= 86400]
     if not out:
-        return []
+        return nocne
 
     # Zadnja meritev vsake voznje -- za vlake, ki so ze na poti.
     last = last_measured(conn, service_date, [d["trip_id"] for d in out], now_s)
@@ -1369,6 +1396,9 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     for d in out:
         d["typical_dep"] = typ.get((d["trip_id"], d["from_seq"]))
         d["typical_arr"] = typ.get((d["trip_id"], d["to_seq"]))
+
+    if nocne:
+        out = sorted(nocne + out, key=lambda d: d["sched_dep"])
     return out
 
 

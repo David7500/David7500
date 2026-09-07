@@ -1629,3 +1629,25 @@ def test_tabla_zjutraj_vidi_vceraj_zacet_promet(conn):
     dnevna = journey.board(conn, "Celje", "2026-09-01", 17 * 3600, 180,
                            kind="prihodi", now_s=17 * 3600)
     assert all(r["train_no"] != "EN 99" for r in dnevna)
+
+
+def test_iskalnik_zjutraj_vidi_nocno_zvezo(conn):
+    """Nočna vožnja pripada VČERAJŠNJEMU prometnemu dnevu — tudi v iskalniku.
+
+    Ista napaka kot pri tabli: vstopnih postankov med polnočjo in tretjo uro
+    je 2 145 (avtobusi) in 41 (vlaki), ponoči pa so pogosto edini.
+    """
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('tnc','rnc','EN 98','A - C','S1')")
+    # Ajdovščina ob 24:34, Celje ob 25:10 -- torej 00:34 in 01:10 naslednjega dne.
+    _sched(conn, "tnc", [(1, "A", None, 88440), (2, "C", 90600, None)])
+    conn.commit()
+
+    zjutraj = stats.connections(conn, "Ajdovščina", "Celje", "2026-09-01", 30 * 60)
+    nocne = [c for c in zjutraj if c["train_no"] == "EN 98"]
+    assert nocne, "nočne zveze iskalnik ne sme skriti"
+    assert nocne[0]["sched_dep"].startswith("2026-09-01T00:34"), nocne[0]["sched_dep"]
+
+    # Podnevi te poizvedbe ni -- včerajšnji dan takrat ne pripada vprašanju.
+    podnevi = stats.connections(conn, "Ajdovščina", "Celje", "2026-09-01", 17 * 3600)
+    assert all(c["train_no"] != "EN 98" for c in podnevi)

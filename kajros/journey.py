@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import (_abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
+from .stats import (NOCNI_REP_S, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, opis_zamude,
                     typical_at_stops)
 
@@ -365,13 +365,6 @@ LEFT JOIN station zn ON zn.stop_id = sn.stop_id
 WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s AND :to_s
 ORDER BY t_s
 """
-
-
-#: Kako dolgo v nov dan sega vceraj zacet promet. Izmerjeno 7. 9. 2026:
-#: najdlje vozeca vozjna se konca ob 33:48 (avtobus) oziroma 26:23 (vlak),
-#: torej slabih deset ur cez polnoc. Pred to uro mora tabla pogledati tudi
-#: vcerajsnji prometni dan -- sicer je ob 00:30 skrila vlak, ki pride ob 00:56.
-NOCNI_REP_S = 10 * 3600
 
 
 def board(conn: sqlite3.Connection, station: str, service_date: str,
