@@ -47,6 +47,12 @@ class Most(
         // Stran sme poslati smeti; budilka brez ure ali brez postanka ni budilka.
         if (vr <= 0 || minut < 0 || minut > 24 * 60) return ""
         if (o.optInt("stop_seq", -1) < 0) return ""
+        // **Odhod, ki je ze mimo, ne dobi budilke.** Zazvonila bi v isti
+        // sekundi in v prazno -- preizkuseno na LPP 19I stiri minute po
+        // odhodu. Stran gumba za tak postanek ne pokaze; to je druga
+        // varovalka, ker stran in APK nista nujno iste starosti.
+        val odhod = vr + o.optInt("zamuda_s", 0) * 1000L
+        if (odhod <= System.currentTimeMillis()) return ""
 
         val b = Budilka(
             id = "b" + System.currentTimeMillis() + "-" + (0..9999).random(),

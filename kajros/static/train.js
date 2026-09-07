@@ -302,7 +302,7 @@ function yourStopHtml(stops, forecast, current) {
         </span>
       </div>
       <div class="yours-tag">${escapeHtml(odkod)}</div>
-      ${budilkaGumbHtml(s)}
+      ${budilkaGumbHtml(s, passed)}
     </div>`;
 }
 
@@ -327,8 +327,12 @@ function budilkeZaPostanek(s) {
   }
 }
 
-function budilkaGumbHtml(s) {
+function budilkaGumbHtml(s, passed) {
   if (!MOST) return "";
+  // **Za postanek, ki je mimo, budilke ni.** Vozilo je tu že bilo; alarm bi
+  // zazvonil takoj in v prazno. Preizkušeno: nastavljena na LPP 19I štiri
+  // minute po odhodu je zazvonila v isti sekundi.
+  if (passed) return "";
   const obstoj = budilkeZaPostanek(s)[0];
   const oznaka = obstoj
     ? `budilka ob ${hhmm(new Date(obstoj.zvoni_ob_ms).toISOString())}`
@@ -438,13 +442,23 @@ function shraniBudilko(stopSeq) {
     stop_seq: s.stop_seq,
     dan: (state.run && state.run.service_date) || "",
     voznoredni_ms: new Date(schedIso).getTime(),
+    // Zamuda gre zraven, da most ve, ali je odhod ze mimo: vozni red sam
+    // tega ne pove, kadar vozilo zamuja.
+    zamuda_s: (stopDelay(s) != null ? stopDelay(s) : 0),
     minut_prej: minut,
     zbudi: zbudi,
     rezerva_s: rezerva ? BUD_REZERVA_S : 0,
     smer: (state.run && state.run.headsign) || "",
   }));
+  if (!id) {
+    // Most zavrne odhod, ki je mimo. To se zgodi le, ce je stran starejsa
+    // od aplikacije -- sicer gumba za tak postanek sploh ni.
+    const opomba = plast.querySelector(".bud-pod");
+    if (opomba) opomba.textContent = "Ta odhod je že mimo — budilke ni mogoče nastaviti.";
+    return;
+  }
   zapriBudilko();
-  if (id) renderRunHead();
+  renderRunHead();
 }
 
 document.addEventListener("click", (ev) => {
