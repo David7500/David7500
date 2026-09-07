@@ -259,6 +259,33 @@ porabil 6,5 minute namesto 0,3 sekunde. `backtest._medians()` jih izračuna
 enkrat ob učenju -- rezultat do zadnje decimalke isti.
 
 
+## `run` hrani zadnje stanje — tudi kadar je smet
+
+Vozilo ne more priti na postajo, preden je odpeljalo s prejšnje. Prikaz je to
+vseeno kazal, pri **vsaki deseti** vožnji avtobusa in vsaki dvajseti vožnji
+vlaka. Vzroki so trije (feed postanek neha pošiljati; feed za nazaj popravi
+prevožen postanek; mestni LPP pošilja samo postanke pred vozilom) in noben od
+njih ni ugotovljiv iz ene same vrednosti.
+
+`stats.oznaci_neskladne()` zato ne ugiba o vzroku: obdrži **nepadajoče
+zaporedje ur z največjo skupno težo**, ostalo označi (`zamuda.vrsta =
+"neskladno"`). Dvoje v njej je izmerjeno in se ne sme „poenostaviti":
+
+* **Utež.** Postanek, nazadnje osvežen prej kot kateri od prejšnjih, je lažji
+  — sicer bi štetje samih postankov pri RG 310 zavrglo *pravo* vrednost, ker
+  sta bili luknji dve in prava ena. Lahek postanek se vseeno **obdrži**, kadar
+  ničemur ne nasprotuje: brez tega pade 4,73 % avtobusnih postankov namesto
+  2,29 %.
+* **Zaokroževanje na minuto.** Prikaz kaže minute; 20 s nazaj ni nemogoč vozni
+  red. Brez tega je pri LPP prizadetih 38,4 % voženj namesto 17,2 %.
+
+Izid: vožnje z uro nazaj 4,9 / 10,1 / 3,6 % → **0 %** v vseh treh omrežjih.
+Podrobnosti in tabela v [docs/MERITVE.md](../../docs/MERITVE.md).
+
+`_LAST_MEASURED_SQL` nosi le **lokalni** del pravila, ker teče nad seznamom
+voženj hkrati in celotne verige ne zmore. Ta niz gre skozi odstotkovno
+formatiranje — znaka za odstotek v njem ne sme biti.
+
 ## Meja ostanka: mediana enega dneva ni mediana
 
 `predict()` ostanku ne verjame več kot **`max(10 min, trenutna zamuda)`**

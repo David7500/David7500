@@ -293,6 +293,16 @@ Uvoz jih poenoti, a samo kadar sta zapisa tudi fizično na istem mestu (500 m):
 med 24 takimi pari jih je 14 v razmiku 3–215 m, deset pa 0,8–111,6 km, in
 „Celje" ter „Čelje" sta 112 km narazen. Glej `gtfs._poenoti_imena()`.
 
+**Pošilja samo postanke PRED vozilom.** Izmerjeno 7. 9. 2026 s projekcijo
+lege vozila na postaje vožnje: vozilo 174 m od postaje 8 (od 26),
+`stop_time_update` pa samo za 9–26. Posledica je težja od zapisa: pri mestnem
+LPP v `run` **nikoli ni meritve** — vedno le zadnja napoved pred prehodom
+(mediana 42 s pred njim, p90 27 s po njem). IJPP je drugačen: 56 % voženj ima
+v seznamu še vedno prvi postanek, torej se prevoženi postanki osvežujejo.
+
+Kdor bo kdaj računal kakovost napovedi po omrežjih, mora to vedeti: pri LPP
+primerja napoved z napovedjo.
+
 ## Vožnja, obratovalni dan in dnevnik
 
 `trip.start_s` / `trip.end_s` sta **prvi odhod in zadnji prihod vožnje**,
