@@ -1061,7 +1061,19 @@ WITH t AS (
 ranked AS (
     SELECT t.*, MAX(COALESCE(t.delay_s, 0)) OVER (
                PARTITION BY t.trip_id ORDER BY t.stop_seq
-               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max,
+           -- Zamuda na ZADNJEM znanem postanku vozjne. Prej je bila svoj CTE
+           -- (`tail`) in spojena nazaj po `trip_id` -- SQLite ga je
+           -- materializiral BREZ indeksa, zato je za vsako vrstico `passed`
+           -- pregledal cel `tail`. Pri zeleznici je to 2 000 x 2 000 in se
+           -- ne pozna, z LPP v bazi pa 59 557 x 59 557 = 3,5 milijarde
+           -- primerjav: **216 s proti 1,5 s**. Ista vrednost je okenska
+           -- funkcija cez isti okvir, brez spoja in brez druge ovrednotitve
+           -- CTE `t`. Izmerjeno: 216 s -> 4,3 s, izid pri zeleznici enak
+           -- vrstico za vrstico.
+           LAST_VALUE(t.delay_s) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS end_delay_s
     FROM t
 ),
 passed AS (
@@ -1069,21 +1081,15 @@ passed AS (
     FROM ranked r
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= :now_s
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
-),
-tail AS (
-    SELECT trip_id, delay_s AS end_delay_s,
-           ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
-    FROM t
 )
 SELECT tr.train_no, tr.headsign, tr.mode, tr.network, p.trip_id,
        st.name AS last_stop, p.stop_seq,
        p.delay_s, p.feed_ts, p.t_s AS sched_s
 FROM passed p
-JOIN tail  ON tail.trip_id = p.trip_id AND tail.rn = 1
 JOIN trip tr ON tr.trip_id = p.trip_id
 JOIN station st ON st.stop_id = p.stop_id
 WHERE p.rn = 1
-  AND :now_s <= tr.end_s + COALESCE(tail.end_delay_s, 0) + :grace
+  AND :now_s <= tr.end_s + COALESCE(p.end_delay_s, 0) + :grace
 ORDER BY p.delay_s DESC
 """
 
