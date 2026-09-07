@@ -562,3 +562,50 @@ Prisotne so večinoma primestne (40+) in nekaj mestnih.
 
 To je vrzel pri viru, ne pri nas, in je ni mogoče zapolniti iz drugega
 odprtega vira. Vredno vprašanja DUJPP, ko bo tekla korespondenca.
+
+## Mestni LPP je dosegljiv, a po drugi poti (7. 9. 2026)
+
+Nadaljevanje zgornjega: mestnih linij LPP v IJPP ni. Vprašanje je bilo, ali
+obstaja odprt vir. **Obstaja**, in je isti `derp.si`, s katerega že jemljemo
+IJPP — le drug vir. Potrjeno iz konfiguracije projekta transitous
+(`feeds/si.json`, vnos `name: lpp`), ne uganjeno.
+
+| vir | dostop | vsebina |
+|---|---|---|
+| `avl.lpp.si/transit/api/gtfs` | odprt, 42 MB | statični GTFS, agencija `lpp`, **31 prog — ravno mestne in nočne** |
+| `rt.gtfs.derp.si/sources/lpp/all` | **odprt, brez ključa** | 600 entitet: 280 trip_updates, **139 leg vozil**, 181 obvestil |
+| `data.lpp.si/api/bus/buses-on-route` | **401** | lege — zaklenjeno, a jih ima derp.si |
+| `data.lpp.si` ostalo | odprt | 117 oznak linij, 1 459 postajališč, `eta_min` |
+
+Feeda sta **komplementarna**: IJPP nosi primestne LPP linije (40–84),
+`avl.lpp.si` mestne (01–28, N1, N3, N5).
+
+**Past: `delay` je v tem feedu vedno 0.** Izmerjeno dvakrat — v nedeljo ob
+22:00 (2 721 postankov) in v ponedeljkovi konici ob 07:11 (2 604 postankov):
+**nobena zamuda ni neničelna**, in `trip_update.delay` ni izpolnjen pri nobeni
+vožnji. Kdor bi bral `delay`, bi zapisal, da mestni LPP nikoli ne zamuja.
+
+**Zamuda je vseeno tam, le v drugi obliki.** 1 882 od 4 517 postankov nosi
+**absolutni napovedani čas**. To je natanko primer, ki ga `collector._delay_of()`
+že pokriva (`m.time − (polnoč + t_s)`). Preverjeno na šestih postankih ob 07:11
+proti uradnemu voznemu redu:
+
+| vozni red | napoved | zamuda |
+|---|---|---|
+| 07:07 | 07:10:13 | **+3,2 min** |
+| 07:13 | 07:11:50 | **−1,2 min** |
+| 07:12 | 07:13:02 | +1,0 min |
+| 07:10 | 07:13:14 | +3,2 min |
+| 07:15 | 07:16:25 | +1,4 min |
+
+**`trip_id` se ujemata 1 : 1.** RT uporablja isto trojno obliko UUID
+(`service|?|trip`) kot uradni `trips.txt`; vsak preverjeni RT `trip_id` je v
+voznem redu natanko enkrat. Združevanje gre torej z `avl.lpp.si`, **ne** z NAP.
+
+Lege vozil: 139, starost mediana 146 s (IJPP ima 10 s). Za zemljevid dovolj,
+za oceno hitrosti manj natančno.
+
+**Kar ostaja odprto: licenca.** Za `avl.lpp.si` in `data.lpp.si` ni navedene.
+Odprt dostop ni dovoljenje za objavo. Vsi podatki v kajrosu so zdaj CC BY-SA 4.0
+z obvezno navedbo vira; preden gre mestni LPP na zaslon, mora biti jasno, pod
+čim. Vprašanje za LPP in za DUJPP v istem krogu pisem.
