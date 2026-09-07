@@ -791,7 +791,15 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   if (tripId) p.set("trip", tripId);
   const q = p.toString() ? `?${p}` : "";
   const res = await fetch(`/api/train/${enc}/run${q}`);
-  if (!res.ok) throw new Error(`run ${res.status}`);
+  // Stevilka, ki je ne poznamo, in dan brez meritev nista isto: prvo je
+  // zastarela ali polomljena povezava, drugo pravi podatek o pravi vozjni.
+  // Prikaz je oboje pisal kot "na ta dan ni podatkov" in s tem trdil, da
+  // vozjna obstaja.
+  if (!res.ok) {
+    const e = new Error(`run ${res.status}`);
+    e.status = res.status;
+    throw e;
+  }
   const run = await res.json();
 
   const cur = lastMeasured(run);

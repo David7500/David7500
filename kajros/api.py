@@ -209,6 +209,11 @@ def stats_page(request: Request, omrezje: str = "vlak"):
     oknu voznje: `/app/statistika` brez pripone bi bila vlakovna samo po
     dogovoru in iz naslova to ne bi bilo vidno.
     """
+    # Pripona, ki je ne poznamo, ni vlakovna stran: `/app/statistika/karkoli`
+    # je doslej tiho vrnil zeleznico, kar je v nasprotju z razlogom, zakaj je
+    # omrezje sploh v poti -- da je iz naslova vidno, kaj gledas.
+    if omrezje not in ("vlak", "bus"):
+        raise HTTPException(404, f"omrežja {omrezje!r} ne poznam")
     network = "avtobus" if omrezje == "bus" else "zeleznica"
     return templates.TemplateResponse(request, "statistika.html",
                                       {"here": "statistika", "network": network})

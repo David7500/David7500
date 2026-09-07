@@ -715,8 +715,10 @@ async function loadRun() {
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
-    runTimelineEl.innerHTML =
-      '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
+    runTimelineEl.innerHTML = err && err.status === 404
+      ? `<div class="empty-state">${vehicleNoun()} s to številko ne obstaja —
+         morda je povezava zastarela ali pa je številka z drugega omrežja</div>`
+      : '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
   }
 }
