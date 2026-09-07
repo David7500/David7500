@@ -28,6 +28,18 @@ Environment=KAJROS_REFRESH_HOUR=4
 # Disk: dnevnik `obs` se obrezuje (železnica 90 dni, avtobusi 14) in se ustali
 # pri ~356 MB; `run` raste ~3,4 GB na leto. Na kartici je 20 GB prostega.
 Environment=KAJROS_AGENCIES=1118,1119,1121,1123
+# Mestni LPP je tu IZKLOPLJEN, čeprav je privzeto vklopljen.
+#
+# Ne zato, ker ne bi sodil v zajem -- sodi, in malina je edina naprava, ki teče
+# ves čas. Ampak ker cena na Pi Zero W **ni izmerjena**: uvoz doda 42 MB GTFS
+# in ~16 000 voženj z ~410 000 postanki, živi feed pa je 315 kB vsakih 30 s in
+# brez ETaga, torej vsakič cel prenos. Stroj, ki je pri SQLite ~100× počasnejši
+# od razvojnega računalnika, se lahko ob tem zaduši -- in če se zaduši zajem,
+# izgubimo tudi tisto, kar zdaj dela.
+#
+# Zato: najprej izmeri (čas uvoza, vrh RSS, ali obhod ostane pod 30 s), potem
+# prižgi. Do takrat mestni LPP zajema samo stroj s strežnikom.
+Environment=KAJROS_LPP=0
 # Senčno merjenje napovedi je tu IZKLOPLJENO, čeprav je privzeto vklopljeno.
 #
 # `ocena.tick()` teče v isti zanki kot zajem, ne v svoji niti. Izmerjeno:
