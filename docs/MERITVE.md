@@ -994,3 +994,25 @@ ob 00:30 je 72,3 → 102,7 ms (avtobusi) in 2,3 → 4,5 ms (vlaki), podnevi nič
 Past, na katero se je treba paziti: rep se mora izračunati **pred** zgodnjim
 `return []`. Kadar današnji dan nima nobene zveze, je včerajšnji rep edino,
 kar sploh obstaja — in ravno tam je bila napaka najbolj vidna.
+
+## Viri segajo različno daleč, prikaz pa je molčal (7. 9. 2026)
+
+| vir | vozni red znan do | dni naprej |
+|---|---|---|
+| železnica | 2026-12-12 | 97 |
+| avtobusi IJPP | 2027-12-31 | 481 |
+| **mestni LPP** | **2026-09-15** | **9** |
+
+Mestni LPP se uvaža v oknu osmih dni (cel mesec je 62 989 voženj in 1,6
+milijona postankov). Posledica na zaslonu: iskanje na avtobusni strani za
+čez dva tedna je vrnilo samo državni vozni red — brez besede o tem, da
+česa manjka. Iskanje vlaka za junij 2027 je vrnilo „na ta dan ni vožnje",
+kar zveni kot dejstvo o prometu, v resnici pa vozni red še ni objavljen.
+
+Endpointa `/api/connections` in `/api/departures` zato vračata `vozni_red_do`
+(in `lpp_do` pri avtobusih), prikaz pa oboje pove.
+
+Ubeseditev je bila popravljena po prvem posnetku: „mestnih linij LPP ni" si
+je nasprotovalo z značkami **LPP 25** tik pod njim. Linija 25 je namreč v
+**obeh** virih — državni jo nosi kot primestno. Besedilo zato govori o
+**viru**, ne o kategoriji linij.

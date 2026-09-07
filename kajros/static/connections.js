@@ -332,6 +332,36 @@ function alertsHtml(list, note) {
   </details>`;
 }
 
+// Vozni red ne sega enako dalec: zeleznica do decembra, IJPP avtobusi vec kot
+// leto, mestni LPP pa osem dni (uvaza se okno). Prazen odgovor cez to mejo ni
+// "ta dan nic ne vozi", ampak "voznega reda se ni" -- za potnika je razlika
+// bistvena, ker v prvem primeru isce drugo pot, v drugem pa pride pozneje.
+function cezMejo(data) {
+  return !!(data.vozni_red_do && data.date > data.vozni_red_do);
+}
+
+function mejaHtml(data) {
+  if (cezMejo(data)) {
+    return `<div class="empty-state">
+      Za <strong>${escapeHtml(dayLabel(data.date))}</strong> voznega reda še ni.
+      Znan je do <strong>${escapeHtml(dayLabel(data.vozni_red_do))}</strong> —
+      objavi ga prevoznik, ne kajros.
+    </div>`;
+  }
+  // Delna vrzel: drzavni vozni red (IJPP) sega leto naprej, LPP-jev lastni pa
+  // osem dni. Nekatere ljubljanske linije so v obeh virih -- linija 25 je -- in
+  // te so vidne; tiste, ki so SAMO v LPP-jevem, tisti dan manjkajo. Zato
+  // besedilo govori o VIRU in ne o "mestnih linijah": sicer bi si nasprotovalo
+  // z znackami "LPP 25", ki so na zaslonu tik pod njim.
+  if (IS_BUS && data.lpp_do && data.date > data.lpp_do) {
+    return `<div class="note-partial">Za ta dan manjkajo linije, ki so samo v
+      LPP-jevem voznem redu — tega uvažamo osem dni naprej, do
+      <strong>${escapeHtml(dayLabel(data.lpp_do))}</strong>
+      Državni vozni red je spodaj.</div>`;
+  }
+  return "";
+}
+
 function renderAlerts(list, note) {
   // Obvestila pride ze urejena s streznika: najprej tista, ki imenujejo
   // postajo s te poti. Prikaz jih samo izpise.
@@ -605,6 +635,11 @@ function renderConnections(data) {
   vozovnicaEl.innerHTML = IS_BUS ? "" : ticketLinkHtml();
 
   if (!list.length && !legs.length) {
+    if (cezMejo(data)) {
+      resultsEl.innerHTML = mejaHtml(data);
+      renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
+      return;
+    }
     // "od Metlika do Bohinjska Bistrica" je napačno; sklanja se "postaja",
     // ime ostane v imenovalniku -- ista rešitev kot pri "na postaji X".
     resultsEl.innerHTML = `<div class="empty-state">
@@ -646,7 +681,7 @@ function renderConnections(data) {
       : "S prestopi — neposredne vožnje ni"}</span></div>`);
     rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date, data.from)));
   }
-  resultsEl.innerHTML = rows.join("");
+  resultsEl.innerHTML = mejaHtml(data) + rows.join("");
 
   renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
 }
@@ -716,6 +751,11 @@ function renderBoard(data) {
     const jutri = new Date(data.date + "T12:00:00");
     jutri.setDate(jutri.getDate() + 1);
     const jutriIso = jutri.toISOString().slice(0, 10);
+    if (cezMejo(data)) {
+      resultsEl.innerHTML = mejaHtml(data);
+      renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
+      return;
+    }
     resultsEl.innerHTML = `<div class="empty-state">
       V tem oknu s postaje <strong>${escapeHtml(data.station)}</strong>
       ni ${escapeHtml(sklon(0, data.kind))}.
@@ -736,7 +776,8 @@ function renderBoard(data) {
 
   let nextIdx = -1;
   if (isToday) nextIdx = list.findIndex((r) => new Date(r.expected || r.sched).getTime() >= nowMs);
-  resultsEl.innerHTML = list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station)).join("");
+  resultsEl.innerHTML = mejaHtml(data)
+    + list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station)).join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 

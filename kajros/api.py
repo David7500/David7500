@@ -513,6 +513,20 @@ def api_stations_near(lat: float = Query(..., ge=-90, le=90),
         return journey.nearby_stations(conn, lat, lon, network, limit)
 
 
+def _znano_do(conn, network: str) -> dict:
+    """Meja voznega reda, ki jo mora prikaz povedati.
+
+    Prazen odgovor cez to mejo ni "ta dan nic ne vozi", ampak "voznega reda
+    se ni". Mestni LPP ima svojo, mnogo blizjo mejo (okno osmih dni), zato je
+    posebej -- brez tega bi avtobusna stran cez teden dni tiho izpustila vse
+    ljubljanske mestne linije in nihce ne bi vedel, zakaj.
+    """
+    out = {"vozni_red_do": stats.znano_do(conn, network)}
+    if network == "avtobus":
+        out["lpp_do"] = stats.znano_do(conn, agency="lpp")
+    return out
+
+
 @app.get("/api/departures")
 def api_departures(
     station: str = Query(..., description="ime postaje; delno ime je dovolj"),
@@ -567,7 +581,9 @@ def api_departures(
             notices = alerts.for_stops(
                 conn, [r["stop_id"] for r in conn.execute(
                     "SELECT stop_id FROM station WHERE name = ?", (exact,))])
+        meje = _znano_do(conn, network)
     return {"station": exact, "date": date, "kind": kind, "network": network,
+            **meje,
             "from_s": from_s, "window_min": window,
             "board": rows, "alerts": notices}
 
@@ -1185,7 +1201,8 @@ def api_connections(
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
         notices = (alerts.for_trains(conn, nos, mentions=[a, b])
                    if network == "zeleznica" else [])
-    return {"from": a, "to": b, "date": date, "network": network,
+        meje = _znano_do(conn, network)
+    return {"from": a, "to": b, "date": date, "network": network, **meje,
             "connections": rows, "transfers": legs, "alerts": notices}
 
 

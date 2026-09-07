@@ -282,6 +282,11 @@ body:not(.is-advanced) .adv-only { display: none !important; }
    postaji“. Bere se kot besedilo, ne kot drobni tisk pod njim. */
 .alert-desc { font: 400 12px/1.45 var(--sans); color: var(--ink-dim); margin-top: 3px; }
 
+/* Delna vrzel v voznem redu: rezultati so, a nepopolni. Ni opozorilo o
+   oviri (to je prevoznikovo) in ne prazno stanje -- svoja stopnja. */
+.note-partial { font: 400 12px/1.5 var(--sans); color: var(--ink-dim);
+  border-left: 2px solid var(--ink-ghost); padding: 6px 0 6px 10px; margin: 0 0 10px; }
+
 /* ---------- starost meritve ----------
  * "+20 min" ob polnoci, izmerjeno ob 17h, je laz brez te oznake.
  */

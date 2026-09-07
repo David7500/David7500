@@ -1651,3 +1651,26 @@ def test_iskalnik_zjutraj_vidi_nocno_zvezo(conn):
     # Podnevi te poizvedbe ni -- včerajšnji dan takrat ne pripada vprašanju.
     podnevi = stats.connections(conn, "Ajdovščina", "Celje", "2026-09-01", 17 * 3600)
     assert all(c["train_no"] != "EN 98" for c in podnevi)
+
+
+def test_znano_do_loci_vire(conn):
+    """Viri segajo različno daleč in prikaz mora to vedeti.
+
+    Izmerjeno 7. 9. 2026: železnica do 12. 12., IJPP avtobusi do 31. 12. 2027,
+    mestni LPP do 15. 9. — ker se uvaža okno osmih dni. Prazen odgovor čez to
+    mejo ni „ta dan nič ne vozi", ampak „voznega reda še ni".
+    """
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S2','2026-12-24')")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, "
+                 "network, agency) VALUES('tz','rz','LP 9','A - C','S2','zeleznica','SZ')")
+    _sched(conn, "tz", [(1, "A", None, 30000), (2, "C", 33000, None)])
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S3','2026-09-15')")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, "
+                 "network, agency) VALUES('tl','rl','3','A - C','S3','avtobus','lpp')")
+    _sched(conn, "tl", [(1, "A", None, 30000), (2, "C", 33000, None)])
+    conn.commit()
+
+    assert stats.znano_do(conn, "zeleznica") == "2026-12-24"
+    assert stats.znano_do(conn, agency="lpp") == "2026-09-15"
+    # Brez omejitve je meja najdaljša od vseh.
+    assert stats.znano_do(conn) == "2026-12-24"

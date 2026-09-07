@@ -1286,6 +1286,36 @@ def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
 _LAST_SCHED_CACHE: dict[tuple, int | None] = {}
 
 
+_HORIZON_CACHE: dict[tuple, str | None] = {}
+
+
+def znano_do(conn: sqlite3.Connection, network: str | None = None,
+             agency: str | None = None) -> str | None:
+    """Zadnji dan, za katerega vozni red sploh obstaja.
+
+    Ni okras: viri segajo **različno daleč** (izmerjeno 7. 9. 2026 --
+    železnica do 12. 12., IJPP avtobusi do 31. 12. 2027, mestni LPP do
+    15. 9., ker se uvaža okno osmih dni). Kdor vpraša čez to mejo, dobi
+    prazen odgovor, ki je videti kot „ta dan nič ne vozi" -- v resnici pa
+    vozni red še ni objavljen. Razlika je za potnika bistvena.
+    """
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, network, agency, stamp)
+    if stamp and key in _HORIZON_CACHE:
+        return _HORIZON_CACHE[key]
+    row = conn.execute(
+        "SELECT MAX(s.date) FROM service_day s JOIN trip t ON t.service_id = s.service_id "
+        "WHERE (? IS NULL OR t.network = ?) AND (? IS NULL OR t.agency = ?)",
+        (network, network, agency, agency)).fetchone()
+    val = row[0] if row else None
+    if stamp:
+        _HORIZON_CACHE[key] = val
+    return val
+
+
 def last_sched_s(conn: sqlite3.Connection, network: str | None) -> int | None:
     """Najpoznejša voznoredna sekunda tega omrežja (zna čez 86400)."""
     stamp = conn.execute(
