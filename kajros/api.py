@@ -282,7 +282,8 @@ def api_health():
     # in desetminutni predpomnilnik bi jo prizgal na rdece brez razloga.
     #
     # `MAX(feed_ts)` je 105 ms, stevci pa 1 100 ms. Sveze torej samo prvo.
-    out = dict(_predpomni("health", None, 600, lambda: _conn_klic(_health_stevci)))
+    out = dict(_predpomni("health", None, 600, lambda: _conn_klic(_health_stevci),
+                          v_ozadju=True))
     with _conn() as conn:
         ts = conn.execute("SELECT MAX(feed_ts) FROM run").fetchone()[0]
         # **Ovire so sveze, ne predpomnjene.** Ista funkcija kot pri
@@ -652,16 +653,37 @@ def _kljucavnica(kljuc: str) -> threading.Lock:
         return _KLJUCAVNICE.setdefault(kljuc, threading.Lock())
 
 
-def _predpomni(kljuc: str, znacka, najvec_s: float, izracun):
+def _predpomni(kljuc: str, znacka, najvec_s: float, izracun,
+               v_ozadju: bool = False):
     """Vrne predpomnjen odgovor ali ga izracuna in shrani.
 
     Kljucavnica je NA KLJUC, ne skupna: sicer bi ob izteku vsi hkratni
     obiskovalci racunali isto stvar (naval na prazen predpomnilnik), skupna
     kljucavnica pa bi drage odgovore med sabo serializirala.
+
+    `v_ozadju=True` postrezi **staro vrednost** in jo osvezi v niti. Za
+    izracune, ki so predragi, da bi jih kdo cakal: brez tega placa polno ceno
+    vsak, ki po izteku prvi pride mimo. Izmerjeno 8. 9. 2026 na `/api/health`
+    po prilitju: `COUNT(*) obs` 932 ms in razrez po omrezjih 1 452 ms s toplim
+    predpomnilnikom, ob hladnem pa je bil odziv **13 s**.
+
+    Prvi klic po zagonu vrednosti se nima in jo mora izracunati sinhrono --
+    stara vrednost, ki je ni, ni izbira.
     """
     zdaj = time.monotonic()
     zapis = _ODGOVORI.get(kljuc)
     if zapis and zapis[0] == znacka and zdaj - zapis[2] < najvec_s:
+        return zapis[1]
+    if v_ozadju and zapis is not None and zapis[0] == znacka:
+        # Stara vrednost je tu; osvezi jo v ozadju in postrezi zdaj. Kljucavnica
+        # poskrbi, da tece **ena** osvezitev, ne ena na obiskovalca.
+        if _kljucavnica(kljuc).acquire(blocking=False):
+            def _osvezi():
+                try:
+                    _ODGOVORI[kljuc] = (znacka, izracun(), time.monotonic())
+                finally:
+                    _kljucavnica(kljuc).release()
+            threading.Thread(target=_osvezi, daemon=True).start()
         return zapis[1]
     with _kljucavnica(kljuc):
         zapis = _ODGOVORI.get(kljuc)          # medtem ga je morda izracunal kdo drug

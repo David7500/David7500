@@ -1756,3 +1756,54 @@ def test_zivi_lpp_vzorec_je_tretja_komponenta():
     from kajros import lpp
     assert lpp._vzorec("a|b|c") == "c"
     assert lpp._vzorec("navaden_id") is None
+
+
+# ---------------------------------------------------------------- predpomnilnik
+
+def test_predpomnilnik_v_ozadju_postrezi_staro_in_osvezi():
+    """Predrag izračun se ne sme zgoditi v zahtevi obiskovalca.
+
+    Izmerjeno 8. 9. 2026: števci `/api/health` so po prilitju stali 932 ms
+    (`COUNT(*) obs`) in 1 452 ms (razrez po omrežjih) s toplim predpomnilnikom,
+    ob hladnem pa je bil odziv 13 s. Po izteku mora klic vrniti **staro**
+    vrednost takoj, novo pa izračunati v niti.
+    """
+    import time as _t
+    from kajros import api
+
+    klici = []
+
+    def izracun():
+        klici.append(1)
+        return f"vrednost-{len(klici)}"
+
+    kljuc = "test-v-ozadju"
+    api._ODGOVORI.pop(kljuc, None)
+
+    # prvi klic nima cesa postreci -- izracuna sinhrono
+    assert api._predpomni(kljuc, None, 0.05, izracun, v_ozadju=True) == "vrednost-1"
+    _t.sleep(0.1)                                   # predpomnilnik je potekel
+
+    # drugi klic vrne STARO vrednost, novo pa izracuna v ozadju
+    assert api._predpomni(kljuc, None, 0.05, izracun, v_ozadju=True) == "vrednost-1"
+    for _ in range(50):                             # pocakaj na nit
+        if len(klici) > 1:
+            break
+        _t.sleep(0.02)
+    assert len(klici) == 2, "osvežitev v ozadju se ni zgodila"
+    assert api._ODGOVORI[kljuc][1] == "vrednost-2"
+
+
+def test_predpomnilnik_brez_ozadja_ostane_sinhron():
+    """Privzeto vedenje se ne sme spremeniti: brez zastavice je izračun v zahtevi."""
+    from kajros import api
+    klici = []
+    kljuc = "test-sinhroni"
+    api._ODGOVORI.pop(kljuc, None)
+
+    def izracun():
+        klici.append(1)
+        return len(klici)
+
+    assert api._predpomni(kljuc, None, 0, izracun) == 1
+    assert api._predpomni(kljuc, None, 0, izracun) == 2   # takoj potekel, znova

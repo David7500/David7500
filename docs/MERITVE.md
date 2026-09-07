@@ -1221,3 +1221,27 @@ je slabši od stroja s starim imenom.
 
 Ob tem odpadel še `gzip -1` na 683 MB: na Pi Zero W je to nekaj dodatnih minut,
 prostora pa je 19 G in dnevne stisnjene kopije obstajajo posebej.
+
+## Kar je bilo poceni pri 6,7 milijona, ni poceni pri 13 (8. 9. 2026)
+
+Po prilitju je `/api/health` prek tunela odgovarjal **13,3 s**. Isti endpoint
+je bil na arwenu lokalno 7 ms — razlike torej ni delal tunel, ampak **iztek
+predpomnilnika**: kdor po 600 s prvi pride mimo, plača cel izračun.
+
+Kaj števci stanejo na arwenu s **toplim** predpomnilnikom, po prilitju:
+
+| poizvedba | čas |
+|---|---|
+| `COUNT(*) FROM obs` (13,05 mio) | **932 ms** |
+| razrez po omrežjih (`run JOIN trip`) | **1 452 ms** |
+| `COUNT(*) FROM run` | 29 ms |
+
+To je natanko tisto, kar pravilo projekta prepoveduje — agregat čez vso
+zgodovino v zahtevi. Popravek ni večji TTL (ta samo redkeje izpostavi istega
+nesrečnika), ampak **postrezi staro, osveži v ozadju**: `_predpomni(...,
+v_ozadju=True)` vrne prejšnjo vrednost takoj in novo izračuna v niti, pri čemer
+ključavnica poskrbi, da teče ena osvežitev in ne ena na obiskovalca. Sinhrono
+ostane samo prvi klic po zagonu, ko stare vrednosti še ni.
+
+Pokrito z dvema testoma: da se stara vrednost res postreže in nova res
+izračuna, in da se privzeto vedenje brez zastavice ne spremeni.
