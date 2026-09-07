@@ -1067,3 +1067,42 @@ zamud). Vsota se ujema z opaženim: najmanj ~57 s, največ ~147 s.
 vsakih 30 s se prenese 315 682 B, kar je **909 MB/dan**, in ker se vsebina
 spremeni le vsakih ~90 s, sta dve tretjini tega isti bajti. Pogostejši zajem
 bi povprečno starost znižal za ~10 s in promet potrojil na 2,7 GB/dan.
+
+## Ima LPP-jev lastni API lege in je hitrejši? (7. 9. 2026)
+
+Vprašanje po meritvi starosti leg: novi vir mestnega LPP — ima GPS in se
+osvežuje pogosteje od derp.si?
+
+**Lege: ne.** Edina endpointa s koordinatami vozil sta še vedno zaprta,
+preverjeno danes znova:
+
+```
+401  /api/bus/buses-on-route      {"message":"No permission for this API"}
+401  /api/bus/bus-details
+404  /api/bus/buses, /transit/api/vehicles, /transit/api/vehicle-positions
+```
+
+Koordinate, ki se v odprtih odgovorih **pojavijo**, so koordinate
+**postajališč**, ne vozil (`arrivals-on-route`, `stations-on-route`).
+
+**Napovedani prihodi: da, in precej.** Odprta endpointa, oba brez ključa:
+
+| endpoint | kako pogosto se vsebina spremeni | cena |
+|---|---|---|
+| `/api/station/arrival?station-code=` | **30 s** (5 sprememb v 150 s, razmiki 30,3 / 30,3 / 30,3 s) | 14 kB |
+| `/api/route/arrivals-on-route?trip-id=` | **10–20 s** (razmiki 20,2 / 10,1 / 20,2 / 10,1 / 20,2) | 25 kB, 57 ms, 39 postankov naenkrat |
+| derp.si `sources/lpp/all` (kar beremo zdaj) | ~90 s | 315 kB |
+
+Torej **3–9× hitreje od derp.si** — a to je `eta_min` v **celih minutah**, ne
+lega. Zaokroževanje na minuto je ±30 s, kar je primerljivo s pridobljeno
+svežino; kdor bo to gradil, mora oboje izmeriti skupaj, ne le svežino.
+
+**Identifikatorji se ujemajo brez prevajanja.** `trip_id` pri `data.lpp.si` je
+natanko **tretja komponenta** našega trojnega derp.si id-ja
+(`a|b|093c945c-…` ↔ `093C945C-…`, velike črke). Na tabli Bavarskega dvora se
+je 11 od 15 prihodov ujelo z našo tabelo `trip` na prvi poskus; štirje
+neujeti so primestne linije (56, 3G, 25), ki pridejo iz IJPP z drugimi id-ji.
+
+Za zajem cele mreže to ni uporabno (ena zahteva na vožnjo, ~276 živih), za
+**odprto stran ene vožnje** pa je: en klic, 25 kB, vse postanke naenkrat.
+Licenca `data.lpp.si` ostaja nenavedena — to je pogoj, ne podrobnost.
