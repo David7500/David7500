@@ -1170,3 +1170,32 @@ Osem ur 27. 8. nima nobena od treh naprav; te ni več od kod dobiti.
 Ob tem se je pokazalo še eno napačno branje: dnevi s tretjino običajnih
 meritev (5. in 6. 9.) **niso izpad**, ampak **sobota in nedelja** — takrat
 vozi mnogo manj avtobusov. Preden kdo lovi luknjo, naj pogleda dan v tednu.
+
+### Kar je prilitje pokvarilo in kako je bilo popravljeno
+
+Prilitje 6,3 milijona meritev ima dve posledici, ki ju je bilo treba ujeti
+takoj — obe sta bili vidni šele **po** njem, ne med njim:
+
+**1. WAL je zrasel na 902 MB in se ni imel kdaj zložiti nazaj.** Strežnik je
+ves čas držal odprte bralne povezave, zato SQLite ni mogel narediti
+checkpointa. Posledica: `/api/health` **15,4 s** in v dnevniku zajema
+`database is locked` vsakih nekaj sekund. Popravek: ustaviti storitev,
+`PRAGMA wal_checkpoint(TRUNCATE)` (12 s), zagnati nazaj — WAL 902 MB → 543 kB,
+baza 973 MB → 1,52 GB. **Po vsakem velikem prilitju v živo bazo je to nujen
+zadnji korak**, sicer je videti kot okvara.
+
+**2. `MAX(feed_ts) FROM run` je postal 938 ms.** Ta poizvedba je vprašanje
+„ali zajem še dela" in `/api/health` je ne sme predpomniti (prag „zajem stoji"
+je 90 s). Pri 1,25 mio vrstic je bil to pregled cele tabele — in ker
+`connections.js` kliče health vsakih 30 s na vsak odprt zavihek, je to
+sekunda dela z diskom na zavihek na pol minute, na istem disku, kjer piše
+zajem. Popravek je indeks `run_feed_ts`:
+
+| | pred | po |
+|---|---|---|
+| arwen (1,25 mio vrstic) | 938 ms | — |
+| razvojni računalnik | 65,9 ms | **0,1 ms** |
+
+Poduk, ki velja naprej: **poizvedba, ki je bila poceni pri 800 000 vrsticah,
+ni nujno poceni pri 1,25 milijona.** Po vsakem večjem prilitju izmeri
+`/api/health` in tiste poizvedbe, ki se ne dajo predpomniti.

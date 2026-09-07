@@ -159,6 +159,12 @@ CREATE TABLE IF NOT EXISTS run (
     PRIMARY KEY (trip_id, service_date, stop_seq)
 );
 CREATE INDEX IF NOT EXISTS run_date ON run(service_date);
+-- `MAX(feed_ts)` je vprasanje "ali zajem se dela" in ga `/api/health` postavi
+-- ob vsakem klicu -- torej vsakih 30 s na vsak odprt zavihek. Brez indeksa je
+-- to pregled cele tabele: izmerjeno 7. 9. 2026 na arwenu **938 ms** pri
+-- 1,25 mio vrstic, po prilitju maline. Z indeksom je to en poskok po drevesu.
+-- Pisanja to skoraj ne stane: zajem doda ~300 vrstic na 30 s.
+CREATE INDEX IF NOT EXISTS run_feed_ts ON run(feed_ts);
 
 -- ---------- vreme (iz Open-Meteo, dopolnjeno za nazaj) ----------
 
