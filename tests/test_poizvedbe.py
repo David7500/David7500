@@ -1602,3 +1602,30 @@ def test_tocno_ime_s_podobnim_prometom_ostane_prvo(conn):
         _sched(conn, f"tk{i}", [(1, "B2", None, 22000 + i), (2, "A", 23000 + i, None)])
     conn.commit()
     assert [s["name"] for s in journey.search_stations(conn, "borst", 5)][0] == "Boršt"
+
+
+def test_tabla_zjutraj_vidi_vceraj_zacet_promet(conn):
+    """Vožnja, ki je odpeljala pred polnočjo, pripada VČERAJŠNJEMU dnevu.
+
+    Prava napaka, izmerjena 7. 9. 2026: tabla ob 00:30 je na Laškem kazala
+    šele vlak ob 01:58, medtem ko je LPV 2007 pripeljal ob 00:56 — pripadal
+    je prometnemu dnevu prej in ga poizvedba ni videla. Čez polnoč sega 10
+    železniških in 154 avtobusnih voženj, najdlje do 33:48.
+    """
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('tn','rn','EN 99','A - C','S1')")
+    # odhod ob 23:40, prihod v Celje ob 00:56 NASLEDNJEGA dne (24:56)
+    _sched(conn, "tn", [(1, "A", None, 85200), (2, "C", 89760, None)])
+    conn.commit()
+
+    # 1. 9. ob 00:30 -- vlak je še na poti in pride čez 26 minut.
+    vrstice = journey.board(conn, "Celje", "2026-09-01", 20 * 60, 180,
+                            kind="prihodi", now_s=30 * 60)
+    assert any(r["train_no"] == "EN 99" for r in vrstice)
+    r = next(r for r in vrstice if r["train_no"] == "EN 99")
+    assert r["sched"].startswith("2026-09-01T00:56"), r["sched"]
+
+    # Podnevi te poizvedbe ni: ob 17:00 včerajšnjega dneva ne gledamo.
+    dnevna = journey.board(conn, "Celje", "2026-09-01", 17 * 3600, 180,
+                           kind="prihodi", now_s=17 * 3600)
+    assert all(r["train_no"] != "EN 99" for r in dnevna)

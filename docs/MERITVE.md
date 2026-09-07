@@ -959,3 +959,24 @@ vsaj **20-krat** manj prometen od najboljšega:
 
 Točni zadetek se ne skrije: gre na **drugo** mesto. Šumnika ni mogoče vtipkati
 tako, da bi ga ločil od nešumnika, zato bi bila „Čelje" sicer nedosegljiva.
+
+## Ob polnoči je tabla skrila vlake, ki so bili na poti (7. 9. 2026)
+
+Vožnja, ki odpelje ob 23:50, ima svoje postanke ob 24:21 in pripada
+**včerajšnjemu** prometnemu dnevu. Tabla pa je vprašala samo današnji dan,
+zato je ob 00:30 na Laškem kazala šele vlak ob 01:58 — LPV 2007, ki je
+pripeljal ob 00:56, ga ni bilo.
+
+Obseg: čez polnoč sega **10 železniških** in **154 avtobusnih** voženj
+(50 oziroma 2 241 postankov po polnoči). Najdlje vozeča se konča ob **33:48**
+(avtobus) oziroma **26:23** (vlak) — torej slabih deset ur čez polnoč, in to
+je prag `journey.NOCNI_REP_S`.
+
+Rešeno z rekurzijo, ne z drugo poizvedbo: vse, kar sledi (meja meritve,
+združevanje dvojnikov, običajna zamuda), mora teči nad **pravim** prometnim
+dnevom, sicer bi bilo treba isti račun napisati dvakrat.
+
+Cena, izmerjena na tabli s 150 vrsticami: ob 00:30 avtobusi 17,5 → 35,0 ms,
+železnica 0,1 → 0,4 ms. **Podnevi nič** — ob 17:00 rekurzije ni (50,3 ms
+prej in potem). Poizvedba je ozka sama po sebi: pri `from_s` čez 86 400 se
+ujamejo samo postanki po polnoči.

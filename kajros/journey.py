@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import sqlite3
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
@@ -367,10 +367,17 @@ ORDER BY t_s
 """
 
 
+#: Kako dolgo v nov dan sega vceraj zacet promet. Izmerjeno 7. 9. 2026:
+#: najdlje vozeca vozjna se konca ob 33:48 (avtobus) oziroma 26:23 (vlak),
+#: torej slabih deset ur cez polnoc. Pred to uro mora tabla pogledati tudi
+#: vcerajsnji prometni dan -- sicer je ob 00:30 skrila vlak, ki pride ob 00:56.
+NOCNI_REP_S = 10 * 3600
+
+
 def board(conn: sqlite3.Connection, station: str, service_date: str,
           from_s: int, window_min: int = 180, kind: str = "odhodi",
           limit: int = 150, network: str | None = None,
-          now_s: int | None = None) -> list[dict]:
+          now_s: int | None = None, _vceraj: bool = True) -> list[dict]:
     """Odhodna (ali prihodna) tabla postaje.
 
     `kind`: "odhodi" izpusti končno postajo vožnje (tam se nič ne odpelje),
@@ -380,6 +387,12 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     `now_s` je trenutek, glede na katerega ločimo meritev od napovedi. Brez
     njega (drug dan) so vse vrednosti feeda enakovredne in tabla se opre na
     zgodovino.
+
+    Zgodaj zjutraj vključi tudi **včerajšnji prometni dan**: vožnja, ki je
+    odpeljala ob 23:50, ima postanke ob 24:21 in pripada včerajšnjemu dnevu.
+    Brez tega je tabla ob 00:30 skrila vlak, ki pride ob 00:56 -- torej
+    ravno takrat, ko je edini. `_vceraj` ustavi rekurzijo pri eni stopnji;
+    dva dneva nazaj ni treba, ker se nobena vožnja ne razteza čez 48 ur.
     """
     rows = conn.execute(_BOARD_SQL, {
         "station": station, "day": service_date, "network": network,
@@ -525,6 +538,20 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
                 d["typical_from"] = d["next_stop"]
         for k in ("next_delay_s", "next_stop", "next_seq"):
             d.pop(k, None)
+
+    # Vceraj zacet promet, ki se ni koncan. Rekurzija namesto druge poizvedbe:
+    # vse, kar sledi (meja meritve, zdruzevanje dvojnikov, obicajna zamuda),
+    # mora teci nad PRAVIM prometnim dnevom, sicer bi bilo treba isti racun
+    # napisati dvakrat. Poizvedba je ozka sama po sebi -- ob `from_s` cez
+    # 86400 se ujamejo samo postanki po polnoci, teh pa je 50 (vlak) in
+    # 2 241 (avtobus).
+    if _vceraj and from_s < NOCNI_REP_S:
+        prej = (date.fromisoformat(service_date) - timedelta(days=1)).isoformat()
+        vcerajsnje = board(conn, station, prej, from_s + 86400, window_min, kind,
+                           limit, network,
+                           None if now_s is None else now_s + 86400, _vceraj=False)
+        if vcerajsnje:
+            out = sorted(vcerajsnje + out, key=lambda d: d["sched"])[:limit]
     return out
 
 
