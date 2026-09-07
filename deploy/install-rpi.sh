@@ -118,6 +118,10 @@ if [ ! -f "$DATA/kajros.sqlite" ] && [ -f "$STARI_DATA/sz.sqlite" ]; then
     echo "==> selim zajem s starega imena ($STARI_DATA -> $DATA)"
     systemctl stop sztrack-zajem 2>/dev/null || true
     systemctl disable sztrack-zajem 2>/dev/null || true
+    # Tudi stari casovnik za kopije: po premiku baze bi kazal na datoteko, ki
+    # je ni, in bi vsako noc tiho padel. Enota, ki ne dela nicesar razen
+    # napake v dnevniku, je slabsa od nobene.
+    systemctl disable --now sztrack-backup.timer 2>/dev/null || true
     install -d -o kajros -g kajros "$DATA"
     for pripona in "" "-wal" "-shm"; do
         [ -f "$STARI_DATA/sz.sqlite$pripona" ] \
