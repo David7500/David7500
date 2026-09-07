@@ -286,6 +286,19 @@ trčita (ΔE 1,2), a to ni težava: **vozila loči oblika** — avtobus je puš�
 vlak krog — in oznaka poleg nosi ime prevoznika. Barva nikoli ne nosi pomena
 sama; to pravilo projekt že ima.
 
+**LPP ima dva `agency_id` in na zemljevidu eno vrstico.** `1118` so primestne
+linije iz IJPP, `lpp` mestne iz lastnega vira. Ključ `lpp` v `BUS_LAYERS` ni
+obstajal, zato so mestni avtobusi padli med „druge prevoznike" — **104 od 179
+živih vozil na produkciji** (7. 9. 2026), torej večina, za stikalom, ki je
+privzeto ugasnjeno in se imenuje, kot da prevoznika ne poznamo. Zdaj oba
+ključa peljeta skozi `agencyKey()` v isto plast, isti števec in isto barvo.
+
+Zakaj ena vrstica in ne dve: na postajališču piše oboje „LPP", številke se med
+viroma ne prekrivajo (mestne 1–27, primestne 40–84), zemljevid pa odgovarja na
+*„kje je moj avtobus"*. Statistika ju loči (`stats.AGENCY_NAMES`: „LPP mestni"
+/ „LPP primestni"), ker tam vprašanje ni isto — zamuda mestne linije in
+primestne sta dve različni stvari.
+
 **Peta vrstica „Drugi prevozniki" ni okras.** Če v zajem pride nov prevoznik,
 bi njegova vozila brez nje tiho izginila — plast brez stikala je plast, ki je
 ni. Vrstica se skrije, kadar je števec 0.

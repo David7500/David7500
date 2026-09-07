@@ -75,7 +75,15 @@ const BUS_LAYERS = {
   "1121": L.layerGroup(),   // AP Murska Sobota
 };
 const busLayerOther = L.layerGroup();          // prevoznik, ki ga se ne poznamo
-const busLayerOf = (v) => BUS_LAYERS[v && v.agency] || busLayerOther;
+
+// LPP je EN prevoznik z dvema viroma: `1118` so primestne linije iz IJPP,
+// `lpp` mestne iz lastnega feeda. Na postajaliscu pise oboje "LPP", zato
+// morata imeti eno plast, en stevec in eno barvo. Brez tega so mestni
+// avtobusi padli med "druge prevoznike" -- na produkciji 104 od 179 zivih
+// vozil (7. 9. 2026), torej vecina, in to za stikalom, ki je privzeto
+// ugasnjeno in se imenuje, kot da prevoznika ne poznamo.
+const agencyKey = (v) => (v && v.agency === "lpp" ? "1118" : v && v.agency);
+const busLayerOf = (v) => BUS_LAYERS[agencyKey(v)] || busLayerOther;
 
 const stationMarkers = new Map();   // ime postaje -> L.CircleMarker
 let stationsByName = new Map();     // ime postaje -> {stop_id, lat, lon}
@@ -374,7 +382,7 @@ const AGENCY_INK = {
   "1119": "#9d7ae0",   // Nomago
   "1121": "#c9a227",   // AP Murska Sobota
 };
-const busInk = (v) => AGENCY_INK[v && v.agency] || BUS_INK;
+const busInk = (v) => AGENCY_INK[agencyKey(v)] || BUS_INK;
 
 // Velikost sledi približevanju. Pri pogledu na vso Slovenijo je vozil do sto
 // in majhna oblika je edina, ki se ne slepi; ko kdo približa na eno ulico,
@@ -932,7 +940,8 @@ function onVehicles(list) {
   // sicer je prazna izbira, ki nicesar ne pojasni.
   const poAgenciji = { "1118": 0, "1123": 0, "1119": 0, "1121": 0, drugi: 0 };
   for (const v of liveBuses) {
-    if (poAgenciji[v.agency] !== undefined) poAgenciji[v.agency] += 1;
+    const k = agencyKey(v);
+    if (poAgenciji[k] !== undefined) poAgenciji[k] += 1;
     else poAgenciji.drugi += 1;
   }
   const stevec = { "n-lpp": "1118", "n-arriva": "1123",

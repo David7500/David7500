@@ -1016,3 +1016,23 @@ Ubeseditev je bila popravljena po prvem posnetku: „mestnih linij LPP ni" si
 je nasprotovalo z značkami **LPP 25** tik pod njim. Linija 25 je namreč v
 **obeh** virih — državni jo nosi kot primestno. Besedilo zato govori o
 **viru**, ne o kategoriji linij.
+
+## Večina živih avtobusov je bila skrita pod „drugi prevozniki" (7. 9. 2026)
+
+`/api/vehicles` na produkciji, 18:40:
+
+| `agency` | vozil | kam je padel na zemljevidu |
+|---|---|---|
+| `lpp` (mestni LPP) | **104** | „Drugi prevozniki" |
+| `1123` Arriva | 33 | svoja plast |
+| `1119` Nomago | 30 | svoja plast |
+| `1118` LPP primestni | 9 | plast „LPP" |
+| `1121` AP MS | 3 | svoja plast |
+
+Torej **58 % vseh živih vozil** je bilo za stikalom, ki je privzeto ugasnjeno
+in ne nosi imena prevoznika. Kdor je prižgal „LPP", je v Ljubljani videl devet
+avtobusov — vsi primestni, večina zunaj mesta. Podatek je bil ves čas v
+odgovoru; manjkal je le ključ `lpp` v `BUS_LAYERS`.
+
+Po popravku isti pogled (Ljubljana, z13): števec LPP **124**, vrstica „Drugi
+prevozniki" skrita, ker je števec 0.
