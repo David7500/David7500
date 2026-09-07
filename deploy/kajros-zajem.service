@@ -28,18 +28,18 @@ Environment=KAJROS_REFRESH_HOUR=4
 # Disk: dnevnik `obs` se obrezuje (železnica 90 dni, avtobusi 14) in se ustali
 # pri ~356 MB; `run` raste ~3,4 GB na leto. Na kartici je 20 GB prostega.
 Environment=KAJROS_AGENCIES=1118,1119,1121,1123
-# Mestni LPP je tu IZKLOPLJEN, čeprav je privzeto vklopljen.
+# Mestni LPP je VKLOPLJEN (privzeto tako ali tako je). Odločitev je Davidova,
+# 7. 9. 2026: na napravi, ki teče ves čas, naj bo zajeto vse.
 #
-# Ne zato, ker ne bi sodil v zajem -- sodi, in malina je edina naprava, ki teče
-# ves čas. Ampak ker cena na Pi Zero W **ni izmerjena**: uvoz doda 42 MB GTFS
-# in ~16 000 voženj z ~410 000 postanki, živi feed pa je 315 kB vsakih 30 s in
-# brez ETaga, torej vsakič cel prenos. Stroj, ki je pri SQLite ~100× počasnejši
-# od razvojnega računalnika, se lahko ob tem zaduši -- in če se zaduši zajem,
-# izgubimo tudi tisto, kar zdaj dela.
+# Kar je pri tem treba vedeti in meriti, ker izmerjeno **ni**: uvoz doda 42 MB
+# GTFS in ~16 000 voženj z ~410 000 postanki, živi feed pa je 315 kB vsakih
+# 30 s in brez ETaga, torej vsakič cel prenos. Pi Zero W je pri SQLite ~100×
+# počasnejši od razvojnega računalnika, zato je nočni uvoz ob 4:00 najbolj
+# tvegan trenutek dneva.
 #
-# Zato: najprej izmeri (čas uvoza, vrh RSS, ali obhod ostane pod 30 s), potem
-# prižgi. Do takrat mestni LPP zajema samo stroj s strežnikom.
-Environment=KAJROS_LPP=0
+# Če se pokaže, da stroj tega ne prenese -- obhod pade čez 30 s, uvoz ne konča,
+# RSS gre čez swap -- se izklopi z `Environment=KAJROS_LPP=0` in restartom.
+# Izgube ni: mestni LPP zajema tudi stroj s strežnikom.
 # Senčno merjenje napovedi je tu IZKLOPLJENO, čeprav je privzeto vklopljeno.
 #
 # `ocena.tick()` teče v isti zanki kot zajem, ne v svoji niti. Izmerjeno:
