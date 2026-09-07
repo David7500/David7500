@@ -1538,3 +1538,23 @@ def test_sumljiva_luknja_ne_prevlada_ene_prave_vrednosti():
             {"dep_s": 63900, "delay_dep": 1320, "feed_ts": 1200}]   # 18:07
     stats.oznaci_neskladne(rows)
     assert [bool(r.get("neskladno")) for r in rows] == [False, True, True, False, False]
+
+
+def test_tabla_ne_kaze_nemogoce_meritve(conn):
+    # IC 1 vozi A (08:00) -> Z (odhod 09:05) -> C (10:00). Za Zidani Most je
+    # v `run` ostala nepotrjena +80 min, torej odhod ob 10:25, za Celje pa
+    # izmerjenih +5 min, torej prihod ob 10:05. Vozilo bi moralo odpeljati iz
+    # Zidanega Mosta, PREDEN je prišlo v Celje -- ena od vrednosti ni meritev.
+    #
+    # Tabla vidi en sam postanek in celotne verige ne zmore (to dela
+    # `stats.oznaci_neskladne()`), zmore pa to primerjavo: raje pove zadnjo
+    # znano zamudo in od kod je, kot da bi trdila nemogoče.
+    for seq, d in ((2, 4800), (3, 300)):
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                     "delay_dep, feed_ts) VALUES('t1','2026-08-31',?,?,?,1)", (seq, d, d))
+    conn.commit()
+    row = next(r for r in journey.board(conn, "Zidani Most", "2026-08-31", 0, 1440,
+                                        now_s=40000) if r["train_no"] == "IC 1")
+    assert row["delay_kind"] == "izmerjeno"
+    assert row["delay_s"] == 300
+    assert row["delay_from"] == "Celje"

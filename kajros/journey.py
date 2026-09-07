@@ -393,8 +393,17 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             # Vozilo je tu ze bilo -- vrednost je meritev. Kadar je za TO
             # postajo nimamo (vlaki ne porocajo `stop_seq = 1`), vzamemo
             # zadnjo znano in povemo, od kod je.
-            d["delay_s"] = own if own is not None else lm["delay_s"]
-            d["delay_from"] = None if own is not None else lm["name"]
+            #
+            # Fizika je tretji primer: vozilo je moralo biti TU, preden je
+            # prislo do `lm`. Kadar vrednost trdi drugace, je ostanek, ki ga
+            # feed ni vec potrdil -- isti pojav, ki ga v oknu voznje lovi
+            # `stats.oznaci_neskladne()`, le da tabla vidi en sam postanek in
+            # zmore samo to primerjavo. Dopust 60 s, ker prikaz kaze minute.
+            nemogoce = (own is not None and lm["stop_seq"] > d["stop_seq"]
+                        and d["t_s"] + own > lm["t_s"] + lm["delay_s"] + 60)
+            uporabi = None if (own is None or nemogoce) else own
+            d["delay_s"] = uporabi if uporabi is not None else lm["delay_s"]
+            d["delay_from"] = None if uporabi is not None else lm["name"]
             d["delay_kind"] = "izmerjeno"
         elif lm:
             # Vozilo je se pred to postajo. Prenesemo njegovo trenutno zamudo

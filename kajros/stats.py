@@ -1243,7 +1243,7 @@ passed AS (
       -- v komentarju zato ne sme biti (podre vezavo poizvedbe).
       AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
-SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, st.name
+SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, p.t_s, st.name
 FROM passed p JOIN station st ON st.stop_id = p.stop_id
 WHERE p.rn = 1
 """
