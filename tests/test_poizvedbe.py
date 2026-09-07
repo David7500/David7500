@@ -1674,3 +1674,85 @@ def test_znano_do_loci_vire(conn):
     assert stats.znano_do(conn, agency="lpp") == "2026-09-15"
     # Brez omejitve je meja najdaljša od vseh.
     assert stats.znano_do(conn) == "2026-12-24"
+
+
+# ---------------------------------------------------------------- živi LPP
+
+def _lpp_voznja(conn):
+    """Mestna vožnja s štirimi postajami, kot jo pozna naša baza."""
+    conn.executemany(
+        "INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
+        [("L1", "Zalog", 46.0628, 14.6033),
+         ("L2", "Silos", 46.0640, 14.5900),
+         ("L3", "Polje", 46.0650, 14.5800),
+         ("L4", "Nove Fužine", 46.0660, 14.5700)])
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, "
+                 "                 agency, network, mode) "
+                 "VALUES('a|b|c','rl','11','ZALOG - VIŽMARJE','S1','lpp','avtobus','bus')")
+    _sched(conn, "a|b|c", [(1, "L1", None, 20000), (2, "L2", 20300, 20300),
+                           (3, "L3", 20600, 20600), (4, "L4", 20900, None)])
+    conn.commit()
+
+
+def _odgovor_lpp(vozilo="V1"):
+    """Odgovor `arrivals-on-route`, kakršnega vrne data.lpp.si."""
+    return [
+        {"name": "ZALOG", "latitude": 46.0628, "longitude": 14.6033,
+         "arrivals": [{"vehicle_id": vozilo, "eta_min": 1}]},
+        {"name": "Silos", "latitude": 46.0640, "longitude": 14.5900,
+         "arrivals": [{"vehicle_id": vozilo, "eta_min": 4},
+                      {"vehicle_id": "TUJ", "eta_min": 12}]},
+        {"name": "Polje", "latitude": 46.0650, "longitude": 14.5800,
+         "arrivals": [{"vehicle_id": "TUJ", "eta_min": 15}]},
+        {"name": "Nove Fužine", "latitude": 46.0660, "longitude": 14.5700,
+         "arrivals": [{"vehicle_id": vozilo, "eta_min": 9}]},
+    ]
+
+
+def test_zivi_lpp_spoji_postanke_po_koordinati(conn, monkeypatch):
+    """Postanki se spajajo po legi, ne po vrstnem redu.
+
+    Njihov `trip-id` je **vzorec proge**, ne vožnja (19 163 naših voženj ima
+    85 različnih tretjih komponent), zato je lahko daljši od naše vožnje --
+    in vrstni red bi takrat vse postanke tiho zamaknil.
+    """
+    from kajros import lpp
+    _lpp_voznja(conn)
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: _odgovor_lpp())
+    assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {1: 1, 2: 4, 4: 9}
+
+
+def test_zivi_lpp_prezre_tuje_vozilo(conn, monkeypatch):
+    """Postanek, kjer je napovedan samo TUJ avtobus, ne sme pripasti nam.
+
+    `arrivals-on-route` našteje prihode vseh vozil na vzorcu; brez izbire po
+    `vehicle_id` bi na zaslon prišla ura naslednjega avtobusa iste linije.
+    """
+    from kajros import lpp
+    _lpp_voznja(conn)
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: _odgovor_lpp())
+    izid = lpp.eta_po_postankih(conn, "a|b|c", "V1")
+    assert 3 not in izid
+
+
+def test_zivi_lpp_brez_vozila_molci(conn, monkeypatch):
+    """Brez sveže lege ne vemo, katero vozilo je naše -- takrat nič."""
+    from kajros import lpp
+    _lpp_voznja(conn)
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: _odgovor_lpp())
+    assert lpp.eta_po_postankih(conn, "a|b|c", None) is None
+
+
+def test_zivi_lpp_ob_izpadu_vira_molci(conn, monkeypatch):
+    """Vir je postranski: ko pade, stran še vedno stoji na derp.si."""
+    from kajros import lpp
+    _lpp_voznja(conn)
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: None)
+    assert lpp.eta_po_postankih(conn, "a|b|c", "V1") is None
+
+
+def test_zivi_lpp_vzorec_je_tretja_komponenta():
+    """Njihov `trip-id` je tretji del našega trojnega id-ja; drugod ga ni."""
+    from kajros import lpp
+    assert lpp._vzorec("a|b|c") == "c"
+    assert lpp._vzorec("navaden_id") is None

@@ -100,6 +100,7 @@ kajros/
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
+  lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   server.py      lifespan: bootstrap + zajem v ozadnji niti

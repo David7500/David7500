@@ -663,6 +663,14 @@ function jeNeskladen(s) {
   return !!(s.zamuda && s.zamuda.vrsta === "neskladno");
 }
 
+// Ziva napoved mestnega LPP (`data.lpp.si`). To NI nasa ocena in ni meritev:
+// je prevoznikova napoved, izracunana iz lege vozila -- ista vrsta stevilke,
+// kot jo nosi derp.si, le da se osvezi na 10-30 s namesto na ~90 s.
+// Odlocitev je strezenikova (`api._lpp_zivo`), tu jo samo preberemo.
+function zivaNapoved(s) {
+  return s && s.zamuda && s.zamuda.vrsta === "živo" ? s.zamuda : null;
+}
+
 function gapStopHtml(s) {
   const sched = hhmm(s.sched_dep || s.sched_arr);
   // "Brez meritve" in "podatek si nasprotuje" nista isto: prvo pomeni, da ni
@@ -701,15 +709,21 @@ function forecastStopHtml(s, f, w) {
   // voznje povsod "?" in "brez ocene", medtem ko je iskalnik za ISTO voznjo
   // pisal "obicajno 0 min, 16 voznj". Ni napoved za ta dan; je opis preteklih
   // voznj in zeton to pove z besedo "obicajno", ne "ocena".
-  const t = !f && s.typical ? s.typical : null;
-  const d = f ? f.predicted_delay_s : t ? t.median_s : null;
+  // Ziva prevoznikova napoved ima prednost pred nasim modelom -- ne zato, ker
+  // bi bila nacelno boljsa, ampak ker je pri mestnem LPP nasa zgodovina
+  // zgrajena iz NAPOVEDI: feed poslje samo postanke pred vozilom, zato v
+  // `run` meritve nikoli ni. Ziva stevilka pride iz lege vozila ta hip.
+  const zivo = zivaNapoved(s);
+  const t = !zivo && !f && s.typical ? s.typical : null;
+  const d = zivo ? zivo.s : f ? f.predicted_delay_s : t ? t.median_s : null;
   const color = delayColor(d);
   const eta = d != null && schedIso ? hhmm(new Date(new Date(schedIso).getTime() + d * 1000)) : "—";
   const schedHtml = eta !== sched ? `<span class="stop-sched">${sched}</span>` : "";
   // Kadar prevoznik napove VEC od nase ocene, je njegova stevilka merjeno
   // skoraj tocna (MAE 0,21 min proti nasim 2,66) -- takrat ve za nekaj, cesar
   // iz zgodovine ni mogoce vedeti. Povejmo, da stevilka pride od njega.
-  const tag = !f ? (t ? "običajno" : "brez ocene")
+  const tag = zivo ? (s.eta_min != null ? `LPP v živo · čez ${s.eta_min} min` : "LPP v živo")
+    : !f ? (t ? "običajno" : "brez ocene")
     : f.from_operator ? "prevoznik napoveduje več"
     : f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}`
     : "ocena · le prenos zamude";
@@ -719,7 +733,7 @@ function forecastStopHtml(s, f, w) {
   // za radovednega, ne za potnika, zato v preprostem pogledu odpade.
   // Ostanejo zetoni, ki povedo nekaj DRUGEGA: da napoveduje prevoznik, da
   // ocene ni ali da za njo ni zgodovine.
-  const rutinska = !!f && !f.from_operator && f.n_samples > 0;
+  const rutinska = !zivo && !!f && !f.from_operator && f.n_samples > 0;
   const feedSaid = stopDelay(s);
   return `
     <div class="stop-row is-forecast">
@@ -728,10 +742,11 @@ function forecastStopHtml(s, f, w) {
         <div class="stop-name">${escapeHtml(s.name)}</div>
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span></div>
         ${dwellPlanHtml(s)}
-        ${feedSaid != null && !(f && f.from_operator)
+        ${feedSaid != null && !zivo && !(f && f.from_operator)
           ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`
           : ""}
         ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.own_delay_s)} min</span></div>` : ""}
+        ${zivo && f ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.predicted_delay_s)} min</span></div>` : ""}
         ${t ? `<div class="stop-times adv-only"><span class="stop-tag">mediana ${pluralRuns(t.n)}${
           t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}
       </div>

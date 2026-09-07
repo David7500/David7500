@@ -1,6 +1,7 @@
 ---
 paths:
   - "kajros/api.py"
+  - "kajros/lpp.py"
 ---
 
 # Kaj sme in česa ne sme API
@@ -231,3 +232,30 @@ Odjemalec, ki bere `delay_s` in sklepa sam, je zato **star način**. V
 `common.js` funkcije `delayLabel()`, `delayColor()`, `delayText()` in
 `isEarly()` sprejmejo oboje — objekt ali gole sekunde — a sekunde so rezerva
 za mesta, ki objekta še nimajo. **Nov odjemalec naj bere samo objekt.**
+
+## Živi prihodi mestnega LPP (`lpp.py`)
+
+Drug vir za **isti** promet: `data.lpp.si` se spremeni na 10–30 s, derp.si na
+~90 s. Uporablja se **samo za prikaz** in samo za postanke **za mejo meritve**
+— v bazo ne gre nič, sicer bi `backtest` in `ocena` merila dve merili hkrati
+in tega ne vedela.
+
+Štiri stvari, brez katerih ta spoj tiho laže; vse so izmerjene:
+
+* **Njihov `trip_id` je vzorec proge, ne vožnja.** 19 163 naših voženj LPP ima
+  85 različnih tretjih komponent id-ja, najpogostejša 993-krat. `arrivals-on-route`
+  zato vrne prihode **vseh** vozil na tem vzorcu.
+* **Pravo vozilo izbere `vehicle_id`.** Isti prostor id-jev v obeh virih.
+* **Lega mora biti sveža** (`collector.POSITION_FRESH_S`). `vehicle_now` hrani
+  vrstico do ure po koncu vožnje in stara vrstica bi vezala vozilo na končano
+  vožnjo — takrat eta pripada naslednjemu obhodu vzorca. Ujeto pri preizkusu:
+  meja postanek 37, eta za postanek 1.
+* **Postanki se spajajo po koordinati, ne po vrstnem redu.** Postajališča so
+  ista do 0,0 m (704 od 714 pod 5 m), vzorec pa je lahko daljši od vožnje.
+
+Ob 22:15 je bilo od 25 svežih mestnih vozil **19 takih z uporabno napovedjo
+naprej**, meje pa so se ujemale (meja 9 → eta 10–27, meja 16 → eta 17–21) —
+to je najmočnejši dokaz, da je spoj pravi: dva vira neodvisno povesta isto
+lego vozila.
+
+Izklop: `KAJROS_LPP_ZIVO=0`.

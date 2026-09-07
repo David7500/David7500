@@ -66,6 +66,15 @@ LPP_RT_URL = okolje("LPP_RT_URL", "https://rt.gtfs.derp.si/sources/lpp/all")
 # postankov, kar je primerljivo z IJPP.
 LPP_DAYS = int(okolje("LPP_DAYS", "8"))
 
+# **Živi prihodi iz LPP-jevega lastnega API-ja, samo za prikaz.**
+# derp.si naredi nov posnetek na ~90 s, `data.lpp.si` pa se spremeni na
+# 10-30 s (izmerjeno 7. 9. 2026). Cena je zaokroževanje na celo minuto, zato
+# ta vir NE gre v bazo in ne nadomesti meritve -- popravi samo napoved za
+# postanke naprej, na strani, ki jo potnik ta hip gleda.
+# Licenca `data.lpp.si` ni navedena; ko bo znana, sme ta zastavica pasti.
+# Izklopi se s `KAJROS_LPP_ZIVO=0`.
+LPP_ZIVO = okolje("LPP_ZIVO", "1") != "0"
+
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in
 # na relacijah, kjer vlak ne vozi (Ljubljana - Logatec, Divača - Koper), so

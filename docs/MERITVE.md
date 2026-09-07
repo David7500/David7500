@@ -1106,3 +1106,26 @@ neujeti so primestne linije (56, 3G, 25), ki pridejo iz IJPP z drugimi id-ji.
 Za zajem cele mreže to ni uporabno (ena zahteva na vožnjo, ~276 živih), za
 **odprto stran ene vožnje** pa je: en klic, 25 kB, vse postanke naenkrat.
 Licenca `data.lpp.si` ostaja nenavedena — to je pogoj, ne podrobnost.
+
+## Spoj z `data.lpp.si`: kaj se je izkazalo za resnično (7. 9. 2026)
+
+| trditev | izmerjeno |
+|---|---|
+| njihov `trip_id` je **vzorec proge**, ne vožnja | 19 163 voženj LPP → **85** različnih tretjih komponent, najpogostejša 993× |
+| `vehicle_id` je isti v obeh virih | naš `vehicle_now.vehicle_id` najden v njihovem odgovoru pri 4 od 8 (manjkajoči so vozila brez preostalih prihodov) |
+| postajališča so ista | 704 od 714 se ujema **pod 5 m**, mediana razdalje **0,0 m**; imena enaka pri 711 |
+| vrstni red postankov se ujema | ena vožnja linije 11: **39 od 39**, razdalja 0,0 m |
+| koliko voženj sploh dobi svežo napoved | **19 od 25** svežih mestnih vozil ob 22:15 |
+
+Najmočnejši dokaz, da spoj ni naključen: **meje se ujemajo**. Kjer naša
+`stats.last_measured()` reče, da je vozilo pri postanku 9, njihova eta pokriva
+postanke 10–27; pri meji 16 pokriva 17–21. Dva vira, ki se nista videla, se
+strinjata o legi vozila.
+
+Prva različica primerjave je pokazala razlike +20 in +14,6 min pri dveh
+vožnjah — to je bila **moja napaka, ne vira**: vzel sem prvi prihod na
+postajališču, ta pa pripada naslednjemu avtobusu iste linije. Z izbiro po
+`vehicle_id` te razlike ni.
+
+Kar s tem virom **ni** rešeno: starost lege. Koordinat vozil v odprtem delu
+API-ja ni, zato ostaja 57–147 s iz prejšnjega razdelka.

@@ -242,3 +242,18 @@ Zato dvoje:
 
 Isto pravilo kot povsod: številka mora pomeniti tisto, kar bralec misli, da
 pomeni.
+
+## „v živo" je tretja vrsta številke, poleg meritve in ocene
+
+Mestni LPP ima od 7. 9. 2026 na oknu vožnje **prevoznikovo živo napoved**
+(`zamuda.vrsta === "živo"`, iz `data.lpp.si`, osvežena na 10–30 s). Piše se
+kot `LPP v živo · čez N min` in ima prednost pred našo oceno — ne zato, ker bi
+bila načelno boljša, ampak ker je pri mestnem LPP **naša zgodovina zgrajena iz
+napovedi**: feed pošlje samo postanke pred vozilom, zato v `run` meritve nikoli
+ni. Naša ocena ostane vidna v naprednem pogledu, da se dá primerjati.
+
+Meritve ta številka **ne prepiše nikoli** — pogoj je `stop_seq > meja`.
+
+Ob tem je bila popravljena navedba vira: pod mestnim LPP je pisalo „IJPP prek
+NAP", česar tam ni. Zdaj `viriHtml()` pove „LPP (avl.lpp.si), obdelava DERP"
+in doda „živi prihodi data.lpp.si", kadar so res uporabljeni.

@@ -24,7 +24,7 @@ from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerts, collector, config, db, journey, stats
+from . import alerts, collector, config, db, journey, lpp, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -851,6 +851,51 @@ def api_train(train_no: str, trip: str | None = None):
                 "mode": stats.trip_mode(conn, train_no), "timetable": rows}
 
 
+def _lpp_zivo(conn, trip_id: str | None, rows: list[dict], service_date: str,
+              meja_seq: int | None, zdaj: datetime) -> str | None:
+    """Napoved za postanke NAPREJ zamenjaj s svežejšo, kadar jo LPP ponuja.
+
+    Zakaj sploh: derp.si naredi nov posnetek na ~90 s, `data.lpp.si` na
+    10-30 s (izmerjeno 7. 9. 2026). Za mestni LPP je vse za mejo tako ali tako
+    napoved -- feed pošlje samo postanke pred vozilom -- zato tu ne prepišemo
+    nobene meritve, le napoved z novejšo napovedjo.
+
+    Meritve se **nikoli** ne dotakne: pogoj je `stop_seq > meja_seq`. Vrne ime
+    vira, kadar je kaj prepisal, sicer `None` -- prikaz mora povedati, čigava
+    številka je na zaslonu.
+    """
+    if not trip_id or service_date != zdaj.date().isoformat():
+        return None
+    # Lega mora biti SVEZA. `vehicle_now` hrani vrstico do ure po koncu voznje,
+    # in stara vrstica bi vozilo vezala na voznjo, ki je ze koncana -- takrat
+    # eta pripada NASLEDNJEMU obhodu istega vzorca in bi na zaslon prinesla
+    # ure z druge voznje. Ujeto pri preizkusu: meja postanek 37, eta za
+    # postanek 1.
+    v = conn.execute(
+        "SELECT vehicle_id FROM vehicle_now WHERE trip_id = ? AND seen_ts >= ?",
+        (trip_id, int(zdaj.timestamp()) - collector.POSITION_FRESH_S)).fetchone()
+    if not v or not v["vehicle_id"]:
+        return None
+    eta = lpp.eta_po_postankih(conn, trip_id, v["vehicle_id"])
+    if not eta:
+        return None
+    now = int(zdaj.timestamp())
+    prepisanih = 0
+    for s in rows:
+        m = eta.get(s["stop_seq"])
+        if m is None or (meja_seq is not None and s["stop_seq"] <= meja_seq):
+            continue
+        vozni_red = s["sched_arr"] or s["sched_dep"]
+        if not vozni_red:
+            continue
+        napovedan = now + m * 60
+        zamuda = napovedan - int(datetime.fromisoformat(vozni_red).timestamp())
+        s["zamuda"] = stats.opis_zamude(zamuda, "živo")
+        s["eta_min"] = m
+        prepisanih += 1
+    return "LPP" if prepisanih else None
+
+
 @app.get("/api/train/{train_no}/run")
 def api_run(train_no: str, date: str | None = None,
             trip: str | None = Query(None, description="id vožnje, kadar številka ni enolična")):
@@ -916,9 +961,10 @@ def api_run(train_no: str, date: str | None = None,
             for s in rows:
                 s["typical"] = typ.get((razresen, s["stop_seq"]))
             stats.typical_na_izhodisce(rows)
+        zivo = _lpp_zivo(conn, razresen, rows, date, meja_seq, zdaj)
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "last_measured_seq": meja_seq,
-                "stops": rows}
+                "zivi_vir": zivo, "stops": rows}
 
 
 @app.get("/api/train/{train_no}/history")

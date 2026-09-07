@@ -293,11 +293,21 @@ function yourStopHtml(stops, forecast, current) {
   // meritev, in prav ta postanek je edini, ki ga potnik dejansko prebere.
   let znak = "ocena";
   let odkod = "";
+  const zivo = passed ? null : zivaNapoved(s);
   if (passed) {
     d = stopDelay(s);
     kdaj = stopActualIso(s);
     znak = "izmerjeno";
     odkod = `${vehicleNoun()} je tu že bil`;
+  } else if (zivo) {
+    // Prevoznikova ziva napoved iz lege vozila. Pri mestnem LPP je to edina
+    // stevilka, ki ne stoji na napovedi o napovedi -- glej `zivaNapoved()`.
+    d = zivo.s;
+    kdaj = schedIso && d != null
+      ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
+    znak = "v živo";
+    odkod = s.eta_min != null
+      ? `LPP pravi čez ${s.eta_min} min` : "LPP, iz lege vozila";
   } else if (f) {
     d = f.predicted_delay_s;
     kdaj = schedIso && d != null
@@ -742,6 +752,18 @@ function renderRunHead() {
 function renderTimeline() {
   const run = state.run;
   if (!run) return;
+// Navedba vira mora povedati, CIGAV podatek je na zaslonu -- doslej je pisalo
+// "IJPP prek NAP" tudi pod mestnim LPP, ki v IJPP-ju sploh ni. Vozni red
+// mestnih linij je LPP-jev lastni GTFS, zivi prihodi pa pridejo z
+// `data.lpp.si` in takrat mora biti to zapisano, ne skrito za DERP.
+function viriHtml(run) {
+  if (run.agency !== "lpp") {
+    return "IJPP prek NAP (CC BY-SA 4.0), obdelava DERP";
+  }
+  const zivo = run.zivi_vir ? ", živi prihodi data.lpp.si" : "";
+  return `LPP (avl.lpp.si), obdelava DERP${zivo}`;
+}
+
   const yours = yourStop(run.stops);
   runTimelineEl.innerHTML =
     runTimelineHtml(run.stops, state.forecast, state.weather, {
@@ -753,7 +775,7 @@ function renderTimeline() {
     // Vira sta navedena tu in ne v opombi nad casovnico: navedba je pogoj
     // rabe (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
     `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj
-      · IJPP prek NAP (CC BY-SA 4.0), obdelava DERP · vreme Open-Meteo (CC BY 4.0)</div>`;
+      · ${viriHtml(run)} · vreme Open-Meteo (CC BY 4.0)</div>`;
 }
 
 // ---------- zgodovina: stevilke ----------
