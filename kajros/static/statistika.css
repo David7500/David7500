@@ -55,10 +55,17 @@
 /* ---------- vrstice ---------- */
 
 .stat-vrstice { display: grid; gap: 3px; }
+/* Širina stolpca z imenom je spremenljivka, ker imena niso enako dolga:
+   ure so „07:00", dnevi „ponedeljek", prevozniki pa „AP Murska Sobota" in
+   „LPP primestni". Doslej je bila fiksna in je rezala — na zaslonu je pisalo
+   „LPP prim…", kar je za statistiko, ki loči mestni od primestnega, ravno
+   tista beseda, ki manjka. */
+.stat-vrstice { --oznaka: 4.6em; }
+.stat-vrstice.dolge-oznake { --oznaka: 8.4em; }
 
 .stat-vrsta {
   display: grid;
-  grid-template-columns: 4.6em 1fr auto auto;
+  grid-template-columns: var(--oznaka, 4.6em) 1fr auto auto;
   align-items: center;
   gap: 10px;
   padding: 3px 0;
@@ -142,7 +149,9 @@
    je "širina dragocenejša" -- a telefon je glavna naprava in prav tam bi
    "sreda je najhujša" ostala brez vzorca. Namesto tega se skrči ime. */
 @media (max-width: 430px) {
-  .stat-vrsta { grid-template-columns: 3.9em 1fr auto auto; gap: 7px; }
+  .stat-vrstice { --oznaka: 3.9em; }
+  .stat-vrstice.dolge-oznake { --oznaka: 7.6em; }
+  .stat-vrsta { grid-template-columns: var(--oznaka, 3.9em) 1fr auto auto; gap: 7px; }
   .stat-vrednost { min-width: 3.8em; font-size: 11.5px; }
   .stat-n { min-width: 2.8em; font-size: 10.5px; }
 }

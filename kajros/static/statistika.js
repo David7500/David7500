@@ -219,6 +219,8 @@ async function zacni() {
 
     opozoriloDnevi(d);
     narisi(el("dnevi"), d.by_weekday, (k) => k);
+    // Imena prevoznikov so daljša od ur in dni — „LPP primestni".
+    el("vrste").classList.toggle("dolge-oznake", IS_BUS);
     narisi(el("vrste"), d.by_kind, (k) => k);
     narisi(el("dan-za-dnem"), d.by_day, (k) => k.slice(5).replace("-", ". ") + ".");
     lestvica();

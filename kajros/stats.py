@@ -600,12 +600,20 @@ def _group_stats(groups: dict[str, list[int]], min_n: int) -> list[dict]:
 
 # GTFS `agency_id` -> ime, kot ga clovek pozna. Surova stevilka v prikazu
 # ("avtobus 1118") ne pove nikomur nicesar.
+# Imena prevoznikov za STATISTIKO. Na zetonu linije pise samo "LPP" -- to je
+# tisto, kar je napisano na avtobusu -- tu pa morata biti loceno.
+#
+# **Mestni in primestni LPP nista ista storitev in ju ni dovoljeno sesteti.**
+# Izmerjeno 7. 9. 2026 na istem dnevu: mestni ima mediano zamude 0 min in
+# p90 3 min, primestni 3 in 11 min. Skupna vrstica "LPP" je opisovala nobenega
+# od njiju -- prav to je oblika napake, ki jo ta projekt lovi: ena beseda,
+# dve stevilki.
 AGENCY_NAMES = {
-    "1161": "SŽ", "1118": "LPP", "1123": "Arriva",
+    "1161": "SŽ", "1123": "Arriva",
     "1119": "Nomago", "1121": "AP Murska Sobota",
-    # Mestni LPP pride iz LPP-jevega lastnega GTFS, kjer je `agency_id` niz
-    # `lpp` in ne stevilka. Ista crka na zaslonu, drug vir -- glej `config`.
-    "lpp": "LPP",
+    "1118": "LPP primestni",
+    # Drug vir, besedni `agency_id` -- glej `config.LPP_*`.
+    "lpp": "LPP mestni",
 }
 
 
