@@ -20,11 +20,24 @@ def cmd_update(args):
     conn = db.connect()
     db.init(conn)
     path = gtfs.download(conn, force=args.force)
+    # Mestni LPP je drug zip in se prenese, tudi ce je IJPP nespremenjen: to
+    # sta razlicna vira in vsak se osvezuje po svoje.
+    lpp = gtfs.download_lpp(conn, force=args.force) if config.LPP_ENABLED else None
+    if config.LPP_ENABLED and lpp is None:
+        lpp = config.DATA_DIR / "lpp_gtfs.zip"
+        if not lpp.exists():
+            lpp = None
     if path is None:
-        print("vozni red nespremenjen (HTTP 304) -- uvoz preskocen")
-        return
+        if lpp is None:
+            print("vozni red nespremenjen (HTTP 304) -- uvoz preskocen")
+            return
+        # LPP se je spremenil, IJPP ne -- uvoziti je treba oba, ker uvoz
+        # staticne tabele zamenja v celoti.
+        path = config.DATA_DIR / "ijpp_gtfs.zip"
+        if not path.exists():
+            path = gtfs.download(conn, force=True)
     print(f"prenesen {path} ({path.stat().st_size / 1e6:.1f} MB), uvazam ...")
-    print(json.dumps(gtfs.import_static(conn, path), indent=2))
+    print(json.dumps(gtfs.import_static(conn, path, lpp_zip=lpp), indent=2))
 
 
 def cmd_poll(args):

@@ -41,6 +41,27 @@ SERVICE_ALERTS_URL = okolje("SERVICE_ALERTS_URL", "https://rt.gtfs.derp.si/sourc
 VEHICLE_POSITIONS_URL = okolje("VEHICLE_POSITIONS_URL", "https://rt.gtfs.derp.si/sources/ijpp/vehicle_positions"
 )
 
+# --- mestni LPP: drug vir, ker ga v IJPP ni ---------------------------------
+#
+# Mestnih linij LPP (1, 2, 3, 6, 11, 14, 20, 22, nočne) **v IJPP ni** — ta
+# nosi le primestne (40–84). Izmerjeno naravnost v zipu: 134 LPP prog, vse
+# primestne. Mestni promet je občinska storitev in v državni feed ne gre.
+#
+# Uradni vir je LPP-jev lastni GTFS, živi del pa **isti derp.si**, s katerega
+# jemljemo IJPP — le drug vir. Oboje odprto, brez ključa; vir potrjen iz
+# konfiguracije projekta transitous (`feeds/si.json`, vnos `name: lpp`).
+#
+# Vklopi se z `KAJROS_LPP=1`. Privzeto izklopljeno, ker podvoji vozni red.
+LPP_ENABLED = okolje("LPP", "0") != "0"
+LPP_GTFS_URL = okolje("LPP_GTFS_URL", "https://avl.lpp.si/transit/api/gtfs")
+# En sam feed za vse troje: zamude, lege in obvestila.
+LPP_RT_URL = okolje("LPP_RT_URL", "https://rt.gtfs.derp.si/sources/lpp/all")
+# **Uvozimo samo okno dni, ne celega feeda.** LPP ima svojo vožnjo za VSAK
+# dan posebej: 62 989 voženj in 1,6 milijona postankov za 31 dni vnaprej,
+# torej trikrat več od vsega IJPP. Osem dni je ~16 000 voženj in ~410 000
+# postankov, kar je primerljivo z IJPP.
+LPP_DAYS = int(okolje("LPP_DAYS", "8"))
+
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in
 # na relacijah, kjer vlak ne vozi (Ljubljana - Logatec, Divača - Koper), so

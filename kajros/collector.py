@@ -459,6 +459,31 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     return ingest(conn, feed)
 
 
+def poll_lpp(conn: sqlite3.Connection) -> dict:
+    """Mestni LPP: **en feed za vse troje** -- zamude, lege in obvestila.
+
+    Zakaj poseben klic in ne le se en URL v `poll_once()`: IJPP ima tri
+    locene vire, LPP enega samega (`sources/lpp/all`), zato ga preberemo
+    enkrat in razdelimo tu.
+
+    **`delay` je v tem feedu vedno 0** in ga ne smemo brati. Izmerjeno dvakrat
+    (nedelja 22:00 in ponedeljkova konica 07:11, skupaj cez 5 000 postankov):
+    nobena zamuda ni bila nenicelna, `trip_update.delay` pa ni izpolnjen nikjer.
+    Zamuda je v ABSOLUTNIH napovedanih casih (1 882 od 4 517 postankov), kar
+    `_delay_of()` ze pokriva -- ta bere `.time` in odsteje vozni red.
+    """
+    if not config.LPP_ENABLED:
+        return {"trips": 0, "vehicles": 0, "unchanged": True}
+    feed = fetch(config.LPP_RT_URL, conn, "lpp_rt_etag")
+    db.set_meta(conn, "lpp_rt_fetched", str(int(time.time())))
+    if feed is None:
+        conn.commit()
+        return {"trips": 0, "vehicles": 0, "unchanged": True}
+    izid = ingest(conn, feed)
+    lege = ingest_positions(conn, feed)
+    return {**izid, "vehicles": lege.get("vehicles", 0)}
+
+
 def run_forever(conn: sqlite3.Connection, interval: int | None = None) -> None:
     interval = interval or config.POLL_SECONDS
     while True:

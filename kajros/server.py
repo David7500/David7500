@@ -121,10 +121,13 @@ def bootstrap() -> None:
 
     _log("voznega reda ni -- prenašam GTFS")
     path = gtfs.download(conn, force=True)
+    lpp = gtfs.download_lpp(conn, force=True) if config.LPP_ENABLED else None
     if path:
         _log(f"uvažam {path.stat().st_size / 1e6:.0f} MB ...")
-        _log(f"uvoženo: {gtfs.import_static(conn, path)}")
+        _log(f"uvoženo: {gtfs.import_static(conn, path, lpp_zip=lpp)}")
         path.unlink(missing_ok=True)      # 41 MB ne rabimo obdržati
+        if lpp:
+            lpp.unlink(missing_ok=True)
 
 
 def refresh_timetable(conn, mode: str) -> None:
@@ -148,11 +151,21 @@ def refresh_timetable(conn, mode: str) -> None:
         return
 
     path = gtfs.download(conn)
-    if path is None:
+    lpp = gtfs.download_lpp(conn) if config.LPP_ENABLED else None
+    if path is None and lpp is None:
         _log("vozni red nespremenjen")
         return
-    _log(f"nov vozni red: {gtfs.import_static(conn, path)}")
+    if path is None:
+        path = config.DATA_DIR / "ijpp_gtfs.zip"
+        if not path.exists():
+            path = gtfs.download(conn, force=True)
+    if lpp is None and config.LPP_ENABLED:
+        kandidat = config.DATA_DIR / "lpp_gtfs.zip"
+        lpp = kandidat if kandidat.exists() else None
+    _log(f"nov vozni red: {gtfs.import_static(conn, path, lpp_zip=lpp)}")
     path.unlink(missing_ok=True)
+    if lpp:
+        lpp.unlink(missing_ok=True)
 
 
 def _next_at(hour: int, minute: int) -> datetime:
@@ -201,6 +214,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Zanka zato tikne na krajsem od obeh, vsako opravilo pa ima svoj cas.
     next_trips = 0.0
     next_positions = 0.0 if track_vehicles else float("inf")
+    next_lpp = 0.0 if config.LPP_ENABLED else float("inf")
     # Prvi obhod sele cez minuto: ob zagonu je `run` se prazen (bootstrap tece
     # vzporedno) in posnetek bi bil posnetek nicesar.
     next_ocena = (time.monotonic() + 60) if meri_napovedi else float("inf")
@@ -235,6 +249,18 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 collector.poll_positions(conn)
             except Exception as exc:      # lega ni kriticna za zajem zamud
                 _log(f"lege vozil ni bilo mogoče pobrati: {exc}")
+
+        # Mestni LPP je drug vir in en sam feed za zamude, lege in obvestila.
+        # Hodi po ritmu zamud, ne leg: zamuda je tisto, kar merimo.
+        if config.LPP_ENABLED and started >= next_lpp:
+            next_lpp = started + interval
+            try:
+                info = collector.poll_lpp(conn)
+                if info.get("changed"):
+                    _log(f"LPP: {info['trips']} voženj, {info['changed']} sprememb, "
+                         f"{info.get('vehicles', 0)} leg")
+            except Exception as exc:
+                _log(f"zajem LPP ni uspel: {exc}")
 
         if started >= next_ocena:
             next_ocena = started + config.OCENA_SECONDS
@@ -319,7 +345,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         # lege so se brale v razmikih 19, 11, 19, 11 s namesto 10.
         # Dnevna opravila (vozni red, vreme, vzdrzevanje) so v tem ritmu
         # preverjena tako ali tako veckrat na minuto.
-        cakaj = min(next_trips, next_positions, next_alerts,
+        cakaj = min(next_trips, next_positions, next_alerts, next_lpp,
                     next_ocena, next_health) - time.monotonic()
         _stop.wait(max(0.5, min(cakaj, interval)))
 

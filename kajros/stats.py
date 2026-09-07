@@ -603,6 +603,9 @@ def _group_stats(groups: dict[str, list[int]], min_n: int) -> list[dict]:
 AGENCY_NAMES = {
     "1161": "SŽ", "1118": "LPP", "1123": "Arriva",
     "1119": "Nomago", "1121": "AP Murska Sobota",
+    # Mestni LPP pride iz LPP-jevega lastnega GTFS, kjer je `agency_id` niz
+    # `lpp` in ne stevilka. Ista crka na zaslonu, drug vir -- glej `config`.
+    "lpp": "LPP",
 }
 
 

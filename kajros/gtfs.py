@@ -8,7 +8,7 @@ import sqlite3
 import statistics
 import zipfile
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -59,6 +59,106 @@ def download(conn: sqlite3.Connection, force: bool = False) -> Path | None:
         db.set_meta(conn, "gtfs_last_modified", resp.headers["Last-Modified"])
     conn.commit()
     return target
+
+
+def download_lpp(conn: sqlite3.Connection, force: bool = False) -> Path | None:
+    """Prenese LPP-jev lastni GTFS. Isto kot `download()`, drug vir in ključi.
+
+    Zakaj sploh drug zip: mestnih linij LPP v IJPP ni (glej `config`).
+    """
+    target = config.DATA_DIR / "lpp_gtfs.zip"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    headers = {"User-Agent": config.USER_AGENT}
+    if not force and target.exists():
+        etag = db.get_meta(conn, "lpp_etag")
+        modified = db.get_meta(conn, "lpp_last_modified")
+        if etag:
+            headers["If-None-Match"] = etag
+        if modified:
+            headers["If-Modified-Since"] = modified
+
+    resp = requests.get(config.LPP_GTFS_URL, headers=headers, timeout=300, stream=True)
+    if resp.status_code == 304:
+        return None
+    resp.raise_for_status()
+
+    tmp = target.with_suffix(".tmp")
+    with open(tmp, "wb") as fh:
+        for chunk in resp.iter_content(1 << 20):
+            fh.write(chunk)
+    tmp.replace(target)
+
+    if resp.headers.get("ETag"):
+        db.set_meta(conn, "lpp_etag", resp.headers["ETag"])
+    if resp.headers.get("Last-Modified"):
+        db.set_meta(conn, "lpp_last_modified", resp.headers["Last-Modified"])
+    conn.commit()
+    return target
+
+
+def beri_lpp(zip_path: Path, dni: int, danes: str | None = None) -> dict:
+    """Prebere LPP zip in vrne le okno `dni` dni od danes.
+
+    **Okno je nujno, ne varčnost.** LPP nima voznih vzorcev kot IJPP, ampak
+    svojo vožnjo za vsak datum: 62 989 voženj in 1,6 milijona postankov za en
+    mesec. Ves feed bi vozni red početveril; osem dni je primerljivo z IJPP.
+    """
+    danes = danes or datetime.now(TZ).date().isoformat()
+    konec = (date.fromisoformat(danes) + timedelta(days=dni)).isoformat()
+
+    with zipfile.ZipFile(zip_path) as zf:
+        # Najprej datumi: samo `calendar_dates.txt`, ker `calendar.txt` v tem
+        # feedu ni. Vsak `service_id` je en dan.
+        dnevi: dict[str, set[str]] = defaultdict(set)
+        for r in _rows(zf, "calendar_dates.txt"):
+            if r["exception_type"] != "1":
+                continue
+            d = datetime.strptime(r["date"], "%Y%m%d").date().isoformat()
+            if danes <= d <= konec:
+                dnevi[r["service_id"]].add(d)
+        if not dnevi:
+            return {"stops": {}, "trips": {}, "routes": {}, "sched": [],
+                    "days": {}, "shapes": {}}
+
+        routes = {r["route_id"]: r for r in _rows(zf, "routes.txt")}
+        trips = {tr["trip_id"]: tr for tr in _rows(zf, "trips.txt")
+                 if tr["service_id"] in dnevi}
+
+        seq_by_trip: dict[str, list[tuple[int, str]]] = defaultdict(list)
+        sched_rows = []
+        for st in _rows(zf, "stop_times.txt"):
+            if st["trip_id"] not in trips:
+                continue
+            n = int(st["stop_sequence"])
+            seq_by_trip[st["trip_id"]].append((n, st["stop_id"]))
+            sched_rows.append((st["trip_id"], n, st["stop_id"],
+                               _to_seconds(st["arrival_time"]),
+                               _to_seconds(st["departure_time"])))
+
+        used = {sid for v in seq_by_trip.values() for _, sid in v}
+        stops = {
+            s["stop_id"]: {"stop_id": s["stop_id"], "name": s["stop_name"],
+                           "lat": float(s["stop_lat"]), "lon": float(s["stop_lon"])}
+            for s in _rows(zf, "stops.txt") if s["stop_id"] in used
+        }
+
+        # Trase: samo tiste, ki jih uvozene voznje res rabijo.
+        want = {tr["shape_id"] for tr in trips.values() if tr.get("shape_id")}
+        po_obliki: dict[str, list] = defaultdict(list)
+        if want and "shapes.txt" in set(zf.namelist()):
+            for r in _rows(zf, "shapes.txt"):
+                if r["shape_id"] in want:
+                    po_obliki[r["shape_id"]].append(
+                        (int(r["shape_pt_sequence"]),
+                         float(r["shape_pt_lat"]), float(r["shape_pt_lon"])))
+        shapes = {}
+        for sid, pts in po_obliki.items():
+            pts.sort()
+            if len(pts) >= 2:
+                shapes[sid] = [[(a, b) for _, a, b in pts]]
+
+    return {"stops": stops, "trips": trips, "routes": routes,
+            "sched": sched_rows, "days": dnevi, "shapes": shapes}
 
 
 def _service_days(zf: zipfile.ZipFile, service_ids: set[str]):
@@ -208,10 +308,27 @@ def _edge_builder(stops):
     return feed, finish
 
 
-def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
+def _lpp_oznaka(kratko: str) -> str:
+    """`01` -> `1`, `01B` -> `1B`, `N3` ostane.
+
+    LPP v svojem GTFS pise enomestne linije z vodilno niclo, dvomestnih pa ne.
+    Na postajaliscu pise "1", in iskati se mora dati po tem, kar clovek vidi.
+    """
+    i = 0
+    while i < len(kratko) - 1 and kratko[i] == "0":
+        i += 1
+    return kratko[i:] if kratko[:1] == "0" else kratko
+
+
+def import_static(conn: sqlite3.Connection, zip_path: Path,
+                  lpp_zip: Path | None = None) -> dict:
     """Uvozi železniški del GTFS zipa (in nadomestne prevoze SŽ).
 
     Statične tabele se v celoti zamenjajo -- zajem (`obs`, `run`) ostane.
+
+    `lpp_zip` prilije mestni LPP iz **drugega** vira. Zliti mora biti tu in ne
+    v svojem klicu: spodnji `DELETE FROM` pobrise vse staticne tabele, zato bi
+    locen uvoz drugega vira vsakic pobrisal prvega.
     """
     with zipfile.ZipFile(zip_path) as zf:
         wanted_types = {config.RAIL_ROUTE_TYPE}
@@ -325,6 +442,21 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
 
         days = _service_days(zf, {t["service_id"] for t in trips.values()})
 
+    # --- mestni LPP iz drugega vira ---------------------------------------
+    lpp_trips = 0
+    if lpp_zip is not None:
+        mesto = beri_lpp(lpp_zip, config.LPP_DAYS)
+        # Kljuci se ne morejo zaleteti: LPP ima UUID-je, IJPP stevilke.
+        stops.update(mesto["stops"])
+        for rid, r in mesto["routes"].items():
+            routes[rid] = {**r, "route_short_name": _lpp_oznaka(r["route_short_name"])}
+        trips.update(mesto["trips"])
+        sched_rows.extend(mesto["sched"])
+        for sid, ds in mesto["days"].items():
+            days[sid].update(ds)
+        shapes.update(mesto["shapes"])
+        lpp_trips = len(mesto["trips"])
+
     with conn:
         # Voznja, ki ima MERITVE, mora prezivati uvoz tudi takrat, ko je nov
         # vozni red nima. Brez tega jo `DELETE FROM trip` osiroti: `run` in
@@ -413,6 +545,7 @@ def import_static(conn: sqlite3.Connection, zip_path: Path) -> dict:
         "trips_obdrzanih": vrnjenih,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
+        "trips_lpp": lpp_trips,
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),
         "trips_blocked": sum(1 for t in trips.values() if t.get("block_id")),
     }

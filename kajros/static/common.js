@@ -345,6 +345,8 @@ const AGENCY = {
   "1123": "Arriva",
   "1119": "Nomago",
   "1121": "AP MS",
+  // Mestni LPP je drug vir z besednim `agency_id` (glej `config.LPP_*`).
+  "lpp": "LPP",
 };
 
 // Vsi LPP-jevi route_color so ista zelena prevoznika, ne barva linije, zato

@@ -609,3 +609,48 @@ za oceno hitrosti manj natančno.
 Odprt dostop ni dovoljenje za objavo. Vsi podatki v kajrosu so zdaj CC BY-SA 4.0
 z obvezno navedbo vira; preden gre mestni LPP na zaslon, mora biti jasno, pod
 čim. Vprašanje za LPP in za DUJPP v istem krogu pisem.
+
+## Uvoz mestnega LPP: kaj to prinese in kaj stane (7. 9. 2026)
+
+Uvoz je zgrajen in preizkušen na kopiji baze. Vklopi se s `KAJROS_LPP=1`,
+privzeto je izklopljen.
+
+**Kaj prinese.** Postajališče „Polje", zaradi katerega se je vse začelo:
+
+| | linij | odhodov danes |
+|---|---|---|
+| prej (samo IJPP) | 1 (linija 25) | 80 |
+| zdaj | **5** (27, 11, 25, 24, 11B) | **365** |
+
+V bazo pride 31 mestnih in nočnih linij: 1, 1B, 2, 3, 5, 6, 7, 8, 9, 10, 11,
+11B, 13, 14, 16, 18, 18L, 19B, 20, 20Z, 22, 23, 24, 26, 27, 28, N1, N3, N3B,
+N5 in SŽ.
+
+**Kaj stane.** Uvoz obeh zipov traja **27 s**:
+
+| | prej | z LPP |
+|---|---|---|
+| vožnje | 20 850 | 39 899 (+19 163) |
+| postanki (`sched`) | 403 208 | 889 731 |
+| postajališča | 9 791 | 10 509 |
+
+**Okno je nujno.** LPP nima voznih vzorcev, ampak svojo vožnjo za vsak datum:
+62 989 voženj in 1,6 milijona postankov za 31 dni. Uvažamo osem dni
+(`KAJROS_LPP_DAYS`), kar da zgornjih 19 163 voženj.
+
+**Zamude so kakovostnejše od avtobusov v IJPP.** En zajem ob 07:40 je dal
+4 157 postankov, **2 071 z neničelno zamudo** (49,8 %):
+
+| p01 | p25 | mediana | p75 | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+| −4 min | 0 | 0 | +1 | +7 | +23 | +69 |
+
+Nad 30 min je 27 vrstic (0,65 %) in **vse pripadajo eni sami vožnji** (linija 1,
+27 postankov, povprečno +66 min). **Nad 2 h ni ničesar** — za primerjavo je
+IJPP-jev avtobusni feed imel 2 541 vrstic nad 4 h. Ta vir je torej bistveno
+čistejši in za zdaj ne potrebuje svoje varovalke.
+
+Leg vozil je 145 (IJPP jih ima ~1 000), starost mediana 146 s.
+
+**Kar je bilo treba obiti:** `delay` v tem feedu je vedno 0. Zamuda pride iz
+absolutnih napovedanih časov prek `collector._delay_of()`.
