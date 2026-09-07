@@ -349,9 +349,18 @@ const AGENCY = {
   "lpp": "LPP",
 };
 
-// Vsi LPP-jevi route_color so ista zelena prevoznika, ne barva linije, zato
-// barva ne loci linij in je ne sme. Ime linije nosi oznaka sama; barva samo
-// pove, cigav avtobus je. Zato je v zetonu vedno tudi ime prevoznika.
+// Ena barva za vse avtobusne linije, in ne barva iz vira.
+//
+// Prvi razlog je bil, da so vsi LPP-jevi `route_color` ista zelena
+// prevoznika. **To za mestni LPP ne velja** -- ta ima 27 razlicnih barv in
+// to so prave barve linij, ki jih Ljubljancani poznajo. Razlog je zdaj drug
+// in izmerjen: na nasi podlagi (#0f1115) jih **14 od 27 ne dosega 4,5 : 1**,
+// stiri so pod 3 : 1, `#1f1d1d` pa pri 1,13 : 1 -- torej nevidna. Nasa
+// zelena je pri 7,70 : 1.
+//
+// Barvati polovico linij po viru in polovico enotno bi bilo slabse od
+// enotnega: barva bi takrat pomenila dvoje. Ime linije nosi oznaka sama;
+// barva samo pove, cigav avtobus je, zato je v zetonu vedno tudi prevoznik.
 const LINE_INK = "#4db97f";
 
 function lineBadgeHtml(row) {
