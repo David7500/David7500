@@ -106,11 +106,11 @@ cat <<KONEC
    Vozni red se osveži sam ob 4:00 (KAJROS_REFRESH_HOUR), v podprocesu.
    Do takrat so v bazi še stari zapisi o vožnjah -- meritve so cele.
 
-   Mestni LPP je v enoti IZKLOPLJEN (KAJROS_LPP=0), ker cena na Pi Zero W
-   ni izmerjena. Ko bo, se vklopi v deploy/kajros-zajem.service.
+   Mestni LPP je VKLOPLJEN. Prvi uvoz njegovega voznega reda je najdaljši
+   korak; do njega v bazi ni mestnih voženj in živi feed nima česa pripisati.
 
-   Ostanke starih namestitev lahko zdaj pobrišeš:
-     rm -rf ~/sztrack ~/sztrack-src ~/sztrack-deploy.zip
-     sudo rm -rf /opt/sztrack
+   Ostanke starih namestitev pospravi:
+     sudo bash $VIR/deploy/pospravi-malino.sh
+   Ta odstrani stare enote in /opt/sztrack ter nastavi časovni pas.
    Pusti: ~/kajros-zgodovina (git bundle) in $STARI_DATA/backup (kopije).
 KONEC
