@@ -280,6 +280,13 @@ def api_health():
     out = dict(_predpomni("health", None, 600, lambda: _conn_klic(_health_stevci)))
     with _conn() as conn:
         ts = conn.execute("SELECT MAX(feed_ts) FROM run").fetchone()[0]
+        # **Ovire so sveze, ne predpomnjene.** Ista funkcija kot pri
+        # `/api/alerts` in `overview.disruptions` -- sicer ime laze. Znotraj
+        # desetminutnega predpomnilnika sta se stevilki razsli takoj, ko je
+        # ovira potekla ali prisla: izmerjeno 19 proti 20, tri mesta, dve
+        # stevilki. Sem sodi, ker je poceni: 0,01 ms proti 35,7 ms za
+        # `MAX(feed_ts)`, ki je zunaj predpomnilnika ze prej.
+        out["alerts_active"] = alerts.active_count(conn)
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out
@@ -317,11 +324,6 @@ def _health_stevci(conn):
         "       COUNT(DISTINCT service_date) AS dni FROM napoved").fetchone()
     out["senca"] = {"dni": sen["dni"], "od": sen["od"], "do": sen["do_"],
                     "vrstic": sen["vseh"], "razresenih": sen["razresenih"]}
-    # Ista funkcija kot pri `/api/alerts` in `overview.disruptions` -- sicer
-    # ime laze. Prej je bilo tu `COUNT(*) FROM alert WHERE kind='ovira'`, kar
-    # steje VSE shranjene ovire, ne le veljavnih: 62 proti 16. Tri mesta, dve
-    # stevilki, ista beseda.
-    out["alerts_active"] = alerts.active_count(conn)
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
     # `db_path` je bil tu, dokler je bil health viden samo domacemu omrezju.
