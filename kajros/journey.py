@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
-from .stats import (NOCNI_REP_S, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
+from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, opis_zamude,
                     typical_at_stops)
 
@@ -384,8 +384,10 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     Zgodaj zjutraj vključi tudi **včerajšnji prometni dan**: vožnja, ki je
     odpeljala ob 23:50, ima postanke ob 24:21 in pripada včerajšnjemu dnevu.
     Brez tega je tabla ob 00:30 skrila vlak, ki pride ob 00:56 -- torej
-    ravno takrat, ko je edini. `_vceraj` ustavi rekurzijo pri eni stopnji;
-    dva dneva nazaj ni treba, ker se nobena vožnja ne razteza čez 48 ur.
+    ravno takrat, ko je edini. Ali se sme včeraj še kaj voziti, pove baza
+    (`stats.se_vozi_vceraj`), ne trd prag: ena nova nočna linija bi ga tiho
+    podrla. `_vceraj` ustavi rekurzijo pri eni stopnji; dva dneva nazaj ni
+    treba, ker se nobena vožnja ne razteza čez 48 ur.
     """
     rows = conn.execute(_BOARD_SQL, {
         "station": station, "day": service_date, "network": network,
@@ -538,7 +540,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     # napisati dvakrat. Poizvedba je ozka sama po sebi -- ob `from_s` cez
     # 86400 se ujamejo samo postanki po polnoci, teh pa je 50 (vlak) in
     # 2 241 (avtobus).
-    if _vceraj and from_s < NOCNI_REP_S:
+    if _vceraj and se_vozi_vceraj(conn, from_s, network):
         prej = (date.fromisoformat(service_date) - timedelta(days=1)).isoformat()
         vcerajsnje = board(conn, station, prej, from_s + 86400, window_min, kind,
                            limit, network,

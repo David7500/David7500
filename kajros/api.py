@@ -1020,31 +1020,6 @@ _LIVE_GRACE_S = 300
 # poizvedbo (173 ms -> 17 ms), ne spregled.
 MAX_LIVE_DELAY_S = 6 * 3600
 
-# Najpoznejsi voznoredni cas v omrezju, predpomnjeno po zigu GTFS uvoza.
-# Sluzi enemu vprasanju: se sme voznja z vcerajsnjim prometnim dnem zdaj se
-# voziti? Ce ne, vcerajsnje poizvedbe sploh ne pozenemo.
-_LAST_SCHED_CACHE: dict[tuple, int | None] = {}
-
-
-def _last_sched_s(conn, network: str | None) -> int | None:
-    """Najpoznejsa voznoredna sekunda tega omrezja (zna cez 86400)."""
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
-    where = conn.execute("PRAGMA database_list").fetchone()["file"]
-    key = (where, network, stamp)
-    # Brez ziga ne predpomnimo -- sveza ali testna baza se lahko spremeni
-    # pod nami in nam tega nihce ne pove.
-    if stamp and key in _LAST_SCHED_CACHE:
-        return _LAST_SCHED_CACHE[key]
-    row = conn.execute(
-        "SELECT MAX(end_s) FROM trip WHERE (? IS NULL OR network = ?)",
-        (network, network)).fetchone()
-    val = row[0] if row else None
-    if stamp:
-        _LAST_SCHED_CACHE[key] = val
-    return val
-
 _LIVE_SQL = """
 WITH t AS (
     SELECT r.trip_id, r.stop_seq, r.feed_ts, s.stop_id,
@@ -1233,7 +1208,7 @@ def _live(network: str | None = None) -> list[dict]:
         # lahko vozilo. Zeleznica ima najpoznejsi voznoredni cas ob 26,4 h,
         # torej je po 08:35 odgovor zagotovo prazen -- prej pa smo ga vseeno
         # racunali in pri letu zajema placali 324 ms za nic.
-        last_s = _last_sched_s(conn, network)
+        last_s = stats.last_sched_s(conn, network)
         if last_s is not None and now_s + 86400 <= last_s + MAX_LIVE_DELAY_S + _LIVE_GRACE_S:
             rows += _live_rows(conn, yesterday, now_s + 86400, network,
                                overnight_only=True)

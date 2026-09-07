@@ -1276,12 +1276,41 @@ def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
     return None
 
 
-#: Kako dolgo v nov dan sega včeraj začet promet. Izmerjeno 7. 9. 2026:
-#: najdlje vozeča vožnja se konča ob 33:48 (avtobus) oziroma 26:23 (vlak),
-#: torej slabih deset ur čez polnoč. Pred to uro morata tabla in iskalnik
-#: pogledati tudi VČERAJŠNJI prometni dan -- sicer je bil ob 00:30 skrit
-#: vlak, ki pride ob 00:56, in 2 145 avtobusnih vstopnih postankov.
-NOCNI_REP_S = 10 * 3600
+# Najpoznejši voznoredni čas omrežja, predpomnjen po žigu GTFS uvoza. Služi
+# enemu vprašanju: se sme vožnja z VČERAJŠNJIM prometnim dnem zdaj še voziti?
+# Če ne, včerajšnje poizvedbe sploh ne poženemo.
+#
+# Izmerjeno 7. 9. 2026: najdlje vozeča vožnja se konča ob 33:48 (avtobus)
+# oziroma 26:23 (vlak). Trd prag bi bil zato videti dovolj, a bi ga ena nova
+# nočna linija tiho podrla -- vrednost mora priti iz baze.
+_LAST_SCHED_CACHE: dict[tuple, int | None] = {}
+
+
+def last_sched_s(conn: sqlite3.Connection, network: str | None) -> int | None:
+    """Najpoznejša voznoredna sekunda tega omrežja (zna čez 86400)."""
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, network, stamp)
+    # Brez žiga ne predpomnimo -- sveža ali testna baza se lahko spremeni
+    # pod nami in nam tega nihče ne pove.
+    if stamp and key in _LAST_SCHED_CACHE:
+        return _LAST_SCHED_CACHE[key]
+    row = conn.execute(
+        "SELECT MAX(end_s) FROM trip WHERE (? IS NULL OR network = ?)",
+        (network, network)).fetchone()
+    val = row[0] if row else None
+    if stamp:
+        _LAST_SCHED_CACHE[key] = val
+    return val
+
+
+def se_vozi_vceraj(conn: sqlite3.Connection, now_s: int,
+                   network: str | None) -> bool:
+    """Ali bi se vožnja z včerajšnjim prometnim dnem zdaj še lahko vozila."""
+    last_s = last_sched_s(conn, network)
+    return last_s is not None and now_s + 86400 <= last_s
 
 
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
@@ -1315,11 +1344,12 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     # je vcerajsnji rep edino, kar sploh obstaja -- in prav tam je bila
     # napaka najbolj vidna.
     #
-    # Samo za danes in samo zgodaj: `now_s` obstaja le za danasnji dan, prag
-    # pa je izmerjen (`NOCNI_REP_S`). Za izrecno vprasan pretekli datum
-    # ostane pomen "prometni dan D", ker je to tisto, kar je bilo vprasano.
+    # Samo za danes: `now_s` obstaja le za danasnji dan. Za izrecno vprasan
+    # pretekli datum ostane pomen "prometni dan D", ker je to vprasanje.
+    # Ali se sme vceraj kaj voziti, pove BAZA (`se_vozi_vceraj`) in ne trd
+    # prag -- ena nova nocna linija bi ga tiho podrla.
     nocne: list[dict] = []
-    if _vceraj and now_s is not None and now_s < NOCNI_REP_S:
+    if _vceraj and now_s is not None and se_vozi_vceraj(conn, now_s, network):
         prej = (date.fromisoformat(service_date) - timedelta(days=1)).isoformat()
         nocne = [d for d in connections(conn, from_name, to_name, prej,
                                         now_s + 86400, network, _vceraj=False)

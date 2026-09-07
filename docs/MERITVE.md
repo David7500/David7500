@@ -969,8 +969,13 @@ pripeljal ob 00:56, ga ni bilo.
 
 Obseg: čez polnoč sega **10 železniških** in **154 avtobusnih** voženj
 (50 oziroma 2 241 postankov po polnoči). Najdlje vozeča se konča ob **33:48**
-(avtobus) oziroma **26:23** (vlak) — torej slabih deset ur čez polnoč, in to
-je prag `journey.NOCNI_REP_S`.
+(avtobus) oziroma **26:23** (vlak).
+
+**Prag ni trd.** `stats.se_vozi_vceraj()` ga vzame iz baze (`MAX(trip.end_s)`,
+predpomnjeno po žigu GTFS uvoza) — ena nova nočna linija bi trdo številko
+tiho podrla. Praktično to pomeni: železnica neha gledati včeraj po 02:23,
+avtobusi po 09:48. Isto funkcijo uporablja tudi zemljevid, ki je to rešitev
+imel že prej; zdaj je na enem mestu.
 
 Rešeno z rekurzijo, ne z drugo poizvedbo: vse, kar sledi (meja meritve,
 združevanje dvojnikov, običajna zamuda), mora teči nad **pravim** prometnim
