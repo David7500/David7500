@@ -28,7 +28,8 @@ zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi
-samo SŽ.
+samo SŽ. **Mestni LPP je drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP
+ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 
 **Strežnik posluša na vseh vmesnikih** (`KAJROS_HOST`, privzeto `0.0.0.0`), ker je
 telefon glavna preizkusna naprava. To **ni** isto kot odpiranje vrat na
@@ -50,6 +51,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 |---|---|---|
 | Vozni red | `gitlab.com/.../IJPP/latest/ijpp_gtfs.zip` (41 MB) | ~1×/dan |
 | Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 30 s |
+| Mestni LPP, vse troje | `rt.gtfs.derp.si/sources/lpp/all` + `avl.lpp.si/transit/api/gtfs` | 30 s |
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |

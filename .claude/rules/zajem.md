@@ -262,6 +262,37 @@ vnaprej — `kajros weather` ga dopolni za že zajete zamude kadarkoli.
   ne bere in ga v shemi ni. Isto velja za `wheelchair_accessible`, ki ga
   `trips.txt` sploh nima. Če se to kdaj spremeni, je oboje en stolpec dela.
 
+## Mestni LPP je drug feed in laže drugače
+
+Mestnih linij LPP (1, 2, 3, 6, 11, 14, 20, 22, nočne) **v IJPP ni** — ta nosi
+le primestne (40–84). Uvažajo se iz LPP-jevega lastnega GTFS
+(`avl.lpp.si/transit/api/gtfs`, 31 prog), živi del pa iz
+`rt.gtfs.derp.si/sources/lpp/all` — **isti derp.si**, s katerega jemljemo
+IJPP, le drug vir. Oboje odprto, brez ključa.
+
+**`delay` je v tem feedu vedno 0.** Izmerjeno dvakrat — nedelja 22:00
+(2 721 postankov) in ponedeljkova konica 07:11 (2 604) — nobena zamuda ni
+neničelna, `trip_update.delay` pa ni izpolnjen nikjer. **Kdor bi ga bral, bi
+zapisal, da mestni LPP nikoli ne zamuja.**
+
+Zamuda je v **absolutnih napovedanih časih** (1 882 od 4 517 postankov), kar
+`_delay_of()` že pokriva — bere `.time` in odšteje vozni red. To je torej
+natanko primer, za katerega ta funkcija obstaja.
+
+Kakovost je boljša od avtobusov v IJPP: mediana 0, p95 +7 min, p99 +23 min,
+nad 30 min 0,65 % in **vse iz ene same vožnje**; nad 2 h ničesar. IJPP-jev
+avtobusni feed je imel 2 541 vrstic nad 4 h.
+
+`trip_id` so trojni UUID (`service|?|trip`) in se ujemajo 1 : 1 z
+`avl.lpp.si`, **ne** z NAP. Uvaža se okno osmih dni, ker ima LPP svojo vožnjo
+za vsak datum: cel mesec je 62 989 voženj in 1,6 milijona postankov.
+
+**Imena postajališč se pišejo drugače.** 12 % jih je s samimi velikimi črkami
+(„ČRNUČE"), IJPP pa normalno — in ker vse teče po imenu, sta to dve postaji.
+Uvoz jih poenoti, a samo kadar sta zapisa tudi fizično na istem mestu (500 m):
+med 24 takimi pari jih je 14 v razmiku 3–215 m, deset pa 0,8–111,6 km, in
+„Celje" ter „Čelje" sta 112 km narazen. Glej `gtfs._poenoti_imena()`.
+
 ## Vožnja, obratovalni dan in dnevnik
 
 `trip.start_s` / `trip.end_s` sta **prvi odhod in zadnji prihod vožnje**,

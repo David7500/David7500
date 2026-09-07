@@ -736,3 +736,33 @@ Uvoz zato poenoti ime samo, kadar sta zapisa tudi **fizično na istem mestu**
 (`ISTO_POSTAJALISCE_M = 500`). Kanonično je ime, ki ni v samih velikih črkah;
 ob več takih odloči pogostost in nato abeceda, da je izid ponovljiv.
 Izid uvoza: `imen_poenotenih: 14`, preostalih dvojnic 10 — vse različni kraji.
+
+## Vzdrževanje po vklopu LPP (7. 9. 2026)
+
+Preverjeno, ker se je baza čez noč povečala za 40 %.
+
+**Obrez deluje.** Politika je 90 dni za železnico in 14 za avtobuse
+(`OBS_KEEP_DAYS`). Avtobusnih vrstic pred 14-dnevno mejo je **0**; ostanejo
+le železniške iz avgusta, po nekaj tisoč na dan.
+
+**Koliko doda LPP.** Med 08:16 in 12:15 je zapisal **57 567 meritev** — na
+cel obratovalni dan okoli 250 000, ob dosedanjih ~470 000. Baza je z uvozom
+zrasla s 605 na **845 MB** (statični vozni red), v ustaljenem stanju bo pri
+štirinajstdnevnem oknu okoli 1,3–1,4 GB. Na arwenu je 33 GB prostega.
+
+| dan | meritev | opomba |
+|---|---|---|
+| 2026-09-02 do 04 | ~1,31 M | delovni dnevi, brez LPP |
+| 2026-09-05, 06 | 293 k, 240 k | vikend |
+| 2026-09-07 do 12:15 | 529 k | ponedeljek, LPP od 08:16 |
+
+**Dnevni povzetek je hiter.** `refresh_summaries()` je **3,1 s** (železnica
+267 + 409 ms, avtobusi 470 + 1 902 ms). Opravilo ob 3:30 torej ni ogroženo.
+
+**Storitev se ne sesuva.** `NRestarts = 0`, v dnevniku dveh ur nobene napake;
+vsi ponovni zagoni so bili moji.
+
+**Senca zdaj zajema tudi mestni LPP** (545 vrstic, 472 razrešenih). Rezerva
+budilke je bila umerjena brez njih — ko bo vrstic dovolj, jo je vredno
+premeriti ločeno, saj je mestni LPP bistveno točnejši: mediana zamude 0 min
+in p90 3 min proti 3 in 11 min pri primestnem LPP.
