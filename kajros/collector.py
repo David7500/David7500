@@ -481,7 +481,13 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
         return {"trips": 0, "vehicles": 0, "unchanged": True}
     izid = ingest(conn, feed)
     lege = ingest_positions(conn, feed)
-    return {**izid, "vehicles": lege.get("vehicles", 0)}
+    # Obvestila so v ISTEM feedu in jih doslej nismo brali -- 181 vrstic na
+    # zajem v smeti. Zdruzena so v `alerts.ingest_lpp()`, ker jih feed poslje
+    # na vozjno in ne na dogodek.
+    from . import alerts as _alerts
+    obv = _alerts.ingest_lpp(conn, feed)
+    return {**izid, "vehicles": lege.get("vehicles", 0),
+            "obvestil": obv.get("obvestil", 0)}
 
 
 def run_forever(conn: sqlite3.Connection, interval: int | None = None) -> None:

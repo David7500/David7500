@@ -1408,3 +1408,43 @@ def test_mestni_in_primestni_lpp_nista_ista_skupina(conn):
 
     kljuci = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
     assert kljuci == {"LPP primestni", "LPP mestni"}
+
+
+def test_obvestila_lpp_se_zdruzijo_po_besedilu(conn):
+    """Feed pošlje isto obvestilo na vsako vožnjo, ne na dogodek.
+
+    Izmerjeno 7. 9. 2026: 181 obvestil, od tega dve različni — „Postaja
+    Čerinova na obvozu" (147 voženj) in „Postaja Tbilisijska" (34). Brez
+    združevanja bi stran pokazala isto poved stokrat.
+    """
+    from google.transit import gtfs_realtime_pb2 as rt
+    from kajros import alerts
+
+    feed = rt.FeedMessage()
+    for i in range(5):
+        e = feed.entity.add()
+        e.id = f"nakljucen-uuid-{i}"
+        a = e.alert
+        t = a.header_text.translation.add(); t.language = "sl"
+        t.text = "Postaja Čerinova na obvozu"
+        d = a.description_text.translation.add(); d.language = "sl"
+        d.text = "Vozilo se ne bo ustavilo na postaji"
+        ie = a.informed_entity.add()
+        # Dve različni postajališči istega imena (mestno jih ima po eno na smer)
+        ie.stop_id = "S1" if i % 2 else "S2"
+
+    izid = alerts.ingest_lpp(conn, feed)
+    assert izid["obvestil"] == 1          # pet vrstic, eno obvestilo
+    assert izid["iz_vrstic"] == 5
+
+    vrstice = conn.execute("SELECT alert_id, kind FROM alert WHERE kind='obvoz'").fetchall()
+    assert len(vrstice) == 1
+    aid = vrstice[0]["alert_id"]
+    # Obe postajališči morata biti zapisani. `route_id` in `trip_id` sta
+    # NOT NULL DEFAULT '' -- z NULL je vstavljanje tiho padlo in obvestilo je
+    # ostalo brez postajališč.
+    stops = {r["stop_id"] for r in conn.execute(
+        "SELECT stop_id FROM alert_entity WHERE alert_id = ?", (aid,))}
+    assert stops == {"S1", "S2"}
+    assert [a["header"] for a in alerts.for_stops(conn, ["S1"])] == ["Postaja Čerinova na obvozu"]
+    assert alerts.for_stops(conn, ["S9"]) == []

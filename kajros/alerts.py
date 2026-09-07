@@ -18,6 +18,8 @@ združujemo -- shranimo jezik in prikaz izbere svojega.
 """
 from __future__ import annotations
 
+import hashlib
+
 import re
 import sqlite3
 import time
@@ -53,12 +55,111 @@ EFFECT_SL = {
 }
 
 
+# Predpona obvestil mestnega LPP. Ta feed ne da id-jev, na katere bi se dalo
+# vezati -- vsako je nakljucen UUID -- zato ga sestavimo iz besedila sami.
+LPP_OBVOZ = "LPP-OBVOZ-"
+
+
 def _kind(alert_id: str) -> str:
     if alert_id.startswith("SZ-DELAY"):
         return "delay"
     if alert_id.startswith("SZ-OVIRA"):
         return "ovira"
+    if alert_id.startswith(LPP_OBVOZ):
+        return "obvoz"
     return "drugo"
+
+
+def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
+    """Obvestila mestnega LPP. **Feed jih poslje na vozjno, ne na dogodek.**
+
+    Izmerjeno 7. 9. 2026: 181 obvestil, od tega **dve razlicni** -- „Postaja
+    Cerinova na obvozu" (147 voznj) in „Postaja Tbilisijska na obvozu" (34).
+    Vsako ima svoj nakljucen UUID, zato bi jih obicajen zajem zapisal 181 in
+    stran bi pokazala isto poved stokrat.
+
+    Zdruzimo jih po besedilu in zberemo prizadeta postajalisca. Za potnika je
+    to natanko en podatek: „tu se avtobus ne bo ustavil".
+    """
+    seen_at = int(time.time())
+    skupine: dict[tuple, dict] = {}
+    for entity in feed.entity:
+        if not entity.HasField("alert"):
+            continue
+        a = entity.alert
+        header, lang = _pick(a.header_text)
+        desc, _ = _pick(a.description_text)
+        if not header:
+            continue
+        kljuc = (header, desc, lang)
+        s = skupine.setdefault(kljuc, {
+            "stops": set(), "routes": set(),
+            "cause": a.cause or None, "effect": a.effect or None,
+            "start": None, "end": None, "n": 0,
+        })
+        s["n"] += 1
+        for e in a.informed_entity:
+            if e.stop_id:
+                s["stops"].add(e.stop_id)
+            if e.route_id:
+                s["routes"].add(e.route_id)
+        if a.active_period:
+            p = a.active_period[0]
+            if p.start:
+                s["start"] = min(s["start"] or p.start, p.start)
+            if p.end:
+                s["end"] = max(s["end"] or p.end, p.end)
+
+    n_new = 0
+    with conn:
+        for (header, desc, lang), s in skupine.items():
+            aid = LPP_OBVOZ + hashlib.sha1(header.encode()).hexdigest()[:12]
+            znan = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
+                                (aid,)).fetchone() is not None
+            conn.execute(
+                "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
+                "                  header, description, url, lang, first_seen, last_seen) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(alert_id) DO UPDATE SET last_seen = excluded.last_seen,"
+                "  header = excluded.header, description = excluded.description",
+                (aid, "obvoz", s["cause"], s["effect"], s["start"], s["end"],
+                 header, desc, None, lang or "sl", seen_at, seen_at))
+            if not znan:
+                n_new += 1
+            # Prizadeta postajalisca zapisemo znova: obvoz se lahko razsiri.
+            conn.execute("DELETE FROM alert_entity WHERE alert_id = ?", (aid,))
+            # **Prazen niz, ne NULL, in navaden INSERT.** `route_id` in
+            # `trip_id` sta `NOT NULL DEFAULT ''`; z `NULL` je vsaka vrstica
+            # padla na omejitvi, `INSERT OR IGNORE` pa jo je tiho pozrl in
+            # obvestilo je ostalo brez prizadetih postajalisc -- videti je
+            # bilo, kot da zajem dela. Brez `OR IGNORE` bi se to slisalo takoj.
+            conn.executemany(
+                "INSERT INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
+                "VALUES(?,'','',?)",
+                [(aid, sid) for sid in s["stops"]])
+    return {"obvestil": len(skupine), "novih": n_new,
+            "iz_vrstic": sum(s["n"] for s in skupine.values())}
+
+
+def for_stops(conn: sqlite3.Connection, stop_ids, lang: str = "sl") -> list[dict]:
+    """Veljavna obvestila, ki zadevajo katero od teh postajalisc.
+
+    Za avtobusno tablo: „na tej postaji se avtobus ne bo ustavil" je edino
+    obvestilo, ki ga mestni feed sploh posilja, in brez tega ga ne vidi nihce.
+    """
+    ids = list(stop_ids)
+    if not ids:
+        return []
+    now = int(time.time())
+    marks = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT DISTINCT a.* FROM alert a JOIN alert_entity e USING (alert_id) "
+        f"WHERE e.stop_id IN ({marks}) AND a.lang = ? "
+        f"  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
+        f"  AND (a.start_ts IS NULL OR a.start_ts <= ?) "
+        f"ORDER BY a.header",
+        (*ids, lang, now, now)).fetchall()
+    return [_alert_row(r) for r in rows]
 
 
 def _pick(translated, want: str = "sl") -> tuple[str | None, str | None]:

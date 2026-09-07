@@ -551,9 +551,17 @@ def api_departures(
         now_s = journey.now_seconds(now) if date == now.date().isoformat() else None
         rows = journey.board(conn, exact, date, from_s, window, kind,
                              network=network, now_s=now_s)
-        # Obvestila o ovirah so SZ-jeva; pri avtobusih jih ni.
-        notices = (alerts.for_trains(conn, [r["train_no"] for r in rows], mentions=[exact])
-                   if network == "zeleznica" else [])
+        if network == "zeleznica":
+            # Obvestila o ovirah so SZ-jeva in vezana na vlak.
+            notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
+                                        mentions=[exact])
+        else:
+            # Mestni LPP poslje eno samo vrsto obvestila -- „tu se avtobus ne
+            # bo ustavil" -- in ta je vezana na POSTAJALISCE, ne na vozjno.
+            # Doslej je ni videl nihce: feed jo je nosil, mi pa smo jo zavrgli.
+            notices = alerts.for_stops(
+                conn, [r["stop_id"] for r in conn.execute(
+                    "SELECT stop_id FROM station WHERE name = ?", (exact,))])
     return {"station": exact, "date": date, "kind": kind, "network": network,
             "from_s": from_s, "window_min": window,
             "board": rows, "alerts": notices}

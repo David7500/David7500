@@ -766,3 +766,27 @@ vsi ponovni zagoni so bili moji.
 budilke je bila umerjena brez njih — ko bo vrstic dovolj, jo je vredno
 premeriti ločeno, saj je mestni LPP bistveno točnejši: mediana zamude 0 min
 in p90 3 min proti 3 in 11 min pri primestnem LPP.
+
+## Obvestila mestnega LPP: 181 vrstic, dve novici (7. 9. 2026)
+
+Feed `sources/lpp/all` nosi poleg zamud in leg tudi **obvestila** — teh doslej
+nismo brali in so šla vsakih 30 s v smeti.
+
+Izmerjeno: **181 obvestil, od tega dve različni.** „Postaja Čerinova na
+obvozu" (147 voženj) in „Postaja Tbilisijska na obvozu" (34), obe z
+besedilom „Vozilo se ne bo ustavilo na postaji". Vsako ima svoj naključen
+UUID, zato bi jih običajen zajem zapisal 181 in stran bi pokazala isto poved
+stokrat.
+
+Združujejo se po besedilu (`alerts.ingest_lpp()`), prizadeta postajališča pa
+se zberejo v `alert_entity`. Odhodna tabla jih pokaže prek `for_stops()` —
+za potnika je to natanko en podatek: **tu se avtobus ne bo ustavil**.
+
+Vrsta je `obvoz` in ne `ovira`, zato števci ovir (`/api/health`,
+`overview.disruptions`) ostanejo železniški in se skladnost ne podre.
+
+**Past, ki je stala en obhod:** `alert_entity.route_id` in `trip_id` sta
+`NOT NULL DEFAULT ''`. Prvi zapis je vstavljal `NULL`, vsaka vrstica je padla
+na omejitvi, `INSERT OR IGNORE` pa jo je **tiho požrl** — obvestili sta bili
+zapisani, a brez enega samega postajališča, in videti je bilo, kot da zajem dela.
+Zdaj gre prazen niz in navaden `INSERT`, da bi se ista napaka slišala takoj.
