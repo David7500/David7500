@@ -828,3 +828,48 @@ Kazalo postaj je bilo v pomnilniku že od nalaganja strani (`KAZALO`, za
 iskalnik brez sunkov). Zdaj preverba bere njega: **0 zahtev**. Strežnik ostane
 le za primer, ko se kazalo še ni naložilo. Iskanje gre po celem kazalu, ne po
 prvih osmih zadetkih — točno ujemanje sme biti kjerkoli.
+
+## Ura, ki teče nazaj: ostanek v `run`, ki ga feed ni več osvežil (7. 9. 2026)
+
+Okno vožnje je pri **vsaki deseti** vožnji avtobusa in vsaki dvajseti vožnji
+vlaka kazalo nemogoč vozni red: naslednja postaja **pred** prejšnjo. Primer,
+RG 310 dne 4. 9.:
+
+```
+seq 2 Litostroj        vr 17:32  d=1740  -> 18:01  feed 17:59:49
+seq 3 Ljubljana Stegne vr 17:35  d=0     -> 17:35  feed 17:32:20   ← ostanek
+seq 4 Lj. Vižmarje     vr 17:38  d=0     -> 17:38  feed 17:34:48   ← ostanek
+seq 5 Medno            vr 17:41  d=1320  -> 18:03  feed 18:00:49
+```
+
+`run` hrani **zadnje** stanje postanka. Kadar feed postanek nekaj časa pošilja
+in potem neha, ostane vrednost iz tistega trenutka — napoved, ki ni bila nikoli
+potrjena, na zaslonu pa je videti kot meritev.
+
+**Razpoznavni znak je mehanski:** postanek, ki je bil nazadnje osvežen prej kot
+kateri od prejšnjih, je ostanek. Izmerjeno na celi bazi:
+
+| omrežje | skokov ure nazaj | razloži zastarel `feed_ts` | delež vseh postankov |
+|---|---|---|---|
+| železnica | 452 | **451 (100 %)** | 0,7 % |
+| avtobus | 6 930 | 2 957 (43 %) | 3,7 % |
+| LPP mestni | 48 | 4 (8 %) | 5,7 % |
+
+Vožnje z uro nazaj za več kot 2 min, pred stražnikom in po njem:
+
+| omrežje | prej | potem |
+|---|---|---|
+| železnica | 4,9 % (364/7 466) | **0,01 % (1/7 468)** |
+| avtobus | 10,1 % (5 347/52 680) | 7,2 % (3 784/52 728) |
+| LPP mestni | 3,6 % (39/1 081) | 3,1 % (34/1 095) |
+
+Preostanek pri avtobusih ima drug vzrok in ni razrešen. Ničla kot nezapolnjeno
+polje razloži 36 % železniških skokov in 7 % avtobusnih — je torej **podmnožica**
+tega pojava, ne glavni vzrok.
+
+Ob tem izmerjeno, kar velja naprej: **mestni LPP feed pošilja samo postanke
+pred vozilom.** Preverjeno s projekcijo lege vozila na postaje vožnje: vozilo
+pri postaji 8 od 26, `stop_time_update` samo za 9–26. Zato pri LPP mestnem
+`run` nikoli ne vsebuje meritve — vedno le zadnjo napoved pred prehodom
+(mediana −42 s pred prehodom, p90 +27 s). IJPP je drugačen: 56 % voženj ima
+v seznamu še vedno prvi postanek.

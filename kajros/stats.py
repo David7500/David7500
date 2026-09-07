@@ -194,7 +194,7 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
         # `lat`/`lon` rabi zemljevid ene voznje v oknu: postanke narise kot
         # crto in pike. Poizvedba postajo ze pridruzuje, zato je to zastonj.
         "SELECT s.stop_seq, st.name, st.lat, st.lon, s.arr_s, s.dep_s, "
-        "       r.delay_arr, r.delay_dep "
+        "       r.delay_arr, r.delay_dep, r.feed_ts "
         "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
         "LEFT JOIN run r ON r.trip_id = s.trip_id AND r.stop_seq = s.stop_seq "
         "                AND r.service_date = ? "
@@ -225,7 +225,34 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
         d["zamuda"] = opis_zamude(
             r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"])
         out.append(d)
+    oznaci_zastarele(out)
     return out
+
+
+def oznaci_zastarele(rows: list[dict]) -> None:
+    """Označi postanke, ki jih feed po nekem trenutku ni več osvežil.
+
+    `run` hrani ZADNJE stanje postanka. Kadar feed postanek nekaj časa
+    pošilja, potem pa neha, ostane v bazi vrednost iz tistega trenutka --
+    napoved, ki ni bila nikoli potrjena. Na zaslonu je bila videti kot
+    meritev in je delala **nemogoče vozne rede**: RG 310 je imel Litostroj
+    ob 18:01 in naslednjo postajo Ljubljana Stegne ob 17:35.
+
+    Razpoznavni znak je mehanski, ne ugib: postanek, ki je bil nazadnje
+    osvežen **prej kot kateri od prejšnjih**, je ostanek. Izmerjeno
+    7. 9. 2026: pri železnici to razloži **451 od 452** skokov ure nazaj
+    (100 %) ob 0,7 % vseh postankov, pri avtobusih 43 % ob 3,7 %.
+    Spreminja `rows` na mestu.
+    """
+    najvecji = None
+    for d in rows:
+        ts = d.get("feed_ts")
+        if ts is None:
+            continue
+        if najvecji is not None and ts < najvecji:
+            d["zastarelo"] = True
+        else:
+            najvecji = ts
 
 
 def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
@@ -1110,7 +1137,7 @@ ORDER BY dep_s
 # Ista logika kot pri /api/live: kar je naprej, je napoved, ne meritev.
 _LAST_MEASURED_SQL = """
 WITH t AS (
-    SELECT r.trip_id, r.stop_seq, s.stop_id, r.delay_arr,
+    SELECT r.trip_id, r.stop_seq, s.stop_id, r.delay_arr, r.feed_ts,
            COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
            COALESCE(s.dep_s, s.arr_s) AS t_s
     FROM run r
@@ -1122,7 +1149,10 @@ WITH t AS (
 ranked AS (
     SELECT t.*, MAX(COALESCE(t.delay_s, 0)) OVER (
                PARTITION BY t.trip_id ORDER BY t.stop_seq
-               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max,
+           MAX(t.feed_ts) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts
     FROM t
 ),
 passed AS (
@@ -1130,6 +1160,9 @@ passed AS (
     FROM ranked r
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= ?
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
+      -- Ostanek, ki ga feed ni vec osvezil, ni prevozen postanek: meja med
+      -- meritvijo in napovedjo bi sicer padla nanj. Glej oznaci_zastarele().
+      AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
 SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, st.name
 FROM passed p JOIN station st ON st.stop_id = p.stop_id

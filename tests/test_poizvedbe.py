@@ -1471,3 +1471,26 @@ def test_prepis_na_izhodisce_ne_preskoci_sredine():
             {"stop_seq": 3, "name": "C", "typical": {"n": 9, "median_s": 120.0}}]
     stats.typical_na_izhodisce(rows)
     assert rows[1]["typical"] is None
+
+
+def test_zastarel_postanek_je_oznacen_ne_meritev():
+    # Feed je postanek nekaj časa pošiljal, potem nehal: ostala je napoved,
+    # ki ni bila nikoli potrjena. Na zaslonu je delala nemogoč vozni red --
+    # naslednja postaja pol ure PRED prejšnjo.
+    rows = [{"stop_seq": 1, "feed_ts": 100},
+            {"stop_seq": 2, "feed_ts": 500},
+            {"stop_seq": 3, "feed_ts": 200},   # ostanek: starejši od prejšnjega
+            {"stop_seq": 4, "feed_ts": 600}]
+    stats.oznaci_zastarele(rows)
+    assert [r.get("zastarelo") for r in rows] == [None, None, True, None]
+
+
+def test_postanek_brez_zajema_ne_pretrga_verige():
+    # Manjkajoč `feed_ts` (postanek, o katerem feed ni povedal nič) ne sme
+    # veljati za ostanek in ne sme ponastaviti največjega časa osvežitve.
+    rows = [{"stop_seq": 1, "feed_ts": 500},
+            {"stop_seq": 2, "feed_ts": None},
+            {"stop_seq": 3, "feed_ts": 300}]
+    stats.oznaci_zastarele(rows)
+    assert rows[1].get("zastarelo") is None
+    assert rows[2].get("zastarelo") is True

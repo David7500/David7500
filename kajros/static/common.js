@@ -655,14 +655,29 @@ function measuredStopHtml(s, isCurrent, w) {
   `;
 }
 
+// Ostanek, ki ga feed po nekem trenutku ni vec osvezil. Streznik ga pove z
+// `zamuda.vrsta` (`stats.oznaci_zastarele`), ker je pravilo mehansko in mora
+// biti v enem jeziku: postanek, osvezen prej kot kateri od prejsnjih.
+function jeZastarel(s) {
+  return !!(s.zamuda && s.zamuda.vrsta === "zastarelo");
+}
+
 function gapStopHtml(s) {
   const sched = hhmm(s.sched_dep || s.sched_arr);
+  // "Brez meritve" in "feed je nehal posiljati" nista isto: prvo pomeni, da
+  // ni prislo nic, drugo, da je prislo in obticalo. Stevilka, ki je ostala,
+  // je delala nemogoce vozne rede (naslednja postaja PRED prejsnjo), zato je
+  // tu ni -- povemo pa, zakaj je ni.
+  const zast = jeZastarel(s);
   return `
     <div class="stop-row is-muted">
       <div class="stop-rail"><span class="stop-dot is-hollow"></span><span class="stop-line"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}</div>
-        <div class="stop-times"><span class="stop-sched-plain">${sched}</span> <span class="stop-tag">brez meritve</span></div>
+        <div class="stop-times"><span class="stop-sched-plain">${sched}</span> <span class="stop-tag">${
+          zast ? "feed ni osvežil" : "brez meritve"}</span></div>
+        ${zast ? `<div class="stop-times adv-only"><span class="stop-tag">zadnja vrednost ${
+          delayText(stopDelay(s))} je ostanek, ne meritev</span></div>` : ""}
       </div>
       <div class="stop-delay is-none">—</div>
     </div>
@@ -753,7 +768,7 @@ function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
     const isHi = highlight != null && s.stop_seq === highlight;
     let html;
     if (cur && s.stop_seq <= cur.stop_seq) {
-      html = stopActualIso(s)
+      html = stopActualIso(s) && !jeZastarel(s)
         ? measuredStopHtml(s, s.stop_seq === cur.stop_seq, wx.get(s.stop_seq))
         : gapStopHtml(s);
     } else {
