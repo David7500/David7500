@@ -712,3 +712,27 @@ naloži se v 1,6 s. Nova meja 300 000, predpomnilnik z štirih na dva vnosa
 ~4 s za vsako poizvedbo (lokalno 0,35 s). Brskalnika to ne prizadene, ker
 odkar obstaja `/api/stations/index`, išče sam; endpoint je še vedno v rabi kot
 zasilna pot in pri prvih pritiskih tipk, preden se kazalo naloži.
+
+## Isto postajališče pod dvema imenoma (7. 9. 2026)
+
+LPP piše **12 % imen s samimi velikimi črkami** („ČRNUČE", 45 od 388), IJPP
+pa normalno. Ker v aplikaciji vse teče po **imenu** postaje, sta to dve
+različni postaji: iskalnik pokaže obe, odhodna tabla razdeli odhode, budilka
+pa si zapomni tisto, ki je nikjer drugje ni.
+
+Imen, ki se razlikujejo samo po velikosti črk ali šumniku, je **24**. Slepo
+združevanje bi bilo napačno — razdelitev po razdalji je ostra:
+
+| razdalja | parov | kaj so |
+|---|---|---|
+| 3–215 m | **14** | isto postajališče, dva zapisa |
+| 0,8–111,6 km | **10** | različna kraja z istim imenom |
+
+Med 215 m in 829 m ni ničesar. „Celje" in „Čelje" sta **112 km** narazen,
+„Lozice" in „Ložice" 43 km, „Rožna Dolina" in „Rožna dolina" 66 km — to so
+različne vasi in jih ni dovoljeno zliti.
+
+Uvoz zato poenoti ime samo, kadar sta zapisa tudi **fizično na istem mestu**
+(`ISTO_POSTAJALISCE_M = 500`). Kanonično je ime, ki ni v samih velikih črkah;
+ob več takih odloči pogostost in nato abeceda, da je izid ponovljiv.
+Izid uvoza: `imen_poenotenih: 14`, preostalih dvojnic 10 — vse različni kraji.

@@ -7,7 +7,7 @@ import json
 import sqlite3
 import statistics
 import zipfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -308,6 +308,58 @@ def _edge_builder(stops):
     return feed, finish
 
 
+# Najvecji razmik, pri katerem sta dva zapisa se ISTO postajalisce.
+#
+# Meja je izmerjena, ne izbrana. Med 24 pari imen, ki se razlikujeta samo po
+# velikosti crk ali sumniku, je razdelitev ostra:
+#
+#   14 parov je 3-215 m narazen  -> isto postajalisce, dva zapisa
+#   10 parov je 0,8-111,6 km      -> RAZLICNA kraja z istim imenom
+#
+# Med 215 m in 829 m ni nicesar. "Celje" in "Celje" sta 112 km narazen,
+# "Lozice" in "Lozice" 43 km -- to so razlicne vasi in jih ni dovoljeno zliti.
+ISTO_POSTAJALISCE_M = 500
+
+
+def _poenoti_imena(stops: dict) -> int:
+    """Isto postajalisce, dva zapisa imena -> eno ime.
+
+    LPP pise dvanajst odstotkov imen s samimi velikimi crkami ("CRNUCE"),
+    IJPP pa normalno ("Crnuce"). **Vse v aplikaciji tece po IMENU postaje**,
+    zato sta to dve razlicni postaji: iskalnik ju pokaze obe, odhodna tabla
+    razdeli odhode, budilka pa si zapomni tistega, ki ga nikjer drugje ni.
+
+    Zdruzimo samo tiste, ki so tudi FIZICNO na istem mestu -- glej
+    `ISTO_POSTAJALISCE_M`. Kanonicno je ime, ki ni v samih velikih crkah;
+    ce jih je vec takih, odloci pogostost in nato abeceda, da je izid
+    ponovljiv.
+    """
+    from .journey import _fold
+
+    po_imenu: dict[str, list] = defaultdict(list)
+    for s in stops.values():
+        po_imenu[_fold(s["name"])].append(s)
+
+    spremenjenih = 0
+    for skupina in po_imenu.values():
+        imena = {s["name"] for s in skupina}
+        if len(imena) < 2:
+            continue
+        naj = max(
+            geo.haversine(a["lat"], a["lon"], b["lat"], b["lon"])
+            for a in skupina for b in skupina if a["name"] != b["name"]
+        )
+        if naj > ISTO_POSTAJALISCE_M:
+            continue        # razlicna kraja z istim imenom -- pusti pri miru
+        stevec = Counter(s["name"] for s in skupina)
+        kanon = min(imena, key=lambda n: (n.isupper(), -stevec[n], n))
+        for s in skupina:
+            if s["name"] != kanon:
+                s["name"] = kanon
+                spremenjenih += 1
+    return spremenjenih
+
+
 def _lpp_oznaka(kratko: str) -> str:
     """`01` -> `1`, `01B` -> `1B`, `N3` ostane.
 
@@ -457,6 +509,8 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         shapes.update(mesto["shapes"])
         lpp_trips = len(mesto["trips"])
 
+    imen_poenotenih = _poenoti_imena(stops)
+
     with conn:
         # Voznja, ki ima MERITVE, mora prezivati uvoz tudi takrat, ko je nov
         # vozni red nima. Brez tega jo `DELETE FROM trip` osiroti: `run` in
@@ -546,6 +600,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "trips_lpp": lpp_trips,
+        # Koliko postajalisc je dobilo drugo ime, ker je isto mesto v feedih
+        # zapisano dvakrat. Ce je to veliko, se je nekaj spremenilo pri viru.
+        "imen_poenotenih": imen_poenotenih,
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),
         "trips_blocked": sum(1 for t in trips.values() if t.get("block_id")),
     }
