@@ -175,7 +175,7 @@ paketi (`python3-venv`, `python3-pip`, `sqlite3`, `git`), sistemski
 uporabnik `kajros`, štiri enote v `/etc/systemd/system/` in `enable --now`
 za `kajros.service` ter `kajros-backup.timer`.
 
-**Stanje maline, preverjeno 7. 9. 2026** (ne po spominu — vse iz `systemctl`
+**Stanje maline PRED selitvijo, 7. 9. 2026** (ne po spominu — vse iz `systemctl`
 in `ls` na njej):
 
 | kaj | vrednost |
@@ -200,6 +200,24 @@ namesti nove enote. Rabi sudo, torej jo požene David.
   `KAJROS_LPP=0`.
 * **Poizvedb na malini ne poganjaj.** `SELECT COUNT(*) FROM run` čez 683 MB
   tam preseže 120 s. Analiza gre na kopijo, ne na izvirnik.
+
+**Selitev je bila opravljena v noči na 8. 9. 2026** in je uspela:
+`962 951 → 962 951` meritev, `sztrack-zajem` onemogočen, `kajros-zajem` teče,
+baza na `/var/lib/kajros/kajros.sqlite`. Mestni LPP je **vklopljen** — Davidova
+odločitev: naprava, ki teče ves čas, naj zajema vse.
+
+Kar se je pri tem naučilo in velja naprej:
+
+* **Pred `.backup` ustavi pisca.** Spletna kopija se ob vsakem pisanju v izvorno
+  bazo začne znova; z živim zajemom se 683 MB ne konča nikoli. Prvi poskus je
+  17 minut stal pri 190 MB in bil videti kot počasen stroj.
+* **`sudo` ima na malini `timestamp_type=global`** — ko David enkrat vpiše
+  geslo, velja tudi za agentovo sejo, dokler ne poteče.
+* **Domača mapa je zdaj čista**: `~/kajros-koda` (koda za namestitev) in
+  `~/kajros-zgodovina` (git bundle + stari posnetki baze). Vse podvojene kopije
+  so odstranjene.
+* `deploy/pospravi-malino.sh` odstrani stare enote in `/opt/sztrack` ter
+  nastavi časovni pas; noče se pognati, dokler selitev ni dokazano uspela.
 
 
 ## Dostop od zunaj: samo Cloudflare
