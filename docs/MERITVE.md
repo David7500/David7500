@@ -1036,3 +1036,34 @@ odgovoru; manjkal je le ključ `lpp` v `BUS_LAYERS`.
 
 Po popravku isti pogled (Ljubljana, z13): števec LPP **124**, vrstica „Drugi
 prevozniki" skrita, ker je števec 0.
+
+## Zakaj je lega stara 1–2 minuti (7. 9. 2026)
+
+Vprašanje je bilo, ali ni lega osvežena vsakih 40 s in torej največ toliko
+stara. Ni — in nobena od sekund ni naša. Izmerjeno ob 18:59–19:03 na
+`/app/bus/11` (mestni LPP) in naravnost na obeh feedih:
+
+**Kar prikaz kaže na tem vozilu (zaporedna branja na 12 s):**
+86 → 98 → 110 → 122 → 135 s, nato skok na 57 s. To je natanko en cikel.
+
+**Od kod te sekunde, po členih:**
+
+| člen | LPP (`sources/lpp/all`) | IJPP (`vehicle_positions`) |
+|---|---|---|
+| lega je stara že v feedu (glava − `vehicle.timestamp`) | mediana **35 s** (min 26, p90 50, max 54) | mediana **33 s** (p90 74, max 194) |
+| kako pogosto se feed osveži | **~90 s** (n=99, mediana 90, min 69, max 111 — vsa vozila hkrati, torej paket) | polovica vozil se v 60 s ne premakne; premaknjenim mediana 40 s |
+| glava feeda ob branju | stara 20–59 s | stara **1–2 s** |
+| koliko doda naš zajem | **0 s** (izmerjeno: vseh 99 leg ima natanko isti `seen_ts` kot feed ta hip) | 0 s |
+
+Torej: 35 s je lega stara, preden jo derp.si sploh zapakira, do 90 s traja, da
+naredi nov posnetek, in do 30 s je naš cikel (`POLL_SECONDS`, LPP hodi po ritmu
+zamud). Vsota se ujema z opaženim: najmanj ~57 s, največ ~147 s.
+
+`seen_ts` je `vehicle.timestamp` iz feeda, ne čas našega branja — zato je
+„lega stara N" poštena številka in prav zato ni videti lepše.
+
+**Edino, kar je naše, je zadnjih do 30 s.** LPP feed **nima ne `ETag` ne
+`Last-Modified`** (preverjeno v glavah), zato pogojna zahteva ni mogoča:
+vsakih 30 s se prenese 315 682 B, kar je **909 MB/dan**, in ker se vsebina
+spremeni le vsakih ~90 s, sta dve tretjini tega isti bajti. Pogostejši zajem
+bi povprečno starost znižal za ~10 s in promet potrojil na 2,7 GB/dan.

@@ -390,3 +390,20 @@ avtobusni `run`, ne železniški.
   (123); `_kind()` tretje veje doslej ni potreboval.
 * **Vsako obvestilo ima natanko eno obdobje veljavnosti.** Vseh 102 v živem
   feedu; glej varovalo `vec_obdobij` v `ingest()`.
+
+## Lege so stare, in to ni naša zamuda
+
+`seen_ts` je `vehicle.timestamp` **iz feeda**, ne čas našega branja — namenoma,
+ker prikaz trdi „lega stara N" in mora biti to res starost meritve.
+
+Pri mestnem LPP je zato normalna starost **57–147 s**: lega je ob pakiranju
+stara mediano 35 s, feed se osveži šele vsakih ~90 s (vsa vozila hkrati, v
+paketu), naš 30-sekundni cikel doda do 30 s. Izmerjeno 7. 9. 2026, podrobnosti
+in razrez po členih v [docs/MERITVE.md](../../docs/MERITVE.md).
+
+Preden kdo išče napako pri sebi: primerjaj `seen_ts`, ki ga strežemo, s
+`vehicle.timestamp` v feedu ta hip. Ob zadnji meritvi je bilo ujemanje
+**99 od 99**.
+
+LPP feed **nima `ETag` ne `Last-Modified`**, zato pogojna zahteva ni mogoča in
+vsak zajem prenese vseh 315 kB.
