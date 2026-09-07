@@ -771,10 +771,15 @@ def api_shape(trip_id: str):
 def api_shapes_live():
     """Trase vseh vozil, ki so zdaj na poti — po obliki, ne po vožnji.
 
-    Dve vozili iste linije v isti smeri imata isto traso, zato jih zdruzimo:
-    izmerjeno je 128 razlicnih oblik namesto ~100 voznj, 539 kB pred gzipom.
-    Plast je izbirna in privzeto ugasnjena -- gost snop crt cez vso Ljubljano
-    je odgovor na vprasanje "kod vozijo linije", ne na "kje je moj avtobus".
+    Dve vozili iste linije v isti smeri imata isto traso, zato jih zdruzimo.
+    Izmerjeno 7. 9. 2026, po vklopu mestnega LPP: **427 oblik in 1,83 MB**
+    pred gzipom (prej 128 oblik in 539 kB). Mestne linije so traso potrojile.
+
+    Plast je izbirna in **privzeto ugasnjena** -- gost snop crt cez vso
+    Ljubljano je odgovor na vprasanje "kod vozijo linije", ne na "kje je moj
+    avtobus". Zato ta velikost zadene samo tistega, ki jo vklopi, in se
+    predpomni za minuto. Ce bi kdaj postala privzeta, jo je treba najprej
+    razredciti (Douglas-Peucker je v `geo.py` ze).
     """
     # Vezano na lege: dokler se vozila ne premaknejo, so trase iste.
     return _predpomni("shapes-live", _znacka("positions_fetched"), 60, _shapes_live_rows)
