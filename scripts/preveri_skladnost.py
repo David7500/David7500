@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 sys.path.insert(0, ".")
@@ -121,6 +122,50 @@ def ovire_povsod_isto():
     return None
 
 
+def tabla_in_okno_isto():
+    """Ista vožnja, ista postaja, dve strani -- ena številka.
+
+    Odhodna tabla in okno vožnje računata mejo med meritvijo in napovedjo
+    vsak po svoje: tabla vidi en sam postanek, okno pa celo vožnjo. Ko je
+    okno dobilo pravilo o neskladnih urah (`stats.oznaci_neskladne`), je
+    tabla lahko za isti postanek še vedno kazala ostanek kot „izmerjeno".
+    Tu se preveri, da se nista razšla.
+
+    Vzorec je odvisen od ure dneva -- ponoči izmerjenih vrstic skoraj ni --
+    zato premalo vrstic ni napaka, ampak molk.
+    """
+    postaje = (("Ljubljana", "zeleznica"), ("Maribor", "zeleznica"),
+               ("Celje", "zeleznica"), ("Bavarski dvor", "avtobus"),
+               ("Ljubljana AP", "avtobus"), ("Celje AP", "avtobus"))
+    ujema = 0
+    for ime, net in postaje:
+        q = urllib.parse.urlencode({"station": ime, "network": net, "limit": 40})
+        d = json.load(urllib.request.urlopen(f"{BASE}/api/departures?{q}", timeout=30))
+        for r in d["board"]:
+            if r.get("delay_s") is None or r.get("delay_kind") != "izmerjeno":
+                continue
+            q2 = urllib.parse.urlencode({"trip": r["trip_id"], "date": d["date"]})
+            no = urllib.parse.quote(r["train_no"])
+            run = json.load(urllib.request.urlopen(f"{BASE}/api/train/{no}/run?{q2}", timeout=30))
+            s = next((x for x in run["stops"] if x["stop_seq"] == r["stop_seq"]), None)
+            if s is None:
+                return f'{r["train_no"]}: table pozna postanek {r["stop_seq"]}, okno ne'
+            z = s.get("zamuda")
+            if z is not None and z["vrsta"] == "neskladno":
+                return (f'{r["train_no"]} na {ime}: tabla „izmerjeno" '
+                        f'{r["delay_s"]} s, okno „neskladno"')
+            if z is None:
+                if not r.get("delay_from"):
+                    return f'{r["train_no"]} na {ime}: tabla ima zamudo, okno nima'
+                continue
+            if abs(z["s"] - r["delay_s"]) > 60:
+                return (f'{r["train_no"]} na {ime}: tabla {r["delay_s"]} s, '
+                        f'okno {z["s"]} s')
+            ujema += 1
+    print(f"       (primerjanih vrstic: {ujema})")
+    return None
+
+
 for opis, fn in (
     ("brez osirotelih meritev", brez_sirot),
     ("delež točnih = vsota razredov", vsota_razredov),
@@ -128,6 +173,7 @@ for opis, fn in (
     ("health je hiter (pod 200 ms)", health_je_hiter),
     ("prestop pod ničlo z besedo", prestop_brez_minusa),
     ("ovire povsod ista številka", ovire_povsod_isto),
+    ("tabla in okno vožnje ista številka", tabla_in_okno_isto),
 ):
     preveri(opis, fn)
 
