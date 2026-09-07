@@ -16,7 +16,17 @@ NOVA_BAZA=/var/lib/kajros/kajros.sqlite
 VIR="${KAJROS_SRC:-/home/david/kajros-src}"
 
 krepko() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-padec()  { printf '\n\033[1;31m%s\033[0m\n' "$*" >&2; exit 1; }
+padec()  {
+    printf '\n\033[1;31m%s\033[0m\n' "$*" >&2
+    # Ce smo zajem ustavili in selitev ni uspela, ga prizgi nazaj: stroj brez
+    # zajema je slabsi od stroja s starim imenom.
+    if ! systemctl is-active --quiet kajros-zajem.service 2>/dev/null \
+       && systemctl list-unit-files sztrack-zajem.service >/dev/null 2>&1; then
+        echo "   prizigam nazaj stari zajem" >&2
+        systemctl start sztrack-zajem.service 2>/dev/null || true
+    fi
+    exit 1
+}
 
 [ "$(id -u)" -eq 0 ] || padec "Ta skript rabi root: sudo bash $0"
 
@@ -46,18 +56,30 @@ krepko "kaj teče zdaj"
 systemctl is-active sztrack-zajem.service >/dev/null 2>&1 \
     && echo "   sztrack-zajem: teče" || echo "   sztrack-zajem: ne teče"
 
-if [ -f "$STARA_BAZA" ]; then
-    krepko "varnostna kopija pred selitvijo"
-    # `.backup` in ne `cp`: baza je v WAL in gola datoteka nima zadnjih zapisov.
-    KOPIJA="$STARI_DATA/backup/pred-selitvijo-$(date +%Y%m%d-%H%M).sqlite"
-    install -d -o sztrack -g sztrack "$STARI_DATA/backup"
-    sqlite3 "$STARA_BAZA" ".backup $KOPIJA"
-    gzip -1 "$KOPIJA"
-    ls -la "$KOPIJA.gz"
+# **Zajem se ustavi PRED kopijo, in to ni previdnost, ampak nujnost.**
+# `sqlite3 .backup` je spletna kopija: kadar kdo med njo piše v izvorno bazo,
+# se kopiranje **zacne znova od prve strani**. Stari zajem pise vsakih 30 s,
+# baza je 683 MB in kopija rabi ~40 minut -- kopija se torej nikoli ne konca.
+# Ujeto v zivo 7. 9. 2026: datoteka je 17 minut stala pri 190 MB, `sqlite3` pa
+# je porabil 2:38 procesorskega casa in pisal v krogu.
+krepko "ustavljam stari zajem (kopija ga ne prenese)"
+systemctl stop sztrack-zajem.service 2>/dev/null || true
+sleep 2
 
+if [ -f "$STARA_BAZA" ]; then
     krepko "koliko je v bazi PRED selitvijo"
     PRED=$(sqlite3 "file:$STARA_BAZA?mode=ro" "SELECT COUNT(*) FROM run;")
     echo "   meritev: $PRED"
+
+    krepko "varnostna kopija pred selitvijo"
+    # `.backup` in ne `cp`: baza je v WAL in gola datoteka nima zadnjih zapisov.
+    # Brez `gzip`: stiskanje 683 MB je na Pi Zero W se nekaj minut, prostora pa
+    # je 19 G. Dnevne stisnjene kopije ze obstajajo posebej.
+    KOPIJA="$STARI_DATA/backup/pred-selitvijo-$(date +%Y%m%d-%H%M).sqlite"
+    install -d -o sztrack -g sztrack "$STARI_DATA/backup"
+    rm -f "$STARI_DATA"/backup/pred-selitvijo-*.sqlite*   # ostanki prejsnjih poskusov
+    sqlite3 "$STARA_BAZA" ".backup $KOPIJA"
+    ls -la "$KOPIJA"
 else
     PRED=""
 fi

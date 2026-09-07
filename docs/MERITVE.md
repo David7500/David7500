@@ -1199,3 +1199,25 @@ zajem. Popravek je indeks `run_feed_ts`:
 Poduk, ki velja naprej: **poizvedba, ki je bila poceni pri 800 000 vrsticah,
 ni nujno poceni pri 1,25 milijona.** Po vsakem večjem prilitju izmeri
 `/api/health` in tiste poizvedbe, ki se ne dajo predpomniti.
+
+## Spletna kopija SQLite se ob pisanju začne znova (7. 9. 2026)
+
+Selitev maline je obtičala in razlog je vreden zapisa, ker ni viden iz ničesar,
+kar bi človek pogledal prvo.
+
+`sqlite3 baza ".backup kam"` je **spletna** kopija: kadar kdo med njo piše v
+izvorno bazo, se kopiranje **začne znova od prve strani**. Zajem na malini piše
+vsakih 30 s, baza je 683 MB in kopija na SD kartici napreduje ~17 MB/min —
+torej rabi ~40 minut. Kopija se v takih pogojih **ne konča nikoli**.
+
+Kako je bilo videti: datoteka je 17 minut stala pri **190 873 600 bajtih**,
+njen `mtime` pa se je ves čas osveževal. `sqlite3` je porabil 2:38
+procesorskega časa in bil v stanju `D`. Videti je bilo kot počasen stroj, ne
+kot zanka.
+
+**Pravilo:** pred kopijo ustavi pisca. `deploy/preseli-malino.sh` zdaj ustavi
+`sztrack-zajem` pred `.backup` in ga ob padcu prižge nazaj — stroj brez zajema
+je slabši od stroja s starim imenom.
+
+Ob tem odpadel še `gzip -1` na 683 MB: na Pi Zero W je to nekaj dodatnih minut,
+prostora pa je 19 G in dnevne stisnjene kopije obstajajo posebej.
