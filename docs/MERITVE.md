@@ -444,7 +444,7 @@ knjižnica v paketu je Kotlinova standardna.
 
 | različica | velikost | zakaj toliko |
 |---|---|---|
-| izdajna (R8) | **28 kB** | naša koda + kar od Kotlina res rabi |
+| izdajna (R8) | **52 kB** | naša koda + kar od Kotlina res rabi (28 kB pred budilko, seznamom in mostom) |
 | razvojna | 824 kB | brez R8; 2,33 MB `classes.dex` pred stiskanjem je Kotlinova standardna knjižnica cela |
 
 Preverjeno v paketu: `aapt2 dump strings` najde **0** nizov z `com/google`,
