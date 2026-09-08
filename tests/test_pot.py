@@ -132,8 +132,8 @@ def test_max_nog_omeji_stevilo_vozenj(conn):
     _voznja(conn, "t3", "c", [(1, "ROB", 8 * 3600 + 2400),
                               (2, "CILJ", 8 * 3600 + 2700)])
     conn.commit()
-    izh, _ = pot.blizu(conn, OD[0], OD[1], {"BLIZU", "DALEC", "ROB", "CILJ"})
-    cil, _ = pot.blizu(conn, DO[0], DO[1], {"BLIZU", "DALEC", "ROB", "CILJ"}, smer="do")
+    izh, _, _ = pot.blizu(conn, OD[0], OD[1], {"BLIZU", "DALEC", "ROB", "CILJ"})
+    cil, _, _ = pot.blizu(conn, DO[0], DO[1], {"BLIZU", "DALEC", "ROB", "CILJ"}, smer="do")
     for meja in (1, 2, 3):
         n = pot._isci_dan(conn, izh, cil, D, 8 * 3600, meja)
         if n is None:
@@ -160,7 +160,7 @@ def test_brez_postajalisc_v_dosegu_ni_izmisljene_voznje(conn):
     Predlog vseeno je — hoja. Ta ni izmišljena, ampak edina resnica, ki jo
     imamo, in „ni poti" bi bil slabši odgovor od nje.
     """
-    izh, _ = pot.blizu(conn, OD[0], OD[1], set())
+    izh, _, _ = pot.blizu(conn, OD[0], OD[1], set())
     assert izh == {}
     r = pot.isci(conn, OD, DO, D, 8 * 3600)
     assert all(n["vrsta"] == "hoja"
@@ -318,3 +318,21 @@ def test_ko_ni_poti_pove_koliko_je_pes(conn, monkeypatch):
     p = r["predlogi"][0]
     assert p.get("edina") is True
     assert p["hoje_s"] == 90 * 60
+
+
+def test_nasvet_pove_koliko_hoje_bi_bilo_treba(conn, monkeypatch):
+    """„Ni poti" brez nadaljevanja je slep konec.
+
+    Meja hoje velja **do postaje**; kadar je prvo uporabno postajališče tik čez
+    njo, je to ugotovitev in ne ugibanje. Da bi s tem pot res nastala, pa ne
+    obljubljamo — postajališče v dosegu še ni zveza.
+    """
+    _voznja(conn, "t1", "a", [(1, "BLIZU", 8 * 3600 + 900),
+                              (2, "CILJ", 8 * 3600 + 1500)])
+    conn.commit()
+    # Cilj je 556 m od postajališča "Cilj", torej 6,7 min hoje. Z mejo petih
+    # minut ga ni v dosegu -- in prav to mora stran povedati s številko.
+    dalje = (46.104, 14.500)
+    r = pot.isci(conn, OD, dalje, D, 8 * 3600, max_hoje_s=5 * 60)
+    assert r["ciljev"] == 0
+    assert r["nasvet"] and r["nasvet"]["vec_hoje_min"] == 7

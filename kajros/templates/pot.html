@@ -67,7 +67,10 @@
           <input id="ob" type="time" step="60">
         </label>
         <label class="polje">
-          <span>Največ hoje</span>
+          {#- "do postaje" ni podrobnost: polje omejuje hojo DO POSTAJE, ne
+              hoje sploh. Brez teh dveh besed si stran nasprotuje sama s sabo --
+              polje pravi 25 minut, pot "vso pot peš" pa jih ima 85. #}
+          <span>Največ hoje do postaje</span>
           {#- "Po meri" je tu, ker je 25 minut privzetek in ne pravilo: kdor
               hodi rad, gre dlje, kdor ne more, manj. Meji 3 in 45 sta isti kot
               na endpointu -- polje, ki dovoli vec od streznika, laze. #}

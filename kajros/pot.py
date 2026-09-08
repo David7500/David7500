@@ -45,6 +45,12 @@ MAX_HOJE_S = 25 * 60
 #: Štiri noge = trije prestopi, ista meja kot pri `journey.plan()`.
 MAX_NOG = 4
 
+#: Do kod iščemo kandidate ne glede na nastavljeno mejo. To je največ, kar
+#: polje na strani dovoli (45 min); vse čez mejo se **zavrže**, obdrži se le
+#: podatek, kako daleč je prvo. Brez tega odgovora "koliko hoje bi bilo treba"
+#: ni mogoče dati: postajališče tik čez mejo prefilter sploh ne izmeri.
+NASVET_MEJA_S = 45 * 60
+
 #: Koliko kandidatov gre največ v eno matriko hoje. Pri Bavarskem dvoru jih je
 #: v polmeru 25 minut 201; matrika 1 x 120 je izmerjeno 81 ms, 1 x 201 pa okoli
 #: 130 ms. Meja je tu zato, da najbolj prometno mesto v državi ne postavi cene
@@ -171,8 +177,12 @@ def _polnoc(service_date: str) -> int:
 
 def blizu(conn: sqlite3.Connection, lat: float, lon: float,
           streze: set[str], najvec_s: int = MAX_HOJE_S,
-          smer: str = "od") -> tuple[dict[str, int], str]:
-    """Postajališča v peš dosegu točke: `{stop_id: sekunde hoje}` in vir.
+          smer: str = "od") -> tuple[dict[str, int], str, int | None]:
+    """Postajališča v peš dosegu točke: `{stop_id: sekunde hoje}`, vir in
+    koliko hoje bi bilo treba do **prvega postajališča čez mejo**.
+
+    Zadnje je za odgovor, kadar ni poti: "z 32 minutami hoje bi bilo v dosegu
+    tudi postajališče" je uporabno, "ni poti" ni.
 
     Predfilter je **zračni polmer brez faktorja obvoza** (`hoja.doseg_zracno`):
     zračna črta je vedno krajša od prave poti, zato ne izpusti ničesar
@@ -182,7 +192,7 @@ def blizu(conn: sqlite3.Connection, lat: float, lon: float,
     naloženega voznega reda in ne iz svoje poizvedbe: ista stvar v SQL (JOIN
     čez `sched`) je izmerjeno 629 ms, tu pa je zastonj.
     """
-    polmer = hoja.doseg_zracno(najvec_s)
+    polmer = hoja.doseg_zracno(max(najvec_s, NASVET_MEJA_S))
     dlat = polmer / 111_320.0
     dlon = dlat / max(0.2, abs(math.cos(math.radians(lat))))
     kandidati = []
@@ -197,14 +207,19 @@ def blizu(conn: sqlite3.Connection, lat: float, lon: float,
     kandidati.sort()
     kandidati = kandidati[:MAX_KANDIDATOV]
     if not kandidati:
-        return {}, hoja.OSRM
+        return {}, hoja.OSRM, None
 
     sekunde, vir = hoja.matrika(lat, lon, [(k[2], k[3]) for k in kandidati], smer)
     out = {}
+    cez_mejo = None
     for (_, stop_id, _, _), s in zip(kandidati, sekunde):
-        if s is not None and s <= najvec_s:
+        if s is None:
+            continue
+        if s <= najvec_s:
             out[stop_id] = s
-    return out, vir
+        elif cez_mejo is None or s < cez_mejo:
+            cez_mejo = s
+    return out, vir, cez_mejo
 
 
 def _isci_dan(conn, izhodisca: dict[str, int], cilji: dict[str, int],
@@ -497,8 +512,8 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     streze = set(at_stop)
 
     zamik = zamiki(conn, service_date, now_s)
-    izhodisca, vir_a = blizu(conn, od[0], od[1], streze, max_hoje_s, "od")
-    cilji, vir_b = blizu(conn, do[0], do[1], streze, max_hoje_s, "do")
+    izhodisca, vir_a, cez_a = blizu(conn, od[0], od[1], streze, max_hoje_s, "od")
+    cilji, vir_b, cez_b = blizu(conn, do[0], do[1], streze, max_hoje_s, "do")
     vir_hoje = hoja.OSRM if vir_a == vir_b == hoja.OSRM else hoja.ZRAK
 
     predlogi = []
@@ -629,10 +644,24 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
                     "noge": [{"vrsta": "hoja", "sekunde": pes_s,
                               "od": None, "do": None}]}]
 
+    # Kaj bi pomagalo, kadar z vozilom ni ničesar. Meja hoje velja **do
+    # postaje**; kadar je prvo uporabno postajališče tik čez njo, je to
+    # ugotovitev in ne ugibanje -- povemo, koliko bi je bilo treba. Da bi s tem
+    # pot res nastala, pa ne obljubljamo: postajališče v dosegu še ni zveza.
+    nasvet = None
+    if not any(n["vrsta"] == "voznja" for p in izbrani for n in p["noge"]):
+        potrebno = [x for x in (cez_a if not izhodisca else None,
+                                cez_b if not cilji else None) if x]
+        if potrebno:
+            nasvet = {"vec_hoje_min": min(45, -(-max(potrebno) // 60))}
+        elif izhodisca and cilji:
+            nasvet = {"ni_zveze": True}
+
     return {
         "datum": service_date,
         "izhodisc": len(izhodisca), "ciljev": len(cilji),
         "vir_hoje": vir_hoje,
+        "nasvet": nasvet,
         "predlogi": izbrani,
         "trajalo_ms": round((time.perf_counter() - t0) * 1000),
     }

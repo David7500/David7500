@@ -143,9 +143,20 @@ popravek in prvi klik pokaže, kje si bil, ne kje si.
 je edini način, da nekomu poveš, kako priti do tebe, opis s stavki — in prav
 to je stran, ki naj bi ga nadomestila.
 
-**Največ hoje ima tudi „po meri".** 25 minut je privzetek in ne pravilo: kdor
-hodi rad, gre dlje, kdor ne more, manj. Meji polja sta isti kot na endpointu
-(3–45) — polje, ki dovoli več od strežnika, laže.
+**Polje se imenuje „Največ hoje DO POSTAJE".** Brez teh dveh besed si stran
+nasprotuje sama s sabo: polje pravi 25 minut, pot „vso pot peš" pa jih ima 85.
+Omejitev velja za dostop do postajališča in z njega, ne za hojo sploh — in ta
+razlika je bila prijavljena kot napaka, ker je bila nevidna.
+
+Ima tudi „po meri": 25 minut je privzetek in ne pravilo. Meji polja sta isti
+kot na endpointu (3–45) — polje, ki dovoli več od strežnika, laže.
+
+**Ko z vozilom ni ničesar, stran pove dvoje**, ne le „ni poti": koliko traja
+hoja vso pot (to je resnica, ki jo imamo) in **koliko hoje bi bilo treba**, da
+bi bilo v dosegu prvo postajališče — s številko in gumbom, ki jo nastavi.
+Zadnje ni obljuba: postajališče v dosegu še ni zveza, in tako tudi piše.
+Zato prefilter kandidatov meri do **45 minut** ne glede na nastavljeno mejo;
+sicer postajališča tik čez mejo sploh ne izmeri in te številke ni od kod dobiti.
 
 ### `/app/pot/podrobno` — ista pot, razložena
 

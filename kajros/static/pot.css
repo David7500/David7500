@@ -285,3 +285,11 @@ a.predlog:hover .predlog-vec { color: var(--accent-lit); }
 .karta-lega.je-iskanje { opacity: 0.6; }
 
 .v-prestop { font-size: 0.76rem; }
+
+/* Nasvet ob praznem izidu. Ne obljublja poti -- pove, kaj bi bilo drugace. */
+.nasvet { display: block; margin-top: 6px; color: var(--ink-dim); }
+.nasvet button {
+  font: inherit; font-size: inherit; color: var(--accent-lit);
+  background: none; border: 0; border-bottom: 1px solid currentColor;
+  padding: 0; cursor: pointer;
+}

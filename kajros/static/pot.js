@@ -349,6 +349,30 @@ async function narisiPot(p) {
   }
 }
 
+// Kaj bi pomagalo, kadar z vozilom ni ničesar. Meja hoje velja do postaje;
+// kadar je prvo uporabno postajališče tik čez njo, je to ugotovitev in ne
+// ugibanje. Da bi s tem pot res nastala, ne obljubljamo -- postajališče v
+// dosegu še ni zveza, in tako tudi piše.
+function nasvetHtml(n) {
+  if (!n) return "";
+  if (n.ni_zveze) {
+    return ' <span class="nasvet">Postajališča so v dosegu, zveze med njimi ta '
+      + "čas ni.</span>";
+  }
+  return ` <span class="nasvet">Najbližje postajališče je <strong>${n.vec_hoje_min} min</strong>`
+    + ` hoje — <button type="button" id="vec-hoje" data-min="${n.vec_hoje_min}">`
+    + "poskusi s toliko</button>, čeprav zveza s tem ni zagotovljena.</span>";
+}
+
+function pripniNasvet() {
+  const b = document.getElementById("vec-hoje");
+  if (!b) return;
+  b.addEventListener("click", () => {
+    nastaviHoje(Number(b.dataset.min));
+    isci();
+  });
+}
+
 function izrisi(izid) {
   S.izidi = izid;
   S.izbran = 0;
@@ -367,7 +391,8 @@ function izrisi(izid) {
   // kot da smo prezrli avtobus, ki ga v resnici ni.
   if (izid.predlogi.length === 1 && izid.predlogi[0].edina) {
     stanje.innerHTML = "Z vozilom ni poti, ki bi bila hitrejša od hoje."
-      + ` · ${dayLabel(izid.datum)}${opomba}`;
+      + ` · ${dayLabel(izid.datum)}${opomba}${nasvetHtml(izid.nasvet)}`;
+    pripniNasvet();
   } else {
     stanje.innerHTML = `${izid.predlogi.length} ${sklon(izid.predlogi.length, "predlog")}`
       + ` · ${dayLabel(izid.datum)}${opomba}`;
