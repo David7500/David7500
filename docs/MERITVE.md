@@ -1281,3 +1281,42 @@ videti kot mirna noč.
 | postankov | 496 542 |
 | baza | 683 → 696 MB, disk 18 G prost |
 | selitev | 962 951 → 962 951 meritev |
+
+## Prikaz je trdil dogodek, o katerem ni imel novic (8. 9. 2026)
+
+Uporabnik je stal na Ljubljani Polje, aplikacija pa je za LPV 2001 kazala
+**„+6 min · izmerjeno · vlak je tu že bil"**. Kaj je vlak res počel, iz naših
+podatkov **ni ugotovljivo** in tu tega ne domnevamo. Ugotovljivo je dvoje
+drugega, in oboje je bilo narobe pri nas.
+
+**1. Meja meritve je prehitevala feed.** Postanek je veljal za prevožen, ko je
+bil „vozni red plus zadnja znana zamuda" mimo. To je ura, ne meritev: ko feed
+o vožnji utihne, se pogoj sam od sebe razširi do konca proge. Ob 07:04 je
+prikaz trdil, da je vlak prevozil **vseh 29 postankov**, vključno s prihodom v
+Ljubljano ob 07:01. Meja je zdaj zamejena z zadnjo besedo feeda o tej vožnji.
+
+Varno je izmerjeno: vožnje, ki so **v** feedu, so sveže — mediana **45 s**,
+p90 59 s, največ 343 s (733 voženj). V normalnem obratovanju to ne spremeni nič.
+
+**2. Tišine feeda prikaz ni povedal.** Kaj je feed rekel o tej vožnji:
+
+| ura | postanek | vrednost |
+|---|---|---|
+| 06:43:25 | Ljubljana Zalog | +6 |
+| 06:51:52 | Ljubljana (končna) | **0** |
+| 06:52:56 | Ljubljana Polje | +6 |
+| 06:54:22 | Ljubljana | +6 |
+| — | — | **24 minut tišine** |
+| 07:18:53 | Ljubljana | **+29** |
+
+Ob 07:00 je bila zadnja novica o vlaku stara **7 minut**, prikaz pa je pisal
+„pred 5 min" — to je bila starost *domnevnega prehoda* (vozni red + zamuda),
+ne starost novice. Zdaj se pokaže tišina: „o vlaku 15 min ni novic — to je
+zadnja znana številka, ne trenutna", prag **180 s** (trikratnik izmerjenega
+ritma osveževanja).
+
+**Kar ostaja nerešeno in je vredno zgraditi:** feed **prevožene postanke
+izpušča** — vsaka preverjena železniška vožnja ima v sporočilu le okno
+postankov pred vozilom (LP 4201: 26–29 od 31; LPV 2402: samo 14 od 17). Izpad
+postanka iz okna je torej **opazovan dogodek prehoda**, ne aritmetika z
+zamudo. Tega ne beležimo, zato takega vprašanja za nazaj ni mogoče razrešiti.

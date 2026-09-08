@@ -984,8 +984,16 @@ def api_run(train_no: str, date: str | None = None,
                 s["typical"] = typ.get((razresen, s["stop_seq"]))
             stats.typical_na_izhodisce(rows)
         zivo = _lpp_zivo(conn, razresen, rows, date, meja_seq, zdaj)
+        # **Kdaj je feed o tej voznji nazadnje kaj rekel.** Brez tega prikaz ne
+        # more lociti sveze stevilke od zadnje znane -- in prav ta razlika je
+        # bila 8. 9. 2026 na zaslonu: LPV 2001 je ob 07:00 kazal "+6 min,
+        # izmerjeno", medtem ko je bila zadnja novica o njem stara 7 minut in
+        # je feed cez cetrt ure povedal +29.
+        zadnja = max((s["feed_ts"] for s in rows if s.get("feed_ts")), default=None)
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "last_measured_seq": meja_seq,
+                "zadnja_beseda": zadnja,
+                "tiho_s": (int(zdaj.timestamp()) - zadnja) if zadnja else None,
                 "zivi_vir": zivo, "stops": rows}
 
 

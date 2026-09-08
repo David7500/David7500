@@ -157,6 +157,27 @@ function applyNetworkWording() {
 // in prikaz mora to povedati -- "+20 min" ob polnoci, izmerjeno ob 17h, je laz.
 const FRESH_S = 20 * 60;
 
+// Koliko sekund tisine feeda o EN I voznji je ze nenormalno.
+//
+// To ni isto kot `FRESH_S`. Ta meri starost domnevnega prehoda (vozni red plus
+// zamuda), tisina pa starost NOVICE. Razlika je bila 8. 9. 2026 na zaslonu:
+// LPV 2001 je ob 07:00 kazal "+6 min, izmerjeno, pred 5 min", pri cemer je
+// bila zadnja novica o njem stara 7 minut -- feed je nato po 24 minutah
+// tisine povedal +29. Potnik na Ljubljani Polje je gledal prazen tir.
+//
+// Prag je izmerjen: voznje, ki so v feedu, se osvezujejo z mediano 45 s,
+// p90 59 s in najvec 343 s (733 voznj, 8. 9. 2026). Tri minute tisine so
+// torej ze izjema, ne ritem.
+const TIHO_S = 180;
+
+function trajanje(sekund) {
+  const min = Math.round(sekund / 60);
+  if (min < 1) return `${Math.round(sekund)} s`;
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  return `${h} h ${String(min % 60).padStart(2, "0")} min`;
+}
+
 function ageLabel(iso) {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (min < 1) return "pravkar";
@@ -208,7 +229,11 @@ function runHeadHtml(cur) {
   const color = delayColor(z || d);
   const atIso = cur ? stopActualIso(cur) : null;
   const ageS = atIso ? (Date.now() - new Date(atIso).getTime()) / 1000 : null;
-  const stale = ageS != null && ageS > FRESH_S;
+  // Tisina feeda je merodajnejsa od starosti domnevnega prehoda: prva pove,
+  // kdaj smo nazadnje kaj IZVEDELI, druga le, kdaj naj bi se nekaj zgodilo.
+  const tihoS = state.run && state.run.tiho_s != null ? state.run.tiho_s : null;
+  const tiho2 = tihoS != null && tihoS > TIHO_S;
+  const stale = tiho2 || (ageS != null && ageS > FRESH_S);
   // "-6 min" je uganka, beseda ni -- in prezgoden avtobus je za potnika hujsa
   // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
   // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
@@ -253,9 +278,14 @@ function runHeadHtml(cur) {
         t0.od_seq ? `, merjeno na postaji ${escapeHtml(t0.od_ime)}` : ""} · ${
         Math.round(t0.on_time_share * 100)} % v 5 min</div>` : ""}
       ${atIso ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
-        ${stale ? "⚠ " : ""}${escapeHtml(ageLabel(atIso))}${stale
-          ? ` — ${vehicleNoun()} je od takrat verjetno že pripeljal`
-          : ""}
+        ${tiho2
+          // Ena starost, ne dve. Ko feed molci, je edina, ki kaj pove,
+          // starost NOVICE -- starost domnevnega prehoda je izpeljanka iz
+          // nje in bralca samo zmede.
+          ? `⚠ o ${vehicleNoun()}u <strong>${escapeHtml(trajanje(tihoS))}</strong> ni novic — to je zadnja znana številka, ne trenutna`
+          : stale
+            ? `⚠ ${escapeHtml(ageLabel(atIso))} — ${vehicleNoun()} je od takrat verjetno že pripeljal`
+            : escapeHtml(ageLabel(atIso))}
       </div>` : ""}
       ${rep ? `<div class="detail-report adv-only">
         Prevoznik poroča <strong style="color:${delayColor(rep.delay_min * 60)}">${rep.delay_min > 0 ? "+" : ""}${rep.delay_min} min</strong>
@@ -302,11 +332,18 @@ function yourStopHtml(stops, forecast, current) {
   let znak = "ocena";
   let odkod = "";
   const zivo = passed ? null : zivaNapoved(s);
+  const tihoS2 = state.run && state.run.tiho_s != null ? state.run.tiho_s : null;
+  const tihoTu = tihoS2 != null && tihoS2 > TIHO_S;
   if (passed) {
     d = stopDelay(s);
     kdaj = stopActualIso(s);
-    znak = "izmerjeno";
-    odkod = `${vehicleNoun()} je tu že bil`;
+    // "Vlak je tu ze bil" je trditev o dogodku. Kadar o voznji ni novic, je
+    // to samo se zadnja znana napoved -- in prav ta razlika je 8. 9. 2026
+    // poslala potnika domov s postaje, s katere vlak se ni odpeljal.
+    znak = tihoTu ? "zadnje znano" : "izmerjeno";
+    odkod = tihoTu
+      ? `po zadnjem podatku bi moral biti tu ob ${hhmm(kdaj)} — od takrat ni novic`
+      : `${vehicleNoun()} je tu že bil`;
   } else if (zivo) {
     // Prevoznikova ziva napoved iz lege vozila. Pri mestnem LPP je to edina
     // stevilka, ki ne stoji na napovedi o napovedi -- glej `zivaNapoved()`.
