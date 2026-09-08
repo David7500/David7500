@@ -1911,3 +1911,29 @@ def test_meja_meritve_normalno_sledi_feedu(conn):
     conn.commit()
     m = stats.last_measured(conn, dan, ["t1"], 10 * 3600 + 600)
     assert m["t1"]["stop_seq"] == 3, "sveži feed mora dovoliti mejo do konca"
+
+
+# ---------------------------------------------------------------- varovalka voznega reda
+
+def test_prevelik_vozni_red_vrze_napako(conn, monkeypatch):
+    """Prazen vozni red je od „ta dan nič ne vozi" nerazločljiv.
+
+    Varovalka je prej vračala `({}, {})` in `plan()` je vrnil prazen seznam.
+    Ko je mestni LPP omrežje potrojil, je bila meja prekoračena mesece, ne da
+    bi kdo vedel — prikaz je kazal „ni zvez" in to je bil videti kot resnica.
+    """
+    monkeypatch.setattr(journey, "MAX_STOP_TIMES", 1)
+    with pytest.raises(journey.VozniRedPrevelik):
+        journey._timetable_for_day(conn, "2026-08-31", None)
+
+
+def test_prevelik_vozni_red_se_ne_pogoltne_v_iskanju(conn, monkeypatch):
+    """Napaka mora priti do klicatelja, sicer je varovalka spet tiha."""
+    monkeypatch.setattr(journey, "MAX_STOP_TIMES", 1)
+    with pytest.raises(journey.VozniRedPrevelik):
+        journey.plan(conn, "Ajdovščina", "Celje", "2026-08-31", network=None)
+
+
+def test_normalen_vozni_red_gre_skozi(conn):
+    by_trip, at_stop = journey._timetable_for_day(conn, "2026-08-31", None)
+    assert by_trip and at_stop

@@ -1355,3 +1355,131 @@ ni ničesar, kar bi sprožilo sum.
 **Edino, kar bi to res rešilo, je zapis okna feeda.** Feed prevožene postanke
 izpušča; dokler je postanek v sporočilu, vozilo mimo njega ŠE NI. To velja
 enako za ničlo kot za +6 in ne zahteva nobene domneve o velikosti zamude.
+
+## Koliko časa res hodiš do postajališča (8. 9. 2026)
+
+Za iskanje poti od vrat do vrat je hoja polovica odgovora. Vprašanje je bilo,
+ali zadošča zračna razdalja s stalnim faktorjem obvoza.
+
+**Prvi poskus umeritve iz naših podatkov ne odgovori na vprašanje.** Razmerje
+med potjo po `shape` polilinji in zračno črto med **sosednjima postajališčema
+iste linije**, 42 869 parov:
+
+| razdalja | parov | mediana | p90 |
+|---|---|---|---|
+| < 300 m | 1 095 | 1,21 | 2,44 |
+| 300–800 m | 14 760 | 1,06 | 1,49 |
+| > 800 m | 27 014 | 1,07 | 1,33 |
+
+Mediana 1,07 — a to meri cesto med dvema postajališčema, ki po definiciji
+ležita na isti cesti. Pešec, ki gre od hiše do postaje, ni na tej cesti.
+Ta številka je torej **prenizka**, ne previsoka, in za rezervo neuporabna.
+
+**Prava umeritev proti pešpotim.** Naključne točke po Sloveniji do svojih
+najbližjih postajališč, primerjava zračne črte s pravo pešpotjo (OSRM, peš
+profil). Dva neodvisna vzorca:
+
+| vzorec | parov | mediana | p75 | p90 | največji |
+|---|---|---|---|---|---|
+| javni OSRM, razvojna baza | 211 | 1,42 | 1,85 | 2,55 | 4,76 |
+| naš OSRM, arwenova baza | 1 080 | 1,43 | 1,83 | 2,63 | **7,86** |
+
+Obvoz ni šum, ampak **ovire** — Sava, proga, avtocesta. Postajališče 300 m
+stran po zraku je lahko 1 400 m hoje.
+
+| faktor | pokrije primerov |
+|---|---|
+| 1,2 | 30 % |
+| 1,3 | 41 % |
+| 1,45 | **52 %** |
+| 1,6 | 65 % |
+
+Ena konstanta torej ne more biti hkrati varna in uporabna: 1,45 podceni pot v
+48 % primerov (potnik zamudi avtobus), 2,63 pa bi iz 500 m naredila 15 minut
+hoje in stran bi zavračala dosegljive povezave.
+
+**Zato hoja teče čez svoj usmerjevalnik** (`kajros/hoja.py`, `deploy/osrm.sh`).
+Faktor ostane le kot zasilna pot in je zato **p75 (1,85), ne mediana** — brez
+usmerjevalnika velja pravilo budilke, da potnik ne sme zamuditi. Izmerjeno na
+831 parih, kaj ta zasilna ocena naredi: mediana **+366 s predolga**, p10 −814 s,
+in v 15 % primerov je še vedno prekratka. To je cena tega, da nečesa ne merimo.
+
+### Postavitev usmerjevalnika (arwen, i5-6200U, 4 niti)
+
+| korak | čas | vrh pomnilnika |
+|---|---|---|
+| prenos `slovenia-latest.osm.pbf` (299 MB) | 30 s | — |
+| `docker pull` | 21 s | — |
+| `osrm-extract -p foot.lua` | **481 s** | **2,25 GB** |
+| `osrm-partition` + `osrm-customize` | 106 s | 572 MB |
+| podatki na disku (brez `.pbf`) | 807 MB | |
+| strežnik med tekom | | 525 MB |
+
+| matrika ena točka → N ciljev | 10 | 30 | 70 | 120 |
+|---|---|---|---|---|
+| odziv | 8 ms | 14 ms | 32 ms | 81 ms |
+
+Troje, kar je meritev pokazala in bi se sicer domnevalo:
+
+* **Naš strežnik vrne isto kot javni** — 412,8 m do decimalke. „Samo za demo"
+  je bila omejitev gostitelja, ne programa.
+* **Peš profil hodi 5,00 km/h**, kar je natanko hitrost, ki jo je zahteval
+  David. `duration` je torej že prava številka in je ni treba računati.
+* **Peš nedosegljivih postajališč ni** — 0 od 831. Ravnanje za `null` v matriki
+  vseeno obstaja, ker bi bila tiha ničla videti kot „nič hoje".
+
+Meja velikosti matrike je bila preizkušena do 300 koordinat brez napake;
+privzetek ni dokumentiran, zato ga `deploy/osrm.sh` nastavlja izrecno na 1 000.
+
+## Doseg hoje: 25 minut je zastonj (8. 9. 2026)
+
+Pričakovanje je bilo, da večji doseg podraži iskanje. Ne podraži ga — cena je v
+premetavanju voznega reda, ne v številu izhodiščnih postajališč.
+
+| primer | 10 min | 15 min | 20 min | 25 min |
+|---|---|---|---|---|
+| Bavarski dvor → Vič | 08:27 | 08:25 | 08:24 | **08:24** |
+| Grosuplje → LJ center | 09:07 | 08:57 | 08:57 | **08:57** |
+| Bohinj → Kranj | 10:26 | 10:26 | 10:22 | **10:22** |
+| čas iskanja | 259–283 ms | 252–441 ms | 263–305 ms | 267–316 ms |
+
+Pri Bavarskem dvoru gre število izhodišč s 16 na 73 in iskanje ostane enako
+hitro; pri Grosuplju je prihod **10 minut boljši**, ker je bilo pravo
+postajališče 11 minut hoje daleč.
+
+Kandidatov v polmeru 2 083 m (25 min × 5 km/h): Bavarski dvor **201**,
+Ljubljana Polje 66, Grosuplje 27, Bohinjska Bistrica 9.
+
+## Iskanje od vrat do vrat, prototip (8. 9. 2026)
+
+Prototip čez **obe omrežji hkrati**, štiri noge, hoja na obeh koncih,
+peš prestopi med postajališči do 300 m:
+
+| primer | izhodišč | ciljev | iskanje |
+|---|---|---|---|
+| Bavarski dvor → Vič | 44 | 12 | 314 ms |
+| Grosuplje → LJ center | 13 | 47 | 312 ms |
+| Bohinj → Kranj | 5 | 13 | 280 ms |
+| Ljubljana Polje → Maribor | 3 | 6 | 225 ms |
+
+Vozni red obeh omrežij za 8. 9. 2026 je **255 245 postankov** v 12 963 vožnjah;
+naloži se v 1,74 s in zadrži 94 MB (vrh 131 MB).
+
+Preverjeno na roko, da izid ni naključje: Grosuplje → Ljubljana center ob 8:00
+= 416 m hoje (6,5 min) → LP 3232 ob 08:17 → Ljubljana 08:44 → 982 m hoje
+(15,3 min) → **08:59**. Prototip vrne isto minuto.
+
+**Peš vso pot je včasih hitreje.** Ljubljana Polje → BTC ob 8:00 z avtobusom
+pomeni prihod 09:04; hoja je 47 minut, torej 08:47. Stran, ki tega ne pove,
+pošilja ljudi na počasnejšo pot.
+
+### Peš povezave med postajališči
+
+| doseg | povezav | najbolj povezano postajališče |
+|---|---|---|
+| 150 m | 5 609 | 7 sosedov |
+| 300 m | 7 314 | 14 sosedov |
+| 500 m | 12 070 | 25 sosedov |
+
+Brez teh se prestopa **samo na istem `stop_id`** — „Bavarski dvor" v eno smer in
+v drugo za iskalnik nista isti kraj. Takih imen je **4 507 od 5 500**.

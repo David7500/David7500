@@ -41,6 +41,17 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"],
 # in to prek Tailscala ali tunela ni vseeno. Brez nove odvisnosti (starlette).
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+
+@app.exception_handler(journey.VozniRedPrevelik)
+def _voznired_prevelik(request: Request, exc: journey.VozniRedPrevelik):
+    """Vozni red je prevelik za iskanje v pomnilniku — 503, ne prazen odgovor.
+
+    Prej je varovalka vracala prazen vozni red in prikaz je pokazal "ni zvez".
+    To je od pravega odgovora nerazlocljivo, zato je napaka mesece ostala
+    neopazena. Zdaj je vidna in ima svojo stevilko.
+    """
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 # Dve locheni omrezji, ne en kup. `zeleznica` so vlaki IN nadomestni prevozi SZ
 # (ti na svoji relaciji zamenjujejo vlak in sodijo v isti odgovor), `avtobus`
 # pa LPP in ostali prevozniki. Potnik ve, ali gre z vlakom ali z busom, in ju

@@ -819,10 +819,21 @@ MAX_LEGS = 4
 # napake straži `preveri.sh`, a je ni ujel, ker `plan()` tece sele takrat, ko
 # ni ne neposredne ne prestopa.
 #
-# Nova meja je izmerjena: cel avtobusni dan je 92 MB zadrzano in 127 MB vrh,
-# nalozi se v 1,6 s. Predpomnilnik je zato zmanjsan na dva vnosa, da je
-# najhujsi primer ~184 MB in ne 370.
-MAX_STOP_TIMES = 300_000
+# **Zato varovalka odslej vrže napako, ne praznega voznega reda.** Prazen izid
+# je od pravega odgovora nerazlocljiv ("ta dan res nic ne vozi") in prav to je
+# napako skrilo. Poln vozni red je ali na voljo ali pa ga ni; polovicni bi dal
+# odgovore, ki so tiho napacni.
+#
+# Meja je 400 000, ker iskanje poti od vrat do vrat bere **obe omrezji hkrati**:
+# 8. 9. 2026 je to 255 245 postankov (94 MB zadrzano, 131 MB vrh, 1,74 s).
+# Stara meja 300 000 je bila od tega le 18 % oddaljena, ena nova agencija pa
+# omrezje premakne bolj kot to -- mestni LPP ga je potrojil. Pri 400 000 je
+# najhujsi primer ~147 MB na vnos in ~294 MB za oba vnosa predpomnilnika.
+MAX_STOP_TIMES = 400_000
+
+
+class VozniRedPrevelik(RuntimeError):
+    """Dnevni vozni red presega `MAX_STOP_TIMES` in se ne sme naloziti."""
 
 
 # Dnevni vozni red v pomnilniku, da ga ne beremo znova ob vsakem iskanju.
@@ -865,12 +876,9 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
         (service_date, network, network),
     ).fetchall()
     if len(rows) > MAX_STOP_TIMES:
-        # Prazen izid tudi predpomnimo: brez tega bi vsak klic znova prebral
-        # cetrt milijona vrstic, da bi vrnil nic. Vsebina se brez novega ziga
-        # ne more spremeniti, zato je to varno.
-        if stamp:
-            _TT_CACHE[key] = ({}, {})
-        return {}, {}
+        raise VozniRedPrevelik(
+            f"dnevni vozni red {service_date} ({network or 'obe omrežji'}) ima "
+            f"{len(rows)} postankov, meja je {MAX_STOP_TIMES}")
 
     by_trip: dict[str, list] = {}
     at_stop: dict[str, list] = {}

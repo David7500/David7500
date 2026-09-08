@@ -112,6 +112,11 @@ OCENA_SECONDS = int(okolje("OCENA_SECONDS", "120"))
 OCENA_BUS_VZOREC = int(okolje("OCENA_BUS_VZOREC", "5"))
 OCENA_KEEP_DAYS = int(okolje("OCENA_KEEP_DAYS", "30"))
 
+# Peš usmerjevalnik (OSRM) za hojo do postajališča -- glej `hoja.py` in
+# `deploy/osrm.sh`. Prazno ga ugasne in hoja pade na zračno razdaljo × faktor.
+# Samo krajevni naslov: strežnik nima avtentikacije in ga kliče ta proces.
+OSRM_URL = okolje("OSRM", "http://127.0.0.1:5000").rstrip("/")
+
 USER_AGENT = okolje("USER_AGENT", "kajros/0.1 (+https://github.com/David7500)")
 TIMEZONE = "Europe/Ljubljana"
 
