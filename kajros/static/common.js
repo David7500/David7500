@@ -974,23 +974,67 @@ function pollVehicles(url, onData) {
 // ki pomeni oceno. Modro proti oranzni loci tudi vsaka oblika barvne slepote.
 const ME_COLOR = "#2f7fff";
 
-function locateMe() {
+// Deset sekund in `enableHighAccuracy` je bilo premalo. Na telefonu brez
+// Googlovih storitev (razgooglana Volla) ni omreznega dolocanja lege -- ostane
+// gol GPS, ki iz hladnega stanja rabi desetine sekund, v stavbi pa pogosto
+// nikoli. `getCurrentPosition` je zato izteklo in povedalo samo "ni bilo
+// mogoce dobiti", kar je za iskanje vzroka neuporabno.
+//
+// Zato troje: `watchPosition` (prvi fix vzame takoj, ko pride, in ne caka na
+// iztek), daljsi rok, in **razlicna sporocila za razlicne vzroke** -- zavrnjeno
+// dovoljenje, GPS brez signala in iztek niso ista tezava.
+const LEGA_ROK_MS = 25000;
+//: Ko je lega natancnejsa od tega, je ni treba izboljsevati. GPS v mestu se
+//: ustali okoli 10-30 m; prva groba lega iz baznih postaj zna biti 1-2 km.
+const LEGA_DOVOLJ_M = 100;
+
+function locateMe(opts) {
+  const { rok = LEGA_ROK_MS, dovolj = LEGA_DOVOLJ_M, napredek } = opts || {};
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       return reject(new Error("Brskalnik ne pozna lokacije."));
     }
     // Brskalniki dovolijo lokacijo samo na HTTPS ali localhostu. Po HTTP na
-    // domacem naslovu klic tiho odpove, zato to povemo vnaprej in ne cakamo.
+    // domacem naslovu klic tiho odpove, zato to povemo vnaprej in imenujemo
+    // naslov -- sicer clovek isce napako pri sebi.
     if (!window.isSecureContext) {
-      return reject(new Error("Lokacija je na voljo samo prek HTTPS ali na localhostu."));
+      return reject(new Error(
+        `Lokacija dela samo prek HTTPS; na ${location.host} je brskalnik ne da. `
+        + "Odpri kajros.app."));
     }
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude,
-                       acc: p.coords.accuracy }),
-      (e) => reject(new Error(e.code === 1
-        ? "Dostop do lokacije je zavrnjen."
-        : "Lokacije ni bilo mogoče dobiti.")),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+
+    let id = null;
+    let koncano = false;
+    let najboljsa = null;
+
+    const konec = (napaka) => {
+      if (koncano) return;
+      koncano = true;
+      clearTimeout(cas);
+      if (id !== null) navigator.geolocation.clearWatch(id);
+      if (najboljsa) return resolve(najboljsa);   // groba lega je boljsa od nobene
+      reject(napaka || new Error("Lokacije ni bilo mogoče dobiti."));
+    };
+
+    const cas = setTimeout(() => konec(new Error(
+      `GPS se ni odzval v ${Math.round(rok / 1000)} s. Pod streho pogosto ne `
+      + "dobi signala — poskusi zunaj ali izberi kraj na zemljevidu.")), rok);
+
+    id = navigator.geolocation.watchPosition(
+      (p) => {
+        const l = { lat: p.coords.latitude, lon: p.coords.longitude,
+                    acc: p.coords.accuracy };
+        if (!najboljsa || l.acc < najboljsa.acc) najboljsa = l;
+        if (napredek) napredek(l);
+        // Prvi fix je lahko iz bazne postaje in gresi za kilometer; pocakamo
+        // na boljsega, dokler je se cas.
+        if (l.acc <= dovolj) konec(null);
+      },
+      (e) => konec(new Error(
+        e.code === 1 ? "Dostop do lokacije je zavrnjen — dovoli ga v nastavitvah strani."
+        : e.code === 2 ? "Naprava lege ne zna dobiti (GPS ugasnjen ali brez signala)."
+        : `GPS se ni odzval v ${Math.round(rok / 1000)} s.`)),
+      { enableHighAccuracy: true, timeout: rok, maximumAge: 60000 },
     );
   });
 }

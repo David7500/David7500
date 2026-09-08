@@ -125,11 +125,18 @@ document.querySelectorAll(".tocka").forEach((el) => {
         povej("Klikni na zemljevid.", null);
         return;
       }
-      povej("Iščem tvojo lego …", null);
+      // GPS brez omrežnega določanja lege rabi lahko pol minute. Molk je v
+      // tem času videti kot pokvarjen gumb, zato povemo, kje smo -- vključno
+      // s trenutno natančnostjo, ki je edino merilo, ali se sploh premika.
+      povej("Iščem tvojo lego … (GPS zna rabiti pol minute)", null);
       try {
-        const loc = await locateMe();
+        const loc = await locateMe({
+          napredek: (l) => povej(`Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m`, null),
+        });
         postavi(kaj, { lat: loc.lat, lon: loc.lon, ime: "moja lega" });
-        povej("");
+        povej(loc.acc > 200
+          ? `Lega je natančna na ${Math.round(loc.acc)} m — po potrebi popravi na zemljevidu.`
+          : "");
       } catch (e) {
         povej(e.message, "napaka");
       }
