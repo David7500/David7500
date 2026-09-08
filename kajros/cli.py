@@ -290,12 +290,14 @@ def cmd_pot(args):
     if not izid["predlogi"]:
         print("  brez predlogov")
     for p in izid["predlogi"]:
+        # Zaokrozuj enako kot zaslon (`floor(x + 0,5)`), sicer ista pot tu in
+        # tam pise drugo minuto.
         print(f"\n  {_ura(p['odhod'])} -> {_ura(p['prihod'])}   "
-              f"{p['trajanje_s'] // 60} min · hoje {p['hoje_s'] // 60} min · "
+              f"{(p['trajanje_s'] + 30) // 60} min · hoje {(p['hoje_s'] + 30) // 60} min · "
               f"{p['prestopov']} prestopov")
         for n in p["noge"]:
             if n["vrsta"] == "hoja":
-                print(f"      peš {n['sekunde'] // 60:3d} min  "
+                print(f"      peš {(n['sekunde'] + 30) // 60:3d} min  "
                       f"{n.get('od') or '(izhodišče)'} -> {n.get('do') or '(cilj)'}")
             else:
                 print(f"      {n['train_no']:12} {_ura(n['odhod'])} {n['od']}"

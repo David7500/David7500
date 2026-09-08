@@ -35,6 +35,10 @@
     </a>
   </div>
   <span class="nav-sep"></span>
+  {#- "Pot" je edina stran, ki se ne zacne pri postaji, ampak pri tocki -- in
+      edina poleg zemljevida, ki obe omrezji namerno mesa. Zato je v glavi
+      povsod, ne le pri enem omrezju. #}
+  {%- if here != 'pot' %}<a class="top-link" href="/app/pot">pot</a>{% endif %}
   {%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}
   {#- "Kdaj se splača" je 6. 9. 2026 umaknjena iz navigacije, ne izbrisana:
       stran dela in je dosegljiva na `/app/statistika[/bus]`, le da je ena

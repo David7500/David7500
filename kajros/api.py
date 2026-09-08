@@ -24,7 +24,7 @@ from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerts, collector, config, db, journey, lpp, stats
+from . import alerts, collector, config, db, journey, lpp, pot, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -196,6 +196,16 @@ def bus_page(request: Request):
         "stop_label": "Postajališče",
         "stop_ph": "npr. Bavarski dvor",
     })
+
+
+@app.get("/app/pot", response_class=HTMLResponse)
+def pot_page(request: Request):
+    """Od vrat do vrat: potnik ne ve, s katere postaje gre -- ve, kje stoji.
+
+    To je za zemljevidom druga stran, ki obe omrežji **namerno** meša: vlak in
+    avtobus sta tu lahko v isti verigi in delitev bi bila ovira, ne pomoč.
+    """
+    return templates.TemplateResponse(request, "pot.html", {"here": "pot"})
 
 
 @app.get("/app/map", response_class=HTMLResponse)
@@ -507,12 +517,20 @@ def api_station_index(network: str = NETWORK_Q):
     return Response(content=telo, media_type="application/json")
 
 
+#: Iskanje postaj sme na ENI strani teci cez obe omrezji -- na poti od vrat
+#: do vrat, kjer sta vlak in avtobus lahko v isti verigi. Drugod ostane
+#: privzeta `zeleznica`, ker je bilo mesanje merljivo skodljivo.
+NETWORK_ISKANJE_Q = Query("zeleznica", pattern="^(zeleznica|avtobus|vse)$",
+                          description="zeleznica, avtobus ali vse")
+
+
 @app.get("/api/stations/search")
 def api_station_search(q: str = Query(..., min_length=1), limit: int = Query(12, ge=1, le=50),
-                       network: str = NETWORK_Q):
+                       network: str = NETWORK_ISKANJE_Q):
     """Postaje po delnem imenu, brez šumnikov. Iskalnik na telefonu rabi prav to."""
     with _conn() as conn:
-        return journey.search_stations(conn, q, limit, network=network)
+        return journey.search_stations(conn, q, limit,
+                                       network=None if network == "vse" else network)
 
 
 @app.get("/api/stations/near")
@@ -1406,6 +1424,53 @@ def _add_gps_position(conn, rows: list[dict]) -> None:
         # a ta ni zanesljiv -- zato "pri", ne "stoji na" ali "proti".
         r["last_stop"] = gps["name"]
         r["position_source"] = "GPS"
+
+
+@app.get("/api/pot")
+def api_pot(
+    od_lat: float = Query(..., ge=45.2, le=47.0, description="izhodišče: širina"),
+    od_lon: float = Query(..., ge=13.2, le=16.8, description="izhodišče: dolžina"),
+    do_lat: float = Query(..., ge=45.2, le=47.0, description="cilj: širina"),
+    do_lon: float = Query(..., ge=13.2, le=16.8, description="cilj: dolžina"),
+    date: str | None = None,
+    ob: str | None = Query(None, description="HH:MM; privzeto zdaj"),
+    hoje: int = Query(pot.MAX_HOJE_S // 60, ge=3, le=45,
+                      description="koliko minut hoje na vsakem koncu"),
+):
+    """Pot od vrat do vrat: hoja → vožnja → (prestop) → vožnja → hoja.
+
+    Meje koordinat so Slovenija in nekaj čeznjo. To ni pedantnost: brez njih bi
+    zahteva s točko sredi Atlantika pognala matriko hoje in iskanje čez cel
+    vozni red, da bi vrnila prazno.
+
+    **Lega potnika se ne zapisuje.** Storitev teče z `--no-access-log`
+    (`deploy/kajros.service`), zato koordinate ne gredo v dnevnik. Kdor to
+    spremeni, naj ve, da s tem začne beležiti, kje kdo stoji in kam gre.
+    """
+    now = datetime.now(TZ)
+    dan = _check_date(date) or now.date().isoformat()
+    if ob:
+        try:
+            h, m = (int(x) for x in ob.split(":")[:2])
+        except ValueError:
+            raise HTTPException(400, "ob mora biti HH:MM")
+        odhod_s = h * 3600 + m * 60
+    else:
+        odhod_s = journey.now_seconds(now)
+
+    with _conn() as conn:
+        izid = pot.isci(conn, (od_lat, od_lon), (do_lat, do_lon), dan, odhod_s,
+                        max_hoje_s=hoje * 60)
+        # Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan in ima `dep_s`
+        # čez 86 400 (največji v voznem redu je 121 680, torej 33:48). Brez
+        # tega vprašanje ob pol enih zjutraj ne najde ničesar, čeprav vozi.
+        if not ob and now.hour < 4:
+            vceraj = pot.isci(conn, (od_lat, od_lon), (do_lat, do_lon),
+                              journey.yesterday(now), odhod_s + 86400,
+                              max_hoje_s=hoje * 60)
+            izid["predlogi"] = sorted(izid["predlogi"] + vceraj["predlogi"],
+                                      key=lambda p: (p["prihod"], p["hoje_s"]))
+    return izid
 
 
 @app.get("/api/live")

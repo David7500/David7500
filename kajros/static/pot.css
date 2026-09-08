@@ -1,0 +1,147 @@
+/* Pot od vrat do vrat.
+ *
+ * Postavitev je dvodelna: plosca z vprasanjem in odgovorom, zemljevid ob njej.
+ * Na telefonu gre plosca zgoraj in zemljevid pod njo -- odgovor je pomembnejsi
+ * od slike, in prav telefon je glavna naprava.
+ */
+
+.pot {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  height: calc(100dvh - var(--topbar-h, 48px));
+}
+
+.pot-panel {
+  overflow-y: auto;
+  padding: 14px 16px 28px;
+  border-right: 1px solid var(--line);
+  background: var(--bg-panel);
+}
+
+.pot-karta { min-height: 240px; }
+
+.pot-title { margin: 0 0 4px; font-size: 1.15rem; letter-spacing: -0.01em; }
+.pot-lead { margin: 0 0 16px; color: var(--ink-dim); font-size: 0.85rem; line-height: 1.45; }
+
+/* ---------------------------------------------------------------- kraja */
+
+.tocka { margin-bottom: 12px; position: relative; }
+
+.tocka-oznaka {
+  display: block; font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-mute); margin-bottom: 4px;
+}
+
+/* Kateri klik na zemljevid gre kam, mora biti vidno -- sicer je klik uganka. */
+.tocka.je-arm .tocka-oznaka { color: var(--accent-lit); }
+.tocka.je-arm .tocka-vnos { border-color: var(--accent); }
+
+.tocka-vrstica { display: flex; gap: 6px; }
+
+.tocka-vnos {
+  flex: 1; min-width: 0;
+  padding: 9px 10px; font: inherit; font-size: 0.9rem;
+  color: var(--ink); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r);
+}
+.tocka-vnos:focus { outline: none; border-color: var(--accent); }
+
+.tocka-gumb {
+  padding: 0 10px; font: inherit; font-size: 0.78rem;
+  color: var(--ink-dim); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r);
+  cursor: pointer;
+}
+.tocka-gumb:hover { color: var(--ink); background: var(--bg-hover); }
+
+.tocka-zadetki {
+  position: absolute; z-index: 500; left: 0; right: 0; top: 100%;
+  margin: 2px 0 0; padding: 4px; list-style: none;
+  background: var(--bg-raised); border: 1px solid var(--line-firm);
+  border-radius: var(--r); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  max-height: 260px; overflow-y: auto;
+}
+.tocka-zadetki button {
+  display: block; width: 100%; text-align: left;
+  padding: 7px 8px; font: inherit; font-size: 0.87rem;
+  color: var(--ink); background: none; border: 0; border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.tocka-zadetki button:hover { background: var(--bg-hover); }
+
+/* ---------------------------------------------------------------- nastavitve */
+
+.pot-nastavitve {
+  display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;
+  margin: 14px 0 10px;
+}
+.polje { display: flex; flex-direction: column; gap: 4px; }
+.polje > span {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+.polje input, .polje select {
+  padding: 8px 9px; font: inherit; font-size: 0.87rem;
+  color: var(--ink); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r);
+}
+
+.pot-isci {
+  flex: 1; min-width: 110px;
+  padding: 9px 14px; font: inherit; font-size: 0.9rem; font-weight: 600;
+  color: #1a1206; background: var(--accent-lit);
+  border: 0; border-radius: var(--r); cursor: pointer;
+}
+.pot-isci:hover { background: #f5a061; }
+
+.pot-stanje { min-height: 1.2em; font-size: 0.82rem; color: var(--ink-dim); }
+.pot-stanje.je-napaka { color: var(--sev-bad); }
+.pot-stanje.je-prazno { color: var(--ink-mute); }
+
+/* ---------------------------------------------------------------- predlogi */
+
+.pot-izidi { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+
+.predlog {
+  padding: 10px 12px; cursor: pointer;
+  background: var(--bg-raised);
+  border: 1px solid var(--line); border-left: 3px solid transparent;
+  border-radius: var(--r);
+}
+.predlog:hover { background: var(--bg-hover); }
+/* Izbrani predlog je tisti, ki je narisan na zemljevidu. Brez te oznake bi
+   bila crta na zemljevidu brez lastnika. */
+.predlog.je-izbran { border-left-color: var(--accent); }
+
+.predlog-glava { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.predlog-ure { font-family: var(--mono); font-size: 1rem; }
+.predlog-meta { font-size: 0.78rem; color: var(--ink-dim); }
+
+.noge { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.noga { display: flex; gap: 8px; font-size: 0.82rem; line-height: 1.35; }
+.noga-znak { width: 12px; text-align: center; color: var(--ink-ghost); flex: none; }
+.noga.je-voznja .noga-znak { color: var(--accent); }
+.noga-telo { min-width: 0; }
+.noga.je-hoja { color: var(--ink-dim); }
+.noga-kam { color: var(--ink-mute); }
+.noga-linija {
+  font-family: var(--mono); font-weight: 600; color: var(--ink);
+  text-decoration: none; border-bottom: 1px solid var(--line-firm);
+}
+.noga-linija:hover { border-bottom-color: var(--accent); }
+.noga-ure { display: block; color: var(--ink-dim); }
+.noga-ure strong { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+
+.pot-vir {
+  margin: 16px 0 0; font-size: 0.72rem; line-height: 1.5; color: var(--ink-faint);
+}
+.pot-vir a { color: var(--ink-mute); }
+
+@media (max-width: 860px) {
+  .pot {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 46vh;
+    height: auto;
+  }
+  .pot-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+}

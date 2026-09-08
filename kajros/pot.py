@@ -91,16 +91,20 @@ def _vozje(conn: sqlite3.Connection, service_date: str) -> dict[str, dict]:
     return out
 
 
-def _imena(conn: sqlite3.Connection) -> dict[str, str]:
-    """`{stop_id: ime}`. Statika, ki se med uvozi ne spreminja; branje vseh
-    10 509 vrstic ob vsakem predlogu je bilo brez potrebe."""
+def _imena(conn: sqlite3.Connection) -> dict[str, tuple]:
+    """`{stop_id: (ime, lat, lon)}`. Statika, ki se med uvozi ne spreminja;
+    branje vseh 10 509 vrstic ob vsakem predlogu je bilo brez potrebe.
+
+    Koordinate so zraven, ker mora zemljevid pot narisati -- brez njih bi jih
+    prikaz iskal z novo zahtevo na postajališče."""
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     n = conn.execute("SELECT COUNT(*) FROM station").fetchone()[0]
     kljuc = (kje, n)
     if kljuc not in _IMENA_CACHE:
         _IMENA_CACHE.clear()
-        _IMENA_CACHE[kljuc] = {r["stop_id"]: r["name"] for r in conn.execute(
-            "SELECT stop_id, name FROM station")}
+        _IMENA_CACHE[kljuc] = {r["stop_id"]: (r["name"], r["lat"], r["lon"])
+                               for r in conn.execute(
+                                   "SELECT stop_id, name, lat, lon FROM station")}
     return _IMENA_CACHE[kljuc]
 
 
@@ -277,16 +281,23 @@ def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int
     noge = []
     prvo = najdba["prvo"]
     # Hoja od izhodišča do prvega postajališča.
+    def ime(sid):
+        return imena[sid][0] if sid in imena else sid
+
+    def ll(sid):
+        return [imena[sid][1], imena[sid][2]] if sid in imena else None
+
     noge.append({"vrsta": "hoja", "sekunde": izhodisca[prvo],
-                 "od": None, "do": imena.get(prvo, prvo), "do_stop": prvo})
+                 "od": None, "do": ime(prvo), "do_stop": prvo, "do_ll": ll(prvo)})
 
     by_trip = journey._timetable_for_day(conn, service_date, None)[0]
     for trip_id, prej, bseq, cur, aseq in najdba["noge"]:
         if trip_id is None:
             noge.append({"vrsta": "hoja",
                          "sekunde": None,      # dopolni se spodaj iz ur
-                         "od": imena.get(prej, prej), "do": imena.get(cur, cur),
-                         "od_stop": prej, "do_stop": cur})
+                         "od": ime(prej), "do": ime(cur),
+                         "od_stop": prej, "do_stop": cur,
+                         "od_ll": ll(prej), "do_ll": ll(cur)})
             continue
         postanki = {s[0]: s for s in by_trip[trip_id]}
         v = vozje[trip_id]
@@ -294,8 +305,9 @@ def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int
             "vrsta": "voznja", "trip_id": trip_id, "train_no": v["train_no"],
             "headsign": v["headsign"], "mode": v["mode"], "network": v["network"],
             "agency": v["agency"],
-            "od": imena.get(prej, prej), "do": imena.get(cur, cur),
+            "od": ime(prej), "do": ime(cur),
             "od_stop": prej, "do_stop": cur,
+            "od_ll": ll(prej), "do_ll": ll(cur),
             "od_seq": bseq, "do_seq": aseq,
             "odhod": polnoc + postanki[bseq][3],
             "prihod": polnoc + postanki[aseq][2],
@@ -304,7 +316,8 @@ def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int
     # Hoja s zadnjega postajališča na cilj.
     zadnje = najdba["zadnje"]
     noge.append({"vrsta": "hoja", "sekunde": cilji[zadnje],
-                 "od": imena.get(zadnje, zadnje), "do": None, "od_stop": zadnje})
+                 "od": ime(zadnje), "do": None, "od_stop": zadnje,
+                 "od_ll": ll(zadnje)})
 
     # Peš prestopi med vožnjama: čas je razlika med prihodom in odhodom, a
     # samo toliko, kolikor je hoje -- ostalo je čakanje.
@@ -321,7 +334,9 @@ def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int
     for n in noge:
         if (n["vrsta"] == "hoja" and zlite and zlite[-1]["vrsta"] == "hoja"):
             zlite[-1]["sekunde"] += n["sekunde"]
-            zlite[-1]["do"], zlite[-1]["do_stop"] = n["do"], n.get("do_stop")
+            zlite[-1]["do"] = n["do"]
+            zlite[-1]["do_stop"] = n.get("do_stop")
+            zlite[-1]["do_ll"] = n.get("do_ll")
             continue
         zlite.append(n)
     # Hoja nič minut ni noga, ampak šum: postajališče je pred vrati.

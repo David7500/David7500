@@ -81,6 +81,38 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   staro obliko, stran bi novo polje izpustila in videti bi bilo, kot da
   sprememba ne dela. Točno to se je zgodilo pri `median_s`.
 
+## `/app/pot` — edina stran, ki se ne začne pri postaji
+
+Potnik ve, **kje stoji**, ne pa, s katere postaje mu pelje. Zato sta vhoda dva
+kraja (klik na zemljevid, lastna lega, ime postaje) in ne dve imeni, iskanje pa
+teče **čez obe omrežji** — vlak in avtobus sta lahko v isti verigi. To je za
+zemljevidom druga stran, ki omrežji namerno meša; zato ima `/api/stations/search`
+tu `network=vse`, drugod pa ostane privzeta `zeleznica`.
+
+**Na domači strani ni tretja izbira, ampak „ostalo".** Zgoraj potnik pove, s čim
+gre; tu se mu ni treba odločiti. Razlog za natanko dve izbiri zgoraj velja
+naprej.
+
+Štiri stvari, ki so se pokazale šele na zaslonu:
+
+* **Ravna črta med postajama ni proga.** Prva različica je Grosuplje–Ljubljana
+  narisala kot daljico čez pokrajino, kar trdi pot, ki je ni. Zdaj se najprej
+  nariše skica, nato jo zamenja **prava trasa iz `shape`**, izrezana med
+  vstopnim in izstopnim postajališčem. Hoja je črtkana in modra, vožnja polna
+  in oranžna — potnik mora videti, kje ga nese vozilo in kje njegove noge.
+* **Imen postaj ne sklanjaj.** „peš 7 min od izhodišča do Grosuplje" je narobe,
+  „do Grosupljega" pa bi moral nekdo izpeljati — in za „Bavarski dvor" ali
+  „Vič Glince" to ne bi delalo. Zato puščica: `izhodišče → Grosuplje`.
+* **Kateri klik gre kam, mora biti vidno.** Prvi klik postavi izhodišče,
+  naslednji cilj; katero polje je „nabito", pove barva oznake.
+* **Vir hoje pride na zaslon.** Kadar usmerjevalnik ne odgovori, stran napiše
+  „hoja je **ocena**" — zasilna številka je izmerjeno mediano 6 minut predolga
+  in brez te besede se bere kot izmerjena.
+
+**Pot je deljiva prek naslova** (`?od=lat,lon&do=lat,lon&ob=HH:MM`). Brez tega
+je edini način, da nekomu poveš, kako priti do tebe, opis s stavki — in prav
+to je stran, ki naj bi ga nadomestila.
+
 **Predlogi poti so ločeni po omrežju in izračunani, ne ugibani.** Avtobusna
 stran jih doslej ni imela nobene — bila je prazen obrazec brez izhodišča —
 železniški seznam pa tja ne sodi, ker se „Ljubljana“ na avtobusnem omrežju

@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 PORT="${KAJROS_PORT:-8001}"
 BASE="http://127.0.0.1:$PORT"
-STRANI=(/ /app/train /app/bus /app/map /app/ovire /app/statistika /app/statistika/bus)
+STRANI=(/ /app/train /app/bus /app/pot /app/map /app/ovire /app/statistika /app/statistika/bus)
 NAPAKE=0
 
 echo "== testi"
