@@ -1937,3 +1937,53 @@ def test_prevelik_vozni_red_se_ne_pogoltne_v_iskanju(conn, monkeypatch):
 def test_normalen_vozni_red_gre_skozi(conn):
     by_trip, at_stop = journey._timetable_for_day(conn, "2026-08-31", None)
     assert by_trip and at_stop
+
+
+def test_vozni_red_se_ob_hkratnem_klicu_nalozi_enkrat(tmp_path, monkeypatch):
+    """Dva klica hkrati ne smeta dvakrat naložiti istega dneva.
+
+    Hladno nalaganje obeh omrežij je na arwenu 9,6 s. Prva zahteva po zagonu
+    je plačala 26,5 s, ker je tekla vzporedno z ogrevanjem in je isti vozni
+    red naložila še enkrat. Ključavnica je NA KLJUČ, ne skupna: dva različna
+    dneva se med sabo nič ne tiščeta.
+    """
+    import threading
+    import time as _t
+
+    pot_baze = tmp_path / "t.sqlite"
+    c = db.connect(pot_baze)
+    db.init(c)
+    c.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('gtfs_imported_at','x')")
+    c.commit()
+    c.close()
+
+    journey._TT_CACHE.clear()
+    klici = []
+    pravi = journey._nalozi_vozni_red
+
+    def pocasi(*a, **k):
+        klici.append(1)
+        _t.sleep(0.2)
+        return pravi(*a, **k)
+
+    monkeypatch.setattr(journey, "_nalozi_vozni_red", pocasi)
+
+    def delo():
+        conn = db.connect(pot_baze)
+        journey._timetable_for_day(conn, "2026-08-31", None)
+        conn.close()
+
+    niti = [threading.Thread(target=delo) for _ in range(3)]
+    for n in niti:
+        n.start()
+    for n in niti:
+        n.join()
+    assert len(klici) == 1, f"vozni red naložen {len(klici)}-krat namesto enkrat"
+    journey._TT_CACHE.clear()
+
+
+def test_kljucavnica_je_na_kljuc():
+    a = journey._tt_kljucavnica(("baza", "2026-01-01", None, "x"))
+    b = journey._tt_kljucavnica(("baza", "2026-01-01", None, "x"))
+    c = journey._tt_kljucavnica(("baza", "2026-01-02", None, "x"))
+    assert a is b and a is not c

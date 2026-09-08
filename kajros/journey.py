@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+import threading
 import unicodedata
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -841,6 +842,8 @@ class VozniRedPrevelik(RuntimeError):
 # ki se ob uvozu premakne, in s tem pade cel predpomnilnik. Hranimo najvec
 # nekaj dni; vec jih naenkrat nihce ne gleda.
 _TT_CACHE: dict[tuple, tuple] = {}
+_TT_LOCKS: dict[tuple, threading.Lock] = {}
+_TT_LOCKS_GUARD = threading.Lock()
 # Trije in ne dva, odkar obstaja pot od vrat do vrat: ta bere **obe omrezji
 # hkrati**, iskalnik zvez pa vsako posebej. Pri dveh vnosih je vsako iskanje
 # zvez izrinilo skupno sliko in naslednja pot je placala poln nalog -- na
@@ -871,7 +874,26 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
         cached = _TT_CACHE.get(key)
         if cached is not None:
             return cached
+        # Kljucavnica NA KLJUC, ne skupna. Hladno nalaganje obeh omrezij je na
+        # arwenu 9,6 s; brez tega ga vsak vzporedni klic opravi znova -- prva
+        # zahteva po zagonu je zato placala 26,5 s namesto 9,6, ker je tekla
+        # ob ogrevanju. Skupna kljucavnica bi serializirala tudi razlicne dneve
+        # in omrezja, ki se med sabo nic ne tiscejo.
+        with _tt_kljucavnica(key):
+            cached = _TT_CACHE.get(key)
+            if cached is not None:
+                return cached        # medtem ga je nalozil kdo drug
+            return _nalozi_vozni_red(conn, service_date, network, key, stamp)
+    return _nalozi_vozni_red(conn, service_date, network, key, stamp)
 
+
+def _tt_kljucavnica(key: tuple) -> threading.Lock:
+    with _TT_LOCKS_GUARD:
+        return _TT_LOCKS.setdefault(key, threading.Lock())
+
+
+def _nalozi_vozni_red(conn: sqlite3.Connection, service_date: str,
+                      network: str | None, key: tuple, stamp: str | None):
     rows = conn.execute(
         "SELECT s.trip_id, s.stop_seq, s.stop_id, s.arr_s, s.dep_s "
         "FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
