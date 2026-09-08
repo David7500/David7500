@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 from . import config, geo
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, opis_zamude,
-                    typical_at_stops)
+                    oznaci_neskladne, typical_at_stops)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -346,6 +346,37 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
     return list(seen.values())[:limit]
 
 
+def _neskladni_postanki(conn: sqlite3.Connection, service_date: str,
+                        trip_ids: list[str]) -> set[tuple[str, int]]:
+    """`{(trip_id, stop_seq)}`, katerih ura si nasprotuje z večino ostalih.
+
+    Isto pravilo kot v oknu vožnje (`stats.oznaci_neskladne`), le da tam teče
+    nad eno vožnjo, tu pa nad vsemi z table hkrati. Ena poizvedba, ne ena na
+    vožnjo: tabla prometnega mestnega postajališča ima do devetdeset voženj.
+    """
+    if not trip_ids:
+        return set()
+    marks = ",".join("?" * len(trip_ids))
+    vrstice = conn.execute(
+        "SELECT r.trip_id, r.stop_seq, r.delay_dep, r.delay_arr, r.feed_ts, "
+        "       s.arr_s, s.dep_s "
+        "FROM run r JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+        f"WHERE r.service_date = ? AND r.trip_id IN ({marks}) "
+        "ORDER BY r.trip_id, r.stop_seq",
+        [service_date, *trip_ids]).fetchall()
+
+    po_voznji: dict[str, list[dict]] = {}
+    for r in vrstice:
+        po_voznji.setdefault(r["trip_id"], []).append(dict(r))
+    slabi: set[tuple[str, int]] = set()
+    for trip_id, postanki in po_voznji.items():
+        oznaci_neskladne(postanki)
+        for x in postanki:
+            if x.get("neskladno"):
+                slabi.add((trip_id, x["stop_seq"]))
+    return slabi
+
+
 # ---------------------------------------------------------------- odhodi
 
 # `first_seq` in `last_seq` bereta iz `trip`, ne iz agregata cez `sched`.
@@ -452,6 +483,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     last = last_measured(conn, service_date, [d["trip_id"] for d in out],
                          now_s if now_s is not None else 48 * 3600)
     slack = _slack_ahead(conn, [d["trip_id"] for d in out])
+    neskladni = _neskladni_postanki(conn, service_date, [d["trip_id"] for d in out])
     for d in out:
         lm = last.get(d["trip_id"])
         own = d["delay_s"]
@@ -467,6 +499,12 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             # zmore samo to primerjavo. Dopust 60 s, ker prikaz kaze minute.
             nemogoce = (own is not None and lm["stop_seq"] > d["stop_seq"]
                         and d["t_s"] + own > lm["t_s"] + lm["delay_s"] + 60)
+            # In cela veriga, ne le primerjava z `lm`: `oznaci_neskladne()` vidi
+            # vso voznjo in zavrne vrednosti, ki si nasprotujejo z vecino. Brez
+            # tega je tabla za isti postanek pisala "izmerjeno -1 min", okno
+            # voznje pa "neskladno" -- dve trditvi o istem postanku.
+            if (d["trip_id"], d["stop_seq"]) in neskladni:
+                nemogoce = True
             uporabi = None if (own is None or nemogoce) else own
             d["delay_s"] = uporabi if uporabi is not None else lm["delay_s"]
             d["delay_from"] = None if uporabi is not None else lm["name"]

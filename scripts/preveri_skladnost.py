@@ -156,13 +156,22 @@ def tabla_in_okno_isto():
             if s is None:
                 return f'{r["train_no"]}: table pozna postanek {r["stop_seq"]}, okno ne'
             z = s.get("zamuda")
+            # `delay_from` pomeni, da tabla vrednosti tega postanka NE trdi:
+            # pove, da je izmerjena drugje ("izmerjeno na postaji Tivoli").
+            # To ni nasprotje z oknom, ampak razkritje -- in prav tako tabla
+            # ravna, odkar tudi ona uporablja `oznaci_neskladne()`. Napaka je
+            # samo, kadar tabla ponovi vrednost, ki jo je okno zavrglo.
             if z is not None and z["vrsta"] == "neskladno":
+                if r.get("delay_from"):
+                    continue
                 return (f'{r["train_no"]} na {ime}: tabla „izmerjeno" '
                         f'{r["delay_s"]} s, okno „neskladno"')
             if z is None:
                 if not r.get("delay_from"):
                     return f'{r["train_no"]} na {ime}: tabla ima zamudo, okno nima'
                 continue
+            if r.get("delay_from"):
+                continue        # tabla govori o drugem postanku in to pove
             if abs(z["s"] - r["delay_s"]) > 60:
                 return (f'{r["train_no"]} na {ime}: tabla {r["delay_s"]} s, '
                         f'okno {z["s"]} s')

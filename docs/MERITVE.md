@@ -1701,3 +1701,32 @@ seznama.
 Kazalo nosi tudi lego — postajališče z **največ prometa** pod tem imenom.
 Naključno izbrano bi pri „Bavarski dvor" enkrat dalo eno stran ceste in enkrat
 drugo.
+
+## Tabla je ponavljala vrednost, ki jo je okno vožnje zavrglo (8. 9. 2026)
+
+Straža `tabla in okno vožnje ista številka` je večkrat pokazala isto: linija 8
+na Bavarskem dvoru, tabla „izmerjeno −1 min", okno vožnje „neskladno".
+Preverjeno, da pade **tudi na kodi izpred vseh sprememb tega dne** — torej ni
+šlo za regresijo, ampak za zapisano omejitev: `_LAST_MEASURED_SQL` nosi le
+**lokalni** del pravila, ker teče nad vsemi vožnjami hkrati.
+
+Tabla je imela svojo, krajšo različico pravila (primerjava z zadnjo meritvijo),
+okno pa celo verigo (`stats.oznaci_neskladne`). Zdaj tudi tabla uporablja celo
+verigo: `journey._neskladni_postanki()` prebere `run` za vse vožnje s table v
+**eni** poizvedbi in požene isto funkcijo po vožnjah. Tabla prometnega mestnega
+postajališča ima do devetdeset voženj, zato ena poizvedba in ne ena na vožnjo —
+izmerjeno ostane 49 ms (Ljubljana) in 96 ms (Bavarski dvor).
+
+Kaj tabla pokaže namesto zavrnjene vrednosti: **zadnjo skladno meritev in kje
+je bila** — „+4 min, izmerjeno na postaji Tivoli". To ni nasprotje z oknom,
+ampak razkritje, zato je bila popravljena tudi straža: napaka je le, kadar
+tabla **ponovi** vrednost, ki jo je okno zavrglo (`delay_from` ni nastavljen).
+
+Kolikokrat pravilo prime, izmerjeno na celem dnevu (12 371 voženj, 237 675
+postankov):
+
+| | neskladnih postankov | voženj z vsaj enim |
+|---|---|---|
+| avtobusi | 5 012 / 230 665 (2,17 %) | 1 621 / 11 775 (13,8 %) |
+| železnica | 17 / 7 010 (0,24 %) | 15 / 596 (2,5 %) |
+| skupaj | 5 029 (2,12 %) | 1 636 (13,2 %) |
