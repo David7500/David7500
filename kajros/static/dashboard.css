@@ -24,7 +24,7 @@ body {
 /* ---------- header ---------- */
 
 .topbar {
-  height: 52px;
+  height: var(--topbar-h);
   flex-shrink: 0;
   background: #16181c;
   border-bottom: 1px solid #23272f;
@@ -369,7 +369,7 @@ body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0
   body { overflow: hidden; }
   .body { position: relative; }
 
-  /* dashboard.css je nalozen za base.css in je s `height: 52px` povozil
+  /* dashboard.css je nalozen za base.css in je z lastno visino povozil
      njen prelom glave v dve vrstici -- ura je bila zato odrezana pod
      zemljevidom. Tu jo spustimo, da glava dobi svojo visino. */
   .topbar { height: auto; }

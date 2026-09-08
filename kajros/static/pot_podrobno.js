@@ -13,8 +13,12 @@ const map = L.map("karta", { zoomControl: true }).setView([46.1, 14.6], 8);
 L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
   maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
 }).addTo(map);
+// Napisi so tu SVETLI, drugace kot na velikem zemljevidu. Tam imena tekmujejo
+// z vozili, ki so edini razlog za tisto stran; tu je vprašanje "kje je to" in
+// brez berljivih imen se človek na zemljevidu ne znajde. Plast je ista, le
+// posvetljena -- Esri svetlejše različice napisov nima.
 L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-            { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 }).addTo(map);
+            { maxZoom: 19, maxNativeZoom: 16, className: "napisi-svetlo" }).addTo(map);
 
 const potLayer = L.layerGroup().addTo(map);
 const jazLayer = L.layerGroup().addTo(map);

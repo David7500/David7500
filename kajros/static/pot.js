@@ -17,8 +17,12 @@ const map = L.map("karta", { zoomControl: true }).setView([46.1, 14.6], 8);
 L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
   maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
 }).addTo(map);
+// Napisi so tu SVETLI, drugace kot na velikem zemljevidu. Tam imena tekmujejo
+// z vozili, ki so edini razlog za tisto stran; tu je vprašanje "kje je to" in
+// brez berljivih imen se človek na zemljevidu ne znajde. Plast je ista, le
+// posvetljena -- Esri svetlejše različice napisov nima.
 L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-            { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 }).addTo(map);
+            { maxZoom: 19, maxNativeZoom: 16, className: "napisi-svetlo" }).addTo(map);
 
 const tockeLayer = L.layerGroup().addTo(map);
 const potLayer = L.layerGroup().addTo(map);
@@ -224,8 +228,10 @@ function velikost(veliko) {
   requestAnimationFrame(() => map.invalidateSize());
 }
 
-$("#karta-max").addEventListener("click",
-  () => velikost(!document.body.classList.contains("karta-velika")));
+$("#karta-max").addEventListener("click", () => {
+  velikost(!document.body.classList.contains("karta-velika"));
+  vUrl();
+});
 
 // ---------------------------------------------------------------- izris predlogov
 
@@ -428,6 +434,9 @@ function vUrl() {
   if (S.do) q.set("do", `${S.do.lat.toFixed(5)},${S.do.lon.toFixed(5)}`);
   if ($("#ob").value) q.set("ob", $("#ob").value);
   if (hojeMin() !== 25) q.set("hoje", hojeMin());
+  // Velikost zemljevida gre v naslov: kdor pot deli, deli tudi pogled nanjo,
+  // in ponovno nalaganje ne vrne zemljevida v okence.
+  if (document.body.classList.contains("karta-velika")) q.set("karta", "velika");
   history.replaceState(null, "", q.toString() ? `?${q}` : location.pathname);
 }
 
@@ -444,6 +453,7 @@ function izUrl() {
   }
   if (q.get("ob")) $("#ob").value = q.get("ob");
   if (q.get("hoje")) nastaviHoje(Number(q.get("hoje")));
+  if (q.get("karta") === "velika") velikost(true);
   S.arm = S.od ? "do" : "od";
   if (imamo) narisiTocke();
   return S.od && S.do;

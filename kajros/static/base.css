@@ -91,10 +91,15 @@ body.net-avtobus {
    zaradi katerih je past sploh nastala. */
 [hidden] { display: none !important; }
 
+/* Visina glave. Bila je trdo zapisana v `.topbar` in hkrati ugibana kot
+   `var(--topbar-h, 48px)` drugje -- torej stiri piksle narazen, in zemljevid
+   "cez celo stran" je bil za toliko predolg. Ena vrednost, eno mesto. */
+:root { --topbar-h: 52px; }
+
 /* ---------- glava ---------- */
 
 .topbar {
-  height: 52px;
+  height: var(--topbar-h);
   flex-shrink: 0;
   min-width: 0;
   background: var(--bg-raised);

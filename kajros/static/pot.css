@@ -8,7 +8,7 @@
 .pot {
   display: grid;
   grid-template-columns: minmax(320px, 420px) 1fr;
-  height: calc(100dvh - var(--topbar-h, 48px));
+  height: calc(100dvh - var(--topbar-h));
 }
 
 .pot-panel {
@@ -18,7 +18,11 @@
   background: var(--bg-panel);
 }
 
-.pot-karta { min-height: 240px; }
+/* Zemljevid mora zapolniti svoj okvir. Ko je bil `#karta` neposredno v mrezi,
+   ga je raztegnila mreza sama; odkar je v `.pot-karta-okvir` (zaradi gumbov v
+   kotu), tega ne pocne nihce -- in gumb "cez celo stran" je razsiril okvir,
+   zemljevid v njem pa je ostal 240 px visok. */
+.pot-karta { height: 100%; min-height: 240px; }
 
 .pot-title { margin: 0 0 4px; font-size: 1.15rem; letter-spacing: -0.01em; }
 .pot-lead { margin: 0 0 16px; color: var(--ink-dim); font-size: 0.85rem; line-height: 1.45; }
@@ -150,7 +154,12 @@
 
 /* ---------------------------------------------------------------- zemljevid */
 
-.pot-karta-okvir { position: relative; min-height: 240px; }
+/* Napisi na zemljevidu poti so svetli. Esri jih ponuja samo v sivi razlicici
+   za temno podlago, zato jih posvetlimo s filtrom -- na velikem zemljevidu
+   tega NE delamo, ker tam imena tekmujejo z vozili. */
+.napisi-svetlo { filter: brightness(1.45) contrast(1.05); }
+
+.pot-karta-okvir { position: relative; height: 100%; min-height: 240px; }
 
 .karta-max {
   position: absolute; z-index: 500; top: 10px; right: 10px;
@@ -165,8 +174,13 @@
 /* Cez celo stran: plosca se umakne, zemljevid dobi vse. Gumb ostane, ker je
    edina pot nazaj -- brez njega bi bil izhod ponovno nalaganje strani. */
 body.karta-velika .pot-panel { display: none; }
-body.karta-velika .pot { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-body.karta-velika .pot-karta-okvir { height: calc(100dvh - var(--topbar-h, 48px)); }
+/* `height` mora biti tu izrecno: mobilno pravilo spodaj ga postavi na `auto`,
+   in mreza z eno vrstico `1fr` se v samodejni visini sesede na vsebino. */
+body.karta-velika .pot {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  height: calc(100dvh - var(--topbar-h));
+}
 
 @media (max-width: 860px) {
   .pot {
