@@ -1,4 +1,4 @@
-# Načrtuj pot
+# Najhitrejša pot
 
 Načrt strani, ki odgovori na vprašanje *„sem tu, moram biti tam — kako in kdaj
 grem?"*. Vse dosedanje strani znajo odgovoriti šele, ko potnik sam ve, s katere

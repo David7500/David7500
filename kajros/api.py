@@ -502,26 +502,34 @@ def api_stations(network: str | None = Query(None, pattern="^(zeleznica|avtobus)
     return Response(content=telo, media_type="application/json")
 
 
-@app.get("/api/stations/index")
-def api_station_index(network: str = NETWORK_Q):
-    """Imena postaj omrežja, urejena po prometu — za iskanje brez omrežja.
-
-    Vsebina se spremeni enkrat na dan ob uvozu GTFS, zato je predpomnjena
-    enako kot `/api/stations`, in to **serializirana**: pretvorba v niz je
-    dražja od poizvedbe.
-    """
-    telo = _predpomni(
-        f"stations-index:{network}", _znacka("gtfs_imported_at"), 3600,
-        lambda: json.dumps(_conn_klic(lambda c: journey.station_index(c, network)),
-                           ensure_ascii=False, separators=(",", ":")).encode())
-    return Response(content=telo, media_type="application/json")
-
-
 #: Iskanje postaj sme na ENI strani teci cez obe omrezji -- na poti od vrat
 #: do vrat, kjer sta vlak in avtobus lahko v isti verigi. Drugod ostane
 #: privzeta `zeleznica`, ker je bilo mesanje merljivo skodljivo.
 NETWORK_ISKANJE_Q = Query("zeleznica", pattern="^(zeleznica|avtobus|vse)$",
                           description="zeleznica, avtobus ali vse")
+
+
+@app.get("/api/stations/index")
+def api_station_index(network: str = NETWORK_ISKANJE_Q,
+                      koordinate: bool = Query(False, description="dodaj lego postaje")):
+    """Imena postaj omrežja, urejena po prometu — za iskanje brez omrežja.
+
+    Vsebina se spremeni enkrat na dan ob uvozu GTFS, zato je predpomnjena
+    enako kot `/api/stations`, in to **serializirana**: pretvorba v niz je
+    dražja od poizvedbe.
+
+    **To je odgovor na „zakaj iskanje traja pet sekund".** `/api/stations/search`
+    za `network=vse` je izmerjeno 1,35 s na razvojnem računalniku in torej okoli
+    pet na arwenu — na vsak pritisk tipke. Postaje se ne spreminjajo vsak dan;
+    kazalo se naloži enkrat in išče se v brskalniku, tako kot pri iskalniku zvez.
+    """
+    net = None if network == "vse" else network
+    telo = _predpomni(
+        f"stations-index:{network}:{int(koordinate)}", _znacka("gtfs_imported_at"), 3600,
+        lambda: json.dumps(
+            _conn_klic(lambda c: journey.station_index(c, net, koordinate)),
+            ensure_ascii=False, separators=(",", ":")).encode())
+    return Response(content=telo, media_type="application/json")
 
 
 @app.get("/api/stations/search")

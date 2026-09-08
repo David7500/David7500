@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kajros — načrtuj pot</title>
+  <title>kajros — najhitrejša pot</title>
   <meta name="description" content="Kje stojiš, kam moraš in kdaj — s hojo, vlakom in avtobusom v isti verigi.">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -34,7 +34,7 @@
 
   <main class="pot">
     <section class="pot-panel" aria-label="Pot">
-      <h1 class="pot-title">Načrtuj pot</h1>
+      <h1 class="pot-title">Najhitrejša pot</h1>
       <p class="pot-lead">
         Povej, kje si in kam moraš. Hoja, vlak in avtobus so v isti verigi;
         hoja se računa po pravih pešpoteh pri 5 km/h.
@@ -98,7 +98,19 @@
       </p>
     </section>
 
-    <div id="karta" class="pot-karta" aria-label="Zemljevid"></div>
+    <div class="pot-karta-okvir">
+      <div id="karta" class="pot-karta" aria-label="Zemljevid"></div>
+      {#- Cez celo STRAN in ne cez cel zaslon -- isti razlog kot pri oknu
+          voznje: fullscreen skrije naslovno vrstico in gumb nazaj, izhod pa je
+          tipka, ki je na telefonu ni. #}
+      <button id="karta-max" class="karta-max" type="button" aria-pressed="false"
+              title="Zemljevid čez celo stran">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+        </svg>
+      </button>
+    </div>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

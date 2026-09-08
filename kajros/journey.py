@@ -66,7 +66,8 @@ def _fold(s: str) -> str:
     )
 
 
-def station_index(conn: sqlite3.Connection, network: str) -> list[dict]:
+def station_index(conn: sqlite3.Connection, network: str | None,
+                  s_koordinatami: bool = False) -> list[dict]:
     """Vsa imena postaj omrezja, ze urejena po prometu.
 
     Za iskalnik v brskalniku. `search_stations()` razvrsca po
@@ -77,17 +78,42 @@ def station_index(conn: sqlite3.Connection, network: str) -> list[dict]:
 
     Imena so zdruzena kot v `search_stations()`: mestno postajalisce ima svoj
     `stop_id` za vsako smer, aplikacija pa vse gradi po imenu.
+
+    `network=None` je obe omrezji skupaj -- to rabi samo stran s potjo, kjer
+    sta vlak in avtobus lahko v isti verigi.
+
+    `s_koordinatami` doda lego **najprometnejsega** postajalisca tega imena.
+    Nakljucno izbrano bi bilo pri "Bavarski dvor" enkrat ena stran ceste in
+    enkrat druga; iskanje poti od tam bi dalo dva razlicna izida za isto ime.
     """
+    # Grupirano po postajaliscu in ne po imenu, ker rabimo tudi lego -- vsota
+    # po imenu je nato v Pythonu in je nad ~10 000 vrsticami zanemarljiva.
     rows = conn.execute(
-        "SELECT st.name AS n, COUNT(*) AS t"
+        "SELECT st.name AS n, st.lat, st.lon, COUNT(*) AS t"
         "  FROM sched s"
         "  JOIN trip tr ON tr.trip_id = s.trip_id"
         "  JOIN station st ON st.stop_id = s.stop_id"
-        " WHERE tr.network = ?"
-        " GROUP BY st.name"
-        " ORDER BY t DESC, n",
-        (network,)).fetchall()
-    return [{"n": r["n"], "t": r["t"]} for r in rows]
+        " WHERE (? IS NULL OR tr.network = ?)"
+        " GROUP BY s.stop_id",
+        (network, network)).fetchall()
+
+    po_imenu: dict[str, dict] = {}
+    for r in rows:
+        d = po_imenu.get(r["n"])
+        if d is None:
+            po_imenu[r["n"]] = {"n": r["n"], "t": r["t"],
+                                "lat": r["lat"], "lon": r["lon"], "_naj": r["t"]}
+            continue
+        d["t"] += r["t"]
+        if r["t"] > d["_naj"]:
+            d["_naj"] = r["t"]
+            d["lat"], d["lon"] = r["lat"], r["lon"]
+
+    out = sorted(po_imenu.values(), key=lambda d: (-d["t"], d["n"]))
+    if s_koordinatami:
+        return [{"n": d["n"], "t": d["t"],
+                 "lat": round(d["lat"], 5), "lon": round(d["lon"], 5)} for d in out]
+    return [{"n": d["n"], "t": d["t"]} for d in out]
 
 
 # Promet po postajaliscu, predpomnjen do naslednjega uvoza GTFS.

@@ -99,43 +99,74 @@
 .pot-stanje.je-prazno { color: var(--ink-mute); }
 
 /* ---------------------------------------------------------------- predlogi */
+/*
+ * Kartica je vrstica, ne izpis. Prej je vsaka noga imela svojo vrstico z urami
+ * in postajami -- stirje predlogi so dali dvajset vrstic, med katerimi ni bilo
+ * mogoce izbirati na pogled. Zdaj troje: ure in trajanje, veriga poti, in
+ * drobno o prestopih. Podrobnosti so na svoji strani.
+ */
 
 .pot-izidi { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 
 .predlog {
-  padding: 10px 12px; cursor: pointer;
+  display: block; text-decoration: none; color: inherit;
+  padding: 10px 12px;
   background: var(--bg-raised);
   border: 1px solid var(--line); border-left: 3px solid transparent;
   border-radius: var(--r);
 }
 .predlog:hover { background: var(--bg-hover); }
-/* Izbrani predlog je tisti, ki je narisan na zemljevidu. Brez te oznake bi
-   bila crta na zemljevidu brez lastnika. */
-.predlog.je-izbran { border-left-color: var(--accent); }
+/* Prvi predlog je najhitrejsi; to mora biti vidno brez branja. */
+.predlog.je-prvi { border-left-color: var(--accent); }
+.predlog.je-izbran { border-color: var(--line-firm); }
 
-.predlog-glava { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
-.predlog-ure { font-family: var(--mono); font-size: 1rem; }
-.predlog-meta { font-size: 0.78rem; color: var(--ink-dim); }
-
-.noge { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
-.noga { display: flex; gap: 8px; font-size: 0.82rem; line-height: 1.35; }
-.noga-znak { width: 12px; text-align: center; color: var(--ink-ghost); flex: none; }
-.noga.je-voznja .noga-znak { color: var(--accent); }
-.noga-telo { min-width: 0; }
-.noga.je-hoja { color: var(--ink-dim); }
-.noga-kam { color: var(--ink-mute); }
-.noga-linija {
-  font-family: var(--mono); font-weight: 600; color: var(--ink);
-  text-decoration: none; border-bottom: 1px solid var(--line-firm);
+.p-ure {
+  display: flex; align-items: baseline; gap: 7px;
+  font-family: var(--mono); font-size: 1.05rem;
 }
-.noga-linija:hover { border-bottom-color: var(--accent); }
-.noga-ure { display: block; color: var(--ink-dim); }
-.noga-ure strong { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+.p-ure strong { font-weight: 600; }
+.p-pusc { color: var(--ink-ghost); }
+/* Trajanje na desno: oci ga tam iscejo in ne tekmuje z urama. */
+.p-traj { margin-left: auto; font-size: 0.85rem; color: var(--ink-dim); }
 
-.pot-vir {
-  margin: 16px 0 0; font-size: 0.72rem; line-height: 1.5; color: var(--ink-faint);
+.p-veriga {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  margin: 6px 0 4px;
 }
-.pot-vir a { color: var(--ink-mute); }
+.v-hoja { font-size: 0.78rem; color: var(--ink-mute); }
+.v-linija {
+  font-family: var(--mono); font-size: 0.82rem; font-weight: 600; color: var(--ink);
+}
+.v-loc { color: var(--ink-ghost); font-size: 0.8rem; }
+
+.p-meta { font-size: 0.76rem; color: var(--ink-mute); }
+.p-vr { color: var(--ink-faint); }
+
+.zam {
+  font-family: var(--mono); font-size: 0.74rem; font-weight: 600;
+  padding: 0 4px; border: 1px solid; border-radius: var(--r-sm);
+}
+.zam-vrsta { font-size: 0.7rem; color: var(--ink-mute); }
+
+/* ---------------------------------------------------------------- zemljevid */
+
+.pot-karta-okvir { position: relative; min-height: 240px; }
+
+.karta-max {
+  position: absolute; z-index: 500; top: 10px; right: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  color: var(--ink-dim); background: var(--bg-panel);
+  border: 1px solid var(--line-firm); border-radius: var(--r); cursor: pointer;
+}
+.karta-max:hover { color: var(--ink); }
+.karta-max[aria-pressed="true"] { color: var(--accent-lit); border-color: var(--accent); }
+
+/* Cez celo stran: plosca se umakne, zemljevid dobi vse. Gumb ostane, ker je
+   edina pot nazaj -- brez njega bi bil izhod ponovno nalaganje strani. */
+body.karta-velika .pot-panel { display: none; }
+body.karta-velika .pot { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+body.karta-velika .pot-karta-okvir { height: calc(100dvh - var(--topbar-h, 48px)); }
 
 @media (max-width: 860px) {
   .pot {
@@ -233,3 +264,10 @@ a.predlog:hover .predlog-vec { color: var(--accent-lit); }
 .hoja-gumb.je-on { color: #2f7fff; border-color: #2f7fff88; }
 .hoja-gumb.je-cilj { color: var(--ink); border-color: var(--line-firm); font-weight: 600; }
 .hoja-gumb.je-cela { margin: 4px 0 0; }
+
+/* Drugi gumb v kotu zemljevida stoji levo od prvega. */
+.karta-lega { right: 48px; }
+.karta-lega.je-on { color: #2f7fff; border-color: #2f7fff88; }
+.karta-lega.je-iskanje { opacity: 0.6; }
+
+.v-prestop { font-size: 0.76rem; }

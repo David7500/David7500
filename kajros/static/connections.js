@@ -235,33 +235,12 @@ function naloziKazalo() {
     .catch(() => { /* ostane streznik */ });
 }
 
-// Vrne zadetke ali null, kadar kazala (se) ni -- takrat vprasa streznik.
-function izKazala(q) {
-  if (!KAZALO) return null;
-  const needle = fold(q);
-  const tocno = [];
-  const zacetek = [];
-  const kjerkoli = [];
-  for (const s of KAZALO) {
-    if (s.f === needle) tocno.push(s);
-    else if (s.f.startsWith(needle)) zacetek.push(s);
-    else if (s.f.indexOf(needle) < 0) continue;
-    // Zacetek besede je za potnika enako dober zadetek kot zacetek imena --
-    // izmerjeno, glej `_razred()` v journey.py. Zato v isto vedro.
-    else if (zacetekBesede(s.f, needle)) zacetek.push(s);
-    else kjerkoli.push(s);
-    if (tocno.length + zacetek.length >= 8 && kjerkoli.length >= 8) break;
-  }
-  return [...tocno, ...zacetek, ...kjerkoli].slice(0, 8);
-}
+// Iskanje po kazalu in razvrscanje sta v `common.js`: rabi ju tudi stran s
+// potjo, dve razlicici istega razvrscanja pa bi za isto crko dali dva
+// razlicna seznama.
 
-function zacetekBesede(folded, needle) {
-  let i = folded.indexOf(needle);
-  while (i >= 0) {
-    if (i === 0 || folded[i - 1] === " ") return true;
-    i = folded.indexOf(needle, i + 1);
-  }
-  return false;
+function izKazala(q) {
+  return KAZALO ? iskalnikKazala(KAZALO, q) : null;
 }
 
 // ---------- brisanje vnosa ----------

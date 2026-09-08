@@ -1677,3 +1677,27 @@ odpelje pozneje, kot piše.
 
 Ista meja obreže tudi zamike same: 482 minut ni zamuda, ampak feedova
 zamenjava prometnega dne (isti razlog kot `api.MAX_LIVE_DELAY_S`).
+
+## Zakaj je iskanje postaje trajalo pet sekund (8. 9. 2026)
+
+Prijava s testiranja: vpis imena postaje je čakal več kot pet sekund.
+
+| poizvedba | čas (razvojni) |
+|---|---|
+| `/api/stations/search?q=ljublj&network=zeleznica` | 0,05 s |
+| `…&network=avtobus` | 0,55 s |
+| `…&network=vse` | **1,35 s** |
+
+Stran s potjo išče čez **obe** omrežji, in to na vsak pritisk tipke; arwen je
+pri takih poizvedbah ~3–4× počasnejši, torej okoli pet sekund. Iskalnik zvez
+tega nikoli ni delal tako — kazalo naloži enkrat in išče v brskalniku.
+
+Zdaj enako tu: `/api/stations/index?network=vse&koordinate=1` je **323 kB**,
+hrani se 12 h v `localStorage`, in strežnikov predpomnilnik ga postreže v
+**3,6 ms** (hladno 1,6 s, enkrat na uvoz voznega reda). Razvrščanje je isto
+kot na strežniku (`iskalnikKazala()`), sicer bi ista črka dala dva različna
+seznama.
+
+Kazalo nosi tudi lego — postajališče z **največ prometa** pod tem imenom.
+Naključno izbrano bi pri „Bavarski dvor" enkrat dalo eno stran ceste in enkrat
+drugo.

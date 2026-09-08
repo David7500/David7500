@@ -17,6 +17,7 @@ L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
             { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 }).addTo(map);
 
 const potLayer = L.layerGroup().addTo(map);
+const jazLayer = L.layerGroup().addTo(map);
 const $ = (s) => document.querySelector(s);
 const Q = new URLSearchParams(location.search);
 
@@ -118,6 +119,36 @@ function voznjaHtml(n) {
 const PLASTI = new Map();      // indeks noge -> {crta, tocke}
 let vseMeje = null;
 
+// Prestop stoji MED vožnjama, ki ju veže. Brez rezerve je "prestop" samo
+// beseda; z njo je odgovor na edino vprašanje, ki ga potnik tam ima.
+function prestopHtml(t, pred, po) {
+  const mins = preostanekPrestopa(t.nacrtovano_s, pred && pred.zamuda, po && po.zamuda);
+  const nacrt = Math.floor(t.nacrtovano_s / 60 + 0.5);
+  const barva = mins == null ? "var(--ink-mute)"
+    : mins < 2 ? "var(--sev-bad)" : mins < 5 ? "var(--sev-hard)" : "var(--ok)";
+  const pes = t.pes_s >= 60 ? ` · ${minute(t.pes_s)} hoje vmes` : "";
+  return `<li class="korak je-prestop">
+    <span class="korak-znak" aria-hidden="true">⇄</span>
+    <div class="korak-telo" style="color:${barva}">
+      ${escapeHtml(mins == null ? `${nacrt} min za prestop` : prestopText(mins))}
+      <span class="korak-kam">v ${escapeHtml(t.kje)}${pes}${
+        mins == null ? " · brez zamud" : ""}</span>
+    </div></li>`;
+}
+
+function korakiHtml(p) {
+  const voznje = p.noge.filter((n) => n.vrsta === "voznja");
+  const out = [];
+  p.noge.forEach((n, i) => {
+    const v = voznje.indexOf(n);
+    if (v > 0 && p.prestopi && p.prestopi[v - 1]) {
+      out.push(prestopHtml(p.prestopi[v - 1], voznje[v - 1], n));
+    }
+    out.push(n.vrsta === "hoja" ? hojaHtml(n, i) : voznjaHtml(n));
+  });
+  return out.join("");
+}
+
 function narisi(p) {
   potLayer.clearLayers();
   PLASTI.clear();
@@ -179,6 +210,42 @@ function priblizaj(i) {
   map.invalidateSize();
 }
 
+// ---------------------------------------------------------------- zemljevid
+
+// Cez celo STRAN, ne cez cel zaslon -- isti razlog kot pri oknu voznje:
+// fullscreen skrije naslovno vrstico, gumb nazaj in vsak drug orientir, izhod
+// pa je tipka, ki je na telefonu ni.
+$("#karta-max").addEventListener("click", () => {
+  const veliko = !document.body.classList.contains("karta-velika");
+  document.body.classList.toggle("karta-velika", veliko);
+  $("#karta-max").setAttribute("aria-pressed", String(veliko));
+  $("#karta-max").title = veliko ? "Pomanjšaj zemljevid" : "Zemljevid čez celo stran";
+  requestAnimationFrame(() => map.invalidateSize());
+});
+
+// Med hojo je edino vprašanje "grem v pravo smer". Zato lega TU sledi in se ne
+// izmeri enkrat: prvi popravek GPS pogosto zgreši za sto metrov, potnik pa se
+// medtem premika.
+let sledim = false;
+$("#karta-lega").addEventListener("click", async () => {
+  const b = $("#karta-lega");
+  if (sledim) return;
+  b.classList.add("je-iskanje");
+  try {
+    const loc = await locateMe({ napredek: (l) => drawMe(jazLayer, l) });
+    drawMe(jazLayer, loc);
+    map.setView([loc.lat, loc.lon], Math.max(map.getZoom(), 16));
+    sledi((l) => drawMe(jazLayer, l));
+    sledim = true;
+    b.classList.add("je-on");
+  } catch (e) {
+    $("#stanje").textContent = e.message;
+    $("#stanje").className = "pot-stanje je-napaka";
+  } finally {
+    b.classList.remove("je-iskanje");
+  }
+});
+
 // ---------------------------------------------------------------- nalaganje
 
 function nazajUrl() {
@@ -217,8 +284,7 @@ async function nalozi() {
         pr.hoje_s >= 60 ? ` · ${minute(pr.hoje_s)} hoje` : ""} · ${
         pr.prestopov === 0 ? "brez prestopa"
           : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(d.datum)}</div>`;
-    $("#koraki").innerHTML = pr.noge.map(
-      (n, i) => (n.vrsta === "hoja" ? hojaHtml(n, i) : voznjaHtml(n))).join("");
+    $("#koraki").innerHTML = korakiHtml(pr);
     narisi(pr);
     $("#koraki").querySelectorAll(".hoja-gumb").forEach((b) => {
       b.addEventListener("click", () => priblizaj(Number(b.dataset.korak)));

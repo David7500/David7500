@@ -131,3 +131,23 @@
 /* Zvezdica pomeni PRILJUBLJENO, ne omrezja -- to nosi levi rob. Oranzna bi
    bila barva vlaka in bi na avtobusni znacki trdila nekaj drugega. */
 .chip-star { color: var(--ink-mute); }
+
+/* Najhitrejsa pot: glavna izbira nad omrezjema.
+ *
+ * Ni tretje omrezje, ampak drugo vprasanje -- potnik pove, kje je in kam mora,
+ * in mu ni treba vedeti, s katere postaje gre. Zato je siroka cez oba stolpca
+ * in ima poudarjen rob; dve izbiri spodaj ostaneta dve. */
+.pick-pot {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(224, 123, 69, 0.10), transparent 70%);
+  margin-bottom: 10px;
+}
+.pick-pot .pick-icon { color: var(--accent-lit); }
+.pick-pot .pick-sub { color: var(--ink-dim); }
+.pick-vec { margin-left: auto; color: var(--ink-mute); font-size: 1.2rem; }
+.pick-pot:hover .pick-vec { color: var(--accent-lit); }
+
+.home-ali {
+  margin: 14px 0 8px;
+  font-size: 0.8rem; color: var(--ink-mute);
+}

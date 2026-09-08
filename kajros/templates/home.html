@@ -39,6 +39,28 @@
          busom, in ju ne isce skupaj. Mesanje je bilo tudi merljivo skodljivo --
          iskanje "ljublj" je vracalo mestna postajalisca in postajo Ljubljana
          potisnilo iz prvih petih zadetkov. -->
+    {#- Najhitrejša pot je nad omrežjema, ker je edina, ki dela brez tega, da
+        potnik ve, s katere postaje gre. Ni tretja izbira ob vlaku in avtobusu,
+        ampak DRUGO vprašanje -- zato tudi drugačna kartica in ne tretja enaka.
+        Razlog za natanko dve izbiri spodaj velja naprej. #}
+    <a class="pick pick-pot" href="/app/pot">
+      <span class="pick-icon">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 20c0-4 3-5 7-5s7-1 7-5"></path>
+          <circle cx="5" cy="20" r="2"></circle>
+          <path d="M19 4.5c1.4 0 2.5 1.1 2.5 2.5S19 10.5 19 10.5 16.5 8.4 16.5 7 17.6 4.5 19 4.5z"></path>
+        </svg>
+      </span>
+      <span class="pick-text">
+        <span class="pick-name">Najhitrejša pot</span>
+        <span class="pick-sub">kje si in kam moraš — hoja, vlak in avtobus v isti verigi</span>
+      </span>
+      <span class="pick-vec" aria-hidden="true">›</span>
+    </a>
+
+    <p class="home-ali">ali, če veš, s katere postaje greš:</p>
+
     <div class="home-picks">
       <a class="pick pick-train" href="/app/train">
         <span class="pick-icon">
@@ -82,14 +104,6 @@
     </section>
 
     <nav class="home-more" aria-label="Ostalo">
-      {#- "Pot" ni tretja izbira ob vlaku in avtobusu, ampak drugo vprasanje:
-          zgoraj potnik pove, s cim gre, tu pa se mu ni treba odlociti. Zato je
-          med "ostalim" in ne med izbirama -- razlog za natanko dve izbiri
-          zgoraj velja naprej. #}
-      <a class="more-link" href="/app/pot">
-        <strong>Načrtuj pot</strong>
-        <span>kje si in kam moraš — hoja, vlak in avtobus v isti verigi</span>
-      </a>
       <a class="more-link" href="/app/map">
         <strong>Živi zemljevid</strong>
         <span>kje je zdaj kaj — edini skupni pogled obeh omrežij</span>

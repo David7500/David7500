@@ -81,7 +81,7 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   staro obliko, stran bi novo polje izpustila in videti bi bilo, kot da
   sprememba ne dela. Točno to se je zgodilo pri `median_s`.
 
-## `/app/pot` („Načrtuj pot") — edina stran, ki se ne začne pri postaji
+## `/app/pot` („Najhitrejša pot") — edina stran, ki se ne začne pri postaji
 
 Potnik ve, **kje stoji**, ne pa, s katere postaje mu pelje. Zato sta vhoda dva
 kraja (klik na zemljevid, lastna lega, ime postaje) in ne dve imeni, iskanje pa
@@ -89,9 +89,39 @@ teče **čez obe omrežji** — vlak in avtobus sta lahko v isti verigi. To je z
 zemljevidom druga stran, ki omrežji namerno meša; zato ima `/api/stations/search`
 tu `network=vse`, drugod pa ostane privzeta `zeleznica`.
 
-**Na domači strani ni tretja izbira, ampak „ostalo".** Zgoraj potnik pove, s čim
-gre; tu se mu ni treba odločiti. Razlog za natanko dve izbiri zgoraj velja
-naprej.
+**Na domači strani je NAD omrežjema, ne med „ostalim".** Je edina stran, ki
+dela brez tega, da potnik ve, s katere postaje gre — torej prvo vprašanje, ne
+zadnje. Ni pa tretja izbira ob vlaku in avtobusu, ampak **drugo vprašanje**,
+zato drugačna kartica in ne tretja enaka; razlog za natanko dve izbiri pod njo
+velja naprej.
+
+**Iskanje postaj gre skozi kazalo, ne skozi strežnik.** `/api/stations/search`
+je bil za `network=vse` izmerjeno **1,35 s** na razvojnem računalniku — okoli
+pet na arwenu, in to na vsak pritisk tipke. Postaje se ne spreminjajo vsak dan:
+`/api/stations/index?network=vse&koordinate=1` se naloži enkrat (323 kB, hrani
+se 12 h v `localStorage`) in išče se v brskalniku z istim razvrščanjem kot na
+strežniku (`iskalnikKazala()` v `common.js`). Toplo je 3,6 ms.
+
+**Kazalo nosi tudi lego** — postajališče z **največ prometa** pod tem imenom.
+Naključno izbrano bi pri „Bavarski dvor" enkrat dalo eno stran ceste in enkrat
+drugo, iskanje poti od tam pa dva različna izida za isto ime.
+
+**Predlog je vrstica, ne izpis.** Prej je vsaka noga imela svojo vrstico z
+urami in postajami — štirje predlogi so dali dvajset vrstic, med katerimi ni
+bilo mogoče izbirati na pogled. Zdaj troje: ure in trajanje, **veriga**
+(`peš 7 › LPP 9 › 7 min za prestop › LPP 25 +2 › peš 10`) in drobno o
+prestopih. Rezerva prestopa mora ostati v verigi — brez nje „1 prestop" ne
+pove, ali zveza drži, in prav to je edino, zaradi česar je prestop vreden
+pozornosti.
+
+**Zemljevid gre čez celo stran**, ne čez cel zaslon — isti razlog kot pri oknu
+vožnje: fullscreen skrije naslovno vrstico, gumb nazaj in vsak drug orientir,
+izhod pa je tipka, ki je na telefonu ni.
+
+**Lega se ne izmeri enkrat, ampak ji sledimo.** Prvi popravek GPS pogosto
+zgreši za sto metrov in ga v naslednjih sekundah popravi, potnik pa se medtem
+premika; `maximumAge` je zato **0** — brez tega brskalnik vrne do minuto star
+popravek in prvi klik pokaže, kje si bil, ne kje si.
 
 Štiri stvari, ki so se pokazale šele na zaslonu:
 

@@ -88,6 +88,19 @@ function prestopText(mins) {
   return `${mins} min za prestop`;
 }
 
+/** Koliko minut ostane za prestop, ali `null`, kadar zamud ne poznamo.
+ *
+ * Racuna se iz ZAOKROZENIH minut, ne iz sekund: vse tri stevilke stojijo na
+ * zaslonu druga ob drugi in bralec, ki jih sesteje, mora priti do iste. Ista
+ * past kot pri razredu zamude.
+ */
+function preostanekPrestopa(nacrtovanoS, zamudaPrvega, zamudaDrugega) {
+  const d1 = delayMin(zamudaPrvega);
+  const d2 = delayMin(zamudaDrugega);
+  if (d1 == null || d2 == null) return null;
+  return Math.floor(nacrtovanoS / 60 + 0.5) - d1 + d2;
+}
+
 function isEarly(z) {
   if (z == null) return false;
   if (typeof z === "object") return !!z.prezgodaj;
@@ -1001,6 +1014,46 @@ async function trasa(n) {
 }
 
 
+// ---------- iskanje po kazalu postaj ----------
+//
+// Postaje se ne spreminjajo vsak dan, iskanje pa je bilo za `network=vse`
+// izmerjeno 1,35 s na razvojnem racunalniku -- torej okoli pet na arwenu, in
+// to na VSAK pritisk tipke. Zato se kazalo naloze enkrat in isce se tu.
+//
+// Razvrscanje mora biti isto kot na strezniku (`journey.search_stations`):
+// tocno ime, nato zacetek imena ali besede, nato kjerkoli, znotraj razreda pa
+// odloca promet -- kazalo je po njem ze urejeno. Dve razlicici tega bi za isto
+// crko dali dva razlicna seznama.
+
+function zacetekBesede(folded, needle) {
+  let i = folded.indexOf(needle);
+  while (i >= 0) {
+    if (i === 0 || folded[i - 1] === " ") return true;
+    i = folded.indexOf(needle, i + 1);
+  }
+  return false;
+}
+
+/** `kazalo` so predmeti z zlozenim imenom v `.f`; vrne najvec `limit` zadetkov. */
+function iskalnikKazala(kazalo, q, limit = 8) {
+  const needle = fold(String(q).trim());
+  if (!needle) return [];
+  const tocno = [];
+  const zacetek = [];
+  const kjerkoli = [];
+  for (const s of kazalo) {
+    if (s.f === needle) tocno.push(s);
+    else if (s.f.startsWith(needle)) zacetek.push(s);
+    else if (s.f.indexOf(needle) < 0) continue;
+    // Zacetek besede je za potnika enako dober zadetek kot zacetek imena --
+    // izmerjeno, glej `_razred()` v journey.py. Zato v isto vedro.
+    else if (zacetekBesede(s.f, needle)) zacetek.push(s);
+    else kjerkoli.push(s);
+    if (tocno.length + zacetek.length >= limit && kjerkoli.length >= limit) break;
+  }
+  return [...tocno, ...zacetek, ...kjerkoli].slice(0, limit);
+}
+
 // ---------- moja lega ----------
 //
 // Prikaz lastne lege je na obeh zemljevidih ista stvar, zato zivi tu.
@@ -1073,9 +1126,27 @@ function locateMe(opts) {
         e.code === 1 ? "Dostop do lokacije je zavrnjen — dovoli ga v nastavitvah strani."
         : e.code === 2 ? "Naprava lege ne zna dobiti (GPS ugasnjen ali brez signala)."
         : `GPS se ni odzval v ${Math.round(rok / 1000)} s.`)),
-      { enableHighAccuracy: true, timeout: rok, maximumAge: 60000 },
+      // `maximumAge: 0`: brez tega brskalnik vrne do minuto star popravek in
+      // prvi klik pokaze, kje si bil, ne kje si. Ujeto v zivo.
+      { enableHighAccuracy: true, timeout: rok, maximumAge: 0 },
     );
   });
+}
+
+/** Neprekinjeno sledenje: `cb(lega)` ob vsakem popravku, vrne ustavitev.
+ *
+ * Ena lega ob kliku ni dovolj -- GPS prvi popravek pogosto zgresi za sto
+ * metrov in ga v naslednjih sekundah popravi, potnik pa se medtem premika.
+ */
+function sledi(cb) {
+  if (!navigator.geolocation || !window.isSecureContext) return () => {};
+  const id = navigator.geolocation.watchPosition(
+    (p) => cb({ lat: p.coords.latitude, lon: p.coords.longitude,
+                acc: p.coords.accuracy }),
+    () => {},                       // tiho: gumb "lega" je tisti, ki porocá
+    { enableHighAccuracy: true, maximumAge: 0 },
+  );
+  return () => navigator.geolocation.clearWatch(id);
 }
 
 // Pika z obrocem tocnosti. Obroc ni okras: GPS v mestu zna zgresiti za sto
