@@ -566,3 +566,21 @@ ki čaka na isto.
 Opomba za tistega, ki to nadaljuje: `rezerva+razred, prag 3 dni` je pri
 avtobusih **slabši** od sedanjega (3,16 proti 2,98), pri železnici pa
 neznatno boljši (2,03 proti 2,06). Prag torej ni skupna nastavitev.
+
+## Prehod ni izmerjen, ampak sklepan — in to je odprta luknja
+
+Postanek velja za prevožen, ko je „vozni red + zadnja znana zamuda" mimo.
+To je **ura, ne opažanje.** Posledica na zaslonu 8. 9. 2026: LPV 2001 je ob
+07:00 kazal „+6 min · izmerjeno · vlak je tu že bil", potnik pa je stal na
+Ljubljani Polje. Feed je po 24 minutah tišine povedal +29.
+
+Popravljeno je bilo dvoje: meja ne sme prehiteti zadnje besede feeda, in
+tišina nad 180 s se pove z besedo. **Nerešeno ostaja jedro**: v 14 dneh ima
+1,63 % železniških in 18,50 % avtobusnih voženj vsaj en postanek, kjer je bila
+videna številka kasneje popravljena za ≥ 5 min — pri železnici jih 76 %
+izhaja iz prikazane **ničle**, z resnico do +66 min.
+
+**Signal obstaja in ga ne beležimo.** Feed prevožene postanke izpušča; dokler
+je postanek v sporočilu, vozilo mimo njega še ni. Preden se to vgradi, mora
+biti izmerjeno proti resnici, ki jo pove človek na peronu — postopek je v
+spominu [[prehod-ni-izmerjen]] in v `docs/MERITVE.md`.
