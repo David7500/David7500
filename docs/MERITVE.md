@@ -1558,3 +1558,23 @@ daljša od tega, kar je peš mogoče, se usmerjevalnika ne vpraša.
 * **Ista pot iz dveh vprašanj.** „Najhitreje" in „z manj hoje" data lahko isto
   vožnjo z drugačnim repom; ključ za razdvajanje so zato **samo vožnje**, ne
   ure — te se razlikujejo za pol minute.
+
+## Zamude v poti od vrat do vrat (8. 9. 2026)
+
+Iskanje teče po voznem redu, ker napovedi za vožnjo čez pet ur ni; zamuda se
+pripiše šele na koncu in veriga se z njo prebere znova.
+
+Pravilo, katera številka velja, je **izluščeno in ne prepisano**:
+`stats.zamuda_na_postanku()` zdaj uporabljata iskalnik zvez in ta stran.
+Preverjeno, da izluščenje ničesar ne spremeni — `/api/connections` za isto
+poizvedbo vrne **bajt za bajt isti odgovor** (18 346 B).
+
+Prvi izid v živo (RG 432, Litija → Ljubljana, 8. 9. ob 12:35): vozni red
+12:35 → 13:07, z zamudo **12:58 → 13:31**, žeton „+23 min · ocena". Potnik ima
+torej triindvajset minut več, preden mora od doma — in to je edino, zaradi
+česar ta stran obstaja.
+
+Preostanek prestopa se računa iz **zaokroženih minut**, ne iz sekund:
+`ostane = načrtovano − zamuda prvega + zamuda drugega`. Vse tri številke
+stojijo na zaslonu druga ob drugi in bralec, ki jih sešteje, mora priti do
+iste — ista past kot pri razredu zamude.

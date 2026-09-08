@@ -104,6 +104,21 @@ Vsak nov model se najprej pomeri s **prenosom trenutne zamude naprej**
   tabla uporabi njihovo lastno meritev. Ista koda pokrije oboje, ker vzame
   naslednjo postajo šele, kadar lastne ni.
 
+## Katera zamuda velja na potnikovem postanku — eno pravilo, eno mesto
+
+`stats.zamuda_na_postanku()` odloči, ali je številka **izmerjena**, **ocena**
+ali **napoved prevoznika**, in od kod je. Uporabljata jo `stats.connections()`
+(iskalnik zvez) in `pot.pripni_zamude()` (pot od vrat do vrat).
+
+Do 8. 9. 2026 je bilo pravilo vgrajeno v `connections()`. Ob dodajanju druge
+strani je bilo izluščeno — ne zaradi lepote, ampak ker je „isto pravilo na dveh
+mestih" v tem projektu dokumentiran razred napake in bi bila razlika **tiha**:
+prikaz bi feedovo napoved pokazal kot izmerjeno zamudo.
+
+Izluščenje je preverjeno, da ničesar ne spremeni: `/api/connections` za isto
+poizvedbo vrne **bajt za bajt isti odgovor** (18 346 B). Test
+`test_ista_zamuda_kot_iskalnik_zvez` primerja obe strani na isti vožnji.
+
 ## Prestopi
 
 * **Prestopov je lahko do trije.** `journey.transfers()` išče enega v SQL in

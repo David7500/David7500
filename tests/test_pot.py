@@ -171,3 +171,49 @@ def test_nicelna_hoja_ni_noga(conn):
     noge = r["predlogi"][0]["noge"]
     assert noge[0]["vrsta"] == "voznja"
     assert all(n["sekunde"] >= 60 for n in noge if n["vrsta"] == "hoja")
+
+
+def test_ista_zamuda_kot_iskalnik_zvez(conn, monkeypatch):
+    """Ista vožnja, isti postanek, dve strani — ena številka.
+
+    Pravilo, katera zamuda velja in od kod je, je `stats.zamuda_na_postanku()`.
+    Dokler je bilo napisano dvakrat, se je razlika pokazala na zaslonu: RG 318
+    je v iskalniku pisal +11, v oknu iste vožnje pa +24.
+    """
+    from kajros import stats
+
+    _voznja(conn, "t1", "LP 1", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "CILJ", 8 * 3600 + 1200)], omrezje="zeleznica")
+    # Vozilo je videno pred potnikovo postajo: zamuda na njegovem postanku je
+    # torej OCENA, ne meritev -- in prav tam sta se poti razšli.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, "
+                 "delay_arr, feed_ts) VALUES('t1', ?, 1, 240, 240, ?)",
+                 (D, 4102444800))
+    conn.commit()
+
+    zveze = stats.connections(conn, "Blizu", "Cilj", D, now_s=8 * 3600 + 700)
+    assert zveze, "iskalnik zvez mora najti to vožnjo"
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, now_s=8 * 3600 + 700)
+    noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
+    assert noga["zamuda"]["s"] == zveze[0]["zamuda"]["s"]
+    assert noga["zamuda"]["vrsta"] == zveze[0]["zamuda"]["vrsta"]
+
+
+def test_prestop_uposteva_zamudo_obeh_vozenj(conn, monkeypatch):
+    """Preostanek prestopa je načrtovani čas plus zamuda drugega minus prvega.
+
+    Če zamuja tudi vozilo, na katero prestopaš, zveza morda vseeno drži — in
+    to je natanko primer, ki potnika najbolj zanima.
+    """
+    _voznja(conn, "t1", "prva", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "DALEC", 8 * 3600 + 900)])
+    _voznja(conn, "t2", "druga", [(1, "DALEC", 8 * 3600 + 1500),
+                                  (2, "CILJ", 8 * 3600 + 1800)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    p = r["predlogi"][0]
+    assert len(p["prestopi"]) == 1
+    t = p["prestopi"][0]
+    assert t["kje"] == "Daleč"
+    assert t["nacrtovano_s"] == 600, "1500 - 900, brez hoje vmes"
+    assert t["ostane_s"] is None, "brez meritev ni ocene, in tega ne izmišljamo"

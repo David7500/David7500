@@ -147,7 +147,17 @@ function minute(s) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
 }
 
-function nogaHtml(n) {
+// Zeton zamude. Barva nikoli sama: poleg nje sta minuta IN beseda o tem, od
+// kod je -- "izmerjeno" in "ocena" nista ista trditev.
+function zamudaHtml(z) {
+  if (!z) return "";
+  const barva = delayColor(z);
+  const vrsta = z.vrsta ? ` <span class="zam-vrsta">${escapeHtml(z.vrsta)}</span>` : "";
+  return `<span class="zam" style="color:${barva};border-color:${barva}55">`
+    + `${escapeHtml(delayText(z))}</span>${vrsta}`;
+}
+
+function nogaHtml(n, sama) {
   if (n.vrsta === "hoja") {
     // Puscica in ne "od X do Y": imena postaj se v slovenscini sklanjajo in
     // splosnega pravila zanje ni. "do Grosuplje" je napacno, "do Grosupljega"
@@ -162,13 +172,65 @@ function nogaHtml(n) {
   }
   const pot = n.network === "avtobus" ? "bus" : "train";
   const povezava = `/app/${pot}/${encodeURIComponent(n.train_no)}?trip=${encodeURIComponent(n.trip_id)}`;
+  // Ura, ki jo potnik dozivi, je glavna; voznoredna ostane vidna poleg nje,
+  // ker je edino, kar drzi, ce se zamuda vmes spremeni.
+  const odh = n.odhod_ocena || n.odhod;
+  const prih = n.prihod_ocena || n.prihod;
+  const vr = !sama && n.odhod_ocena && n.odhod_ocena !== n.odhod
+    ? `<span class="noga-vr">vozni red ${ura(n.odhod)} → ${ura(n.prihod)}</span>` : "";
   return `<li class="noga je-voznja">
     <span class="noga-znak" aria-hidden="true">●</span>
     <span class="noga-telo">
-      <a class="noga-linija" href="${povezava}">${escapeHtml(n.train_no)}</a>
-      <span class="noga-ure"><strong>${ura(n.odhod)}</strong> ${escapeHtml(n.od)}
-        → <strong>${ura(n.prihod)}</strong> ${escapeHtml(n.do)}</span>
+      <span class="noga-vrh">
+        <a class="noga-linija" href="${povezava}">${escapeHtml(n.train_no)}</a>
+        ${zamudaHtml(n.zamuda)}
+      </span>
+      <span class="noga-ure"><strong>${ura(odh)}</strong> ${escapeHtml(n.od)}
+        → <strong>${ura(prih)}</strong> ${escapeHtml(n.do)}</span>
+      ${vr}
     </span></li>`;
+}
+
+// Preostanek prestopa se racuna iz ZAOKROZENIH minut, ne iz sekund: na
+// zaslonu stojijo vse tri stevilke druga ob drugi in bralec, ki jih sesteje,
+// mora priti do iste. Ista past kot pri razredu zamude.
+function prestopHtml(t, pred, po) {
+  const nacrt = Math.floor(t.nacrtovano_s / 60 + 0.5);
+  const d1 = delayMin(pred && pred.zamuda);
+  const d2 = delayMin(po && po.zamuda);
+  const znano = d1 != null && d2 != null;
+  const mins = znano ? nacrt - d1 + d2 : nacrt;
+  const barva = !znano ? "var(--ink-mute)" : mins < 2 ? "var(--sev-bad)"
+    : mins < 5 ? "var(--sev-hard)" : "var(--ok)";
+  const pes = t.pes_s >= 60 ? ` · ${minute(t.pes_s)} hoje vmes` : "";
+  return `<li class="noga je-prestop">
+    <span class="noga-znak" aria-hidden="true">⇄</span>
+    <span class="noga-telo" style="color:${barva}">
+      ${escapeHtml(znano ? prestopText(mins) : `${nacrt} min za prestop`)}
+      <span class="noga-kam">v ${escapeHtml(t.kje)}${pes}${znano ? "" : " · brez zamud"}</span>
+    </span></li>`;
+}
+
+// Prestop stoji MED nogama, ki ju veze -- ne v svojem seznamu pod potjo,
+// kjer bi bralec moral sam ugotoviti, na kateri prestop se nanasa.
+function nogeHtml(p) {
+  const voznje = p.noge.filter((n) => n.vrsta === "voznja");
+  const out = [];
+  for (const n of p.noge) {
+    const i = voznje.indexOf(n);
+    if (i > 0 && p.prestopi && p.prestopi[i - 1]) {
+      out.push(prestopHtml(p.prestopi[i - 1], voznje[i - 1], n));
+    }
+    out.push(nogaHtml(n, voznje.length === 1));
+  }
+  return out.join("");
+}
+
+// Kadar se ura z zamudo razlikuje od voznorednega, mora bralec videti obe --
+// sicer ne ve, ali gleda vozni red ali napoved.
+function zamudno(p) {
+  if (!p.prihod_ocena || p.prihod_ocena === p.prihod) return "";
+  return ` <span class="predlog-vr">vozni red ${ura(p.odhod)} → ${ura(p.prihod)}</span>`;
 }
 
 function predlogHtml(p, i, izbran) {
@@ -177,10 +239,12 @@ function predlogHtml(p, i, izbran) {
     : `${p.prestopov} ${sklon(p.prestopov, "prestop")}`;
   return `<article class="predlog${i === izbran ? " je-izbran" : ""}" data-i="${i}">
     <header class="predlog-glava">
-      <span class="predlog-ure"><strong>${ura(p.odhod)}</strong> → <strong>${ura(p.prihod)}</strong></span>
-      <span class="predlog-meta">${minute(p.trajanje_s)} · ${minute(p.hoje_s)} hoje · ${prestopi}</span>
+      <span class="predlog-ure"><strong>${ura(p.odhod_ocena || p.odhod)}</strong>
+        → <strong>${ura(p.prihod_ocena || p.prihod)}</strong>${zamudno(p)}</span>
+      <span class="predlog-meta">${minute(p.trajanje_s)}${p.hoje_s >= 60
+        ? ` · ${minute(p.hoje_s)} hoje` : ""} · ${prestopi}</span>
     </header>
-    <ol class="noge">${p.noge.map(nogaHtml).join("")}</ol>
+    <ol class="noge">${nogeHtml(p)}</ol>
   </article>`;
 }
 

@@ -1371,6 +1371,60 @@ def se_vozi_vceraj(conn: sqlite3.Connection, now_s: int,
     return last_s is not None and now_s + 86400 <= last_s
 
 
+def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
+                       trip_id: str | None, stop_seq: int, ime_postaje: str,
+                       feed_delay_s: int | None, lm: dict | None,
+                       slack_vrsta, service_date: str) -> dict:
+    """Zamuda na potnikovem postanku: koliko je in **od kod je**.
+
+    Eno pravilo na enem mestu. Iskalnik zvez in pot od vrat do vrat sta ista
+    vprašanja o istem postanku; dve različici tega pravila bi se prej ali slej
+    razšli, razlika pa bi bila tiha — prikaz bi feedovo napoved pokazal kot
+    izmerjeno zamudo. Ta razred napake je v tem projektu že bil.
+
+    `lm` je vrstica iz `last_measured()` za to vožnjo, `slack_vrsta` pa njena
+    rezerva voznega reda iz `_slack_ahead()`.
+    """
+    # Kaj potnik res rabi: zamudo na SVOJI postaji, ce je ze izmerjena;
+    # sicer zadnjo znano zamudo in kje je bila izmerjena.
+    if lm and lm["stop_seq"] >= stop_seq:
+        return {
+            "delay_s": feed_delay_s if feed_delay_s is not None else lm["delay_s"],
+            "delay_at": ime_postaje if feed_delay_s is not None else lm["name"],
+            "delay_kind": "izmerjeno",
+        }
+    if lm:
+        # Vozilo je se pred izhodiscno postajo potnika: to je prenos njegove
+        # trenutne zamude, torej OCENA za to postajo. Ista beseda kot na
+        # odhodni tabli -- dve imeni za isto stvar na dveh straneh iste
+        # aplikacije sta dve razlicni stvari za bralca.
+        #
+        # Prej rezerva voznega reda, isto kot na tabli: vlak, ki stoji na
+        # vmesni postaji dvajset minut, do potnika zamude ne prinese.
+        rez = sum(w for seq, w in slack_vrsta if lm["stop_seq"] < seq <= stop_seq)
+        # Prevoznikova vrednost samo navzgor: nizka je nerazresena nicla,
+        # visoka pa pomeni, da ve nekaj, cesar iz zgodovine ni mogoce vedeti.
+        # Izjema: dokler vlak stoji na dolgem postanku, je njegova vrednost
+        # le prenos prihodne zamude (glej `_operator_is_stale`).
+        prev = feed_delay_s
+        if _operator_is_stale(prev, lm["delay_arr"], lm["delay_s"],
+                              dwell_at(slack_vrsta, lm["stop_seq"])):
+            prev = None
+        ocena = estimate_at(conn, train_no, trip_id, lm["stop_seq"],
+                            lm["delay_s"], stop_seq, service_date)
+        return {
+            "delay_s": (ocena if ocena is not None
+                        else _with_operator(_after_slack(lm["delay_s"], rez), prev)),
+            "delay_at": lm["name"],
+            "delay_kind": "ocena",
+        }
+    if feed_delay_s is not None:
+        # Feed ima vrednost, a cas se ni minil -- to je napoved prevoznika.
+        return {"delay_s": feed_delay_s, "delay_at": ime_postaje,
+                "delay_kind": "napoved prevoznika"}
+    return {"delay_s": None, "delay_at": None, "delay_kind": "brez podatka"}
+
+
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
                 service_date: str, now_s: int | None = None,
                 network: str | None = None, _vceraj: bool = True) -> list[dict]:
@@ -1425,47 +1479,13 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         d["sched_arr"] = _abs_time(service_date, d["arr_s"])
         d["duration_s"] = d["arr_s"] - d["dep_s"]
 
-        lm = last.get(d["trip_id"])
-        # Kaj potnik res rabi: zamudo na SVOJI postaji, ce je ze izmerjena;
-        # sicer zadnjo znano zamudo in kje je bila izmerjena.
-        if lm and lm["stop_seq"] >= d["from_seq"]:
-            d["delay_s"] = d["from_delay_s"] if d["from_delay_s"] is not None else lm["delay_s"]
-            d["delay_at"] = from_name if d["from_delay_s"] is not None else lm["name"]
-            d["delay_kind"] = "izmerjeno"
-        elif lm:
-            # Vozilo je se pred izhodiscno postajo potnika: to je prenos
-            # njegove trenutne zamude, torej OCENA za to postajo. Ista beseda
-            # kot na odhodni tabli -- dve imeni za isto stvar na dveh straneh
-            # iste aplikacije sta dve razlicni stvari za bralca.
-            #
-            # Prej rezerva voznega reda, isto kot na tabli: vlak, ki stoji na
-            # vmesni postaji dvajset minut, do potnika zamude ne prinese.
-            vrsta = slack.get(d["trip_id"], ())
-            rez = sum(w for seq, w in vrsta
-                      if lm["stop_seq"] < seq <= d["from_seq"])
-            # Prevoznikova vrednost samo navzgor: nizka je nerazresena nicla,
-            # visoka pa pomeni, da ve nekaj, cesar iz zgodovine ni mogoce vedeti.
-            # Izjema: dokler vlak stoji na dolgem postanku, je njegova vrednost
-            # le prenos prihodne zamude (glej `_operator_is_stale`).
-            prev = d["from_delay_s"]
-            if _operator_is_stale(prev, lm["delay_arr"], lm["delay_s"],
-                                  dwell_at(vrsta, lm["stop_seq"])):
-                prev = None
-            ocena = estimate_at(conn, d["train_no"], d["trip_id"], lm["stop_seq"],
-                                lm["delay_s"], d["from_seq"], service_date)
-            d["delay_s"] = (ocena if ocena is not None
-                            else _with_operator(_after_slack(lm["delay_s"], rez), prev))
-            d["delay_at"] = lm["name"]
-            d["delay_kind"] = "ocena"
-        elif d["from_delay_s"] is not None:
-            # Feed ima vrednost, a cas se ni minil -- to je napoved prevoznika.
-            d["delay_s"] = d["from_delay_s"]
-            d["delay_at"] = from_name
-            d["delay_kind"] = "napoved prevoznika"
-        else:
-            d["delay_s"] = None
-            d["delay_at"] = None
-            d["delay_kind"] = "brez podatka"
+        z = zamuda_na_postanku(
+            conn, train_no=d["train_no"], trip_id=d["trip_id"],
+            stop_seq=d["from_seq"], ime_postaje=from_name,
+            feed_delay_s=d["from_delay_s"], lm=last.get(d["trip_id"]),
+            slack_vrsta=slack.get(d["trip_id"], ()), service_date=service_date)
+        d["delay_s"], d["delay_at"], d["delay_kind"] = (
+            z["delay_s"], z["delay_at"], z["delay_kind"])
 
         d["expected_dep"] = (_abs_time(service_date, d["dep_s"] + d["delay_s"])
                              if d["delay_s"] is not None else None)

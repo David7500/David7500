@@ -1458,16 +1458,21 @@ def api_pot(
     else:
         odhod_s = journey.now_seconds(now)
 
+    # `now_s` samo za današnji dan: le takrat obstaja meja med prevoženim in
+    # tem, kar je še pred vozilom. Za izrecno vprašan drug datum ostane pomen
+    # "prometni dan D" in zamud ni.
+    zdaj_s = journey.now_seconds(now) if dan == now.date().isoformat() else None
     with _conn() as conn:
         izid = pot.isci(conn, (od_lat, od_lon), (do_lat, do_lon), dan, odhod_s,
-                        max_hoje_s=hoje * 60)
+                        max_hoje_s=hoje * 60, now_s=zdaj_s)
         # Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan in ima `dep_s`
         # čez 86 400 (največji v voznem redu je 121 680, torej 33:48). Brez
         # tega vprašanje ob pol enih zjutraj ne najde ničesar, čeprav vozi.
         if not ob and now.hour < 4:
             vceraj = pot.isci(conn, (od_lat, od_lon), (do_lat, do_lon),
                               journey.yesterday(now), odhod_s + 86400,
-                              max_hoje_s=hoje * 60)
+                              max_hoje_s=hoje * 60,
+                              now_s=(zdaj_s + 86400) if zdaj_s is not None else None)
             izid["predlogi"] = sorted(izid["predlogi"] + vceraj["predlogi"],
                                       key=lambda p: (p["prihod"], p["hoje_s"]))
     return izid

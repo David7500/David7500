@@ -79,6 +79,15 @@ function delayText(z, kratko) {
 
 // Ali je vrednost "prezgodaj". Streznik to ze pove (`zamuda.prezgodaj`),
 // sicer po isti zaokrozeni minuti kot `delayText`.
+// "-1 min za prestop" je natanko primer, ko zveza NE drzi -- torej tisti, kjer
+// mora potnik razumeti brez ugibanja. Nicla ni "0 min za prestop" (videti kot
+// podatek), ampak "brez rezerve". Uporabljata iskalnik zvez in pot.
+function prestopText(mins) {
+  if (mins < 0) return `zmanjka ${Math.abs(mins)} min`;
+  if (mins === 0) return "brez rezerve";
+  return `${mins} min za prestop`;
+}
+
 function isEarly(z) {
   if (z == null) return false;
   if (typeof z === "object") return !!z.prezgodaj;

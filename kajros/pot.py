@@ -30,7 +30,7 @@ import sqlite3
 import time
 from datetime import date, datetime
 
-from . import geo, hoja, journey
+from . import geo, hoja, journey, stats
 
 TZ = journey.TZ
 
@@ -385,11 +385,16 @@ def _pes_vso_pot(od: tuple[float, float], do: tuple[float, float],
 
 def isci(conn: sqlite3.Connection, od: tuple[float, float],
          do: tuple[float, float], service_date: str, odhod_s: int,
-         max_hoje_s: int = MAX_HOJE_S, max_nog: int = MAX_NOG) -> dict:
+         max_hoje_s: int = MAX_HOJE_S, max_nog: int = MAX_NOG,
+         now_s: int | None = None) -> dict:
     """Predlogi poti od točke do točke, po voznem redu danega prometnega dne.
 
     `odhod_s` je sekunda od polnoči tega prometnega dne. Odgovor nosi absolutne
     čase, da se dneva dasta zlepiti brez ugibanja.
+
+    `now_s` obstaja samo za današnji dan -- le takrat je meja med tem, kar je
+    vozilo že prevozilo, in tem, kar je pred njim. Brez njega so predlogi po
+    voznem redu in brez zamud.
     """
     t0 = time.perf_counter()
     polnoc = _polnoc(service_date)
@@ -450,6 +455,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
         videni.add(kljuc)
         izbrani.append(p)
 
+    pripni_zamude(conn, izbrani, service_date, now_s)
     return {
         "datum": service_date,
         "izhodisc": len(izhodisca), "ciljev": len(cilji),
@@ -457,3 +463,96 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
         "predlogi": izbrani,
         "trajalo_ms": round((time.perf_counter() - t0) * 1000),
     }
+
+
+# ---------------------------------------------------------------- zamude
+
+def _feed_zamude(conn, pari: list[tuple[str, int]], service_date: str) -> dict:
+    """Kaj feed pravi o teh postankih. `COALESCE(delay_dep, delay_arr)`, ker je
+    `departure.delay` izpolnjen pri vseh prevoznikih, `arrival.delay` pa ne."""
+    if not pari:
+        return {}
+    marks = ",".join("(?,?)" for _ in pari)
+    par: list = []
+    for t, q in pari:
+        par += [t, q]
+    vrstice = conn.execute(
+        "SELECT trip_id, stop_seq, COALESCE(delay_dep, delay_arr) AS d FROM run "
+        f"WHERE service_date = ? AND (trip_id, stop_seq) IN ({marks})",
+        [service_date, *par]).fetchall()
+    return {(r["trip_id"], r["stop_seq"]): r["d"] for r in vrstice}
+
+
+def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
+                  service_date: str, now_s: int | None) -> None:
+    """Vsaki vožnji pripiše zamudo ob vstopu in oceno ob izstopu.
+
+    **Iskanje teče po voznem redu**, ker napovedi za vožnjo čez pet ur ni.
+    Zamuda se pripiše šele tu in veriga se z njo znova prebere: če prva noga
+    zamuja osem minut in je prestop imel šest, mora to potnik videti.
+
+    Pravilo, katera številka velja in od kod je, je `stats.zamuda_na_postanku()`
+    — **isto, ki ga uporablja iskalnik zvez**. Druga različica bi se prej ali
+    slej razšla in razlika bi bila tiha.
+    """
+    noge = [n for p in predlogi for n in p["noge"] if n["vrsta"] == "voznja"]
+    if not noge:
+        return
+    trip_ids = list({n["trip_id"] for n in noge})
+    lm = stats.last_measured(conn, service_date, trip_ids, now_s)
+    slack = stats._slack_ahead(conn, trip_ids)
+    feed = _feed_zamude(conn, [(n["trip_id"], n["od_seq"]) for n in noge],
+                        service_date)
+
+    for n in noge:
+        tid = n["trip_id"]
+        z = stats.zamuda_na_postanku(
+            conn, train_no=n["train_no"], trip_id=tid, stop_seq=n["od_seq"],
+            ime_postaje=n["od"], feed_delay_s=feed.get((tid, n["od_seq"])),
+            lm=lm.get(tid), slack_vrsta=slack.get(tid, ()),
+            service_date=service_date)
+        n["zamuda"] = stats.opis_zamude(z["delay_s"], z["delay_kind"])
+        n["zamuda_od"] = z["delay_at"]
+        if z["delay_s"] is None:
+            n["odhod_ocena"] = n["prihod_ocena"] = None
+            continue
+        n["odhod_ocena"] = n["odhod"] + z["delay_s"]
+        # Zamuda ob izstopu ni ista kot ob vstopu: vlak vmes porabi rezervo
+        # voznega reda. Isti model kot v oknu vožnje.
+        ob_izstopu = stats.estimate_at(conn, n["train_no"], tid, n["od_seq"],
+                                       z["delay_s"], n["do_seq"], service_date)
+        if ob_izstopu is None:
+            ob_izstopu = z["delay_s"]
+        n["prihod_ocena"] = n["prihod"] + ob_izstopu
+
+    for p in predlogi:
+        voznje = [n for n in p["noge"] if n["vrsta"] == "voznja"]
+        if not voznje:
+            continue
+        # Kdaj moraš zares od doma: če prvi avtobus zamuja pet minut, imaš pet
+        # minut več. To je edini razlog, zakaj ta stran obstaja.
+        prva = voznje[0]
+        zac = p["noge"][0]["sekunde"] if p["noge"][0]["vrsta"] == "hoja" else 0
+        p["odhod_ocena"] = prva["odhod_ocena"] - zac if prva["odhod_ocena"] else None
+        rep = 0
+        for n in reversed(p["noge"]):
+            if n["vrsta"] == "voznja":
+                break
+            rep += n["sekunde"]
+        zadnja = voznje[-1]
+        p["prihod_ocena"] = zadnja["prihod_ocena"] + rep if zadnja["prihod_ocena"] else None
+
+        # Ali prestopi še držijo. Načrtovani čas je razlika voznega reda; kar
+        # od njega ostane, je razlika **pričakovanih** ur minus hoja vmes.
+        p["prestopi"] = []
+        for a, b in zip(voznje, voznje[1:]):
+            i, j = p["noge"].index(a), p["noge"].index(b)
+            pes = sum(n["sekunde"] for n in p["noge"][i + 1:j] if n["vrsta"] == "hoja")
+            nacrtovano = b["odhod"] - a["prihod"] - pes
+            ostane = None
+            if a["prihod_ocena"] is not None and b["odhod_ocena"] is not None:
+                ostane = b["odhod_ocena"] - a["prihod_ocena"] - pes
+            p["prestopi"].append({
+                "kje": a["do"], "pes_s": pes,
+                "nacrtovano_s": nacrtovano, "ostane_s": ostane,
+            })

@@ -91,13 +91,18 @@ def prestop_brez_minusa():
     „−1 min za prestop“ je uganka in nastopi natanko takrat, ko zveza ne drži.
     """
     from pathlib import Path
-    js = Path("kajros/static/connections.js").read_text()
-    # Ne iščemo golega niza -- ta je legitimno v `prestopText()` za pozitivne
-    # minute. Iščemo, ali gre ŽETON skozi to funkcijo.
-    if "prestopText(mins)" not in js:
-        return "žeton ne gre skozi `prestopText()` — negativna minuta bo gola"
-    if "zmanjka " not in js or "brez rezerve" not in js:
+    # Pravilo je od 8. 9. 2026 v `common.js`, ker ga rabita dve strani --
+    # iskalnik zvez in pot od vrat do vrat. Straža gleda oboje: definicijo in
+    # to, da gre ŽETON vsake strani res skoznjo.
+    skupno = Path("kajros/static/common.js").read_text()
+    if "function prestopText(" not in skupno:
+        return "`prestopText()` ni v common.js — pravilo bi bilo spet dvakrat"
+    if "zmanjka " not in skupno or "brez rezerve" not in skupno:
         return "manjka beseda za negativno oziroma ničelno rezervo"
+    for ime in ("connections.js", "pot.js"):
+        js = Path("kajros/static") / ime
+        if "prestopText(" not in js.read_text():
+            return f"{ime}: žeton ne gre skozi `prestopText()` — minuta bo gola"
     return None
 
 

@@ -535,12 +535,8 @@ function preostaliPrestop(tr, plannedS) {
 // stevilka je natanko primer, ko zveza NE drzi, in prav takrat mora potnik
 // razumeti brez ugibanja. Nic minut ni "0 min za prestop" -- to je videti kot
 // podatek, pomeni pa, da rezerve ni nic.
-function prestopText(mins) {
-  if (mins < 0) return `zmanjka ${Math.abs(mins)} min`;
-  if (mins === 0) return "brez rezerve";
-  return `${mins} min za prestop`;
-}
-
+// `prestopText()` je v `common.js` -- isto besedilo rabi tudi pot od vrat do
+// vrat, dve razlicici pa bi se prej ali slej razsli.
 function transferBadgeHtml(tr, plannedS) {
   if (!tr) return '<span class="tag">1 prestop</span>';
   const st = TRANSFER_STYLE[tr.status] || TRANSFER_STYLE["brez podatka"];
