@@ -1499,3 +1499,62 @@ Primer, ki je bil doslej neviden: „Bavarski dvor" → „Bavarski dvor" (druga
 smer) je **133 s hoje**, 169 m po zraku. In primer, zakaj zračna razdalja ne
 zadošča niti tu: „Bavarski dvor" → „Gosposvetska" je 99 m po zraku in 115 s
 hoje — obvoz 1,61×.
+
+## Iskanje od vrat do vrat: kaj je bilo narobe, preden je delalo (8. 9. 2026)
+
+`kajros pot --od lat,lon --do lat,lon`. Izmerjeno s toplimi predpomnilniki, čez
+obe omrežji, hoja iz OSRM prek tunela do arwena:
+
+| primer | izhodišč/ciljev | čas | predlogov |
+|---|---|---|---|
+| Grosuplje → LJ center | 25 / 120 | 179 ms | 2 |
+| Ljubljana Polje → BTC | 19 / 62 | 193 ms | 2 |
+| Bavarski dvor → Vič | 120 / 87 | 282 ms | 2 |
+| Bohinjska Bistrica → Kranj | 7 / 50 | 99 ms | 2 |
+| Maribor → Koper | 21 / 11 | 720 ms | 2 |
+
+Prvi izid, ki ga druga slovenska orodja ne dajo — Maribor → Koper vključi
+**4 minute hoje z železniške postaje Ljubljana na avtobusno**, ker je vlak do
+Ljubljane in avtobus naprej hitrejši od same železnice.
+
+### Štiri napake, ki jih je bilo treba popraviti
+
+**1. Iskanje po postajah v SQL je bilo 629 ms.** Poizvedba „katera
+postajališča so blizu in ta dan kaj strežejo" je šla čez `JOIN sched JOIN trip
+JOIN service_day`. Ista stvar v Pythonu, z množico postajališč iz **že
+naloženega voznega reda**, je 7 ms. Vozni red se za iskanje tako ali tako
+naloži; nova poizvedba je bila delo, ki je bilo že opravljeno.
+
+**2. Brez obrezovanja po meji je iskanje 510 ms, z njim 7 ms.** Zgornja meja
+je čas hoje vso pot (kadar obstaja) in se med iskanjem stiska ob vsakem
+doseženem cilju. Brez nje zadnja kroga premetavata pol države, ki je ne bo
+nihče videl. Izid je do minute isti.
+
+**3. Krogi niso omejevali nog — v obeh iskanjih.** Z eno samo tabelo
+najboljših prihodov se ob poznejši izboljšavi prepiše tudi starš postajališča
+in veriga nazaj preskoči kroge. Izmerjeno na Maribor → Koper: pri meji **dveh**
+nog je iskanje vrnilo pot s **štirimi** vožnjami.
+
+To ni bila samo netočna dokumentacija. `journey.plan()` ima varovalko
+`len(legs) > max_legs: return []` — torej je predolgo verigo **tiho zavrgel**
+in veljavna pot je izginila brez sledu. Oboje je zdaj RAPTOR z oznakami po
+krogih (`tau[k]` = najzgodnejši prihod z največ k vožnjami).
+
+Popravek `journey.plan()` ne poslabša izida: vzorec 80 naključnih parov
+železniških postaj da **4 % brez odgovora**, kar je natanko zapisana številka
+izpred popravka, in vsi trije dokumentirani primeri še delajo (Ljutomer mesto
+→ Ribnica 3 prestopi, Stara Cerkev → Prevalje 3, Narin → Kranj 2).
+
+**4. Za Maribor → Koper je usmerjevalnik računal 200 km dolgo pešpot**, samo
+da jo je iskanje takoj zavrglo. Zračna črta je spodnja meja poti: če je že ona
+daljša od tega, kar je peš mogoče, se usmerjevalnika ne vpraša.
+
+### Kar se v izidu vidi in ni napaka
+
+* **Dve hoji zapored** nastaneta, kadar pot s postajališča pelje čez peš
+  prestop na drugo in šele od tam do vrat. Za potnika je to ena hoja, zato se
+  zlijeta; vmesno postajališče je brez pomena, minute ne.
+* **Hoja nič minut** je postajališče pred vrati. Ni noga, ampak šum.
+* **Ista pot iz dveh vprašanj.** „Najhitreje" in „z manj hoje" data lahko isto
+  vožnjo z drugačnim repom; ključ za razdvajanje so zato **samo vožnje**, ne
+  ure — te se razlikujejo za pol minute.

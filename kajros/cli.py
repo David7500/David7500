@@ -7,8 +7,8 @@ import json
 import sys
 from pathlib import Path
 
-from . import (alerts, backtest, config, collector, db, gtfs, hoja, ocena, stats,
-               weather)
+from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
+               ocena, pot, stats, weather)
 
 
 def cmd_init(args):
@@ -266,6 +266,47 @@ def cmd_pespoti(args):
     print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
+def cmd_pot(args):
+    """Pot od vrat do vrat. Točki sta `lat,lon` -- kot ju da zemljevid."""
+    def tocka(niz):
+        a, b = niz.split(",")
+        return float(a), float(b)
+
+    conn = db.connect()
+    db.init(conn)
+    dan = args.dan or journey.today()
+    if args.ob:
+        h, m = (int(x) for x in args.ob.split(":")[:2])
+        odhod_s = h * 3600 + m * 60
+    else:
+        odhod_s = journey.now_seconds()
+    izid = pot.isci(conn, tocka(args.od), tocka(args.do), dan, odhod_s)
+    if args.json:
+        print(json.dumps(izid, indent=2, ensure_ascii=False))
+        return
+    print(f"{dan}, od {odhod_s // 3600:02d}:{odhod_s % 3600 // 60:02d} · "
+          f"{izid['izhodisc']} izhodišč, {izid['ciljev']} ciljev · "
+          f"hoja: {izid['vir_hoje']} · {izid['trajalo_ms']} ms")
+    if not izid["predlogi"]:
+        print("  brez predlogov")
+    for p in izid["predlogi"]:
+        print(f"\n  {_ura(p['odhod'])} -> {_ura(p['prihod'])}   "
+              f"{p['trajanje_s'] // 60} min · hoje {p['hoje_s'] // 60} min · "
+              f"{p['prestopov']} prestopov")
+        for n in p["noge"]:
+            if n["vrsta"] == "hoja":
+                print(f"      peš {n['sekunde'] // 60:3d} min  "
+                      f"{n.get('od') or '(izhodišče)'} -> {n.get('do') or '(cilj)'}")
+            else:
+                print(f"      {n['train_no']:12} {_ura(n['odhod'])} {n['od']}"
+                      f"  ->  {_ura(n['prihod'])} {n['do']}")
+
+
+def _ura(ts):
+    from datetime import datetime
+    return datetime.fromtimestamp(ts, pot.TZ).strftime("%H:%M")
+
+
 def cmd_alerts(args):
     conn = db.connect()
     db.init(conn)
@@ -392,6 +433,14 @@ def main(argv=None):
     a = sub.add_parser("pespoti", help="izmeri pes poti med bliznjimi postajalisci")
     a.add_argument("--znova", action="store_true", help="pobrisi in izracunaj vse")
     a.set_defaults(func=cmd_pespoti)
+
+    a = sub.add_parser("pot", help="pot od vrat do vrat (tocki sta lat,lon)")
+    a.add_argument("--od", required=True, help="izhodisce kot lat,lon")
+    a.add_argument("--do", required=True, help="cilj kot lat,lon")
+    a.add_argument("--ob", help="HH:MM; privzeto zdaj")
+    a.add_argument("--dan", help="prometni dan; privzeto danes")
+    a.add_argument("--json", action="store_true")
+    a.set_defaults(func=cmd_pot)
 
     a = sub.add_parser("alerts", help="obvestila o ovirah in zive zamude")
     a.add_argument("--fetch", action="store_true", help="poberi feed zdaj")

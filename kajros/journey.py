@@ -932,15 +932,24 @@ def plan(conn: sqlite3.Connection, from_name: str, to_name: str,
     min_gap = TRANSFER_LIMITS.get(network or "zeleznica",
                                   TRANSFER_LIMITS["zeleznica"])[0] * 60
 
-    best: dict[str, int] = {sid: earliest_s for sid in starts}
-    # od kod smo prisli: stop_id -> (trip_id, vstopno postajalisce, vstopni seq, izstopni seq)
-    parent: dict[str, tuple] = {}
+    # Oznake so PO KROGIH: `tau[k]` je najzgodnejsi prihod z najvec k voznjami.
+    #
+    # Z eno samo tabelo najboljsih prihodov `max_legs` ne omejuje nicesar --
+    # ko poznejsi krog izboljsa postajalisce, se prepise tudi njegov stars in
+    # veriga nazaj preskoci kroge. To ni bila samo netocna dokumentacija:
+    # varovalka spodaj je predolgo verigo **tiho zavrgla**, torej se je
+    # veljavna pot izgubila brez sledu. Izmerjeno na obeh omrezjih: pri meji
+    # dveh nog je iskanje vracalo pot s stirimi voznjami.
+    tau: list[dict[str, int]] = [{} for _ in range(max_legs + 1)]
+    starsi: list[dict[str, tuple]] = [{} for _ in range(max_legs + 1)]
+    tau[0] = {sid: earliest_s for sid in starts}
+    najboljsi = dict(tau[0])
     frontier = set(starts)
 
-    for leg in range(max_legs):
+    for leg in range(1, max_legs + 1):
         marked: set[str] = set()
         for sid in frontier:
-            ready = best[sid] + (0 if leg == 0 else min_gap)
+            ready = tau[leg - 1][sid] + (0 if leg == 1 else min_gap)
             for dep_s, trip_id, seq in at_stop.get(sid, ()):
                 if dep_s < ready:
                     continue
@@ -948,28 +957,33 @@ def plan(conn: sqlite3.Connection, from_name: str, to_name: str,
                 for nseq, nstop, narr, _ in by_trip[trip_id]:
                     if nseq <= seq or narr is None:
                         continue
-                    if narr < best.get(nstop, 1 << 30):
-                        best[nstop] = narr
-                        parent[nstop] = (trip_id, sid, seq, nseq)
+                    if narr < najboljsi.get(nstop, 1 << 30):
+                        tau[leg][nstop] = narr
+                        starsi[leg][nstop] = (trip_id, sid, seq, nseq)
+                        najboljsi[nstop] = narr
                         marked.add(nstop)
         frontier = marked
         if not frontier:
             break
 
-    reached = [t for t in targets if t in parent]
-    if not reached:
+    dosezeni = [(tau[k][t], k, t) for t in targets
+                for k in range(1, max_legs + 1) if t in tau[k]]
+    if not dosezeni:
         return []
-    end = min(reached, key=lambda t: best[t])
+    _, krog, end = min(dosezeni)
 
     # Pot nazaj do izhodisca.
     legs: list[tuple] = []
-    cur = end
-    while cur in parent:
-        trip_id, board, bseq, aseq = parent[cur]
+    cur, k = end, krog
+    while k >= 1:
+        p = starsi[k].get(cur)
+        if p is None:
+            k -= 1                  # do sem smo prisli z manj voznjami
+            continue
+        trip_id, board, bseq, aseq = p
         legs.append((trip_id, board, bseq, cur, aseq))
         cur = board
-        if len(legs) > max_legs:
-            return []            # varovalka pred ciklom, ki ga ne bi smelo biti
+        k -= 1
     legs.reverse()
     if len(legs) <= 2:
         return []                # to zna ze `transfers()`, in bolje
