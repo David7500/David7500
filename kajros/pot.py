@@ -25,6 +25,7 @@ voznem redu je 121 680, torej 33:48) in relativni čas bi jo pokvaril.
 
 from __future__ import annotations
 
+import bisect
 import math
 import sqlite3
 import time
@@ -66,6 +67,12 @@ NAJVEC_POZNEJE_S = 30 * 60
 #: pelje", hoče seznam in ne ene ure -- prvi odhod je lahko čez minuto in ga ne
 #: ujame. Vsak je svoje iskanje, a peš matriki sta že izračunani.
 NASLEDNJIH = 2
+
+#: Največji zamik, ki ga iskanje sploh upošteva. Nad tem ni zamuda, ampak
+#: feedova zamenjava prometnega dne -- isti razlog kot `api.MAX_LIVE_DELAY_S`.
+#: Meja hkrati dovoli preskočiti odhode pred potnikovim prihodom: vožnja z
+#: zamudo lahko odpelje pozneje, kot piše v voznem redu, a ne poljubno pozneje.
+MAX_ZAMIK_S = 60 * 60
 
 #: Kako daleč naprej sploh gledamo naslednje odhode. Brez te meje bi na progi
 #: s tremi vožnjami na dan ponudili odhod čez sedem ur kot "naslednjega".
@@ -149,7 +156,8 @@ def zamiki(conn: sqlite3.Connection, service_date: str,
         "SELECT t.trip_id FROM trip t JOIN service_day sd "
         "ON sd.service_id = t.service_id AND sd.date = ?", (service_date,))]
     lm = stats.last_measured(conn, service_date, vse, now_s)
-    out = {t: v["delay_s"] for t, v in lm.items() if v.get("delay_s")}
+    out = {t: max(-MAX_ZAMIK_S, min(MAX_ZAMIK_S, v["delay_s"]))
+           for t, v in lm.items() if v.get("delay_s")}
     if zig:
         _ZAMIK_CACHE.clear()
         _ZAMIK_CACHE[kljuc] = out
@@ -255,7 +263,14 @@ def _isci_dan(conn, izhodisca: dict[str, int], cilji: dict[str, int],
             prispel = tau[krog - 1][sid]
             if prispel >= meja:
                 continue            # tja pridemo pozneje, kot smo že na cilju
-            for dep_s, trip_id, seq in at_stop.get(sid, ()):
+            odhodi = at_stop.get(sid, ())
+            # Preskoči vse, kar je odpeljalo, preden smo prišli. Vožnja z
+            # zamudo lahko odpelje pozneje od voznega reda, a največ za
+            # `MAX_ZAMIK_S` -- toliko nazaj torej pogledamo in nič dlje.
+            # Brez tega se na prometnem postajališču prehodijo vsi dnevni
+            # odhodi za vsako postajališče v čelu iskanja.
+            od = bisect.bisect_left(odhodi, (prispel - MAX_ZAMIK_S,))
+            for dep_s, trip_id, seq in odhodi[od:]:
                 if dep_s - naj_prej >= meja:
                     break
                 # Vozilo, ki je zdaj na poti, odpelje z znano zamudo. Iskanje

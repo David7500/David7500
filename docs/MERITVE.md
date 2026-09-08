@@ -1659,3 +1659,21 @@ zaslonu, bi razvrščanje po voznem redu spet delalo vrstni red, ki nasprotuje
 Vozila, ki še ne vozijo, zamude nimajo in se obravnavajo kot točna — to velja
 za obe različici. `zamiki()` je predpomnjen na žig zajema, ker je izračun za
 vseh 13 107 voženj dneva 541 ms.
+
+### Odhodi, ki so že odpeljali, se preskočijo
+
+`at_stop` je urejen po odhodu, iskanje pa je za vsako postajališče v čelu
+prehodilo **vse dnevne odhode** in šele nato zavrglo tiste pred potnikovim
+prihodom. Z dvojiškim iskanjem (`bisect`) se začne pri prvem odhodu, ki je še
+lahko naš — največ `MAX_ZAMIK_S` (60 min) pred prihodom, ker vožnja z zamudo
+odpelje pozneje, kot piše.
+
+| primer | prej | zdaj |
+|---|---|---|
+| Križanke → Novo Polje | 633 ms | **299 ms** |
+| Bavarski dvor → Vič | 575 ms | **303 ms** |
+| Maribor → Koper | 569 ms | **429 ms** |
+| Grosuplje → LJ center | 228 ms | **180 ms** |
+
+Ista meja obreže tudi zamike same: 482 minut ni zamuda, ampak feedova
+zamenjava prometnega dne (isti razlog kot `api.MAX_LIVE_DELAY_S`).
