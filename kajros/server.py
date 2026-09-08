@@ -108,10 +108,14 @@ def _ogrej_pot() -> None:
 
     Poleg voznega reda še opis voženj, imena postajališč in peš poti — vse
     troje je statika dneva in skupaj nekaj sto milisekund.
+
+    In **kazalo postaj obeh omrežij**: prvi klic je bil na arwenu izmerjeno
+    16,6 s, topel pa 0,5 s. Iskalnik ga vpraša ob nalaganju strani, torej bi
+    ta račun plačal prvi obiskovalec po zagonu ali po dnevnem uvozu.
     """
     if not _strezemo:
         return                   # `kajros collect`: odgovorov ni komu streci
-    from . import hoja, journey, pot
+    from . import api, hoja, journey, pot
     try:
         conn = db.connect()
         dan = journey.today()
@@ -120,6 +124,9 @@ def _ogrej_pot() -> None:
         pot._vozje(conn, dan)
         pot._imena(conn)
         hoja.pespoti(conn)
+        # Skozi ENDPOINT, ne skozi `journey.station_index()`: predpomnilnik
+        # napolni sele ovoj, sicer je delo opravljeno in zavrzeno.
+        api.api_station_index("vse", True)
         trajalo = (time.monotonic() - t) * 1000
         if trajalo > 1000:       # tiho, kadar je bilo ze toplo
             _log(f"vozni red za pot ogret: {len(by_trip)} voženj, {trajalo:.0f} ms")
