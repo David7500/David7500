@@ -113,12 +113,25 @@ hoji na postajo je to nevarnejše od zamude in mora biti napisano.
 
 ## Vrstni red
 
-1. Glasna varovalka `MAX_STOP_TIMES` + `hoja.py` + OSRM na arwenu
-2. Peš noge med postajališči (popravi prestop čez cesto tudi v obstoječem
-   iskalniku)
-3. Jedro: iskanje z več izhodišči in cilji čez obe omrežji — CLI in testi
-4. Endpoint `/api/pot` + stran `/app/pot`, „čim prej"
-5. Zamude v predlogih in preverjanje, ali veriga drži
-6. „Biti tam ob X" (obratno iskanje), več predlogov, shranjene točke
+1. ✅ Glasna varovalka `MAX_STOP_TIMES` + `hoja.py` + OSRM na arwenu
+2. ✅ Peš noge med postajališči (`pespot`, `kajros pespoti`)
+3. ✅ Jedro: iskanje z več izhodišči in cilji čez obe omrežji (`pot.py`,
+   `kajros pot`)
+4. ✅ Endpoint `/api/pot` + stran `/app/pot`, „čim prej"
+5. ✅ Zamude v predlogih in preverjanje, ali veriga drži
+6. ⬜ „Biti tam ob X" (obratno iskanje), več predlogov, shranjene točke
 
-Rezine 1–5 dajo uporabno stran. Vsaka se da ustaviti brez škode za prejšnje.
+**Peš noge v `journey.plan()` namenoma niso vezane.** Njegova oblika odgovora
+(`train1`, `trip1`, `via`) nima mesta za peš nogo in prikaz bi jo narisal
+napol; prvorazredne so v `pot.py`, kjer je bil odgovor zasnovan zanje.
+
+### Kaj ostaja odprto
+
+* **„Biti tam ob X"** je obratno iskanje: isti postopek, obrnjen v času, iz
+  cilja nazaj do najpoznejšega odhoda. Nekaj deset vrstic, ne nov algoritem.
+* **Več predlogov.** Zdaj sta „najhitreje" in „z manj hoje"; „najpozneje
+  odideš za isti prihod" je vredno več od obojega in pride z obratnim iskanjem.
+* **Shranjene točke** („dom", „služba") — `localStorage`, kot pri shranjenih
+  poteh iskalnika.
+* **Predlogi po prihodu, ne le prvi.** Iskanje vrne eno pot na vprašanje;
+  „naslednja čez pol ure" je še eno vprašanje in še eno iskanje.
