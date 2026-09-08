@@ -98,6 +98,35 @@ def _ogrej_health() -> None:
         _log(f"predpomnilnika ni bilo mogoče ogreti (health): {exc}")
 
 
+def _ogrej_pot() -> None:
+    """Vozni red obeh omrežij v pomnilnik, preden ga kdo vpraša.
+
+    Pot od vrat do vrat bere **obe omrežji hkrati**: 255 245 postankov, 94 MB,
+    in na arwenu je prvi tak klic izmerjeno **15,3 s**. Topel je 0,6–1,6 s.
+    Nalaganje se zgodi po vsakem zagonu in po vsakem uvozu voznega reda (žig
+    razveljavi predpomnilnik), torej ravno takrat, ko ga nihče ne pričakuje.
+
+    Poleg voznega reda še opis voženj, imena postajališč in peš poti — vse
+    troje je statika dneva in skupaj nekaj sto milisekund.
+    """
+    if not _strezemo:
+        return                   # `kajros collect`: odgovorov ni komu streci
+    from . import hoja, journey, pot
+    try:
+        conn = db.connect()
+        dan = journey.today()
+        t = time.monotonic()
+        by_trip, _ = journey._timetable_for_day(conn, dan, None)
+        pot._vozje(conn, dan)
+        pot._imena(conn)
+        hoja.pespoti(conn)
+        trajalo = (time.monotonic() - t) * 1000
+        if trajalo > 1000:       # tiho, kadar je bilo ze toplo
+            _log(f"vozni red za pot ogret: {len(by_trip)} voženj, {trajalo:.0f} ms")
+    except Exception as exc:  # noqa: BLE001
+        _log(f"voznega reda za pot ni bilo mogoče ogreti: {exc}")
+
+
 def bootstrap() -> None:
     """Poskrbi, da baza obstaja in ima vozni red.
 
@@ -275,6 +304,10 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         if started >= next_health:
             next_health = started + 300
             _ogrej_health()
+            # Isti ritem, a v SVOJI niti: topel klic je nekaj milisekund,
+            # hladen pa 15 s -- toliko bi zajem stal en cikel, in prav zajem
+            # je edino, česar ni mogoče ponoviti za nazaj.
+            threading.Thread(target=_ogrej_pot, daemon=True).start()
 
         if started >= next_alerts:
             next_alerts = started + alert_interval

@@ -841,7 +841,12 @@ class VozniRedPrevelik(RuntimeError):
 # ki se ob uvozu premakne, in s tem pade cel predpomnilnik. Hranimo najvec
 # nekaj dni; vec jih naenkrat nihce ne gleda.
 _TT_CACHE: dict[tuple, tuple] = {}
-_TT_CACHE_MAX = 2
+# Trije in ne dva, odkar obstaja pot od vrat do vrat: ta bere **obe omrezji
+# hkrati**, iskalnik zvez pa vsako posebej. Pri dveh vnosih je vsako iskanje
+# zvez izrinilo skupno sliko in naslednja pot je placala poln nalog -- na
+# arwenu izmerjeno **15,3 s**. Cena je majhna, ker je zeleznica drobna:
+# avtobusi 92 MB, oboje skupaj 94 MB, zeleznica ~3 MB.
+_TT_CACHE_MAX = 3
 
 
 def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
