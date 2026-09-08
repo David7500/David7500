@@ -76,10 +76,11 @@ Prototip vrne isto minuto.
 
 ## Zamude
 
-Zaradi tega stran obstaja; vozni red zna vsak. Zamuda prve noge se bere iz
-`journey.board()`, **ne iz `run`** — isti razlog kot pri budilki (`run` vrne
-`null` prav za tisti postanek, kjer potnik čaka). Cena je izmerjeno 4 ms
-(železnica) do 58 ms (prometno mestno postajališče).
+Zaradi tega stran obstaja; vozni red zna vsak. Katera številka velja na
+potnikovem postanku in od kod je, odloči `stats.zamuda_na_postanku()` —
+**isto pravilo, ki ga uporablja iskalnik zvez**. Načrtovano je bilo brati iz
+`journey.board()`; ob pisanju se je pokazalo, da je pravo dejanje izluščiti
+pravilo, ne ga poklicati skozi tablo, ki odgovarja na drugo vprašanje.
 
 Iskanje teče **po voznem redu**, ker napovedi za vožnjo čez pet ur ni. Zamuda se
 pripiše tam, kjer jo imamo, in veriga se **znova preveri**: če prva noga zamuja
