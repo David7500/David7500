@@ -1578,3 +1578,38 @@ Preostanek prestopa se računa iz **zaokroženih minut**, ne iz sekund:
 `ostane = načrtovano − zamuda prvega + zamuda drugega`. Vse tri številke
 stojijo na zaslonu druga ob drugi in bralec, ki jih sešteje, mora priti do
 iste — ista past kot pri razredu zamude.
+
+## Kaj je pokazal zaslon, česar meritev ni (8. 9. 2026)
+
+Stran `/app/pot` je v produkciji ponudila **dva predloga, od katerih je bil
+drugi po vseh merilih slabši**: Grosuplje → Zmajski most, 12:53 z 20 minutami
+hoje poleg 13:01 z 10 minutami, oba s prihodom 13:31. Odideš prej, hodiš
+dvakrat dlje, prideš ob isti minuti.
+
+Vzrok: vprašanje „z manj hoje" omeji hojo na **vsakem koncu posebej** (10 min
+tja, 10 min nazaj), ne v vsoti — zato zna dati pot z več hoje skupaj. Zdaj
+odpade vsak predlog, ki je po vseh štirih merilih (odhod, prihod, hoja,
+prestopi) slabši od že izbranega.
+
+Posledica je bila, da je ostal en sam predlog. Zato so dodani **naslednji
+odhodi**: dve nadaljnji iskanji z začetkom minuto za prvim odhodom. To je
+poceni, ker sta peš matriki že izračunani in vsako nadaljnje iskanje je le še
+krog čez vozni red. Izid za isto vprašanje: 13:00 (avtobus 69), 13:27 (LP 3296
++ 3B) in 13:40 — namesto ene ure.
+
+### Zmogljivost v produkciji (arwen)
+
+| | čas |
+|---|---|
+| prvi klic po zagonu (hladen vozni red) | **14,7 s** |
+| topel klic | **0,85 s** |
+| ogrevanje v ozadju (`server._ogrej_pot`) | 9,6 s |
+
+Prva zahteva po zagonu je bila **26,5 s**, ker je tekla vzporedno z ogrevanjem
+in isti vozni red naložila še enkrat. Ključavnica na ključ (ne skupna) je to
+znižala na 14,7 s — toliko, kolikor traja eno nalaganje.
+
+`_TT_CACHE_MAX` je z dveh na tri: pot bere obe omrežji hkrati, iskalnik zvez
+pa vsako posebej, in pri dveh vnosih je vsako iskanje zvez izrinilo skupno
+sliko. Cena je majhna, ker je železnica drobna — avtobusi 92 MB, oboje skupaj
+94 MB, železnica ~3 MB.

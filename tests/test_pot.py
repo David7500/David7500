@@ -217,3 +217,24 @@ def test_prestop_uposteva_zamudo_obeh_vozenj(conn, monkeypatch):
     assert t["kje"] == "Daleč"
     assert t["nacrtovano_s"] == 600, "1500 - 900, brez hoje vmes"
     assert t["ostane_s"] is None, "brez meritev ni ocene, in tega ne izmišljamo"
+
+
+def test_po_vseh_merilih_slabsi_predlog_odpade(conn):
+    """Pot, ki odide prej, hodi dlje in pride ob isti minuti, ni izbira.
+
+    Videno na zaslonu: Grosuplje → Zmajski most je ponudil 12:53 z 20 min hoje
+    poleg 13:01 z 10 min, oba s prihodom 13:31. Vprašanje „z manj hoje" omejuje
+    hojo na vsakem koncu posebej, ne v vsoti, in zna zato dati pot z več hoje.
+    """
+    _voznja(conn, "t1", "blizu", [(1, "BLIZU", 8 * 3600 + 900),
+                                  (2, "CILJ", 8 * 3600 + 1800)])
+    _voznja(conn, "t2", "dalec", [(1, "DALEC", 8 * 3600 + 840),
+                                  (2, "CILJ", 8 * 3600 + 1800)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    prihodi = [p["prihod"] for p in r["predlogi"]]
+    assert len(prihodi) == len(set(prihodi)) or all(
+        r["predlogi"][i]["hoje_s"] < r["predlogi"][i - 1]["hoje_s"]
+        for i in range(1, len(r["predlogi"]))), (
+        "dva predloga z istim prihodom smeta ostati le, če je poznejši boljši "
+        "po kakem drugem merilu")

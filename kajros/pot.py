@@ -62,6 +62,15 @@ MANJ_HOJE_S = 10 * 60
 #: Koliko pozneje sme priti pot z manj hoje, da je še izbira in ne druga pot.
 NAJVEC_POZNEJE_S = 30 * 60
 
+#: Koliko naslednjih odhodov ponudimo poleg prvega. Potnik, ki vpraša "kdaj mi
+#: pelje", hoče seznam in ne ene ure -- prvi odhod je lahko čez minuto in ga ne
+#: ujame. Vsak je svoje iskanje, a peš matriki sta že izračunani.
+NASLEDNJIH = 2
+
+#: Kako daleč naprej sploh gledamo naslednje odhode. Brez te meje bi na progi
+#: s tremi vožnjami na dan ponudili odhod čez sedem ur kot "naslednjega".
+ISKALNO_OKNO_S = 3 * 3600
+
 _VOZJE_CACHE: dict[tuple, dict] = {}
 _IMENA_CACHE: dict[tuple, dict] = {}
 
@@ -430,6 +439,26 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
                 if a:
                     predlogi.append(_sestavi(conn, a, izhodisca, cilji,
                                              service_date, vir_hoje))
+            # Naslednja odhoda. To je poceni: peš matriki sta že izračunani
+            # in vsako nadaljnje iskanje je le še krog čez vozni red (7-300 ms
+            # z obrezovanjem). Brez tega stran odgovori "ob 13:01" in molči o
+            # tem, da naslednji pelje čez deset minut.
+            zadnji = prvi
+            for _ in range(NASLEDNJIH):
+                prva = next((n for n in zadnji["noge"] if n["vrsta"] == "voznja"), None)
+                if prva is None:
+                    break
+                nov_s = prva["odhod"] - polnoc + 60
+                if nov_s > odhod_s + ISKALNO_OKNO_S:
+                    break
+                nova_meja = nov_s + pes["trajanje_s"] if pes else None
+                a = _isci_dan(conn, izhodisca, cilji, service_date, nov_s,
+                              max_nog, nova_meja)
+                if not a:
+                    break
+                zadnji = _sestavi(conn, a, izhodisca, cilji, service_date, vir_hoje)
+                predlogi.append(zadnji)
+
             if prvi["hoje_s"] > MANJ_HOJE_S:
                 kratka_i = {k: v for k, v in izhodisca.items() if v <= MANJ_HOJE_S}
                 kratka_c = {k: v for k, v in cilji.items() if v <= MANJ_HOJE_S}
@@ -446,11 +475,22 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     # istima avtobusoma sta ista pot, tudi če se hoja na koncu vije čez drugo
     # postajališče in se ure razlikujejo za pol minute. Obdrži se tista z manj
     # hoje, ker je razvrščanje takšno.
+    #
+    # Za tem pade vse, kar je po VSEH treh merilih slabše od že izbranega.
+    # Brez tega je stran ponudila pot, ki odide prej, hodi dvakrat dlje in
+    # pride ob isti minuti -- videno na zaslonu 8. 9. 2026 (Grosuplje ->
+    # Zmajski most: 12:53 z 20 min hoje poleg 13:01 z 10 min, oba prihod
+    # 13:31). Vprašanje "z manj hoje" omejuje hojo na VSAKEM koncu, ne v
+    # vsoti, in zna zato dati pot z več hoje skupaj.
     videni, izbrani = set(), []
     for p in sorted(predlogi, key=lambda p: (p["prihod"], p["hoje_s"])):
         kljuc = tuple((n["trip_id"], n["od_seq"], n["do_seq"])
                       for n in p["noge"] if n["vrsta"] == "voznja")
         if kljuc in videni:
+            continue
+        if any(q["prihod"] <= p["prihod"] and q["hoje_s"] <= p["hoje_s"]
+               and q["prestopov"] <= p["prestopov"] and q["odhod"] >= p["odhod"]
+               for q in izbrani):
             continue
         videni.add(kljuc)
         izbrani.append(p)
