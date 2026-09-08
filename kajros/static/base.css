@@ -81,6 +81,16 @@ body.net-avtobus {
   --accent-lit: #4db97f;
 }
 
+/* `display` iz razreda premaga `[hidden]` iz brskalnikovega sloga, ker je
+   avtorski. To je v tem projektu ugriznilo najmanj trikrat: vrstica "Drugi
+   prevozniki" ni izginila pri števcu 0, prazen sloj budilke je ležal čez vso
+   stran in požiral vsak klik (tudi v brskalniku, kjer gumba za budilko sploh
+   ni), gumb "pokaži vso pot" pa se je videl, preden je bilo kaj pokazati.
+   Vsaka datoteka je to nato popravljala zase -- enajstkrat isto pravilo.
+   Odslej enkrat, za vse: `!important`, ker mora premagati prav tiste razrede,
+   zaradi katerih je past sploh nastala. */
+[hidden] { display: none !important; }
+
 /* ---------- glava ---------- */
 
 .topbar {

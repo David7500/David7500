@@ -45,7 +45,6 @@
   border-radius: var(--r-lg);
   padding: 14px;
 }
-.search-card[hidden] { display: none; }
 
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
 /* 150 px je bilo dovolj za sam datum; dve puscici v polju mu vzameta ~33 px,
@@ -120,7 +119,6 @@
   max-height: 264px;
   overflow-y: auto;
 }
-.suggest[hidden] { display: none; }
 .suggest li {
   padding: 8px 9px;
   border-radius: var(--r-sm);
@@ -144,7 +142,6 @@
   cursor: pointer;
 }
 .field-clear:hover { color: var(--ink); }
-.field-clear[hidden] { display: none; }
 /* Besedilo se ne sme skriti pod gumb. */
 .station-field input { padding-right: 34px; }
 

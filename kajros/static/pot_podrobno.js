@@ -53,7 +53,19 @@ function izstopHtml(n) {
   return " " + zamudaHtml(n.zamuda_izstop);
 }
 
-function hojaHtml(n) {
+// Ko izstopiš, te zanima samo zadnji kos poti, ne cela. Zato ima vsak peš
+// korak svoj gumb: zemljevid približa nanj in ga pripelje pred oči -- na
+// telefonu je zemljevid pod seznamom in bi ga bilo treba iskati z drsenjem.
+function hojaGumb(n, i) {
+  const zadnja = n.do === null;
+  const beseda = n.od === null ? "pot do postajališča"
+    : zadnja ? "sem izstopil — pot do cilja"
+    : "pot do prestopa";
+  return `<button class="hoja-gumb${zadnja ? " je-cilj" : ""}" data-korak="${i}">`
+    + `${beseda}</button>`;
+}
+
+function hojaHtml(n, i) {
   const od = n.od ? escapeHtml(n.od) : "izhodišče";
   const kam = n.do ? escapeHtml(n.do) : "cilj";
   // Kadar usmerjevalnika ni, poti nismo izračunali in tega ne skrivamo:
@@ -66,6 +78,7 @@ function hojaHtml(n) {
       <div class="korak-vrh">peš <strong>${minute(n.sekunde)}</strong>${razdalja(n.metri)}</div>
       <div class="korak-kam">${od} → ${kam}</div>
       ${opomba}
+      ${hojaGumb(n, i)}
     </div></li>`;
 }
 
@@ -100,24 +113,32 @@ function voznjaHtml(n) {
     </div></li>`;
 }
 
+// Plast na nogo, da se da posamezna približati in poudariti. Brez tega je
+// zemljevid ena sama črta in "pokaži mi zadnji kos" ni izvedljivo.
+const PLASTI = new Map();      // indeks noge -> {crta, tocke}
+let vseMeje = null;
+
 function narisi(p) {
   potLayer.clearLayers();
+  PLASTI.clear();
   const meje = [];
   const skice = [];
-  for (const n of p.noge) {
+  p.noge.forEach((n, i) => {
     if (n.vrsta === "hoja") {
       const crta = n.tocke && n.tocke.length > 1 ? n.tocke : [n.od_ll, n.do_ll];
-      if (!crta[0] || !crta[1]) continue;
-      L.polyline(crta, { color: "#2f7fff", weight: 4, dashArray: "4 6", opacity: 0.95 })
-        .addTo(potLayer);
+      if (!crta[0] || !crta[1]) return;
+      const l = L.polyline(crta, { color: "#2f7fff", weight: 4, dashArray: "4 6",
+                                   opacity: 0.95 }).addTo(potLayer);
+      PLASTI.set(i, { crta: l, tocke: crta });
       crta.forEach((t) => meje.push(t));
     } else {
-      const crta = L.polyline([n.od_ll, n.do_ll],
+      const l = L.polyline([n.od_ll, n.do_ll],
         { color: "#f0934f", weight: 4, opacity: 0.55 }).addTo(potLayer);
-      skice.push([n, crta]);
+      PLASTI.set(i, { crta: l, tocke: [n.od_ll, n.do_ll] });
+      skice.push([n, l, i]);
       meje.push(n.od_ll, n.do_ll);
     }
-  }
+  });
   // Konca poti: kje začneš in kje si doma.
   const prva = p.noge[0];
   const zadnja = p.noge[p.noge.length - 1];
@@ -128,14 +149,34 @@ function narisi(p) {
                          fillColor: barva, fillOpacity: 1 })
       .addTo(potLayer).bindTooltip(opis);
   }
-  if (meje.length) map.fitBounds(L.latLngBounds(meje), { padding: [40, 40], maxZoom: 16 });
+  vseMeje = meje.length ? L.latLngBounds(meje) : null;
+  if (vseMeje) map.fitBounds(vseMeje, { padding: [40, 40], maxZoom: 16 });
   (async () => {
-    for (const [n, crta] of skice) {
+    for (const [n, crta, i] of skice) {
       const t = await trasa(n).catch(() => null);
-      if (t) crta.setLatLngs(t);
+      if (t) { crta.setLatLngs(t); PLASTI.get(i).tocke = t; }
       crta.setStyle({ opacity: 0.9 });
     }
   })();
+}
+
+/** Približaj na eno nogo (ali na vso pot, kadar je `i` `null`). */
+function priblizaj(i) {
+  for (const [j, plast] of PLASTI) {
+    // Ostale ne skrijemo, samo umaknemo: pot brez okolice je brez smisla,
+    // pot, ki ji okolica tekmuje, pa neberljiva.
+    plast.crta.setStyle({ opacity: i === null || j === i ? 0.9 : 0.25 });
+  }
+  const cilj = i === null ? vseMeje
+    : PLASTI.has(i) ? L.latLngBounds(PLASTI.get(i).tocke) : null;
+  if (cilj) map.fitBounds(cilj, { padding: [40, 40], maxZoom: 17 });
+  document.querySelectorAll(".hoja-gumb").forEach((b) =>
+    b.classList.toggle("je-on", Number(b.dataset.korak) === i));
+  $("#cela").hidden = i === null;
+  // Na telefonu je zemljevid pod seznamom; gumb brez tega premakne pogled
+  // nekam, česar se ne vidi.
+  $("#karta").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  map.invalidateSize();
 }
 
 // ---------------------------------------------------------------- nalaganje
@@ -177,8 +218,12 @@ async function nalozi() {
         pr.prestopov === 0 ? "brez prestopa"
           : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(d.datum)}</div>`;
     $("#koraki").innerHTML = pr.noge.map(
-      (n) => (n.vrsta === "hoja" ? hojaHtml(n) : voznjaHtml(n))).join("");
+      (n, i) => (n.vrsta === "hoja" ? hojaHtml(n, i) : voznjaHtml(n))).join("");
     narisi(pr);
+    $("#koraki").querySelectorAll(".hoja-gumb").forEach((b) => {
+      b.addEventListener("click", () => priblizaj(Number(b.dataset.korak)));
+    });
+    $("#cela").addEventListener("click", () => priblizaj(null));
   } catch (e) {
     $("#stanje").textContent = e.message;
     $("#stanje").className = "pot-stanje je-napaka";

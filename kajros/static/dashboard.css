@@ -106,7 +106,6 @@ body {
   font: 400 20px/1 'IBM Plex Sans', system-ui, sans-serif; cursor: pointer;
 }
 .find-box .field-clear:hover { color: #e7eaf0; }
-.find-box .field-clear[hidden] { display: none; }
 
 .find-list { margin-top: 8px; max-height: 260px; overflow-y: auto; }
 .find-row {
@@ -145,9 +144,6 @@ body {
   display: flex; align-items: center; gap: 8px;
   padding: 5px 0; cursor: pointer;
 }
-/* `display: flex` povozi privzeto vrednost za `[hidden]`, zato vrstica
-   "Drugi prevozniki" ni izginila, ko je bil stevec 0. */
-.layer[hidden] { display: none; }
 .layer input { accent-color: var(--accent-lit); width: 14px; height: 14px; flex-shrink: 0; }
 .layer-key { width: 12px; flex-shrink: 0; display: inline-flex; align-items: center; }
 .layer-key-train::before {

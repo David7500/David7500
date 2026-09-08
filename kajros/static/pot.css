@@ -220,3 +220,16 @@ a.predlog:hover .predlog-vec { color: var(--accent-lit); }
 }
 .vmesni li { padding: 2px 0; }
 .vm-ura { font-family: var(--mono); color: var(--ink-mute); margin-right: 6px; }
+
+/* Gumb "pokazi mi ta kos poti". Na telefonu je to glavni gumb strani -- kdor
+   je pravkar izstopil, hoce videti zadnjih pet minut, ne cele poti. */
+.hoja-gumb {
+  display: inline-block; margin-top: 6px;
+  padding: 5px 10px; font: inherit; font-size: 0.78rem;
+  color: var(--ink-dim); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r); cursor: pointer;
+}
+.hoja-gumb:hover { color: var(--ink); background: var(--bg-hover); }
+.hoja-gumb.je-on { color: #2f7fff; border-color: #2f7fff88; }
+.hoja-gumb.je-cilj { color: var(--ink); border-color: var(--line-firm); font-weight: 600; }
+.hoja-gumb.je-cela { margin: 4px 0 0; }

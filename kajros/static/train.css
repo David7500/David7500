@@ -140,7 +140,6 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   max-width: 260px;
 }
-.chart-tooltip[hidden] { display: none; }
 .tt-title { font: 600 12px/1.3 'IBM Plex Sans', system-ui, sans-serif; color: #e7eaf0; margin-bottom: 5px; }
 .tt-row {
   display: flex; justify-content: space-between; gap: 14px;
@@ -399,7 +398,6 @@
   overflow: hidden;
   background: var(--bg-raised);
 }
-.run-map-wrap[hidden] { display: none; }
 .run-map-head {
   display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
   padding: 10px 12px;
@@ -437,7 +435,6 @@
   font: 400 11px/1.35 var(--sans); color: var(--ink-dim);
   text-align: center; pointer-events: none;
 }
-.run-map-hint[hidden] { display: none; }
 /* Samo ozadje rabi sestavljen selektor -- prav to Leaflet nastavlja. */
 .run-map.leaflet-container { background: #0f1115; font-family: var(--sans); }
 
@@ -450,7 +447,6 @@
   border-top: 1px solid var(--line);
   font: 400 11.5px/1.45 var(--sans); color: var(--ink-dim);
 }
-.run-map-me[hidden] { display: none; }
 .run-map-me strong { color: var(--ink); font-weight: 600; }
 .run-map-me .slabo { color: var(--ink-faint); }
 
@@ -481,7 +477,6 @@
   border-radius: 5px; color: var(--ink-faint); cursor: pointer;
 }
 .run-map-fs:hover { color: var(--ink); border-color: var(--line-strong, #3d434f); }
-.run-map-fs[hidden] { display: none; }
 
 /* Cez celo STRAN, ne cez cel zaslon (glej opombo v train.js). Glava in
    legenda ostaneta -- brez njiju ne bi bilo ne hitrosti ne pomena oznak. */
@@ -600,11 +595,6 @@
 .bud-gumb.is-on { border-color: var(--accent); color: var(--accent); }
 
 .bud-plast { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; }
-/* `display: flex` iz razreda premaga `[hidden]` iz brskalnikovega sloga, ker
-   je avtorski. Brez te vrstice prazen sloj leži čez vso stran in požira vsak
-   klik -- tudi v brskalniku, kjer gumba za budilko sploh ni. Izmerjeno tako,
-   da se list ni odprl in v konzoli ni bilo ničesar. */
-.bud-plast[hidden] { display: none; }
 .bud-ozadje { position: absolute; inset: 0; background: rgba(0, 0, 0, .55); }
 .bud-list {
   position: relative;
@@ -653,7 +643,6 @@
   color: var(--ink);
   font: 600 13px/1 var(--mono);
 }
-.bud-meri[hidden] { display: none; }
 
 .bud-rezerva {
   display: flex;

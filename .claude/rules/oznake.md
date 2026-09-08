@@ -176,6 +176,19 @@ protan/deutan/tritan). Trk obeh lestvic je pri tritanu **ΔE 1,6**, torej hujši
 od tu prej zapisanih 5,5 — ločena registra sta nujna, ne okrasna.
 
 
+## `[hidden]` je eno pravilo, ne enajst
+
+`display` iz razreda premaga `[hidden]` iz brskalnikovega sloga, ker je
+avtorski. Past je ugriznila najmanj trikrat — vrstica „Drugi prevozniki" ni
+izginila pri števcu 0, prazen sloj budilke je ležal čez vso stran in požiral
+vsak klik, gumb „pokaži vso pot" se je videl, preden je bilo kaj pokazati.
+
+Vsakič je bila popravljena **v svoji datoteki**, zato je bilo isto pravilo
+zapisano enajstkrat, in vsak nov razred z `display` je past čakal znova. Odslej
+je v `base.css` eno samo `[hidden] { display: none !important; }`;
+`!important` je tam zato, ker mora premagati prav tiste razrede, zaradi katerih
+je past sploh nastala. **Novih `X[hidden]` ne dodajaj.**
+
 ## Znak
 
 Monogram **K**: navpično steblo in dve roki iz iste točke. Siva roka je vozni
