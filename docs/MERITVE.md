@@ -1320,3 +1320,38 @@ izpušča** — vsaka preverjena železniška vožnja ima v sporočilu le okno
 postankov pred vozilom (LP 4201: 26–29 od 31; LPV 2402: samo 14 od 17). Izpad
 postanka iz okna je torej **opazovan dogodek prehoda**, ne aritmetika z
 zamudo. Tega ne beležimo, zato takega vprašanja za nazaj ni mogoče razrešiti.
+
+### Koliko je takih voženj (8. 9. 2026, zadnjih 14 dni)
+
+Vprašanje po LPV 2001: je bil to izjemen primer? Merilo: za vsak postanek
+primerjaj vrednost, ki bi jo prikaz **kazal ob domnevnem prehodu** (zadnja
+izjava feeda do tedaj), s **končno** vrednostjo istega postanka.
+
+| | železnica | avtobus |
+|---|---|---|
+| primerjanih postankov | 81 798 | — |
+| postankov, popravljenih za ≥ 5 min | 118 (**0,14 %**) | 25 691 |
+| postankov, popravljenih za ≥ 10 min | 51 (0,06 %) | — |
+| **voženj z vsaj enim takim postankom** | 113 od 6 948 (**1,63 %**) | 11 682 od 63 136 (**18,50 %**) |
+
+**Prevladujoča oblika ni tista, ki jo je pokazal LPV 2001.** Pri železnici je
+**90 od 118 popravkov (76 %) izhajalo iz prikazane NIČLE** — prikaz je trdil
+„točno", resnica pa je bila do **+66 min**. Pri avtobusih je takih 17 %
+(največja +647 min, kar je že znani vzorec „ura namesto zamude").
+
+Najhujši primeri, vsi z istim podpisom:
+
+```
+2026-08-26  LP 3191   postanek  9: videno +0 -> na koncu +66 min
+2026-09-04  LPV 2271  postanek 12: videno +0 -> na koncu +34 min
+2026-08-27  LP 3387   postanek  2: videno +0 -> na koncu +29 min
+```
+
+Obstoječi varovalki tega ne ujameta: `is_zero_blip` in pogoj
+`NOT (delay_s = 0 AND prev_max >= 300)` se sprožita šele, kadar je kak
+**prejšnji** postanek že kazal veliko zamudo. Pri postanku 2 ali 6 pred njim
+ni ničesar, kar bi sprožilo sum.
+
+**Edino, kar bi to res rešilo, je zapis okna feeda.** Feed prevožene postanke
+izpušča; dokler je postanek v sporočilu, vozilo mimo njega ŠE NI. To velja
+enako za ničlo kot za +6 in ne zahteva nobene domneve o velikosti zamude.
