@@ -75,10 +75,16 @@
               hodi rad, gre dlje, kdor ne more, manj. Meji 3 in 45 sta isti kot
               na endpointu -- polje, ki dovoli vec od streznika, laze. #}
           <span class="hoje-skupina">
+            {#- Koraki niso izbrani na oko: pri vsakem se merljivo spremeni,
+                koliko poti sploh obstaja (10 min -> 28 %, 15 -> 38 %,
+                25 -> 75 %, 35 -> 88 %, 45 -> 95 %). Med 25 in "po meri" prej
+                ni bilo nicesar, cheprav se prav tam odgovor najbolj spremeni. #}
             <select id="hoje">
               <option value="10">10 min</option>
               <option value="15">15 min</option>
               <option value="25" selected>25 min</option>
+              <option value="35">35 min</option>
+              <option value="45">45 min</option>
               <option value="po-meri">po meri …</option>
             </select>
             <input id="hoje-meri" type="number" min="3" max="45" step="1"

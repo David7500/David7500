@@ -1754,3 +1754,35 @@ glede na vzrok:
 
 Preizkušeno na vzorcu iz prijave: (46,073, 14,582) → (46,076, 14,615) zdaj da
 samo hojo 44 min, prej pa je isti vzorec dal pot z vozilom in dolgo hojo.
+
+## Ali je meja hoje do postaje sploh potrebna (8. 9. 2026)
+
+David je vprašal, ali polje „največ hoje" rabiva. Izmerjeno na 40 parih točk
+(1,5–25 km narazen, jutranja konica, obe omrežji):
+
+| meja | poti z vozilom | hoje mediana | hoje p90 | prihod proti 45 min |
+|---|---|---|---|---|
+| 10 min | 11/40 (28 %) | 16 min | 19 min | **enak** |
+| 15 min | 15/40 (38 %) | 18 min | 30 min | **enak** |
+| 20 min | 23/40 (58 %) | 23 min | 35 min | **enak** |
+| **25 min** | **30/40 (75 %)** | **28 min** | 48 min | **enak** |
+| 30 min | 32/40 (80 %) | 33 min | 51 min | **enak** |
+| 35 min | 35/40 (88 %) | 37 min | 54 min | **enak** |
+| 45 min | 38/40 (95 %) | 40 min | 59 min | — |
+
+**Meja ne vpliva na uro prihoda** — mediana razlike je pri vsaki vrednosti
+**0 minut**. Ne gre torej za izbiro med „hitreje" in „manj hoje", ki bi jo
+lahko rešil algoritem sam; meja odloča o tem, **ali odgovor obstaja in koliko
+hodiš**.
+
+Zato ostane. Brez nje bi bilo treba izbrati eno številko za vse: pri 45 vsi
+hodijo 40 minut, pri 25 četrtina ne dobi ničesar. Preverjena je bila tudi
+tretja pot — iskati vedno na 45 in med predlogi vedno ponuditi tudi pot z malo
+hoje: **ne gre**, ker je taka pot med predlogi le v **2 primerih od 38**.
+Takih poti večinoma ni in razvrščanje ne more nadomestiti omejitve.
+
+Cena večje meje je nič: iskanje je pri 25 min 293 ms in pri 45 min 315 ms.
+
+Koraki v izbirniku so po tej meritvi: 10 / 15 / 25 (privzeto) / 35 / 45 in
+„po meri". Med 25 in „po meri" prej ni bilo ničesar, čeprav se prav tam
+odgovor najbolj spremeni.

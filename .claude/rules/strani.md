@@ -151,6 +151,18 @@ razlika je bila prijavljena kot napaka, ker je bila nevidna.
 Ima tudi „po meri": 25 minut je privzetek in ne pravilo. Meji polja sta isti
 kot na endpointu (3–45) — polje, ki dovoli več od strežnika, laže.
 
+**Polje ostane, in to je izmerjeno.** Na 40 parih točk (1,5–25 km, jutranja
+konica) je ura prihoda pri **vsaki** vrednosti meje enaka — mediana razlike
+0 minut. Meja torej ne izbira med „hitreje" in „manj hoje", ampak med **ali
+odgovor obstaja** in **koliko hodiš**: 10 min da pot v 28 % primerov s
+16 minutami hoje, 45 min v 95 % s 40 minutami. Brez polja bi bilo treba
+izbrati eno številko za vse, in obe skrajnosti sta slabi. Preizkušeno je bilo
+tudi „iskati vedno na 45 in ponuditi tudi pot z malo hoje" — **ne gre**, taka
+pot je med predlogi le v 2 primerih od 38.
+
+Koraki izbirnika so po isti meritvi 10 / 15 / 25 / 35 / 45: pri vsakem se
+delež najdenih poti merljivo spremeni (28 / 38 / 75 / 88 / 95 %).
+
 **Ko z vozilom ni ničesar, stran pove dvoje**, ne le „ni poti": koliko traja
 hoja vso pot (to je resnica, ki jo imamo) in **koliko hoje bi bilo treba**, da
 bi bilo v dosegu prvo postajališče — s številko in gumbom, ki jo nastavi.
