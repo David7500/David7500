@@ -28,6 +28,28 @@ const potLayer = L.layerGroup().addTo(map);
 const S = { od: null, do: null, arm: "od", izidi: null, izbran: 0 };
 
 const $ = (s) => document.querySelector(s);
+
+// Koliko minut hoje potnik dovoli. "Po meri" odkrije polje s številko; meji
+// sta isti kot na endpointu, ker bi polje, ki dovoli več od strežnika, lagalo.
+function hojeMin() {
+  const izbira = $("#hoje").value;
+  if (izbira !== "po-meri") return Number(izbira);
+  const n = Number($("#hoje-meri").value);
+  return Number.isFinite(n) && n >= 3 ? Math.min(45, Math.round(n)) : 25;
+}
+
+function nastaviHoje(minut) {
+  const sel = $("#hoje");
+  const polje = $("#hoje-meri");
+  if ([...sel.options].some((o) => o.value === String(minut))) {
+    sel.value = String(minut);
+    polje.hidden = true;
+    return;
+  }
+  sel.value = "po-meri";
+  polje.value = minut;
+  polje.hidden = false;
+}
 const stanje = $("#pot-stanje");
 const izidiEl = $("#pot-izidi");
 
@@ -240,11 +262,28 @@ function zamudno(p) {
   return ` <span class="predlog-vr">vozni red ${ura(p.odhod)} → ${ura(p.prihod)}</span>`;
 }
 
+// Naslov podrobne strani. Vožnje so v naslovu, ne v seji: pot mora ostati
+// deljiva, in kdor jo komu pošlje, mu pošlje pot, ne svojega brskalnika.
+function podrobnoUrl(p) {
+  const noge = p.noge.filter((n) => n.vrsta === "voznja")
+    .map((n) => `${n.trip_id}:${n.od_seq}:${n.do_seq}`).join(";");
+  if (!noge) return null;            // pot vso pot peš nima česa razložiti
+  const q = new URLSearchParams({
+    noge, od_lat: S.od.lat, od_lon: S.od.lon,
+    do_lat: S.do.lat, do_lon: S.do.lon,
+  });
+  if ($("#ob").value) q.set("date", S.izidi ? S.izidi.datum : "");
+  return `/app/pot/podrobno?${q}`;
+}
+
 function predlogHtml(p, i, izbran) {
   const prestopi = p.prestopov === 0
     ? (p.noge.some((n) => n.vrsta === "voznja") ? "brez prestopa" : "vso pot peš")
     : `${p.prestopov} ${sklon(p.prestopov, "prestop")}`;
-  return `<article class="predlog${i === izbran ? " je-izbran" : ""}" data-i="${i}">
+  const url = podrobnoUrl(p);
+  const znacka = url ? "a" : "article";
+  const kam = url ? ` href="${url}"` : "";
+  return `<${znacka} class="predlog${i === izbran ? " je-izbran" : ""}" data-i="${i}"${kam}>
     <header class="predlog-glava">
       <span class="predlog-ure"><strong>${ura(p.odhod_ocena || p.odhod)}</strong>
         → <strong>${ura(p.prihod_ocena || p.prihod)}</strong>${zamudno(p)}</span>
@@ -252,39 +291,8 @@ function predlogHtml(p, i, izbran) {
         ? ` · ${minute(p.hoje_s)} hoje` : ""} · ${prestopi}</span>
     </header>
     <ol class="noge">${nogeHtml(p)}</ol>
-  </article>`;
-}
-
-// Trase voznj, predpomnjene po vožnji. Statika, ki se med uvozi ne spremeni.
-const TRASE = new Map();
-
-function najblizji(tocke, ll) {
-  let naj = -1, najd = Infinity;
-  for (let i = 0; i < tocke.length; i += 1) {
-    const dy = tocke[i][0] - ll[0], dx = (tocke[i][1] - ll[1]) * 0.694;
-    const d = dy * dy + dx * dx;
-    if (d < najd) { najd = d; naj = i; }
-  }
-  return naj;
-}
-
-async function trasa(n) {
-  if (!n.trip_id || !n.od_ll || !n.do_ll) return null;
-  if (!TRASE.has(n.trip_id)) {
-    TRASE.set(n.trip_id, (async () => {
-      const r = await fetch(`/api/trip/${encodeURIComponent(n.trip_id)}/shape`);
-      if (!r.ok) return null;
-      const deli = (await r.json()).points || [];
-      // Trasa je lahko večdelna; za izrez vzamemo najdaljši del.
-      return deli.reduce((a, b) => (b.length > a.length ? b : a), []);
-    })());
-  }
-  const del = await TRASE.get(n.trip_id);
-  if (!del || del.length < 2) return null;
-  const i = najblizji(del, n.od_ll), j = najblizji(del, n.do_ll);
-  if (i === j) return null;
-  const kos = del.slice(Math.min(i, j), Math.max(i, j) + 1);
-  return i <= j ? kos : kos.reverse();
+    ${url ? '<span class="predlog-vec">podrobno →</span>' : ""}
+  </${znacka}>`;
 }
 
 // Ravna črta med postajama ni proga. Zato se najprej nariše kot skica, nato
@@ -332,13 +340,18 @@ function izrisi(izid) {
   stanje.innerHTML = `${izid.predlogi.length} ${sklon(izid.predlogi.length, "predlog")}`
     + ` · ${dayLabel(izid.datum)}${opomba}`;
   izidiEl.innerHTML = izid.predlogi.map((p, i) => predlogHtml(p, i, 0)).join("");
+  // Kartica je povezava na podrobno stran, zato klik ne sme izbirati. Na
+  // zemljevidu se pot pokaže ob dotiku ali fokusu -- to ne odvzame klika in
+  // na telefonu ne naredi ničesar, kar bi bilo v napoto.
   izidiEl.querySelectorAll(".predlog").forEach((el) => {
-    el.addEventListener("click", () => {
+    const pokazi = () => {
       S.izbran = Number(el.dataset.i);
       izidiEl.querySelectorAll(".predlog").forEach((x) =>
         x.classList.toggle("je-izbran", Number(x.dataset.i) === S.izbran));
       narisiPot(izid.predlogi[S.izbran]);
-    });
+    };
+    el.addEventListener("mouseenter", pokazi);
+    el.addEventListener("focus", pokazi);
   });
   narisiPot(izid.predlogi[0]);
 }
@@ -352,7 +365,7 @@ async function isci() {
   }
   const p = new URLSearchParams({
     od_lat: S.od.lat, od_lon: S.od.lon, do_lat: S.do.lat, do_lon: S.do.lon,
-    hoje: $("#hoje").value,
+    hoje: hojeMin(),
   });
   if ($("#ob").value) p.set("ob", $("#ob").value);
   povej("Iščem …", null);
@@ -370,6 +383,17 @@ async function isci() {
   }
 }
 
+$("#hoje").addEventListener("change", () => {
+  const polje = $("#hoje-meri");
+  polje.hidden = $("#hoje").value !== "po-meri";
+  if (!polje.hidden) {
+    if (!polje.value) polje.value = 25;
+    polje.focus();
+    polje.select();
+  }
+});
+$("#hoje-meri").addEventListener("keydown", (e) => { if (e.key === "Enter") isci(); });
+
 $("#isci").addEventListener("click", isci);
 document.querySelectorAll(".tocka-vnos").forEach((el) =>
   el.addEventListener("keydown", (e) => { if (e.key === "Enter") isci(); }));
@@ -384,7 +408,7 @@ function vUrl() {
   if (S.od) q.set("od", `${S.od.lat.toFixed(5)},${S.od.lon.toFixed(5)}`);
   if (S.do) q.set("do", `${S.do.lat.toFixed(5)},${S.do.lon.toFixed(5)}`);
   if ($("#ob").value) q.set("ob", $("#ob").value);
-  if ($("#hoje").value !== "25") q.set("hoje", $("#hoje").value);
+  if (hojeMin() !== 25) q.set("hoje", hojeMin());
   history.replaceState(null, "", q.toString() ? `?${q}` : location.pathname);
 }
 
@@ -400,7 +424,7 @@ function izUrl() {
     if (t) { S[kaj] = t; $(`#q-${kaj}`).value = `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`; imamo = true; }
   }
   if (q.get("ob")) $("#ob").value = q.get("ob");
-  if (q.get("hoje")) $("#hoje").value = q.get("hoje");
+  if (q.get("hoje")) nastaviHoje(Number(q.get("hoje")));
   S.arm = S.od ? "do" : "od";
   if (imamo) narisiTocke();
   return S.od && S.do;

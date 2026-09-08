@@ -238,3 +238,51 @@ def test_po_vseh_merilih_slabsi_predlog_odpade(conn):
         for i in range(1, len(r["predlogi"]))), (
         "dva predloga z istim prihodom smeta ostati le, če je poznejši boljši "
         "po kakem drugem merilu")
+
+
+# ---------------------------------------------------------------- pot po korakih
+
+def test_razberi_noge_prenese_dvopicje_v_id():
+    """LPP-jev `trip_id` je trojni niz; ločnico beremo z desne, ne z leve."""
+    assert pot.razberi_noge("a|b|c:3:9") == [("a|b|c", 3, 9)]
+    assert pot.razberi_noge("x:y:1:2;t2:5:6") == [("x:y", 1, 2), ("t2", 5, 6)]
+    with pytest.raises(ValueError):
+        pot.razberi_noge("brez-stevilk")
+
+
+def test_podrobnosti_sestavi_hojo_in_vmesne_postanke(conn, monkeypatch):
+    """Podrobni prikaz doda dvoje, česar seznam nima: pešpot in postanke vmes."""
+    monkeypatch.setattr(hoja, "pot",
+                        lambda *a: {"sekunde": 300, "metri": 400,
+                                    "tocke": [[46.0, 14.5], [46.001, 14.5]]})
+    _voznja(conn, "t1", "LP 1", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "DALEC", 8 * 3600 + 900),
+                                 (3, "ROB", 8 * 3600 + 1200),
+                                 (4, "CILJ", 8 * 3600 + 1500)])
+    conn.commit()
+    r = pot.podrobnosti(conn, [("t1", 1, 4)], OD, DO, D)
+    noge = r["predlog"]["noge"]
+    assert [n["vrsta"] for n in noge] == ["hoja", "voznja", "hoja"]
+    assert noge[0]["tocke"], "pešpot mora imeti geometrijo"
+    assert noge[0]["metri"] == 400
+    # Štirje postanki od vstopa do izstopa, torej dva vmes.
+    assert len(noge[1]["postanki"]) == 4
+    assert [s["ime"] for s in noge[1]["postanki"][1:-1]] == ["Daleč", "Rob"]
+
+
+def test_podrobnosti_brez_usmerjevalnika_prizna_da_poti_ni(conn, monkeypatch):
+    """Ravna črta na zemljevidu bi trdila pot, ki je ni."""
+    monkeypatch.setattr(hoja, "pot", lambda *a: None)
+    _voznja(conn, "t1", "LP 1", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "CILJ", 8 * 3600 + 1200)])
+    conn.commit()
+    r = pot.podrobnosti(conn, [("t1", 1, 2)], OD, DO, D)
+    hoje = [n for n in r["predlog"]["noge"] if n["vrsta"] == "hoja"]
+    assert hoje and all(n["tocke"] is None for n in hoje)
+
+
+def test_podrobnosti_neobstojeca_voznja_pade(conn):
+    """Vozni red se med iskanjem in klikom lahko zamenja; deljena povezava od
+    včeraj torej ni napaka odjemalca, a tudi ne sme tiho vrniti prazne poti."""
+    with pytest.raises(KeyError):
+        pot.podrobnosti(conn, [("ni-me", 1, 2)], OD, DO, D)

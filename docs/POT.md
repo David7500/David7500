@@ -1,4 +1,4 @@
-# Pot od vrat do vrat
+# Načrtuj pot
 
 Načrt strani, ki odgovori na vprašanje *„sem tu, moram biti tam — kako in kdaj
 grem?"*. Vse dosedanje strani znajo odgovoriti šele, ko potnik sam ve, s katere
@@ -120,7 +120,9 @@ hoji na postajo je to nevarnejše od zamude in mora biti napisano.
    `kajros pot`)
 4. ✅ Endpoint `/api/pot` + stran `/app/pot`, „čim prej"
 5. ✅ Zamude v predlogih in preverjanje, ali veriga drži
-6. ⬜ „Biti tam ob X" (obratno iskanje), več predlogov, shranjene točke
+6. ✅ Podrobni prikaz ene poti (`/app/pot/podrobno`): pešpot z geometrijo in
+   vmesni postanki vožnje
+7. ⬜ „Biti tam ob X" (obratno iskanje), shranjene točke
 
 **Peš noge v `journey.plan()` namenoma niso vezane.** Njegova oblika odgovora
 (`train1`, `trip1`, `via`) nima mesta za peš nogo in prikaz bi jo narisal

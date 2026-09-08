@@ -1,0 +1,188 @@
+/* Ena pot, razložena po korakih.
+ *
+ * Seznam predlogov odgovarja na „s čim in kdaj". Ta stran na **„kako"**: kod
+ * hodiš do postajališča, kje izstopiš in kaj je vmes. Zato dvoje, česar seznam
+ * nima — prava pešpot na zemljevidu (ne ravna črta) in vmesni postanki vožnje.
+ *
+ * Pot je v naslovu, ne v seji: kdor jo komu pošlje, mu pošlje pot, ne svojega
+ * brskalnika.
+ */
+
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
+const map = L.map("karta", { zoomControl: true }).setView([46.1, 14.6], 8);
+L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
+  maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
+}).addTo(map);
+L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
+            { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 }).addTo(map);
+
+const potLayer = L.layerGroup().addTo(map);
+const $ = (s) => document.querySelector(s);
+const Q = new URLSearchParams(location.search);
+
+const ura = (ts) => new Date(ts * 1000).toLocaleTimeString("sl-SI",
+  { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Ljubljana" });
+
+function minute(s) {
+  const m = Math.floor(s / 60 + 0.5);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+}
+
+function razdalja(m) {
+  if (m == null) return "";
+  return m < 950 ? ` · ${Math.round(m / 10) * 10} m` : ` · ${(m / 1000).toFixed(1)} km`;
+}
+
+// ---------------------------------------------------------------- izris
+
+function zamudaHtml(z) {
+  if (!z) return "";
+  const barva = delayColor(z);
+  const vrsta = z.vrsta ? ` <span class="zam-vrsta">${escapeHtml(z.vrsta)}</span>` : "";
+  return `<span class="zam" style="color:${barva};border-color:${barva}55">`
+    + `${escapeHtml(delayText(z))}</span>${vrsta}`;
+}
+
+// Žeton ob izstopu samo takrat, kadar se od vstopnega res razlikuje -- dva
+// enaka žetona v isti vrstici sta šum, dva različna pa edino, kar pojasni,
+// zakaj je prihod za voznim redom, čeprav vstop ni bil.
+function izstopHtml(n) {
+  const a = delayMin(n.zamuda);
+  const b = delayMin(n.zamuda_izstop);
+  if (b == null || a === b) return "";
+  return " " + zamudaHtml(n.zamuda_izstop);
+}
+
+function hojaHtml(n) {
+  const od = n.od ? escapeHtml(n.od) : "izhodišče";
+  const kam = n.do ? escapeHtml(n.do) : "cilj";
+  // Kadar usmerjevalnika ni, poti nismo izračunali in tega ne skrivamo:
+  // ravna črta na zemljevidu bi trdila pot, ki je ni.
+  const opomba = n.tocke ? "" :
+    '<span class="korak-opomba">pešpot ni izračunana — na zemljevidu je zračna črta</span>';
+  return `<li class="korak je-hoja">
+    <span class="korak-znak" aria-hidden="true">↓</span>
+    <div class="korak-telo">
+      <div class="korak-vrh">peš <strong>${minute(n.sekunde)}</strong>${razdalja(n.metri)}</div>
+      <div class="korak-kam">${od} → ${kam}</div>
+      ${opomba}
+    </div></li>`;
+}
+
+function voznjaHtml(n) {
+  const pot = n.network === "avtobus" ? "bus" : "train";
+  const okno = `/app/${pot}/${encodeURIComponent(n.train_no)}?trip=${encodeURIComponent(n.trip_id)}`;
+  const odh = n.odhod_ocena || n.odhod;
+  const prih = n.prihod_ocena || n.prihod;
+  const vr = n.odhod_ocena && n.odhod_ocena !== n.odhod
+    ? `<div class="korak-opomba">vozni red ${ura(n.odhod)} → ${ura(n.prihod)}</div>` : "";
+  // Vmesni postanki so zaprti: potnika najprej zanima, kje izstopi, in šele
+  // potem, kaj je vmes. Prvi in zadnji sta v vrsticah nad in pod, zato ju tu ni.
+  const vmes = n.postanki.slice(1, -1);
+  const seznam = vmes.length ? `<details class="vmesni">
+      <summary>${vmes.length} ${sklon(vmes.length, "postanek")} vmes</summary>
+      <ol>${vmes.map((s) => `<li><span class="vm-ura">${
+        s.prihod ? ura(s.prihod) : "—"}</span> ${escapeHtml(s.ime)}</li>`).join("")}</ol>
+    </details>` : "";
+  return `<li class="korak je-voznja">
+    <span class="korak-znak" aria-hidden="true">●</span>
+    <div class="korak-telo">
+      <div class="korak-vrh">
+        <a class="noga-linija" href="${okno}">${escapeHtml(n.train_no)}</a>
+        ${zamudaHtml(n.zamuda)}
+        ${n.headsign ? `<span class="korak-smer">→ ${escapeHtml(n.headsign)}</span>` : ""}
+      </div>
+      <div class="korak-vstop"><strong>${ura(odh)}</strong> ${escapeHtml(n.od)}</div>
+      ${seznam}
+      <div class="korak-izstop"><strong>${ura(prih)}</strong> ${escapeHtml(n.do)}
+        <span class="korak-kam">izstopiš</span>${izstopHtml(n)}</div>
+      ${vr}
+    </div></li>`;
+}
+
+function narisi(p) {
+  potLayer.clearLayers();
+  const meje = [];
+  const skice = [];
+  for (const n of p.noge) {
+    if (n.vrsta === "hoja") {
+      const crta = n.tocke && n.tocke.length > 1 ? n.tocke : [n.od_ll, n.do_ll];
+      if (!crta[0] || !crta[1]) continue;
+      L.polyline(crta, { color: "#2f7fff", weight: 4, dashArray: "4 6", opacity: 0.95 })
+        .addTo(potLayer);
+      crta.forEach((t) => meje.push(t));
+    } else {
+      const crta = L.polyline([n.od_ll, n.do_ll],
+        { color: "#f0934f", weight: 4, opacity: 0.55 }).addTo(potLayer);
+      skice.push([n, crta]);
+      meje.push(n.od_ll, n.do_ll);
+    }
+  }
+  // Konca poti: kje začneš in kje si doma.
+  const prva = p.noge[0];
+  const zadnja = p.noge[p.noge.length - 1];
+  for (const [ll, barva, opis] of [[prva.od_ll, "#2f7fff", "izhodišče"],
+                                   [zadnja.do_ll, "#f0934f", "cilj"]]) {
+    if (!ll) continue;
+    L.circleMarker(ll, { radius: 7, weight: 3, color: "#ffffff",
+                         fillColor: barva, fillOpacity: 1 })
+      .addTo(potLayer).bindTooltip(opis);
+  }
+  if (meje.length) map.fitBounds(L.latLngBounds(meje), { padding: [40, 40], maxZoom: 16 });
+  (async () => {
+    for (const [n, crta] of skice) {
+      const t = await trasa(n).catch(() => null);
+      if (t) crta.setLatLngs(t);
+      crta.setStyle({ opacity: 0.9 });
+    }
+  })();
+}
+
+// ---------------------------------------------------------------- nalaganje
+
+function nazajUrl() {
+  const q = new URLSearchParams();
+  const t = (a, b) => `${Number(Q.get(a)).toFixed(5)},${Number(Q.get(b)).toFixed(5)}`;
+  if (Q.get("od_lat")) q.set("od", t("od_lat", "od_lon"));
+  if (Q.get("do_lat")) q.set("do", t("do_lat", "do_lon"));
+  return q.toString() ? `/app/pot?${q}` : "/app/pot";
+}
+
+async function nalozi() {
+  $("#nazaj").href = nazajUrl();
+  const p = new URLSearchParams();
+  for (const k of ["noge", "od_lat", "od_lon", "do_lat", "do_lon", "date"]) {
+    if (Q.get(k)) p.set(k, Q.get(k));
+  }
+  if (!p.get("noge")) {
+    $("#stanje").textContent = "Poti v naslovu ni.";
+    $("#stanje").className = "pot-stanje je-napaka";
+    return;
+  }
+  $("#stanje").textContent = "Nalagam …";
+  try {
+    const r = await fetch(`/api/pot/podrobno?${p}`);
+    if (!r.ok) {
+      const telo = await r.json().catch(() => ({}));
+      throw new Error(telo.detail || `strežnik je vrnil ${r.status}`);
+    }
+    const d = await r.json();
+    const pr = d.predlog;
+    $("#stanje").textContent = "";
+    $("#glava").innerHTML = `
+      <div class="podr-ure"><strong>${ura(pr.odhod_ocena || pr.odhod)}</strong>
+        → <strong>${ura(pr.prihod_ocena || pr.prihod)}</strong></div>
+      <div class="podr-meta">${minute(pr.trajanje_s)}${
+        pr.hoje_s >= 60 ? ` · ${minute(pr.hoje_s)} hoje` : ""} · ${
+        pr.prestopov === 0 ? "brez prestopa"
+          : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(d.datum)}</div>`;
+    $("#koraki").innerHTML = pr.noge.map(
+      (n) => (n.vrsta === "hoja" ? hojaHtml(n) : voznjaHtml(n))).join("");
+    narisi(pr);
+  } catch (e) {
+    $("#stanje").textContent = e.message;
+    $("#stanje").className = "pot-stanje je-napaka";
+  }
+}
+
+nalozi();

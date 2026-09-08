@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kajros — pot od vrat do vrat</title>
+  <title>kajros — načrtuj pot</title>
   <meta name="description" content="Kje stojiš, kam moraš in kdaj — s hojo, vlakom in avtobusom v isti verigi.">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -34,7 +34,7 @@
 
   <main class="pot">
     <section class="pot-panel" aria-label="Pot">
-      <h1 class="pot-title">Od vrat do vrat</h1>
+      <h1 class="pot-title">Načrtuj pot</h1>
       <p class="pot-lead">
         Povej, kje si in kam moraš. Hoja, vlak in avtobus so v isti verigi;
         hoja se računa po pravih pešpoteh pri 5 km/h.
@@ -68,11 +68,19 @@
         </label>
         <label class="polje">
           <span>Največ hoje</span>
-          <select id="hoje">
-            <option value="10">10 min</option>
-            <option value="15">15 min</option>
-            <option value="25" selected>25 min</option>
-          </select>
+          {#- "Po meri" je tu, ker je 25 minut privzetek in ne pravilo: kdor
+              hodi rad, gre dlje, kdor ne more, manj. Meji 3 in 45 sta isti kot
+              na endpointu -- polje, ki dovoli vec od streznika, laze. #}
+          <span class="hoje-skupina">
+            <select id="hoje">
+              <option value="10">10 min</option>
+              <option value="15">15 min</option>
+              <option value="25" selected>25 min</option>
+              <option value="po-meri">po meri …</option>
+            </select>
+            <input id="hoje-meri" type="number" min="3" max="45" step="1"
+                   aria-label="Največ minut hoje" hidden>
+          </span>
         </label>
         <button id="isci" class="pot-isci">Poišči</button>
       </div>

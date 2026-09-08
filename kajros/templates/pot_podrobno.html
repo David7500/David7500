@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>kajros — pot po korakih</title>
+  <meta name="description" content="Ena pot razložena: kod hodiš, s čim se pelješ in kje izstopiš.">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('pot.css') }}">
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg class="brand-mark" width="20" height="20" viewBox="0 0 96 96" fill="none"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M34 24V72" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M66 26L34 50" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M34 50L66 72" stroke="currentColor" stroke-width="9"/>
+      </svg>
+      <span class="brand-name">kajros</span>
+    </a>
+    <div class="spacer"></div>
+    {% include "_nav.html" with context %}
+  </header>
+
+  <main class="pot">
+    <section class="pot-panel" aria-label="Pot po korakih">
+      <a class="nazaj" id="nazaj" href="/app/pot">‹ nazaj na predloge</a>
+      <div id="glava" class="podr-glava"></div>
+      <div id="stanje" class="pot-stanje"></div>
+      <ol id="koraki" class="koraki"></ol>
+
+      <p class="pot-vir">
+        Vozni red in zamude: IJPP prek <a href="https://b2b.nap.si/">NAP</a>
+        (CC BY-SA 4.0), obdelava DERP. Pešpoti: ©
+        <a href="https://www.openstreetmap.org/copyright">prispevalci OpenStreetMap</a>
+        (ODbL), izračun OSRM.
+      </p>
+    </section>
+
+    <div id="karta" class="pot-karta" aria-label="Zemljevid"></div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('pot_podrobno.js') }}"></script>
+</body>
+</html>

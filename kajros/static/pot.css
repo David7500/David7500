@@ -163,3 +163,60 @@
 
 .noga.je-prestop .noga-znak { color: var(--ink-mute); }
 .noga.je-prestop .noga-telo { font-size: 0.8rem; }
+
+/* "Po meri" odkrije polje ob izbirniku, ne namesto njega: pogosti trije
+   ostanejo en dotik dalec. */
+.hoje-skupina { display: flex; gap: 6px; align-items: center; }
+.hoje-skupina input { width: 4.5em; }
+
+/* ---------------------------------------------------------------- pot po korakih */
+
+.nazaj {
+  display: inline-block; margin-bottom: 10px;
+  font-size: 0.82rem; color: var(--ink-dim); text-decoration: none;
+}
+.nazaj:hover { color: var(--ink); }
+
+.podr-glava { margin-bottom: 12px; }
+.podr-ure { font-family: var(--mono); font-size: 1.25rem; }
+.podr-meta { font-size: 0.82rem; color: var(--ink-dim); margin-top: 2px; }
+
+/* Kartica predloga je povezava; puscica pove, da klik nekam pelje. */
+.predlog-vec {
+  display: block; margin-top: 8px;
+  font-size: 0.76rem; color: var(--ink-mute);
+}
+a.predlog { display: block; text-decoration: none; color: inherit; }
+a.predlog:hover .predlog-vec { color: var(--accent-lit); }
+
+.koraki { list-style: none; margin: 0; padding: 0; }
+
+/* Navpicnica med koraki: pot je ena veriga in ne pet locenih vrstic. */
+.korak { display: flex; gap: 10px; padding-bottom: 14px; position: relative; }
+.korak::before {
+  content: ""; position: absolute; left: 5px; top: 16px; bottom: 0;
+  border-left: 1px dashed var(--line-firm);
+}
+.korak:last-child::before { display: none; }
+.korak-znak { width: 11px; flex: none; text-align: center; color: var(--ink-ghost); z-index: 1;
+              background: var(--bg-panel); }
+.korak.je-voznja .korak-znak { color: var(--accent); }
+.korak-telo { min-width: 0; flex: 1; font-size: 0.86rem; }
+.korak-vrh { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.korak-kam { color: var(--ink-mute); font-size: 0.8rem; }
+.korak-opomba { color: var(--ink-faint); font-size: 0.76rem; margin-top: 2px; }
+.korak-smer { color: var(--ink-mute); font-size: 0.8rem; }
+.korak-vstop, .korak-izstop { margin-top: 3px; }
+.korak-vstop strong, .korak-izstop strong { font-family: var(--mono); }
+
+.vmesni { margin: 5px 0 3px; }
+.vmesni summary {
+  cursor: pointer; font-size: 0.78rem; color: var(--ink-mute);
+  list-style-position: outside; padding-left: 2px;
+}
+.vmesni ol {
+  margin: 5px 0 0; padding: 0 0 0 2px; list-style: none;
+  font-size: 0.8rem; color: var(--ink-dim);
+}
+.vmesni li { padding: 2px 0; }
+.vm-ura { font-family: var(--mono); color: var(--ink-mute); margin-right: 6px; }

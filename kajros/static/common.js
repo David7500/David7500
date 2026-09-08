@@ -137,6 +137,7 @@ const SKLONI = {
   voznja: ["vožnja", "vožnji", "vožnje", "voženj"],
   prestop: ["prestop", "prestopa", "prestopi", "prestopov"],
   predlog: ["predlog", "predloga", "predlogi", "predlogov"],
+  postanek: ["postanek", "postanka", "postanki", "postankov"],
 };
 
 function sklon(n, kljuc) {
@@ -961,6 +962,44 @@ function pollVehicles(url, onData) {
   tick();
   return () => { ustavljen = true; clearTimeout(timer); };
 }
+
+// ---------- trase voznj ----------
+//
+// Rabita ju obe strani poti: seznam predlogov in podrobni prikaz.
+// Ravna crta med postajama ni proga in bi trdila pot, ki je ni.
+
+// Trase voznj, predpomnjene po vožnji. Statika, ki se med uvozi ne spremeni.
+const TRASE = new Map();
+
+function najblizji(tocke, ll) {
+  let naj = -1, najd = Infinity;
+  for (let i = 0; i < tocke.length; i += 1) {
+    const dy = tocke[i][0] - ll[0], dx = (tocke[i][1] - ll[1]) * 0.694;
+    const d = dy * dy + dx * dx;
+    if (d < najd) { najd = d; naj = i; }
+  }
+  return naj;
+}
+
+async function trasa(n) {
+  if (!n.trip_id || !n.od_ll || !n.do_ll) return null;
+  if (!TRASE.has(n.trip_id)) {
+    TRASE.set(n.trip_id, (async () => {
+      const r = await fetch(`/api/trip/${encodeURIComponent(n.trip_id)}/shape`);
+      if (!r.ok) return null;
+      const deli = (await r.json()).points || [];
+      // Trasa je lahko večdelna; za izrez vzamemo najdaljši del.
+      return deli.reduce((a, b) => (b.length > a.length ? b : a), []);
+    })());
+  }
+  const del = await TRASE.get(n.trip_id);
+  if (!del || del.length < 2) return null;
+  const i = najblizji(del, n.od_ll), j = najblizji(del, n.do_ll);
+  if (i === j) return null;
+  const kos = del.slice(Math.min(i, j), Math.max(i, j) + 1);
+  return i <= j ? kos : kos.reverse();
+}
+
 
 // ---------- moja lega ----------
 //

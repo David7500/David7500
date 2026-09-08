@@ -666,6 +666,11 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
         if ob_izstopu is None:
             ob_izstopu = z["delay_s"]
         n["prihod_ocena"] = n["prihod"] + ob_izstopu
+        # Zamuda ob izstopu je pogosto DRUGA od tiste ob vstopu -- vozilo vmes
+        # porabi rezervo ali jo izgubi. En sam žeton nad vrstico, ki kaže obe
+        # uri, si zato nasprotuje: "+1 min" nad prihodom šest minut za voznim
+        # redom je videti kot napaka, čeprav je napoved.
+        n["zamuda_izstop"] = stats.opis_zamude(ob_izstopu, z["delay_kind"])
 
     for p in predlogi:
         voznje = [n for n in p["noge"] if n["vrsta"] == "voznja"]
@@ -698,3 +703,114 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
                 "kje": a["do"], "pes_s": pes,
                 "nacrtovano_s": nacrtovano, "ostane_s": ostane,
             })
+
+
+# ---------------------------------------------------------------- ena pot, razložena
+
+def razberi_noge(niz: str) -> list[tuple[str, int, int]]:
+    """`trip:od_seq:do_seq;trip:od_seq:do_seq` -> seznam trojic.
+
+    Vožnja je v naslovu in ne v seji, ker mora biti pot **deljiva**: kdor jo
+    komu pošlje, mu pošlje pot, ne svojega brskalnika. LPP-jev `trip_id` nosi
+    navpičnice, zato gre skozi `encodeURIComponent` -- tu je že razkodiran.
+    """
+    out = []
+    for kos in niz.split(";"):
+        if not kos.strip():
+            continue
+        deli = kos.rsplit(":", 2)
+        if len(deli) != 3:
+            raise ValueError(f"noga {kos!r} ni oblike trip:od:do")
+        out.append((deli[0], int(deli[1]), int(deli[2])))
+    return out
+
+
+def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
+                od: tuple[float, float], do: tuple[float, float],
+                service_date: str, now_s: int | None = None) -> dict:
+    """Ena pot, razložena: kod hodiš in kje izstopiš.
+
+    Seznam predlogov odgovarja na „s čim in kdaj"; to na „kako". Zato dvoje,
+    česar seznam nima: **pešpot z geometrijo** (črta na zemljevidu, ne število
+    minut) in **vmesni postanki vožnje** (kje izstopiš in kaj je pred tem).
+
+    Pot se sestavi iz naslova, ne iz shranjenega iskanja: ista pot mora
+    obstajati tudi za tistega, ki mu jo nekdo pošlje.
+    """
+    by_trip = journey._timetable_for_day(conn, service_date, None)[0]
+    vozje = _vozje(conn, service_date)
+    imena = _imena(conn)
+    polnoc = _polnoc(service_date)
+
+    def ime(sid):
+        return imena[sid][0] if sid in imena else sid
+
+    def ll(sid):
+        return [imena[sid][1], imena[sid][2]] if sid in imena else None
+
+    voznje = []
+    for trip_id, od_seq, do_seq in noge_spec:
+        if trip_id not in by_trip or trip_id not in vozje:
+            raise KeyError(f"vožnje {trip_id} ta dan ni")
+        postanki = [s for s in by_trip[trip_id] if od_seq <= s[0] <= do_seq]
+        if len(postanki) < 2:
+            raise KeyError(f"vožnja {trip_id} nima postankov {od_seq}-{do_seq}")
+        v = vozje[trip_id]
+        voznje.append({
+            "vrsta": "voznja", "trip_id": trip_id, "train_no": v["train_no"],
+            "headsign": v["headsign"], "mode": v["mode"], "network": v["network"],
+            "agency": v["agency"],
+            "od": ime(postanki[0][1]), "do": ime(postanki[-1][1]),
+            "od_stop": postanki[0][1], "do_stop": postanki[-1][1],
+            "od_ll": ll(postanki[0][1]), "do_ll": ll(postanki[-1][1]),
+            "od_seq": od_seq, "do_seq": do_seq,
+            "odhod": polnoc + postanki[0][3],
+            "prihod": polnoc + postanki[-1][2],
+            # Vmesni postanki: kje si in koliko jih je še do izstopa. Brez njih
+            # potnik ne ve, kdaj vstati.
+            "postanki": [{"stop_seq": s[0], "ime": ime(s[1]),
+                          "prihod": polnoc + s[2] if s[2] is not None else None,
+                          "odhod": polnoc + s[3] if s[3] is not None else None}
+                         for s in postanki],
+        })
+
+    def hoja_noga(a, b, od_stop=None, do_stop=None):
+        p = hoja.pot(a[0], a[1], b[0], b[1])
+        if p is None:
+            # Brez usmerjevalnika ne rišemo ravne črte kot poti: povemo, da
+            # geometrije ni, in pustimo prikazu, da to prizna.
+            sek, _ = hoja.sekunde(a[0], a[1], b[0], b[1])
+            p = {"sekunde": sek or 0, "metri": None, "tocke": None}
+        return {"vrsta": "hoja", "sekunde": p["sekunde"], "metri": p["metri"],
+                "tocke": p["tocke"],
+                "od": ime(od_stop) if od_stop else None,
+                "do": ime(do_stop) if do_stop else None,
+                "od_stop": od_stop, "do_stop": do_stop,
+                "od_ll": ll(od_stop) if od_stop else [a[0], a[1]],
+                "do_ll": ll(do_stop) if do_stop else [b[0], b[1]]}
+
+    noge = [hoja_noga(od, voznje[0]["od_ll"], None, voznje[0]["od_stop"])]
+    for a, b in zip(voznje, voznje[1:]):
+        noge.append(a)
+        if a["do_stop"] != b["od_stop"]:
+            noge.append(hoja_noga(a["do_ll"], b["od_ll"], a["do_stop"], b["od_stop"]))
+    noge.append(voznje[-1])
+    noge.append(hoja_noga(voznje[-1]["do_ll"], do, voznje[-1]["do_stop"], None))
+    noge = [n for n in noge if n["vrsta"] != "hoja" or n["sekunde"] >= 60]
+
+    rep = 0
+    for n in reversed(noge):
+        if n["vrsta"] == "voznja":
+            break
+        rep += n["sekunde"]
+    zac = noge[0]["sekunde"] if noge[0]["vrsta"] == "hoja" else 0
+    predlog = {
+        "odhod": voznje[0]["odhod"] - zac,
+        "prihod": voznje[-1]["prihod"] + rep,
+        "hoje_s": sum(n["sekunde"] for n in noge if n["vrsta"] == "hoja"),
+        "prestopov": len(voznje) - 1,
+        "noge": noge,
+    }
+    predlog["trajanje_s"] = predlog["prihod"] - predlog["odhod"]
+    pripni_zamude(conn, [predlog], service_date, now_s)
+    return {"datum": service_date, "predlog": predlog}

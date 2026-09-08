@@ -1478,6 +1478,47 @@ def api_pot(
     return izid
 
 
+@app.get("/api/pot/podrobno")
+def api_pot_podrobno(
+    noge: str = Query(..., description="trip:od_seq:do_seq;trip:od_seq:do_seq"),
+    od_lat: float = Query(..., ge=45.2, le=47.0),
+    od_lon: float = Query(..., ge=13.2, le=16.8),
+    do_lat: float = Query(..., ge=45.2, le=47.0),
+    do_lon: float = Query(..., ge=13.2, le=16.8),
+    date: str | None = None,
+):
+    """Ena pot, razložena: kod hodiš in kje izstopiš.
+
+    Pot je v naslovu in ne v seji, ker mora biti **deljiva** -- kdor jo komu
+    pošlje, mu pošlje pot, ne svojega brskalnika.
+    """
+    now = datetime.now(TZ)
+    dan = _check_date(date) or now.date().isoformat()
+    try:
+        spec = pot.razberi_noge(noge)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not spec:
+        raise HTTPException(400, "pot brez nog")
+    if len(spec) > pot.MAX_NOG:
+        raise HTTPException(400, f"največ {pot.MAX_NOG} voženj")
+    zdaj_s = journey.now_seconds(now) if dan == now.date().isoformat() else None
+    with _conn() as conn:
+        try:
+            return pot.podrobnosti(conn, spec, (od_lat, od_lon), (do_lat, do_lon),
+                                   dan, zdaj_s)
+        except KeyError as e:
+            # Vozni red se je med iskanjem in klikom lahko zamenjal (uvoz je
+            # dnevni). Deljena povezava od včeraj torej ni napaka odjemalca.
+            raise HTTPException(404, str(e).strip("'"))
+
+
+@app.get("/app/pot/podrobno", response_class=HTMLResponse)
+def pot_podrobno_page(request: Request):
+    """Ena pot na svoji strani: zemljevid s pešpotjo in postanki vožnje."""
+    return templates.TemplateResponse(request, "pot_podrobno.html", {"here": "pot"})
+
+
 @app.get("/api/live")
 def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
                                          description="samo to omrežje")):

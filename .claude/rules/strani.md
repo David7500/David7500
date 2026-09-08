@@ -81,7 +81,7 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   staro obliko, stran bi novo polje izpustila in videti bi bilo, kot da
   sprememba ne dela. Točno to se je zgodilo pri `median_s`.
 
-## `/app/pot` — edina stran, ki se ne začne pri postaji
+## `/app/pot` („Načrtuj pot") — edina stran, ki se ne začne pri postaji
 
 Potnik ve, **kje stoji**, ne pa, s katere postaje mu pelje. Zato sta vhoda dva
 kraja (klik na zemljevid, lastna lega, ime postaje) in ne dve imeni, iskanje pa
@@ -112,6 +112,35 @@ naprej.
 **Pot je deljiva prek naslova** (`?od=lat,lon&do=lat,lon&ob=HH:MM`). Brez tega
 je edini način, da nekomu poveš, kako priti do tebe, opis s stavki — in prav
 to je stran, ki naj bi ga nadomestila.
+
+**Največ hoje ima tudi „po meri".** 25 minut je privzetek in ne pravilo: kdor
+hodi rad, gre dlje, kdor ne more, manj. Meji polja sta isti kot na endpointu
+(3–45) — polje, ki dovoli več od strežnika, laže.
+
+### `/app/pot/podrobno` — ista pot, razložena
+
+Seznam odgovarja na „s čim in kdaj", ta stran na **„kako"**. Klik na predlog
+pelje sem in doda dvoje, česar seznam nima:
+
+* **prava pešpot na zemljevidu**, ne ravna črta (`hoja.pot()`, OSRM `route` z
+  geometrijo). Kadar usmerjevalnika ni, se to **napiše** in nariše zračna črta;
+  ravna črta brez opombe bi trdila pot, ki je ni;
+* **vmesni postanki vožnje**, zaprti v `<details>` — potnika najprej zanima,
+  kje izstopi, in šele potem, kaj je vmes.
+
+**Žeton zamude ob izstopu je drug od vstopnega in mora biti viden.** Vozilo
+vmes rezervo porabi ali izgubi: „+1 min" nad prihodom šest minut za voznim
+redom je videti kot napaka, čeprav je napoved. Zato drugi žeton na izstopni
+vrstici — a samo takrat, kadar se od prvega res razlikuje.
+
+**Pot je v naslovu** (`?noge=trip:od_seq:do_seq;…`), ne v seji: kdor jo komu
+pošlje, mu pošlje pot, ne svojega brskalnika. `trip_id` LPP nosi navpičnice,
+zato gre skozi `encodeURIComponent`, ločnica pa se bere **z desne** — sicer se
+id z dvopičjem razlomi na napačnem mestu.
+
+**Kartica predloga je povezava, zato klik ne izbira.** Pot se na zemljevidu
+seznama pokaže ob dotiku ali fokusu; na telefonu to ne naredi ničesar, kar bi
+bilo v napoto, na namizju pa ostane predogled.
 
 **Predlogi poti so ločeni po omrežju in izračunani, ne ugibani.** Avtobusna
 stran jih doslej ni imela nobene — bila je prazen obrazec brez izhodišča —

@@ -123,6 +123,43 @@ def sekunde(lat1: float, lon1: float, lat2: float, lon2: float,
     return vrsta[0], vir
 
 
+def pot(lat1: float, lon1: float, lat2: float, lon2: float) -> dict | None:
+    """Ena pešpot z **geometrijo**: `{"sekunde", "metri", "tocke": [[lat,lon]]}`.
+
+    Matrika pove samo, koliko časa hodiš; ta pove **kod**. Rabi jo podrobni
+    prikaz poti, kjer je vprašanje "kako pridem do postajališča" in je odgovor
+    črta na zemljevidu, ne številka.
+
+    `None`, kadar usmerjevalnika ni — takrat prikaz nariše ravno črto in to
+    tudi pove, namesto da bi trdil pot, ki je ni.
+    """
+    global _zadnja_napaka
+    if not config.OSRM_URL:
+        return None
+    if time.monotonic() - _zadnja_napaka < _NAPAKA_MIRUJ_S:
+        return None
+    try:
+        r = requests.get(
+            f"{config.OSRM_URL}/route/v1/foot/"
+            f"{lon1:.6f},{lat1:.6f};{lon2:.6f},{lat2:.6f}",
+            params={"overview": "full", "geometries": "geojson"},
+            timeout=_TIMEOUT_S)
+        r.raise_for_status()
+        poti = r.json().get("routes") or []
+        if not poti:
+            return None
+        naj = poti[0]
+        # OSRM piše [lon, lat], Leaflet bere [lat, lon]. Zamenjava tu in ne v
+        # brskalniku: obrnjena koordinata je napaka, ki je na zemljevidu videti
+        # kot pot nekje v Somaliji, in nihče je ne pripiše temu mestu.
+        tocke = [[c[1], c[0]] for c in naj["geometry"]["coordinates"]]
+    except Exception:
+        _zadnja_napaka = time.monotonic()
+        return None
+    return {"sekunde": round(naj["duration"]), "metri": round(naj["distance"]),
+            "tocke": tocke}
+
+
 # ---------------------------------------------------------------- peš med postajališči
 
 #: Najdaljši peš prestop, ki ga iskanje ponudi. Šest minut je izbrano po
