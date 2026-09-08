@@ -7,7 +7,8 @@ import json
 import sys
 from pathlib import Path
 
-from . import alerts, backtest, config, collector, db, gtfs, ocena, stats, weather
+from . import (alerts, backtest, config, collector, db, gtfs, hoja, ocena, stats,
+               weather)
 
 
 def cmd_init(args):
@@ -257,6 +258,14 @@ def cmd_repair(args):
     print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
+def cmd_pespoti(args):
+    """Izmeri peš poti med bližnjimi postajališči (rabi peš usmerjevalnik)."""
+    conn = db.connect()
+    db.init(conn)
+    izid = hoja.zgradi_pespoti(conn, znova=args.znova, javi=print)
+    print(json.dumps(izid, indent=2, ensure_ascii=False))
+
+
 def cmd_alerts(args):
     conn = db.connect()
     db.init(conn)
@@ -379,6 +388,10 @@ def main(argv=None):
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)
+
+    a = sub.add_parser("pespoti", help="izmeri pes poti med bliznjimi postajalisci")
+    a.add_argument("--znova", action="store_true", help="pobrisi in izracunaj vse")
+    a.set_defaults(func=cmd_pespoti)
 
     a = sub.add_parser("alerts", help="obvestila o ovirah in zive zamude")
     a.add_argument("--fetch", action="store_true", help="poberi feed zdaj")

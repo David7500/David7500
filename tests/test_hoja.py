@@ -148,3 +148,79 @@ def test_prazen_seznam_ne_kliche_niti_usmerjevalnika(monkeypatch):
     monkeypatch.setattr(config, "OSRM_URL", "http://x:5000")
     monkeypatch.setattr(hoja.requests, "get", pade)
     assert hoja.matrika(46.0, 14.5, []) == ([], hoja.ZRAK)
+
+
+# ---------------------------------------------------------------- peš med postajališči
+
+@pytest.fixture()
+def conn():
+    from kajros import db
+    c = db.connect(":memory:")
+    db.init(c)
+    # Tri postajališča: dve čez cesto (60 m), tretje daleč (1,5 km).
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)", [
+        ("BD1", "Bavarski dvor", 46.05690, 14.50580),
+        ("BD2", "Bavarski dvor", 46.05744, 14.50580),
+        ("DAL", "Vič", 46.07000, 14.50580),
+    ])
+    c.commit()
+    return c
+
+
+def test_sosedje_ne_steje_sebe(conn):
+    postaje = [dict(r) for r in conn.execute("SELECT stop_id, lat, lon FROM station")]
+    s = hoja._sosedje(postaje, hoja.doseg_zracno(hoja.MAX_PRESTOP_S))
+    assert [q["stop_id"] for q in s["BD1"]] == ["BD2"]
+    assert "DAL" not in s, "1,5 km ni peš prestop"
+
+
+def test_zgradi_shrani_samo_kratke_poti(conn, monkeypatch):
+    """Predfilter je zračni polmer; pravo mejo postavi izmerjena pot.
+
+    Postajališči čez progo sta lahko 60 m narazen in 12 minut hoje.
+    """
+    monkeypatch.setattr(hoja, "matrika",
+                        lambda lat, lon, cilji, smer="od": ([700], hoja.OSRM))
+    izid = hoja.zgradi_pespoti(conn)
+    assert izid["poti"] == 0, "700 s je čez mejo prestopa"
+
+    monkeypatch.setattr(hoja, "matrika",
+                        lambda lat, lon, cilji, smer="od": ([90], hoja.OSRM))
+    izid = hoja.zgradi_pespoti(conn, znova=True)
+    assert izid["poti"] == 2, "obe smeri, ker pešpot ni nujno simetrična"
+    assert hoja.pespoti(conn)["BD1"] == [("BD2", 90)]
+
+
+def test_brez_usmerjevalnika_ne_zapise_nic(conn, monkeypatch):
+    """Ocena po zraku bi se zapekla v podatke in je pozneje nihče ne bi ločil
+    od meritve."""
+    monkeypatch.setattr(hoja, "matrika",
+                        lambda lat, lon, cilji, smer="od": ([120], hoja.ZRAK))
+    with pytest.raises(RuntimeError):
+        hoja.zgradi_pespoti(conn)
+    assert conn.execute("SELECT COUNT(*) FROM pespot").fetchone()[0] == 0
+
+
+def test_dopolnjevanje_preskoci_ze_izmerjene(conn, monkeypatch):
+    klici = []
+
+    def fake(lat, lon, cilji, smer="od"):
+        klici.append(1)
+        return [90] * len(cilji), hoja.OSRM
+
+    monkeypatch.setattr(hoja, "matrika", fake)
+    hoja.zgradi_pespoti(conn)
+    prvic = len(klici)
+    hoja.zgradi_pespoti(conn)
+    assert len(klici) == prvic, "drugi zagon nima česa meriti"
+
+
+def test_predpomnilnik_pade_ob_spremembi(conn, monkeypatch):
+    """`kajros pespoti` tabelo spremeni med tekom strežnika."""
+    monkeypatch.setattr(hoja, "matrika",
+                        lambda lat, lon, cilji, smer="od": ([90], hoja.OSRM))
+    hoja.zgradi_pespoti(conn)
+    assert hoja.pespoti(conn)["BD1"] == [("BD2", 90)]
+    conn.execute("DELETE FROM pespot")
+    conn.commit()
+    assert hoja.pespoti(conn) == {}

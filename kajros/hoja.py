@@ -121,3 +121,98 @@ def sekunde(lat1: float, lon1: float, lat2: float, lon2: float,
     """Ena pot; za več ciljev vzemi `matrika()`, ki jih zna v enem klicu."""
     vrsta, vir = matrika(lat1, lon1, [(lat2, lon2)], smer)
     return vrsta[0], vir
+
+
+# ---------------------------------------------------------------- peš med postajališči
+
+#: Najdaljši peš prestop, ki ga iskanje ponudi. Šest minut je izbrano po
+#: pragovih za prestop, ki že veljajo (vlak 6 min, avtobus 3): daljša hoja ne
+#: bi bila prestop, ampak druga pot. Predfilter je zato polmer 500 m po zraku,
+#: v katerem je 12 070 parov postajališč; koliko jih po pravi poti ostane, je
+#: zapisano v `docs/MERITVE.md`.
+MAX_PRESTOP_S = 6 * 60
+
+_PES_CACHE: dict[tuple, dict] = {}
+
+
+def _sosedje(postaje: list[dict], polmer_m: float) -> dict[str, list[dict]]:
+    """Kdo je komu bližje od polmera. Mreža, ker je 10 509^2 = 110 milijonov."""
+    celica = polmer_m / 111_320.0
+    mreza: dict[tuple[int, int], list[dict]] = {}
+    for p in postaje:
+        mreza.setdefault((int(p["lat"] / celica), int(p["lon"] / celica)), []).append(p)
+    out: dict[str, list[dict]] = {}
+    for (gy, gx), kos in mreza.items():
+        okolica = [q for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                   for q in mreza.get((gy + dy, gx + dx), ())]
+        for p in kos:
+            blizu = [q for q in okolica
+                     if q["stop_id"] != p["stop_id"]
+                     and geo.haversine(p["lat"], p["lon"], q["lat"], q["lon"]) <= polmer_m]
+            if blizu:
+                out[p["stop_id"]] = blizu
+    return out
+
+
+def zgradi_pespoti(conn, znova: bool = False, javi=None) -> dict:
+    """Izmeri peš poti med bližnjimi postajališči in jih shrani v `pespot`.
+
+    Teče proti usmerjevalniku in **brez njega ne naredi nič** — ocena po zraku
+    se ne sme zapeči v podatke, ker bi jo pozneje nihče ne ločil od meritve.
+
+    Privzeto dopolnjuje: postajališča, ki že imajo vrstice, se preskočijo. Nova
+    nastanejo ob uvozu voznega reda in jih je malo, zato je to sekunde dela.
+    """
+    if znova:
+        conn.execute("DELETE FROM pespot")
+        conn.commit()
+
+    postaje = [dict(r) for r in conn.execute(
+        "SELECT stop_id, lat, lon FROM station WHERE lat IS NOT NULL")]
+    sosedje = _sosedje(postaje, doseg_zracno(MAX_PRESTOP_S))
+    ze = {r[0] for r in conn.execute("SELECT DISTINCT a_stop FROM pespot")}
+
+    kje = {p["stop_id"]: p for p in postaje}
+    novih = 0
+    obdelanih = 0
+    for stop_id, blizu in sosedje.items():
+        if stop_id in ze:
+            continue
+        p = kje[stop_id]
+        sek, vir = matrika(p["lat"], p["lon"], [(q["lat"], q["lon"]) for q in blizu])
+        if vir != OSRM:
+            raise RuntimeError(
+                f"peš usmerjevalnik ({config.OSRM_URL or 'ugasnjen'}) ne odgovarja; "
+                "ocene po zraku se v `pespot` ne shranjujejo")
+        vrstice = [(stop_id, q["stop_id"], s) for q, s in zip(blizu, sek)
+                   if s is not None and s <= MAX_PRESTOP_S]
+        conn.executemany(
+            "INSERT OR REPLACE INTO pespot(a_stop, b_stop, sekunde) VALUES(?,?,?)",
+            vrstice)
+        novih += len(vrstice)
+        obdelanih += 1
+        if javi and obdelanih % 500 == 0:
+            javi(f"  {obdelanih} postajališč, {novih} poti")
+    conn.commit()
+    _PES_CACHE.clear()
+    return {"postajalisc": obdelanih, "poti": novih,
+            "v_bazi": conn.execute("SELECT COUNT(*) FROM pespot").fetchone()[0]}
+
+
+def pespoti(conn) -> dict[str, list[tuple[str, int]]]:
+    """`{stop_id: [(sosed, sekunde)]}` iz baze, v pomnilniku.
+
+    Ključ predpomnilnika nosi tudi število vrstic: `kajros pespoti` tabelo
+    spremeni med tekom strežnika in stara slika bi ostala do ponovnega zagona.
+    """
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    kljuc = (kje, conn.execute("SELECT COUNT(*) FROM pespot").fetchone()[0])
+    v = _PES_CACHE.get(kljuc)
+    if v is not None:
+        return v
+    out: dict[str, list[tuple[str, int]]] = {}
+    for a, b, s in conn.execute("SELECT a_stop, b_stop, sekunde FROM pespot"):
+        out.setdefault(a, []).append((b, s))
+    _PES_CACHE.clear()          # ena slika naenkrat; te so velike in kratkožive
+    _PES_CACHE[kljuc] = out
+    return out

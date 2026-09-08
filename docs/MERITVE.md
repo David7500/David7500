@@ -1483,3 +1483,19 @@ pošilja ljudi na počasnejšo pot.
 
 Brez teh se prestopa **samo na istem `stop_id`** — „Bavarski dvor" v eno smer in
 v drugo za iskalnik nista isti kraj. Takih imen je **4 507 od 5 500**.
+
+Izmerjeno, ko so bile poti res izračunane (`kajros pespoti`, 8. 9. 2026):
+
+| | |
+|---|---|
+| postajališč s peš sosedom v 500 m | 9 970 od 10 509 |
+| shranjenih poti (usmerjenih, ≤ 6 min) | **20 060** |
+| od tega isto ime, torej čez cesto | 10 890 (54 %) |
+| imen, ki dobijo soseda z drugim imenom | 1 781 |
+| trajanje | mediana 1,6 min, p90 5,4 min |
+| gradnja prek tunela do arwena | 97 s |
+
+Primer, ki je bil doslej neviden: „Bavarski dvor" → „Bavarski dvor" (druga
+smer) je **133 s hoje**, 169 m po zraku. In primer, zakaj zračna razdalja ne
+zadošča niti tu: „Bavarski dvor" → „Gosposvetska" je 99 m po zraku in 115 s
+hoje — obvoz 1,61×.

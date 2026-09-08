@@ -261,6 +261,24 @@ CREATE INDEX IF NOT EXISTS delay_report_date ON delay_report(service_date);
 -- ob vsakem obisku strani: en nov dan premakne mediano 90-dnevnega okna za
 -- odstotek. Zato se rezultat shrani cel (JSON) skupaj s casom izracuna, ki ga
 -- stran pokaze -- predpomnjena stevilka brez datuma je laz, ki caka na priloznost.
+-- Peš povezave med bližnjimi postajališči: "izstopi tu, prehodi 200 m, vkrcaj
+-- se tam".
+--
+-- Brez njih se prestopa **samo na istem `stop_id`**, torej "Bavarski dvor" v
+-- eno smer in "Bavarski dvor" v drugo za iskalnik nista isti kraj. Takih imen
+-- je 4 507 od 5 500.
+--
+-- Vrstice so usmerjene (A->B in B->A sta dve), ker `oneway:foot` obstaja in
+-- simetrije ni treba privzeti. V tabeli so **samo izmerjene** poti iz peš
+-- usmerjevalnika; ocene po zraku se ne shranjujejo, sicer bi se en izpad
+-- usmerjevalnika za vedno zapekel v podatke.
+CREATE TABLE IF NOT EXISTS pespot (
+    a_stop  TEXT NOT NULL,
+    b_stop  TEXT NOT NULL,
+    sekunde INTEGER NOT NULL,
+    PRIMARY KEY (a_stop, b_stop)
+);
+
 CREATE TABLE IF NOT EXISTS povzetek (
     kind        TEXT NOT NULL,      -- network_stats | breakdowns
     network     TEXT NOT NULL,      -- zeleznica | avtobus
