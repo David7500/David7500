@@ -1830,7 +1830,12 @@ function initLocate() {
     el.innerHTML = '<span class="slabo">iščem lokacijo …</span>';
     el.hidden = false;
     try {
-      const loc = await locateMe();
+      const loc = await locateMe({
+        napredek: (l) => {
+          if (!runMap.me) runMap.me = L.layerGroup().addTo(runMap.map);
+          drawMe(runMap.me, l);
+        },
+      });
       if (!runMap.me) runMap.me = L.layerGroup().addTo(runMap.map);
       drawMe(runMap.me, loc);
       // Pogled naj zajame OBOJE -- vprasanje je razmerje med tabo in vozilom,
@@ -1844,6 +1849,15 @@ function initLocate() {
       }
       runMap.loc = loc;
       izracunajRazdaljo(loc);
+      // Vprasanje "kako dalec je vozilo od mene" se med cakanjem spreminja na
+      // obeh straneh. Ena izmerjena lega bi po petih minutah lagala.
+      if (!runMap.sledim) {
+        runMap.sledim = sledi((l) => {
+          drawMe(runMap.me, l);
+          runMap.loc = l;
+          izracunajRazdaljo(l);
+        });
+      }
     } catch (err) {
       el.innerHTML = `<span class="slabo">${escapeHtml(err.message)}</span>`;
     }

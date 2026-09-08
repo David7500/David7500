@@ -559,6 +559,8 @@ function meNote(text) {
   if (text) setTimeout(() => { if (n.textContent === text) n.hidden = true; }, 4000);
 }
 
+let ustaviSledenje = null;
+
 const LocateControl = L.Control.extend({
   options: { position: "topright" },
   onAdd() {
@@ -576,16 +578,22 @@ const LocateControl = L.Control.extend({
       if (meLoc) {                       // drugi klik skrije
         meLayer.clearLayers();
         meLoc = null;
+        if (ustaviSledenje) { ustaviSledenje(); ustaviSledenje = null; }
         el.classList.remove("is-on");
         return;
       }
       el.classList.add("is-busy");
       try {
-        const loc = await locateMe();
+        const loc = await locateMe({ napredek: (l) => drawMe(meLayer, l) });
         drawMe(meLayer, loc);
         meLoc = loc;
         el.classList.add("is-on");
         map.setView([loc.lat, loc.lon], Math.max(map.getZoom(), 15), { animate: true });
+        // Ena lega ni dovolj: prvi popravek GPS pogosto zgresi za sto metrov in
+        // ga v naslednjih sekundah popravi, clovek pa se medtem premika. Pogled
+        // se NE premika za njim -- zemljevid, ki bezi izpod prsta, je slabsi od
+        // pike, ki jo je treba poiskati.
+        ustaviSledenje = sledi((l) => { drawMe(meLayer, l); meLoc = l; });
       } catch (err) {
         meNote(err.message);
       } finally {

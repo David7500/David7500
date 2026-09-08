@@ -1323,53 +1323,51 @@ function nearMeUnavailable(msg) {
 }
 
 async function showNearby() {
-  if (!navigator.geolocation) {
-    return nearMeUnavailable("Brskalnik ne pozna lokacije.");
-  }
-  // Brskalniki dovolijo lokacijo samo na HTTPS ali localhostu. Po HTTP na
-  // domacem naslovu klic tiho odpove, zato to povemo vnaprej in ne cakamo.
-  if (!window.isSecureContext) {
-    return nearMeUnavailable(
-      "Lokacija je na voljo samo prek HTTPS ali na localhostu. "
-      + "Vpiši ime postajališča.");
-  }
+  // `locateMe()` iz `common.js`, ne svoj `getCurrentPosition`. Tu je bila do
+  // 8. 9. 2026 druga kopija istega pravila -- s `maximumAge: 60000`, torej je
+  // prvi klik pokazal, kje si BIL, in z osemsekundnim rokom, ki ga telefon
+  // brez omreznega dolocanja lege pogosto ne ujame. Isti razred napake kot
+  // "isto pravilo na dveh mestih" povsod drugod v tem projektu.
   resultsEl.innerHTML = '<div class="empty-state">iščem lokacijo …</div>';
-
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const { latitude, longitude } = pos.coords;
-    try {
-      const list = await fetch(
-        `/api/stations/near?lat=${latitude}&lon=${longitude}&network=${NETWORK}&limit=8`
-      ).then((r) => r.json());
-      if (!list.length) {
-        return nearMeUnavailable(IS_BUS
-          ? "V treh kilometrih ni postajališča."
-          : "V treh kilometrih ni železniške postaje.");
-      }
-      resultHeadEl.innerHTML = `<span>Najbližja ${IS_BUS ? "postajališča" : "postaje"}</span>
-        <span>zračna razdalja, ne po poti</span>`;
-      resultsEl.innerHTML = `<div class="near-list">${list.map((x) => `
-        <button type="button" class="near-row" data-name="${escapeHtml(x.name)}">
-          <span class="near-name">${escapeHtml(x.name)}</span>
-          <span class="near-dist">${x.meters < 1000
-            ? `${x.meters} m`
-            : `${(x.meters / 1000).toFixed(1).replace(".", ",")} km`}</span>
-        </button>`).join("")}</div>`;
-      resultsEl.querySelectorAll(".near-row").forEach((b) => {
-        b.addEventListener("click", () => {
-          $("station").value = b.dataset.name;
-          paintAllClears();
-          searchBoard(true);
-        });
-      });
-    } catch (err) {
-      nearMeUnavailable("Postajališč ni bilo mogoče poiskati.");
+  let loc;
+  try {
+    loc = await locateMe({
+      napredek: (l) => {
+        resultsEl.innerHTML = '<div class="empty-state">iščem lokacijo … zaenkrat na '
+          + `${Math.round(l.acc)} m</div>`;
+      },
+    });
+  } catch (err) {
+    return nearMeUnavailable(`${err.message} Vpiši ime postajališča.`);
+  }
+  try {
+    const list = await fetch(
+      `/api/stations/near?lat=${loc.lat}&lon=${loc.lon}&network=${NETWORK}&limit=8`
+    ).then((r) => r.json());
+    if (!list.length) {
+      return nearMeUnavailable(IS_BUS
+        ? "V treh kilometrih ni postajališča."
+        : "V treh kilometrih ni železniške postaje.");
     }
-  }, (err) => {
-    nearMeUnavailable(err.code === err.PERMISSION_DENIED
-      ? "Dostop do lokacije je zavrnjen. Vpiši ime postajališča."
-      : "Lokacije ni bilo mogoče dobiti.");
-  }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 });
+    resultHeadEl.innerHTML = `<span>Najbližja ${IS_BUS ? "postajališča" : "postaje"}</span>
+      <span>zračna razdalja, ne po poti</span>`;
+    resultsEl.innerHTML = `<div class="near-list">${list.map((x) => `
+      <button type="button" class="near-row" data-name="${escapeHtml(x.name)}">
+        <span class="near-name">${escapeHtml(x.name)}</span>
+        <span class="near-dist">${x.meters < 1000
+          ? `${x.meters} m`
+          : `${(x.meters / 1000).toFixed(1).replace(".", ",")} km`}</span>
+      </button>`).join("")}</div>`;
+    resultsEl.querySelectorAll(".near-row").forEach((b) => {
+      b.addEventListener("click", () => {
+        $("station").value = b.dataset.name;
+        paintAllClears();
+        searchBoard(true);
+      });
+    });
+  } catch (err) {
+    nearMeUnavailable("Postajališč ni bilo mogoče poiskati.");
+  }
 }
 
 $("near-me").addEventListener("click", showNearby);
