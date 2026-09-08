@@ -363,8 +363,15 @@ function izrisi(izid) {
   const opomba = izid.vir_hoje === "osrm" ? ""
     : " · hoja je <strong>ocena</strong>, ker usmerjevalnik ne odgovarja";
   povej("");
-  stanje.innerHTML = `${izid.predlogi.length} ${sklon(izid.predlogi.length, "predlog")}`
-    + ` · ${dayLabel(izid.datum)}${opomba}`;
+  // Kadar je hoja edino, kar imamo, je treba povedati zakaj -- sicer je videti
+  // kot da smo prezrli avtobus, ki ga v resnici ni.
+  if (izid.predlogi.length === 1 && izid.predlogi[0].edina) {
+    stanje.innerHTML = "Z vozilom ni poti, ki bi bila hitrejša od hoje."
+      + ` · ${dayLabel(izid.datum)}${opomba}`;
+  } else {
+    stanje.innerHTML = `${izid.predlogi.length} ${sklon(izid.predlogi.length, "predlog")}`
+      + ` · ${dayLabel(izid.datum)}${opomba}`;
+  }
   izidiEl.innerHTML = izid.predlogi.map((p, i) => predlogHtml(p, i)).join("");
   // Kartica je povezava na podrobno stran, zato klik ne sme izbirati. Na
   // zemljevidu se pot pokaže ob dotiku ali fokusu -- to ne odvzame klika in

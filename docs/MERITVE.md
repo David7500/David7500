@@ -1730,3 +1730,27 @@ postankov):
 | avtobusi | 5 012 / 230 665 (2,17 %) | 1 621 / 11 775 (13,8 %) |
 | železnica | 17 / 7 010 (0,24 %) | 15 / 596 (2,5 %) |
 | skupaj | 5 029 (2,12 %) | 1 636 (13,2 %) |
+
+## Predlog, ki je bil ovinek namesto poti (8. 9. 2026)
+
+Prijava s preizkusa: iz Ljubljane Polje proti vzhodu je stran predlagala vlak
+**na zahod** v Ljubljano in nato **8,8 km (1 h 46) peš nazaj** — dve uri za
+pot, ki jo prehodiš precej hitreje.
+
+**Vzroka nisem dokazal.** Preverjeno je bilo dvoje in oboje je bilo v redu:
+`blizu()` spoštuje mejo hoje na **obeh** straneh (največja vrnjena vrednost je
+natanko 1 500 s = 25 min, izmerjeno na 30 točkah), in podrobna stran vrne isto
+kot seznam (30 parov, največja razlika v skupni hoji **0 min**).
+
+Vgrajeni sta zato dve varovalki, ki nesmisel te oblike naredita nemogoč ne
+glede na vzrok:
+
+* **Pot z vozilom, v kateri je hoje več, kot bi je bilo peš vso pot, ni
+  predlog.** Za to je bilo treba trajanje hoje računati tudi takrat, ko je
+  hoja predolga, da bi jo ponudili (`MAX_PES_PRIMERJAVA_S` 3 h proti
+  `MAX_PES_VSO_POT_S` 1 h) — brez te številke primerjave ni mogoče narediti.
+* **Kadar z vozilom ni ničesar, se pove, koliko je peš.** „Ni poti" je slabši
+  odgovor od resnice „peš 1 h 25"; potnik sicer čaka avtobus, ki ne pride.
+
+Preizkušeno na vzorcu iz prijave: (46,073, 14,582) → (46,076, 14,615) zdaj da
+samo hojo 44 min, prej pa je isti vzorec dal pot z vozilom in dolgo hojo.

@@ -444,24 +444,36 @@ def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int
     }
 
 
-def _pes_vso_pot(od: tuple[float, float], do: tuple[float, float],
-                 odhod: int) -> dict | None:
-    """Hoja od vrat do vrat, kadar je to sploh smiselno.
+#: Do kod sploh vprašamo, koliko traja hoja vso pot. To ni meja predloga
+#: (ta je `MAX_PES_VSO_POT_S`), ampak meja **primerjave**: pot z vozilom, ki je
+#: slabša od hoje, ni predlog, in brez te številke tega ni mogoče vedeti.
+#: Nad tremi urami hoje primerjava nima več pomena, izračun 200-kilometrske
+#: pešpoti pa stane.
+MAX_PES_PRIMERJAVA_S = 3 * 3600
 
+
+def _pes_vso_pot(od: tuple[float, float], do: tuple[float, float],
+                 odhod: int) -> tuple[dict | None, int | None]:
+    """Hoja od vrat do vrat: (predlog ali `None`, trajanje ali `None`).
+
+    Trajanje se vrne **tudi takrat, ko predloga ni** — hoja treh ur ni pot, ki
+    bi jo kdo ponudil, je pa merilo: kar je počasnejše od nje, ni predlog.
     Brez tega stran pošilja ljudi na avtobus, ki je počasnejši od njihovih nog:
     Ljubljana Polje -> BTC je z avtobusom 64 minut in peš 47.
     """
     # Zračna črta je spodnja meja poti: če je že ona predolga, usmerjevalnika
     # ni treba vprašati. Brez tega je Maribor -> Koper pomenil izračun
     # dvestokilometrske pešpoti, ki gre takoj v koš.
-    if geo.haversine(od[0], od[1], do[0], do[1]) > hoja.doseg_zracno(MAX_PES_VSO_POT_S):
-        return None
+    if geo.haversine(od[0], od[1], do[0], do[1]) > hoja.doseg_zracno(MAX_PES_PRIMERJAVA_S):
+        return None, None
     sek, vir = hoja.sekunde(od[0], od[1], do[0], do[1])
-    if sek is None or sek > MAX_PES_VSO_POT_S:
-        return None
+    if sek is None:
+        return None, None
+    if sek > MAX_PES_VSO_POT_S:
+        return None, sek
     return {"odhod": odhod, "prihod": odhod + sek, "trajanje_s": sek,
             "hoje_s": sek, "prestopov": 0, "vir_hoje": vir,
-            "noge": [{"vrsta": "hoja", "sekunde": sek, "od": None, "do": None}]}
+            "noge": [{"vrsta": "hoja", "sekunde": sek, "od": None, "do": None}]}, sek
 
 
 def isci(conn: sqlite3.Connection, od: tuple[float, float],
@@ -490,12 +502,13 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     vir_hoje = hoja.OSRM if vir_a == vir_b == hoja.OSRM else hoja.ZRAK
 
     predlogi = []
-    pes = _pes_vso_pot(od, do, polnoc + odhod_s)
+    pes, pes_s = _pes_vso_pot(od, do, polnoc + odhod_s)
     if pes:
         predlogi.append(pes)
     # Hoja vso pot je hkrati zgornja meja iskanja: pot, ki pride pozneje, kot
-    # bi prišel peš, ni odgovor.
-    meja = odhod_s + pes["trajanje_s"] if pes else None
+    # bi prišel peš, ni odgovor. Meja velja tudi takrat, ko hoje ne ponudimo
+    # (nad uro) -- takrat je merilo, ne predlog.
+    meja = odhod_s + pes_s if pes_s is not None else None
 
     if izhodisca and cilji:
         najdba = _isci_dan(conn, izhodisca, cilji, service_date, odhod_s,
@@ -585,6 +598,14 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     # Zmajski most: 12:53 z 20 min hoje poleg 13:01 z 10 min, oba prihod
     # 13:31). Vprašanje "z manj hoje" omejuje hojo na VSAKEM koncu, ne v
     # vsoti, in zna zato dati pot z več hoje skupaj.
+    # Pot z vozilom, v kateri je HOJE več, kot bi je bilo, če bi šel kar peš,
+    # ni predlog, ampak ovinek. Ta primer je bil na zaslonu: vlak stran od
+    # cilja in nato osem kilometrov peš nazaj.
+    if pes_s is not None:
+        predlogi = [p for p in predlogi
+                    if not any(n["vrsta"] == "voznja" for n in p["noge"])
+                    or p["hoje_s"] < pes_s]
+
     videni, izbrani = set(), []
     for p in sorted(predlogi, key=lambda p: (kdaj(p), p["hoje_s"])):
         kljuc = tuple((n["trip_id"], n["od_seq"], n["do_seq"])
@@ -597,6 +618,16 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
             continue
         videni.add(kljuc)
         izbrani.append(p)
+
+    # Kadar z vozilom ni ničesar, je "ni poti" slabši odgovor od resnice.
+    # Hoja uro in pol ni predlog, ki bi ga kdo dal prvi -- je pa edini, ki
+    # obstaja, in potnik ga mora videti, da ne čaka avtobusa, ki ne pride.
+    if not izbrani and pes_s is not None:
+        izbrani = [{"odhod": polnoc + odhod_s, "prihod": polnoc + odhod_s + pes_s,
+                    "trajanje_s": pes_s, "hoje_s": pes_s, "prestopov": 0,
+                    "vir_hoje": vir_hoje, "edina": True,
+                    "noge": [{"vrsta": "hoja", "sekunde": pes_s,
+                              "od": None, "do": None}]}]
 
     return {
         "datum": service_date,

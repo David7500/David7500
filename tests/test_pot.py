@@ -154,12 +154,17 @@ def test_hoja_vso_pot_je_predlog(conn):
     assert prvi["trajanje_s"] < 10 * 60
 
 
-def test_brez_postajalisc_v_dosegu_ni_izmisljenega_odgovora(conn):
-    """Postajališče, ki ta dan nič ne streže, ne sme priti v matriko hoje."""
+def test_brez_postajalisc_v_dosegu_ni_izmisljene_voznje(conn):
+    """Postajališče, ki ta dan nič ne streže, ne sme priti v matriko hoje.
+
+    Predlog vseeno je — hoja. Ta ni izmišljena, ampak edina resnica, ki jo
+    imamo, in „ni poti" bi bil slabši odgovor od nje.
+    """
     izh, _ = pot.blizu(conn, OD[0], OD[1], set())
     assert izh == {}
     r = pot.isci(conn, OD, DO, D, 8 * 3600)
-    assert r["predlogi"] == []
+    assert all(n["vrsta"] == "hoja"
+               for p in r["predlogi"] for n in p["noge"]), "vožnje ne sme biti"
 
 
 def test_nicelna_hoja_ni_noga(conn):
@@ -286,3 +291,30 @@ def test_podrobnosti_neobstojeca_voznja_pade(conn):
     včeraj torej ni napaka odjemalca, a tudi ne sme tiho vrniti prazne poti."""
     with pytest.raises(KeyError):
         pot.podrobnosti(conn, [("ni-me", 1, 2)], OD, DO, D)
+
+
+def test_voznja_z_vec_hoje_kot_pes_vso_pot_ni_predlog(conn, monkeypatch):
+    """Pot z vozilom, v kateri je hoje več, kot bi je bilo peš, je ovinek.
+
+    Videno na zaslonu: vlak stran od cilja in nato 8,8 km peš nazaj — dve uri
+    za pot, ki jo prehodiš v pol ure.
+    """
+    # Peš vso pot 20 minut; vožnja pa zahteva 13 + 13 = 26 minut hoje.
+    monkeypatch.setattr(hoja, "sekunde", lambda *a, **k: (20 * 60, hoja.OSRM))
+    _voznja(conn, "t1", "ovinek", [(1, "DALEC", 8 * 3600 + 900),
+                                   (2, "ROB", 8 * 3600 + 1200)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    for p in r["predlogi"]:
+        if any(n["vrsta"] == "voznja" for n in p["noge"]):
+            assert p["hoje_s"] < 20 * 60, "vožnja z več hoje od same hoje"
+
+
+def test_ko_ni_poti_pove_koliko_je_pes(conn, monkeypatch):
+    """„Ni poti" je slabši odgovor od resnice „peš uro in pol"."""
+    monkeypatch.setattr(hoja, "sekunde", lambda *a, **k: (90 * 60, hoja.OSRM))
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)      # v bazi ni nobene vožnje
+    assert len(r["predlogi"]) == 1
+    p = r["predlogi"][0]
+    assert p.get("edina") is True
+    assert p["hoje_s"] == 90 * 60
