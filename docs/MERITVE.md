@@ -1613,3 +1613,49 @@ znižala na 14,7 s — toliko, kolikor traja eno nalaganje.
 pa vsako posebej, in pri dveh vnosih je vsako iskanje zvez izrinilo skupno
 sliko. Cena je majhna, ker je železnica drobna — avtobusi 92 MB, oboje skupaj
 94 MB, železnica ~3 MB.
+
+## Vrstni red predlogov je nasprotoval številkam v njih (8. 9. 2026)
+
+Prijava s testiranja: Križanke → Novo Polje ob 12:51 je ponudil štiri avtobusne
+poti in **nobene z vlakom**, čeprav je vlak prišel prej. Preverjeno na roko:
+
+| pot | vozni red | z zamudo |
+|---|---|---|
+| avtobus 19B + 25 | 12:52 → **13:35** | 12:51 → **13:43** |
+| vlak LPV 2219 | 13:01 → **13:38** | (brez meritve) 13:38 |
+
+Vzroka sta bila dva in oba sta bila napaka:
+
+**1. Razvrščanje po voznem redu, prikaz z zamudo.** Stran je razvrstila po
+voznoredni uri (13:35 < 13:38) in poleg izpisala pričakovano (13:43). Vrstni
+red in številke so si nasprotovali — ista past kot barva, ki pripoveduje drugo
+zgodbo kot številka poleg nje. Zdaj se zamude pripišejo **pred** razvrščanjem
+in ključ je ura, ki je na zaslonu.
+
+**2. Druge poti sploh ni bilo med predlogi.** Nadaljnja iskanja so gledala
+poznejše odhode, ne drugih poti. Zdaj je med predlogi tudi iskanje, ki
+**izloči vožnje najboljše poti** — tako pride na zaslon vlak, tudi kadar
+avtobus po voznem redu zmaga za tri minute.
+
+### Zamude v samem iskanju: izmerjeno, in ni zmaga
+
+Ob tem je bil preizkušen tudi prenos znane zamude v samo iskanje (vozila, ki so
+zdaj na poti, odpeljejo z izmerjeno zamudo). Na 39 naključnih parih v Ljubljani:
+
+| | |
+|---|---|
+| boljši pričakovani prihod | 1 |
+| slabši | 1 |
+| enak | 37 |
+| mediana razlike | 0,0 min |
+| cena | +85 ms na iskanje |
+
+Torej **ni** izboljšava prihoda. Obdržano je iz drugega razloga: brez tega
+iskanje ponuja prestope, za katere iz meritev **že vemo, da ne držijo** — na
+183 ponujenih prestopih 1 (1 %), z zamudami 0 od 175. In ker so zamude na
+zaslonu, bi razvrščanje po voznem redu spet delalo vrstni red, ki nasprotuje
+številkam.
+
+Vozila, ki še ne vozijo, zamude nimajo in se obravnavajo kot točna — to velja
+za obe različici. `zamiki()` je predpomnjen na žig zajema, ker je izračun za
+vseh 13 107 voženj dneva 541 ms.
