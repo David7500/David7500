@@ -1176,10 +1176,18 @@ ranked AS (
                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts
     FROM t
 ),
+-- Zadnji trenutek, ko je feed o TEJ voznji sploh kaj rekel. Isto pravilo kot
+-- `stats.last_measured()`: meja med meritvijo in napovedjo ne sme prehiteti
+-- feeda, sicer se s casom sama od sebe razsiri do konca proge in pika na
+-- zemljevidu pripelje na cilj, ceprav o voznji ze pol ure ne vemo nicesar.
+zadnja_beseda AS (
+    SELECT trip_id, MAX(feed_ts) AS zadnji_ts FROM t GROUP BY trip_id
+),
 passed AS (
-    SELECT r.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
-    FROM ranked r
+    SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn
+    FROM ranked r JOIN zadnja_beseda z ON z.trip_id = r.trip_id
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= :now_s
+      AND r.t_s + COALESCE(r.delay_s, 0) <= z.zadnji_ts - :polnoc
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
       AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
@@ -1201,9 +1209,14 @@ def _live_rows(conn, service_date: str, now_s: int,
     dejansko vozijo. Zadnja znana postaja je zadnja, katere cas je ze minil --
     ne zadnja, o kateri feed porocá: feed poslje napoved tudi za naslednjo
     postajo, po koncu voznje pa ostane zapisan cilj."""
+    # Polnoc prometnega dne v sekundah od epohe: `t_s` steje od nje, `feed_ts`
+    # pa je epoha. Rabi ju pogoj "meja ne prehiti feeda".
+    polnoc = int(datetime.combine(date.fromisoformat(service_date),
+                                  datetime.min.time(), tzinfo=TZ).timestamp())
     rows = conn.execute(_LIVE_SQL, {"day": service_date, "now_s": now_s,
                                     "grace": _LIVE_GRACE_S,
                                     "network": network,
+                                    "polnoc": polnoc,
                                     "overnight_only": int(overnight_only),
                                     "max_delay": MAX_LIVE_DELAY_S}).fetchall()
     out = []

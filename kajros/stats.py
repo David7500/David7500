@@ -852,15 +852,25 @@ def last_measured(conn: sqlite3.Connection, service_date: str,
     za se nedosezen postanek -- in ta je izmerjeno slaba (`kajros backtest
     --operator`: MAE 7,9 min proti 1,3 min za prenos trenutne zamude).
     Prikaz je zato ne sme kazati kot meritev.
+
+    **Meja nikoli ne prehiti feeda.** Pogoj "vozni red plus zamuda je mimo" je
+    ura in se s casom sam od sebe razsiri do konca proge, tudi ko feed o voznji
+    ze zdavnaj molci. Zato je zamejen z zadnjo besedo feeda o tej voznji.
+    Vrnjeni `feed_ts` je starost dokaza -- prikaz z njim pove, kdaj je bilo to
+    nazadnje potrjeno.
     """
     if now_s is None or not trip_ids:
         return {}
     ids = list(dict.fromkeys(trip_ids))
+    # Polnoc prometnega dne v sekundah od epohe: `t_s` steje od nje, `feed_ts`
+    # pa je epoha. Brez te pretvorbe bi primerjali dve razlicni merili.
+    polnoc = int(datetime.combine(date.fromisoformat(service_date),
+                                  datetime.min.time(), tzinfo=TZ).timestamp())
     # Vsi vezani parametri morajo biti istega sloga: sqlite jih ob mesanju
     # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
     sql = _LAST_MEASURED_SQL % ",".join("?" * len(ids))
     return {r["trip_id"]: dict(r)
-            for r in conn.execute(sql, (service_date, *ids, now_s))}
+            for r in conn.execute(sql, (service_date, *ids, now_s, polnoc))}
 
 
 #: Koliko dni s podobno zamudo mora biti, da jim verjamemo mediano. Merjeno:
@@ -1228,10 +1238,28 @@ ranked AS (
                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts
     FROM t
 ),
+-- Zadnji trenutek, ko je feed o TEJ voznji sploh kaj rekel.
+zadnja_beseda AS (
+    SELECT trip_id, MAX(feed_ts) AS zadnji_ts FROM t GROUP BY trip_id
+),
 passed AS (
-    SELECT r.*, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY stop_seq DESC) AS rn
-    FROM ranked r
+    SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn
+    FROM ranked r JOIN zadnja_beseda z ON z.trip_id = r.trip_id
     WHERE r.t_s + COALESCE(r.delay_s, 0) <= ?
+      -- **Meja ne sme prehiteti feeda.** Pogoj zgoraj je ura: vozni red plus
+      -- zadnja znana zamuda je mimo. Kadar feed o voznji utihne, to ni vec
+      -- meritev, ampak ekstrapolacija -- in ta se s casom sama od sebe
+      -- razsiri cez vse postanke do konca proge.
+      --
+      -- Ujeto v zivo 8. 9. 2026 na LPV 2001: feed je nazadnje spregovoril ob
+      -- 06:54:11 in voznjo nato izpustil. Ob 07:04 je prikaz trdil, da je
+      -- vlak prevozil VSEH 29 postankov, vkljucno s prihodom v Ljubljano ob
+      -- 07:01 -- uporabnik pa je stal na Ljubljani Polje in vlaka ni bilo.
+      --
+      -- Varno je, ker so voznje, ki so v feedu, sveze: mediana 45 s, p90 59 s,
+      -- le 11 od 733 cez 120 s (izmerjeno isti dan). V normalnem obratovanju
+      -- ta pogoj ne spremeni nicesar.
+      AND r.t_s + COALESCE(r.delay_s, 0) <= z.zadnji_ts - ?
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
       -- Ostanek, ki ga feed ni vec osvezil, ni prevozen postanek: meja med
       -- meritvijo in napovedjo bi sicer padla nanj. To je LOKALNO pravilo
@@ -1243,7 +1271,7 @@ passed AS (
       -- v komentarju zato ne sme biti (podre vezavo poizvedbe).
       AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
-SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, p.t_s, st.name
+SELECT p.trip_id, p.stop_seq, p.delay_s, p.delay_arr, p.t_s, p.feed_ts, st.name
 FROM passed p JOIN station st ON st.stop_id = p.stop_id
 WHERE p.rn = 1
 """

@@ -16,6 +16,14 @@ import pytest
 from kajros import db, journey, ocena, stats
 
 
+# Zakaj imajo vstavki v `run` velik `feed_ts` (4102444800 = 2100-01-01):
+# `stats.last_measured()` od 8. 9. 2026 mejo meritve zameji z **zadnjo besedo
+# feeda o vožnji** -- ura brez potrditve ni meritev. Prej je bila tu simbolična
+# enica, ki pomeni leto 1970, in vsi ti postanki bi po novem veljali za
+# nepotrjene. Testi, ki staranje preizkušajo namenoma, uporabljajo svoje
+# vrednosti in so pustili pri miru.
+
+
 def _pred(dni: int) -> str:
     """Datum pred toliko dnevi. Trdi datumi bi test cez tri mesece podrli:
     `typical_at_stops` gleda samo zadnjih 90 dni."""
@@ -187,7 +195,7 @@ def test_tabla_vzame_zamudo_z_naslednje_postaje(conn):
     # Feed ne porocá stop_seq = 1; meritev na drugi postaji je edini priblizek
     # odhodne zamude z izhodisca in prikaz mora povedati, od kod je.
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
-                 "VALUES('t1','2026-08-31',2,600,600,1)")
+                 "VALUES('t1','2026-08-31',2,600,600,4102444800)")
     conn.commit()
     row = next(r for r in journey.board(conn, "Ajdovščina", "2026-08-31", 0, 1440) if r["train_no"] == "IC 1")
     assert row["delay_s"] == 600
@@ -267,7 +275,7 @@ def test_naslednja_postaja_tudi_pri_vrzeli_v_zaporedju(conn):
               "VALUES('t9','r9','LP 9','A - C','S1')")
     _sched(c, "t9", [(1, "A", None, 20000), (5, "Z", 22000, 22100), (9, "C", 24000, None)])
     c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
-              "VALUES('t9','2026-08-31',5,420,420,1)")
+              "VALUES('t9','2026-08-31',5,420,420,4102444800)")
     c.commit()
 
     row = next(r for r in journey.board(c, "Ajdovščina", "2026-08-31", 0, 1440)
@@ -404,7 +412,7 @@ def test_statistika_ne_steje_mestnih_avtobusov(conn):
                          ("t1", "2026-08-28", 600), ("b1", "2026-08-28", 60),
                          ("t1", "2026-08-27", 600), ("b1", "2026-08-27", 60)):
         conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
-                     "VALUES(?,?,2,?,?,1)", (trip, day, d, d))
+                     "VALUES(?,?,2,?,?,4102444800)", (trip, day, d, d))
     conn.commit()
 
     rail = stats.day_summary(conn, "2026-08-31", network="zeleznica")
@@ -434,7 +442,7 @@ def test_breakdowns_loci_vrsto_vlaka_od_prevoznika(conn):
         for i in range(10):
             conn.execute("INSERT INTO run(trip_id, service_date, stop_seq,"
                          "                delay_arr, delay_dep, feed_ts) "
-                         "VALUES(?,?,2,120,120,1)", (trip, _pred(i + 1)))
+                         "VALUES(?,?,2,120,120,4102444800)", (trip, _pred(i + 1)))
     conn.commit()
 
     rail = {r["key"] for r in stats.breakdowns(conn, network="zeleznica")["by_kind"]}
@@ -526,7 +534,7 @@ def test_nocna_voznja_ostane_na_seznamu_tudi_ob_veliki_zamudi(conn):
     for seq in (2, 3):
         c.execute("INSERT INTO run(trip_id, service_date, stop_seq,"
                   "                delay_arr, delay_dep, feed_ts) "
-                  "VALUES('nz','2026-08-31',?,9660,9660,1)", (seq,))
+                  "VALUES('nz','2026-08-31',?,9660,9660,4102444800)", (seq,))
     c.commit()
 
     now_s = 20 * 60 + 86400          # 00:20 naslednjega dne
@@ -602,7 +610,7 @@ def _vozba(conn, trip, day, stops):
     """stops: [(stop_seq, delay_s)] -- zadnji je koncna zamuda vozjne."""
     for seq, d in stops:
         conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
-                     " delay_dep, feed_ts) VALUES(?,?,?,?,?,1)", (trip, day, seq, d, d))
+                     " delay_dep, feed_ts) VALUES(?,?,?,?,?,4102444800)", (trip, day, seq, d, d))
 
 
 def test_povzetek_vzame_zadnji_postanek(conn):
@@ -654,7 +662,7 @@ def test_tabla_zdruzi_sezonske_razlicice(conn):
     _sched(conn, "t1b", [(1, "A", None, 28800), (2, "Z", 32400, 32700), (3, "C", 36000, None)])
     # Meritev ima samo sezonska razlicica.
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
-                 " feed_ts) VALUES('t1b','2026-08-31',1,300,300,1)")
+                 " feed_ts) VALUES('t1b','2026-08-31',1,300,300,4102444800)")
     conn.commit()
 
     # Tabla isce po IMENU postaje, ne po `stop_id`.
@@ -788,7 +796,7 @@ def test_voznja_z_nemogoco_zamudo_ni_ziva(conn):
     _sched(c, "nz2", [(1, "A", None, 15300), (2, "Z", 18000, 18000), (3, "C", 20640, None)])
     for seq in (2, 3):
         c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
-                  " delay_dep, feed_ts) VALUES('nz2','2026-08-31',?,27060,27060,1)", (seq,))
+                  " delay_dep, feed_ts) VALUES('nz2','2026-08-31',?,27060,27060,4102444800)", (seq,))
     c.commit()
 
     opoldne = 12 * 3600 + 1800
@@ -818,9 +826,9 @@ def test_tabla_ne_kaze_feedove_napovedi_kot_meritve(conn):
     """
     # IC 1: A(1) -> Z(2) -> C(3). Vlak je pri Z, feed za C pravi 0.
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
-                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,1020,1020,1)")
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,1020,1020,4102444800)")
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
-                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',3,0,0,1)")
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',3,0,0,4102444800)")
     conn.commit()
 
     # Ob 09:30 je vlak Z že prevozil (32700 + 1020 = 09:22), C (10:00) pa je
@@ -837,7 +845,7 @@ def test_tabla_ne_kaze_feedove_napovedi_kot_meritve(conn):
 def test_tabla_prevozeni_postanek_je_meritev(conn):
     """Kar je vozilo že prevozilo, je meritev in se tako tudi imenuje."""
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
-                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,600,600,1)")
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,600,600,4102444800)")
     conn.commit()
     ob = 10 * 3600                        # Z je ob 09:05 + 10 min = mimo
     r = next(x for x in journey.board(conn, "Zidani Most", "2026-08-31", 0, 1440,
@@ -1011,7 +1019,7 @@ def test_tabla_upostevaj_rezervo_dolgega_postanka(conn):
     _sched(conn, "tr", [(1, "A", None, 28800), (2, "Z", 32400, 33600), (3, "C", 36000, None)])
     # Izmerjeno na izhodiscu: +15 min.
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
-                 "VALUES('tr',?,1,900,900,0)", (dan,))
+                 "VALUES('tr',?,1,900,900,4102444800)", (dan,))
     conn.commit()
 
     # Ob 08:30 je vlak med A in Z; tabla v Zidanem Mostu velja za odhod 09:20.
@@ -1031,7 +1039,7 @@ def test_prihodna_tabla_ne_steje_lastnega_postanka(conn):
                  "VALUES('tr','rr','LP 7','A - C','S1')")
     _sched(conn, "tr", [(1, "A", None, 28800), (2, "Z", 32400, 33600), (3, "C", 36000, None)])
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
-                 "VALUES('tr',?,1,900,900,0)", (dan,))
+                 "VALUES('tr',?,1,900,900,4102444800)", (dan,))
     conn.commit()
 
     b = journey.board(conn, "Zidani Most", dan, 30000, 240, kind="prihodi", now_s=30600)
@@ -1059,7 +1067,7 @@ def test_napoved_dvigne_kadar_prevoznik_ve_vec(conn):
     conn.commit()
     # Feed za Zidani Most (stop_seq 2) trdi +30 min, nasa ocena bi bila +10.
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
-                 "VALUES('t1',?,2,1800,1800,0)", (dan,))
+                 "VALUES('t1',?,2,1800,1800,4102444800)", (dan,))
     conn.commit()
     f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600, service_date=dan)}
     z = f["Zidani Most"]
@@ -1074,7 +1082,7 @@ def test_napoved_ne_pade_na_prevoznikovo_niclo(conn):
     conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
                  "VALUES('S1', ?)", (dan,))
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
-                 "VALUES('t1',?,3,0,0,0)", (dan,))
+                 "VALUES('t1',?,3,0,0,4102444800)", (dan,))
     conn.commit()
     f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600, service_date=dan)}
     assert f["Celje"]["from_operator"] is False
@@ -1109,10 +1117,10 @@ def test_napoved_ne_prevzame_prenesene_zamude(conn):
     db.fill_trip_window(conn)
     # vlak stoji v Zidanem Mostu: prišel +20, odhod po voznem redu
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
-                 "VALUES('t1',?,2,1200,0,0)", (dan,))
+                 "VALUES('t1',?,2,1200,0,4102444800)", (dan,))
     # prevoznik za Celje objavi natanko zamudo ob prihodu -- prenos, ne napoved
     conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
-                 "VALUES('t1',?,3,1200,1200,0)", (dan,))
+                 "VALUES('t1',?,3,1200,1200,4102444800)", (dan,))
     conn.commit()
     f = {p["name"]: p for p in stats.predict(conn, "IC 1", 2, 0, service_date=dan)}
     assert f["Celje"]["from_operator"] is False
@@ -1137,7 +1145,7 @@ def test_senca_posname_napoved_in_dopise_resnico(conn):
     # Vlak t1: A 08:00 -> Z 09:00/09:05 -> C 10:00. Izmerjen je na Z (+10 min),
     # torej je bil tam ob 09:15 -- ob 09:35 je C se 25 minut proc.
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
-                 " feed_ts) VALUES('t1','2026-08-31',2,600,600,0)")
+                 " feed_ts) VALUES('t1','2026-08-31',2,600,600,4102444800)")
 
     izid = ocena.snapshot(conn, _ob(34500))
     assert izid["zapisanih"] == 1
@@ -1151,7 +1159,7 @@ def test_senca_posname_napoved_in_dopise_resnico(conn):
 
     # Dokler vlak ni tam, resnice ni -- to je bistvo meje `last_measured`.
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
-                 " feed_ts) VALUES('t1','2026-08-31',3,300,300,0)")
+                 " feed_ts) VALUES('t1','2026-08-31',3,300,300,4102444800)")
     assert ocena.resolve(conn, _ob(34500))["resenih"] == 0
     assert conn.execute("SELECT actual_s FROM napoved").fetchone()["actual_s"] is None
 
@@ -1174,7 +1182,7 @@ def test_senca_posname_postanek_samo_enkrat(conn):
     sicer bi merili napoved z vedno krajsim horizontom."""
     ocena.init(conn)
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
-                 " feed_ts) VALUES('t1','2026-08-31',2,600,600,0)")
+                 " feed_ts) VALUES('t1','2026-08-31',2,600,600,4102444800)")
     ocena.snapshot(conn, _ob(34500))
     prvi = conn.execute("SELECT made_ts, horizon_s FROM napoved").fetchone()
     assert ocena.snapshot(conn, _ob(34560))["zapisanih"] == 0
@@ -1403,7 +1411,7 @@ def test_mestni_in_primestni_lpp_nista_ista_skupina(conn):
         for i in range(10):
             conn.execute("INSERT INTO run(trip_id, service_date, stop_seq,"
                          "                delay_arr, delay_dep, feed_ts) "
-                         "VALUES(?,?,2,120,120,1)", (trip, _pred(i + 1)))
+                         "VALUES(?,?,2,120,120,4102444800)", (trip, _pred(i + 1)))
     conn.commit()
 
     kljuci = {r["key"] for r in stats.breakdowns(conn, network="avtobus")["by_kind"]}
@@ -1551,7 +1559,7 @@ def test_tabla_ne_kaze_nemogoce_meritve(conn):
     # znano zamudo in od kod je, kot da bi trdila nemogoče.
     for seq, d in ((2, 4800), (3, 300)):
         conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
-                     "delay_dep, feed_ts) VALUES('t1','2026-08-31',?,?,?,1)", (seq, d, d))
+                     "delay_dep, feed_ts) VALUES('t1','2026-08-31',?,?,?,4102444800)", (seq, d, d))
     conn.commit()
     row = next(r for r in journey.board(conn, "Zidani Most", "2026-08-31", 0, 1440,
                                         now_s=40000) if r["train_no"] == "IC 1")
@@ -1845,3 +1853,61 @@ def test_okno_lpp_vkljuci_vcerajsnji_dan(tmp_path):
     assert "a|b|danes" in izid["trips"], "današnjega dne ni v oknu"
     assert "a|b|vceraj" in izid["trips"], "včerajšnjega dne ni v oknu — nočne vožnje bodo odpadle"
     assert "a|b|predvceraj" not in izid["trips"], "okno sega predaleč nazaj"
+
+
+def test_meja_meritve_ne_prehiti_feeda(conn):
+    """Ko feed o vožnji utihne, se meja ne sme premikati naprej z uro.
+
+    Prava napaka, ujeta v živo 8. 9. 2026 na LPV 2001: feed je nazadnje
+    spregovoril ob 06:54:11 in vožnjo nato izpustil. Ob 07:04 je prikaz trdil,
+    da je vlak prevozil **vseh 29 postankov**, vključno s prihodom v Ljubljano
+    ob 07:01 — uporabnik pa je stal na Ljubljani Polje in vlaka ni bilo.
+
+    Vzrok: pogoj "vozni red plus zadnja znana zamuda je mimo" je ura, ne
+    meritev, in se s časom sam od sebe razširi do konca proge.
+    """
+    from datetime import datetime as _dt
+    dan = "2026-08-31"
+    polnoc = int(_dt.combine(date.fromisoformat(dan), _dt.min.time(),
+                             tzinfo=stats.TZ).timestamp())
+    # IC 1: A 08:00 -> Z 09:00/09:05 -> C 10:00. Feed je nazadnje kaj rekel ob
+    # 09:10, vsem trem postankom pripisal +5 min in nato utihnil.
+    zadnja_beseda = polnoc + 9 * 3600 + 600          # 09:10
+    for seq in (1, 2, 3):
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                     "delay_dep, feed_ts) VALUES('t1',?,?,300,300,?)",
+                     (dan, seq, zadnja_beseda))
+    conn.commit()
+
+    # Ob 09:15 je Zidani Most (09:05 + 5 min = 09:10) potrjen: feed je takrat
+    # se govoril. Celje (10:00 + 5 = 10:05) pa se ni in ne bo, dokler feed molci.
+    m = stats.last_measured(conn, dan, ["t1"], 9 * 3600 + 900)
+    assert m["t1"]["stop_seq"] == 2, "meja mora obstati pri zadnjem potrjenem postanku"
+
+    # Uro pozneje se meja NE sme premakniti naprej, ceprav je vozni red mimo.
+    m = stats.last_measured(conn, dan, ["t1"], 10 * 3600 + 1800)
+    assert m["t1"]["stop_seq"] == 2, "ura brez potrditve feeda ni meritev"
+    assert m["t1"]["feed_ts"] == zadnja_beseda, "prikaz mora dobiti starost dokaza"
+
+
+def test_meja_meritve_normalno_sledi_feedu(conn):
+    """Ko feed govori sproti, se pravilo ne sme poznati.
+
+    Izmerjeno 8. 9. 2026: vožnje, ki so v feedu, so sveže — mediana 45 s,
+    p90 59 s, le 11 od 733 čez 120 s. Ta pogoj torej v normalnem obratovanju
+    ne spremeni ničesar.
+    """
+    from datetime import datetime as _dt
+    dan = "2026-08-31"
+    polnoc = int(_dt.combine(date.fromisoformat(dan), _dt.min.time(),
+                             tzinfo=stats.TZ).timestamp())
+    # Feed govori sproti: zadnja beseda je ob 10:06, torej PO pričakovanem
+    # prihodu v Celje (10:00 + 5 min). Prav ta minuta razlike je vse, kar
+    # pravilo zahteva -- feed se oglaša na ~45 s.
+    for seq, ts in ((1, 8 * 3600), (2, 9 * 3600 + 300), (3, 10 * 3600 + 360)):
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                     "delay_dep, feed_ts) VALUES('t1',?,?,300,300,?)",
+                     (dan, seq, polnoc + ts))
+    conn.commit()
+    m = stats.last_measured(conn, dan, ["t1"], 10 * 3600 + 600)
+    assert m["t1"]["stop_seq"] == 3, "sveži feed mora dovoliti mejo do konca"
