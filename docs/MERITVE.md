@@ -1786,3 +1786,42 @@ Cena večje meje je nič: iskanje je pri 25 min 293 ms in pri 45 min 315 ms.
 Koraki v izbirniku so po tej meritvi: 10 / 15 / 25 (privzeto) / 35 / 45 in
 „po meri". Med 25 in „po meri" prej ni bilo ničesar, čeprav se prav tam
 odgovor najbolj spremeni.
+
+## Prehoda vlaka se iz teh podatkov ne da ugotoviti (9. 9. 2026)
+
+Drugič v dveh dneh: prikaz je ob 06:53 trdil, da je LPV 2001 že bil v Ljubljani
+Polje; David je bil na peronu in vlak je prišel ob **07:05**. Kaj je feed
+govoril:
+
+```
+06:37:28  Laze (26)             +4 min
+06:42:28  Ljubljana Zalog (27)  +4 min
+06:50:13  Ljubljana Polje (28)  +4 min   <- zadnja beseda o Polju
+06:52:16  Ljubljana (29)         0 min
+06:53:43  Ljubljana (29)        +4 min
+07:03:43  Ljubljana (29)       +15 min   <- resnica, 13 minut prepozno
+```
+
+Feed je Polje zamrznil na +4 **minuto po voznem redu** in ga ni nikoli popravil;
+popravil je samo končno postajo, ob 07:03. Vrednost torej ni bila zastarela,
+ampak napačna, in do 07:03 ji ni nasprotovalo nobeno opažanje.
+
+**Pet možnih signalov, vsi izmerjeni, vsi odpovejo:**
+
+| signal | izid |
+|---|---|
+| tišina feeda (popravek 8. 9.) | feed ni molčal — zadnja beseda 06:53:43 |
+| potrditev postanka **po** prehodu | železnica **0,4 %** postankov (avtobusi 68 %) |
+| obvestila SŽ s krajem | zadnji kraj 06:28 (Kresnice), naslednji 07:04 |
+| rob okna feeda | **0 izpadov** pri 39 vožnjah v 11 min; 69/69 postankov, ki jim je vozni red mimo, ostane v oknu |
+| „nerazrešena ničla" za kasnejši postanek | pred napačnimi trditvami **redkejša** (7 %) kot pred pravilnimi (24 %); natančnost 3 % |
+
+Zadnji dve sta bili včeraj zapisani kot obetavni; obe sta zdaj **zaprti** in
+naj se ne lovita znova.
+
+**Obseg danes:** 180 od 1 967 železniških postankov z dnevnikom (**9,2 %**) je
+bilo pozneje popravljenih za ≥ 5 min navzgor; prizadetih 66 od 174 voženj.
+
+**Kaj iz tega sledi.** Če prehoda ni mogoče zaznati, popravek ne more biti
+boljše zaznavanje, ampak poštenejša trditev. Beseda „izmerjeno" za prevožen
+postanek pri železnici trdi opažanje, ki ga v **99,6 %** primerov nimamo.
