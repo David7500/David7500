@@ -1837,3 +1837,33 @@ postanek pri železnici trdi opažanje, ki ga v **99,6 %** primerov nimamo.
 
 Pri vlakih torej beseda skoraj povsod izgine — in prav to je bila ugotovitev:
 tam je bila trditev o opažanju, ki ga nimamo.
+
+### Koliko je feed zgrešil in ali bi pomagala zadnja beseda o vožnji
+
+O Ljubljani Polje je feed 9. 9. povedal **eno samo stvar**: ob 06:50:13 prihod
+ob 06:52:00 (+4 min). Nikoli je ni popravil. David je bil na peronu: vlak je
+prišel ob **07:05:00**. Razlika **780 s = 13 minut**.
+
+Zadnja beseda o **vožnji** (+15 min v Ljubljani, ob 07:03:43) bi na Polju
+pomenila prihod 07:03 — torej **120 s** od resnice. Feed je vedel, le da tega
+ni zapisal na Polje.
+
+**Zato preizkušeno in NE uvedeno:** za nepotrjen postanek vzeti zadnjo besedo
+o vožnji s poznejšega postanka.
+
+| različica | primerov | boljša | slabša |
+|---|---|---|---|
+| vedno | 1 662 | 195 | **921** |
+| le če je poznejša za ≥ 5 min večja | 558 | 56 | **497** |
+| ≥ 7 min | 410 | 34 | 372 |
+| ≥ 10 min | 293 | 22 | 268 |
+
+Zamuda po potnikovi postaji običajno **zraste upravičeno**, zato prenos nazaj
+škodi. Pošteno pa je treba povedati **omejitev merila**: za „resnico" je vzeta
+končna vrednost naslednjega postanka, ta pa je pogosto zamrznjena iz istega
+trenutka kot merjena — merilo je torej nagnjeno v korist zamrznjene vrednosti.
+Edina prava resnica, ki jo imamo, je Davidova ura, in ta govori nasprotno.
+
+**Kar iz tega sledi:** ugibati se ne izplača, povedati pa je treba. Kadar
+zadnja beseda o vožnji močno odstopa od številke za potnikovo postajo, naj
+prikaz pokaže **obe** — brez trditve, katera drži.
