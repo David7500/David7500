@@ -55,6 +55,36 @@ postanek potnika.
   skozi Šiško** — v nasprotni smeri je ista postaja povprečno +370 s. Zajem
   LPP je za zdaj samo vikendski (od 29. 8.); ali velja med tednom, se bo videlo.
 
+## „Izmerjeno" je trditev o dogodku, ne o številki
+
+Beseda pomeni **opažanje**, in to je feed potrdil samo, če je vrednost osvežil
+**po** trenutku, ko trdi prehod (`stats.potrjen_prehod()`). Izmerjeno
+9. 9. 2026 na celem dnevu: železnica **0,3 %** postankov (6 od 2 007),
+avtobusi **69,6 %** (50 166 od 72 076).
+
+Pri vlakih je bila torej ta beseda skoraj vedno **sklep iz ure**, ne meritev —
+in dvakrat v dveh dneh je poslala potnika s perona, s katerega vlak še ni
+odpeljal. Zdaj je razlika povedana:
+
+| kaj vemo | žeton | stavek |
+|---|---|---|
+| feed potrdil po prehodu | `izmerjeno` | „vlak je tu že bil" |
+| ni potrdil | `zadnji podatek` | „po zadnjem podatku bi bil tu ob 06:53" |
+
+Isto velja za glavo okna vožnje: „izmerjeno na postaji Blanca" proti
+„zadnji podatek s postaje Blanca".
+
+**Pravilo je na strežniku in na enem mestu.** `stats.potrjen_prehod()` ga
+uporabljajo okno vožnje (`/api/train/{no}/run`), odhodna tabla
+(`journey.board`) in vse, kar gre skozi `stats.zamuda_na_postanku()` —
+iskalnik zvez in pot. Straža `preveri_skladnost.py` odslej primerja tudi
+**besedo**, ne le številke: če se tabla in okno razideta, je pravilo spet
+napisano dvakrat.
+
+**Zakaj ne poskušamo prehoda zaznati bolje.** Pet signalov je izmerjenih in
+vsi odpovejo — podrobnosti v `docs/MERITVE.md`, „Prehoda vlaka se iz teh
+podatkov ne da ugotoviti". Kar ni mogoče izmeriti, se ne sme trditi.
+
 ## Barve zamud
 
 Ordinalni ramp v enem odtenku, validiran na monotonost svetlosti in kontrast:

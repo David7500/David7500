@@ -1825,3 +1825,15 @@ bilo pozneje popravljenih za ≥ 5 min navzgor; prizadetih 66 od 174 voženj.
 **Kaj iz tega sledi.** Če prehoda ni mogoče zaznati, popravek ne more biti
 boljše zaznavanje, ampak poštenejša trditev. Beseda „izmerjeno" za prevožen
 postanek pri železnici trdi opažanje, ki ga v **99,6 %** primerov nimamo.
+
+### Kaj je popravek stal (9. 9. 2026)
+
+„Izmerjeno" ostane samo tam, kjer je feed vrednost potrdil po prehodu:
+
+| omrežje | postankov | ostane „izmerjeno" | postane „zadnji podatek" |
+|---|---|---|---|
+| železnica | 2 007 | **6 (0,3 %)** | 2 001 (99,7 %) |
+| avtobusi | 72 076 | 50 166 (69,6 %) | 21 910 (30,4 %) |
+
+Pri vlakih torej beseda skoraj povsod izgine — in prav to je bila ugotovitev:
+tam je bila trditev o opažanju, ki ga nimamo.

@@ -1371,10 +1371,76 @@ def se_vozi_vceraj(conn: sqlite3.Connection, now_s: int,
     return last_s is not None and now_s + 86400 <= last_s
 
 
+#: Kaj je vrednost za postanek, ki ga je vozilo že prevozilo.
+#:
+#: „Izmerjeno" pomeni **opažanje**, in to je feed potrdil le, če je vrednost
+#: osvežil PO trenutku, ko trdi prehod. Pri železnici se to zgodi v 0,4 %
+#: primerov (avtobusi 68 %) -- izmerjeno 9. 9. 2026 na 1 863 oziroma 66 990
+#: postankih. Beseda „izmerjeno" je tam torej trdila opažanje, ki ga skoraj
+#: nikoli nimamo, in dvakrat v dveh dneh je poslala potnika s perona, s
+#: katerega vlak še ni odpeljal.
+IZMERJENO = "izmerjeno"
+ZADNJI_PODATEK = "zadnji podatek"
+
+
+def potrjen_prehod(feed_ts: int | None, prehod_ts: int | None) -> bool:
+    """Je feed vrednost potrdil PO trenutku, ko trdi prehod?
+
+    Edino to loči meritev od sklepa iz ure. Brez tega je „izmerjeno" ime za
+    napoved, ki je nihče ni preveril.
+    """
+    return (feed_ts is not None and prehod_ts is not None
+            and feed_ts >= prehod_ts)
+
+
+def stanje_postankov(conn: sqlite3.Connection, service_date: str,
+                      trip_ids: list[str]) -> tuple[set, set]:
+    """Dvoje o postankih s table, iz ENE poizvedbe:
+
+    * **neskladni** -- tisti, katerih ura si nasprotuje z večino ostalih.
+      Isto pravilo kot v oknu vožnje (`stats.oznaci_neskladne`), le da tam teče
+      nad eno vožnjo, tu pa nad vsemi hkrati. Tabla prometnega mestnega
+      postajališča ima do devetdeset voženj, zato ena poizvedba in ne ena na
+      vožnjo.
+    * **potrjeni** -- tisti, katerih vrednost je feed osvežil PO trenutku, ko
+      trdi prehod. Samo ti so meritev; ostalo je sklep iz ure.
+    """
+    if not trip_ids:
+        return set(), set()
+    marks = ",".join("?" * len(trip_ids))
+    vrstice = conn.execute(
+        "SELECT r.trip_id, r.stop_seq, r.delay_dep, r.delay_arr, r.feed_ts, "
+        "       s.arr_s, s.dep_s "
+        "FROM run r JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+        f"WHERE r.service_date = ? AND r.trip_id IN ({marks}) "
+        "ORDER BY r.trip_id, r.stop_seq",
+        [service_date, *trip_ids]).fetchall()
+
+    polnoc = int(datetime.combine(date.fromisoformat(service_date),
+                                  datetime.min.time(), tzinfo=TZ).timestamp())
+    po_voznji: dict[str, list[dict]] = {}
+    for r in vrstice:
+        po_voznji.setdefault(r["trip_id"], []).append(dict(r))
+    slabi: set[tuple[str, int]] = set()
+    potrjeni: set[tuple[str, int]] = set()
+    for trip_id, postanki in po_voznji.items():
+        oznaci_neskladne(postanki)
+        for x in postanki:
+            if x.get("neskladno"):
+                slabi.add((trip_id, x["stop_seq"]))
+            z = x["delay_dep"] if x["delay_dep"] is not None else x["delay_arr"]
+            t = x["dep_s"] if x["dep_s"] is not None else x["arr_s"]
+            if z is not None and t is not None and potrjen_prehod(
+                    x["feed_ts"], polnoc + t + z):
+                potrjeni.add((trip_id, x["stop_seq"]))
+    return slabi, potrjeni
+
+
 def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
                        trip_id: str | None, stop_seq: int, ime_postaje: str,
                        feed_delay_s: int | None, lm: dict | None,
-                       slack_vrsta, service_date: str) -> dict:
+                       slack_vrsta, service_date: str,
+                       potrjen: bool = False) -> dict:
     """Zamuda na potnikovem postanku: koliko je in **od kod je**.
 
     Eno pravilo na enem mestu. Iskalnik zvez in pot od vrat do vrat sta ista
@@ -1391,7 +1457,7 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
         return {
             "delay_s": feed_delay_s if feed_delay_s is not None else lm["delay_s"],
             "delay_at": ime_postaje if feed_delay_s is not None else lm["name"],
-            "delay_kind": "izmerjeno",
+            "delay_kind": IZMERJENO if potrjen else ZADNJI_PODATEK,
         }
     if lm:
         # Vozilo je se pred izhodiscno postajo potnika: to je prenos njegove
@@ -1472,6 +1538,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     # Zadnja meritev vsake voznje -- za vlake, ki so ze na poti.
     last = last_measured(conn, service_date, [d["trip_id"] for d in out], now_s)
     slack = _slack_ahead(conn, [d["trip_id"] for d in out])
+    _, potrjeni = stanje_postankov(conn, service_date, [d["trip_id"] for d in out])
 
     for d in out:
         d["stops_between"] = d["to_seq"] - d["from_seq"]
@@ -1483,7 +1550,8 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             conn, train_no=d["train_no"], trip_id=d["trip_id"],
             stop_seq=d["from_seq"], ime_postaje=from_name,
             feed_delay_s=d["from_delay_s"], lm=last.get(d["trip_id"]),
-            slack_vrsta=slack.get(d["trip_id"], ()), service_date=service_date)
+            slack_vrsta=slack.get(d["trip_id"], ()), service_date=service_date,
+            potrjen=(d["trip_id"], d["from_seq"]) in potrjeni)
         d["delay_s"], d["delay_at"], d["delay_kind"] = (
             z["delay_s"], z["delay_at"], z["delay_kind"])
 

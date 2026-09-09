@@ -271,7 +271,12 @@ function runHeadHtml(cur) {
       </div>`}
       <div class="detail-now-where">
         ${cur
-          ? `izmerjeno na postaji <strong>${escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
+          // Ista razlika kot pri postanku potnika: "izmerjeno" smemo reci samo,
+          // kadar je feed vrednost potrdil PO prehodu. Sicer je to zadnji
+          // podatek s te postaje, ne meritev na njej.
+          ? `${cur.zamuda && cur.zamuda.vrsta === "izmerjeno"
+              ? "izmerjeno na postaji" : "zadnji podatek s postaje"} <strong>${
+              escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
           : notStartedText()}
       </div>
       ${t0 ? `<div class="detail-now-age">mediana ${pluralRuns(t0.n)}${
@@ -337,13 +342,18 @@ function yourStopHtml(stops, forecast, current) {
   if (passed) {
     d = stopDelay(s);
     kdaj = stopActualIso(s);
-    // "Vlak je tu ze bil" je trditev o dogodku. Kadar o voznji ni novic, je
-    // to samo se zadnja znana napoved -- in prav ta razlika je 8. 9. 2026
-    // poslala potnika domov s postaje, s katere vlak se ni odpeljal.
-    znak = tihoTu ? "zadnje znano" : "izmerjeno";
-    odkod = tihoTu
-      ? `po zadnjem podatku bi moral biti tu ob ${hhmm(kdaj)} — od takrat ni novic`
-      : `${vehicleNoun()} je tu že bil`;
+    // "Vlak je tu ze bil" je trditev o DOGODKU in jo smemo izreci samo, kadar
+    // jo feed potrdi -- torej kadar je vrednost osvezil PO trenutku, ko trdi
+    // prehod. Pri zeleznici se to zgodi v 0,4 % primerov (avtobusi 68 %), zato
+    // je bila ta trditev skoraj vedno sklep iz ure. Dvakrat v dveh dneh je
+    // poslala potnika s perona, s katerega vlak se ni odpeljal.
+    // Odlocitev je strezenikova (`stats.potrjen_prehod`), tu se samo bere.
+    const potrjen = s.zamuda && s.zamuda.vrsta === "izmerjeno";
+    znak = potrjen ? "izmerjeno" : "zadnji podatek";
+    odkod = potrjen
+      ? `${vehicleNoun()} je tu že bil`
+      : `po zadnjem podatku bi bil tu ob ${hhmm(kdaj)}`
+        + (tihoTu ? " — od takrat ni novic" : "");
   } else if (zivo) {
     // Prevoznikova ziva napoved iz lege vozila. Pri mestnem LPP je to edina
     // stevilka, ki ne stoji na napovedi o napovedi -- glej `zivaNapoved()`.

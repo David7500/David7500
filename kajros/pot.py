@@ -703,6 +703,7 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
     trip_ids = list({n["trip_id"] for n in noge})
     lm = stats.last_measured(conn, service_date, trip_ids, now_s)
     slack = stats._slack_ahead(conn, trip_ids)
+    _, potrjeni = stats.stanje_postankov(conn, service_date, trip_ids)
     feed = _feed_zamude(conn, [(n["trip_id"], n["od_seq"]) for n in noge],
                         service_date)
 
@@ -712,7 +713,8 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
             conn, train_no=n["train_no"], trip_id=tid, stop_seq=n["od_seq"],
             ime_postaje=n["od"], feed_delay_s=feed.get((tid, n["od_seq"])),
             lm=lm.get(tid), slack_vrsta=slack.get(tid, ()),
-            service_date=service_date)
+            service_date=service_date,
+            potrjen=(tid, n["od_seq"]) in potrjeni)
         n["zamuda"] = stats.opis_zamude(z["delay_s"], z["delay_kind"])
         n["zamuda_od"] = z["delay_at"]
         if z["delay_s"] is None:

@@ -1987,3 +1987,43 @@ def test_kljucavnica_je_na_kljuc():
     b = journey._tt_kljucavnica(("baza", "2026-01-01", None, "x"))
     c = journey._tt_kljucavnica(("baza", "2026-01-02", None, "x"))
     assert a is b and a is not c
+
+
+# ---------------------------------------------------------------- meritev proti sklepu
+
+def test_potrjen_prehod_loci_meritev_od_ure():
+    """„Izmerjeno" pomeni opažanje, ne ure.
+
+    Feed je vrednost potrdil samo, če jo je osvežil PO trenutku, ko trdi
+    prehod. Pri železnici se to zgodi v 0,3 % primerov — do 9. 9. 2026 je ta
+    beseda tam trdila opažanje, ki ga skoraj nikoli nimamo.
+    """
+    assert stats.potrjen_prehod(1000, 900) is True     # osvežil po prehodu
+    assert stats.potrjen_prehod(900, 900) is True      # natanko ob njem
+    assert stats.potrjen_prehod(800, 900) is False     # samo napoved pred njim
+    assert stats.potrjen_prehod(None, 900) is False
+    assert stats.potrjen_prehod(1000, None) is False
+
+
+def test_tabla_prevozen_postanek_brez_potrditve_ni_izmerjen(conn):
+    """Tabla mora reči isto besedo kot okno vožnje.
+
+    Vrednost je bila zapisana ob 08:00, prehod pa trdi 08:05 — torej je to
+    zadnji podatek, ne meritev.
+    """
+    from datetime import datetime as _dt
+    dan = "2026-08-31"
+    polnoc = int(_dt.combine(date.fromisoformat(dan), _dt.min.time(),
+                             tzinfo=stats.TZ).timestamp())
+    # `t1` ustavlja v A ob 8:00; z zamudo 5 min je prehod ob 8:05.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                 "delay_dep, feed_ts) VALUES('t1',?,1,300,300,?)",
+                 (dan, polnoc + 8 * 3600))
+    conn.commit()
+    _, potrjeni = stats.stanje_postankov(conn, dan, ["t1"])
+    assert ("t1", 1) not in potrjeni
+    conn.execute("UPDATE run SET feed_ts=? WHERE trip_id='t1' AND stop_seq=1",
+                 (polnoc + 8 * 3600 + 400,))
+    conn.commit()
+    _, potrjeni = stats.stanje_postankov(conn, dan, ["t1"])
+    assert ("t1", 1) in potrjeni

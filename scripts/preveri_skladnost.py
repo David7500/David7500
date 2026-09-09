@@ -147,7 +147,13 @@ def tabla_in_okno_isto():
         q = urllib.parse.urlencode({"station": ime, "network": net, "limit": 40})
         d = json.load(urllib.request.urlopen(f"{BASE}/api/departures?{q}", timeout=30))
         for r in d["board"]:
-            if r.get("delay_s") is None or r.get("delay_kind") != "izmerjeno":
+            # Tabla in okno morata za prevozen postanek reci ISTO besedo:
+            # "izmerjeno" samo, kadar je feed vrednost potrdil po prehodu,
+            # sicer "zadnji podatek". Obe strani gresta odslej skozi
+            # `stats.potrjen_prehod()`; ce se razideta, je pravilo spet
+            # napisano dvakrat.
+            if r.get("delay_s") is None or r.get("delay_kind") not in (
+                    "izmerjeno", "zadnji podatek"):
                 continue
             q2 = urllib.parse.urlencode({"trip": r["trip_id"], "date": d["date"]})
             no = urllib.parse.quote(r["train_no"])
@@ -172,6 +178,9 @@ def tabla_in_okno_isto():
                 continue
             if r.get("delay_from"):
                 continue        # tabla govori o drugem postanku in to pove
+            if z["vrsta"] != r["delay_kind"]:
+                return (f'{r["train_no"]} na {ime}: tabla „{r["delay_kind"]}", '
+                        f'okno „{z["vrsta"]}"')
             if abs(z["s"] - r["delay_s"]) > 60:
                 return (f'{r["train_no"]} na {ime}: tabla {r["delay_s"]} s, '
                         f'okno {z["s"]} s')

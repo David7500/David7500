@@ -1004,8 +1004,17 @@ def api_run(train_no: str, date: str | None = None,
             # Postanek, katerega ura si nasprotuje z vecino ostalih, ni
             # meritev -- glej `stats.oznaci_neskladne()`. Brez tega je bila
             # na zaslonu ura, ki tece nazaj, pri vsaki deseti vozjni avtobusa.
+            # "Izmerjeno" pomeni opažanje, in to je feed potrdil samo, če je
+            # vrednost osvežil PO trenutku, ko trdi prehod. Pri železnici se to
+            # zgodi v 0,4 % primerov -- do 9. 9. 2026 je ta beseda tam trdila
+            # opažanje, ki ga skoraj nikoli nimamo.
+            prehod = s.get("actual_dep") or s.get("actual_arr")
+            potrjen = stats.potrjen_prehod(
+                s.get("feed_ts"),
+                int(datetime.fromisoformat(prehod).timestamp()) if prehod else None)
             s["zamuda"]["vrsta"] = ("neskladno" if s.get("neskladno")
-                                    else "izmerjeno"
+                                    else (stats.IZMERJENO if potrjen
+                                          else stats.ZADNJI_PODATEK)
                                     if meja_seq is not None and s["stop_seq"] <= meja_seq
                                     else "napoved prevoznika")
         # **Obicajna zamuda iz zgodovine, za postanke brez meritve.**
