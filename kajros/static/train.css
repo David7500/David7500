@@ -347,6 +347,16 @@
 }
 .yours-delay { font: 600 15px/1 var(--mono); }
 .yours-tag { margin-top: 5px; font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }
+/* Dve resnici hkrati: stevilka za potnikovo postajo in novejsa beseda o
+   voznji. Vidnejsa od `yours-tag`, ker je to opozorilo, ne opomba -- a ne
+   oranzna, ker ne trdi, da je prava. */
+.yours-razlika {
+  margin-top: 5px; padding: 5px 8px;
+  font: 400 11.5px/1.45 var(--sans); color: var(--ink-dim);
+  background: var(--bg-raised); border-left: 2px solid var(--d-none);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.yours-razlika strong { color: var(--ink); font-family: var(--mono); }
 
 /* Postanek potnika v časovnici — da ga najde med tridesetimi. */
 .stop-row.is-yours {

@@ -81,6 +81,20 @@ iskalnik zvez in pot. Straža `preveri_skladnost.py` odslej primerja tudi
 **besedo**, ne le številke: če se tabla in okno razideta, je pravilo spet
 napisano dvakrat.
 
+**Kadar sta resnici dve, se pokažeta obe.** Številka za potnikovo postajo je
+lahko zamrznjena napoved, feed pa je medtem o vožnji povedal nekaj drugega.
+9. 9. 2026: pri Polju „+4 min, podatek ob 06:50", za Ljubljano „+15 min ob
+07:03" — in +15 je bilo **120 s** od resnice, +4 pa **780 s**. Katera drži, se
+ne da ugotoviti (izmerjeno: prenos poznejše vrednosti nazaj je slabši v 921
+primerih od 1 662), zato prikaz **ne izbira**:
+
+> po zadnjem podatku bi bil tu ob 06:53
+> novejša beseda o vožnji: **+15 min** (Ljubljana, 07:03)
+
+Pogoja sta dva: številka za postanek **ni potrjena** (`zadnji podatek`) in
+razlika je vsaj **5 minut** (`RAZKRIJ_RAZLIKO_S`) — pod tem je to šum, ne
+druga resnica. Ime postaje je v oklepaju, ker se ga ne da splošno sklanjati.
+
 **Zakaj ne poskušamo prehoda zaznati bolje.** Pet signalov je izmerjenih in
 vsi odpovejo — podrobnosti v `docs/MERITVE.md`, „Prehoda vlaka se iz teh
 podatkov ne da ugotoviti". Kar ni mogoče izmeriti, se ne sme trditi.

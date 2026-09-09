@@ -321,6 +321,28 @@ function yourStop(stops) {
 
 // "Kdaj pride po mene in koliko bo takrat zamujal" -- edino vprasanje, ki ga
 // ima potnik na peronu. Zato je to prva stvar v oknu, nad vsem drugim.
+// Najnovejša beseda o vožnji s POZNEJŠEGA postanka.
+//
+// Kadar številka za potnikovo postajo ni potrjena (zamrznjena napoved), feed pa
+// je medtem o vožnji povedal nekaj bistveno drugega, sta na zaslonu dve
+// resnici. 9. 9. 2026 je bilo prav to: pri Polju "+4 min, podatek ob 06:50",
+// za Ljubljano pa "+15 min ob 07:03" -- in +15 je bilo 120 s od resnice, +4 pa
+// 780 s. Katera drži, se **ne da ugotoviti** (izmerjeno: prenos poznejše
+// vrednosti nazaj je slabši v 921 primerih od 1 662), zato prikaz ne izbira,
+// ampak pokaže obe.
+const RAZKRIJ_RAZLIKO_S = 300;
+
+function novejsaBeseda(s, stops) {
+  if (!s.feed_ts) return null;
+  let naj = null;
+  for (const x of stops) {
+    if (x.stop_seq <= s.stop_seq || !x.feed_ts || x.feed_ts <= s.feed_ts) continue;
+    if (!naj || x.feed_ts > naj.feed_ts) naj = x;
+  }
+  if (!naj || naj.zamuda == null || s.zamuda == null) return null;
+  return Math.abs(naj.zamuda.s - s.zamuda.s) >= RAZKRIJ_RAZLIKO_S ? naj : null;
+}
+
 function yourStopHtml(stops, forecast, current) {
   const s = yourStop(stops);
   if (!s) return "";
@@ -402,6 +424,17 @@ function yourStopHtml(stops, forecast, current) {
         </span>
       </div>
       <div class="yours-tag">${escapeHtml(odkod)}</div>
+      ${(() => {
+        // Samo pri nepotrjeni številki: kadar je potrjena, ni česa razkrivati.
+        if (!passed || (s.zamuda && s.zamuda.vrsta === "izmerjeno")) return "";
+        const n = novejsaBeseda(s, stops);
+        if (!n) return "";
+        // Ime postaje v oklepaj, ne v stavek: sklanjati se ga ne da splošno
+        // ("za Ljubljana" je narobe, "za Bavarski dvor" pa ne bi bilo).
+        return `<div class="yours-razlika">novejša beseda o vožnji:
+          <strong>${escapeHtml(delayText(n.zamuda))}</strong>
+          (${escapeHtml(n.name)}, ${hhmm(new Date(n.feed_ts * 1000).toISOString())})</div>`;
+      })()}
       ${budilkaGumbHtml(s, passed)}
     </div>`;
 }
