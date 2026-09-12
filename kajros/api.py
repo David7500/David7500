@@ -188,6 +188,9 @@ def s(rel: str) -> str:
 
 
 templates.env.globals["s"] = s
+# Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
+# relativnega Signal, WhatsApp in Slack ne razrešijo.
+templates.env.globals["baza"] = config.BASE_URL
 
 
 def _conn():
@@ -278,6 +281,39 @@ def robots():
         "Disallow: /redoc\n"
         f"\nSitemap: {config.BASE_URL}/sitemap.xml\n",
         media_type="text/plain")
+
+
+#: Kar mora biti v predpomnilniku, preden obiskovalec izgubi zvezo. Samo
+#: skupna lupina: pisave, podlaga in `common.js` so na vsaki strani, ostala
+#: statika pa se nabere med rabo (glej razlog v `sw.js`).
+_SW_LUPINA = ("base.css", "pisave.css", "common.js", "home.css",
+              "pisave/IBMPlexSans-var-latin.woff2",
+              "pisave/IBMPlexSans-var-latin-ext.woff2",
+              "pisave/IBMPlexMono-400-latin.woff2",
+              "pisave/IBMPlexMono-600-latin.woff2")
+
+
+@app.get("/sw.js", include_in_schema=False)
+def sw(request: Request):
+    """Service worker. Stoji v korenu, ker mu pot določa doseg.
+
+    Vsebina nosi odtise statike, zato se ob objavi spremeni sama in brskalnik
+    to zazna kot novega delavca. Brez tega bi bilo treba različico vzdrževati
+    ročno in prva pozabljena bi obiskovalcem postregla staro aplikacijo.
+    """
+    lupina = ["/brez-omrezja"] + [s(f) for f in _SW_LUPINA]
+    # Odtis celotne lupine: ena sama datoteka drugačna, in vse gre ven.
+    odtis = hashlib.blake2s(" ".join(lupina).encode(), digest_size=8).hexdigest()
+    return templates.TemplateResponse(
+        request, "sw.js", {"razlicica": odtis, "lupina": lupina},
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/brez-omrezja", response_class=HTMLResponse, include_in_schema=False)
+def brez_omrezja(request: Request):
+    """Kar se pokaže, kadar strani ni v predpomnilniku in omrežja ni."""
+    return templates.TemplateResponse(request, "brez_omrezja.html", {})
 
 
 @app.get("/zasebnost", response_class=HTMLResponse, include_in_schema=False)

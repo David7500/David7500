@@ -1,0 +1,30 @@
+{#
+  Naslov, opis in predogled deljene povezave — na enem mestu za vse strani.
+
+  Doslej tega ni bilo nikjer: povezava, poslana v Signalu, WhatsAppu ali
+  Slacku, je pokazala gol naslov `kajros.app/app/train` in nič drugega.
+  Prejemnik ni videl ne imena ne tega, kaj stran sploh je.
+
+  Naslov v značkah mora biti **absoluten** — relativnega noben od teh
+  odjemalcev ne razreši. Zato `baza` (`config.BASE_URL`) in ne `request.url`:
+  za Cloudflarovim tunelom je zahteva videti kot `http://127.0.0.1:8000`.
+
+  Klic (vrednosti nastavi stran s `{% set %}` nad glavo):
+      {% include "_meta.html" %}
+#}
+{%- set _t = og_title | default('kajros — vozni redi in zamude') -%}
+{%- set _d = og_desc | default('Odhodi in zamude slovenskih vlakov in avtobusov, izmerjeni iz odprtih podatkov.') -%}
+  <title>{{ _t }}</title>
+  <meta name="description" content="{{ _d }}">
+  <link rel="canonical" href="{{ baza }}{{ request.url.path }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="kajros">
+  <meta property="og:locale" content="sl_SI">
+  <meta property="og:title" content="{{ _t }}">
+  <meta property="og:description" content="{{ _d }}">
+  <meta property="og:url" content="{{ baza }}{{ request.url.path }}">
+  <meta property="og:image" content="{{ baza }}{{ s('og.png') }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="kajros — odhodi in zamude slovenskih vlakov in avtobusov">
+  <meta name="twitter:card" content="summary_large_image">

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brez omrežja — kajros</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+</head>
+<body class="home-page">
+
+  <main class="home">
+    <header class="home-head">
+      <div class="home-brand">
+        <svg class="brand-mark" width="26" height="26" viewBox="0 0 96 96" fill="none"
+             stroke-linecap="round" aria-hidden="true">
+          <path d="M34 24V72" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+          <path d="M66 26L34 50" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+          <path d="M34 50L66 72" stroke="#f0934f" stroke-width="9"/>
+        </svg>
+        <span>kajros</span>
+      </div>
+      <p class="napaka-koda">brez zveze</p>
+      {#- Namerno ne ponudi „zadnjih znanih zamud". Ta stran se pokaže v
+          predoru in v dvigalu, torej natanko tam, kjer je stara številka
+          videti kot sveža. Raje nič kot laž z uro zraven. #}
+      <p class="home-lead">
+        Telefon nima povezave. Zamud ne moremo pokazati — stara številka bi
+        bila videti kot sveža in to je slabše od nobene.
+      </p>
+      <p class="home-lead">Ko se zveza vrne, osveži stran.</p>
+    </header>
+  </main>
+
+</body>
+</html>

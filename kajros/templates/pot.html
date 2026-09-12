@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kajros — najhitrejša pot</title>
-  <meta name="description" content="Kje stojiš, kam moraš in kdaj — s hojo, vlakom in avtobusom v isti verigi.">
+  {% set og_title = "kajros — najhitrejša pot" %}
+  {% set og_desc = "Kje stojiš, kam moraš in kdaj — s hojo, vlakom in avtobusom v isti verigi." %}
+{% include "_meta.html" %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="/static/leaflet/leaflet.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">

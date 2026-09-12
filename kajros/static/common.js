@@ -1228,3 +1228,15 @@ function drawMe(group, loc) {
   bindFlashName(pika, loc.acc ? `tvoja lega (±${Math.round(loc.acc)} m)` : "tvoja lega");
   return pika;
 }
+
+// Service worker. Registrira se sam in samo tam, kjer sme.
+//
+// `isSecureContext` je pogoj brskalnika, ne nas: po `http://192.168.1.164:8001`
+// `navigator.serviceWorker` sploh ne obstaja (izmerjeno). Preverjanje je tu
+// zato, da razvoj po omrežnem naslovu ne meče napak v konzolo -- ta mora
+// ostati prazna, ker jo `preveri.sh` bere kot merilo.
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
