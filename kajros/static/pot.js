@@ -98,6 +98,7 @@ function postavi(kaj, tocka) {
   // pred vsakim klikom povedati, kaj postavlja.
   S.arm = S.od && !S.do ? "do" : kaj === "od" ? "do" : "od";
   oznaciArm();
+  oznaciZvezde();
 }
 
 function oznaciArm() {
@@ -107,6 +108,128 @@ function oznaciArm() {
 }
 
 map.on("click", (e) => postavi(S.arm, { lat: e.latlng.lat, lon: e.latlng.lng }));
+
+// ---------------------------------------------------------------- shranjene točke
+//
+// Potnik hodi isto pot vsak dan, kraj pa je moral vsakič znova zadeti na
+// zemljevidu — na telefonu je to klik, ki hiše ne zadene, in prav zaradi tega
+// je bila ta stran za vsakodnevno rabo nerodna.
+//
+// **Točke ostanejo v brskalniku.** Kje kdo stanuje, je najobčutljivejši
+// podatek, ki ga ta aplikacija sploh lahko drži. Strežnik dobi samo
+// koordinate, ki jih poizvedba nosi tako ali tako (`/api/pot?od_lat=…`), ime
+// pa nikamor — tudi v naslov strani ne, da deljena povezava ne pove, da je
+// tista točka tvoj dom.
+
+const TOCKE_KLJUC = "kajros:tocke";
+const TOCKE_MAX = 6;
+// Ujemanje je po razdalji, ne po enakosti: naslov nosi pet decimalk, lega iz
+// GPS pa vse. 1e-4 stopinje je ~11 m — isto dvorišče, ne ista ulica.
+const TOCKA_PRAG = 1e-4;
+
+function tockeBeri() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TOCKE_KLJUC) || "[]");
+    return Array.isArray(v)
+      ? v.filter((t) => t && t.ime && Number.isFinite(t.lat) && Number.isFinite(t.lon))
+      : [];
+  } catch (e) {
+    return [];                 // pokvarjen zapis ni razlog, da stran ne dela
+  }
+}
+
+function tockeZapisi(seznam) {
+  try {
+    localStorage.setItem(TOCKE_KLJUC, JSON.stringify(seznam.slice(0, TOCKE_MAX)));
+  } catch (e) { /* zaseben zavihek ali polna shramba: stran dela naprej */ }
+}
+
+function shranjenaZa(t) {
+  if (!t) return null;
+  return tockeBeri().find((s) => Math.abs(s.lat - t.lat) < TOCKA_PRAG
+                              && Math.abs(s.lon - t.lon) < TOCKA_PRAG) || null;
+}
+
+// Zvezdica govori isto kot v iskalniku zvez (`fav-toggle`): en gumb pove
+// stanje in ga preklopi. Križca na žetonu zato ni — točka se odstrani tako,
+// da jo postaviš (dotik na žeton) in odtakneš zvezdico. Dve poti do istega
+// dejanja bi pri dveh poljih pomenili dvanajst gumbov za šest točk.
+function oznaciZvezde() {
+  for (const kaj of ["od", "do"]) {
+    const b = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocka-shrani`);
+    const t = S[kaj];
+    // **Zvezdica opisuje postavljeno točko, ne besedila v polju.** Med
+    // tipkanjem polje že govori o drugem kraju, točka pa je še stara — in
+    // zvezdica je takrat trdila „★ shranjeno“ nad tujim imenom. Dotik nanjo
+    // bi odstranil točko, ki je človek sploh ni gledal, zato je dotlej ni.
+    const napis = t ? (t.ime || `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`) : "";
+    b.hidden = !t || $(`#q-${kaj}`).value.trim() !== napis;
+    if (b.hidden) continue;
+    const s = shranjenaZa(t);
+    b.textContent = s ? "★ shranjeno" : "☆ shrani";
+    b.title = s ? `odstrani „${s.ime}“ med shranjenimi`
+                : "shrani to točko (dom, služba …)";
+    b.setAttribute("aria-pressed", String(!!s));
+  }
+}
+
+// Žetoni so pod OBEMA poljema, ne enkrat na stran: „dom“ je enkrat izhodišče
+// in enkrat cilj, in dotik mora povedati, kam gre. En sam seznam bi bil isti
+// ugib kot klik na zemljevid brez oznake, kateri klik gre kam.
+function izrisiTocke() {
+  const shranjene = tockeBeri();
+  for (const kaj of ["od", "do"]) {
+    const ul = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocke-shranjene`);
+    ul.innerHTML = shranjene.map((t, i) => `<li><button type="button"
+      class="tocka-zeton" data-i="${i}">★ ${escapeHtml(t.ime)}</button></li>`).join("");
+    ul.hidden = shranjene.length === 0;
+  }
+  oznaciZvezde();
+}
+
+function odpriIme(kaj) {
+  const box = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocka-ime`);
+  const vnos = box.querySelector(".tocka-ime-vnos");
+  // Ime postaje je dober privzetek; „moja lega“ in koordinate nista ime kraja.
+  const t = S[kaj];
+  vnos.value = t && t.ime && t.ime !== "moja lega" ? t.ime : "";
+  box.hidden = false;
+  vnos.focus();
+  vnos.select();
+}
+
+function shraniTocko(kaj) {
+  const box = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocka-ime`);
+  const ime = box.querySelector(".tocka-ime-vnos").value.trim();
+  const t = S[kaj];
+  if (!t || !ime) return;
+  const seznam = tockeBeri();
+  // Isto ime je isti kraj: druga „služba“ ni druga služba, ampak popravek
+  // prve. Brez tega bi seznam tiho zrasel v dva žetona z istim napisom.
+  const at = seznam.findIndex((s) => fold(s.ime) === fold(ime));
+  if (at >= 0) {
+    seznam[at] = { ime, lat: t.lat, lon: t.lon };
+  } else if (seznam.length >= TOCKE_MAX) {
+    povej(`Shranjenih je že ${TOCKE_MAX} točk — eno odstrani, preden dodaš novo.`,
+          "napaka");
+    return;
+  } else {
+    seznam.push({ ime, lat: t.lat, lon: t.lon });
+  }
+  tockeZapisi(seznam);
+  box.hidden = true;
+  // Polje odslej kaže IME, ne koordinat — to je bil ves namen.
+  S[kaj] = { ...t, ime };
+  $(`#q-${kaj}`).value = ime;
+  izrisiTocke();
+}
+
+function odstraniTocko(kaj) {
+  const s = shranjenaZa(S[kaj]);
+  if (!s) return;
+  tockeZapisi(tockeBeri().filter((x) => fold(x.ime) !== fold(s.ime)));
+  izrisiTocke();
+}
 
 // ---------------------------------------------------------------- iskanje postaj
 //
@@ -147,6 +270,7 @@ function pripniIskanje(kaj) {
   const vnos = $(`#q-${kaj}`);
   const ul = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocka-zadetki`);
   const isci_ = () => {
+    oznaciZvezde();          // polje se je razšlo s točko: zvezdica gre stran
     const q = vnos.value.trim();
     if (q.length < 2 || !KAZALO) return zapriZadetke(kaj);
     const najdbe = iskalnikKazala(KAZALO, q);
@@ -181,8 +305,30 @@ function zacniSledenje() {
 document.querySelectorAll(".tocka").forEach((el) => {
   const kaj = el.dataset.kaj;
   pripniIskanje(kaj);
+  // Žetoni se prerišejo ob vsaki spremembi, zato posluša blok in ne žeton:
+  // poslušalec, pripet ob izrisu, bi se ob petem shranjevanju pripel petkrat.
+  el.addEventListener("click", (e) => {
+    const z = e.target.closest(".tocka-zeton");
+    if (!z) return;
+    const t = tockeBeri()[Number(z.dataset.i)];
+    if (t) postavi(kaj, { lat: t.lat, lon: t.lon, ime: t.ime });
+  });
+  el.querySelector(".tocka-ime-vnos").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") shraniTocko(kaj);
+    // Enter tu ne sme iskati — iskanje je drugo vprašanje od poimenovanja.
+    if (e.key === "Escape") el.querySelector(".tocka-ime").hidden = true;
+  });
   el.querySelectorAll(".tocka-gumb").forEach((b) => {
     b.addEventListener("click", async () => {
+      if (b.dataset.akcija === "shrani") {
+        if (shranjenaZa(S[kaj])) odstraniTocko(kaj);
+        else odpriIme(kaj);
+        return;
+      }
+      if (b.dataset.akcija === "ime-shrani") {
+        shraniTocko(kaj);
+        return;
+      }
       if (b.dataset.akcija === "karta") {
         S.arm = kaj;
         oznaciArm();
@@ -481,7 +627,14 @@ function izUrl() {
   let imamo = false;
   for (const kaj of ["od", "do"]) {
     const t = q.get(kaj) && tocka(q.get(kaj));
-    if (t) { S[kaj] = t; $(`#q-${kaj}`).value = `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`; imamo = true; }
+    if (!t) continue;
+    // Naslov nosi samo koordinate; kadar so tvoje, jim ime pripiše brskalnik
+    // sam — „dom“ pove več kot 46.05611, 14.50577.
+    const s = shranjenaZa(t);
+    if (s) t.ime = s.ime;
+    S[kaj] = t;
+    $(`#q-${kaj}`).value = t.ime || `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`;
+    imamo = true;
   }
   if (q.get("ob")) $("#ob").value = q.get("ob");
   if (q.get("hoje")) nastaviHoje(Number(q.get("hoje")));
@@ -494,4 +647,6 @@ function izUrl() {
 oznaciArm();
 povej("Klikni na zemljevid ali vpiši postajo.", null);
 naloziKazalo();
-if (izUrl()) isci();
+const izPovezave = izUrl();
+izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi
+if (izPovezave) isci();

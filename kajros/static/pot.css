@@ -40,7 +40,9 @@
 .tocka.je-arm .tocka-oznaka { color: var(--accent-lit); }
 .tocka.je-arm .tocka-vnos { border-color: var(--accent); }
 
-.tocka-vrstica { display: flex; gap: 6px; }
+/* Zadetki iskanja se odpirajo pod VRSTICO in ne pod blokom: pod blokom sta
+   zdaj vnos imena in žetoni shranjenih točk. */
+.tocka-vrstica { display: flex; gap: 6px; position: relative; }
 
 .tocka-vnos {
   flex: 1; min-width: 0;
@@ -72,6 +74,38 @@
   cursor: pointer;
 }
 .tocka-zadetki button:hover { background: var(--bg-hover); }
+
+/* ---------------------------------------------------------------- shranjene točke */
+
+/* Zvezdica je ista govorica kot v iskalniku zvez (`.fav-toggle`): en gumb
+   pove stanje in ga preklopi. */
+.tocka-shrani { white-space: nowrap; }
+.tocka-shrani[aria-pressed="true"] {
+  color: var(--accent-lit);
+  border-color: color-mix(in srgb, var(--accent) 33%, transparent);
+}
+
+.tocka-ime { display: flex; gap: 6px; margin-top: 6px; }
+.tocka-ime-vnos {
+  flex: 1; min-width: 0;
+  padding: 7px 9px; font: inherit; font-size: 0.85rem;
+  color: var(--ink); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r);
+}
+.tocka-ime-vnos:focus { outline: none; border-color: var(--accent); }
+
+/* Žetoni so oblo, kot shranjene poti v iskalniku -- ista stvar naj bo videti
+   ista, tudi če je na drugi strani. */
+.tocke-shranjene {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  margin: 6px 0 0; padding: 0; list-style: none;
+}
+.tocka-zeton {
+  padding: 5px 11px; font: inherit; font-size: 0.78rem;
+  color: var(--ink-dim); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: 100px; cursor: pointer;
+}
+.tocka-zeton:hover { color: var(--ink); border-color: var(--accent); }
 
 /* ---------------------------------------------------------------- nastavitve */
 

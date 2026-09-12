@@ -122,7 +122,9 @@ hoji na postajo je to nevarnejše od zamude in mora biti napisano.
 5. ✅ Zamude v predlogih in preverjanje, ali veriga drži
 6. ✅ Podrobni prikaz ene poti (`/app/pot/podrobno`): pešpot z geometrijo in
    vmesni postanki vožnje
-7. ⬜ „Biti tam ob X" (obratno iskanje), shranjene točke
+7. ✅ Shranjene točke („dom", „služba") — `localStorage`, žetoni pod obema
+   poljema
+8. ⬜ „Biti tam ob X" (obratno iskanje)
 
 **Peš noge v `journey.plan()` namenoma niso vezane.** Njegova oblika odgovora
 (`train1`, `trip1`, `via`) nima mesta za peš nogo in prikaz bi jo narisal

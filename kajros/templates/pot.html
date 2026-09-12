@@ -40,6 +40,9 @@
         hoja se računa po pravih pešpoteh pri 5 km/h.
       </p>
 
+      {#- Zadetki iskanja visijo pod VRSTICO, ne pod celim blokom: pod njim sta
+          zdaj vnos imena in žetoni shranjenih točk, in seznam bi se odpiral
+          pod njimi -- torej stran od polja, v katero se tipka. #}
       <div class="tocka" data-kaj="od">
         <label class="tocka-oznaka" for="q-od">Od kod</label>
         <div class="tocka-vrstica">
@@ -47,8 +50,21 @@
                  placeholder="postaja, ali klikni na zemljevid">
           <button class="tocka-gumb" data-akcija="lega" title="Moja lega">lega</button>
           <button class="tocka-gumb" data-akcija="karta" title="Izberi na zemljevidu">karta</button>
+          {#- Gumb se pokaže šele, ko je kraj postavljen: shraniti prazno polje
+              ni mogoče, gumb pa bi to obljubljal. #}
+          <button class="tocka-gumb tocka-shrani" data-akcija="shrani"
+                  aria-pressed="false" hidden>☆ shrani</button>
+          <ul class="tocka-zadetki" hidden></ul>
         </div>
-        <ul class="tocka-zadetki" hidden></ul>
+        {#- Ime se vpraša v strani, ne s `prompt()`: v aplikaciji za Android
+            `Krom` (`WebChromeClient`) `onJsPrompt` ne obravnava, zato okna
+            tam sploh ni in shranjevanje bi tiho odpovedalo. #}
+        <div class="tocka-ime" hidden>
+          <input class="tocka-ime-vnos" type="text" maxlength="24"
+                 autocomplete="off" aria-label="Ime točke" placeholder="dom, služba …">
+          <button class="tocka-gumb" data-akcija="ime-shrani">shrani</button>
+        </div>
+        <ul class="tocke-shranjene" hidden></ul>
       </div>
 
       <div class="tocka" data-kaj="do">
@@ -57,8 +73,16 @@
           <input id="q-do" class="tocka-vnos" type="search" autocomplete="off"
                  placeholder="postaja, ali klikni na zemljevid">
           <button class="tocka-gumb" data-akcija="karta" title="Izberi na zemljevidu">karta</button>
+          <button class="tocka-gumb tocka-shrani" data-akcija="shrani"
+                  aria-pressed="false" hidden>☆ shrani</button>
+          <ul class="tocka-zadetki" hidden></ul>
         </div>
-        <ul class="tocka-zadetki" hidden></ul>
+        <div class="tocka-ime" hidden>
+          <input class="tocka-ime-vnos" type="text" maxlength="24"
+                 autocomplete="off" aria-label="Ime točke" placeholder="dom, služba …">
+          <button class="tocka-gumb" data-akcija="ime-shrani">shrani</button>
+        </div>
+        <ul class="tocke-shranjene" hidden></ul>
       </div>
 
       <div class="pot-nastavitve">

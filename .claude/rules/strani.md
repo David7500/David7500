@@ -170,6 +170,34 @@ Zadnje ni obljuba: postajališče v dosegu še ni zveza, in tako tudi piše.
 Zato prefilter kandidatov meri do **45 minut** ne glede na nastavljeno mejo;
 sicer postajališča tik čez mejo sploh ne izmeri in te številke ni od kod dobiti.
 
+**Shranjene točke („dom", „služba") ostanejo v brskalniku.** Kje kdo stanuje,
+je najobčutljivejši podatek, ki ga aplikacija lahko drži, zato je v
+`localStorage` (`kajros:tocke`, največ šest). Strežnik dobi samo koordinate, ki
+jih poizvedba nosi tako ali tako (`/api/pot?od_lat=…`); **ime ne gre nikamor**,
+tudi v naslov strani ne — sicer bi deljena povezava povedala, da je tista točka
+tvoj dom. Obratno pa naslov, ki ga odpreš sam, koordinate **poimenuje**: če se
+ujemajo s shranjeno točko, piše v polju „dom" in ne 46.05611, 14.50577.
+
+Ujemanje je po razdalji (`TOCKA_PRAG`, 1e-4 ≈ 11 m), ne po enakosti: naslov
+nosi pet decimalk, lega iz GPS pa vse, in dve zapisovanji istega praga bi se
+razšli.
+
+Troje, kar je pri tem odločeno:
+
+* **Žetoni so pod obema poljema, ne enkrat na stran.** „Dom" je enkrat
+  izhodišče in enkrat cilj; en sam seznam bi bil isti ugib, kot je bil klik na
+  zemljevid, preden je oznaka povedala, kateri klik gre kam.
+* **Zvezdica govori isto kot v iskalniku zvez** (`☆ shrani` / `★ shranjeno`):
+  en gumb pove stanje in ga preklopi, križca na žetonu ni. Odstrani se tako,
+  da točko postaviš in odtakneš zvezdico — dve poti do istega dejanja bi pri
+  dveh poljih pomenili dvanajst gumbov za šest točk.
+* **Isto ime je isti kraj.** Shranjevanje pod obstoječim imenom popravi
+  koordinate; brez tega bi seznam tiho dobil dva žetona z napisom „služba".
+
+Ime se vpraša **v strani**, ne s `prompt()`: v aplikaciji za Android
+`WebChromeClient` (`Krom`) `onJsPrompt` ne obravnava, zato okna tam sploh ni in
+shranjevanje bi tiho odpovedalo.
+
 ### `/app/pot/podrobno` — ista pot, razložena
 
 Seznam odgovarja na „s čim in kdaj", ta stran na **„kako"**. Klik na predlog

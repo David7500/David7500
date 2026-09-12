@@ -22,7 +22,7 @@ CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (111 preizkusov).
+enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (233 preizkusov).
 `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
 zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
