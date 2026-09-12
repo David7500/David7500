@@ -107,7 +107,14 @@ object Nacrtovalec {
         Shramba.vse(c).forEach { b ->
             val mimo = b.odzvonjeno || b.voznoredniMs < zdajMs - 60_000L
             val sveze = b.odzvonjeno && zdajMs - b.zvoniObMs < NEDAVNO_MS
-            if (b.ponavljajoca && mimo && !sveze) Shramba.shrani(c, b.prestavljena(zdajMs))
+            // Budilka, nastavljena pred popravkom 12. 9. 2026, ima lahko prvo
+            // ponovitev zunaj izbranega nabora (izmerjeno: nabor tor + sre,
+            // shranjen ponedeljek). Take ne cakamo, da odzvoni na napacen dan
+            // -- poravnamo jo ob prvem obhodu.
+            val zunajNabora = !Ponovitev.jeVNaboru(b.voznoredniMs, b.dnevi)
+            if (b.ponavljajoca && (mimo || zunajNabora) && !sveze) {
+                Shramba.shrani(c, b.prestavljena(zdajMs))
+            }
         }
         Shramba.vse(c).forEach {
             if (it.odzvonjeno || it.ugasnjena) preklici(c, it.id) else nastavi(c, it, zdajMs)

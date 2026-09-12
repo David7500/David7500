@@ -85,4 +85,39 @@ class PonovitevTest {
         assertEquals("enkratna", Ponovitev.ime(0))
         assertEquals("pon, sre, pet", Ponovitev.ime(0b0010101))
     }
+
+    @Test
+    fun `prva ponovitev se poravna na izbrani dan`() {
+        // Tako je nastalo na telefonu: izbrana tor + sre, stran je kazala
+        // ponedeljek 14. 9. 2026. Budilka ne sme prvic zazvoniti v ponedeljek.
+        val ponedeljek = ob(2026, 9, 14, 6, 49)
+        val torSre = (1 shl 1) or (1 shl 2)
+        val prva = Ponovitev.naslednji(ponedeljek, torSre, ponedeljek - 1000, CONA)
+
+        assertEquals(LocalDate.of(2026, 9, 15), beri(prva).toLocalDate())
+        assertEquals(LocalTime.of(6, 49), beri(prva).toLocalTime())
+        assertTrue(Ponovitev.velja(torSre, beri(prva).dayOfWeek))
+    }
+
+    @Test
+    fun `voznja, ki je danes ze mimo, skoci na naslednji dan iz nabora`() {
+        val danesZjutraj = ob(2026, 9, 14, 6, 49)     // ponedeljek
+        val popoldne = ob(2026, 9, 14, 13, 45)
+        val samoPonedeljki = 1
+        val prva = Ponovitev.naslednji(
+            danesZjutraj, samoPonedeljki, maxOf(danesZjutraj - 1000, popoldne), CONA)
+
+        assertEquals(LocalDate.of(2026, 9, 21), beri(prva).toLocalDate())
+        assertEquals(LocalTime.of(6, 49), beri(prva).toLocalTime())
+    }
+
+    @Test
+    fun `opazi budilko, ki je shranjena na dnevu zunaj nabora`() {
+        val ponedeljek = ob(2026, 9, 14, 6, 49)
+        val torSre = (1 shl 1) or (1 shl 2)
+        assertFalse(Ponovitev.jeVNaboru(ponedeljek, torSre, CONA))
+        assertTrue(Ponovitev.jeVNaboru(ob(2026, 9, 15, 6, 49), torSre, CONA))
+        // Enkratna nabora nima in je ni treba premikati.
+        assertTrue(Ponovitev.jeVNaboru(ponedeljek, 0, CONA))
+    }
 }

@@ -83,4 +83,18 @@ class NastavitveTest {
     fun `velike crke v gostitelju so isti izvor`() {
         assertTrue(Nastavitve.jeNas("HTTPS://Kajros.App/app", "https://kajros.app"))
     }
+
+    @Test
+    fun `presledek v poti je odstotek dvajset, ne plus`() {
+        // `URLEncoder` sam da `LPV+2001`, kar je v POTI dobesedni plus.
+        // Izmerjeno na produkciji: tak naslov vrne 404, `%20` pa 200.
+        assertEquals("LPV%202001", Nastavitve.zaPot("LPV 2001"))
+        assertFalse(Nastavitve.zaPot("LPV 2001").contains("+"))
+    }
+
+    @Test
+    fun `sumniki in posebni znaki v poti prezivijo`() {
+        assertEquals("Ljubljana%20Polje", Nastavitve.zaPot("Ljubljana Polje"))
+        assertEquals("%C5%A0entilj", Nastavitve.zaPot("\u0160entilj"))
+    }
 }

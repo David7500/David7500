@@ -59,6 +59,17 @@ object Ponovitev {
         return voznoredniMs
     }
 
+    /**
+     * Ali shranjeni odhod pade na dan iz nabora.
+     *
+     * Enkratna budilka je vedno "v naboru" -- nabora nima in je ni treba
+     * premikati. Za ponavljajoco je to edini nacin, da opazimo budilko, ki je
+     * nastala, preden je `Most.nastavi()` prvo ponovitev poravnal.
+     */
+    fun jeVNaboru(voznoredniMs: Long, dnevi: Int, cona: ZoneId = ZoneId.systemDefault()): Boolean =
+        !jePonavljajoca(dnevi) ||
+            velja(dnevi, Instant.ofEpochMilli(voznoredniMs).atZone(cona).dayOfWeek)
+
     /** Prometni dan odhoda, kot ga pricakuje `/api/departures`. */
     fun dan(voznoredniMs: Long, cona: ZoneId = ZoneId.systemDefault()): String =
         Instant.ofEpochMilli(voznoredniMs).atZone(cona).toLocalDate().format(DATUM)

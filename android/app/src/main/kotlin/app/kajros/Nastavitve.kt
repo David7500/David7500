@@ -3,6 +3,7 @@ package app.kajros
 import android.content.Context
 import java.net.URI
 import java.net.URISyntaxException
+import java.net.URLEncoder
 
 /**
  * Naslov streznika -- edina nastavitev, ki jo aplikacija ima.
@@ -72,6 +73,23 @@ object Nastavitve {
         return if (u.port == -1 || u.port == PRIVZETA_VRATA[shema]) "$shema://$gostitelj"
         else "$shema://$gostitelj:${u.port}"
     }
+
+    /**
+     * Niz, ki gre v **pot** naslova.
+     *
+     * `URLEncoder` je obrazcno kodiranje in presledek zapise kot `+`. V poizvedbi
+     * je to prav, v poti pa je `+` dobesedni plus in ne presledek -- zato je
+     * povezava "Odpri voznjo" iz seznama budilk odprla `/app/train/LPV+2001`
+     * in stran je pisala "vlak s to stevilko ne obstaja".
+     *
+     * Izmerjeno na produkciji 12. 9. 2026:
+     * `/api/train/LPV+2001/run` -> **404**, `/api/train/LPV%202001/run` -> **200**.
+     *
+     * `%20` je veljaven tudi v poizvedbi, zato ga uporabimo za oboje -- eno
+     * pravilo je manj prilozosti za napako kot dve.
+     */
+    fun zaPot(niz: String): String =
+        URLEncoder.encode(niz, "UTF-8").replace("+", "%20")
 
     /** Ali je [url] na istem izvoru kot [naslov]. */
     fun jeNas(url: String?, naslov: String): Boolean {

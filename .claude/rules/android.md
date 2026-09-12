@@ -147,6 +147,19 @@ ima teste za oba prehoda.
 3G ima 388 voženj). Ključ je takrat številka + voznoredna ura, ne `stop_seq` —
 sezonska različica ima lahko drugačen vrstni red postankov.
 
+### Prva ponovitev mora biti v naboru, ne šele druga
+
+Stran pošlje uro vožnje, ki jo je človek **gledal**, in ta ni nujno na dan iz
+nabora. Izmerjeno 12. 9. 2026: izbrana `tor + sre`, stran je kazala ponedeljek
+14. 9., in budilka bi prvič zazvonila v **ponedeljek** — zunaj vzorca.
+`prestavljena()` to popravi šele po zvonjenju, kar je prepozno.
+
+Zato `Most.nastavi()` prvo ponovitev poravna, `Nacrtovalec.vseZnova()` pa
+poravna tudi budilke, ki so v shrambi že nastale narobe
+(`Ponovitev.jeVNaboru()`). Meja je `max(voznja − 1 s, zdaj)`: prvo pusti vožnjo
+pri miru, kadar njen dan v naboru je, drugo poskrbi, da vožnja, ki je danes že
+mimo, skoči na naslednji dan iz nabora.
+
 ### „Ni odgovora“ in „danes ne vozi“ nista isti izid
 
 `Preverjevalec.Odgovor` ima tri stanja namenoma. Če tabla odgovori in te vožnje
@@ -218,3 +231,10 @@ in budilka bere **njo**, ne podatka pod njo.
 * **`display` iz razreda premaga `[hidden]`** iz brskalnikovega sloga.
   `.bud-plast` brez `[hidden] { display: none }` leži čez vso stran in požira
   vsak klik — tudi v brskalniku, kjer gumba za budilko sploh ni.
+* **`URLEncoder` ne sodi v pot naslova.** Je obrazčno kodiranje in presledek
+  zapiše kot `+`; v poizvedbi je to prav, v poti pa je `+` dobesedni plus.
+  Gumb „Odpri vožnjo“ je zato odprl `/app/train/LPV+2001` in stran je pisala
+  „vlak s to številko ne obstaja“. Izmerjeno na produkciji 12. 9. 2026:
+  `/api/train/LPV+2001/run` → **404**, `/api/train/LPV%202001/run` → **200**.
+  Za oboje se uporablja `Nastavitve.zaPot()`, ker je `%20` veljaven tudi v
+  poizvedbi — eno pravilo je manj priložnosti za napako kot dve.

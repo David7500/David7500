@@ -10,7 +10,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
-import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -159,11 +158,13 @@ class BudilkeDejavnost : Activity() {
         val pot = if (b.vlak) "/app/train/" else "/app/bus/"
         val naslov = buildString {
             append(Nastavitve.naslov(this@BudilkeDejavnost)).append(pot)
-            append(URLEncoder.encode(b.trainNo, "UTF-8"))
-            append("?postaja=").append(URLEncoder.encode(b.postaja, "UTF-8"))
-            append("&date=").append(URLEncoder.encode(b.dan, "UTF-8"))
+            // `Nastavitve.zaPot`, ne `URLEncoder`: stevilka vlaka gre v POT in
+            // presledek mora biti `%20`, ne `+`. Glej opombo tam.
+            append(Nastavitve.zaPot(b.trainNo))
+            append("?postaja=").append(Nastavitve.zaPot(b.postaja))
+            append("&date=").append(Nastavitve.zaPot(b.dan))
             if (!b.tripId.isNullOrBlank()) {
-                append("&trip=").append(URLEncoder.encode(b.tripId, "UTF-8"))
+                append("&trip=").append(Nastavitve.zaPot(b.tripId))
             }
         }
         startActivity(Intent(this, GlavnaDejavnost::class.java)

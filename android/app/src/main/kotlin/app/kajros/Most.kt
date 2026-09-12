@@ -53,8 +53,27 @@ class Most(
         // sekundi in v prazno -- preizkuseno na LPP 19I stiri minute po
         // odhodu. Stran gumba za tak postanek ne pokaze; to je druga
         // varovalka, ker stran in APK nista nujno iste starosti.
-        val odhod = vr + o.optInt("zamuda_s", 0) * 1000L
-        if (odhod <= System.currentTimeMillis()) return ""
+        val dnevi = o.optInt("dnevi", 0) and Ponovitev.VSI
+        val zdaj = System.currentTimeMillis()
+
+        // **Prva ponovitev mora biti v izbranem naboru dni.**
+        // Stran poslje uro voznje, ki jo je clovek gledal, in ta ni nujno na
+        // dan iz nabora: izmerjeno 12. 9. 2026 -- izbrana tor + sre, stran je
+        // kazala ponedeljek 14. 9., in budilka bi prvic zazvonila v ponedeljek,
+        // torej zunaj vzorca. `prestavljena()` to popravi sele PO zvonjenju,
+        // kar je prepozno.
+        //
+        // `poMs` je vecji od "sekundo pred voznjo" in "zdaj": prvo pusti
+        // voznjo pri miru, kadar njen dan v naboru je, drugo poskrbi, da
+        // voznja, ki je danes ze mimo, skoci na naslednji dan iz nabora.
+        val vrP = if (Ponovitev.jePonavljajoca(dnevi)) {
+            Ponovitev.naslednji(vr, dnevi, maxOf(vr - 1000L, zdaj))
+        } else {
+            vr
+        }
+
+        val odhod = vrP + o.optInt("zamuda_s", 0) * 1000L
+        if (odhod <= zdaj) return ""
 
         val b = Budilka(
             id = "b" + System.currentTimeMillis() + "-" + (0..9999).random(),
@@ -63,17 +82,18 @@ class Most(
             omrezje = if (o.optString("omrezje") == "avtobus") "avtobus" else "zeleznica",
             postaja = o.optString("postaja"),
             stopSeq = o.optInt("stop_seq"),
-            dan = o.optString("dan"),
-            voznoredniMs = vr,
+            // Ko se ura premakne, se mora premakniti tudi prometni dan --
+            // sicer bi `Preverjevalec` vprasal tablo za napacen datum.
+            dan = if (vrP != vr) Ponovitev.dan(vrP) else o.optString("dan"),
+            voznoredniMs = vrP,
             minutPrej = minut,
             zbudi = o.optBoolean("zbudi", true),
             // Rezerva je potnikova izbira, a ne sme biti orozje: pol ure
             // "rezerve" bi budilko spremenilo v nekaj drugega.
             rezervaS = o.optInt("rezerva_s", 0).coerceIn(0, 600),
-            dnevi = o.optInt("dnevi", 0) and Ponovitev.VSI,
+            dnevi = dnevi,
             smer = o.optString("smer"),
         )
-        val zdaj = System.currentTimeMillis()
         Shramba.pocisti(dejavnost, zdaj)
         Shramba.shrani(dejavnost, b.copy(zvoniObMs = b.izracun(zdaj).zvoniOb))
         glavna.post { Nacrtovalec.nastavi(dejavnost, b, zdaj); Widget.osvezi(dejavnost) }
