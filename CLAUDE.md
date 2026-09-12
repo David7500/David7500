@@ -180,7 +180,15 @@ prešteje osirotele meritve.
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
 | `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
+| `/zasebnost` | kaj o obiskovalcu hranimo; mora ostati skladna z `obisk.py` |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
+
+Poti, ki niso za aplikacijo, ampak za brskalnike in iskalnike: `/favicon.ico`,
+`/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`. Napaka je **stran**,
+kadar jo bere človek, in JSON pod `/api/`. Absolutni naslov zanje je
+`KAJROS_BASE_URL`, ne `request.url` — za tunelom je ta `http://127.0.0.1:8000`.
+**Tujih izvorov v strani ni**: pisave in Leaflet so naši, ostanejo le ploščice
+zemljevida. Podrobnosti v `.claude/rules/strezba.md` in `oznake.md`.
 
 **Pregled za skrbnika zahteva žeton**; brez njega poti ni (404). Prvi obisk
 `/admin?k=<žeton>`, nato piškotek s potjo `/admin`. Žeton je

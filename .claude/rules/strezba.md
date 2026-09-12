@@ -306,3 +306,47 @@ obstaja.
 **Pregled in števci se ne štejeta sama.** `/admin*` in `/static/*` gresta mimo
 štetja; sicer bi skrbnikovo osveževanje na minuto postalo največja postavka v
 lastni statistiki.
+
+
+## Kar stran dolguje javnosti, ne aplikaciji
+
+Od 12. 9. 2026 je `kajros.app` odprt komurkoli. Te poti niso za aplikacijo,
+ampak za brskalnike, iskalnike in ljudi, ki povezavo pošljejo naprej.
+
+**Napaka je stran, kadar jo bere človek, in JSON, kadar jo bere stroj.**
+`_napaka_html()` se odloči po poti, ne po glavi `Accept`: pod `/api/` in
+`/static/` je odjemalec stroj tudi takrat, ko pošlje `*/*` — tuji odjemalci
+se ob naši napaki sicer zlomijo drugače, kot pričakujejo. Podrobnost iz
+kode („vlak 999999 ne obstaja“) pride na zaslon, Starlettov angleški
+privzetek (`Not Found`) pa ne.
+
+**Absolutni naslov je `config.BASE_URL`, nikoli `request.url`.** Za
+Cloudflarovim tunelom je zahteva videti kot `http://127.0.0.1:8000`, ker
+izvor govori navaden HTTP in enota ne teče z `--proxy-headers`. Zemljevid
+strani in značke za predogled bi torej kazali na naslov, ki iz interneta ni
+dosegljiv. (Naslov obiskovalca to ne prizadene — `obisk.py` bere
+`cf-connecting-ip`, ne `request.client`.)
+
+**Naš `robots.txt` mora obstajati, sicer Cloudflare postreže svojega.**
+Njegov privzetek o naših poteh ne ve ničesar in pusti indeksirati `/api/`.
+Naš prepove `/api/`, `/admin`, `/docs` in `/redoc`.
+
+**`/favicon.ico` je pot, ne datoteka.** Brskalniki jo prosijo ne glede na
+`<link rel=icon>` — zaznamek, zavihek in „pogosto obiskano“ gredo pogosto po
+njej. Streže se PNG; ime poti je zgodovina, brskalnik gleda `Content-Type`.
+
+**Naslov in opis strani sta zapisana enkrat** (`templates/_meta.html`), ne
+posebej za `<title>` in posebej za `og:`. Dve različici istega stavka se
+razideta ob prvem popravku.
+
+**`/zasebnost` ni obrazec, ampak edino, česar obiskovalec o nas ne more
+preveriti sam.** Vsebina mora ostati skladna z `obisk.py`; kdor spremeni,
+kaj se šteje, spremeni tudi to stran. Naslov za vprašanja je `KAJROS_STIK`
+in **privzeto prazen** — objava naslova je odločitev lastnika strani, ne
+privzetek nastavitve.
+
+**Tujih izvorov v strani ni več.** Pisave (`static/pisave/`) in Leaflet
+(`static/leaflet/`) so gostovani pri nas. Prej je šel naslov IP vsakega
+obiskovalca ob vsakem odprtju Googlu, zemljevid pa je visel na `unpkg.com`.
+Kar ostane tuje, so **ploščice zemljevida** (OpenStreetMap, Esri) in to je
+neizogibno; na strani o zasebnosti je zato našteto.

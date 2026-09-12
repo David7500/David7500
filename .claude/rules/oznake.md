@@ -274,8 +274,47 @@ naslovu. Zato „dodaj na začetni zaslon" dobi pravo ime in ikono že zdaj;
 namestitev kot aplikacija (WebAPK) in delovanje brez omrežja pa ne, ker oboje
 visi na varnem kontekstu.
 
-**Service workerja zato (še) ni.** Registrirati se po omrežnem naslovu ne more,
-torej bi bil do Tailscale Funnela mrtva koda. Napiše se skupaj s HTTPS, ne prej.
+**Service worker je od 12. 9. 2026 tu**, ker je HTTPS na `kajros.app` tu.
+Streže ga `api.sw()` iz predloge `templates/sw.js`, registrira pa se v
+`common.js` samo, kadar je `isSecureContext` — po omrežnem naslovu bi vrgel
+napako v konzolo, ta pa mora ostati prazna, ker jo `preveri.sh` bere kot
+merilo.
+
+**Nad njim stoji eno pravilo: `/api/` se ne predpomni nikoli.** Ta projekt
+meri zamude, zamuda iz predpomnilnika pa je laž — najhujša vrsta, ker je
+videti kot podatek in nosi uro. Potnik, ki bi videl „+2 min“ izpred pol ure,
+bi zamudil vlak, o katerem misli, da ima čas. Isto velja za `/admin`: pregled
+za skrbnika ne sme pustiti sledi na napravi.
+
+Ostalo je razdeljeno po tem, kaj se sme postarati:
+
+| kaj | ravnanje | zakaj |
+|---|---|---|
+| `/static/*` | najprej predpomnilnik | naslov nosi odtis vsebine, torej je nespremenljiv |
+| strani | najprej omrežje, predpomnilnik kot rezerva | vsebujejo tudi številke |
+| `/api/*`, `/admin` | delavec se jih ne dotakne | glej zgoraj |
+| tuji izvori (ploščice) | delavec se jih ne dotakne | niso naši |
+
+Različica predpomnilnika je **odtis celotne lupine**, ne ročna številka:
+`sw.js` se ob objavi spremeni sam in brskalnik to zazna kot novega delavca.
+Ročno vzdrževana številka bi bila prej ali slej pozabljena in obiskovalci bi
+dobivali staro aplikacijo. Naslovi statike nosijo odtis, zato se stari vnosi
+ne povozijo, ampak kopičijo — ob novi različici gredo vsi ven naenkrat.
+
+`/brez-omrezja` **namerno ne ponudi zadnjih znanih zamud.** Ta stran se
+pokaže v predoru in v dvigalu, torej natanko tam, kjer je stara številka
+videti kot sveža.
+
+**Preverjeno z ugasnjenim strežnikom, ne po opisu** (12. 9. 2026): lupina
+9 datotek, offline stran shranjena, **`/api/` v nobenem predpomnilniku
+(0 vnosov)**, že obiskana stran se postreže iz predpomnilnika, nikoli
+obiskana dobi „brez zveze“.
+
+**Headless chromium z `--virtual-time-budget` delavca ne požene.**
+`register()` se ne razreši ne v eno ne v drugo smer — virtualni čas ne
+teče v nitih service workerja. Preizkus zato teče brez njega, dogodek
+`load` pa se zakasni s počasnim odgovorom iz začasnega strežnika. Brez
+tega je videti, kot da registracija tiho odpove.
 
 
 ## Ovire: kaj velja danes in kaj šele pozneje
