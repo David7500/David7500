@@ -50,7 +50,7 @@ object Nacrtovalec {
     }
 
     fun nastavi(c: Context, b: Budilka, zdajMs: Long = System.currentTimeMillis()) {
-        if (b.odzvonjeno) { preklici(c, b.id); return }
+        if (b.odzvonjeno || b.ugasnjena) { preklici(c, b.id); return }
         val am = c.getSystemService(AlarmManager::class.java) ?: return
         val ob = kdaj(b, zdajMs)
         val pokazi = PendingIntent.getActivity(
@@ -69,15 +69,50 @@ object Nacrtovalec {
         }
     }
 
+    /**
+     * Zvonjenje je koncano in potnik ga je ustavil: ponavljajoco prestavi.
+     *
+     * Loceno od [vseZnova], ker ima ta varovalko "sveze odzvonjeno" -- ta
+     * varuje zaslon zvonjenja, ki se stoji, in tu ravno ne velja: zaslon se
+     * zapira in shranjene budilke ne bo vec bral.
+     */
+    fun poZvonjenju(c: Context, id: String) {
+        val b = Shramba.ena(c, id) ?: return
+        val zdaj = System.currentTimeMillis()
+        if (b.odzvonjeno && b.ponavljajoca) Shramba.shrani(c, b.prestavljena(zdaj))
+        vseZnova(c, zdaj)
+    }
+
     fun preklici(c: Context, id: String) {
         c.getSystemService(AlarmManager::class.java)?.cancel(namera(c, id))
     }
 
-    /** Po ponovnem zagonu telefona so vse nacrtovane budnice izgubljene. */
-    fun vseZnova(c: Context) {
-        val zdaj = System.currentTimeMillis()
-        Shramba.pocisti(c, zdaj)
-        Shramba.vse(c).filter { !it.odzvonjeno }.forEach { nastavi(c, it, zdaj) }
+    /**
+     * Toliko po odzvonjenju ponavljajoce se ne prestavimo. Zaslon zvonjenja
+     * takrat se stoji in bere shranjeno budilko; ce bi jo pod njim zamenjali
+     * z jutrisnjo, bi gumb "se dve minuti" odlozil napacen dan.
+     */
+    private const val NEDAVNO_MS = 5 * 60_000L
+
+    /**
+     * Vse budilke znova: prestavi ponavljajoce in nastavi budnice.
+     *
+     * Klice se ob zagonu aplikacije, po ponovnem zagonu telefona in vsakic, ko
+     * se seznam spremeni -- `AlarmManager` ponovnega zagona ne prezivi, in
+     * ponavljajoca budilka se mora nekje prestaviti na naslednji dan. Oboje je
+     * ista poteza in zato eno mesto: dve poti do istega stanja bi se razsli.
+     */
+    fun vseZnova(c: Context, zdajMs: Long = System.currentTimeMillis()) {
+        Shramba.pocisti(c, zdajMs)
+        Shramba.vse(c).forEach { b ->
+            val mimo = b.odzvonjeno || b.voznoredniMs < zdajMs - 60_000L
+            val sveze = b.odzvonjeno && zdajMs - b.zvoniObMs < NEDAVNO_MS
+            if (b.ponavljajoca && mimo && !sveze) Shramba.shrani(c, b.prestavljena(zdajMs))
+        }
+        Shramba.vse(c).forEach {
+            if (it.odzvonjeno || it.ugasnjena) preklici(c, it.id) else nastavi(c, it, zdajMs)
+        }
+        Widget.osvezi(c)
     }
 
     /**

@@ -103,6 +103,32 @@ adb logcat --pid=$(adb shell pidof app.kajros)
 Stran samo v razvojni različici razhrošuješ prek `chrome://inspect`
 (`WebView.setWebContentsDebuggingEnabled` je v izdaji izklopljen).
 
-## Kaj še ni
+## Budilka
 
-Budilka. Ovoj je prva rezina; načrt je v pogovoru in v zgodovini commitov.
+Edino, česar splet ne zmore, in edini razlog, da ta aplikacija obstaja.
+Nastavi se **na strani** — odpri vožnjo, pri svoji postaji pritisni „budilka“ —
+zvoni pa **nativno**, prek `AlarmManager.setAlarmClock`, ker to preživi Doze.
+
+* **Ponavljanje.** Nabor dni (`pon … ned`, `delavniki`, `vsak dan`) je v listu
+  budilke; brez izbire je budilka enkratna. Naslednji dan se poišče po **zidni
+  uri**, ne s prištevanjem 86 400 s — ob prehodu na zimski čas ima dan 25 ur in
+  budilka bi bila uro narobe (`Ponovitev.kt`, testi brez naprave).
+* **Vožnja, ki danes ne vozi, ne zvoni.** `trip_id` je vsak dan drug, zato ga
+  ponavljajoča budilka na dan odhoda poišče znova po številki in voznoredni uri.
+  Če je tabla odgovorila in te vožnje na njej ni, se budilka **preskoči** s
+  tihim obvestilom. „Ni odgovora“ in „danes ne vozi“ zato nista isti izid.
+* **Seznam budilk** je nativen (dela brez strežnika) in dosegljiv iz aplikacije:
+  povezava „budilke“ v glavi strani. Dolg pritisk na ikono ostaja kot bližnjica.
+
+## Widget
+
+Odštevanje do naslednjega odhoda, za katerega imaš budilko. Sekunde riše
+`Chronometer` v sistemskem procesu (`setChronometerCountDown`), zato odštevanje
+ne stane nobenega prebujanja. Zamuda se osveži takrat, ko se budilka tako ali
+tako zbuja — torej približno pol ure pred odhodom; prej widget pošteno piše
+„zamuda še ni preverjena“.
+
+## Naslov strežnika
+
+Bil je na dolgem pritisku na ikono; zdaj je na **zaslonu budilk** in na zaslonu
+napake, torej tam, kjer se rabi.

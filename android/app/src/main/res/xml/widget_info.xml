@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  `updatePeriodMillis` je 30 minut in ne manj: sistem krajšega ne dovoli, mi pa
+  ga tudi ne rabimo. Odštevanje riše `Chronometer` sam, zamudo pa osveži
+  budilka, ki se pred odhodom tako ali tako zbuja (`Sprozilec`). Ta številka je
+  samo varovalka, da widget ne obtiči, če aplikacije nihče ne odpre.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="80dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget"
+    android:previewImage="@drawable/ikona_znak"
+    android:resizeMode="horizontal|vertical"
+    android:description="@string/widget_opis"
+    android:widgetCategory="home_screen" />

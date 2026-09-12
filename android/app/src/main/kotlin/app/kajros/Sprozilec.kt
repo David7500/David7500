@@ -30,7 +30,7 @@ class Sprozilec : BroadcastReceiver() {
         if (i.action != PROZI) return
         val id = i.getStringExtra(ID) ?: return
         val b = Shramba.ena(c, id) ?: return
-        if (b.odzvonjeno) return
+        if (b.odzvonjeno || b.ugasnjena) return
 
         // Omrezje ne sme teci na glavni niti, prozenje pa ima le nekaj sekund.
         val konec = goAsync()
@@ -57,15 +57,38 @@ class Sprozilec : BroadcastReceiver() {
         // zvonjenje. Dalec od ure en poskus zadosca.
         val nujno = stara.izracun(zdaj).zvoniOb - zdaj <= Ura.PREVENTIVA_MS
         val poskusov = if (nujno) 3 else 1
-        var izmerjena: Int? = null
+        var odgovor: Preverjevalec.Odgovor = Preverjevalec.Odgovor.BrezZveze
         for (i in 0 until poskusov) {
-            izmerjena = Preverjevalec.zamuda(c, stara)
-            if (izmerjena != null) break
+            odgovor = Preverjevalec.preveri(c, stara)
+            if (odgovor !is Preverjevalec.Odgovor.BrezZveze) break
             if (i + 1 < poskusov) Thread.sleep(2000)
         }
-        val nova = izmerjena?.let {
-            stara.copy(zamudaS = it, zamudaObMs = System.currentTimeMillis())
-        } ?: stara
+
+        // **Ponavljajoca budilka za vozilo, ki danes ne vozi, ne sme zvoniti.**
+        // Nabor dni izbere potnik na pamet ("vsak dan"), vozni red pa pozna
+        // resnico -- in nedeljski alarm za delavniski vlak je natanko tisto,
+        // zaradi cesar ljudje budilke ugasnejo za vedno.
+        //
+        // Pri enkratni budilki tega ne delamo: tam je vozjno izbral clovek za
+        // dolocen dan, in ce je izginila z voznega reda, je to novica, zaradi
+        // katere je treba vstati, ne razlog za tisino.
+        if (odgovor is Preverjevalec.Odgovor.NeVozi && stara.ponavljajoca) {
+            preskoci(c, stara, zdaj)
+            return
+        }
+        val vozi = odgovor as? Preverjevalec.Odgovor.Vozi
+        val nova = when {
+            vozi == null -> stara
+            // "Vozi, zamude pa ne vem" ni razlog, da bi zavrgli zadnjo znano:
+            // stara vrednost s svojim casom je se vedno boljsa od nicesar in
+            // `Ura` sama presodi, kdaj je prestara.
+            vozi.zamudaS == null -> stara.copy(tripId = vozi.tripId ?: stara.tripId)
+            else -> stara.copy(
+                zamudaS = vozi.zamudaS,
+                zamudaObMs = System.currentTimeMillis(),
+                tripId = vozi.tripId ?: stara.tripId,
+            )
+        }
 
         val izid = nova.izracun(zdaj)
         val posodobljena = nova.copy(zvoniObMs = izid.zvoniOb)
@@ -74,7 +97,15 @@ class Sprozilec : BroadcastReceiver() {
         } else {
             Shramba.shrani(c, posodobljena)
             Nacrtovalec.nastavi(c, posodobljena, zdaj)
+            Widget.osvezi(c)
         }
+    }
+
+    /** Danes te voznje ni: povej in prestavi na naslednji dan iz nabora. */
+    private fun preskoci(c: Context, b: Budilka, zdajMs: Long) {
+        Zvonjenje.neVozi(c, b)
+        Shramba.shrani(c, b.prestavljena(zdajMs))
+        Nacrtovalec.vseZnova(c, zdajMs)
     }
 
     private fun zvoni(c: Context, b: Budilka, zdajMs: Long) {
@@ -82,5 +113,6 @@ class Sprozilec : BroadcastReceiver() {
         Shramba.shrani(c, b.copy(odzvonjeno = true, zvoniObMs = zdajMs))
         Nacrtovalec.preklici(c, b.id)
         Zvonjenje.sprozi(c, b, zdajMs)
+        Widget.osvezi(c)
     }
 }

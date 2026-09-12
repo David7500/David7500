@@ -23,6 +23,15 @@ data class Budilka(
     val zbudi: Boolean,
     /** Kar je potnik sam obkljukal ("še 3 minute"), v sekundah. */
     val rezervaS: Int = 0,
+    /**
+     * Kateri dnevi v tednu, kot bitna maska (`Ponovitev`). 0 = enkratna.
+     *
+     * Kdor se vozi vsak dan z istim vlakom, je doslej moral budilko nastavljati
+     * vsak vecer znova -- in ravno takrat, ko na to pozabis, je pomembna.
+     */
+    val dnevi: Int = 0,
+    /** Zacasno ugasnjena: ostane v seznamu, a ne zvoni (dopust, bolniska). */
+    val ugasnjena: Boolean = false,
     val smer: String = "",
     /** Zadnja znana zamuda in kdaj smo jo dobili. */
     val zamudaS: Int? = null,
@@ -34,6 +43,28 @@ data class Budilka(
     val odlozenoDoMs: Long = 0,
 ) {
     val vlak: Boolean get() = omrezje == "zeleznica"
+    val ponavljajoca: Boolean get() = Ponovitev.jePonavljajoca(dnevi)
+
+    /**
+     * Naslednja ponovitev te budilke po [zdajMs].
+     *
+     * Vozni red naslednjega dne ni nujno isti in `trip_id` **zagotovo** ni:
+     * LPP linija 3G ima 388 voženj, vsak dan svoje. Zato gre id proc in ga
+     * `Preverjevalec` na dan odhoda poisce znova po stevilki in uri.
+     */
+    fun prestavljena(zdajMs: Long): Budilka {
+        val vr = Ponovitev.naslednji(voznoredniMs, dnevi, zdajMs)
+        return copy(
+            voznoredniMs = vr,
+            dan = Ponovitev.dan(vr),
+            tripId = null,
+            zamudaS = null,
+            zamudaObMs = 0,
+            zvoniObMs = 0,
+            odzvonjeno = false,
+            odlozenoDoMs = 0,
+        )
+    }
 
     fun izracun(zdajMs: Long): Ura.Izid {
         val i = Ura.izracunaj(
@@ -54,6 +85,7 @@ data class Budilka(
         put("omrezje", omrezje); put("postaja", postaja); put("stop_seq", stopSeq)
         put("dan", dan); put("voznoredni_ms", voznoredniMs); put("minut_prej", minutPrej)
         put("zbudi", zbudi); put("rezerva_s", rezervaS); put("smer", smer)
+        put("dnevi", dnevi); put("ugasnjena", ugasnjena)
         put("zamuda_s", zamudaS ?: JSONObject.NULL); put("zamuda_ob_ms", zamudaObMs)
         put("zvoni_ob_ms", zvoniObMs); put("odzvonjeno", odzvonjeno)
         put("odlozeno_do_ms", odlozenoDoMs)
@@ -76,6 +108,8 @@ data class Budilka(
                 minutPrej = o.optInt("minut_prej", 25),
                 zbudi = o.optBoolean("zbudi", true),
                 rezervaS = o.optInt("rezerva_s", 0),
+                dnevi = o.optInt("dnevi", 0) and Ponovitev.VSI,
+                ugasnjena = o.optBoolean("ugasnjena"),
                 smer = o.optString("smer"),
                 zamudaS = if (o.isNull("zamuda_s")) null else o.optInt("zamuda_s"),
                 zamudaObMs = o.optLong("zamuda_ob_ms"),
@@ -132,9 +166,16 @@ object Shramba {
         zapisi(c, vse(c).filter { it.id != id })
     }
 
-    /** Pobrise, kar je davno mimo. Klicano ob vsakem pisanju z zunanje strani. */
+    /**
+     * Pobrise, kar je davno mimo. Klicano ob vsakem pisanju z zunanje strani.
+     *
+     * Ponavljajoce se ne brisejo nikoli -- njihov odhod je vedno v prihodnosti,
+     * dokler jih `Ponovitev.prestavi()` prestavlja, in ce je kdaj v preteklosti,
+     * je to okvara, ki jo popravi prestavljanje, ne brisanje.
+     */
     fun pocisti(c: Context, zdajMs: Long) {
-        val ostane = vse(c).filter { zdajMs - it.voznoredniMs < ZADRZI_MS }
-        if (ostane.size != vse(c).size) zapisi(c, ostane)
+        val vse = vse(c)
+        val ostane = vse.filter { it.ponavljajoca || zdajMs - it.voznoredniMs < ZADRZI_MS }
+        if (ostane.size != vse.size) zapisi(c, ostane)
     }
 }

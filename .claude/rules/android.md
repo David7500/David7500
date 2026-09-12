@@ -36,6 +36,25 @@ Razčlenjevanje gre skozi `java.net.URI`, **ne** `android.net.Uri`: prvi je
 navaden JVM in ga je mogoče preizkusiti brez naprave. Varnostno pravilo brez
 testov ni pravilo.
 
+## Lastna lega: WebView si dovoljenje zapomni sam
+
+To je stalo tri dni tihe okvare. Izmerjeno na telefonu 9. 9. 2026:
+
+```
+WebViewProfilePrefsDefault.xml  AwGeolocationPermissions%https://kajros.app/ = true
+dumpsys package app.kajros      ACCESS_FINE_LOCATION: granted=false … ONE_TIME
+```
+
+Sistemsko dovoljenje je bilo „samo tokrat“ in je poteklo; WebViewov **lasten**
+zapis je ostal. Ker je ta rekel „dovoljeno“, `onGeolocationPermissionsShowPrompt`
+ni bil vec poklican — in to je edini kraj, kjer aplikacija zaprosi Android.
+Lega je odpovedala za vedno in se sama ni mogla rešiti.
+
+Zato: **`retain` je vedno `false`**, ob zagonu pa
+`GeolocationPermissions.getInstance().clearAll()`. Vir resnice je Androidovo
+dovoljenje, ne WebViewov spomin. Preverjeno: po popravku ostane shramba prazna
+(`<map />`) tudi potem, ko potnik lego dovoli.
+
 ## Nič odvisnosti
 
 Ne AndroidX, ne `appcompat`. Vse potrebno je v ogrodju od API 26: `WebView`,
@@ -117,6 +136,25 @@ petnajstih minut, 30 s v zadnjih petih. Blizu ure poskusi trikrat zapored.
 * v zadnjih **3,5 minute** pred zvonjenjem budilka zazvoni **takoj** in to
   pove. Cena je do 3,5 minute spanca, in samo takrat, ko povezave res ni.
 
+### Ponavljanje: zidna ura, ne 86 400 sekund
+
+Nabor dni je bitna maska (ponedeljek = bit 0). Naslednji odhod se poišče po
+**uri po zidni uri**; prištevanje enega dne v milisekundah je narobe dvakrat na
+leto, ker ima dan ob prehodu 23 ali 25 ur. `Ponovitev.kt` je zato čist JVM in
+ima teste za oba prehoda.
+
+`trip_id` se pri ponovitvi **zavrže**: naslednji dan je vožnja druga (LPP linija
+3G ima 388 voženj). Ključ je takrat številka + voznoredna ura, ne `stop_seq` —
+sezonska različica ima lahko drugačen vrstni red postankov.
+
+### „Ni odgovora“ in „danes ne vozi“ nista isti izid
+
+`Preverjevalec.Odgovor` ima tri stanja namenoma. Če tabla odgovori in te vožnje
+na njej **ni**, ponavljajoča budilka molči in se prestavi — nedeljski alarm za
+delavniški vlak je natanko tisto, zaradi česar ljudje budilke ugasnejo za vedno.
+Pri **enkratni** budilki se to ne dela: tam je vožnjo za določen dan izbral
+človek, in če je izginila z voznega reda, je to novica, ne razlog za tišino.
+
 ### Kje budilka bere zamudo
 
 **`/api/departures`, ne `/api/train/{no}/run`.** Prva izbira je bila druga in
@@ -134,6 +172,36 @@ bi vsak drug vir pomenil, da rezerva varuje pred napako, ki je ne merimo.
 Ta napaka je bila na zaslonu: naslov „ob 22:34" (iz zamude) in pod njim
 „po voznem redu — zamude nisem mogel preveriti". Zato `Ura.Izid` nosi
 `odhodMs`, ki ga izračuna **ista odločitev** kot uro zvonjenja.
+
+### Widget odšteva sam, mi ga ne rišemo
+
+Sekunde riše `Chronometer` s `setChronometerCountDown` — v **sistemskem**
+procesu. Widget, ki bi ga risali mi, bi zahteval prebujanje vsako sekundo.
+Njegova časovnica je `elapsedRealtime`, ne epoch; razliko je treba prišteti.
+
+`onUpdate` (vsakih 30 min, kar je sistemski minimum) kliče `Nacrtovalec.vseZnova`.
+To ni okrasek: ponavljajoča budilka, ki je odzvonila in je nihče ni ustavil,
+bi sicer ostala `odzvonjeno` za vedno — widget bi pisal „ni budilke“, jutrišnji
+alarm pa ne bi bil nastavljen. Sistem nas zaradi widgeta tako ali tako zbudi;
+to je najcenejši kraj za samopopravek.
+
+### Prikaz ne sme obljubiti ure, ki je ni v shrambi
+
+List budilke je pisal „zvoni ob 16:56“, seznam budilk pa „16:51“ — ker se
+budilka shrani **brez** zamude (vpraša jo šele deset minut pred zvonjenjem).
+Zdaj sta v listu dve vrstici: shranjena ura, ki velja tudi brez omrežja, in
+pod njo „pri zdajšnjih +5 min bi zvonilo ob 16:56“.
+
+Uro računa **Kotlin** (`Most.napoved()` → `Ura`), ne stran. Dvojnik tega
+pravila v JavaScriptu bi se razšel s tistim, kar budilka res naredi.
+
+### Zamuda pri potnikovem postanku je ena sama
+
+`/api/train/{no}/run` vrne `zamuda: null` za vsak še nedosežen postanek — torej
+ravno za potnikovega. Budilka je zato računala z ničlo, medtem ko je dva prsta
+višje pisalo „+5 min“ (izmerjeno na LPV 2268, 9. 9. 2026: prikaz 17:24, budilka
+17:19). Blok „Pri tebi“ si svojo odločitev zato zapiše (`state.tvojaZamudaS`)
+in budilka bere **njo**, ne podatka pod njo.
 
 ### Pasti, ki so se pokazale šele na napravi
 

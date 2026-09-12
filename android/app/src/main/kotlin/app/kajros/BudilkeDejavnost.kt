@@ -2,12 +2,15 @@ package app.kajros
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.Switch
 import android.widget.TextView
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -22,7 +25,7 @@ import java.util.Locale
 class BudilkeDejavnost : Activity() {
 
     private val ura = SimpleDateFormat("HH:mm", Locale("sl"))
-    private val dan = SimpleDateFormat("d. M.", Locale("sl"))
+    private val dan = SimpleDateFormat("EEE d. M.", Locale("sl"))
 
     override fun onCreate(stanje: Bundle?) {
         super.onCreate(stanje)
@@ -31,18 +34,37 @@ class BudilkeDejavnost : Activity() {
             startActivity(Intent(this, GlavnaDejavnost::class.java))
             finish()
         }
+        findViewById<Button>(R.id.naslov).setOnClickListener {
+            // Pogovorno okno je v glavni dejavnosti; podvojiti ga bi pomenilo
+            // dve poti do iste nastavitve in prilozost, da se razideta.
+            startActivity(Intent(this, GlavnaDejavnost::class.java)
+                .setAction(GlavnaDejavnost.AKCIJA_NASTAVITVE))
+        }
+        findViewById<TextView>(R.id.opozorilo).setOnClickListener {
+            startActivity(Intent(android.provider.Settings
+                .ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        // Ponavljajoce se tu prestavijo na naslednji dan, ce jim je ura mimo:
+        // seznam mora kazati, kdaj bo zvonilo, ne kdaj je zvonilo vceraj.
+        Nacrtovalec.vseZnova(this)
         narisi()
     }
 
     private fun narisi() {
+        findViewById<TextView>(R.id.opozorilo).visibility =
+            if (GlavnaDejavnost.smeObvescati(this) && Nacrtovalec.smeTocenAlarm(this))
+                View.GONE else View.VISIBLE
+        findViewById<Button>(R.id.naslov).text =
+            getString(R.string.budilke_naslov_streznika,
+                Nastavitve.naslov(this).removePrefix("https://").removePrefix("http://"))
+
         val seznam = findViewById<LinearLayout>(R.id.seznam)
         seznam.removeAllViews()
         val zdaj = System.currentTimeMillis()
-        Shramba.pocisti(this, zdaj)
         val budilke = Shramba.vse(this).sortedBy { it.voznoredniMs }
 
         if (budilke.isEmpty()) {
@@ -68,27 +90,91 @@ class BudilkeDejavnost : Activity() {
 
         v.findViewById<TextView>(R.id.kaj).text =
             if (b.trainNo.isBlank()) b.postaja else "${b.trainNo} · ${b.postaja}"
-        // Ura zvonjenja stoji na zadnji znani zamudi in se bo se premikala.
-        // Voznoredna ura je edino, kar je gotovo, zato je vedno zraven.
-        v.findViewById<TextView>(R.id.kdaj).text = buildString {
+        v.findViewById<TextView>(R.id.smer).apply {
+            text = "→ ${b.smer}"
+            visibility = if (b.smer.isBlank()) View.GONE else View.VISIBLE
+        }
+
+        // Ura zvonjenja stoji na zadnji znani zamudi in se bo se premikala;
+        // koliko je do nje, je tisto, kar clovek res bere.
+        v.findViewById<TextView>(R.id.zvoni).text = when {
+            b.ugasnjena -> getString(R.string.budilka_ugasnjena)
+            b.odzvonjeno -> getString(R.string.budilka_odzvonjeno)
+            else -> getString(R.string.budilka_zvoni_ob, ura.format(Date(izid.zvoniOb))) +
+                "  " + getString(R.string.budilka_cez, presledek(izid.zvoniOb - zdajMs))
+        }
+
+        // Vozni red je edino, kar je gotovo, zato je vedno zraven -- in kadar
+        // se odhod od njega loci, sta obe uri na zaslonu, ne le izracunana.
+        v.findViewById<TextView>(R.id.odhod).text = buildString {
             append(dan.format(Date(b.voznoredniMs))).append(' ')
             append(getString(R.string.budilka_vozni_red, ura.format(Date(b.voznoredniMs))))
-            append(" · ")
-            if (b.odzvonjeno) append(getString(R.string.budilka_odzvonjeno))
-            else append(getString(R.string.budilka_zvoni_ob, ura.format(Date(izid.zvoniOb))))
+            // Odhod pisemo LE, kadar se od voznega reda loci. "odhod 17:19 ·
+            // vozni red 17:19" je bilo na zaslonu in ni povedalo nicesar --
+            // dve imeni za isto uro sta videti kot dva podatka.
+            val min = Math.round((izid.odhodMs - b.voznoredniMs) / 60_000.0).toInt()
+            if (min != 0) {
+                append(" · ").append(getString(R.string.budilka_odhod,
+                    ura.format(Date(izid.odhodMs))))
+                append(if (min > 0) " +$min min" else " $min min")
+            }
         }
+
         v.findViewById<TextView>(R.id.kako).text = buildString {
-            append(getString(if (b.zbudi) R.string.budilka_zbudi else R.string.budilka_obvesti))
+            append(Ponovitev.ime(b.dnevi))
+            append(" · ").append(getString(
+                if (b.zbudi) R.string.budilka_zbudi else R.string.budilka_obvesti))
             append(" · ").append(b.minutPrej).append(" min prej")
             if (b.rezervaS > 0) append(" +").append(b.rezervaS / 60).append(" rezerve")
-            if (b.smer.isNotBlank()) append(" · ").append(b.smer)
         }
+
+        // Od kdaj je stevilka. Brez tega bi "+4 min" izpred pol ure izgledalo
+        // enako kot "+4 min" izpred pol minute -- in prva ne pomeni nicesar.
+        v.findViewById<TextView>(R.id.vir).text =
+            if (b.zamudaObMs > 0) getString(R.string.budilka_preverjeno,
+                ura.format(Date(b.zamudaObMs)))
+            else getString(R.string.budilka_nepreverjeno)
+
+        v.findViewById<Switch>(R.id.vklop).apply {
+            isChecked = !b.ugasnjena
+            setOnCheckedChangeListener { _, vklop ->
+                Shramba.shrani(this@BudilkeDejavnost, b.copy(ugasnjena = !vklop))
+                Nacrtovalec.vseZnova(this@BudilkeDejavnost)
+                narisi()
+            }
+        }
+        v.findViewById<Button>(R.id.odpri_voznjo).setOnClickListener { odpriVoznjo(b) }
         v.findViewById<Button>(R.id.odstrani).setOnClickListener {
             Shramba.odstrani(this, b.id)
             Nacrtovalec.preklici(this, b.id)
             Zvonjenje.utisaj(this, b.id)
+            Widget.osvezi(this)
             narisi()
         }
         return v
+    }
+
+    /** Okno te voznje v aplikaciji -- ista stran, ki jo potnik ze pozna. */
+    private fun odpriVoznjo(b: Budilka) {
+        val pot = if (b.vlak) "/app/train/" else "/app/bus/"
+        val naslov = buildString {
+            append(Nastavitve.naslov(this@BudilkeDejavnost)).append(pot)
+            append(URLEncoder.encode(b.trainNo, "UTF-8"))
+            append("?postaja=").append(URLEncoder.encode(b.postaja, "UTF-8"))
+            append("&date=").append(URLEncoder.encode(b.dan, "UTF-8"))
+            if (!b.tripId.isNullOrBlank()) {
+                append("&trip=").append(URLEncoder.encode(b.tripId, "UTF-8"))
+            }
+        }
+        startActivity(Intent(this, GlavnaDejavnost::class.java)
+            .setAction(GlavnaDejavnost.AKCIJA_ODPRI)
+            .putExtra(GlavnaDejavnost.KAM, naslov))
+        finish()
+    }
+
+    /** "3 h 12 min" ali "7 min". Sekund tu ni: seznam se ne osvezuje sam. */
+    private fun presledek(ms: Long): String {
+        val minut = Math.max(0, Math.round(ms / 60_000.0).toInt())
+        return if (minut >= 60) "${minut / 60} h ${minut % 60} min" else "$minut min"
     }
 }

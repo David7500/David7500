@@ -4,7 +4,7 @@
 
 | stroj | naslov | naloga |
 |---|---|---|
-| prenosnik `arwen` | `192.168.1.138` | **streže** `kajros.app` in zajema sam |
+| prenosnik `arwen` | `192.168.1.46` | **streže** `kajros.app` in zajema sam |
 | malina (Pi Zero W) | `192.168.1.166` | zajem, teče ves čas, **varovalo** |
 | ta računalnik | — | razvoj |
 

@@ -125,7 +125,7 @@ Od 3. 9. 2026 stroji niso več dva:
 | stroj | naslov | vloga |
 |---|---|---|
 | malina (`raspberrypi`, Pi Zero W) | `192.168.1.166` | zajem, teče ves čas, **varovalo** |
-| prenosnik (`arwen`, x86_64) | `192.168.1.138` | **strežnik za `kajros.app`** + svoj zajem |
+| prenosnik (`arwen`, x86_64) | `192.168.1.46` | **strežnik za `kajros.app`** + svoj zajem |
 | ta računalnik | — | razvoj |
 
 **Prenosnik zajema sam, ne vleče sproti z maline.** Prikaz mora biti živ, poteg

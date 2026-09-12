@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Nastavitve so tu in ne v aplikaciji sami: stran zavzame ves zaslon in v njej
-  ni mesta za nativni gumb, ki bi ga bilo videti. Dolg pritisk na ikono je
-  standardna pot Androida in ne izumljena gesta, ki bi je nihce ne nasel.
+  Ena sama bliznjica: budilke.
+
+  Nastavitev naslova streznika je bila tu tudi in je sla proc. Dolg pritisk na
+  ikono je pot za tistega, ki ze ve, da tam kaj je; za nastavitev, ki jo clovek
+  isce enkrat na leto, je to hkrati prevec skrito in prevec vidno. Zdaj je na
+  zaslonu budilk in na zaslonu napake, torej tam, kjer se rabi.
 -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
@@ -17,15 +20,4 @@
             android:targetClass="app.kajros.BudilkeDejavnost" />
     </shortcut>
 
-    <shortcut
-        android:shortcutId="nastavitve"
-        android:enabled="true"
-        android:icon="@drawable/ikona_znak_enobarvna"
-        android:shortcutShortLabel="@string/nastavi_naslov"
-        android:shortcutLongLabel="@string/nastavitve_naslov">
-        <intent
-            android:action="app.kajros.NASTAVITVE"
-            android:targetPackage="app.kajros"
-            android:targetClass="app.kajros.GlavnaDejavnost" />
-    </shortcut>
 </shortcuts>

@@ -40,6 +40,9 @@ class GlavnaDejavnost : Activity() {
 
     companion object {
         const val AKCIJA_NASTAVITVE = "app.kajros.NASTAVITVE"
+        /** Odpri dolocen naslov v WebView (iz seznama budilk). */
+        const val AKCIJA_ODPRI = "app.kajros.ODPRI"
+        const val KAM = "kam"
         private const val ZAHTEVA_LEGA = 1
         private const val ZAHTEVA_OBVESTILA = 2
 
@@ -107,7 +110,16 @@ class GlavnaDejavnost : Activity() {
     }
 
     private fun obravnavajNamero(n: Intent) {
-        if (n.action == AKCIJA_NASTAVITVE) odpriNastavitve()
+        if (n.action == AKCIJA_NASTAVITVE) { odpriNastavitve(); return }
+        if (n.action != AKCIJA_ODPRI) return
+        val kam = n.getStringExtra(KAM) ?: return
+        // Namera je izvozena skupaj z LAUNCHER, torej jo zna poslati tudi tuja
+        // aplikacija. Naslov gre zato skozi isto mejo zaupanja kot vse drugo:
+        // most do budilk sme videti samo nasa stran.
+        if (!Nastavitve.jeNas(kam, naslov)) return
+        bilaNapaka = false
+        skrijNapako()
+        web.loadUrl(kam)
     }
 
     override fun onSaveInstanceState(v: Bundle) {
@@ -125,6 +137,20 @@ class GlavnaDejavnost : Activity() {
         // zato aplikacija in brskalnik na telefonu vidita iste shranjene poti.
         n.domStorageEnabled = true
         n.setGeolocationEnabled(true)
+        // **WebView si dovoljenje za lego zapomni sam, in to je past.**
+        // Izmerjeno na telefonu 9. 9. 2026: v `WebViewProfilePrefsDefault.xml`
+        // je stalo `AwGeolocationPermissions%https://kajros.app/ = true`,
+        // `dumpsys package` pa je za ACCESS_FINE_LOCATION javljal
+        // `granted=false, ONE_TIME`. Sistemsko dovoljenje je bilo "samo
+        // tokrat" in je poteklo, WebViewov zapis pa je ostal -- zato
+        // `onGeolocationPermissionsShowPrompt` ni bil vec poklican in edini
+        // kraj, kjer aplikacija zaprosi Android, se ni izvedel nikoli vec.
+        // Lega je tiho odpovedala za vedno in sama iz tega ni mogla ven.
+        //
+        // Zato te shrambe ne uporabljamo: vir resnice je Androidovo
+        // dovoljenje, ne WebViewov spomin. Tu se ze zapisano pobrise, spodaj
+        // pa se nic novega ne zapise (`retain = false`).
+        GeolocationPermissions.getInstance().clearAll()
         // Nic lokalnega: stran je oddaljena in do datotek v telefonu nima opravka.
         n.allowFileAccess = false
         n.allowContentAccess = false
@@ -215,7 +241,10 @@ class GlavnaDejavnost : Activity() {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                odgovor.invoke(izvor, true, true)
+                // Tretji argument je "zapomni si" in je vedno `false`: ce bi
+                // WebView shranil "dovoljeno", nas naslednjic ne bi vprasal
+                // in Androidovega dovoljenja ne bi preveril nihce.
+                odgovor.invoke(izvor, true, false)
                 return
             }
             cakajocaLega = izvor to odgovor
@@ -265,9 +294,13 @@ class GlavnaDejavnost : Activity() {
         val (izvor, odgovor) = cakajocaLega ?: return
         cakajocaLega = null
         val da = izidi.any { it == PackageManager.PERMISSION_GRANTED }
-        // Tretji argument je "zapomni si": ob zavrnitvi ga ne shranimo, da
-        // stran lahko vpraša znova, ko clovek premisli.
-        odgovor.invoke(izvor, da, da)
+        odgovor.invoke(izvor, da, false)
+        // Ce je clovek rekel "ne vprasaj vec", sistem naslednjic okna sploh ne
+        // pokaze in stran bi cakala v prazno. Povejmo, kje se to odklene.
+        if (!da && !shouldShowRequestPermissionRationale(
+                Manifest.permission.ACCESS_FINE_LOCATION)) {
+            Toast.makeText(this, R.string.lega_zavrnjena, Toast.LENGTH_LONG).show()
+        }
     }
 
     // ---------- napaka ----------

@@ -240,6 +240,28 @@ const MOST = (() => {
   }
 })();
 
+// Do nativnega seznama budilk je bilo doslej mogoce priti samo z dolgim
+// pritiskom na ikono aplikacije. To je gesta, ki jo pozna Android, ne pa nujno
+// clovek -- zato je povezava tam, kjer so vse druge: v glavi strani. V
+// brskalniku je ni, ker nativnega zaslona ni.
+function povezavaDoBudilk() {
+  if (!MOST || typeof MOST.odpriBudilke !== "function") return;
+  const nav = document.querySelector(".top-nav");
+  if (!nav || nav.querySelector("[data-budilke]")) return;
+  const g = document.createElement("button");
+  g.type = "button";
+  g.className = "top-link";
+  g.dataset.budilke = "1";
+  g.textContent = "budilke";
+  g.addEventListener("click", () => MOST.odpriBudilke());
+  nav.appendChild(g);
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", povezavaDoBudilk);
+} else {
+  povezavaDoBudilk();
+}
+
 // ---------- pika o zivosti ----------
 // Pika je doslej kazala, ali je ODGOVOR prisel, ne ali so PODATKI sveži.
 // Če zajem odmre, API pa tece naprej, bi ostala zelena in bi trdila nekaj,

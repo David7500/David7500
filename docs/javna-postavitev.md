@@ -5,7 +5,7 @@ dati to na Oracle Free Tier.
 
 **Odločeno je bilo tako, kot ta analiza priporoča: Cloudflarov tunel.**
 Spremenil se je le stroj — tunel bo tekel s **prenosnika** `arwen`
-(192.168.1.138), ne z maline, ker prenosnik streže in je zmogljivejši; malina
+(192.168.1.46), ne z maline, ker prenosnik streže in je zmogljivejši; malina
 zajema naprej kot varovalo. Domena `kajros.app` je registrirana 3. 9. 2026.
 
 ## Kaj sploh izpostavljamo

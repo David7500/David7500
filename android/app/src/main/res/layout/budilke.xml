@@ -35,6 +35,39 @@
             android:paddingBottom="20dp" />
     </ScrollView>
 
+    <!-- Opozorilo, kadar Android budilki ne dovoli tega, kar rabi. Brez tega
+         je odpoved tiha in videti kot okvara aplikacije. -->
+    <TextView
+        android:id="@+id/opozorilo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/vrstica"
+        android:padding="12dp"
+        android:text="@string/budilka_dovoljenja"
+        android:textColor="@color/sev_bad"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <!-- Naslov strežnika je bil doslej dosegljiv samo z dolgim pritiskom na
+         ikono. Tu je, ker je to edini nativni zaslon, ki ga potnik odpre
+         namerno — in ker ga rabi natanko takrat, ko stran ne dela. -->
+    <Button
+        android:id="@+id/naslov"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="8dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:textAllCaps="false"
+        android:textColor="@color/ink_faint"
+        android:textSize="13sp" />
+
     <Button
         android:id="@+id/odpri"
         style="?android:attr/borderlessButtonStyle"

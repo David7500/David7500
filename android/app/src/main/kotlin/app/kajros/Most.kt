@@ -33,9 +33,11 @@ class Most(
      * Razlicica mostu. Stran in APK se lahko razideta -- uporabnik posodobi
      * stran takoj, aplikacijo pa cez mesec -- zato mora stran vedeti, s cim
      * govori, preden poklice karkoli drugega.
+     *
+     * 2: ponavljajoce budilke (`dnevi`), `preklopi()` in `odpriBudilke()`.
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 1 else 0
+    fun razlicica(): Int = if (nas()) 2 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -68,13 +70,45 @@ class Most(
             // Rezerva je potnikova izbira, a ne sme biti orozje: pol ure
             // "rezerve" bi budilko spremenilo v nekaj drugega.
             rezervaS = o.optInt("rezerva_s", 0).coerceIn(0, 600),
+            dnevi = o.optInt("dnevi", 0) and Ponovitev.VSI,
             smer = o.optString("smer"),
         )
         val zdaj = System.currentTimeMillis()
         Shramba.pocisti(dejavnost, zdaj)
         Shramba.shrani(dejavnost, b.copy(zvoniObMs = b.izracun(zdaj).zvoniOb))
-        glavna.post { Nacrtovalec.nastavi(dejavnost, b, zdaj) }
+        glavna.post { Nacrtovalec.nastavi(dejavnost, b, zdaj); Widget.osvezi(dejavnost) }
         return b.id
+    }
+
+    /**
+     * Kdaj bi budilka s temi nastavitvami zazvonila -- **brez** shranjevanja.
+     *
+     * Racun je v Kotlinu in ne v strani namenoma: `Ura` je edini kraj, ki ve,
+     * kaj se zgodi z negativno zamudo pri vlaku in kaj ob izpadu povezave.
+     * Dvojnik tega pravila v JavaScriptu bi se prej ali slej razsel s tistim,
+     * kar budilka res naredi -- in prikaz bi obljubljal uro, ki je ne bo.
+     */
+    @JavascriptInterface
+    fun napoved(zapis: String): String {
+        if (!nas()) return "{}"
+        val o = try { JSONObject(zapis) } catch (e: org.json.JSONException) { return "{}" }
+        val vr = o.optLong("voznoredni_ms")
+        if (vr <= 0) return "{}"
+        val zdaj = System.currentTimeMillis()
+        val izid = Ura.izracunaj(
+            voznoredniMs = vr,
+            minutPrej = o.optInt("minut_prej", 25),
+            zamudaS = if (o.isNull("zamuda_s")) null else o.optInt("zamuda_s"),
+            zamudaObMs = zdaj,
+            zdajMs = zdaj,
+            vlak = o.optString("omrezje") != "avtobus",
+            rezervaS = o.optInt("rezerva_s", 0).coerceIn(0, 600),
+        )
+        return JSONObject()
+            .put("zvoni_ob_ms", izid.zvoniOb)
+            .put("odhod_ms", izid.odhodMs)
+            .put("upostevana_s", izid.upostevanaS)
+            .toString()
     }
 
     @JavascriptInterface
@@ -88,11 +122,37 @@ class Most(
         return a.toString()
     }
 
+    /** Vklopi ali ugasne budilko, ne da bi jo izbrisal. */
+    @JavascriptInterface
+    fun preklopi(id: String, vklop: Boolean): Boolean {
+        if (!nas()) return false
+        val b = Shramba.ena(dejavnost, id) ?: return false
+        Shramba.shrani(dejavnost, b.copy(ugasnjena = !vklop))
+        glavna.post { Nacrtovalec.vseZnova(dejavnost) }
+        return true
+    }
+
+    /**
+     * Nativni seznam budilk.
+     *
+     * Doslej je bil dosegljiv samo z dolgim pritiskom na ikono -- gesta, ki jo
+     * pozna Android, ne pa nujno clovek, ki aplikacijo uporablja. Zdaj je do
+     * njega povezava v glavi strani.
+     */
+    @JavascriptInterface
+    fun odpriBudilke() {
+        if (!nas()) return
+        glavna.post {
+            dejavnost.startActivity(
+                android.content.Intent(dejavnost, BudilkeDejavnost::class.java))
+        }
+    }
+
     @JavascriptInterface
     fun odstrani(id: String): Boolean {
         if (!nas()) return false
         Shramba.odstrani(dejavnost, id)
-        glavna.post { Nacrtovalec.preklici(dejavnost, id) }
+        glavna.post { Nacrtovalec.preklici(dejavnost, id); Widget.osvezi(dejavnost) }
         return true
     }
 

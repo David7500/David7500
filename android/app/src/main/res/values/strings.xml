@@ -23,7 +23,9 @@
     <string name="zvoni_prezgodaj">Vozilo je %1$d min pred voznim redom.</string>
     <string name="zvoni_tocno">Vozi po voznem redu.</string>
     <string name="zvoni_vozni_red">Po voznem redu (%1$s) — zamude nisem mogel preveriti.</string>
-    <string name="zvoni_preventivno">Ni povezave — zvonim prej, da ne zamudiš. Vozni red: %1$s.</string>
+    <!-- Ta stavek velja za oba vzroka: ni povezave ALI tabla o zamudi nima
+         besede. Prej je pisal „Ni povezave“ in bi se v drugem primeru zlagal. -->
+    <string name="zvoni_preventivno">Zamude ni bilo mogoče preveriti — zvonim prej, da ne zamudiš. Vozni red: %1$s.</string>
     <string name="ustavi">Ustavi</string>
     <string name="se_malo">Še 2 minuti</string>
     <string name="ni_tocnih_alarmov">Android ne dovoli točnih alarmov. Vklopi jih v nastavitvah aplikacije, sicer budilka ne bo zanesljiva.</string>
@@ -39,4 +41,31 @@
     <string name="budilka_zbudi">zbudi me</string>
     <string name="budilka_obvesti">obvesti</string>
     <string name="odpri_kajros">Odpri kajros</string>
+    <string name="budilka_vklop">Vklopljena</string>
+    <string name="budilka_odpri_voznjo">Odpri vožnjo</string>
+    <string name="budilka_enkratna">enkratna</string>
+    <string name="budilka_ugasnjena">ugasnjena</string>
+    <string name="budilka_cez">čez %1$s</string>
+    <string name="budilka_odhod">odhod %1$s</string>
+    <string name="budilka_preverjeno">zamuda preverjena ob %1$s</string>
+    <string name="budilka_nepreverjeno">zamude še nisem preveril</string>
+    <string name="budilka_dovoljenja">Android ne dovoli obvestil ali točnih alarmov — budilka ne bo zanesljiva. Pritisni za nastavitve.</string>
+    <string name="budilke_naslov_streznika">Naslov strežnika: %1$s</string>
+
+    <!-- preskocena voznja -->
+    <string name="kanal_tiho">Preskočene budilke</string>
+    <string name="ne_vozi_naslov">%1$s danes ne vozi</string>
+    <string name="ne_vozi_zakaj">Po voznem redu bi šel ob %1$s. Budilka je preskočena, jutri velja naprej.</string>
+
+    <!-- widget -->
+    <string name="widget_opis">Odštevanje do naslednjega odhoda, za katerega imaš budilko.</string>
+    <string name="widget_brez">ni budilke</string>
+    <string name="widget_brez_kako">Nastavi jo pri svoji postaji v aplikaciji.</string>
+    <string name="widget_zdaj">zdaj</string>
+    <string name="widget_vozni_red">vozni red %1$s · zamuda še ni preverjena</string>
+    <string name="widget_zamuda">odhod %1$s · zamuja %2$d min</string>
+    <string name="widget_prezgodaj">odhod %1$s · %2$d min pred redom</string>
+    <string name="widget_tocno">odhod %1$s · vozi točno</string>
+
+    <string name="lega_zavrnjena">Dovoljenje za lego je zavrnjeno trajno. Odpri Nastavitve → Aplikacije → Kajros → Dovoljenja in dovoli lego.</string>
 </resources>

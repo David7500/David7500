@@ -360,6 +360,12 @@ function yourStopHtml(stops, forecast, current) {
   let odkod = "";
   const zivo = passed ? null : zivaNapoved(s);
   const tihoS2 = state.run && state.run.tiho_s != null ? state.run.tiho_s : null;
+  // Vrednost, ki jo ta blok izracuna, si zapomnimo za budilko. Ne zato, da bi
+  // bilo manj kode, ampak zato, da je stevilka ena sama: `/api/train/{no}/run`
+  // vrne `zamuda: null` za vsak se nedosezen postanek -- torej ravno za
+  // potnikovega -- in budilka je zato racunala z niclo, medtem ko je dva
+  // prsta visje pisalo "+5 min". Izmerjeno na LPV 2268, 9. 9. 2026: prikaz
+  // 17:24, napoved budilke 17:19.
   const tihoTu = tihoS2 != null && tihoS2 > TIHO_S;
   if (passed) {
     d = stopDelay(s);
@@ -408,6 +414,11 @@ function yourStopHtml(stops, forecast, current) {
     znak = "vozni red";
     odkod = "ocene še ni";
   }
+  // Tu, in samo tu, se odloci, katero zamudo potnik pri svojem postanku vidi.
+  // Budilka bere prav to -- glej opombo zgoraj.
+  state.tvojaZamudaS = d != null ? Math.round(d) : null;
+  state.tvojZnak = znak;
+  state.tvojPostanek = s.stop_seq;
   const color = delayColor(d);
   const sched = hhmm(schedIso);
   const cas = hhmm(kdaj);
@@ -448,6 +459,10 @@ function yourStopHtml(stops, forecast, current) {
 const BUD_KLJUC = "kajros:budilka";
 const BUD_MINUT = [10, 15, 25, 40];
 const BUD_REZERVA_S = 180;
+// Ponedeljek je bit 0, nedelja bit 6 -- ista maska kot `Ponovitev.kt`.
+const BUD_DNEVI = ["pon", "tor", "sre", "čet", "pet", "sob", "ned"];
+const BUD_DELAVNIKI = 0b0011111;
+const BUD_VSI = 0b1111111;
 
 function budilkeZaPostanek(s) {
   if (!MOST) return [];
@@ -465,8 +480,11 @@ function budilkaGumbHtml(s, passed) {
   // **Za postanek, ki je mimo, budilke ni.** Vozilo je tu že bilo; alarm bi
   // zazvonil takoj in v prazno. Preizkušeno: nastavljena na LPP 19I štiri
   // minute po odhodu je zazvonila v isti sekundi.
-  if (passed) return "";
+  //
+  // Ponavljajoča je izjema: ta ne meri na današnjo vožnjo, ampak na jutrišnjo,
+  // in prav zato jo nastaviš, ko na peronu ugotoviš, da bi jo rabil.
   const obstoj = budilkeZaPostanek(s)[0];
+  if (passed && !obstoj) return "";
   const oznaka = obstoj
     ? `budilka ob ${hhmm(new Date(obstoj.zvoni_ob_ms).toISOString())}`
     : "budilka";
@@ -478,6 +496,107 @@ function budilkaGumbHtml(s, passed) {
       </svg>
       <span>${escapeHtml(oznaka)}</span>
     </button>`;
+}
+
+function budDneviHtml(dnevi) {
+  const chip = (oznaka, val, on, kaj) =>
+    `<button type="button" class="bud-izbira bud-dan${on ? " is-on" : ""}"
+       data-${kaj}="${val}">${oznaka}</button>`;
+  return BUD_DNEVI.map((d, i) => chip(d, i, (dnevi >> i) & 1, "dan")).join("")
+    + chip("delavniki", BUD_DELAVNIKI, dnevi === BUD_DELAVNIKI, "nabor")
+    + chip("vsak dan", BUD_VSI, dnevi === BUD_VSI, "nabor");
+}
+
+/**
+ * Zamuda, s katero budilka računa: **ista, kot jo blok „Pri tebi" pokaže.**
+ *
+ * `run` je za še nedosežen postanek prazen (`zamuda: null`), zato bi surova
+ * vrednost pomenila nič — in budilka bi zvonila po voznem redu za vlak, ki
+ * na zaslonu piše +5. Zato beremo odločitev prikaza in ne podatka pod njim.
+ */
+function budZamuda(s) {
+  if (state.tvojPostanek === s.stop_seq && state.tvojaZamudaS != null) {
+    return state.tvojaZamudaS;
+  }
+  const d = stopDelay(s);
+  return d != null ? d : 0;
+}
+
+/**
+ * Kaj bo budilka naredila. Račun je v aplikaciji (`Ura`), ne tu.
+ *
+ * **Dve vrstici, ker sta dve resnici.** Budilka se shrani brez zamude —
+ * zamudo vpraša strežnik šele deset minut pred zvonjenjem, ker je do takrat
+ * itak druga. Prva vrstica je torej ura, ki je zapisana in ki velja tudi, če
+ * omrežja takrat ne bo; druga pove, kam bi se premaknila, če bo zamuda takšna
+ * kot zdaj. Ena sama vrstica bi eno od tega zamolčala — in prvi zaslon te
+ * strani je obljubljal 16:56, seznam budilk pa je pisal 16:51.
+ */
+function budNapovedHtml(s) {
+  const plast = document.getElementById("budilka");
+  if (!plast || !MOST || typeof MOST.napoved !== "function") return "";
+  const schedIso = s.sched_dep || s.sched_arr;
+  const skupno = {
+    voznoredni_ms: new Date(schedIso).getTime(),
+    minut_prej: budMinut(plast),
+    rezerva_s: budRezerva() ? BUD_REZERVA_S : 0,
+    omrezje: state.network,
+  };
+  const vprasaj = (zamuda) => {
+    try {
+      return JSON.parse(MOST.napoved(JSON.stringify(
+        Object.assign({ zamuda_s: zamuda }, skupno))) || "{}");
+    } catch (e) {
+      return {};
+    }
+  };
+  const po = vprasaj(0);
+  if (!po.zvoni_ob_ms) return "";
+
+  const dnevi = Number(plast.dataset.dnevi || 0);
+  const cez = Math.round((po.zvoni_ob_ms - Date.now()) / 60000);
+  let html = `zvoni ob <strong>${hhmm(new Date(po.zvoni_ob_ms).toISOString())}</strong>`
+    + (cez > 0 ? ` · čez ${minLabel(cez * 60)}` : " · zdaj")
+    + (dnevi ? ` · ${escapeHtml(imeDni(dnevi))}` : "");
+
+  const zamuda = budZamuda(s);
+  const z = zamuda ? vprasaj(zamuda) : null;
+  if (z && z.zvoni_ob_ms && z.zvoni_ob_ms !== po.zvoni_ob_ms) {
+    html += `<div class="bud-napoved-drugo">zamudo preverim tik pred zvonjenjem —
+      pri zdajšnjih ${escapeHtml(delayText(zamuda))} bi zvonilo ob
+      ${hhmm(new Date(z.zvoni_ob_ms).toISOString())}</div>`;
+  }
+  return html;
+}
+
+/** Slovensko ime nabora dni. Isto pravilo kot `Ponovitev.ime()` v aplikaciji. */
+function imeDni(dnevi) {
+  if (!dnevi) return "enkratna";
+  if (dnevi === BUD_VSI) return "vsak dan";
+  if (dnevi === BUD_DELAVNIKI) return "vsak delavnik";
+  if (dnevi === 0b1100000) return "vikend";
+  return BUD_DNEVI.filter((_, i) => (dnevi >> i) & 1).join(", ");
+}
+
+/**
+ * Kam vozilo pelje. `run` `headsign` nima (preverjeno: ključa ni v odgovoru),
+ * zadnja postaja vožnje pa je natanko to — in v seznamu budilk je „→ Ljubljana"
+ * edino, po čemer ločiš jutranji vlak od popoldanskega v isti smeri.
+ */
+function smerVoznje() {
+  const stops = (state.run && state.run.stops) || [];
+  return stops.length ? stops[stops.length - 1].name : "";
+}
+
+function budMinut(plast) {
+  const poMeri = document.getElementById("bud-meri");
+  return poMeri && !poMeri.hidden
+    ? Math.min(240, Math.max(1, Math.round(Number(poMeri.value) || 25)))
+    : Number(plast.dataset.minut || 25);
+}
+
+function budRezerva() {
+  return !!(document.getElementById("bud-rezerva") || {}).checked;
 }
 
 // Nastavitve budilke NISO v `#run-head`: tega prikaz vsakih 30 s prerise in
@@ -498,14 +617,23 @@ function odpriBudilko(stopSeq) {
   const minut = obstoj ? obstoj.minut_prej : shranjeno.minut;
   const zbudi = obstoj ? obstoj.zbudi : shranjeno.zbudi;
   const rezerva = obstoj ? obstoj.rezerva_s > 0 : shranjeno.rezerva !== false;
+  // Ponavljanja si NE zapomnimo med budilkami: koliko prej hočeš zvonjenje, je
+  // navada, kateri vlak voziš vsak dan, pa ni.
+  const dnevi = obstoj ? (obstoj.dnevi || 0) : 0;
   const poMeri = !BUD_MINUT.includes(minut);
   const schedIso = s.sched_dep || s.sched_arr;
+  const smer = smerVoznje();
+  // Ista številka in ista beseda kot dva prsta višje v bloku „Pri tebi“ —
+  // list, ki bi tu molčal, bi izgledal, kot da budilka o zamudi ne ve nič.
+  const zamuda = state.tvojPostanek === s.stop_seq && state.tvojaZamudaS != null
+    ? `${state.tvojZnak} ${delayText(state.tvojaZamudaS)}` : null;
 
   plast.innerHTML = `
     <div class="bud-ozadje" data-zapri="1"></div>
     <div class="bud-list" role="dialog" aria-label="Budilka">
       <div class="bud-naslov">Budilka — ${escapeHtml(s.name)}</div>
-      <div class="bud-pod">${escapeHtml(TRAIN_NO)} · po voznem redu ob ${hhmm(schedIso)}</div>
+      <div class="bud-pod">${escapeHtml(TRAIN_NO)}${smer ? ` → ${escapeHtml(smer)}` : ""}
+        · po voznem redu ob ${hhmm(schedIso)}${zamuda ? ` · ${escapeHtml(zamuda)}` : ""}</div>
 
       <div class="bud-vrsta">Zvoni koliko prej</div>
       <div class="bud-izbire" data-skupina="minut">
@@ -518,6 +646,9 @@ function odpriBudilko(stopSeq) {
                aria-label="minut prej">
       </div>
 
+      <div class="bud-vrsta">Ponovi <span class="bud-namig">brez izbire = samo tokrat</span></div>
+      <div class="bud-izbire bud-dnevi" data-skupina="dnevi">${budDneviHtml(dnevi)}</div>
+
       <div class="bud-vrsta">Kako</div>
       <div class="bud-izbire" data-skupina="kako">
         <button type="button" class="bud-izbira${zbudi ? "" : " is-on"}" data-zbudi="0">obvesti</button>
@@ -528,6 +659,8 @@ function odpriBudilko(stopSeq) {
         <input type="checkbox" id="bud-rezerva" ${rezerva ? "checked" : ""}>
         <span>še 3 minute rezerve</span>
       </label>
+
+      <div class="bud-napoved" id="bud-napoved"></div>
 
       ${manjka ? `<button type="button" class="bud-dovoli" data-dovoli="1">
         Android še ne dovoli obvestil ali točnih alarmov — uredi</button>` : ""}
@@ -541,6 +674,19 @@ function odpriBudilko(stopSeq) {
   plast.hidden = false;
   plast.dataset.minut = String(minut);
   plast.dataset.zbudi = zbudi ? "1" : "0";
+  plast.dataset.dnevi = String(dnevi);
+  plast.dataset.stop = String(stopSeq);
+  osveziNapoved();
+}
+
+/** Vrstica "zvoni ob ...". Prerise se ob vsaki spremembi v listu. */
+function osveziNapoved() {
+  const plast = document.getElementById("budilka");
+  const polje = document.getElementById("bud-napoved");
+  if (!plast || !polje) return;
+  const s = (state.run && state.run.stops || [])
+    .find((x) => x.stop_seq === Number(plast.dataset.stop));
+  polje.innerHTML = s ? budNapovedHtml(s) : "";
 }
 
 function zapriBudilko() {
@@ -552,12 +698,10 @@ function shraniBudilko(stopSeq) {
   const plast = document.getElementById("budilka");
   const s = (state.run && state.run.stops || []).find((x) => x.stop_seq === stopSeq);
   if (!plast || !s || !MOST) return;
-  const poMeri = document.getElementById("bud-meri");
-  const minut = poMeri && !poMeri.hidden
-    ? Math.min(240, Math.max(1, Math.round(Number(poMeri.value) || 25)))
-    : Number(plast.dataset.minut || 25);
+  const minut = budMinut(plast);
   const zbudi = plast.dataset.zbudi === "1";
-  const rezerva = !!(document.getElementById("bud-rezerva") || {}).checked;
+  const rezerva = budRezerva();
+  const dnevi = Number(plast.dataset.dnevi || 0);
   localStorage.setItem(BUD_KLJUC, JSON.stringify({ minut, zbudi, rezerva }));
 
   // Obstojeco budilko za isti postanek zamenjamo, ne podvojimo -- dve zvonjenji
@@ -577,11 +721,12 @@ function shraniBudilko(stopSeq) {
     voznoredni_ms: new Date(schedIso).getTime(),
     // Zamuda gre zraven, da most ve, ali je odhod ze mimo: vozni red sam
     // tega ne pove, kadar vozilo zamuja.
-    zamuda_s: (stopDelay(s) != null ? stopDelay(s) : 0),
+    zamuda_s: budZamuda(s),
     minut_prej: minut,
     zbudi: zbudi,
     rezerva_s: rezerva ? BUD_REZERVA_S : 0,
-    smer: (state.run && state.run.headsign) || "",
+    dnevi: dnevi,
+    smer: smerVoznje(),
   }));
   if (!id) {
     // Most zavrne odhod, ki je mimo. To se zgodi le, ce je stran starejsa
@@ -604,6 +749,24 @@ document.addEventListener("click", (ev) => {
   if (zapri) { zapriBudilko(); return; }
   const izbira = ev.target.closest(".bud-izbira");
   if (izbira) {
+    // Dnevi so preklopi, ne izbira ene med mnogimi: vsak sam zase.
+    if (izbira.dataset.dan !== undefined) {
+      const bit = 1 << Number(izbira.dataset.dan);
+      plast.dataset.dnevi = String(Number(plast.dataset.dnevi || 0) ^ bit);
+      prerisiDneve(plast);
+      osveziNapoved();
+      return;
+    }
+    if (izbira.dataset.nabor !== undefined) {
+      const nabor = Number(izbira.dataset.nabor);
+      // Drugi pritisk na isti nabor ga sname: sicer iz "vsak dan" ni poti nazaj
+      // na enkratno, razen z odklikanjem sedmih dni.
+      plast.dataset.dnevi = String(
+        Number(plast.dataset.dnevi || 0) === nabor ? 0 : nabor);
+      prerisiDneve(plast);
+      osveziNapoved();
+      return;
+    }
     const skupina = izbira.parentElement;
     skupina.querySelectorAll(".bud-izbira").forEach((b) => b.classList.remove("is-on"));
     izbira.classList.add("is-on");
@@ -614,6 +777,7 @@ document.addEventListener("click", (ev) => {
     }
     if (izbira.dataset.poMeri && meri) { meri.hidden = false; meri.focus(); }
     if (izbira.dataset.zbudi) plast.dataset.zbudi = izbira.dataset.zbudi;
+    osveziNapoved();
     return;
   }
   const dovoli = ev.target.closest("[data-dovoli]");
@@ -622,6 +786,17 @@ document.addEventListener("click", (ev) => {
   if (brisi) { MOST.odstrani(brisi.dataset.brisi); zapriBudilko(); renderRunHead(); return; }
   const shrani = ev.target.closest("[data-shrani]");
   if (shrani) shraniBudilko(Number(shrani.dataset.shrani));
+});
+
+function prerisiDneve(plast) {
+  const vrsta = plast.querySelector('[data-skupina="dnevi"]');
+  if (vrsta) vrsta.innerHTML = budDneviHtml(Number(plast.dataset.dnevi || 0));
+}
+
+// Minute po meri in rezerva se ne kliknejo, ampak vtipkajo -- napoved mora
+// slediti tudi njima.
+document.addEventListener("input", (ev) => {
+  if (ev.target.id === "bud-meri" || ev.target.id === "bud-rezerva") osveziNapoved();
 });
 
 // ---------- veriga vozila ----------

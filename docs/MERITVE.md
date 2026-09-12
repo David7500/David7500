@@ -437,19 +437,30 @@ cilja natanko na prikazano minuto. Zato je absolutni strošek precenjen;
 **razmerje** med možnostmi in ugotovitev, da sta `k` in rezerva zamenljiva,
 pa sta na te predpostavke neobčutljiva.
 
-## Aplikacija za Android: velikost in čistost (6. 9. 2026)
+## Aplikacija za Android: velikost in čistost (12. 9. 2026)
 
 **APK.** Ovoj z WebView, brez AndroidX in brez česarkoli Googlovega; edina
 knjižnica v paketu je Kotlinova standardna.
 
 | različica | velikost | zakaj toliko |
 |---|---|---|
-| izdajna (R8) | **52 kB** | naša koda + kar od Kotlina res rabi (28 kB pred budilko, seznamom in mostom) |
-| razvojna | 824 kB | brez R8; 2,33 MB `classes.dex` pred stiskanjem je Kotlinova standardna knjižnica cela |
+| izdajna (R8) | **60 942 B** (~60 kB) | naša koda + kar od Kotlina res rabi |
+| razvojna | 937 170 B (~915 kB) | brez R8; Kotlinova standardna knjižnica cela |
 
-Preverjeno v paketu: `aapt2 dump strings` najde **0** nizov z `com/google`,
-`gms`, `firebase` ali `androidx`. Dovoljenja so štiri (`INTERNET`,
-`ACCESS_NETWORK_STATE`, dvakrat lega), `minSdk` 26, `targetSdk` 35.
+Rast po rezinah, vse izmerjeno na izdajni različici: **28 kB** gol ovoj
+(6. 9.) → **50 kB** z budilko, seznamom in mostom (7. 9.) → **60 kB** s
+ponavljajočimi budilkami, widgetom in bogatejšim seznamom (12. 9.). Devet
+kilobajtov za ponavljanje in widget je toliko, kolikor stane `java.time` v
+`Ponovitev.kt` in `RemoteViews` v widgetu — nobene nove odvisnosti ni.
+
+Preverjeno v paketu 12. 9. 2026: `aapt2 dump strings` najde **0** nizov z
+`com/google`, `gms`, `firebase` ali `androidx`. `minSdk` 26, `targetSdk` 35.
+
+**Dovoljenj je enajst, ne štiri** — budilka jih je prinesla sedem:
+`INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_FINE_LOCATION`,
+`ACCESS_COARSE_LOCATION`, `USE_EXACT_ALARM`, `SCHEDULE_EXACT_ALARM`
+(do SDK 32), `POST_NOTIFICATIONS`, `USE_FULL_SCREEN_INTENT`, `WAKE_LOCK`,
+`VIBRATE`, `RECEIVE_BOOT_COMPLETED`. Za widget ni bilo treba nobenega.
 
 **Orodja.** `~/kajros-android` = 2,4 GB brez emulatorja, 5,5 GB z njim.
 Nič sistemskega, nič sudota.

@@ -102,6 +102,9 @@ class ZvonjenjeDejavnost : Activity() {
 
     private fun koncaj() {
         utisaj()
+        // Ponavljajoca budilka se tu prestavi na naslednji dan. Ce bi cakali
+        // na naslednji zagon aplikacije, bi widget do takrat kazal prazno.
+        budilka?.let { Nacrtovalec.poZvonjenju(this, it.id) }
         finish()
     }
 

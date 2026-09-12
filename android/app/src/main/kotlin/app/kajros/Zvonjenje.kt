@@ -21,6 +21,8 @@ object Zvonjenje {
 
     const val KANAL_ZBUDI = "zbudi"
     const val KANAL_OBVESTI = "obvesti"
+    /** Za sporocila, ki niso alarm: preskocena voznja, ki danes ne vozi. */
+    const val KANAL_TIHO = "tiho"
 
     private val URA = SimpleDateFormat("HH:mm", Locale("sl"))
 
@@ -38,6 +40,9 @@ object Zvonjenje {
         nm.createNotificationChannel(
             NotificationChannel(KANAL_OBVESTI, c.getString(R.string.kanal_obvesti),
                 NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(
+            NotificationChannel(KANAL_TIHO, c.getString(R.string.kanal_tiho),
+                NotificationManager.IMPORTANCE_LOW))
     }
 
     /**
@@ -113,6 +118,29 @@ object Zvonjenje {
             // Od Androida 10 zagon dejavnosti iz ozadja ni vedno dovoljen.
             // Obvestilo s `fullScreenIntent` je takrat tisto, kar zbudi zaslon.
         }
+    }
+
+    /**
+     * Ponavljajoca budilka je bila preskocena, ker vozilo danes ne vozi.
+     *
+     * Tiho obvestilo in ne alarm: potnik mora to izvedeti, a ob peti uri
+     * zjutraj ne sme biti zbujen zato, da mu povemo, da mu ni treba vstati.
+     */
+    fun neVozi(c: Context, b: Budilka) {
+        kanali(c)
+        val kaj = if (b.trainNo.isBlank()) b.postaja else "${b.trainNo} · ${b.postaja}"
+        c.getSystemService(NotificationManager::class.java)?.notify(
+            b.id.hashCode(),
+            Notification.Builder(c, KANAL_TIHO)
+                .setSmallIcon(R.drawable.ikona_obvestilo)
+                .setContentTitle(c.getString(R.string.ne_vozi_naslov, kaj))
+                .setContentText(c.getString(R.string.ne_vozi_zakaj,
+                    URA.format(Date(b.voznoredniMs))))
+                .setAutoCancel(true)
+                .setContentIntent(PendingIntent.getActivity(
+                    c, 0, Intent(c, BudilkeDejavnost::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                .build())
     }
 
     fun utisaj(c: Context, id: String) {

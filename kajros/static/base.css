@@ -130,6 +130,15 @@ body.net-avtobus {
   white-space: nowrap;
 }
 .top-link:hover { color: var(--ink); }
+/* Ista povezava, ki pa ni povezava: budilke odpre nativni zaslon aplikacije,
+   zato je gumb. Brez tega bi imela obrobo in ozadje brskalnikovega gumba. */
+button.top-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: 500 12px/1 var(--sans);
+}
 
 .top-nav { display: flex; align-items: center; gap: 12px; }
 .nav-sep { width: 1px; height: 18px; background: #262b33; flex-shrink: 0; }
