@@ -13,9 +13,15 @@ star zadnji poteg. Ko prenosnik nekaj časa ne teče, se vrzel zapolni z
 `deploy/zapolni-vrzel.sh` (bere z maline, nikoli ne piše nanjo). Malina zato
 ostane prižgana: prenosnik se zapira in seli, ona ne.
 
-**Posodobitev prenosnika:** `~/posodobi.sh` na njem — namesti kodo iz
-`~/kajros` (tja jo osveži razvojni računalnik z `rsync`) in preveri
-`/api/health`. Podrobnosti in past z `/tmp` na malini so v
+**Posodobitev prenosnika:** `~/kajros/deploy/posodobi.sh` na njem — izpiše
+nameščeni commit, prepiše kodo v `/opt/kajros`, jo znova zažene in počaka na
+`/api/health`. Kodo v `~/kajros` osveži razvojni računalnik z `rsync`.
+**Gesla ne rabi**: restart je eden od štirih ukazov z `NOPASSWD`, ki jih
+nastavi `deploy/brez-sudo.sh`.
+
+Starejši `~/posodobi.sh` je **odstranjen 12. 9. 2026**: posodabljal je prek
+`install-rpi.sh` in je zato zahteval sudo geslo, ki ga v seji brez terminala
+ni mogoče vpisati. Podrobnosti in past z `/tmp` na malini so v
 `.claude/rules/objava.md`.
 
 Spodaj je namestitev na Raspberry Pi; za majhne gostitelje, ki sprejmejo zip,

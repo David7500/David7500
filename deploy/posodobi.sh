@@ -15,6 +15,12 @@ PY="$APP/.venv/bin/python"
 
 krepko() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
+# Kateri commit se namesca. To je edino, kar je bilo vredno v starem
+# `~/posodobi.sh` (odstranjen 12. 9. 2026): kodo v `$VIR` osvezi razvojni
+# racunalnik z rsync, in ce je tam stara, se stara tudi tiho namesti.
+krepko "nameščam commit"
+git -C "$VIR" log --oneline -1 2>/dev/null || echo "  (brez git zgodovine)"
+
 krepko "koda: $VIR -> $APP"
 # `--delete`, da odstranjena datoteka res izgine; `.venv` in podatki ostanejo.
 rsync -a --delete \

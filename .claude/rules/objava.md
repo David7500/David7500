@@ -242,10 +242,17 @@ Cena: tunel je brezplačen brez omejitev, Zero Trust do 50 uporabnikov
 brezplačno (iz sekundarnih virov, Cloudflarove cenike ni bilo mogoče
 prebrati — preveri ob postavitvi).
 
-Skript na prenosniku (`/home/david/posodobi.sh`), narejen za rabo s telefona —
-en ukaz, eno geslo: namesti kodo iz `~/kajros` in preveri `/api/health`.
-Kodo tja osveži razvojni računalnik z `rsync`; skript izpiše, kateri commit
-nameša, da se stara koda ne namesti tiho.
+Posodobitev prenosnika je **`~/kajros/deploy/posodobi.sh`**: izpiše nameščeni
+commit, prepiše kodo v `/opt/kajros`, `systemctl restart` (eden od štirih
+ukazov z `NOPASSWD`) in počaka na `/api/health`. Kodo v `~/kajros` osveži
+razvojni računalnik z `rsync`; izpis commita je zato, da se stara koda ne
+namesti tiho.
+
+**Starega `/home/david/posodobi.sh` ni več** (odstranjen 12. 9. 2026). Nastal
+je pred `brez-sudo.sh` in je posodabljal prek `install-rpi.sh`, torej z
+geslom — po prehodu na lahko pot je bil njegov edini učinek, da je objava
+obtičala na pozivu za geslo, ki ga v seji brez terminala ni mogoče vpisati.
+Izpis commita, edino, kar je bilo v njem vredno, je zdaj v `deploy/posodobi.sh`.
 
 **Kaj se da od zunaj in kaj ne.** Prestavitev imenskih strežnikov je spletni
 obrazec in ne rabi domačega omrežja. Vse, kar rabi `sudo` na strojih, rabi
