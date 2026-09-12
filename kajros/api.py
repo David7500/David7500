@@ -1880,16 +1880,19 @@ def admin_podatki(request: Request, dni: int = Query(30, ge=1, le=370)):
 
 
 @app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)
-async def admin_sporocilo_prebrano(request: Request, id_: int):
-    """Označi sporočilo za prebrano ali neprebrano.
+async def admin_sporocilo(request: Request, id_: int):
+    """Označi sporočilo za prebrano ali ga izbriši.
 
-    Edino pisanje pod `/admin`. Žeton je isti kot za pregled; brez njega
-    poti ni (404), tako kot pri vsem drugem v tem razdelku.
+    Dejanji sta na **isti poti** in ne vsaka na svoji: pisalne poti so
+    naštete v `test_pisalne_poti_so_nastete` in vsaka nova je odločitev,
+    ne podrobnost. Žeton je isti kot za pregled; brez njega poti ni (404).
     """
     _preveri_admina(request)
     polja = parse_qs((await request.body()).decode("utf-8", "replace"))
-    prebrano = (polja.get("prebrano") or ["1"])[0] != "0"
     with _conn() as conn:
+        if (polja.get("akcija") or [""])[0] == "brisi":
+            return {"id": id_, "izbrisano": stik.izbrisi(conn, id_)}
+        prebrano = (polja.get("prebrano") or ["1"])[0] != "0"
         stik.oznaci_prebrano(conn, id_, prebrano)
     return {"id": id_, "prebrano": prebrano}
 

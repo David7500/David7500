@@ -234,6 +234,7 @@ function sporocila(d) {
         <button type="button" class="adm-sp-gumb" data-prebrano="${v.prebrano ? 0 : 1}">
           ${v.prebrano ? "označi kot novo" : "prebrano"}
         </button>
+        <button type="button" class="adm-sp-gumb adm-sp-brisi" data-brisi="1">izbriši</button>
       </header>
       <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p>
     </article>`).join("");
@@ -243,12 +244,15 @@ el("sporocila").addEventListener("click", async (e) => {
   const gumb = e.target.closest(".adm-sp-gumb");
   if (!gumb) return;
   const id = gumb.closest(".adm-sporocilo").dataset.id;
+  // Brisanje je nepovratno in gumb stoji tik ob „prebrano" -- vprašanje je
+  // tu zato, ker je zgrešen klik na telefonu cena celega sporočila.
+  if (gumb.dataset.brisi && !confirm("Izbrišem to sporočilo? Tega ni mogoče razveljaviti.")) return;
   gumb.disabled = true;
   try {
     await fetch(`/admin/sporocila/${id}`, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `prebrano=${gumb.dataset.prebrano}`,
+      body: gumb.dataset.brisi ? "akcija=brisi" : `prebrano=${gumb.dataset.prebrano}`,
     });
     await nalozi();
   } finally {

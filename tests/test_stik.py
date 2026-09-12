@@ -234,3 +234,31 @@ def test_najnovejse_prvo(conn):
     _poslji(conn, besedilo="Drugo sporočilo v vrsti.", zdaj=zdaj + 1,
             zeton_iz_obrazca=stik.zeton(zdaj - stik.NAJHITREJE_S - 1))
     assert stik.seznam(conn)[0]["besedilo"] == "Drugo sporočilo v vrsti."
+
+
+def test_brisanje(conn):
+    zdaj = time.time()
+    a = _poslji(conn, zdaj=zdaj,
+                zeton_iz_obrazca=stik.zeton(zdaj - stik.NAJHITREJE_S - 1))
+    assert stik.izbrisi(conn, a) is True
+    assert stik.seznam(conn) == []
+    # Drugič ni česa brisati in to mora povedati, ne pa tiho uspeti.
+    assert stik.izbrisi(conn, a) is False
+
+
+def test_brisanje_ne_sprosti_omejitve(conn):
+    """Kdor izbriše spam, s tem ne sme podariti pošiljatelju novih poskusov.
+
+    Omejitev živi v pomnilniku in z vrstico v bazi nima zveze — to je tu
+    zapisano kot preizkus, ker bi bilo ob morebitni selitvi štetja v bazo
+    prav to tiha vrzel.
+    """
+    zdaj = time.time()
+    ids = [_poslji(conn, zdaj=zdaj + i,
+                   zeton_iz_obrazca=stik.zeton(zdaj - stik.NAJHITREJE_S - 1))
+           for i in range(stik.NA_URO)]
+    for i in ids:
+        stik.izbrisi(conn, i)
+    with pytest.raises(stik.Zavrnjeno, match="kratkem času"):
+        _poslji(conn, zdaj=zdaj + 10,
+                zeton_iz_obrazca=stik.zeton(zdaj - stik.NAJHITREJE_S - 1))

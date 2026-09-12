@@ -242,3 +242,16 @@ def oznaci_prebrano(conn: sqlite3.Connection, id_: int, prebrano: bool) -> None:
     conn.execute("UPDATE sporocilo SET prebrano = ? WHERE id = ?",
                  (1 if prebrano else 0, id_))
     conn.commit()
+
+
+def izbrisi(conn: sqlite3.Connection, id_: int) -> bool:
+    """Odstrani sporočilo. Vrne, ali je kaj odstranil.
+
+    Nabiralnik brez brisanja se zapolni z neželeno pošto, ki jo je treba
+    odslej gledati vsak dan. Brisanje je tudi edini način, kako izpolniti
+    prošnjo „izbrišite moje sporočilo“ — računa, prek katerega bi človek
+    to storil sam, namenoma nimamo.
+    """
+    n = conn.execute("DELETE FROM sporocilo WHERE id = ?", (id_,)).rowcount
+    conn.commit()
+    return n > 0

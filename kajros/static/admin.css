@@ -208,3 +208,8 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Brisanje je nepovratno, zato ni videti kot sosednji gumb: rdeče se
+   pokaže šele ob dotiku, da ne vabi na zgrešen klik. */
+.adm-sp-brisi { margin-left: 0; color: var(--ink-faint); }
+.adm-sp-brisi:hover { color: var(--sev-bad); border-color: var(--sev-bad); }

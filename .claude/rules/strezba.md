@@ -359,6 +359,11 @@ zakaj je javna izpostavitev varna. Zdaj sta pisalni poti dve — `POST /stik`
 in `POST /admin/sporocila/{id}` — in nobene tretje ne sme biti mimogrede:
 `test_pisalne_poti_so_nastete` pade, če se seznam podaljša.
 
+**Brisanje in označevanje sta na ISTI poti** (`POST /admin/sporocila/{id}`,
+loči ju polje `akcija`), ne vsako na svoji. Pisalne poti so naštete in vsaka
+nova je odločitev, ne podrobnost. Brisanje je nepovratno in ima potrditev:
+gumb stoji tik ob „prebrano" in zgrešen klik na telefonu bi stal sporočilo.
+
 **Vsa varovalka je v `kajros/stik.py`, ne razsuta po `api.py`.** Namen je, da
 se v enem branju vidi, kaj neznanec sme. Pet plasti, po vrsti:
 
