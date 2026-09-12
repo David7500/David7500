@@ -275,16 +275,19 @@ Obisk strani, napake, odzivni časi in zdravje zajema na enem mestu. **Pot
 obstaja samo, če je nastavljen `KAJROS_ADMIN_TOKEN`** — brez njega vrne 404 in
 privzetega gesla ni, ker bi ostalo tudi na stroju, ki visi na `kajros.app`.
 
-Na strežniku (arwen) žeton **ne sme v git**, zato je v ločeni datoteki, ki jo
-enota bere z `EnvironmentFile=-/etc/kajros/admin.env`:
+Žeton **ne sme v git** in tudi **ne v systemd enoto**: enoto v `/etc` sme
+pisati samo root, posodobitev strežnika pa je namenoma brez sudota. Zato je v
+podatkovnem imeniku, ki je skupinsko pisljiv, in ga postavi skripta:
 
 ```bash
-sudo install -d -m 700 /etc/kajros
-sudo sh -c 'umask 077; echo "KAJROS_ADMIN_TOKEN=$(openssl rand -base64 24)" \
-    > /etc/kajros/admin.env'
+bash ~/kajros/deploy/zeton.sh        # naredi ga, če ga ni, in izpiše vstop
 sudo systemctl restart kajros.service
-sudo cat /etc/kajros/admin.env      # žeton prepiši v telefon
 ```
+
+`zeton.sh --nov` starega zavrže in naredi novega — menjava je torej ena vrstica
+in ne opravilo za nekoga z geslom. Datoteka je `640`, skupina `kajros`, ker
+storitev teče pod svojim uporabnikom. Okoljska spremenljivka
+`KAJROS_ADMIN_TOKEN` datoteko povozi in ostaja za enkratne poskuse.
 
 Prvi obisk je `https://kajros.app/admin?k=<žeton>`; strežnik nastavi piškotek
 in preusmeri na čist naslov, da žeton ne ostane v zgodovini brskalnika.

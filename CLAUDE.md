@@ -182,10 +182,11 @@ prešteje osirotele meritve.
 | `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
 
-**Pregled za skrbnika zahteva `KAJROS_ADMIN_TOKEN`**; brez njega poti ni (404).
-Prvi obisk `/admin?k=<žeton>`, nato piškotek s potjo `/admin`. Na strežniku je
-žeton v `/etc/kajros/admin.env` (v git ne gre); v razvoju ga naredi
-`dev-restart.sh` sam in izpiše naslov. Šteje se **brez IP-ja**: obiskovalec je
+**Pregled za skrbnika zahteva žeton**; brez njega poti ni (404). Prvi obisk
+`/admin?k=<žeton>`, nato piškotek s potjo `/admin`. Žeton je
+`${KAJROS_DATA_DIR}/.admin-zeton` (postavi ga `deploy/zeton.sh`, **brez
+sudota** — enote v `/etc` agent ne more pisati), `KAJROS_ADMIN_TOKEN` ga
+povozi; v razvoju ga naredi `dev-restart.sh` sam in izpiše naslov. Šteje se **brez IP-ja**: obiskovalec je
 zgoščena vrednost s soljo, ki se ob polnoči zavrže — zato mesečnih unikatov ni
 in vsota dnevnih ni isto. Podrobnosti v `.claude/rules/strezba.md`.
 

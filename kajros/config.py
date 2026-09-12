@@ -119,9 +119,31 @@ OBISK = okolje("OBISK", "1") != "0"
 # reda 100 000 na leto -- proti `run`, ki raste v milijone, je to nic.
 OBISK_KEEP_DAYS = int(okolje("OBISK_KEEP_DAYS", "550"))
 # Zeton za `/admin`. **Prazen pomeni, da poti ni** -- pregled ni javen in
-# nima privzetega gesla, ki bi ga kdo pozabil zamenjati. Nastavi ga v
-# systemd enoti: `Environment=KAJROS_ADMIN_TOKEN=...`.
-ADMIN_TOKEN = okolje("ADMIN_TOKEN", "") or ""
+# nima privzetega gesla, ki bi ga kdo pozabil zamenjati.
+#
+# Dva vira, in vrstni red ni vseeno:
+#
+#  1. `KAJROS_ADMIN_TOKEN` iz okolja -- povozi vse, za enkratne poskuse;
+#  2. `.admin-zeton` v podatkovnem imeniku.
+#
+# Zakaj sploh datoteka: **posodobitev streznika je namenoma brez sudota**
+# (`deploy/brez-sudo.sh` dovoli natanko stiri ukaze `systemctl`), okoljsko
+# spremenljivko pa se da enoti dodati samo v `/etc/systemd/system`, kamor
+# brez roota ni poti. Zeton v `/etc` bi torej pomenil, da je za vsako menjavo
+# potreben clovek z geslom -- in prav to je bilo pri tem projektu ze zapisano
+# kot napaka. Podatkovni imenik je skupinsko pisljiv (`skupina kajros`), zato
+# ga postavi ista skripta, ki objavi kodo.
+def _admin_zeton() -> str:
+    iz_okolja = okolje("ADMIN_TOKEN", "") or ""
+    if iz_okolja:
+        return iz_okolja
+    try:
+        return (DATA_DIR / ".admin-zeton").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""                # ni ga -- torej ni `/admin`, in to je v redu
+
+
+ADMIN_TOKEN = _admin_zeton()
 
 # Peš usmerjevalnik (OSRM) za hojo do postajališča -- glej `hoja.py` in
 # `deploy/osrm.sh`. Prazno ga ugasne in hoja pade na zračno razdaljo × faktor.
