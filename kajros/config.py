@@ -112,6 +112,17 @@ OCENA_SECONDS = int(okolje("OCENA_SECONDS", "120"))
 OCENA_BUS_VZOREC = int(okolje("OCENA_BUS_VZOREC", "5"))
 OCENA_KEEP_DAYS = int(okolje("OCENA_KEEP_DAYS", "30"))
 
+# Števci obiska (`obisk.py`). Tecejo samo na strezniku -- `kajros collect`
+# nima kaj steti. Izklopi se s `KAJROS_OBISK=0`.
+OBISK = okolje("OBISK", "1") != "0"
+# Leto in pol. Vrstic je nekaj sto na dan (poti x ure + obiskovalci), torej
+# reda 100 000 na leto -- proti `run`, ki raste v milijone, je to nic.
+OBISK_KEEP_DAYS = int(okolje("OBISK_KEEP_DAYS", "550"))
+# Zeton za `/admin`. **Prazen pomeni, da poti ni** -- pregled ni javen in
+# nima privzetega gesla, ki bi ga kdo pozabil zamenjati. Nastavi ga v
+# systemd enoti: `Environment=KAJROS_ADMIN_TOKEN=...`.
+ADMIN_TOKEN = okolje("ADMIN_TOKEN", "") or ""
+
 # Peš usmerjevalnik (OSRM) za hojo do postajališča -- glej `hoja.py` in
 # `deploy/osrm.sh`. Prazno ga ugasne in hoja pade na zračno razdaljo × faktor.
 # Samo krajevni naslov: strežnik nima avtentikacije in ga kliče ta proces.

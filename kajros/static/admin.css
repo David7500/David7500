@@ -1,0 +1,153 @@
+/* Pregled za skrbnika.
+ *
+ * Podeduje `statistika.css` -- vodoravni stolpci so isti in nimajo razloga
+ * biti drugačni. Tu je samo tisto, česar potniške strani nimajo: ploščice s
+ * številkami, tabela odzivnih časov in vrstice o stroju.
+ *
+ * Barve NISO lestvica zamud. `--d-*` je ordinalni ramp za minute zamude in
+ * na tej strani ne pomeni ničesar; stanje stroja gre skozi semafor razmer
+ * (`--sev-*`), ki je zato v paleti ločen. Mešanje obojega bi pomenilo, da
+ * oranžna na eni strani pomeni „pet minut" in na drugi „nekaj je narobe".
+ */
+
+.adm-main { max-width: 880px; }
+
+/* ---------- ploščice z odgovorom ---------- */
+
+.adm-ploscice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+
+.adm-ploscica {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+}
+.adm-st {
+  display: block;
+  font: 600 24px/1.1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.adm-ploscica.je-poudarek .adm-st { color: var(--accent-lit); }
+.adm-ime {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.adm-pod {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-ghost);
+}
+
+/* ---------- dva stolpca, kjer je prostor ---------- */
+
+.adm-dvojno {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+.adm-zamik { margin-top: 12px; }
+
+/* Štiriindvajset vrstic je pri privzeti višini 600 px in požre stran, čeprav
+   je vsaka vrstica ena sama številka. Ure so edini razrez, ki je vedno poln
+   in vedno enako dolg, zato so tanjše -- brati se mora oblika dneva, ne
+   posamezna vrstica. */
+.adm-ure .stat-vrsta { padding: 0; }
+.adm-ure .stat-tir { height: 11px; }
+
+/* ---------- tabela odzivov ---------- */
+
+/* Tabela je edina stvar na strani, ki sme drseti vodoravno: stolpcev je šest
+   in na 390 px se ne da stisniti nobenega brez laži. Drsi ovoj, ne telo --
+   vodoravno drsenje cele strani je na telefonu napaka. */
+.adm-tabela-ovoj { overflow-x: auto; }
+
+.adm-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.adm-tabela th {
+  text-align: right;
+  font: 500 11px/1 var(--sans);
+  color: var(--ink-mute);
+  padding: 0 8px 6px;
+  white-space: nowrap;
+}
+.adm-tabela th:first-child, .adm-tabela td:first-child { text-align: left; }
+.adm-tabela td {
+  text-align: right;
+  padding: 5px 8px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+.adm-tabela td:first-child { color: var(--ink); }
+.adm-tabela tr.je-slaba td { background: color-mix(in srgb, var(--sev-bad) 12%, transparent); }
+.adm-tabela .adm-nic { color: var(--ink-ghost); }
+.adm-tabela .adm-slabo { color: var(--sev-bad); font-weight: 600; }
+.adm-tabela .adm-mlacno { color: var(--sev-hard); }
+
+/* ---------- zdravje ---------- */
+
+.adm-zdravje {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.adm-vrsta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+}
+.adm-vrsta .adm-kaj { font-size: 12px; color: var(--ink-dim); }
+.adm-vrsta .adm-koliko {
+  font: 400 12.5px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: right;
+}
+.adm-vrsta.je-dobra .adm-koliko { color: var(--sev-mild); }
+.adm-vrsta.je-mlacna .adm-koliko { color: var(--sev-hard); }
+.adm-vrsta.je-slaba .adm-koliko { color: var(--sev-bad); }
+
+/* `code` v razlagah pod naslovi. Base.css ga ne sloga -- na potniških straneh
+   ga ni, ker potnik ne bere imen endpointov. */
+.adm-main .stat-pod code {
+  font: 400 11.5px/1 var(--mono);
+  color: var(--ink-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.adm-napaka {
+  margin: 16px 0;
+  padding: 11px 13px;
+  border-radius: var(--r);
+  border: 1px solid color-mix(in srgb, var(--sev-bad) 45%, var(--line));
+  background: color-mix(in srgb, var(--sev-bad) 10%, transparent);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+@media (max-width: 620px) {
+  .adm-dvojno { grid-template-columns: 1fr; gap: 26px; }
+  .adm-st { font-size: 21px; }
+}

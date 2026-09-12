@@ -1878,3 +1878,41 @@ Edina prava resnica, ki jo imamo, je Davidova ura, in ta govori nasprotno.
 **Kar iz tega sledi:** ugibati se ne izplača, povedati pa je treba. Kadar
 zadnja beseda o vožnji močno odstopa od številke za potnikovo postajo, naj
 prikaz pokaže **obe** — brez trditve, katera drži.
+
+## Kaj stane štetje obiska (12. 9. 2026)
+
+Projekt o sebi ni vedel ničesar: strežnik ni beležil zahtev, pred njim pa je
+Cloudflarov tunel, ki svojega dnevnika ne da. `obisk.py` zato šteje v
+pomnilniku in enkrat na minuto zapiše v bazo.
+
+**Cena na zahtevo je 0,11 ms** (mediana, p99 0,30 ms), merjeno v strežniku
+samem na 300 zahtevah: čas od konca odgovora do konca vpisa v števce. Za
+primerjavo je bilo v istem teku notranje delo zahteve 1,47 ms, torej je
+štetje **7 % zahteve** pri najcenejšem predpomnjenem odgovoru.
+
+Merjeno posebej, izven strežnika: `iz_zahteve()` 30 µs, od tega iskanje oblike
+poti 4,6 µs (46 vzorcev) in zgoščevanje ključa 1,0 µs. Razlika do 0,11 ms je
+`request.headers` in `request.url`, ki ju Starlette sestavi šele ob prvi rabi.
+
+**Primerjava „vklopljeno proti izklopljeno" na celi zahtevi ne pove nič in to
+je vredno zapisati**, ker je bila prva meritev prav takšna in je kazala
+2,8 ms razlike. Ob ponovitvi se je obrnila:
+
+| krog | OBISK=1 | OBISK=0 |
+|---|---|---|
+| 1 | 1,88 ms | 3,13 ms |
+| 2 | 4,13 ms | 1,75 ms |
+
+Mediana 1 000 zahtev z ohranjeno povezavo, brez zajema. Razlika med dvema
+procesoma na tem računalniku je torej večja od merjenega učinka — sklep iz
+enega para bi bil za faktor 25 napačen. Velja samo meritev v procesu.
+
+**Koliko vrstic to naredi:** `obisk_pot` je ena vrstica na (dan, pot, vrsta),
+torej ~46 vzorcev poti krat dve vrsti; `obisk_razrez` 24 ur + naprave +
+države; `obiskovalec` eno vrstico na obiskovalca na dan. Pri stotih
+obiskovalcih na dan je to nekaj sto vrstic dnevno in ~100 000 na leto — proti
+`run`, ki raste v milijone, nič. Obrez je `KAJROS_OBISK_KEEP_DAYS` (550 dni).
+
+**Zakaj ne vrstica na zahtevo:** en obisk strani jih naredi 10–30 (lege na
+10 s, zamude na 30 s, dokler je zavihek odprt). Vrstica na zahtevo bi pomenila
+stalno pisanje v isto bazo, v katero teče zajem, in na malini je to kartica.

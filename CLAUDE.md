@@ -103,6 +103,7 @@ kajros/
   lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
+  obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
   cli.py         ukazna vrstica
@@ -121,7 +122,8 @@ in podrlo pet zelenih preizkusov. Računani vstavki gredo zato skozi
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` ·
-`weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved`.
+`weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` ·
+`obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` (samo strežni stroj).
 
 **Senčno merjenje napovedi teče ob strežniku** (`ocena.py`, vsakih 120 s).
 Vsakih nekaj minut posname, kaj bi prikaz **ta hip** povedal za postanek, ki je
@@ -178,6 +180,14 @@ prešteje osirotele meritve.
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
 | `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
+| `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
+
+**Pregled za skrbnika zahteva `KAJROS_ADMIN_TOKEN`**; brez njega poti ni (404).
+Prvi obisk `/admin?k=<žeton>`, nato piškotek s potjo `/admin`. Na strežniku je
+žeton v `/etc/kajros/admin.env` (v git ne gre); v razvoju ga naredi
+`dev-restart.sh` sam in izpiše naslov. Šteje se **brez IP-ja**: obiskovalec je
+zgoščena vrednost s soljo, ki se ob polnoči zavrže — zato mesečnih unikatov ni
+in vsota dnevnih ni isto. Podrobnosti v `.claude/rules/strezba.md`.
 
 ## Kam gre
 
@@ -222,7 +232,7 @@ ustreznih datotek:
 | datoteka | velja za | o čem |
 |---|---|---|
 | `zajem.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py` | kaj feed pošlje in kje laže; varovalke pred smetmi |
-| `strezba.md` | `api.py` | meja meritve, omrežje, živa vožnja, predpomnilnik leg |
+| `strezba.md` | `api.py`, `obisk.py` | meja meritve, omrežje, živa vožnja, predpomnilnik leg, štetje obiska |
 | `model.md` | `stats.py`, `backtest.py`, `journey.py` | napoved zamude, prestopi, kaj je bilo preizkušeno in ne pomaga |
 | `oznake.md` | `static/**`, `templates/**` | kako je zamuda napisana in pobarvana |
 | `zemljevid.md` | `dashboard.*`, `train.*` | plasti, geste, ocena lege, pasti CSS |

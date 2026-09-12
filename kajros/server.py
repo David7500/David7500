@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import alerts, collector, config, db, gtfs, ocena, stats, weather
+from . import alerts, collector, config, db, gtfs, obisk, ocena, stats, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -204,6 +204,30 @@ def refresh_timetable(conn, mode: str) -> None:
         lpp.unlink(missing_ok=True)
 
 
+def _obisk_worker() -> None:
+    """Števce obiska iz pomnilnika v bazo, vsakih `obisk.IZPRAZNI_S`.
+
+    **Svoja nit in ne zajemna zanka.** Zajem je edino, česar ni mogoče
+    ponoviti za nazaj, in nobeno štetje obiskov mu ne sme premakniti ritma;
+    poleg tega mora praznjenje teči tudi pri `KAJROS_COLLECTOR=0`, ko zajemne
+    zanke sploh ni. Pisca sta s tem dva, kar je pri WAL v redu: ta zapiše
+    nekaj deset vrstic enkrat na minuto in na drugega čaka največ `timeout`.
+    """
+    conn = db.connect()
+    try:
+        while not _stop.wait(obisk.IZPRAZNI_S):
+            try:
+                obisk.izprazni(conn)
+            except Exception as exc:      # noqa: BLE001 -- statistika ni kriticna
+                _log(f"števcev obiska ni bilo mogoče zapisati: {exc}")
+    finally:
+        try:
+            obisk.izprazni(conn)          # zadnja minuta ob ustavitvi
+        except Exception:                 # noqa: BLE001
+            pass
+        conn.close()
+
+
 def _next_at(hour: int, minute: int) -> datetime:
     when = datetime.now(TZ).replace(hour=hour, minute=minute, second=0, microsecond=0)
     return when + timedelta(days=1) if when <= datetime.now(TZ) else when
@@ -364,6 +388,16 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:
                 _log(f"merjenja napovedi ni bilo mogoče obrezati: {exc}")
 
+            # Samo na strezniku: tabel obiska na malini ni, ker tam ni komu
+            # streci in jih `obisk.init()` nikoli ne naredi.
+            if _strezemo and config.OBISK:
+                try:
+                    n = obisk.prune(conn)
+                    if n:
+                        _log(f"števci obiska obrezani: {n} vrstic")
+                except Exception as exc:
+                    _log(f"števcev obiska ni bilo mogoče obrezati: {exc}")
+
             # Razrezi cez vso zgodovino. Pri letu zajema je to agregat cez 12
             # milijonov vrstic in traja 34 s, odgovor pa se med dvema dnevoma
             # skoraj ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na
@@ -450,6 +484,18 @@ async def lifespan(app):
     global _strezemo
     _strezemo = True             # samo tu; `kajros collect` tega ne izvede
     bootstrap()
+    obisk_nit = None
+    if config.OBISK:
+        conn = db.connect()
+        try:
+            obisk.init(conn)
+        finally:
+            conn.close()
+        obisk_nit = threading.Thread(target=_obisk_worker, daemon=True,
+                                     name="kajros-obisk")
+        obisk_nit.start()
+        _log("štetje obiska vklopljeno"
+             + ("" if config.ADMIN_TOKEN else " (pregleda /admin ni: KAJROS_ADMIN_TOKEN ni nastavljen)"))
     thread = None
     if config.okolje("COLLECTOR", "1") != "0":
         settings = _settings()
@@ -467,3 +513,5 @@ async def lifespan(app):
         _stop.set()
         if thread:
             thread.join(timeout=5)
+        if obisk_nit:
+            obisk_nit.join(timeout=5)

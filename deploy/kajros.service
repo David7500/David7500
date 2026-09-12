@@ -23,6 +23,13 @@ Environment=KAJROS_REFRESH_HOUR=4
 # Če jo kdo prižge, naj ve, da hkrati z zajemom ne smeta teči: pisali bi v
 # isto bazo in se prepirali za feed (`install-rpi.sh` drugo zato ugasne).
 Environment=KAJROS_AGENCIES=1118,1119,1121,1123
+# Žeton za `/admin` (pregled obiska). **V git ne sme**, zato je v ločeni
+# datoteki, ki jo naredi skrbnik na stroju samem:
+#   install -m 600 -o root /dev/null /etc/kajros/admin.env
+#   echo "KAJROS_ADMIN_TOKEN=$(openssl rand -base64 24)" > /etc/kajros/admin.env
+# Vodilni `-` pomeni, da odsotnost datoteke ni napaka -- brez nje poti
+# `/admin` preprosto ni in strežnik teče naprej.
+EnvironmentFile=-/etc/kajros/admin.env
 ExecStart=/opt/kajros/.venv/bin/python -m uvicorn kajros.api:app --host 0.0.0.0 --port ${PORT} --no-access-log
 Restart=always
 RestartSec=15

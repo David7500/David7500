@@ -2,6 +2,7 @@
 paths:
   - "kajros/api.py"
   - "kajros/lpp.py"
+  - "kajros/obisk.py"
 ---
 
 # Kaj sme in česa ne sme API
@@ -259,3 +260,49 @@ to je najmočnejši dokaz, da je spoj pravi: dva vira neodvisno povesta isto
 lego vozila.
 
 Izklop: `KAJROS_LPP_ZIVO=0`.
+
+## Štetje obiska in pregled za skrbnika (`obisk.py`, `/admin`)
+
+Prvo pravilo projekta je „meri, ne domnevaj", o sebi pa projekt ni meril nič:
+strežnik ni beležil zahtev in Cloudflare svojega dnevnika ne da. Zato
+`obisk.py`. Štiri stvari, ki se pri tem hitro pokvarijo tiho:
+
+* **IP se ne shrani nikoli.** Obiskovalec je `blake2s(sol dneva ‖ IP ‖ UA)`,
+  sol pa so naključni bajti, ki se ob prehodu dneva zavržejo. Posledica, ki
+  jo je treba **pisati na zaslon in ne samo v kodo**: mesečnih različnih ljudi
+  ni mogoče izračunati, vsota nad 30 dnevi isto osebo šteje do 30-krat. Stran
+  to pove v nogi; brez tega je številka videti kot unikati in ni.
+* **Pot se normalizira na obliko iz usmerjevalnika** (`/app/train/{train_no}`),
+  ne na naslov. Sicer tabela raste s prometom in ne s številom strani — LPP
+  linija 3G ima 388 voženj. Vzorci se berejo iz `app.routes` in ne iz seznama
+  v kodi: seznam bi se ob novi strani tiho razšel. Kar ni nobena naša pot, gre
+  v eno samo vrstico `(neznano)` — en bot, ki ugiba `/wp-admin/…`, bi sicer
+  naredil tisoče vrstic na dan.
+* **Boti so izločeni iz razrezov, ne iz prometa.** Ura dneva, naprava in
+  država štejejo samo ljudi; `obisk_pot` šteje oboje, ločeno po stolpcih
+  `zahtev` in `ljudi`. Iskalnik, ki vsako uro pobere isto stran, bi sicer
+  narisal enakomeren dan in ubil edino zanimivo črto.
+* **Pisanje ne gre v zahtevo**, ampak v svojo nit vsakih 60 s
+  (`server._obisk_worker`). En obisk strani je 10–30 zahtev; vrstica na zahtevo
+  bi pomenila stalno pisanje v bazo, v katero teče zajem. Cena štetja je
+  izmerjena: **0,11 ms na zahtevo** (p99 0,30 ms), podrobnosti v
+  `docs/MERITVE.md`.
+
+**Odzivni čas se hrani po vedrih in mediana je razred, ne vrednost.** Prikaz
+piše `‹ 250 ms` in ne `180 ms`: hranimo porazdelitev (`obisk_odziv`), ne
+vsakega časa. Izmišljena natančnost bi bila tu posebej zahrbtna, ker je ta
+stran edino mesto, kjer se počasnost sploh vidi.
+
+**`/admin` je zaprt z žetonom iz okolja in brez privzete vrednosti.** Če
+`KAJROS_ADMIN_TOKEN` ni nastavljen, poti ni (404). Manjkajoč žeton v zahtevi
+je prav tako 404 — kdor ga nima, naj ne izve, da pot obstaja — **napačen pa
+je 403**, da se tipkarska napaka loči od pozabljene nastavitve. Primerjava gre
+skozi `hmac.compare_digest`. Po prijavi z `?k=` sledi preusmeritev na čist
+naslov: žeton bi sicer ostal v zgodovini brskalnika in v glavi `Referer`.
+Piškotek ima pot `/admin`, zato ne potuje z `/api/*` klici, ki jih brskalnik
+pošilja desetkrat na minuto. Poti ni v OpenAPI — `/docs` je razglas, kaj
+obstaja.
+
+**Pregled in števci se ne štejeta sama.** `/admin*` in `/static/*` gresta mimo
+štetja; sicer bi skrbnikovo osveževanje na minuto postalo največja postavka v
+lastni statistiki.

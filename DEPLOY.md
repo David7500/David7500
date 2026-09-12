@@ -268,3 +268,33 @@ Zgodovine zamud ni od nikoder dobiti nazaj — GTFS-RT nosi samo trenutno stanje
 Če gostitelj ob vsaki objavi ali ponovnem zagonu zavrže disk, se zbrano izgubi.
 Pred resnim zajemom preveri, ali `KAJROS_DATA_DIR` preživi ponovni zagon, in si
 uredi občasno kopijo `kajros.sqlite`.
+
+## Pregled za skrbnika (`/admin`)
+
+Obisk strani, napake, odzivni časi in zdravje zajema na enem mestu. **Pot
+obstaja samo, če je nastavljen `KAJROS_ADMIN_TOKEN`** — brez njega vrne 404 in
+privzetega gesla ni, ker bi ostalo tudi na stroju, ki visi na `kajros.app`.
+
+Na strežniku (arwen) žeton **ne sme v git**, zato je v ločeni datoteki, ki jo
+enota bere z `EnvironmentFile=-/etc/kajros/admin.env`:
+
+```bash
+sudo install -d -m 700 /etc/kajros
+sudo sh -c 'umask 077; echo "KAJROS_ADMIN_TOKEN=$(openssl rand -base64 24)" \
+    > /etc/kajros/admin.env'
+sudo systemctl restart kajros.service
+sudo cat /etc/kajros/admin.env      # žeton prepiši v telefon
+```
+
+Prvi obisk je `https://kajros.app/admin?k=<žeton>`; strežnik nastavi piškotek
+in preusmeri na čist naslov, da žeton ne ostane v zgodovini brskalnika.
+Napačen žeton vrne 403 (tipkarska napaka), manjkajoč 404 (poti ni).
+
+V razvoju žetona ni treba nastavljati: `scripts/dev-restart.sh` si ga naredi
+sam v `data/.admin-zeton` in ob zagonu izpiše cel naslov.
+
+**Kaj se hrani:** nikoli IP. Obiskovalec je zgoščena vrednost s soljo, ki se
+ob polnoči zavrže, zato je „različnih ljudi" smiselno samo za en dan; vsota
+nad 30 dnevi isto osebo šteje večkrat in stran to tudi piše. Števci gredo v
+bazo enkrat na minuto in se obrežejo po `KAJROS_OBISK_KEEP_DAYS` (550 dni).
+Štetje se ugasne s `KAJROS_OBISK=0`.

@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import shutil
 import threading
 import time
 from datetime import date, datetime, timedelta
@@ -24,7 +26,7 @@ from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerts, collector, config, db, journey, lpp, pot, stats
+from . import alerts, collector, config, db, journey, lpp, obisk, pot, stats
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -40,6 +42,29 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"],
 # Pri letu zajema ima lestvica avtobusnih linij 167 KB, stisnjena 20 KB --
 # in to prek Tailscala ali tunela ni vseeno. Brez nove odvisnosti (starlette).
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+@app.middleware("http")
+async def _stej_obisk(request: Request, call_next):
+    """Šteje vsako postreženo zahtevo. Podrobnosti in zasebnost: `obisk.py`.
+
+    Meri se **cela** pot skozi aplikacijo, vključno z gzipom -- to je tisto,
+    kar obiskovalec res čaka, brez omrežja. Napaka v štetju ne sme podreti
+    odgovora: to je statistika, ne strežba.
+    """
+    zacetek = time.perf_counter()
+    koda = 500
+    try:
+        odgovor = await call_next(request)
+        koda = odgovor.status_code
+        return odgovor
+    finally:
+        if config.OBISK:
+            try:
+                obisk.iz_zahteve(request, koda,
+                                 (time.perf_counter() - zacetek) * 1000)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 @app.exception_handler(journey.VozniRedPrevelik)
@@ -1544,6 +1569,98 @@ def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
     # branjema zamud se ne spremeni, zato ga racunamo enkrat za vse.
     return _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
+
+
+# --- pregled za skrbnika ----------------------------------------------------
+#
+# **Ne gre v OpenAPI** (`include_in_schema=False`). Endpointi so namenoma
+# javni in jih kdo bere; seznam na `/docs` je razglas, kaj obstaja, in pot,
+# ki je zaprta z žetonom, se v takem razglasu nima česa učiti.
+#
+# Zaprto je z žetonom iz okolja in **brez privzete vrednosti**: če
+# `KAJROS_ADMIN_TOKEN` ni nastavljen, poti ni. Privzeto geslo je geslo, ki
+# ostane -- na stroju, ki visi na `kajros.app`, to ni sprejemljivo.
+
+#: Ime piškotka. Pot je `/admin`, zato žeton ne potuje z nobeno drugo zahtevo
+#: -- niti z `/api/*`, ki jih brskalnik pošilja desetkrat na minuto.
+ADMIN_PISKOTEK = "kajros_admin"
+ADMIN_POT = "/admin"
+#: Kdaj je ta proces vstal. Pove, ali je restart požrl kaj, česar ni v bazi.
+_ZAGON_TS = time.time()
+
+
+def _preveri_admina(request: Request) -> str:
+    """Vrne veljaven žeton ali sproži napako.
+
+    404 in ne 401, kadar žetona v zahtevi sploh ni: kdor ga nima, naj ne
+    izve, da pot obstaja. 403 pa je namenoma **razločen** -- pomeni "žeton
+    imaš, a je napačen" in loči tipkarsko napako od pozabljene nastavitve.
+    Brez te razlike je edini odgovor na telefonu prazen 404 in ni mogoče
+    ugotoviti, katera od obeh stvari je narobe.
+    """
+    if not config.ADMIN_TOKEN:
+        raise HTTPException(status_code=404)
+    dano = request.query_params.get("k") or request.cookies.get(ADMIN_PISKOTEK)
+    if not dano:
+        raise HTTPException(status_code=404)
+    if not hmac.compare_digest(dano, config.ADMIN_TOKEN):
+        raise HTTPException(status_code=403, detail="Napačen žeton.")
+    return dano
+
+
+@app.get(ADMIN_POT, response_class=HTMLResponse, include_in_schema=False)
+def admin_page(request: Request):
+    """Pregled obiska in zdravja. Prvi obisk z `?k=<žeton>`, potem piškotek.
+
+    Po uspešni prijavi gre **preusmeritev na čist naslov**: žeton v vrstici
+    bi sicer ostal v zgodovini brskalnika, v deljeni povezavi in v glavi
+    `Referer` vsake zunanje pisave na strani.
+    """
+    zeton = _preveri_admina(request)
+    if not request.query_params.get("k"):
+        return templates.TemplateResponse(request, "admin.html", {})
+    odgovor = RedirectResponse(ADMIN_POT, status_code=303)
+    odgovor.set_cookie(
+        ADMIN_PISKOTEK, zeton, max_age=180 * 24 * 3600, httponly=True,
+        samesite="lax", path=ADMIN_POT,
+        # Za tunelom je zahteva do uvicorna navaden http, zato `url.scheme`
+        # ne zadošča -- `secure` bi bil vedno izklopljen prav tam, kjer je
+        # potreben. Cloudflare pove pravo shemo v glavi.
+        secure=(request.headers.get("x-forwarded-proto") == "https"
+                or request.url.scheme == "https"))
+    return odgovor
+
+
+@app.get(f"{ADMIN_POT}/podatki", include_in_schema=False)
+def admin_podatki(request: Request, dni: int = Query(30, ge=1, le=370)):
+    """Vse številke pregleda v enem odgovoru."""
+    _preveri_admina(request)
+    out = {"steje": config.OBISK}
+    with _conn() as conn:
+        if config.OBISK:
+            # Najprej v bazo, kar visi v pomnilniku, sicer pregled ne pozna
+            # zadnje minute -- in prav ta je tista, ki jo skrbnik gleda.
+            try:
+                obisk.izprazni(conn)
+            except Exception:  # noqa: BLE001 -- pregled sme biti tudi minuto star
+                pass
+        else:
+            # Tabele naredi `obisk.init()` iz `lifespan`, ta pa pri
+            # `KAJROS_OBISK=0` ne tece. Brez tega bi pregled padel na
+            # "no such table" -- napaka, ki je videti kot okvara, pomeni pa
+            # samo, da stetje ni vklopljeno. Zdravje zajema je vseeno vredno
+            # pokazati, zato tabele naredimo prazne.
+            obisk.init(conn)
+        out.update(obisk.pregled(conn, dni))
+    out["zdravje"] = api_health()
+    raba = shutil.disk_usage(config.DATA_DIR)
+    out["stroj"] = {
+        "disk_prostih": raba.free, "disk_vseh": raba.total,
+        "zagon_ts": int(_ZAGON_TS), "teka_s": int(time.time() - _ZAGON_TS),
+        "razlicica": app.version,
+        "obisk_od": obisk.IZPRAZNI_S,
+    }
+    return out
 
 
 # --- HEAD -------------------------------------------------------------------

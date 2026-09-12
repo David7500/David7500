@@ -13,6 +13,21 @@ cd "$(dirname "$0")/.."
 LOG="${KAJROS_DEV_LOG:-/tmp/kajros-dev.log}"
 HOST="${KAJROS_HOST:-0.0.0.0}"
 PORT="${KAJROS_PORT:-8001}"
+
+# Zeton za /admin. Brez njega te poti ni -- privzetega gesla namenoma ni,
+# ker bi ostalo tudi na stroju, ki visi na kajros.app. V razvoju pa mora biti
+# stran dosegljiva brez iskanja po dokumentaciji, zato si tu enkrat naredimo
+# svojega in ga hranimo v `data/`, ki je v .gitignore.
+ZETON_DAT="${KAJROS_DATA_DIR:-data}/.admin-zeton"
+if [ -z "${KAJROS_ADMIN_TOKEN:-}" ]; then
+  if [ ! -s "$ZETON_DAT" ]; then
+    mkdir -p "$(dirname "$ZETON_DAT")"
+    ./venv/bin/python -c "import secrets; print(secrets.token_urlsafe(18))" > "$ZETON_DAT"
+    chmod 600 "$ZETON_DAT"
+  fi
+  KAJROS_ADMIN_TOKEN="$(cat "$ZETON_DAT")"
+  export KAJROS_ADMIN_TOKEN
+fi
 pkill -f "[u]vicorn kajros.api.*--port $PORT" 2>/dev/null
 for _ in $(seq 1 40); do
   pgrep -f "[u]vicorn kajros.api.*--port $PORT" >/dev/null || break
@@ -28,6 +43,7 @@ for _ in $(seq 1 60); do
       ip -4 -br addr show scope global | awk -v p="$PORT" \
         '{split($3,a,"/"); printf "  v omrezju: http://%s:%s/app\n", a[1], p}'
     fi
+    echo "  pregled:   http://127.0.0.1:$PORT/admin?k=$KAJROS_ADMIN_TOKEN"
     exit 0
   fi
   sleep 0.5

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pregled — kajros</title>
+  {# Pregled ni za ljudi in ne za iskalnike. Strežnik ga sicer brez žetona
+     sploh ne postreže, a `noindex` je druga vrsta varovalke: velja tudi
+     takrat, ko bi žeton kdaj pricurljal v deljeno povezavo. #}
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#0f1115">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('connections.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+  <link rel="stylesheet" href="{{ s('admin.css') }}">
+</head>
+<body class="conn-page">
+
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg class="brand-mark" width="20" height="20" viewBox="0 0 96 96" fill="none"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M34 24V72" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M66 26L34 50" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M34 50L66 72" stroke="currentColor" stroke-width="9"/>
+      </svg>
+      <span class="brand-name">kajros</span>
+    </a>
+    <div class="divider"></div>
+    <span class="page-name">Pregled</span>
+    <div class="spacer"></div>
+    <div class="mode-switch" id="obdobje">
+      <button type="button" data-dni="7" aria-pressed="false">7 dni</button>
+      <button type="button" data-dni="30" aria-pressed="true">30 dni</button>
+      <button type="button" data-dni="90" aria-pressed="false">90 dni</button>
+    </div>
+  </header>
+
+  <main class="conn-main stat-main adm-main">
+
+    <div id="adm-napaka" class="adm-napaka" hidden></div>
+
+    <section class="adm-ploscice" id="ploscice"></section>
+
+    <section class="stat-blok">
+      <h2>Dan za dnem</h2>
+      <p class="stat-pod">Različni obiskovalci na dan (stolpec) in ogledi strani
+        (številka desno). Boti niso šteti.</p>
+      <div class="stat-vrstice" id="po-dnevih"><div class="empty-state">nalagam …</div></div>
+    </section>
+
+    <section class="stat-blok">
+      <h2>Katere strani</h2>
+      <p class="stat-pod">Ogledi po straneh v izbranem obdobju. Klici API-ja so
+        spodaj posebej — ena odprta stran jih naredi na desetine.</p>
+      <div class="stat-vrstice" id="strani"></div>
+    </section>
+
+    <section class="stat-blok adm-dvojno">
+      <div>
+        <h2>Ob kateri uri</h2>
+        <p class="stat-pod">Zahteve ljudi po uri dneva.</p>
+        <div class="stat-vrstice adm-ure" id="ure"></div>
+      </div>
+      <div>
+        <h2>S čim in od kod</h2>
+        <p class="stat-pod">Naprava iz <code>User-Agent</code>, država iz
+          Cloudflarove glave — <em>domače</em> pomeni, da zahteva sploh ni
+          šla skozi tunel.</p>
+        <div class="stat-vrstice" id="naprave"></div>
+        <div class="stat-vrstice adm-zamik" id="drzave"></div>
+      </div>
+    </section>
+
+    <section class="stat-blok">
+      <h2>Kdaj je bilo počasno ali narobe</h2>
+      <p class="stat-pod">Odzivni čas meri celotno pot skozi aplikacijo, brez
+        omrežja. Mediana in p95 sta <strong>razreda</strong>, ne točni vrednosti:
+        hranimo porazdelitev po vedrih, ne vsakega časa posebej.</p>
+      <div class="adm-tabela-ovoj">
+        <table class="adm-tabela" id="endpointi"></table>
+      </div>
+      <p class="stat-pod adm-zamik"><code>(neznano)</code> ni naša pot — tam so
+        ugibanja botov po naslovih, ki jih nimamo.</p>
+    </section>
+
+    <section class="stat-blok">
+      <h2>Zdravje zajema</h2>
+      <p class="stat-pod">Isti podatki kot <code>/api/health</code>, na enem
+        mestu in s stanjem stroja zraven.</p>
+      <div class="adm-zdravje" id="zdravje"></div>
+    </section>
+
+    <footer class="page-foot" id="adm-noga"></footer>
+  </main>
+
+  <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('admin.js') }}"></script>
+</body>
+</html>
