@@ -22,17 +22,6 @@
   max-width: 46ch;
 }
 
-.home-live {
-  margin-top: 14px;
-  display: flex; align-items: center; gap: 8px;
-  font: 400 12.5px/1 var(--sans); color: var(--ink-mute);
-}
-.home-live strong { color: var(--ink); font: 600 13px/1 var(--mono); }
-.live-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--ok); flex-shrink: 0;
-}
-
 /* ---------- izbira omrezja ---------- */
 
 .home-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -54,16 +43,6 @@
 .pick-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .pick-name { font: 600 18px/1.2 var(--sans); color: var(--ink); }
 .pick-sub { font: 400 11.5px/1.45 var(--sans); color: var(--ink-mute); }
-/* Stevilo na poti je edini ziv podatek na tej strani -- zato v kot in ne
- * v vrsto s poimenovanjem, ki je stalno. */
-.pick-n {
-  position: absolute; top: 16px; right: 18px;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
-  font: 600 15px/1 var(--mono);
-}
-/* Gola "15" v kotu je uganka; beseda pod njo stane eno vrstico. */
-.pick-n small { font: 400 9.5px/1 var(--sans); color: var(--ink-mute);
-                letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* ---------- ostalo ---------- */
 
@@ -80,6 +59,9 @@
   text-decoration: none;
 }
 .more-link:hover { border-color: var(--line-firm); }
+/* Budilke so v aplikaciji gumb, ne povezava: odpre jih nativni zaslon, ne
+   naslov. Videti pa mora biti isto kot soseda, sicer je videti kot okvara. */
+button.more-link { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 .more-link strong { font: 600 13.5px/1.3 var(--sans); color: var(--ink); }
 .more-link span { font: 400 11.5px/1.5 var(--sans); color: var(--ink-mute); }
 .more-link:hover strong { color: var(--accent-lit); }
@@ -100,7 +82,6 @@
      tem, KOGA stran sploh pokriva ("LPP, Arriva, Nomago, AP MS"). V vrstici
      zanj ni stolpca, zato ime in podnaslov zlozimo v svojega. */
   .pick-sub { font-size: 11px; }
-  .pick-n { position: static; margin-left: auto; }
 }
 
 /* ---------- shranjene in nedavne poti ---------- */

@@ -244,17 +244,28 @@ const MOST = (() => {
 // pritiskom na ikono aplikacije. To je gesta, ki jo pozna Android, ne pa nujno
 // clovek -- zato je povezava tam, kjer so vse druge: v glavi strani. V
 // brskalniku je ni, ker nativnega zaslona ni.
+//
+// **Domaca stran glave nima**, zato gre tam med "Ostalo" (`.home-more`). Brez
+// tega je bil prvi zaslon aplikacije edini, s katerega do budilk ni poti -- in
+// prav ta se odpre ob zagonu.
 function povezavaDoBudilk() {
   if (!MOST || typeof MOST.odpriBudilke !== "function") return;
   const nav = document.querySelector(".top-nav");
-  if (!nav || nav.querySelector("[data-budilke]")) return;
+  const kam = nav || document.querySelector(".home-more");
+  if (!kam || kam.querySelector("[data-budilke]")) return;
   const g = document.createElement("button");
   g.type = "button";
-  g.className = "top-link";
   g.dataset.budilke = "1";
-  g.textContent = "budilke";
+  if (nav) {
+    g.className = "top-link";
+    g.textContent = "budilke";
+  } else {
+    g.className = "more-link";
+    g.innerHTML = "<strong>Budilke</strong>"
+      + "<span>nastavljene budilke za odhode — samo v aplikaciji</span>";
+  }
   g.addEventListener("click", () => MOST.odpriBudilke());
-  nav.appendChild(g);
+  kam.appendChild(g);
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", povezavaDoBudilk);
@@ -329,6 +340,34 @@ function pollWhileVisible(fn, ms) {
   window.addEventListener("online", wake);
   wake();
   return { stop: () => { clearTimeout(timer); timer = null; } };
+}
+
+// ---------- puscici za dan ----------
+//
+// Premakneta datum za dan naprej ali nazaj. Prazno polje pomeni danes -- tako
+// ga berejo tudi vse poizvedbe -- zato je prvi pritisk "jutri" oziroma
+// "vceraj", naslednji pa naprej po dnevih.
+//
+// Racunamo ob POLDNEVU in ne ob polnoci: dan ob prehodu na zimski cas traja
+// 25 ur, pristevanje 86 400 000 ms bi ostalo v istem dnevu, ura 12 pa nikoli
+// ne pade cez rob dneva.
+//
+// Tu in ne na strani, ker imata polje z dnevom zdaj dve strani (iskalnik zvez
+// in pot); dve razlicici istega racuna bi se ob prvem prehodu casa razsli.
+function pripniDnevnePuscice(koren) {
+  for (const btn of (koren || document).querySelectorAll("[data-day-for]")) {
+    const input = document.getElementById(btn.dataset.dayFor);
+    if (!input) continue;
+    const korak = Number(btn.dataset.step) || 1;
+    btn.addEventListener("click", () => {
+      const d = new Date(`${input.value || todayIso()}T12:00:00`);
+      d.setDate(d.getDate() + korak);
+      input.value = d.toLocaleDateString("sv-SE");
+      // Stran mora izvedeti, da se je dan spremenil -- brez tega je poizvedba
+      // po dotiku na puscico se vedno za prejsnji dan.
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
 }
 
 // ---------- preprosto / napredno ----------

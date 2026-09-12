@@ -468,3 +468,52 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .empty-state.is-busy { animation: none; opacity: 0.8; }
 }
+
+/* ---------- polje z dnevom ---------- */
+/* Skupno iskalniku zvez in Najhitrejši poti, odkar ima dan tudi ta. */
+
+/* Puščica za dan naprej živi V polju, levo od koledarskega gumbka brskalnika
+   -- ne kot lastni gumb ob njem. Datum in njegovo premikanje sta ena stvar in
+   tako je videti kot ena. Prostor zanjo naredi `padding-right` na vnosu. */
+.date-row { position: relative; display: block; }
+/* **`padding-right` premakne koledarski gumbek brskalnika navznoter**, ker ga
+   Chrome polozi na konec vsebinskega okvira. Pri 50 px je gumbek zdrsnil
+   levo od nase puscice in vrstni red je bil obrnjen. Vnos zato ostane pri
+   svojem robu, puscica pa se postavi LEVO od gumbka -- torej pri vecjem
+   odmiku od desne, kot ga ima on. */
+.date-row input { width: 100%; padding-right: 10px; }
+/* Obe puščici v enem zavoju: razmik med njima ureja `gap` in ne dva ločena
+   odmika, ki bi se ob spremembi velikosti ikone razšla. */
+.day-nav {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+}
+/* Tarča, ne ikona. 14 px puščica s 3 px odmika je bila na telefonu prezadetek
+   -- prst je 7--10 mm, kar je pri tej gostoti okoli 40 px. Ikona je zdaj 17 px,
+   dotakljivo polje okoli nje pa 34 px, kar je še vedno pod 44 px iz smernic,
+   a več ne gre: desno od puščic stoji koledarski gumbek brskalnika. */
+.day-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.day-step:active { background: var(--bg-hover); }
+.day-step:hover { color: var(--accent-lit); }
+/* Brez tega je puščica na tipkovnici nevidna -- obroba je edini znak fokusa. */
+.day-step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}

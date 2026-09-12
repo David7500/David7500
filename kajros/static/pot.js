@@ -88,10 +88,16 @@ function narisiTocke(premakni = true) {
   }
 }
 
+// Kaj piše v polju za ta kraj. Ena funkcija, ker je isti zapis stal na treh
+// mestih (postavitev, branje naslova, zvezdica) in se je razšel takoj, ko je
+// shranjena točka dobila ime.
+function napisTocke(t) {
+  return t ? (t.ime || `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`) : "";
+}
+
 function postavi(kaj, tocka) {
   S[kaj] = tocka;
-  const vnos = $(`#q-${kaj}`);
-  vnos.value = tocka.ime || `${tocka.lat.toFixed(5)}, ${tocka.lon.toFixed(5)}`;
+  $(`#q-${kaj}`).value = napisTocke(tocka);
   zapriZadetke(kaj);
   narisiTocke();
   // Prvi klik postavi izhodišče, naslednji cilj -- brez tega bi moral človek
@@ -108,6 +114,21 @@ function oznaciArm() {
 }
 
 map.on("click", (e) => postavi(S.arm, { lat: e.latlng.lat, lon: e.latlng.lng }));
+
+// Pot nazaj je isto vprašanje z zamenjanima koncema. Kadar je odgovor že na
+// zaslonu, se poišče takoj — gumb, ki vidno stanje pusti pri miru, je videti
+// kot okvara (isto pravilo kot pri zamenjavi postaj v iskalniku zvez).
+$("#zamenjaj").addEventListener("click", () => {
+  [S.od, S.do] = [S.do, S.od];
+  for (const kaj of ["od", "do"]) $(`#q-${kaj}`).value = napisTocke(S[kaj]);
+  // Naslednji klik na zemljevid gre v prazno polje, ne tja, kamor je meril prej.
+  S.arm = !S.od ? "od" : !S.do ? "do" : S.arm;
+  oznaciArm();
+  oznaciZvezde();
+  narisiTocke(false);      // pogled ostane, kjer je: premaknili sta se le vlogi
+  vUrl();
+  if (S.izidi) isci();
+});
 
 // ---------------------------------------------------------------- shranjene točke
 //
@@ -162,8 +183,7 @@ function oznaciZvezde() {
     // tipkanjem polje že govori o drugem kraju, točka pa je še stara — in
     // zvezdica je takrat trdila „★ shranjeno“ nad tujim imenom. Dotik nanjo
     // bi odstranil točko, ki je človek sploh ni gledal, zato je dotlej ni.
-    const napis = t ? (t.ime || `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`) : "";
-    b.hidden = !t || $(`#q-${kaj}`).value.trim() !== napis;
+    b.hidden = !t || $(`#q-${kaj}`).value.trim() !== napisTocke(t);
     if (b.hidden) continue;
     const s = shranjenaZa(t);
     b.textContent = s ? "★ shranjeno" : "☆ shrani";
@@ -519,12 +539,41 @@ function pripniNasvet() {
   });
 }
 
+// Ura, ki je danes že mimo, ni napaka — včasih človek res gleda nazaj — a mora
+// biti povedano. Doslej je stran na vprašanje „ob 06:00“ ob treh popoldne
+// vrnila jutranje odhode, kot da so pred tabo, in nič na zaslonu ni namignilo,
+// da gleda v preteklost.
+function zeMimo() {
+  const ob = $("#ob").value;
+  if (!ob) return false;                        // prazno pomeni „zdaj“
+  if (($("#dan").value || todayIso()) !== todayIso()) return false;
+  // „HH:MM“ se primerja kot niz, ker sta obe uri po ljubljanskem času in
+  // enako dolgi -- datuma iz njiju ni treba sestavljati.
+  return ob < TIME_FMT.format(new Date());
+}
+
+function mimoHtml() {
+  if (!zeMimo()) return "";
+  return ' <span class="nasvet">Ta ura je danes že mimo — predlogi so za nazaj.'
+    + ' <button type="button" id="od-zdaj">poišči od zdaj</button></span>';
+}
+
+function pripniMimo() {
+  const b = document.getElementById("od-zdaj");
+  if (!b) return;
+  b.addEventListener("click", () => { $("#ob").value = ""; isci(); });
+}
+
 function izrisi(izid) {
   S.izidi = izid;
   S.izbran = 0;
+  const mimo = mimoHtml();
   if (!izid.predlogi.length) {
     izidiEl.innerHTML = "";
-    povej("Za ta čas ni poti. Poskusi pozneje ali dovoli več hoje.", "prazno");
+    povej("", "prazno");
+    stanje.innerHTML = "Za ta čas ni poti. Poskusi pozneje ali dovoli več hoje."
+      + mimo;
+    pripniMimo();
     potLayer.clearLayers();
     return;
   }
@@ -537,12 +586,13 @@ function izrisi(izid) {
   // kot da smo prezrli avtobus, ki ga v resnici ni.
   if (izid.predlogi.length === 1 && izid.predlogi[0].edina) {
     stanje.innerHTML = "Z vozilom ni poti, ki bi bila hitrejša od hoje."
-      + ` · ${dayLabel(izid.datum)}${opomba}${nasvetHtml(izid.nasvet)}`;
+      + ` · ${dayLabel(izid.datum)}${opomba}${nasvetHtml(izid.nasvet)}${mimo}`;
     pripniNasvet();
   } else {
     stanje.innerHTML = `${izid.predlogi.length} ${sklon(izid.predlogi.length, "predlog")}`
-      + ` · ${dayLabel(izid.datum)}${opomba}`;
+      + ` · ${dayLabel(izid.datum)}${opomba}${mimo}`;
   }
+  pripniMimo();
   izidiEl.innerHTML = izid.predlogi.map((p, i) => predlogHtml(p, i)).join("");
   // Kartica je povezava na podrobno stran, zato klik ne sme izbirati. Na
   // zemljevidu se pot pokaže ob dotiku ali fokusu -- to ne odvzame klika in
@@ -572,6 +622,7 @@ async function isci() {
     hoje: hojeMin(),
   });
   if ($("#ob").value) p.set("ob", $("#ob").value);
+  if ($("#dan").value) p.set("date", $("#dan").value);
   povej("Iščem …", null);
   izidiEl.innerHTML = "";
   vUrl();
@@ -611,6 +662,9 @@ function vUrl() {
   if (S.od) q.set("od", `${S.od.lat.toFixed(5)},${S.od.lon.toFixed(5)}`);
   if (S.do) q.set("do", `${S.do.lat.toFixed(5)},${S.do.lon.toFixed(5)}`);
   if ($("#ob").value) q.set("ob", $("#ob").value);
+  // Današnjega dne v naslov ne pišemo: deljena povezava brez dneva pomeni
+  // „danes“ in jutri odgovori na jutrišnji dan, kar je skoraj vedno mišljeno.
+  if ($("#dan").value && $("#dan").value !== todayIso()) q.set("dan", $("#dan").value);
   if (hojeMin() !== 25) q.set("hoje", hojeMin());
   // Velikost zemljevida gre v naslov: kdor pot deli, deli tudi pogled nanjo,
   // in ponovno nalaganje ne vrne zemljevida v okence.
@@ -633,15 +687,24 @@ function izUrl() {
     const s = shranjenaZa(t);
     if (s) t.ime = s.ime;
     S[kaj] = t;
-    $(`#q-${kaj}`).value = t.ime || `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`;
+    $(`#q-${kaj}`).value = napisTocke(t);
     imamo = true;
   }
   if (q.get("ob")) $("#ob").value = q.get("ob");
+  $("#dan").value = q.get("dan") || todayIso();
   if (q.get("hoje")) nastaviHoje(Number(q.get("hoje")));
   if (q.get("karta") === "velika") velikost(true);
   S.arm = S.od ? "do" : "od";
   if (imamo) narisiTocke();
   return S.od && S.do;
+}
+
+pripniDnevnePuscice();
+// Kadar je odgovor že na zaslonu, ga spremenjeno vprašanje osveži; dokler ga
+// ni, išče samo gumb — vsak vmesni ugib je zahteva za odgovor, ki ga nihče ni
+// prosil (isto pravilo kot na vstopni strani).
+for (const id of ["#dan", "#ob"]) {
+  $(id).addEventListener("change", () => { if (S.izidi) isci(); });
 }
 
 oznaciArm();

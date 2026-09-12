@@ -1,41 +1,16 @@
 "use strict";
 
-// Domaca stran. Ena zahteva na omrezje in nic vec -- to je razcepisce, ne
-// nadzorna plosca; kdor hoce podrobnosti, klikne naprej.
+// Domaca stran. Razcepisce, ne nadzorna plosca; kdor hoce podrobnosti, klikne
+// naprej.
+//
+// **Zivih stevilk tu ni.** Bili sta dve: "danes obicajno: vlaki +2 min ·
+// avtobusi +1 min" in stevec vozil "na poti" pri vsaki kartici. Prva je vsak
+// dan skoraj ista, torej ne spremeni nicesar, kar bo clovek na tej strani
+// storil; druga je podatek o omrezju in ne o njegovi poti. Z njima sta odpadli
+// dve zahtevi od treh -- `/api/overview` in `/api/overview/bus` sta bili
+// najdrazji na strani, ki je samo razcepisce.
 
 async function load() {
-  try {
-    const [o, b] = await Promise.all([
-      fetch("/api/overview").then((r) => r.json()),
-      fetch("/api/overview/bus").then((r) => r.json()),
-    ]);
-    const nt = o.live_trains || 0;
-    const nb = b.live_vehicles || 0;
-    document.getElementById("n-train").textContent = nt;
-    document.getElementById("n-bus").textContent = nb;
-    // Stevili "na poti" sta ze na karticah, 60 px nizje. Ista dva podatka
-    // dvakrat sta zapravljena vrstica -- tu zato pove, kako danes vozijo,
-    // kar je vprasanje, zaradi katerega je clovek prisel.
-    // Zjutraj je danasnji vzorec droben (ob 6:50 nekaj koncanih voznj) in
-    // "0 min" iz treh vozenj ni slika dneva. Streznik zato posilja `yesterday`
-    // natanko takrat, kadar je danasnjih premalo -- in beseda nad stevilko
-    // mora povedati, kateri dan to je.
-    const dan = (x) => (x && x.yesterday && x.yesterday.runs ? x.yesterday : x.today);
-    const del = (x) => {
-      const d = dan(x);
-      return d && d.runs ? `${delayLabel(d.median_s)} min` : null;
-    };
-    const dv = del(o), da = del(b);
-    const vceraj = !!(o.yesterday && o.yesterday.runs) || !!(b.yesterday && b.yesterday.runs);
-    document.getElementById("home-live").innerHTML = dv || da
-      ? `<span class="live-dot"></span>${vceraj ? "včeraj" : "danes"} običajno:`
-        + (dv ? ` vlaki <strong>${dv}</strong>` : "")
-        + (dv && da ? " ·" : "")
-        + (da ? ` avtobusi <strong>${da}</strong>` : "")
-      : `<span class="live-dot"></span>zajem teče`;
-  } catch (err) {
-    document.getElementById("home-live").textContent = "podatki trenutno niso dosegljivi";
-  }
   try {
     const h = await fetch("/api/health").then((r) => r.json());
     document.getElementById("home-health").textContent =

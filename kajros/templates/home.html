@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kajros — kdaj mi pelje</title>
-  <meta name="description" content="Zamude slovenskih vlakov in avtobusov iz odprtih podatkov, izmerjene in ne prepisane.">
+  <title>kajros — vozni redi in zamude</title>
+  <meta name="description" content="Odhodi in zamude slovenskih vlakov in avtobusov, izmerjeni iz odprtih podatkov.">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -28,11 +28,12 @@
         </svg>
         <span>kajros</span>
       </div>
+      {#- Odhodi in zamude, ne „kdaj ti pelje": prva različica je bila pisana,
+          kot se govori, in se je brala kot narobe postavljen stavek. #}
       <p class="home-lead">
-        Kdaj ti pelje in koliko zamuja — izmerjeno iz odprtih podatkov,
-        ne prepisano od prevoznika.
+        Odhodi in zamude slovenskih vlakov in avtobusov. Izmerjeni iz odprtih
+        podatkov, ne prepisani od prevoznika.
       </p>
-      <div class="home-live" id="home-live"></div>
     </header>
 
     <!-- Dve poti, ne ena z izbiro znotraj: potnik ve, ali gre z vlakom ali z
@@ -54,12 +55,12 @@
       </span>
       <span class="pick-text">
         <span class="pick-name">Najhitrejša pot</span>
-        <span class="pick-sub">kje si in kam moraš — hoja, vlak in avtobus v isti verigi</span>
+        <span class="pick-sub">od vrat do vrat — hoja, vlak in avtobus v eni verigi</span>
       </span>
       <span class="pick-vec" aria-hidden="true">›</span>
     </a>
 
-    <p class="home-ali">ali, če veš, s katere postaje greš:</p>
+    <p class="home-ali">Če že veš, s katere postaje greš:</p>
 
     <div class="home-picks">
       <a class="pick pick-train" href="/app/train">
@@ -75,7 +76,6 @@
           <span class="pick-name">Vlaki</span>
           <span class="pick-sub">SŽ in nadomestni prevozi</span>
         </span>
-        <span class="pick-n"><span id="n-train">—</span><small>na poti</small></span>
       </a>
       <a class="pick pick-bus" href="/app/bus">
         <span class="pick-icon">
@@ -90,7 +90,6 @@
           <span class="pick-name">Avtobusi</span>
           <span class="pick-sub">LPP, Arriva, Nomago, AP MS</span>
         </span>
-        <span class="pick-n"><span id="n-bus">—</span><small>na poti</small></span>
       </a>
     </div>
 
@@ -99,18 +98,20 @@
          njih mora tudi za vsakodnevno pot skozi dva zaslona. Ce jih ni,
          odseka ni: prazen naslov ne pove nicesar. -->
     <section class="home-saved" id="home-saved" hidden>
-      <h2 class="home-saved-title">Tvoje poti</h2>
+      <h2 class="home-saved-title">Shranjene poti</h2>
       <div class="chips" id="home-chips"></div>
     </section>
 
+    {#- Sem (in ne v glavo, ki je ta stran nima) pripne `common.js` povezavo
+        do budilk, kadar stran teče v aplikaciji za Android. #}
     <nav class="home-more" aria-label="Ostalo">
       <a class="more-link" href="/app/map">
         <strong>Živi zemljevid</strong>
-        <span>kje je zdaj kaj — edini skupni pogled obeh omrežij</span>
+        <span>kje so vlaki in avtobusi ta trenutek — edini skupni pogled obeh omrežij</span>
       </a>
       <a class="more-link" href="/app/ovire">
         <strong>Ovire na progah</strong>
-        <span>dela, zapore in nadomestni prevozi — samo železnica</span>
+        <span>dela na progi, zapore in nadomestni prevozi (samo železnica)</span>
       </a>
     </nav>
 

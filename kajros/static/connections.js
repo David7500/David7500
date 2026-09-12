@@ -1492,23 +1492,7 @@ for (const id of STATION_INPUTS) {
   attachClear($(id));
 }
 
-// Puscici premakneta datum za dan naprej ali nazaj. Prazno polje pomeni danes
-// -- tako ga bere tudi `searchAB()` -- zato je prvi pritisk "jutri" oziroma
-// "vceraj", naslednji pa naprej po dnevih.
-//
-// Racunamo ob POLDNEVU in ne ob polnoci: dan ob prehodu na zimski cas traja
-// 25 ur, prištevanje 86 400 000 ms bi ostalo v istem dnevu, ura 12 pa nikoli
-// ne pade cez rob dneva.
-for (const btn of document.querySelectorAll("[data-day-for]")) {
-  const input = $(btn.dataset.dayFor);
-  if (!input) continue;
-  const korak = Number(btn.dataset.step) || 1;
-  btn.addEventListener("click", () => {
-    const d = new Date(`${input.value || todayIso()}T12:00:00`);
-    d.setDate(d.getDate() + korak);
-    input.value = d.toLocaleDateString("sv-SE");
-  });
-}
+pripniDnevnePuscice();
 
 // Kazalo postaj se nalozi takoj po strani; iskalnik do takrat vprasa streznik.
 naloziKazalo();

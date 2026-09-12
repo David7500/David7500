@@ -36,8 +36,8 @@
     <section class="pot-panel" aria-label="Pot">
       <h1 class="pot-title">Najhitrejša pot</h1>
       <p class="pot-lead">
-        Povej, kje si in kam moraš. Hoja, vlak in avtobus so v isti verigi;
-        hoja se računa po pravih pešpoteh pri 5 km/h.
+        Izberi izhodišče in cilj — kjerkoli, ne le na postaji. Hoja, vlak in
+        avtobus so v eni verigi; hoja se računa po pravih pešpoteh pri 5 km/h.
       </p>
 
       {#- Zadetki iskanja visijo pod VRSTICO, ne pod celim blokom: pod njim sta
@@ -67,6 +67,19 @@
         <ul class="tocke-shranjene" hidden></ul>
       </div>
 
+      {#- Pot nazaj je isto vprašanje z zamenjanima koncema. Brez tega gumba ga
+          je bilo treba postaviti znova — in kraja, ki je prišel z lego iz GPS
+          ali s klikom na zemljevid, ni bilo mogoče prepisati. #}
+      <div class="tocka-menjava">
+        <button type="button" id="zamenjaj" class="zamenjaj"
+                title="zamenjaj kraja" aria-label="zamenjaj kraja">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
+          </svg>
+        </button>
+      </div>
+
       <div class="tocka" data-kaj="do">
         <label class="tocka-oznaka" for="q-do">Kam</label>
         <div class="tocka-vrstica">
@@ -86,8 +99,35 @@
       </div>
 
       <div class="pot-nastavitve">
+        {#- Dneva stran doslej ni imela in ga tudi ni povedala: ura 06:00 ob
+            treh popoldne je vrnila jutranje odhode, kot da so pred tabo. Polje
+            je isto kot v iskalniku zvez — puščici sta en dotik, koledar trije. #}
+        <div class="polje">
+          <span>Dan</span>
+          <div class="date-row">
+            <input id="dan" type="date" aria-label="Dan">
+            <span class="day-nav">
+              <button type="button" class="day-step" data-day-for="dan" data-step="-1"
+                      aria-label="dan nazaj" title="dan nazaj">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M15 6l-6 6 6 6"></path>
+                </svg>
+              </button>
+              <button type="button" class="day-step" data-day-for="dan" data-step="1"
+                      aria-label="dan naprej" title="dan naprej">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6"></path>
+                </svg>
+              </button>
+            </span>
+          </div>
+        </div>
         <label class="polje">
-          <span>Odhod</span>
+          {#- Prazno polje pomeni „zdaj“ in to mora biti napisano: prazen
+              obrazec sicer izgleda kot nedokončan. #}
+          <span>Odhod <small class="polje-op">prazno = zdaj</small></span>
           <input id="ob" type="time" step="60">
         </label>
         <label class="polje">

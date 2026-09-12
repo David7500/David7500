@@ -81,6 +81,31 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
   staro obliko, stran bi novo polje izpustila in videti bi bilo, kot da
   sprememba ne dela. Točno to se je zgodilo pri `median_s`.
 
+## Domača stran je razcepišče, ne nadzorna plošča
+
+**Živih številk tam ni** (odstranjeni 12. 9. 2026 na prijavo). Bili sta dve:
+
+* „danes običajno: vlaki +2 min · avtobusi +1 min" — vsak dan skoraj ista
+  številka, torej ne spremeni ničesar, kar bo človek na tej strani storil;
+* števec vozil „na poti" na vsaki kartici — podatek o omrežju, ne o njegovi
+  poti.
+
+Z njima sta odpadli **dve zahtevi od treh** (`/api/overview` in
+`/api/overview/bus`, najdražji na strani, ki je samo razcepišče). Ostane
+`/api/health` za obseg zajema v nogi — to je navedba vira, ne statistika.
+
+**Povedi so pisane, kot se piše, ne kot se govori.** „Kdaj ti pelje in koliko
+zamuja" in „kje je zdaj kaj" sta bili prijavljeni kot stavka, ki se v
+slovenščini tako ne uporabljata; zdaj „Odhodi in zamude slovenskih vlakov in
+avtobusov" in „kje so vlaki in avtobusi ta trenutek". Isto velja za naslove v
+zavihku brskalnika: „kajros — vlaki: odhodi in zamude", ne „kdaj mi pelje
+vlak".
+
+**Do budilk se pride tudi s prve strani.** `common.povezavaDoBudilk()` je
+iskala samo `.top-nav`, ki je domača stran **edina nima** — in prav ta se v
+aplikaciji odpre ob zagonu. Zdaj gre povezava tam med „Ostalo"
+(`.home-more`); v brskalniku je še vedno ni, ker nativnega zaslona ni.
+
 ## `/app/pot` („Najhitrejša pot") — edina stran, ki se ne začne pri postaji
 
 Potnik ve, **kje stoji**, ne pa, s katere postaje mu pelje. Zato sta vhoda dva
@@ -169,6 +194,28 @@ bi bilo v dosegu prvo postajališče — s številko in gumbom, ki jo nastavi.
 Zadnje ni obljuba: postajališče v dosegu še ni zveza, in tako tudi piše.
 Zato prefilter kandidatov meri do **45 minut** ne glede na nastavljeno mejo;
 sicer postajališča tik čez mejo sploh ne izmeri in te številke ni od kod dobiti.
+
+**Zamenjava krajev in dan sta manjkala** (dodano 12. 9. 2026):
+
+* **Zamenjava** je gumb med poljema. Pot nazaj je isto vprašanje z zamenjanima
+  koncema, kraja z lego iz GPS ali s klikom na zemljevid pa ni bilo mogoče
+  prepisati. Kadar je odgovor že na zaslonu, se poišče takoj — gumb, ki vidno
+  stanje pusti pri miru, je videti kot okvara.
+* **Dan** je polje z dvema puščicama, isto kot v iskalniku zvez. `/api/pot` je
+  `date` sprejemal ves čas, stran ga ni pošiljala. Ker ima polje zdaj dve
+  strani, sta slog (`.date-row`, `.day-nav`, `.day-step`) v `base.css` in
+  poslušalec v `common.pripniDnevnePuscice()`; dve različici istega računa bi
+  se razšli ob prvem prehodu na zimski čas. Najmanjša širina **210 px** ni
+  izbrana na oko: pri 160 px je leva puščica ležala čez besedilo datuma —
+  datum konča pri ~105 px, puščici zasedeta 68 px levo od koledarskega gumbka
+  brskalnika, ki stoji 28 px od desnega roba.
+* **Ura, ki je danes že mimo, se ne popravi tiho.** „Ob 06:00" ob treh
+  popoldne je vrnilo jutranje odhode, kot da so pred tabo, in nič tega ni
+  povedalo. Zdaj piše „Ta ura je danes že mimo — predlogi so za nazaj" in
+  ponudi **poišči od zdaj**. Iskanje se ne premakne samo: pogled nazaj je
+  včasih prav to, po kar je človek prišel.
+* Sprememba dneva ali ure odgovor **osveži samo, kadar je ta že na zaslonu**;
+  dokler ga ni, išče samo gumb — isto pravilo kot na vstopni strani.
 
 **Shranjene točke („dom", „služba") ostanejo v brskalniku.** Kje kdo stanuje,
 je najobčutljivejši podatek, ki ga aplikacija lahko drži, zato je v

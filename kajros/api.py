@@ -189,7 +189,7 @@ def bus_page(request: Request):
     return templates.TemplateResponse(request, "connections.html", {
         "here": "avtobusi", "network": "avtobus",
         "section": "Avtobusi",
-        "page_title": "kajros — kdaj mi pelje avtobus",
+        "page_title": "kajros — avtobusi: odhodi in zamude",
         "page_desc": "Odhodi in zamude slovenskih avtobusov iz odprtih podatkov.",
         "from_ph": "izhodiščno postajališče",
         "to_ph": "ciljno postajališče",

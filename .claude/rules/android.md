@@ -112,6 +112,14 @@ takrat ni.
 **Aritmetika je v `Ura.kt` in je čista** (brez Androida), da jo je mogoče
 preizkusiti brez naprave. Tam je vse, kar je mogoče narediti narobe.
 
+### Do seznama budilk se pride z vsake strani, tudi s prve
+
+Povezavo doda `common.povezavaDoBudilk()` in obstaja samo v aplikaciji.
+Doslej je iskala le `.top-nav` — te pa **domača stran nima**, torej z zaslona,
+ki se ob zagonu odpre prvi, do budilk ni bilo poti razen dolgega pritiska na
+ikono aplikacije. Zdaj gre tam med „Ostalo" (`.home-more`) in je videti kot
+soseda, čeprav je gumb in ne povezava.
+
 ### Rezervo določi potnik, ne aplikacija
 
 `zvoni = voznoredna + zamuda − X`. **Rezerve v računu ni** (odločeno
