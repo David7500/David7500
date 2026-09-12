@@ -111,12 +111,20 @@
       ne o ljudeh.
     </p>
 
+    {#- Brez nastavljenega `KAJROS_STIK` naslov ni skrit, ampak odsek cel:
+        naslov „Vprašanja“ nad odstavkom, ki ne pove, kam vprašati, je
+        slabši od nobenega naslova. #}
+    {% if stik %}
     <h2>Vprašanja</h2>
     <p>
-      Stran vzdržuje ena oseba kot osebni projekt.
-      {%- if stik %} Za vprašanje o podatkih piši na
-      <a href="mailto:{{ stik }}">{{ stik }}</a>.{% endif %}
+      Stran vzdržuje ena oseba kot osebni projekt. Za vprašanje o podatkih
+      piši na <a href="mailto:{{ stik }}">{{ stik }}</a>.
     </p>
+    {% else %}
+    <p class="drobno">
+      Stran vzdržuje ena oseba kot osebni projekt.
+    </p>
+    {% endif %}
 
     <footer class="home-foot">
       <a href="/">nazaj na začetek</a>
