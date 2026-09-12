@@ -38,12 +38,14 @@
         android:textStyle="bold"
         android:fontFamily="monospace" />
 
+    <!-- Kadar odhod ni blizu, tu stoji ura odhoda ("tor. 06:49") namesto
+         odstevanja: 65 ur v sekundah bere kot stoparica, ne kot odgovor.
+         Besedilo in velikost nastavi `Widget.kt`. -->
     <TextView
-        android:id="@+id/widget_zdaj"
+        android:id="@+id/widget_staticno"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:text="@string/widget_zdaj"
         android:textColor="@color/accent"
         android:textSize="32sp"
         android:textStyle="bold"

@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import java.text.SimpleDateFormat
@@ -47,6 +48,25 @@ class Widget : AppWidgetProvider() {
     companion object {
 
         private val URA = SimpleDateFormat("HH:mm", Locale("sl"))
+        /** "tor. 06:49" -- dan in ura, kadar je odhod predalec za odstevanje. */
+        private val DAN_URA = SimpleDateFormat("EEE HH:mm", Locale("sl"))
+        /** "tor. 15. 9. 06:49" -- ko je vec kot teden dni in bi bil dan dvoumen. */
+        private val DATUM_URA = SimpleDateFormat("EEE d. M. HH:mm", Locale("sl"))
+
+        /**
+         * Do kod se odsteva v sekundah.
+         *
+         * Ni meritev, ampak presoja berljivosti: `65:00:31` na domacem zaslonu
+         * bere kot stoparica in ne odgovori na vprasanje "kdaj mi pelje".
+         * Dve uri sta okno, v katerem se clovek pripravlja na pot -- takrat je
+         * ziva sekunda koristna, prej pa je koristna ura odhoda.
+         *
+         * Preklop se zgodi ob naslednji osvezitvi widgeta, torej najvec pol
+         * ure pozneje (`updatePeriodMillis`) ali prej, ce se budilka tako ali
+         * tako zbudi.
+         */
+        private const val BLIZU_MS = 2 * 3600 * 1000L
+        private const val TEDEN_MS = 7 * 24 * 3600 * 1000L
 
         /** Prerise vse widgete. Klice se od povsod, kjer se budilke spremenijo. */
         fun osvezi(c: Context) {
@@ -80,7 +100,7 @@ class Widget : AppWidgetProvider() {
                 v.setTextViewText(R.id.widget_kaj, c.getString(R.string.ime))
                 v.setTextViewText(R.id.widget_kje, c.getString(R.string.widget_brez))
                 v.setViewVisibility(R.id.widget_stevec, View.GONE)
-                v.setViewVisibility(R.id.widget_zdaj, View.GONE)
+                v.setViewVisibility(R.id.widget_staticno, View.GONE)
                 v.setTextViewText(R.id.widget_pod, c.getString(R.string.widget_brez_kako))
                 return v
             }
@@ -93,33 +113,58 @@ class Widget : AppWidgetProvider() {
             // `Chronometer` steje v casovnici `elapsedRealtime`, ne v epoch --
             // zato razliko pristejemo, namesto da bi mu dali cas odhoda.
             val doOdhoda = izid.odhodMs - zdaj
-            if (doOdhoda > 0) {
-                v.setViewVisibility(R.id.widget_stevec, View.VISIBLE)
-                v.setViewVisibility(R.id.widget_zdaj, View.GONE)
+            val odsteva = doOdhoda in 1..BLIZU_MS
+            v.setViewVisibility(R.id.widget_stevec, if (odsteva) View.VISIBLE else View.GONE)
+            v.setViewVisibility(R.id.widget_staticno, if (odsteva) View.GONE else View.VISIBLE)
+
+            if (odsteva) {
+                // `Chronometer` steje v casovnici `elapsedRealtime`, ne v epoch --
+                // zato razliko pristejemo, namesto da bi mu dali cas odhoda.
                 v.setChronometer(R.id.widget_stevec,
                     SystemClock.elapsedRealtime() + doOdhoda, null, true)
                 v.setChronometerCountDown(R.id.widget_stevec, true)
-            } else {
+            } else if (doOdhoda <= 0) {
                 // Cez niclo `Chronometer` steje naprej z minusom; to ni odgovor.
-                v.setViewVisibility(R.id.widget_stevec, View.GONE)
-                v.setViewVisibility(R.id.widget_zdaj, View.VISIBLE)
+                v.setTextViewText(R.id.widget_staticno, c.getString(R.string.widget_zdaj))
+                v.setTextViewTextSize(R.id.widget_staticno, TypedValue.COMPLEX_UNIT_SP, 32f)
+            } else {
+                val oblika = if (doOdhoda > TEDEN_MS) DATUM_URA else DAN_URA
+                v.setTextViewText(R.id.widget_staticno, oblika.format(Date(izid.odhodMs)))
+                // Ura z dnevom je daljsa od stevca in pri 32sp uide iz okvira.
+                v.setTextViewTextSize(R.id.widget_staticno, TypedValue.COMPLEX_UNIT_SP, 23f)
             }
 
-            v.setTextViewText(R.id.widget_pod, pod(c, izid))
+            // Voznoredna ura pride iz budilke, ne iz racuna: `upostevanaS` ima
+            // odsteto rezervo, `odhodMs` pa ne, zato bi izpeljava
+            // `odhodMs - upostevanaS` uro zamaknila za rezervo.
+            v.setTextViewText(R.id.widget_pod, pod(c, izid, URA.format(Date(b.voznoredniMs)),
+                uraJeZgoraj = !odsteva && doOdhoda > 0))
             return v
         }
 
-        /** Vrstica pod stevilko: od kod je ura, ki jo widget kaze. */
-        private fun pod(c: Context, izid: Ura.Izid): String {
+        /**
+         * Vrstica pod stevilko: od kod je ura, ki jo widget kaze.
+         *
+         * `uraJeZgoraj` pove, da veliko polje ze kaze uro odhoda. Takrat je ne
+         * ponovimo -- "tor. 06:49" nad "vozni red 06:49" sta dve imeni za isto
+         * uro in nista dva podatka. Isto pravilo kot v seznamu budilk.
+         */
+        private fun pod(c: Context, izid: Ura.Izid, red: String, uraJeZgoraj: Boolean): String {
             val odhod = URA.format(Date(izid.odhodMs))
+            val zamuda = Math.round(izid.upostevanaS / 60.0).toInt()
             return when {
                 izid.vir != Ura.Vir.ZAMUDA ->
-                    c.getString(R.string.widget_vozni_red, odhod)
-                izid.upostevanaS >= 60 -> c.getString(R.string.widget_zamuda,
-                    odhod, Math.round(izid.upostevanaS / 60.0).toInt())
-                izid.upostevanaS <= -60 -> c.getString(R.string.widget_prezgodaj,
-                    odhod, Math.round(-izid.upostevanaS / 60.0).toInt())
-                else -> c.getString(R.string.widget_tocno, odhod)
+                    if (uraJeZgoraj) c.getString(R.string.widget_nepreverjena)
+                    else c.getString(R.string.widget_vozni_red, odhod)
+                izid.upostevanaS >= 60 ->
+                    if (uraJeZgoraj) c.getString(R.string.widget_zamuja_dan, zamuda, red)
+                    else c.getString(R.string.widget_zamuda, odhod, zamuda)
+                izid.upostevanaS <= -60 ->
+                    if (uraJeZgoraj) c.getString(R.string.widget_prezgodaj_dan, -zamuda, red)
+                    else c.getString(R.string.widget_prezgodaj, odhod, -zamuda)
+                else ->
+                    if (uraJeZgoraj) c.getString(R.string.widget_tocno_dan)
+                    else c.getString(R.string.widget_tocno, odhod)
             }
         }
     }

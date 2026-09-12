@@ -63,6 +63,10 @@
     <string name="widget_brez_kako">Nastavi jo pri svoji postaji v aplikaciji.</string>
     <string name="widget_zdaj">zdaj</string>
     <string name="widget_vozni_red">vozni red %1$s · zamuda še ni preverjena</string>
+    <string name="widget_nepreverjena">zamuda še ni preverjena</string>
+    <string name="widget_zamuja_dan">zamuja %1$d min · vozni red %2$s</string>
+    <string name="widget_prezgodaj_dan">%1$d min pred redom · vozni red %2$s</string>
+    <string name="widget_tocno_dan">vozi točno</string>
     <string name="widget_zamuda">odhod %1$s · zamuja %2$d min</string>
     <string name="widget_prezgodaj">odhod %1$s · %2$d min pred redom</string>
     <string name="widget_tocno">odhod %1$s · vozi točno</string>
