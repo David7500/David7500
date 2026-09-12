@@ -1916,3 +1916,24 @@ obiskovalcih na dan je to nekaj sto vrstic dnevno in ~100 000 na leto — proti
 **Zakaj ne vrstica na zahtevo:** en obisk strani jih naredi 10–30 (lege na
 10 s, zamude na 30 s, dokler je zavihek odprt). Vrstica na zahtevo bi pomenila
 stalno pisanje v isto bazo, v katero teče zajem, in na malini je to kartica.
+
+## Prva ugotovitev pregleda: hladen `/api/health` je zrasel na 20,6 s (12. 9. 2026)
+
+Uro po objavi je `/admin` na arwenu pokazal `/api/health` s p95 nad 5 s in
+**najdlje 20 575 ms**. Topel je isti endpoint 11–14 ms (tri zaporedne
+meritve), torej ne gre za počasnost strežbe, ampak za ceno **prvega** klica po
+zagonu.
+
+V tem zapisu je bila ta cena 6. 9. 2026 izmerjena kot **2 683 ms** pri 5,3 mio
+`obs`. Baza je odtlej zrasla na **2,4 GB in 19,3 mio meritev** — številka je
+torej zrasla **7,7-krat**, medtem ko je zapisana ostala stara.
+
+Plača jo tisti, ki vpraša prvi, in po vsaki objavi je to **`posodobi.sh` sam**:
+njegov `curl` na `/api/health` je del čakanja na odgovor. Ogrevanje
+(`server._ogrej_health`) se sproži v istem trenutku, zato se v najslabšem
+primeru oba ustavita pred isto ključavnico.
+
+Ni popravljeno, ker to ni okvara strežbe: za obiskovalca je odgovor topel,
+razen v prvi minuti po restartu. Zapisano je zato, ker je to **prva številka,
+ki je prišla iz pregleda in je ne bi videl nihče** — in ker pri nadaljnji rasti
+baze ne bo ostala 20 s.
