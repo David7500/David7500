@@ -53,3 +53,53 @@
   margin-top: 30px;
   font: 400 12.5px/1.6 var(--sans); color: var(--ink-faint);
 }
+
+/* ---------- obrazec za stik ---------- */
+
+/* Vaba proti robotom. Ne `display:none`: del robotov tako skrita polja
+   preskoči, kar je natanko tisto, česar nočemo. Odmaknjena je iz vidnega
+   polja in vzeta iz zaporedja tabulatorja, za bralnik zaslona pa jo skrije
+   `aria-hidden` na ovoju. */
+.stik-vaba {
+  position: absolute; left: -9999px;
+  width: 1px; height: 1px; overflow: hidden;
+}
+
+.stik-obrazec { display: flex; flex-direction: column; margin-top: 22px; }
+
+.stik-oznaka {
+  font: 500 11px/1 var(--sans); color: var(--ink-mute);
+  letter-spacing: .06em; text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.stik-oznaka + .stik-polje { margin-bottom: 18px; }
+
+.stik-polje {
+  font: 400 14.5px/1.5 var(--sans); color: var(--ink);
+  background: var(--bg-raised);
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r);
+  padding: 11px 13px;
+  width: 100%;
+}
+.stik-polje:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.stik-polje::placeholder { color: var(--ink-ghost); }
+
+.stik-besedilo { resize: vertical; min-height: 130px; }
+
+.stik-gumb { align-self: flex-start; margin-top: 4px; }
+
+/* Napaka in uspeh sta obarvana po semaforju razmer, ne po lestvici zamud:
+   ista barva mora povsod pomeniti isto zamudo. */
+.stik-napaka, .stik-ok {
+  margin: 18px 0 0;
+  padding: 11px 13px;
+  border-radius: var(--r);
+  font: 400 14px/1.5 var(--sans);
+  border: 1px solid;
+}
+.stik-napaka { color: var(--sev-bad); border-color: var(--sev-bad); }
+.stik-ok { color: var(--sev-mild); border-color: var(--sev-mild); }

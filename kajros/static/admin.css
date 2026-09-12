@@ -151,3 +151,60 @@
   .adm-dvojno { grid-template-columns: 1fr; gap: 26px; }
   .adm-st { font-size: 21px; }
 }
+
+/* ---------- nabiralnik ---------- */
+
+.adm-znacka {
+  margin-left: 8px;
+  font: 600 10.5px/1 var(--sans);
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+
+.adm-sporocila { display: flex; flex-direction: column; gap: 10px; }
+
+.adm-sporocilo {
+  border: 1px solid var(--line-firm);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--bg-raised);
+  padding: 12px 14px;
+}
+/* Prebrano ostane vidno, le stopi v ozadje: skrivanje bi pomenilo, da se
+   odgovorjenega ni več mogoče spomniti, kaj je pisalo. */
+.adm-sporocilo.je-prebrano {
+  border-left-color: var(--line-firm);
+  opacity: .62;
+}
+
+.adm-sp-glava {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.adm-sp-od { font: 600 13px/1.3 var(--sans); color: var(--ink); }
+.adm-sp-kdaj { font: 400 11.5px/1 var(--mono); color: var(--ink-mute); }
+.adm-sp-kje { font: 400 11px/1 var(--sans); color: var(--ink-faint); }
+
+.adm-sp-gumb {
+  margin-left: auto;
+  font: 500 11px/1 var(--sans); color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r-sm);
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.adm-sp-gumb:hover { color: var(--ink); border-color: var(--ink-mute); }
+.adm-sp-gumb:disabled { opacity: .5; cursor: default; }
+
+/* Prelomi vrstic pridejo iz besedila, ne iz <br>: vsaka pretvorba bi bila
+   druga pot, po kateri bi lahko kaj ušlo iz vnosa neznanca. */
+.adm-sp-telo {
+  margin: 0;
+  font: 400 13.5px/1.6 var(--sans); color: var(--ink-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

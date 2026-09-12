@@ -22,7 +22,7 @@ CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (233 preizkusov).
+enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (304 preizkusov).
 `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
 zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
@@ -78,6 +78,10 @@ mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
   Ta napaka je bila že dvakrat na zaslonu.
 * **Omrežje filtriraj znotraj poizvedbe, ne za njo** (`WHERE t.network = ?`).
   Bil je že dvakrat vzrok počasnosti.
+* **Pisalni poti sta natanko dve** — `POST /stik` in `POST /admin/sporocila/{id}`.
+  Vse ostalo je `GET`. Nova pisalna pot je zavestna odločitev, ne mimogrede:
+  `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke pred
+  neželeno pošto so na enem mestu v `stik.py`.
 * **V enem SQL stavku ne mešaj `?` in `:ime`** — sqlite veže po vrstnem redu
   pojavitve in tiho vrne napačne vrstice.
 * **`run` hrani zadnje stanje postanka**, zato `MAX(stop_seq)` po koncu vožnje
@@ -104,6 +108,7 @@ kajros/
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
+  stik.py        sporočila obiskovalcev; EDINA pot, ki piše iz zahteve
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
   cli.py         ukazna vrstica
@@ -123,7 +128,8 @@ in podrlo pet zelenih preizkusov. Računani vstavki gredo zato skozi
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` ·
 `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` ·
-`obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` (samo strežni stroj).
+`obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo`
+(zadnjih pet samo strežni stroj).
 
 **Senčno merjenje napovedi teče ob strežniku** (`ocena.py`, vsakih 120 s).
 Vsakih nekaj minut posname, kaj bi prikaz **ta hip** povedal za postanek, ki je
@@ -180,7 +186,8 @@ prešteje osirotele meritve.
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
 | `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
-| `/zasebnost` | kaj o obiskovalcu hranimo; mora ostati skladna z `obisk.py` |
+| `/stik` | obrazec za sporočilo; nabiralnik je v `/admin` |
+| `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
 
 Poti, ki niso za aplikacijo, ampak za brskalnike in iskalnike: `/favicon.ico`,

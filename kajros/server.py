@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import alerts, collector, config, db, gtfs, obisk, ocena, stats, weather
+from . import alerts, collector, config, db, gtfs, obisk, ocena, stats, stik, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -484,6 +484,14 @@ async def lifespan(app):
     global _strezemo
     _strezemo = True             # samo tu; `kajros collect` tega ne izvede
     bootstrap()
+    # Tabela za sporočila obstaja tudi, kadar je štetje obiska ugasnjeno:
+    # obrazec za stik s štetjem nima nobene zveze.
+    if config.STIK_OBRAZEC:
+        conn = db.connect()
+        try:
+            stik.init(conn)
+        finally:
+            conn.close()
     obisk_nit = None
     if config.OBISK:
         conn = db.connect()

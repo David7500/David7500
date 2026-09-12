@@ -206,6 +206,57 @@ function noga(d) {
 
 // ------------------------------------------------------------------ zagon
 
+/** Nabiralnik. Edino na tej strani, kar čaka na odgovor človeka. */
+function sporocila(d) {
+  const s = d.sporocila || {};
+  const znacka = el("sporocil-znacka");
+  znacka.hidden = !s.neprebranih;
+  znacka.textContent = s.neprebranih ? `${s.neprebranih} novih` : "";
+
+  const cilj = el("sporocila");
+  if (!s.vklopljeno) {
+    cilj.innerHTML = prazno("obrazec za stik je izklopljen (KAJROS_STIK_OBRAZEC=0)");
+    return;
+  }
+  if (!s.seznam || !s.seznam.length) {
+    cilj.innerHTML = prazno("nobenega sporočila še ni");
+    return;
+  }
+  // Besedilo je vpisal neznanec: gre skozi `escapeHtml` in v `<p>`, nikoli
+  // v `innerHTML` kot je. Prelome vrstic ohrani CSS (`white-space`), ne
+  // pretvorba v `<br>` -- ta bi bila druga pot, po kateri bi lahko kaj ušlo.
+  cilj.innerHTML = s.seznam.map((v) => `
+    <article class="adm-sporocilo${v.prebrano ? " je-prebrano" : ""}" data-id="${v.id}">
+      <header class="adm-sp-glava">
+        <a class="adm-sp-od" href="mailto:${encodeURIComponent(v.email)}">${escapeHtml(v.email)}</a>
+        <span class="adm-sp-kdaj">${escapeHtml(v.prispelo.slice(0, 16).replace("T", " "))}</span>
+        <span class="adm-sp-kje">${escapeHtml([v.drzava, v.naprava].filter(Boolean).join(" · "))}</span>
+        <button type="button" class="adm-sp-gumb" data-prebrano="${v.prebrano ? 0 : 1}">
+          ${v.prebrano ? "označi kot novo" : "prebrano"}
+        </button>
+      </header>
+      <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p>
+    </article>`).join("");
+}
+
+el("sporocila").addEventListener("click", async (e) => {
+  const gumb = e.target.closest(".adm-sp-gumb");
+  if (!gumb) return;
+  const id = gumb.closest(".adm-sporocilo").dataset.id;
+  gumb.disabled = true;
+  try {
+    await fetch(`/admin/sporocila/${id}`, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `prebrano=${gumb.dataset.prebrano}`,
+    });
+    await nalozi();
+  } finally {
+    gumb.disabled = false;
+  }
+});
+
+
 async function nalozi() {
   try {
     const r = await fetch(`/admin/podatki?dni=${dni}`, { credentials: "same-origin" });
@@ -219,7 +270,8 @@ async function nalozi() {
       p.textContent = "Štetje obiska je izklopljeno (KAJROS_OBISK=0) — "
         + "spodnje številke se ne dopolnjujejo in so lahko poljubno stare.";
     }
-    ploscice(d); poDnevih(d); strani(d); razrezi(d); endpointi(d); zdravje(d); noga(d);
+    ploscice(d); poDnevih(d); strani(d); razrezi(d); endpointi(d);
+    sporocila(d); zdravje(d); noga(d);
   } catch (e) {
     const p = el("adm-napaka");
     p.hidden = false;

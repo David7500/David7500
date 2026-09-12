@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Stik — kajros" %}
+  {% set og_desc = "Napaka na strani, manjkajoča linija ali vprašanje o podatkih — napiši nam." %}
+{% include "_meta.html" %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('besedilo.css') }}">
+</head>
+<body class="home-page">
+
+  <main class="home besedilo">
+    <a class="home-brand" href="/" style="text-decoration:none">
+      <svg class="brand-mark" width="26" height="26" viewBox="0 0 96 96" fill="none"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M34 24V72" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M66 26L34 50" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M34 50L66 72" stroke="#f0934f" stroke-width="9"/>
+      </svg>
+      <span>kajros</span>
+    </a>
+
+    <h1>Stik</h1>
+
+    {% if poslano %}
+    <p class="stik-ok">
+      Sporočilo je prispelo. Odgovorimo ročno in ne takoj — stran vzdržuje
+      ena oseba.
+    </p>
+    <p><a href="/">nazaj na začetek</a></p>
+
+    {% else %}
+    <p class="vodilo">
+      Napaka na strani, manjkajoča linija, napačna zamuda ali vprašanje o
+      podatkih. Piši in odgovorimo, ko utegnemo.
+    </p>
+
+    {% if napaka %}
+    <p class="stik-napaka" role="alert">{{ napaka }}</p>
+    {% endif %}
+
+    <form class="stik-obrazec" method="post" action="/stik">
+      <input type="hidden" name="zeton" value="{{ zeton }}">
+
+      {#- Vaba. Za človeka je skrita s CSS in z `tabindex`, robot pa bere
+          HTML in polje po imenu izpolni. `autocomplete="off"`, da je ne
+          napolni brskalnik in s tem ne obtoži človeka. #}
+      <div class="stik-vaba" aria-hidden="true">
+        <label for="naslov">Naslov (pusti prazno)</label>
+        <input id="naslov" name="naslov" type="text" tabindex="-1" autocomplete="off">
+      </div>
+
+      <label class="stik-oznaka" for="email">Tvoj e-naslov</label>
+      <input class="stik-polje" id="email" name="email" type="email"
+             required maxlength="254" autocomplete="email"
+             placeholder="da ti lahko odgovorimo" value="{{ email | default('') }}">
+
+      <label class="stik-oznaka" for="besedilo">Sporočilo</label>
+      <textarea class="stik-polje stik-besedilo" id="besedilo" name="besedilo"
+                required minlength="10" maxlength="{{ najdaljse }}" rows="8"
+                placeholder="Kaj je narobe ali kaj te zanima?">{{ besedilo | default('') }}</textarea>
+
+      <button class="btn go stik-gumb" type="submit">Pošlji</button>
+    </form>
+
+    <p class="drobno">
+      Shranimo tvoj e-naslov in besedilo, da lahko odgovorimo — nič drugega,
+      naslova IP tudi tu ne. Podrobnosti na strani
+      <a href="/zasebnost">zasebnost</a>.
+    </p>
+    {% endif %}
+  </main>
+
+</body>
+</html>

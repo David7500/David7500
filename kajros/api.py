@@ -14,7 +14,7 @@ import time
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import alerts, collector, config, db, journey, lpp, obisk, pot, stats
+from . import alerts, collector, config, db, journey, lpp, obisk, pot, stats, stik
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -250,7 +250,7 @@ def favicon():
 # iskati -- vsaka je ena vožnja enega dne.
 _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
             "/app/ovire", "/app/statistika", "/app/statistika/bus",
-            "/zasebnost"]
+            "/stik", "/zasebnost"]
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
@@ -316,6 +316,68 @@ def brez_omrezja(request: Request):
     return templates.TemplateResponse(request, "brez_omrezja.html", {})
 
 
+def _stik_vklopljen() -> None:
+    """Ugasnjen obrazec pomeni, da poti ni — ne prazne strani."""
+    if not config.STIK_OBRAZEC:
+        raise HTTPException(status_code=404)
+
+
+@app.get("/stik", response_class=HTMLResponse, include_in_schema=False)
+def stik_stran(request: Request, poslano: int = 0):
+    """Obrazec za sporočilo. Žeton v njem nosi čas izdaje (glej `stik.py`)."""
+    _stik_vklopljen()
+    return templates.TemplateResponse(request, "stik.html", {
+        "zeton": stik.zeton(), "poslano": bool(poslano),
+        "najdaljse": stik.NAJDALJSE,
+    })
+
+
+@app.post("/stik", response_class=HTMLResponse, include_in_schema=False)
+async def stik_poslji(request: Request):
+    """**Edina pot v tej aplikaciji, ki piše v bazo iz zahteve.**
+
+    Telo se razbere s `parse_qs` iz standardne knjižnice in ne s
+    `request.form()`: slednji potegne `python-multipart`, kar bi bila šesta
+    vrstica v `requirements.txt` za tri vrstice dela. Obrazec je zato
+    `application/x-www-form-urlencoded` in ne `multipart/form-data`.
+
+    Vsa varovalka je v `stik.sprejmi()`, da je mogoče v enem branju videti,
+    kaj neznanec sme. Ob napaki se stran izriše znova z vpisanim besedilom —
+    kdor je napisal odstavek in dobil napačen e-naslov nazaj, ga ne sme
+    izgubiti.
+    """
+    _stik_vklopljen()
+    # 64 kB je ~16× več od dovoljenega sporočila; večje telo je napad, ne
+    # obrazec, in ga zavrnemo, preden ga sploh preberemo v pomnilnik.
+    if int(request.headers.get("content-length") or 0) > 65536:
+        raise HTTPException(413, "Sporočilo je predolgo.")
+    polja = parse_qs((await request.body()).decode("utf-8", "replace"),
+                     keep_blank_values=True)
+
+    def p(ime: str) -> str:
+        return (polja.get(ime) or [""])[0]
+
+    email, besedilo = p("email"), p("besedilo")
+    with _conn() as conn:
+        try:
+            stik.sprejmi(
+                conn, email=email, besedilo=besedilo,
+                zeton_iz_obrazca=p("zeton"), vaba=p("naslov"),
+                kljuc=stik.kljuc_posiljatelja(request.headers),
+                drzava=request.headers.get("cf-ipcountry", ""),
+                naprava=obisk.naprava(request.headers.get("user-agent", "")))
+        except stik.Zavrnjeno as e:
+            return templates.TemplateResponse(
+                request, "stik.html",
+                {"zeton": stik.zeton(), "napaka": str(e),
+                 "email": email, "besedilo": besedilo,
+                 "najdaljse": stik.NAJDALJSE},
+                status_code=400)
+    # Preusmeritev po uspehu, ne izris: brez nje osvežitev strani pošlje
+    # sporočilo še enkrat in v nabiralniku sta dva enaka.
+    return RedirectResponse("/stik?poslano=1", status_code=303)
+
+
 @app.get("/zasebnost", response_class=HTMLResponse, include_in_schema=False)
 def zasebnost(request: Request):
     """Kaj o obiskovalcu hranimo in česa ne.
@@ -324,8 +386,9 @@ def zasebnost(request: Request):
     obrazca, ampak ker je edino, kar bi obiskovalec o nas hotel vedeti in
     ne more preveriti sam. Koda je zaprta; ta stran je njen povzetek.
     """
-    return templates.TemplateResponse(request, "zasebnost.html",
-                                      {"stik": config.STIK})
+    return templates.TemplateResponse(
+        request, "zasebnost.html",
+        {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
 
 
 @app.get("/app", response_class=HTMLResponse)
@@ -1798,6 +1861,13 @@ def admin_podatki(request: Request, dni: int = Query(30, ge=1, le=370)):
             # pokazati, zato tabele naredimo prazne.
             obisk.init(conn)
         out.update(obisk.pregled(conn, dni))
+        # Tabelo naredi `lifespan` samo pri vklopljenem obrazcu; brez tega
+        # bi pregled padel na „no such table", kar je videti kot okvara,
+        # pomeni pa samo, da obrazca ni. Isti razlog kot pri štetju zgoraj.
+        stik.init(conn)
+        out["sporocila"] = {"vklopljeno": config.STIK_OBRAZEC,
+                            **stik.stevec(conn),
+                            "seznam": stik.seznam(conn, limit=100)}
     out["zdravje"] = api_health()
     raba = shutil.disk_usage(config.DATA_DIR)
     out["stroj"] = {
@@ -1807,6 +1877,21 @@ def admin_podatki(request: Request, dni: int = Query(30, ge=1, le=370)):
         "obisk_od": obisk.IZPRAZNI_S,
     }
     return out
+
+
+@app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)
+async def admin_sporocilo_prebrano(request: Request, id_: int):
+    """Označi sporočilo za prebrano ali neprebrano.
+
+    Edino pisanje pod `/admin`. Žeton je isti kot za pregled; brez njega
+    poti ni (404), tako kot pri vsem drugem v tem razdelku.
+    """
+    _preveri_admina(request)
+    polja = parse_qs((await request.body()).decode("utf-8", "replace"))
+    prebrano = (polja.get("prebrano") or ["1"])[0] != "0"
+    with _conn() as conn:
+        stik.oznaci_prebrano(conn, id_, prebrano)
+    return {"id": id_, "prebrano": prebrano}
 
 
 # --- HEAD -------------------------------------------------------------------

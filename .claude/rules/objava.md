@@ -107,11 +107,17 @@ razpona `fd00::/8`, ki po internetu ne gre. Zapis mora biti v Cloudflarovi
 coni in proksiran, sicer kaže v nič. Torej: imenske strežnike na name.comu
 prestavi na Cloudflarove.
 
-**Javna izpostavitev ne odpre pisanja.** V `api.py` ni nobene poti razen
-`GET` in nobenega pisanja v bazo iz zahteve; `delay_report` polni `alerts.py`
-iz feeda. To se ujema z odločitvijo „endpointi so odprti". Tunel tudi ne
-odpre vrat na usmerjevalniku in skrije domači naslov — nasprotno od
-preusmeritve vrat.
+**Javna izpostavitev je dolgo odpirala samo branje.** V `api.py` ni bilo
+nobene poti razen `GET` in nobenega pisanja v bazo iz zahteve; `delay_report`
+polni `alerts.py` iz feeda. Tunel tudi ne odpre vrat na usmerjevalniku in
+skrije domači naslov — nasprotno od preusmeritve vrat.
+
+**Od 12. 9. 2026 to ne drži več in seznam izjem je natanko dolg dve:**
+`POST /stik` (obrazec za sporočilo) in `POST /admin/sporocila/{id}`
+(označevanje prebranega, za žetonom). Vse ostalo ostaja `GET`. Varovalke so
+na enem mestu v `kajros/stik.py` in so preizkušene v `tests/test_stik.py`;
+`test_pisalne_poti_so_nastete` pade, če se seznam tiho podaljša — nova
+pisalna pot mora biti dodana zavestno, ne mimogrede.
 
 **Odprto vprašanje: kateri stroj streže.** Merodajen zajem je malina (Pi
 Zero W), a je počasna (obhod `ocena.tick()` 88,7 s proti 0,90 s na razvojnem

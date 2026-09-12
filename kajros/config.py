@@ -164,7 +164,12 @@ BASE_URL = okolje("BASE_URL", "https://kajros.app").rstrip("/")
 
 # Naslov za vprašanja o podatkih na strani o zasebnosti. Prazen ga skrije:
 # objava naslova je odločitev lastnika strani, ne privzetek nastavitve.
+# Odločeno 12. 9. 2026, da ostane prazen — namesto naslova je obrazec.
 STIK = okolje("STIK", "")
+
+# Obrazec za stik (`/stik`). To je EDINA pot, ki piše v bazo iz zahteve, zato
+# ima svojo stikalo: kdor tega ne želi, ga ugasne in poti ni (404).
+STIK_OBRAZEC = okolje("STIK_OBRAZEC", "1") != "0"
 
 # Postaja, ki je od proge oddaljena vec kot toliko metrov, se ne projicira nanjo.
 MAX_STATION_OFFSET_M = 1500.0

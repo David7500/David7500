@@ -350,3 +350,58 @@ privzetek nastavitve.
 obiskovalca ob vsakem odprtju Googlu, zemljevid pa je visel na `unpkg.com`.
 Kar ostane tuje, so **ploščice zemljevida** (OpenStreetMap, Esri) in to je
 neizogibno; na strani o zasebnosti je zato našteto.
+
+
+## Obrazec za stik: edina pot, ki piše iz zahteve
+
+Do 12. 9. 2026 je bil `api.py` samo `GET` in to je bilo zapisano kot razlog,
+zakaj je javna izpostavitev varna. Zdaj sta pisalni poti dve — `POST /stik`
+in `POST /admin/sporocila/{id}` — in nobene tretje ne sme biti mimogrede:
+`test_pisalne_poti_so_nastete` pade, če se seznam podaljša.
+
+**Vsa varovalka je v `kajros/stik.py`, ne razsuta po `api.py`.** Namen je, da
+se v enem branju vidi, kaj neznanec sme. Pet plasti, po vrsti:
+
+| plast | kaj ustavi |
+|---|---|
+| podpisan žeton (HMAC, čas izdaje) | pošiljanje mimo naše strani, ponovno rabo obrazca |
+| časovna past (`NAJHITREJE_S` = 4 s) | robota, ki izpolni in pošlje takoj |
+| vaba (skrito polje `naslov`) | robota, ki izpolni vsa polja |
+| `NA_URO` = 3, `NA_DAN` = 5 | enega vztrajnega pošiljatelja |
+| `VSEH_NA_DAN` = 50 | porazdeljeno kampanjo |
+
+Zadnja je tista, ki šteje: prve štiri ustavijo preprost robot, peta omeji
+škodo, kadar jih kdo prebije. Brez nje bi bila posledica polna **baza
+meritev**, torej edino, česar ni mogoče ponoviti za nazaj.
+
+**Vrstni red preverb ni poljuben: najprej poceni, šele nato poizvedba.**
+Robot, ki tolče po obrazcu, tako ne povzroči poizvedbe na vsak poskus.
+
+**Ujeta vaba vrne videz uspeha, ne napake.** Robot, ki izve, da je ujet, se
+nauči, česa ne sme izpolniti. Iz istega razloga prehitro poslan obrazec ne
+pove „bilo je prehitro“ — to bi povedalo, koliko naj počaka.
+
+**Naslova IP ne shranimo niti tu.** Omejevanje teče v pomnilniku nad
+zgoščeno vrednostjo in po restartu izgine. To je zavestna menjava: raje
+kdo po restartu pošlje nekaj sporočil več, kot da bi zaradi neželene pošte
+začeli voditi dnevnik naslovov. `test_naslov_ip_ni_v_shemi` to straži —
+kdor bo kdaj dodal stolpec „samo za odkrivanje spama“, naj tam pade.
+
+**Telo se razbere s `parse_qs`, ne z `request.form()`.** Slednji potegne
+`python-multipart`, kar bi bila šesta vrstica v `requirements.txt` za tri
+vrstice dela. Obrazec je zato `application/x-www-form-urlencoded`.
+
+**Po uspehu gre preusmeritev (303), ne izris.** Brez nje osvežitev strani
+pošlje sporočilo še enkrat in v nabiralniku sta dva enaka. Ob napaki pa se
+stran izriše **z vpisanim besedilom**: kdor je napisal odstavek in dobil
+nazaj „e-naslov ni videti pravi“, ga ne sme izgubiti.
+
+**Besedilo je vnos neznanca in gre skozi `escapeHtml`.** Prelome vrstic
+ohrani CSS (`white-space: pre-wrap`), ne pretvorba v `<br>` — ta bi bila
+druga pot, po kateri bi lahko kaj ušlo. Preverjeno z vnosom
+`<img src=x onerror=…><script>…`: v DOM ni živega elementa.
+
+**Stran o zasebnosti mora ostati skladna.** Tu se prvič shrani nekaj, kar je
+človek napisal sam (e-naslov in besedilo); kdor spremeni, kaj se hrani,
+spremeni tudi `/zasebnost`. Obrazec se da ugasniti s `KAJROS_STIK_OBRAZEC=0`
+in takrat poti ni (404), odsek na strani o zasebnosti pa odpade.

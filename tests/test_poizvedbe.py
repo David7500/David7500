@@ -1376,13 +1376,35 @@ def test_vse_poti_odgovarjajo_na_head():
 
     FastAPIjev `APIRoute` ob GET ne doda HEAD (Starlettov `Route` ga), zato so
     vse poti vracale 405. Javno je to videti kot "stran ne dela".
+
+    HEAD se nanasa na GET in samo nanj. Poti, ki sprejmejo POST (obrazec za
+    stik in oznacevanje sporocil), so iz tega izvzete namenoma: "glava
+    odgovora brez telesa" pri posiljanju sporocila ne pomeni nicesar, HEAD
+    na taki poti pa mora ostati 405.
     """
     from fastapi.routing import APIRoute
     from kajros.api import app
 
     brez = [r.path for r in app.routes
-            if isinstance(r, APIRoute) and "HEAD" not in r.methods]
+            if isinstance(r, APIRoute) and "GET" in r.methods
+            and "HEAD" not in r.methods]
     assert brez == [], f"poti brez HEAD: {brez}"
+
+
+def test_pisalne_poti_so_nastete():
+    """Katere poti sploh pisejo. Ta seznam se ne sme tiho daljsati.
+
+    Do 12. 9. 2026 je bil prazen in v `.claude/rules/objava.md` je bilo to
+    zapisano kot razlog, zakaj je javna izpostavitev varna. Zdaj nista prazna
+    ne seznam ne razlog -- zato je tu straza: nova pisalna pot mora biti
+    dodana zavestno, skupaj s premislekom, kaj neznanec sme.
+    """
+    from fastapi.routing import APIRoute
+    from kajros.api import app
+
+    pisejo = sorted(r.path for r in app.routes
+                    if isinstance(r, APIRoute) and "POST" in r.methods)
+    assert pisejo == ["/admin/sporocila/{id_}", "/stik"], pisejo
 
 
 def test_head_ni_v_dokumentaciji():
