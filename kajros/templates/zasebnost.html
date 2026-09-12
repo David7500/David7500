@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zasebnost — kajros</title>
+  <meta name="description" content="Kaj kajros o obiskovalcu hrani in česa ne. IP se ne shrani nikoli.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('besedilo.css') }}">
+</head>
+<body class="home-page">
+
+  <main class="home besedilo">
+    <a class="home-brand" href="/" style="text-decoration:none">
+      <svg class="brand-mark" width="26" height="26" viewBox="0 0 96 96" fill="none"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M34 24V72" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M66 26L34 50" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M34 50L66 72" stroke="#f0934f" stroke-width="9"/>
+      </svg>
+      <span>kajros</span>
+    </a>
+
+    <h1>Zasebnost</h1>
+
+    <p class="vodilo">
+      Obisk te strani štejemo, ker sicer ne vemo, ali jo sploh kdo odpre.
+      Tvojega naslova IP pri tem ne shranimo nikoli — niti šifriranega,
+      niti za en dan.
+    </p>
+
+    <h2>Kaj se shrani ob obisku</h2>
+    <p>
+      Ob vsaki zahtevi nastane ena vrstica števcev. V njej so:
+    </p>
+    <ul>
+      <li><b>oblika poti</b>, ne naslov — <code>/app/train/{train_no}</code>
+        in ne <code>/app/train/LPV 2010</code>;</li>
+      <li><b>ura dneva</b>, vrsta naprave (telefon, računalnik) in
+        <b>dvočrkovna oznaka države</b>, ki jo pove Cloudflare;</li>
+      <li><b>odzivni čas v razredu</b> (na primer „pod 250 ms“), ne natančna
+        vrednost;</li>
+      <li><b>ključ obiskovalca</b>: šestnajst znakov
+        <code>blake2s(sol dneva ‖ IP ‖ opis brskalnika)</code>.</li>
+    </ul>
+
+    <h2>Zakaj tega ni mogoče razvozlati</h2>
+    <p>
+      Sol je šestnajst naključnih bajtov, ki nastanejo ob polnoči in se ob
+      naslednji polnoči <b>zavržejo</b>. Iz ključa ni poti nazaj do naslova
+      IP, ker sol, s katero je bil narejen, ne obstaja več. Iste naprave v
+      dveh dneh ne more povezati nihče — tudi mi ne.
+    </p>
+    <p>
+      To ima ceno in jo je pošteno povedati: <b>mesečnih različnih
+      obiskovalcev zato ni mogoče izračunati.</b> Vsota čez trideset dni
+      isto osebo šteje do tridesetkrat. Raje imamo številko, ki je nižje
+      vredna, kot podatek, ki bi ga bilo mogoče zlorabiti.
+    </p>
+    <p>
+      Kar ta števec <b>ni</b>: ni sledilnik poti po strani. O obiskovalcu
+      hranimo štiri števila — koliko zahtev, koliko ogledov strani, prvi in
+      zadnji dotik. Zaporedja strani iz tega ni mogoče sestaviti.
+    </p>
+
+    <h2>Piškotki</h2>
+    <p>
+      Za obiskovalca jih <b>ni</b>. Noben piškotek se ne postavi ob obisku
+      in nobenega ni treba sprejeti. Edini piškotek v tej aplikaciji je
+      prijava skrbnika na <code>/admin</code> in ta obstaja samo na
+      lastnikovi napravi.
+    </p>
+
+    <h2>Kar ostane v tvojem brskalniku</h2>
+    <p>
+      Priljubljene postaje, zadnja iskanja in izbrane plasti zemljevida so
+      shranjeni v <code>localStorage</code> tvojega brskalnika. Ti podatki
+      <b>na strežnik ne gredo nikoli</b>. Izbrišeš jih tako, da počistiš
+      podatke strani.
+    </p>
+
+    <h2>Lastna lega</h2>
+    <p>
+      Iskanje najbližjih postaj in načrtovanje poti od vrat do vrat
+      potrebujeta koordinati. Brskalnik ju pove šele, ko to izrecno
+      dovoliš, in se pošljeta strežniku zato, da izračuna razdaljo.
+      <b>Ne shranita se</b> — obdelata se v zahtevi in gresta z odgovorom.
+    </p>
+
+    <h2>Tuje storitve v strani</h2>
+    <p>
+      Pri odpiranju strani tvoj brskalnik stopi še do naslednjih:
+    </p>
+    <ul>
+      <li><b>Cloudflare</b> — stoji pred stranjo, vidi vsako zahtevo in tvoj
+        naslov IP. Brez tega ta stran ne bi bila dosegljiva iz interneta.</li>
+      <li><b>OpenStreetMap</b> in <b>Esri</b> — samo na zemljevidu, in samo
+        za ploščice s sliko zemljevida.</li>
+    </ul>
+
+    <h2>Podatki o prevozu</h2>
+    <p>
+      Vozni redi in zamude prihajajo iz IJPP prek
+      <a href="https://b2b.nap.si/">NAP</a> (CC BY-SA 4.0), obdelava DERP.
+      Vreme je <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0).
+      Meritve zamud hranimo po vožnjah in postankih — o vozilih in urnikih,
+      ne o ljudeh.
+    </p>
+
+    <h2>Vprašanja</h2>
+    <p>
+      Stran vzdržuje ena oseba kot osebni projekt.
+      {%- if stik %} Za vprašanje o podatkih piši na
+      <a href="mailto:{{ stik }}">{{ stik }}</a>.{% endif %}
+    </p>
+
+    <footer class="home-foot">
+      <a href="/">nazaj na začetek</a>
+    </footer>
+  </main>
+
+</body>
+</html>

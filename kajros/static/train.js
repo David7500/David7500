@@ -1603,10 +1603,10 @@ function loadLeaflet() {
   leafletReady = new Promise((resolve, reject) => {
     const css = document.createElement("link");
     css.rel = "stylesheet";
-    css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    css.href = "/static/leaflet/leaflet.css";
     document.head.appendChild(css);
     const js = document.createElement("script");
-    js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    js.src = "/static/leaflet/leaflet.js";
     js.onload = resolve;
     js.onerror = reject;
     document.head.appendChild(js);

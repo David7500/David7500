@@ -72,6 +72,14 @@ button.more-link { width: 100%; text-align: left; cursor: pointer; font: inherit
   max-width: 64ch;
 }
 
+/* Stran za napake. Številka je velika, ker je edino, kar je o napaki res
+   znano -- razlaga pod njo je ugibanje, poti naprej pa so tisto, po kar je
+   človek prišel. */
+.napaka-koda {
+  margin: 26px 0 0;
+  font: 600 54px/1 var(--mono); color: var(--ink-ghost);
+}
+
 @media (max-width: 520px) {
   .home { padding: 34px 16px 32px; }
   .home-picks { grid-template-columns: 1fr; }

@@ -21,10 +21,11 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import (HTMLResponse, JSONResponse, RedirectResponse,
-                               Response)
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import alerts, collector, config, db, journey, lpp, obisk, pot, stats
 from .server import lifespan
@@ -76,6 +77,52 @@ def _voznired_prevelik(request: Request, exc: journey.VozniRedPrevelik):
     neopazena. Zdaj je vidna in ima svojo stevilko.
     """
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+# Kaj naj na zaslonu piše pri kateri kodi. Brez tega je edino, kar človek
+# dobi, beseda "Not Found" -- v angleščini in brez poti naprej.
+_NAPAKE = {
+    404: "Te strani ni. Naslov je morda star ali narobe prepisan.",
+    403: "Do te strani nimaš dostopa.",
+    500: "Nekaj se je pokvarilo pri nas. Poskusi čez trenutek.",
+    503: "Strežnik je trenutno preobremenjen. Poskusi čez trenutek.",
+}
+
+
+def _hoce_html(request: Request) -> bool:
+    """Ali je zahtevo poslal brskalnik človeka, ne program.
+
+    Pot je močnejši znak od glave: pod `/api/` je odjemalec stroj tudi
+    takrat, ko pošlje `Accept: */*` -- in JSON mora dobiti JSON, sicer se
+    tuji odjemalci ob naši napaki zlomijo drugače, kot pričakujejo.
+    """
+    if request.url.path.startswith(("/api/", "/static/")):
+        return False
+    return "text/html" in request.headers.get("accept", "")
+
+
+@app.exception_handler(StarletteHTTPException)
+def _napaka_html(request: Request, exc: StarletteHTTPException):
+    """Človeku stran, stroju JSON.
+
+    Prej je vsaka napaka -- tudi napačno prepisan naslov v brskalniku --
+    vrnila `{"detail":"Not Found"}`. To je za obiskovalca slepa ulica: ne
+    pove, kje je, in ne ponudi poti naprej.
+    """
+    if not _hoce_html(request):
+        return JSONResponse(status_code=exc.status_code,
+                            content={"detail": exc.detail},
+                            headers=getattr(exc, "headers", None))
+    sporocilo = _NAPAKE.get(exc.status_code)
+    # Podrobnost iz kode (`vlak 123 ne obstaja`) je bolj uporabna od splošne
+    # vrstice -- a samo, kadar je naša in ne Starlettov angleški privzetek.
+    if exc.detail and exc.detail not in ("Not Found", "Forbidden",
+                                         "Internal Server Error"):
+        sporocilo = exc.detail[:1].upper() + exc.detail[1:] + "."
+    return templates.TemplateResponse(
+        request, "napaka.html",
+        {"koda": exc.status_code, "sporocilo": sporocilo or "Nekaj ni v redu."},
+        status_code=exc.status_code)
 
 # Dve locheni omrezji, ne en kup. `zeleznica` so vlaki IN nadomestni prevozi SZ
 # (ti na svoji relaciji zamenjujejo vlak in sodijo v isti odgovor), `avtobus`
@@ -180,6 +227,69 @@ def index(request: Request):
         "app": "/app",
         "endpoints": [r.path for r in app.routes if getattr(r, "path", "").startswith("/api/")],
     })
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Brskalniki prosijo za `/favicon.ico` ne glede na `<link rel=icon>`.
+
+    Zaznamek, zavihek in seznam „pogosto obiskano" gredo pogosto po tej poti
+    in ne po znački v glavi; brez nje je bila ikona v teh treh mestih prazna.
+    Streže se PNG -- ime poti je zgodovina, brskalnik gleda `Content-Type`.
+    """
+    return FileResponse(_PKG_DIR / "static/ikone/icon-180.png",
+                        media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
+# Strani, ki naj bodo v iskalniku. Naštete so ročno in to je namerno: poti z
+# vzorcem (`/app/train/{no}`) jih je ~20 000 in v zemljevidu strani nimajo kaj
+# iskati -- vsaka je ena vožnja enega dne.
+_SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
+            "/app/ovire", "/app/statistika", "/app/statistika/bus",
+            "/zasebnost"]
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap():
+    """Zemljevid strani za iskalnike."""
+    poti = "".join(f"<url><loc>{config.BASE_URL}{p}</loc></url>"
+                   for p in _SITEMAP)
+    return Response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{poti}</urlset>",
+        media_type="application/xml")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots():
+    """Robotom: strani da, `/api/` in `/admin` ne.
+
+    Cloudflare postreže svojega, kadar naš manjka, in ta o naših poteh ne ve
+    ničesar -- iskalnik je zato indeksiral JSON endpointe kot strani.
+    """
+    return Response(
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/\n"
+        "Disallow: /admin\n"
+        "Disallow: /docs\n"
+        "Disallow: /redoc\n"
+        f"\nSitemap: {config.BASE_URL}/sitemap.xml\n",
+        media_type="text/plain")
+
+
+@app.get("/zasebnost", response_class=HTMLResponse, include_in_schema=False)
+def zasebnost(request: Request):
+    """Kaj o obiskovalcu hranimo in česa ne.
+
+    Obisk **štejemo** (`obisk.py`), zato mora to nekje pisati -- ne zaradi
+    obrazca, ampak ker je edino, kar bi obiskovalec o nas hotel vedeti in
+    ne more preveriti sam. Koda je zaprta; ta stran je njen povzetek.
+    """
+    return templates.TemplateResponse(request, "zasebnost.html",
+                                      {"stik": config.STIK})
 
 
 @app.get("/app", response_class=HTMLResponse)

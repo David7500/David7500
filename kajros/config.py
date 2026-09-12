@@ -153,5 +153,18 @@ OSRM_URL = okolje("OSRM", "http://127.0.0.1:5000").rstrip("/")
 USER_AGENT = okolje("USER_AGENT", "kajros/0.1 (+https://github.com/David7500)")
 TIMEZONE = "Europe/Ljubljana"
 
+# Javni naslov strani. Rabijo ga zemljevid strani in značke za predogled
+# deljene povezave: te morajo nositi **absolutni** naslov, relativnega
+# Facebook, WhatsApp in Signal ne razrešijo.
+#
+# Ne izpeljuje se iz zahteve. Za Cloudflarovim tunelom je `request.url`
+# `http://127.0.0.1:8000`, ker izvor govori navaden HTTP -- predogled bi
+# torej kazal na naslov, ki iz interneta ni dosegljiv.
+BASE_URL = okolje("BASE_URL", "https://kajros.app").rstrip("/")
+
+# Naslov za vprašanja o podatkih na strani o zasebnosti. Prazen ga skrije:
+# objava naslova je odločitev lastnika strani, ne privzetek nastavitve.
+STIK = okolje("STIK", "")
+
 # Postaja, ki je od proge oddaljena vec kot toliko metrov, se ne projicira nanjo.
 MAX_STATION_OFFSET_M = 1500.0
