@@ -277,6 +277,12 @@ To je v nasprotju z odločitvijo „endpointi so odprti". Popravi se v nadzorni
 plošči (Security → Settings → Browser Integrity Check, ali pravilo WAF s
 `skip` za `/api/*`); iz kode se ne da.
 
+**Premerjeno 12. 9. 2026: tega ni več.** `Python-urllib/3.12` dobi na
+`/api/health` **200**, prav tako `curl`, `python-requests` in `Wget`. Ali je
+bila nastavitev spremenjena ali jo je Cloudflare sam umaknil, ni znano — zato
+to ni zaprta zadeva, ampak meritev z datumom. Kdor se na odprtost endpointov
+zanaša, naj jo pomeri znova; brezplačni paket se spreminja brez najave.
+
 **Rob povozi tudi `Cache-Control`.** Strežnik pošilja `no-cache`, Cloudflare
 pa privzeto `max-age=14400`. Zato imajo naslovi statike odtis vsebine
 (`api.s()`); nastavitev „Respect Existing Headers" bi delovala enako, a bi

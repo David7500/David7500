@@ -1937,3 +1937,67 @@ Ni popravljeno, ker to ni okvara strežbe: za obiskovalca je odgovor topel,
 razen v prvi minuti po restartu. Zapisano je zato, ker je to **prva številka,
 ki je prišla iz pregleda in je ne bi videl nihče** — in ker pri nadaljnji rasti
 baze ne bo ostala 20 s.
+
+## Priprava na javni obisk (12. 9. 2026)
+
+Kar je bilo pred prvim pravim obiskovalcem izmerjeno in popravljeno.
+
+**Tuji izvori na vsaki strani.** `fonts.googleapis.com` je bil na **vseh
+devetih** predlogah, `unpkg.com` (Leaflet) na treh. Naslov IP vsakega
+obiskovalca je torej ob vsakem odprtju šel Googlu, zemljevid pa je visel na
+tujem CDN-ju. Po samogostitvi je na živi strani na vseh osmih javnih poteh
+**nič** tujih gostiteljev v HTML; ostanejo samo ploščice zemljevida.
+
+| kaj | velikost | opomba |
+|---|---|---|
+| pisave (6 rezov) | 148 kB | `latin` + `latin-ext`, brez štirih drugih naborov |
+| Leaflet + 5 slik | 192 kB | 1.9.4, isti kot prej |
+
+**IBM Plex Sans je variabilna pisava, Mono ni.** Google za teže 400, 500 in
+600 servira **isto datoteko** — vse tri so bile bajt v bajt enake
+(md5 `b2c9031d`). Prva različica jih je prenesla vse tri in nosila 91 kB
+podvojenega. Mono je statičen: 400 in 600 se res razlikujeta.
+
+**Chromium tiho zavrne variabilno pisavo iz `data:` URI.** Izmerjeno s
+štirimi vrsticami druga ob drugi: statični Mono se naloži, variabilni Sans
+pa je pikel v piko enak serifni rezervi. Prek HTTP se naloži oboje. Isto
+pisavo s `file://` zavrne obakrat (CORS velja tudi tam). Slika je v vseh
+primerih nastala in imela pravo velikost v pikah — torej videti kot uspeh;
+`naredi-ikone.sh` zato vpraša `document.fonts.check()`.
+
+**Headless chromium z `--virtual-time-budget` ne požene service workerja.**
+`register()` se ne razreši ne v eno ne v drugo smer; virtualni čas ne teče v
+njegovih nitih. Preizkus zato teče brez njega, dogodek `load` pa se zakasni
+s počasnim odgovorom iz začasnega strežnika.
+
+**Service worker, preverjen z ugasnjenim strežnikom:** lupina 9 datotek,
+`/brez-omrezja` shranjena, **`/api/` v nobenem predpomnilniku (0 vnosov)**,
+že obiskana stran postrežena iz predpomnilnika, nikoli obiskana dobi
+„brez zveze“.
+
+**Cena endpointov na arwenu** (prek `kajros.app`, mediana dveh klicev):
+
+| pot | hladno | toplo |
+|---|---|---|
+| `/api/pot` (prvi po zagonu) | **5,2 s** | 0,6–1,7 s |
+| `/api/live` | 3,2 s | 0,13 s |
+| `/api/connections` | 0,58 s | 0,29 s |
+| `/api/stations` | 0,51 s | 0,53 s |
+| `/api/stats` | 0,17 s | 0,20 s |
+
+Petsekundni prvi klic je **enkratno ogrevanje po zagonu**, ne cena vsake
+poti: pet različnih parov koordinat da 0,6–1,7 s. `server._ogrej_pot()` to
+že drži toplo na 300 s.
+
+**Disk na arwenu ni kajrosova težava.** 194 GB od 234 je zasedenih (88 %), a
+`/var/lib/kajros` je od tega **4,3 GB**; 115 GB je `/home/david`. WAL stoji
+pri 273 MB in ne raste — to je visoka voda, ne uhajanje.
+
+**Cloudflare `Python-urllib` ne blokira več** (200 na `/api/health`, prav
+tako `curl`, `python-requests`, `Wget`). Prej zapisani *Browser Integrity
+Check* je torej odpadel; podrobnosti v `.claude/rules/objava.md`.
+
+**Naš `robots.txt` je na živi strani pripet za Cloudflarovim.** Njihov
+blok o signalih za AI je spredaj, naše `Disallow: /api/` in `Sitemap:` pa
+zadaj in veljavne. Brez našega bi Cloudflare postregel samo svojega, ta pa
+o naših poteh ne ve ničesar.
