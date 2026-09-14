@@ -52,9 +52,30 @@
     <h2>Namestitev</h2>
     <ol>
       <li>Odpri preneseno datoteko.</li>
-      <li>Telefon bo vprašal, ali dovoliš namestitev s te strani. Potrdi.</li>
+      <li>Telefon opozori, da aplikacija ni iz trgovine. Pritisni
+        <b>Nastavitve</b> in vklopi <b>Dovoli iz tega vira</b> (nameščanje
+        neznanih aplikacij) za brskalnik, s katerim si jo prenesel. Vrni se
+        in pritisni <b>Namesti</b>.</li>
       <li>Ko izide nova različica, te aplikacija opozori sama.</li>
     </ol>
+
+    {#- Android 13+ vpraša za obvestila, 14+ ne da celega zaslona aplikaciji,
+        ki ni iz trgovine (izmerjeno 14. 9. 2026: USE_FULL_SCREEN_INTENT deny).
+        Brez teh dveh budilka ne zbudi. Glej .claude/rules/android.md. #}
+    <h2>Dovoljenja za budilko</h2>
+    <p>Ko prvič nastaviš budilko, te aplikacija vodi skozi nastavitve. Dovoli:</p>
+    <ul>
+      <li><b>Obvestila</b> — brez njih budilka ne more zazvoniti.</li>
+      <li><b>Alarmi in opomniki</b> — da zazvoni ob točni uri. Na večini
+        telefonov je že vklopljeno.</li>
+      <li><b>Obvestila čez cel zaslon</b> — da budilka prižge zaslon, ko je
+        telefon zaklenjen. Brez tega zvoni, a zaslon ostane temen.</li>
+      <li><b>Lokacija</b> (neobvezno) — samo za gumb „kje sem“ na zemljevidu.</li>
+    </ul>
+    <p class="drobno">
+      Če si kaj zavrnil: Nastavitve → Aplikacije → Kajros. V aplikaciji pod
+      Budilke je opozorilo, dokler kaj manjka.
+    </p>
 
     {% else %}
     <p>Prve izdaje še ni. Ko bo, bo tu.</p>
