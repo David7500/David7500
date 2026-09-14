@@ -19,6 +19,11 @@ import android.os.Build
  */
 object Nacrtovalec {
 
+    /** Po zvonjenju: kako pogosto osvezimo zamudo za widget. */
+    private const val SLEDENJE_KORAK_MS = 2 * 60_000L
+    /** Toliko po odhodu se sledenje konca in ponavljajoca gre na naslednji dan. */
+    private const val SLEDENJE_ZA_MS = 90_000L
+
     private fun namera(c: Context, id: String): PendingIntent {
         val i = Intent(c, Sprozilec::class.java).apply {
             action = Sprozilec.PROZI
@@ -49,13 +54,42 @@ object Nacrtovalec {
         return Ura.naslednjePreverjanje(zdajMs, zvoni) ?: zvoni
     }
 
+    /**
+     * Po zvonjenju: naslednja osvezitev zamude, ali null, ce je odhod mimo.
+     *
+     * Zvonjenje ni konec: potnik gre proti postaji in widget odsteva do odhoda,
+     * zamuda pa se medtem se spreminja. Konec je malo ZA odhodom -- takrat se
+     * ponavljajoca budilka prestavi na naslednji dan.
+     */
+    fun sledenjeOb(b: Budilka, zdajMs: Long): Long? {
+        val konec = maxOf(b.voznoredniMs, b.izracun(zdajMs).odhodMs) + SLEDENJE_ZA_MS
+        if (zdajMs >= konec) return null
+        return minOf(zdajMs + SLEDENJE_KORAK_MS, konec)
+    }
+
     fun nastavi(c: Context, b: Budilka, zdajMs: Long = System.currentTimeMillis()) {
-        if (b.odzvonjeno || b.ugasnjena) { preklici(c, b.id); return }
+        if (b.ugasnjena) { preklici(c, b.id); return }
         val am = c.getSystemService(AlarmManager::class.java) ?: return
+
+        if (b.odzvonjeno) {
+            val ob = sledenjeOb(b, zdajMs) ?: run { preklici(c, b.id); return }
+            // Ne `setAlarmClock`: sistem bi v vrstici stanja kazal "budilka ob
+            // 7:32" za nekaj, kar ni budilka, ampak osvezitev widgeta.
+            try {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ob, namera(c, b.id))
+            } catch (e: SecurityException) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ob, namera(c, b.id))
+            }
+            return
+        }
+
         val ob = kdaj(b, zdajMs)
+        // Kar sistem odpre ob dotiku "naslednje budilke" v vrhnjem meniju. Prej
+        // je bila to glavna stran, ki o budilki ne pove nicesar -- seznam budilk
+        // pa pove, katera je in zakaj zvoni takrat.
         val pokazi = PendingIntent.getActivity(
             c, 0,
-            Intent(c, GlavnaDejavnost::class.java),
+            Intent(c, BudilkeDejavnost::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         // `setAlarmClock` brez dovoljenja vrze `SecurityException` in bi
@@ -70,29 +104,24 @@ object Nacrtovalec {
     }
 
     /**
-     * Zvonjenje je koncano in potnik ga je ustavil: ponavljajoco prestavi.
+     * Zvonjenje je koncano in potnik ga je ustavil.
      *
-     * Loceno od [vseZnova], ker ima ta varovalko "sveze odzvonjeno" -- ta
-     * varuje zaslon zvonjenja, ki se stoji, in tu ravno ne velja: zaslon se
-     * zapira in shranjene budilke ne bo vec bral.
+     * Loceno od [vseZnova], ker ta ne prestavi budilke, ki ta hip zvoni. Tu se
+     * zvonjenje ravno konca, in ce je odhod ze mimo (X manjsi od minute), mora
+     * ponavljajoca na naslednji dan takoj -- nihce drug je ne bo prestavil.
      */
     fun poZvonjenju(c: Context, id: String) {
         val b = Shramba.ena(c, id) ?: return
         val zdaj = System.currentTimeMillis()
-        if (b.odzvonjeno && b.ponavljajoca) Shramba.shrani(c, b.prestavljena(zdaj))
+        if (b.odzvonjeno && b.ponavljajoca && sledenjeOb(b, zdaj) == null) {
+            Shramba.shrani(c, b.prestavljena(zdaj))
+        }
         vseZnova(c, zdaj)
     }
 
     fun preklici(c: Context, id: String) {
         c.getSystemService(AlarmManager::class.java)?.cancel(namera(c, id))
     }
-
-    /**
-     * Toliko po odzvonjenju ponavljajoce se ne prestavimo. Zaslon zvonjenja
-     * takrat se stoji in bere shranjeno budilko; ce bi jo pod njim zamenjali
-     * z jutrisnjo, bi gumb "se dve minuti" odlozil napacen dan.
-     */
-    private const val NEDAVNO_MS = 5 * 60_000L
 
     /**
      * Vse budilke znova: prestavi ponavljajoce in nastavi budnice.
@@ -105,20 +134,23 @@ object Nacrtovalec {
     fun vseZnova(c: Context, zdajMs: Long = System.currentTimeMillis()) {
         Shramba.pocisti(c, zdajMs)
         Shramba.vse(c).forEach { b ->
-            val mimo = b.odzvonjeno || b.voznoredniMs < zdajMs - 60_000L
-            val sveze = b.odzvonjeno && zdajMs - b.zvoniObMs < NEDAVNO_MS
+            // Odzvonjena caka na ODHOD, ne na zvonjenje: do takrat widget
+            // odsteva do nje. Prestavljena takoj po zvonjenju bi kazala jutri.
+            val mimo = sledenjeOb(b, zdajMs) == null && (b.odzvonjeno ||
+                b.voznoredniMs < zdajMs - 60_000L)
+            // Zaslon zvonjenja bere shranjeno budilko; ce bi jo pod njim
+            // zamenjali z jutrisnjo, bi gumb "se dve minuti" odlozil napacen dan.
+            val zvoni = ZvonjenjeStoritev.zvoni == b.id
             // Budilka, nastavljena pred popravkom 12. 9. 2026, ima lahko prvo
             // ponovitev zunaj izbranega nabora (izmerjeno: nabor tor + sre,
             // shranjen ponedeljek). Take ne cakamo, da odzvoni na napacen dan
             // -- poravnamo jo ob prvem obhodu.
-            val zunajNabora = !Ponovitev.jeVNaboru(b.voznoredniMs, b.dnevi)
-            if (b.ponavljajoca && (mimo || zunajNabora) && !sveze) {
+            val zunajNabora = !b.odzvonjeno && !Ponovitev.jeVNaboru(b.voznoredniMs, b.dnevi)
+            if (b.ponavljajoca && (mimo || zunajNabora) && !zvoni) {
                 Shramba.shrani(c, b.prestavljena(zdajMs))
             }
         }
-        Shramba.vse(c).forEach {
-            if (it.odzvonjeno || it.ugasnjena) preklici(c, it.id) else nastavi(c, it, zdajMs)
-        }
+        Shramba.vse(c).forEach { nastavi(c, it, zdajMs) }
         Widget.osvezi(c)
     }
 

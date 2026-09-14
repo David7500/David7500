@@ -9,6 +9,14 @@
          iz CLAUDE.md, ki jo aplikacija odpravi. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Dovoljenje za lego sicer pomeni PRIVZETO `required="true"` za strojno
+         opremo (izmerjeno z `aapt2 dump badging`: uses-implied-feature …
+         reason='requested ACCESS_*_LOCATION'), in trgovina bi aplikacijo
+         skrila vsaki napravi brez GPS. Brez lege dela vse razen gumba
+         „kje sem“, zato je zahteva izrecno neobvezna. -->
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
 
     <!-- Budilka. `USE_EXACT_ALARM` (33+) dobi aplikacija, ki JE budilka, brez
          vprašanja; `SCHEDULE_EXACT_ALARM` je pot za starejše. Brez enega od
@@ -21,6 +29,11 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Zvoni storitev v ospredju, ne zaslon: zaslon se brez dovoljenja za cel
+         zaslon ne odpre, in 14. 9. 2026 budilka zato ni zbudila. Vrsta
+         `systemExempted` pripada aplikacijam z `USE_EXACT_ALARM`. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <!-- Ob ponovnem zagonu telefona so vse načrtovane budnice izgubljene. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -79,6 +92,11 @@
             android:turnScreenOn="true"
             android:taskAffinity=".zvonjenje"
             android:theme="@style/Tema" />
+
+        <service
+            android:name=".ZvonjenjeStoritev"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
 
         <!-- Widget na domacem zaslonu. `exported=false` zadosca: sistem
              posilja `APPWIDGET_UPDATE` naravnost tej komponenti, ne po imenu

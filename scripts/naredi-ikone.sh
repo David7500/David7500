@@ -19,18 +19,19 @@ fi
 
 ./venv/bin/python - <<'PY'
 import pathlib
-def mark(w=9):
-    return ('<path d="M34 24V72" stroke="#e7eaf0" stroke-width="%d"/>'
-            '<path d="M66 26L34 50" stroke="#5b6472" stroke-width="%d"/>'
-            '<path d="M34 50L66 72" stroke="#f0934f" stroke-width="%d"/>' % (w, w, w))
-navadna = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none" '
-           'stroke-linecap="round"><rect width="96" height="96" rx="21" fill="#0f1115"/>'
-           + mark() + '</svg>')
-# Maskirana: podlaga cez ves kvadrat, znak na 66 % -- Android si obliko izreze sam.
+import re
+# Vir je `favicon.svg`: ena risba za brskalnik in ikone, ne dve, ki bi se
+# razsli ob prvi spremembi. Podlaga in znak sta tam v loceni skupini.
+znak = pathlib.Path("kajros/static/favicon.svg").read_text()
+navadna = znak
+defs = re.search(r"<defs>.*?</defs>", znak, re.S).group(0)
+jedro = re.search(r'<g id="znak">.*</g>', znak, re.S).group(0)
+# Maskirana: podlaga cez ves kvadrat, znak na 80 % -- Android si obliko izreze
+# sam, varna cona je krog s 80 % premera, in oznake ure morajo ostati v njem.
 maskirana = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none" '
-             'stroke-linecap="round"><rect width="96" height="96" fill="#0f1115"/>'
-             '<g transform="translate(48 48) scale(0.66) translate(-48 -48)">'
-             + mark() + '</g></svg>')
+             'stroke-linecap="round">' + defs + '<rect width="96" height="96" fill="#0f1115"/>'
+             '<g transform="translate(48 48) scale(0.8) translate(-48 -48)">'
+             + jedro + '</g></svg>')
 for ime, svg, px in (("i180", navadna, 180), ("i192", navadna, 192),
                      ("i512", navadna, 512), ("imask", maskirana, 512)):
     pathlib.Path("posnetki/%s.html" % ime).write_text(

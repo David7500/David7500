@@ -52,6 +52,12 @@ paths:
   je **iskalnik vozila**: vprašanje pred zemljevidom je „kje je moj avtobus",
   ne „kdo danes najbolj zamuja".
 
+  **Iskalnik najde tudi postaje** (14. 9. 2026). Kazalo obeh omrežij je isto
+  kot pri najhitrejši poti (`common.naloziKazalo()`, 12 h v `localStorage`),
+  največ štiri postaje. Z besedo so nad vozili, s številko („25", „IC 502")
+  pod njimi. Izbira postavi obroč in oblaček s povezavo na odhodno tablo;
+  železniška postaja je tista, ki je v `/api/stations?network=zeleznica`.
+
   Podlaga je Esri „Dark Gray Canvas". **Imena ulic so vanjo vpečena in jih ni
   mogoče ugasniti posebej** — preverjeno je, da brezplačne podlage brez
   napisov ni: CARTO `*_nolabels` pride z vodnim žigom „API KEY REQUIRED",
@@ -258,6 +264,11 @@ in pod njo, v istem grafu, pas razmer: vprašanje ni *"kakšno je vreme"*, ampak
 *"je zamuda tam, kjer je bilo vreme hudo"*. Hitrost po odsekih je isti podatek
 v drugi enoti, zato leži na dnu v zaprtem `<details>` in se naloži šele ob
 odprtju. Zavihkov ne vračaj — eno vprašanje so razbili na tri strani.
+
+**Končna zamuda po dnevih: 15 dni v širini okvirja, ostali levo.** Prej je
+graf stisnil vse, kar je šlo noter (7 px na stolpec) — na telefonu 40 stolpcev
+brez razločljivega dneva. Zdaj drsi vodoravno, odpre se pri zadnjih dneh, os
+stoji posebej (`.runs-ovoj`), da ob drsenju ne odide.
 
 Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.

@@ -18,108 +18,98 @@
 </head>
 <body class="home-page">
 
-  <main class="home">
-    <header class="home-head">
-      <div class="home-brand">
-        <svg class="brand-mark" width="26" height="26" viewBox="0 0 96 96" fill="none"
-             stroke-linecap="round" aria-hidden="true">
-          <path d="M34 24V72" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
-          <path d="M66 26L34 50" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
-          <path d="M34 50L66 72" stroke="#f0934f" stroke-width="9"/>
-        </svg>
-        <span>kajros</span>
-      </div>
-      {#- Odhodi in zamude, ne „kdaj ti pelje": prva različica je bila pisana,
-          kot se govori, in se je brala kot narobe postavljen stavek. #}
-      <p class="home-lead">
-        Odhodi in zamude slovenskih vlakov in avtobusov. Izmerjeni iz odprtih
-        podatkov, ne prepisani od prevoznika.
-      </p>
+  <main class="ploscice">
+    <header class="plo-glava">
+      <img src="/static/favicon.svg" width="28" height="28" alt="">
+      <span>kajros</span>
     </header>
 
-    <!-- Dve poti, ne ena z izbiro znotraj: potnik ve, ali gre z vlakom ali z
-         busom, in ju ne isce skupaj. Mesanje je bilo tudi merljivo skodljivo --
-         iskanje "ljublj" je vracalo mestna postajalisca in postajo Ljubljana
-         potisnilo iz prvih petih zadetkov. -->
-    {#- Najhitrejša pot je nad omrežjema, ker je edina, ki dela brez tega, da
-        potnik ve, s katere postaje gre. Ni tretja izbira ob vlaku in avtobusu,
-        ampak DRUGO vprašanje -- zato tudi drugačna kartica in ne tretja enaka.
-        Razlog za natanko dve izbiri spodaj velja naprej. #}
-    <a class="pick pick-pot" href="/app/pot">
-      <span class="pick-icon">
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 20c0-4 3-5 7-5s7-1 7-5"></path>
-          <circle cx="5" cy="20" r="2"></circle>
-          <path d="M19 4.5c1.4 0 2.5 1.1 2.5 2.5S19 10.5 19 10.5 16.5 8.4 16.5 7 17.6 4.5 19 4.5z"></path>
+    {#- Ploščice, ne seznam. Izbran osnutek D (14. 9. 2026): seznam enakih vrstic
+        je bil „dolgočasen, vse isto oblikovano", budilke pa so bile skrite pod
+        „Še". Zdaj ima vsaka izbira svojo velikost; budilka je prva, ker je
+        najbolj tvoja. Vsebino ploščice budilk izriše `home.js` -- v aplikaciji
+        iz telefona (`Kajros.seznam()`), v brskalniku povabilo na aplikacijo. #}
+    <div class="mreza">
+      <section class="p p-bud" id="budilke" aria-label="Budilke">
+        <span class="oznaka">Budilke</span>
+      </section>
+
+      {#- Najhitrejša pot je nad omrežjema, ker je edina, ki dela brez tega, da
+          potnik ve, s katere postaje gre. Dve omrežji spodaj ostaneta dve:
+          mešanje je bilo merljivo škodljivo (iskanje „ljublj" je Ljubljano
+          potisnilo iz prvih petih zadetkov). #}
+      <a class="p p-pot" href="/app/pot">
+        <strong class="p-ime">Najhitrejša pot</strong>
+        <small>hoja, vlak in avtobus skupaj</small>
+        <span class="pot-vnos">Kam greš?</span>
+        <svg class="pot-slika" width="120" height="80" viewBox="0 0 120 80" fill="none"
+             stroke-linecap="round" aria-hidden="true">
+          <path d="M10 70 C40 70 40 30 70 30 S100 10 110 10" stroke="#111" stroke-width="3" stroke-dasharray="2 7"/>
+          <circle cx="10" cy="70" r="6" fill="#fff" stroke="#111" stroke-width="3"/>
+          <circle cx="110" cy="10" r="6" fill="#f0934f" stroke="#111" stroke-width="3"/>
         </svg>
-      </span>
-      <span class="pick-text">
-        <span class="pick-name">Najhitrejša pot</span>
-        <span class="pick-sub">od vrat do vrat — hoja, vlak in avtobus v eni verigi</span>
-      </span>
-      <span class="pick-vec" aria-hidden="true">›</span>
-    </a>
-
-    <p class="home-ali">Če že veš, s katere postaje greš:</p>
-
-    <div class="home-picks">
-      <a class="pick pick-train" href="/app/train">
-        <span class="pick-icon">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-            <rect x="6" y="3" width="12" height="14" rx="3"></rect>
-            <path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
-            <circle cx="9" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle>
-            <circle cx="15" cy="13.5" r="0.9" fill="currentColor" stroke="none"></circle>
-          </svg>
-        </span>
-        <span class="pick-text">
-          <span class="pick-name">Vlaki</span>
-          <span class="pick-sub">SŽ in nadomestni prevozi</span>
-        </span>
       </a>
-      <a class="pick pick-bus" href="/app/bus">
-        <span class="pick-icon">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-            <rect x="3.5" y="3.5" width="17" height="15" rx="2.6"></rect>
-            <path d="M3.5 10.5h17M3.5 5.8 1.4 6.8M20.5 5.8l2.1 1M6.5 18.6v2.4M17.5 18.6v2.4"></path>
-            <circle cx="8" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
-            <circle cx="16" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
-          </svg>
+
+      {#- Brez števila vozil in brez „običajno +2 min": tak podatek je vsak dan
+          skoraj isti in ne spremeni ničesar, kar bo človek tu storil (odstranjen
+          12. 9. 2026). Kartica pove samo, kam pelje. #}
+      <a class="p p-omr p-vlak" href="/app/train">
+        <svg class="omr-ikona" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#111"
+             stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/>
+        </svg>
+        <strong class="p-ime">Vlaki</strong>
+        <small>odhodi in zamude</small>
+      </a>
+      <a class="p p-omr p-bus" href="/app/bus">
+        <svg class="omr-ikona" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#111"
+             stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <rect x="3.5" y="3.5" width="17" height="15" rx="2.6"/><path d="M3.5 10.5h17M6.5 18.6v2.4M17.5 18.6v2.4"/>
+        </svg>
+        <strong class="p-ime">Avtobusi</strong>
+        <small>LPP, Arriva, Nomago …</small>
+      </a>
+
+      <a class="p p-zem" href="/app/map">
+        <strong class="p-ime">Zemljevid</strong>
+        <small>kje so vozila zdaj</small>
+        <svg class="zem-slika" viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 80 C50 70 80 40 120 45 S180 20 200 10" stroke="#3a4150" stroke-width="2" fill="none"/>
+          <g fill="#f0934f"><circle cx="40" cy="73" r="3"/><circle cx="125" cy="44" r="3"/></g>
+          <g fill="#4db97f"><circle cx="80" cy="30" r="2.5"/><circle cx="150" cy="70" r="2.5"/><circle cx="170" cy="55" r="2.5"/></g>
+        </svg>
+      </a>
+      <a class="p p-ovire" href="/app/ovire">
+        <strong class="p-ime">Ovire</strong>
+        <small>dela na progah</small>
+        <span class="ovire-n" id="ovire-n"></span>
+        <small id="ovire-pod"></small>
+      </a>
+      <a class="p p-stat" href="/app/statistika">
+        <span>
+          <strong class="p-ime">Kdaj potovati</strong>
+          <small>ob kateri uri vlaki zamujajo najmanj</small>
         </span>
-        <span class="pick-text">
-          <span class="pick-name">Avtobusi</span>
-          <span class="pick-sub">LPP, Arriva, Nomago, AP MS</span>
-        </span>
+        <svg class="stat-slika" width="96" height="44" viewBox="0 0 96 44" aria-hidden="true">
+          <g fill="#3a4150"><rect x="0" y="30" width="12" height="14" rx="3"/><rect x="16" y="20" width="12" height="24" rx="3"/>
+          <rect x="48" y="18" width="12" height="26" rx="3"/><rect x="64" y="28" width="12" height="16" rx="3"/><rect x="80" y="33" width="12" height="11" rx="3"/></g>
+          <rect x="32" y="2" width="12" height="42" rx="3" fill="#f0934f"/>
+        </svg>
       </a>
     </div>
 
-    <!-- Shranjene in nedavne poti. Iskalnik jih ze hrani, domaca stran pa je
-         edino mesto, kjer se povratnik znajde PRED izbiro omrezja -- brez
-         njih mora tudi za vsakodnevno pot skozi dva zaslona. Ce jih ni,
-         odseka ni: prazen naslov ne pove nicesar. -->
+    <!-- Shranjene poti. Iskalnik jih ze hrani, domaca stran pa je edino mesto,
+         kjer se povratnik znajde PRED izbiro omrezja. Ce jih ni, odseka ni. -->
     <section class="home-saved" id="home-saved" hidden>
-      <h2 class="home-saved-title">Shranjene poti</h2>
+      <h2 class="plo-nasl">Shranjene poti</h2>
       <div class="chips" id="home-chips"></div>
     </section>
-
-    {#- Sem (in ne v glavo, ki je ta stran nima) pripne `common.js` povezavo
-        do budilk, kadar stran teče v aplikaciji za Android. #}
-    <nav class="home-more" aria-label="Ostalo">
-      <a class="more-link" href="/app/map">
-        <strong>Živi zemljevid</strong>
-        <span>kje so vlaki in avtobusi ta trenutek — edini skupni pogled obeh omrežij</span>
-      </a>
-      <a class="more-link" href="/app/ovire">
-        <strong>Ovire na progah</strong>
-        <span>dela na progi, zapore in nadomestni prevozi (samo železnica)</span>
-      </a>
-    </nav>
 
     <footer class="home-foot">
       Podatki: IJPP prek NAP (CC BY-SA 4.0), obdelava DERP.
       Vreme Open-Meteo (CC BY 4.0).
       <a href="/stik">Stik</a>. <a href="/zasebnost">Zasebnost</a>.
+      <a href="/android">Aplikacija za Android</a>.
       <span id="home-health"></span>
     </footer>
   </main>

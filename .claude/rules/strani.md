@@ -101,10 +101,29 @@ avtobusov" in „kje so vlaki in avtobusi ta trenutek". Isto velja za naslove v
 zavihku brskalnika: „kajros — vlaki: odhodi in zamude", ne „kdaj mi pelje
 vlak".
 
-**Do budilk se pride tudi s prve strani.** `common.povezavaDoBudilk()` je
-iskala samo `.top-nav`, ki je domača stran **edina nima** — in prav ta se v
-aplikaciji odpre ob zagonu. Zdaj gre povezava tam med „Ostalo"
-(`.home-more`); v brskalniku je še vedno ni, ker nativnega zaslona ni.
+**Domača stran so ploščice** (izbrano 14. 9. 2026 med petimi osnutki,
+preverjeno v telefonski širini). Dve zavrnjeni različici pred tem: kartice z
+ikonami in prelivom („preveč AI generirano", „od vrat do vrat" butasto), nato
+tipografske vrstice („vse isto oblikovano in dolgočasno"). Zdaj ima vsaka
+izbira svojo velikost in malo sliko:
+
+* **Budilke so prva ploščica, ne povezava.** „Budilke morajo biti takoj
+  dostopne, ne da iščeš, kje so." V aplikaciji `home.js` bere
+  `Kajros.seznam()`: naslednja budilka z uro zvonjenja, dnem, odštevanjem,
+  odhodom z zamudo, ponavljanjem in „zvoni N min prej"; pod njo do tri druge
+  s stikalom (`preklopi`). Po zvonjenju kaže odhod, isto kot widget. Uro in
+  odhod izračuna Kotlin (`odhod_ms`, `vir` v `seznam()`), stran jih samo
+  izpiše; aplikacija 1.0 teh polj nima in takrat velja vozni red. V brskalniku
+  je ploščica povabilo na aplikacijo. V glavi drugih strani budilk ni.
+* **Vlaki in avtobusi sta barvni kartici brez statistike** — število vozil in
+  „običajno +2 min" sta bila odstranjena že 12. 9. in se nista vrnila.
+* Ovire nosijo število veljavnih iz `/api/health` (`alerts_active`, ista
+  funkcija kot na strani ovir), ker ga stran bere tako ali tako.
+* Stolpci na „Kdaj potovati" in pike na zemljevidu so **slika, ne podatek**.
+
+`home.css` rabijo tudi napaka, stik, zasebnost, `/android` in
+`/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`,
+`.home-foot`) — spremembo teh razredov preveri tudi tam.
 
 ## `/app/pot` („Najhitrejša pot") — edina stran, ki se ne začne pri postaji
 
@@ -255,6 +274,18 @@ pelje sem in doda dvoje, česar seznam nima:
   ravna črta brez opombe bi trdila pot, ki je ni;
 * **vmesni postanki vožnje**, zaprti v `<details>` — potnika najprej zanima,
   kje izstopi, in šele potem, kaj je vmes.
+
+**Lastna lega in izhodišče nista ista pika.** Izhodišče je bilo polna modra
+pika, enaka kot lastna lega — kdor je iskal od svoje lege, je imel dve enaki
+piki eno na drugi in postajališča sploh ne. Zdaj: polna modra je samo „ti",
+izhodišče prazen svetel obroč, postajališče obroč v barvi vožnje, cilj polna
+oranžna. Isto na seznamu predlogov (`pot.js`).
+
+**Kompas kaže, v katero smer se obrniti.** Pojavi se z lego (gumb v kotu) in
+kaže proti koncu izbranega peš koraka (privzeto do postajališča) z razdaljo.
+Smer telefona bere `deviceorientationabsolute` (iOS `webkitCompassHeading`
+na izrecno prošnjo iz dotika); kadar je ni, kaže glede na zemljevid in napiše
+„sever je zgoraj". Pod natančnostjo GPS puščica pobledi in piše „tu si".
 
 **Žeton zamude ob izstopu je drug od vstopnega in mora biti viden.** Vozilo
 vmes rezervo porabi ali izgubi: „+1 min" nad prihodom šest minut za voznim
@@ -426,3 +457,28 @@ Obljubiti izpolnjeno pot bi bila laž, ki bi jo potnik odkril šele tam.
 **Da mi na `potniski.sz.si` ne moremo, samo po sebi povezave ne bi oviralo** —
 odpre jo uporabnikov brskalnik, ne naš strežnik. Ta razloček je bil enkrat
 spregledan in stran prehitro zavržena; zavrnjena je zdaj iz drugega razloga.
+
+## Besedilne strani govorijo potniku, ne razvijalcu
+
+Prijavljeno 12. 9. 2026 na `/android` in `/zasebnost`: obe sta „naklada[li] in
+posreduj[ali] zelo tehnične podatke“. Primer, ki je to sprožil:
+
+> Lastna lega dela povsod. V brskalniku po domačem omrežju (`http://192.168…`)
+> je ni, ker to ni varen kontekst.
+
+To je opis **razvojnega okolja**, ne lastnosti aplikacije.
+
+Prvi popravek je take odstavke le zložil v `<details>` — in to je bilo
+**zavrnjeno**: „noben produkt nima tako podrobno napisanih stvari, to naj bi
+bilo samo za naju“. Zloženo ni skrito; je isto besedilo z enim klikom več.
+
+Pravilo: kar zanima naju, **ne gre na stran v nobeni obliki**. Mesto za to so
+`docs/` in `.claude/rules/`. Tako so odpadli licenčna politika trgovin,
+kontrolna vsota SHA-256, `sha256sum`, formula `blake2s(sol ‖ IP ‖ UA)`,
+doba hrambe, oblika poti v števcih in razlaga omejevanja neželene pošte.
+
+Kar mora ostati, je **obljuba, ne dokaz**: „naslova IP ne shranimo nikoli“
+zadošča, „ker je sol zavržena ob polnoči“ je za naju. Skladnost z `obisk.py`
+in `stik.py` velja naprej — krajše ne sme pomeniti manj resnično.
+
+Izrisana stran: `/android` 8,5 → **3,0 kB**, `/zasebnost` 9,6 → **4,1 kB**.

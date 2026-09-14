@@ -757,6 +757,19 @@ const findEl = document.getElementById("find");
 const findListEl = document.getElementById("find-list");
 let selectedKey = null;
 
+// Postaje v istem iskalniku. "Kje je Celje" je na zemljevidu enako pogosto
+// vprašanje kot "kje je moj avtobus", a zemljevid imen postaj ne kaže, dokler
+// se jih ne dotakneš -- in avtobusnih postajališč sploh ne, dokler plast ni
+// vklopljena. Kazalo je isto kot pri najhitrejši poti (obe omrežji).
+let kazaloPostaj = null;
+const najdenaPostaja = L.layerGroup().addTo(map);
+naloziKazalo().then((k) => {
+  kazaloPostaj = k;
+  if (findEl.value.trim()) renderFind();
+});
+//: Toliko postaj nad vozili; več jih izrine vozila, po katera je človek prišel.
+const NAJVEC_POSTAJ = 4;
+
 // "25" je lahko cigar koli, zato clovek pise "lpp 25" -- in prav to doslej ni
 // naslo nicesar, ker je iskalnik poznal samo stevilko in smer. Iscemo po
 // celem imenu, kot ga vidi na zaslonu: "LPP 25 Medvode naselje - Zadobrova".
@@ -782,10 +795,22 @@ function findMatches(q) {
   const prvi = deli[0];
   out.sort((a, b) => Number(fold(b.v.train_no).startsWith(prvi))
                    - Number(fold(a.v.train_no).startsWith(prvi)));
-  return out.slice(0, 12);
+  const postaje = kazaloPostaj && f.length >= 2
+    ? iskalnikKazala(kazaloPostaj, q, NAJVEC_POSTAJ).map((s) => (
+      { kind: "postaja", s, vlak: stationsByName.has(s.n) }))
+    : [];
+  // S številko človek išče linijo ali vlak ("25", "IC 502"), z besedo kraj.
+  return (/\d/.test(f) ? [...out, ...postaje] : [...postaje, ...out]).slice(0, 12);
 }
 
 function findRowHtml(m) {
+  if (m.kind === "postaja") {
+    return `<button type="button" class="find-row" data-key="${escapeHtml(m.key)}">
+      <span class="find-kind find-kind-postaja"></span>
+      <span class="find-no">${escapeHtml(m.s.n)}</span>
+      <span class="find-where">${m.vlak ? "železniška postaja" : "postajališče"}</span>
+    </button>`;
+  }
   const v = m.v;
   const delay = m.kind === "bus" ? v.delay_s : bestDelay(v).value;
   const kje = m.kind === "bus"
@@ -808,14 +833,15 @@ function renderFind() {
   }
   const found = findMatches(q);
   for (const m of found) {
-    m.key = m.kind === "bus"
-      ? `b:${m.v.trip_id || m.v.train_no}`
+    m.key = m.kind === "postaja" ? `p:${m.s.n}`
+      : m.kind === "bus" ? `b:${m.v.trip_id || m.v.train_no}`
       : `t:${m.v.trip_id || m.v.train_no}`;
   }
   findListEl.innerHTML = found.length
     ? found.map(findRowHtml).join("")
-    : `<div class="find-empty">Med vozili, ki so zdaj na poti, tega ni.
-         Vlaki brez meritve in avtobusi brez GPS na zemljevidu ne obstajajo.</div>`;
+    : `<div class="find-empty">Ni postaje s tem imenom in ne vozila, ki bi bilo
+         zdaj na poti. Vlaki brez meritve in avtobusi brez GPS na zemljevidu ne
+         obstajajo.</div>`;
   findListEl.__found = found;
 }
 
@@ -863,6 +889,22 @@ async function drawStops(trainNo, tripId) {
   }
 }
 
+// Postaja iz iskalnika: obroč na njej in povezava na odhodno tablo -- to je
+// naslednje vprašanje, ko jo človek najde. Mestno postajališče rabi ulico
+// (z16), železniška postaja kraj okrog sebe (z14).
+function pokaziPostajo(m) {
+  najdenaPostaja.clearLayers();
+  const { s, vlak } = m;
+  const tabla = `${vlak ? "/app/train" : "/app/bus"}?station=${encodeURIComponent(s.n)}`;
+  map.setView([s.lat, s.lon], Math.max(map.getZoom(), vlak ? 14 : 16), { animate: true });
+  L.circleMarker([s.lat, s.lon], {
+    radius: 9, weight: 3, color: "#e7eaf0", fillColor: "#0f1115", fillOpacity: 0.6,
+  }).addTo(najdenaPostaja)
+    .bindPopup(`<div class="tt-title">${escapeHtml(s.n)}</div>
+      <a class="najdena-tabla" href="${tabla}">odhodi s te postaje ›</a>`)
+    .openPopup();
+}
+
 function focusVehicle(key) {
   selectedKey = key;
   const found = findListEl.__found || [];
@@ -870,6 +912,11 @@ function focusVehicle(key) {
   if (!m) return;
   for (const b of findListEl.querySelectorAll(".find-row")) {
     b.classList.toggle("is-on", b.dataset.key === key);
+  }
+  if (m.kind === "postaja") {
+    pokaziPostajo(m);
+    setSheet(false);
+    return;
   }
   if (m.kind === "bus") {
     map.setView([m.v.lat, m.v.lon], Math.max(map.getZoom(), 14), { animate: true });
@@ -897,6 +944,7 @@ document.getElementById("find-clear").addEventListener("click", () => {
   findEl.value = "";
   selectedKey = null;
   routeLayer.clearLayers();
+  najdenaPostaja.clearLayers();
   renderFind();
   findEl.focus();
 });

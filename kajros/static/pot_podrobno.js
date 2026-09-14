@@ -174,16 +174,36 @@ function narisi(p) {
       meje.push(n.od_ll, n.do_ll);
     }
   });
-  // Konca poti: kje začneš in kje si doma.
+  // Postajališča vstopa in izstopa. Prej jih ni bilo, izhodišče pa je bila
+  // polna modra pika -- natanko taka kot lastna lega. Kdor je iskal od svoje
+  // lege, je imel na zemljevidu dve enaki piki in ni vedel, katera je on.
+  // Zdaj je modro polno samo "ti", izhodišče je prazen obroč, postajališče
+  // obroč v barvi vožnje, cilj pa polna oranžna.
+  const postaje = new Map();
+  for (const n of p.noge) {
+    if (n.vrsta !== "voznja") continue;
+    if (n.od_ll) postaje.set(n.od, n.od_ll);
+    if (n.do_ll) postaje.set(n.do, n.do_ll);
+  }
+  for (const [ime, ll] of postaje) {
+    bindFlashName(L.circleMarker(ll, { radius: 5.5, weight: 3, color: "#f0934f",
+                                       fillColor: "#0f1115", fillOpacity: 1 }), ime)
+      .addTo(potLayer);
+  }
   const prva = p.noge[0];
   const zadnja = p.noge[p.noge.length - 1];
-  for (const [ll, barva, opis] of [[prva.od_ll, "#2f7fff", "izhodišče"],
-                                   [zadnja.do_ll, "#f0934f", "cilj"]]) {
-    if (!ll) continue;
-    L.circleMarker(ll, { radius: 7, weight: 3, color: "#ffffff",
-                         fillColor: barva, fillOpacity: 1 })
-      .addTo(potLayer).bindTooltip(opis);
+  if (prva.od_ll) {
+    bindFlashName(L.circleMarker(prva.od_ll, { radius: 7, weight: 3, color: "#e7eaf0",
+                                               fillColor: "#0f1115", fillOpacity: 1 }),
+                  "izhodišče").addTo(potLayer);
   }
+  if (zadnja.do_ll) {
+    bindFlashName(L.circleMarker(zadnja.do_ll, { radius: 7, weight: 3, color: "#ffffff",
+                                                 fillColor: "#f0934f", fillOpacity: 1 }),
+                  "cilj").addTo(potLayer);
+  }
+  PREDLOG = p;
+  nastaviCiljKompasa(null);
   vseMeje = meje.length ? L.latLngBounds(meje) : null;
   if (vseMeje) map.fitBounds(vseMeje, { padding: [40, 40], maxZoom: 16 });
   (async () => {
@@ -207,6 +227,7 @@ function priblizaj(i) {
   if (cilj) map.fitBounds(cilj, { padding: [40, 40], maxZoom: 17 });
   document.querySelectorAll(".hoja-gumb").forEach((b) =>
     b.classList.toggle("je-on", Number(b.dataset.korak) === i));
+  nastaviCiljKompasa(i);
   $("#cela").hidden = i === null;
   // Na telefonu je zemljevid pod seznamom; gumb brez tega premakne pogled
   // nekam, česar se ne vidi.
@@ -227,6 +248,79 @@ $("#karta-max").addEventListener("click", () => {
   requestAnimationFrame(() => map.invalidateSize());
 });
 
+// ---------------------------------------------------------------- kompas
+//
+// Črta na zemljevidu pove, kod je pot, ne pa, v katero smer se obrniti: na
+// križišču z zemljevidom v roki človek najprej ugiba, kje je sever. Puščica
+// kaže naravnost proti koncu izbranega peš koraka (privzeto prvega -- do
+// postajališča), obrnjena po telefonu, kadar ta pozna smer neba. Kadar je ne
+// pozna (namizje, telefon brez magnetometra), kaže glede na zemljevid in to
+// tudi napiše: puščica, ki bi se tiho obnašala drugače, bi poslala narobe.
+
+let PREDLOG = null;
+const kompas = { cilj: null, ime: "", jaz: null, smer: null };
+
+function azimut(a, b) {
+  const r = Math.PI / 180;
+  const dl = (b[1] - a.lon) * r;
+  const y = Math.sin(dl) * Math.cos(b[0] * r);
+  const x = Math.cos(a.lat * r) * Math.sin(b[0] * r)
+    - Math.sin(a.lat * r) * Math.cos(b[0] * r) * Math.cos(dl);
+  return (Math.atan2(y, x) / r + 360) % 360;
+}
+
+function metriDo(a, b) {
+  const r = Math.PI / 180;
+  const s = Math.sin((b[0] - a.lat) * r / 2) ** 2
+    + Math.cos(a.lat * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a.lon) * r / 2) ** 2;
+  return 12742000 * Math.asin(Math.sqrt(s));
+}
+
+/** Cilj puščice: konec peš koraka `i`, ali prvega, kadar `i` ni peš korak. */
+function nastaviCiljKompasa(i) {
+  if (!PREDLOG) return;
+  const hoje = PREDLOG.noge.map((n, j) => [n, j]).filter(([n]) => n.vrsta === "hoja");
+  const izbran = hoje.find(([, j]) => j === i) || hoje[0];
+  kompas.cilj = izbran ? izbran[0].do_ll : null;
+  kompas.ime = izbran ? (izbran[0].do || "cilj") : "";
+  risiKompas();
+}
+
+function risiKompas() {
+  const el = $("#kompas");
+  if (!kompas.cilj || !kompas.jaz) { el.hidden = true; return; }
+  el.hidden = false;
+  const m = metriDo(kompas.jaz, kompas.cilj);
+  const kot = azimut(kompas.jaz, kompas.cilj) - (kompas.smer == null ? 0 : kompas.smer);
+  $("#kompas-igla").style.transform = `rotate(${kot.toFixed(1)}deg)`;
+  // Pod natančnostjo GPS smer ne pomeni ničesar -- puščica bi se vrtela.
+  const tu = m < Math.max(20, kompas.jaz.acc || 0);
+  $("#kompas-igla").classList.toggle("je-tu", tu);
+  $("#kompas-kam").textContent = tu ? `${kompas.ime} · tu si`
+    : `${kompas.ime} · ${m < 950 ? `${Math.round(m / 10) * 10} m`
+      : `${(m / 1000).toFixed(1).replace(".", ",")} km`}`;
+  $("#kompas-opomba").textContent = kompas.smer == null ? "sever je zgoraj" : "";
+}
+
+function poslusajSmer() {
+  const obdelaj = (e) => {
+    let h = null;
+    if (typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;   // iOS
+    else if (e.absolute && e.alpha != null) h = 360 - e.alpha;
+    if (h == null) return;
+    const zaslon = (screen.orientation && screen.orientation.angle) || 0;
+    kompas.smer = (h + zaslon) % 360;
+    risiKompas();
+  };
+  // `deviceorientationabsolute` je proti severu; navaden `deviceorientation`
+  // v Chromu je proti legi ob nalaganju in bi kazal naključno smer.
+  if ("ondeviceorientationabsolute" in window) {
+    window.addEventListener("deviceorientationabsolute", obdelaj);
+  } else {
+    window.addEventListener("deviceorientation", obdelaj);
+  }
+}
+
 // Med hojo je edino vprašanje "grem v pravo smer". Zato lega TU sledi in se ne
 // izmeri enkrat: prvi popravek GPS pogosto zgreši za sto metrov, potnik pa se
 // medtem premika.
@@ -234,12 +328,22 @@ let sledim = false;
 $("#karta-lega").addEventListener("click", async () => {
   const b = $("#karta-lega");
   if (sledim) return;
+  // iOS da smer neba samo na izrecno prošnjo iz dotika -- pred prvim `await`.
+  if (typeof DeviceOrientationEvent !== "undefined"
+      && typeof DeviceOrientationEvent.requestPermission === "function") {
+    DeviceOrientationEvent.requestPermission().then((o) => {
+      if (o === "granted") poslusajSmer();
+    }).catch(() => {});
+  } else {
+    poslusajSmer();
+  }
   b.classList.add("je-iskanje");
+  const jaz = (l) => { drawMe(jazLayer, l); kompas.jaz = l; risiKompas(); };
   try {
-    const loc = await locateMe({ napredek: (l) => drawMe(jazLayer, l) });
-    drawMe(jazLayer, loc);
+    const loc = await locateMe({ napredek: jaz });
+    jaz(loc);
     map.setView([loc.lat, loc.lon], Math.max(map.getZoom(), 16));
-    sledi((l) => drawMe(jazLayer, l));
+    sledi(jaz);
     sledim = true;
     b.classList.add("je-on");
   } catch (e) {

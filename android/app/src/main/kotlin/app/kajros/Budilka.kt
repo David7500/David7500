@@ -36,6 +36,8 @@ data class Budilka(
     /** Zadnja znana zamuda in kdaj smo jo dobili. */
     val zamudaS: Int? = null,
     val zamudaObMs: Long = 0,
+    /** Zadnji odgovor streznika, tudi kadar o zamudi ni imel podatka. */
+    val stikObMs: Long = 0,
     /** Zadnji izracun -- da ga vidi tudi zaslon brez omrezja. */
     val zvoniObMs: Long = 0,
     val odzvonjeno: Boolean = false,
@@ -53,13 +55,18 @@ data class Budilka(
      * `Preverjevalec` na dan odhoda poisce znova po stevilki in uri.
      */
     fun prestavljena(zdajMs: Long): Budilka {
-        val vr = Ponovitev.naslednji(voznoredniMs, dnevi, zdajMs)
+        // **Nikoli na isto voznjo.** Budilka zvoni PRED odhodom, zato je bil
+        // "naslednji odhod po zdaj" 14. 9. 2026 isti vlak ob 7:35: ustavljena
+        // budilka se je prestavila nase, zvonjenje je bilo ze v preteklosti in
+        // je zazvonila znova -- v krogu, dokler je ni kdo ugasnil.
+        val vr = Ponovitev.naslednji(voznoredniMs, dnevi, maxOf(zdajMs, voznoredniMs))
         return copy(
             voznoredniMs = vr,
             dan = Ponovitev.dan(vr),
             tripId = null,
             zamudaS = null,
             zamudaObMs = 0,
+            stikObMs = 0,
             zvoniObMs = 0,
             odzvonjeno = false,
             odlozenoDoMs = 0,
@@ -75,6 +82,7 @@ data class Budilka(
             zdajMs = zdajMs,
             vlak = vlak,
             rezervaS = rezervaS,
+            stikObMs = stikObMs,
         )
         // Odlog povozi racun: potnik je rekel "cez dve minuti" in to ni ocena.
         return if (odlozenoDoMs > 0) i.copy(zvoniOb = odlozenoDoMs) else i
@@ -87,6 +95,7 @@ data class Budilka(
         put("zbudi", zbudi); put("rezerva_s", rezervaS); put("smer", smer)
         put("dnevi", dnevi); put("ugasnjena", ugasnjena)
         put("zamuda_s", zamudaS ?: JSONObject.NULL); put("zamuda_ob_ms", zamudaObMs)
+        put("stik_ob_ms", stikObMs)
         put("zvoni_ob_ms", zvoniObMs); put("odzvonjeno", odzvonjeno)
         put("odlozeno_do_ms", odlozenoDoMs)
     }
@@ -113,6 +122,7 @@ data class Budilka(
                 smer = o.optString("smer"),
                 zamudaS = if (o.isNull("zamuda_s")) null else o.optInt("zamuda_s"),
                 zamudaObMs = o.optLong("zamuda_ob_ms"),
+                stikObMs = o.optLong("stik_ob_ms"),
                 zvoniObMs = o.optLong("zvoni_ob_ms"),
                 odzvonjeno = o.optBoolean("odzvonjeno"),
                 odlozenoDoMs = o.optLong("odlozeno_do_ms"),

@@ -337,6 +337,25 @@ a.predlog:hover .predlog-vec { color: var(--accent-lit); }
 .karta-lega.je-on { color: #2f7fff; border-color: #2f7fff88; }
 .karta-lega.je-iskanje { opacity: 0.6; }
 
+/* Kompas pod gumboma v kotu: zgornji desni kot je edini, ki ga brskalnik na
+   telefonu ne prekrije (glej zemljevid.md). */
+.kompas {
+  position: absolute; z-index: 500; top: 48px; right: 10px;
+  display: flex; align-items: center; gap: 8px;
+  max-width: calc(100% - 80px);
+  padding: 6px 10px 6px 6px;
+  background: var(--bg-panel); border: 1px solid var(--line-firm); border-radius: var(--r);
+}
+.kompas-igla { flex-shrink: 0; transform-origin: 50% 50%; }
+.kompas-igla.je-tu { opacity: 0.35; }
+.kompas-besedilo { display: flex; flex-direction: column; min-width: 0; }
+.kompas-kam {
+  font-size: 0.8rem; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kompas-opomba { font-size: 0.7rem; color: var(--ink-mute); }
+.kompas-opomba:empty { display: none; }
+
 .v-prestop { font-size: 0.76rem; }
 
 /* Nasvet ob praznem izidu. Ne obljublja poti -- pove, kaj bi bilo drugace. */

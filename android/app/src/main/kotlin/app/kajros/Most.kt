@@ -123,6 +123,9 @@ class Most(
             zdajMs = zdaj,
             vlak = o.optString("omrezje") != "avtobus",
             rezervaS = o.optInt("rezerva_s", 0).coerceIn(0, 600),
+            // Stran je podatke pravkar dobila s streznika: to je stik, tudi
+            // kadar zamude v njih ni.
+            stikObMs = zdaj,
         )
         return JSONObject()
             .put("zvoni_ob_ms", izid.zvoniOb)
@@ -136,8 +139,15 @@ class Most(
         if (!nas()) return "[]"
         val zdaj = System.currentTimeMillis()
         val a = JSONArray()
+        // Domača stran kaže naslednjo budilko z odhodom in zamudo. Račun je
+        // tu, ne v strani: ista odločitev kot pri zvonjenju (glej `napoved`).
         Shramba.vse(dejavnost).sortedBy { it.voznoredniMs }.forEach {
-            a.put(it.json().put("zvoni_ob_ms", it.izracun(zdaj).zvoniOb))
+            val izid = it.izracun(zdaj)
+            a.put(it.json()
+                .put("zvoni_ob_ms", izid.zvoniOb)
+                .put("odhod_ms", izid.odhodMs)
+                .put("upostevana_s", izid.upostevanaS)
+                .put("vir", izid.vir.name.lowercase()))
         }
         return a.toString()
     }
@@ -183,6 +193,7 @@ class Most(
         return JSONObject()
             .put("obvestila", GlavnaDejavnost.smeObvescati(dejavnost))
             .put("tocni_alarmi", Nacrtovalec.smeTocenAlarm(dejavnost))
+            .put("cel_zaslon", Zvonjenje.smeCelZaslon(dejavnost))
             .toString()
     }
 

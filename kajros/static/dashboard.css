@@ -120,6 +120,13 @@ body {
 /* Kvadratek za avtobus, krog za vlak -- ista razlika kot na zemljevidu. */
 .find-kind-bus { background: #4db97f; border-radius: 2px; }
 .find-kind-train { background: #8b95a4; }
+/* Postaja je prazen obroč -- ista oblika kot oznaka, ki jo izbira nariše. */
+.find-kind-postaja { border: 2px solid #e7eaf0; box-sizing: border-box; }
+/* Leafletov `.leaflet-container a` bi povezavo pobarval modro in podčrtal. */
+.leaflet-popup-content a.najdena-tabla {
+  display: inline-block; margin-top: 6px;
+  color: var(--accent-lit); text-decoration: none;
+}
 .find-no {
   font: 600 12.5px/1.3 'IBM Plex Mono', ui-monospace, monospace;
   color: #e7eaf0; flex-shrink: 0;

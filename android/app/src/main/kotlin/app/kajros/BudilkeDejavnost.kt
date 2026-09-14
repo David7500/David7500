@@ -40,9 +40,42 @@ class BudilkeDejavnost : Activity() {
                 .setAction(GlavnaDejavnost.AKCIJA_NASTAVITVE))
         }
         findViewById<TextView>(R.id.opozorilo).setOnClickListener {
-            startActivity(Intent(android.provider.Settings
-                .ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            // Dovoljenje za cel zaslon ima svoj zaslon; v podrobnostih
+            // aplikacije ga na vecini telefonov ni mogoce najti.
+            val akcija = if (samoCelZaslon() &&
+                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT
+            else android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+            try {
+                startActivity(Intent(akcija, Uri.parse("package:$packageName")))
+            } catch (e: android.content.ActivityNotFoundException) {
+                startActivity(Intent(android.provider.Settings
+                    .ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
         }
+        findViewById<Button>(R.id.dnevnik).setOnClickListener { pokaziDnevnik() }
+    }
+
+    /** Vse drugo je urejeno, manjka samo cel zaslon. */
+    private fun samoCelZaslon(): Boolean =
+        GlavnaDejavnost.smeObvescati(this) && Nacrtovalec.smeTocenAlarm(this) &&
+            !Zvonjenje.smeCelZaslon(this)
+
+    private fun pokaziDnevnik() {
+        val p = (16 * resources.displayMetrics.density).toInt()
+        val besedilo = TextView(this).apply {
+            text = Dnevnik.beri(this@BudilkeDejavnost).ifBlank { getString(R.string.dnevnik_prazen) }
+            setTextColor(getColor(R.color.ink_dim))
+            textSize = 12f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            setPadding(p, p / 2, p, 0)
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.dnevnik)
+            .setView(android.widget.ScrollView(this).apply { addView(besedilo) })
+            .setPositiveButton(R.string.zapri, null)
+            .show()
     }
 
     override fun onResume() {
@@ -54,9 +87,13 @@ class BudilkeDejavnost : Activity() {
     }
 
     private fun narisi() {
-        findViewById<TextView>(R.id.opozorilo).visibility =
-            if (GlavnaDejavnost.smeObvescati(this) && Nacrtovalec.smeTocenAlarm(this))
+        findViewById<TextView>(R.id.opozorilo).apply {
+            val vse = GlavnaDejavnost.smeObvescati(this@BudilkeDejavnost) &&
+                Nacrtovalec.smeTocenAlarm(this@BudilkeDejavnost)
+            visibility = if (vse && Zvonjenje.smeCelZaslon(this@BudilkeDejavnost))
                 View.GONE else View.VISIBLE
+            setText(if (vse) R.string.budilka_cel_zaslon else R.string.budilka_dovoljenja)
+        }
         findViewById<Button>(R.id.naslov).text =
             getString(R.string.budilke_naslov_streznika,
                 Nastavitve.naslov(this).removePrefix("https://").removePrefix("http://"))
@@ -129,10 +166,12 @@ class BudilkeDejavnost : Activity() {
 
         // Od kdaj je stevilka. Brez tega bi "+4 min" izpred pol ure izgledalo
         // enako kot "+4 min" izpred pol minute -- in prva ne pomeni nicesar.
-        v.findViewById<TextView>(R.id.vir).text =
-            if (b.zamudaObMs > 0) getString(R.string.budilka_preverjeno,
-                ura.format(Date(b.zamudaObMs)))
-            else getString(R.string.budilka_nepreverjeno)
+        v.findViewById<TextView>(R.id.vir).text = when {
+            b.zamudaObMs > 0 && b.zamudaObMs >= b.stikObMs ->
+                getString(R.string.budilka_preverjeno, ura.format(Date(b.zamudaObMs)))
+            b.stikObMs > 0 -> getString(R.string.budilka_ni_podatka, ura.format(Date(b.stikObMs)))
+            else -> getString(R.string.budilka_nepreverjeno)
+        }
 
         v.findViewById<Switch>(R.id.vklop).apply {
             isChecked = !b.ugasnjena

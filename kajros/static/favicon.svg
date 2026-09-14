@@ -1,7 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none"
-     stroke-linecap="round">
-  <rect width="96" height="96" rx="21" fill="#0f1115"/>
-  <path d="M34 24V72" stroke="#e7eaf0" stroke-width="9"/>
-  <path d="M66 26L34 50" stroke="#5b6472" stroke-width="9"/>
-  <path d="M34 50L66 72" stroke="#f0934f" stroke-width="9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none" stroke-linecap="round">
+<!-- Znak Kajros: K kot kazalca ure na številčnici (kairos proti chronosu).
+     Siva roka je vozni red, oranžna resnica, in po njej pelje avtobus.
+     Iz tega se naredijo ikone: scripts/naredi-ikone.sh. Android ima isto
+     risbo v res/drawable/ikona_znak.xml (brez prelivov, ki jih vektor nima). -->
+<defs>
+<linearGradient id="og" gradientUnits="userSpaceOnUse" x1="34" y1="50" x2="70" y2="74"><stop offset="0" stop-color="#f6ad6f"/><stop offset="1" stop-color="#dd6a26"/></linearGradient>
+<linearGradient id="sg" gradientUnits="userSpaceOnUse" x1="34" y1="24" x2="34" y2="72"><stop offset="0" stop-color="#f4f6fa"/><stop offset="1" stop-color="#b9c0cc"/></linearGradient>
+<radialGradient id="bg" cx=".3" cy=".2" r="1"><stop offset="0" stop-color="#1d2129"/><stop offset="1" stop-color="#0b0d10"/></radialGradient>
+</defs>
+<g id="podlaga"><rect width="96" height="96" rx="21" fill="url(#bg)"/><rect x=".75" y=".75" width="94.5" height="94.5" rx="20.3" stroke="#fff" stroke-opacity=".07" stroke-width="1.5"/></g>
+<g id="znak"><line x1="48" y1="11" x2="48" y2="6" stroke="#fff" stroke-opacity=".28" stroke-width="3"/><line x1="67.5" y1="14.23" x2="69" y2="11.63" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="81.77" y1="28.5" x2="84.37" y2="27" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="85" y1="48" x2="90" y2="48" stroke="#fff" stroke-opacity=".28" stroke-width="3"/><line x1="81.77" y1="67.5" x2="84.37" y2="69" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="67.5" y1="81.77" x2="69" y2="84.37" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="48" y1="85" x2="48" y2="90" stroke="#fff" stroke-opacity=".28" stroke-width="3"/><line x1="28.5" y1="81.77" x2="27" y2="84.37" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="14.23" y1="67.5" x2="11.63" y2="69" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="11" y1="48" x2="6" y2="48" stroke="#fff" stroke-opacity=".28" stroke-width="3"/><line x1="14.23" y1="28.5" x2="11.63" y2="27" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><line x1="28.5" y1="14.23" x2="27" y2="11.63" stroke="#fff" stroke-opacity=".13" stroke-width="2"/><g transform="translate(7 -1)">
+<path d="M34 24V72" stroke="url(#sg)" stroke-width="9"/><path d="M66 26L34 50" stroke="#5b6472" stroke-width="9"/>
+<path d="M34 50L68 73" stroke="url(#og)" stroke-width="13"/><path d="M36.5 51.7L66 71.6" stroke="#0f1115" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="butt" stroke-dasharray="3.2 3.2"/>
+<g transform="translate(55.08 64.26) rotate(34.08) translate(0 -9)"><rect x="-13" y="-6" width="26" height="12" rx="3" fill="#f4f6fa" stroke="#0f1115" stroke-width="1.4"/><rect x="-10" y="-3.5" width="5" height="4" rx="1" fill="#0f1115" opacity=".8"/><rect x="-3" y="-3.5" width="5" height="4" rx="1" fill="#0f1115" opacity=".8"/><rect x="4" y="-3.5" width="6.5" height="5" rx="1" fill="#0f1115" opacity=".8"/><circle cx="-7" cy="6" r="2.4" fill="#0f1115"/><circle cx="7" cy="6" r="2.4" fill="#0f1115"/></g>
+<circle cx="34" cy="50" r="6" fill="#f0934f" stroke="#0f1115" stroke-width="3"/>
+</g></g>
 </svg>

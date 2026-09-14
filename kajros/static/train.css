@@ -117,6 +117,15 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
 }
 .fig-body.is-wide::after { content: ""; }
+/* Koncna zamuda po dnevih: os ostane, stolpci drsijo. Senca je LEVO, ker so
+   tam starejsi dnevi -- graf se odpre pri zadnjih. */
+.runs-ovoj { display: flex; }
+.runs-ovoj > svg { flex-shrink: 0; }
+.runs-drsnik {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, transparent, #000 18px);
+}
 .fig-body .empty-state { padding: 10px 2px; }
 
 .run-row {

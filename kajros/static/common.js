@@ -240,38 +240,6 @@ const MOST = (() => {
   }
 })();
 
-// Do nativnega seznama budilk je bilo doslej mogoce priti samo z dolgim
-// pritiskom na ikono aplikacije. To je gesta, ki jo pozna Android, ne pa nujno
-// clovek -- zato je povezava tam, kjer so vse druge: v glavi strani. V
-// brskalniku je ni, ker nativnega zaslona ni.
-//
-// **Domaca stran glave nima**, zato gre tam med "Ostalo" (`.home-more`). Brez
-// tega je bil prvi zaslon aplikacije edini, s katerega do budilk ni poti -- in
-// prav ta se odpre ob zagonu.
-function povezavaDoBudilk() {
-  if (!MOST || typeof MOST.odpriBudilke !== "function") return;
-  const nav = document.querySelector(".top-nav");
-  const kam = nav || document.querySelector(".home-more");
-  if (!kam || kam.querySelector("[data-budilke]")) return;
-  const g = document.createElement("button");
-  g.type = "button";
-  g.dataset.budilke = "1";
-  if (nav) {
-    g.className = "top-link";
-    g.textContent = "budilke";
-  } else {
-    g.className = "more-link";
-    g.innerHTML = "<strong>Budilke</strong>"
-      + "<span>nastavljene budilke za odhode — samo v aplikaciji</span>";
-  }
-  g.addEventListener("click", () => MOST.odpriBudilke());
-  kam.appendChild(g);
-}
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", povezavaDoBudilk);
-} else {
-  povezavaDoBudilk();
-}
 
 // ---------- pika o zivosti ----------
 // Pika je doslej kazala, ali je ODGOVOR prisel, ne ali so PODATKI sveži.
@@ -1113,6 +1081,40 @@ function iskalnikKazala(kazalo, q, limit = 8) {
     if (tocno.length + zacetek.length >= limit && kjerkoli.length >= limit) break;
   }
   return [...tocno, ...zacetek, ...kjerkoli].slice(0, limit);
+}
+
+// Kazalo postaj obeh omrezij se nalozi ENKRAT in isce se v brskalniku.
+// Poizvedba na streznik je bila za obe omrezji izmerjeno 1,35 s na razvojnem
+// racunalniku -- okoli pet na arwenu, in to na vsak pritisk tipke. Postaje se
+// ne spreminjajo vsak dan. Rabita ga najhitrejsa pot in veliki zemljevid, zato
+// je tu: dve kopiji predpomnilnika bi se razsli pri prvi spremembi oblike.
+const KAZALO_KLJUC = "kajros:kazalo-vse";
+const KAZALO_VELJA_MS = 12 * 3600 * 1000;
+let kazaloObljuba = null;
+
+/** Vrne obljubo seznama `{n, t, lat, lon, f}` ali `null`, ce ga ni bilo mogoce dobiti. */
+function naloziKazalo() {
+  if (kazaloObljuba) return kazaloObljuba;
+  kazaloObljuba = (async () => {
+    try {
+      const shranjeno = JSON.parse(localStorage.getItem(KAZALO_KLJUC) || "null");
+      if (shranjeno && Date.now() - shranjeno.ts < KAZALO_VELJA_MS) {
+        return shranjeno.v.map((s) => ({ ...s, f: fold(s.n) }));
+      }
+    } catch (e) { /* pokvarjen zapis: preberemo znova */ }
+    try {
+      const r = await fetch("/api/stations/index?network=vse&koordinate=1");
+      if (!r.ok) return null;
+      const v = await r.json();
+      try {
+        localStorage.setItem(KAZALO_KLJUC, JSON.stringify({ ts: Date.now(), v }));
+      } catch (e) { /* poln ali zavrnjen localStorage ni napaka */ }
+      return v.map((s) => ({ ...s, f: fold(s.n) }));
+    } catch (e) {
+      return null;
+    }
+  })();
+  return kazaloObljuba;
 }
 
 // ---------- moja lega ----------

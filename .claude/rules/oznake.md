@@ -240,9 +240,16 @@ red, poudarjena resnica — ista misel kot ime (*chronos* proti *kairosu*).
 
 * **V glavi strani** (`brand-mark`) je znak brez podlage in bere `currentColor`,
   zato na avtobusni strani pozeleni skupaj s poudarkom. Steblo in zgornja roka
-  imata `stroke-opacity="0.5"`.
-* **Kot ikona** (`static/ikone/`) ima podlago, ker stoji sam. Nastane s
-  `scripts/naredi-ikone.sh`, ne ročno.
+  imata `stroke-opacity="0.5"`. Ostal je preprost, ker pri 20 px podrobnosti
+  ikone ni videti.
+* **Kot ikona** je bolj podroben (izbrano 14. 9. 2026, „K je preveč
+  preprost"): K kot kazalca na številčnici z dvanajstimi oznakami, oranžna roka
+  je cesta, po njej pelje avtobus. Vir je **`static/favicon.svg`** (podlaga in
+  znak v ločenih skupinah); `scripts/naredi-ikone.sh` iz njega naredi PNG,
+  Android ima isto risbo v `ikona_znak.xml` brez prelivov, stisnjeno na 75 %,
+  da oznake ure ostanejo v varni coni adaptivne ikone.
+* **V komentarju SVG in XML ni `--`.** Favicon z `--` v komentarju ni veljaven
+  XML in ga brskalnik ne pokaže; aapt gradnjo ustavi.
 * **Vlakov znak ni več znamka.** Ostane samo tam, kjer pomeni **omrežje**:
   preklop v glavi in izbira na domači strani. Znamka mora pokrivati oboje.
 * Znak mora zdržati **svetlo in temno podlago**. Prvi poskus monograma je imel

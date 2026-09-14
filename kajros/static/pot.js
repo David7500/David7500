@@ -72,9 +72,11 @@ function narisiTocke(premakni = true) {
   for (const kaj of ["od", "do"]) {
     const t = S[kaj];
     if (!t) continue;
+    // Izhodišče je prazen obroč, ne modra pika: polna modra je lastna lega,
+    // in kdor išče od svoje lege, je imel dve enaki piki eno na drugi.
     L.circleMarker([t.lat, t.lon], {
-      radius: 8, weight: 3, color: "#ffffff",
-      fillColor: kaj === "od" ? "#2f7fff" : "#f0934f",
+      radius: 8, weight: 3, color: kaj === "od" ? "#e7eaf0" : "#ffffff",
+      fillColor: kaj === "od" ? "#0f1115" : "#f0934f",
       fillOpacity: 1,
     }).addTo(tockeLayer).bindTooltip(kaj === "od" ? "od kod" : "kam");
   }
@@ -253,32 +255,9 @@ function odstraniTocko(kaj) {
 
 // ---------------------------------------------------------------- iskanje postaj
 //
-// Kazalo se naloži ENKRAT in išče se v brskalniku. Poizvedba na strežnik je
-// bila za obe omrežji izmerjeno 1,35 s na razvojnem računalniku -- okoli pet
-// na arwenu, in to na vsak pritisk tipke. Postaje se ne spreminjajo vsak dan.
+// Kazalo nalozi `common.naloziKazalo()` -- enkrat, iskanje pa tece v brskalniku.
 
-const KAZALO_KLJUC = "kajros:kazalo-vse";
-const KAZALO_VELJA_MS = 12 * 3600 * 1000;
 let KAZALO = null;
-
-async function naloziKazalo() {
-  try {
-    const shranjeno = JSON.parse(localStorage.getItem(KAZALO_KLJUC) || "null");
-    if (shranjeno && Date.now() - shranjeno.ts < KAZALO_VELJA_MS) {
-      KAZALO = shranjeno.v.map((s) => ({ ...s, f: fold(s.n) }));
-      return;
-    }
-  } catch (e) { /* pokvarjen zapis: preberemo znova */ }
-  try {
-    const r = await fetch("/api/stations/index?network=vse&koordinate=1");
-    if (!r.ok) return;
-    const v = await r.json();
-    KAZALO = v.map((s) => ({ ...s, f: fold(s.n) }));
-    try {
-      localStorage.setItem(KAZALO_KLJUC, JSON.stringify({ ts: Date.now(), v }));
-    } catch (e) { /* poln ali zavrnjen localStorage ni napaka */ }
-  } catch (e) { /* brez kazala ostane zemljevid */ }
-}
 
 function zapriZadetke(kaj) {
   const ul = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocka-zadetki`);
@@ -709,7 +688,7 @@ for (const id of ["#dan", "#ob"]) {
 
 oznaciArm();
 povej("Klikni na zemljevid ali vpiši postajo.", null);
-naloziKazalo();
+naloziKazalo().then((k) => { KAZALO = k; });
 const izPovezave = izUrl();
 izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi
 if (izPovezave) isci();

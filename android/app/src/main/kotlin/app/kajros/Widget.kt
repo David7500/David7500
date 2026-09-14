@@ -78,14 +78,21 @@ class Widget : AppWidgetProvider() {
         }
 
         /**
-         * Budilka, ki jo widget kaze: prva, ki se ni odzvonila in ni ugasnjena.
+         * Budilka, ki jo widget kaze: prva, katere odhod se ni mimo.
+         *
+         * **Tudi odzvonjena.** Po zvonjenju je vprasanje "koliko casa imam se
+         * do vlaka" -- prej je widget takrat pisal "ni budilke" ali jutrisnji
+         * odhod, ravno ko je potnik stopil skozi vrata.
          *
          * Ena in ne seznam: widget je velik kot dve vrstici ikon in stevilka,
          * ki jo potnik lovi s praga, je ena sama.
          */
         fun naslednja(c: Context, zdajMs: Long): Budilka? =
             Shramba.vse(c)
-                .filter { !it.ugasnjena && !it.odzvonjeno && it.voznoredniMs > zdajMs - 60_000L }
+                .filter {
+                    !it.ugasnjena &&
+                        maxOf(it.voznoredniMs, it.izracun(zdajMs).odhodMs) > zdajMs - 60_000L
+                }
                 .minByOrNull { it.izracun(zdajMs).odhodMs }
 
         private fun pogled(c: Context): RemoteViews {
@@ -153,6 +160,9 @@ class Widget : AppWidgetProvider() {
             val odhod = URA.format(Date(izid.odhodMs))
             val zamuda = Math.round(izid.upostevanaS / 60.0).toInt()
             return when {
+                izid.vir == Ura.Vir.NI_PODATKA ->
+                    if (uraJeZgoraj) c.getString(R.string.widget_ni_podatka_dan)
+                    else c.getString(R.string.widget_ni_podatka, odhod)
                 izid.vir != Ura.Vir.ZAMUDA ->
                     if (uraJeZgoraj) c.getString(R.string.widget_nepreverjena)
                     else c.getString(R.string.widget_vozni_red, odhod)

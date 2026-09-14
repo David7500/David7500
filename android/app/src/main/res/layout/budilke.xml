@@ -68,6 +68,23 @@
         android:textColor="@color/ink_faint"
         android:textSize="13sp" />
 
+    <!-- Kaj je budilka naredila in zakaj. Brez tega je bilo treba vzrok
+         budilke, ki ni zbudila, sklepati iz kode: sistemski dnevnik je bil
+         do večera že prepisan. -->
+    <Button
+        android:id="@+id/dnevnik"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:textAllCaps="false"
+        android:textColor="@color/ink_faint"
+        android:textSize="13sp"
+        android:text="@string/dnevnik" />
+
     <Button
         android:id="@+id/odpri"
         style="?android:attr/borderlessButtonStyle"

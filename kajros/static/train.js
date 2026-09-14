@@ -609,7 +609,10 @@ function odpriBudilko(stopSeq) {
 
   let dovoljenja = {};
   try { dovoljenja = JSON.parse(MOST.dovoljenja() || "{}"); } catch (e) { /* prazno */ }
-  const manjka = !dovoljenja.obvestila || !dovoljenja.tocni_alarmi;
+  // `cel_zaslon` pozna šele aplikacija 1.1; starejša ga ne pošlje in tam ga
+  // ne smemo šteti za manjkajočega, sicer bi opozorilo viselo za vedno.
+  const manjka = !dovoljenja.obvestila || !dovoljenja.tocni_alarmi
+    || dovoljenja.cel_zaslon === false;
 
   const shranjeno = JSON.parse(
     localStorage.getItem(BUD_KLJUC) || '{"minut":25,"zbudi":true,"rezerva":true}');
@@ -663,7 +666,7 @@ function odpriBudilko(stopSeq) {
       <div class="bud-napoved" id="bud-napoved"></div>
 
       ${manjka ? `<button type="button" class="bud-dovoli" data-dovoli="1">
-        Android še ne dovoli obvestil ali točnih alarmov — uredi</button>` : ""}
+        Android budilki še ne dovoli vsega, kar rabi — uredi</button>` : ""}
 
       <div class="bud-dno">
         ${obstoj ? `<button type="button" class="btn-quiet bud-brisi" data-brisi="${obstoj.id}">Odstrani</button>` : ""}
@@ -1521,44 +1524,42 @@ function renderProfile() {
 
 // ---------- graf 2: koncna zamuda po dnevih ----------
 
-//: Najozji stolpec, ki je se stolpec in ne crta.
-const MIN_BAR_PX = 7;
+//: Koliko dni je v sirini okvirja. Starejsi so levo in do njih se podrsa.
+const VIDNIH_DNI = 15;
 
-function drawRuns(w, runs, onSlice) {
+// Doslej je graf stisnil v sirino vse dneve, kar jih je slo noter (7 px na
+// stolpec): na telefonu 40 stolpcev, med katerimi se dneva ni dalo razlociti
+// ne s prstom ne z ocmi, in datum le pod vsakim petim. Zdaj je v okvirju
+// petnajst dni, ostali so levo -- isti dogovor kot pri profilu postaj: bolje
+// drseti kot ne videti. Os stoji posebej, da ob drsenju ne odide z grafom.
+function drawRuns(w, runs) {
   const H = 190;
   const M = { t: 14, r: 12, b: 30, l: 40 };
-  const iw = Math.max(40, w - M.l - M.r);
+  const vidno = Math.max(40, w - M.l - M.r);
   const ih = H - M.t - M.b;
-  const svg = svgEl("svg", { width: w, height: H, role: "img" });
-
-  // Pri pol leta zajema bi bilo 180 stolpcev na 300 px, torej 1,7 px na dan
-  // in 180 datumov drug cez drugega. Zato pokazemo zadnjih toliko, kolikor
-  // jih gre citljivo noter, in povemo, koliko jih je vseh -- graf, ki se ne
-  // da brati, ni graf.
-  const zmore = Math.max(6, Math.floor(iw / MIN_BAR_PX));
-  const vsi = runs.length;
-  runs = runs.slice(-zmore);
-  if (onSlice) onSlice(runs.length, vsi);
+  const step = vidno / Math.min(VIDNIH_DNI, runs.length);
+  const iw = step * runs.length;
 
   const ticks = niceTicks(Math.max(60, ...runs.map((r) => r.final_delay_s)), 5);
   const yMax = ticks.top;
   const y = (v) => M.t + ih - (v / yMax) * ih;
-  const step = iw / runs.length;
   const bw = Math.min(32, step - 2); // 2px reze med stolpci
 
+  const os = svgEl("svg", { width: M.l, height: H, "aria-hidden": "true" });
+  const svg = svgEl("svg", { width: iw + M.r, height: H, role: "img" });
   for (const v of ticks.values) {
     svg.appendChild(svgEl("line", {
-      x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v),
+      x1: 0, x2: iw, y1: y(v), y2: y(v),
       stroke: v === 0 ? INK_AXIS : INK_GRID, "stroke-width": 1,
     }));
-    svg.appendChild(svgEl("text", {
+    os.appendChild(svgEl("text", {
       x: M.l - 8, y: y(v) + 4, "text-anchor": "end",
       fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Mono', monospace",
     }, `${Math.round(v / 60)}`));
   }
 
   runs.forEach((r, i) => {
-    const cx = M.l + step * i + step / 2;
+    const cx = step * i + step / 2;
     const h = Math.max(2, M.t + ih - y(r.final_delay_s));
     const rect = svgEl("rect", {
       x: cx - bw / 2, y: y(r.final_delay_s), width: bw, height: h,
@@ -1575,17 +1576,26 @@ function drawRuns(w, runs, onSlice) {
   });
 
   // Datumi pod stolpci: toliko, kolikor jih gre brez prekrivanja. Vsak
-  // datum rabi ~34 px; kadar jih je vec, pisemo vsakega k-tega in vedno
-  // zadnjega -- ta je "danes" in je edini, ki ga clovek isce.
+  // datum rabi ~34 px; kadar jih je vec, pisemo vsakega k-tega, steto OD
+  // DESNE -- zadnji je "danes" in je edini, ki ga clovek zagotovo isce.
   const naK = Math.max(1, Math.ceil(34 / step));
   runs.forEach((r, i) => {
-    if (i % naK !== 0 && i !== runs.length - 1) return;
+    if ((runs.length - 1 - i) % naK !== 0) return;
     svg.appendChild(svgEl("text", {
-      x: M.l + step * i + step / 2, y: H - 10, "text-anchor": "middle",
+      x: step * i + step / 2, y: H - 10, "text-anchor": "middle",
       fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
     }, dayLabel(r.service_date)));
   });
-  return svg;
+
+  const drsnik = document.createElement("div");
+  drsnik.className = "runs-drsnik";
+  drsnik.appendChild(svg);
+  const ovoj = document.createElement("div");
+  ovoj.className = "runs-ovoj";
+  ovoj.append(os, drsnik);
+  // Odpre se pri zadnjih dneh: vprasanje je "kako je bilo zadnje case".
+  requestAnimationFrame(() => { drsnik.scrollLeft = drsnik.scrollWidth; });
+  return ovoj;
 }
 
 // ---------- zemljevid ene voznje ----------
@@ -2165,11 +2175,10 @@ async function loadHistory() {
   const runsSub = document.getElementById("runs-sub");
   const runsEl = document.getElementById("runs-chart");
   if (runs.length >= 3) {
-    mountChart(runsEl, (w) => drawRuns(w, runs, (n, vsi) => {
-      runsSub.textContent = n < vsi
-        ? `ena vožnja = en stolpec · zadnjih ${n} od ${vsi} zajetih`
-        : "ena vožnja = en stolpec";
-    }));
+    runsSub.textContent = runs.length > VIDNIH_DNI
+      ? `ena vožnja = en stolpec · ${runs.length} zajetih, starejše levo`
+      : "ena vožnja = en stolpec";
+    mountChart(runsEl, (w) => drawRuns(w, runs));
   } else if (runs.length) {
     // Pod tremi voznjami stolpci ne povedo nic vec kot seznam -- in namigujejo
     // na trend, ki ga ni.

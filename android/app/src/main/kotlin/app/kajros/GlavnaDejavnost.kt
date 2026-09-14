@@ -73,6 +73,22 @@ class GlavnaDejavnost : Activity() {
      */
     private var bilaNapaka = false
 
+    /**
+     * Naslov, pri katerem je bila napaka. Rabi se, ker WebView javi napako
+     * HTTP **pred** `onPageStarted` za isto navigacijo -- izmerjeno na
+     * emulatorju 12. 9. 2026:
+     *
+     *     httpError 525 main=true url=https://…/
+     *     pageFinished bilaNapaka=false url=https://…/
+     *
+     * `onPageStarted` je zastavico pobrisal za nazaj in `onPageFinished` je
+     * nas zaslon skril. Posledica je bila natanko tisto, cemur se zaslon
+     * izogiba: potnik je videl Cloudflarovo anglesko stran „SSL handshake
+     * failed", ne nasega stavka. Zato zacetek nalaganja pobrise stanje samo,
+     * kadar gre za DRUG naslov.
+     */
+    private var naslovNapake: String? = null
+
     /** Dovoljenje za lego zahteva sistem asinhrono; stran medtem caka na odgovor. */
     private var cakajocaLega: Pair<String, GeolocationPermissions.Callback>? = null
 
@@ -102,6 +118,26 @@ class GlavnaDejavnost : Activity() {
 
         if (stanje != null) web.restoreState(stanje) else web.loadUrl(naslov)
         obravnavajNamero(intent)
+        // Zunaj trgovine posodobitve ne ponudi nihce. Vprasa se enkrat na dan
+        // in samo pokaze vrstico -- prenos in namestitev sta uporabnikova klika.
+        Posodobitev.preveri(this) { pokaziPosodobitev(it) }
+    }
+
+    private fun pokaziPosodobitev(izdaja: Posodobitev.Izdaja) {
+        val vrstica = findViewById<View>(R.id.posodobitev)
+        findViewById<TextView>(R.id.posodobitev_besedilo).text =
+            getString(R.string.posodobitev, izdaja.ime)
+        vrstica.setOnClickListener {
+            // V brskalnik, ne v WebView: stran s prenosom je nasa, a prenos
+            // datoteke v WebView ne dela -- `DownloadListener`-ja nimamo in
+            // ga zaradi enega gumba ne bomo dodajali.
+            odpriZunaj(Uri.parse(izdaja.stran))
+        }
+        findViewById<Button>(R.id.posodobitev_zapri).setOnClickListener {
+            Posodobitev.preskoci(this, izdaja.koda)
+            vrstica.visibility = View.GONE
+        }
+        vrstica.visibility = View.VISIBLE
     }
 
     override fun onNewIntent(nova: Intent?) {
@@ -118,6 +154,7 @@ class GlavnaDejavnost : Activity() {
         // most do budilk sme videti samo nasa stran.
         if (!Nastavitve.jeNas(kam, naslov)) return
         bilaNapaka = false
+        naslovNapake = null
         skrijNapako()
         web.loadUrl(kam)
     }
@@ -188,13 +225,20 @@ class GlavnaDejavnost : Activity() {
         }
 
         override fun onPageStarted(v: WebView, url: String?, ikona: Bitmap?) {
-            bilaNapaka = false
+            // Samo DRUG naslov pomeni novo nalaganje. Za isti naslov je ta
+            // klic lahko nadaljevanje navigacije, katere napako smo ze javili
+            // (glej [naslovNapake]) -- brisanje bi zaslon napake skrilo.
+            if (url != naslovNapake) {
+                bilaNapaka = false
+                naslovNapake = null
+            }
             most.trenutniUrl = url
         }
 
         override fun onReceivedError(v: WebView, z: WebResourceRequest, e: WebResourceError) {
             // Napaka pri sliki ali pisavi ni razlog, da bi skrili vso stran.
             if (!z.isForMainFrame) return
+            naslovNapake = z.url?.toString()
             pokaziNapako(e.description?.toString())
         }
 
@@ -205,7 +249,10 @@ class GlavnaDejavnost : Activity() {
             // Samo napake streznika. Pri 4xx stran obstaja in pove vec od nas:
             // Cloudflarov 403 je svoja stran, nas 404 pa nasa. Nativni zaslon
             // je za primer, ko ni NICESAR -- ne za vsako stevilko nad 400.
-            if (o.statusCode >= 500) pokaziNapako("HTTP ${o.statusCode}")
+            if (o.statusCode >= 500) {
+                naslovNapake = z.url?.toString()
+                pokaziNapako("HTTP ${o.statusCode}")
+            }
         }
 
         override fun onPageFinished(v: WebView, url: String?) {
@@ -259,8 +306,9 @@ class GlavnaDejavnost : Activity() {
     }
 
     /**
-     * Kar budilka rabi od sistema: obvestila (13+) in tocne alarme (12+).
-     * Drugo ni dovoljenje, ampak nastavitev, zato zanj odpremo zaslon sistema.
+     * Kar budilka rabi od sistema: obvestila (13+), tocne alarme (12+) in
+     * cel zaslon (14+). Zadnja dva nista dovoljenji, ampak nastavitvi, zato
+     * zanju odpremo zaslon sistema.
      */
     fun zahtevajZaBudilko() {
         if (!smeObvescati(this)) {
@@ -270,13 +318,23 @@ class GlavnaDejavnost : Activity() {
         }
         if (!Nacrtovalec.smeTocenAlarm(this)) {
             Toast.makeText(this, R.string.ni_tocnih_alarmov, Toast.LENGTH_LONG).show()
-            try {
-                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                    Uri.parse("package:$packageName")))
-            } catch (e: ActivityNotFoundException) {
-                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:$packageName")))
-            }
+            odpriNastavitev(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            return
+        }
+        if (!Zvonjenje.smeCelZaslon(this) &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+        ) {
+            Toast.makeText(this, R.string.ni_celega_zaslona, Toast.LENGTH_LONG).show()
+            odpriNastavitev(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+        }
+    }
+
+    private fun odpriNastavitev(akcija: String) {
+        try {
+            startActivity(Intent(akcija, Uri.parse("package:$packageName")))
+        } catch (e: ActivityNotFoundException) {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName")))
         }
     }
 
@@ -328,6 +386,7 @@ class GlavnaDejavnost : Activity() {
 
     private fun naloziZnova() {
         bilaNapaka = false
+        naslovNapake = null
         skrijNapako()
         // `reload()` ponovi zadnji naslov, tudi ce je bila to stran z napako
         // znotraj naseg izvora. Ce se nismo nikamor prisli, zacnemo od doma.
@@ -373,6 +432,7 @@ class GlavnaDejavnost : Activity() {
         // Piskotki in `localStorage` so vezani na izvor, zato ob menjavi
         // naslova ni kaj brisati -- nov izvor preprosto ne vidi starega.
         bilaNapaka = false
+        naslovNapake = null
         skrijNapako()
         web.clearHistory()
         web.loadUrl(naslov)

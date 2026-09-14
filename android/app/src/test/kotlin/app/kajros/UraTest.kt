@@ -110,6 +110,51 @@ class UraTest {
     }
 
     @Test
+    fun `velika zamuda ne skrajsa veljavnosti na vozni red`() {
+        // 14. 9. 2026: vlak ob 7:35, X = 25, zamuda +20 -- zvonjenje 7:30.
+        // Ob 7:10 je bil zadnji podatek s 7:05 (korak 5 min, do zvonjenja jih
+        // je bilo se 25). Meja, racunana od voznega reda (7:10), je bila 75 s,
+        // in budilka je ob 7:08 zvonila "preventivno", 22 minut prezgodaj.
+        val zdaj = ODHOD - min(25)
+        val i = Ura.izracunaj(ODHOD, 25, 20 * 60, zdaj - min(5), zdaj, vlak = true)
+        assertEquals(Ura.Vir.ZAMUDA, i.vir)
+        assertEquals(ODHOD + min(20) - min(25), i.zvoniOb)
+    }
+
+    @Test
+    fun `streznik brez podatka o zamudi ni izpad povezave`() {
+        // 14. 9. 2026: LPV 2002 na zacetni postaji, tabla vrne `zamuda: null`.
+        // Budilka je to stela kot izpad in zazvonila preventivno ob prvem
+        // preverjanju, tri minute pred uro -- s stavkom "zamude ni bilo mogoce
+        // preveriti", ceprav je streznik odgovoril.
+        val zvoni = ODHOD - min(25)
+        val zdaj = zvoni - min(2)
+        val i = Ura.izracunaj(ODHOD, 25, null, 0, zdaj, vlak = true, stikObMs = zdaj - 5_000)
+        assertEquals(Ura.Vir.NI_PODATKA, i.vir)
+        assertEquals(zvoni, i.zvoniOb)
+        assertEquals(ODHOD, i.odhodMs)
+    }
+
+    @Test
+    fun `star stik je spet izpad`() {
+        val zvoni = ODHOD - min(25)
+        val zdaj = zvoni - min(2)
+        val i = Ura.izracunaj(ODHOD, 25, null, 0, zdaj, vlak = true, stikObMs = zdaj - min(5))
+        assertEquals(Ura.Vir.PREVENTIVA, i.vir)
+    }
+
+    @Test
+    fun `prehod na krajsi korak ni izpad`() {
+        // Podatek je prisel 16 minut pred zvonjenjem, naslednje preverjanje je
+        // bilo nacrtovano cez 5 minut. Ob njem je do zvonjenja 11 minut, kjer je
+        // korak ze minuta -- a zgresenega ni bilo nic.
+        val zvoni = ODHOD - min(25)
+        val zdaj = zvoni - min(11)
+        assertEquals(Ura.Vir.ZAMUDA,
+            Ura.izracunaj(ODHOD, 25, 0, zdaj - min(5), zdaj, true).vir)
+    }
+
+    @Test
     fun `tik pred zvonjenjem je meja stroga`() {
         // Tam se preverja vsakih 30 s, zato dve minuti tisine pomenita izpad.
         val zvoni = ODHOD - min(25)

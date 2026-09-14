@@ -46,6 +46,13 @@ object Ura {
     enum class Vir {
         /** Zamuda je sveza in upostevana. */
         ZAMUDA,
+        /**
+         * Streznik je odgovoril, a o zamudi te voznje nima podatka -- velja
+         * vozni red, preventive pa NI. Tipicno vlak na zacetni postaji, ki se
+         * se ni premaknil. 14. 9. 2026 je bil ta primer zamenjan z izpadom
+         * povezave in budilka je zazvonila takoj ob prvem preverjanju.
+         */
+        NI_PODATKA,
         /** Zamude ni (ali ji ne verjamemo) -- velja vozni red. */
         VOZNI_RED,
         /** Zvoni prej, ker povezave ni. */
@@ -78,6 +85,7 @@ object Ura {
      * @param zdajMs       zdaj
      * @param vlak         `network == "zeleznica"`
      * @param rezervaS     kar je potnik sam obkljukal ("se 3 minute"), v sekundah
+     * @param stikObMs     zadnji odgovor streznika, tudi brez zamude (0 = nikoli)
      */
     fun izracunaj(
         voznoredniMs: Long,
@@ -87,13 +95,9 @@ object Ura {
         zdajMs: Long,
         vlak: Boolean,
         rezervaS: Int = 0,
+        stikObMs: Long = 0L,
     ): Izid {
         val poVoznemRedu = voznoredniMs - minutPrej * 60_000L - rezervaS * 1000L
-        // `zamudaS == null` je tu zato, da `odhodMs` spodaj ne more pasti na
-        // `!!`. Brez tega bi pokvarjen zapis v shrambi (zamuda null, cas pa
-        // nastavljen) podrl budilko ravno ob prozenju.
-        val brezZveze = zamudaS == null || zamudaObMs <= 0L ||
-            zdajMs - zamudaObMs > veljavnost(voznoredniMs - minutPrej * 60_000L - zdajMs)
 
         // Vlak pred voznim redom ne odpelje -- izmerjeno na 10 775 primerih,
         // niti enkrat. Negativna vrednost iz feeda je zato smet in ne razlog
@@ -106,13 +110,35 @@ object Ura {
         } - rezervaS
         val izZamude = voznoredniMs + upostevana * 1000L - minutPrej * 60_000L
 
-        // Brez povezave nikoli POZNEJE od voznega reda. Sicer bi dvajset minut
-        // stara "+15" drzala uro, tudi ko vlak vmes nadoknadi -- in preventiva
-        // spodaj tega ne ujame, ker premakne le za tri minute.
-        var zvoni = if (brezZveze) min(izZamude, poVoznemRedu) else izZamude
+        // Veljavnost se meri od ure, PO KATERI SE NACRTUJE, torej od zvonjenja
+        // z zamudo -- ne od voznega reda. Razlika je stala budilko 14. 9. 2026:
+        // vlak ob 7:35 z dvajset minutami zamude, preverjanje vsakih 5 minut
+        // (do zvonjenja jih je bilo se 20), meja pa izracunana od voznega reda,
+        // kjer je bilo "zvonjenje" ze cez minuto in je veljalo 75 s. Pet minut
+        // star podatek je bil zato izpad, ura je padla na vozni red in budilka
+        // je sporocila "zamude ni bilo mogoce preveriti" 22 minut prezgodaj.
+        //
+        fun sveze(obMs: Long) =
+            obMs > 0L && zdajMs - obMs <= veljavnost(izZamude - zdajMs, zdajMs - obMs)
+        // `zamudaS != null` je tu tudi zato, da `odhodMs` spodaj ne more pasti
+        // na `!!`. Brez tega bi pokvarjen zapis v shrambi (zamuda null, cas pa
+        // nastavljen) podrl budilko ravno ob prozenju.
+        val zamudaVelja = zamudaS != null && sveze(zamudaObMs)
+        // Povezava in zamuda nista isto: streznik, ki odgovori "o tej voznji ne
+        // vem nic", je dosegljiv, in preventiva je samo za primer, ko ni.
+        val zvezaVelja = zamudaVelja || sveze(stikObMs)
 
-        var vir = if (brezZveze) Vir.VOZNI_RED else Vir.ZAMUDA
-        if (brezZveze && zdajMs >= zvoni - PREVENTIVA_MS) {
+        // Brez sveze zamude nikoli POZNEJE od voznega reda. Sicer bi dvajset
+        // minut stara "+15" drzala uro, tudi ko vlak vmes nadoknadi -- in
+        // preventiva spodaj tega ne ujame, ker premakne le za tri minute.
+        var zvoni = if (zamudaVelja) izZamude else min(izZamude, poVoznemRedu)
+
+        var vir = when {
+            zamudaVelja -> Vir.ZAMUDA
+            zvezaVelja -> Vir.NI_PODATKA
+            else -> Vir.VOZNI_RED
+        }
+        if (!zvezaVelja && zdajMs >= zvoni - PREVENTIVA_MS) {
             // Zadnje okno in povezave ni: ne cakamo na cudez.
             zvoni = min(zvoni, zdajMs)
             vir = Vir.PREVENTIVA
@@ -121,9 +147,9 @@ object Ura {
         return Izid(
             zvoniOb = zvoni,
             vir = vir,
-            upostevanaS = if (brezZveze) 0 else upostevana,
+            upostevanaS = if (zamudaVelja) upostevana else 0,
             surovaS = zamudaS,
-            odhodMs = if (brezZveze) voznoredniMs else voznoredniMs + zamudaS!! * 1000L,
+            odhodMs = if (zamudaVelja) voznoredniMs + zamudaS!! * 1000L else voznoredniMs,
         )
     }
 
@@ -137,11 +163,17 @@ object Ura {
     /**
      * Koliko casa podatek se velja: dve preverjanji plus zamik.
      *
+     * Prvo preverjanje je tisto, ki je bilo NACRTOVANO, ko je podatek prisel
+     * -- takrat je bilo do zvonjenja `doZvonjenjaMs + starostMs` in korak je bil
+     * dolg temu primerno. Drugo je zgreseno preverjanje po zdajsnjem koraku.
+     * Brez tega bi prehod s 5-minutnega na minutni korak (15 minut pred
+     * zvonjenjem) vsakic razglasil izpad, ceprav ni bilo zgreseno nic.
+     *
      * Dalec od ure to pomeni deset minut, tik pred njo pa slabo minuto in pol
      * -- natanko takrat, ko je pomembno.
      */
-    fun veljavnost(doZvonjenjaMs: Long): Long =
-        maxOf(IZPAD_MS, 2 * korak(doZvonjenjaMs) + 15_000L)
+    fun veljavnost(doZvonjenjaMs: Long, starostMs: Long = 0L): Long =
+        maxOf(IZPAD_MS, korak(doZvonjenjaMs + starostMs) + korak(doZvonjenjaMs) + 15_000L)
 
     /**
      * Kdaj naslednjic preveriti zamudo, ali null, ce je cas za zvonjenje.

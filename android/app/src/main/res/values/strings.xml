@@ -3,17 +3,17 @@
     <string name="ime">Kajros</string>
 
     <string name="ni_zveze_naslov">Kajrosa ni mogoče doseči</string>
-    <string name="ni_zveze_zakaj">Strežnik ne odgovarja. Če teče na prenosniku, je ta najbrž zaprt.</string>
+    <string name="ni_zveze_zakaj">Strežnik ne odgovarja. Poskusi čez nekaj minut.</string>
     <string name="ni_omrezja">Telefon ni na omrežju. Strežnik je morda čisto v redu.</string>
     <string name="poskusi_znova">Poskusi znova</string>
     <string name="nastavi_naslov">Nastavi naslov</string>
 
     <string name="nastavitve_naslov">Naslov strežnika</string>
-    <string name="nastavitve_pomoc">https://kajros.app ali http://192.168.1.164:8001</string>
+    <string name="nastavitve_pomoc">https://kajros.app</string>
     <string name="shrani">Shrani</string>
     <string name="preklici">Prekliči</string>
     <string name="naslov_ni_veljaven">Tega naslova ne razumem.</string>
-    <string name="brez_sifriranja">Ta naslov ni šifriran in ga aplikacija ne bo odprla. Dovoljeni so samo naslovi v domačem omrežju, našteti v res/xml/omrezje.xml.</string>
+    <string name="brez_sifriranja">Ta naslov ni šifriran in ga aplikacija ne bo odprla. Uporabi naslov s https://.</string>
 
     <!-- budilka -->
     <string name="kanal_zbudi">Budilka</string>
@@ -23,11 +23,13 @@
     <string name="zvoni_prezgodaj">Vozilo je %1$d min pred voznim redom.</string>
     <string name="zvoni_tocno">Vozi po voznem redu.</string>
     <string name="zvoni_vozni_red">Po voznem redu (%1$s) — zamude nisem mogel preveriti.</string>
-    <!-- Ta stavek velja za oba vzroka: ni povezave ALI tabla o zamudi nima
-         besede. Prej je pisal „Ni povezave“ in bi se v drugem primeru zlagal. -->
-    <string name="zvoni_preventivno">Zamude ni bilo mogoče preveriti — zvonim prej, da ne zamudiš. Vozni red: %1$s.</string>
+    <!-- Preventiva je od 14. 9. 2026 samo za izpad povezave. Tabla brez besede
+         o zamudi ima svoj stavek (`zvoni_ni_podatka`) in ne zvoni prej. -->
+    <string name="zvoni_preventivno">Strežnika ni bilo mogoče vprašati — zvonim prej, da ne zamudiš. Vozni red: %1$s.</string>
+    <string name="zvoni_ni_podatka">O zamudi te vožnje še ni podatka — velja vozni red (%1$s).</string>
     <string name="ustavi">Ustavi</string>
     <string name="se_malo">Še 2 minuti</string>
+    <string name="ni_celega_zaslona">Dovoli Kajrosu, da budilka prižge zaslon. Zvonila bo tudi brez tega, a zaslon ostane temen.</string>
     <string name="ni_tocnih_alarmov">Android ne dovoli točnih alarmov. Vklopi jih v nastavitvah aplikacije, sicer budilka ne bo zanesljiva.</string>
 
     <!-- pregled budilk -->
@@ -40,7 +42,7 @@
     <string name="budilka_odzvonjeno">odzvonjeno</string>
     <string name="budilka_zbudi">zbudi me</string>
     <string name="budilka_obvesti">obvesti</string>
-    <string name="odpri_kajros">Odpri kajros</string>
+    <string name="odpri_kajros">Odpri Kajros</string>
     <string name="budilka_vklop">Vklopljena</string>
     <string name="budilka_odpri_voznjo">Odpri vožnjo</string>
     <string name="budilka_enkratna">enkratna</string>
@@ -49,7 +51,12 @@
     <string name="budilka_odhod">odhod %1$s</string>
     <string name="budilka_preverjeno">zamuda preverjena ob %1$s</string>
     <string name="budilka_nepreverjeno">zamude še nisem preveril</string>
+    <string name="budilka_ni_podatka">ob %1$s o zamudi še ni bilo podatka</string>
     <string name="budilka_dovoljenja">Android ne dovoli obvestil ali točnih alarmov — budilka ne bo zanesljiva. Pritisni za nastavitve.</string>
+    <string name="budilka_cel_zaslon">Budilka ne sme prižgati zaslona. Zvonila bo, a zaslon ostane temen. Pritisni za nastavitev.</string>
+    <string name="dnevnik">Dnevnik budilk</string>
+    <string name="dnevnik_prazen">Budilka še ni ničesar naredila.</string>
+    <string name="zapri">Zapri</string>
     <string name="budilke_naslov_streznika">Naslov strežnika: %1$s</string>
 
     <!-- preskocena voznja -->
@@ -64,12 +71,18 @@
     <string name="widget_zdaj">zdaj</string>
     <string name="widget_vozni_red">vozni red %1$s · zamuda še ni preverjena</string>
     <string name="widget_nepreverjena">zamuda še ni preverjena</string>
+    <string name="widget_ni_podatka">odhod %1$s · o zamudi še ni podatka</string>
+    <string name="widget_ni_podatka_dan">o zamudi še ni podatka</string>
     <string name="widget_zamuja_dan">zamuja %1$d min · vozni red %2$s</string>
     <string name="widget_prezgodaj_dan">%1$d min pred redom · vozni red %2$s</string>
     <string name="widget_tocno_dan">vozi točno</string>
     <string name="widget_zamuda">odhod %1$s · zamuja %2$d min</string>
     <string name="widget_prezgodaj">odhod %1$s · %2$d min pred redom</string>
     <string name="widget_tocno">odhod %1$s · vozi točno</string>
+
+    <!-- posodobitev zunaj trgovine -->
+    <string name="posodobitev">Na voljo je različica %1$s. Odpri stran za prenos.</string>
+    <string name="zapri_znak">✕</string>
 
     <string name="lega_zavrnjena">Dovoljenje za lego je zavrnjeno trajno. Odpri Nastavitve → Aplikacije → Kajros → Dovoljenja in dovoli lego.</string>
 </resources>

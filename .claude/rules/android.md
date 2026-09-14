@@ -17,8 +17,8 @@ nativno je samo tisto, česar splet ne zmore. To je zaenkrat ena stvar: budilka.
 | GeckoView | most do JavaScripta je z njim moreč; `addJavascriptInterface` na WebView je ena vrstica. To je bilo odločilno, ne hitrost |
 | service worker | David: „ne zaenkrat pač nič ne pokaže". Posledica je, da nedosegljivega strežnika ne pokrije splet — pokrije ga **nativni zaslon napake** |
 
-Razdeljevanje: samopodpisan APK s `kajros.app`, kasneje F-Droid. Brez Play
-Store in brez Googlovega računa.
+Razdeljevanje: **prenos s strani** `kajros.app/android`. Brez trgovine in brez
+Googlovega računa.
 
 ## Meja zaupanja je ena sama funkcija
 
@@ -55,12 +55,74 @@ Zato: **`retain` je vedno `false`**, ob zagonu pa
 dovoljenje, ne WebViewov spomin. Preverjeno: po popravku ostane shramba prazna
 (`<map />`) tudi potem, ko potnik lego dovoli.
 
+## Razdeljevanje: zakaj ni trgovine (12. 9. 2026)
+
+| trgovina | ovira |
+|---|---|
+| F-Droid (glavni), IzzyOnDroid | sprejmeta **samo prosto programje**; koda je zaprta (3. 9. 2026) |
+| Google Play | račun, 25 $, identiteta, **12 preizkuševalcev × 14 dni** (osebni račun po 13. 11. 2023), AAB, od 31. 8. 2026 `targetSdk` 36 |
+| Accrescent | zaprto kodo sprejme, a rabi pregled in `bundletool` — ostaja odprto |
+
+Zato **stran `/android`**: podpisan APK, vsota SHA-256, navodilo v treh
+korakih. Pot: `android/objavi.sh` zgradi in podpiše, prepiše APK v mapo z
+`razlicica.json`, `rsync` jo pošlje na strežnik, `api.py` mapo streže na
+`/prenos` (`config.PRENOS_DIR` = `${KAJROS_DATA_DIR}/prenos`). Če mape ni,
+poti ni, stran pa pove, da izdaje še ni.
+
+Mapa je v podatkovnem imeniku in ne v `/srv`, ker je ta po `brez-sudo.sh` že
+skupinsko pisljiv in ga enota sme brati — objava je zato navaden `rsync` kot
+`david`, brez sudota in brez spremembe enote v `/etc`. Mount nastane ob
+zagonu, zato je po **prvi** objavi potreben restart storitve.
+
+**Podpisni ključ je trajna identiteta aplikacije** (`podpis.sh`,
+`~/kajros-android/podpis/`): brez njega posodobitve ni in vsak uporabnik bi
+moral aplikacijo odstraniti in namestiti znova. V gitu ga ni in ne sme biti;
+`build.gradle.kts` bere geslo iz `podpis.properties` **zunaj** repozitorija,
+in če datoteke ni, gradnja še vedno teče in naredi nepodpisan APK — merjenje
+velikosti zato ne zahteva ključa.
+
+**Dvig `versionCode` je edini pogoj, da posodobitev sploh pride do telefona.**
+`versionName` je za ljudi in ne pomeni ničesar.
+
+**Zunaj trgovine mora na posodobitev opozoriti aplikacija sama**
+(`Posodobitev.kt`): enkrat na dan vpraša `/api/android/razlicica` in ob večji
+kodi pokaže vrstico s povezavo na stran. Dvoje je pri tem pravilo:
+
+* **Nič se ne prenese ali namesti samo.** `REQUEST_INSTALL_PACKAGES` ta
+  aplikacija nima in ga ne sme dobiti — tiho nameščanje iz omrežja je natanko
+  to, pred čimer Android svari.
+* **Naslov iz odgovora gre skozi `Nastavitve.jeNas()`.** Odgovor je podatek s
+  strežnika; tudi naš strežnik ne sme odpreti povezave drugam samo zato, ker
+  jo je vrnil. Ista meja zaupanja kot pri povezavah v WebView.
+
+**Zaradi preverjanja ob zagonu je 2027 vreden zaznamka**: Google od
+30. 9. 2026 zahteva **preverjenega razvijalca** za namestitev na certificiranih
+napravah (Brazilija, Indonezija, Singapur, Tajska; globalno 2027). Naprave brez
+Googlove certifikacije (razgooglana Volla) to ne zadeva, navadnega telefona pa
+bo. Takrat bo treba izbrati znova; do tedaj ta pot dela.
+
+## Dovoljenje za lego skrije aplikacijo napravam brez GPS
+
+`ACCESS_*_LOCATION` pomeni **privzeto `uses-feature required="true"`** —
+izmerjeno z `aapt2 dump badging`:
+
+```
+uses-implied-feature: name='android.hardware.location'
+  reason='requested ACCESS_COARSE_LOCATION … ACCESS_FINE_LOCATION permission'
+```
+
+Trgovina tako aplikacijo skrije vsaki napravi brez GPS, čeprav brez lege dela
+vse razen gumba „kje sem“. Zato so v manifestu tri izrecne vrstice
+`uses-feature … required="false"` (`location`, `location.gps`,
+`location.network`). To se ne vidi nikjer, dokler se ne pogleda z `aapt2`.
+
 ## Nič odvisnosti
 
 Ne AndroidX, ne `appcompat`. Vse potrebno je v ogrodju od API 26: `WebView`,
-`AlarmManager`, `NotificationChannel`, `Ringtone`. Zato je izdajni APK **50 kB**
-(7. 9. 2026; 28 kB pred budilko in njenim vmesnikom) in v njem ni **nobenega**
-Googlovega niza — preverjeno z `aapt2 dump strings`, 0 zadetkov za
+`AlarmManager`, `NotificationChannel`, `Ringtone`. Zato je objavljeni APK **70 kB**
+(71 822 B podpisan, 61 854 B pred podpisom; 12. 9. 2026, prej 50 kB 7. 9. in
+28 kB pred budilko z vmesnikom) in v njem ni
+**nobenega** Googlovega niza — preverjeno z `aapt2 dump strings`, 0 zadetkov za
 „google", „firebase" in „gms".
 Če se v `dependencies` kdaj pojavi vrstica, mora biti zraven razlog.
 
@@ -78,6 +140,15 @@ in ne `HOME`.
 
 Zato ta dokaz ni enkraten — `zgradi.sh` ga ponovi ob vsaki gradnji in pade,
 če kaj uide.
+
+**Ista izolacija je enkrat že skrila podpisni ključ.** `build.gradle.kts` je
+mapo iskal prek `System.getProperty("user.home")`, ta pa je zaradi
+`-Duser.home` **lažni dom** (`~/kajros-android/domov`). Ključ je obstajal,
+gradnja ga ni našla in je **tiho** naredila nepodpisan APK — brez opozorila,
+ker je nepodpisana izdaja veljavna. Zato se pot bere iz okolja (`KAJROS_PODPIS`,
+`KAJROS_ANDROID`, `HOME`), `zgradi.sh izdaja` pa po gradnji izpiše prstni odtis
+podpisa: ime datoteke (`app-release.apk` proti `app-release-unsigned.apk`) je
+edini drugi znak, in tega je lahko spregledati.
 
 Spremenljivk okolja ne dodajaj na slepo: AGP pade, če najde več različnih poti
 do svoje mape (`ANDROID_PREFS_ROOT`, `ANDROID_SDK_HOME`, `ANDROID_USER_HOME`).
@@ -112,13 +183,93 @@ takrat ni.
 **Aritmetika je v `Ura.kt` in je čista** (brez Androida), da jo je mogoče
 preizkusiti brez naprave. Tam je vse, kar je mogoče narediti narobe.
 
-### Do seznama budilk se pride z vsake strani, tudi s prve
+### Do seznama budilk se pride samo s prve strani
 
-Povezavo doda `common.povezavaDoBudilk()` in obstaja samo v aplikaciji.
-Doslej je iskala le `.top-nav` — te pa **domača stran nima**, torej z zaslona,
-ki se ob zagonu odpre prvi, do budilk ni bilo poti razen dolgega pritiska na
-ikono aplikacije. Zdaj gre tam med „Ostalo" (`.home-more`) in je videti kot
-soseda, čeprav je gumb in ne povezava.
+Na domači strani je **prva ploščica** in kaže naslednjo budilko s stikali
+(`home.js` bere `Most.seznam()`, dotik odpre `odpriBudilke()`); glej
+`strani.md`. V glavi drugih strani je **ni** (odločeno 14. 9. 2026): budilka se
+nastavi v oknu vožnje, seznam pa je pregled. Tudi „naslednja budilka" v
+vrhnjem meniju sistema odpre seznam (`AlarmClockInfo` → `BudilkeDejavnost`),
+ne glavne strani, ki o budilki ne pove ničesar.
+
+Ura v vrhnjem meniju je **prvo preverjanje** (10 min pred zvonjenjem), ne
+zvonjenje — `setAlarmClock` je ena budnica za oboje, glej `Nacrtovalec`.
+
+### Budilka 14. 9. 2026 ni zbudila — štiri napake naenkrat
+
+RG 318, Ljubljana Polje 7:31, X = 20 + 3 min rezerve, vlak +20 min. Obvestilo
+ob 7:08 „zamude ni bilo mogoče preveriti — zvonim prej", zvonjenje šele, ko je
+potnik ob 7:30 sam vzel telefon, in po „Ustavi" znova in znova.
+Sistemski dnevnik je bil zvečer že prepisan; vzrok je sestavljen iz
+`dumpsys appops`, `dumpsys alarm` in kode, nato potrjen s preizkusom na telefonu.
+
+1. **Veljavnost je bila merjena od voznega reda, ne od zvonjenja z zamudo.**
+   Preverjanje je teklo na 5 minut (do zvonjenja jih je bilo še 20), meja pa
+   je bila izračunana od 7:08 in je znašala 75 s — vsak podatek je bil izpad.
+   Zdaj `Ura.veljavnost(do, starost)` = korak ob prihodu podatka + zdajšnji
+   korak + 15 s, oboje od ure zvonjenja z zamudo. Test:
+   `velika zamuda ne skrajsa veljavnosti na vozni red`.
+2. **Bližnjica „čas je tu, zvoni" je zazvonila brez vprašanja strežnika.** Zdaj
+   zvoni brez omrežja samo, kadar ura stoji na sveži zamudi ali odlogu.
+3. **Zvonil je zaslon, zaslon pa se ni odprl.** `USE_FULL_SCREEN_INTENT: deny`
+   — Android 14+ ga sam da le budilkam **iz trgovine**. Obvestilo kanala brez
+   zvoka je bilo tiho. Glej naslednji razdelek.
+4. **Zanka po „Ustavi".** `prestavljena()` je iskala naslednji odhod po
+   *zdaj* — ta je bil isti vlak ob 7:35, zvonjenje v preteklosti, torej takoj
+   znova. Zdaj po `max(zdaj, voznoredni)`. Test: `BudilkaTest`.
+
+### Zvoni obvestilo, ne aplikacija
+
+Po popravku 3 je zvok najprej predvajala storitev v ospredju — in Android 16
+ga je utišal. Izmerjeno na telefonu 14. 9. 2026 ob 20:03:55:
+
+```
+AS.AudioService: AudioHardening background playback would be muted for app.kajros (10024), level: full
+AudioPlaybackConfiguration … u/pid:10024 state:started … usage=USAGE_ALARM … muted
+```
+
+Storitev, zagnana iz ozadja, za zvok ni „v ospredju". Zato zdaj zvok predvaja
+**sistem**: kanal `budilka` ima zvok `DEFAULT_ALARM_ALERT_URI` z
+`USAGE_ALARM`, obvestilo `FLAG_INSISTENT` (ponavlja, dokler obvestila ni) in
+`FOREGROUND_SERVICE_IMMEDIATE`. Preizkus ob 20:39: zazvonilo, `AudioHardening`
+v dnevniku ni bilo, „Ustavi" ob 20:40:09, brez ponovitve.
+
+`ZvonjenjeStoritev` (vrsta `systemExempted`, pripada aplikacijam z
+`USE_EXACT_ALARM`) ostane samo zato, ker obvestila storitve ni mogoče podrsati
+stran — odmahnjena budilka je tiha budilka. Gumba „Ustavi" in „Še 2 minuti" sta
+v obvestilu, ker zaslona brez dovoljenja ni.
+
+**Kanalu zvoka ni mogoče spremeniti, ko obstaja.** Zato je kanal preimenovan
+(`zbudi` → `budilka`) in stari se ob vsakem `kanali()` izbriše.
+
+Dovoljenje za cel zaslon se zdaj zaprosi (`zahtevajZaBudilko`, 14+:
+`ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`), stran ga pozna kot `cel_zaslon`
+v `dovoljenja()`, seznam budilk pa pove, kadar manjka.
+
+### „Strežnik nima podatka" ni izpad povezave
+
+Drugi preizkus (LPV 2002, Ljubljana je začetna postaja) je zazvonil
+preventivno ob prvem preverjanju: `vozi, zamuda neznana → preventiva`. Tabla
+za vlak, ki se še ni premaknil, vrne `zamuda: null`, in to je bilo isto kot brez
+odgovora. Zdaj `Budilka.stikObMs` hrani **vsak** odgovor, `Ura.Vir.NI_PODATKA`
+pa pomeni vozni red **brez** preventive in s stavkom „o zamudi te vožnje še ni
+podatka". Preventiva ostane samo za primer, ko strežnika ni bilo mogoče vprašati.
+
+### Po zvonjenju budilka sledi vozilu do odhoda
+
+Vprašanje po zvonjenju je „koliko imam še do vlaka", zato widget odšteva do
+**odhoda** odzvonjene budilke (odhod in ne prihod: potnik lovi trenutek, ko
+vlak spelje). Ista budnica se po zvonjenju nastavi na vsaki 2 minuti
+(`setExactAndAllowWhileIdle`, ne `setAlarmClock` — to ni budilka) in osveži
+zamudo; 90 s po odhodu `vseZnova` ponavljajočo prestavi na naslednji dan.
+Prej se je prestavila takoj ob zvonjenju in widget je kazal jutrišnji odhod.
+
+### Dnevnik budilk
+
+`Dnevnik.kt` hrani zadnjih 120 vrstic (preverjanje in izid, zvonjenje in
+ali je cel zaslon dovoljen, ustavitev, odlog, napake) v telefonu; prebere se
+v seznamu budilk. Ne gre nikamor. Brez njega je bilo treba vzrok budilke, ki ni
+zbudila, sklepati iz kode.
 
 ### Rezervo določi potnik, ne aplikacija
 
@@ -137,7 +288,8 @@ primerov.
 Zamuda se preverja do konca, korak pa se krajša: 5 min daleč, 60 s znotraj
 petnajstih minut, 30 s v zadnjih petih. Blizu ure poskusi trikrat zapored.
 
-Če zadnji uspešen odgovor ni mlajši od **30 s**, velja, da povezave ni. Takrat:
+Če zadnji odgovor strežnika ni mlajši od **dveh korakov** (glej spodaj, „štiri
+napake"), velja, da povezave ni. Takrat:
 
 * zvonjenje se **nikoli ne načrtuje pozneje od voznega reda** — sicer bi
   dvajset minut stara „+15" držala uro, tudi ko vlak vmes nadoknadi;
@@ -226,6 +378,12 @@ in budilka bere **njo**, ne podatka pod njo.
 
 ### Pasti, ki so se pokazale šele na napravi
 
+* **Napaka HTTP pride pred `onPageStarted`, ne za njim.** Izmerjeno
+  12. 9. 2026 na 525: `httpError` je zastavico postavil, `onPageStarted` iste
+  navigacije jo je pobrisal, `onPageFinished` pa je nativni zaslon skril —
+  potnik je videl Cloudflarovo angleško stran. Zato `onPageStarted` briše
+  stanje samo pri **drugem** naslovu (`naslovNapake`). Ta primer ni redek:
+  kadar arwen ne teče, Cloudflare vrne 52x za vsako zahtevo.
 * **`setAlarmClock` brez dovoljenja vrže `SecurityException`.** Od Androida 12
   točen alarm ni pravica. Ujet je in nadomeščen s `setAndAllowWhileIdle` —
   slabša budilka je boljša od podrte aplikacije.
