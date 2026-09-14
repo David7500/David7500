@@ -53,9 +53,18 @@ esac
 
 echo
 for apk in app/build/outputs/apk/debug/app-debug.apk \
+           app/build/outputs/apk/release/app-release.apk \
            app/build/outputs/apk/release/app-release-unsigned.apk; do
     [ -f "$apk" ] && printf '%-52s %s\n' "$apk" "$(du -h "$apk" | cut -f1)"
 done
+
+# Nepodpisan APK ni izdaja. Če ključ obstaja, mora podpis tudi držati --
+# `assembleRelease` ga naredi tiho in napaka bi se pokazala šele pri namestitvi.
+IZDAJA="app/build/outputs/apk/release/app-release.apk"
+if [ "$UKAZ" = "izdaja" ] && [ -f "$IZDAJA" ]; then
+    BT="$(ls -d "${ANDROID_HOME:-$KOREN/sdk}"/build-tools/* | sort -V | tail -1)"
+    "$BT/apksigner" verify --print-certs "$IZDAJA" | grep -E 'SHA-256|Signer #1' | sed 's/^/  /'
+fi
 
 POTEM="$(mktemp)"; LC_ALL=C ls -A "$HOME" | LC_ALL=C sort > "$POTEM"
 NOVO="$(LC_ALL=C comm -13 "$PREJ" "$POTEM" || true)"

@@ -9,9 +9,11 @@ določeni uri pa ne zna nobena spletna tehnologija brez Googlovega push strežni
 
 ```bash
 ./orodja.sh                # enkrat: JDK, Android SDK, Gradle v ~/kajros-android
+./podpis.sh                # enkrat: podpisni ključ v ~/kajros-android/podpis
 ./zgradi.sh                # testi JVM + razvojni APK
 ./zgradi.sh namesti        # in ga naloži na priklopljen telefon
-./zgradi.sh izdaja         # izdajni APK (nepodpisan), za merjenje velikosti
+./zgradi.sh izdaja         # izdajni APK (podpisan, če ključ obstaja)
+./objavi.sh posreduj       # objavi za prenos na kajros.app/android
 ```
 
 Orodja so **vsa v `~/kajros-android`** in nič ni sistemsko — glej `orodja.sh`.
@@ -35,9 +37,10 @@ orodje in živi z drugimi orodji. Kdor klonira repozitorij, požene `orodja.sh`.
 
 Nič Googlovega in nič AndroidX. Edina knjižnica v APK je Kotlinova standardna;
 vse drugo (`WebView`, `AlarmManager`, `NotificationChannel`) je v ogrodju od
-API 26 naprej. Zato je izdajni APK **28 kB**, razvojni pa 812 kB — razlika je
-Kotlinova standardna knjižnica, ki jo R8 v izdaji odreže, v razvojni pa ostane
-cela.
+API 26 naprej. Izmerjeno 12. 9. 2026: izdajni APK **71 822 B** (70 kB, podpisan; nepodpisan
+61 854 B, 29 datotek, brez nativne kode), razvojni **894 259 B** — razlika je Kotlinova standardna knjižnica,
+ki jo R8 v izdaji odreže, v razvojni pa ostane cela. Nizov „google“, „firebase“
+in „gms“ je v izdajnem APK **0** (`aapt2 dump strings`).
 
 Android SDK, s katerim se gradi, je seveda Googlov. Aplikacija med **tekom**
 nima z Googlom nobenega opravka.
@@ -132,3 +135,36 @@ tako zbuja — torej približno pol ure pred odhodom; prej widget pošteno piše
 
 Bil je na dolgem pritisku na ikono; zdaj je na **zaslonu budilk** in na zaslonu
 napake, torej tam, kjer se rabi.
+
+## Razdeljevanje: prenos s kajros.app
+
+Trgovine ni, in to je odločitev, ne opuščeno opravilo (12. 9. 2026):
+
+| trgovina | zakaj ne |
+|---|---|
+| F-Droid (glavni) | sprejme **samo prosto programje** in gradi iz javnega izvora; koda je zaprta |
+| IzzyOnDroid | isti pogoj |
+| Google Play | Googlov račun, 25 $, preverjanje identitete, **12 preizkuševalcev × 14 dni** za osebni račun, AAB namesto APK, od 31. 8. 2026 `targetSdk` 36 |
+| Accrescent | zaprto kodo sprejme; ostaja odprta možnost, a zahteva pregled in `bundletool` |
+
+Zato **stran `/android`** s podpisanim APK-jem, vsoto SHA-256 in navodilom v
+treh korakih. Deluje danes in za vsakogar; cena je vprašanje o neznanem viru,
+in stran to pove vnaprej.
+
+```bash
+./podpis.sh                       # enkrat: ključ za APK
+./objavi.sh posreduj              # zgradi, podpiše, pošlje na arwen
+```
+
+**Podpisni ključ ni v gitu in brez varnostne kopije posodobitev ni mogoča** —
+telefon sprejme le nadgradnjo, podpisano z istim ključem kot nameščena
+različica (`~/kajros-android/podpis/`).
+
+**Dvig `versionCode` je pogoj za posodobitev.** Telefon jo vidi samo, če je
+številka večja od nameščene; `versionName` je za ljudi. Oboje je v
+`app/build.gradle.kts`.
+
+**Posodobitve zunaj trgovine ne ponudi nihče**, zato jih aplikacija poišče
+sama: `Posodobitev.kt` enkrat na dan vpraša `/api/android/razlicica` in ob
+novejši kodi pokaže vrstico s povezavo. Prenos in namestitev ostaneta klika
+uporabnika — `REQUEST_INSTALL_PACKAGES` aplikacija nima in ga ne bo imela.

@@ -108,11 +108,20 @@ def _napaka_html(request: Request, exc: StarletteHTTPException):
     Prej je vsaka napaka -- tudi napačno prepisan naslov v brskalniku --
     vrnila `{"detail":"Not Found"}`. To je za obiskovalca slepa ulica: ne
     pove, kje je, in ne ponudi poti naprej.
+
+    **Napaka se ne sme predpomniti.** Cloudflare 404 pri predpomnljivi
+    končnici (`.apk` je med njimi) zadrži na robu -- izmerjeno 12. 9. 2026
+    ob prvi objavi aplikacije: naslov je bil zahtevan, preden je datoteka
+    prišla na strežnik, in `cf-cache-status: HIT` je nato 404 stregel še
+    minute po tem, ko je izvor vračal 200. Z `no-store` se to ne more
+    zgoditi ne na robu ne v brskalniku.
     """
+    glave = dict(getattr(exc, "headers", None) or {})
+    glave["Cache-Control"] = "no-store"
     if not _hoce_html(request):
         return JSONResponse(status_code=exc.status_code,
                             content={"detail": exc.detail},
-                            headers=getattr(exc, "headers", None))
+                            headers=glave)
     sporocilo = _NAPAKE.get(exc.status_code)
     # Podrobnost iz kode (`vlak 123 ne obstaja`) je bolj uporabna od splošne
     # vrstice -- a samo, kadar je naša in ne Starlettov angleški privzetek.
@@ -122,7 +131,7 @@ def _napaka_html(request: Request, exc: StarletteHTTPException):
     return templates.TemplateResponse(
         request, "napaka.html",
         {"koda": exc.status_code, "sporocilo": sporocilo or "Nekaj ni v redu."},
-        status_code=exc.status_code)
+        status_code=exc.status_code, headers=glave)
 
 # Dve locheni omrezji, ne en kup. `zeleznica` so vlaki IN nadomestni prevozi SZ
 # (ti na svoji relaciji zamenjujejo vlak in sodijo v isti odgovor), `avtobus`
@@ -155,6 +164,13 @@ class _RevalidatingStatic(StaticFiles):
 
 
 app.mount("/static", _RevalidatingStatic(directory=_PKG_DIR / "static"), name="static")
+
+# Podpisan APK za Android. Mapa je zunaj paketa (gre v `data/`), ker vsebuje
+# izdajo, ne kode, in jo z razvojnega računalnika polni `android/objavi.sh`.
+# Streže se samo, če obstaja: dokler izdaje ni, poti ni.
+if config.PRENOS_DIR.is_dir():
+    app.mount("/prenos", StaticFiles(directory=config.PRENOS_DIR),
+              name="prenos")
 templates = Jinja2Templates(directory=_PKG_DIR / "templates")
 
 
@@ -250,7 +266,7 @@ def favicon():
 # iskati -- vsaka je ena vožnja enega dne.
 _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
             "/app/ovire", "/app/statistika", "/app/statistika/bus",
-            "/stik", "/zasebnost"]
+            "/android", "/stik", "/zasebnost"]
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
@@ -389,6 +405,57 @@ def zasebnost(request: Request):
     return templates.TemplateResponse(
         request, "zasebnost.html",
         {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
+
+
+def _izdaja_androida() -> dict | None:
+    """Kaj piše `razlicica.json` v mapi za prenos, ali `None`, če izdaje ni.
+
+    Bere se ob vsaki zahtevi in ne ob zagonu: objava je `rsync` v to mapo,
+    ne restart strežnika, in stran, ki bi po objavi še pol dneva kazala staro
+    številko, bi bila slabša od nobene.
+    """
+    try:
+        podatki = json.loads(
+            (config.PRENOS_DIR / "razlicica.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return podatki if podatki.get("datoteka") else None
+
+
+@app.get("/android", response_class=HTMLResponse, include_in_schema=False)
+def android(request: Request):
+    """Aplikacija za Android: kaj doda in kako se namesti.
+
+    Trgovine ni namenoma -- glavni F-Droid zahteva prosto licenco (koda je
+    zaprta), Play pa račun, 25 $, preverjanje identitete in dva tedna
+    zaprtega preizkusa. Prenos s te strani dela danes in za vsakogar; cena
+    je, da mora človek dovoliti namestitev iz neznanega vira, in stran mu to
+    pove naravnost, namesto da bi ga presenetilo sistemsko opozorilo.
+    """
+    return templates.TemplateResponse(
+        request, "android.html", {"izdaja": _izdaja_androida()})
+
+
+@app.get("/api/android/razlicica")
+def api_android_razlicica():
+    """Zadnja izdaja aplikacije. Bere jo aplikacija sama ob zagonu.
+
+    Zunaj trgovine ni nikogar, ki bi posodobitev ponudil, zato mora to
+    narediti aplikacija: če je `koda` večja od nameščene, pokaže vrstico s
+    povezavo. Brez tega bi telefoni obtičali na različici, s katero so bili
+    nameščeni, in to bi se videlo kot okvara strani, ne aplikacije.
+    """
+    izdaja = _izdaja_androida()
+    if not izdaja:
+        raise HTTPException(status_code=404, detail="izdaje še ni")
+    return {
+        "koda": izdaja["koda"],
+        "ime": izdaja["ime"],
+        "url": f"{config.BASE_URL}/prenos/{izdaja['datoteka']}",
+        "stran": f"{config.BASE_URL}/android",
+        "sha256": izdaja.get("sha256"),
+        "objavljeno": izdaja.get("objavljeno"),
+    }
 
 
 @app.get("/app", response_class=HTMLResponse)

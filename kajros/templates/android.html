@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Aplikacija za Android — kajros" %}
+  {% set og_desc = "Kajros za Android: budilka, ki upošteva zamudo vlaka ali avtobusa." %}
+{% include "_meta.html" %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('besedilo.css') }}">
+</head>
+<body class="home-page">
+
+  <main class="home besedilo">
+    <a class="home-brand" href="/" style="text-decoration:none">
+      <svg class="brand-mark" width="26" height="26" viewBox="0 0 96 96" fill="none"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M34 24V72" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M66 26L34 50" stroke="#f0934f" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M34 50L66 72" stroke="#f0934f" stroke-width="9"/>
+      </svg>
+      <span>kajros</span>
+    </a>
+
+    <h1>Aplikacija za Android</h1>
+
+    <p class="vodilo">
+      Ista stran kot v brskalniku, doda pa <b>budilko, ki upošteva zamudo</b>.
+    </p>
+
+    <ul>
+      <li><b>Budilka pred odhodom.</b> Poveš, koliko minut prej naj zazvoni.
+        Če vlak zamuja, se ura premakne z njim. Če povezave ni, zvoni po
+        voznem redu — raje prezgodaj kot prepozno.</li>
+      <li><b>Odštevanje na domačem zaslonu</b> do naslednjega odhoda, za
+        katerega imaš budilko.</li>
+    </ul>
+
+    {% if izdaja %}
+    <p>
+      <a class="btn prenos-gumb" href="/prenos/{{ izdaja.datoteka }}">
+        Prenesi za Android</a>
+    </p>
+    <p class="drobno">
+      Različica {{ izdaja.ime }} · {{ (izdaja.bajtov / 1024) | round | int }} kB ·
+      Android 8 ali novejši
+    </p>
+
+    <h2>Namestitev</h2>
+    <ol>
+      <li>Odpri preneseno datoteko.</li>
+      <li>Telefon bo vprašal, ali dovoliš namestitev s te strani. Potrdi.</li>
+      <li>Ko izide nova različica, te aplikacija opozori sama.</li>
+    </ol>
+
+    {% else %}
+    <p>Prve izdaje še ni. Ko bo, bo tu.</p>
+    {% endif %}
+
+    <footer class="home-foot">
+      <a href="/">nazaj na začetek</a>
+    </footer>
+  </main>
+
+</body>
+</html>

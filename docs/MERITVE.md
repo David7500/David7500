@@ -2001,3 +2001,112 @@ Check* je torej odpadel; podrobnosti v `.claude/rules/objava.md`.
 blok o signalih za AI je spredaj, naše `Disallow: /api/` in `Sitemap:` pa
 zadaj in veljavne. Brez našega bi Cloudflare postregel samo svojega, ta pa
 o naših poteh ne ve ničesar.
+
+## Kaj je pokazal pregled Androida pred trgovino (12. 9. 2026)
+
+Stanje pred spremembami, izmerjeno in ne domnevano:
+
+| kaj | izid |
+|---|---|
+| `./zgradi.sh izdaja` | uspe, 26 s |
+| testi JVM | 39, vsi zeleni |
+| izdajni APK (nepodpisan) | **61 854 B** (60 kB), 29 datotek, brez nativne kode |
+| isti, podpisan | 71 822 B (70 kB) — podpis v2+v3 doda 9 968 B |
+| razvojni APK | 894 259 B |
+| nizi „google“ / „firebase“ / „gms“ | **0** (`aapt2 dump strings`) |
+| `debuggable`, `testOnly` | ju ni |
+| revizija domačega imenika | čista |
+
+Zapisi so trdili 28 kB (README) in 50 kB (`android.md`). Obe številki sta bili
+resnični, ko sta bili zapisani — vmes sta prišli budilka in njen vmesnik. Pri
+velikosti, ki se meri ob vsaki gradnji, je zastarela številka poceni napaka;
+popravljeno je oboje.
+
+**Tiha napaka, ki bi jo videla šele trgovina:** `ACCESS_*_LOCATION` pomeni
+privzeto `uses-feature required="true"` za strojno opremo. `aapt2 dump badging`:
+
+```
+uses-implied-feature: name='android.hardware.location'
+  reason='requested ACCESS_COARSE_LOCATION … ACCESS_FINE_LOCATION permission'
+```
+
+Aplikacija bi bila torej skrita vsaki napravi brez GPS, čeprav brez lege dela
+vse razen gumba „kje sem“. Popravek so tri izrecne vrstice `required="false"`.
+
+**Dva niza sta bila razvojna, ne javna**: „Če teče na prenosniku, je ta najbrž
+zaprt“ in naslov `192.168.1.164:8001` kot pomoč v polju za strežnik. Za potnika
+nista pomenila nič.
+
+**Trgovine ni nobene, in to je izbira po pravilih, ne po okusu.** Glavni
+F-Droid in IzzyOnDroid zahtevata prosto licenco za vse in gradnjo iz javnega
+izvora ([pravila](https://f-droid.org/docs/Inclusion_Policy/)); koda je zaprta
+(3. 9. 2026). Google Play zaprto kodo sprejme, a zahteva račun, 25 $,
+preverjanje identitete in — za osebni račun, odprt po 13. 11. 2023 — **12
+preizkuševalcev, ki aplikacijo držijo nameščeno 14 dni**, poleg tega AAB in od
+31. 8. 2026 `targetSdk` 36. Lasten repozitorij F-Droid bi delal, a ga najde le,
+kdor pozna naslov.
+
+Izbrano: **prenos s `kajros.app/android`**, ker deluje danes in za vsakogar.
+Cena je vprašanje o neznanem viru ob namestitvi in to, da posodobitve ne
+ponudi nihče — zato jo poišče aplikacija sama (`/api/android/razlicica`,
+enkrat na dan).
+
+**Rok, ki ga je treba imeti v mislih:** Google od 30. 9. 2026 zahteva
+registriranega, preverjenega razvijalca za namestitev na certificiranih
+napravah (najprej Brazilija, Indonezija, Singapur, Tajska; globalno 2027).
+Razgooglane naprave to ne zadeva, navadnega telefona pa bo — takrat bo treba
+izbrati znova.
+
+## Stran za prenos aplikacije (12. 9. 2026)
+
+Preverjeno na tekočem strežniku in emulatorju, ne po opisu:
+
+| kaj | izid |
+|---|---|
+| `/android` z izdajo | 200, 4 915 B |
+| `/android` brez izdaje | 200 — pove „prve izdaje še ni“, ne 404 |
+| `/api/android/razlicica` | 200 z izdajo, **404** brez nje |
+| `/prenos/kajros-0.1.apk` | 200, `application/vnd.android.package-archive`, 61 854 B |
+| vrstica o posodobitvi v aplikaciji | vidna pri `koda` 2 proti nameščeni 1 |
+| križec na vrstici | skrije jo in zapiše `posodobitev_preskocena=2` |
+
+**Lastna varovalka je med preizkusom ugriznila in to je prav.** Vrstice ni
+bilo, dokler je strežnik vračal `stran: https://kajros.app/android`,
+aplikacija pa je kazala na `http://10.0.2.2:8001` — `Nastavitve.jeNas()`
+tujega naslova ne sprejme niti od našega strežnika. Preizkus je stekel šele s
+`KAJROS_BASE_URL=http://10.0.2.2:8001`. V produkciji se izvora ujemata.
+
+**Dve številki o isti stvari na istem zaslonu.** Stran je pisala „Različica
+0.1 · 60 kB“ (izračunano iz bajtov) in dva odstavka nižje „velika okoli
+64 kB“ (zapisano na roko). Razlika je `du -h`, ki zaokroži na bloke po 4 KiB:
+datoteka ima **61 854 B**. Trdo zapisana številka je odstranjena — velikost
+pove tista, ki je izračunana iz datoteke. Ista napaka kot povsod: številka
+mora pomeniti to, kar bralec misli, da pomeni.
+
+## Prva objava aplikacije (12. 9. 2026)
+
+`kajros-1.0.apk`, **71 822 B**, podpisan z lastnim ključem (SHA-256 potrdila
+`fe89…73f4`, velja do 28. 1. 2054). Preverjeno na objavljeni datoteki, ne na
+lokalni: prenesena s `https://kajros.app/prenos/kajros-1.0.apk` ima isto vsoto
+kot `/api/android/razlicica` in kot stran, `apksigner` potrdi naš podpis, na
+emulatorju se namesti (`Success`) in zažene.
+
+Podpis doda 9 968 B (61 854 → 71 822). Sheme: **v1 false, v2 true, v3 true** —
+v1 velja do API 23, mi smo od 26 naprej, zato ni potreben.
+
+**Cloudflare predpomni 404 in to je ugriznilo pri prvi objavi.** Naslov APK-ja
+sem zahteval, preden je datoteka prišla na strežnik; ko je prišla, je izvor
+vračal 200, rob pa še vedno 404:
+
+```
+HTTP/2 404 · age: 171 · cf-cache-status: HIT     (izvor lokalno: 200)
+```
+
+`.apk` je med končninami, ki jih Cloudflare predpomni sam od sebe. Izteklo se
+je po ~3,5 minute (`cf-cache-status: EXPIRED` → 200). Popravek je na naši
+strani: `_napaka_html()` vsaki napaki doda **`Cache-Control: no-store`**, zato
+se noben 404 ne more več prijeti ne na robu ne v brskalniku. Preverjeno na obeh
+oblikah napake (JSON in stran).
+
+Nauk za naslednjič: **objavi datoteko, preden naslov kamorkoli objaviš** —
+en sam radoveden klik pred objavo zamrzne 404 za vse.

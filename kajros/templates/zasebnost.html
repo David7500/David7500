@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% set og_title = "Zasebnost — kajros" %}
-  {% set og_desc = "Kaj kajros o obiskovalcu hrani in česa ne. IP se ne shrani nikoli." %}
+  {% set og_desc = "Kaj kajros o obiskovalcu hrani in česa ne. Naslova IP ne shranimo nikoli." %}
 {% include "_meta.html" %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
@@ -28,128 +28,67 @@
     <h1>Zasebnost</h1>
 
     <p class="vodilo">
-      Obisk te strani štejemo, ker sicer ne vemo, ali jo sploh kdo odpre.
-      Tvojega naslova IP pri tem ne shranimo nikoli — niti šifriranega,
-      niti za en dan.
+      Ne vemo, kdo si, in tega nočemo vedeti. Tvojega naslova IP ne shranimo
+      nikoli, računa ni, piškotkov ni.
     </p>
 
-    <h2>Kaj se shrani ob obisku</h2>
+    <h2>Kaj štejemo</h2>
     <p>
-      Ob vsaki zahtevi nastane ena vrstica števcev. V njej so:
-    </p>
-    <ul>
-      <li><b>oblika poti</b>, ne naslov — <code>/app/train/{train_no}</code>
-        in ne <code>/app/train/LPV 2010</code>;</li>
-      <li><b>ura dneva</b>, vrsta naprave (telefon, računalnik) in
-        <b>dvočrkovna oznaka države</b>, ki jo pove Cloudflare;</li>
-      <li><b>odzivni čas v razredu</b> (na primer „pod 250 ms“), ne natančna
-        vrednost;</li>
-      <li><b>ključ obiskovalca</b>: šestnajst znakov
-        <code>blake2s(sol dneva ‖ IP ‖ opis brskalnika)</code>.</li>
-    </ul>
-
-    <h2>Zakaj tega ni mogoče razvozlati</h2>
-    <p>
-      Sol je šestnajst naključnih bajtov, ki nastanejo ob polnoči in se ob
-      naslednji polnoči <b>zavržejo</b>. Iz ključa ni poti nazaj do naslova
-      IP, ker sol, s katero je bil narejen, ne obstaja več. Iste naprave v
-      dveh dneh ne more povezati nihče — tudi mi ne.
-    </p>
-    <p>
-      To ima ceno in jo je pošteno povedati: <b>mesečnih različnih
-      obiskovalcev zato ni mogoče izračunati.</b> Vsota čez trideset dni
-      isto osebo šteje do tridesetkrat. Raje imamo številko, ki je nižje
-      vredna, kot podatek, ki bi ga bilo mogoče zlorabiti.
-    </p>
-    <p>
-      Kar ta števec <b>ni</b>: ni sledilnik poti po strani. O obiskovalcu
-      hranimo štiri števila — koliko zahtev, koliko ogledov strani, prvi in
-      zadnji dotik. Zaporedja strani iz tega ni mogoče sestaviti.
+      Samo to, koliko ljudi odpre katero stran — ob kateri uri, s telefonom ali
+      z računalnikom, iz katere države. Brez tega ne bi vedeli, ali stran sploh
+      kdo uporablja. Naslednji dan te iz teh števcev ne moremo prepoznati niti
+      mi.
     </p>
 
-    <h2>Piškotki</h2>
+    <h2>Kar ostane v tvojem telefonu</h2>
     <p>
-      Za obiskovalca jih <b>ni</b>. Noben piškotek se ne postavi ob obisku
-      in nobenega ni treba sprejeti. Edini piškotek v tej aplikaciji je
-      prijava skrbnika na <code>/admin</code> in ta obstaja samo na
-      lastnikovi napravi.
+      Priljubljene postaje, zadnja iskanja in shranjene točke („dom“, „služba“)
+      so shranjeni v brskalniku. K nam ne pridejo. Izbrišeš jih tako, da
+      počistiš podatke strani.
     </p>
 
-    <h2>Kar ostane v tvojem brskalniku</h2>
+    <h2>Kje si</h2>
     <p>
-      Priljubljene postaje, zadnja iskanja in izbrane plasti zemljevida so
-      shranjeni v <code>localStorage</code> tvojega brskalnika. Ti podatki
-      <b>na strežnik ne gredo nikoli</b>. Izbrišeš jih tako, da počistiš
-      podatke strani.
+      Lego pove brskalnik, in samo če jo dovoliš. Uporabimo jo za izračun
+      najbližje postaje in poti — potem izgine. Ne shrani se.
     </p>
-
-    <h2>Lastna lega</h2>
-    <p>
-      Iskanje najbližjih postaj in načrtovanje poti od vrat do vrat
-      potrebujeta koordinati. Brskalnik ju pove šele, ko to izrecno
-      dovoliš, in se pošljeta strežniku zato, da izračuna razdaljo.
-      <b>Ne shranita se</b> — obdelata se v zahtevi in gresta z odgovorom.
-    </p>
-
-    <h2>Tuje storitve v strani</h2>
-    <p>
-      Pri odpiranju strani tvoj brskalnik stopi še do naslednjih:
-    </p>
-    <ul>
-      <li><b>Cloudflare</b> — stoji pred stranjo, vidi vsako zahtevo in tvoj
-        naslov IP. Brez tega ta stran ne bi bila dosegljiva iz interneta.</li>
-      <li><b>OpenStreetMap</b> in <b>Esri</b> — samo na zemljevidu, in samo
-        za ploščice s sliko zemljevida.</li>
-    </ul>
 
     {% if obrazec %}
     <h2>Če nam pišeš</h2>
     <p>
-      Obrazec na strani <a href="/stik">stik</a> je edino mesto, kjer o tebi
-      shranimo kaj, kar si napisal sam. Shranita se <b>e-naslov in besedilo
-      sporočila</b>, ker brez naslova ni mogoče odgovoriti. Zraven še ura,
-      dvočrkovna oznaka države in vrsta naprave — isto troje kot pri štetju
-      obiska in nič več. <b>Naslova IP tudi tu ne shranimo.</b>
-    </p>
-    <p>
-      Sporočila bere en človek in nanje odgovarja ročno. Ne gredo nikamor
-      drugam, na noben seznam in v nobeno tujo storitev. Če želiš, da svoje
-      sporočilo izbrišemo, napiši to v njem — drugega načina ni, ker o tebi
-      ne vodimo računa, s katerim bi te lahko prepoznali.
-    </p>
-    <p>
-      Da neželena pošta ne bi napolnila nabiralnika, je število sporočil
-      omejeno na pošiljatelja in na dan. Za to omejitev se zgoščena vrednost
-      naslova IP <b>zadrži samo v pomnilniku strežnika</b> in izgine ob
-      njegovem ponovnem zagonu; nikamor se ne zapiše.
+      Shranita se <b>e-naslov in besedilo</b>, ker drugače ni mogoče
+      odgovoriti. Sporočilo prebere en človek in ne gre nikamor drugam — na
+      noben seznam in v nobeno tujo storitev. Če ga želiš izbrisati, napiši to
+      v njem.
     </p>
     {% endif %}
 
-    <h2>Podatki o prevozu</h2>
+    <h2>Kdo še vidi ta obisk</h2>
     <p>
-      Vozni redi in zamude prihajajo iz IJPP prek
-      <a href="https://b2b.nap.si/">NAP</a> (CC BY-SA 4.0), obdelava DERP.
-      Vreme je <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0).
-      Meritve zamud hranimo po vožnjah in postankih — o vozilih in urnikih,
-      ne o ljudeh.
+      <b>Cloudflare</b> stoji pred stranjo in vidi vsako zahtevo, sicer stran
+      ne bi bila dosegljiva. Na zemljevidu se slike pokrajine naložijo z
+      <b>OpenStreetMap</b> in <b>Esri</b>. Drugih tujih storitev v strani ni —
+      ne oglasov, ne sledilnikov, ne analitike.
     </p>
 
-    {#- Naslov „Vprašanja“ nad odstavkom, ki ne pove, kam vprašati, je slabši
-        od nobenega naslova. Zato odpade cel odsek, kadar ni ne naslova ne
-        obrazca. #}
-    {% if stik or obrazec %}
-    <h2>Vprašanja</h2>
+    <h2>Podatki o prevozu</h2>
     <p>
-      Stran vzdržuje ena oseba kot osebni projekt.
-      {%- if stik %} Za vprašanje o podatkih piši na
-      <a href="mailto:{{ stik }}">{{ stik }}</a>.
-      {%- elif obrazec %} Za vprašanje o podatkih uporabi
-      <a href="/stik">obrazec za stik</a>.{% endif %}
+      Vozni redi in zamude so odprti podatki IJPP prek
+      <a href="https://b2b.nap.si/">NAP</a>, vreme
+      <a href="https://open-meteo.com/">Open-Meteo</a>. Hranimo jih po vožnjah
+      in postajah — to so podatki o vlakih in avtobusih, ne o ljudeh.
     </p>
-    {% else %}
+
+    {% if stik or obrazec %}
     <p class="drobno">
       Stran vzdržuje ena oseba kot osebni projekt.
+      {%- if stik %} Za vprašanja o podatkih piši na
+      <a href="mailto:{{ stik }}">{{ stik }}</a>.
+      {%- elif obrazec %} Za vprašanja o podatkih uporabi
+      <a href="/stik">obrazec</a>.{% endif %}
     </p>
+    {% else %}
+    <p class="drobno">Stran vzdržuje ena oseba kot osebni projekt.</p>
     {% endif %}
 
     <footer class="home-foot">

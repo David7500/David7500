@@ -103,3 +103,18 @@
 }
 .stik-napaka { color: var(--sev-bad); border-color: var(--sev-bad); }
 .stik-ok { color: var(--sev-mild); border-color: var(--sev-mild); }
+
+/* ---------- stran o aplikaciji ---------- */
+
+/* Oštevilčeni koraki namestitve. `ul` je bil doslej edini seznam na
+   besedilnih straneh; vrstni red tu nekaj pomeni, zato `ol`. */
+.besedilo ol { margin: 0 0 12px; padding-left: 20px; }
+.besedilo ol li { margin-bottom: 6px; }
+
+/* Gumb je povezava, zato mu je treba vrniti to, kar `a` v besedilu ima:
+   podčrtaj in barvo povezave bi tu brala kot besedilo, ne kot dejanje. */
+.besedilo .prenos-gumb {
+  display: inline-block;
+  color: #14161a;
+  text-decoration: none;
+}

@@ -301,3 +301,27 @@ ob polnoči zavrže, zato je „različnih ljudi" smiselno samo za en dan; vsota
 nad 30 dnevi isto osebo šteje večkrat in stran to tudi piše. Števci gredo v
 bazo enkrat na minuto in se obrežejo po `KAJROS_OBISK_KEEP_DAYS` (550 dni).
 Štetje se ugasne s `KAJROS_OBISK=0`.
+
+## Aplikacija za Android (`/android`, `/prenos`)
+
+Aplikacija se razdeljuje **s strani, ne iz trgovine**: F-Droid sprejme samo
+prosto programje, Play pa zahteva račun, 25 $, preverjanje identitete in
+dvotedenski zaprti preizkus. Podrobnosti in preostale možnosti so v
+[android/README.md](android/README.md).
+
+Strežnik samo streže; mapo polni `android/objavi.sh` z razvojnega računalnika.
+Mapa je `${KAJROS_DATA_DIR}/prenos` (torej `/var/lib/kajros/prenos`) in **nič
+posebnega ni treba pripraviti**: podatkovni imenik je po `deploy/brez-sudo.sh`
+že skupinsko pisljiv, enota pa ga sme brati (`ReadWritePaths`). Pot povozi
+`KAJROS_PRENOS_DIR`; **če mape ni, poti `/prenos` ni**, stran `/android` pa
+pove, da izdaje še ni. Ker se mount postavi ob zagonu, je po prvi objavi
+potreben restart storitve; `objavi.sh` ga naredi sam.
+
+Objava nove različice (na razvojnem računalniku, brez sudota):
+
+```bash
+cd android && ./objavi.sh posreduj
+```
+
+Pred prvo objavo mora biti dvignjen `versionCode` in narejena varnostna kopija
+podpisnega ključa — brez njega posodobitev ni več mogoča.

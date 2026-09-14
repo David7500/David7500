@@ -171,5 +171,17 @@ STIK = okolje("STIK", "")
 # ima svojo stikalo: kdor tega ne želi, ga ugasne in poti ni (404).
 STIK_OBRAZEC = okolje("STIK_OBRAZEC", "1") != "0"
 
+# Aplikacija za Android: podpisan APK in `razlicica.json`, ki ju naredi
+# `android/objavi.sh`. Trgovin ni -- glavni F-Droid zahteva prosto licenco,
+# koda pa je zaprta, Play pa rabi racun, 25 $ in dva tedna zaprtega preizkusa.
+# Prenos s te strani deluje danes in za vsakogar.
+#
+# V podatkovnem imeniku je zato, ker je ta ze skupinsko pisljiv
+# (`deploy/brez-sudo.sh`) in ga enota sme brati (`ReadWritePaths`): objava je
+# tako navaden `rsync` kot `david`, brez sudota in brez spremembe enote.
+# Ce mape ni, poti za prenos ni -- gumb, ki vrne 404, je slabsi od strani,
+# ki pove, da izdaje se ni.
+PRENOS_DIR = Path(okolje("PRENOS_DIR", DATA_DIR / "prenos"))
+
 # Postaja, ki je od proge oddaljena vec kot toliko metrov, se ne projicira nanjo.
 MAX_STATION_OFFSET_M = 1500.0

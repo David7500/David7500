@@ -191,7 +191,9 @@ prešteje osirotele meritve.
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
 
 Poti, ki niso za aplikacijo, ampak za brskalnike in iskalnike: `/favicon.ico`,
-`/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`. Napaka je **stran**,
+`/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`. `/android` je stran s
+**prenosom aplikacije**, `/prenos` podpisan APK (samo če mapa obstaja).
+Napaka je **stran**,
 kadar jo bere človek, in JSON pod `/api/`. Absolutni naslov zanje je
 `KAJROS_BASE_URL`, ne `request.url` — za tunelom je ta `http://127.0.0.1:8000`.
 **Tujih izvorov v strani ni**: pisave in Leaflet so naši, ostanejo le ploščice
@@ -229,6 +231,9 @@ uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude)
   nositi **čas izračuna**.
 * **Mrtve kode ne puščaj.** Kar nima klicatelja, gre ven — v git zgodovini
   ostane. Izjema mora biti napisana v komentarju, z rokom.
+* **Odgovori na kratko, brez uvodov in olepšav** (caveman). Vsa tehnična
+  vsebina ostane; koda, commiti in dokumentacija so normalna proza. Izklop:
+  „normal mode“.
 
 ## Objava
 
@@ -276,7 +281,10 @@ Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
 * **Koda je zaprta** (odločeno 3. 9. 2026): zasebni repozitorij, brez licence,
   torej „vse pravice pridržane“. **Endpointi so odprti** — API sme brati vsak.
   Podatki ostajajo CC BY-SA 4.0 in navedba vira je pogoj rabe, ne okras;
-  `seed/kajros.sqlite` je njihova izpeljanka.
+  `seed/kajros.sqlite` je njihova izpeljanka. Posledica za Android: glavni
+  F-Droid in IzzyOnDroid zahtevata prosto licenco, Play pa račun, 25 $ in
+  12 preizkuševalcev, zato se aplikacija razdeljuje **s strani** (`/android`,
+  glej `.claude/rules/android.md`).
 * **Delovni imenik se še vedno imenuje `sztrack`.** Preimenovanje mape bi
   prekinilo tekočo sejo in poti v lupini; naredi se ločeno, git ostane cel:
   `mv ~/Dokumenti/Projekti/{sztrack,kajros}`.
