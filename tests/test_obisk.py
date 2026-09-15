@@ -54,13 +54,13 @@ def conn():
 @pytest.fixture(autouse=True)
 def cist_pomnilnik():
     """Števci so modulni globali; en test ne sme podedovati drugega."""
-    obisk._poti.clear(); obisk._razrezi.clear()
-    obisk._ljudje.clear(); obisk._odzivi.clear()
-    obisk._soli.clear()
+    def pocisti():
+        obisk._poti.clear(); obisk._razrezi.clear()
+        obisk._ljudje.clear(); obisk._odzivi.clear()
+        obisk._soli.clear(); obisk._cakajoci.clear(); obisk._dokazani.clear()
+    pocisti()
     yield
-    obisk._poti.clear(); obisk._razrezi.clear()
-    obisk._ljudje.clear(); obisk._odzivi.clear()
-    obisk._soli.clear()
+    pocisti()
 
 
 def _zabelezi(**kwargs):
@@ -68,6 +68,11 @@ def _zabelezi(**kwargs):
                   naprava_="telefon", drzava="SI", koda=200, ms=12.0)
     osnova.update(kwargs)
     obisk.zabelezi(**osnova)
+
+
+def _js(kljuc="abc", **kwargs):
+    """Klic, ki ga pošlje stran, ko se JS požene -- dokaz, da je obiskovalec človek."""
+    _zabelezi(pot="/api/health", vrsta="api", kljuc=kljuc, **kwargs)
 
 
 # ------------------------------------------------------------- zasebnost
@@ -112,10 +117,35 @@ def test_sol_preprecuje_ugibanje():
     ("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)", "tablica"),
     ("Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0", "računalnik"),
     ("Kajros/1.2 (Android)", "aplikacija"),
+    # WebView v aplikaciji: UA Chroma s pripono, ne s predpono.
+    ("Mozilla/5.0 (Linux; Android 14; wv) Chrome/128 Mobile Safari/537.36 Kajros/1.0",
+     "aplikacija"),
     ("", "neznano"),
 ])
 def test_naprava(ua, pricakovano):
     assert obisk.naprava(ua) == pricakovano
+
+
+def test_aplikacija_je_en_obiskovalec_ne_dva():
+    """WebView in budilka iste naprave sta bila dva ključa (15. 9. 2026)."""
+    webview = "Mozilla/5.0 (Linux; Android 14; wv) Chrome/128 Mobile Safari/537.36 Kajros/1.0"
+    budilka = "Kajros/1.0 (Android)"
+    assert obisk.ua_za_kljuc(webview) == obisk.ua_za_kljuc(budilka)
+    chrome = "Mozilla/5.0 (Linux; Android 14) Chrome/128 Mobile Safari/537.36"
+    assert obisk.ua_za_kljuc(chrome) == chrome
+
+
+@pytest.mark.parametrize("pot, vrsta, koda, pricakovano", [
+    ("/api/health", "api", 200, True),
+    ("/sw.js", "drugo", 200, True),
+    ("/api/vehicles", "api", 304, True),
+    ("/", "stran", 200, False),
+    ("/robots.txt", "drugo", 200, False),
+    # Skener, ki ugiba API, ni nič bolj človek od tistega, ki ugiba /wp-admin.
+    ("(neznano)", "api", 404, False),
+])
+def test_je_dokaz(pot, vrsta, koda, pricakovano):
+    assert obisk.je_dokaz(pot, vrsta, koda) is pricakovano
 
 
 @pytest.mark.parametrize("ua", [
@@ -182,6 +212,7 @@ def test_vrsta_poti(pot, vrsta):
 # -------------------------------------------------------------- seštevanje
 
 def test_stevci_se_sestevajo_cez_vec_praznjenj(conn):
+    _js()
     for _ in range(3):
         _zabelezi()
     obisk.izprazni(conn)
@@ -190,7 +221,7 @@ def test_stevci_se_sestevajo_cez_vec_praznjenj(conn):
     vrstica = conn.execute(
         "SELECT zahtev, ljudi FROM obisk_pot WHERE pot = '/app/train'").fetchone()
     assert vrstica["zahtev"] == 4 and vrstica["ljudi"] == 4
-    assert conn.execute("SELECT COUNT(*) FROM obisk_pot").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM obisk_pot").fetchone()[0] == 2
 
 
 def test_napake_se_stejejo_locheno(conn):
@@ -215,13 +246,79 @@ def test_bot_ne_pokvari_razrezov(conn):
     zanimivo črto -- kdaj se ljudje res peljejo."""
     _zabelezi(bot=True, kljuc="bot", ura=3)
     _zabelezi(bot=False, kljuc="clovek", ura=17)
+    _js(kljuc="clovek", ura=17)
     obisk.izprazni(conn)
     ure = [r["kljuc"] for r in conn.execute(
         "SELECT kljuc FROM obisk_razrez WHERE razsez = 'ura'")]
     assert ure == ["17"]
     # V `obisk_pot` je bot vseeno štet -- promet je promet, le `ljudi` ne.
-    v = conn.execute("SELECT zahtev, ljudi FROM obisk_pot").fetchone()
+    v = conn.execute("SELECT zahtev, ljudi FROM obisk_pot "
+                     "WHERE pot = '/app/train'").fetchone()
     assert v["zahtev"] == 2 and v["ljudi"] == 1
+
+
+def test_brskalnik_brez_js_ni_clovek(conn):
+    """Skener z UA Chroma: ena zahteva na `/`, nič drugega (79 od 104,
+    15. 9. 2026). V prometu je, med ljudmi in v razrezih ne."""
+    _zabelezi(pot="/", kljuc="skener")
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn, dni=7)
+    assert p["danes"]["ljudi"] == 0 and p["danes"]["brez_js"] == 1
+    assert p["danes"]["ogledov"] == 0
+    assert conn.execute("SELECT COUNT(*) FROM obisk_razrez").fetchone()[0] == 0
+    v = conn.execute("SELECT zahtev, ljudi FROM obisk_pot").fetchone()
+    assert v["zahtev"] == 1 and v["ljudi"] == 0
+
+
+def test_ogled_se_pripise_ko_pride_dokaz_tudi_cez_praznjenje(conn):
+    """Stran pride pred klicem API; praznjenje ju lahko loči. Ogled mora
+    po dokazu vseeno priti v razreze in v `ljudi`, in to enkrat."""
+    _zabelezi(pot="/", kljuc="clovek", ura=8)
+    obisk.izprazni(conn)
+    assert conn.execute("SELECT COUNT(*) FROM obisk_razrez").fetchone()[0] == 0
+    _js(kljuc="clovek", ura=8)
+    obisk.izprazni(conn)
+    _js(kljuc="clovek", ura=8)
+    obisk.izprazni(conn)
+    ura = conn.execute("SELECT zahtev, ogledov FROM obisk_razrez "
+                       "WHERE razsez = 'ura' AND kljuc = '08'").fetchone()
+    assert (ura["zahtev"], ura["ogledov"]) == (3, 1)
+    stran = conn.execute("SELECT ljudi FROM obisk_pot WHERE pot = '/'").fetchone()
+    assert stran["ljudi"] == 1
+    p = obisk.pregled(conn, dni=7)
+    assert p["danes"]["ljudi"] == 1 and p["danes"]["ogledov"] == 1
+    assert not obisk._cakajoci
+
+
+def test_neuspel_klic_api_ni_dokaz(conn):
+    _zabelezi(pot="/", kljuc="skener")
+    _zabelezi(pot="(neznano)", vrsta="api", kljuc="skener", koda=404)
+    obisk.izprazni(conn)
+    assert obisk.pregled(conn, dni=7)["danes"]["ljudi"] == 0
+
+
+def test_vrstice_pred_stolpcem_js_stejejo_po_starem(conn):
+    """Za zgodovino ne vemo, ali je pognala JS. Ničla bi vso zgodovino
+    naredila za bote, zato NULL šteje kot človek."""
+    conn.execute("INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov, js,"
+                 " prvi_s, zadnji_s) VALUES(?, 'star', 0, 1, 1, NULL, 0, 0)",
+                 (obisk._danes(),))
+    p = obisk.pregled(conn, dni=7)
+    assert p["danes"]["ljudi"] == 1
+    assert p["js_od"] is None
+
+
+def test_migracija_doda_stolpec_js():
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE obiskovalec (dan TEXT NOT NULL, kljuc TEXT NOT NULL,"
+              " bot INTEGER NOT NULL DEFAULT 0, zahtev INTEGER NOT NULL DEFAULT 0,"
+              " ogledov INTEGER NOT NULL DEFAULT 0, prvi_s INTEGER NOT NULL,"
+              " zadnji_s INTEGER NOT NULL, PRIMARY KEY (dan, kljuc))")
+    c.execute("INSERT INTO obiskovalec VALUES('2026-09-14', 'k', 0, 3, 1, 0, 0)")
+    c.executescript(db.SCHEMA)
+    obisk.init(c)
+    assert c.execute("SELECT js FROM obiskovalec").fetchone()[0] is None
+    c.close()
 
 
 def test_prazno_praznjenje_ne_pise(conn):
@@ -267,8 +364,11 @@ def test_percentil_ujame_pocasnost():
 
 def test_pregled_loci_ljudi_od_botov(conn):
     _zabelezi(kljuc="clovek1", bot=False)
+    _js(kljuc="clovek1")
     _zabelezi(kljuc="clovek2", bot=False)
+    _js(kljuc="clovek2")
     _zabelezi(kljuc="bot1", bot=True)
+    _js(kljuc="bot1", bot=True)       # bot, ki kliče API, je še vedno bot
     obisk.izprazni(conn)
     p = obisk.pregled(conn, dni=7)
     assert p["danes"]["ljudi"] == 2

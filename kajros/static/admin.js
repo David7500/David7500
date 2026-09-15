@@ -64,8 +64,11 @@ function ploscice(d) {
   const s = d.skupaj || {};
   // Delež botov pove, koliko od tega sploh so ljudje. Brez njega je „120
   // obiskovalcev" lahko en sam iskalnik, ki je prišel stokrat z drugega IP.
-  const botDelez = (s.ljudi_vsota + s.botov_vsota) > 0
-    ? Math.round(100 * s.botov_vsota / (s.ljudi_vsota + s.botov_vsota)) : 0;
+  // Stroji so dveh vrst: taki, ki se predstavijo, in taki z UA brskalnika, ki
+  // strani niso pognali (glej `obisk.py`) -- teh je bilo 15. 9. 2026 več.
+  const strojev = s.botov_vsota + (s.brez_js_vsota || 0);
+  const botDelez = (s.ljudi_vsota + strojev) > 0
+    ? Math.round(100 * strojev / (s.ljudi_vsota + strojev)) : 0;
   // Obdobje je vedno 7, 30 ali 90 -- zato „dneh" in nobenega sklanjanja.
   // Prva različica je pisala „v 1 dneh", ker je štela dneve s podatkom in ne
   // izbranega okna; številka je bila prava, poved pa pokvarjena.
@@ -76,8 +79,8 @@ function ploscice(d) {
      "vsota dnevnih, ne različnih ljudi"],
     ["", stevilo(s.ogledov), "ogledov strani",
      `od ${stevilo(s.zahtev)} zahtev skupaj`],
-    ["", `${botDelez} %`, "od tega botov",
-     `${stevilo(s.botov_vsota)} strojnih obiskov`],
+    ["", `${botDelez} %`, "od tega strojev",
+     `boti ${stevilo(s.botov_vsota)} · skriti ${stevilo(s.brez_js_vsota)}`],
     [s.napak5 > 0 ? "je-poudarek" : "", stevilo(s.napak5), "napak strežnika",
      `${stevilo(s.napak4)} × 4xx (napačen naslov)`],
   ];
@@ -200,7 +203,11 @@ function noga(d) {
   el("adm-noga").innerHTML = `
     IP se ne shrani nikoli: obiskovalec je zgoščena vrednost s soljo, ki se ob
     polnoči zavrže. Zato <strong>mesečnih različnih ljudi ni mogoče izračunati</strong>
-    — vsota nad ${d.dni} dnevi isto osebo šteje enkrat na dan. Števci gredo v
+    — vsota nad ${d.dni} dnevi isto osebo šteje enkrat na dan. Ista naprava na
+    drugem omrežju (Wi-Fi ↔ mobilni podatki) je nov obiskovalec.
+    <strong>Človek je, kdor je stran pognal</strong>: brskalnik, ki jo samo prenese
+    in ne vpraša po podatkih, je štet kot skrit stroj${d.js_od
+      ? ` (od ${escapeHtml(dayLabel(d.js_od))}; prej je štel vsak brskalnik)` : ""}. Števci gredo v
     bazo vsakih ${d.stroj ? d.stroj.obisk_od : 60} s; obdobje ${escapeHtml(d.od)} – ${escapeHtml(d.do)}.${opozorilo}`;
 }
 

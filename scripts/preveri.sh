@@ -50,6 +50,15 @@ api() {                     # opis, pot, pricakovana koda
     NAPAKE=$((NAPAKE+1))
   fi
 }
+# Koren brez glave Accept (tako pride del pajkov) mora biti stran, ne JSON.
+# DuckDuckGo je 15. 9. 2026 kot opis kajros.app kazal seznam endpointov.
+vrsta=$(curl -s -o /dev/null -w '%{content_type}' --max-time 10 "$BASE/")
+if [[ "$vrsta" == text/html* ]]; then
+  printf "  ok   %-34s %s\n" "koren brez Accept je stran" "$vrsta"
+else
+  printf "  PADE %-34s %s (pricakoval text/html)\n" "koren brez Accept je stran" "$vrsta"
+  NAPAKE=$((NAPAKE+1))
+fi
 api "ista postaja"        "/api/connections?from=Ljubljana&to=Ljubljana" 400
 api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
 api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404

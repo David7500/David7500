@@ -230,22 +230,31 @@ def _check_date(value: str | None) -> str | None:
 
 @app.get("/")
 def index(request: Request):
-    """Korenska pot streže dvoje.
+    """Korenska pot je domača stran; JSON dobi samo, kdor ga izrecno prosi.
 
-    Gostitelji in nadzor preverjajo živost prav tu in pričakujejo JSON, zato
-    ta ostane. Človek, ki v naslovno vrstico vtipka domeno, pa ni prišel po
-    seznam endpointov -- brskalnik prosi za HTML in dobi preusmeritev na
-    aplikacijo.
+    Do 15. 9. 2026 je bilo obratno: HTML samo ob `Accept: text/html`, sicer
+    seznam endpointov. Iskalnikovi pajki pa ne pošljejo vsi te glave --
+    DuckDuckGo (Bingov indeks) je za `kajros.app` kazal `{"service":"kajros",…}`
+    kot opis strani, `facebookexternalhit` z `Accept: */*` prav tako JSON.
+    Privzeto mora biti tisto, kar je za ljudi; živost se preverja na
+    `/api/health`.
     """
-    if "text/html" in request.headers.get("accept", ""):
-        return templates.TemplateResponse(request, "home.html", {})
-    return JSONResponse({
-        "service": "kajros",
-        "version": app.version,
-        "docs": "/docs",
-        "app": "/app",
-        "endpoints": [r.path for r in app.routes if getattr(r, "path", "").startswith("/api/")],
-    })
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        odgovor = JSONResponse({
+            "service": "kajros",
+            "version": app.version,
+            "docs": "/docs",
+            "app": "/app",
+            "endpoints": [r.path for r in app.routes
+                          if getattr(r, "path", "").startswith("/api/")],
+        })
+    else:
+        odgovor = templates.TemplateResponse(request, "home.html", {})
+    # Isti naslov, dve vsebini: brez `Vary` bi predpomnilnik na poti lahko
+    # enemu odjemalcu postregel, kar je dobil drugi.
+    odgovor.headers["Vary"] = "Accept"
+    return odgovor
 
 
 @app.get("/favicon.ico", include_in_schema=False)

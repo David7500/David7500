@@ -18,9 +18,18 @@ zemljevid anketira lege vsakih 10 s in zamude vsakih 30 s, dokler je zavihek
 odprt. Vrstica na zahtevo bi torej pomenila stalno pisanje v isto bazo, v
 katero teče zajem — in zajem je edino, česar ni mogoče ponoviti za nazaj.
 
+**Človek je, kdor je stran pognal, ne kdor se predstavi kot brskalnik.**
+15. 9. 2026 je pregled kazal 104 ljudi, od tega 79 z eno samo zahtevo na `/`
+in nič drugega -- iz ZDA, Tajske, Kitajske, Hongkonga, ponoči. Skenerji
+pošiljajo UA Chroma, zato jih `_BOT` ne ujame. Pravi brskalnik pa po strani
+požene JS in vpraša `/api/…` ali `/sw.js`; kdor tega ne naredi, stran ni
+videl, ampak jo je prenesel. Ogled se zato do tega dokaza drži na čakanju
+(`_cakajoci`) in se pripiše za nazaj, ko dokaz pride.
+
 Kar ta modul namenoma **ni**: ni sledilnik poti posameznika po strani. Vrstica
-o obiskovalcu nosi štiri števila (zahteve, ogledi, prvi in zadnji dotik), ne
-zaporedja strani. Kdo je kam kliknil, se iz tega ne da sestaviti.
+o obiskovalcu nosi pet števil (zahteve, ogledi, klici iz JS, prvi in zadnji
+dotik), ne zaporedja strani. Kdo je kam kliknil, se iz tega ne da sestaviti.
+Tudi čakajoči ogledi so v pomnilniku razrezi, ne seznam poti.
 """
 
 from __future__ import annotations
@@ -54,6 +63,13 @@ VEDRA = (10, 25, 50, 100, 250, 500, 1000, 2500, 5000)
 #: nekdo namerno preiskuje z izmišljenimi naslovi in nadaljnje štetje ne
 #: pove ničesar novega.
 NAJVEC_KLJUCEV = 20_000
+
+#: Koliko obiskovalcev brez dokaza (glej opis modula) sme hkrati čakati. Živijo
+#: do konca dneva, ne do praznjenja, zato imajo svojo mejo. Kdor pride čez
+#: njo, se še vedno šteje v promet in med obiskovalce; izgubi se le pripis
+#: njegovega prvega ogleda v razreze, če se kasneje izkaže za človeka. Pri
+#: 94 skenerjih na dan je meja petdesetkrat nad izmerjenim.
+NAJVEC_CAKAJOCIH = 5_000
 
 #: Kar ni nobena naša pot. Vse take zahteve gredo v eno samo vrstico: brez
 #: tega bi en sam bot, ki ugiba `/wp-admin/…`, naredil tisoče vrstic na dan.
@@ -116,6 +132,7 @@ CREATE TABLE IF NOT EXISTS obiskovalec (
     bot      INTEGER NOT NULL DEFAULT 0,
     zahtev   INTEGER NOT NULL DEFAULT 0,
     ogledov  INTEGER NOT NULL DEFAULT 0,
+    js       INTEGER,              -- zahtev, ki jih pošlje le pognan JS; NULL = pred 15. 9. 2026
     prvi_s   INTEGER NOT NULL,
     zadnji_s INTEGER NOT NULL,
     PRIMARY KEY (dan, kljuc)
@@ -148,11 +165,25 @@ _odzivi: dict[tuple[str, str, int], int] = {}
 # dneva istega obiskovalca ne razdeli na dva.
 _soli: dict[str, bytes] = {}
 _prelito = False                  # ali smo zadeli NAJVEC_KLJUCEV
+# (dan, kljuc) -> {("pot", pot, vrsta) | ("razrez", razsez, k): [zahtev, ogledov]}
+# Kar bi obiskovalec prispeval kot človek, dokler tega ne dokaže. Ne prazni
+# se ob praznjenju, ampak ob prehodu dneva -- dokaz pride lahko minuto kasneje.
+_cakajoci: dict[tuple[str, str], dict[tuple[str, str, str], list]] = {}
+# (dan, kljuc) obiskovalcev, ki so dokazali, da so pognali stran. Restart ga
+# pobriše; posledica je le, da naslednji ogled spet počaka na prvi klic API,
+# ki na vsaki strani pride v sekundi.
+_dokazani: set[tuple[str, str]] = set()
 
 
 def init(conn: sqlite3.Connection) -> None:
     """Ustvari tabele in prevzame današnjo sol, če je proces že tekel."""
     conn.executescript(SHEMA)
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(obiskovalec)")}
+    if "js" not in stolpci:
+        # Brez privzete vrednosti: za stare vrstice ne vemo, ali so pognale
+        # JS, in ničla bi trdila, da niso -- vsa zgodovina bi čez noč postala
+        # boti. NULL `pregled()` šteje po starem pravilu.
+        conn.execute("ALTER TABLE obiskovalec ADD COLUMN js INTEGER")
     conn.commit()
     shranjeno = db.get_meta(conn, "obisk_sol")
     if shranjeno and ":" in shranjeno:
@@ -194,12 +225,37 @@ def je_bot(ua: str) -> bool:
     return bool(_BOT.search(ua))
 
 
+def je_dokaz(pot: str, vrsta: str, koda: int) -> bool:
+    """Ali zahtevo pošlje samo brskalnik, ki je stran res pognal.
+
+    `/sw.js` registrira `common.js`, `/api/…` kliče vsaka stran. Napaka ni
+    dokaz: skener, ki ugiba `/api/v1/…`, dobi 404 in ni zato nič bolj človek.
+    """
+    if koda >= 400:
+        return False
+    return vrsta == "api" or pot == "/sw.js"
+
+
+def ua_za_kljuc(ua: str) -> str:
+    """User-Agent, kakor gre v ključ obiskovalca.
+
+    Aplikacija za Android govori z dvema glasovoma: WebView pošlje UA Chroma s
+    pripono ` Kajros/1.0`, budilka in preverjanje posodobitve pa
+    `Kajros/1.0 (Android)`. Ista naprava je bila zato dva obiskovalca --
+    15. 9. 2026 v bazi kot par z enakim prvim in zadnjim dotikom na sekundo.
+    Dve osebi z aplikacijo za istim naslovom se s tem zlijeta v eno; to je
+    redkeje kot vsaka raba aplikacije.
+    """
+    return "Kajros" if "Kajros/" in ua else ua
+
+
 def naprava(ua: str) -> str:
-    # Naš lastni ovoj za Android se predstavi kot `Kajros/<različica>` in ni
-    # brskalnik: budilka vpraša strežnik tudi takrat, ko nihče ne gleda. Če bi
-    # padel med telefone, bi ga bilo od človeka na strani nemogoče ločiti --
-    # in prav ta razlika je tisto, zaradi česar se razrez sploh bere.
-    if ua.startswith("Kajros/"):
+    # Naš lastni ovoj za Android: budilka se predstavi kot `Kajros/<različica>`,
+    # WebView pa doda ` Kajros/<različica>` na konec UA Chroma. Budilka vpraša
+    # strežnik tudi takrat, ko nihče ne gleda, zato ne sme pasti med telefone;
+    # ogledi v WebView pa so ogledi v aplikaciji, ne v brskalniku. Oboje loči
+    # stolpec ogledov -- budilka jih nima.
+    if "Kajros/" in ua:
         return "aplikacija"
     if not ua:
         return "neznano"
@@ -235,13 +291,13 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
     dan = dan or trenutek.strftime("%Y-%m-%d")
     ura = trenutek.hour if ura is None else ura
     ogled = 1 if vrsta == "stran" else 0
+    dokaz = je_dokaz(pot, vrsta, koda)
     with _zaklep:
         if len(_poti) + len(_razrezi) + len(_ljudje) > NAJVEC_KLJUCEV:
             _prelito = True
             return
         p = _poti.setdefault((dan, pot, vrsta), [0, 0, 0, 0, 0.0, 0.0])
         p[0] += 1
-        p[1] += 0 if bot else 1
         p[2] += 1 if 400 <= koda < 500 else 0
         p[3] += 1 if koda >= 500 else 0
         p[4] += ms
@@ -250,22 +306,46 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
         kljuc_odziv = (dan, pot, vedro(ms))
         _odzivi[kljuc_odziv] = _odzivi.get(kljuc_odziv, 0) + 1
 
-        # Razrezi so vprašanje o ljudeh, ne o strojih. Bot, ki vsako uro
-        # pobere sitemap, bi sicer narisal enakomeren dan in ubil edino
-        # zanimivo črto -- kdaj se ljudje res peljejo.
+        # Razrezi in `ljudi` so vprašanje o ljudeh, ne o strojih. Bot, ki vsako
+        # uro pobere sitemap, bi sicer narisal enakomeren dan in ubil edino
+        # zanimivo črto -- kdaj se ljudje res peljejo. Brskalnik brez dokaza
+        # čaka; glej opis modula.
         if not bot:
+            prispevek = {("pot", pot, vrsta): [1, 0]}
             for razsez, k in (("ura", f"{ura:02d}"), ("naprava", naprava_),
                               ("drzava", drzava)):
-                r = _razrezi.setdefault((dan, razsez, k), [0, 0])
-                r[0] += 1
-                r[1] += ogled
+                prispevek[("razrez", razsez, k)] = [1, ogled]
+            obiskovalec = (dan, kljuc)
+            if dokaz and obiskovalec not in _dokazani:
+                _dokazani.add(obiskovalec)
+                _pripisi(dan, _cakajoci.pop(obiskovalec, {}))
+            if obiskovalec in _dokazani:
+                _pripisi(dan, prispevek)
+            elif obiskovalec in _cakajoci or len(_cakajoci) < NAJVEC_CAKAJOCIH:
+                caka = _cakajoci.setdefault(obiskovalec, {})
+                for k, (n, og) in prispevek.items():
+                    c = caka.setdefault(k, [0, 0])
+                    c[0] += n
+                    c[1] += og
 
-        o = _ljudje.setdefault((dan, kljuc), [0, 0, 0, int(zdaj), int(zdaj)])
+        o = _ljudje.setdefault((dan, kljuc), [0, 0, 0, 0, int(zdaj), int(zdaj)])
         o[0] = max(o[0], int(bot))
         o[1] += 1
         o[2] += ogled
-        o[3] = min(o[3], int(zdaj))
-        o[4] = max(o[4], int(zdaj))
+        o[3] += int(dokaz)
+        o[4] = min(o[4], int(zdaj))
+        o[5] = max(o[5], int(zdaj))
+
+
+def _pripisi(dan: str, prispevek: dict) -> None:
+    """Prispevek človeka v števce poti in razrezov. Kliče se pod `_zaklep`."""
+    for (kam, a, b), (n, og) in prispevek.items():
+        if kam == "pot":
+            _poti.setdefault((dan, a, b), [0, 0, 0, 0, 0.0, 0.0])[1] += n
+        else:
+            r = _razrezi.setdefault((dan, a, b), [0, 0])
+            r[0] += n
+            r[1] += og
 
 
 def ip_zahteve(glave, odjemalec: str | None) -> str:
@@ -292,7 +372,7 @@ def iz_zahteve(request, koda: int, ms: float) -> None:
     bot = je_bot(ua)
     zabelezi(pot=pot, vrsta=vrsta_poti(request.url.path),
              kljuc=kljuc_obiskovalca(ip_zahteve(glave, _odjemalec(request)),
-                                     ua, _danes()),
+                                     ua_za_kljuc(ua), _danes()),
              bot=bot, naprava_=naprava(ua),
              drzava=(glave.get("cf-ipcountry") or "??").upper()[:2],
              koda=koda, ms=ms)
@@ -359,6 +439,12 @@ def izprazni(conn: sqlite3.Connection) -> int:
         preliv = _prelito
         _poti.clear(); _razrezi.clear(); _ljudje.clear(); _odzivi.clear()
         _prelito = False
+        # Včerajšnji čakajoči niso dokazali ničesar in ne bodo: jutri imajo
+        # drug ključ.
+        danes = _danes()
+        for k in [k for k in _cakajoci if k[0] < danes]:
+            del _cakajoci[k]
+        _dokazani.difference_update([k for k in _dokazani if k[0] < danes])
 
     with conn:
         conn.executemany(
@@ -376,11 +462,12 @@ def izprazni(conn: sqlite3.Connection) -> int:
             "  zahtev = zahtev + excluded.zahtev,"
             "  ogledov = ogledov + excluded.ogledov", razrezi)
         conn.executemany(
-            "INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov, prvi_s, zadnji_s)"
-            " VALUES(?,?,?,?,?,?,?) "
+            "INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov, js, prvi_s, zadnji_s)"
+            " VALUES(?,?,?,?,?,?,?,?) "
             "ON CONFLICT(dan, kljuc) DO UPDATE SET "
             "  bot = MAX(bot, excluded.bot), zahtev = zahtev + excluded.zahtev,"
             "  ogledov = ogledov + excluded.ogledov,"
+            "  js = COALESCE(js, 0) + excluded.js,"
             "  prvi_s = MIN(prvi_s, excluded.prvi_s),"
             "  zadnji_s = MAX(zadnji_s, excluded.zadnji_s)", ljudje)
         conn.executemany(
@@ -444,14 +531,21 @@ def pregled(conn: sqlite3.Connection, dni: int = 30) -> dict:
     od = datetime.fromordinal(
         datetime.now(TZ).date().toordinal() - dni + 1).strftime("%Y-%m-%d")
 
+    # Človek je, kdor se ne predstavi kot bot IN je pognal JS. Vrstice pred
+    # stolpcem `js` (NULL) štejejo po starem pravilu -- zanje tega ne vemo, in
+    # ničla bi jih vse naredila za bote. `js_od` pove, od kdaj velja novo.
+    clovek = "o.bot = 0 AND COALESCE(o.js, 1) > 0"
     po_dnevih = [dict(r) for r in conn.execute(
         "SELECT o.dan,"
-        "       SUM(CASE WHEN o.bot = 0 THEN 1 ELSE 0 END) AS ljudi,"
+        f"      SUM(CASE WHEN {clovek} THEN 1 ELSE 0 END) AS ljudi,"
         "       SUM(CASE WHEN o.bot = 1 THEN 1 ELSE 0 END) AS botov,"
-        "       SUM(CASE WHEN o.bot = 0 THEN o.ogledov ELSE 0 END) AS ogledov,"
+        "       SUM(CASE WHEN o.bot = 0 AND o.js = 0 THEN 1 ELSE 0 END) AS brez_js,"
+        f"      SUM(CASE WHEN {clovek} THEN o.ogledov ELSE 0 END) AS ogledov,"
         "       SUM(o.zahtev) AS zahtev "
         "FROM obiskovalec o WHERE o.dan >= ? GROUP BY o.dan ORDER BY o.dan",
         (od,))]
+    js_od = conn.execute(
+        "SELECT MIN(dan) FROM obiskovalec WHERE js IS NOT NULL").fetchone()[0]
 
     strani = [dict(r) for r in conn.execute(
         "SELECT pot, SUM(zahtev) AS zahtev, SUM(ljudi) AS ljudi "
@@ -498,6 +592,7 @@ def pregled(conn: sqlite3.Connection, dni: int = 30) -> dict:
         "ogledov": sum(d["ogledov"] for d in po_dnevih),
         "zahtev": sum(d["zahtev"] for d in po_dnevih),
         "botov_vsota": sum(d["botov"] for d in po_dnevih),
+        "brez_js_vsota": sum(d["brez_js"] for d in po_dnevih),
         "napak4": sum(e["napak4"] for e in endpointi),
         "napak5": sum(e["napak5"] for e in endpointi),
     }
@@ -505,7 +600,8 @@ def pregled(conn: sqlite3.Connection, dni: int = 30) -> dict:
     return {
         "dni": dni, "od": od, "do": danes,
         "danes": danasnji or {"dan": danes, "ljudi": 0, "botov": 0,
-                              "ogledov": 0, "zahtev": 0},
+                              "brez_js": 0, "ogledov": 0, "zahtev": 0},
+        "js_od": js_od,
         "teden": {"ljudi_vsota": sum(d["ljudi"] for d in zadnjih7),
                   "ogledov": sum(d["ogledov"] for d in zadnjih7),
                   "dni": len(zadnjih7)},

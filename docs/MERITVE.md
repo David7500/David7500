@@ -2110,3 +2110,45 @@ oblikah napake (JSON in stran).
 
 Nauk za naslednjič: **objavi datoteko, preden naslov kamorkoli objaviš** —
 en sam radoveden klik pred objavo zamrzne 404 za vse.
+
+## Koliko ljudi je res na strani (15. 9. 2026)
+
+Pregled je kazal **104 ljudi in 94 botov** za en dan, v resnici pa so stran
+rabili lastnik (telefon, računalnik, aplikacija) in morda dva ali trije.
+Razčlenitev iz `obiskovalec` na arwenu, do 21:06:
+
+| zahtev na obiskovalca | „ljudi" | od tega krajše od minute |
+|---|---|---|
+| 1 | **79** | 79 |
+| 2–3 | 9 | 5 |
+| 4–10 | 8 | 6 |
+| 11–100 | 5 | 1 |
+| več | 3 | 0 |
+
+* **81 od 104 ni poslalo ničesar razen strani** — nobenega `/api/health`, ki ga
+  domača stran pokliče vedno. Po državah je pri teh zahtev natanko toliko kot
+  ogledov: US 28, TH 13, CN 11, HK 10, SG 4, KR 3.
+* **RU: 147 zahtev, 0 ogledov, vse 404**, od 00:01 do 21:06, z UA brskalnika.
+* 50 prvih dotikov med 00 in 02.
+* **Aplikacija je štela dvakrat**: pari z enakim prvim in zadnjim dotikom na
+  sekundo (06:54:50–14:37:11, 07:04:38–10:44:33) — WebView in budilka pošiljata
+  različen UA.
+
+Obiskovalcev z vsaj 5 zahtevami je bilo 13; brez skenerja in parov aplikacije
+~10 ključev, kar se ujema s tremi napravami lastnika na dveh omrežjih in
+nekaj drugimi. Popravek je v `obisk.py` („človek je, kdor je stran pognal“).
+
+**DuckDuckGo je kot opis `kajros.app` kazal JSON** s seznamom endpointov.
+Koren je stregel HTML samo ob `Accept: text/html`; izmerjeno na živi strani:
+
+| odjemalec | `Accept` | dobil |
+|---|---|---|
+| Googlebot | `text/html,…` | stran |
+| katerikoli | brez | JSON |
+| katerikoli | `*/*` | JSON |
+| `facebookexternalhit` | `*/*` | JSON |
+| `HEAD /` | brez | JSON |
+
+Google je bil zato v redu, Bing (in z njim DuckDuckGo) ne. Hkrati izmerjeno:
+`http://kajros.app/` in `www.kajros.app` vračata **200 z isto vsebino** in ne
+preusmerita — dvojnik, ki ga drži skupaj samo `rel=canonical`.

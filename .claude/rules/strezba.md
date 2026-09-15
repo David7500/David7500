@@ -282,6 +282,16 @@ strežnik ni beležil zahtev in Cloudflare svojega dnevnika ne da. Zato
   država štejejo samo ljudi; `obisk_pot` šteje oboje, ločeno po stolpcih
   `zahtev` in `ljudi`. Iskalnik, ki vsako uro pobere isto stran, bi sicer
   narisal enakomeren dan in ubil edino zanimivo črto.
+* **Človek je, kdor je stran pognal** (od 15. 9. 2026). Pregled je kazal
+  104 ljudi na dan, od tega **79 z eno samo zahtevo** na `/` — skenerji z UA
+  Chroma iz ZDA, Tajske, Kitajske, ponoči; en z 147 zahtevami, vse 404. Zdaj
+  šteje kot človek samo obiskovalec s stolpcem `js > 0`: poslal je uspešen
+  `/api/…` ali `/sw.js`, kar naredi samo pognan JS. Ogled pred tem čaka v
+  pomnilniku (`_cakajoci`) in se pripiše za nazaj. Vrstice pred stolpcem
+  imajo `js` NULL in štejejo po starem, sicer bi zgodovina postala boti.
+  **Aplikacija je en ključ**, ne dva: WebView (`… Kajros/1.0`) in budilka
+  (`Kajros/1.0 (Android)`) gresta skozi `ua_za_kljuc()`. Menjava Wi-Fi ↔
+  mobilni podatki je še vedno nov obiskovalec — brez IP-ja se ne da združiti.
 * **Pisanje ne gre v zahtevo**, ampak v svojo nit vsakih 60 s
   (`server._obisk_worker`). En obisk strani je 10–30 zahtev; vrstica na zahtevo
   bi pomenila stalno pisanje v bazo, v katero teče zajem. Cena štetja je
@@ -326,6 +336,12 @@ izvor govori navaden HTTP in enota ne teče z `--proxy-headers`. Zemljevid
 strani in značke za predogled bi torej kazali na naslov, ki iz interneta ni
 dosegljiv. (Naslov obiskovalca to ne prizadene — `obisk.py` bere
 `cf-connecting-ip`, ne `request.client`.)
+
+**Koren `/` je stran, JSON samo na izrecno prošnjo.** Do 15. 9. 2026 je bil
+HTML samo ob `Accept: text/html`; DuckDuckGo (Bingov indeks) je zato kot
+opis `kajros.app` kazal `{"service":"kajros",…}`, `facebookexternalhit` z
+`Accept: */*` prav tako. Privzetek mora biti za ljudi — živost je
+`/api/health`. Straži `preveri.sh`.
 
 **Naš `robots.txt` mora obstajati, sicer Cloudflare postreže svojega.**
 Njegov privzetek o naših poteh ne ve ničesar in pusti indeksirati `/api/`.
