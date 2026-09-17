@@ -96,7 +96,7 @@ class Most(
         )
         Shramba.pocisti(dejavnost, zdaj)
         Shramba.shrani(dejavnost, b.copy(zvoniObMs = b.izracun(zdaj).zvoniOb))
-        glavna.post { Nacrtovalec.nastavi(dejavnost, b, zdaj); Widget.osvezi(dejavnost) }
+        glavna.post { Nacrtovalec.nastavi(dejavnost, b, zdaj); Widgeti.osvezi(dejavnost) }
         return b.id
     }
 
@@ -182,7 +182,7 @@ class Most(
     fun odstrani(id: String): Boolean {
         if (!nas()) return false
         Shramba.odstrani(dejavnost, id)
-        glavna.post { Nacrtovalec.preklici(dejavnost, id); Widget.osvezi(dejavnost) }
+        glavna.post { Nacrtovalec.preklici(dejavnost, id); Widgeti.osvezi(dejavnost) }
         return true
     }
 

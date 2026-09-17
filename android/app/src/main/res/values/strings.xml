@@ -85,6 +85,38 @@
     <string name="widget_prezgodaj">odhod %1$s · %2$d min pred redom</string>
     <string name="widget_tocno">odhod %1$s · vozi točno</string>
 
+    <!-- widget: budilke s stikali -->
+    <string name="widget_budilke_opis">Nastavljene budilke; stikalo jih vklopi ali ugasne brez odpiranja aplikacije.</string>
+    <string name="widget_budilke_glava">budilke</string>
+    <string name="widget_budilke_vec">in še %1$d</string>
+    <string name="widget_budilka_vklop">vklopljena</string>
+    <string name="widget_budilka_izklop">ugasnjena</string>
+    <string name="widget_budilka_vklop_opis">%1$s: budilka je vklopljena, dotik jo ugasne</string>
+    <string name="widget_budilka_izklop_opis">%1$s: budilka je ugasnjena, dotik jo vklopi</string>
+
+    <!-- widget: odhodna tabla ene postaje -->
+    <string name="widget_tabla_opis">Naslednji odhodi z ene postaje, z zamudo.</string>
+    <string name="widget_tabla_ob">osveženo ob %1$s</string>
+    <string name="widget_tabla_staro">podatek ob %1$s — star %2$d min</string>
+    <string name="widget_tabla_osvezi">Osveži zdaj</string>
+    <string name="widget_tabla_caka">Še nisem uspel vprašati strežnika.</string>
+    <string name="widget_tabla_nic">Danes od tod ne pelje nič več.</string>
+    <string name="widget_tabla_ni_zamude">zamuda še ni znana</string>
+    <string name="widget_tabla_brez_postaje">Postaja ni izbrana. Pritisni in jo izberi.</string>
+    <string name="widget_tabla_predogled_postaja">Ljubljana</string>
+    <string name="widget_tabla_predogled_ob">osveženo ob 06:48</string>
+
+    <!-- nastavitev table -->
+    <string name="tabla_nastavitev">Katera postaja</string>
+    <string name="tabla_pomoc">Napiši ime postaje, kot piše na postajališču.</string>
+    <string name="tabla_postaja">npr. Ljubljana</string>
+    <string name="tabla_vlak">Vlak</string>
+    <string name="tabla_avtobus">Avtobus</string>
+    <string name="tabla_shrani">Poišči in shrani</string>
+    <string name="tabla_iscem">Iščem …</string>
+    <string name="tabla_ni_postaje">Te postaje ne najdem. Poskusi drugo ime.</string>
+    <string name="tabla_ni_zveze">Strežnika ni mogoče doseči. Poskusi znova.</string>
+
     <!-- posodobitev zunaj trgovine -->
     <string name="posodobitev">Na voljo je različica %1$s. Odpri stran za prenos.</string>
     <string name="zapri_znak">✕</string>

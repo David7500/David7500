@@ -11,6 +11,13 @@
     <color name="ink_mute">#79828f</color>
     <color name="ink_faint">#6b7480</color>
     <color name="sev_bad">#d1495b</color>
+    <color name="sev_hard">#d9b33c</color>
+    <!-- Lestvica zamud, iste vrednosti kot žetoni `d` v base.css. Razred pove
+         strežnik (`stats.opis_zamude()`), barva je oblikovanje in je tu. -->
+    <color name="d_ontime">#7c8698</color>
+    <color name="d_small">#f2a87e</color>
+    <color name="d_mid">#e07b45</color>
+    <color name="d_big">#b85417</color>
     <color name="accent">#e07b45</color>
     <color name="line_firm">#2b303a</color>
     <!-- Besedilo NA poudarku, ne poudarek sam: belo na oranzni ne bi

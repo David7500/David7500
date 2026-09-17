@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ta widget **nima `updatePeriodMillis`** in ga ne rabi: ničesar ne pridobiva
+  iz omrežja in ura zvonjenja se med dvema spremembama budilk ne premakne.
+  Prerišejo ga `Widgeti.osvezi()` ob vsaki spremembi in `Sprozilec`, ko se
+  budilka tako ali tako zbudi. Interval bi bil prebujanje telefona za sliko,
+  ki je ista.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_budilke"
+    android:previewLayout="@layout/widget_budilke_predogled"
+    android:previewImage="@drawable/ikona_znak"
+    android:resizeMode="horizontal|vertical"
+    android:description="@string/widget_budilke_opis"
+    android:widgetCategory="home_screen" />

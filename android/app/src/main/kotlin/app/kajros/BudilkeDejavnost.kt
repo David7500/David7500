@@ -186,7 +186,7 @@ class BudilkeDejavnost : Activity() {
             Shramba.odstrani(this, b.id)
             Nacrtovalec.preklici(this, b.id)
             Zvonjenje.utisaj(this, b.id)
-            Widget.osvezi(this)
+            Widgeti.osvezi(this)
             narisi()
         }
         return v

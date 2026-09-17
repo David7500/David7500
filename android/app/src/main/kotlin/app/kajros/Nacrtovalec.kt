@@ -151,7 +151,7 @@ object Nacrtovalec {
             }
         }
         Shramba.vse(c).forEach { nastavi(c, it, zdajMs) }
-        Widget.osvezi(c)
+        Widgeti.osvezi(c)
     }
 
     /**

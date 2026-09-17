@@ -112,6 +112,46 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
+        <!-- Odhodna tabla ene postaje. Postajo izbere potnik ob dodajanju;
+             brez nje widget ne ve, kaj naj kaze, in ugibati ne sme. -->
+        <receiver
+            android:name=".WidgetTabla"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_tabla_info" />
+        </receiver>
+
+        <!-- Sistem to dejavnost odpre sam, ko potnik widget dodaja, zato mora
+             biti `exported`. Widget id pride od njega; brez veljavnega se
+             takoj zapre. -->
+        <activity
+            android:name=".TablaNastavitev"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Tema">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Widget s seznamom budilk. `exported=false` zadosca tudi za
+             stikalo: namera nanj je izrecna in jo posljemo mi sami prek
+             `PendingIntent`, zunaj je ni mogoce sestaviti. -->
+        <receiver
+            android:name=".WidgetBudilke"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_budilke_info" />
+        </receiver>
+
         <receiver
             android:name=".Sprozilec"
             android:exported="true"

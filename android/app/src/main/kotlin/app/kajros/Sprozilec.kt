@@ -34,6 +34,11 @@ class Sprozilec : BroadcastReceiver() {
         ) {
             Dnevnik.zapisi(c, null, "zagon: ${i.action?.substringAfterLast('.')}")
             Nacrtovalec.vseZnova(c)
+            // `AlarmManager` ponovnega zagona ne prezivi -- tudi ritem odhodne
+            // table ne. Brez tega bi tabla po ponovnem zagonu telefona obstala
+            // na zadnji uri in tega ne bi povedal nihce.
+            WidgetTabla.naRitem(c)
+            WidgetTabla.zahtevajPrenos(c)
             return
         }
         if (i.action != PROZI) return
@@ -113,7 +118,7 @@ class Sprozilec : BroadcastReceiver() {
         } else {
             Shramba.shrani(c, posodobljena)
             Nacrtovalec.nastavi(c, posodobljena, zdaj)
-            Widget.osvezi(c)
+            Widgeti.osvezi(c)
         }
     }
 
@@ -175,6 +180,6 @@ class Sprozilec : BroadcastReceiver() {
         Zvonjenje.sprozi(c, b, zdajMs)
         // Ista budnica odslej sledi vozilu do odhoda -- za widget.
         Nacrtovalec.nastavi(c, odzvonjena, zdajMs)
-        Widget.osvezi(c)
+        Widgeti.osvezi(c)
     }
 }

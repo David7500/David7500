@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nastavitev widgeta z odhodno tablo: katera postaja in katero omrežje.
+     Omrežje ni podrobnost — „Ljubljana“ je na železnici vozlišče in na mestnih
+     linijah postajališče, in tiho izbrano bi vrnilo tujo tablo.
+
+     **`fitsSystemWindows` povozi `padding`**: nastavi ga na sistemske odmike
+     in avtorjevega zavrže. Na prvem posnetku se je naslov dotikal levega roba
+     zaslona. Zato je zunanji okvir samo za odmike sistema, zrak pa je na
+     notranjem — isto kot v `budilke.xml`. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:fitsSystemWindows="true"
+    android:background="@color/bg">
+
+  <!-- Drsnik, ker tipkovnica vzame pol zaslona: brez njega je gumb pod njo in
+       widgeta ni mogoce shraniti, ne da bi jo prej zaprl. -->
+  <ScrollView
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1">
+
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="vertical"
+      android:paddingStart="20dp"
+      android:paddingEnd="20dp"
+      android:paddingTop="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="16dp"
+        android:paddingBottom="6dp"
+        android:text="@string/tabla_nastavitev"
+        android:textColor="@color/ink"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:text="@string/tabla_pomoc"
+        android:textColor="@color/ink_dim"
+        android:textSize="13sp" />
+
+    <EditText
+        android:id="@+id/postaja"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/tabla_postaja"
+        android:inputType="text"
+        android:imeOptions="actionDone"
+        android:singleLine="true"
+        android:textColor="@color/ink"
+        android:textColorHint="@color/ink_faint"
+        android:textSize="17sp" />
+
+    <!-- Dva gumba in ne spustni seznam: izbiri sta dve in obe morata biti
+         vidni, ker je prav ta izbira tista, ki jo je lahko spregledati. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/vlak"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:text="@string/tabla_vlak" />
+
+        <Button
+            android:id="@+id/avtobus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:text="@string/tabla_avtobus" />
+    </LinearLayout>
+
+    <!-- Izid iskanja. Postaje, ki je ni, ni mogoče shraniti: widget, ki bi
+         ostal prazen, bi bil videti kot okvara aplikacije. -->
+    <TextView
+        android:id="@+id/izid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:textColor="@color/ink_dim"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+  </LinearLayout>
+  </ScrollView>
+
+    <Button
+        android:id="@+id/shrani"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/gumb"
+        android:textAllCaps="false"
+        android:textColor="@color/na_poudarku"
+        android:textSize="16sp"
+        android:text="@string/tabla_shrani" />
+</LinearLayout>

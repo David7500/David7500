@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Majhen widget: do tri budilke, vsaka s stikalom.
+     Stikalo preklopi budilko na mestu, dotik vrstice odpre seznam. Zakaj je
+     stikalo napis in ne `Switch`, piše v `drawable/pilula_vklop.xml`. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bud_koren"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_ozadje"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/bud_glava"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/ink_faint"
+        android:textSize="11sp" />
+
+    <!-- Vrstica 1. Trikrat izpisana in ne `include`: RemoteViews naslavlja
+         poglede po id, `include` pa notranjih idjev ne preimenuje. -->
+    <LinearLayout
+        android:id="@+id/bud_vrstica1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <TextView
+            android:id="@+id/bud_ura1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/accent"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/bud_kaj1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ink_dim"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/bud_stikalo1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Vrstica 2. Trikrat izpisana in ne `include`: RemoteViews naslavlja
+         poglede po id, `include` pa notranjih idjev ne preimenuje. -->
+    <LinearLayout
+        android:id="@+id/bud_vrstica2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <TextView
+            android:id="@+id/bud_ura2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/accent"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/bud_kaj2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ink_dim"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/bud_stikalo2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Vrstica 3. Trikrat izpisana in ne `include`: RemoteViews naslavlja
+         poglede po id, `include` pa notranjih idjev ne preimenuje. -->
+    <LinearLayout
+        android:id="@+id/bud_vrstica3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <TextView
+            android:id="@+id/bud_ura3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/accent"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/bud_kaj3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ink_dim"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/bud_stikalo3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Brez budilk widget ne sme biti prazen pravokotnik: povedati mora, da
+         ni okvara, in kje se budilka nastavi. -->
+    <TextView
+        android:id="@+id/bud_prazno"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:textColor="@color/ink_dim"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <!-- Kadar jih je vec, kot jih gre na widget. -->
+    <TextView
+        android:id="@+id/bud_vec"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:maxLines="1"
+        android:textColor="@color/ink_faint"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</LinearLayout>

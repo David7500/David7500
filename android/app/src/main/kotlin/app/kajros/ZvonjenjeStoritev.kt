@@ -99,7 +99,7 @@ class ZvonjenjeStoritev : Service() {
                 )
                 Shramba.shrani(this, nova)
                 Nacrtovalec.nastavi(this, nova)
-                Widget.osvezi(this)
+                Widgeti.osvezi(this)
             } else {
                 // Ponavljajoca se tu ne prestavi takoj: widget do odhoda odsteva
                 // do nje. Prestavi jo `Nacrtovalec`, ko je odhod mimo.

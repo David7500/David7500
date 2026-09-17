@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  `updatePeriodMillis` je **0**: ritem ima ta widget svoj, na 15 minut
+  (`WidgetTabla.KORAK_MS`). Sistemski minimum je 30 minut in krajšega ne
+  dovoli, zato bi bila ta številka samo druga, redkejša pot do istega dela.
+  Dvoje bi pomenilo dve zahtevi v istem koraku.
+
+  `configure` je obvezen: widget brez postaje ne ve, kaj naj kaže, in
+  ugibati je najslabše, kar lahko naredi — „Ljubljana“ je na železnici in na
+  mestnih linijah drug kraj.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_tabla"
+    android:previewLayout="@layout/widget_tabla_predogled"
+    android:previewImage="@drawable/ikona_znak"
+    android:configure="app.kajros.TablaNastavitev"
+    android:resizeMode="horizontal|vertical"
+    android:description="@string/widget_tabla_opis"
+    android:widgetCategory="home_screen" />

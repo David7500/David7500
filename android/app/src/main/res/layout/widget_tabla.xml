@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odhodna tabla ene postaje: tri vrstice in ura podatka.
+     Ura podatka ni okras — dotik nanjo osveži, in brez nje je „+4 min“ izpred
+     pol ure videti enako kot „+4 min“ izpred pol minute. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tab_koren"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_ozadje"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/tab_postaja"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/ink"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <!-- „Še ni podatka“, „danes nič več“ ali „ni postaje“. Prazen pravokotnik
+         je videti kot okvara, tudi kadar to ni. -->
+    <TextView
+        android:id="@+id/tab_sporocilo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:textColor="@color/ink_dim"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <!-- Vrstica 1. Trikrat izpisana in ne `include`: RemoteViews naslavlja
+         poglede po id, `include` pa notranjih idjev ne preimenuje. -->
+    <LinearLayout
+        android:id="@+id/tab_vrstica1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/tab_ura1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/ink"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tab_kam1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ink_dim"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tab_zamuda1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Vrstica 2. Trikrat izpisana in ne `include`: RemoteViews naslavlja
+         poglede po id, `include` pa notranjih idjev ne preimenuje. -->
+    <LinearLayout
+        android:id="@+id/tab_vrstica2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/tab_ura2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/ink"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tab_kam2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ink_dim"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tab_zamuda2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Vrstica 3. Trikrat izpisana in ne `include`: RemoteViews naslavlja
+         poglede po id, `include` pa notranjih idjev ne preimenuje. -->
+    <LinearLayout
+        android:id="@+id/tab_vrstica3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/tab_ura3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/ink"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tab_kam3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/ink_dim"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tab_zamuda3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tab_ob"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/ink_faint"
+        android:textSize="11sp" />
+</LinearLayout>

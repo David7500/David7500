@@ -462,6 +462,26 @@ Preverjeno v paketu 12. 9. 2026: `aapt2 dump strings` najde **0** nizov z
 opis za bralnik zaslona. Izmerjeno z gradnjo iz `git worktree` na HEAD, ne po
 oceni.
 
+**Dva nova widgeta stanejo 17 148 B.** Izdajni APK 80 866 → **98 014 B**
+(~96 kB): odhodna tabla ene postaje s svojo nastavitveno dejavnostjo in seznam
+budilk s stikali. Večino tega nosi tabla — prenos, razčlenjevanje odgovora,
+shramba zadnjega stanja in zaslon za izbiro postaje; seznam budilk je samo
+izris tega, kar je že v telefonu. Nobene nove odvisnosti ni.
+
+**Ritem table je 15 minut, a sistem ga sme raztegniti.** Izmerjeno na
+emulatorju (Android 15, `dumpsys alarm`):
+
+```
+tag=*alarm*:app.kajros.TABLA
+type=ELAPSED origWhen=+13m46s repeatInterval=900000 window=+11m15s
+whenElapsed=+13m46s maxWhenElapsed=+25m1s
+```
+
+`setInexactRepeating` torej ne obljublja 15 minut, ampak **od 15 do 25**, in
+`ELAPSED` (brez `_WAKEUP`) pomeni, da se spečega telefona ne budi. Prav zato
+widget nosi uro podatka in od 30 minut naprej to pove z besedo — številka brez
+ure bi trdila svežino, ki je ta ritem ne more zagotoviti.
+
 **Dovoljenj je enajst, ne štiri** — budilka jih je prinesla sedem:
 `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_FINE_LOCATION`,
 `ACCESS_COARSE_LOCATION`, `USE_EXACT_ALARM`, `SCHEDULE_EXACT_ALARM`

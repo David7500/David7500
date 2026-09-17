@@ -281,6 +281,75 @@ kazal. Ista past kot pri `PendingIntent` budilk, le da se tam rešuje z `data`.
 
 Brez budilke ni kam peljati in ostane domača stran.
 
+### Trije widgeti, tri vprašanja
+
+| widget | vprašanje | omrežje |
+|---|---|---|
+| `Widget` (odštevanje) | koliko časa je še do **moje** vožnje | nič — računa iz shranjene budilke |
+| `WidgetBudilke` (seznam s stikali) | katere budilke so nastavljene in ali jutri sploh grem | nič |
+| `WidgetTabla` (odhodna tabla) | kdaj mi pelje z **moje postaje** | `/api/departures`, na 15 min |
+
+**Prva dva ne pošljeta nobene zahteve.** Vse, kar kažeta, je v telefonu, zato
+delata tudi takrat, ko strežnika ni — in `updatePeriodMillis` imata `0`, ker se
+ura zvonjenja med dvema spremembama budilk ne premakne. Prerišejo ju
+`Widgeti.osvezi()` in `Sprozilec`, ko se budilka tako ali tako zbudi.
+
+`Widgeti.osvezi()` obstaja zato, ker se budilka spremeni na sedmih mestih,
+widgeta, ki jo kažeta, pa sta dva. Tretji bi tiho zamrznil povsod, kjer bi ga
+kdo pozabil dodati.
+
+**Stikalo je napis, ne `Switch`.** `setCompoundButtonChecked` je šele API 31,
+aplikacija pa gre od 26 — `Switch` v `RemoteViews` bi na starejšem telefonu
+podrl risanje, ne le izgledal drugače. Pilula nosi **stanje**
+(„vklopljena“ / „ugasnjena“), ne dejanja: tako se bere kot stikalo in ne kot
+gumb, ki bi lahko pomenil oboje.
+
+Vsako stikalo ima svoj `data` (`kajros://preklop/<id>`). Brez tega bi
+`FLAG_UPDATE_CURRENT` vsa tri združil v eno in vsako bi preklopilo isto
+budilko — `extras` se pri primerjavi namer ne upoštevajo. Ista past kot pri
+budnicah v `Nacrtovalec`. Preverjeno na emulatorju: dotik prve vrstice je
+ugasnil prvo budilko in pustil drugi dve pri miru.
+
+### Odhodna tabla: 15 minut je cilj, ne obljuba
+
+`updatePeriodMillis` tega ne zmore — sistemski minimum je 30 minut. Zato ima
+tabla svojo budnico, `setInexactRepeating` z `ELAPSED_REALTIME` (**brez**
+`_WAKEUP`): spečega telefona ne budimo zaradi table, ki je nihče ne gleda.
+
+Koliko to res je, je izmerjeno in ne domnevano (`dumpsys alarm`, Android 15):
+`repeatInterval=900000`, a `whenElapsed=+13m46s` proti `maxWhenElapsed=+25m1s`
+— sistem sme korak raztegniti na 25 minut in ga združiti z drugimi alarmi.
+Podrobnosti v [docs/MERITVE.md](../../docs/MERITVE.md).
+
+**Zato widget nosi uro podatka.** Od 30 minut naprej to pove z besedo in
+pordeči. Številka brez ure bi trdila svežino, ki je ta ritem ne more
+zagotoviti — in „+4 min“ izpred pol ure je videti enako kot „+4 min“ izpred pol
+minute. Dotik ure osveži takoj.
+
+Troje, kar velja pri tem:
+
+* **Omrežje ne sme na glavno nit.** `onReceive` teče na njej in
+  `NetworkOnMainThreadException` bi widget podrl. Nit drži pokonci `goAsync()`
+  — ta v `onUpdate` deluje, ker ta teče znotraj `onReceive`. Brez njega sme
+  sistem proces ubiti sredi zahteve.
+* **Samo odgovor prepiše shranjeno stanje.** Izpad zveze pusti pri miru, kar
+  widget že kaže: stara tabla z uro je uporabna, prazna ni.
+* **„Ni zveze“ in „te postaje ni“ nista isto** (`Tabla.Izid`, ista razlika kot
+  v `Preverjevalec.Odgovor`). Prvo je začasno in postaje ne sme zavreči, drugo
+  je tipkarska napaka in jo mora nastavitev povedati takoj. Postaje zato ni
+  mogoče shraniti, ne da bi jo strežnik prej našel — widget, ki bi ostal
+  prazen, je za potnika okvara aplikacije in ne napaka izpred treh dni.
+
+Ime postaje razreši strežnik (`resolve_station()`), isto kot stran. Svoj seznam
+postaj v telefonu bi bil drugo pravilo za isto stvar in bi se ob naslednjem
+uvozu voznega reda razšel.
+
+**`fitsSystemWindows` povozi `padding`.** Nastavitvena dejavnost je imela na
+prvem posnetku naslov prilepljen na levi rob zaslona, čeprav je imel korenski
+pogled `padding="20dp"`. Zunanji okvir je zato samo za odmike sistema, zrak pa
+je na notranjem — isto kot v `budilke.xml`. Ob tem je bil gumb „Poišči in
+shrani“ pod tipkovnico; rešita ga `adjustResize` in `ScrollView`.
+
 ### Kaj je widget dolgoval smernicam (17. 9. 2026)
 
 Preverjeno proti Googlovim smernicam za widgete; štiri stvari so manjkale:
