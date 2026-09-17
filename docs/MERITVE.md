@@ -462,6 +462,9 @@ Preverjeno v paketu 12. 9. 2026: `aapt2 dump strings` najde **0** nizov z
 opis za bralnik zaslona. Izmerjeno z gradnjo iz `git worktree` na HEAD, ne po
 oceni.
 
+**Objavljena 17. 9. 2026 kot 1.2** (`versionCode` 3, 98 014 B, sha256
+`71f8f5aa…`); prenos s `kajros.app/prenos/kajros-1.2.apk` preverjen z vsoto.
+
 **Dva nova widgeta stanejo 17 148 B.** Izdajni APK 80 866 → **98 014 B**
 (~96 kB): odhodna tabla ene postaje s svojo nastavitveno dejavnostjo in seznam
 budilk s stikali. Večino tega nosi tabla — prenos, razčlenjevanje odgovora,
