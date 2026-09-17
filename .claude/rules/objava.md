@@ -109,9 +109,17 @@ tam.
 ## Varnostna kopija zgodovine
 
 `./scripts/varnostna-kopija.sh` nese **celotno zgodovino** na malino kot
-`git bundle`. Potisk na GitHub rabi ključ, ki ga nimamo, malina pa je imela
-samo delovno drevo brez `.git` — 3. 9. 2026 je **196 commitov obstajalo le na
-razvojnem disku**.
+`git bundle`. Malina je imela namreč samo delovno drevo brez `.git` —
+3. 9. 2026 je **196 commitov obstajalo le na razvojnem disku**.
+
+Od 17. 9. 2026 je kopij več: **arwen ima vso zgodovino** (`~/kajros` je zdaj
+cilj potiska, ne rsynca).
+
+**Trditev „potisk na GitHub rabi ključ, ki ga nimamo" ne drži več.** Izmerjeno
+17. 9. 2026: `git push --dry-run origin <veja>` se poveže in javi
+`781eb9c..2600f82`, torej bi potisk delal. To ni dokaz, da je potisk pravi
+ukrep — koda je zaprta in gre na GitHub samo, če David tako reče — je pa
+dokaz, da ključ obstaja. **Ne potiskaj brez vprašanja.**
 
 Sveženj ni razlika, ampak popolna kopija, zato jih hranimo pet zadnjih.
 Obnovitev: `git clone kajros-YYYYMMDD-HHMM.bundle kajros`.
