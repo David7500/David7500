@@ -37,9 +37,15 @@
     <p class="vodilo">
       {% if odhodi %}
         {% set n = odhodi | length %}
+        {#- Ob „več kot" je samostalnik v rodilniku ne glede na število, zato
+            svoja poved in ne pripis „in še več" na prejšnjo. -#}
+        {% if vseh > n %}
+        V naslednjih treh urah odpelje <b>več kot {{ n }}</b> voženj.
+        {% else %}
         V naslednjih treh urah {{ n | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
         <b>{{ n }}</b>
-        {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}{% if vseh > n %} in še več{% endif %}.
+        {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.
+        {% endif %}
         Prva ob {{ odhodi[0].sched | ura }}{% if odhodi[0].towards %}, smer {{ odhodi[0].towards }}{% endif %}.
       {% else %}
         V naslednjih treh urah od tu ne pelje nič.
