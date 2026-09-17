@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Objava s potiskom. Na razvojnem računalniku `git push arwen` in to je vse.
+#
+# Kavelj je v repozitoriju in ne v `.git/hooks/`, ker mora biti v zgodovini
+# kot vse ostalo; `deploy/arwen-git.sh` tja postavi **simbolno povezavo** nanj,
+# zato se posodobi skupaj s kodo in ne more zaostati.
+#
+# Zaporedje ob potisku:
+#   1. git posodobi delovno drevo v `~/kajros` (`receive.denyCurrentBranch =
+#      updateInstead`, to naredi git sam, še preden pride ta kavelj na vrsto);
+#   2. ta kavelj požene `deploy/posodobi.sh`, ki kodo prepiše v `/opt/kajros`,
+#      restarta enoto in počaka na odgovor strežnika.
+#
+# Izpis gre nazaj potiskajočemu (z `remote:` na začetku vrstice), zato se
+# neuspela objava vidi tam, kjer si jo sprožil, in ne šele v dnevniku.
+set -euo pipefail
+
+# **Git kavlju podtakne svoje okolje.** `GIT_DIR` kaže na `~/kajros/.git`,
+# `GIT_QUARANTINE_PATH` na še nesprejete objekte; brez brisanja bi vsak `git`
+# v `posodobi.sh` gledal v napačen repozitorij ali videl karanteno.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY
+unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PUSH_OPTION_COUNT
+
+KOREN="${KAJROS_KOREN:-$HOME/kajros}"
+
+krepko() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+
+# Katera veja je na strežniku objavna: tista, ki je v `~/kajros` odjavljena.
+# Potisk katerekoli druge se shrani, a ne objavi -- veja za poskus ne sme
+# nikoli po nesreči pristati na `kajros.app`.
+VEJA="$(git -C "$KOREN" symbolic-ref --short HEAD 2>/dev/null || echo '')"
+[ -n "$VEJA" ] || { echo "!! ~/kajros ni na veji; ne objavljam"; exit 0; }
+
+OBJAVI=0
+while read -r _stara nova ref; do
+    if [ "$ref" != "refs/heads/$VEJA" ]; then
+        echo "  $ref: shranjeno, ne objavljeno (objavna veja je $VEJA)"
+        continue
+    fi
+    # Izbris veje ni objava.
+    [ "$nova" = "0000000000000000000000000000000000000000" ] && continue
+    OBJAVI=1
+done
+
+[ "$OBJAVI" -eq 1 ] || exit 0
+
+krepko "objavljam $(git -C "$KOREN" log --oneline -1)"
+exec "$KOREN/deploy/posodobi.sh" "$KOREN"
