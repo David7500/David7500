@@ -62,6 +62,14 @@ poskušaj sam.
 Pella je bila slepa ulica — zajem je delal, javni API pa je vračal Cloudflare
 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
+**Malina ostane, kakor je** (odločeno 17. 9. 2026). Tam teče starejša koda in
+to ni zaostanek, ki bi ga bilo treba nadoknaditi: malina streže **samo zajem**,
+zato sprememba v `kajros/static`, `templates` ali `android` nanjo nima učinka.
+Deploy tja predlagaj **samo**, kadar se je res spremenil zajem — `collector.py`,
+`gtfs.py`, `alerts.py` ali `db.py`. Preveri z
+`git diff --name-only <zadnje> -- kajros/collector.py kajros/gtfs.py kajros/alerts.py kajros/db.py`
+in ne na občutek.
+
 **Na malini teče izključno zajem, in zajema vse.** Tako je zamišljeno in tako
 je tudi v resnici — le da je enota **še vedno `sztrack-zajem.service`**
 (`sztrack.cli collect`), ker preimenovalna namestitev tam še ni bila pognana;
