@@ -1,0 +1,124 @@
+{#
+  Ena postaja na svojem naslovu: /postaja/{ime} in /postajalisce/{ime}.
+  Izrisano na strežniku in brez JS -- razlog je isti kot pri relaciji.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set beseda = "Postajališče" if network == "avtobus" else "Postaja" %}
+  {% set og_title = beseda ~ " " ~ ime ~ " — odhodi in zamude" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+  {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('besedilo.css') }}">
+  <link rel="stylesheet" href="{{ s('pristanek.css') }}">
+</head>
+<body class="home-page{% if network == 'avtobus' %} net-avtobus{% endif %}">
+
+  <main class="home besedilo pristanek">
+    <a class="home-brand" href="/" style="text-decoration:none">
+      <svg class="brand-mark" width="26" height="26" viewBox="0 0 96 96" fill="none"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M34 24V72" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M66 26L34 50" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/>
+        <path d="M34 50L66 72" stroke="currentColor" stroke-width="9"/>
+      </svg>
+      <span>kajros</span>
+    </a>
+
+    <h1>{{ beseda }} {{ ime }}</h1>
+
+    <p class="vodilo">
+      {% if odhodi %}
+        {% set n = odhodi | length %}
+        V naslednjih treh urah {{ n | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
+        <b>{{ n }}</b>
+        {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}{% if vseh > n %} in še več{% endif %}.
+        Prva ob {{ odhodi[0].sched | ura }}{% if odhodi[0].towards %}, smer {{ odhodi[0].towards }}{% endif %}.
+      {% else %}
+        V naslednjih treh urah od tu ne pelje nič.
+        <a href="{{ iskalnik }}">Poglej drug dan ali uro.</a>
+      {% endif %}
+    </p>
+
+    {% if zapis and zapis.meritev >= min_meritev %}
+    <h2>Koliko se tu čaka</h2>
+    <div class="stevila">
+      <div class="stevilo">
+        <b class="z-{{ zapis.zamuda.razred }}">{{ zapis.zamuda | besedilo }}</b>
+        <span>običajna zamuda na tem postanku</span>
+      </div>
+      <div class="stevilo">
+        <b>{{ (zapis.tocnih * 100) | round | int }} %</b>
+        <span>jih pride v petih minutah</span>
+      </div>
+      <div class="stevilo">
+        <b>+{{ zapis.p90_min | round | int }} min</b>
+        <span>vsaka deseta je slabša od tega</span>
+      </div>
+    </div>
+    <p class="drobno">
+      Izmerjeno na {{ zapis.meritev | stevilo }} postankih od {{ od_dneva }} do {{ do_dneva }}
+      Preračunano {{ izracunano | ura_dneva }}.
+    </p>
+    {% endif %}
+
+    <h2>Naslednji odhodi</h2>
+    {% if odhodi %}
+    <table class="odhodi">
+      <thead>
+        <tr>
+          <th>Odhod</th>
+          <th>{{ "Linija" if network == "avtobus" else "Vlak" }}</th>
+          <th>Proti</th>
+          <th class="zam">Zamuda</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for o in odhodi %}
+        <tr>
+          <td class="t">{{ o.sched | ura }}</td>
+          <td><a href="{{ pot_vozje(network, o.train_no, o.trip_id) }}">{{ o.train_no }}</a></td>
+          <td class="kam">{{ o.towards }}</td>
+          {% if o.zamuda %}
+          <td class="zam z-{{ o.zamuda.razred }}">{{ o.zamuda | besedilo }}</td>
+          {% elif o.obicajno %}
+          <td class="zam obicajno">običajno {{ o.obicajno | besedilo }}</td>
+          {% else %}
+          <td class="zam">—</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <p><a href="{{ iskalnik }}">Cela odhodna tabla in iskanje povezav →</a></p>
+
+    {% if naprej %}
+    <h2>Kam se od tu največ pelje</h2>
+    <ul class="povezave">
+      {% for r in naprej %}
+      <li><a href="{{ pot_relacije(network, r.od, r.cilj) }}">
+        <span>{{ "Avtobus" if network == "avtobus" else "Vlak" }} {{ r.od }} → {{ r.cilj }}</span>
+        <span class="drobec">{{ r.km | km }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <footer class="home-foot">
+      Podatki: NAP (b2b.nap.si), CC BY-SA 4.0. Zamude merimo sami iz javnega
+      vira in jih hranimo — drugje te zgodovine ni.
+      <a href="{{ kazalo_pot }}">vse postaje</a> ·
+      <a href="/">začetek</a> · <a href="/zasebnost">zasebnost</a>
+    </footer>
+  </main>
+
+</body>
+</html>

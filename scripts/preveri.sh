@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 PORT="${KAJROS_PORT:-8001}"
 BASE="http://127.0.0.1:$PORT"
-STRANI=(/ /app/train /app/bus /app/pot /app/pot/podrobno /app/map /app/ovire /app/statistika /app/statistika/bus /stik /zasebnost /android)
+STRANI=(/ /app/train /app/bus /app/pot /app/pot/podrobno /app/map /app/ovire /app/statistika /app/statistika/bus /stik /zasebnost /android /postaje /postajalisca)
 NAPAKE=0
 
 echo "== testi"
@@ -20,6 +20,16 @@ if ! curl -s -o /dev/null --max-time 5 "$BASE/api/health"; then
   echo "!! strežnik na $PORT ne teče -- poženi ./scripts/dev-restart.sh"
   exit 1
 fi
+
+# Pristajalni strani (relacija, postaja) sta v naslovu odvisni od podatkov,
+# zato ju vzamemo iz zemljevida strani in ne iz seznama: trd naslov bi po
+# naslednjem uvozu voznega reda lahko pokazal na postajo, ki je ni vec.
+for vzorec in "/vlak/" "/postaja/"; do
+  najden=$(curl -s --max-time 10 "$BASE/sitemap.xml" \
+    | grep -o "<loc>[^<]*${vzorec}[^<]*</loc>" | head -1 \
+    | sed -e 's|<loc>||' -e 's|</loc>||' -e 's|^https\{0,1\}://[^/]*||')
+  [ -n "$najden" ] && STRANI+=("$najden")
+done
 
 echo "== strani"
 mkdir -p posnetki

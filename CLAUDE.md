@@ -104,6 +104,7 @@ kajros/
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
+  pristanek.py   pristajalne strani: katere relacije in postaje imajo naslov
   lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
@@ -186,9 +187,19 @@ prešteje osirotele meritve.
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
 | `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
+| `/vlak/{od}/{cilj}` · `/avtobus/…` | **pristajalna stran ene relacije**: odhodi danes in izmerjena zamuda, izrisana na strežniku |
+| `/postaja/{ime}` · `/postajalisce/{ime}` | pristajalna stran ene postaje |
+| `/postaje` · `/postajalisca` | kazalo obojega — edina pot do pristajalnih strani, ki ni zemljevid strani |
 | `/stik` | obrazec za sporočilo; nabiralnik je v `/admin` |
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
+
+**Pristajalne strani obstajajo zaradi iskalnika in so brez JS.** Človek ne
+išče „kajros", ampak „vlak ljubljana koper" — in za to mora obstajati naslov,
+ki odgovor nosi **v odgovoru strežnika**. Katere nastanejo in zakaj je meja
+tam, kjer je, je v `kajros/pristanek.py`; izmerjeno v `docs/MERITVE.md`.
+V zemljevidu strani je vrh po prometu (400 relacij in 300 postaj na omrežje),
+vse ostalo je dosegljivo in `noindex` — prostor parov postaj je 26 000.
 
 Poti, ki niso za aplikacijo, ampak za brskalnike in iskalnike: `/favicon.ico`,
 `/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`. `/android` je stran s

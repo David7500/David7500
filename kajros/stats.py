@@ -1668,10 +1668,21 @@ def run_weather(conn: sqlite3.Connection, train_no: str, service_date: str,
 # brez njega dva obiska ob praznem predpomnilniku pozeneta dva 17-sekundna
 # agregata na isti bazi.
 
+def _pristanek(conn, days, network):
+    """Kazalo pristajalnih strani. Uvoz je pozen, ker `pristanek` bere `stats`
+    -- in `journey`, ki ga prav tako bere. Zgoraj bi bil krog."""
+    from . import pristanek
+    return pristanek.zgradi(conn, days, network)
+
+
 SUMMARY_BUILDERS = {
     "network_stats": lambda conn, days, network: {
         "rows": network_stats(conn, days, network)},
     "breakdowns": breakdowns,
+    # Katere relacije in postaje imajo svojo stran ter kaj je o njih
+    # izmerjeno. Isti razlog kot pri ostalih: agregat cez vso zgodovino
+    # (20 s za obe omrezji) se ne racuna v zahtevi.
+    "pristanek": _pristanek,
 }
 
 # Katera okna vzdrzujemo. Sirse okno ni drazje od ozjega toliko, kolikor je

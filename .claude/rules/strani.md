@@ -1,5 +1,7 @@
 ---
 paths:
+  - "kajros/pristanek.py"
+  - "kajros/static/pristanek.css"
   - "kajros/static/connections.js"
   - "kajros/static/connections.css"
   - "kajros/static/home.js"
@@ -457,6 +459,37 @@ Obljubiti izpolnjeno pot bi bila laž, ki bi jo potnik odkril šele tam.
 **Da mi na `potniski.sz.si` ne moremo, samo po sebi povezave ne bi oviralo** —
 odpre jo uporabnikov brskalnik, ne naš strežnik. Ta razloček je bil enkrat
 spregledan in stran prehitro zavržena; zavrnjena je zdaj iz drugega razloga.
+
+## Pristajalne strani so za iskalnik in nimajo JS
+
+`/vlak/{od}/{cilj}`, `/postaja/{ime}` in kazali `/postaje` · `/postajalisca`.
+Zakaj obstajajo in po čem so izbrane, je v `kajros/pristanek.py`; številke v
+`docs/MERITVE.md`. Tu je, kar velja za izris.
+
+* **Brez JS, ker je to ves njihov razlog.** Kar bi se dorisalo v brskalniku,
+  `/app/*` že ima. Zato tudi ni žetonov iz `common.js` — zamuda je navaden
+  `<span>`, pravilo o besedi in razredu pa pride s strežnika
+  (`stats.opis_zamude()`), ne iz predloge.
+* **Razred zamude mora premagati okvir, v katerem stoji.** `.odhodi td` in
+  `.stevilo b` sta specifičnejša od enega samega razreda in sta barvo tiho
+  povozila — „+15 min" je bil bel. Zato `.pristanek .z-…`.
+* **Imen postaj se ne sklanja, tudi tu ne.** „ob prihodu v Ljubljana" je bilo
+  na prvem posnetku; zdaj „običajna zamuda ob prihodu" (cilj je v naslovu) in
+  „Prva ob 14:23, **smer** Dobova".
+* **Ob številu stoji pravilna oblika** (`pristanek.stevnik()`): 1 vožnja,
+  2 vožnji, 3 vožnje, 5 voženj. Odločata **zadnji dve števki** — 21 je
+  „enaindvajset voženj", 101 pa „sto ena vožnja".
+* **Vožnja brez meritve ne dobi pomišljaja, ampak zgodovino.** „običajno
+  +13 min", sivo in z besedo: brez nje je stolpec pri jutranjem vlaku prazen,
+  čeprav o njem vemo osemnajst prejšnjih voženj. Vrednost **ni napoved za ta
+  dan** in stran je tako tudi imenuje (`stats.typical_at_stops()`).
+* **Vsaka številka nosi vzorec in čas izračuna** — „na 734 vožnjah od 21. 8.
+  do 17. 9., preračunano 17. 9. ob 03:31". Pravilo velja povsod, kjer je
+  agregat čez vso zgodovino.
+* **Kar ni v kazalu, dobi `noindex, follow`.** Prostor naslovov je sicer
+  neskončen (26 000 parov postaj pri avtobusih) in iskalnik ga bo prehodil.
+  Naslov se pred izrisom **zloži v našo obliko in preusmeri s 301**, sicer
+  sta `/postaja/Celje` in `/postaja/celje` dve strani z isto vsebino.
 
 ## Besedilne strani govorijo potniku, ne razvijalcu
 

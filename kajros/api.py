@@ -27,7 +27,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import alerts, collector, config, db, journey, lpp, obisk, pot, stats, stik
+from . import (alerts, collector, config, db, journey, lpp, obisk, pot,
+               pristanek, stats, stik)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -204,6 +205,47 @@ def s(rel: str) -> str:
 
 
 templates.env.globals["s"] = s
+
+
+def _ura(iso: str | None) -> str:
+    """Absolutni čas -> „07:42". Strežnik pošilja ISO, stran pa je vozni red."""
+    return datetime.fromisoformat(iso).strftime("%H:%M") if iso else ""
+
+
+def _ura_dneva(iso: str | None) -> str:
+    """ISO -> „17. 9. ob 03:31".
+
+    Vsaka številka, ki je agregat čez vso zgodovino, mora na strani nositi
+    **čas izračuna** -- sicer bralec včeraj izračunane vrednosti ne loči od
+    zdajšnje. Pravilo velja tudi na pristajalnih straneh.
+    """
+    if not iso:
+        return ""
+    t = datetime.fromisoformat(iso)
+    return f"{t.day}. {t.month}. ob {t:%H:%M}"
+
+
+def _dan(iso: str | None) -> str:
+    """„2026-08-21" -> „21. 8.". Brez vodilnih ničel, kot se datum piše."""
+    if not iso:
+        return ""
+    d = date.fromisoformat(iso)
+    return f"{d.day}. {d.month}."
+
+
+templates.env.filters["ura"] = _ura
+templates.env.filters["ura_dneva"] = _ura_dneva
+templates.env.filters["dan"] = _dan
+# Trajanje in besedilo zamude sta PRAVILO, ne oblikovanje, zato prideta iz
+# modula in ne nastaneta v predlogi -- ista razlaga kot pri `opis_zamude()`.
+templates.env.filters["trajanje"] = pristanek.trajanje
+templates.env.filters["besedilo"] = pristanek.besedilo
+templates.env.filters["stevnik"] = pristanek.stevnik
+templates.env.filters["stevilo"] = pristanek.stevilo
+templates.env.filters["km"] = pristanek.km
+templates.env.globals["pot_relacije"] = pristanek.pot_relacije
+templates.env.globals["pot_postaje"] = pristanek.pot_postaje
+templates.env.globals["pot_vozje"] = pristanek.pot_vozje
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
 templates.env.globals["baza"] = config.BASE_URL
@@ -275,14 +317,33 @@ def favicon():
 # iskati -- vsaka je ena vožnja enega dne.
 _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
             "/app/ovire", "/app/statistika", "/app/statistika/bus",
+            "/postaje", "/postajalisca",
             "/android", "/stik", "/zasebnost"]
+
+
+def _sitemap_poti() -> list[str]:
+    """Vse poti za iskalnike: ročne in pristajalne.
+
+    Pristajalne so naštete iz kazala (`pristanek.py`) in ne iz vzorca poti:
+    parov postaj je 26 000, relacij s stranjo pa 400 na omrežje. Kar ni v
+    kazalu, ostane dosegljivo in `noindex` -- zemljevid strani ne sme odpreti
+    neskončnega prostora naslovov.
+    """
+    poti = list(_SITEMAP)
+    for network in stats.SUMMARY_NETWORKS:
+        kaz = _kazalo(network)
+        poti += [pristanek.pot_relacije(network, r["od"], r["cilj"])
+                 for r in kaz["relacije"]]
+        poti += [pristanek.pot_postaje(network, p["ime"])
+                 for p in kaz["postaje"]]
+    return poti
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap():
     """Zemljevid strani za iskalnike."""
     poti = "".join(f"<url><loc>{config.BASE_URL}{p}</loc></url>"
-                   for p in _SITEMAP)
+                   for p in _sitemap_poti())
     return Response(
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -585,6 +646,176 @@ def bus_trip_page(request: Request, train_no: str, trip: str | None = None):
     """Okno ene avtobusne vožnje. Ista predloga, druga pot in druga barva --
     potnik mora iz naslova videti, s čim gre."""
     return _trip_page(request, train_no, trip, "avtobus")
+
+
+# ---------------------------------------------------------------- pristajalne strani
+
+# Zakaj obstajajo in kako je izbrano, katere: `kajros/pristanek.py`. Na kratko:
+# do 17. 9. 2026 je bilo v zemljevidu strani enajst naslovov in vsak je bil
+# prazna lupina, ki se napolni v JS. Človek pa ne išče „kajros", ampak
+# „vlak ljubljana koper" -- in za to mora obstajati stran, ki odgovor nosi
+# **v odgovoru strežnika**.
+
+
+def _kazalo(network: str) -> dict:
+    """Kazalo pristajalnih strani, predpomnjeno.
+
+    Povzetek je v bazi in se prebere z `json.loads` 400 relacij in 300 postaj
+    -- to je za vsako zahtevo po nepotrebnem. Značka je uvoz voznega reda,
+    ker se nabor naslovov spremeni z njim; številke v njem se osvežijo z
+    dnevnim opravilom in četrturna varovalka jih ujame.
+    """
+    return _predpomni(f"pristanek:{network}", _znacka("gtfs_imported_at"), 900,
+                      lambda: _conn_klic(lambda c: pristanek.kazalo(c, network)))
+
+
+def _zdaj():
+    """Današnji obratovalni datum in sekunda -- isto kot drugod na straneh."""
+    now = datetime.now(TZ)
+    return now.date().isoformat(), journey.now_seconds(now)
+
+
+def _pristanek_pot(vrednost: str) -> str | None:
+    """Del naslova, zložen v našo obliko -- ali `None`, če je že prav.
+
+    `/Postaja/CELJE` in `/postaja/celje` sta isti vsebini in ne smeta biti dva
+    naslova: iskalnik bi ju štel za podvojeno stran, mi pa bi ju šteli dvakrat.
+    """
+    cista = pristanek.slug(vrednost)
+    return None if cista == vrednost else cista
+
+
+def _relacija_stran(request: Request, od: str, cilj: str, network: str):
+    cista_od, cista_cilj = _pristanek_pot(od), _pristanek_pot(cilj)
+    if cista_od or cista_cilj:
+        return RedirectResponse(
+            pristanek.pot_relacije(network, cista_od or od, cista_cilj or cilj),
+            status_code=301)
+
+    kaz = _kazalo(network)
+    with _conn() as conn:
+        ime_od = pristanek.ime_postaje(conn, kaz, od, network)
+        ime_cilj = pristanek.ime_postaje(conn, kaz, cilj, network)
+        if not ime_od or not ime_cilj or ime_od == ime_cilj:
+            raise HTTPException(404, "te relacije ne poznam")
+        datum, now_s = _zdaj()
+        podatki = pristanek.relacija(conn, kaz, ime_od, ime_cilj, network,
+                                     datum, now_s)
+
+    zapis = podatki["zapis"]
+    vozilo = "Avtobus" if network == "avtobus" else "Vlak"
+    if zapis and zapis["meritev"] >= pristanek.MIN_MERITEV:
+        opis = (f"{vozilo} {ime_od} → {ime_cilj}: odhodi danes in izmerjena "
+                f"zamuda — običajno {pristanek.besedilo(zapis['zamuda'])}, "
+                f"{round(zapis['tocnih'] * 100)} % jih pride v petih minutah.")
+    else:
+        opis = (f"{vozilo} {ime_od} → {ime_cilj}: odhodi danes in zamude, "
+                f"izmerjene iz odprtih podatkov.")
+
+    dnevi = kaz.get("days") or []
+    return templates.TemplateResponse(request, "relacija.html", {
+        **podatki, "opis": opis,
+        "min_meritev": pristanek.MIN_MERITEV,
+        "najkrajse": min((z["duration_s"] for z in podatki["zveze"]), default=None),
+        "iskalnik": _iskalnik_ab(network, ime_od, ime_cilj),
+        "kazalo_pot": pristanek.pot_kazala(network),
+        "od_dneva": _dan(dnevi[0] if dnevi else None),
+        "do_dneva": _dan(dnevi[-1] if dnevi else None),
+    })
+
+
+def _iskalnik_ab(network: str, od: str, cilj: str) -> str:
+    stran = "/app/bus" if network == "avtobus" else "/app/train"
+    return f"{stran}?from={quote(od)}&to={quote(cilj)}"
+
+
+@app.get("/vlak/{od}/{cilj}", response_class=HTMLResponse, include_in_schema=False)
+def relacija_vlak(request: Request, od: str, cilj: str):
+    """Ena železniška relacija: odhodi danes in izmerjena zamuda."""
+    return _relacija_stran(request, od, cilj, "zeleznica")
+
+
+@app.get("/avtobus/{od}/{cilj}", response_class=HTMLResponse, include_in_schema=False)
+def relacija_avtobus(request: Request, od: str, cilj: str):
+    """Ena avtobusna relacija. Mestnega LPP tu ni -- glej `pristanek.py`."""
+    return _relacija_stran(request, od, cilj, "avtobus")
+
+
+def _postaja_stran(request: Request, ime: str, network: str):
+    cista = _pristanek_pot(ime)
+    if cista:
+        return RedirectResponse(f"{pristanek.pot_postaje(network, cista)}",
+                                status_code=301)
+
+    kaz = _kazalo(network)
+    with _conn() as conn:
+        pravo = pristanek.ime_postaje(conn, kaz, ime, network)
+        if not pravo:
+            raise HTTPException(404, "te postaje ne poznam")
+        datum, now_s = _zdaj()
+        podatki = pristanek.postaja(conn, kaz, pravo, network, datum, now_s)
+
+    zapis = podatki["zapis"]
+    beseda = "Postajališče" if network == "avtobus" else "Postaja"
+    if zapis and zapis["meritev"] >= pristanek.MIN_MERITEV:
+        opis = (f"{beseda} {pravo}: naslednji odhodi in izmerjena zamuda — "
+                f"običajno {pristanek.besedilo(zapis['zamuda'])} na tem postanku.")
+    else:
+        opis = f"{beseda} {pravo}: naslednji odhodi in zamude iz odprtih podatkov."
+
+    dnevi = kaz.get("days") or []
+    stran = "/app/bus" if network == "avtobus" else "/app/train"
+    return templates.TemplateResponse(request, "postaja.html", {
+        **podatki, "opis": opis,
+        "min_meritev": pristanek.MIN_MERITEV,
+        "iskalnik": f"{stran}?station={quote(pravo)}",
+        "kazalo_pot": pristanek.pot_kazala(network),
+        "od_dneva": _dan(dnevi[0] if dnevi else None),
+        "do_dneva": _dan(dnevi[-1] if dnevi else None),
+    })
+
+
+@app.get("/postaja/{ime}", response_class=HTMLResponse, include_in_schema=False)
+def postaja_vlak(request: Request, ime: str):
+    """Ena železniška postaja: naslednji odhodi in izmerjena zamuda."""
+    return _postaja_stran(request, ime, "zeleznica")
+
+
+@app.get("/postajalisce/{ime}", response_class=HTMLResponse, include_in_schema=False)
+def postaja_avtobus(request: Request, ime: str):
+    """Eno avtobusno postajališče. Beseda je druga, ker je druga tudi v
+    resnici -- mestno postajališče ni postaja."""
+    return _postaja_stran(request, ime, "avtobus")
+
+
+def _kazalo_stran(request: Request, network: str):
+    kaz = _kazalo(network)
+    postaje = sorted(kaz["postaje"], key=lambda p: journey._fold(p["ime"]))
+    beseda = "postajališč" if network == "avtobus" else "postaj"
+    stran = "/app/bus" if network == "avtobus" else "/app/train"
+    return templates.TemplateResponse(request, "postaje.html", {
+        "network": network,
+        "postaje": postaje,
+        "relacije": kaz["relacije"][:40],
+        "opis": f"Odhodi in izmerjene zamude za {len(postaje)} "
+                f"najbolj prometnih {beseda} v Sloveniji.",
+        "iskalnik": stran,
+        "drugo_omrezje": pristanek.pot_kazala(
+            "zeleznica" if network == "avtobus" else "avtobus"),
+    })
+
+
+@app.get("/postaje", response_class=HTMLResponse, include_in_schema=False)
+def kazalo_postaj(request: Request):
+    """Kazalo železniških postaj. Do pristajalne strani mora voditi povezava --
+    zemljevid strani je namig, ne pot."""
+    return _kazalo_stran(request, "zeleznica")
+
+
+@app.get("/postajalisca", response_class=HTMLResponse, include_in_schema=False)
+def kazalo_postajalisc(request: Request):
+    """Kazalo avtobusnih postajališč."""
+    return _kazalo_stran(request, "avtobus")
 
 
 @app.get("/api/health")

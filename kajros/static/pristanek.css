@@ -1,0 +1,115 @@
+/* Strani ene relacije in ene postaje.
+ *
+ * Te strani so **brez JS**. To ni varčnost: njihov edini razlog je, da jih
+ * iskalnik in človek dobita že izrisane iz strežnika -- vsak kos, ki bi se
+ * dorisal v brskalniku, bi bil natanko tisto, česar `/app/*` že ima.
+ * Zato tudi ni žetonov iz `common.js`; zamuda je tu navaden `<span>`.
+ */
+
+.pristanek h2 { margin-top: 34px; }
+
+/* ---------- izmerjeno: troje števil, ki jih nima nihče drug ---------- */
+
+.stevila {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin: 20px 0 10px;
+  background: var(--line-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.stevilo { background: var(--bg-raised); padding: 14px 14px 12px; }
+.stevilo b {
+  display: block;
+  font: 600 22px/1.1 var(--mono); color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.stevilo span {
+  display: block; margin-top: 5px;
+  font: 400 11.5px/1.35 var(--sans); color: var(--ink-mute);
+}
+
+/* Barva nosi razred zamude, beseda pa vedno stoji zraven -- barva sama ne
+   pomeni nič (glej .claude/rules/oznake.md). */
+/* Dvojni razred: `.odhodi td` in `.stevilo b` sta specifičnejša od enega
+   samega razreda in sta barvo zamude tiho povozila -- „+15 min" je bil bel.
+   Barva zamude mora povsod premagati barvo okvira, v katerem stoji. */
+.pristanek .z-tocno   { color: var(--d-ontime); }
+.pristanek .z-1-5     { color: var(--d-small); }
+.pristanek .z-5-15    { color: var(--d-mid); }
+.pristanek .z-nad-15  { color: var(--d-big); }
+
+/* Zgodovina, ne meritev: pisava je manjša in siva, beseda „običajno" pa stoji
+   zraven -- brez nje bi bila ta številka videti kot današnja zamuda. */
+.odhodi .obicajno {
+  font: 400 11.5px/1.35 var(--sans); color: var(--ink-faint);
+}
+
+/* ---------- odhodi ---------- */
+
+.odhodi { width: 100%; border-collapse: collapse; margin: 14px 0 6px; }
+
+.odhodi th {
+  text-align: left;
+  font: 500 11px/1 var(--sans); color: var(--ink-faint);
+  text-transform: uppercase; letter-spacing: .06em;
+  padding: 0 8px 8px 0; border-bottom: 1px solid var(--line);
+}
+
+.odhodi td {
+  padding: 9px 8px 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font: 400 13.5px/1.35 var(--sans); color: var(--ink-dim);
+  vertical-align: baseline;
+}
+
+.odhodi .t { font: 500 14px/1.35 var(--mono); color: var(--ink);
+             font-variant-numeric: tabular-nums; white-space: nowrap; }
+.odhodi .kam { color: var(--ink); }
+.odhodi .zam { text-align: right; white-space: nowrap;
+               font: 500 13px/1.35 var(--mono); font-variant-numeric: tabular-nums; }
+.odhodi a { color: inherit; text-decoration: none; }
+.odhodi a:hover { color: var(--accent-lit); }
+
+/* Na telefonu odpade stolpec, ki ga potnik potrebuje najmanj: od kod vožnja
+   prihaja. Ura, linija in zamuda ostanejo vse tri -- brez katere koli od njih
+   vrstica ne odgovori na vprašanje, zaradi katerega je človek prišel. */
+@media (max-width: 520px) {
+  .odhodi .skrij-ozko { display: none; }
+  /* Številka vožnje se ne sme lomiti: „LPV 2809" v dveh vrsticah naredi
+     vrstico dvakrat višjo in tabelo neberljivo. Lomi naj se cilj, ki je
+     besedilo. */
+  .odhodi .t, .odhodi td:nth-child(2) { white-space: nowrap; }
+  /* Tri števila v treh stolpcih pri 390 px pomenijo 84 px na stolpec in
+     „+17 min" se prelomi na dve vrstici. Dve in eno čez oba: številke
+     ostanejo velike, ker so edini razlog, da je ta okvir tu. */
+  .stevila { grid-template-columns: 1fr 1fr; }
+  .stevilo:last-child { grid-column: 1 / -1; }
+}
+
+/* ---------- povezave naprej ---------- */
+
+.povezave { list-style: none; margin: 10px 0 0; padding: 0; }
+.povezave li { margin: 0; }
+.povezave a {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft);
+  text-decoration: none;
+  font: 400 14px/1.4 var(--sans); color: var(--ink);
+}
+.povezave a:hover { color: var(--accent-lit); }
+.povezave .drobec { font: 400 12px/1.4 var(--sans); color: var(--ink-faint); }
+
+/* ---------- kazalo postaj ---------- */
+
+.kazalo {
+  columns: 3 180px; column-gap: 24px;
+  margin: 16px 0 0; padding: 0; list-style: none;
+}
+.kazalo li { break-inside: avoid; margin: 0 0 7px; }
+.kazalo a { font: 400 13.5px/1.4 var(--sans); color: var(--ink-dim);
+            text-decoration: none; }
+.kazalo a:hover { color: var(--accent-lit); }

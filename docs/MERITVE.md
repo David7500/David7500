@@ -2152,3 +2152,83 @@ Koren je stregel HTML samo ob `Accept: text/html`; izmerjeno na živi strani:
 Google je bil zato v redu, Bing (in z njim DuckDuckGo) ne. Hkrati izmerjeno:
 `http://kajros.app/` in `www.kajros.app` vračata **200 z isto vsebino** in ne
 preusmerita — dvojnik, ki ga drži skupaj samo `rel=canonical`.
+
+## Pristajalne strani: koliko jih sme biti (17. 9. 2026)
+
+Zemljevid strani je imel **enajst naslovov** in vsak je bil prazna lupina, ki
+se napolni v JS — iskalnik torej ni imel česa indeksirati. Vprašanje je bilo,
+koliko strani sme nastati in po čem se izberejo.
+
+**Parov postaj je preveč, da bi jih imeli vse.** Vsi pari, ki jih poveže vsaj
+ena vožnja v voznem redu:
+
+| omrežje | vseh parov nad pragom voženj | nad pragom razdalje |
+|---|---|---|
+| železnica (≥ 4 vožnje) | 6 185 | **5 903** (≥ 3 km) |
+| avtobus brez LPP (≥ 30 voženj) | 47 533 | **26 049** (≥ 6 km) |
+| avtobus z mestnim LPP (≥ 20) | 83 289 | — |
+
+Zato `NAJVEC_RELACIJ = 400` na omrežje; ostalo ostane dosegljivo in `noindex`.
+
+**Meja razdalje ni okras.** Brez nje je vrh avtobusne lestvice po prometu:
+
+```
+Ljubljana Kino Šiška → Ljubljana Tivoli     870 voženj   1,2 km
+Ljubljana Slovenija avto → Ljubljana Tivoli 870 voženj   1,6 km
+```
+
+To sta postajališči iste ulice — nihče ne išče povezave med njima, ker gre peš.
+Z mejo 6 km je vrh `Medvode → Ljubljana Šentvid` (510) in `Grosuplje →
+Ljubljana Strelišče` (471), torej relaciji, ki ju ljudje res vozijo.
+
+**Mestni LPP relacij nima.** Brez izločitve (`agency = 'lpp'`) je vrh
+`Ajdovščina → Konzorcij` s 5 398 vožnjami — imeni dveh postajališč v središču
+Ljubljane. Postajališča svoje strani obdržijo, relacije ne.
+
+**Lego imena mora dati najprometnejše postajališče, ne povprečje.**
+Prvi poskus je razdaljo meril iz povprečja vseh postajališč z istim imenom in
+„Ajdovščina" (postajališče LPP + mesto 25 km stran) je dalo **25 km** za par
+sredi Ljubljane. Isto pravilo kot v kazalu postaj (`journey.station_index`).
+
+**Cena izračuna** (razvojni računalnik, 90 dni, 1,93 mio vrstic `run`):
+
+| korak | železnica | avtobus |
+|---|---|---|
+| izbor parov | 0,1 s | 4,4 s |
+| vožnje izbranih relacij + zamude | 0,5 s | 3,5 s |
+| zamude po postajah | 0,2 s | 2,9 s |
+| **skupaj `pristanek`** | **4,8 s** | **15,1 s** |
+
+Dvajset sekund enkrat na dan, v istem opravilu kot ostali povzetki. V zahtevi
+se to ne računa; stran bere shranjeni povzetek in ga ima predpomnjenega.
+
+**Zamude se seštevajo kot histogram po zaokroženi minuti, ne kot seznam
+sekund.** Razred zamude se tako ali tako določa iz minute
+(`stats._razred_zamude`), torej je histogram natanko tako natančen kot prikaz
+— in ne potegne 1,9 mio vrstic v pomnilnik. Kvantil ima isto definicijo kot
+`stats._pct()`; test to primerja.
+
+**Bralno transakcijo je treba zapreti pred zapisom.** Prvi zagon je pri
+avtobusih odpovedal z „database is locked": v WAL je bralec priklenjen na
+posnetek ob prvem branju, zajem medtem piše in zapis v isti transakciji
+odpove s SQLITE_BUSY_SNAPSHOT — česar čakanje **ne** reši. Pri petnajstih
+sekundah branja je vmesni zapis zajema skoraj gotov.
+
+**Izmerjene strani** (17. 9. 2026, topel predpomnilnik):
+
+| stran | velikost | čas |
+|---|---|---|
+| `/vlak/zidani-most/ljubljana` | 12,6 kB | 44 ms |
+| `/postaja/celje` | 9,3 kB | 28 ms |
+| `/postajalisce/bavarski-dvor` | 10,7 kB | 67 ms |
+| `/postaje` | 27,0 kB | 13 ms |
+| `/sitemap.xml` | 92,7 kB (1 370 naslovov) | — |
+
+Prva različica avtobusne relacije je bila **43 kB**: Medvode → Ljubljana
+Šentvid ima 108 voženj na dan in stran je bila samo naštevanje. Zato
+`NAJVEC_ODHODOV = 24` in vrstica, ki pove, koliko jih je vseh.
+
+**Prva številka, ki jo te strani povedo in je drugje ni:** na relaciji
+`Zidani Most → Ljubljana` je mediana zamude ob prihodu **15 min**, p90 35 min,
+in **15,5 %** voženj pride v petih minutah (734 meritev, 21. 8.–17. 9. 2026).
+V nasprotni smeri je mediana **2 min** in 67,9 % točnih.
