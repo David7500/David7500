@@ -194,21 +194,9 @@ class BudilkeDejavnost : Activity() {
 
     /** Okno te voznje v aplikaciji -- ista stran, ki jo potnik ze pozna. */
     private fun odpriVoznjo(b: Budilka) {
-        val pot = if (b.vlak) "/app/train/" else "/app/bus/"
-        val naslov = buildString {
-            append(Nastavitve.naslov(this@BudilkeDejavnost)).append(pot)
-            // `Nastavitve.zaPot`, ne `URLEncoder`: stevilka vlaka gre v POT in
-            // presledek mora biti `%20`, ne `+`. Glej opombo tam.
-            append(Nastavitve.zaPot(b.trainNo))
-            append("?postaja=").append(Nastavitve.zaPot(b.postaja))
-            append("&date=").append(Nastavitve.zaPot(b.dan))
-            if (!b.tripId.isNullOrBlank()) {
-                append("&trip=").append(Nastavitve.zaPot(b.tripId))
-            }
-        }
         startActivity(Intent(this, GlavnaDejavnost::class.java)
             .setAction(GlavnaDejavnost.AKCIJA_ODPRI)
-            .putExtra(GlavnaDejavnost.KAM, naslov))
+            .putExtra(GlavnaDejavnost.KAM, b.naslovVoznje(Nastavitve.naslov(this))))
         finish()
     }
 

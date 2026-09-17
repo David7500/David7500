@@ -264,6 +264,44 @@ vlak spelje). Ista budnica se po zvonjenju nastavi na vsaki 2 minuti
 zamudo; 90 s po odhodu `vseZnova` ponavljajočo prestavi na naslednji dan.
 Prej se je prestavila takoj ob zvonjenju in widget je kazal jutrišnji odhod.
 
+### Dotik widgeta odpre vožnjo, ne domače strani
+
+Widget odgovarja na „koliko časa imam še“; naslednje vprašanje je „in kje je
+zdaj“. Domača stran nanj ne odgovori in do njega je od tam še dvakrat treba
+klikniti — ravno takrat, ko potnik hiti. Zato pelje na **okno tiste vožnje**,
+isti naslov kot gumb „Odpri vožnjo“ v seznamu budilk.
+
+Naslov sestavlja `Budilka.naslovVoznje(izvor)`. Vzame niz in ne `Context`, da je
+čist JVM in ima teste — ta naslov je bil že enkrat narobe (`+` namesto `%20` v
+poti) in na napravi se to vidi šele kot „vlak s to številko ne obstaja“.
+
+**`FLAG_UPDATE_CURRENT` tu ni okras.** `extras` se pri primerjavi namer ne
+upoštevajo, zato bi widget brez njega odpiral prvo vožnjo, kar jih je kdaj
+kazal. Ista past kot pri `PendingIntent` budilk, le da se tam rešuje z `data`.
+
+Brez budilke ni kam peljati in ostane domača stran.
+
+### Kaj je widget dolgoval smernicam (17. 9. 2026)
+
+Preverjeno proti Googlovim smernicam za widgete; štiri stvari so manjkale:
+
+| kaj | zakaj |
+|---|---|
+| `previewLayout` (12+) | izbirnik je kazal **ikono aplikacije**, ne widgeta. Človek izbira tisto, kar vidi. `previewImage` ostane za starejše |
+| `minResizeWidth/Height` | brez njiju sme launcher widget stisniti poljubno globoko in podnapis tiho odreže |
+| sistemski `system_app_widget_background_radius` | trdih 18 dp je bilo na Androidu 12+ edino, kar se ni ujemalo z ostalimi widgeti. Zdaj `@dimen/widget_rob`, ki ima v `values-v31` sistemsko vrednost |
+| `setContentDescription` | bralnik zaslona je prebral samo stoparico, ki je brez konteksta gola številka. `Chronometer` se ne da prebrati, zato je ura odhoda v opisu |
+
+Kar je bilo **že prav**: `description`, `targetCellWidth/Height`,
+`updatePeriodMillis` na sistemskem minimumu (30 min), `exported="false"`,
+odštevanje v sistemskem procesu.
+
+Kar ostaja **zavestno drugače**: widget je temen ne glede na temo naprave
+(`values-night` aplikacija nima nikjer, ker je stran temna) in ne uporablja
+Material You barv — te so v AndroidX, odvisnosti pa ta aplikacija nima.
+
+Cena vsega tega je **1 472 B** (izdajni APK 79 394 → 80 866 B).
+
 ### Dnevnik budilk
 
 `Dnevnik.kt` hrani zadnjih 120 vrstic (preverjanje in izid, zvonjenje in

@@ -274,6 +274,37 @@ Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.
 Leaflet se nalaga z unpkg CDN.
 
+## Gumb „osveži“ obstaja zato, ker se osveževanje ne vidi
+
+Oba zemljevida se osvežujeta sama in v koraku s strežbo. Kadar vozilo stoji ali
+feed zaostane, je slika mirna — in mirna slika je videti **enako kot obtičala
+stran**. Brez gumba je edini izhod ponovno nalaganje cele strani, ki podlago,
+plasti in kazalo postaj prinese znova za nič.
+
+Gumb torej ničesar ne pohitri. Pove dvoje: da se je pravkar vprašalo in **ob
+kateri uri je bil odgovor** („osveženo ob 20:44:25“). Ob napaki to tudi pove
+(„osvežitev ni uspela — ni zveze s strežnikom“) in pordeči — tiha napaka je
+natanko tisto, zaradi česar človek ne ve, ali stran še teče.
+
+Skupen je `common.pripniOsvezi()`, obe zanki pa imata odslej `zdaj()`
+(`pollWhileVisible`, `pollVehicles`). **`zdaj()` napake ne pogoltne**, `tick()`
+pa jo še vedno: ritem sme eno zahtevo zamuditi, gumb pod prstom ne.
+
+**Na velikem zemljevidu je levo pod približevanjem, ne desno pod lego.** Desno
+na telefonu pri `top: 62px` že stoji tipka za spodnjo ploščo (`.sheet-toggle`,
+`z-index: 1100`) in je gumb prekrila. Videlo se je šele na posnetku v telefonski
+širini; na namizju te tipke ni.
+
+### Lega vozila se je nalagala v vzporednih zankah
+
+`loadPosition()` se kliče iz `loadRun()`, ta pa teče vsakih 30 s — in
+`pollVehicles` je ob vsakem klicu začel **novo** zanko. Izmerjeno na
+`/app/bus/12D` (chromium, `--virtual-time-budget=90000`, štirje cikli
+`loadRun`): **19 zahtev po legi z varovalko odstranjeno proti 12 z njo**.
+Razlika raste z odprtostjo strani, ker vsaka zanka ostane za vedno.
+
+Varovalka je ena vožnja, ena zanka (`runMap.pollTrip`).
+
 ## Avtobusi: plast na prevoznika, privzeto ugasnjeni
 
 **Ena skupna avtobusna plast je zemljevid zadušila.** Ob 15:10 je bilo na njem

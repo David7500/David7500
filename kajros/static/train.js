@@ -1859,6 +1859,7 @@ async function drawRunMap(v) {
     initWheelZoom();
     initDragPolicy();
     initLocate();
+    initOsvezi();
   }
 }
 
@@ -2092,6 +2093,27 @@ function initLocate() {
   });
 }
 
+/**
+ * Gumb "osvezi" ob zemljevidu voznje.
+ *
+ * Vprasanje pred tem zemljevidom je "kje je zdaj", odgovor pa se osvezuje sam.
+ * Kadar vozilo stoji, se to na zaslonu ne vidi -- mirna pika je videti enako
+ * kot obticala stran. Osvezi OBOJE: lego in zamudo, ker sta na tej strani en
+ * sam odgovor.
+ */
+function initOsvezi() {
+  const btn = document.getElementById("run-map-osvezi");
+  if (!btn) return;
+  btn.hidden = false;
+  pripniOsvezi(btn, [
+    () => (runMap.poll ? runMap.poll.zdaj() : Promise.resolve()),
+    () => loadRun(),
+    () => refreshFeedDot(),
+  ]);
+  btn.title = "Osveži zdaj";
+  btn.setAttribute("aria-label", "Osveži zdaj");
+}
+
 function initFullscreen() {
   const btn = document.getElementById("run-map-fs");
   if (!btn) return;
@@ -2115,7 +2137,13 @@ function loadPosition() {
   // Prej se je lega nalozila ENKRAT in nikoli vec: kdor je okno pustil odprto,
   // je gledal, kje je bil avtobus ob odprtju strani. Prav tu je vprasanje
   // "kje je zdaj" najbolj neposredno, zato se osvezuje v koraku s strezbo.
-  pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
+  // **Ena zanka na vožnjo, ne ena na osvežitev.** `loadPosition` se klice iz
+  // `loadRun`, ta pa tece vsakih 30 s -- brez te varovalke je stran po desetih
+  // minutah imela dvajset vzporednih poizvedb po legi, vsaka na ~10 s.
+  if (runMap.pollTrip === trip) return;
+  if (runMap.poll) runMap.poll.stop();
+  runMap.pollTrip = trip;
+  runMap.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
     if (list.length) drawRunMap(list[0]);
   });
 }

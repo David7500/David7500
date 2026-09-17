@@ -88,6 +88,27 @@ data class Budilka(
         return if (odlozenoDoMs > 0) i.copy(zvoniOb = odlozenoDoMs) else i
     }
 
+    /**
+     * Naslov okna te voznje -- ista stran, ki jo potnik ze pozna.
+     *
+     * Tu in ne v dejavnosti, ker ga rabita dva klica: gumb "Odpri voznjo" v
+     * seznamu budilk in dotik widgeta na domacem zaslonu. Dva zapisa istega
+     * naslova bi se razsla, prvi pa je bil ze enkrat narobe (`+` namesto
+     * `%20` v poti).
+     *
+     * Vzame [izvor] in ne `Context`, da je cist JVM in ga je mogoce preizkusiti
+     * brez naprave -- isti razlog kot pri `Nastavitve.izvor()`.
+     */
+    fun naslovVoznje(izvor: String): String = buildString {
+        append(izvor).append(if (vlak) "/app/train/" else "/app/bus/")
+        // `Nastavitve.zaPot`, ne `URLEncoder`: stevilka gre v POT in presledek
+        // mora biti `%20`, ne `+`. Glej opombo tam.
+        append(Nastavitve.zaPot(trainNo))
+        append("?postaja=").append(Nastavitve.zaPot(postaja))
+        append("&date=").append(Nastavitve.zaPot(dan))
+        if (!tripId.isNullOrBlank()) append("&trip=").append(Nastavitve.zaPot(tripId))
+    }
+
     fun json(): JSONObject = JSONObject().apply {
         put("id", id); put("train_no", trainNo); put("trip", tripId ?: JSONObject.NULL)
         put("omrezje", omrezje); put("postaja", postaja); put("stop_seq", stopSeq)

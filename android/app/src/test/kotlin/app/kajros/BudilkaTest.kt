@@ -44,4 +44,39 @@ class BudilkaTest {
         assertEquals(ob(18, 7, 35), nova.voznoredniMs)
         assertTrue(nova.tripId == null)
     }
+
+    // ---------- naslov voznje ----------
+    //
+    // Isti naslov odpira gumb v seznamu budilk in dotik widgeta. Prvic je bil
+    // ze narobe (`+` namesto `%20` v poti) in tega na napravi ni bilo videti:
+    // stran je pisala "vlak s to stevilko ne obstaja".
+
+    @Test
+    fun `presledek v stevilki gre v pot odstotkovno, ne kot plus`() {
+        val n = budilka(ob(14, 7, 35)).naslovVoznje("https://kajros.app")
+        assertTrue(n.startsWith("https://kajros.app/app/train/LPV%202010?"), n)
+        assertTrue("+" !in n, n)
+    }
+
+    @Test
+    fun `avtobus gre na svojo pot`() {
+        val b = budilka(ob(14, 7, 35)).copy(omrezje = "avtobus", trainNo = "25")
+        assertTrue(b.naslovVoznje("https://kajros.app").startsWith(
+            "https://kajros.app/app/bus/25?"))
+    }
+
+    @Test
+    fun `brez trip id parametra ni`() {
+        val b = budilka(ob(14, 7, 35)).copy(tripId = null)
+        assertTrue("trip=" !in b.naslovVoznje("https://kajros.app"))
+    }
+
+    @Test
+    fun `postaja in dan sta v poizvedbi`() {
+        val b = budilka(ob(14, 7, 35)).copy(postaja = "Bavarski dvor")
+        val n = b.naslovVoznje("https://kajros.app")
+        assertTrue("postaja=Bavarski%20dvor" in n, n)
+        assertTrue("date=2026-09-14" in n, n)
+        assertTrue("trip=t1" in n, n)
+    }
 }

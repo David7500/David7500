@@ -4,14 +4,25 @@
   ga tudi ne rabimo. Odštevanje riše `Chronometer` sam, zamudo pa osveži
   budilka, ki se pred odhodom tako ali tako zbuja (`Sprozilec`). Ta številka je
   samo varovalka, da widget ne obtiči, če aplikacije nihče ne odpre.
+
+  `previewLayout` je od Androida 12 naprej priporočena pot: izbirnik pokaže
+  pravo postavitev z vzorčno vožnjo, ne ikone aplikacije. `previewImage` ostane
+  za starejše naprave, kjer `previewLayout` ni brano.
+
+  `minResizeWidth/Height` sta ista kot `minWidth/minHeight` namenoma: pod tem
+  se štiri vrstice besedila ne izidejo. Brez njiju sme launcher widget stisniti
+  poljubno globoko in podnapis tiho odreže.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
     android:minHeight="80dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="80dp"
     android:targetCellWidth="3"
     android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget"
+    android:previewLayout="@layout/widget_predogled"
     android:previewImage="@drawable/ikona_znak"
     android:resizeMode="horizontal|vertical"
     android:description="@string/widget_opis"

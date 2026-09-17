@@ -307,7 +307,22 @@ function pollWhileVisible(fn, ms) {
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", wake);
   wake();
-  return { stop: () => { clearTimeout(timer); timer = null; } };
+  return {
+    stop: () => { clearTimeout(timer); timer = null; },
+    // Takoj, ne ob naslednjem koraku -- to je gumb "osvezi" pod prstom. Za
+    // razliko od `tick` napake NE pogoltne: gumb mora povedati, ali je
+    // odgovor prisel.
+    zdaj: async () => {
+      clearTimeout(timer);
+      timer = null;
+      zadnji = Date.now();
+      try {
+        return await fn();
+      } finally {
+        if (!document.hidden && !timer) timer = setTimeout(tick, ms);
+      }
+    },
+  };
 }
 
 // ---------- puscici za dan ----------
@@ -963,12 +978,23 @@ setInterval(() => {
 // ritem je polovico svojega casa cakal na podatek, ki je v bazi ze lezal --
 // izmerjeno je bilo to 10 od 45 sekund starosti pike na zaslonu.
 //
-// Vrne funkcijo za ustavitev. Klic tece, dokler je stran vidna: telefon v
+// Vrne `{ stop, zdaj }`. Klic tece, dokler je stran vidna: telefon v
 // zepu ne sme spraševati, ker odgovora nihce ne gleda -- to je hkrati
 // najcenejsi prihranek na strezniku, kar jih je.
 function pollVehicles(url, onData) {
   let timer = null;
   let ustavljen = false;
+
+  // Ena zahteva. Napake NE pogoltne -- ritem jo sme prezreti, gumb "osvezi"
+  // pa mora povedati, da odgovora ni bilo. Vrne, cez koliko sekund vprasati
+  // znova.
+  async function poizvedi() {
+    const r = await fetch(url);
+    const h = parseInt(r.headers.get("X-Osvezi-Cez"), 10);
+    const podatki = await r.json();
+    onData(podatki);
+    return Number.isFinite(h) ? h : 10;
+  }
 
   async function tick() {
     if (ustavljen) return;
@@ -978,10 +1004,7 @@ function pollVehicles(url, onData) {
     }
     let cez = 10;
     try {
-      const r = await fetch(url);
-      const h = parseInt(r.headers.get("X-Osvezi-Cez"), 10);
-      if (Number.isFinite(h)) cez = h;
-      onData(await r.json());
+      cez = await poizvedi();
     } catch (err) {
       cez = 30;                         // ob napaki ne tolcemo naprej
       console.warn("leg vozil ni bilo mogoče naložiti", err);
@@ -1002,7 +1025,70 @@ function pollVehicles(url, onData) {
   });
 
   tick();
-  return () => { ustavljen = true; clearTimeout(timer); };
+  return {
+    stop: () => { ustavljen = true; clearTimeout(timer); },
+    // Ista oblika kot pri `pollWhileVisible`: obe zanki zna gumb "osvezi"
+    // pognati z istim klicem in mu ni treba vedeti, katera je katera.
+    zdaj: async () => {
+      clearTimeout(timer);
+      try {
+        return await poizvedi();
+      } finally {
+        if (!ustavljen) timer = setTimeout(tick, 10000);
+      }
+    },
+  };
+}
+
+// ---------- gumb "osvezi" ----------
+//
+// Zemljevid se osvezuje sam, a tega se ne vidi. Ko vozilo dve minuti stoji,
+// clovek ne loci mirnega podatka od obticale strani -- in edino, kar mu takrat
+// preostane, je ponovno nalozi vso stran. Gumb ne pohitri nicesar: pove, da se
+// je pravkar vprasalo, in ob kateri uri je bil odgovor.
+//
+// Zato tudi ne izgine po uspehu. Ura zadnje osvezitve je odgovor na "ali to se
+// tece", in ta je koristen, ko se nic ne premika.
+
+const OSVEZI_URA = new Intl.DateTimeFormat("sl-SI", {
+  timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit",
+  second: "2-digit", hour12: false,
+});
+
+/**
+ * `opravila` so funkcije, ki vrnejo obljubo; gumb je zaseden, dokler niso vse
+ * koncane. Prej je "osvezeno ob" pisalo pred podatkom, kar je natanko tista
+ * laz, ki jo naj bi gumb odpravil.
+ *
+ * `opomba` je neobvezen izpis na zaslon (zemljevid ima za to svojo vrstico);
+ * naslov gumba dobi isto besedilo tudi brez nje.
+ */
+function pripniOsvezi(el, opravila, opomba) {
+  if (!el) return;
+  let tece = false;
+
+  const povej = (t, napaka) => {
+    el.title = t;
+    el.setAttribute("aria-label", t);
+    el.classList.toggle("is-fail", !!napaka);
+    if (opomba) opomba(t);
+  };
+
+  el.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    if (tece) return;                     // dvojni dotik ni dve zahtevi
+    tece = true;
+    el.classList.add("is-busy");
+    try {
+      await Promise.all(opravila.map((f) => f()));
+      povej(`osveženo ob ${OSVEZI_URA.format(new Date())}`, false);
+    } catch (err) {
+      povej("osvežitev ni uspela — ni zveze s strežnikom", true);
+    } finally {
+      tece = false;
+      el.classList.remove("is-busy");
+    }
+  });
 }
 
 // ---------- trase voznj ----------

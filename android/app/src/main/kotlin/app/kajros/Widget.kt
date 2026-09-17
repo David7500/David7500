@@ -95,15 +95,37 @@ class Widget : AppWidgetProvider() {
                 }
                 .minByOrNull { it.izracun(zdajMs).odhodMs }
 
+        /**
+         * Kam pelje dotik widgeta.
+         *
+         * **Na voznjo, ne na domaco stran.** Widget odgovarja na "koliko casa
+         * imam se", naslednje vprasanje pa je "in kje je zdaj" -- domaca stran
+         * nanj ne odgovori in potnik mora do nje se dvakrat klikniti, ravno ko
+         * hiti. Brez budilke ni kam peljati in ostane domaca stran.
+         *
+         * `FLAG_UPDATE_CURRENT` poskrbi, da se ob menjavi budilke osvezi tudi
+         * naslov: `extras` se pri primerjavi namer NE upostevajo, zato bi brez
+         * njega widget vedno odprl prvo vozjo, kar jih je kdaj kazal.
+         */
+        private fun kam(c: Context, b: Budilka?): PendingIntent {
+            val i = Intent(c, GlavnaDejavnost::class.java)
+            if (b != null) {
+                i.action = GlavnaDejavnost.AKCIJA_ODPRI
+                i.putExtra(GlavnaDejavnost.KAM, b.naslovVoznje(Nastavitve.naslov(c)))
+            }
+            return PendingIntent.getActivity(c, 0, i,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+
         private fun pogled(c: Context): RemoteViews {
             val v = RemoteViews(c.packageName, R.layout.widget)
-            v.setOnClickPendingIntent(R.id.widget_koren, PendingIntent.getActivity(
-                c, 0, Intent(c, GlavnaDejavnost::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
 
             val zdaj = System.currentTimeMillis()
             val b = naslednja(c, zdaj)
+            v.setOnClickPendingIntent(R.id.widget_koren, kam(c, b))
             if (b == null) {
+                v.setContentDescription(R.id.widget_koren,
+                    c.getString(R.string.widget_opis))
                 v.setTextViewText(R.id.widget_kaj, c.getString(R.string.ime))
                 v.setTextViewText(R.id.widget_kje, c.getString(R.string.widget_brez))
                 v.setViewVisibility(R.id.widget_stevec, View.GONE)
@@ -144,8 +166,17 @@ class Widget : AppWidgetProvider() {
             // Voznoredna ura pride iz budilke, ne iz racuna: `upostevanaS` ima
             // odsteto rezervo, `odhodMs` pa ne, zato bi izpeljava
             // `odhodMs - upostevanaS` uro zamaknila za rezervo.
-            v.setTextViewText(R.id.widget_pod, pod(c, izid, URA.format(Date(b.voznoredniMs)),
-                uraJeZgoraj = !odsteva && doOdhoda > 0))
+            val podpis = pod(c, izid, URA.format(Date(b.voznoredniMs)),
+                uraJeZgoraj = !odsteva && doOdhoda > 0)
+            v.setTextViewText(R.id.widget_pod, podpis)
+            // Bralnik zaslona bi sicer prebral samo stoparico, ki je brez
+            // konteksta gola stevilka. Ura odhoda je tu in ne v `Chronometer`,
+            // ker se ta ne da prebrati.
+            v.setContentDescription(R.id.widget_koren, buildString {
+                append(b.trainNo)
+                if (b.smer.isNotBlank()) append(", smer ").append(b.smer)
+                append(", ").append(b.postaja).append(". ").append(podpis)
+            })
             return v
         }
 

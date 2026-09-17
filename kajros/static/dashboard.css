@@ -269,6 +269,25 @@ body {
 .locate-ctl.is-on a { color: #2f7fff; }
 .locate-ctl.is-busy a { opacity: 0.45; }
 
+/* Gumb "osveži". Vrtenje ni okras: brez njega je edini znak, da se je kaj
+   zgodilo, vrstica, ki pride šele z odgovorom -- na počasni povezavi je to
+   sekunda tišine in v njej človek pritisne še dvakrat. */
+.osvezi-ctl a {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; color: #79828f;
+}
+.osvezi-ctl a:hover { color: #e7eaf0; }
+.osvezi-ctl a.is-busy { color: #e7eaf0; }
+.osvezi-ctl a.is-busy svg { animation: osvezi-vrti 0.85s linear infinite; }
+.osvezi-ctl a.is-fail { color: #d1495b; }
+
+@keyframes osvezi-vrti { to { transform: rotate(360deg); } }
+
+/* Kdor je izklopil animacije, jih je izklopil tudi tu; barva pove isto. */
+@media (prefers-reduced-motion: reduce) {
+  .osvezi-ctl a.is-busy svg { animation: none; }
+}
+
 /* ---------- podrobnosti vlaka (smer D) ---------- */
 
 

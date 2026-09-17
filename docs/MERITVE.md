@@ -456,6 +456,12 @@ kilobajtov za ponavljanje in widget je toliko, kolikor stane `java.time` v
 Preverjeno v paketu 12. 9. 2026: `aapt2 dump strings` najde **0** nizov z
 `com/google`, `gms`, `firebase` ali `androidx`. `minSdk` 26, `targetSdk` 35.
 
+**17. 9. 2026: widget po smernicah stane 1 472 B.** Podpisani izdajni APK
+79 394 → **80 866 B**; v tem so predogledna postavitev za izbirnik
+(`previewLayout`), sistemska zaobljenost v `values-v31`, meji za stiskanje in
+opis za bralnik zaslona. Izmerjeno z gradnjo iz `git worktree` na HEAD, ne po
+oceni.
+
 **Dovoljenj je enajst, ne štiri** — budilka jih je prinesla sedem:
 `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_FINE_LOCATION`,
 `ACCESS_COARSE_LOCATION`, `USE_EXACT_ALARM`, `SCHEDULE_EXACT_ALARM`

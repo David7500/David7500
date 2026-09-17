@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Od Androida 12 zaobljenost widgetov predpiše sistem in jo launcher lahko
+     spreminja (Material You). Trda vrednost bi bila na takem zaslonu edina,
+     ki se ne ujema z ostalimi widgeti. -->
+<resources>
+    <dimen name="widget_rob">@android:dimen/system_app_widget_background_radius</dimen>
+</resources>

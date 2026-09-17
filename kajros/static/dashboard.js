@@ -605,6 +605,44 @@ const LocateControl = L.Control.extend({
 });
 map.addControl(new LocateControl());
 
+// ---------- osvezi zdaj ----------
+//
+// Vozila se osvezujejo sama in v koraku s strezbo, a tega se na zaslonu ne
+// vidi. Kadar vozilo stoji ali feed zaostaja, je slika mirna -- in mirna slika
+// je videti enako kot obticala stran. Brez gumba je edini izhod ponovno
+// nalaganje cele strani, kar podlago in plasti nalozi znova za nic.
+//
+// Zanka se ob tem NE podvoji: `zdaj()` pri obeh poizvedbah prekine cakanje in
+// ga nastavi na novo.
+let vozilaPoll = null;
+
+// Levo pod priblizevanjem, ne desno pod lego: na telefonu tam ze stoji tipka
+// za spodnjo plosco (`.sheet-toggle`, `top: 62px`) in je gumb prekrila --
+// videlo se je sele na posnetku v telefonski sirini.
+const OsveziControl = L.Control.extend({
+  options: { position: "topleft" },
+  onAdd() {
+    const el = L.DomUtil.create("div", "leaflet-bar osvezi-ctl");
+    const a = L.DomUtil.create("a", "", el);
+    a.href = "#";
+    a.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path d="M20 11a8 8 0 1 0-1.9 6.2"></path>
+        <path d="M20 5v6h-6"></path></svg>`;
+    L.DomEvent.disableClickPropagation(el);
+    pripniOsvezi(a, [
+      () => pollLive(),
+      () => (vozilaPoll ? vozilaPoll.zdaj() : Promise.resolve()),
+      () => refreshFeedDot(),
+    ], meNote);
+    a.title = "Osveži zdaj";
+    a.setAttribute("aria-label", "Osveži zdaj");
+    return el;
+  },
+});
+map.addControl(new OsveziControl());
+
 // ---------- avtobusna postajalisca ----------
 //
 // 9 519 postajalisc, 211 kB z gzipom in 167 ms. Zato izbirno, privzeto
@@ -953,18 +991,23 @@ document.getElementById("find-clear").addEventListener("click", () => {
 
 const feedDotEl = document.getElementById("feed-dot");
 
+// Napake NE pogoltne. Ritem jih prezre (`pollLiveTiho`), gumb "osvezi" pa
+// mora povedati, da odgovora ni bilo -- tiha napaka je natanko tisto, zaradi
+// cesar clovek ne ve, ali stran se tece.
 async function pollLive() {
-  try {
-    liveTrains = await fetch("/api/live?network=zeleznica").then((r) => r.json());
-    document.getElementById("n-train").textContent = liveTrains.length;
-    renderTrains(liveTrains);
-    vlakiPrispeli = true;
-    prilagodiPogledVozilom();
-    if (findEl.value.trim()) renderFind();
-  } catch (err) {
+  liveTrains = await fetch("/api/live?network=zeleznica").then((r) => r.json());
+  document.getElementById("n-train").textContent = liveTrains.length;
+  renderTrains(liveTrains);
+  vlakiPrispeli = true;
+  prilagodiPogledVozilom();
+  if (findEl.value.trim()) renderFind();
+}
+
+function pollLiveTiho() {
+  return pollLive().catch((err) => {
     console.error("/api/live ni uspel", err);
     refreshFeedDot();
-  }
+  });
 }
 
 // Trase se nalozijo SELE, ko jih kdo prizge, in nato osvezujejo z legami --
@@ -1047,11 +1090,11 @@ map.on("click", () => setSheet(false));
 
 initLayers();
 loadStatic().then(() => {
-  pollLive();
-  setInterval(pollLive, POLL_MS);
+  pollLiveTiho();
+  setInterval(pollLiveTiho, POLL_MS);
   // Lega avtobusov ima svoj ritem: feed jo osvežuje na ~30 s, zamude pa se
   // spreminjajo redkeje.
-  pollVehicles("/api/vehicles", onVehicles);
+  vozilaPoll = pollVehicles("/api/vehicles", onVehicles);
   loadRoutes();
   setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
 });

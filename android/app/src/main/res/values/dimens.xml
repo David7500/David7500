@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zaobljenost widgeta. Do Androida 11 sistem svoje mere nima, zato je tu
+     naša; od 12 naprej jo določi launcher (glej `values-v31`), da widget ne
+     štrli iz vrste ostalih na domačem zaslonu. -->
+<resources>
+    <dimen name="widget_rob">18dp</dimen>
+</resources>

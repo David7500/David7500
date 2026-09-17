@@ -497,6 +497,20 @@
 }
 .run-map-fs:hover { color: var(--ink); border-color: var(--line-strong, #3d434f); }
 
+/* Gumb „osveži“. Vrtenje ni okras: brez njega je edini znak, da se je kaj
+   zgodilo, podnapis, ki pride šele z odgovorom — na počasni povezavi je to
+   sekunda tišine in v njej človek pritisne še dvakrat. */
+.run-map-osvezi.is-busy { color: var(--ink); }
+.run-map-osvezi.is-busy svg { animation: osvezi-vrti 0.85s linear infinite; }
+.run-map-osvezi.is-fail { color: var(--sev-bad); border-color: currentColor; }
+
+@keyframes osvezi-vrti { to { transform: rotate(360deg); } }
+
+/* Kdor je izklopil animacije, jih je izklopil tudi tu; barva pove isto. */
+@media (prefers-reduced-motion: reduce) {
+  .run-map-osvezi.is-busy svg { animation: none; }
+}
+
 /* Cez celo STRAN, ne cez cel zaslon (glej opombo v train.js). Glava in
    legenda ostaneta -- brez njiju ne bi bilo ne hitrosti ne pomena oznak. */
 /* Razsirjen zemljevid je iztrgan iz postavitve in mora prezreti VSA pravila o
