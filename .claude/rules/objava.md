@@ -6,6 +6,43 @@ paths:
 
 # Objava in malina
 
+## Objava na arwen je potisk, ne rsync (17. 9. 2026)
+
+`kajros.app` streže **arwen** (`david@192.168.1.46`, port 8000, cloudflared).
+Objava je:
+
+```bash
+git push arwen claude/slovenske-zeleznice-api-ql84hf
+```
+
+`~/kajros` na arwenu je navaden repozitorij z `receive.denyCurrentBranch =
+updateInstead`, zato potisk posodobi tudi delovno drevo; `post-receive`
+(simbolna povezava na `deploy/post-receive` v drevesu) nato požene
+`deploy/posodobi.sh`. Izpis, vključno s čakanjem na `/api/health`, pride nazaj
+potiskajočemu.
+
+**Objavi se samo veja, ki je na strežniku odjavljena.** Vsaka druga se shrani
+in ne objavi — veja za poskus ne sme po nesreči pristati na `kajros.app`.
+
+Zakaj to zamenjuje `rsync`: ta je pisal **mimo gita**, zato je bilo delovno
+drevo na strežniku novejše od svojega HEAD (ob prehodu 17. 9. 2026 je imel
+`git status` tam sedem spremenjenih in tri neizsledene datoteke, HEAD pa je
+bil tri commite zadaj). Katera koda tam teče, se je dalo ugotoviti samo po
+datotekah. Tisto stanje ni bilo zavrženo, ampak pospravljeno v `git stash`
+(`git -C ~/kajros stash list`).
+
+Enkratna nastavitev je `deploy/arwen-git.sh` in gre po cevi, ker je treba
+skripto dobiti na strežnik, preden je tam koda:
+
+```bash
+ssh david@192.168.1.46 'bash -s' < deploy/arwen-git.sh
+```
+
+Pri **prvem** zagonu kavlja še ni mogoče postaviti (datoteke v drevesu ni);
+skripto poženi znova po prvem potisku. Drugi zagon je sicer prazen tek.
+
+**Malina je druga zgodba** in ostane pri sudotu z geslom — glej spodaj.
+
 ## Objava
 
 Ciljni gostitelj je Raspberry Pi doma: **`david@192.168.1.166`**. Tam ob

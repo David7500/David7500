@@ -13,11 +13,23 @@ star zadnji poteg. Ko prenosnik nekaj časa ne teče, se vrzel zapolni z
 `deploy/zapolni-vrzel.sh` (bere z maline, nikoli ne piše nanjo). Malina zato
 ostane prižgana: prenosnik se zapira in seli, ona ne.
 
-**Posodobitev prenosnika:** `~/kajros/deploy/posodobi.sh` na njem — izpiše
-nameščeni commit, prepiše kodo v `/opt/kajros`, jo znova zažene in počaka na
-`/api/health`. Kodo v `~/kajros` osveži razvojni računalnik z `rsync`.
+**Posodobitev prenosnika je `git push arwen`** (od 17. 9. 2026). Potisk
+posodobi delovno drevo v `~/kajros`, kavelj `post-receive` požene
+`deploy/posodobi.sh`, ta pa prepiše kodo v `/opt/kajros`, jo znova zažene in
+počaka na `/api/health`. Izpis pride nazaj na razvojni računalnik, zato se
+neuspela objava vidi tam, kjer si jo sprožil.
 **Gesla ne rabi**: restart je eden od štirih ukazov z `NOPASSWD`, ki jih
 nastavi `deploy/brez-sudo.sh`.
+
+Enkratna nastavitev je `deploy/arwen-git.sh` (po cevi:
+`ssh david@192.168.1.46 'bash -s' < deploy/arwen-git.sh`) in na razvojnem
+računalniku `git remote add arwen david@192.168.1.46:kajros`.
+
+Prej je kodo prinašal `rsync`, torej **mimo gita**: delovno drevo na strežniku
+je bilo novejše od svojega HEAD in vprašati, katera različica tam teče, ni
+bilo mogoče drugače kot po datotekah. `posodobi.sh` se da še vedno pognati
+ročno (`~/kajros/deploy/posodobi.sh ~/kajros`), kar rabiš, kadar je treba
+znova namestiti isti commit.
 
 Starejši `~/posodobi.sh` je **odstranjen 12. 9. 2026**: posodabljal je prek
 `install-rpi.sh` in je zato zahteval sudo geslo, ki ga v seji brez terminala
