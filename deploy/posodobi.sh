@@ -16,8 +16,12 @@ PY="$APP/.venv/bin/python"
 krepko() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
 # Kateri commit se namesca. To je edino, kar je bilo vredno v starem
-# `~/posodobi.sh` (odstranjen 12. 9. 2026): kodo v `$VIR` osvezi razvojni
-# racunalnik z rsync, in ce je tam stara, se stara tudi tiho namesti.
+# `~/posodobi.sh` (odstranjen 12. 9. 2026).
+#
+# Od 17. 9. 2026 kodo v `$VIR` prinese `git push` (`deploy/post-receive`), ki
+# to skripto tudi pozene; ta izpis je zato potrditev, da se namesca prav tisto,
+# kar si pravkar potisnil. Rocni zagon ostane za ponovno namestitev istega
+# commita.
 krepko "nameščam commit"
 git -C "$VIR" log --oneline -1 2>/dev/null || echo "  (brez git zgodovine)"
 

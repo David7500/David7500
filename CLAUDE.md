@@ -253,8 +253,10 @@ zajema vse prevoznike. Ta računalnik je razvoj; baza se **vleče z maline**
 (`./scripts/potegni.sh`), nikoli obratno. Podrobnosti: `.claude/rules/objava.md`
 in [DEPLOY.md](DEPLOY.md).
 
-**Deploy požene uporabnik sam** — `david` na malini za sudo rabi geslo.
-Pripravi ukaz in mu ga daj.
+**Objava strežnika je `git push arwen <veja>`** — kavelj na arwenu požene
+`deploy/posodobi.sh` sam in izpis se vrne potiskajočemu.
+**Na malino pa deploy požene uporabnik sam**, ker `david` tam za sudo rabi
+geslo: pripravi ukaz in mu ga daj.
 
 ## Kje je zapisano ostalo
 
