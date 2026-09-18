@@ -160,7 +160,8 @@ def cmd_ocena(args):
     razpon = (f"{r['prvi_dan']} .. {r['zadnji_dan']}" if r.get("prvi_dan")
               else "brez podatkov")
     print(f"senca {razpon} · pokritih obratovalnih dni {r.get('pokritih_dni', 0)}"
-          f" · razrešenih vrstic {r['vrstic']} · čaka na resnico {r['cakajo']}")
+          f" · razrešenih vrstic {r['vrstic']} na poti, {r.get('vrstic_pred_odhodom', 0)}"
+          f" pred odhodom · čaka na resnico {r['cakajo']}")
     if not r["vrstic"]:
         print("\nŠe nič razrešenega. Senca teče ob strežniku; prvi izidi so čez"
               " dobro uro.")
@@ -194,6 +195,19 @@ def cmd_ocena(args):
         blok(net.upper(), x)
     for ime, x in r["po_zamudi"].items():
         blok(f"ZAMUDA OB POGLEDU {ime}", x)
+
+    # Pogledi, ko vozilo se ni nikjer izmerjeno. Beležijo se od 19. 9. 2026.
+    for net, x in r.get("pred_odhodom", {}).items():
+        print(f"\nPRED ODHODOM, {net.upper()} -- vožnja ob pogledu še ni nikjer izmerjena"
+              f" (brez običajnega {x['brez_obicajnega']} %)")
+        print(f"{'model':24s}{'MAE':>10}{'v 5 min':>10}"
+              f"{'podcenj.':>10}{'precenj.':>10}{'odklon':>10}{'strošek':>10}{'n':>8}")
+        for ime, kljuc in (("prikaz", "prikaz"), ("običajno", "obicajno"),
+                           ("vozni red", "vozni_red")):
+            print(_vrstica_modela(ime, x[kljuc]))
+        print("  kjer ima prevoznik vrednost:")
+        for ime, kljuc in (("prikaz", "prikaz_kjer_prevoznik"), ("prevoznik", "prevoznik")):
+            print("  " + _vrstica_modela(ime, x[kljuc]))
 
 
 def cmd_prune(args):

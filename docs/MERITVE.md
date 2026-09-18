@@ -121,6 +121,12 @@ dan (Arriva +3,0, LPP +4,5 min nad mediano vožnje), popoldne 14–18 h najslab�
 del dneva (LPP do +4,3). Napovedi to ne premakne, ker je mediana okoli nič —
 glej `.claude/rules/model.md`.
 
+**Cena na arwenu** (po objavi, 19. 9.): odhodna tabla Bavarski dvor, 135
+odhodov, **590 ms**, od tega „običajno“ 100 ms na klic (prej 15–18 ms) —
+dodatnih 920 vrstic zgodovine za 112 mestnih odhodov, ki je prej niso imeli.
+Tabla ga kliče dvakrat (še za včerajšnji prometni dan). Glavna poizvedba table
+je ~340 ms in je nova koda ne spremeni. Obhod sence v konici: 0,34 s lokalno.
+
 **Gradientni strop** (LightGBM, cilj L1, učenje 6.–13., test 14.–18. 9.):
 senca 2,43 → 2,20 min, strošek 6,38 → **6,50**; simulacija na poti 2,68 →
 2,42. Pred odhodom 2,89 → 2,87 (brez LPP nič). Najpomembnejše: odklon od

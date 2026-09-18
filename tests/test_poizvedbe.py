@@ -1331,13 +1331,40 @@ def test_senca_posname_napoved_in_dopise_resnico(conn):
     assert conn.execute("SELECT actual_s FROM napoved").fetchone()["actual_s"] == 300
 
 
-def test_senca_ne_meri_voznje_brez_meritve(conn):
-    """Brez izmerjenega postanka nase ocene ni -- in izmisljena ocena je
-    slabsa od priznanja, da je ne poznamo. Tak primer se sam presteje."""
+def test_senca_zapise_pogled_pred_odhodom(conn):
+    """Vožnja brez meritve se od 19. 9. 2026 meri, ne le šteje: 40 % avtobusnih
+    pogledov je takih. Izhodišča in prenosa ni -- in vrstica mora to povedati,
+    sicer bi jo poročilo štelo med poglede na poti."""
     ocena.init(conn)
     izid = ocena.snapshot(conn, _ob(34500))
-    assert izid["zapisanih"] == 0
     assert izid["brez_meritve"] >= 1
+    assert izid["zapisanih"] == 1
+    v = conn.execute("SELECT * FROM napoved").fetchone()
+    assert v["stop_seq"] == 3
+    assert (v["from_seq"], v["current_s"], v["carry_s"]) == (None, None, None)
+    assert v["ours_s"] is None                 # brez zgodovine in brez prevoznika
+
+
+def test_senca_pred_odhodom_zapise_kar_pokaze_iskalnik(conn):
+    """Avtobus, običajno +5, prevoznik +15: iskalnik pokaže +10 (`pred_odhodom`)."""
+    ocena.init(conn)
+    # 'b4': vsota bajtov deljiva s 5 -- senca vzame vsako peto avtobusno vožnjo.
+    assert ocena._v_vzorcu("b4", "avtobus")
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,mode,agency,network) "
+                 "VALUES('b4','rb','N4','A - C','S1','bus','1119','avtobus')")
+    # Pri horizontu 15 min in obhodu ob 09:35 je v oknu postanek ob 09:50.
+    _sched(conn, "b4", [(1, "A", None, 35100), (2, "Z", 35400, 35400), (3, "C", 36000, None)])
+    for k in range(3):          # računani datumi: "običajno" gleda 90 dni od danes
+        _meritev(conn, "b4", _pred(10 + k), 2, 300)
+    _meritev(conn, "b4", "2026-08-31", 2, 900)
+    conn.commit()
+    ocena.snapshot(conn, _ob(34500))
+    v = conn.execute("SELECT * FROM napoved WHERE trip_id = 'b4'").fetchone()
+    assert (v["stop_seq"], v["from_seq"]) == (2, None)
+    assert (v["ours_s"], v["ours_own_s"], v["operator_s"]) == (600, 300, 900)
+    r = ocena.report(conn, days=3650)
+    assert r["vrstic"] == 0                     # na poti ni nič
+    assert r["vrstic_pred_odhodom"] == 0        # resnice še ni
 
 
 def test_senca_posname_postanek_samo_enkrat(conn):

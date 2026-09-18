@@ -357,9 +357,14 @@ Kar velja spoštovati, če se ga kdo dotakne:
   razlika je tisto, kar tu merimo. Če bi resnico brali iz `run` brez te meje,
   bi za resnico vzeli prevoznikovo napoved in prevoznik bi zmagal sam proti
   sebi.
-* **Vožnje brez izmerjenega postanka se ne merijo, ampak štejejo**
-  (`brez_meritve`). To ni izpuščen primer, ampak ugotovitev: to je okno, v
-  katerem potniku ne znamo povedati ničesar.
+* **Vožnje brez izmerjenega postanka se od 19. 9. 2026 tudi merijo**, ne le
+  štejejo (`brez_meritve`). Vrstica nima izhodišča (`from_seq`, `current_s`,
+  `carry_s` so NULL), `ours_s` je, kar pokaže iskalnik (`pred_odhodom`, sicer
+  „običajno“), `ours_own_s` golo „običajno“. Poročilo jih izpiše posebej
+  („PRED ODHODOM“) in na istih vrsticah — mešane s pogledi na poti bi merile
+  razmerje med vrstama, ne modela. Posledica za kontinuiteto: postanek, ki ga
+  prvi obhod ujame pred odhodom, dobi to vrstico in pozneje nobene na poti
+  (zapiše se prvi posnetek), zato je pogledov na poti odtlej nekaj manj.
 * **Avtobusi se vzorčijo** (`OCENA_BUS_VZOREC`, vsaka peta vožnja), sicer bi
   bilo ~135 000 vrstic na dan. Vzorči se po `trip_id` in ne po postanku:
   vožnja mora biti cela ali nobena, sicer se razrez po zamudi meri na kosih
@@ -548,9 +553,10 @@ MAE in strošek sta boljša v 13 dneh. MAE je slabši 6., 12. in 18. 9. (do
 +0,06), strošek 5., 6. in 12. 9. (do +0,23) — večinoma sobote in nedelje, ko
 imajo vožnje po dva dneva zgodovine.
 
-**Pred odhodom je 40 % vseh pogledov** (15 min pred avtobusom). Senca jih samo
-šteje (`brez_meritve`), ne meri — zato je bila ta napaka nevidna. Merilo zanjo
-je rekonstrukcija iz `obs`: kaj je feed vedel ob T, isto pravilo kot
+**Pred odhodom je 40 % vseh pogledov** (15 min pred avtobusom). Senca jih je do
+19. 9. samo štela (`brez_meritve`) — zato je bila ta napaka nevidna; odtlej jih
+meri (`kajros ocena`, blok „PRED ODHODOM“). Merilo za nazaj je rekonstrukcija
+iz `obs`: kaj je feed vedel ob T, isto pravilo kot
 `_LAST_MEASURED_SQL`, brez meje zadnje besede feeda (te iz `obs` ni mogoče
 obnoviti). Simulacija iz končnih vrednosti v `run` tu **laže**: že sama
 razvrstitev „še ni odpeljal“ izda, da vozilo zamuja.

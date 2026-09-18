@@ -20,10 +20,16 @@ model na svojem vzorcu, meri tudi razliko med vzorci.
 Kar ta zapis namenoma **ni**:
 
 * ni model in ne vpliva na prikaz — samo bere;
-* ne meri voženj, ki se še niso začele. Takrat naše ocene ni (nimamo trenutne
-  zamude) in tudi prevoznikova je praviloma ničla. Koliko je takih, se šteje
-  posebej (`brez_meritve`), ker je to samo po sebi ugotovitev: to je okno,
-  v katerem potniku ne znamo povedati ničesar.
+
+**Pogledi pred odhodom se od 19. 9. 2026 merijo, ne le štejejo.** Vožnja, ki ob
+pogledu še nima nobene meritve, dobi vrstico brez izhodišča (`from_seq`,
+`current_s` in `carry_s` so NULL): `ours_s` je, kar pokaže iskalnik zvez
+(`stats.pred_odhodom`, sicer „običajno“), `ours_own_s` golo „običajno“,
+`operator_s` prevoznikova vrednost. Takih je 40 % avtobusnih pogledov 15 min
+pred odhodom (rekonstrukcija iz `obs`, 8.–18. 9.), in dokler jih senca ni
+beležila, je bila njihova napaka nevidna: iskalnik je tam kazal prevoznikovo
+ničlo, MAE 3,68 min proti 2,90 za „običajno“. Poročilo ju loči — mešanica bi
+merila razmerje med obema vrstama, ne modela.
 """
 
 from __future__ import annotations
@@ -100,10 +106,10 @@ def _dnevi(now: datetime) -> list[tuple[str, int]]:
 # postanka je voznja, o kateri potniku ne znamo povedati nicesar, in prav
 # pogostost tega je stvar, ki jo hocemo videti (`brez_meritve`).
 _KANDIDATI_SQL = """
-SELECT t.trip_id, t.train_no, t.network
+SELECT t.trip_id, t.train_no, t.network, t.agency, t.start_s
 FROM trip t
 JOIN service_day d ON d.service_id = t.service_id AND d.date = :day
-WHERE t.start_s <= :now_s
+WHERE t.start_s <= :do_s
   AND t.end_s >= :now_s - :grace
 """
 
@@ -145,8 +151,11 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
     pogledanih = 0
 
     for day, now_s in _dnevi(now):
+        # Kandidati so tudi voznje, ki se sele zacnejo -- pogled 15 min pred
+        # postankom pade pri kratki voznji pred njen odhod.
         kandidati = conn.execute(_KANDIDATI_SQL, {
-            "day": day, "now_s": now_s, "grace": 3 * 3600,
+            "day": day, "now_s": now_s, "do_s": now_s + max(HORIZONT_S.values()),
+            "grace": 3 * 3600,
         }).fetchall()
         if not kandidati:
             continue
@@ -156,10 +165,13 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
         # Postanki v potnikovem oknu. Okno je po omrezju razlicno, zato dve
         # poizvedbi -- ali ena, kadar je v bazi samo eno omrezje.
         for network, h in HORIZONT_S.items():
-            ids = [tid for tid, r in po_id.items()
-                   if r["network"] == network and tid in lm and _v_vzorcu(tid, network)]
+            # Stevec ostane, kar je bil: voznje, ki bi po voznem redu ze
+            # morale voziti, a niso nikjer izmerjene.
             brez_meritve += sum(1 for tid, r in po_id.items()
-                                if r["network"] == network and tid not in lm)
+                                if r["network"] == network and tid not in lm
+                                and r["start_s"] <= now_s)
+            ids = [tid for tid, r in po_id.items()
+                   if r["network"] == network and _v_vzorcu(tid, network)]
             if not ids:
                 continue
             sql = _TARCE_SQL % ",".join("?" * len(ids))
@@ -169,12 +181,16 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
 
             po_voznji: dict[str, list[sqlite3.Row]] = {}
             for t in tarce:
-                if t["stop_seq"] > lm[t["trip_id"]]["stop_seq"]:
+                zadnji = lm.get(t["trip_id"])
+                if zadnji is None or t["stop_seq"] > zadnji["stop_seq"]:
                     po_voznji.setdefault(t["trip_id"], []).append(t)
+            # "Obicajno" za poglede pred odhodom, v enem klicu.
+            typ = stats.typical_at_stops(conn, [
+                (tid, t["stop_seq"]) for tid, sez in po_voznji.items()
+                if tid not in lm for t in sez])
 
             for trip_id, seznam in po_voznji.items():
-                zadnji = lm[trip_id]
-                trenutna = zadnji["delay_s"] or 0
+                zadnji = lm.get(trip_id)
                 # Prevoznikova vrednost za te postanke -- kar bi feed rekel,
                 # ce bi ga bral naravnost. Za se nedosezen postanek je pogosto
                 # sploh ni (drsece okno), in prav to je del ugotovitve.
@@ -184,6 +200,28 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                     f"WHERE service_date = ? AND trip_id = ? AND stop_seq IN "
                     f"({','.join('?' * len(seqs))})",
                     (day, trip_id, *seqs))}
+
+                if zadnji is None:
+                    # Pogled pred odhodom: izhodisca in prenosa ni, prikaz
+                    # pokaze `pred_odhodom` ali "obicajno".
+                    for t in seznam:
+                        seq = t["stop_seq"]
+                        o = typ.get((trip_id, seq))
+                        obicajno = round(o["median_s"]) if o else None
+                        z, _ = stats.pred_odhodom(obicajno, feed.get(seq), network,
+                                                  po_id[trip_id]["agency"])
+                        cur = conn.execute(
+                            "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
+                            " network, made_ts, horizon_s, ours_s, ours_own_s, ours_samples,"
+                            " operator_s) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (trip_id, day, seq, network, made_ts, t["t_s"] - now_s,
+                             z if z is not None else obicajno, obicajno,
+                             o["n"] if o else None, feed.get(seq)))
+                        zapisano += cur.rowcount
+                        pogledanih += 1
+                    continue
+
+                trenutna = zadnji["delay_s"] or 0
                 # `predict` enkrat na voznjo, ne enkrat na postanek: vrne vse
                 # postanke naprej in klic je isti.
                 napoved = {x["stop_seq"]: x for x in stats.predict(
@@ -362,10 +400,15 @@ def report(conn: sqlite3.Connection, days: int = 30,
     ki precenitev nad rezervo zaračuna kot cel razmik do naslednjega vozila.
     """
     od = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
-    vrstice = conn.execute(
+    vse = conn.execute(
         "SELECT * FROM napoved WHERE actual_s IS NOT NULL AND service_date >= ?"
         + (" AND network = ?" if network else ""),
         (od, network) if network else (od,)).fetchall()
+    # Pogled pred odhodom (brez izhodisca) je drugo vprasanje: tam ni ne
+    # trenutne zamude ne prenosa. V isti tabeli merila bi mesal oboje in
+    # meril razmerje med vrstama pogledov, ne modela.
+    vrstice = [r for r in vse if r["from_seq"] is not None]
+    pred = [r for r in vse if r["from_seq"] is None]
 
     def rez(rows: list[sqlite3.Row], omrezje: str | None = None) -> dict:
         # Prevoznik za postanek v potnikovem oknu pogosto nima vrednosti. Ce
@@ -411,7 +454,7 @@ def report(conn: sqlite3.Connection, days: int = 30,
     # gre v izpis se dejanski razpon in stevilo obratovalnih dni, ki jih
     # senca res pokriva. Senca se polni samo, ko tece strezni proces, zato
     # koledarski razpon in pokriti dnevi nista isto.
-    obr = sorted({r["service_date"] for r in vrstice})
+    obr = sorted({r["service_date"] for r in vse})
     izid = {"od": od, "vrstic": len(vrstice), "skupaj": rez(vrstice),
             "prvi_dan": obr[0] if obr else None,
             "zadnji_dan": obr[-1] if obr else None,
@@ -436,4 +479,22 @@ def report(conn: sqlite3.Connection, days: int = 30,
     cakajo = conn.execute(
         "SELECT COUNT(*) FROM napoved WHERE actual_s IS NULL").fetchone()[0]
     izid["cakajo"] = cakajo
+
+    def pred_rez(rows: list[sqlite3.Row], omrezje: str) -> dict:
+        # Vsi trije na ISTIH vrsticah -- tistih, kjer "obicajno" obstaja.
+        # Kjer ga ni, prikaz kaze prevoznika ali nic, in to je drug vzorec.
+        parne = [r for r in rows if r["ours_own_s"] is not None]
+        s_prev = [r for r in parne if r["operator_s"] is not None]
+        return {
+            "prikaz": _meritve([(r["ours_s"], r["actual_s"]) for r in parne], omrezje),
+            "obicajno": _meritve([(r["ours_own_s"], r["actual_s"]) for r in parne], omrezje),
+            "vozni_red": _meritve([(0, r["actual_s"]) for r in parne], omrezje),
+            # Prevoznik le tam, kjer ga ima; prikaz zraven na istih vrsticah.
+            "prikaz_kjer_prevoznik": _meritve([(r["ours_s"], r["actual_s"]) for r in s_prev], omrezje),
+            "prevoznik": _meritve([(r["operator_s"], r["actual_s"]) for r in s_prev], omrezje),
+            "brez_obicajnega": round((len(rows) - len(parne)) / len(rows) * 100, 1) if rows else None,
+        }
+    izid["vrstic_pred_odhodom"] = len(pred)
+    izid["pred_odhodom"] = {net: pred_rez([r for r in pred if r["network"] == net], net)
+                            for net in sorted({r["network"] for r in pred})}
     return izid

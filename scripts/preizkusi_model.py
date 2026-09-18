@@ -32,7 +32,7 @@ def oceni(pari):
 def main():
     conn = db.connect()
     vrstice = [dict(r) for r in conn.execute(
-        "SELECT * FROM napoved WHERE actual_s IS NOT NULL")]
+        "SELECT * FROM napoved WHERE actual_s IS NOT NULL AND from_seq IS NOT NULL")]
     if not vrstice:
         print("sencno merjenje še nima razrešenih vrstic -- pusti strežnik teči")
         return
