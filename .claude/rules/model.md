@@ -254,17 +254,8 @@ vsak dan 0.)
 Vsak nov model naj se najprej pomeri s `prenos`. Kar ga ne premaga, ne sodi
 v prikaz, pa naj bo še tako domiseln.
 
-**Avtobusi bodo dobili svoj model; zdaj ga nimajo in to je izmerjeno.**
-`backtest --network avtobus`, 2 dneva in 326 685 nalog: sedanji model da
-**natanko isto kot prenos zamude** (2,74 min · 92,5 %), ker z dvema dnevoma
-ni niti enega para (vožnja, i, j) z dovolj vzorci. Edini, ki kaj pridobi, je
-`odsek` (2,63 min · 92,9 %) -- združevanje po fizičnem odseku čez vse linije.
-Model torej avtobusom ne škodi, a jim tudi ne pomaga.
-
-Ko bo meritev dovolj, gresta modela **narazen**: pri avtobusu so smiselni
-vhodi, ki jih železnica nima ali jih tam ni vredno gledati -- ura dneva
-(gneča), vreme, GPS hitrost in lega, gostota postajališč. Do takrat velja
-isto pravilo: kar ne premaga prenosa, ne gre v prikaz.
+**Avtobusi imajo od 19. 9. 2026 svoja pravila** — glej „Avtobusni model“
+spodaj. Železnica ostane pri tem, kar je opisano tu.
 
 **Meritev je bila neizvedljiva, dokler mediane niso bile predračunane.**
 `statistics.median` se je klical enkrat na napoved. Pri železnici je bil
@@ -484,46 +475,14 @@ lastno rezervo `B`, sta `k` in `B` **zamenljiva**: pri `B = 5` je najboljši
 zamik natanko nič in mera ne dela videza, da se izplača napovedovati manj,
 kot merimo.
 
-## Avtobusni pozitivni odklon: diagnoza, brez popravka
+## Avtobusni pozitivni odklon — razrešeno 19. 9. 2026
 
-Naš odklon je pri avtobusih **+0,42 min**, pri železnici −0,94. Izvor je
-izmerjen: **pravilo „prevoznik ve več“** (`_with_operator`, `max(naša,
-njegova)`). Maksimum dveh šumnih ocen je navzgor pristranski — to je
-aritmetika, ne napaka pravila.
-
-**Kaj pravilo res zamenja, se vidi šele pri simetričnem pragu** (avtobusi,
-n = 29 642, 30 dni sence):
-
-| | odklon | precenili | podcenili | MAE | strošek |
-|---|---|---|---|---|---|
-| naša ocena **s** pravilom | +0,42 | **6,9 %** | 5,7 % | 3,16 | **7,73** |
-| ista vrstica **brez** pravila | −0,94 | 4,2 % | 9,4 % | 3,18 | 7,93 |
-
-Pravilo **skoraj podvoji nevarno smer** (4,2 → 6,9 %) in za toliko poreže
-varno (9,4 → 5,7 %). Dokler je to bral samo `odklon`, je bila to opomba o
-pristranskosti; zdaj je vidno kot menjava varne napake za nevarno.
-
-**Vseeno ostane**, ker je strošek — edina mera, ki obe smeri tehta s ceno —
-z njim nižji (7,73 proti 7,93 min). Ima tudi svojo izmerjeno utemeljitev:
-kadar prevoznik napove več, je njegov MAE 0,21 proti našim 2,66. A rezerva je
-tanka in odvisna od `RAZMIK_S`; kdor se ga dotakne, naj to številko pomeri
-znova.
-
-**Preizkušeno in NE uvedeno:** povprečje naše in prevoznikove vrednosti da na
-parnem izrezu MAE 2,77 (proti 2,85), odklon **−0,03** (proti +0,85) in strošek
-7,09 (proti 7,27) — boljše po vseh treh merilih hkrati. Vseeno ni uvedeno,
-ker:
-
-* utemeljitev obstoječega pravila pravi, da je nizka prevoznikova vrednost
-  **privzeta ničla** za nerazrešen postanek; povprečenje z njo bi moralo
-  škoditi, pa ne škoduje, in **mehanizma, zakaj, nimam**;
-* podatka sta dva dneva in dobiček pri MAE se ne ponovi (2. 9.: 3,06 → 2,93;
-  3. 9.: 2,44 → 2,45), popravek odklona pa se ponovi oba dneva
-  (+0,95 → −0,01 in +0,63 → −0,07).
-
-Ko bo sence za dva tedna, se to pomeri znova: če odklon ostane popravljen in
-MAE vsaj enak, se uvede. Prej ne — utemeljeno pravilo se ne ruši z razlago,
-ki je ni.
+Izvor je bil `max(naša, prevoznikova)`: maksimum dveh šumnih ocen je navzgor
+pristranski (+0,26 min, 4,4 % precenjenih). Pri avtobusih zdaj velja
+polovica presežka, pri mestnem LPP ves — glej „Avtobusni model“ spodaj.
+Povprečje v obe smeri, ki je čakalo na dva tedna sence, je bilo pomerjeno
+in je **slabše** (2,72 proti 2,62 min): prevozniku navzdol se še vedno ne
+verjame.
 
 
 ## Katera vožnja danes pelje, pove meritev
@@ -549,38 +508,80 @@ iz meje. Če se kdaj razideta, je to tiha napaka na zaslonu — ta je bila po
 zapisu v `CLAUDE.md` tam že dvakrat.
 
 
-## Avtobusni model: prva meritev, ki odločitev sploh omogoča (4. 9. 2026)
+## Avtobusni model (19. 9. 2026)
 
-Do zdaj je bila odločitev „ni dovolj podatkov“. Zdaj jih je: **77 %**
-avtobusnih voženj ima zgodovino (1. 9. jih je 11 %), **47 %** vsaj tri dni
-(prag `MIN_PREDICT_SAMPLES`); pri železnici 88 % oziroma 82 %.
+Železnica in avtobusi imajo od tu **ista koda, različna pravila**. Vse štiri
+razlike so izmerjene na treh merilih hkrati, podrobnosti in tabele so v
+[docs/MERITVE.md](../../docs/MERITVE.md), „Avtobusni model“.
 
-`kajros backtest` na obeh omrežjih — železnica 15 dni in **521 781** nalog,
-avtobusi 7 dni in **6 004 849** nalog:
+1. **Vožnja je vožnja čez dneve, ne `trip_id`** (`db.voznja_sql`). Mestni LPP
+   ima za vsak datum svoj `trip_id` (`dan|vožnja|vzorec`), zato model, „običajno“
+   in zgodovina okna vožnje zanj **nikoli niso imeli preteklega dne** — senca je
+   pokazala 0 % napovedi LPP z zgodovino. Ključ je izrazni indeks
+   `trip_voznja`; poizvedba mora izraz ponoviti dobesedno, zato vedno skozi
+   `db.voznja_sql()`. Nagrobniki LPP nimajo `sched`, zato `history()` vzame
+   vozni red prikazane vožnje.
+2. **Meja ostanka velja samo, dokler ni treh dni** (`OSTANEK_BREZ_MEJE_DNI`).
+   Nekatere vožnje so na določenem postanku vsak dan uro „pozne“ (A6385:
+   +62 min v devetih dneh), meja jih je rezala na +10.
+3. **Prevoznik navzgor do polovice, pri mestnem LPP v celoti**
+   (`PREVOZNIK_NAVZGOR`, `PREVOZNIK_NAVZGOR_AGENCIJA`). Mestni LPP ima živi del
+   iz lastnega sistema sledenja vozil; primestni LPP (1118) je IJPP in dobi
+   polovico.
+4. **Vožnja brez meritve** (`stats.pred_odhodom`): kadar prevoznik ne pove
+   več od običajnega, velja „običajno“; kadar pove več, zgornje pravilo; brez
+   treh dni zgodovine prevoznik. Prej je tabla kazala običajno, iskalnik zvez
+   pa prevoznikovo vrednost — **za isto vožnjo ob istem trenutku** — in 73 %
+   prevoznikovih vrednosti pred odhodom je gola ničla.
 
-| model | železnica MAE | v 5 min | avtobusi MAE | v 5 min |
-|---|---|---|---|---|
-| **rezerva+razred (v uporabi)** | **2,06** | 90,0 % | 2,98 | 93,0 % |
-| združen | 2,07 | 89,6 % | **2,85** | **93,6 %** |
-| odsek+razred | 2,36 | 87,5 % | 2,89 | 93,4 % |
-| odsek | 2,37 | 87,4 % | 2,94 | 93,2 % |
-| rezerva+mediana | **2,00** | **90,5 %** | 3,16 | 92,4 % |
-| prenos | 3,04 | 82,3 % | 3,38 | 91,0 % |
+Izid, prikazana številka (učenje samo na preteklih dneh):
 
-**Sedanji model je pisan za železnico in tam je blizu najboljšega; pri
-avtobusih ga „združen“ prekaša** za 0,13 min MAE in 0,6 odstotne točke.
-To je prvi merljiv razlog za omrežju lasten model — ne velik, a ponovljiv na
-šestih milijonih nalog.
+| | prej | zdaj |
+|---|---|---|
+| senca 14.–18. 9., vozilo na poti (124 909) | 2,60 min · 91,2 % · strošek 6,72 | **2,44 · 92,3 % · 6,33** |
+| pred odhodom, iskalnik (463 075, iz `obs`) | 3,68 · 85,4 % · 8,59 | **2,78 · 90,9 % · 7,18** |
+| pred odhodom, tabla (isto) | 2,90 · 90,2 % · 7,43 | **2,78 · 90,9 % · 7,18** |
+| backtest 8 dni (10,6 mio nalog), oboje že z novim ključem | 2,13 · 94,9 % | 2,13 · 95,1 % |
 
-**Zamenjave zaenkrat NI**, in to ni oklevanje, ampak pravilo: model se meri na
-dveh merilih, backtest in `kajros ocena`. Senca je 4. 9. stara **tri dni**
-(47 892 vrstic) in na njej se razlika 0,13 min ne da ločiti od šuma. Ko bo
-sence za dva tedna, se to pomeri znova — skupaj s preizkusom povprečenja,
-ki čaka na isto.
+Precenjenih (nevarna smer) je v senci manj **vseh 16 dni** od 3. do 18. 9.
+MAE in strošek sta boljša v 13 dneh. MAE je slabši 6., 12. in 18. 9. (do
++0,06), strošek 5., 6. in 12. 9. (do +0,23) — večinoma sobote in nedelje, ko
+imajo vožnje po dva dneva zgodovine.
 
-Opomba za tistega, ki to nadaljuje: `rezerva+razred, prag 3 dni` je pri
-avtobusih **slabši** od sedanjega (3,16 proti 2,98), pri železnici pa
-neznatno boljši (2,03 proti 2,06). Prag torej ni skupna nastavitev.
+**Pred odhodom je 40 % vseh pogledov** (15 min pred avtobusom). Senca jih samo
+šteje (`brez_meritve`), ne meri — zato je bila ta napaka nevidna. Merilo zanjo
+je rekonstrukcija iz `obs`: kaj je feed vedel ob T, isto pravilo kot
+`_LAST_MEASURED_SQL`, brez meje zadnje besede feeda (te iz `obs` ni mogoče
+obnoviti). Simulacija iz končnih vrednosti v `run` tu **laže**: že sama
+razvrstitev „še ni odpeljal“ izda, da vozilo zamuja.
+
+**Ura, dež in dan v tednu povečajo negotovost, ne premaknejo sredine.** Po
+vseh treh rezih je predznačena mediana napake novega modela med +0,1 in
++0,4 min; raste le MAE (suho 2,49, rahel dež 3,19; 14–16 h 3,2–3,5 proti
+2,0–2,5; petek 3,50 proti ~2,3). Ura je že v vožnji sami — vsak odhod ima
+svojo zgodovino.
+
+**Preizkušeno in ne pomaga** (vse z učenjem samo na preteklih dneh):
+
+| zamisel | izid |
+|---|---|
+| „običajno“ po tipu dneva / po dnevu v tednu (≥ 2 dni); osnova je mediana vseh preteklih dni | 2,76 → 2,76 / **3,10** |
+| „običajno“ iz zadnjih 7 dni | 2,76 → 2,82 |
+| „običajno“ ločeno za dež in suho | 2,76 → 2,79 |
+| sidro v običajni zamudi, `typ_j + ρ·(d_i − typ_i)`, zmes z modelom | senca 2,43 → 2,41 |
+| stanje danes: odklon linije / prevoznika / postajališča v zadnji uri | ±0,01; linija s težo 0,4 slabše |
+| odsek (vse vožnje med istima postajališčema) za vožnje brez 3 dni | senca 2,43 → 2,43 |
+| „združen“ (vožnja, skrčena proti odseku) | backtest 2,13 → 2,05, senca 2,43 → 2,41, dobiček z dnevi pada; rabi nočno tabelo odsekov |
+| spodnja meja iz ure, ko vožnja po voznem redu že vozi, a ni izmerjena | strošek 14,39 → 14,90, precenjenih 6,0 → 10,7 % |
+
+**Strop je znan.** Gradientni model (LightGBM, vse zgornje značilke) na isti
+senci: 2,43 → 2,20 min, a s **slabšim** stroškom (6,38 → 6,50). Ostanek so
+nelinearne interakcije; najmočnejša značilka je odklon od običajnega na
+izhodišču. Preprost izraz zanj ni našel ničesar nad 0,02 min.
+
+`kajros backtest --network avtobus` v celoti ne gre v pomnilnik (21 dni ≈
+24 mio nalog), zato `--dni 7` in `--modeli 'a;b'` (podpičje, imena modelov
+vsebujejo vejice). Sedem dni in štirje modeli: 9,3 GB, 7 min.
 
 ## Prehod ni izmerjen, ampak sklepan — in to je odprta luknja
 

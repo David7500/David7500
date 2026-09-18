@@ -10,7 +10,7 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, geo
+from . import config, db, geo
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -346,21 +346,38 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
     petnajst minut v enem koraku; v resnici se je tam koncala ena smer in
     zacela druga. Isto velja za devet vlakov s sezonskimi razlicicami.
 
-    `trip_id` je med regeneracijami GTFS stabilen, zato isti `trip_id` na
-    drugem dnevu je res isti odhod.
+    Isti odhod na drugem dnevu je ista VOZNJA (`db.voznja_sql`): pri IJPP je
+    to isti `trip_id`, pri mestnem LPP pa `trip_id` brez dnevne predpone.
     """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
-    kje = "t.train_no = ?" if trip_id is None else "r.trip_id = ?"
-    rows = conn.execute(
-        "SELECT r.service_date, r.stop_seq, st.name, r.delay_arr, r.delay_dep "
-        "FROM run r JOIN trip t USING (trip_id) JOIN sched s "
-        "       ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
-        "JOIN station st ON st.stop_id = s.stop_id "
-        f"WHERE {kje} AND r.service_date >= ? "
-        "  AND (? IS NULL OR r.service_date <> ?) "
-        "ORDER BY r.service_date, r.stop_seq",
-        (trip_id or train_no, since, exclude_date, exclude_date),
-    ).fetchall()
+    if trip_id is None:
+        rows = conn.execute(
+            "SELECT r.service_date, r.stop_seq, st.name, r.delay_arr, r.delay_dep "
+            "FROM run r JOIN trip t USING (trip_id) JOIN sched s "
+            "       ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+            "JOIN station st ON st.stop_id = s.stop_id "
+            "WHERE t.train_no = ? AND r.service_date >= ? "
+            "  AND (? IS NULL OR r.service_date <> ?) "
+            "ORDER BY r.service_date, r.stop_seq",
+            (train_no, since, exclude_date, exclude_date),
+        ).fetchall()
+    else:
+        # Pretekli dnevi iste VOZNJE (`db.voznja_sql`), imena postaj pa iz
+        # voznega reda te, ki jo prikazujemo. Mestni LPP ima za vsak dan svoj
+        # `trip_id`, pretekli pa po novem uvozu nimajo vec `sched` -- skozi
+        # njihov vozni red bi zgodovina ostala prazna.
+        rows = conn.execute(
+            "SELECT r.service_date, r.stop_seq, st.name, r.delay_arr, r.delay_dep "
+            "FROM trip a JOIN trip t "
+            f"       ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
+            "JOIN run r ON r.trip_id = t.trip_id "
+            "JOIN sched s ON s.trip_id = a.trip_id AND s.stop_seq = r.stop_seq "
+            "JOIN station st ON st.stop_id = s.stop_id "
+            "WHERE a.trip_id = ? AND r.service_date >= ? "
+            "  AND (? IS NULL OR r.service_date <> ?) "
+            "ORDER BY r.service_date, r.stop_seq",
+            (trip_id, since, exclude_date, exclude_date),
+        ).fetchall()
 
     by_day: dict[str, list] = {}
     by_stop: dict[int, dict] = {}
@@ -636,14 +653,21 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     # ima cez cel dan sto in vec voznj, pri avtobusih pa bo tega desetkrat vec.
     # Meja spremenljivk v sqlite je 32766; 400 parov (800 vezav) je varno tudi
     # na starejsih razlicicah.
+    #
+    # Pretekle dneve isce po VOZNJI (`db.voznja_sql`), ne po `trip_id`: mestni
+    # LPP ima za vsak dan svoj `trip_id` in "obicajno" je bilo zanj zato vedno
+    # prazno. Izmerjeno z ucenjem samo na preteklih dneh (naloge pred odhodom,
+    # 11 dni): pri LPP MAE 2,13 -> 1,70 min, v 5 min 92,5 -> 94,7 %.
     for i in range(0, len(wanted), 400):
         chunk = wanted[i:i + 400]
         values = ",".join(["(?,?)"] * len(chunk))
         params = [x for pair in chunk for x in pair]
         rows = conn.execute(
             f"WITH want(trip_id, stop_seq) AS (VALUES {values}) "
-            f"SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
-            f"FROM run r JOIN want w ON w.trip_id = r.trip_id AND w.stop_seq = r.stop_seq "
+            f"SELECT w.trip_id, w.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
+            f"FROM want w JOIN trip a ON a.trip_id = w.trip_id "
+            f"JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
+            f"JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
             f"WHERE r.service_date >= ? AND d IS NOT NULL",
             (*params, since),
         ).fetchall()
@@ -1016,8 +1040,46 @@ def _slack_ahead(conn: sqlite3.Connection, trip_ids: list[str]) -> dict:
 #: razrešil; visoka pa pomeni, da prevoznik VE nekaj, cesar iz zgodovine ni
 #: mogoce vedeti -- okvaro, zaporo, krizanje. Zato: `max(nasa ocena, njegova)`.
 #: Nikoli navzdol, vedno navzgor.
-def _with_operator(ocena: int, prevoznik: int | None) -> int:
-    return ocena if prevoznik is None else max(ocena, prevoznik)
+#:
+#: **Pri avtobusih samo do polovice.** Visoka prevoznikova vrednost je tam
+#: prav tako informativna, a ne tako zanesljiva kot pri vlaku: maksimum dveh
+#: sumnih ocen je navzgor pristranski, in v potnikovem oknu je to bilo vidno
+#: kot odklon +0,26 min in 4,4 % precenjenih (nevarna smer). Izmerjeno na
+#: senci 8.-18. 9. 2026 (217 784 avtobusnih napovedi, isti model zraven):
+#:
+#:   pravilo                      MAE   v 5 min  odklon  precenj.  strosek
+#:   max (prej)                  2,68   91,1 %   +0,26    4,4 %     6,77
+#:   povprecje v obe smeri       2,72   90,3 %   -1,11    1,4 %     6,80
+#:   **navzgor do polovice**     2,62   91,4 %   -0,36    2,6 %     6,64
+#:   navzgor 3/4                 2,62   91,5 %   -0,05    3,3 %     6,60
+#:
+#: Polovica je najboljsa v obeh polovicah obdobja (8.-13. in 14.-18. 9.) in
+#: pri vseh stirih medkrajevnih prevoznikih. Navzdol se prevozniku se vedno
+#: ne verjame -- povprecje, ki to pocne, je slabse.
+PREVOZNIK_NAVZGOR = {"avtobus": 0.5}
+
+#: **Mestni LPP je izjema: tam prevoznik navzgor velja v celoti.** Njegov
+#: zivi del prihaja iz LPP-jevega lastnega sistema za sledenje vozil, ne iz
+#: IJPP, in kadar pove vec od nas, je to vedenje o vozilu. Izmerjeno na obeh
+#: merilih, v obeh polovicah obdobja:
+#:
+#:   LPP, delez presezka             0      0,5    1
+#:   senca, na poti 6.-13.          2,39   2,19   2,12
+#:   senca, na poti 14.-18.         1,90   1,78   1,79
+#:   pred odhodom 8.-13.           10,93   9,81   8,77   (11. 9.: +9,8 min dan)
+#:   pred odhodom 14.-18.           2,30   2,17   2,07
+#:
+#: Pri primestnem LPP (1118, IJPP) je pred odhodom najboljse 0 -- zato izjema
+#: velja za vir, ne za ime prevoznika.
+PREVOZNIK_NAVZGOR_AGENCIJA = {"lpp": 1.0}
+
+
+def _with_operator(ocena: int, prevoznik: int | None,
+                   network: str | None = None, agency: str | None = None) -> int:
+    if prevoznik is None or prevoznik <= ocena:
+        return ocena
+    delez = PREVOZNIK_NAVZGOR_AGENCIJA.get(agency, PREVOZNIK_NAVZGOR.get(network, 1.0))
+    return ocena + round((prevoznik - ocena) * delez)
 
 
 #: Postanek, od katerega naprej velja, da vozilo na postaji "stoji dlje casa".
@@ -1065,6 +1127,25 @@ def _operator_is_stale(prevoznik: int | None, arr_i: int | None, dep_i: int,
 OMEJI_OSTANEK_S = 600
 OMEJI_OSTANEK_DELEZ = 1.0
 
+#: Od koliko dni zgodovine meja ostanka ne velja vec -- po omrezju.
+#:
+#: Meja je bila postavljena, ko je za mediano stal en sam dan. Pri avtobusih
+#: jih je 18. 9. 2026 za 80 % napovedi v senci vsaj tri, in tam meja reze
+#: pravo strukturo: nekatere vozje so na dolocenem postanku vsak dan uro
+#: "pozne" (A6385 na devetem postanku mediano +62 min v devetih dneh, danes
+#: +66), meja pa je to rezala na +10. Izmerjeno z ucenjem samo na preteklih
+#: dneh (1,16 mio nalog iz oci potnika, 8.-18. 9.):
+#:
+#:   meja velja, ce je dni manj kot   MAE     v 5 min
+#:   vedno (prej)                     3,44    89,4 %
+#:   2 / **3** / 4                    3,12    89,7 %
+#:   5                                3,13
+#:   nikoli                           3,12
+#:
+#: Arriva 4,61 -> 3,73 min. Na senci od 14. 9. (124 909 napovedi, oboje s
+#: pravilom `max`): 2,59 -> 2,48. Pri zeleznici ni izmerjeno in ostane, kot je.
+OSTANEK_BREZ_MEJE_DNI = {"avtobus": 3}
+
 
 def _omejen_ostanek(ostanek: float, current_delay_s: int,
                     omeji_s: int | None = None,
@@ -1103,18 +1184,26 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     krajema, ki nista sosednja in nista niti v isti smeri.
     """
     trip_id = resolve_trip(conn, train_no, service_date, trip_id)
+    jaz = (conn.execute("SELECT network, agency FROM trip WHERE trip_id = ?",
+                        (trip_id,)).fetchone() if trip_id else None)
+    network, agency = (jaz["network"], jaz["agency"]) if jaz else (None, None)
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     # Dan, ki ga prikazujemo, ne sme biti v svoji lastni ucni mnozici. Pri
     # tekoci voznji naprej po progi meritev tako ali tako ni, pri ogledu
     # koncanega dne pa bi model deloma napovedoval iz odgovora.
+    #
+    # Zgodovina je zgodovina VOZNJE, ne `trip_id` (`db.voznja_sql`): mestni
+    # LPP ima za vsak dan svoj `trip_id` in model zanj brez tega ni nikoli
+    # imel niti enega preteklega dne.
     rows = conn.execute(
         f"SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
-        f"FROM run r JOIN trip t USING (trip_id) "
-        f"WHERE {'r.trip_id = ?' if trip_id else 't.train_no = ?'} "
+        f"FROM trip t JOIN run r ON r.trip_id = t.trip_id "
+        f"WHERE {db.voznja_sql('t') + ' = ?' if trip_id else 't.train_no = ?'} "
         f"  AND r.service_date >= ? AND d IS NOT NULL "
         f"  AND (? IS NULL OR r.service_date <> ?) "
         f"ORDER BY r.service_date, r.stop_seq",
-        (trip_id or train_no, since, exclude_date, exclude_date),
+        (db.voznja(trip_id, agency) if trip_id else train_no,
+         since, exclude_date, exclude_date),
     ).fetchall()
 
     by_day: dict[str, dict[int, int]] = {}
@@ -1167,12 +1256,12 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
                 if stop_seq in day and seq in day]
         podobni = [r for d0, r in pari if delay_bucket(d0) == razred]
         ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
-        # Mediana iz enega dneva ni mediana. Krcenje jo potegne proti nic
-        # sorazmerno s tem, koliko dni stoji za njo -- brez praga, ki bi pri
-        # dveh dneh delal skok.
-        nasa = osnova + (round(_omejen_ostanek(
-            statistics.median(ostanki), current_delay_s, omeji_s, omeji_delez))
-            if ostanki else 0)
+        # Mediana iz enega dneva ni mediana, zato meja (`_omejen_ostanek`) --
+        # a pri avtobusih samo, dokler dni ni dovolj (`OSTANEK_BREZ_MEJE_DNI`).
+        ostanek = statistics.median(ostanki) if ostanki else 0
+        if len(ostanki) < OSTANEK_BREZ_MEJE_DNI.get(network, math.inf):
+            ostanek = _omejen_ostanek(ostanek, current_delay_s, omeji_s, omeji_delez)
+        nasa = osnova + round(ostanek)
         prevoznik = feed.get(seq)
         if _operator_is_stale(prevoznik, arr_i, current_delay_s, dwell_i):
             prevoznik = None            # samo prenos zamude, ne napoved
@@ -1186,8 +1275,9 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             "own_delay_s": nasa,
             "operator_delay_s": prevoznik,
             "from_operator": prevoznik is not None and prevoznik > nasa,
-            "predicted_delay_s": _with_operator(nasa, prevoznik),
-            "p90_delay_s": (_with_operator(osnova + round(_pct(ostanki, 0.9)), prevoznik)
+            "predicted_delay_s": _with_operator(nasa, prevoznik, network, agency),
+            "p90_delay_s": (_with_operator(osnova + round(_pct(ostanki, 0.9)), prevoznik,
+                                           network, agency)
                             if ostanki else None),
             "basis": ("prevoznik ve več" if prevoznik is not None and prevoznik > nasa
                       else "rezerva + historicni ostanek" if ostanki
@@ -1440,7 +1530,8 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
                        trip_id: str | None, stop_seq: int, ime_postaje: str,
                        feed_delay_s: int | None, lm: dict | None,
                        slack_vrsta, service_date: str,
-                       potrjen: bool = False) -> dict:
+                       potrjen: bool = False,
+                       obicajno_s: float | None = None) -> dict:
     """Zamuda na potnikovem postanku: koliko je in **od kod je**.
 
     Eno pravilo na enem mestu. Iskalnik zvez in pot od vrat do vrat sta ista
@@ -1449,7 +1540,9 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
     izmerjeno zamudo. Ta razred napake je v tem projektu že bil.
 
     `lm` je vrstica iz `last_measured()` za to vožnjo, `slack_vrsta` pa njena
-    rezerva voznega reda iz `_slack_ahead()`.
+    rezerva voznega reda iz `_slack_ahead()`, `obicajno_s` mediana iz
+    `typical_at_stops()` za ta postanek (rabi jo vožnja brez meritve,
+    glej `pred_odhodom`).
     """
     # Kaj potnik res rabi: zamudo na SVOJI postaji, ce je ze izmerjena;
     # sicer zadnjo znano zamudo in kje je bila izmerjena.
@@ -1478,17 +1571,60 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
             prev = None
         ocena = estimate_at(conn, train_no, trip_id, lm["stop_seq"],
                             lm["delay_s"], stop_seq, service_date)
+        if ocena is None:
+            # Omrezje samo tu: pravilo prevoznika je pri avtobusu drugacno,
+            # model pa ga je ze uporabil sam (`predict`).
+            jaz = conn.execute("SELECT network, agency FROM trip WHERE trip_id = ?",
+                               (trip_id,)).fetchone() if trip_id else None
+            ocena = _with_operator(_after_slack(lm["delay_s"], rez), prev,
+                                   *((jaz["network"], jaz["agency"]) if jaz else ()))
         return {
-            "delay_s": (ocena if ocena is not None
-                        else _with_operator(_after_slack(lm["delay_s"], rez), prev)),
+            "delay_s": ocena,
             "delay_at": lm["name"],
             "delay_kind": "ocena",
         }
     if feed_delay_s is not None:
         # Feed ima vrednost, a cas se ni minil -- to je napoved prevoznika.
-        return {"delay_s": feed_delay_s, "delay_at": ime_postaje,
-                "delay_kind": "napoved prevoznika"}
+        jaz = conn.execute("SELECT network, agency FROM trip WHERE trip_id = ?",
+                           (trip_id,)).fetchone() if trip_id else None
+        z, vrsta = pred_odhodom(obicajno_s, feed_delay_s,
+                                *((jaz["network"], jaz["agency"]) if jaz else ()))
+        return {"delay_s": z, "delay_at": ime_postaje if vrsta == "napoved prevoznika" else None,
+                "delay_kind": vrsta or "brez podatka"}
     return {"delay_s": None, "delay_at": None, "delay_kind": "brez podatka"}
+
+
+def pred_odhodom(obicajno_s: float | None, prevoznik_s: int | None,
+                 network: str | None = None,
+                 agency: str | None = None) -> tuple[int | None, str | None]:
+    """Zamuda za vožnjo, ki še nima nobene meritve: (sekunde, vrsta) ali (None, None).
+
+    Takrat prikaz nima naše ocene -- ni trenutne zamude, iz katere bi jo
+    izpeljal. Na voljo sta "običajno" (zgodovina tega postanka) in prevoznikova
+    vrednost. Iskalnik zvez je kazal prevoznikovo, odhodna tabla običajno; za
+    isto vožnjo ob istem trenutku dve številki.
+
+    Pri avtobusih je izmerjeno, katera je boljša (rekonstrukcija iz `obs`, kaj
+    je feed vedel 15 min pred odhodom, 8.-18. 9. 2026, 605 334 pogledov):
+
+      prevoznik <= obicajno (82 %)  prevoznik 3,98 min  obicajno 2,67
+      prevoznik >  obicajno (18 %)  prevoznik 4,78      obicajno 4,67  pol presezka 4,40
+      brez 3 dni zgodovine          prevoznik 2,83      vozni red 3,25
+
+    73 % prevoznikovih vrednosti je natanko nič -- nerazrešen postanek, isto
+    kot pri vlaku. Zato: kadar prevoznik ne pove več od običajnega, velja
+    običajno (vrne None -- prikaz ga že kaže z besedo "običajno"); kadar pove
+    več, isto pravilo kot na poti (`_with_operator`: do polovice, pri
+    mestnem LPP v celoti), in to je naša **ocena**. Železnica ostane pri prevozniku: tam ni izmerjeno, in v
+    potnikovem oknu ima prevoznik vrednost v 0,4 % primerov.
+    """
+    if prevoznik_s is None:
+        return None, None
+    if network != "avtobus" or obicajno_s is None:
+        return prevoznik_s, "napoved prevoznika"
+    if prevoznik_s <= obicajno_s:
+        return None, None
+    return _with_operator(round(obicajno_s), prevoznik_s, network, agency), "ocena"
 
 
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
@@ -1539,19 +1675,27 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     last = last_measured(conn, service_date, [d["trip_id"] for d in out], now_s)
     slack = _slack_ahead(conn, [d["trip_id"] for d in out])
     _, potrjeni = stanje_postankov(conn, service_date, [d["trip_id"] for d in out])
+    # Obicajna zamuda iz zgodovine. Za dan, ki se ni prisel, je to edino, kar
+    # o vlaku sploh vemo -- brez tega je vsaka vrstica "brez podatka". Pred
+    # zanko, ker jo rabi tudi vožnja brez meritve (`pred_odhodom`).
+    typ = typical_at_stops(conn, [(d["trip_id"], d["from_seq"]) for d in out]
+                                 + [(d["trip_id"], d["to_seq"]) for d in out])
 
     for d in out:
         d["stops_between"] = d["to_seq"] - d["from_seq"]
         d["sched_dep"] = _abs_time(service_date, d["dep_s"])
         d["sched_arr"] = _abs_time(service_date, d["arr_s"])
         d["duration_s"] = d["arr_s"] - d["dep_s"]
+        d["typical_dep"] = typ.get((d["trip_id"], d["from_seq"]))
+        d["typical_arr"] = typ.get((d["trip_id"], d["to_seq"]))
 
         z = zamuda_na_postanku(
             conn, train_no=d["train_no"], trip_id=d["trip_id"],
             stop_seq=d["from_seq"], ime_postaje=from_name,
             feed_delay_s=d["from_delay_s"], lm=last.get(d["trip_id"]),
             slack_vrsta=slack.get(d["trip_id"], ()), service_date=service_date,
-            potrjen=(d["trip_id"], d["from_seq"]) in potrjeni)
+            potrjen=(d["trip_id"], d["from_seq"]) in potrjeni,
+            obicajno_s=(d["typical_dep"] or {}).get("median_s"))
         d["delay_s"], d["delay_at"], d["delay_kind"] = (
             z["delay_s"], z["delay_at"], z["delay_kind"])
 
@@ -1564,14 +1708,6 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         d["feed_delay_s"] = d["from_delay_s"]
         d.pop("from_delay_s", None)
         d.pop("to_delay_s", None)
-
-    # Obicajna zamuda iz zgodovine. Za dan, ki se ni prisel, je to edino, kar
-    # o vlaku sploh vemo -- brez tega je vsaka vrstica "brez podatka".
-    typ = typical_at_stops(conn, [(d["trip_id"], d["from_seq"]) for d in out]
-                                 + [(d["trip_id"], d["to_seq"]) for d in out])
-    for d in out:
-        d["typical_dep"] = typ.get((d["trip_id"], d["from_seq"]))
-        d["typical_arr"] = typ.get((d["trip_id"], d["to_seq"]))
 
     if nocne:
         out = sorted(nocne + out, key=lambda d: d["sched_dep"])

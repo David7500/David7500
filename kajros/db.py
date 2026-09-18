@@ -404,9 +404,43 @@ def fill_trip_window(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM trip WHERE start_s IS NOT NULL").fetchone()[0]
 
 
+def voznja_sql(alias: str = "") -> str:
+    """Ista vožnja čez dneve, kot SQL izraz nad `trip`.
+
+    Pri IJPP je to `trip_id`: ena vožnja iz voznega reda vozi vse dni svojega
+    `service_id`. Mestni LPP pa ima svojo vožnjo za VSAK datum in prva
+    komponenta trojnega id-ja (`dan|vožnja|vzorec`) je dan -- ključ je torej
+    ostanek za prvo navpičnico. Brez tega model pri LPP nikoli ni imel
+    zgodovine: senca je 3.–18. 9. 2026 pri 62 498 napovedih za LPP pokazala 0 %
+    z vsaj tremi dnevi, pri IJPP 77–89 %.
+
+    Srednja komponenta je med regeneracijami GTFS stabilna (ista vožnja je
+    22-krat v 31 dneh, na novem zipu z istim srednjim delom), in na dan je
+    ključ enoličen (0 podvojitev med 39 907 LPP vožnjami, 18. 9. 2026).
+
+    Izraz je v indeksu `trip_voznja` **dobesedno** -- poizvedba ga mora
+    ponoviti, sicer indeks ne prime. Zato vedno skozi to funkcijo.
+    """
+    p = f"{alias}." if alias else ""
+    return (f"CASE WHEN {p}agency = 'lpp' "
+            f"THEN substr({p}trip_id, instr({p}trip_id, '|') + 1) ELSE {p}trip_id END")
+
+
+def voznja(trip_id: str, agency: str | None) -> str:
+    """Isto kot `voznja_sql`, v Pythonu."""
+    if agency == "lpp" and "|" in trip_id:
+        return trip_id.split("|", 1)[1]
+    return trip_id
+
+
 def init(conn: sqlite3.Connection) -> None:
     _migrate(conn)
     conn.executescript(SCHEMA)
+    # Izrazni indeks, ne stolpec: vrednost je izpeljana iz `trip_id` in
+    # `agency`, zato je ni treba polniti ne ob uvozu ne ob prilivanju, in
+    # nagrobniki (vožnje brez voznega reda, ki jih uvoz obdrži) jo imajo sami
+    # od sebe. Izmerjeno: 30 ms za 60 951 voženj.
+    conn.execute(f"CREATE INDEX IF NOT EXISTS trip_voznja ON trip({voznja_sql()})")
     conn.commit()
 
 

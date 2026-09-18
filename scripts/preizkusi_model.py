@@ -42,10 +42,11 @@ def main():
     skupine = defaultdict(list)
     for r in vrstice:
         skupine[(r["trip_id"], r["service_date"], r["from_seq"], r["current_s"])].append(r)
-    tn = {}
+    tn, agencija = {}, {}
     for tid in {r["trip_id"] for r in vrstice}:
-        row = conn.execute("SELECT train_no FROM trip WHERE trip_id = ?", (tid,)).fetchone()
+        row = conn.execute("SELECT train_no, agency FROM trip WHERE trip_id = ?", (tid,)).fetchone()
         tn[tid] = row["train_no"] if row else None
+        agencija[tid] = row["agency"] if row else None
 
     print(f"nalog iz sence: {len(vrstice)} · klicev predict na različico: {len(skupine)}")
     print(f"\n{'meja':>12}{'MAE':>9}{'v 5 min':>9}{'podcenj.':>10}{'odklon':>9}"
@@ -65,8 +66,8 @@ def main():
                 # Kar bi potnik RES videl -- s pravilom "prevoznik ve več",
                 # in sicer z vrednostjo, ki jo je feed imel TAKRAT (iz sence),
                 # ne z današnjo.
-                v = (max(p["own_delay_s"], r["operator_s"])
-                     if r["operator_s"] is not None else p["own_delay_s"])
+                v = stats._with_operator(p["own_delay_s"], r["operator_s"],
+                                         r["network"], agencija.get(tid))
                 vidno.append((v, r["actual_s"]))
                 if 9 <= r["stop_seq"] - r["from_seq"] <= 10:
                     dolge.append((v, r["actual_s"]))

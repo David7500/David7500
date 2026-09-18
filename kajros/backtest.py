@@ -23,11 +23,12 @@ zapleten.
 """
 from __future__ import annotations
 
+import math
 import sqlite3
 import statistics
 from collections import defaultdict
 
-from . import stats
+from . import db, stats
 
 # Nalog s premikom cez vec kot toliko postankov ne sestavljamo: cez pol proge
 # je "napoved" bolj opis voznega reda kot napoved.
@@ -42,8 +43,8 @@ MIN_SAMPLES = 3
 NETWORK = "zeleznica"
 
 
-def _delays_by_day(conn: sqlite3.Connection,
-                   network: str = NETWORK) -> dict[tuple[str, str], dict[int, int]]:
+def _delays_by_day(conn: sqlite3.Connection, network: str = NETWORK,
+                   od: str = "") -> dict[tuple[str, str], dict[int, int]]:
     """(voznja, dan) -> {stop_seq: zamuda}. Iz `run`, torej zadnje znano stanje.
 
     Kljuc je `trip_id`, ne `train_no`. Pri zeleznici je to isto -- 0 od 663
@@ -51,14 +52,17 @@ def _delays_by_day(conn: sqlite3.Connection,
     LPP linija 25 ima 217 voznj obeh smeri in "postanek 2" bi zdruzil dva
     razlicna kraja. Model bi se ucil mediano spremembe med krajema, ki nista
     sosednja in nista niti v isti smeri.
+
+    Natancneje: kljuc je VOZNJA (`db.voznja_sql`). Mestni LPP ima za vsak dan
+    svoj `trip_id` in backtest brez tega zanj ne bi imel ucne mnozice.
     """
     rows = conn.execute(
-        "SELECT r.trip_id AS train_no, r.service_date, r.stop_seq, "
+        f"SELECT {db.voznja_sql('t')} AS train_no, r.service_date, r.stop_seq, "
         "       COALESCE(r.delay_dep, r.delay_arr) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
-        "WHERE d IS NOT NULL AND t.network = ? "
-        "ORDER BY r.trip_id, r.service_date, r.stop_seq",
-        (network,),
+        "WHERE d IS NOT NULL AND t.network = ? AND r.service_date >= ? "
+        "ORDER BY 1, r.service_date, r.stop_seq",
+        (network, od),
     )
     out: dict[tuple[str, str], dict[int, int]] = defaultdict(dict)
     for r in rows:
@@ -70,7 +74,7 @@ def _stop_ids(conn: sqlite3.Connection, network: str = NETWORK) -> dict[tuple[st
     """(train_no, stop_seq) -> stop_id. Rabi ga zdruzevanje po odsekih:
     isti fizicni odsek vozi vec vlakov in skupaj jih je dovolj za mediano."""
     rows = conn.execute(
-        "SELECT t.trip_id AS train_no, s.stop_seq, s.stop_id "
+        f"SELECT {db.voznja_sql('t')} AS train_no, s.stop_seq, s.stop_id "
         "FROM trip t JOIN sched s USING (trip_id) "
         "WHERE t.network = ?",
         (network,),
@@ -91,7 +95,7 @@ def _dwells(conn: sqlite3.Connection, network: str = NETWORK) -> dict[str, dict[
     """
     out: dict[str, dict[int, int]] = defaultdict(dict)
     for r in conn.execute(
-        "SELECT t.trip_id AS train_no, s.stop_seq, s.dep_s - s.arr_s AS w "
+        f"SELECT {db.voznja_sql('t')} AS train_no, s.stop_seq, s.dep_s - s.arr_s AS w "
         "FROM trip t JOIN sched s USING (trip_id) "
         "WHERE t.network = ? AND s.arr_s IS NOT NULL AND s.dep_s IS NOT NULL",
         (network,),
@@ -100,9 +104,14 @@ def _dwells(conn: sqlite3.Connection, network: str = NETWORK) -> dict[str, dict[
     return out
 
 
-def build_tasks(conn: sqlite3.Connection, network: str = NETWORK) -> list[dict]:
-    """Vse naloge (voznja, dan, i, j, zamuda_i, zamuda_j)."""
-    by_day = _delays_by_day(conn, network)
+def build_tasks(conn: sqlite3.Connection, network: str = NETWORK,
+                od: str = "") -> list[dict]:
+    """Vse naloge (voznja, dan, i, j, zamuda_i, zamuda_j), od dneva `od` naprej.
+
+    `od` ni okras: avtobusi imajo 18. 9. 2026 v 21 dneh ~24 milijonov nalog,
+    kar v slovarjih ne gre v pomnilnik.
+    """
+    by_day = _delays_by_day(conn, network, od)
     stops = _stop_ids(conn, network)
     dwells = _dwells(conn, network)
     tasks = []
@@ -125,7 +134,7 @@ def build_tasks(conn: sqlite3.Connection, network: str = NETWORK) -> list[dict]:
                     "train_no": train_no, "day": day,
                     "i": i, "j": j, "horizon": j - i,
                     "d_i": delays[i], "d_j": delays[j],
-                    "seg": (si, sj), "slack": slack,
+                    "seg": (si, sj), "slack": slack, "network": network,
                 })
     return tasks
 
@@ -371,8 +380,19 @@ def model_fizika_razred(train_tasks):
         # uporabljali drugega. Prag `MIN_SAMPLES` je veljal TUDI za nepogojeno
         # mediano -- tu, ne pa v strezeni kodi; razlika je bila vidna sele v
         # senci (v petih minutah 80,8 % s pragom proti 84,7 % brez).
+        # Meja ostanka pa pri avtobusu velja le, dokler dni ni dovolj.
+        if e[1] >= stats.OSTANEK_BREZ_MEJE_DNI.get(t["network"], math.inf):
+            return osnova + round(e[0])
         return osnova + round(stats._omejen_ostanek(e[0], t["d_i"]))
     return predict
+
+
+def model_fizika_razred_meja_vedno(train_tasks):
+    """Kar je streznik pri avtobusih delal do 19. 9. 2026: meja ostanka ne
+    glede na to, koliko dni stoji za mediano. Obdrzan, da je razlika merljiva.
+    """
+    napovej = model_fizika_razred(train_tasks)
+    return lambda t: napovej({**t, "network": None})
 
 
 def model_fizika_razred_brez_meje(train_tasks):
@@ -438,6 +458,7 @@ MODELS = {
     "rezerva+razred (sedanji)": model_fizika_razred,
     "rezerva+razred, prag 3 dni": model_fizika_razred_prag,
     "rezerva+razred, brez meje": model_fizika_razred_brez_meje,
+    "rezerva+razred, meja vedno": model_fizika_razred_meja_vedno,
 }
 
 
@@ -457,19 +478,25 @@ def _score(errors: list[float]) -> dict:
 
 
 def evaluate(conn: sqlite3.Connection, by_horizon: bool = False,
-             network: str = NETWORK) -> dict:
-    """Primerja modele z izpuščanjem enega dne."""
-    tasks = build_tasks(conn, network)
+             network: str = NETWORK, od: str = "",
+             modeli: list[str] | None = None) -> dict:
+    """Primerja modele z izpuščanjem enega dne.
+
+    `od` omeji naloge na dneve od tega naprej, `modeli` na izbrane modele --
+    oboje zato, da gre meritev avtobusov v pomnilnik in v razumen čas.
+    """
+    izbrani = {k: v for k, v in MODELS.items() if not modeli or k in modeli}
+    tasks = build_tasks(conn, network, od)
     days = sorted({t["day"] for t in tasks})
-    errors: dict[str, list[float]] = {name: [] for name in MODELS}
-    per_h: dict[str, dict[int, list[float]]] = {n: defaultdict(list) for n in MODELS}
+    errors: dict[str, list[float]] = {name: [] for name in izbrani}
+    per_h: dict[str, dict[int, list[float]]] = {n: defaultdict(list) for n in izbrani}
 
     for day in days:
         train = [t for t in tasks if t["day"] != day]
         test = [t for t in tasks if t["day"] == day]
         if not train or not test:
             continue
-        for name, factory in MODELS.items():
+        for name, factory in izbrani.items():
             predict = factory(train)
             for t in test:
                 err = predict(t) - t["d_j"]

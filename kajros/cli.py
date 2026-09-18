@@ -5,6 +5,7 @@ import os
 import argparse
 import json
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
@@ -112,8 +113,11 @@ def cmd_backtest(args):
             return
         print(f"nalog, kjer je feed ze imel vrednost za cilj: {res['tasks']}\n")
     else:
+        od = ((date.today() - timedelta(days=args.dni)).isoformat()
+              if args.dni else "")
         res = backtest.evaluate(conn, by_horizon=args.by_horizon,
-                                network=args.network)
+                                network=args.network, od=od,
+                                modeli=args.modeli.split(";") if args.modeli else None)
         print(f"omrezje: {args.network} · dni: {len(res['days'])}"
               f" · nalog: {res['tasks']}\n")
 
@@ -389,6 +393,11 @@ def main(argv=None):
     a.add_argument("--network", default=backtest.NETWORK,
                    choices=("zeleznica", "avtobus"),
                    help="katero omrezje meriti (privzeto zeleznica)")
+    a.add_argument("--dni", type=int, default=0,
+                   help="samo zadnjih N dni (avtobusi v celoti ne gredo v pomnilnik)")
+    a.add_argument("--modeli", default="",
+                   help="s podpicjem loceni modeli (imena vsebujejo vejice), "
+                        "npr. 'prenos;rezerva+razred (sedanji)'")
     a.set_defaults(func=cmd_backtest)
 
     a = sub.add_parser("ocena", help="kako dobra je bila napoved, ki jo je potnik videl")

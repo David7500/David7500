@@ -1060,6 +1060,169 @@ def test_prevoznikova_napoved_steje_samo_navzgor():
     assert stats._with_operator(900, None) == 900    # o tem postanku ne pravi nic
 
 
+def test_prevoznik_pri_avtobusu_dvigne_le_do_polovice():
+    """Pri avtobusu je maksimum dveh sumnih ocen navzgor pristranski.
+
+    Senca 8.-18. 9. 2026: `max` MAE 2,68 in 4,4 % precenjenih, polovica
+    presezka 2,62 in 2,6 %. Navzdol se prevozniku se vedno ne verjame.
+    """
+    assert stats._with_operator(300, 900, "avtobus") == 600
+    assert stats._with_operator(900, 0, "avtobus") == 900
+    assert stats._with_operator(900, None, "avtobus") == 900
+    assert stats._with_operator(300, 900, "zeleznica") == 900   # vlak: kot prej
+    assert stats._with_operator(300, 900) == 900
+    # Mestni LPP ima svoj sistem sledenja vozil -- navzgor mu verjamemo v celoti.
+    assert stats._with_operator(300, 900, "avtobus", "lpp") == 900
+    assert stats._with_operator(300, 900, "avtobus", "1118") == 600   # primestni LPP je IJPP
+    assert stats.pred_odhodom(300, 900, "avtobus", "lpp") == (900, "ocena")
+
+
+# ---------------------------------------------------------------- avtobusni model
+
+def _lpp(conn, dan_id, voznja="v1|p1", train_no="LPP 6B", sched=True):
+    """Mestni LPP: za vsak dan svoja vožnja, prva komponenta je dan."""
+    tid = f"{dan_id}|{voznja}"
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,mode,agency,network) "
+                 "VALUES(?,'rl',?,'A - C','S1','bus','lpp','avtobus')", (tid, train_no))
+    if sched:
+        _sched(conn, tid, [(1, "A", None, 28800), (2, "Z", 29400, 29400), (3, "C", 30000, None)])
+    return tid
+
+
+def _meritev(conn, tid, dan, seq, d):
+    conn.execute("INSERT OR IGNORE INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES(?,?,?,?,?,4102444800)", (tid, dan, seq, d, d))
+
+
+def test_voznja_lpp_je_brez_dneva(conn):
+    """Isti izraz v Pythonu in v SQL -- indeks `trip_voznja` prime samo nanj."""
+    assert db.voznja("d1|v1|p1", "lpp") == "v1|p1"
+    assert db.voznja("465938", "1119") == "465938"
+    assert db.voznja("t1", None) == "t1"
+    tid = _lpp(conn, "d1")
+    got = conn.execute(f"SELECT {db.voznja_sql()} FROM trip WHERE trip_id = ?", (tid,)).fetchone()[0]
+    assert got == db.voznja(tid, "lpp")
+    plan = " ".join(r[3] for r in conn.execute(
+        f"EXPLAIN QUERY PLAN SELECT trip_id FROM trip t WHERE {db.voznja_sql('t')} = 'x'"))
+    assert "trip_voznja" in plan
+
+
+def test_obicajna_zamuda_lpp_cez_dneve(conn):
+    """Mestni LPP ima vsak dan svoj `trip_id`; "obicajno" je bilo zato prazno.
+
+    Pretekle vožnje so nagrobniki -- brez voznega reda, a z meritvami.
+    """
+    for i, d in enumerate((_pred(9), _pred(8), _pred(7))):
+        stara = _lpp(conn, f"d{i}", sched=False)
+        _meritev(conn, stara, d, 2, 60 * (i + 1))
+    tuja = _lpp(conn, "d0", voznja="v2|p1", sched=False)         # druga vožnja
+    _meritev(conn, tuja, _pred(9), 2, 3600)
+    danes = _lpp(conn, "d9")
+    conn.commit()
+    got = stats.typical_at_stops(conn, [(danes, 2)])
+    assert got[(danes, 2)]["n"] == 3
+    assert got[(danes, 2)]["median_s"] == 120
+
+
+def test_zgodovina_lpp_cez_dneve_brez_voznega_reda(conn):
+    """Okno vožnje LPP je kazalo samo današnji dan: pretekli nimajo `sched`."""
+    for i, d in enumerate((_pred(9), _pred(8))):
+        stara = _lpp(conn, f"d{i}", sched=False)
+        _meritev(conn, stara, d, 2, 120)
+        _meritev(conn, stara, d, 3, 180)
+    danes = _lpp(conn, "d9")
+    conn.commit()
+    h = stats.history(conn, "LPP 6B", trip_id=danes)
+    assert h["runs_observed"] == 2
+    assert [s["name"] for s in h["by_stop"]] == ["Zidani Most", "Celje"]
+
+
+def _avtobus_z_zgodovino(conn, dni, network="avtobus"):
+    """Vožnja, ki je na tretjem postanku vsak dan +30 min, na prvem točna.
+
+    Tak vzorec je v IJPP resničen (A6385: mediana +62 min na devetem postanku
+    v devetih dneh) in meja ostanka ga je rezala na +10.
+    """
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,mode,agency,network) "
+                 "VALUES('ab','ra','A1','A - C','S1','bus','1123',?)", (network,))
+    _sched(conn, "ab", [(1, "A", None, 28800), (2, "Z", 29400, 29400), (3, "C", 30000, None)])
+    for k in range(dni):
+        d = _pred(10 - k)
+        _meritev(conn, "ab", d, 1, 0)
+        _meritev(conn, "ab", d, 3, 1800)
+    conn.commit()
+    return {p["stop_seq"]: p for p in stats.predict(conn, "A1", 1, 0, trip_id="ab")}
+
+
+def test_avtobus_ostanku_verjame_od_treh_dni(conn):
+    assert _avtobus_z_zgodovino(conn, 3)[3]["own_delay_s"] == 1800
+
+
+def test_avtobus_ostanek_omeji_pri_dveh_dneh(conn):
+    assert _avtobus_z_zgodovino(conn, 2)[3]["own_delay_s"] == stats.OMEJI_OSTANEK_S
+
+
+def test_vlak_ostanek_omeji_kot_prej(conn):
+    """Pri železnici meja ostane -- tam sprememba ni izmerjena."""
+    got = _avtobus_z_zgodovino(conn, 5, network="zeleznica")
+    assert got[3]["own_delay_s"] == stats.OMEJI_OSTANEK_S
+
+
+def test_napoved_lpp_se_uci_iz_preteklih_dni(conn):
+    for i, d in enumerate((_pred(9), _pred(8), _pred(7))):
+        stara = _lpp(conn, f"d{i}", sched=False)
+        _meritev(conn, stara, d, 1, 0)
+        _meritev(conn, stara, d, 3, 240)
+    danes = _lpp(conn, "d9")
+    conn.commit()
+    f = {p["stop_seq"]: p for p in stats.predict(conn, "LPP 6B", 1, 0, trip_id=danes)}
+    assert f[3]["n_samples"] == 3
+    assert f[3]["own_delay_s"] == 240
+
+
+def test_pred_odhodom_pravilo():
+    """Vožnja brez meritve: 73 % prevoznikovih vrednosti je nerazrešena ničla."""
+    assert stats.pred_odhodom(300, 0, "avtobus") == (None, None)       # velja običajno
+    assert stats.pred_odhodom(300, 300, "avtobus") == (None, None)
+    assert stats.pred_odhodom(300, 900, "avtobus") == (600, "ocena")   # do polovice
+    assert stats.pred_odhodom(None, 900, "avtobus") == (900, "napoved prevoznika")
+    assert stats.pred_odhodom(300, 0, "zeleznica") == (0, "napoved prevoznika")
+    assert stats.pred_odhodom(300, None, "avtobus") == (None, None)
+
+
+def _avtobus_pred_odhodom(conn, prevoznik):
+    """Avtobus A -> C ob 08:00, običajno +5 min; danes še ni odpeljal."""
+    dan = _pred(0)
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,mode,agency,network) "
+                 "VALUES('bb','rb','N1','A - C','S1','bus','1119','avtobus')")
+    _sched(conn, "bb", [(1, "A", None, 28800), (2, "Z", 29400, 29400), (3, "C", 30000, None)])
+    for k in range(3):
+        _meritev(conn, "bb", _pred(9 - k), 1, 300)
+    _meritev(conn, "bb", dan, 1, prevoznik)
+    conn.commit()
+    return dan
+
+
+def test_iskalnik_vozi_obicajno_kadar_prevoznik_pove_nic(conn):
+    dan = _avtobus_pred_odhodom(conn, 0)
+    z = next(d for d in stats.connections(conn, "Ajdovščina", "Celje", dan, now_s=25200,
+                                          network="avtobus") if d["trip_id"] == "bb")
+    assert z["delay_s"] is None                    # prikaz pokaže "običajno"
+    assert z["typical_dep"]["median_s"] == 300
+
+
+def test_iskalnik_in_tabla_isto_kadar_prevoznik_ve_vec(conn):
+    """Prej: iskalnik +15 (prevoznik), tabla običajno +5 -- ista vožnja, ista ura."""
+    dan = _avtobus_pred_odhodom(conn, 900)
+    z = next(d for d in stats.connections(conn, "Ajdovščina", "Celje", dan, now_s=25200,
+                                          network="avtobus") if d["trip_id"] == "bb")
+    t = next(d for d in journey.board(conn, "Ajdovščina", dan, 25200, 240, network="avtobus",
+                                      now_s=25200) if d["trip_id"] == "bb")
+    assert (z["delay_s"], z["delay_kind"]) == (600, "ocena")
+    assert (t["delay_s"], t["delay_kind"]) == (600, "ocena")
+
+
 def test_napoved_dvigne_kadar_prevoznik_ve_vec(conn):
     dan = _pred(0)
     conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "

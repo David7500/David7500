@@ -706,6 +706,9 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
     _, potrjeni = stats.stanje_postankov(conn, service_date, trip_ids)
     feed = _feed_zamude(conn, [(n["trip_id"], n["od_seq"]) for n in noge],
                         service_date)
+    # Vožnja brez meritve rabi "običajno" -- isto pravilo kot iskalnik zvez
+    # (`stats.pred_odhodom`).
+    typ = stats.typical_at_stops(conn, [(n["trip_id"], n["od_seq"]) for n in noge])
 
     for n in noge:
         tid = n["trip_id"]
@@ -714,7 +717,8 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
             ime_postaje=n["od"], feed_delay_s=feed.get((tid, n["od_seq"])),
             lm=lm.get(tid), slack_vrsta=slack.get(tid, ()),
             service_date=service_date,
-            potrjen=(tid, n["od_seq"]) in potrjeni)
+            potrjen=(tid, n["od_seq"]) in potrjeni,
+            obicajno_s=(typ.get((tid, n["od_seq"])) or {}).get("median_s"))
         n["zamuda"] = stats.opis_zamude(z["delay_s"], z["delay_kind"])
         n["zamuda_od"] = z["delay_at"]
         if z["delay_s"] is None:

@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 from . import config, geo
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
-                    _with_operator, dwell_at, last_measured, opis_zamude,
+                    _with_operator, dwell_at, last_measured, opis_zamude, pred_odhodom,
                     stanje_postankov, typical_at_stops,
                     IZMERJENO, ZADNJI_PODATEK)
 
@@ -518,7 +518,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
                                  lm["delay_s"], d["stop_seq"], service_date)
                      if kind == "odhodi" else None)
             d["delay_s"] = (ocena if ocena is not None
-                            else _with_operator(_after_slack(lm["delay_s"], rez), prev))
+                            else _with_operator(_after_slack(lm["delay_s"], rez), prev,
+                                                d["network"], d["agency"]))
             d["slack_s"] = rez
             d["delay_from"] = lm["name"]
             d["delay_kind"] = "ocena"
@@ -573,6 +574,18 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
                 d["typical_from"] = d["next_stop"]
         for k in ("next_delay_s", "next_stop", "next_seq"):
             d.pop(k, None)
+        # Vožnja brez meritve: isto pravilo kot iskalnik zvez in pot
+        # (`stats.pred_odhodom`). Tabla je tu kazala običajno, iskalnik pa
+        # prevoznikovo vrednost -- za isto vožnjo ob istem trenutku.
+        # Samo odhodi, iz istega razloga kot `estimate_at` zgoraj.
+        if (kind == "odhodi" and d["delay_kind"] is None and d["network"] == "avtobus"
+                and d["feed_delay_s"] is not None):
+            z, vrsta = pred_odhodom((d["typical"] or {}).get("median_s"),
+                                    d["feed_delay_s"], d["network"], d["agency"])
+            if vrsta:
+                d["delay_s"], d["delay_kind"] = z, vrsta
+                d["expected"] = _abs_time(service_date, d["t_s"] + z)
+                d["zamuda"] = opis_zamude(z, vrsta)
 
     # Vceraj zacet promet, ki se ni koncan. Rekurzija namesto druge poizvedbe:
     # vse, kar sledi (meja meritve, zdruzevanje dvojnikov, obicajna zamuda),

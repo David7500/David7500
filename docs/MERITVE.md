@@ -55,6 +55,78 @@ nalog, avtobusi 7 dni in **6 004 849**.
 Zgodovino ima 88 % železniških voženj (82 % vsaj tri dni) in 77 % avtobusnih
 (47 %). Razlaga in kaj iz tega sledi: `.claude/rules/model.md`.
 
+## Avtobusni model (19. 9. 2026)
+
+Kopija baze z arwena 19. 9. ob 00:20 (`VACUUM INTO`; `.backup` se med
+zajemom vrti v krogu). Avtobusnih vrstic `run` **3,25 mio** v 21 dneh
+(29. 8.–18. 9.), dnevnik `obs` 21,7 mio (4.–19. 9.), senca 271 095
+razrešenih avtobusnih napovedi (3.–18. 9.). Pravila, ki so iz tega nastala,
+in kaj ni pomagalo: `.claude/rules/model.md`, „Avtobusni model“.
+
+**Mestni LPP ni imel zgodovine.** Od 603 140 njegovih vrstic `run` jih je
+489 k (81 %) na nagrobnikih — vožnjah prejšnjih uvozov brez `sched` — ker ima
+LPP za vsak datum svoj `trip_id`. Srednji del id-ja (`dan|vožnja|vzorec`) se
+ponovi 22-krat v 31 dneh in preživi nov zip. S ključem brez dneva ima LPP 12
+dni zgodovine namesto 2; v senci je bilo 0 % napovedi LPP z vsaj tremi dnevi.
+
+**Tri merila**, vsa z učenjem **samo na preteklih dneh** (ne izpuščanje enega):
+
+| merilo | kaj | nalog |
+|---|---|---|
+| senca, ponovljena | kar je prikaz posnel v živo; trenutna in prevoznikova vrednost sta takratni | 217 784 (8.–18. 9.) |
+| rekonstrukcija iz `obs` | vse vožnje 15 min pred postankom; kaj je feed vedel ob T, pravilo `_LAST_MEASURED_SQL` | 2,3 mio, od tega 40,5 % pred odhodom |
+| simulacija iz `run` | isto iz končnih vrednosti — **pušča** pri „še ni odpeljal“, rabljena samo za vozilo na poti | 3,0 mio |
+
+Ponovitev sence z modelom, prepisanim v pandas, se s tem, kar je strežnik res
+zapisal, ujema na dve decimalki (2,97 proti 2,97); nova koda skozi pravi
+`stats.predict` in pandas različica se ujemata v 99,4 % vrstic (18. 9.).
+
+**Meja ostanka** (simulacija, vozilo na poti, 1,16 mio nalog, 8.–18. 9.):
+
+| meja velja, ko je dni manj kot | MAE | v 5 min | Arriva |
+|---|---|---|---|
+| vedno (prej) | 3,44 | 89,4 % | 4,61 |
+| 2 / **3** / 4 | 3,12 | 89,7 % | 3,73 |
+| 7 | 3,21 | | |
+
+**Prevoznik navzgor, delež presežka** (senca, MAE po prevozniku, 6.–13. / 14.–18. 9.):
+
+| | 0 | 0,25 | **0,5** | 0,75 | 1 (prej) |
+|---|---|---|---|---|---|
+| 1118 | 2,60 / 2,17 | 2,54 / 2,08 | **2,53 / 2,05** | 2,58 / 2,07 | 2,66 / 2,13 |
+| Nomago | 2,56 / 2,46 | 2,43 / 2,35 | **2,40 / 2,32** | 2,44 / 2,35 | 2,55 / 2,45 |
+| AP MS | 2,54 / 2,45 | 2,42 / 2,36 | **2,37 / 2,34** | 2,38 / 2,37 | 2,44 / 2,44 |
+| Arriva | 4,27 / 3,42 | 4,13 / 3,24 | **4,07** / 3,15 | 4,08 / **3,11** | 4,16 / 3,14 |
+| mestni LPP | 2,39 / 1,90 | 2,28 / 1,82 | 2,19 / 1,78 | 2,14 / **1,76** | **2,12** / 1,79 |
+
+Pred odhodom (rekonstrukcija iz `obs`) je razlika pri LPP večja: 1 → 8,77 in
+2,07 min, 0,5 → 9,81 in 2,17. Pri primestnem 1118 je tam najboljše 0.
+
+**Vožnja brez meritve** (rekonstrukcija, 605 334 pogledov, ko ima prevoznik vrednost):
+
+| | delež | prevoznik | običajno | običajno + presežek |
+|---|---|---|---|---|
+| prevoznik ≤ običajno | 69 % | 3,98 | **2,67** | 2,67 |
+| prevoznik > običajno | 15 % | 4,78 | 4,67 | **4,40** |
+| brez 3 dni zgodovine | 16 % | **2,83** | (vozni red 3,25) | |
+
+72,9 % prevoznikovih vrednosti pred odhodom je natanko 0 (LPP 88 %, IJPP
+41–67 %).
+
+**Dnevni sunki so v repu, ne v sredini.** Odklon od lastne mediane vožnje,
+povprečje po dnevu: 11. 9. (petek, rahel dež) LPP +9,8 min, Arriva +7,3,
+Nomago +2,1; mediana istih odklonov pa 0,5 / 0,3 / 0,05. 10. 9. je deževalo
+v 97 % ur (4,4 mm/h povprečno) in LPP je bil +2,0. Petek je povprečno najslabši
+dan (Arriva +3,0, LPP +4,5 min nad mediano vožnje), popoldne 14–18 h najslabši
+del dneva (LPP do +4,3). Napovedi to ne premakne, ker je mediana okoli nič —
+glej `.claude/rules/model.md`.
+
+**Gradientni strop** (LightGBM, cilj L1, učenje 6.–13., test 14.–18. 9.):
+senca 2,43 → 2,20 min, strošek 6,38 → **6,50**; simulacija na poti 2,68 →
+2,42. Pred odhodom 2,89 → 2,87 (brez LPP nič). Najpomembnejše: odklon od
+običajnega na izhodišču (19,6 % dobička), prevoznikov presežek (14,1 %),
+naša ocena, ura. Dež 1,7–2,3 %, dan v tednu 1,1–2,9 %.
+
 ## Razdalje med postajami
 
 `stop_times.txt` nima `shape_dist_traveled`. Postaje projiciramo na polilinijo
