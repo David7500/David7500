@@ -587,6 +587,7 @@ svojo zgodovino.
 | odsek (vse vožnje med istima postajališčema) za vožnje brez 3 dni | senca 2,43 → 2,43 |
 | „združen“ (vožnja, skrčena proti odseku) | backtest 2,13 → 2,05, senca 2,43 → 2,41, dobiček z dnevi pada; rabi nočno tabelo odsekov |
 | spodnja meja iz ure, ko vožnja po voznem redu že vozi, a ni izmerjena | strošek 14,39 → 14,90, precenjenih 6,0 → 10,7 % |
+| prevoznik navzgor 0,25 (ali 0,25 do 10 min presežka, nad tem 0,75–1), po pravilu izhodišča | senca 14.–18. MAE 2,28 → 2,24, a strošek 6,15 → 6,26 in v 5 min 93,4 → 93,3 %; mere si nasprotujejo, ostane 0,5 |
 
 **Strop je znan.** Gradientni model (LightGBM, vse zgornje značilke) na isti
 senci: 2,43 → 2,20 min, a s **slabšim** stroškom (6,38 → 6,50). 58 % tega
