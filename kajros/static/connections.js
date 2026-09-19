@@ -28,25 +28,6 @@ let activeTab = "ab";
 // bilo tu naprednega, je bodisi razumljivo vsakomur (in je zdaj vedno vidno)
 // bodisi ni sodilo na to stran (stevilka postanka, prevoznikova napoved).
 // Okno ene voznje preklop obdrzi -- tam gre za eno vozjno in ne vec za izbiro.
-loadHealth();
-
-async function loadHealth() {
-  const el = $("foot-health");
-  if (!el || el.dataset.done) return;
-  try {
-    const h = await fetch("/api/health").then((r) => r.json());
-    // Po omrezju, ne skupno: na strani vlakov je stevilka avtobusnih meritev
-    // le zavajajoca -- enako kot vse drugo na tej strani.
-    const mine = (h.by_network || {})[NETWORK] || {};
-    const runs = mine.runs != null ? mine.runs : h.runs_recorded;
-    el.textContent =
-      ` · zajetih ${runs.toLocaleString("sl-SI")} meritev v ${h.days_covered} dneh` +
-      (h.last_feed_at ? `, zadnja ob ${hhmm(h.last_feed_at)}` : "");
-    el.dataset.done = "1";
-  } catch (err) {
-    /* stanje zajema je postranska informacija */
-  }
-}
 
 // ---------- samodopolnjevanje postaj ----------
 

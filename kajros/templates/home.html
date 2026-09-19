@@ -85,17 +85,19 @@
         <span class="ovire-n" id="ovire-n"></span>
         <small id="ovire-pod"></small>
       </a>
-      <a class="p p-stat" href="/app/statistika">
+      {#- Podpora je na mestu, kjer je bila „Kdaj potovati" (umaknjena 19. 9. 2026,
+          ker v taki obliki ni bila uporabna). Brez `KAJROS_DONACIJE` je ni. #}
+      {%- if donacije %}
+      <a class="p p-don" href="/donacije">
         <span>
-          <strong class="p-ime">Kdaj potovati</strong>
-          <small>ob kateri uri vlaki zamujajo najmanj</small>
+          <strong class="p-ime">Podpri kajros</strong>
+          <small>brez oglasov, vzdržuje ga ena oseba</small>
         </span>
-        <svg class="stat-slika" width="96" height="44" viewBox="0 0 96 44" aria-hidden="true">
-          <g fill="#3a4150"><rect x="0" y="30" width="12" height="14" rx="3"/><rect x="16" y="20" width="12" height="24" rx="3"/>
-          <rect x="48" y="18" width="12" height="26" rx="3"/><rect x="64" y="28" width="12" height="16" rx="3"/><rect x="80" y="33" width="12" height="11" rx="3"/></g>
-          <rect x="32" y="2" width="12" height="42" rx="3" fill="#f0934f"/>
+        <svg class="don-slika" width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.3h2c.7-1.2 2.2-2.3 4.3-2.3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/>
         </svg>
       </a>
+      {%- endif %}
     </div>
 
     <!-- Shranjene poti. Iskalnik jih ze hrani, domaca stran pa je edino mesto,
@@ -105,15 +107,7 @@
       <div class="chips" id="home-chips"></div>
     </section>
 
-    <footer class="home-foot">
-      Podatki: IJPP prek NAP (CC BY-SA 4.0), obdelava DERP.
-      Vreme Open-Meteo (CC BY 4.0).
-      <a href="/postaje">Postaje</a> in
-      <a href="/postajalisca">postajališča</a>.
-      <a href="/stik">Stik</a>. <a href="/zasebnost">Zasebnost</a>.
-      <a href="/android">Aplikacija za Android</a>.
-      <span id="home-health"></span>
-    </footer>
+    {% include "_noga.html" %}
   </main>
 
   <script src="{{ s('common.js') }}"></script>

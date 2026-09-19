@@ -1,0 +1,42 @@
+{#
+  Skupna noga vseh strani za potnike.
+
+  Prej je imela vsaka stran svojo: domača je naštela vire, postaje in stanje
+  zajema v enem odstavku drobnega sivega besedila, besedilne strani so imele
+  samo „nazaj na začetek“. Stik in „o nas“ sta bila tako skrita, da ju je
+  bilo treba iskati. Zdaj so tri dejanja, po katera človek v nogo pride
+  (podpri, piši, kdo smo), gumbi; ostalo je ena vrstica povezav in ena vrstica
+  navedbe vira, ki je pogoj licence CC BY-SA in ne sme izpasti.
+
+  Števila zajetih meritev tu ni več: potniku ne pove ničesar, kar bi mu
+  pomagalo na poti.
+
+  Klic: {% include "_noga.html" %}. `donacije` in `stik_obrazec` sta globalni
+  spremenljivki (`api.py`), zato stran ničesar ne podaja.
+#}
+<footer class="noga">
+  <nav class="noga-gumbi" aria-label="O strani">
+    {%- if donacije %}
+    <a class="noga-gumb noga-don" href="/donacije">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.3h2c.7-1.2 2.2-2.3 4.3-2.3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/>
+      </svg>
+      Podpri kajros
+    </a>
+    {%- endif %}
+    {%- if stik_obrazec %}
+    <a class="noga-gumb" href="/stik">Stik</a>
+    {%- endif %}
+    <a class="noga-gumb" href="/o-nas">O nas</a>
+  </nav>
+  <p class="noga-poti">
+    <a href="/postaje">Postaje</a>
+    <a href="/postajalisca">Postajališča</a>
+    <a href="/android">Aplikacija za Android</a>
+    <a href="/zasebnost">Zasebnost</a>
+  </p>
+  <p class="noga-vir">
+    Podatki IJPP prek NAP (CC BY-SA 4.0), obdelava DERP. Vreme Open-Meteo
+    (CC BY 4.0). Kajros ni stran prevoznika.
+  </p>
+</footer>

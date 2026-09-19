@@ -8,15 +8,13 @@
 async function load() {
   try {
     const h = await fetch("/api/health").then((r) => r.json());
-    document.getElementById("home-health").textContent =
-      ` · zajetih ${h.runs_recorded.toLocaleString("sl-SI")} meritev v ${h.days_covered} dneh`;
     const n = h.alerts_active;
     if (typeof n === "number") {
       document.getElementById("ovire-n").textContent = n ? String(n) : "";
       document.getElementById("ovire-pod").textContent = n ? "velja zdaj" : "zdaj jih ni";
     }
   } catch (err) {
-    /* obseg zajema in stevilo ovir sta postranska */
+    /* stevilo ovir je postransko */
   }
 }
 

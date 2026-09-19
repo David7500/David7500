@@ -460,10 +460,6 @@ def pot_postaje(network: str, ime: str) -> str:
     return f"/{koren}/{slug(ime)}"
 
 
-def pot_kazala(network: str) -> str:
-    return "/postajalisca" if network == "avtobus" else "/postaje"
-
-
 def pot_vozje(network: str, train_no: str, trip_id: str | None = None) -> str:
     """Okno ene vožnje. `?trip=` je obvezen pri avtobusih: številka linije ni
     številka vožnje in LPP 3G ima 388 voženj."""

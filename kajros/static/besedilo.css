@@ -46,8 +46,6 @@
 
 .besedilo a { color: var(--accent-lit); }
 
-.besedilo .home-foot { margin-top: 40px; font-size: 12.5px; }
-
 /* Zadnja vrstica strani, ki ni naslov svojega odseka. */
 .besedilo .drobno {
   margin-top: 30px;
@@ -118,3 +116,13 @@
   color: #14161a;
   text-decoration: none;
 }
+
+/* ---------- donacije ---------- */
+
+/* Isti razlog kot pri `.prenos-gumb`: gumb je povezava. */
+.don-gumb-vrsta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 22px; }
+.besedilo .don-gumb {
+  display: inline-block; padding: 12px 26px;
+  font-size: 15px; color: #14161a; text-decoration: none;
+}
+.don-prek { font: 400 13px var(--sans); color: var(--ink-mute); }

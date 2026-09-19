@@ -58,11 +58,7 @@
       največ prometa. Ostale najdeš z iskanjem: <a href="{{ iskalnik }}">iskalnik povezav</a>.
     </p>
 
-    <footer class="home-foot">
-      Podatki: NAP (b2b.nap.si), CC BY-SA 4.0.
-      <a href="{{ drugo_omrezje }}">{{ "postaje vlakov" if network == "avtobus" else "postajališča avtobusov" }}</a> ·
-      <a href="/">začetek</a> · <a href="/zasebnost">zasebnost</a>
-    </footer>
+    {% include "_noga.html" %}
   </main>
 
 </body>

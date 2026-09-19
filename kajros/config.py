@@ -171,6 +171,13 @@ STIK = okolje("STIK", "")
 # ima svojo stikalo: kdor tega ne želi, ga ugasne in poti ni (404).
 STIK_OBRAZEC = okolje("STIK_OBRAZEC", "1") != "0"
 
+# Naslov strani za donacije. Privzeto je v kodi in ne v enoti na strežniku,
+# ker enote v `/etc` agent ne more pisati, naslov pa ni skrivnost. Prazen
+# (`KAJROS_DONACIJE=`) skrije vse: `/donacije` vrne 404, ploščica na začetni
+# strani in gumb v nogi izgineta -- prošnja za denar brez naslova, kamor bi
+# šel, je slabša od nobene.
+DONACIJE = okolje("DONACIJE", "https://ko-fi.com/kajros").strip()
+
 # Aplikacija za Android: podpisan APK in `razlicica.json`, ki ju naredi
 # `android/objavi.sh`. Trgovin ni -- glavni F-Droid zahteva prosto licenco,
 # koda pa je zaprta, Play pa rabi racun, 25 $ in dva tedna zaprtega preizkusa.

@@ -22,7 +22,7 @@ CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (304 preizkusov).
+enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (363 preizkusov).
 `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
 zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
@@ -186,12 +186,14 @@ prešteje osirotele meritve.
 | `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
-| `/app/statistika[/bus]` | kdaj se splača potovati: zamuda po uri, dnevu, vrsti |
+| `/app/statistika[/bus]` | kdaj se splača potovati — **umaknjena** (19. 9. 2026): dela, a ni povezana, ni v sitemapu, `noindex` |
 | `/vlak/{od}/{cilj}` · `/avtobus/…` | **pristajalna stran ene relacije**: odhodi danes in izmerjena zamuda, izrisana na strežniku |
 | `/postaja/{ime}` · `/postajalisce/{ime}` | pristajalna stran ene postaje |
 | `/postaje` · `/postajalisca` | kazalo obojega — edina pot do pristajalnih strani, ki ni zemljevid strani |
 | `/stik` | obrazec za sporočilo; nabiralnik je v `/admin` |
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
+| `/o-nas` | kaj je kajros, od kod podatki, da ni prevoznikova stran |
+| `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
 
 **Pristajalne strani obstajajo zaradi iskalnika in so brez JS.** Človek ne

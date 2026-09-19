@@ -517,3 +517,35 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   outline-offset: 1px;
   border-radius: 4px;
 }
+
+/* ---------- skupna noga (_noga.html) ----------
+ * Stik, o nas in podpora so gumbi, ne besedilo v odstavku: prej jih je bilo
+ * treba iskati med navedbo virov. Barva gumba za podporo je poudarek strani,
+ * zato je na avtobusnih straneh zelen -- isto kot vsak drug poudarek tam.
+ * Izbirniki so dvojni (`.noga .x`), ker `.besedilo a` sicer povozi barvo. */
+.noga {
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  font: 400 12px/1.6 var(--sans);
+  color: var(--ink-faint);
+}
+.noga-gumbi { display: flex; flex-wrap: wrap; gap: 8px; }
+.noga .noga-gumb {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 40px; padding: 9px 16px;
+  border: 1px solid var(--line-firm); border-radius: 99px;
+  background: var(--bg-raised);
+  font: 500 14px/1.2 var(--sans); color: var(--ink);
+  text-decoration: none;
+}
+.noga .noga-gumb:hover { background: var(--bg-hover); border-color: var(--ink-ghost); }
+.noga .noga-don { border-color: var(--accent); color: var(--accent-lit); font-weight: 600; }
+.noga .noga-don:hover { border-color: var(--accent-lit); }
+.noga-gumb:focus-visible, .noga-poti a:focus-visible {
+  outline: 2px solid var(--accent-lit); outline-offset: 2px;
+}
+.noga .noga-poti { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 14px 0 0; }
+.noga .noga-poti a { color: var(--ink-dim); text-decoration: none; padding: 4px 0; font-size: 12px; }
+.noga .noga-poti a:hover { color: var(--ink); text-decoration: underline; }
+.noga .noga-vir { margin: 10px 0 0; max-width: 64ch; font: 400 11px/1.6 var(--sans); color: var(--ink-faint); }

@@ -169,12 +169,7 @@
     {# Vozovnica pod rezultati: najprej "ali kaj pelje", sele nato "kupi". #}
     <div id="vozovnica"></div>
 
-    <footer class="page-foot">
-      Podatki: IJPP prek NAP (CC BY-SA 4.0), obdelava DERP.
-      Vreme Open-Meteo (CC BY 4.0).
-      <a href="/stik">Stik</a>. <a href="/zasebnost">Zasebnost</a>.
-      <span id="foot-health"></span>
-    </footer>
+    {% include "_noga.html" %}
   </main>
 
   <script src="{{ s('common.js') }}"></script>

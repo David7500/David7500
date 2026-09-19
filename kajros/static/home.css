@@ -4,8 +4,8 @@
  * velikost in svojo malo sliko. Budilka je prva in najvecja. Kartici omrezij
  * sta barvni in brez statistike (kot v osnutku A).
  *
- * Razrede .home-page, .home, .home-brand, .home-lead, .home-more, .more-link,
- * .home-foot in .napaka-koda rabijo tudi napaka, stik, zasebnost, /android in
+ * Razrede .home-page, .home, .home-brand, .home-lead, .home-more, .more-link
+ * in .napaka-koda rabijo tudi napaka, stik, zasebnost, /android in
  * /brez-omrezja -- ostanejo spodaj. */
 
 .home-page { display: flex; justify-content: center; }
@@ -116,12 +116,12 @@
 .p-ovire { background: #1c1a10; border-color: #3a3316; }
 .ovire-n { margin-top: auto; font: 700 32px/1 var(--mono); color: #d9b33c; }
 .ovire-n:empty { display: none; }
-.p-stat {
+.p-don {
   grid-column: 1 / -1; min-height: 0; flex-direction: row;
   align-items: center; justify-content: space-between; gap: 12px;
 }
-.p-stat > span { display: flex; flex-direction: column; }
-.stat-slika { flex-shrink: 0; }
+.p-don > span { display: flex; flex-direction: column; }
+.don-slika { flex-shrink: 0; color: var(--accent-lit); }
 
 .p:focus-visible, .bud-vse:focus-visible, .stikalo:focus-visible {
   outline: 2px solid var(--accent-lit); outline-offset: 2px;
@@ -170,12 +170,6 @@
 .more-link strong { font: 600 15px/1.3 var(--sans); color: var(--ink); }
 .more-link span { font: 400 13px/1.4 var(--sans); color: var(--ink-mute); }
 .more-link:hover strong { color: var(--accent-lit); }
-
-.home-foot {
-  margin-top: 28px;
-  font: 400 11px/1.65 var(--sans); color: var(--ink-faint);
-  max-width: 64ch;
-}
 
 /* Stran za napake. Številka je velika, ker je edino, kar je o napaki res
    znano -- razlaga pod njo je ugibanje, poti naprej pa so tisto, po kar je

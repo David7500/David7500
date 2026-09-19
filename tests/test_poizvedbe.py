@@ -2260,3 +2260,27 @@ def test_tabla_prevozen_postanek_brez_potrditve_ni_izmerjen(conn):
     conn.commit()
     _, potrjeni = stats.stanje_postankov(conn, dan, ["t1"])
     assert ("t1", 1) in potrjeni
+
+
+def test_noga_brez_donacij_ne_ponuja_podpore():
+    """Brez `KAJROS_DONACIJE` ni gumba: `/donacije` je takrat 404 in gumb bi
+    peljal na napako. Stik in „o nas" sta v nogi vedno (stik, dokler obrazec
+    obstaja)."""
+    from kajros.api import templates
+
+    noga = templates.env.get_template("_noga.html")
+    brez = noga.render(donacije="", stik_obrazec=True)
+    z = noga.render(donacije="https://ko-fi.com/x", stik_obrazec=False)
+    assert "/donacije" not in brez and "/donacije" in z
+    assert 'href="/stik"' in brez and 'href="/stik"' not in z
+    assert 'href="/o-nas"' in brez and 'href="/o-nas"' in z
+    # Navedba vira je pogoj licence CC BY-SA, ne okras.
+    assert "CC BY-SA 4.0" in brez
+
+
+def test_statistika_ni_v_zemljevidu_strani():
+    """Umaknjena stran ne sme biti ponujena iskalniku, če je ne vidi niti
+    obiskovalec."""
+    from kajros.api import _SITEMAP
+
+    assert not [p for p in _SITEMAP if "statistika" in p]

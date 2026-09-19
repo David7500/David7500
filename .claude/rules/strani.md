@@ -24,7 +24,9 @@ zares zatrebala. Skupaj z njima je odpadel še `/api/trains` s
 
 **`/app/statistika` odgovarja na „kdaj se splača potovati", ne „kakšna je
 statistika".** Stran je bila prej odstranjena do prenove; vrnjena je s tem
-vprašanjem, ker je edino, ki ga potnik res ima. Na vrhu je ena poved
+vprašanjem, ker je edino, ki ga potnik res ima. **19. 9. 2026 spet umaknjena**
+(„v taki obliki skoraj neuporabna"): ploščica na domači strani je odšla, pot iz
+zemljevida strani, stran ima `noindex`. Stran in endpointa ostanejo do prenove. Na vrhu je ena poved
 (najboljša in najslabša ura), pod njo razrezi po uri, dnevu v tednu in vrsti
 vlaka, na dnu pa dan za dnem, ki je `adv-only`.
 
@@ -94,7 +96,24 @@ Tri pravila, ki so se pokazala šele na posnetku prve različice:
 
 Z njima sta odpadli **dve zahtevi od treh** (`/api/overview` in
 `/api/overview/bus`, najdražji na strani, ki je samo razcepišče). Ostane
-`/api/health` za obseg zajema v nogi — to je navedba vira, ne statistika.
+`/api/health` za število ovir na ploščici. Obseg zajema („zajetih N meritev v
+M dneh") je bil v nogi do 19. 9. 2026 in je odšel — potniku ne pove ničesar.
+
+**Noga je ena za vse strani** (`_noga.html`, slog v `base.css`). Stik, „o
+nas" in podpora so gumbi — prej so bili stavki v odstavku drobnega sivega
+besedila in jih je bilo treba iskati. Pod njimi postaje, postajališča,
+Android, zasebnost (edina pot do kazal pristajalnih strani poleg sitemapa) in
+ena vrstica navedbe vira, ki je pogoj CC BY-SA. Izbirniki so `.noga .x`, ker
+`.besedilo p` / `.besedilo a` sicer povozita razmik in barvo — to se je
+pokazalo na prvem posnetku. Karta, okno vožnje in pot noge nimajo: so
+celozaslonske aplikacije.
+
+**Podpora (`/donacije`) pelje na `ko-fi.com/kajros`** (odprto 19. 9. 2026,
+PayPal Business na ime „kajros“, da donator ne vidi lastnikovega imena).
+Naslov je privzetek v `config.py`, ne v enoti, ker ga agent tam ne more
+pisati. Prazen `KAJROS_DONACIJE=` skrije vse: pot je ploščice na domači strani (na mestu nekdanje „Kdaj potovati") in gumba v
+nogi ni: prošnja brez naslova, kamor bi denar šel, je slabša od nobene. Stran
+pove ime ponudnika ob gumbu, ker gumb pelje s strani.
 
 **Povedi so pisane, kot se piše, ne kot se govori.** „Kdaj ti pelje in koliko
 zamuja" in „kje je zdaj kaj" sta bili prijavljeni kot stavka, ki se v
@@ -121,11 +140,10 @@ izbira svojo velikost in malo sliko:
   „običajno +2 min" sta bila odstranjena že 12. 9. in se nista vrnila.
 * Ovire nosijo število veljavnih iz `/api/health` (`alerts_active`, ista
   funkcija kot na strani ovir), ker ga stran bere tako ali tako.
-* Stolpci na „Kdaj potovati" in pike na zemljevidu so **slika, ne podatek**.
+* Pike na zemljevidu so **slika, ne podatek**.
 
 `home.css` rabijo tudi napaka, stik, zasebnost, `/android` in
-`/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`,
-`.home-foot`) — spremembo teh razredov preveri tudi tam.
+`/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`) — spremembo teh razredov preveri tudi tam.
 
 ## `/app/pot` („Najhitrejša pot") — edina stran, ki se ne začne pri postaji
 

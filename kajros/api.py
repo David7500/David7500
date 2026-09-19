@@ -14,7 +14,7 @@ import time
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import parse_qs, quote
+from urllib.parse import parse_qs, quote, urlsplit
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -249,6 +249,10 @@ templates.env.globals["pot_vozje"] = pristanek.pot_vozje
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
 templates.env.globals["baza"] = config.BASE_URL
+# Za skupno nogo (`_noga.html`), ki je v vsaki strani in ne sme zahtevati,
+# da ji vsak pogled posebej poda nastavitve.
+templates.env.globals["donacije"] = config.DONACIJE
+templates.env.globals["stik_obrazec"] = config.STIK_OBRAZEC
 
 
 def _conn():
@@ -315,10 +319,12 @@ def favicon():
 # Strani, ki naj bodo v iskalniku. Naštete so ročno in to je namerno: poti z
 # vzorcem (`/app/train/{no}`) jih je ~20 000 in v zemljevidu strani nimajo kaj
 # iskati -- vsaka je ena vožnja enega dne.
+# `/app/statistika` ni na seznamu (umaknjena 19. 9. 2026): stran dela, a ni
+# povezana od nikoder, dokler ne bo prenovljena -- iskalnik je ne sme najti,
+# če je ne more niti obiskovalec.
 _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
-            "/app/ovire", "/app/statistika", "/app/statistika/bus",
-            "/postaje", "/postajalisca",
-            "/android", "/stik", "/zasebnost"]
+            "/app/ovire", "/postaje", "/postajalisca",
+            "/android", "/stik", "/zasebnost", "/o-nas"]
 
 
 def _sitemap_poti() -> list[str]:
@@ -329,7 +335,7 @@ def _sitemap_poti() -> list[str]:
     kazalu, ostane dosegljivo in `noindex` -- zemljevid strani ne sme odpreti
     neskončnega prostora naslovov.
     """
-    poti = list(_SITEMAP)
+    poti = list(_SITEMAP) + (["/donacije"] if config.DONACIJE else [])
     for network in stats.SUMMARY_NETWORKS:
         kaz = _kazalo(network)
         poti += [pristanek.pot_relacije(network, r["od"], r["cilj"])
@@ -475,6 +481,34 @@ def zasebnost(request: Request):
     return templates.TemplateResponse(
         request, "zasebnost.html",
         {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
+
+
+@app.get("/o-nas", response_class=HTMLResponse, include_in_schema=False)
+def o_nas(request: Request):
+    """Kaj je kajros in kdo stoji za njim.
+
+    Stran obstaja zaradi zamenjave: kdor pride iz iskalnika s „vlak ljubljana
+    koper", mora vedeti, da to ni prevoznikova stran in da ima tabla na
+    postaji prednost.
+    """
+    return templates.TemplateResponse(
+        request, "o_nas.html",
+        {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
+
+
+@app.get("/donacije", response_class=HTMLResponse, include_in_schema=False)
+def donacije(request: Request):
+    """Za kaj gre denar in gumb do plačilne strani.
+
+    Brez `KAJROS_DONACIJE` poti ni (404): prošnja brez naslova, kamor bi
+    denar šel, je slabša od nobene.
+    """
+    if not config.DONACIJE:
+        raise HTTPException(404, "donacije niso nastavljene")
+    ponudnik = urlsplit(config.DONACIJE).hostname or config.DONACIJE
+    return templates.TemplateResponse(
+        request, "donacije.html",
+        {"naslov": config.DONACIJE, "ponudnik": ponudnik.removeprefix("www.")})
 
 
 def _izdaja_androida() -> dict | None:
@@ -718,7 +752,6 @@ def _relacija_stran(request: Request, od: str, cilj: str, network: str):
         "min_meritev": pristanek.MIN_MERITEV,
         "najkrajse": min((z["duration_s"] for z in podatki["zveze"]), default=None),
         "iskalnik": _iskalnik_ab(network, ime_od, ime_cilj),
-        "kazalo_pot": pristanek.pot_kazala(network),
         "od_dneva": _dan(dnevi[0] if dnevi else None),
         "do_dneva": _dan(dnevi[-1] if dnevi else None),
     })
@@ -769,7 +802,6 @@ def _postaja_stran(request: Request, ime: str, network: str):
         **podatki, "opis": opis,
         "min_meritev": pristanek.MIN_MERITEV,
         "iskalnik": f"{stran}?station={quote(pravo)}",
-        "kazalo_pot": pristanek.pot_kazala(network),
         "od_dneva": _dan(dnevi[0] if dnevi else None),
         "do_dneva": _dan(dnevi[-1] if dnevi else None),
     })
@@ -800,8 +832,6 @@ def _kazalo_stran(request: Request, network: str):
         "opis": f"Odhodi in izmerjene zamude za {len(postaje)} "
                 f"najbolj prometnih {beseda} v Sloveniji.",
         "iskalnik": stran,
-        "drugo_omrezje": pristanek.pot_kazala(
-            "zeleznica" if network == "avtobus" else "avtobus"),
     })
 
 
