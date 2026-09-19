@@ -40,7 +40,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, db
@@ -518,47 +518,88 @@ def _percentil(vedra: dict[int, int], p: float) -> dict:
     return {"do": None, "n": skupaj}
 
 
-def pregled(conn: sqlite3.Connection, dni: int = 30) -> dict:
-    """Vse, kar pokaže stran `/admin`. Ena poizvedba na vprašanje.
+def prejsnje_obdobje(od: str, do: str) -> tuple[str, str]:
+    """Obdobje, s katerim se `od`–`do` primerja.
+
+    Cel koledarski mesec se primerja s prejšnjim mesecem in celo leto s
+    prejšnjim letom, vse ostalo pa z enako dolgim odsekom tik pred njim.
+    Premik za enako število dni bi september (30) primerjal z 2. 8.–31. 8.,
+    kar ni noben mesec, ki bi ga kdo imel v glavi.
+    """
+    a, b = date.fromisoformat(od), date.fromisoformat(do)
+    if a.day == 1 and (b + timedelta(days=1)).day == 1 and a.month == b.month:
+        konec = a - timedelta(days=1)
+        return konec.replace(day=1).isoformat(), konec.isoformat()
+    if (a.month, a.day, b.month, b.day) == (1, 1, 12, 31) and a.year == b.year:
+        return date(a.year - 1, 1, 1).isoformat(), date(a.year - 1, 12, 31).isoformat()
+    n = (b - a).days + 1
+    return (a - timedelta(days=n)).isoformat(), (a - timedelta(days=1)).isoformat()
+
+
+#: Človek je, kdor se ne predstavi kot bot IN je pognal JS. Vrstice pred
+#: stolpcem `js` (NULL) štejejo po starem pravilu -- zanje tega ne vemo, in
+#: ničla bi jih vse naredila za bote. `js_od` pove, od kdaj velja novo.
+_CLOVEK = "o.bot = 0 AND COALESCE(o.js, 1) > 0"
+_PO_DNEVIH_SQL = (
+    "SELECT o.dan,"
+    f"      SUM(CASE WHEN {_CLOVEK} THEN 1 ELSE 0 END) AS ljudi,"
+    "       SUM(CASE WHEN o.bot = 1 THEN 1 ELSE 0 END) AS botov,"
+    "       SUM(CASE WHEN o.bot = 0 AND o.js = 0 THEN 1 ELSE 0 END) AS brez_js,"
+    f"      SUM(CASE WHEN {_CLOVEK} THEN o.ogledov ELSE 0 END) AS ogledov,"
+    "       SUM(o.zahtev) AS zahtev "
+    "FROM obiskovalec o WHERE o.dan BETWEEN ? AND ? GROUP BY o.dan ORDER BY o.dan")
+
+
+def _vsota_dni(vrstice: list[dict]) -> dict:
+    return {
+        "ljudi_vsota": sum(d["ljudi"] for d in vrstice),
+        "ogledov": sum(d["ogledov"] for d in vrstice),
+        "zahtev": sum(d["zahtev"] for d in vrstice),
+        "botov_vsota": sum(d["botov"] for d in vrstice),
+        "brez_js_vsota": sum(d["brez_js"] for d in vrstice),
+        "dni": len(vrstice),
+    }
+
+
+def pregled(conn: sqlite3.Connection, od: str | None = None,
+            do: str | None = None) -> dict:
+    """Vse, kar pokaže stran `/admin`, za obdobje `od`–`do` (privzeto danes).
 
     **Mesečnega števila različnih ljudi tu ni in ga ne more biti.** Sol se
     vsak dan zavrže, zato je ista naprava jutri drug ključ; `ljudi_vsota` je
     vsota dnevnih in isto osebo šteje tolikokrat, kolikor dni je prišla. To
     je cena zasebnosti in je zapisana tudi na strani, da je številka ne bo
     kdo bral kot mesečne unikate.
+
+    Ne glede na obdobje nosi odgovor še `danes` in `zadnjih30`: zavihek
+    „Stanje“ ju rabi vedno, in dva klica namesto enega bi bila dve številki,
+    ki se lahko razideta.
     """
     danes = _danes()
-    od = datetime.fromordinal(
-        datetime.now(TZ).date().toordinal() - dni + 1).strftime("%Y-%m-%d")
+    od = od or danes
+    do = do or danes
+    prej_od, prej_do = prejsnje_obdobje(od, do)
+    pred30 = (date.fromisoformat(danes) - timedelta(days=29)).isoformat()
 
-    # Človek je, kdor se ne predstavi kot bot IN je pognal JS. Vrstice pred
-    # stolpcem `js` (NULL) štejejo po starem pravilu -- zanje tega ne vemo, in
-    # ničla bi jih vse naredila za bote. `js_od` pove, od kdaj velja novo.
-    clovek = "o.bot = 0 AND COALESCE(o.js, 1) > 0"
-    po_dnevih = [dict(r) for r in conn.execute(
-        "SELECT o.dan,"
-        f"      SUM(CASE WHEN {clovek} THEN 1 ELSE 0 END) AS ljudi,"
-        "       SUM(CASE WHEN o.bot = 1 THEN 1 ELSE 0 END) AS botov,"
-        "       SUM(CASE WHEN o.bot = 0 AND o.js = 0 THEN 1 ELSE 0 END) AS brez_js,"
-        f"      SUM(CASE WHEN {clovek} THEN o.ogledov ELSE 0 END) AS ogledov,"
-        "       SUM(o.zahtev) AS zahtev "
-        "FROM obiskovalec o WHERE o.dan >= ? GROUP BY o.dan ORDER BY o.dan",
-        (od,))]
-    js_od = conn.execute(
-        "SELECT MIN(dan) FROM obiskovalec WHERE js IS NOT NULL").fetchone()[0]
+    po_dnevih = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (od, do))]
+    prej = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (prej_od, prej_do))]
+    zadnjih30 = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (pred30, danes))]
+    js_od, prvi_dan = conn.execute(
+        "SELECT MIN(CASE WHEN js IS NOT NULL THEN dan END), MIN(dan) "
+        "FROM obiskovalec").fetchone()
 
     strani = [dict(r) for r in conn.execute(
         "SELECT pot, SUM(zahtev) AS zahtev, SUM(ljudi) AS ljudi "
-        "FROM obisk_pot WHERE dan >= ? AND vrsta = 'stran' "
-        "GROUP BY pot ORDER BY ljudi DESC, zahtev DESC", (od,))]
+        "FROM obisk_pot WHERE dan BETWEEN ? AND ? AND vrsta = 'stran' "
+        "GROUP BY pot ORDER BY ljudi DESC, zahtev DESC", (od, do))]
 
     # Odzivni čas in napake: obojega ne meri nihče drug. Cloudflare vidi svoj
     # rob, ne našega izračuna, in 2,7 s za `/api/health` je pri njem videti
     # enako kot 3 ms.
     vedra: dict[str, dict[int, int]] = {}
     for r in conn.execute(
-            "SELECT pot, vedro, SUM(n) AS n FROM obisk_odziv WHERE dan >= ? "
-            "GROUP BY pot, vedro", (od,)):
+            "SELECT pot, vedro, SUM(n) AS n FROM obisk_odziv "
+            "WHERE dan BETWEEN ? AND ? GROUP BY pot, vedro", (od, do)):
         vedra.setdefault(r["pot"], {})[r["vedro"]] = r["n"]
 
     endpointi = []
@@ -566,8 +607,8 @@ def pregled(conn: sqlite3.Connection, dni: int = 30) -> dict:
             "SELECT pot, SUM(zahtev) AS zahtev, SUM(napak4) AS napak4,"
             "       SUM(napak5) AS napak5, SUM(ms_vsota) AS ms_vsota,"
             "       MAX(ms_naj) AS ms_naj "
-            "FROM obisk_pot WHERE dan >= ? GROUP BY pot "
-            "ORDER BY zahtev DESC", (od,)):
+            "FROM obisk_pot WHERE dan BETWEEN ? AND ? GROUP BY pot "
+            "ORDER BY zahtev DESC", (od, do)):
         v = vedra.get(r["pot"], {})
         endpointi.append({
             "pot": r["pot"], "zahtev": r["zahtev"],
@@ -580,33 +621,25 @@ def pregled(conn: sqlite3.Connection, dni: int = 30) -> dict:
     razrezi: dict[str, list] = {}
     for r in conn.execute(
             "SELECT razsez, kljuc, SUM(zahtev) AS zahtev, SUM(ogledov) AS ogledov "
-            "FROM obisk_razrez WHERE dan >= ? GROUP BY razsez, kljuc "
-            "ORDER BY razsez, ogledov DESC, zahtev DESC", (od,)):
+            "FROM obisk_razrez WHERE dan BETWEEN ? AND ? GROUP BY razsez, kljuc "
+            "ORDER BY razsez, ogledov DESC, zahtev DESC", (od, do)):
         razrezi.setdefault(r["razsez"], []).append(dict(r))
     if "ura" in razrezi:
         razrezi["ura"].sort(key=lambda x: x["kljuc"])
 
-    danasnji = next((d for d in po_dnevih if d["dan"] == danes), None)
-    skupaj = {
-        "ljudi_vsota": sum(d["ljudi"] for d in po_dnevih),
-        "ogledov": sum(d["ogledov"] for d in po_dnevih),
-        "zahtev": sum(d["zahtev"] for d in po_dnevih),
-        "botov_vsota": sum(d["botov"] for d in po_dnevih),
-        "brez_js_vsota": sum(d["brez_js"] for d in po_dnevih),
-        "napak4": sum(e["napak4"] for e in endpointi),
-        "napak5": sum(e["napak5"] for e in endpointi),
-    }
-    zadnjih7 = po_dnevih[-7:]
+    skupaj = _vsota_dni(po_dnevih)
+    skupaj["napak4"] = sum(e["napak4"] for e in endpointi)
+    skupaj["napak5"] = sum(e["napak5"] for e in endpointi)
+    danasnji = next((d for d in zadnjih30 if d["dan"] == danes), None)
     return {
-        "dni": dni, "od": od, "do": danes,
+        "od": od, "do": do, "danes_dan": danes,
         "danes": danasnji or {"dan": danes, "ljudi": 0, "botov": 0,
                               "brez_js": 0, "ogledov": 0, "zahtev": 0},
-        "js_od": js_od,
-        "teden": {"ljudi_vsota": sum(d["ljudi"] for d in zadnjih7),
-                  "ogledov": sum(d["ogledov"] for d in zadnjih7),
-                  "dni": len(zadnjih7)},
+        "js_od": js_od, "prvi_dan": prvi_dan,
         "skupaj": skupaj,
+        "prej": {"od": prej_od, "do": prej_do, **_vsota_dni(prej)},
         "po_dnevih": po_dnevih,
+        "zadnjih30": zadnjih30,
         "strani": strani,
         "endpointi": endpointi,
         "razrezi": razrezi,

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C · Poročilo — kajros</title>
+<link rel="stylesheet" href="../../kajros/static/pisave.css">
+<link rel="stylesheet" href="../../kajros/static/base.css">
+<link rel="stylesheet" href="skupno.css">
+<style>
+/* C — Poročilo: dan se prebere kot odstavek, številke so v stavkih; zgodovina je letni koledar. */
+.topbar { position: sticky; top: 0; z-index: 20; }
+.zavihki { display: flex; gap: 4px; height: 100%; margin-left: 10px; }
+.zavihki a { display: flex; align-items: center; padding: 0 14px; font: 500 13.5px var(--sans); color: var(--ink-mute);
+  text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.zavihki a[aria-current] { color: var(--ink); border-bottom-color: var(--accent); }
+.stanje-pika { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--ink-faint); }
+
+main { max-width: 1240px; margin: 0 auto; padding: 30px 32px 80px; }
+.nav-dan { display: flex; align-items: center; gap: 18px; margin-bottom: 8px; }
+.nav-dan button.pu { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line-firm); background: var(--bg-raised);
+  color: var(--ink); font-size: 18px; cursor: pointer; }
+.nav-dan button.pu:hover:not(:disabled) { border-color: var(--ink-dim); }
+.nav-dan button.pu:disabled { opacity: .3; cursor: default; }
+.nav-dan h1 { margin: 0; font: 600 30px var(--sans); letter-spacing: -.01em; }
+.nav-dan .mode-switch { margin-left: auto; }
+.nadnaslov { font: 500 12px var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); margin: 0 0 6px 56px; }
+
+.lede { font: 400 20px/1.6 var(--sans); color: var(--ink-dim); max-width: 880px; margin: 18px 0 30px; }
+.lede b { color: var(--ink); font-weight: 600; }
+.lede .o { color: var(--accent-lit); font-weight: 600; }
+.lede .r { color: var(--sev-bad); font-weight: 600; }
+
+.stevci { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 34px; }
+.stevci > div { padding: 16px 18px; }
+.stevci > div + div { border-left: 1px solid var(--line); }
+.stevci .v { font: 600 26px var(--sans); }
+.stevci .i { font-size: 12.5px; color: var(--ink-faint); margin-top: 3px; }
+.stevci .spark { height: 30px; margin-top: 8px; }
+
+.dve { display: grid; grid-template-columns: 1.15fr 1fr; gap: 40px; margin-bottom: 34px; }
+h2 { font: 600 15px var(--sans); margin: 0 0 4px; }
+.pod { font-size: 12.5px; color: var(--ink-faint); margin: 0 0 14px; }
+section { min-width: 0; }
+
+.opozorila { display: flex; flex-direction: column; gap: 0; }
+.op { display: grid; grid-template-columns: 14px 1fr auto; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); align-items: baseline; font-size: 13.5px; }
+.op .pika { transform: translateY(1px); }
+.op .t { color: var(--ink-dim); } .op .t code { font: 12.5px var(--mono); color: var(--ink); }
+.op .v { font: 600 13px var(--mono); }
+
+/* letni koledar */
+.leto { overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; }
+.leto-mreza { display: grid; grid-auto-flow: column; grid-template-rows: 16px repeat(7, 15px); gap: 3px; width: max-content; }
+.leto-mreza .mes { font: 10.5px var(--sans); color: var(--ink-faint); grid-row: 1; white-space: nowrap; }
+.leto-mreza .c { width: 15px; height: 15px; border-radius: 3px; background: var(--line-soft); border: 0; padding: 0; cursor: pointer; }
+.leto-mreza .c.bod { background: transparent; outline: 1px dashed var(--line); outline-offset: -1px; cursor: default; }
+.leto-mreza .c.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+.leto-mreza .c:hover:not(.bod) { outline: 1px solid var(--ink-dim); }
+.leto-noga { display: flex; gap: 18px; align-items: center; font-size: 12px; color: var(--ink-faint); margin-bottom: 30px; }
+.leto-noga i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin: 0 1px; }
+.leto-dt { display: grid; grid-template-rows: 16px repeat(7, 15px); gap: 3px; font: 10px var(--sans); color: var(--ink-faint); margin-right: 6px; }
+.leto-ovoj { display: flex; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#"><svg class="brand-mark" width="20" height="20" viewBox="0 0 96 96" fill="none" stroke-linecap="round"><path d="M34 24V72" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/><path d="M66 26L34 50" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/><path d="M34 50L66 72" stroke="currentColor" stroke-width="9"/></svg><span class="brand-name">kajros</span></a>
+  <div class="divider"></div>
+  <nav class="zavihki"><a href="#stanje" id="z-stanje">Danes</a><a href="#zgodovina" id="z-zgodovina">Zgodovina</a><a href="#">Sporočila</a></nav>
+  <div class="spacer"></div>
+  <div class="stanje-pika" id="pika"></div>
+</header>
+<main id="vsebina"></main>
+<div class="predloga-oznaka">predloga C · poročilo</div>
+
+<script src="podatki.js"></script>
+<script src="skupno.js"></script>
+<script>
+"use strict";
+
+let izbor = { vrsta: "dan", sidro: isoDan(ZDAJ) };
+
+/** Odstavek o obdobju. Stavki so iz istih številk kot vse spodaj. */
+function odstavek(o) {
+  const danes = o.vrsta === "dan" && o.sidro === isoDan(ZDAJ);
+  const cas = danes ? `Danes do ${ZDAJ.getHours()}:${String(ZDAJ.getMinutes()).padStart(2, "0")}` :
+    o.vrsta === "dan" ? "Ta dan" : "V tem obdobju";
+  const kdo = o.vrsta === "dan" ? `<span class="o">${st(o.ljudi)} različnih ljudi</span>` : `<span class="o">${st(o.ljudi)} obiskov</span> (vsota dnevnih)`;
+  const s1 = o.strani[0], s2 = o.strani[1];
+  const tel = o.naprave.find((n) => n.kljuc === "telefon");
+  const nv = o.naprave.reduce((a, r) => a + r.ogledov, 0) || 1;
+  const p = o.pocasi[0];
+  const vrh = [...o.ure].sort((a, b) => b.ogledov - a.ogledov)[0];
+  let t = `${cas} je prišlo ${kdo}, ki so odprli <b>${st(o.ogledov)} strani</b>. `;
+  if (s1) t += `Največ ljudi je odprlo stran <b>${imeStrani(s1.pot)}</b> (${st(s1.ljudi)})${s2 ? ` in <b>${imeStrani(s2.pot)}</b> (${st(s2.ljudi)})` : ""}. `;
+  if (tel) t += `<b>${st(100 * tel.ogledov / nv)} %</b> ogledov je s telefona. `;
+  if (vrh && o.vrsta === "dan") t += `Največ gneče je bilo med <b>${+vrh.kljuc}. in ${+vrh.kljuc + 1}. uro</b>. `;
+  if (p && p.ms_naj > 5000) t += `Najpočasnejša je bila <b>${esc(p.pot)}</b>: ena zahteva je trajala <span class="r">${ms(p.ms_naj)}</span>, povprečje ${ms(p.ms_povp)}.`;
+  return t;
+}
+
+/** Zadnjih 14 dni kot drobni stolpci, brez osi. */
+function iskra(vr) {
+  const naj = Math.max(1, ...vr.filter((v) => v != null));
+  const w = 100 / vr.length;
+  return `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" style="width:100%;display:block">${vr.map((v, i) =>
+    v == null ? `<rect x="${i * w + w * .15}" y="28" width="${w * .7}" height="2" fill="var(--line)"/>` :
+    `<rect x="${i * w + w * .15}" y="${30 - Math.max(2, 30 * v / naj)}" width="${w * .7}" height="${Math.max(2, 30 * v / naj)}" fill="var(--accent)" opacity="${i === vr.length - 1 ? 1 : .6}"/>`).join("")}</svg>`;
+}
+
+function porocilo(o) {
+  const pd = podenote(o);
+  const d7 = zadnjihDni(14);
+  const strojev = o.botov + o.brez_js;
+  const nv = o.naprave.reduce((a, r) => a + r.ogledov, 0) || 1;
+  const nd = o.drzave.reduce((a, r) => a + r.ogledov, 0) || 1;
+  const najS = o.strani[0] ? o.strani[0].ljudi : 0;
+  return `<p class="lede">${odstavek(o)}</p>
+  <div class="stevci">
+    <div><div class="v">${st(o.ljudi)}</div><div class="i">${o.vrsta === "dan" ? "ljudi" : "obiskov"}</div>${iskra(d7.map((r) => r.prazen ? null : r.ljudi))}</div>
+    <div><div class="v">${st(o.ogledov)}</div><div class="i">ogledov strani</div>${iskra(d7.map((r) => r.prazen ? null : r.ogledov))}</div>
+    <div><div class="v">${st(o.ogledov / Math.max(1, o.ljudi), 1)}</div><div class="i">strani na obisk</div></div>
+    <div><div class="v">${st(strojev)}</div><div class="i">strojev, ni šteto</div></div>
+    <div><div class="v">${st(o.zahtev)}</div><div class="i">zahtev skupaj</div></div>
+  </div>
+  <section style="margin-bottom:34px"><h2>${o.vrsta === "dan" ? "Po urah" : o.vrsta === "leto" ? "Po mesecih" : "Po dnevih"}</h2><p class="pod">${pd.enota}</p>
+    ${stolpci(pd.v, { visina: 200, oznake: pd.oznake, tip: pd.tip })}</section>
+  <div class="dve">
+    <section><h2>Katere strani</h2><p class="pod">ljudi, desno vsi ogledi</p>
+      ${o.strani.slice(0, 10).map((s) => vrsta(imeStrani(s.pot), s.ljudi, najS, `${st(s.zahtev)}×`)).join("")}</section>
+    <section><h2>Kaj je šlo narobe</h2><p class="pod">počasne zahteve, napake in stroj</p>
+      <div class="opozorila">${opozorila(o)}</div></section>
+  </div>
+  <div class="dve">
+    <section><h2>S čim</h2><p class="pod">ogledi po napravi</p>${o.naprave.map((r) => vrsta(r.kljuc, r.ogledov, nv, `${st(100 * r.ogledov / nv)} %`)).join("")}</section>
+    <section><h2>Od kod</h2><p class="pod">država iz Cloudflarove glave</p>${o.drzave.slice(0, 5).map((r) => vrsta(r.kljuc, r.ogledov, nd, `${st(100 * r.ogledov / nd)} %`)).join("")}</section>
+  </div>`;
+}
+
+/** Počasno in zdravje v enem seznamu, najhujše na vrhu: bere se kot seznam opravil. */
+function opozorila(o) {
+  const vrst = [];
+  for (const p of o.pocasi.slice(0, 5)) {
+    const r = hitrostRazred(p.ms_naj);
+    vrst.push([r === "bad" ? 0 : 1, `<div class="op"><span class="pika ${r}"></span><span class="t"><code>${esc(p.pot)}</code> najdlje ${ms(p.ms_naj)}, povprečno ${ms(p.ms_povp)} na ${st(p.zahtev)} zahtevah${p.napak4 + p.napak5 ? `, ${p.napak4 + p.napak5} napak` : ""}</span><span class="v ms ${r}">${ms(p.ms_naj)}</span></div>`]);
+  }
+  if (o.sidro === isoDan(ZDAJ) || o.vrsta !== "dan") {
+    for (const z of zdravje().filter((z) => z.raz === "hard" || z.raz === "bad")) {
+      vrst.push([z.raz === "bad" ? 0 : 2, `<div class="op"><span class="pika ${z.raz}"></span><span class="t">${z.ime}</span><span class="v">${z.vr}</span></div>`]);
+    }
+  }
+  return vrst.sort((a, b) => a[0] - b[0]).map((x) => x[1]).join("");
+}
+
+function glava(naslov, nad, vrsta) {
+  return `<div class="nadnaslov">${nad}</div><div class="nav-dan">
+    <button class="pu" id="nazaj" ${vrsta === "vse" ? "disabled" : ""}>‹</button><h1>${naslov}</h1>
+    <button class="pu" id="naprej" ${vrsta === "vse" || premakni(vrsta, izbor.sidro, 1) > isoDan(ZDAJ) ? "disabled" : ""}>›</button>
+    <div class="mode-switch" id="vrste">${Object.entries(OBDOBJA).map(([k, n]) => `<button data-v="${k}" aria-pressed="${k === vrsta}">${n}</button>`).join("")}</div></div>`;
+}
+
+/** Leto kot mreža tednov (stolpci) in dni (vrstice), kot pri GitHubu. */
+function letniKoledar() {
+  const y = izIso(izbor.sidro).getFullYear();
+  const naj = Math.max(1, ...PREGLED.po_dnevih.map((r) => r.ljudi));
+  const [od, do_] = meje(izbor.vrsta, izbor.sidro);
+  let d = izIso(`${y}-01-01`);
+  d = dodaj(d, -((d.getDay() + 6) % 7));
+  let h = "", stolpec = 1, zadnjiMes = -1;
+  while (d.getFullYear() <= y) {
+    if (d.getMonth() !== zadnjiMes && d.getFullYear() === y && d.getDate() <= 7) {
+      h += `<span class="mes" style="grid-column:${stolpec}">${MESECI[d.getMonth()].slice(0, 3)}</span>`;
+      zadnjiMes = d.getMonth();
+    }
+    for (let i = 0; i < 7; i++) {
+      const iso = isoDan(d), r = PREGLED.po_dnevih.find((x) => x.dan === iso);
+      const bod = iso > isoDan(ZDAJ), tuj = d.getFullYear() !== y;
+      const bg = r ? `background:color-mix(in srgb, var(--accent) ${Math.round(100 * (0.18 + 0.82 * Math.sqrt(r.ljudi / naj)))}%, var(--bg))` : "";
+      const sel = izbor.vrsta !== "vse" && iso >= od && iso <= do_ ? " sel" : "";
+      h += tuj ? `<span style="grid-column:${stolpec};grid-row:${i + 2}"></span>` :
+        `<button class="c${bod ? " bod" : ""}${sel}" style="grid-column:${stolpec};grid-row:${i + 2};${bg}" data-d="${iso}"
+          data-tip="${esc(r ? `<b>${dolgiDan(iso)}</b><br>${st(r.ljudi)} ljudi · ${st(r.ogledov)} ogledov` : `${dolgiDan(iso)}<br>${bod ? "še ni bil" : "ni podatka"}`)}"></button>`;
+      d = dodaj(d, 1);
+    }
+    stolpec++;
+  }
+  return `<div class="leto-ovoj"><div class="leto-dt"><span></span><span>pon</span><span></span><span>sre</span><span></span><span>pet</span><span></span><span>ned</span></div>
+    <div class="leto"><div class="leto-mreza">${h}</div></div></div>
+    <div class="leto-noga"><span>${y}</span><span>manj <i style="background:var(--line-soft)"></i><i style="background:color-mix(in srgb,var(--accent) 35%,var(--bg))"></i><i style="background:color-mix(in srgb,var(--accent) 70%,var(--bg))"></i><i style="background:var(--accent)"></i> več ljudi</span><span>siva = ni podatka · štetje od ${kratkiDan(PRVI_DAN)} ${y}</span></div>`;
+}
+
+function risi() {
+  const h = location.hash.slice(1) || "stanje";
+  const zg = h === "zgodovina";
+  $("z-stanje").toggleAttribute("aria-current", !zg);
+  $("z-zgodovina").toggleAttribute("aria-current", zg);
+  const z = zdravje(), slabo = z.filter((x) => x.raz === "bad" || x.raz === "hard");
+  $("pika").innerHTML = `<span class="pika ${slabo.some((x) => x.raz === "bad") ? "bad" : slabo.length ? "hard" : "mild"}"></span>${slabo.length ? `${slabo.length} opozorilo` : "zajem teče"} · ${pred(PREGLED.zdravje.last_feed_ts)}`;
+  if (!zg) izbor = { vrsta: "dan", sidro: isoDan(ZDAJ) };
+  const o = obdobje(izbor.vrsta, izbor.sidro);
+  const nad = zg ? (izbor.vrsta === "dan" ? "dan" : OBDOBJA[izbor.vrsta].toLowerCase()) : "stanje";
+  let html = glava(naslovObdobja(izbor.vrsta, izbor.sidro), nad, izbor.vrsta);
+  if (zg) html = letniKoledar() + html;
+  html += o.zDnevi ? porocilo(o) : `<p class="lede">Za to obdobje ni podatkov. Štetje obiska teče od ${kratkiDan(PRVI_DAN)} 2026.</p>`;
+  $("vsebina").innerHTML = html;
+  if (!zg) { $("vrste").hidden = true; }
+  document.querySelectorAll("#vrste button").forEach((b) => b.onclick = () => { izbor.vrsta = b.dataset.v; risi(); });
+  $("nazaj").onclick = () => { izbor.sidro = premakni(izbor.vrsta, izbor.sidro, -1); if (!zg) location.hash = "zgodovina"; else risi(); };
+  $("naprej").onclick = () => { izbor.sidro = premakni(izbor.vrsta, izbor.sidro, 1); risi(); };
+  document.querySelectorAll(".c[data-d]:not(.bod)").forEach((c) => c.onclick = () => { izbor = { vrsta: "dan", sidro: c.dataset.d }; risi(); });
+}
+const q = new URLSearchParams(location.search);
+if (q.get("v")) izbor.vrsta = q.get("v");
+if (q.get("d")) izbor.sidro = q.get("d");
+addEventListener("hashchange", risi);
+risi();
+</script>
+</body>
+</html>

@@ -262,7 +262,7 @@ def test_brskalnik_brez_js_ni_clovek(conn):
     15. 9. 2026). V prometu je, med ljudmi in v razrezih ne."""
     _zabelezi(pot="/", kljuc="skener")
     obisk.izprazni(conn)
-    p = obisk.pregled(conn, dni=7)
+    p = obisk.pregled(conn)
     assert p["danes"]["ljudi"] == 0 and p["danes"]["brez_js"] == 1
     assert p["danes"]["ogledov"] == 0
     assert conn.execute("SELECT COUNT(*) FROM obisk_razrez").fetchone()[0] == 0
@@ -285,7 +285,7 @@ def test_ogled_se_pripise_ko_pride_dokaz_tudi_cez_praznjenje(conn):
     assert (ura["zahtev"], ura["ogledov"]) == (3, 1)
     stran = conn.execute("SELECT ljudi FROM obisk_pot WHERE pot = '/'").fetchone()
     assert stran["ljudi"] == 1
-    p = obisk.pregled(conn, dni=7)
+    p = obisk.pregled(conn)
     assert p["danes"]["ljudi"] == 1 and p["danes"]["ogledov"] == 1
     assert not obisk._cakajoci
 
@@ -294,7 +294,7 @@ def test_neuspel_klic_api_ni_dokaz(conn):
     _zabelezi(pot="/", kljuc="skener")
     _zabelezi(pot="(neznano)", vrsta="api", kljuc="skener", koda=404)
     obisk.izprazni(conn)
-    assert obisk.pregled(conn, dni=7)["danes"]["ljudi"] == 0
+    assert obisk.pregled(conn)["danes"]["ljudi"] == 0
 
 
 def test_vrstice_pred_stolpcem_js_stejejo_po_starem(conn):
@@ -303,7 +303,7 @@ def test_vrstice_pred_stolpcem_js_stejejo_po_starem(conn):
     conn.execute("INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov, js,"
                  " prvi_s, zadnji_s) VALUES(?, 'star', 0, 1, 1, NULL, 0, 0)",
                  (obisk._danes(),))
-    p = obisk.pregled(conn, dni=7)
+    p = obisk.pregled(conn)
     assert p["danes"]["ljudi"] == 1
     assert p["js_od"] is None
 
@@ -370,16 +370,48 @@ def test_pregled_loci_ljudi_od_botov(conn):
     _zabelezi(kljuc="bot1", bot=True)
     _js(kljuc="bot1", bot=True)       # bot, ki kliče API, je še vedno bot
     obisk.izprazni(conn)
-    p = obisk.pregled(conn, dni=7)
+    p = obisk.pregled(conn)
     assert p["danes"]["ljudi"] == 2
     assert p["danes"]["botov"] == 1
     assert p["skupaj"]["ljudi_vsota"] == 2
 
 
 def test_pregled_prazne_baze_ne_pade(conn):
-    p = obisk.pregled(conn, dni=30)
+    p = obisk.pregled(conn)
     assert p["danes"]["ljudi"] == 0
     assert p["po_dnevih"] == [] and p["strani"] == []
+    assert p["prej"]["ljudi_vsota"] == 0 and p["prvi_dan"] is None
+
+
+@pytest.mark.parametrize("od, do, prej", [
+    # Dan in teden: enako dolgo tik pred njim.
+    ("2026-09-19", "2026-09-19", ("2026-09-18", "2026-09-18")),
+    ("2026-09-14", "2026-09-20", ("2026-09-07", "2026-09-13")),
+    # Mesec s prejšnjim mesecem, ne s tridesetimi dnevi pred njim.
+    ("2026-09-01", "2026-09-30", ("2026-08-01", "2026-08-31")),
+    ("2026-03-01", "2026-03-31", ("2026-02-01", "2026-02-28")),
+    ("2026-01-01", "2026-12-31", ("2025-01-01", "2025-12-31")),
+])
+def test_prejsnje_obdobje(od, do, prej):
+    assert obisk.prejsnje_obdobje(od, do) == prej
+
+
+def test_pregled_obdobja_ne_zajame_drugih_dni(conn):
+    """Zgodovina izbere en dan; vrstica sosednjega dne ne sme priti zraven,
+    pride pa v primerjavo, če je dan prej."""
+    for dan, n in (("2026-09-17", 3), ("2026-09-18", 5)):
+        for i in range(n):
+            conn.execute("INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov,"
+                         " js, prvi_s, zadnji_s) VALUES(?, ?, 0, 4, 2, 1, 0, 0)",
+                         (dan, f"k{i}"))
+        conn.execute("INSERT INTO obisk_pot(dan, pot, vrsta, zahtev, ljudi) "
+                     "VALUES(?, '/', 'stran', ?, ?)", (dan, 2 * n, n))
+    p = obisk.pregled(conn, "2026-09-18", "2026-09-18")
+    assert [d["dan"] for d in p["po_dnevih"]] == ["2026-09-18"]
+    assert p["skupaj"]["ljudi_vsota"] == 5 and p["skupaj"]["ogledov"] == 10
+    assert p["prej"]["ljudi_vsota"] == 3
+    assert p["strani"] == [{"pot": "/", "zahtev": 10, "ljudi": 5}]
+    assert p["prvi_dan"] == "2026-09-17"
 
 
 def test_prune_pobrise_staro(conn):

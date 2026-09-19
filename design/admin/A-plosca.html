@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A · Plošča — kajros</title>
+<link rel="stylesheet" href="../../kajros/static/pisave.css">
+<link rel="stylesheet" href="../../kajros/static/base.css">
+<link rel="stylesheet" href="skupno.css">
+<style>
+/* A — Plošča: vse naenkrat v mreži, dva zavihka v glavi. */
+body { background: var(--bg); }
+.topbar { position: sticky; top: 0; z-index: 20; }
+.zavihki { display: flex; gap: 4px; height: 100%; margin-left: 10px; }
+.zavihki a { display: flex; align-items: center; padding: 0 14px; font: 500 13.5px var(--sans); color: var(--ink-mute);
+  text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.zavihki a:hover { color: var(--ink); }
+.zavihki a[aria-current] { color: var(--ink); border-bottom-color: var(--accent); }
+.osvezeno { font: 12px var(--mono); color: var(--ink-faint); display: flex; align-items: center; gap: 8px; }
+
+main { max-width: 1520px; margin: 0 auto; padding: 22px 28px 60px; }
+.mreza { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+.plosca { background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px 18px; min-width: 0; }
+.plosca h2 { margin: 0 0 2px; font: 600 13.5px var(--sans); color: var(--ink); display: flex; align-items: baseline; gap: 10px; }
+.plosca h2 small { font: 400 12px var(--sans); color: var(--ink-faint); }
+.plosca .pod { margin: 0 0 12px; font-size: 12px; color: var(--ink-faint); }
+.s12 { grid-column: span 12; } .s8 { grid-column: span 8; } .s6 { grid-column: span 6; }
+.s4 { grid-column: span 4; } .s3 { grid-column: span 3; }
+
+.kpi { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; grid-column: span 12; }
+.k { background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px 13px; }
+.k .v { font: 600 30px/1.05 var(--sans); color: var(--ink); letter-spacing: -.01em; }
+.k .v.poud { color: var(--accent-lit); }
+.k .i { font-size: 12.5px; color: var(--ink-dim); margin-top: 6px; }
+.k .d { font: 11.5px var(--mono); margin-top: 3px; color: var(--ink-faint); }
+
+table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.t th { text-align: left; font: 500 11px var(--sans); color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em;
+  padding: 0 8px 8px; border-bottom: 1px solid var(--line); }
+.t td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-dim); }
+.t td.n, .t th.n { text-align: right; font-family: var(--mono); }
+.t td.pot { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+.t tr:last-child td { border-bottom: 0; }
+
+.zdr { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+.zdr div { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.zdr span.ime { color: var(--ink-dim); flex: 1; }
+.zdr span.vr { font-family: var(--mono); font-size: 12px; color: var(--ink); }
+
+/* zgodovina */
+.hist-glava { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.hist-glava h1 { font: 600 22px var(--sans); margin: 0 6px 0 0; min-width: 300px; }
+.korak { display: inline-flex; border: 1px solid var(--line-firm); border-radius: var(--r); overflow: hidden; }
+.korak button { background: var(--bg); color: var(--ink-dim); border: 0; padding: 7px 12px; font: 500 13px var(--sans); cursor: pointer; }
+.korak button + button { border-left: 1px solid var(--line-firm); }
+.korak button:hover:not(:disabled) { color: var(--ink); background: var(--bg-hover); }
+.korak button:disabled { color: var(--ink-ghost); cursor: default; }
+input[type=date] { background: var(--bg); color: var(--ink); border: 1px solid var(--line-firm); border-radius: var(--r); padding: 6px 9px; font: 13px var(--mono); color-scheme: dark; }
+.opomba { font-size: 12px; color: var(--ink-faint); margin-left: auto; }
+.prazno { padding: 36px 0; text-align: center; color: var(--ink-faint); font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#"><svg class="brand-mark" width="20" height="20" viewBox="0 0 96 96" fill="none" stroke-linecap="round"><path d="M34 24V72" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/><path d="M66 26L34 50" stroke="currentColor" stroke-opacity=".5" stroke-width="9"/><path d="M34 50L66 72" stroke="currentColor" stroke-width="9"/></svg><span class="brand-name">kajros</span></a>
+  <div class="divider"></div>
+  <nav class="zavihki">
+    <a href="#stanje" id="z-stanje">Stanje</a>
+    <a href="#zgodovina" id="z-zgodovina">Zgodovina</a>
+    <a href="#sporocila">Sporočila</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="osvezeno"><span class="pika mild"></span>osveženo 11:42 · samodejno vsako minuto</div>
+</header>
+
+<main id="vsebina"></main>
+<div class="predloga-oznaka">predloga A · plošča</div>
+
+<script src="podatki.js"></script>
+<script src="skupno.js"></script>
+<script>
+"use strict";
+
+function kpi(v, ime, pod, poud) {
+  return `<div class="k"><div class="v${poud ? " poud" : ""}">${v}</div><div class="i">${ime}</div><div class="d">${pod}</div></div>`;
+}
+
+function tabelaPocasi(vrstice, n = 7) {
+  return `<table class="t"><tr><th>pot</th><th class="n">zahtev</th><th class="n">povprečno</th><th class="n">najdlje</th><th class="n">napak</th></tr>
+  ${vrstice.slice(0, n).map((r) => `<tr><td class="pot">${esc(r.pot)}</td><td class="n">${st(r.zahtev)}</td>
+    <td class="n ms ${hitrostRazred(r.ms_povp)}">${ms(r.ms_povp)}</td><td class="n ms ${hitrostRazred(r.ms_naj)}">${ms(r.ms_naj)}</td>
+    <td class="n">${r.napak4 + r.napak5 || "—"}</td></tr>`).join("")}</table>`;
+}
+
+function blokStrani(strani, n = 9) {
+  const naj = strani[0] ? strani[0].ljudi : 0;
+  return strani.slice(0, n).map((s) => vrsta(imeStrani(s.pot), s.ljudi, naj, `${st(s.zahtev)}×`)).join("");
+}
+
+function blokNaprave(o) {
+  const nv = o.naprave.reduce((a, r) => a + r.ogledov, 0) || 1;
+  const nd = o.drzave.reduce((a, r) => a + r.ogledov, 0) || 1;
+  return o.naprave.map((r) => vrsta(r.kljuc, r.ogledov, nv, `${st(100 * r.ogledov / nv)} %`)).join("")
+    + `<div style="height:10px"></div>`
+    + o.drzave.slice(0, 5).map((r) => vrsta(r.kljuc, r.ogledov, nd, `${st(100 * r.ogledov / nd)} %`)).join("");
+}
+
+function stanje() {
+  const d = PREGLED.danes;
+  const vceraj = PREGLED.po_dnevih.find((r) => r.dan === "2026-09-18");
+  const danes = obdobje("dan", "2026-09-19");
+  const naj = danes.pocasi[0];
+  const mes = zadnjihDni(30);
+  const pd = podenote(danes);
+  const strojev = d.botov + d.brez_js;
+  return `<div class="mreza">
+  <div class="kpi">
+    ${kpi(st(d.ljudi), "ljudi danes", `včeraj cel dan ${st(vceraj.ljudi)}`, true)}
+    ${kpi(st(d.ogledov), "ogledov strani", `${st(d.ogledov / d.ljudi, 1)} na človeka`)}
+    ${kpi(st(d.zahtev), "zahtev", "vse, tudi API in stroji")}
+    ${kpi(`${st(100 * strojev / (strojev + d.ljudi))} %`, "strojev", `${st(d.botov)} botov · ${st(d.brez_js)} brez JS`)}
+    ${kpi(`<span class="ms bad">${ms(naj.ms_naj)}</span>`, "najpočasneje danes", esc(naj.pot))}
+    ${kpi(`<span style="display:flex;align-items:center;gap:10px"><span class="pika mild" style="width:12px;height:12px"></span>vse dela</span>`, "zajem in stroj", `zadnji feed ${pred(PREGLED.zdravje.last_feed_ts)}`)}
+  </div>
+
+  <section class="plosca s8">
+    <h2>Zadnjih 30 dni <small>ljudi na dan · šrafirano = štetja še ni bilo</small></h2>
+    ${stolpci(mes.map((r) => (r.prazen ? null : r.ljudi)), {
+      visina: 210, poudari: 29,
+      oznake: mes.map((r, i) => (i % 5 === 4 || i === 29) ? kratkiDan(r.dan) : ""),
+      tip: (i) => mes[i].prazen ? `${dolgiDan(mes[i].dan)}<br>ni podatka` : `<b>${dolgiDan(mes[i].dan)}</b><br>${st(mes[i].ljudi)} ljudi · ${st(mes[i].ogledov)} ogledov`,
+    })}
+  </section>
+  <section class="plosca s4">
+    <h2>Danes po urah <small>ogledov</small></h2>
+    ${stolpci(pd.v, { visina: 210, oznake: pd.oznake, tip: pd.tip, poudari: 11 })}
+  </section>
+
+  <section class="plosca s4">
+    <h2>Katere strani <small>danes · ljudi</small></h2>
+    <p class="pod">Številka desno so vsi ogledi, tudi ponovni.</p>
+    ${blokStrani(danes.strani)}
+  </section>
+  <section class="plosca s8">
+    <h2>Kaj je bilo počasno <small>danes · po najdaljši zahtevi</small></h2>
+    <p class="pod">Čas v aplikaciji brez omrežja. Rdeče je nad 5 s — tam potnik odneha.</p>
+    ${tabelaPocasi(danes.pocasi)}
+  </section>
+
+  <section class="plosca s4">
+    <h2>S čim in od kod <small>danes · ogledi</small></h2>
+    <p class="pod">&nbsp;</p>
+    ${blokNaprave(danes)}
+  </section>
+  <section class="plosca s8">
+    <h2>Zdravje <small>isto kot /api/health</small></h2>
+    <p class="pod">&nbsp;</p>
+    <div class="zdr">${zdravje().map((z) => `<div><span class="pika ${z.raz}"></span><span class="ime">${z.ime}</span><span class="vr">${z.vr}</span></div>`).join("")}</div>
+  </section>
+  </div>`;
+}
+
+let stanjeZgod = { vrsta: "dan", sidro: "2026-09-19" };
+
+function zgodovina() {
+  const { vrsta: v, sidro } = stanjeZgod;
+  const o = obdobje(v, sidro);
+  const prej = obdobje(v, premakni(v, sidro, -1));
+  const naprej = premakni(v, sidro, 1);
+  const pd = podenote(o);
+  const r1 = razlika(o.ljudi, prej.ljudi), r2 = razlika(o.ogledov, prej.ogledov);
+  const cls = (r) => r.smer > 0 ? "gor" : r.smer < 0 ? "dol" : "ravno";
+  const glava = `<div class="hist-glava">
+    <div class="mode-switch" id="vrste">${Object.entries(OBDOBJA).map(([k, n]) =>
+      `<button data-v="${k}" aria-pressed="${k === v}">${n}</button>`).join("")}</div>
+    <div class="korak"><button id="nazaj" ${v === "vse" ? "disabled" : ""}>‹</button><button id="danes">danes</button><button id="naprej" ${v === "vse" || naprej > isoDan(ZDAJ) ? "disabled" : ""}>›</button></div>
+    <input type="date" id="datum" value="${sidro}" max="${isoDan(ZDAJ)}">
+    <h1>${naslovObdobja(v, sidro)}</h1>
+    <span class="opomba">štetje od ${kratkiDan(PRVI_DAN)} 2026 · ${o.zDnevi} od ${o.dnevi.length} dni s podatki</span>
+  </div>`;
+  if (!o.zDnevi) {
+    return glava + `<div class="plosca"><div class="prazno">Za ${naslovObdobja(v, sidro)} ni podatkov. Štetje obiska teče od ${kratkiDan(PRVI_DAN)} 2026.</div></div>`;
+  }
+  const enDan = v === "dan";
+  return glava + `<div class="mreza">
+  <div class="kpi">
+    ${kpi(st(o.ljudi), enDan ? "različnih ljudi" : "obiskov", enDan ? `<span class="${cls(r1)}">${r1.besedilo}</span>` : `vsota dnevnih · <span class="${cls(r1)}">${r1.besedilo}</span>`, true)}
+    ${kpi(st(o.ogledov), "ogledov strani", `<span class="${cls(r2)}">${r2.besedilo}</span>`)}
+    ${kpi(st(o.ogledov / Math.max(1, o.ljudi), 1), "ogledov na obisk", "")}
+    ${kpi(st(o.zahtev), "zahtev", "vse skupaj")}
+    ${kpi(st(o.botov + o.brez_js), "strojev", `${st(o.botov)} botov · ${st(o.brez_js)} brez JS`)}
+    ${kpi(`<span class="ms ${hitrostRazred(o.pocasi[0]?.ms_naj)}">${ms(o.pocasi[0]?.ms_naj)}</span>`, "najdaljša zahteva", esc(o.pocasi[0]?.pot || ""))}
+  </div>
+  <section class="plosca s12">
+    <h2>${enDan ? "Po urah" : v === "leto" ? "Po mesecih" : "Po dnevih"} <small>${pd.enota}${enDan ? "" : " · klik na dan ga odpre"}</small></h2>
+    <div id="glavni-graf">${stolpci(pd.v, { visina: 220, oznake: pd.oznake, tip: pd.tip })}</div>
+  </section>
+  <section class="plosca s4"><h2>Katere strani <small>ljudi</small></h2><p class="pod">&nbsp;</p>${blokStrani(o.strani, 11)}</section>
+  <section class="plosca s5" style="grid-column: span 5"><h2>Počasno <small>po najdaljši zahtevi</small></h2><p class="pod">&nbsp;</p>${tabelaPocasi(o.pocasi, 8)}</section>
+  <section class="plosca s3"><h2>S čim in od kod</h2><p class="pod">&nbsp;</p>${blokNaprave(o)}</section>
+  </div>`;
+}
+
+function risi() {
+  const h = location.hash.slice(1) || "stanje";
+  $("z-stanje").toggleAttribute("aria-current", h !== "zgodovina");
+  $("z-zgodovina").toggleAttribute("aria-current", h === "zgodovina");
+  $("vsebina").innerHTML = h === "zgodovina" ? zgodovina() : stanje();
+  if (h !== "zgodovina") return;
+  document.querySelectorAll("#vrste button").forEach((b) => b.onclick = () => { stanjeZgod.vrsta = b.dataset.v; risi(); });
+  $("nazaj").onclick = () => { stanjeZgod.sidro = premakni(stanjeZgod.vrsta, stanjeZgod.sidro, -1); risi(); };
+  $("naprej").onclick = () => { stanjeZgod.sidro = premakni(stanjeZgod.vrsta, stanjeZgod.sidro, 1); risi(); };
+  $("danes").onclick = () => { stanjeZgod.sidro = isoDan(ZDAJ); risi(); };
+  document.querySelectorAll("#glavni-graf rect[data-i]").forEach((r) => {
+    const o = obdobje(stanjeZgod.vrsta, stanjeZgod.sidro);
+    if (stanjeZgod.vrsta === "dan" || stanjeZgod.vrsta === "leto") return;
+    r.style.cursor = "pointer";
+    r.onclick = () => { stanjeZgod = { vrsta: "dan", sidro: o.dnevi[+r.dataset.i] }; risi(); };
+  });
+  $("datum").onchange = (e) => { if (e.target.value) { stanjeZgod.sidro = e.target.value; risi(); } };
+}
+const q = new URLSearchParams(location.search);
+if (q.get("v")) stanjeZgod.vrsta = q.get("v");
+if (q.get("d")) stanjeZgod.sidro = q.get("d");
+addEventListener("hashchange", risi);
+risi();
+</script>
+</body>
+</html>

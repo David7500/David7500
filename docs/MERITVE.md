@@ -2358,3 +2358,22 @@ Prva različica avtobusne relacije je bila **43 kB**: Medvode → Ljubljana
 `Zidani Most → Ljubljana` je mediana zamude ob prihodu **15 min**, p90 35 min,
 in **15,5 %** voženj pride v petih minutah (734 meritev, 21. 8.–17. 9. 2026).
 V nasprotni smeri je mediana **2 min** in 67,9 % točnih.
+
+## Pregled je pokazal: iskanje zvez na strežniku traja sekunde (19. 9. 2026)
+
+Prvi dan nove strani `/admin` z odzivnimi časi po poteh, arwen, 19. 9. 2026
+do 12:18 (od polnoči):
+
+| pot | zahtev | povprečno | p95 | najdlje |
+|---|---|---|---|---|
+| `/api/connections` | 74 | 16,4 s | › 5 s | **4,0 min** |
+| `/api/pot` | 121 | 7,2 s | › 5 s | 47,2 s |
+| `/api/stations` | 31 | 3,4 s | › 5 s | 22,9 s |
+| `/api/stations/index` | 149 | 1,7 s | › 5 s | 19,7 s |
+| `/api/health` | 634 | 193 ms | ‹ 50 ms | 34,9 s |
+
+Dan prej (18. 9.) je bil `/api/connections` 3,9 s povprečno na 169 zahtevah.
+Meritev 4. 9. (zgoraj) je dala 40 ms na razvojnem stroju z ~85 k meritvami;
+arwen jih ima 19 M. Čas je čas v aplikaciji brez omrežja, torej ga potnik
+dobi v celoti. Vzrok ni raziskan -- tu je zapisano samo, da je, in s katero
+številko se bo popravek primerjal.

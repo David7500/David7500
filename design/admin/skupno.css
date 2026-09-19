@@ -1,0 +1,32 @@
+/* Skupni gradniki predlogov: grafi, vodoravne vrstice, namig, pike stanja. */
+body { font-feature-settings: "tnum" 1; }
+.graf-ovoj { position: relative; width: 100%; }
+.graf { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.graf-mreza { stroke: var(--line-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.graf-stolpec { fill: var(--accent); opacity: .82; }
+.graf-stolpec.je-poudarek { opacity: 1; fill: var(--accent-lit); }
+[data-tip]:hover + .graf-stolpec { opacity: 1; }
+.graf-crta { fill: none; stroke: var(--ink-dim); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
+.graf-osy { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; pointer-events: none; }
+.graf-osy span { position: absolute; right: 0; transform: translateY(-50%); font: 10.5px var(--mono); color: var(--ink-faint); }
+.graf-osx { position: absolute; left: 0; right: 0; bottom: 0; display: flex; pointer-events: none; }
+.graf-osx span { flex: 1; font: 10.5px var(--mono); color: var(--ink-faint); white-space: nowrap; overflow: visible; }
+.graf-tip { position: fixed; z-index: 50; pointer-events: none; background: var(--bg-raised); border: 1px solid var(--line-firm);
+  border-radius: var(--r-sm); padding: 7px 10px; font: 12px/1.45 var(--sans); color: var(--ink-dim); box-shadow: 0 6px 20px #0008; }
+.graf-tip b { color: var(--ink); font-weight: 600; }
+
+.hv { display: grid; grid-template-columns: minmax(60px, 34%) minmax(30px, 1fr) auto 44px; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
+.hv-ime { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hv-tir { height: 8px; background: var(--line-soft); border-radius: 4px; overflow: hidden; }
+.hv-tir span { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; opacity: .82; }
+.hv:hover .hv-tir span { opacity: 1; }
+.hv-st { text-align: right; font-family: var(--mono); color: var(--ink); }
+.hv-pri { text-align: right; font: 11px var(--mono); color: var(--ink-faint); }
+
+.pika { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pika.mild { background: var(--sev-mild); } .pika.hard { background: var(--sev-hard); }
+.pika.bad { background: var(--sev-bad); } .pika.calm { background: var(--sev-calm); }
+.ms.mild { color: var(--ink-dim); } .ms.hard { color: var(--sev-hard); } .ms.bad { color: var(--sev-bad); font-weight: 600; }
+.gor { color: var(--sev-mild); } .dol { color: var(--d-mid); } .ravno { color: var(--ink-faint); }
+.predloga-oznaka { position: fixed; right: 12px; bottom: 10px; font: 11px var(--mono); color: var(--ink-faint);
+  background: var(--bg-raised); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 8px; z-index: 40; }

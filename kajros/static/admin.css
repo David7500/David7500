@@ -1,155 +1,157 @@
-/* Pregled za skrbnika.
- *
- * Podeduje `statistika.css` -- vodoravni stolpci so isti in nimajo razloga
- * biti drugačni. Tu je samo tisto, česar potniške strani nimajo: ploščice s
- * številkami, tabela odzivnih časov in vrstice o stroju.
+/* Pregled za skrbnika -- predloga A iz `design/admin/`: mreža plošč, trije
+ * zavihki v glavi. Stran je za računalnik; na telefonu se mreža zloži v en
+ * stolpec, a se ne trudi biti lepa.
  *
  * Barve NISO lestvica zamud. `--d-*` je ordinalni ramp za minute zamude in
  * na tej strani ne pomeni ničesar; stanje stroja gre skozi semafor razmer
  * (`--sev-*`), ki je zato v paleti ločen. Mešanje obojega bi pomenilo, da
  * oranžna na eni strani pomeni „pet minut" in na drugi „nekaj je narobe".
+ * Stolpci so v poudarku (`--accent`), ker nosijo samo količino.
  */
 
-.adm-main { max-width: 880px; }
+body.adm { font-feature-settings: "tnum" 1; }
+.adm .topbar { position: sticky; top: 0; z-index: 20; }
 
-/* ---------- ploščice z odgovorom ---------- */
+.adm-zavihki { display: flex; gap: 4px; align-self: stretch; margin-left: 6px; }
+.adm-zavihki a {
+  display: flex; align-items: center; gap: 7px; padding: 0 14px;
+  font: 500 13.5px var(--sans); color: var(--ink-mute); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.adm-zavihki a:hover { color: var(--ink); }
+.adm-zavihki a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.adm-osvezeno { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--ink-faint); white-space: nowrap; }
 
-.adm-ploscice {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
-  margin: 16px 0 4px;
+.adm-main { max-width: 1520px; margin: 0 auto; padding: 22px 28px 60px; }
+.adm-mreza { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.adm-plosca {
+  background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--r-lg);
+  padding: 16px 18px; min-width: 0;
 }
+.adm-plosca h2 { margin: 0 0 2px; font: 600 13.5px var(--sans); color: var(--ink); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.adm-plosca h2 small { font: 400 12px var(--sans); color: var(--ink-faint); }
+.adm-pod { margin: 0 0 12px; font-size: 12px; color: var(--ink-faint); min-height: 1em; }
+.s12 { grid-column: span 12; } .s8 { grid-column: span 8; } .s5 { grid-column: span 5; }
+.s4 { grid-column: span 4; } .s3 { grid-column: span 3; }
 
-.adm-ploscica {
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 12px 14px;
-}
-.adm-st {
-  display: block;
-  font: 600 24px/1.1 var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
-.adm-ploscica.je-poudarek .adm-st { color: var(--accent-lit); }
-.adm-ime {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--ink-dim);
-}
-.adm-pod {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--ink-ghost);
-}
+/* ---------- ploščice s številko ---------- */
 
-/* ---------- dva stolpca, kjer je prostor ---------- */
+.adm-kpi { grid-column: span 12; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.adm-k { background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px 13px; min-width: 0; }
+.adm-k-v { font: 600 30px/1.05 var(--sans); color: var(--ink); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-k-v.je-poudarek { color: var(--accent-lit); }
+.adm-k-i { font-size: 12.5px; color: var(--ink-dim); margin-top: 6px; }
+.adm-k-d { font: 11.5px var(--mono); margin-top: 3px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; }
 
-.adm-dvojno {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px;
+/* ---------- navpični stolpci (SVG) ---------- */
+
+.adm-graf { position: relative; width: 100%; }
+.adm-graf svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.adm-graf .mreza { stroke: var(--line-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.adm-graf .stolpec { fill: var(--accent); opacity: .82; }
+.adm-graf .stolpec.je-poudarek { opacity: 1; fill: var(--accent-lit); }
+.adm-graf rect[data-tip]:hover + .stolpec { opacity: 1; }
+.adm-graf rect.klik { cursor: pointer; }
+.adm-osy { position: absolute; left: 0; top: 0; bottom: 0; width: 30px; pointer-events: none; }
+.adm-osy span { position: absolute; right: 0; transform: translateY(-50%); font: 10.5px var(--mono); color: var(--ink-faint); }
+.adm-osx { position: absolute; left: 0; right: 0; bottom: 0; display: flex; pointer-events: none; }
+.adm-osx span { flex: 1; min-width: 0; font: 10.5px var(--mono); color: var(--ink-faint); white-space: nowrap; overflow: visible; }
+
+.adm-tip {
+  position: fixed; z-index: 50; pointer-events: none; max-width: 320px;
+  background: var(--bg-raised); border: 1px solid var(--line-firm); border-radius: var(--r-sm);
+  padding: 7px 10px; font: 12px/1.45 var(--sans); color: var(--ink-dim);
+  box-shadow: 0 6px 20px color-mix(in srgb, black 55%, transparent);
 }
-.adm-zamik { margin-top: 12px; }
+.adm-tip b { color: var(--ink); font-weight: 600; }
 
-/* Štiriindvajset vrstic je pri privzeti višini 600 px in požre stran, čeprav
-   je vsaka vrstica ena sama številka. Ure so edini razrez, ki je vedno poln
-   in vedno enako dolg, zato so tanjše -- brati se mora oblika dneva, ne
-   posamezna vrstica. */
-.adm-ure .stat-vrsta { padding: 0; }
-.adm-ure .stat-tir { height: 11px; }
+/* ---------- vodoravne vrstice ---------- */
 
-/* ---------- tabela odzivov ---------- */
-
-/* Tabela je edina stvar na strani, ki sme drseti vodoravno: stolpcev je šest
-   in na 390 px se ne da stisniti nobenega brez laži. Drsi ovoj, ne telo --
-   vodoravno drsenje cele strani je na telefonu napaka. */
-.adm-tabela-ovoj { overflow-x: auto; }
-
-.adm-tabela {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
+.adm-hv {
+  display: grid; grid-template-columns: minmax(60px, 34%) minmax(30px, 1fr) auto 44px;
+  gap: 10px; align-items: center; padding: 4px 0; font-size: 13px;
 }
-.adm-tabela th {
-  text-align: right;
-  font: 500 11px/1 var(--sans);
-  color: var(--ink-mute);
-  padding: 0 8px 6px;
-  white-space: nowrap;
+.adm-hv-ime { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-hv-tir { height: 8px; background: var(--line-soft); border-radius: 4px; overflow: hidden; }
+.adm-hv-tir span { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; opacity: .82; }
+.adm-hv:hover .adm-hv-tir span { opacity: 1; }
+.adm-hv-st { text-align: right; font-family: var(--mono); color: var(--ink); }
+.adm-hv-pri { text-align: right; font: 11px var(--mono); color: var(--ink-faint); }
+.adm-razmik { height: 10px; }
+
+/* ---------- tabela počasnih ---------- */
+
+.adm-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.adm-t th {
+  text-align: left; font: 500 11px var(--sans); color: var(--ink-faint); text-transform: uppercase;
+  letter-spacing: .04em; padding: 0 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
 }
-.adm-tabela th:first-child, .adm-tabela td:first-child { text-align: left; }
-.adm-tabela td {
-  text-align: right;
-  padding: 5px 8px;
-  border-top: 1px solid var(--line-soft);
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-dim);
-  white-space: nowrap;
-}
-.adm-tabela td:first-child { color: var(--ink); }
-.adm-tabela tr.je-slaba td { background: color-mix(in srgb, var(--sev-bad) 12%, transparent); }
-.adm-tabela .adm-nic { color: var(--ink-ghost); }
-.adm-tabela .adm-slabo { color: var(--sev-bad); font-weight: 600; }
-.adm-tabela .adm-mlacno { color: var(--sev-hard); }
+.adm-t td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); color: var(--ink-dim); white-space: nowrap; }
+.adm-t .n { text-align: right; font-family: var(--mono); }
+.adm-t td.pot { font: 12px var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.adm-t tr:last-child td { border-bottom: 0; }
+.adm-t .nic { color: var(--ink-ghost); }
+.adm-ovoj-t { overflow-x: auto; }
+
+/* Razred hitrosti: pod 1 s je v redu, do 5 s potnik opazi, nad 5 s odneha. */
+.ms-hard { color: var(--sev-hard); }
+.ms-bad { color: var(--sev-bad); font-weight: 600; }
 
 /* ---------- zdravje ---------- */
 
-.adm-zdravje {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
-}
-.adm-vrsta {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-  background: var(--bg-panel);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  padding: 8px 11px;
-}
-.adm-vrsta .adm-kaj { font-size: 12px; color: var(--ink-dim); }
-.adm-vrsta .adm-koliko {
-  font: 400 12.5px/1 var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  text-align: right;
-}
-.adm-vrsta.je-dobra .adm-koliko { color: var(--sev-mild); }
-.adm-vrsta.je-mlacna .adm-koliko { color: var(--sev-hard); }
-.adm-vrsta.je-slaba .adm-koliko { color: var(--sev-bad); }
+.adm-zdr { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+.adm-zdr div { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; min-width: 0; }
+.adm-zdr .ime { color: var(--ink-dim); flex: 1; }
+.adm-zdr .vr { font: 12px var(--mono); color: var(--ink); text-align: right; }
 
-/* `code` v razlagah pod naslovi. Base.css ga ne sloga -- na potniških straneh
-   ga ni, ker potnik ne bere imen endpointov. */
-.adm-main .stat-pod code {
-  font: 400 11.5px/1 var(--mono);
-  color: var(--ink-dim);
-  background: var(--bg-panel);
-  border: 1px solid var(--line-soft);
-  border-radius: 3px;
-  padding: 1px 4px;
+.adm-pika { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--sev-calm); }
+.adm-pika.je-dobra { background: var(--sev-mild); }
+.adm-pika.je-mlacna { background: var(--sev-hard); }
+.adm-pika.je-slaba { background: var(--sev-bad); }
+.gor { color: var(--sev-mild); } .dol { color: var(--d-mid); }
+
+/* ---------- zgodovina ---------- */
+
+.adm-hist { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.adm-hist h1 { font: 600 22px var(--sans); margin: 0 6px 0 4px; }
+.adm-korak { display: inline-flex; border: 1px solid var(--line-firm); border-radius: var(--r); overflow: hidden; }
+.adm-korak button {
+  background: var(--bg); color: var(--ink-dim); border: 0; padding: 7px 12px;
+  font: 500 13px var(--sans); cursor: pointer;
 }
+.adm-korak button + button { border-left: 1px solid var(--line-firm); }
+.adm-korak button:hover:not(:disabled) { color: var(--ink); background: var(--bg-hover); }
+.adm-korak button:disabled { color: var(--ink-ghost); cursor: default; }
+.adm-datum {
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line-firm); border-radius: var(--r);
+  padding: 6px 9px; font: 13px var(--mono); color-scheme: dark;
+}
+.adm-opomba { font-size: 12px; color: var(--ink-faint); margin-left: auto; }
+.adm-prazno { padding: 36px 0; text-align: center; color: var(--ink-faint); font-size: 13px; }
 
 .adm-napaka {
-  margin: 16px 0;
-  padding: 11px 13px;
-  border-radius: var(--r);
+  margin: 0 0 16px; padding: 11px 13px; border-radius: var(--r);
   border: 1px solid color-mix(in srgb, var(--sev-bad) 45%, var(--line));
   background: color-mix(in srgb, var(--sev-bad) 10%, transparent);
-  font-size: 13px;
-  color: var(--ink);
+  font-size: 13px; color: var(--ink);
 }
+.adm-noga { margin-top: 22px; font-size: 12px; line-height: 1.6; color: var(--ink-faint); max-width: 980px; }
+.adm-noga strong { color: var(--ink-dim); font-weight: 500; }
 
+/* Pod širino računalnika: plošče ena pod drugo. Stran ni narejena za
+   telefon, a se na njem ne sme razpasti v vodoravno drsenje. */
+@media (max-width: 1100px) {
+  .adm-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .s8, .s5, .s4, .s3 { grid-column: span 12; }
+}
 @media (max-width: 620px) {
-  .adm-dvojno { grid-template-columns: 1fr; gap: 26px; }
-  .adm-st { font-size: 21px; }
+  .adm-main { padding: 16px 16px 40px; }
+  .adm-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .adm-k-v { font-size: 23px; }
+  .adm-zdr { grid-template-columns: 1fr; }
+  .adm-osvezeno { display: none; }
+  .adm-zavihki a { padding: 0 8px; }
+  .adm-opomba { margin-left: 0; }
 }
 
 /* ---------- nabiralnik ---------- */
@@ -164,7 +166,7 @@
   vertical-align: middle;
 }
 
-.adm-sporocila { display: flex; flex-direction: column; gap: 10px; }
+.adm-sporocila { display: flex; flex-direction: column; gap: 10px; max-width: 900px; }
 
 .adm-sporocilo {
   border: 1px solid var(--line-firm);

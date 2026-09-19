@@ -2148,9 +2148,21 @@ def admin_page(request: Request):
 
 
 @app.get(f"{ADMIN_POT}/podatki", include_in_schema=False)
-def admin_podatki(request: Request, dni: int = Query(30, ge=1, le=370)):
-    """Vse številke pregleda v enem odgovoru."""
+def admin_podatki(request: Request,
+                  od: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                  do: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """Vse številke pregleda v enem odgovoru, za obdobje `od`–`do`.
+
+    Brez obeh je obdobje današnji dan -- to je zavihek „Stanje“. Zgodovina
+    pošlje meje dneva, tedna, meseca ali leta, ki jih izračuna prikaz.
+    """
     _preveri_admina(request)
+    try:
+        meje = [date.fromisoformat(x) for x in (od, do) if x]
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Ni datum.") from None
+    if len(meje) == 2 and meje[0] > meje[1]:
+        raise HTTPException(status_code=422, detail="Začetek je za koncem.")
     out = {"steje": config.OBISK}
     with _conn() as conn:
         if config.OBISK:
@@ -2167,7 +2179,7 @@ def admin_podatki(request: Request, dni: int = Query(30, ge=1, le=370)):
             # samo, da stetje ni vklopljeno. Zdravje zajema je vseeno vredno
             # pokazati, zato tabele naredimo prazne.
             obisk.init(conn)
-        out.update(obisk.pregled(conn, dni))
+        out.update(obisk.pregled(conn, od, do))
         # Tabelo naredi `lifespan` samo pri vklopljenem obrazcu; brez tega
         # bi pregled padel na „no such table", kar je videti kot okvara,
         # pomeni pa samo, da obrazca ni. Isti razlog kot pri štetju zgoraj.

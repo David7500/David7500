@@ -313,6 +313,15 @@ Piškotek ima pot `/admin`, zato ne potuje z `/api/*` klici, ki jih brskalnik
 pošilja desetkrat na minuto. Poti ni v OpenAPI — `/docs` je razglas, kaj
 obstaja.
 
+**Pregled ima tri zavihke in en endpoint.** `/admin/podatki?od=&do=` vrne
+obdobje (brez meja današnji dan) in vedno še `danes`, `zadnjih30`, zdravje in
+sporočila -- Stanje je en klic, Zgodovina dva. Meje dneva, tedna (od
+ponedeljka), meseca in leta računa prikaz; primerjavo „proti prejšnjemu“
+strežnik (`obisk.prejsnje_obdobje()`): mesec s prejšnjim mesecem in leto s
+prejšnjim letom, ne z enako dolgim odsekom -- september proti 2.–31. 8. ni
+nobeno obdobje, ki bi ga kdo imel v glavi. Nad enim dnem je številka
+„obiskov“, ne „ljudi“ (vsota dnevnih). Oblika je predloga A iz `design/admin/`.
+
 **Pregled in števci se ne štejeta sama.** `/admin*` in `/static/*` gresta mimo
 štetja; sicer bi skrbnikovo osveževanje na minuto postalo največja postavka v
 lastni statistiki.
