@@ -1163,6 +1163,28 @@ def _omejen_ostanek(ostanek: float, current_delay_s: int,
     return max(-meja, min(meja, ostanek))
 
 
+def odhod_z_izhodisca(delay_s: int, stop_seq: int, izhodisce: int | None) -> int:
+    """Prezgodnji odhod z izhodišča ni odhod: šteje kot točen.
+
+    Avtobus s prvega postanka ne odpelje pred voznim redom; negativna
+    vrednost tam pove, da vozilo ČAKA, ne da je šlo (isto je v `zajem.md`
+    zapisano za prihod na izhodišču). Model jo je nosil naprej po progi in
+    potnik je dobil "5 min prej" za avtobus, ki je nato peljal točno.
+    Izmerjeno na senci 8.-18. 9. 2026 (217 784 avtobusnih napovedi, oboje
+    tudi v zgodovini, iz katere se model uči):
+
+      izrez                                  prej    zdaj
+      zadnji izmerjeni je izhodišče, < 0     6,24    2,75 min   (7 799)
+      zadnji izmerjeni je izhodišče          4,11    3,10       (27 462)
+      vse                                    2,62    2,49       v 5 min 91,5 -> 92,4 %
+
+    Na drugih postankih prezgodnja vrednost ostane: tam je sedanji model
+    najboljši (3,06 proti 3,49 za "običajno" in 4,23 za odrez na nič).
+    Vlaka se ne tiče -- izhodišča feed zanj ne poroča nikoli.
+    """
+    return max(delay_s, 0) if stop_seq == izhodisce else delay_s
+
+
 def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             current_delay_s: int, days: int = 90,
             exclude_date: str | None = None,
@@ -1184,9 +1206,11 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     krajema, ki nista sosednja in nista niti v isti smeri.
     """
     trip_id = resolve_trip(conn, train_no, service_date, trip_id)
-    jaz = (conn.execute("SELECT network, agency FROM trip WHERE trip_id = ?",
+    jaz = (conn.execute("SELECT network, agency, first_seq FROM trip WHERE trip_id = ?",
                         (trip_id,)).fetchone() if trip_id else None)
     network, agency = (jaz["network"], jaz["agency"]) if jaz else (None, None)
+    izhodisce = jaz["first_seq"] if jaz else None
+    current_delay_s = odhod_z_izhodisca(current_delay_s, stop_seq, izhodisce)
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     # Dan, ki ga prikazujemo, ne sme biti v svoji lastni ucni mnozici. Pri
     # tekoci voznji naprej po progi meritev tako ali tako ni, pri ogledu
@@ -1208,7 +1232,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
 
     by_day: dict[str, dict[int, int]] = {}
     for r in rows:
-        by_day.setdefault(r["service_date"], {})[r["stop_seq"]] = r["d"]
+        by_day.setdefault(r["service_date"], {})[r["stop_seq"]] = odhod_z_izhodisca(
+            r["d"], r["stop_seq"], izhodisce)
 
     stops = timetable(conn, train_no, service_date, trip_id)
     names = {t["stop_seq"]: t["name"] for t in stops}
@@ -1573,10 +1598,12 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
                             lm["delay_s"], stop_seq, service_date)
         if ocena is None:
             # Omrezje samo tu: pravilo prevoznika je pri avtobusu drugacno,
-            # model pa ga je ze uporabil sam (`predict`).
-            jaz = conn.execute("SELECT network, agency FROM trip WHERE trip_id = ?",
+            # model pa ga je ze uporabil sam (`predict`). Isto za izhodisce.
+            jaz = conn.execute("SELECT network, agency, first_seq FROM trip WHERE trip_id = ?",
                                (trip_id,)).fetchone() if trip_id else None
-            ocena = _with_operator(_after_slack(lm["delay_s"], rez), prev,
+            zdaj = odhod_z_izhodisca(lm["delay_s"], lm["stop_seq"],
+                                     jaz["first_seq"] if jaz else None)
+            ocena = _with_operator(_after_slack(zdaj, rez), prev,
                                    *((jaz["network"], jaz["agency"]) if jaz else ()))
         return {
             "delay_s": ocena,

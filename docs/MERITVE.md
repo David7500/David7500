@@ -127,6 +127,25 @@ dodatnih 920 vrstic zgodovine za 112 mestnih odhodov, ki je prej niso imeli.
 Tabla ga kliče dvakrat (še za včerajšnji prometni dan). Glavna poizvedba table
 je ~340 ms in je nova koda ne spremeni. Obhod sence v konici: 0,34 s lokalno.
 
+**Prezgodnji odhod z izhodišča** (senca, 8.–18. 9.). Kadar je zadnji izmerjeni
+postanek izhodišče vožnje (11,7 % pogledov; LPP nikoli, AP MS 21 %) in je
+vozilo tam prezgodnje, je resnica na cilju v mediani −0,02 min, naša napoved
+pa je nosila −4,6 min naprej:
+
+| izrez | n | prej | izhodišče ≥ 0 |
+|---|---|---|---|
+| izhodišče, prezgodaj | 7 799 | 6,24 · 65,8 % | **2,75 · 90,5 %** |
+| izhodišče, vse | 27 462 | 4,11 · 83,2 % | **3,10 · 90,4 %** |
+| vse | 217 784 | 2,62 · 91,5 % | **2,49 · 92,4 %** |
+
+Na drugih postankih je pri prezgodnjem vozilu (≤ −3 min) sedanji model
+najboljši: 3,06 proti 3,49 za „običajno“ in 4,23 za odrez na nič.
+
+**Končni model na senci po prevoznikih** (14.–18. 9., prej → zdaj):
+1118 2,20 → 1,87 · Nomago 2,46 → 2,17 · AP MS 2,56 → 2,24 · Arriva
+3,42 → 2,86 · mestni LPP 1,84 → 1,79 min. Backtest (8 dni): 2,13 → 2,12 min,
+v 5 min 94,9 → 95,1 %.
+
 **Gradientni strop** (LightGBM, cilj L1, učenje 6.–13., test 14.–18. 9.):
 senca 2,43 → 2,20 min, strošek 6,38 → **6,50**; simulacija na poti 2,68 →
 2,42. Pred odhodom 2,89 → 2,87 (brez LPP nič). Najpomembnejše: odklon od

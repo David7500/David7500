@@ -1168,6 +1168,27 @@ def test_vlak_ostanek_omeji_kot_prej(conn):
     assert got[3]["own_delay_s"] == stats.OMEJI_OSTANEK_S
 
 
+def test_prezgodnji_odhod_z_izhodisca_ni_odhod():
+    assert stats.odhod_z_izhodisca(-300, 1, 1) == 0
+    assert stats.odhod_z_izhodisca(300, 1, 1) == 300
+    assert stats.odhod_z_izhodisca(-300, 2, 1) == -300      # drugje prezgodnji ostane
+    assert stats.odhod_z_izhodisca(-300, 1, None) == -300
+
+
+def test_napoved_ne_nosi_prezgodnjega_izhodisca(conn):
+    """Avtobus 'čaka' na izhodišču različno dolgo, na tretjem postanku pa je
+    vsak dan +1 min. Brez pravila bi model iz -10 min napovedal -8."""
+    conn.execute("INSERT INTO trip(trip_id,route_id,train_no,headsign,service_id,mode,agency,network) "
+                 "VALUES('iz','ri','A2','A - C','S1','bus','1123','avtobus')")
+    _sched(conn, "iz", [(1, "A", None, 28800), (2, "Z", 29400, 29400), (3, "C", 30000, None)])
+    for k, zacetek in enumerate((-300, -60, 0)):
+        _meritev(conn, "iz", _pred(10 - k), 1, zacetek)
+        _meritev(conn, "iz", _pred(10 - k), 3, 60)
+    conn.commit()
+    f = {p["stop_seq"]: p for p in stats.predict(conn, "A2", 1, -600, trip_id="iz")}
+    assert f[3]["own_delay_s"] == 60
+
+
 def test_napoved_lpp_se_uci_iz_preteklih_dni(conn):
     for i, d in enumerate((_pred(9), _pred(8), _pred(7))):
         stara = _lpp(conn, f"d{i}", sched=False)

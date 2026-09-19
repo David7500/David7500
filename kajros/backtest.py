@@ -114,6 +114,11 @@ def build_tasks(conn: sqlite3.Connection, network: str = NETWORK,
     by_day = _delays_by_day(conn, network, od)
     stops = _stop_ids(conn, network)
     dwells = _dwells(conn, network)
+    # Izhodisce voznje -- za pravilo `stats.odhod_z_izhodisca`.
+    izhodisce: dict[str, int] = {}
+    for (voznja, seq) in stops:
+        if seq < izhodisce.get(voznja, 10**9):
+            izhodisce[voznja] = seq
     tasks = []
     for (train_no, day), delays in by_day.items():
         seqs = sorted(delays)
@@ -135,6 +140,7 @@ def build_tasks(conn: sqlite3.Connection, network: str = NETWORK,
                     "i": i, "j": j, "horizon": j - i,
                     "d_i": delays[i], "d_j": delays[j],
                     "seg": (si, sj), "slack": slack, "network": network,
+                    "izhodisce": i == izhodisce.get(train_no),
                 })
     return tasks
 
@@ -363,15 +369,23 @@ def model_fizika_razred(train_tasks):
     """
     razred = defaultdict(list)
     skupno = defaultdict(list)
+
+    def zdaj(t):
+        # Prezgodnji odhod z izhodisca ni odhod -- `stats.odhod_z_izhodisca`.
+        return max(t["d_i"], 0) if t.get("izhodisce") else t["d_i"]
+
     for t in train_tasks:
-        o = t["d_j"] - stats._after_slack(t["d_i"], t["slack"])
-        razred[(t["train_no"], t["i"], t["j"], _bucket(t["d_i"]))].append(o)
+        d_i = zdaj(t)
+        o = t["d_j"] - stats._after_slack(d_i, t["slack"])
+        razred[(t["train_no"], t["i"], t["j"], _bucket(d_i))].append(o)
         skupno[(t["train_no"], t["i"], t["j"])].append(o)
     razred, skupno = _medians(razred), _medians(skupno)
 
     def predict(t):
-        osnova = stats._after_slack(t["d_i"], t["slack"])
-        e = razred.get((t["train_no"], t["i"], t["j"], _bucket(t["d_i"])))
+        d_i = zdaj(t)
+        t = {**t, "d_i": d_i}
+        osnova = stats._after_slack(d_i, t["slack"])
+        e = razred.get((t["train_no"], t["i"], t["j"], _bucket(d_i)))
         if not e or e[1] < MIN_SAMPLES:
             e = skupno.get((t["train_no"], t["i"], t["j"]))
         if not e:
@@ -389,10 +403,12 @@ def model_fizika_razred(train_tasks):
 
 def model_fizika_razred_meja_vedno(train_tasks):
     """Kar je streznik pri avtobusih delal do 19. 9. 2026: meja ostanka ne
-    glede na to, koliko dni stoji za mediano. Obdrzan, da je razlika merljiva.
+    glede na to, koliko dni stoji za mediano, in prezgodnje izhodisce
+    naprej. Obdrzan, da je razlika merljiva.
     """
-    napovej = model_fizika_razred(train_tasks)
-    return lambda t: napovej({**t, "network": None})
+    prej = [{**t, "network": None, "izhodisce": False} for t in train_tasks]
+    napovej = model_fizika_razred(prej)
+    return lambda t: napovej({**t, "network": None, "izhodisce": False})
 
 
 def model_fizika_razred_brez_meje(train_tasks):
@@ -458,7 +474,7 @@ MODELS = {
     "rezerva+razred (sedanji)": model_fizika_razred,
     "rezerva+razred, prag 3 dni": model_fizika_razred_prag,
     "rezerva+razred, brez meje": model_fizika_razred_brez_meje,
-    "rezerva+razred, meja vedno": model_fizika_razred_meja_vedno,
+    "rezerva+razred (do 19. 9.)": model_fizika_razred_meja_vedno,
 }
 
 

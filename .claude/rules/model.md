@@ -515,8 +515,8 @@ zapisu v `CLAUDE.md` tam že dvakrat.
 
 ## Avtobusni model (19. 9. 2026)
 
-Železnica in avtobusi imajo od tu **ista koda, različna pravila**. Vse štiri
-razlike so izmerjene na treh merilih hkrati, podrobnosti in tabele so v
+Železnica in avtobusi imajo od tu **ista koda, različna pravila**. Vseh pet
+razlik je izmerjenih na treh merilih hkrati, podrobnosti in tabele so v
 [docs/MERITVE.md](../../docs/MERITVE.md), „Avtobusni model“.
 
 1. **Vožnja je vožnja čez dneve, ne `trip_id`** (`db.voznja_sql`). Mestni LPP
@@ -538,20 +538,28 @@ razlike so izmerjene na treh merilih hkrati, podrobnosti in tabele so v
    treh dni zgodovine prevoznik. Prej je tabla kazala običajno, iskalnik zvez
    pa prevoznikovo vrednost — **za isto vožnjo ob istem trenutku** — in 73 %
    prevoznikovih vrednosti pred odhodom je gola ničla.
+5. **Prezgodnji odhod z izhodišča ni odhod** (`stats.odhod_z_izhodisca`), v
+   trenutni vrednosti in v zgodovini. Avtobus s prvega postanka ne odpelje
+   pred voznim redom; negativna vrednost tam pomeni, da čaka. Model jo je
+   nosil naprej in napovedal „5 min prej“ za avtobus, ki je peljal točno
+   (na teh pogledih 6,24 → 2,75 min). Na drugih postankih prezgodnja vrednost
+   ostane — tam je model izmerjeno najboljši. Vlaka se ne tiče: izhodišča
+   feed zanj ne poroča.
 
 Izid, prikazana številka (učenje samo na preteklih dneh):
 
 | | prej | zdaj |
 |---|---|---|
-| senca 14.–18. 9., vozilo na poti (124 909) | 2,60 min · 91,2 % · strošek 6,72 | **2,44 · 92,3 % · 6,33** |
+| senca 14.–18. 9., vozilo na poti (124 909) | 2,60 min · 91,2 % · strošek 6,72 | **2,28 · 93,4 % · 6,15** |
+| senca 8.–13. 9. (92 875) | 3,00 · 89,5 % · 7,18 | **2,77 · 91,1 % · 6,80** |
 | pred odhodom, iskalnik (463 075, iz `obs`) | 3,68 · 85,4 % · 8,59 | **2,78 · 90,9 % · 7,18** |
 | pred odhodom, tabla (isto) | 2,90 · 90,2 % · 7,43 | **2,78 · 90,9 % · 7,18** |
-| backtest 8 dni (10,6 mio nalog), oboje že z novim ključem | 2,13 · 94,9 % | 2,13 · 95,1 % |
+| backtest 8 dni (10,6 mio nalog), oboje že z novim ključem | 2,13 · 94,9 % | 2,12 · 95,1 % |
 
-Precenjenih (nevarna smer) je v senci manj **vseh 16 dni** od 3. do 18. 9.
-MAE in strošek sta boljša v 13 dneh. MAE je slabši 6., 12. in 18. 9. (do
-+0,06), strošek 5., 6. in 12. 9. (do +0,23) — večinoma sobote in nedelje, ko
-imajo vožnje po dva dneva zgodovine.
+V senci je MAE boljši **vseh 16 dni** od 3. do 18. 9., precenjenih (nevarna
+smer) manj ali enako vseh 16, strošek nižji v 14 (5. 9. enak, 6. 9. +0,20 —
+nedelja, ko imajo vožnje po dva dneva zgodovine). Boljši so vsi prevozniki;
+pri mestnem LPP precenjenih zraste z 0,9 na 1,7 %, ker mu verjamemo v celoti.
 
 **Pred odhodom je 40 % vseh pogledov** (15 min pred avtobusom). Senca jih je do
 19. 9. samo štela (`brez_meritve`) — zato je bila ta napaka nevidna; odtlej jih
@@ -581,9 +589,9 @@ svojo zgodovino.
 | spodnja meja iz ure, ko vožnja po voznem redu že vozi, a ni izmerjena | strošek 14,39 → 14,90, precenjenih 6,0 → 10,7 % |
 
 **Strop je znan.** Gradientni model (LightGBM, vse zgornje značilke) na isti
-senci: 2,43 → 2,20 min, a s **slabšim** stroškom (6,38 → 6,50). Ostanek so
-nelinearne interakcije; najmočnejša značilka je odklon od običajnega na
-izhodišču. Preprost izraz zanj ni našel ničesar nad 0,02 min.
+senci: 2,43 → 2,20 min, a s **slabšim** stroškom (6,38 → 6,50). 58 % tega
+dobička je bilo pri vozilih, prezgodnjih na izhodišču — to je zdaj pravilo 5
+(2,44 → 2,28). Za ostanek preprost izraz ni našel ničesar nad 0,02 min.
 
 `kajros backtest --network avtobus` v celoti ne gre v pomnilnik (21 dni ≈
 24 mio nalog), zato `--dni 7` in `--modeli 'a;b'` (podpičje, imena modelov

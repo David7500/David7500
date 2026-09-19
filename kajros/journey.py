@@ -23,7 +23,8 @@ from zoneinfo import ZoneInfo
 
 from . import config, geo
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
-                    _with_operator, dwell_at, last_measured, opis_zamude, pred_odhodom,
+                    _with_operator, dwell_at, last_measured, odhod_z_izhodisca, opis_zamude,
+                    pred_odhodom,
                     stanje_postankov, typical_at_stops,
                     IZMERJENO, ZADNJI_PODATEK)
 
@@ -436,8 +437,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         d["towards"] = d["destination"] if kind == "odhodi" else d["origin"]
         d["is_terminus"] = d["stop_seq"] == d["last_seq"]
         d["is_origin"] = d["stop_seq"] == d["first_seq"]
-        for k in ("first_seq", "last_seq"):
-            d.pop(k)
+        d["_izhodisce"] = d.pop("first_seq")
+        d.pop("last_seq")
         out.append(d)
         if len(out) >= limit:
             break
@@ -517,8 +518,9 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             ocena = (estimate_at(conn, d["train_no"], d["trip_id"], lm["stop_seq"],
                                  lm["delay_s"], d["stop_seq"], service_date)
                      if kind == "odhodi" else None)
+            zdaj = odhod_z_izhodisca(lm["delay_s"], lm["stop_seq"], d["_izhodisce"])
             d["delay_s"] = (ocena if ocena is not None
-                            else _with_operator(_after_slack(lm["delay_s"], rez), prev,
+                            else _with_operator(_after_slack(zdaj, rez), prev,
                                                 d["network"], d["agency"]))
             d["slack_s"] = rez
             d["delay_from"] = lm["name"]
@@ -572,7 +574,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             if nxt:
                 d["typical"] = nxt
                 d["typical_from"] = d["next_stop"]
-        for k in ("next_delay_s", "next_stop", "next_seq"):
+        for k in ("next_delay_s", "next_stop", "next_seq", "_izhodisce"):
             d.pop(k, None)
         # Vožnja brez meritve: isto pravilo kot iskalnik zvez in pot
         # (`stats.pred_odhodom`). Tabla je tu kazala običajno, iskalnik pa
