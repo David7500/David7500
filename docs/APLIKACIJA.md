@@ -9,14 +9,10 @@ tečeta v enem samem procesu (`main.py` → FastAPI z zajemom v ozadnji niti),
 frontend pa govori z njim samo prek JSON-a. Zaradi tega izbira prikaza ne
 zahteva nobene spremembe v zaledju.
 
-**Zemljevid: Leaflet + OSM rastrske ploščice.** Odločeno. MapLibre z vektorskimi
-ploščicami (OpenFreeMap, Protomaps) je bil alternativa in je prav tako
-brezplačen — MapLibre je BSD, plačljiv je Mapbox, ne MapLibre. Leaflet je
-preprostejši; ceni se odpovemo gladkemu zoomu in barvanju prog po podatkih na
-ravni ploščic.
-
-Pri OSM ploščicah velja njihova politika uporabe: za resno rabo si postavi
-lasten predpomnilnik ploščic ali preidi na vektorske.
+**Zemljevid: Leaflet, podlaga vektorska OpenFreeMap prek MapLibre**
+(22. 9. 2026). Prej rastrske ploščice (OSM, nato Esri „Dark Gray Canvas").
+MapLibre je BSD, plačljiv je Mapbox, ne MapLibre. Naše plasti ostanejo
+Leafletove; MapLibre riše samo podlago (glej `.claude/rules/zemljevid.md`).
 
 ## Kaj aplikacija dela
 

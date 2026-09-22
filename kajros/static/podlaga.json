@@ -1,0 +1,1583 @@
+{
+ "version": 8,
+ "name": "kajros",
+ "metadata": {
+  "kajros:vir": "Lastna temna podlaga za zemljevide kajrosa. Plasti in izbira podatkov po OpenMapTiles shemi, barve iz kajros/static/base.css. Napisi z metadata kajros:napisi=dodatni so stikalo 'Dodatna imena krajev'."
+ },
+ "sources": {
+  "omt": {
+   "type": "vector",
+   "url": "https://tiles.openfreemap.org/planet"
+  }
+ },
+ "glyphs": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+ "layers": [
+  {
+   "id": "kopno",
+   "type": "background",
+   "paint": {
+    "background-color": "#2a2d33"
+   }
+  },
+  {
+   "id": "naselje",
+   "type": "fill",
+   "source": "omt",
+   "source-layer": "landuse",
+   "minzoom": 9,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Polygon",
+      "MultiPolygon"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "residential",
+      "suburb",
+      "neighbourhood",
+      "commercial",
+      "industrial",
+      "retail"
+     ],
+     true,
+     false
+    ]
+   ],
+   "paint": {
+    "fill-color": "#2e3137",
+    "fill-opacity": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     9,
+     0.5,
+     12,
+     1
+    ]
+   }
+  },
+  {
+   "id": "gozd",
+   "type": "fill",
+   "source": "omt",
+   "source-layer": "landcover",
+   "minzoom": 8,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Polygon",
+      "MultiPolygon"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "wood",
+      "forest"
+     ],
+     true,
+     false
+    ]
+   ],
+   "paint": {
+    "fill-color": "#282b30"
+   }
+  },
+  {
+   "id": "park",
+   "type": "fill",
+   "source": "omt",
+   "source-layer": "park",
+   "filter": [
+    "match",
+    [
+     "geometry-type"
+    ],
+    [
+     "Polygon",
+     "MultiPolygon"
+    ],
+    true,
+    false
+   ],
+   "paint": {
+    "fill-color": "#272b2f"
+   }
+  },
+  {
+   "id": "voda",
+   "type": "fill",
+   "source": "omt",
+   "source-layer": "water",
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Polygon",
+      "MultiPolygon"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "paint": {
+    "fill-color": "#1b1e24",
+    "fill-antialias": true
+   }
+  },
+  {
+   "id": "reka",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "waterway",
+   "minzoom": 8,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#1b1e24",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.4
+     ],
+     [
+      "zoom"
+     ],
+     8,
+     0.5,
+     12,
+     1.2,
+     16,
+     3,
+     18,
+     6
+    ]
+   }
+  },
+  {
+   "id": "stavba",
+   "type": "fill",
+   "source": "omt",
+   "source-layer": "building",
+   "minzoom": 14,
+   "paint": {
+    "fill-color": "#33363d",
+    "fill-opacity": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     14,
+     0.4,
+     16,
+     0.9
+    ]
+   }
+  },
+  {
+   "id": "predor-glavna",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "transportation",
+   "minzoom": 8,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "motorway",
+      "trunk",
+      "primary",
+      "secondary",
+      "tertiary"
+     ],
+     true,
+     false
+    ],
+    [
+     "==",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "butt",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#3e434b",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.5
+     ],
+     [
+      "zoom"
+     ],
+     8,
+     0.5,
+     12,
+     1.3,
+     14,
+     3,
+     18,
+     14
+    ],
+    "line-opacity": 0.45
+   }
+  },
+  {
+   "id": "pot",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "transportation",
+   "minzoom": 14,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "path",
+      "track",
+      "pedestrian"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#34383f",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.5
+     ],
+     [
+      "zoom"
+     ],
+     14,
+     0.6,
+     16,
+     1,
+     18,
+     2
+    ],
+    "line-dasharray": [
+     2,
+     1.5
+    ]
+   }
+  },
+  {
+   "id": "manjsa",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "transportation",
+   "minzoom": 12,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "minor",
+      "service"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#383c44",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.5
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     0.4,
+     14,
+     1.4,
+     16,
+     4,
+     18,
+     10
+    ]
+   }
+  },
+  {
+   "id": "srednja",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "transportation",
+   "minzoom": 9,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "secondary",
+      "tertiary"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#3e434b",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.5
+     ],
+     [
+      "zoom"
+     ],
+     9,
+     0.4,
+     12,
+     1,
+     14,
+     2.6,
+     16,
+     6,
+     18,
+     14
+    ]
+   }
+  },
+  {
+   "id": "glavna",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "transportation",
+   "minzoom": 7,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "primary",
+      "trunk"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#454a53",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.5
+     ],
+     [
+      "zoom"
+     ],
+     7,
+     0.5,
+     10,
+     1.1,
+     14,
+     3.4,
+     16,
+     7,
+     18,
+     16
+    ]
+   }
+  },
+  {
+   "id": "avtocesta",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "transportation",
+   "minzoom": 6,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "motorway"
+     ],
+     true,
+     false
+    ],
+    [
+     "!=",
+     [
+      "coalesce",
+      [
+       "get",
+       "brunnel"
+      ],
+      ""
+     ],
+     "tunnel"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#4d535d",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.5
+     ],
+     [
+      "zoom"
+     ],
+     6,
+     0.7,
+     10,
+     1.5,
+     14,
+     4,
+     16,
+     8,
+     18,
+     18
+    ]
+   }
+  },
+  {
+   "id": "meja",
+   "type": "line",
+   "source": "omt",
+   "source-layer": "boundary",
+   "minzoom": 5,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "admin_level"
+     ],
+     2
+    ],
+    [
+     "!=",
+     [
+      "get",
+      "maritime"
+     ],
+     1
+    ]
+   ],
+   "layout": {
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "#5a616c",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.2
+     ],
+     [
+      "zoom"
+     ],
+     5,
+     0.8,
+     10,
+     1.3,
+     14,
+     2
+    ],
+    "line-dasharray": [
+     3,
+     2
+    ]
+   }
+  },
+  {
+   "id": "ime-vode",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "water_name",
+   "minzoom": 9,
+   "metadata": {
+    "kajros:napisi": "dodatni"
+   },
+   "filter": [
+    "match",
+    [
+     "geometry-type"
+    ],
+    [
+     "Point",
+     "MultiPoint"
+    ],
+    true,
+    false
+   ],
+   "layout": {
+    "visibility": "none",
+    "text-field": [
+     "coalesce",
+     [
+      "get",
+      "name:sl"
+     ],
+     [
+      "get",
+      "name:latin"
+     ],
+     [
+      "get",
+      "name"
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Italic"
+    ],
+    "text-size": 11,
+    "text-max-width": 8
+   },
+   "paint": {
+    "text-color": "#5d6776",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1
+   }
+  },
+  {
+   "id": "ime-ulice",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "transportation_name",
+   "minzoom": 14,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "LineString",
+      "MultiLineString"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "primary",
+      "secondary",
+      "tertiary",
+      "minor",
+      "trunk",
+      "pedestrian"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "symbol-placement": "line",
+    "symbol-spacing": 320,
+    "text-field": [
+     "coalesce",
+     [
+      "get",
+      "name:sl"
+     ],
+     [
+      "get",
+      "name:latin"
+     ],
+     [
+      "get",
+      "name"
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     14,
+     10,
+     18,
+     13
+    ],
+    "text-max-angle": 30,
+    "text-rotation-alignment": "map",
+    "text-pitch-alignment": "viewport"
+   },
+   "paint": {
+    "text-color": "#8c94a0",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.2
+   }
+  },
+  {
+   "id": "ime-zaselka",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "place",
+   "minzoom": 13,
+   "maxzoom": 17,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Point",
+      "MultiPoint"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "hamlet",
+      "isolated_dwelling",
+      "neighbourhood",
+      "quarter"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "let",
+     "n",
+     [
+      "coalesce",
+      [
+       "get",
+       "name:sl"
+      ],
+      [
+       "get",
+       "name:latin"
+      ],
+      [
+       "get",
+       "name"
+      ]
+     ],
+     [
+      "case",
+      [
+       "==",
+       [
+        "index-of",
+        "Četrtna skupnost ",
+        [
+         "var",
+         "n"
+        ]
+       ],
+       0
+      ],
+      [
+       "slice",
+       [
+        "var",
+        "n"
+       ],
+       17
+      ],
+      [
+       "var",
+       "n"
+      ]
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     13,
+     10,
+     16,
+     12
+    ],
+    "text-max-width": 8,
+    "text-padding": 4,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "rank"
+     ],
+     99
+    ],
+    "visibility": "none"
+   },
+   "paint": {
+    "text-color": "#737b87",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.3,
+    "text-halo-blur": 0.5
+   },
+   "metadata": {
+    "kajros:napisi": "dodatni"
+   }
+  },
+  {
+   "id": "ime-cetrti",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "place",
+   "minzoom": 11,
+   "maxzoom": 16,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Point",
+      "MultiPoint"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "suburb"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "let",
+     "n",
+     [
+      "coalesce",
+      [
+       "get",
+       "name:sl"
+      ],
+      [
+       "get",
+       "name:latin"
+      ],
+      [
+       "get",
+       "name"
+      ]
+     ],
+     [
+      "case",
+      [
+       "==",
+       [
+        "index-of",
+        "Četrtna skupnost ",
+        [
+         "var",
+         "n"
+        ]
+       ],
+       0
+      ],
+      [
+       "slice",
+       [
+        "var",
+        "n"
+       ],
+       17
+      ],
+      [
+       "var",
+       "n"
+      ]
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     11,
+     10,
+     15,
+     13
+    ],
+    "text-max-width": 8,
+    "text-padding": 4,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "rank"
+     ],
+     99
+    ],
+    "visibility": "none"
+   },
+   "paint": {
+    "text-color": "#7d8591",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.3,
+    "text-halo-blur": 0.5
+   },
+   "metadata": {
+    "kajros:napisi": "dodatni"
+   }
+  },
+  {
+   "id": "ime-vasi",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "place",
+   "minzoom": 10,
+   "maxzoom": 16,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Point",
+      "MultiPoint"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "village"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "let",
+     "n",
+     [
+      "coalesce",
+      [
+       "get",
+       "name:sl"
+      ],
+      [
+       "get",
+       "name:latin"
+      ],
+      [
+       "get",
+       "name"
+      ]
+     ],
+     [
+      "case",
+      [
+       "==",
+       [
+        "index-of",
+        "Četrtna skupnost ",
+        [
+         "var",
+         "n"
+        ]
+       ],
+       0
+      ],
+      [
+       "slice",
+       [
+        "var",
+        "n"
+       ],
+       17
+      ],
+      [
+       "var",
+       "n"
+      ]
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     10,
+     15,
+     13
+    ],
+    "text-max-width": 8,
+    "text-padding": 4,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "rank"
+     ],
+     99
+    ],
+    "visibility": "none"
+   },
+   "paint": {
+    "text-color": "#858d99",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.3,
+    "text-halo-blur": 0.5
+   },
+   "metadata": {
+    "kajros:napisi": "dodatni"
+   }
+  },
+  {
+   "id": "ime-trga",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "place",
+   "minzoom": 8,
+   "maxzoom": 16,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Point",
+      "MultiPoint"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "town"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "let",
+     "n",
+     [
+      "coalesce",
+      [
+       "get",
+       "name:sl"
+      ],
+      [
+       "get",
+       "name:latin"
+      ],
+      [
+       "get",
+       "name"
+      ]
+     ],
+     [
+      "case",
+      [
+       "==",
+       [
+        "index-of",
+        "Četrtna skupnost ",
+        [
+         "var",
+         "n"
+        ]
+       ],
+       0
+      ],
+      [
+       "slice",
+       [
+        "var",
+        "n"
+       ],
+       17
+      ],
+      [
+       "var",
+       "n"
+      ]
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     8,
+     10,
+     12,
+     13,
+     15,
+     15
+    ],
+    "text-max-width": 8,
+    "text-padding": 4,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "rank"
+     ],
+     99
+    ]
+   },
+   "paint": {
+    "text-color": "#9ba3af",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.3,
+    "text-halo-blur": 0.5
+   }
+  },
+  {
+   "id": "ime-mesta",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "place",
+   "minzoom": 6,
+   "maxzoom": 15,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Point",
+      "MultiPoint"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "city"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "let",
+     "n",
+     [
+      "coalesce",
+      [
+       "get",
+       "name:sl"
+      ],
+      [
+       "get",
+       "name:latin"
+      ],
+      [
+       "get",
+       "name"
+      ]
+     ],
+     [
+      "case",
+      [
+       "==",
+       [
+        "index-of",
+        "Četrtna skupnost ",
+        [
+         "var",
+         "n"
+        ]
+       ],
+       0
+      ],
+      [
+       "slice",
+       [
+        "var",
+        "n"
+       ],
+       17
+      ],
+      [
+       "var",
+       "n"
+      ]
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Bold"
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     6,
+     11,
+     10,
+     14,
+     14,
+     18
+    ],
+    "text-max-width": 8,
+    "text-padding": 4,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "rank"
+     ],
+     99
+    ]
+   },
+   "paint": {
+    "text-color": "#b3bac5",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.3,
+    "text-halo-blur": 0.5
+   }
+  },
+  {
+   "id": "ime-drzave",
+   "type": "symbol",
+   "source": "omt",
+   "source-layer": "place",
+   "minzoom": 3,
+   "maxzoom": 9,
+   "filter": [
+    "all",
+    [
+     "match",
+     [
+      "geometry-type"
+     ],
+     [
+      "Point",
+      "MultiPoint"
+     ],
+     true,
+     false
+    ],
+    [
+     "match",
+     [
+      "get",
+      "class"
+     ],
+     [
+      "country"
+     ],
+     true,
+     false
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "let",
+     "n",
+     [
+      "coalesce",
+      [
+       "get",
+       "name:sl"
+      ],
+      [
+       "get",
+       "name:latin"
+      ],
+      [
+       "get",
+       "name"
+      ]
+     ],
+     [
+      "case",
+      [
+       "==",
+       [
+        "index-of",
+        "Četrtna skupnost ",
+        [
+         "var",
+         "n"
+        ]
+       ],
+       0
+      ],
+      [
+       "slice",
+       [
+        "var",
+        "n"
+       ],
+       17
+      ],
+      [
+       "var",
+       "n"
+      ]
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Bold"
+    ],
+    "text-size": 12,
+    "text-max-width": 8,
+    "text-padding": 4,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "rank"
+     ],
+     99
+    ],
+    "text-transform": "uppercase",
+    "text-letter-spacing": 0.12
+   },
+   "paint": {
+    "text-color": "#6b7480",
+    "text-halo-color": "#23262b",
+    "text-halo-width": 1.3,
+    "text-halo-blur": 0.5
+   }
+  }
+ ]
+}

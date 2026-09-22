@@ -8,7 +8,9 @@ const POLL_MS = 30000;
 
 // ---------- podlaga ----------
 
-const map = L.map("map", { zoomControl: true }).setView([46.05, 14.95], 8);
+// `maxZoom` na zemljevidu in ne le na podlagi: ta se nalozi v ozadju, do
+// takrat pa Leaflet meje ne pozna in priblizuje v neskoncnost.
+const map = L.map("map", { zoomControl: true, maxZoom: 19 }).setView([46.05, 14.95], 8);
 
 // Lego zemljevida hranimo v naslovu: brez tega je "poglej, kje stoji" nemogoce
 // deliti, osvezitev strani pa vrne cez vso Slovenijo. Naslov se popravlja
@@ -31,27 +33,12 @@ const HAS_START = Number.isFinite(startLat) && Number.isFinite(startLon)
 if (HAS_START) map.setView([startLat, startLon], startZ);
 map.on("moveend zoomend", mapStateToUrl);
 
-// Esri "Dark Gray Canvas" je razdeljen na DVE plasti: podlago brez napisov in
-// oznake posebej. Prav to je razlog za zamenjavo -- OSM ima napise vpecene v
-// ploscico in jih ni mogoce ugasniti, pri velikem priblizku pa ime vsake
-// ulice tekmuje z vozili, ki so edini razlog za to stran.
-//
-// CARTO (dark_nolabels) zna isto, a ploscice pridejo z napisom "API KEY
-// REQUIRED" cez pol zaslona -- preverjeno, ne uporabljati brez kljuca.
-const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
-const baseLayer = L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
-  maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
-}).addTo(map);
-
-// Dodatna imena (kraji, znamenitosti). Podlaga sama ima pri velikem
-// priblizku ze imena ulic in teh ni mogoce ugasniti: brezplacne podlage brez
-// napisov ni -- CARTO `*_nolabels` pride z vodnim zigom "API KEY REQUIRED",
-// wmflabs je ugasnjen, Wikimedia zunanjo rabo zavraca (403). Zato dvoje, kar
-// res dela: to plast se da izklopiti, podlago pa v celoti odloziti.
-const labelLayer = L.tileLayer(
-  `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-  { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 },
-);
+// Podlaga in dodatna imena sta dve plasti z dvema stikaloma (`LAYERS`).
+// Vektorska podlaga ima imena ulic in mest v sebi, dodatna imena (vasi,
+// cetrti, vode) pa so svoje stikalo, privzeto ugasnjeno: pri velikem
+// priblizku bi tekmovala z vozili, ki so edini razlog za to stran. Kaj je v
+// njiju in kaj, kadar vektorske podlage ni, je v `common.podlagaZemljevida()`.
+const { osnova: baseLayer, imena: labelLayer } = podlagaZemljevida();
 
 // Vrstni red plasti je vrstni red risanja: proge in postaje spodaj, vozila
 // zgoraj. Brez tega vlak izgine pod progo, po kateri vozi.
@@ -388,9 +375,9 @@ const busInk = (v) => AGENCY_INK[agencyKey(v)] || BUS_INK;
 // in majhna oblika je edina, ki se ne slepi; ko kdo približa na eno ulico,
 // pa je iskal prav to vozilo in mora biti veliko.
 function busSize(z) {
-  // Nad z16 Esri prave podlage nima in Leaflet zadnjo raztegne; nasi sloji so
-  // SVG in ostanejo ostri, zato ima globok priblizek smisel -- vozilo naj bo
-  // takrat priblizno tako veliko kot ulica pod njim.
+  // Globok priblizek ima smisel -- vektorska podlaga in nasi SVG sloji
+  // ostanejo ostri do z19 -- zato naj bo vozilo takrat priblizno tako veliko
+  // kot ulica pod njim.
   if (z >= 17) return 44;
   if (z >= 14) return 34;
   if (z >= 12) return 26;
@@ -750,10 +737,9 @@ function setLayer(spec, on) {
   }
 }
 
-// Podlaga naj bo tiho: imena ulic so na njej vpecena in pri velikem
-// priblizku tekmujejo z vozili, ki so edini razlog za to stran. Zatemnitev
-// jih potisne nazaj, geometrija cest pa ostane -- to je edino, kar se brez
-// placljive podlage da narediti.
+// Podlaga naj bo tiho: pri velikem priblizku imena ulic tekmujejo z vozili,
+// ki so edini razlog za to stran. Zatemnitev jih potisne nazaj, geometrija
+// cest pa ostane. Pri vektorski podlagi je blazja (dashboard.css).
 function setQuiet(on) {
   document.body.classList.toggle("map-quiet", on);
   const box = document.getElementById("lay-quiet");

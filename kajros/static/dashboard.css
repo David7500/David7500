@@ -371,6 +371,10 @@ body {
  * je invertiral OSM, ni vec. Ta je poleg tega obracal tudi barve markerjev
  * na robovih ploscic in je bil vedno le zasilna resitev. */
 body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
+/* Vektorska podlaga je umirjena ze sama (barve iz tega sloga), zato je
+ * zatemnitev blazja: pri Esrijevi mocnosti bi obroba proge (#11141a) utonila
+ * v kopnem. Filter je na vsem platnu MapLibra, ne na ploscicah -- teh ni. */
+body.map-quiet .leaflet-gl-layer { filter: brightness(0.66) contrast(0.9); }
 
 
 /* Avtobus je puščica v smeri vožnje, vlak krog na postaji -- ker sta to

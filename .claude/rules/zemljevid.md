@@ -58,23 +58,37 @@ paths:
   pod njimi. Izbira postavi obroč in oblaček s povezavo na odhodno tablo;
   železniška postaja je tista, ki je v `/api/stations?network=zeleznica`.
 
-  Podlaga je Esri „Dark Gray Canvas". **Imena ulic so vanjo vpečena in jih ni
-  mogoče ugasniti posebej** — preverjeno je, da brezplačne podlage brez
-  napisov ni: CARTO `*_nolabels` pride z vodnim žigom „API KEY REQUIRED",
-  `tiles.wmflabs.org` je ugasnjen, Wikimedia zunanjo rabo zavrača s 403. Zato
-  dvoje, kar res dela: „pomirjena podlaga" jih zatemni
-  (`brightness(0.42) contrast(0.7)`), izklop podlage jih odstrani s cestami
-  vred. Proga je narisana dvakrat — temna obroba, svetla črta — sicer se na
-  temni podlagi izgubi ali je videti kot cesta.
+  **Podlaga je vektorska OpenFreeMap** (22. 9. 2026, prej Esri „Dark Gray
+  Canvas"). Odprta koda (MIT), brez ključa, registracije in omejitve ogledov,
+  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10**, ki ga Leaflet nosi
+  kot eno plast (`leaflet-maplibre-gl` 0.1.4) — vse naše plasti, geste,
+  oznake in pravila na tej strani ostanejo Leafletova. Oboje je gostovano pri
+  nas (`static/maplibre-6.10.0/`, različica v **poti**, ker `maplibre-gl.mjs`
+  uvaža sosede po relativnem imenu, Cloudflare pa statiko drži štiri ure).
+  Tuje so ploščice in pisave z `tiles.openfreemap.org`.
 
-  **Esri ima prave ploščice samo do z16.** Nad tem vrne 200 in sličico, ki je
-  za vsak kraj **bajt za bajt ista** (2521 B proti 15 647 B pri z16) — prazno
-  polje. Zato ne `maxZoom: 16` (približevanje se ustavi prezgodaj in ulice se
-  ne razločijo) in ne `maxZoom: 19` (nad 16 sivina), ampak
-  **`maxNativeZoom: 16, maxZoom: 19`**: Leaflet zadnjo pravo ploščico raztegne.
-  Podlaga je pri z17--19 mehka, naši sloji pa ostanejo ostri, ker so SVG —
-  in prav ti so razlog za približevanje. Vozili pri z17+ zrasteta (bus 44 px,
-  vlak 38 px), da ostaneta v razmerju z ulico pod sabo.
+  * **Slog je naš** (`static/podlaga.json`, 22 plasti): barve iz `base.css`,
+    imena `name:sl` pred lokalnimi (Celovec, Trst, Gradec), „Četrtna skupnost“
+    odrezana. Napisi z `metadata.kajros:napisi = dodatni` (vasi, četrti,
+    vode) so stikalo „Dodatna imena krajev“ — to so zdaj plasti v slogu, ne
+    ploščice, zato se ugasnejo brez podlage. Imena ulic so v osnovi od
+    MapLibrovega z14, torej **Leafletovega z15** (MapLibre ima 512-pikselne
+    ploščice in je za ena nižje; vse meje v slogu so v njegovih enotah).
+  * **Esri ostane rezerva** (`common.podlagaZemljevida()`): MapLibre 6 zna
+    samo WebGL2. Rezerva velja brez WebGL2, kadar se knjižnica ne naloži in
+    kadar slog ali opis ploščic pade **pred prvim izrisom** (preverjeno z
+    `--disable-webgl` in z nedosegljivim `tiles.openfreemap.org`). Napaka ene
+    ploščice pozneje ni razlog za menjavo.
+  * **„Zatemni podlago“ je pri vektorski podlagi blažja**
+    (`brightness(0.66) contrast(0.9)` na `.leaflet-gl-layer`): slog je
+    umirjen že sam, Esrijeva moč bi obrobo proge utopila v kopnem.
+  * **`maxZoom: 19` je na zemljevidu, ne le na podlagi.** Podlaga pride v
+    ozadju, do takrat Leaflet meje ne pozna in približuje v neskončnost.
+  * **Cena so podatki**, izmerjeno 22. 9. 2026 (vsota ploščic, ki jih MapLibre
+    naloži; stisnjeno): pregled države na telefonu **1,27 MB** (6 ploščic;
+    Esri 74 kB), namizje 3,4 MB; Ljubljana pri z13 367 kB, pri z15 1,0 MB
+    (Esri 187 kB). Ploščice imajo `max-age` deset let in naslov z različico,
+    zato se plačajo enkrat na napravo; MapLibre sam je 299 kB, prav tako enkrat.
 
 **Med dvema meritvama pika drsi naprej po trasi — samo v oknu vožnje.**
 Lega je ob strežbi ~30 s stara (izmerjeno), kar je pri 50 km/h **več kot pol
@@ -272,7 +286,8 @@ stoji posebej (`.runs-ovoj`), da ob drsenju ne odide.
 
 Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.
-Leaflet se nalaga z unpkg CDN.
+Leaflet in MapLibre sta gostovana pri nas (`static/leaflet/`,
+`static/maplibre-6.10.0/`).
 
 ## Gumb „osveži“ obstaja zato, ker se osveževanje ne vidi
 

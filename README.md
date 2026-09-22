@@ -140,8 +140,11 @@ navodila za delo na projektu v [CLAUDE.md](CLAUDE.md).
 
 Podatki SŽ in IJPP prek [NAP](https://www.nap.si), **CC BY-SA 4.0**,
 obdelava [DERP](https://derp.si). Vreme [Open-Meteo](https://open-meteo.com)
-(CC BY 4.0). Podlaga zemljevida © Esri, HERE, Garmin in
-© [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+(CC BY 4.0). Podlaga zemljevida [OpenFreeMap](https://openfreemap.org)
+© [OpenMapTiles](https://www.openmaptiles.org/), rezervna © Esri, HERE, Garmin,
+obe © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+MapLibre GL JS (BSD-3) in `leaflet-maplibre-gl` (ISC) sta v
+`kajros/static/maplibre-6.10.0/` z licencama.
 
 **`seed/kajros.sqlite` v tem repozitoriju je izpeljanka podatkov CC BY-SA 4.0**
 (vozni red IJPP, brez meritev). Deljenje naprej je zato dovoljeno pod isto
@@ -151,4 +154,4 @@ in za odgovore API-ja. Koda sama ni ista stvar kot podatki in svoje licence
 
 Navedba vira ni okras, ampak pogoj rabe, zato stoji **v aplikaciji** in ne le
 tu: v nogi vstopne strani in okna vožnje (IJPP in Open-Meteo) ter na obeh
-zemljevidih (Esri in OpenStreetMap).
+zemljevidih (OpenFreeMap, OpenMapTiles in OpenStreetMap).

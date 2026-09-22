@@ -536,6 +536,9 @@
   height: auto !important;
 }
 .run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
+/* Vektorska podlaga je umirjena ze sama; zatemnitev je zato blazja (glej
+ * `map-quiet` v dashboard.css). */
+.run-map .leaflet-gl-layer { filter: brightness(0.66) contrast(0.9); }
 @media (max-width: 720px) { .run-map { height: 210px; } }
 
 /* ---------- preprost pogled na sirokem zaslonu ----------

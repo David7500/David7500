@@ -17,6 +17,9 @@
   <title>{{ _t }}</title>
   <meta name="description" content="{{ _d }}">
   <link rel="canonical" href="{{ baza }}{{ request.url.path }}">
+  {#- Slog vektorske podlage z odtisom vsebine: bere ga `common.podlagaZemljevida()`,
+      ki `s()` nima, Cloudflare pa bi golo pot drzal stiri ure. -#}
+  <meta name="kajros-podlaga" content="{{ s('podlaga.json') }}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="kajros">
   <meta property="og:locale" content="sl_SI">

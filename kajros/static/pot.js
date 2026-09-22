@@ -9,20 +9,13 @@
  * zemljevidu, iz lastne lege ali po imenu postaje, ki jo že poznamo.
  */
 
-// `ESRI_ATTR` je v `common.js` -- druga razglasitev bi bila `SyntaxError` in
-// stran ne bi delala nic.
-const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
-
-const map = L.map("karta", { zoomControl: true }).setView([46.1, 14.6], 8);
-L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
-  maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR,
-}).addTo(map);
-// Napisi so tu SVETLI, drugace kot na velikem zemljevidu. Tam imena tekmujejo
-// z vozili, ki so edini razlog za tisto stran; tu je vprašanje "kje je to" in
-// brez berljivih imen se človek na zemljevidu ne znajde. Plast je ista, le
-// posvetljena -- Esri svetlejše različice napisov nima.
-L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-            { maxZoom: 19, maxNativeZoom: 16, className: "napisi-svetlo" }).addTo(map);
+const map = L.map("karta", { zoomControl: true, maxZoom: 19 }).setView([46.1, 14.6], 8);
+// Tu so tudi dodatna imena prizgana, drugace kot na velikem zemljevidu. Tam
+// imena tekmujejo z vozili, ki so edini razlog za tisto stran; tu je vprasanje
+// "kje je to" in brez imen vasi in cetrti se clovek na zemljevidu ne znajde.
+const podlaga = podlagaZemljevida();
+podlaga.osnova.addTo(map);
+podlaga.imena.addTo(map);
 
 const tockeLayer = L.layerGroup().addTo(map);
 const potLayer = L.layerGroup().addTo(map);

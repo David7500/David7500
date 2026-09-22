@@ -373,8 +373,10 @@ privzetek nastavitve.
 **Tujih izvorov v strani ni več.** Pisave (`static/pisave/`) in Leaflet
 (`static/leaflet/`) so gostovani pri nas. Prej je šel naslov IP vsakega
 obiskovalca ob vsakem odprtju Googlu, zemljevid pa je visel na `unpkg.com`.
-Kar ostane tuje, so **ploščice zemljevida** (OpenStreetMap, Esri) in to je
-neizogibno; na strani o zasebnosti je zato našteto.
+Kar ostane tuje, so **ploščice zemljevida** in to je neizogibno; na strani o
+zasebnosti je zato našteto. Od 22. 9. 2026 so to vektorske ploščice in pisave
+OpenFreeMap (`tiles.openfreemap.org`), Esri pa samo še kot rezerva brez WebGL2
+(glej `zemljevid.md`).
 
 
 ## Obrazec za stik: edina pot, ki piše iz zahteve

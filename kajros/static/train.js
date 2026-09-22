@@ -1768,19 +1768,17 @@ async function drawRunMap(v) {
     // Preklopi ga `initDragPolicy()`, in sicer po VHODNI NAPRAVI, ne po
     // napravi nasploh -- prenosnik z zaslonom na dotik mora imeti oboje.
     runMap.map = L.map("run-map", {
-      zoomControl: false, scrollWheelZoom: false,
-      // Navedba podlage je pogoj rabe (Esri in OpenStreetMap), ne okras --
+      zoomControl: false, scrollWheelZoom: false, maxZoom: 19,
+      // Navedba podlage je pogoj rabe (OpenStreetMap), ne okras --
       // `attributionControl: false` jo je odstranil s cele strani. Ostane,
       // le brez Leafletove lastne oznake, ker okvir meri 260 px.
       attributionControl: true,
     }).setView([v.lat, v.lon], 14);
     runMap.map.attributionControl.setPrefix("");
     L.control.zoom({ position: "topright" }).addTo(runMap.map);
-    // Esri ima prave ploscice do z16; nad tem raztegnemo zadnjo (glej dashboard).
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/"
-      + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR })
-      .addTo(runMap.map);
+    // Brez dodatnih imen: okvir meri 260 px in gleda eno vozilo. Imena ulic so
+    // v podlagi sami, in ta so tu tisto, kar potnik bere.
+    podlagaZemljevida().osnova.addTo(runMap.map);
 
     // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
     // postajalisca -- ta ni pot in mora biti videti drugace (crtkano).

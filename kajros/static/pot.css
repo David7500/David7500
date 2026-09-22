@@ -207,11 +207,6 @@
 
 /* ---------------------------------------------------------------- zemljevid */
 
-/* Napisi na zemljevidu poti so svetli. Esri jih ponuja samo v sivi razlicici
-   za temno podlago, zato jih posvetlimo s filtrom -- na velikem zemljevidu
-   tega NE delamo, ker tam imena tekmujejo z vozili. */
-.napisi-svetlo { filter: brightness(1.45) contrast(1.05); }
-
 .pot-karta-okvir { position: relative; height: 100%; min-height: 240px; }
 
 .karta-max {
