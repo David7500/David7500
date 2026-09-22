@@ -337,6 +337,20 @@ Preverjeno na arwenu po popravku: v minuti 161 vrstic `run` za linijo 25,
 neznanih v IJPP 5 od 538. Za Tržnico Moste je zajem ob 16:36 dal vožnji s
 16:31 +467 s, torej 16:38:47; LPP je ob 16:37:30 pisal „čez 1 min".
 
+**Id vožnje v IJPP feedu pride iz naprave na vozilu, ne od derp.si.**
+`derp-si/ijpp-rt` (gitlab) ga vzame iz NAP SIRI (`VehicleJourneyRef`, sistem
+Realis) in samo pretvori. Stari id-ji torej pomenijo, da ima vozilo še stari
+plan voženj — kdaj ga zamenjajo, ni odvisno od derp.si in ne od nas.
+
+**Linija 15 je dokaz, da par ni vedno mogoč.** LPP-jev lastni vozni red
+(data.lpp.si) se 22. 9. ujema z novim IJPP (Stanežiče → Sora 15 od 15
+odhodov, obratno 13 od 14; izjema 15:35 pri LPP proti 15:50 v IJPP).
+Avtobus ob 17:45 je pri LPP vozil v živo (`type 0`), v IJPP feedu pa ga ni
+bilo **pod nobenim id-jem** — ne starim ne novim, v okolici proge nobenega
+vozila linije 15. Takega vozila nobeno pravilo povezovanja ne reši; edini
+živi vir zanj je data.lpp.si. Isti dan je feed od 16:31 naprej za linijo 15
+molčal.
+
 **Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi —
 pozneje ga ni. Kadar je uvoz že tekel brez tega (arwen 22. 9.),
 ga da `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.
