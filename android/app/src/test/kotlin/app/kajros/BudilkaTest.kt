@@ -80,3 +80,75 @@ class BudilkaTest {
         assertTrue("trip=t1" in n, n)
     }
 }
+
+/**
+ * Po zvonjenju widget odsteva do odhoda. 22. 9. 2026 prijavljeno: odstevanje
+ * je izginilo "recimo pet minut pred prihodom".
+ */
+class SledenjeTest {
+
+    private val CONA = ZoneId.of("Europe/Ljubljana")
+
+    private fun ob(ura: Int, minuta: Int, sekunda: Int = 0): Long =
+        ZonedDateTime.of(2026, 9, 22, ura, minuta, sekunda, 0, CONA).toInstant().toEpochMilli()
+
+    /** RG 318 ob 7:31, X = 20, vlak +5 min; zazvonilo je ob 7:16. */
+    private fun odzvonjena(zamudaS: Int?, preverjenoOb: Long) = Budilka(
+        id = "b1", trainNo = "RG 318", tripId = "t1", omrezje = "zeleznica",
+        postaja = "Ljubljana Polje", stopSeq = 3, dan = "2026-09-22",
+        voznoredniMs = ob(7, 31), minutPrej = 20, zbudi = true,
+        zamudaS = zamudaS, zamudaObMs = if (zamudaS == null) 0 else preverjenoOb,
+        stikObMs = preverjenoOb, zvoniObMs = ob(7, 16), odzvonjeno = true,
+    )
+
+    @Test
+    fun `zamuda velja med dvema osvezitvama sledenja`() {
+        // Sledenje osvezi zamudo na dve minuti. Pred popravkom je veljala 75 s,
+        // ker je bil korak racunan od ure zvonjenja, ki je ze mimo.
+        val b = odzvonjena(300, ob(7, 29))
+        assertEquals(ob(7, 36), b.izracun(ob(7, 30, 50)).odhodMs)
+    }
+
+    @Test
+    fun `sledenje ne neha ob voznem redu, ce vlak zamuja`() {
+        // Zadnja osvezitev ob 7:31 je zgresena (Doze, ni signala): ob 7:33 je
+        // vlak po zadnjem podatku se tri minute dalec.
+        val b = odzvonjena(300, ob(7, 29))
+        assertTrue(b.sledenjeOb(ob(7, 33)) != null)
+        assertEquals(ob(7, 36) + Ura.SLEDENJE_ZA_MS, b.konecSledenjaMs())
+    }
+
+    @Test
+    fun `brez osvezitve odsteva do voznega reda, konca pa ne prehiti`() {
+        // Pet minut brez odgovora: stevec se vrne na vozni red (pred njim vlak
+        // ne odpelje), widget pa ostane do zadnjega znanega odhoda.
+        val b = odzvonjena(300, ob(7, 25))
+        assertEquals(ob(7, 31), b.izracun(ob(7, 30)).odhodMs)
+        assertTrue(b.sledenjeOb(ob(7, 34)) != null)
+        assertEquals(null, b.sledenjeOb(ob(7, 37, 31)))
+    }
+
+    @Test
+    fun `ena osvezitev pade na sam odhod`() {
+        // Cez niclo Chronometer steje z minusom; ob odhodu mora widget
+        // preklopiti na "zdaj", in to zna samo ob izrisu.
+        val b = odzvonjena(300, ob(7, 35))
+        assertEquals(ob(7, 36), b.sledenjeOb(ob(7, 35, 10)))
+        // Po odhodu je naslednja budnica konec sledenja, ne nov korak cez njega.
+        assertEquals(ob(7, 37, 30), b.sledenjeOb(ob(7, 36, 10)))
+    }
+
+    @Test
+    fun `prezgoden avtobus ne podaljsa sledenja cez vozni red`() {
+        val b = odzvonjena(-120, ob(7, 25)).copy(omrezje = "avtobus")
+        assertEquals(ob(7, 31) + Ura.SLEDENJE_ZA_MS, b.konecSledenjaMs())
+    }
+
+    @Test
+    fun `pred zvonjenjem ostane staro merilo veljavnosti`() {
+        // Pet minut daleč od zvonjenja je korak 60 s; podatek, star tri
+        // minute, tam ne velja -- sprememba je samo za cas po zvonjenju.
+        val b = odzvonjena(300, ob(7, 10)).copy(odzvonjeno = false, zvoniObMs = 0)
+        assertEquals(ob(7, 31), b.izracun(ob(7, 13)).odhodMs)
+    }
+}

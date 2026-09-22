@@ -86,12 +86,18 @@ class Widget : AppWidgetProvider() {
          *
          * Ena in ne seznam: widget je velik kot dve vrstici ikon in stevilka,
          * ki jo potnik lovi s praga, je ena sama.
+         *
+         * **Odzvonjena ostane do konca sledenja**, ne do odhoda po zdajsnjem
+         * racunu. Ta pade na vozni red, kakor hitro zamuda ni sveza, in widget
+         * je budilko izpustil toliko pred prihodom, kolikor je vlak zamujal
+         * (22. 9. 2026). Konec sledenja je isti trenutek, ko jo `Nacrtovalec`
+         * neha osvezevati -- dve meji za isto stvar bi se razsli.
          */
         fun naslednja(c: Context, zdajMs: Long): Budilka? =
             Shramba.vse(c)
                 .filter {
-                    !it.ugasnjena &&
-                        maxOf(it.voznoredniMs, it.izracun(zdajMs).odhodMs) > zdajMs - 60_000L
+                    !it.ugasnjena && if (it.odzvonjeno) zdajMs < it.konecSledenjaMs()
+                        else maxOf(it.voznoredniMs, it.izracun(zdajMs).odhodMs) > zdajMs - 60_000L
                 }
                 .minByOrNull { it.izracun(zdajMs).odhodMs }
 
@@ -166,7 +172,7 @@ class Widget : AppWidgetProvider() {
             // Voznoredna ura pride iz budilke, ne iz racuna: `upostevanaS` ima
             // odsteto rezervo, `odhodMs` pa ne, zato bi izpeljava
             // `odhodMs - upostevanaS` uro zamaknila za rezervo.
-            val podpis = pod(c, izid, URA.format(Date(b.voznoredniMs)),
+            val podpis = pod(c, b, izid, URA.format(Date(b.voznoredniMs)),
                 uraJeZgoraj = !odsteva && doOdhoda > 0)
             v.setTextViewText(R.id.widget_pod, podpis)
             // Bralnik zaslona bi sicer prebral samo stoparico, ki je brez
@@ -187,9 +193,19 @@ class Widget : AppWidgetProvider() {
          * ponovimo -- "tor. 06:49" nad "vozni red 06:49" sta dve imeni za isto
          * uro in nista dva podatka. Isto pravilo kot v seznamu budilk.
          */
-        private fun pod(c: Context, izid: Ura.Izid, red: String, uraJeZgoraj: Boolean): String {
+        private fun pod(c: Context, b: Budilka, izid: Ura.Izid, red: String,
+                        uraJeZgoraj: Boolean): String {
             val odhod = URA.format(Date(izid.odhodMs))
             val zamuda = Math.round(izid.upostevanaS / 60.0).toInt()
+            // Po zvonjenju je "se ni preverjena" neresnica: bila je, a je
+            // zdaj prestara, da bi ji stevec sledil. Zato pove, kaj je bilo
+            // znano in kdaj -- stevec pa vseeno tece do voznega reda, ker pred
+            // njim vlak ne odpelje.
+            val zadnja = b.zamudaS?.let { Math.round(it / 60.0).toInt() } ?: 0
+            if (b.odzvonjeno && izid.vir != Ura.Vir.ZAMUDA && zadnja >= 1) {
+                return c.getString(R.string.widget_zastarela, red,
+                    URA.format(Date(b.zamudaObMs)), zadnja)
+            }
             return when {
                 izid.vir == Ura.Vir.NI_PODATKA ->
                     if (uraJeZgoraj) c.getString(R.string.widget_ni_podatka_dan)

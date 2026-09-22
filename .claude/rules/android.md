@@ -264,6 +264,26 @@ vlak spelje). Ista budnica se po zvonjenju nastavi na vsaki 2 minuti
 zamudo; 90 s po odhodu `vseZnova` ponavljajočo prestavi na naslednji dan.
 Prej se je prestavila takoj ob zvonjenju in widget je kazal jutrišnji odhod.
 
+**Po zvonjenju zamuda velja dve osvezitvi sledenja (4 min 15 s), ne 75 s.**
+Prijavljeno 22. 9. 2026: odštevanje je izginilo „recimo pet minut pred
+prihodom“. Veljavnost se je tudi po zvonjenju merila po koraku do ure
+zvonjenja — ta je bila mimo, korak 30 s, meja 75 s — sledenje pa zamudo osveži
+na dve minuti. Zamuda je bila zato večino časa „zastarela“, odhod je padel na
+vozni red in sledenje se je končalo 90 s za njim: **natanko toliko pred
+prihodom, kolikor je vlak zamujal.** `Ura.izracunaj(sledenje = odzvonjeno)`.
+
+Dvoje je ob tem ločeno namenoma:
+
+* **Do kdaj odštevati** pove sveža zamuda. Brez nje števec teče do voznega
+  reda (pred njim vlak ne odpelje) in vrstica pod njim pove zadnje znano
+  („vozni red 07:31 · ob 07:29 je zamujal 5 min“).
+* **Do kdaj slediti in kazati** pove najpoznejši odhod, ki ga je kdo trdil —
+  `Budilka.konecSledenjaMs()` po zadnji znani zamudi, tudi zastareli. To mejo
+  berejo sledenje in widget; dve meji za isto stvar bi se razšli.
+
+Ena budnica sledenja pade **na sam odhod**: `Chronometer` čez ničlo šteje z
+minusom in widget „zdaj“ napiše samo ob izrisu. Testi: `SledenjeTest`.
+
 ### Dotik widgeta odpre vožnjo, ne domače strani
 
 Widget odgovarja na „koliko časa imam še“; naslednje vprašanje je „in kje je

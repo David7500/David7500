@@ -42,6 +42,24 @@ object Ura {
     /** Koliko pred prvim moznim zvonjenjem se zacne preverjati. */
     const val ZALET_MS = 10 * 60 * 1000L
 
+    /** Po zvonjenju: kako pogosto osvezimo zamudo, da widget odsteva prav. */
+    const val SLEDENJE_KORAK_MS = 2 * 60_000L
+
+    /** Toliko po odhodu se sledenje konca in ponavljajoca gre na naslednji dan. */
+    const val SLEDENJE_ZA_MS = 90_000L
+
+    /**
+     * Po zvonjenju zamuda velja **dve zgreseni osvezitvi** sledenja, isto
+     * pravilo kot pred njim.
+     *
+     * Pred 22. 9. 2026 se je tudi po zvonjenju merilo po koraku do ure
+     * zvonjenja. Ta je bila ze mimo, korak je bil zato 30 s in zamuda je
+     * veljala 75 s -- sledenje pa jo osvezi na dve minuti. Vecino casa je bila
+     * torej "zastarela", odhod je padel na vozni red in widget je nehal
+     * odstevati toliko pred prihodom, kolikor je vlak zamujal.
+     */
+    const val SLEDENJE_VELJA_MS = 2 * SLEDENJE_KORAK_MS + 15_000L
+
     /** Iz cesa je nastala ura zvonjenja. To gre v obvestilo, ne ostane v kodi. */
     enum class Vir {
         /** Zamuda je sveza in upostevana. */
@@ -86,6 +104,7 @@ object Ura {
      * @param vlak         `network == "zeleznica"`
      * @param rezervaS     kar je potnik sam obkljukal ("se 3 minute"), v sekundah
      * @param stikObMs     zadnji odgovor streznika, tudi brez zamude (0 = nikoli)
+     * @param sledenje     budilka je ze zazvonila in zdaj samo sledi odhodu
      */
     fun izracunaj(
         voznoredniMs: Long,
@@ -96,6 +115,7 @@ object Ura {
         vlak: Boolean,
         rezervaS: Int = 0,
         stikObMs: Long = 0L,
+        sledenje: Boolean = false,
     ): Izid {
         val poVoznemRedu = voznoredniMs - minutPrej * 60_000L - rezervaS * 1000L
 
@@ -118,8 +138,10 @@ object Ura {
         // star podatek je bil zato izpad, ura je padla na vozni red in budilka
         // je sporocila "zamude ni bilo mogoce preveriti" 22 minut prezgodaj.
         //
+        // Po zvonjenju ura zvonjenja ni vec merilo -- takrat je ritem sledenja.
         fun sveze(obMs: Long) =
-            obMs > 0L && zdajMs - obMs <= veljavnost(izZamude - zdajMs, zdajMs - obMs)
+            obMs > 0L && zdajMs - obMs <= (if (sledenje) SLEDENJE_VELJA_MS
+                                           else veljavnost(izZamude - zdajMs, zdajMs - obMs))
         // `zamudaS != null` je tu tudi zato, da `odhodMs` spodaj ne more pasti
         // na `!!`. Brez tega bi pokvarjen zapis v shrambi (zamuda null, cas pa
         // nastavljen) podrl budilko ravno ob prozenju.

@@ -83,9 +83,44 @@ data class Budilka(
             vlak = vlak,
             rezervaS = rezervaS,
             stikObMs = stikObMs,
+            sledenje = odzvonjeno,
         )
         // Odlog povozi racun: potnik je rekel "cez dve minuti" in to ni ocena.
         return if (odlozenoDoMs > 0) i.copy(zvoniOb = odlozenoDoMs) else i
+    }
+
+    /**
+     * Do kdaj po zvonjenju sledimo vozilu -- in do kdaj ga kaze widget.
+     *
+     * **Po zadnji znani zamudi, tudi zastareli.** Odhod iz [izracun] pade na
+     * vozni red, kakor hitro zamuda ni vec sveza, in sledenje se je zato
+     * koncalo ob voznem redu, ceprav je vlak po zadnjem podatku imel se pet
+     * minut (22. 9. 2026). Kdaj odstevati, pove sveza zamuda; kdaj nehati,
+     * pa najpoznejsi odhod, ki ga je kdo trdil -- daljse sledenje stane nekaj
+     * prebujanj, prekratko pa potnika pusti brez stevca pred peronom.
+     *
+     * Pri vlaku negativna zamuda ne steje (pred voznim redom ne odpelje), pri
+     * avtobusu pa konca tudi ne premakne naprej -- `maxOf` z voznim redom.
+     */
+    fun konecSledenjaMs(): Long =
+        maxOf(voznoredniMs, voznoredniMs + (zamudaS ?: 0) * 1000L) + Ura.SLEDENJE_ZA_MS
+
+    /**
+     * Po zvonjenju: naslednja osvezitev zamude, ali null, ce je odhod mimo.
+     *
+     * Zvonjenje ni konec: potnik gre proti postaji in widget odsteva do
+     * odhoda, zamuda pa se medtem se spreminja.
+     *
+     * **Ena budnica pade na sam odhod.** `Chronometer` cez niclo steje naprej
+     * z minusom; widget mora takrat pisati "zdaj", in to zna samo ob
+     * ponovnem izrisu.
+     */
+    fun sledenjeOb(zdajMs: Long): Long? {
+        val konec = konecSledenjaMs()
+        if (zdajMs >= konec) return null
+        val naslednja = minOf(zdajMs + Ura.SLEDENJE_KORAK_MS, konec)
+        val odhod = izracun(zdajMs).odhodMs
+        return if (odhod > zdajMs) minOf(naslednja, odhod) else naslednja
     }
 
     /**

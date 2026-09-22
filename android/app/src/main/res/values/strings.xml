@@ -84,6 +84,7 @@
     <string name="widget_zamuda">odhod %1$s · zamuja %2$d min</string>
     <string name="widget_prezgodaj">odhod %1$s · %2$d min pred redom</string>
     <string name="widget_tocno">odhod %1$s · vozi točno</string>
+    <string name="widget_zastarela">vozni red %1$s · ob %2$s je zamujal %3$d min</string>
 
     <!-- widget: budilke s stikali -->
     <string name="widget_budilke_opis">Nastavljene budilke; stikalo jih vklopi ali ugasne brez odpiranja aplikacije.</string>

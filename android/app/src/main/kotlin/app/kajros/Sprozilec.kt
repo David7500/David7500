@@ -128,7 +128,7 @@ class Sprozilec : BroadcastReceiver() {
      */
     private fun sledi(c: Context, stara: Budilka) {
         val zdaj = System.currentTimeMillis()
-        if (Nacrtovalec.sledenjeOb(stara, zdaj) != null) {
+        if (stara.sledenjeOb(zdaj) != null) {
             val odgovor = Preverjevalec.preveri(c, stara)
             val sveza = Shramba.ena(c, stara.id) ?: return
             if (sveza.odzvonjeno) Shramba.shrani(c, sZamudo(sveza, odgovor))
