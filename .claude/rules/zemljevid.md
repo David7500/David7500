@@ -71,9 +71,17 @@ paths:
   `maplibre-gl.mjs` uvaža sosede po relativnem imenu, Cloudflare pa statiko
   drži štiri ure). Tuje so ploščice in pisave z `tiles.openfreemap.org`.
 
-  * **Slog je naš** (`static/podlaga.json`, 22 plasti): barve iz `base.css`,
-    imena `name:sl` pred lokalnimi (Celovec, Trst, Gradec), „Četrtna skupnost“
-    odrezana. Napisi z `metadata.kajros:napisi = dodatni` (vasi, četrti,
+  * **Slog je naš** (`static/podlaga.json`, 30 plasti), imena `name:sl` pred
+    lokalnimi (Celovec, Trst, Gradec), „Četrtna skupnost“ odrezana.
+    **Barve so po Slometovi podlagi** (izbrano 22. 9. 2026 med „vedno
+    barvno“ in „barve šele od blizu“; vzorčeno z njegovih posnetkov): kopno
+    modro-sivo `#232d39`, voda `#2b4153`, trava in gozd temno zelena, stavbe
+    temnejše od kopnega. Prej je bila siva, in uporabnik je Slometovo
+    ocenil kot lepšo in podrobnejšo — zato še **tiri** s pragovi (glavni od
+    z12,5, stranski od z15), **poti za pesce** črtkano čez zelenice,
+    igrišča, pokopališča, letališke steze in **imena pomembnih točk** (šole,
+    bolnišnice, cerkve) od z16, drobno in bledo. Naša mreža prog od blizu
+    pobledi (`k-proge`), da tirov ne prekrije. Napisi z `metadata.kajros:napisi = dodatni` (vasi, četrti,
     vode) so stikalo „Dodatna imena krajev“ — to so zdaj plasti v slogu, ne
     ploščice, zato se ugasnejo brez podlage. Imena ulic so v osnovi od
     MapLibrovega z14, torej **Leafletovega z15** (MapLibre ima 512-pikselne

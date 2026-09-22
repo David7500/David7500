@@ -225,10 +225,14 @@ function dodajSloje() {
 
   // Vrstni red plasti je vrstni red risanja: proge in postaje spodaj, vozila
   // zgoraj. Brez tega vlak izgine pod progo, po kateri vozi.
+  // Od blizu podlaga nariše tire sama, vsakega posebej; naša proga takrat
+  // pobledi, da jih ne prekrije, a ostane, ker pove, kod vozi potniški vlak.
+  const bledi = (dalec, blizu) => ["interpolate", ["linear"], ["zoom"], 14, dalec, 16, blizu];
   map.addLayer({ id: "k-proge-obroba", type: "line", source: "k-proge", layout: OKROGLO,
-                 paint: { "line-color": "#11141a", "line-width": 5.5, "line-opacity": 0.9 } });
+                 paint: { "line-color": "#11141a", "line-width": 5.5,
+                          "line-opacity": bledi(0.9, 0.25) } });
   map.addLayer({ id: "k-proge", type: "line", source: "k-proge", layout: OKROGLO,
-                 paint: { "line-color": PROGA, "line-width": 2 } });
+                 paint: { "line-color": PROGA, "line-width": 2, "line-opacity": bledi(1, 0.5) } });
   map.addLayer({ id: "k-vse-trase", type: "line", source: "k-vse-trase", layout: OKROGLO,
                  paint: { "line-color": ["match", ["get", "network"], "avtobus", BUS_INK, PROGA],
                           "line-width": 1.6, "line-opacity": 0.42 } });
