@@ -63,3 +63,43 @@ class TablaTest {
         assertTrue(Tabla.jeStaro(0, 1_700_000_000_000L))
     }
 }
+
+/** Stran ceste na widgetu: napis in poizvedba. */
+class TablaSmerTest {
+
+    @Test
+    fun `napis smeri je isti kot na strani`() {
+        assertEquals("→ Tobačna", Tabla.smerNapis(listOf("Tobačna")))
+        assertEquals("→ Vič Glince · Jadranska", Tabla.smerNapis(listOf("Vič Glince", "Jadranska")))
+        assertEquals("→ končna", Tabla.smerNapis(emptyList()))
+    }
+
+    @Test
+    fun `smer gre v poizvedbo kodirana, brez nje je ni`() {
+        val brez = Tabla.naslov("https://kajros.app", Tabla.Nastavitev("Bavarski dvor", "avtobus"))
+        assertTrue("smer=" !in brez, brez)
+        assertTrue("station=Bavarski+dvor" in brez, brez)
+        val z = Tabla.naslov("https://kajros.app",
+            Tabla.Nastavitev("Bavarski dvor", "avtobus", "295616c0-387b|x", "→ Kolodvor"))
+        assertTrue(z.endsWith("&smer=295616c0-387b%7Cx"), z)
+    }
+}
+
+class TablaPopravekTest {
+
+    private val n = Tabla.Nastavitev("bavarski", "avtobus", "s1", "→ Kolodvor")
+
+    @Test
+    fun `ime postaje prevzame streznikovo`() {
+        assertEquals("Bavarski dvor",
+            Tabla.Izid.Odhodi(emptyList(), postaja = "Bavarski dvor").popravi(n).postaja)
+    }
+
+    @Test
+    fun `smer, ki je streznik ne pozna vec, gre z napisom vred`() {
+        val p = Tabla.Izid.Odhodi(emptyList(), smerVelja = false).popravi(n)
+        assertEquals(null, p.smer)
+        assertEquals(null, p.smerNapis)
+        assertEquals("bavarski", p.postaja)
+    }
+}

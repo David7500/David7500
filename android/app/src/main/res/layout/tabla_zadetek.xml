@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- En predlog postaje. Visok 48 dp, ker je to najmanj, kar prst zadane brez
+     napake — predlogi stojijo drug pod drugim in zgrešen dotik izbere sosedo. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="48dp"
+    android:gravity="center_vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:background="?android:attr/selectableItemBackground"
+    android:textColor="@color/ink"
+    android:textSize="16sp" />

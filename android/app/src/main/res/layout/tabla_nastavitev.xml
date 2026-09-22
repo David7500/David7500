@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nastavitev widgeta z odhodno tablo: katera postaja in katero omrežje.
-     Omrežje ni podrobnost — „Ljubljana“ je na železnici vozlišče in na mestnih
+<!-- Nastavitev widgeta z odhodno tablo: katero omrežje, katera postaja in
+     pri avtobusih katera stran ceste.
+
+     Vrstni red je vrstni red odločitev. Omrežje je prvo, ker od njega zavisi
+     seznam predlogov: „Ljubljana“ je na železnici vozlišče in na mestnih
      linijah postajališče, in tiho izbrano bi vrnilo tujo tablo.
+
+     **Postaja se izbere, ne vtipka** (22. 9. 2026): vnos samo išče, shrani pa
+     se lahko šele ime, ki ga je vrnil strežnik — isto kot pri iskalniku na
+     strani.
 
      **`fitsSystemWindows` povozi `padding`**: nastavi ga na sistemske odmike
      in avtorjevega zavrže. Na prvem posnetku se je naslov dotikal levega roba
@@ -17,6 +24,7 @@
   <!-- Drsnik, ker tipkovnica vzame pol zaslona: brez njega je gumb pod njo in
        widgeta ni mogoce shraniti, ne da bi jo prej zaprl. -->
   <ScrollView
+      android:id="@+id/drsnik"
       android:layout_width="match_parent"
       android:layout_height="0dp"
       android:layout_weight="1">
@@ -27,7 +35,8 @@
       android:orientation="vertical"
       android:paddingStart="20dp"
       android:paddingEnd="20dp"
-      android:paddingTop="20dp">
+      android:paddingTop="20dp"
+      android:paddingBottom="12dp">
 
     <TextView
         android:layout_width="match_parent"
@@ -47,24 +56,12 @@
         android:textColor="@color/ink_dim"
         android:textSize="13sp" />
 
-    <EditText
-        android:id="@+id/postaja"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="@string/tabla_postaja"
-        android:inputType="text"
-        android:imeOptions="actionDone"
-        android:singleLine="true"
-        android:textColor="@color/ink"
-        android:textColorHint="@color/ink_faint"
-        android:textSize="17sp" />
-
     <!-- Dva gumba in ne spustni seznam: izbiri sta dve in obe morata biti
          vidni, ker je prav ta izbira tista, ki jo je lahko spregledati. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
         android:orientation="horizontal">
 
         <Button
@@ -87,6 +84,55 @@
             android:textSize="15sp"
             android:text="@string/tabla_avtobus" />
     </LinearLayout>
+
+    <EditText
+        android:id="@+id/postaja"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/tabla_postaja"
+        android:inputType="text|textNoSuggestions"
+        android:imeOptions="actionDone"
+        android:singleLine="true"
+        android:textColor="@color/ink"
+        android:textColorHint="@color/ink_faint"
+        android:textSize="17sp" />
+
+    <!-- Predlogi s strežnika. Pod poljem in ne v spustnem oknu: okno bi
+         prekrila tipkovnica, tu pa se seznam s poljem vred pomakne navzgor. -->
+    <LinearLayout
+        android:id="@+id/zadetki"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+    <!-- Stran ceste, samo pri avtobusnem postajališču z več stranmi. -->
+    <TextView
+        android:id="@+id/smeri_glava"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/tabla_smer"
+        android:textColor="@color/ink_mute"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.08"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/smeri_pomoc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/tabla_smer_pomoc"
+        android:textColor="@color/ink_faint"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/smeri"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
 
     <!-- Izid iskanja. Postaje, ki je ni, ni mogoče shraniti: widget, ki bi
          ostal prazen, bi bil videti kot okvara aplikacije. -->

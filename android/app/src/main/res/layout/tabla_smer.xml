@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ena stran ceste. Cela širina in ne pilula v vrsti: oznake so dolge
+     („→ Vič Glince · Jadranska“) in ogrodje brez AndroidX nima prelivne
+     postavitve, ki bi jih zložila. -->
+<Button xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:gravity="start|center_vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:textAllCaps="false"
+    android:textSize="15sp" />

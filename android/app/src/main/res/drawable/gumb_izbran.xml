@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Izbrana moznost v seznamu (stran ceste): rob v poudarku, podlaga
+     dvignjena. Poln poudarek je za dejanje („Shrani“); izbira, ki bi bila
+     videti enako, bi se brala kot se en gumb. Isto kot `.smer-chip` na strani. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#22ffffff">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bg_raised" />
+            <stroke android:width="1.5dp" android:color="@color/accent" />
+            <corners android:radius="7dp" />
+        </shape>
+    </item>
+</ripple>

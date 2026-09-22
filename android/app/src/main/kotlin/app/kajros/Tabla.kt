@@ -33,6 +33,8 @@ object Tabla {
     const val VRSTIC = 3
     /** Koliko naprej vprasamo. Manj bi pri redki progi vrnilo prazno tablo. */
     private const val OKNO_MIN = 240
+    /** Toliko predlogov kot na strani (`attachSuggest`); vec jih tipkovnica prekrije. */
+    private const val ZADETKOV = 8
 
     private val URA = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -61,21 +63,47 @@ object Tabla {
      * "Ljubljana" je zeleznisko vozlisce in hkrati mestno postajalisce, in
      * privzeta zeleznica bi avtobusnemu potniku tiho vrnila drugo tablo.
      */
-    data class Nastavitev(val postaja: String, val omrezje: String) {
+    data class Nastavitev(
+        val postaja: String,
+        val omrezje: String,
+        /**
+         * Stran ceste (`journey.smeri_postaje` na strezniku), ali null = obe.
+         *
+         * Mestno postajalisce je dvoje in tabla je kazala oboje skupaj; widget
+         * pa pokaze samo tri vrstice, in ce sta dve z druge strani ceste, sta
+         * dve od treh neuporabni.
+         */
+        val smer: String? = null,
+        /** "→ Tobačna" -- shranjena, ker jo widget izpise tudi brez omrezja. */
+        val smerNapis: String? = null,
+    ) {
         val vlak: Boolean get() = omrezje == "zeleznica"
     }
+
+    /** Ena stran ceste, kot jo pove streznik. */
+    data class Smer(val kljuc: String, val napis: String)
+
+    /**
+     * "→ Tobačna" ali "→ Vič Glince · Jadranska" -- isto kot `smerNapis` na
+     * strani. Imen se ne sklanja.
+     */
+    fun smerNapis(naslednje: List<String>): String =
+        "→ " + naslednje.joinToString(" · ").ifBlank { "končna" }
 
     fun nastavi(c: Context, widgetId: Int, n: Nastavitev) {
         c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).edit()
             .putString("postaja_$widgetId", n.postaja)
             .putString("omrezje_$widgetId", n.omrezje)
+            .putString("smer_$widgetId", n.smer)
+            .putString("smer_napis_$widgetId", n.smerNapis)
             .apply()
     }
 
     fun nastavitev(c: Context, widgetId: Int): Nastavitev? {
         val p = c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE)
         val postaja = p.getString("postaja_$widgetId", null) ?: return null
-        return Nastavitev(postaja, p.getString("omrezje_$widgetId", "zeleznica")!!)
+        return Nastavitev(postaja, p.getString("omrezje_$widgetId", "zeleznica")!!,
+            p.getString("smer_$widgetId", null), p.getString("smer_napis_$widgetId", null))
     }
 
     /** Widget je odstranjen z zaslona; njegova nastavitev nima vec lastnika. */
@@ -83,6 +111,8 @@ object Tabla {
         c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).edit()
             .remove("postaja_$widgetId")
             .remove("omrezje_$widgetId")
+            .remove("smer_$widgetId")
+            .remove("smer_napis_$widgetId")
             .remove("stanje_$widgetId")
             .apply()
     }
@@ -183,26 +213,94 @@ object Tabla {
     sealed class Izid {
         object BrezZveze : Izid()
         object NiPostaje : Izid()
-        data class Odhodi(val vrstice: List<Odhod>) : Izid()
+        data class Odhodi(
+            val vrstice: List<Odhod>,
+            /** Strani ceste te postaje; prazno pri vlakih in postajah z eno. */
+            val smeri: List<Smer> = emptyList(),
+            /**
+             * false, kadar je bila smer zahtevana, streznik pa je ne pozna vec
+             * (nov vozni red). Tabla je takrat cela in widget ne sme trditi
+             * smeri, ki je ne kaze.
+             */
+            val smerVelja: Boolean = true,
+            /**
+             * Ime, kot ga pozna streznik. Widget pred 22. 9. 2026 je shranil
+             * kar vnos ("bavarski"); s tem se ob prvi osvezitvi popravi.
+             */
+            val postaja: String? = null,
+        ) : Izid() {
+            /**
+             * Nastavitev, kot jo potrjuje odgovor: ime postaje streznikovo,
+             * smer pa samo, ce jo streznik se pozna -- napis nad tablo, ki
+             * kaze obe strani, ne sme trditi ene.
+             */
+            fun popravi(n: Nastavitev): Nastavitev = n.copy(
+                postaja = postaja ?: n.postaja,
+                smer = if (smerVelja) n.smer else null,
+                smerNapis = if (smerVelja) n.smerNapis else null,
+            )
+        }
+    }
+
+    /**
+     * Naslov table za widget. Cist JVM (izvor je niz), da ga je mogoce
+     * preizkusiti -- `smer` je `stop_id` in v poizvedbo gre kodiran.
+     */
+    fun naslov(izvor: String, n: Nastavitev): String = buildString {
+        append(izvor).append("/api/departures?station=")
+        append(URLEncoder.encode(n.postaja, "UTF-8"))
+        append("&network=").append(n.omrezje)
+        append("&window=").append(OKNO_MIN)
+        if (!n.smer.isNullOrBlank()) append("&smer=").append(URLEncoder.encode(n.smer, "UTF-8"))
     }
 
     /** Prve [VRSTIC] vrstice odhodne table te postaje. */
     fun prenesi(c: Context, n: Nastavitev): Izid {
-        val url = buildString {
-            append(Nastavitve.naslov(c)).append("/api/departures?station=")
-            append(URLEncoder.encode(n.postaja, "UTF-8"))
-            append("&network=").append(n.omrezje)
-            append("&window=").append(OKNO_MIN)
-        }
-        val (koda, besedilo) = prenesi(url)
+        val (koda, besedilo) = prenesi(naslov(Nastavitve.naslov(c), n))
         if (koda == 404) return Izid.NiPostaje
         if (besedilo == null) return Izid.BrezZveze
         return try {
-            val a = JSONObject(besedilo).optJSONArray("board") ?: return Izid.BrezZveze
-            Izid.Odhodi((0 until minOf(a.length(), VRSTIC))
-                .map { vrstica(a.getJSONObject(it)) })
+            val o = JSONObject(besedilo)
+            val a = o.optJSONArray("board") ?: return Izid.BrezZveze
+            val sm = o.optJSONArray("smeri") ?: JSONArray()
+            val smeri = (0 until sm.length()).map { i ->
+                val d = sm.getJSONObject(i)
+                val nasl = d.optJSONArray("naslednje") ?: JSONArray()
+                Smer(d.optString("kljuc"), smerNapis((0 until nasl.length()).map { nasl.optString(it) }))
+            }.filter { it.kljuc.isNotBlank() }
+            Izid.Odhodi(
+                (0 until minOf(a.length(), VRSTIC)).map { vrstica(a.getJSONObject(it)) },
+                if (smeri.size > 1) smeri else emptyList(),
+                smerVelja = n.smer.isNullOrBlank() || !o.isNull("smer"),
+                postaja = o.optString("station").ifBlank { null },
+            )
         } catch (e: org.json.JSONException) {
             Izid.BrezZveze
+        }
+    }
+
+    /**
+     * Postaje, ki ustrezajo vnosu, v vrstnem redu streznika -- ali null, kadar
+     * streznika ni bilo mogoce vprasati.
+     *
+     * Iskanje je strezniskovo (`journey.search_stations`), isto kot na strani:
+     * seznam v telefonu bi bil drugo pravilo za isto stvar in bi se ob
+     * naslednjem uvozu voznega reda razsel.
+     */
+    fun isci(c: Context, vnos: String, omrezje: String): List<String>? {
+        val url = buildString {
+            append(Nastavitve.naslov(c)).append("/api/stations/search?q=")
+            append(URLEncoder.encode(vnos, "UTF-8"))
+            append("&limit=").append(ZADETKOV)
+            append("&network=").append(omrezje)
+        }
+        val (_, besedilo) = prenesi(url)
+        besedilo ?: return null
+        return try {
+            val a = JSONArray(besedilo)
+            (0 until a.length()).map { a.getJSONObject(it).optString("name") }.filter { it.isNotBlank() }
+        } catch (e: org.json.JSONException) {
+            null
         }
     }
 

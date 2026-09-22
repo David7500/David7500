@@ -109,14 +109,19 @@
 
     <!-- nastavitev table -->
     <string name="tabla_nastavitev">Katera postaja</string>
-    <string name="tabla_pomoc">Napiši ime postaje, kot piše na postajališču.</string>
+    <string name="tabla_pomoc">Začni tipkati ime in postajo izberi s seznama.</string>
     <string name="tabla_postaja">npr. Ljubljana</string>
+    <string name="tabla_postajalisce">npr. Bavarski dvor</string>
     <string name="tabla_vlak">Vlak</string>
     <string name="tabla_avtobus">Avtobus</string>
-    <string name="tabla_shrani">Poišči in shrani</string>
+    <string name="tabla_shrani">Shrani</string>
     <string name="tabla_iscem">Iščem …</string>
+    <string name="tabla_izberi">Izberi postajo s seznama.</string>
     <string name="tabla_ni_postaje">Te postaje ne najdem. Poskusi drugo ime.</string>
     <string name="tabla_ni_zveze">Strežnika ni mogoče doseči. Poskusi znova.</string>
+    <string name="tabla_smer">SMER</string>
+    <string name="tabla_smer_pomoc">Na vsaki strani ceste je svoje postajališče. Izberi tisto, kjer čakaš — spoznaš ga po naslednji postaji.</string>
+    <string name="tabla_obe_smeri">Obe smeri</string>
 
     <!-- posodobitev zunaj trgovine -->
     <string name="posodobitev">Na voljo je različica %1$s. Odpri stran za prenos.</string>

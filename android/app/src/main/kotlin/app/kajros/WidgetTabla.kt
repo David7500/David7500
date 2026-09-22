@@ -66,6 +66,10 @@ class WidgetTabla : AppWidgetProvider() {
                     // uporabna, prazna ni.
                     val izid = Tabla.prenesi(c, n)
                     if (izid !is Tabla.Izid.Odhodi) continue
+                    // Stran ceste je ob uvozu izginila: tabla je cela, zato
+                    // napis nad njo ne sme vec trditi ene strani.
+                    val popravljena = izid.popravi(n)
+                    if (popravljena != n) Tabla.nastavi(c, id, popravljena)
                     Tabla.shraniStanje(c, id,
                         Tabla.Stanje(izid.vrstice, System.currentTimeMillis()))
                     am.updateAppWidget(id, pogled(c, id, null))
@@ -175,7 +179,7 @@ class WidgetTabla : AppWidgetProvider() {
                 return v
             }
 
-            v.setTextViewText(R.id.tab_postaja, n.postaja)
+            v.setTextViewText(R.id.tab_postaja, glava(c, n))
             // Glava odpre tablo te postaje v aplikaciji -- isti pogled, cel.
             v.setOnClickPendingIntent(R.id.tab_koren, odpri(c, widgetId, naslovTable(c, n)))
 
@@ -241,6 +245,23 @@ class WidgetTabla : AppWidgetProvider() {
                 odpri(c, widgetId * 10 + i, naslovVoznje(c, n, o)))
         }
 
+        /**
+         * "Bavarski dvor → Razstavišče · Kolodvor": ime postaje in pomirjeno
+         * stran ceste. Brez smeri tri vrstice ne povedo, s katere strani so --
+         * in prav to je bilo narobe, preden je smer obstajala.
+         */
+        private fun glava(c: Context, n: Tabla.Nastavitev): CharSequence {
+            val smer = n.smerNapis ?: return n.postaja
+            val b = android.text.SpannableStringBuilder(n.postaja).append("  ")
+            val od = b.length
+            b.append(smer)
+            b.setSpan(android.text.style.ForegroundColorSpan(c.getColor(R.color.ink_mute)),
+                od, b.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            b.setSpan(android.text.style.RelativeSizeSpan(0.9f),
+                od, b.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            return b
+        }
+
         /** Razred pride s streznika; barva je oblikovanje in sme biti tu. */
         private fun barva(o: Tabla.Odhod): Int = when (o.razred) {
             "tocno" -> R.color.d_ontime
@@ -250,9 +271,12 @@ class WidgetTabla : AppWidgetProvider() {
             else -> R.color.ink_faint
         }
 
+        // Z isto stranjo ceste kot widget: stran bi sicer odprla obe in
+        // potnik bi iskal vrstice, ki jih je pravkar videl.
         private fun naslovTable(c: Context, n: Tabla.Nastavitev): String =
             Nastavitve.naslov(c) + (if (n.vlak) "/app/train" else "/app/bus") +
-                "?station=" + Nastavitve.zaPot(n.postaja)
+                "?station=" + Nastavitve.zaPot(n.postaja) +
+                (if (n.smer.isNullOrBlank()) "" else "&smer=" + Nastavitve.zaPot(n.smer))
 
         private fun naslovVoznje(c: Context, n: Tabla.Nastavitev, o: Tabla.Odhod): String =
             buildString {

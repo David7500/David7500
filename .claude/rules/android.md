@@ -364,6 +364,23 @@ Ime postaje razreši strežnik (`resolve_station()`), isto kot stran. Svoj sezna
 postaj v telefonu bi bil drugo pravilo za isto stvar in bi se ob naslednjem
 uvozu voznega reda razšel.
 
+**Postaja se izbere, ne vtipka** (22. 9. 2026). Prej je bilo ime treba napisati
+na pamet in widget je shranil kar vnos („bavarski“). Zdaj vnos išče
+(`/api/stations/search`, 250 ms po zadnji tipki, od dveh črk — isto kot predlogi
+na strani), predlogi so pod poljem in ne v spustnem oknu (tega bi prekrila
+tipkovnica), „Končano“ vzame prvega, „Shrani“ pa je ugasnjen, dokler ime ni s
+seznama. Omrežje je nad poljem, ker od njega zavisi seznam. Shrani se ime, kot
+ga vrne strežnik (`Izid.Odhodi.popravi`), in s tem se ob prvi osvežitvi popravi
+tudi star widget z delnim imenom — preverjeno na emulatorju.
+
+**Pri avtobusih se izbere tudi stran ceste** (`smer`, glej `strani.md`): widget
+kaže tri vrstice, in če sta dve z druge strani ceste, sta dve od treh
+neuporabni. Strani pove `/api/departures` ob izbiri postaje; ključ in napis
+(„→ Tobačna“) se shranita, ker napis widget izpiše tudi brez omrežja, glava pa
+odpre stran z isto smerjo. Izbrana smer je rob v poudarku in ne poln gumb:
+poln je za dejanje („Shrani“). Če strežnik ključa ne pozna več (nov vozni red),
+odgovor nosi `smer: null`, tabla je cela in napis gre stran.
+
 **`fitsSystemWindows` povozi `padding`.** Nastavitvena dejavnost je imela na
 prvem posnetku naslov prilepljen na levi rob zaslona, čeprav je imel korenski
 pogled `padding="20dp"`. Zunanji okvir je zato samo za odmike sistema, zrak pa
