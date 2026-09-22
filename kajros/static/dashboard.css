@@ -122,8 +122,7 @@ body {
 .find-kind-train { background: #8b95a4; }
 /* Postaja je prazen obroč -- ista oblika kot oznaka, ki jo izbira nariše. */
 .find-kind-postaja { border: 2px solid #e7eaf0; box-sizing: border-box; }
-/* Leafletov `.leaflet-container a` bi povezavo pobarval modro in podčrtal. */
-.leaflet-popup-content a.najdena-tabla {
+.maplibregl-popup-content a.najdena-tabla {
   display: inline-block; margin-top: 6px;
   color: var(--accent-lit); text-decoration: none;
 }
@@ -195,35 +194,64 @@ body {
 .map-area { flex-grow: 1; position: relative; background: #12141a; min-width: 0; }
 #map { position: absolute; inset: 0; background: #12141a; }
 
-/* Leaflet privzeto rise svetlo temo -- prilagojeno na temno paleto zgoraj. */
-.leaflet-container { background: #12141a; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+/* MapLibre privzeto rise svetle oblacke -- prilagojeno na temno paleto zgoraj. */
+.maplibregl-map { font-family: 'IBM Plex Sans', system-ui, sans-serif; }
 
-.leaflet-popup-content-wrapper {
+/* Oblacki morajo biti nad vlaki: ti so DOM kot oni, in vlak, ki se pojavi
+   za odprto kartico, bi jo sicer prekril. */
+.maplibregl-marker { z-index: 1; }
+.maplibregl-popup { z-index: 2; }
+
+.maplibregl-popup-content {
+  padding: 12px 14px;
   background: #1a1d23;
   border: 1px solid #2b303a;
   border-radius: 8px;
   color: #e7eaf0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
-.leaflet-popup-tip { background: #1a1d23; border: 1px solid #2b303a; }
-.leaflet-popup-content { margin: 12px 14px; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
-.leaflet-popup-close-button { color: #6b7480 !important; }
+/* Konica oblacka je rob tega trikotnika; barva mora biti rob okvirja. */
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: #2b303a; }
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: #2b303a; }
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #2b303a; }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #2b303a; }
+.maplibregl-popup-close-button {
+  width: 26px; height: 26px;
+  color: #6b7480; font-size: 18px; line-height: 1;
+}
+.maplibregl-popup-close-button:hover { background: none; color: #e7eaf0; }
 
-
-.leaflet-tooltip.kajros-tooltip {
-  background: #1a1d23;
-  border: 1px solid #2b303a;
-  color: #e7eaf0;
-  font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif;
+/* Ime postaje in vozilo pod miško: majhno, brez konice. */
+.kajros-tooltip .maplibregl-popup-content {
+  padding: 3px 7px;
   border-radius: 5px;
   box-shadow: none;
-}
-.leaflet-tooltip.kajros-tooltip::before { display: none; }
-
-.leaflet-tooltip.kajros-label {
-  padding: 2px 6px;
+  font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif;
   white-space: nowrap;
-  cursor: pointer;
+}
+.kajros-tooltip .maplibregl-popup-tip { display: none; }
+
+/* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
+ * Avtobus obroča nima, ker je njegova lega prava. Oznaka je desno od ikone in
+ * je del istega elementa, zato jo klik odpre tako kot ikono. */
+.train-marker { cursor: pointer; }
+.train-icon svg { display: block; }
+.train-label {
+  position: absolute;
+  left: calc(100% + 5px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  background: #1a1d23;
+  border: 1px solid #2b303a;
+  border-radius: 5px;
+  color: #e7eaf0;
+  font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif;
+  white-space: nowrap;
 }
 .train-label-line { display: flex; align-items: baseline; gap: 5px; }
 .train-label-code { font: 600 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; }
@@ -259,33 +287,27 @@ body {
 /* Tretja opomba (lokacija) nad drugo -- vse tri se lahko pojavijo hkrati. */
 .label-note-3 { bottom: 80px; }
 
-/* Gumb za lastno lego. Videz podeduje od Leafletove vrstice, da je videti
-   kot del zemljevida in ne kot nalepka na njem. */
-.locate-ctl a {
-  display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; color: #79828f;
+/* Gumb za lastno lego. Videz podeduje od MapLibrove skupine gumbov, da je
+   videti kot del zemljevida in ne kot nalepka na njem. */
+.locate-ctl button, .osvezi-ctl button {
+  display: flex; align-items: center; justify-content: center; color: #79828f;
 }
-.locate-ctl a:hover { color: #e7eaf0; }
-.locate-ctl.is-on a { color: #2f7fff; }
-.locate-ctl.is-busy a { opacity: 0.45; }
+.locate-ctl button:hover, .osvezi-ctl button:hover { color: #0f1115; }
+.locate-ctl.is-on button { color: #2f7fff; }
+.locate-ctl.is-busy button { opacity: 0.45; }
 
 /* Gumb "osveži". Vrtenje ni okras: brez njega je edini znak, da se je kaj
    zgodilo, vrstica, ki pride šele z odgovorom -- na počasni povezavi je to
    sekunda tišine in v njej človek pritisne še dvakrat. */
-.osvezi-ctl a {
-  display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; color: #79828f;
-}
-.osvezi-ctl a:hover { color: #e7eaf0; }
-.osvezi-ctl a.is-busy { color: #e7eaf0; }
-.osvezi-ctl a.is-busy svg { animation: osvezi-vrti 0.85s linear infinite; }
-.osvezi-ctl a.is-fail { color: #d1495b; }
+.osvezi-ctl button.is-busy { color: #0f1115; }
+.osvezi-ctl button.is-busy svg { animation: osvezi-vrti 0.85s linear infinite; }
+.osvezi-ctl button.is-fail { color: #d1495b; }
 
 @keyframes osvezi-vrti { to { transform: rotate(360deg); } }
 
 /* Kdor je izklopil animacije, jih je izklopil tudi tu; barva pove isto. */
 @media (prefers-reduced-motion: reduce) {
-  .osvezi-ctl a.is-busy svg { animation: none; }
+  .osvezi-ctl button.is-busy svg { animation: none; }
 }
 
 /* ---------- podrobnosti vlaka (smer D) ---------- */
@@ -362,25 +384,13 @@ body {
   border-top: 1px solid #1e2229;
 }
 
-/* Podlaga zemljevida brez barve: barvo nosijo podatki, ne pokrajina.
- * invert + hue-rotate obrne svetlo karto v temno, grayscale pobere zeleno
- * gozdov in rdečo cest, ki v tem prikazu ne pomenita ničesar. Filtriramo
- * ploščice, ne celotnega zemljevida -- markerji in oznake morajo ostati taki,
- * kot so narisani. */
-/* Podlaga je zdaj Esri "Dark Gray Canvas" in je temna ze sama -- filtra, ki
- * je invertiral OSM, ni vec. Ta je poleg tega obracal tudi barve markerjev
- * na robovih ploscic in je bil vedno le zasilna resitev. */
-body.map-quiet .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
-/* Vektorska podlaga je umirjena ze sama (barve iz tega sloga), zato je
- * zatemnitev blazja: pri Esrijevi mocnosti bi obroba proge (#11141a) utonila
- * v kopnem. Filter je na vsem platnu MapLibra, ne na ploscicah -- teh ni. */
-body.map-quiet .leaflet-gl-layer { filter: brightness(0.66) contrast(0.9); }
-
-
-/* Avtobus je puščica v smeri vožnje, vlak krog na postaji -- ker sta to
- * dve različni stvari: avtobusova lega je iz GPS, vlakova je zadnja postaja
- * z meritvijo. Enak simbol za oboje bi to razliko zabrisal. */
-.bus-marker { background: none; border: none; }
+/* Brskalnik brez WebGL2: namesto praznega okvira pove, kje je odgovor. */
+.ni-zemljevida {
+  max-width: 340px; margin: 80px auto 0; padding: 0 20px;
+  font: 400 14px/1.55 'IBM Plex Sans', system-ui, sans-serif; color: #9aa3b0;
+}
+.ni-zemljevida a { color: var(--accent-lit); }
+body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: none; }
 
 /* ---------- zemljevid na telefonu ----------
  * Stranski stolpec je 300 px; na 390 px zaslonu je za zemljevid ostalo 90 px
@@ -478,9 +488,9 @@ body.map-quiet .leaflet-gl-layer { filter: brightness(0.66) contrast(0.9); }
 
   .legend { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
   .find-list { max-height: 40vh; }
-  /* Zaprta plosca je 46 px visoka; Leafletova noga se ji umakne. Odprta jo
-     tako ali tako prekrije, ker je nad njo. */
-  .leaflet-bottom { bottom: 46px; }
+  /* Navedba vira se umakne dnu, ki ga Chromova spodnja naslovna vrstica
+     prekrije, ne da bi skrajsala postavitveno okno (glej `.sheet-toggle`). */
+  .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 46px; }
 }
 
 /* ---------- kartica vozila ----------
@@ -515,10 +525,6 @@ body.map-quiet .leaflet-gl-layer { filter: brightness(0.66) contrast(0.9); }
   font: 500 11.5px/1 'IBM Plex Sans', system-ui, sans-serif;
 }
 .veh-open:hover { color: var(--ink); border-color: var(--accent-lit); }
-
-/* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
- * Avtobus obroča nima, ker je njegova lega prava. */
-.train-marker { background: none; border: none; }
 
 /* Barvni ključi prevoznikov. Iste vrednosti kot `AGENCY_INK` v dashboard.js
    in `OPERATERJI` v scripts/preveri_paleto.py -- ce se spremenijo tu, se

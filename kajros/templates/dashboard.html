@@ -7,7 +7,7 @@
   {% set og_desc = "Kje so slovenski vlaki in avtobusi ta trenutek — edini skupni pogled obeh omrežij." %}
 {% include "_meta.html" %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
-  <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -108,6 +108,11 @@
         <label class="layer"><input type="checkbox" id="lay-labels">
           <span class="layer-key"></span>
           <span class="layer-name">Dodatna imena krajev</span><span class="layer-n"></span></label>
+        {# Nagib in stavbe od blizu. Stikalo, ker je 3D na starejsem telefonu
+           najdrazji del risanja -- in ker ga nekateri pri iskanju ulice nocejo. #}
+        <label class="layer"><input type="checkbox" id="lay-3d" checked>
+          <span class="layer-key"></span>
+          <span class="layer-name">3D od blizu</span><span class="layer-n"></span></label>
 
       </div>
 
@@ -133,8 +138,9 @@
     </main>
   </div>
 
-  <script src="/static/leaflet/leaflet.js"></script>
   <script src="{{ s('common.js') }}"></script>
-  <script src="{{ s('dashboard.js') }}"></script>
+  {#- Modul, ker MapLibre 6 je samo ES modul in ga `dashboard.js` uvozi. Moduli
+      se izvedejo za klasicnimi skripti, zato je `common.js` takrat ze tu. -#}
+  <script type="module" src="{{ s('dashboard.js') }}"></script>
 </body>
 </html>

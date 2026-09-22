@@ -9,10 +9,12 @@ tečeta v enem samem procesu (`main.py` → FastAPI z zajemom v ozadnji niti),
 frontend pa govori z njim samo prek JSON-a. Zaradi tega izbira prikaza ne
 zahteva nobene spremembe v zaledju.
 
-**Zemljevid: Leaflet, podlaga vektorska OpenFreeMap prek MapLibre**
-(22. 9. 2026). Prej rastrske ploščice (OSM, nato Esri „Dark Gray Canvas").
-MapLibre je BSD, plačljiv je Mapbox, ne MapLibre. Naše plasti ostanejo
-Leafletove; MapLibre riše samo podlago (glej `.claude/rules/zemljevid.md`).
+**Zemljevid: MapLibre, podlaga vektorska OpenFreeMap** (22. 9. 2026). Prej
+Leaflet z rastrskimi ploščicami (OSM, nato Esri „Dark Gray Canvas").
+MapLibre je BSD, plačljiv je Mapbox, ne MapLibre. Veliki zemljevid je
+MapLibre sam, ker se od blizu nagne v 3D; trije majhni (pot, podrobna pot,
+okno vožnje) ostanejo Leaflet z MapLibrom kot podlago (glej
+`.claude/rules/zemljevid.md`).
 
 ## Kaj aplikacija dela
 

@@ -24,6 +24,9 @@ paths:
   odprl. Klik ustavi razširjanje dogodka, sicer na telefonu zapre spodnjo
   ploščo. Velja na velikem zemljevidu, na trasi izbranega vozila in v oknu
   vožnje. Polmer pike je zato 3,4 namesto 2,4 px: 2,4 je manj od prsta.
+  Veliki zemljevid ima isto pravilo po svoje (`zadetek()` v `dashboard.js`):
+  dotik zadene, kar je v **12 px** od prsta, vozilo pred postajo — MapLibre
+  sicer zadene samo piko samo.
 
   **Avtobusna postajališča so svoja plast in privzeto ugasnjena.** Vseh je
   9 519 (211 kB z gzipom, 167 ms), zato se naložijo šele ob prvem vklopu --
@@ -60,12 +63,13 @@ paths:
 
   **Podlaga je vektorska OpenFreeMap** (22. 9. 2026, prej Esri „Dark Gray
   Canvas"). Odprta koda (MIT), brez ključa, registracije in omejitve ogledov,
-  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10**, ki ga Leaflet nosi
-  kot eno plast (`leaflet-maplibre-gl` 0.1.4) — vse naše plasti, geste,
-  oznake in pravila na tej strani ostanejo Leafletova. Oboje je gostovano pri
-  nas (`static/maplibre-6.10.0/`, različica v **poti**, ker `maplibre-gl.mjs`
-  uvaža sosede po relativnem imenu, Cloudflare pa statiko drži štiri ure).
-  Tuje so ploščice in pisave z `tiles.openfreemap.org`.
+  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10**. Na treh majhnih
+  zemljevidih (pot, podrobna pot, okno vožnje) ga Leaflet nosi kot eno plast
+  (`leaflet-maplibre-gl` 0.1.4) in vse ostalo ostane Leafletovo; **veliki
+  zemljevid je MapLibre sam** (glej „3D od blizu“ spodaj). Oboje je gostovano
+  pri nas (`static/maplibre-6.10.0/`, različica v **poti**, ker
+  `maplibre-gl.mjs` uvaža sosede po relativnem imenu, Cloudflare pa statiko
+  drži štiri ure). Tuje so ploščice in pisave z `tiles.openfreemap.org`.
 
   * **Slog je naš** (`static/podlaga.json`, 22 plasti): barve iz `base.css`,
     imena `name:sl` pred lokalnimi (Celovec, Trst, Gradec), „Četrtna skupnost“
@@ -78,17 +82,58 @@ paths:
     samo WebGL2. Rezerva velja brez WebGL2, kadar se knjižnica ne naloži in
     kadar slog ali opis ploščic pade **pred prvim izrisom** (preverjeno z
     `--disable-webgl` in z nedosegljivim `tiles.openfreemap.org`). Napaka ene
-    ploščice pozneje ni razlog za menjavo.
+    ploščice pozneje ni razlog za menjavo. Na velikem zemljevidu Esri riše
+    MapLibre (`naEsri()`), zato tam rezerve **brez WebGL2 ni**: stran to
+    pove in pokaže pot do tabel.
   * **„Zatemni podlago“ je pri vektorski podlagi blažja**
     (`brightness(0.66) contrast(0.9)` na `.leaflet-gl-layer`): slog je
-    umirjen že sam, Esrijeva moč bi obrobo proge utopila v kopnem.
+    umirjen že sam, Esrijeva moč bi obrobo proge utopila v kopnem. Na
+    velikem zemljevidu je platno eno in filter bi zatemnil tudi vozila, zato
+    je tam zatemnitev črna plast (`k-zatemnitev`, 0,34 = `brightness(0.66)`)
+    nad podlago in pod našimi plastmi.
   * **`maxZoom: 19` je na zemljevidu, ne le na podlagi.** Podlaga pride v
     ozadju, do takrat Leaflet meje ne pozna in približuje v neskončnost.
+  * **Navedba vira je v slogu** (`sources.omt.attribution`), ker jo veliki
+    zemljevid bere od tam in ob rezervi pokaže Esrijevo. Leafletov ovoj bere
+    `customAttribution` in slogove ne vidi, zato je ni dvakrat.
   * **Cena so podatki**, izmerjeno 22. 9. 2026 (vsota ploščic, ki jih MapLibre
     naloži; stisnjeno): pregled države na telefonu **1,27 MB** (6 ploščic;
     Esri 74 kB), namizje 3,4 MB; Ljubljana pri z13 367 kB, pri z15 1,0 MB
     (Esri 187 kB). Ploščice imajo `max-age` deset let in naslov z različico,
     zato se plačajo enkrat na napravo; MapLibre sam je 299 kB, prav tako enkrat.
+
+## 3D od blizu (veliki zemljevid)
+
+Od daleč je zemljevid raven, od Leafletovega **z15** se kamera začne nagibati
+in pri **z17,5** doseže 60°; hkrati se od ploskve do prave višine dvignejo
+stavbe (`render_height` iz OSM). Prelivanje in ne skok je bila želja
+(22. 9. 2026, po Slometovem zemljevidu, od koder sta formula nagiba in
+razpon zoomov). Stikalo „3D od blizu“ je privzeto vklopljeno.
+
+* **Leaflet nagiba ne zna**, zato je veliki zemljevid MapLibre sam. Ovoj
+  `leaflet-maplibre-gl` MapLibrovo kamero drži v Leafletovi ravnini.
+* **Nagib je lastnost približka**, ne gesta: `transformCameraUpdate` ga
+  postavi ob vsaki spremembi kamere, `touchPitch` in `pitchWithRotate` sta
+  ugasnjena, da se z njim ne prepirata. Vrtenje ostane, kompas vrne sever.
+* **`z` v naslovu ostane v Leafletovih enotah** (MapLibrov zoom + 1), ker ga
+  delijo drugi (`train.js` pelje na `&z=15`), in vse meje na strani tudi
+  (`LZ` v `dashboard.js`).
+* **Vlaki so DOM, avtobusi plast.** Oznaka vlaka je HTML z več vrsticami in
+  značko, vlakov je nekaj deset; avtobusov je ob konici 1 530 in DOM bi pri
+  vsakem premiku vsakega prestavljal posebej. Avtobus v nagibu stoji
+  **obrnjen proti gledalcu** (`icon-pitch-alignment: viewport`): položen na
+  cesto je bil pri 60° za pol nižji in med stavbami ga je bilo težko najti.
+* **Stavbe so pod napisi**, sicer stavba pokrije ime ulice za sabo. Naše
+  plasti in zatemnitev so nad stavbami.
+* **Cena v podatkih je majhna**: OpenFreeMap ima ploščice do z14, nad tem se
+  povečujejo, zato nagib doda kvečjemu kakšno ploščico na obzorju. Izmerjeno
+  (Ljubljana, Chromov dnevnik omrežja): telefon pri z17 **2 ploščici z 3D in
+  brez**; namizje 1400 × 900 pri z16 4 in 4, pri z17,5 **4 (786 kB) proti 2
+  (451 kB)**. Cena je risanje stavb, zato je stikalo.
+* **Brez WebGL2 zemljevida ni** in stran to pove z dvema povezavama; iskalnik
+  in plasti se skrijejo, ker brez zemljevida ne naredijo ničesar.
+* Slomet od blizu riše tudi **3D modele avtobusov** (three.js in GLTF, od
+  z15 naprej, pod tem ploščate ikone); tega (še) nismo prevzeli.
 
 **Med dvema meritvama pika drsi naprej po trasi — samo v oknu vožnje.**
 Lega je ob strežbi ~30 s stara (izmerjeno), kar je pri 50 km/h **več kot pol

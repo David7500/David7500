@@ -133,6 +133,8 @@ function dayLabel(isoDate) {
 // brez registracije in brez omejitve ogledov, podatki OpenStreetMap. Risanje
 // je MapLibre, ki ga Leaflet nosi kot eno plast (`leaflet-maplibre-gl`) --
 // vse nase plasti, geste in oznake ostanejo Leafletove in se ne spremenijo.
+// Veliki zemljevid (`dashboard.js`) je izjema: tam je MapLibre sam, ker
+// Leaflet kamere ne zna nagniti; od tu rabi samo konstante.
 //
 // Prej je bil Esri "Dark Gray Canvas": prave ploscice samo do z16, imena ulic
 // vpecena v podlago in brez moznosti, da bi se ugasnila posebej. Vektorska
