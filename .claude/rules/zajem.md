@@ -333,6 +333,10 @@ naraste do 17 min.
 feedova vrednost je razlika do STAREGA voznega reda, zato se ohrani ura in
 odšteje nov. Staro 15:29 +20 je 15:49 in po novem 15:28 torej +21.
 
+Preverjeno na arwenu po popravku: v minuti 161 vrstic `run` za linijo 25,
+neznanih v IJPP 5 od 538. Za Tržnico Moste je zajem ob 16:36 dal vožnji s
+16:31 +467 s, torej 16:38:47; LPP je ob 16:37:30 pisal „čez 1 min".
+
 **Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi —
 pozneje ga ni. Kadar je uvoz že tekel brez tega (arwen 22. 9.),
 ga da `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.

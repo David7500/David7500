@@ -287,7 +287,7 @@ function vrsticeZdravja(d) {
   const zel = mreze.zeleznica || {}, bus = mreze.avtobus || {}, sen = z.senca || {};
   // Vožnje iz feeda, ki jih vozni red ne pozna, zajem zavrže. 22. 9. 2026 jih
   // je bilo 16 od 662 (2,4 %) -- tri linije LPP brez vsake zamude; ostanek
-  // po popravku 4 od 662 (0,6 %), vožnje, ki jih vozni red nima več.
+  // po popravku na arwenu 5 od 538 (0,9 %).
   const nez = Object.entries(z.rt_neznanih || {});
   const nezDel = Math.max(0, ...nez.map(([, [n, vseh]]) => (vseh ? n / vseh : 0)));
   const nezR = !nez.length ? "" : nezDel >= 0.02 ? "je-slaba" : nezDel > 0 ? "je-mlacna" : "je-dobra";
