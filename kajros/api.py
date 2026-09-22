@@ -175,11 +175,24 @@ if config.PRENOS_DIR.is_dir():
 templates = Jinja2Templates(directory=_PKG_DIR / "templates")
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=256)
+def _odtis(pot: str, mtime_ns: int, velikost: int) -> str:
+    return hashlib.sha256(Path(pot).read_bytes()).hexdigest()[:8]
+
+
 def _razlicica(rel: str) -> str:
-    """Osem znakov zgoščene vsebine datoteke. Med tekom se ne spreminja."""
+    """Osem znakov zgoščene vsebine datoteke.
+
+    Predpomni se po času spremembe in velikosti, ne za ves tek: odtis, ki se
+    je ob prvi zahtevi zapisal za vedno, je razvojnemu strežniku ob popravku
+    ostal star, service worker pa je pod starim naslovom stregel staro
+    datoteko. 22. 9. 2026 je tako `dashboard.js` po prehodu na MapLibre še
+    klical Leaflet (`L is not defined`), dokler ga ni obšel Ctrl+Shift+R.
+    """
+    p = _PKG_DIR / "static" / rel
     try:
-        return hashlib.sha256((_PKG_DIR / "static" / rel).read_bytes()).hexdigest()[:8]
+        st = p.stat()
+        return _odtis(str(p), st.st_mtime_ns, st.st_size)
     except OSError:
         return ""
 

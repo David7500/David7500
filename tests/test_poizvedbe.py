@@ -2284,3 +2284,22 @@ def test_statistika_ni_v_zemljevidu_strani():
     from kajros.api import _SITEMAP
 
     assert not [p for p in _SITEMAP if "statistika" in p]
+
+
+def test_odtis_statike_sledi_popravku(tmp_path, monkeypatch):
+    """Popravljena datoteka dobi nov naslov tudi brez ponovnega zagona.
+
+    Odtis se je zapisal ob prvi zahtevi za ves tek, service worker pa je pod
+    starim naslovom stregel staro datoteko: 22. 9. 2026 je `dashboard.js` po
+    prehodu na MapLibre na razvojnem strežniku še klical Leaflet.
+    """
+    from kajros import api
+    (tmp_path / "static").mkdir()
+    f = tmp_path / "static" / "x.js"
+    f.write_text("prej")
+    monkeypatch.setattr(api, "_PKG_DIR", tmp_path)
+    prej = api.s("x.js")
+    assert prej == api.s("x.js")
+    f.write_text("potem, daljse")
+    assert api.s("x.js") != prej
+    assert api.s("ni.js") == "/static/ni.js"

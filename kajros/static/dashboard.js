@@ -127,7 +127,7 @@ map.on("moveend", mapStateToUrl);
 // ---------- podlaga ----------
 //
 // Slog je `podlaga.json`, isti kot na ostalih zemljevidih. Plasti, ki so
-// samo tukaj (stavbe v 3D, zatemnitev in vse nase), se dodajo ob nalaganju.
+// samo tukaj (stavbe v 3D in vse nase), se dodajo ob nalaganju.
 // Nase plasti imajo predpono `k-`; vse ostalo je podlaga in ta se prizge ali
 // ugasne kot celota (`osveziPodlago`).
 
@@ -150,7 +150,7 @@ function naEsri(zakaj) {
   if (esri) return;
   esri = true;
   console.warn("vektorska podlaga ni na voljo, velja Esri:", zakaj);
-  const pod = map.getLayer("k-zatemnitev") ? "k-zatemnitev" : undefined;
+  const pod = map.getLayer("k-proge-obroba") ? "k-proge-obroba" : undefined;
   const ploscice = (sloj) => ({
     type: "raster", tileSize: 256,
     // Esri ima prave ploscice samo do z16; nad tem MapLibre zadnjo raztegne.
@@ -176,8 +176,8 @@ function nastaviVir(id, data) {
   if (vir) vir.setData(data);
 }
 
-// Podlaga, dodatna imena, stavbe v 3D in zatemnitev. Vse to so plasti v
-// slogu, zato ena zanka; `getStyle()` ni primeren, ker vsakic zapise tudi vse
+// Podlaga, dodatna imena in stavbe v 3D. Vse to so plasti v slogu, zato ena
+// zanka; `getStyle()` ni primeren, ker vsakic zapise tudi vse
 // podatke vseh virov (9 519 postajalisc).
 function osveziPodlago() {
   if (!slojiDodani) return;
@@ -190,13 +190,6 @@ function osveziPodlago() {
     if (id === STAVBE_3D) on = on && vklop["3d"];
     vidnost(id, on);
   }
-  // Podlaga naj bo tiho: pri velikem priblizku imena ulic tekmujejo z vozili,
-  // ki so edini razlog za to stran. Prej je bil to filter CSS na platnu
-  // podlage; zdaj je platno eno in filter bi zatemnil tudi vozila, zato je
-  // zatemnitev crna plast nad podlago in pod nasimi. 0,34 je isto kot prejsnji
-  // `brightness(0.66)`, pri Esriju 0,58 isto kot njegov `brightness(0.42)`.
-  vidnost("k-zatemnitev", vklop.base && vklop.quiet);
-  map.setPaintProperty("k-zatemnitev", "fill-opacity", esri ? 0.58 : 0.34);
 }
 
 // Proga je narisana DVAKRAT: široka temna obroba spodaj, svetla črta
@@ -214,7 +207,9 @@ function dodajSloje() {
     id: STAVBE_3D, type: "fill-extrusion", source: "omt", "source-layer": "building",
     minzoom: NAGIB_OD,
     paint: {
-      "fill-extrusion-color": "#3b3f47",
+      // Barva je ista kot ploskev stavbe v slogu, da je stavba od zgoraj in
+      // od strani ena stvar.
+      "fill-extrusion-color": map.getPaintProperty("stavba", "fill-color"),
       "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"],
         NAGIB_OD, 0, NAGIB_OD + 2, ["coalesce", ["get", "render_height"], 0]],
       "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"],
@@ -222,14 +217,6 @@ function dodajSloje() {
       "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"], NAGIB_OD, 0, NAGIB_OD + 1, 0.9],
     },
   }, prviNapis);
-
-  map.addSource("k-svet", {
-    type: "geojson",
-    data: { type: "Feature", properties: {}, geometry: { type: "Polygon",
-      coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } },
-  });
-  map.addLayer({ id: "k-zatemnitev", type: "fill", source: "k-svet",
-                 paint: { "fill-color": "#000000", "fill-opacity": 0.34 } });
 
   for (const id of ["k-proge", "k-vse-trase", "k-postaje", "k-postajalisca", "k-trasa",
                     "k-trasa-skica", "k-trasa-postaje", "k-najdena", "k-jaz", "k-avtobusi"]) {
@@ -633,6 +620,19 @@ function busSvg(size, moving, ink) {
 
 const busIkona = (ink, moving) => `bus-${ink.slice(1)}-${moving ? "vozi" : "stoji"}`;
 
+// Od blizu je avtobus model v 3D (`avtobusi3d.js`), od dalec ikona. Meja je
+// tam, kjer se kamera ze vidno nagne (24° pri Leafletovem z16); od zgoraj bi
+// bil model bela skatla, ikona pa pove smer in prevoznika na prvi pogled.
+const AVTOBUS_3D_OD = 15;      // MapLibrov zoom
+let avtobusi3d = null;
+let vozila3d = [];             // kar plast 3D ta hip rise, za dotik
+
+// Model je vecji od resnicnega, sicer bi bil pri z16 dolg sedem pik: tako
+// velik kot ikona, ko se prikaze (~36 px), in blizje resnici, ko se
+// priblizas (pri z19 1,7-krat).
+const povecava3D = (z) => 3.5 * 2 ** (-(z - 16) * 0.5);
+const vidni3D = () => !!avtobusi3d && vklop["3d"] && map.getZoom() >= AVTOBUS_3D_OD;
+
 // Slike avtobusov za plast: ena na barvo in stanje (vozi / stoji).
 async function dodajAvtobuse() {
   const barve = [...new Set([BUS_INK, ...Object.values(AGENCY_INK)])];
@@ -660,7 +660,49 @@ async function dodajAvtobuse() {
       "icon-ignore-placement": true,
     },
   });
+  avtobusi3d = avtobusi3D({
+    id: "k-avtobusi-3d",
+    inki: { ...AGENCY_INK, drugi: BUS_INK },
+    vidna: vidni3D,
+    povecava: povecava3D,
+  });
+  map.addLayer(avtobusi3d.plast);
   uveljavi();
+}
+
+// Plasti 3D damo samo vozila v sliki in pas okrog nje: brez tega gre ob
+// konici 1 500 modelov skozi risanje na vsak premik.
+function posodobi3D() {
+  if (!avtobusi3d) return;
+  const vidni = new Set(LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag));
+  const b = map.getBounds();
+  const dx = (b.getEast() - b.getWest()) / 2;
+  const dy = (b.getNorth() - b.getSouth()) / 2;
+  vozila3d = [];
+  for (const v of busByKey.values()) {
+    const model = busGroup(v);
+    if (!vidni.has(model)) continue;
+    if (v.lon < b.getWest() - dx || v.lon > b.getEast() + dx
+        || v.lat < b.getSouth() - dy || v.lat > b.getNorth() + dy) continue;
+    vozila3d.push({ lon: v.lon, lat: v.lat, smer: v.bearing ?? 0, model, kljuc: busKey(v) });
+  }
+  avtobusi3d.nastavi(vozila3d);
+}
+
+// Avtobus v 3D pod prstom. Plast 3D ni v `queryRenderedFeatures`, zato
+// preverimo sami: razdalja do lege na zaslonu, polmer pa pol dolzine modela
+// (12 m krat povecava), a vsaj za prst.
+function zadetek3D(p) {
+  if (!vidni3D()) return null;
+  const r = Math.max(18, (6 * povecava3D(map.getZoom())) / mppZdaj());
+  let naj = null, najd = r;
+  for (const a of vozila3d) {
+    const q = map.project([a.lon, a.lat]);
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d < najd) { najd = d; naj = a; }
+  }
+  return naj && { layer: { id: "k-avtobusi" }, properties: { kljuc: naj.kljuc },
+                  geometry: { type: "Point", coordinates: [naj.lon, naj.lat] } };
 }
 
 function busTooltipHtml(v) {
@@ -692,6 +734,7 @@ function renderBuses(list) {
     });
   }
   nastaviVir("k-avtobusi", { type: "FeatureCollection", features });
+  posodobi3D();
   // Odprta kartica gre z vozilom; ce ga ni vec, gre tudi ona.
   if (kartica && kartica.__kljuc) {
     const v = busByKey.get(kartica.__kljuc);
@@ -717,6 +760,8 @@ let najdenaOkno = null;
 
 // Najblizje, kar je pod prstom: vozilo pred postajo, postaja pred postajo.
 function zadetek(p) {
+  const v3d = zadetek3D(p);
+  if (v3d) return v3d;
   const sloji = ["k-avtobusi", "k-najdena", ...IMENA].filter((id) => map.getLayer(id));
   const r = DOTIK_PX;
   const f = map.queryRenderedFeatures([[p.x - r, p.y - r], [p.x + r, p.y + r]],
@@ -731,9 +776,17 @@ function zadetek(p) {
   return naj;
 }
 
+// Metrov na piksel v sredini slike; za velikost modela na zaslonu.
+function mppZdaj() {
+  return 40075016.686 * Math.cos((map.getCenter().lat * Math.PI) / 180)
+    / (512 * 2 ** map.getZoom());
+}
+
 function odpriKartico(v) {
   if (kartica) kartica.remove();
-  kartica = new maplibregl.Popup({ maxWidth: "280px", offset: 14 })
+  // Model v 3D stoji nad svojo lego; kartica gre nad streho, ne cezenj.
+  const nad = vidni3D() ? (3.4 * povecava3D(map.getZoom())) / mppZdaj() : 0;
+  kartica = new maplibregl.Popup({ maxWidth: "280px", offset: 14 + nad })
     .setLngLat([v.lon, v.lat]).setHTML(busCardHtml(v)).addTo(map);
   kartica.__kljuc = busKey(v);
   kartica.on("close", () => { kartica = null; });
@@ -774,7 +827,7 @@ if (matchMedia("(hover: hover)").matches) {
                                  className: "kajros-tooltip", offset: 12 });
   map.on("mousemove", (e) => {
     const sloji = ["k-avtobusi", ...IMENA].filter((id) => map.getLayer(id));
-    const f = map.queryRenderedFeatures(e.point, { layers: sloji })[0];
+    const f = zadetek3D(e.point) || map.queryRenderedFeatures(e.point, { layers: sloji })[0];
     map.getCanvas().style.cursor = f ? "pointer" : "";
     if (!f) { lebdi.remove(); return; }
     const v = f.layer.id === "k-avtobusi" && busByKey.get(f.properties.kljuc);
@@ -1032,6 +1085,7 @@ let stopTimer = null;
 map.on("moveend", () => {
   clearTimeout(stopTimer);
   stopTimer = setTimeout(renderBusStops, 120);   // med vlecenjem ne prestevaj
+  posodobi3D();
 });
 
 // ---------- plasti ----------
@@ -1065,7 +1119,6 @@ const LAYERS = [
   { id: "lay-busstops", key: "busstops", def: false, sloji: ["k-postajalisca"] },
   { id: "lay-labels", key: "labels", def: false },
   { id: "lay-base", key: "base", def: true },
-  { id: "lay-quiet", key: "quiet", def: true },
   { id: "lay-3d", key: "3d", def: true },
 ];
 
@@ -1086,7 +1139,9 @@ function uveljavi() {
   if (map.getLayer("k-avtobusi")) {
     const ag = LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag);
     map.setFilter("k-avtobusi", ["in", ["get", "ag"], ["literal", ag]]);
+    map.setLayerZoomRange("k-avtobusi", 0, vklop["3d"] ? AVTOBUS_3D_OD : 24);
   }
+  posodobi3D();
   osveziPodlago();
 }
 

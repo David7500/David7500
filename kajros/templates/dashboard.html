@@ -102,9 +102,6 @@
         <label class="layer"><input type="checkbox" id="lay-base" checked>
           <span class="layer-key"></span>
           <span class="layer-name">Podlaga (ceste)</span><span class="layer-n"></span></label>
-        <label class="layer"><input type="checkbox" id="lay-quiet" checked>
-          <span class="layer-key"></span>
-          <span class="layer-name">Zatemni podlago</span><span class="layer-n"></span></label>
         <label class="layer"><input type="checkbox" id="lay-labels">
           <span class="layer-key"></span>
           <span class="layer-name">Dodatna imena krajev</span><span class="layer-n"></span></label>
@@ -139,6 +136,7 @@
   </div>
 
   <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('avtobusi3d.js') }}"></script>
   {#- Modul, ker MapLibre 6 je samo ES modul in ga `dashboard.js` uvozi. Moduli
       se izvedejo za klasicnimi skripti, zato je `common.js` takrat ze tu. -#}
   <script type="module" src="{{ s('dashboard.js') }}"></script>

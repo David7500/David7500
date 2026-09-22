@@ -85,12 +85,12 @@ paths:
     ploščice pozneje ni razlog za menjavo. Na velikem zemljevidu Esri riše
     MapLibre (`naEsri()`), zato tam rezerve **brez WebGL2 ni**: stran to
     pove in pokaže pot do tabel.
-  * **„Zatemni podlago“ je pri vektorski podlagi blažja**
-    (`brightness(0.66) contrast(0.9)` na `.leaflet-gl-layer`): slog je
-    umirjen že sam, Esrijeva moč bi obrobo proge utopila v kopnem. Na
-    velikem zemljevidu je platno eno in filter bi zatemnil tudi vozila, zato
-    je tam zatemnitev črna plast (`k-zatemnitev`, 0,34 = `brightness(0.66)`)
-    nad podlago in pod našimi plastmi.
+  * **Stikala „Zatemni podlago“ ni več** (22. 9. 2026). Nastalo je pri
+    Esrijevih ploščicah, kjer so bila imena ulic vpečena v podlago in jih
+    drugače ni bilo mogoče potisniti nazaj za vozila. V vektorskem slogu so
+    napisi svoje plasti in umirjeni že sami; uporabnik razlike med vklopom in
+    izklopom ni videl. Okno vožnje ima še stalen filter na
+    `.run-map .leaflet-gl-layer`.
   * **`maxZoom: 19` je na zemljevidu, ne le na podlagi.** Podlaga pride v
     ozadju, do takrat Leaflet meje ne pozna in približuje v neskončnost.
   * **Navedba vira je v slogu** (`sources.omt.attribution`), ker jo veliki
@@ -132,8 +132,22 @@ razpon zoomov). Stikalo „3D od blizu“ je privzeto vklopljeno.
   (451 kB)**. Cena je risanje stavb, zato je stikalo.
 * **Brez WebGL2 zemljevida ni** in stran to pove z dvema povezavama; iskalnik
   in plasti se skrijejo, ker brez zemljevida ne naredijo ničesar.
-* Slomet od blizu riše tudi **3D modele avtobusov** (three.js in GLTF, od
-  z15 naprej, pod tem ploščate ikone); tega (še) nismo prevzeli.
+* **Od Leafletovega z16 so avtobusi modeli v 3D** (`avtobusi3d.js`), pod tem
+  ikone. Meja je tam, kjer se kamera že vidno nagne; od zgoraj bi bil model
+  bela škatla. Vsak prevoznik ima **svoj model in svoje barve**: LPP zgibni
+  mestni 18 m (148 od 224 njegovih avtobusov je zgibnih), Arriva, Nomago in
+  AP Murska Sobota medkrajevni 12 m; barve so z njihovih logotipov in strani.
+  **Streha nosi barvo z legende**, ker se od zgoraj vidi samo streha.
+* **Modeli so goli WebGL2 v plasti po meri**, ne three.js (Slomet ga ima za
+  en GLTF): three.js je 172 kB stisnjen, dobra polovica MapLibra (299 kB),
+  in za nekaj škatel ni vreden nove odvisnosti. Vsa vozila
+  istega modela so en klic risanja (instanciranje). Lega gre v senčilnik kot
+  odmik od izhodišča v Sloveniji — absolutni Mercator v float32 bi pri z18
+  trepetal za metre.
+* **Model je večji od resničnega**: pri z16 ~36 px kot ikona, pri z19
+  1,7-krat (`povecava3D`). Plasti damo samo vozila v sliki in pas okrog nje
+  (`posodobi3D` ob premiku). `queryRenderedFeatures` plasti po meri ne vidi,
+  zato dotik išče sam (`zadetek3D`: razdalja do lege, polmer pol modela).
 
 **Med dvema meritvama pika drsi naprej po trasi — samo v oknu vožnje.**
 Lega je ob strežbi ~30 s stara (izmerjeno), kar je pri 50 km/h **več kot pol
