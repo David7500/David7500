@@ -178,6 +178,14 @@ prestopih. Rezerva prestopa mora ostati v verigi — brez nje „1 prestop" ne
 pove, ali zveza drži, in prav to je edino, zaradi česar je prestop vreden
 pozornosti.
 
+**Brez podatka ni isto kot točno.** Vožnja, o kateri feed danes ni povedal
+ničesar, nosi v verigi sivo „brez podatka" — isto besedo kot iskalnik zvez.
+Prej je bilo mesto prazno in se je bralo kot „vozi po voznem redu": 22. 9.
+2026 je tako stal 25 s Tržnice Moste, ki je zamujal 20 minut, ker njegov
+feed zaradi novih id-jev ni prišel do nas (`zajem.md`, „Nov vozni red, stari
+id-ji v feedu"). Kdaj velja, pove strežnik (`brez_podatka`); za drug dan
+podatka v živo ne more biti in žetona ni.
+
 **Zemljevid gre čez celo stran**, ne čez cel zaslon — isti razlog kot pri oknu
 vožnje: fullscreen skrije naslovno vrstico, gumb nazaj in vsak drug orientir,
 izhod pa je tipka, ki je na telefonu ni.

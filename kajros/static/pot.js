@@ -388,8 +388,12 @@ function minute(s) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
 }
 
-function zamudaHtml(z) {
-  if (!z) return "";
+// Brez podatka ni isto kot točno. Prazno mesto ob liniji se bere kot „vozi po
+// voznem redu“ -- ista beseda kot v iskalniku zvez. Kdaj je podatka res ni,
+// pove strežnik (`brez_podatka`); za drug dan ga ne more biti in molčimo.
+function zamudaHtml(n) {
+  const z = n.zamuda;
+  if (!z) return n.brez_podatka ? '<span class="zam zam-brez">brez podatka</span>' : "";
   const barva = delayColor(z);
   return `<span class="zam" style="color:${barva};border-color:${barva}55">`
     + `${escapeHtml(delayText(z, true))}</span>`;
@@ -426,7 +430,7 @@ function verigaHtml(p) {
     }
     const kdo = AGENCY[n.agency];
     const oznaka = kdo ? `${kdo} ${n.train_no}` : n.train_no;
-    cleni.push(`<span class="v-linija">${escapeHtml(oznaka)}</span>${zamudaHtml(n.zamuda)}`);
+    cleni.push(`<span class="v-linija">${escapeHtml(oznaka)}</span>${zamudaHtml(n)}`);
   }
   return cleni.join('<span class="v-loc" aria-hidden="true">›</span>');
 }

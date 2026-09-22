@@ -40,8 +40,9 @@ function razdalja(m) {
 
 // ---------------------------------------------------------------- izris
 
-function zamudaHtml(z) {
-  if (!z) return "";
+// Brez podatka ni isto kot točno -- glej `pot.js`, isto pravilo.
+function zamudaHtml(z, brez) {
+  if (!z) return brez ? '<span class="zam zam-brez">brez podatka</span>' : "";
   const barva = delayColor(z);
   const vrsta = z.vrsta ? ` <span class="zam-vrsta">${escapeHtml(z.vrsta)}</span>` : "";
   return `<span class="zam" style="color:${barva};border-color:${barva}55">`
@@ -107,7 +108,7 @@ function voznjaHtml(n) {
     <div class="korak-telo">
       <div class="korak-vrh">
         <a class="noga-linija" href="${okno}">${escapeHtml(n.train_no)}</a>
-        ${zamudaHtml(n.zamuda)}
+        ${zamudaHtml(n.zamuda, n.brez_podatka)}
         ${n.headsign ? `<span class="korak-smer">→ ${escapeHtml(n.headsign)}</span>` : ""}
       </div>
       <div class="korak-vstop"><strong>${ura(odh)}</strong> ${escapeHtml(n.od)}</div>

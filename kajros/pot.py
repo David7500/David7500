@@ -721,6 +721,11 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
             obicajno_s=(typ.get((tid, n["od_seq"])) or {}).get("median_s"))
         n["zamuda"] = stats.opis_zamude(z["delay_s"], z["delay_kind"])
         n["zamuda_od"] = z["delay_at"]
+        # Brez podatka ni isto kot točno, na zaslonu pa je bilo videti enako:
+        # prazno mesto ob liniji. 22. 9. 2026 je tako stal 25, ki je zamujal
+        # 20 minut, ker feed zanj ni prišel do nas. Samo za danes -- za drug
+        # dan podatka v živo ne more biti in beseda bi bila šum.
+        n["brez_podatka"] = now_s is not None and z["delay_s"] is None
         if z["delay_s"] is None:
             n["odhod_ocena"] = n["prihod_ocena"] = None
             continue

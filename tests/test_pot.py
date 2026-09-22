@@ -336,3 +336,29 @@ def test_nasvet_pove_koliko_hoje_bi_bilo_treba(conn, monkeypatch):
     r = pot.isci(conn, OD, dalje, D, 8 * 3600, max_hoje_s=5 * 60)
     assert r["ciljev"] == 0
     assert r["nasvet"] and r["nasvet"]["vec_hoje_min"] == 7
+
+
+def test_brez_podatka_ni_isto_kot_tocno(conn):
+    """Vožnja brez vsake besede iz feeda nosi `brez_podatka`, izmerjena ne.
+
+    22. 9. 2026 je 25, ki je zamujal 20 minut, stal v predlogu brez žetona --
+    feed zanj ni prišel do nas, zaslon pa je bil videti kot „po voznem redu".
+    Za drug dan (brez `now_s`) podatka v živo ne more biti, zato molk.
+    """
+    _voznja(conn, "t1", "LPP 25", [(1, "BLIZU", 8 * 3600 + 600),
+                                   (2, "CILJ", 8 * 3600 + 1200)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, now_s=8 * 3600 + 300)
+    noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
+    assert noga["zamuda"] is None and noga["brez_podatka"] is True
+
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
+    assert noga["brez_podatka"] is False
+
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, "
+                 "delay_arr, feed_ts) VALUES('t1', ?, 1, 240, 240, ?)", (D, 4102444800))
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, now_s=8 * 3600 + 700)
+    noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
+    assert noga["zamuda"] is not None and noga["brez_podatka"] is False

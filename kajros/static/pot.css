@@ -253,6 +253,11 @@ body.karta-velika .pot {
   padding: 1px 5px; border: 1px solid; border-radius: var(--r-sm);
 }
 .zam-vrsta { font-size: 0.7rem; color: var(--ink-mute); }
+/* Siva in brez številke: ni zamuda, ampak odsotnost podatka. */
+.zam-brez {
+  color: var(--ink-faint); border-color: var(--line);
+  font-family: var(--sans); font-weight: 400;
+}
 
 .noga-vr, .predlog-vr {
   display: block; font-size: 0.72rem; color: var(--ink-faint);
