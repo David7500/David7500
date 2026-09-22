@@ -351,6 +351,18 @@ vozila linije 15. Takega vozila nobeno pravilo povezovanja ne reši; edini
 živi vir zanj je data.lpp.si. Isti dan je feed od 16:31 naprej za linijo 15
 molčal.
 
+**Vozilo vozi NOV vozni red, feed pa mu pripne najbližji stari id — in
+prevod to popravi.** Izmerjeno 22. 9. na 14 vzorcih lege vozila, ki ga je feed
+vodil kot staro vožnjo 21:20 (460289): odmik od **novega** voznega reda
+(478164, 21:25) je bil 0 do +2 min, od starega pa +3 do +7. Feedova zamuda je
+bila +345 s, `run` pa je po prevodu zapisal **+45 s** — torej vrednost, ki se
+ujema z resnico, ne s starim voznim redom. To je hkrati dokaz, da je prevod
+prek ure pravilen tudi takrat, ko se vozni red premakne.
+
+**Širiti mejo 10 minut se ne izplača.** Pri liniji 15 je od 16:31 do 21:40 v
+feed prišla ena sama vožnja od šestih, ki bi jih večja meja lahko povezala, in
+ta je bila povezana že tako. Manjka torej **vozilo v feedu**, ne pravilo.
+
 **Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi —
 pozneje ga ni. Kadar je uvoz že tekel brez tega (arwen 22. 9.),
 ga da `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.
