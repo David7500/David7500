@@ -134,10 +134,12 @@
       </div>
       {# Dve moznosti nista spustni seznam: ta se na telefonu odpre cez pol
          zaslona in zahteva dva dotika za preklop, ki ga pove ena beseda.
-         Skrito polje ostane, da se `$("board-kind").value` bere kot prej. #}
+         Skrito polje ostane, da se `$("board-kind").value` bere kot prej.
+         „Tabla“ in ne „Smer“: smer je od 22. 9. 2026 stran ceste nad
+         rezultati, in dve izbiri z istim imenom na enem zaslonu sta uganka. #}
       <div class="field field-kind">
-        <span class="field-label">Smer</span>
-        <div class="seg" id="board-kind-seg" role="group" aria-label="Smer">
+        <span class="field-label">Tabla</span>
+        <div class="seg" id="board-kind-seg" role="group" aria-label="Tabla">
           <button type="button" data-kind="odhodi" aria-pressed="true">odhodi</button>
           <button type="button" data-kind="prihodi" aria-pressed="false">prihodi</button>
         </div>

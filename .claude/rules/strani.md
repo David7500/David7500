@@ -450,6 +450,37 @@ ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib pa 
 zahteva za odgovor, ki ga nihče ni prosil. Izjema je poizvedba iz naslova
 (deljena povezava) — tam je odgovor prav to, po kar je človek prišel.
 
+**Avtobusna tabla ima smer: stran ceste** (22. 9. 2026). Mestno postajališče
+je dvoje in tabla je kazala oboje: Bavarski dvor 53 odhodov v pol ure, polovico
+z druge strani ceste. Na imenih z vsaj dvema postajališčema je **89 %**
+avtobusnega prometa, zato to ni posebnost LPP. Nad tablo so gumbi „obe ·
+→ Tobačna · → Vič Glince · Jadranska“; oznaka je **naslednja postaja**, ker jo
+potnik vidi na postajališču in ker je kratka (cilji so na hubu deset različnih).
+Imen se ne sklanja — „→ Tobačna“, ne „proti Tobačni“.
+
+* **Strani izračuna strežnik** (`journey.smeri_postaje`): smer vožnje do
+  naslednjega postanka in lega. `stop_id` sam tega ne pove, ker ima vsak vir
+  svojega (Bavarski dvor: dva LPP, dva IJPP, strani pa dve). Od 4 126 imen z
+  dvema postajališčema je smer pri 3 596 nasprotna (> 120°), pri 65 podobna
+  (< 45° — enosmerne ulice, kjer izbire ni). Meji: 60° in 250 m; IJPP-jev
+  Bavarski dvor je 149 m od LPP-jevega z isto naslednjo postajo, kraji z istim
+  imenom pa so kilometre narazen.
+* **„Proti centru / iz centra“ (Trola, ljbus.cc) je bilo zavrnjeno**: v
+  središču (Bavarski dvor, Konzorcij) nima pomena, medkrajevna postajališča pa
+  bi rabila drugo pravilo.
+* **Filtrira strežnik, ne brskalnik.** Tabla ima mejo 150 vrstic; rezana po
+  obeh straneh bi izbrano smer končala sredi okna, glava pa bi trdila „6 h
+  naprej“ (Hajdrihova, 14. 9. od 07:00: 150 skupaj, 79 v eni smeri). Preklop je
+  vseeno takojšen — iz cele table se izbrana stran pokaže takoj, nato pride
+  prava. Osvežitev na 30 s je odtlej **tiha** (`searchBoard(push, tiho)`):
+  prej je tablo za hip zamenjala z „iščem …“ in stran je skočila na vrh.
+* **Izbira se zapomni po pravem imenu postajališča** (`kajros:smer`), ne po
+  vnosu — „hajdri“ in „Hajdrihova“ sta ista tabla. Ključ, ki ga strežnik ne
+  pozna več, se tiho pozabi in tabla je spet cela. Ključ je katerikoli
+  `stop_id` smeri, zato ga ne podre to, da ob uvozu prevlada drugo postajališče.
+* Odhodi/prihodi so odtlej **„Tabla“**, ne „Smer“: dve izbiri z istim imenom
+  na enem zaslonu sta uganka.
+
 **Odhodna tabla združi sezonske različice.** Devet vlakov ima dva ali tri
 tripe z različnimi obdobji veljavnosti; kadar oba veljata isti dan, je bila
 ista vožnja na tabli **dvakrat**. Izmerjeno na Bled Jezeru 3. 9. 2026: LP 4208

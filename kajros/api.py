@@ -786,7 +786,8 @@ def _postaja_stran(request: Request, ime: str, network: str):
         if not pravo:
             raise HTTPException(404, "te postaje ne poznam")
         datum, now_s = _zdaj()
-        podatki = pristanek.postaja(conn, kaz, pravo, network, datum, now_s)
+        podatki = pristanek.postaja(conn, kaz, pravo, network, datum, now_s,
+                                    smer=request.query_params.get("smer"))
 
     zapis = podatki["zapis"]
     beseda = "Postajališče" if network == "avtobus" else "Postaja"
@@ -801,7 +802,8 @@ def _postaja_stran(request: Request, ime: str, network: str):
     return templates.TemplateResponse(request, "postaja.html", {
         **podatki, "opis": opis,
         "min_meritev": pristanek.MIN_MERITEV,
-        "iskalnik": f"{stran}?station={quote(pravo)}",
+        "iskalnik": f"{stran}?station={quote(pravo)}"
+                    + (f"&smer={quote(podatki['smer'])}" if podatki["smer"] else ""),
         "od_dneva": _dan(dnevi[0] if dnevi else None),
         "do_dneva": _dan(dnevi[-1] if dnevi else None),
     })
@@ -1152,11 +1154,19 @@ def api_departures(
                                description="minut naprej; privzeto 3 h za danes, cel dan sicer"),
     kind: str = Query("odhodi", pattern="^(odhodi|prihodi)$"),
     network: str = NETWORK_Q,
+    smer: str | None = Query(None, max_length=80,
+                             description="stran ceste: `kljuc` iz `smeri`"),
 ):
     """Odhodna ali prihodna tabla postaje.
 
     Najpogostejše vprašanje potnika in doslej edino, na katero API ni znal
     odgovoriti -- `connections` je zahteval izhodišče in cilj hkrati.
+
+    Pri avtobusih odgovor nosi `smeri` (strani ceste, `journey.smeri_postaje`)
+    in vsaka vrstica svojo `smer`. Stran jih filtrira sama; `smer=` je za
+    odjemalca, ki vzame samo prve vrstice -- widget na telefonu. Neznan kljuc
+    (postajalisce je ob uvozu izginilo) ni napaka: tabla je cela, `smer` v
+    odgovoru pa `null`, da odjemalec ve, da izbira ni bila upostevana.
     """
     now = datetime.now(TZ)
     date = _check_date(date) or now.date().isoformat()
@@ -1184,8 +1194,14 @@ def api_departures(
         # `now_s` samo za danasnji dan: le takrat obstaja meja med tem, kar je
         # vozilo ze prevozilo, in tem, kar je se pred njim.
         now_s = journey.now_seconds(now) if date == now.date().isoformat() else None
+        smeri = journey.smeri_postaje(conn, exact, network) if network == "avtobus" else []
+        izbrana = journey.smer_za(smeri, smer)
         rows = journey.board(conn, exact, date, from_s, window, kind,
-                             network=network, now_s=now_s)
+                             network=network, now_s=now_s,
+                             stop_ids=set(izbrana["stop_ids"]) if izbrana else None)
+        smer_od = {sid: d["kljuc"] for d in smeri for sid in d["stop_ids"]}
+        for r in rows:
+            r["smer"] = smer_od.get(r["stop_id"])
         if network == "zeleznica":
             # Obvestila o ovirah so SZ-jeva in vezana na vlak.
             notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
@@ -1194,13 +1210,17 @@ def api_departures(
             # Mestni LPP poslje eno samo vrsto obvestila -- „tu se avtobus ne
             # bo ustavil" -- in ta je vezana na POSTAJALISCE, ne na vozjno.
             # Doslej je ni videl nihce: feed jo je nosil, mi pa smo jo zavrgli.
+            # Z izbrano smerjo samo njena postajalisca: "tu se ne ustavi" z
+            # druge strani ceste bi na widgetu trdilo zaporo, ki potnika ne zadeva.
             notices = alerts.for_stops(
-                conn, [r["stop_id"] for r in conn.execute(
+                conn, izbrana["stop_ids"] if izbrana else [r["stop_id"] for r in conn.execute(
                     "SELECT stop_id FROM station WHERE name = ?", (exact,))])
         meje = _znano_do(conn, network)
     return {"station": exact, "date": date, "kind": kind, "network": network,
             **meje,
             "from_s": from_s, "window_min": window,
+            "smeri": [{k: d[k] for k in ("kljuc", "naslednje", "odhodov")} for d in smeri],
+            "smer": izbrana["kljuc"] if izbrana else None,
             "board": rows, "alerts": notices}
 
 

@@ -403,17 +403,27 @@ def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
 
 
 def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
-            datum: str, now_s: int) -> dict:
-    """Vse, kar potrebuje stran ene postaje."""
+            datum: str, now_s: int, smer: str | None = None) -> dict:
+    """Vse, kar potrebuje stran ene postaje.
+
+    `smer` je stran ceste (`journey.smeri_postaje`) -- ista izbira kot na
+    odhodni tabli, le da tu kot povezava, ker stran nima JS. Izbrana smer ne
+    spremeni kanonicnega naslova: to je ista stran, samo ozja.
+    """
     zapis = kaz["po_postaji"].get(slug(ime))
+    smeri = journey.smeri_postaje(conn, ime, network) if network == "avtobus" else []
+    izbrana = journey.smer_za(smeri, smer)
     # Eden več od prikazanih: brez tega stran ne more ločiti „toliko jih je"
     # od „toliko jih kažemo", in prvo je za potnika drug odgovor.
     odhodi = journey.board(conn, ime, datum, now_s, window_min=180,
                            kind="odhodi", limit=NAJVEC_ODHODOV + 1,
-                           network=network, now_s=now_s)
+                           network=network, now_s=now_s,
+                           stop_ids=set(izbrana["stop_ids"]) if izbrana else None)
     _dopolni_obicajno(odhodi, "typical")
     return {
         "ime": ime, "network": network, "datum": datum,
+        "smeri": smeri if len(smeri) > 1 else [],
+        "smer": izbrana["kljuc"] if izbrana else None,
         "zapis": zapis, "odhodi": odhodi[:NAJVEC_ODHODOV],
         "vseh": len(odhodi),
         "naprej": sosednje(kaz, ime),

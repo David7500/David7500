@@ -76,6 +76,17 @@
     {% endif %}
 
     <h2>Naslednji odhodi</h2>
+    {#- Stran ceste: mestno postajališče je dvoje, tabla pa je kazala oboje
+        skupaj. Povezava in ne gumb, ker stran nima JS. Imen se ne sklanja. -#}
+    {% if smeri %}
+    <nav class="smeri" aria-label="Smer vožnje s postajališča">
+      <span class="smeri-label">Smer</span>
+      <a href="?" {% if not smer %}aria-current="true"{% endif %}>obe</a>
+      {% for d in smeri %}
+      <a href="?smer={{ d.kljuc | urlencode }}" {% if smer == d.kljuc %}aria-current="true"{% endif %}>→ {{ d.naslednje | join(" · ") }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
     {% if odhodi %}
     <table class="odhodi">
       <thead>

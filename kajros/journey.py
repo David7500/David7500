@@ -348,6 +348,178 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
     return list(seen.values())[:limit]
 
 
+# ---------------------------------------------------------------- smeri postajalisca
+#
+# Mestno postajalisce ima svoj `stop_id` za vsako stran ceste, aplikacija pa
+# vse gradi po IMENU -- zato je tabla na "Bavarskem dvoru" kazala obe strani
+# skupaj: 53 odhodov v pol ure (izmerjeno 22. 9. 2026), polovico z druge
+# strani ceste. Na imenih z vsaj dvema postajaliscema je 89 % avtobusnega
+# prometa, torej to ni posebnost LPP.
+#
+# `stop_id` sam stran ceste ne pove: vsak vir ima svoje. Bavarski dvor ima
+# stiri (dva LPP, dva IJPP za primestne linije), strani pa dve. Zato se
+# postajalisca zdruzijo po **smeri voznje do naslednjega postanka** in legi.
+# Izmerjeno na avtobusnem omrezju (5 361 imen): od 4 126 imen z dvema
+# postajaliscema je smer pri 3 596 nasprotna (> 120°) in le pri 65 podobna
+# (< 45°) -- to so enosmerne ulice, kjer izbire res ni.
+#
+# "Proti centru / iz centra" (Trola, ljbus.cc) je bilo zavrnjeno: v sredisču
+# (Bavarski dvor, Konzorcij) nima pomena, medkrajevna postajalisca pa bi
+# rabila drugo pravilo.
+
+#: Najvec kota med smerema, da sta dve postajalisci ista stran ceste.
+SMER_KOT = 60
+#: Najvec razdalje med njima. IJPP ima Bavarski dvor 149 m od LPP-jevega, z
+#: isto naslednjo postajo; 250 m obe zdruzi, kraji z istim imenom pa so
+#: kilometre narazen. Strani iste ceste loci smer, ne razdalja (10--50 m).
+SMER_RAZDALJA_M = 250
+#: Oznaka smeri: naslednje postaje, dokler ne pokrijejo toliko odhodov.
+SMER_POKRITJE = 0.75
+
+_SMERI: dict[tuple, dict[str, list[dict]]] = {}
+_SMERI_MAX = 4
+
+
+def _smer_voznje(a: sqlite3.Row, b: sqlite3.Row) -> float:
+    """Azimut od `a` do `b` v radianih."""
+    f1, f2 = math.radians(a["lat"]), math.radians(b["lat"])
+    dl = math.radians(b["lon"] - a["lon"])
+    return math.atan2(math.sin(dl) * math.cos(f2),
+                      math.cos(f1) * math.sin(f2) - math.sin(f1) * math.cos(f2) * math.cos(dl))
+
+
+def _kot_med(a: float, b: float) -> float:
+    d = abs(a - b) % (2 * math.pi)
+    return math.degrees(min(d, 2 * math.pi - d))
+
+
+def smeri_postaje(conn: sqlite3.Connection, ime: str,
+                  network: str = "avtobus") -> list[dict]:
+    """Strani ceste postajalisca `ime`: `[{kljuc, stop_ids, naslednje, odhodov}]`.
+
+    `kljuc` je najprometnejsi `stop_id` smeri, a poizvedba sme nositi
+    **katerikoli** `stop_id` iz nje (`smer_za()`): IJPP in LPP se ob uvozu ne
+    posodobita hkrati in shranjen kljuc ne sme izgubiti smeri zaradi tega,
+    katero postajalisce je ta teden prometnejse.
+
+    `naslednje` so imena naslednjih postankov, ki skupaj pokrijejo tri
+    cetrtine odhodov (najvec dve) -- in to z najprometnejsega postajalisca
+    smeri, ker isto postajalisce IJPP imenuje "Ljubljana Tivoli", LPP pa
+    "Tivoli". Brez sklanjanja: "→ Tobačna", ne "proti Tobačni".
+
+    Vozni red in ne dan: stran ceste se med dnevi ne spremeni, promet pa
+    samo razvrsti smeri in izbere oznako. Predpomnjeno do uvoza GTFS.
+    """
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, network, stamp)
+    po_imenu = _SMERI.get(key) if stamp else None
+    if po_imenu is not None and ime in po_imenu:
+        return po_imenu[ime]
+
+    rows = conn.execute(
+        "SELECT s.stop_id AS sid, n.stop_id AS nxt, COUNT(*) AS k"
+        "  FROM station st"
+        "  JOIN sched s ON s.stop_id = st.stop_id"
+        "  JOIN trip t ON t.trip_id = s.trip_id AND t.network = ?"
+        "  LEFT JOIN sched n ON n.trip_id = s.trip_id"
+        "   AND n.stop_seq = (SELECT MIN(x.stop_seq) FROM sched x"
+        "                      WHERE x.trip_id = s.trip_id AND x.stop_seq > s.stop_seq)"
+        " WHERE st.name = ?"
+        " GROUP BY s.stop_id, n.stop_id",
+        (network, ime)).fetchall()
+    ids = {r["sid"] for r in rows} | {r["nxt"] for r in rows if r["nxt"]}
+    lega = {r["stop_id"]: r for r in conn.execute(
+        f"SELECT stop_id, name, lat, lon FROM station WHERE stop_id IN "
+        f"({','.join('?' * len(ids))})", tuple(ids))} if ids else {}
+
+    # Na postajalisce: vsota enotskih vektorjev smeri (utezena z odhodi),
+    # stevilo odhodov in naslednje postaje. Voznja, ki se tu konca, smeri
+    # nima -- ostane samo za prihode.
+    vek: dict[str, list] = {}
+    naslednje: dict[str, dict[str, int]] = {}
+    for r in rows:
+        v = vek.setdefault(r["sid"], [0.0, 0.0, 0])
+        a, b = lega.get(r["sid"]), lega.get(r["nxt"])
+        if a is None or b is None or (a["lat"], a["lon"]) == (b["lat"], b["lon"]):
+            continue
+        th = _smer_voznje(a, b)
+        v[0] += math.cos(th) * r["k"]
+        v[1] += math.sin(th) * r["k"]
+        v[2] += r["k"]
+        nn = naslednje.setdefault(r["sid"], {})
+        nn[b["name"]] = nn.get(b["name"], 0) + r["k"]
+
+    def kot(sid: str) -> float:
+        return math.atan2(vek[sid][1], vek[sid][0])
+
+    def razdalja(x: str, y: str) -> float:
+        return geo.haversine(lega[x]["lat"], lega[x]["lon"], lega[y]["lat"], lega[y]["lon"])
+
+    # Najprometnejse najprej: vsaka skupina se meri po svojem prvem
+    # postajaliscu, ki je tudi njen kljuc.
+    z_odhodi = sorted((s for s in vek if vek[s][2]), key=lambda s: (-vek[s][2], s))
+    skupine: list[list[str]] = []
+    for sid in z_odhodi:
+        for g in skupine:
+            if (_kot_med(kot(g[0]), kot(sid)) < SMER_KOT
+                    and razdalja(g[0], sid) < SMER_RAZDALJA_M):
+                g.append(sid)
+                break
+        else:
+            skupine.append([sid])
+    # Postajalisce, kjer se voznje samo koncajo, gre k najblizji smeri --
+    # na prihodni tabli mora biti kje, na odhodni ga ni.
+    for sid in sorted(s for s in vek if not vek[s][2]):
+        if not skupine:
+            skupine.append([sid])
+            continue
+        g = min(skupine, key=lambda g: razdalja(g[0], sid))
+        if razdalja(g[0], sid) < SMER_RAZDALJA_M:
+            g.append(sid)
+        else:
+            skupine.append([sid])
+
+    out: list[dict] = []
+    for g in skupine:
+        nn = naslednje.get(g[0], {})
+        vseh = sum(nn.values())
+        oznaka: list[str] = []
+        pokrito = 0
+        for n, k in sorted(nn.items(), key=lambda x: (-x[1], x[0])):
+            oznaka.append(n)
+            pokrito += k
+            if pokrito >= SMER_POKRITJE * vseh or len(oznaka) == 2:
+                break
+        prej = next((d for d in out if d["naslednje"] == oznaka), None)
+        if prej is not None:
+            # Dve skupini z isto naslednjo postajo sta za potnika ena izbira
+            # (zanka, obracalisce). Izmerjeno: trije taki primeri na 5 361 imen.
+            prej["stop_ids"] += g
+            prej["odhodov"] += sum(vek[s][2] for s in g)
+            continue
+        out.append({"kljuc": g[0], "stop_ids": g, "naslednje": oznaka,
+                    "odhodov": sum(vek[s][2] for s in g)})
+    out.sort(key=lambda d: (-d["odhodov"], d["kljuc"]))
+
+    if stamp:
+        if po_imenu is None:
+            if len(_SMERI) >= _SMERI_MAX:
+                _SMERI.clear()
+            po_imenu = _SMERI[key] = {}
+        po_imenu[ime] = out
+    return out
+
+
+def smer_za(smeri: list[dict], stop_id: str | None) -> dict | None:
+    """Smer, ki ji `stop_id` pripada, ali None."""
+    if not stop_id:
+        return None
+    return next((d for d in smeri if stop_id in d["stop_ids"]), None)
+
+
 # ---------------------------------------------------------------- odhodi
 
 # `first_seq` in `last_seq` bereta iz `trip`, ne iz agregata cez `sched`.
@@ -357,7 +529,7 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
 # (napolni `db.fill_trip_window`).
 _BOARD_SQL = """
 SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
-       s.stop_seq, s.arr_s, s.dep_s,
+       s.stop_id, s.stop_seq, s.arr_s, s.dep_s,
        COALESCE(s.dep_s, s.arr_s) AS t_s,
        t.first_seq, t.last_seq,
        origin.name AS origin, dest.name AS destination,
@@ -399,8 +571,12 @@ ORDER BY t_s
 def board(conn: sqlite3.Connection, station: str, service_date: str,
           from_s: int, window_min: int = 180, kind: str = "odhodi",
           limit: int = 150, network: str | None = None,
-          now_s: int | None = None, _vceraj: bool = True) -> list[dict]:
+          now_s: int | None = None, stop_ids: set[str] | None = None,
+          _vceraj: bool = True) -> list[dict]:
     """Odhodna (ali prihodna) tabla postaje.
+
+    `stop_ids` omeji tablo na ena stran ceste (`smeri_postaje()`). Brez tega
+    so vsa postajalisca tega imena skupaj, kot doslej.
 
     `kind`: "odhodi" izpusti končno postajo vožnje (tam se nič ne odpelje),
     "prihodi" izpusti izhodiščno. Brez tega bi tabla vsakega vlaka štela
@@ -426,6 +602,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     out = []
     for r in rows:
         d = dict(r)
+        if stop_ids is not None and d["stop_id"] not in stop_ids:
+            continue
         if kind == "odhodi" and d["stop_seq"] == d["last_seq"]:
             continue
         if kind == "prihodi" and d["stop_seq"] == d["first_seq"]:
@@ -599,7 +777,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         prej = (date.fromisoformat(service_date) - timedelta(days=1)).isoformat()
         vcerajsnje = board(conn, station, prej, from_s + 86400, window_min, kind,
                            limit, network,
-                           None if now_s is None else now_s + 86400, _vceraj=False)
+                           None if now_s is None else now_s + 86400, stop_ids,
+                           _vceraj=False)
         if vcerajsnje:
             out = sorted(vcerajsnje + out, key=lambda d: d["sched"])[:limit]
     return out

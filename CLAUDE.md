@@ -159,8 +159,10 @@ Kar je pri avtobusih drugače in se hitro pozabi:
   iskati se mora dati po tem, kar človek vidi na postajališču.
   Prevoznik je v `trip.agency` kot GTFS ID (1118, 1123 …); ime je v
   `common.AGENCY` in `stats.AGENCY_NAMES`.
-* **Mestno postajališče ima svoj `stop_id` za vsako smer** („Bavarski dvor“ je
-  v `station` dvakrat). Vse v aplikaciji teče po **imenu** postaje.
+* **Mestno postajališče ima svoj `stop_id` za vsako smer** in vsak vir svojega
+  („Bavarski dvor“ je v `station` štirikrat). Vse v aplikaciji teče po
+  **imenu** postaje; stran ceste loči `journey.smeri_postaje()` po smeri vožnje
+  do naslednjega postanka, tabla, widget in pristajalna stran jo nosijo kot `smer`.
 
 ## Številke vlakov
 

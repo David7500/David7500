@@ -593,6 +593,20 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
 .fav-toggle[aria-pressed="true"] { color: var(--accent-lit);
   border-color: color-mix(in srgb, var(--accent) 33%, transparent); }
 
+/* Smer na postajaliscu: stran ceste, izbrana po naslednji postaji. Nad
+   tablo in ne v obrazcu, ker jo pozna sele odgovor -- in ker se preklaplja
+   brez novega iskanja. */
+.smeri {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+  padding: 2px 2px 12px;
+}
+.smeri-label { margin-right: 3px; }
+.smer-chip[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-raised));
+}
+
 /* Prazno okno ponudi dejanje, ne nasveta. */
 .empty-act { margin-top: 12px; }
 

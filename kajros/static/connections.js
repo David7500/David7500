@@ -688,8 +688,100 @@ function setBoardKind(v) {
   });
 }
 
+// ---------- smer na postajaliscu ----------
+//
+// Mestno postajalisce je dvoje -- ena stran ceste za vsako smer -- in tabla je
+// kazala obe skupaj: na Bavarskem dvoru 53 odhodov v pol ure, polovico z
+// druge strani ceste. Strani izracuna streznik (`journey.smeri_postaje`) po
+// smeri voznje do naslednjega postanka; tu se samo izbere.
+//
+// **Filtrira streznik, ne brskalnik.** Tabla ima mejo vrstic (150), in ce bi
+// jo rezali po obeh straneh skupaj, bi se izbrana smer koncala sredi okna,
+// glava pa bi trdila "6 h naprej". Da je preklop vseeno takojsen, se iz cele
+// table izbrana stran pokaze takoj, nato pride prava.
+//
+// Izbira se zapomni **po postajaliscu**: kdor caka na Hajdrihovi proti Tobacni,
+// tam caka vsak dan. Kljuc, ki ga streznik ne pozna vec (nov vozni red), se
+// tiho pozabi -- tabla je takrat spet cela, ne prazna.
+
+const SMER_KLJUC = "kajros:smer";
+let zadnjaTabla = null;
+let izbranaSmer = null;       // kljuc smeri ali null = obe
+let smerIzNaslova = null;     // deljena povezava prevlada nad spominom, a le enkrat
+// Spomin je po PRAVEM imenu postajalisca, vnos pa je lahko delen ("hajdri").
+// Pravo ime pove sele odgovor, zato se spomin prebere tam.
+let smerIzSpominaPo = false;
+let tablaZa = null;           // vnos, za katerega velja `izbranaSmer`
+// Zaporedna stevilka zahteve po tabli. Osvezitev, ki je bila na poti, ko je
+// clovek izbral drugo smer, ne sme njegove izbire povoziti s staro tablo.
+let tablaSt = 0;
+
+function smerIzSpomina(postaja) {
+  try {
+    return (JSON.parse(localStorage.getItem(SMER_KLJUC) || "{}") || {})[postaja] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function smerVSpomin(postaja, kljuc) {
+  try {
+    const vse = JSON.parse(localStorage.getItem(SMER_KLJUC) || "{}") || {};
+    if (kljuc) vse[postaja] = kljuc;
+    else delete vse[postaja];
+    localStorage.setItem(SMER_KLJUC, JSON.stringify(vse));
+  } catch (e) { /* poln ali zavrnjen localStorage izbire ne podre */ }
+}
+
+/** "→ Tobačna" ali "→ Vič Glince · Jadranska". Imen se ne sklanja. */
+function smerNapis(d) {
+  return `→ ${(d.naslednje || []).join(" · ") || "končna"}`;
+}
+
+function smeriHtml(data) {
+  const smeri = data.smeri || [];
+  if (smeri.length < 2) return "";
+  const gumb = (kljuc, napis) => `<button type="button" class="route-chip smer-chip"
+      data-smer="${escapeHtml(kljuc || "")}" aria-pressed="${String((izbranaSmer || "") === (kljuc || ""))}"
+      >${escapeHtml(napis)}</button>`;
+  return `<div class="smeri" role="group" aria-label="Smer vožnje s postajališča">
+      <span class="field-label smeri-label" title="po naslednji postaji">Smer</span>
+      ${gumb(null, "obe")}
+      ${smeri.map((d) => gumb(d.kljuc, smerNapis(d))).join("")}
+    </div>`;
+}
+
+function izberiSmer(kljuc) {
+  izbranaSmer = kljuc || null;
+  if (!zadnjaTabla) return;
+  smerVSpomin(zadnjaTabla.station, izbranaSmer);
+  const q = new URLSearchParams(location.search);
+  if (izbranaSmer) q.set("smer", izbranaSmer);
+  else q.delete("smer");
+  history.replaceState(null, "", `?${q}`);
+  // Iz cele table se izbrana stran da pokazati takoj. Iz ze filtrirane ne --
+  // druge strani v njej ni, in "v tej smeri ni odhodov" bi bila laz za pol
+  // sekunde.
+  const takoj = !zadnjaTabla.smer;
+  if (takoj) renderBoard(zadnjaTabla);
+  searchBoard(false, takoj);
+}
+
+resultsEl.addEventListener("click", (ev) => {
+  const b = ev.target.closest(".smer-chip");
+  if (b) izberiSmer(b.dataset.smer);
+});
+
 function renderBoard(data) {
-  const list = data.board || [];
+  zadnjaTabla = data;
+  const smeri = data.smeri || [];
+  // Streznik kljuca ne pozna vec (nov vozni red): tabla je cela, izbira gre.
+  if (izbranaSmer && !smeri.some((d) => d.kljuc === izbranaSmer)) {
+    smerVSpomin(data.station, null);
+    izbranaSmer = null;
+  }
+  const vse = data.board || [];
+  const list = izbranaSmer ? vse.filter((r) => r.smer === izbranaSmer) : vse;
   const isToday = data.date === todayIso();
   const nowMs = isToday ? Date.now() : 0;
 
@@ -700,6 +792,19 @@ function renderBoard(data) {
      <span>${list.length} ${sklon(list.length, data.kind)}${data.window_min >= 1440
         ? " ta dan"
         : ` od ${String(Math.floor(data.from_s / 3600)).padStart(2, "0")}:${String(Math.floor(data.from_s % 3600 / 60)).padStart(2, "0")}, ${Math.round(data.window_min / 60)} h naprej`}</span>`;
+
+  if (!list.length && vse.length) {
+    // Druga stran ceste ima odhode, ta ne: to je druga novica kot "od tu nic
+    // ne pelje" in ima drugo dejanje.
+    resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data) + `<div class="empty-state">
+      V tej smeri v tem oknu ni ${escapeHtml(sklon(0, data.kind))}.
+      <div class="empty-act">
+        <button type="button" class="btn btn-quiet smer-chip" data-smer="">pokaži obe smeri</button>
+      </div>
+    </div>`;
+    renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
+    return;
+  }
 
   if (!list.length) {
     // "Poskusi drugo uro" je nasvet, ne dejanje -- ponoci je odgovor vedno
@@ -732,7 +837,7 @@ function renderBoard(data) {
 
   let nextIdx = -1;
   if (isToday) nextIdx = list.findIndex((r) => new Date(r.expected || r.sched).getTime() >= nowMs);
-  resultsEl.innerHTML = mejaHtml(data)
+  resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data)
     + list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station)).join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
@@ -1238,14 +1343,24 @@ async function searchAB(push) {
   }
 }
 
-async function searchBoard(push) {
+/** `tiho`: osvezitev, ne novo iskanje -- tabla ostane na zaslonu, dokler ne
+ *  pride nova. Brez tega je vsaka osvezitev na 30 s tablo za hip zamenjala s
+ *  "iščem …" in stran je skocila na vrh. */
+async function searchBoard(push, tiho = false) {
   const station = $("station").value.trim();
   const date = $("board-date").value || todayIso();
   const kind = $("board-kind").value;
   const from = $("board-time").value;
   if (!station) return;
   remember({ tab: "board", station, date, kind, from });
-  zacniIskanje(`iščem odhode — ${station} …`);
+  if (!tiho) zacniIskanje(`iščem odhode — ${station} …`);
+  // Nova postaja vzame svojo zapomnjeno smer; osvezitev iste obdrzi izbrano.
+  if (push || tablaZa !== station) {
+    izbranaSmer = IS_BUS ? smerIzNaslova : null;
+    smerIzSpominaPo = IS_BUS && !smerIzNaslova;
+    smerIzNaslova = null;
+    tablaZa = station;
+  }
   if (push) {
     // Ura se v naslovu imenuje `ob` in NE `from`. `from` je na tej strani že
     // izhodiščna postaja iskanja A–B, in `restore()` ga tako tudi bere: naslov
@@ -1254,6 +1369,7 @@ async function searchBoard(push) {
     // Eno ime, en pomen; `/api/departures` ostane pri svojem `from`.
     const q = new URLSearchParams({ station, date, kind });
     if (from) q.set("ob", from);
+    if (izbranaSmer) q.set("smer", izbranaSmer);
     history.replaceState(null, "", `?${q}`);
   }
 
@@ -1262,20 +1378,29 @@ async function searchBoard(push) {
     // dan cel dan. Vpisana ura to povozi.
     const q = from ? `&from=${encodeURIComponent(from)}&window=360` : "";
     const url = `/api/departures?station=${encodeURIComponent(station)}`
-      + `&date=${encodeURIComponent(date)}&kind=${kind}&network=${NETWORK}${q}`;
+      + `&date=${encodeURIComponent(date)}&kind=${kind}&network=${NETWORK}${q}`
+      + (izbranaSmer ? `&smer=${encodeURIComponent(izbranaSmer)}` : "");
+    const moja = ++tablaSt;
     const res = await fetch(url);
+    if (moja !== tablaSt) return;
     if (res.status === 404) {
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
       return;
     }
     const data = await res.json();
+    if (moja !== tablaSt) return;
+    if (smerIzSpominaPo) {
+      smerIzSpominaPo = false;
+      izbranaSmer = smerIzSpomina(data.station);
+    }
     renderBoard(data);
     if (push) revealResults();
-    schedulePoll(() => searchBoard(false), data.date === todayIso());
+    schedulePoll(() => searchBoard(false, true), data.date === todayIso());
   } catch (err) {
     console.error("tabla ni uspela", err);
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
-    resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
+    // Tiha osvezitev pusti staro tablo: ta ima uro in je uporabna, prazna ni.
+    if (!tiho) resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
   } finally {
     koncajIskanje();
   }
@@ -1441,6 +1566,7 @@ function restore() {
 
   if (q.has("station") && station) {
     setTab("board");
+    smerIzNaslova = q.get("smer");
     searchBoard(false);
   } else if (from && to) {
     // Polji sta izpolnjeni iz spomina ali naslova, iskanja pa NE sprozimo,
