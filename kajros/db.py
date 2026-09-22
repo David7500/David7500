@@ -134,6 +134,25 @@ CREATE TABLE IF NOT EXISTS service_day (
 );
 CREATE INDEX IF NOT EXISTS service_day_date ON service_day(date);
 
+-- Voznja, ki jo je nov vozni red zamenjal z drugim id-jem, feed v zivo pa jo
+-- se nosi pod starim. 22. 9. 2026 so linije LPP 25, 12D in 15 v IJPP dobile
+-- nove id-je, feed pa je vozila se naprej javljal pod starimi -- zajem jih je
+-- zavrgel in iskalnik je avtobus, ki je zamujal okoli 20 minut, ponudil po
+-- voznem redu.
+--
+-- Vrstica na postanek, ker se zaporedje postankov lahko spremeni, in s
+-- STARIM voznim redom, ker se feedova zamuda nanasa nanj. Nastane ob uvozu,
+-- dokler je stari vozni red se v bazi -- pozneje ga ni vec od kod vzeti.
+CREATE TABLE IF NOT EXISTS zamenjava (
+    stari_trip  TEXT NOT NULL,
+    stari_seq   INTEGER NOT NULL,
+    novi_trip   TEXT NOT NULL,
+    novi_seq    INTEGER NOT NULL,
+    stari_arr_s INTEGER,
+    stari_dep_s INTEGER,
+    PRIMARY KEY (stari_trip, stari_seq)
+);
+
 -- ---------- zajem (iz GTFS-RT) ----------
 
 -- Dnevnik sprememb. Nova vrstica samo, kadar se zamuda dejansko spremeni.

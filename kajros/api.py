@@ -885,6 +885,13 @@ def api_health():
         # stevilki. Sem sodi, ker je poceni: 0,01 ms proti 35,7 ms za
         # `MAX(feed_ts)`, ki je zunaj predpomnilnika ze prej.
         out["alerts_active"] = alerts.active_count(conn)
+        # Vožnje, ki jih feed nosi, vozni red pa ne pozna -- zajem jih
+        # zavrže. Sveže, ker ju zajem zapiše ob vsakem branju (`n/vseh`).
+        out["rt_neznanih"] = {
+            vir: [int(x) for x in v.split("/")]
+            for vir, kljuc in (("ijpp", "rt_neznanih"), ("lpp", "lpp_rt_neznanih"))
+            if (v := db.get_meta(conn, kljuc))
+        }
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out

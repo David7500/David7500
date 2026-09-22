@@ -88,6 +88,52 @@ def _service_dates(conn: sqlite3.Connection, now: datetime) -> dict[str, set[str
     return _cached(conn, "dates", days, build)
 
 
+def _zamenjave(conn: sqlite3.Connection) -> dict[str, tuple[str, dict]]:
+    """Stari id -> (novi id, {stari_seq: (novi_seq, stari_arr_s, stari_dep_s)}).
+
+    Vožnje, ki jim je nov vozni red dal drug id, feed pa jih nosi pod starim
+    (`gtfs.povezi_zamenjave`). Brez tega jih zajem zavrže kot neznane.
+    """
+    def build():
+        out: dict[str, tuple[str, dict]] = {}
+        for r in conn.execute(
+            "SELECT stari_trip, stari_seq, novi_trip, novi_seq, stari_arr_s, stari_dep_s "
+            "FROM zamenjava"
+        ):
+            out.setdefault(r[0], (r[2], {}))[1][r[1]] = (r[3], r[4], r[5])
+        return out
+    # Ključ je tudi število vrstic: `kajros zamenjave` jih doda mimo uvoza,
+    # torej brez novega `gtfs_imported_at`, in brez tega bi tekoči zajem do
+    # naslednjega uvoza bral stare.
+    n = conn.execute("SELECT COUNT(*) FROM zamenjava").fetchone()[0]
+    return _cached(conn, "zamenjave", n, build)
+
+
+def _cas_zamude(sched_row, kaj: str) -> int | None:
+    """Voznoredni čas, na katerega se nanaša zamuda za `arrival`/`departure`."""
+    t_s = sched_row[0] if kaj == "arrival" else sched_row[1]
+    if t_s is None:
+        t_s = sched_row[1] if kaj == "arrival" else sched_row[0]
+    return t_s
+
+
+def zamuda_po_zamenjavi(stu, kaj: str, stari_row, novi_row,
+                        service_date: str) -> int | None:
+    """Zamuda iz feeda, preračunana s starega voznega reda na novega.
+
+    Feedova zamuda je razlika do voznega reda, ki ga pozna feed -- starega.
+    Uro, ki jo pomeni, obdržimo in odštejemo novega: sicer bi vožnjo, ki je po
+    novem voznem redu tri minute prej, kazali tri minute prepozno.
+    """
+    d = _delay_of(stu, kaj, stari_row, service_date)
+    if d is None or novi_row is None:
+        return None
+    a, b = _cas_zamude(stari_row, kaj), _cas_zamude(novi_row, kaj)
+    if a is None or b is None:
+        return None
+    return d + a - b
+
+
 def resolve_service_date(trip_id, window, valid_dates, now: datetime) -> str | None:
     """Ugotovi, kateremu obratovalnemu dnevu pripada ta vožnja.
 
@@ -307,9 +353,7 @@ def _delay_of(stu, kaj: str, sched_row, service_date: str) -> int | None:
         return m.delay
     if not m.HasField("time") or sched_row is None:
         return None
-    t_s = sched_row[0] if kaj == "arrival" else sched_row[1]
-    if t_s is None:
-        t_s = sched_row[1] if kaj == "arrival" else sched_row[0]
+    t_s = _cas_zamude(sched_row, kaj)
     if t_s is None:
         return None
     base = datetime.combine(date.fromisoformat(service_date),
@@ -341,9 +385,18 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     now = datetime.now(TZ)
     windows = _rail_trip_windows(conn)
     valid = _service_dates(conn, now)
+    zamenjave = _zamenjave(conn)
+
+    def nas_id(tid):
+        """Pod katerim id-jem vožnjo vodimo: pod njenim ali pod naslednico."""
+        if tid in windows:
+            return tid, None
+        z = zamenjave.get(tid)
+        return z if z and z[0] in windows else (None, None)
+
     # Vozni red postankov rabimo, kadar feed da absolutni cas namesto zamude.
-    sched = _sched_times(conn, {e.trip_update.trip.trip_id for e in feed.entity
-                                if e.trip_update.trip.trip_id in windows})
+    sched = _sched_times(conn, {nas_id(e.trip_update.trip.trip_id)[0]
+                                for e in feed.entity} - {None})
     feed_ts = feed.header.timestamp or int(time.time())
     observed_at = int(time.time())
 
@@ -358,12 +411,21 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     # spremeni, hocemo izvedeti takoj in ne cez pol leta.
     non_scheduled = 0
     unpassed = 0
+    # Vožnje, ki jih feed nosi, vozni red pa ne pozna. Zavržemo jih, a jih
+    # štejemo: tako je bil 22. 9. 2026 zavržen ves zajem treh linij LPP in tega
+    # ni videl nihče, dokler potnik ni čakal na avtobus.
+    neznanih = 0
+    zamenjanih = 0
 
     for entity in feed.entity:
+        if not entity.HasField("trip_update"):
+            continue            # LPP v isti feed da tudi lege in obvestila
         tu = entity.trip_update
-        trip_id = tu.trip.trip_id
-        if trip_id not in windows:      # ni železnica -- avtobuse ignoriramo
+        trip_id, zamenjava = nas_id(tu.trip.trip_id)
+        if trip_id is None:
+            neznanih += 1
             continue
+        zamenjanih += zamenjava is not None
         trips_seen += 1
 
         service_date = tu.trip.start_date or None
@@ -383,8 +445,17 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             if stu.schedule_relationship != 0:
                 non_scheduled += 1
             seq = stu.stop_sequence
-            arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date)
-            dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date)
+            if zamenjava is None:
+                arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date)
+                dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date)
+            else:
+                p = zamenjava.get(seq)
+                if p is None:
+                    continue    # tega postanka nov vozni red nima
+                seq, stari = p[0], (p[1], p[2])
+                novi = sched.get((trip_id, seq))
+                arr = zamuda_po_zamenjavi(stu, "arrival", stari, novi, service_date)
+                dep = zamuda_po_zamenjavi(stu, "departure", stari, novi, service_date)
             if arr is None and dep is None:
                 continue        # feed o tem postanku ni povedal nicesar
 
@@ -444,7 +515,15 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     conn.commit()
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
-            "non_scheduled": non_scheduled, "feed_ts": feed_ts}
+            "non_scheduled": non_scheduled, "feed_ts": feed_ts,
+            "neznanih": neznanih, "zamenjanih": zamenjanih}
+
+
+def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
+    """Koliko voženj iz feeda je bilo zavrženih: `neznanih/vseh` za pregled."""
+    vseh = izid["trips"] + izid["neznanih"]
+    db.set_meta(conn, kljuc, f"{izid['neznanih']}/{vseh}")
+    conn.commit()
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:
@@ -456,7 +535,9 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     if feed is None:
         conn.commit()
         return {"trips": 0, "changed": 0, "skipped": 0, "unchanged": True}
-    return ingest(conn, feed)
+    izid = ingest(conn, feed)
+    _zapisi_neznane(conn, "rt_neznanih", izid)
+    return izid
 
 
 def poll_lpp(conn: sqlite3.Connection) -> dict:
@@ -480,6 +561,7 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
         conn.commit()
         return {"trips": 0, "vehicles": 0, "unchanged": True}
     izid = ingest(conn, feed)
+    _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
     lege = ingest_positions(conn, feed)
     # Obvestila so v ISTEM feedu in jih doslej nismo brali -- 181 vrstic na
     # zajem v smeti. Zdruzena so v `alerts.ingest_lpp()`, ker jih feed poslje
@@ -602,12 +684,22 @@ def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
     "kje je zdaj" pa rabi eno vrstico na vožnjo -- zato upsert.
     """
     known = {r["trip_id"] for r in conn.execute("SELECT trip_id FROM trip")}
+    windows = _rail_trip_windows(conn)
+    zamenjave = _zamenjave(conn)
     seen_at = int(time.time())
     written = 0
 
     for entity in feed.entity:
         v = entity.vehicle
         trip_id = v.trip.trip_id
+        stop_seq = v.current_stop_sequence or None
+        # Isto kot pri zamudah: vozilo, ki ga feed javlja pod starim id-jem,
+        # sodi k naslednici -- sicer ga zemljevid riše ob vožnji, ki je ni.
+        z = zamenjave.get(trip_id) if trip_id not in windows else None
+        if z is not None:
+            trip_id = z[0]
+            p = z[1].get(stop_seq)
+            stop_seq = p[0] if p else None
         if trip_id not in known or not v.HasField("position"):
             continue
         day = v.trip.start_date or ""
@@ -627,7 +719,7 @@ def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
              v.position.latitude, v.position.longitude,
              v.position.bearing if v.position.HasField("bearing") else None,
              v.position.speed if v.position.HasField("speed") else None,
-             v.current_stop_sequence or None, v.current_status,
+             stop_seq, v.current_status,
              v.vehicle.id or None, v.vehicle.license_plate or None),
         )
         written += 1

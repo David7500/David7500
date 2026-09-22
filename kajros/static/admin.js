@@ -285,6 +285,12 @@ function vrsticeZdravja(d) {
   const disk = m.disk_vseh ? m.disk_prostih / m.disk_vseh : null;
   const diskR = disk == null ? "" : disk < 0.08 ? "je-slaba" : disk < 0.2 ? "je-mlacna" : "je-dobra";
   const zel = mreze.zeleznica || {}, bus = mreze.avtobus || {}, sen = z.senca || {};
+  // Vožnje iz feeda, ki jih vozni red ne pozna, zajem zavrže. 22. 9. 2026 jih
+  // je bilo 16 od 662 (2,4 %) -- tri linije LPP brez vsake zamude; ostanek
+  // po popravku 4 od 662 (0,6 %), vožnje, ki jih vozni red nima več.
+  const nez = Object.entries(z.rt_neznanih || {});
+  const nezDel = Math.max(0, ...nez.map(([, [n, vseh]]) => (vseh ? n / vseh : 0)));
+  const nezR = !nez.length ? "" : nezDel >= 0.02 ? "je-slaba" : nezDel > 0 ? "je-mlacna" : "je-dobra";
   return [
     ["zadnja zamuda iz feeda", pred(z.last_feed_ts), feed],
     ["vlaki · zadnji zapis", pred(zel.last_feed_ts), omr(zel.last_feed_ts)],
@@ -292,6 +298,9 @@ function vrsticeZdravja(d) {
     ["vozil z lego", st(z.vehicles_with_gps), ""],
     ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`, ""],
     ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`, ""],
+    ["vožnje brez voznega reda",
+      nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—",
+      nezR],
     ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
     ["aktivnih obvestil", st(z.alerts_active), ""],
     ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, diskR],

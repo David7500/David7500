@@ -384,6 +384,167 @@ def _lpp_oznaka(kratko: str) -> str:
     return kratko[i:] if kratko[:1] == "0" else kratko
 
 
+# --- zamenjane vožnje ------------------------------------------------------
+#
+# Nov vozni red lahko vožnji da nov id, feed v živo pa jo še naprej nosi pod
+# starim: ta generator ima svojo kopijo voznega reda in je ne osveži hkrati z
+# nami. Brez tega zajem take vožnje zavrže (stari id nima več voznega reda),
+# prikaz pa novo vožnjo kaže po voznem redu, ker zanjo ne pride nič.
+#
+# Ujeto 22. 9. 2026: LPP 25, 12D in 15 so v IJPP dobili nove id-je z veljavo od
+# istega dne, feed pa je vseh 12 vozil teh linij javljal pod starimi. Iskalnik
+# je ob 15:20 ponudil 25 s Tržnice Moste ob 15:28; LPP je pisal, da pride čez
+# 25 minut. Vozilo te vožnje je bilo ob 16:01 na koncu proge, ki bi jo po
+# voznem redu doseglo ob 15:41.
+
+#: Največji premik na prvem skupnem postanku, da je nova vožnja ista kot stara.
+#: Zamenjava 22. 9. 2026 je spremenila tudi vozne čase (25: 65 -> 52 minut),
+#: zato se primerja začetek in ne povprečje čez progo.
+ZAMENJAVA_PREMIK_S = 10 * 60
+
+#: Kolikšen del postankov stare vožnje mora imeti tudi nova.
+ZAMENJAVA_DELEZ = 0.6
+
+
+def _z_voznim_redom(conn: sqlite3.Connection) -> set[str]:
+    return {r[0] for r in conn.execute(
+        "SELECT trip_id FROM trip WHERE start_s IS NOT NULL")}
+
+
+def _vozje_za(conn: sqlite3.Connection, ids: set[str], od_dne: str,
+              kljuci: set | None = None) -> dict[str, dict]:
+    """Linija, dnevi od `od_dne` naprej in postanki teh voženj.
+
+    Vožnja brez dneva od `od_dne` naprej ne pride v poštev: zamenjava je za
+    feed v živo, ta pa govori o danes. Pri LPP to izloči vse, kar je zdrsnilo
+    iz okna uvoza -- tam so id-ji po datumih in vsak dan jih nekaj izgine.
+    """
+    out: dict[str, dict] = {}
+    ids = list(ids)
+    for i in range(0, len(ids), 500):
+        kos = ids[i:i + 500]
+        for r in conn.execute(
+            "SELECT t.trip_id, t.agency, t.train_no, sd.date FROM trip t "
+            "JOIN service_day sd ON sd.service_id = t.service_id "
+            f"WHERE t.trip_id IN ({','.join('?' * len(kos))}) AND sd.date >= ?",
+            [*kos, od_dne],
+        ):
+            kljuc = (r[1], r[2])
+            if kljuci is not None and kljuc not in kljuci:
+                continue
+            v = out.setdefault(r[0], {"kljuc": kljuc, "dnevi": set(), "postanki": []})
+            v["dnevi"].add(r[3])
+    ids = list(out)
+    for i in range(0, len(ids), 500):
+        kos = ids[i:i + 500]
+        for r in conn.execute(
+            "SELECT trip_id, stop_seq, stop_id, arr_s, dep_s FROM sched "
+            f"WHERE trip_id IN ({','.join('?' * len(kos))}) ORDER BY trip_id, stop_seq",
+            kos,
+        ):
+            out[r[0]]["postanki"].append((r[1], r[2], r[3], r[4]))
+    return out
+
+
+def _poravnaj(stari: list, novi: list) -> list[tuple]:
+    """Pari postankov z istim postajališčem, v istem vrstnem redu.
+
+    Po `stop_id` in ne po `stop_seq`: nova vožnja lahko kakšno postajališče
+    izpusti ali doda, in zaporedna številka bi potem tiho zamaknila vse za njim.
+    """
+    kje: dict[str, list[int]] = defaultdict(list)
+    for i, p in enumerate(novi):
+        kje[p[1]].append(i)
+    pari, j = [], 0
+    for p in stari:
+        i = next((i for i in kje.get(p[1], ()) if i >= j), None)
+        if i is None:
+            continue
+        pari.append((p, novi[i]))
+        j = i + 1
+    return pari
+
+
+def _ura(arr: int | None, dep: int | None) -> int | None:
+    return dep if dep is not None else arr
+
+
+def povezi_zamenjave(stare: dict[str, dict], nove: dict[str, dict]) -> dict[str, tuple]:
+    """Katera nova vožnja je katera stara.
+
+    `{stari_trip: (novi_trip, [(stari_seq, novi_seq, stari_arr_s, stari_dep_s)])}`.
+
+    Par je ista linija in prevoznik, vsaj en skupen dan, večina postankov v
+    istem vrstnem redu in najmanjši premik na prvem skupnem postanku. Vsaka
+    nova vožnja dobi največ eno staro -- sicer bi dve vozili pisali v isto.
+    """
+    po_kljucu: dict[tuple, list[str]] = defaultdict(list)
+    for tid, v in nove.items():
+        po_kljucu[v["kljuc"]].append(tid)
+
+    kandidati = []
+    for stari, s in stare.items():
+        for novi in po_kljucu.get(s["kljuc"], ()):
+            n = nove[novi]
+            if not s["dnevi"] & n["dnevi"]:
+                continue
+            pari = _poravnaj(s["postanki"], n["postanki"])
+            if len(pari) < max(2, ZAMENJAVA_DELEZ * len(s["postanki"])):
+                continue
+            a, b = pari[0]
+            ta, tb = _ura(a[2], a[3]), _ura(b[2], b[3])
+            if ta is None or tb is None or abs(tb - ta) > ZAMENJAVA_PREMIK_S:
+                continue
+            kandidati.append((abs(tb - ta), -len(pari), stari, novi, pari))
+
+    kandidati.sort()
+    out: dict[str, tuple] = {}
+    vzete: set[str] = set()
+    for _, _, stari, novi, pari in kandidati:
+        if stari in out or novi in vzete:
+            continue
+        vzete.add(novi)
+        out[stari] = (novi, [(a[0], b[0], a[2], a[3]) for a, b in pari])
+    return out
+
+
+def _zapisi_zamenjave(conn: sqlite3.Connection, stare: dict, nove: dict) -> int:
+    """Zapiše nove pare in pobriše tiste, ki ne veljajo več. Vrne število parov.
+
+    Par velja, dokler ima nova vožnja vozni red in stara ne. Kar je bilo
+    povezano ob prejšnjih uvozih, ostane: starega voznega reda takrat ni več in
+    para ne bi bilo mogoče sestaviti znova.
+    """
+    conn.execute(
+        "DELETE FROM zamenjava WHERE novi_trip NOT IN "
+        "(SELECT trip_id FROM trip WHERE start_s IS NOT NULL) "
+        "OR stari_trip IN (SELECT trip_id FROM trip WHERE start_s IS NOT NULL)")
+    pari = povezi_zamenjave(stare, nove)
+    for stari, (novi, postanki) in pari.items():
+        conn.execute("DELETE FROM zamenjava WHERE stari_trip = ?", (stari,))
+        conn.executemany(
+            "INSERT INTO zamenjava(stari_trip, stari_seq, novi_trip, novi_seq,"
+            "                      stari_arr_s, stari_dep_s) VALUES(?,?,?,?,?,?)",
+            [(stari, s_seq, novi, n_seq, arr, dep) for s_seq, n_seq, arr, dep in postanki])
+    return len(pari)
+
+
+def zamenjave_iz(conn: sqlite3.Connection, stara: sqlite3.Connection) -> dict:
+    """Poveže zamenjane vožnje iz starejše kopije baze.
+
+    Za primer, ko je uvoz novega voznega reda že tekel, preden je to znal
+    sam: stari vozni red je takrat samo še v varnostni kopiji.
+    """
+    od_dne = (datetime.now(TZ).date() - timedelta(days=1)).isoformat()
+    stari_ids, novi_ids = _z_voznim_redom(stara), _z_voznim_redom(conn)
+    stare = _vozje_za(stara, stari_ids - novi_ids, od_dne)
+    nove = _vozje_za(conn, novi_ids - stari_ids, od_dne,
+                     {v["kljuc"] for v in stare.values()})
+    with conn:
+        n = _zapisi_zamenjave(conn, stare, nove)
+    return {"izginulih": len(stare), "novih": len(nove), "povezanih": n}
+
+
 def import_static(conn: sqlite3.Connection, zip_path: Path,
                   lpp_zip: Path | None = None) -> dict:
     """Uvozi železniški del GTFS zipa (in nadomestne prevoze SŽ).
@@ -540,6 +701,11 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         nagrobniki = [dict(r) for r in conn.execute(
             "SELECT t.* FROM trip t "
             "WHERE EXISTS (SELECT 1 FROM run r WHERE r.trip_id = t.trip_id)")]
+        # Stari vozni red izginulih voženj je treba prebrati ZDAJ: spodnji
+        # `DELETE` ga pobriše, in brez njega zamenjave ni mogoče sestaviti.
+        od_dne = (datetime.now(TZ).date() - timedelta(days=1)).isoformat()
+        stari_ids = _z_voznim_redom(conn)
+        izginule = _vozje_za(conn, stari_ids - set(trips), od_dne)
 
         for table in ("station", "edge", "trip", "sched", "service_day", "shape"):
             conn.execute(f"DELETE FROM {table}")
@@ -599,6 +765,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         )
         # Voznoredni okvir voznje se da izracunati sele, ko je `sched` poln.
         db.fill_trip_window(conn)
+        nove = _vozje_za(conn, set(trips) - stari_ids, od_dne,
+                         {v["kljuc"] for v in izginule.values()}) if izginule else {}
+        zamenjanih = _zapisi_zamenjave(conn, izginule, nove)
         # S pasom, tako kot vse drugo v projektu: brez njega je to cas stroja,
         # ki se od `config.TIMEZONE` lahko razlikuje.
         db.set_meta(conn, "gtfs_imported_at",
@@ -609,6 +778,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         # Koliko voznj je prezivelo uvoz samo zato, ker imajo meritve. Ce je
         # to veliko, se je vozni red mocno premesal in je vredno pogledati.
         "trips_obdrzanih": vrnjenih,
+        # Koliko izginulih voznj ima naslednico pod novim id-jem. Feed v zivo
+        # jih zna se naprej nositi pod starim; zajem ju poveze sam.
+        "trips_zamenjanih": zamenjanih,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "trips_lpp": lpp_trips,

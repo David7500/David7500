@@ -303,6 +303,46 @@ v seznamu še vedno prvi postanek, torej se prevoženi postanki osvežujejo.
 Kdor bo kdaj računal kakovost napovedi po omrežjih, mora to vedeti: pri LPP
 primerja napoved z napovedjo.
 
+## Nov vozni red, stari id-ji v feedu
+
+**Feed v živo ima svojo kopijo voznega reda in je ne osveži hkrati z nami.**
+22. 9. 2026 so linije LPP 25, 12D in 15 (prevoznik 1118 v IJPP) dobile novo
+storitev `…260922…` z novimi id-ji od istega dne. Uvoz ob 04:23 je stare
+vožnje spremenil v nagrobnike brez `sched`, feed pa je vseh 12 vozil teh
+linij še popoldne javljal pod **starimi** id-ji (452xxx, 468xxx, 460xxx).
+Zajem jih je zavrgel (`trip_id not in windows`), nove vožnje so ostale brez
+vsake zamude in lege — 0 od 62 voženj linije 25 z vrstico v `run`.
+
+Posledica na zaslonu: iskalnik poti je ob 15:20 ponudil 25 s Tržnice Moste
+ob 15:28, LPP pa je pisal, da pride čez 25 minut. Vozilo te vožnje je bilo
+ob 16:01 na koncu proge, ki bi jo po voznem redu doseglo ob 15:41; sosednja
+vožnja je imela ob 16:14 v feedu +18 do +20 min.
+
+**Nov vozni red ni le preštevilčen.** Vozni čas linije 25 je padel s 65 na
+52 minut, nekateri odhodi so se premaknili. Par zato ni „isti id + konstanta",
+ampak `gtfs.povezi_zamenjave()`: ista linija in prevoznik, skupen dan,
+vsaj 60 % postankov v istem vrstnem redu (po `stop_id`, ne `stop_seq`) in
+najmanjši premik na **prvem skupnem postanku**, največ 10 min, vsaka nova
+vožnja največ enkrat. Na zamenjavi 22. 9.: **195 od 210** izginulih voženj
+dobi par (12D 85/85, 25 88/88, N0315 3/3, 15 pa 19/34 — tam so se odhodi
+premaknili za 15–30 min in para ne ugibamo). Mediana primerjave po vsej progi
+bi bila napačno merilo: pri pravih parih zaradi krajšega voznega časa
+naraste do 17 min.
+
+**Zamuda se preračuna, ne prepiše** (`collector.zamuda_po_zamenjavi`):
+feedova vrednost je razlika do STAREGA voznega reda, zato se ohrani ura in
+odšteje nov. Staro 15:29 +20 je 15:49 in po novem 15:28 torej +21.
+
+**Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi —
+pozneje ga ni. Kadar je uvoz že tekel brez tega (arwen 22. 9.),
+ga da `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.
+
+**Kar še ostane neznano, se šteje.** `ingest` vrne `neznanih`, zajem ga zapiše
+v `meta` (`rt_neznanih`, `lpp_rt_neznanih`, oblika `n/vseh`) in pregled za
+skrbnika ga pokaže med zdravjem. Ob zamenjavi 22. 9. je bilo v IJPP 16 od 662
+(2,4 %); prag za rdečo je 2 %. Brez tega števca se je napaka videla šele,
+ko je potnik čakal na avtobus.
+
 ## Vožnja, obratovalni dan in dnevnik
 
 `trip.start_s` / `trip.end_s` sta **prvi odhod in zadnji prihod vožnje**,

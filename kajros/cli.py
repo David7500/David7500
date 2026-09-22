@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import argparse
+import sqlite3
 import json
 import sys
 from datetime import date, timedelta
@@ -276,6 +277,16 @@ def cmd_repair(args):
     print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
+def cmd_zamenjave(args):
+    """Poveži vožnje z novimi id-ji iz starejše kopije baze (npr. varnostne)."""
+    conn = db.connect()
+    db.init(conn)
+    # Samo za branje: kopija je dokaz, kakšen je bil vozni red, in `db.connect`
+    # bi ji spremenil dnevnik.
+    stara = sqlite3.connect(f"file:{Path(args.stara).resolve()}?mode=ro", uri=True)
+    print(json.dumps(gtfs.zamenjave_iz(conn, stara), indent=2, ensure_ascii=False))
+
+
 def cmd_pespoti(args):
     """Izmeri peš poti med bližnjimi postajališči (rabi peš usmerjevalnik)."""
     conn = db.connect()
@@ -454,6 +465,11 @@ def main(argv=None):
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)
+
+    a = sub.add_parser("zamenjave",
+                       help="povezi voznje z novimi id-ji; stari vozni red vzame iz kopije baze")
+    a.add_argument("stara", help="starejsa baza (razpakirana varnostna kopija izpred uvoza)")
+    a.set_defaults(func=cmd_zamenjave)
 
     a = sub.add_parser("pespoti", help="izmeri pes poti med bliznjimi postajalisci")
     a.add_argument("--znova", action="store_true", help="pobrisi in izracunaj vse")

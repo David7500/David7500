@@ -18,11 +18,11 @@ Venv je `venv/` (Python 3.12), **ne** `.venv`. Strežnik med razvojem pogosto ž
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
 CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
-`prune`, `ocena`, `seed`.
+`prune`, `ocena`, `seed`, `zamenjave`.
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (363 preizkusov).
+enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (375 preizkusov).
 `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
 zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
@@ -176,6 +176,13 @@ gredo skozi `JOIN trip`, ker je omrežje tam. Zato uvoz zdaj **obdrži vožnjo,
 ki ima meritve**, tudi če je nov vozni red nima (`gtfs.py`, „nagrobnik“ brez
 `sched`), `kajros merge` pa take vožnje prinese s seboj. `kajros repair`
 prešteje osirotele meritve.
+
+**Feed v živo zna nov id zamuditi.** 22. 9. 2026 so LPP 25, 12D in 15 dobili
+nove id-je, feed pa je vozila javljal pod starimi — zajem jih je zavrgel in
+iskalnik poti je avtobus z ~20 min zamude ponudil po voznem redu. Uvoz zato
+izginulo vožnjo poveže z naslednico (tabela `zamenjava`), zajem pa zamudo in
+lego prevede nanjo. Pregled za skrbnika šteje vožnje, ki jih feed nosi in
+vozni red ne pozna. Podrobnosti v `.claude/rules/zajem.md`.
 
 ## Strani
 
