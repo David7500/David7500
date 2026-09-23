@@ -2416,3 +2416,63 @@ Feedova zamuda je videti boljša, a meritev ni čista. V 69 % vzorcev je
 enaka zadnji izmerjeni, in ker `run` na postanku pogosto hrani kar zadnjo
 feedovo vrednost, se del tega primerja sam s sabo. Skripta je bila
 enkratna, v repozitorij ni šla.
+
+## Pregled 23. 9. 2026: pot ponoči, naslednji odhodi, tabla s starim načrtom
+
+Vse spodaj na razvojni bazi (vozni red 23. 9., `PYTHONHASHSEED=0`, ker set
+postajališč v iskanju razreši izenačene poti po zgoščevanju).
+
+**Nočna pot.** Pred 04:00 je `api.py` poklical `pot.isci()` za danes in za
+včeraj ter predloga zlepil. Troje je bilo narobe:
+
+* predlog ni nosil svojega prometnega dne, podrobnosti pa so ga iskale po
+  dnevu vprašanja: IC 350 (vožnja 453052), predlog 23. 9. ob 00:05, podrobnosti
+  pa **24. 9. ob 00:05**. Ista vožnja vozi tudi danes, zato napake ni bilo
+  videti kot napake, ampak kot pot;
+* hoja vso pot je bila na seznamu dvakrat (center -> Moste ob 00:30:
+  dve enaki „00:30 -> 01:00 peš");
+* predpomnilniki v `pot.py` so imeli eno mesto, dneva sta se izrivala:
+  **1 673-1 839 ms** na nočno vprašanje toplo. Zdaj iskanje obeh dni teče v
+  `isci()` skozi isto izbiro, predpomnilnik ima dve mesti: **151-154 ms**.
+  Hladno (včerajšnji vozni red v pomnilnik) 3,5 s.
+
+**Naslednji odhodi so preskakovali, kar odpelje v času hoje do postaje.**
+Iskanje je šlo „od doma minuto po vstopu", ne minuto po odhodu od doma. Na
+60 vprašanjih po Ljubljani (20 parov, 07:20 / 12:40 / 17:10, 27 z vozilom):
+
+| | predlogov z vozilom (povprečje) | različnih prihodov | mediana iskanja |
+|---|---|---|---|
+| prej | 1,55 | 1,52 | 125 ms |
+| popravek, 2 naslednja | 1,30 | 1,25 | 129 ms |
+| popravek, 3 naslednji | **1,67** | **1,57** | 136 ms |
+
+Prvi prihod je enak v 60 od 60. Pri dveh naslednjih se je seznam skrčil,
+ker pravi naslednji odhod pri zvezah, ki se stečejo v isti avtobus, pogosto
+povozi predlog, ki odide pozneje in pride ob isti minuti — zato tri.
+Posamezni primeri tu niso dokaz: izenačene poti se med procesi razrešijo
+različno, in isti par je pri drugem `PYTHONHASHSEED` vrnil drug seznam.
+Preskok sam je v `test_naslednji_odhod_v_casu_hoje_ni_preskocen`.
+
+Pri „biti tam do" se je isti avtobus z drugim izstopom vračal kot „prejšnja
+zveza" in izpadel kot dvojnik: 1,20 -> **1,68** predloga, različnih odhodov
+1,15 -> 1,68, najpoznejši odhod enak v 60 od 60, čas enak (133 / 135 ms).
+
+**Odhodna tabla Ljubljana AP je trajala 38-40 s** (razvojna baza, 83 vrstic).
+Vsa cena je bila `stats.typical_at_stops()`: pri 166 parih je načrtovalec
+`run` bral po `stop_seq` in si ob vsakem klicu zgradil samodejni indeks čez
+celo tabelo. Kriva je stara statistika (`sqlite_stat1` pri 44 511 vrsticah
+`run`, brez `trip_voznja`). `CROSS JOIN` vsili pravi vrstni red: **40 324 ->
+12 ms**, 1 675 vrstic enakih. Arwen je imel isti večer dober načrt (cela tabla
+0,52-0,83 s za okno treh ur podnevi) — a zaradi drugačne statistike, ne zaradi
+poizvedbe.
+
+**Kar je bilo v pregledu napačno ali ni vredno popravka:**
+
+* „Stara povezava na kazalo naslovov drži izbrisano datoteko do restarta" —
+  ne do restarta, ampak do naslednjega zbiralnika smeti: povezava ima krožne
+  reference, `clear()` je ne zapre, `gc.collect()` jo (preverjeno z
+  `/proc/self/fd`). Zapreti jo izrecno bi podrlo iskanje, ki na njej ravno
+  teče, zato ostane.
+* `zamiki()` z vožnjami, ki imajo danes vrstico v `run`, namesto vseh voženj
+  dneva: isti izid (5 829), a počasneje (1 069-1 275 ms proti 813-963 ms). Meja
+  32 766 vezav je pri 10 679 voženj dneva trikrat daleč. Ostane.

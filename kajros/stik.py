@@ -78,6 +78,8 @@ CREATE INDEX IF NOT EXISTS ix_sporocilo_cas ON sporocilo(prispelo DESC);
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _zaklep = threading.Lock()
+#: Cel sprejem od preverbe pogostosti do zapisa; glej `sprejmi()`.
+_sprejem = threading.Lock()
 #: `kljuc -> [časi pošiljanj]`. Samo v pomnilniku, glej opis modula.
 _poslana: dict[str, list[float]] = {}
 
@@ -208,16 +210,20 @@ def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
         return 0
     _preveri_zeton(zeton_iz_obrazca, zdaj)
     email, besedilo = preveri_vsebino(email, besedilo)
-    _preveri_pogostost(kljuc, zdaj)
-    _preveri_dnevni_strop(conn)
+    # Od preverbe pogostosti do zapisa je eno dejanje. Sprejem teče v niti
+    # (`api.stik_poslji`), in dve hkratni pošiljanji istega pošiljatelja bi
+    # sicer obe prešli `NA_URO`, preden bi katero zapisalo svoj čas.
+    with _sprejem:
+        _preveri_pogostost(kljuc, zdaj)
+        _preveri_dnevni_strop(conn)
 
-    cur = conn.execute(
-        "INSERT INTO sporocilo(prispelo, email, besedilo, drzava, naprava) "
-        "VALUES(?, ?, ?, ?, ?)",
-        (_zdaj().isoformat(timespec="seconds"), email, besedilo,
-         (drzava or "")[:2].upper() or None, (naprava or "")[:20] or None))
-    conn.commit()
-    _zabelezi_poslano(kljuc, zdaj)
+        cur = conn.execute(
+            "INSERT INTO sporocilo(prispelo, email, besedilo, drzava, naprava) "
+            "VALUES(?, ?, ?, ?, ?)",
+            (_zdaj().isoformat(timespec="seconds"), email, besedilo,
+             (drzava or "")[:2].upper() or None, (naprava or "")[:20] or None))
+        conn.commit()
+        _zabelezi_poslano(kljuc, zdaj)
     return int(cur.lastrowid)
 
 

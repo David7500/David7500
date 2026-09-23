@@ -1031,10 +1031,6 @@ def today(when: datetime | None = None) -> str:
     return (when or datetime.now(TZ)).date().isoformat()
 
 
-def yesterday(when: datetime | None = None) -> str:
-    return ((when or datetime.now(TZ)).date() - timedelta(days=1)).isoformat()
-
-
 # ---------------------------------------------------------------- dva prestopa
 
 # Koliko nog (voznj) najvec. Stiri noge = trije prestopi.

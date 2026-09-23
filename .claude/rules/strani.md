@@ -382,6 +382,13 @@ pošlje, mu pošlje pot, ne svojega brskalnika. `trip_id` LPP nosi navpičnice,
 zato gre skozi `encodeURIComponent`, ločnica pa se bere **z desne** — sicer se
 id z dvopičjem razlomi na napačnem mestu.
 
+**`date` je prometni dan predloga, `dan` dan vprašanja** (23. 9. 2026). Pred
+04:00 iskanje bere tudi včerajšnji prometni dan (`pot.NOCNI_S`) — IC 350 ob
+00:05 je včerajšnji. Povezava je nosila dan vprašanja in podrobnosti so
+pokazale **jutrišnjo** vožnjo ob isti uri. Zdaj vsak predlog nosi `datum`,
+podrobnosti pa `zivo` (ali odštevati in osveževati zamude) — prej je stran to
+sklepala iz „dan je danes". Glava kaže koledarski dan odhoda, ne prometnega.
+
 **Kartica predloga je povezava, zato klik ne izbira.** Pot se na zemljevidu
 seznama pokaže ob dotiku ali fokusu; na telefonu to ne naredi ničesar, kar bi
 bilo v napoto, na namizju pa ostane predogled.

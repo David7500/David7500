@@ -19,7 +19,10 @@ const KOLO = KMH > 7;
 
 let K = null;
 let PREDLOG = null;
-let DATUM = null;
+// Ali je pot "zdaj": samo takrat ima smisel odštevati do odhoda in osveževati
+// zamude. Pove strežnik -- prej je stran sklepala iz "dan je danes", in nočna
+// vožnja, ki nosi včerajšnji prometni dan, je ostala brez obojega.
+let ZIVO = false;
 // Črte na zemljevidu po nogah: vodenje eno poudari, preračun eno zamenja.
 const CRTE = [];
 
@@ -418,7 +421,7 @@ function tockaNa(t, kum, m) {
 const V = {
   aktivno: false, i: -1, tocke: [], kum: [], koraki: [],
   sledi: true, izven: 0, preracun: 0, najavljen: -1, prispel: false,
-  listaj: 0, puscica: null, zaklep: null, osvezi: null, zacel: false,
+  listaj: 0, puscica: null, zaklep: null, osvezi: null, zamude: null, zacel: false,
 };
 
 // Dokler nisi bil na poti, je nisi začel: "vodi me do cilja" se pogosto
@@ -485,6 +488,7 @@ function zacniVodenje(i) {
 function koncajVodenje() {
   V.aktivno = false;
   clearInterval(V.osvezi);
+  clearTimeout(V.zamude);
   document.body.classList.remove("vodenje");
   $("#vod-manever").hidden = true;
   $("#vod-spodaj").hidden = true;
@@ -541,14 +545,20 @@ function puscica(ll, smer) {
   V.puscica.setLngLat([ll[1], ll[0]]).setRotation(smer);
 }
 
+// Koledarski dan odhoda, ne prometni dan: nočni avtobus ob 00:05 nosi
+// včerajšnji datum, v glavi pa mora pisati dan, ko potnik gre od doma.
+function danOdhoda(pr) {
+  return new Date(pr.odhod * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+}
+
 function voziloHtml(nv, ostaneS) {
   const kdo = AGENCY[nv.agency] ? `${AGENCY[nv.agency]} ${nv.train_no}` : nv.train_no;
   const odh = nv.odhod_ocena || nv.odhod;
   const zam = nv.zamuda ? " " + zamudaHtml(nv.zamuda) : "";
   let vrstica = `<strong>${escapeHtml(kdo)}</strong> ${
     nv.headsign ? `→ ${escapeHtml(nv.headsign)} ` : ""}odpelje ob <strong>${ura(odh)}</strong>${zam}`;
-  // Odštevanje samo za danes: za jutrišnjo pot je "čez 1 080 minut" šum.
-  if (DATUM !== todayIso()) return vrstica;
+  // Odštevanje samo za pot, ki je zdaj: za jutrišnjo je "čez 1 080 minut" šum.
+  if (!ZIVO) return vrstica;
   const cez = odh - Date.now() / 1000;
   const rezerva = cez - ostaneS;
   if (cez < -60) return vrstica + ' · <span class="vod-stanje je-slabo">je že odpeljal</span>';
@@ -713,7 +723,8 @@ async function preracunaj() {
 // Zamude se med hojo spreminjajo; odštevanje do odhoda mora slediti. Hoja
 // sama se ne osvežuje -- preračunana pot bi se sicer vrnila na staro.
 async function osveziZamude() {
-  if (!V.aktivno || DATUM !== todayIso()) return;
+  clearTimeout(V.zamude);
+  if (!V.aktivno || !ZIVO) return;
   try {
     const r = await fetch(`/api/pot/podrobno?${naslovPodrobno()}`);
     if (r.ok) {
@@ -728,7 +739,11 @@ async function osveziZamude() {
       posodobi(false, true);
     }
   } catch (e) { /* naslednjič */ }
-  if (V.aktivno) setTimeout(osveziZamude, 30000);
+  // Ena sama veriga: `zacniVodenje` se kliče tudi med vodenjem ("ko izstopiš:
+  // vodi me do cilja"), in vsak klic je prej začel svojo -- na tretji nogi so
+  // tri osveževale isto pot, vsaka z OSRM za vsako pešpot.
+  clearTimeout(V.zamude);
+  if (V.aktivno) V.zamude = setTimeout(osveziZamude, 30000);
 }
 
 $("#vod-konec").addEventListener("click", koncajVodenje);
@@ -762,7 +777,10 @@ function nazajUrl() {
   if (Q.get("do_lat")) q.set("do", t("do_lat", "do_lon"));
   // Nazaj na isto vprašanje: rok, dan in kolo so del njega.
   if (Q.get("tam")) q.set("tam", Q.get("tam"));
-  if (Q.get("date")) q.set("dan", Q.get("date"));
+  // Dan vprašanja, ne dan vožnje: ponoči je nočni avtobus včerajšnji, seznam
+  // pa je bil iskan za danes. Stare povezave `dan` nimajo in sta ista.
+  const dan = Q.get("dan") || Q.get("date");
+  if (dan && dan !== todayIso()) q.set("dan", dan);
   if (KOLO) q.set("kolo", "1");
   return q.toString() ? `/app/pot?${q}` : "/app/pot";
 }
@@ -785,7 +803,7 @@ async function nalozi() {
     const d = await r.json();
     const pr = d.predlog;
     PREDLOG = pr;
-    DATUM = d.datum;
+    ZIVO = Boolean(d.zivo);
     $("#stanje").textContent = "";
     $("#glava").innerHTML = `
       <div class="podr-ure"><strong>${ura(pr.odhod_ocena || pr.odhod)}</strong>
@@ -793,7 +811,7 @@ async function nalozi() {
       <div class="podr-meta">${minute(pr.trajanje_s)}${
         pr.hoje_s >= 60 ? ` · ${minute(pr.hoje_s)} ${KOLO ? "do postaj" : "hoje"}` : ""} · ${
         pr.prestopov === 0 ? "brez prestopa"
-          : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(d.datum)}</div>`;
+          : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(danOdhoda(pr))}</div>`;
     $("#koraki").innerHTML = korakiHtml(pr);
     narisi(pr);
     $("#koraki").addEventListener("click", (e) => {

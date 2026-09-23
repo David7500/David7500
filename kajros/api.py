@@ -25,6 +25,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, hoja, journey, lpp, naslovi, obisk,
@@ -450,15 +451,39 @@ async def stik_poslji(request: Request):
     kaj neznanec sme. Ob napaki se stran izriše znova z vpisanim besedilom —
     kdor je napisal odstavek in dobil napačen e-naslov nazaj, ga ne sme
     izgubiti.
+
+    **Baza gre v nit, ne v zanko dogodkov.** Pot je `async`, ker telo bere po
+    kosih; pisanje v sqlite pa čaka na zaklep do `timeout=30`, in dokler zajem
+    piše (nočni obrez dnevnika, uvoz voznega reda), bi v zanki stal ves
+    strežnik, ne le ta zahteva.
     """
     _stik_vklopljen()
-    # 64 kB je ~16× več od dovoljenega sporočila; večje telo je napad, ne
-    # obrazec, in ga zavrnemo, preden ga sploh preberemo v pomnilnik.
-    if int(request.headers.get("content-length") or 0) > 65536:
-        raise HTTPException(413, "Sporočilo je predolgo.")
-    polja = parse_qs((await request.body()).decode("utf-8", "replace"),
-                     keep_blank_values=True)
+    polja = parse_qs(await _preberi_telo(request), keep_blank_values=True)
+    return await run_in_threadpool(_stik_sprejmi, request, polja)
 
+
+#: 64 kB je ~16× več od dovoljenega sporočila; večje telo je napad, ne obrazec.
+NAJVEC_TELA = 65536
+
+
+async def _preberi_telo(request: Request) -> str:
+    """Telo obrazca, a nikoli več kot `NAJVEC_TELA` v pomnilnik.
+
+    `Content-Length` sam ne zadošča: telo brez njega (chunked) je šlo z
+    `request.body()` v pomnilnik v celoti, ne glede na velikost. Zato se bere
+    po kosih in prekine, brž ko meja pade.
+    """
+    if int(request.headers.get("content-length") or 0) > NAJVEC_TELA:
+        raise HTTPException(413, "Sporočilo je predolgo.")
+    telo = bytearray()
+    async for kos in request.stream():
+        telo += kos
+        if len(telo) > NAJVEC_TELA:
+            raise HTTPException(413, "Sporočilo je predolgo.")
+    return telo.decode("utf-8", "replace")
+
+
+def _stik_sprejmi(request: Request, polja: dict):
     def p(ime: str) -> str:
         return (polja.get(ime) or [""])[0]
 
@@ -1184,11 +1209,8 @@ def api_departures(
     now = datetime.now(TZ)
     date = _check_date(date) or now.date().isoformat()
     if from_time:
-        try:
-            h, m = (int(x) for x in from_time.split(":")[:2])
-        except ValueError:
-            raise HTTPException(400, "from mora biti HH:MM")
-        from_s = h * 3600 + m * 60
+        # Isto preverjanje kot pri poti: "99:99" je bil prej prazna tabla z 200.
+        from_s = _ura_s(from_time, "from")
     elif date == now.date().isoformat():
         # Nekaj minut nazaj: vlak, ki je ravnokar odpeljal (ali zamuja), je
         # se vedno tisto, kar clovek na peronu isce.
@@ -1663,6 +1685,9 @@ def api_history(train_no: str, days: int = Query(90, ge=1, le=3650),
     `trip` zamejí na eno vožnjo. Brez njega se pri avtobusu sešteje vseh 217
     voženj linije, in ker profil teče po zaporedni številki postanka, se pod
     isto oznako znajdeta obe smeri."""
+    # Tipkarska napaka ni "izpusti nič": povprečje bi tiho vsebovalo vožnjo,
+    # ki jo prikaz riše zraven. Isto kot pri `/predict`.
+    exclude_date = _check_date(exclude_date)
     with _conn() as conn:
         return stats.history(conn, train_no, days, exclude_date, trip)
 
@@ -2098,22 +2123,29 @@ def api_pot(
     od, do = (od_lat, od_lon), (do_lat, do_lon)
     kako = {"max_hoje_s": hoje * 60, "kmh": kmh}
 
+    # Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan; poišče ga
+    # `pot.isci()` sam (`pot.NOCNI_S`), da gredo predlogi obeh dni skozi isto
+    # izbiro in vsak nosi svoj dan.
     with _conn() as conn:
         if prihod:
             return pot.isci_do(conn, od, do, dan, _ura_s(prihod, "prihod"), zdaj_s, **kako)
-
         odhod_s = _ura_s(ob, "ob") if ob else journey.now_seconds(now)
-        izid = pot.isci(conn, od, do, dan, odhod_s, now_s=zdaj_s, **kako)
-        # Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan in ima `dep_s`
-        # čez 86 400 (največji v voznem redu je 121 680, torej 33:48). Brez
-        # tega vprašanje ob pol enih zjutraj ne najde ničesar, čeprav vozi.
-        if not ob and now.hour < 4:
-            vcerajsnji = pot.isci(conn, od, do, journey.yesterday(now), odhod_s + 86400,
-                                  now_s=(zdaj_s + 86400) if zdaj_s is not None else None,
-                                  **kako)
-            izid["predlogi"] = sorted(izid["predlogi"] + vcerajsnji["predlogi"],
-                                      key=lambda p: (p["prihod"], p["hoje_s"]))
-    return izid
+        return pot.isci(conn, od, do, dan, odhod_s, now_s=zdaj_s, **kako)
+
+
+def _zdaj_za_dan(dan: str, now: datetime) -> int | None:
+    """"Zdaj" v sekundah od polnoči prometnega dne `dan`, ali `None`.
+
+    Danes je to ura, ponoči pa tudi včeraj -- z 86 400 več: nočni avtobus ob
+    00:05 nosi včerajšnji prometni dan in je prav takrat na poti. Za vse
+    ostalo meje med prevoženim in tem, kar je pred vozilom, ni.
+    """
+    s = journey.now_seconds(now)
+    if dan == now.date().isoformat():
+        return s
+    if dan == (now.date() - timedelta(days=1)).isoformat() and s < pot.NOCNI_S:
+        return s + 86400
+    return None
 
 
 @app.get("/api/pot/podrobno")
@@ -2141,7 +2173,7 @@ def api_pot_podrobno(
         raise HTTPException(400, "pot brez nog")
     if len(spec) > pot.MAX_NOG:
         raise HTTPException(400, f"največ {pot.MAX_NOG} voženj")
-    zdaj_s = journey.now_seconds(now) if dan == now.date().isoformat() else None
+    zdaj_s = _zdaj_za_dan(dan, now)
     with _conn() as conn:
         try:
             return pot.podrobnosti(conn, spec, (od_lat, od_lon), (do_lat, do_lon),
@@ -2332,7 +2364,12 @@ async def admin_sporocilo(request: Request, id_: int):
     ne podrobnost. Žeton je isti kot za pregled; brez njega poti ni (404).
     """
     _preveri_admina(request)
-    polja = parse_qs((await request.body()).decode("utf-8", "replace"))
+    polja = parse_qs(await _preberi_telo(request))
+    # Baza v nit, iz istega razloga kot pri `/stik`.
+    return await run_in_threadpool(_admin_sporocilo, id_, polja)
+
+
+def _admin_sporocilo(id_: int, polja: dict) -> dict:
     with _conn() as conn:
         if (polja.get("akcija") or [""])[0] == "brisi":
             return {"id": id_, "izbrisano": stik.izbrisi(conn, id_)}

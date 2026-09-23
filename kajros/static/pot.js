@@ -578,8 +578,13 @@ function podrobnoUrl(p) {
     do_lat: S.do.lat.toFixed(5), do_lon: S.do.lon.toFixed(5),
   });
   // Dan je del poti: jutrišnja vožnja z današnjim dnem je druga vožnja ali
-  // nobena. Doslej ga povezava ni nosila in podrobnosti so kazale danes.
-  if (S.izidi && S.izidi.datum !== todayIso()) q.set("date", S.izidi.datum);
+  // nobena. To je dan PREDLOGA, ne vprašanja -- ponoči je nočni avtobus
+  // včerajšnji, in z dnem vprašanja so podrobnosti kazale jutrišnjo vožnjo ob
+  // isti uri. Dan vprašanja gre posebej (`dan`), za pot nazaj na seznam.
+  const vprasanje = S.izidi && S.izidi.datum;
+  const dan = p.datum || vprasanje;
+  if (dan && dan !== todayIso()) q.set("date", dan);
+  if (vprasanje && vprasanje !== dan) q.set("dan", vprasanje);
   if (S.izidi && S.izidi.kmh > 7) q.set("kmh", S.izidi.kmh);
   if (S.izidi && S.izidi.prihod_do) q.set("tam", ura(S.izidi.prihod_do));
   return `/app/pot/podrobno?${q}`;

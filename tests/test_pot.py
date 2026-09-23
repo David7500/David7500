@@ -501,3 +501,113 @@ def test_kolo_meri_eno_postajalisce_na_ime(conn, monkeypatch):
     assert len(merjeni) == 1
     assert set(kolo) == {"DALEC", "DALEC2"}
     assert abs(kolo["DALEC2"] - kolo["DALEC"]) <= 10
+
+
+# ---------------------------------------------------------------- naslednji odhodi
+
+def test_naslednji_odhod_v_casu_hoje_ni_preskocen(conn):
+    """Naslednji odhod se išče od doma minuto pozneje, ne minuto po vstopu.
+
+    Prej je iskanje začelo ob uri vstopa in preskočilo vse, kar odpelje v času
+    hoje do postaje. Na pravih podatkih (Vič -> Fužine, 23. 9. 2026) je tako
+    izpadel 47 ob 14:19; na seznam je prišel samo po naključju, prek „druge
+    poti", ki pa najde le enega. Tu sta dva zapored in drugi mora ostati.
+    """
+    for i, (ime, t) in enumerate((("prvi", 600), ("drugi", 660),
+                                  ("tretji", 720), ("pozni", 1800))):
+        _voznja(conn, f"t{i}", ime, [(1, "BLIZU", 8 * 3600 + t),
+                                     (2, "CILJ", 8 * 3600 + t + 600)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    voznje = [n["train_no"] for p in r["predlogi"] for n in p["noge"]
+              if n["vrsta"] == "voznja"]
+    assert voznje[:3] == ["prvi", "drugi", "tretji"], voznje
+
+
+def test_naslednji_odhod_ni_ista_voznja_z_zamudo(conn, monkeypatch):
+    """Vožnja, ki zamuja več kot hoja do postaje, ni svoj naslednji odhod.
+
+    Iskanje od poznejše ure jo je našlo znova, dvojnik je izpadel in
+    naslednjih odhodov ni bilo -- stran je ponudila en sam avtobus.
+    """
+    monkeypatch.setattr(pot, "zamiki", lambda *a: {"t0": 600})
+    for i, t in enumerate((600, 1800, 3000)):
+        _voznja(conn, f"t{i}", f"v{i}", [(1, "BLIZU", 8 * 3600 + t),
+                                         (2, "CILJ", 8 * 3600 + t + 600)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    voznje = [n["train_no"] for p in r["predlogi"] for n in p["noge"]
+              if n["vrsta"] == "voznja"]
+    assert voznje == ["v0", "v1", "v2"], voznje
+
+
+# ---------------------------------------------------------------- nočni avtobus
+
+DV = "2026-09-07"          # dan pred D
+
+
+def test_nocna_voznja_je_iz_vcerajsnjega_dne_in_to_pove(conn):
+    """Ob 00:05 vozi avtobus, ki nosi včerajšnji prometni dan (`dep_s` čez 86 400).
+
+    Predlog mora nositi SVOJ dan: podrobnosti so ga prej iskale po dnevu
+    vprašanja in pokazale jutrišnjo vožnjo ob isti uri (izmerjeno: vožnja
+    453052, predlog 23. 9. ob 00:05, podrobnosti 24. 9. ob 00:05).
+    """
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (DV,))
+    _voznja(conn, "noc", "N1", [(1, "BLIZU", 86400 + 300), (2, "CILJ", 86400 + 900)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 0)
+    p = next(p for p in r["predlogi"] if any(n["vrsta"] == "voznja" for n in p["noge"]))
+    assert p["datum"] == DV and r["datum"] == D
+    noga = next(n for n in p["noge"] if n["vrsta"] == "voznja")
+    assert noga["odhod"] == pot._polnoc(D) + 300, "ob 00:05 danes, ne jutri"
+
+    # Ista vožnja danes pelje šele jutri ob 00:05; podrobnosti po dnevu
+    # predloga dajo pravo uro.
+    d = pot.podrobnosti(conn, [("noc", 1, 2)], OD, DO, p["datum"])
+    assert d["predlog"]["noge"][1]["odhod"] == noga["odhod"]
+
+
+def test_nocno_iskanje_ne_podvoji_hoje(conn):
+    """Hoja vso pot je ena, ne ena na prometni dan.
+
+    Ko sta se predloga dveh dni zlila v `api.py`, sta bili na seznamu dve
+    enaki „00:30 -> 01:00 peš" (izmerjeno 23. 9. 2026).
+    """
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (DV,))
+    conn.commit()
+    blizu_cilj = (46.003, 14.500)
+    r = pot.isci(conn, OD, blizu_cilj, D, 30 * 60)
+    assert len(r["predlogi"]) == 1
+
+
+def test_podnevi_vcerajsnjega_dne_ne_iscemo(conn):
+    """Drugo iskanje je cel krog čez vozni red, zato samo pred `NOCNI_S`."""
+    conn.execute("INSERT INTO service_day(service_id, date) VALUES('S1', ?)", (DV,))
+    _voznja(conn, "noc", "N1", [(1, "BLIZU", 86400 + 8 * 3600 + 300),
+                                (2, "CILJ", 86400 + 8 * 3600 + 900)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    assert not any(n["vrsta"] == "voznja" for p in r["predlogi"] for n in p["noge"])
+
+
+def test_podrobnosti_povedo_ali_je_pot_ziva(conn, monkeypatch):
+    """Odštevanje in osveževanje zamud sta za pot, ki je zdaj -- to pove
+    strežnik, ne sklepa ga stran iz „dan je danes"."""
+    monkeypatch.setattr(hoja, "pot", lambda *a, **k: None)
+    _voznja(conn, "t1", "a", [(1, "BLIZU", 8 * 3600 + 600), (2, "CILJ", 8 * 3600 + 1200)])
+    conn.commit()
+    assert pot.podrobnosti(conn, [("t1", 1, 2)], OD, DO, D, now_s=8 * 3600)["zivo"] is True
+    assert pot.podrobnosti(conn, [("t1", 1, 2)], OD, DO, D)["zivo"] is False
+
+
+def test_predpomnilnik_hrani_dva_dneva_brez_praznjenja():
+    """Ponoči se iskanje izmenjuje med danes in včeraj. Z enim mestom je vsako
+    drugemu izpraznilo predpomnilnik, `clear()` med `in` in `[]` v drugi niti
+    pa je bil KeyError."""
+    c: dict = {}
+    for k in ("a", "b", "c"):
+        pot._shrani(c, k, k.upper())
+    assert c == {"b": "B", "c": "C"}
+    pot._shrani(c, "c", "C2")
+    assert c == {"b": "B", "c": "C2"}

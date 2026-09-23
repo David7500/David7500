@@ -611,10 +611,9 @@ def test_now_seconds_je_sekunda_od_polnoci():
     assert journey.now_seconds(t.replace(hour=0, minute=0, second=0)) == 0
 
 
-def test_today_in_yesterday_sta_lokalna_dneva():
+def test_today_je_lokalni_dan():
     t = datetime(2026, 9, 4, 0, 5, tzinfo=ZoneInfo("Europe/Ljubljana"))
     assert journey.today(t) == "2026-09-04"
-    assert journey.yesterday(t) == "2026-09-03"
 
 
 # ------------------------------------------------------------- vremenska celica

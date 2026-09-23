@@ -351,6 +351,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE trip ADD COLUMN end_s INTEGER")
         conn.commit()
         fill_trip_window(conn)
+        conn.commit()
         have.add("start_s")
     # Veriga vozila. Tega izracunati ne moremo -- je v GTFS zipu -- zato ostane
     # prazen do naslednjega `kajros update`, prikaz pa ga zna pogresati.
@@ -370,6 +371,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE trip ADD COLUMN last_seq INTEGER")
         conn.commit()
         fill_trip_window(conn)
+        conn.commit()
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
@@ -407,6 +409,13 @@ def fill_trip_window(conn: sqlite3.Connection) -> int:
     `first_seq` in `last_seq` sta tu iz istega razloga kot okvir: odhodna
     tabla ju je racunala kot `MIN/MAX(stop_seq) GROUP BY trip_id` cez vseh
     403 208 vrstic `sched` ob vsaki zahtevi -- 117 ms od 120.
+
+    **Ne potrdi sama; to naredi klicatelj.** Uvoz (`gtfs.import_static`) jo
+    klice sredi svoje transakcije, in `commit()` tu je nov vozni red zapisal
+    PRED zamenjavami in znacko `gtfs_imported_at`. Ce bi preostanek uvoza
+    padel, bi ostal nov vozni red s staro znacko -- in vsi predpomnilniki na
+    znacki (tudi okna voznj v zajemu) bi do restarta drzali staro sliko, zajem
+    pa bi nove id-je zavrgel.
     """
     conn.execute("""
         UPDATE trip SET
@@ -419,7 +428,6 @@ def fill_trip_window(conn: sqlite3.Connection) -> int:
             last_seq  = (SELECT MAX(s.stop_seq) FROM sched s
                          WHERE s.trip_id = trip.trip_id)
     """)
-    conn.commit()
     return conn.execute("SELECT COUNT(*) FROM trip WHERE start_s IS NOT NULL").fetchone()[0]
 
 

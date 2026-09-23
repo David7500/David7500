@@ -658,6 +658,17 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     # LPP ima za vsak dan svoj `trip_id` in "obicajno" je bilo zanj zato vedno
     # prazno. Izmerjeno z ucenjem samo na preteklih dneh (naloge pred odhodom,
     # 11 dni): pri LPP MAE 2,13 -> 1,70 min, v 5 min 92,5 -> 94,7 %.
+    #
+    # **`CROSS JOIN`, ker ga SQLite izvede v zapisanem vrstnem redu.** Načrt
+    # je sicer odvisen od statistike (`sqlite_stat1`), in ta je lahko stara:
+    # na razvojni bazi (statistika pri 44 511 vrsticah `run`) je načrtovalec
+    # `run` začel brati po `stop_seq` in si za to ob VSAKEM klicu zgradil
+    # samodejni indeks čez celo tabelo. Izmerjeno 23. 9. 2026 na odhodni
+    # tabli Ljubljana AP (166 parov, 1 675 vrstic): **40 324 ms**, z vsiljenim
+    # vrstnim redom (par -> vožnja -> ista vožnja po `trip_voznja` -> `run` po
+    # ključu) **12 ms**, izid enak vrstico za vrstico. Arwen je imel isti dan
+    # dober načrt (0,5-0,8 s za celo tablo) -- a le zato, ker je imel drugo
+    # statistiko, ne zato, ker bi ga poizvedba zagotavljala.
     for i in range(0, len(wanted), 400):
         chunk = wanted[i:i + 400]
         values = ",".join(["(?,?)"] * len(chunk))
@@ -665,9 +676,9 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
         rows = conn.execute(
             f"WITH want(trip_id, stop_seq) AS (VALUES {values}) "
             f"SELECT w.trip_id, w.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
-            f"FROM want w JOIN trip a ON a.trip_id = w.trip_id "
-            f"JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
-            f"JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
+            f"FROM want w CROSS JOIN trip a ON a.trip_id = w.trip_id "
+            f"CROSS JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
+            f"CROSS JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
             f"WHERE r.service_date >= ? AND d IS NOT NULL",
             (*params, since),
         ).fetchall()

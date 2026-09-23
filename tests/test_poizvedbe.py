@@ -2303,3 +2303,63 @@ def test_odtis_statike_sledi_popravku(tmp_path, monkeypatch):
     f.write_text("potem, daljse")
     assert api.s("x.js") != prej
     assert api.s("ni.js") == "/static/ni.js"
+
+
+def test_fill_trip_window_ne_potrdi_sama(tmp_path):
+    """Uvoz jo kliče sredi svoje transakcije. Ko je potrdila sama, je bil nov
+    vozni red zapisan pred zamenjavami in značko `gtfs_imported_at` -- in ob
+    napaki v preostanku uvoza bi ostal nov vozni red s staro značko."""
+    pot = tmp_path / "k.sqlite"
+    c = db.connect(pot)
+    db.init(c)
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id) "
+              "VALUES('t', 'r', 'LP 1', 'S')")
+    c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+              "VALUES('t', 1, 'A', 100, 100)")
+    db.fill_trip_window(c)
+    drug = db.connect(pot)
+    assert drug.execute("SELECT COUNT(*) FROM trip").fetchone()[0] == 0, \
+        "druga povezava ne sme videti nepotrjenega uvoza"
+    c.rollback()
+    assert c.execute("SELECT COUNT(*) FROM trip").fetchone()[0] == 0
+
+
+def test_zdaj_za_dan_ponoci_velja_tudi_za_vceraj():
+    """Nočni avtobus ob 00:05 nosi včerajšnji prometni dan in je prav takrat
+    na poti. Podrobnosti poti so ga prej kazale brez zamud in odštevanja."""
+    from zoneinfo import ZoneInfo
+
+    from kajros import api
+    tz = ZoneInfo("Europe/Ljubljana")
+    noc = api.datetime(2026, 9, 23, 0, 30, tzinfo=tz)
+    assert api._zdaj_za_dan("2026-09-23", noc) == 1800
+    assert api._zdaj_za_dan("2026-09-22", noc) == 86400 + 1800
+    assert api._zdaj_za_dan("2026-09-24", noc) is None
+    dan = api.datetime(2026, 9, 23, 14, 0, tzinfo=tz)
+    assert api._zdaj_za_dan("2026-09-22", dan) is None, "podnevi je včeraj končan"
+
+
+def test_telo_obrazca_je_omejeno_tudi_brez_content_length():
+    """Telo brez `Content-Length` (chunked) je šlo z `request.body()` v
+    pomnilnik v celoti, ne glede na velikost."""
+    import asyncio
+
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from kajros import api
+
+    def zahteva(kosi):
+        sporocila = [{"type": "http.request", "body": k, "more_body": True} for k in kosi]
+        sporocila.append({"type": "http.request", "body": b"", "more_body": False})
+        it = iter(sporocila)
+
+        async def receive():
+            return next(it)
+        return Request({"type": "http", "method": "POST", "headers": [],
+                        "path": "/stik"}, receive)
+
+    assert asyncio.run(api._preberi_telo(zahteva([b"email=a", b"&x=1"]))) == "email=a&x=1"
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(api._preberi_telo(zahteva([b"a" * 40000] * 3)))
+    assert e.value.status_code == 413

@@ -105,7 +105,7 @@ class _Mreza:
     def dodaj_mesto(self, lat, lon, ime, polmer_km):
         self.dodaj(lat, lon, (ime, polmer_km))
 
-    def najblizji(self, lat, lon, razen=None):
+    def najblizji(self, lat, lon):
         """Ime najbližjega, ali `(ime, polmer)` pri mestih."""
         gy, gx = int(lat / self.celica), int(lon / self.celica)
         naj, najd = None, 1e18
@@ -113,7 +113,7 @@ class _Mreza:
             for dx in (-1, 0, 1):
                 for la, lo, ime in self.celice.get((gy + dy, gx + dx), ()):
                     d = (la - lat) ** 2 + ((lo - lon) * 0.69) ** 2
-                    if d < najd and ime != razen:
+                    if d < najd:
                         naj, najd = ime, d
         return naj
 
@@ -277,6 +277,10 @@ def _povezava() -> sqlite3.Connection | None:
         # Samo za branje in brez niti-straže: kazalo se med tekom ne piše,
         # zamenja se kot datoteka -- in takrat ključ z `mtime` odpre novo.
         c = sqlite3.connect(f"file:{pot}?mode=ro", uri=True, check_same_thread=False)
+        # Stare povezave ne zapiramo: nit, ki na njej ravno išče, bi dobila
+        # napako. Pobere jo zbiralnik smeti (povezava ima krožne reference,
+        # zato ne takoj ob `clear()`, ampak ob naslednjem `gc` -- preverjeno z
+        # `/proc/self/fd`, 23. 9. 2026).
         _POVEZAVA.clear()
         _POVEZAVA[kljuc] = c
     return c
