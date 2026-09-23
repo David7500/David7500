@@ -215,6 +215,11 @@ Kar se je pokazalo pri preizkušanju in je zdaj v kodi:
   6 km, trga 2,5 km.
 * **„Četrtna skupnost X" je X** — isto kot v slogu zemljevida.
 
+Na arwenu (23. 9. 2026, `deploy/naslovi.sh` z `nice`): vse skupaj 2 min 47 s,
+od tega branje izvoza 44 s in gradnja 60 s; kazalo 49 MB na disku. Odziv
+`/api/pot` prek kajros.app po objavi: prvi klic za jutri 8,7 s (hladen vozni
+red), nato 0,6–1,5 s za „do ure", „čim prej" in kolo.
+
 OSM v Ljubljani nima vseh hišnih številk (Slovenska cesta 50 manjka, 51 je);
 pokritost proti registru GURS ni izmerjena.
 
