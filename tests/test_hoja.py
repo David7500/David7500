@@ -192,6 +192,25 @@ def test_pot_s_koraki_za_vodenje(monkeypatch):
     assert p["koraki"][1]["ll"] == [46.0003, 14.5005], "OSRM piše lon, lat"
 
 
+def test_pot_se_priklopi_na_vrata_in_postajalisce(monkeypatch):
+    """Usmerjevalnik začne na najbližji poti; črta mora vseeno segati do
+    točke, ki jo je človek izbral, sicer je na zemljevidu pretrgana."""
+    telo = {"routes": [{"duration": 100, "distance": 140,
+                        "geometry": {"coordinates": [[14.5006, 46.0004], [14.5010, 46.0010]]},
+                        "legs": [{"steps": [
+                            {"maneuver": {"type": "depart", "location": [14.5006, 46.0004],
+                                          "bearing_after": 0}, "name": "", "distance": 140},
+                            {"maneuver": {"type": "arrive", "location": [14.5010, 46.0010]},
+                             "name": "", "distance": 0}]}]}]}
+    monkeypatch.setattr(config, "OSRM_URL", "http://x:5000")
+    monkeypatch.setattr(hoja.requests, "get", lambda *a, **k: _Odgovor(telo))
+    p = hoja.pot(46.0, 14.5, 46.0012, 14.5013, koraki=True)
+    assert p["tocke"][0] == [46.0, 14.5] and p["tocke"][-1] == [46.0012, 14.5013]
+    assert len(p["tocke"]) == 4
+    # Prvi korak je za priključkom, ne na vratih.
+    assert p["koraki"][0]["od_zacetka"] == round(geo.haversine(46.0, 14.5, 46.0004, 14.5006))
+
+
 # ---------------------------------------------------------------- peš med postajališči
 
 @pytest.fixture()

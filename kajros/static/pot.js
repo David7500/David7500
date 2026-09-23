@@ -72,12 +72,8 @@ document.querySelectorAll("[data-kdaj]").forEach((b) => {
 
 function narisiTocke(premakni = true) {
   if (!K) return;
+  pkKonca(K, S.od, S.do);
   const f = [];
-  for (const kaj of ["od", "do"]) {
-    const t = S[kaj];
-    if (t) f.push(pkTocka([t.lat, t.lon], { vrsta: kaj === "od" ? "izhodisce" : "cilj",
-                                           ime: t.ime || (kaj === "od" ? "od kod" : "kam") }));
-  }
   // Postajališča izbrane poti, da je vstop in izstop videti brez branja.
   const p = S.izidi && S.izidi.predlogi[S.izbran];
   if (p) {
@@ -90,7 +86,7 @@ function narisiTocke(premakni = true) {
   pkVir(K.map, "k-tocke", f);
   if (!premakni) return;
   if (S.od && S.do) {
-    pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon]], { maxZoom: 14 });
+    pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon]]);
   } else if (S.od || S.do) {
     const t = S.od || S.do;
     K.map.easeTo({ center: [t.lon, t.lat], zoom: Math.max(K.map.getZoom(), 14 - PK_LZ) });
@@ -746,7 +742,7 @@ function izrisi(izid) {
   if (K) {
     const p = izid.predlogi[0];
     pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon],
-                        ...p.noge.flatMap((n) => [n.od_ll, n.do_ll])], { maxZoom: 15 });
+                        ...p.noge.flatMap((n) => [n.od_ll, n.do_ll])]);
   }
 }
 
@@ -879,6 +875,9 @@ pkUstvari($("#karta")).then((k) => {
   K = k;
   K.map.addControl(new K.ml.NavigationControl({ visualizePitch: true }), "top-left");
   K.map.on("click", (e) => {
+    // Dotik oznake ali postajališča ni nov kraj -- sicer bi klik na "Cilj"
+    // cilj premaknil pod prst.
+    if (e.originalEvent.target.closest(".maplibregl-marker")) return;
     if (K.map.queryRenderedFeatures(e.point, { layers: ["k-tocke"] }).length) return;
     postavi(S.arm, { lat: e.lngLat.lat, lon: e.lngLat.lng });
   });
@@ -888,7 +887,7 @@ pkUstvari($("#karta")).then((k) => {
     const p = S.izidi.predlogi[S.izbran];
     pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon],
                         ...p.noge.flatMap((n) => [n.od_ll, n.do_ll])],
-                { maxZoom: 15, animate: false });
+                { animate: false });
   } else {
     narisiTocke();
   }

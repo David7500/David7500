@@ -175,11 +175,22 @@ def pot(lat1: float, lon1: float, lat2: float, lon2: float,
         # brskalniku: obrnjena koordinata je napaka, ki je na zemljevidu videti
         # kot pot nekje v Somaliji, in nihče je ne pripiše temu mestu.
         tocke = [[c[1], c[0]] for c in naj["geometry"]["coordinates"]]
+        # Usmerjevalnik začne pot na najbližji poti, ne na vratih ali
+        # postajališču: hiša je sredi parcele, postajališče na pločniku. Brez
+        # priključka na obeh koncih je bila črta na zemljevidu pretrgana --
+        # obroč postajališča je stal ob koncu poti, ne na njem (23. 9. 2026).
+        # Čas ostane usmerjevalnikov; priključek je nekaj korakov.
+        zacetek = geo.haversine(lat1, lon1, *tocke[0]) if tocke else 0
+        if zacetek > 2:
+            tocke.insert(0, [lat1, lon1])
+        if tocke and geo.haversine(lat2, lon2, *tocke[-1]) > 2:
+            tocke.append([lat2, lon2])
         out = {"sekunde": round(naj["duration"]), "metri": round(naj["distance"]),
                "tocke": tocke}
         if koraki:
             out["koraki"] = []
-            prevozeno = 0.0
+            # Koraki štejejo od začetka črte, ta pa zdaj vključuje priključek.
+            prevozeno = zacetek if zacetek > 2 else 0.0
             for noga in naj.get("legs", ()):
                 for k in noga.get("steps", ()):
                     n = navodilo(k)

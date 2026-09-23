@@ -56,8 +56,8 @@ function pkKrog(lat, lon, m, n = 40) {
 
 /**
  * Zemljevid v elementu `el`: `{ map, ml }` ali `null`, kadar ga ni mogoče
- * narisati. Viri `k-pot` (črte), `k-tocke` (izhodišče, cilj, postajališča) in
- * `k-jaz` (lastna lega) so dodani in prazni.
+ * narisati. Viri `k-pot` (črte), `k-tocke` (postajališča vstopa in izstopa) in
+ * `k-jaz` (lastna lega) so dodani in prazni; start in cilj riše `pkKonca()`.
  */
 async function pkUstvari(el) {
   if (!imaWebGL2()) return null;
@@ -154,18 +154,23 @@ async function pkUstvari(el) {
   map.addLayer({ id: "k-jaz-rob", type: "line", source: "k-jaz",
                  filter: ["==", ["get", "vrsta"], "obroc"],
                  paint: { "line-color": ME_COLOR, "line-width": 1, "line-opacity": 0.35 } });
-  // Točke: izhodišče prazen svetel obroč, postajališče obroč v barvi vožnje,
-  // cilj polna oranžna. Polna modra je samo "ti" -- kdor išče od svoje lege,
-  // je imel prej dve enaki piki eno na drugi.
+  // Postajališče je obroč v barvi vožnje, z imenom od blizu: kje vstopiš in
+  // kje izstopiš, mora biti vidno brez dotika. Polna modra je samo "ti".
   map.addLayer({ id: "k-tocke", type: "circle", source: "k-tocke",
                  paint: {
-                   "circle-radius": ["match", ["get", "vrsta"], "postaja", 5.5, 8],
-                   "circle-color": ["match", ["get", "vrsta"], "cilj", PK_VOZNJA, "#0f1115"],
-                   "circle-stroke-width": 3,
-                   "circle-stroke-color": ["match", ["get", "vrsta"],
-                     "izhodisce", "#e7eaf0", "cilj", "#ffffff", PK_VOZNJA],
+                   "circle-radius": 6, "circle-color": "#0f1115",
+                   "circle-stroke-width": 3, "circle-stroke-color": PK_VOZNJA,
                    "circle-pitch-alignment": "map",
                  } });
+  map.addLayer({ id: "k-tocke-imena", type: "symbol", source: "k-tocke",
+                 minzoom: 13 - PK_LZ,
+                 layout: {
+                   "text-field": ["get", "ime"], "text-font": ["Noto Sans Bold"],
+                   "text-size": 12, "text-anchor": "left", "text-offset": [0.9, 0],
+                   "text-optional": true,
+                 },
+                 paint: { "text-color": "#f5c7a3", "text-halo-color": "#0f1115",
+                          "text-halo-width": 1.6 } });
   map.addLayer({ id: "k-jaz", type: "circle", source: "k-jaz",
                  filter: ["==", ["get", "vrsta"], "pika"],
                  paint: { "circle-radius": 7, "circle-color": ME_COLOR,
@@ -187,6 +192,45 @@ async function pkUstvari(el) {
   map.on("mouseleave", "k-tocke", () => { map.getCanvas().style.cursor = ""; });
 
   return { map, ml };
+}
+
+// Start in cilj sta oznaki DOM in ne krogca v plasti: morata biti vidna od
+// daleč, nad vsem drugim in z besedo -- obroč velikosti postajališča se je
+// med ulicami izgubil (23. 9. 2026). Cilj je žebljiček, ki v nagibu stoji
+// pokonci; start svetel krog. Besedi sta splošni, ne ime kraja: "dom" ne sodi
+// na zaslon, ki ga kdo gleda čez ramo.
+const PK_KONCA = { od: null, do: null };
+
+function pkKonecEl(kaj) {
+  const el = document.createElement("div");
+  el.className = `pk-konec pk-${kaj}`;
+  el.innerHTML = kaj === "od"
+    ? `<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+         <circle cx="12" cy="12" r="9.5" fill="#e7eaf0" stroke="#0f1115" stroke-width="2.5"/>
+         <circle cx="12" cy="12" r="3.6" fill="#0f1115"/></svg><span class="pk-napis">Start</span>`
+    : `<svg width="30" height="38" viewBox="0 0 30 38" aria-hidden="true">
+         <path d="M15 37s12-12.2 12-22A12 12 0 0 0 3 15c0 9.8 12 22 12 22z"
+               fill="${PK_VOZNJA}" stroke="#0f1115" stroke-width="2.5"/>
+         <circle cx="15" cy="15" r="4.6" fill="#0f1115"/></svg><span class="pk-napis">Cilj</span>`;
+  return el;
+}
+
+/** Postavi (ali umakne) oznaki starta in cilja; `od`, `do` sta `{lat, lon}` ali `null`. */
+function pkKonca(k, od, do_) {
+  if (!k) return;
+  for (const [kaj, t] of [["od", od], ["do", do_]]) {
+    if (!t) {
+      if (PK_KONCA[kaj]) { PK_KONCA[kaj].remove(); PK_KONCA[kaj] = null; }
+      continue;
+    }
+    if (!PK_KONCA[kaj]) {
+      PK_KONCA[kaj] = new k.ml.Marker({
+        element: pkKonecEl(kaj), anchor: kaj === "od" ? "center" : "bottom",
+        pitchAlignment: "viewport", rotationAlignment: "viewport",
+      }).setLngLat([t.lon, t.lat]).addTo(k.map);
+    }
+    PK_KONCA[kaj].setLngLat([t.lon, t.lat]);
+  }
 }
 
 function pkEsri(map) {
@@ -243,9 +287,17 @@ function pkOkvir(tocke) {
   return s <= j ? [[z, s], [v, j]] : null;
 }
 
+// `fitBounds` računa okvir za ravno kamero, nagib pa pride šele za njim
+// (`transformCameraUpdate`) in spodnji rob odreže -- cilj je stal pod robom
+// zemljevida. Zato je pregled največ Leafletov z15, kjer nagiba še ni, in
+// ožji pogled ima spodaj več prostora.
+const PK_BREZ_NAGIBA = PK_NAGIB_OD + PK_LZ;
+
 function pkPrilagodi(map, tocke, opts) {
   const o = pkOkvir(tocke);
   if (!o || !map) return;
-  const { maxZoom = 16, padding = 50, ...ostalo } = opts || {};
-  map.fitBounds(o, { padding, maxZoom: maxZoom - PK_LZ, ...ostalo });
+  const { maxZoom = PK_BREZ_NAGIBA, padding = 50, ...ostalo } = opts || {};
+  const odmik = maxZoom > PK_BREZ_NAGIBA && typeof padding === "number"
+    ? { top: padding, left: padding, right: padding, bottom: padding * 2.5 } : padding;
+  map.fitBounds(o, { padding: odmik, maxZoom: maxZoom - PK_LZ, ...ostalo });
 }

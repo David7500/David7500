@@ -463,6 +463,20 @@ body.brez-zemljevida .karta-max, body.brez-zemljevida .karta-lega { display: non
   font: 400 11px/1.4 var(--sans); white-space: nowrap;
 }
 .kajros-tooltip .maplibregl-popup-tip { display: none; }
+/* Start in cilj: oznaka z besedo, ki jo vidiš od daleč. Beseda je desno od
+   znaka in del istega elementa, zato sidro ostane na točki sami. */
+/* Brez `position`: MapLibre oznaki postavi `absolute` in s `relative` tu je
+   stala na napačnem kraju (start v Tivoliju, pot pri Bavarskem dvoru).
+   Njen `absolute` je napisu tudi okvir. */
+.pk-konec { line-height: 0; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55)); }
+.pk-napis {
+  position: absolute; top: 50%; left: calc(100% + 4px); transform: translateY(-50%);
+  padding: 3px 7px; border-radius: 5px; white-space: nowrap;
+  font: 700 12px/1.2 var(--sans); letter-spacing: 0.02em;
+}
+.pk-od .pk-napis { color: #0f1115; background: #e7eaf0; }
+.pk-do .pk-napis { top: 15px; transform: translateY(-50%); color: #1a1206; background: #f0934f; }
+
 /* Navedba vira je pogoj rabe, a ne sme pokriti poti na telefonu. */
 .maplibregl-ctrl-attrib { font-size: 10px; }
 

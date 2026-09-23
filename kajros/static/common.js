@@ -1244,16 +1244,35 @@ function pripniOsvezi(el, opravila, opomba) {
 // Trase voznj, predpomnjene po vožnji. Statika, ki se med uvozi ne spremeni.
 const TRASE = new Map();
 
-function najblizji(tocke, ll) {
-  let naj = -1, najd = Infinity;
-  for (let i = 0; i < tocke.length; i += 1) {
-    const dy = tocke[i][0] - ll[0], dx = (tocke[i][1] - ll[1]) * 0.694;
-    const d = dy * dy + dx * dx;
-    if (d < najd) { najd = d; naj = i; }
+/** Najbližja točka na črti: odsek `i`, delež `u` na njem in točka sama. */
+function naCrti(tocke, ll) {
+  const kx = Math.cos(ll[0] * Math.PI / 180);
+  let naj = { i: 0, u: 0, d: Infinity, tocka: tocke[0] };
+  for (let i = 0; i < tocke.length - 1; i += 1) {
+    const ax = (tocke[i][1] - ll[1]) * kx, ay = tocke[i][0] - ll[0];
+    const bx = (tocke[i + 1][1] - ll[1]) * kx, by = tocke[i + 1][0] - ll[0];
+    const dx = bx - ax, dy = by - ay;
+    const l2 = dx * dx + dy * dy;
+    const u = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+    const d = (ax + u * dx) ** 2 + (ay + u * dy) ** 2;
+    if (d < naj.d) {
+      naj = { i, u, d, tocka: [tocke[i][0] + u * (tocke[i + 1][0] - tocke[i][0]),
+                               tocke[i][1] + u * (tocke[i + 1][1] - tocke[i][1])] };
+    }
   }
   return naj;
 }
 
+/**
+ * Trasa vožnje med vstopom in izstopom, od postajališča do postajališča.
+ *
+ * Rez je na **projekciji** postajališča na traso, ne na najbližjem ogljišču:
+ * ogljišča so ponekod sto metrov narazen in črta se je začela sredi ulice,
+ * obroč postajališča pa je stal ob njej (Drama → Križanke, 23. 9. 2026). In
+ * na obeh koncih je kratek priključek do postajališča samega -- LPP ima
+ * postajališče na pločniku, traso pa na sredini ceste, in brez njega je bila
+ * pot na zemljevidu pretrgana.
+ */
 async function trasa(n) {
   if (!n.trip_id || !n.od_ll || !n.do_ll) return null;
   if (!TRASE.has(n.trip_id)) {
@@ -1267,12 +1286,17 @@ async function trasa(n) {
   }
   const del = await TRASE.get(n.trip_id);
   if (!del || del.length < 2) return null;
-  const i = najblizji(del, n.od_ll), j = najblizji(del, n.do_ll);
-  if (i === j) return null;
-  const kos = del.slice(Math.min(i, j), Math.max(i, j) + 1);
-  return i <= j ? kos : kos.reverse();
+  const a = naCrti(del, n.od_ll), b = naCrti(del, n.do_ll);
+  const pa = a.i + a.u, pb = b.i + b.u;
+  if (pa === pb) return null;
+  const vmes = pa < pb ? del.slice(a.i + 1, b.i + 1) : del.slice(b.i + 1, a.i + 1).reverse();
+  // Projekcija, ki je le nekaj deset metrov od postajališča, bi s
+  // priključkom narisala kljukico (tja in nazaj ob obroču); takrat gre črta
+  // s postajališča kar na naslednje ogljišče.
+  const blizu = (x) => Math.sqrt(x.d) * 111320 < 35;
+  return [n.od_ll, ...(blizu(a) ? [] : [a.tocka]), ...vmes,
+          ...(blizu(b) ? [] : [b.tocka]), n.do_ll];
 }
-
 
 // ---------- iskanje po kazalu postaj ----------
 //

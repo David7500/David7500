@@ -331,6 +331,17 @@ pelje sem in doda dvoje, česar seznam nima:
 * **vmesni postanki vožnje**, zaprti v `<details>` — potnika najprej zanima,
   kje izstopi, in šele potem, kaj je vmes.
 
+**Črta mora biti sklenjena od starta do cilja** (23. 9. 2026, prijavljeno z
+zaslona). Dve vrzeli: usmerjevalnik začne pešpot na najbližji poti, ne na
+vratih ali postajališču (`hoja.pot()` zdaj doda priključek na oba konca), in
+trasa vožnje je bila odrezana na najbližjem **ogljišču**, ki je ponekod sto
+metrov od postajališča (`common.trasa()` zdaj reže na projekciji in doda
+priključek do postajališča; projekcijo bližje od 35 m izpusti, sicer nastane
+kljukica ob obroču). **Start in cilj sta oznaki z besedo** (`pkKonca()`), ne
+krogca v plasti: obroč velikosti postajališča se je med ulicami izgubil.
+Oznaka MapLibra ne sme dobiti `position` iz našega sloga — z `relative` je
+start stal v Tivoliju. Postajališča nosijo ime od Leafletovega z13.
+
 **Lastna lega in izhodišče nista ista pika.** Izhodišče je bilo polna modra
 pika, enaka kot lastna lega — kdor je iskal od svoje lege, je imel dve enaki
 piki eno na drugi in postajališča sploh ne. Zdaj: polna modra je samo „ti",

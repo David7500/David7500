@@ -226,17 +226,16 @@ function narisi(p) {
     }
   });
   if (!K) return;
-  // Postajališča vstopa in izstopa. Polna modra je samo "ti", izhodišče je
-  // prazen obroč, postajališče obroč v barvi vožnje, cilj polna oranžna.
+  // Postajališča vstopa in izstopa z imeni; start in cilj sta svoji oznaki.
   const f = [];
   for (const n of p.noge) {
     if (n.vrsta !== "voznja") continue;
     if (n.od_ll) f.push(pkTocka(n.od_ll, { vrsta: "postaja", ime: n.od }));
     if (n.do_ll) f.push(pkTocka(n.do_ll, { vrsta: "postaja", ime: n.do }));
   }
-  f.push(pkTocka(odKod(), { vrsta: "izhodisce", ime: "izhodišče" }));
-  f.push(pkTocka(doKod(), { vrsta: "cilj", ime: "cilj" }));
   pkVir(K.map, "k-tocke", f);
+  const [a, b] = [odKod(), doKod()];
+  pkKonca(K, { lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] });
   risiCrte();
   if (!V.aktivno) priblizaj(null, false);
   (async () => {
@@ -257,8 +256,8 @@ function priblizaj(i, pomakni = true) {
   const tocke = i === null
     ? CRTE.filter(Boolean).flatMap((c) => c.tocke).concat([odKod(), doKod()])
     : (CRTE[i] ? CRTE[i].tocke : []);
-  pkPrilagodi(K.map, tocke, { maxZoom: i === null ? 16 : 17, padding: 40, bearing: 0,
-                              animate: pomakni });
+  pkPrilagodi(K.map, tocke, { maxZoom: i === null ? PK_BREZ_NAGIBA : 16.5, padding: 40,
+                              bearing: 0, animate: pomakni });
   document.querySelectorAll(".hoja-gumb[data-korak]").forEach((b) =>
     b.classList.toggle("je-on", Number(b.dataset.korak) === i));
   $("#cela").hidden = i === null;
