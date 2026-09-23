@@ -7,7 +7,7 @@
   {% set og_desc = "Ena pot razložena: kod hodiš, s čim se pelješ in kje izstopiš." %}
 {% include "_meta.html" %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
-  <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -50,8 +50,8 @@
 
     <div class="pot-karta-okvir">
       <div id="karta" class="pot-karta" aria-label="Zemljevid"></div>
-      {#- Lega je tu koristnejsa kot kjerkoli: med hojo se vidi, ali gres v
-          pravo smer. Ne zahtevamo je sami -- dovoljenje, ki ga nihce ni prosil,
+      {#- Lega je tu koristnejša kot kjerkoli: med hojo se vidi, ali greš v
+          pravo smer. Ne zahtevamo je sami -- dovoljenje, ki ga nihče ni prosil,
           je vsiljivo in ga brskalnik ob zavrnitvi pogosto zapomni za vedno. #}
       <button id="karta-lega" class="karta-max karta-lega" type="button"
               title="Pokaži mojo lego in ji sledi">
@@ -61,18 +61,6 @@
           <path d="M12 1.5v2.5M12 20v2.5M1.5 12h2.5M20 12h2.5"/>
         </svg>
       </button>
-      {#- Kompas se pokaže šele z lego: brez nje ni od kod kazati. #}
-      <div id="kompas" class="kompas" hidden aria-live="polite">
-        <svg id="kompas-igla" class="kompas-igla" width="30" height="30" viewBox="0 0 24 24"
-             aria-hidden="true">
-          <path d="M12 2.5 18.5 20.5 12 16.6 5.5 20.5Z" fill="#2f7fff" stroke="#ffffff"
-                stroke-width="1.3" stroke-linejoin="round"/>
-        </svg>
-        <span class="kompas-besedilo">
-          <span id="kompas-kam" class="kompas-kam"></span>
-          <span id="kompas-opomba" class="kompas-opomba"></span>
-        </span>
-      </div>
       <button id="karta-max" class="karta-max" type="button" aria-pressed="false"
               title="Zemljevid čez celo stran">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -80,11 +68,39 @@
           <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
         </svg>
       </button>
+
+      {#- Vodenje: navodilo zgoraj, cilj in vozilo spodaj, zemljevid vmes.
+          Zgoraj je samo naslednji zavoj -- ves seznam je v plošči, med hojo
+          pa človek pogleda na telefon za sekundo, ne za minuto. #}
+      <div id="vod-manever" class="vod-manever" hidden aria-live="polite">
+        <span id="vod-znak" class="vod-znak" aria-hidden="true"></span>
+        <div class="vod-besedilo">
+          <div id="vod-razdalja" class="vod-razdalja"></div>
+          <div id="vod-navodilo" class="vod-navodilo"></div>
+          <div id="vod-ulica" class="vod-ulica"></div>
+        </div>
+        {#- Brez lege se po navodilih lista na roko: "kod grem" je vprašanje
+            tudi doma, preden greš. #}
+        <span class="vod-listaj" id="vod-listaj" hidden>
+          <button type="button" id="vod-prej" aria-label="prejšnje navodilo">‹</button>
+          <button type="button" id="vod-naprej" aria-label="naslednje navodilo">›</button>
+        </span>
+      </div>
+      <div id="vod-spodaj" class="vod-spodaj" hidden>
+        <div id="vod-cilj" class="vod-cilj"></div>
+        <div id="vod-vozilo" class="vod-vozilo"></div>
+        <div id="vod-opomba" class="vod-opomba"></div>
+        <div class="vod-gumbi">
+          <button type="button" id="vod-sledi" class="vod-gumb" hidden>sledi mi</button>
+          <button type="button" id="vod-dalje" class="vod-gumb je-glavni" hidden></button>
+          <button type="button" id="vod-konec" class="vod-gumb">končaj</button>
+        </div>
+      </div>
     </div>
   </main>
 
-  <script src="/static/leaflet/leaflet.js"></script>
   <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('pot_karta.js') }}"></script>
   <script src="{{ s('pot_podrobno.js') }}"></script>
 </body>
 </html>

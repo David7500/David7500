@@ -18,11 +18,11 @@ Venv je `venv/` (Python 3.12), **ne** `.venv`. Strežnik med razvojem pogosto ž
 teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
 CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
-`prune`, `ocena`, `seed`, `zamenjave`.
+`prune`, `ocena`, `seed`, `zamenjave`, `pespoti`, `pot`, `naslovi`.
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (376 preizkusov).
+enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (400 preizkusov).
 `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
 zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
@@ -104,6 +104,9 @@ kajros/
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
+  pot.py         od vrat do vrat: naprej (čim prej) in nazaj (biti tam do)
+  hoja.py        pešpoti in navodila iz lastnega OSRM; kolo = ista pot, 15 km/h
+  naslovi.py     kazalo naslovov iz OSM -- lastno, ne tuji geokodirnik
   pristanek.py   pristajalne strani: katere relacije in postaje imajo naslov
   lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz
   backtest.py    merjenje napovedi z izpuščanjem enega dne

@@ -16,6 +16,11 @@ Postavitev: `deploy/osrm.sh`.
 **Zakaj je hitrost samo ena.** OSRM-ov peš profil hodi 5,00 km/h (izmerjeno na
 1 080 poteh), kar je natanko hitrost, s katero računa zasilna pot. Vira se
 torej razlikujeta v dolžini poti, ne v hitrosti hoje.
+
+**Kolo ali rolka je ista pot, hitreje prevožena** (`pri_hitrosti()`). Pot
+ostane peš pot — kolesarskega profila usmerjevalnik nima, in za "koliko do
+postaje" je razlika majhna: pločnik in kolesarska steza tečeta ob isti cesti.
+Kjer peš pot gre čez stopnice, jo bo kolesar obšel; tega ne računamo.
 """
 
 from __future__ import annotations
@@ -27,7 +32,19 @@ import requests
 from . import config, geo
 
 #: Hitrost hoje. Ista v obeh virih -- glej opombo v glavi modula.
-HITROST_MS = 5000 / 3600
+KMH = 5.0
+HITROST_MS = KMH * 1000 / 3600
+
+#: Kolo, rolka ali tek. Ena sama druga hitrost in ne drsnik: potnik ve, ali ima
+#: s sabo kolo, ne pa, koliko km/h vozi. 15 km/h je mestna vožnja s semaforji.
+KOLO_KMH = 15.0
+
+
+def pri_hitrosti(sekunde: int | None, kmh: float = KMH) -> int | None:
+    """Sekunde peš poti, prevožene s hitrostjo `kmh`. Pot je ista, čas ne."""
+    if sekunde is None:
+        return None
+    return sekunde if kmh == KMH else round(sekunde * KMH / kmh)
 
 #: Zasilni faktor obvoza, kadar usmerjevalnika ni. To je **p75** izmerjene
 #: porazdelitve, ne mediana: brez usmerjevalnika ne vemo, kako dolga je pot, in
@@ -51,14 +68,14 @@ OSRM = "osrm"
 ZRAK = "zrak"
 
 
-def doseg_zracno(sekund: float) -> float:
+def doseg_zracno(sekund: float, kmh: float = KMH) -> float:
     """Polmer v metrih, ki ga v danem času ni mogoče preseči — za predfilter.
 
     Faktorja tu **ne sme biti**. Zračna črta je vedno krajša ali enaka pravi
     poti, zato ta polmer ne izpusti ničesar dosegljivega; z faktorjem bi tiho
     odrezal postajališča, ki so v resnici v dosegu, in tega ne bi nihče opazil.
     """
-    return sekund * HITROST_MS
+    return sekund * kmh / 3.6
 
 
 def _zracno(lat1: float, lon1: float, lat2: float, lon2: float) -> int:
@@ -123,12 +140,16 @@ def sekunde(lat1: float, lon1: float, lat2: float, lon2: float,
     return vrsta[0], vir
 
 
-def pot(lat1: float, lon1: float, lat2: float, lon2: float) -> dict | None:
+def pot(lat1: float, lon1: float, lat2: float, lon2: float,
+        koraki: bool = False) -> dict | None:
     """Ena pešpot z **geometrijo**: `{"sekunde", "metri", "tocke": [[lat,lon]]}`.
 
     Matrika pove samo, koliko časa hodiš; ta pove **kod**. Rabi jo podrobni
     prikaz poti, kjer je vprašanje "kako pridem do postajališča" in je odgovor
     črta na zemljevidu, ne številka.
+
+    `koraki=True` doda še navodila za vodenje (`navodilo()`): kje zaviti in
+    kam. Brez njih je vodenje samo črta, ki ji mora človek slediti z očmi.
 
     `None`, kadar usmerjevalnika ni — takrat prikaz nariše ravno črto in to
     tudi pove, namesto da bi trdil pot, ki je ni.
@@ -142,7 +163,8 @@ def pot(lat1: float, lon1: float, lat2: float, lon2: float) -> dict | None:
         r = requests.get(
             f"{config.OSRM_URL}/route/v1/foot/"
             f"{lon1:.6f},{lat1:.6f};{lon2:.6f},{lat2:.6f}",
-            params={"overview": "full", "geometries": "geojson"},
+            params={"overview": "full", "geometries": "geojson",
+                    "steps": "true" if koraki else "false"},
             timeout=_TIMEOUT_S)
         r.raise_for_status()
         poti = r.json().get("routes") or []
@@ -153,11 +175,79 @@ def pot(lat1: float, lon1: float, lat2: float, lon2: float) -> dict | None:
         # brskalniku: obrnjena koordinata je napaka, ki je na zemljevidu videti
         # kot pot nekje v Somaliji, in nihče je ne pripiše temu mestu.
         tocke = [[c[1], c[0]] for c in naj["geometry"]["coordinates"]]
+        out = {"sekunde": round(naj["duration"]), "metri": round(naj["distance"]),
+               "tocke": tocke}
+        if koraki:
+            out["koraki"] = []
+            prevozeno = 0.0
+            for noga in naj.get("legs", ()):
+                for k in noga.get("steps", ()):
+                    n = navodilo(k)
+                    n["od_zacetka"] = round(prevozeno)
+                    out["koraki"].append(n)
+                    prevozeno += k.get("distance", 0)
     except Exception:
         _zadnja_napaka = time.monotonic()
         return None
-    return {"sekunde": round(naj["duration"]), "metri": round(naj["distance"]),
-            "tocke": tocke}
+    return out
+
+
+# ---------------------------------------------------------------- navodila
+
+_SMER = {"left": "levo", "right": "desno",
+         "slight left": "rahlo levo", "slight right": "rahlo desno",
+         "sharp left": "ostro levo", "sharp right": "ostro desno",
+         "straight": "naravnost", "uturn": "nazaj"}
+
+#: Stran neba v mestniku: "pojdi proti severu". Osem, ker je na začetku poti
+#: to edino, kar lahko rečemo -- ulice, po kateri greš, pogosto nima imena.
+_STRAN_NEBA = ("severu", "severovzhodu", "vzhodu", "jugovzhodu",
+               "jugu", "jugozahodu", "zahodu", "severozahodu")
+
+
+def navodilo(korak: dict) -> dict:
+    """En OSRM-ov korak kot navodilo: `{znak, besedilo, ulica, metri, ll}`.
+
+    **Ime ulice ostane v imenovalniku in stoji posebej** ("Levo · Trubarjeva
+    cesta"), ne v stavku ("zavij levo na Trubarjevo cesto"). Sklanjati imena
+    ne znamo splošno in napačen sklon je slabši od nobenega -- isto pravilo
+    kot pri imenih postaj.
+
+    `znak` je ključ za puščico na zaslonu; besedilo je za tiste, ki je ne vidijo
+    (in za bralnik zaslona).
+    """
+    m = korak.get("maneuver") or {}
+    tip = m.get("type", "")
+    smer = m.get("modifier")
+    beseda = _SMER.get(smer, "naravnost")
+    znak = beseda.replace(" ", "-")
+    if tip == "depart":
+        znak = "start"
+        besedilo = "Pojdi proti " + _STRAN_NEBA[round(m.get("bearing_after", 0) / 45) % 8]
+    elif tip == "arrive":
+        znak = "cilj"
+        besedilo = "Na cilju"
+    elif tip in ("roundabout", "rotary", "roundabout turn"):
+        znak = "krozisce"
+        izvoz = m.get("exit")
+        besedilo = f"V krožišču {izvoz}. izvoz" if izvoz else "Skozi krožišče"
+    elif tip in ("exit roundabout", "exit rotary"):
+        besedilo = "Zapusti krožišče"
+    elif beseda == "nazaj":
+        besedilo = "Obrni se"
+    elif beseda == "naravnost":
+        besedilo = "Naravnost"
+    elif tip == "fork":
+        besedilo = f"Na razcepu {beseda}"
+    elif tip == "end of road":
+        besedilo = f"Na koncu ceste {beseda}"
+    else:
+        besedilo = f"Zavij {beseda}" if " " not in beseda else beseda.capitalize()
+    lon, lat = (m.get("location") or [None, None])[:2]
+    return {"znak": znak, "besedilo": besedilo, "ulica": korak.get("name") or "",
+            "metri": round(korak.get("distance", 0)),
+            "sekunde": round(korak.get("duration", 0)),
+            "ll": [lat, lon] if lat is not None else None}
 
 
 # ---------------------------------------------------------------- peš med postajališči

@@ -27,8 +27,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (alerts, collector, config, db, journey, lpp, obisk, pot,
-               pristanek, stats, stik)
+from . import (alerts, collector, config, db, hoja, journey, lpp, naslovi, obisk,
+               pot, pristanek, stats, stik)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -2054,6 +2054,16 @@ def _add_gps_position(conn, rows: list[dict]) -> None:
         r["position_source"] = "GPS"
 
 
+def _ura_s(vrednost: str, ime: str) -> int:
+    try:
+        h, m = (int(x) for x in vrednost.split(":")[:2])
+    except ValueError:
+        raise HTTPException(400, f"{ime} mora biti HH:MM")
+    if not (0 <= h < 30 and 0 <= m < 60):
+        raise HTTPException(400, f"{ime} mora biti HH:MM")
+    return h * 3600 + m * 60
+
+
 @app.get("/api/pot")
 def api_pot(
     od_lat: float = Query(..., ge=45.2, le=47.0, description="izhodišče: širina"),
@@ -2061,9 +2071,13 @@ def api_pot(
     do_lat: float = Query(..., ge=45.2, le=47.0, description="cilj: širina"),
     do_lon: float = Query(..., ge=13.2, le=16.8, description="cilj: dolžina"),
     date: str | None = None,
-    ob: str | None = Query(None, description="HH:MM; privzeto zdaj"),
+    ob: str | None = Query(None, description="HH:MM odhoda; privzeto zdaj"),
+    prihod: str | None = Query(None, description="HH:MM: biti na cilju najpozneje ob; "
+                                                 "prvi predlog je najpoznejši odhod"),
     hoje: int = Query(pot.MAX_HOJE_S // 60, ge=3, le=45,
-                      description="koliko minut hoje na vsakem koncu"),
+                      description="koliko minut do postaje na vsakem koncu"),
+    kmh: float = Query(hoja.KMH, ge=3, le=25,
+                       description="hitrost na obeh koncih: 5 peš, 15 kolo ali rolka"),
 ):
     """Pot od vrat do vrat: hoja → vožnja → (prestop) → vožnja → hoja.
 
@@ -2077,31 +2091,27 @@ def api_pot(
     """
     now = datetime.now(TZ)
     dan = _check_date(date) or now.date().isoformat()
-    if ob:
-        try:
-            h, m = (int(x) for x in ob.split(":")[:2])
-        except ValueError:
-            raise HTTPException(400, "ob mora biti HH:MM")
-        odhod_s = h * 3600 + m * 60
-    else:
-        odhod_s = journey.now_seconds(now)
-
     # `now_s` samo za današnji dan: le takrat obstaja meja med prevoženim in
     # tem, kar je še pred vozilom. Za izrecno vprašan drug datum ostane pomen
     # "prometni dan D" in zamud ni.
     zdaj_s = journey.now_seconds(now) if dan == now.date().isoformat() else None
+    od, do = (od_lat, od_lon), (do_lat, do_lon)
+    kako = {"max_hoje_s": hoje * 60, "kmh": kmh}
+
     with _conn() as conn:
-        izid = pot.isci(conn, (od_lat, od_lon), (do_lat, do_lon), dan, odhod_s,
-                        max_hoje_s=hoje * 60, now_s=zdaj_s)
+        if prihod:
+            return pot.isci_do(conn, od, do, dan, _ura_s(prihod, "prihod"), zdaj_s, **kako)
+
+        odhod_s = _ura_s(ob, "ob") if ob else journey.now_seconds(now)
+        izid = pot.isci(conn, od, do, dan, odhod_s, now_s=zdaj_s, **kako)
         # Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan in ima `dep_s`
         # čez 86 400 (največji v voznem redu je 121 680, torej 33:48). Brez
         # tega vprašanje ob pol enih zjutraj ne najde ničesar, čeprav vozi.
         if not ob and now.hour < 4:
-            vceraj = pot.isci(conn, (od_lat, od_lon), (do_lat, do_lon),
-                              journey.yesterday(now), odhod_s + 86400,
-                              max_hoje_s=hoje * 60,
-                              now_s=(zdaj_s + 86400) if zdaj_s is not None else None)
-            izid["predlogi"] = sorted(izid["predlogi"] + vceraj["predlogi"],
+            vcerajsnji = pot.isci(conn, od, do, journey.yesterday(now), odhod_s + 86400,
+                                  now_s=(zdaj_s + 86400) if zdaj_s is not None else None,
+                                  **kako)
+            izid["predlogi"] = sorted(izid["predlogi"] + vcerajsnji["predlogi"],
                                       key=lambda p: (p["prihod"], p["hoje_s"]))
     return izid
 
@@ -2114,6 +2124,7 @@ def api_pot_podrobno(
     do_lat: float = Query(..., ge=45.2, le=47.0),
     do_lon: float = Query(..., ge=13.2, le=16.8),
     date: str | None = None,
+    kmh: float = Query(hoja.KMH, ge=3, le=25),
 ):
     """Ena pot, razložena: kod hodiš in kje izstopiš.
 
@@ -2134,11 +2145,55 @@ def api_pot_podrobno(
     with _conn() as conn:
         try:
             return pot.podrobnosti(conn, spec, (od_lat, od_lon), (do_lat, do_lon),
-                                   dan, zdaj_s)
+                                   dan, zdaj_s, kmh=kmh)
         except KeyError as e:
             # Vozni red se je med iskanjem in klikom lahko zamenjal (uvoz je
             # dnevni). Deljena povezava od včeraj torej ni napaka odjemalca.
             raise HTTPException(404, str(e).strip("'"))
+
+
+@app.get("/api/naslovi")
+def api_naslovi(
+    q: str = Query(..., min_length=2, max_length=80),
+    lat: float | None = Query(None, ge=45.2, le=47.0,
+                              description="okolica iskanja: drugi konec poti ali sredina zemljevida"),
+    lon: float | None = Query(None, ge=13.2, le=16.8),
+):
+    """Naslovi, ulice, kraji in imenovane točke iz lastnega kazala (`naslovi.py`).
+
+    Postaj tu ni -- te ima stran v svojem kazalu, s prometom. Kadar kazala na
+    strežniku ni, je odgovor prazen in `kazalo: false`: stran išče samo po
+    postajah, kot pred njim.
+
+    Poizvedba se ne zapisuje, isto kot pri `/api/pot`: kdo išče kateri naslov,
+    je isto občutljivo kot to, kje stoji.
+    """
+    blizu = (lat, lon) if lat is not None and lon is not None else None
+    return {"kazalo": naslovi.pot_kazala().exists(),
+            "zadetki": naslovi.isci(q, blizu)}
+
+
+@app.get("/api/pot/hoja")
+def api_pot_hoja(
+    od_lat: float = Query(..., ge=45.2, le=47.0),
+    od_lon: float = Query(..., ge=13.2, le=16.8),
+    do_lat: float = Query(..., ge=45.2, le=47.0),
+    do_lon: float = Query(..., ge=13.2, le=16.8),
+    kmh: float = Query(hoja.KMH, ge=3, le=25),
+):
+    """Ena pešpot s koraki, od tu do tja: za vodenje, ko potnik zaide.
+
+    Usmerjevalnik je na strežniku in iz brskalnika ni dosegljiv, zato je to
+    edina pot do nove poti, ko potnik zavije drugam, kot je bilo narisano.
+    Brez usmerjevalnika je odgovor 503 -- zračne črte kot pot ne ponujamo.
+    """
+    p = hoja.pot(od_lat, od_lon, do_lat, do_lon, koraki=True)
+    if p is None:
+        raise HTTPException(503, "peš usmerjevalnik ne odgovarja")
+    p["sekunde"] = hoja.pri_hitrosti(p["sekunde"], kmh)
+    for k in p["koraki"]:
+        k["sekunde"] = hoja.pri_hitrosti(k["sekunde"], kmh)
+    return p
 
 
 @app.get("/app/pot/podrobno", response_class=HTMLResponse)

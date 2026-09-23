@@ -258,7 +258,7 @@ def test_razberi_noge_prenese_dvopicje_v_id():
 def test_podrobnosti_sestavi_hojo_in_vmesne_postanke(conn, monkeypatch):
     """Podrobni prikaz doda dvoje, česar seznam nima: pešpot in postanke vmes."""
     monkeypatch.setattr(hoja, "pot",
-                        lambda *a: {"sekunde": 300, "metri": 400,
+                        lambda *a, **k: {"sekunde": 300, "metri": 400,
                                     "tocke": [[46.0, 14.5], [46.001, 14.5]]})
     _voznja(conn, "t1", "LP 1", [(1, "BLIZU", 8 * 3600 + 600),
                                  (2, "DALEC", 8 * 3600 + 900),
@@ -277,7 +277,7 @@ def test_podrobnosti_sestavi_hojo_in_vmesne_postanke(conn, monkeypatch):
 
 def test_podrobnosti_brez_usmerjevalnika_prizna_da_poti_ni(conn, monkeypatch):
     """Ravna črta na zemljevidu bi trdila pot, ki je ni."""
-    monkeypatch.setattr(hoja, "pot", lambda *a: None)
+    monkeypatch.setattr(hoja, "pot", lambda *a, **k: None)
     _voznja(conn, "t1", "LP 1", [(1, "BLIZU", 8 * 3600 + 600),
                                  (2, "CILJ", 8 * 3600 + 1200)])
     conn.commit()
@@ -362,3 +362,142 @@ def test_brez_podatka_ni_isto_kot_tocno(conn):
     r = pot.isci(conn, OD, DO, D, 8 * 3600, now_s=8 * 3600 + 700)
     noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
     assert noga["zamuda"] is not None and noga["brez_podatka"] is False
+
+
+# ---------------------------------------------------------------- biti tam do
+
+def test_nazaj_da_najpoznejsi_odhod_za_rok(conn):
+    """„Moram biti tam ob 8:45" -- prvi predlog je tisti, s katerim od doma
+    odideš najpozneje, ne tisti, s katerim si najprej tam."""
+    _voznja(conn, "t1", "zgodnji", [(1, "BLIZU", 8 * 3600 + 600),
+                                    (2, "CILJ", 8 * 3600 + 1500)])
+    _voznja(conn, "t2", "pravi", [(1, "BLIZU", 8 * 3600 + 1200),
+                                  (2, "CILJ", 8 * 3600 + 2400)])
+    _voznja(conn, "t3", "prepozni", [(1, "BLIZU", 8 * 3600 + 1800),
+                                     (2, "CILJ", 8 * 3600 + 3300)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, None, prihod_do_s=8 * 3600 + 2700)
+    voznje = [[n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"]
+              for p in r["predlogi"]]
+    assert voznje[0] == ["pravi"]
+    assert ["prepozni"] not in voznje
+    assert ["zgodnji"] in voznje, "prejšnja zveza je izbira z več rezerve"
+    assert r["prihod_do"] == pot._polnoc(D) + 8 * 3600 + 2700
+    assert all(p["prihod"] <= r["prihod_do"] for p in r["predlogi"])
+
+
+def test_nazaj_prag_prestopa_samo_ob_prihodu_z_vozilom(conn):
+    """Prag za prestop velja, kadar na postajališče pripelješ, ne kadar
+    prideš peš od doma -- isto kot prvi krog iskanja naprej."""
+    # Avtobus z BLIZU pripelje na DALEC dve minuti pred drugim: premalo za
+    # avtobusni prag treh minut. Peš do DALEC (13 min) pa ga ujameš.
+    _voznja(conn, "t1", "dovoz", [(1, "BLIZU", 8 * 3600 + 300),
+                                  (2, "DALEC", 8 * 3600 + 1200)])
+    _voznja(conn, "t2", "naprej", [(1, "DALEC", 8 * 3600 + 1320),
+                                   (2, "CILJ", 8 * 3600 + 2400)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, None, prihod_do_s=8 * 3600 + 2700)
+    for p in r["predlogi"]:
+        voznje = [n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"]
+        assert voznje != ["dovoz", "naprej"], "prestop dveh minut ni prestop"
+    prvi = r["predlogi"][0]
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["naprej"]
+    assert prvi["noge"][0]["vrsta"] == "hoja" and prvi["noge"][0]["do"] == "Daleč"
+
+
+def test_nazaj_ne_ponudi_odhoda_pred_zdaj(conn):
+    """Za danes je najzgodnejši odhod zdaj: pot, ki bi odšla pred petimi
+    minutami, ni odgovor na „kdaj moram od doma"."""
+    _voznja(conn, "t1", "odpeljal", [(1, "BLIZU", 8 * 3600 + 600),
+                                     (2, "CILJ", 8 * 3600 + 1500)])
+    _voznja(conn, "t2", "se_ujames", [(1, "BLIZU", 8 * 3600 + 1200),
+                                      (2, "CILJ", 8 * 3600 + 2400)])
+    conn.commit()
+    zdaj = 8 * 3600 + 900
+    r = pot.isci(conn, OD, DO, D, zdaj, now_s=zdaj, prihod_do_s=9 * 3600)
+    voznje = [n["train_no"] for p in r["predlogi"] for n in p["noge"]
+              if n["vrsta"] == "voznja"]
+    assert voznje == ["se_ujames"]
+    assert all(p["odhod"] >= pot._polnoc(D) + zdaj for p in r["predlogi"])
+
+
+def test_nazaj_se_ujema_z_iskanjem_naprej(conn):
+    """Naprej od T da prihod A; nazaj z rokom A mora dati odhod, ki ni prej
+    od odhoda naprej, in priti do A. Dve smeri istega postopka se ne smeta
+    razhajati."""
+    _voznja(conn, "t1", "a", [(1, "BLIZU", 8 * 3600 + 600),
+                              (2, "DALEC", 8 * 3600 + 900)])
+    _voznja(conn, "t2", "b", [(1, "DALEC", 8 * 3600 + 1500),
+                              (2, "ROB", 8 * 3600 + 1800)])
+    _voznja(conn, "t3", "c", [(1, "ROB", 8 * 3600 + 2400),
+                              (2, "CILJ", 8 * 3600 + 2700)])
+    _voznja(conn, "t4", "d", [(1, "DALEC", 8 * 3600 + 1560),
+                              (2, "CILJ", 8 * 3600 + 3000)])
+    conn.commit()
+    polnoc = pot._polnoc(D)
+    for t0 in (7 * 3600 + 3000, 8 * 3600, 8 * 3600 + 300):
+        naprej = pot.isci(conn, OD, DO, D, t0)
+        prvi = next(p for p in naprej["predlogi"]
+                    if any(n["vrsta"] == "voznja" for n in p["noge"]))
+        nazaj = pot.isci(conn, OD, DO, D, None, prihod_do_s=prvi["prihod"] - polnoc)
+        z = nazaj["predlogi"][0]
+        assert z["odhod"] >= prvi["odhod"]
+        assert z["prihod"] <= prvi["prihod"]
+
+
+def test_rok_ki_ga_ne_ujames_pove_kdaj_si_tam_najprej(conn):
+    """Do roka ne gre več: odgovor ni „ni poti", ampak najhitrejša pot od
+    zdaj in beseda, da je prepozno. Pot je -- samo prepozna."""
+    _voznja(conn, "t1", "odpeljal", [(1, "BLIZU", 8 * 3600 + 600),
+                                     (2, "CILJ", 8 * 3600 + 1500)])
+    _voznja(conn, "t2", "naslednji", [(1, "BLIZU", 9 * 3600),
+                                      (2, "CILJ", 9 * 3600 + 900)])
+    conn.commit()
+    zdaj = 8 * 3600 + 900
+    r = pot.isci_do(conn, OD, DO, D, 8 * 3600 + 1800, zdaj)
+    assert r["ne_ujames"] is True
+    assert r["prihod_do"] == pot._polnoc(D) + 8 * 3600 + 1800
+    assert [n["train_no"] for n in r["predlogi"][0]["noge"]
+            if n["vrsta"] == "voznja"] == ["naslednji"]
+
+    # Za drug dan "zdaj" ni meja: rok velja, kakor je.
+    r = pot.isci_do(conn, OD, DO, D, 8 * 3600 + 1800, None)
+    assert not r.get("ne_ujames")
+    assert [n["train_no"] for n in r["predlogi"][0]["noge"]
+            if n["vrsta"] == "voznja"] == ["odpeljal"]
+
+
+# ---------------------------------------------------------------- kolo
+
+def test_kolo_doseze_dlje_in_hitreje(conn):
+    """S 15 km/h je postajališče 4 km stran v dosegu, ki ga peš ni, in pot
+    do bližnjega traja tretjino časa."""
+    _postaja(conn, "DALJE", "Dalje", 46.036, 14.500)      # 4 km: 48 min peš
+    _voznja(conn, "t1", "a", [(1, "DALJE", 8 * 3600 + 1800),
+                              (2, "CILJ", 8 * 3600 + 2400)])
+    _voznja(conn, "t2", "b", [(1, "DALEC", 8 * 3600 + 1800),
+                              (2, "CILJ", 8 * 3600 + 2400)])
+    conn.commit()
+    streze = {"DALJE", "DALEC", "CILJ"}
+    pes, _, _ = pot.blizu(conn, OD[0], OD[1], streze)
+    kolo, _, _ = pot.blizu(conn, OD[0], OD[1], streze, kmh=hoja.KOLO_KMH)
+    assert "DALJE" not in pes and "DALJE" in kolo
+    assert kolo["DALEC"] == pytest.approx(pes["DALEC"] / 3, abs=1)
+
+
+def test_kolo_meri_eno_postajalisce_na_ime(conn, monkeypatch):
+    """Pri kolesu je kandidatov devetkrat več; istoimenska postajališča na
+    dveh straneh ceste dobijo en izmerjen čas in razliko po zraku."""
+    _postaja(conn, "DALEC2", "Daleč", 46.0102, 14.5003)   # druga stran ceste
+    merjeni = []
+    stara = hoja.matrika
+
+    def matrika(lat, lon, cilji, smer="od"):
+        merjeni.extend(cilji)
+        return stara(lat, lon, cilji, smer)
+    monkeypatch.setattr(pot.hoja, "matrika", matrika)
+    streze = {"DALEC", "DALEC2"}
+    kolo, _, _ = pot.blizu(conn, OD[0], OD[1], streze, kmh=hoja.KOLO_KMH)
+    assert len(merjeni) == 1
+    assert set(kolo) == {"DALEC", "DALEC2"}
+    assert abs(kolo["DALEC2"] - kolo["DALEC"]) <= 10

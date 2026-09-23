@@ -12,9 +12,9 @@ zahteva nobene spremembe v zaledju.
 **Zemljevid: MapLibre, podlaga vektorska OpenFreeMap** (22. 9. 2026). Prej
 Leaflet z rastrskimi ploščicami (OSM, nato Esri „Dark Gray Canvas").
 MapLibre je BSD, plačljiv je Mapbox, ne MapLibre. Veliki zemljevid je
-MapLibre sam, ker se od blizu nagne v 3D; trije majhni (pot, podrobna pot,
-okno vožnje) ostanejo Leaflet z MapLibrom kot podlago (glej
-`.claude/rules/zemljevid.md`).
+MapLibre sam, ker se od blizu nagne v 3D, in od 23. 9. 2026 tudi obe strani
+poti (vodenje po pešpoti je kamera za hrbtom pešca). Okno vožnje ostane
+Leaflet z MapLibrom kot podlago (glej `.claude/rules/zemljevid.md`).
 
 ## Kaj aplikacija dela
 

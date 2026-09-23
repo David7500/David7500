@@ -68,12 +68,27 @@
   max-height: 260px; overflow-y: auto;
 }
 .tocka-zadetki button {
-  display: block; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
   padding: 7px 8px; font: inherit; font-size: 0.87rem;
   color: var(--ink); background: none; border: 0; border-radius: var(--r-sm);
   cursor: pointer;
 }
-.tocka-zadetki button:hover { background: var(--bg-hover); }
+.tocka-zadetki button:hover, .tocka-zadetki button.je-izbran { background: var(--bg-hover); }
+.z-besedilo { display: flex; flex-direction: column; min-width: 0; }
+.z-ime { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.z-pod { font-size: 0.74rem; color: var(--ink-mute);
+         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Znak vrste: postaja je obroč v barvi vožnje (kot na zemljevidu), naslov
+   in točka pika, kraj in ulica prazen kvadrat. Oblika in ne samo barva --
+   barva sama ne sme nositi pomena. */
+.z-znak { flex: none; width: 10px; height: 10px; border-radius: 50%;
+          border: 2px solid var(--ink-mute); }
+.z-postaja { border-color: #f0934f; }
+.z-naslov, .z-tocka { background: var(--ink-mute); border-color: var(--ink-mute);
+                      transform: scale(0.7); }
+.z-kraj, .z-ulica { border-radius: 2px; }
+.z-shranjena { border: 0; width: auto; height: auto; border-radius: 0; color: var(--accent-lit); }
+.z-shranjena::before { content: "★"; font-size: 0.8rem; }
 
 /* ---------------------------------------------------------------- shranjene točke */
 
@@ -107,22 +122,39 @@
 }
 .tocka-zeton:hover { color: var(--ink); border-color: var(--accent); }
 
-/* ---------------------------------------------------------------- nastavitve */
+/* ---------------------------------------------------------------- kdaj */
 
-.pot-nastavitve {
-  display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;
-  margin: 14px 0 10px;
-}
-.polje { display: flex; flex-direction: column; gap: 4px; }
-.polje > span {
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--ink-mute);
-}
-.polje input, .polje select {
-  padding: 8px 9px; font: inherit; font-size: 0.87rem;
+/* Vprašanje je prihod: "čim prej" ali "do ure". Preklop je en dotik, dan in
+   ura se pokažeta šele, ko ju vprašanje rabi. */
+.kdaj { border: 0; margin: 14px 0 12px; padding: 0; min-width: 0; }
+.kdaj legend { padding: 0; }
+.kdaj .seg { max-width: 280px; }
+.kdaj-do { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* Polje z dnevom je širše od ure: v njem stojita še dve puščici in koledarski
+   gumbek brskalnika. Meja ni izbrana na oko — pri 160 px je leva puščica
+   ležala čez besedilo datuma: datum konča pri ~105 px, puščici zasedeta
+   68 px levo od gumbka pri 28 px od desnega roba, torej mora biti polje vsaj
+   105 + 68 + 28 = 201 px. */
+.kdaj-do .date-row { flex: 1 1 210px; min-width: 210px; }
+.kdaj-do input {
+  padding: 8px 9px; font: inherit; font-size: 0.9rem;
   color: var(--ink); background: var(--bg-raised);
   border: 1px solid var(--line-firm); border-radius: var(--r);
 }
+#tam { flex: 0 0 auto; width: 118px; font-family: var(--mono); }
+
+/* Možnosti so drobne in pod gumbom: večina ljudi jih ne rabi. */
+.moznosti {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+  margin: 10px 0 12px; font-size: 0.78rem; color: var(--ink-mute);
+}
+.moznost { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.moznost select {
+  padding: 3px 4px; font: inherit; color: var(--ink-dim);
+  background: var(--bg-raised); border: 1px solid var(--line-firm); border-radius: var(--r-sm);
+}
+.moznost input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+.moznost small { color: var(--ink-faint); font-size: 0.95em; }
 
 /* Zamenjava krajev stoji MED poljema, ker zamenja prav njiju. */
 .tocka-menjava { display: flex; justify-content: flex-end; margin: -6px 0 4px; }
@@ -134,24 +166,20 @@
 }
 .zamenjaj:hover { color: var(--ink); border-color: #3d434f; }
 
-/* Polje z dnevom je širše od ure: v njem stojita še dve puščici in koledarski
-   gumbek brskalnika. Meja ni izbrana na oko — pri 160 px je leva puščica
-   ležala čez besedilo datuma: datum konča pri ~105 px, puščici zasedeta
-   68 px levo od gumbka pri 28 px od desnega roba, torej mora biti polje vsaj
-   105 + 68 + 28 = 201 px. */
-.pot-nastavitve .date-row { min-width: 210px; }
-.polje-op { font-size: 0.85em; text-transform: none; letter-spacing: 0;
-            color: var(--ink-faint); }
-
 .pot-isci {
-  flex: 1; min-width: 110px;
-  padding: 9px 14px; font: inherit; font-size: 0.9rem; font-weight: 600;
+  display: block; width: 100%;
+  padding: 10px 14px; font: inherit; font-size: 0.9rem; font-weight: 600;
   color: #1a1206; background: var(--accent-lit);
   border: 0; border-radius: var(--r); cursor: pointer;
 }
 .pot-isci:hover { background: #f5a061; }
 
-.pot-stanje { min-height: 1.2em; font-size: 0.82rem; color: var(--ink-dim); }
+.pot-stanje { min-height: 1.2em; font-size: 0.82rem; color: var(--ink-dim); line-height: 1.5; }
+/* Naslov izida pove, na katero vprašanje odgovarja -- "čim prej" in "do
+   8:00" dasta drugačen vrstni red in ta mora biti viden. */
+.izid-naslov { display: block; font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+.izid-naslov.je-pozno { color: var(--sev-bad); }
+.pot-stanje strong { color: var(--ink); font-family: var(--mono); }
 .pot-stanje.je-napaka { color: var(--sev-bad); }
 .pot-stanje.je-prazno { color: var(--ink-mute); }
 
@@ -197,6 +225,16 @@
 .v-loc { color: var(--ink-ghost); font-size: 0.8rem; }
 
 .p-meta { font-size: 0.76rem; color: var(--ink-mute); }
+/* Rezerva do roka: prvo, kar zanima človeka, ki mora biti tam ob osmih. */
+.p-rok { color: var(--ink-dim); margin-right: 6px; }
+.p-rok::after { content: " ·"; color: var(--ink-ghost); }
+.p-rok.je-zadnji {
+  color: var(--accent-lit); font-weight: 600; text-transform: uppercase;
+  font-size: 0.68rem; letter-spacing: 0.05em;
+}
+.p-rok.je-zadnji::after { content: ""; }
+.p-rok.je-pozno { color: var(--sev-bad); }
+.predlog.je-pozno { border-left-color: var(--sev-bad); }
 .p-vr { color: var(--ink-faint); }
 
 .zam {
@@ -241,8 +279,6 @@ body.karta-velika .pot {
 
 /* ---------------------------------------------------------------- zamude */
 
-.noga-vrh { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-
 .zam {
   font-family: var(--mono); font-size: 0.76rem; font-weight: 600;
   padding: 1px 5px; border: 1px solid; border-radius: var(--r-sm);
@@ -253,19 +289,6 @@ body.karta-velika .pot {
   color: var(--ink-faint); border-color: var(--line);
   font-family: var(--sans); font-weight: 400;
 }
-
-.noga-vr, .predlog-vr {
-  display: block; font-size: 0.72rem; color: var(--ink-faint);
-}
-.predlog-vr { display: inline; margin-left: 6px; }
-
-.noga.je-prestop .noga-znak { color: var(--ink-mute); }
-.noga.je-prestop .noga-telo { font-size: 0.8rem; }
-
-/* "Po meri" odkrije polje ob izbirniku, ne namesto njega: pogosti trije
-   ostanejo en dotik dalec. */
-.hoje-skupina { display: flex; gap: 6px; align-items: center; }
-.hoje-skupina input { width: 4.5em; }
 
 /* ---------------------------------------------------------------- pot po korakih */
 
@@ -279,13 +302,7 @@ body.karta-velika .pot {
 .podr-ure { font-family: var(--mono); font-size: 1.25rem; }
 .podr-meta { font-size: 0.82rem; color: var(--ink-dim); margin-top: 2px; }
 
-/* Kartica predloga je povezava; puscica pove, da klik nekam pelje. */
-.predlog-vec {
-  display: block; margin-top: 8px;
-  font-size: 0.76rem; color: var(--ink-mute);
-}
 a.predlog { display: block; text-decoration: none; color: inherit; }
-a.predlog:hover .predlog-vec { color: var(--accent-lit); }
 
 .koraki { list-style: none; margin: 0; padding: 0; }
 
@@ -337,24 +354,88 @@ a.predlog:hover .predlog-vec { color: var(--accent-lit); }
 .karta-lega.je-on { color: #2f7fff; border-color: #2f7fff88; }
 .karta-lega.je-iskanje { opacity: 0.6; }
 
-/* Kompas pod gumboma v kotu: zgornji desni kot je edini, ki ga brskalnik na
-   telefonu ne prekrije (glej zemljevid.md). */
-.kompas {
-  position: absolute; z-index: 500; top: 48px; right: 10px;
-  display: flex; align-items: center; gap: 8px;
-  max-width: calc(100% - 80px);
-  padding: 6px 10px 6px 6px;
-  background: var(--bg-panel); border: 1px solid var(--line-firm); border-radius: var(--r);
+/* Peš korak ima dve dejanji: vodenje (glavno) in pogled na zemljevid. */
+.korak-gumbi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.korak-gumbi .hoja-gumb { margin-top: 0; }
+.vodi-gumb {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; font: inherit; font-size: 0.8rem; font-weight: 600;
+  color: #fff; background: #2f7fff; border: 0; border-radius: var(--r); cursor: pointer;
 }
-.kompas-igla { flex-shrink: 0; transform-origin: 50% 50%; }
-.kompas-igla.je-tu { opacity: 0.35; }
-.kompas-besedilo { display: flex; flex-direction: column; min-width: 0; }
-.kompas-kam {
-  font-size: 0.8rem; font-weight: 600; color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.vodi-gumb:hover { background: #4b8fff; }
+
+.navodila ol { display: flex; flex-direction: column; gap: 1px; }
+.navodila li { display: flex; align-items: center; gap: 8px; }
+.navodila li svg { flex: none; color: var(--ink-mute); }
+.nav-ulica { color: var(--ink-mute); }
+.nav-m { margin-left: auto; padding-left: 8px; font-family: var(--mono); font-size: 0.74rem;
+         color: var(--ink-faint); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- vodenje */
+/*
+ * Zemljevid čez vso stran, zgoraj naslednji zavoj, spodaj cilj in vozilo.
+ * Plošča s koraki se umakne: med hojo je vprašanje "kam zdaj", ne "kaj je
+ * vse". Glava strani ostane -- nazaj mora biti vedno en dotik.
+ */
+body.vodenje .pot-panel,
+body.vodenje .karta-max,
+body.vodenje .maplibregl-ctrl-top-left { display: none; }
+body.vodenje .pot {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  height: calc(100dvh - var(--topbar-h));
 }
-.kompas-opomba { font-size: 0.7rem; color: var(--ink-mute); }
-.kompas-opomba:empty { display: none; }
+
+.vod-manever, .vod-spodaj {
+  position: absolute; z-index: 600; left: 10px; right: 10px; max-width: 520px;
+  background: rgba(20, 22, 26, 0.95); border: 1px solid var(--line-firm);
+  border-radius: var(--r-lg); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.vod-manever {
+  top: 10px; display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+}
+.vod-znak {
+  flex: none; width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; background: #2f7fff; border-radius: 10px;
+}
+.vod-besedilo { min-width: 0; flex: 1; }
+.vod-razdalja { font: 600 1.3rem/1.15 var(--mono); color: var(--ink); }
+.vod-razdalja:empty { display: none; }
+.vod-navodilo { font-size: 1rem; font-weight: 600; line-height: 1.25; }
+.vod-ulica { font-size: 0.84rem; color: var(--ink-dim);
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vod-ulica:empty { display: none; }
+.vod-listaj { display: flex; gap: 4px; }
+.vod-listaj button {
+  width: 36px; height: 36px; font: 600 1.1rem/1 var(--sans);
+  color: var(--ink); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r); cursor: pointer;
+}
+
+/* Spodaj pusti prostor za navedbo vira v kotu: ta je pogoj rabe. */
+.vod-spodaj { bottom: 34px; padding: 11px 13px; font-size: 0.88rem; }
+.vod-cilj:empty { display: none; }
+.vod-cilj strong { font-weight: 600; }
+.vod-vozilo { margin-top: 5px; font-size: 0.86rem; line-height: 1.45; color: var(--ink-dim); }
+.vod-vozilo strong { color: var(--ink); font-family: var(--mono); }
+.vod-vozilo[hidden] { display: none; }
+.vod-stanje { font-weight: 600; white-space: nowrap; }
+.vod-stanje.je-dobro { color: var(--ok); }
+.vod-stanje.je-tesno { color: var(--sev-hard); }
+.vod-stanje.je-slabo { color: var(--sev-bad); }
+.vod-opomba { margin-top: 5px; font-size: 0.78rem; color: var(--ink-mute); }
+.vod-opomba:empty { display: none; }
+.vod-gumbi { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.vod-gumb {
+  padding: 8px 14px; font: inherit; font-size: 0.84rem;
+  color: var(--ink); background: var(--bg-raised);
+  border: 1px solid var(--line-firm); border-radius: var(--r); cursor: pointer;
+}
+.vod-gumb.je-glavni { margin-right: auto; color: #fff; background: #2f7fff; border-color: #2f7fff; font-weight: 600; }
+
+/* Puščica "ti" pri vodenju leži na tleh in se vrti z zemljevidom. */
+.vod-jaz { width: 30px; height: 30px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
 
 .v-prestop { font-size: 0.76rem; }
 
@@ -365,3 +446,25 @@ a.predlog:hover .predlog-vec { color: var(--accent-lit); }
   background: none; border: 0; border-bottom: 1px solid currentColor;
   padding: 0; cursor: pointer;
 }
+
+/* ---------------------------------------------------------------- zemljevid MapLibre */
+
+.pot-karta { position: relative; background: #12141a; }
+.ni-zemljevida {
+  margin: 0; padding: 40px 20px; text-align: center;
+  font-size: 0.85rem; color: var(--ink-mute);
+}
+body.brez-zemljevida .karta-max, body.brez-zemljevida .karta-lega { display: none; }
+
+.maplibregl-map { font-family: var(--sans); }
+.kajros-tooltip .maplibregl-popup-content {
+  padding: 3px 7px; border-radius: 5px; box-shadow: none;
+  background: #1a1d23; border: 1px solid #2b303a; color: var(--ink);
+  font: 400 11px/1.4 var(--sans); white-space: nowrap;
+}
+.kajros-tooltip .maplibregl-popup-tip { display: none; }
+/* Navedba vira je pogoj rabe, a ne sme pokriti poti na telefonu. */
+.maplibregl-ctrl-attrib { font-size: 10px; }
+
+.pot-vir { margin: 22px 0 0; font-size: 0.72rem; line-height: 1.5; color: var(--ink-faint); }
+.pot-vir a { color: var(--ink-mute); }

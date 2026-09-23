@@ -11,7 +11,7 @@ vrhu — kdaj moraš iz hiše.
 
 | odločitev | razlog |
 |---|---|
-| **brez iskanja po naslovu** | geokodiranje pomeni tujo storitev, ki ob vsakem tipkanju izve, kam greš. Cilj se izbere na zemljevidu, iz shranjenih točk ali po imenu postaje |
+| **naslov iz lastnega kazala** | tuji geokodirnik bi ob vsakem tipkanju izvedel, kam greš; kazalo iz OSM je 51 MB in teče pri nas (23. 9. 2026, prej naslova sploh ni bilo) |
 | **doseg hoje 25 minut** | izmerjeno: večji doseg ne stane nič in najde boljše poti (Grosuplje 10 minut boljši prihod) |
 | **hoja iz OSRM, ne iz faktorja** | izmerjeno na 1 080 poteh: faktor 1,45 podceni pot v 48 % primerov, največji obvoz je 7,86× |
 | **usmerjevalnik doma, ne javni** | javni bi ob vsakem iskanju izvedel, kje si; poleg tega je „samo za demo" in bi bil nova točka odpovedi |
@@ -124,19 +124,115 @@ hoji na postajo je to nevarnejše od zamude in mora biti napisano.
    vmesni postanki vožnje
 7. ✅ Shranjene točke („dom", „služba") — `localStorage`, žetoni pod obema
    poljema
-8. ⬜ „Biti tam ob X" (obratno iskanje)
+8. ✅ „Biti tam do X" (obratno iskanje, `_isci_nazaj()`), 23. 9. 2026
+9. ✅ Kolo ali rolka: 15 km/h na obeh koncih (`kmh`)
+10. ✅ Iskanje po naslovu, ulici in kraju iz lastnega kazala (`naslovi.py`)
+11. ✅ Vodenje po pešpoti na zemljevidu v 3D (`/app/pot/podrobno`)
 
 **Peš noge v `journey.plan()` namenoma niso vezane.** Njegova oblika odgovora
 (`train1`, `trip1`, `via`) nima mesta za peš nogo in prikaz bi jo narisal
 napol; prvorazredne so v `pot.py`, kjer je bil odgovor zasnovan zanje.
 
+## „Biti tam do X" — obratno iskanje
+
+Vprašanje človeka, ki mora biti v službi ob osmih, ni „kdaj sem najprej
+tam", ampak **„kdaj moram najpozneje od doma"**. Iskanje naprej na to ne zna
+odgovoriti: odhod ob 7:04 in prihod ob 7:52 ne povesta, da isti prihod da
+tudi odhod ob 7:20.
+
+`_isci_nazaj()` je isti postopek po krogih, obrnjen v času: od cilja z rokom,
+katera vožnja pripelje dovolj zgodaj, in do kdaj moraš biti na njenem vstopu.
+**Oznaki sta dve na postajališče**: `pes` (do kdaj moraš biti tu, če prideš
+peš od doma — brez praga) in `voz` (do kdaj moraš sem pripeljati — že manj
+praga vožnje, na katero se tu vkrcaš). V iskanju naprej je to ena oznaka, ker
+je prag znan šele ob vkrcanju; nazaj je znan prej.
+
+Preverjeno 23. 9. 2026 na **60 parih točk** (16 krajev, prometni dan 24. 9.,
+ure 7–18): naprej ob uri T da prihod A; nazaj z rokom A + 1 min. Pri 34 parih
+z vožnjo **nazaj ni bil nikoli slabši in nikoli prepozen**, v **17 od 34** je
+našel poznejši odhod za isti prihod (0–37 min pozneje, mediana 0,5). Minuta
+rezerve je v preizkusu zato, ker prikaz reže hojo pod minuto: brez nje je
+bilo „slabše" dvakrat, oboje zaradi 19 s oziroma 1 s hoje, ki je v roku ni.
+
+Čas na razvojnem stroju: **mediana 140 ms, največ 307 ms** za celo iskanje z
+izbirami (naprej 105 / 910 ms).
+
+Izbire poleg prvega so zrcalo iskanja naprej: dve **prejšnji** zvezi (rok =
+prihod prejšnje − 1 min) namesto naslednjih, manj prestopov, druga pot in
+manj hoje. Druge izbire smejo oditi največ 30 minut prej od prve.
+
+**Za danes je spodnja meja zdaj.** Kadar do roka ne gre več, strežnik ne
+vrne „ni poti", ampak iskanje naprej od zdaj z `ne_ujames` — stran pove, kdaj
+si tam najprej.
+
+## Kolo ali rolka
+
+Ena sama druga hitrost, 15 km/h, in ne drsnik: potnik ve, ali ima kolo, ne pa,
+koliko vozi. Pot ostane **peš pot** iz OSRM — kolesarskega profila nimamo, za
+„koliko do postaje" pa je razlika majhna. Peš prestop na postaji ostane hoja.
+
+Doseg je trikrat daljši in ploščina devetkrat večja: pri Bavarskem dvoru je v
+25 minutah vožnje **760 postajališč** (peš 210), in meja 120 kandidatov bi jih
+odrezala pri 1,3 km — prav tam, kjer kolo začne pomagati. Zato se pri kolesu
+meri **eno postajališče na ime** (istoimenska v 200 m dobijo njegov čas in
+razliko po zraku): 340 imen, meja 300. Matrika na razvojnem stroju: 1 × 120
+27 ms, 1 × 300 71 ms, 1 × 600 202 ms, 1 × 1 000 453 ms.
+
+Izmerjeno na 50 parih ob 8:00 (37 z odgovorom v obeh): s kolesom si na cilju
+**mediano 23 minut prej** (5–141). Iskanje s kolesom mediana 217 ms, največ
+476 ms na razvojnem stroju — arwen je okoli trikrat počasnejši.
+
+## Iskanje po naslovu
+
+Do 23. 9. 2026 se je kraj izbral na zemljevidu, iz shranjenih točk ali po
+imenu postaje — naslova ni bilo, ker bi ga tuji geokodirnik ob vsakem
+pritisku tipke izvedel. Zdaj je kazalo naše (`kajros/naslovi.py`,
+`/api/naslovi`, gradnja `deploy/naslovi.sh`).
+
+| kaj | izmerjeno 23. 9. 2026 (razvojni stroj) |
+|---|---|
+| izvoz OSM (`slovenia-latest.osm.pbf`) | 313 MB |
+| osmium `tags-filter` + `export` v vsebniku | 28 s, 1 208 362 predmetov, 566 MB geojsonseq |
+| gradnja kazala | 10–12 s |
+| kazalo (`naslovi.sqlite`, dve FTS5) | 51 MB |
+| hišnih številk v izvozu | 815 060 → **435 044** različnih (točka in stavba sta v OSM pogosto ista hiša) |
+| ulic (iz naslovov) / krajev / imenovanih točk | 17 085 / 11 237 / 82 934 |
+| poizvedba | 0–15 ms |
+
+Kar se je pokazalo pri preizkušanju in je zdaj v kodi:
+
+* **Hišna številka ni predpona.** „50*" ujame poštno številko 5000 in s tem
+  vso Novo Gorico; pravi naslov je izpadel iz prvih 400 zadetkov.
+* **Bližina šteje več od črk.** „Trubarjeva 5" je v Laškem ime do črke, v
+  Ljubljani pa „Trubarjeva cesta 5"; z večjo težo ujemanja je bilo Laško prvo.
+  Brez okolice (človek še ni povedal, kje je) imata mesti Ljubljana in Maribor
+  prednost, ker tam živi največ ljudi.
+* **Dve kazali, ne eno.** Brez številke človek išče ulico, kraj ali ime; s
+  številko naslov. Eno kazalo bi za „ljub" premetalo sto tisoč ljubljanskih
+  naslovov, da bi našlo mesto.
+* **Točka brez kraja dobi mesto okrog sebe**, ne najbližje vasi: BTC ima
+  najbližjo vas Hrastje, človek pa reče „BTC v Ljubljani". Polmer mesta je
+  6 km, trga 2,5 km.
+* **„Četrtna skupnost X" je X** — isto kot v slogu zemljevida.
+
+OSM v Ljubljani nima vseh hišnih številk (Slovenska cesta 50 manjka, 51 je);
+pokritost proti registru GURS ni izmerjena.
+
+## Vodenje po pešpoti
+
+Stran `/app/pot/podrobno` ima pri vsakem peš koraku „vodi me". Zemljevid je
+MapLibre (kot veliki), nagnjen in obrnjen v smer hoje; navodila so OSRM-ova
+(`steps=true`) v slovenščini (`hoja.navodilo()`), ulica v imenovalniku.
+Pravila in pragovi so v `.claude/rules/strani.md`. Preizkušeno v chromiumu z
+lego prek CDP (`Emulation.setGeolocationOverride`) na poti Polje →
+Bavarski dvor: prvi zavoj, odštevanje do vlaka z rezervo, preračun po odmiku
+78 m (nova pot 44 točk namesto 83), prihod na postajališče, nadaljevanje po
+izstopu in pogled od daleč (6,4 km od začetka poti).
+
+Česa ni izmerjenega: kako se vodenje obnese na pravem telefonu med hojo (GPS
+v mestu, kompas, baterija). To pove šele prva hoja z njim.
+
 ### Kaj ostaja odprto
 
-* **„Biti tam ob X"** je obratno iskanje: isti postopek, obrnjen v času, iz
-  cilja nazaj do najpoznejšega odhoda. Nekaj deset vrstic, ne nov algoritem.
-* **Več predlogov.** Zdaj sta „najhitreje" in „z manj hoje"; „najpozneje
-  odideš za isti prihod" je vredno več od obojega in pride z obratnim iskanjem.
-* **Shranjene točke** („dom", „služba") — `localStorage`, kot pri shranjenih
-  poteh iskalnika.
-* **Predlogi po prihodu, ne le prvi.** Iskanje vrne eno pot na vprašanje;
-  „naslednja čez pol ure" je še eno vprašanje in še eno iskanje.
+* **Kolesarski profil OSRM**, če bi se izkazalo, da peš pot kolesarja pošilja
+  čez stopnice. Zdaj ni izmerjeno.

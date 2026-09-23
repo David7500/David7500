@@ -1,0 +1,251 @@
+/* Zemljevid obeh strani poti: seznama predlogov in poti po korakih.
+ *
+ * MapLibre sam, brez Leafleta, kot veliki zemljevid (22. 9. 2026): od blizu se
+ * kamera nagne in stavbe se dvignejo -- in prav od blizu se po poti hodi.
+ * Vodenje po pešpoti je kamera za hrbtom pešca; Leaflet je ne zna nagniti.
+ *
+ * Klasičen skript in ne modul: naslovi statike nosijo odtis vsebine (`s()`),
+ * uvoz modula po relativnem imenu pa bi ga izgubil in service worker bi
+ * stregel staro datoteko (ista past, kot jo opisuje `api._razlicica`).
+ *
+ * Brez WebGL2 zemljevida ni. Obe strani delata tudi brez njega -- seznam in
+ * koraki so v plošči --, zato stran to pove in gre naprej.
+ */
+
+// MapLibrov zoom je za ena manjši od Leafletovega (512-pikselne ploščice).
+// Meje na teh straneh so zapisane v Leafletovih enotah, kot na velikem
+// zemljevidu; pretvorba je samo tu.
+const PK_LZ = 1;
+
+// Nagib sledi približku, isto kot na velikem zemljevidu: od daleč raven, od
+// Leafletovega z15 se nagiba in pri z17,5 doseže 60°.
+const PK_NAGIB_OD = 14;
+const PK_NAGIB_CEZ = 2.5;
+const PK_NAGIB_NAJVEC = 60;
+
+// Hoja je modra in črtkana, vožnja oranžna in polna: potnik mora na prvi
+// pogled videti, kje ga nese vozilo in kje njegove noge.
+const PK_HOJA = "#2f7fff";
+const PK_VOZNJA = "#f0934f";
+const PK_PRAZNO = { type: "FeatureCollection", features: [] };
+
+function pkNagib(z) {
+  return PK_NAGIB_NAJVEC * Math.max(0, Math.min(1, (z - PK_NAGIB_OD) / PK_NAGIB_CEZ));
+}
+
+let pkKnjiznica = null;
+
+// Slog MapLibra je v glavi predloge, ne dodan tu: zemljevid, ustvarjen pred
+// njim, dobi napačno velikost platna.
+function pkNaloziMapLibre() {
+  if (!pkKnjiznica) pkKnjiznica = import(`${MAPLIBRE_POT}/maplibre-gl.mjs`);
+  return pkKnjiznica;
+}
+
+/** Krog v metrih kot mnogokotnik [lon, lat]: v nagibu mora ležati na tleh. */
+function pkKrog(lat, lon, m, n = 40) {
+  const dLat = m / 111320;
+  const dLon = m / (111320 * Math.cos(lat * Math.PI / 180));
+  const pts = [];
+  for (let i = 0; i <= n; i += 1) {
+    const a = (i / n) * 2 * Math.PI;
+    pts.push([lon + dLon * Math.cos(a), lat + dLat * Math.sin(a)]);
+  }
+  return pts;
+}
+
+/**
+ * Zemljevid v elementu `el`: `{ map, ml }` ali `null`, kadar ga ni mogoče
+ * narisati. Viri `k-pot` (črte), `k-tocke` (izhodišče, cilj, postajališča) in
+ * `k-jaz` (lastna lega) so dodani in prazni.
+ */
+async function pkUstvari(el) {
+  if (!imaWebGL2()) return null;
+  let ml;
+  try {
+    ml = await pkNaloziMapLibre();
+  } catch (e) {
+    console.warn("MapLibre se ni naložil:", e && e.message);
+    return null;
+  }
+  const slog = document.querySelector('meta[name="kajros-podlaga"]')?.content
+    || "/static/podlaga.json";
+  let map;
+  try {
+    map = new ml.Map({
+      container: el, style: slog,
+      center: [14.6, 46.1], zoom: 8 - PK_LZ, maxZoom: 19 - PK_LZ,
+      canvasContextAttributes: { antialias: true },
+      // Nagib je lastnost približka, ne gesta -- isto kot na velikem
+      // zemljevidu. Vrtenje ostane: pri vodenju je sever redko zgoraj.
+      transformCameraUpdate: (t) => ({ pitch: pkNagib(t.zoom) }),
+      pitchWithRotate: false, touchPitch: false,
+      attributionControl: { compact: true },
+    });
+  } catch (e) {
+    console.warn("zemljevida ni mogoče odpreti:", e && e.message);
+    return null;
+  }
+
+  let izrisano = false;
+  map.on("error", (e) => {
+    // Opis ploščic pred prvim izrisom ni prišel (OpenFreeMap ni dosegljiv):
+    // rezerva, kot na velikem zemljevidu. Napaka ene ploščice pozneje ni razlog.
+    if (!izrisano && e.sourceId === "omt") pkEsri(map);
+    else console.warn("zemljevid:", e && e.error && e.error.message);
+  });
+  await new Promise((ok) => map.once("load", ok));
+  izrisano = true;
+
+  // Stavbe od blizu, pod napisi -- sicer stavba pokrije ime ulice za sabo.
+  const prviNapis = map.getLayersOrder().find((id) => map.getLayer(id).type === "symbol");
+  if (map.getLayer("stavba")) {
+    map.addLayer({
+      id: "stavbe-3d", type: "fill-extrusion", source: "omt", "source-layer": "building",
+      minzoom: PK_NAGIB_OD,
+      paint: {
+        "fill-extrusion-color": map.getPaintProperty("stavba", "fill-color"),
+        "fill-extrusion-height": ["interpolate", ["linear"], ["zoom"],
+          PK_NAGIB_OD, 0, PK_NAGIB_OD + 2, ["coalesce", ["get", "render_height"], 0]],
+        "fill-extrusion-base": ["interpolate", ["linear"], ["zoom"],
+          PK_NAGIB_OD, 0, PK_NAGIB_OD + 2, ["coalesce", ["get", "render_min_height"], 0]],
+        "fill-extrusion-opacity": ["interpolate", ["linear"], ["zoom"],
+          PK_NAGIB_OD, 0, PK_NAGIB_OD + 1, 0.85],
+      },
+    }, prviNapis);
+  }
+  // Dodatna imena krajev so tu prižgana, drugače kot na velikem zemljevidu:
+  // tam tekmujejo z vozili, tu je vprašanje "kje je to".
+  for (const id of map.getLayersOrder()) {
+    const l = map.getLayer(id);
+    if (l.metadata && l.metadata["kajros:napisi"] === "dodatni") {
+      map.setLayoutProperty(id, "visibility", "visible");
+    }
+  }
+
+  for (const id of ["k-pot", "k-tocke", "k-jaz"]) {
+    map.addSource(id, { type: "geojson", data: PK_PRAZNO });
+  }
+  const okroglo = { "line-join": "round", "line-cap": "round" };
+  map.addLayer({ id: "k-voznja-obroba", type: "line", source: "k-pot", layout: okroglo,
+                 filter: ["==", ["get", "vrsta"], "voznja"],
+                 paint: { "line-color": "#0f1115", "line-width": 7,
+                          "line-opacity": ["coalesce", ["get", "prosojnost"], 0.85] } });
+  map.addLayer({ id: "k-voznja", type: "line", source: "k-pot", layout: okroglo,
+                 filter: ["==", ["get", "vrsta"], "voznja"],
+                 paint: { "line-color": PK_VOZNJA, "line-width": 4,
+                          "line-opacity": ["coalesce", ["get", "prosojnost"], 0.9] } });
+  map.addLayer({ id: "k-hoja-obroba", type: "line", source: "k-pot", layout: okroglo,
+                 filter: ["==", ["get", "vrsta"], "hoja"],
+                 paint: { "line-color": "#0f1115", "line-width": 7,
+                          "line-opacity": ["*", 0.6, ["coalesce", ["get", "prosojnost"], 1]] } });
+  // Črtkana: pot je pešpot, ne proga. Pri vodenju pa je debelejša, ker je
+  // takrat edina stvar na zemljevidu, ki šteje.
+  map.addLayer({ id: "k-hoja", type: "line", source: "k-pot",
+                 layout: { "line-join": "round", "line-cap": "butt" },
+                 filter: ["==", ["get", "vrsta"], "hoja"],
+                 paint: { "line-color": PK_HOJA,
+                          "line-width": ["coalesce", ["get", "sirina"], 4],
+                          "line-dasharray": [1.4, 1.2],
+                          "line-opacity": ["coalesce", ["get", "prosojnost"], 0.95] } });
+  map.addLayer({ id: "k-jaz-obroc", type: "fill", source: "k-jaz",
+                 filter: ["==", ["get", "vrsta"], "obroc"],
+                 paint: { "fill-color": ME_COLOR, "fill-opacity": 0.1 } });
+  map.addLayer({ id: "k-jaz-rob", type: "line", source: "k-jaz",
+                 filter: ["==", ["get", "vrsta"], "obroc"],
+                 paint: { "line-color": ME_COLOR, "line-width": 1, "line-opacity": 0.35 } });
+  // Točke: izhodišče prazen svetel obroč, postajališče obroč v barvi vožnje,
+  // cilj polna oranžna. Polna modra je samo "ti" -- kdor išče od svoje lege,
+  // je imel prej dve enaki piki eno na drugi.
+  map.addLayer({ id: "k-tocke", type: "circle", source: "k-tocke",
+                 paint: {
+                   "circle-radius": ["match", ["get", "vrsta"], "postaja", 5.5, 8],
+                   "circle-color": ["match", ["get", "vrsta"], "cilj", PK_VOZNJA, "#0f1115"],
+                   "circle-stroke-width": 3,
+                   "circle-stroke-color": ["match", ["get", "vrsta"],
+                     "izhodisce", "#e7eaf0", "cilj", "#ffffff", PK_VOZNJA],
+                   "circle-pitch-alignment": "map",
+                 } });
+  map.addLayer({ id: "k-jaz", type: "circle", source: "k-jaz",
+                 filter: ["==", ["get", "vrsta"], "pika"],
+                 paint: { "circle-radius": 7, "circle-color": ME_COLOR,
+                          "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5,
+                          "circle-pitch-alignment": "map" } });
+
+  // Ime točke na dotik; po petih sekundah odide (isto kot `bindFlashName`).
+  let oblacek = null;
+  map.on("click", "k-tocke", (e) => {
+    const f = e.features && e.features[0];
+    if (!f || !f.properties.ime) return;
+    if (oblacek) oblacek.remove();
+    oblacek = new ml.Popup({ closeButton: false, className: "kajros-tooltip", offset: 10 })
+      .setLngLat(f.geometry.coordinates).setText(f.properties.ime).addTo(map);
+    const moj = oblacek;
+    setTimeout(() => moj.remove(), NAME_MS);
+  });
+  map.on("mouseenter", "k-tocke", () => { map.getCanvas().style.cursor = "pointer"; });
+  map.on("mouseleave", "k-tocke", () => { map.getCanvas().style.cursor = ""; });
+
+  return { map, ml };
+}
+
+function pkEsri(map) {
+  if (map.getSource("esri")) return;
+  console.warn("vektorska podlaga ni na voljo, velja Esri");
+  const ploscice = (sloj) => ({
+    type: "raster", tileSize: 256, maxzoom: 16,
+    tiles: [`${ESRI_CANVAS}/${sloj}/MapServer/tile/{z}/{y}/{x}`],
+  });
+  map.addSource("esri", { ...ploscice("World_Dark_Gray_Base"), attribution: ESRI_ATTR });
+  map.addSource("esri-imena", ploscice("World_Dark_Gray_Reference"));
+  const prvi = map.getLayersOrder()[0];
+  map.addLayer({ id: "esri", type: "raster", source: "esri" }, prvi);
+  map.addLayer({ id: "esri-imena", type: "raster", source: "esri-imena",
+                 paint: { "raster-opacity": 0.9 } }, prvi);
+}
+
+function pkVir(map, id, features) {
+  const v = map && map.getSource(id);
+  if (v) v.setData({ type: "FeatureCollection", features });
+}
+
+function pkCrta(tocke, lastnosti) {
+  // Naše točke so [lat, lon] (tako jih vrača strežnik), MapLibre bere [lon, lat].
+  return { type: "Feature", properties: lastnosti,
+           geometry: { type: "LineString", coordinates: tocke.map((t) => [t[1], t[0]]) } };
+}
+
+function pkTocka(ll, lastnosti) {
+  return { type: "Feature", properties: lastnosti,
+           geometry: { type: "Point", coordinates: [ll[1], ll[0]] } };
+}
+
+/** Lastna lega z obročem točnosti. Obroč ni okras: GPS v mestu zna zgrešiti
+ *  za sto metrov in pika brez njega trdi natančnost, ki je nima. */
+function pkJaz(map, loc) {
+  const f = [];
+  if (loc && loc.acc && loc.acc > 25) {
+    f.push({ type: "Feature", properties: { vrsta: "obroc" },
+             geometry: { type: "Polygon", coordinates: [pkKrog(loc.lat, loc.lon, loc.acc)] } });
+  }
+  if (loc) f.push(pkTocka([loc.lat, loc.lon], { vrsta: "pika" }));
+  pkVir(map, "k-jaz", f);
+}
+
+/** Okvir seznama točk [lat, lon] za `fitBounds`. */
+function pkOkvir(tocke) {
+  let s = 90, j = -90, z = 180, v = -180;
+  for (const t of tocke) {
+    if (!t) continue;
+    s = Math.min(s, t[0]); j = Math.max(j, t[0]);
+    z = Math.min(z, t[1]); v = Math.max(v, t[1]);
+  }
+  return s <= j ? [[z, s], [v, j]] : null;
+}
+
+function pkPrilagodi(map, tocke, opts) {
+  const o = pkOkvir(tocke);
+  if (!o || !map) return;
+  const { maxZoom = 16, padding = 50, ...ostalo } = opts || {};
+  map.fitBounds(o, { padding, maxZoom: maxZoom - PK_LZ, ...ostalo });
+}

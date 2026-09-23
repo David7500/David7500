@@ -133,8 +133,9 @@ function dayLabel(isoDate) {
 // brez registracije in brez omejitve ogledov, podatki OpenStreetMap. Risanje
 // je MapLibre, ki ga Leaflet nosi kot eno plast (`leaflet-maplibre-gl`) --
 // vse nase plasti, geste in oznake ostanejo Leafletove in se ne spremenijo.
-// Veliki zemljevid (`dashboard.js`) je izjema: tam je MapLibre sam, ker
-// Leaflet kamere ne zna nagniti; od tu rabi samo konstante.
+// Veliki zemljevid (`dashboard.js`) in obe strani poti (`pot_karta.js`) sta
+// izjema: tam je MapLibre sam, ker Leaflet kamere ne zna nagniti; od tu rabita
+// samo konstante. Leafletov je samo še zemljevid v oknu vožnje.
 //
 // Prej je bil Esri "Dark Gray Canvas": prave ploscice samo do z16, imena ulic
 // vpecena v podlago in brez moznosti, da bi se ugasnila posebej. Vektorska
@@ -293,8 +294,8 @@ const SKLONI = {
   vlak: ["vlak", "vlaka", "vlaki", "vlakov"],
   voznja: ["vožnja", "vožnji", "vožnje", "voženj"],
   prestop: ["prestop", "prestopa", "prestopi", "prestopov"],
-  predlog: ["predlog", "predloga", "predlogi", "predlogov"],
   postanek: ["postanek", "postanka", "postanki", "postankov"],
+  navodilo: ["navodilo", "navodili", "navodila", "navodil"],
 };
 
 function sklon(n, kljuc) {
@@ -1433,9 +1434,12 @@ function locateMe(opts) {
  */
 function sledi(cb) {
   if (!navigator.geolocation || !window.isSecureContext) return () => {};
+  // Smer in hitrost sta za vodenje po pešpoti: GPS smer gibanja pozna samo
+  // med hojo (`heading` je sicer `null`), kompas telefona pa tudi na mestu.
   const id = navigator.geolocation.watchPosition(
     (p) => cb({ lat: p.coords.latitude, lon: p.coords.longitude,
-                acc: p.coords.accuracy }),
+                acc: p.coords.accuracy, smer: p.coords.heading,
+                hitrost: p.coords.speed }),
     () => {},                       // tiho: gumb "lega" je tisti, ki porocá
     { enableHighAccuracy: true, maximumAge: 0 },
   );

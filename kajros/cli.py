@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
-               ocena, pot, stats, weather)
+               naslovi, ocena, pot, stats, weather)
 
 
 def cmd_init(args):
@@ -295,6 +295,12 @@ def cmd_pespoti(args):
     print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
+def cmd_naslovi(args):
+    """Kazalo naslovov iz izvoza OSM (`deploy/naslovi.sh` ga pripravi)."""
+    cilj = Path(args.out) if args.out else naslovi.pot_kazala()
+    print(json.dumps(naslovi.zgradi(Path(args.vir), cilj), indent=2, ensure_ascii=False))
+
+
 def cmd_pot(args):
     """Pot od vrat do vrat. Točki sta `lat,lon` -- kot ju da zemljevid."""
     def tocka(niz):
@@ -304,16 +310,24 @@ def cmd_pot(args):
     conn = db.connect()
     db.init(conn)
     dan = args.dan or journey.today()
-    if args.ob:
-        h, m = (int(x) for x in args.ob.split(":")[:2])
-        odhod_s = h * 3600 + m * 60
+
+    def ura(niz):
+        h, m = (int(x) for x in niz.split(":")[:2])
+        return h * 3600 + m * 60
+
+    odhod_s = ura(args.ob) if args.ob else journey.now_seconds()
+    kmh = hoja.KOLO_KMH if args.kolo else hoja.KMH
+    if args.prihod:
+        izid = pot.isci(conn, tocka(args.od), tocka(args.do), dan, None,
+                        prihod_do_s=ura(args.prihod), kmh=kmh)
     else:
-        odhod_s = journey.now_seconds()
-    izid = pot.isci(conn, tocka(args.od), tocka(args.do), dan, odhod_s)
+        izid = pot.isci(conn, tocka(args.od), tocka(args.do), dan, odhod_s, kmh=kmh)
     if args.json:
         print(json.dumps(izid, indent=2, ensure_ascii=False))
         return
-    print(f"{dan}, od {odhod_s // 3600:02d}:{odhod_s % 3600 // 60:02d} · "
+    kdaj = (f"tam do {args.prihod}" if args.prihod
+            else f"od {odhod_s // 3600:02d}:{odhod_s % 3600 // 60:02d}")
+    print(f"{dan}, {kdaj} · "
           f"{izid['izhodisc']} izhodišč, {izid['ciljev']} ciljev · "
           f"hoja: {izid['vir_hoje']} · {izid['trajalo_ms']} ms")
     if not izid["predlogi"]:
@@ -479,9 +493,16 @@ def main(argv=None):
     a.add_argument("--od", required=True, help="izhodisce kot lat,lon")
     a.add_argument("--do", required=True, help="cilj kot lat,lon")
     a.add_argument("--ob", help="HH:MM; privzeto zdaj")
+    a.add_argument("--prihod", help="HH:MM: biti tam najpozneje ob (obratno iskanje)")
+    a.add_argument("--kolo", action="store_true", help="15 km/h na obeh koncih namesto hoje")
     a.add_argument("--dan", help="prometni dan; privzeto danes")
     a.add_argument("--json", action="store_true")
     a.set_defaults(func=cmd_pot)
+
+    a = sub.add_parser("naslovi", help="zgradi kazalo naslovov iz izvoza OSM (geojsonseq)")
+    a.add_argument("vir", help="izvoz `osmium export -f geojsonseq`")
+    a.add_argument("--out", help="privzeto $KAJROS_NASLOVI ali data/naslovi.sqlite")
+    a.set_defaults(func=cmd_naslovi)
 
     a = sub.add_parser("alerts", help="obvestila o ovirah in zive zamude")
     a.add_argument("--fetch", action="store_true", help="poberi feed zdaj")

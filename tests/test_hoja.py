@@ -150,6 +150,48 @@ def test_prazen_seznam_ne_kliche_niti_usmerjevalnika(monkeypatch):
     assert hoja.matrika(46.0, 14.5, []) == ([], hoja.ZRAK)
 
 
+def test_kolo_je_ista_pot_trikrat_hitreje():
+    assert hoja.pri_hitrosti(900, hoja.KOLO_KMH) == 300
+    assert hoja.pri_hitrosti(900) == 900
+    assert hoja.pri_hitrosti(None, hoja.KOLO_KMH) is None
+    # Polmer predfiltra raste s hitrostjo -- sicer bi kolo ostalo pri peš dosegu.
+    assert hoja.doseg_zracno(25 * 60, hoja.KOLO_KMH) == pytest.approx(6250)
+
+
+def test_pot_s_koraki_za_vodenje(monkeypatch):
+    """Koraki nosijo znak, besedilo, ulico v imenovalniku in razdaljo od
+    začetka -- vodenje po njej ve, koliko je še do naslednjega zavoja."""
+    korak = lambda tip, smer, ime, m, ll, **k: {
+        "maneuver": {"type": tip, "modifier": smer, "location": ll,
+                     "bearing_after": 90, **k},
+        "name": ime, "distance": m, "duration": m / 1.39}
+    telo = {"routes": [{"duration": 300, "distance": 420,
+                        "geometry": {"coordinates": [[14.5, 46.0], [14.501, 46.001]]},
+                        "legs": [{"steps": [
+                            korak("depart", None, "", 40, [14.5, 46.0]),
+                            korak("turn", "left", "Trubarjeva cesta", 300, [14.5005, 46.0003]),
+                            korak("roundabout", "right", "", 80, [14.5008, 46.0008], exit=2),
+                            korak("arrive", None, "", 0, [14.501, 46.001])]}]}]}
+    poslano = {}
+
+    def fake_get(url, params=None, timeout=None):
+        poslano.update(params)
+        return _Odgovor(telo)
+
+    monkeypatch.setattr(config, "OSRM_URL", "http://x:5000")
+    monkeypatch.setattr(hoja.requests, "get", fake_get)
+    p = hoja.pot(46.0, 14.5, 46.001, 14.501, koraki=True)
+    assert poslano["steps"] == "true"
+    znaki = [k["znak"] for k in p["koraki"]]
+    assert znaki == ["start", "levo", "krozisce", "cilj"]
+    assert p["koraki"][0]["besedilo"] == "Pojdi proti vzhodu"
+    assert p["koraki"][1]["besedilo"] == "Zavij levo"
+    assert p["koraki"][1]["ulica"] == "Trubarjeva cesta"
+    assert p["koraki"][2]["besedilo"] == "V krožišču 2. izvoz"
+    assert [k["od_zacetka"] for k in p["koraki"]] == [0, 40, 340, 420]
+    assert p["koraki"][1]["ll"] == [46.0003, 14.5005], "OSRM piše lon, lat"
+
+
 # ---------------------------------------------------------------- peš med postajališči
 
 @pytest.fixture()

@@ -1,6 +1,10 @@
 ---
 paths:
   - "kajros/pristanek.py"
+  - "kajros/static/pot.js"
+  - "kajros/static/pot.css"
+  - "kajros/static/pot_karta.js"
+  - "kajros/static/pot_podrobno.js"
   - "kajros/static/pristanek.css"
   - "kajros/static/connections.js"
   - "kajros/static/connections.css"
@@ -148,10 +152,37 @@ izbira svojo velikost in malo sliko:
 ## `/app/pot` („Najhitrejša pot") — edina stran, ki se ne začne pri postaji
 
 Potnik ve, **kje stoji**, ne pa, s katere postaje mu pelje. Zato sta vhoda dva
-kraja (klik na zemljevid, lastna lega, ime postaje) in ne dve imeni, iskanje pa
-teče **čez obe omrežji** — vlak in avtobus sta lahko v isti verigi. To je za
-zemljevidom druga stran, ki omrežji namerno meša; zato ima `/api/stations/search`
-tu `network=vse`, drugod pa ostane privzeta `zeleznica`.
+kraja (naslov, ulica, kraj, postaja, shranjena točka, lastna lega, klik na
+zemljevid) in ne dve imeni, iskanje pa teče **čez obe omrežji** — vlak in
+avtobus sta lahko v isti verigi. To je za zemljevidom druga stran, ki omrežji
+namerno meša; zato ima `/api/stations/search` tu `network=vse`, drugod pa
+ostane privzeta `zeleznica`.
+
+**Naslovi so iz našega kazala, ne iz geokodirnika** (23. 9. 2026,
+`kajros/naslovi.py`, `/api/naslovi`). Tuji ponudnik bi ob vsakem pritisku
+tipke izvedel, kam kdo gre; prej zato naslova sploh ni bilo mogoče vpisati.
+Kazalo je iz OSM (hišne številke GURS so tam za vso državo), 51 MB, poizvedba
+1–15 ms. V polju je en seznam s tremi viri: shranjene točke, postaje (kazalo v
+brskalniku, takoj) in naslovi/ulice/kraji/točke (strežnik, 160 ms zakasnitve,
+prekinjeno ob naslednji tipki). S številko v poizvedbi so naslovi prvi, brez
+nje postaje. Razvrščanje upošteva **okolico** — drugi konec poti, lastno lego
+ali sredino zemljevida —, sicer je „Trubarjeva 5" v Laškem pred Ljubljano.
+„Poišči" po tipkanju brez izbire vzame prvi zadetek, ne javi „manjka cilj".
+Kadar kazala na strežniku ni, polje išče samo po postajah, kot prej.
+
+**Vprašanje časa je prihod, ne odhod.** „Kdaj moraš biti tam?": **čim prej**
+(privzeto, danes od zdaj; prvi predlog je najzgodnejši prihod) ali **do ure**
+(dan in ura; prvi predlog je tisti, s katerim od doma odideš **najpozneje**,
+z oznako „najpozneje" in rezervo do roka na vsaki kartici). Odhod ob uri je
+izginil, ker je odgovor na vprašanje, ki ga nihče ne postavi: človek ve, kdaj
+mora biti v službi, ne pa, kdaj mora od doma. `/api/pot` `ob` ostane za druge
+odjemalce. Kadar za danes do roka ne gre več, stran ne reče „ni poti", ampak
+„Do 8:00 ne prideš več. Najhitreje si tam ob 8:14." (`ne_ujames`). Pot, ki po
+napovedi zamude pride prepozno, ostane na seznamu, a na dnu in rdeče.
+
+**Kolo ali rolka je potrditveno polje, ne drsnik** — 15 km/h na obeh koncih
+(`kmh`), drobno pod gumbom, ker ga večina ne rabi. V verigi piše „kolo 4"
+namesto „peš 12"; prestop med postajališči ostane „peš".
 
 **Na domači strani je NAD omrežjema, ne med „ostalim".** Je edina stran, ki
 dela brez tega, da potnik ve, s katere postaje gre — torej prvo vprašanje, ne
@@ -211,17 +242,16 @@ popravek in prvi klik pokaže, kje si bil, ne kje si.
   „hoja je **ocena**" — zasilna številka je izmerjeno mediano 6 minut predolga
   in brez te besede se bere kot izmerjena.
 
-**Pot je deljiva prek naslova** (`?od=lat,lon&do=lat,lon&ob=HH:MM`). Brez tega
-je edini način, da nekomu poveš, kako priti do tebe, opis s stavki — in prav
-to je stran, ki naj bi ga nadomestila.
+**Pot je deljiva prek naslova** (`?od=lat,lon&do=lat,lon&tam=HH:MM&dan=…&kolo=1`).
+Brez tega je edini način, da nekomu poveš, kako priti do tebe, opis s stavki —
+in prav to je stran, ki naj bi ga nadomestila. Današnji dan v naslov ne gre.
 
-**Polje se imenuje „Največ hoje DO POSTAJE".** Brez teh dveh besed si stran
+**Polje se glasi „do postaje največ".** Brez besed „do postaje" si stran
 nasprotuje sama s sabo: polje pravi 25 minut, pot „vso pot peš" pa jih ima 85.
 Omejitev velja za dostop do postajališča in z njega, ne za hojo sploh — in ta
-razlika je bila prijavljena kot napaka, ker je bila nevidna.
-
-Ima tudi „po meri": 25 minut je privzetek in ne pravilo. Meji polja sta isti
-kot na endpointu (3–45) — polje, ki dovoli več od strežnika, laže.
+razlika je bila prijavljena kot napaka, ker je bila nevidna. „Po meri" je
+odšel s poenostavitvijo obrazca (23. 9. 2026); vrednost iz naslova, ki je med
+izbirami ni, dobi svojo izbiro. Meji sta isti kot na endpointu (3–45).
 
 **Polje ostane, in to je izmerjeno.** Na 40 parih točk (1,5–25 km, jutranja
 konica) je ura prihoda pri **vsaki** vrednosti meje enaka — mediana razlike
@@ -256,13 +286,11 @@ sicer postajališča tik čez mejo sploh ne izmeri in te številke ni od kod dob
   izbrana na oko: pri 160 px je leva puščica ležala čez besedilo datuma —
   datum konča pri ~105 px, puščici zasedeta 68 px levo od koledarskega gumbka
   brskalnika, ki stoji 28 px od desnega roba.
-* **Ura, ki je danes že mimo, se ne popravi tiho.** „Ob 06:00" ob treh
-  popoldne je vrnilo jutranje odhode, kot da so pred tabo, in nič tega ni
-  povedalo. Zdaj piše „Ta ura je danes že mimo — predlogi so za nazaj" in
-  ponudi **poišči od zdaj**. Iskanje se ne premakne samo: pogled nazaj je
-  včasih prav to, po kar je človek prišel.
-* Sprememba dneva ali ure odgovor **osveži samo, kadar je ta že na zaslonu**;
-  dokler ga ni, išče samo gumb — isto pravilo kot na vstopni strani.
+* **Dan in ura sta vidna samo pri „do ure"**; „čim prej" je vedno danes.
+  Rok, ki je danes že mimo, ne vrne poti za nazaj, ampak `ne_ujames` in
+  najhitrejšo pot od zdaj.
+* Sprememba dneva, ure, meje ali kolesa odgovor **osveži samo, kadar je ta že
+  na zaslonu**; dokler ga ni, išče samo gumb — isto pravilo kot na vstopni strani.
 
 **Shranjene točke („dom", „služba") ostanejo v brskalniku.** Kje kdo stanuje,
 je najobčutljivejši podatek, ki ga aplikacija lahko drži, zato je v
@@ -309,11 +337,29 @@ piki eno na drugi in postajališča sploh ne. Zdaj: polna modra je samo „ti",
 izhodišče prazen svetel obroč, postajališče obroč v barvi vožnje, cilj polna
 oranžna. Isto na seznamu predlogov (`pot.js`).
 
-**Kompas kaže, v katero smer se obrniti.** Pojavi se z lego (gumb v kotu) in
-kaže proti koncu izbranega peš koraka (privzeto do postajališča) z razdaljo.
-Smer telefona bere `deviceorientationabsolute` (iOS `webkitCompassHeading`
-na izrecno prošnjo iz dotika); kadar je ni, kaže glede na zemljevid in napiše
-„sever je zgoraj". Pod natančnostjo GPS puščica pobledi in piše „tu si".
+**Peš korak ima vodenje** („vodi me do postajališča / do cilja", 23. 9. 2026).
+Zamenjalo je kompas: puščica proti koncu koraka je povedala smer, ne poti.
+Zemljevid gre čez stran, od blizu in nagnjen (`pot_karta.js`, isti nagib kot
+veliki zemljevid), obrnjen v smer hoje, lega v spodnji tretjini. Zgoraj je
+**samo naslednji zavoj** (znak, „čez 120 m", „Zavij levo", ulica v
+imenovalniku — sklanjati je ne znamo), spodaj koliko je še in **ali ujameš
+vozilo**: „LPP 6 odpelje ob 12:03 · čez 9 min · 3 min rezerve" (zeleno /
+rumeno pod 3 min / rdeče „pohiti"). Navodila so iz OSRM (`steps=true`,
+`hoja.navodilo()`).
+
+* **Smer kamere**: smer gibanja iz GPS, kadar hodiš (> 0,7 m/s), sicer kompas
+  telefona (`deviceorientationabsolute`, iOS na prošnjo iz dotika), sicer
+  smer poti. Kdor zemljevid premakne s prstom, ga kamera ne vleče nazaj,
+  dokler ne pritisne „sledi mi".
+* **Zašel**: odmik od poti nad 35 m in nad točnostjo, dvakrat zapored →
+  nova pot od tu (`/api/pot/hoja`), največ vsakih 20 s. Preračun je samo, ko
+  si pot že začel (bil v 60 m od nje): „vodi me do cilja" se pogosto pritisne
+  na vlaku, in pot sedem kilometrov stran ni zašla, ampak je pred tabo.
+  Takrat in brez lege se po navodilih lista na roko (‹ ›).
+* **Prihod**: konec bližje od točnosti lege (najmanj 15 m) — „Tu je
+  postajališče" z vozilom in gumbom „ko izstopiš: vodi me do cilja".
+* Zaslon med vodenjem ne ugasne (`wakeLock`), zamude se osvežujejo vsakih 30 s,
+  odštevanje vsakih 5 s; tresljaj 20 m pred zavojem in ob prihodu.
 
 **Žeton zamude ob izstopu je drug od vstopnega in mora biti viden.** Vozilo
 vmes rezervo porabi ali izgubi: „+1 min" nad prihodom šest minut za voznim

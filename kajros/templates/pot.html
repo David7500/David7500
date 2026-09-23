@@ -7,7 +7,7 @@
   {% set og_desc = "Kje stojiš, kam moraš in kdaj — s hojo, vlakom in avtobusom v isti verigi." %}
 {% include "_meta.html" %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
-  <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -37,25 +37,25 @@
     <section class="pot-panel" aria-label="Pot">
       <h1 class="pot-title">Najhitrejša pot</h1>
       <p class="pot-lead">
-        Izberi izhodišče in cilj — kjerkoli, ne le na postaji. Hoja, vlak in
-        avtobus so v eni verigi; hoja se računa po pravih pešpoteh pri 5 km/h.
+        Od vrat do vrat — z vlakom, avtobusom in peš, v eni verigi.
       </p>
 
       {#- Zadetki iskanja visijo pod VRSTICO, ne pod celim blokom: pod njim sta
-          zdaj vnos imena in žetoni shranjenih točk, in seznam bi se odpiral
-          pod njimi -- torej stran od polja, v katero se tipka. #}
+          vnos imena in žetoni shranjenih točk, in seznam bi se odpiral pod
+          njimi -- torej stran od polja, v katero se tipka. #}
       <div class="tocka" data-kaj="od">
         <label class="tocka-oznaka" for="q-od">Od kod</label>
         <div class="tocka-vrstica">
           <input id="q-od" class="tocka-vnos" type="search" autocomplete="off"
-                 placeholder="postaja, ali klikni na zemljevid">
+                 enterkeyhint="search" placeholder="naslov, kraj ali postaja"
+                 role="combobox" aria-expanded="false" aria-controls="z-od">
           <button class="tocka-gumb" data-akcija="lega" title="Moja lega">lega</button>
           <button class="tocka-gumb" data-akcija="karta" title="Izberi na zemljevidu">karta</button>
           {#- Gumb se pokaže šele, ko je kraj postavljen: shraniti prazno polje
               ni mogoče, gumb pa bi to obljubljal. #}
           <button class="tocka-gumb tocka-shrani" data-akcija="shrani"
                   aria-pressed="false" hidden>☆ shrani</button>
-          <ul class="tocka-zadetki" hidden></ul>
+          <ul id="z-od" class="tocka-zadetki" role="listbox" hidden></ul>
         </div>
         {#- Ime se vpraša v strani, ne s `prompt()`: v aplikaciji za Android
             `Krom` (`WebChromeClient`) `onJsPrompt` ne obravnava, zato okna
@@ -85,11 +85,12 @@
         <label class="tocka-oznaka" for="q-do">Kam</label>
         <div class="tocka-vrstica">
           <input id="q-do" class="tocka-vnos" type="search" autocomplete="off"
-                 placeholder="postaja, ali klikni na zemljevid">
+                 enterkeyhint="search" placeholder="naslov, kraj ali postaja"
+                 role="combobox" aria-expanded="false" aria-controls="z-do">
           <button class="tocka-gumb" data-akcija="karta" title="Izberi na zemljevidu">karta</button>
           <button class="tocka-gumb tocka-shrani" data-akcija="shrani"
                   aria-pressed="false" hidden>☆ shrani</button>
-          <ul class="tocka-zadetki" hidden></ul>
+          <ul id="z-do" class="tocka-zadetki" role="listbox" hidden></ul>
         </div>
         <div class="tocka-ime" hidden>
           <input class="tocka-ime-vnos" type="text" maxlength="24"
@@ -99,12 +100,16 @@
         <ul class="tocke-shranjene" hidden></ul>
       </div>
 
-      <div class="pot-nastavitve">
-        {#- Dneva stran doslej ni imela in ga tudi ni povedala: ura 06:00 ob
-            treh popoldne je vrnila jutranje odhode, kot da so pred tabo. Polje
-            je isto kot v iskalniku zvez — puščici sta en dotik, koledar trije. #}
-        <div class="polje">
-          <span>Dan</span>
+      {#- Vprašanje je PRIHOD, ne odhod: človek ve, kdaj mora biti tam, ne pa,
+          kdaj mora od doma -- to je odgovor, ki ga išče. "Čim prej" je
+          privzetek in pomeni danes, od zdaj. #}
+      <fieldset class="kdaj">
+        <legend class="tocka-oznaka">Kdaj moraš biti tam?</legend>
+        <div class="seg" role="group" aria-label="Kdaj moraš biti tam">
+          <button type="button" data-kdaj="zdaj" aria-pressed="true">Čim prej</button>
+          <button type="button" data-kdaj="do" aria-pressed="false">Do ure …</button>
+        </div>
+        <div class="kdaj-do" hidden>
           <div class="date-row">
             <input id="dan" type="date" aria-label="Dan">
             <span class="day-nav">
@@ -124,51 +129,48 @@
               </button>
             </span>
           </div>
+          <input id="tam" type="time" step="60" aria-label="Ura, ko moraš biti tam">
         </div>
-        <label class="polje">
-          {#- Prazno polje pomeni „zdaj“ in to mora biti napisano: prazen
-              obrazec sicer izgleda kot nedokončan. #}
-          <span>Odhod <small class="polje-op">prazno = zdaj</small></span>
-          <input id="ob" type="time" step="60">
+      </fieldset>
+
+      <button id="isci" class="pot-isci">Poišči</button>
+
+      {#- Možnosti so drobne in pod gumbom: večina ljudi jih ne rabi, kdor jih
+          rabi, jih najde. Hitrost je ena sama druga (15 km/h) in ne drsnik --
+          potnik ve, ali ima kolo, ne pa, koliko vozi. #}
+      <div class="moznosti">
+        <label class="moznost">
+          {#- "do postaje" ni podrobnost: polje omejuje pot DO POSTAJE, ne hoje
+              sploh -- pot "vso pot peš" ima lahko več. #}
+          <span>do postaje največ</span>
+          {#- Koraki niso izbrani na oko: pri vsakem se merljivo spremeni,
+              koliko poti sploh obstaja (10 min -> 28 %, 15 -> 38 %,
+              25 -> 75 %, 35 -> 88 %, 45 -> 95 %). Meji 3 in 45 sta isti kot na
+              endpointu -- polje, ki dovoli več od strežnika, laže. #}
+          <select id="hoje">
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="25" selected>25 min</option>
+            <option value="35">35 min</option>
+            <option value="45">45 min</option>
+          </select>
         </label>
-        <label class="polje">
-          {#- "do postaje" ni podrobnost: polje omejuje hojo DO POSTAJE, ne
-              hoje sploh. Brez teh dveh besed si stran nasprotuje sama s sabo --
-              polje pravi 25 minut, pot "vso pot peš" pa jih ima 85. #}
-          <span>Največ hoje do postaje</span>
-          {#- "Po meri" je tu, ker je 25 minut privzetek in ne pravilo: kdor
-              hodi rad, gre dlje, kdor ne more, manj. Meji 3 in 45 sta isti kot
-              na endpointu -- polje, ki dovoli vec od streznika, laze. #}
-          <span class="hoje-skupina">
-            {#- Koraki niso izbrani na oko: pri vsakem se merljivo spremeni,
-                koliko poti sploh obstaja (10 min -> 28 %, 15 -> 38 %,
-                25 -> 75 %, 35 -> 88 %, 45 -> 95 %). Med 25 in "po meri" prej
-                ni bilo nicesar, cheprav se prav tam odgovor najbolj spremeni. #}
-            <select id="hoje">
-              <option value="10">10 min</option>
-              <option value="15">15 min</option>
-              <option value="25" selected>25 min</option>
-              <option value="35">35 min</option>
-              <option value="45">45 min</option>
-              <option value="po-meri">po meri …</option>
-            </select>
-            <input id="hoje-meri" type="number" min="3" max="45" step="1"
-                   aria-label="Največ minut hoje" hidden>
-          </span>
+        <label class="moznost moznost-kolo">
+          <input id="kolo" type="checkbox">
+          <span>kolo ali rolka <small>15 km/h</small></span>
         </label>
-        <button id="isci" class="pot-isci">Poišči</button>
       </div>
 
-      <div id="pot-stanje" class="pot-stanje"></div>
+      <div id="pot-stanje" class="pot-stanje" aria-live="polite"></div>
       <div id="pot-izidi" class="pot-izidi"></div>
 
-      {#- Navedba vira ni okras, ampak pogoj rabe. Pesne poti so izracunane iz
+      {#- Navedba vira ni okras, ampak pogoj rabe. Pešpoti in naslovi so iz
           OpenStreetMap (ODbL), vozni red in zamude pa iz IJPP prek NAP. #}
       <p class="pot-vir">
         Vozni red in zamude: IJPP prek <a href="https://b2b.nap.si/">NAP</a>
-        (CC BY-SA 4.0), obdelava DERP. Pešpoti: ©
+        (CC BY-SA 4.0), obdelava DERP. Pešpoti in naslovi: ©
         <a href="https://www.openstreetmap.org/copyright">prispevalci OpenStreetMap</a>
-        (ODbL), izračun OSRM.
+        (ODbL).
       </p>
     </section>
 
@@ -187,8 +189,8 @@
     </div>
   </main>
 
-  <script src="/static/leaflet/leaflet.js"></script>
   <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('pot_karta.js') }}"></script>
   <script src="{{ s('pot.js') }}"></script>
 </body>
 </html>

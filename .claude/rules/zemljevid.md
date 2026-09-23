@@ -63,10 +63,11 @@ paths:
 
   **Podlaga je vektorska OpenFreeMap** (22. 9. 2026, prej Esri „Dark Gray
   Canvas"). Odprta koda (MIT), brez ključa, registracije in omejitve ogledov,
-  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10**. Na treh majhnih
-  zemljevidih (pot, podrobna pot, okno vožnje) ga Leaflet nosi kot eno plast
-  (`leaflet-maplibre-gl` 0.1.4) in vse ostalo ostane Leafletovo; **veliki
-  zemljevid je MapLibre sam** (glej „3D od blizu“ spodaj). Oboje je gostovano
+  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10**. Na majhnem
+  zemljevidu okna vožnje ga Leaflet nosi kot eno plast (`leaflet-maplibre-gl`
+  0.1.4) in vse ostalo ostane Leafletovo; **veliki zemljevid in obe strani
+  poti so MapLibre sam** (glej „3D od blizu“ spodaj; pot od 23. 9. 2026, ker
+  vodenje po pešpoti rabi kamero za hrbtom, `pot_karta.js`). Oboje je gostovano
   pri nas (`static/maplibre-6.10.0/`, različica v **poti**, ker
   `maplibre-gl.mjs` uvaža sosede po relativnem imenu, Cloudflare pa statiko
   drži štiri ure). Tuje so ploščice in pisave z `tiles.openfreemap.org`.

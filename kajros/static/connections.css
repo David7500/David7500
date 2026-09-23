@@ -59,25 +59,6 @@
   letter-spacing: 0.08em; text-transform: uppercase;
 }
 
-/* Preklop v obrazcu: enaka visina kot polje ob njem, sicer vrstica poskoci. */
-.seg {
-  display: flex;
-  background: var(--bg);
-  border: 1px solid var(--line-firm);
-  border-radius: var(--r);
-  padding: 2px;
-}
-.seg button {
-  flex: 1 1 0;
-  border: none; background: none; cursor: pointer;
-  color: var(--ink-mute);
-  font: 500 13px/1 var(--sans);
-  padding: 8px 4px;
-  border-radius: var(--r-sm);
-  white-space: nowrap;
-}
-.seg button:hover { color: var(--ink); }
-.seg button[aria-pressed="true"] { background: var(--line-firm); color: var(--ink); }
 
 .field input, .field select {
   background: var(--bg);
