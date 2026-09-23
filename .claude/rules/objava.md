@@ -43,6 +43,12 @@ skripto poženi znova po prvem potisku. Drugi zagon je sicer prazen tek.
 
 **Malina je druga zgodba** in ostane pri sudotu z geslom — glej spodaj.
 
+**Kazalo naslovov ni v gitu in ga potisk ne prinese** (`naslovi.sqlite`,
+51 MB, 23. 9. 2026). Na arwenu se zgradi enkrat in nato nekajkrat na leto:
+`ssh david@192.168.1.46 'cd ~/kajros && deploy/naslovi.sh'` (docker brez
+sudota, kot `osrm.sh`; piše v `/var/lib/kajros`, ki je skupinsko pisljiv).
+Brez njega stran dela, le naslova ni mogoče vpisati — samo postajo.
+
 ## Objava
 
 Ciljni gostitelj je Raspberry Pi doma: **`david@192.168.1.166`**. Tam ob
