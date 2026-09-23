@@ -2377,3 +2377,42 @@ Meritev 4. 9. (zgoraj) je dala 40 ms na razvojnem stroju z ~85 k meritvami;
 arwen jih ima 19 M. Čas je čas v aplikaciji brez omrežja, torej ga potnik
 dobi v celoti. Vzrok ni raziskan -- tu je zapisano samo, da je, in s katero
 številko se bo popravek primerjal.
+
+## Lega vlaka iz voznega reda in zamude: koliko zgreši (19. 9. 2026)
+
+zamudil.si riše vlake, ki drsijo po progi. GPS-a za vlake nimajo ne oni ne
+mi. Lega je `vozni red + trenutna zamuda`, prištete vsem postankom, in
+enakomerna vožnja med prejšnjim in naslednjim (njihov `/api/map/live`: `prev.ts`,
+`next.ts`, `shapeSegment`; brskalnik interpolira v `requestAnimationFrame`).
+Izmerjeno z isto formulo na naših podatkih: 7 454 voženj od 21. 8. do 19. 9.,
+vzorec vsakih 30 s, skupaj 1,25 mio vzorcev. Izločenih je 3 296 voženj,
+ker je manj kot 80 % postankov izmerjenih ali ker se postaja ne projicira na
+traso.
+
+Resnica je dejanski prihod in odhod na postanku (`run`), vmes pa enakomerno.
+**Isto domnevo ima tudi ocena**, zato meritev zajame samo napako zamude, ne
+pa hitrosti med postajama (speljevanje, počasni odseki). To **ni spodnja
+meja**: napaka hitrosti se z napako zamude lahko sešteje ali odšteje (vlak, ki
+zamuja in počasi spelje, je bliže oceni, ne dlje). Meritev je samo del napake;
+celote brez GPS-a vlaka ne izmerimo.
+
+| način | mediana | p90 | p99 | < 500 m | < 1 km |
+|---|---|---|---|---|---|
+| krog na zadnji postaji (mi danes) | 2,8 km | 11,4 km | 45 km | 13 % | 22 % |
+| drsenje, zamuda ob zadnjem postanku | 0 m | 2,1 km | 10,2 km | 72 % | 82 % |
+| drsenje, zamuda, kot jo je feed poslal\* | 0 m | 1,7 km | 10,2 km | 74 % | 84 % |
+
+\* delno primerjava same s sabo, glej zadnji odstavek.
+
+Samo vzorci med vožnjo (brez postankov na postaji): mediana ostane 0 m, p90
+je 2,4 oziroma 2,0 km. Mediana je 0, ker se zamuda SŽ med dvema postankoma
+večinoma ne spremeni in je zapisana v celih minutah. Na pravem odseku med
+postajama je vlak v 90 oziroma 94 % vzorcev. Napaka raste s hitrostjo in z
+razdaljo med postanki. Mediana in p90 za feedovo zamudo: LPV 0 / 1,2 km,
+LP 0 / 1,3 km, RG 0,1 / 2,2 km, IC 0,4 / 2,3 km, MV 0,6 / 4,2 km,
+EC 0,5 / 5,1 km, EN 1,2 / 7,0 km.
+
+Feedova zamuda je videti boljša, a meritev ni čista. V 69 % vzorcev je
+enaka zadnji izmerjeni, in ker `run` na postanku pogosto hrani kar zadnjo
+feedovo vrednost, se del tega primerja sam s sabo. Skripta je bila
+enkratna, v repozitorij ni šla.
