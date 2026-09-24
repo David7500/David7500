@@ -2600,3 +2600,9 @@ Kaj se šteje od zdaj (`obisk.py`): v `obiskovalec` stolpca `aplikacija`
 datoteki) in `prenos_iz` (`stran` | `aplikacija`, loči ga `?iz=aplikacija`
 na naslovu, ki ga aplikacija dobi iz `/api/android/razlicica`). Prenos se
 šteje brez dokaza JS, ker `/android` JS nima.
+
+Po objavi (arwen, 24. 9. ob 11:40) dva zaporedna `curl -sI` na APK:
+`cache-control: no-store`, `cf-cache-status: BYPASS` obakrat — vsak prenos
+zdaj pride do strežnika. Migracija je stolpca dodala na produkcijski bazi,
+`obisk_aplikacija_od = 2026-09-24`; današnji dan je zato delen (do 11:40
+aplikacija ni bila ločena).
