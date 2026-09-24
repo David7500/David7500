@@ -2507,6 +2507,23 @@ Prva različica sita je imela rezervo 20 min tudi pri avtobusih: Ljubljana AP
 je spustila 52 vrstic skozi, na tabli jih je ostalo 6, čas **35 → 72 ms**.
 Rezerva je zdaj samo pri železnici.
 
+Na arwenu po objavi (produkcijska baza, 24. 9. ob 11:05, mediana petih klicev
+`journey.board()`, stara koda iz `git archive 0435e4b` ob isti bazi):
+
+| tabla | prej | zdaj |
+|---|---|---|
+| Ljubljana | 49 ms | 57 ms |
+| Zidani Most | 99 ms | 100 ms |
+| Bavarski dvor | 1 233 ms | 1 346–1 359 ms |
+| Ljubljana AP | 325 ms | 369–372 ms |
+
+Pri avtobusih je dodatek v poizvedbi, ne v Pythonu: sito čez tri ure nazaj
+Bavarskemu dvoru doda 90 ms (292 → 389 ms, vrstic 349 → 358), eno uro nazaj
+30 ms pri istih vrsticah. Tri ure ostanejo, ker ima 1,45 % avtobusnih
+postankov (12.–24. 9.) zamudo nad uro. Vezava sita na `s.trip_id` namesto
+`t.trip_id` prihrani 7–26 ms. Preostala sekunda Bavarskega dvora je v
+Pythonu (ocena za 150 vrstic) in je bila tam že prej.
+
 **„Odpeljal je“ je sklep iz ure.** Rekonstrukcija iz `obs` z istimi
 varovali kot `_LAST_MEASURED_SQL` (meja ne prehiti zadnje besede feeda, ničla
 po zamudi ≥ 300 s ni prehod, postanek, osvežen prej kot prejšnji, ni prehod):

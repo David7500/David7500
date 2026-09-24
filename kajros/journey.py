@@ -569,7 +569,7 @@ WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s - :nazaj AND :to_s
        -- okna. Koncno odloci `board()` po pricakovani uri; to je le sito,
        -- da mestno postajalisce ne racuna ocene za vse tri ure nazaj.
        OR EXISTS (SELECT 1 FROM run x
-                  WHERE x.trip_id = t.trip_id AND x.service_date = :day
+                  WHERE x.trip_id = s.trip_id AND x.service_date = :day
                     AND COALESCE(s.dep_s, s.arr_s)
                         + COALESCE(x.delay_dep, x.delay_arr) + :rezerva >= :from_s))
 ORDER BY t_s
