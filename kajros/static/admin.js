@@ -272,6 +272,104 @@ function blokNaprav(d) {
       `${st(100 * x.ogledov / nd)} %`)).join("");
 }
 
+// ------------------------------------------------------------------ aplikacija
+//
+// Aplikacija za Android se šteje od `aplikacija_od` (24. 9. 2026). Prej je
+// ni bilo mogoče ločiti -- dan pred tem je „štetja še ni bilo“, ne „nihče“.
+// „Odprlo“ je okno aplikacije (WebView); pripomoček, budilka in preverjanje
+// posodobitve tečejo tudi brez tega in so zato posebej.
+
+const PRENOS_IZ = { stran: "nova namestitev", aplikacija: "posodobitev" };
+/** `kajros-1.2.apk` -> `1.2`; tuje ime ostane, kot je. */
+const imeIzdaje = (f) => { const m = /^kajros-(.+)\.apk$/.exec(f); return m ? m[1] : f; };
+
+function mini(v, ime, razred = "") {
+  return `<div><b class="${razred}">${st(v)}</b><span>${escapeHtml(ime)}</span></div>`;
+}
+
+/**
+ * Številke aplikacije za obdobje `d`: kdo jo je odprl, kdo jo ima samo v
+ * ozadju, koliko prenosov in katere različice tečejo. `n` so vsote --
+ * današnje ali obdobja -- da isti blok služi obema zavihkoma.
+ */
+function blokAplikacije(d, n, vecDni) {
+  const od = d.aplikacija_od;
+  if (!od || od > d.do) return prazno(`Aplikacija se šteje od ${od ? dolgi(od) : "prve objave s tem štetjem"}.`);
+  const r = d.razrezi || {};
+  const iz = r.prenos_iz || [], izdaje = r.prenos || [], raz = d.razlicice || [];
+  const najIz = Math.max(1, ...iz.map((x) => x.zahtev), ...izdaje.map((x) => x.zahtev));
+  const vsehRaz = raz.reduce((a, x) => a + x.ljudi, 0) || 1;
+  const prenosi = !iz.length ? prazno("ni prenosov")
+    : iz.map((x) => vrsta(PRENOS_IZ[x.kljuc] || x.kljuc, x.zahtev, najIz)).join("")
+      + (izdaje.length > 1 ? `<div class="adm-razmik"></div>`
+        + izdaje.map((x) => vrsta(`različica ${imeIzdaje(x.kljuc)}`, x.zahtev, najIz)).join("") : "");
+  const razlicice = !raz.length ? prazno("nihče")
+    : raz.map((x) => vrsta(`različica ${x.kljuc}`, x.ljudi, vsehRaz, `${st(100 * x.ljudi / vsehRaz)} %`)).join("");
+  return `<div class="adm-app">
+    <div class="adm-mini">
+      ${mini(n.app, vecDni ? "obiskov v aplikaciji" : "odprlo aplikacijo", "je-poudarek")}
+      ${mini(n.ozadje, "samo pripomoček ali budilka")}
+      ${mini(n.prenosov, "prenosov")}
+    </div>
+    <div><h3 class="adm-mali">Prenosi</h3>${prenosi}</div>
+    <div><h3 class="adm-mali">Različice v rabi${vecDni ? " · vsota dnevnih" : ""}</h3>${razlicice}</div>
+  </div>`;
+}
+
+/** Pripis pod naslovom, kadar obdobje sega pred začetek štetja. */
+function podAplikacije(d) {
+  const od = d.aplikacija_od;
+  return od && od > d.od && od <= d.do ? `Šteto od ${escapeHtml(dolgi(od))}; prej aplikacije ni bilo mogoče ločiti.` : "&nbsp;";
+}
+
+let vedraApp = [];           // katere dneve nosi vsak stolpec grafov aplikacije
+
+/**
+ * Dva grafa: ljudje, ki so aplikacijo odprli, in prenosi. `vedra` so
+ * stolpci -- en dan ali, pri letu, en mesec. Stolpec pred začetkom štetja
+ * je šrafiran, ne ničla.
+ */
+function grafiAplikacije(d, vrstice, vedra) {
+  vedraApp = vedra;
+  const od = d.aplikacija_od;
+  const po = new Map(vrstice.map((r) => [r.dan, r]));
+  const vsota = (v, f) => {
+    if (v.dni[0] > danes()) return undefined;
+    const imajo = v.dni.filter((dan) => od && dan >= od && po.has(dan));
+    return imajo.length ? imajo.reduce((a, dan) => a + f(po.get(dan)), 0) : null;
+  };
+  const app = vedra.map((v) => vsota(v, (r) => r.app));
+  const ozadje = vedra.map((v) => vsota(v, (r) => r.app_ozadje));
+  const pren = vedra.map((v) => vsota(v, (r) => r.prenosov));
+  const posod = vedra.map((v) => vsota(v, (r) => r.prenosov_iz_aplikacije));
+  const tip = (i, kaj) => (app[i] == null ? `${vedra[i].ime}<br>ni podatka` : `<b>${vedra[i].ime}</b><br>${kaj}`);
+  const oznake = vedra.map((v) => v.oznaka);
+  return `<div id="graf-app">
+    <p class="adm-graf-ime">odprli aplikacijo</p>
+    ${stolpci(app, { visina: 130, klik: true,
+      tip: (i) => tip(i, `${st(app[i])} odprlo · ${st(ozadje[i])} samo v ozadju`) })}
+    <p class="adm-graf-ime">prenosov</p>
+    ${stolpci(pren, { visina: 110, oznake, klik: true,
+      tip: (i) => tip(i, `${st(pren[i])} prenosov · ${st(posod[i])} posodobitev iz aplikacije`) })}
+  </div>`;
+}
+
+/** Stolpci za graf obdobja: pri letu meseci, sicer dnevi. */
+function vedraObdobja(o) {
+  if (izbor.vrsta === "leto") {
+    const leto = izIso(o.od).getFullYear();
+    return MESECI.map((m, k) => ({
+      ime: `${m} ${leto}`, oznaka: m.slice(0, 3),
+      dni: vseDni(vIso(new Date(leto, k, 1)), vIso(new Date(leto, k + 1, 0))),
+    }));
+  }
+  const dni = vseDni(o.od, o.do);
+  const korak = dni.length > 120 ? 30 : 7;
+  return dni.map((dan, i) => ({
+    ime: dolgi(dan), dni: [dan], oznaka: dni.length <= 14 || i % korak === 0 ? kratki(dan) : "",
+  }));
+}
+
 /** Zdravje zajema in stroja kot vrstice s piko stanja. */
 function vrsticeZdravja(d) {
   const z = d.zdravje || {}, m = d.stroj || {}, mreze = z.by_network || {};
@@ -374,6 +472,12 @@ function stanje(d) {
           : `<b>${dolgi(mes[i].dan)}</b><br>${st(mes[i].ljudi)} ljudi · ${st(mes[i].ogledov)} ogledov`,
       })}</div>`, "")}
     ${plosca("s4", "Danes po urah", "ogledov", stolpci(pu.v, { visina: 210, oznake: pu.oznake, tip: pu.tip, poudari: zdajUra() }), "")}
+    ${plosca("s8", "Aplikacija · zadnjih 30 dni", "na dan · klik odpre dan",
+      grafiAplikacije(d, d.zadnjih30 || [], mes.map((r, i) => ({
+        ime: dolgi(r.dan), dni: [r.dan], oznaka: i % 5 === 4 ? kratki(r.dan) : "" }))), podAplikacije({ ...d, od: mes[0].dan }))}
+    ${plosca("s4", "Aplikacija danes", "za Android",
+      blokAplikacije(d, { app: t.app, ozadje: t.app_ozadje, prenosov: t.prenosov }, false),
+      "„Odprlo“ je okno aplikacije; pripomoček in budilka tečeta tudi brez tega.")}
     ${plosca("s4", "Katere strani", "danes · ljudi", blokStrani(d, 10), "Številka desno so vsi ogledi, tudi ponovni.")}
     ${plosca("s8", "Kaj je bilo počasno", "danes · po najdaljši zahtevi", tabelaPocasnih(d, 8),
       "Čas v aplikaciji brez omrežja. Rdeče je nad 5 s — tam potnik odneha. p95 je razred, ne točna vrednost.")}
@@ -458,6 +562,11 @@ function zgodovina() {
     ${plosca("s4", "Katere strani", "ljudi · desno vsi ogledi", blokStrani(o, 12))}
     ${plosca("s5", "Počasno", "po najdaljši zahtevi", tabelaPocasnih(o, 9))}
     ${plosca("s3", "S čim in od kod", "ogledi", blokNaprav(o))}
+    ${enDan ? "" : plosca("s8", "Aplikacija", izbor.vrsta === "leto" ? "po mesecih" : "po dnevih",
+      grafiAplikacije(o, o.po_dnevih, vedraObdobja(o)), podAplikacije(o))}
+    ${plosca(enDan ? "s12" : "s4", "Aplikacija za Android", enDan ? "ta dan" : "vsota obdobja",
+      blokAplikacije(o, { app: s.app_vsota, ozadje: s.app_ozadje_vsota, prenosov: s.prenosov }, !enDan),
+      enDan ? podAplikacije(o) : "Ista naprava šteje enkrat na dan.")}
   </div>`;
 }
 
@@ -578,6 +687,14 @@ function poveziDogodke() {
     const mes = zadnjih30(zadnji);
     g30.querySelectorAll("rect[data-i]").forEach((r) => {
       r.addEventListener("click", () => pojdi("dan", mes[Number(r.dataset.i)].dan));
+    });
+  }
+  const gA = el("graf-app");
+  if (gA) {
+    // Dan odpre dan, mesec (pri letu) odpre mesec.
+    gA.querySelectorAll("rect[data-i]").forEach((r) => {
+      const v = vedraApp[Number(r.dataset.i)];
+      if (v) r.addEventListener("click", () => pojdi(v.dni.length > 1 ? "mesec" : "dan", v.dni[0]));
     });
   }
   const gO = el("graf-obdobje");

@@ -41,7 +41,7 @@
 
     {% if izdaja %}
     <p>
-      <a class="btn prenos-gumb" href="/prenos/{{ izdaja.datoteka }}">
+      <a class="btn prenos-gumb" href="/prenos/{{ izdaja.datoteka }}{% if iz_aplikacije %}?iz=aplikacija{% endif %}">
         Prenesi za Android</a>
     </p>
     <p class="drobno">

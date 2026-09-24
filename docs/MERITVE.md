@@ -2562,3 +2562,41 @@ V živo 24. 9. ob 10:11: MV 311 (Kranj po voznem redu 09:49, zadnji podatek z
 Lesc-Bleda, +21) je stal na tabli in v iskalniku z besedo. Po starem bi s
 table izginil ob 09:59, iskalnik pa bi ga ob 10:10 zložil med „prejšnje“.
 Skripta je bila enkratna, v repozitorij ni šla.
+
+## Aplikacija in prenosi v pregledu (24. 9. 2026)
+
+Vprašanje: koliko prenosov aplikacije in koliko ljudi jo uporablja na dan.
+Pregled tega ni znal povedati — razrez naprave šteje zahteve in oglede, ne
+ljudi, prenosi pa so bili ena vrstica `/prenos/{path}` skupaj z
+`razlicica.json`.
+
+**Števec prenosov na strežniku je bil brez pomena.** `curl -sI` na
+`kajros.app/prenos/kajros-1.2.apk`: `cf-cache-status: HIT`, `age: 6678`,
+`cache-control: max-age=14400` — Cloudflare je APK (98 kB) stregel s svojega
+roba in do arwena je prišel le prenos, ki je zgrešil njegov predpomnilnik.
+`no-cache` tega ne reši: `/static/base.css` ga pošilja in je na robu
+izmerjeno `MISS`, nato `REVALIDATED` — Cloudflare hrani in pri nas le
+preverja `ETag`. Zato `/prenos` zdaj pošilja `no-store`.
+
+Kar je do arwena prišlo doslej (`obisk_pot`, zahtev / od tega ljudi):
+
+| dan | `/android` | `/prenos/{path}` | `/api/android/razlicica` | ogledov v aplikaciji |
+|---|---|---|---|---|
+| 18. 9. | 50 / 30 | 29 / 9 | 13 | 24 |
+| 19. 9. | 116 / 76 | 58 / 15 | 14 | 21 |
+| 20. 9. | 88 / 56 | 39 / 10 | 17 | 21 |
+| 21. 9. | 90 / 70 | 52 / 11 | 21 | 35 |
+| 22. 9. | 76 / 59 | 40 / 11 | 7 | 34 |
+| 23. 9. | 41 / 29 | 33 / 9 | 16 | 26 |
+
+Preverjanje posodobitve teče enkrat na 24 ur na napravo, zato je stolpec
+`razlicica` spodnja meja naprav, ki so aplikacijo ta dan odprle (5–21 na
+dan). Števila ljudi z aplikacijo za nazaj ni in ga ne bo: vrstica
+obiskovalca ni vedela, od kod je prišel.
+
+Kaj se šteje od zdaj (`obisk.py`): v `obiskovalec` stolpca `aplikacija`
+(različica) in `okno` (zahteve iz WebView — pripomoček in budilka ne
+štejeta kot odprta aplikacija), v `obisk_razrez` razreza `prenos` (po
+datoteki) in `prenos_iz` (`stran` | `aplikacija`, loči ga `?iz=aplikacija`
+na naslovu, ki ga aplikacija dobi iz `/api/android/razlicica`). Prenos se
+šteje brez dokaza JS, ker `/android` JS nima.

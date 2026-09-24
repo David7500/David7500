@@ -31,14 +31,19 @@ class _Naslov:
 class _Zahteva:
     """Toliko zahteve, kolikor je `obisk.iz_zahteve()` res prebere."""
 
-    def __init__(self, pot, ua="Mozilla/5.0", ip="1.2.3.4", app=None, drzava=None):
+    def __init__(self, pot, ua="Mozilla/5.0", ip="1.2.3.4", app=None, drzava=None,
+                 metoda="GET", poizvedba=None, obmocje=None):
         self.url = _Naslov(pot)
         glave = {"user-agent": ua, "cf-connecting-ip": ip}
         if drzava:
             glave["cf-ipcountry"] = drzava
+        if obmocje:
+            glave["range"] = obmocje
         self.headers = _Glave(glave)
         self.scope = {"app": app}
         self.client = None
+        self.method = metoda
+        self.query_params = poizvedba or {}
 
 
 @pytest.fixture
@@ -321,6 +326,22 @@ def test_migracija_doda_stolpec_js():
     c.close()
 
 
+def test_migracija_doda_stolpca_aplikacije():
+    """Stara vrstica ne ve, ali je prišla iz aplikacije: NULL, ne ničla."""
+    c = sqlite3.connect(":memory:")
+    c.execute("CREATE TABLE obiskovalec (dan TEXT NOT NULL, kljuc TEXT NOT NULL,"
+              " bot INTEGER NOT NULL DEFAULT 0, zahtev INTEGER NOT NULL DEFAULT 0,"
+              " ogledov INTEGER NOT NULL DEFAULT 0, js INTEGER, prvi_s INTEGER NOT NULL,"
+              " zadnji_s INTEGER NOT NULL, PRIMARY KEY (dan, kljuc))")
+    c.execute("INSERT INTO obiskovalec VALUES('2026-09-14', 'k', 0, 3, 1, 1, 0, 0)")
+    c.executescript(db.SCHEMA)
+    obisk.init(c)
+    assert c.execute("SELECT aplikacija, okno FROM obiskovalec").fetchone() == (None, None)
+    od = c.execute("SELECT value FROM meta WHERE key = 'obisk_aplikacija_od'").fetchone()
+    assert od == (obisk._danes(),)
+    c.close()
+
+
 def test_prazno_praznjenje_ne_pise(conn):
     assert obisk.izprazni(conn) == 0
 
@@ -422,3 +443,83 @@ def test_prune_pobrise_staro(conn):
     assert obisk.prune(conn, dni=30) >= 1
     poti = [r["pot"] for r in conn.execute("SELECT pot FROM obisk_pot")]
     assert poti == ["/app/train"]
+
+
+# ------------------------------------------------------------- aplikacija
+
+@pytest.mark.parametrize("ua, pricakovano", [
+    ("Mozilla/5.0 (Linux; Android 14; wv) Chrome/128 Mobile Safari/537.36 Kajros/1.2",
+     ("1.2", True)),
+    ("Kajros/1.2 (Android)", ("1.2", False)),
+    ("Kajros/1.10 (Android)", ("1.10", False)),
+    ("Mozilla/5.0 (Linux; Android 14) Chrome/128 Mobile Safari/537.36", (None, False)),
+    # UA piše kdorkoli; v bazo gre samo različica iz števk.
+    ("Kajros/<script>alert(1)</script>", ("?", False)),
+])
+def test_aplikacija_razlicica_in_okno(ua, pricakovano):
+    assert obisk.aplikacija(ua) == pricakovano
+
+
+@pytest.mark.parametrize("pot, metoda, koda, obmocje, pricakovano", [
+    ("/prenos/kajros-1.2.apk", "GET", 200, "", "kajros-1.2.apk"),
+    ("/prenos/kajros-1.2.apk", "GET", 206, "bytes=0-", "kajros-1.2.apk"),
+    # Nadaljevanje prekinjenega prenosa ni nov prenos.
+    ("/prenos/kajros-1.2.apk", "GET", 206, "bytes=40000-", None),
+    ("/prenos/kajros-1.2.apk", "HEAD", 200, "", None),
+    ("/prenos/kajros-1.2.apk", "GET", 304, "", None),
+    ("/prenos/kajros-9.9.apk", "GET", 404, "", None),
+    ("/prenos/razlicica.json", "GET", 200, "", None),
+    ("/android", "GET", 200, "", None),
+])
+def test_prenos(pot, metoda, koda, obmocje, pricakovano):
+    assert obisk.prenos(pot, metoda, koda, obmocje) == pricakovano
+
+
+def test_pregled_loci_odprto_aplikacijo_od_pripomocka(conn):
+    """Pripomoček na domačem zaslonu kliče API tudi, ko aplikacije nihče ne
+    odpre; ta naprava ni „uporabnik aplikacije ta dan“, je pa nameščena."""
+    _zabelezi(kljuc="odprl", razlicica="1.2", okno=True)
+    _js(kljuc="odprl", razlicica="1.2")
+    _js(kljuc="pripomocek", razlicica="1.1")
+    _js(kljuc="brskalnik")
+    _zabelezi(kljuc="bot", bot=True, razlicica="1.2", okno=True)
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn)
+    assert (p["danes"]["app"], p["danes"]["app_ozadje"]) == (1, 1)
+    assert p["danes"]["ljudi"] == 3
+    assert p["razlicice"] == [{"kljuc": "1.2", "ljudi": 1}, {"kljuc": "1.1", "ljudi": 1}]
+    assert p["aplikacija_od"] == obisk._danes()
+
+
+def test_okno_se_sesteva_cez_praznjenja(conn):
+    """Okno je prišlo pred praznjenjem, pripomoček po njem: še vedno odprl."""
+    _zabelezi(kljuc="k", razlicica="1.2", okno=True)
+    _js(kljuc="k", razlicica="1.2", okno=True)
+    obisk.izprazni(conn)
+    _js(kljuc="k", razlicica="1.2")
+    obisk.izprazni(conn)
+    v = conn.execute("SELECT aplikacija, okno FROM obiskovalec").fetchone()
+    assert (v["aplikacija"], v["okno"]) == ("1.2", 2)
+    assert obisk.pregled(conn)["danes"]["app"] == 1
+
+
+def test_prenos_steje_brez_dokaza_bot_pa_ne(conn, monkeypatch):
+    """`/android` nima JS: kdor pride nanjo naravnost, dokaza ne pošlje nikoli.
+    Prenos se zato šteje brez njega, bot po UA pa ne."""
+    monkeypatch.setattr(obisk, "_vzorci", [])
+    chrome = "Mozilla/5.0 (Linux; Android 14) Chrome/128 Mobile Safari/537.36"
+    obisk.iz_zahteve(_Zahteva("/prenos/kajros-1.2.apk", ua=chrome, ip="1.1.1.1"), 200, 5.0)
+    obisk.iz_zahteve(_Zahteva("/prenos/kajros-1.2.apk", ua=chrome, ip="2.2.2.2",
+                              poizvedba={"iz": "aplikacija"}), 200, 5.0)
+    obisk.iz_zahteve(_Zahteva("/prenos/kajros-1.2.apk", ua=chrome, ip="2.2.2.2",
+                              obmocje="bytes=50000-"), 206, 5.0)
+    obisk.iz_zahteve(_Zahteva("/prenos/kajros-1.2.apk", ua="Googlebot/2.1",
+                              ip="3.3.3.3"), 200, 5.0)
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn)
+    assert (p["danes"]["prenosov"], p["danes"]["prenosov_iz_aplikacije"]) == (2, 1)
+    assert p["razrezi"]["prenos"] == [
+        {"razsez": "prenos", "kljuc": "kajros-1.2.apk", "zahtev": 2, "ogledov": 0}]
+    assert p["skupaj"]["prenosov"] == 2
+    # Prenos brez dokaza ni človek: v ljudeh in razrezih ure ga ni.
+    assert p["danes"]["ljudi"] == 0 and "ura" not in p["razrezi"]

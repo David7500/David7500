@@ -28,8 +28,16 @@ videl, ampak jo je prenesel. Ogled se zato do tega dokaza drži na čakanju
 
 Kar ta modul namenoma **ni**: ni sledilnik poti posameznika po strani. Vrstica
 o obiskovalcu nosi pet števil (zahteve, ogledi, klici iz JS, prvi in zadnji
-dotik), ne zaporedja strani. Kdo je kam kliknil, se iz tega ne da sestaviti.
-Tudi čakajoči ogledi so v pomnilniku razrezi, ne seznam poti.
+dotik) in različico naše aplikacije, če je prišel iz nje -- ne zaporedja
+strani. Kdo je kam kliknil, se iz tega ne da sestaviti. Tudi čakajoči ogledi
+so v pomnilniku razrezi, ne seznam poti.
+
+**Aplikacija za Android se šteje posebej** (od 24. 9. 2026). Do tedaj je bila
+v pregledu le razrez naprave, ki šteje zahteve in oglede, ne ljudi -- na
+vprašanje „koliko ljudi jo uporablja na dan“ ni odgovarjal nihče. Prenosi APK
+pa se sploh niso videli: Cloudflare je datoteko stregel s svojega roba
+(`cf-cache-status: HIT`, izmerjeno 24. 9.) in do strežnika je prišel le vsak
+kdove kateri prenos. Zato mapa `/prenos` pošilja `no-store` (`api.py`).
 """
 
 from __future__ import annotations
@@ -111,12 +119,13 @@ CREATE TABLE IF NOT EXISTS obisk_pot (
     PRIMARY KEY (dan, pot, vrsta)
 );
 
--- Razrezi, ki so vsi iste oblike (ura dneva, naprava, država, brskalnik).
+-- Razrezi, ki so vsi iste oblike (ura dneva, naprava, država, prenos).
 -- Ena tabela in ne štiri: nov razrez je s tem nov `razsez`, ne nova tabela
--- in nova migracija.
+-- in nova migracija. Pri `prenos` (ključ je ime APK) in `prenos_iz`
+-- (`stran` | `aplikacija`) je `zahtev` število prenosov.
 CREATE TABLE IF NOT EXISTS obisk_razrez (
     dan     TEXT    NOT NULL,
-    razsez  TEXT    NOT NULL,      -- ura | naprava | drzava
+    razsez  TEXT    NOT NULL,      -- ura | naprava | drzava | prenos | prenos_iz
     kljuc   TEXT    NOT NULL,
     zahtev  INTEGER NOT NULL DEFAULT 0,
     ogledov INTEGER NOT NULL DEFAULT 0,
@@ -133,6 +142,8 @@ CREATE TABLE IF NOT EXISTS obiskovalec (
     zahtev   INTEGER NOT NULL DEFAULT 0,
     ogledov  INTEGER NOT NULL DEFAULT 0,
     js       INTEGER,              -- zahtev, ki jih pošlje le pognan JS; NULL = pred 15. 9. 2026
+    aplikacija TEXT,               -- različica naše aplikacije (`Kajros/1.2`); NULL = ni prišel iz nje
+    okno     INTEGER,              -- od tega zahtev iz okna aplikacije, ne iz pripomočka ali budilke
     prvi_s   INTEGER NOT NULL,
     zadnji_s INTEGER NOT NULL,
     PRIMARY KEY (dan, kljuc)
@@ -157,7 +168,7 @@ _zaklep = threading.Lock()
 _poti: dict[tuple[str, str, str], list] = {}
 # (dan, razsez, kljuc) -> [zahtev, ogledov]
 _razrezi: dict[tuple[str, str, str], list] = {}
-# (dan, kljuc) -> [bot, zahtev, ogledov, prvi_s, zadnji_s]
+# (dan, kljuc) -> [bot, zahtev, ogledov, js, prvi_s, zadnji_s, aplikacija, okno]
 _ljudje: dict[tuple[str, str], list] = {}
 # (dan, pot, vedro) -> n
 _odzivi: dict[tuple[str, str, int], int] = {}
@@ -184,6 +195,13 @@ def init(conn: sqlite3.Connection) -> None:
         # JS, in ničla bi trdila, da niso -- vsa zgodovina bi čez noč postala
         # boti. NULL `pregled()` šteje po starem pravilu.
         conn.execute("ALTER TABLE obiskovalec ADD COLUMN js INTEGER")
+    if "aplikacija" not in stolpci:
+        conn.execute("ALTER TABLE obiskovalec ADD COLUMN aplikacija TEXT")
+        conn.execute("ALTER TABLE obiskovalec ADD COLUMN okno INTEGER")
+    # Od kdaj se aplikacija šteje. Pred tem dnem je NULL v `aplikacija`
+    # „ne vemo“, ne „ni je bilo“, in pregled ga mora tako tudi pokazati.
+    if not db.get_meta(conn, "obisk_aplikacija_od"):
+        db.set_meta(conn, "obisk_aplikacija_od", _danes())
     conn.commit()
     shranjeno = db.get_meta(conn, "obisk_sol")
     if shranjeno and ":" in shranjeno:
@@ -266,6 +284,41 @@ def naprava(ua: str) -> str:
     return "računalnik"
 
 
+_RAZLICICA = re.compile(r"Kajros/(\d{1,3}(?:\.\d{1,3}){0,3})\b")
+
+
+def aplikacija(ua: str) -> tuple[str | None, bool]:
+    """(različica, iz okna) za zahtevo naše aplikacije; (None, False) sicer.
+
+    Okno je WebView, ki doda ` Kajros/1.2` na konec UA Chroma -- tam človek
+    aplikacijo gleda. Pripomoček, budilka in preverjanje posodobitve pa se
+    predstavijo kot `Kajros/1.2 (Android)` in tečejo tudi takrat, ko je
+    nihče ne odpre. Brez tega ločevanja bi bil pripomoček na domačem zaslonu
+    vsak dan „uporabnik aplikacije“.
+
+    Različica gre v bazo samo kot števke in pike: UA lahko pošlje kdorkoli in
+    s čimerkoli, in `Kajros/<script>` naj bo v bazi `?`, ne niz napadalca.
+    """
+    if "Kajros/" not in ua:
+        return None, False
+    m = _RAZLICICA.search(ua)
+    return (m.group(1) if m else "?"), not ua.startswith("Kajros/")
+
+
+def prenos(pot: str, metoda: str, koda: int, obmocje: str) -> str | None:
+    """Ime APK, kadar je zahteva začetek prenosa; sicer None.
+
+    Prenos je en `GET` s 200 -- ali 206 od prvega bajta, ker ga upravitelj
+    prenosov lahko začne z `Range: bytes=0-`. Nadaljevanje prekinjenega
+    prenosa (`bytes=40000-`) ni nov prenos, `HEAD` in 304 pa sploh ne.
+    """
+    if metoda != "GET" or not pot.startswith("/prenos/") or not pot.endswith(".apk"):
+        return None
+    if koda == 200 or (koda == 206 and obmocje.replace(" ", "").startswith("bytes=0-")):
+        return pot.rsplit("/", 1)[1][:64]
+    return None
+
+
 def vrsta_poti(pot: str) -> str:
     if pot == "/" or pot.startswith("/app"):
         return "stran"
@@ -283,8 +336,13 @@ def vedro(ms: float) -> int:
 
 def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
              drzava: str, koda: int, ms: float, zdaj: float | None = None,
-             ura: int | None = None, dan: str | None = None) -> None:
-    """Doda eno zahtevo v števce. Samo pomnilnik -- v bazo gre `izprazni()`."""
+             ura: int | None = None, dan: str | None = None,
+             razlicica: str | None = None, okno: bool = False,
+             prenesel: tuple[str, str] | None = None) -> None:
+    """Doda eno zahtevo v števce. Samo pomnilnik -- v bazo gre `izprazni()`.
+
+    `prenesel` je (datoteka, od kod) za začetek prenosa APK; glej `prenos()`.
+    """
     global _prelito
     zdaj = time.time() if zdaj is None else zdaj
     trenutek = datetime.fromtimestamp(zdaj, TZ)
@@ -327,14 +385,23 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
                     c = caka.setdefault(k, [0, 0])
                     c[0] += n
                     c[1] += og
+            # Prenos ne čaka na dokaz: `/android` nima JS in kdor pride
+            # naravnost nanjo -- iz iskalnika ali iz vrstice o posodobitvi --
+            # dokaza ne pošlje nikoli. Bot se izloči po UA kot povsod.
+            if prenesel:
+                _pripisi(dan, {("razrez", "prenos", prenesel[0]): [1, 0],
+                               ("razrez", "prenos_iz", prenesel[1]): [1, 0]})
 
-        o = _ljudje.setdefault((dan, kljuc), [0, 0, 0, 0, int(zdaj), int(zdaj)])
+        o = _ljudje.setdefault((dan, kljuc),
+                               [0, 0, 0, 0, int(zdaj), int(zdaj), None, 0])
         o[0] = max(o[0], int(bot))
         o[1] += 1
         o[2] += ogled
         o[3] += int(dokaz)
         o[4] = min(o[4], int(zdaj))
         o[5] = max(o[5], int(zdaj))
+        o[6] = razlicica or o[6]
+        o[7] += int(okno)
 
 
 def _pripisi(dan: str, prispevek: dict) -> None:
@@ -370,12 +437,19 @@ def iz_zahteve(request, koda: int, ms: float) -> None:
     glave = request.headers
     ua = glave.get("user-agent", "")
     bot = je_bot(ua)
+    razlicica, okno = aplikacija(ua)
+    apk = prenos(request.url.path, request.method, koda, glave.get("range", ""))
+    # `?iz=aplikacija` nosi povezava iz vrstice o posodobitvi v aplikaciji
+    # (`/api/android/razlicica`); brez nje je prenos nekoga, ki je prišel na
+    # stran sam -- večinoma nova namestitev.
+    iz = "aplikacija" if request.query_params.get("iz") == "aplikacija" else "stran"
     zabelezi(pot=pot, vrsta=vrsta_poti(request.url.path),
              kljuc=kljuc_obiskovalca(ip_zahteve(glave, _odjemalec(request)),
                                      ua_za_kljuc(ua), _danes()),
              bot=bot, naprava_=naprava(ua),
              drzava=(glave.get("cf-ipcountry") or "??").upper()[:2],
-             koda=koda, ms=ms)
+             koda=koda, ms=ms, razlicica=razlicica, okno=okno,
+             prenesel=(apk, iz) if apk else None)
 
 
 def _odjemalec(request) -> str | None:
@@ -462,14 +536,17 @@ def izprazni(conn: sqlite3.Connection) -> int:
             "  zahtev = zahtev + excluded.zahtev,"
             "  ogledov = ogledov + excluded.ogledov", razrezi)
         conn.executemany(
-            "INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov, js, prvi_s, zadnji_s)"
-            " VALUES(?,?,?,?,?,?,?,?) "
+            "INSERT INTO obiskovalec(dan, kljuc, bot, zahtev, ogledov, js, prvi_s, zadnji_s,"
+            "                        aplikacija, okno)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(dan, kljuc) DO UPDATE SET "
             "  bot = MAX(bot, excluded.bot), zahtev = zahtev + excluded.zahtev,"
             "  ogledov = ogledov + excluded.ogledov,"
             "  js = COALESCE(js, 0) + excluded.js,"
             "  prvi_s = MIN(prvi_s, excluded.prvi_s),"
-            "  zadnji_s = MAX(zadnji_s, excluded.zadnji_s)", ljudje)
+            "  zadnji_s = MAX(zadnji_s, excluded.zadnji_s),"
+            "  aplikacija = COALESCE(excluded.aplikacija, aplikacija),"
+            "  okno = COALESCE(okno, 0) + excluded.okno", ljudje)
         conn.executemany(
             "INSERT INTO obisk_odziv(dan, pot, vedro, n) VALUES(?,?,?,?) "
             "ON CONFLICT(dan, pot, vedro) DO UPDATE SET n = n + excluded.n", odzivi)
@@ -540,14 +617,35 @@ def prejsnje_obdobje(od: str, do: str) -> tuple[str, str]:
 #: stolpcem `js` (NULL) štejejo po starem pravilu -- zanje tega ne vemo, in
 #: ničla bi jih vse naredila za bote. `js_od` pove, od kdaj velja novo.
 _CLOVEK = "o.bot = 0 AND COALESCE(o.js, 1) > 0"
+#: Aplikacija: človek, ki je prišel iz nje. `app` jo je odprl, `app_ozadje`
+#: pa je samo pripomoček ali budilka -- nameščena je, pogledal je ni.
+_APP = f"{_CLOVEK} AND o.aplikacija IS NOT NULL"
 _PO_DNEVIH_SQL = (
     "SELECT o.dan,"
     f"      SUM(CASE WHEN {_CLOVEK} THEN 1 ELSE 0 END) AS ljudi,"
     "       SUM(CASE WHEN o.bot = 1 THEN 1 ELSE 0 END) AS botov,"
     "       SUM(CASE WHEN o.bot = 0 AND o.js = 0 THEN 1 ELSE 0 END) AS brez_js,"
     f"      SUM(CASE WHEN {_CLOVEK} THEN o.ogledov ELSE 0 END) AS ogledov,"
-    "       SUM(o.zahtev) AS zahtev "
+    "       SUM(o.zahtev) AS zahtev,"
+    f"      SUM(CASE WHEN {_APP} AND o.okno > 0 THEN 1 ELSE 0 END) AS app,"
+    f"      SUM(CASE WHEN {_APP} AND COALESCE(o.okno, 0) = 0 THEN 1 ELSE 0 END) AS app_ozadje "
     "FROM obiskovalec o WHERE o.dan BETWEEN ? AND ? GROUP BY o.dan ORDER BY o.dan")
+_PRENOSI_SQL = (
+    "SELECT dan, kljuc, SUM(zahtev) AS n FROM obisk_razrez "
+    "WHERE razsez = 'prenos_iz' AND dan BETWEEN ? AND ? GROUP BY dan, kljuc")
+
+
+def _po_dnevih(conn: sqlite3.Connection, od: str, do: str) -> list[dict]:
+    """Dnevne vrstice obiskovalcev s prenosi APK tistega dne."""
+    vrstice = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (od, do))]
+    prenosi: dict[str, dict[str, int]] = {}
+    for r in conn.execute(_PRENOSI_SQL, (od, do)):
+        prenosi.setdefault(r["dan"], {})[r["kljuc"]] = r["n"]
+    for d in vrstice:
+        p = prenosi.get(d["dan"], {})
+        d["prenosov"] = sum(p.values())
+        d["prenosov_iz_aplikacije"] = p.get("aplikacija", 0)
+    return vrstice
 
 
 def _vsota_dni(vrstice: list[dict]) -> dict:
@@ -557,6 +655,10 @@ def _vsota_dni(vrstice: list[dict]) -> dict:
         "zahtev": sum(d["zahtev"] for d in vrstice),
         "botov_vsota": sum(d["botov"] for d in vrstice),
         "brez_js_vsota": sum(d["brez_js"] for d in vrstice),
+        "app_vsota": sum(d["app"] for d in vrstice),
+        "app_ozadje_vsota": sum(d["app_ozadje"] for d in vrstice),
+        "prenosov": sum(d["prenosov"] for d in vrstice),
+        "prenosov_iz_aplikacije": sum(d["prenosov_iz_aplikacije"] for d in vrstice),
         "dni": len(vrstice),
     }
 
@@ -581,9 +683,9 @@ def pregled(conn: sqlite3.Connection, od: str | None = None,
     prej_od, prej_do = prejsnje_obdobje(od, do)
     pred30 = (date.fromisoformat(danes) - timedelta(days=29)).isoformat()
 
-    po_dnevih = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (od, do))]
-    prej = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (prej_od, prej_do))]
-    zadnjih30 = [dict(r) for r in conn.execute(_PO_DNEVIH_SQL, (pred30, danes))]
+    po_dnevih = _po_dnevih(conn, od, do)
+    prej = _po_dnevih(conn, prej_od, prej_do)
+    zadnjih30 = _po_dnevih(conn, pred30, danes)
     js_od, prvi_dan = conn.execute(
         "SELECT MIN(CASE WHEN js IS NOT NULL THEN dan END), MIN(dan) "
         "FROM obiskovalec").fetchone()
@@ -627,6 +729,13 @@ def pregled(conn: sqlite3.Connection, od: str | None = None,
     if "ura" in razrezi:
         razrezi["ura"].sort(key=lambda x: x["kljuc"])
 
+    # Ljudje po različici aplikacije. Nad enim dnem je to vsota dnevnih, kot
+    # povsod na tej strani -- ista naprava šteje enkrat na dan.
+    razlicice = [dict(r) for r in conn.execute(
+        "SELECT o.aplikacija AS kljuc, COUNT(*) AS ljudi FROM obiskovalec o "
+        f"WHERE o.dan BETWEEN ? AND ? AND {_APP} "
+        "GROUP BY o.aplikacija ORDER BY ljudi DESC, o.aplikacija DESC", (od, do))]
+
     skupaj = _vsota_dni(po_dnevih)
     skupaj["napak4"] = sum(e["napak4"] for e in endpointi)
     skupaj["napak5"] = sum(e["napak5"] for e in endpointi)
@@ -634,8 +743,12 @@ def pregled(conn: sqlite3.Connection, od: str | None = None,
     return {
         "od": od, "do": do, "danes_dan": danes,
         "danes": danasnji or {"dan": danes, "ljudi": 0, "botov": 0,
-                              "brez_js": 0, "ogledov": 0, "zahtev": 0},
+                              "brez_js": 0, "ogledov": 0, "zahtev": 0,
+                              "app": 0, "app_ozadje": 0, "prenosov": 0,
+                              "prenosov_iz_aplikacije": 0},
         "js_od": js_od, "prvi_dan": prvi_dan,
+        "aplikacija_od": db.get_meta(conn, "obisk_aplikacija_od"),
+        "razlicice": razlicice,
         "skupaj": skupaj,
         "prej": {"od": prej_od, "do": prej_do, **_vsota_dni(prej)},
         "po_dnevih": po_dnevih,

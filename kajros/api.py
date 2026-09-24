@@ -167,11 +167,29 @@ class _RevalidatingStatic(StaticFiles):
 
 app.mount("/static", _RevalidatingStatic(directory=_PKG_DIR / "static"), name="static")
 
+
+class _PrenosStatic(StaticFiles):
+    """Izdaje aplikacije, ki jih Cloudflare ne sme hraniti na svojem robu.
+
+    Brez glave je APK stregel Cloudflare (`cf-cache-status: HIT`, `age` dve
+    uri, izmerjeno 24. 9. 2026) in do nas je prišel le prenos, ki je zgrešil
+    njegov predpomnilnik -- števec prenosov je bil zato številka brez
+    pomena. `no-cache` ne zadošča: z njim Cloudflare datoteko hrani in pri
+    nas le preveri `ETag`, kar je 304 in ne prenos. `no-store` pošlje vsak
+    prenos sem; pri 98 kB na izdajo tunel tega ne čuti.
+    """
+
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+
 # Podpisan APK za Android. Mapa je zunaj paketa (gre v `data/`), ker vsebuje
 # izdajo, ne kode, in jo z razvojnega računalnika polni `android/objavi.sh`.
 # Streže se samo, če obstaja: dokler izdaje ni, poti ni.
 if config.PRENOS_DIR.is_dir():
-    app.mount("/prenos", StaticFiles(directory=config.PRENOS_DIR),
+    app.mount("/prenos", _PrenosStatic(directory=config.PRENOS_DIR),
               name="prenos")
 templates = Jinja2Templates(directory=_PKG_DIR / "templates")
 
@@ -574,8 +592,12 @@ def android(request: Request):
     je, da mora človek dovoliti namestitev iz neznanega vira, in stran mu to
     pove naravnost, namesto da bi ga presenetilo sistemsko opozorilo.
     """
+    # Kdor pride iz vrstice o posodobitvi, nosi `?iz=aplikacija` naprej na
+    # gumb za prenos -- samo tako pregled loči posodobitev od nove namestitve.
+    iz_aplikacije = request.query_params.get("iz") == "aplikacija"
     return templates.TemplateResponse(
-        request, "android.html", {"izdaja": _izdaja_androida()})
+        request, "android.html",
+        {"izdaja": _izdaja_androida(), "iz_aplikacije": iz_aplikacije})
 
 
 @app.get("/api/android/razlicica")
@@ -594,7 +616,9 @@ def api_android_razlicica():
         "koda": izdaja["koda"],
         "ime": izdaja["ime"],
         "url": f"{config.BASE_URL}/prenos/{izdaja['datoteka']}",
-        "stran": f"{config.BASE_URL}/android",
+        # Aplikacija odpre to stran v brskalniku; oznaka gre skozi gumb do
+        # prenosa in v pregledu loči posodobitve od novih namestitev.
+        "stran": f"{config.BASE_URL}/android?iz=aplikacija",
         "sha256": izdaja.get("sha256"),
         "objavljeno": izdaja.get("objavljeno"),
     }

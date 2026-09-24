@@ -322,6 +322,27 @@ prejšnjim letom, ne z enako dolgim odsekom -- september proti 2.–31. 8. ni
 nobeno obdobje, ki bi ga kdo imel v glavi. Nad enim dnem je številka
 „obiskov“, ne „ljudi“ (vsota dnevnih). Oblika je predloga A iz `design/admin/`.
 
+**Aplikacija in prenosi se štejejo posebej** (od 24. 9. 2026,
+`meta.obisk_aplikacija_od`; prej je „ne vemo“, ne nič). Trije kraji, kjer se
+številka tiho pokvari:
+
+* **Cloudflare je APK stregel s svojega roba** (`cf-cache-status: HIT`, `age`
+  dve uri) in do nas je prišel le prenos, ki mu je zgrešil. `/prenos` zato
+  pošilja `Cache-Control: no-store` (`_PrenosStatic`). `no-cache` NE zadošča:
+  z njim Cloudflare hrani in pri nas le preverja — `/static/base.css` je
+  izmerjeno `MISS` in nato `REVALIDATED`, kar je pri nas 304, ne prenos.
+* **Prenos ne čaka na dokaz JS**, ker `/android` JS nima — kdor pride nanjo
+  naravnost, ga ne pošlje nikoli. Bot se izloči po UA. Šteje se `GET` s 200
+  ali 206 od `bytes=0-`; nadaljevanje, `HEAD` in 304 niso prenos.
+  Posodobitev loči `?iz=aplikacija`, ki ga nosi `stran` iz
+  `/api/android/razlicica` naprej na gumb — velja za vse že nameščene
+  različice, ker naslov pride s strežnika.
+* **Pripomoček ni uporabnik.** Okno aplikacije (WebView, `… Kajros/1.2`) in
+  pripomoček/budilka (`Kajros/1.2 (Android)`) sta isti ključ, a stolpec
+  `okno` šteje le prve: pripomoček na domačem zaslonu kliče API tudi, ko
+  aplikacije nihče ne odpre, in bi sicer vsak dan veljal za uporabnika.
+  Različica gre v bazo samo kot števke in pike — UA piše kdorkoli.
+
 **Pregled in števci se ne štejeta sama.** `/admin*` in `/static/*` gresta mimo
 štetja; sicer bi skrbnikovo osveževanje na minuto postalo največja postavka v
 lastni statistiki.
