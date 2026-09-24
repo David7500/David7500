@@ -421,8 +421,24 @@ function departedMs(c) {
   return new Date(c.expected_dep || c.sched_dep).getTime();
 }
 
+// "Odpeljal" je pri vlaku skoraj vedno sklep iz ure, ne opažanje. Kadar vlak
+// čaka na prejšnji postaji in feed zamude ne osveži, ura laže: vrstica je šla
+// med odpeljane, vlak pa je šele prihajal. Do `nepotrjen_do` zato ostane med
+// živimi in pove, da je odhod sklep. Mejo postavi strežnik
+// (`stats.nepotrjen_do`); tu je le ura, ker teče tudi med osvežitvama.
+function nepotrjen(pricakovanoMs, doIso, nowMs) {
+  return !!(nowMs && doIso && pricakovanoMs < nowMs
+            && nowMs <= new Date(doIso).getTime());
+}
+
+function nepotrjenHtml(iso, prihod) {
+  return `<span class="nepotrjen">po zadnjem podatku bi ${prihod ? "prispel" : "odpeljal"}
+      ob ${hhmm(iso)}, potrditve ni</span>`;
+}
+
 function connectionRowHtml(c, nowMs, isNext, date, odKod) {
-  const gone = nowMs && departedMs(c) < nowMs;
+  const morda = nepotrjen(departedMs(c), c.nepotrjen_do, nowMs);
+  const gone = nowMs && departedMs(c) < nowMs && !morda;
   const late = c.delay_s != null && Math.abs(c.delay_s) >= 60;
   const color = delayColor(c.zamuda);
   const cd = isNext && nowMs ? countdownLabel(c.expected_dep || c.sched_dep, nowMs) : "";
@@ -433,7 +449,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
     : null;
 
   return `
-    <a class="conn-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
+    <a class="conn-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
        href="${journeyHref(c.train_no, date, c.trip_id, odKod)}">
       <div class="conn-times">
         <div class="conn-clock">
@@ -456,6 +472,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
         : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}</div>
       <div class="conn-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
+        ${morda ? nepotrjenHtml(c.expected_dep || c.sched_dep, false) : ""}
         <span>${durationLabel(c.duration_s)}</span>
         <span>${stopsLabel(c.stops_between)}</span>
         <span>neposredno</span>
@@ -616,7 +633,11 @@ function renderConnections(data) {
 
   // Ze odpeljane vozjne so kontekst, ne izbira. Ostanejo dosegljive -- kdor
   // preverja, ali je zamudil vlak, jih rabi -- a ne stojijo pred odgovorom.
-  const gone = nextIdx > 0 ? list.slice(0, nextIdx) : [];
+  // Nepotrjen odhod ni odpeljan: ostane viden, pred naslednjo.
+  const pred = nextIdx > 0 ? list.slice(0, nextIdx) : [];
+  const jeMorda = (c) => nepotrjen(departedMs(c), c.nepotrjen_do, nowMs);
+  const gone = pred.filter((c) => !jeMorda(c));
+  const morda = pred.filter(jeMorda);
   const ahead = nextIdx >= 0 ? list.slice(nextIdx) : list;
 
   const rows = [];
@@ -627,6 +648,7 @@ function renderConnections(data) {
       ${gone.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)).join("")}
     </details>`);
   }
+  rows.push(...morda.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)));
   rows.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date, data.from)));
   if (legs.length) {
     // Naslov naj pove, kaj je spodaj: en prestop ali vec. Ko en prestop ne
@@ -642,8 +664,10 @@ function renderConnections(data) {
   renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
 }
 
-function boardRowHtml(r, nowMs, isNext, date, station) {
-  const gone = nowMs && new Date(r.expected || r.sched).getTime() < nowMs;
+function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
+  const exp = new Date(r.expected || r.sched).getTime();
+  const morda = nepotrjen(exp, r.nepotrjen_do, nowMs);
+  const gone = nowMs && exp < nowMs && !morda;
   // Ne "zamuja", ampak "ne vozi po voznem redu": mestni avtobus je pogosto
   // PREZGODEN in doslej se to ni videlo nikjer -- vrstica je kazala samo
   // voznoredno uro. Prav ta primer potnik zamudi, ker pride ob njej.
@@ -651,7 +675,7 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
   const color = delayColor(r.zamuda);
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
   return `
-    <a class="board-row${gone ? " is-gone" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
+    <a class="board-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
        href="${journeyHref(r.train_no, date, r.trip_id, station)}">
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
@@ -673,6 +697,7 @@ function boardRowHtml(r, nowMs, isNext, date, station) {
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}</div>
       <div class="board-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
+        ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
     </a>`;
@@ -838,7 +863,8 @@ function renderBoard(data) {
   let nextIdx = -1;
   if (isToday) nextIdx = list.findIndex((r) => new Date(r.expected || r.sched).getTime() >= nowMs);
   resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data)
-    + list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station)).join("");
+    + list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station,
+                                      data.kind === "prihodi")).join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 

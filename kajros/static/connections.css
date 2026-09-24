@@ -183,6 +183,11 @@
 }
 .conn-row:hover { background: var(--bg-raised); }
 .conn-row.is-gone { opacity: 0.4; }
+/* Odhod, ki ga je ura pretekla, nihce pa ga ni potrdil: verjetno mimo, a ne
+   gotovo. Zato manj od zive vrstice in bolj od odpeljane -- in beseda. */
+.conn-row.is-unconfirmed,
+.board-row.is-unconfirmed { opacity: 0.72; }
+.nepotrjen { color: var(--ink-dim); }
 
 /* Naslednja vozjna je tista, ki jo clovek isce -- dobi rob, ne le vrstni red. */
 .conn-row.is-next {

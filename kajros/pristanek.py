@@ -371,6 +371,14 @@ def _dopolni_obicajno(vrstice: list[dict], polje: str) -> None:
                          if v.get("zamuda") is None and t else None)
 
 
+def _se_ni_odpeljal(sched: str | None, expected: str | None, zdaj: datetime) -> bool:
+    """Poznejsa od obeh ur je se pred nami. Voznoredna sama je skrila vsak
+    vlak z zamudo; pricakovana sama bi skrila prezgodnji avtobus, ki ga je
+    stran doslej kazala do njegove voznoredne ure."""
+    ure = [datetime.fromisoformat(x) for x in (sched, expected) if x]
+    return bool(ure) and max(ure) >= zdaj
+
+
 def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
              network: str, datum: str, now_s: int | None) -> dict:
     """Vse, kar potrebuje stran ene relacije."""
@@ -383,9 +391,11 @@ def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
     # je bilo to ob pol treh popoldne naštevanje odhodov med 04:52 in 07:28.
     # Kadar danes ni več ničesar (pozno zvečer), ostane dan od začetka: prazna
     # tabela je slabša od včerajšnje ure, ki je vsaj vozni red.
+    #
+    # Vlak z 20 min zamude je pet minut po voznem redu se vedno naslednji
+    # odhod, zato velja poznejsa od obeh ur.
     zdaj = datetime.now(TZ)
-    odslej = [z for z in zveze
-              if z["sched_dep"] and datetime.fromisoformat(z["sched_dep"]) >= zdaj]
+    odslej = [z for z in zveze if _se_ni_odpeljal(z["sched_dep"], z["expected_dep"], zdaj)]
     prikaz = odslej or zveze
     return {
         "od": od, "cilj": cilj, "network": network, "datum": datum,
@@ -419,6 +429,12 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
                            kind="odhodi", limit=NAJVEC_ODHODOV + 1,
                            network=network, now_s=now_s,
                            stop_ids=set(izbrana["stop_ids"]) if izbrana else None)
+    # Tabla obdrzi tudi vlak, katerega odhod je le sklep iz ure
+    # (`stats.NEPOTRJEN_ODHOD_S`), in aplikacija to pove z besedo. Ta stran je
+    # brez JS in njen naslov je "Naslednji odhodi" -- zato samo, kar po
+    # pricakovani uri se ni odpeljalo.
+    zdaj = datetime.now(TZ)
+    odhodi = [o for o in odhodi if _se_ni_odpeljal(o["sched"], o["expected"], zdaj)]
     _dopolni_obicajno(odhodi, "typical")
     return {
         "ime": ime, "network": network, "datum": datum,

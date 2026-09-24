@@ -95,6 +95,18 @@ Pogoja sta dva: številka za postanek **ni potrjena** (`zadnji podatek`) in
 razlika je vsaj **5 minut** (`RAZKRIJ_RAZLIKO_S`) — pod tem je to šum, ne
 druga resnica. Ime postaje je v oklepaju, ker se ga ne da splošno sklanjati.
 
+**Nepotrjen odhod ni odpeljan** (24. 9. 2026). Tabla in iskalnik zvez sta
+vlak, čim je minila ura po zadnjem podatku, posivila, iskalnik pa ga je zložil
+pod „pokaži prejšnje“. Kadar vlak čaka na prejšnji postaji in feed zamude ne
+osveži, je bil prav ta vlak še na poti. Zdaj strežnik vsaki železniški vrstici
+doda `nepotrjen_do` (`stats.nepotrjen_do()`, 20 min po pričakovanem odhodu,
+izmerjeno v `docs/MERITVE.md`), prikaz pa vrstico med pričakovanim odhodom in
+to uro pokaže napol prosojno (`is-unconfirmed`, 0,72 — med živo in odpeljano 0,4)
+z besedo **„po zadnjem podatku bi odpeljal ob 10:10, potrditve ni“**. Ni
+naslednja in ni med odpeljanimi. Primerjavo z uro naredi odjemalec, ker ura
+teče tudi med osvežitvama; mejo postavi strežnik. Pristajalni strani je ne
+kažeta — nimata JS in njun naslov je „Naslednji odhodi“.
+
 **Zakaj ne poskušamo prehoda zaznati bolje.** Pet signalov je izmerjenih in
 vsi odpovejo — podrobnosti v `docs/MERITVE.md`, „Prehoda vlaka se iz teh
 podatkov ne da ugotoviti". Kar ni mogoče izmeriti, se ne sme trditi.

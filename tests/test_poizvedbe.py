@@ -2363,3 +2363,138 @@ def test_telo_obrazca_je_omejeno_tudi_brez_content_length():
     with pytest.raises(HTTPException) as e:
         asyncio.run(api._preberi_telo(zahteva([b"a" * 40000] * 3)))
     assert e.value.status_code == 413
+
+
+# ---------------------------------------------------------------- nepotrjen odhod
+
+def _polnoc(dan: str) -> int:
+    from datetime import datetime
+    return int(datetime.combine(date.fromisoformat(dan), datetime.min.time(),
+                                tzinfo=stats.TZ).timestamp())
+
+
+def test_tabla_obdrzi_vlak_z_zamudo_cez_rob_okna(conn):
+    """Okno table je po pričakovani uri, ne po voznem redu.
+
+    Živ primer: LPV 2008 je bil 22. 9. 2026 v Orehovi vasi +20 min, tabla pa
+    ga 12 min po voznem redu ni več kazala -- iskala je od "zdaj - 10 min"
+    po voznem redu. Vlak je prišel osem minut pozneje.
+    """
+    # IC 1: A 08:00 -> Z 09:00/09:05 -> C. Izmerjeno na A: +20 min.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',1,1200,1200,4102444800)")
+    conn.commit()
+    zdaj = 32700 + 12 * 60              # 09:17, dvanajst minut po voznem redu
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180, now_s=zdaj)
+    r = next((x for x in b if x["train_no"] == "IC 1"), None)
+    assert r is not None, "zamujen vlak je izginil s table, preden je prišel"
+    assert r["t_s"] + r["delay_s"] > zdaj
+
+    # Brez `now_s` (drug dan) ostane okno po voznem redu: "zdaj" tam ni.
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180)
+    assert all(x["train_no"] != "IC 1" for x in b)
+
+
+def test_tabla_ne_seze_nazaj_po_tocnem_vlaku(conn):
+    """Pogled nazaj je samo za zamude -- točen vlak izpred okna ne pride nazaj."""
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',1,0,0,4102444800)")
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,0,0,4102444800)")
+    conn.commit()
+    zdaj = 32700 + 40 * 60              # 09:45, vlak je odpeljal ob 09:05
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180, now_s=zdaj)
+    assert all(x["train_no"] != "IC 1" for x in b)
+
+
+def test_meja_vrstic_ne_steje_zamujenih_izpred_okna(conn):
+    """Zamujena vrstica izpred okna ne sme izriniti zadnje v oknu."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('t5','r5','LP 5','Z - C','S1')")
+    _sched(conn, "t5", [(1, "Z", None, 34200), (2, "C", 37800, None)])
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',1,1800,1800,4102444800)")
+    conn.commit()
+    # 09:20: IC 1 (09:05, +30) je pred oknom od 09:10, LP 5 (09:30) v njem.
+    zdaj = 33600
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180,
+                      limit=1, now_s=zdaj)
+    assert [x["train_no"] for x in b] == ["IC 1", "LP 5"]
+
+
+def _nepotrjen_z(conn, dan="2026-08-31"):
+    """IC 1 s +2 min, vrednosti za Z objavljene PRED prehodom, feed pa je
+    pozneje spregovoril o C. Z je torej po uri prevožen, a nepotrjen --
+    natanko stanje, ko vlak čaka na prejšnji postaji in feed molči o njem."""
+    p = _polnoc(dan)
+    prej = p + 32000                     # 08:53, pred prehodom Z (09:07)
+    pozneje = p + 33000                  # 09:10, po njem
+    conn.executemany(
+        "INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts)"
+        " VALUES('t1',?,?,120,120,?)",
+        [(dan, 1, prej), (dan, 2, prej), (dan, 3, pozneje)])
+    conn.commit()
+
+
+def test_nepotrjen_odhod_ostane_na_tabli(conn):
+    """Prehod, ki ga je ura pretekla, feed pa ga ni potrdil, ni odhod.
+
+    Vrstica ostane `NEPOTRJEN_ODHOD_S` po pričakovani uri in nosi mejo, da
+    prikaz lahko pove „po zadnjem podatku bi odpeljal ob …, potrditve ni“.
+    """
+    _nepotrjen_z(conn)
+    zdaj = 32700 + 120 + 15 * 60         # 15 min po pričakovanem odhodu
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180, now_s=zdaj)
+    r = next((x for x in b if x["train_no"] == "IC 1"), None)
+    assert r is not None
+    assert r["delay_kind"] == stats.ZADNJI_PODATEK
+    assert r["nepotrjen_do"] == stats._abs_time(
+        "2026-08-31", 32700 + 120 + stats.NEPOTRJEN_ODHOD_S)
+
+    # Ko meja poteče, gre vrstica s table kot vsaka odpeljana.
+    zdaj = 32700 + 120 + stats.NEPOTRJEN_ODHOD_S + 60
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180, now_s=zdaj)
+    assert all(x["train_no"] != "IC 1" for x in b)
+
+
+def test_potrjen_odhod_nima_meje(conn):
+    """Kar je feed potrdil po prehodu, je odpeljalo -- brez „morda“."""
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr,"
+                 " delay_dep, feed_ts) VALUES('t1','2026-08-31',2,120,120,4102444800)")
+    conn.commit()
+    zdaj = 32700 + 120 + 5 * 60
+    b = journey.board(conn, "Zidani Most", "2026-08-31", zdaj - 600, 180, now_s=zdaj)
+    r = next(x for x in b if x["train_no"] == "IC 1")
+    assert r["delay_kind"] == stats.IZMERJENO
+    assert r["nepotrjen_do"] is None
+
+
+def test_potrjen_postanek_naprej_potrdi_tudi_prejsnjega():
+    assert stats.nepotrjen_do("zeleznica", 1000, 60, stats.ZADNJI_PODATEK) == \
+        1000 + 60 + stats.NEPOTRJEN_ODHOD_S
+    assert stats.nepotrjen_do("zeleznica", 1000, 60, stats.ZADNJI_PODATEK,
+                              potrjen_naprej=True) is None
+    assert stats.nepotrjen_do("zeleznica", 1000, None, None) is None
+    assert stats.zadnji_potrjeni({("a", 2), ("a", 5), ("b", 1)}) == {"a": 5, "b": 1}
+
+
+def test_nepotrjen_odhod_velja_samo_za_zeleznico():
+    """Pri avtobusih feed prehod potrdi v 68 %, mestni LPP nikoli -- tabla
+    na Bavarskem dvoru bi bila polna „morda“ vrstic."""
+    assert stats.nepotrjen_do("avtobus", 1000, 60, stats.ZADNJI_PODATEK) is None
+
+
+def test_iskalnik_nosi_mejo_nepotrjenega_odhoda(conn):
+    """Iskalnik zvez je vlak po preteku ure spravil med odpeljane, pod
+    „pokaži prejšnje“. Isto pravilo kot tabla, isto polje."""
+    _nepotrjen_z(conn)
+    zdaj = 32700 + 120 + 5 * 60
+    z = next(x for x in stats.connections(conn, "Zidani Most", "Celje", "2026-08-31", zdaj)
+             if x["train_no"] == "IC 1")
+    assert z["delay_kind"] == stats.ZADNJI_PODATEK
+    assert z["nepotrjen_do"] == stats._abs_time(
+        "2026-08-31", 32700 + 120 + stats.NEPOTRJEN_ODHOD_S)
+    # Drug dan: brez "zdaj" ni ne sklepa ne meje.
+    z = next(x for x in stats.connections(conn, "Zidani Most", "Celje", "2026-08-31")
+             if x["train_no"] == "IC 1")
+    assert z["nepotrjen_do"] is None

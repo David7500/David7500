@@ -1519,6 +1519,56 @@ def potrjen_prehod(feed_ts: int | None, prehod_ts: int | None) -> bool:
             and feed_ts >= prehod_ts)
 
 
+#: Kako dolgo po domnevnem odhodu vlak še velja za mogoč, kadar odhoda ni
+#: potrdil nihče.
+#:
+#: „Odpeljal je“ je pri vlaku skoraj vedno sklep iz ure (vozni red + zadnja
+#: zamuda), ne opažanje -- feed prehod potrdi pri 0,4 % postankov (glej
+#: `IZMERJENO`). Kadar vlak čaka na prejšnji postaji, feed pa zamude ne
+#: osveži, ura laže: vrstica je šla med odpeljane in s table, vlak pa je šele
+#: prihajal.
+#:
+#: Rekonstrukcija iz `obs` z istimi varovali kot `_LAST_MEASURED_SQL`,
+#: železnica 20. 8.-23. 9. 2026, 118 129 nepotrjenih trditev o odhodu: v
+#: 4,13 % je vlak res odpeljal vsaj 3 min pozneje. Od teh jih je v 10 min
+#: odpeljalo 58 %, v 15 min 77 %, v 20 min 87 %, v 30 min 95 %. Tišina feeda
+#: po trditvi pravilnih od napačnih ne loči (mediana 3,0 proti 2,5 min),
+#: zato meja ni tišina, ampak čas.
+#:
+#: Samo železnica. Pri avtobusih feed prehod potrdi v 68 %, mestni LPP pa
+#: nikoli (pošilja samo postanke pred vozilom), zato bi bila na Bavarskem
+#: dvoru (53 odhodov v pol ure) tabla polna „morda“ vrstic. Tudi rep je
+#: drugačen: napačnih trditev je 3,7 %, a p95 zamika je 95 min, ne 31.
+NEPOTRJEN_ODHOD_S = 20 * 60
+
+
+def nepotrjen_do(network: str | None, t_s: int | None, delay_s: int | None,
+                 delay_kind: str | None, potrjen_naprej: bool = False) -> int | None:
+    """Do katere sekunde prometnega dne je odhod s postanka samo sklep iz ure.
+
+    None, kadar je odhod potrjen (feed je vrednost osvežil po prehodu na tem
+    ali poznejšem postanku), kadar ure sploh ni ali kadar pravilo ne velja
+    (avtobusi, glej `NEPOTRJEN_ODHOD_S`). Do vrnjene sekunde vrstica ne sme
+    trditi, da je vlak odpeljal; primerjavo z uro naredi prikaz, ker ura teče
+    tudi med dvema osvežitvama.
+    """
+    if network != "zeleznica" or t_s is None or delay_s is None:
+        return None
+    if delay_kind == IZMERJENO or potrjen_naprej:
+        return None
+    return t_s + delay_s + NEPOTRJEN_ODHOD_S
+
+
+def zadnji_potrjeni(potrjeni: set[tuple[str, int]]) -> dict[str, int]:
+    """trip_id -> najvišji potrjen postanek. Potrjen prehod naprej po progi
+    pomeni, da je vozilo tudi ta postanek zanesljivo že prevozilo."""
+    out: dict[str, int] = {}
+    for trip_id, seq in potrjeni:
+        if seq > out.get(trip_id, -1):
+            out[trip_id] = seq
+    return out
+
+
 def stanje_postankov(conn: sqlite3.Connection, service_date: str,
                       trip_ids: list[str]) -> tuple[set, set]:
     """Dvoje o postankih s table, iz ENE poizvedbe:
@@ -1665,6 +1715,25 @@ def pred_odhodom(obicajno_s: float | None, prevoznik_s: int | None,
     return _with_operator(round(obicajno_s), prevoznik_s, network, agency), "ocena"
 
 
+def _po_polnoci(d: dict, zdaj_s: int) -> bool:
+    """Ali vcerajsnja zveza sodi na danasnji seznam.
+
+    Po voznem redu po polnoci -- ali pa jo tja potisne zamuda oziroma se ni
+    potrjen odhod. Vlak ob 23:50 z 20 min zamude je ob 00:05 se vedno
+    naslednji, samo po voznem redu pa bi ga iskalnik po polnoci ne poznal
+    vec. `nepotrjen_do` je po definiciji odhod + `NEPOTRJEN_ODHOD_S`, zato
+    se da iz njega sklepati brez ponovnega racuna potrditev.
+    """
+    if d["dep_s"] >= 86400:
+        return True
+    if d["delay_s"] is None:
+        return False
+    odhod = d["dep_s"] + d["delay_s"]
+    if d.get("nepotrjen_do"):
+        return odhod + NEPOTRJEN_ODHOD_S >= zdaj_s
+    return odhod >= 86400
+
+
 def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
                 service_date: str, now_s: int | None = None,
                 network: str | None = None, _vceraj: bool = True) -> list[dict]:
@@ -1705,7 +1774,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         prej = (date.fromisoformat(service_date) - timedelta(days=1)).isoformat()
         nocne = [d for d in connections(conn, from_name, to_name, prej,
                                         now_s + 86400, network, _vceraj=False)
-                 if d["dep_s"] >= 86400]
+                 if _po_polnoci(d, now_s + 86400)]
     if not out:
         return nocne
 
@@ -1713,6 +1782,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     last = last_measured(conn, service_date, [d["trip_id"] for d in out], now_s)
     slack = _slack_ahead(conn, [d["trip_id"] for d in out])
     _, potrjeni = stanje_postankov(conn, service_date, [d["trip_id"] for d in out])
+    naprej = zadnji_potrjeni(potrjeni)
     # Obicajna zamuda iz zgodovine. Za dan, ki se ni prisel, je to edino, kar
     # o vlaku sploh vemo -- brez tega je vsaka vrstica "brez podatka". Pred
     # zanko, ker jo rabi tudi vožnja brez meritve (`pred_odhodom`).
@@ -1739,6 +1809,12 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
 
         d["expected_dep"] = (_abs_time(service_date, d["dep_s"] + d["delay_s"])
                              if d["delay_s"] is not None else None)
+        # Do kdaj je "odpeljal" samo sklep iz ure -- glej `NEPOTRJEN_ODHOD_S`.
+        # Brez tega je iskalnik vlak, ki je cakal na prejsnji postaji, spravil
+        # med odpeljane, cim je minila ura, ki jo je feed nazadnje povedal.
+        d["nepotrjen_do"] = _abs_time(service_date, nepotrjen_do(
+            d["network"], d["dep_s"], d["delay_s"], d["delay_kind"],
+            naprej.get(d["trip_id"], -1) > d["from_seq"])) if now_s is not None else None
         # Odlocitev o zamudi gre z vrstico vred -- glej `opis_zamude()`.
         d["zamuda"] = opis_zamude(d["delay_s"], d["delay_kind"])
         # Kaj je o tej postaji rekel feed. Kadar je vozilo se pred njo, je to

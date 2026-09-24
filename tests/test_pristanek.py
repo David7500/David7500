@@ -179,3 +179,17 @@ def test_mestni_lpp_v_relacijah_ne_nastopa(conn):
     got = pristanek.zgradi(conn, 90, "avtobus")
     assert got["relacije"] == []
     assert [p["ime"] for p in got["postaje"]] == ["Medvode", "Tivoli"]
+
+
+def test_stran_ne_skrije_vlaka_z_zamudo():
+    """Vlak z zamudo je po voznem redu že mimo, a še ni odpeljal."""
+    from datetime import datetime
+    zdaj = datetime.fromisoformat("2026-09-22T16:27:00+02:00")
+    assert pristanek._se_ni_odpeljal("2026-09-22T16:15:00+02:00",
+                                     "2026-09-22T16:35:00+02:00", zdaj)
+    assert not pristanek._se_ni_odpeljal("2026-09-22T16:15:00+02:00",
+                                         "2026-09-22T16:20:00+02:00", zdaj)
+    # Prezgodnji avtobus ostane do voznoredne ure, kot doslej.
+    assert pristanek._se_ni_odpeljal("2026-09-22T16:30:00+02:00",
+                                     "2026-09-22T16:25:00+02:00", zdaj)
+    assert not pristanek._se_ni_odpeljal(None, None, zdaj)

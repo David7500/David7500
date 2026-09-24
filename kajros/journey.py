@@ -25,8 +25,8 @@ from . import config, geo
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, odhod_z_izhodisca, opis_zamude,
                     pred_odhodom,
-                    stanje_postankov, typical_at_stops,
-                    IZMERJENO, ZADNJI_PODATEK)
+                    stanje_postankov, typical_at_stops, nepotrjen_do, zadnji_potrjeni,
+                    IZMERJENO, MAX_REALNA_ZAMUDA_S, NEPOTRJEN_ODHOD_S, ZADNJI_PODATEK)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -563,7 +563,15 @@ LEFT JOIN sched sn ON sn.trip_id = t.trip_id
 LEFT JOIN run rn   ON rn.trip_id = t.trip_id AND rn.service_date = :day
                   AND rn.stop_seq = sn.stop_seq
 LEFT JOIN station zn ON zn.stop_id = sn.stop_id
-WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s AND :to_s
+WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s - :nazaj AND :to_s
+  AND (COALESCE(s.dep_s, s.arr_s) >= :from_s
+       -- Pred oknom samo vozjne, ki jim je kdaj danes zamuda segla cez rob
+       -- okna. Koncno odloci `board()` po pricakovani uri; to je le sito,
+       -- da mestno postajalisce ne racuna ocene za vse tri ure nazaj.
+       OR EXISTS (SELECT 1 FROM run x
+                  WHERE x.trip_id = t.trip_id AND x.service_date = :day
+                    AND COALESCE(s.dep_s, s.arr_s)
+                        + COALESCE(x.delay_dep, x.delay_arr) + :rezerva >= :from_s))
 ORDER BY t_s
 """
 
@@ -594,12 +602,26 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     podrla. `_vceraj` ustavi rekurzijo pri eni stopnji; dva dneva nazaj ni
     treba, ker se nobena vožnja ne razteza čez 48 ur.
     """
+    # **Okno je po pricakovani uri, ne po voznem redu.** Tabla je iskala od
+    # `from_s` po voznem redu, zato je vlak z vec kot desetimi minutami
+    # zamude izginil, preden je prisel: LPV 2008 je bil 22. 9. v Orehovi vasi
+    # +20 min in ga 12 min po voznem redu ni bilo na tabli. Takih postankov je
+    # pri zeleznici 24 % (9.-23. 9. 2026). Nazaj se gleda samo danes -- za
+    # drug dan "zdaj" ne obstaja -- in najvec toliko, kolikor je zamuda
+    # sploh verjetna.
+    nazaj = MAX_REALNA_ZAMUDA_S if now_s is not None else 0
+    # Rezerva sita je za nepotrjen odhod, ki velja samo pri zeleznici. Pri
+    # avtobusih bi le podvojila cas table (Ljubljana AP ob 16:30: 52 vrstic
+    # skozi sito, 6 na tabli; 35 -> 72 ms).
+    rezerva = NEPOTRJEN_ODHOD_S if network != "avtobus" else 0
     rows = conn.execute(_BOARD_SQL, {
         "station": station, "day": service_date, "network": network,
         "from_s": from_s, "to_s": from_s + window_min * 60,
+        "nazaj": nazaj, "rezerva": rezerva,
     }).fetchall()
 
     out = []
+    v_oknu = 0
     for r in rows:
         d = dict(r)
         if stop_ids is not None and d["stop_id"] not in stop_ids:
@@ -618,8 +640,13 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         d["_izhodisce"] = d.pop("first_seq")
         d.pop("last_seq")
         out.append(d)
-        if len(out) >= limit:
-            break
+        # Meja steje samo vrstice v oknu. Zamujene izpred okna so redke (sito
+        # v poizvedbi), in ce bi stele, bi tabla ob veliki zamudi izgubila
+        # konec okna.
+        if d["t_s"] >= from_s:
+            v_oknu += 1
+            if v_oknu >= limit:
+                break
 
     # Meja med meritvijo in napovedjo. Brez tega je tabla kazala feedovo
     # vrednost za se nedosezen postanek kot izmerjeno zamudo -- in ta je
@@ -766,6 +793,24 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
                 d["delay_s"], d["delay_kind"] = z, vrsta
                 d["expected"] = _abs_time(service_date, d["t_s"] + z)
                 d["zamuda"] = opis_zamude(z, vrsta)
+
+    # Odhod, ki ga je ura ze pretekla, a ga nihce ni potrdil, ni odhod --
+    # glej `stats.NEPOTRJEN_ODHOD_S`. Do `nepotrjen_do` vrstica ostane in
+    # prikaz pove, da je to sklep, ne opazanje.
+    naprej = zadnji_potrjeni(potrjeni)
+    for d in out:
+        nd = (nepotrjen_do(d["network"], d["t_s"], d["delay_s"], d["delay_kind"],
+                           naprej.get(d["trip_id"], -1) > d["stop_seq"])
+              if now_s is not None else None)
+        d["nepotrjen_do"] = _abs_time(service_date, nd)
+        d["_nd"] = nd
+    if nazaj:
+        out = [d for d in out
+               if d["t_s"] >= from_s
+               or (d["delay_s"] is not None and d["t_s"] + d["delay_s"] >= from_s)
+               or (d["_nd"] is not None and d["_nd"] >= now_s)]
+    for d in out:
+        d.pop("_nd", None)
 
     # Vceraj zacet promet, ki se ni koncan. Rekurzija namesto druge poizvedbe:
     # vse, kar sledi (meja meritve, zdruzevanje dvojnikov, obicajna zamuda),

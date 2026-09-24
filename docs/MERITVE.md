@@ -2476,3 +2476,72 @@ poizvedbe.
 * `zamiki()` z vožnjami, ki imajo danes vrstico v `run`, namesto vseh voženj
   dneva: isti izid (5 829), a počasneje (1 069-1 275 ms proti 813-963 ms). Meja
   32 766 vezav je pri 10 679 voženj dneva trikrat daleč. Ostane.
+
+## Vlak, ki ga je ura spravila s table (24. 9. 2026)
+
+Prijava: vlak čaka na prejšnji postaji, feed kaže, da bi moral že odpeljati,
+in vlaka v aplikaciji ni več. Isto se zgodi v uradni aplikaciji. Vzroka sta
+bila dva, en naš in en v podatkih.
+
+**Tabla je iskala po voznem redu.** Okno je bilo `zdaj − 10 min` po voznem
+redu, zato je vlak z več kot desetimi minutami zamude izginil, preden je
+prišel. LPV 2008 je bil 22. 9. v Orehovi vasi +20 min: 12 min po voznem redu
+ga ni bilo na tabli, z oknom, razširjenim za zamudo, je bil. Železniških
+postankov z zamudo nad 10 min je bilo 9.–23. 9. **24 %** (9 063 od 36 919),
+p90 zamude 19 min, p99 45 min. Isto napako sta imeli obe pristajalni strani
+(relacija je rezala po `sched_dep >= zdaj`).
+
+Popravek: `journey.board()` gleda nazaj do `MAX_REALNA_ZAMUDA_S`, a samo po
+vožnjah, ki jim je zamuda danes segla čez rob okna (sito v poizvedbi), in
+obdrži, kar po pričakovani uri še ni mimo. Cena, razvojna baza, 23. 9.,
+mediana petih klicev:
+
+| tabla | prej | zdaj |
+|---|---|---|
+| Ljubljana 16:30 | 8,1 ms | 8,5 ms |
+| Zidani Most 16:30 | 14,3 ms | 13,0 ms |
+| Bavarski dvor 16:30 | 70 ms | 66–68 ms |
+| Ljubljana AP 16:30 | 35–37 ms | 43 ms |
+
+Prva različica sita je imela rezervo 20 min tudi pri avtobusih: Ljubljana AP
+je spustila 52 vrstic skozi, na tabli jih je ostalo 6, čas **35 → 72 ms**.
+Rezerva je zdaj samo pri železnici.
+
+**„Odpeljal je“ je sklep iz ure.** Rekonstrukcija iz `obs` z istimi
+varovali kot `_LAST_MEASURED_SQL` (meja ne prehiti zadnje besede feeda, ničla
+po zamudi ≥ 300 s ni prehod, postanek, osvežen prej kot prejšnji, ni prehod):
+za vsak postanek prvi trenutek, ko prikaz trdi odhod, in končna vrednost v
+`run` kot resnica.
+
+| | železnica 20. 8.–23. 9. | avtobusi 19.–21. 9. |
+|---|---|---|
+| trditev o odhodu | 123 280 | 87 979 |
+| nepotrjenih | 118 129 (95,8 %) | 54 671 (62,1 %) |
+| od teh je odpeljal ≥ 3 min pozneje | 4 874 (**4,13 %**) | 2 040 (3,73 %) |
+| čas do pravega odhoda, p50 / p75 / p90 / p95 | 8,7 / 14,6 / 22,1 / 31,0 min | 6,3 / 18,5 / 43,3 / 94,7 min |
+
+Delež zgrešenih, ki jih pokrije okno po trditvi:
+
+| okno | železnica | avtobusi |
+|---|---|---|
+| 10 min | 58 % | 62 % |
+| 15 min | 77 % | 72 % |
+| **20 min** | **87 %** | 77 % |
+| 30 min | 95 % | 85 % |
+
+**Tišina feeda po trditvi pravilnih od napačnih ne loči.** Do naslednje
+besede o vožnji: pravilne p50 3,0 min, p90 7,0; napačne p50 2,5, p90 5,9.
+Prva sprememba poznejšega postanka: 3,0 proti 4,0 min. Ni praga, ki bi ju
+ločil, zato meja ni tišina, ampak čas.
+
+Odločitev: pri železnici vrstica ostane `NEPOTRJEN_ODHOD_S = 20 min` po
+pričakovanem odhodu, z besedo „po zadnjem podatku bi odpeljal ob HH:MM,
+potrditve ni“, in ne gre med odpeljane. Konča jo potrditev na tem ali
+poznejšem postanku. Avtobusi so izvzeti: mestni LPP prehoda ne potrdi nikoli
+in tabla na Bavarskem dvoru (53 odhodov v pol ure) bi bila polna „morda“
+vrstic, rep pa je predolg, da bi ga kakršnokoli okno smiselno pokrilo.
+
+V živo 24. 9. ob 10:11: MV 311 (Kranj po voznem redu 09:49, zadnji podatek z
+Lesc-Bleda, +21) je stal na tabli in v iskalniku z besedo. Po starem bi s
+table izginil ob 09:59, iskalnik pa bi ga ob 10:10 zložil med „prejšnje“.
+Skripta je bila enkratna, v repozitorij ni šla.

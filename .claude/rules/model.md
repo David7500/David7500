@@ -611,6 +611,14 @@ tišina nad 180 s se pove z besedo. **Nerešeno ostaja jedro**: v 14 dneh ima
 videna številka kasneje popravljena za ≥ 5 min — pri železnici jih 76 %
 izhaja iz prikazane **ničle**, z resnico do +66 min.
 
+**Kar se da narediti brez signala, je narejeno** (24. 9. 2026): nepotrjen
+odhod pri železnici ni odpeljan še 20 min po pričakovani uri
+(`stats.NEPOTRJEN_ODHOD_S`) in to se pove z besedo. Rekonstrukcija iz `obs`:
+4,13 % nepotrjenih trditev o odhodu je napačnih za ≥ 3 min, 87 % od teh vlak
+odpelje v 20 min. Tišina feeda obeh ne loči. Tabla poleg tega išče po
+pričakovani uri, ne po voznem redu — prej je vlak z zamudo nad 10 min izginil,
+preden je prišel. Številke v `docs/MERITVE.md`.
+
 **Signal obstaja in ga ne beležimo.** Feed prevožene postanke izpušča; dokler
 je postanek v sporočilu, vozilo mimo njega še ni. Preden se to vgradi, mora
 biti izmerjeno proti resnici, ki jo pove človek na peronu — postopek je v
