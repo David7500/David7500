@@ -2633,6 +2633,14 @@ preživele. Na razvojnem računalniku Ljubljana 0,54 s hladno in 0,09 s toplo,
 Maribor 0,21 / 0,06, Postojna 0,05 / 0,05. Pomnilnik: vse vožnje v okolici
 ure (1 512, 941 tras) so 48,5 MB.
 
+Arwen je za to ~9× počasnejši od razvojnega računalnika. Po treh popravkih
+(sito po trasi, projekcija preskoči oddaljene odseke, postanki enkrat na
+linijo — 493 voženj v Ljubljani ima 291 različnih zaporedij) je tam
+Ljubljana **0,65 s toplo** in 4 s hladno takoj po ponovnem zagonu, Maribor
+2,4 s hladno, Postojna 0,4 s, Celje 0,6 s (merjeno od zunaj, skozi tunel;
+`/api/health` ima 0,15 s). Hladno se zgodi enkrat na območje po vsakem
+zagonu ali uvozu voznega reda.
+
 Vozila v `vehicle_now`, katerih vožnja se **še ni začela** (tudi 26 min
 pred odhodom, do 5 km od trase), v kandidatih niso — potnik v njih ne sedi.
 
