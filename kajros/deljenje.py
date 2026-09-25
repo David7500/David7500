@@ -230,29 +230,42 @@ class Trasa:
         return x0 - polmer <= x <= x1 + polmer and y0 - polmer <= y <= y1 + polmer
 
     def projiciraj(self, lat: float, lon: float, od_m: float = -1.0,
-                   do_m: float = float("inf")) -> tuple[float, float]:
+                   do_m: float = float("inf"),
+                   najvec_m: float = float("inf")) -> tuple[float, float]:
         """(razdalja vzdolž trase, odmik od nje) v metrih.
 
         `od_m`/`do_m` omejita iskanje na del trase. Brez tega se krožna
         mestna linija ali proga, ki gre dvakrat mimo iste točke, projicira na
         napačen krak in potnik skoči za pol vožnje naprej.
+
+        `najvec_m`: odmik, nad katerim nas projekcija ne zanima -- takrat
+        vrne `inf`. Odsek, ki je ves dlje od najboljšega doslej, se preskoči
+        brez računanja; na arwenu je bilo to 1,26 s od 1,75 za kandidate v
+        Ljubljani (1 029 projekcij), ker je vsaka računala vse odseke.
         """
         px, py = self.xy(lat, lon)
         x, y, cum = self.x, self.y, self.cum
         naj_d2, naj_along = float("inf"), 0.0
+        r = najvec_m
         vrzeli = self.vrzeli
         for i in range(len(x) - 1):
+            ax, ay, bx, by = x[i], y[i], x[i + 1], y[i + 1]
+            # Oba konca na isti strani pasu okoli točke: odsek je dlje od r.
+            if ((ax < px - r and bx < px - r) or (ax > px + r and bx > px + r)
+                    or (ay < py - r and by < py - r) or (ay > py + r and by > py + r)):
+                continue
             if cum[i + 1] < od_m or cum[i] > do_m or i in vrzeli:
                 continue
-            ax, ay = x[i], y[i]
-            vx, vy = x[i + 1] - ax, y[i + 1] - ay
+            vx, vy = bx - ax, by - ay
             l2 = vx * vx + vy * vy
-            t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / l2))
+            t = 0.0 if l2 == 0 else ((px - ax) * vx + (py - ay) * vy) / l2
+            t = 0.0 if t < 0 else (1.0 if t > 1 else t)
             dx, dy = ax + t * vx - px, ay + t * vy - py
             d2 = dx * dx + dy * dy
             if d2 < naj_d2:
                 naj_d2 = d2
                 naj_along = cum[i] + t * (cum[i + 1] - cum[i])
+                r = math.sqrt(d2)
         return naj_along, math.sqrt(naj_d2)
 
     def tocka(self, along: float) -> tuple[float, float]:
@@ -597,14 +610,15 @@ def _ocenjeni(conn: sqlite3.Connection, lat: float, lon: float, meja: float,
     # pa so za vsako vožnjo svoji -- zato postanki, zamude in GPS šele za
     # tiste, ki sito preživijo. Izmerjeno na arwenu: 17 s hladno in 1,75 s
     # toplo, preden je bilo sito prvo.
-    blizu = []
+    blizu, po_trasi = [], {}
     for trip_id, dan, now_s, shape_id in _zive_blizu(conn, lat, lon, zdaj, polmeri):
-        tr = trasa(conn, shape_id)
-        if tr is None or not tr.blizu(lat, lon, meja):
-            continue
-        along, odmik = tr.projiciraj(lat, lon)
-        if odmik <= meja:
-            blizu.append((trip_id, dan, now_s, along, odmik))
+        if shape_id not in po_trasi:
+            tr = trasa(conn, shape_id)
+            po_trasi[shape_id] = (tr.projiciraj(lat, lon, najvec_m=meja)
+                                  if tr is not None and tr.blizu(lat, lon, meja) else None)
+        pr = po_trasi[shape_id]
+        if pr is not None and pr[1] <= meja:
+            blizu.append((trip_id, dan, now_s, *pr))
     zamude = _zadnje_zamude(conn, [b[:3] for b in blizu])
     gps = _gps(conn, [b[0] for b in blizu], zdaj_ts)
     out, videno = [], set()
