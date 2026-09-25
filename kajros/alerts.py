@@ -26,7 +26,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import config
+from . import config, db
 from .collector import fetch, resolve_service_date, _rail_trip_windows, _service_dates
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -58,6 +58,14 @@ EFFECT_SL = {
 # Predpona obvestil mestnega LPP. Ta feed ne da id-jev, na katere bi se dalo
 # vezati -- vsako je nakljucen UUID -- zato ga sestavimo iz besedila sami.
 LPP_OBVOZ = "LPP-OBVOZ-"
+
+#: Kdaj je bil feed LPP nazadnje prebran do obvestil (`meta`). Obvoz velja,
+#: dokler ga feed še pošilja -- `end_ts` tega ne pove.
+LPP_OBVESTILA_PREBRANA = "lpp_obvestila_prebrana"
+
+#: Koliko pred zadnjim branjem je obvoz še lahko nazadnje viden. Feed LPP se
+#: bere vsakih 30 s; nekaj branj lahko pade (ETag, omrežje), zato rezerva.
+OBVOZ_REZERVA_S = 600
 
 
 def _kind(alert_id: str) -> str:
@@ -112,6 +120,8 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
 
     n_new = 0
     with conn:
+        # Tudi brez obvestil: prazen feed pomeni, da ne velja nobeno.
+        db.set_meta(conn, LPP_OBVESTILA_PREBRANA, str(seen_at))
         for (header, desc, lang), s in skupine.items():
             aid = LPP_OBVOZ + hashlib.sha1(header.encode()).hexdigest()[:12]
             znan = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
@@ -151,14 +161,22 @@ def for_stops(conn: sqlite3.Connection, stop_ids, lang: str = "sl") -> list[dict
     if not ids:
         return []
     now = int(time.time())
+    # **Obvoz velja, dokler ga feed pošilja, ne do `end_ts`.** LPP obvestila
+    # ob koncu obvoza ne skrajša, ampak ga neha pošiljati: „Postaja Bavarski
+    # dvor na obvozu -- vozilo se ne bo ustavilo" je bil nazadnje v feedu
+    # 22. 9. 2026 ob 22:31, `end_ts` pa je decembra, in tabla najbolj
+    # prometnega postajališča v Ljubljani ga je kazala še 25. 9. Meja je
+    # zadnje branje feeda, ne ura: če zajem stoji, ostane zadnje znano.
+    prebrano = int(db.get_meta(conn, LPP_OBVESTILA_PREBRANA) or 0)
     marks = ",".join("?" * len(ids))
     rows = conn.execute(
         f"SELECT DISTINCT a.* FROM alert a JOIN alert_entity e USING (alert_id) "
         f"WHERE e.stop_id IN ({marks}) AND a.lang = ? "
         f"  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
         f"  AND (a.start_ts IS NULL OR a.start_ts <= ?) "
+        f"  AND (a.kind != 'obvoz' OR a.last_seen >= ?) "
         f"ORDER BY a.header",
-        (*ids, lang, now, now)).fetchall()
+        (*ids, lang, now, now, prebrano - OBVOZ_REZERVA_S)).fetchall()
     return [_alert_row(r) for r in rows]
 
 

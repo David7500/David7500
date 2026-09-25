@@ -928,6 +928,13 @@ na omejitvi, `INSERT OR IGNORE` pa jo je **tiho požrl** — obvestili sta bili
 zapisani, a brez enega samega postajališča, in videti je bilo, kot da zajem dela.
 Zdaj gre prazen niz in navaden `INSERT`, da bi se ista napaka slišala takoj.
 
+**Konec obvoza ni v `end_ts`** (25. 9. 2026). Živi feed je nosil 166
+obvestil, dve novici: Čerinova (147) in Tbilisijska (19). „Postaja Bavarski
+dvor na obvozu“ je bil nazadnje viden 22. 9. ob 22:31, `end_ts` pa je
+december — tabla ga je kazala tri dni po koncu. Od 4 obvozov z veljavnim
+`end_ts` sta 2 imela `last_seen` starejši od dneva. Obvoz zdaj velja le, če je
+bil viden ob zadnjem branju feeda (±10 min).
+
 ## Feed ne poroča prvega postanka (7. 9. 2026)
 
 Prijava: okno vožnje pri vlaku, ki še ni odpeljal, povsod kaže „?" in „brez

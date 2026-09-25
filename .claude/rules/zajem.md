@@ -305,6 +305,16 @@ v seznamu še vedno prvi postanek, torej se prevoženi postanki osvežujejo.
 Kdor bo kdaj računal kakovost napovedi po omrežjih, mora to vedeti: pri LPP
 primerja napoved z napovedjo.
 
+**Obvoz se konča tako, da ga feed neha pošiljati** — `end_ts` ostane v
+prihodnosti. „Postaja Bavarski dvor na obvozu — vozilo se ne bo ustavilo“ je
+bil nazadnje v feedu 22. 9. 2026 ob 22:31, `end_ts` pa decembra; tabla
+najprometnejšega postajališča v Ljubljani ga je kazala še 25. 9. Od 4
+„veljavnih“ obvozov sta bila 2 taka. Zato `ingest_lpp()` ob vsakem branju
+zapiše `meta.lpp_obvestila_prebrana`, `for_stops()` pa obvoz pokaže samo,
+če je bil viden največ 10 min pred tem branjem (`OBVOZ_REZERVA_S`). Meja je
+branje, ne ura: če zajem stoji, ostane zadnje znano. Ponoči, ko feed voženj
+nima, obvozov ni — tudi avtobusov ne.
+
 ## Nov vozni red, stari id-ji v feedu
 
 **Feed v živo ima svojo kopijo voznega reda in je ne osveži hkrati z nami.**

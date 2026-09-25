@@ -1693,6 +1693,12 @@ def test_obvestila_lpp_se_zdruzijo_po_besedilu(conn):
     assert [a["header"] for a in alerts.for_stops(conn, ["S1"])] == ["Postaja Čerinova na obvozu"]
     assert alerts.for_stops(conn, ["S9"]) == []
 
+    # Obvoz se konča tako, da ga feed neha pošiljati; `end_ts` ostane v
+    # prihodnosti. Bavarski dvor je tako visel tri dni po koncu (25. 9. 2026).
+    conn.execute("UPDATE alert SET last_seen = last_seen - 3600 WHERE alert_id = ?", (aid,))
+    alerts.ingest_lpp(conn, rt.FeedMessage())
+    assert alerts.for_stops(conn, ["S1"]) == []
+
 
 def test_izhodisce_dobi_obicajno_zamudo_naslednje_postaje():
     # Feed prvega postanka ne poroca nikoli (0 od 716 voznj), zato bi tam
