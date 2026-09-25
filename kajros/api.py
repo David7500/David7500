@@ -29,7 +29,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, naslovi,
-               obisk, pot, pristanek, stats, stik)
+               obisk, peroni, pot, pristanek, stats, stik)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -1326,6 +1326,8 @@ def api_departures(
             deljenje.dopolni(conn, rows, seq="stop_seq", t_s="t_s",
                              pricakovano="expected", ura="sched", zdaj=now)
         if network == "zeleznica":
+            # Tir s table SZ (`peroni.py`). Kadar ga ni ali je star, ga ni.
+            peroni.dopolni(conn, rows, lambda r: (r["train_no"], exact, r["sched"]))
             # Obvestila o ovirah so SZ-jeva in vezana na vlak.
             notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
                                         mentions=[exact])
@@ -1750,6 +1752,9 @@ def api_run(train_no: str, date: str | None = None,
             for s in rows:
                 s["typical"] = typ.get((razresen, s["stop_seq"]))
             stats.typical_na_izhodisce(rows)
+        if ident["network"] == "zeleznica":
+            peroni.dopolni(conn, rows, lambda s: (
+                train_no, s["name"], s.get("sched_dep") or s.get("sched_arr")))
         zivo = _lpp_zivo(conn, razresen, rows, date, meja_seq, zdaj)
         # **Kdaj je feed o tej voznji nazadnje kaj rekel.** Brez tega prikaz ne
         # more lociti sveze stevilke od zadnje znane -- in prav ta razlika je
@@ -2116,6 +2121,15 @@ def api_connections(
                                 network=network)
         # Obvestila pobere streznik, ne brskalnik: prikaz jih je sicer iskal
         # z eno zahtevo na vlak, torej z dvanajstimi za eno iskanje.
+        if network == "zeleznica":
+            # Tir na izhodiscu in na cilju vsake noge: pri prestopu je prav
+            # prihodni tir tisti, s katerega se tece na drugi vlak.
+            noge = [n for t in legs for n in t["legs"]]
+            for vrstice, od, do in ((rows, "sched_dep", "sched_arr"), (noge, "dep", "arr")):
+                peroni.dopolni(conn, vrstice, lambda r, k=od: (
+                    r["train_no"], r.get("from", a), r.get(k)))
+                peroni.dopolni(conn, vrstice, lambda r, k=do: (
+                    r["train_no"], r.get("to", b), r.get(k)), "tir_prihod")
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
         notices = (alerts.for_trains(conn, nos, mentions=[a, b])
                    if network == "zeleznica" else [])

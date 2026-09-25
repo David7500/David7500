@@ -277,6 +277,31 @@ CREATE TABLE IF NOT EXISTS delay_report (
 CREATE INDEX IF NOT EXISTS delay_report_train ON delay_report(train_no, service_date);
 CREATE INDEX IF NOT EXISTS delay_report_date ON delay_report(service_date);
 
+-- Tir vlaka na postaji s table SŽ (`peroni.py`). Kljuc je koledarski dan
+-- table in stevilka vlaka brez vrste, ker tabla SZ drugega ne pozna; postaja
+-- je nase ime. `prvi` je tir ob prvem branju -- razlika do `tir` je
+-- sprememba perona cez dan. Hrani se vse: kateri vlak obicajno stoji kje,
+-- ne ve nihce drug.
+CREATE TABLE IF NOT EXISTS peron (
+    datum   TEXT NOT NULL,
+    vlak    TEXT NOT NULL,
+    postaja TEXT NOT NULL,
+    tir     TEXT NOT NULL,
+    prvi    TEXT NOT NULL,
+    videno  INTEGER NOT NULL,   -- zadnje branje, unix cas
+    PRIMARY KEY (datum, vlak, postaja)
+) WITHOUT ROWID;
+
+-- Katere postaje SZ beremo in kdaj. `ima_tir` NULL = se ne vemo.
+CREATE TABLE IF NOT EXISTS peron_postaja (
+    st         TEXT PRIMARY KEY,   -- id postaje pri SZ
+    postaja    TEXT NOT NULL,      -- nase ime
+    ima_tir    INTEGER,
+    vlakov     INTEGER,            -- vlakov na zadnji tabli
+    promet     INTEGER NOT NULL DEFAULT 0,  -- postankov v voznem redu
+    preverjeno INTEGER NOT NULL DEFAULT 0
+);
+
 -- Statistika cez vso zgodovino, izracunana enkrat na dan.
 --
 -- Razrez 90 dni je agregat cez milijone vrstic `run` in ga ni smiselno racunati
@@ -652,6 +677,15 @@ def merge_from(conn: sqlite3.Connection, other: Path) -> dict:
                     "(trip_id, service_date, seen_ts, train_no, delay_min, station, event, severe) "
                     "SELECT trip_id, service_date, seen_ts, train_no, delay_min, station,"
                     "       event, severe FROM src.delay_report"
+                )
+            if _has(conn, "peron", "prvi"):
+                conn.execute(
+                    "INSERT INTO peron(datum, vlak, postaja, tir, prvi, videno) "
+                    "SELECT datum, vlak, postaja, tir, prvi, videno FROM src.peron WHERE true "
+                    "ON CONFLICT(datum, vlak, postaja) DO UPDATE SET "
+                    "  tir = CASE WHEN excluded.videno > peron.videno"
+                    "             THEN excluded.tir ELSE peron.tir END, "
+                    "  videno = MAX(peron.videno, excluded.videno)"
                 )
     finally:
         conn.execute("DETACH DATABASE src")

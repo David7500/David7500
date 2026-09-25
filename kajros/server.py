@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import alerts, collector, config, db, deljenje, gtfs, obisk, ocena, stats, stik, weather
+from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, peroni,
+               stats, stik, weather)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -226,6 +227,20 @@ def _obisk_worker() -> None:
         except Exception:                 # noqa: BLE001
             pass
         conn.close()
+
+
+def _zazeni_perone() -> threading.Thread | None:
+    """Tir s table SŽ, v SVOJI niti.
+
+    Ena tabla je 13-17 s. V zajemni zanki bi to vsakič zamaknilo zamude za
+    pol cikla -- in zajem je edino, česar ni mogoče ponoviti za nazaj.
+    """
+    if not config.PERONI:
+        return None
+    nit = threading.Thread(target=peroni.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-peroni")
+    nit.start()
+    return nit
 
 
 def _next_at(hour: int, minute: int) -> datetime:
@@ -472,6 +487,7 @@ def run_collector() -> None:
     bootstrap()
     s = _settings()
     _log(_describe(s))
+    _zazeni_perone()
     try:
         _worker(**s)
     except KeyboardInterrupt:
@@ -519,7 +535,9 @@ async def lifespan(app):
         )
         thread.start()
         _log(_describe(settings))
+        peroni_nit = _zazeni_perone()
     else:
+        peroni_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -527,5 +545,7 @@ async def lifespan(app):
         _stop.set()
         if thread:
             thread.join(timeout=5)
+        if peroni_nit:
+            peroni_nit.join(timeout=5)
         if obisk_nit:
             obisk_nit.join(timeout=5)

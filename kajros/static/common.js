@@ -842,6 +842,15 @@ function dwellNoteHtml(d) {
     + ` — izgubil ${-d.gained} min`;
 }
 
+// Tir s table SŽ (`peroni.py`). Kadar ga ni, ni nič -- vir je tretja oseba in
+// sme izginiti. Sprememba čez dan se napiše z besedo, ne le z barvo: prav
+// potnik, ki svoj vlak pozna, gre sicer na stari peron.
+function tirHtml(tir, prej) {
+  if (!tir) return "";
+  return `<span class="tir${prej ? " is-changed" : ""}">tir ${escapeHtml(tir)}${
+    prej ? ` · prej ${escapeHtml(prej)}` : ""}</span>`;
+}
+
 function measuredStopHtml(s, isCurrent, w) {
   const d = stopDelay(s);
   const color = delayColor(d);
@@ -869,7 +878,7 @@ function measuredStopHtml(s, isCurrent, w) {
     <div class="stop-row${isCurrent ? " is-current" : ""}">
       <div class="stop-rail"><span class="stop-dot" style="background:${color}"></span><span class="stop-line"></span></div>
       <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}</div>
+        <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
         <div class="stop-times">${times}</div>
         ${split ? `<div class="stop-dwell">${escapeHtml(dwellNoteHtml(split))}</div>` : ""}
       </div>
@@ -905,7 +914,7 @@ function gapStopHtml(s) {
     <div class="stop-row is-muted">
       <div class="stop-rail"><span class="stop-dot is-hollow"></span><span class="stop-line"></span></div>
       <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}</div>
+        <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
         <div class="stop-times"><span class="stop-sched-plain">${sched}</span> <span class="stop-tag">${
           zast ? "ura si nasprotuje" : "brez meritve"}</span></div>
         ${zast ? `<div class="stop-times adv-only"><span class="stop-tag">feed je zadnjič rekel ${
@@ -963,7 +972,7 @@ function forecastStopHtml(s, f, w) {
     <div class="stop-row is-forecast">
       <div class="stop-rail"><span class="stop-dot is-hollow" style="border-color:${color}"></span><span class="stop-line is-dashed"></span></div>
       <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}</div>
+        <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span></div>
         ${dwellPlanHtml(s)}
         ${feedSaid != null && !zivo && !(f && f.from_operator)

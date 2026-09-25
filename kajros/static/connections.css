@@ -256,6 +256,9 @@
 .leg-train { font-weight: 600; color: var(--ink); flex-shrink: 0; }
 .leg-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .leg-wait { font: 400 11px/1.4 var(--sans); color: var(--sev-hard); }
+/* Vrstica prestopa se sme prelomiti: tira pod njo sta vredna vec kot ena vrstica. */
+.leg.is-prestop { flex-wrap: wrap; row-gap: 3px; }
+.leg-tiri { white-space: nowrap; color: var(--ink-mute); }
 
 /* ---------- odhodna tabla ----------
  * Tabla je enovrsticna in gostejsa od povezav: clovek jo bere kot seznam,

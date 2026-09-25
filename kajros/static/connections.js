@@ -491,6 +491,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
         ? delayChipHtml(c.zamuda, c.delay_kind, c.delay_at)
         : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}</div>
       <div class="conn-meta">
+        ${tirHtml(c.tir, c.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(c.expected_dep || c.sched_dep, false) : ""}
         ${potnikiHtml(c.potniki, c.network === "avtobus", false)}
@@ -547,6 +548,21 @@ function transferBadgeHtml(tr, plannedS) {
       : `${prestopText(mins)} · ${escapeHtml(tr.source)}`}</div>`;
 }
 
+// Tir pri prestopu: kam vlak pripelje in s katerega odpelje naslednji. Na
+// ozkem zaslonu je to vrstica, ki odloči, ali tečeš čez podhod -- zato tu in
+// ne pri imenih postaj, kjer bi potisnila cilj izven vrstice.
+function prestopTiriHtml(prej, nasl) {
+  const a = prej.tir_prihod;
+  const b = nasl.tir;
+  if (!a && !b) return "";
+  if (a && b) {
+    return `<span class="leg-tiri">${tirHtml(a, prej.tir_prihod_prej)} →${
+      tirHtml(b, nasl.tir_prej)}</span>`;
+  }
+  return `<span class="leg-tiri">${a ? "prihod" : "odhod"}${
+    tirHtml(a || b, a ? prej.tir_prihod_prej : nasl.tir_prej)}</span>`;
+}
+
 function transferRowHtml(t, nowMs, date, odKod) {
   const tr = t.transfer;
   const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
@@ -564,10 +580,11 @@ function transferRowHtml(t, nowMs, date, odKod) {
         <span class="leg-train">${escapeHtml(l.train_no)}</span>
         <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
       </div>
-      ${next ? `<div class="leg">
+      ${next ? `<div class="leg is-prestop">
           <span class="leg-wait" style="color:${count === 1 ? st.color : "var(--sev-hard)"}">
             prestop na postaji ${escapeHtml(l.to)} · ${wait} min
           </span>
+          ${prestopTiriHtml(l, next)}
           ${count === 1 && tr && tr.delay1_s
             ? `<span class="leg-note">prvi vlak ${delayLabel(tr.delay1_s)} min</span>` : ""}
           ${count === 1 && tr && tr.delay2_s
@@ -601,6 +618,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
       </div>
       <div class="conn-delay">${badge}</div>
       <div class="conn-meta">
+        ${tirHtml(t.legs[0].tir, t.legs[0].tir_prej)}
         <span>${durationLabel(t.duration_s)}</span>
         ${count === 1 ? `<span>načrtovano ${planned} min za prestop</span>` : ""}
       </div>
@@ -717,6 +735,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
         ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}</div>
       <div class="board-meta">
+        ${tirHtml(r.tir, r.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
         ${potnikiHtml(r.potniki, r.network === "avtobus", prihodi)}

@@ -75,6 +75,14 @@ LPP_DAYS = int(okolje("LPP_DAYS", "8"))
 # Izklopi se s `KAJROS_LPP_ZIVO=0`.
 LPP_ZIVO = okolje("LPP_ZIVO", "1") != "0"
 
+# **Tir vlaka s table SŽ** (`peroni.py`). potniski.sz.si je za Cloudflarom,
+# `api.modra.ninja` ga strga in streže -- tretja oseba brez lastnika, zato je
+# tir dodatek, ki sme izginiti. Ena tabla je 13-17 s; bere jo ena sama nit.
+# Izklopi se s `KAJROS_PERONI=0`.
+PERONI = okolje("PERONI", "1") != "0"
+PERONI_URL = okolje("PERONI_URL", "https://api.modra.ninja/sz")
+PERONI_SECONDS = int(okolje("PERONI_SECONDS", "600"))
+
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in
 # na relacijah, kjer vlak ne vozi (Ljubljana - Logatec, Divača - Koper), so

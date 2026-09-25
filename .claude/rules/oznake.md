@@ -372,3 +372,14 @@ Meritve ta številka **ne prepiše nikoli** — pogoj je `stop_seq > meja`.
 Ob tem je bila popravljena navedba vira: pod mestnim LPP je pisalo „IJPP prek
 NAP", česar tam ni. Zdaj `viriHtml()` pove „LPP (avl.lpp.si), obdelava DERP"
 in doda „živi prihodi data.lpp.si", kadar so res uporabljeni.
+
+## Tir
+
+Tir s table SŽ (`peroni.py`) je `tirHtml()` v `common.js`: ploščica
+„tir 6-A“ ob imenu postaje (okno vožnje), prva v vrstici pod odhodom (tabla,
+neposredna zveza) in v vrstici prestopa kot „tir 3 → tir 1“. **Ne ob imenih
+postaj v nogah prestopa** — na 375 px je potisnil cilj izven vrstice.
+
+Sprememba čez dan se napiše z besedo (`tir 7-A · prej 6-A`), barva
+`--sev-hard` je samo poudarek. Kadar tira ni (postaja ga pri SŽ nima, vir
+obstal), ni nič: ne „tir ?“ in ne ugibanje iz zgodovine.

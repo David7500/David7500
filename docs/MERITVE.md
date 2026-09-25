@@ -2807,3 +2807,57 @@ Ostane `_live("avtobus")` s 2,7 s na 30 s: okenske funkcije tečejo čez 92 160
 vrstic `run`, ker okno voženj sega 6 h nazaj (`MAX_LIVE_DELAY_S`), žive pa so
 403 od 407 v zadnji uri po voznorednem koncu. Zožiti okno bi spremenilo pomen
 (vožnja s feedom, tihim več kot uro) — ni narejeno.
+
+## Viri brezavta.si in tir s table SŽ (25. 9. 2026)
+
+brezavta.si je stran DERP (isti ljudje kot `rt.gtfs.derp.si`); zaledje je
+`api.beta.brezavta.si` (FastAPI, `/openapi.json` javen), pod njim OTP. Kar
+ima in kajros nima, večinoma ne pride od njih, ampak iz virov, ki jih
+uporabljajo. Merjeno 25. 9. 2026 med 12:50 in 13:05 (30 vzorcev po 30 s) in
+ob 16:45–17:05.
+
+**Lega vlakov SŽ (`api.modra.ninja/sz/lokacije`) je izračunana, ne GPS.**
+Pokritost je popolna (764 od 764 vlakov, ki bi po voznem redu morali voziti)
+in točka leži na progi (odmik od naše trase mediana 4 m, p90 15 m) — a to
+dokaže le, da jo vir tja postavi sam:
+
+* vlaki na postaji imajo **bitno enake** koordinate: 3295, 2275 in 3123 v
+  Ljubljani na `14.5102706481,46.0585694286`, 601, 312 in 4212 na isti
+  točki na Jesenicah — to je točka postaje, ne sprejemnik;
+* „preslikana“ različica (`/lokacije`) je od surove (`/lokacije_raw`)
+  oddaljena mediano 391 m (p90 699 m), obe na progi;
+* SŽ sam jim pravi „približne lokacije“ (potniski.sz.si/info).
+
+Koliko zgreši, ni izmerjeno: za to bi rabili GPS z vlaka (deljenje lege).
+
+**Tir s table SŽ.** Tabla `…/sz/postaje/{st}/prihodi_raw` na 20 postajah:
+
+| | |
+|---|---|
+| postaje s tirom pri vseh vlakih | 14 (Ljubljana 119/119, Maribor 91/92, Celje, Zidani Most, Pragersko, Divača, Koper, Sežana, Grosuplje, Postojna, Litija, Ptuj, Murska Sobota, Nova Gorica) |
+| postaje brez tira | 6 (Jesenice, Novo mesto, Kranj, Dobova, Trbovlje, Škofja Loka) |
+| vlakov voznega reda na tabli | 723 od 755 (96 %); manjkajo mednarodni 1472, 210, 211, 79, 350 |
+| odziv | 13–17 s ob zgrešenem predpomnilniku, 0,07 s ob zadetku (60 s) |
+| brezavta.si proti tabli (Ljubljana) | 8 od 121 vlakov drug tir — oni kažejo „običajnega“ |
+
+Prvi zagon zajema (16:56): vseh 266 naših postaj se preslika na ime pri SŽ;
+17 tabel v 6 minutah, torej **~21 s na postajo** s premorom. Vseh postaj na
+deset minut ena nit ne zmore (1 600 tabel na uro proti ~180), zato je razmik
+po prometu: velike vsakih 10 min, majhne najdlje 2 h (`peroni._RAZMIK_SQL`).
+
+**Marprom (mestni avtobusi Maribor).** GTFS `marprom_official` ima 1 136
+voženj na petek, veljaven do 24. 6. 2027. RT na
+`rt.gtfs.derp.si/sources/marprom`: 30 od 30 odzivov, glava stara največ 4 s,
+vsi `trip_id` so v GTFS. A zamudo nosi **564 od 772 (73 %)** voženj, ki bi
+po voznem redu morale voziti, in 37 od 38 vozil v legah nima vožnje.
+Zamude so napoved po postankih (768 voženj z različnimi, 249 z isto).
+Kranj 5 voženj, Murska Sobota 3, Celje prazno.
+
+**Cene** (karte.brezavta.si, prodajalna, ne API): določa jih tarifni razred,
+za vlak in avtobus isti — Ljubljana–Maribor R26 14,0 €, Koper R21 11,5 €,
+Celje R15 8,5 €, Zidani Most R13 7,5 €, Kranj R05 3,5 € (avtobus do Kranja
+R06 4,0 €). En par na poizvedbo, 1,5 s.
+
+**Oprema postaj** (`/sz/postaje_oprema`, infrastruktura.sz.si): pokrije vseh
+266 naših postaj, a nosi samo dostopnost po tirih. **Sestave vlaka ni**
+(`/sz/train_details` vrača 500), vozila pri brezavta.si so brez modela.

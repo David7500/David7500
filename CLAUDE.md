@@ -22,7 +22,7 @@ CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
 strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (437 preizkusov).
+enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (487 preizkusov).
 `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
 zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
 zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
@@ -55,6 +55,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
+| Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, stari SOAP je
 mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
@@ -112,6 +113,7 @@ kajros/
   lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
+  peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   stik.py        sporočila obiskovalcev; piše iz zahteve
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
@@ -135,6 +137,7 @@ Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` ·
 `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` ·
 `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) ·
+`peron` + `peron_postaja` (tir s table SŽ) ·
 `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo`
 (zadnjih pet samo strežni stroj).
 
@@ -242,7 +245,9 @@ koliko zamuja“*. Iskalnik povezav je vstopna stran; zemljevid ostane, ker je
 uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude)
 čaka 2–3 mesece zajema — do takrat se vreme samo *pokaže ob* zamudi.
 
-Česar ne bo, ker podatka ni: cene, sestava vlaka, peron, zasedenost.
+Česar ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** je od
+25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20
+izmerjenih); vir je tretja oseba, zato je dodatek, ki sme izginiti.
 
 ## Konvencije
 

@@ -259,6 +259,21 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   font: 400 11px/1.5 var(--sans);
 }
 
+/* Tir s table SŽ. Poleg imena postaje, zato z odmikom in brez preloma. */
+.tir {
+  display: inline-block;
+  margin-left: 6px;
+  font: 600 11px/1.45 var(--mono);
+  color: var(--ink);
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r-sm);
+  padding: 0 5px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.board-meta > .tir:first-child, .conn-meta > .tir:first-child { margin-left: 0; }
+.tir.is-changed { color: var(--sev-hard); border-color: var(--sev-hard); }
+
 .tag {
   font: 400 10px/1.5 var(--sans);
   color: var(--ink-faint);

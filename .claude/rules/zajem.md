@@ -4,6 +4,7 @@ paths:
   - "kajros/alerts.py"
   - "kajros/gtfs.py"
   - "kajros/db.py"
+  - "kajros/peroni.py"
 ---
 
 # Kaj feed pošlje in kje laže
@@ -227,8 +228,9 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas =
   „vlak je stal 4 min namesto 0 — izgubil 4 min", torej zgodbo o dogodku, ki
   se ni zgodil. `common.dwellSplit()` zdaj prvi postanek preskoči.
 
-* **Ni** cen, sestave vlaka, perona, zasedenosti. Mednarodni vlaki (EN/MV)
-  pogosto brez realtime pokritja.
+* **Ni** cen, sestave vlaka, zasedenosti. Mednarodni vlaki (EN/MV)
+  pogosto brez realtime pokritja. **Tira v feedu ni** -- je s table SŽ,
+  glej spodaj.
 
 Izjema je **vreme**: Open-Meteo ima arhiv za nazaj, zato ga ni treba zbirati
 vnaprej — `kajros weather` ga dopolni za že zajete zamude kadarkoli.
@@ -504,3 +506,29 @@ Preden kdo išče napako pri sebi: primerjaj `seen_ts`, ki ga strežemo, s
 
 LPP feed **nima `ETag` ne `Last-Modified`**, zato pogojna zahteva ni mogoča in
 vsak zajem prenese vseh 315 kB.
+
+## Tir s table SŽ (`peroni.py`, od 25. 9. 2026)
+
+Ne GTFS ne NeTEx ne feed tira nimajo. Ima ga tabla prihodov in odhodov na
+potniski.sz.si, ki je za Cloudflarom; beremo jo prek `api.modra.ninja/sz`
+(„improviziran API“ tretje osebe, isti vir uporablja brezavta.si). Zato:
+
+* **Tir je dodatek.** Pokaže se samo, kadar ga je potrdilo ZADNJE branje
+  postaje in to branje ni zamujeno za več kot dva razmika (`peroni.tiri`).
+  Ugasniti se da s `KAJROS_PERONI=0`, in nič drugega ne sme pasti.
+* **Ena tabla je 13-17 s** (predpomnilnik vira 60 s). Bere jo SVOJA nit, ena
+  postaja naenkrat -- v zajemni zanki bi zamaknila zamude.
+* **Tir je lastnost postaje, ne vlaka.** Na 20 izmerjenih postajah ga je 14
+  imelo pri vseh vlakih, 6 (Jesenice, Novo mesto, Kranj, Dobova, Trbovlje,
+  Škofja Loka) pri nobenem. Postaja brez tira se preveri enkrat na dan.
+* **Vseh postaj na deset minut ena nit ne zmore** (~20 s na tablo, 266
+  postaj). Razmik je zato po prometu: Ljubljana, Maribor, Celje vsakih
+  `KAJROS_PERONI_SECONDS` (600 s), majhne postaje redkeje, najdlje 2 h.
+* **Tabla kaže samo vlake, ki še pridejo** (tudi zamujene), zato se bere čez
+  ves dan. Mednarodnih 1472, 210, 211, 79, 350 na njej ni.
+* **Ključ je koledarski dan table in številka brez vrste**, ne prometni dan
+  in ne `trip_id`: vlak ob 00:30 je na tabli naslednjega dne.
+* **Tir se čez dan spreminja.** `prvi` ostane, `tir` se posodablja; prikaz
+  razliko napiše z besedo („prej 6-A“). brezavta.si kaže „običajni“ tir iz
+  zgodovine in se je v Ljubljani razlikoval od table pri 8 od 121 vlakov.
+
