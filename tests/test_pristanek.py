@@ -193,3 +193,18 @@ def test_stran_ne_skrije_vlaka_z_zamudo():
     assert pristanek._se_ni_odpeljal("2026-09-22T16:30:00+02:00",
                                      "2026-09-22T16:25:00+02:00", zdaj)
     assert not pristanek._se_ni_odpeljal(None, None, zdaj)
+
+
+def test_odhodi_po_pricakovani_uri():
+    """Vožnja z veliko zamudo gre na svoje mesto, ne na vrh strani."""
+    o = [
+        {"id": "pozna", "sched": "2026-09-25T12:46:00+02:00",
+         "expected": "2026-09-25T13:34:00+02:00"},
+        {"id": "brez", "sched": "2026-09-25T13:20:00+02:00", "expected": None},
+        {"id": "hitra", "sched": "2026-09-25T13:14:00+02:00",
+         "expected": "2026-09-25T13:16:00+02:00"},
+        {"id": "ista", "sched": "2026-09-25T13:10:00+02:00",
+         "expected": "2026-09-25T13:16:00+02:00"},
+    ]
+    assert [x["id"] for x in pristanek._po_pricakovani(o)] == [
+        "ista", "hitra", "brez", "pozna"]

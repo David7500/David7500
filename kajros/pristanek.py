@@ -379,6 +379,18 @@ def _se_ni_odpeljal(sched: str | None, expected: str | None, zdaj: datetime) -> 
     return bool(ure) and max(ure) >= zdaj
 
 
+def _po_pricakovani(odhodi: list[dict]) -> list[dict]:
+    """Naslednji odhodi po uri, ko vozilo res pelje, ne po voznem redu.
+
+    Po voznem redu je 25. 9. 2026 na Bavarskem dvoru prvi stal LPP 14 z 12:46
+    in +49 min, ki je peljal zadnji od prvih desetih. Brez podatka o zamudi
+    velja vozni red; ob isti uri odloči vozni red.
+    """
+    return sorted(odhodi, key=lambda o: (
+        datetime.fromisoformat(o["expected"] or o["sched"]),
+        datetime.fromisoformat(o["sched"])))
+
+
 def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
              network: str, datum: str, now_s: int | None) -> dict:
     """Vse, kar potrebuje stran ene relacije."""
@@ -434,7 +446,8 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
     # brez JS in njen naslov je "Naslednji odhodi" -- zato samo, kar po
     # pricakovani uri se ni odpeljalo.
     zdaj = datetime.now(TZ)
-    odhodi = [o for o in odhodi if _se_ni_odpeljal(o["sched"], o["expected"], zdaj)]
+    odhodi = _po_pricakovani(
+        [o for o in odhodi if _se_ni_odpeljal(o["sched"], o["expected"], zdaj)])
     _dopolni_obicajno(odhodi, "typical")
     return {
         "ime": ime, "network": network, "datum": datum,

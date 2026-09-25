@@ -545,6 +545,17 @@ Imen se ne sklanja — „→ Tobačna“, ne „proti Tobačni“.
 * Odhodi/prihodi so odtlej **„Tabla“**, ne „Smer“: dve izbiri z istim imenom
   na enem zaslonu sta uganka.
 
+**Današnja tabla je po pričakovani uri, ne po voznem redu** (25. 9. 2026).
+Po voznem redu je na Bavarskem dvoru na vrhu stal LPP 14 z 12:46 in +49 min,
+pod njim deset že odpeljanih, nato mešanica svetlih in temnih vrstic:
+odpeljanost je bila po pričakovani uri, vrstni red pa ne. Poudarek „čez 20 min“
+je dobila prav ta vožnja, LPP 13 pa je peljal čez dve. Zdaj: odpeljane so pod
+„pokaži N prejšnjih“ (kot pri zvezah, odprtost preživi osvežitev), nepotrjen
+odhod je nad naslednjo, poudarjena je prva po pričakovani uri. Vozni red ostane
+prečrtan v vrstici. Drug dan ostane po voznem redu — tam „zdaj“ ni. Pristajalna
+stran postaje razvršča enako (`pristanek._po_pricakovani`); API in widget ne,
+tam je vrstni red še vedno voznoredni.
+
 **Odhodna tabla združi sezonske različice.** Devet vlakov ima dva ali tri
 tripe z različnimi obdobji veljavnosti; kadar oba veljata isti dan, je bila
 ista vožnja na tabli **dvakrat**. Izmerjeno na Bled Jezeru 3. 9. 2026: LP 4208

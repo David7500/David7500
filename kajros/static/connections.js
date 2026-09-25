@@ -901,11 +901,44 @@ function renderBoard(data) {
     return;
   }
 
-  let nextIdx = -1;
-  if (isToday) nextIdx = list.findIndex((r) => new Date(r.expected || r.sched).getTime() >= nowMs);
-  resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data)
-    + list.map((r, i) => boardRowHtml(r, nowMs, i === nextIdx, data.date, data.station,
-                                      data.kind === "prihodi")).join("");
+  const prihodi = data.kind === "prihodi";
+  const vrstica = (r, isNext) => boardRowHtml(r, nowMs, isNext, data.date, data.station, prihodi);
+  if (!isToday) {
+    // Drug dan nima "zdaj": vozni red po vrsti, brez poudarka.
+    resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data)
+      + list.map((r) => vrstica(r, false)).join("");
+    renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
+    return;
+  }
+
+  // **Danes je tabla po pricakovani uri, ne po voznem redu.** Po voznem redu
+  // je 25. 9. 2026 na Bavarskem dvoru na vrhu stal LPP 14 z 12:46 in +49 min,
+  // pod njim deset ze odpeljanih, nato mesanica svetlih in temnih vrstic --
+  // odpeljanost je bila po pricakovani uri, vrstni red pa ne. Poudarek
+  // "naslednja, cez 20 min" je dobila prav ta vozjna, ceprav je LPP 13
+  // peljal cez dve minuti. Vozni red ostane precrtan v vsaki vrstici.
+  const kdaj = (r) => new Date(r.expected || r.sched).getTime();
+  const po = [...list].sort((a, b) => kdaj(a) - kdaj(b)
+    || new Date(a.sched).getTime() - new Date(b.sched).getTime());
+  const jeMorda = (r) => nepotrjen(kdaj(r), r.nepotrjen_do, nowMs);
+  // Ze odpeljane so kontekst, ne izbira -- isto kot pri zvezah. Nepotrjen
+  // odhod ni odpeljan: ostane viden, pred naslednjim.
+  const gone = po.filter((r) => kdaj(r) < nowMs && !jeMorda(r));
+  const morda = po.filter((r) => kdaj(r) < nowMs && jeMorda(r));
+  const ahead = po.filter((r) => kdaj(r) >= nowMs);
+  // Osvezitev vsakih 30 s tablo izrise znova; odprt seznam naj ostane odprt.
+  const odprto = !!resultsEl.querySelector(".past-box[open]");
+  const rows = [];
+  if (gone.length) {
+    rows.push(`<details class="past-box"${odprto ? " open" : ""}><summary class="past-head">
+        pokaži ${gone.length} ${gone.length === 1 ? "prejšnjo vožnjo" : "prejšnjih"}
+      </summary>
+      ${gone.map((r) => vrstica(r, false)).join("")}
+    </details>`);
+  }
+  rows.push(...morda.map((r) => vrstica(r, false)));
+  rows.push(...ahead.map((r, i) => vrstica(r, i === 0)));
+  resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data) + rows.join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 
