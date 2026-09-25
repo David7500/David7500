@@ -152,6 +152,9 @@ CREATE TABLE IF NOT EXISTS zamenjava (
     stari_dep_s INTEGER,
     PRIMARY KEY (stari_trip, stari_seq)
 );
+-- Zgodovina gre v obratno smer kot zajem: od nove vožnje k stari
+-- (`PREDNIKI_SQL`). Brez indeksa je to pregled cele tabele za vsak postanek table.
+CREATE INDEX IF NOT EXISTS zamenjava_novi ON zamenjava(novi_trip, novi_seq);
 
 -- ---------- zajem (iz GTFS-RT) ----------
 
@@ -458,6 +461,53 @@ def voznja(trip_id: str, agency: str | None) -> str:
     if agency == "lpp" and "|" in trip_id:
         return trip_id.split("|", 1)[1]
     return trip_id
+
+
+#: Pretekle meritve vožnje, ki jo je nov vozni red zamenjal (`zamenjava`),
+#: prevedene na postanke in vozni red NOVE. Stolpci: `trip_id` (nova vožnja),
+#: `stop_seq` (njen postanek), `service_date`, `delay_arr`, `delay_dep`.
+#:
+#: `voznja_sql` ista vožnja čez dneve ne ujame, kadar ji je uvoz dal nov id.
+#: 22. 9. 2026 se je to zgodilo 247 vožnjam (192 LPP v IJPP, 52 Nomago,
+#: 3 Arriva) in vse so ostale brez zgodovine: LPP 25 z Novega Polja je imel
+#: pod starim id-jem 15 dni meritev, pod novim dva, zato je tabla pisala
+#: „brez podatka“ namesto običajne zamude, model pa se je učil iz dveh dni.
+#:
+#: Zamuda se preračuna na nov vozni red kot v zajemu
+#: (`collector.zamuda_po_zamenjavi`): absolutni čas ostane, premakne se
+#: vozni red. Stari 15:29 +2 min je pri novem 15:28 +3 min.
+#:
+#: Veriga dveh zamenjav se ne sestavi: ko nova vožnja izgubi vozni red, uvoz
+#: njen par pobriše (`gtfs._zapisi_zamenjave`).
+#:
+#: Ta oblika je za posamezne postanke (`WHERE p.trip_id = ? AND p.stop_seq = ?`).
+#: Za celo vožnjo je `PREDNIKI_VOZNJE_SQL`.
+_PREDNIKI_STOLPCI = (
+    "z.novi_trip AS trip_id, z.novi_seq AS stop_seq, r.service_date, "
+    "r.delay_arr + COALESCE(z.stari_arr_s, z.stari_dep_s) "
+    "            - COALESCE(s.arr_s, s.dep_s) AS delay_arr, "
+    "r.delay_dep + COALESCE(z.stari_dep_s, z.stari_arr_s) "
+    "            - COALESCE(s.dep_s, s.arr_s) AS delay_dep "
+)
+PREDNIKI_SQL = (
+    f"SELECT {_PREDNIKI_STOLPCI}"
+    "FROM zamenjava z "
+    "JOIN run r ON r.trip_id = z.stari_trip AND r.stop_seq = z.stari_seq "
+    "JOIN sched s ON s.trip_id = z.novi_trip AND s.stop_seq = z.novi_seq"
+)
+#: Isto za vse postanke ene vožnje; edini parameter (`?`) je nova vožnja.
+#:
+#: Drugačen vrstni red zato, ker ključ `run` je (vožnja, dan, postanek):
+#: pot od postanka nove vožnje k `run` prebere vse dni stare vožnje ZA VSAK
+#: postanek posebej. Izmerjeno na LPP 25 (36 postankov, 17 dni): 9,8 ms na
+#: klic in `predict` 1,3 -> 11,5 ms. Tu se `run` prebere enkrat.
+PREDNIKI_VOZNJE_SQL = (
+    f"SELECT {_PREDNIKI_STOLPCI}"
+    "FROM (SELECT DISTINCT stari_trip FROM zamenjava WHERE novi_trip = ?) k "
+    "CROSS JOIN run r ON r.trip_id = k.stari_trip "
+    "CROSS JOIN zamenjava z ON z.stari_trip = r.trip_id AND z.stari_seq = r.stop_seq "
+    "CROSS JOIN sched s ON s.trip_id = z.novi_trip AND s.stop_seq = z.novi_seq"
+)
 
 
 def init(conn: sqlite3.Connection) -> None:

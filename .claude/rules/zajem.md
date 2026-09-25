@@ -373,6 +373,20 @@ skrbnika ga pokaže med zdravjem. Ob zamenjavi 22. 9. je bilo v IJPP 16 od 662
 (2,4 %); prag za rdečo je 2 %. Brez tega števca se je napaka videla šele,
 ko je potnik čakal na avtobus.
 
+**Obratne napake ta števec ne vidi: vožnje, ki jih feed zamud sploh ne nosi.**
+Od 21. 9. 2026 IJPP `trip_updates` nima **nobene** vožnje z veljavnostjo od
+21. 9. naprej — Nomago ~430 na dan (11 % njegovih), Arriva 51 — v
+`vehicle_positions` pa ista vozila so, pod novimi id-ji (25. 9. ob 11:16:
+22 vozil, nobeno v `trip_updates`). Vožnje z veljavnostjo od 7. in 14. 9.
+imajo zamude normalno. Najverjetneje ima derp.si za zamude star vozni red:
+lega ga ne rabi, zamuda na postanek pa ga. Tabla zato pri teh vožnjah piše
+„brez podatka“, četudi vozilo vozi in ga vidimo na zemljevidu. Izmerjeno in
+razčlenjeno v `docs/MERITVE.md` (25. 9. 2026).
+
+**Zgodovina gre čez zamenjavo** (`db.PREDNIKI_SQL`): običajna zamuda, okno
+vožnje in model štejejo tudi meritve stare vožnje, prevedene na nov vozni
+red. Brez tega je bila vožnja z novim id-jem tri dni „brez podatka“.
+
 ## Vožnja, obratovalni dan in dnevnik
 
 `trip.start_s` / `trip.end_s` sta **prvi odhod in zadnji prihod vožnje**,

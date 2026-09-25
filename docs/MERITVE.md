@@ -2606,3 +2606,57 @@ Po objavi (arwen, 24. 9. ob 11:40) dva zaporedna `curl -sI` na APK:
 zdaj pride do strežnika. Migracija je stolpca dodala na produkcijski bazi,
 `obisk_aplikacija_od = 2026-09-24`; današnji dan je zato delen (do 11:40
 aplikacija ni bila ločena).
+
+## Avtobusi brez zamude: zamenjani id-ji in feed brez novega voznega reda (25. 9. 2026)
+
+Prijava: LPP 25 z Novega Polja proti Bavarskemu dvoru ob 11:11 in 11:36 je
+pisal „brez podatka“ — ne zamude ne običajne zamude. Vzroka sta dva in nista
+povezana.
+
+**1. Zgodovina se je ob novem id-ju pretrgala.** 22. 9. je 247 voženj dobilo
+nov id (192 LPP v IJPP, 52 Nomago, 3 Arriva). Zajem jih od takrat prevaja
+(`zamenjava`), zgodovina pa je šla samo po `trip_id`: vožnja 11:11 (478946)
+je imela pod novim id-jem 2 dneva meritev, pod starim (452527) 15. Običajna
+zamuda rabi 3, zato je ni bilo; model se je učil iz dveh dni.
+
+Po popravku (`db.PREDNIKI_SQL`, meritve stare vožnje prevedene na postanke in
+vozni red nove), na kopiji arwena 25. 9.:
+
+| | prej | potem |
+|---|---|---|
+| LPP 25 na Novem Polju, odhodov z običajno zamudo | 1 od 21 | 21 od 21 |
+| postanki zamenjanih voženj danes z običajno zamudo | 3 303 od 4 987 | 4 772 od 4 987 |
+| tabla Novo Polje / Bavarski dvor / Ljubljana AP | 39 / 445 / 140 ms | 71 / 478 / 146 ms |
+
+Prvi osnutek je za celo vožnjo bral `run` stare vožnje po vseh dneh za vsak
+postanek posebej (ključ je vožnja, dan, postanek): 9,8 ms na klic, `predict`
+1,3 → 11,5 ms. Z branjem `run` enkrat (`PREDNIKI_VOZNJE_SQL`) 4,7 ms in
+`predict` 7,0 ms — toliko kot pri vožnji, ki ima 17 dni lastne zgodovine.
+Dan 22. 9. je za te vožnje izgubljen: feed jih je javljal pod starimi id-ji,
+prevoda še ni bilo.
+
+**2. Feed zamud ne nosi voženj z veljavnostjo od 21. 9.** Ni povezano s
+prvim — to so druge vožnje (Nomago, Arriva), ki niso dobile novega id-ja,
+ampak so nov vozni red z novim obdobjem veljavnosti.
+
+| prevoznik | obdobje od | voženj 25. 9. | odpeljalo do 11:00 | z meritvijo |
+|---|---|---|---|---|
+| Nomago | 1. 9. | 404 | 173 | 161 |
+| Nomago | 7. 9. | 68 | 23 | 23 |
+| Nomago | **21. 9.** | **427** | **164** | **0** |
+| Arriva | 7. 9. | 313 | 130 | 130 |
+| Arriva | 14. 9. | 38 | 14 | 14 |
+| Arriva | **21. 9.** | **51** | **24** | **0** |
+
+Enako vsak dan od 21. 9.: Nomago 423–432 voženj na dan brez ene same meritve
+(razen treh zamenjanih), Arriva 51. To je 11 % Nomagovih voženj, 40 linij
+(N0091, N0112, N0152, N0158, N0324, N0330, N0334 …) in 5 Arrivinih (A2240,
+A2265, A2280, A6360, A6472). Železnica ni prizadeta (vlaki z obdobjem od
+7. 9.: 3 od 4 odpeljanih z meritvijo).
+
+V `vehicle_positions` ta vozila **so**, pod novimi id-ji: ob 11:16 22 vozil
+(Nomago 18, Arriva 4) na vožnjah z veljavnostjo od 21. 9., in nobeno od njih
+ni v `trip_updates`. Zamuda na postanek potrebuje vozni red, lega ne —
+zato je najverjetnejša razlaga, da ima derp.si za `trip_updates` vozni red
+izpred 21. 9. Števec `rt_neznanih` tega ne vidi, ker šteje id-je v feedu, ki
+jih mi ne poznamo, ne obratno.

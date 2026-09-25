@@ -328,6 +328,28 @@ def oznaci_neskladne(rows: list[dict]) -> None:
             rows[i]["neskladno"] = True
 
 
+def _dnevi_prednikov(conn: sqlite3.Connection, trip_id: str | None, since: str,
+                     exclude_date: str | None, znani) -> dict[str, dict[int, int]]:
+    """Pretekli dnevi predhodnice (`db.PREDNIKI_VOZNJE_SQL`) po postankih NOVE vožnje.
+
+    Dan, ki ga vožnja `znani` že ima pod svojim id-jem, se izpusti CEL: dan,
+    sestavljen iz dveh virov, bi bil vožnja, ki je ni bilo.
+    """
+    if trip_id is None:
+        return {}
+    out: dict[str, dict[int, int]] = {}
+    for r in conn.execute(
+        f"SELECT p.service_date, p.stop_seq, COALESCE(p.delay_dep, p.delay_arr) AS d "
+        f"FROM ({db.PREDNIKI_VOZNJE_SQL}) p "
+        f"WHERE p.service_date >= ? AND d IS NOT NULL "
+        f"  AND (? IS NULL OR p.service_date <> ?)",
+        (trip_id, since, exclude_date, exclude_date),
+    ):
+        if r["service_date"] not in znani:
+            out.setdefault(r["service_date"], {})[r["stop_seq"]] = r["d"]
+    return out
+
+
 def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
             exclude_date: str | None = None, trip_id: str | None = None) -> dict:
     """Zgodovina zamud ene voznje: po dnevih in po postajah.
@@ -379,17 +401,30 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
             (trip_id, since, exclude_date, exclude_date),
         ).fetchall()
 
+    # Odhodna vrednost je izpolnjena pri vseh prevoznikih stoodstotno,
+    # prihodna pri avtobusih le v 31-61 %. Tu je bilo obratno in je bralo
+    # niclo tam, kjer je feed odhod povedal -- edina taka poizvedba.
+    vrstice = [(r["service_date"], r["stop_seq"], r["name"],
+                r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"])
+               for r in rows]
+    predniki = _dnevi_prednikov(conn, trip_id, since, exclude_date,
+                                {v[0] for v in vrstice})
+    if predniki:
+        imena = {r["stop_seq"]: r["name"] for r in conn.execute(
+            "SELECT s.stop_seq, st.name FROM sched s JOIN station st USING (stop_id) "
+            "WHERE s.trip_id = ?", (trip_id,))}
+        vrstice += [(dan, seq, imena.get(seq), d)
+                    for dan, po_postankih in predniki.items()
+                    for seq, d in po_postankih.items()]
+        vrstice.sort(key=lambda v: (v[0], v[1]))
+
     by_day: dict[str, list] = {}
     by_stop: dict[int, dict] = {}
-    for r in rows:
-        # Odhodna vrednost je izpolnjena pri vseh prevoznikih stoodstotno,
-        # prihodna pri avtobusih le v 31-61 %. Tu je bilo obratno in je bralo
-        # niclo tam, kjer je feed odhod povedal -- edina taka poizvedba.
-        delay = r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"]
+    for dan, seq, ime, delay in vrstice:
         if delay is None:
             continue
-        by_day.setdefault(r["service_date"], []).append((r["stop_seq"], delay))
-        slot = by_stop.setdefault(r["stop_seq"], {"name": r["name"], "delays": []})
+        by_day.setdefault(dan, []).append((seq, delay))
+        slot = by_stop.setdefault(seq, {"name": ime, "delays": []})
         slot["delays"].append(delay)
 
     runs = []
@@ -648,7 +683,9 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     wanted = sorted(set(pairs))
 
-    grouped: dict[tuple[str, int], list[int]] = {}
+    # Po dnevih, ne seznam: isti dan je lahko zajet pod novim id-jem IN pod
+    # predhodnico (`db.PREDNIKI_SQL`), steti pa se sme enkrat -- nova velja.
+    grouped: dict[tuple[str, int], dict[str, int]] = {}
     # Ena poizvedba na svezenj, ne ena na trip: odhodna tabla velike postaje
     # ima cez cel dan sto in vec voznj, pri avtobusih pa bo tega desetkrat vec.
     # Meja spremenljivk v sqlite je 32766; 400 parov (800 vezav) je varno tudi
@@ -675,7 +712,8 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
         params = [x for pair in chunk for x in pair]
         rows = conn.execute(
             f"WITH want(trip_id, stop_seq) AS (VALUES {values}) "
-            f"SELECT w.trip_id, w.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
+            f"SELECT w.trip_id, w.stop_seq, r.service_date, "
+            f"       COALESCE(r.delay_dep, r.delay_arr) AS d "
             f"FROM want w CROSS JOIN trip a ON a.trip_id = w.trip_id "
             f"CROSS JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
             f"CROSS JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
@@ -683,10 +721,23 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
             (*params, since),
         ).fetchall()
         for r in rows:
-            grouped.setdefault((r["trip_id"], r["stop_seq"]), []).append(r["d"])
+            grouped.setdefault((r["trip_id"], r["stop_seq"]), {})[r["service_date"]] = r["d"]
+        rows = conn.execute(
+            f"WITH want(trip_id, stop_seq) AS (VALUES {values}) "
+            f"SELECT p.trip_id, p.stop_seq, p.service_date, "
+            f"       COALESCE(p.delay_dep, p.delay_arr) AS d "
+            f"FROM want w CROSS JOIN ({db.PREDNIKI_SQL}) p "
+            f"  ON p.trip_id = w.trip_id AND p.stop_seq = w.stop_seq "
+            f"WHERE p.service_date >= ? AND d IS NOT NULL",
+            (*params, since),
+        ).fetchall()
+        for r in rows:
+            grouped.setdefault((r["trip_id"], r["stop_seq"]), {}).setdefault(
+                r["service_date"], r["d"])
 
     out: dict[tuple[str, int], dict] = {}
-    for key, vals in grouped.items():
+    for key, po_dnevih in grouped.items():
+        vals = list(po_dnevih.values())
         if len(vals) < MIN_RUNS_FOR_TYPICAL:
             continue
         out[key] = {
@@ -1245,6 +1296,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     for r in rows:
         by_day.setdefault(r["service_date"], {})[r["stop_seq"]] = odhod_z_izhodisca(
             r["d"], r["stop_seq"], izhodisce)
+    for dan, vrednosti in _dnevi_prednikov(conn, trip_id, since, exclude_date, by_day).items():
+        by_day[dan] = {seq: odhod_z_izhodisca(d, seq, izhodisce) for seq, d in vrednosti.items()}
 
     stops = timetable(conn, train_no, service_date, trip_id)
     names = {t["stop_seq"]: t["name"] for t in stops}

@@ -10,11 +10,11 @@ v majhno bazo in preverijo, da zamuda in lega prideta do nove vožnje.
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from google.transit import gtfs_realtime_pb2
 
-from kajros import collector, db, gtfs
+from kajros import collector, db, gtfs, stats
 
 DANES = date.today().isoformat()
 
@@ -187,3 +187,68 @@ def test_zamenjave_iz_starejse_kopije():
     assert [tuple(r) for r in c.execute(
         "SELECT stari_seq, novi_seq, stari_dep_s FROM zamenjava ORDER BY stari_seq")] == [
         (1, 1, 15 * 3600), (3, 2, 15 * 3600 + 29 * 60)]
+
+
+# ---------------------------------------------------------------- zgodovina
+
+def _pred(dni):
+    return (date.today() - timedelta(days=dni)).isoformat()
+
+
+def _run(c, trip_id, dan, seq, zamuda):
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts)"
+              " VALUES(?,?,?,NULL,?,0)", (trip_id, dan, seq, zamuda))
+
+
+def _z_zgodovino():
+    """Stara vožnja tri dni po +20 min na C, nova en dan po +10 min.
+
+    Stari vozni red je na C 15:29, novi 15:28: stari +20 je novi +21.
+    """
+    c = _baza()
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,0,0)",
+                  [("A", "Zadobrova"), ("C", "Novo Polje")])
+    for k in (4, 3, 2):
+        _run(c, "s1", _pred(k), 1, 0)
+        _run(c, "s1", _pred(k), 3, 1200)
+    _run(c, "n1", _pred(1), 1, 0)
+    _run(c, "n1", _pred(1), 2, 600)
+    c.commit()
+    return c
+
+
+def test_obicajna_zamuda_steje_tudi_predhodnico():
+    """LPP 25 z Novega Polja je 25. 9. 2026 pisal „brez podatka“: pod novim
+    id-jem dva dni meritev, pod starim petnajst."""
+    got = stats.typical_at_stops(_z_zgodovino(), [("n1", 2)])[("n1", 2)]
+    assert got["n"] == 4
+    assert got["median_s"] == 1260          # prevedeno na nov vozni red
+
+
+def test_dan_pod_obema_idjema_steje_enkrat_in_velja_novi():
+    c = _z_zgodovino()
+    _run(c, "n1", _pred(2), 2, 0)            # isti dan kot zadnji stari
+    c.commit()
+    got = stats.typical_at_stops(c, [("n1", 2)])[("n1", 2)]
+    # 0, 600, 1260, 1260 -- ne 0, 600, 1260, 1260, 1260
+    assert got["n"] == 4
+    assert got["median_s"] == 930
+
+
+def test_zgodovina_in_model_vidita_predhodnico():
+    c = _z_zgodovino()
+    h = stats.history(c, "25", trip_id="n1")
+    assert h["runs_observed"] == 4
+    assert [(s["name"], s["n"]) for s in h["by_stop"]] == [("Zadobrova", 4), ("Novo Polje", 4)]
+    napoved = {p["stop_seq"]: p for p in stats.predict(c, "25", 1, 0, trip_id="n1")}
+    assert napoved[2]["own_delay_s"] == 1260
+
+
+def test_predhodnica_gre_po_indeksu():
+    c = _baza()
+    plan = " ".join(r[3] for r in c.execute(
+        f"EXPLAIN QUERY PLAN SELECT * FROM ({db.PREDNIKI_SQL}) p WHERE p.trip_id = 'n1'"))
+    assert "zamenjava_novi" in plan
+    plan = " ".join(r[3] for r in c.execute(
+        f"EXPLAIN QUERY PLAN SELECT * FROM ({db.PREDNIKI_VOZNJE_SQL}) p", ("n1",)))
+    assert "zamenjava_novi" in plan and "SCAN" not in plan.replace("SCAN k", "")
