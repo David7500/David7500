@@ -1,7 +1,7 @@
 "use strict";
 
-// Avtobusi v 3D na velikem zemljevidu: vsak prevoznik svoj model in svoje
-// barve, kot jih ima na cesti. Rise jih MapLibrova plast po meri
+// Avtobusi v 3D na velikem zemljevidu in v oknu voznje: vsak prevoznik svoj
+// model in svoje barve, kot jih ima na cesti. Rise jih MapLibrova plast po meri
 // (`type: "custom"`) z golim WebGL2: three.js je 172 kB stisnjen (MapLibre
 // 299 kB) in za nekaj skatel ni vreden nove odvisnosti; WebGL2 pa MapLibre 6
 // tako ali tako zahteva.
@@ -22,6 +22,16 @@
 // Streha nosi barvo prevoznika z legende (`AGENCY_INK` v dashboard.js):
 // od zgoraj je streha edino, kar se vidi, in brez tega bi bili Nomagov in
 // AP-jev avtobus od zgoraj ista bela skatla.
+
+// Od blizu je avtobus model, od dalec ikona. Meja je tam, kjer se kamera ze
+// vidno nagne (24° pri Leafletovem z16); od zgoraj bi bil model bela skatla,
+// ikona pa pove smer in prevoznika na prvi pogled. Ista na obeh zemljevidih.
+const AVTO_3D_OD = 15;         // MapLibrov zoom
+
+// Model je vecji od resnicnega, sicer bi bil pri z16 dolg sedem pik: tako
+// velik kot ikona, ko se prikaze (~36 px), in blizje resnici, ko se
+// priblizas (pri z19 1,7-krat).
+const avtoPovecava = (z) => 3.5 * 2 ** (-(z - 16) * 0.5);
 
 const AVTO_BELA = "#eef1f3";
 const AVTO_STEKLO = "#1c2530";
@@ -183,19 +193,25 @@ function avtoMedkrajevni(barve, visina = 3.25) {
 }
 
 // Kljuc je skupina iz `busGroup()` v dashboard.js.
-function avtoModeli(inki) {
+//
+// `enotna` pobarva vse, kar je sicer barva prevoznika (pasove in streho), z
+// eno barvo -- okno voznje tako rise OCENO lege: barva prevoznika je na
+// velikem zemljevidu barva meritve, oblika modela pa ostane prevoznikova.
+function avtoModeli(inki, enotna = null) {
   const B = AVTO_BELA;
+  const streha = (k) => enotna || inki[k];
+  const pasovi = (p) => (enotna ? p.map(([a, b, hex]) => [a, b, hex === B ? B : enotna]) : p);
   return {
-    "1118": avtoZgibni({ streha: inki["1118"],
-      pasovi: [[0.3, 0.62, "#8dc63f"], [0.62, 0.7, "#3c8c3c"], [0.7, 1.0, B]] }),
-    "1123": avtoMedkrajevni({ streha: inki["1123"], srednjaVrata: true,
-      pasovi: [[0.35, 0.72, "#33cad6"], [0.72, 0.8, "#2d146e"], [0.8, 1.0, B], [1.0, 1.35, B]] }),
-    "1119": avtoMedkrajevni({ streha: inki["1119"],
-      pasovi: [[0.35, 0.9, "#004899"], [0.9, 1.0, "#fbb900"], [1.0, 1.45, B]] }, 3.45),
-    "1121": avtoMedkrajevni({ streha: inki["1121"], srednjaVrata: true,
-      pasovi: [[0.35, 0.8, "#00a7e7"], [0.8, 0.9, "#0077be"], [0.9, 1.0, B], [1.0, 1.3, B]] }, 3.2),
-    drugi: avtoMedkrajevni({ streha: inki.drugi,
-      pasovi: [[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]] }),
+    "1118": avtoZgibni({ streha: streha("1118"),
+      pasovi: pasovi([[0.3, 0.62, "#8dc63f"], [0.62, 0.7, "#3c8c3c"], [0.7, 1.0, B]]) }),
+    "1123": avtoMedkrajevni({ streha: streha("1123"), srednjaVrata: true,
+      pasovi: pasovi([[0.35, 0.72, "#33cad6"], [0.72, 0.8, "#2d146e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
+    "1119": avtoMedkrajevni({ streha: streha("1119"),
+      pasovi: pasovi([[0.35, 0.9, "#004899"], [0.9, 1.0, "#fbb900"], [1.0, 1.45, B]]) }, 3.45),
+    "1121": avtoMedkrajevni({ streha: streha("1121"), srednjaVrata: true,
+      pasovi: pasovi([[0.35, 0.8, "#00a7e7"], [0.8, 0.9, "#0077be"], [0.9, 1.0, B], [1.0, 1.3, B]]) }, 3.2),
+    drugi: avtoMedkrajevni({ streha: streha("drugi"),
+      pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
   };
 }
 
@@ -228,10 +244,11 @@ void main() { barva = vec4(v_barva, 1.0); }`;
  * stikalo); `povecava(z)` koliko je vozilo vecje od resnicnega.
  *
  * Vrne `{ plast, nastavi(vozila) }`; vozilo je `{lon, lat, smer, model}`,
- * smer v stopinjah od severa.
+ * smer v stopinjah od severa. `inki` so barve streh po prevozniku, `enotna`
+ * ena barva namesto barv prevoznikov (glej `avtoModeli`).
  */
-function avtobusi3D({ id, inki, vidna, povecava }) {
-  const modeli = avtoModeli(inki);
+function avtobusi3D({ id, inki = {}, enotna = null, vidna, povecava }) {
+  const modeli = avtoModeli(inki, enotna);
   const kljuci = Object.keys(modeli);
   // Izhodisce v Slovenji: odmiki od njega so majhni in float32 jih nosi na
   // centimeter. Absolutna lega v Mercatorju bi pri z18 trepetala za metre.

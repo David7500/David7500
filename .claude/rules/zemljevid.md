@@ -121,10 +121,16 @@ razpon zoomov). Stikalo „3D od blizu“ je privzeto vklopljeno.
   `leaflet-maplibre-gl` je MapLibrovo kamero držal v Leafletovi ravnini — zato
   okno vožnje do 25. 9. 2026 ni imelo 3D, čeprav ga je veliki zemljevid imel.
 * **Okno vožnje nagiba in stavbe dobi iz `pkUstvari()`** (`pot_karta.js`),
-  stikala nima. Avtobus tam ostane ikona in ne model: je **ocena** lege v
-  barvi ocene, model pa nosi barve prevoznika, kar je barva meritve. Oznaka
-  vozila je DOM (`rotationAlignment: map`, `pitchAlignment: viewport`), ker
-  se premika vsako sekundo in je ena.
+  stikala nima. **Od blizu je avtobus tudi tam model** (25. 9. 2026, na
+  prijavo: „ko približaš, je vozilo še kar 2D“) — oblika prevoznikova, barva
+  pa **ocene** (`avtobusi3D({ enotna: ESTIMATE_COLOR })`): pasovi in streha
+  so `#a8d8ff`, belo ostane belo. Barve prevoznika so na velikem zemljevidu
+  barva meritve, tu pa vozilo stoji na oceni lege in legenda to barvo tako
+  imenuje. Meja (`AVTO_3D_OD`) in velikost (`avtoPovecava`) sta v
+  `avtobusi3d.js`, ker ju rabita oba zemljevida. Od daleč ostane ikona kot
+  DOM (`rotationAlignment: map`, `pitchAlignment: viewport`), ker se premika
+  vsako sekundo in je ena; ko je model viden, je ikona skrita, sicer bi ga
+  kot element nad platnom prekrila.
 * **Nagib je lastnost približka**, ne gesta: `transformCameraUpdate` ga
   postavi ob vsaki spremembi kamere, `touchPitch` in `pitchWithRotate` sta
   ugasnjena, da se z njim ne prepirata. Vrtenje ostane, kompas vrne sever.

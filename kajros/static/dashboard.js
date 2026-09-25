@@ -645,17 +645,13 @@ function busSvg(size, moving, ink) {
 
 const busIkona = (ink, moving) => `bus-${ink.slice(1)}-${moving ? "vozi" : "stoji"}`;
 
-// Od blizu je avtobus model v 3D (`avtobusi3d.js`), od dalec ikona. Meja je
-// tam, kjer se kamera ze vidno nagne (24° pri Leafletovem z16); od zgoraj bi
-// bil model bela skatla, ikona pa pove smer in prevoznika na prvi pogled.
-const AVTOBUS_3D_OD = 15;      // MapLibrov zoom
+// Od blizu je avtobus model v 3D (`avtobusi3d.js`), od dalec ikona. Meja in
+// velikost modela sta tam, ker ju rabi tudi okno voznje.
+const AVTOBUS_3D_OD = AVTO_3D_OD;
 let avtobusi3d = null;
 let vozila3d = [];             // kar plast 3D ta hip rise, za dotik
 
-// Model je vecji od resnicnega, sicer bi bil pri z16 dolg sedem pik: tako
-// velik kot ikona, ko se prikaze (~36 px), in blizje resnici, ko se
-// priblizas (pri z19 1,7-krat).
-const povecava3D = (z) => 3.5 * 2 ** (-(z - 16) * 0.5);
+const povecava3D = avtoPovecava;
 const vidni3D = () => !!avtobusi3d && vklop["3d"] && map.getZoom() >= AVTOBUS_3D_OD;
 
 // Slike avtobusov za plast: ena na barvo in stanje (vozi / stoji).

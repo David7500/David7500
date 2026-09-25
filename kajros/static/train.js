@@ -1021,6 +1021,12 @@ async function loadRun() {
     state.agency = run.agency || null;
     if (isBus(run.mode)) {
       document.getElementById("train-mode").innerHTML = lineBadgeHtml(run);
+      // Oznaka linije nosi številko ("LPP 25"); gola številka pred njo je
+      // bila ista stvar dvakrat ("25 LPP 25") v glavi, ki je na telefonu tesna.
+      // Nadomestni prevoz obdrži številko -- njegova oznaka je beseda.
+      if (run.network === "avtobus") {
+        document.querySelector(".train-head-code").hidden = true;
+      }
     }
     applyNetworkWording();
     state.run = run;
@@ -1673,7 +1679,8 @@ function naloziSlogMapLibre() {
 }
 
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
-                 postaje: null, v: null, since: 0, loc: null, nastaja: null };
+                 postaje: null, v: null, since: 0, loc: null, nastaja: null,
+                 avto3d: null };
 
 // ---------- ocena lege med dvema meritvama ----------
 //
@@ -1956,6 +1963,19 @@ async function ustvariRunMap(v) {
                           "circle-stroke-opacity": 0.95, "circle-pitch-alignment": "map" } },
                RUN_POD);
 
+  // Od blizu model v 3D, kot na velikem zemljevidu: zemljevid se tu nagne
+  // enako, ploska ikona pa je med dvignjenimi stavbami ostala ploska.
+  // Oblika je prevoznikova, barva pa OCENE, ne prevoznika -- vozilo stoji na
+  // oceni lege in legenda pod zemljevidom to barvo tako imenuje.
+  runMap.avto3d = avtobusi3D({
+    id: "run-avtobus-3d",
+    enotna: ESTIMATE_COLOR,
+    vidna: run3D,
+    povecava: avtoPovecava,
+  });
+  map.addLayer(runMap.avto3d.plast, RUN_POD);
+  map.on("zoom", () => postavi3D());
+
   runVir("run-trasa", crte);
   runVir("run-postaje", postaje.map((s) => pkTocka([s.lat, s.lon], { ime: s.name })));
   const yours = yourStop(state.run.stops);
@@ -1964,6 +1984,23 @@ async function ustvariRunMap(v) {
   }
   runImeNaDotik();
   return true;
+}
+
+const run3D = () => !!runMap.map && runMap.map.getZoom() >= AVTO_3D_OD;
+
+// Model in ikona se ne rišeta hkrati: ikona je element nad platnom in bi
+// model prekrila. Skupina modela je prevoznik (`avtoModeli`), LPP pa v legah
+// nosi ime namesto ID-ja.
+function postavi3D(kje) {
+  const { v, avto3d, marker } = runMap;
+  if (!avto3d || !marker) return;
+  const na = kje || runMap.kje;
+  if (!na) return;
+  runMap.kje = na;
+  const zdaj3D = run3D();
+  marker.getElement().hidden = zdaj3D;
+  avto3d.nastavi(zdaj3D ? [{ lon: na[1], lat: na[0], smer: v.bearing || 0,
+                             model: v.agency === "lpp" ? "1118" : v.agency }] : []);
 }
 
 async function drawRunMap(v) {
@@ -2017,6 +2054,7 @@ function postaviVozilo(prvic, nova) {
     el.innerHTML = busSvg(moving);
   }
   runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: "zadnja izmerjena lega" })]);
+  postavi3D(kje);
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
   // sekundno osvezevanje trgalo izpod prsta.
