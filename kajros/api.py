@@ -1116,7 +1116,7 @@ def api_overview():
         # Pregled je zeleznicki ("kako vozijo vlaki"), zato filter. Endpointa
         # `api_live` se tu ne klice: Python bi kot argument podal FastAPIjev
         # objekt Query namesto None in filter se ne bi ujel z nicimer.
-        live = _live("zeleznica")
+        live = _live_predpomnjen("zeleznica")
         with _conn() as conn:
             day = stats.day_summary(conn, today)
             disruptions = alerts.active_count(conn)
@@ -1163,7 +1163,7 @@ def api_overview_bus():
     # Zdaj se drago predpomni na `rt_fetched` (30 s), stevci vozil pa se
     # preberejo sveze -- ti so poceni in prav oni se z legami spreminjajo.
     def izracun():
-        live = _live("avtobus")
+        live = _live_predpomnjen("avtobus")
         with _conn() as conn:
             day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
             # Ista varovalka kot pri vlakih, ki je tu manjkala. Brez nje je
@@ -1939,20 +1939,24 @@ WITH t AS (
     SELECT r.trip_id, r.stop_seq, r.feed_ts, s.stop_id,
            COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
            COALESCE(s.dep_s, s.arr_s) AS t_s
-    FROM run r
-    JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
+    -- **Od voženj k `run`, ne obratno** (`CROSS JOIN` ohrani zapisani vrstni
+    -- red). Iz `run` po `run_date` se je bral CEL dan vseh omrežij in šele
+    -- nato zožil na vožnje v oknu; izmerjeno na kopiji arwena 25. 9. 2026 ob
+    -- 12:25: železnica 0,68 -> 0,14 s, avtobusi 3,10 -> 2,92 s, izid enak
+    -- vrstico za vrstico. Pregled `trip` je 6 ms.
+    FROM trip tn
+    CROSS JOIN run r ON r.trip_id = tn.trip_id AND r.service_date = :day
+    CROSS JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
     -- Omrezje omejimo TU, ne sele v Pythonu: z LPP v bazi je vrstic vec kot
     -- petkrat toliko in okenske funkcije spodaj tecejo cez vse. Na tem
     -- prenosniku 190 ms proti 90 ms, na Pi Zero bi bila razlika sekunde.
-    JOIN trip tn ON tn.trip_id = r.trip_id
-                AND (:network IS NULL OR tn.network = :network)
-                -- Vozjne, ki se po voznem redu zdaj lahko vozijo. Brez tega
-                -- gre skozi okenske funkcije spodaj cel dan -- pri vseh
-                -- prevoznikih 135 000 vrstic za 735 vozil. Okvir je zato
-                -- stolpec v `trip` in ne grupiranje `sched` ob vsakem klicu.
-                AND tn.start_s <= :now_s
-                AND tn.end_s >= :now_s - :max_delay
-    WHERE r.service_date = :day
+    WHERE (:network IS NULL OR tn.network = :network)
+      -- Vozjne, ki se po voznem redu zdaj lahko vozijo. Brez tega
+      -- gre skozi okenske funkcije spodaj cel dan -- pri vseh
+      -- prevoznikih 135 000 vrstic za 735 vozil. Okvir je zato
+      -- stolpec v `trip` in ne grupiranje `sched` ob vsakem klicu.
+      AND tn.start_s <= :now_s
+      AND tn.end_s >= :now_s - :max_delay
       -- Vcerajsnji prometni dan gledamo SAMO zaradi voznj, ki segajo cez
       -- polnoc. Brez tega pogoja gre cel vcerajsnji dan skozi okenske
       -- funkcije, da na koncu vrne nic: 173 ms za prazen odgovor.
@@ -2402,8 +2406,18 @@ def pot_podrobno_page(request: Request):
 def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
                                          description="samo to omrežje")):
     """Vozila, ki so zdaj na poti, z zadnjo izmerjeno zamudo."""
-    # Najdrazji odgovor, ki ga zemljevid vprasa vsakih 30 s. Med dvema
-    # branjema zamud se ne spremeni, zato ga racunamo enkrat za vse.
+    return _live_predpomnjen(network)
+
+
+def _live_predpomnjen(network: str | None) -> list[dict]:
+    """`_live()` enkrat na branje zamud, za zemljevid in oba pregleda.
+
+    Najdražji odgovor, ki ga zemljevid vpraša vsakih 30 s. Med dvema branjema
+    zamud se ne spremeni, zato ga računamo enkrat za vse. Pregleda sta prej
+    klicala `_live()` mimo tega in ga računala še enkrat: ogrevanje po
+    vsakem zajemu je na arwenu 25. 9. 2026 stalo 10,3 s CPU na 30 s, od tega
+    `_live("avtobus")` dvakrat po 3,1 s.
+    """
     return _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
 

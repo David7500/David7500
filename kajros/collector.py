@@ -51,9 +51,18 @@ def _cached(conn: sqlite3.Connection, name: str, extra, build):
     key = db.cache_key(conn)
     if key is None:                 # sveza ali testna baza -- ne predpomni
         return build()
-    key = (key, name, extra)
+    baza, key = key, (key, name, extra)
     if key not in _STATIC_CACHE:
-        _STATIC_CACHE.clear()       # nov uvoz razveljavi vse, tudi vcerajsnji koledar
+        # Nov uvoz razveljavi vse, tudi včerajšnji koledar -- a SAMO nov uvoz.
+        # Prej je bil tu `clear()` ob vsakem novem ključu, in ključi so trije
+        # (okna, koledar, zamenjave): vsak je izbrisal druga dva, zato se je
+        # vse gradilo znova ob vsakem klicu. Izmerjeno 25. 9. 2026 na kopiji
+        # arwena: v 240 s 62 gradenj oken (11,4 s CPU), 20 koledarja (7,6 s) in
+        # 58 zamenjav (2,1 s) -- 9 % jedra za predpomnilnik, ki ni predpomnil.
+        # Stara vrednost ISTE vrste (včerajšnji koledar, prejšnje število
+        # zamenjav) gre ven, da se ne kopiči.
+        for k in [k for k in _STATIC_CACHE if k[0] != baza or k[1] == name]:
+            del _STATIC_CACHE[k]
         _STATIC_CACHE[key] = build()
     return _STATIC_CACHE[key]
 

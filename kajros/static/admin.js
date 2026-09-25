@@ -394,9 +394,16 @@ function vrsticeZdravja(d) {
   // vožnjah, ki jih feed nosi, je bilo takih 0 od 295. Trojka je [ne v feedu,
   // brez zamude, vseh]: `iz_lege` vrzel zapolni, zato je napaka vira rumena,
   // rdeče pa je šele to, kar vidi potnik -- vozilo brez vsake zamude.
+  //
+  // Rdeče šele pri vsaj treh vozilih IN 5 % prevoznika. Po zapolnitvi ostane
+  // nekaj voženj, ki so odpeljale pozno in še niso prevozile drugega
+  // postanka (izhodišča `iz_lege` ne meri): 25. 9. po objavi Nomago 1-2 od
+  // ~100, takoj po restartu 5 od 104 (4,8 %), preden je `iz_lege` dohitel.
+  // Samo z deležem 2 % je bila vrstica -- in s tem vsa stran -- rdeča zaradi
+  // dveh avtobusov. Pred zapolnitvijo je bilo 8 od 91 (8,8 %).
   const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
-  const lbzDel = Math.max(0, ...lbz.map(([, [, nz, vseh]]) => (vseh ? nz / vseh : 0)));
-  const lbzR = !z.lega_brez_zamude ? "" : lbzDel >= 0.02 ? "je-slaba" : lbz.length ? "je-mlacna" : "je-dobra";
+  const lbzSlabo = lbz.some(([, [, nz, vseh]]) => nz >= 3 && vseh && nz / vseh >= 0.05);
+  const lbzR = !z.lega_brez_zamude ? "" : lbzSlabo ? "je-slaba" : lbz.length ? "je-mlacna" : "je-dobra";
   return [
     ["zadnja zamuda iz feeda", pred(z.last_feed_ts), feed],
     ["vlaki · zadnji zapis", pred(zel.last_feed_ts), omr(zel.last_feed_ts)],
@@ -407,7 +414,7 @@ function vrsticeZdravja(d) {
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—",
       nezR],
-    ["vozila, ki jih feed zamud ne nosi",
+    ["vozila brez feeda zamud",
       lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
         `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : "—",
       lbzR],

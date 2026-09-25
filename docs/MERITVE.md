@@ -2769,3 +2769,41 @@ napaki lege. Izmerjeno to ni.
 
 **Števec v pregledu je zdaj trojka** [ne v feedu, brez vsake zamude, vozil]:
 iz lege zapolnjena vožnja ni več „brez zamude“, napaka vira pa ostane vidna.
+
+## Zajemna nit je jedla pol jedra (25. 9. 2026)
+
+Opazil drugi agent: na arwenu je nit zajema porabila ~14 s CPU v 30 s, proces
+pa po systemd 85 % jedra v 24 h (22.–23. 9. okoli 50 %). Zahteve si z njo
+delijo GIL, zato je to tudi počasnost strani (`/api/overview/bus` 4,8 s,
+`/api/live` 4,1 s, izmerjeno ob 10:55).
+
+Zanka zajema, kot jo teče `server._worker`, na kopiji baze arwena, 240 s,
+CPU po opravilih (`time.process_time`):
+
+| opravilo | prej | potem |
+|---|---|---|
+| ogrevanje živih in pregledov (po vsakem zajemu) | 82,6 s (10,3 s na klic) | 34,3 s (4,3 s) |
+| lege + `iz_lege` | 13,3 s | 7,7 s |
+| zamude IJPP | 11,0 s | 6,9 s |
+| LPP | 11,2 s | 4,3 s |
+| senca napovedi | 6,2 s | 6,2 s |
+| obvestila | 2,8 s | 0,4 s |
+| **skupaj** | **127 s = 53 % jedra** | **60 s = 25 %** |
+
+Trije vzroki:
+
+* **Predpomnilnik statike v `collector._cached` ni predpomnil.** Vsak nov
+  ključ je izpraznil vse, ključi pa so trije (okna voženj, koledar,
+  zamenjave), zato se je vse gradilo ob vsakem klicu: 62 gradenj oken, 20
+  koledarja in 58 zamenjav v 240 s.
+* **Pregleda sta `_live()` računala sama**, mimo predpomnilnika `/api/live`.
+  Po vsakem zajemu se je `_live("avtobus")` (3,1 s) računal dvakrat.
+* **`_LIVE_SQL` je bral `run` celega dne** po `run_date` in šele nato ožil na
+  vožnje v oknu. Obrnjeno (vožnje → `run` po ključu): železnica 0,68 → 0,14 s,
+  avtobusi 3,04 → 2,67 s, izid enak vrstico za vrstico v vseh šestih
+  kombinacijah omrežja in noči.
+
+Ostane `_live("avtobus")` s 2,7 s na 30 s: okenske funkcije tečejo čez 92 160
+vrstic `run`, ker okno voženj sega 6 h nazaj (`MAX_LIVE_DELAY_S`), žive pa so
+403 od 407 v zadnji uri po voznorednem koncu. Zožiti okno bi spremenilo pomen
+(vožnja s feedom, tihim več kot uro) — ni narejeno.
