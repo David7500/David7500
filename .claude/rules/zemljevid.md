@@ -191,6 +191,22 @@ Varovala, brez katerih bi ocena lagala: ne premikamo **stoječega** vozila
 in nikoli čez konec trase. Podnapis pove „ocenjeno iz lege pred 42 s", ne
 „lega stara 42 s".
 
+**Na oceni vozilo gleda po trasi, ne po smeri iz feeda** (25. 9. 2026, na
+prijavo „modeli naj bolj sledijo trasi"). Smer iz feeda je stara kot lega, in
+avtobus, ki ga je ocena odpeljala čez ovinek, je z njo stal počez na cesto.
+Izmerjeno na 324 parih zaporednih leg (31 vozil LPP), proti smeri ob
+naslednji legi: mediana **5,6° → 2,4°**, v 20° **74 → 87 %**, nad 45°
+12,3 → 8,0 %; kar ostane, je napaka lege, ne smeri. Smer je tetiva od repa do
+čela **narisanega** vozila (`smerNaOceni`): model je povečan (pri z15 zgibni
+89 m), in s tetivo njegove dolžine oba konca v ovinku ležita na trasi.
+Natančnosti dolžina tetive ne spremeni (0–150 m: 84–87 % v 20°).
+
+Ocena teče **samo pri LPP**: Arriva, Nomago in AP Murska Sobota hitrosti ne
+pošiljajo (0 od 445 vozil), zato stojijo na izmerjeni legi s smerjo iz feeda.
+Tam in na velikem zemljevidu ostane smer iz feeda, ker trasa ni boljša:
+proti smeri premika med legama je bilo pri Arrivi nad 45° 11,5 % s feedom in
+12,1 % s traso (487 parov), pri LPP se feed s traso ujema v 95 % v 15°.
+
 **Barva loči meritev od ocene.** Vozilo na tem zemljevidu ni zeleno kot
 drugod, ampak v `ESTIMATE_COLOR` (`#a8d8ff`) in rahlo prosojno — ta odtenek je
 v projektu rezerviran prav za „tu meritve ni" in ga lestvica zamud ne uporablja.

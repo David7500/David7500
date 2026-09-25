@@ -33,6 +33,9 @@ const AVTO_3D_OD = 15;         // MapLibrov zoom
 // priblizas (pri z19 1,7-krat).
 const avtoPovecava = (z) => 3.5 * 2 ** (-(z - 16) * 0.5);
 
+// Resnicna dolzina modela v metrih (glej `avtoModeli`): LPP zgibni, ostali 12 m.
+const avtoDolzina = (model) => (model === "1118" ? 18 : 12);
+
 const AVTO_BELA = "#eef1f3";
 const AVTO_STEKLO = "#1c2530";
 const AVTO_GUMA = "#17191c";

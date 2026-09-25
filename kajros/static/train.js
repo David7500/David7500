@@ -1680,7 +1680,7 @@ function naloziSlogMapLibre() {
 
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
                  postaje: null, v: null, since: 0, loc: null, nastaja: null,
-                 avto3d: null };
+                 avto3d: null, lega: null };
 
 // ---------- ocena lege med dvema meritvama ----------
 //
@@ -1749,6 +1749,17 @@ function tockaNaTrasi(pts, cums, dolzina) {
   return pts[pts.length - 1];
 }
 
+// Smer trase pri `s` metrih, v stopinjah od severa: od tocke `pol` metrov
+// zadaj do tocke `pol` metrov spredaj. Brez dolzine vrne null.
+function smerTrase(pts, cums, s, pol) {
+  const a = tockaNaTrasi(pts, cums, s - pol);
+  const b = tockaNaTrasi(pts, cums, s + pol);
+  const k = metriNaStopinjo((a[0] + b[0]) / 2);
+  const dx = (b[1] - a[1]) * k.lon, dy = (b[0] - a[0]) * k.lat;
+  if (Math.hypot(dx, dy) < 0.5) return null;
+  return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+}
+
 // Med dvema legama avtobus ne vozi ves cas -- na postajaliscih stoji, in
 // `hitrost x starost` ga zato odnese predalec. Izmerjeno na 139 parih
 // zaporednih leg (150 vozil, 1. 9. zvecer), napaka proti dejanski naslednji
@@ -1767,11 +1778,13 @@ const POSTANEK_S = 15;
 const ZA_SABO_M = 15;
 
 // Kje je vozilo priblizno ZDAJ. Brez trase ali med mirovanjem vrne izmerjeno
-// lego -- ocena, ki ne ve, kam naprej, ni boljsa od meritve.
+// lego -- ocena, ki ne ve, kam naprej, ni boljsa od meritve. `vzdolz` je
+// ocena na trasi v metrih, pri izmerjeni legi null.
 function ocenjenaLega(v, starostS) {
-  if (!runMap.trasa || !v.speed_ms || v.speed_ms < 1) return [v.lat, v.lon];
+  const izmerjena = { kje: [v.lat, v.lon], vzdolz: null };
+  if (!runMap.trasa || !v.speed_ms || v.speed_ms < 1) return izmerjena;
   const { vzdolz, odmik } = projekcijaNaTraso(runMap.trasa, runMap.cums, v.lat, v.lon);
-  if (odmik > OCENA_MAX_ODMIK_M) return [v.lat, v.lon];
+  if (odmik > OCENA_MAX_ODMIK_M) return izmerjena;
 
   // Vozi s trenutno hitrostjo, na vsakem vmesnem postajaliscu porabi postanek.
   let ostanek = starostS, kje = vzdolz;
@@ -1784,7 +1797,36 @@ function ocenjenaLega(v, starostS) {
     if (ostanek <= 0) break;
   }
   const cilj = kje + Math.max(0, ostanek) * v.speed_ms;
-  return tockaNaTrasi(runMap.trasa, runMap.cums, cilj);
+  return { kje: tockaNaTrasi(runMap.trasa, runMap.cums, cilj), vzdolz: cilj };
+}
+
+// Kam je obrnjeno vozilo na oceni: po TRASI, ne po smeri iz feeda. Ta je
+// stara toliko kot lega (~30 s), in avtobus, ki ga je ocena odpeljala cez
+// ovinek, je z njo stal pocez na cesto. Izmerjeno na 324 parih zaporednih
+// leg LPP (31 vozil, 25. 9. 2026 ob 19h, razmik 10-90 s), napaka proti
+// smeri, ki jo feed pove ob naslednji legi (ta se s traso na dejanski
+// legi ujema: 95 % v 15°, torej je dobro merilo):
+//
+//   smer na oceni            mediana   v 20°   nad 45°
+//   iz feeda (prej)            5,6°     74 %    12,3 %
+//   **po trasi, tetiva ±35 m** 2,4°     87 %     8,0 %
+//
+// Kar ostane nad 45° (26 parov), je napaka LEGE, ne smeri: v 16 je ocena od
+// resnice vzdolz trase vec kot 100 m, v ostalih je projekcija padla na
+// nasprotni krak trase ali pa vozilo po svoji trasi pelje nazaj (12D, 69).
+//
+// Smer je tetiva od repa do cela NARISANEGA vozila, zato oba konca lezita na
+// trasi tudi v ovinku. Model je povecan (pri z15 zgibni meri 89 m), ikona
+// ~24 px. Natancnosti dolzina tetive skoraj ne spremeni -- od 0 do +-150 m
+// je v 20° med 84 in 87 % -- zato je izbrana po sliki.
+function smerNaOceni(v, lega) {
+  const iz = v.bearing || 0;
+  if (lega.vzdolz == null) return iz;
+  const z = runMap.map.getZoom();
+  const pol = run3D()
+    ? (avtoDolzina(modelVozila(v)) / 2) * avtoPovecava(z)
+    : 12 * (40075016.686 * Math.cos(v.lat * Math.PI / 180)) / (512 * 2 ** z);
+  return smerTrase(runMap.trasa, runMap.cums, lega.vzdolz, pol) ?? iz;
 }
 
 // Ista oblika kot na velikem zemljevidu -- avtobus je vozilo, ne pika, in
@@ -1991,17 +2033,19 @@ const run3D = () => !!runMap.map && runMap.map.getZoom() >= AVTO_3D_OD;
 // Model in ikona se ne rišeta hkrati: ikona je element nad platnom in bi
 // model prekrila. Skupina modela je prevoznik (`avtoModeli`), LPP pa v legah
 // nosi ime namesto ID-ja.
-function postavi3D(kje) {
+function postavi3D(lega) {
   const { v, avto3d, marker } = runMap;
   if (!avto3d || !marker) return;
-  const na = kje || runMap.kje;
+  const na = lega || runMap.lega;
   if (!na) return;
-  runMap.kje = na;
+  runMap.lega = na;
   const zdaj3D = run3D();
   marker.getElement().hidden = zdaj3D;
-  avto3d.nastavi(zdaj3D ? [{ lon: na[1], lat: na[0], smer: v.bearing || 0,
-                             model: v.agency === "lpp" ? "1118" : v.agency }] : []);
+  avto3d.nastavi(zdaj3D ? [{ lon: na.kje[1], lat: na.kje[0], smer: na.smer,
+                             model: modelVozila(v) }] : []);
 }
+
+const modelVozila = (v) => (v.agency === "lpp" ? "1118" : v.agency);
 
 async function drawRunMap(v) {
   runMap.v = v;
@@ -2035,7 +2079,9 @@ function postaviVozilo(prvic, nova) {
   if (!v || !runMap.map) return;
   const moving = (v.speed_kmh || 0) >= 3;
   const starost = v.age_s + (Date.now() - runMap.since) / 1000;
-  const kje = ocenjenaLega(v, starost);
+  const lega = ocenjenaLega(v, starost);
+  lega.smer = smerNaOceni(v, lega);
+  const { kje } = lega;
   const odmik = razdaljaM(kje, [v.lat, v.lon]);
 
   if (!runMap.marker) {
@@ -2047,14 +2093,14 @@ function postaviVozilo(prvic, nova) {
       element: el, rotationAlignment: "map", pitchAlignment: "viewport",
     }).setLngLat([kje[1], kje[0]]).addTo(runMap.map);
   }
-  runMap.marker.setLngLat([kje[1], kje[0]]).setRotation(v.bearing || 0);
+  runMap.marker.setLngLat([kje[1], kje[0]]).setRotation(lega.smer);
   const el = runMap.marker.getElement();
   if (el.dataset.vozi !== String(moving)) {
     el.dataset.vozi = String(moving);
     el.innerHTML = busSvg(moving);
   }
   runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: "zadnja izmerjena lega" })]);
-  postavi3D(kje);
+  postavi3D(lega);
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
   // sekundno osvezevanje trgalo izpod prsta.
@@ -2148,7 +2194,7 @@ function izracunajRazdaljo(loc) {
   // Vozilo jemljemo na OCENJENI legi -- isti, ki je narisana. Dve stevilki o
   // istem vozilu, ena s slike in ena iz besedila, se ne smeta razhajati.
   const starost = v.age_s + (Date.now() - runMap.since) / 1000;
-  const kje = ocenjenaLega(v, starost);
+  const { kje } = ocenjenaLega(v, starost);
   const vozilo = projekcijaNaTraso(runMap.trasa, runMap.cums, kje[0], kje[1]);
   const d = vozilo.vzdolz - jaz.vzdolz;
   // "je 1,5 km pred tvojo lego" se bere dvoumno -- lahko kot "ze mimo tebe".
