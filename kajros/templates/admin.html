@@ -12,7 +12,11 @@
   <meta name="theme-color" content="#0f1115">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="stylesheet" href="{{ s('admin.css') }}">
+  {#- Slog podlage z odtisom vsebine, kot v `_meta.html`: zemljevid zavihka
+      „Deljenje“ ga bere od tu, gola pot bi na Cloudflaru obvisela štiri ure. -#}
+  <meta name="kajros-podlaga" content="{{ s('podlaga.json') }}">
 </head>
 <body class="adm">
 
@@ -34,6 +38,8 @@
       <a href="#zgodovina" data-zavihek="zgodovina">Zgodovina</a>
       <a href="#sporocila" data-zavihek="sporocila">Sporočila
         <span class="adm-znacka" id="sporocil-znacka" hidden></span></a>
+      <a href="#deljenje" data-zavihek="deljenje">Deljenje
+        <span class="adm-znacka je-zivo" id="deljenje-znacka" hidden></span></a>
     </nav>
     <div class="spacer"></div>
     <div class="adm-osvezeno" id="osvezeno"></div>
@@ -46,6 +52,8 @@
   </main>
 
   <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('pot_karta.js') }}"></script>
+  <script src="{{ s('admin_deljenje.js') }}"></script>
   <script src="{{ s('admin.js') }}"></script>
 </body>
 </html>

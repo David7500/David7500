@@ -317,6 +317,7 @@ async function refreshFeedDot() {
 function pollWhileVisible(fn, ms) {
   let timer = null;
   let zadnji = 0;
+  let ustavljen = false;
 
   const tick = async () => {
     zadnji = Date.now();
@@ -325,7 +326,7 @@ function pollWhileVisible(fn, ms) {
     } catch (err) {
       /* posamezna zahteva sme spodleteti; ritem se ne sme ustaviti */
     }
-    if (!document.hidden) timer = setTimeout(tick, ms);
+    if (!document.hidden && !ustavljen) timer = setTimeout(tick, ms);
   };
 
   const wake = () => {
@@ -345,7 +346,15 @@ function pollWhileVisible(fn, ms) {
   window.addEventListener("online", wake);
   wake();
   return {
-    stop: () => { clearTimeout(timer); timer = null; },
+    // Za zmeraj: brez odjave bi ga prva vrnitev na zavihek zbudila znova,
+    // korak, ki ravno čaka na odgovor, pa bi si naročil naslednjega.
+    stop: () => {
+      ustavljen = true;
+      clearTimeout(timer);
+      timer = null;
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("online", wake);
+    },
     // Takoj, ne ob naslednjem koraku -- to je gumb "osvezi" pod prstom. Za
     // razliko od `tick` napake NE pogoltne: gumb mora povedati, ali je
     // odgovor prisel.
@@ -356,7 +365,7 @@ function pollWhileVisible(fn, ms) {
       try {
         return await fn();
       } finally {
-        if (!document.hidden && !timer) timer = setTimeout(tick, ms);
+        if (!document.hidden && !timer && !ustavljen) timer = setTimeout(tick, ms);
       }
     },
   };

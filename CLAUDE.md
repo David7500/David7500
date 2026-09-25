@@ -212,7 +212,7 @@ vozni red ne pozna. Podrobnosti v `.claude/rules/zajem.md`.
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/o-nas` | kaj je kajros, od kod podatki, da ni prevoznikova stran |
 | `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
-| `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema |
+| `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu |
 
 **Pristajalne strani obstajajo zaradi iskalnika in so brez JS.** Človek ne
 išče „kajros", ampak „vlak ljubljana koper" — in za to mora obstajati naslov,

@@ -1139,3 +1139,150 @@ def dopolni(conn: sqlite3.Connection, vrstice: list[dict], *, seq: str, t_s: str
                 r[k] = None
         r["zamuda"] = stats.opis_zamude(z, "po poročilu potnikov")
         r["nepotrjen_do"] = None
+
+
+# ---------------------------------------------------------------- pregled
+
+def _kosi(t: Trasa, od_m: float = 0.0, do_m: float = math.inf) -> list[list[list[float]]]:
+    """Del trase med dvema razdaljama vzdolž nje, [lat, lon], za risanje.
+
+    Razrezan na vrzelih: ravna črta čez vrzel ni kraj, kjer vozilo vozi
+    (glej `Trasa`). Vrzel `i` je odsek med točkama `i` in `i + 1`.
+    """
+    cum, tocke, vrzeli = t.cum, t.tocke, t.vrzeli
+    od_m, do_m = max(od_m, 0.0), min(do_m, t.dolzina)
+    if do_m <= od_m:
+        return []
+    kosi: list[list[tuple[float, float]]] = []
+    kos: list[tuple[float, float]] = []
+    for i in range(len(tocke)):
+        if cum[i] <= od_m:
+            continue
+        if not kos and not kosi and i > 0 and (i - 1) not in vrzeli:
+            kos.append(t.tocka(od_m))
+        if cum[i] >= do_m:
+            if (i - 1) not in vrzeli:
+                kos.append(t.tocka(do_m))
+            break
+        kos.append(tocke[i])
+        if i in vrzeli:
+            kosi.append(kos)
+            kos = []
+    kosi.append(kos)
+    return [[[round(la, 5), round(lo, 5)] for la, lo in k] for k in kosi if len(k) >= 2]
+
+
+def deli_zdaj(conn: sqlite3.Connection, zdaj: datetime | None = None) -> int:
+    """Koliko deljenj ta hip teče -- značka na zavihku pregleda."""
+    zdaj_ts = int((zdaj or datetime.now(TZ)).timestamp())
+    return conn.execute(
+        "SELECT COUNT(*) FROM deljenje WHERE konec IS NULL AND zadnja_ts >= ? "
+        "AND zacetek_ts >= ?", (zdaj_ts - SVEZE_S, zdaj_ts - NAJDALJE_S)).fetchone()[0]
+
+
+def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
+    """Današnja deljenja po vozilih, za skrbnika (`/admin`).
+
+    Kar vidi javnost -- število poročevalcev, soglasje, lega in zamuda --
+    pride iz `stanje()`, ne iz lastnega računa: pregled mora pokazati isto
+    kot tabla in zemljevid, sicer ne pove ničesar o tem, kar potnik vidi.
+    Zraven je feedova zamuda (in pri avtobusu GPS), da se razhajanje vidi.
+
+    Sled deljenja je del trase med prvo in zadnjo sprejeto točko. Surovih
+    koordinat ni (glej `SHEMA`), in vozilo s trase ne gre.
+    """
+    zdaj = zdaj or datetime.now(TZ)
+    zdaj_ts = int(zdaj.timestamp())
+    polnoc = _polnoc(zdaj.date().isoformat())
+    # `zacetek_ts` ima kazalo; deljenje, ki je začelo pred polnočjo, ni daljše
+    # od `NAJDALJE_S`.
+    vrstice = [dict(r) for r in conn.execute(
+        "SELECT d.*, MIN(t.along_m) AS od_m, MAX(t.along_m) AS do_m, "
+        "       (SELECT COUNT(*) FROM deljenje_prehod p WHERE p.deljenje = d.id) AS prehodov "
+        "FROM deljenje d LEFT JOIN deljenje_tocka t ON t.deljenje = d.id "
+        "WHERE d.zacetek_ts >= ? GROUP BY d.id ORDER BY d.zacetek_ts",
+        (polnoc - NAJDALJE_S,))
+        if max(r["zacetek_ts"], r["zadnja_ts"]) >= polnoc]
+
+    po_vozilu: dict[tuple[str, str], list[dict]] = {}
+    for r in vrstice:
+        po_vozilu.setdefault((r["trip_id"], r["service_date"]), []).append(r)
+    ids = list(dict.fromkeys(t for t, _ in po_vozilu))
+    marks = ",".join("?" * len(ids))
+    tripi = {r["trip_id"]: dict(r) for r in conn.execute(
+        f"SELECT trip_id, train_no, headsign, network, mode, agency "
+        f"FROM trip WHERE trip_id IN ({marks})", ids)} if ids else {}
+    javno = stanje(conn, ids, zdaj)
+    gps = _gps(conn, [t for t in ids if tripi.get(t, {}).get("network") == "avtobus"], zdaj_ts)
+    feed: dict[tuple[str, str], dict] = {}
+    for dan in {d for _, d in po_vozilu}:
+        naj = [t for t, d in po_vozilu if d == dan]
+        for trip_id, m in stats.last_measured(conn, dan, naj, zdaj_ts - _polnoc(dan)).items():
+            feed[(trip_id, dan)] = m
+
+    vozila = []
+    for (trip_id, dan), dd in po_vozilu.items():
+        v = voznja(conn, trip_id)
+        t = tripi.get(trip_id, {})
+        st = javno.get(trip_id)
+        zivo = bool(st and st.get("along_m") is not None and st["service_date"] == dan)
+        m = feed.get((trip_id, dan))
+        deljenja = []
+        for r in dd:
+            sveze = r["konec"] is None and r["zadnja_ts"] >= zdaj_ts - SVEZE_S
+            deljenja.append({
+                "zacetek": _iso(r["zacetek_ts"]), "zadnja": _iso(r["zadnja_ts"]),
+                "trajanje_s": max(0, r["zadnja_ts"] - r["zacetek_ts"]),
+                "tock": r["tock"], "prehodov": r["prehodov"],
+                # Brez konca in brez svežih točk: aplikacija je utihnila
+                # (zaprta, brez signala) in deljenja ni nihče ustavil.
+                "izid": r["konec"] or ("deli" if sveze else "utihnil"),
+                "zamuda": stats.opis_zamude(r["zamuda_s"], "po poročilu potnikov"),
+                "hitrost_ms": r["hitrost_ms"],
+                "lat": r["lat"], "lon": r["lon"],
+                "sled": (_kosi(v.trasa, r["od_m"], r["do_m"])
+                         if v is not None and r["od_m"] is not None else []),
+            })
+        g = gps.get(trip_id)
+        vozila.append({
+            "trip_id": trip_id, "service_date": dan,
+            **{k: t.get(k) for k in ("train_no", "headsign", "network", "mode", "agency")},
+            "od": v.postanki[0]["name"] if v else None,
+            "do": v.postanki[-1]["name"] if v else None,
+            "zivo": zivo,
+            "javno": ({k: st[k] for k in ("n", "soglasje", "starost_s", "lat", "lon",
+                                           "stoji", "zamuda", "pri", "med") if k in st}
+                      if zivo else None),
+            # Samo ob živem deljenju: feedova zamuda zdaj in potnikova izpred
+            # dveh ur nista primerjava, ampak dva različna trenutka.
+            "feed": ({"zamuda": stats.opis_zamude(m["delay_s"], "izmerjeno"),
+                      "feed_ts": m.get("feed_ts")}
+                     if zivo and m and m.get("delay_s") is not None else None),
+            "gps": ({"lat": g["lat"], "lon": g["lon"], "starost_s": zdaj_ts - g["seen_ts"]}
+                    if g else None),
+            "zadnja_ts": max(r["zadnja_ts"] for r in dd),
+            # Cela trasa samo živim: odgovor se vleče na 10 s, in trasa je do
+            # 40 kB -- sto končanih vožnji na dan bi bilo nekaj MB na obhod.
+            "trasa": _kosi(v.trasa) if v and zivo else [],
+            "deljenja": deljenja,
+        })
+    vozila.sort(key=lambda x: (not x["zivo"], -x["zadnja_ts"]))
+
+    izidi: dict[str, int] = {}
+    for x in vozila:
+        for d in x["deljenja"]:
+            izidi[d["izid"]] = izidi.get(d["izid"], 0) + 1
+    return {
+        "zdaj": zdaj.isoformat(timespec="seconds"),
+        "sveze_s": SVEZE_S,
+        "povzetek": {
+            "deljenj": len(vrstice),
+            "tock": sum(r["tock"] for r in vrstice),
+            "prehodov": sum(r["prehodov"] for r in vrstice),
+            "vozil": len(vozila),
+            "vozil_zdaj": sum(x["zivo"] for x in vozila),
+            "deli_zdaj": izidi.get("deli", 0),
+            "izidi": izidi,
+        },
+        "vozila": vozila,
+    }

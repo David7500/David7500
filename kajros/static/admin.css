@@ -229,3 +229,67 @@ body.adm { font-feature-settings: "tnum" 1; }
    pokaže šele ob dotiku, da ne vabi na zgrešen klik. */
 .adm-sp-brisi { margin-left: 0; color: var(--ink-faint); }
 .adm-sp-brisi:hover { color: var(--sev-bad); border-color: var(--sev-bad); }
+
+/* ---------- deljenje ---------- */
+
+/* Značka na zavihku je živa stvar (kdo deli ta hip), ne nabiralnik -- zato
+   modra, barva lege človeka v aplikaciji (`ME_COLOR`). */
+.adm-znacka.je-zivo { background: #2f7fff; color: #fff; }
+
+.de-karta { height: 560px; border-radius: var(--r); overflow: hidden; background: #232d39; }
+.de-karta .adm-prazno { padding-top: 250px; }
+.de-plosca-karta .adm-pod { margin-bottom: 10px; }
+
+.de-seznam { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
+  max-height: 560px; overflow-y: auto; }
+.de-v {
+  border: 1px solid var(--line-soft); border-left: 3px solid var(--line-firm); border-radius: var(--r);
+  padding: 9px 11px; cursor: pointer; font-size: 12.5px; color: var(--ink-dim);
+}
+.de-v:hover { border-color: var(--line-firm); }
+.de-v.je-zivo { border-left-color: #2f7fff; }
+.de-v.je-izbran { background: var(--bg-raised); border-color: var(--ink-faint); }
+.de-v-glava { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; min-width: 0; }
+.de-v-glava b { font: 600 13.5px var(--sans); color: var(--ink); white-space: nowrap; }
+.de-smer { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.de-v-vr { line-height: 1.55; }
+.de-v-vr a, .de-obl a { color: var(--accent-lit); text-decoration: none; }
+.de-v-vr a:hover, .de-obl a:hover { text-decoration: underline; }
+.de-pika { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; border: 2px solid var(--ink-faint); }
+.de-v.je-zivo .de-pika { border-color: #fff; }
+.de-zivo {
+  font: 600 10px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase;
+  color: #fff; background: #2f7fff; border-radius: 999px; padding: 3px 7px;
+}
+.de-soglasje { color: var(--sev-mild); font-weight: 600; }
+.de-v .nic, .de-obl .nic { color: var(--ink-faint); }
+.adm-t td.de-cas { font-family: var(--mono); color: var(--ink); }
+.adm-t td a.de-na-karti { color: var(--ink); text-decoration: none; font-weight: 500; margin-right: 6px; }
+.adm-t td a.de-na-karti:hover { color: var(--accent-lit); }
+
+.de-izid { font: 500 11px var(--sans); padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line-firm); color: var(--ink-dim); }
+.de-izid-deli { border-color: #2f7fff; color: #8fb6ff; }
+.de-izid-cilj { border-color: var(--sev-mild); color: var(--sev-mild); }
+.de-izid-utihnil { color: var(--ink-faint); }
+
+/* Oblaček na zemljevidu -- iste barve kot na velikem zemljevidu. */
+.adm .maplibregl-popup-content {
+  padding: 10px 12px; background: #1a1d23; border: 1px solid #2b303a; border-radius: 8px;
+  color: #e7eaf0; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.adm .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #2b303a; }
+.adm .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #2b303a; }
+.adm .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #2b303a; }
+.adm .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #2b303a; }
+.adm .maplibregl-popup-close-button { width: 24px; height: 24px; color: #6b7480; font-size: 17px; }
+.adm .maplibregl-popup-close-button:hover { background: none; color: #e7eaf0; }
+.de-obl { font: 12.5px/1.55 var(--sans); color: var(--ink-dim); padding-right: 12px; }
+.de-obl b { color: var(--ink); }
+
+@media (max-width: 1100px) {
+  .de-seznam { max-height: none; }
+}
+@media (max-width: 620px) {
+  .de-karta { height: 380px; }
+  .de-karta .adm-prazno { padding-top: 160px; }
+}

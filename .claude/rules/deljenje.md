@@ -3,6 +3,7 @@ paths:
   - "kajros/deljenje.py"
   - "kajros/static/deli.js"
   - "kajros/static/deli.css"
+  - "kajros/static/admin_deljenje.js"
   - "android/app/src/main/kotlin/app/kajros/Deljenje*.kt"
   - "tests/test_deljenje.py"
 ---
@@ -56,6 +57,24 @@ v oknu −15 / +45 min (nesimetrično, ker je zamuda, ki je feed ne pozna,
 prav primer, zaradi katerega vse to obstaja). Avtobus z GPS se oceni po
 razdalji do vozila. Smer iz dveh leg (≥ 40 m narazen) izloči vozila v
 nasprotni smeri. Izmerjeno v `docs/MERITVE.md`, „Deljenje lege“.
+
+## Pregled za skrbnika (`/admin#deljenje`)
+
+Zemljevid in seznam današnjih deljenj po vozilih (`deljenje.pregled()`).
+**Kar je „javno“, pride iz `stanje()`** in ne iz lastnega računa: pregled mora
+pokazati isto kot tabla in zemljevid, sicer ne pove ničesar o tem, kar potnik
+vidi. Zraven sta feedova zamuda in GPS avtobusa, da se razhajanje vidi --
+**samo ob živem deljenju**; feed zdaj proti potniku izpred dveh ur ni
+primerjava.
+
+Sled je del trase med prvo in zadnjo sprejeto točko (`_kosi()`, razrezan na
+vrzelih), ker surovih koordinat ni. Cela trasa gre samo živim vozilom: odgovor
+se vleče na 10 s, trasa je do 40 kB. Izmerjeno 25. 9. 2026 na razvojnem
+stroju, 9 vozil in 23 deljenj, nobeno živo: 10 kB (1,4 kB z gzipom), 4--19 ms;
+ko je traso nosilo vseh devet, 60 kB (16 kB) in 15--44 ms.
+
+Izid deljenja: `konec` iz baze, sicer `deli` (sveže točke) ali **`utihnil`**
+-- brez konca in brez svežih točk, aplikacija zaprta ali brez signala.
 
 ## Android
 

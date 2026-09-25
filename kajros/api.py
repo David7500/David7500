@@ -2536,6 +2536,9 @@ def admin_podatki(request: Request,
         out["sporocila"] = {"vklopljeno": config.STIK_OBRAZEC,
                             **stik.stevec(conn),
                             "seznam": stik.seznam(conn, limit=100)}
+        # Samo število za značko; zemljevid in sledi so v `/admin/deljenje`.
+        deljenje.init(conn)
+        out["deljenje"] = {"vklopljeno": config.DELI, "zdaj": deljenje.deli_zdaj(conn)}
     out["zdravje"] = api_health()
     raba = shutil.disk_usage(config.DATA_DIR)
     out["stroj"] = {
@@ -2545,6 +2548,21 @@ def admin_podatki(request: Request,
         "obisk_od": obisk.IZPRAZNI_S,
     }
     return out
+
+
+@app.get(f"{ADMIN_POT}/deljenje", include_in_schema=False)
+def admin_deljenje(request: Request):
+    """Vozila, na katerih potniki danes delijo lego -- zavihek „Deljenje“.
+
+    Svoj endpoint in ne del `/admin/podatki`: tisti je v ritmu minute, ker
+    gredo števci v bazo na 60 s, lega poročevalca pa se spremeni na 10 s.
+    """
+    _preveri_admina(request)
+    with _conn() as conn:
+        # Tabele naredi `lifespan` samo pri `KAJROS_DELI=1`; isti razlog kot
+        # pri `stik.init()` v `admin_podatki`.
+        deljenje.init(conn)
+        return {"vklopljeno": config.DELI, **deljenje.pregled(conn)}
 
 
 @app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)

@@ -262,3 +262,53 @@ def test_vcerajsnji_prehod_ne_velja_danes(conn):
     deljenje.dopolni(conn, [r], seq="stop_seq", t_s="t_s", pricakovano="expected",
                      ura="sched", zdaj=zdaj)
     assert "potniki" not in r
+
+
+# ------------------------------------------------------------ pregled za skrbnika
+
+def test_pregled_pokaze_zivo_in_koncano_po_vozilih(conn):
+    zdaj = _ob("10:14")
+    r = _deli(conn, zdaj - timedelta(seconds=40), _tocka(6.0, zdaj - timedelta(seconds=40)),
+              kljuc="a")
+    _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), ident=r["deljenje"], kljuc="a")
+    koncan = _deli(conn, zdaj, _tocka(7.80, zdaj, v=0), kljuc="b")
+    conn.execute("UPDATE deljenje SET konec = 'potnik' WHERE id = ?", (koncan["deljenje"],))
+    p = deljenje.pregled(conn, zdaj)
+    assert p["povzetek"]["deljenj"] == 2 and p["povzetek"]["vozil"] == 1
+    assert p["povzetek"]["izidi"] == {"deli": 1, "potnik": 1}
+    assert deljenje.deli_zdaj(conn, zdaj) == 1
+    v = p["vozila"][0]
+    assert v["train_no"] == "LP 1" and v["od"] == "Ajdovščina" and v["do"] == "Celje"
+    # Javno stanje je isto kot na tabli: `stanje()` šteje sveža poročila.
+    assert v["zivo"] and v["javno"]["n"] == 2 and v["javno"]["pri"] == "Bled"
+    assert len(v["trasa"]) == 1
+    # Sled je del trase med prvo in zadnjo točko, na vzporedniku.
+    sled = v["deljenja"][0]["sled"]
+    assert len(sled) == 1
+    assert sled[0][0][1] == pytest.approx(_lon(6.0), abs=1e-4)      # ~8 m
+    assert sled[0][-1][1] == pytest.approx(_lon(7.72), abs=1e-4)
+    assert all(t[0] == LAT for t in sled[0])
+
+
+def test_pregled_koncanemu_ne_poslje_cele_trase(conn):
+    zdaj = _ob("10:14")
+    _deli(conn, zdaj, _tocka(7.72, zdaj, v=0))
+    v = deljenje.pregled(conn, zdaj + timedelta(seconds=deljenje.SVEZE_S + 30))["vozila"][0]
+    assert not v["zivo"] and v["trasa"] == [] and v["deljenja"][0]["izid"] == "utihnil"
+
+
+def test_pregled_ne_kaze_vcerajsnjih(conn):
+    zdaj = _ob("10:14")
+    _deli(conn, zdaj, _tocka(7.72, zdaj, v=0))
+    jutri = zdaj + timedelta(days=1)
+    assert deljenje.pregled(conn, jutri)["vozila"] == []
+    assert deljenje.deli_zdaj(conn, jutri) == 0
+
+
+def test_odsek_trase_se_prelomi_na_vrzeli():
+    t = deljenje.Trasa([[(LAT, 14.0), (LAT, 14.01)], [(LAT, 14.1), (LAT, 14.11)]])
+    kosi = deljenje._kosi(t)
+    assert len(kosi) == 2
+    # Del, ki se začne v vrzeli, ne nariše ravne črte čeznjo.
+    del_ = deljenje._kosi(t, t.cum[1] + 100, t.cum[3])
+    assert len(del_) == 1 and del_[0][0] == [LAT, 14.1]

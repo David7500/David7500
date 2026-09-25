@@ -322,6 +322,13 @@ prejšnjim letom, ne z enako dolgim odsekom -- september proti 2.–31. 8. ni
 nobeno obdobje, ki bi ga kdo imel v glavi. Nad enim dnem je številka
 „obiskov“, ne „ljudi“ (vsota dnevnih). Oblika je predloga A iz `design/admin/`.
 
+**Četrti zavihek, Deljenje, ima svoj endpoint** (`/admin/deljenje`, od
+25. 9. 2026) in svoj ritem, 10 s: `/admin/podatki` teče na minuto, ker gredo
+števci v bazo na 60 s, lega poročevalca pa se premakne na 10. Iz istega
+razloga ga `risi()` ob osvežitvi pregleda pusti pri miru -- zemljevid bi
+sicer vsako minuto nastal znova. `/admin/podatki` nosi samo število za
+značko (`deljenje.deli_zdaj()`). Kaj je v odgovoru, je v `deljenje.md`.
+
 **Aplikacija in prenosi se štejejo posebej** (od 24. 9. 2026,
 `meta.obisk_aplikacija_od`; prej je „ne vemo“, ne nič). Trije kraji, kjer se
 številka tiho pokvari:

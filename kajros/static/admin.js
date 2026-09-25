@@ -2,10 +2,11 @@
 
 // Pregled za skrbnika: kdo je bil na strani in ali stroj dela.
 //
-// Trije zavihki -- Stanje, Zgodovina, Sporočila -- in en endpoint,
-// `/admin/podatki?od=&do=`. Brez meja vrne današnji dan; odgovor vedno nosi
-// še `danes`, `zadnjih30`, zdravje in sporočila, zato Stanje in Sporočila
-// rabita en klic, Zgodovina pa enega več za izbrano obdobje.
+// Štirje zavihki -- Stanje, Zgodovina, Sporočila, Deljenje. Prvi trije imajo
+// en endpoint, `/admin/podatki?od=&do=`. Brez meja vrne današnji dan; odgovor
+// vedno nosi še `danes`, `zadnjih30`, zdravje in sporočila, zato Stanje in
+// Sporočila rabita en klic, Zgodovina pa enega več za izbrano obdobje.
+// Deljenje ima svoj endpoint in ritem (`admin_deljenje.js`).
 //
 // Kar je na tej strani najlažje narobe prebrati, je vsota dnevnih
 // obiskovalcev. Sol se vsak dan zavrže (glej `obisk.py`), zato ista oseba v
@@ -669,7 +670,7 @@ function noga(d) {
 /** `#zgodovina/teden/2026-09-14` -- stanje je v naslovu, da ga ohrani osvežitev. */
 function preberiNaslov() {
   const [zav, v, d] = location.hash.slice(1).split("/");
-  const zavihek = ["stanje", "zgodovina", "sporocila"].includes(zav) ? zav : "stanje";
+  const zavihek = ["stanje", "zgodovina", "sporocila", "deljenje"].includes(zav) ? zav : "stanje";
   if (zavihek === "zgodovina") {
     izbor = {
       vrsta: OBDOBJA[v] ? v : "dan",
@@ -692,6 +693,10 @@ function risi() {
     else a.removeAttribute("aria-current");
   });
   const v = el("vsebina");
+  // Deljenje se osvežuje samo in ga osvežitev pregleda ne sme podreti:
+  // zemljevid bi vsako minuto nastal znova.
+  if (zavihek === "deljenje") { deljenjeOdpri(v); return; }
+  deljenjeZapri();
   if (zavihek === "sporocila") v.innerHTML = sporocila(zadnji);
   else if (zavihek === "zgodovina") v.innerHTML = zgodovina();
   else v.innerHTML = stanje(zadnji);
@@ -762,6 +767,9 @@ async function osvezi() {
     const s = zadnji.sporocila || {};
     el("sporocil-znacka").hidden = !s.neprebranih;
     el("sporocil-znacka").textContent = s.neprebranih ? String(s.neprebranih) : "";
+    const zdaj = (zadnji.deljenje && zadnji.deljenje.zdaj) || 0;
+    el("deljenje-znacka").hidden = !zdaj;
+    el("deljenje-znacka").textContent = zdaj ? String(zdaj) : "";
     const [raz, bes] = skupnoZdravje(zadnji);
     const ura = new Intl.DateTimeFormat("sl-SI", { timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit" }).format(new Date());
     el("osvezeno").innerHTML = `<span class="adm-pika ${raz}"></span>${escapeHtml(bes)} · osveženo ${ura}`;

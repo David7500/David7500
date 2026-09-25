@@ -79,6 +79,7 @@ api "nesmiseln datum"     "/api/connections?from=Ljubljana&to=Maribor&date=neki"
 api "admin brez zetona"   "/admin"                                        404
 api "admin napacen zeton" "/admin?k=napacno"                              403
 api "admin podatki"       "/admin/podatki"                                404
+api "admin deljenje"      "/admin/deljenje"                               404
 
 echo "== koda"
 # Ujame nedefinirana imena in mrtvo kodo. Uvoz modula tega ne ujame: vrstica,
