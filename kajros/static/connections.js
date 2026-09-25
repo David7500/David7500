@@ -679,25 +679,39 @@ function renderConnections(data) {
   const morda = pred.filter(jeMorda);
   const ahead = nextIdx >= 0 ? list.slice(nextIdx) : list;
 
-  const rows = [];
+  const neposredne = [];
   if (gone.length) {
-    rows.push(`<details class="past-box"><summary class="past-head">
+    neposredne.push(`<details class="past-box"><summary class="past-head">
         pokaži ${gone.length} ${gone.length === 1 ? "prejšnjo vožnjo" : "prejšnjih"}
       </summary>
       ${gone.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)).join("")}
     </details>`);
   }
-  rows.push(...morda.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)));
-  rows.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date, data.from)));
+  neposredne.push(...morda.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)));
+  neposredne.push(...ahead.map((c, i) => connectionRowHtml(c, nowMs, i === 0 && nextIdx >= 0, data.date, data.from)));
+
+  // **Prestop gre nad neposredne, kadar prej pripelje.** 25. 9. 2026 ob
+  // 17:31 je iskalnik Ljubljana -> Maribor na vrhu poudaril LPV 2002 ob 20:50
+  // s prihodom ob 23:26, zveza s prestopom ob 17:50 pa je pripeljala ob 20:34
+  // -- skoraj tri ure prej, a pod njim. Prestope strežnik že očisti tistih, ki
+  // jih kakšna neposredna prekaša, zato je vsak, ki ostane, prava izbira.
+  // Samo danes: drug dan nima "naslednje" in seznam je vozni red.
+  const naslednja = nextIdx >= 0 ? ahead[0] : null;
+  const prestopPrej = isToday && legs.length > 0 && list.length > 0
+    && (!naslednja || Math.min(...legs.map((t) => t.arr_s)) < naslednja.arr_s);
+  const prestopi = [];
   if (legs.length) {
     // Naslov naj pove, kaj je spodaj: en prestop ali vec. Ko en prestop ne
     // da nicesar, iscemo naprej in rezultat je lahko tri- ali stirinozen.
     const most = Math.max(...legs.map((t) => t.transfers || t.legs.length - 1));
-    rows.push(`<div class="result-head"><span>${most === 1
-      ? "Z enim prestopom"
+    prestopi.push(`<div class="result-head"><span>${most === 1
+      ? `Z enim prestopom${prestopPrej ? " — prej na cilju" : ""}`
       : "S prestopi — neposredne vožnje ni"}</span></div>`);
-    rows.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date, data.from)));
+    prestopi.push(...legs.map((t) => transferRowHtml(t, nowMs, data.date, data.from)));
   }
+  const rows = prestopPrej
+    ? [...prestopi, '<div class="result-head"><span>Neposredno</span></div>', ...neposredne]
+    : [...neposredne, ...prestopi];
   resultsEl.innerHTML = mejaHtml(data) + rows.join("");
 
   renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");

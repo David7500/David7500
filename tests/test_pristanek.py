@@ -208,3 +208,16 @@ def test_odhodi_po_pricakovani_uri():
     ]
     assert [x["id"] for x in pristanek._po_pricakovani(o)] == [
         "ista", "hitra", "brez", "pozna"]
+
+
+def test_izpisana_je_ura_po_kateri_je_vrstni_red():
+    """Z voznoredno uro bi tekle ure nazaj: 17:55, 17:57, 17:50 (+10), 18:15."""
+    assert pristanek.ura_odhoda(
+        {"sched": "2026-09-25T17:50:00+02:00",
+         "expected": "2026-09-25T18:00:00+02:00"}) == ("18:00", "17:50")
+    # Brez zamude ali z zamudo pod minuto ni česa prečrtati.
+    assert pristanek.ura_odhoda(
+        {"sched": "2026-09-25T18:15:00+02:00", "expected": None}) == ("18:15", None)
+    assert pristanek.ura_odhoda(
+        {"sched": "2026-09-25T18:15:00+02:00",
+         "expected": "2026-09-25T18:15:40+02:00"}) == ("18:15", None)

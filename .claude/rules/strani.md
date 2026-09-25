@@ -553,8 +553,19 @@ je dobila prav ta vožnja, LPP 13 pa je peljal čez dve. Zdaj: odpeljane so pod
 „pokaži N prejšnjih“ (kot pri zvezah, odprtost preživi osvežitev), nepotrjen
 odhod je nad naslednjo, poudarjena je prva po pričakovani uri. Vozni red ostane
 prečrtan v vrstici. Drug dan ostane po voznem redu — tam „zdaj“ ni. Pristajalna
-stran postaje razvršča enako (`pristanek._po_pricakovani`); API in widget ne,
-tam je vrstni red še vedno voznoredni.
+stran postaje razvršča enako (`pristanek._po_pricakovani`) in **izpiše
+pričakovano uro**, voznoredno prečrtano nad njo (`pristanek.ura_odhoda`) —
+z voznoredno so ure tekle nazaj (17:55, 17:57, 17:50 z +10, 18:15). API in
+widget ne, tam je vrstni red še vedno voznoredni.
+
+**Prestop gre v iskalniku nad neposredne, kadar prej pripelje** (25. 9.
+2026). Ljubljana → Maribor ob 17:31: poudarjen na vrhu je bil LPV 2002 ob
+20:50 s prihodom ob 23:26, zveza s prestopom ob 17:50 pa je pripeljala ob
+20:34, skoraj tri ure prej — pod njim. Strežnik prestope, ki jih kakšna
+neposredna prekaša, že izloči, zato je vsak preostali prava izbira. Kadar
+najzgodnejši prihod s prestopom prehiti naslednjo neposredno (ali neposredne
+danes ni več), je razdelek „Z enim prestopom — prej na cilju“ prvi, pod njim
+„Neposredno“. Samo danes; drug dan je seznam vozni red.
 
 **Odhodna tabla združi sezonske različice.** Devet vlakov ima dva ali tri
 tripe z različnimi obdobji veljavnosti; kadar oba veljata isti dan, je bila

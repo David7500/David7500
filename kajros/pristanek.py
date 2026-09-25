@@ -391,6 +391,21 @@ def _po_pricakovani(odhodi: list[dict]) -> list[dict]:
         datetime.fromisoformat(o["sched"])))
 
 
+def ura_odhoda(o: dict) -> tuple[str, str | None]:
+    """(ura, ki velja; voznoredna, kadar je drugačna) za vrstico table.
+
+    Vrstni red je po pričakovani uri, zato mora biti izpisana ona. Z voznoredno
+    je 25. 9. 2026 na strani Ljubljane stalo 17:55, 17:57, **17:50** (IC 502,
+    +10), 18:15 -- ure so tekle nazaj in vrstica je bila videti kot napaka v
+    razvrščanju. Voznoredna ostane zraven prečrtana, kot na tabli v aplikaciji.
+    """
+    vr = datetime.fromisoformat(o["sched"]).strftime("%H:%M")
+    if not o.get("expected"):
+        return vr, None
+    ura = datetime.fromisoformat(o["expected"]).strftime("%H:%M")
+    return ura, (vr if ura != vr else None)
+
+
 def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
              network: str, datum: str, now_s: int | None) -> dict:
     """Vse, kar potrebuje stran ene relacije."""
@@ -449,6 +464,8 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
     odhodi = _po_pricakovani(
         [o for o in odhodi if _se_ni_odpeljal(o["sched"], o["expected"], zdaj)])
     _dopolni_obicajno(odhodi, "typical")
+    for o in odhodi:
+        o["ura"], o["vozni_red"] = ura_odhoda(o)
     return {
         "ime": ime, "network": network, "datum": datum,
         "smeri": smeri if len(smeri) > 1 else [],
