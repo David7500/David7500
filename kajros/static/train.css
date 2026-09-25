@@ -356,6 +356,15 @@
 }
 .yours-delay { font: 600 15px/1 var(--mono); }
 .yours-tag { margin-top: 5px; font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }
+/* Poročilo potnika je opažanje, ne sklep iz ure -- zato poudarjeno. */
+.yours-potnik { margin-top: 4px; font: 500 12px/1.4 var(--sans); color: var(--accent-lit); }
+.detail-potniki {
+  margin-top: 9px; padding: 8px 10px; border-radius: var(--r);
+  border: 1px solid var(--line-firm); background: var(--bg-panel);
+  font: 400 12px/1.5 var(--sans); color: var(--ink-dim);
+}
+.detail-potniki strong { display: block; color: var(--accent-lit); font-weight: 600; }
+.detail-potniki b { font-weight: 600; }
 /* Dve resnici hkrati: stevilka za potnikovo postajo in novejsa beseda o
    voznji. Vidnejsa od `yours-tag`, ker je to opozorilo, ne opomba -- a ne
    oranzna, ker ne trdi, da je prava. */

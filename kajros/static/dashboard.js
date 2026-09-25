@@ -291,8 +291,7 @@ function prilagodiPogledVozilom() {
   const okvir = new maplibregl.LngLatBounds();
   let n = 0;
   for (const t of liveTrains) {
-    const st = t.reported_lat != null
-      ? { lat: t.reported_lat, lon: t.reported_lon } : stationsByName.get(t.last_stop);
+    const st = trainPlace(t).station;
     if (st && st.lat != null) { okvir.extend([st.lon, st.lat]); n += 1; }
   }
   for (const v of liveBuses) if (v.lat != null) { okvir.extend([v.lon, v.lat]); n += 1; }
@@ -365,21 +364,32 @@ function bestDelay(t) {
   return { value: t.delay_s, where: t.last_stop, ageS: t.age_s, fromOperator: false };
 }
 
+// Kje narisati vlak: kjer ga vidi potnik na njem, sicer na postaji, ki jo je
+// sporočil prevoznik, sicer na zadnji postaji z meritvijo. Potnikova lega je
+// edina prava lega vlaka, ki jo imamo (`deljenje.py`).
+function trainPlace(t) {
+  if (t.potnik && t.potnik.lat != null) {
+    return { key: `potnik:${t.trip_id}`, name: "lega po poročilu potnika",
+             station: { lat: t.potnik.lat, lon: t.potnik.lon } };
+  }
+  if (t.reported_lat != null) {
+    return { key: t.reported_at_station, name: t.reported_at_station,
+             station: { lat: t.reported_lat, lon: t.reported_lon } };
+  }
+  return { key: t.last_stop, name: t.last_stop, station: stationsByName.get(t.last_stop) };
+}
+
 function groupByStation(trains) {
   // Več vlakov stoji na isti postaji -- en marker na postajo, sicer se
   // markerji in oznake v vozliščih (Ljubljana, Zidani Most) prekrivajo.
   const groups = new Map();
   for (const t of trains) {
-    const useReported = t.reported_lat != null;
-    const where = useReported ? t.reported_at_station : t.last_stop;
-    const station = useReported
-      ? { lat: t.reported_lat, lon: t.reported_lon }
-      : stationsByName.get(t.last_stop);
+    const { key, name, station } = trainPlace(t);
     if (!station) continue;
-    let g = groups.get(where);
+    let g = groups.get(key);
     if (!g) {
-      g = { name: where, station, trains: [] };
-      groups.set(where, g);
+      g = { name, station, trains: [], potnik: key.startsWith("potnik:") };
+      groups.set(key, g);
     }
     g.trains.push(t);
   }
@@ -424,6 +434,15 @@ function tripHref(trainNo, tripId, serviceDate, network) {
 
 function trainCardHtml(t) {
   const d = bestDelay(t);
+  const p = t.potnik;
+  // Z enim poročevalcem sta feed in potnik vsak v svoji vrstici; potnikova
+  // lega je lahko pol postaje naprej od zadnje meritve.
+  const potnik = p && p.lat != null ? [
+    [p.n > 1 ? `${potnikov(p.n)} na vlaku` : "potnik na vlaku",
+     `${p.pri ? escapeHtml(`pri postaji ${p.pri}`) : p.med
+       ? escapeHtml(`med postajama ${p.med[0]} in ${p.med[1]}`) : "—"}${p.zamuda
+       ? ` · <span style="color:${delayColor(p.zamuda)}">${escapeHtml(delayText(p.zamuda))}</span>` : ""}`],
+  ] : [];
   return vehCardHtml({
     no: t.train_no, badge: modeBadgeHtml(t.mode), headsign: t.headsign,
     href: tripHref(t.train_no, t.trip_id, t.service_date, "zeleznica"),
@@ -432,6 +451,7 @@ function trainCardHtml(t) {
       ["zadnja meritev", escapeHtml(d.where || "—")],
       [d.fromOperator ? "poročal prevoznik" : "izmerjeno",
        t.measured_at ? `ob ${hhmm(t.measured_at)}` : "—"],
+      ...potnik,
     ],
   });
 }
@@ -476,8 +496,9 @@ function groupLabelHtml(g) {
 function groupPopupHtml(g) {
   return `
     <div class="popup-station">${escapeHtml(g.name)}</div>
-    <div class="popup-note">zadnja postaja z meritvijo — ${g.trains.length === 1
-      ? "1 vlak" : `${g.trains.length} vlakov`}</div>
+    <div class="popup-note">${g.potnik ? "potnik na vlaku deli lego"
+      : `zadnja postaja z meritvijo — ${g.trains.length === 1
+      ? "1 vlak" : `${g.trains.length} vlakov`}`}</div>
     <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>`;
 }
 
@@ -1366,12 +1387,9 @@ function focusVehicle(key) {
     map.easeTo({ center: [m.v.lon, m.v.lat], zoom: Math.max(map.getZoom(), 14 - LZ) });
     odpriKartico(m.v);
   } else {
-    const where = bestDelay(m.v).where;
-    const st = m.v.reported_lat != null
-      ? { lat: m.v.reported_lat, lon: m.v.reported_lon }
-      : stationsByName.get(m.v.last_stop);
+    const { key, station: st } = trainPlace(m.v);
     if (st) map.easeTo({ center: [st.lon, st.lat], zoom: Math.max(map.getZoom(), 11 - LZ) });
-    const mk = stationMarkers.get(where);
+    const mk = stationMarkers.get(key);
     if (mk && vklop.train && !mk.getPopup().isOpen()) mk.togglePopup();
   }
   drawStops(m.v.train_no, m.v.trip_id);

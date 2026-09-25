@@ -167,9 +167,14 @@ BASE_URL = okolje("BASE_URL", "https://kajros.app").rstrip("/")
 # Odločeno 12. 9. 2026, da ostane prazen — namesto naslova je obrazec.
 STIK = okolje("STIK", "")
 
-# Obrazec za stik (`/stik`). To je EDINA pot, ki piše v bazo iz zahteve, zato
+# Obrazec za stik (`/stik`). Piše v bazo iz zahteve (poleg `/api/deli`), zato
 # ima svojo stikalo: kdor tega ne želi, ga ugasne in poti ni (404).
 STIK_OBRAZEC = okolje("STIK_OBRAZEC", "1") != "0"
+
+# Deljenje lege potnikov (`deljenje.py`, `POST /api/deli`). Druga pot, ki piše
+# iz zahteve, zato ima svoje stikalo kot obrazec za stik: ugasnjena pomeni, da
+# poti ni (404), prikaz pa poročil ne bere.
+DELI = okolje("DELI", "1") != "0"
 
 # Naslov strani za donacije. Privzeto je v kodi in ne v enoti na strežniku,
 # ker enote v `/etc` agent ne more pisati, naslov pa ni skrivnost. Prazen

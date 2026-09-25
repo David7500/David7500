@@ -15,6 +15,9 @@
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('home.css') }}">
+  {%- if deli %}
+  <link rel="stylesheet" href="{{ s('deli.css') }}">
+  {%- endif %}
 </head>
 <body class="home-page">
 
@@ -33,6 +36,16 @@
       <section class="p p-bud" id="budilke" aria-label="Budilke">
         <span class="oznaka">Budilke</span>
       </section>
+
+      {#- Deljenje lege (25. 9. 2026). Takoj pod budilkami, ker ga odpre človek,
+          ki že sedi na vlaku -- ta ne išče poti, ampak gumb. Vsebino izriše
+          `deli.js`; brez `KAJROS_DELI` ploščice ni. #}
+      {%- if deli %}
+      <section class="p p-deli deli" id="deli" aria-label="Deli lego vozila" aria-live="polite">
+        <span class="deli-oznaka">Pomagaj drugim</span>
+        <strong class="deli-naslov">Pelješ se? Deli, kje je vozilo.</strong>
+      </section>
+      {%- endif %}
 
       {#- Najhitrejša pot je nad omrežjema, ker je edina, ki dela brez tega, da
           potnik ve, s katere postaje gre. Dve omrežji spodaj ostaneta dve:
@@ -112,5 +125,8 @@
 
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('home.js') }}"></script>
+  {%- if deli %}
+  <script src="{{ s('deli.js') }}"></script>
+  {%- endif %}
 </body>
 </html>

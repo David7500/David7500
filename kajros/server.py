@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import alerts, collector, config, db, gtfs, obisk, ocena, stats, stik, weather
+from . import alerts, collector, config, db, deljenje, gtfs, obisk, ocena, stats, stik, weather
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -490,6 +490,12 @@ async def lifespan(app):
         conn = db.connect()
         try:
             stik.init(conn)
+        finally:
+            conn.close()
+    if config.DELI:
+        conn = db.connect()
+        try:
+            deljenje.init(conn)
         finally:
             conn.close()
     obisk_nit = None

@@ -83,6 +83,11 @@
 .p-bud-splet small { margin-top: 3px; font-size: 13px; color: var(--ink-dim); }
 .p-bud-splet .bud-vec { margin-top: 10px; font: 600 13px var(--sans); color: var(--accent-lit); }
 
+/* ---------- deljenje lege ---------- */
+
+/* Vsebina je v `deli.css`, ker je ista kartica tudi v iskalniku. */
+.p-deli { grid-column: 1 / -1; min-height: 0; }
+
 /* ---------- najhitrejsa pot ---------- */
 
 .p-pot { grid-column: 1 / -1; min-height: 140px; background: #e7eaf0; color: #111; border: 0; }

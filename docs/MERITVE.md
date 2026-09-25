@@ -2607,6 +2607,46 @@ zdaj pride do strežnika. Migracija je stolpca dodala na produkcijski bazi,
 `obisk_aplikacija_od = 2026-09-24`; današnji dan je zato delen (do 11:40
 aplikacija ni bila ločena).
 
+## Deljenje lege: ali kandidati najdejo pravo vozilo (25. 9. 2026)
+
+Potnik vozila ne vpisuje; strežnik iz njegove lege predlaga do pet voženj
+(`deljenje.kandidati`). Merjeno na razvojni bazi, dopoldne ob delavniku.
+
+**Avtobusi, prava lega:** GPS lega avtobusa iz `vehicle_now` (sveža, vožnja
+že teče) podtaknjena kot potnikova, brez smeri. Na **200** vozilih je prava
+vožnja **prva v 180 (90 %)**, med petimi v 184 (92 %). Na dveh drugih
+vzorcih po 150 prva v 141 in 130 (94 / 87 %) — razpon je med vzorci, ne
+napaka enega. Zgrešeni so skoraj vsi vozila, katerih
+GPS je kilometre od lastne trase (feed jih je pripisal napačni vožnji) —
+takega vozila tudi potnik ne bi mogel potrditi.
+
+Polmer iskanja postaj pri avtobusih je 6 km, ne 2,5: pri 2,5 km je bilo
+zgrešenih 14 od 150 (medkrajevni avtobus je daleč od postajališča), pri
+6 km 7. Čas: mediana 55 ms, p90 90 ms, najdlje 0,6 s (prve trase v
+pomnilnik).
+
+Vozila v `vehicle_now`, katerih vožnja se **še ni začela** (tudi 26 min
+pred odhodom, do 5 km od trase), v kandidatih niso — potnik v njih ne sedi.
+
+**Vlaki, sintetično:** vlak nima GPS-a, zato je lega izračunana iz voznega
+reda in feedove zamude, s 17 m odmika. Brez smeri, 25 živih vlakov:
+
+| vlak zamuja glede na feed | prvi | med petimi |
+|---|---|---|
+| natanko kot feed | 21 | 24 |
+| 10 min več | 14 | 24 |
+| 25 min več | 11 | 22 |
+
+Ko zamuja več, kot feed ve (prav primer, zaradi katerega deljenje obstaja),
+se v času bolj ujema naslednji vlak iste proge — zato izbira ostane
+potnikova. Smer iz dveh leg izloči vlake v nasprotni smeri; na primeru
+A8425 pri Strunjanu je pred smerjo med petimi en „Koper – Piran“, po njej
+nobeden.
+
+**Android v ozadju** (emulator, API 35): po potrditvi, s telefonom v ozadju
+in ugasnjenim zaslonom je storitev v 40 s poslala 8 točk (lega na 5 s,
+pošiljanje na 10 s). Brskalnik tega ne zmore.
+
 ## Avtobusi brez zamude: zamenjani id-ji in feed brez novega voznega reda (25. 9. 2026)
 
 Prijava: LPP 25 z Novega Polja proti Bavarskemu dvoru ob 11:11 in 11:36 je

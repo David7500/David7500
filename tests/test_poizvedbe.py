@@ -1609,13 +1609,16 @@ def test_pisalne_poti_so_nastete():
     zapisano kot razlog, zakaj je javna izpostavitev varna. Zdaj nista prazna
     ne seznam ne razlog -- zato je tu straza: nova pisalna pot mora biti
     dodana zavestno, skupaj s premislekom, kaj neznanec sme.
+
+    `/api/deli` (25. 9. 2026): deljenje lege potnikov. Varovalke so v
+    `deljenje.py`: točka mora ležati na trasi vožnje, ki jo trdi.
     """
     from fastapi.routing import APIRoute
     from kajros.api import app
 
     pisejo = sorted(r.path for r in app.routes
                     if isinstance(r, APIRoute) and "POST" in r.methods)
-    assert pisejo == ["/admin/sporocila/{id_}", "/stik"], pisejo
+    assert pisejo == ["/admin/sporocila/{id_}", "/api/deli", "/stik"], pisejo
 
 
 def test_head_ni_v_dokumentaciji():

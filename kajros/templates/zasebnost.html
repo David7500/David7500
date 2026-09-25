@@ -55,6 +55,19 @@
       ga vpišeš, poiščemo pri sebi, ne pri tuji storitvi, in se ne shrani.
     </p>
 
+    {#- Skladno z `deljenje.py`: točke se hranijo kot razdalja vzdolž trase in
+        čas, brez koordinat in brez identitete. #}
+    {% if deli %}
+    <h2>Če deliš lego vozila</h2>
+    <p>
+      Ko izbereš <b>Deli lego</b>, nam telefon med vožnjo pošilja, kje je
+      vozilo. Shranimo samo, kako daleč po progi je bilo in kdaj — ne tvojih
+      koordinat in ne tega, kdo si. Drugi iz tega vidijo, kje je vlak ali
+      avtobus, mi pa izboljšujemo napoved zamud. Deljenje se ustavi, ko
+      izstopiš ali pritisneš <b>Ustavi</b>.
+    </p>
+    {% endif %}
+
     {% if obrazec %}
     <h2>Če nam pišeš</h2>
     <p>

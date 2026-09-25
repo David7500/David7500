@@ -15,6 +15,9 @@
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('connections.css') }}">
+  {%- if deli %}
+  <link rel="stylesheet" href="{{ s('deli.css') }}">
+  {%- endif %}
 </head>
 <body class="conn-page net-{{ network | default('zeleznica') }}" data-network="{{ network | default('zeleznica') }}">
 
@@ -160,6 +163,14 @@
 
     <div id="recents" class="recents"></div>
 
+    {#- Deljenje lege tudi tu, ne samo na domači strani: sem pride, kdor ima
+        shranjeno svojo pot, in prav tu je, ko sede na vlak ali avtobus
+        (David, 25. 9. 2026). Zaprto je ena vrstica, da ne odrine rezultatov. #}
+    {%- if deli %}
+    <section class="deli deli-kompakt" id="deli" data-omrezje="{{ network | default('zeleznica') }}"
+             aria-label="Deli lego vozila" aria-live="polite"></section>
+    {%- endif %}
+
     <div id="alerts" aria-live="polite"></div>
     <!-- Rezultati se zamenjajo brez ponovnega nalaganja strani; bralnik
          zaslona mora izvedeti, da je odgovor tu. `polite`, ker ni nujno. -->
@@ -176,5 +187,8 @@
 
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('connections.js') }}"></script>
+  {%- if deli %}
+  <script src="{{ s('deli.js') }}"></script>
+  {%- endif %}
 </body>
 </html>

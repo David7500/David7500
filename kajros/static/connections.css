@@ -188,6 +188,8 @@
 .conn-row.is-unconfirmed,
 .board-row.is-unconfirmed { opacity: 0.72; }
 .nepotrjen { color: var(--ink-dim); }
+/* Poročilo potnika je opažanje, ne sklep iz ure -- zato poudarjeno, ne sivo. */
+.potnik { color: var(--accent-lit); }
 
 /* Naslednja vozjna je tista, ki jo clovek isce -- dobi rob, ne le vrstni red. */
 .conn-row.is-next {

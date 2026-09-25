@@ -35,9 +35,10 @@ class Most(
      * govori, preden poklice karkoli drugega.
      *
      * 2: ponavljajoce budilke (`dnevi`), `preklopi()` in `odpriBudilke()`.
+     * 3: deljenje lege (`deliZacni()`, `deliStanje()`, `deliUstavi()`).
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 2 else 0
+    fun razlicica(): Int = if (nas()) 3 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -184,6 +185,51 @@ class Most(
         Shramba.odstrani(dejavnost, id)
         glavna.post { Nacrtovalec.preklici(dejavnost, id); Widgeti.osvezi(dejavnost) }
         return true
+    }
+
+    // ---------- deljenje lege ----------
+    //
+    // Voznjo izbere stran (kandidati s streznika, potnik potrdi); posilja pa
+    // storitev, ker brskalnik z ugasnjenim zaslonom lege ne dobiva. Stran
+    // samo bere, kaj je storitev poslala -- dvojno posiljanje bi bila dva
+    // "potnika" in lazno soglasje.
+
+    /** Zacne deljenje. `zapis` je izbrana voznja (`trip_id`, `service_date` ...). */
+    @JavascriptInterface
+    fun deliZacni(zapis: String): Boolean {
+        if (!nas()) return false
+        val o = try { JSONObject(zapis) } catch (e: org.json.JSONException) { return false }
+        if (o.optString("trip_id").isBlank() || o.optString("service_date").isBlank()) return false
+        // Dovoljenje za lego je stran ze dobila (`navigator.geolocation` pri
+        // iskanju kandidatov). Brez njega storitev vrste `location` ne sme teci.
+        if (!DeljenjeStoritev.smeLego(dejavnost)) return false
+        glavna.post { DeljenjeStoritev.zacni(dejavnost, zapis) }
+        return true
+    }
+
+    /** `{aktivno, voznja, stanje, konec}`. Razlog konca se prebere enkrat. */
+    @JavascriptInterface
+    fun deliStanje(): String {
+        if (!nas()) return "{}"
+        val aktivno = DeljenjeStoritev.aktivno || DeljenjeStoritev.zaganja
+        val o = JSONObject().put("aktivno", aktivno)
+        DeljenjeStoritev.voznja?.let {
+            try { o.put("voznja", JSONObject(it)) } catch (e: org.json.JSONException) { /* brez */ }
+        }
+        DeljenjeStoritev.stanje?.let {
+            try { o.put("stanje", JSONObject(it)) } catch (e: org.json.JSONException) { /* brez */ }
+        }
+        if (!aktivno) {
+            DeljenjeStoritev.konec?.let { o.put("konec", it) }
+            DeljenjeStoritev.konec = null
+        }
+        return o.toString()
+    }
+
+    @JavascriptInterface
+    fun deliUstavi() {
+        if (!nas()) return
+        glavna.post { DeljenjeStoritev.ustavi(dejavnost) }
     }
 
     /** Kaj sistem trenutno dovoli. Stran naj gumba ne ponuja, ce ne bo delal. */

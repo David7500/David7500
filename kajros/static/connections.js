@@ -436,6 +436,26 @@ function nepotrjenHtml(iso, prihod) {
       ob ${hhmm(iso)}, potrditve ni</span>`;
 }
 
+// Kar o vožnji poroča potnik, ki je na njej (`deljenje.py`). Z enim
+// poročevalcem je to vrstica ZRAVEN feeda -- en telefon se lahko moti; kadar
+// se ujemata dva, je strežnik feedovo zamudo in uro že zamenjal in vrstica
+// samo pove, od kod je. Imena postaj v imenovalniku, kot povsod.
+function potnikiHtml(p, bus, prihod) {
+  if (!p) return "";
+  const kdo = p.soglasje ? "potniki na vozilu" : "potnik na vozilu";
+  let kaj;
+  if (p.odpeljal) kaj = `${prihod ? "prispel" : "odpeljal"} ob ${hhmm(p.odpeljal)}`;
+  else if (p.mimo) kaj = "je že mimo";
+  else if (p.tu) kaj = `je ${bus ? "na postajališču" : "na postaji"}`;
+  else if (p.pricakovano) {
+    const k = p.kje || {};
+    const kje = k.pri ? `pri ${bus ? "postajališču" : "postaji"} ${k.pri}`
+      : k.med ? `med ${bus ? "postajališčema" : "postajama"} ${k.med[0]} in ${k.med[1]}` : "";
+    kaj = `${kje ? `${kje}, ` : ""}tu okoli ${hhmm(p.pricakovano)}`;
+  } else return "";
+  return `<span class="potnik">${kdo}: ${escapeHtml(kaj)}</span>`;
+}
+
 function connectionRowHtml(c, nowMs, isNext, date, odKod) {
   const morda = nepotrjen(departedMs(c), c.nepotrjen_do, nowMs);
   const gone = nowMs && departedMs(c) < nowMs && !morda;
@@ -473,6 +493,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
       <div class="conn-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(c.expected_dep || c.sched_dep, false) : ""}
+        ${potnikiHtml(c.potniki, c.network === "avtobus", false)}
         <span>${durationLabel(c.duration_s)}</span>
         <span>${stopsLabel(c.stops_between)}</span>
         <span>neposredno</span>
@@ -698,6 +719,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
       <div class="board-meta">
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
+        ${potnikiHtml(r.potniki, r.network === "avtobus", prihodi)}
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
     </a>`;

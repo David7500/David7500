@@ -1,4 +1,4 @@
-"""Sporočila obiskovalcev — edina pot v tej aplikaciji, ki piše iz zahteve.
+"""Sporočila obiskovalcev — pot, ki piše iz zahteve (druga je `deljenje.py`).
 
 Do 12. 9. 2026 je bilo v `api.py` samo `GET` in nobenega pisanja v bazo iz
 zahteve; v `.claude/rules/objava.md` je bilo to zapisano kot razlog, zakaj je

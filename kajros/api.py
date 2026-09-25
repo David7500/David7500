@@ -28,8 +28,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (alerts, collector, config, db, hoja, journey, lpp, naslovi, obisk,
-               pot, pristanek, stats, stik)
+from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, naslovi,
+               obisk, pot, pristanek, stats, stik)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -285,6 +285,7 @@ templates.env.globals["baza"] = config.BASE_URL
 # da ji vsak pogled posebej poda nastavitve.
 templates.env.globals["donacije"] = config.DONACIJE
 templates.env.globals["stik_obrazec"] = config.STIK_OBRAZEC
+templates.env.globals["deli"] = config.DELI
 
 
 def _conn():
@@ -458,7 +459,7 @@ def stik_stran(request: Request, poslano: int = 0):
 
 @app.post("/stik", response_class=HTMLResponse, include_in_schema=False)
 async def stik_poslji(request: Request):
-    """**Edina pot v tej aplikaciji, ki piše v bazo iz zahteve.**
+    """**Pot, ki piše v bazo iz zahteve** -- poleg nje samo `/api/deli`.
 
     Telo se razbere s `parse_qs` iz standardne knjižnice in ne s
     `request.form()`: slednji potegne `python-multipart`, kar bi bila šesta
@@ -524,6 +525,59 @@ def _stik_sprejmi(request: Request, polja: dict):
     # Preusmeritev po uspehu, ne izris: brez nje osvežitev strani pošlje
     # sporočilo še enkrat in v nabiralniku sta dva enaka.
     return RedirectResponse("/stik?poslano=1", status_code=303)
+
+
+@app.post("/api/deli")
+async def api_deli(request: Request):
+    """Deljenje lege potnika: kandidati in točke.
+
+    Telo je JSON. **Brez `trip_id`** je to vprašanje „na čem sem?“ --
+    `{lat, lon, acc, prej?}` vrne `kandidati`, v bazo ne gre nič. **S
+    `trip_id`** je to deljenje: `{trip_id, service_date, deljenje?, tocke:
+    [{lat, lon, acc, t, v}], konec?}` zapiše točke in vrne `deljenje` (id za
+    naslednje pošiljanje), `konec` in `stanje` vožnje.
+
+    **POST tudi za kandidate, ne GET**: koordinate v naslovu bi pristale v
+    dnevnikih strežnika in tunela, telo pa ne. To je druga pot poleg
+    `/stik`, ki piše iz zahteve; vsa varovalka je v `deljenje.py`.
+
+    Zahteva mora biti `application/json`: brskalnik tako pred vsako tujo
+    zahtevo vpraša za dovoljenje (CORS dovoli samo GET) in druga stran ne
+    more naših obiskovalcev spremeniti v poročevalce.
+    """
+    if not config.DELI:
+        raise HTTPException(status_code=404)
+    if "application/json" not in request.headers.get("content-type", ""):
+        raise HTTPException(415, "telo mora biti application/json")
+    try:
+        podatki = json.loads(await _preberi_telo(request))
+    except ValueError:
+        raise HTTPException(400, "telo ni veljaven JSON") from None
+    if not isinstance(podatki, dict):
+        raise HTTPException(400, "telo mora biti objekt")
+    return await run_in_threadpool(_deli, request, podatki)
+
+
+def _deli(request: Request, podatki: dict):
+    kljuc = stik.kljuc_posiljatelja(request.headers)
+    try:
+        with _conn() as conn:
+            if podatki.get("trip_id"):
+                return deljenje.sprejmi(conn, podatki, kljuc)
+            deljenje.preveri_kandidate(kljuc)
+            lat, lon, acc = deljenje.lega(podatki)
+            prej = podatki.get("prej")
+            if isinstance(prej, dict):
+                try:
+                    p_lat, p_lon, _ = deljenje.lega(prej)
+                    prej = {"lat": p_lat, "lon": p_lon}
+                except deljenje.Zavrnjeno:
+                    prej = None
+            else:
+                prej = None
+            return {"kandidati": deljenje.kandidati(conn, lat, lon, acc, prej)}
+    except deljenje.Zavrnjeno as e:
+        return JSONResponse({"napaka": str(e)}, status_code=e.status)
 
 
 @app.get("/zasebnost", response_class=HTMLResponse, include_in_schema=False)
@@ -1261,6 +1315,9 @@ def api_departures(
         smer_od = {sid: d["kljuc"] for d in smeri for sid in d["stop_ids"]}
         for r in rows:
             r["smer"] = smer_od.get(r["stop_id"])
+        if now_s is not None and config.DELI:
+            deljenje.dopolni(conn, rows, seq="stop_seq", t_s="t_s",
+                             pricakovano="expected", ura="sched", zdaj=now)
         if network == "zeleznica":
             # Obvestila o ovirah so SZ-jeva in vezana na vlak.
             notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
@@ -1693,11 +1750,63 @@ def api_run(train_no: str, date: str | None = None,
         # izmerjeno", medtem ko je bila zadnja novica o njem stara 7 minut in
         # je feed cez cetrt ure povedal +29.
         zadnja = max((s["feed_ts"] for s in rows if s.get("feed_ts")), default=None)
+        potniki = None
+        if config.DELI and razresen and date in (zdaj.date().isoformat(),
+                                                 (zdaj.date() - timedelta(days=1)).isoformat()):
+            potniki = deljenje.stanje(conn, [razresen], zdaj).get(razresen)
+            if potniki and potniki["service_date"] != date:
+                potniki = None
+        if potniki:
+            meja_seq = _potniki_v_okno(conn, razresen, rows, potniki, meja_seq)
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "last_measured_seq": meja_seq,
                 "zadnja_beseda": zadnja,
                 "tiho_s": (int(zdaj.timestamp()) - zadnja) if zadnja else None,
-                "zivi_vir": zivo, "stops": rows}
+                "zivi_vir": zivo, "potniki": potniki, "stops": rows}
+
+
+def _potniki_v_okno(conn, trip_id: str, rows: list[dict], potniki: dict,
+                    meja_seq: int | None) -> int | None:
+    """Kar poročajo potniki, zapiše k postankom okna vožnje.
+
+    Vsak postanek dobi `potniki`: odpeljal (s časom, kadar je bil prehod
+    viden), vozilo je tu, ali kdaj bo tu ob sedanji zamudi. Kadar odhod
+    potrjujeta vsaj dva poročevalca, je to meritev: postanek dobi zamudo iz
+    prehoda in meja meritve se premakne do njega -- feedov sklep iz ure tam ni
+    več potreben. Z enim poročevalcem ostane feedova vrednost, poročilo pa je
+    zraven.
+    """
+    stara_meja = meja_seq
+    for s in rows:
+        p = deljenje.za_postanek(conn, potniki, trip_id, s["stop_seq"])
+        if not p:
+            continue
+        s["potniki"] = p
+        if not p.get("odpeljal") or p["n"] < 2:
+            continue
+        sched = s.get("sched_dep") or s.get("sched_arr")
+        if not sched:
+            continue
+        z = int(datetime.fromisoformat(p["odpeljal"]).timestamp()
+                - datetime.fromisoformat(sched).timestamp())
+        s["actual_dep"] = p["odpeljal"]
+        s["zamuda"] = stats.opis_zamude(z, "po poročilu potnikov")
+        if meja_seq is None or s["stop_seq"] > meja_seq:
+            meja_seq = s["stop_seq"]
+    # Dva ujemajoča se potnika za postajo pomenita, da je vozilo z nje
+    # odpeljalo, četudi ob kateri uri ne vemo (deljenje se je začelo za njo).
+    mimo = potniki.get("mimo_seq")
+    if potniki.get("soglasje") and mimo is not None and (meja_seq is None or mimo > meja_seq):
+        meja_seq = mimo
+    # Postanki pred potrjenim prehodom so prevoženi, četudi feed zanje nosi
+    # še napoved -- vozilo je šlo mimo njih, da je prišlo do poznejšega.
+    if meja_seq != stara_meja:
+        for s in rows:
+            z = s.get("zamuda")
+            if (z and s["stop_seq"] <= meja_seq
+                    and z.get("vrsta") == "napoved prevoznika"):
+                z["vrsta"] = stats.ZADNJI_PODATEK
+    return meja_seq
 
 
 @app.get("/api/train/{train_no}/history")
@@ -1975,6 +2084,9 @@ def api_connections(
         if a == b:
             raise HTTPException(400, "izhodišče in cilj sta ista postaja")
         rows = stats.connections(conn, a, b, date, now_s, network=network)
+        if now_s is not None and config.DELI:
+            deljenje.dopolni(conn, rows, seq="from_seq", t_s="dep_s",
+                             pricakovano="expected_dep", ura="sched_dep", zdaj=now)
         # Prestop ponudimo vedno, ne sele ko neposredne ni: cez dan je
         # neposrednih voznj lahko pet, med njimi pa stiri ure luknje.
         #
@@ -2051,12 +2163,33 @@ def _live(network: str | None = None) -> list[dict]:
 
     with _conn() as conn:
         _add_gps_position(conn, rows)
+        if config.DELI:
+            _add_potnike(conn, rows, now)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     # Ziva vozjna je po definiciji ze prevozila `last_stop`, zato je njena
     # zamuda meritev -- `_live_rows` bere natanko do meje.
     for r in rows:
         r["zamuda"] = stats.opis_zamude(r["delay_s"], "izmerjeno")
     return rows
+
+
+def _add_potnike(conn, rows: list[dict], now: datetime) -> None:
+    """Vlaku pripiše lego, ki jo pravkar deli potnik na njem.
+
+    Vlak nima GPS-a in zemljevid ga riše na zadnji postaji z meritvijo. Kadar
+    kdo na njem deli lego, je ta boljša -- a zamuda na kartici ostane feedova,
+    dokler se poročevalca ne ujemata dva (glej `deljenje`).
+    """
+    ids = [r["trip_id"] for r in rows if r.get("network") == "zeleznica"]
+    for trip_id, st in deljenje.stanje(conn, ids, now).items():
+        if st.get("lat") is None:
+            continue
+        for r in rows:
+            if r["trip_id"] == trip_id and r.get("service_date") == st["service_date"]:
+                r["potnik"] = {k: st[k] for k in (
+                    "lat", "lon", "n", "soglasje", "starost_s", "stoji",
+                    "zamuda_s", "zamuda") if k in st}
+                r["potnik"].update({k: st[k] for k in ("pri", "med") if k in st})
 
 
 # Hitrost, pod katero vozilo stejemo za stojece. Merjeno iz `speed`, NE iz

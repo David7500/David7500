@@ -34,6 +34,11 @@
          `systemExempted` pripada aplikacijam z `USE_EXACT_ALARM`. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <!-- Deljenje lege med vožnjo (`DeljenjeStoritev`): brskalnik z ugasnjenim
+         zaslonom lege ne dobiva, storitev v ospredju vrste `location` pa jo.
+         Dovoljenja za lego v ozadju NE rabi: storitev se začne, ko je
+         aplikacija spredaj, in lego dobiva, dokler je obvestilo prikazano. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Ob ponovnem zagonu telefona so vse načrtovane budnice izgubljene. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -97,6 +102,11 @@
             android:name=".ZvonjenjeStoritev"
             android:exported="false"
             android:foregroundServiceType="systemExempted" />
+
+        <service
+            android:name=".DeljenjeStoritev"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <!-- Widget na domacem zaslonu. `exported=false` zadosca: sistem
              posilja `APPWIDGET_UPDATE` naravnost tej komponenti, ne po imenu

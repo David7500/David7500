@@ -78,10 +78,11 @@ mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
   Ta napaka je bila že dvakrat na zaslonu.
 * **Omrežje filtriraj znotraj poizvedbe, ne za njo** (`WHERE t.network = ?`).
   Bil je že dvakrat vzrok počasnosti.
-* **Pisalni poti sta natanko dve** — `POST /stik` in `POST /admin/sporocila/{id}`.
-  Vse ostalo je `GET`. Nova pisalna pot je zavestna odločitev, ne mimogrede:
-  `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke pred
-  neželeno pošto so na enem mestu v `stik.py`.
+* **Pisalne poti so natanko tri** — `POST /stik`, `POST /admin/sporocila/{id}`
+  in `POST /api/deli` (deljenje lege, od 25. 9. 2026). Vse ostalo je `GET`.
+  Nova pisalna pot je zavestna odločitev, ne mimogrede:
+  `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke so na
+  enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`).
 * **V enem SQL stavku ne mešaj `?` in `:ime`** — sqlite veže po vrstnem redu
   pojavitve in tiho vrne napačne vrstice.
 * **`run` hrani zadnje stanje postanka**, zato `MAX(stop_seq)` po koncu vožnje
@@ -112,7 +113,8 @@ kajros/
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
-  stik.py        sporočila obiskovalcev; EDINA pot, ki piše iz zahteve
+  stik.py        sporočila obiskovalcev; piše iz zahteve
+  deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
   cli.py         ukazna vrstica
@@ -132,6 +134,7 @@ in podrlo pet zelenih preizkusov. Računani vstavki gredo zato skozi
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
 `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` ·
 `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` ·
+`deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) ·
 `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo`
 (zadnjih pet samo strežni stroj).
 
@@ -287,6 +290,7 @@ ustreznih datotek:
 | `strani.md` | `connections.*`, `home.*`, `templates/**` | katera stran odgovarja na katero vprašanje |
 | `objava.md` | `deploy/**`, `scripts/**` | malina, namestitev, vleka baze |
 | `android.md` | `android/**` | ovoj z WebView, meja izvora, budilka, orodja |
+| `deljenje.md` | `deljenje.py`, `deli.*`, `DeljenjeStoritev.kt` | lega potnikov: kaj se pokaže, kaj hrani, varovalke |
 
 Razrez ni po temah, ampak **po datotekah, ki znanje res rabijo**: to je edino,
 kar se pozna pri porabi konteksta. Popravek v `connections.js` naloži 10 kB

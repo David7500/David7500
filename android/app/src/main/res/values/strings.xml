@@ -32,6 +32,16 @@
     <string name="ni_celega_zaslona">Dovoli Kajrosu, da budilka prižge zaslon. Zvonila bo tudi brez tega, a zaslon ostane temen.</string>
     <string name="ni_tocnih_alarmov">Android ne dovoli točnih alarmov. Vklopi jih v nastavitvah aplikacije, sicer budilka ne bo zanesljiva.</string>
 
+    <!-- deljenje lege -->
+    <string name="kanal_deljenje">Deljenje lege</string>
+    <string name="deljenje_naslov">Deliš lego · %1$s</string>
+    <string name="deljenje_zacetek">Pošiljam prvo lego …</string>
+    <string name="deljenje_pri">pri postaji %1$s</string>
+    <string name="deljenje_med">med postajama %1$s in %2$s</string>
+    <string name="deljenje_pri_bus">pri postajališču %1$s</string>
+    <string name="deljenje_med_bus">med postajališčema %1$s in %2$s</string>
+    <string name="deljenje_vidijo">Drugi vidijo: %1$s · %2$s min</string>
+
     <!-- pregled budilk -->
     <string name="budilke">Budilke</string>
     <string name="budilk_ni">Nobene budilke ni nastavljene.</string>

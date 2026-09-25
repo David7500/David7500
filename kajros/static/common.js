@@ -317,6 +317,16 @@ function escapeHtml(str) {
   })[c]);
 }
 
+// "1 potnik, 2 potnika, 3 potniki, 5 potnikov" -- odlocata zadnji dve
+// stevki, isto kot `pristanek.stevnik()`.
+function potnikov(n) {
+  const d = n % 100;
+  if (d === 1) return `${n} potnik`;
+  if (d === 2) return `${n} potnika`;
+  if (d === 3 || d === 4) return `${n} potniki`;
+  return `${n} potnikov`;
+}
+
 function pluralRuns(n) {
   if (!n) return "brez zajete vožnje";
   if (n === 1) return "1 vožnja";
@@ -1040,13 +1050,21 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
     for (const s of run.stops) if (stopDelay(s) != null) { base = s; break; }
   }
 
+  // Kadar se ujemata vsaj dva potnika na vozilu, je njuna zamuda svezejsa od
+  // feedove in napoved tece od njune lege (`deljenje.py`, odlocitev 25. 9.
+  // 2026). Z enim porocevalcem ostane feedova.
+  const pp = run.potniki;
+  const izPotnikov = pp && pp.soglasje && pp.stop_seq != null && pp.zamuda_s != null;
+  const odSeq = izPotnikov ? pp.stop_seq : base && base.stop_seq;
+  const odZamude = izPotnikov ? pp.zamuda_s : base && stopDelay(base);
+
   let forecast = [];
   const lastSeq = run.stops.length ? run.stops[run.stops.length - 1].stop_seq : 0;
-  if (base && stopDelay(base) != null && base.stop_seq < lastSeq) {
+  if (odSeq != null && odZamude != null && odSeq < lastSeq) {
     try {
       // Prikazani dan izpustimo iz ucenja -- isto kot pri zgodovini.
       const p = await fetch(
-        `/api/train/${enc}/predict?stop_seq=${base.stop_seq}&delay_s=${stopDelay(base)}`
+        `/api/train/${enc}/predict?stop_seq=${odSeq}&delay_s=${odZamude}`
         + `&exclude_date=${encodeURIComponent(run.service_date)}`
         // Brez `trip` se model pri avtobusu uci iz vseh voznj te linije,
         // obeh smeri skupaj. Pri vlaku je isti trip in sprememba nicesar.
