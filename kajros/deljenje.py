@@ -373,7 +373,14 @@ _pp_zaklep = threading.Lock()
 _PP_NAJVEC = 2000
 
 
-def _postanki(conn: sqlite3.Connection, trip_id: str, trasa: Trasa) -> list[dict]:
+#: Lega postankov vzdolž trase po (trasa, zaporedje postajališč). Vse vožnje
+#: ene linije v isti smeri imajo isto oboje, projekcija pa je bila hladno
+#: večji del iskanja kandidatov: v Ljubljani 493 voženj, 11 529 projekcij.
+_vzorci: dict[tuple, list[float]] = {}
+
+
+def _postanki(conn: sqlite3.Connection, trip_id: str, shape_id: str,
+              trasa: Trasa) -> list[dict]:
     """Postanki vožnje s projekcijo na traso, **zaporedno**.
 
     Vsak postanek se išče samo naprej od prejšnjega: sicer bi se postajališče
@@ -381,17 +388,23 @@ def _postanki(conn: sqlite3.Connection, trip_id: str, trasa: Trasa) -> list[dict
     trase ne bi bil več vrstni red vožnje.
     """
     vrstice = conn.execute(
-        "SELECT s.stop_seq, s.arr_s, s.dep_s, st.name, st.lat, st.lon "
+        "SELECT s.stop_seq, s.stop_id, s.arr_s, s.dep_s, st.name, st.lat, st.lon "
         "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
         "WHERE s.trip_id = ? ORDER BY s.stop_seq", (trip_id,)).fetchall()
-    out, prej = [], -1.0
-    for v in vrstice:
-        along, _ = trasa.projiciraj(v["lat"], v["lon"], od_m=prej - 30)
-        along = max(along, prej)
-        out.append({"stop_seq": v["stop_seq"], "name": v["name"],
-                    "arr_s": v["arr_s"], "dep_s": v["dep_s"], "along": along})
-        prej = along
-    return out
+    kljuc = (shape_id, tuple(v["stop_id"] for v in vrstice))
+    alongi = _vzorci.get(kljuc)
+    if alongi is None:
+        alongi, prej = [], -1.0
+        for v in vrstice:
+            along, _ = trasa.projiciraj(v["lat"], v["lon"], od_m=prej - 30)
+            prej = max(along, prej)
+            alongi.append(prej)
+        with _pp_zaklep:
+            if len(_vzorci) >= _PP_NAJVEC:
+                _vzorci.clear()
+            _vzorci[kljuc] = alongi
+    return [{"stop_seq": v["stop_seq"], "name": v["name"], "arr_s": v["arr_s"],
+             "dep_s": v["dep_s"], "along": a} for v, a in zip(vrstice, alongi)]
 
 
 #: Kako pogosto preveriti, ali je bil uvožen nov vozni red. Ob vsakem klicu
@@ -411,6 +424,7 @@ def _preveri_znacko(conn: sqlite3.Connection) -> None:
         if znacka != _pp_znacka:
             _predpomnilnik.clear()
             _trase.clear()
+            _vzorci.clear()
             _pp_znacka = znacka
 
 
@@ -446,7 +460,7 @@ def voznja(conn: sqlite3.Connection, trip_id: str) -> Voznja | None:
     izid = None
     t = trasa(conn, v["shape_id"]) if v else None
     if t is not None:
-        postanki = _postanki(conn, trip_id, t)
+        postanki = _postanki(conn, trip_id, v["shape_id"], t)
         if len(postanki) >= 2:
             izid = Voznja(dict(v), t, postanki)
     with _pp_zaklep:

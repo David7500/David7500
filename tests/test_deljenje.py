@@ -25,6 +25,7 @@ def _lon(km: float) -> float:
 def conn():
     deljenje._predpomnilnik.clear()
     deljenje._trase.clear()
+    deljenje._vzorci.clear()
     deljenje._kandidati_casi.clear()
     deljenje._deljenja_casi.clear()
     c = db.connect(":memory:")
