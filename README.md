@@ -143,8 +143,7 @@ obdelava [DERP](https://derp.si). Vreme [Open-Meteo](https://open-meteo.com)
 (CC BY 4.0). Podlaga zemljevida [OpenFreeMap](https://openfreemap.org)
 © [OpenMapTiles](https://www.openmaptiles.org/), rezervna © Esri, HERE, Garmin,
 obe © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
-MapLibre GL JS (BSD-3) in `leaflet-maplibre-gl` (ISC) sta v
-`kajros/static/maplibre-6.10.0/` z licencama.
+MapLibre GL JS (BSD-3) je v `kajros/static/maplibre-6.10.0/` z licenco.
 
 **`seed/kajros.sqlite` v tem repozitoriju je izpeljanka podatkov CC BY-SA 4.0**
 (vozni red IJPP, brez meritev). Deljenje naprej je zato dovoljeno pod isto

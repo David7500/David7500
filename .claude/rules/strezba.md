@@ -391,8 +391,8 @@ kaj se šteje, spremeni tudi to stran. Naslov za vprašanja je `KAJROS_STIK`
 in **privzeto prazen** — objava naslova je odločitev lastnika strani, ne
 privzetek nastavitve.
 
-**Tujih izvorov v strani ni več.** Pisave (`static/pisave/`) in Leaflet
-(`static/leaflet/`) so gostovani pri nas. Prej je šel naslov IP vsakega
+**Tujih izvorov v strani ni več.** Pisave (`static/pisave/`) in MapLibre
+(`static/maplibre-6.10.0/`) so gostovani pri nas. Prej je šel naslov IP vsakega
 obiskovalca ob vsakem odprtju Googlu, zemljevid pa je visel na `unpkg.com`.
 Kar ostane tuje, so **ploščice zemljevida** in to je neizogibno; na strani o
 zasebnosti je zato našteto. Od 22. 9. 2026 so to vektorske ploščice in pisave

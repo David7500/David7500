@@ -1645,30 +1645,35 @@ function drawRuns(w, runs) {
 // GPS. Vlaki lege nimajo, zato zanje tega okvira ni -- prazen bi obljubljal
 // podatek, ki ne obstaja.
 //
-// Leaflet se nalozi SELE, ko je lega res na voljo: sicer bi vsako okno vlaka
-// vleklo knjiznico, ki je ne bo nikoli uporabilo.
+// Zemljevid je MapLibre sam, kot veliki zemljevid in obe strani poti
+// (`pot_karta.js`): od blizu se kamera nagne in stavbe se dvignejo. Leaflet
+// kamere ne zna nagniti, zato je okno voznje doslej ostalo ravno.
+//
+// Knjiznica in njen slog se naložita SELE, ko je lega res na voljo: sicer bi
+// vsako okno vlaka vleklo 300 kB, ki jih ne bo nikoli uporabilo.
 
-let leafletReady = null;
+let slogMapLibre = null;
 
-function loadLeaflet() {
-  if (leafletReady) return leafletReady;
-  leafletReady = new Promise((resolve, reject) => {
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = "/static/leaflet/leaflet.css";
-    document.head.appendChild(css);
-    const js = document.createElement("script");
-    js.src = "/static/leaflet/leaflet.js";
-    js.onload = resolve;
-    js.onerror = reject;
-    document.head.appendChild(js);
-  });
-  return leafletReady;
+// Slog mora biti v glavi, preden zemljevid nastane -- sicer platno dobi
+// napacno velikost (glej `pkNaloziMapLibre`). In PRED nasimi: oblacki v
+// dashboard.css imajo isto specificnost kot MapLibrovi in zmaga poznejsi.
+function naloziSlogMapLibre() {
+  if (!slogMapLibre) {
+    slogMapLibre = new Promise((ok) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = `${MAPLIBRE_POT}/maplibre-gl.css`;
+      // Brez sloga zemljevid se vedno rise, le kontrole so nerazporejene.
+      css.onload = ok;
+      css.onerror = ok;
+      document.head.insertBefore(css, document.head.querySelector('link[rel="stylesheet"]'));
+    });
+  }
+  return slogMapLibre;
 }
 
-const runMap = { map: null, marker: null, line: null, stops: null,
-                 trasa: null, cums: null, postaje: null, v: null, since: 0,
-                 me: null, loc: null, gps: null, prosto: false };
+const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
+                 postaje: null, v: null, since: 0, loc: null, nastaja: null };
 
 // ---------- ocena lege med dvema meritvama ----------
 //
@@ -1781,123 +1786,203 @@ function ocenjenaLega(v, starostS) {
 // v projektu barva izmerjenega (postajalisca, trasa), `ESTIMATE_COLOR` pa je
 // rezervirana prav za "tu meritve ni". Prosojnost pove isto se enkrat, za
 // tistega, ki barv ne loci.
-function busDivIcon(bearing, moving) {
+function busSvg(moving) {
   const s = 30;
-  return L.divIcon({
-    className: "bus-marker",
-    html: `<div style="transform:rotate(${bearing || 0}deg);width:${s}px;height:${s}px">
-      <svg width="${s}" height="${s}" viewBox="0 0 24 24">
-        <rect x="7.5" y="2.5" width="9" height="19" rx="3.2" fill="${ESTIMATE_COLOR}"
-              fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
-        <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
-              fill="#0f1115" fill-opacity="0.55"/>
-      </svg></div>`,
-    iconSize: [s, s], iconAnchor: [s / 2, s / 2],
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7.5" y="2.5" width="9" height="19" rx="3.2" fill="${ESTIMATE_COLOR}"
+            fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
+      <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
+            fill="#0f1115" fill-opacity="0.55"/>
+    </svg>`;
+}
+
+const RUN_PRAZNO = { type: "FeatureCollection", features: [] };
+
+function runVir(id, features) {
+  const v = runMap.map && runMap.map.getSource(id);
+  if (v) v.setData({ type: "FeatureCollection", features });
+}
+
+// Ime na dotik in po petih sekundah proc -- isto kot `pot_karta.js`. Dotik
+// zadene, kar je v 12 px od prsta, kot na velikem zemljevidu: pika postaje
+// je manjsa od prsta.
+const RUN_ZADETEK_PX = 12;
+const RUN_IMENA = ["run-gps", "run-tvoja", "k-jaz", "run-postaje"];
+
+function runImeNaDotik() {
+  const { map, ml } = runMap;
+  let oblacek = null;
+  const zadetek = (p) => map.queryRenderedFeatures(
+    [[p.x - RUN_ZADETEK_PX, p.y - RUN_ZADETEK_PX], [p.x + RUN_ZADETEK_PX, p.y + RUN_ZADETEK_PX]],
+    { layers: RUN_IMENA.filter((id) => map.getLayer(id)) });
+  const ime = (f) => {
+    if (f.layer.id === "k-jaz") {
+      const acc = runMap.loc && runMap.loc.acc;
+      return acc ? `tvoja lega (±${Math.round(acc)} m)` : "tvoja lega";
+    }
+    return f.properties.ime;
+  };
+  map.on("click", (e) => {
+    // Prednost po vrstnem redu v RUN_IMENA: meritev pred postajo, ker pika
+    // lege pogosto lezi na postajaliscu.
+    const vsi = zadetek(e.point);
+    const f = RUN_IMENA.map((id) => vsi.find((x) => x.layer.id === id)).find(Boolean);
+    if (!f || !ime(f)) return;
+    if (oblacek) oblacek.remove();
+    oblacek = new ml.Popup({ closeButton: false, className: "kajros-tooltip", offset: 8 })
+      .setLngLat(f.geometry.coordinates).setText(ime(f)).addTo(map);
+    const moj = oblacek;
+    setTimeout(() => moj.remove(), NAME_MS);
+  });
+  map.on("mousemove", (e) => {
+    map.getCanvas().style.cursor = zadetek(e.point).length ? "pointer" : "";
   });
 }
 
-async function drawRunMap(v) {
+// Plasti okna voznje gredo POD plasti `pot_karta.js`: te nosijo lastno lego,
+// ki mora ostati nad traso.
+const RUN_POD = "k-voznja-obroba";
+
+async function ustvariRunMap(v) {
   const wrap = document.getElementById("run-map-wrap");
-  await loadLeaflet();
+  const el = document.getElementById("run-map");
+  // MapLibre izmeri okvir ob nastanku; skrit okvir meri 0 x 0.
+  wrap.hidden = false;
+  await naloziSlogMapLibre();
+  // Zemljevid je ELEMENT na strani, ne stran, zato geste, ki bi ukradle
+  // pomikanje strani, tu ne veljajo: en prst in kolesce pomikata stran, dva
+  // prsta in Ctrl + kolesce zemljevid. Vlecenje z misko strani ne pomika in
+  // ostane zemljevidu. Brez dodatnih imen: okvir meri 260 px in gleda eno
+  // vozilo; imena ulic so v podlagi sami.
+  const k = await pkUstvari(el, { sredisce: [v.lat, v.lon], zoom: 14,
+                                  dodatnaImena: false, sodelovanje: true });
+  if (!k) {
+    // Brez WebGL2 zemljevida ni -- enako kot na velikem. Hitrost in starost
+    // lege sta v glavi okvirja in ostaneta.
+    el.innerHTML = '<div class="ni-zemljevida">Ta brskalnik zemljevida ne zna narisati.</div>';
+    return false;
+  }
+  const { map, ml } = k;
+  runMap.map = map;
+  runMap.ml = ml;
+  map.addControl(new ml.NavigationControl({ visualizePitch: true }), "top-right");
+  // Navedba vira je v okvirju 260 px odprta pokrila spodnjo osmino, cez traso.
+  // Zlozena ostane gumb (i), kot je na drugih zemljevidih po prvem premiku.
+  el.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
 
-  const prvic = !runMap.map;
-  if (prvic) {
-    // Zemljevid je ELEMENT na strani, ne stran, zato geste, ki bi ukradle
-    // pomikanje strani, tu ne veljajo -- a samo tiste, ki ga res ukradejo.
-    // Kolesce ne priblizuje (klasicna nadloga: kazalec zaide cez zemljevid in
-    // stran se neha pomikati), pac pa Ctrl/Cmd + kolesce. `dragging` pa ostane
-    // VKLOPLJEN: vlecenje z misko strani ne pomika in ni v konfliktu z nicimer.
-    // Preklopi ga `initDragPolicy()`, in sicer po VHODNI NAPRAVI, ne po
-    // napravi nasploh -- prenosnik z zaslonom na dotik mora imeti oboje.
-    runMap.map = L.map("run-map", {
-      zoomControl: false, scrollWheelZoom: false, maxZoom: 19,
-      // Navedba podlage je pogoj rabe (OpenStreetMap), ne okras --
-      // `attributionControl: false` jo je odstranil s cele strani. Ostane,
-      // le brez Leafletove lastne oznake, ker okvir meri 260 px.
-      attributionControl: true,
-    }).setView([v.lat, v.lon], 14);
-    runMap.map.attributionControl.setPrefix("");
-    L.control.zoom({ position: "topright" }).addTo(runMap.map);
-    // Brez dodatnih imen: okvir meri 260 px in gleda eno vozilo. Imena ulic so
-    // v podlagi sami, in ta so tu tisto, kar potnik bere.
-    podlagaZemljevida().osnova.addTo(runMap.map);
-
-    // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
-    // postajalisca -- ta ni pot in mora biti videti drugace (crtkano).
-    let trasa = null;
-    try {
-      const r = await fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`);
-      if (r.ok) trasa = (await r.json()).points;
-    } catch (err) {
-      /* brez trase narisemo postajalisca */
-    }
-    // `trasa` je seznam KOSOV, ne tock: uvoz jo razreze tam, kjer je v GTFS
-    // razmik nad kilometer. Pogoj `trasa.length > 1` je bil napisan se za
-    // ravno listo tock in je zato izlocil vsako enodelno traso -- 2 706 od
-    // 2 897 oblik, torej 93 %. Proga se ni risala skoraj nikoli.
-    const kosi = (trasa || []).filter((k) => k && k.length > 1);
-    if (kosi.length) {
-      L.polyline(kosi, { color: "#0f1115", weight: 6, opacity: 0.85 }).addTo(runMap.map);
-      runMap.line = L.polyline(kosi, { color: "#4db97f", weight: 3, opacity: 0.95 })
-        .addTo(runMap.map);
-      // Za projekcijo vzamemo najdaljsi kos -- vozilo je skoraj vedno na njem.
-      const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
-      runMap.trasa = kos;
-      runMap.cums = kumulative(kos);
-    }
-    const postaje = (state.run.stops || []).filter((s) => s.lat != null && s.lon != null);
-    const pts = postaje.map((s) => [s.lat, s.lon]);
-    // Kje vzdolz trase lezijo postanki -- ocena lege se na njih ustavi.
-    // Postaja, ki je od trase vec kot 60 m, tej trasi ne pripada (napacen
-    // kos, obvoz) in bi oceno ustavila na napacnem mestu.
-    if (runMap.trasa) {
-      runMap.postaje = postaje
-        .map((s) => projekcijaNaTraso(runMap.trasa, runMap.cums, s.lat, s.lon))
-        .filter((r) => r.odmik <= 60)
-        .map((r) => r.vzdolz)
-        .sort((a, b) => a - b);
-    }
-    if (!kosi.length && pts.length > 1) {
-      runMap.line = L.polyline(pts, {
-        color: "#4db97f", weight: 2.5, opacity: 0.55, dashArray: "5 5",
-      }).addTo(runMap.map);
-    }
-    if (postaje.length) {
-      // Pike so bile `interactive: false` in zato nema tocka na zemljevidu.
-      // Ime ob dotiku je edini nacin, da se izve, katera postaja to je --
-      // trajne oznake bi na mestni liniji zakrile progo pod sabo.
-      runMap.stops = L.layerGroup(postaje.map((s) => bindFlashName(
-        L.circleMarker([s.lat, s.lon], {
-          radius: 3.6, color: "#0f1115", weight: 1.4,
-          fillColor: "#4db97f", fillOpacity: 1,
-        }), s.name))).addTo(runMap.map);
-    }
-
-    // Postaja, na kateri stoji potnik, mora biti vidna -- brez nje je to
-    // zemljevid o vozilu in ne o njegovi poti.
-    const yours = yourStop(state.run.stops);
-    if (yours && yours.lat != null) {
-      L.circleMarker([yours.lat, yours.lon], {
-        radius: 6, color: "#0f1115", fillColor: "#f0934f", fillOpacity: 1, weight: 2,
-      }).addTo(runMap.map).bindTooltip(yours.name, {
-        className: "kajros-tooltip", permanent: true, direction: "right", offset: [8, 0],
-      });
-    }
+  // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
+  // postajalisca -- ta ni pot in mora biti videti drugace (crtkano).
+  let trasa = null;
+  try {
+    const r = await fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`);
+    if (r.ok) trasa = (await r.json()).points;
+  } catch (err) {
+    /* brez trase narisemo postajalisca */
+  }
+  // `trasa` je seznam KOSOV, ne tock: uvoz jo razreze tam, kjer je v GTFS
+  // razmik nad kilometer. Pogoj `trasa.length > 1` je bil napisan se za
+  // ravno listo tock in je zato izlocil vsako enodelno traso -- 2 706 od
+  // 2 897 oblik, torej 93 %. Proga se ni risala skoraj nikoli.
+  const kosi = (trasa || []).filter((kos) => kos && kos.length > 1);
+  if (kosi.length) {
+    // Za projekcijo vzamemo najdaljsi kos -- vozilo je skoraj vedno na njem.
+    const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
+    runMap.trasa = kos;
+    runMap.cums = kumulative(kos);
+  }
+  const postaje = (state.run.stops || []).filter((s) => s.lat != null && s.lon != null);
+  const pts = postaje.map((s) => [s.lat, s.lon]);
+  // Kje vzdolz trase lezijo postanki -- ocena lege se na njih ustavi.
+  // Postaja, ki je od trase vec kot 60 m, tej trasi ne pripada (napacen
+  // kos, obvoz) in bi oceno ustavila na napacnem mestu.
+  if (runMap.trasa) {
+    runMap.postaje = postaje
+      .map((s) => projekcijaNaTraso(runMap.trasa, runMap.cums, s.lat, s.lon))
+      .filter((r) => r.odmik <= 60)
+      .map((r) => r.vzdolz)
+      .sort((a, b) => a - b);
   }
 
+  const crte = kosi.length ? kosi.map((kos) => pkCrta(kos, { vrsta: "trasa" }))
+    : pts.length > 1 ? [pkCrta(pts, { vrsta: "skozi" })] : [];
+  for (const id of ["run-trasa", "run-postaje", "run-tvoja", "run-gps"]) {
+    map.addSource(id, { type: "geojson", data: RUN_PRAZNO });
+  }
+  const okroglo = { "line-join": "round", "line-cap": "round" };
+  map.addLayer({ id: "run-trasa-obroba", type: "line", source: "run-trasa", layout: okroglo,
+                 filter: ["==", ["get", "vrsta"], "trasa"],
+                 paint: { "line-color": "#0f1115", "line-width": 6, "line-opacity": 0.85 } },
+               RUN_POD);
+  map.addLayer({ id: "run-trasa", type: "line", source: "run-trasa", layout: okroglo,
+                 filter: ["==", ["get", "vrsta"], "trasa"],
+                 paint: { "line-color": "#4db97f", "line-width": 3, "line-opacity": 0.95 } },
+               RUN_POD);
+  map.addLayer({ id: "run-skozi", type: "line", source: "run-trasa",
+                 filter: ["==", ["get", "vrsta"], "skozi"],
+                 paint: { "line-color": "#4db97f", "line-width": 2.5, "line-opacity": 0.55,
+                          "line-dasharray": [2, 2] } },
+               RUN_POD);
+  // Pike so bile nekoc neme tocke na zemljevidu. Ime ob dotiku je edini
+  // nacin, da se izve, katera postaja to je -- trajne oznake bi na mestni
+  // liniji zakrile progo pod sabo.
+  map.addLayer({ id: "run-postaje", type: "circle", source: "run-postaje",
+                 paint: { "circle-radius": 3.6, "circle-color": "#4db97f",
+                          "circle-stroke-color": "#0f1115", "circle-stroke-width": 1.4,
+                          "circle-pitch-alignment": "map" } },
+               RUN_POD);
+  // Postaja, na kateri stoji potnik, mora biti vidna -- brez nje je to
+  // zemljevid o vozilu in ne o njegovi poti. Zato z imenom, trajno.
+  map.addLayer({ id: "run-tvoja", type: "circle", source: "run-tvoja",
+                 paint: { "circle-radius": 6, "circle-color": "#f0934f",
+                          "circle-stroke-color": "#0f1115", "circle-stroke-width": 2,
+                          "circle-pitch-alignment": "map" } },
+               RUN_POD);
+  map.addLayer({ id: "run-tvoja-ime", type: "symbol", source: "run-tvoja",
+                 layout: { "text-field": ["get", "ime"], "text-font": ["Noto Sans Bold"],
+                           "text-size": 12, "text-anchor": "left", "text-offset": [0.9, 0],
+                           "text-allow-overlap": true },
+                 paint: { "text-color": "#f5c7a3", "text-halo-color": "#0f1115",
+                          "text-halo-width": 1.6 } },
+               RUN_POD);
+  // Zadnja RESNICNA meritev je edina trdna tocka na tem zemljevidu, zato je
+  // polna in vidna -- ne bleda. Rdeca s svetlim obrocem: postajalisca in
+  // trasa so zeleni, zato se zelena pika med njimi izgubi. Rdeca ni iz nobene
+  // lestvice -- ne iz zamud in ne iz razmer -- zato tu ne more pomeniti
+  // nicesar drugega. Rise se VEDNO: kadar vozilo stoji, jo oblika vozila
+  // pokrije. Plast je zadnja med nasimi, da je 3 px siroka trasa ne prereze.
+  map.addLayer({ id: "run-gps", type: "circle", source: "run-gps",
+                 paint: { "circle-radius": 5.5, "circle-color": "#ff4d5e",
+                          "circle-stroke-color": "#e7eaf0", "circle-stroke-width": 2,
+                          "circle-stroke-opacity": 0.95, "circle-pitch-alignment": "map" } },
+               RUN_POD);
+
+  runVir("run-trasa", crte);
+  runVir("run-postaje", postaje.map((s) => pkTocka([s.lat, s.lon], { ime: s.name })));
+  const yours = yourStop(state.run.stops);
+  if (yours && yours.lat != null) {
+    runVir("run-tvoja", [pkTocka([yours.lat, yours.lon], { ime: yours.name })]);
+  }
+  runImeNaDotik();
+  return true;
+}
+
+async function drawRunMap(v) {
   runMap.v = v;
   runMap.since = Date.now();
-  postaviVozilo(prvic, true);
-
   document.getElementById("run-map-full").href =
     `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
-  wrap.hidden = false;
-  // Okvir je bil skrit, ko je Leaflet meril prostor -- brez tega je siv.
+
+  // Lega pride vsakih nekaj sekund, zemljevid pa nastaja dlje (knjiznica,
+  // slog, trasa). Brez skupne obljube bi druga lega naredila drugi zemljevid.
+  const prvic = !runMap.nastaja;
+  if (prvic) runMap.nastaja = ustvariRunMap(v);
+  if (!(await runMap.nastaja)) {
+    podnapis(v, 0);
+    return;
+  }
+  postaviVozilo(prvic, true);
   if (prvic) {
-    requestAnimationFrame(() => runMap.map.invalidateSize());
     initFullscreen();
-    initWheelZoom();
-    initDragPolicy();
     initLocate();
     initOsvezi();
   }
@@ -1917,48 +2002,41 @@ function postaviVozilo(prvic, nova) {
   const odmik = razdaljaM(kje, [v.lat, v.lon]);
 
   if (!runMap.marker) {
-    runMap.marker = L.marker(kje, { icon: busDivIcon(v.bearing, moving) }).addTo(runMap.map);
-  } else {
-    runMap.marker.setLatLng(kje);
-    runMap.marker.setIcon(busDivIcon(v.bearing, moving));
+    const el = document.createElement("div");
+    el.className = "run-bus";
+    // Smer je glede na sever in se vrti z zemljevidom; v nagibu vozilo stoji
+    // obrnjeno proti gledalcu, kot na velikem zemljevidu.
+    runMap.marker = new runMap.ml.Marker({
+      element: el, rotationAlignment: "map", pitchAlignment: "viewport",
+    }).setLngLat([kje[1], kje[0]]).addTo(runMap.map);
   }
-
-  // Zadnja RESNICNA meritev je edina trdna tocka na tem zemljevidu, zato je
-  // polna in vidna -- ne bleda. Riše se VEDNO: kadar se ocena ni premaknila
-  // (vozilo stoji), jo oblika vozila pokrije in dveh oznak ni videti, opomba
-  // pod zemljevidom pa ostane resnicna v obeh primerih.
-  if (!runMap.gps) {
-    // Rdeca s svetlim obrocem: postajalisca in trasa so zeleni, zato se
-    // zelena pika med njimi izgubi. Rdeca ni iz nobene lestvice -- ne iz
-    // zamud in ne iz razmer -- zato tu ne more pomeniti nicesar drugega.
-    runMap.gps = L.circleMarker([v.lat, v.lon], {
-      radius: 5.5, color: "#e7eaf0", weight: 2, opacity: 0.95,
-      fillColor: "#ff4d5e", fillOpacity: 1,
-    }).addTo(runMap.map);
-    bindFlashName(runMap.gps, "zadnja izmerjena lega");
-  } else {
-    runMap.gps.setLatLng([v.lat, v.lon]);
+  runMap.marker.setLngLat([kje[1], kje[0]]).setRotation(v.bearing || 0);
+  const el = runMap.marker.getElement();
+  if (el.dataset.vozi !== String(moving)) {
+    el.dataset.vozi = String(moving);
+    el.innerHTML = busSvg(moving);
   }
-  // Crta in pika sta v isti plasti (overlayPane) in vrstni red risanja je
-  // vrstni red dodajanja. Trasa se doda enkrat, pika enkrat -- a postajalisca
-  // vmes, zato jo eksplicitno dvignemo. Sicer 3 px siroka trasa prerezhe piko
-  // in ta je videti kot del proge.
-  runMap.gps.bringToFront();
+  runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: "zadnja izmerjena lega" })]);
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
   // sekundno osvezevanje trgalo izpod prsta.
-  const ll = L.latLng(kje);
-  if (prvic || !runMap.map.getBounds().contains(ll)) runMap.map.panTo(ll);
+  if (prvic || !runMap.map.getBounds().contains([kje[1], kje[0]])) {
+    runMap.map.panTo([kje[1], kje[0]], { duration: prvic ? 0 : 500 });
+  }
 
   // Vozilo se premika, torej se razdalja spreminja tudi brez novega dotika.
   if (runMap.loc) izracunajRazdaljo(runMap.loc);
 
-  if (nova) {
-    document.getElementById("run-map-sub").innerHTML =
-      `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `
-      + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
-                    : `lega stara ${ageHtml(v.age_s)}`);
-  }
+  if (nova) podnapis(v, odmik);
+}
+
+// Hitrost in starost lege veljata tudi brez zemljevida (brskalnik brez WebGL2).
+function podnapis(v, odmik) {
+  const moving = (v.speed_kmh || 0) >= 3;
+  document.getElementById("run-map-sub").innerHTML =
+    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `
+    + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
+                  : `lega stara ${ageHtml(v.age_s)}`);
 }
 
 // Med dvema meritvama pika drsi naprej. To ni okras: vozilo se v 30 s pri
@@ -1979,65 +2057,18 @@ function setMapMax(on) {
   const btn = document.getElementById("run-map-fs");
   if (!wrap) return;
   wrap.classList.toggle("is-max", on);
-  // Cez celo stran ni nicesar krasti: zemljevid JE stran, zato oboje prosto.
-  runMap.prosto = on;
+  // Cez celo stran ni nicesar krasti: zemljevid JE stran, zato en prst in
+  // kolesce pripadata njemu.
   if (runMap.map) {
-    if (on) { runMap.map.dragging.enable(); runMap.map.scrollWheelZoom.enable(); }
-    else { runMap.map.scrollWheelZoom.disable(); }
+    if (on) runMap.map.cooperativeGestures.disable();
+    else runMap.map.cooperativeGestures.enable();
   }
   if (btn) {
     btn.setAttribute("aria-pressed", String(on));
     btn.title = on ? "Pomanjšaj" : "Čez celo stran";
   }
-  // Leaflet meri okvir sam in ga po spremembi velikosti ne premeri.
-  if (runMap.map) requestAnimationFrame(() => runMap.map.invalidateSize());
-}
-
-// Ctrl/Cmd + kolesce priblizuje tudi v vgrajenem zemljevidu. Na sledilni
-// ploscici brskalnik sipanje prstov posilja prav kot `wheel` s `ctrlKey`,
-// zato ista koda pokrije oboje. Namig se pokaze SAMO ob poskusu brez tipke --
-// takrat, ko clovek res ne ve, zakaj se nic ne zgodi.
-// En prst mora pomikati STRAN, miska pa zemljevid. Zato preklapljamo po
-// vhodni napravi ob vsakem dotiku oziroma pritisku, ne enkrat za vselej.
-//
-// Poslusamo v ZAJEMNI fazi na ovoju: Leaflet svoj `touchstart` obesi na
-// zabojnik zemljevida in ga dobi v mehurcni fazi, torej za nami. Ce dragging
-// izklopimo prej, Leaflet svojega poslusalca sploh nima vec in vlecenja ne
-// zacne. Obratno pri miski.
-//
-// Dva prsta zemljevid vseeno pomikata in priblizujeta -- to opravi
-// `touchZoom`, ki med sirjenjem prstov premika tudi sredisce.
-function initDragPolicy() {
-  const wrap = document.getElementById("run-map-wrap");
-  if (!wrap || !runMap.map) return;
-  const nastavi = (naj) => {
-    if (runMap.prosto) return;             // cez celo stran je vse prosto
-    if (naj) runMap.map.dragging.enable();
-    else runMap.map.dragging.disable();
-  };
-  wrap.addEventListener("touchstart", () => nastavi(false),
-                        { capture: true, passive: true });
-  wrap.addEventListener("mousedown", () => nastavi(true), { capture: true });
-}
-
-function initWheelZoom() {
-  const el = runMap.map && runMap.map.getContainer();
-  if (!el) return;
-  let namigT = null;
-  el.addEventListener("wheel", (e) => {
-    if (runMap.map.scrollWheelZoom.enabled()) return;   // razsirjen pogled
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      runMap.map.setZoomAround(runMap.map.mouseEventToContainerPoint(e),
-                               runMap.map.getZoom() + (e.deltaY < 0 ? 1 : -1));
-      return;
-    }
-    const n = document.getElementById("run-map-hint");
-    if (!n) return;
-    n.hidden = false;
-    clearTimeout(namigT);
-    namigT = setTimeout(() => { n.hidden = true; }, 2200);
-  }, { passive: false });
+  // MapLibre meri okvir sam in ga po spremembi velikosti ne premeri.
+  if (runMap.map) requestAnimationFrame(() => runMap.map.resize());
 }
 
 // ---------- moja lega na malem zemljevidu ----------
@@ -2100,29 +2131,25 @@ function initLocate() {
     el.hidden = false;
     try {
       const loc = await locateMe({
-        napredek: (l) => {
-          if (!runMap.me) runMap.me = L.layerGroup().addTo(runMap.map);
-          drawMe(runMap.me, l);
-        },
+        napredek: (l) => { runMap.loc = l; pkJaz(runMap.map, l); },
       });
-      if (!runMap.me) runMap.me = L.layerGroup().addTo(runMap.map);
-      drawMe(runMap.me, loc);
+      runMap.loc = loc;
+      pkJaz(runMap.map, loc);
       // Pogled naj zajame OBOJE -- vprasanje je razmerje med tabo in vozilom,
       // ne ena ali druga tocka.
       if (runMap.marker) {
-        runMap.map.fitBounds(
-          L.latLngBounds([[loc.lat, loc.lon], runMap.marker.getLatLng()]),
-          { padding: [40, 40], maxZoom: 16 });
+        const ll = runMap.marker.getLngLat();
+        pkPrilagodi(runMap.map, [[loc.lat, loc.lon], [ll.lat, ll.lng]],
+                    { padding: 40, maxZoom: 16 });
       } else {
-        runMap.map.setView([loc.lat, loc.lon], 15);
+        runMap.map.easeTo({ center: [loc.lon, loc.lat], zoom: 15 - PK_LZ });
       }
-      runMap.loc = loc;
       izracunajRazdaljo(loc);
       // Vprasanje "kako dalec je vozilo od mene" se med cakanjem spreminja na
       // obeh straneh. Ena izmerjena lega bi po petih minutah lagala.
       if (!runMap.sledim) {
         runMap.sledim = sledi((l) => {
-          drawMe(runMap.me, l);
+          pkJaz(runMap.map, l);
           runMap.loc = l;
           izracunajRazdaljo(l);
         });

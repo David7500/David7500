@@ -490,7 +490,7 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
   .find-list { max-height: 40vh; }
   /* Navedba vira se umakne dnu, ki ga Chromova spodnja naslovna vrstica
      prekrije, ne da bi skrajsala postavitveno okno (glej `.sheet-toggle`). */
-  .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 46px; }
+  #map .maplibregl-ctrl-bottom-left, #map .maplibregl-ctrl-bottom-right { bottom: 46px; }
 }
 
 /* ---------- kartica vozila ----------

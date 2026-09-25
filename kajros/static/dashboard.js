@@ -7,9 +7,9 @@ const POLL_MS = 30000;
 // ---------- zemljevid ----------
 //
 // Ta zemljevid je MapLibre sam, brez Leafleta (22. 9. 2026). Leaflet nagiba
-// ne pozna: ovoj `leaflet-maplibre-gl`, ki ga imajo ostali trije zemljevidi,
-// drzi MapLibrovo kamero v Leafletovi ravnini. Nagib od blizu in stavbe v 3D
-// sta mogoca samo, ce kamera pripada MapLibru.
+// ne pozna: ovoj `leaflet-maplibre-gl` je drzal MapLibrovo kamero v
+// Leafletovi ravnini. Nagib od blizu in stavbe v 3D sta mogoca samo, ce
+// kamera pripada MapLibru.
 //
 // MapLibre 6 zna samo WebGL2 in brez njega ta stran zemljevida nima. Esrijeva
 // podlaga je rezerva za primer, ko OpenFreeMap ni dosegljiv, ne za brskalnik
@@ -941,7 +941,7 @@ function krog(lat, lon, m, n = 48) {
 }
 
 // Pika z obrocem tocnosti. Obroc ni okras: GPS v mestu zna zgresiti za sto
-// metrov in pika brez njega trdi natancnost, ki je nima (isto kot `drawMe`).
+// metrov in pika brez njega trdi natancnost, ki je nima (isto kot `pkJaz`).
 function narisiMe(loc) {
   const features = [];
   if (loc && loc.acc && loc.acc > 25) {

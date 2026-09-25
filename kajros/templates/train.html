@@ -57,7 +57,7 @@
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
       <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo GPS lego
-           -- vlaki je nimajo nikoli in zanje ta okvir ne obstaja. Leaflet se
+           -- vlaki je nimajo nikoli in zanje ta okvir ne obstaja. MapLibre se
            zato prinese sele takrat in ne obtezi vsake strani z vlakom. -->
       <div id="run-map-wrap" class="run-map-wrap" hidden>
         <div class="run-map-head">
@@ -93,9 +93,6 @@
         </div>
         <div class="run-map-holder">
           <div id="run-map" class="run-map"></div>
-          <div id="run-map-hint" class="run-map-hint" hidden>
-            Ctrl + kolešček približa · ali razširi zemljevid
-          </div>
         </div>
         <p class="run-map-me" id="run-map-me-line" hidden></p>
         <p class="run-map-key">
@@ -139,6 +136,7 @@
   <div id="budilka" class="bud-plast" hidden></div>
 
   <script src="{{ s('common.js') }}"></script>
+  <script src="{{ s('pot_karta.js') }}"></script>
   <script src="{{ s('train.js') }}"></script>
 </body>
 </html>

@@ -131,29 +131,19 @@ function dayLabel(isoDate) {
 //
 // **Vektorska podlaga OpenFreeMap** (22. 9. 2026): odprta koda, brez kljuca,
 // brez registracije in brez omejitve ogledov, podatki OpenStreetMap. Risanje
-// je MapLibre, ki ga Leaflet nosi kot eno plast (`leaflet-maplibre-gl`) --
-// vse nase plasti, geste in oznake ostanejo Leafletove in se ne spremenijo.
-// Veliki zemljevid (`dashboard.js`) in obe strani poti (`pot_karta.js`) sta
-// izjema: tam je MapLibre sam, ker Leaflet kamere ne zna nagniti; od tu rabita
-// samo konstante. Leafletov je samo še zemljevid v oknu vožnje.
+// je MapLibre sam na vseh zemljevidih -- velikem (`dashboard.js`), obeh
+// straneh poti in v oknu voznje (`pot_karta.js`) --, ker Leaflet kamere ne
+// zna nagniti. Od tu rabijo samo konstante.
 //
 // Prej je bil Esri "Dark Gray Canvas": prave ploscice samo do z16, imena ulic
 // vpecena v podlago in brez moznosti, da bi se ugasnila posebej. Vektorska
 // podlaga je ostra pri vsakem priblizku, barve so iz `base.css`, napisi pa so
 // svoje plasti (`podlaga.json`, `metadata.kajros:napisi`).
 //
-// **Esri ostane rezerva**: MapLibre 6 zahteva WebGL2. Kjer ga ni, kjer se
-// knjiznica ne nalozi ali kjer slog pade pred prvim izrisom, stran dobi
-// staro podlago -- zemljevid brez podlage bi bil slabsi od obeh.
-//
-// Navedba je pogoj rabe, zato je na VSAKEM zemljevidu, tudi na 260 px velikem
-// v oknu voznje.
+// **Esri ostane rezerva**, kadar slog ali opis ploscic pade pred prvim
+// izrisom. Brez WebGL2 pa zemljevida ni: MapLibre 6 ga zahteva in tudi Esri
+// bi risal on.
 const ESRI_ATTR = 'podlaga &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, '
-  + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-// Besedilo, ki ga OpenFreeMap predlaga, brez besed okrog: v oknu voznje je
-// okvir sirok 390 px in daljsa navedba bi pokrila spodnjo tretjino zemljevida.
-const OFM_ATTR = '<a href="https://openfreemap.org">OpenFreeMap</a> '
-  + '&copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> '
   + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 const ESRI_CANVAS = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
 // Razlicica je v POTI in ne v poizvedbi: `maplibre-gl.mjs` uvaza sosedi po
@@ -161,120 +151,12 @@ const ESRI_CANVAS = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas
 // bi sicer nova glava dobila staro telo.
 const MAPLIBRE_POT = "/static/maplibre-6.10.0";
 
-let maplibreObljuba = null;
-
-function naloziMapLibre() {
-  if (maplibreObljuba) return maplibreObljuba;
-  maplibreObljuba = (async () => {
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = `${MAPLIBRE_POT}/maplibre-gl.css`;
-    document.head.appendChild(css);
-    // Modul in ne klasicen skript: MapLibre 6 je samo ES modul. Leafletov
-    // ovoj je UMD in bere `window.maplibregl`, zato ga nalozimo za njim.
-    window.maplibregl = await import(`${MAPLIBRE_POT}/maplibre-gl.mjs`);
-    await new Promise((ok, ne) => {
-      const js = document.createElement("script");
-      js.src = `${MAPLIBRE_POT}/leaflet-maplibre-gl.js`;
-      js.onload = ok;
-      js.onerror = ne;
-      document.head.appendChild(js);
-    });
-    if (!L.maplibreGL) throw new Error("leaflet-maplibre-gl se ni nalozil");
-  })();
-  return maplibreObljuba;
-}
-
 function imaWebGL2() {
   try {
     return !!document.createElement("canvas").getContext("webgl2");
   } catch (e) {
     return false;
   }
-}
-
-/**
- * Podlaga za Leafletov zemljevid: `{ osnova, imena }`, dve plasti, ki ju stran
- * doda in odstrani kot vsako drugo.
- *
- * `osnova` je pokrajina s cestami in glavnimi imeni, `imena` so dodatna imena
- * krajev (vasi, cetrti, vode). Obe sta `L.layerGroup` in sta takoj uporabni;
- * vsebino dobita, ko se MapLibre nalozi -- ali Esri, ce se ne.
- */
-function podlagaZemljevida() {
-  const osnova = L.layerGroup();
-  const imena = L.layerGroup();
-  const slog = document.querySelector('meta[name="kajros-podlaga"]')?.content
-    || "/static/podlaga.json";
-  let gl = null;
-  let esri = false;
-  let dodatni = false;
-
-  // Stikalo dodatnih imen. Pri vektorski podlagi to niso ploscice, ampak
-  // vidnost plasti v slogu -- plast brez risbe, ki jo Leaflet vseeno steje za
-  // prizgano (`map.hasLayer`), da stikalo na strani dela kot doslej.
-  const pokaziDodatne = () => {
-    const m = gl && gl.getMaplibreMap && gl.getMaplibreMap();
-    if (!m || !m.isStyleLoaded()) return;
-    for (const l of m.getStyle().layers) {
-      if (l.metadata && l.metadata["kajros:napisi"] === "dodatni") {
-        m.setLayoutProperty(l.id, "visibility", dodatni ? "visible" : "none");
-      }
-    }
-  };
-  const StikaloImen = L.Layer.extend({
-    onAdd() { dodatni = true; pokaziDodatne(); return this; },
-    onRemove() { dodatni = false; pokaziDodatne(); return this; },
-  });
-
-  const naEsri = (zakaj) => {
-    if (esri) return;
-    esri = true;
-    if (zakaj) console.warn("vektorska podlaga ni na voljo, velja Esri:", zakaj);
-    if (gl) osnova.removeLayer(gl);
-    gl = null;
-    osnova.clearLayers();
-    imena.clearLayers();
-    // Esri ima prave ploscice samo do z16; nad tem Leaflet zadnjo raztegne.
-    osnova.addLayer(L.tileLayer(`${ESRI_CANVAS}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-      { maxZoom: 19, maxNativeZoom: 16, attribution: ESRI_ATTR }));
-    imena.addLayer(L.tileLayer(`${ESRI_CANVAS}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-      { maxZoom: 19, maxNativeZoom: 16, opacity: 0.9 }));
-  };
-
-  if (!imaWebGL2()) {
-    naEsri("brez WebGL2");
-    return { osnova, imena };
-  }
-  naloziMapLibre().then(() => {
-    if (esri) return;
-    gl = L.maplibreGL({
-      style: slog,
-      // Leaflet po tem ve, do kod sme priblizati; MapLibre sam ima pri tem
-      // zoom za ena manjsi (512-pikselne ploscice), kar ovoj uredi.
-      maxZoom: 19,
-      attributionControl: { customAttribution: OFM_ATTR },
-    });
-    // MapLibre nastane sele, ko je plast na zemljevidu -- in znova ob vsakem
-    // vklopu podlage, ker ovoj ob izklopu svojega zavrze.
-    gl.on("add", () => {
-      const m = gl.getMaplibreMap();
-      let izrisan = false;
-      m.on("load", () => { izrisan = true; pokaziDodatne(); });
-      // Slog ali opis ploscic pred prvim izrisom ni prisel (OpenFreeMap ni
-      // dosegljiv): rezerva. Napaka ene ploscice pozneje ni razlog za menjavo.
-      m.on("error", (e) => { if (!izrisan) naEsri(e && e.error && e.error.message); });
-    });
-    try {
-      osnova.addLayer(gl);
-    } catch (e) {
-      // `new maplibregl.Map` vrze, kadar WebGL2 obstaja, a ga ni mogoce odpreti.
-      naEsri(e.message);
-      return;
-    }
-    imena.addLayer(new StikaloImen());
-  }).catch((e) => naEsri(e && e.message));
-  return { osnova, imena };
 }
 
 // Naslovi obvestil SŽ kricijo in ponavljajo znacko nad sabo: "DELA NA PROGI:
@@ -1095,21 +977,6 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
 // prsta in bi zahteval drugi, natancnejsi dotik od tistega, ki je ime odprl.
 const NAME_MS = 5000;
 
-function bindFlashName(marker, name) {
-  marker.bindTooltip(name, {
-    className: "kajros-tooltip", direction: "top", offset: [0, -4],
-  });
-  marker.on("click", (e) => {
-    // Brez tega dotik na postajo velja tudi za dotik na zemljevid in ta
-    // na telefonu zapre spodnjo plosco.
-    if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
-    clearTimeout(marker.__nameT);
-    marker.openTooltip();
-    marker.__nameT = setTimeout(() => marker.closeTooltip(), NAME_MS);
-  });
-  return marker;
-}
-
 // ---------- starost lege, ki tece sama ----------
 
 // "lega stara 59 s" je stala pri miru, dokler ni prisel naslednji poll, in
@@ -1495,25 +1362,6 @@ function sledi(cb) {
     { enableHighAccuracy: true, maximumAge: 0 },
   );
   return () => navigator.geolocation.clearWatch(id);
-}
-
-// Pika z obrocem tocnosti. Obroc ni okras: GPS v mestu zna zgresiti za sto
-// metrov in pika brez njega trdi natancnost, ki je nima -- ista napaka, kot
-// bi bila pika vozila brez "lega stara N s".
-function drawMe(group, loc) {
-  group.clearLayers();
-  if (loc.acc && loc.acc > 25) {
-    L.circle([loc.lat, loc.lon], {
-      radius: loc.acc, color: ME_COLOR, weight: 1, opacity: 0.35,
-      fillColor: ME_COLOR, fillOpacity: 0.1, interactive: false,
-    }).addTo(group);
-  }
-  const pika = L.circleMarker([loc.lat, loc.lon], {
-    radius: 6, color: "#ffffff", weight: 2,
-    fillColor: ME_COLOR, fillOpacity: 1,
-  }).addTo(group);
-  bindFlashName(pika, loc.acc ? `tvoja lega (±${Math.round(loc.acc)} m)` : "tvoja lega");
-  return pika;
 }
 
 // Service worker. Registrira se sam in samo tam, kjer sme.

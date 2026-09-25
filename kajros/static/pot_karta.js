@@ -58,8 +58,14 @@ function pkKrog(lat, lon, m, n = 40) {
  * Zemljevid v elementu `el`: `{ map, ml }` ali `null`, kadar ga ni mogoče
  * narisati. Viri `k-pot` (črte), `k-tocke` (postajališča vstopa in izstopa) in
  * `k-jaz` (lastna lega) so dodani in prazni; start in cilj riše `pkKonca()`.
+ *
+ * `opts` rabi okno vožnje (`train.js`): `sredisce` [lat, lon] in `zoom` v
+ * Leafletovih enotah, `dodatnaImena` in `sodelovanje` (geste, ki strani ne
+ * ukradejo pomikanja -- zemljevid je tam element na strani, ne stran).
  */
-async function pkUstvari(el) {
+async function pkUstvari(el, opts) {
+  const { sredisce = [46.1, 14.6], zoom = 8, dodatnaImena = true,
+          sodelovanje = false } = opts || {};
   if (!imaWebGL2()) return null;
   let ml;
   try {
@@ -74,13 +80,19 @@ async function pkUstvari(el) {
   try {
     map = new ml.Map({
       container: el, style: slog,
-      center: [14.6, 46.1], zoom: 8 - PK_LZ, maxZoom: 19 - PK_LZ,
+      center: [sredisce[1], sredisce[0]], zoom: zoom - PK_LZ, maxZoom: 19 - PK_LZ,
       canvasContextAttributes: { antialias: true },
       // Nagib je lastnost približka, ne gesta -- isto kot na velikem
       // zemljevidu. Vrtenje ostane: pri vodenju je sever redko zgoraj.
       transformCameraUpdate: (t) => ({ pitch: pkNagib(t.zoom) }),
       pitchWithRotate: false, touchPitch: false,
       attributionControl: { compact: true },
+      cooperativeGestures: sodelovanje,
+      locale: {
+        "CooperativeGesturesHandler.WindowsHelpText": "Ctrl + kolešček približa · ali razširi zemljevid",
+        "CooperativeGesturesHandler.MacHelpText": "⌘ + kolešček približa · ali razširi zemljevid",
+        "CooperativeGesturesHandler.MobileHelpText": "Zemljevid premakneš z dvema prstoma",
+      },
     });
   } catch (e) {
     console.warn("zemljevida ni mogoče odpreti:", e && e.message);
@@ -116,7 +128,7 @@ async function pkUstvari(el) {
   }
   // Dodatna imena krajev so tu prižgana, drugače kot na velikem zemljevidu:
   // tam tekmujejo z vozili, tu je vprašanje "kje je to".
-  for (const id of map.getLayersOrder()) {
+  for (const id of dodatnaImena ? map.getLayersOrder() : []) {
     const l = map.getLayer(id);
     if (l.metadata && l.metadata["kajros:napisi"] === "dodatni") {
       map.setLayoutProperty(id, "visibility", "visible");
@@ -177,7 +189,7 @@ async function pkUstvari(el) {
                           "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5,
                           "circle-pitch-alignment": "map" } });
 
-  // Ime točke na dotik; po petih sekundah odide (isto kot `bindFlashName`).
+  // Ime točke na dotik; po petih sekundah odide (`NAME_MS`).
   let oblacek = null;
   map.on("click", "k-tocke", (e) => {
     const f = e.features && e.features[0];

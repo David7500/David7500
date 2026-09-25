@@ -18,15 +18,15 @@ paths:
   **Ime postaje se pokaže na dotik in po petih sekundah odide.** Pike so bile
   `interactive: false`, torej nema točka na zemljevidu -- iz nje se ni dalo
   izvedeti, katera postaja to je. Trajne oznake pa na mestni liniji zakrijejo
-  progo pod sabo. Zato `common.bindFlashName()`: klik odpre oblaček,
+  progo pod sabo. Zato klik odpre oblaček (`common.NAME_MS`),
   `setTimeout` ga zapre. Brez gumba za zapiranje -- ta bi bil na telefonu
   manjši od prsta in bi zahteval natančnejši dotik od tistega, ki je ime
   odprl. Klik ustavi razširjanje dogodka, sicer na telefonu zapre spodnjo
   ploščo. Velja na velikem zemljevidu, na trasi izbranega vozila in v oknu
   vožnje. Polmer pike je zato 3,4 namesto 2,4 px: 2,4 je manj od prsta.
-  Veliki zemljevid ima isto pravilo po svoje (`zadetek()` v `dashboard.js`):
-  dotik zadene, kar je v **12 px** od prsta, vozilo pred postajo — MapLibre
-  sicer zadene samo piko samo.
+  Veliki zemljevid (`zadetek()` v `dashboard.js`) in okno vožnje
+  (`runImeNaDotik()`) zadeneta, kar je v **12 px** od prsta, vozilo oziroma
+  izmerjeno lego pred postajo — MapLibre sicer zadene samo piko samo.
 
   **Avtobusna postajališča so svoja plast in privzeto ugasnjena.** Vseh je
   9 519 (211 kB z gzipom, 167 ms), zato se naložijo šele ob prvem vklopu --
@@ -63,11 +63,11 @@ paths:
 
   **Podlaga je vektorska OpenFreeMap** (22. 9. 2026, prej Esri „Dark Gray
   Canvas"). Odprta koda (MIT), brez ključa, registracije in omejitve ogledov,
-  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10**. Na majhnem
-  zemljevidu okna vožnje ga Leaflet nosi kot eno plast (`leaflet-maplibre-gl`
-  0.1.4) in vse ostalo ostane Leafletovo; **veliki zemljevid in obe strani
-  poti so MapLibre sam** (glej „3D od blizu“ spodaj; pot od 23. 9. 2026, ker
-  vodenje po pešpoti rabi kamero za hrbtom, `pot_karta.js`). Oboje je gostovano
+  podatki OpenStreetMap. Riše jo **MapLibre GL JS 6.10, povsod sam, brez
+  Leafleta**: veliki zemljevid (22. 9.), obe strani poti (23. 9., vodenje po
+  pešpoti rabi kamero za hrbtom) in okno vožnje (25. 9. 2026, `pot_karta.js`
+  si delita; glej „3D od blizu“ spodaj). Leaflet in `leaflet-maplibre-gl` sta
+  s tem odšla iz repozitorija. Knjižnica je gostovana
   pri nas (`static/maplibre-6.10.0/`, različica v **poti**, ker
   `maplibre-gl.mjs` uvaža sosede po relativnem imenu, Cloudflare pa statiko
   drži štiri ure). Tuje so ploščice in pisave z `tiles.openfreemap.org`.
@@ -87,31 +87,29 @@ paths:
     ploščice, zato se ugasnejo brez podlage. Imena ulic so v osnovi od
     MapLibrovega z14, torej **Leafletovega z15** (MapLibre ima 512-pikselne
     ploščice in je za ena nižje; vse meje v slogu so v njegovih enotah).
-  * **Esri ostane rezerva** (`common.podlagaZemljevida()`): MapLibre 6 zna
-    samo WebGL2. Rezerva velja brez WebGL2, kadar se knjižnica ne naloži in
-    kadar slog ali opis ploščic pade **pred prvim izrisom** (preverjeno z
-    `--disable-webgl` in z nedosegljivim `tiles.openfreemap.org`). Napaka ene
-    ploščice pozneje ni razlog za menjavo. Na velikem zemljevidu Esri riše
-    MapLibre (`naEsri()`), zato tam rezerve **brez WebGL2 ni**: stran to
-    pove in pokaže pot do tabel.
+  * **Esri ostane rezerva** (`naEsri()`, `pkEsri()`), kadar slog ali opis
+    ploščic pade **pred prvim izrisom** (preverjeno z nedosegljivim
+    `tiles.openfreemap.org`). Napaka ene ploščice pozneje ni razlog za
+    menjavo. Esri riše MapLibre, ki zna samo WebGL2, zato rezerve **brez
+    WebGL2 ni** na nobenem zemljevidu: stran to pove (veliki pokaže pot do
+    tabel, okno vožnje obdrži hitrost in starost lege v glavi).
   * **Stikala „Zatemni podlago“ ni več** (22. 9. 2026). Nastalo je pri
     Esrijevih ploščicah, kjer so bila imena ulic vpečena v podlago in jih
     drugače ni bilo mogoče potisniti nazaj za vozila. V vektorskem slogu so
     napisi svoje plasti in umirjeni že sami; uporabnik razlike med vklopom in
-    izklopom ni videl. Okno vožnje ima še stalen filter na
-    `.run-map .leaflet-gl-layer`.
-  * **`maxZoom: 19` je na zemljevidu, ne le na podlagi.** Podlaga pride v
-    ozadju, do takrat Leaflet meje ne pozna in približuje v neskončnost.
+    izklopom ni videl. Zatemnitev podlage v oknu vožnje (CSS filter na
+    Leafletovi plasti) je odšla z Leafletom: filter na platnu MapLibra bi
+    zatemnil tudi traso in vozilo.
   * **Navedba vira je v slogu** (`sources.omt.attribution`), ker jo veliki
-    zemljevid bere od tam in ob rezervi pokaže Esrijevo. Leafletov ovoj bere
-    `customAttribution` in slogove ne vidi, zato je ni dvakrat.
+    zemljevid bere od tam in ob rezervi pokaže Esrijevo. V oknu vožnje je
+    od začetka zložena v gumb (i): odprta je v okvirju 260 px pokrila traso.
   * **Cena so podatki**, izmerjeno 22. 9. 2026 (vsota ploščic, ki jih MapLibre
     naloži; stisnjeno): pregled države na telefonu **1,27 MB** (6 ploščic;
     Esri 74 kB), namizje 3,4 MB; Ljubljana pri z13 367 kB, pri z15 1,0 MB
     (Esri 187 kB). Ploščice imajo `max-age` deset let in naslov z različico,
     zato se plačajo enkrat na napravo; MapLibre sam je 299 kB, prav tako enkrat.
 
-## 3D od blizu (veliki zemljevid)
+## 3D od blizu (vsi zemljevidi)
 
 Od daleč je zemljevid raven, od Leafletovega **z15** se kamera začne nagibati
 in pri **z17,5** doseže 60°; hkrati se od ploskve do prave višine dvignejo
@@ -119,8 +117,14 @@ stavbe (`render_height` iz OSM). Prelivanje in ne skok je bila želja
 (22. 9. 2026, po Slometovem zemljevidu, od koder sta formula nagiba in
 razpon zoomov). Stikalo „3D od blizu“ je privzeto vklopljeno.
 
-* **Leaflet nagiba ne zna**, zato je veliki zemljevid MapLibre sam. Ovoj
-  `leaflet-maplibre-gl` MapLibrovo kamero drži v Leafletovi ravnini.
+* **Leaflet nagiba ne zna**, zato so vsi zemljevidi MapLibre sam. Ovoj
+  `leaflet-maplibre-gl` je MapLibrovo kamero držal v Leafletovi ravnini — zato
+  okno vožnje do 25. 9. 2026 ni imelo 3D, čeprav ga je veliki zemljevid imel.
+* **Okno vožnje nagiba in stavbe dobi iz `pkUstvari()`** (`pot_karta.js`),
+  stikala nima. Avtobus tam ostane ikona in ne model: je **ocena** lege v
+  barvi ocene, model pa nosi barve prevoznika, kar je barva meritve. Oznaka
+  vozila je DOM (`rotationAlignment: map`, `pitchAlignment: viewport`), ker
+  se premika vsako sekundo in je ena.
 * **Nagib je lastnost približka**, ne gesta: `transformCameraUpdate` ga
   postavi ob vsaki spremembi kamere, `touchPitch` in `pitchWithRotate` sta
   ugasnjena, da se z njim ne prepirata. Vrtenje ostane, kompas vrne sever.
@@ -218,7 +222,9 @@ naprej po poti"; „je 1,5 km pred tvojo lego" se bere dvoumno.
 
 **Geste so omejene, dokler je zemljevid element strani.** Vprašanje „naj
 kolešček približuje" ima odgovor „ne, dokler je to element" — kazalec zaide
-čez zemljevid in stran se neha pomikati. Zato:
+čez zemljevid in stran se neha pomikati. Od prehoda na MapLibre to opravi
+njegov `cooperativeGestures` (namig v slovenščini je v `pkUstvari`), razširjen
+pogled ga ugasne. Tabela ostaja ista:
 
 | | vgrajen | čez celo stran |
 |---|---|---|
@@ -228,27 +234,10 @@ kolešček približuje" ima odgovor „ne, dokler je to element" — kazalec zai
 | dva prsta | pomikata in približujeta | isto |
 | gumba +/− | vedno | vedno |
 
-Resnična napaka tu **ni bila** manjkajoča povečava, ampak `dragging`: ta je
-privzeto vklopljen in je en prst pomikal zemljevid namesto strani — na
-telefonu se s tega okvira ni dalo odpomakniti. Dva prsta zemljevid vseeno
-pomikata in približujeta, ker to opravi `touchZoom` (med širjenjem prstov
-premika tudi središče); dvoprstna povečava je torej **delala že prej**,
-manjkalo je nasprotno.
-
-**Vlečenje se preklaplja po vhodni napravi, ne po napravi nasploh.** Prvi
-popravek je `dragging` preprosto ugasnil in s tem vzel tudi vlečenje z miško,
-ki strani ne pomika in ni v konfliktu z ničimer. `initDragPolicy()` ga zato
-ugasne ob `touchstart` in prižge ob `mousedown` — prenosnik z zaslonom na
-dotik mora imeti oboje, in odloči tisti vhod, ki je pravkar v rabi.
-Poslušalca sta v **zajemni** fazi na ovoju: Leaflet svojega obesi na zabojnik
-zemljevida in ga dobi v mehurčni, torej za nama, zato je ob njegovem branju
-`dragging` že v pravem stanju.
-
-Na sledilni ploščici brskalnik širjenje prstov pošlje prav kot `wheel` s
-`ctrlKey`, zato ista koda pokrije Ctrl + kolešček in ščipanje. Namig se pokaže
-**samo ob poskusu brez tipke** in po 2,2 s izgine — takrat človek res ne ve,
-zakaj se nič ne zgodi; opomba, ki visi ves čas, bi bila četrta razlaga na tem
-okviru.
+Resnična napaka tu **ni bila** manjkajoča povečava, ampak vlečenje z enim
+prstom: pomikalo je zemljevid namesto strani in s tega okvira se na telefonu
+ni dalo odpomakniti. Vlečenje z miško pa strani ne pomika in ostane
+zemljevidu — prenosnik z zaslonom na dotik mora imeti oboje.
 
 **Gumb razširi zemljevid čez celo stran, ne čez cel zaslon.** Fullscreen API
 vzame ves monitor in skrije brskalnik; za „hočem videti več zemljevida" je to
@@ -267,13 +256,6 @@ namizja. Rešitev ni daljši selektor, ampak `!important` na `position`, `inset`
 `margin` in `height`: element je iztrgan iz postavitve in mora prezreti vsa
 pravila o njej. Isti vzorec kot `adv-only` v `base.css`.
 
-**Ozadje zemljevida rabi sestavljen selektor.** `.leaflet-container` ima svoj
-`background: #ddd`, Leafletov CSS pa se naloži **šele ob prvi legi**, torej za
-našim — enaka specifičnost, poznejši zmaga. Pri 260 px se to ni videlo, ker
-ploščice pokrijejo cel okvir; čez celo stran je bila polovica bela. Zato
-`.run-map.leaflet-container { background }`. Višina ostane pri enem razredu,
-sicer bi sestavljeni selektor povozil telefonsko pravilo v `@media`.
-
 **Na velikem zemljevidu tega ni**, in to je odločitev, ne opustitev: tam je
 vprašanje „kje je vse skupaj" in ocena za osemdeset vozil je osemdeset
 izmišljenih leg. V oknu vožnje gledaš eno vozilo in vprašanje je natanko
@@ -286,7 +268,7 @@ To je bilo **2 706 od 2 897 oblik, torej 93 %** — v oknu vožnje in na velikem
 zemljevidu. Pravilen pogoj je „vsaj en kos z vsaj dvema točkama".
 
 **Okno vožnje z GPS ima živ zemljevid, in to v preprostem pogledu.** „Kje je
-zdaj" je pri avtobusu prvo vprašanje. Leaflet se naloži šele, ko lega res
+zdaj" je pri avtobusu prvo vprašanje. MapLibre se naloži šele, ko lega res
 obstaja — vlaki je nimajo nikoli in zanje tega okvira ni; prazen bi obljubljal
 podatek, ki ne obstaja.
 
@@ -354,8 +336,7 @@ stoji posebej (`.runs-ovoj`), da ob drsenju ne odide.
 
 Frontend je **vanilla JS brez ogrodja**. Grafi so ročno risan SVG z lastnim
 tooltipom (`train.js`) — ni chart knjižnice in je ne dodajaj brez razloga.
-Leaflet in MapLibre sta gostovana pri nas (`static/leaflet/`,
-`static/maplibre-6.10.0/`).
+MapLibre je gostovan pri nas (`static/maplibre-6.10.0/`).
 
 ## Gumb „osveži“ obstaja zato, ker se osveževanje ne vidi
 

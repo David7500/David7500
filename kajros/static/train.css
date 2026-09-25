@@ -444,27 +444,17 @@
   font: 500 11px/1 var(--sans); color: var(--ink-mute); text-decoration: none;
 }
 .run-map-full:hover { color: var(--accent-lit); }
-/* `.leaflet-container` ima svoj `background: #ddd` in Leafletov CSS se nalozi
-   SELE ob prvi legi -- torej za nasim. Enaka specificnost, poznejsi zmaga,
-   zato mora biti nas selektor sestavljen. Pri 260 px se to ni videlo, ker
-   ploscice pokrijejo cel okvir; cez celo stran pa je bila polovica bela. */
-/* Ovoj rabi namig, ki lezi cez zemljevid. */
+/* Ovoj nosi zemljevid; namig o gestah je MapLibrov (`cooperativeGestures`). */
 .run-map-holder { position: relative; }
-.run-map { height: 260px; }
-
-/* Namig se pokaze samo ob poskusu povecave s koleskom brez tipke in sam
-   izgine. Opomba, ki visi ves cas, bi bila cetrta razlaga na tem okviru. */
-.run-map-hint {
-  position: absolute; inset: auto 10px 10px 10px;
-  z-index: 500; padding: 7px 9px;
-  background: rgba(22, 24, 28, 0.93);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font: 400 11px/1.35 var(--sans); color: var(--ink-dim);
-  text-align: center; pointer-events: none;
+.run-map { height: 260px; background: #0f1115; }
+.run-map .ni-zemljevida {
+  display: flex; align-items: center; justify-content: center; height: 100%;
+  font: 400 12px/1.4 var(--sans); color: var(--ink-mute);
 }
-/* Samo ozadje rabi sestavljen selektor -- prav to Leaflet nastavlja. */
-.run-map.leaflet-container { background: #0f1115; font-family: var(--sans); }
+/* Vozilo je oznaka DOM; vrtenje ji postavlja MapLibre, zato brez lastnega
+   `transform`. */
+.run-bus { line-height: 0; cursor: default; }
+.run-map .maplibregl-cooperative-gesture-screen { font: 500 13px/1.35 var(--sans); }
 
 /* Legenda pod zemljevidom: dve oznaki, dva pomena. Brez nje je moder avtobus
    ob zeleni piki uganka -- in prav razlika med njima je bistvo tega okvira. */
@@ -544,10 +534,6 @@
   flex: 1 1 auto !important;
   height: auto !important;
 }
-.run-map .leaflet-tile { filter: brightness(0.42) contrast(0.7) saturate(0.5); }
-/* Vektorska podlaga je umirjena ze sama; zatemnitev je zato blazja (glej
- * `map-quiet` v dashboard.css). */
-.run-map .leaflet-gl-layer { filter: brightness(0.66) contrast(0.9); }
 @media (max-width: 720px) { .run-map { height: 210px; } }
 
 /* ---------- preprost pogled na sirokem zaslonu ----------

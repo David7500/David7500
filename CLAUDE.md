@@ -227,7 +227,7 @@ Poti, ki niso za aplikacijo, ampak za brskalnike in iskalnike: `/favicon.ico`,
 Napaka je **stran**,
 kadar jo bere človek, in JSON pod `/api/`. Absolutni naslov zanje je
 `KAJROS_BASE_URL`, ne `request.url` — za tunelom je ta `http://127.0.0.1:8000`.
-**Tujih izvorov v strani ni**: pisave in Leaflet so naši, ostanejo le ploščice
+**Tujih izvorov v strani ni**: pisave in MapLibre so naši, ostanejo le ploščice
 zemljevida. Podrobnosti v `.claude/rules/strezba.md` in `oznake.md`.
 
 **Pregled za skrbnika zahteva žeton**; brez njega poti ni (404). Prvi obisk
