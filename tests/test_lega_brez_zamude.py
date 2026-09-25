@@ -10,10 +10,29 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from kajros import collector, db
+import pytest
+
+from kajros import collector, db, iz_lege
 
 DANES = date.today()
 ZDAJ = datetime(DANES.year, DANES.month, DANES.day, 12, 0, tzinfo=collector.TZ)
+
+
+@pytest.fixture(autouse=True)
+def _cist_spomin():
+    """`iz_lege` si feed zapomni v modulu; vsak preizkus začne od začetka."""
+    iz_lege._v_feedu.clear()
+    iz_lege._sled.clear()
+    iz_lege._prvic = None
+    yield
+    iz_lege._v_feedu.clear()
+    iz_lege._sled.clear()
+    iz_lege._prvic = None
+
+
+def _feed(*trip_ids):
+    """Feed zamud je bil prebran pred dvema minutama in je nosil te vožnje."""
+    iz_lege.zabelezi_feed(trip_ids, ZDAJ.timestamp() - 120)
 
 
 def _vozja(c, trip_id, agency, zacetek_s, konec_s):
@@ -43,7 +62,30 @@ def test_steje_vozilo_na_poti_brez_zamude():
     db.fill_trip_window(c)
     _lega(c, "nov")
     _lega(c, "star")
-    assert collector.lega_brez_zamude(c, ZDAJ) == {"1119": [1, 2]}
+    _feed("star")
+    # [ne v feedu, brez zamude, vseh]
+    assert collector.lega_brez_zamude(c, ZDAJ) == {"1119": [1, 1, 2]}
+
+
+def test_zamuda_iz_lege_ne_skrije_napake_vira():
+    """Vožnja, ki jo feed izpušča, a ima zamudo iz lege: napaka vira ostane."""
+    c = _baza()
+    _vozja(c, "nov", "1119", 11 * 3600, 13 * 3600)
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, feed_ts)"
+              " VALUES('nov', ?, 2, 60, 0)", (DANES.isoformat(),))
+    db.fill_trip_window(c)
+    _lega(c, "nov")
+    _feed()
+    assert collector.lega_brez_zamude(c, ZDAJ) == {"1119": [1, 0, 1]}
+
+
+def test_pred_prvim_branjem_feeda_ni_nic_izpusceno():
+    """Po zagonu še ne vemo, katere vožnje feed nosi."""
+    c = _baza()
+    _vozja(c, "nov", "1119", 11 * 3600, 13 * 3600)
+    db.fill_trip_window(c)
+    _lega(c, "nov")
+    assert collector.lega_brez_zamude(c, ZDAJ) == {"1119": [0, 1, 1]}
 
 
 def test_ne_steje_vozila_ki_je_komaj_odpeljalo_ali_je_ze_na_koncu():
@@ -71,7 +113,8 @@ def test_nocna_vozja_s_vcerajsnjim_dnem():
     _vozja(c, "noc", "1119", 35 * 3600, 37 * 3600)                # 11:00-13:00 naslednji dan
     db.fill_trip_window(c)
     _lega(c, "noc", dan=(DANES - timedelta(days=1)).isoformat())
-    assert collector.lega_brez_zamude(c, ZDAJ) == {"1119": [1, 1]}
+    _feed()
+    assert collector.lega_brez_zamude(c, ZDAJ) == {"1119": [1, 1, 1]}
 
 
 def test_lpp_brez_dneva_v_legi_velja_danes():
@@ -82,4 +125,5 @@ def test_lpp_brez_dneva_v_legi_velja_danes():
               " VALUES('d|v|p', ?, 1, 60, 0)", (DANES.isoformat(),))
     db.fill_trip_window(c)
     _lega(c, "d|v|p", dan=None)
-    assert collector.lega_brez_zamude(c, ZDAJ) == {"lpp": [0, 1]}
+    _feed("d|v|p")
+    assert collector.lega_brez_zamude(c, ZDAJ) == {"lpp": [0, 0, 1]}

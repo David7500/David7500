@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db
+from . import config, db, iz_lege
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -417,6 +417,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     # ni videl nihče, dokler potnik ni čakal na avtobus.
     neznanih = 0
     zamenjanih = 0
+    v_feedu: set[str] = set()
 
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
@@ -428,6 +429,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             continue
         zamenjanih += zamenjava is not None
         trips_seen += 1
+        v_feedu.add(trip_id)
 
         service_date = tu.trip.start_date or None
         if service_date and len(service_date) == 8:
@@ -514,6 +516,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             )
 
     conn.commit()
+    iz_lege.zabelezi_feed(v_feedu)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
@@ -535,13 +538,18 @@ BREZ_ZAMUDE_PO_S = 600
 
 
 def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list[int]]:
-    """Prevoznik -> [vozil brez zamude, vozil z lego] na vožnjah, ki zdaj vozijo.
+    """Prevoznik -> [ne v feedu zamud, brez zamude, vozil z lego] na vožnjah,
+    ki zdaj vozijo.
 
     Obratna stran `rt_neznanih`: tam feed nosi vožnjo, ki je ne poznamo, tu
-    vozilo z lego vozi vožnjo, za katero feed zamud **nima ničesar**. Od 21. 9.
-    2026 je bilo tako ~430 Nomagovih voženj na dan (vse z veljavnostjo od
-    21. 9.) -- lege so bile, zamud ni bilo, in števec `rt_neznanih` je bil ves
-    čas zelen. Na tabli smo jo opazili štiri dni pozneje.
+    vozilo z lego vozi vožnjo, ki je feed zamud **ne nosi**. Od 21. 9. 2026 je
+    bilo tako ~430 Nomagovih voženj na dan (vse z veljavnostjo od 21. 9.) --
+    lege so bile, zamud ni bilo, in števec `rt_neznanih` je bil ves čas zelen.
+    Na tabli smo jo opazili štiri dni pozneje.
+
+    Števca sta dva, ker `iz_lege` vrzel zapolni: „ne v feedu“ je napaka vira,
+    „brez zamude“ (nobene vrstice v `run`) pa tisto, kar vidi potnik. Brez
+    prvega bi zapolnitev napako vira skrila.
 
     Vožnja „vozi“, kadar je po voznem redu na poti vsaj `BREZ_ZAMUDE_PO_S`;
     brez tega bi štelo vsako vozilo, ki čaka na izhodišču ali je ravnokar
@@ -552,7 +560,7 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
     now_s = int((zdaj - polnoc).total_seconds())
     out: dict[str, list[int]] = {}
     for r in conn.execute(
-        "SELECT t.agency, "
+        "SELECT t.agency, v.trip_id, "
         "       EXISTS (SELECT 1 FROM run r WHERE r.trip_id = v.trip_id "
         "                AND r.service_date = COALESCE(v.service_date, ?)) AS ima "
         "FROM vehicle_now v JOIN trip t USING (trip_id) "
@@ -564,9 +572,10 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
          danes.isoformat(), danes.isoformat(), now_s,
          (danes - timedelta(days=1)).isoformat(), now_s, BREZ_ZAMUDE_PO_S),
     ):
-        stevec = out.setdefault(r["agency"], [0, 0])
-        stevec[0] += not r["ima"]
-        stevec[1] += 1
+        stevec = out.setdefault(r["agency"], [0, 0, 0])
+        stevec[0] += iz_lege.brez_feeda(r["trip_id"], zdaj.timestamp())
+        stevec[1] += not r["ima"]
+        stevec[2] += 1
     return out
 
 
@@ -786,7 +795,12 @@ def poll_positions(conn: sqlite3.Connection) -> dict:
     if feed is None:
         conn.commit()
         return {"vehicles": 0, "unchanged": True}
-    return ingest_positions(conn, feed)
+    izid = ingest_positions(conn, feed)
+    # Za vožnje, ki jih feed zamud ne nosi, zamudo izmerimo iz lege sami.
+    # Za `ingest_positions`, da so lege shranjene tudi, če to odpove.
+    if config.ZAMUDA_IZ_LEGE:
+        izid["iz_lege"] = iz_lege.iz_feeda(conn, feed)
+    return izid
 
 
 # ---------------------------------------------------------------- obrezovanje

@@ -379,9 +379,22 @@ Od 21. 9. 2026 IJPP `trip_updates` nima **nobene** vožnje z veljavnostjo od
 `vehicle_positions` pa ista vozila so, pod novimi id-ji (25. 9. ob 11:16:
 22 vozil, nobeno v `trip_updates`). Vožnje z veljavnostjo od 7. in 14. 9.
 imajo zamude normalno. Najverjetneje ima derp.si za zamude star vozni red:
-lega ga ne rabi, zamuda na postanek pa ga. Tabla zato pri teh vožnjah piše
-„brez podatka“, četudi vozilo vozi in ga vidimo na zemljevidu. Izmerjeno in
-razčlenjeno v `docs/MERITVE.md` (25. 9. 2026).
+lega ga ne rabi, zamuda na postanek pa ga. Tabla je pri teh vožnjah pisala
+„brez podatka“, četudi je vozilo vozilo in smo ga videli na zemljevidu.
+Izmerjeno in razčlenjeno v `docs/MERITVE.md` (25. 9. 2026).
+
+Pregled to kaže kot `lega_brez_zamude` (`collector`), trojko
+[ne v feedu zamud, brez vsake zamude, vozil z lego] po prevozniku. Števca sta
+dva, ker vrzel zapolnjujemo sami in prvi sicer ne bi več videl napake vira.
+
+**Kar feed zamud izpušča, izmerimo iz lege** (`iz_lege.py`): lega na traso,
+prehod postanka med dvema legama, največ 60 s narazen, zapis v `run` in
+`obs` kot iz feeda, s časom lege po prehodu. Na vožnjah, ki imajo oboje,
+se ujema s feedom v 92 % na minuto natančno (izmerjeno v `docs/MERITVE.md`).
+Izhodišča ne meri. Teče samo s strežnikom: `kajros collect` na malini leg
+ne bere (`KAJROS_POSITIONS=0`), izklop `KAJROS_ZAMUDA_IZ_LEGE=0`. Vožnja,
+ki jo feed zamud v zadnjih 5 min omeni, gre mimo -- iz lege se piše samo
+tam, kjer feeda ni.
 
 **Zgodovina gre čez zamenjavo** (`db.PREDNIKI_SQL`): običajna zamuda, okno
 vožnje in model štejejo tudi meritve stare vožnje, prevedene na nov vozni

@@ -2724,3 +2724,48 @@ Pregled za skrbnika ga kaže po prevozniku. Ob 11:50: na vožnjah, ki jih feed
 nosi, 0 od 295 (LPP mestni 51, Arriva 106, Nomago 102 …), na vožnjah z
 veljavnostjo od 21. 9. 10 od 10 (Nomago 8, Arriva 2). Meja 10 min je tam,
 ker vozilo na izhodišču ali tik po odhodu še nima prvega sporočila.
+
+## Zamuda iz lege za vožnje, ki jih feed zamud izpušča (25. 9. 2026)
+
+Nadaljevanje ugotovitve zgoraj: ~480 voženj na dan ima lego, zamude pa ne.
+`iz_lege.py` jo izmeri sam: lega na traso vožnje (`deljenje.Voznja`), prehod
+postanka med dvema legama, največ 60 s narazen, zapis v `run`/`obs` z
+`feed_ts` = časom lege po prehodu.
+
+**Meritev s kodo, ki je šla v zajem**, na vožnjah, ki imajo tudi feed: 24 min
+surovih leg IJPP (11:40–12:04, 19 594 leg na vožnjah iz voznega reda), predvajanih
+skozi `iz_lege.opazuj` v prazno bazo s pripeto živo bazo samo za branje.
+
+| prevoznik | prehodov | mediana razlike | mediana \|razlike\| | p90 | v 60 s | v 120 s |
+|---|---|---|---|---|---|---|
+| Arriva | 688 | −4 s | 5 s | 52 s | 92,3 % | 96,8 % |
+| Nomago | 558 | −3 s | 4 s | 56 s | 90,3 % | 95,7 % |
+| LPP primestni | 201 | −10 s | 10 s | 39 s | 93,5 % | 96,5 % |
+| AP Murska Sobota | 104 | −4 s | 4 s | 60 s | 89,4 % | 98,1 % |
+| **vse** | **1 551** | **−4 s** | **5 s** | **54 s** | **91,6 %** | **96,5 %** |
+
+Na vožnjah z veljavnostjo od 21. 9. je v istem času nastalo 62 prehodov
+(Nomago 57, Arriva 5), ki jih feed ni imel. Cena: mediana 0,13 ms na lego,
+p90 0,31 ms; prvi klic za vožnjo zgradi traso (do 50 ms). Številke so s
+`deljenje.py` v stanju 6fefe4e (lega postankov enkrat na linijo). V zajemu gre skozi
+samo lega vožnje, ki je feed zamud 5 min ni omenil (~25 vozil).
+
+Trije popravki na poti do tega, vsak izmerjen na prvem vzorcu (528 prehodov):
+
+* **Prva lega samo v oknu voznega reda** (od 60 min zamude do 20 min
+  prehitevanja). Brez tega se je krožna linija ujela na napačen krak: A-vožnja
+  z 48 postanki je dala +5 183 s proti feedovim +361.
+* **Meja hitrosti 30 m/s vzdolž trase.** Ena lega je skočila čez osem
+  postajališč v 13 s in dala zamude od −202 do −1 273 s.
+* **Izhodišča ne merimo.** Vozilo pred odhodom kroži po postajališču; „prehod“
+  je bil 595–667 s prezgodaj.
+
+Skupaj p90 759 s → 54 s, v 60 s 75 % → 92 %.
+
+Ostanek (4 % nad 2 min) ni razložen. V enem pregledanem primeru (N0124,
+vožnja 469707) je imel feed na dveh zaporednih postankih isto vrednost
++853 s, lega pa +257 in +253 s — kar diši po zamrznjeni napovedi feeda, ne po
+napaki lege. Izmerjeno to ni.
+
+**Števec v pregledu je zdaj trojka** [ne v feedu, brez vsake zamude, vozil]:
+iz lege zapolnjena vožnja ni več „brez zamude“, napaka vira pa ostane vidna.
