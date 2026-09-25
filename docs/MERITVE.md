@@ -2620,10 +2620,18 @@ napaka enega. Zgrešeni so skoraj vsi vozila, katerih
 GPS je kilometre od lastne trase (feed jih je pripisal napačni vožnji) —
 takega vozila tudi potnik ne bi mogel potrditi.
 
-Polmer iskanja postaj pri avtobusih je 6 km, ne 2,5: pri 2,5 km je bilo
-zgrešenih 14 od 150 (medkrajevni avtobus je daleč od postajališča), pri
-6 km 7. Čas: mediana 55 ms, p90 90 ms, najdlje 0,6 s (prve trase v
-pomnilnik).
+Polmer iskanja postaj pri avtobusih: samo 2,5 km je zgrešil 14 od 150
+(medkrajevni avtobus je daleč od postajališča), 6 km 7. Zdaj dva koraka —
+2,5 km, in 6 km samo, kadar blizu ni nobenega avtobusa: na istem vzorcu 200
+prva 177 proti 174 pri stalnih 6 km, med petimi 184 obakrat.
+
+**Hitrost.** Prva objava na arwenu je za Ljubljano rabila **17 s hladno in
+1,75 s toplo**: za vsako od ~600 voženj v okolici so se naložili postanki in
+zadnja zamuda, preden se je sploh vedelo, ali gre vožnja mimo. Zdaj je prvo
+sito po trasi (trase si vožnje delijo), postanki, zamuda in GPS pa samo za
+preživele. Na razvojnem računalniku Ljubljana 0,54 s hladno in 0,09 s toplo,
+Maribor 0,21 / 0,06, Postojna 0,05 / 0,05. Pomnilnik: vse vožnje v okolici
+ure (1 512, 941 tras) so 48,5 MB.
 
 Vozila v `vehicle_now`, katerih vožnja se **še ni začela** (tudi 26 min
 pred odhodom, do 5 km od trase), v kandidatih niso — potnik v njih ne sedi.

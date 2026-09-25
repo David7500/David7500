@@ -24,6 +24,7 @@ def _lon(km: float) -> float:
 @pytest.fixture()
 def conn():
     deljenje._predpomnilnik.clear()
+    deljenje._trase.clear()
     deljenje._kandidati_casi.clear()
     deljenje._deljenja_casi.clear()
     c = db.connect(":memory:")

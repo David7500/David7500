@@ -93,9 +93,14 @@ KANDIDAT_ODMIK_M = 250
 KANDIDAT_PRED_S = 15 * 60
 KANDIDAT_ZA_S = 45 * 60
 #: Postaje, med katerimi iščemo kandidate. Vlak je lahko 10 km od najbližje
-#: postaje (Postojna--Divača), avtobus pa ima postajališče na vsakih nekaj sto
-#: metrov.
-KANDIDAT_POLMER_M = {"zeleznica": 12000, "avtobus": 6000}
+#: postaje (Postojna--Divača); avtobus ima postajališče na vsakih nekaj sto
+#: metrov, medkrajevni pa je lahko tudi 5 km od njega (avtocesta). Zato pri
+#: avtobusih dva koraka: najprej blizu, in samo če tam ni nič, širše. V
+#: Ljubljani je v 6 km ~1 500 postajališč in poizvedba je bila na arwenu
+#: večji del od 1,75 s; pri 2,5 km so bili zgrešeni 14 od 150 avtobusov,
+#: pri 6 km 7.
+KANDIDAT_POLMER_M = {"zeleznica": 12000, "avtobus": 2500}
+KANDIDAT_POLMER_SIRSE_M = {"avtobus": 6000}
 #: Avtobus z GPS lego, oddaljeno več od tega, ni potnikov avtobus.
 KANDIDAT_GPS_M = 600
 #: Največ kandidatov v odgovoru; potnik izbira med njimi z dotikom.
@@ -348,7 +353,7 @@ _predpomnilnik: dict[str, Voznja | None] = {}
 #: Trase po `shape_id`: vse vožnje ene linije v isti smeri imajo isto traso,
 #: in trasa je večji del pomnilnika (postanki so nekaj deset vrstic).
 _trase: dict[str, Trasa] = {}
-_pp_znacka: str | None = None
+_pp_znacka: str | None = "\0ni prebrana"
 _pp_zaklep = threading.Lock()
 #: Toliko voženj v pomnilniku. Izmerjeno 25. 9. 2026: vse vožnje v okolici ure
 #: (1 512, 941 tras) so 48,5 MB; to je zgornja meja, ne običaj.
@@ -376,40 +381,65 @@ def _postanki(conn: sqlite3.Connection, trip_id: str, trasa: Trasa) -> list[dict
     return out
 
 
-def voznja(conn: sqlite3.Connection, trip_id: str) -> Voznja | None:
-    """Vožnja s traso in postanki, iz pomnilnika. None, kadar trase ni."""
-    global _pp_znacka
+#: Kako pogosto preveriti, ali je bil uvožen nov vozni red. Ob vsakem klicu
+#: bi bila to poizvedba na vožnjo -- pri kandidatih v Ljubljani šesto.
+_PP_PREVERI_S = 60
+_pp_preverjeno = 0.0
+
+
+def _preveri_znacko(conn: sqlite3.Connection) -> None:
+    """Nov vozni red lahko spremeni traso in postanke pod istim id-jem."""
+    global _pp_znacka, _pp_preverjeno
+    if time.monotonic() - _pp_preverjeno < _PP_PREVERI_S:
+        return
     znacka = db.get_meta(conn, "gtfs_imported_at")
     with _pp_zaklep:
-        # Nov vozni red lahko spremeni traso in postanke pod istim id-jem.
+        _pp_preverjeno = time.monotonic()
         if znacka != _pp_znacka:
             _predpomnilnik.clear()
             _trase.clear()
             _pp_znacka = znacka
+
+
+def trasa(conn: sqlite3.Connection, shape_id: str | None) -> Trasa | None:
+    """Trasa iz pomnilnika. Brez postankov -- za grobo sito kandidatov."""
+    if not shape_id:
+        return None
+    _preveri_znacko(conn)
+    t = _trase.get(shape_id)
+    if t is not None:
+        return t
+    sh = conn.execute("SELECT points FROM shape WHERE shape_id = ?", (shape_id,)).fetchone()
+    kosi = [[tuple(p) for p in kos] for kos in json.loads(sh["points"])] if sh else []
+    if sum(len(k) for k in kosi) < 2:
+        return None
+    t = Trasa(kosi)
+    with _pp_zaklep:
+        if len(_trase) >= _PP_NAJVEC:
+            _trase.clear()
+        _trase[shape_id] = t
+    return t
+
+
+def voznja(conn: sqlite3.Connection, trip_id: str) -> Voznja | None:
+    """Vožnja s traso in postanki, iz pomnilnika. None, kadar trase ni."""
+    _preveri_znacko(conn)
+    with _pp_zaklep:
         if trip_id in _predpomnilnik:
             return _predpomnilnik[trip_id]
     v = conn.execute(
         "SELECT trip_id, train_no, headsign, network, mode, agency, shape_id "
-        "FROM trip WHERE trip_id = ? AND shape_id IS NOT NULL", (trip_id,)).fetchone()
+        "FROM trip WHERE trip_id = ?", (trip_id,)).fetchone()
     izid = None
-    trasa = _trase.get(v["shape_id"]) if v else None
-    if v and trasa is None:
-        sh = conn.execute("SELECT points FROM shape WHERE shape_id = ?",
-                          (v["shape_id"],)).fetchone()
-        kosi = [[tuple(p) for p in kos] for kos in json.loads(sh["points"])] if sh else []
-        if sum(len(k) for k in kosi) >= 2:
-            trasa = Trasa(kosi)
-    if trasa is not None:
-        postanki = _postanki(conn, trip_id, trasa)
+    t = trasa(conn, v["shape_id"]) if v else None
+    if t is not None:
+        postanki = _postanki(conn, trip_id, t)
         if len(postanki) >= 2:
-            izid = Voznja(dict(v), trasa, postanki)
+            izid = Voznja(dict(v), t, postanki)
     with _pp_zaklep:
         if len(_predpomnilnik) >= _PP_NAJVEC:
             _predpomnilnik.clear()
-            _trase.clear()
         _predpomnilnik[trip_id] = izid
-        if trasa is not None:
-            _trase[v["shape_id"]] = trasa
     return izid
 
 
@@ -440,7 +470,7 @@ def _dneva(zdaj: datetime) -> list[tuple[str, int]]:
 # ------------------------------------------------------------ kandidati
 
 _ZIVE_VOZNJE_SQL = """
-SELECT DISTINCT t.trip_id, t.network
+SELECT DISTINCT t.trip_id, t.shape_id
 FROM station st
 JOIN sched s ON s.stop_id = st.stop_id
 JOIN trip t ON t.trip_id = s.trip_id
@@ -452,16 +482,16 @@ WHERE st.lat BETWEEN ? AND ? AND st.lon BETWEEN ? AND ?
 """
 
 
-def _zive_blizu(conn: sqlite3.Connection, lat: float, lon: float,
-                zdaj: datetime) -> list[tuple[str, str, int]]:
-    """(trip_id, prometni dan, sekunde od polnoči) za vožnje v okolici.
+def _zive_blizu(conn: sqlite3.Connection, lat: float, lon: float, zdaj: datetime,
+                polmeri: dict[str, int]) -> list[tuple[str, str, int, str]]:
+    """(trip_id, prometni dan, sekunde od polnoči, shape_id) za vožnje v okolici.
 
     Najprej postaje v okolici, šele nato vožnje skozi njih: trase vseh
     voženj, ki se ta hip vozijo, so desettisoče točk, in brati jih vse za
     vsakega potnika bi bilo potratno.
     """
     out = []
-    for network, polmer in KANDIDAT_POLMER_M.items():
+    for network, polmer in polmeri.items():
         dlat = polmer / _M_NA_STOPINJO
         dlon = dlat / max(math.cos(math.radians(lat)), 0.1)
         for dan, now_s in _dneva(zdaj):
@@ -469,7 +499,7 @@ def _zive_blizu(conn: sqlite3.Connection, lat: float, lon: float,
                     dan, lat - dlat, lat + dlat, lon - dlon, lon + dlon, network,
                     now_s + KANDIDAT_PRED_S,
                     now_s - KANDIDAT_ZA_S - stats.MAX_REALNA_ZAMUDA_S)):
-                out.append((r["trip_id"], dan, now_s))
+                out.append((r["trip_id"], dan, now_s, r["shape_id"]))
     return out
 
 
@@ -477,7 +507,7 @@ def _zadnje_zamude(conn: sqlite3.Connection, pari: list[tuple[str, str, int]]
                    ) -> dict[str, int]:
     """Zadnja izmerjena zamuda vsake vožnje -- ista meja kot povsod."""
     po_dnevih: dict[tuple[str, int], list[str]] = {}
-    for trip_id, dan, now_s in pari:
+    for trip_id, dan, now_s, *_ in pari:
         po_dnevih.setdefault((dan, now_s), []).append(trip_id)
     out = {}
     for (dan, now_s), ids in po_dnevih.items():
@@ -536,20 +566,53 @@ def kandidati(conn: sqlite3.Connection, lat: float, lon: float,
     istem tiru.
     """
     zdaj = zdaj or datetime.now(TZ)
-    zdaj_ts = int(zdaj.timestamp())
     meja = KANDIDAT_ODMIK_M + min(max(natancnost or 0, 0), NATANCNOST_MAX_M)
-    pari = _zive_blizu(conn, lat, lon, zdaj)
-    zamude = _zadnje_zamude(conn, pari)
-    gps = _gps(conn, [p[0] for p in pari], zdaj_ts)
+    out = _ocenjeni(conn, lat, lon, meja, prej, zdaj, KANDIDAT_POLMER_M)
+    if not any(k["network"] == "avtobus" for k in out):
+        znani = {k["trip_id"] for k in out}
+        out += [k for k in _ocenjeni(conn, lat, lon, meja, prej, zdaj,
+                                     KANDIDAT_POLMER_SIRSE_M)
+                if k["trip_id"] not in znani]
+    out.sort(key=lambda k: k["_ocena"])
+    # Dve vožnji z isto oznako, istim ciljem in na istem kraju sta za potnika
+    # en gumb -- v IJPP jih je kar nekaj (sezonske različice, A8425 dvakrat
+    # proti Ljubljani na emulatorju 25. 9. 2026). Obdrži se bolje ocenjena.
+    videni, izbrani = set(), []
+    for k in out:
+        kljuc = (k["train_no"], k["headsign"], k.get("pri"), tuple(k.get("med") or ()))
+        if kljuc in videni:
+            continue
+        videni.add(kljuc)
+        k.pop("_ocena")
+        izbrani.append(k)
+    return izbrani[:KANDIDATOV]
+
+
+def _ocenjeni(conn: sqlite3.Connection, lat: float, lon: float, meja: float,
+              prej: dict | None, zdaj: datetime, polmeri: dict[str, int]) -> list[dict]:
+    """Kandidati v danem polmeru, z oceno (`_ocena`, manjša je boljša)."""
+    zdaj_ts = int(zdaj.timestamp())
+    # Najprej sito po trasi: v Ljubljani je v okolici ~600 voženj, a le
+    # nekaj deset gre res mimo. Trase si delijo vožnje iste linije, postanki
+    # pa so za vsako vožnjo svoji -- zato postanki, zamude in GPS šele za
+    # tiste, ki sito preživijo. Izmerjeno na arwenu: 17 s hladno in 1,75 s
+    # toplo, preden je bilo sito prvo.
+    blizu = []
+    for trip_id, dan, now_s, shape_id in _zive_blizu(conn, lat, lon, zdaj, polmeri):
+        tr = trasa(conn, shape_id)
+        if tr is None or not tr.blizu(lat, lon, meja):
+            continue
+        along, odmik = tr.projiciraj(lat, lon)
+        if odmik <= meja:
+            blizu.append((trip_id, dan, now_s, along, odmik))
+    zamude = _zadnje_zamude(conn, [b[:3] for b in blizu])
+    gps = _gps(conn, [b[0] for b in blizu], zdaj_ts)
     out, videno = [], set()
-    for trip_id, dan, now_s in pari:
+    for trip_id, dan, now_s, along, odmik in blizu:
         if trip_id in videno:
             continue
         v = voznja(conn, trip_id)
-        if v is None or not v.trasa.blizu(lat, lon, meja):
-            continue
-        along, odmik = v.trasa.projiciraj(lat, lon)
-        if odmik > meja:
+        if v is None:
             continue
         smer = None
         if prej and prej.get("lat") is not None:
@@ -588,19 +651,7 @@ def kandidati(conn: sqlite3.Connection, lat: float, lon: float,
             "network": v.network, "mode": v.mode, "agency": v.agency,
             "smer_potrjena": bool(smer), **_kje(v, along), "_ocena": ocena,
         })
-    out.sort(key=lambda k: k["_ocena"])
-    # Dve vožnji z isto oznako, istim ciljem in na istem kraju sta za potnika
-    # en gumb -- v IJPP jih je kar nekaj (sezonske različice, A8425 dvakrat
-    # proti Ljubljani na emulatorju 25. 9. 2026). Obdrži se bolje ocenjena.
-    videni, izbrani = set(), []
-    for k in out:
-        kljuc = (k["train_no"], k["headsign"], k.get("pri"), tuple(k.get("med") or ()))
-        if kljuc in videni:
-            continue
-        videni.add(kljuc)
-        k.pop("_ocena")
-        izbrani.append(k)
-    return izbrani[:KANDIDATOV]
+    return out
 
 
 # ------------------------------------------------------------ omejevanje
