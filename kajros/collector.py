@@ -7,6 +7,7 @@ z zadnjim znanim stanjem.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from datetime import date, datetime, timedelta
@@ -526,6 +527,49 @@ def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
     conn.commit()
 
 
+#: Koliko mora biti vožnja po voznem redu že na poti, preden je molk feeda
+#: napaka in ne le prvo sporočilo, ki še pride. Izmerjeno 25. 9. 2026 ob 11:50:
+#: pri tej meji je bilo brez zamude 0 od 295 vozil na vožnjah, ki jih feed
+#: nosi, in 10 od 10 na vožnjah z veljavnostjo od 21. 9., ki jih ne.
+BREZ_ZAMUDE_PO_S = 600
+
+
+def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list[int]]:
+    """Prevoznik -> [vozil brez zamude, vozil z lego] na vožnjah, ki zdaj vozijo.
+
+    Obratna stran `rt_neznanih`: tam feed nosi vožnjo, ki je ne poznamo, tu
+    vozilo z lego vozi vožnjo, za katero feed zamud **nima ničesar**. Od 21. 9.
+    2026 je bilo tako ~430 Nomagovih voženj na dan (vse z veljavnostjo od
+    21. 9.) -- lege so bile, zamud ni bilo, in števec `rt_neznanih` je bil ves
+    čas zelen. Na tabli smo jo opazili štiri dni pozneje.
+
+    Vožnja „vozi“, kadar je po voznem redu na poti vsaj `BREZ_ZAMUDE_PO_S`;
+    brez tega bi štelo vsako vozilo, ki čaka na izhodišču ali je ravnokar
+    odpeljalo.
+    """
+    danes = zdaj.date()
+    polnoc = datetime(danes.year, danes.month, danes.day, tzinfo=TZ)
+    now_s = int((zdaj - polnoc).total_seconds())
+    out: dict[str, list[int]] = {}
+    for r in conn.execute(
+        "SELECT t.agency, "
+        "       EXISTS (SELECT 1 FROM run r WHERE r.trip_id = v.trip_id "
+        "                AND r.service_date = COALESCE(v.service_date, ?)) AS ima "
+        "FROM vehicle_now v JOIN trip t USING (trip_id) "
+        "WHERE v.seen_ts >= ? AND t.start_s IS NOT NULL "
+        "  AND CASE COALESCE(v.service_date, ?) "
+        "        WHEN ? THEN ? WHEN ? THEN ? + 86400 END "
+        "      BETWEEN t.start_s + ? AND t.end_s",
+        (danes.isoformat(), int(zdaj.timestamp()) - POSITION_FRESH_S,
+         danes.isoformat(), danes.isoformat(), now_s,
+         (danes - timedelta(days=1)).isoformat(), now_s, BREZ_ZAMUDE_PO_S),
+    ):
+        stevec = out.setdefault(r["agency"], [0, 0])
+        stevec[0] += not r["ima"]
+        stevec[1] += 1
+    return out
+
+
 def poll_once(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.TRIP_UPDATES_URL, conn, "rt_etag")
     # Znacka za predpomnilnik strezbe, po vzoru `positions_fetched`. Pise se
@@ -537,6 +581,9 @@ def poll_once(conn: sqlite3.Connection) -> dict:
         return {"trips": 0, "changed": 0, "skipped": 0, "unchanged": True}
     izid = ingest(conn, feed)
     _zapisi_neznane(conn, "rt_neznanih", izid)
+    db.set_meta(conn, "lega_brez_zamude",
+                json.dumps(lega_brez_zamude(conn, datetime.now(TZ)), sort_keys=True))
+    conn.commit()
     return izid
 
 

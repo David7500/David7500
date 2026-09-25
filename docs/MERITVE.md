@@ -2700,3 +2700,11 @@ ni v `trip_updates`. Zamuda na postanek potrebuje vozni red, lega ne —
 zato je najverjetnejša razlaga, da ima derp.si za `trip_updates` vozni red
 izpred 21. 9. Števec `rt_neznanih` tega ne vidi, ker šteje id-je v feedu, ki
 jih mi ne poznamo, ne obratno.
+
+**Števec, ki bi to ujel 21. 9.:** `collector.lega_brez_zamude` ob vsakem
+branju zamud prešteje vozila s svežo lego na vožnji, ki je po voznem redu na
+poti vsaj 10 min, in koliko od njih nima danes nobene vrstice v `run`.
+Pregled za skrbnika ga kaže po prevozniku. Ob 11:50: na vožnjah, ki jih feed
+nosi, 0 od 295 (LPP mestni 51, Arriva 106, Nomago 102 …), na vožnjah z
+veljavnostjo od 21. 9. 10 od 10 (Nomago 8, Arriva 2). Meja 10 min je tam,
+ker vozilo na izhodišču ali tik po odhodu še nima prvega sporočila.

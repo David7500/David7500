@@ -1010,6 +1010,13 @@ def api_health():
             for vir, kljuc in (("ijpp", "rt_neznanih"), ("lpp", "lpp_rt_neznanih"))
             if (v := db.get_meta(conn, kljuc))
         }
+        # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
+        # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
+        # pregledu nikomur nič ne pove.
+        lbz = db.get_meta(conn, "lega_brez_zamude")
+        out["lega_brez_zamude"] = {
+            stats.AGENCY_NAMES.get(ag, ag): n for ag, n in json.loads(lbz).items()
+        } if lbz else {}
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out

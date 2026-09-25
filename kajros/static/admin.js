@@ -389,6 +389,12 @@ function vrsticeZdravja(d) {
   const nez = Object.entries(z.rt_neznanih || {});
   const nezDel = Math.max(0, ...nez.map(([, [n, vseh]]) => (vseh ? n / vseh : 0)));
   const nezR = !nez.length ? "" : nezDel >= 0.02 ? "je-slaba" : nezDel > 0 ? "je-mlacna" : "je-dobra";
+  // Obratno: vozilo vozi in ima lego, feed zamud pa zanj nima nič. Od 21. do
+  // 25. 9. 2026 ~430 Nomagovih voženj na dan, števec zgoraj pa zelen. Na
+  // vožnjah, ki jih feed nosi, je bilo takih 0 od 295 -- zato je rdeče že malo.
+  const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [n]]) => n > 0);
+  const lbzDel = Math.max(0, ...lbz.map(([, [n, vseh]]) => (vseh ? n / vseh : 0)));
+  const lbzR = !z.lega_brez_zamude ? "" : lbzDel >= 0.02 ? "je-slaba" : lbzDel > 0 ? "je-mlacna" : "je-dobra";
   return [
     ["zadnja zamuda iz feeda", pred(z.last_feed_ts), feed],
     ["vlaki · zadnji zapis", pred(zel.last_feed_ts), omr(zel.last_feed_ts)],
@@ -399,6 +405,9 @@ function vrsticeZdravja(d) {
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—",
       nezR],
+    ["vozila z lego brez zamude",
+      lbz.length ? lbz.map(([ime, [n, vseh]]) => `${ime} ${st(n)} od ${st(vseh)}`).join(" · ") : "—",
+      lbzR],
     ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
     ["aktivnih obvestil", st(z.alerts_active), ""],
     ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, diskR],
