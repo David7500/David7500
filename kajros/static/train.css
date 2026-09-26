@@ -7,7 +7,7 @@
   color: #9aa3b0; text-decoration: none;
   font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif;
 }
-.back-link:hover { color: #e7eaf0; }
+@media (hover: hover) { .back-link:hover { color: #e7eaf0; } }
 
 .train-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 /* **Številka se ne sme odrezati.** Je identiteta strani: „LPV 2" je druga
@@ -443,7 +443,7 @@
 .run-map-full {
   font: 500 11px/1 var(--sans); color: var(--ink-mute); text-decoration: none;
 }
-.run-map-full:hover { color: var(--accent-lit); }
+@media (hover: hover) { .run-map-full:hover { color: var(--accent-lit); } }
 /* Ovoj nosi zemljevid; namig o gestah je MapLibrov (`cooperativeGestures`). */
 .run-map-holder { position: relative; }
 .run-map { height: 260px; background: #0f1115; }
@@ -494,7 +494,7 @@
   padding: 0; background: none; border: 1px solid var(--line);
   border-radius: 5px; color: var(--ink-faint); cursor: pointer;
 }
-.run-map-fs:hover { color: var(--ink); border-color: var(--line-strong, #3d434f); }
+@media (hover: hover) { .run-map-fs:hover { color: var(--ink); border-color: var(--line-strong, #3d434f); } }
 
 /* Gumb „osveži“. Vrtenje ni okras: brez njega je edini znak, da se je kaj
    zgodilo, podnapis, ki pride šele z odgovorom — na počasni povezavi je to
@@ -684,7 +684,7 @@
   font: 400 13px/1.3 var(--sans);
   cursor: pointer;
 }
-.bud-rezerva input { width: 18px; height: 18px; accent-color: var(--accent); }
+.bud-rezerva input { width: 18px; height: 18px; }
 .bud-dovoli {
   display: block; width: 100%;
   margin-top: 12px; padding: 10px;

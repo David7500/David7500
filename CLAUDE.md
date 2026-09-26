@@ -12,7 +12,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
 Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `pespoti`, `pot`, `naslovi`.
 
-**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (502 preizkusa). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (504 preizkusi). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 

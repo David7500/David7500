@@ -276,6 +276,8 @@ const MOST = (() => {
     return null;
   }
 })();
+// Slog, ki velja samo v aplikaciji (dolg pritisk na povezavo, base.css).
+if (MOST) document.documentElement.classList.add("v-aplikaciji");
 
 
 /** Telo odgovora kot JSON -- a samo uspešnega. Napaka FastAPI je tudi JSON

@@ -76,7 +76,7 @@
 .odhodi .zam { text-align: right; white-space: nowrap;
                font: 500 13px/1.35 var(--mono); font-variant-numeric: tabular-nums; }
 .odhodi a { color: inherit; text-decoration: none; }
-.odhodi a:hover { color: var(--accent-lit); }
+@media (hover: hover) { .odhodi a:hover { color: var(--accent-lit); } }
 
 /* Na telefonu odpade stolpec, ki ga potnik potrebuje najmanj: od kod vožnja
    prihaja. Ura, linija in zamuda ostanejo vse tri -- brez katere koli od njih
@@ -104,7 +104,7 @@
   text-decoration: none;
   font: 400 14px/1.4 var(--sans); color: var(--ink);
 }
-.povezave a:hover { color: var(--accent-lit); }
+@media (hover: hover) { .povezave a:hover { color: var(--accent-lit); } }
 .povezave .drobec { font: 400 12px/1.4 var(--sans); color: var(--ink-faint); }
 
 /* ---------- kazalo postaj ---------- */
@@ -116,7 +116,7 @@
 .kazalo li { break-inside: avoid; margin: 0 0 7px; }
 .kazalo a { font: 400 13.5px/1.4 var(--sans); color: var(--ink-dim);
             text-decoration: none; }
-.kazalo a:hover { color: var(--accent-lit); }
+@media (hover: hover) { .kazalo a:hover { color: var(--accent-lit); } }
 
 /* ---------- smer: stran ceste ---------- */
 /* Povezave in ne gumbi, ker stran nima JS. Izbrana nosi `aria-current`, da
@@ -135,7 +135,7 @@
   font: 400 12px/1.3 var(--sans); color: var(--ink-dim);
   text-decoration: none;
 }
-.smeri a:hover { color: var(--ink); border-color: var(--accent); }
+@media (hover: hover) { .smeri a:hover { color: var(--ink); border-color: var(--accent); } }
 .smeri a[aria-current="true"] {
   color: var(--ink); border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);

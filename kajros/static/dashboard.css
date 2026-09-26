@@ -43,7 +43,7 @@ body {
   color: #9aa3b0; text-decoration: none;
   font: 500 12px/1 'IBM Plex Sans', system-ui, sans-serif;
 }
-.top-link:hover { color: #e7eaf0; }
+@media (hover: hover) { .top-link:hover { color: #e7eaf0; } }
 
 
 
@@ -105,7 +105,7 @@ body {
   background: none; border: 0; color: #545c68;
   font: 400 20px/1 'IBM Plex Sans', system-ui, sans-serif; cursor: pointer;
 }
-.find-box .field-clear:hover { color: #e7eaf0; }
+@media (hover: hover) { .find-box .field-clear:hover { color: #e7eaf0; } }
 
 .find-list { margin-top: 8px; max-height: 260px; overflow-y: auto; }
 .find-row {
@@ -114,7 +114,7 @@ body {
   background: none; border: 0; border-radius: 6px;
   cursor: pointer; text-align: left;
 }
-.find-row:hover { background: #191c22; }
+@media (hover: hover) { .find-row:hover { background: #191c22; } }
 .find-row.is-on { background: #1f242c; }
 .find-kind { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 /* Kvadratek za avtobus, krog za vlak -- ista razlika kot na zemljevidu. */
@@ -223,7 +223,7 @@ body {
   width: 26px; height: 26px;
   color: #6b7480; font-size: 18px; line-height: 1;
 }
-.maplibregl-popup-close-button:hover { background: none; color: #e7eaf0; }
+@media (hover: hover) { .maplibregl-popup-close-button:hover { background: none; color: #e7eaf0; } }
 
 /* Ime postaje in vozilo pod miško: majhno, brez konice. */
 .kajros-tooltip .maplibregl-popup-content {
@@ -292,7 +292,7 @@ body {
 .locate-ctl button, .osvezi-ctl button {
   display: flex; align-items: center; justify-content: center; color: #79828f;
 }
-.locate-ctl button:hover, .osvezi-ctl button:hover { color: #0f1115; }
+@media (hover: hover) { .locate-ctl button:hover, .osvezi-ctl button:hover { color: #0f1115; } }
 .locate-ctl.is-on button { color: #2f7fff; }
 .locate-ctl.is-busy button { opacity: 0.45; }
 
@@ -524,7 +524,7 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
   color: #9aa3b0; text-decoration: none; text-align: center;
   font: 500 11.5px/1 'IBM Plex Sans', system-ui, sans-serif;
 }
-.veh-open:hover { color: var(--ink); border-color: var(--accent-lit); }
+@media (hover: hover) { .veh-open:hover { color: var(--ink); border-color: var(--accent-lit); } }
 
 /* Barvni ključi prevoznikov. Iste vrednosti kot `AGENCY_INK` v dashboard.js
    in `OPERATERJI` v scripts/preveri_paleto.py -- ce se spremenijo tu, se

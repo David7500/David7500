@@ -91,6 +91,58 @@ body.net-avtobus {
    zaradi katerih je past sploh nastala. */
 [hidden] { display: none !important; }
 
+/* ---------- dotik ----------
+ *
+ * V aplikaciji za Android je stran v WebView in vsaka brskalniška navada se
+ * tam bere kot "to ni prava aplikacija". Prijavljeno 26. 9. 2026: gumbi so
+ * modri, ko jih pritisneš. To je Chromov `tap-highlight`; namesto njega dobi
+ * vsak gumb in povezava plast v barvi svojega besedila, kot jo nariše Android
+ * (Materialov "state layer"): na oranžni ploščici potemni, na temni podlagi
+ * posvetli. Senca `inset` zato, ker leži nad ozadjem in pod besedilom, sledi
+ * zaobljenim robom in ne povozi `background`, ki je pri gumbih pomen.
+ *
+ * Isti razlog za preostale tri vrstice: brez `color-scheme` so izbirnik
+ * datuma, ure in spustni seznam svetli sredi temne strani, brez
+ * `accent-color` so potrditvena polja Chromovo modra, brez `::selection` je
+ * modro tudi označeno besedilo.
+ *
+ * `:hover` je v vseh datotekah zavit v `@media (hover: hover)`: na zaslonu na
+ * dotik obvisi na zadnjem pritisnjenem elementu, dokler se ne dotakneš drugam,
+ * in vrstica je videti izbrana. Preverja `tests/test_dotik.py`. */
+:root { color-scheme: dark; accent-color: var(--accent); }
+html { -webkit-tap-highlight-color: transparent; }
+::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--ink); }
+
+a, button, summary, [role="button"], [role="switch"], [role="tab"] {
+  transition: box-shadow .2s ease-out;
+}
+a:active, button:active, summary:active,
+[role="button"]:active, [role="switch"]:active, [role="tab"]:active {
+  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor 14%, transparent);
+  transition: none;
+}
+button, summary, [role="button"], [role="switch"], [role="tab"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Dolg pritisk na povezavo v WebView ne odpre menija "odpri v novem zavihku",
+   samo označi besedilo. V brskalniku ta meni je in je koristen, zato samo v
+   aplikaciji (razred postavi `common.js`, kadar obstaja `window.Kajros`). */
+.v-aplikaciji a {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Prehod med stranmi: nova stran se prelije čez staro, kot pri zaslonih
+   aplikacije, namesto da jo zamenja v enem koraku. Chrome od 126 (tudi
+   WebView); brskalnik, ki tega ne zna, pravilo preskoči. */
+@view-transition { navigation: auto; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .16s; }
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+}
+
 /* Visina glave. Bila je trdo zapisana v `.topbar` in hkrati ugibana kot
    `var(--topbar-h, 48px)` drugje -- torej stiri piksle narazen, in zemljevid
    "cez celo stran" je bil za toliko predolg. Ena vrednost, eno mesto. */
@@ -129,7 +181,7 @@ body.net-avtobus {
   font: 500 12px/1 var(--sans);
   white-space: nowrap;
 }
-.top-link:hover { color: var(--ink); }
+@media (hover: hover) { .top-link:hover { color: var(--ink); } }
 /* Ista povezava, ki pa ni povezava: budilke odpre nativni zaslon aplikacije,
    zato je gumb. Brez tega bi imela obrobo in ozadje brskalnikovega gumba. */
 button.top-link {
@@ -164,7 +216,7 @@ button.top-link {
   font: 500 12px/1 var(--sans);
   white-space: nowrap;
 }
-.net-tab:hover { color: var(--ink); }
+@media (hover: hover) { .net-tab:hover { color: var(--ink); } }
 .net-tab svg { flex-shrink: 0; }
 .net-tab.is-on {
   background: var(--bg-raised);
@@ -211,7 +263,7 @@ button.top-link {
   cursor: pointer;
   white-space: nowrap;
 }
-.mode-switch button:hover { color: var(--ink); }
+@media (hover: hover) { .mode-switch button:hover { color: var(--ink); } }
 .mode-switch button[aria-pressed="true"] {
   background: var(--line-firm);
   color: var(--ink);
@@ -232,14 +284,14 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   cursor: pointer;
   font: 600 13px/1.2 var(--sans);
 }
-.btn:hover { background: var(--accent-lit); }
+@media (hover: hover) { .btn:hover { background: var(--accent-lit); } }
 
 .btn-quiet {
   background: none;
   border: 1px solid var(--line-firm);
   color: var(--ink-dim);
 }
-.btn-quiet:hover { background: var(--bg-hover); color: var(--ink); border-color: #3d434f; }
+@media (hover: hover) { .btn-quiet:hover { background: var(--bg-hover); color: var(--ink); border-color: #3d434f; } }
 
 /* ---------- žetoni zamude ----------
  * Barva nikoli ne nosi pomena sama: v zetonu je vedno tudi stevilka minut.
@@ -431,7 +483,7 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   font-size: 13px;
   text-decoration: none;
 }
-.ticket-link:hover { border-color: var(--accent); color: var(--ink); }
+@media (hover: hover) { .ticket-link:hover { border-color: var(--accent); color: var(--ink); } }
 .ticket-link strong { color: var(--accent-lit); font-weight: 600; }
 .ticket-note { margin-left: auto; font-size: 11.5px; color: var(--ink-faint); }
 
@@ -502,7 +554,7 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   border-radius: var(--r-sm);
   white-space: nowrap;
 }
-.seg button:hover { color: var(--ink); }
+@media (hover: hover) { .seg button:hover { color: var(--ink); } }
 .seg button[aria-pressed="true"] { background: var(--line-firm); color: var(--ink); }
 
 /* ---------- polje z dnevom ---------- */
@@ -546,7 +598,7 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   cursor: pointer;
 }
 .day-step:active { background: var(--bg-hover); }
-.day-step:hover { color: var(--accent-lit); }
+@media (hover: hover) { .day-step:hover { color: var(--accent-lit); } }
 /* Brez tega je puščica na tipkovnici nevidna -- obroba je edini znak fokusa. */
 .day-step:focus-visible {
   outline: 2px solid var(--accent);
@@ -575,13 +627,13 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   font: 500 14px/1.2 var(--sans); color: var(--ink);
   text-decoration: none;
 }
-.noga .noga-gumb:hover { background: var(--bg-hover); border-color: var(--ink-ghost); }
+@media (hover: hover) { .noga .noga-gumb:hover { background: var(--bg-hover); border-color: var(--ink-ghost); } }
 .noga .noga-don { border-color: var(--accent); color: var(--accent-lit); font-weight: 600; }
-.noga .noga-don:hover { border-color: var(--accent-lit); }
+@media (hover: hover) { .noga .noga-don:hover { border-color: var(--accent-lit); } }
 .noga-gumb:focus-visible, .noga-poti a:focus-visible {
   outline: 2px solid var(--accent-lit); outline-offset: 2px;
 }
 .noga .noga-poti { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 14px 0 0; }
 .noga .noga-poti a { color: var(--ink-dim); text-decoration: none; padding: 4px 0; font-size: 12px; }
-.noga .noga-poti a:hover { color: var(--ink); text-decoration: underline; }
+@media (hover: hover) { .noga .noga-poti a:hover { color: var(--ink); text-decoration: underline; } }
 .noga .noga-vir { margin: 10px 0 0; max-width: 64ch; font: 400 11px/1.6 var(--sans); color: var(--ink-faint); }

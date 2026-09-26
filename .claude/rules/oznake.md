@@ -114,6 +114,19 @@ Zato: do vključno **blagih (≤ 3) temperatura** (pove nekaj sama), od **zahtev
 
 Vsakič popravljeno **v svoji datoteki** → isto pravilo zapisano enajstkrat, vsak nov razred z `display` past čakal znova. Odslej v `base.css` eno samo `[hidden] { display: none !important; }`; `!important` ker mora premagati prav razrede, zaradi katerih past nastala. **Novih `X[hidden]` ne dodajaj.**
 
+## Dotik: stran ne sme izdati WebView-a
+
+Prijavljeno 26. 9. 2026: „gumbi so modri, ko klikneš" — Chromov `tap-highlight`. Aplikacija za Android kaže spletno stran, zato se občutek nativnega dela **v CSS**, ne v Kotlinu, in pride na telefon z objavo strežnika, brez novega APK. Vse v razdelku „dotik" v `base.css`:
+
+* **Pritisk = plast v barvi besedila** (`box-shadow: inset … color-mix(currentColor 14%)` na `:active`), kot Materialov „state layer": na temni podlagi posvetli, na oranžni s temnim besedilom potemni. Ne `background`, ker je ta pri gumbih pomen. Element z lastnim `box-shadow` višje specifičnosti (`.net-tab.is-on`) plasti nima — namerno.
+* **`:hover` samo v `@media (hover: hover)`**, v vseh datotekah razen `admin.css`. Na dotik obvisi na zadnjem pritisnjenem elementu in vrstica je videti izbrana. Pravilo z vejico (`.x:hover, .x.is-active`) se razcepi, sicer bi na telefonu izgubil tudi `.is-active`. Varuje `tests/test_dotik.py`.
+* **`color-scheme: dark`** — brez tega so izbirnik datuma, ure, spustni seznam in drsnik svetli. Posledica: ikona koledarja je zdaj bela, `invert` jo je potemnil; zdaj `opacity`.
+* **`accent-color: var(--accent)`** za vsa potrditvena polja (na avtobusni strani zelena), ne več po datotekah.
+* Dolg pritisk na povezavo ne označi besedila **samo v aplikaciji** (`.v-aplikaciji`, postavi `common.js` iz `MOST`): v brskalniku je meni „odpri v novem zavihku" koristen. Strani brez `common.js` (besedilne, pristajalne) razreda nimajo.
+* Prehod med stranmi `@view-transition` (Chrome/WebView 126+), 0,16 s, izklopljen pri `prefers-reduced-motion`.
+
+Preizkus pritiska: `chromium --headless` z `--virtual-time-budget` ga ne zna; prek CDP `Input.dispatchMouseEvent mousePressed`, nato `getComputedStyle(el).boxShadow`. Dotik (`dispatchTouchEvent`) v brezglavem Chromu `:active` **ne** sproži — izmerjeno, ni napaka CSS.
+
 ## Znak
 
 Monogram **K**: navpično steblo + dve roki iz iste točke. Siva roka = vozni red, poudarjena = resnica — ista misel kot ime (*chronos* proti *kairosu*).

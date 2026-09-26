@@ -6,6 +6,8 @@ paths:
 
 Nativni ovoj z WebView na `kajros.app`. Vmesnik ostane **en sam — spletni**; nativno samo, česar splet ne zmore. Zaenkrat ena stvar: budilka.
 
+Da aplikacija ni videti kot splet v ovoju (modri pritisk, obviseli `:hover`, svetli izbirnik datuma), se ureja v CSS strani, ne tu — razdelek „Dotik" v `oznake.md`.
+
 ## Zakaj tako in ne drugače
 
 | možnost | zakaj ne |
