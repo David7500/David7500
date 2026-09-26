@@ -1,53 +1,19 @@
 {#
-  Skupne povezave v glavi.
+  Glava aplikacije: kar ni v plavajoči orodni vrstici (`_orodna.html`).
 
-  Preklop med omrežjema je segmentni gumb in ne dve navadni povezavi med
-  štirimi: potnik mora na prvi pogled videti, ali gleda vlake ali avtobuse.
-  Doslej je bila trenutna stran preprosto izpuščena iz seznama in razlika ni
-  bila vidna nikjer -- kdor je na /app/bus iskal "Ljubljana", je dobil
-  postajališče LPP in ni razumel, zakaj.
+  Vlaki, Avtobusi, Pot in Zemljevid so od 26. 9. 2026 v orodni vrstici na
+  dnu -- prej segmentni gumb in povezave tu. Ostanejo ovire, ker niso cilj,
+  kamor bi človek šel vsak dan, ampak opozorilo, ki ga pokaže tudi tabla.
 
   `here` pove, katera stran je trenutna. Klic:
   {% include "_nav.html" with context %}  in v pogledu {"here": "ovire"}.
 #}
 {%- set here = here | default('') -%}
 <nav class="top-nav" aria-label="Strani">
-  <div class="net-switch" role="group" aria-label="Omrežje">
-    <a class="net-tab{% if here == 'iskalnik' %} is-on{% endif %}" href="/app/train"
-       {% if here == 'iskalnik' %}aria-current="page"{% endif %}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
-        <rect x="6" y="3" width="12" height="14" rx="3"></rect>
-        <path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>
-      </svg>
-      <span class="net-name">Vlaki</span>
-    </a>
-    <a class="net-tab{% if here == 'avtobusi' %} is-on{% endif %}" href="/app/bus"
-       {% if here == 'avtobusi' %}aria-current="page"{% endif %}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
-        <rect x="3.5" y="3.5" width="17" height="15" rx="2.6"></rect>
-        <path d="M3.5 10.5h17M3.5 5.8 1.4 6.8M20.5 5.8l2.1 1M6.5 18.6v2.4M17.5 18.6v2.4"></path>
-        <circle cx="8" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
-        <circle cx="16" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
-      </svg>
-      <span class="net-name">Avtobusi</span>
-    </a>
-  </div>
-  <span class="nav-sep"></span>
-  {#- "Pot" je edina stran, ki se ne zacne pri postaji, ampak pri tocki -- in
-      edina poleg zemljevida, ki obe omrezji namerno mesa. Zato je v glavi
-      povsod, ne le pri enem omrezju. #}
-  {%- if here != 'pot' %}<a class="top-link" href="/app/pot">pot</a>{% endif %}
-  {%- if here != 'zemljevid' %}<a class="top-link" href="/app/map">zemljevid</a>{% endif %}
-  {#- "Kdaj se splača" je 6. 9. 2026 umaknjena iz navigacije, ne izbrisana:
-      stran dela in je dosegljiva na `/app/statistika[/bus]`, le da je ena
-      vrsta statistike med mnogimi in v glavi jemlje prostor vprašanju, s
-      katerim potnik res pride. Vrne se, ko bo statistika urejena kot celota.
-      Povezavo doda nazaj ta blok -- drugje je ni. #}
   {#- Ovire so `SZ-OVIRA` obvestila SŽ: dela na progi, zapore tira, nadomestni
       prevozi. Za avtobuse takih obvestil ni in povezava tja bi obljubljala
       podatek, ki zanje ne obstaja. #}
   {%- if here != 'ovire' and (network | default('zeleznica')) != 'avtobus' %}
   <a class="top-link" href="/app/ovire">ovire</a>{% endif %}
 </nav>
+{% include "_orodna.html" %}

@@ -139,6 +139,10 @@ Izbran na domači strani (osnutek G), razširjen na vse strani prek skupnih grad
 * **Brez roba na levi kot poudarka** (`border-left: 3px`) — naslednja vožnja na tabli in v zvezah ima tonsko podlago. Stanje prestopa nosi značka z besedo, ne rob.
 * Opozorila (ovire) so tonska rumena (`#2e2811`, besedilo `#f2d36b`), brez obrobe.
 * Zgornja vrstica v barvi strani, brez obrobe.
+* **Glavni meni = plavajoča orodna vrstica na dnu** (`_orodna.html`, vključi jo `_nav.html`, domača stran posebej): Domov, Vlaki, Avtobusi, Pot, Zemljevid. Izbrana je pilula z imenom v poudarku, ostale ikona. Vlaki | Avtobusi sta tu **namesto segmentnega gumba v glavi** — izbrana pilula pove omrežje enako na prvi pogled. V glavi ostanejo ovire (samo železnica). Okno vožnje ima izbrano omrežje vožnje (`here`).
+  * Kar je pod njo, ima zadnjih `--orodna-prostor` pik praznih: drseče strani spodnji odmik (`.domov`, `.conn-page`, v oknu vožnje `.col` oziroma `.train-body` na telefonu); na zemljevidih jo nosi zemljevid, dvignejo se le gumbi MapLibra in opombe (`.label-note*` nad navedbo vira, sicer se prekrivata).
+  * Odprta spodnja plošča zemljevida (z-index 1100) jo pokrije; pri vodenju po pešpoti (`body.vodenje`) je ni.
+  * `view-transition-name: orodna` jo pri prehodu med stranmi pusti na mestu.
 
 ## Znak
 

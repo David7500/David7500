@@ -1,0 +1,24 @@
+{#
+  Plavajoča orodna vrstica (Material 3 Expressive, osnutek G, 26. 9. 2026).
+
+  Glavni meni aplikacije, na dnu vsake strani za potnike z zemljevidom ali
+  tablo; besedilne in pristajalne strani je nimajo. Izbrana stran je pilula z
+  imenom, ostale samo ikona. Vlaki in Avtobusi sta tu namesto segmentnega
+  gumba v glavi: izbrana pilula pove, na katerem omrežju si, enako na prvi
+  pogled, kot ga je povedal preklop.
+
+  `here` iz pogleda (api.py): iskalnik, avtobusi, pot, zemljevid, ovire, domov.
+  Okno vožnje dobi iskalnik ali avtobusi, glede na omrežje vožnje.
+#}
+{%- set _h = here | default('') -%}
+{%- macro _g(ime, href, on) -%}
+<a class="orodna-g{% if on %} is-on{% endif %}" href="{{ href }}" aria-label="{{ ime }}"
+   {%- if on %} aria-current="page"{% endif %}>{{ caller() }}<span>{{ ime }}</span></a>
+{%- endmacro %}
+<nav class="orodna" aria-label="Glavni meni">
+  {% call _g("Domov", "/", _h == "domov") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>{% endcall %}
+  {% call _g("Vlaki", "/app/train", _h == "iskalnik") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/></svg>{% endcall %}
+  {% call _g("Avtobusi", "/app/bus", _h == "avtobusi") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="15" rx="2.6"/><path d="M3.5 10.5h17M6.5 18.6v2.4M17.5 18.6v2.4"/></svg>{% endcall %}
+  {% call _g("Pot", "/app/pot", _h == "pot") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>{% endcall %}
+  {% call _g("Zemljevid", "/app/map", _h == "zemljevid") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg>{% endcall %}
+</nav>

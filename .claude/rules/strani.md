@@ -60,7 +60,7 @@ Odpadli **dve zahtevi od treh** (`/api/overview` in `/api/overview/bus`, najdra�
 * **Zemljevid, Ovire, Deli lego = ikone v oblikah** (detelja, piškot, zvezda; poti iz `r = R(1 + a·cos nθ)`, v predlogi). Ovire nosijo značko s številom iz `/api/health` (`alerts_active`), skrito pri 0. Pritisk posvetli obliko, ne pravokotnika okrog nje.
 * **Deli lego:** oblika je vabilo (`deli-oblika`); `deli.js` shrani njen HTML in ga vrne v fazi `miruje`, v drugih fazah na istem mestu razpre kartico čez vso širino (`je-odprt` → `flex-basis: 100%`).
 * Podpora nima več svoje ploščice; ostane gumb v nogi (pogoj: `KAJROS_DONACIJE`).
-* **Plavajoče orodne vrstice iz osnutka ni**: na domači strani bi bila meni, ki na naslednji strani izgine. Pride, če se slog razširi na vse strani.
+* **Plavajoča orodna vrstica** (`_orodna.html`) je od 26. 9. 2026 na vseh straneh aplikacije (domača, iskalnik, pot, zemljevid, ovire, okno vožnje), ne na besedilnih in pristajalnih. Glej „Slog: Material 3“ v `oznake.md`.
 
 `home.css` rabijo tudi napaka, stik, zasebnost, `/android` in `/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`) — spremembo teh razredov preveri tudi tam.
 

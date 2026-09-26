@@ -480,3 +480,9 @@ body.brez-zemljevida .karta-max, body.brez-zemljevida .karta-lega { display: non
 
 .pot-vir { margin: 22px 0 0; font-size: 0.72rem; line-height: 1.5; color: var(--ink-faint); }
 .pot-vir a { color: var(--ink-mute); }
+
+/* Orodna vrstica (base.css) plava nad zemljevidom. Pri vodenju po pešpoti je
+   ni: zemljevid je takrat ves zaslon in vrstica bi pokrila navodilo. */
+body.vodenje .orodna { display: none; }
+.pot-karta-okvir .maplibregl-ctrl-bottom-left,
+.pot-karta-okvir .maplibregl-ctrl-bottom-right { bottom: calc(var(--orodna-prostor) - 16px); }

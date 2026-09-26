@@ -542,3 +542,11 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
    stojijo v spodnjem levem kotu -- pri 430 px se prekrivajo. Zato se opombe
    dvignejo nad tipko. Vrstni red pravil šteje: to mora biti za `.label-note`
    in za `.label-note-2/3`, sicer ga te povozijo. */
+
+/* Orodna vrstica (base.css) plava nad zemljevidom; gumbi in opombe v
+   spodnjem robu se dvignejo nadnjo. Odprta spodnja plošča (z-index 1100) jo
+   pokrije -- tako mora biti, plošča je takrat pomembnejša. */
+.label-note { bottom: calc(var(--orodna-prostor) + 22px); }
+.label-note-2 { bottom: calc(var(--orodna-prostor) + 56px); }
+.label-note-3 { bottom: calc(var(--orodna-prostor) + 90px); }
+#map .maplibregl-ctrl-bottom-left, #map .maplibregl-ctrl-bottom-right { bottom: calc(var(--orodna-prostor) - 16px); }

@@ -718,3 +718,17 @@
 .bud-dno { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 .bud-dno .btn, .bud-dno .btn-quiet { padding: 10px 16px; border-radius: var(--r); }
 .bud-brisi { margin-right: auto; color: var(--sev-bad); border-color: var(--sev-bad); }
+
+/* Orodna vrstica (base.css): stolpca se drsita sama, zato odmik v njiju. */
+.col { padding-bottom: var(--orodna-prostor); }
+@media (max-width: 860px) {
+  .col { padding-bottom: 0; }
+  .train-body { padding-bottom: var(--orodna-prostor); }
+}
+
+/* Trenutna zamuda je tonska kartica (Material 3), kot budilka na domači
+   strani: prvo, kar človek na tej strani išče, ne vrstica med črtami. */
+.col-run .detail-now {
+  margin: 4px 12px 12px; padding: 16px 18px;
+  border: 0; border-radius: 28px; background: var(--m-visoka);
+}

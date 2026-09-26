@@ -621,3 +621,7 @@ body:not(.is-advanced) .alert-trains .adv-only { display: none; }
 /* Gumb med iskanjem ne sme sprejeti drugega klika -- dve zahtevi hkrati sta
    dva odgovora in zadnji ni nujno tisti, ki ga je človek naročil. */
 .go:disabled { opacity: 0.55; cursor: default; }
+
+/* Iskalnik, ovire, statistika: orodna vrstica na dnu (base.css) ne sme
+   pokriti zadnje vrstice table. */
+.conn-page { padding-bottom: var(--orodna-prostor); }

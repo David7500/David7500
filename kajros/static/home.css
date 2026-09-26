@@ -200,3 +200,6 @@
   .home-head { margin-bottom: 30px; }
   .home-lead { font-size: 23px; margin-top: 24px; }
 }
+
+/* Orodna vrstica na dnu (base.css) ne sme pokriti noge. */
+.domov { padding-bottom: var(--orodna-prostor); }

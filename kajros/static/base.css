@@ -217,37 +217,6 @@ button.top-link {
 }
 
 .top-nav { display: flex; align-items: center; gap: 12px; }
-.nav-sep { width: 1px; height: 18px; background: #262b33; flex-shrink: 0; }
-
-/* Preklop omrezja. Segmentni gumb, ne dve povezavi med stirimi: potnik mora
- * na prvi pogled videti, ali gleda vlake ali avtobuse -- doslej je bila
- * trenutna stran samo izpuscena iz seznama in razlika ni bila vidna nikjer. */
-.net-switch {
-  display: flex;
-  background: var(--bg);
-  border: 1px solid var(--m-obroba);
-  border-radius: var(--r-pilula);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.net-tab {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px;
-  color: var(--ink-dim);
-  text-decoration: none;
-  font: 500 12px/1 var(--sans);
-  white-space: nowrap;
-}
-@media (hover: hover) { .net-tab:hover { color: var(--ink); } }
-.net-tab svg { flex-shrink: 0; }
-.net-tab + .net-tab { border-left: 1px solid var(--m-obroba); }
-.net-tab.is-on { background: var(--m-sek); color: var(--m-na-sek); }
-
-@media (max-width: 560px) {
-  /* Ime omrezja je pri 390 px predrago -- ikona pove isto, ker sta samo dve. */
-  .net-tab { padding: 8px 11px; }
-  .net-tab .net-name { display: none; }
-}
 
 .divider { width: 1px; height: 20px; background: #262b33; flex-shrink: 0; }
 
@@ -491,15 +460,16 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   align-items: baseline;
   gap: 8px;
   margin: 14px 0 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--bg-panel);
+  min-height: 48px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--m-visoka);
   color: var(--ink-dim);
-  font-size: 13px;
+  font-size: 14px;
   text-decoration: none;
 }
-@media (hover: hover) { .ticket-link:hover { border-color: var(--accent); color: var(--ink); } }
+@media (hover: hover) { .ticket-link:hover { background: var(--m-najvisja); color: var(--ink); } }
 .ticket-link strong { color: var(--accent-lit); font-weight: 600; }
 .ticket-note { margin-left: auto; font-size: 11.5px; color: var(--ink-faint); }
 
@@ -652,3 +622,38 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .noga .noga-poti a { color: var(--ink-dim); text-decoration: none; padding: 4px 0; font-size: 12px; }
 @media (hover: hover) { .noga .noga-poti a:hover { color: var(--ink); text-decoration: underline; } }
 .noga .noga-vir { margin: 10px 0 0; max-width: 64ch; font: 400 11px/1.6 var(--sans); color: var(--ink-faint); }
+
+/* ---------- orodna vrstica ----------
+ *
+ * Plavajoča orodna vrstica Materiala 3 Expressive (`_orodna.html`): glavni
+ * meni na dnu. Izbrana stran je pilula z imenom v barvi poudarka (na
+ * avtobusni strani zelena), ostale samo ikona. `view-transition-name` jo
+ * pri prehodu med stranmi pusti na mestu, namesto da bi se prelila z vsebino.
+ *
+ * Kar je pod njo, mora imeti zadnjih `--orodna-prostor` pik praznih: na
+ * straneh, ki se drsijo, spodnji odmik; na zemljevidih jo zemljevid nosi pod
+ * sabo, dvignejo se le gumbi in opombe v spodnjem robu. */
+:root { --orodna-prostor: calc(96px + env(safe-area-inset-bottom, 0px)); }
+
+.orodna {
+  position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex; align-items: center; gap: 4px;
+  height: 64px; padding: 0 8px;
+  border-radius: 32px; background: var(--m-najvisja);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  view-transition-name: orodna;
+}
+.orodna-g {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 52px; height: 48px; padding: 0 14px;
+  border-radius: 24px; color: #c4cad4; text-decoration: none;
+  font: 600 14px/1 var(--sans); white-space: nowrap;
+}
+.orodna-g span { display: none; }
+.orodna-g.is-on { background: var(--accent-lit); color: #14161a; padding: 0 18px 0 14px; }
+.orodna-g.is-on span { display: inline; }
+.orodna-g:focus-visible { outline: 2px solid var(--accent-lit); outline-offset: 2px; }
+/* Tiskanje ne rabi menija. */
+@media print { .orodna { display: none; } }
