@@ -13,14 +13,10 @@
 .home-page { display: flex; justify-content: center; }
 
 .domov {
-  /* Material vloge: vsebnik poudarka in besedilo na njem. Kontrast 8,8 : 1
-     (#ffdbc8 na #5a2e12), drugotno besedilo 6,4 : 1. */
-  --m-kont: #5a2e12;
-  --m-na-kont: #ffdbc8;
+  /* Vloge so v base.css; tu le drugotno besedilo in obroba NA vsebniku
+     budilke. Kontrast #ffdbc8 na #5a2e12 8,8 : 1, drugotno 6,4 : 1. */
   --m-na-kont-2: #e6b8a0;
-  --m-obroba: #b98a70;
-  --m-visoka: #1e2229;
-  --m-najvisja: #272b33;
+  --m-obroba-kont: #b98a70;
   width: 100%; max-width: 560px; padding: 0 16px 36px;
 }
 .d-glava {
@@ -49,7 +45,7 @@
 .bud-dan {
   display: flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; box-sizing: border-box; border-radius: 50%;
-  border: 1.5px solid var(--m-obroba); font: 600 13px/1 var(--sans);
+  border: 1.5px solid var(--m-obroba-kont); font: 600 13px/1 var(--sans);
 }
 .bud-dan.je-vklop { border-color: transparent; background: var(--m-na-kont); color: var(--m-kont); }
 .bud-vrsta {
@@ -72,12 +68,12 @@
    zgodi takoj, brez "shrani", in tako ga bere tudi bralnik zaslona. */
 .stikalo {
   position: relative; width: 52px; height: 32px; flex-shrink: 0; padding: 0;
-  box-sizing: border-box; border: 2px solid var(--m-obroba); border-radius: 16px;
+  box-sizing: border-box; border: 2px solid var(--m-obroba-kont); border-radius: 16px;
   background: transparent; cursor: pointer;
 }
 .stikalo::after {
   content: ""; position: absolute; left: 4px; top: 6px; width: 16px; height: 16px;
-  border-radius: 50%; background: var(--m-obroba);
+  border-radius: 50%; background: var(--m-obroba-kont);
   transition: left .15s ease, top .15s ease, width .15s ease, height .15s ease;
 }
 .stikalo[aria-checked="true"] { border-color: var(--m-na-kont); background: var(--m-na-kont); }
@@ -143,9 +139,6 @@
    čez vso širino (`je-odprt`) in jo po koncu vrne. Vsebina v `deli.css`. */
 .d-deli { flex: 1 1 0; min-width: 0; }
 .d-deli.je-odprt { flex-basis: 100%; padding: 20px; border-radius: 28px; background: var(--bg-raised); }
-.d-deli .deli-gumb, .d-deli .deli-drugo, .d-deli .deli-kandidat { border-radius: 20px; }
-/* Oznaka kartice kot v Materialu, ne v razprtih velikih črkah iskalnika. */
-.d-deli .deli-oznaka { font: 500 14px/1.2 var(--sans); letter-spacing: 0; text-transform: none; color: var(--accent-lit); }
 
 /* ---------- shranjene poti ---------- */
 

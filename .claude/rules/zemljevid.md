@@ -60,6 +60,12 @@ paths:
     (Esri 187 kB). Ploščice imajo `max-age` deset let in naslov z različico,
     zato se plačajo enkrat na napravo; MapLibre sam je 299 kB, prav tako enkrat.
 
+## Pogled se ne premika sam (26. 9. 2026)
+
+Prej: zemljevid se je odprl pri z8, po prihodu vlakov in avtobusov pa `fitBounds` na njihov okvir — skok sekundo ali dve po tem, ko je človek že gledal („precej neprofesionalno"). Zdaj velja od prvega izrisa: **pogled iz naslova** (`lat`/`lon`/`z`), sicer **zadnji pogled na tej napravi** (`kajros:map-pogled` v `localStorage`, zapiše ga `moveend`), sicer **okvir Slovenije** (`bounds` v konstruktorju). Na telefonu je to trak čez sredino — isto, kar je dal okvir vozil, ko so bila razkropljena po državi; razlika je le, da ne skoči. Preverjeno prek CDP: naslov se v 8 s po odprtju ne spremeni (ni `moveend`), vlaki so na zemljevidu.
+
+**Podatki gredo na pot ob začetku modula** (`zgodaj` v `dashboard.js`: postaje, proge, vlaki, avtobusi), med nalaganjem MapLibra — prej so čakali na slog in drug na drugega. `pollVehicles(url, onData, prva)` vzame že začeto zahtevo. **V aplikaciji domača stran potegne zemljevid vnaprej** (`data-vnaprej` na `.domov`, `<link rel=prefetch>` ob mirovanju): MapLibre 1,1 MB (okrog 300 kB stisnjeno), `dashboard.js`, slog. Naslovi morajo biti natanko taki kot v `dashboard.html`, sicer predpomnilnik ne zadene. V brskalniku ne — prenos bi plačal vsak obiskovalec domače strani.
+
 ## 3D od blizu (vsi zemljevidi)
 
 Od daleč raven zemljevid; od Leafletovega **z15** se kamera nagiba, pri **z17,5** 60°; hkrati se stavbe dvignejo od ploskve do prave višine (`render_height` iz OSM). Prelivanje, ne skok, je bila želja (22. 9. 2026, po Slometovem zemljevidu, od koder formula nagiba in razpon zoomov). Stikalo „3D od blizu“ privzeto vklopljeno.

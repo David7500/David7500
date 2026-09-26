@@ -603,7 +603,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
        <div class="conn-where">najkrajše čakanje ${planned} min</div>`;
 
   return `
-    <a class="conn-row is-transfer" style="border-left-color:${count === 1 ? st.color : "var(--line-firm)"}"
+    <a class="conn-row is-transfer"
        href="${journeyHref(t.train1, date, t.trip1, odKod)}">
       <div class="conn-times">
         <div class="conn-clock">

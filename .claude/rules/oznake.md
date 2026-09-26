@@ -128,6 +128,18 @@ Prijavljeno 26. 9. 2026: „gumbi so modri, ko klikneš" — Chromov `tap-highli
 
 Preizkus pritiska: `chromium --headless` z `--virtual-time-budget` ga ne zna; prek CDP `Input.dispatchMouseEvent mousePressed`, nato `getComputedStyle(el).boxShadow`. Dotik (`dispatchTouchEvent`) v brezglavem Chromu `:active` **ne** sproži — izmerjeno, ni napaka CSS.
 
+## Slog: Material 3 (od 26. 9. 2026)
+
+Izbran na domači strani (osnutek G), razširjen na vse strani prek skupnih gradnikov v `base.css`. Pravila:
+
+* **Oznake v stavčni velikosti**, Plex Sans 500, 12,5–14 px — nikjer več razprtih velikih črk (`text-transform: uppercase`, `letter-spacing`), razen v `admin.css`. Te so bile prvi znak „AI videza". Naslovi razdelkov v barvi poudarka (Materialov „list subheader").
+* **Zaobljenost** `--r-sm` 8, `--r` 12, `--r-lg` 20, gumbi `--r-pilula`. Prej 5/7/10.
+* **Materialove vloge** so spremenljivke (`--m-kont`, `--m-na-kont`, `--m-sek`, `--m-na-sek`, `--m-visoka`, `--m-najvisja`, `--m-obroba`); `body.net-avtobus` jih prestavi na zeleno. Izbrano v segmentnem gumbu = `--m-sek`, ne obroba v poudarku.
+* **Polja so zapolnjena** (`--m-visoka`, brez obrobe, 48 px, 16 px pisava), fokus = 2 px poudarka.
+* **Brez roba na levi kot poudarka** (`border-left: 3px`) — naslednja vožnja na tabli in v zvezah ima tonsko podlago. Stanje prestopa nosi značka z besedo, ne rob.
+* Opozorila (ovire) so tonska rumena (`#2e2811`, besedilo `#f2d36b`), brez obrobe.
+* Zgornja vrstica v barvi strani, brez obrobe.
+
 ## Znak
 
 Monogram **K**: navpično steblo + dve roki iz iste točke. Siva roka = vozni red, poudarjena = resnica — ista misel kot ime (*chronos* proti *kairosu*).

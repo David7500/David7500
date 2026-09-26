@@ -32,8 +32,7 @@
 .tocka { margin-bottom: 12px; position: relative; }
 
 .tocka-oznaka {
-  display: block; font-size: 0.72rem; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--ink-mute); margin-bottom: 4px;
+  display: block; font: 500 12.5px/1.2 var(--sans); color: var(--ink-dim); margin-bottom: 6px;
 }
 
 /* Kateri klik na zemljevid gre kam, mora biti vidno -- sicer je klik uganka. */
@@ -45,20 +44,20 @@
 .tocka-vrstica { display: flex; gap: 6px; position: relative; }
 
 .tocka-vnos {
-  flex: 1; min-width: 0;
-  padding: 9px 10px; font: inherit; font-size: 0.9rem;
-  color: var(--ink); background: var(--bg-raised);
-  border: 1px solid var(--line-firm); border-radius: var(--r);
+  flex: 1; min-width: 0; min-height: 48px;
+  padding: 11px 12px; font: inherit; font-size: 16px;
+  color: var(--ink); background: var(--m-visoka);
+  border: 2px solid transparent; border-radius: var(--r);
 }
-.tocka-vnos:focus { outline: none; border-color: var(--accent); }
+.tocka-vnos:focus { outline: none; border-color: var(--accent-lit); }
 
 .tocka-gumb {
-  padding: 0 10px; font: inherit; font-size: 0.78rem;
-  color: var(--ink-dim); background: var(--bg-raised);
-  border: 1px solid var(--line-firm); border-radius: var(--r);
+  padding: 0 14px; font: inherit; font-size: 14px; font-weight: 500;
+  color: var(--ink); background: var(--m-visoka);
+  border: 0; border-radius: var(--r-pilula);
   cursor: pointer;
 }
-@media (hover: hover) { .tocka-gumb:hover { color: var(--ink); background: var(--bg-hover); } }
+@media (hover: hover) { .tocka-gumb:hover { background: var(--m-najvisja); } }
 
 .tocka-zadetki {
   position: absolute; z-index: 500; left: 0; right: 0; top: 100%;
@@ -160,20 +159,19 @@
 /* Zamenjava krajev stoji MED poljema, ker zamenja prav njiju. */
 .tocka-menjava { display: flex; justify-content: flex-end; margin: -6px 0 4px; }
 .zamenjaj {
-  width: 32px; height: 32px;
+  width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--ink-mute); background: var(--bg-raised);
-  border: 1px solid var(--line-firm); border-radius: var(--r); cursor: pointer;
+  color: var(--ink); background: var(--m-najvisja);
+  border: 0; border-radius: 50%; cursor: pointer;
 }
-@media (hover: hover) { .zamenjaj:hover { color: var(--ink); border-color: #3d434f; } }
 
 .pot-isci {
   display: block; width: 100%;
-  padding: 10px 14px; font: inherit; font-size: 0.9rem; font-weight: 600;
+  min-height: 48px; padding: 12px 16px; font: inherit; font-size: 15px; font-weight: 600;
   color: #1a1206; background: var(--accent-lit);
-  border: 0; border-radius: var(--r); cursor: pointer;
+  border: 0; border-radius: var(--r-pilula); cursor: pointer;
 }
-@media (hover: hover) { .pot-isci:hover { background: #f5a061; } }
+@media (hover: hover) { .pot-isci:hover { filter: brightness(1.06); } }
 
 .pot-stanje { min-height: 1.2em; font-size: 0.82rem; color: var(--ink-dim); line-height: 1.5; }
 /* Naslov izida pove, na katero vprašanje odgovarja -- "čim prej" in "do
@@ -230,8 +228,7 @@
 .p-rok { color: var(--ink-dim); margin-right: 6px; }
 .p-rok::after { content: " ·"; color: var(--ink-ghost); }
 .p-rok.je-zadnji {
-  color: var(--accent-lit); font-weight: 600; text-transform: uppercase;
-  font-size: 0.68rem; letter-spacing: 0.05em;
+  color: var(--accent-lit); font-weight: 600;
 }
 .p-rok.je-zadnji::after { content: ""; }
 .p-rok.je-pozno { color: var(--sev-bad); }

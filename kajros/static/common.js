@@ -1045,15 +1045,16 @@ setInterval(() => {
 // Vrne `{ stop, zdaj }`. Klic tece, dokler je stran vidna: telefon v
 // zepu ne sme spraševati, ker odgovora nihce ne gleda -- to je hkrati
 // najcenejsi prihranek na strezniku, kar jih je.
-function pollVehicles(url, onData) {
+function pollVehicles(url, onData, prva = null) {
   let timer = null;
   let ustavljen = false;
 
   // Ena zahteva. Napake NE pogoltne -- ritem jo sme prezreti, gumb "osvezi"
   // pa mora povedati, da odgovora ni bilo. Vrne, cez koliko sekund vprasati
-  // znova.
+  // znova. `prva` = odgovor, ki ga je stran zacela cakati ze prej (zemljevid).
   async function poizvedi() {
-    const r = await fetch(url);
+    const r = await (prva || fetch(url));
+    prva = null;
     const h = parseInt(r.headers.get("X-Osvezi-Cez"), 10);
     const podatki = await r.json();
     onData(podatki);

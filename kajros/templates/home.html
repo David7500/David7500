@@ -27,7 +27,10 @@
       obrobo in napisi v razprtih velikih črkah. Zdaj ima vsak element obliko,
       kakršno ima v Androidu: kartica budilke, povezana gumba, iskalna vrstica,
       ikone v oblikah. Budilka je še vedno prva, ker je najbolj tvoja. #}
-  <main class="domov">
+  {#- `data-vnaprej`: kar zemljevid rabi, da ga aplikacija potegne vnaprej
+      (`home.js`). Naslovi natanko taki, kot jih nalozi `dashboard.html`,
+      sicer predpomnilnik ne zadene. #}
+  <main class="domov" data-vnaprej="{{ s('dashboard.js') }} {{ s('dashboard.css') }} {{ s('avtobusi3d.js') }} {{ s('podlaga.json') }} /static/maplibre-6.10.0/maplibre-gl.mjs /static/maplibre-6.10.0/maplibre-gl-shared.mjs /static/maplibre-6.10.0/maplibre-gl-worker.mjs /static/maplibre-6.10.0/maplibre-gl.css">
     <header class="d-glava">
       {{ znak(22, "#f0934f") }}
       <span>kajros</span>

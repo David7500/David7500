@@ -54,8 +54,7 @@
 
 .odhodi th {
   text-align: left;
-  font: 500 11px/1 var(--sans); color: var(--ink-faint);
-  text-transform: uppercase; letter-spacing: .06em;
+  font: 500 12.5px/1 var(--sans); color: var(--ink-faint);
   padding: 0 8px 8px 0; border-bottom: 1px solid var(--line);
 }
 
@@ -126,8 +125,8 @@
   margin: 12px 0 4px;
 }
 .smeri-label {
-  font: 600 10px/1 var(--sans); color: var(--ink-mute);
-  letter-spacing: .08em; text-transform: uppercase; margin-right: 3px;
+  font: 500 12.5px/1 var(--sans); color: var(--ink-mute);
+  margin-right: 3px;
 }
 .smeri a {
   border: 1px solid var(--line-firm); border-radius: 100px;

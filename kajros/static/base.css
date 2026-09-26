@@ -46,9 +46,22 @@
   --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 
-  --r-sm: 5px;
-  --r:    7px;
-  --r-lg: 10px;
+  /* Zaobljenost po Materialu 3 (izbran slog 26. 9. 2026): majhna 8, srednja
+     12, velika 20; gumbi so pilule. Prej 5/7/10 -- oglato, "spletno". */
+  --r-sm: 8px;
+  --r:    12px;
+  --r-lg: 20px;
+  --r-pilula: 999px;
+
+  /* Materialove vloge, izpeljane iz poudarka: vsebnik in besedilo na njem,
+     dva nivoja tonske podlage. Avtobusna stran jih prestavi na zeleno. */
+  --m-kont:     #5a2e12;
+  --m-na-kont:  #ffdbc8;
+  --m-sek:      #4a2a14;
+  --m-na-sek:   #ffdbc8;
+  --m-visoka:   #1e2229;
+  --m-najvisja: #272b33;
+  --m-obroba:   #79828f;
 }
 
 * { box-sizing: border-box; }
@@ -79,6 +92,10 @@ a { color: inherit; }
 body.net-avtobus {
   --accent:     #3fa96f;
   --accent-lit: #4db97f;
+  --m-kont:     #16452e;
+  --m-na-kont:  #c1f0d6;
+  --m-sek:      #163a28;
+  --m-na-sek:   #c1f0d6;
 }
 
 /* `display` iz razreda premaga `[hidden]` iz brskalnikovega sloga, ker je
@@ -153,7 +170,7 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
 /* Visina glave. Bila je trdo zapisana v `.topbar` in hkrati ugibana kot
    `var(--topbar-h, 48px)` drugje -- torej stiri piksle narazen, in zemljevid
    "cez celo stran" je bil za toliko predolg. Ena vrednost, eno mesto. */
-:root { --topbar-h: 52px; }
+:root { --topbar-h: 56px; }
 
 /* ---------- glava ---------- */
 
@@ -161,12 +178,12 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
   height: var(--topbar-h);
   flex-shrink: 0;
   min-width: 0;
-  background: var(--bg-raised);
-  border-bottom: 1px solid var(--line);
+  /* Materialova zgornja vrstica je v barvi strani, brez obrobe. */
+  background: var(--bg);
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 0 18px;
+  padding: 0 16px;
 }
 
 .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; min-width: 0; }
@@ -175,7 +192,7 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
    ki ni vedel, kje je. */
 .brand svg { flex-shrink: 0; color: var(--accent); }
 .brand-name {
-  font: 600 15px/1 var(--sans);
+  font: 600 18px/1 var(--sans);
   color: var(--ink);
   letter-spacing: -0.01em;
 }
@@ -208,32 +225,27 @@ button.top-link {
 .net-switch {
   display: flex;
   background: var(--bg);
-  border: 1px solid var(--line-firm);
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
+  border: 1px solid var(--m-obroba);
+  border-radius: var(--r-pilula);
+  overflow: hidden;
   flex-shrink: 0;
 }
 .net-tab {
   display: flex; align-items: center; gap: 6px;
-  padding: 5px 11px;
-  border-radius: 6px;
-  color: var(--ink-mute);
+  padding: 8px 12px;
+  color: var(--ink-dim);
   text-decoration: none;
   font: 500 12px/1 var(--sans);
   white-space: nowrap;
 }
 @media (hover: hover) { .net-tab:hover { color: var(--ink); } }
 .net-tab svg { flex-shrink: 0; }
-.net-tab.is-on {
-  background: var(--bg-raised);
-  color: var(--accent-lit);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-lit) 34%, transparent);
-}
+.net-tab + .net-tab { border-left: 1px solid var(--m-obroba); }
+.net-tab.is-on { background: var(--m-sek); color: var(--m-na-sek); }
 
 @media (max-width: 560px) {
   /* Ime omrezja je pri 390 px predrago -- ikona pove isto, ker sta samo dve. */
-  .net-tab { padding: 5px 9px; }
+  .net-tab { padding: 8px 11px; }
   .net-tab .net-name { display: none; }
 }
 
@@ -255,9 +267,9 @@ button.top-link {
 .mode-switch {
   display: inline-flex;
   background: var(--bg);
-  border: 1px solid var(--line-firm);
-  border-radius: var(--r);
-  padding: 2px;
+  border: 1px solid var(--m-obroba);
+  border-radius: var(--r-pilula);
+  overflow: hidden;
   flex-shrink: 0;
 }
 .mode-switch button {
@@ -265,16 +277,12 @@ button.top-link {
   background: none;
   color: var(--ink-mute);
   font: 500 11.5px/1 var(--sans);
-  padding: 6px 10px;
-  border-radius: var(--r-sm);
+  padding: 8px 12px;
   cursor: pointer;
   white-space: nowrap;
 }
 @media (hover: hover) { .mode-switch button:hover { color: var(--ink); } }
-.mode-switch button[aria-pressed="true"] {
-  background: var(--line-firm);
-  color: var(--ink);
-}
+.mode-switch button[aria-pressed="true"] { background: var(--m-sek); color: var(--m-na-sek); }
 
 /* Vse, kar je samo za napreden pogled, je v DOM-u vedno -- preklop je
  * en atribut na <body>, ne ponovno risanje strani. */
@@ -283,20 +291,21 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 /* ---------- gumbi ---------- */
 
 .btn {
-  padding: 10px 18px;
-  background: var(--accent);
+  min-height: 44px;
+  padding: 11px 22px;
+  background: var(--accent-lit);
   border: none;
-  border-radius: var(--r);
+  border-radius: var(--r-pilula);
   color: #14161a;
   cursor: pointer;
-  font: 600 13px/1.2 var(--sans);
+  font: 600 14px/1.2 var(--sans);
 }
-@media (hover: hover) { .btn:hover { background: var(--accent-lit); } }
+@media (hover: hover) { .btn:hover { filter: brightness(1.06); } }
 
 .btn-quiet {
   background: none;
-  border: 1px solid var(--line-firm);
-  color: var(--ink-dim);
+  border: 1px solid var(--m-obroba);
+  color: var(--ink);
 }
 @media (hover: hover) { .btn-quiet:hover { background: var(--bg-hover); color: var(--ink); border-color: #3d434f; } }
 
@@ -356,10 +365,10 @@ body:not(.is-advanced) .adv-only { display: none !important; }
  */
 
 .alert-box {
-  border: 1px solid rgba(217, 179, 60, 0.35);
-  background: rgba(217, 179, 60, 0.07);
+  border: 0;
+  background: #2e2811;
   border-radius: var(--r-lg);
-  padding: 11px 13px;
+  padding: 14px 16px;
   margin: 16px 0 0;
 }
 .alert-head {
@@ -548,21 +557,21 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .seg {
   display: flex;
   background: var(--bg);
-  border: 1px solid var(--line-firm);
-  border-radius: var(--r);
-  padding: 2px;
+  border: 1px solid var(--m-obroba);
+  border-radius: var(--r-pilula);
+  overflow: hidden;
 }
 .seg button {
   flex: 1 1 0;
   border: none; background: none; cursor: pointer;
-  color: var(--ink-mute);
-  font: 500 13px/1 var(--sans);
-  padding: 8px 4px;
-  border-radius: var(--r-sm);
+  color: var(--ink);
+  font: 500 14px/1 var(--sans);
+  padding: 10px 4px;
   white-space: nowrap;
 }
+.seg button + button { border-left: 1px solid var(--m-obroba); }
 @media (hover: hover) { .seg button:hover { color: var(--ink); } }
-.seg button[aria-pressed="true"] { background: var(--line-firm); color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--m-sek); color: var(--m-na-sek); }
 
 /* ---------- polje z dnevom ---------- */
 /* Skupno iskalniku zvez in Najhitrejši poti, odkar ima dan tudi ta. */
@@ -629,14 +638,13 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .noga .noga-gumb {
   display: inline-flex; align-items: center; gap: 7px;
   min-height: 40px; padding: 9px 16px;
-  border: 1px solid var(--line-firm); border-radius: 99px;
-  background: var(--bg-raised);
+  border: 1px solid transparent; border-radius: var(--r-pilula);
+  background: var(--m-visoka);
   font: 500 14px/1.2 var(--sans); color: var(--ink);
   text-decoration: none;
 }
-@media (hover: hover) { .noga .noga-gumb:hover { background: var(--bg-hover); border-color: var(--ink-ghost); } }
-.noga .noga-don { border-color: var(--accent); color: var(--accent-lit); font-weight: 600; }
-@media (hover: hover) { .noga .noga-don:hover { border-color: var(--accent-lit); } }
+@media (hover: hover) { .noga .noga-gumb:hover { background: var(--m-najvisja); } }
+.noga .noga-don { background: var(--m-kont); color: var(--m-na-kont); font-weight: 600; }
 .noga-gumb:focus-visible, .noga-poti a:focus-visible {
   outline: 2px solid var(--accent-lit); outline-offset: 2px;
 }

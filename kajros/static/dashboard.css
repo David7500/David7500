@@ -69,10 +69,8 @@ body {
 }
 
 .sidebar-title {
-  font: 600 11px/1 'IBM Plex Sans', system-ui, sans-serif;
-  color: #79828f;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font: 500 14px/1.2 var(--sans);
+  color: var(--accent-lit);
   margin-bottom: 10px;
 }
 
@@ -83,24 +81,25 @@ body {
 .find { padding: 14px; border-bottom: 1px solid #1e2229; flex-shrink: 0; }
 .find-label {
   display: block; margin-bottom: 7px;
-  font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif;
-  color: #79828f; letter-spacing: 0.08em; text-transform: uppercase;
+  font: 500 12.5px/1 var(--sans);
+  color: var(--ink-dim);
 }
 .find-box { position: relative; }
 .find-box input {
   width: 100%;
-  background: #0f1115;
-  border: 1px solid #2b303a;
-  border-radius: 7px;
-  padding: 9px 32px 9px 10px;
+  min-height: 48px;
+  background: var(--m-visoka);
+  border: 2px solid transparent;
+  border-radius: var(--r-pilula);
+  padding: 11px 40px 11px 16px;
   color: #e7eaf0;
-  font: 400 14px/1.2 'IBM Plex Sans', system-ui, sans-serif;
+  font: 400 16px/1.2 var(--sans);
 }
 .find-box input:focus { outline: none; border-color: var(--accent-lit); }
-.find-box input::placeholder { color: #545c68; }
+.find-box input::placeholder { color: var(--ink-faint); }
 .find-box .field-clear {
-  position: absolute; right: 1px; top: 1px;
-  width: 32px; height: 34px;
+  position: absolute; right: 4px; top: 0;
+  width: 40px; height: 48px;
   display: flex; align-items: center; justify-content: center;
   background: none; border: 0; color: #545c68;
   font: 400 20px/1 'IBM Plex Sans', system-ui, sans-serif; cursor: pointer;
@@ -318,8 +317,7 @@ body {
 
 .detail-now { padding: 14px; border-bottom: 1px solid #1e2229; }
 .detail-now-label {
-  font: 600 10px/1 'IBM Plex Sans', system-ui, sans-serif; color: #79828f;
-  letter-spacing: 0.09em; text-transform: uppercase;
+  font: 500 12.5px/1 var(--sans); color: var(--ink-dim);
 }
 .detail-now-value { display: flex; align-items: baseline; gap: 7px; margin-top: 9px; }
 .detail-now-n { font: 600 38px/1 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: -0.02em; }

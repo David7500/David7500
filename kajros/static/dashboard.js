@@ -37,6 +37,19 @@ setInterval(tickClock, 1000);
 refreshFeedDot();
 setInterval(refreshFeedDot, 30000);
 
+// Podatki gredo na pot takoj, med nalaganjem MapLibra, ne sele ko je slog
+// tu. Prej so cakali drug na drugega -- slog, postaje, proge, vlaki, avtobusi,
+// po vrsti -- in vozila so se na telefonu pokazala sekunde za podlago.
+const zgodaj = {
+  postaje: fetch("/api/stations?network=zeleznica").then(jsonOk),
+  proge: fetch("/api/network.geojson").then(jsonOk),
+  vlaki: fetch("/api/live?network=zeleznica").then(jsonOk),
+  vozila: fetch("/api/vehicles"),
+};
+// Obljuba, ki je nihce ne pocaka, ob napaki ne sme v konzolo kot neujeta;
+// napako javi tisti, ki jo prebere.
+for (const o of Object.values(zgodaj)) o.catch(() => {});
+
 let maplibregl = null;
 try {
   if (!imaWebGL2()) throw new Error("brez WebGL2");
@@ -88,15 +101,33 @@ const HAS_START = Number.isFinite(startLat) && Number.isFinite(startLon)
 if (!maplibregl) await new Promise(() => {});
 vklop["3d"] = layerPref("3d", true);
 
-const zacetniZoom = (HAS_START ? startZ : 8) - LZ;
+// Pogled se ne premika sam. Do 26. 9. 2026 se je po prihodu vozil prilagodil
+// njihovemu okvirju in zemljevid je skocil sekundo ali dve po tem, ko ga je
+// clovek ze gledal ("precej neprofesionalno"). Zdaj velja od prvega izrisa:
+// pogled iz naslova, sicer zadnji pogled na tej napravi (kot zemljevidi v
+// telefonu), sicer cela Slovenija.
+const POGLED = "kajros:map-pogled";
+const SLOVENIJA = [[13.38, 45.42], [16.61, 46.88]];
+
+function shranjenPogled() {
+  try {
+    const p = JSON.parse(localStorage.getItem(POGLED) || "null");
+    return p && [p.lat, p.lon, p.z].every(Number.isFinite) ? p : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+const zacetni = HAS_START ? { lat: startLat, lon: startLon, z: startZ } : shranjenPogled();
+const zacetniZoom = zacetni ? zacetni.z - LZ : 0;
 let map;
 try {
   map = new maplibregl.Map({
     container: "map",
     style: SLOG,
-    center: HAS_START ? [startLon, startLat] : [14.95, 46.05],
-    zoom: zacetniZoom,
-    pitch: nagib(zacetniZoom),
+    ...(zacetni
+      ? { center: [zacetni.lon, zacetni.lat], zoom: zacetniZoom, pitch: nagib(zacetniZoom) }
+      : { bounds: SLOVENIJA, fitBoundsOptions: { padding: 12 } }),
     maxZoom: 19 - LZ,
     // Robovi stavb v nagibu so brez glajenja nazobcani.
     canvasContextAttributes: { antialias: true },
@@ -121,6 +152,12 @@ function mapStateToUrl() {
   q.set("lon", c.lng.toFixed(5));
   q.set("z", String(Math.round(lz() * 100) / 100));
   history.replaceState(null, "", `?${q}`);
+  try {
+    localStorage.setItem(POGLED, JSON.stringify(
+      { lat: +c.lat.toFixed(5), lon: +c.lng.toFixed(5), z: Math.round(lz() * 100) / 100 }));
+  } catch (e) {
+    /* zasebno okno: zemljevid se odpre cez Slovenijo */
+  }
 }
 map.on("moveend", mapStateToUrl);
 
@@ -276,36 +313,11 @@ let stationsByName = new Map();     // ime postaje -> {stop_id, lat, lon}
 let liveTrains = [];
 let liveBuses = [];
 
-// Zacetni pogled se prilagodi VOZILOM, ne postajam. Prej je bil okvir
-// izracunan iz vseh 9 791 postajalisc -- ta segajo od Breginja do Pinc, torej
-// cez vso sirino drzave, in na telefonu (430 px sirine, 900 visine) je zoom
-// dolocila sirina: Slovenija je zapolnila trak na sredini, nad njo in pod njo
-// pa sta bili Avstrija in Jadran. Stran odgovarja na "kje je zdaj kaj",
-// zato okvir dolocajo vozila; kadar so razkropljena po drzavi, je to itak
-// spet cela Slovenija.
-let pogledPrilagojen = HAS_START;
-let vlakiPrispeli = false, vozilaPrispela = false;
-
-function prilagodiPogledVozilom() {
-  if (pogledPrilagojen || !vlakiPrispeli || !vozilaPrispela) return;
-  const okvir = new maplibregl.LngLatBounds();
-  let n = 0;
-  for (const t of liveTrains) {
-    const st = trainPlace(t).station;
-    if (st && st.lat != null) { okvir.extend([st.lon, st.lat]); n += 1; }
-  }
-  for (const v of liveBuses) if (v.lat != null) { okvir.extend([v.lon, v.lat]); n += 1; }
-  pogledPrilagojen = true;
-  if (!n) return;                            // ponoci se zgodi; ostane cela drzava
-  // maxZoom: dve vozili na isti postaji ne smeta priblizati na ulico.
-  map.fitBounds(okvir, { padding: 30, maxZoom: 12 - LZ, animate: false });
-}
-
 async function loadStatic() {
   try {
     // Samo železniške postaje: avtobusnih je nekaj tisoč in mreža prog bi
     // izginila pod postajališči.
-    const stations = await fetch("/api/stations?network=zeleznica").then(jsonOk);
+    const stations = await zgodaj.postaje;
     stationsByName = new Map(stations.map((s) => [s.name, s]));
     nastaviVir("k-postaje", tocke(stations.filter((s) => s.lat != null)));
   } catch (err) {
@@ -313,7 +325,7 @@ async function loadStatic() {
   }
 
   try {
-    nastaviVir("k-proge", await fetch("/api/network.geojson").then(jsonOk));
+    nastaviVir("k-proge", await zgodaj.proge);
   } catch (err) {
     console.error("mreže ni bilo mogoče naložiti", err);
   }
@@ -1414,11 +1426,12 @@ document.getElementById("find-clear").addEventListener("click", () => {
 // mora povedati, da odgovora ni bilo -- tiha napaka je natanko tisto, zaradi
 // cesar clovek ne ve, ali stran se tece.
 async function pollLive() {
-  liveTrains = await fetch("/api/live?network=zeleznica").then(jsonOk);
+  // Prvi odgovor je ze na poti od zacetka strani (`zgodaj`).
+  const prvi = zgodaj.vlaki;
+  zgodaj.vlaki = null;
+  liveTrains = await (prvi || fetch("/api/live?network=zeleznica").then(jsonOk));
   document.getElementById("n-train").textContent = liveTrains.length;
   renderTrains(liveTrains);
-  vlakiPrispeli = true;
-  prilagodiPogledVozilom();
   if (findEl.value.trim()) renderFind();
 }
 
@@ -1464,8 +1477,6 @@ function onVehicles(list) {
   const drugiRow = document.getElementById("row-bus-other");
   if (drugiRow) drugiRow.hidden = poAgenciji.drugi === 0;
   renderBuses(liveBuses);
-  vozilaPrispela = true;
-  prilagodiPogledVozilom();
   if (findEl.value.trim()) renderFind();
 }
 
@@ -1496,7 +1507,7 @@ map.once("style.load", async () => {
   setInterval(pollLiveTiho, POLL_MS);
   // Lega avtobusov ima svoj ritem: feed jo osvežuje na ~30 s, zamude pa se
   // spreminjajo redkeje.
-  vozilaPoll = pollVehicles("/api/vehicles", onVehicles);
+  vozilaPoll = pollVehicles("/api/vehicles", onVehicles, zgodaj.vozila);
   loadRoutes();
   setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
 });

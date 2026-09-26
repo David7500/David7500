@@ -66,8 +66,7 @@
 .stik-obrazec { display: flex; flex-direction: column; margin-top: 22px; }
 
 .stik-oznaka {
-  font: 500 11px/1 var(--sans); color: var(--ink-mute);
-  letter-spacing: .06em; text-transform: uppercase;
+  font: 500 13px/1 var(--sans); color: var(--ink-dim);
   margin-bottom: 7px;
 }
 .stik-oznaka + .stik-polje { margin-bottom: 18px; }

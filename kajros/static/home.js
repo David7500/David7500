@@ -238,6 +238,32 @@ function izrisiPoti() {
   document.getElementById("home-saved").hidden = false;
 }
 
+// ---------- zemljevid vnaprej ----------
+//
+// Zemljevid je najtezja stran (MapLibre 1,1 MB, stisnjeno okrog 300 kB). V
+// aplikaciji ga domaca stran potegne v predpomnilnik, ko nima drugega dela,
+// da se ob odprtju ne caka na knjiznico (zelja 26. 9. 2026: "fetchal bi ze,
+// ko odpres aplikacijo"). V brskalniku ne: tam bi prenos placal vsak
+// obiskovalec domace strani, tudi kdor zemljevida ne odpre.
+function zemljevidVnaprej() {
+  for (const href of (document.querySelector(".domov").dataset.vnaprej || "").split(" ")) {
+    if (!href) continue;
+    const l = document.createElement("link");
+    l.rel = "prefetch";
+    l.href = href;
+    document.head.appendChild(l);
+  }
+}
+
+function kasneje() {
+  if ("requestIdleCallback" in window) requestIdleCallback(zemljevidVnaprej, { timeout: 4000 });
+  else setTimeout(zemljevidVnaprej, 2000);
+}
+
 izrisiBudilke();
 izrisiPoti();
 load();
+if (MOST) {
+  if (document.readyState === "complete") kasneje();
+  else addEventListener("load", kasneje, { once: true });
+}
