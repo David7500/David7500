@@ -4,20 +4,15 @@ paths:
   - "kajros/templates/**"
   - "scripts/preveri_paleto.py"
 ---
-
 # Kako je zamuda napisana in pobarvana
 
-Velja povsod, kjer se zamuda pokaže: kartica zemljevida, iskalnik, časovnica,
-postanek potnika.
+Velja povsod, kjer se zamuda pokaže: kartica zemljevida, iskalnik, časovnica, postanek potnika.
 
 ## Prezgodnja vožnja
 
-* **Avtobus je lahko PREZGODEN; vlak v zajetih podatkih nikoli.** Preverjeno
-  znova 4. 9. 2026 na **78 082** železniških vrsticah `run` (prej 45 146): še
-  vedno ni niti ene negativne vrednosti, najmanjša je natanko 0.
+* **Avtobus lahko PREZGODEN; vlak v zajetih podatkih nikoli.** Preverjeno znova 4. 9. 2026 na **78 082** železniških vrsticah `run` (prej 45 146): ni niti ene negativne vrednosti, najmanjša natanko 0.
 
-  Pri avtobusih (**750 935** vrstic) je **10,7 %** vsaj minuto prezgodnjih in
-  **3,8 %** vsaj tri; **37,9 % voženj ima vsaj en prezgodnji postanek**.
+  Avtobusi (**750 935** vrstic): **10,7 %** vsaj minuto prezgodnjih, **3,8 %** vsaj tri; **37,9 % voženj ima vsaj en prezgodnji postanek**.
 
   | prevoznik | vsaj minuto prej | vrstic |
   |---|---|---|
@@ -26,90 +21,39 @@ postanek potnika.
   | Arriva | 8,8 % | 314 621 |
   | AP Murska Sobota | 5,9 % | 39 306 |
 
-  **Vse te številke so od prve meritve zdrsnile navzdol** (bilo je 12,0 / 4,5 /
-  41,7 %, LPP 22,6, Nomago 10,6). Smer ugotovitve drži, velikost pa se z
-  vzorcem spreminja — zato so tu odslej zapisane z vzorcem in kdor jih navaja,
-  naj jih pomeri znova.
+  **Vse številke so od prve meritve zdrsnile navzdol** (bilo 12,0 / 4,5 / 41,7 %, LPP 22,6, Nomago 10,6). Smer drži, velikost se z vzorcem spreminja — zato zapisane z vzorcem; kdor jih navaja, naj jih pomeri znova.
 
-  Prikaz je to do zdaj **skrival**: vrstica je pričakovano uro izpisala samo
-  ob `delay_s >= 60`, torej je prezgoden avtobus kazal zgolj voznoredno uro.
-  Napaka v najslabšo smer — potnik pride ob objavljeni uri in avtobusa ni več.
-  Zdaj je prag `abs(delay_s) >= 60`, žeton pa pove „3 min prej", ne „−3 min":
-  minus pred številko je uganka, beseda ni. Barva ostane siva, ker to res ni
-  zamuda — in prav zato mora povedati beseda. Pravilo je v `common.delayText()`
-  in velja **povsod**: kartica zemljevida, iskalnik vozila, stolpec zamude v
-  časovnici in postanek potnika. Za ozke stolpce ima kratko obliko („5 prej").
+  Prikaz je to do zdaj **skrival**: vrstica je pričakovano uro izpisala samo ob `delay_s >= 60`, prezgoden avtobus je kazal zgolj voznoredno uro. Napaka v najslabšo smer — potnik pride ob objavljeni uri, avtobusa ni več. Zdaj prag `abs(delay_s) >= 60`, žeton pove „3 min prej", ne „−3 min": minus pred številko je uganka, beseda ni. Barva ostane siva (res ni zamuda) — zato mora povedati beseda. Pravilo v `common.delayText()`, velja **povsod**: kartica zemljevida, iskalnik vozila, stolpec zamude v časovnici, postanek potnika. Ozki stolpci: kratka oblika („5 prej").
 
-  **V glavi okna vožnje smer nosi naslov, ne enota.** „Trenutna zamuda" nad
-  „6 min prej" si nasprotuje, „Vozi prezgodaj" nad „6 min prej" pa besedo
-  ponovi. Zato naslov pove smer in številka velikost: **„Vozi prezgodaj" ·
-  „6 min"**.
+  **V glavi okna vožnje smer nosi naslov, ne enota.** „Trenutna zamuda" nad „6 min prej" si nasprotuje, „Vozi prezgodaj" nad „6 min prej" ponovi besedo. Naslov pove smer, številka velikost: **„Vozi prezgodaj" · „6 min"**.
 
-  Ali je prezgodnja vrednost resnična, je bilo preverjeno na LPP 25
-  (Medvode ↔ Zadobrova). V smeri proti Zadobrovi je bila na Gosposvetski
-  prezgodnja v **vseh 17 zajetih vožnjah**, povprečno −4,4 min, najpozneje
-  −5 s; profil čez progo je lok, ki na obeh koncih izgine (Prušnikova −74 s,
-  Kompas −224, Gosposvetska −265, Kolodvor −73, konec +123). GPS to potrdi:
-  30. 8. ob 12:10:44 je bilo vozilo LJ LPP-124 že za postankom, ki ima vozni
-  red 12:13. To torej ni napaka zajema, ampak **prevelika rezerva voznega reda
-  skozi Šiško** — v nasprotni smeri je ista postaja povprečno +370 s. Zajem
-  LPP je za zdaj samo vikendski (od 29. 8.); ali velja med tednom, se bo videlo.
+  Resničnost prezgodnje vrednosti preverjena na LPP 25 (Medvode ↔ Zadobrova). Proti Zadobrovi prezgodnja na Gosposvetski v **vseh 17 zajetih vožnjah**, povprečno −4,4 min, najpozneje −5 s; profil čez progo = lok, ki na obeh koncih izgine (Prušnikova −74 s, Kompas −224, Gosposvetska −265, Kolodvor −73, konec +123). GPS potrdi: 30. 8. ob 12:10:44 vozilo LJ LPP-124 že za postankom z voznim redom 12:13. Ni napaka zajema, ampak **prevelika rezerva voznega reda skozi Šiško** — v nasprotni smeri ista postaja povprečno +370 s. Zajem LPP za zdaj samo vikendski (od 29. 8.); ali velja med tednom, se bo videlo.
 
 ## „Izmerjeno" je trditev o dogodku, ne o številki
 
-Beseda pomeni **opažanje**, in to je feed potrdil samo, če je vrednost osvežil
-**po** trenutku, ko trdi prehod (`stats.potrjen_prehod()`). Izmerjeno
-9. 9. 2026 na celem dnevu: železnica **0,3 %** postankov (6 od 2 007),
-avtobusi **69,6 %** (50 166 od 72 076).
+Beseda = **opažanje**; feed potrdil samo, če je vrednost osvežil **po** trenutku, ki ga trdi prehod (`stats.potrjen_prehod()`). Izmerjeno 9. 9. 2026 na celem dnevu: železnica **0,3 %** postankov (6 od 2 007), avtobusi **69,6 %** (50 166 od 72 076).
 
-Pri vlakih je bila torej ta beseda skoraj vedno **sklep iz ure**, ne meritev —
-in dvakrat v dveh dneh je poslala potnika s perona, s katerega vlak še ni
-odpeljal. Zdaj je razlika povedana:
+Pri vlakih je bila beseda skoraj vedno **sklep iz ure**, ne meritev — dvakrat v dveh dneh poslala potnika s perona, s katerega vlak še ni odpeljal. Zdaj razlika povedana:
 
 | kaj vemo | žeton | stavek |
 |---|---|---|
 | feed potrdil po prehodu | `izmerjeno` | „vlak je tu že bil" |
 | ni potrdil | `zadnji podatek` | „po zadnjem podatku bi bil tu ob 06:53" |
 
-Isto velja za glavo okna vožnje: „izmerjeno na postaji Blanca" proti
-„zadnji podatek s postaje Blanca".
+Enako za glavo okna vožnje: „izmerjeno na postaji Blanca" proti „zadnji podatek s postaje Blanca".
 
-**Pravilo je na strežniku in na enem mestu.** `stats.potrjen_prehod()` ga
-uporabljajo okno vožnje (`/api/train/{no}/run`), odhodna tabla
-(`journey.board`) in vse, kar gre skozi `stats.zamuda_na_postanku()` —
-iskalnik zvez in pot. Straža `preveri_skladnost.py` odslej primerja tudi
-**besedo**, ne le številke: če se tabla in okno razideta, je pravilo spet
-napisano dvakrat.
+**Pravilo je na strežniku, na enem mestu.** `stats.potrjen_prehod()` uporabljajo okno vožnje (`/api/train/{no}/run`), odhodna tabla (`journey.board`) in vse prek `stats.zamuda_na_postanku()` — iskalnik zvez in pot. Straža `preveri_skladnost.py` odslej primerja tudi **besedo**, ne le številk: če se tabla in okno razideta, je pravilo spet napisano dvakrat.
 
-**Kadar sta resnici dve, se pokažeta obe.** Številka za potnikovo postajo je
-lahko zamrznjena napoved, feed pa je medtem o vožnji povedal nekaj drugega.
-9. 9. 2026: pri Polju „+4 min, podatek ob 06:50", za Ljubljano „+15 min ob
-07:03" — in +15 je bilo **120 s** od resnice, +4 pa **780 s**. Katera drži, se
-ne da ugotoviti (izmerjeno: prenos poznejše vrednosti nazaj je slabši v 921
-primerih od 1 662), zato prikaz **ne izbira**:
+**Kadar sta resnici dve, se pokažeta obe.** Številka za potnikovo postajo je lahko zamrznjena napoved, feed pa je medtem o vožnji povedal nekaj drugega. 9. 9. 2026: pri Polju „+4 min, podatek ob 06:50", za Ljubljano „+15 min ob 07:03" — +15 je bilo **120 s** od resnice, +4 pa **780 s**. Katera drži, se ne da ugotoviti (izmerjeno: prenos poznejše vrednosti nazaj slabši v 921 primerih od 1 662), zato prikaz **ne izbira**:
 
 > po zadnjem podatku bi bil tu ob 06:53
 > novejša beseda o vožnji: **+15 min** (Ljubljana, 07:03)
 
-Pogoja sta dva: številka za postanek **ni potrjena** (`zadnji podatek`) in
-razlika je vsaj **5 minut** (`RAZKRIJ_RAZLIKO_S`) — pod tem je to šum, ne
-druga resnica. Ime postaje je v oklepaju, ker se ga ne da splošno sklanjati.
+Pogoja dva: številka za postanek **ni potrjena** (`zadnji podatek`) in razlika vsaj **5 minut** (`RAZKRIJ_RAZLIKO_S`) — pod tem šum, ne druga resnica. Ime postaje v oklepaju, ker se ga ne da splošno sklanjati.
 
-**Nepotrjen odhod ni odpeljan** (24. 9. 2026). Tabla in iskalnik zvez sta
-vlak, čim je minila ura po zadnjem podatku, posivila, iskalnik pa ga je zložil
-pod „pokaži prejšnje“. Kadar vlak čaka na prejšnji postaji in feed zamude ne
-osveži, je bil prav ta vlak še na poti. Zdaj strežnik vsaki železniški vrstici
-doda `nepotrjen_do` (`stats.nepotrjen_do()`, 20 min po pričakovanem odhodu,
-izmerjeno v `docs/MERITVE.md`), prikaz pa vrstico med pričakovanim odhodom in
-to uro pokaže napol prosojno (`is-unconfirmed`, 0,72 — med živo in odpeljano 0,4)
-z besedo **„po zadnjem podatku bi odpeljal ob 10:10, potrditve ni“**. Ni
-naslednja in ni med odpeljanimi. Primerjavo z uro naredi odjemalec, ker ura
-teče tudi med osvežitvama; mejo postavi strežnik. Pristajalni strani je ne
-kažeta — nimata JS in njun naslov je „Naslednji odhodi“.
+**Nepotrjen odhod ni odpeljan** (24. 9. 2026). Tabla in iskalnik zvez sta vlak, čim je minila ura po zadnjem podatku, posivila; iskalnik ga je zložil pod „pokaži prejšnje“. Kadar vlak čaka na prejšnji postaji in feed zamude ne osveži, je bil prav ta vlak še na poti. Zdaj strežnik vsaki železniški vrstici doda `nepotrjen_do` (`stats.nepotrjen_do()`, 20 min po pričakovanem odhodu, izmerjeno v `docs/MERITVE.md`); prikaz vrstico med pričakovanim odhodom in to uro pokaže napol prosojno (`is-unconfirmed`, 0,72 — med živo in odpeljano 0,4) z besedo **„po zadnjem podatku bi odpeljal ob 10:10, potrditve ni“**. Ni naslednja, ni med odpeljanimi. Primerjavo z uro naredi odjemalec, ker ura teče tudi med osvežitvama; mejo postavi strežnik. Pristajalni strani je ne kažeta — nimata JS, naslov „Naslednji odhodi“.
 
-**Zakaj ne poskušamo prehoda zaznati bolje.** Pet signalov je izmerjenih in
-vsi odpovejo — podrobnosti v `docs/MERITVE.md`, „Prehoda vlaka se iz teh
-podatkov ne da ugotoviti". Kar ni mogoče izmeriti, se ne sme trditi.
+**Zakaj ne poskušamo prehoda zaznati bolje.** Pet signalov izmerjenih, vsi odpovejo — podrobnosti v `docs/MERITVE.md`, „Prehoda vlaka se iz teh podatkov ne da ugotoviti". Kar ni mogoče izmeriti, se ne sme trditi.
 
 ## Barve zamud
 
@@ -122,79 +66,28 @@ Ordinalni ramp v enem odtenku, validiran na monotonost svetlosti in kontrast:
 | 5–15 min | `#dd6a26` | `#e07b45` |
 | nad 15 min | `#a83f10` | `#b85417` |
 
-Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
+Pravila (obstoječa koda in nova):
 
-* **Vsaka oznaka poleg barve vedno nosi tudi minute.** Barva nikoli ne nosi
-  pomena sama — barvna slepota, in +4 proti +14 je za potnika bistvena razlika.
-* **Razred se določi iz zaokrožene minute, ne iz sekund.** Meje v `DELAY_RAMP`
-  so v minutah in gredo skozi isto zaokroževanje kot `delayLabel`. Prej so bile
-  v sekundah (`<= 60` = točno): 60 s je pisalo „+1" sivo, 61 s „+1" oranžno —
-  ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot
-  številka poleg nje.
+* **Vsaka oznaka poleg barve vedno nosi tudi minute.** Barva nikoli sama ne nosi pomena — barvna slepota; +4 proti +14 je za potnika bistvena razlika.
+* **Razred iz zaokrožene minute, ne iz sekund.** Meje v `DELAY_RAMP` v minutah, isto zaokroževanje kot `delayLabel`. Prej sekunde (`<= 60` = točno): 60 s pisalo „+1" sivo, 61 s „+1" oranžno — ista številka, dve barvi. Barva ne sme pripovedovati druge zgodbe kot številka poleg nje.
 
-  **Ista past se je ponovila pri „prej".** Prag je bil `s <= -60`, zaokroževanje
-  pa se prelomi pri −30 s: −45 s je zato izpisalo golo **„−1"** namesto
-  „1 min prej". Pravilo je zdaj v `common.isEarly()` in ga uporabljata okno
-  vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
-* **Isto velja za prestop.** Preostanek pod ničlo je pisalo `-1 min za
-  prestop`; zdaj **„zmanjka 1 min“**. Negativna številka je natanko primer,
-  ko zveza NE drži — torej tisti, kjer mora potnik razumeti brez ugibanja.
-  Ničla ni „0 min za prestop“ (videti kot podatek), ampak **„brez rezerve“**.
-  Pravilo je v `connections.prestopText()`.
-* **Kar se na zaslonu sešteva, zaokroži enkrat in potem računaj.** Preostali
-  čas za prestop je bil `round(dejansko_s)`, poleg njega pa `round(načrtovano_s)`
-  in `round(zamuda_s)` — vsaka številka zaokrožena prav, skupaj pa
-  „načrtovano 52 min, prvi vlak +5, ostane 48". Bralec, ki sešteje, dobi 47 in
-  ima prav. Zdaj se preostanek računa iz **zaokroženih minut**
-  (`preostaliPrestop()`), ne iz sekund. Ista past kot pri razredu zamude.
-* **Razred se šteje na strežniku po ISTI zaokroženi minuti kot na zaslonu.**
-  Pravilo zgoraj je bilo popravljeno na odjemalcu, `stats.py` pa je razvrščal
-  po sekundah (`v <= 60` = „točno“) — v režo 30–60 s pade **3 280 od 45 015
-  voženj (7,29 %)**, ki jih je strežnik štel kot sive „točno“, barvna lestvica
-  pa bi jih pobarvala oranžno „1–5 min“. Zdaj gre vse skozi
-  `stats._razred_zamude()`.
+  **Ista past pri „prej".** Prag `s <= -60`, zaokroževanje se prelomi pri −30 s: −45 s izpisalo golo **„−1"** namesto „1 min prej". Pravilo zdaj v `common.isEarly()`, uporabljata ga okno vožnje in iskalnik zvez — en prag, ena zaokrožena minuta.
+* **Isto za prestop.** Preostanek pod ničlo pisalo `-1 min za prestop`; zdaj **„zmanjka 1 min“**. Negativna številka = zveza NE drži — potnik mora razumeti brez ugibanja. Ničla ni „0 min za prestop“ (videti kot podatek), ampak **„brez rezerve“**. Pravilo v `connections.prestopText()`.
+* **Kar se na zaslonu sešteva, zaokroži enkrat, potem računaj.** Preostali čas za prestop bil `round(dejansko_s)`, poleg `round(načrtovano_s)` in `round(zamuda_s)` — vsaka prav, skupaj „načrtovano 52 min, prvi vlak +5, ostane 48". Bralec sešteje: 47, ima prav. Zdaj preostanek iz **zaokroženih minut** (`preostaliPrestop()`), ne iz sekund. Ista past kot pri razredu zamude.
+* **Razred se na strežniku šteje po ISTI zaokroženi minuti kot na zaslonu.** Pravilo popravljeno na odjemalcu, `stats.py` pa razvrščal po sekundah (`v <= 60` = „točno“) — v režo 30–60 s pade **3 280 od 45 015 voženj (7,29 %)**: strežnik jih štel kot sive „točno“, barvna lestvica bi jih pobarvala oranžno „1–5 min“. Zdaj vse skozi `stats._razred_zamude()`.
 
-  **`floor(x + 0.5)`, ne `round()`:** JS `Math.round` zaokroži pol navzgor,
-  Pythonov `round` bančno (`round(0.5) == 0`), zato bi se pri natanko 30 s
-  prikaz in izračun razšla.
-* **„Točno“ in „delež točnih“ nista isto in ne smeta nositi iste besede.**
-  Žeton `točno` je zaokroženih **nič** minut, `on_time_share` pa **pet**. V
-  istem okvirju je pisalo „točno 81“ in „točnih 69 %“ — 81 od 162 je 50 % in
-  bralec tega ne more spraviti skupaj. Zato prikaz zdaj povsod pove prag:
-  **„72 % v 5 min“**.
+  **`floor(x + 0.5)`, ne `round()`:** JS `Math.round` zaokroži pol navzgor, Pythonov `round` bančno (`round(0.5) == 0`) → pri natanko 30 s bi se prikaz in izračun razšla.
+* **„Točno“ in „delež točnih“ nista isto, ne smeta nositi iste besede.** Žeton `točno` = zaokroženih **nič** minut, `on_time_share` = **pet**. V istem okvirju „točno 81“ in „točnih 69 %“ — 81 od 162 je 50 %, bralec ne more uskladiti. Zato prikaz povsod pove prag: **„72 % v 5 min“**.
 
-  In ker sta v istem okvirju, se morata **sešteti**: prag je zato
-  `ON_TIME_MIN = 5` v **minutah**, ne 300 s. Dokler je bil v sekundah, razred
-  „1–5 min“ pa je segal do zaokroženih pet (330 s), se 553 voženj (1,23 %) ni
-  ujelo — bile so v razredu, a ne med točnimi. Zdaj velja
-  `točno + 1–5 min = izpisani odstotek` in to je preverjeno v testu.
-* Odtenek lestvice se uporablja **samo tam, kjer pomeni velikost zamude**.
-* **Omrežje prestavi samo poudarek, ne lestvice.** `body.net-avtobus` premakne
-  `--accent` na zeleno; `--d-*` ostanejo oranžni tudi tam. Ista barva mora
-  pomeniti isto zamudo povsod — sicer „+5 min“ na avtobusni in železniški
-  strani nista primerljiva. Lestvica je poleg tega validirana na monotonost
-  svetlosti in barvno slepoto; zelena različica bi rabila svojo validacijo in
-  bi trčila s poudarkom.
+  V istem okvirju se morata **sešteti**: prag `ON_TIME_MIN = 5` v **minutah**, ne 300 s. V sekundah, razred „1–5 min“ pa do zaokroženih pet (330 s): 553 voženj (1,23 %) se ni ujelo — v razredu, a ne med točnimi. Zdaj `točno + 1–5 min = izpisani odstotek`, preverjeno v testu.
+* Odtenek lestvice **samo tam, kjer pomeni velikost zamude**.
+* **Omrežje prestavi samo poudarek, ne lestvice.** `body.net-avtobus` premakne `--accent` na zeleno; `--d-*` ostanejo oranžni tudi tam. Ista barva = ista zamuda povsod — sicer „+5 min“ na avtobusni in železniški strani nista primerljiva. Lestvica validirana na monotonost svetlosti in barvno slepoto; zelena različica bi rabila svojo validacijo in bi trčila s poudarkom.
 
-  **Kar sme biti zeleno, gre skozi `var(--accent)`, nikoli skozi trdo zapisan
-  `#f0934f`.** Tega se koda ni držala: `.hist-note strong`, žetona shranjenih
-  poti in zvezdica na iskalniku so bili na avtobusni strani oranžni brez
-  razloga. Izjemi, ki ostaneta trdi, sta **legenda omrežij na zemljevidu**
-  (oranžna = vlak, zelena = avtobus, to je njun pomen) in **izbira na domači
-  strani** (`.pick-train` proti `.pick-bus`).
-* **Padec zamude na postaji riši vedno, krogec prihoda pa le, kadar je zanj
-  prostor** (`MIN_SPLIT_PX = 15`). Krogec meri v premeru 10 pik, polna pika
-  odhoda 11 — pri manjšem razmiku se prekrijeta, navpičnica med njima izgine
-  pod njima in videti je kot **dva nepovezana krogca**. Prav to je bilo
-  prijavljeno pri Divači (+16 → +15, razmik natanko 10 pik).
+  **Kar sme biti zeleno, gre skozi `var(--accent)`, nikoli skozi trdo zapisan `#f0934f`.** Koda tega ni držala: `.hist-note strong`, žetona shranjenih poti in zvezdica na iskalniku so bili na avtobusni strani oranžni brez razloga. Trdi izjemi: **legenda omrežij na zemljevidu** (oranžna = vlak, zelena = avtobus, to je njun pomen) in **izbira na domači strani** (`.pick-train` proti `.pick-bus`).
+* **Padec zamude na postaji riši vedno, krogec prihoda le, kadar je prostor** (`MIN_SPLIT_PX = 15`). Krogec premer 10 pik, polna pika odhoda 11 — pri manjšem razmiku se prekrijeta, navpičnica med njima izgine pod njima, videti **dva nepovezana krogca**. Prijavljeno pri Divači (+16 → +15, razmik natanko 10 pik).
 
-  Rešitev ni skrivanje: enominutni padec je resničen podatek. Odsek se konča
-  pri **prihodni** vrednosti, navpičnica pa pade na odhodno — pri majhni
-  razliki je to stopnica ob piki in se bere, pri veliki (Ljubljana, 170 pik)
-  dobi še krogec. Skrivanje bi izgubilo prav tisto, zaradi česar je padec
-  narisan.
-* Kjer meritve ni (ocena, napoved), nastopi rezervirana `#a8d8ff`, ki je
-  lestvica ne uporablja.
+  Rešitev ni skrivanje: enominutni padec je resničen podatek. Odsek se konča pri **prihodni** vrednosti, navpičnica pade na odhodno — pri majhni razliki stopnica ob piki, bere se; pri veliki (Ljubljana, 170 pik) dobi še krogec. Skrivanje bi izgubilo prav to, zaradi česar je padec narisan.
+* Kjer meritve ni (ocena, napoved): rezervirana `#a8d8ff`, lestvica je ne uporablja.
 * Vreme ima **svoj semafor**, ne odtenek lestvice zamud.
 
 ### Semafor razmer
@@ -206,180 +99,90 @@ Pravila, ki se jih drži obstoječa koda in naj se jih tudi nova:
 | 4–6 | zahtevne | `#d9b33c` |
 | 7–10 | hude | `#d1495b` |
 
-Stopnja 0–10 je seštevek točk za padavine, sneg, sunke vetra, meglo, nevihto in
-mraz (`weather.severity()`). Razčlenitev gre v tooltip — indeks brez razčlenitve
-je črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
+Stopnja 0–10 = seštevek točk za padavine, sneg, sunke vetra, meglo, nevihto in mraz (`weather.severity()`). Razčlenitev v tooltip — indeks brez razčlenitve = črna skrinja. Modelska vrednost za celico 8 × 8 km, ne meritev na peronu.
 
-**Žeton nikoli ne pokaže gole stopnje.** „0" potniku ne pove nič — to je bilo
-popravljeno prej — a **„1" prav tako ne**: številka brez enote in brez lestvice
-je uganka, razlaga pa je v `title`, ki ga na telefonu ni mogoče doseči. Prvi
-popravek je torej rešil pol težave.
+**Žeton nikoli ne pokaže gole stopnje.** „0" potniku ne pove nič — popravljeno prej — a **„1" prav tako ne**: številka brez enote in lestvice je uganka, razlaga v `title`, ki ga na telefonu ni mogoče doseči. Prvi popravek rešil pol težave.
 
-Zato: do vključno **blagih (≤ 3) piše temperatura**, ki nekaj pove sama po sebi,
-od **zahtevnih (≥ 4) naprej pa beseda** („zahtevne", „hude"), ki pove, kaj je
-narobe. Barva ostane ista lestvica razmer. Besede so samo tam, kjer je kaj za
-povedati, in takih postankov je malo, zato širina ni težava. Žetoni so
-v preprostem pogledu na **postajah naprej po progi** (napoved, črtkan rob);
-prevožene postaje so tam itak skrite in mirno vreme za nazaj ne pove ničesar.
+Zato: do vključno **blagih (≤ 3) temperatura** (pove nekaj sama), od **zahtevnih (≥ 4) naprej beseda** („zahtevne", „hude"), ki pove, kaj je narobe. Barva ostane ista lestvica razmer. Besede le tam, kjer je kaj povedati; takih postankov malo, širina ni težava. Žetoni v preprostem pogledu na **postajah naprej po progi** (napoved, črtkan rob); prevožene postaje tam skrite, mirno vreme za nazaj ne pove ničesar.
 
-**Lestvic ne mešaj v istem registru.** Rumena razmer `#d9b33c` proti svetli
-oranžni zamud `#f2a87e` je pri deutanu ΔE 5,5 — nerazločljivo. Zato je zamuda
-krivulja s pikami zgoraj, razmere pa stolpci v ločenem pasu spodaj, in vsak
-stolpec od stopnje 4 naprej nosi svojo številko. Paleto preverjaj z
-`scripts/preveri_paleto.py`, ne na oko. Ta izmeri kontrast (WCAG), monotonost
-svetlosti in razločljivost pri barvni slepoti (CIEDE2000 na simulaciji
-protan/deutan/tritan). Trk obeh lestvic je pri tritanu **ΔE 1,6**, torej hujši
-od tu prej zapisanih 5,5 — ločena registra sta nujna, ne okrasna.
+**Lestvic ne mešaj v istem registru.** Rumena razmer `#d9b33c` proti svetli oranžni zamud `#f2a87e`: pri deutanu ΔE 5,5 — nerazločljivo. Zato zamuda = krivulja s pikami zgoraj, razmere = stolpci v ločenem pasu spodaj, vsak stolpec od stopnje 4 naprej nosi svojo številko. Paleto preverjaj z `scripts/preveri_paleto.py`, ne na oko. Meri kontrast (WCAG), monotonost svetlosti, razločljivost pri barvni slepoti (CIEDE2000 na simulaciji protan/deutan/tritan). Trk obeh lestvic pri tritanu **ΔE 1,6**, hujši od prej zapisanih 5,5 — ločena registra nujna, ne okrasna.
 
 
 ## `[hidden]` je eno pravilo, ne enajst
 
-`display` iz razreda premaga `[hidden]` iz brskalnikovega sloga, ker je
-avtorski. Past je ugriznila najmanj trikrat — vrstica „Drugi prevozniki" ni
-izginila pri števcu 0, prazen sloj budilke je ležal čez vso stran in požiral
-vsak klik, gumb „pokaži vso pot" se je videl, preden je bilo kaj pokazati.
+`display` iz razreda premaga `[hidden]` iz brskalnikovega sloga (avtorski). Past ugriznila vsaj trikrat — vrstica „Drugi prevozniki" ni izginila pri števcu 0, prazen sloj budilke ležal čez vso stran in požiral vsak klik, gumb „pokaži vso pot" viden, preden je bilo kaj pokazati.
 
-Vsakič je bila popravljena **v svoji datoteki**, zato je bilo isto pravilo
-zapisano enajstkrat, in vsak nov razred z `display` je past čakal znova. Odslej
-je v `base.css` eno samo `[hidden] { display: none !important; }`;
-`!important` je tam zato, ker mora premagati prav tiste razrede, zaradi katerih
-je past sploh nastala. **Novih `X[hidden]` ne dodajaj.**
+Vsakič popravljeno **v svoji datoteki** → isto pravilo zapisano enajstkrat, vsak nov razred z `display` past čakal znova. Odslej v `base.css` eno samo `[hidden] { display: none !important; }`; `!important` ker mora premagati prav razrede, zaradi katerih past nastala. **Novih `X[hidden]` ne dodajaj.**
 
 ## Znak
 
-Monogram **K**: navpično steblo in dve roki iz iste točke. Siva roka je vozni
-red, poudarjena resnica — ista misel kot ime (*chronos* proti *kairosu*).
+Monogram **K**: navpično steblo + dve roki iz iste točke. Siva roka = vozni red, poudarjena = resnica — ista misel kot ime (*chronos* proti *kairosu*).
 
-* **V glavi strani** (`brand-mark`) je znak brez podlage in bere `currentColor`,
-  zato na avtobusni strani pozeleni skupaj s poudarkom. Steblo in zgornja roka
-  imata `stroke-opacity="0.5"`. Ostal je preprost, ker pri 20 px podrobnosti
-  ikone ni videti.
-* **Kot ikona** je bolj podroben (izbrano 14. 9. 2026, „K je preveč
-  preprost"): K kot kazalca na številčnici z dvanajstimi oznakami, oranžna roka
-  je cesta, po njej pelje avtobus. Vir je **`static/favicon.svg`** (podlaga in
-  znak v ločenih skupinah); `scripts/naredi-ikone.sh` iz njega naredi PNG,
-  Android ima isto risbo v `ikona_znak.xml` brez prelivov, stisnjeno na 75 %,
-  da oznake ure ostanejo v varni coni adaptivne ikone.
-* **V komentarju SVG in XML ni `--`.** Favicon z `--` v komentarju ni veljaven
-  XML in ga brskalnik ne pokaže; aapt gradnjo ustavi.
-* **Vlakov znak ni več znamka.** Ostane samo tam, kjer pomeni **omrežje**:
-  preklop v glavi in izbira na domači strani. Znamka mora pokrivati oboje.
-* Znak mora zdržati **svetlo in temno podlago**. Prvi poskus monograma je imel
-  belo steblo in je na svetli podlagi izginil; Android si ozadje določi sam.
+* **V glavi strani** (`brand-mark`): znak brez podlage, bere `currentColor`, zato na avtobusni strani pozeleni skupaj s poudarkom. Steblo in zgornja roka: `stroke-opacity="0.5"`. Ostal preprost, ker pri 20 px podrobnosti ikone ni videti.
+* **Kot ikona** bolj podroben (izbrano 14. 9. 2026, „K je preveč preprost"): K kot kazalca na številčnici z dvanajstimi oznakami, oranžna roka = cesta, po njej pelje avtobus. Vir **`static/favicon.svg`** (podlaga in znak v ločenih skupinah); `scripts/naredi-ikone.sh` iz njega naredi PNG, Android ima isto risbo v `ikona_znak.xml` brez prelivov, stisnjeno na 75 %, da oznake ure ostanejo v varni coni adaptivne ikone.
+* **V komentarju SVG in XML ni `--`.** Favicon z `--` v komentarju ni veljaven XML, brskalnik ga ne pokaže; aapt gradnjo ustavi.
+* **Vlakov znak ni več znamka.** Ostane samo kjer pomeni **omrežje**: preklop v glavi in izbira na domači strani. Znamka mora pokrivati oboje.
+* Znak mora zdržati **svetlo in temno podlago**. Prvi poskus monograma: belo steblo, na svetli podlagi izginilo; Android si ozadje določi sam.
 
-**Chromium ne more brati iz `/tmp`** (isti razlog, kot da tja ne more pisati).
-Prva različica ikon je bila zato posnetek njegove strani z napako in je bila
-videti kot uspeh — datoteka je obstajala, imela 200 in pravo velikost v bajtih.
-Razkril jo je šele enak `md5` dveh različnih ikon. `naredi-ikone.sh` zato po
-vsaki sliki preveri **dejansko velikost slike**, ne le obstoja datoteke.
+**Chromium ne more brati iz `/tmp`** (isti razlog, kot da tja ne more pisati). Prva različica ikon zato = posnetek njegove strani z napako, videti kot uspeh — datoteka obstajala, 200, prava velikost v bajtih. Razkril šele enak `md5` dveh različnih ikon. `naredi-ikone.sh` zato po vsaki sliki preveri **dejansko velikost slike**, ne le obstoja datoteke.
 
 ## Namestitev na telefon (PWA)
 
-`static/manifest.webmanifest` je povezan z vseh strani, skupaj z
-`apple-touch-icon` (180 px, ker iOS manifesta za ikono ne bere) in
-`theme-color` `#0f1115`. Bližnjice v manifestu so vlaki, avtobusi, zemljevid.
+`static/manifest.webmanifest` povezan z vseh strani, skupaj z `apple-touch-icon` (180 px, ker iOS manifesta za ikono ne bere) in `theme-color` `#0f1115`. Bližnjice v manifestu: vlaki, avtobusi, zemljevid.
 
-**Kaj od tega po `http://` res dela, je izmerjeno, ne domnevano** (3. 9. 2026,
-chromium brez zaslona):
+**Kaj po `http://` res dela: izmerjeno, ne domnevano** (3. 9. 2026, chromium brez zaslona):
 
 | izvor | `isSecureContext` | `navigator.serviceWorker` |
 |---|---|---|
 | `http://127.0.0.1:8001` | `true` | obstaja |
 | `http://192.168.1.164:8001` | `false` | **ne obstaja** |
 
-Manifest se kljub temu **prenese tudi po nevarnem izvoru** — v dnevniku
-strežnika je `GET /static/manifest.webmanifest` ob nalaganju po omrežnem
-naslovu. Zato „dodaj na začetni zaslon" dobi pravo ime in ikono že zdaj;
-namestitev kot aplikacija (WebAPK) in delovanje brez omrežja pa ne, ker oboje
-visi na varnem kontekstu.
+Manifest se kljub temu **prenese tudi po nevarnem izvoru** — v dnevniku strežnika `GET /static/manifest.webmanifest` ob nalaganju po omrežnem naslovu. Zato „dodaj na začetni zaslon" dobi pravo ime in ikono že zdaj; namestitev kot aplikacija (WebAPK) in delovanje brez omrežja ne, ker oboje visi na varnem kontekstu.
 
-**Service worker je od 12. 9. 2026 tu**, ker je HTTPS na `kajros.app` tu.
-Streže ga `api.sw()` iz predloge `templates/sw.js`, registrira pa se v
-`common.js` samo, kadar je `isSecureContext` — po omrežnem naslovu bi vrgel
-napako v konzolo, ta pa mora ostati prazna, ker jo `preveri.sh` bere kot
-merilo.
+**Service worker tu od 12. 9. 2026**, ker je HTTPS na `kajros.app`. Streže ga `api.sw()` iz predloge `templates/sw.js`, registrira se v `common.js` samo kadar `isSecureContext` — po omrežnem naslovu bi vrgel napako v konzolo, ta pa mora ostati prazna, ker jo `preveri.sh` bere kot merilo.
 
-**Nad njim stoji eno pravilo: `/api/` se ne predpomni nikoli.** Ta projekt
-meri zamude, zamuda iz predpomnilnika pa je laž — najhujša vrsta, ker je
-videti kot podatek in nosi uro. Potnik, ki bi videl „+2 min“ izpred pol ure,
-bi zamudil vlak, o katerem misli, da ima čas. Isto velja za `/admin`: pregled
-za skrbnika ne sme pustiti sledi na napravi.
+**Nad njim eno pravilo: `/api/` se ne predpomni nikoli.** Projekt meri zamude, zamuda iz predpomnilnika = laž — najhujša vrsta, ker je videti kot podatek in nosi uro. Potnik, ki bi videl „+2 min“ izpred pol ure, bi zamudil vlak, o katerem misli, da ima čas. Isto za `/admin`: pregled za skrbnika ne sme pustiti sledi na napravi.
 
-Ostalo je razdeljeno po tem, kaj se sme postarati:
+Ostalo razdeljeno po tem, kaj se sme postarati:
 
 | kaj | ravnanje | zakaj |
 |---|---|---|
-| `/static/*` | najprej predpomnilnik | naslov nosi odtis vsebine, torej je nespremenljiv |
+| `/static/*` | najprej predpomnilnik | naslov nosi odtis vsebine → nespremenljiv |
 | strani | najprej omrežje, predpomnilnik kot rezerva | vsebujejo tudi številke |
 | `/api/*`, `/admin` | delavec se jih ne dotakne | glej zgoraj |
 | tuji izvori (ploščice) | delavec se jih ne dotakne | niso naši |
 
-Različica predpomnilnika je **odtis celotne lupine**, ne ročna številka:
-`sw.js` se ob objavi spremeni sam in brskalnik to zazna kot novega delavca.
-Ročno vzdrževana številka bi bila prej ali slej pozabljena in obiskovalci bi
-dobivali staro aplikacijo. Naslovi statike nosijo odtis, zato se stari vnosi
-ne povozijo, ampak kopičijo — ob novi različici gredo vsi ven naenkrat.
+Različica predpomnilnika = **odtis celotne lupine**, ne ročna številka: `sw.js` se ob objavi spremeni sam, brskalnik to zazna kot novega delavca. Ročna številka bi bila prej ali slej pozabljena, obiskovalci bi dobivali staro aplikacijo. Naslovi statike nosijo odtis, zato se stari vnosi ne povozijo, ampak kopičijo — ob novi različici gredo vsi ven naenkrat.
 
-`/brez-omrezja` **namerno ne ponudi zadnjih znanih zamud.** Ta stran se
-pokaže v predoru in v dvigalu, torej natanko tam, kjer je stara številka
-videti kot sveža.
+`/brez-omrezja` **namerno ne ponudi zadnjih znanih zamud.** Stran se pokaže v predoru in dvigalu, natanko kjer je stara številka videti sveža.
 
-**Preverjeno z ugasnjenim strežnikom, ne po opisu** (12. 9. 2026): lupina
-9 datotek, offline stran shranjena, **`/api/` v nobenem predpomnilniku
-(0 vnosov)**, že obiskana stran se postreže iz predpomnilnika, nikoli
-obiskana dobi „brez zveze“.
+**Preverjeno z ugasnjenim strežnikom, ne po opisu** (12. 9. 2026): lupina 9 datotek, offline stran shranjena, **`/api/` v nobenem predpomnilniku (0 vnosov)**, že obiskana stran se postreže iz predpomnilnika, nikoli obiskana dobi „brez zveze“.
 
-**Headless chromium z `--virtual-time-budget` delavca ne požene.**
-`register()` se ne razreši ne v eno ne v drugo smer — virtualni čas ne
-teče v nitih service workerja. Preizkus zato teče brez njega, dogodek
-`load` pa se zakasni s počasnim odgovorom iz začasnega strežnika. Brez
-tega je videti, kot da registracija tiho odpove.
-
+**Headless chromium z `--virtual-time-budget` delavca ne požene.** `register()` se ne razreši v nobeno smer — virtualni čas ne teče v nitih service workerja. Preizkus zato teče brez njega, dogodek `load` se zakasni s počasnim odgovorom iz začasnega strežnika. Brez tega je videti, kot da registracija tiho odpove.
 
 ## Ovire: kaj velja danes in kaj šele pozneje
 
-`alerts.for_train()` filtrira samo `end_ts >= zdaj`, ne pa `start_ts <= zdaj`,
-in to je **namerno**: nadomestni prevoz, ki se začne v petek, je za potnika,
-ki gleda četrtkov vlak, uporabna vest.
+`alerts.for_train()` filtrira samo `end_ts >= zdaj`, ne `start_ts <= zdaj` — **namerno**: nadomestni prevoz, ki se začne v petek, je za potnika, ki gleda četrtkov vlak, uporabna vest.
 
-Brez datuma pa je zavajajoča. Izmerjeno 4. 9. 2026: od 62 shranjenih ovir jih
-je bilo **16 veljavnih in 32 takih, ki se še niso začele** (5.–19. 9.). Na
-LPV 2250 je okno vožnje pisalo „Obvestila o ovirah na tej poti — 7“, od
-katerih so štiri začele šele 7.–19. 9.
+Brez datuma zavajajoče. Izmerjeno 4. 9. 2026: od 62 shranjenih ovir **16 veljavnih, 32 še nezačetih** (5.–19. 9.). Na LPV 2250 okno vožnje pisalo „Obvestila o ovirah na tej poti — 7“, od tega štiri začele šele 7.–19. 9.
 
 Zato dvoje:
 
-* vsaka ovira, ki se še ni začela, nosi **„velja od D. M.“** (`alert-later`,
-  barva `--sev-hard`);
-* **naslov razčleni števec** — „— 3 zdaj, 4 pozneje“ namesto „— 7“. Škatla je
-  zaprta, kadar jih je več kot dve, torej natanko takrat, ko je razlika
-  največja in je ni videti.
+* vsaka ovira, ki se še ni začela, nosi **„velja od D. M.“** (`alert-later`, barva `--sev-hard`);
+* **naslov razčleni števec** — „— 3 zdaj, 4 pozneje“ namesto „— 7“. Škatla zaprta, kadar jih je več kot dve, torej natanko ko je razlika največja in je ni videti.
 
-Isto pravilo kot povsod: številka mora pomeniti tisto, kar bralec misli, da
-pomeni.
+Isto pravilo kot povsod: številka mora pomeniti tisto, kar bralec misli, da pomeni.
 
 ## „v živo" je tretja vrsta številke, poleg meritve in ocene
 
-Mestni LPP ima od 7. 9. 2026 na oknu vožnje **prevoznikovo živo napoved**
-(`zamuda.vrsta === "živo"`, iz `data.lpp.si`, osvežena na 10–30 s). Piše se
-kot `LPP v živo · čez N min` in ima prednost pred našo oceno — ne zato, ker bi
-bila načelno boljša, ampak ker je pri mestnem LPP **naša zgodovina zgrajena iz
-napovedi**: feed pošlje samo postanke pred vozilom, zato v `run` meritve nikoli
-ni. Naša ocena ostane vidna v naprednem pogledu, da se dá primerjati.
+Mestni LPP ima od 7. 9. 2026 na oknu vožnje **prevoznikovo živo napoved** (`zamuda.vrsta === "živo"`, iz `data.lpp.si`, osvežena na 10–30 s). Piše se `LPP v živo · čez N min`, prednost pred našo oceno — ne ker bi bila načelno boljša, ampak ker je pri mestnem LPP **naša zgodovina zgrajena iz napovedi**: feed pošlje samo postanke pred vozilom, zato v `run` meritve nikoli ni. Naša ocena ostane vidna v naprednem pogledu za primerjavo.
 
-Meritve ta številka **ne prepiše nikoli** — pogoj je `stop_seq > meja`.
+Meritve ta številka **ne prepiše nikoli** — pogoj `stop_seq > meja`.
 
-Ob tem je bila popravljena navedba vira: pod mestnim LPP je pisalo „IJPP prek
-NAP", česar tam ni. Zdaj `viriHtml()` pove „LPP (avl.lpp.si), obdelava DERP"
-in doda „živi prihodi data.lpp.si", kadar so res uporabljeni.
+Popravljena navedba vira: pod mestnim LPP je pisalo „IJPP prek NAP", česar tam ni. Zdaj `viriHtml()` pove „LPP (avl.lpp.si), obdelava DERP" in doda „živi prihodi data.lpp.si", kadar so res uporabljeni.
 
 ## Tir
 
-Tir s table SŽ (`peroni.py`) je `tirHtml()` v `common.js`: ploščica
-„tir 6-A“ ob imenu postaje (okno vožnje), prva v vrstici pod odhodom (tabla,
-neposredna zveza) in v vrstici prestopa kot „tir 3 → tir 1“. **Ne ob imenih
-postaj v nogah prestopa** — na 375 px je potisnil cilj izven vrstice.
+Tir s table SŽ (`peroni.py`) = `tirHtml()` v `common.js`: ploščica „tir 6-A“ ob imenu postaje (okno vožnje), prva v vrstici pod odhodom (tabla, neposredna zveza) in v vrstici prestopa kot „tir 3 → tir 1“. **Ne ob imenih postaj v nogah prestopa** — na 375 px potisnil cilj izven vrstice.
 
-Sprememba čez dan se napiše z besedo (`tir 7-A · prej 6-A`), barva
-`--sev-hard` je samo poudarek. Kadar tira ni (postaja ga pri SŽ nima, vir
-obstal), ni nič: ne „tir ?“ in ne ugibanje iz zgodovine.
+Sprememba čez dan z besedo (`tir 7-A · prej 6-A`), barva `--sev-hard` samo poudarek. Kadar tira ni (postaja ga pri SŽ nima, vir obstal): nič — ne „tir ?“, ne ugibanje iz zgodovine.

@@ -1,10 +1,6 @@
 # Kajros
 
-Zajem in analiza **zamud slovenskega javnega prevoza** iz odprtih podatkov.
-Ime je grški *kairos* — pravi trenutek, v nasprotju s *chronosom*, urnim
-časom. Vozni red je chronos, resnica je kairos; razlika med njima je projekt.
-Zaledje v Pythonu (FastAPI + SQLite), prikaz v vanilla JS. Zgodovine teh
-podatkov ni nikjer drugje — če je ne posnamemo sami, je ni.
+Zajem in analiza **zamud slovenskega javnega prevoza** iz odprtih podatkov. Ime = grški *kairos* — pravi trenutek, nasprotje *chronosa* (urni čas). Vozni red = chronos, resnica = kairos; razlika med njima = projekt. Zaledje Python (FastAPI + SQLite), prikaz vanilla JS. Zgodovine teh podatkov nikjer drugje ni — če je ne posnamemo sami, je ni.
 
 Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
@@ -14,32 +10,15 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 ./scripts/dev-restart.sh          # počaka na sproščen port in izpiše naslove
 ```
 
-Venv je `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že
-teče na 8001 — preveri s `pgrep -af uvicorn`, preden zaganjaš drugega.
-CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`,
-`show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`,
-`prune`, `ocena`, `seed`, `zamenjave`, `pespoti`, `pot`, `naslovi`.
+Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `pespoti`, `pot`, `naslovi`.
 
-**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh
-strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v
-enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (487 preizkusov).
-`scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na
-zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po
-zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (502 preizkusa). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
-Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi
-samo SŽ. **Mestni LPP je drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP
-ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
+Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 
-**Strežnik posluša na vseh vmesnikih** (`KAJROS_HOST`, privzeto `0.0.0.0`), ker je
-telefon glavna preizkusna naprava. To **ni** isto kot odpiranje vrat na
-usmerjevalniku: API nima avtentikacije in ga sme videti samo domače omrežje.
-Za samo ta računalnik: `KAJROS_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
+**Strežnik posluša na vseh vmesnikih** (`KAJROS_HOST`, privzeto `0.0.0.0`), ker je telefon glavna preizkusna naprava. To **ni** odpiranje vrat na usmerjevalniku: API nima avtentikacije, sme ga videti samo domače omrežje. Samo ta računalnik: `KAJROS_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
 
-**Prek omrežnega naslova lastna lega ne dela in to ni naša napaka.**
-`navigator.geolocation` zahteva varen kontekst — HTTPS ali `localhost` — in
-`http://192.168.1.164:8001` ni ne eno ne drugo (izmerjeno:
-`window.isSecureContext = false`). Prikaz to pove, namesto da bi tiho čakal.
+**Prek omrežnega naslova lastna lega ne dela — ni naša napaka.** `navigator.geolocation` zahteva varen kontekst (HTTPS ali `localhost`); `http://192.168.1.164:8001` ni ne eno ne drugo (izmerjeno: `window.isSecureContext = false`). Prikaz to pove, ne čaka tiho.
 
 ## Od kod podatki
 
@@ -57,42 +36,21 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
 
-SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, stari SOAP je
-mrtev. V zipu je **ves** slovenski javni potniški promet (pet agencij), ne le
-železnica; `config.RAIL_AGENCY_ID` je edino, kar jih loči.
+SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči.
 
 ## Pravila, ki veljajo povsod
 
-* **Model se meri na dveh merilih, ne enem.** `kajros backtest` je zgodovina
-  s kratkimi skoki, `kajros ocena` pa številka, ki jo je potnik res videl 25
-  minut prej. Zadnja sprememba je bila na prvem merilu za las slabša in na
-  drugem mnogo boljša — brez obojega bi jo zavrgli.
-* **Meri, ne domnevaj.** Vsaka trditev v teh zapisih ima za sabo številko.
-  Kar ni izmerjeno, se ne zapiše kot dejstvo — in kar je, se zapiše z
-  vzorcem („na 79 primerih“), da naslednji ve, koliko zaupati.
-* **Nikoli ne beri `stu.arrival.delay` naravnost** — protobuf za neizpolnjeno
-  polje vrne 0, kar je videti kot „točno“. Uporabljaj `collector._delay_of()`.
-* **Povsod `COALESCE(delay_dep, delay_arr)`, ne obratno.** `departure.delay`
-  je izpolnjen pri vseh prevoznikih stoodstotno, `arrival.delay` ne.
-* **Meja med meritvijo in napovedjo je `stats.last_measured()`.** Kar je za
-  zadnjim prevoženim postankom, je napoved — vsak prikaz zamude to upošteva.
-  Ta napaka je bila že dvakrat na zaslonu.
-* **Omrežje filtriraj znotraj poizvedbe, ne za njo** (`WHERE t.network = ?`).
-  Bil je že dvakrat vzrok počasnosti.
-* **Pisalne poti so natanko tri** — `POST /stik`, `POST /admin/sporocila/{id}`
-  in `POST /api/deli` (deljenje lege, od 25. 9. 2026). Vse ostalo je `GET`.
-  Nova pisalna pot je zavestna odločitev, ne mimogrede:
-  `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke so na
-  enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`).
-* **V enem SQL stavku ne mešaj `?` in `:ime`** — sqlite veže po vrstnem redu
-  pojavitve in tiho vrne napačne vrstice.
-* **`run` hrani zadnje stanje postanka**, zato `MAX(stop_seq)` po koncu vožnje
-  ni dokaz, da vozilo še vozi. Živost sklepaj iz `_LIVE_SQL`.
-* **Spremembo prikaza poglej, preden jo razglasiš za končano.**
-  `chromium --headless --disable-gpu --window-size=1850,1000
-  --virtual-time-budget=7000 --screenshot=$PWD/posnetki/x.png <url>`.
-  V `/tmp` chromium ne more pisati; `posnetki/` je v `.gitignore`. **Ne v
-  `$HOME`.**
+* **Model se meri na dveh merilih, ne enem.** `kajros backtest` = zgodovina s kratkimi skoki, `kajros ocena` = številka, ki jo je potnik res videl 25 minut prej. Zadnja sprememba: na prvem merilu za las slabša, na drugem mnogo boljša — brez obojega bi jo zavrgli.
+* **Meri, ne domnevaj.** Vsaka trditev v zapisih ima številko. Kar ni izmerjeno, se ne zapiše kot dejstvo; kar je, se zapiše z vzorcem („na 79 primerih“), da naslednji ve, koliko zaupati.
+* **Nikoli ne beri `stu.arrival.delay` naravnost** — protobuf za neizpolnjeno polje vrne 0, videti kot „točno“. Uporabi `collector._delay_of()`.
+* **Povsod `COALESCE(delay_dep, delay_arr)`, ne obratno.** `departure.delay` izpolnjen pri vseh prevoznikih 100 %, `arrival.delay` ne. Namenoma obratno samo **prihod** na cilj ali naslednjo postajo (`to_delay_s`, `typical_dwell`, `operator_forecast_tasks`) -- ne „popravljaj“.
+* **Voznoredne sekunde štejejo od poldneva minus 12 h, ne od polnoči** (GTFS). Epoha ↔ `t_s` samo prek `stats.polnoc()` ali `stats.abs_time()`; na dan premika ure je polnoč za uro zamaknjena (25. 10. 2026 bi bila zamuda LPP +60 min).
+* **Meja med meritvijo in napovedjo = `stats.last_measured()`.** Kar je za zadnjim prevoženim postankom, je napoved — vsak prikaz zamude to upošteva. Napaka je bila že dvakrat na zaslonu.
+* **Omrežje filtriraj znotraj poizvedbe, ne za njo** (`WHERE t.network = ?`). Bil že dvakrat vzrok počasnosti.
+* **Pisalne poti natanko tri** — `POST /stik`, `POST /admin/sporocila/{id}` in `POST /api/deli` (deljenje lege, od 25. 9. 2026). Vse ostalo `GET`. Nova pisalna pot = zavestna odločitev: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke na enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`).
+* **V enem SQL stavku ne mešaj `?` in `:ime`** — sqlite veže po vrstnem redu pojavitve, tiho vrne napačne vrstice.
+* **`run` hrani zadnje stanje postanka**, zato `MAX(stop_seq)` po koncu vožnje ni dokaz, da vozilo še vozi. Živost sklepaj iz `_LIVE_SQL`.
+* **Spremembo prikaza poglej, preden jo razglasiš za končano.** `chromium --headless --disable-gpu --window-size=1850,1000 --virtual-time-budget=7000 --screenshot=$PWD/posnetki/x.png <url>`. V `/tmp` chromium ne more pisati; `posnetki/` v `.gitignore`. **Ne v `$HOME`.**
 
 ## Koda
 
@@ -127,73 +85,25 @@ scripts/         dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
 android/         nativni ovoj z WebView (Kotlin); orodja ločeno v ~/kajros-android
 ```
 
-**Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja
-`service_day('S1','2026-08-31')`, testi pa dan računajo (`_pred`). Na dan, ko
-se datuma ujameta, je to `UNIQUE constraint failed` — zgodilo se je 31. 8. 2026
-in podrlo pet zelenih preizkusov. Računani vstavki gredo zato skozi
-`INSERT OR IGNORE`.
+**Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) ·
-`obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` ·
-`weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` ·
-`deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) ·
-`peron` + `peron_postaja` (tir s table SŽ) ·
-`obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo`
-(zadnjih pet samo strežni stroj).
-
-**Senčno merjenje napovedi teče ob strežniku** (`ocena.py`, vsakih 120 s).
-Vsakih nekaj minut posname, kaj bi prikaz **ta hip** povedal za postanek, ki je
-25 minut pred vlakom (15 pred avtobusom) — našo oceno, prevoznikovo in prenos
-zamude — in ko vozilo tja pride, v isto vrstico dopiše resnico. Izid:
-`kajros ocena`. To ni backtest: backtest meri model na zgodovini, to meri
-**številko, ki jo je potnik res videl**. Ugasne se s `KAJROS_OCENA=0`.
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
 
 ## Omrežji: `network` ni `mode`
 
-`trip.network` (`zeleznica` / `avtobus`) loči **strani aplikacije**. Nadomestni
-prevoz SŽ je `mode = 'bus'`, a `network = 'zeleznica'`, ker zamenjuje vlak in
-sodi v isti odgovor kot vlaki. Vsi potniški endpointi imajo `network` in
-**privzeto `zeleznica`**, da mešanja ne povzroči pozabljen parameter — mešanje
-je bilo merljivo škodljivo: iskanje „ljublj“ je vračalo mestna postajališča in
-postajo Ljubljana potisnilo iz prvih petih zadetkov.
+`trip.network` (`zeleznica` / `avtobus`) loči **strani aplikacije**. Nadomestni prevoz SŽ: `mode = 'bus'`, a `network = 'zeleznica'`, ker zamenjuje vlak in sodi v isti odgovor kot vlaki. Vsi potniški endpointi imajo `network`, **privzeto `zeleznica`**, da mešanja ne povzroči pozabljen parameter — mešanje merljivo škodljivo: iskanje „ljublj“ vračalo mestna postajališča in postajo Ljubljana potisnilo iz prvih petih zadetkov.
 
-Kar je pri avtobusih drugače in se hitro pozabi:
+Pri avtobusih drugače, hitro pozabljeno:
 
-* **Številka linije ni številka vožnje.** LPP linija 3G ima 388 voženj. Vsaka
-  poizvedba po `train_no` mora skozi `stats.resolve_trip()`; povezave na eno
-  vožnjo nosijo `?trip=<id>`. Isto velja za devet vlakov s sezonskimi
-  različicami.
-* **Barva linije ni barva linije.** Vsi LPP `route_color` so ista zelena
-  prevoznika, zato oznaka nosi ime prevoznika in številko („LPP 25“) — in
-  iskati se mora dati po tem, kar človek vidi na postajališču.
-  Prevoznik je v `trip.agency` kot GTFS ID (1118, 1123 …); ime je v
-  `common.AGENCY` in `stats.AGENCY_NAMES`.
-* **Mestno postajališče ima svoj `stop_id` za vsako smer** in vsak vir svojega
-  („Bavarski dvor“ je v `station` štirikrat). Vse v aplikaciji teče po
-  **imenu** postaje; stran ceste loči `journey.smeri_postaje()` po smeri vožnje
-  do naslednjega postanka, tabla, widget in pristajalna stran jo nosijo kot `smer`.
+* **Številka linije ≠ številka vožnje.** LPP linija 3G ima 388 voženj. Vsaka poizvedba po `train_no` skozi `stats.resolve_trip()`; povezave na eno vožnjo nosijo `?trip=<id>`. Isto velja za devet vlakov s sezonskimi različicami.
+* **Barva linije ≠ barva linije.** Vsi LPP `route_color` = ista zelena prevoznika, zato oznaka nosi ime prevoznika in številko („LPP 25“) — iskati se mora dati po tem, kar človek vidi na postajališču. Prevoznik v `trip.agency` kot GTFS ID (1118, 1123 …); ime v `common.AGENCY` in `stats.AGENCY_NAMES`.
+* **Mestno postajališče ima svoj `stop_id` za vsako smer** in vsak vir svojega („Bavarski dvor“ v `station` štirikrat). Vse v aplikaciji teče po **imenu** postaje; stran ceste loči `journey.smeri_postaje()` po smeri vožnje do naslednjega postanka, tabla, widget in pristajalna stran jo nosijo kot `smer`.
 
 ## Številke vlakov
 
-`LPV 2010` ni oznaka proge, ampak **ena vožnja** (trip). `route_id` je 1 : 1 s
-tripom in za združevanje neuporaben — zgodovino gradi po `train_no` **znotraj
-`trip_id`**. Parnost številke nosi smer. Predpona (`LP`, `LPV`, `IC`, `MV`,
-`EN` …) je vrsta vlaka; `BUS …` je nadomestni prevoz.
+`LPV 2010` ni oznaka proge, ampak **ena vožnja** (trip). `route_id` 1 : 1 s tripom, za združevanje neuporaben — zgodovino gradi po `train_no` **znotraj `trip_id`**. Parnost številke nosi smer. Predpona (`LP`, `LPV`, `IC`, `MV`, `EN` …) = vrsta vlaka; `BUS …` = nadomestni prevoz.
 
-**`trip_id` so med regeneracijami GTFS stabilni — a ne vsi.** Ob prehodu na
-šolski vozni red 1. 9. 2026 je iz `trip` izginilo **114 voženj s 3 043
-meritvami** (0,37 %). Meritve so ostale, a jih ni videla nobena poizvedba: vse
-gredo skozi `JOIN trip`, ker je omrežje tam. Zato uvoz zdaj **obdrži vožnjo,
-ki ima meritve**, tudi če je nov vozni red nima (`gtfs.py`, „nagrobnik“ brez
-`sched`), `kajros merge` pa take vožnje prinese s seboj. `kajros repair`
-prešteje osirotele meritve.
-
-**Feed v živo zna nov id zamuditi.** 22. 9. 2026 so LPP 25, 12D in 15 dobili
-nove id-je, feed pa je vozila javljal pod starimi — zajem jih je zavrgel in
-iskalnik poti je avtobus z ~20 min zamude ponudil po voznem redu. Uvoz zato
-izginulo vožnjo poveže z naslednico (tabela `zamenjava`), zajem pa zamudo in
-lego prevede nanjo. Pregled za skrbnika šteje vožnje, ki jih feed nosi in
-vozni red ne pozna. Podrobnosti v `.claude/rules/zajem.md`.
+**`trip_id` niso vedno stabilni.** Vse poizvedbe gredo skozi `JOIN trip` (omrežje je tam), zato uvoz **obdrži vožnjo z meritvami**, tudi če je nov vozni red nima („nagrobnik“ brez `sched`; 1. 9. 2026 bi sicer izginilo 114 voženj s 3 043 meritvami), in izginulo vožnjo poveže z naslednico (tabela `zamenjava`), na katero zajem prevede zamudo in lego (22. 9. 2026: LPP 25, 12D, 15). `kajros repair` prešteje osirotele meritve. Podrobnosti: `.claude/rules/zajem.md`.
 
 ## Strani
 
@@ -201,6 +111,7 @@ vozni red ne pozna. Podrobnosti v `.claude/rules/zajem.md`.
 |---|---|
 | `/` | domača stran: s čim greš — vlak ali avtobus |
 | `/app/train` · `/app/bus` | iskalnik povezav in odhodna tabla, po omrežju |
+| `/app/pot` · `/app/pot/podrobno` | od vrat do vrat čez obe omrežji, z vodenjem po pešpoti |
 | `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi in nadomestni prevozi (samo železnica) |
@@ -208,119 +119,64 @@ vozni red ne pozna. Podrobnosti v `.claude/rules/zajem.md`.
 | `/vlak/{od}/{cilj}` · `/avtobus/…` | **pristajalna stran ene relacije**: odhodi danes in izmerjena zamuda, izrisana na strežniku |
 | `/postaja/{ime}` · `/postajalisce/{ime}` | pristajalna stran ene postaje |
 | `/postaje` · `/postajalisca` | kazalo obojega — edina pot do pristajalnih strani, ki ni zemljevid strani |
-| `/stik` | obrazec za sporočilo; nabiralnik je v `/admin` |
+| `/stik` | obrazec za sporočilo; nabiralnik v `/admin` |
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/o-nas` | kaj je kajros, od kod podatki, da ni prevoznikova stran |
 | `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu |
 
-**Pristajalne strani obstajajo zaradi iskalnika in so brez JS.** Človek ne
-išče „kajros", ampak „vlak ljubljana koper" — in za to mora obstajati naslov,
-ki odgovor nosi **v odgovoru strežnika**. Katere nastanejo in zakaj je meja
-tam, kjer je, je v `kajros/pristanek.py`; izmerjeno v `docs/MERITVE.md`.
-V zemljevidu strani je vrh po prometu (400 relacij in 300 postaj na omrežje),
-vse ostalo je dosegljivo in `noindex` — prostor parov postaj je 26 000.
+**Pristajalne strani obstajajo zaradi iskalnika in so brez JS**: človek išče „vlak ljubljana koper“, odgovor mora biti v odgovoru strežnika. Meja, katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po prometu, ostalo `noindex`.
 
-Poti, ki niso za aplikacijo, ampak za brskalnike in iskalnike: `/favicon.ico`,
-`/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`. `/android` je stran s
-**prenosom aplikacije**, `/prenos` podpisan APK (samo če mapa obstaja).
-Napaka je **stran**,
-kadar jo bere človek, in JSON pod `/api/`. Absolutni naslov zanje je
-`KAJROS_BASE_URL`, ne `request.url` — za tunelom je ta `http://127.0.0.1:8000`.
-**Tujih izvorov v strani ni**: pisave in MapLibre so naši, ostanejo le ploščice
-zemljevida. Podrobnosti v `.claude/rules/strezba.md` in `oznake.md`.
+Poti za brskalnike in iskalnike: `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`; `/android` = stran s prenosom, `/prenos` = podpisan APK. Napaka = **stran** za človeka in JSON pod `/api/`. Absolutni naslov = `KAJROS_BASE_URL`, ne `request.url` (za tunelom je ta `http://127.0.0.1:8000`). **Tujih izvorov v strani ni** razen ploščic zemljevida.
 
-**Pregled za skrbnika zahteva žeton**; brez njega poti ni (404). Prvi obisk
-`/admin?k=<žeton>`, nato piškotek s potjo `/admin`. Žeton je
-`${KAJROS_DATA_DIR}/.admin-zeton` (postavi ga `deploy/zeton.sh`, **brez
-sudota** — enote v `/etc` agent ne more pisati), `KAJROS_ADMIN_TOKEN` ga
-povozi; v razvoju ga naredi `dev-restart.sh` sam in izpiše naslov. Šteje se **brez IP-ja**: obiskovalec je
-zgoščena vrednost s soljo, ki se ob polnoči zavrže — zato mesečnih unikatov ni
-in vsota dnevnih ni isto. Podrobnosti v `.claude/rules/strezba.md`.
+**`/admin` zahteva žeton** (brez njega 404): `/admin?k=<žeton>`, nato piškotek. Žeton: `${KAJROS_DATA_DIR}/.admin-zeton` (`deploy/zeton.sh`, **brez sudota**), `KAJROS_ADMIN_TOKEN` ga povozi, v razvoju ga izpiše `dev-restart.sh`. Obisk se šteje **brez IP-ja** (sol dneva). Podrobnosti: `.claude/rules/strezba.md`.
 
 ## Kam gre
 
-Ciljni uporabnik ni dispečer, ampak potnik z vprašanjem *„kdaj mi pelje in
-koliko zamuja“*. Iskalnik povezav je vstopna stran; zemljevid ostane, ker je
-uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude)
-čaka 2–3 mesece zajema — do takrat se vreme samo *pokaže ob* zamudi.
+Ciljni uporabnik ni dispečer, ampak potnik z vprašanjem *„kdaj mi pelje in koliko zamuja“*. Iskalnik povezav = vstopna stran; zemljevid ostane, ker je uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude) čaka 2–3 mesece zajema — do takrat se vreme samo *pokaže ob* zamudi.
 
-Česar ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** je od
-25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20
-izmerjenih); vir je tretja oseba, zato je dodatek, ki sme izginiti.
+Ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** od 25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20 izmerjenih); vir je tretja oseba, zato je dodatek, ki sme izginiti.
 
 ## Konvencije
 
-* **Jezik: slovenščina** povsod — koda, komentarji, commiti, UI, dokumentacija.
-  Šumniki obvezni.
+* **Jezik: slovenščina** povsod — koda, komentarji, commiti, UI, dokumentacija. Šumniki obvezni.
 * Komentarji povedo **zakaj**, ne kaj.
-* Commit sporočila: kratka prva vrstica, telo pojasni razlog in izmerjene
-  posledice, ne naštevanja datotek.
+* Commit sporočila: kratka prva vrstica, telo pojasni razlog in izmerjene posledice, ne naštevanja datotek.
 * Ne dodajaj odvisnosti brez razloga; `requirements.txt` ima pet vrstic.
-* `venv/`, `data/`, `export/`, `posnetki/`, `*.sqlite` so v `.gitignore` —
-  **razen** `seed/kajros.sqlite`, ki ga rabi namestitev.
-* **Agregat čez vso zgodovino se ne računa v zahtevi** (`stats.summary_get()`,
-  enkrat na dan ob 3:30, `KAJROS_MAINT_HOUR`). Vsaka taka številka mora na strani
-  nositi **čas izračuna**.
-* **Mrtve kode ne puščaj.** Kar nima klicatelja, gre ven — v git zgodovini
-  ostane. Izjema mora biti napisana v komentarju, z rokom.
-* **Odgovori na kratko, brez uvodov in olepšav** (caveman). Vsa tehnična
-  vsebina ostane; koda, commiti in dokumentacija so normalna proza. Izklop:
-  „normal mode“.
+* `venv/`, `data/`, `export/`, `posnetki/`, `*.sqlite` so v `.gitignore` — **razen** `seed/kajros.sqlite`, ki ga rabi namestitev.
+* **Agregat čez vso zgodovino se ne računa v zahtevi** (`stats.summary_get()`, enkrat na dan ob 3:30, `KAJROS_MAINT_HOUR`). Vsaka taka številka mora na strani nositi **čas izračuna**.
+* **Mrtve kode ne puščaj.** Kar nima klicatelja, gre ven — v git zgodovini ostane. Izjema mora biti napisana v komentarju, z rokom.
+* **Odgovori na kratko, brez uvodov in olepšav** (caveman). Vsa tehnična vsebina ostane; koda, commiti in dokumentacija normalna proza. Izklop: „normal mode“.
 
 ## Objava
 
-Malina doma (`david@192.168.1.166`) je **merodajen zajem**: teče ves čas in
-zajema vse prevoznike. Ta računalnik je razvoj; baza se **vleče z maline**
-(`./scripts/potegni.sh`), nikoli obratno. Podrobnosti: `.claude/rules/objava.md`
-in [DEPLOY.md](DEPLOY.md).
+Malina doma (`david@192.168.1.166`) = **merodajen zajem**: teče ves čas, zajema vse prevoznike. Ta računalnik = razvoj; baza se **vleče z maline** (`./scripts/potegni.sh`), nikoli obratno. Podrobnosti: `.claude/rules/objava.md` in [DEPLOY.md](DEPLOY.md).
 
-**Objava strežnika je `git push arwen <veja>`** — kavelj na arwenu požene
-`deploy/posodobi.sh` sam in izpis se vrne potiskajočemu.
-**Na malino pa deploy požene uporabnik sam**, ker `david` tam za sudo rabi
-geslo: pripravi ukaz in mu ga daj.
+**Objava strežnika = `git push arwen <veja>`** — kavelj na arwenu sam požene `deploy/posodobi.sh`, izpis se vrne potiskajočemu. **Na malino deploy požene uporabnik sam**, ker `david` tam za sudo rabi geslo: pripravi ukaz in mu ga daj.
 
 ## Kje je zapisano ostalo
 
-Poglobljena pravila so v `.claude/rules/` in se naložijo, ko se dotakneš
-ustreznih datotek:
+Poglobljena pravila so v `.claude/rules/`, naložijo se ob dotiku ustreznih datotek:
 
 | datoteka | velja za | o čem |
 |---|---|---|
-| `zajem.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py` | kaj feed pošlje in kje laže; varovalke pred smetmi |
-| `strezba.md` | `api.py`, `obisk.py` | meja meritve, omrežje, živa vožnja, predpomnilnik leg, štetje obiska |
-| `model.md` | `stats.py`, `backtest.py`, `journey.py` | napoved zamude, prestopi, kaj je bilo preizkušeno in ne pomaga |
+| `zajem.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py`, `peroni.py` | kaj feed pošlje in kje laže; varovalke pred smetmi |
+| `strezba.md` | `api.py`, `lpp.py`, `obisk.py` | meja meritve, omrežje, živa vožnja, predpomnilnik leg, štetje obiska |
+| `model.md` | `stats.py`, `backtest.py`, `journey.py`, `ocena.py` | napoved zamude, prestopi, senčno merjenje, kaj ne pomaga |
 | `oznake.md` | `static/**`, `templates/**` | kako je zamuda napisana in pobarvana |
 | `zemljevid.md` | `dashboard.*`, `train.*` | plasti, geste, ocena lege, pasti CSS |
-| `strani.md` | `connections.*`, `home.*`, `templates/**` | katera stran odgovarja na katero vprašanje |
+| `strani.md` | `connections.*`, `pot*`, `home.*`, `pristanek.*`, `templates/**` | katera stran odgovarja na katero vprašanje |
 | `objava.md` | `deploy/**`, `scripts/**` | malina, namestitev, vleka baze |
 | `android.md` | `android/**` | ovoj z WebView, meja izvora, budilka, orodja |
 | `deljenje.md` | `deljenje.py`, `deli.*`, `DeljenjeStoritev.kt` | lega potnikov: kaj se pokaže, kaj hrani, varovalke |
 
-Razrez ni po temah, ampak **po datotekah, ki znanje res rabijo**: to je edino,
-kar se pozna pri porabi konteksta. Popravek v `connections.js` naloži 10 kB
-(`oznake` + `strani`), ne 25 kB o zemljevidih; popravek v `api.py` 6 kB
-namesto 25 kB o zajemu.
+Razrez **po datotekah, ki znanje rabijo**, ne po temah: le to se pozna pri porabi konteksta.
 
-Meritve, ki niso pravilo, ampak stanje (koliko je zajetega, poraba, hitrost):
-[docs/MERITVE.md](docs/MERITVE.md). Daljši zapisi: [HANDOVER.md](HANDOVER.md),
-[docs/APLIKACIJA.md](docs/APLIKACIJA.md), [design/README.md](design/README.md).
+Meritve, ki niso pravilo, ampak stanje (koliko zajetega, poraba, hitrost): [docs/MERITVE.md](docs/MERITVE.md). Daljši zapisi: [HANDOVER.md](HANDOVER.md), [docs/APLIKACIJA.md](docs/APLIKACIJA.md), [design/README.md](design/README.md).
 
 ## Odprto
 
-* Dostop od zunaj: **`kajros.app`** (registrirana 3. 9. 2026, name.com). Ta
-  nakup je razveljavil prejšnjo izbiro Tailscale Funnela — ta zna samo
-  `*.ts.net` in domene ne postreže. Pot je **imenovani Cloudflarov tunel**,
-  ne hitri; podrobnosti in izmerjeno v `.claude/rules/objava.md`.
-  **Vrat na usmerjevalniku ne odpiraj.**
+* **Vrat na usmerjevalniku ne odpiraj**: `kajros.app` gre prek imenovanega Cloudflarovega tunela z arwena (`.claude/rules/objava.md`).
 * Ločen model napovedi za avtobuse, ko bo meritev dovolj.
-* **Koda je zaprta** (odločeno 3. 9. 2026): zasebni repozitorij, brez licence,
-  torej „vse pravice pridržane“. **Endpointi so odprti** — API sme brati vsak.
-  Podatki ostajajo CC BY-SA 4.0 in navedba vira je pogoj rabe, ne okras;
-  `seed/kajros.sqlite` je njihova izpeljanka. Posledica za Android: glavni
-  F-Droid in IzzyOnDroid zahtevata prosto licenco, Play pa račun, 25 $ in
-  12 preizkuševalcev, zato se aplikacija razdeljuje **s strani** (`/android`,
-  glej `.claude/rules/android.md`).
-* **Delovni imenik se še vedno imenuje `sztrack`.** Preimenovanje mape bi
-  prekinilo tekočo sejo in poti v lupini; naredi se ločeno, git ostane cel:
-  `mv ~/Dokumenti/Projekti/{sztrack,kajros}`.
+* **Koda je zaprta** (odločeno 3. 9. 2026): zasebni repozitorij, brez licence = „vse pravice pridržane“. **Endpointi so odprti** — API sme brati vsak. Podatki ostajajo CC BY-SA 4.0, navedba vira je pogoj rabe, ne okras; `seed/kajros.sqlite` je njihova izpeljanka. Posledica za Android: glavni F-Droid in IzzyOnDroid zahtevata prosto licenco, Play pa račun, 25 $ in 12 preizkuševalcev, zato se aplikacija razdeljuje **s strani** (`/android`, glej `.claude/rules/android.md`).
+* **Delovni imenik se še vedno imenuje `sztrack`.** Preimenovanje mape bi prekinilo tekočo sejo in poti v lupini; naredi se ločeno, git ostane cel: `mv ~/Dokumenti/Projekti/{sztrack,kajros}`.
