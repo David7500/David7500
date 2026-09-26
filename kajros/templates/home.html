@@ -6,6 +6,7 @@
   {% set og_title = "kajros — vozni redi in zamude" %}
   {% set og_desc = "Odhodi in zamude slovenskih vlakov in avtobusov, izmerjeni iz odprtih podatkov." %}
 {% include "_meta.html" %}
+{% from "_znak.html" import znak %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -21,103 +22,106 @@
 </head>
 <body class="home-page">
 
-  <main class="ploscice">
-    <header class="plo-glava">
-      <img src="/static/favicon.svg" width="28" height="28" alt="">
+  {#- Material 3 Expressive (izbran 26. 9. 2026 med devetimi osnutki, "G").
+      Prejšnje ploščice so bile "preveč AI": vse enako zaobljene kartice z
+      obrobo in napisi v razprtih velikih črkah. Zdaj ima vsak element obliko,
+      kakršno ima v Androidu: kartica budilke, povezana gumba, iskalna vrstica,
+      ikone v oblikah. Budilka je še vedno prva, ker je najbolj tvoja. #}
+  <main class="domov">
+    <header class="d-glava">
+      {{ znak(22, "#f0934f") }}
       <span>kajros</span>
     </header>
 
-    {#- Ploščice, ne seznam. Izbran osnutek D (14. 9. 2026): seznam enakih vrstic
-        je bil „dolgočasen, vse isto oblikovano", budilke pa so bile skrite pod
-        „Še". Zdaj ima vsaka izbira svojo velikost; budilka je prva, ker je
-        najbolj tvoja. Vsebino ploščice budilk izriše `home.js` -- v aplikaciji
-        iz telefona (`Kajros.seznam()`), v brskalniku povabilo na aplikacijo. #}
-    <div class="mreza">
-      <section class="p p-bud" id="budilke" aria-label="Budilke">
-        <span class="oznaka">Budilke</span>
-      </section>
+    {#- Vsebino izriše `home.js`: v aplikaciji budilke iz telefona
+        (`Kajros.seznam()`), v brskalniku povabilo na aplikacijo. #}
+    <section class="d-bud" id="budilke" aria-label="Budilke"></section>
 
-      {#- Deljenje lege (25. 9. 2026). Takoj pod budilkami, ker ga odpre človek,
-          ki že sedi na vlaku -- ta ne išče poti, ampak gumb. Vsebino izriše
-          `deli.js`; brez `KAJROS_DELI` ploščice ni. #}
-      {%- if deli %}
-      <section class="p p-deli deli" id="deli" aria-label="Deli lego vozila" aria-live="polite">
-        <span class="deli-oznaka">Pomagaj drugim</span>
-        <strong class="deli-naslov">Pelješ se? Deli, kje je vozilo.</strong>
-      </section>
-      {%- endif %}
-
-      {#- Najhitrejša pot je nad omrežjema, ker je edina, ki dela brez tega, da
-          potnik ve, s katere postaje gre. Dve omrežji spodaj ostaneta dve:
-          mešanje je bilo merljivo škodljivo (iskanje „ljublj" je Ljubljano
-          potisnilo iz prvih petih zadetkov). #}
-      <a class="p p-pot" href="/app/pot">
-        <strong class="p-ime">Najhitrejša pot</strong>
-        <small>hoja, vlak in avtobus skupaj</small>
-        <span class="pot-vnos">Kam greš?</span>
-        <svg class="pot-slika" width="120" height="80" viewBox="0 0 120 80" fill="none"
-             stroke-linecap="round" aria-hidden="true">
-          <path d="M10 70 C40 70 40 30 70 30 S100 10 110 10" stroke="#111" stroke-width="3" stroke-dasharray="2 7"/>
-          <circle cx="10" cy="70" r="6" fill="#fff" stroke="#111" stroke-width="3"/>
-          <circle cx="110" cy="10" r="6" fill="#f0934f" stroke="#111" stroke-width="3"/>
-        </svg>
-      </a>
-
-      {#- Brez števila vozil in brez „običajno +2 min": tak podatek je vsak dan
-          skoraj isti in ne spremeni ničesar, kar bo človek tu storil (odstranjen
-          12. 9. 2026). Kartica pove samo, kam pelje. #}
-      <a class="p p-omr p-vlak" href="/app/train">
-        <svg class="omr-ikona" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#111"
-             stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+    {#- Dve omrežji ostaneta dve: mešanje je bilo merljivo škodljivo (iskanje
+        „ljublj" je Ljubljano potisnilo iz prvih petih zadetkov). Povezana
+        gumba, ker sta ena odločitev z dvema odgovoroma. #}
+    <nav class="d-omr" aria-label="Omrežje">
+      <a class="d-omr-g d-vlak" href="/app/train">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/>
         </svg>
-        <strong class="p-ime">Vlaki</strong>
-        <small>odhodi in zamude</small>
+        <span>Vlaki</span>
       </a>
-      <a class="p p-omr p-bus" href="/app/bus">
-        <svg class="omr-ikona" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#111"
-             stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+      <a class="d-omr-g d-bus" href="/app/bus">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <rect x="3.5" y="3.5" width="17" height="15" rx="2.6"/><path d="M3.5 10.5h17M6.5 18.6v2.4M17.5 18.6v2.4"/>
         </svg>
-        <strong class="p-ime">Avtobusi</strong>
-        <small>LPP, Arriva, Nomago …</small>
+        <span>Avtobusi</span>
       </a>
+    </nav>
 
-      <a class="p p-zem" href="/app/map">
-        <strong class="p-ime">Zemljevid</strong>
-        <small>kje so vozila zdaj</small>
-        <svg class="zem-slika" viewBox="0 0 200 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 80 C50 70 80 40 120 45 S180 20 200 10" stroke="#3a4150" stroke-width="2" fill="none"/>
-          <g fill="#f0934f"><circle cx="40" cy="73" r="3"/><circle cx="125" cy="44" r="3"/></g>
-          <g fill="#4db97f"><circle cx="80" cy="30" r="2.5"/><circle cx="150" cy="70" r="2.5"/><circle cx="170" cy="55" r="2.5"/></g>
+    {#- Najhitrejša pot: edina izbira, ki dela brez tega, da potnik ve, s
+        katere postaje gre -- zato je iskalna vrstica, ne ploščica. #}
+    <a class="d-isci" href="/app/pot">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>
+      </svg>
+      <span class="d-isci-besedilo">Kam greš?</span>
+      <span class="d-isci-gumb" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
         </svg>
-      </a>
-      <a class="p p-ovire" href="/app/ovire">
-        <strong class="p-ime">Ovire</strong>
-        <small>dela na progah</small>
-        <span class="ovire-n" id="ovire-n"></span>
-        <small id="ovire-pod"></small>
-      </a>
-      {#- Podpora je na mestu, kjer je bila „Kdaj potovati" (umaknjena 19. 9. 2026,
-          ker v taki obliki ni bila uporabna). Brez `KAJROS_DONACIJE` je ni. #}
-      {%- if donacije %}
-      <a class="p p-don" href="/donacije">
-        <span>
-          <strong class="p-ime">Podpri kajros</strong>
-          <small>brez oglasov, vzdržuje ga ena oseba</small>
+      </span>
+    </a>
+
+    {#- Oblike so iz Material 3 Expressive (detelja, piškot, zvezda) in
+        ločijo tri stvari brez napisov v razprtih črkah. Število ovir iz
+        `/api/health` (`alerts_active`), ker ga stran bere tako ali tako. #}
+    <div class="d-oblike">
+      <a class="d-obl" href="/app/map">
+        <span class="d-obl-slika d-obl-zem">
+          <svg class="d-obl-oblika" viewBox="0 0 88 88" aria-hidden="true"><path d="M44.0 4.0L46.8 4.3L49.5 5.1L52.0 6.4L54.3 8.0L56.4 10.0L58.2 12.1L59.8 14.3L61.3 16.4L62.6 18.4L64.0 20.2L65.4 21.8L67.0 23.3L68.7 24.7L70.6 26.1L72.7 27.5L74.8 29.0L77.0 30.7L79.0 32.6L80.8 34.8L82.3 37.2L83.4 39.9L83.9 42.6L83.9 45.4L83.4 48.1L82.3 50.8L80.8 53.2L79.0 55.4L77.0 57.3L74.8 59.0L72.7 60.5L70.6 61.9L68.7 63.3L67.0 64.7L65.4 66.2L64.0 67.8L62.6 69.6L61.3 71.6L59.8 73.7L58.2 75.9L56.4 78.0L54.3 80.0L52.0 81.6L49.5 82.9L46.8 83.7L44.0 84.0L41.2 83.7L38.5 82.9L36.0 81.6L33.7 80.0L31.6 78.0L29.8 75.9L28.2 73.7L26.7 71.6L25.4 69.6L24.0 67.8L22.6 66.2L21.0 64.7L19.3 63.3L17.4 61.9L15.3 60.5L13.2 59.0L11.0 57.3L9.0 55.4L7.2 53.2L5.7 50.8L4.6 48.1L4.1 45.4L4.1 42.6L4.6 39.9L5.7 37.2L7.2 34.8L9.0 32.6L11.0 30.7L13.2 29.0L15.3 27.5L17.4 26.1L19.3 24.7L21.0 23.3L22.6 21.8L24.0 20.2L25.4 18.4L26.7 16.4L28.2 14.3L29.8 12.1L31.6 10.0L33.7 8.0L36.0 6.4L38.5 5.1L41.2 4.3Z"/></svg>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/>
+          </svg>
         </span>
-        <svg class="don-slika" width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.3h2c.7-1.2 2.2-2.3 4.3-2.3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/>
-        </svg>
+        <span class="d-obl-ime">Zemljevid</span>
       </a>
+      <a class="d-obl" href="/app/ovire">
+        <span class="d-obl-slika d-obl-ovire">
+          <svg class="d-obl-oblika" viewBox="0 0 88 88" aria-hidden="true"><path d="M44.0 4.0L46.8 4.7L49.3 6.4L51.5 8.7L53.5 10.7L55.7 12.0L58.1 12.4L61.0 12.1L64.1 11.8L67.2 12.1L69.7 13.4L71.4 15.6L72.2 18.6L72.5 21.8L72.7 24.6L73.5 27.0L75.1 28.8L77.5 30.5L80.1 32.3L82.3 34.5L83.4 37.1L83.2 39.9L81.9 42.7L80.1 45.3L78.5 47.6L77.6 49.9L77.6 52.4L78.4 55.2L79.2 58.2L79.4 61.3L78.6 64.0L76.7 66.1L73.9 67.4L70.8 68.2L68.1 68.9L65.9 70.1L64.4 72.0L63.1 74.6L61.8 77.5L60.0 80.0L57.7 81.6L54.9 81.9L51.9 81.1L49.0 79.8L46.4 78.6L44.0 78.1L41.6 78.6L39.0 79.8L36.1 81.1L33.1 81.9L30.3 81.6L28.0 80.0L26.2 77.5L24.9 74.6L23.6 72.0L22.1 70.1L19.9 68.9L17.2 68.2L14.1 67.4L11.3 66.1L9.4 64.0L8.6 61.3L8.8 58.2L9.6 55.2L10.4 52.4L10.4 49.9L9.5 47.6L7.9 45.3L6.1 42.7L4.8 39.9L4.6 37.1L5.7 34.5L7.9 32.3L10.5 30.5L12.9 28.8L14.5 27.0L15.3 24.6L15.5 21.8L15.8 18.6L16.6 15.6L18.3 13.4L20.8 12.1L23.9 11.8L27.0 12.1L29.9 12.4L32.3 12.0L34.5 10.7L36.5 8.7L38.7 6.4L41.2 4.7Z"/></svg>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3.5 2.5 20h19L12 3.5z"/><path d="M12 10v4.5M12 17.2v.3"/>
+          </svg>
+          <span class="d-znacka" id="ovire-n" hidden></span>
+        </span>
+        <span class="d-obl-ime">Ovire</span>
+      </a>
+      {#- Deljenje lege (25. 9. 2026). Oblika je vabilo; ko potnik začne,
+          `deli.js` na istem mestu razpre kartico čez vso širino in jo po
+          koncu vrne. Brez `KAJROS_DELI` je ni. #}
+      {%- if deli %}
+      <section class="d-deli deli deli-oblika" id="deli" aria-label="Deli lego vozila" aria-live="polite">
+        <button type="button" class="d-obl" data-deli="zacni" title="Pelješ se? Deli, kje je vozilo.">
+          <span class="d-obl-slika d-obl-deli">
+            <svg class="d-obl-oblika" viewBox="0 0 88 88" aria-hidden="true"><path d="M44.0 4.0L46.7 4.8L49.2 6.7L51.5 8.6L53.9 9.5L56.6 9.4L59.7 8.8L62.7 8.8L65.1 10.2L66.7 12.8L67.7 15.8L68.9 18.2L70.9 19.8L73.7 20.8L76.6 22.0L78.6 24.0L79.3 26.8L79.0 29.9L78.5 32.8L78.8 35.3L80.3 37.6L82.3 40.0L83.8 42.6L83.8 45.4L82.3 48.0L80.3 50.4L78.8 52.7L78.5 55.2L79.0 58.1L79.3 61.2L78.6 64.0L76.6 66.0L73.7 67.2L70.9 68.2L68.9 69.8L67.7 72.2L66.7 75.2L65.1 77.8L62.7 79.2L59.7 79.2L56.6 78.6L53.9 78.5L51.5 79.4L49.2 81.3L46.7 83.2L44.0 84.0L41.3 83.2L38.8 81.3L36.5 79.4L34.1 78.5L31.4 78.6L28.3 79.2L25.3 79.2L22.9 77.8L21.3 75.2L20.3 72.2L19.1 69.8L17.1 68.2L14.3 67.2L11.4 66.0L9.4 64.0L8.7 61.2L9.0 58.1L9.5 55.2L9.2 52.7L7.7 50.4L5.7 48.0L4.2 45.4L4.2 42.6L5.7 40.0L7.7 37.6L9.2 35.3L9.5 32.8L9.0 29.9L8.7 26.8L9.4 24.0L11.4 22.0L14.3 20.8L17.1 19.8L19.1 18.2L20.3 15.8L21.3 12.8L22.9 10.2L25.3 8.8L28.3 8.8L31.4 9.4L34.1 9.5L36.5 8.6L38.8 6.7L41.3 4.8Z"/></svg>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/>
+            </svg>
+          </span>
+          <span class="d-obl-ime">Deli lego</span>
+        </button>
+      </section>
       {%- endif %}
     </div>
 
     <!-- Shranjene poti. Iskalnik jih ze hrani, domaca stran pa je edino mesto,
          kjer se povratnik znajde PRED izbiro omrezja. Ce jih ni, odseka ni. -->
-    <section class="home-saved" id="home-saved" hidden>
-      <h2 class="plo-nasl">Shranjene poti</h2>
-      <div class="chips" id="home-chips"></div>
+    <section class="d-shranjene" id="home-saved" hidden>
+      <h2 class="d-nasl">Shranjene poti</h2>
+      <div class="d-cipi" id="home-chips"></div>
     </section>
 
     {% include "_noga.html" %}

@@ -73,12 +73,15 @@
 
   // ---------- izris ----------
   //
-  // Dve obliki iste stvari: ploscica na domaci strani in vrstica v iskalniku
-  // (`deli-kompakt`), kamor clovek pride prvi -- tja, kjer ima shranjeno svojo
-  // pot, in prav tam je, ko sede na vlak. V vrstici je povabilo en sam
-  // gumb; ko potnik zacne, se razpre v isto kartico kot doma.
+  // Dve obliki iste stvari: oblika na domaci strani (`deli-oblika`) in
+  // vrstica v iskalniku (`deli-kompakt`), kamor clovek pride prvi -- tja, kjer
+  // ima shranjeno svojo pot, in prav tam je, ko sede na vlak. V obeh je
+  // povabilo en sam gumb; ko potnik zacne, se razpre v kartico.
 
   const KOMPAKT = el.classList.contains("deli-kompakt");
+  // Obliko na domaci strani narise predloga (`home.html`), z risbo, ki v JS
+  // nima kaj iskati; stran jo shrani in vrne, ko se deljenje konca.
+  const VABILO = el.classList.contains("deli-oblika") ? el.innerHTML : null;
   const OMREZJE = el.dataset.omrezje || null;
 
   function kartica(oznaka, naslov, besedilo, gumbi) {
@@ -98,6 +101,7 @@
     const f = S.faza;
     el.classList.toggle("je-odprt", f !== "miruje");
     if (f === "miruje") {
+      if (VABILO !== null) { el.innerHTML = VABILO; return; }
       el.innerHTML = KOMPAKT
         ? `<button type="button" class="deli-vabilo" data-deli="zacni">
              <span>Pelješ se? <b>Deli, kje je vozilo</b></span><span aria-hidden="true">›</span>

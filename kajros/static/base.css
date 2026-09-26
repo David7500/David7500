@@ -133,6 +133,13 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
   user-select: none;
   -webkit-touch-callout: none;
 }
+/* Dolg pritisk na povezavo ali sliko začne vleko: nad prstom plava oblaček z
+   imenom in naslovom strani (prijavljeno 26. 9. 2026 v aplikaciji). Na
+   zaslonu na dotik je ni treba nikjer, zato velja za vse strani, tudi tiste
+   brez `common.js`; z miško vleka ostane (povezava v nov zavihek). */
+@media (pointer: coarse) {
+  a, img { -webkit-user-drag: none; }
+}
 
 /* Prehod med stranmi: nova stran se prelije čez staro, kot pri zaslonih
    aplikacije, namesto da jo zamenja v enem koraku. Chrome od 126 (tudi

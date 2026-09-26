@@ -123,6 +123,7 @@ Prijavljeno 26. 9. 2026: „gumbi so modri, ko klikneš" — Chromov `tap-highli
 * **`color-scheme: dark`** — brez tega so izbirnik datuma, ure, spustni seznam in drsnik svetli. Posledica: ikona koledarja je zdaj bela, `invert` jo je potemnil; zdaj `opacity`.
 * **`accent-color: var(--accent)`** za vsa potrditvena polja (na avtobusni strani zelena), ne več po datotekah.
 * Dolg pritisk na povezavo ne označi besedila **samo v aplikaciji** (`.v-aplikaciji`, postavi `common.js` iz `MOST`): v brskalniku je meni „odpri v novem zavihku" koristen. Strani brez `common.js` (besedilne, pristajalne) razreda nimajo.
+* **Vleke povezav in slik ni na zaslonu na dotik** (`@media (pointer: coarse)`, `-webkit-user-drag: none`): dolg pritisk je začel vleko z oblačkom „ime · naslov strani" (prijavljeno 26. 9. 2026). Velja za vse strani, tudi brez `common.js`; z miško vleka ostane. Preizkus prek CDP: `Input.setInterceptDrags` + premik z miško; z `setTouchEmulationEnabled` (`pointer: coarse`) dogodka `dragIntercepted` ni, brez njega je.
 * Prehod med stranmi `@view-transition` (Chrome/WebView 126+), 0,16 s, izklopljen pri `prefers-reduced-motion`.
 
 Preizkus pritiska: `chromium --headless` z `--virtual-time-budget` ga ne zna; prek CDP `Input.dispatchMouseEvent mousePressed`, nato `getComputedStyle(el).boxShadow`. Dotik (`dispatchTouchEvent`) v brezglavem Chromu `:active` **ne** sproži — izmerjeno, ni napaka CSS.

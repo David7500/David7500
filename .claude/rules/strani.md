@@ -52,12 +52,15 @@ Odpadli **dve zahtevi od treh** (`/api/overview` in `/api/overview/bus`, najdra�
 
 **Povedi so pisane, kot se piše, ne kot se govori.** „Kdaj ti pelje in koliko zamuja" in „kje je zdaj kaj" prijavljena kot stavka, ki se v slovenščini tako ne uporabljata; zdaj „Odhodi in zamude slovenskih vlakov in avtobusov" in „kje so vlaki in avtobusi ta trenutek". Isto za naslove v zavihku brskalnika: „kajros — vlaki: odhodi in zamude", ne „kdaj mi pelje vlak".
 
-**Domača stran so ploščice** (izbrano 14. 9. 2026 med petimi osnutki, preverjeno v telefonski širini). Prej dve zavrnjeni različici: kartice z ikonami in prelivom („preveč AI generirano", „od vrat do vrat" butasto), nato tipografske vrstice („vse isto oblikovano in dolgočasno"). Zdaj ima vsaka izbira svojo velikost in malo sliko:
+**Domača stran je Material 3 Expressive** (osnutek G, izbran 26. 9. 2026 med devetimi na platnu „Domača stran kajros"). Zavrnjene prej: kartice z ikonami in prelivom („preveč AI generirano"), tipografske vrstice („vse isto oblikovano in dolgočasno"), ploščice 14.–26. 9. („zgleda tako AI": vse enako zaobljene kartice z obrobo, razprte velike črke, pastelna polja). Sestava:
 
-* **Budilke so prva ploščica, ne povezava.** „Budilke morajo biti takoj dostopne, ne da iščeš, kje so." V aplikaciji `home.js` bere `Kajros.seznam()`: naslednja budilka z uro zvonjenja, dnem, odštevanjem, odhodom z zamudo, ponavljanjem in „zvoni N min prej"; pod njo do tri druge s stikalom (`preklopi`). Po zvonjenju kaže odhod, kot widget. Uro in odhod izračuna Kotlin (`odhod_ms`, `vir` v `seznam()`), stran samo izpiše; aplikacija 1.0 teh polj nima, takrat velja vozni red. V brskalniku ploščica = povabilo na aplikacijo. V glavi drugih strani budilk ni.
-* **Vlaki in avtobusi = barvni kartici brez statistike** — število vozil in „običajno +2 min" odstranjena že 12. 9., se nista vrnila.
-* Ovire nosijo število veljavnih iz `/api/health` (`alerts_active`, ista funkcija kot na strani ovir), ker ga stran bere tako ali tako.
-* Pike na zemljevidu = **slika, ne podatek**.
+* **Budilka = tonska kartica na vrhu** (`--m-kont` #5a2e12, besedilo #ffdbc8, 8,8 : 1). „Budilke morajo biti takoj dostopne, ne da iščeš, kje so." V aplikaciji `home.js` bere `Kajros.seznam()`: ura zvonjenja 68 px, dan in odštevanje, vožnja, odhod z zamudo, „zvoni N min prej", **dnevi kot krogi** (P T S Č P S N, polni = zvoni; enkratna brez krogov, z besedo); pod njo do tri druge s stikalom (`preklopi`) in gumb „Vse budilke". Po zvonjenju kaže odhod, kot widget. Uro in odhod izračuna Kotlin (`odhod_ms`, `vir`), stran samo izpiše. **Zamuda v kartici je žeton na podlagi strani** (`.bud-zam`): `--d-big` na rjavem vsebniku ne doseže kontrasta. V brskalniku kartica = povabilo na aplikacijo.
+* **Vlaki | Avtobusi = povezana gumba** (Expressive „connected button group"), barvi sta pomen. Brez statistike (odstranjena 12. 9.).
+* **Najhitrejša pot = iskalna vrstica** „Kam greš?" z okroglim gumbom.
+* **Zemljevid, Ovire, Deli lego = ikone v oblikah** (detelja, piškot, zvezda; poti iz `r = R(1 + a·cos nθ)`, v predlogi). Ovire nosijo značko s številom iz `/api/health` (`alerts_active`), skrito pri 0. Pritisk posvetli obliko, ne pravokotnika okrog nje.
+* **Deli lego:** oblika je vabilo (`deli-oblika`); `deli.js` shrani njen HTML in ga vrne v fazi `miruje`, v drugih fazah na istem mestu razpre kartico čez vso širino (`je-odprt` → `flex-basis: 100%`).
+* Podpora nima več svoje ploščice; ostane gumb v nogi (pogoj: `KAJROS_DONACIJE`).
+* **Plavajoče orodne vrstice iz osnutka ni**: na domači strani bi bila meni, ki na naslednji strani izgine. Pride, če se slog razširi na vse strani.
 
 `home.css` rabijo tudi napaka, stik, zasebnost, `/android` in `/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`) — spremembo teh razredov preveri tudi tam.
 

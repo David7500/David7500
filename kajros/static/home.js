@@ -1,6 +1,6 @@
 "use strict";
 
-// Domaca stran: ploscice. Zivih stevilk o omrezju tu ni ("danes obicajno
+// Domaca stran (Material 3 Expressive, osnutek G). Zivih stevilk o omrezju tu ni ("danes obicajno
 // +2 min", stevec vozil) -- vsak dan skoraj iste in ne spremenijo nicesar, kar
 // bo clovek na tej strani storil. Stevilo ovir ostane, ker pove, ali je danes
 // kaj drugace, in pride iz `/api/health`, ki ga stran bere tako ali tako.
@@ -10,8 +10,9 @@ async function load() {
     const h = await fetch("/api/health").then(jsonOk);
     const n = h.alerts_active;
     if (typeof n === "number") {
-      document.getElementById("ovire-n").textContent = n ? String(n) : "";
-      document.getElementById("ovire-pod").textContent = n ? "velja zdaj" : "zdaj jih ni";
+      const el = document.getElementById("ovire-n");
+      el.textContent = String(n);
+      el.hidden = !n;
     }
   } catch (err) {
     /* stevilo ovir je postransko */
@@ -20,17 +21,19 @@ async function load() {
 
 // ---------- budilke ----------
 //
-// **Budilke so prva ploscica, ne povezava pod "Še".** Prijavljeno 14. 9. 2026:
+// **Budilke so prva kartica, ne povezava pod "Še".** Prijavljeno 14. 9. 2026:
 // "budilke morajo biti takoj dostopne, ne da isces, kje so". V aplikaciji jih
 // beremo iz telefona (`Kajros.seznam()`); uro zvonjenja in odhod izracuna
 // Kotlin, ne stran -- dvojnik pravila v JavaScriptu bi se razsel s tistim, kar
-// budilka res naredi. V brskalniku budilk ni, ploscica povabi na aplikacijo.
+// budilka res naredi. V brskalniku budilk ni, kartica povabi na aplikacijo.
 
 const URA = new Intl.DateTimeFormat("sl-SI",
   { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Ljubljana" });
 const DAN = new Intl.DateTimeFormat("sl-SI",
   { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Ljubljana" });
 const KRATICE = ["pon", "tor", "sre", "čet", "pet", "sob", "ned"];
+//: Dnevi v kartici kot v Androidovi Uri: krogi, polni za dneve, ko zvoni.
+const CRKE = ["P", "T", "S", "Č", "P", "S", "N"];
 //: Koliko drugih budilk pod naslednjo; ostale so v seznamu.
 const NAJVEC_DRUGIH = 3;
 
@@ -84,7 +87,14 @@ function zamudaHtml(b) {
   const s = Math.round((odhodOf(b) - b.voznoredni_ms) / 1000);
   // Po zaokrozeni minuti, ne po sekundah (oznake.md): 45 s je "+1", ne "tocno".
   if (delayMin(s) === 0) return " · vozi točno";
-  return ` <b style="color:${delayColor(s)}">${escapeHtml(delayText(s))}</b>`;
+  return ` <b class="bud-zam" style="color:${delayColor(s)}">${escapeHtml(delayText(s))}</b>`;
+}
+
+function dneviHtml(maska) {
+  const m = (maska || 0) & 0b1111111;
+  if (!m) return "";
+  return `<div class="bud-dnevi" role="img" aria-label="${escapeHtml(dneviIme(m))}">${CRKE.map((c, i) =>
+    `<span class="bud-dan${(m >> i) & 1 ? " je-vklop" : ""}">${c}</span>`).join("")}</div>`;
 }
 
 function stikaloHtml(b) {
@@ -100,56 +110,58 @@ function kajHtml(b) {
 function izrisiBudilke() {
   const el = document.getElementById("budilke");
   if (!MOST) {
-    el.outerHTML = `<a class="p p-bud p-bud-splet" id="budilke" href="/android">
-      <span class="oznaka">Budilka</span>
-      <strong class="p-ime">Zbudi te, ko vlak res pelje</strong>
-      <small>Če zamuja, zazvoni pozneje. Samo v aplikaciji za Android.</small>
-      <span class="bud-vec">Prenesi aplikacijo ›</span></a>`;
+    el.outerHTML = `<a class="d-bud d-bud-splet" id="budilke" href="/android">
+      <span class="bud-oznaka">Budilka</span>
+      <strong class="bud-vabilo">Zbudi te, ko vlak res pelje</strong>
+      <span class="bud-pod">Če zamuja, zazvoni pozneje. Samo v aplikaciji za Android.</span>
+      <span class="bud-gumb">Prenesi aplikacijo</span></a>`;
     return;
   }
   const zdaj = Date.now();
   const vse = beriBudilke();
   const zive = vse.filter((b) => Math.max(b.voznoredni_ms, odhodOf(b)) > zdaj - 60000);
   const prva = zive.filter((b) => !b.ugasnjena).sort((a, b) => kljucOf(a) - kljucOf(b))[0];
-
-  const vrh = `<div class="bud-vrh"><span class="oznaka">${prva && prva.odzvonjeno
-    ? "Zazvonila — do odhoda" : "Naslednja budilka"}</span>
-    <button type="button" class="bud-vse" data-vse="1">vse budilke ›</button></div>`;
+  const gumbVse = vse.length ? `<button type="button" class="bud-vse" data-vse="1">Vse budilke${
+    vse.length > 1 ? ` (${vse.length})` : ""}</button>` : "";
 
   if (!prva) {
-    el.innerHTML = vrh + `<div class="bud-prazno" data-vse="1">
+    el.innerHTML = `<div class="bud-vrh"><span class="bud-oznaka">Budilke</span></div>
+      <div class="bud-prazno" data-vse="1">
       <strong>${vse.length ? "Vse budilke so ugasnjene" : "Ni nastavljenih budilk"}</strong>
-      Odpri vožnjo in pri svoji postaji pritisni „budilka“.</div>`;
+      Odpri vožnjo in pri svoji postaji pritisni „budilka“.</div>${gumbVse}`;
     return;
   }
 
   const velika = prva.odzvonjeno ? odhodOf(prva) : prva.zvoni_ob_ms;
+  // Dnevi so v krogih pod kartico; z besedo samo enkratna, ki krogov nima.
   const pod = prva.odzvonjeno
     ? `odhod po voznem redu ${URA.format(prva.voznoredni_ms)}${zamudaHtml(prva)}`
-    : `odhod ${URA.format(odhodOf(prva))}${zamudaHtml(prva)} · ${dneviIme(prva.dnevi)}`
-      + ` · zvoni ${prva.minut_prej} min prej${prva.rezerva_s > 0 ? " + rezerva" : ""}`;
+    : `odhod ${URA.format(odhodOf(prva))}${zamudaHtml(prva)}`
+      + ` · zvoni ${prva.minut_prej} min prej${prva.rezerva_s > 0 ? " + rezerva" : ""}`
+      + ((prva.dnevi || 0) & 0b1111111 ? "" : " · enkratna");
   const druge = zive.filter((b) => b !== prva)
     .sort((a, b) => a.ugasnjena - b.ugasnjena || kljucOf(a) - kljucOf(b));
 
-  el.innerHTML = vrh + `
-    <div class="bud-glavna" data-vse="1">
-      <div class="bud-ura"><strong>${URA.format(velika)}</strong>
-        <em>${dan(velika)} · ${cez(velika)}</em></div>
-      ${stikaloHtml(prva)}
-      <div class="bud-kaj">${kajHtml(prva)}</div>
-      <div class="bud-pod">${pod}</div>
-    </div>
+  el.innerHTML = `
+    <div class="bud-vrh"><span class="bud-oznaka">${prva.odzvonjeno
+      ? "Zazvonila — do odhoda" : "Naslednja budilka"}</span>${stikaloHtml(prva)}</div>
+    <div class="bud-glavna" data-vse="1"><span class="bud-ura">${URA.format(velika)}</span>
+      <span class="bud-kdaj">${dan(velika)}<br>${cez(velika)}</span></div>
+    <div class="bud-kaj" data-vse="1">${kajHtml(prva)}</div>
+    <div class="bud-pod">${pod}</div>
+    ${prva.odzvonjeno ? "" : dneviHtml(prva.dnevi)}
     ${druge.slice(0, NAJVEC_DRUGIH).map((b) => `
       <div class="bud-vrsta${b.ugasnjena ? " je-ugasnjena" : ""}">
         <span class="bud-cas">${URA.format(b.zvoni_ob_ms)}</span>
         <span class="bud-opis" data-vse="1">${kajHtml(b)}
           <span>${dan(b.zvoni_ob_ms)} · odhod ${URA.format(odhodOf(b))} · ${dneviIme(b.dnevi)}</span></span>
         ${stikaloHtml(b)}
-      </div>`).join("")}`;
+      </div>`).join("")}
+    ${gumbVse}`;
 }
 
-document.getElementById("budilke").parentElement.addEventListener("click", (ev) => {
-  if (!MOST) return;
+document.querySelector(".domov").addEventListener("click", (ev) => {
+  if (!MOST || !ev.target.closest("#budilke")) return;
   const s = ev.target.closest(".stikalo");
   if (s) {
     ev.stopPropagation();
@@ -206,6 +218,9 @@ function kljucPoti(f) {
     ? `b:${f.station}:${f.dir || "odhodi"}` : `a:${f.from}:${f.to}`}`;
 }
 
+const ZVEZDICA = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>`;
+
 function izrisiPoti() {
   const seen = new Set();
   const poti = [];
@@ -218,11 +233,8 @@ function izrisiPoti() {
   }
   if (!poti.length) return;
   document.getElementById("home-chips").innerHTML = poti.map((f) => `
-    <a class="chip chip-${f.net === "avtobus" ? "bus" : "train"}"
-       href="${escapeHtml(znackaHref(f))}">
-      <span class="chip-star">★</span>
-      <span>${escapeHtml(znackaOpis(f))}</span>
-    </a>`).join("");
+    <a class="d-cip d-cip-${f.net === "avtobus" ? "bus" : "vlak"}"
+       href="${escapeHtml(znackaHref(f))}">${ZVEZDICA}<span>${escapeHtml(znackaOpis(f))}</span></a>`).join("");
   document.getElementById("home-saved").hidden = false;
 }
 

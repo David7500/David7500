@@ -31,3 +31,5 @@ def test_brez_brskalniskih_barv():
     assert "-webkit-tap-highlight-color: transparent" in css
     assert "color-scheme: dark" in css
     assert "accent-color: var(--accent)" in css
+    # Dolg pritisk na povezavo je začel vleko z oblačkom naslova.
+    assert "-webkit-user-drag: none" in css
