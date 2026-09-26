@@ -2046,7 +2046,9 @@ function postaviVozilo(prvic, nova) {
     el.dataset.vozi = String(moving);
     el.innerHTML = busSvg(moving);
   }
-  runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: "zadnja izmerjena lega" })]);
+  // Izmerjena lega se spremeni samo z novim odgovorom; `setData` vsako
+  // sekundo bi MapLibre silil, da vir na telefonu predeluje brez razloga.
+  if (nova) runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: "zadnja izmerjena lega" })]);
   postavi3D(lega);
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga

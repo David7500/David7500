@@ -184,6 +184,21 @@ def test_zamuda_se_izracuna_iz_absolutnega_casa():
     assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31") == 420
 
 
+def test_na_dan_premika_ure_zamuda_iz_casa_ni_ura_prevec():
+    """GTFS šteje od poldneva minus 12 ur, ne od polnoči. Na dan premika ure
+    je razlika ura: avtobus ob 10:07 po stenski uri bi bil +67 ali -53 min."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Europe/Ljubljana")
+    for dan in ("2026-10-25", "2027-03-28", "2026-08-31"):
+        d = date.fromisoformat(dan)
+        deset = datetime(d.year, d.month, d.day, 10, tzinfo=tz).timestamp()
+        assert stats.polnoc(dan) + 36000 == deset
+        assert stats._abs_time(dan, 36000) == datetime.fromtimestamp(deset, tz).isoformat()
+        s = _stu(3, arr_time=int(deset + 420))
+        assert _delay_of(s, "arrival", (36000, 36060), dan) == 420
+
+
 def test_porocana_zamuda_ima_prednost_pred_izracunano():
     # Ce feed zamudo pove, je to njegova beseda in ne ugibamo iz casa.
     s = _stu(3, arr_delay=120, arr_time=999999999)

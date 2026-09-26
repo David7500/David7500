@@ -720,6 +720,15 @@ def _pogostost(slovar: dict[str, list[float]], kljuc: str, okno_s: float,
                 slovar.pop(k, None)
 
 
+def je_json(content_type: str) -> bool:
+    """Ali zahteva res nosi `application/json` -- edina vrsta, pri kateri
+    brskalnik pred tujo zahtevo vpraša CORS. Podniz ne zadošča:
+    `text/plain;charset=application/json` je za brskalnik `text/plain` in gre
+    brez vprašanja, tuja stran pa bi svoje obiskovalce spremenila v
+    poročevalce -- dva sta dovolj za soglasje, ki zamenja feed."""
+    return content_type.split(";")[0].strip().lower() == "application/json"
+
+
 def preveri_kandidate(kljuc: str, zdaj: float | None = None) -> None:
     _pogostost(_kandidati_casi, kljuc, 60, KANDIDATI_NA_MINUTO,
                "Preveč poizvedb. Poskusi čez minuto.", zdaj or time.time())

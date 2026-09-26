@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, iz_lege
+from . import config, db, iz_lege, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -221,9 +221,7 @@ def _sched_abs(service_date: str, sched_row) -> float | None:
     t_s = sched_row[1] if sched_row[1] is not None else sched_row[0]
     if t_s is None:
         return None
-    base = datetime.combine(date.fromisoformat(service_date),
-                            datetime.min.time(), tzinfo=TZ)
-    return base.timestamp() + t_s
+    return stats.polnoc(service_date) + t_s
 
 
 def undoes_passing(prev, sched_row, service_date, arr, dep, ts) -> bool:
@@ -366,9 +364,7 @@ def _delay_of(stu, kaj: str, sched_row, service_date: str) -> int | None:
     t_s = _cas_zamude(sched_row, kaj)
     if t_s is None:
         return None
-    base = datetime.combine(date.fromisoformat(service_date),
-                            datetime.min.time(), tzinfo=TZ)
-    return int(m.time - (base.timestamp() + t_s))
+    return int(m.time - (stats.polnoc(service_date) + t_s))
 
 
 def _sched_times(conn: sqlite3.Connection, trip_ids: set[str]) -> dict:
@@ -565,8 +561,7 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
     odpeljalo.
     """
     danes = zdaj.date()
-    polnoc = datetime(danes.year, danes.month, danes.day, tzinfo=TZ)
-    now_s = int((zdaj - polnoc).total_seconds())
+    now_s = int(zdaj.timestamp()) - stats.polnoc(danes.isoformat())
     out: dict[str, list[int]] = {}
     for r in conn.execute(
         "SELECT t.agency, v.trip_id, "

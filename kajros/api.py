@@ -542,17 +542,16 @@ async def api_deli(request: Request):
     dnevnikih strežnika in tunela, telo pa ne. To je druga pot poleg
     `/stik`, ki piše iz zahteve; vsa varovalka je v `deljenje.py`.
 
-    Zahteva mora biti `application/json`: brskalnik tako pred vsako tujo
-    zahtevo vpraša za dovoljenje (CORS dovoli samo GET) in druga stran ne
-    more naših obiskovalcev spremeniti v poročevalce.
+    Zahteva mora biti `application/json` (`deljenje.je_json`): brskalnik tako
+    pred vsako tujo zahtevo vpraša za dovoljenje (CORS dovoli samo GET).
     """
     if not config.DELI:
         raise HTTPException(status_code=404)
-    if "application/json" not in request.headers.get("content-type", ""):
+    if not deljenje.je_json(request.headers.get("content-type", "")):
         raise HTTPException(415, "telo mora biti application/json")
     try:
         podatki = json.loads(await _preberi_telo(request))
-    except ValueError:
+    except (ValueError, RecursionError):      # 2000 x "[" je RecursionError
         raise HTTPException(400, "telo ni veljaven JSON") from None
     if not isinstance(podatki, dict):
         raise HTTPException(400, "telo mora biti objekt")
@@ -2186,8 +2185,6 @@ def _live(network: str | None = None) -> list[dict]:
 
     with _conn() as conn:
         _add_gps_position(conn, rows)
-        if config.DELI:
-            _add_potnike(conn, rows, now)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     # Ziva vozjna je po definiciji ze prevozila `last_stop`, zato je njena
     # zamuda meritev -- `_live_rows` bere natanko do meje.
@@ -2196,23 +2193,29 @@ def _live(network: str | None = None) -> list[dict]:
     return rows
 
 
-def _add_potnike(conn, rows: list[dict], now: datetime) -> None:
-    """Vlaku pripiše lego, ki jo pravkar deli potnik na njem.
+def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
+    """Vlakom pripiše lego, ki jo pravkar deli potnik na njem.
 
     Vlak nima GPS-a in zemljevid ga riše na zadnji postaji z meritvijo. Kadar
     kdo na njem deli lego, je ta boljša -- a zamuda na kartici ostane feedova,
     dokler se poročevalca ne ujemata dva (glej `deljenje`).
+
+    Vrne nov seznam: `rows` so iz predpomnilnika in jih ne smemo spreminjati.
     """
     ids = [r["trip_id"] for r in rows if r.get("network") == "zeleznica"]
-    for trip_id, st in deljenje.stanje(conn, ids, now).items():
-        if st.get("lat") is None:
-            continue
-        for r in rows:
-            if r["trip_id"] == trip_id and r.get("service_date") == st["service_date"]:
-                r["potnik"] = {k: st[k] for k in (
-                    "lat", "lon", "n", "soglasje", "starost_s", "stoji",
-                    "zamuda_s", "zamuda") if k in st}
-                r["potnik"].update({k: st[k] for k in ("pri", "med") if k in st})
+    stanje = {t: st for t, st in deljenje.stanje(conn, ids, now).items()
+              if st.get("lat") is not None}
+    if not stanje:
+        return rows
+    out = []
+    for r in rows:
+        st = stanje.get(r["trip_id"])
+        if st and r.get("service_date") == st["service_date"]:
+            r = {**r, "potnik": {k: st[k] for k in (
+                "lat", "lon", "n", "soglasje", "starost_s", "stoji",
+                "zamuda_s", "zamuda", "pri", "med") if k in st}}
+        out.append(r)
+    return out
 
 
 # Hitrost, pod katero vozilo stejemo za stojece. Merjeno iz `speed`, NE iz
@@ -2434,8 +2437,14 @@ def _live_predpomnjen(network: str | None) -> list[dict]:
     vsakem zajemu je na arwenu 25. 9. 2026 stalo 10,3 s CPU na 30 s, od tega
     `_live("avtobus")` dvakrat po 3,1 s.
     """
-    return _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
+    rows = _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
+    # Potnik deli lego na 10 s, predpomnilnik pa živi do naslednjega branja
+    # zamud (do 60 s) -- zato gre potnik zraven šele tu, mimo njega.
+    if config.DELI and network != "avtobus":
+        with _conn() as conn:
+            rows = _s_potniki(conn, rows, datetime.now(TZ))
+    return rows
 
 
 # --- pregled za skrbnika ----------------------------------------------------

@@ -326,14 +326,17 @@ function pollWhileVisible(fn, ms) {
   let zadnji = 0;
   let ustavljen = false;
 
+  // Naslednji korak si naroči samo, če ga medtem ni naročil kdo drug
+  // (`zdaj`, `wake`) -- sicer tečeta dve verigi in vsaka zahteva gre dvakrat.
   const tick = async () => {
+    timer = null;
     zadnji = Date.now();
     try {
       await fn();
     } catch (err) {
       /* posamezna zahteva sme spodleteti; ritem se ne sme ustaviti */
     }
-    if (!document.hidden && !ustavljen) timer = setTimeout(tick, ms);
+    if (!document.hidden && !ustavljen && !timer) timer = setTimeout(tick, ms);
   };
 
   const wake = () => {

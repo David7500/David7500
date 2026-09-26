@@ -276,6 +276,14 @@ def test_prevelika_stevila_so_zavrnitev_ne_napaka(conn):
     assert r["deljenje"]
 
 
+def test_samo_prava_vrsta_json_sprozi_cors():
+    assert deljenje.je_json("application/json")
+    assert deljenje.je_json("Application/JSON; charset=utf-8")
+    # Za brskalnik je to text/plain in gre brez predpoizvedbe.
+    assert not deljenje.je_json("text/plain;charset=application/json")
+    assert not deljenje.je_json("")
+
+
 def test_staro_porocilo_ne_pove_lege(conn):
     zdaj = _ob("10:05")
     _deli(conn, zdaj, _tocka(3.8, zdaj))
@@ -379,3 +387,16 @@ def test_odsek_trase_se_prelomi_na_vrzeli():
     # Del, ki se začne v vrzeli, ne nariše ravne črte čeznjo.
     del_ = deljenje._kosi(t, t.cum[1] + 100, t.cum[3])
     assert len(del_) == 1 and del_[0][0] == [LAT, 14.1]
+
+
+def test_potnik_na_zivih_ne_spremeni_predpomnjenih_vrstic(monkeypatch):
+    """Žive vožnje so predpomnjene do 60 s, potnik pa pošilja na 10 s: potnik
+    gre zraven ob vsakem branju, predpomnjena vrstica ostane brez njega."""
+    from kajros import api
+    vrstice = [{"trip_id": "t1", "network": "zeleznica", "service_date": "D"},
+               {"trip_id": "t2", "network": "zeleznica", "service_date": "D"}]
+    monkeypatch.setattr(api.deljenje, "stanje", lambda conn, ids, now: {
+        "t1": {"service_date": "D", "lat": 46.0, "lon": 14.5, "n": 1}})
+    out = api._s_potniki(None, vrstice, None)
+    assert out[0]["potnik"]["lat"] == 46.0 and "potnik" not in out[1]
+    assert all("potnik" not in r for r in vrstice)

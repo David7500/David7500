@@ -40,10 +40,16 @@ def _pct(values: list[float], q: float) -> float | None:
 
 
 def polnoc(service_date: str) -> int:
-    """Polnoč prometnega dne v sekundah od epohe: voznoredni `t_s` šteje od
-    nje, `feed_ts` in `time.time()` pa od epohe."""
-    return int(datetime.combine(date.fromisoformat(service_date),
-                                datetime.min.time(), tzinfo=TZ).timestamp())
+    """Začetek štetja voznorednih sekund prometnega dne, v sekundah od epohe:
+    voznoredni `t_s` šteje od tu, `feed_ts` in `time.time()` pa od epohe.
+
+    Po GTFS je to **poldne minus 12 ur**, ne polnoč. Razlika je ura na dan
+    premika ure: 25. 10. 2026 bi bil `polnoc + 10 h` ob 9:00 in zamuda
+    avtobusa iz absolutnega časa +60 min. Prej je bila tu polnoč, v šestih
+    kopijah.
+    """
+    d = date.fromisoformat(service_date)
+    return int(datetime(d.year, d.month, d.day, 12, tzinfo=TZ).timestamp()) - 43200
 
 
 def _abs_time(service_date: str, seconds: int | None) -> str | None:
