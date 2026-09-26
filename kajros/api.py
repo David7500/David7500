@@ -11,6 +11,7 @@ import json
 import shutil
 import threading
 import time
+import warnings
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -2610,7 +2611,12 @@ _openapi_z_head = app.openapi
 
 
 def _openapi_brez_head():
-    shema = _openapi_z_head()
+    # GET in HEAD iste poti dobita isti `operationId` in FastAPI za vsako pot
+    # opozori (42 opozoril v vsakem teku testov). HEAD takoj nato odstranimo,
+    # zato opozorilo tu ne pomeni ničesar.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Duplicate Operation ID")
+        shema = _openapi_z_head()
     for operacije in shema.get("paths", {}).values():
         operacije.pop("head", None)
     return shema
