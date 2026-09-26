@@ -168,10 +168,16 @@ def pot(lat1: float, lon1: float, lat2: float, lon2: float,
             timeout=_TIMEOUT_S)
         r.raise_for_status()
         poti = r.json().get("routes") or []
-        if not poti:
-            return None
+    except Exception:
+        _zadnja_napaka = time.monotonic()
+        return None
+    if not poti:
+        return None
+    # Branje odgovora je zunaj zgornjega `except`: nenavaden korak ene poti ni
+    # izpad usmerjevalnika in ne sme za 30 s ugasniti vseh matrik.
+    try:
         naj = poti[0]
-        # OSRM piše [lon, lat], Leaflet bere [lat, lon]. Zamenjava tu in ne v
+        # OSRM piše [lon, lat], prikaz bere [lat, lon]. Zamenjava tu in ne v
         # brskalniku: obrnjena koordinata je napaka, ki je na zemljevidu videti
         # kot pot nekje v Somaliji, in nihče je ne pripiše temu mestu.
         tocke = [[c[1], c[0]] for c in naj["geometry"]["coordinates"]]
@@ -187,19 +193,21 @@ def pot(lat1: float, lon1: float, lat2: float, lon2: float,
             tocke.append([lat2, lon2])
         out = {"sekunde": round(naj["duration"]), "metri": round(naj["distance"]),
                "tocke": tocke}
-        if koraki:
-            out["koraki"] = []
-            # Koraki štejejo od začetka črte, ta pa zdaj vključuje priključek.
-            prevozeno = zacetek if zacetek > 2 else 0.0
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+    if koraki:
+        out["koraki"] = []
+        # Koraki štejejo od začetka črte, ta pa zdaj vključuje priključek.
+        prevozeno = zacetek if zacetek > 2 else 0.0
+        try:
             for noga in naj.get("legs", ()):
                 for k in noga.get("steps", ()):
                     n = navodilo(k)
                     n["od_zacetka"] = round(prevozeno)
                     out["koraki"].append(n)
                     prevozeno += k.get("distance", 0)
-    except Exception:
-        _zadnja_napaka = time.monotonic()
-        return None
+        except (KeyError, TypeError, ValueError, IndexError):
+            out["koraki"] = None     # pot brez navodil je še vedno pot
     return out
 
 
@@ -234,7 +242,7 @@ def navodilo(korak: dict) -> dict:
     znak = beseda.replace(" ", "-")
     if tip == "depart":
         znak = "start"
-        besedilo = "Pojdi proti " + _STRAN_NEBA[round(m.get("bearing_after", 0) / 45) % 8]
+        besedilo = "Pojdi proti " + _STRAN_NEBA[round((m.get("bearing_after") or 0) / 45) % 8]
     elif tip == "arrive":
         znak = "cilj"
         besedilo = "Na cilju"

@@ -29,7 +29,7 @@ import bisect
 import math
 import sqlite3
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from . import geo, hoja, journey, stats
 
@@ -210,11 +210,6 @@ def zamiki(conn: sqlite3.Connection, service_date: str,
     if zig:
         _shrani(_ZAMIK_CACHE, kljuc, out)
     return out
-
-
-def _polnoc(service_date: str) -> int:
-    return int(datetime.combine(date.fromisoformat(service_date),
-                                datetime.min.time(), tzinfo=TZ).timestamp())
 
 
 def blizu(conn: sqlite3.Connection, lat: float, lon: float,
@@ -521,6 +516,10 @@ def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
     nic = -(1 << 30)
     if meja is None:
         meja = nic
+    # `meja` med iskanjem raste (najboljši že najdeni odhod) in reže vožnje po
+    # uri na postajališču. Za odgovor šteje odhod OD DOMA, ki je zaradi hoje
+    # prej -- vozilo po zdaj s postajališča 13 minut stran je odhod pred zdaj.
+    spodnja = meja
     voz: list[dict[str, int]] = [{} for _ in range(max_nog + 1)]
     pes: list[dict[str, int]] = [{} for _ in range(max_nog + 1)]
     starsi_voz: list[dict[str, tuple]] = [{} for _ in range(max_nog + 1)]
@@ -594,7 +593,8 @@ def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
     # Najpoznejši odhod od doma; ob enakem tisti z manj vožnjami.
     dosezeni = [(pes[k][sid] - h, -k, sid)
                 for sid, h in izhodisca.items()
-                for k in range(1, max_nog + 1) if sid in pes[k]]
+                for k in range(1, max_nog + 1)
+                if sid in pes[k] and pes[k][sid] - h > spodnja]
     if not dosezeni:
         return None
     odhod, minus_k, zacetek = max(dosezeni)
@@ -625,7 +625,7 @@ def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
 def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int],
              service_date: str, vir_hoje: str) -> dict:
     """Iz surovih nog sestavi predlog, kot ga bere prikaz."""
-    polnoc = _polnoc(service_date)
+    polnoc = stats.polnoc(service_date)
     vozje = _vozje(conn, service_date)
     imena = _imena(conn)
 
@@ -766,7 +766,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
     zato se predlogi dveh dni dajo zložiti v en seznam. Pomen `odhod_s` in
     `prihod_do_s` je isti kot pri `isci()`.
     """
-    polnoc = _polnoc(service_date)
+    polnoc = stats.polnoc(service_date)
     zamik = zamiki(conn, service_date, now_s)
 
     def sestavi(najdba, izh=izhodisca, cil=cilji):
@@ -941,7 +941,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     postajališči ostane hoja: kolo se na postaji pelje ob sebi.
     """
     t0 = time.perf_counter()
-    polnoc = _polnoc(service_date)
+    polnoc = stats.polnoc(service_date)
     nazaj = prihod_do_s is not None
     # (prometni dan, koliko je njegova polnoč pred polnočjo `service_date`).
     # Včerajšnji dan šteje sekunde od svoje polnoči, zato vse ure +86 400.
@@ -1218,7 +1218,7 @@ def razberi_noge(niz: str) -> list[tuple[str, int, int]]:
 def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
                 od: tuple[float, float], do: tuple[float, float],
                 service_date: str, now_s: int | None = None,
-                kmh: float = hoja.KMH) -> dict:
+                kmh: float = hoja.KMH, geometrija: bool = True) -> dict:
     """Ena pot, razložena: kod hodiš in kje izstopiš.
 
     Seznam predlogov odgovarja na „s čim in kdaj"; to na „kako". Zato dvoje,
@@ -1227,11 +1227,15 @@ def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
 
     Pot se sestavi iz naslova, ne iz shranjenega iskanja: ista pot mora
     obstajati tudi za tistega, ki mu jo nekdo pošlje.
+
+    `geometrija=False` je za osveževanje zamud med vodenjem (vsakih 30 s):
+    pešpoti tedaj le kot čas iz matrike, brez OSRM-ove poti s koraki, ki bi
+    jo odjemalec tako ali tako zavrgel.
     """
     by_trip = journey._timetable_for_day(conn, service_date, None)[0]
     vozje = _vozje(conn, service_date)
     imena = _imena(conn)
-    polnoc = _polnoc(service_date)
+    polnoc = stats.polnoc(service_date)
 
     def ime(sid):
         return imena[sid][0] if sid in imena else sid
@@ -1265,9 +1269,9 @@ def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
                          for s in postanki],
         })
 
-    def hoja_noga(a, b, od_stop=None, do_stop=None):
+    def hoja_noga(a, b, od_stop=None, do_stop=None, kmh=kmh):
         # S koraki: na tej strani se po poti tudi hodi, ne le gleda.
-        p = hoja.pot(a[0], a[1], b[0], b[1], koraki=True)
+        p = hoja.pot(a[0], a[1], b[0], b[1], koraki=True) if geometrija else None
         if p is None:
             # Brez usmerjevalnika ne rišemo ravne črte kot poti: povemo, da
             # geometrije ni, in pustimo prikazu, da to prizna.
@@ -1287,7 +1291,10 @@ def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
     for a, b in zip(voznje, voznje[1:]):
         noge.append(a)
         if a["do_stop"] != b["od_stop"]:
-            noge.append(hoja_noga(a["do_ll"], b["od_ll"], a["do_stop"], b["od_stop"]))
+            # Prestop je hoja tudi s kolesom, enako kot v `isci()`: sicer
+            # podrobnosti kažejo drugo uro kot seznam, iz katerega so prišle.
+            noge.append(hoja_noga(a["do_ll"], b["od_ll"], a["do_stop"], b["od_stop"],
+                                  hoja.KMH))
     noge.append(voznje[-1])
     noge.append(hoja_noga(voznje[-1]["do_ll"], do, voznje[-1]["do_stop"], None))
     noge = [n for n in noge if n["vrsta"] != "hoja" or n["sekunde"] >= 60]

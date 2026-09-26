@@ -61,7 +61,7 @@ def cmd_show(args):
         sys.exit(f"vlak {args.train_no} ne obstaja")
     for r in rows:
         if args.date:
-            delay = r["delay_arr"] if r["delay_arr"] is not None else r["delay_dep"]
+            delay = r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"]
             mark = f"{delay // 60:+3d} min" if delay is not None else "     -"
             sched = (r["sched_arr"] or r["sched_dep"] or "")[11:16]
             print(f"{r['stop_seq']:>3}  {r['name']:<26} {sched}  {mark}")

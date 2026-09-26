@@ -1192,8 +1192,7 @@ def api_overview_bus():
 
 
 @app.get("/api/stations")
-def api_stations(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
-                                             description="samo postaje tega omrežja")):
+def api_stations(network: str = NETWORK_Q):
     # 863 kB in 77 ms, vsebina pa se spremeni enkrat na dan ob uvozu GTFS.
     # Predpomnimo ze SERIALIZIRAN JSON, ne seznama slovarjev: sama poizvedba
     # je manjsi del cene, vecino poje pretvorba 9 791 postaj v niz. Zato
@@ -2048,10 +2047,8 @@ def _live_rows(conn, service_date: str, now_s: int,
     dejansko vozijo. Zadnja znana postaja je zadnja, katere cas je ze minil --
     ne zadnja, o kateri feed porocá: feed poslje napoved tudi za naslednjo
     postajo, po koncu voznje pa ostane zapisan cilj."""
-    # Polnoc prometnega dne v sekundah od epohe: `t_s` steje od nje, `feed_ts`
-    # pa je epoha. Rabi ju pogoj "meja ne prehiti feeda".
-    polnoc = int(datetime.combine(date.fromisoformat(service_date),
-                                  datetime.min.time(), tzinfo=TZ).timestamp())
+    # Pogoj "meja ne prehiti feeda" primerja `t_s` s `feed_ts`.
+    polnoc = stats.polnoc(service_date)
     rows = conn.execute(_LIVE_SQL, {"day": service_date, "now_s": now_s,
                                     "grace": _LIVE_GRACE_S,
                                     "network": network,
@@ -2339,6 +2336,7 @@ def api_pot_podrobno(
     do_lon: float = Query(..., ge=13.2, le=16.8),
     date: str | None = None,
     kmh: float = Query(hoja.KMH, ge=3, le=25),
+    geometrija: bool = Query(True, description="0 = samo zamude, brez pešpoti"),
 ):
     """Ena pot, razložena: kod hodiš in kje izstopiš.
 
@@ -2359,7 +2357,7 @@ def api_pot_podrobno(
     with _conn() as conn:
         try:
             return pot.podrobnosti(conn, spec, (od_lat, od_lon), (do_lat, do_lon),
-                                   dan, zdaj_s, kmh=kmh)
+                                   dan, zdaj_s, kmh=kmh, geometrija=geometrija)
         except KeyError as e:
             # Vozni red se je med iskanjem in klikom lahko zamenjal (uvoz je
             # dnevni). Deljena povezava od včeraj torej ni napaka odjemalca.
@@ -2405,7 +2403,7 @@ def api_pot_hoja(
     if p is None:
         raise HTTPException(503, "peš usmerjevalnik ne odgovarja")
     p["sekunde"] = hoja.pri_hitrosti(p["sekunde"], kmh)
-    for k in p["koraki"]:
+    for k in p.get("koraki") or ():
         k["sekunde"] = hoja.pri_hitrosti(k["sekunde"], kmh)
     return p
 
@@ -2417,9 +2415,12 @@ def pot_podrobno_page(request: Request):
 
 
 @app.get("/api/live")
-def api_live(network: str | None = Query(None, pattern="^(zeleznica|avtobus)$",
-                                         description="samo to omrežje")):
-    """Vozila, ki so zdaj na poti, z zadnjo izmerjeno zamudo."""
+def api_live(network: str = NETWORK_Q):
+    """Vozila, ki so zdaj na poti, z zadnjo izmerjeno zamudo.
+
+    Omrežje je privzeto kot povsod: brez njega gre poizvedba čez obe hkrati,
+    izmerjeno 4,6 s proti 0,38 s (glej `train.js`, `loadHeadsign`).
+    """
     return _live_predpomnjen(network)
 
 

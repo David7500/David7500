@@ -14,7 +14,6 @@ const Q = new URLSearchParams(location.search);
 // Hitrost na koncih poti: hoja ali kolo. Ista, s katero je strežnik računal
 // minute -- druga bi dala vodenju drugo uro prihoda kot seznamu.
 const KMH = Number(Q.get("kmh")) || 5;
-const HITROST_MS = KMH / 3.6;
 const KOLO = KMH > 7;
 
 let K = null;
@@ -95,6 +94,10 @@ function izstopHtml(n) {
 // Kolo je samo na koncih poti; prestop na postaji je hoja s kolesom ob sebi.
 function jeKolo(i) {
   return KOLO && (i === 0 || i === PREDLOG.noge.length - 1);
+}
+
+function kmhNoge(i) {
+  return jeKolo(i) ? KMH : 5;
 }
 
 function kamBeseda(n) {
@@ -361,13 +364,6 @@ $("#karta-lega").addEventListener("click", async () => {
 
 // ---------------------------------------------------------------- geometrija
 
-function metri(a, b) {
-  const r = Math.PI / 180;
-  const s = Math.sin((b[0] - a[0]) * r / 2) ** 2
-    + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2;
-  return 12742000 * Math.asin(Math.sqrt(s));
-}
-
 function azimut(a, b) {
   const r = Math.PI / 180;
   const dl = (b[1] - a[1]) * r;
@@ -375,40 +371,6 @@ function azimut(a, b) {
   const x = Math.cos(a[0] * r) * Math.sin(b[0] * r)
     - Math.sin(a[0] * r) * Math.cos(b[0] * r) * Math.cos(dl);
   return (Math.atan2(y, x) / r + 360) % 360;
-}
-
-function kumulativa(t) {
-  const k = [0];
-  for (let i = 1; i < t.length; i += 1) k.push(k[i - 1] + metri(t[i - 1], t[i]));
-  return k;
-}
-
-/** Najbližja točka na poti: koliko je prehojeno in kako daleč je pot. */
-function projekcija(t, kum, p) {
-  const kx = 111320 * Math.cos(p[0] * Math.PI / 180);
-  const ky = 110540;
-  let naj = { odmik: Infinity, vzdolz: 0 };
-  for (let i = 0; i < t.length - 1; i += 1) {
-    const ax = (t[i][1] - p[1]) * kx, ay = (t[i][0] - p[0]) * ky;
-    const bx = (t[i + 1][1] - p[1]) * kx, by = (t[i + 1][0] - p[0]) * ky;
-    const dx = bx - ax, dy = by - ay;
-    const l2 = dx * dx + dy * dy;
-    const u = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
-    const d = Math.hypot(ax + u * dx, ay + u * dy);
-    if (d < naj.odmik) naj = { odmik: d, vzdolz: kum[i] + u * (kum[i + 1] - kum[i]) };
-  }
-  return naj;
-}
-
-function tockaNa(t, kum, m) {
-  if (m <= 0) return t[0];
-  for (let i = 1; i < t.length; i += 1) {
-    if (kum[i] >= m) {
-      const u = (m - kum[i - 1]) / Math.max(1e-9, kum[i] - kum[i - 1]);
-      return [t[i - 1][0] + u * (t[i][0] - t[i - 1][0]), t[i - 1][1] + u * (t[i][1] - t[i - 1][1])];
-    }
-  }
-  return t[t.length - 1];
 }
 
 // ---------------------------------------------------------------- vodenje
@@ -453,7 +415,7 @@ function pripraviNogo(i) {
   const n = PREDLOG.noge[i];
   V.i = i;
   V.tocke = CRTE[i] ? CRTE[i].tocke : [n.od_ll || odKod(), n.do_ll || doKod()];
-  V.kum = kumulativa(V.tocke);
+  V.kum = kumulative(V.tocke);
   V.koraki = (n.koraki || []).slice();
   V.prispel = false;
   V.izven = 0;
@@ -523,9 +485,9 @@ function smerKamere(vzdolz, vodim) {
     return JAZ.smer;
   }
   if (vodim && KOMPAS != null) return KOMPAS;
-  const a = tockaNa(V.tocke, V.kum, vzdolz);
-  const b = tockaNa(V.tocke, V.kum, vzdolz + 25);
-  return metri(a, b) > 1 ? azimut(a, b) : (K ? K.map.getBearing() : 0);
+  const a = tockaNaTrasi(V.tocke, V.kum, vzdolz);
+  const b = tockaNaTrasi(V.tocke, V.kum, vzdolz + 25);
+  return razdaljaM(a, b) > 1 ? azimut(a, b) : (K ? K.map.getBearing() : 0);
 }
 
 function puscica(ll, smer) {
@@ -594,7 +556,7 @@ function posodobi(skok, samoBesedilo) {
   let vzdolz = 0;
   let odmik = null;
   if (JAZ) {
-    const p = projekcija(V.tocke, V.kum, [JAZ.lat, JAZ.lon]);
+    const p = projekcijaNaTraso(V.tocke, V.kum, JAZ.lat, JAZ.lon);
     vzdolz = p.vzdolz;
     odmik = p.odmik;
     if (odmik <= NA_POTI_M) V.zacel = true;
@@ -605,7 +567,7 @@ function posodobi(skok, samoBesedilo) {
   if (dalec) vzdolz = 0;
   const ostane = Math.max(0, skupaj - vzdolz);
   const konec = V.tocke[V.tocke.length - 1];
-  const doKonca = JAZ ? metri([JAZ.lat, JAZ.lon], konec) : Infinity;
+  const doKonca = JAZ ? razdaljaM([JAZ.lat, JAZ.lon], konec) : Infinity;
   // Prispel si, ko je konec bližje od točnosti lege -- a vsaj 15 m, sicer bi
   // GPS v mestu tu in tam "prispel" dvajset metrov pred postajo.
   const prag = Math.max(15, Math.min(JAZ ? JAZ.acc || 15 : 15, 35));
@@ -614,7 +576,8 @@ function posodobi(skok, samoBesedilo) {
     V.prispel = true;
   }
   const nv = nogaVozila(V.i);
-  const ostaneS = ostane / HITROST_MS;
+  const hitrost = kmhNoge(V.i) / 3.6;
+  const ostaneS = ostane / hitrost;
 
   $("#vod-listaj").hidden = vodim || V.koraki.length < 2;
   if (V.prispel) {
@@ -639,7 +602,7 @@ function posodobi(skok, samoBesedilo) {
     const k = V.koraki[V.listaj];
     prikaziManever(k, V.koraki.length ? `${V.listaj + 1} / ${V.koraki.length}` : "");
     $("#vod-cilj").innerHTML = `${n.do ? "Do postajališča" : "Do cilja"} <strong>${
-      escapeHtml(n.do || "")}</strong> · ${dolzina(skupaj)} · ${cas(skupaj / HITROST_MS)}`;
+      escapeHtml(n.do || "")}</strong> · ${dolzina(skupaj)} · ${cas(skupaj / hitrost)}`;
   }
   $("#vod-vozilo").innerHTML = nv ? voziloHtml(nv, V.prispel ? 0 : ostaneS) : "";
   $("#vod-vozilo").hidden = !nv;
@@ -655,7 +618,7 @@ function posodobi(skok, samoBesedilo) {
   $("#vod-sledi").hidden = V.sledi || !vodim;
   const opomba = $("#vod-opomba");
   if (dalec) {
-    opomba.textContent = `Pot se začne ${dolzina(metri([JAZ.lat, JAZ.lon], V.tocke[0]))}`
+    opomba.textContent = `Pot se začne ${dolzina(razdaljaM([JAZ.lat, JAZ.lon], V.tocke[0]))}`
       + ` od tebe${n.od ? ` (${n.od})` : ""} — do takrat lahko listaš po navodilih.`;
   } else if (!JAZ && !opomba.textContent) {
     opomba.textContent = "Čakam na tvojo lego … medtem lahko listaš po navodilih.";
@@ -695,7 +658,7 @@ async function preracunaj() {
   const konec = V.tocke[V.tocke.length - 1];
   const p = new URLSearchParams({ od_lat: JAZ.lat.toFixed(6), od_lon: JAZ.lon.toFixed(6),
                                   do_lat: konec[0].toFixed(6), do_lon: konec[1].toFixed(6),
-                                  kmh: KMH });
+                                  kmh: kmhNoge(V.i) });
   try {
     const r = await fetch(`/api/pot/hoja?${p}`);
     if (!r.ok) return;
@@ -703,7 +666,7 @@ async function preracunaj() {
     if (!V.aktivno || !d.tocke || d.tocke.length < 2) return;
     CRTE[V.i] = { vrsta: "hoja", tocke: d.tocke };
     V.tocke = d.tocke;
-    V.kum = kumulativa(d.tocke);
+    V.kum = kumulative(d.tocke);
     V.koraki = d.koraki || [];
     V.najavljen = -1;
     V.izven = 0;
@@ -726,12 +689,15 @@ async function osveziZamude() {
   clearTimeout(V.zamude);
   if (!V.aktivno || !ZIVO) return;
   try {
-    const r = await fetch(`/api/pot/podrobno?${naslovPodrobno()}`);
+    const r = await fetch(`/api/pot/podrobno?${naslovPodrobno()}&geometrija=0`);
     if (r.ok) {
       const d = await r.json();
-      d.predlog.noge.forEach((n, i) => {
-        const moja = PREDLOG.noge[i];
-        if (n.vrsta !== "voznja" || !moja || moja.trip_id !== n.trip_id) return;
+      // Po vožnji, ne po indeksu: pešpot iz matrike je lahko drugače dolga
+      // in kratka hoja (pod minuto) odpade -- indeksi se tedaj zamaknejo.
+      d.predlog.noge.forEach((n) => {
+        const moja = PREDLOG.noge.find((m) => m.vrsta === "voznja"
+          && m.trip_id === n.trip_id && m.od_seq === n.od_seq);
+        if (n.vrsta !== "voznja" || !moja) return;
         for (const k of ["zamuda", "zamuda_izstop", "odhod_ocena", "prihod_ocena", "brez_podatka"]) {
           moja[k] = n[k];
         }

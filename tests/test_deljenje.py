@@ -28,6 +28,7 @@ def conn():
     deljenje._vzorci.clear()
     deljenje._kandidati_casi.clear()
     deljenje._deljenja_casi.clear()
+    deljenje._zadnje_deljenje.clear()
     c = db.connect(":memory:")
     db.init(c)
     deljenje.init(c)
@@ -210,6 +211,71 @@ def test_dva_neujemajoca_se_nista_soglasje(conn):
     assert st["n"] == 2 and st["soglasje"] is False
 
 
+def test_isti_posiljatelj_znova_ni_drugi_porocevalec(conn):
+    """Osvežena stran ali izgubljen odgovor začne novo deljenje; en telefon
+    pa ne sme dati soglasja dveh in zamenjati feeda."""
+    zdaj = _ob("10:14")
+    prvo = _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), kljuc="a")
+    _deli(conn, zdaj, _tocka(7.74, zdaj, v=0), kljuc="a")
+    st = deljenje.stanje(conn, ["t1"], zdaj)["t1"]
+    assert st["n"] == 1 and st["soglasje"] is False
+    konec = conn.execute("SELECT konec FROM deljenje WHERE id = ?",
+                         (prvo["deljenje"],)).fetchone()[0]
+    assert konec == "potnik"
+
+
+def test_zavrnjen_zacetek_ne_porabi_omejitve(conn):
+    """Slab GPS ob postaji da „ni na trasi" večkrat zapored; ključ si za
+    CGNAT deli veliko ljudi, zato šteje le deljenje, ki se je začelo."""
+    zdaj = _ob("10:05")
+    for _ in range(deljenje.DELJENJ_NA_URO + 2):
+        with pytest.raises(deljenje.Zavrnjeno):
+            _deli(conn, zdaj, {"lat": LAT + 0.05, "lon": _lon(3.8), "acc": 10,
+                               "t": zdaj.timestamp() * 1000})
+    assert _deli(conn, zdaj, _tocka(3.8, zdaj))["deljenje"]
+
+
+def _krozna(conn):
+    """Krožna t3: A -> B po vzporedniku, nazaj 22 m severneje v A2 ob A."""
+    tja = [[LAT, 14.0 + i * 0.01] for i in range(11)]
+    nazaj = [[LAT + 0.0002, 14.1 - i * 0.01] for i in range(11)]
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('A2', 'Ajdovščina', ?, 14.0)",
+                 (LAT + 0.0002,))
+    conn.execute("INSERT INTO shape(shape_id, points) VALUES('sh3', ?)",
+                 (json.dumps([tja + nazaj]),))
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, shape_id) "
+                 "VALUES('t3', 'r3', 'LPP 3', 'krog', 'S', 'sh3')")
+    conn.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                     "VALUES(?,?,?,?,?)", [("t3", 1, "A", None, 36000),
+                                          ("t3", 2, "B", 37800, 37800),
+                                          ("t3", 3, "A2", 39600, None)])
+    db.fill_trip_window(conn)
+    conn.commit()
+
+
+def test_krozna_linija_na_izhodiscu_ni_na_cilju(conn):
+    """Izhodišče in konec krožne linije sta ista točka. Projekcija brez meje
+    je potnika pred odhodom postavila na cilj -- in deljenje zavrnila."""
+    _krozna(conn)
+    zdaj = _ob("09:58")
+    tocka = {"lat": LAT + 0.0002, "lon": 14.0, "acc": 10, "t": zdaj.timestamp() * 1000}
+    assert "t3" in {k["trip_id"] for k in deljenje.kandidati(
+        conn, tocka["lat"], tocka["lon"], 10, zdaj=zdaj)}
+    r = _deli(conn, zdaj, tocka, trip="t3")
+    assert r["konec"] is None
+    along = conn.execute("SELECT along_m FROM deljenje WHERE id = ?",
+                         (r["deljenje"],)).fetchone()[0]
+    assert along < 100
+
+
+def test_prevelika_stevila_so_zavrnitev_ne_napaka(conn):
+    zdaj = _ob("10:05")
+    with pytest.raises(deljenje.Zavrnjeno):
+        _deli(conn, zdaj, {"lat": 10 ** 400, "lon": _lon(3.8), "acc": 10})
+    r = _deli(conn, zdaj, _tocka(3.8, zdaj, t=float("inf"), v=10 ** 400))
+    assert r["deljenje"]
+
+
 def test_staro_porocilo_ne_pove_lege(conn):
     zdaj = _ob("10:05")
     _deli(conn, zdaj, _tocka(3.8, zdaj))
@@ -279,8 +345,9 @@ def test_pregled_pokaze_zivo_in_koncano_po_vozilih(conn):
     assert deljenje.deli_zdaj(conn, zdaj) == 1
     v = p["vozila"][0]
     assert v["train_no"] == "LP 1" and v["od"] == "Ajdovščina" and v["do"] == "Celje"
-    # Javno stanje je isto kot na tabli: `stanje()` šteje sveža poročila.
-    assert v["zivo"] and v["javno"]["n"] == 2 and v["javno"]["pri"] == "Bled"
+    # Javno stanje je isto kot na tabli: `stanje()` šteje sveža poročila
+    # deljenj, ki še tečejo -- ustavljeno ne poroča več.
+    assert v["zivo"] and v["javno"]["n"] == 1 and v["javno"]["pri"] == "Bled"
     assert len(v["trasa"]) == 1
     # Sled je del trase med prvo in zadnjo točko, na vzporedniku.
     sled = v["deljenja"][0]["sled"]

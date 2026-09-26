@@ -215,29 +215,3 @@ def severity(row: dict) -> dict:
     else:
         label = "hude"
     return {"score": score, "label": label, "parts": parts}
-
-
-# Semafor, ne lestvica enega odtenka: stopnje se morajo lociti na prvi pogled.
-# Tople barve tu ne trkajo z lestvico zamud, ker je v pogledu Vreme zamuda
-# narisana nevtralno -- lestvica zamud zivi v pogledu Zamude.
-#
-# Preverjeno z validatorjem palete na temni podlagi: najslabsi par med sabo je
-# #d1495b <-> #6b7480 (protan ΔE 6,1), kar je dovoljeno le ob dodatnem zapisu --
-# zato stopnja povsod nosi tudi stevilko in ime.
-SEVERITY_STYLE = {
-    "mirne":    "#6b7480",
-    "blage":    "#5aa87d",
-    "zahtevne": "#d9b33c",
-    "hude":     "#d1495b",
-}
-SEVERITY_ORDER = ("mirne", "blage", "zahtevne", "hude")
-
-
-def severity_color(score: int) -> str:
-    if score <= 0:
-        return SEVERITY_STYLE["mirne"]
-    if score <= 3:
-        return SEVERITY_STYLE["blage"]
-    if score <= 6:
-        return SEVERITY_STYLE["zahtevne"]
-    return SEVERITY_STYLE["hude"]

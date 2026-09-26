@@ -1696,59 +1696,6 @@ const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
 // tej trasi, in podnapis pove, da je ocenjena.
 const OCENA_MAX_ODMIK_M = 120;
 
-function metriNaStopinjo(lat) {
-  return { lat: 111320, lon: 111320 * Math.cos(lat * Math.PI / 180) };
-}
-
-function razdaljaM(a, b) {
-  const k = metriNaStopinjo((a[0] + b[0]) / 2);
-  const dy = (a[0] - b[0]) * k.lat;
-  const dx = (a[1] - b[1]) * k.lon;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-// Kumulativne dolzine vzdolz trase, izracunane enkrat ob nalaganju.
-function kumulative(pts) {
-  const out = [0];
-  for (let i = 1; i < pts.length; i++) out.push(out[i - 1] + razdaljaM(pts[i - 1], pts[i]));
-  return out;
-}
-
-// Najblizja tocka na trasi: kako dalec vzdolz nje lezi in kako dalec od nje
-// je iskana tocka. Odmik je merilo zaupanja -- velik pomeni, da tocka tej
-// trasi ne pripada in racun po poti nima smisla.
-function projekcijaNaTraso(pts, cums, lat, lon) {
-  const k = metriNaStopinjo(lat);
-  let najOdmik = Infinity, vzdolz = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [ay, ax] = pts[i], [by, bx] = pts[i + 1];
-    const vx = (bx - ax) * k.lon, vy = (by - ay) * k.lat;
-    const wx = (lon - ax) * k.lon, wy = (lat - ay) * k.lat;
-    const len2 = vx * vx + vy * vy;
-    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2));
-    const odmik = razdaljaM([lat, lon], [ay + t * (by - ay), ax + t * (bx - ax)]);
-    if (odmik < najOdmik) {
-      najOdmik = odmik;
-      vzdolz = cums[i] + t * (cums[i + 1] - cums[i]);
-    }
-  }
-  return { vzdolz, odmik: najOdmik };
-}
-
-// Tocka, ki lezi `cilj` metrov vzdolz trase.
-function tockaNaTrasi(pts, cums, dolzina) {
-  const cilj = Math.max(0, Math.min(dolzina, cums[cums.length - 1]));
-  for (let i = 0; i < cums.length - 1; i++) {
-    if (cilj >= cums[i] && cilj <= cums[i + 1]) {
-      const d = cums[i + 1] - cums[i];
-      const f = d === 0 ? 0 : (cilj - cums[i]) / d;
-      return [pts[i][0] + f * (pts[i + 1][0] - pts[i][0]),
-              pts[i][1] + f * (pts[i + 1][1] - pts[i][1])];
-    }
-  }
-  return pts[pts.length - 1];
-}
-
 // Smer trase pri `s` metrih, v stopinjah od severa: od tocke `pol` metrov
 // zadaj do tocke `pol` metrov spredaj. Brez dolzine vrne null.
 function smerTrase(pts, cums, s, pol) {
@@ -2332,7 +2279,7 @@ async function loadHistory() {
     const q = (today ? `&exclude_date=${encodeURIComponent(today)}` : "")
       + ((state.run && state.run.trip_id) || URL_TRIP
           ? `&trip=${encodeURIComponent((state.run && state.run.trip_id) || URL_TRIP)}` : "");
-    h = await fetch(`/api/train/${ENC}/history?days=90${q}`).then((r) => r.json());
+    h = await fetch(`/api/train/${ENC}/history?days=90${q}`).then(jsonOk);
   } catch (err) {
     console.error("zgodovine ni bilo mogoče naložiti", err);
     return;
@@ -2383,7 +2330,7 @@ async function loadHeadsign() {
     // vožnje. Ta stran gleda eno vožnjo in njeno omrežje pozna.
     // Omrežje strani, ne `state.network`: ta se napolni šele iz odgovora
     // `/api/train/…/run`, `loadHeadsign()` pa teče takoj ob nalaganju.
-    const live = await fetch(`/api/live?network=${OMREZJE}`).then((r) => r.json());
+    const live = await fetch(`/api/live?network=${OMREZJE}`).then(jsonOk);
     const me = live.find((t) => t.train_no === TRAIN_NO);
     if (me && me.headsign) headsignEl.textContent = me.headsign;
   } catch (err) {

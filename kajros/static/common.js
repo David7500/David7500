@@ -278,6 +278,13 @@ const MOST = (() => {
 })();
 
 
+/** Telo odgovora kot JSON -- a samo uspešnega. Napaka FastAPI je tudi JSON
+ *  (`{detail}`) in bi jo stran sicer brala kot podatke. */
+function jsonOk(r) {
+  if (!r.ok) throw new Error(`${r.url}: HTTP ${r.status}`);
+  return r.json();
+}
+
 // ---------- pika o zivosti ----------
 // Pika je doslej kazala, ali je ODGOVOR prisel, ne ali so PODATKI sveži.
 // Če zajem odmre, API pa tece naprej, bi ostala zelena in bi trdila nekaj,
@@ -291,7 +298,7 @@ async function refreshFeedDot() {
   const dot = document.getElementById("feed-dot");
   if (!dot) return;
   try {
-    const h = await fetch("/api/health").then((r) => r.json());
+    const h = await fetch("/api/health").then(jsonOk);
     const age = h.last_feed_ts ? Date.now() / 1000 - h.last_feed_ts : Infinity;
     const stale = age > FEED_STALE_S;
     dot.classList.toggle("stale", stale);
@@ -562,7 +569,11 @@ function num(v, digits) {
 
 // Semafor, ne lestvica enega odtenka: stopnje se morajo lociti na prvi pogled.
 // Tople barve tu ne trkajo z lestvico zamud, ker je v pogledu Vreme zamuda
-// narisana nevtralno. Enako kot v weather.py.
+// narisana nevtralno. Meje stopenj so iste kot oznake v `weather.severity()`.
+//
+// Preverjeno z validatorjem palete na temni podlagi: najslabsi par med sabo je
+// #d1495b <-> #6b7480 (protan ΔE 6,1), kar je dovoljeno le ob dodatnem zapisu --
+// zato stopnja povsod nosi tudi stevilko in ime.
 const SEVERITY_STYLE = {
   "mirne": "#6b7480",
   "blage": "#5aa87d",
@@ -1362,10 +1373,11 @@ function locateMe(opts) {
 function sledi(cb) {
   if (!navigator.geolocation || !window.isSecureContext) return () => {};
   // Smer in hitrost sta za vodenje po pešpoti: GPS smer gibanja pozna samo
-  // med hojo (`heading` je sicer `null`), kompas telefona pa tudi na mestu.
+  // med hojo, kompas telefona pa tudi na mestu. Na mestu je `heading` po
+  // specifikaciji `NaN`, ne `null` -- in `??` na NaN ne pade na kompas.
   const id = navigator.geolocation.watchPosition(
-    (p) => cb({ lat: p.coords.latitude, lon: p.coords.longitude,
-                acc: p.coords.accuracy, smer: p.coords.heading,
+    (p) => cb({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy,
+                smer: Number.isFinite(p.coords.heading) ? p.coords.heading : null,
                 hitrost: p.coords.speed }),
     () => {},                       // tiho: gumb "lega" je tisti, ki porocá
     { enableHighAccuracy: true, maximumAge: 0 },

@@ -390,7 +390,7 @@ def _sched_times(conn: sqlite3.Connection, trip_ids: set[str]) -> dict:
     return out
 
 
-def ingest(conn: sqlite3.Connection, feed) -> dict:
+def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     """Zapiše spremembe zamud. Vrne števce za log."""
     now = datetime.now(TZ)
     windows = _rail_trip_windows(conn)
@@ -525,7 +525,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             )
 
     conn.commit()
-    iz_lege.zabelezi_feed(v_feedu)
+    iz_lege.zabelezi_feed(v_feedu, vir=vir)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
@@ -595,6 +595,7 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     # vedeti, da je odgovor se vedno tocen, in ne le, da se je spremenil.
     db.set_meta(conn, "rt_fetched", str(int(time.time())))
     if feed is None:
+        iz_lege.feed_nespremenjen("ijpp")
         conn.commit()
         return {"trips": 0, "changed": 0, "skipped": 0, "unchanged": True}
     izid = ingest(conn, feed)
@@ -623,9 +624,10 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.LPP_RT_URL, conn, "lpp_rt_etag")
     db.set_meta(conn, "lpp_rt_fetched", str(int(time.time())))
     if feed is None:
+        iz_lege.feed_nespremenjen("lpp")
         conn.commit()
         return {"trips": 0, "vehicles": 0, "unchanged": True}
-    izid = ingest(conn, feed)
+    izid = ingest(conn, feed, vir="lpp")
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
     lege = ingest_positions(conn, feed)
     # Obvestila so v ISTEM feedu in jih doslej nismo brali -- 181 vrstic na

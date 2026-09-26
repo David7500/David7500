@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from kajros import db, geo, hoja, pot
+from kajros import db, geo, hoja, pot, stats
 
 D = "2026-09-08"
 
@@ -275,6 +275,37 @@ def test_podrobnosti_sestavi_hojo_in_vmesne_postanke(conn, monkeypatch):
     assert [s["ime"] for s in noge[1]["postanki"][1:-1]] == ["Daleč", "Rob"]
 
 
+def test_podrobnosti_prestop_je_hoja_tudi_s_kolesom(conn, monkeypatch):
+    """Kolo je samo na koncih, kot v seznamu: prestop pri 15 km/h bi bil
+    trikrat krajši, pod minuto odpadel in podrobnosti bi kazale drugo uro."""
+    monkeypatch.setattr(hoja, "pot",
+                        lambda *a, **k: {"sekunde": 240, "metri": 330,
+                                    "tocke": [[46.0, 14.5], [46.001, 14.5]]})
+    _voznja(conn, "t1", "prva", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "DALEC", 8 * 3600 + 900)])
+    _voznja(conn, "t2", "druga", [(1, "ROB", 8 * 3600 + 1500),
+                                  (2, "CILJ", 8 * 3600 + 1800)])
+    conn.commit()
+    r = pot.podrobnosti(conn, [("t1", 1, 2), ("t2", 1, 2)], OD, DO, D, kmh=15)
+    noge = r["predlog"]["noge"]
+    assert [n["vrsta"] for n in noge] == ["hoja", "voznja", "hoja", "voznja", "hoja"]
+    assert noge[2]["sekunde"] == 240
+    assert noge[0]["sekunde"] == hoja.pri_hitrosti(240, 15)
+
+
+def test_podrobnosti_brez_geometrije_ne_klicejo_poti(conn, monkeypatch):
+    """Osveževanje zamud med vodenjem ne rabi OSRM-ove poti s koraki."""
+    def pot_ne(*a, **k):
+        raise AssertionError("hoja.pot ne sme biti klican")
+    monkeypatch.setattr(hoja, "pot", pot_ne)
+    _voznja(conn, "t1", "LP 1", [(1, "DALEC", 8 * 3600 + 600),
+                                 (2, "CILJ", 8 * 3600 + 1200)])
+    conn.commit()
+    r = pot.podrobnosti(conn, [("t1", 1, 2)], OD, DO, D, geometrija=False)
+    hoje = [n for n in r["predlog"]["noge"] if n["vrsta"] == "hoja"]
+    assert hoje and all(n["tocke"] is None and n["sekunde"] > 0 for n in hoje)
+
+
 def test_podrobnosti_brez_usmerjevalnika_prizna_da_poti_ni(conn, monkeypatch):
     """Ravna črta na zemljevidu bi trdila pot, ki je ni."""
     monkeypatch.setattr(hoja, "pot", lambda *a, **k: None)
@@ -382,7 +413,7 @@ def test_nazaj_da_najpoznejsi_odhod_za_rok(conn):
     assert voznje[0] == ["pravi"]
     assert ["prepozni"] not in voznje
     assert ["zgodnji"] in voznje, "prejšnja zveza je izbira z več rezerve"
-    assert r["prihod_do"] == pot._polnoc(D) + 8 * 3600 + 2700
+    assert r["prihod_do"] == stats.polnoc(D) + 8 * 3600 + 2700
     assert all(p["prihod"] <= r["prihod_do"] for p in r["predlogi"])
 
 
@@ -418,7 +449,7 @@ def test_nazaj_ne_ponudi_odhoda_pred_zdaj(conn):
     voznje = [n["train_no"] for p in r["predlogi"] for n in p["noge"]
               if n["vrsta"] == "voznja"]
     assert voznje == ["se_ujames"]
-    assert all(p["odhod"] >= pot._polnoc(D) + zdaj for p in r["predlogi"])
+    assert all(p["odhod"] >= stats.polnoc(D) + zdaj for p in r["predlogi"])
 
 
 def test_nazaj_se_ujema_z_iskanjem_naprej(conn):
@@ -434,7 +465,7 @@ def test_nazaj_se_ujema_z_iskanjem_naprej(conn):
     _voznja(conn, "t4", "d", [(1, "DALEC", 8 * 3600 + 1560),
                               (2, "CILJ", 8 * 3600 + 3000)])
     conn.commit()
-    polnoc = pot._polnoc(D)
+    polnoc = stats.polnoc(D)
     for t0 in (7 * 3600 + 3000, 8 * 3600, 8 * 3600 + 300):
         naprej = pot.isci(conn, OD, DO, D, t0)
         prvi = next(p for p in naprej["predlogi"]
@@ -456,7 +487,7 @@ def test_rok_ki_ga_ne_ujames_pove_kdaj_si_tam_najprej(conn):
     zdaj = 8 * 3600 + 900
     r = pot.isci_do(conn, OD, DO, D, 8 * 3600 + 1800, zdaj)
     assert r["ne_ujames"] is True
-    assert r["prihod_do"] == pot._polnoc(D) + 8 * 3600 + 1800
+    assert r["prihod_do"] == stats.polnoc(D) + 8 * 3600 + 1800
     assert [n["train_no"] for n in r["predlogi"][0]["noge"]
             if n["vrsta"] == "voznja"] == ["naslednji"]
 
@@ -465,6 +496,20 @@ def test_rok_ki_ga_ne_ujames_pove_kdaj_si_tam_najprej(conn):
     assert not r.get("ne_ujames")
     assert [n["train_no"] for n in r["predlogi"][0]["noge"]
             if n["vrsta"] == "voznja"] == ["odpeljal"]
+
+
+def test_nazaj_meja_velja_za_odhod_od_doma_ne_s_postajalisca(conn):
+    """Vozilo odpelje s postajališča po zdaj, a do tja je 13 minut hoje:
+    odhod od doma bi bil pred zdaj. To ni zveza, ampak `ne_ujames`."""
+    _voznja(conn, "t1", "odpelje_po_zdaj", [(1, "DALEC", 8 * 3600 + 1200),
+                                            (2, "CILJ", 8 * 3600 + 2100)])
+    _voznja(conn, "t2", "naslednji", [(1, "DALEC", 9 * 3600),
+                                      (2, "CILJ", 9 * 3600 + 900)])
+    conn.commit()
+    zdaj = 8 * 3600 + 900
+    r = pot.isci_do(conn, OD, DO, D, 8 * 3600 + 2400, zdaj)
+    assert r["ne_ujames"] is True
+    assert all(p["odhod"] >= stats.polnoc(D) + zdaj for p in r["predlogi"])
 
 
 # ---------------------------------------------------------------- kolo
@@ -560,7 +605,7 @@ def test_nocna_voznja_je_iz_vcerajsnjega_dne_in_to_pove(conn):
     p = next(p for p in r["predlogi"] if any(n["vrsta"] == "voznja" for n in p["noge"]))
     assert p["datum"] == DV and r["datum"] == D
     noga = next(n for n in p["noge"] if n["vrsta"] == "voznja")
-    assert noga["odhod"] == pot._polnoc(D) + 300, "ob 00:05 danes, ne jutri"
+    assert noga["odhod"] == stats.polnoc(D) + 300, "ob 00:05 danes, ne jutri"
 
     # Ista vožnja danes pelje šele jutri ob 00:05; podrobnosti po dnevu
     # predloga dajo pravo uro.

@@ -17,11 +17,11 @@ from __future__ import annotations
 import math
 import sqlite3
 import threading
-import unicodedata
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, geo
+from .naslovi import fold as _fold
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, odhod_z_izhodisca, opis_zamude,
                     pred_odhodom,
@@ -43,7 +43,6 @@ TRANSFER_LIMITS = {
     "zeleznica": (6, 120),
     "avtobus": (3, 30),
 }
-MIN_TRANSFER_MIN, MAX_TRANSFER_MIN = TRANSFER_LIMITS["zeleznica"]
 
 # Koliko zadetkov po imenu sploh pretehtamo po prometu. Glej `search_stations`.
 CANDIDATE_CAP = 300
@@ -55,18 +54,6 @@ TOCNO_NAJMANJ_DELEZ = 20
 
 
 # ---------------------------------------------------------------- iskanje postaj
-
-def _fold(s: str) -> str:
-    """Male črke brez šumnikov: 'Šentjur' -> 'sentjur'.
-
-    NFKD razstavi č na c + strešico, `combining` jo vrže stran. Brez tega
-    iskanje "sentjur" ne najde ničesar, kar je za tipkanje na telefonu ubijalsko.
-    """
-    return "".join(
-        c for c in unicodedata.normalize("NFKD", s.lower())
-        if not unicodedata.combining(c)
-    )
-
 
 def station_index(conn: sqlite3.Connection, network: str | None,
                   s_koordinatami: bool = False) -> list[dict]:
@@ -534,7 +521,6 @@ SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
        t.first_seq, t.last_seq,
        origin.name AS origin, dest.name AS destination,
        COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
-       COALESCE(rn.delay_arr, rn.delay_dep) AS next_delay_s,
        sn.stop_seq AS next_seq,
        zn.name AS next_stop,
        r.feed_ts
@@ -550,8 +536,9 @@ JOIN service_day sday ON sday.service_id = t.service_id AND sday.date = :day
 LEFT JOIN run r  ON r.trip_id = t.trip_id AND r.service_date = :day
                  AND r.stop_seq = s.stop_seq
 -- Feed ni nikoli porocal stop_seq = 1: prva meritev pride sele na drugi
--- postaji. Za odhod z izhodisca je torej edini priblizek zamuda na naslednji
--- postaji -- vzamemo jo, prikaz pa mora povedati, da je od tam.
+-- postaji. Za odhod z izhodisca je torej edini priblizek OBICAJNA zamuda na
+-- naslednji postaji (`typical_from`), prikaz pa mora povedati, da je od tam.
+-- Feedove vrednosti tam ne jemljemo: za nedosezen postanek je napoved.
 --
 -- "Naslednja" je najmanjsi vecji stop_seq, ne stop_seq + 1. V tem feedu so
 -- zaporedja sicer strnjena od 1, a GTFS tega ne zahteva in ob prvi vrzeli bi
@@ -560,8 +547,6 @@ LEFT JOIN sched sn ON sn.trip_id = t.trip_id
                   AND sn.stop_seq = (SELECT MIN(x.stop_seq) FROM sched x
                                      WHERE x.trip_id = t.trip_id
                                        AND x.stop_seq > s.stop_seq)
-LEFT JOIN run rn   ON rn.trip_id = t.trip_id AND rn.service_date = :day
-                  AND rn.stop_seq = sn.stop_seq
 LEFT JOIN station zn ON zn.stop_id = sn.stop_id
 WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s - :nazaj AND :to_s
   AND (COALESCE(s.dep_s, s.arr_s) >= :from_s
@@ -779,7 +764,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             if nxt:
                 d["typical"] = nxt
                 d["typical_from"] = d["next_stop"]
-        for k in ("next_delay_s", "next_stop", "next_seq", "_izhodisce"):
+        for k in ("next_stop", "next_seq", "_izhodisce"):
             d.pop(k, None)
         # Vožnja brez meritve: isto pravilo kot iskalnik zvez in pot
         # (`stats.pred_odhodom`). Tabla je tu kazala običajno, iskalnik pa
@@ -925,12 +910,11 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
     """Povezave z enim prestopom.
 
     Brez tega iskalnik na velikem delu države ne najde ničesar -- neposredne
-    vožnje Koper--Maribor ni. Zveze ne jemljemo kot zajamčene: `MIN_TRANSFER_MIN`
-    je najkrajši čas, ki ga sploh ponudimo, in če prvi vlak zamuja, prikaz to
-    pove sam.
+    vožnje Koper--Maribor ni. Zveze ne jemljemo kot zajamčene: spodnja meja v
+    `TRANSFER_LIMITS` je najkrajši čas, ki ga sploh ponudimo, in če prvi vlak
+    zamuja, prikaz to pove sam.
 
-    Več prestopov namenoma ne iščemo. Slovenska mreža jih skoraj ne potrebuje,
-    dva prestopa pa bi iz preproste poizvedbe naredila iskanje poti z utežmi.
+    Več prestopov tu ne iščemo; to naredi `plan()`, kadar en ne da ničesar.
     """
     min_min, max_min = TRANSFER_LIMITS.get(network or "zeleznica",
                                            TRANSFER_LIMITS["zeleznica"])

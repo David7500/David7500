@@ -20,6 +20,7 @@ from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, pero
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
+_ogrevanje = threading.Lock()
 
 #: Ali ta proces tudi strezhe. Postavi ga `lifespan` v `api.py`.
 #:
@@ -116,6 +117,10 @@ def _ogrej_pot() -> None:
     """
     if not _strezemo:
         return                   # `kajros collect`: odgovorov ni komu streci
+    # Nit se zažene vsakih 300 s; hladno ogrevanje na počasnem stroju ne sme
+    # nakopičiti druge, ki bi čakala na isto ključavnico voznega reda.
+    if not _ogrevanje.acquire(blocking=False):
+        return
     from . import api, hoja, journey, pot
     try:
         conn = db.connect()
@@ -133,6 +138,8 @@ def _ogrej_pot() -> None:
             _log(f"vozni red za pot ogret: {len(by_trip)} voženj, {trajalo:.0f} ms")
     except Exception as exc:  # noqa: BLE001
         _log(f"voznega reda za pot ni bilo mogoče ogreti: {exc}")
+    finally:
+        _ogrevanje.release()
 
 
 def bootstrap() -> None:

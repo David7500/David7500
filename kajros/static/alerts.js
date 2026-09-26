@@ -99,7 +99,7 @@ qEl.addEventListener("input", render);
 initMode();
 
 fetch("/api/alerts")
-  .then((r) => r.json())
+  .then(jsonOk)
   .then((data) => {
     // Najprej dela in nadomestni prevozi -- ta dvoje potnika res zadeva.
     const rank = { "dela na progi": 0, "nadomestni prevoz": 1, "združene garniture": 2, "obvestilo": 3 };

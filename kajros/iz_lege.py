@@ -27,13 +27,10 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 # `collector` uvozi ta modul, zato ga tu beremo šele ob klicu.
-from . import collector, config, deljenje
+from . import collector, config, deljenje, stats
 
-TZ = ZoneInfo(config.TIMEZONE)
 
 #: Dve legi dlje narazen ne povesta, kdaj je vozilo prevozilo postanek vmes.
 NAJVEC_RAZMIK_S = 60
@@ -55,19 +52,35 @@ _zaklep = threading.Lock()
 _v_feedu: dict[str, float] = {}
 #: Kdaj je feed zamud prvič prebran. Pred tem ne vemo, katere vožnje nosi.
 _prvic: float | None = None
+#: Vir -> vožnje iz zadnje vsebine feeda. Ob 304 je vsebina ista in te
+#: vožnje so še vedno v njem.
+_zadnji_nabor: dict[str, list[str]] = {}
 #: (trip_id, dan) -> (t_s, along, zadnji zapisani stop_seq, kdaj osveženo)
 _sled: dict[tuple[str, str], tuple[float, float, int, float]] = {}
 
 
-def zabelezi_feed(trip_ids, zdaj: float | None = None) -> None:
+def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp") -> None:
     """Vožnje, ki jih je feed zamud pravkar nosil. Kliče `collector.ingest`."""
     global _prvic
     zdaj = time.time() if zdaj is None else zdaj
+    trip_ids = list(trip_ids)
     with _zaklep:
         if _prvic is None:
             _prvic = zdaj
         for t in trip_ids:
             _v_feedu[t] = zdaj
+        _zadnji_nabor[vir] = trip_ids
+
+
+def feed_nespremenjen(vir: str, zdaj: float | None = None) -> None:
+    """Feed je odgovoril 304: vožnje zadnje vsebine so še v njem.
+
+    Brez tega je nespremenjen feed po `FEED_POZABI_S` veljal za prazen in
+    `iz_feeda` bi zamudo iz lege pisal tudi vožnjam, ki jih feed nosi.
+    """
+    with _zaklep:
+        nabor = _zadnji_nabor.get(vir, [])
+    zabelezi_feed(nabor, zdaj, vir)
 
 
 def brez_feeda(trip_id: str, zdaj: float | None = None) -> bool:
@@ -85,14 +98,6 @@ def brez_feeda(trip_id: str, zdaj: float | None = None) -> bool:
 
 def _cas(p: dict) -> float:
     return p["dep_s"] if p["dep_s"] is not None else p["arr_s"]
-
-
-def _okno(v: deljenje.Voznja, t_s: float) -> tuple[float, float]:
-    """Del trase, kjer je vozilo ob `t_s` lahko, po voznem redu."""
-    ps = v.postanki
-    lo = [p["along"] for p in ps if _cas(p) <= t_s - OKNO_ZAMUDA_S]
-    hi = [p["along"] for p in ps if _cas(p) >= t_s + OKNO_PREHITEVA_S]
-    return (lo[-1] if lo else -1.0), (hi[0] if hi else float("inf"))
 
 
 def prehodi(v: deljenje.Voznja, prej: tuple[float, float] | None,
@@ -124,12 +129,12 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
     v = deljenje.voznja(conn, trip_id)
     if v is None:
         return 0
-    polnoc = datetime.fromisoformat(dan).replace(tzinfo=TZ).timestamp()
+    polnoc = stats.polnoc(dan)
     t_s = ts - polnoc
     kljuc = (trip_id, dan)
     sled = _sled.get(kljuc)
     if sled is None:
-        od, do = _okno(v, t_s)
+        od, do = v.okno(t_s, OKNO_ZAMUDA_S, OKNO_PREHITEVA_S)
     else:
         od, do = sled[1] - deljenje.NAZAJ_MAX_M, float("inf")
     along, odmik = v.trasa.projiciraj(lat, lon, od_m=od, do_m=do)

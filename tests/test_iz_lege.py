@@ -10,25 +10,27 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date, datetime
+from datetime import date
 
 import pytest
 from google.transit import gtfs_realtime_pb2
 
-from kajros import db, deljenje, iz_lege
+from kajros import db, deljenje, iz_lege, stats
 
 DAN = date.today().isoformat()
-POLNOC = datetime.fromisoformat(DAN).replace(tzinfo=iz_lege.TZ).timestamp()
+POLNOC = stats.polnoc(DAN)
 LON = {"A": 14.00, "B": 14.01, "C": 14.02, "D": 14.03}
 
 
 @pytest.fixture(autouse=True)
 def _cist_spomin():
-    for s in (iz_lege._v_feedu, iz_lege._sled, deljenje._predpomnilnik, deljenje._trase):
+    for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnji_nabor,
+              deljenje._predpomnilnik, deljenje._trase):
         s.clear()
     iz_lege._prvic = None
     yield
-    for s in (iz_lege._v_feedu, iz_lege._sled, deljenje._predpomnilnik, deljenje._trase):
+    for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnji_nabor,
+              deljenje._predpomnilnik, deljenje._trase):
         s.clear()
     iz_lege._prvic = None
 
@@ -124,6 +126,18 @@ def _lege(*tocke):
         e.vehicle.timestamp = _ts(ura)
         e.vehicle.position.latitude, e.vehicle.position.longitude = 46.0, lon
     return f
+
+
+def test_nespremenjen_feed_se_nosi_iste_voznje():
+    """304 pomeni isto vsebino: vožnja, ki jo je feed nosil, je še v njem --
+    ne pa "izpuščena", ko mine `FEED_POZABI_S`."""
+    zdaj = time.time()
+    iz_lege.zabelezi_feed(["n"], zdaj - 1000, vir="lpp")
+    iz_lege.zabelezi_feed(["m"], zdaj - 1000, vir="ijpp")
+    assert iz_lege.brez_feeda("n", zdaj) and iz_lege.brez_feeda("m", zdaj)
+    iz_lege.feed_nespremenjen("lpp", zdaj)
+    assert not iz_lege.brez_feeda("n", zdaj)
+    assert iz_lege.brez_feeda("m", zdaj)          # drug vir ni potrjen
 
 
 def test_iz_feeda_samo_za_vozje_ki_jih_feed_zamud_ne_nosi():

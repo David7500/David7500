@@ -58,7 +58,12 @@ _BESEDA = re.compile(r"[\w]+", re.UNICODE)
 
 
 def fold(s: str) -> str:
-    """Male črke brez strešic. Isto kot `common.fold()` v brskalniku."""
+    """Male črke brez šumnikov: 'Šentjur' -> 'sentjur'. Isto kot `common.fold()`
+    v brskalniku; iskalnik postaj ga uvozi kot `journey._fold`.
+
+    NFKD razstavi č na c + strešico, `combining` jo vrže stran. Brez tega
+    iskanje "sentjur" ne najde ničesar, kar je za tipkanje na telefonu ubijalsko.
+    """
     return "".join(c for c in unicodedata.normalize("NFKD", s.lower())
                    if not unicodedata.combining(c))
 

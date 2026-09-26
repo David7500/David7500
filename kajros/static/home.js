@@ -7,7 +7,7 @@
 
 async function load() {
   try {
-    const h = await fetch("/api/health").then((r) => r.json());
+    const h = await fetch("/api/health").then(jsonOk);
     const n = h.alerts_active;
     if (typeof n === "number") {
       document.getElementById("ovire-n").textContent = n ? String(n) : "";

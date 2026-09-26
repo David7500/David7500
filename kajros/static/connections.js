@@ -149,7 +149,7 @@ function attachSuggest(input, listEl) {
     const mine = ++seq;
     try {
       const res = await fetch(`/api/stations/search?q=${encodeURIComponent(q)}&limit=8&network=${NETWORK}`)
-        .then((r) => r.json());
+        .then(jsonOk);
       if (mine !== seq) return;       // prehitelo ga je novejse tipkanje
       items = res;
       active = -1;
@@ -696,9 +696,15 @@ function renderConnections(data) {
   // -- skoraj tri ure prej, a pod njim. Prestope strežnik že očisti tistih, ki
   // jih kakšna neposredna prekaša, zato je vsak, ki ostane, prava izbira.
   // Samo danes: drug dan nima "naslednje" in seznam je vozni red.
+  // Primerja se absolutna pričakovana ura, ne `arr_s`: po polnoči je
+  // naslednja lahko nočna vožnja včerajšnjega dne (arr_s nad 86400), prestop
+  // pa današnja -- sekunde dveh različnih polnoči se ne dajo primerjati.
   const naslednja = nextIdx >= 0 ? ahead[0] : null;
+  const prihodMs = (c) => new Date(c.sched_arr).getTime() + (c.delay_s || 0) * 1000;
+  const prihodPrestopaMs = (t) => new Date(t.sched_arr).getTime()
+    + ((t.transfer && t.transfer.delay2_s) || 0) * 1000;
   const prestopPrej = isToday && legs.length > 0 && list.length > 0
-    && (!naslednja || Math.min(...legs.map((t) => t.arr_s)) < naslednja.arr_s);
+    && (!naslednja || Math.min(...legs.map(prihodPrestopaMs)) < prihodMs(naslednja));
   const prestopi = [];
   if (legs.length) {
     // Naslov naj pove, kaj je spodaj: en prestop ali vec. Ko en prestop ne
@@ -1098,7 +1104,7 @@ function busOverviewHtml(o) {
 async function showOverview() {
   if (IS_BUS) {
     try {
-      const o = await fetch("/api/overview/bus").then((r) => r.json());
+      const o = await fetch("/api/overview/bus").then(jsonOk);
       resultsEl.innerHTML = busOverviewHtml(o);
       wirePopularChips();
     } catch (err) {
@@ -1107,7 +1113,7 @@ async function showOverview() {
     return;
   }
   try {
-    const o = await fetch("/api/overview").then((r) => r.json());
+    const o = await fetch("/api/overview").then(jsonOk);
     resultsEl.innerHTML = overviewHtml(o);
     wirePopularChips();
   } catch (err) {
@@ -1563,7 +1569,7 @@ async function showNearby() {
   try {
     const list = await fetch(
       `/api/stations/near?lat=${loc.lat}&lon=${loc.lon}&network=${NETWORK}&limit=8`
-    ).then((r) => r.json());
+    ).then(jsonOk);
     if (!list.length) {
       return nearMeUnavailable(IS_BUS
         ? "V treh kilometrih ni postajališča."

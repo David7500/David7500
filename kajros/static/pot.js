@@ -305,13 +305,20 @@ function izrisiZadetke(kaj) {
 
 const iskanjeNaslovov = { od: null, do: null };
 
+/** Zadetki, ki so že v brskalniku: shranjene točke in postaje. */
+function lokalniZadetki(q) {
+  const niz = fold(q.trim());
+  return {
+    shranjene: tockeBeri().filter((t) => fold(t.ime).startsWith(niz))
+      .map((t) => ({ vrsta: "shranjena", ime: t.ime, pod: "", lat: t.lat, lon: t.lon })),
+    postaje: (KAZALO ? iskalnikKazala(KAZALO, q, 3) : [])
+      .map((s) => ({ vrsta: "postaja", ime: s.n, pod: "", lat: s.lat, lon: s.lon })),
+  };
+}
+
 async function zadetkiZa(kaj, q, signal) {
   const niz = fold(q.trim());
-  const shranjene = tockeBeri()
-    .filter((t) => fold(t.ime).startsWith(niz))
-    .map((t) => ({ vrsta: "shranjena", ime: t.ime, pod: "", lat: t.lat, lon: t.lon }));
-  const postaje = (KAZALO ? iskalnikKazala(KAZALO, q, 3) : [])
-    .map((s) => ({ vrsta: "postaja", ime: s.n, pod: "", lat: s.lat, lon: s.lon }));
+  const { shranjene, postaje } = lokalniZadetki(q);
   let naslovi = [];
   if (niz.length >= 2) {
     const p = new URLSearchParams({ q });
@@ -344,13 +351,8 @@ function pripniIskanje(kaj) {
     if (q.length < 2 || q === napisTocke(S[kaj])) return zapriZadetke(kaj);
     // Postaje so v brskalniku in so takoj; naslovi pridejo s strežnika in
     // se ne sprašujejo na vsak pritisk tipke.
-    const takoj = [
-      ...tockeBeri().filter((t) => fold(t.ime).startsWith(fold(q)))
-        .map((t) => ({ vrsta: "shranjena", ime: t.ime, pod: "", lat: t.lat, lon: t.lon })),
-      ...(KAZALO ? iskalnikKazala(KAZALO, q, 3) : [])
-        .map((s) => ({ vrsta: "postaja", ime: s.n, pod: "", lat: s.lat, lon: s.lon })),
-    ];
-    ZADETKI[kaj] = takoj;
+    const { shranjene, postaje } = lokalniZadetki(q);
+    ZADETKI[kaj] = [...shranjene, ...postaje];
     IZBRAN_Z[kaj] = -1;
     izrisiZadetke(kaj);
     zakasnitev = setTimeout(async () => {
@@ -408,7 +410,15 @@ function izberi(kaj, z) {
 async function razresi(kaj) {
   const q = $(`#q-${kaj}`).value.trim();
   if (S[kaj] && q === napisTocke(S[kaj])) return true;
-  if (q.length < 2) return !!S[kaj] && !q;
+  if (!q) {
+    // Izbrisano polje ni "prejšnja točka": iskanje s staro točko bi tiho
+    // odgovorilo na vprašanje, ki ga potnik ni več postavil.
+    S[kaj] = null;
+    narisiTocke(false);
+    oznaciZvezde();
+    return false;
+  }
+  if (q.length < 2) return false;
   try {
     const z = await zadetkiZa(kaj, q);
     if (!z.length) return false;

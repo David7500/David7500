@@ -305,7 +305,7 @@ async function loadStatic() {
   try {
     // Samo železniške postaje: avtobusnih je nekaj tisoč in mreža prog bi
     // izginila pod postajališči.
-    const stations = await fetch("/api/stations?network=zeleznica").then((r) => r.json());
+    const stations = await fetch("/api/stations?network=zeleznica").then(jsonOk);
     stationsByName = new Map(stations.map((s) => [s.name, s]));
     nastaviVir("k-postaje", tocke(stations.filter((s) => s.lat != null)));
   } catch (err) {
@@ -313,7 +313,7 @@ async function loadStatic() {
   }
 
   try {
-    nastaviVir("k-proge", await fetch("/api/network.geojson").then((r) => r.json()));
+    nastaviVir("k-proge", await fetch("/api/network.geojson").then(jsonOk));
   } catch (err) {
     console.error("mreže ni bilo mogoče naložiti", err);
   }
@@ -1073,7 +1073,7 @@ async function loadBusStops() {
   if (busStops || busStopsLoading) return;
   busStopsLoading = true;
   try {
-    busStops = (await fetch("/api/stations?network=avtobus").then((r) => r.json()))
+    busStops = (await fetch("/api/stations?network=avtobus").then(jsonOk))
       .filter((s) => s.lat != null);
     nastaviVir("k-postajalisca", tocke(busStops));
   } catch (err) {
@@ -1337,7 +1337,7 @@ async function drawStops(trainNo, tripId) {
   try {
     const q = tripId ? `?trip=${encodeURIComponent(tripId)}` : "";
     const res = await fetch(
-      `/api/train/${encodeURIComponent(trainNo)}${q}`).then((r) => r.json());
+      `/api/train/${encodeURIComponent(trainNo)}${q}`).then(jsonOk);
     if (st !== trasaSt) return;
     const postaje = (res.timetable || []).filter((s) => s.lat != null && s.lon != null);
     if (!kosi.length && postaje.length > 1) {
@@ -1414,7 +1414,7 @@ document.getElementById("find-clear").addEventListener("click", () => {
 // mora povedati, da odgovora ni bilo -- tiha napaka je natanko tisto, zaradi
 // cesar clovek ne ve, ali stran se tece.
 async function pollLive() {
-  liveTrains = await fetch("/api/live?network=zeleznica").then((r) => r.json());
+  liveTrains = await fetch("/api/live?network=zeleznica").then(jsonOk);
   document.getElementById("n-train").textContent = liveTrains.length;
   renderTrains(liveTrains);
   vlakiPrispeli = true;
@@ -1436,7 +1436,7 @@ let routesLoaded = false;
 async function loadRoutes() {
   if (!vklop.routes) return;
   try {
-    const list = await fetch("/api/shapes/live").then((r) => r.json());
+    const list = await fetch("/api/shapes/live").then(jsonOk);
     nastaviVir("k-vse-trase", { type: "FeatureCollection",
       features: list.map((r) => kosiVCrto(r.points, { network: r.network })) });
     routesLoaded = true;

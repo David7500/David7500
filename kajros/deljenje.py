@@ -44,7 +44,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, db, geo, stats
@@ -221,6 +221,11 @@ class Trasa:
     def dolzina(self) -> float:
         return self.cum[-1]
 
+    @property
+    def krozna(self) -> bool:
+        """Začetek in konec v isti točki: projekcija sama ne ve, na katerega."""
+        return math.hypot(self.x[0] - self.x[-1], self.y[0] - self.y[-1]) < 300
+
     def xy(self, lat: float, lon: float) -> tuple[float, float]:
         return lon * self.k * _M_NA_STOPINJO, lat * _M_NA_STOPINJO
 
@@ -323,6 +328,15 @@ class Voznja:
         if abs(self.postanki[naj]["along"] - along) <= self.na_postaji_m:
             return naj
         return None
+
+    def okno(self, t_s: float, zamuda_s: float, prehiteva_s: float) -> tuple[float, float]:
+        """Del trase, kjer je vozilo ob `t_s` po voznem redu lahko: za postankom,
+        mimo katerega bi moralo že pred `zamuda_s`, in pred tistim, do katerega
+        ima še `prehiteva_s`. Meja za `Trasa.projiciraj()`."""
+        cas = [p["dep_s"] if p["dep_s"] is not None else p["arr_s"] for p in self.postanki]
+        lo = [p["along"] for p, c in zip(self.postanki, cas) if c <= t_s - zamuda_s]
+        hi = [p["along"] for p, c in zip(self.postanki, cas) if c >= t_s + prehiteva_s]
+        return (lo[-1] if lo else -1.0), (hi[0] if hi else float("inf"))
 
     def voznoredni_cas(self, along: float) -> float:
         """Kdaj bi bilo vozilo po voznem redu na tej razdalji (s od polnoči).
@@ -472,12 +486,6 @@ def voznja(conn: sqlite3.Connection, trip_id: str) -> Voznja | None:
 
 # --------------------------------------------------------------- čas
 
-def _polnoc(service_date: str) -> int:
-    """Polnoč prometnega dne v sekundah od epohe."""
-    return int(datetime.combine(date.fromisoformat(service_date),
-                                datetime.min.time(), tzinfo=TZ).timestamp())
-
-
 def _iso(ts: int | None) -> str | None:
     return datetime.fromtimestamp(ts, TZ).isoformat() if ts else None
 
@@ -491,7 +499,7 @@ def _dneva(zdaj: datetime) -> list[tuple[str, int]]:
     danes = zdaj.date()
     vceraj = danes - timedelta(days=1)
     ts = int(zdaj.timestamp())
-    return [(d.isoformat(), ts - _polnoc(d.isoformat())) for d in (danes, vceraj)]
+    return [(d.isoformat(), ts - stats.polnoc(d.isoformat())) for d in (danes, vceraj)]
 
 
 # ------------------------------------------------------------ kandidati
@@ -642,6 +650,14 @@ def _ocenjeni(conn: sqlite3.Connection, lat: float, lon: float, meja: float,
         v = voznja(conn, trip_id)
         if v is None:
             continue
+        zamuda = zamude.get(trip_id, 0)
+        if v.trasa.krozna:
+            # Sito je projiciralo na celo traso; na krožni liniji je izhodišče
+            # tudi konec, in vozilo na izhodišču bi bilo videti kot na cilju.
+            along, odmik = v.trasa.projiciraj(
+                lat, lon, *v.okno(now_s - zamuda, KANDIDAT_ZA_S, KANDIDAT_PRED_S))
+            if odmik > meja:
+                continue
         smer = None
         if prej and prej.get("lat") is not None:
             p_along, p_odmik = v.trasa.projiciraj(prej["lat"], prej["lon"],
@@ -650,7 +666,6 @@ def _ocenjeni(conn: sqlite3.Connection, lat: float, lon: float, meja: float,
                 smer = along > p_along
                 if not smer:
                     continue          # pelje v nasprotno smer
-        zamuda = zamude.get(trip_id, 0)
         # Kdaj bi bila vožnja tu, po voznem redu in zadnji zamudi -- in
         # koliko je od tega zdaj. Pozitivno: vozilo zamuja več, kot vemo.
         razlika = now_s - (v.voznoredni_cas(along) + zamuda)
@@ -687,6 +702,9 @@ def _ocenjeni(conn: sqlite3.Connection, lat: float, lon: float, meja: float,
 _zaklep = threading.Lock()
 _kandidati_casi: dict[str, list[float]] = {}
 _deljenja_casi: dict[str, list[float]] = {}
+#: Zadnje deljenje pošiljatelja na vožnji. Samo v pomnilniku, kot omejitve:
+#: v bazi deljenje nima identitete.
+_zadnje_deljenje: dict[tuple[str, str], str] = {}
 
 
 def _pogostost(slovar: dict[str, list[float]], kljuc: str, okno_s: float,
@@ -712,7 +730,7 @@ def preveri_kandidate(kljuc: str, zdaj: float | None = None) -> None:
 def _stevilo(v, ime: str, lo: float, hi: float) -> float:
     try:
         x = float(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # 400-mestno celo število
         raise Zavrnjeno(f"{ime} ni število.") from None
     if not (lo <= x <= hi) or math.isnan(x):
         raise Zavrnjeno(f"{ime} je zunaj meja.")
@@ -728,7 +746,7 @@ def lega(podatki: dict) -> tuple[float, float, float | None]:
 
 
 def _dnevni_strop(conn: sqlite3.Connection, zdaj: datetime) -> None:
-    polnoc = _polnoc(zdaj.date().isoformat())
+    polnoc = stats.polnoc(zdaj.date().isoformat())
     n, tock = conn.execute(
         "SELECT COUNT(*), COALESCE(SUM(tock), 0) FROM deljenje WHERE zacetek_ts >= ?",
         (polnoc,)).fetchone()
@@ -736,26 +754,57 @@ def _dnevni_strop(conn: sqlite3.Connection, zdaj: datetime) -> None:
         raise Zavrnjeno("Danes je deljenja dovolj. Hvala — poskusi jutri.", 429)
 
 
+def _prva_lega(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
+               lat: float, lon: float) -> tuple[float, float, int]:
+    """(along, odmik, zamuda) prve točke deljenja.
+
+    Projekcija je omejena na del trase, kjer je vozilo po voznem redu in
+    zadnji zamudi lahko -- z isto mejo, kot jo ima preverjanje časa v
+    `_zacni()`. Krožna linija ima izhodišče in konec v isti točki: brez meje
+    prva točka na izhodišču pade na konec trase in deljenje se konča s „cilj“.
+    """
+    zamuda = _zadnje_zamude(conn, [(v.trip_id, dan, now_s)]).get(v.trip_id, 0)
+    od_m, do_m = v.okno(now_s - zamuda, KANDIDAT_ZA_S + stats.MAX_REALNA_ZAMUDA_S,
+                        KANDIDAT_PRED_S)
+    along, odmik = v.trasa.projiciraj(lat, lon, od_m, do_m)
+    return along, odmik, zamuda
+
+
 def _zacni(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
            prva: dict, kljuc: str, zdaj: datetime) -> str:
-    """Novo deljenje. Prva točka mora biti na trasi in ob pravem času."""
-    _pogostost(_deljenja_casi, kljuc, 3600, DELJENJ_NA_URO,
-               "Preveč začetih deljenj. Poskusi čez kakšno uro.", zdaj.timestamp())
+    """Novo deljenje. Prva točka mora biti na trasi in ob pravem času.
+
+    Omejitev na uro šteje le deljenja, ki so se res začela: potnik s slabim
+    GPS ob postaji dobi „ni na trasi“ večkrat zapored, ključ pa si za
+    operaterjevim CGNAT deli veliko ljudi.
+    """
     _dnevni_strop(conn, zdaj)
-    along, odmik = v.trasa.projiciraj(prva["lat"], prva["lon"])
+    along, odmik, zamuda = _prva_lega(conn, v, dan, now_s, prva["lat"], prva["lon"])
     if odmik > KANDIDAT_ODMIK_M + min(prva.get("acc") or 0, NATANCNOST_MAX_M):
         raise Zavrnjeno("Tvoja lega ni na trasi te vožnje.")
-    zamuda = _zadnje_zamude(conn, [(v.trip_id, dan, now_s)]).get(v.trip_id, 0)
     razlika = now_s - (v.voznoredni_cas(along) + zamuda)
     if razlika < -KANDIDAT_PRED_S and along > v.postanki[0]["along"] + v.na_postaji_m:
         raise Zavrnjeno("Ta vožnja ta hip ni tu.")
     if razlika > KANDIDAT_ZA_S + stats.MAX_REALNA_ZAMUDA_S:
         raise Zavrnjeno("Ta vožnja ta hip ni tu.")
+    _pogostost(_deljenja_casi, kljuc, 3600, DELJENJ_NA_URO,
+               "Preveč začetih deljenj. Poskusi čez kakšno uro.", zdaj.timestamp())
     ident = secrets.token_urlsafe(16)
     ts = int(zdaj.timestamp())
     conn.execute(
         "INSERT INTO deljenje(id, trip_id, service_date, network, zacetek_ts, zadnja_ts) "
         "VALUES(?, ?, ?, ?, ?, ?)", (ident, v.trip_id, dan, v.network, ts, ts))
+    # Isti pošiljatelj znova na isti vožnji (osvežena stran, izgubljen odgovor
+    # na prvo pošiljanje) ni drugi potnik: prejšnje deljenje se konča, sicer
+    # bi en telefon dal "soglasje dveh" in zamenjal feed.
+    with _zaklep:
+        prej = _zadnje_deljenje.get((kljuc, v.trip_id))
+        _zadnje_deljenje[(kljuc, v.trip_id)] = ident
+        if len(_zadnje_deljenje) > 5000:
+            _zadnje_deljenje.clear()
+    if prej:
+        conn.execute("UPDATE deljenje SET konec = 'potnik' WHERE id = ? AND konec IS NULL",
+                     (prej,))
     return ident
 
 
@@ -782,13 +831,13 @@ def _tocke(podatki: dict, zdaj_ts: int) -> list[dict]:
         ts = t.get("t")
         try:
             ts = int(float(ts) / 1000) if ts is not None else zdaj_ts
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):   # 1e999 je v JSON inf
             ts = zdaj_ts
         ts = min(max(ts, zdaj_ts - 900), zdaj_ts)
         hitrost = t.get("v")
         try:
             hitrost = float(hitrost) if hitrost is not None else None
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             hitrost = None
         if hitrost is not None and not (0 <= hitrost <= HITROST_MAX_MS):
             hitrost = None
@@ -840,7 +889,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
         conn.commit()
         return {"deljenje": ident, "sprejetih": 0, "konec": d["konec"],
                 "stanje": stanje(conn, [trip_id], zdaj).get(trip_id)}
-    polnoc = _polnoc(dan)
+    polnoc = stats.polnoc(dan)
     sprejetih = 0
     for t in tocke:
         if d["konec"]:
@@ -850,7 +899,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
         if d["along_m"] is not None and t["ts"] < d["zadnja_ts"] + RAZMIK_S:
             continue
         if d["along_m"] is None:
-            along, odmik = v.trasa.projiciraj(t["lat"], t["lon"])
+            along, odmik, _ = _prva_lega(conn, v, dan, now_s, t["lat"], t["lon"])
         else:
             dt = max(t["ts"] - d["zadnja_ts"], 1)
             along, odmik = v.trasa.projiciraj(
@@ -972,7 +1021,7 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         f"SELECT id, trip_id, service_date, zadnja_ts, along_m, lat, lon, "
         f"       hitrost_ms, zamuda_s "
         f"FROM deljenje WHERE trip_id IN ({marks}) AND zadnja_ts >= ? "
-        f"  AND along_m IS NOT NULL AND zamuda_s IS NOT NULL "
+        f"  AND konec IS NULL AND along_m IS NOT NULL AND zamuda_s IS NOT NULL "
         f"  AND service_date IN (?, ?)",
         (*ids, zdaj_ts - SVEZE_S, *dnevi)).fetchall()
     prehodi = conn.execute(
@@ -997,7 +1046,7 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         vrstice = [r for r in vrstice if r["service_date"] == dan]
         skupina = _soglasni(vrstice)
         glavna = max(skupina, key=lambda r: r["zadnja_ts"])
-        now_s = zdaj_ts - _polnoc(dan)
+        now_s = zdaj_ts - stats.polnoc(dan)
         along = glavna["along_m"]
         stoji = glavna["hitrost_ms"] is not None and glavna["hitrost_ms"] < STOJI_MS
         zamude = sorted(r["zamuda_s"] for r in skupina)
@@ -1118,7 +1167,7 @@ def dopolni(conn: sqlite3.Connection, vrstice: list[dict], *, seq: str, t_s: str
         sched_s = r[t_s]
         if p.get("odpeljal"):
             z = int(datetime.fromisoformat(p["odpeljal"]).timestamp()
-                    - _polnoc(st["service_date"]) - sched_s)
+                    - stats.polnoc(st["service_date"]) - sched_s)
             r[pricakovano] = p["odpeljal"]
         elif p.get("mimo"):
             # Mimo je, a kdaj, ne vemo: deljenje se je začelo za postajo.
@@ -1193,7 +1242,7 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
     """
     zdaj = zdaj or datetime.now(TZ)
     zdaj_ts = int(zdaj.timestamp())
-    polnoc = _polnoc(zdaj.date().isoformat())
+    polnoc = stats.polnoc(zdaj.date().isoformat())
     # `zacetek_ts` ima kazalo; deljenje, ki je začelo pred polnočjo, ni daljše
     # od `NAJDALJE_S`.
     vrstice = [dict(r) for r in conn.execute(
@@ -1217,7 +1266,7 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
     feed: dict[tuple[str, str], dict] = {}
     for dan in {d for _, d in po_vozilu}:
         naj = [t for t, d in po_vozilu if d == dan]
-        for trip_id, m in stats.last_measured(conn, dan, naj, zdaj_ts - _polnoc(dan)).items():
+        for trip_id, m in stats.last_measured(conn, dan, naj, zdaj_ts - stats.polnoc(dan)).items():
             feed[(trip_id, dan)] = m
 
     vozila = []

@@ -39,6 +39,13 @@ def _pct(values: list[float], q: float) -> float | None:
     return round(s[lo] + (s[hi] - s[lo]) * (k - lo), 1)
 
 
+def polnoc(service_date: str) -> int:
+    """Polnoč prometnega dne v sekundah od epohe: voznoredni `t_s` šteje od
+    nje, `feed_ts` in `time.time()` pa od epohe."""
+    return int(datetime.combine(date.fromisoformat(service_date),
+                                datetime.min.time(), tzinfo=TZ).timestamp())
+
+
 def _abs_time(service_date: str, seconds: int | None) -> str | None:
     """Voznoredna sekunda od polnoči -> absolutni čas (zna čez polnoč)."""
     if seconds is None:
@@ -554,10 +561,6 @@ def _razred_zamude(v: int) -> str:
 _KLJUC_RAZREDA = {"točno": "tocno", "1–5 min": "1-5",
                   "5–15 min": "5-15", "nad 15 min": "nad-15"}
 
-#: Od kod je zamuda. Iste vrednosti kot `delay_kind`, na enem mestu.
-VRSTE_ZAMUDE = ("izmerjeno", "ocena", "napoved prevoznika", "običajno")
-
-
 def opis_zamude(v: int | None, vrsta: str | None = None) -> dict | None:
     """Odločitev o zamudi, da je odjemalcu ni treba izpeljati samemu.
 
@@ -572,6 +575,9 @@ def opis_zamude(v: int | None, vrsta: str | None = None) -> dict | None:
     Meja je namenoma tu: **strežnik pove, kaj stvar JE, odjemalec, kako je
     VIDETI.** Barve tu zato ni -- ta je oblikovanje in sme biti drugačna na
     telefonu kot v brskalniku. Razred, minuta in vrsta pa so pravilo.
+
+    `vrsta` je `delay_kind` in gre skozi nespremenjena: izmerjeno, ocena,
+    napoved prevoznika, običajno, po poročilu potnikov.
 
     `min` je zaokrozen z `floor(x + 0.5)`. JS `Math.round` dela isto, Javin
     `Math.round` tudi, a `kotlin.math.round` NE -- in prav zato te vrednosti
@@ -948,15 +954,13 @@ def last_measured(conn: sqlite3.Connection, service_date: str,
     if now_s is None or not trip_ids:
         return {}
     ids = list(dict.fromkeys(trip_ids))
-    # Polnoc prometnega dne v sekundah od epohe: `t_s` steje od nje, `feed_ts`
-    # pa je epoha. Brez te pretvorbe bi primerjali dve razlicni merili.
-    polnoc = int(datetime.combine(date.fromisoformat(service_date),
-                                  datetime.min.time(), tzinfo=TZ).timestamp())
+    # Brez te pretvorbe bi primerjali dve razlicni merili (`t_s` in `feed_ts`).
+    polnoc_s = polnoc(service_date)
     # Vsi vezani parametri morajo biti istega sloga: sqlite jih ob mesanju
     # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
     sql = _LAST_MEASURED_SQL % ",".join("?" * len(ids))
     return {r["trip_id"]: dict(r)
-            for r in conn.execute(sql, (service_date, *ids, now_s, polnoc))}
+            for r in conn.execute(sql, (service_date, *ids, now_s, polnoc_s))}
 
 
 #: Koliko dni s podobno zamudo mora biti, da jim verjamemo mediano. Merjeno:
@@ -1645,8 +1649,7 @@ def stanje_postankov(conn: sqlite3.Connection, service_date: str,
         "ORDER BY r.trip_id, r.stop_seq",
         [service_date, *trip_ids]).fetchall()
 
-    polnoc = int(datetime.combine(date.fromisoformat(service_date),
-                                  datetime.min.time(), tzinfo=TZ).timestamp())
+    polnoc_s = polnoc(service_date)
     po_voznji: dict[str, list[dict]] = {}
     for r in vrstice:
         po_voznji.setdefault(r["trip_id"], []).append(dict(r))
@@ -1660,7 +1663,7 @@ def stanje_postankov(conn: sqlite3.Connection, service_date: str,
             z = x["delay_dep"] if x["delay_dep"] is not None else x["delay_arr"]
             t = x["dep_s"] if x["dep_s"] is not None else x["arr_s"]
             if z is not None and t is not None and potrjen_prehod(
-                    x["feed_ts"], polnoc + t + z):
+                    x["feed_ts"], polnoc_s + t + z):
                 potrjeni.add((trip_id, x["stop_seq"]))
     return slabi, potrjeni
 

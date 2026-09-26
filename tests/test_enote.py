@@ -109,12 +109,6 @@ def test_stopnja_je_omejena_na_deset():
     assert s["score"] == 10
 
 
-def test_barva_sledi_stopnji():
-    # Semafor mora biti monoton: vsaka stopnja svoja barva, brez preskokov.
-    seen = [weather.severity_color(n) for n in (0, 2, 5, 9)]
-    assert seen == [weather.SEVERITY_STYLE[k] for k in weather.SEVERITY_ORDER]
-
-
 # ---------------------------------------------------------------- prag dnevnika
 
 def test_prva_vrednost_gre_vedno_v_dnevnik():
@@ -695,10 +689,8 @@ def test_opis_zamude_je_edini_vir_pravila():
     assert stats.opis_zamude(-31)["min"] == -1
     assert stats.opis_zamude(-90)["min"] == -1
 
-    # Vrsta gre skozi nespremenjena in je omejena na znane vrednosti.
+    # Vrsta gre skozi nespremenjena.
     assert stats.opis_zamude(0, "izmerjeno")["vrsta"] == "izmerjeno"
-    for v in stats.VRSTE_ZAMUDE:
-        assert stats.opis_zamude(60, v)["vrsta"] == v
 
 
 def test_opis_zamude_se_ujema_z_razredi_povzetka():
