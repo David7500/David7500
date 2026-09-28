@@ -1840,3 +1840,13 @@ Pripenjanje (`zamude_sz.pripni`), 17 branj 08:59--09:08: 574 od 647 vrstic
 vlakov; 42 z odhodom v prihodnosti, 31 brez naslednje postaje, drugih 0.
 Lokalni strežnik po zagonu: 38 vlakov, 33 samo SŽ, 5 nepripetih; IC 503 na
 tabli Ljubljana +26 min, prej „brez podatka“.
+
+Isti zip, avtobusi (pregled ob 09:17, `/admin` rdeč): prvi postanek dlje kot
+2 km od začetka trase pri 1118 556/556, 1119 5 885/6 656, 1121 598/810, 1123
+6 429/7 821 voženj; v zipu 30. 8. 226/3 060, 259/6 941, 17/965, 88/8 981.
+Enako v izvirniku `dujpp.si/gtfs/dujpp-ijpp.zip` -- napaka je pri DUJPP, ne
+pri derp.si. `iz_lege` po 08:12 ni zapisal ničesar (27. 9.: 50 voženj z
+veljavnostjo od 21. 9.); pet preverjenih vozil 55--145 km od trase. Voženj
+1118 za 28. 9.: 281 proti 1 215 v kopiji izpred uvoza; 33 v feedu brez voznega
+reda. `/api/health` nad 5 s: 24. 9. 7-krat, 25. 9. 14, 26. 9. 5, 27. 9. 0,
+28. 9. 3 -- dnevi s ponovnimi zagoni, ne ta sprememba.

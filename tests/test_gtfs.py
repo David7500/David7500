@@ -54,21 +54,28 @@ def test_poenoti_imena_zdruzi_le_isto_mesto():
     assert stops["c1"]["name"] == "AMZS"        # brez para ostane, kot je
 
 
-def _zip(pot, trips):
-    """Najmanjši IJPP zip: ena proga SŽ in vožnje, ki jih dobi."""
+def _zip(pot, trips, trasa=None):
+    """Najmanjši IJPP zip: ena proga SŽ in vožnje, ki jih dobi.
+
+    `trasa` = (lat, lon) začetka trase, ki jo dobijo vse vožnje; brez nje
+    vožnje trase nimajo.
+    """
     import zipfile
+    sid = "sh1" if trasa else ""
     with zipfile.ZipFile(pot, "w") as zf:
         zf.writestr("routes.txt", "route_id,agency_id,route_short_name,route_type\n"
                                   "r1,1161,LP 2010,2\n")
         zf.writestr("trips.txt", "trip_id,route_id,service_id,shape_id,trip_headsign\n"
-                    + "".join(f"{t},r1,s1,,Ljubljana\n" for t in trips))
+                    + "".join(f"{t},r1,s1,{sid},Ljubljana\n" for t in trips))
         zf.writestr("stop_times.txt",
                     "trip_id,stop_sequence,stop_id,arrival_time,departure_time\n"
                     + "".join(f"{t},1,A,08:00:00,08:00:00\n{t},2,B,08:30:00,08:30:00\n"
                               for t in trips))
         zf.writestr("stops.txt", "stop_id,stop_name,stop_lat,stop_lon\n"
                                  "A,Kamnik,46.2,14.6\nB,Ljubljana,46.05,14.5\n")
-        zf.writestr("shapes.txt", "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\n")
+        zf.writestr("shapes.txt", "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\n"
+                    + (f"sh1,{trasa[0]},{trasa[1]},1\nsh1,{trasa[0] + 0.004},{trasa[1]},2\n"
+                       if trasa else ""))
         zf.writestr("calendar_dates.txt", "service_id,date,exception_type\n"
                                           "s1,20260928,1\n")
     return pot
@@ -95,3 +102,20 @@ def test_zip_brez_vlakov_ne_izbrise_voznega_reda(tmp_path):
     # Pravi nov vozni red: druge vožnje, isti prevoznik.
     izid = gtfs.import_static(c, _zip(tmp_path / "nov.zip", ["v2", "v3"]), lpp_zip=None)
     assert izid["trips_rail"] == 2
+
+
+def test_zip_s_tujimi_trasami_se_zavrne(tmp_path):
+    """28. 9. 2026 so bile v zipu DUJPP trase pomešane pri 74-100 % voženj
+    vsakega avtobusnega prevoznika. Trasa, ki se začne pri prvem postanku
+    (Kamnik), gre skozi; ista trasa z začetkom v Novem mestu ne."""
+    import pytest
+    from kajros import db
+    c = db.connect(":memory:")
+    db.init(c)
+    voznje = [f"v{i}" for i in range(gtfs.TRASA_NAJMANJ)]
+    izid = gtfs.import_static(c, _zip(tmp_path / "prej.zip", voznje, (46.2, 14.6)))
+    assert izid["trips_rail"] == gtfs.TRASA_NAJMANJ
+
+    with pytest.raises(gtfs.UvozZavrnjen, match="trase"):
+        gtfs.import_static(c, _zip(tmp_path / "pomesan.zip", voznje, (45.8, 15.17)))
+    assert c.execute("SELECT COUNT(*) FROM sched").fetchone()[0] == 2 * gtfs.TRASA_NAJMANJ

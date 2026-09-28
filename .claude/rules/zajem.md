@@ -149,6 +149,8 @@ Preverjeno na arwenu po popravku: v minuti 161 vrstic `run` za linijo 25, neznan
 
 **Zip brez prevoznika se zavrne** (`gtfs.izginuli_prevozniki`). 28. 9. 2026 je DUJPP (`dujpp.si/gtfs/dujpp-ijpp.zip`, derp.si ga le prenese) objavil 783 prog SŽ in **0 voženj**; uvoz ob 04:22 pobrisal vozni red vseh 726 vlakov, tabla za Ljubljano „postaje ne poznam“. Feed zamud in leg ob 08:13 ni imel nobenega vlaka (0 od 560 vnosov) — z uvozom tega ne popraviš, stari vozni red pa vsaj pokaže odhode. Meja je nič, ne delež: LPP v IJPP med 30. 8. in 28. 9. padel s 3 060 na 556 voženj (−82 %) brez opažene napake — prag v deležu bi bil ugibanje.
 
+Isti zip je imel **pomešane trase** in izgubil LPP primestni: prvi postanek več kot 2 km od začetka trase pri 74–100 % voženj vsakega avtobusnega prevoznika (Arriva 6 429 od 7 821; zip 30. 8.: 1–7 %), LPP v IJPP za 28. 9. 281 voženj namesto 1 215. Posledica: `iz_lege` obstal (vozilo 55–145 km od „svoje“ trase), napačne trase na zemljevidu, 33 voženj v feedu brez voznega reda. Zato druga varovalka `gtfs.tuje_trase`: prevoznik z ≥ 20 vožnjami s traso in več kot polovico tujih → zip zavrnjen. Preverjeno na obeh zipih: 28. 9. zavrnjen v 9 s, 30. 8. uvožen.
+
 **Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi — pozneje ga ni. Če je uvoz že tekel brez tega (arwen 22. 9.): `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.
 
 **Kar še ostane neznano, se šteje.** `ingest` vrne `neznanih`, zajem zapiše v `meta` (`rt_neznanih`, `lpp_rt_neznanih`, oblika `n/vseh`), pregled za skrbnika pokaže med zdravjem. Ob zamenjavi 22. 9. v IJPP 16 od 662 (2,4 %); prag za rdečo 2 %. Brez števca se je napaka videla šele, ko je potnik čakal na avtobus.

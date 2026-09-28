@@ -429,6 +429,38 @@ def izginuli_prevozniki(conn: sqlite3.Connection, zeljeni: set[str],
     return sorted((imajo & zeljeni) - v_zipu)
 
 
+#: Prvi postanek dlje od začetka trase: trasa ni od te vožnje.
+TRASA_ODMIK_M = 2000
+#: Delež takih voženj prevoznika, pri katerem je pokvarjen zip, ne vožnja.
+TRASA_DELEZ = 0.5
+#: Pri manj vožnjah s traso delež ne pove ničesar.
+TRASA_NAJMANJ = 20
+
+
+def tuje_trase(trips: dict, routes: dict, seq_by_trip: dict, stops: dict,
+               shapes: dict) -> dict[str, tuple[int, int]]:
+    """Prevoznik -> (voženj, katerih trasa se ne začne pri prvem postanku, vseh s traso).
+
+    28. 9. 2026 je imel zip DUJPP trase pomešane: vožnja Izola - Ljubljana je
+    dobila traso, ki se začne v Novem mestu. Takih je bilo 74-100 % voženj
+    vsakega avtobusnega prevoznika (Arriva 6 429 od 7 821), v zipu 30. 8. pa
+    1-7 %. Zamuda iz lege je tisti dan obstala: vozilo je bilo 55-145 km od
+    „svoje“ trase in `iz_lege` ga ni znal projicirati.
+    """
+    out: dict[str, list[int]] = {}
+    for tid, t in trips.items():
+        kosi = shapes.get(t["shape_id"])
+        seq = seq_by_trip.get(tid)
+        if not kosi or not seq or seq[0][1] not in stops:
+            continue
+        s = stops[seq[0][1]]
+        lat, lon = kosi[0][0]
+        n = out.setdefault(routes[t["route_id"]]["agency_id"], [0, 0])
+        n[0] += geo.haversine(s["lat"], s["lon"], lat, lon) > TRASA_ODMIK_M
+        n[1] += 1
+    return {k: (v[0], v[1]) for k, v in out.items()}
+
+
 def _z_voznim_redom(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in conn.execute(
         "SELECT trip_id FROM trip WHERE start_s IS NOT NULL")}
@@ -695,6 +727,16 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         if current is not None:
             _shrani(current, urejeno)
         edges = finish()
+
+        # Pokvarjen zip se ne pozna le po manjkajočem prevozniku. Stari vozni
+        # red ostane samo, če ga imamo -- prazna baza vzame, kar je.
+        tuje = {ag: n for ag, n in tuje_trase(trips, routes, seq_by_trip, stops, shapes).items()
+                if n[1] >= TRASA_NAJMANJ and n[0] > TRASA_DELEZ * n[1]}
+        if tuje and conn.execute("SELECT 1 FROM sched LIMIT 1").fetchone():
+            raise UvozZavrnjen(
+                "trase se ne začnejo pri prvem postanku: " + ", ".join(
+                    f"{ag} {n[0]} od {n[1]}" for ag, n in sorted(tuje.items()))
+                + " -- stari vozni red ostane")
 
         days = _service_days(zf, {t["service_id"] for t in trips.values()})
 
