@@ -617,7 +617,9 @@
 }
 .bud-gumb.is-on { border-color: var(--accent); color: var(--accent); }
 
-.bud-plast { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; }
+/* Nad orodno vrstico (1000), kot odprta plošča zemljevida: pri 60 je vrstica
+   ležala čez spodnji rob lista in pokrila gumb, s katerim se budilka shrani. */
+.bud-plast { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: flex-end; }
 .bud-ozadje { position: absolute; inset: 0; background: rgba(0, 0, 0, .55); }
 .bud-list {
   position: relative;
