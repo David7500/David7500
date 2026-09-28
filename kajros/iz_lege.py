@@ -90,10 +90,24 @@ def brez_feeda(trip_id: str, zdaj: float | None = None) -> bool:
     sicer bi prve lege vožnje, ki jo feed nosi, šle v `run` kot iz lege.
     """
     zdaj = time.time() if zdaj is None else zdaj
+    if not feed_prebran(zdaj):
+        return False
     with _zaklep:
-        if _prvic is None or zdaj - _prvic < 2 * config.POLL_SECONDS:
-            return False
         return zdaj - _v_feedu.get(trip_id, 0.0) > FEED_POZABI_S
+
+
+def feed_prebran(zdaj: float | None = None) -> bool:
+    """Ali sta od zagona prebrana oba vira, torej `brez_feeda` kaj pomeni."""
+    zdaj = time.time() if zdaj is None else zdaj
+    with _zaklep:
+        return _prvic is not None and zdaj - _prvic >= 2 * config.POLL_SECONDS
+
+
+def v_feedu(zdaj: float | None = None) -> set[str]:
+    """Vožnje, ki jih je feed zamud omenil v zadnjih `FEED_POZABI_S`."""
+    zdaj = time.time() if zdaj is None else zdaj
+    with _zaklep:
+        return {t for t, kdaj in _v_feedu.items() if zdaj - kdaj <= FEED_POZABI_S}
 
 
 def _cas(p: dict) -> float:
@@ -146,7 +160,7 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
     for p, t_prehod in pari:
         zamuda = round(t_prehod - _cas(p))
         je_konec = p is v.postanki[zadnji]
-        _zapisi(conn, trip_id, dan, p["stop_seq"],
+        zapisi_meritev(conn, trip_id, dan, p["stop_seq"],
                 zamuda if je_konec else None, None if je_konec else zamuda, ts)
         zapisan = p["stop_seq"]
     # Lega nazaj po trasi (tresenje) ne premakne sledi nazaj.
@@ -157,10 +171,11 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
     return len(pari)
 
 
-def _zapisi(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
+def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
             arr: int | None, dep: int | None, ts: int) -> None:
     """Isto kot zapis iz feeda v `collector.ingest`, brez varoval za feedove
-    napake (ničla, odpoklic prehoda) -- prehod iz lege je opažen, ne sporočen."""
+    napake (ničla, odpoklic prehoda) -- prehod iz lege je opažen, ne sporočen.
+    Isto pot uporablja `zamude_sz` za vlake, ki jih feed ne nosi."""
     last = conn.execute(
         "SELECT delay_arr, delay_dep FROM obs WHERE trip_id=? AND service_date=? "
         "AND stop_seq=? ORDER BY feed_ts DESC LIMIT 1", (trip_id, dan, seq)).fetchone()

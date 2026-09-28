@@ -277,6 +277,21 @@ CREATE TABLE IF NOT EXISTS delay_report (
 CREATE INDEX IF NOT EXISTS delay_report_train ON delay_report(train_no, service_date);
 CREATE INDEX IF NOT EXISTS delay_report_date ON delay_report(service_date);
 
+-- Zamude vlakov z zemljevida SZ (`zamude_sz.py`), drugi vir poleg derp.si.
+-- Zadnje stanje na postanek kot `run`. `v_run = 1`: derp.si vlaka ni imel
+-- in vrednost je sla tudi v `run`; take vrstice ne stejejo v primerjavo virov.
+CREATE TABLE IF NOT EXISTS sz_zamuda (
+    trip_id      TEXT NOT NULL,
+    service_date TEXT NOT NULL,
+    stop_seq     INTEGER NOT NULL,
+    delay_s      INTEGER NOT NULL,
+    prvic_ts     INTEGER NOT NULL,
+    zadnjic_ts   INTEGER NOT NULL,
+    v_run        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (trip_id, service_date, stop_seq)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS sz_zamuda_ts ON sz_zamuda(zadnjic_ts);
+
 -- Tir vlaka na postaji s table SŽ (`peroni.py`). Kljuc je koledarski dan
 -- table in stevilka vlaka brez vrste, ker tabla SZ drugega ne pozna; postaja
 -- je nase ime. `prvi` je tir ob prvem branju -- razlika do `tir` je

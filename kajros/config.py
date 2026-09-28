@@ -83,6 +83,13 @@ PERONI = okolje("PERONI", "1") != "0"
 PERONI_URL = okolje("PERONI_URL", "https://api.modra.ninja/sz")
 PERONI_SECONDS = int(okolje("PERONI_SECONDS", "600"))
 
+# **Zamude vlakov z zemljevida SŽ** (`zamude_sz.py`), isti posrednik kot tir.
+# Drugi vir poleg derp.si: ta je 28. 9. 2026 z voznim redom DUJPP izgubil vse
+# vlake, zemljevid SŽ jih je imel. Odgovor se spremeni ~vsako minuto.
+# Izklopi se s `KAJROS_SZ_ZAMUDE=0`.
+SZ_ZAMUDE = okolje("SZ_ZAMUDE", "1") != "0"
+SZ_ZAMUDE_SECONDS = int(okolje("SZ_ZAMUDE_SECONDS", "60"))
+
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in
 # na relacijah, kjer vlak ne vozi (Ljubljana - Logatec, Divača - Koper), so

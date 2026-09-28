@@ -1017,6 +1017,10 @@ def api_health():
         out["lega_brez_zamude"] = {
             stats.AGENCY_NAMES.get(ag, ag): n for ag, n in json.loads(lbz).items()
         } if lbz else {}
+        # Dva vira zamud vlakov (`zamude_sz`): koliko jih nosi kateri in kako
+        # se ujemata. Zapiše jih nit ob vsakem branju zemljevida.
+        zsz = db.get_meta(conn, "zamude_sz")
+        out["zamude_sz"] = json.loads(zsz) if zsz else None
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out

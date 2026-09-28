@@ -5,6 +5,8 @@ paths:
   - "kajros/gtfs.py"
   - "kajros/db.py"
   - "kajros/peroni.py"
+  - "kajros/zamude_sz.py"
+  - "kajros/iz_lege.py"
 ---
 
 # Kaj feed pošlje in kje laže
@@ -214,3 +216,15 @@ Ne GTFS ne NeTEx ne feed tira nimajo. Ima ga tabla prihodov in odhodov na potnis
 * **Tabla kaže samo vlake, ki še pridejo** (tudi zamujene), zato se bere čez ves dan. Mednarodnih 1472, 210, 211, 79, 350 na njej ni.
 * **Ključ = koledarski dan table + številka brez vrste**, ne prometni dan, ne `trip_id`: vlak ob 00:30 je na tabli naslednjega dne.
 * **Tir se čez dan spreminja.** `prvi` ostane, `tir` se posodablja; prikaz razliko napiše z besedo („prej 6-A“). brezavta.si kaže „običajni“ tir iz zgodovine; v Ljubljani se je razlikoval od table pri 8 od 121 vlakov.
+
+## Zamude vlakov z zemljevida SŽ (`zamude_sz.py`, od 28. 9. 2026)
+
+Drugi vir poleg derp.si. Tistega dne je derp.si z zipom DUJPP izgubil vse vlake (zamude, `SZ-DELAY`, surovi `…/data/raw/sz/rt/trip-updates` 0 vnosov) — **derp.si pri vlakih visi na voznem redu DUJPP**. Zemljevid vlakov s potniski.sz.si (`api.modra.ninja/sz/lokacije`, isti posrednik kot tir) vlak vodi po **številki**, zato ga zip ne prizadene.
+
+Izmerjeno 28. 9. 2026, 08:59–09:08, 17 branj po 30 s:
+
+* **`raw_odhod` = voznoredni odhod s postaje PRED `naslednja_postaja` + `zamuda_min`**, na minuto, pri vseh 12 ročno preverjenih vlakih. Zamuda je torej odhodna zamuda zadnjega prevoženega postanka; enakost je hkrati preizkus, da je vlak pripet na pravo vožnjo in dan (sezonske različice z isto številko). Brez ujemanja se vlak ne pripne.
+* **Pripetih 574 od 647 vrstic vlakov** (89 %). Ostanek brez izjeme upravičen: 42 z odhodom v prihodnosti (vlak stoji na postaji ali pred izhodiščem — zemljevid ob prihodu že pokaže naslednjo postajo), 31 brez naslednje postaje (na cilju). Nadomestni avtobusi (34) se ne štejejo: zamuda 0 v točki postaje je izračun.
+* Odgovor se spremeni ~vsako minuto (9 različnih v 17 branjih). Zamuda se med odsekom lahko popravi (10 od 556 zaporednih parov) — vrstica v `sz_zamuda` in `run` drži zadnjo, kot pri derp.si.
+
+**Kam gre:** vsaka pripeta vrednost v `sz_zamuda` (zadnje stanje na postanek). V `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`, ista meja kot zamuda iz lege) — tedaj `v_run = 1`. Kadar nosita oba, `run` ostane derp.si-jev in `kajros primerjava` / pregled („ujemanje virov · 24 h“) pokažeta razhajanja. **Kdo ima prav, še ni odločeno**: primerjav do objave ni bilo, ker derp.si vlakov ni imel. Nit čaka, da zajem derp.si prebere feed (`iz_lege.feed_prebran`), sicer bi bil ob zagonu vsak vlak „samo SŽ“.

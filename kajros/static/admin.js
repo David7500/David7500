@@ -405,6 +405,23 @@ function vrsticeZdravja(d) {
   const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
   const lbzSlabo = lbz.some(([, [, nz, vseh]]) => nz >= 3 && vseh && nz / vseh >= 0.05);
   const lbzR = !z.lega_brez_zamude ? "" : lbzSlabo ? "je-slaba" : lbz.length ? "je-mlacna" : "je-dobra";
+  // Dva vira zamud vlakov (`zamude_sz`). 28. 9. 2026 je derp.si z voznim
+  // redom DUJPP izgubil vse vlake, zemljevid SŽ jih je imel. Rumeno, kadar
+  // manjka eden od virov -- zamude so, a le iz enega; kadar ni nobenega,
+  // je rdeča že vrstica „vlaki · zadnji zapis“. Nit bere vsako minuto, zato
+  // je vir po petih minutah brez odgovora obstal.
+  const zs = z.zamude_sz;
+  const zsStoji = zs && (!zs.ts || zdaj - zs.ts > 300);
+  const zsEden = zs && !zsStoji && !zs.oba && (zs.samo_sz || zs.samo_derp);
+  const zsR = !zs ? "" : zsStoji || zsEden ? "je-mlacna" : zs.oba ? "je-dobra" : "";
+  const zsVr = !zs ? "—" : zsStoji
+    ? `zemljevid SŽ ne odgovarja ${pred(zs.napaka_ts || zs.ts)}${zs.napaka ? `: ${zs.napaka}` : ""}`
+    : `oba ${st(zs.oba)} · samo SŽ ${st(zs.samo_sz)} · samo derp ${st(zs.samo_derp)}`
+      + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : "");
+  // Brez barve, dokler ne vemo, kakšno razhajanje je običajno.
+  const pr = zs && zs.primerjava;
+  const prVr = !pr || !pr.parov ? "—"
+    : `${st(100 * pr.v_minuti / pr.parov)} % v minuti od ${st(pr.parov)} · nad 5 min ${st(pr.nad_5_min)}`;
   return [
     ["zadnja zamuda iz feeda", pred(z.last_feed_ts), feed],
     ["vlaki · zadnji zapis", pred(zel.last_feed_ts), omr(zel.last_feed_ts)],
@@ -419,6 +436,8 @@ function vrsticeZdravja(d) {
       lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
         `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : "—",
       lbzR],
+    ["vlaki · vira zamud", zsVr, zsR],
+    ["ujemanje virov · 24 h", prVr, ""],
     ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
     ["aktivnih obvestil", st(z.alerts_active), ""],
     ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, diskR],

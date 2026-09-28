@@ -10,9 +10,9 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 ./scripts/dev-restart.sh          # počaka na sproščen port in izpiše naslove
 ```
 
-Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `pespoti`, `pot`, `naslovi`.
+Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`.
 
-**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (504 preizkusi). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (511 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 
@@ -34,6 +34,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
+| Zamude vlakov, drugi vir | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči.
@@ -72,6 +73,7 @@ kajros/
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
+  zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   stik.py        sporočila obiskovalcev; piše iz zahteve
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
@@ -87,7 +89,7 @@ android/         nativni ovoj z WebView (Kotlin); orodja ločeno v ~/kajros-andr
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` (zamude z zemljevida SŽ, za primerjavo z derp.si) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
 
 ## Omrežji: `network` ni `mode`
 

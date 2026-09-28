@@ -16,7 +16,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, peroni,
-               stats, stik, weather)
+               stats, stik, weather, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -246,6 +246,17 @@ def _zazeni_perone() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=peroni.teci, args=(_stop, _log), daemon=True,
                            name="kajros-peroni")
+    nit.start()
+    return nit
+
+
+def _zazeni_zamude_sz() -> threading.Thread | None:
+    """Zamude vlakov z zemljevida SŽ, v SVOJI niti kot tir: isti posrednik,
+    ki zna obviseti, zajem pa ne sme čakati nanj."""
+    if not config.SZ_ZAMUDE:
+        return None
+    nit = threading.Thread(target=zamude_sz.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-zamude-sz")
     nit.start()
     return nit
 
@@ -495,6 +506,7 @@ def run_collector() -> None:
     s = _settings()
     _log(_describe(s))
     _zazeni_perone()
+    _zazeni_zamude_sz()
     try:
         _worker(**s)
     except KeyboardInterrupt:
@@ -543,8 +555,9 @@ async def lifespan(app):
         thread.start()
         _log(_describe(settings))
         peroni_nit = _zazeni_perone()
+        sz_nit = _zazeni_zamude_sz()
     else:
-        peroni_nit = None
+        peroni_nit = sz_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -554,5 +567,7 @@ async def lifespan(app):
             thread.join(timeout=5)
         if peroni_nit:
             peroni_nit.join(timeout=5)
+        if sz_nit:
+            sz_nit.join(timeout=5)
         if obisk_nit:
             obisk_nit.join(timeout=5)

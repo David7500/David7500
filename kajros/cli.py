@@ -6,11 +6,12 @@ import argparse
 import sqlite3
 import json
 import sys
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
-               naslovi, ocena, pot, stats, weather)
+               naslovi, ocena, pot, stats, weather, zamude_sz)
 
 
 def cmd_init(args):
@@ -293,6 +294,15 @@ def cmd_zamenjave(args):
     print(json.dumps(gtfs.zamenjave_iz(conn, stara), indent=2, ensure_ascii=False))
 
 
+def cmd_primerjava(args):
+    """Kako se zamude vlakov z zemljevida SŽ ujemajo z derp.si."""
+    conn = db.connect()
+    db.init(conn)
+    od = int(time.time()) - args.dni * 86400
+    print(json.dumps(zamude_sz.primerjava(conn, od, najvec=args.najvec),
+                     indent=2, ensure_ascii=False))
+
+
 def cmd_pespoti(args):
     """Izmeri peš poti med bližnjimi postajališči (rabi peš usmerjevalnik)."""
     conn = db.connect()
@@ -490,6 +500,12 @@ def main(argv=None):
                        help="povezi voznje z novimi id-ji; stari vozni red vzame iz kopije baze")
     a.add_argument("stara", help="starejsa baza (razpakirana varnostna kopija izpred uvoza)")
     a.set_defaults(func=cmd_zamenjave)
+
+    a = sub.add_parser("primerjava",
+                       help="zamude vlakov: zemljevid SZ proti derp.si, z najvecjimi razhajanji")
+    a.add_argument("--dni", type=int, default=1)
+    a.add_argument("--najvec", type=int, default=20, help="koliko najvecjih razhajanj izpisati")
+    a.set_defaults(func=cmd_primerjava)
 
     a = sub.add_parser("pespoti", help="izmeri pes poti med bliznjimi postajalisci")
     a.add_argument("--znova", action="store_true", help="pobrisi in izracunaj vse")

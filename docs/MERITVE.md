@@ -1822,3 +1822,21 @@ podvojenega v pravila (senčno merjenje, žeton za `/admin`, pristajalne strani)
 klic, z `--system-prompt … --tools ""` 0,8 k** (izmerjeno na enem vprašanju).
 Prvi tek krčenja je šel brez tega, dvanajst klicev vzporedno, in izčrpal limit;
 drugi (Sonnet, 174 klicev) je stal 1,2 M vhodnih in 0,27 M izhodnih žetonov.
+
+## Vlaki brez derp.si, zamude z zemljevida SŽ (28. 9. 2026)
+
+DUJPP je ob 00:00 UTC objavil vozni red s 783 progami SŽ in 0 vožnjami; uvoz
+na arwenu ob 04:22 je pobrisal vozni red vseh 726 vlakov (obnovljen iz kopije
+ob 03:33, varovalka `gtfs.izginuli_prevozniki` od istega dne). derp.si ob 08:46:
+`trip_updates` 544 vnosov, `vehicle_positions` 539, vlakov 0 -- tudi pod id-ji
+iz zipa 27. 9. (vseh 791). Surovi vir SŽ pri derp.si 0 vnosov, `SZ-DELAY` 0.
+
+Zemljevid SŽ (`api.modra.ninja/sz/lokacije`) ob 08:50: 41 vlakov, med njimi
+vseh 31, ki so po voznem redu vozili; ostalih 10 zamujenih čez konec voznega
+reda. Zamuda mediana 3 min, 19 nad 5 min, največ 50 (LP 4203). Odziv 0,08 s,
+`/lokacije_raw` 8,9 s.
+
+Pripenjanje (`zamude_sz.pripni`), 17 branj 08:59--09:08: 574 od 647 vrstic
+vlakov; 42 z odhodom v prihodnosti, 31 brez naslednje postaje, drugih 0.
+Lokalni strežnik po zagonu: 38 vlakov, 33 samo SŽ, 5 nepripetih; IC 503 na
+tabli Ljubljana +26 min, prej „brez podatka“.
