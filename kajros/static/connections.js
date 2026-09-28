@@ -735,7 +735,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
   return `
     <a class="board-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
-       href="${journeyHref(r.train_no, date, r.trip_id, station)}">
+       href="${journeyHref(r.train_no, r.service_date || date, r.trip_id, station)}">
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
         ${off ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}

@@ -616,6 +616,12 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
         if kind == "prihodi" and d["stop_seq"] == d["first_seq"]:
             continue
         d["sched"] = _abs_time(service_date, d["t_s"])
+        # Prometni dan vrstice, ne vprašanja: po polnoči so na tabli tudi
+        # včerajšnje vožnje (rekurzija spodaj), okno vožnje pa jih pozna le
+        # pod njihovim dnem. Brez tega je 29. 9. 2026 ob 00:30 vlak 604 na
+        # tabli v Celju kazal +7 min, klik nanj pa odprl današnjo vožnjo
+        # brez podatka.
+        d["service_date"] = service_date
         d["delay_from"] = None
         d["delay_kind"] = None
         # Za odhodno tablo je zanimiv cilj, za prihodno izhodisce.

@@ -154,7 +154,9 @@ def tabla_in_okno_isto():
             if r.get("delay_s") is None or r.get("delay_kind") not in (
                     "izmerjeno", "zadnji podatek"):
                 continue
-            q2 = urllib.parse.urlencode({"trip": r["trip_id"], "date": d["date"]})
+            # Po polnoci so na tabli tudi vcerajsnje voznje -- pod svojim dnem.
+            q2 = urllib.parse.urlencode({"trip": r["trip_id"],
+                                         "date": r.get("service_date") or d["date"]})
             no = urllib.parse.quote(r["train_no"])
             run = json.load(urllib.request.urlopen(f"{BASE}/api/train/{no}/run?{q2}", timeout=30))
             s = next((x for x in run["stops"] if x["stop_seq"] == r["stop_seq"]), None)
