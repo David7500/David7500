@@ -111,8 +111,9 @@
       </div>
 
       <p class="sidebar-note">
-        Vlak stoji na zadnji postaji z meritvijo (obroč), avtobus na izmerjeni
-        legi. Zamuda je na kartici ob kliku.
+        Vlak je na zadnji postaji z meritvijo (obroč) ali na postaji, kjer po
+        voznem redu zdaj stoji; avtobus na izmerjeni legi. Zamuda je na
+        kartici ob kliku.
       </p>
     </aside>
 
@@ -134,7 +135,7 @@
   </div>
 
   <script src="{{ s('common.js') }}"></script>
-  <script src="{{ s('avtobusi3d.js') }}"></script>
+  <script src="{{ s('vozila3d.js') }}"></script>
   {#- Modul, ker MapLibre 6 je samo ES modul in ga `dashboard.js` uvozi. Moduli
       se izvedejo za klasicnimi skripti, zato je `common.js` takrat ze tu. -#}
   <script type="module" src="{{ s('dashboard.js') }}"></script>

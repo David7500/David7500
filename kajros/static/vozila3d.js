@@ -1,10 +1,11 @@
 "use strict";
 
-// Avtobusi v 3D na velikem zemljevidu in v oknu voznje: vsak prevoznik svoj
-// model in svoje barve, kot jih ima na cesti. Rise jih MapLibrova plast po meri
-// (`type: "custom"`) z golim WebGL2: three.js je 172 kB stisnjen (MapLibre
-// 299 kB) in za nekaj skatel ni vreden nove odvisnosti; WebGL2 pa MapLibre 6
-// tako ali tako zahteva.
+// Vozila v 3D. Avtobusi na velikem zemljevidu in v oknu voznje: vsak
+// prevoznik svoj model in svoje barve, kot jih ima na cesti. Vlaki samo na
+// velikem zemljevidu, po vrsti vlaka (glej "vlaki" spodaj). Rise jih
+// MapLibrova plast po meri (`type: "custom"`) z golim WebGL2: three.js je
+// 172 kB stisnjen (MapLibre 299 kB) in za nekaj skatel ni vreden nove
+// odvisnosti; WebGL2 pa MapLibre 6 tako ali tako zahteva.
 //
 // Model je zlozen iz kvadrov in osmerokotnih koles v metrih: x naprej, y
 // levo, z gor, izhodisce na sredini vozila na tleh. Vsa vozila istega
@@ -218,18 +219,243 @@ function avtoModeli(inki, enotna = null) {
   };
 }
 
+// ---------- vlaki ----------
+//
+// Vrsta vlaka (predpona stevilke) garniture ne pove, sestave pa SZ ne
+// objavijo nikjer, kjer bi jo lahko brali (28. 9. 2026: ni je v GTFS, ne na
+// zemljevidu ne na tabli SZ; `train_details` posrednika vraca 500). Model je
+// zato podoba, ki je za vrsto najbolj verjetna, ne trditev o tem vlaku:
+// regionalni = Stadler FLIRT (SZ 510/610), ICS = dvonadstropni KISS (313),
+// IC, EC, EN in avtovlak = lokomotiva Taurus (541) z vagoni. Razmerja in
+// barve s fotografij na Wikimedia Commons (510 012, 510-037, 610-003,
+// 313-017, 541-015, EC 211 Sava), na oko.
+//
+// Po sredini strehe je oranzen pas z legende, iz istega razloga kot pri
+// avtobusih: od zgoraj se vidi samo streha, siva streha vlaka pa bi bila od
+// strehe avtobusa nelocljiva.
+
+const VLAK_MODRA = "#1f9ad6";      // SZ modra na Stadlerjevih garniturah
+const VLAK_TEMNA = "#262a31";      // podvozje, spojke, prehodi med vozovi
+const VLAK_RDECA = "#c7282d";      // Taurus 541
+const VLAK_SREBRNA = "#c4c9ce";    // vagoni
+const VLAK_OPREMA = "#5b626b";     // naprave na strehi
+const VLAK_STREHA = "#8d949b";
+
+// Model je vecji od resnicnega, a manj kot avtobus: garnitura je dolga
+// 60-100 m, z avtobusno povecavo (3,5-krat pri z16) bi prekrila pol postaje.
+// Pri MapLibrovem z15 je FLIRT dolg ~90 pik, od z18 naprej je resnicne
+// velikosti.
+const vlakPovecava = (z) => Math.max(1, 2.4 * 2 ** (-(z - 15) * 0.5));
+
+// Razmik med vlakoma, ki stojita na isti postaji: tirna razdalja v metrih.
+const VLAK_TIR_M = 4.6;
+
+// Model po vrsti vlaka; glej opombo zgoraj, zakaj ne po garnituri.
+function vlakModel(t) {
+  if (t.mode === "bus") return "bus";
+  const vrsta = String(t.train_no || "").split(" ")[0];
+  if (vrsta === "ICS") return "kiss";
+  if (["IC", "EC", "EN", "AVT"].includes(vrsta)) return "lok";
+  return "flirt";
+}
+
+// Kolesna dvojica ali dve na podstavnem vozicku, `x` je sredina vozicka.
+function vlakVozicek(v, x, W) {
+  avtoKvader(v, x - 1.5, x + 1.5, -W + 0.4, W - 0.4, 0.12, 0.42, VLAK_TEMNA);
+  for (const xa of [x - 1.1, x + 1.1]) {
+    for (const s of [-1, 1]) avtoKolo(v, xa, s * 0.6, s * 0.8, 0.42);
+  }
+}
+
+/**
+ * Voz od `x0` do `x1`. `o.pasovi` so [z0, z1, barva] od tal do strehe brez
+ * lukenj (kot pri avtobusu: prekrivajoci se kvadri bi na ploskvah
+ * trepetali); pas z barvo `AVTO_STEKLO` dobi stebricke med okni.
+ */
+function vlakVoz(v, x0, x1, o, streha) {
+  const W = o.sirina / 2;
+  avtoKvader(v, x0 + 0.2, x1 - 0.2, -W + 0.3, W - 0.3, 0.3, o.pasovi[0][0], AVTO_NOTRANJOST);
+  for (const [z0, z1, hex] of o.pasovi) {
+    avtoKvader(v, x0, x1, -W, W, z0, z1, hex);
+    if (hex !== AVTO_STEKLO) continue;
+    for (let x = x1 - 1.0; x > x0 + 0.4; x -= o.razmik) {
+      for (const s of [-1, 1]) {
+        avtoKvader(v, x - 0.07, x + 0.07, s > 0 ? W : -W - 0.012, s > 0 ? W + 0.012 : -W,
+                   z0, z1, o.okvir || AVTO_BELA);
+      }
+    }
+  }
+  // Vrata na obeh straneh: vlak ima peron lahko levo ali desno.
+  for (const xs of o.vrata(x0, x1)) {
+    for (const s of [-1, 1]) {
+      avtoKvader(v, xs - 0.65, xs + 0.65, s > 0 ? W : -W - 0.02, s > 0 ? W + 0.02 : -W,
+                 o.pasovi[0][0] + 0.1, o.visinaVrat, o.barvaVrat);
+    }
+  }
+  // Streha je siva kot v resnici, barva z legende je pas po sredini: cela
+  // oranzna streha je od blizu prevladala nad vozom samim.
+  const vrh = o.pasovi[o.pasovi.length - 1][1];
+  avtoKvader(v, x0 + 0.15, x1 - 0.15, -W + 0.15, W - 0.15, vrh, vrh + 0.1, VLAK_STREHA);
+  avtoKvader(v, x0 + 0.6, x1 - 0.6, -0.75, 0.75, vrh + 0.1, vrh + 0.18, streha);
+  for (const xb of o.vozicki(x0, x1)) vlakVozicek(v, xb, W);
+}
+
+// Prehod med vozovoma: ozji in temen, da se vidi, kje se voz konca.
+function vlakPrehod(v, x0, x1, visina) {
+  avtoKvader(v, x0, x1, -1.1, 1.1, 0.45, visina - 0.25, VLAK_TEMNA);
+}
+
+// Celo: stopnicast nos namesto zaobljenega -- od blizu se vidi nagnjeno
+// steklo, od dalec je vlak se vedno vlak. `s` = +1 spredaj, -1 zadaj.
+function vlakNos(v, x, s, n) {
+  const X = (a, b) => (s > 0 ? [x + a, x + b] : [x - b, x - a]);
+  const W = n.sirina / 2;
+  const sred = n.dolzina * 0.62, vrh = n.dolzina * 0.28;
+  avtoKvader(v, ...X(0, n.dolzina), -W + 0.15, W - 0.15, 0.35, n.pas, n.spodaj);
+  avtoKvader(v, ...X(0, sred), -W + 0.05, W - 0.05, n.pas, n.steklo, n.zgoraj);
+  avtoKvader(v, ...X(0, vrh), -W + 0.1, W - 0.1, n.steklo, n.visina, n.zgoraj);
+  // Vetrobransko steklo na obeh stopnicah, luci in spojka spodaj.
+  avtoKvader(v, ...X(sred - 0.01, sred + 0.02), -W + 0.3, W - 0.3, n.pas + 0.2, n.steklo, AVTO_STEKLO);
+  avtoKvader(v, ...X(vrh - 0.01, vrh + 0.02), -W + 0.35, W - 0.35, n.steklo, n.steklo + 0.5, AVTO_STEKLO);
+  for (const y of [-W + 0.4, W - 0.7]) {
+    avtoKvader(v, ...X(n.dolzina - 0.01, n.dolzina + 0.02), y, y + 0.3, n.pas - 0.32, n.pas - 0.14, AVTO_LUC);
+  }
+  avtoKvader(v, ...X(n.dolzina, n.dolzina + 0.35), -0.35, 0.35, 0.6, 0.95, VLAK_TEMNA);
+}
+
+// Garnitura iz zaporedja vozov, od cela (+x) proti repu; sredina modela je
+// sredina garniture, da vlak stoji SREDI postaje, ne s celom na njej.
+function vlakGarnitura(dolzine, prehod, zgradi) {
+  const skupaj = dolzine.reduce((a, b) => a + b, 0) + prehod * (dolzine.length - 1);
+  let x1 = skupaj / 2;
+  dolzine.forEach((d, i) => {
+    zgradi(i, x1 - d, x1);
+    x1 -= d + prehod;
+  });
+}
+
+// Stadler FLIRT (SZ 510 in 610): nizkopodna garnitura, tri vozovi,
+// Jakobsovi vozicki na stikih.
+function vlakFlirt(streha) {
+  const v = [];
+  const o = {
+    sirina: 2.88, razmik: 1.45,
+    pasovi: [[0.3, 0.55, VLAK_TEMNA], [0.55, 0.9, AVTO_BELA], [0.9, 1.1, VLAK_MODRA],
+             [1.1, 2.25, AVTO_STEKLO], [2.25, 3.75, AVTO_BELA]],
+    vrata: (x0, x1) => [x0 + 4.5, x1 - 4.5],
+    visinaVrat: 2.3, barvaVrat: VLAK_MODRA,
+    vozicki: () => [],
+  };
+  const nos = { dolzina: 1.7, sirina: 2.88, pas: 1.35, steklo: 2.9, visina: 3.75,
+                spodaj: AVTO_BELA, zgoraj: VLAK_MODRA };
+  const dolzine = [19.5, 18.6, 19.5];
+  const stiki = [];
+  vlakGarnitura(dolzine, 0.6, (i, x0, x1) => {
+    vlakVoz(v, x0, x1, o, streha);
+    if (i === 0) vlakNos(v, x1, 1, nos);
+    if (i === dolzine.length - 1) vlakNos(v, x0, -1, nos);
+    else { vlakPrehod(v, x0 - 0.6, x0, 3.75); stiki.push(x0 - 0.3); }
+    if (i === 0) vlakVozicek(v, x1 - 2.6, o.sirina / 2);
+    if (i === dolzine.length - 1) vlakVozicek(v, x0 + 2.6, o.sirina / 2);
+  });
+  for (const x of stiki) vlakVozicek(v, x, o.sirina / 2);
+  // Klima in pretvornik na strehi.
+  for (const x of [-18, 0, 18]) avtoKvader(v, x - 2.2, x + 2.2, -0.9, 0.9, 3.89, 4.2, VLAK_OPREMA);
+  return v;
+}
+
+// Stadler KISS (SZ 313): dvonadstropna garnitura, tri vozovi.
+function vlakKiss(streha) {
+  const v = [];
+  const o = {
+    sirina: 2.8, razmik: 1.6,
+    pasovi: [[0.3, 0.5, VLAK_TEMNA], [0.5, 0.75, AVTO_BELA], [0.75, 1.75, AVTO_STEKLO],
+             [1.75, 1.95, AVTO_BELA], [1.95, 2.3, VLAK_MODRA], [2.3, 2.45, AVTO_BELA],
+             [2.45, 3.55, AVTO_STEKLO], [3.55, 4.3, AVTO_BELA]],
+    vrata: (x0, x1) => [x0 + 6.5, x1 - 6.5],
+    visinaVrat: 2.2, barvaVrat: VLAK_MODRA,
+    vozicki: (x0, x1) => [x0 + 2.4, x1 - 2.4],
+  };
+  const nos = { dolzina: 2.0, sirina: 2.8, pas: 1.45, steklo: 3.55, visina: 4.3,
+                spodaj: AVTO_BELA, zgoraj: VLAK_MODRA };
+  const dolzine = [26.5, 25, 26.5];
+  vlakGarnitura(dolzine, 0.7, (i, x0, x1) => {
+    vlakVoz(v, x0, x1, o, streha);
+    if (i === 0) vlakNos(v, x1, 1, nos);
+    if (i === dolzine.length - 1) vlakNos(v, x0, -1, nos);
+    else vlakPrehod(v, x0 - 0.7, x0, 4.3);
+  });
+  return v;
+}
+
+// Lokomotiva Taurus (SZ 541) in trije vagoni.
+function vlakLokomotiva(streha) {
+  const v = [];
+  const lok = {
+    sirina: 3.0, razmik: 100,
+    pasovi: [[0.45, 1.15, VLAK_TEMNA], [1.15, 2.05, VLAK_RDECA], [2.05, 2.2, AVTO_BELA],
+             [2.2, 3.75, VLAK_RDECA]],
+    vrata: () => [], visinaVrat: 0, barvaVrat: VLAK_TEMNA,
+    vozicki: (x0, x1) => [x0 + 3.2, x1 - 3.2],
+  };
+  const vagon = {
+    sirina: 2.83, razmik: 1.9, okvir: VLAK_SREBRNA,
+    pasovi: [[0.45, 1.0, VLAK_TEMNA], [1.0, 1.25, VLAK_SREBRNA], [1.25, 1.45, VLAK_MODRA],
+             [1.45, 1.6, VLAK_SREBRNA], [1.6, 2.45, AVTO_STEKLO], [2.45, 3.7, VLAK_SREBRNA]],
+    vrata: (x0, x1) => [x0 + 1.4, x1 - 1.4],
+    visinaVrat: 2.45, barvaVrat: "#8e969e",
+    vozicki: (x0, x1) => [x0 + 3.6, x1 - 3.6],
+  };
+  const nos = { dolzina: 1.0, sirina: 3.0, pas: 2.05, steklo: 3.3, visina: 3.75,
+                spodaj: VLAK_RDECA, zgoraj: VLAK_RDECA };
+  const dolzine = [17.3, 26.4, 26.4, 26.4];
+  vlakGarnitura(dolzine, 0.8, (i, x0, x1) => {
+    if (i === 0) {
+      vlakVoz(v, x0, x1, lok, streha);
+      vlakNos(v, x1, 1, nos);
+      vlakNos(v, x0, -1, nos);
+      // Okna kabine na obeh koncih in odjemnika toka.
+      for (const [a, b] of [[x1 - 1.6, x1 - 0.4], [x0 + 0.4, x0 + 1.6]]) {
+        for (const s of [-1, 1]) {
+          avtoKvader(v, a, b, s > 0 ? 1.5 : -1.52, s > 0 ? 1.52 : -1.5, 2.4, 3.2, AVTO_STEKLO);
+        }
+      }
+      for (const x of [x0 + 4, x1 - 4]) avtoKvader(v, x - 1.2, x + 1.2, -0.7, 0.7, 3.89, 4.35, VLAK_TEMNA);
+    } else {
+      vlakPrehod(v, x1, x1 + 0.8, 3.7);
+      vlakVoz(v, x0, x1, vagon, streha);
+    }
+  });
+  return v;
+}
+
+function vlakModeli(streha) {
+  return {
+    flirt: vlakFlirt(streha),
+    kiss: vlakKiss(streha),
+    lok: vlakLokomotiva(streha),
+    // Nadomestni prevoz SZ: avtobus, a z oranzno streho -- sodi med vlake.
+    bus: avtoMedkrajevni({ streha,
+      pasovi: [[0.35, 0.8, "#8a939e"], [0.8, 1.0, AVTO_BELA], [1.0, 1.35, AVTO_BELA]] }),
+  };
+}
+
+// ---------- plast ----------
+
 const AVTO_VS = `#version 300 es
 layout(location = 0) in vec3 a_pos;
 layout(location = 1) in vec3 a_norm;
 layout(location = 2) in vec3 a_barva;
 layout(location = 3) in vec4 a_vozilo;
+layout(location = 4) in float a_odmik;
 uniform mat4 u_matrix;
 uniform float u_povecava;
 uniform vec3 u_luc;
 out vec3 v_barva;
 void main() {
   float s = sin(a_vozilo.z), c = cos(a_vozilo.z);
-  vec2 v = vec2(a_pos.x * s - a_pos.y * c, a_pos.x * c + a_pos.y * s);
+  vec2 p = vec2(a_pos.x, a_pos.y + a_odmik);
+  vec2 v = vec2(p.x * s - p.y * c, p.x * c + p.y * s);
   float k = a_vozilo.w * u_povecava;
   gl_Position = u_matrix * vec4(a_vozilo.x + v.x * k, a_vozilo.y - v.y * k, a_pos.z * k, 1.0);
   vec3 n = vec3(a_norm.x * s - a_norm.y * c, a_norm.x * c + a_norm.y * s, a_norm.z);
@@ -243,15 +469,24 @@ out vec4 barva;
 void main() { barva = vec4(v_barva, 1.0); }`;
 
 /**
- * Plast in njen vnos. `vidna()` pove, ali naj plast ta hip rise (zoom,
- * stikalo); `povecava(z)` koliko je vozilo vecje od resnicnega.
- *
- * Vrne `{ plast, nastavi(vozila) }`; vozilo je `{lon, lat, smer, model}`,
- * smer v stopinjah od severa. `inki` so barve streh po prevozniku, `enotna`
- * ena barva namesto barv prevoznikov (glej `avtoModeli`).
+ * Plast avtobusov: `inki` so barve streh po prevozniku, `enotna` ena barva
+ * namesto barv prevoznikov (glej `avtoModeli`).
  */
 function avtobusi3D({ id, inki = {}, enotna = null, vidna, povecava }) {
-  const modeli = avtoModeli(inki, enotna);
+  return plast3D({ id, modeli: avtoModeli(inki, enotna), vidna, povecava });
+}
+
+/**
+ * Plast in njen vnos. `modeli` so {kljuc: oglisca}; `vidna()` pove, ali naj
+ * plast ta hip rise (zoom, stikalo); `povecava(z)` koliko je vozilo vecje od
+ * resnicnega.
+ *
+ * Vrne `{ plast, nastavi(vozila) }`; vozilo je `{lon, lat, smer, model,
+ * odmik}`, smer v stopinjah od severa, `odmik` v metrih levo od lege (vlaka
+ * na isti postaji stojita drug ob drugem). Odmik se poveca skupaj z
+ * modelom, zato se vozili pri nobenem priblizku ne prekrijeta.
+ */
+function plast3D({ id, modeli, vidna, povecava }) {
   const kljuci = Object.keys(modeli);
   // Izhodisce v Slovenji: odmiki od njega so majhni in float32 jih nosi na
   // centimeter. Absolutna lega v Mercatorju bi pri z18 trepetala za metre.
@@ -298,8 +533,11 @@ function avtobusi3D({ id, inki = {}, enotna = null, vidna, povecava }) {
         const vozila = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, vozila);
         gl.enableVertexAttribArray(3);
-        gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 16, 0);
+        gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 20, 0);
         gl.vertexAttribDivisor(3, 1);
+        gl.enableVertexAttribArray(4);
+        gl.vertexAttribPointer(4, 1, gl.FLOAT, false, 20, 16);
+        gl.vertexAttribDivisor(4, 1);
         gl.bindVertexArray(null);
         const r = risbe[k] || (risbe[k] = { podatki: new Float32Array(0), stevilo: 0, sveze: true });
         Object.assign(r, { vao, vozila, n: modeli[k].length / 9, sveze: true });
@@ -347,12 +585,13 @@ function avtobusi3D({ id, inki = {}, enotna = null, vidna, povecava }) {
       const y = (180 - (180 / Math.PI) * Math.log(Math.tan(Math.PI / 4 + lat / 2))) / 360;
       // Mercatorjeva enota na meter na tej sirini.
       const enota = 1 / (40075016.686 * Math.cos(lat));
-      (po[a.model] || po.drugi).push(x - IZ_X, y - IZ_Y, (a.smer * Math.PI) / 180, enota);
+      (po[a.model] || po.drugi || po[kljuci[0]])
+        .push(x - IZ_X, y - IZ_Y, (a.smer * Math.PI) / 180, enota, a.odmik || 0);
     }
     for (const k of kljuci) {
       const r = risbe[k] || (risbe[k] = {});
       r.podatki = new Float32Array(po[k]);
-      r.stevilo = po[k].length / 4;
+      r.stevilo = po[k].length / 5;
       r.sveze = true;
     }
     if (map) map.triggerRepaint();

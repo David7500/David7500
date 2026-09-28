@@ -2093,8 +2093,51 @@ def _live_rows(conn, service_date: str, now_s: int,
         d["service_date"] = service_date
         # Kje in kdaj je bila zamuda nazadnje izmerjena -- prikaz mora to povedati.
         d["measured_at"] = stats.abs_time(service_date, d.pop("sched_s") + (d["delay_s"] or 0))
+        if d["network"] == "zeleznica":
+            d["na_postaji"] = _na_postaji(conn, d, now_s)
         out.append(d)
     return out
+
+
+#: Pol tetive, iz katere se računa smer proge na postaji. Garnitura je dolga
+#: 60-100 m in stoji sredi postaje, zato smer čez njeno dolžino, ne čez
+#: kretnico pred peronom.
+_SMER_POSTAJE_M = 40
+
+
+def _na_postaji(conn, r: dict, now_s: int) -> dict | None:
+    """Postaja, na kateri vlak po voznem redu in zadnji zamudi ta hip stoji.
+
+    Zemljevid tam nariše vlak v 3D; med postajama ostane ikona na zadnji
+    postaji z meritvijo. `_LIVE_SQL` šteje postajo za prevoženo šele ob
+    ODHODU, zato vlak med postankom na X kaže na prejšnji postaji -- tu je X.
+
+    Sklep, ne meritev: SŽ za postanek objavi eno zamudo (prihodna in odhodna
+    se razlikujeta pri 3,1 % postankov), dejanski čas stanja ni zapisan
+    nikjer. Na zgodovini 10.-27. 9. 2026 (26 705 postankov, daljših od
+    minute) se sklepano okno z oknom iz zapisanih zamud prekriva 70 % časa.
+    Postanek brez voznorednega čakanja (prihod = odhod) ni nikoli "stoji".
+    """
+    v = deljenje.voznja(conn, r["trip_id"])
+    if v is None:
+        return None
+    postanki = v.postanki
+    i = next((j for j, p in enumerate(postanki) if p["stop_seq"] == r["stop_seq"]), None)
+    if i is None:
+        return None
+    koncna = i == len(postanki) - 1
+    if koncna:
+        p = postanki[i]
+    else:
+        p = postanki[i + 1]
+        prihod = p["arr_s"] if p["arr_s"] is not None else p["dep_s"]
+        odhod = p["dep_s"] if p["dep_s"] is not None else prihod
+        d = r["delay_s"] or 0
+        if prihod is None or not prihod + d <= now_s < odhod + d:
+            return None
+    lat, lon = v.trasa.tocka(p["along"])
+    return {"ime": p["name"], "lat": round(lat, 6), "lon": round(lon, 6),
+            "smer": v.trasa.smer(p["along"], _SMER_POSTAJE_M), "koncna": koncna}
 
 
 @app.get("/api/connections")
@@ -2243,9 +2286,15 @@ def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
     for r in rows:
         st = stanje.get(r["trip_id"])
         if st and r.get("service_date") == st["service_date"]:
-            r = {**r, "potnik": {k: st[k] for k in (
+            potnik = {k: st[k] for k in (
                 "lat", "lon", "n", "soglasje", "starost_s", "stoji",
-                "zamuda_s", "zamuda", "pri", "med") if k in st}}
+                "zamuda_s", "zamuda", "pri", "med") if k in st}
+            # Smer proge pod potnikom: zemljevid tam od blizu nariše vlak.
+            v = deljenje.voznja(conn, r["trip_id"])
+            if v is not None:
+                along, _ = v.trasa.projiciraj(st["lat"], st["lon"])
+                potnik["smer"] = v.trasa.smer(along, _SMER_POSTAJE_M)
+            r = {**r, "potnik": potnik}
         out.append(r)
     return out
 

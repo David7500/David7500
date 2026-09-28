@@ -376,13 +376,20 @@ function bestDelay(t) {
   return { value: t.delay_s, where: t.last_stop, ageS: t.age_s, fromOperator: false };
 }
 
-// Kje narisati vlak: kjer ga vidi potnik na njem, sicer na postaji, ki jo je
-// sporočil prevoznik, sicer na zadnji postaji z meritvijo. Potnikova lega je
-// edina prava lega vlaka, ki jo imamo (`deljenje.py`).
+// Kje narisati vlak: kjer ga vidi potnik na njem, sicer na postaji, kjer po
+// voznem redu in zamudi ta hip stoji, sicer na postaji, ki jo je sporočil
+// prevoznik, sicer na zadnji postaji z meritvijo. Potnikova lega je edina
+// prava lega vlaka, ki jo imamo (`deljenje.py`); postanek je sklep
+// (`api._na_postaji`), a boljši od prejšnje postaje, na kateri je vlak
+// prej obstal ves postanek.
 function trainPlace(t) {
   if (t.potnik && t.potnik.lat != null) {
     return { key: `potnik:${t.trip_id}`, name: "lega po poročilu potnika",
              station: { lat: t.potnik.lat, lon: t.potnik.lon } };
+  }
+  if (t.na_postaji) {
+    return { key: `stoji:${t.na_postaji.ime}`, name: t.na_postaji.ime,
+             station: { lat: t.na_postaji.lat, lon: t.na_postaji.lon } };
   }
   if (t.reported_lat != null) {
     return { key: t.reported_at_station, name: t.reported_at_station,
@@ -400,7 +407,8 @@ function groupByStation(trains) {
     if (!station) continue;
     let g = groups.get(key);
     if (!g) {
-      g = { name, station, trains: [], potnik: key.startsWith("potnik:") };
+      g = { name, station, trains: [], potnik: key.startsWith("potnik:"),
+            stoji: key.startsWith("stoji:") };
       groups.set(key, g);
     }
     g.trains.push(t);
@@ -506,11 +514,12 @@ function groupLabelHtml(g) {
 }
 
 function groupPopupHtml(g) {
+  const koliko = g.trains.length === 1 ? "1 vlak" : `${g.trains.length} vlakov`;
   return `
     <div class="popup-station">${escapeHtml(g.name)}</div>
     <div class="popup-note">${g.potnik ? "potnik na vlaku deli lego"
-      : `zadnja postaja z meritvijo — ${g.trains.length === 1
-      ? "1 vlak" : `${g.trains.length} vlakov`}`}</div>
+      : g.stoji ? `po voznem redu in zamudi zdaj stoji tu — ${koliko}`
+      : `zadnja postaja z meritvijo — ${koliko}`}</div>
     <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>`;
 }
 
@@ -579,6 +588,7 @@ function renderTrains(trains) {
     marker.__label.innerHTML = groupLabelHtml(g);
     marker.getPopup().setOffset(s / 2).setHTML(groupPopupHtml(g));
     marker.__worst = worstDelay(g.trains);
+    marker.__g = g;
   }
   for (const [name, marker] of stationMarkers) {
     if (!groups.has(name)) {
@@ -586,7 +596,79 @@ function renderTrains(trains) {
       stationMarkers.delete(name);
     }
   }
+  posodobiVlake3D();
   requestAnimationFrame(declutterLabels);
+}
+
+// ---------- vlaki v 3D ----------
+// Model samo tam, kjer vlak RES je: stoji na postaji (po voznem redu in
+// zamudi) ali potnik na njem deli lego. Vlak med postajama ostane ikona na
+// obroču tudi od blizu -- model na zadnji postaji z meritvijo bi trdil, da
+// vlak stoji tam, kjer ga že davno ni. Avtobus je v 3D na GPS, vlak mora
+// imeti isto pravilo. Meja priblizka je ista kot pri avtobusih.
+
+let vlaki3d = null;
+let vlaki3dSeznam = [];        // kar plast ta hip rise, za dotik
+
+const vidniVlaki3D = () => !!vlaki3d && vklop["3d"] && vklop.train
+  && map.getZoom() >= AVTOBUS_3D_OD;
+
+function dodajVlake3D() {
+  vlaki3d = plast3D({
+    id: "k-vlaki-3d",
+    modeli: vlakModeli(TRAIN_INK),
+    vidna: vidniVlaki3D,
+    povecava: vlakPovecava,
+  });
+  map.addLayer(vlaki3d.plast);
+  posodobiVlake3D();
+}
+
+const smerVlaka = (t) => (t.potnik && t.potnik.lat != null ? t.potnik.smer
+  : t.na_postaji && t.na_postaji.smer) ?? 0;
+
+// Vlaki na isti postaji stojijo drug ob drugem, en tir narazen. Odmik je v
+// okviru modela (levo od smeri voznje), zato vlak v nasprotni smeri dobi
+// nasprotni predznak -- sicer bi stala na istem tiru.
+function posodobiVlake3D() {
+  if (!vlaki3d) return;
+  const vidni = vidniVlaki3D();
+  vlaki3dSeznam = [];
+  for (const [kljuc, m] of stationMarkers) {
+    const g = m.__g;
+    const v3d = g && (g.stoji || g.potnik);
+    // Ikona nad modelom bi ga prekrila (element je nad platnom); oznaka ostane.
+    m.__icon.style.visibility = vidni && v3d ? "hidden" : "";
+    if (!v3d) continue;
+    const ref = smerVlaka(g.trains[0]);
+    g.trains.forEach((t, i) => {
+      const smer = smerVlaka(t);
+      const razlika = (((smer - ref) % 360) + 360) % 360;
+      const odmik = (i - (g.trains.length - 1) / 2) * VLAK_TIR_M;
+      vlaki3dSeznam.push({ lon: g.station.lon, lat: g.station.lat, smer,
+                           model: vlakModel(t), kljuc,
+                           odmik: razlika > 90 && razlika < 270 ? -odmik : odmik });
+    });
+  }
+  vlaki3d.nastavi(vlaki3dSeznam);
+}
+// Ob vsakem koraku priblizevanja, ne sele ob koncu: sicer bi cez mejo
+// model in ikona do konca gibanja stala drug na drugem.
+map.on("zoom", posodobiVlake3D);
+
+// Vlak v 3D pod prstom: odpre kartico postaje, isto kot ikona. Polmer je
+// pol garniture, a vsaj za prst.
+function zadetekVlak3D(p) {
+  if (!vidniVlaki3D()) return null;
+  const r = Math.max(18, (30 * vlakPovecava(map.getZoom())) / mppZdaj());
+  let naj = null, najd = r;
+  for (const a of vlaki3dSeznam) {
+    const q = map.project([a.lon, a.lat]);
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d < najd) { najd = d; naj = a; }
+  }
+  return naj && { layer: { id: "k-vlaki-3d" }, properties: { kljuc: naj.kljuc },
+                  geometry: { type: "Point", coordinates: [naj.lon, naj.lat] } };
 }
 
 // Velikost ikone vlaka je odvisna od zooma, marker pa se sam ne skalira.
@@ -657,7 +739,7 @@ function busSvg(size, moving, ink) {
 
 const busIkona = (ink, moving) => `bus-${ink.slice(1)}-${moving ? "vozi" : "stoji"}`;
 
-// Od blizu je avtobus model v 3D (`avtobusi3d.js`), od dalec ikona. Meja in
+// Od blizu je avtobus model v 3D (`vozila3d.js`), od dalec ikona. Meja in
 // velikost modela sta tam, ker ju rabi tudi okno voznje.
 const AVTOBUS_3D_OD = AVTO_3D_OD;
 let avtobusi3d = null;
@@ -706,6 +788,7 @@ async function dodajAvtobuse() {
 // Plasti 3D damo samo vozila v sliki in pas okrog nje: brez tega gre ob
 // konici 1 500 modelov skozi risanje na vsak premik.
 function posodobi3D() {
+  posodobiVlake3D();
   if (!avtobusi3d) return;
   const vidni = new Set(LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag));
   const b = map.getBounds();
@@ -793,7 +876,7 @@ let najdenaOkno = null;
 
 // Najblizje, kar je pod prstom: vozilo pred postajo, postaja pred postajo.
 function zadetek(p) {
-  const v3d = zadetek3D(p);
+  const v3d = zadetek3D(p) || zadetekVlak3D(p);
   if (v3d) return v3d;
   const sloji = ["k-avtobusi", "k-najdena", ...IMENA].filter((id) => map.getLayer(id));
   const r = DOTIK_PX;
@@ -845,6 +928,9 @@ map.on("click", (e) => {
   if (f.layer.id === "k-avtobusi") {
     const v = busByKey.get(f.properties.kljuc);
     if (v) odpriKartico(v);
+  } else if (f.layer.id === "k-vlaki-3d") {
+    const m = stationMarkers.get(f.properties.kljuc);
+    if (m && !m.getPopup().isOpen()) m.togglePopup();
   } else if (f.layer.id === "k-najdena") {
     if (najdenaOkno) najdenaOkno.addTo(map);
   } else {
@@ -860,11 +946,14 @@ if (matchMedia("(hover: hover)").matches) {
                                  className: "kajros-tooltip", offset: 12 });
   map.on("mousemove", (e) => {
     const sloji = ["k-avtobusi", ...IMENA].filter((id) => map.getLayer(id));
-    const f = zadetek3D(e.point) || map.queryRenderedFeatures(e.point, { layers: sloji })[0];
+    const f = zadetek3D(e.point) || zadetekVlak3D(e.point)
+      || map.queryRenderedFeatures(e.point, { layers: sloji })[0];
     map.getCanvas().style.cursor = f ? "pointer" : "";
     if (!f) { lebdi.remove(); return; }
     const v = f.layer.id === "k-avtobusi" && busByKey.get(f.properties.kljuc);
+    const m = f.layer.id === "k-vlaki-3d" && stationMarkers.get(f.properties.kljuc);
     if (v) lebdi.setHTML(busTooltipHtml(v));
+    else if (m) lebdi.setHTML(groupLabelHtml(m.__g));
     else lebdi.setText(f.properties.ime);
     lebdi.setLngLat(f.geometry.coordinates).addTo(map);
   });
@@ -1502,6 +1591,7 @@ map.once("style.load", async () => {
   slojiDodani = true;
   uveljavi();
   await dodajAvtobuse();
+  dodajVlake3D();
   await loadStatic();
   pollLiveTiho();
   setInterval(pollLiveTiho, POLL_MS);

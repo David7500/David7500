@@ -397,6 +397,54 @@ def test_potnik_na_zivih_ne_spremeni_predpomnjenih_vrstic(monkeypatch):
                {"trip_id": "t2", "network": "zeleznica", "service_date": "D"}]
     monkeypatch.setattr(api.deljenje, "stanje", lambda conn, ids, now: {
         "t1": {"service_date": "D", "lat": 46.0, "lon": 14.5, "n": 1}})
+    monkeypatch.setattr(api.deljenje, "voznja", lambda conn, trip_id: None)
     out = api._s_potniki(None, vrstice, None)
     assert out[0]["potnik"]["lat"] == 46.0 and "potnik" not in out[1]
     assert all("potnik" not in r for r in vrstice)
+
+
+# ------------------------------------------------- vlak na postaji (3D)
+
+def test_smer_trase_gleda_naprej_po_voznji():
+    t = deljenje.Trasa([[(LAT, 14.0), (LAT, 14.01), (LAT, 14.02)]])
+    assert t.smer(t.dolzina / 2, 40) == pytest.approx(90, abs=0.5)
+    # Na koncu se tetiva skrajša, smer ostane.
+    assert t.smer(t.dolzina, 40) == pytest.approx(90, abs=0.5)
+    obratna = deljenje.Trasa([[(LAT, 14.02), (LAT, 14.0)]])
+    assert obratna.smer(0, 40) == pytest.approx(270, abs=0.5)
+
+
+def _vrstica(seq, zamuda=0, trip="t1"):
+    return {"trip_id": trip, "stop_seq": seq, "delay_s": zamuda}
+
+
+def test_vlak_med_postankom_stoji_na_naslednji_postaji(conn):
+    """`_LIVE_SQL` šteje Bled za prevožen šele ob odhodu (10:11); med
+    postankom je zadnja prevožena postaja še Ajdovščina."""
+    from kajros import api
+    p = api._na_postaji(conn, _vrstica(1), 36630)
+    assert p["ime"] == "Bled" and not p["koncna"]
+    assert p["smer"] == pytest.approx(90, abs=1)
+    assert p["lon"] == pytest.approx(14.1, abs=1e-4)
+    # t2 vozi po isti progi nazaj: isti postanek, nasprotna smer.
+    assert api._na_postaji(conn, _vrstica(1, trip="t2"), 36630)["smer"] == \
+        pytest.approx(270, abs=1)
+
+
+def test_vlak_med_postajama_ne_stoji(conn):
+    from kajros import api
+    assert api._na_postaji(conn, _vrstica(1), 36300) is None
+
+
+def test_postanek_se_zamakne_za_zamudo(conn):
+    from kajros import api
+    # Dve minuti zamude: ob 10:10:30 še ni prispel, ob 10:12:30 stoji.
+    assert api._na_postaji(conn, _vrstica(1, 120), 36630) is None
+    assert api._na_postaji(conn, _vrstica(1, 120), 36750)["ime"] == "Bled"
+
+
+def test_vlak_na_koncni_stoji(conn):
+    from kajros import api
+    p = api._na_postaji(conn, _vrstica(3), 37300)
+    assert p["ime"] == "Celje" and p["koncna"]
+    assert p["smer"] == pytest.approx(90, abs=1)

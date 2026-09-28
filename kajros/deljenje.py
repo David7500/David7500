@@ -292,6 +292,20 @@ class Trasa:
         (a_lat, a_lon), (b_lat, b_lon) = self.tocke[lo], self.tocke[hi]
         return a_lat + t * (b_lat - a_lat), a_lon + t * (b_lon - a_lon)
 
+    def smer(self, along: float, pol_m: float) -> float | None:
+        """Smer trase pri `along`, v stopinjah od severa, naprej po vožnji.
+
+        Tetiva od `pol_m` zadaj do `pol_m` spredaj; na koncu trase se skrajša
+        na tisto, kar trasa ima. Brez dolžine (ena točka) vrne None.
+        """
+        a_lat, a_lon = self.tocka(along - pol_m)
+        b_lat, b_lon = self.tocka(along + pol_m)
+        dx = (b_lon - a_lon) * math.cos(math.radians((a_lat + b_lat) / 2))
+        dy = b_lat - a_lat
+        if dx == 0 and dy == 0:
+            return None
+        return round((math.degrees(math.atan2(dx, dy)) + 360) % 360, 1)
+
 
 class Voznja:
     """Trasa in postanki ene vožnje, s postanki projiciranimi nanjo."""
