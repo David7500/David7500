@@ -42,15 +42,13 @@ Pravila zajema (kaj feed pove in kje laže): `.claude/rules/zajem.md`; tu samo s
   | pot | prej | zdaj |
   |---|---|---|
   | `/api/live` | 253 ms | **3,8 ms** |
-  | `/api/overview` | 224 ms | 2,9 ms |
-  | `/api/overview/bus` | 230 ms | 2,6 ms |
   | `/api/stations` | 77 ms | 3,3 ms |
   | `/api/network.geojson` | 51 ms | 3,3 ms |
   | `/api/shapes/live` | 33 ms | 3,0 ms |
 
   **`/api/stations` in `/api/network.geojson` predpomnita že serializiran JSON**, ne seznama slovarjev: poizvedba je manjši del cene, večino poje pretvorba 9 791 postaj v niz. Predpomnjenje poizvedbe: 77 → 41 ms, predpomnjenje niza: 41 → 3,3. Zato vračata `Response`, sicer bi FastAPI serializiral znova.
 
-  **Kar mora ostati sveže, se doda po predpomnilniku**: `now` v pregledih, `age_s` pri legah. Predpomnjena bi lagala.
+  **Kar mora ostati sveže, se doda po predpomnilniku**: `age_s` pri legah. Predpomnjena bi lagala.
 
 * **`/api/vehicles` predpomnjen na cikel zajema.** Odgovor se med dvema branjema leg ne spremeni → izračun enkrat, vsem iste vrstice; ključ `positions_fetched`, ne ura, da se razveljavi natanko ob novem podatku. Izjema `age_s`: računa se ob vsaki strežbi — starost lege je edino, kar se med cikloma res spreminja, predpomnjena bi lagala. Edini del prikaza, kjer je število uporabnikov vidno: brez tega sto obiskovalcev = sto enakih poizvedb desetkrat na minuto.
 
@@ -64,11 +62,11 @@ Zdaj ga **zajemna nit izračuna vnaprej**, takoj po zajemu (`server._ogrej_zive`
 
 **Ogrevaj skozi ENDPOINT, ne skozi notranjo funkcijo.** Prva različica je klicala `api._live()`, predpomnilnik pa napolni šele `api_live()`, ki ga ovije v `_predpomni`. Delo opravljeno in zavrženo; učinka nobenega, meritev „6 ms toplo“ = navadno predpomnjenje iz zaporednih zahtev. Po popravku: **0 od 16 klicev čez dve minuti nad 100 ms** (prej 3 od 14 pri 245 ms).
 
-**Značka mora ustrezati temu, od česar je odgovor res odvisen.** `/api/overview/bus` vezan na `rt_fetched` **in** `positions_fetched` (osveži se vsakih 10 s) → predpomnilnik razpadel prej, kot ga je ogrevanje (na 30 s) ujelo; z njim `day_summary` (463 ms) in `_live("avtobus")` (768 ms), oboje od leg neodvisno. Endpoint dosledno **1,3 s**. Zdaj se drago predpomni na `rt_fetched`, števci vozil se berejo sveže (920 vrstic, poceni): **4–42 ms**.
+**Značka mora ustrezati temu, od česar je odgovor res odvisen.** Primer (endpoint odstranjen 29. 9. 2026, pravilo ostane): `/api/overview/bus` vezan na `rt_fetched` **in** `positions_fetched` (osveži se vsakih 10 s) → predpomnilnik razpadel prej, kot ga je ogrevanje (na 30 s) ujelo; z njim `day_summary` (463 ms) in `_live("avtobus")` (768 ms), oboje od leg neodvisno. Endpoint dosledno **1,3 s**. Zdaj se drago predpomni na `rt_fetched`, števci vozil se berejo sveže (920 vrstic, poceni): **4–42 ms**.
 
 Dvoje, kar se hitro zgreši:
 
-* **Ogrevaj samo, kar strani res vprašajo.** Zemljevid in pregled kličeta `network=zeleznica`; `network=None` = 802 ms dela za odgovor, ki ga aplikacija ne uporablja — ogrevanje zamika koristna dva.
+* **Ogrevaj samo, kar strani res vprašajo.** Zemljevid kliče `network=zeleznica`; `network=None` = 802 ms dela za odgovor, ki ga aplikacija ne uporablja — ogrevanje zamika koristna dva.
 * **Na malini tega ne sme biti.** Zajemna zanka ista za strežnik in `kajros collect`. Pi Zero W pri istem poslu ~100× počasnejši; ~1 s dela na obhod bi podrlo ritem zajema — isti razlog, zakaj je tam ugasnjena `ocena`. Varovalo `server._strezemo`, ki ga postavi samo `lifespan`.
 
 Ogrevanje po vsakem **uspešnem** zajemu, ne le ob spremembi: značka se osveži tudi, ko feed ni prinesel nič novega; kadar se ni premaknila, ogrevanje 19 ms, nič ne stane.

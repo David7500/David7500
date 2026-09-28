@@ -964,8 +964,15 @@ function renderBoard(data) {
 
 
 // ---------- vstopni pregled ----------
-// Brez tega je prva stran prazen obrazec. "Kako vozijo vlaki danes" je pri
-// prometni aplikaciji enako pogosto vprasanje kot vprasanje o svoji poti.
+// Brez tega je prva stran prazen obrazec: žetoni najpogostejših poti, pri
+// vlakih še povezava na ovire.
+//
+// Do 29. 9. 2026 je bila tu še kartica "Kako vozijo vlaki/avtobusi" z
+// mediano končne zamude dneva. Ob 00:03 je kazala "avtobusi +839 min": tri
+// vožnje, vse s feedovo zamenjavo prometnega dne (14-22 h), ker dnevni
+// povzetek edini ni imel stropa `MAX_REALNA_ZAMUDA_S`, avtobusna kartica pa
+// včerajšnjega nadomestka ni brala. Tudi pravilna številka potniku ne pove,
+// kdaj mu pelje -- zato ven in ne popravek.
 
 // Predlogi poti. Loceno po omrezju: avtobusna stran je doslej ni imela nobene
 // in je bila prazen obrazec brez izhodisca -- zelezniski seznam pa tja ne sodi,
@@ -995,62 +1002,6 @@ const POPULAR_BUS = [
 
 const POPULAR = IS_BUS ? POPULAR_BUS : POPULAR_RAIL;
 
-function bucketBarHtml(b, total) {
-  const order = [["točno", 60], ["1–5 min", 300], ["5–15 min", 900], ["nad 15 min", 1800]];
-  const segs = order.map(([label, ref]) => {
-    const n = b[label] || 0;
-    if (!n) return "";
-    const pct = (n / total) * 100;
-    return `<span class="bucket" style="width:${pct}%;background:${delayColor(ref)}"
-              title="${escapeHtml(label)}: ${n}"></span>`;
-  }).join("");
-  const keys = order.map(([label, ref]) => `<span class="bucket-key">
-      <span class="bucket-dot" style="background:${delayColor(ref)}"></span>
-      ${escapeHtml(label)} <b>${b[label] || 0}</b></span>`).join("");
-  return `<div class="bucket-bar">${segs}</div><div class="bucket-keys">${keys}</div>`;
-}
-
-function overviewHtml(o) {
-  // Streznik da `yesterday` samo takrat, kadar je danasnji vzorec premajhen.
-  const useYesterday = o.yesterday && o.yesterday.runs;
-  const day = useYesterday ? o.yesterday : o.today;
-  const dayNote = useYesterday ? "včeraj" : "danes";
-
-  return `
-    <section class="overview">
-      ${popularChipsHtml()}
-
-      <div class="ov-head">
-        <h2>Kako vozijo vlaki</h2>
-        <span class="ov-sub">${o.live_trains} ${o.live_trains === 1 ? "vlak" : "vlakov"} zdaj na progi</span>
-      </div>
-
-      ${day && day.runs ? `
-        <div class="ov-card">
-          <div class="ov-card-head">
-            <span>Končna zamuda, ${dayNote}</span>
-            <strong style="color:${delayColor(day.median_s)}">mediana ${delayLabel(day.median_s)} min</strong>
-          </div>
-          ${bucketBarHtml(day.buckets, day.runs)}
-          <div class="ov-card-foot">
-            ${day.runs} zajetih voženj · ${Math.round(day.on_time_share * 100)} % v 5 min
-            · najslabša ${delayLabel(day.worst_s)} min
-          </div>
-        </div>` : ""}
-
-      ${o.disruptions ? `<a class="ov-link" href="/app/ovire">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
-        </svg>
-        ${o.disruptions} veljavnih obvestil o ovirah na progah
-      </a>` : ""}
-
-    </section>`;
-}
-
-// Avtobusni pregled govori o SEDANJOSTI, ne o zgodovini: zajem je nov in
-// vsaka številka o preteklosti bi obljubljala več, kot ve. Zato koliko jih
-// vozi, koliko jih ima GPS in kako hitro se premikajo -- to o njih res vemo.
 /** Žetoni priljubljenih poti. Isti na obeh omrežjih, le vsebina je druga. */
 function popularChipsHtml() {
   return `<div class="chips chips-top">
@@ -1074,50 +1025,31 @@ function wirePopularChips() {
   });
 }
 
-function busOverviewHtml(o) {
-  return `
-    <section class="overview">
-      ${popularChipsHtml()}
-      <div class="ov-head">
-        <h2>Kako vozijo avtobusi</h2>
-        <span class="ov-sub">${o.live_vehicles} zdaj na poti</span>
-      </div>
-
-      ${o.today && o.today.runs ? `
-        <div class="ov-card">
-          <div class="ov-card-head">
-            <span>Končna zamuda, danes</span>
-            <strong style="color:${delayColor(o.today.median_s)}">mediana ${delayLabel(o.today.median_s)} min</strong>
-          </div>
-          ${bucketBarHtml(o.today.buckets, o.today.runs)}
-          <div class="ov-card-foot">
-            ${o.today.runs} zajetih voženj · ${Math.round(o.today.on_time_share * 100)} % v 5 min
-            ${o.with_gps ? `· ${o.with_gps} vozil oddaja svojo lego` : ""}
-          </div>
-        </div>` : `
-        <div class="ov-card">
-          <div class="ov-card-foot">Danes še ni dovolj zajetih voženj za sliko dneva.</div>
-        </div>`}
-    </section>`;
+/** Povezava na ovire; samo železnica, avtobusnih ovir ne zajemamo. */
+function ovireHtml(n) {
+  return `<a class="ov-link" href="/app/ovire">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+        </svg>
+        ${n} veljavnih obvestil o ovirah na progah
+      </a>`;
 }
 
 async function showOverview() {
-  if (IS_BUS) {
-    try {
-      const o = await fetch("/api/overview/bus").then(jsonOk);
-      resultsEl.innerHTML = busOverviewHtml(o);
-      wirePopularChips();
-    } catch (err) {
-      resultsEl.innerHTML = '<div class="empty-state">Vpiši postajališče ali izhodišče in cilj.</div>';
-    }
-    return;
-  }
+  // Žetoni ne čakajo na strežnik. Število ovir pride za njimi in se doda le,
+  // če je pregled še na zaslonu -- sicer bi prepisal rezultat iskanja, ki ga
+  // je človek medtem sprožil.
+  resultsEl.innerHTML = `<section class="overview">${popularChipsHtml()}</section>`;
+  wirePopularChips();
+  if (IS_BUS) return;
   try {
-    const o = await fetch("/api/overview").then(jsonOk);
-    resultsEl.innerHTML = overviewHtml(o);
-    wirePopularChips();
+    const n = (await fetch("/api/health").then(jsonOk)).alerts_active;
+    const sekcija = resultsEl.querySelector(".overview");
+    if (n && sekcija && !sekcija.querySelector(".ov-link")) {
+      sekcija.insertAdjacentHTML("beforeend", ovireHtml(n));
+    }
   } catch (err) {
-    resultsEl.innerHTML = '<div class="empty-state">Vpiši izhodišče in cilj ali izberi postajo.</div>';
+    /* število ovir je postransko */
   }
 }
 

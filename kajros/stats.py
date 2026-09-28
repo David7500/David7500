@@ -761,41 +761,6 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     return out
 
 
-
-
-def day_summary(conn: sqlite3.Connection, service_date: str,
-                network: str | None = "zeleznica") -> dict:
-    """Kako je mreža vozila ta dan: porazdelitev končnih zamud po vožnjah.
-
-    Ena vožnja = en vzorec, ne en postanek. Sicer bi vlak s tridesetimi
-    postanki tridesetkrat glasoval, kratki lokalni pa enkrat, in "delež
-    točnih" bi meril dolžino poti namesto točnosti.
-    """
-    rows = conn.execute(
-        "WITH last AS ("
-        "  SELECT r.trip_id, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d,"
-        "         ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn"
-        "  FROM run r JOIN trip t USING (trip_id)"
-        "  WHERE r.service_date = ? AND (? IS NULL OR t.network = ?)"
-        ") SELECT d FROM last WHERE rn = 1 AND d IS NOT NULL",
-        (service_date, network, network),
-    ).fetchall()
-    vals = [r["d"] for r in rows]
-    if not vals:
-        return {"date": service_date, "runs": 0}
-
-    buckets = _bucket_counts(vals)
-    return {
-        "date": service_date,
-        "runs": len(vals),
-        "median_s": _pct(vals, 0.5),
-        "p90_s": _pct(vals, 0.9),
-        "worst_s": max(vals),
-        "on_time_share": round(sum(1 for v in vals if _je_pravocasna(v)) / len(vals), 3),
-        "buckets": buckets,
-    }
-
-
 def _bucket_counts(values: list[int]) -> dict:
     out = {"točno": 0, "1–5 min": 0, "5–15 min": 0, "nad 15 min": 0}
     for v in values:

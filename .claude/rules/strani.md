@@ -154,6 +154,8 @@ Seznam = „s čim in kdaj", ta stran = **„kako"**. Klik na predlog pelje sem,
 
 Žetone riše `popularChipsHtml()`, poslušalca pripne `wirePopularChips()` — oboje skupno. Prej poslušalec pripet samo v železniški veji, zato avtobusna žetonov ne bi imela, tudi če bi jih izrisala.
 
+**Pregled pod iskalnikom = žetoni + (pri vlakih) povezava na ovire, nič drugega.** Kartica „Kako vozijo vlaki/avtobusi" (mediana končne zamude dneva, razredi) odstranjena 29. 9. 2026 z `/api/overview*` in `stats.day_summary`. Ob 00:03 je kazala „avtobusi +839 min": tri vožnje, vse s feedovo zamenjavo prometnega dne (14–22 h) — dnevni povzetek edini ni imel stropa `MAX_REALNA_ZAMUDA_S`, avtobusna kartica pa ni brala `yesterday`, ki ga je strežnik pošiljal od 3. 9. Isti razlog kot na domači strani: tudi pravilna številka potniku ne pove, kdaj mu pelje. Število ovir iz `/api/health` (isti števec kot domača); doda se le, če je pregled še na zaslonu, sicer bi prepisal medtem sproženo iskanje.
+
 **Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker dve vprašanji: `kajros:fav` = „to je moja pot", človek pove sam (zvezdica); `kajros:recent` = „tu sem pravkar bil", napiše se sam (šest zadnjih). Oba v žetonih **pod iskalnikom**, ne v pregledu — pregled prva poizvedba pobriše prav takrat, ko bi seznam rabil za naslednjo. Prazno polje za postajo ob dotiku ponudi imena iz teh poizvedb; drugega ugibanja za prazno polje ni.
 
 Oba seznama **ločena po omrežju**. Prejšnji `kajros:last` ni bil: kdor je na `/app` iskal Celje–Ljubljana, nato odprl `/app/bus`, dobil isto vprašanje razrešeno na avtobusnem omrežju („Ljubljana AP") in prazen odgovor. Zadnja poizvedba je zdaj prva med nedavnimi, svojega zapisa nima več.

@@ -85,4 +85,4 @@ Doma API na `http://<ip>:8000`, za razvoj zadošča. Od zunaj odločeno: **imeno
 
 **Vrat na usmerjevalniku ne odpiraj — API nima avtentikacije.** Samo za branje: v `api.py` ni poti razen `GET` in nobenega pisanja v bazo iz zahteve. CORS odprt za vse izvore, namerno, da prikaz lahko teče drugje.
 
-**Odgovori predpomnjeni tam, kjer se med zahtevami ne spremenijo.** Kdor piše svoj prikaz: `/api/health` (60 s), `/api/live`, `/api/overview` in razrezi statistike so predpomnjeni; glava `X-Osvezi-Cez` pri legah pove, čez koliko sekund je smiselno vprašati znova.
+**Odgovori predpomnjeni tam, kjer se med zahtevami ne spremenijo.** Kdor piše svoj prikaz: `/api/health` (60 s), `/api/live` in razrezi statistike so predpomnjeni; glava `X-Osvezi-Cez` pri legah pove, čez koliko sekund je smiselno vprašati znova.

@@ -396,16 +396,14 @@ def test_nadomestni_prevoz_ostane_pri_vlakih(conn):
 def test_statistika_ne_steje_mestnih_avtobusov(conn):
     """Avtobus ne sme šteti med vlake v nobeni številki.
 
-    Iskalnik je bil le prvo mesto, kjer je mešanje bolelo. `day_summary`,
-    `network_stats` in `breakdowns` berejo `run` in bi brez filtra LPP
-    prištele k železnici -- pri 3060 LPP vožnjah proti 733 vlakom bi to
-    "delež točnih vlakov" spremenilo v delež točnih avtobusov.
+    Iskalnik je bil le prvo mesto, kjer je mešanje bolelo. `network_stats`
+    in `breakdowns` bereta `run` in bi brez filtra LPP prištela k železnici --
+    pri 3060 LPP vožnjah proti 733 vlakom bi to "delež točnih vlakov"
+    spremenilo v delež točnih avtobusov.
     """
     _add_bus(conn)
-    # Dnevni povzetek preverjamo na 31. 8. (natanko ena vozjna na omrezje),
-    # lestvica pa ima prag `MIN_RUNS_FOR_RANK`, zato so ostali dnevi zraven.
-    # Datumi so trdi, ker jih testira tudi `day_summary`; v `service_day` se ne
-    # vstavlja nic, zato trka z vrstico iz priprave ni.
+    # Lestvica ima prag `MIN_RUNS_FOR_RANK`, zato pet dni. Datumi so trdi; v
+    # `service_day` se ne vstavlja nic, zato trka z vrstico iz priprave ni.
     for trip, day, d in (("t1", "2026-08-31", 600), ("b1", "2026-08-31", 60),
                          ("t1", "2026-08-30", 600), ("b1", "2026-08-30", 60),
                          ("t1", "2026-08-29", 600), ("b1", "2026-08-29", 60),
@@ -414,11 +412,6 @@ def test_statistika_ne_steje_mestnih_avtobusov(conn):
         conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
                      "VALUES(?,?,2,?,?,4102444800)", (trip, day, d, d))
     conn.commit()
-
-    rail = stats.day_summary(conn, "2026-08-31", network="zeleznica")
-    bus = stats.day_summary(conn, "2026-08-31", network="avtobus")
-    assert rail["runs"] == 1 and rail["median_s"] == 600
-    assert bus["runs"] == 1 and bus["median_s"] == 60
 
     assert {r["train_no"] for r in stats.network_stats(conn, network="zeleznica")} == {"IC 1"}
     assert {r["train_no"] for r in stats.network_stats(conn, network="avtobus")} == {"6B"}

@@ -51,15 +51,15 @@ def vsota_razredov():
     Prag je bil v sekundah (300), razred pa v zaokroženih minutah (330):
     553 voženj se ni ujelo in bralec, ki sešteje, je dobil drugo številko.
     """
-    o = json.load(urllib.request.urlopen(f"{BASE}/api/overview", timeout=20))["today"]
-    if not o.get("runs"):
-        return None                                  # prazen dan ni napaka
-    b = o["buckets"]
-    v_pragu = b["točno"] + b["1–5 min"]
-    pricakovano = round(v_pragu / o["runs"], 3)
-    if abs(pricakovano - o["on_time_share"]) > 0.001:
-        return (f"vsota razredov da {pricakovano}, izpisano pa je "
-                f"{o['on_time_share']}")
+    # Do 29. 9. 2026 se je preverjal dnevni pregled (`/api/overview`), ki ga
+    # ni več; razrez ima iste razrede in isti delež po skupinah.
+    o = json.load(urllib.request.urlopen(f"{BASE}/api/stats/breakdowns", timeout=60))
+    for g in o.get("by_day", []) + o.get("by_kind", []):
+        b = g["buckets"]
+        pricakovano = round((b["točno"] + b["1–5 min"]) / g["n"], 3)
+        if abs(pricakovano - g["on_time_share"]) > 0.001:
+            return (f"{g['key']}: vsota razredov da {pricakovano}, izpisano pa je "
+                    f"{g['on_time_share']}")
     return None
 
 
@@ -112,15 +112,14 @@ def ovire_povsod_isto():
     `health.alerts_active` je štel VSE shranjene ovire, ne le veljavnih:
     62 proti 16, ki jih kaže stran. Tri mesta, dve številki.
     """
-    # `/api/alerts` odslej vraca TUDI napovedane (glej `alerts.active`), števca
-    # pa štejeta samo veljavne — to je namerno. Primerjamo veljavni del.
+    # `/api/alerts` odslej vraca TUDI napovedane (glej `alerts.active`), števec
+    # pa šteje samo veljavne — to je namerno. Primerjamo veljavni del.
     al = json.load(urllib.request.urlopen(f"{BASE}/api/alerts", timeout=20))
     vrstice = al if isinstance(al, list) else al.get("alerts", [])
     n = sum(1 for x in vrstice if not x.get("napovedana"))
-    ov = json.load(urllib.request.urlopen(f"{BASE}/api/overview", timeout=20))["disruptions"]
     he = json.load(urllib.request.urlopen(f"{BASE}/api/health", timeout=20))["alerts_active"]
-    if not (n == ov == he):
-        return f"/api/alerts (veljavnih) {n}, overview {ov}, health {he}"
+    if n != he:
+        return f"/api/alerts (veljavnih) {n}, health {he}"
     # In da napovedane sploh pridejo skozi -- sicer bi stran spet molcala.
     if not any(x.get("napovedana") for x in vrstice):
         return "med ovirami ni nobene napovedane — ali jih endpoint spet izpušča?"

@@ -1136,100 +1136,6 @@ def _active_service_date(conn, train_no: str, now: datetime) -> str:
     return today
 
 
-# Koliko voženj mora imeti dan, da o njem sploh govorimo. Pod tem je "delež
-# točnih" bolj podatek o uri kot o železnici.
-MIN_RUNS_FOR_DAY = 20
-
-
-@app.get("/api/overview")
-def api_overview():
-    """Kaj se dogaja zdaj -- za obiskovalca, ki še ni nič vpisal.
-
-    Brez tega je vstopna stran prazen obrazec. Vprašanje "kako vozijo vlaki
-    danes" je pri prometni aplikaciji enako pogosto kot vprašanje o svoji poti.
-    """
-    now = datetime.now(TZ)
-
-    def izracun():
-        today = now.date().isoformat()
-        # Pregled je zeleznicki ("kako vozijo vlaki"), zato filter. Endpointa
-        # `api_live` se tu ne klice: Python bi kot argument podal FastAPIjev
-        # objekt Query namesto None in filter se ne bi ujel z nicimer.
-        live = _live_predpomnjen("zeleznica")
-        with _conn() as conn:
-            day = stats.day_summary(conn, today)
-            disruptions = alerts.active_count(conn)
-            # Zgodaj zjutraj je danasnji vzorec prazen ali droben. "Mediana
-            # 0 min, tocnih 100 %" iz ene same voznje ob pol enih zvecer ni
-            # slika dneva, ampak nakljucje -- takrat raje povemo za vceraj in
-            # tako tudi napisemo.
-            fallback = None
-            if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
-                fallback = stats.day_summary(conn, yesterday_iso(now))
-        return {"live_trains": len(live), "today": day,
-                "yesterday": fallback, "disruptions": disruptions}
-
-    # Dan v kljucu, ker se ob polnoci vsebina spremeni tudi brez novega feeda.
-    odgovor = _predpomni(f"overview:{now.date()}", _znacka("rt_fetched"), 60, izracun)
-    # `now` je edino, kar mora biti sveze -- kot `age_s` pri legah.
-    return {"now": now.isoformat(), **odgovor}
-
-
-def yesterday_iso(now: datetime) -> str:
-    return (now.date() - timedelta(days=1)).isoformat()
-
-
-@app.get("/api/overview/bus")
-def api_overview_bus():
-    """Kaj se dogaja z avtobusi zdaj.
-
-    Ločeno od `/api/overview`, ki je železniški. Zgodovine tu skoraj ni --
-    zajem avtobusov je nov -- zato pregled govori o **sedanjosti**: koliko
-    vozil je na poti, koliko jih ima GPS in kako hitro se premikajo. To je
-    tisto, kar o njih res vemo.
-    """
-    now = datetime.now(TZ)
-
-    # Razdeljeno po tem, OD CESA je kaj odvisno.
-    #
-    # Prej je bil cel odgovor vezan na `rt_fetched` IN `positions_fetched`,
-    # ta pa se osvezi vsakih 10 s (`KAJROS_POSITION_SECONDS`). Predpomnilnik je
-    # zato razpadel vsakih deset sekund in z njim tudi `day_summary` (463 ms) in
-    # `_live("avtobus")` (768 ms) -- oboje, kar od leg sploh ni odvisno.
-    # Izmerjeno 4. 9. 2026: endpoint je bil dosledno 1,3 s, ogrevanje pa mu ni
-    # moglo pomagati, ker tece na 30 s.
-    #
-    # Zdaj se drago predpomni na `rt_fetched` (30 s), stevci vozil pa se
-    # preberejo sveze -- ti so poceni in prav oni se z legami spreminjajo.
-    def izracun():
-        live = _live_predpomnjen("avtobus")
-        with _conn() as conn:
-            day = stats.day_summary(conn, now.date().isoformat(), network="avtobus")
-            # Ista varovalka kot pri vlakih, ki je tu manjkala. Brez nje je
-            # stran 3. 9. 2026 ob 00:20 kazala "avtobusi +833 min": mediana
-            # sestih voznj, od katerih jih je pet nosilo feedovo zamenjavo
-            # prometnega dne (glej `.claude/rules/strezba.md`, MAX_LIVE_DELAY_S).
-            # `home.js` je `yesterday` ze bral -- samo poslali ga nismo.
-            fallback = None
-            if day.get("runs", 0) < MIN_RUNS_FOR_DAY:
-                fallback = stats.day_summary(conn, yesterday_iso(now), network="avtobus")
-        return {"live_vehicles": len(live), "today": day, "yesterday": fallback}
-
-    odgovor = _predpomni(f"overview-bus:{now.date()}",
-                         _znacka("rt_fetched"), 60, izracun)
-    # Sveze in poceni: 920 vrstic `vehicle_now`, brez poizvedbe cez `run`.
-    vehicles, _ = _vehicles_now()
-    moving = [v for v in vehicles if (v.get("speed_kmh") or 0) >= 3]
-    return {
-        "now": now.isoformat(),
-        **odgovor,
-        "with_gps": len(vehicles),
-        "moving": len(moving),
-        "median_speed_kmh": (sorted(v["speed_kmh"] for v in moving)[len(moving) // 2]
-                             if moving else None),
-    }
-
-
 @app.get("/api/stations")
 def api_stations(network: str = NETWORK_Q):
     # 863 kB in 77 ms, vsebina pa se spremeni enkrat na dan ob uvozu GTFS.
@@ -1542,13 +1448,19 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     return out
 
 
-def _vehicles_now(trip: str | None = None) -> tuple[list[dict], int]:
-    """Vozila z GPS kot NAVADEN seznam in sekunde do naslednjega branja.
+@app.get("/api/vehicles")
+def api_vehicles(trip: str | None = None):
+    """Trenutna lega vozil z GPS.
 
-    Loceno od endpointa namenoma: ta vraca `JSONResponse` zaradi glave
-    `X-Osvezi-Cez`, in `JSONResponse` ni iterabilen. Ko je `/api/overview/bus`
-    klical endpoint naravnost, je zato vracal 500 -- domaca stran je pisala
-    "podatki trenutno niso dosegljivi" in obe stevilki kot "-".
+    Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
+    ta seznam nikoli ne bo vseboval -- kar aplikacija riše za vlake, je
+    zadnja postaja z meritvijo, ne položaj.
+
+    `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
+
+    Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
+    Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
+    podatek, ki v bazi že leži.
     """
     zdaj = datetime.now(TZ)
     now = int(zdaj.timestamp())
@@ -1572,24 +1484,6 @@ def _vehicles_now(trip: str | None = None) -> tuple[list[dict], int]:
     cez = config.POSITION_SECONDS
     if brano:
         cez = max(1, config.POSITION_SECONDS - (now - int(brano)))
-    return out, cez
-
-
-@app.get("/api/vehicles")
-def api_vehicles(trip: str | None = None):
-    """Trenutna lega vozil z GPS.
-
-    Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
-    ta seznam nikoli ne bo vseboval -- kar aplikacija riše za vlake, je
-    zadnja postaja z meritvijo, ne položaj.
-
-    `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
-
-    Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
-    Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
-    podatek, ki v bazi že leži.
-    """
-    out, cez = _vehicles_now(trip)
     return JSONResponse(out, headers={"X-Osvezi-Cez": str(cez)})
 
 
@@ -2510,13 +2404,12 @@ def api_live(network: str = NETWORK_Q):
 
 
 def _live_predpomnjen(network: str | None) -> list[dict]:
-    """`_live()` enkrat na branje zamud, za zemljevid in oba pregleda.
+    """`_live()` enkrat na branje zamud, za vse, ki ga vprašajo.
 
     Najdražji odgovor, ki ga zemljevid vpraša vsakih 30 s. Med dvema branjema
-    zamud se ne spremeni, zato ga računamo enkrat za vse. Pregleda sta prej
-    klicala `_live()` mimo tega in ga računala še enkrat: ogrevanje po
-    vsakem zajemu je na arwenu 25. 9. 2026 stalo 10,3 s CPU na 30 s, od tega
-    `_live("avtobus")` dvakrat po 3,1 s.
+    zamud se ne spremeni, zato ga računamo enkrat za vse. Klic mimo tega ga
+    računa še enkrat: ogrevanje po vsakem zajemu je na arwenu 25. 9. 2026
+    stalo 10,3 s CPU na 30 s, od tega `_live("avtobus")` dvakrat po 3,1 s.
     """
     rows = _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
