@@ -211,6 +211,10 @@ Ločevanje do 2. 9. 2026 merljivo narobe: „polje“ → „Polje (Tolmin)“ z
 **Postanke istega imena seštej PRED razvrščanjem.** Mestno postajališče ima svoj `stop_id` za vsako smer; prej razvrščeno po postankih enega, izpisana vsota vseh — seznam urejen po drugi številki, kot jo je kazal („Bavarski dvor“ pokaže 1 137, razvrščen po 573).
 
 
+## Nad tremi urami ni zamude: strop pri VSEM branju zgodovine
+
+`stats.MAX_REALNA_ZAMUDA_S` (3 h) velja v `predict`, `typical_at_stops`, `history`, `_dnevi_prednikov`, `backtest._delays_by_day`, statistiki in pristajalnih straneh. Nad tem je feedova zamenjava prometnega dne (železnica: 0 vrstic). Do 29. 9. 2026 so ga imeli samo agregati — okno vožnje je kazalo „najslabša vožnja 608 min“ ob mediani 2, model se je učil ostankov +9 h. **Filter po vrsticah, ne po dnevih**: na 441 od 738 takih dni se prava in lažna vrednost na isti vožnji izmenjujeta. Izpuščen dan, 477 prizadetih avtobusnih voženj: model 3,03 → 2,44 min, strošek 7,59 → 7,27; „običajno“ 5,83 → 5,32. `backtest` ga ima zato, da meri isti model, kot se streže — in ker vrednost nad 3 h ni resnica. Senca (`ocena.resolve`) ga v resnici nima. Številke: `docs/MERITVE.md`.
+
 ## „Končna zamuda“ je zadnja OPAŽENA, ne nujno zadnja
 
 `LAST_STOP_SQL` vzame `MAX(stop_seq)` iz `run` = zadnji videni postanek, ne zadnji iz voznega reda. Ujemata se v **96,3 %** (6 581 celih proti 253 nepopolnim, izmerjeno 4. 9. 2026); pri nepopolnih manjka mediano **en** postanek, povprečno 2,8, največ 30.

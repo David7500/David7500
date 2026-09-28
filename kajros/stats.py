@@ -355,6 +355,7 @@ def _dnevi_prednikov(conn: sqlite3.Connection, trip_id: str | None, since: str,
         f"SELECT p.service_date, p.stop_seq, COALESCE(p.delay_dep, p.delay_arr) AS d "
         f"FROM ({db.PREDNIKI_VOZNJE_SQL}) p "
         f"WHERE p.service_date >= ? AND d IS NOT NULL "
+        f"  AND ABS(d) <= {MAX_REALNA_ZAMUDA_S} "
         f"  AND (? IS NULL OR p.service_date <> ?)",
         (trip_id, since, exclude_date, exclude_date),
     ):
@@ -431,27 +432,39 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
                     for seq, d in po_postankih.items()]
         vrstice.sort(key=lambda v: (v[0], v[1]))
 
+    # Vrednost nad `MAX_REALNA_ZAMUDA_S` ni zamuda (glej tam) in ne gre ne v
+    # profil ne med končne. Do 29. 9. 2026 je šla: Nomagov N0317 je imel
+    # mediano 2 min in "najslabšo vožnjo" 608 min, stolpec tega dne pa je
+    # vse prave stisnil ob os. Filter je po vrsticah, ne po dnevih: na 441 od
+    # 738 takih dni se prava in lažna vrednost na isti vožnji izmenjujeta
+    # (549, 551, 2, 551 ...) -- feed pošilja še vozilo z drugega dne.
     by_day: dict[str, list] = {}
     by_stop: dict[int, dict] = {}
     for dan, seq, ime, delay in vrstice:
         if delay is None:
             continue
         by_day.setdefault(dan, []).append((seq, delay))
-        slot = by_stop.setdefault(seq, {"name": ime, "delays": []})
-        slot["delays"].append(delay)
+        if abs(delay) <= MAX_REALNA_ZAMUDA_S:
+            slot = by_stop.setdefault(seq, {"name": ime, "delays": []})
+            slot["delays"].append(delay)
 
     runs = []
     for day, items in sorted(by_day.items()):
         items.sort()
-        delays = [d for _, d in items]
+        dobre = [d for _, d in items if abs(d) <= MAX_REALNA_ZAMUDA_S]
+        if not dobre:
+            continue
+        # Končna je zadnji postanek dneva, ne zadnji dober: vmesna vrednost
+        # bi se predstavljala za končno. Tako šteje tudi `LAST_STOP_SQL`.
+        zadnja = items[-1][1]
         runs.append({
             "service_date": day,
-            "stops_observed": len(items),
-            "final_delay_s": items[-1][1],
-            "max_delay_s": max(delays),
+            "stops_observed": len(dobre),
+            "final_delay_s": zadnja if abs(zadnja) <= MAX_REALNA_ZAMUDA_S else None,
+            "max_delay_s": max(dobre),
         })
 
-    finals = [r["final_delay_s"] for r in runs]
+    finals = [r["final_delay_s"] for r in runs if r["final_delay_s"] is not None]
     profile = [
         {
             "stop_seq": seq, "name": v["name"], "n": len(v["delays"]),
@@ -504,6 +517,15 @@ def history(conn: sqlite3.Connection, train_no: str, days: int = 90,
 #     izstopajočih vrednosti, ne repa prave porazdelitve.
 #
 # Podatki se NE brišejo; to je filter branja. Zajem hrani vse.
+#
+# **Velja za VSE branje zgodovine**, ne le za statistiko: okno vožnje
+# (`history`), "običajno" (`typical_at_stops`), model (`predict`, prek
+# `_dnevi_prednikov` tudi predhodnica) in `backtest`. Do 29. 9. 2026 so
+# ga imeli samo statistika, razrez in pristajalne strani. Izmerjeno na 477
+# avtobusnih vožnjah s tako vrstico, izpuščen dan (22.-28. 9.): model MAE
+# 3,03 -> 2,44 min, strošek 7,59 -> 7,27, precenjenih 4,6 -> 4,2 %;
+# "običajno" 5,83 -> 5,32 min, strošek 10,62 -> 10,38. Ostale vožnje so
+# nespremenjene po sestavi.
 # Meja "tocnosti": pet minut, obicajen prag pri zeleznicah.
 #
 # **V MINUTAH in ne v sekundah**, ker je poleg nje na zaslonu razrez po
@@ -729,7 +751,8 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
             f"FROM want w CROSS JOIN trip a ON a.trip_id = w.trip_id "
             f"CROSS JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
             f"CROSS JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
-            f"WHERE r.service_date >= ? AND d IS NOT NULL",
+            f"WHERE r.service_date >= ? AND d IS NOT NULL "
+            f"  AND ABS(d) <= {MAX_REALNA_ZAMUDA_S}",
             (*params, since),
         ).fetchall()
         for r in rows:
@@ -740,7 +763,8 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
             f"       COALESCE(p.delay_dep, p.delay_arr) AS d "
             f"FROM want w CROSS JOIN ({db.PREDNIKI_SQL}) p "
             f"  ON p.trip_id = w.trip_id AND p.stop_seq = w.stop_seq "
-            f"WHERE p.service_date >= ? AND d IS NOT NULL",
+            f"WHERE p.service_date >= ? AND d IS NOT NULL "
+            f"  AND ABS(d) <= {MAX_REALNA_ZAMUDA_S}",
             (*params, since),
         ).fetchall()
         for r in rows:
@@ -1261,6 +1285,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
         f"FROM trip t JOIN run r ON r.trip_id = t.trip_id "
         f"WHERE {db.voznja_sql('t') + ' = ?' if trip_id else 't.train_no = ?'} "
         f"  AND r.service_date >= ? AND d IS NOT NULL "
+        f"  AND ABS(d) <= {MAX_REALNA_ZAMUDA_S} "
         f"  AND (? IS NULL OR r.service_date <> ?) "
         f"ORDER BY r.service_date, r.stop_seq",
         (db.voznja(trip_id, agency) if trip_id else train_no,

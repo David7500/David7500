@@ -55,12 +55,18 @@ def _delays_by_day(conn: sqlite3.Connection, network: str = NETWORK,
 
     Natancneje: kljuc je VOZNJA (`db.voznja_sql`). Mestni LPP ima za vsak dan
     svoj `trip_id` in backtest brez tega zanj ne bi imel ucne mnozice.
+
+    Strop `stats.MAX_REALNA_ZAMUDA_S` kot v `stats.predict`, sicer bi merili
+    en model in uporabljali drugega. Velja tudi za resnico: vrednost nad tremi
+    urami je feedova zamenjava prometnega dne, ne zamuda, ki bi jo lahko
+    kdo napovedal (od 29. 9. 2026; železnica takih vrstic nima).
     """
     rows = conn.execute(
         f"SELECT {db.voznja_sql('t')} AS train_no, r.service_date, r.stop_seq, "
         "       COALESCE(r.delay_dep, r.delay_arr) AS d "
         "FROM run r JOIN trip t USING (trip_id) "
         "WHERE d IS NOT NULL AND t.network = ? AND r.service_date >= ? "
+        f"  AND ABS(d) <= {stats.MAX_REALNA_ZAMUDA_S} "
         "ORDER BY 1, r.service_date, r.stop_seq",
         (network, od),
     )

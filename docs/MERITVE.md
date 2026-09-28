@@ -1850,3 +1850,39 @@ veljavnostjo od 21. 9.); pet preverjenih vozil 55--145 km od trase. Voženj
 1118 za 28. 9.: 281 proti 1 215 v kopiji izpred uvoza; 33 v feedu brez voznega
 reda. `/api/health` nad 5 s: 24. 9. 7-krat, 25. 9. 14, 26. 9. 5, 27. 9. 0,
 28. 9. 3 -- dnevi s ponovnimi zagoni, ne ta sprememba.
+
+## Zamenjan prometni dan v zgodovini, modelu in „običajno“ (29. 9. 2026)
+
+Povod: iskalnik avtobusov ob 00:03 „mediana +839 min“ iz treh voženj (14, 21
+in 22 h), kartica odstranjena. Isti strop `MAX_REALNA_ZAMUDA_S` (3 h) so imeli
+samo statistika, razrez in pristajalne strani.
+
+Lokalna baza 21. 8.--29. 9. (2,68 M vrstic `run`): nad 3 h avtobusi 10 091
+vrstic (0,40 %), nad 6 h 7 511, železnica 0 od 153 859. Avtobusnih voženj z
+vsaj enim takim dnem 477 od 19 889 (2,4 %; Nomago 316, Arriva 132, AP MS 28),
+slabih dni 738 od 133 426. Na 441 dneh se prava in lažna vrednost na isti
+vožnji izmenjujeta (npr. 549, 551, 2, 551 min) -- feed pošilja še vozilo z
+drugega dne, `run` hrani zadnje sporočilo. Skok med pravim in lažnim delom
+mediana 468 min, p10 200 min: meja 3 h ju loči čisto. Filter zato po
+vrsticah, ne po dnevih.
+
+Okno vožnje (`stats.history`) na prizadetih vožnjah, brez stropa proti s
+stropom: „najslabša vožnja“ višja za mediano 437 min (p90 658), „povprečje
+preteklih“ na najhujšem postanku za 67 min (p90 208), najvišji stolpec
+61-krat višji od najvišjega pravega. Na kajros.app 29. 9.: N0317 mediana
+2 min, najslabša 608; N6172 2 in 521; N0150 7 in 475.
+
+Model in „običajno“, izpuščen dan 22.--28. 9., prizadete vožnje (ostale so
+po sestavi enake), resnica samo vrednosti do 3 h:
+
+| | nalog | MAE | v 5 min | strošek | precenjenih | podcenjenih |
+|---|---|---|---|---|---|---|
+| `predict`, brez stropa | 18 471 | 3,03 | 91,0 % | 7,59 | 4,6 % | 4,4 % |
+| `predict`, s stropom | | **2,44** | **91,4 %** | **7,27** | **4,2 %** | 4,5 % |
+| „običajno“, brez stropa | 9 510 | 5,83 | 83,8 % | 10,62 | 7,3 % | 8,9 % |
+| „običajno“, s stropom | | **5,32** | **84,3 %** | **10,38** | **5,9 %** | 9,7 % |
+
+Pri modelu se napoved spremeni na 3 534 nalogah: boljša 1 542 (skupaj
+12 549 min), slabša 1 988 (skupaj 1 783 min, mediana 0,22 min). Senca
+(`kajros ocena`) meri naprej; njena resnica stropa nima, zato lažne resnice
+ostajajo v obeh stolpcih enako.

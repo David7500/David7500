@@ -1155,6 +1155,49 @@ def test_avtobus_ostanek_omeji_pri_dveh_dneh(conn):
     assert _avtobus_z_zgodovino(conn, 2)[3]["own_delay_s"] == stats.OMEJI_OSTANEK_S
 
 
+def _zamenjani_dnevi(conn, dni):
+    """Poleg dobrih dni še `dni` takih, kjer feed na tretjem postanku pošlje
+    vozilo z drugega prometnega dne: +9 h. Izhodišče je tisti dan pravo."""
+    for k in range(dni):
+        d = _pred(20 + k)
+        _meritev(conn, "ab", d, 1, 0)
+        _meritev(conn, "ab", d, 3, 9 * 3600)
+    conn.commit()
+
+
+def test_model_ne_uci_zamenjave_dneva(conn):
+    """Pol dni zamenjanih: brez stropa bi bila mediana ostanka +4,75 h."""
+    _avtobus_z_zgodovino(conn, 3)
+    _zamenjani_dnevi(conn, 3)
+    got = {p["stop_seq"]: p for p in stats.predict(conn, "A1", 1, 0, trip_id="ab")}
+    assert got[3]["own_delay_s"] == 1800
+
+
+def test_obicajno_brez_zamenjave_dneva(conn):
+    _avtobus_z_zgodovino(conn, 3)
+    _zamenjani_dnevi(conn, 3)
+    got = stats.typical_at_stops(conn, [("ab", 3)])[("ab", 3)]
+    assert got["n"] == 3 and got["median_s"] == 1800
+
+
+def test_zgodovina_brez_zamenjave_dneva(conn):
+    """Okno vožnje: N0317 je kazal mediano 2 min in najslabšo vožnjo 608 min.
+
+    Dan z lažno končno ostane (izhodišče je pravo), a brez končne; dan, ki je
+    ves lažen, odpade.
+    """
+    _avtobus_z_zgodovino(conn, 3)
+    _zamenjani_dnevi(conn, 1)
+    _meritev(conn, "ab", _pred(30), 1, 9 * 3600)
+    _meritev(conn, "ab", _pred(30), 3, 9 * 3600)
+    conn.commit()
+    h = stats.history(conn, "A1", trip_id="ab")
+    assert h["runs_observed"] == 4
+    assert h["summary"]["worst_final_s"] == 1800
+    assert [r["final_delay_s"] for r in h["runs"]].count(None) == 1
+    assert {p["stop_seq"]: p["max_s"] for p in h["by_stop"]} == {1: 0, 3: 1800}
+
+
 def test_vlak_ostanek_omeji_kot_prej(conn):
     """Pri železnici meja ostane -- tam sprememba ni izmerjena."""
     got = _avtobus_z_zgodovino(conn, 5, network="zeleznica")
@@ -1871,6 +1914,8 @@ def test_tabla_zjutraj_vidi_vceraj_zacet_promet(conn):
     assert any(r["train_no"] == "EN 99" for r in vrstice)
     r = next(r for r in vrstice if r["train_no"] == "EN 99")
     assert r["sched"].startswith("2026-09-01T00:56"), r["sched"]
+    # Povezava v okno vožnje mora nesti ta dan, ne dneva vprašanja.
+    assert r["service_date"] == "2026-08-31"
 
     # Podnevi te poizvedbe ni: ob 17:00 včerajšnjega dneva ne gledamo.
     dnevna = journey.board(conn, "Celje", "2026-09-01", 17 * 3600, 180,
