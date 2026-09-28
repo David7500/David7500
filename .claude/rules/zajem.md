@@ -145,6 +145,8 @@ Preverjeno na arwenu po popravku: v minuti 161 vrstic `run` za linijo 25, neznan
 
 **Širiti mejo 10 minut se ne izplača.** Pri liniji 15 od 16:31 do 21:40 v feed prišla ena sama vožnja od šestih, ki bi jih večja meja lahko povezala, in ta bila povezana že tako. Manjka **vozilo v feedu**, ne pravilo.
 
+**Zip brez prevoznika se zavrne** (`gtfs.izginuli_prevozniki`). 28. 9. 2026 je DUJPP (`dujpp.si/gtfs/dujpp-ijpp.zip`, derp.si ga le prenese) objavil 783 prog SŽ in **0 voženj**; uvoz ob 04:22 pobrisal vozni red vseh 726 vlakov, tabla za Ljubljano „postaje ne poznam“. Feed zamud in leg ob 08:13 ni imel nobenega vlaka (0 od 560 vnosov) — z uvozom tega ne popraviš, stari vozni red pa vsaj pokaže odhode. Meja je nič, ne delež: LPP v IJPP med 30. 8. in 28. 9. padel s 3 060 na 556 voženj (−82 %) brez opažene napake — prag v deležu bi bil ugibanje.
+
 **Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi — pozneje ga ni. Če je uvoz že tekel brez tega (arwen 22. 9.): `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.
 
 **Kar še ostane neznano, se šteje.** `ingest` vrne `neznanih`, zajem zapiše v `meta` (`rt_neznanih`, `lpp_rt_neznanih`, oblika `n/vseh`), pregled za skrbnika pokaže med zdravjem. Ob zamenjavi 22. 9. v IJPP 16 od 662 (2,4 %); prag za rdečo 2 %. Brez števca se je napaka videla šele, ko je potnik čakal na avtobus.

@@ -406,6 +406,29 @@ ZAMENJAVA_PREMIK_S = 10 * 60
 ZAMENJAVA_DELEZ = 0.6
 
 
+class UvozZavrnjen(Exception):
+    """Zip bi izbrisal ves vozni red prevoznika; stari ostane v bazi."""
+
+
+def izginuli_prevozniki(conn: sqlite3.Connection, zeljeni: set[str],
+                        v_zipu: set[str]) -> list[str]:
+    """Prevozniki, ki imajo v bazi vozni red, nov zip pa zanje nobene vožnje.
+
+    28. 9. 2026 je DUJPP objavil zip s 783 progami SŽ in nič vožnjami (derp.si
+    ga je le prenesel). Uvoz ga je sprejel, `DELETE FROM sched` je pobrisal
+    vozni red vseh 726 vlakov, stran je za Ljubljano pisala „postaje ne
+    poznam“. Prevoznik ne izgine čez noč; zip, ki trdi drugače, je pokvarjen.
+
+    Meja je nič in ne delež: med 30. 8. in 28. 9. je LPP v IJPP padel s 3 060
+    na 556 voženj (-82 %) in nihče ni opazil napake. Prag v deležu bi bil
+    ugibanje, prevoznik brez vseh voženj pa ni.
+    """
+    imajo = {r[0] for r in conn.execute(
+        "SELECT DISTINCT t.agency FROM trip t "
+        "WHERE EXISTS (SELECT 1 FROM sched s WHERE s.trip_id = t.trip_id)")}
+    return sorted((imajo & zeljeni) - v_zipu)
+
+
 def _z_voznim_redom(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in conn.execute(
         "SELECT trip_id FROM trip WHERE start_s IS NOT NULL")}
@@ -568,6 +591,14 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
 
         routes = {r["route_id"]: r for r in _rows(zf, "routes.txt") if _wanted(r)}
         trips = {t["trip_id"]: t for t in _rows(zf, "trips.txt") if t["route_id"] in routes}
+        # Preden karkoli izbrišemo in preden beremo 4,85 milijona točk tras.
+        manjka = izginuli_prevozniki(
+            conn, {config.RAIL_AGENCY_ID} | extra,
+            {routes[t["route_id"]]["agency_id"] for t in trips.values()})
+        if manjka:
+            raise UvozZavrnjen(
+                f"zip nima nobene vožnje prevoznika {', '.join(manjka)}, ki ima "
+                "v bazi vozni red -- stari vozni red ostane")
         # Nadomestni prevozi vozijo po cesti. Njihova geometrija ne sme v
         # `edge`: mreza prog bi dobila odseke, ki niso proge, in dolzine, ki
         # niso zelezniske. Za vozni red in iskanje povezav pa so enakovredni.

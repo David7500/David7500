@@ -52,3 +52,46 @@ def test_poenoti_imena_zdruzi_le_isto_mesto():
     assert stops["b1"]["name"] == "Celje"       # 112 km -- ne zliva se
     assert stops["b2"]["name"] == "Čelje"
     assert stops["c1"]["name"] == "AMZS"        # brez para ostane, kot je
+
+
+def _zip(pot, trips):
+    """Najmanjši IJPP zip: ena proga SŽ in vožnje, ki jih dobi."""
+    import zipfile
+    with zipfile.ZipFile(pot, "w") as zf:
+        zf.writestr("routes.txt", "route_id,agency_id,route_short_name,route_type\n"
+                                  "r1,1161,LP 2010,2\n")
+        zf.writestr("trips.txt", "trip_id,route_id,service_id,shape_id,trip_headsign\n"
+                    + "".join(f"{t},r1,s1,,Ljubljana\n" for t in trips))
+        zf.writestr("stop_times.txt",
+                    "trip_id,stop_sequence,stop_id,arrival_time,departure_time\n"
+                    + "".join(f"{t},1,A,08:00:00,08:00:00\n{t},2,B,08:30:00,08:30:00\n"
+                              for t in trips))
+        zf.writestr("stops.txt", "stop_id,stop_name,stop_lat,stop_lon\n"
+                                 "A,Kamnik,46.2,14.6\nB,Ljubljana,46.05,14.5\n")
+        zf.writestr("shapes.txt", "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\n")
+        zf.writestr("calendar_dates.txt", "service_id,date,exception_type\n"
+                                          "s1,20260928,1\n")
+    return pot
+
+
+def test_zip_brez_vlakov_ne_izbrise_voznega_reda(tmp_path):
+    """DUJPP je 28. 9. 2026 objavil zip s progami SŽ in brez njihovih voženj.
+
+    Uvoz ga je sprejel in pobrisal vozni red vseh vlakov; zato ga zdaj zavrne,
+    zip z vožnjami pa gre skozi kot prej.
+    """
+    import pytest
+    from kajros import db
+    c = db.connect(":memory:")
+    db.init(c)
+    gtfs.import_static(c, _zip(tmp_path / "prej.zip", ["v1"]), lpp_zip=None)
+    assert c.execute("SELECT COUNT(*) FROM sched").fetchone()[0] == 2
+
+    with pytest.raises(gtfs.UvozZavrnjen, match="1161"):
+        gtfs.import_static(c, _zip(tmp_path / "prazen.zip", []), lpp_zip=None)
+    assert c.execute("SELECT COUNT(*) FROM sched").fetchone()[0] == 2, \
+        "zavrnjen uvoz je vseeno pobrisal vozni red"
+
+    # Pravi nov vozni red: druge vožnje, isti prevoznik.
+    izid = gtfs.import_static(c, _zip(tmp_path / "nov.zip", ["v2", "v3"]), lpp_zip=None)
+    assert izid["trips_rail"] == 2

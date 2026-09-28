@@ -40,7 +40,13 @@ def cmd_update(args):
         if not path.exists():
             path = gtfs.download(conn, force=True)
     print(f"prenesen {path} ({path.stat().st_size / 1e6:.1f} MB), uvazam ...")
-    print(json.dumps(gtfs.import_static(conn, path, lpp_zip=lpp), indent=2))
+    try:
+        izid = gtfs.import_static(conn, path, lpp_zip=lpp)
+    except gtfs.UvozZavrnjen as exc:
+        # Zadnja vrstica izpisa gre v dnevnik strežnika (`refresh_timetable`).
+        print(f"uvoz zavrnjen: {exc}")
+        sys.exit(1)
+    print(json.dumps(izid, indent=2))
 
 
 def cmd_poll(args):
