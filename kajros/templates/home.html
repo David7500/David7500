@@ -7,6 +7,7 @@
   {% set og_desc = "Odhodi in zamude slovenskih vlakov in avtobusov, izmerjeni iz odprtih podatkov." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -35,6 +36,8 @@
       {{ znak(22, "#f0934f") }}
       <span>kajros</span>
     </header>
+
+    {{ obvestila_mesto("vse") }}
 
     {#- Vsebino izriše `home.js`: v aplikaciji budilke iz telefona
         (`Kajros.seznam()`), v brskalniku povabilo na aplikacijo. #}

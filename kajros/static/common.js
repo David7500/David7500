@@ -1391,6 +1391,95 @@ function sledi(cb) {
   return () => navigator.geolocation.clearWatch(id);
 }
 
+// ---------- obvestila skrbnika ----------
+// Kar kajros ve o sebi in podatki tega ne povedo sami: „vozni red avtobusov
+// je danes pomanjkljiv". Piše jih skrbnik v /admin (`obvestila.py`). Stran
+// ima zanje mesto `[data-obvestila="<omrežje>"]`; kjer ga ni, ni obvestil.
+//
+// Nalaga jih brskalnik in ne predloga, ker aplikacija za Android stran pusti
+// odprto ure in dneve: obvestilo, objavljeno medtem, se mora pokazati, ko se
+// potnik vrne, ne šele ob naslednjem nalaganju.
+
+const OBV_SKRITA = "kajros:obvestila-skrita";
+// Zaprtih si zapomnimo toliko najnovejših. Številke rastejo, zato starejše
+// od teh ne morejo biti več veljavne.
+const OBV_SPOMIN = 50;
+const OBV_OMREZJE = { zeleznica: "vlaki", avtobus: "avtobusi" };
+
+function obvSkrita() {
+  try {
+    const v = JSON.parse(localStorage.getItem(OBV_SKRITA) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];     // zasebno okno: zaprto obvestilo se pokaže znova, nič hujšega
+  }
+}
+
+function obvSkrij(id) {
+  const v = [...new Set([id, ...obvSkrita()])].sort((a, b) => b - a).slice(0, OBV_SPOMIN);
+  try { localStorage.setItem(OBV_SKRITA, JSON.stringify(v)); } catch (e) { /* glej zgoraj */ }
+}
+
+/** „danes ob 11:20“ ali „27. 9. ob 11:20“ -- obvestilo brez časa se ne da
+ *  presoditi: včerajšnje „zamude manjkajo“ danes morda ne velja več. */
+function obvKdaj(iso) {
+  const dan = new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+  return `${dan === todayIso() ? "danes" : dayLabel(dan)} ob ${hhmm(iso)}`;
+}
+
+function obvestiloHtml(o, vseOmrezje) {
+  const komu = vseOmrezje && o.omrezje ? ` · ${OBV_OMREZJE[o.omrezje]}` : "";
+  return `<div class="obvestilo" data-id="${o.id}">
+    <svg class="obv-znak" width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>
+    </svg>
+    <div class="obv-telo">
+      <div class="obv-glava">Obvestilo kajrosa${komu} · ${escapeHtml(obvKdaj(o.objavljeno))}</div>
+      <p class="obv-besedilo">${escapeHtml(o.besedilo)}</p>
+    </div>
+    <button type="button" class="obv-zapri" aria-label="Zapri obvestilo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>`;
+}
+
+(function obvestila() {
+  const mesto = document.querySelector("[data-obvestila]");
+  if (!mesto) return;
+  const omrezje = mesto.dataset.obvestila || "vse";
+  let zadnje = "";
+
+  const nalozi = async () => {
+    const r = await fetch(`/api/obvestila?network=${encodeURIComponent(omrezje)}`);
+    if (!r.ok) return;
+    const skrita = new Set(obvSkrita());
+    const vidna = (await r.json()).obvestila.filter((o) => !skrita.has(o.id));
+    // Isto kot prej se ne riše znova: pasica bi utripnila ob vsaki vrnitvi.
+    const odtis = JSON.stringify(vidna);
+    if (odtis === zadnje) return;
+    zadnje = odtis;
+    mesto.innerHTML = vidna.map((o) => obvestiloHtml(o, omrezje === "vse")).join("");
+    mesto.hidden = !vidna.length;
+  };
+
+  mesto.addEventListener("click", (e) => {
+    const gumb = e.target.closest(".obv-zapri");
+    if (!gumb) return;
+    const kartica = gumb.closest(".obvestilo");
+    obvSkrij(Number(kartica.dataset.id));
+    kartica.remove();
+    zadnje = "";
+    mesto.hidden = !mesto.querySelector(".obvestilo");
+  });
+
+  // Pet minut, dokler je stran vidna, in ob vrnitvi nanjo, če je od zadnjega
+  // branja minilo več kot pol tega. Pogosteje ni treba: obvestilo pove
+  // stanje za ure, ne za minute.
+  pollWhileVisible(nalozi, 5 * 60000);
+})();
+
 // Service worker. Registrira se sam in samo tam, kjer sme.
 //
 // `isSecureContext` je pogoj brskalnika, ne nas: po `http://192.168.1.164:8001`

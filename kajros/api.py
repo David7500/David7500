@@ -30,7 +30,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, naslovi,
-               obisk, peroni, pot, pristanek, stats, stik)
+               obisk, obvestila, peroni, pot, pristanek, stats, stik)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -146,6 +146,12 @@ def _napaka_html(request: Request, exc: StarletteHTTPException):
 # zahtevajo izrecno. Tako mesanja ne more povzrociti pozabljen parameter.
 NETWORK_Q = Query("zeleznica", pattern="^(zeleznica|avtobus)$",
                   description="zeleznica (vlaki + nadomestni prevozi) ali avtobus")
+#: Iskanje postaj sme na ENI strani teci cez obe omrezji -- na poti od vrat
+#: do vrat, kjer sta vlak in avtobus lahko v isti verigi -- in obvestila na
+#: straneh, ki kazejo obe. Drugod ostane privzeta `zeleznica`, ker je bilo
+#: mesanje merljivo skodljivo.
+NETWORK_ISKANJE_Q = Query("zeleznica", pattern="^(zeleznica|avtobus|vse)$",
+                          description="zeleznica, avtobus ali vse")
 
 # Poti relativno na paket, da delajo enako v dev checkoutu in na /opt/kajros.
 _PKG_DIR = Path(__file__).parent
@@ -966,6 +972,35 @@ def kazalo_postajalisc(request: Request):
     return _kazalo_stran(request, "avtobus")
 
 
+def _obvestila_veljavna() -> list[dict]:
+    """Veljavna obvestila, predpomnjena do naslednjega zapisa.
+
+    Vpraša jih vsaka stran aplikacije ob nalaganju; brez predpomnilnika je
+    to povezava na bazo na ogled za tabelo, ki je skoraj vedno prazna.
+    Značka je `obvestila.razlicica`, ki jo premakne vsak zapis v tem procesu;
+    minuta je varovalka, če bi kdaj pisal kdo drug.
+    """
+    return _predpomni("obvestila", obvestila.razlicica, 60,
+                      lambda: _conn_klic(obvestila.veljavna))
+
+
+@app.get("/api/obvestila")
+def api_obvestila(network: str = NETWORK_ISKANJE_Q):
+    """Obvestila skrbnika za stran omrežja; `vse` za domačo, zemljevid, pot.
+
+    Obe omrežji zadeva obvestilo brez omrežja. Stran vsako pokaže, dokler
+    ne poteče (`velja_do`) ali ga potnik ne zapre.
+    """
+    return {"obvestila": [
+        {k: o[k] for k in ("id", "besedilo", "omrezje", "objavljeno", "velja_do")}
+        for o in obvestila.za_omrezje(_obvestila_veljavna(), network)]}
+
+
+# Pristajalne strani so brez JS, zato obvestilo izrišejo same (`_obvestila.html`).
+templates.env.globals["obvestila_za"] = lambda network: obvestila.za_omrezje(
+    _obvestila_veljavna(), network)
+
+
 @app.get("/api/health")
 def api_health():
     """Stanje zajema. Po ponovnem zagonu gostitelja preveri prav to --
@@ -1206,13 +1241,6 @@ def api_stations(network: str = NETWORK_Q):
         lambda: json.dumps(_conn_klic(lambda c: stats.stations(c, network)),
                            ensure_ascii=False, separators=(",", ":")).encode())
     return Response(content=telo, media_type="application/json")
-
-
-#: Iskanje postaj sme na ENI strani teci cez obe omrezji -- na poti od vrat
-#: do vrat, kjer sta vlak in avtobus lahko v isti verigi. Drugod ostane
-#: privzeta `zeleznica`, ker je bilo mesanje merljivo skodljivo.
-NETWORK_ISKANJE_Q = Query("zeleznica", pattern="^(zeleznica|avtobus|vse)$",
-                          description="zeleznica, avtobus ali vse")
 
 
 @app.get("/api/stations/index")
@@ -2554,6 +2582,9 @@ def admin_podatki(request: Request,
         # Samo število za značko; zemljevid in sledi so v `/admin/deljenje`.
         deljenje.init(conn)
         out["deljenje"] = {"vklopljeno": config.DELI, "zdaj": deljenje.deli_zdaj(conn)}
+        out["obvestila"] = {"seznam": obvestila.seznam(conn),
+                            "najdaljse": obvestila.NAJDALJSE,
+                            "najdlje_dni": obvestila.NAJDLJE_S // 86400}
     out["zdravje"] = api_health()
     raba = shutil.disk_usage(config.DATA_DIR)
     out["stroj"] = {
@@ -2601,6 +2632,41 @@ def _admin_sporocilo(id_: int, polja: dict) -> dict:
         prebrano = (polja.get("prebrano") or ["1"])[0] != "0"
         stik.oznaci_prebrano(conn, id_, prebrano)
     return {"id": id_, "prebrano": prebrano}
+
+
+@app.post(f"{ADMIN_POT}/obvestila", include_in_schema=False)
+async def admin_obvestila(request: Request):
+    """Objavi, umakni ali izbriši obvestilo potnikom (`obvestila.py`).
+
+    Četrta pisalna pot (28. 9. 2026), a ne nova izpostavljenost: zaprta je z
+    istim žetonom kot pregled in piškotek nosi samo pot `/admin`. Vsa
+    dejanja so na eni poti iz istega razloga kot pri sporočilih.
+    """
+    _preveri_admina(request)
+    polja = parse_qs(await _preberi_telo(request))
+    return await run_in_threadpool(_admin_obvestila, polja)
+
+
+def _admin_obvestila(polja: dict) -> dict:
+    def p(ime: str) -> str:
+        return (polja.get(ime) or [""])[0]
+
+    akcija = p("akcija")
+    with _conn() as conn:
+        try:
+            if akcija == "objavi":
+                id_ = obvestila.objavi(conn, p("besedilo"), p("omrezje"),
+                                       obvestila.rok(p("do")))
+                return {"id": id_, "objavljeno": True}
+            if not p("id").isdigit():
+                raise obvestila.Zavrnjeno("Manjka številka obvestila.")
+            if akcija == "umakni":
+                return {"id": int(p("id")), "umaknjeno": obvestila.umakni(conn, int(p("id")))}
+            if akcija == "brisi":
+                return {"id": int(p("id")), "izbrisano": obvestila.izbrisi(conn, int(p("id")))}
+            raise obvestila.Zavrnjeno("Neznano dejanje.")
+        except obvestila.Zavrnjeno as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 # --- HEAD -------------------------------------------------------------------

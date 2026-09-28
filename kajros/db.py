@@ -292,6 +292,17 @@ CREATE TABLE IF NOT EXISTS sz_zamuda (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS sz_zamuda_ts ON sz_zamuda(zadnjic_ts);
 
+-- Obvestila skrbnika potnikom (`obvestila.py`). Vsako ima rok; umaknjeno
+-- dobi rok v preteklosti in ostane, da se ve, kaj je bilo recenega.
+-- `omrezje` NULL = obe omrezji.
+CREATE TABLE IF NOT EXISTS obvestilo (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    besedilo TEXT    NOT NULL,
+    omrezje  TEXT,
+    od_ts    INTEGER NOT NULL,
+    do_ts    INTEGER NOT NULL
+);
+
 -- Tir vlaka na postaji s table SŽ (`peroni.py`). Kljuc je koledarski dan
 -- table in stevilka vlaka brez vrste, ker tabla SZ drugega ne pozna; postaja
 -- je nase ime. `prvi` je tir ob prvem branju -- razlika do `tir` je

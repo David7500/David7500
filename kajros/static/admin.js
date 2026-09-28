@@ -666,6 +666,152 @@ async function obSporocilu(e) {
   }
 }
 
+// ------------------------------------------------------------------ obvestila
+
+const OBV_KOMU = [["", "vsem"], ["zeleznica", "vlaki"], ["avtobus", "avtobusi"]];
+// Rok od zdaj. „noč“ = 3:00, ko se konča obratovalni dan: „danes je vozni
+// red pomanjkljiv“ jutri ne velja več, ob polnoči pa še vozi zadnji vlak.
+const OBV_ROKI = [["noc", "do 3:00"], ["24", "24 ur"], ["72", "3 dni"], ["168", "7 dni"]];
+
+/** Osnutek preživi osvežitev: pregled vsako minuto nariše zavihek znova. */
+let obvOsnutek = { besedilo: "", omrezje: "", do: "" };
+
+function obvRok(kaj) {
+  const d = new Date();
+  if (kaj === "noc") {
+    if (d.getHours() >= 3) d.setDate(d.getDate() + 1);
+    d.setHours(3, 0, 0, 0);
+  } else {
+    d.setTime(d.getTime() + Number(kaj) * 3600000);
+    d.setSeconds(0, 0);
+  }
+  const dve = (n) => String(n).padStart(2, "0");
+  return `${vIso(d)}T${dve(d.getHours())}:${dve(d.getMinutes())}`;
+}
+
+function obvCas(iso) { return `${dayLabel(iso.slice(0, 10))} ob ${hhmm(iso)}`; }
+
+function obvObrazec(o) {
+  if (!obvOsnutek.do) obvOsnutek.do = obvRok("noc");
+  const gumbi = (ime, izbire, izbrana) => izbire.map(([v, n]) =>
+    `<button type="button" data-${ime}="${v}" aria-pressed="${v === izbrana}">${n}</button>`).join("");
+  return `<section class="adm-plosca adm-obv">
+    <h2>Novo obvestilo <small>na vrhu strani, dokler ne poteče ali ga potnik ne zapre</small></h2>
+    <p class="adm-pod">Na straneh vlakov samo „vsem“ in „vlaki“, na avtobusnih „vsem“ in „avtobusi“;
+      domača stran, zemljevid in pot pokažejo vsa. Največ ${o.najdlje_dni} dni.</p>
+    <form id="obv-obrazec" novalidate>
+      <textarea id="obv-besedilo" rows="3" maxlength="${o.najdaljse}"
+        placeholder="npr. Vozni red avtobusov je danes pomanjkljiv — nekaterih voženj ni.">${escapeHtml(obvOsnutek.besedilo)}</textarea>
+      <div class="adm-obv-vrsta"><span>Komu</span>
+        <div class="mode-switch" id="obv-komu">${gumbi("komu", OBV_KOMU, obvOsnutek.omrezje)}</div></div>
+      <div class="adm-obv-vrsta"><span>Velja do</span>
+        <div class="mode-switch" id="obv-roki">${gumbi("rok", OBV_ROKI, "")}</div>
+        <input type="datetime-local" id="obv-do" class="adm-datum" value="${obvOsnutek.do}"></div>
+      <div class="adm-obv-dno">
+        <span class="adm-obv-stevec" id="obv-stevec">${obvOsnutek.besedilo.length} / ${o.najdaljse}</span>
+        <span class="adm-obv-izid" id="obv-izid" role="status"></span>
+        <button type="submit" class="btn" id="obv-objavi">Objavi</button>
+      </div>
+    </form>
+  </section>
+  <section class="adm-plosca adm-obv"><h2>Objavljena <small>umaknjena in potekla ostanejo, da se ve, kaj je bilo rečeno</small></h2>
+    <div id="obv-seznam" class="adm-sporocila"></div></section>`;
+}
+
+function obvSeznam(seznam) {
+  if (!seznam.length) return prazno("obvestil še ni bilo");
+  // Besedilo je pisal skrbnik, a gre vseeno skozi `escapeHtml`: pregled ne
+  // sme zaupati ničemur, kar pride iz baze.
+  return seznam.map((v) => `
+    <article class="adm-sporocilo adm-obvestilo${v.velja ? "" : " je-prebrano"}" data-id="${v.id}">
+      <header class="adm-sp-glava">
+        <span class="adm-sp-od">${v.velja ? `velja do ${obvCas(v.velja_do)}` : `poteklo ${obvCas(v.velja_do)}`}</span>
+        <span class="adm-sp-kje">${v.omrezje === "zeleznica" ? "vlaki" : v.omrezje === "avtobus" ? "avtobusi" : "vsem"}
+          · objavljeno ${obvCas(v.objavljeno)}</span>
+        ${v.velja
+          ? `<button type="button" class="adm-sp-gumb" data-akcija="umakni">umakni</button>`
+          : `<button type="button" class="adm-sp-gumb adm-sp-brisi" data-akcija="brisi">izbriši</button>`}
+      </header>
+      <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p>
+    </article>`).join("");
+}
+
+async function obvPosli(polja) {
+  const r = await fetch("/admin/obvestila", {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams(polja).toString(),
+  });
+  if (r.ok) return r.json();
+  let razlog = `strežnik: ${r.status}`;
+  try { razlog = (await r.json()).detail || razlog; } catch (e) { /* ni JSON */ }
+  throw new Error(razlog);
+}
+
+function obvPovezi(o) {
+  const besedilo = el("obv-besedilo");
+  besedilo.addEventListener("input", () => {
+    obvOsnutek.besedilo = besedilo.value;
+    el("obv-stevec").textContent = `${besedilo.value.length} / ${o.najdaljse}`;
+  });
+  el("obv-do").addEventListener("change", (e) => { obvOsnutek.do = e.target.value; });
+  el("obv-komu").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-komu]");
+    if (!b) return;
+    obvOsnutek.omrezje = b.dataset.komu;
+    el("obv-komu").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  });
+  el("obv-roki").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-rok]");
+    if (b) el("obv-do").value = obvOsnutek.do = obvRok(b.dataset.rok);
+  });
+  el("obv-obrazec").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const gumb = el("obv-objavi");
+    gumb.disabled = true;
+    el("obv-izid").textContent = "";
+    try {
+      await obvPosli({ akcija: "objavi", besedilo: obvOsnutek.besedilo,
+                       omrezje: obvOsnutek.omrezje, do: el("obv-do").value });
+      obvOsnutek = { besedilo: "", omrezje: "", do: "" };
+      el("vsebina").innerHTML = "";          // obrazec nastane znova, prazen
+      await osvezi();
+      el("obv-izid").textContent = "Objavljeno.";
+    } catch (err) {
+      el("obv-izid").textContent = err.message;
+      el("obv-izid").classList.add("je-napaka");
+    } finally {
+      gumb.disabled = false;
+    }
+  });
+  el("obv-seznam").addEventListener("click", async (e) => {
+    const gumb = e.target.closest("button[data-akcija]");
+    if (!gumb) return;
+    const akcija = gumb.dataset.akcija;
+    if (akcija === "umakni" && !confirm("Umaknem obvestilo? Potniki ga ne bodo več videli.")) return;
+    if (akcija === "brisi" && !confirm("Izbrišem obvestilo iz seznama? Tega ni mogoče razveljaviti.")) return;
+    gumb.disabled = true;
+    try {
+      await obvPosli({ akcija, id: gumb.closest(".adm-obvestilo").dataset.id });
+      await osvezi();
+    } catch (err) {
+      alert(err.message);
+      gumb.disabled = false;
+    }
+  });
+}
+
+/** Obrazec nastane enkrat in ostane: osvežitev nariše samo seznam, sicer bi
+ *  skrbniku sredi pisanja izginil kazalec. */
+function obvestilaRisi(v, d) {
+  const o = d.obvestila || { seznam: [], najdaljse: 280, najdlje_dni: 30 };
+  if (!el("obv-obrazec")) {
+    v.innerHTML = obvObrazec(o);
+    obvPovezi(o);
+  }
+  el("obv-seznam").innerHTML = obvSeznam(o.seznam);
+}
+
 // ------------------------------------------------------------------ noga
 
 function noga(d) {
@@ -689,7 +835,7 @@ function noga(d) {
 /** `#zgodovina/teden/2026-09-14` -- stanje je v naslovu, da ga ohrani osvežitev. */
 function preberiNaslov() {
   const [zav, v, d] = location.hash.slice(1).split("/");
-  const zavihek = ["stanje", "zgodovina", "sporocila", "deljenje"].includes(zav) ? zav : "stanje";
+  const zavihek = ["stanje", "zgodovina", "sporocila", "obvestila", "deljenje"].includes(zav) ? zav : "stanje";
   if (zavihek === "zgodovina") {
     izbor = {
       vrsta: OBDOBJA[v] ? v : "dan",
@@ -716,6 +862,7 @@ function risi() {
   // zemljevid bi vsako minuto nastal znova.
   if (zavihek === "deljenje") { deljenjeOdpri(v); return; }
   deljenjeZapri();
+  if (zavihek === "obvestila") { obvestilaRisi(v, zadnji); return; }
   if (zavihek === "sporocila") v.innerHTML = sporocila(zadnji);
   else if (zavihek === "zgodovina") v.innerHTML = zgodovina();
   else v.innerHTML = stanje(zadnji);
@@ -786,6 +933,11 @@ async function osvezi() {
     const s = zadnji.sporocila || {};
     el("sporocil-znacka").hidden = !s.neprebranih;
     el("sporocil-znacka").textContent = s.neprebranih ? String(s.neprebranih) : "";
+    // Veljavno obvestilo je nekaj, kar potniki ta hip berejo: značka je
+    // opomnik, da ga je treba umakniti, ko ne drži več.
+    const obv = ((zadnji.obvestila || {}).seznam || []).filter((o) => o.velja).length;
+    el("obvestil-znacka").hidden = !obv;
+    el("obvestil-znacka").textContent = obv ? String(obv) : "";
     const zdaj = (zadnji.deljenje && zadnji.deljenje.zdaj) || 0;
     el("deljenje-znacka").hidden = !zdaj;
     el("deljenje-znacka").textContent = zdaj ? String(zdaj) : "";

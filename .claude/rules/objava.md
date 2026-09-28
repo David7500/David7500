@@ -82,7 +82,7 @@ Domena registrirana 3. 9. 2026 pri name.comu. Zaenkrat parkirana (`91.195.240.94
 
 **Javna izpostavitev je dolgo odpirala samo branje.** V `api.py` nobene poti razen `GET`, nobenega pisanja v bazo iz zahteve; `delay_report` polni `alerts.py` iz feeda. Tunel ne odpre vrat na usmerjevalniku in skrije domači naslov — nasprotno od preusmeritve vrat.
 
-**Od 12. 9. 2026 ne drži več; izjem natanko dve:** `POST /stik` (obrazec za sporočilo) in `POST /admin/sporocila/{id}` (označevanje prebranega, za žetonom). Vse ostalo ostaja `GET`. Varovalke na enem mestu v `kajros/stik.py`, preizkušene v `tests/test_stik.py`; `test_pisalne_poti_so_nastete` pade, če se seznam tiho podaljša — nova pisalna pot mora biti dodana zavestno, ne mimogrede.
+**Od 12. 9. 2026 ne drži več; izjem je zdaj štiri:** `POST /stik` (obrazec za sporočilo), `POST /api/deli` (deljenje lege, 25. 9.) ter za žetonom `POST /admin/sporocila/{id}` (prebrano, brisanje) in `POST /admin/obvestila` (obvestila potnikom, 28. 9.). Vse ostalo ostaja `GET`. Varovalke v modulu, ki piše (`stik.py`, `deljenje.py`, `obvestila.py`), preizkušene v istoimenskih testih; `test_pisalne_poti_so_nastete` pade, če se seznam tiho podaljša — nova pisalna pot mora biti dodana zavestno, ne mimogrede.
 
 **Odprto: kateri stroj streže.** Merodajen zajem = malina (Pi Zero W), a počasna (obhod `ocena.tick()` 88,7 s proti 0,90 s na razvojnem računalniku). Javni promet nanjo brez predpomnjenja na Cloudflarovem robu ni premišljen.
 

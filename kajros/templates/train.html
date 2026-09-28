@@ -6,6 +6,7 @@
   {% set og_title = train_no ~ " — kajros" %}
   {% set og_desc = "Kje je ta vožnja, koliko zamuja in kdaj pride — izmerjeno iz odprtih podatkov." %}
 {% include "_meta.html" %}
+{% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
@@ -53,6 +54,7 @@
       <!-- Kar velja ZDAJ. Na sirokem zaslonu v preprostem pogledu je to levi
            stolpec, casovnica pa desni; na telefonu je oboje eno za drugim. -->
       <div class="run-now">
+      {{ obvestila_mesto(network | default('zeleznica')) }}
       <div class="section-title">Ta vožnja</div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>

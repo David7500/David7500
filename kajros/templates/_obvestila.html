@@ -1,0 +1,33 @@
+{#
+  Mesto za obvestila kajrosa (`obvestila.py`, `common.js`).
+
+  `mesto` je prazno: napolni ga brskalnik, ker aplikacija stran pusti odprto
+  ure in dneve in se mora obvestilo pokazati tudi takrat. `omrezje` je
+  `zeleznica`, `avtobus` ali `vse` (strani, ki kažejo obe omrežji).
+
+  `izrisana` je za pristajalne strani, ki so brez JS: obvestila so v
+  odgovoru strežnika in se ne dajo zapreti. Oblika ista kot v `common.js`.
+#}
+{% macro mesto(omrezje, razred="") -%}
+<div class="obvestila{% if razred %} {{ razred }}{% endif %}" data-obvestila="{{ omrezje }}" aria-live="polite" hidden></div>
+{%- endmacro %}
+
+{% macro izrisana(omrezje) -%}
+{%- set vsa = obvestila_za(omrezje) -%}
+{%- if vsa %}
+<div class="obvestila">
+  {%- for o in vsa %}
+  <div class="obvestilo">
+    <svg class="obv-znak" width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/>
+    </svg>
+    <div class="obv-telo">
+      <div class="obv-glava">Obvestilo kajrosa · {{ o.objavljeno | ura_dneva }}</div>
+      <p class="obv-besedilo">{{ o.besedilo }}</p>
+    </div>
+  </div>
+  {%- endfor %}
+</div>
+{%- endif %}
+{%- endmacro %}

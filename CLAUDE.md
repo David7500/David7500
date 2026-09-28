@@ -12,7 +12,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
 Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`.
 
-**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (512 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (525 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 
@@ -48,7 +48,7 @@ SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zi
 * **Voznoredne sekunde štejejo od poldneva minus 12 h, ne od polnoči** (GTFS). Epoha ↔ `t_s` samo prek `stats.polnoc()` ali `stats.abs_time()`; na dan premika ure je polnoč za uro zamaknjena (25. 10. 2026 bi bila zamuda LPP +60 min).
 * **Meja med meritvijo in napovedjo = `stats.last_measured()`.** Kar je za zadnjim prevoženim postankom, je napoved — vsak prikaz zamude to upošteva. Napaka je bila že dvakrat na zaslonu.
 * **Omrežje filtriraj znotraj poizvedbe, ne za njo** (`WHERE t.network = ?`). Bil že dvakrat vzrok počasnosti.
-* **Pisalne poti natanko tri** — `POST /stik`, `POST /admin/sporocila/{id}` in `POST /api/deli` (deljenje lege, od 25. 9. 2026). Vse ostalo `GET`. Nova pisalna pot = zavestna odločitev: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke na enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`).
+* **Pisalne poti natanko štiri** — `POST /stik`, `POST /admin/sporocila/{id}`, `POST /api/deli` (deljenje lege, od 25. 9. 2026) in `POST /admin/obvestila` (obvestila potnikom, od 28. 9. 2026, za žetonom). Vse ostalo `GET`. Nova pisalna pot = zavestna odločitev: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke na enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`, `obvestila.py`).
 * **V enem SQL stavku ne mešaj `?` in `:ime`** — sqlite veže po vrstnem redu pojavitve, tiho vrne napačne vrstice.
 * **`run` hrani zadnje stanje postanka**, zato `MAX(stop_seq)` po koncu vožnje ni dokaz, da vozilo še vozi. Živost sklepaj iz `_LIVE_SQL`.
 * **Spremembo prikaza poglej, preden jo razglasiš za končano.** `chromium --headless --disable-gpu --window-size=1850,1000 --virtual-time-budget=7000 --screenshot=$PWD/posnetki/x.png <url>`. V `/tmp` chromium ne more pisati; `posnetki/` v `.gitignore`. **Ne v `$HOME`.**
@@ -76,6 +76,7 @@ kajros/
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   stik.py        sporočila obiskovalcev; piše iz zahteve
+  obvestila.py   obvestila skrbnika potnikom: vsako z rokom in omrežjem
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*
@@ -89,7 +90,7 @@ android/         nativni ovoj z WebView (Kotlin); orodja ločeno v ~/kajros-andr
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` (zamude z zemljevida SŽ, za primerjavo z derp.si) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` (zamude z zemljevida SŽ, za primerjavo z derp.si) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
 
 ## Omrežji: `network` ni `mode`
 
@@ -125,7 +126,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/o-nas` | kaj je kajros, od kod podatki, da ni prevoznikova stran |
 | `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
-| `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu |
+| `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu, obvestila potnikom |
 
 **Pristajalne strani obstajajo zaradi iskalnika in so brez JS**: človek išče „vlak ljubljana koper“, odgovor mora biti v odgovoru strežnika. Meja, katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po prometu, ostalo `noindex`.
 

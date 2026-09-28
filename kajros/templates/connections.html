@@ -7,6 +7,7 @@
   {% set og_desc = page_desc | default('Odhodi, povezave in zamude slovenskih vlakov iz odprtih podatkov.') %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -39,6 +40,8 @@
   </header>
 
   <main class="conn-main">
+
+    {{ obvestila_mesto(network | default('zeleznica')) }}
 
     <!-- Dva vprašanja, ne dva obrazca: "od kod do kam" in "kaj gre s te postaje".
          Drugo je pogostejše in ga aplikacija doslej ni znala odgovoriti. -->

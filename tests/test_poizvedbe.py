@@ -1612,13 +1612,17 @@ def test_pisalne_poti_so_nastete():
 
     `/api/deli` (25. 9. 2026): deljenje lege potnikov. Varovalke so v
     `deljenje.py`: točka mora ležati na trasi vožnje, ki jo trdi.
+
+    `/admin/obvestila` (28. 9. 2026): obvestila potnikom. Zaprta z istim
+    žetonom kot pregled, piše samo skrbnik.
     """
     from fastapi.routing import APIRoute
     from kajros.api import app
 
     pisejo = sorted(r.path for r in app.routes
                     if isinstance(r, APIRoute) and "POST" in r.methods)
-    assert pisejo == ["/admin/sporocila/{id_}", "/api/deli", "/stik"], pisejo
+    assert pisejo == ["/admin/obvestila", "/admin/sporocila/{id_}", "/api/deli",
+                      "/stik"], pisejo
 
 
 def test_head_ni_v_dokumentaciji():

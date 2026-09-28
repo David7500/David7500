@@ -7,6 +7,7 @@
   {% set og_desc = "Kje so slovenski vlaki in avtobusi ta trenutek — edini skupni pogled obeh omrežij." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -125,6 +126,7 @@
 
     <main class="map-area">
       <div id="map"></div>
+      {{ obvestila_mesto("vse", "obvestila-lebdi") }}
       <div id="me-note" class="label-note label-note-3" hidden></div>
       <div id="stop-note" class="label-note label-note-2" hidden></div>
       <div id="label-note" class="label-note" hidden></div>

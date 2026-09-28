@@ -15,6 +15,7 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_obvestila.html" import izrisana as obvestila_izrisana %}
   {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
@@ -30,6 +31,8 @@
       {{ znak(26) }}
       <span>kajros</span>
     </a>
+
+    {{ obvestila_izrisana(network) }}
 
     <h1>{{ vozilo }} {{ od }} → {{ cilj }}</h1>
 

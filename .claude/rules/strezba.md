@@ -167,7 +167,7 @@ Od 12. 9. 2026 `kajros.app` odprt komurkoli. Poti niso za aplikacijo, ampak za b
 
 ## Obrazec za stik: edina pot, ki piše iz zahteve
 
-Do 12. 9. 2026 `api.py` samo `GET`, zapisano kot razlog, zakaj je javna izpostavitev varna. Zdaj dve pisalni poti — `POST /stik` in `POST /admin/sporocila/{id}` — tretje ne sme biti mimogrede: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša.
+Do 12. 9. 2026 `api.py` samo `GET`, zapisano kot razlog, zakaj je javna izpostavitev varna. Zdaj štiri pisalne poti (seznam v CLAUDE.md), nobena nova ne sme priti mimogrede: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša.
 
 **Brisanje in označevanje na ISTI poti** (`POST /admin/sporocila/{id}`, loči ju polje `akcija`), ne vsako na svoji. Pisalne poti so naštete, vsaka nova = odločitev, ne podrobnost. Brisanje nepovratno, ima potrditev: gumb tik ob „prebrano“, zgrešen klik na telefonu bi stal sporočilo.
 
@@ -196,3 +196,14 @@ Zadnja šteje: prve štiri ustavijo preprost robot, peta omeji škodo, kadar jih
 **Besedilo = vnos neznanca, gre skozi `escapeHtml`.** Prelome vrstic ohrani CSS (`white-space: pre-wrap`), ne pretvorba v `<br>` — ta bi bila druga pot, po kateri bi lahko kaj ušlo. Preverjeno z vnosom `<img src=x onerror=…><script>…`: v DOM ni živega elementa.
 
 **Stran o zasebnosti mora ostati skladna.** Tu se prvič shrani, kar je človek napisal sam (e-naslov in besedilo); kdor spremeni, kaj se hrani, spremeni tudi `/zasebnost`. Obrazec se da ugasniti s `KAJROS_STIK_OBRAZEC=0` — takrat poti ni (404), odsek na strani o zasebnosti odpade.
+
+
+## Obvestila kajrosa (`obvestila.py`)
+
+Nastala 28. 9. 2026: DUJPP je objavil vozni red brez vlakov in s pomešanimi trasami, potnik pa ni imel kje prebrati, da ni kriv on. Skrbnik piše v `/admin` (zavihek Obvestila, `POST /admin/obvestila`, `akcija` = `objavi` | `umakni` | `brisi` na isti poti), strani berejo `/api/obvestila?network=zeleznica|avtobus|vse`.
+
+* **Vsako ima rok, največ 30 dni.** Obvestilo, ki ostane, ko razlog ni več res, laže. Umaknjeno dobi rok zdaj in ostane v seznamu pregleda — ve se, kaj je bilo rečeno in do kdaj.
+* **Omrežje kot povsod**: obvestilo brez omrežja gre na vse strani, vlakovno ne na avtobusne. Domača, zemljevid in pot vprašajo `vse` in dobijo oznako omrežja na kartici.
+* **Stran jih naloži sama, ne predloga** (`common.js`, mesto `[data-obvestila]` iz `_obvestila.html`): aplikacija za Android pusti stran odprto ure in dneve, obvestilo se mora pokazati ob vrnitvi (`pollWhileVisible`, 5 min). Pristajalne strani so brez JS, zato jih izrišejo na strežniku (`obvestila_za`), brez gumba za zapiranje.
+* **Zaprto si zapomni brskalnik** (`kajros:obvestila-skrita`, zadnjih 50 številk), ne piškotek: `/zasebnost` obljublja „piškotkov ni“.
+* Predpomnjeno na `obvestila.razlicica` (premakne jo vsak zapis, objava je na strani takoj), rok se preveri še ob strežbi. `/api/obvestila` 3–5 ms.

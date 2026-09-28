@@ -7,6 +7,7 @@
   {% set og_desc = "Kje stojiš, kam moraš in kdaj — s hojo, vlakom in avtobusom v isti verigi." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -31,6 +32,7 @@
 
   <main class="pot">
     <section class="pot-panel" aria-label="Pot">
+      {{ obvestila_mesto("vse") }}
       <h1 class="pot-title">Najhitrejša pot</h1>
       <p class="pot-lead">
         Od vrat do vrat — z vlakom, avtobusom in peš, v eni verigi.
