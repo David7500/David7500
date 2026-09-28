@@ -387,9 +387,15 @@ function vrsticeZdravja(d) {
   // Vožnje iz feeda, ki jih vozni red ne pozna, zajem zavrže. 22. 9. 2026 jih
   // je bilo 16 od 662 (2,4 %) -- tri linije LPP brez vsake zamude; ostanek
   // po popravku na arwenu 5 od 538 (0,9 %).
+  //
+  // Rdeče šele pri vsaj treh vožnjah IN 2 %, kot spodaj pri legi. 28. 9. 2026
+  // ob 23:42 je bila vsa stran rdeča zaradi ene same vožnje: Nomagov N0152,
+  // nagrobnik brez voznega reda, ki ga feed še nosi -- 1 od 29, ker ponoči
+  // vozi malo voženj. Podnevi bi bila ista vožnja 1 od ~600.
   const nez = Object.entries(z.rt_neznanih || {});
-  const nezDel = Math.max(0, ...nez.map(([, [n, vseh]]) => (vseh ? n / vseh : 0)));
-  const nezR = !nez.length ? "" : nezDel >= 0.02 ? "je-slaba" : nezDel > 0 ? "je-mlacna" : "je-dobra";
+  const nezSlabo = nez.some(([, [n, vseh]]) => n >= 3 && vseh && n / vseh >= 0.02);
+  const nezR = !nez.length ? "" : nezSlabo ? "je-slaba"
+    : nez.some(([, [n]]) => n > 0) ? "je-mlacna" : "je-dobra";
   // Obratno: vozilo vozi in ima lego, feed zamud pa ga ne nosi. Od 21. do
   // 25. 9. 2026 ~430 Nomagovih voženj na dan, števec zgoraj pa zelen. Na
   // vožnjah, ki jih feed nosi, je bilo takih 0 od 295. Trojka je [ne v feedu,
