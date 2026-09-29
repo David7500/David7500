@@ -33,8 +33,8 @@ preverjen. Webmaster Tools doda poročila in potrdi lastništvo.
 
 **Narejeno 29. 9. 2026:** uvoz iz Search Console lastnosti vrste „domena“ ne
 najde, zato je stran dodana ročno (`https://kajros.app/`) z oznako
-`msvalidate.01` na domači strani. Ostane: po objavi v Bing Webmaster Tools
-pritisni **Verify** in oddaj `https://kajros.app/sitemap.xml` pod **Sitemaps**.
+`msvalidate.01` na domači strani (oznaka mora ostati). Lastništvo potrjeno,
+`https://kajros.app/sitemap.xml` oddan pod **Sitemaps**.
 
 1. <https://www.bing.com/webmasters> → prijava.
 2. **Import from Google Search Console** (po koraku 1) — prenese lastnost in
