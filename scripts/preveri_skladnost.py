@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, ".")
-from kajros import db, stats                       # noqa: E402
+from kajros import db, pristanek, stats            # noqa: E402
 
 BASE = "http://127.0.0.1:8001"
 napake: list[str] = []
@@ -190,6 +190,26 @@ def tabla_in_okno_isto():
     return None
 
 
+def zemljevid_brez_404():
+    """Vsak naslov iz zemljevida strani mora najti svojo postajo.
+
+    29. 9. 2026 je 36 avtobusnih relacij iz zemljevida vrnilo 404: konec
+    relacije ni bil med postajami kazala, iskalnik pa „Trzin ind.cona“ po
+    „trzin ind cona“ ne najde. Iskalnik je te naslove dobil v roke sami.
+    """
+    conn = db.connect()
+    slabi = []
+    for network in stats.SUMMARY_NETWORKS:
+        kaz = pristanek.kazalo(conn, network)
+        imena = {p["ime"] for p in kaz["postaje"]}
+        for r in kaz["relacije"]:
+            imena |= {r["od"], r["cilj"]}
+        slabi += [ime for ime in sorted(imena)
+                  if pristanek.ime_postaje(conn, kaz, pristanek.slug(ime),
+                                           network) != ime]
+    return None if not slabi else f"{len(slabi)} brez strani: {', '.join(slabi[:5])}"
+
+
 for opis, fn in (
     ("brez osirotelih meritev", brez_sirot),
     ("delež točnih = vsota razredov", vsota_razredov),
@@ -198,6 +218,7 @@ for opis, fn in (
     ("prestop pod ničlo z besedo", prestop_brez_minusa),
     ("ovire povsod ista številka", ovire_povsod_isto),
     ("tabla in okno vožnje ista številka", tabla_in_okno_isto),
+    ("zemljevid strani brez 404", zemljevid_brez_404),
 ):
     preveri(opis, fn)
 

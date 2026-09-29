@@ -159,6 +159,22 @@ def test_kazalo_najde_postajo_samo_po_tocnem_naslovu(conn):
     assert pristanek.ime_postaje(conn, kaz, "ajdov", "zeleznica") is None
 
 
+def test_konec_relacije_zunaj_vrha_postaj_ima_stran(conn, monkeypatch):
+    """Relacija iz zemljevida strani do postaje, ki je med postajami kazala
+    ni. Iskalnik „Sl.Konjice“ po „sl konjice“ ne najde: 29. 9. 2026 je bilo
+    tako 36 avtobusnih relacij iz zemljevida strani 404."""
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('K', 'Sl.Konjice', 46.337, 15.421)")
+    _voznje(conn, "k", 6, ["A", "K"])
+    conn.commit()
+    monkeypatch.setattr(pristanek, "NAJVEC_POSTAJ", 1)
+    stats.summary_build(conn, "pristanek", "zeleznica", 90)
+    kaz = pristanek.kazalo(conn, "zeleznica")
+    assert ("Ajdovščina", "Sl.Konjice") in {(r["od"], r["cilj"]) for r in kaz["relacije"]}
+    assert "Sl.Konjice" not in {p["ime"] for p in kaz["postaje"]}
+    assert pristanek.ime_postaje(conn, kaz, "sl-konjice", "zeleznica") == "Sl.Konjice"
+
+
 def _voznje(c, predpona: str, n: int, postaje: list[str], network="zeleznica",
             agency="1161") -> None:
     for i in range(n):

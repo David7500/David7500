@@ -355,29 +355,39 @@ def kazalo(conn: sqlite3.Connection, network: str) -> dict:
     Ob dveh imenih z istim naslovom obvelja **prometnejše** -- vrstice so
     urejene po prometu in prvo ne prepišemo. Naključna izbira bi pomenila, da
     isti naslov enkrat pelje na eno in drugič na drugo postajo.
+
+    `imena` pozna tudi konce relacij, ki jih med postajami ni (`NAJVEC_POSTAJ`
+    je vrh po prometu, relacije pa izbira `_teza()`). Brez tega je 29. 9. 2026
+    vrnilo 404 36 avtobusnih relacij iz zemljevida strani: „Trzin ind.cona“,
+    „Sl.Konjice“, „Naklo/Kr.“ iskalnik po „trzin ind cona“ ne najde.
     """
     got = stats.summary_get(conn, "pristanek", network)
-    po_relaciji, po_postaji = {}, {}
-    for r in got.get("relacije", []):
-        po_relaciji.setdefault((r["od_pot"], r["cilj_pot"]), r)
+    po_relaciji, po_postaji, imena = {}, {}, {}
     for p in got.get("postaje", []):
         po_postaji.setdefault(p["pot"], p)
-    return {**got, "po_relaciji": po_relaciji, "po_postaji": po_postaji}
+        imena.setdefault(p["pot"], p["ime"])
+    for r in got.get("relacije", []):
+        po_relaciji.setdefault((r["od_pot"], r["cilj_pot"]), r)
+        imena.setdefault(r["od_pot"], r["od"])
+        imena.setdefault(r["cilj_pot"], r["cilj"])
+    return {**got, "po_relaciji": po_relaciji, "po_postaji": po_postaji,
+            "imena": imena}
 
 
 def ime_postaje(conn: sqlite3.Connection, kaz: dict, pot: str,
                 network: str) -> str | None:
     """Naslov -> ime postaje, ali `None`.
 
-    Kazalo pozna samo vrh po prometu (`NAJVEC_POSTAJ`). Ostale postaje strani
-    prav tako imajo -- samo v zemljevidu strani jih ni -- zato je za njih
-    rezerva iskalnik, ki šumnike zlaga po istem pravilu kot `slug()`. Zadetek
-    velja le, če se naslov **natanko** vrne: sicer bi `/postaja/karkoli`
-    postregla najbližjo postajo in iskalnikom odprla neskončen prostor.
+    Kazalo pozna vrh po prometu (`NAJVEC_POSTAJ`) in konce relacij. Ostale
+    postaje strani prav tako imajo -- samo v zemljevidu strani jih ni -- zato
+    je za njih rezerva iskalnik, ki šumnike zlaga po istem pravilu kot
+    `slug()`. Zadetek velja le, če se naslov **natanko** vrne: sicer bi
+    `/postaja/karkoli` postregla najbližjo postajo in iskalnikom odprla
+    neskončen prostor.
     """
-    zapis = kaz["po_postaji"].get(pot)
-    if zapis:
-        return zapis["ime"]
+    ime = kaz["imena"].get(pot)
+    if ime:
+        return ime
     for hit in journey.search_stations(conn, pot.replace("-", " "), limit=5,
                                        network=network):
         if slug(hit["name"]) == pot:
