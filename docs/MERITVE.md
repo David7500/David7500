@@ -1925,3 +1925,7 @@ Avtobusi s 400 na 1 000 dobijo le 6 parov, železnica 74 → meji 1 000 in 400. 
 Cena izračuna na razvojnem računalniku (90 dni): železnica 5,4 s (prej 4,8), avtobusi 17,8 s (prej 15,1). Kandidatov pri avtobusih z mejo 4 voženj 91 128 (prej 26 049).
 
 Novi vrh: Ljubljana ↔ Maribor, Celje, Zidani Most, Pragersko …; avtobusi Ljubljana AP ↔ Maribor AP, Kranj AP, Medvode, Celje AP, Koper. Ljubljana → Maribor: mediana zamude ob prihodu **10 min** na 281 vožnjah; Ljubljana → Koper **16 min** na 92.
+
+**Objavljeno isti dan (9455db6), preverjeno na živi strani:** `/vlak/ljubljana/maribor` in `/vlak/ljubljana/koper` brez `noindex`, zemljevid strani 1 983 naslovov (1 970 z `lastmod`), `http://` in `www.` → 301 na `https://kajros.app` (glava `CF-Visitor` pride skozi tunel). Prvi izračun kazala na arwenu v zahtevi: železnica **26 s**, avtobusi **98 s** — tik pod Cloudflarovo mejo 100 s. Dnevno opravilo ga dela v ozadju, zato to velja le ob povečanju `SUMMARY_VERSION`; po objavi takega commita kazalo ogrej z `curl https://kajros.app/postaje` in `/postajalisca`, preden ga zahteva iskalnik.
+
+Ljubljana → Koper: mediana zamude ob prihodu +15 min, v petih minutah pride **2 %** voženj.
