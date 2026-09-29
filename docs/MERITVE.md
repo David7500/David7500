@@ -1887,6 +1887,14 @@ Pri modelu se napoved spremeni na 3 534 nalogah: boljša 1 542 (skupaj
 (`kajros ocena`) meri naprej; njena resnica stropa nima, zato lažne resnice
 ostajajo v obeh stolpcih enako.
 
+Izhodišče sence za primerjavo (arwen, `ocena --network avtobus --days 7`,
+29. 9. ob 22:40; 22.--29. 9., strop objavljen 29. 9. ob 00:40, torej sedem
+dni pred in en po): na poti 149 967 vrstic, naša ocena MAE 2,16 min, v 5 min
+94,2 %, precenjenih 2,8 %, strošek 6,00; brez prevoznika 2,13 / 6,34. Pred
+odhodom 118 315: prikaz 2,36 min, strošek 6,71; običajno 2,27 / 6,70.
+Primerjava z `--days 3` okoli 3. 10. Pričakovana razlika majhna: strop
+spremeni ~2,4 % avtobusnih voženj.
+
 ## Iskalniki: kajros ni bil nikjer (29. 9. 2026)
 
 Povod: Grok na vprašanje „najboljša slovenska stran za zamude“ kajrosa ni omenil; omenil je zamudil.si, brezavta.si, slomet.si.
