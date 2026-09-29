@@ -591,21 +591,30 @@ def api_catalog():
 
 @app.get("/auth.md", include_in_schema=False)
 def auth_md():
-    """Agentu pove, da prijave ni: bere se brez računa in brez ključa."""
-    b = config.BASE_URL
+    """Agentu pove, da prijave ni: bere se brez računa in brez ključa.
+
+    Cloudflarov pregled išče v datoteki opis registracije in prijave, zato ju
+    naštejemo po imenu -- z resnično vsebino „ni“.
+    """
+    b_ = config.BASE_URL
     return Response(
-        "# Auth.md\n\n## Dostop za agente\n\n"
-        "No account, registration or API key is needed. Every page and every "
-        "read endpoint of kajros is open.\n\n"
-        "Prijave ni: kajros nima računov. Strani in bralni endpointi "
-        "(`GET`) so odprti vsakomur, brez ključa.\n\n"
-        f"- Strani: [{b}/llms.txt]({b}/llms.txt)\n"
-        f"- API: [{b}/.well-known/api-catalog]({b}/.well-known/api-catalog), "
-        f"opis [{b}/openapi.json]({b}/openapi.json)\n"
-        "- Podatki so CC BY-SA 4.0; navedba vira (kajros.app, podatki IJPP prek "
-        "NAP) je pogoj rabe.\n\n"
-        "Pisalne poti (`POST /stik`, `POST /api/deli`) so za obiskovalce in "
-        "niso za agente.\n",
+        "# Auth.md\n\n"
+        "How an AI agent registers and signs in to kajros: it does not need to. "
+        "Kajros has no accounts, so there is nothing to register and nobody to "
+        "sign in as.\n\n"
+        "Registracija in prijava: ju ni, ker kajros nima računov.\n\n"
+        "## Registration\n\n"
+        "None. No account, no API key, no token. Registration is not offered.\n\n"
+        "## Sign in\n\n"
+        "None. Every page and every read endpoint (`GET`) is open to anyone.\n\n"
+        "## Where to start\n\n"
+        f"- Pages: [{b_}/llms.txt]({b_}/llms.txt)\n"
+        f"- API: [{b_}/.well-known/api-catalog]({b_}/.well-known/api-catalog), "
+        f"description [{b_}/openapi.json]({b_}/openapi.json)\n\n"
+        "## Terms\n\n"
+        "Data is CC BY-SA 4.0; attribution (kajros.app, IJPP data via NAP) is a "
+        "condition of use. The write paths (`POST /stik`, `POST /api/deli`) are "
+        "for visitors, not for agents.\n",
         media_type="text/markdown; charset=utf-8")
 
 
