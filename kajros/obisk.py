@@ -49,9 +49,12 @@ import sqlite3
 import threading
 import time
 from datetime import date, datetime, timedelta
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from . import config, db
+
+_NAS = (urlsplit(config.BASE_URL).hostname or "").lower()
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -97,6 +100,96 @@ _BOT = re.compile(
     r"curl/|wget|scrapy|go-http-client|java/|libwww|"
     r"uptime|pingdom|monitor|probe|scanner|nuclei|zgrab|masscan",
     re.I)
+#: Roboti, ki jih hočemo videti po imenu: iskalniki in AI. Vprašanje, na
+#: katerega odgovarjajo, je „ali nas kdo sploh bere“ -- 29. 9. 2026
+#: `site:kajros.app` ni vrnil ničesar in ni bilo mogoče reči, ali je Google
+#: stran sploh obiskal. Ime je tisto, s katerim se robot predstavi sam; kdor
+#: hoče, se predstavi za Googlebot, zato v pregledu piše „po predstavitvi“.
+#:
+#: Iskano je kot podniz v malih črkah, prvi zadetek velja. Kar ni na seznamu,
+#: a je bot, šteje `_BOT` kot doslej.
+ROBOTI = (
+    # iskalniki
+    "Googlebot", "Google-InspectionTool", "GoogleOther", "Storebot-Google",
+    "bingbot", "BingPreview", "DuckDuckBot", "YandexBot", "Applebot",
+    "SeznamBot", "PetalBot", "Baiduspider",
+    # iskanje z AI in odpiranje strani na zahtevo uporabnika
+    "OAI-SearchBot", "ChatGPT-User", "Claude-SearchBot", "Claude-User",
+    "PerplexityBot", "Perplexity-User", "DuckAssistBot", "MistralAI-User",
+    # učenje modelov (Cloudflare jih 29. 9. 2026 zavrača s 403)
+    "GPTBot", "ClaudeBot", "CCBot", "Amazonbot",
+    "Bytespider", "meta-externalagent",
+    # predogled povezave
+    "facebookexternalhit", "Twitterbot", "Slackbot", "TelegramBot",
+    "WhatsApp", "Discordbot",
+)
+_ROBOTI_MALE = tuple((ime.lower(), ime) for ime in ROBOTI)
+
+
+#: Od kod je človek prišel: ime vira po gostitelju v `Referer`. Shrani se samo
+#: ime (Google, ChatGPT …), nikoli naslov, s katerega je prišel -- iskalni niz
+#: bi lahko povedal več o človeku kot o strani. Vrstni red šteje: Gemini je
+#: pod `google.com`, zato pred Googlom. Ime s piko je domena (tudi njene
+#: poddomene), brez pike oznaka kjerkoli v imenu gostitelja (`google.si`,
+#: `com.google.android.googlequicksearchbox` iz aplikacije Google).
+_VIRI = (
+    ("gemini.google.com", "Gemini"), ("google", "Google"),
+    ("bing.com", "Bing"),
+    ("duckduckgo.com", "DuckDuckGo"), ("search.brave.com", "Brave"),
+    ("ecosia.org", "Ecosia"), ("yandex", "Yandex"),
+    ("chatgpt.com", "ChatGPT"), ("openai.com", "ChatGPT"),
+    ("perplexity.ai", "Perplexity"), ("claude.ai", "Claude"),
+    ("copilot.microsoft.com", "Copilot"), ("grok.com", "Grok"),
+    ("t.co", "X"), ("x.com", "X"), ("twitter.com", "X"),
+    ("reddit.com", "Reddit"), ("facebook.com", "Facebook"),
+    ("instagram.com", "Instagram"), ("slo-tech.com", "Slo-Tech"),
+    ("zamudil.si", "zamudil.si"), ("brezavta.si", "brezavta.si"),
+)
+#: Največ znakov imena neznanega vira; ključ ne sme rasti s smetmi v glavi.
+_VIR_DOLZINA = 40
+
+
+def vir_obiska(referer: str, utm: str | None = None) -> str | None:
+    """Ime vira, s katerega je prišel obiskovalec, ali `None` (naravnost,
+    z naše strani ali brez glave).
+
+    ChatGPT glave pogosto ne pošlje, doda pa `?utm_source=chatgpt.com`.
+    """
+    if utm:
+        ime = _znan_vir(utm.strip().lower())
+        if ime:
+            return ime
+    if not referer:
+        return None
+    gost = (urlsplit(referer).hostname or "").lower()
+    if not gost or _ujema(gost, _NAS):
+        return None
+    return _znan_vir(gost) or gost.removeprefix("www.")[:_VIR_DOLZINA]
+
+
+def _ujema(gost: str, iskano: str) -> bool:
+    # Podniz ne zadošča: „reddit.com“ vsebuje „t.co“, „dropbox.com“ „x.com“.
+    if "." in iskano:
+        return gost == iskano or gost.endswith("." + iskano)
+    return iskano in gost.split(".")
+
+
+def _znan_vir(gost: str) -> str | None:
+    for iskano, ime in _VIRI:
+        if _ujema(gost, iskano):
+            return ime
+    return None
+
+
+def robot(ua: str) -> str | None:
+    """Ime znanega robota iz UA ali `None`."""
+    male = (ua or "").lower()
+    for iskano, ime in _ROBOTI_MALE:
+        if iskano in male:
+            return ime
+    return None
+
+
 # Vrstni red šteje: tablični Android nima „Mobi“, iPad pa se v novem
 # iPadOS predstavlja kot Macintosh -- tega ne ujamemo in pade med računalnike.
 _TABLICA = re.compile(r"iPad|Tablet|PlayBook|Silk", re.I)
@@ -125,7 +218,7 @@ CREATE TABLE IF NOT EXISTS obisk_pot (
 -- (`stran` | `aplikacija`) je `zahtev` število prenosov.
 CREATE TABLE IF NOT EXISTS obisk_razrez (
     dan     TEXT    NOT NULL,
-    razsez  TEXT    NOT NULL,      -- ura | naprava | drzava | prenos | prenos_iz
+    razsez  TEXT    NOT NULL,      -- ura | naprava | drzava | prenos | prenos_iz | robot | vir
     kljuc   TEXT    NOT NULL,
     zahtev  INTEGER NOT NULL DEFAULT 0,
     ogledov INTEGER NOT NULL DEFAULT 0,
@@ -319,8 +412,16 @@ def prenos(pot: str, metoda: str, koda: int, obmocje: str) -> str | None:
     return None
 
 
+#: Strani za človeka zunaj `/app`. Do 29. 9. 2026 so bile pristajalne in
+#: besedilne strani „drugo“: ogledi se niso šteli, v pregledu „Katere strani“
+#: jih ni bilo -- prav tistih, na katere pride človek z iskalnika.
+_STRANI = ("/vlak/", "/avtobus/", "/postaja/", "/postajalisce/", "/postaje",
+           "/postajalisca", "/o-nas", "/primerjava", "/stik", "/zasebnost",
+           "/android", "/donacije", "/brez-omrezja")
+
+
 def vrsta_poti(pot: str) -> str:
-    if pot == "/" or pot.startswith("/app"):
+    if pot == "/" or pot.startswith("/app") or pot.startswith(_STRANI):
         return "stran"
     if pot.startswith("/api"):
         return "api"
@@ -338,10 +439,17 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
              drzava: str, koda: int, ms: float, zdaj: float | None = None,
              ura: int | None = None, dan: str | None = None,
              razlicica: str | None = None, okno: bool = False,
-             prenesel: tuple[str, str] | None = None) -> None:
+             prenesel: tuple[str, str] | None = None,
+             robot_ime: str | None = None, vir: str | None = None) -> None:
     """Doda eno zahtevo v števce. Samo pomnilnik -- v bazo gre `izprazni()`.
 
     `prenesel` je (datoteka, od kod) za začetek prenosa APK; glej `prenos()`.
+    `robot_ime` je ime iz `ROBOTI`; gre v razrez `robot`, ki šteje zahteve in
+    oglede strani, a ne ljudi. `vir` je `vir_obiska()`.
+
+    **Prihod z znanega vira je dokaz, da je človek.** Pristajalne strani nimajo
+    JS -- kdor pride z Googla nanje in odide, dokaza po starem ne pošlje in
+    ga ne bi šteli nikoli. Googlebot glave `Referer` z Googla ne pošilja.
     """
     global _prelito
     zdaj = time.time() if zdaj is None else zdaj
@@ -349,7 +457,8 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
     dan = dan or trenutek.strftime("%Y-%m-%d")
     ura = trenutek.hour if ura is None else ura
     ogled = 1 if vrsta == "stran" else 0
-    dokaz = je_dokaz(pot, vrsta, koda)
+    znan_vir = vir is not None and any(vir == ime for _, ime in _VIRI)
+    dokaz = je_dokaz(pot, vrsta, koda) or (bool(ogled) and znan_vir and koda < 400)
     with _zaklep:
         if len(_poti) + len(_razrezi) + len(_ljudje) > NAJVEC_KLJUCEV:
             _prelito = True
@@ -373,6 +482,8 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
             for razsez, k in (("ura", f"{ura:02d}"), ("naprava", naprava_),
                               ("drzava", drzava)):
                 prispevek[("razrez", razsez, k)] = [1, ogled]
+            if vir and ogled:
+                prispevek[("razrez", "vir", vir)] = [1, 1]
             obiskovalec = (dan, kljuc)
             if dokaz and obiskovalec not in _dokazani:
                 _dokazani.add(obiskovalec)
@@ -391,6 +502,9 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
             if prenesel:
                 _pripisi(dan, {("razrez", "prenos", prenesel[0]): [1, 0],
                                ("razrez", "prenos_iz", prenesel[1]): [1, 0]})
+
+        if robot_ime:
+            _pripisi(dan, {("razrez", "robot", robot_ime): [1, ogled]})
 
         o = _ljudje.setdefault((dan, kljuc),
                                [0, 0, 0, 0, int(zdaj), int(zdaj), None, 0])
@@ -436,7 +550,11 @@ def iz_zahteve(request, koda: int, ms: float) -> None:
         return
     glave = request.headers
     ua = glave.get("user-agent", "")
-    bot = je_bot(ua)
+    ime_robota = robot(ua)
+    vir = vir_obiska(glave.get("referer", ""),
+                     request.query_params.get("utm_source"))
+    # `Claude-User` in `Perplexity-User` besede „bot“ nimata, a človek nista.
+    bot = je_bot(ua) or ime_robota is not None
     razlicica, okno = aplikacija(ua)
     apk = prenos(request.url.path, request.method, koda, glave.get("range", ""))
     # `?iz=aplikacija` nosi povezava iz vrstice o posodobitvi v aplikaciji
@@ -449,7 +567,8 @@ def iz_zahteve(request, koda: int, ms: float) -> None:
              bot=bot, naprava_=naprava(ua),
              drzava=(glave.get("cf-ipcountry") or "??").upper()[:2],
              koda=koda, ms=ms, razlicica=razlicica, okno=okno,
-             prenesel=(apk, iz) if apk else None)
+             prenesel=(apk, iz) if apk else None, robot_ime=ime_robota,
+             vir=vir)
 
 
 def _odjemalec(request) -> str | None:

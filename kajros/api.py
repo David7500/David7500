@@ -398,7 +398,7 @@ def favicon():
 # če je ne more niti obiskovalec.
 _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
             "/app/ovire", "/postaje", "/postajalisca",
-            "/android", "/stik", "/zasebnost", "/o-nas"]
+            "/android", "/stik", "/zasebnost", "/o-nas", "/primerjava"]
 
 
 def _sitemap_poti() -> list[tuple[str, str | None]]:
@@ -440,15 +440,28 @@ def sitemap():
         media_type="application/xml")
 
 
+@app.get(f"/{config.INDEXNOW_KLJUC}.txt", include_in_schema=False)
+def indexnow_kljuc():
+    """Dokaz za IndexNow, da naslove pošilja lastnik strani (`indexnow.py`)."""
+    return Response(config.INDEXNOW_KLJUC, media_type="text/plain")
+
+
 @app.get("/robots.txt", include_in_schema=False)
 def robots():
     """Robotom: strani da, `/api/` in `/admin` ne.
 
     Cloudflare postreže svojega, kadar naš manjka, in ta o naših poteh ne ve
     ničesar -- iskalnik je zato indeksiral JSON endpointe kot strani.
+
+    `Content-Signal` (Cloudflarov predlog, ima ga tudi zamudil.si) pove, da
+    smemo biti v iskanju in v odgovorih AI, ki stran preberejo za
+    uporabnika. O učenju modelov (`ai-train`) vrstica namenoma molči: to je
+    odločitev lastnika in jo danes izvaja Cloudflare (403 za GPTBot, ClaudeBot,
+    CCBot), ne ta datoteka.
     """
     return Response(
         "User-agent: *\n"
+        "Content-Signal: search=yes, ai-input=yes\n"
         "Allow: /\n"
         "Disallow: /api/\n"
         "Disallow: /admin\n"
@@ -652,6 +665,15 @@ def o_nas(request: Request):
     """
     return templates.TemplateResponse(
         request, "o_nas.html",
+        {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
+
+
+@app.get("/primerjava", response_class=HTMLResponse, include_in_schema=False)
+def primerjava(request: Request):
+    """Kje preveriti zamudo: vse strani za zamude, vsaka s tem, v čem je
+    dobra. Zakaj in pod katerim pogojem: glava `primerjava.html`."""
+    return templates.TemplateResponse(
+        request, "primerjava.html",
         {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
 
 

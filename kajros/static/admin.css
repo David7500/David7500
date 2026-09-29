@@ -32,7 +32,7 @@ body.adm { font-feature-settings: "tnum" 1; }
 .adm-plosca h2 small { font: 400 12px var(--sans); color: var(--ink-faint); }
 .adm-pod { margin: 0 0 12px; font-size: 12px; color: var(--ink-faint); min-height: 1em; }
 .s12 { grid-column: span 12; } .s8 { grid-column: span 8; } .s5 { grid-column: span 5; }
-.s4 { grid-column: span 4; } .s3 { grid-column: span 3; }
+.s6 { grid-column: span 6; } .s4 { grid-column: span 4; } .s3 { grid-column: span 3; }
 
 /* ---------- ploščice s številko ---------- */
 
@@ -155,7 +155,7 @@ body.adm { font-feature-settings: "tnum" 1; }
    telefon, a se na njem ne sme razpasti v vodoravno drsenje. */
 @media (max-width: 1100px) {
   .adm-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .s8, .s5, .s4, .s3 { grid-column: span 12; }
+  .s8, .s6, .s5, .s4, .s3 { grid-column: span 12; }
   .s12 .adm-app { grid-template-columns: 1fr; gap: 16px; }
 }
 @media (max-width: 620px) {

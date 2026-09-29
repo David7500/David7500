@@ -523,3 +523,68 @@ def test_prenos_steje_brez_dokaza_bot_pa_ne(conn, monkeypatch):
     assert p["skupaj"]["prenosov"] == 2
     # Prenos brez dokaza ni človek: v ljudeh in razrezih ure ga ni.
     assert p["danes"]["ljudi"] == 0 and "ura" not in p["razrezi"]
+
+
+# ------------------------------------------------------------------ roboti
+
+@pytest.mark.parametrize("ua, ime", [
+    ("Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "Googlebot"),
+    ("Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)", "bingbot"),
+    ("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0;"
+     " +https://openai.com/bot", "ChatGPT-User"),
+    ("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1;"
+     " +https://openai.com/gptbot", "GPTBot"),
+    ("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-User/1.0;"
+     " +Claude-User@anthropic.com)", "Claude-User"),
+    ("Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0", None),
+    ("Kajros/1.2 (Android)", None),
+])
+def test_robot_po_imenu(ua, ime):
+    assert obisk.robot(ua) == ime
+
+
+def test_robot_se_steje_po_imenu_in_ni_clovek(conn):
+    """`Claude-User` besede „bot“ nima; brez imena bi čakal kot človek brez JS."""
+    ua = ("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible;"
+          " Claude-User/1.0; +Claude-User@anthropic.com)")
+    obisk.iz_zahteve(_Zahteva("/vlak/ljubljana/maribor", ua=ua), 200, 10.0)
+    obisk.iz_zahteve(_Zahteva("/sitemap.xml", ua=ua), 200, 10.0)
+    obisk.izprazni(conn)
+    r = conn.execute("SELECT kljuc, zahtev, ogledov FROM obisk_razrez "
+                     "WHERE razsez = 'robot'").fetchall()
+    assert [tuple(x) for x in r] == [("Claude-User", 2, 1)]
+    assert conn.execute("SELECT bot FROM obiskovalec").fetchone()["bot"] == 1
+
+
+@pytest.mark.parametrize("referer, utm, vir", [
+    ("https://www.google.com/", None, "Google"),
+    ("https://www.google.si/", None, "Google"),
+    ("android-app://com.google.android.googlequicksearchbox/", None, "Google"),
+    ("https://gemini.google.com/", None, "Gemini"),
+    ("https://www.bing.com/search?q=zamude", None, "Bing"),
+    ("https://www.reddit.com/r/Slovenia/", None, "Reddit"),   # vsebuje „t.co“
+    ("https://t.co/abc", None, "X"),
+    ("https://www.dropbox.com/", None, "dropbox.com"),        # vsebuje „x.com“
+    ("", "chatgpt.com", "ChatGPT"),
+    ("https://kajros.app/postaje", None, None),                # z naše strani
+    ("", None, None),
+])
+def test_vir_obiska(referer, utm, vir):
+    assert obisk.vir_obiska(referer, utm) == vir
+
+
+def test_prihod_z_googla_je_clovek_brez_js(conn):
+    """Pristajalne strani nimajo JS: kdor pride z Googla in odide, dokaza po
+    starem ne pošlje nikoli -- in obiski iz iskalnika bi bili nevidni."""
+    _zabelezi(pot="/vlak/{od}/{cilj}", kljuc="iz-googla", vir="Google")
+    _zabelezi(pot="/vlak/{od}/{cilj}", kljuc="skener")        # brez vira, brez JS
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn)
+    assert p["danes"]["ljudi"] == 1
+    assert [(r["kljuc"], r["ogledov"]) for r in p["razrezi"]["vir"]] == [("Google", 1)]
+
+
+@pytest.mark.parametrize("pot", ["/vlak/ljubljana/maribor", "/postaja/celje",
+                                 "/postaje", "/o-nas"])
+def test_pristajalne_in_besedilne_so_strani(pot):
+    assert obisk.vrsta_poti(pot) == "stran"

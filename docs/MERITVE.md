@@ -1931,3 +1931,10 @@ Novi vrh: Ljubljana ↔ Maribor, Celje, Zidani Most, Pragersko …; avtobusi Lju
 Ljubljana → Koper: mediana zamude ob prihodu +15 min, v petih minutah pride **2 %** voženj.
 
 **Roboti AI na živi strani** (29. 9. 2026 zvečer, glava `User-Agent`, `/vlak/ljubljana/maribor`): **403** GPTBot, ClaudeBot, CCBot, Amazonbot, Bytespider (učenje modelov; Cloudflarova blokada). **200** OAI-SearchBot, ChatGPT-User, Claude-User, Claude-SearchBot, PerplexityBot, Perplexity-User, Applebot, meta-externalagent, DuckAssistBot, MistralAI-User. Iskanje z AI stran torej lahko bere; v podatke za učenje (tudi Common Crawl) ne pride.
+
+**Drugi del istega dne — AI in merjenje:**
+
+* **Obiski z iskalnika se niso šteli.** `obisk.vrsta_poti()` je pristajalne in besedilne strani štel kot „drugo“ (ne „stran“), zato jih v pregledu „Katere strani“ ni bilo; človek pa je tisti, ki pošlje klic iz JS, in pristajalne strani JS nimajo. Kdor je z Googla prišel na `/vlak/…` in odšel, ni bil nikjer. Zdaj: pristajalne in besedilne so strani, prihod z znanega vira (`Referer` Google, Bing, ChatGPT …, ali `utm_source=chatgpt.com`) je dokaz, da je človek. Razreza `vir` in `robot` v `/admin`.
+* **IndexNow** (`kajros/indexnow.py`, ključ na `/<ključ>.txt`): Bing, Yandex, Seznam, Naver in Yep dobijo vse naslove zemljevida strani z enim klicem, brez računa. Google ga ne podpira.
+* `robots.txt` nosi `Content-Signal: search=yes, ai-input=yes`; o `ai-train` molči (odločitev lastnika, izvaja jo Cloudflare).
+* **Iskani pari z redko neposredno vožnjo.** Z mejo 1 vožnje (namesto 4) ima neposredno vožnjo 442 od 491 iskanih železniških parov (prej 371) — Maribor → Koper, Celje → Koper, Koper ↔ Ptuj, Murska Sobota (IC 502/503, 1–3 vožnje v voznem redu). A v prvih 1 000 po teži jih je 200 namesto 199: Koper ima malo vlakov, zato je njegova teža majhna, čeprav je mesto veliko. Meja zato ostane 4. Rešitev bi bila teža po velikosti kraja (npr. OSM `place=city/town` iz `naslovi.sqlite`), ne po prometu postaje — nemerjeno.

@@ -1,0 +1,92 @@
+{#
+  Kje preveriti zamudo: vse strani za zamude slovenskega javnega prevoza,
+  vsaka s tem, v čem je dobra.
+
+  Nastala 29. 9. 2026, ko Grok na vprašanje po najboljši strani za zamude
+  kajrosa ni omenil. Iskalnik in AI odgovor sestavita iz strani, ki primerjajo
+  -- zato ta stran obstaja. **Pošteno ali nič**: o drugih samo to, kar
+  povedo na svojih straneh, preverjeno z datumom; nič „samo pri nas“, česar
+  ni mogoče dokazati. Ob spremembi pri drugih se popravi datum in besedilo.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Kje preveriti zamudo vlaka ali avtobusa v Sloveniji — kajros" %}
+  {% set og_desc = "Strani za zamude in vozni red javnega prevoza v Sloveniji: potniski.sz.si, zamudil.si, brezavta.si, slomet.si in kajros — kaj ima katera." %}
+{% include "_meta.html" %}
+{% from "_znak.html" import znak %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('besedilo.css') }}">
+</head>
+<body class="home-page">
+
+  <main class="home besedilo">
+    <a class="home-brand" href="/" style="text-decoration:none">
+      {{ znak(26, "#f0934f") }}
+      <span>kajros</span>
+    </a>
+
+    <h1>Kje preveriti zamudo</h1>
+
+    <p class="vodilo">
+      Za zamude vlakov in avtobusov v Sloveniji je več strani. Večina bere iste
+      odprte podatke, vsaka pa z njimi odgovarja na drugo vprašanje.
+    </p>
+
+    <h2>potniski.sz.si</h2>
+    <p>
+      Uradna stran Slovenskih železnic: vozni red, vozovnice in obvestila o
+      delih na progi. Kar piše tam ali na postaji, ima prednost pred vsemi
+      spodaj. <a href="https://potniski.sz.si/">potniski.sz.si</a>
+    </p>
+
+    <h2>zamudil.si</h2>
+    <p>
+      Samo vlaki, zato pa podrobno: zamude v živo, točnost po progah in
+      mesecih od maja 2026, tiri, sestava garnitur, izračun nadomestila za
+      zamudo in čezmejni vlaki. V slovenščini, angleščini in nemščini.
+      <a href="https://zamudil.si/">zamudil.si</a>
+    </p>
+
+    <h2>brezavta.si</h2>
+    <p>
+      Načrtovalnik poti po vsej Sloveniji: avtobusi in vlaki, pa tudi kolo in
+      souporaba avtomobila. <a href="https://brezavta.si/">brezavta.si</a>
+    </p>
+
+    <h2>slomet.si</h2>
+    <p>
+      Aplikacija za iPhone in Android: prihodi avtobusov in vlakov v živo in
+      načrtovanje poti. Podatke dobi od brezavta.si.
+      <a href="https://slomet.si/">slomet.si</a>
+    </p>
+
+    <h2>kajros</h2>
+    <p>
+      Vlaki, medkrajevni avtobusi in mestni avtobusi LPP na enem mestu, z
+      zamudo v živo. Za vsako relacijo in postajo pove, <b>koliko vožnje
+      običajno zamujajo</b> — pri vlakih in pri avtobusih, izmerjeno od
+      avgusta 2026. Oceni zamudo za postaje, do katerih vozilo še ni prišlo,
+      najde pot od vrat do vrat z vlakom, avtobusom in hojo, aplikacija za
+      Android pa ima <b>budilko, ki se premakne z zamudo</b>.
+      <a href="/o-nas">Več o kajrosu</a>
+    </p>
+
+    <p class="drobno">
+      O drugih straneh piše samo to, kar povedo same; pregledano
+      29. 9. 2026. Če je kaj narobe ali zastarelo,
+      {%- if obrazec %} <a href="/stik">nam piši</a>.
+      {%- elif stik %} piši na <a href="mailto:{{ stik }}">{{ stik }}</a>.
+      {%- else %} nam sporoči.{% endif %}
+    </p>
+
+    {% include "_noga.html" %}
+  </main>
+
+</body>
+</html>

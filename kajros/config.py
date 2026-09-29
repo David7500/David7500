@@ -180,6 +180,11 @@ TIMEZONE = "Europe/Ljubljana"
 # torej kazal na naslov, ki iz interneta ni dosegljiv.
 BASE_URL = okolje("BASE_URL", "https://kajros.app").rstrip("/")
 
+# Ključ IndexNow (`kajros/indexnow.py`). Javen po zasnovi -- iskalnik ga
+# prebere na `/<ključ>.txt` kot dokaz, da naslove pošilja lastnik strani --
+# zato v kodi in ne v okolju strežnika, ki ga posodobitev ne more pisati.
+INDEXNOW_KLJUC = okolje("INDEXNOW_KLJUC", "b560b2c381d31eacdad3e4ca09b0cb94")
+
 # Naslov za vprašanja o podatkih na strani o zasebnosti. Prazen ga skrije:
 # objava naslova je odločitev lastnika strani, ne privzetek nastavitve.
 # Odločeno 12. 9. 2026, da ostane prazen — namesto naslova je obrazec.

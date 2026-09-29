@@ -238,6 +238,10 @@ Zato povezava vodi na trgovino in **to tudi piše** („relacijo vpišeš tam“
 * **Kar ni v kazalu, dobi `noindex, follow`.** Prostor naslovov je neskončen (91 000 parov postaj pri avtobusih), iskalnik ga bo prehodil. **Zato je izbor kazala ključen**: do 29. 9. 2026 je bil po številu voženj in `noindex` sta dobili Ljubljana → Maribor in → Koper, najbolj iskani relaciji. Zdaj po `pristanek._teza()`; pravilo ne sme nazaj na število voženj. Naslov se pred izrisom **zloži v našo obliko in preusmeri s 301**, sicer sta `/postaja/Celje` in `/postaja/celje` dve strani z isto vsebino.
 * **Drobtine (`BreadcrumbList`) in `WebSite` v JSON-LD** se pišejo s `tojson`, ne ročno — imena postaj so vnos iz GTFS.
 
+## `/primerjava`: druge strani po njihovih besedah
+
+Nastala 29. 9. 2026, ker AI na vprašanje „najboljša stran za zamude“ odgovori iz strani, ki primerjajo. **Pošteno ali nič**: o drugih samo to, kar povedo same (naslov, opis, stran „o projektu“, zemljevid strani), z datumom pregleda na strani; nič „samo pri nas“, česar ni mogoče dokazati; uradna stran SŽ prva, ker ima prednost. Lažne ocene in skrito besedilo za AI so zavrnjeni — v EU prepovedani (direktiva 2019/2161), in skupnost je majhna. Ob spremembi pri drugih se popravi besedilo in datum. Isto velja za `Kaj je tu` na `/o-nas`: vsaka alineja mora biti res.
+
 ## Besedilne strani govorijo potniku, ne razvijalcu
 
 Prijavljeno 12. 9. 2026 na `/android` in `/zasebnost`: obe „naklada[li] in posreduj[ali] zelo tehnične podatke“. Sprožilni primer:

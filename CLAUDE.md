@@ -10,7 +10,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 ./scripts/dev-restart.sh          # počaka na sproščen port in izpiše naslove
 ```
 
-Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`.
+Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`, `indexnow`.
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (525 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
@@ -125,6 +125,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 | `/stik` | obrazec za sporočilo; nabiralnik v `/admin` |
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/o-nas` | kaj je kajros, od kod podatki, da ni prevoznikova stran |
+| `/primerjava` | kje preveriti zamudo: druge strani po njihovih besedah, z datumom pregleda |
 | `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu, obvestila potnikom |
 
@@ -182,4 +183,5 @@ Meritve, ki niso pravilo, ampak stanje (koliko zajetega, poraba, hitrost): [docs
 * **Vrat na usmerjevalniku ne odpiraj**: `kajros.app` gre prek imenovanega Cloudflarovega tunela z arwena (`.claude/rules/objava.md`).
 * Ločen model napovedi za avtobuse, ko bo meritev dovolj.
 * **Koda je zaprta** (odločeno 3. 9. 2026): zasebni repozitorij, brez licence = „vse pravice pridržane“. **Endpointi so odprti** — API sme brati vsak. Podatki ostajajo CC BY-SA 4.0, navedba vira je pogoj rabe, ne okras; `seed/kajros.sqlite` je njihova izpeljanka. Posledica za Android: glavni F-Droid in IzzyOnDroid zahtevata prosto licenco, Play pa račun, 25 $ in 12 preizkuševalcev, zato se aplikacija razdeljuje **s strani** (`/android`, glej `.claude/rules/android.md`).
+* **Iskalniki in AI: koraki, ki rabijo Davidovo prijavo** (Search Console, Bing, Cloudflare, objave) v `docs/ISKALNIKI-NALOGE.md`.
 * **Delovni imenik se še vedno imenuje `sztrack`.** Preimenovanje mape bi prekinilo tekočo sejo in poti v lupini; naredi se ločeno, git ostane cel: `mv ~/Dokumenti/Projekti/{sztrack,kajros}`.

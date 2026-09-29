@@ -140,6 +140,8 @@ Prvo pravilo projekta „meri, ne domnevaj", o sebi pa ni meril nič: strežnik 
 * **Prenos ne čaka na dokaz JS**, ker `/android` JS nima — kdor pride nanjo naravnost, ga ne pošlje nikoli. Bot se izloči po UA. Šteje se `GET` s 200 ali 206 od `bytes=0-`; nadaljevanje, `HEAD` in 304 niso prenos. Posodobitev loči `?iz=aplikacija`, ki ga nosi `stran` iz `/api/android/razlicica` naprej na gumb — velja za vse nameščene različice, ker naslov pride s strežnika.
 * **Pripomoček ni uporabnik.** Okno aplikacije (WebView, `… Kajros/1.2`) in pripomoček/budilka (`Kajros/1.2 (Android)`) = isti ključ, a stolpec `okno` šteje le prve: pripomoček na domačem zaslonu kliče API tudi, ko aplikacije nihče ne odpre, in bi sicer vsak dan veljal za uporabnika. Različica gre v bazo samo kot števke in pike — UA piše kdorkoli.
 
+**Pristajalne strani so strani in prihod z iskalnika je človek** (29. 9. 2026). Do tedaj `vrsta_poti()` pozna samo `/` in `/app*`; pristajalne (brez JS) niso poslale dokaza in človek z Googla ni bil štet nikjer. Zdaj `_STRANI` in `vir_obiska()`: znan vir v `Referer` (ali `utm_source`) je dokaz. Shrani se **ime vira**, nikoli naslov (iskalni niz). `robot()` loči iskalnike in AI po imenu (razrez `robot`); `Claude-User` in `Perplexity-User` besede „bot“ nimata, zato ime robota sproži tudi `bot`. Domene se primerjajo po oznakah, ne kot podniz — „reddit.com“ vsebuje „t.co“. Nova stran za človeka = vnos v `_STRANI`, sicer se ne šteje.
+
 **Pregled in števci se ne štejeta sama.** `/admin*` in `/static/*` gresta mimo štetja; sicer bi skrbnikovo osveževanje na minuto postalo največja postavka v lastni statistiki.
 
 ## Kar stran dolguje javnosti, ne aplikaciji

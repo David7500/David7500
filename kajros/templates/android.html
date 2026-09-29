@@ -6,6 +6,18 @@
   {% set og_title = "Aplikacija za Android — kajros" %}
   {% set og_desc = "Kajros za Android: budilka, ki upošteva zamudo vlaka ali avtobusa." %}
 {% include "_meta.html" %}
+  {%- if izdaja %}
+  {#- Za iskalnik in AI: da je aplikacija, brezplačna in za kateri Android.
+      Brez tega je stran zanje le besedilo o budilki. #}
+  <script type="application/ld+json">{{ {
+    "@context": "https://schema.org", "@type": "MobileApplication",
+    "name": "kajros", "operatingSystem": "Android 8.0+",
+    "applicationCategory": "TravelApplication", "inLanguage": "sl",
+    "description": og_desc, "softwareVersion": izdaja.ime,
+    "downloadUrl": baza ~ "/prenos/" ~ izdaja.datoteka,
+    "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"},
+    "publisher": {"@id": baza ~ "/#kajros"}} | tojson }}</script>
+  {%- endif %}
 {% from "_znak.html" import znak %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">

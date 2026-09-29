@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% set og_title = "O nas — kajros" %}
-  {% set og_desc = "Kajros beleži, koliko slovenski vlaki in avtobusi res zamujajo. Osebni projekt, ne prevoznikova stran." %}
+  {% set og_desc = "Kajros beleži, koliko slovenski vlaki in avtobusi res zamujajo: zamude v živo, vozni red in zgodovina zamud za vlake SŽ, medkrajevne avtobuse in mestni LPP." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -29,12 +29,33 @@
       ista vožnja zamuja običajno.
     </p>
 
+    <h2>Kaj je tu</h2>
+    {#- Kratka dejstva, ki jih lahko navede iskalnik ali AI, ko ga kdo vpraša
+        po strani za zamude (29. 9. 2026: Grok kajrosa ni poznal). Vsako mora
+        biti res -- ob spremembi strani popravi tudi tu. #}
+    <ul>
+      <li><b>Vlaki SŽ, medkrajevni avtobusi</b> (Arriva, Nomago, AP Murska
+        Sobota, primestni LPP) <b>in mestni avtobusi LPP</b> na enem mestu, z zamudo v živo.</li>
+      <li><b>Iskalnik povezav</b> s prestopi in <b>pot od vrat do vrat</b>, ki
+        združi vlak, avtobus in hojo.</li>
+      <li>Za vsako relacijo in postajo: <b>koliko vožnje običajno zamujajo</b>,
+        izmerjeno od avgusta 2026.</li>
+      <li><b>Ocena zamude</b> za postaje, do katerih vozilo še ni prišlo — iz
+        trenutne zamude in tega, kako je ista vožnja vozila prejšnje dni.</li>
+      <li><b>Zemljevid vozil</b>, <b>ovire na progah</b> in <b>tir</b> na
+        postajah, kjer ga objavi SŽ.</li>
+      <li><a href="/android">Aplikacija za Android</a> z <b>budilko, ki se
+        premakne z zamudo</b>.</li>
+    </ul>
+    <p>Katere druge strani so še in v čem so dobre: <a href="/primerjava">kje
+      preveriti zamudo</a>.</p>
+
     <h2>Zakaj</h2>
     <p>
       Vozni red pove, kdaj bi vlak moral priti. Kdaj res pride, se ve samo ta
       hip — in naslednji dan tega ne hrani nihče. Če zamud ne zapišemo sami,
-      jih ni nikjer. Iz teh zapisov nastanejo ocena zamude, preden vlak
-      odpelje, in odgovor na to, kdaj se splača potovati.
+      jih ni nikjer. Iz teh zapisov nastane ocena zamude, preden vlak
+      odpelje.
     </p>
 
     <h2>Ime</h2>
@@ -59,8 +80,8 @@
 
     <h2>Česa tu ni</h2>
     <p>
-      Cen vozovnic, perona, sestave vlaka in zasedenosti. Teh podatkov nihče
-      ne objavlja, zato jih tudi mi ne moremo pokazati.
+      Cen vozovnic, sestave vlaka in zasedenosti. Teh podatkov med odprtimi
+      podatki ni, zato jih tudi mi ne moremo pokazati.
     </p>
 
     <h2>Kdo smo</h2>

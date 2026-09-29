@@ -31,6 +31,10 @@ const IMENA_STRANI = {
   "/app/train": "Vlak", "/app/train/{train_no}": "Vlak · vožnja",
   "/app/map": "Zemljevid", "/app/ovire": "Ovire", "/app/statistika": "Statistika",
   "/app/statistika/{omrezje}": "Statistika · avtobus",
+  "/vlak/{od}/{cilj}": "Relacija · vlak", "/avtobus/{od}/{cilj}": "Relacija · avtobus",
+  "/postaja/{ime}": "Postaja", "/postajalisce/{ime}": "Postajališče",
+  "/postaje": "Kazalo postaj", "/postajalisca": "Kazalo postajališč",
+  "/o-nas": "O nas", "/primerjava": "Primerjava",
 };
 const imeStrani = (p) => IMENA_STRANI[p] || p;
 
@@ -271,6 +275,37 @@ function blokNaprav(d) {
     + `<div class="adm-razmik"></div>`
     + drz.slice(0, 5).map((x) => vrsta(x.kljuc === "??" ? "domače" : x.kljuc, x.ogledov, nd,
       `${st(100 * x.ogledov / nd)} %`)).join("");
+}
+
+// ------------------------------------------------------------ iskalniki in AI
+//
+// Od 29. 9. 2026. Do tedaj ni bilo mogoče reči, ali nas Google sploh obišče,
+// in človek, ki je z iskalnika prišel na pristajalno stran (brez JS), se ni
+// štel. Vir je samo ime (Google, ChatGPT), nikoli iskalni niz. Robot je, kar
+// se za robota predstavi -- ponarediti zna vsak.
+
+const ROBOT_KAJ = {
+  Googlebot: "Google", bingbot: "Bing, ChatGPT, Copilot", "OAI-SearchBot": "iskanje ChatGPT",
+  "ChatGPT-User": "ChatGPT odpre na prošnjo", "Claude-User": "Claude odpre na prošnjo",
+  "Claude-SearchBot": "iskanje Claude", PerplexityBot: "Perplexity", "Perplexity-User": "Perplexity odpre",
+  GPTBot: "učenje OpenAI", ClaudeBot: "učenje Anthropic", CCBot: "Common Crawl",
+  DuckAssistBot: "DuckDuckGo AI", Applebot: "Apple, Siri",
+};
+
+function blokVirov(d) {
+  const v = (d.razrezi || {}).vir || [];
+  if (!v.length) return prazno("vsi naravnost");
+  const naj = Math.max(1, ...v.map((x) => x.ogledov));
+  return v.slice(0, 10).map((x) => vrsta(x.kljuc, x.ogledov, naj)).join("");
+}
+
+function blokRobotov(d) {
+  const r = (d.razrezi || {}).robot || [];
+  if (!r.length) return prazno("nobenega");
+  const naj = Math.max(1, ...r.map((x) => x.zahtev));
+  return r.slice(0, 14).map((x) => vrsta(
+    ROBOT_KAJ[x.kljuc] ? `${x.kljuc} · ${ROBOT_KAJ[x.kljuc]}` : x.kljuc,
+    x.zahtev, naj, st(x.ogledov))).join("");
 }
 
 // ------------------------------------------------------------------ aplikacija
@@ -528,6 +563,8 @@ function stanje(d) {
       "Čas v aplikaciji brez omrežja. Rdeče je nad 5 s — tam potnik odneha. p95 je razred, ne točna vrednost.")}
     ${plosca("s4", "S čim in od kod", "danes · ogledi", blokNaprav(d))}
     ${plosca("s8", "Zdravje", "isto kot /api/health", blokZdravja(d))}
+    ${plosca("s6", "Od kod pridejo", "danes · ogledi", blokVirov(d), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
+    ${plosca("s6", "Roboti", "danes · zahtev · desno strani", blokRobotov(d), "Po predstavitvi, ne preverjeno.")}
   </div>`;
 }
 
@@ -607,6 +644,8 @@ function zgodovina() {
     ${plosca("s4", "Katere strani", "ljudi · desno vsi ogledi", blokStrani(o, 12))}
     ${plosca("s5", "Počasno", "po najdaljši zahtevi", tabelaPocasnih(o, 9))}
     ${plosca("s3", "S čim in od kod", "ogledi", blokNaprav(o))}
+    ${plosca("s6", "Od kod pridejo", "ogledi", blokVirov(o), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
+    ${plosca("s6", "Roboti", "zahtev · desno strani", blokRobotov(o), "Po predstavitvi, ne preverjeno.")}
     ${enDan ? "" : plosca("s8", "Aplikacija", izbor.vrsta === "leto" ? "po mesecih" : "po dnevih",
       grafiAplikacije(o, o.po_dnevih, vedraObdobja(o)), podAplikacije(o))}
     ${plosca(enDan ? "s12" : "s4", "Aplikacija za Android", enDan ? "ta dan" : "vsota obdobja",

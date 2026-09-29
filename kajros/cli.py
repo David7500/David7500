@@ -405,6 +405,13 @@ def cmd_export(args):
     print(f"zapisano v {out}/")
 
 
+def cmd_indexnow(args):
+    from . import indexnow
+    naslovi = args.naslovi or indexnow.naslovi_iz_zemljevida(args.zemljevid)
+    kode = indexnow.poslji(naslovi)
+    print(f"poslanih {len(naslovi)} naslovov, odgovori: {kode}")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="kajros", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -530,6 +537,11 @@ def main(argv=None):
     a.add_argument("--fetch", action="store_true", help="poberi feed zdaj")
     a.add_argument("--live", action="store_true", help="zadnja porocila o zamudi po vlakih")
     a.set_defaults(func=cmd_alerts)
+
+    a = sub.add_parser("indexnow", help="povej Bingu in drugim, katere strani obstajajo")
+    a.add_argument("naslovi", nargs="*", help="privzeto vsi iz zivega sitemap.xml")
+    a.add_argument("--zemljevid", help="drug sitemap.xml")
+    a.set_defaults(func=cmd_indexnow)
 
     a = sub.add_parser("export", help="izvozi GeoJSON mreze in postaj")
     a.add_argument("--out", default="export")
