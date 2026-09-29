@@ -59,6 +59,13 @@ for i in $(seq 1 30); do
 d = json.load(sys.stdin)
 print("  %s voženj · %s meritev · %s dni"
       % (d["trips"], d["observations"], d["days_covered"]))'
+        # IndexNow (`kajros/indexnow.py`): Bingu in drugim povej naslove, ko
+        # se nabor spremeni. V ozadju, ker zemljevid strani ob novem povzetku
+        # rabi do 100 s, in brez vpliva na izid objave. Dnevnik v $HOME.
+        ( cd "$APP" && nohup "$PY" -m kajros.cli indexnow \
+            --zemljevid "http://127.0.0.1:$PORT/sitemap.xml" \
+            --stanje "$HOME/.kajros-indexnow" \
+            >> "$HOME/kajros-indexnow.log" 2>&1 < /dev/null & )
         exit 0
     fi
     sleep 1

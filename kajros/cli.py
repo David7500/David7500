@@ -408,8 +408,10 @@ def cmd_export(args):
 def cmd_indexnow(args):
     from . import indexnow
     naslovi = args.naslovi or indexnow.naslovi_iz_zemljevida(args.zemljevid)
-    kode = indexnow.poslji(naslovi)
-    print(f"poslanih {len(naslovi)} naslovov, odgovori: {kode}")
+    if args.stanje:
+        print(indexnow.poslji_ce_spremenjeno(naslovi, Path(args.stanje)))
+        return
+    print(f"{len(naslovi)} naslovov: {indexnow.poslji(naslovi)}")
 
 
 def main(argv=None):
@@ -541,6 +543,7 @@ def main(argv=None):
     a = sub.add_parser("indexnow", help="povej Bingu in drugim, katere strani obstajajo")
     a.add_argument("naslovi", nargs="*", help="privzeto vsi iz zivega sitemap.xml")
     a.add_argument("--zemljevid", help="drug sitemap.xml")
+    a.add_argument("--stanje", help="datoteka z odtisom zadnjega poslanega; poslji le ob spremembi")
     a.set_defaults(func=cmd_indexnow)
 
     a = sub.add_parser("export", help="izvozi GeoJSON mreze in postaj")

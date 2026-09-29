@@ -26,8 +26,9 @@ Googlov indeks.
 
 ## 2. Bing Webmaster Tools (5 minut)
 
-Bing je vir za ChatGPT, Copilot in DuckDuckGo. Naslove sem Bingu že poslal
-prek IndexNow; Webmaster Tools doda poročila in potrdi lastništvo.
+Bing je vir za ChatGPT, Copilot in DuckDuckGo. Prvih 100 naslovov je Bing
+prek IndexNow že sprejel, ostale pošlje naslednja objava, ko bo ključ
+preverjen. Webmaster Tools doda poročila in potrdi lastništvo.
 
 1. <https://www.bing.com/webmasters> → prijava.
 2. **Import from Google Search Console** (po koraku 1) — prenese lastnost in
@@ -100,5 +101,5 @@ OPSI. Povsod povej, da si avtor.
 - V `/admin` sta od 29. 9. 2026 plošči **Od kod pridejo** (Google, Bing,
   ChatGPT …) in **Roboti** (Googlebot, bingbot, OAI-SearchBot …). Po oddaji
   zemljevida strani pričakuj Googlebot v nekaj dneh.
-- Po objavi, ki doda ali preimenuje strani: `./venv/bin/python -m kajros.cli
-  indexnow` (pošlje vse naslove iz živega `sitemap.xml` Bingu in drugim).
+- IndexNow teče sam ob vsaki objavi na arwen, kadar se nabor strani
+  spremeni (`deploy/posodobi.sh`, dnevnik `~/kajros-indexnow.log` na arwenu).
