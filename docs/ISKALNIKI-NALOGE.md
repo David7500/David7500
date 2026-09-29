@@ -6,8 +6,8 @@ tvoje ime. Vrstni red je po učinku.
 
 ## 1. Google Search Console (15 minut, najpomembnejše)
 
-Brez tega Google za stran ne ve. Gemini in Googlov povzetek z AI berejo samo
-Googlov indeks.
+Lastnost `kajros.app` že obstaja (585 klikov 16.–27. 9. 2026). Koraka 2–5
+spodaj preskoči; naredi 6 in 7.
 
 1. Odpri <https://search.google.com/search-console> in se prijavi.
 2. **Dodaj lastnost → Domena** (levo polje, ne „Predpona URL-ja“) → `kajros.app`.
