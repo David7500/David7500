@@ -458,12 +458,22 @@ def robots():
     uporabnika. O učenju modelov (`ai-train`) vrstica namenoma molči: to je
     odločitev lastnika in jo danes izvaja Cloudflare (403 za GPTBot, ClaudeBot,
     CCBot), ne ta datoteka.
+
+    **Aplikacija s parametri je za iskalnik prepovedana** (29. 9. 2026). Search
+    Console je pokazal, da Googlebot hodi po `/app/train?station=Podvelka`,
+    `/app/bus/8?trip=…|…|…` -- lupine, polnjene v JS, s kanonskim naslovom
+    brez parametrov. Od 155 neindeksiranih strani jih je 46 „alternativna s
+    kanonično“, med 105 „preiskano, ni indeksirano“ pa večina takih. Nova
+    domena ima malo pregledov na dan; vsak na lupini je en pregled manj za
+    pristajalno stran. Poti brez parametrov (`/app/train`) ostanejo odprte.
     """
     return Response(
         "User-agent: *\n"
         "Content-Signal: search=yes, ai-input=yes\n"
         "Allow: /\n"
         "Disallow: /api/\n"
+        "Disallow: /app/*?\n"
+        "Disallow: /postajalisce/*?\n"
         "Disallow: /admin\n"
         "Disallow: /docs\n"
         "Disallow: /redoc\n"

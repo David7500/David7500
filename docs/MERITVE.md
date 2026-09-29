@@ -1939,3 +1939,12 @@ Ljubljana → Koper: mediana zamude ob prihodu +15 min, v petih minutah pride **
 * `robots.txt` nosi `Content-Signal: search=yes, ai-input=yes`; o `ai-train` molči (odločitev lastnika, izvaja jo Cloudflare).
 * **Iskani pari z redko neposredno vožnjo.** Z mejo 1 vožnje (namesto 4) ima neposredno vožnjo 442 od 491 iskanih železniških parov (prej 371) — Maribor → Koper, Celje → Koper, Koper ↔ Ptuj, Murska Sobota (IC 502/503, 1–3 vožnje v voznem redu). A v prvih 1 000 po teži jih je 200 namesto 199: Koper ima malo vlakov, zato je njegova teža majhna, čeprav je mesto veliko. Meja zato ostane 4. Rešitev bi bila teža po velikosti kraja (npr. OSM `place=city/town` iz `naslovi.sqlite`), ne po prometu postaje — nemerjeno.
 * **IndexNow prvi dan:** klic s 100 naslovi → 202, s 500 ali več → 403 `SiteVerificationNotCompleted` („počakaj, da se preverjanje konča“); en naslov tudi naravnost na `bing.com/indexnow` → 202. Sprejetih prvih 100 naslovov zemljevida (ročne strani in vrh železniških relacij). Ostale pošlje `deploy/posodobi.sh` ob naslednji objavi; stanje se zapiše samo ob uspehu.
+
+**Search Console, prebrano 29. 9. 2026 zvečer** (lastnost `sc-domain:kajros.app`, 28 dni, podatki do 27. 9.):
+
+* 585 klikov, 888 prikazov, CTR 65,9 %, povprečni položaj 2,4. **540 klikov (649 prikazov) je poizvedba „kajros“** — ljudje, ki ime že poznajo. Brez imena: „vlak zagorje ljubljana“ 1 klik / 24 prikazov, ostalo po 0–3 prikaze. Vrh 19.–20. 9. je torej obisk po imenu, ne iskanje zamud; za splošne poizvedbe stran do 27. 9. skoraj ni obstajala.
+* Strani: `/` 501 klik, `/app/bus` 36, **`http://www.kajros.app/` 32**, `https://www.kajros.app/app/bus` 11, `http://kajros.app/app/map` 4 — Google je imel v indeksu dvojnike z `www.` in `http://` (od 29. 9. preusmerjeni s 301). 74 strani s prikazi.
+* Indeksiranih 135, neindeksiranih 155: „preiskano – trenutno ni indeksirano“ 105 (primeri: `/postajalisce/jurckova`, `/app/train?station=Rimske Toplice`, `/app/bus/8?trip=…|…|…`, `/app/bus/N6550`), „alternativna stran z ustrezno kanonično oznako“ 46, noindex 2, dvojnik brez izbrane kanonične 2.
+* **Zemljevid strani ni bil nikoli oddan** (seznam predloženih prazen).
+
+Posledica v kodi: `robots.txt` prepove `/app/*?` in `/postajalisce/*?` — lupine s parametri so jedle preglede nove domene.
