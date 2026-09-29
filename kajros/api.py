@@ -118,10 +118,12 @@ async def _markdown_za_agente(request: Request, call_next):
     in ga Cloudflare tako ali tako stisne na robu.
     """
     pot = request.url.path
-    if (request.method != "GET" or pot.startswith(_BREZ_MARKDOWNA)
+    if (request.method not in ("GET", "HEAD") or pot.startswith(_BREZ_MARKDOWNA)
             or pot.startswith(ADMIN_POT)):
         return await call_next(request)
-    zeli = markdown.zeli_markdown(request.headers.get("accept", ""))
+    # HEAD dobi iste glave kot GET (tudi `Link`), telesa pa ni, zato ga ne pretvarjamo.
+    zeli = (request.method == "GET"
+            and markdown.zeli_markdown(request.headers.get("accept", "")))
     if zeli:
         request.scope["headers"] = [(k, v) for k, v in request.scope["headers"]
                                     if k != b"accept-encoding"]
@@ -131,9 +133,10 @@ async def _markdown_za_agente(request: Request, call_next):
         return odgovor
     if not zeli:
         odgovor.headers.append("Vary", "Accept")
+        odgovor.headers["Link"] = _LINK
         return odgovor
     telo = b"".join([kos async for kos in odgovor.body_iterator])
-    glave = {"Vary": "Accept"}
+    glave = {"Vary": "Accept", "Link": _LINK}
     if "cache-control" in odgovor.headers:
         glave["Cache-Control"] = odgovor.headers["cache-control"]
     return Response(markdown.iz_html(telo.decode("utf-8"), config.BASE_URL + pot),
@@ -141,6 +144,13 @@ async def _markdown_za_agente(request: Request, call_next):
 
 
 _BREZ_MARKDOWNA = ("/api/", "/app", "/static/", "/docs", "/redoc")
+
+#: Kje so stvari za stroje (RFC 8288). Cloudflarov pregled pripravljenosti za
+#: AI išče te povezave na domači strani; agent po njih najde zemljevid strani,
+#: kazalo `llms.txt` in seznam odprtih endpointov brez ugibanja poti.
+_LINK = (f'<{config.BASE_URL}/sitemap.xml>; rel="sitemap", '
+         f'<{config.BASE_URL}/llms.txt>; rel="describedby"; type="text/plain", '
+         f'<{config.BASE_URL}/.well-known/api-catalog>; rel="api-catalog"')
 
 
 @app.exception_handler(journey.VozniRedPrevelik)
@@ -561,6 +571,42 @@ def llms():
         "## Neobvezno\n\n"
         f"- [Zemljevid strani]({b}/sitemap.xml)\n",
         media_type="text/plain; charset=utf-8")
+
+@app.get("/.well-known/api-catalog", include_in_schema=False)
+def api_catalog():
+    """Seznam API-jev v obliki iz RFC 9727: en API, opis OpenAPI in dokumentacija.
+
+    API je odprt in ima `Access-Control-Allow-Origin: *` (CLAUDE.md, „Kam
+    gre“), zato ga imenujemo, namesto da ga agent ugiba. Iskalnikom ostane
+    `/api/` v `robots.txt` prepovedan -- tam je JSON, ne strani.
+    """
+    b = config.BASE_URL
+    return Response(json.dumps({"linkset": [{
+        "anchor": f"{b}/api",
+        "service-desc": [{"href": f"{b}/openapi.json",
+                          "type": "application/vnd.oai.openapi+json"}],
+        "service-doc": [{"href": f"{b}/docs", "type": "text/html"}],
+    }]}), media_type="application/linkset+json")
+
+
+@app.get("/auth.md", include_in_schema=False)
+def auth_md():
+    """Agentu pove, da prijave ni: bere se brez računa in brez ključa."""
+    b = config.BASE_URL
+    return Response(
+        "# Dostop za agente\n\n"
+        "No account, registration or API key is needed. Every page and every "
+        "read endpoint of kajros is open.\n\n"
+        "Prijave ni: kajros nima računov. Strani in bralni endpointi "
+        "(`GET`) so odprti vsakomur, brez ključa.\n\n"
+        f"- Strani: [{b}/llms.txt]({b}/llms.txt)\n"
+        f"- API: [{b}/.well-known/api-catalog]({b}/.well-known/api-catalog), "
+        f"opis [{b}/openapi.json]({b}/openapi.json)\n"
+        "- Podatki so CC BY-SA 4.0; navedba vira (kajros.app, podatki IJPP prek "
+        "NAP) je pogoj rabe.\n\n"
+        "Pisalne poti (`POST /stik`, `POST /api/deli`) so za obiskovalce in "
+        "niso za agente.\n",
+        media_type="text/markdown; charset=utf-8")
 
 
 #: Kar mora biti v predpomnilniku, preden obiskovalec izgubi zvezo. Samo

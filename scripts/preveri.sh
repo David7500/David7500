@@ -81,6 +81,8 @@ else
 fi
 
 api "llms.txt obstaja" /llms.txt 200
+api "api-catalog obstaja" /.well-known/api-catalog 200
+api "auth.md obstaja" /auth.md 200
 api "ista postaja"        "/api/connections?from=Ljubljana&to=Ljubljana" 400
 api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
 api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404
