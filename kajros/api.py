@@ -594,7 +594,7 @@ def auth_md():
     """Agentu pove, da prijave ni: bere se brez računa in brez ključa."""
     b = config.BASE_URL
     return Response(
-        "# Dostop za agente\n\n"
+        "# Auth.md\n\n## Dostop za agente\n\n"
         "No account, registration or API key is needed. Every page and every "
         "read endpoint of kajros is open.\n\n"
         "Prijave ni: kajros nima računov. Strani in bralni endpointi "
