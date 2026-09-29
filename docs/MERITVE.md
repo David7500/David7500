@@ -1948,3 +1948,4 @@ Ljubljana → Koper: mediana zamude ob prihodu +15 min, v petih minutah pride **
 * **Zemljevid strani ni bil nikoli oddan** (seznam predloženih prazen).
 
 Posledica v kodi: `robots.txt` prepove `/app/*?` in `/postajalisce/*?` — lupine s parametri so jedle preglede nove domene.
+* **Oddano isti večer** (v Davidovem brskalniku, z njegovim dovoljenjem): `sitemap.xml` → stanje „Uspešno“, 1 984 najdenih strani. Zahtevano indeksiranje za `/` (bil v indeksu), `/vlak/ljubljana/maribor` in `/vlak/ljubljana/koper` (oba „odkrito – trenutno ni indeksirano“; Google je Maribor našel prek `/vlak/ljubljana/medno`), `/avtobus/ljubljana-ap/maribor-ap` (enako), `/primerjava` (Googlu ni bil poznan).

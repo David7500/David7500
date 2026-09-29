@@ -6,8 +6,9 @@ tvoje ime. Vrstni red je po učinku.
 
 ## 1. Google Search Console (15 minut, najpomembnejše)
 
-Lastnost `kajros.app` že obstaja (585 klikov 16.–27. 9. 2026). Koraka 2–5
-spodaj preskoči; naredi 6 in 7.
+**Narejeno 29. 9. 2026:** lastnost `kajros.app` je obstajala, zemljevid strani
+je oddan (1 984 strani), indeksiranje zahtevano za vseh pet strani spodaj.
+Koraki ostanejo za primer, ko bo treba ponoviti.
 
 1. Odpri <https://search.google.com/search-console> in se prijavi.
 2. **Dodaj lastnost → Domena** (levo polje, ne „Predpona URL-ja“) → `kajros.app`.
