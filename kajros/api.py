@@ -454,10 +454,11 @@ def robots():
     ničesar -- iskalnik je zato indeksiral JSON endpointe kot strani.
 
     `Content-Signal` (Cloudflarov predlog, ima ga tudi zamudil.si) pove, da
-    smemo biti v iskanju in v odgovorih AI, ki stran preberejo za
-    uporabnika. O učenju modelov (`ai-train`) vrstica namenoma molči: to je
-    odločitev lastnika in jo danes izvaja Cloudflare (403 za GPTBot, ClaudeBot,
-    CCBot), ne ta datoteka.
+    smemo biti v iskanju, v odgovorih AI, ki stran preberejo za uporabnika,
+    in v učenju modelov. Zadnje je odločil lastnik 29. 9. 2026: kajros hoče,
+    da model zanj ve tudi brez iskanja. Do takrat je Cloudflare robotom za
+    učenje (GPTBot, ClaudeBot, CCBot) vračal 403; zdaj je v Cloudflaru
+    „Training: Allow“ in vrstica mora govoriti isto.
 
     **Aplikacija s parametri je za iskalnik prepovedana** (29. 9. 2026). Search
     Console je pokazal, da Googlebot hodi po `/app/train?station=Podvelka`,
@@ -469,7 +470,7 @@ def robots():
     """
     return Response(
         "User-agent: *\n"
-        "Content-Signal: search=yes, ai-input=yes\n"
+        "Content-Signal: search=yes, ai-input=yes, ai-train=yes\n"
         "Allow: /\n"
         "Disallow: /api/\n"
         "Disallow: /app/*?\n"

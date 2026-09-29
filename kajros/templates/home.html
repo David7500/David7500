@@ -18,6 +18,10 @@
        "publisher": {"@id": baza ~ "/#kajros"}},
       {"@type": "Organization", "@id": baza ~ "/#kajros", "name": "kajros",
        "url": baza ~ "/", "logo": baza ~ "/static/ikone/icon-512.png"}]} | tojson }}</script>
+  {#- Lastništvo v Bing Webmaster Tools (29. 9. 2026). Uvoz iz Search Console
+      lastnosti vrste „domena“ ne najde, zapis CNAME pa bi bil sprememba DNS.
+      Oznaka mora ostati, sicer Bing lastništvo prekliče. -#}
+  <meta name="msvalidate.01" content="344789E7AA383B8CA7EB4D69CFFCA2F2">
 {% from "_znak.html" import znak %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">

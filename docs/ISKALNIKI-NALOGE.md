@@ -31,19 +31,21 @@ Bing je vir za ChatGPT, Copilot in DuckDuckGo. Prvih 100 naslovov je Bing
 prek IndexNow že sprejel, ostale pošlje naslednja objava, ko bo ključ
 preverjen. Webmaster Tools doda poročila in potrdi lastništvo.
 
+**Narejeno 29. 9. 2026:** uvoz iz Search Console lastnosti vrste „domena“ ne
+najde, zato je stran dodana ročno (`https://kajros.app/`) z oznako
+`msvalidate.01` na domači strani. Ostane: po objavi v Bing Webmaster Tools
+pritisni **Verify** in oddaj `https://kajros.app/sitemap.xml` pod **Sitemaps**.
+
 1. <https://www.bing.com/webmasters> → prijava.
 2. **Import from Google Search Console** (po koraku 1) — prenese lastnost in
    zemljevid strani.
 
 ## 3. Cloudflare: roboti za učenje modelov (odločitev)
 
-Danes Cloudflare vrača 403 robotom GPTBot, ClaudeBot, CCBot (Common Crawl),
-Amazonbot in Bytespider. Iskanje z AI (ChatGPT, Claude, Perplexity) stran
-bere; v znanje modelov pa kajros ne pride.
-
-Če hočeš, da model za kajros ve tudi brez iskanja: **kajros.app → AI Crawl
-Control** (ali **Security → Bots**) → pri teh robotih izberi **Allow**.
-Cena: nekaj več zahtev na arwen.
+**Narejeno 29. 9. 2026:** roboti za učenje so spuščeni. Nastavitev je v
+**Security → Settings → Configure AI bot policies → Training: Allow**
+(posamezna stikala v AI Crawl Control so zaklenjena, dokler velja ta
+politika). `robots.txt` nosi `ai-train=yes`. Nazaj: isto mesto, „Disallow“.
 
 ## 4. Omembe drugod (ko Google pokaže prve strani)
 
