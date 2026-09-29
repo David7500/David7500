@@ -128,7 +128,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 | `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu, obvestila potnikom |
 
-**Pristajalne strani obstajajo zaradi iskalnika in so brez JS**: človek išče „vlak ljubljana koper“, odgovor mora biti v odgovoru strežnika. Meja, katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po prometu, ostalo `noindex`.
+**Pristajalne strani obstajajo zaradi iskalnika in so brez JS**: človek išče „vlak ljubljana koper“, odgovor mora biti v odgovoru strežnika. Meja, katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po teži (promet izhodišča × promet cilja, ne število voženj), ostalo `noindex`. Kaj ljudje iščejo, izmerjeno v `docs/MERITVE.md` („Iskalniki“).
 
 Poti za brskalnike in iskalnike: `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`; `/android` = stran s prenosom, `/prenos` = podpisan APK. Napaka = **stran** za človeka in JSON pod `/api/`. Absolutni naslov = `KAJROS_BASE_URL`, ne `request.url` (za tunelom je ta `http://127.0.0.1:8000`). **Tujih izvorov v strani ni** razen ploščic zemljevida.
 

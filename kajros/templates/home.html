@@ -3,9 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  {% set og_title = "kajros — vozni redi in zamude" %}
-  {% set og_desc = "Odhodi in zamude slovenskih vlakov in avtobusov, izmerjeni iz odprtih podatkov." %}
+  {% set og_title = "Vozni red in zamude vlakov in avtobusov v živo — kajros" %}
+  {% set og_desc = "Zamude vlakov in avtobusov po Sloveniji v živo: vozni red, odhodi s postaj, iskalnik povezav in zemljevid vozil." %}
 {% include "_meta.html" %}
+  {#- Ime strani za iskalnik: brez tega Google pod zadetkom izpiše
+      „kajros.app“ in ne „kajros“ (zamudil.si, brezavta.si in slomet.si ga
+      imajo). -#}
+  <script type="application/ld+json">{{ {
+    "@context": "https://schema.org",
+    "@graph": [
+      {"@type": "WebSite", "@id": baza ~ "/#splet", "name": "kajros",
+       "alternateName": "Zamude vlakov in avtobusov", "url": baza ~ "/",
+       "inLanguage": "sl", "description": og_desc,
+       "publisher": {"@id": baza ~ "/#kajros"}},
+      {"@type": "Organization", "@id": baza ~ "/#kajros", "name": "kajros",
+       "url": baza ~ "/", "logo": baza ~ "/static/ikone/icon-512.png"}]} | tojson }}</script>
 {% from "_znak.html" import znak %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -36,6 +48,10 @@
       {{ znak(22, "#f0934f") }}
       <span>kajros</span>
     </header>
+    {#- Do 29. 9. 2026 stran ni imela naslova, besed „zamude“ in „vozni red“
+        pa ni bilo nikjer v besedilu -- iskalnik je videl gumbe brez vsebine.
+        Ena vrstica pod znamko, ne nov blok: razcepišče ostane razcepišče. #}
+    <h1 class="d-geslo">Vozni red in zamude vlakov in avtobusov v živo</h1>
 
     {{ obvestila_mesto("vse") }}
 

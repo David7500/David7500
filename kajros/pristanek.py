@@ -31,19 +31,27 @@ TZ = ZoneInfo(config.TIMEZONE)
 
 #: Koliko relacij na omrežje pride v zemljevid strani. Meja ni estetska:
 #: parov, ki prestanejo `MIN_VOZENJ` in `MIN_RAZDALJA_M`, je 5 903 pri
-#: železnici in 26 049 pri avtobusih (izmerjeno 17. 9. 2026). Tisoče tankih
-#: strani so za iskalnik breme, ne prednost -- v zemljevid gre vrh po prometu,
-#: ostalo ostane dosegljivo in `noindex`.
-NAJVEC_RELACIJ = 400
+#: železnici in 91 128 pri avtobusih (izmerjeno 29. 9. 2026). V zemljevid gre
+#: vrh po `_teza()`, ostalo ostane dosegljivo in `noindex`.
+#:
+#: Meji sta različni, ker se krivulja različno obrne. Merilo so pari, ki jih
+#: Google ponudi v samodejnem dopolnjevanju („vlak celje " -> „vlak celje
+#: ljubljana"; 371 železniških in 203 avtobusni pari z neposredno vožnjo):
+#: železnica z 400 stranmi pokrije 125, s 1 000 pa 199 -- še raste; avtobusi
+#: 67 in 73 -- šest parov za 600 strani ni vredno.
+NAJVEC_RELACIJ = {"zeleznica": 1000, "avtobus": 400}
 
 #: Koliko postaj na omrežje pride v zemljevid strani. Železnica jih ima 264 z
 #: meritvijo, postajališč pa je 5 356 in rep so tista z eno vožnjo na dan.
 NAJVEC_POSTAJ = 300
 
 #: Koliko voženj v voznem redu mora imeti par postaj, da je sploh kandidat.
-#: Štiri je pri železnici en par na dan v obe smeri; pri avtobusih je isto
-#: število brez pomena, ker je voženj petdesetkrat več.
-MIN_VOZENJ = {"zeleznica": 4, "avtobus": 30}
+#: Štiri je pri železnici en par na dan v obe smeri. Pri avtobusih je bila
+#: meja 30 in je izločila prav medkrajevne relacije, po katerih ljudje
+#: iščejo: Ljubljana AP -> Maribor AP ima v voznem redu 18 voženj, -> Piran
+#: 22, -> Novo mesto 23, -> Celje AP 28. Vrstni red zdaj določa `_teza()`,
+#: meja mora izločiti le naključne pare.
+MIN_VOZENJ = 4
 
 #: Koliko zračne razdalje mora biti med postajama. **To ni okras, ampak edino,
 #: kar loči relacijo od dveh postajališč iste ulice.** Brez te meje je vrh
@@ -100,7 +108,18 @@ FROM p a
 JOIN p b ON b.trip_id = a.trip_id AND b.stop_seq > a.stop_seq
 GROUP BY a.name, b.name
 HAVING vozenj >= :min_vozenj
-ORDER BY vozenj DESC
+"""
+
+# Promet postaje za `_teza()`: postanki voženj, ki smejo v relacije. Brez
+# mestnega LPP, sicer bi bil Bavarski dvor (14 215 postankov, od tega 1 137
+# medkrajevnih) težji od Maribora.
+_PROMET_SQL = """
+SELECT st.name AS ime, COUNT(*) AS n
+FROM sched s
+JOIN station st ON st.stop_id = s.stop_id
+JOIN trip t ON t.trip_id = s.trip_id
+WHERE t.network = :net AND (:brez IS NULL OR t.agency <> :brez)
+GROUP BY st.name
 """
 
 # Vožnje izbranih relacij. `a.stop_seq` je bar stolpec ob `MIN(b.stop_seq)` --
@@ -210,13 +229,33 @@ def _iz_histograma(hist: dict[int, int]) -> dict:
     }
 
 
+def _teza(promet: dict[str, int], par: dict) -> int:
+    """Kako verjetno človek išče ta par: promet izhodišča krat promet cilja.
+
+    **Ne število voženj med njima.** Po tem je bil izbor do 29. 9. 2026 in v
+    zemljevidu strani je bilo „Ljubljana -> Kresnice" (28 voženj), ne pa
+    „Ljubljana -> Maribor" (13, mesto 2 589) in „Ljubljana -> Koper" (4, mesto
+    5 640) -- najbolj iskani relaciji v državi, obe `noindex`. Pogoste vožnje
+    so primestne; iščejo se pari velikih krajev, med katerimi vozi malo
+    vlakov, ker so dolgi.
+
+    Merjeno na parih iz Googlovega samodejnega dopolnjevanja (371 železniških,
+    203 avtobusni): v prvih 400 po številu voženj jih je bilo 54 oziroma 7, po
+    tej teži 125 oziroma 67. Preizkušeno in slabše: teža, pomnožena s številom
+    voženj (114 / 34), z razdaljo (103 / 45) ali s korenom voženj (120 / 47).
+    Skripte in pari niso v repozitoriju; postopek v `docs/MERITVE.md`.
+    """
+    return promet.get(par["od"], 0) * promet.get(par["cilj"], 0)
+
+
 def zgradi(conn: sqlite3.Connection, days: int = 90,
            network: str | None = "zeleznica") -> dict:
     """Kazalo pristajalnih strani enega omrežja. Gradilnik povzetka.
 
-    Vrne `{"relacije": [...], "postaje": [...]}`, urejeno po prometu. Vsaka
-    vrstica nosi tudi, koliko meritev stoji za njeno številko -- brez tega
-    stran ne more povedati, koliko naj ji bralec verjame.
+    Vrne `{"relacije": [...], "postaje": [...]}`: relacije po `_teza()`,
+    postaje po prometu. Vsaka vrstica nosi tudi, koliko meritev stoji za
+    njeno številko -- brez tega stran ne more povedati, koliko naj ji bralec
+    verjame.
     """
     network = network or "zeleznica"
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
@@ -226,11 +265,11 @@ def zgradi(conn: sqlite3.Connection, days: int = 90,
     lege = {d["n"]: (d["lat"], d["lon"])
             for d in journey.station_index(conn, network, True)}
     promet = {d["n"]: d["t"] for d in journey.station_index(conn, network)}
+    teza = {r["ime"]: r["n"] for r in conn.execute(_PROMET_SQL, par)}
 
     # ---- kateri pari sploh pridejo v poštev
     kandidati = []
-    for r in conn.execute(_IZBOR_SQL,
-                          {**par, "min_vozenj": MIN_VOZENJ.get(network, 10)}):
+    for r in conn.execute(_IZBOR_SQL, {**par, "min_vozenj": MIN_VOZENJ}):
         a, b = r["od"], r["cilj"]
         if a not in lege or b not in lege:
             continue
@@ -239,8 +278,8 @@ def zgradi(conn: sqlite3.Connection, days: int = 90,
             continue
         kandidati.append({"od": a, "cilj": b, "vozenj": r["vozenj"],
                           "km": round(m / 1000, 1)})
-        if len(kandidati) >= NAJVEC_RELACIJ:
-            break
+    kandidati.sort(key=lambda k: (-_teza(teza, k), k["od"], k["cilj"]))
+    del kandidati[NAJVEC_RELACIJ[network]:]
 
     # ---- vožnje teh relacij v ločeno tabelo, da jo vprašamo dvakrat
     conn.execute("CREATE TEMP TABLE IF NOT EXISTS _izbor (od TEXT, cilj TEXT)")
@@ -427,6 +466,11 @@ def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
     return {
         "od": od, "cilj": cilj, "network": network, "datum": datum,
         "zapis": zapis, "zveze": prikaz[:NAJVEC_ODHODOV], "vseh": len(zveze),
+        # Čez ves dan, ne čez prikazane: zvečer so ostale le počasne vožnje in
+        # „najhitrejša je na poti 2 h 16 min“ je veljalo za Ljubljana -> Maribor,
+        # ki ima čez dan vožnjo, krajšo za pol ure.
+        "najkrajse": min((z["duration_s"] for z in zveze if z.get("duration_s")),
+                         default=None),
         "odslej": bool(odslej),
         "obratno": kaz["po_relaciji"].get((slug(cilj), slug(od))),
         "naprej": sosednje(kaz, od, razen=cilj),

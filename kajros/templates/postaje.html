@@ -11,7 +11,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% set beseda = "Postajališča" if network == "avtobus" else "Postaje" %}
-  {% set og_title = beseda ~ " — odhodi in zamude" %}
+  {% set og_title = ("Avtobusna postajališča" if network == "avtobus" else "Železniške postaje") ~ " v Sloveniji: odhodi in zamude — kajros" %}
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
@@ -33,7 +33,7 @@
     <h1>{{ beseda }}</h1>
     <p class="vodilo">{{ opis }}</p>
 
-    <h2>Najbolj vožene relacije</h2>
+    <h2>Glavne relacije</h2>
     <ul class="povezave">
       {% for r in relacije %}
       <li><a href="{{ pot_relacije(network, r.od, r.cilj) }}">

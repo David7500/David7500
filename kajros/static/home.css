@@ -23,6 +23,7 @@
   display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 4px;
   font: 600 24px/1 var(--sans); letter-spacing: -0.01em;
 }
+.d-geslo { margin: -10px 4px 14px; font: 400 15px/1.35 var(--sans); color: var(--ink-dim); }
 
 /* ---------- budilka ---------- */
 

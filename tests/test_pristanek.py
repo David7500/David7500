@@ -159,6 +159,57 @@ def test_kazalo_najde_postajo_samo_po_tocnem_naslovu(conn):
     assert pristanek.ime_postaje(conn, kaz, "ajdov", "zeleznica") is None
 
 
+def _voznje(c, predpona: str, n: int, postaje: list[str], network="zeleznica",
+            agency="1161") -> None:
+    for i in range(n):
+        tid = f"{predpona}{i}"
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign,"
+                  "  service_id, network, agency) VALUES(?,?,?,?, 'S1', ?, ?)",
+                  (tid, f"r{tid}", f"LP {tid}", "x", network, agency))
+        c.executemany(
+            "INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+            [(tid, k + 1, s, 28800 + 600 * k, 28800 + 600 * k)
+             for k, s in enumerate(postaje)])
+
+
+def test_velika_kraja_pred_pogosto_primestno_relacijo(conn, monkeypatch):
+    """Ljubljana -> Maribor (13 voženj) je bila za Ljubljana -> Kresnice (28),
+    ker je izbor štel vožnje -- in najbolj iskana relacija je dobila `noindex`.
+    Tu: med Mali1 in Mali2 vozi deset vlakov, med Velika1 in Velika2 šest,
+    a skozi veliki postaji pelje še štirideset drugih."""
+    conn.executemany(
+        "INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
+        [("M1", "Mali1", 46.0, 14.0), ("M2", "Mali2", 46.1, 14.0),
+         ("V1", "Velika1", 46.0, 15.0), ("V2", "Velika2", 46.5, 15.5),
+         ("O1", "Ob Veliki1", 46.001, 15.001), ("O2", "Ob Veliki2", 46.501, 15.501)])
+    _voznje(conn, "m", 10, ["M1", "M2"])
+    _voznje(conn, "v", 6, ["V1", "V2"])
+    _voznje(conn, "a", 20, ["V1", "O1"])
+    _voznje(conn, "b", 20, ["O2", "V2"])
+    conn.commit()
+    monkeypatch.setitem(pristanek.NAJVEC_RELACIJ, "zeleznica", 1)
+    got = pristanek.zgradi(conn, 90, "zeleznica")
+    assert [(r["od"], r["cilj"]) for r in got["relacije"]] == [("Velika1", "Velika2")]
+
+
+def test_mestni_promet_ne_steje_v_tezo(conn, monkeypatch):
+    """Bavarski dvor ima 14 215 postankov, od tega 1 137 medkrajevnih: z
+    mestnimi vred bi bil vsak par z njim težji od Maribora."""
+    conn.executemany(
+        "INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
+        [("B", "Mesto", 46.05, 14.50), ("B2", "Mestna ulica", 46.052, 14.502),
+         ("K", "Kraj", 46.30, 14.20), ("L", "Ljubljana AP", 46.06, 14.51),
+         ("R", "Maribor AP", 46.56, 15.65), ("Q", "Ljubljana Center", 46.07, 14.52)])
+    _voznje(conn, "x", 5, ["B", "K"], "avtobus", "1118")
+    _voznje(conn, "l", 100, ["B", "B2"], "avtobus", "lpp")
+    _voznje(conn, "y", 5, ["L", "R"], "avtobus", "1118")
+    _voznje(conn, "z", 10, ["L", "Q"], "avtobus", "1118")   # blizu: ni relacija
+    conn.commit()
+    monkeypatch.setitem(pristanek.NAJVEC_RELACIJ, "avtobus", 1)
+    got = pristanek.zgradi(conn, 90, "avtobus")
+    assert [(r["od"], r["cilj"]) for r in got["relacije"]] == [("Ljubljana AP", "Maribor AP")]
+
+
 def test_mestni_lpp_v_relacijah_ne_nastopa(conn):
     """Mestne „relacije" so postajališče do postajališča znotraj mesta. Stran
     postajališča ostane, relacija ne."""

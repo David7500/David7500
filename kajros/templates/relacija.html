@@ -11,12 +11,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% set vozilo = "Avtobus" if network == "avtobus" else "Vlak" %}
-  {% set og_title = vozilo ~ " " ~ od ~ " → " ~ cilj ~ " — odhodi in zamude" %}
+  {% set og_title = vozilo ~ " " ~ od ~ " → " ~ cilj ~ ": vozni red in zamude danes — kajros" %}
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
 {% from "_obvestila.html" import izrisana as obvestila_izrisana %}
   {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
+  {#- Drobtine za iskalnik: namesto gole poti pokaže „Postaje › Ljubljana ›
+      Ljubljana → Maribor“ in s tem, da je stran del urejenega kazala. -#}
+  {% set kazalo = "/postajalisca" if network == "avtobus" else "/postaje" %}
+  <script type="application/ld+json">{{ {
+    "@context": "https://schema.org", "@type": "BreadcrumbList",
+    "itemListElement": [
+      {"@type": "ListItem", "position": 1,
+       "name": "Postajališča" if network == "avtobus" else "Postaje", "item": baza ~ kazalo},
+      {"@type": "ListItem", "position": 2, "name": od, "item": baza ~ pot_postaje(network, od)},
+      {"@type": "ListItem", "position": 3, "name": od ~ " → " ~ cilj,
+       "item": baza ~ pot_relacije(network, od, cilj)}]} | tojson }}</script>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">

@@ -8,12 +8,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {% set beseda = "Postajališče" if network == "avtobus" else "Postaja" %}
-  {% set og_title = beseda ~ " " ~ ime ~ " — odhodi in zamude" %}
+  {% set og_title = beseda ~ " " ~ ime ~ ": odhodi " ~ ("avtobusov" if network == "avtobus" else "vlakov") ~ ", vozni red in zamude — kajros" %}
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
 {% from "_obvestila.html" import izrisana as obvestila_izrisana %}
   {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
+  {% set kazalo = "/postajalisca" if network == "avtobus" else "/postaje" %}
+  <script type="application/ld+json">{{ {
+    "@context": "https://schema.org", "@type": "BreadcrumbList",
+    "itemListElement": [
+      {"@type": "ListItem", "position": 1,
+       "name": "Postajališča" if network == "avtobus" else "Postaje", "item": baza ~ kazalo},
+      {"@type": "ListItem", "position": 2, "name": ime,
+       "item": baza ~ pot_postaje(network, ime)}]} | tojson }}</script>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">

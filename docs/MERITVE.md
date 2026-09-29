@@ -1886,3 +1886,42 @@ Pri modelu se napoved spremeni na 3 534 nalogah: boljša 1 542 (skupaj
 12 549 min), slabša 1 988 (skupaj 1 783 min, mediana 0,22 min). Senca
 (`kajros ocena`) meri naprej; njena resnica stropa nima, zato lažne resnice
 ostajajo v obeh stolpcih enako.
+
+## Iskalniki: kajros ni bil nikjer (29. 9. 2026)
+
+Povod: Grok na vprašanje „najboljša slovenska stran za zamude“ kajrosa ni omenil; omenil je zamudil.si, brezavta.si, slomet.si.
+
+**Stanje na živi strani, izmerjeno:**
+
+* `site:kajros.app` v spletnem iskanju: **0 zadetkov**. Na `kajros.app` ni TXT zapisa za Google Search Console, v predlogah ni značke za preverjanje — lastništvo pri nobenem iskalniku ni potrjeno, zemljevid strani ni bil nikoli oddan.
+* Zemljevid strani: 1 383 naslovov (400 `/vlak`, 400 `/avtobus`, 270 `/postaja`, 300 `/postajalisce`), brez `lastmod`.
+* **`/vlak/ljubljana/maribor` in `/vlak/ljubljana/koper` sta imela `noindex`.** Izbor relacij je bil po številu voženj med parom (`pristanek._IZBOR_SQL`); Ljubljana → Maribor (13 voženj) je bila na mestu 2 589, Ljubljana → Koper (4) na 5 640. V zemljevidu so bile Kresnice, Jevnica, Laze. Pri avtobusih vrh Medno ↔ Ljubljana Tivoli; Ljubljana AP → Maribor AP (18 voženj), Piran (22), Novo mesto (23), Celje AP (28) sploh niso bili kandidati, ker je bila meja 30 voženj.
+* Domača stran: **brez `<h1>`**, 296 znakov besedila, besed „zamude“ in „vozni red“ ni v vidnem besedilu. Naslov `kajros — vozni redi in zamude`.
+* `/app/train` in `/app/bus`: brez `<h1>`, naslov se začne z imenom znamke.
+* `http://kajros.app/`, `https://www.kajros.app/`, `http://www.kajros.app/`: vsi **200** z isto vsebino, brez preusmeritve.
+* `canonical` okna vožnje s presledkom: `https://kajros.app/app/train/LPV 2276` — neveljaven URL.
+* Strukturiranih podatkov (JSON-LD) ni nikjer. zamudil.si, slomet.si in brezavta.si jih imajo (`WebSite`, `Organization`).
+* Cloudflare vrača **403** za `GPTBot` in `ClaudeBot` (učenje modelov), 200 za Googlebot, bingbot, OAI-SearchBot, PerplexityBot, YandexBot.
+
+**Konkurenca** (isti dan): zamudil.si ima v zemljevidu 1 386 prog, 798 postaj, 2 175 vlakov (vse v sl/en/de, `hreflang`), naslov „Zamude slovenskih vlakov“, opis z „vozni red“ in „v živo“. brezavta.si: „Javni prevoz po Sloveniji | Vozni red in načrtovalnik poti“. slomet.si: „Prihodi avtobusov in javni prevoz v Sloveniji“.
+
+**Merilo povpraševanja: Googlovo samodejno dopolnjevanje** (`suggestqueries.google.com`, `hl=sl`, `gl=si`). Za vsako od 270 železniških postaj poizvedba „vlak <ime> “, za 144 avtobusnih krajev „avtobus <kraj> “; predlog „vlak celje ljubljana“ = iskan par. Rezultat: 491 železniških parov (371 z neposredno vožnjo), 338 avtobusnih (203). Pristranskost: izhodišča so izbrana po prometu, kar malo pomaga teži po prometu.
+
+Najpogostejši predlogi: „vlak ljubljana koper / maribor / zagreb / kamnik / celje“, „vozni red vlakov zamude“, „zamude vlakov danes / sž / ljubljana maribor“, „sž zamude vlakov danes“, „avtobus ljubljana koper / maribor / piran / kranj / novo mesto“. Tujih ciljev (Zagreb 105 točk, Reka, Pulj, Dunaj, Trst, Budimpešta, Beljak) naš vir nima. Po številkah vlakov se tudi išče („vlak ic 503“, „ic 502 pohorje“).
+
+**Koliko iskanih parov pokrije zemljevid strani** (prvih N po pravilu):
+
+| pravilo | železnica 400 | železnica 1 000 | avtobus 400 |
+|---|---|---|---|
+| število voženj (do 29. 9.) | 54 / 371 | 141 | 7 / 203 |
+| **promet × promet** | **125** | **199** | **67** |
+| × število voženj | 114 | 205 | 34 |
+| × razdalja | 103 | 164 | 45 |
+| × √ voženj | 120 | 201 | 47 |
+| po K najprometnejših ciljev z vsake postaje (K = 2, +400 po teži) | — | 216 (1 034 strani) | 100 (7 750 strani) |
+
+Avtobusi s 400 na 1 000 dobijo le 6 parov, železnica 74 → meji 1 000 in 400. Izbor po K ciljih z vsake postaje je malo boljši pri železnici, pri avtobusih pa rabi 7 750 strani — zavrnjen.
+
+Cena izračuna na razvojnem računalniku (90 dni): železnica 5,4 s (prej 4,8), avtobusi 17,8 s (prej 15,1). Kandidatov pri avtobusih z mejo 4 voženj 91 128 (prej 26 049).
+
+Novi vrh: Ljubljana ↔ Maribor, Celje, Zidani Most, Pragersko …; avtobusi Ljubljana AP ↔ Maribor AP, Kranj AP, Medvode, Celje AP, Koper. Ljubljana → Maribor: mediana zamude ob prihodu **10 min** na 281 vožnjah; Ljubljana → Koper **16 min** na 92.

@@ -2006,7 +2006,9 @@ SUMMARY_MAX_AGE_S = 36 * 3600
 #: izpustila in videti je bilo, kot da sprememba ne dela. Zgodilo se je pri
 #: dodajanju `median_s` (4. 9. 2026) -- API je vrnil `cached=true` in polja
 #: ni bilo, cetudi je bila koda pravilna.
-SUMMARY_VERSION = 4
+#:
+#: v5 (29. 9. 2026): pristajalne relacije izbrane po `pristanek._teza()`.
+SUMMARY_VERSION = 5
 
 _SUMMARY_LOCK = threading.Lock()
 

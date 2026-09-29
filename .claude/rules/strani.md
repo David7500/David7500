@@ -50,7 +50,11 @@ Odpadli **dve zahtevi od treh** (`/api/overview` in `/api/overview/bus`, najdra�
 
 **Podpora (`/donacije`) pelje na `ko-fi.com/kajros`** (odprto 19. 9. 2026, PayPal Business na ime „kajros“, da donator ne vidi lastnikovega imena). Naslov = privzetek v `config.py`, ne v enoti, ker ga agent tam ne more pisati. Prazen `KAJROS_DONACIJE=` skrije vse: pot je ploščice na domači strani (na mestu nekdanje „Kdaj potovati") in gumba v nogi ni: prošnja brez naslova, kamor bi denar šel, je slabša od nobene. Stran pove ime ponudnika ob gumbu, ker gumb pelje s strani.
 
-**Povedi so pisane, kot se piše, ne kot se govori.** „Kdaj ti pelje in koliko zamuja" in „kje je zdaj kaj" prijavljena kot stavka, ki se v slovenščini tako ne uporabljata; zdaj „Odhodi in zamude slovenskih vlakov in avtobusov" in „kje so vlaki in avtobusi ta trenutek". Isto za naslove v zavihku brskalnika: „kajros — vlaki: odhodi in zamude", ne „kdaj mi pelje vlak".
+**Povedi so pisane, kot se piše, ne kot se govori.** „Kdaj ti pelje in koliko zamuja" in „kje je zdaj kaj" prijavljena kot stavka, ki se v slovenščini tako ne uporabljata; zdaj „Odhodi in zamude slovenskih vlakov in avtobusov" in „kje so vlaki in avtobusi ta trenutek". Isto za naslove v zavihku brskalnika: „Vozni red vlakov in zamude v živo — kajros", ne „kdaj mi pelje vlak".
+
+**Naslov strani se začne s tem, kar človek vtipka v iskalnik, znamka je zadnja** (29. 9. 2026). „vozni red“, „zamude“, „v živo“, „vlakov/avtobusov“ — besede iz Googlovega samodejnega dopolnjevanja („vozni red vlakov zamude“, „sž zamude vlakov danes“). „kajros — …“ je porabil prvo mesto za besedo, ki je nihče ne išče. Opis pristajalne strani nosi številke (vožnje danes, najhitrejša, običajna zamuda), ne splošnega stavka, ki je bil enak na 800 straneh.
+
+**Domača stran ima `<h1>`** — eno vrstico pod znamko (`.d-geslo`). Brez nje je iskalnik videl gumbe: 296 znakov besedila, ne „zamude“ ne „vozni red“.
 
 **Domača stran je Material 3 Expressive** (osnutek G, izbran 26. 9. 2026 med devetimi na platnu „Domača stran kajros"). Zavrnjene prej: kartice z ikonami in prelivom („preveč AI generirano"), tipografske vrstice („vse isto oblikovano in dolgočasno"), ploščice 14.–26. 9. („zgleda tako AI": vse enako zaobljene kartice z obrobo, razprte velike črke, pastelna polja). Sestava:
 
@@ -231,7 +235,8 @@ Zato povezava vodi na trgovino in **to tudi piše** („relacijo vpišeš tam“
 * **Ob številu pravilna oblika** (`pristanek.stevnik()`): 1 vožnja, 2 vožnji, 3 vožnje, 5 voženj. Odločata **zadnji dve števki** — 21 = „enaindvajset voženj", 101 = „sto ena vožnja".
 * **Vožnja brez meritve ne dobi pomišljaja, ampak zgodovino.** „običajno +13 min", sivo in z besedo: brez nje je stolpec pri jutranjem vlaku prazen, čeprav o njem vemo osemnajst prejšnjih voženj. Vrednost **ni napoved za ta dan**; stran jo tako tudi imenuje (`stats.typical_at_stops()`).
 * **Vsaka številka nosi vzorec in čas izračuna** — „na 734 vožnjah od 21. 8. do 17. 9., preračunano 17. 9. ob 03:31". Velja povsod, kjer je agregat čez vso zgodovino.
-* **Kar ni v kazalu, dobi `noindex, follow`.** Prostor naslovov je neskončen (26 000 parov postaj pri avtobusih), iskalnik ga bo prehodil. Naslov se pred izrisom **zloži v našo obliko in preusmeri s 301**, sicer sta `/postaja/Celje` in `/postaja/celje` dve strani z isto vsebino.
+* **Kar ni v kazalu, dobi `noindex, follow`.** Prostor naslovov je neskončen (91 000 parov postaj pri avtobusih), iskalnik ga bo prehodil. **Zato je izbor kazala ključen**: do 29. 9. 2026 je bil po številu voženj in `noindex` sta dobili Ljubljana → Maribor in → Koper, najbolj iskani relaciji. Zdaj po `pristanek._teza()`; pravilo ne sme nazaj na število voženj. Naslov se pred izrisom **zloži v našo obliko in preusmeri s 301**, sicer sta `/postaja/Celje` in `/postaja/celje` dve strani z isto vsebino.
+* **Drobtine (`BreadcrumbList`) in `WebSite` v JSON-LD** se pišejo s `tojson`, ne ročno — imena postaj so vnos iz GTFS.
 
 ## Besedilne strani govorijo potniku, ne razvijalcu
 

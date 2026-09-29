@@ -11,12 +11,20 @@
 
   Klic (vrednosti nastavi stran s `{% set %}` nad glavo):
       {% include "_meta.html" %}
+
+  Naslov se začne s tem, kar človek išče („Vozni red vlakov …“), znamka je
+  na koncu. Iskalnik prikaže ~60 znakov, zavihek še manj; „kajros“ na
+  začetku je porabil prvo mesto za besedo, ki je nihče ne vtipka.
+
+  `request.url.path` je razkodirana pot: brez `urlencode` je bil kanonski
+  naslov okna vožnje `…/app/train/LPV 2276` -- s presledkom, neveljaven.
 #}
-{%- set _t = og_title | default('kajros — vozni redi in zamude') -%}
-{%- set _d = og_desc | default('Odhodi in zamude slovenskih vlakov in avtobusov, izmerjeni iz odprtih podatkov.') -%}
+{%- set _t = og_title | default('Vozni red in zamude vlakov in avtobusov v živo — kajros') -%}
+{%- set _d = og_desc | default('Zamude vlakov in avtobusov po Sloveniji v živo: vozni red, odhodi s postaj, iskalnik povezav in zemljevid vozil.') -%}
+{%- set _pot = baza ~ (request.url.path | urlencode) -%}
   <title>{{ _t }}</title>
   <meta name="description" content="{{ _d }}">
-  <link rel="canonical" href="{{ baza }}{{ request.url.path }}">
+  <link rel="canonical" href="{{ _pot }}">
   {#- Slog vektorske podlage z odtisom vsebine: bere ga JS zemljevidov,
       ki `s()` nima, Cloudflare pa bi golo pot drzal stiri ure. -#}
   <meta name="kajros-podlaga" content="{{ s('podlaga.json') }}">
@@ -25,7 +33,7 @@
   <meta property="og:locale" content="sl_SI">
   <meta property="og:title" content="{{ _t }}">
   <meta property="og:description" content="{{ _d }}">
-  <meta property="og:url" content="{{ baza }}{{ request.url.path }}">
+  <meta property="og:url" content="{{ _pot }}">
   <meta property="og:image" content="{{ baza }}{{ s('og.png') }}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">

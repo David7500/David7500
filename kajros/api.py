@@ -71,6 +71,40 @@ async def _stej_obisk(request: Request, call_next):
                 pass
 
 
+_GOSTITELJ = urlsplit(config.BASE_URL).hostname
+
+
+@app.middleware("http")
+async def _en_naslov(request: Request, call_next):
+    """`http://` in `www.` preusmeri na en naslov, `https://kajros.app`.
+
+    Do 29. 9. 2026 so `http://kajros.app/`, `https://www.kajros.app/` in
+    `http://www.kajros.app/` vračali 200 z isto vsebino. Za iskalnik so to
+    štiri strani, ki jih drži skupaj samo `rel=canonical` -- namig, ne ukaz.
+
+    Samo za zahteve, ki pridejo prek Cloudflara (glava `CF-Visitor` nosi
+    shemo obiskovalca; za tunelom je naša vedno `http`). Razvoj na
+    `192.168.1.164:8001` in aplikacija v domačem omrežju je nimata in ostaneta
+    nedotaknjena.
+    """
+    obiskovalec = request.headers.get("cf-visitor")
+    if obiskovalec is not None and _GOSTITELJ:
+        try:
+            shema = json.loads(obiskovalec).get("scheme")
+        except (ValueError, AttributeError):
+            shema = None
+        gost = (request.headers.get("host") or "").split(":")[0].lower()
+        if gost == "www." + _GOSTITELJ or (gost == _GOSTITELJ and shema == "http"):
+            pot = request.scope.get("raw_path", b"").decode("latin-1") or request.url.path
+            q = request.scope.get("query_string", b"").decode("latin-1")
+            # 308 ohrani metodo in telo: `POST /api/deli` po `http://` ne sme
+            # postati `GET`.
+            return RedirectResponse(
+                f"{config.BASE_URL}{pot}" + (f"?{q}" if q else ""),
+                status_code=301 if request.method in ("GET", "HEAD") else 308)
+    return await call_next(request)
+
+
 @app.exception_handler(journey.VozniRedPrevelik)
 def _voznired_prevelik(request: Request, exc: journey.VozniRedPrevelik):
     """Vozni red je prevelik za iskanje v pomnilniku — 503, ne prazen odgovor.
@@ -367,20 +401,27 @@ _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
             "/android", "/stik", "/zasebnost", "/o-nas"]
 
 
-def _sitemap_poti() -> list[str]:
-    """Vse poti za iskalnike: ročne in pristajalne.
+def _sitemap_poti() -> list[tuple[str, str | None]]:
+    """Vse poti za iskalnike, vsaka z dnem zadnje spremembe ali `None`.
 
     Pristajalne so naštete iz kazala (`pristanek.py`) in ne iz vzorca poti:
-    parov postaj je 26 000, relacij s stranjo pa 400 na omrežje. Kar ni v
+    parov postaj je 91 000, relacij s stranjo pa 1 000 in 400. Kar ni v
     kazalu, ostane dosegljivo in `noindex` -- zemljevid strani ne sme odpreti
     neskončnega prostora naslovov.
+
+    Dan spremembe nosijo samo pristajalne: njihove številke se preračunajo
+    vsako noč (`izracunano` na strani), torej je dan resničen. Ročnim ga ne
+    pišemo -- Google `lastmod` upošteva le, dokler se izkazuje za točnega.
     """
-    poti = list(_SITEMAP) + (["/donacije"] if config.DONACIJE else [])
+    poti = [(p, None) for p in _SITEMAP]
+    if config.DONACIJE:
+        poti.append(("/donacije", None))
     for network in stats.SUMMARY_NETWORKS:
         kaz = _kazalo(network)
-        poti += [pristanek.pot_relacije(network, r["od"], r["cilj"])
+        dan = (kaz.get("computed_at") or "")[:10] or None
+        poti += [(pristanek.pot_relacije(network, r["od"], r["cilj"]), dan)
                  for r in kaz["relacije"]]
-        poti += [pristanek.pot_postaje(network, p["ime"])
+        poti += [(pristanek.pot_postaje(network, p["ime"]), dan)
                  for p in kaz["postaje"]]
     return poti
 
@@ -388,8 +429,10 @@ def _sitemap_poti() -> list[str]:
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap():
     """Zemljevid strani za iskalnike."""
-    poti = "".join(f"<url><loc>{config.BASE_URL}{p}</loc></url>"
-                   for p in _sitemap_poti())
+    poti = "".join(
+        f"<url><loc>{config.BASE_URL}{p}</loc>"
+        + (f"<lastmod>{dan}</lastmod>" if dan else "") + "</url>"
+        for p, dan in _sitemap_poti())
     return Response(
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -716,8 +759,8 @@ def bus_page(request: Request):
     return templates.TemplateResponse(request, "connections.html", {
         "here": "avtobusi", "network": "avtobus",
         "section": "Avtobusi",
-        "page_title": "kajros — avtobusi: odhodi in zamude",
-        "page_desc": "Odhodi in zamude slovenskih avtobusov iz odprtih podatkov.",
+        "page_title": "Vozni red avtobusov in zamude v živo — kajros",
+        "page_desc": "Iskalnik avtobusnih povezav po Sloveniji: vozni red, odhodi s postajališča in zamude avtobusov v živo, tudi mestni LPP.",
         "from_ph": "izhodiščno postajališče",
         "to_ph": "ciljno postajališče",
         "stop_label": "Postajališče",
@@ -776,18 +819,38 @@ def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     """
     with _conn() as conn:
         row = conn.execute(
-            "SELECT network FROM trip "
+            "SELECT trip_id, network FROM trip "
             "WHERE (:trip IS NOT NULL AND trip_id = :trip) "
             "   OR (:trip IS NULL AND train_no = :no) LIMIT 1",
             {"trip": trip, "no": train_no}).fetchone()
-    prava = row["network"] if row else network
+        prava = row["network"] if row else network
+        # Konca vožnje za naslov: po številki se išče („vlak ic 503“), a
+        # „IC 503 — kajros“ ne pove, kam pelje. Mestna linija brez `trip` je
+        # sto voženj v dveh smereh -- tam konca ne ugibamo.
+        konca = None
+        if row and (trip or prava == "zeleznica"):
+            konca = conn.execute(
+                "SELECT a.name AS od, b.name AS cilj FROM trip t"
+                "  JOIN sched sa ON sa.trip_id = t.trip_id AND sa.stop_seq = t.first_seq"
+                "  JOIN station a ON a.stop_id = sa.stop_id"
+                "  JOIN sched sb ON sb.trip_id = t.trip_id AND sb.stop_seq = t.last_seq"
+                "  JOIN station b ON b.stop_id = sb.stop_id"
+                " WHERE t.trip_id = ?", (row["trip_id"],)).fetchone()
     if prava != network:
         pot = "/app/bus/" if prava == "avtobus" else "/app/train/"
         q = f"?{request.url.query}" if request.url.query else ""
         return RedirectResponse(f"{pot}{quote(train_no)}{q}", status_code=307)
+    beseda = ("Avtobus" if prava == "avtobus" else
+              "Nadomestni prevoz" if train_no.upper().startswith("BUS") else "Vlak")
+    relacija = f"{konca['od']} → {konca['cilj']}" if konca else ""
     return templates.TemplateResponse(request, "train.html", {
         "train_no": train_no, "network": prava,
         "here": "avtobusi" if prava == "avtobus" else "iskalnik",
+        "naslov": f"{beseda} {train_no} {relacija}".strip(),
+        "opis": f"Kje je {beseda.lower()} {train_no}"
+                + (f" ({relacija})" if relacija else "")
+                + " zdaj, koliko zamuja in kdaj pride na cilj — z zgodovino"
+                  " zamud te vožnje.",
     })
 
 
@@ -816,7 +879,7 @@ def bus_trip_page(request: Request, train_no: str, trip: str | None = None):
 def _kazalo(network: str) -> dict:
     """Kazalo pristajalnih strani, predpomnjeno.
 
-    Povzetek je v bazi in se prebere z `json.loads` 400 relacij in 300 postaj
+    Povzetek je v bazi in se prebere z `json.loads` 1 000 relacij in 300 postaj
     -- to je za vsako zahtevo po nepotrebnem. Značka je uvoz voznega reda,
     ker se nabor naslovov spremeni z njim; številke v njem se osvežijo z
     dnevnim opravilom in četrturna varovalka jih ujame.
@@ -859,24 +922,45 @@ def _relacija_stran(request: Request, od: str, cilj: str, network: str):
                                      datum, now_s)
 
     zapis = podatki["zapis"]
-    vozilo = "Avtobus" if network == "avtobus" else "Vlak"
-    if zapis and zapis["meritev"] >= pristanek.MIN_MERITEV:
-        opis = (f"{vozilo} {ime_od} → {ime_cilj}: odhodi danes in izmerjena "
-                f"zamuda — običajno {pristanek.besedilo(zapis['zamuda'])}, "
-                f"{round(zapis['tocnih'] * 100)} % jih pride v petih minutah.")
-    else:
-        opis = (f"{vozilo} {ime_od} → {ime_cilj}: odhodi danes in zamude, "
-                f"izmerjene iz odprtih podatkov.")
+    opis = _opis_relacije(network, ime_od, ime_cilj, podatki["vseh"],
+                          podatki["najkrajse"], zapis)
 
     dnevi = kaz.get("days") or []
     return templates.TemplateResponse(request, "relacija.html", {
         **podatki, "opis": opis,
         "min_meritev": pristanek.MIN_MERITEV,
-        "najkrajse": min((z["duration_s"] for z in podatki["zveze"]), default=None),
         "iskalnik": _iskalnik_ab(network, ime_od, ime_cilj),
         "od_dneva": _dan(dnevi[0] if dnevi else None),
         "do_dneva": _dan(dnevi[-1] if dnevi else None),
     })
+
+
+def _opis_relacije(network: str, od: str, cilj: str, vseh: int,
+                   najkrajse: int | None, zapis: dict | None) -> str:
+    """Opis za iskalnik: to, kar človek išče, in številke, ki jih nima nihče.
+
+    Iskalnik pokaže ~155 znakov pod naslovom. „Odhodi danes in zamude,
+    izmerjene iz odprtih podatkov“ je bilo enako na vseh 800 straneh; zdaj
+    nosi število voženj, čas vožnje in izmerjeno zamudo -- razlog, da kdo
+    klikne ravno tu.
+    """
+    vrsta = "avtobusov" if network == "avtobus" else "vlakov"
+    deli = [f"Vozni red {vrsta} {od} → {cilj} za danes"]
+    if vseh:
+        deli[0] += (f": {vseh} " + pristanek.stevnik(
+            vseh, "neposredna vožnja", "neposredni vožnji",
+            "neposredne vožnje", "neposrednih voženj"))
+        if najkrajse:
+            deli[0] += f", najhitrejša {pristanek.trajanje(najkrajse)}"
+    else:
+        deli[0] += ": neposredne vožnje danes ni"
+    if zapis and zapis["meritev"] >= pristanek.MIN_MERITEV:
+        deli.append(f"Običajna zamuda ob prihodu "
+                    f"{pristanek.besedilo(zapis['zamuda'])}, "
+                    f"{round(zapis['tocnih'] * 100)} % jih pride v petih minutah")
+    else:
+        deli.append("Zamude v živo")
+    return ". ".join(deli) + "."
 
 
 def _iskalnik_ab(network: str, od: str, cilj: str) -> str:
@@ -913,11 +997,11 @@ def _postaja_stran(request: Request, ime: str, network: str):
 
     zapis = podatki["zapis"]
     beseda = "Postajališče" if network == "avtobus" else "Postaja"
+    vrsta = "avtobusov" if network == "avtobus" else "vlakov"
+    opis = f"{beseda} {pravo}: odhodi {vrsta} danes, vozni red in zamude v živo."
     if zapis and zapis["meritev"] >= pristanek.MIN_MERITEV:
-        opis = (f"{beseda} {pravo}: naslednji odhodi in izmerjena zamuda — "
-                f"običajno {pristanek.besedilo(zapis['zamuda'])} na tem postanku.")
-    else:
-        opis = f"{beseda} {pravo}: naslednji odhodi in zamude iz odprtih podatkov."
+        opis += (f" Običajna zamuda na tem postanku "
+                 f"{pristanek.besedilo(zapis['zamuda'])}.")
 
     dnevi = kaz.get("days") or []
     stran = "/app/bus" if network == "avtobus" else "/app/train"

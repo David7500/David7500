@@ -150,6 +150,8 @@ Od 12. 9. 2026 `kajros.app` odprt komurkoli. Poti niso za aplikacijo, ampak za b
 
 **Absolutni naslov = `config.BASE_URL`, nikoli `request.url`.** Za Cloudflarovim tunelom je zahteva videti kot `http://127.0.0.1:8000`: izvor govori navaden HTTP, enota ne teče z `--proxy-headers`. Zemljevid strani in značke za predogled bi kazali na naslov, nedosegljiv iz interneta. (Naslova obiskovalca to ne prizadene — `obisk.py` bere `cf-connecting-ip`, ne `request.client`.)
 
+**En naslov: `https://kajros.app`.** `http://` in `www.` preusmeri `api._en_naslov` (301, za ne-GET 308), samo ob glavi `CF-Visitor` — razvoj in domače omrežje je nimata. Do 29. 9. 2026 so vsi štirje vračali 200 z isto vsebino. Kanonski naslov v `_meta.html` gre skozi `urlencode`: `request.url.path` je razkodiran, okno vožnje je imelo `…/LPV 2276` s presledkom.
+
 **Koren `/` = stran, JSON samo na izrecno prošnjo.** Do 15. 9. 2026 HTML samo ob `Accept: text/html`; DuckDuckGo (Bingov indeks) je zato kot opis `kajros.app` kazal `{"service":"kajros",…}`, `facebookexternalhit` z `Accept: */*` prav tako. Privzetek za ljudi — živost = `/api/health`. Straži `preveri.sh`.
 
 **Naš `robots.txt` mora obstajati, sicer Cloudflare postreže svojega.** Njegov privzetek o naših poteh ne ve nič, pusti indeksirati `/api/`. Naš prepove `/api/`, `/admin`, `/docs`, `/redoc`.
