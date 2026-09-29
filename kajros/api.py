@@ -29,8 +29,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, naslovi,
-               obisk, obvestila, peroni, pot, pristanek, stats, stik)
+from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
+               naslovi, obisk, obvestila, peroni, pot, pristanek, stats, stik)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -103,6 +103,44 @@ async def _en_naslov(request: Request, call_next):
                 f"{config.BASE_URL}{pot}" + (f"?{q}" if q else ""),
                 status_code=301 if request.method in ("GET", "HEAD") else 308)
     return await call_next(request)
+
+
+@app.middleware("http")
+async def _markdown_za_agente(request: Request, call_next):
+    """Strani kot Markdown za agente, ki ga zahtevajo (`markdown.py`).
+
+    Stran brez `Accept: text/markdown` dobi samo `Vary: Accept`, da posrednik
+    ne bi postregel Markdowna brskalniku. Aplikacija (`/app`), API in admin
+    ostanejo nedotaknjeni: lupina JS v Markdownu ni nič.
+
+    Middleware je zunaj gzipa (dodan pozneje), zato bi videl stisnjeno telo;
+    agentu, ki ga zahteva, zato vzamemo `Accept-Encoding` -- odgovor je kratek
+    in ga Cloudflare tako ali tako stisne na robu.
+    """
+    pot = request.url.path
+    if (request.method != "GET" or pot.startswith(_BREZ_MARKDOWNA)
+            or pot.startswith(ADMIN_POT)):
+        return await call_next(request)
+    zeli = markdown.zeli_markdown(request.headers.get("accept", ""))
+    if zeli:
+        request.scope["headers"] = [(k, v) for k, v in request.scope["headers"]
+                                    if k != b"accept-encoding"]
+    odgovor = await call_next(request)
+    if (odgovor.status_code != 200
+            or not odgovor.headers.get("content-type", "").startswith("text/html")):
+        return odgovor
+    if not zeli:
+        odgovor.headers.append("Vary", "Accept")
+        return odgovor
+    telo = b"".join([kos async for kos in odgovor.body_iterator])
+    glave = {"Vary": "Accept"}
+    if "cache-control" in odgovor.headers:
+        glave["Cache-Control"] = odgovor.headers["cache-control"]
+    return Response(markdown.iz_html(telo.decode("utf-8"), config.BASE_URL + pot),
+                    media_type="text/markdown", headers=glave)
+
+
+_BREZ_MARKDOWNA = ("/api/", "/app", "/static/", "/docs", "/redoc")
 
 
 @app.exception_handler(journey.VozniRedPrevelik)
@@ -480,6 +518,49 @@ def robots():
         "Disallow: /redoc\n"
         f"\nSitemap: {config.BASE_URL}/sitemap.xml\n",
         media_type="text/plain")
+
+
+@app.get("/llms.txt", include_in_schema=False)
+def llms():
+    """Kazalo za jezikovne modele: kaj kajros je in katera stran odgovarja na kaj.
+
+    Predlagan dogovor (llmstxt.org), ki ga brskalniki AI in agenti berejo
+    prednostno, ker jim prihrani iskanje po straneh. Brez številk zamud --
+    te so na straneh in se menjajo vsak dan, tu bi se postarale.
+    """
+    b = config.BASE_URL
+    return Response(
+        "# kajros\n\n"
+        "> Zamude slovenskih vlakov in avtobusov: koliko vožnje res zamujajo, "
+        "vozni red in zamuda v živo. Vlaki SŽ, medkrajevni avtobusi in mestni "
+        "LPP. Osebni projekt, ne stran prevoznika. Vse v slovenščini.\n\n"
+        "Zamudo zapišemo pri vsaki vožnji od avgusta 2026, zato stran za "
+        "relacijo pove, koliko ta vožnja običajno zamuja. Zamuda je taka, kot "
+        "jo sporoči prevoznik; za postaje, do katerih vozilo še ni prišlo, je "
+        "to ocena, ne meritev, in stran to napiše. Povzemanje in navajanje "
+        "strani je dovoljeno, glej robots.txt.\n\n"
+        "## Odgovori na vprašanja\n\n"
+        f"- [Vlak med dvema postajama]({b}/vlak/ljubljana/maribor): "
+        "vozni red za danes, običajna zamuda ob prihodu in odstotek "
+        "pravočasnih vožnj. Vzorec: `/vlak/{od}/{cilj}`, imena brez šumnikov.\n"
+        f"- [Avtobus med dvema postajališčema]({b}/avtobus/ljubljana-ap/celje): "
+        "isto za medkrajevne avtobuse. Vzorec: `/avtobus/{od}/{cilj}`.\n"
+        f"- [Odhodi s postaje]({b}/postaja/ljubljana): odhodna tabla "
+        "z zamudami. Vzorec: `/postaja/{ime}`, za avtobus `/postajalisce/{ime}`.\n"
+        f"- [Vse železniške postaje]({b}/postaje) in "
+        f"[vsa avtobusna postajališča]({b}/postajalisca): kazalo vseh strani.\n\n"
+        "## O strani\n\n"
+        f"- [O nas]({b}/o-nas): kaj je kajros, od kod podatki, česa ni.\n"
+        f"- [Kje preveriti zamudo]({b}/primerjava): druge strani za zamude "
+        "in v čem so dobre.\n"
+        f"- [Zasebnost]({b}/zasebnost): obiska ne beležimo po osebah.\n\n"
+        "## Podatki\n\n"
+        "Vozni redi in zamude: odprti podatki javnega potniškega prometa "
+        "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP iz odprtih virov LPP, "
+        "vreme Open-Meteo. Navedba vira je pogoj rabe.\n\n"
+        "## Neobvezno\n\n"
+        f"- [Zemljevid strani]({b}/sitemap.xml)\n",
+        media_type="text/plain; charset=utf-8")
 
 
 #: Kar mora biti v predpomnilniku, preden obiskovalec izgubi zvezo. Samo

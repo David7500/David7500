@@ -75,6 +75,7 @@ kajros/
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
+  markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
   stik.py        sporočila obiskovalcev; piše iz zahteve
   obvestila.py   obvestila skrbnika potnikom: vsako z rokom in omrežjem
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
@@ -131,7 +132,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 
 **Pristajalne strani obstajajo zaradi iskalnika in so brez JS**: človek išče „vlak ljubljana koper“, odgovor mora biti v odgovoru strežnika. Meja, katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po teži (promet izhodišča × promet cilja, ne število voženj), ostalo `noindex`. Kaj ljudje iščejo, izmerjeno v `docs/MERITVE.md` („Iskalniki“).
 
-Poti za brskalnike in iskalnike: `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, `/sw.js`, `/brez-omrezja`; `/android` = stran s prenosom, `/prenos` = podpisan APK. Napaka = **stran** za človeka in JSON pod `/api/`. Absolutni naslov = `KAJROS_BASE_URL`, ne `request.url` (za tunelom je ta `http://127.0.0.1:8000`). **Tujih izvorov v strani ni** razen ploščic zemljevida.
+Poti za brskalnike in iskalnike: `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, `/llms.txt` (kazalo za jezikovne modele), `/sw.js`, `/brez-omrezja`; `/android` = stran s prenosom, `/prenos` = podpisan APK. Napaka = **stran** za človeka in JSON pod `/api/`. Absolutni naslov = `KAJROS_BASE_URL`, ne `request.url` (za tunelom je ta `http://127.0.0.1:8000`). **Tujih izvorov v strani ni** razen ploščic zemljevida.
 
 **`/admin` zahteva žeton** (brez njega 404): `/admin?k=<žeton>`, nato piškotek. Žeton: `${KAJROS_DATA_DIR}/.admin-zeton` (`deploy/zeton.sh`, **brez sudota**), `KAJROS_ADMIN_TOKEN` ga povozi, v razvoju ga izpiše `dev-restart.sh`. Obisk se šteje **brez IP-ja** (sol dneva). Podrobnosti: `.claude/rules/strezba.md`.
 

@@ -69,6 +69,18 @@ else
   printf "  PADE %-34s %s (pricakoval text/html)\n" "koren brez Accept je stran" "$vrsta"
   NAPAKE=$((NAPAKE+1))
 fi
+# Agent, ki zahteva Markdown, ga dobi; brskalnik (brez te glave) ostane pri
+# HTML. llms.txt je kazalo za modele -- 404 bi pomenil, da ga izbrisan
+# usmerjevalnik ali predpomnilnik skriva.
+vrsta=$(curl -s -o /dev/null -w '%{content_type}' --max-time 10 -H 'Accept: text/markdown' "$BASE/o-nas")
+if [[ "$vrsta" == text/markdown* ]]; then
+  printf "  ok   %-34s %s\n" "Accept: text/markdown daje Markdown" "$vrsta"
+else
+  printf "  PADE %-34s %s (pricakoval text/markdown)\n" "Accept: text/markdown daje Markdown" "$vrsta"
+  NAPAKE=$((NAPAKE+1))
+fi
+
+api "llms.txt obstaja" /llms.txt 200
 api "ista postaja"        "/api/connections?from=Ljubljana&to=Ljubljana" 400
 api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
 api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404
