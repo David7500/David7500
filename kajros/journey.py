@@ -1113,7 +1113,10 @@ _TT_LOCKS_GUARD = threading.Lock()
 # zvez izrinilo skupno sliko in naslednja pot je placala poln nalog -- na
 # arwenu izmerjeno **15,3 s**. Cena je majhna, ker je zeleznica drobna:
 # avtobusi 92 MB, oboje skupaj 94 MB, zeleznica ~3 MB.
-_TT_CACHE_MAX = 3
+# Pet in ne tri, odkar pot zvecer isce tudi jutri (30. 9. 2026): danes skupaj,
+# danes vlaki, danes avtobusi, jutri skupaj, ponoci se vceraj skupaj. Pri treh
+# je vsako vecerno iskanje izpraznilo vse -- na arwenu 2,8 do 9 s na zahtevo.
+_TT_CACHE_MAX = 5
 
 
 def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
@@ -1184,8 +1187,14 @@ def _nalozi_vozni_red(conn: sqlite3.Connection, service_date: str,
         v.sort()
 
     if stamp:
-        if len(_TT_CACHE) >= _TT_CACHE_MAX:
-            _TT_CACHE.clear()   # brez vrstnega reda; teh je par in so poceni
+        # Ven gre najstarejsi vnos, ne vsi: praznjenje celega je ob vsakem
+        # novem dnevu vrglo tudi danasnjega, ki ga naslednja zahteva spet rabi.
+        # Kljucavnica je na kljuc, zato sme vzporedno vstavljati druga nit.
+        while len(_TT_CACHE) >= _TT_CACHE_MAX:
+            try:
+                _TT_CACHE.pop(next(iter(_TT_CACHE)), None)
+            except (StopIteration, RuntimeError):
+                break
         _TT_CACHE[key] = (by_trip, at_stop)
     return by_trip, at_stop
 
