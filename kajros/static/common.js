@@ -101,6 +101,28 @@ function preostanekPrestopa(nacrtovanoS, zamudaPrvega, zamudaDrugega) {
   return Math.floor(nacrtovanoS / 60 + 0.5) - d1 + d2;
 }
 
+/** Trajanje poti med urama, ki ju stran pokaže. `trajanje_s` je po voznem
+ * redu; kadar prva vožnja zamuja, zadnja pa ne (ali obratno), je stalo
+ * "18:45 → 19:43 · 1 h 34" (30. 9. 2026). */
+function trajanjePrikaz(p) {
+  return (p.prihod_ocena || p.prihod) - (p.odhod_ocena || p.odhod);
+}
+
+/** Rezerva prestopa na poti od vrat do vrat, po urah, ki jih stran kaže.
+ *
+ * Prva vožnja šteje z zamudo ob IZSTOPU -- vmes rezervo porabi ali izgubi --,
+ * vožnja brez podatka pa po voznem redu, tako kot jo pokaže ura. Prej je
+ * veljala zamuda ob vstopu in "ne vemo" pri eni sami vožnji je skril tudi
+ * znano zamudo druge (30. 9. 2026: 18 od 112 prestopov za 3 min ali več
+ * drugače od ur na strani). `null`, kadar ne vemo za nobeno.
+ */
+function rezervaPrestopa(t, pred, po) {
+  const z1 = pred && (pred.zamuda_izstop || pred.zamuda);
+  const z2 = po && po.zamuda;
+  if (delayMin(z1) == null && delayMin(z2) == null) return null;
+  return preostanekPrestopa(t.nacrtovano_s, z1 == null ? 0 : z1, z2 == null ? 0 : z2);
+}
+
 function isEarly(z) {
   if (z == null) return false;
   if (typeof z === "object") return !!z.prezgodaj;

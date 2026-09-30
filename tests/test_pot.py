@@ -216,7 +216,8 @@ def test_prestop_uposteva_zamudo_obeh_vozenj(conn, monkeypatch):
                                   (2, "CILJ", 8 * 3600 + 1800)])
     conn.commit()
     r = pot.isci(conn, OD, DO, D, 8 * 3600)
-    p = r["predlogi"][0]
+    # Prvi je peš do Daleč in samo druga -- ob istem prihodu brez prestopa.
+    p = next(p for p in r["predlogi"] if p["prestopov"] == 1)
     assert len(p["prestopi"]) == 1
     t = p["prestopi"][0]
     assert t["kje"] == "Daleč"
@@ -387,6 +388,11 @@ def test_brez_podatka_ni_isto_kot_tocno(conn):
     noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
     assert noga["brez_podatka"] is False
 
+    # Uro pred odhodom podatka še ne more biti -- beseda bi bila šum.
+    r = pot.isci(conn, OD, DO, D, 7 * 3600, now_s=7 * 3600)
+    noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
+    assert noga["brez_podatka"] is False
+
     conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, "
                  "delay_arr, feed_ts) VALUES('t1', ?, 1, 240, 240, ?)", (D, 4102444800))
     conn.commit()
@@ -435,6 +441,54 @@ def test_cim_prej_ne_caka_na_prestopu_namesto_doma(conn):
     prvi = r["predlogi"][0]
     assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["pozni", "vlak"]
     assert prvi["prestopi"][0]["nacrtovano_s"] == 20 * 60
+
+
+def _vmes_in_direkt(conn, pozni_odhod_s):
+    """Direkten avtobus ob 8:10 in avtobus + vlak prek VMES; oba na cilju ob 10:00."""
+    _postaja(conn, "VMES", "Vmes", 46.050, 14.500)
+    _voznja(conn, "t1", "direkt", [(1, "BLIZU", 8 * 3600 + 600),
+                                   (2, "CILJ", 10 * 3600)])
+    _voznja(conn, "t2", "pozni", [(1, "BLIZU", pozni_odhod_s),
+                                  (2, "VMES", 9 * 3600 + 1800)])
+    _voznja(conn, "t3", "vlak", [(1, "VMES", 9 * 3600 + 2400),
+                                 (2, "CILJ", 10 * 3600)], "zeleznica")
+    conn.commit()
+
+
+def test_cim_prej_prestop_vec_za_uro_doma(conn):
+    """Ob isti uri prihoda je prvi predlog tisti, s katerim odideš uro pozneje,
+    čeprav ima prestop več (30. 9. 2026: 05:44 namesto 11:43, prihod isti)."""
+    _vmes_in_direkt(conn, 9 * 3600 + 1200)
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    voznje = [[n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"]
+              for p in r["predlogi"]]
+    assert voznje[0] == ["pozni", "vlak"]
+    assert ["direkt"] in voznje, "pot brez prestopa ostane izbira"
+
+
+def test_cim_prej_prestop_vec_ni_vreden_minute(conn):
+    """Prestop več za dve minuti doma ni boljša pot."""
+    _vmes_in_direkt(conn, 8 * 3600 + 720)
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    prvi = r["predlogi"][0]
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["direkt"]
+
+
+def test_zvecer_brez_zveze_ponudi_jutrisnje(conn):
+    """Ob 22:00 danes ne pelje nič več: odgovor je prva zveza jutri, ne "ni poti"."""
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S1', '2026-09-09')")
+    _voznja(conn, "t1", "jutranji", [(1, "BLIZU", 8 * 3600 + 600),
+                                     (2, "CILJ", 8 * 3600 + 1500)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 22 * 3600)
+    assert r["danes_ni"] is True and r["datum"] == "2026-09-09"
+    prvi = r["predlogi"][0]
+    assert prvi["datum"] == "2026-09-09"
+    assert prvi["odhod"] > stats.polnoc("2026-09-09")
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["jutranji"]
+
+    r = pot.isci(conn, OD, DO, D, 22 * 3600, jutri=False)
+    assert "danes_ni" not in r and r["nasvet"] == {"ni_zveze": True}
 
 
 def test_tam_do_ne_caka_na_prestopu_namesto_na_cilju(conn):
@@ -671,7 +725,9 @@ def test_podnevi_vcerajsnjega_dne_ne_iscemo(conn):
     _voznja(conn, "noc", "N1", [(1, "BLIZU", 86400 + 8 * 3600 + 300),
                                 (2, "CILJ", 86400 + 8 * 3600 + 900)])
     conn.commit()
-    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    # Brez jutrišnjega iskanja: vožnja ob 32:05 dne D je jutri ob 8:05 in jo
+    # tisto (upravičeno) najde.
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, jutri=False)
     assert not any(n["vrsta"] == "voznja" for p in r["predlogi"] for n in p["noge"])
 
 

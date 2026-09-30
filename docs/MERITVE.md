@@ -1995,3 +1995,31 @@ Ostanek so poti z drugim številom voženj: zategovanje jih namenoma ne dodaja.
 **Popravek:** vsaka najdba gre še skozi obratno iskanje od najdene ure z enakim številom voženj (`pot._naprej`, `pot._nazaj`). Ura ostane ista, pot do nje je najkrajša. Spremeni se polovica najdb (345 od 693 klicev za ≥ 5 min), zato vrata „samo, kadar je na prestopu čakanje“ ne prihranijo skoraj nič (pri 10 min zgrešijo 12 primerov in prihranijo 9 % klicev).
 
 **Cena**, 60 vprašanj po Ljubljani in 60 med 20 mesti (07:20 / 12:40 / 17:10), mediana: Ljubljana 32 → 41 ms (čim prej), 28 → 34 ms (tam do); mesta 152 → 213 ms in 53 → 53 ms. Čakanje na prestopih na predlog med mesti 26,3 → 20,6 min (čim prej) in 10,4 → 7,9 min; predlogov s ≥ 30 min čakanja 69 → 54 od ~230 in 6 → 1 od 68. Trije medkrajevni primeri z živimi zamudami: Celje–Koper 910 → 1 015 ms, M. Sobota–Ljubljana 235 → 471, Novo mesto–Kranj 245 → 416. Arwen je okoli trikrat počasnejši.
+
+## Pregled načrtovalca poti (30. 9. 2026)
+
+Osem področij (iskanje, izbor predlogov, hitrost, API, oblika, zemljevid, vodenje, hoja), vsako z meritvijo. Kar je bilo popravljeno, s številko pred in po; kar ne, z razlogom.
+
+**Popravljeno** (100 parov postaj — 40 ljubljanskih, 60 po državi — ob 7:20, 12:40, 17:10 in 22:30):
+
+| | pred | po |
+|---|---|---|
+| prvi predlog odide ≥ 20 min prej od drugega z isto minuto prihoda | 3 | 0 |
+| vprašanj z vsaj eno potjo z vozilom | 233 / 400 | 334 / 400 |
+| ob 22:30 brez vozila, a z odgovorom za jutri | 0 / 74 | 54 / 74 |
+| CPU podnevi brez jutrišnjega iskanja, mediana / p90 | 79 / 468 ms | 84 / 579 ms |
+
+* **Isti prihod, zgodnejši odhod.** Zategovanje z istim številom voženj ne vidi poti z vožnjo več, ki odide ure pozneje (na 1280 vprašanjih 39 primerov, največ 05:44 proti 11:43, oba prihod 14:46). Prvi predlog zdaj vzame poznejši odhod, kadar prestop več prinese vsaj 10 min doma; isto pravilo razvršča predloge z isto minuto prihoda.
+* **Zvečer „ni poti“.** Ob 22:30 je bilo brez vozila 74 od 100 vprašanj, jutrišnjo zvezo jih ima 54. Jutrišnje iskanje gre od polnoči brez meje hoje in z oknom naslednjih odhodov od prvega predloga, ne od polnoči. Podnevi zajame tudi podeželje, kjer danes ne pelje več nič (od 17:10 naprej).
+* **Naslednji odhod.** Okno treh ur se meri na odhodu najdene poti, ne na začetku iskanja: iskanje ob 10:41 je vrnilo 19:20 kot „naslednjega“.
+* **„brez podatka“** je stal pri 86 % voženj (192 od 224, mediana 78 min do odhoda), zdaj samo za odhode v 30 min.
+* **Trajanje in rezerva prestopa** se nista ujemala z urama na kartici: odhod z zamudo prve vožnje, trajanje po voznem redu („18:45 → 19:43 · 1 h 34“); rezerva z zamudo prve vožnje ob vstopu namesto ob izstopu (18 od 112 prestopov za ≥ 3 min drugače). Oboje se zdaj računa iz prikazanih ur.
+* **Vodenje peš.** Preračun sredi vožnje v 69 od 70 simuliranih voženj z „vodi me do cilja“ (vozilo pelje mimo pešpoti, 60 m je štelo za „začel“), s 35 m v nobeni. Pri šumu GPS 15 m je bilo 630 lažnih preračunov na 305 km, z dvojno točnostjo in tremi zaporednimi odmiki 149; pravo zaidenje zaznano pri 41 m namesto 32 m (mediana, 200 pešpoti).
+
+**Izmerjeno in pusti** (ni koristi ali je odločitev):
+
+* Meja kandidatov 120 → 400 postajališč: na 100 parih prvi predlog nikjer prej. Peš prestop 6 → 10 min (bi povezal npr. Celje ŽP–AP, 452 m): na 90 parih nikjer prej, CPU +19 %.
+* Kratke vožnje (≤ 3 min) v verigi, na 1280 vprašanjih 190: ostanejo, ker jih filter prevlade obdrži samo, kadar imajo manj hoje — izbira za tistega, ki hodi težko.
+* Prva vožnja stran od cilja (238 medkrajevnih): pot prek vozlišča, ne napaka.
+
+**Odprto:** OSRM ponekod pripne postajališče na napačno cesto (Sečovlje: 100 m zračno, 28 min hoje); trasa vožnje ima pri ~20 % nog ravno črto do postajališča (Ljubljana AP 457 m od začetka oblike — podatek v `shape`), v 7 od 812 nog vso pot ravno (obe postajališči na isti točki oblike).

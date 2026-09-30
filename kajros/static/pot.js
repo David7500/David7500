@@ -539,7 +539,7 @@ function zamudaHtml(n) {
 // Rezerva prestopa mora ostati v verigi. Brez nje "1 prestop" ne pove, ali
 // zveza drži -- in prav to je edino, zaradi česar je prestop vreden pozornosti.
 function prestopHtml(t, pred, po) {
-  const mins = preostanekPrestopa(t.nacrtovano_s, pred && pred.zamuda, po && po.zamuda);
+  const mins = rezervaPrestopa(t, pred, po);
   if (mins == null) {
     const n = Math.floor(t.nacrtovano_s / 60 + 0.5);
     return `<span class="v-prestop">${n} min za prestop</span>`;
@@ -633,7 +633,7 @@ function predlogHtml(p, i) {
       <strong>${ura(p.odhod_ocena || p.odhod)}</strong>
       <span class="p-pusc" aria-hidden="true">→</span>
       <strong>${ura(p.prihod_ocena || p.prihod)}</strong>
-      <span class="p-traj">${minute(p.trajanje_s)}</span>
+      <span class="p-traj">${minute(trajanjePrikaz(p))}</span>
     </div>
     <div class="p-veriga">${verigaHtml(p)}</div>
     <div class="p-meta">${rokHtml(p, i)}${prestopi}${hoje}${zamudno}</div>
@@ -703,7 +703,14 @@ function naslovIzida(izid) {
     const prvi = izid.predlogi[0];
     const kdaj = prvi ? ura(prvi.prihod_ocena || prvi.prihod) : null;
     return `<span class="izid-naslov je-pozno">Do ${ura(izid.prihod_do)} ne prideš več.</span>`
-      + (kdaj ? ` Najhitreje si tam ob <strong>${kdaj}</strong>.` : "") + opomba;
+      + (kdaj ? ` Najhitreje si tam ob <strong>${kdaj}</strong>${
+        izid.danes_ni ? danBeseda(izid.datum) : ""}.` : "") + opomba;
+  }
+  // Zvečer, ko danes ne pelje nič več, so predlogi jutrišnji -- to mora
+  // stati v naslovu, kartice nosijo samo uri.
+  if (izid.danes_ni) {
+    return `<span class="izid-naslov">Danes ne pelje nič več. Prve zveze${
+      danBeseda(izid.datum)}</span>${opomba}`;
   }
   if (izid.prihod_do) {
     const prvi = izid.predlogi[0];

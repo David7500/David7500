@@ -175,7 +175,7 @@ function voznjaHtml(n) {
 // Prestop stoji MED vožnjama, ki ju veže. Brez rezerve je "prestop" samo
 // beseda; z njo je odgovor na edino vprašanje, ki ga potnik tam ima.
 function prestopHtml(t, pred, po) {
-  const mins = preostanekPrestopa(t.nacrtovano_s, pred && pred.zamuda, po && po.zamuda);
+  const mins = rezervaPrestopa(t, pred, po);
   const nacrt = Math.floor(t.nacrtovano_s / 60 + 0.5);
   const barva = mins == null ? "var(--ink-mute)"
     : mins < 2 ? "var(--sev-bad)" : mins < 5 ? "var(--sev-hard)" : "var(--ok)";
@@ -388,8 +388,10 @@ const V = {
 
 // Dokler nisi bil na poti, je nisi začel: "vodi me do cilja" se pogosto
 // pritisne še na vlaku. Takrat pot ni "zašla", ampak je pred tabo -- pokaže se
-// njen začetek, preračuna pa ni.
-const NA_POTI_M = 60;
+// njen začetek, preračuna pa ni. 35 m in ne 60: vozilo pogosto pelje mimo
+// pešpoti do cilja, s 60 m je to štelo za "začel" in preračunalo pot sredi
+// vožnje v 69 od 70 simuliranih voženj (30. 9. 2026), s 35 m v nobeni.
+const NA_POTI_M = 35;
 const DALEC_M = 150;
 
 // Odmik od poti, pri katerem je človek zares drugje in ne le GPS v šumu.
@@ -642,12 +644,14 @@ function posodobi(skok, samoBesedilo) {
     });
   }
 
-  // Zašel: odmik večji od točnosti in od praga, dvakrat zapored -- en sam
-  // skok GPS ni razlog za novo pot.
-  if (vodim && V.zacel && !V.prispel && odmik > Math.max(IZVEN_M, JAZ.acc || 0)
+  // Zašel: odmik večji od dvojne točnosti in od praga, trikrat zapored -- šum
+  // GPS se vleče čez več zaporednih popravkov. Simulacija na 200 pešpoteh
+  // (30. 9. 2026, šum 15 m): lažnih preračunov 149 namesto 630 na 305 km,
+  // pravo zaidenje zaznano pri 41 m namesto 32 m (mediana).
+  if (vodim && V.zacel && !V.prispel && odmik > Math.max(IZVEN_M, 2 * (JAZ.acc || 0))
       && (JAZ.acc || 0) < 60) {
     V.izven += 1;
-    if (V.izven >= 2 && Date.now() - V.preracun > PRERACUN_MS) preracunaj();
+    if (V.izven >= 3 && Date.now() - V.preracun > PRERACUN_MS) preracunaj();
   } else {
     V.izven = 0;
   }
@@ -774,7 +778,7 @@ async function nalozi() {
     $("#glava").innerHTML = `
       <div class="podr-ure"><strong>${ura(pr.odhod_ocena || pr.odhod)}</strong>
         → <strong>${ura(pr.prihod_ocena || pr.prihod)}</strong></div>
-      <div class="podr-meta">${minute(pr.trajanje_s)}${
+      <div class="podr-meta">${minute(trajanjePrikaz(pr))}${
         pr.hoje_s >= 60 ? ` · ${minute(pr.hoje_s)} ${KOLO ? "do postaj" : "hoje"}` : ""} · ${
         pr.prestopov === 0 ? "brez prestopa"
           : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(danOdhoda(pr))}</div>`;
