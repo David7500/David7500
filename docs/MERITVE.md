@@ -1976,3 +1976,22 @@ Posledica v kodi: `robots.txt` prepove `/app/*?` in `/postajalisce/*?` — lupin
 * **Narejeno v kodi:** `/llms.txt` (kazalo za jezikovne modele: kaj je kajros, vzorci naslovov, od kod podatki, licenca), in **`Accept: text/markdown`** (`kajros/markdown.py`, middleware v `api.py`): agent, ki Markdown izrecno zahteva (Claude Code, Cursor …), dobi naslove, tabelo odhodov in povezave brez HTML-ja; brskalnik in `*/*` ostaneta pri HTML. `Vary: Accept` na vseh besedilnih straneh. Aplikacija (`/app*`), API in admin nedotaknjeni.
 * Naključnih 69 strani iz zemljevida strani: en `<h1>`, kanonični naslov pravilen, brez `noindex`, JSON-LD na vseh pristajalnih. Naslovi so na 30 straneh daljši od ~65 znakov (avtobusne relacije z dolgimi imeni, npr. „Šempeter v Sav. d. nad V.“) — Google jih skrajša, začetek z iskano besedo ostane. Ne popravljam: dolžina je posledica imen postajališč.
 * **Stopnja 2 Cloudflarovega pregleda (ista noč):** `Link` na besedilnih straneh (`sitemap`, `describedby` → `llms.txt`, `api-catalog`), `/.well-known/api-catalog` (RFC 9727, kaže na `/openapi.json` in `/docs`) in `/auth.md` (prijave ni, bralni endpointi so odprti). Vse tri je mogoče trditi, ker so resnične: API je odprt in ima CORS `*`. **Stopnja 3 (OAuth, A2A, kartica MCP, Skills, WebMCP, Web Bot Auth, DNS-AID) ni narejena namenoma:** vsaka trdi zmožnost, ki je kajros nima (prijava, agent, strežnik MCP), zato bi bila napačna trditev, ne optimizacija. Ocena „100 %“ zato ni cilj.
+
+## Pot od vrat do vrat je čakala na prestopu namesto doma (30. 9. 2026)
+
+Sporočilo potnika prek `/stik`: pot „tako neoptimizirana, da je bilo uro za prestope“. Poizvedbe ne poznamo (`obisk` hrani samo obliko poti, strežnik teče z `--no-access-log`), mehanizem pa se izmeri brez nje.
+
+**Vzrok.** Iskanje naprej (`_isci_dan`) se vkrca na prvo vožnjo, ki jo ujame, in od doma odide ob prvi priložnosti: kadar dva avtobusa ujameta isti vlak, vzame zgodnejšega in razliko prečaka na prestopu. Obratno (`_isci_nazaj`, „biti tam do“) izbere zadnjo vožnjo, ki še ujame rok, in čaka vmes, namesto da bi bil prej na cilju. Seznam tega ni popravil: izločanje slabših primerja predlog samo s tistimi pred njim, zgodnejši pa je bil ob istem prihodu vedno prvi.
+
+**Merjeno** na razvojni bazi, vozni red 30. 9., 120 naključnih parov postaj 8–90 km narazen (`random.Random(7)`): za prvi predlog „čim prej“ ob 12:30 je „biti tam do“ istega prihoda poiskal najpoznejši odhod; za „biti tam do 17:00“ je „čim prej“ od istega odhoda poiskal najzgodnejši prihod.
+
+| | prej | po popravku |
+|---|---|---|
+| čim prej: ob istem prihodu bi odšel ≥ 5 / ≥ 20 / ≥ 45 min pozneje | 21 / 15 / 8 (največ 195 min) | 5 / 5 / 1 (112) |
+| tam do: ob istem odhodu bi prišel ≥ 5 / ≥ 20 / ≥ 45 min prej | 28 / 25 / 14 (242) | 5 / 5 / 2 (90) |
+
+Ostanek so poti z drugim številom voženj: zategovanje jih namenoma ne dodaja.
+
+**Popravek:** vsaka najdba gre še skozi obratno iskanje od najdene ure z enakim številom voženj (`pot._naprej`, `pot._nazaj`). Ura ostane ista, pot do nje je najkrajša. Spremeni se polovica najdb (345 od 693 klicev za ≥ 5 min), zato vrata „samo, kadar je na prestopu čakanje“ ne prihranijo skoraj nič (pri 10 min zgrešijo 12 primerov in prihranijo 9 % klicev).
+
+**Cena**, 60 vprašanj po Ljubljani in 60 med 20 mesti (07:20 / 12:40 / 17:10), mediana: Ljubljana 32 → 41 ms (čim prej), 28 → 34 ms (tam do); mesta 152 → 213 ms in 53 → 53 ms. Čakanje na prestopih na predlog med mesti 26,3 → 20,6 min (čim prej) in 10,4 → 7,9 min; predlogov s ≥ 30 min čakanja 69 → 54 od ~230 in 6 → 1 od 68. Trije medkrajevni primeri z živimi zamudami: Celje–Koper 910 → 1 015 ms, M. Sobota–Ljubljana 235 → 471, Novo mesto–Kranj 245 → 416. Arwen je okoli trikrat počasnejši.

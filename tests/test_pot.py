@@ -417,6 +417,45 @@ def test_nazaj_da_najpoznejsi_odhod_za_rok(conn):
     assert all(p["prihod"] <= r["prihod_do"] for p in r["predlogi"])
 
 
+def test_cim_prej_ne_caka_na_prestopu_namesto_doma(conn):
+    """Dva avtobusa ujameta isti vlak: prvi predlog vzame poznejšega.
+
+    Iskanje naprej se vkrca na prvo vožnjo, ki jo ujame, in je razliko
+    prečakalo na prestopu. Sporočilo potnika 30. 9. 2026: „uro za prestope".
+    """
+    _postaja(conn, "VMES", "Vmes", 46.050, 14.500)     # 5,5 km od obeh koncev
+    _voznja(conn, "t1", "zgodnji", [(1, "BLIZU", 8 * 3600 + 600),
+                                    (2, "VMES", 8 * 3600 + 1200)])
+    _voznja(conn, "t2", "pozni", [(1, "BLIZU", 8 * 3600 + 3000),
+                                  (2, "VMES", 8 * 3600 + 3600)])
+    _voznja(conn, "t3", "vlak", [(1, "VMES", 9 * 3600 + 1200),
+                                 (2, "CILJ", 9 * 3600 + 3000)], "zeleznica")
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    prvi = r["predlogi"][0]
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["pozni", "vlak"]
+    assert prvi["prestopi"][0]["nacrtovano_s"] == 20 * 60
+
+
+def test_tam_do_ne_caka_na_prestopu_namesto_na_cilju(conn):
+    """Isti odhod od doma, dva vlaka naprej: prvi predlog vzame zgodnejšega.
+
+    Obratno iskanje je izbralo zadnji vlak, ki še ujame rok, in potnik bi
+    uro čakal na prestopu namesto biti uro prej na cilju.
+    """
+    _postaja(conn, "VMES", "Vmes", 46.050, 14.500)     # 5,5 km od obeh koncev
+    _voznja(conn, "t1", "avtobus", [(1, "BLIZU", 8 * 3600 + 600),
+                                    (2, "VMES", 8 * 3600 + 1200)])
+    _voznja(conn, "t2", "zgodnji", [(1, "VMES", 8 * 3600 + 1800),
+                                    (2, "CILJ", 9 * 3600)], "zeleznica")
+    _voznja(conn, "t3", "pozni", [(1, "VMES", 9 * 3600 + 1800),
+                                  (2, "CILJ", 10 * 3600)], "zeleznica")
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, None, prihod_do_s=10 * 3600 + 300)
+    prvi = r["predlogi"][0]
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["avtobus", "zgodnji"]
+
+
 def test_nazaj_prag_prestopa_samo_ob_prihodu_z_vozilom(conn):
     """Prag za prestop velja, kadar na postajališče pripelješ, ne kadar
     prideš peš od doma -- isto kot prvi krog iskanja naprej."""
