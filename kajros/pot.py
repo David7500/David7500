@@ -991,7 +991,8 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
          do: tuple[float, float], service_date: str, odhod_s: int | None,
          max_hoje_s: int = MAX_HOJE_S, max_nog: int = MAX_NOG,
          now_s: int | None = None, prihod_do_s: int | None = None,
-         kmh: float = hoja.KMH, jutri: bool = True, pes_meja: bool = True) -> dict:
+         kmh: float = hoja.KMH, jutri: bool = True,
+         nadaljevanje: bool = False) -> dict:
     """Predlogi poti od točke do točke, po voznem redu danega prometnega dne.
 
     Vprašanji sta dve, in obe sta potnikovi:
@@ -1015,8 +1016,9 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
 
     Kadar pri "čim prej" danes ni več nobene zveze, so odgovor zveze
     naslednjega dne (`danes_ni`), ne "ni poti"; `jutri=False` to izklopi.
-    `pes_meja=False` ne ponudi hoje in ne reže voženj, ki pridejo pozneje, kot
-    bi prišel peš -- za jutrišnje iskanje od polnoči, ko nihče ne gre peš.
+    `nadaljevanje=True` je to jutrišnje iskanje od polnoči: hoje ne ponudi in
+    z njo ne reže voženj (ob polnoči nihče ne gre peš), včerajšnjega dne pa ne
+    išče znova -- ta je bil pravkar preiskan do konca.
     """
     t0 = time.perf_counter()
     polnoc = stats.polnoc(service_date)
@@ -1025,7 +1027,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     # Včerajšnji dan šteje sekunde od svoje polnoči, zato vse ure +86 400.
     ura = prihod_do_s if nazaj else odhod_s
     dnevi = [(service_date, 0)]
-    if ura is not None and ura < NOCNI_S:
+    if ura is not None and ura < NOCNI_S and not nadaljevanje:
         dnevi.append((_vceraj(service_date), 86400))
     # Vozni red se naloži tu in ne šele v iskanju: iz njega pride tudi
     # množica postajališč, ki te dni sploh kaj strežejo.
@@ -1038,7 +1040,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     vir_hoje = hoja.OSRM if vir_a == vir_b == hoja.OSRM else hoja.ZRAK
 
     pes_s, vir_pes = _pes_vso_pot(od, do, kmh)
-    ponudi_pes = pes_meja and pes_s is not None and pes_s <= MAX_PES_VSO_POT_S
+    ponudi_pes = not nadaljevanje and pes_s is not None and pes_s <= MAX_PES_VSO_POT_S
     najprej = odhod_s if odhod_s is not None else -(1 << 30)
 
     # Hoja vso pot je ena, ne ena na prometni dan: ponoči sta bili na seznamu
@@ -1056,7 +1058,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
                 None if odhod_s is None else odhod_s + zamik_s,
                 None if prihod_do_s is None else prihod_do_s + zamik_s,
                 None if now_s is None else now_s + zamik_s,
-                max_nog, pes_s if pes_meja else None, ponudi_pes, vir_hoje)
+                max_nog, None if nadaljevanje else pes_s, ponudi_pes, vir_hoje)
 
     def kdaj(p):
         return p.get("prihod_ocena") or p["prihod"]
@@ -1142,7 +1144,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
     if jutri and not nazaj and nasvet == {"ni_zveze": True} and not ponudi_pes:
         naslednji = (date.fromisoformat(service_date) + timedelta(days=1)).isoformat()
         izid = isci(conn, od, do, naslednji, 0, max_hoje_s, max_nog, kmh=kmh,
-                    jutri=False, pes_meja=False)
+                    jutri=False, nadaljevanje=True)
         if any(n["vrsta"] == "voznja" for p in izid["predlogi"] for n in p["noge"]):
             izid["predlogi"] = [p for p in izid["predlogi"] if not p.get("edina")] + izbrani
             izid["danes_ni"] = True
