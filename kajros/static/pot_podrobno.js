@@ -752,6 +752,7 @@ function nazajUrl() {
   const dan = Q.get("dan") || Q.get("date");
   if (dan && dan !== todayIso()) q.set("dan", dan);
   if (KOLO) q.set("kolo", "1");
+  if (Q.get("hoje")) q.set("hoje", Q.get("hoje"));
   return q.toString() ? `/app/pot?${q}` : "/app/pot";
 }
 

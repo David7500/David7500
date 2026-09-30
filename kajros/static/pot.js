@@ -596,6 +596,8 @@ function podrobnoUrl(p) {
   if (dan && dan !== todayIso()) q.set("date", dan);
   if (vprasanje && vprasanje !== dan) q.set("dan", vprasanje);
   if (S.izidi && S.izidi.kmh > 7) q.set("kmh", S.izidi.kmh);
+  // Meja hoje je del vprašanja: brez nje je "nazaj na predloge" iskal z 25 min.
+  if (hojeMin() !== 25) q.set("hoje", hojeMin());
   if (S.izidi && S.izidi.prihod_do) q.set("tam", ura(S.izidi.prihod_do));
   return `/app/pot/podrobno?${q}`;
 }
@@ -798,6 +800,14 @@ async function isci() {
   }
   izidiEl.innerHTML = "";
   vUrl();
+  const kljuc = String(p);
+  const shranjen = S.obnovi ? prebraniIzid(kljuc) : null;
+  S.obnovi = false;
+  if (shranjen) {
+    izrisi(shranjen.izid);
+    window.scrollTo(0, shranjen.y || 0);
+    return;
+  }
   if (poizvedba) poizvedba.abort();
   poizvedba = new AbortController();
   try {
@@ -806,11 +816,50 @@ async function isci() {
       const telo = await r.json().catch(() => ({}));
       throw new Error(telo.detail || `strežnik je vrnil ${r.status}`);
     }
-    izrisi(await r.json());
+    const izid = await r.json();
+    izrisi(izid);
+    shraniIzid(kljuc, izid);
   } catch (e) {
     if (e.name !== "AbortError") povej(e.message, "napaka");
   }
 }
+
+// ---------------------------------------------------------------- nazaj s podrobnosti
+//
+// Kdor odpre predlog in se vrne, hoče isti seznam na istem mestu, ne novega
+// iskanja: brskalnik strani iz predpomnilnika ne vrne (zemljevid, odprte
+// povezave), zato je seznam iskal znova ali pa je moral potnik spet pritisniti
+// "Poišči". Seznam gre v sessionStorage -- samo ta zavihek, koordinate so tako
+// ali tako v naslovu -- in se ob vrnitvi pokaže takoj, dokler je svež in prvi
+// predlog še ni odpeljal.
+const SHRAMBA = "kajros:pot-izid";
+const SVEZE_MS = 5 * 60 * 1000;
+
+function shraniIzid(kljuc, izid) {
+  try {
+    sessionStorage.setItem(SHRAMBA, JSON.stringify({ kljuc, t: Date.now(), izid, y: 0 }));
+  } catch (e) { /* zasebno okno ali poln prostor: brez obnove */ }
+}
+
+function prebraniIzid(kljuc) {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(SHRAMBA));
+    if (!s || s.kljuc !== kljuc || Date.now() - s.t > SVEZE_MS) return null;
+    const prvi = s.izid.predlogi[0];
+    if (prvi && (prvi.odhod_ocena || prvi.odhod) * 1000 < Date.now() - 60000) return null;
+    return s;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Mesto na seznamu: brez tega se vrneš na vrh, čeprav si odprl četrti predlog.
+addEventListener("pagehide", () => {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(SHRAMBA));
+    if (s) sessionStorage.setItem(SHRAMBA, JSON.stringify({ ...s, y: window.scrollY }));
+  } catch (e) { /* brez obnove mesta */ }
+});
 
 $("#isci").addEventListener("click", isci);
 $("#tam").addEventListener("keydown", (e) => { if (e.key === "Enter") isci(); });
@@ -884,6 +933,7 @@ naloziKazalo().then((k) => { KAZALO = k; });
 const izPovezave = izUrl();
 izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi
 povej(izPovezave ? "" : "Vpiši naslov ali postajo, ali klikni na zemljevid.", null);
+S.obnovi = izPovezave;         // samo ob odprtju strani, ne ob "Poišči"
 if (izPovezave) isci();
 
 pkUstvari($("#karta")).then((k) => {
