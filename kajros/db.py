@@ -373,6 +373,11 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    # WAL se po prepisu v bazo sicer nikoli ne skrči: 1. 10. 2026 ga je
+    # obstala transakcija napihnila na 5,4 GB in toliko je ostal tudi po
+    # popravku -- na disku z 8 % prostora. Meja velja ob vsakem ponastavljenem
+    # WAL-u, ne zmanjša pa rednega dela.
+    conn.execute("PRAGMA journal_size_limit=67108864")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
