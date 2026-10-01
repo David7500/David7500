@@ -95,6 +95,11 @@ const startLon = parseFloat(URLQ.get("lon"));
 const startZ = parseFloat(URLQ.get("z"));
 const HAS_START = Number.isFinite(startLat) && Number.isFinite(startLon)
   && Number.isFinite(startZ);
+// Vozilo, s katerim je clovek prisel iz okna voznje ("na velik zemljevid").
+// Brez tega se je zemljevid odprl na legi avtobusa, plast njegovega
+// prevoznika pa je bila lahko ugasnjena -- avtobusa, po katerega je prisel,
+// tam ni bilo.
+let urlTrip = URLQ.get("trip");
 
 // Brez WebGL2 se modul tu ustavi: vse spodaj je zemljevid. Obljuba, ki se ne
 // izpolni nikoli, je edini nacin, da ES modul neha brez napake v konzoli.
@@ -844,7 +849,8 @@ function renderBuses(list) {
       type: "Feature",
       geometry: { type: "Point", coordinates: [v.lon, v.lat] },
       properties: {
-        kljuc, ag: busGroup(v), smer: v.bearing == null ? 0 : v.bearing,
+        kljuc, ag: busGroup(v), mesto: v.agency === "lpp",
+        smer: v.bearing == null ? 0 : v.bearing,
         ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3),
       },
     });
@@ -1163,10 +1169,26 @@ const BUSSTOP_MIN_Z = 13;
 let busStops = null;
 let busStopsLoading = false;
 
+// Kar se rise sele od blizje, mora to povedati -- sicer je videti, kot da ga
+// ni. Avtobusi in postajalisca si delijo eno opombo, da se nad orodno
+// vrstico ne kopicijo.
 const stopNoteEl = document.getElementById("stop-note");
-function setStopNote(text) {
+function opombaPriblizka() {
   if (!stopNoteEl) return;
-  stopNoteEl.textContent = text || "";
+  const z = lz();
+  const skrito = [];
+  if (LAYERS.some((s) => s.ag && vklop[s.key]) && z < AVTOBUSI_OD) skrito.push("Avtobusi");
+  else if (vklop["avtobus-lpp"] && z < MESTNI_OD) skrito.push("Mestni avtobusi LPP");
+  const postaje = vklop.busstops && busStops && z < BUSSTOP_MIN_Z;
+  let text = "";
+  if (postaje && !skrito.length) {
+    text = "Postajališča se pokažejo, ko približaš — zdaj bi jih bilo "
+      + "toliko, da bi zakrila proge.";
+  } else if (skrito.length) {
+    if (postaje) skrito.push("postajališča");
+    text = `${skrito.join(" in ")} se pokažejo, ko približaš.`;
+  }
+  stopNoteEl.textContent = text;
   stopNoteEl.hidden = !text;
 }
 
@@ -1188,15 +1210,12 @@ async function loadBusStops() {
 // Plast rise MapLibre sam od praga naprej; tu sta samo stevec in opomba.
 function renderBusStops() {
   const el = document.getElementById("n-busstops");
-  if (!vklop.busstops) { setStopNote(null); return; }
-  if (!busStops) return;
+  opombaPriblizka();
+  if (!vklop.busstops || !busStops) return;
   if (lz() < BUSSTOP_MIN_Z) {
-    setStopNote("Postajališča se pokažejo, ko približaš — zdaj bi jih bilo "
-      + "toliko, da bi zakrila proge.");
     if (el) el.textContent = "";
     return;
   }
-  setStopNote(null);
   const b = map.getBounds();
   let n = 0;
   for (const st of busStops) if (b.contains([st.lon, st.lat])) n += 1;
@@ -1217,9 +1236,20 @@ map.on("moveend", () => {
 //
 // Ena plast na prevoznika, ne ena skupna. Razlog je merjen: ob 15:10 je bilo
 // na zemljevidu 1 530 avtobusov in slika je bila zelena kasa, v kateri se
-// posamezno vozilo ni dalo najti. Zdaj je vsak prevoznik svoje potrditveno
-// polje, privzeto pa so VSI ugasnjeni -- zemljevid se odpre kot zeleznicni,
-// avtobuse prizges, ko jih res isces. `ag` je skupina v `busGroup()`.
+// posamezno vozilo ni dalo najti. Zato je vsak prevoznik svoje potrditveno
+// polje. `ag` je skupina v `busGroup()`.
+//
+// Do 1. 10. 2026 so bili avtobusi privzeto ugasnjeni in zemljevid se je
+// odprl kot železniški. Prijava s Facebooka: „za vlak lahko spremljaš, kje
+// je, pri medmestnih busih pa ne“ -- čeprav ima GPS 90 % njihovih voženj.
+// Zdaj so prižgani, kašo pa rešuje približek: avtobus se riše šele tam, kjer
+// se ga da ločiti od drugih (`AVTOBUSI_OD`, `MESTNI_OD`), pod tem opomba pove,
+// zakaj ga ni.
+//
+// Ključi shrambe so novi (`avtobus-*`, prej `bus-*`): stara koda je ob vsakem
+// odprtju zapisala stanje VSEH stikal, zato je imel vsak, ki je zemljevid
+// kdaj odprl, shranjeno „ugasnjeno“, čeprav ni ničesar izbral. Zdaj se zapiše
+// samo, kar človek sam prestavi -- privzetek tako doseže vse, ki niso izbirali.
 //
 // Trase vseh vozil na poti so svoja plast in privzeto ugasnjene: gost snop
 // crt cez vso Ljubljano odgovarja na vprasanje "kod vozijo linije", ne na
@@ -1228,13 +1258,25 @@ map.on("moveend", () => {
 // Dodatna imena krajev (vasi, cetrti, vode) so privzeto ugasnjena: pri
 // velikem priblizku bi tekmovala z vozili. Katera so, pove `podlaga.json`.
 
+// Od katerega (Leafletovega) približka se avtobusi rišejo. Izmerjeno na
+// 48-urnem posnetku leg (28.–30. 9. 2026, vrh 970 vozil 30. 9. ob 14:50) kot
+// delež vozil, ki jim je drugo vozilo bližje od pol ikone; mediana delavnika
+// 6–20 h. Mestni LPP: z11 80 %, z12 61 %, z13 46 %. Vsi ostali: pogled cele
+// Slovenije na telefonu (z7,5) 86 %, z8 77 %, z9 61 %, z10 54 %. Prag je pri
+// obojih tam, kjer je gneča enaka (61 %) in kjer se na posnetku vozila
+// ločijo; kar ostane, so avtobusi, ki stojijo na postajah -- pri z17 še
+// vedno 11 %. Na namizju je cela Slovenija ~z9,3, zato so tam medkrajevni
+// vidni že ob odprtju.
+const AVTOBUSI_OD = 9;
+const MESTNI_OD = 12;
+
 const LAYERS = [
   { id: "lay-train", key: "train", def: true },
-  { id: "lay-lpp", key: "bus-lpp", def: false, ag: "1118" },
-  { id: "lay-arriva", key: "bus-arriva", def: false, ag: "1123" },
-  { id: "lay-nomago", key: "bus-nomago", def: false, ag: "1119" },
-  { id: "lay-apms", key: "bus-apms", def: false, ag: "1121" },
-  { id: "lay-bus-other", key: "bus-other", def: false, ag: "drugi" },
+  { id: "lay-lpp", key: "avtobus-lpp", def: true, ag: "1118" },
+  { id: "lay-arriva", key: "avtobus-arriva", def: true, ag: "1123" },
+  { id: "lay-nomago", key: "avtobus-nomago", def: true, ag: "1119" },
+  { id: "lay-apms", key: "avtobus-apms", def: true, ag: "1121" },
+  { id: "lay-bus-other", key: "avtobus-drugi", def: true, ag: "drugi" },
   { id: "lay-net", key: "net", def: true, sloji: ["k-proge-obroba", "k-proge"] },
   { id: "lay-routes", key: "routes", def: false, sloji: ["k-vse-trase"] },
   { id: "lay-stations", key: "stations", def: true, sloji: ["k-postaje"] },
@@ -1260,21 +1302,29 @@ function uveljavi() {
   for (const spec of LAYERS) for (const id of spec.sloji || []) vidnost(id, vklop[spec.key]);
   if (map.getLayer("k-avtobusi")) {
     const ag = LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag);
-    map.setFilter("k-avtobusi", ["in", ["get", "ag"], ["literal", ag]]);
+    // Filter vidi celoštevilski MapLibrov zoom ploščice, zato sta praga cela.
+    map.setFilter("k-avtobusi", ["all",
+      ["in", ["get", "ag"], ["literal", ag]],
+      [">=", ["zoom"], ["case", ["get", "mesto"], MESTNI_OD - LZ, AVTOBUSI_OD - LZ]]]);
     map.setLayerZoomRange("k-avtobusi", 0, vklop["3d"] ? AVTOBUS_3D_OD : 24);
   }
   posodobi3D();
   osveziPodlago();
+  opombaPriblizka();
 }
 
-function setLayer(spec, on) {
+// `zapomni` samo ob človekovi izbiri: kar je stran nastavila sama (privzetek,
+// vozilo iz naslova), ni izbira in ne sme prekriti poznejšega privzetka.
+function setLayer(spec, on, zapomni = false) {
   vklop[spec.key] = on;
   const box = document.getElementById(spec.id);
   if (box) box.checked = on;
-  try {
-    localStorage.setItem(`kajros:map-${spec.key}`, on ? "1" : "0");
-  } catch (err) {
-    /* zaseben zavihek ni razlog, da stran ne dela */
+  if (zapomni) {
+    try {
+      localStorage.setItem(`kajros:map-${spec.key}`, on ? "1" : "0");
+    } catch (err) {
+      /* zaseben zavihek ni razlog, da stran ne dela */
+    }
   }
   if (spec.key === "train") {
     for (const m of stationMarkers.values()) {
@@ -1298,7 +1348,7 @@ function initLayers() {
     if (spec.key === "busstops" && vklop.busstops) loadBusStops();
     if (box) {
       box.addEventListener("change", () => {
-        setLayer(spec, box.checked);
+        setLayer(spec, box.checked, true);
         // Prvi vklop mora tudi kaj narisati -- plast je ob zagonu prazna.
         if (spec.key === "routes" && box.checked && !routesLoaded) loadRoutes();
         if (spec.key === "busstops") {
@@ -1567,6 +1617,25 @@ function onVehicles(list) {
   if (drugiRow) drugiRow.hidden = poAgenciji.drugi === 0;
   renderBuses(liveBuses);
   if (findEl.value.trim()) renderFind();
+  pokaziVoziloIzNaslova();
+}
+
+// Vozilo iz naslova je človek gledal v oknu vožnje. Njegova plast se prižge
+// tudi, če jo je sam ugasnil -- a samo za ta ogled, ne v shrambo -- in kartica
+// se odpre, da je takoj jasno, katero vozilo je. Enkrat: naslov ga nato
+// izgubi, sicer bi ga osvežitev strani odprla znova, ko ga morda ni več.
+function pokaziVoziloIzNaslova() {
+  if (!urlTrip) return;
+  const v = liveBuses.find((x) => x.trip_id === urlTrip);
+  urlTrip = null;
+  const q = new URLSearchParams(location.search);
+  q.delete("trip");
+  history.replaceState(null, "", `?${q}`);
+  if (!v || v.lat == null) return;
+  const spec = LAYERS.find((s) => s.ag === busGroup(v));
+  if (spec && !vklop[spec.key]) setLayer(spec, true);
+  odpriKartico(v);
+  drawStops(v.train_no, v.trip_id);
 }
 
 // Spodnja plosca na telefonu. Zaprta se odpre na dotik gumba; iskanje jo

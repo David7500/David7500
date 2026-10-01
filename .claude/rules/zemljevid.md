@@ -168,9 +168,14 @@ Skupen je `common.pripniOsvezi()`; obe zanki imata odslej `zdaj()` (`pollWhileVi
 
 Varovalka: ena vožnja, ena zanka (`runMap.pollTrip`).
 
-## Avtobusi: plast na prevoznika, privzeto ugasnjeni
+## Avtobusi: plast na prevoznika, prižgani od približka
 
-**Ena skupna avtobusna plast je zemljevid zadušila.** Ob 15:10 na njem 1 530 vozil, slika zelena kaša, posameznega avtobusa ni bilo mogoče najti. Zdaj **vsak prevoznik svoja plast in svoje potrditveno polje**, **vsi privzeto ugasnjeni**: zemljevid se odpre kot železniški, avtobuse prižgeš, ko jih iščeš.
+**Ena skupna avtobusna plast je zemljevid zadušila.** Ob 15:10 na njem 1 530 vozil, slika zelena kaša, posameznega avtobusa ni bilo mogoče najti. Zato **vsak prevoznik svoja plast in svoje potrditveno polje**.
+
+**Privzeto ugasnjeni (do 1. 10. 2026) so bili napaka.** Zemljevid se je odprl kot železniški in potnik je sklepal, da medkrajevnih avtobusov ni mogoče spremljati (komentar na Facebooku), čeprav ima GPS 90 % voženj. Zdaj **vsi prižgani, kaša se rešuje s približkom**: mestni LPP (`agency = 'lpp'`) od z12 (`MESTNI_OD`), vsi ostali od z9 (`AVTOBUSI_OD`) — pri obeh pragovih je gneča enaka (61 % vozil ima drugo vozilo bližje od pol ikone), meritev v `docs/MERITVE.md`. Pod pragom pove opomba (`opombaPriblizka()`, deli si jo s postajališči), da se pokažejo, ko približaš. Prag je v filtru plasti (`["zoom"]`), ki vidi celoštevilski zoom ploščice — zato cela števila.
+
+* **V shrambo gre samo, kar človek prestavi** (`setLayer(…, zapomni)`). Stara koda je ob vsakem odprtju zapisala vsa stikala, zato je imel vsak obiskovalec shranjeno „ugasnjeno“, ki ga ni izbral; ključi so zato novi (`kajros:map-avtobus-*`, prej `bus-*`).
+* **„na velik zemljevid“ iz okna vožnje nosi `&trip=`**: zemljevid prižge plast prevoznika samo za ta ogled (ne v shrambo), odpre kartico in traso, nato `trip` iz naslova odstrani.
 
 Barve preverjene (ne izbrane na oko) s `scripts/preveri_paleto.py`:
 

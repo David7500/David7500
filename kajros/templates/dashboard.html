@@ -63,23 +63,24 @@
           <span class="layer-key layer-key-train"></span>
           <span class="layer-name">Vlaki</span><span class="layer-n" id="n-train">—</span></label>
         {# Prevoznik na svojo vrstico in svojo barvo. Ena skupna plast je bila ob
-           konici 1 530 vozil in zemljevida se ni dalo brati; privzeto so vsi
-           ugasnjeni. #}
-        <label class="layer"><input type="checkbox" id="lay-lpp">
+           konici 1 530 vozil in zemljevida se ni dalo brati. Privzeto so vsi
+           prižgani, rišejo pa se šele od približka, kjer se jih da ločiti
+           (`AVTOBUSI_OD`, `MESTNI_OD` v dashboard.js). #}
+        <label class="layer"><input type="checkbox" id="lay-lpp" checked>
           <span class="layer-key layer-key-lpp"></span>
           <span class="layer-name">LPP</span><span class="layer-n" id="n-lpp">—</span></label>
-        <label class="layer"><input type="checkbox" id="lay-arriva">
+        <label class="layer"><input type="checkbox" id="lay-arriva" checked>
           <span class="layer-key layer-key-arriva"></span>
           <span class="layer-name">Arriva</span><span class="layer-n" id="n-arriva">—</span></label>
-        <label class="layer"><input type="checkbox" id="lay-nomago">
+        <label class="layer"><input type="checkbox" id="lay-nomago" checked>
           <span class="layer-key layer-key-nomago"></span>
           <span class="layer-name">Nomago</span><span class="layer-n" id="n-nomago">—</span></label>
-        <label class="layer"><input type="checkbox" id="lay-apms">
+        <label class="layer"><input type="checkbox" id="lay-apms" checked>
           <span class="layer-key layer-key-apms"></span>
           <span class="layer-name">AP Murska Sobota</span><span class="layer-n" id="n-apms">—</span></label>
         {# Peta vrstica ni okras: ce v zajem pride nov prevoznik, njegova vozila
            sicer tiho izginejo -- plast brez stikala je plast, ki je ni. #}
-        <label class="layer" id="row-bus-other" hidden><input type="checkbox" id="lay-bus-other">
+        <label class="layer" id="row-bus-other" hidden><input type="checkbox" id="lay-bus-other" checked>
           <span class="layer-key layer-key-bus"></span>
           <span class="layer-name">Drugi prevozniki</span>
           <span class="layer-n" id="n-bus-other">—</span></label>

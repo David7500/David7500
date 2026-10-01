@@ -1997,8 +1997,11 @@ const modelVozila = (v) => (v.agency === "lpp" ? "1118" : v.agency);
 async function drawRunMap(v) {
   runMap.v = v;
   runMap.since = Date.now();
+  // `trip` pove zemljevidu, katero vozilo je človek gledal: plast prevoznika
+  // je lahko ugasnjena in brez tega avtobusa na legi, kamor ga pelje, ni.
   document.getElementById("run-map-full").href =
-    `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`;
+    `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`
+    + `&trip=${encodeURIComponent(v.trip_id)}`;
 
   // Lega pride vsakih nekaj sekund, zemljevid pa nastaja dlje (knjiznica,
   // slog, trasa). Brez skupne obljube bi druga lega naredila drugi zemljevid.

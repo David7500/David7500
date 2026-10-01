@@ -2023,3 +2023,22 @@ Osem področij (iskanje, izbor predlogov, hitrost, API, oblika, zemljevid, voden
 * Prva vožnja stran od cilja (238 medkrajevnih): pot prek vozlišča, ne napaka.
 
 **Odprto:** OSRM ponekod pripne postajališče na napačno cesto (Sečovlje: 100 m zračno, 28 min hoje); trasa vožnje ima pri ~20 % nog ravno črto do postajališča (Ljubljana AP 457 m od začetka oblike — podatek v `shape`), v 7 od 812 nog vso pot ravno (obe postajališči na isti točki oblike).
+
+## Avtobusi na velikem zemljevidu: privzeto prižgani, od približka (1. 10. 2026)
+
+Komentar pod objavo na Facebooku: „za vlak lahko spremljaš, kje je tisti moment, pri medmestnih busih pa žal ne“. Podatek obstaja: ob 20:00 je imelo svežo lego (≤ 5 min) **262 od 291 avtobusnih voženj na poti (90 %)**, Arriva 101 od 113, Nomago 62 od 67. Skrival ga je prikaz:
+
+* avtobusne plasti velikega zemljevida so bile **privzeto ugasnjene**, stikala v spodnji plošči, ki je na telefonu zaprta — kdor je zemljevid odprl z domače strani, je videl samo vlake;
+* povezava „na velik zemljevid“ v oknu vožnje je odprla zemljevid na legi avtobusa, njegova plast pa je ostala ugasnjena: avtobusa tam ni bilo;
+* stara koda je ob vsakem odprtju zapisala stanje vseh stikal v `localStorage`, zato je imel vsak, ki je zemljevid kdaj odprl, shranjeno „ugasnjeno“, čeprav ni izbiral.
+
+**Gneča po približku.** 48-urni posnetek leg na arwenu (28.–30. 9. 2026, 3,2 milijona leg), stanje vsakih 10 min, vozilo = zadnja lega v 180 s (`POSITION_FRESH_S`). Vrh 970 vozil (30. 9. ob 14:50: Arriva 356, Nomago 342, LPP mestni 152, LPP primestni 62, AP Murska Sobota 58). Merilo: delež vozil, ki jim je središče drugega vozila bližje od pol ikone (`BUS_VELIKOST`), mediana torka 29. 9. med 6. in 20. uro (Leafletov zoom):
+
+| | z7,5 | z8 | z9 | z10 | z11 | z12 | z13 |
+|---|---|---|---|---|---|---|---|
+| mestni LPP (mediana 122 vozil) | 99 % | 99 % | 97 % | 94 % | 80 % | 61 % | 46 % |
+| vsi ostali (mediana 508) | 86 % | 77 % | 61 % | 54 % | 45 % | 37 % | 31 % |
+
+Kolena ni: kar ostane od blizu (pri z17 še 11 % medkrajevnih brez LPP primestnih), so avtobusi, ki stojijo na postajah in obračališčih, in se prekrivajo pri vsakem približku. Zato je prag postavljen pri **isti gneči za oba (61 %)** — mestni od z12 (`MESTNI_OD`), ostali od z9 (`AVTOBUSI_OD`) — in preverjen na posnetku vrha prek CDP: pri z9 se medkrajevna vozila zunaj avtobusnih postaj ločijo, mestni LPP je pri z11 v središču Ljubljane še en madež, pri z12 posamezna vozila. Pogled cele Slovenije je na telefonu ~z7,5 (brez avtobusov, opomba „Avtobusi se pokažejo, ko približaš.“), na namizju 1850 × 1000 ~z9,3 (medkrajevni vidni, mestni ne).
+
+Ključi shrambe so novi (`kajros:map-avtobus-*`), zapiše se samo stikalo, ki ga človek prestavi. Povezava iz okna vožnje nosi `trip`: zemljevid prižge plast tega prevoznika samo za ta ogled in odpre kartico vozila.
