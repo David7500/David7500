@@ -117,7 +117,7 @@ Vse, kar budilka rabi, **shranjeno lokalno** — predvsem voznoredna ura. Nadome
 
 ### Do seznama budilk se pride samo s prve strani
 
-Domača stran: **prva ploščica**, kaže naslednjo budilko s stikali (`home.js` bere `Most.seznam()`, dotik odpre `odpriBudilke()`); glej `strani.md`. V glavi drugih strani je **ni** (odločeno 14. 9. 2026): budilka se nastavi v oknu vožnje, seznam = pregled. „Naslednja budilka" v vrhnjem meniju sistema odpre seznam (`AlarmClockInfo` → `BudilkeDejavnost`), ne glavne strani, ki o budilki ne pove ničesar.
+Domača stran: **prva kartica, a samo, kadar budilka obstaja** (od 1. 10. 2026), kaže naslednjo budilko s stikalom in gumb „Vse budilke“ (`home.js` bere `Most.seznam()`, dotik odpre `odpriBudilke()`); vse ugasnjene → kartica ostane s seznamom, nobene → oblika „Budilke“ ob zemljevidu odpre seznam; glej `strani.md`. V glavi drugih strani je **ni** (odločeno 14. 9. 2026): budilka se nastavi v oknu vožnje, seznam = pregled. „Naslednja budilka" v vrhnjem meniju sistema odpre seznam (`AlarmClockInfo` → `BudilkeDejavnost`), ne glavne strani, ki o budilki ne pove ničesar.
 
 Ura v vrhnjem meniju = **prvo preverjanje** (10 min pred zvonjenjem), ne zvonjenje — `setAlarmClock` = ena budnica za oboje, glej `Nacrtovalec`.
 

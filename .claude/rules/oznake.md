@@ -83,7 +83,7 @@ Pravila (obstoječa koda in nova):
 * Odtenek lestvice **samo tam, kjer pomeni velikost zamude**.
 * **Omrežje prestavi samo poudarek, ne lestvice.** `body.net-avtobus` premakne `--accent` na zeleno; `--d-*` ostanejo oranžni tudi tam. Ista barva = ista zamuda povsod — sicer „+5 min“ na avtobusni in železniški strani nista primerljiva. Lestvica validirana na monotonost svetlosti in barvno slepoto; zelena različica bi rabila svojo validacijo in bi trčila s poudarkom.
 
-  **Kar sme biti zeleno, gre skozi `var(--accent)`, nikoli skozi trdo zapisan `#f0934f`.** Koda tega ni držala: `.hist-note strong`, žetona shranjenih poti in zvezdica na iskalniku so bili na avtobusni strani oranžni brez razloga. Trdi izjemi: **legenda omrežij na zemljevidu** (oranžna = vlak, zelena = avtobus, to je njun pomen) in **izbira na domači strani** (`.pick-train` proti `.pick-bus`).
+  **Kar sme biti zeleno, gre skozi `var(--accent)`, nikoli skozi trdo zapisan `#f0934f`.** Koda tega ni držala: `.hist-note strong`, žetona shranjenih poti in zvezdica na iskalniku so bili na avtobusni strani oranžni brez razloga. Trdi izjemi: **legenda omrežij na zemljevidu** (oranžna = vlak, zelena = avtobus, to je njun pomen) in **omrežji v orodni vrstici domače strani** (`.orodna-vlak` proti `.orodna-bus`).
 * **Padec zamude na postaji riši vedno, krogec prihoda le, kadar je prostor** (`MIN_SPLIT_PX = 15`). Krogec premer 10 pik, polna pika odhoda 11 — pri manjšem razmiku se prekrijeta, navpičnica med njima izgine pod njima, videti **dva nepovezana krogca**. Prijavljeno pri Divači (+16 → +15, razmik natanko 10 pik).
 
   Rešitev ni skrivanje: enominutni padec je resničen podatek. Odsek se konča pri **prihodni** vrednosti, navpičnica pade na odhodno — pri majhni razliki stopnica ob piki, bere se; pri veliki (Ljubljana, 170 pik) dobi še krogec. Skrivanje bi izgubilo prav to, zaradi česar je padec narisan.
@@ -144,6 +144,7 @@ Izbran na domači strani (osnutek G), razširjen na vse strani prek skupnih grad
   * Kar je pod njo, ima zadnjih `--orodna-prostor` pik praznih: drseče strani spodnji odmik (`.domov`, `.conn-page`, v oknu vožnje `.col` oziroma `.train-body` na telefonu); na zemljevidih jo nosi zemljevid, dvignejo se le gumbi MapLibra in opombe (`.label-note*` nad navedbo vira, sicer se prekrivata).
   * Odprta spodnja plošča zemljevida (z-index 1100) jo pokrije; pri vodenju po pešpoti (`body.vodenje`) je ni. **Vsak modalni sloj mora biti nad 1000**: list budilke je imel 60 in vrstica je pokrila gumb „Nastavi“ (prijava 28. 9. 2026).
   * `view-transition-name: orodna` jo pri prehodu med stranmi pusti na mestu.
+  * **Na domači strani je razprta** (`.orodna-domov`, 1. 10. 2026): Vlaki in Avtobusi kot pilula z imenom v barvi omrežja, ločilo, Pot, Zemljevid; Domova ni. Namesto dveh velikih gumbov na strani, glej `strani.md`. Ob prehodu na drugo stran se zaradi `view-transition-name` skrči na mestu.
 
 ## Znak
 

@@ -661,6 +661,33 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .orodna-g.is-on { background: var(--accent-lit); color: #14161a; padding: 0 18px 0 14px; }
 .orodna-g.is-on span { display: inline; }
 .orodna-g:focus-visible { outline: 2px solid var(--accent-lit); outline-offset: 2px; }
+
+/* Na domači strani je vrstica razprta (osnutek D, 1. 10. 2026): Vlaki in
+   Avtobusi sta pilula z imenom v barvi omrežja, namesto dveh velikih gumbov
+   na strani. Barvi sta pomen (vlak oranžno, avtobus zeleno), zato trdo
+   zapisani -- izjema iz oznake.md. Na ožjem zaslonu se skrčijo odmiki, ne
+   napisi: brez imena bi bila pilula spet le ikona. */
+.orodna-domov { height: 76px; gap: 6px; padding: 0 10px; border-radius: 38px; }
+.orodna-domov .orodna-g { height: 56px; min-width: 48px; padding: 0 10px; }
+.orodna-domov .orodna-omr {
+  padding: 0 16px 0 12px; border-radius: 28px;
+  color: #14161a; font: 700 15.5px/1 var(--sans);
+}
+.orodna-domov .orodna-omr span { display: inline; }
+.orodna-vlak { background: #f0934f; }
+.orodna-bus { background: #4db97f; }
+.orodna-locilo { width: 1px; height: 28px; margin: 0 2px; background: var(--line-firm); }
+@media (max-width: 380px) {
+  .orodna-domov { gap: 4px; padding: 0 8px; }
+  .orodna-domov .orodna-g { min-width: 44px; padding: 0 8px; }
+  .orodna-domov .orodna-omr { padding: 0 12px 0 10px; }
+}
+/* Pod 340 pik (izmerjeno: pri 320 je vrstica segla čez oba roba) ostane v
+   pilulah samo ime; barva še vedno pove omrežje. */
+@media (max-width: 340px) {
+  .orodna-domov .orodna-omr svg { display: none; }
+  .orodna-domov .orodna-omr { padding: 0 14px; }
+}
 /* Tiskanje ne rabi menija. */
 @media print { .orodna { display: none; } }
 

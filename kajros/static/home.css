@@ -2,9 +2,10 @@
  *
  * Prejšnje ploščice so bile "preveč AI": vse enako zaobljene kartice z
  * obrobo, napisi v razprtih velikih črkah, pastelna polja. Tu ima vsak del
- * obliko, kakršno ima v Androidu 16: tonska kartica budilke, povezana gumba,
- * iskalna vrstica, ikone v oblikah. Barve Material vlog so izpeljane iz
- * poudarka (`--accent`), nevtralne so iste kot povsod (`--bg`, `--ink`).
+ * obliko, kakršno ima v Androidu 16: tonska kartica budilke, iskalna
+ * vrstica, ikone v oblikah. Vlaki in Avtobusi sta od 1. 10. 2026 v razprti
+ * orodni vrstici (`_orodna.html`, slog v base.css). Barve Material vlog so
+ * izpeljane iz poudarka (`--accent`), nevtralne so iste kot povsod.
  *
  * Razrede .home-page, .home, .home-brand, .home-lead, .home-more, .more-link
  * in .napaka-koda rabijo tudi napaka, stik, zasebnost, /android in
@@ -25,44 +26,30 @@
 }
 .d-geslo { margin: -10px 4px 14px; font: 400 15px/1.35 var(--sans); color: var(--ink-dim); }
 
-/* ---------- budilka ---------- */
+/* ---------- budilka ----------
+ *
+ * Ena kartica, samo kadar budilka obstaja (osnutek 1, 1. 10. 2026). Prej je
+ * bila prva kartica vedno: ura 68 px, krogi dni in še do tri budilke s
+ * stikali -- največji element na strani, čeprav jo rabi malokdo. Zdaj ura,
+ * vožnja, odhod z zamudo in stikalo; ostalo je en dotik stran v seznamu. */
 
 .d-bud {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-top: 4px; padding: 20px 20px 18px; border-radius: 32px;
-  background: var(--m-kont); color: var(--m-na-kont); text-decoration: none;
+  display: grid; gap: 12px;
+  margin-top: 4px; padding: 16px 16px 14px 20px; border-radius: 28px;
+  background: var(--m-kont); color: var(--m-na-kont);
 }
-.bud-vrh { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
-.bud-oznaka { font: 500 14px/1.2 var(--sans); }
-.bud-glavna { display: flex; align-items: baseline; gap: 12px; cursor: pointer; }
-.bud-ura { font: 600 68px/1 var(--sans); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.bud-kdaj { font: 500 16px/1.25 var(--sans); }
-.bud-kaj { font: 600 16px/1.3 var(--sans); cursor: pointer; }
-.bud-pod { font: 400 14px/1.45 var(--sans); color: var(--m-na-kont-2); }
+.bud-vrsta { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; cursor: pointer; }
+.bud-ura { font: 600 40px/1 var(--sans); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.bud-opis { display: grid; gap: 3px; min-width: 0; cursor: pointer; }
+.bud-nad { font: 500 13px/1.3 var(--sans); color: var(--m-na-kont-2); }
+.bud-kaj { font: 600 15px/1.3 var(--sans); }
 /* Zamuda nosi barvo lestvice, zato na podlagi strani: temna oranžna
    (`--d-big`) na rjavem vsebniku ne bi dosegla kontrasta. */
 .bud-zam { padding: 1px 7px; border-radius: 8px; background: var(--bg); font-weight: 600; white-space: nowrap; }
-.bud-dnevi { display: flex; justify-content: space-between; margin-top: 10px; }
-.bud-dan {
-  display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; box-sizing: border-box; border-radius: 50%;
-  border: 1.5px solid var(--m-obroba-kont); font: 600 13px/1 var(--sans);
-}
-.bud-dan.je-vklop { border-color: transparent; background: var(--m-na-kont); color: var(--m-kont); }
-.bud-vrsta {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
-  margin-top: 10px; padding-top: 12px; border-top: 1px solid rgba(255, 219, 200, 0.16);
-}
-.bud-cas { font: 600 22px/1 var(--sans); font-variant-numeric: tabular-nums; }
-.bud-opis { min-width: 0; font: 500 14px/1.35 var(--sans); cursor: pointer; }
-.bud-opis span { display: block; font: 400 12.5px/1.35 var(--sans); color: var(--m-na-kont-2); }
-.bud-vrsta.je-ugasnjena .bud-cas, .bud-vrsta.je-ugasnjena .bud-opis { opacity: .5; }
-.bud-prazno { font: 400 14px/1.45 var(--sans); color: var(--m-na-kont-2); cursor: pointer; }
-.bud-prazno strong { display: block; margin: 6px 0 2px; font: 600 20px/1.25 var(--sans); color: var(--m-na-kont); }
 .bud-vse {
-  align-self: flex-start; margin-top: 12px; padding: 10px 16px;
-  border: 0; border-radius: 20px; background: rgba(255, 219, 200, 0.12);
-  color: var(--m-na-kont); font: 500 14px/1 var(--sans); cursor: pointer;
+  justify-self: start; padding: 8px 14px;
+  border: 0; border-radius: 18px; background: rgba(255, 219, 200, 0.12);
+  color: var(--m-na-kont); font: 500 13px/1 var(--sans); cursor: pointer;
 }
 
 /* Stikalo Material 3: gumb z vlogo `switch`, ne potrditveno polje -- vklop se
@@ -79,26 +66,6 @@
 }
 .stikalo[aria-checked="true"] { border-color: var(--m-na-kont); background: var(--m-na-kont); }
 .stikalo[aria-checked="true"]::after { left: 22px; top: 2px; width: 24px; height: 24px; background: var(--m-kont); }
-
-/* V brskalniku budilk ni: kartica je povabilo na aplikacijo. */
-.bud-vabilo { margin-top: 6px; font: 600 24px/1.2 var(--sans); }
-.bud-gumb {
-  align-self: flex-start; margin-top: 12px; padding: 11px 18px; border-radius: 20px;
-  background: var(--m-na-kont); color: var(--m-kont); font: 600 14px/1 var(--sans);
-}
-
-/* ---------- omrežji ---------- */
-
-/* Povezana gumba (Expressive "connected button group"): ena odločitev, dva
-   odgovora. Barva je pomen (vlak oranžno, avtobus zeleno), zato trdo
-   zapisana -- izjema iz oznake.md. */
-.d-omr { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-top: 14px; }
-.d-omr-g {
-  display: flex; align-items: center; justify-content: center; gap: 10px; height: 72px;
-  color: #14161a; text-decoration: none; font: 700 20px/1 var(--sans);
-}
-.d-vlak { border-radius: 36px 10px 10px 36px; background: #f0934f; }
-.d-bus { border-radius: 10px 36px 36px 10px; background: #4db97f; }
 
 /* ---------- najhitrejša pot ---------- */
 
@@ -125,40 +92,60 @@
 .d-obl-oblika { position: absolute; left: 0; top: 0; width: 88px; height: 88px; transition: filter .2s ease-out; }
 .d-obl-slika > svg:not(.d-obl-oblika) { position: relative; }
 .d-obl-ime { font: 500 14px/1.2 var(--sans); }
-.d-obl-zem { color: #c4cad4; fill: var(--m-najvisja); }
-.d-obl-ovire { color: #f2d36b; fill: #3f3510; }
-.d-obl-deli { color: #ffb68d; fill: #4a2a14; }
+.d-obl-pod { margin-top: -5px; font: 400 12px/1.2 var(--sans); color: var(--ink-mute); }
+/* Tri barve za tri stvari (izbrano 1. 10. 2026 med šestimi kombinacijami).
+   Budilka obdrži rjavo kartice v aplikaciji. Modrozelena je blizu avtobusne
+   zelene in indigo blizu modre naših obvestil -- izbrano vede: ob obliki je
+   ime, barva tu ne nosi pomena. Ikona proti polnilu 8,8 / 9,3 / 10,3 : 1. */
+.d-obl-bud { color: var(--m-na-kont); fill: var(--m-kont); }
+.d-obl-zem { color: #aeeaec; fill: #123a3c; }
+.d-obl-deli { color: #d9dfff; fill: #232b55; }
 /* Pritisk posvetli obliko, ne pravokotnika okrog nje (plast iz base.css). */
 .d-obl:active { box-shadow: none; }
 .d-obl:active .d-obl-oblika { filter: brightness(1.35); transition: none; }
-.d-znacka {
-  position: absolute; right: -2px; top: 2px; padding: 3px 7px; border-radius: 10px;
-  background: var(--sev-hard); color: #14161a; font: 700 12px/1.1 var(--sans);
-}
 
 /* Deljenje lege: oblika je vabilo, `deli.js` na istem mestu razpre kartico
    čez vso širino (`je-odprt`) in jo po koncu vrne. Vsebina v `deli.css`. */
 .d-deli { flex: 1 1 0; min-width: 0; }
 .d-deli.je-odprt { flex-basis: 100%; padding: 20px; border-radius: 28px; background: var(--bg-raised); }
 
-/* ---------- shranjene poti ---------- */
+/* ---------- moje poti ----------
+ *
+ * Shranjene poti z naslednjima odhodoma (`home.js`). Kartice so povezana
+ * skupina kot seznam v Materialu: zgornja in spodnja zaobljeni, vmes ozke. */
 
-.d-shranjene { margin-top: 26px; }
+.d-moje { margin-top: 24px; }
 .d-nasl { margin: 0 4px 10px; font: 500 14px/1 var(--sans); color: var(--ink-dim); }
-.d-cipi { display: flex; flex-wrap: wrap; gap: 8px; }
-.d-cip {
-  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px 0 10px;
-  border-radius: 18px; background: var(--m-visoka); color: var(--ink);
-  text-decoration: none; font: 500 14px/1 var(--sans);
+.d-poti { display: grid; gap: 3px; }
+.d-poti:empty { display: none; }
+.d-pot {
+  display: grid; gap: 10px; padding: 14px 16px 14px 18px; border-radius: 8px;
+  background: var(--m-visoka); color: var(--ink); text-decoration: none;
 }
-/* Barva zvezdice pove omrežje -- ista dogovorjena para kot povsod. Značka
-   brez nje bi poslala človeka v napačen iskalnik. */
-.d-cip svg { flex-shrink: 0; }
-.d-cip-vlak svg { fill: #f0934f; }
-.d-cip-bus svg { fill: #4db97f; }
+.d-pot:first-child { border-top-left-radius: 24px; border-top-right-radius: 24px; }
+.d-pot:last-child { border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; }
+.d-pot-glava { display: flex; align-items: center; gap: 10px; font: 600 15.5px/1.25 var(--sans); }
+.d-pot-ime { flex: 1; min-width: 0; }
+.d-pot-glava svg { flex-shrink: 0; }
+.d-pot-glava > svg:last-child { color: var(--ink-mute); }
+/* Barva zvezdice pove omrežje -- ista dogovorjena para kot povsod. */
+.d-pot-vlak .d-pot-glava > svg:first-child { fill: #f0934f; }
+.d-pot-bus .d-pot-glava > svg:first-child { fill: #4db97f; }
+.d-pot-odh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; min-height: 20px; }
+.d-pot-o { display: inline-flex; align-items: baseline; gap: 8px; }
+.d-pot-ura { font: 600 20px/1 var(--sans); font-variant-numeric: tabular-nums; }
+.d-pot-o + .d-pot-o .d-pot-ura { font-size: 16px; font-weight: 500; color: var(--ink-dim); }
+.d-pot-zam { font: 600 13.5px/1 var(--sans); white-space: nowrap; }
+.d-pot-brez { color: var(--ink-faint); font-weight: 500; }
+.d-pot-cez, .d-pot-kam, .d-pot-nic { font: 400 13px/1.2 var(--sans); color: var(--ink-mute); }
+.d-poti-prazno {
+  display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 14px 16px;
+  border-radius: 24px; background: var(--bg-raised); color: var(--ink-dim); font: 400 14px/1.45 var(--sans);
+}
+.d-poti-prazno svg { flex-shrink: 0; margin-top: 1px; fill: #f0934f; }
 
-.d-omr-g:focus-visible, .d-isci:focus-visible, .d-obl:focus-visible, .stikalo:focus-visible,
-.bud-vse:focus-visible, .d-cip:focus-visible, .d-bud:focus-visible {
+.d-isci:focus-visible, .d-obl:focus-visible, .stikalo:focus-visible,
+.bud-vse:focus-visible, .d-pot:focus-visible {
   outline: 2px solid var(--accent-lit); outline-offset: 2px;
 }
 
@@ -202,5 +189,6 @@
   .home-lead { font-size: 23px; margin-top: 24px; }
 }
 
-/* Orodna vrstica na dnu (base.css) ne sme pokriti noge. */
-.domov { padding-bottom: var(--orodna-prostor); }
+/* Orodna vrstica na dnu (base.css) ne sme pokriti noge; na domači strani
+   je razprta in 12 pik višja. */
+.domov { padding-bottom: calc(var(--orodna-prostor) + 12px); }

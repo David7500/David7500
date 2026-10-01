@@ -7,18 +7,41 @@
   gumba v glavi: izbrana pilula pove, na katerem omrežju si, enako na prvi
   pogled, kot ga je povedal preklop.
 
+  **Na domači strani je vrstica razprta** (osnutek D, izbran 1. 10. 2026):
+  Vlaki in Avtobusi sta pilula z imenom v barvi omrežja, namesto dveh velikih
+  gumbov na strani, ki sta isti dve mesti ponavljala tik nad vrstico.
+  Prijavljeno 1. 10.: začetna stran „preveč overwhelming“ -- ista izbira dvakrat
+  na enem zaslonu je bila del razloga. Domova tu ni, ker si že doma. Na vseh
+  drugih straneh je vrstica taka kot prej; `view-transition-name` jo ob
+  prehodu skrči na mestu.
+
   `here` iz pogleda (api.py): iskalnik, avtobusi, pot, zemljevid, ovire, domov.
   Okno vožnje dobi iskalnik ali avtobusi, glede na omrežje vožnje.
 #}
 {%- set _h = here | default('') -%}
-{%- macro _g(ime, href, on) -%}
-<a class="orodna-g{% if on %} is-on{% endif %}" href="{{ href }}" aria-label="{{ ime }}"
-   {%- if on %} aria-current="page"{% endif %}>{{ caller() }}<span>{{ ime }}</span></a>
+{%- set _domov -%}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>{%- endset -%}
+{%- set _vlak -%}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/></svg>{%- endset -%}
+{%- set _bus -%}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="15" rx="2.6"/><path d="M3.5 10.5h17M6.5 18.6v2.4M17.5 18.6v2.4"/></svg>{%- endset -%}
+{%- set _pot -%}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>{%- endset -%}
+{%- set _zem -%}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg>{%- endset -%}
+{%- macro _g(ime, href, on, ikona, razred="") -%}
+<a class="orodna-g{% if on %} is-on{% endif %}{% if razred %} {{ razred }}{% endif %}" href="{{ href }}" aria-label="{{ ime }}"
+   {%- if on %} aria-current="page"{% endif %}>{{ ikona }}<span>{{ ime }}</span></a>
 {%- endmacro %}
-<nav class="orodna" aria-label="Glavni meni">
-  {% call _g("Domov", "/", _h == "domov") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>{% endcall %}
-  {% call _g("Vlaki", "/app/train", _h == "iskalnik") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/></svg>{% endcall %}
-  {% call _g("Avtobusi", "/app/bus", _h == "avtobusi") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="15" rx="2.6"/><path d="M3.5 10.5h17M6.5 18.6v2.4M17.5 18.6v2.4"/></svg>{% endcall %}
-  {% call _g("Pot", "/app/pot", _h == "pot") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg>{% endcall %}
-  {% call _g("Zemljevid", "/app/map", _h == "zemljevid") %}<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z"/><path d="M9 4v14M15 6v14"/></svg>{% endcall %}
+{%- if _h == "domov" %}
+<nav class="orodna orodna-domov" aria-label="Glavni meni">
+  {{ _g("Vlaki", "/app/train", false, _vlak, "orodna-omr orodna-vlak") }}
+  {{ _g("Avtobusi", "/app/bus", false, _bus, "orodna-omr orodna-bus") }}
+  <span class="orodna-locilo" aria-hidden="true"></span>
+  {{ _g("Pot", "/app/pot", false, _pot) }}
+  {{ _g("Zemljevid", "/app/map", false, _zem) }}
 </nav>
+{%- else %}
+<nav class="orodna" aria-label="Glavni meni">
+  {{ _g("Domov", "/", false, _domov) }}
+  {{ _g("Vlaki", "/app/train", _h == "iskalnik", _vlak) }}
+  {{ _g("Avtobusi", "/app/bus", _h == "avtobusi", _bus) }}
+  {{ _g("Pot", "/app/pot", _h == "pot", _pot) }}
+  {{ _g("Zemljevid", "/app/map", _h == "zemljevid", _zem) }}
+</nav>
+{%- endif %}
