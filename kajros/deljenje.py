@@ -52,7 +52,8 @@ from . import config, db, geo, stats
 TZ = ZoneInfo(config.TIMEZONE)
 
 #: Poročilo, starejše od tega, ne opisuje več, kje je vozilo zdaj. Brskalnik
-#: pošilja na 10 s, Android na 15 s; dve zamujeni pošiljanji še nista konec.
+#: in Android pošiljata na 10 s (`deli.js`, `Deljenje.POSLJI_MS`); dve
+#: zamujeni pošiljanji še nista konec.
 SVEZE_S = 120
 
 #: Koliko sta lahko dve poročili narazen, da se „ujemata“. Primerjamo zamudo
