@@ -233,9 +233,8 @@ function potnikiKjeText(p) {
 function potnikiGlavaHtml() {
   const p = state.run && state.run.potniki;
   if (!p || p.lat == null) return "";
-  const d = p.n % 100;
   const kdo = p.n === 1 ? "Potnik na vozilu deli lego"
-    : `${potnikov(p.n)} na vozilu ${d === 2 ? "delita" : "deli"}${d === 2 || d === 1 ? "" : "jo"} lego`;
+    : `${potnikov(p.n)} na vozilu ${deliGlagol(p.n)} lego`;
   const z = p.zamuda;
   return `<div class="detail-potniki">
       <strong>${kdo}</strong>
@@ -1035,7 +1034,7 @@ async function loadRun() {
     renderRunHead();
     renderTimeline();
     renderProfile();
-    loadPosition();     // ziv zemljevid; pri vlaku tiho odpade, ker lege ni
+    loadPosition();     // ziv zemljevid: GPS, sicer lega vsaj dveh potnikov
   } catch (err) {
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
@@ -1680,7 +1679,7 @@ function naloziSlogMapLibre() {
 
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
                  postaje: null, v: null, since: 0, loc: null, nastaja: null,
-                 avto3d: null, lega: null };
+                 avto3d: null, lega: null, vir: null, vlak: false };
 
 // ---------- ocena lege med dvema meritvama ----------
 //
@@ -1721,6 +1720,11 @@ function smerTrase(pts, cums, s, pol) {
 // rezultat raven (povprecje 84,4 / 83,0 / 83,6 m), zato 15 s ni izbrano
 // natancno, ampak je sredina izmerjene ravnine -- isto kot `MIN_DWELL_S`.
 const POSTANEK_S = 15;
+// Vlak stoji dlje. Izmerjeno 1. 10. 2026 na točkah treh deljenj na vlakih
+// (LPV 2010, RG 318, LPV 2221; 202--273 parov), napaka proti legi, ki jo je
+// potnik poslal pozneje, mediana: po 60 s 79 m s 15 s postanka in 61 m s 45,
+// po 120 s 354 in 192 m. Po 30 s ni razlike (31 m).
+const POSTANEK_VLAK_S = 45;
 // Postajalisce, na katerem vozilo ze stoji, ne steje se enkrat.
 const ZA_SABO_M = 15;
 
@@ -1739,7 +1743,7 @@ function ocenjenaLega(v, starostS) {
     if (p <= vzdolz + ZA_SABO_M) continue;
     const doPostaje = (p - kje) / v.speed_ms;
     if (doPostaje >= ostanek) break;
-    ostanek -= doPostaje + POSTANEK_S;
+    ostanek -= doPostaje + (runMap.vlak ? POSTANEK_VLAK_S : POSTANEK_S);
     kje = p;
     if (ostanek <= 0) break;
   }
@@ -1770,9 +1774,10 @@ function smerNaOceni(v, lega) {
   const iz = v.bearing || 0;
   if (lega.vzdolz == null) return iz;
   const z = runMap.map.getZoom();
-  const pol = run3D()
-    ? (avtoDolzina(modelVozila(v)) / 2) * avtoPovecava(z)
-    : 12 * (40075016.686 * Math.cos(v.lat * Math.PI / 180)) / (512 * 2 ** z);
+  const pol = !run3D()
+    ? 12 * (40075016.686 * Math.cos(v.lat * Math.PI / 180)) / (512 * 2 ** z)
+    : runMap.vlak ? (VLAK_DOLZINA_M / 2) * vlakPovecava(z)
+      : (avtoDolzina(modelVozila(v)) / 2) * avtoPovecava(z);
   return smerTrase(runMap.trasa, runMap.cums, lega.vzdolz, pol) ?? iz;
 }
 
@@ -1789,6 +1794,20 @@ function busSvg(moving) {
             fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
       <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
             fill="#0f1115" fill-opacity="0.55"/>
+    </svg>`;
+}
+
+// Vlak v isti barvi ocene, z obliko vlaka z velikega zemljevida -- a brez
+// obroča: tam obroč pove "na postaji, ne izmerjeno", tu stoji na legi.
+function vlakSvg(moving) {
+  const s = 30;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="2" width="10" height="20" rx="3.4" fill="${ESTIMATE_COLOR}"
+            fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
+      <path d="M8.8 5.2 Q12 4.1 15.2 5.2 L15.2 7.8 Q12 6.8 8.8 7.8 Z"
+            fill="#0f1115" fill-opacity="0.6"/>
+      <circle cx="9.8" cy="19" r="1" fill="#0f1115" fill-opacity="0.7"/>
+      <circle cx="14.2" cy="19" r="1" fill="#0f1115" fill-opacity="0.7"/>
     </svg>`;
 }
 
@@ -1956,12 +1975,11 @@ async function ustvariRunMap(v) {
   // enako, ploska ikona pa je med dvignjenimi stavbami ostala ploska.
   // Oblika je prevoznikova, barva pa OCENE, ne prevoznika -- vozilo stoji na
   // oceni lege in legenda pod zemljevidom to barvo tako imenuje.
-  runMap.avto3d = avtobusi3D({
-    id: "run-avtobus-3d",
-    enotna: ESTIMATE_COLOR,
-    vidna: run3D,
-    povecava: avtoPovecava,
-  });
+  runMap.avto3d = runMap.vlak
+    ? plast3D({ id: "run-vlak-3d", modeli: vlakModeli(ESTIMATE_COLOR),
+                vidna: run3D, povecava: vlakPovecava })
+    : avtobusi3D({ id: "run-avtobus-3d", enotna: ESTIMATE_COLOR,
+                   vidna: run3D, povecava: avtoPovecava });
   map.addLayer(runMap.avto3d.plast, RUN_POD);
   map.on("zoom", () => postavi3D());
 
@@ -1992,11 +2010,23 @@ function postavi3D(lega) {
                              model: modelVozila(v) }] : []);
 }
 
-const modelVozila = (v) => (v.agency === "lpp" ? "1118" : v.agency);
+const modelVozila = (v) => (runMap.vlak
+  ? vlakModel({ mode: state.mode, train_no: state.run && state.run.train_no })
+  : v.agency === "lpp" ? "1118" : v.agency);
+// Garnitura FLIRT, najpogostejša na progi: trije vozovi po ~20 m.
+const VLAK_DOLZINA_M = 60;
 
 async function drawRunMap(v) {
   runMap.v = v;
   runMap.since = Date.now();
+  runMap.vlak = !isBus(state.mode);
+  // Okvir, ki so ga zastarela poročila skrila, se vrne; MapLibre skritega
+  // okvira ne meri, zato po prikazu znova.
+  const wrap = document.getElementById("run-map-wrap");
+  if (wrap.hidden && runMap.map) {
+    wrap.hidden = false;
+    requestAnimationFrame(() => runMap.map.resize());
+  }
   // `trip` pove zemljevidu, katero vozilo je človek gledal: plast prevoznika
   // je lahko ugasnjena in brez tega avtobusa na legi, kamor ga pelje, ni.
   document.getElementById("run-map-full").href =
@@ -2047,11 +2077,14 @@ function postaviVozilo(prvic, nova) {
   const el = runMap.marker.getElement();
   if (el.dataset.vozi !== String(moving)) {
     el.dataset.vozi = String(moving);
-    el.innerHTML = busSvg(moving);
+    el.innerHTML = runMap.vlak ? vlakSvg(moving) : busSvg(moving);
   }
   // Izmerjena lega se spremeni samo z novim odgovorom; `setData` vsako
   // sekundo bi MapLibre silil, da vir na telefonu predeluje brez razloga.
-  if (nova) runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: "zadnja izmerjena lega" })]);
+  if (nova) {
+    runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: meritevIme() })]);
+    document.getElementById("run-map-key-meritev").textContent = meritevIme();
+  }
   postavi3D(lega);
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
@@ -2066,11 +2099,17 @@ function postaviVozilo(prvic, nova) {
   if (nova) podnapis(v, odmik);
 }
 
+const meritevIme = () => (runMap.vir === "potniki" ? "zadnje poročilo potnikov"
+  : "zadnja izmerjena lega");
+
 // Hitrost in starost lege veljata tudi brez zemljevida (brskalnik brez WebGL2).
+// Lega od potnikov to pove, preden pove karkoli drugega: ni prevoznikova.
 function podnapis(v, odmik) {
   const moving = (v.speed_kmh || 0) >= 3;
   document.getElementById("run-map-sub").innerHTML =
-    `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `
+    (runMap.vir === "potniki"
+      ? `${escapeHtml(potnikov(v.potnikov))} ${deliGlagol(v.potnikov)} lego · ` : "")
+    + (v.speed_kmh == null ? "" : `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `)
     + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
                   : `lega stara ${ageHtml(v.age_s)}`);
 }
@@ -2237,6 +2276,11 @@ function loadPosition() {
   // Lega obstaja samo za tekoci dan; za ogled preteklega dne je vprasanje
   // "kje je zdaj" brez pomena.
   if (state.run.service_date !== todayIso()) return;
+  if (runMap.vir !== "gps") pokaziPotnike();
+  // Vozila zeleznice (tudi nadomestni avtobusi) v legah feeda niso nikoli:
+  // 1. 10. 2026 v `vehicle_now` 671 vozil, vsa z omrezja avtobus. Poizvedba
+  // na 10 s bi bila za vsakega gledalca vlaka zastonj.
+  if (state.network === "zeleznica") return;
   // Prej se je lega nalozila ENKRAT in nikoli vec: kdor je okno pustil odprto,
   // je gledal, kje je bil avtobus ob odprtju strani. Prav tu je vprasanje
   // "kje je zdaj" najbolj neposredno, zato se osvezuje v koraku s strezbo.
@@ -2247,8 +2291,45 @@ function loadPosition() {
   if (runMap.poll) runMap.poll.stop();
   runMap.pollTrip = trip;
   runMap.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
-    if (list.length) drawRunMap(list[0]);
+    if (!list.length) return;
+    runMap.vir = "gps";
+    drawRunMap(list[0]);
   });
+}
+
+// Vozilo brez GPS (vlak, ~10 % avtobusov) ima lego samo od potnikov na njem,
+// in to le, kadar se ujemata vsaj dva. En sam je lahko že izstopil in čaka
+// na peronu -- videti bi bilo, kot da vozilo tam stoji, in tega iz njegove
+// lege ne ločimo od vlaka, ki res stoji (odločil David, 1. 10. 2026). Lega
+// pride z vožnjo (`loadRun`, na 30 s) in med poročili drsi po trasi:
+// izmerjeno 1. 10. 2026 na 273 točkah treh deljenj na vlakih, napaka po
+// 30 s mediana 31 m proti 244 m za pikom na zadnjem poročilu, po 60 s
+// 61 m proti 482 m (z `POSTANEK_VLAK_S`).
+function voziloPoPotnikih() {
+  const p = state.run && state.run.potniki;
+  if (!p || p.lat == null || !p.soglasje) return null;
+  const hitrost = p.stoji ? 0 : p.hitrost_ms;
+  return {
+    trip_id: state.run.trip_id, lat: p.lat, lon: p.lon, age_s: p.starost_s,
+    speed_ms: hitrost, speed_kmh: hitrost == null ? null : Math.round(hitrost * 3.6),
+    potnikov: p.n,
+  };
+}
+
+function pokaziPotnike() {
+  const v = voziloPoPotnikih();
+  if (v) {
+    runMap.vir = "potniki";
+    drawRunMap(v);
+    return;
+  }
+  if (runMap.vir !== "potniki") return;
+  // Poročila so zastarala ali se ne ujemajo več. Vlak na legi izpred petih
+  // minut bi trdil, da je tam, zato okvir izgine.
+  runMap.vir = null;
+  runMap.v = null;
+  setMapMax(false);
+  document.getElementById("run-map-wrap").hidden = true;
 }
 
 // ---------- vreme ----------

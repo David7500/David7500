@@ -100,6 +100,9 @@ const HAS_START = Number.isFinite(startLat) && Number.isFinite(startLon)
 // prevoznika pa je bila lahko ugasnjena -- avtobusa, po katerega je prisel,
 // tam ni bilo.
 let urlTrip = URLQ.get("trip");
+// Vlaki in avtobusi pridejo v ločenih odgovorih; dokler nista oba tu,
+// odsotnost vozila iz naslova ne pomeni, da ga ni.
+const nalozeno = { vlaki: false, avtobusi: false };
 
 // Brez WebGL2 se modul tu ustavi: vse spodaj je zemljevid. Obljuba, ki se ne
 // izpolni nikoli, je edini nacin, da ES modul neha brez napake v konzoli.
@@ -381,15 +384,19 @@ function bestDelay(t) {
   return { value: t.delay_s, where: t.last_stop, ageS: t.age_s, fromOperator: false };
 }
 
-// Kje narisati vlak: kjer ga vidi potnik na njem, sicer na postaji, kjer po
-// voznem redu in zamudi ta hip stoji, sicer na postaji, ki jo je sporočil
+// Kje narisati vlak: kjer ga vidita potnika na njem, sicer na postaji, kjer
+// po voznem redu in zamudi ta hip stoji, sicer na postaji, ki jo je sporočil
 // prevoznik, sicer na zadnji postaji z meritvijo. Potnikova lega je edina
-// prava lega vlaka, ki jo imamo (`deljenje.py`); postanek je sklep
-// (`api._na_postaji`), a boljši od prejšnje postaje, na kateri je vlak
-// prej obstal ves postanek.
+// prava lega vlaka, ki jo imamo (`deljenje.py`), a samo, kadar se ujemata
+// vsaj dva: en sam je lahko že izstopil in čaka na peronu, vlak pa bi stal
+// tam z njim (odločil David, 1. 10. 2026; isto pravilo ima okno vožnje).
+// Postanek je sklep (`api._na_postaji`), a boljši od prejšnje postaje, na
+// kateri je vlak prej obstal ves postanek.
+const naPotnikovi = (t) => !!(t.potnik && t.potnik.soglasje && t.potnik.lat != null);
+
 function trainPlace(t) {
-  if (t.potnik && t.potnik.lat != null) {
-    return { key: `potnik:${t.trip_id}`, name: "lega po poročilu potnika",
+  if (naPotnikovi(t)) {
+    return { key: `potnik:${t.trip_id}`, name: "lega po poročilu potnikov",
              station: { lat: t.potnik.lat, lon: t.potnik.lon } };
   }
   if (t.na_postaji) {
@@ -522,7 +529,8 @@ function groupPopupHtml(g) {
   const koliko = g.trains.length === 1 ? "1 vlak" : `${g.trains.length} vlakov`;
   return `
     <div class="popup-station">${escapeHtml(g.name)}</div>
-    <div class="popup-note">${g.potnik ? "potnik na vlaku deli lego"
+    <div class="popup-note">${g.potnik
+      ? `${potnikov(g.trains[0].potnik.n)} na vlaku ${deliGlagol(g.trains[0].potnik.n)} lego`
       : g.stoji ? `po voznem redu in zamudi zdaj stoji tu — ${koliko}`
       : `zadnja postaja z meritvijo — ${koliko}`}</div>
     <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>`;
@@ -629,7 +637,7 @@ function dodajVlake3D() {
   posodobiVlake3D();
 }
 
-const smerVlaka = (t) => (t.potnik && t.potnik.lat != null ? t.potnik.smer
+const smerVlaka = (t) => (naPotnikovi(t) ? t.potnik.smer
   : t.na_postaji && t.na_postaji.smer) ?? 0;
 
 // Vlaki na isti postaji stojijo drug ob drugem, en tir narazen. Odmik je v
@@ -1572,6 +1580,8 @@ async function pollLive() {
   document.getElementById("n-train").textContent = liveTrains.length;
   renderTrains(liveTrains);
   if (findEl.value.trim()) renderFind();
+  nalozeno.vlaki = true;
+  pokaziVoziloIzNaslova();
 }
 
 function pollLiveTiho() {
@@ -1617,6 +1627,7 @@ function onVehicles(list) {
   if (drugiRow) drugiRow.hidden = poAgenciji.drugi === 0;
   renderBuses(liveBuses);
   if (findEl.value.trim()) renderFind();
+  nalozeno.avtobusi = true;
   pokaziVoziloIzNaslova();
 }
 
@@ -1627,10 +1638,22 @@ function onVehicles(list) {
 function pokaziVoziloIzNaslova() {
   if (!urlTrip) return;
   const v = liveBuses.find((x) => x.trip_id === urlTrip);
+  const vlak = !v && liveTrains.find((x) => x.trip_id === urlTrip);
+  if (!v && !vlak && !(nalozeno.vlaki && nalozeno.avtobusi)) return;
   urlTrip = null;
   const q = new URLSearchParams(location.search);
   q.delete("trip");
   history.replaceState(null, "", `?${q}`);
+  if (vlak) {
+    const spec = LAYERS.find((s) => s.key === "train");
+    if (spec && !vklop.train) setLayer(spec, true);
+    const { key, station: st } = trainPlace(vlak);
+    if (st) map.easeTo({ center: [st.lon, st.lat] });
+    const mk = stationMarkers.get(key);
+    if (mk && !mk.getPopup().isOpen()) mk.togglePopup();
+    drawStops(vlak.train_no, vlak.trip_id);
+    return;
+  }
   if (!v || v.lat == null) return;
   const spec = LAYERS.find((s) => s.ag === busGroup(v));
   if (spec && !vklop[spec.key]) setLayer(spec, true);

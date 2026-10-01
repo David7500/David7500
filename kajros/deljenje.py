@@ -67,7 +67,8 @@ ODMIK_MAX_M = 200
 #: štejejo kot izstop: v predoru je natančnost slaba, potnik pa je še vedno
 #: na vlaku.
 NATANCNOST_MAX_M = 250
-#: Toliko zaporednih natančnih točk izven trase pomeni, da je potnik izstopil.
+#: Toliko zaporednih natančnih točk izven trase ali odmaknjenih med stanjem
+#: (`VSTRAN_M`) pomeni, da je potnik izstopil.
 ZUNAJ_ZA_IZSTOP = 3
 #: 250 km/h. Hitreje ne vozi nič na tej mreži; skok čez to je napaka GPS.
 HITROST_MAX_MS = 70
@@ -78,6 +79,24 @@ STOJI_MS = 1.5
 #: Kako blizu postaje vozilo „je na postaji“. Vlak je dolg do 200 m in
 #: koordinata postaje ni nujno sredina perona; avtobus stoji na točki.
 NA_POSTAJI_M = {"zeleznica": 200, "avtobus": 60}
+#: Nad to hitrostjo med dvema točkama se vozilo pelje; pod njo stoji ali
+#: potnik hodi. Prehod čez rob postaje šteje samo, kadar se je poročevalec
+#: čez rob peljal. Izmerjeno 1. 10. 2026 na prvih 14 prehodih (hitrost
+#: odseka med točkama, v katerem je rob): pravi 4,6--22,5 m/s, edini lažni
+#: 1,8 m/s -- potnik RG 318 je po izstopu v Ljubljani hodil po peronu in
+#: vlak „odpeljal“.
+VOZI_MS = 3
+#: Vozilo, ki stoji, se od trase vstran ne odmika, potnik, ki hodi, pa se.
+#: Kdor se med stanjem odmakne od odmika ob ustavitvi za več od tega in obeh
+#: natančnosti, ni več na vozilu. Samo z natančnimi točkami (do te meje):
+#: točka ±200 m je na vlaku, ki je stal, skočila 150 m vstran (LPV 2010,
+#: Ljubljana Zalog). Izmerjeno 1. 10. 2026 na prvih deljenjih: na vozilu je
+#: bilo do meje najmanj 16 m (štirje postanki), po izstopu jo je potnik
+#: RG 318 prešel po treh minutah hoje po peronu, potnik LPV 2010 v Kresnicah
+#: pa za 84 m. Brez tega je izstopivši potnik še 10 minut „stal“ na postaji
+#: kot vlak z rastočo zamudo: točke 150--185 m od proge so pod mejo izven
+#: trase (`ODMIK_MAX_M`) in vsaka je števec izstopa vrnila na nič.
+VSTRAN_M = 40
 #: Najmanjši razmik med dvema točkami istega deljenja. Pogosteje ne prinese
 #: nič novega, bazo pa polni.
 RAZMIK_S = 3
@@ -819,14 +838,18 @@ def _zacni(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
         "VALUES(?, ?, ?, ?, ?, ?)", (ident, v.trip_id, dan, v.network, ts, ts))
     # Isti pošiljatelj znova na isti vožnji (osvežena stran, izgubljen odgovor
     # na prvo pošiljanje) ni drugi potnik: prejšnje deljenje se konča, sicer
-    # bi en telefon dal "soglasje dveh" in zamenjal feed.
+    # bi en telefon dal "soglasje dveh" in zamenjal feed. Konec je `znova`,
+    # ne `potnik`: v prvih deljenjih (do 1. 10. 2026) se ponovnega začetka ni
+    # dalo ločiti od gumba Ustavi -- en potnik je v 45 minutah začel petkrat.
+    # Ključ je naslov, za CGNAT pa si ga deli več ljudi: ponoven začetek,
+    # medtem ko staro deljenje še pošilja, je lahko drug potnik.
     with _zaklep:
         prej = _zadnje_deljenje.get((kljuc, v.trip_id))
         _zadnje_deljenje[(kljuc, v.trip_id)] = ident
         if len(_zadnje_deljenje) > 5000:
             _zadnje_deljenje.clear()
     if prej:
-        conn.execute("UPDATE deljenje SET konec = 'potnik' WHERE id = ? AND konec IS NULL",
+        conn.execute("UPDATE deljenje SET konec = 'znova' WHERE id = ? AND konec IS NULL",
                      (prej,))
     return ident
 
@@ -943,6 +966,12 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
             along = max(along, d["along_m"])
             if hitrost is None and dt > 0:
                 hitrost = max(premik, 0) / dt
+            if ((along - d["along_m"]) / max(dt, 1) < VOZI_MS
+                    and _odmaknjen(conn, ident, odmik, t["acc"])):
+                d["zunaj"] += 1
+                if d["zunaj"] >= ZUNAJ_ZA_IZSTOP:
+                    d["konec"] = "izstop"
+                continue
             _prehodi(conn, v, ident, dan, d["along_m"], d["zadnja_ts"], along, t["ts"])
         d["zunaj"] = 0
         conn.execute(
@@ -975,6 +1004,32 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
             "stanje": stanje(conn, [trip_id], zdaj).get(trip_id)}
 
 
+def _odmaknjen(conn: sqlite3.Connection, ident: str, odmik: float,
+               acc: float | None) -> bool:
+    """Ali se je potnik, medtem ko vozilo stoji, odmaknil od trase vstran.
+
+    Merilo je prva natančna točka sedanjega stanja -- za zadnjim odsekom, na
+    katerem se je vozilo peljalo. Vlak na stranskem tiru je od trase lahko
+    tudi 60 m, a ves postanek enako daleč.
+    """
+    if acc is None or acc > VSTRAN_M:
+        return False
+    tocke = conn.execute(
+        "SELECT ts, along_m, odmik_m, natancnost_m FROM deljenje_tocka "
+        "WHERE deljenje = ? ORDER BY ts DESC LIMIT 400", (ident,)).fetchall()
+    stanje = tocke[:1]
+    for nova, stara in zip(tocke, tocke[1:]):
+        if (nova["along_m"] - stara["along_m"]) / max(nova["ts"] - stara["ts"], 1) >= VOZI_MS:
+            break
+        stanje.append(stara)
+    natancne = [t for t in stanje
+                if t["natancnost_m"] is not None and t["natancnost_m"] <= VSTRAN_M]
+    if not natancne:
+        return False
+    ref = natancne[-1]
+    return abs(odmik - ref["odmik_m"]) > VSTRAN_M + acc + ref["natancnost_m"]
+
+
 def _prehodi(conn: sqlite3.Connection, v: Voznja, ident: str, dan: str,
              a0: float, t0: int, a1: float, t1: int) -> None:
     """Zapiše prihode in odhode na postaje, ki jih je vozilo prečkalo.
@@ -983,9 +1038,10 @@ def _prehodi(conn: sqlite3.Connection, v: Voznja, ident: str, dan: str,
     trenutek, ko to razdaljo zapusti na drugi strani. Čas je linearno
     vmesen med točkama; pri točkah na 10 s je to napaka nekaj sekund.
     Odhod je zato nekoliko pozen (vlak še pospešuje) -- surove točke so
-    shranjene, da se to lahko kdaj popravi.
+    shranjene, da se to lahko kdaj popravi. Čez rob, ki ga je potnik prehodil
+    (`VOZI_MS`), vozilo ni ne prišlo ne odpeljalo.
     """
-    if a1 <= a0:
+    if a1 <= a0 or (a1 - a0) / max(t1 - t0, 1) < VOZI_MS:
         return
     r = v.na_postaji_m
 
@@ -1086,6 +1142,9 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
             "lat": glavna["lat"], "lon": glavna["lon"],
             "along_m": round(along),
             "stoji": stoji,
+            # Okno vožnje z njo pomika vlak med poročili (`ocenjenaLega`).
+            "hitrost_ms": (None if glavna["hitrost_ms"] is None
+                           else round(glavna["hitrost_ms"], 1)),
             "zamuda_s": zamuda,
             "zamuda": stats.opis_zamude(zamuda, "po poročilu potnikov"),
             **_kje(v, along),

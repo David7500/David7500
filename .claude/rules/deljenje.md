@@ -13,11 +13,12 @@ Potnik na vozilu deli lego; drugi vidijo, kje je vozilo. Razlog: `docs/MERITVE.m
 
 ## Kaj se pokaže (odločil David, 25. 9. 2026)
 
-* **En poročevalec: feed IN poročilo**, vsak s svojo oznako. Tabla in iskalnik: vrstica „potnik na vozilu: …“; okno vožnje: okvir s poročilom; zemljevid: vlak na potnikovi legi; kartica: obe vrstici. Feedova zamuda, ura in `nepotrjen_do` ostanejo.
+* **En poročevalec: feed IN poročilo**, vsak s svojo oznako. Tabla in iskalnik: vrstica „potnik na vozilu: …“; okno vožnje: okvir s poročilom; kartica: obe vrstici. Feedova zamuda, ura in `nepotrjen_do` ostanejo.
+* **Lega na zemljevidu samo ob soglasju dveh** (odločil David, 1. 10. 2026): veliki zemljevid vlak postavi na potnikovo lego, okno vožnje odpre mali zemljevid „Kje je zdaj“. En sam je lahko že izstopil in čaka na peronu ob progi; iz njegove lege tega ne ločimo od vlaka, ki res stoji. Prvi teden ni bilo nobenega para (`docs/MERITVE.md`, „Prva prava deljenja“).
 * **Dva ali več, ki se ujemata: feed ni več potreben.** `deljenje.dopolni()` zamenja zamudo, pričakovano uro in `nepotrjen_do` (vrsta „po poročilu potnikov“); okno vožnje premakne mejo meritve do zadnje postaje, ki sta jo potnika prevozila (`mimo_seq`); napoved za naprej teče od njune lege (`common.fetchRunAndForecast`).
 * **Ujemanje po zamudi, ne po legi** (`SOGLASJE_S`, 2 min): dve točki iz različnih trenutkov sta na različnih krajih, izpeljana zamuda pa ista.
 * **Samo dokler so poročila sveža** (`SVEZE_S`, 120 s) **in deljenje teče** (`konec IS NULL`). Prehodi so opažanja in veljajo ves dan, tudi ko je poročevalec izstopil.
-* **En pošiljatelj = en poročevalec.** Kdor na isti vožnji začne znova (osvežena stran, izgubljen odgovor na prvo pošiljanje), konča prejšnje deljenje (`konec = 'potnik'`); sicer bi en telefon dal soglasje dveh. Preslikava pošiljatelj → deljenje samo v pomnilniku.
+* **En pošiljatelj = en poročevalec.** Kdor na isti vožnji začne znova (osvežena stran, izgubljen odgovor na prvo pošiljanje), konča prejšnje deljenje (`konec = 'znova'`, od 1. 10. 2026; prej `potnik` kot gumb Ustavi in se ni dalo ločiti); sicer bi en telefon dal soglasje dveh. Preslikava pošiljatelj → deljenje samo v pomnilniku. Pošiljatelj = naslov, za CGNAT si ga deli več ljudi: `znova`, medtem ko staro deljenje še pošilja, je lahko drug potnik na istem vlaku.
 
 ## Kaj se hrani
 
@@ -26,7 +27,7 @@ Točke **projicirane na traso** (`deljenje_tocka`: razdalja vzdolž, odmik, čas
 ## Varovalke
 
 API nima avtentikacije. Zato:
-deljenje se začne samo za vožnjo, ki ta hip lahko je tu (isto pravilo kot kandidati); vsaka točka ≤ 200 m od trase, hitrost ≤ 250 km/h; tri zaporedne natančne točke izven trase = izstop; točke z natančnostjo slabšo od 250 m se preskočijo (predor ni izstop). Omejitve na pošiljatelja so v pomnilniku kot v `stik.py`, dnevni strop čez vse v bazi; urna omejitev šteje samo deljenja, ki so se začela (zavrnjen začetek je pri slabem GPS pogost, ključ si za CGNAT deli veliko ljudi). `Content-Type: application/json` obvezen, da brskalnik pred tujo zahtevo vpraša CORS (dovoli samo GET).
+deljenje se začne samo za vožnjo, ki ta hip lahko je tu (isto pravilo kot kandidati); vsaka točka ≤ 200 m od trase, hitrost ≤ 250 km/h; tri zaporedne natančne točke izven trase **ali odmaknjene vstran, medtem ko vozilo stoji** (`VSTRAN_M`: izstopivši potnik je sicer 10 minut „stal“ 150–185 m od proge kot vlak z rastočo zamudo) = izstop; prehod čez rob postaje samo, če se je potnik čez rob peljal (`VOZI_MS`), ne prehodil; točke z natančnostjo slabšo od 250 m se preskočijo (predor ni izstop). Omejitve na pošiljatelja so v pomnilniku kot v `stik.py`, dnevni strop čez vse v bazi; urna omejitev šteje samo deljenja, ki so se začela (zavrnjen začetek je pri slabem GPS pogost, ključ si za CGNAT deli veliko ljudi). `Content-Type: application/json` obvezen, da brskalnik pred tujo zahtevo vpraša CORS (dovoli samo GET).
 
 ## Kandidati
 

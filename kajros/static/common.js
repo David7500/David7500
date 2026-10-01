@@ -231,6 +231,13 @@ function potnikov(n) {
   return `${n} potnikov`;
 }
 
+// Glagol se ujema s številom: "2 potnika delita", "3 potniki delijo",
+// "5 potnikov deli".
+function deliGlagol(n) {
+  const d = n % 100;
+  return d === 2 ? "delita" : d === 3 || d === 4 ? "delijo" : "deli";
+}
+
 function pluralRuns(n) {
   if (!n) return "brez zajete vožnje";
   if (n === 1) return "1 vožnja";

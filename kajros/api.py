@@ -2419,8 +2419,9 @@ def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
     """Vlakom pripiše lego, ki jo pravkar deli potnik na njem.
 
     Vlak nima GPS-a in zemljevid ga riše na zadnji postaji z meritvijo. Kadar
-    kdo na njem deli lego, je ta boljša -- a zamuda na kartici ostane feedova,
-    dokler se poročevalca ne ujemata dva (glej `deljenje`).
+    kdo na njem deli lego, kartica to pove; na potnikovo lego pa ga zemljevid
+    postavi šele, ko se ujemata dva (`soglasje`) -- en sam je lahko že
+    izstopil in čaka na peronu. Do takrat ostane tudi zamuda feedova.
 
     Vrne nov seznam: `rows` so iz predpomnilnika in jih ne smemo spreminjati.
     """

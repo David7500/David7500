@@ -114,6 +114,7 @@ def test_deljenje_zapise_prehod_in_zamudo(conn):
     assert r["konec"] is None and r["sprejetih"] == 2
     assert r["stanje"]["pri"] == "Bled"
     assert r["stanje"]["zamuda_s"] == 180
+    assert r["stanje"]["hitrost_ms"] == 0
     # Odpelje in gre čez rob postaje: zapiše se odhod.
     z2 = zdaj + timedelta(seconds=60)
     r = _deli(conn, z2, _tocka(8.5, z2), ident=r["deljenje"])
@@ -186,6 +187,60 @@ def test_prihod_na_cilj_konca_deljenje(conn):
     assert r["konec"] == "cilj"
 
 
+def _stoji_v_bledu(conn, zdaj):
+    """Vlak stoji v Bledu; vrne odgovor na drugo točko."""
+    _deli(conn, zdaj - timedelta(seconds=20), _tocka(7.72, zdaj - timedelta(seconds=20), v=0))
+    ident = conn.execute("SELECT id FROM deljenje").fetchone()[0]
+    return _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), ident=ident)
+
+
+def _vstran(km: float, metrov: float, zdaj: datetime, acc: float = 10) -> dict:
+    return {"lat": LAT + metrov / 111195, "lon": _lon(km), "acc": acc,
+            "t": zdaj.timestamp() * 1000, "v": 0}
+
+
+def test_potnik_odide_s_postaje_je_izstop(conn):
+    """Izstopil je in čaka ob progi: 100 m vstran je še pod mejo izven trase,
+    a vlak, ki stoji, se vstran ne premika."""
+    zdaj = _ob("10:14")
+    r = _stoji_v_bledu(conn, zdaj)
+    for i in range(1, 4):
+        z = zdaj + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _vstran(7.72, 100, z), ident=r["deljenje"])
+    assert r["konec"] == "izstop" and r["sprejetih"] == 0
+
+
+def test_premik_vstran_v_meji_natancnosti_ni_izstop(conn):
+    zdaj = _ob("10:14")
+    r = _stoji_v_bledu(conn, zdaj)
+    for i in range(1, 4):
+        z = zdaj + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _vstran(7.72, 30, z), ident=r["deljenje"])
+    assert r["konec"] is None and r["sprejetih"] == 1
+
+
+def test_nenatancen_skok_vstran_med_stanjem_ni_izstop(conn):
+    """Točka ±200 m je na vlaku, ki je stal, skočila 150 m vstran (LPV 2010)."""
+    zdaj = _ob("10:14")
+    r = _stoji_v_bledu(conn, zdaj)
+    for i in range(1, 4):
+        z = zdaj + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _vstran(7.72, 150, z, acc=200), ident=r["deljenje"])
+    assert r["konec"] is None
+
+
+def test_hoja_cez_rob_postaje_ni_odhod(conn):
+    """Potnik je izstopil in hodi po peronu vzdolž proge (RG 318, Ljubljana):
+    rob postaje prečka peš, vlak pa ni odpeljal."""
+    zdaj = _ob("10:14")
+    r = _stoji_v_bledu(conn, zdaj)
+    for i in range(1, 16):
+        z = zdaj + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _tocka(7.72 + 0.018 * i, z, v=1.5), ident=r["deljenje"])
+    assert r["sprejetih"] == 1
+    assert 2 not in r["stanje"]["prehodi"]
+
+
 # ------------------------------------------------------------ soglasje
 
 def test_en_porocevalec_ni_soglasje(conn):
@@ -221,7 +276,7 @@ def test_isti_posiljatelj_znova_ni_drugi_porocevalec(conn):
     assert st["n"] == 1 and st["soglasje"] is False
     konec = conn.execute("SELECT konec FROM deljenje WHERE id = ?",
                          (prvo["deljenje"],)).fetchone()[0]
-    assert konec == "potnik"
+    assert konec == "znova"
 
 
 def test_zavrnjen_zacetek_ne_porabi_omejitve(conn):

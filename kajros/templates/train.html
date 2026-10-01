@@ -58,9 +58,10 @@
       <div class="section-title">Ta vožnja</div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
-      <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo GPS lego
-           -- vlaki je nimajo nikoli in zanje ta okvir ne obstaja. MapLibre se
-           zato prinese sele takrat in ne obtezi vsake strani z vlakom. -->
+      <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo lego:
+           GPS ali vsaj dva potnika, ki na njem delita lego in se ujemata.
+           Vlaki GPS-a nimajo, zato je zanje okvir redek. MapLibre se zato
+           prinese sele takrat in ne obtezi vsake strani z vlakom. -->
       <div id="run-map-wrap" class="run-map-wrap" hidden>
         <div class="run-map-head">
           <span class="run-map-title">Kje je zdaj</span>
@@ -98,7 +99,7 @@
         </div>
         <p class="run-map-me" id="run-map-me-line" hidden></p>
         <p class="run-map-key">
-          <span class="key-dot"></span> zadnja izmerjena lega ·
+          <span class="key-dot"></span> <span id="run-map-key-meritev">zadnja izmerjena lega</span> ·
           <span class="key-bus"></span> ocena trenutne lege — <strong>približna</strong>
         </p>
       </div>

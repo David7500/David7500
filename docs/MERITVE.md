@@ -2042,3 +2042,40 @@ Komentar pod objavo na Facebooku: „za vlak lahko spremljaš, kje je tisti mome
 Kolena ni: kar ostane od blizu (pri z17 še 11 % medkrajevnih brez LPP primestnih), so avtobusi, ki stojijo na postajah in obračališčih, in se prekrivajo pri vsakem približku. Zato je prag postavljen pri **isti gneči za oba (61 %)** — mestni od z12 (`MESTNI_OD`), ostali od z9 (`AVTOBUSI_OD`) — in preverjen na posnetku vrha prek CDP: pri z9 se medkrajevna vozila zunaj avtobusnih postaj ločijo, mestni LPP je pri z11 v središču Ljubljane še en madež, pri z12 posamezna vozila. Pogled cele Slovenije je na telefonu ~z7,5 (brez avtobusov, opomba „Avtobusi se pokažejo, ko približaš.“), na namizju 1850 × 1000 ~z9,3 (medkrajevni vidni, mestni ne).
 
 Ključi shrambe so novi (`kajros:map-avtobus-*`), zapiše se samo stikalo, ki ga človek prestavi. Povezava iz okna vožnje nosi `trip`: zemljevid prižge plast tega prevoznika samo za ta ogled in odpre kartico vozila.
+
+## Prva prava deljenja lege: izstop, prehod peš, drsenje vlaka (1. 10. 2026)
+
+Od objave (25. 9.) do 1. 10. 2026 na produkciji **12 deljenj**: 7 na avtobusih (3 vožnje, ~6 min točk), 5 na vlakih (4 vožnje, ~51 min). **Dva potnika hkrati na isti vožnji: nikoli** (0 prekrivajočih se parov). Točke na 3–15 s.
+
+| vožnja | trajanje | točk | konec | zamuda po potniku | feed ob istem času |
+|---|---|---|---|---|---|
+| A6335 (Arriva) | 21 s | 7 | utihnil | +749 do +755 s | +754 s |
+| N6224 (Nomago), petkrat znova | 45 min | 83 | potnik ×4, utihnil | +7 do +706 s | ni meritve do 17:54 |
+| LP 3163 | 1 točka | 1 | utihnil | +209 s | +240 s |
+| LPV 2221 | 2 min | 25 | potnik | +96 do +49 s | 0 (zadnji podatek 14 min star) |
+| N0175 (Nomago) | 0 | 0 | utihnil | — | — |
+| RG 318 | 12 min | 145 | izstop | +1 502 do +1 667 s | +1 260 s, nato skače |
+| LPV 2010 | 37 min | 149 | izstop | +45 do +810 s | 0 do +240 s |
+
+Kjer je feed imel svežo meritev, se potnik z njim ujema na pol minute (A6335, LP 3163); kjer je feed star ali ga ni, je potnik edini vir (N6224, LPV 2221, RG 318).
+
+**Izstopivši potnik je „stal“ kot vlak.** LPV 2010: potnik je izstopil v Kresnicah ob 13:19, deljenje se je ustavilo šele ob 13:29. Vmes je bil 105–185 m od proge, pod mejo izven trase (`ODMIK_MAX_M` 200 m), in vsaka taka točka je števec izstopa vrnila na nič; ker je stal, je zamuda rasla do +810 s, vlak pa je bil že v Savi z +240 s. RG 318 enako v Ljubljani: hoja po peronu od ~08:06, izstop ob 08:10. Zato:
+
+* **Odmik vstran med stanjem = izstop** (`deljenje.VSTRAN_M` = 40 m + obe natančnosti, samo točke z natančnostjo do 40 m). Vlak, ki stoji, se vstran ne premika. Ponovitev shranjenih točk: na vozilu do meje najmanj 16 m (RG 318 v Ljubljani pred hojo, LPV 2010 v Ljubljani Polje in Zalogu, N6224 v Vipavi in Postojni); izstop RG 318 ob 08:07:43 namesto 08:10:18, LPV 2010 iz shranjenih točk ob 13:28, v resnici prej, ker take točke števca ne vrnejo več na nič (zavrnjenih točk ne hranimo). Točka ±200 m je na vlaku, ki je stal v Zalogu, skočila 150 m vstran — zato samo natančne.
+* **Prehod samo, če se je čez rob postaje peljal** (`VOZI_MS` = 3 m/s hitrosti odseka). Pravi prehodi 4,6–22,5 m/s (13), lažni 1,8 m/s: RG 318 je v Ljubljani „odpeljal“ ob 08:08:13, ko je potnik hodil po peronu.
+* **Na zemljevidih lega po potnikih samo ob soglasju dveh** (odločil David, 1. 10. 2026): izstopivšega, ki čaka na peronu blizu proge, iz njegove lege ne ločimo od vlaka, ki res stoji.
+
+**Ponoven začetek se ni ločil od gumba Ustavi** — oboje `konec = 'potnik'`. Potnik N6224 je v 45 min začel petkrat; RG 318 dobil drugo deljenje 7 s po prvem, z istega naslova in na isti legi (en človek dvakrat ali dva za istim CGNAT — ni se dalo vedeti). Od zdaj `znova`.
+
+**N0175:** začetek sprejet (meja `KANDIDAT_ODMIK_M` + natančnost), prva točka pa zavrnjena (`ODMIK_MAX_M`) — potnik je videl „Pošiljam prvo lego …“ in odšel. Postaje so od trase do 10 m, trasa je dobra; potnik je bil 12 min po voznorednem prihodu na cilj več kot 200 m od proge. En primer, vzrok neznan, ni popravljeno.
+
+**Drsenje vlaka med poročili** (okno vožnje, `ocenjenaLega`): napaka proti legi, ki jo je potnik poslal pozneje, na točkah LPV 2010, RG 318 in LPV 2221 (rep po izstopu izločen):
+
+| starost poročila | pika na zadnjem poročilu | drsi, postanek 15 s | drsi, postanek 45 s |
+|---|---|---|---|
+| 15 s (n = 273) | 122 m | 14 m | 14 m |
+| 30 s (256) | 244 m | 31 m | 31 m |
+| 60 s (235) | 482 m | 79 m | 61 m |
+| 120 s (202) | 950 m | 354 m | 192 m |
+
+Mediane. Vlak zato drsi s 45 s postanka (`POSTANEK_VLAK_S`), avtobus ostane pri 15 s.
