@@ -78,6 +78,8 @@ kajros/
   markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
   stik.py        sporočila obiskovalcev; piše iz zahteve
   obvestila.py   obvestila skrbnika potnikom: vsako z rokom in omrežjem
+  zdravje.py     kdaj je zajem zdrav: barve v /admin, ista pravila za pošto
+  opozorila.py   pošta skrbniku, ko je kaj rdeče 10 min; `${DATA_DIR}/.opozorila`
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*

@@ -409,53 +409,16 @@ function vedraObdobja(o) {
 /** Zdravje zajema in stroja kot vrstice s piko stanja. */
 function vrsticeZdravja(d) {
   const z = d.zdravje || {}, m = d.stroj || {}, mreze = z.by_network || {};
+  // Barve računa strežnik (`zdravje.ocena()`), ker ista pravila pošiljajo
+  // opozorila po pošti -- dve kopiji mej bi se razšli.
+  const r = d.razredi || {};
   const zdaj = Date.now() / 1000;
-  // Ista meja kot v nogi potniških strani (`common.FEED_STALE_S`): zajem
-  // bere vsakih 30 s, zato je 90 s že tretji zgrešeni obhod.
-  const feed = !z.last_feed_ts || zdaj - z.last_feed_ts > FEED_STALE_S ? "je-slaba" : "je-dobra";
-  // Po omrežjih je `/api/health` predpomnjen do 10 min, zato meja 20 min --
-  // sicer bi predpomnilnik sam prižgal rdečo.
-  const omr = (ts) => !ts ? "je-slaba" : zdaj - ts < 1200 ? "je-dobra" : zdaj - ts < 3600 ? "je-mlacna" : "je-slaba";
   const disk = m.disk_vseh ? m.disk_prostih / m.disk_vseh : null;
-  const diskR = disk == null ? "" : disk < 0.08 ? "je-slaba" : disk < 0.2 ? "je-mlacna" : "je-dobra";
   const zel = mreze.zeleznica || {}, bus = mreze.avtobus || {}, sen = z.senca || {};
-  // Vožnje iz feeda, ki jih vozni red ne pozna, zajem zavrže. 22. 9. 2026 jih
-  // je bilo 16 od 662 (2,4 %) -- tri linije LPP brez vsake zamude; ostanek
-  // po popravku na arwenu 5 od 538 (0,9 %).
-  //
-  // Rdeče šele pri vsaj treh vožnjah IN 2 %, kot spodaj pri legi. 28. 9. 2026
-  // ob 23:42 je bila vsa stran rdeča zaradi ene same vožnje: Nomagov N0152,
-  // nagrobnik brez voznega reda, ki ga feed še nosi -- 1 od 29, ker ponoči
-  // vozi malo voženj. Podnevi bi bila ista vožnja 1 od ~600.
   const nez = Object.entries(z.rt_neznanih || {});
-  const nezSlabo = nez.some(([, [n, vseh]]) => n >= 3 && vseh && n / vseh >= 0.02);
-  const nezR = !nez.length ? "" : nezSlabo ? "je-slaba"
-    : nez.some(([, [n]]) => n > 0) ? "je-mlacna" : "je-dobra";
-  // Obratno: vozilo vozi in ima lego, feed zamud pa ga ne nosi. Od 21. do
-  // 25. 9. 2026 ~430 Nomagovih voženj na dan, števec zgoraj pa zelen. Na
-  // vožnjah, ki jih feed nosi, je bilo takih 0 od 295. Trojka je [ne v feedu,
-  // brez zamude, vseh]: `iz_lege` vrzel zapolni, zato je napaka vira rumena,
-  // rdeče pa je šele to, kar vidi potnik -- vozilo brez vsake zamude.
-  //
-  // Rdeče šele pri vsaj treh vozilih IN 5 % prevoznika. Po zapolnitvi ostane
-  // nekaj voženj, ki so odpeljale pozno in še niso prevozile drugega
-  // postanka (izhodišča `iz_lege` ne meri): 25. 9. po objavi Nomago 1-2 od
-  // ~100, takoj po restartu 5 od 104 (4,8 %), preden je `iz_lege` dohitel.
-  // Samo z deležem 2 % je bila vrstica -- in s tem vsa stran -- rdeča zaradi
-  // dveh avtobusov. Pred zapolnitvijo je bilo 8 od 91 (8,8 %).
   const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
-  const lbzSlabo = lbz.some(([, [, nz, vseh]]) => nz >= 3 && vseh && nz / vseh >= 0.05);
-  const lbzR = !z.lega_brez_zamude ? "" : lbzSlabo ? "je-slaba" : lbz.length ? "je-mlacna" : "je-dobra";
-  // Dva vira zamud vlakov (`zamude_sz`). 28. 9. 2026 je derp.si z voznim
-  // redom DUJPP izgubil vse vlake, zemljevid SŽ jih je imel. Rumeno, kadar
-  // manjka eden od virov -- zamude so, a le iz enega; kadar ni nobenega,
-  // je rdeča že vrstica „vlaki · zadnji zapis“. Nit bere vsako minuto, zato
-  // je vir po petih minutah brez odgovora obstal.
   const zs = z.zamude_sz;
-  const zsStoji = zs && (!zs.ts || zdaj - zs.ts > 300);
-  const zsEden = zs && !zsStoji && !zs.oba && (zs.samo_sz || zs.samo_derp);
-  const zsR = !zs ? "" : zsStoji || zsEden ? "je-mlacna" : zs.oba ? "je-dobra" : "";
-  const zsVr = !zs ? "—" : zsStoji
+  const zsVr = !zs ? "—" : !zs.ts || zdaj - zs.ts > 300
     ? `zemljevid SŽ ne odgovarja ${pred(zs.napaka_ts || zs.ts)}${zs.napaka ? `: ${zs.napaka}` : ""}`
     : `oba ${st(zs.oba)} · samo SŽ ${st(zs.samo_sz)} · samo derp ${st(zs.samo_derp)}`
       + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : "");
@@ -464,24 +427,25 @@ function vrsticeZdravja(d) {
   const prVr = !pr || !pr.parov ? "—"
     : `${st(100 * pr.v_minuti / pr.parov)} % v minuti od ${st(pr.parov)} · nad 5 min ${st(pr.nad_5_min)}`;
   return [
-    ["zadnja zamuda iz feeda", pred(z.last_feed_ts), feed],
-    ["vlaki · zadnji zapis", pred(zel.last_feed_ts), omr(zel.last_feed_ts)],
-    ["avtobusi · zadnji zapis", pred(bus.last_feed_ts), omr(bus.last_feed_ts)],
+    ["zadnja zamuda iz feeda", pred(z.last_feed_ts), r.feed || ""],
+    ["vlaki · zadnji zapis", pred(zel.last_feed_ts), r.zeleznica || ""],
+    ["avtobusi · zadnji zapis", pred(bus.last_feed_ts), r.avtobus || ""],
     ["vozil z lego", st(z.vehicles_with_gps), ""],
     ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`, ""],
     ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`, ""],
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—",
-      nezR],
+      r.neznane || ""],
     ["vozila brez feeda zamud",
       lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
         `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : "—",
-      lbzR],
-    ["vlaki · vira zamud", zsVr, zsR],
+      r.lega_brez_zamude || ""],
+    ["vlaki · vira zamud", zsVr, r.zamude_sz || ""],
     ["ujemanje virov · 24 h", prVr, ""],
     ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
     ["aktivnih obvestil", st(z.alerts_active), ""],
-    ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, diskR],
+    ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, r.disk || ""],
+    ["WAL", bajti(m.wal_bajtov), r.wal || ""],
     ["baza", bajti(z.db_bytes), ""],
     ["zajetih dni", st(z.days_covered), ""],
     ["strežnik teče", trajanje(m.teka_s), ""],

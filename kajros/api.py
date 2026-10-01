@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import shutil
 import threading
 import time
 import warnings
@@ -30,7 +29,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
-               naslovi, obisk, obvestila, peroni, pot, pristanek, stats, stik)
+               naslovi, obisk, obvestila, peroni, pot, pristanek, stats, stik,
+               zdravje)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -2781,13 +2781,15 @@ def admin_podatki(request: Request,
                             "najdaljse": obvestila.NAJDALJSE,
                             "najdlje_dni": obvestila.NAJDLJE_S // 86400}
     out["zdravje"] = api_health()
-    raba = shutil.disk_usage(config.DATA_DIR)
     out["stroj"] = {
-        "disk_prostih": raba.free, "disk_vseh": raba.total,
+        **zdravje.stroj(),
         "zagon_ts": int(_ZAGON_TS), "teka_s": int(time.time() - _ZAGON_TS),
         "razlicica": app.version,
         "obisk_od": obisk.IZPRAZNI_S,
     }
+    # Barve vrstic iz `zdravje.ocena()`, ne iz prikaza: ista pravila berejo
+    # opozorila po pošti.
+    out["razredi"] = {k: r for k, (r, _) in zdravje.ocena(out["zdravje"], out["stroj"]).items()}
     return out
 
 

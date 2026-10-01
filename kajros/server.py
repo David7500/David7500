@@ -15,8 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, peroni,
-               stats, stik, weather, zamude_sz)
+from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, opozorila,
+               peroni, stats, stik, weather, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -255,6 +255,16 @@ def _zazeni_zamude_sz() -> threading.Thread | None:
                            name="kajros-zamude-sz")
     nit.start()
     return nit
+
+
+def _zazeni_opozorila() -> None:
+    """Pošta skrbniku, ko je v `/admin` kaj rdeče -- samo na strežniku, ker
+    `/api/health` je del njega."""
+    def beri():
+        from . import api
+        return api.api_health()
+    threading.Thread(target=opozorila.teci, args=(_stop, _log, beri), daemon=True,
+                     name="kajros-opozorila").start()
 
 
 def _next_at(hour: int, minute: int) -> datetime:
@@ -567,6 +577,7 @@ async def lifespan(app):
         _log(_describe(settings))
         peroni_nit = _zazeni_perone()
         sz_nit = _zazeni_zamude_sz()
+        _zazeni_opozorila()
     else:
         peroni_nit = sz_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
