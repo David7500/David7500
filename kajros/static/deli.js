@@ -18,8 +18,9 @@
   if (!el) return;
 
   //: Kako pogosto stran poslje nabrane tocke. Tocka pa se nabere ob vsakem
-  //: popravku GPS -- posiljanje v paketih ne izgubi natancnosti.
-  const POSLJI_MS = 10000;
+  //: popravku GPS -- posiljanje v paketih ne izgubi natancnosti. Toliko kot
+  //: mali zemljevid v oknu voznje vprasa (`deljenje.POSILJANJE_S`).
+  const POSLJI_MS = 5000;
   //: Najmanjsi razmik tock; streznik gostejsih ne sprejme (`RAZMIK_S`).
   const RAZMIK_MS = 3000;
   //: Druga lega za smer: toliko casa ali toliko metrov po prvi.

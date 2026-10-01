@@ -1701,6 +1701,35 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     return out
 
 
+#: Kako pogosto okno vožnje vpraša po vozilu, ki lege nima ne od GPS ne od
+#: potnikov. Toliko kot vožnja sama (`RUN_POLL_MS` v train.js): vlak je tak
+#: skoraj vedno, poizvedba na 10 s bi bila za vsakega gledalca zastonj.
+BREZ_LEGE_CEZ_S = 30
+
+
+def _vozilo_po_potnikih(conn, trip_id: str, zdaj: datetime) -> dict | None:
+    """Lega vozila brez GPS po potnikih na njem, v obliki vrstice GPS.
+
+    Samo ob soglasju dveh: en sam je lahko že izstopil in čaka na peronu,
+    vozilo pa bi stalo tam z njim (odločil David, 1. 10. 2026). Lega je že
+    na trasi (`deljenje.stanje`), smeri ni -- okno vožnje jo vzame iz trase.
+    """
+    st = deljenje.stanje(conn, [trip_id], zdaj).get(trip_id)
+    if not st or st.get("lat") is None or not st["soglasje"]:
+        return None
+    t = conn.execute("SELECT train_no, mode, agency, headsign, network FROM trip "
+                     "WHERE trip_id = ?", (trip_id,)).fetchone()
+    if t is None:
+        return None
+    hitrost = 0.0 if st["stoji"] else st.get("hitrost_ms")
+    return {**dict(t), "trip_id": trip_id, "service_date": st["service_date"],
+            "lat": st["lat"], "lon": st["lon"], "bearing": None,
+            "speed_ms": hitrost,
+            "speed_kmh": None if hitrost is None else round(hitrost * 3.6),
+            "age_s": st["starost_s"], "delay_s": st["zamuda_s"],
+            "vir": "potniki", "potnikov": st["n"]}
+
+
 @app.get("/api/vehicles")
 def api_vehicles(trip: str | None = None):
     """Trenutna lega vozil z GPS.
@@ -1710,6 +1739,8 @@ def api_vehicles(trip: str | None = None):
     zadnja postaja z meritvijo, ne položaj.
 
     `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
+    Vožnja brez GPS dobi tu lego potnikov na njej, kadar se ujemata dva
+    (`vir: "potniki"`) -- mali zemljevid jo bere isto kot GPS, na 5 s.
 
     Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
     Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
@@ -1737,6 +1768,17 @@ def api_vehicles(trip: str | None = None):
     cez = config.POSITION_SECONDS
     if brano:
         cez = max(1, config.POSITION_SECONDS - (now - int(brano)))
+    if trip is not None and not out:
+        with _conn() as conn:
+            v = _vozilo_po_potnikih(conn, trip, zdaj)
+            if v is not None:
+                out.append(v)
+                cez = deljenje.POSILJANJE_S
+            else:
+                omrezje = conn.execute("SELECT network FROM trip WHERE trip_id = ?",
+                                       (trip,)).fetchone()
+                if omrezje and omrezje["network"] == "zeleznica":
+                    cez = BREZ_LEGE_CEZ_S
     return JSONResponse(out, headers={"X-Osvezi-Cez": str(cez)})
 
 
@@ -2667,7 +2709,7 @@ def _live_predpomnjen(network: str | None) -> list[dict]:
     """
     rows = _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
-    # Potnik deli lego na 10 s, predpomnilnik pa živi do naslednjega branja
+    # Potnik deli lego na 5 s, predpomnilnik pa živi do naslednjega branja
     # zamud (do 60 s) -- zato gre potnik zraven šele tu, mimo njega.
     if config.DELI and network != "avtobus":
         with _conn() as conn:
@@ -2799,7 +2841,7 @@ def admin_deljenje(request: Request):
     """Vozila, na katerih potniki danes delijo lego -- zavihek „Deljenje“.
 
     Svoj endpoint in ne del `/admin/podatki`: tisti je v ritmu minute, ker
-    gredo števci v bazo na 60 s, lega poročevalca pa se spremeni na 10 s.
+    gredo števci v bazo na 60 s, lega poročevalca pa se spremeni na 5 s.
     """
     _preveri_admina(request)
     with _conn() as conn:

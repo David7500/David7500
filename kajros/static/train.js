@@ -2276,14 +2276,11 @@ function loadPosition() {
   // Lega obstaja samo za tekoci dan; za ogled preteklega dne je vprasanje
   // "kje je zdaj" brez pomena.
   if (state.run.service_date !== todayIso()) return;
-  if (runMap.vir !== "gps") pokaziPotnike();
-  // Vozila zeleznice (tudi nadomestni avtobusi) v legah feeda niso nikoli:
-  // 1. 10. 2026 v `vehicle_now` 671 vozil, vsa z omrezja avtobus. Poizvedba
-  // na 10 s bi bila za vsakega gledalca vlaka zastonj.
-  if (state.network === "zeleznica") return;
   // Prej se je lega nalozila ENKRAT in nikoli vec: kdor je okno pustil odprto,
   // je gledal, kje je bil avtobus ob odprtju strani. Prav tu je vprasanje
-  // "kje je zdaj" najbolj neposredno, zato se osvezuje v koraku s strezbo.
+  // "kje je zdaj" najbolj neposredno, zato se osvezuje v koraku s strezbo:
+  // ritem pove streznik (`X-Osvezi-Cez`) -- GPS na 10 s, potniki na 5 s,
+  // vlak brez potnikov na 30 s.
   // **Ena zanka na vožnjo, ne ena na osvežitev.** `loadPosition` se klice iz
   // `loadRun`, ta pa tece vsakih 30 s -- brez te varovalke je stran po desetih
   // minutah imela dvajset vzporednih poizvedb po legi, vsaka na ~10 s.
@@ -2291,41 +2288,24 @@ function loadPosition() {
   if (runMap.poll) runMap.poll.stop();
   runMap.pollTrip = trip;
   runMap.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
-    if (!list.length) return;
-    runMap.vir = "gps";
-    drawRunMap(list[0]);
+    const v = list[0];
+    if (v) {
+      runMap.vir = v.vir === "potniki" ? "potniki" : "gps";
+      drawRunMap(v);
+    } else if (runMap.vir === "potniki") {
+      skrijRunMap();
+    }
   });
 }
 
 // Vozilo brez GPS (vlak, ~10 % avtobusov) ima lego samo od potnikov na njem,
-// in to le, kadar se ujemata vsaj dva. En sam je lahko že izstopil in čaka
-// na peronu -- videti bi bilo, kot da vozilo tam stoji, in tega iz njegove
-// lege ne ločimo od vlaka, ki res stoji (odločil David, 1. 10. 2026). Lega
-// pride z vožnjo (`loadRun`, na 30 s) in med poročili drsi po trasi:
-// izmerjeno 1. 10. 2026 na 273 točkah treh deljenj na vlakih, napaka po
-// 30 s mediana 31 m proti 244 m za pikom na zadnjem poročilu, po 60 s
-// 61 m proti 482 m (z `POSTANEK_VLAK_S`).
-function voziloPoPotnikih() {
-  const p = state.run && state.run.potniki;
-  if (!p || p.lat == null || !p.soglasje) return null;
-  const hitrost = p.stoji ? 0 : p.hitrost_ms;
-  return {
-    trip_id: state.run.trip_id, lat: p.lat, lon: p.lon, age_s: p.starost_s,
-    speed_ms: hitrost, speed_kmh: hitrost == null ? null : Math.round(hitrost * 3.6),
-    potnikov: p.n,
-  };
-}
-
-function pokaziPotnike() {
-  const v = voziloPoPotnikih();
-  if (v) {
-    runMap.vir = "potniki";
-    drawRunMap(v);
-    return;
-  }
-  if (runMap.vir !== "potniki") return;
-  // Poročila so zastarala ali se ne ujemajo več. Vlak na legi izpred petih
-  // minut bi trdil, da je tam, zato okvir izgine.
+// in to le, kadar se ujemata vsaj dva (`api._vozilo_po_potnikih`). Med
+// poročili drsi po trasi: izmerjeno 1. 10. 2026 na 273 točkah treh deljenj na
+// vlakih, napaka po 30 s mediana 31 m proti 244 m za piko na zadnjem
+// poročilu, po 60 s 61 m proti 482 m (z `POSTANEK_VLAK_S`). Ko se poročila
+// postarajo ali razidejo, okvir izgine: vlak na legi izpred petih minut bi
+// trdil, da je tam. GPS avtobusa pa ostane na zadnji legi, kot je bil.
+function skrijRunMap() {
   runMap.vir = null;
   runMap.v = null;
   setMapMax(false);

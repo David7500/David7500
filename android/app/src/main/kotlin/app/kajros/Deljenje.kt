@@ -14,8 +14,12 @@ object Deljenje {
 
     /** Najmanjsi razmik tock; streznik gostejsih ne sprejme (`RAZMIK_S`). */
     const val RAZMIK_MS = 3_000L
-    /** Kako pogosto se nabrane tocke poslje. Streznik jih sprejme 60 naenkrat. */
-    const val POSLJI_MS = 10_000L
+    /**
+     * Kako pogosto se nabrane tocke poslje. Streznik jih sprejme 60 naenkrat.
+     * Toliko kot mali zemljevid v oknu voznje vprasa (`deljenje.POSILJANJE_S`);
+     * do 1.3 je bilo 10 s.
+     */
+    const val POSLJI_MS = 5_000L
     /**
      * Najvec tock v vrsti brez povezave. V predoru ali med postajami brez
      * signala se nabirajo; ko zveza pride, gredo vse -- a ne vec kot streznik

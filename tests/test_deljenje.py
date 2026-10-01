@@ -445,7 +445,7 @@ def test_odsek_trase_se_prelomi_na_vrzeli():
 
 
 def test_potnik_na_zivih_ne_spremeni_predpomnjenih_vrstic(monkeypatch):
-    """Žive vožnje so predpomnjene do 60 s, potnik pa pošilja na 10 s: potnik
+    """Žive vožnje so predpomnjene do 60 s, potnik pa pošilja na 5 s: potnik
     gre zraven ob vsakem branju, predpomnjena vrstica ostane brez njega."""
     from kajros import api
     vrstice = [{"trip_id": "t1", "network": "zeleznica", "service_date": "D"},
@@ -503,3 +503,17 @@ def test_vlak_na_koncni_stoji(conn):
     p = api._na_postaji(conn, _vrstica(3), 37300)
     assert p["ime"] == "Celje" and p["koncna"]
     assert p["smer"] == pytest.approx(90, abs=1)
+
+
+def test_vozilo_po_potnikih_samo_ob_soglasju(conn):
+    """Mali zemljevid v oknu vožnje: en potnik je lahko že izstopil in čaka
+    na peronu, zato lega šele od dveh, ki se ujemata."""
+    from kajros import api
+    zdaj = _ob("10:14")
+    _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), kljuc="a")
+    assert api._vozilo_po_potnikih(conn, "t1", zdaj) is None
+    _deli(conn, zdaj, _tocka(7.80, zdaj, v=0), kljuc="b")
+    v = api._vozilo_po_potnikih(conn, "t1", zdaj)
+    assert v["vir"] == "potniki" and v["potnikov"] == 2
+    assert v["train_no"] == "LP 1" and v["speed_ms"] == 0 and v["age_s"] == 0
+    assert v["lat"] == pytest.approx(LAT, abs=1e-4)

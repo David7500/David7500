@@ -51,9 +51,13 @@ from . import config, db, geo, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
-#: Poročilo, starejše od tega, ne opisuje več, kje je vozilo zdaj. Brskalnik
-#: in Android pošiljata na 10 s (`deli.js`, `Deljenje.POSLJI_MS`); dve
-#: zamujeni pošiljanji še nista konec.
+#: Kako pogosto odjemalca pošiljata točke (`deli.js`, `Deljenje.POSLJI_MS`).
+#: Bilo je 10 s; na 5 s od 1. 10. 2026, da mali zemljevid, ki vpraša na
+#: toliko, kaže lego, staro povprečno 5 s namesto 20 s. Točke se nabirajo
+#: gosteje (brskalnik na 3 s, Android na 5 s), pošiljanje jih le pobere.
+POSILJANJE_S = 5
+#: Poročilo, starejše od tega, ne opisuje več, kje je vozilo zdaj. To je 24
+#: zamujenih pošiljanj: dovolj za krajši predor, ne za potnika, ki je nehal.
 SVEZE_S = 120
 
 #: Koliko sta lahko dve poročili narazen, da se „ujemata“. Primerjamo zamudo
@@ -129,8 +133,9 @@ KANDIDATOV = 5
 #: Omejitve pogostosti na pošiljatelja (v pomnilniku, glej `stik.py`).
 KANDIDATI_NA_MINUTO = 20
 DELJENJ_NA_URO = 12
-#: Dnevna stropa čez vse. Deljenje na 10 s je 360 točk na uro; tristo
-#: potnikov po uro je 108 000. Strop je trikrat to.
+#: Dnevna stropa čez vse. Točke pridejo na 3--5 s (brskalnik na 3, Android
+#: na 5; izmerjeno na prvih deljenjih), torej 720--1 200 na uro: strop je
+#: ~300 potnikovih ur na dan.
 TOCK_NA_DAN = 350_000
 DELJENJ_NA_DAN = 3000
 #: Točk v eni zahtevi. Android jih pošlje več naenkrat, kadar je bil brez
@@ -1037,7 +1042,7 @@ def _prehodi(conn: sqlite3.Connection, v: Voznja, ident: str, dan: str,
 
     Prihod je trenutek, ko vozilo pride na `NA_POSTAJI_M` od postaje, odhod
     trenutek, ko to razdaljo zapusti na drugi strani. Čas je linearno
-    vmesen med točkama; pri točkah na 10 s je to napaka nekaj sekund.
+    vmesen med točkama; pri točkah na 3--5 s je to napaka nekaj sekund.
     Odhod je zato nekoliko pozen (vlak še pospešuje) -- surove točke so
     shranjene, da se to lahko kdaj popravi. Čez rob, ki ga je potnik prehodil
     (`VOZI_MS`), vozilo ni ne prišlo ne odpeljalo.
