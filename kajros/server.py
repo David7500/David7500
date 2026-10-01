@@ -222,6 +222,7 @@ def _obisk_worker() -> None:
             try:
                 obisk.izprazni(conn)
             except Exception as exc:      # noqa: BLE001 -- statistika ni kriticna
+                conn.rollback()           # glej `_worker`
                 _log(f"števcev obiska ni bilo mogoče zapisati: {exc}")
     finally:
         try:
@@ -310,6 +311,10 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Prvič takoj -- prvi obiskovalec po zagonu je sicer tisti, ki plača.
     next_health = 0.0
 
+    # Vsak `except` spodaj najprej `conn.rollback()`: napaka sredi pisanja
+    # pusti transakcijo odprto, prvo branje v njej zamrzne posnetek in vsako
+    # nadaljnje pisanje vrne „database is locked“ -- za vedno, WAL pa raste,
+    # ker ga za tem posnetkom ni mogoče prepisati. Glej `zamude_sz.teci()`.
     while not _stop.is_set():
         started = time.monotonic()
         if started >= next_trips:
@@ -329,6 +334,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"POZOR: feed poroča {info['non_scheduled']} zapisov, "
                          f"ki niso 'SCHEDULED' (odpoved ali izpuščen postanek)")
             except Exception as exc:        # feed občasno resetira povezavo
+                conn.rollback()
                 _log(f"zajem ni uspel: {exc}")
 
         if started >= next_positions:
@@ -336,6 +342,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             try:
                 collector.poll_positions(conn)
             except Exception as exc:      # lega ni kriticna za zajem zamud
+                conn.rollback()
                 _log(f"lege vozil ni bilo mogoče pobrati: {exc}")
 
         # Mestni LPP je drug vir in en sam feed za zamude, lege in obvestila.
@@ -348,6 +355,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"LPP: {info['trips']} voženj, {info['changed']} sprememb, "
                          f"{info.get('vehicles', 0)} leg")
             except Exception as exc:
+                conn.rollback()
                 _log(f"zajem LPP ni uspel: {exc}")
 
         if started >= next_ocena:
@@ -358,6 +366,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"ocena: {info['zapisanih']} novih napovedi, "
                          f"{info['resenih']} razrešenih")
             except Exception as exc:      # merjenje ni kriticno za zajem
+                conn.rollback()
                 _log(f"ocene napovedi ni bilo mogoče posneti: {exc}")
 
         if started >= next_health:
@@ -376,6 +385,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"obvestila: {info['alerts']} zapisov, "
                          f"{info['changed']} novih poročil o zamudi")
             except Exception as exc:      # obvestila niso kriticna za zajem
+                conn.rollback()
                 _log(f"obvestil ni bilo mogoče pobrati: {exc}")
 
         if next_refresh and datetime.now(TZ) >= next_refresh:
@@ -383,6 +393,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             try:
                 refresh_timetable(conn, refresh_mode)
             except Exception as exc:
+                conn.rollback()
                 _log(f"osvežitev voznega reda ni uspela: {exc}")
 
         if next_weather and datetime.now(TZ) >= next_weather:
@@ -391,6 +402,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 info = weather.backfill(conn, days=3)
                 _log(f"vreme: {info['rows']} vrstic za {info['cells']} celic")
             except Exception as exc:      # vreme ni kriticno -- zajem tece naprej
+                conn.rollback()
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
 
         # Nocno vzdrzevanje: obrez dnevnika in razrezi statistike. Prej je bilo
@@ -407,6 +419,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"dnevnik obrezan: {info['rail_deleted']} železniških, "
                          f"{info['bus_deleted']} avtobusnih vrstic")
             except Exception as exc:
+                conn.rollback()
                 _log(f"dnevnika ni bilo mogoče obrezati: {exc}")
 
             try:
@@ -414,6 +427,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 if n:
                     _log(f"merjenje napovedi obrezano: {n} vrstic")
             except Exception as exc:
+                conn.rollback()
                 _log(f"merjenja napovedi ni bilo mogoče obrezati: {exc}")
 
             # Samo na strezniku: tabel obiska na malini ni, ker tam ni komu
@@ -424,6 +438,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     if n:
                         _log(f"števci obiska obrezani: {n} vrstic")
                 except Exception as exc:
+                    conn.rollback()
                     _log(f"števcev obiska ni bilo mogoče obrezati: {exc}")
 
             # Razrezi cez vso zgodovino. Pri letu zajema je to agregat cez 12
@@ -439,6 +454,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"povzetki osveženi: {len(done)} razrezov, "
                          f"najdlje {worst / 1000:.1f} s")
                 except Exception as exc:  # statistika ni kriticna za zajem
+                    conn.rollback()
                     _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
 
         # Spimo do PRVEGA naslednjega opravila, ne fiksen tik. Prej je bil

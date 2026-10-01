@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import sqlite3
+import threading
 from datetime import date
 
 import pytest
@@ -118,3 +120,52 @@ def test_vlak_samo_pri_derp_se_steje():
     c = _baza()
     iz_lege.zabelezi_feed(["t1"], zdaj=ZDAJ)
     assert zamude_sz.zapisi(c, [], ZDAJ, {"t1", "t2"})["samo_derp"] == 1
+
+
+def test_nit_po_zaklenjeni_bazi_ne_obstane(tmp_path, monkeypatch):
+    """1. 10. 2026: nočno vzdrževanje je drlo pisanje dlje od čakanja, nit je
+    ostala v napol odprti transakciji z zamrznjenim posnetkom in nato 4 h na
+    vsako pisanje dobivala „database is locked“, WAL pa je rasel."""
+    pot = tmp_path / "k.sqlite"
+    c = db.connect(pot)
+    db.init(c)
+    c.commit()
+    pravi = db.connect
+
+    def hitra(path=None):
+        conn = pravi(pot)
+        conn.execute("PRAGMA busy_timeout = 50")
+        return conn
+
+    monkeypatch.setattr(db, "connect", hitra)
+    monkeypatch.setattr(iz_lege, "feed_prebran", lambda: True)
+    monkeypatch.setattr(zamude_sz, "_get", lambda: [])
+    monkeypatch.setattr(zamude_sz.config, "SZ_ZAMUDE_SECONDS", 0)
+
+    # Drugi pisec iz glavne niti, korak pa ga sprosti iz zajemne.
+    vzdrzevanje = sqlite3.connect(pot, timeout=0.05, check_same_thread=False)
+    vzdrzevanje.execute("BEGIN IMMEDIATE")
+    vzdrzevanje.execute("INSERT INTO meta(key, value) VALUES('vzdrzevanje', '1')")
+    stop, uspelih, klicev = threading.Event(), [], []
+
+    def korak(conn, vrstice, zdaj):
+        klicev.append(1)
+        if len(klicev) == 2:
+            # Vzdrževanje konča, zajem medtem zapiše svoje.
+            vzdrzevanje.commit()
+            vzdrzevanje.execute("INSERT INTO meta(key, value) VALUES('zajem', '1')")
+            vzdrzevanje.commit()
+        db.get_meta(conn, "zamude_sz")
+        db.set_meta(conn, "zamude_sz", '{"ts": 1}')
+        conn.commit()
+        uspelih.append(len(klicev))
+        stop.set()
+        return {"vlakov": 0, "oba": 0, "samo_sz": 0, "samo_derp": 0, "nepripetih": 0}
+
+    monkeypatch.setattr(zamude_sz, "korak", korak)
+    nit = threading.Thread(target=zamude_sz.teci, args=(stop, lambda _: None))
+    nit.start()
+    nit.join(5)
+    stop.set()
+    nit.join()
+    assert uspelih, f"po {len(klicev)} poskusih nit še vedno ne more pisati"

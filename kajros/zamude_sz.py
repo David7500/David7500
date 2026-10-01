@@ -254,6 +254,14 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                         f"{s['oba']} v obeh, {s['samo_sz']} samo SŽ, "
                         f"{s['samo_derp']} samo derp.si, {s['nepripetih']} nepripetih)")
             except Exception as exc:        # noqa: BLE001 -- vir ni naš
+                # Brez tega je nit obstala za vedno. 1. 10. 2026 ob 3:30 je
+                # nočno vzdrževanje drlo pisanje dlje od 30 s, `korak` je
+                # odnehal sredi transakcije, `get_meta` spodaj je v njej
+                # zamrznil posnetek in vsako nadaljnje pisanje je vrnilo
+                # „database is locked“ (SQLITE_BUSY_SNAPSHOT, čakanje ne
+                # pomaga). Zemljevid SŽ 4 h brez zapisa, WAL zrasel na 5,4 GB,
+                # ker ga za odprtim posnetkom ni mogoče prepisati.
+                conn.rollback()
                 napak += 1
                 if napak == 1:
                     log(f"zemljevid SŽ ne odgovarja: {exc}")
@@ -265,7 +273,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                     db.set_meta(conn, "zamude_sz", json.dumps(s, sort_keys=True))
                     conn.commit()
                 except sqlite3.Error:
-                    pass
+                    conn.rollback()
             stop.wait(config.SZ_ZAMUDE_SECONDS)
     finally:
         conn.close()

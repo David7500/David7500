@@ -178,6 +178,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                     log(f"peroni: {n} postaj SŽ; tabla velikih vsakih {OBHOD_S // 60} min,"
                         f" majhnih najdlje {NAJDLJE_S // 3600} h")
                 except Exception as exc:    # noqa: BLE001 -- vir ni naš
+                    conn.rollback()            # glej `zamude_sz.teci()`
                     log(f"peroni: seznama postaj ni bilo mogoče dobiti: {exc}")
                     seznam_do = zdaj + 600
             odlozene = {st: do for st, do in odlozene.items() if do > zdaj}
@@ -193,6 +194,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                     log(f"peroni: vir spet odgovarja (po {napak} napakah)")
                 napak = 0
             except Exception as exc:        # noqa: BLE001
+                conn.rollback()            # glej `zamude_sz.teci()`
                 odlozene[p["st"]] = zdaj + PO_NAPAKI_S
                 napak += 1
                 if napak == 1:
