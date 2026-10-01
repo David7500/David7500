@@ -230,3 +230,7 @@ Izmerjeno 28. 9. 2026, 08:59–09:08, 17 branj po 30 s:
 * Odgovor se spremeni ~vsako minuto (9 različnih v 17 branjih). Zamuda se med odsekom lahko popravi (10 od 556 zaporednih parov) — vrstica v `sz_zamuda` in `run` drži zadnjo, kot pri derp.si.
 
 **Kam gre:** vsaka pripeta vrednost v `sz_zamuda` (zadnje stanje na postanek). V `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`, ista meja kot zamuda iz lege) — tedaj `v_run = 1`. Kadar nosita oba, `run` ostane derp.si-jev in `kajros primerjava` / pregled („ujemanje virov · 24 h“) pokažeta razhajanja. **Kdo ima prav, še ni odločeno**: primerjav do objave ni bilo, ker derp.si vlakov ni imel. Nit čaka, da zajem derp.si prebere feed (`iz_lege.feed_prebran`), sicer bi bil ob zagonu vsak vlak „samo SŽ“.
+
+## Napaka pisanja: najprej `conn.rollback()`
+
+Vsaka nit ima svojo povezavo in vsak `except` okoli pisanja najprej razveljavi. Python ob napaki transakcije ne zapre; prvo branje v njej zamrzne posnetek, nato vsako pisanje vrne „database is locked“ (SQLITE_BUSY_SNAPSHOT) — za vedno, čakanje ne pomaga. 1. 10. 2026 je nočno vzdrževanje ob 3:30 drlo pisanje dlje od 30 s: nit zemljevida SŽ stala 4,3 h, WAL zrasel na 5,4 GB (za odprtim posnetkom ga ni mogoče prepisati), disk na 8 %. Od takrat `journal_size_limit` 64 MB v `db.connect()`, da se WAL po ponastavitvi skrči. Preizkus: `test_nit_po_zaklenjeni_bazi_ne_obstane`.
