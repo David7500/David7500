@@ -2140,6 +2140,8 @@ Lastni OSRM z dvema profiloma (`deploy/osrm/avtobus.lua`, `tir.lua`), `/match` n
 | velikost: surove / pripete (poenostavljene na 2e-5°) | 10,9 MB / 25,4 MB |
 | gradnja avtobusnega OSRM (6 jeder) | 81 s, vrh 1,66 GB, 688 MB podatkov |
 | gradnja tirnega | 5 s, vrh 1,1 GB |
+| **arwen** (i5-6200U): prvi prehod ob objavi | 546 s, 2 878 tras in 387 odsekov |
+| arwen: avtobusni / tirni OSRM med tekom | 291 MB / 29 MB (peš 536 MB) |
 
 Prva različica je presojala cel matching naenkrat: en zgrešen konec (končno postajališče na dvorišču, ki ga OSM nima kot cesto) je zavrnil traso čez pol Slovenije, **994 od 2 667 avtobusnih tras ostalo surovih**. Po odsekih je delež pripete dolžine na prevoznika (mediana / p10): LPP primestni 0,999 / 0,93, Nomago 0,998 / 0,97, AP MS 1,0 / 0,95, Arriva 1,0 / 0,97, SŽ 1,0 / 0,94, mestni LPP 1,0 / 0,98.
 
