@@ -114,6 +114,8 @@ Drug vir za **isti** promet: `data.lpp.si` se spremeni na 10–30 s, derp.si na 
 
 Ob 22:15 od 25 svežih mestnih vozil **19 z uporabno napovedjo naprej**, meje so se ujemale (meja 9 → eta 10–27, meja 16 → eta 17–21) — najmočnejši dokaz pravega spoja: dva vira neodvisno povesta isto lego vozila.
 
+**Linija mimo voznega reda (`lpp.na_tablo`, od 2. 10. 2026).** Kadar zajem pri liniji LPP vidi vsaj 3 in vsaj 20 % voženj, ki jih vozni red nima (`zajem.md`), današnja tabla „zdaj“ za to linijo pokaže LPP-jev `station/arrival` namesto voznega reda — do zadnjega LPP-jevega prihoda, dlje ostane vozni red. Vrstica nima `trip_id` (vožnje v voznem redu ni, povezava bi odprla napačno), nima zamude, nosi `lpp_vrsta` (`type` po dokumentaciji LPP: napoved / po načrtu / prihaja / obvoz); odgovor nosi `mimo_voznega_reda`. Ob kakršni koli napaki vira ostane vozni red. Postajališče → LPP-jeva koda po koordinati (25 m), seznam postajališč predpomnjen dan, prihodi 15 s. Zemljevid dobi vozila teh voženj brez `trip_id`, z `vehicle_id` kot ključem.
+
 Izklop: `KAJROS_LPP_ZIVO=0`.
 
 ## Štetje obiska in pregled za skrbnika (`obisk.py`, `/admin`)

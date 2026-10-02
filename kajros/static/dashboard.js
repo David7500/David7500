@@ -451,8 +451,8 @@ function vehCardHtml(o) {
         <span class="veh-headsign">${escapeHtml(o.headsign || "")}</span>
       </div>
       <div class="veh-rows">${rows}</div>
-      <a class="veh-open" href="${o.href}" target="_blank" rel="noopener">
-        Odpri stran o vozilu →</a>
+      ${o.href ? `<a class="veh-open" href="${o.href}" target="_blank" rel="noopener">
+        Odpri stran o vozilu →</a>` : ""}
     </div>`;
 }
 
@@ -492,13 +492,17 @@ function busCardHtml(v) {
   // Zamuda in kraj morata biti iz istega vira: "+15 min" brez postaje, kjer
   // je bila izmerjena, je stevilka brez pomena, ce je vozilo od takrat ze
   // dalec naprej.
-  const rows = v.delay_s == null
+  // Brez `trip_id` je vožnja, ki je vozni red ne pozna (LPP ob zapori): ni
+  // ure, od katere bi merili zamudo, in ne strani, ki bi jo lahko odprli.
+  const rows = !v.trip_id
+    ? [["zamuda", "vožnje ni v voznem redu"]]
+    : v.delay_s == null
     ? [["zamuda", "ni meritve"]]
     : [["zamuda", delayText(v.delay_s), delayColor(v.delay_s)],
        ["zadnja meritev", escapeHtml(v.last_stop || "—")]];
   return vehCardHtml({
     no: agencyPrefix(v) + v.train_no, badge: "", headsign: v.headsign,
-    href: tripHref(v.train_no, v.trip_id, v.service_date, "avtobus"),
+    href: v.trip_id ? tripHref(v.train_no, v.trip_id, v.service_date, "avtobus") : null,
     rows: rows.concat([
       ["hitrost", v.speed_kmh == null ? "ni podatka"
         : v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji"],
@@ -720,7 +724,8 @@ const agencyKey = (v) => (v && v.agency === "lpp" ? "1118" : v && v.agency);
 // Plast avtobusa: prevoznik s svojim stikalom ali "drugi".
 const busGroup = (v) => (AGENCY_INK[agencyKey(v)] ? agencyKey(v) : "drugi");
 const busInk = (v) => AGENCY_INK[agencyKey(v)] || BUS_INK;
-const busKey = (v) => v.trip_id || `${v.train_no}:${v.lat},${v.lon}`;
+const busKey = (v) => v.trip_id
+  || (v.vehicle_id ? `v:${v.vehicle_id}` : `${v.train_no}:${v.lat},${v.lon}`);
 
 // Velikost sledi približevanju. Pri pogledu na vso Slovenijo je vozil do sto
 // in majhna oblika je edina, ki se ne slepi; ko kdo približa na eno ulico,
@@ -1454,7 +1459,7 @@ function renderFind() {
   const found = findMatches(q);
   for (const m of found) {
     m.key = m.kind === "postaja" ? `p:${m.s.n}`
-      : m.kind === "bus" ? `b:${m.v.trip_id || m.v.train_no}`
+      : m.kind === "bus" ? `b:${busKey(m.v)}`
       : `t:${m.v.trip_id || m.v.train_no}`;
   }
   findListEl.innerHTML = found.length
@@ -1547,7 +1552,8 @@ function focusVehicle(key) {
     const mk = stationMarkers.get(key);
     if (mk && vklop.train && !mk.getPopup().isOpen()) mk.togglePopup();
   }
-  drawStops(m.v.train_no, m.v.trip_id);
+  if (m.v.trip_id) drawStops(m.v.train_no, m.v.trip_id);
+  else pocistiTraso();    // vožnje ni v voznem redu, njenih postaj ne poznamo
   setSheet(false);        // naslednje, kar clovek hoce videti, je zemljevid
 }
 

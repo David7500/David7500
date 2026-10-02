@@ -733,9 +733,12 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
   const off = r.delay_s != null && Math.abs(r.delay_s) >= 60;
   const color = delayColor(r.zamuda);
   const cd = isNext && nowMs ? countdownLabel(r.expected || r.sched, nowMs) : "";
+  // Vrstica z LPP-jevega zaslona nima vožnje: tiste, ki ji pripada, v voznem
+  // redu ni, povezava na katero koli drugo pa bi odprla napačno.
+  const tag = r.trip_id ? "a" : "div";
   return `
-    <a class="board-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
-       href="${journeyHref(r.train_no, r.service_date || date, r.trip_id, station)}">
+    <${tag} class="board-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
+       ${r.trip_id ? `href="${journeyHref(r.train_no, r.service_date || date, r.trip_id, station)}"` : ""}>
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
         ${off ? `<div class="board-expected" style="color:${color}">${hhmm(r.expected)}</div>` : ""}
@@ -751,8 +754,8 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
           ? lineBadgeHtml(r) + " "
           : ""}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
       </div>
-      <div class="conn-delay">${r.zamuda
-        ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
+      <div class="conn-delay">${r.lpp_vrsta ? lppChipHtml(r.lpp_vrsta)
+        : r.zamuda ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}</div>
       <div class="board-meta">
         ${tirHtml(r.tir, r.tir_prej)}
@@ -761,7 +764,26 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
         ${potnikiHtml(r.potniki, r.network === "avtobus", prihodi)}
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
-    </a>`;
+    </${tag}>`;
+}
+
+// Ura je LPP-jeva, ne naša: zamude ni, ker ni voznega reda, od katerega bi jo
+// merili. Beseda pove, kako LPP do ure pride (`lpp.VRSTE`).
+function lppChipHtml(vrsta) {
+  return `<span class="chip chip-none">${escapeHtml(vrsta)}</span>
+    <div class="conn-where">po LPP</div>`;
+}
+
+// Zakaj so odhodi neke linije drugačni od ostalih: LPP jo danes vozi mimo
+// objavljenega voznega reda (zapora), zato so ure z njegovega zaslona.
+function mimoHtml(data) {
+  const l = data.mimo_voznega_reda || [];
+  if (!l.length) return "";
+  const imena = l.length === 1 ? l[0] : `${l.slice(0, -1).join(", ")} in ${l[l.length - 1]}`;
+  const [kdo, glagol] = l.length === 1 ? ["Linija", "ne vozi"]
+    : l.length === 2 ? ["Liniji", "ne vozita"] : ["Linije", "ne vozijo"];
+  return `<div class="note-partial">${kdo} <strong>${escapeHtml(imena)}</strong>
+    danes ${glagol} po voznem redu. Prihode kažemo, kot jih napove LPP.</div>`;
 }
 
 // Preklop smeri drzi vrednost v skritem polju, da ostane `.value` isti kot
@@ -958,7 +980,7 @@ function renderBoard(data) {
   }
   rows.push(...morda.map((r) => vrstica(r, false)));
   rows.push(...ahead.map((r, i) => vrstica(r, i === 0)));
-  resultsEl.innerHTML = mejaHtml(data) + smeriHtml(data) + rows.join("");
+  resultsEl.innerHTML = mejaHtml(data) + mimoHtml(data) + smeriHtml(data) + rows.join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }
 

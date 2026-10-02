@@ -1541,6 +1541,14 @@ def api_departures(
         if now_s is not None and config.DELI:
             deljenje.dopolni(conn, rows, seq="stop_seq", t_s="t_s",
                              pricakovano="expected", ura="sched", zdaj=now)
+        # Linije LPP, ki danes vozijo mimo voznega reda (zapora): njihovi
+        # odhodi so z LPP-jevega zaslona, ne iz voznega reda. Samo za "zdaj" --
+        # LPP napove uro naprej, ne izbrane ure zvečer.
+        mimo: list[str] = []
+        if network == "avtobus" and now_s is not None and not from_time:
+            rows, mimo = lpp.na_tablo(conn, rows, now, kind == "odhodi", exact)
+            for r in rows:
+                r.setdefault("smer", smer_od.get(r["stop_id"]))
         if network == "zeleznica":
             # Tir s table SZ (`peroni.py`). Kadar ga ni ali je star, ga ni.
             peroni.dopolni(conn, rows, lambda r: (r["train_no"], exact, r["sched"]))
@@ -1562,7 +1570,7 @@ def api_departures(
             "from_s": from_s, "window_min": window,
             "smeri": [{k: d[k] for k in ("kljuc", "naslednje", "odhodov")} for d in smeri],
             "smer": izbrana["kljuc"] if izbrana else None,
-            "board": rows, "alerts": notices}
+            "board": rows, "mimo_voznega_reda": mimo, "alerts": notices}
 
 
 @app.get("/api/alerts")
@@ -1724,7 +1732,24 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
         d["delay_s"] = m["delay_s"] if m else None
         d["last_stop"] = m["name"] if m else None
         d["measured_seq"] = m["stop_seq"] if m else None
-    return out
+    return out + _vozila_brez_voznje(conn, now)
+
+
+def _vozila_brez_voznje(conn, now: int) -> list[dict]:
+    """Avtobusi LPP na vožnjah, ki jih vozni red ne pozna.
+
+    Linija in smer sta iz vzorca proge, zamude ni (`collector._zapisi_brez_voznje`).
+    Brez tega je 2. 10. 2026 z zemljevida izginilo 15 od 16 vozil linije 1.
+    """
+    try:
+        zapis = json.loads(db.get_meta(conn, "lpp_vozila_brez_voznje") or "{}")
+    except ValueError:
+        return []
+    return [{**v, "trip_id": None, "service_date": None, "mode": "bus", "agency": "lpp",
+             "network": "avtobus", "delay_s": None, "last_stop": None, "measured_seq": None,
+             "speed_kmh": round(v["speed_ms"] * 3.6) if v.get("speed_ms") is not None else None}
+            for v in zapis.get("vozila") or []
+            if v.get("seen_ts", 0) >= now - collector.POSITION_FRESH_S]
 
 
 #: Kako pogosto okno vožnje vpraša po vozilu, ki lege nima ne od GPS ne od

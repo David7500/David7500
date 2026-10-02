@@ -423,12 +423,19 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     neznanih = 0
     zamenjanih = 0
     v_feedu: set[str] = set()
+    # Po progah, ker LPP včasih ne izgubi vožnje, ampak linijo: 2. 10. 2026
+    # je bilo 38 od 44 voženj linije 1 neznanih, liniji 11 in 27 pa 3 in 4.
+    proge: dict[str, list[int]] = {}
 
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
             continue            # LPP v isti feed da tudi lege in obvestila
         tu = entity.trip_update
         trip_id, zamenjava = nas_id(tu.trip.trip_id)
+        if vir == "lpp":
+            stevec = proge.setdefault(tu.trip.route_id, [0, 0])
+            stevec[0] += trip_id is None
+            stevec[1] += 1
         if trip_id is None:
             neznanih += 1
             continue
@@ -525,7 +532,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
-            "neznanih": neznanih, "zamenjanih": zamenjanih}
+            "neznanih": neznanih, "zamenjanih": zamenjanih, "proge": proge}
 
 
 def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
@@ -601,6 +608,55 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     return izid
 
 
+def _lpp_vzorci(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Vzorec proge (tretja komponenta id-ja) -> proga, linija in smer.
+
+    Vožnja, ki je vozni red ne pozna, ima vzorec iz njega: 2. 10. 2026 vseh
+    45 od 45. Linija in smer sta torej znani, ure pa ne.
+    """
+    def build():
+        out: dict[str, dict] = {}
+        for r in conn.execute("SELECT trip_id, route_id, train_no, headsign "
+                              "FROM trip WHERE agency = 'lpp'"):
+            out.setdefault(r["trip_id"].split("|")[-1], {
+                "route_id": r["route_id"], "train_no": r["train_no"],
+                "headsign": r["headsign"]})
+        return out
+    return _cached(conn, "lpp_vzorci", None, build)
+
+
+def _zapisi_brez_voznje(conn: sqlite3.Connection, proge: dict[str, list[int]],
+                        vozila: list[dict]) -> None:
+    """Linije in vozila mestnega LPP, ki vozijo mimo voznega reda, za prikaz.
+
+    LPP vožnje izda pod id-ji, ki jih objavljeni vozni red nima (1. 10. 2026
+    17 % voženj šestih linij, 2. 10. ob kolesarskem prvenstvu linija 1).
+    Zamude se jim ne da izračunati -- ni ure, od katere bi jo merili -- zato
+    v `run` ne gredo. Tabla zanje vpraša LPP (`lpp.na_tablo`), zemljevid pa
+    jih nariše brez zamude.
+    """
+    vzorci = _lpp_vzorci(conn)
+    linija = {v["route_id"]: v["train_no"] for v in vzorci.values()}
+    linije: dict[str, list[int]] = {}
+    for route_id, (n, vseh) in proge.items():
+        ime = linija.get(route_id)
+        if ime is not None and n:
+            stevec = linije.setdefault(ime, [0, 0])
+            stevec[0] += n
+            stevec[1] += vseh
+    zdaj = int(time.time())
+    db.set_meta(conn, "lpp_linije_brez_voznje",
+                json.dumps({"ts": zdaj, "linije": linije}, sort_keys=True))
+    out = []
+    for v in vozila:
+        p = vzorci.get(v.pop("trip_id").split("|")[-1])
+        if p is not None:
+            out.append({**v, "train_no": p["train_no"], "headsign": p["headsign"]})
+    db.set_meta(conn, "lpp_vozila_brez_voznje",
+                json.dumps({"ts": zdaj, "vozila": out}, ensure_ascii=False))
+    conn.commit()
+
+
 def poll_lpp(conn: sqlite3.Connection) -> dict:
     """Mestni LPP: **en feed za vse troje** -- zamude, lege in obvestila.
 
@@ -624,7 +680,9 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
         return {"trips": 0, "vehicles": 0, "unchanged": True}
     izid = ingest(conn, feed, vir="lpp")
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
-    lege = ingest_positions(conn, feed)
+    brez_voznje: list[dict] = []
+    lege = ingest_positions(conn, feed, brez_voznje)
+    _zapisi_brez_voznje(conn, izid.pop("proge"), brez_voznje)
     # Obvestila so v ISTEM feedu in jih doslej nismo brali -- 181 vrstic na
     # zajem v smeti. Zdruzena so v `alerts.ingest_lpp()`, ker jih feed poslje
     # na vozjno in ne na dogodek.
@@ -735,7 +793,8 @@ def rebuild_run(conn: sqlite3.Connection) -> dict:
 POSITION_FRESH_S = 180
 
 
-def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
+def ingest_positions(conn: sqlite3.Connection, feed,
+                     brez_voznje: list[dict] | None = None) -> dict:
     """Zapiše trenutno lego vozil.
 
     Feed `vehicle_positions` nosi **samo avtobuse** -- vlakov v njem ni. Za
@@ -744,6 +803,9 @@ def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
 
     Zgodovine ne vodimo. 130 vozil na 30 s je ~300 000 točk na dan, prikaz
     "kje je zdaj" pa rabi eno vrstico na vožnjo -- zato upsert.
+
+    Vozila na vožnjah, ki jih vozni red ne pozna, gredo v `brez_voznje`, če
+    je dan: v `vehicle_now` ne smejo, ker tam vse teče prek `JOIN trip`.
     """
     known = {r["trip_id"] for r in conn.execute("SELECT trip_id FROM trip")}
     windows = _rail_trip_windows(conn)
@@ -762,7 +824,16 @@ def ingest_positions(conn: sqlite3.Connection, feed) -> dict:
             trip_id = z[0]
             p = z[1].get(stop_seq)
             stop_seq = p[0] if p else None
-        if trip_id not in known or not v.HasField("position"):
+        if not v.HasField("position"):
+            continue
+        if trip_id not in known:
+            if brez_voznje is not None and trip_id:
+                brez_voznje.append({
+                    "trip_id": trip_id, "vehicle_id": v.vehicle.id or None,
+                    "seen_ts": v.timestamp or seen_at,
+                    "lat": v.position.latitude, "lon": v.position.longitude,
+                    "bearing": v.position.bearing if v.position.HasField("bearing") else None,
+                    "speed_ms": v.position.speed if v.position.HasField("speed") else None})
             continue
         day = v.trip.start_date or ""
         if len(day) == 8:

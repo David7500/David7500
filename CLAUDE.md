@@ -69,7 +69,7 @@ kajros/
   hoja.py        pešpoti in navodila iz lastnega OSRM; kolo = ista pot, 15 km/h
   naslovi.py     kazalo naslovov iz OSM -- lastno, ne tuji geokodirnik
   pristanek.py   pristajalne strani: katere relacije in postaje imajo naslov
-  lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz
+  lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz; tabla linij mimo voznega reda
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
