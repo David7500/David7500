@@ -370,8 +370,8 @@ templates.env.globals["pot_vozje"] = pristanek.pot_vozje
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
 templates.env.globals["baza"] = config.BASE_URL
-# Za skupno nogo (`_noga.html`), ki je v vsaki strani in ne sme zahtevati,
-# da ji vsak pogled posebej poda nastavitve.
+# Za meni Več (`_vec.html`), ki je v vsaki strani in ne sme zahtevati, da
+# mu vsak pogled posebej poda nastavitve.
 templates.env.globals["donacije"] = config.DONACIJE
 templates.env.globals["stik_obrazec"] = config.STIK_OBRAZEC
 templates.env.globals["deli"] = config.DELI
@@ -627,20 +627,46 @@ _SW_LUPINA = ("base.css", "pisave.css", "common.js", "home.css",
               "pisave/IBMPlexMono-400-latin.woff2",
               "pisave/IBMPlexMono-600-latin.woff2")
 
+#: Strani orodne vrstice, ki jih service worker streže iz predpomnilnika.
+#: Pogoj za vsako: v HTML ni nobenega podatka, ki se spreminja -- vse živo
+#: pride iz `/api/`. Pristajalne strani in okno vožnje (naslov z relacijo iz
+#: baze) zato niso med njimi.
+_SW_STRANI = ("/", "/app/train", "/app/bus", "/app/pot", "/app/map")
+
+
+def _odtis_aplikacije() -> list[str]:
+    """Odtisi vseh predlog in vse statike strani.
+
+    Lupine strani so v predpomnilniku telefona, zato mora vsaka sprememba
+    predloge ali skripte zamenjati različico service workerja -- ta ob
+    zamenjavi izprazni stare strani. Sicer bi potnik po objavi enkrat dobil
+    staro predlogo z novim `/api/`.
+    """
+    odtisi = []
+    for mapa, vzorec in ((_PKG_DIR / "templates", "*.html"),
+                         (_PKG_DIR / "static", "*.js"), (_PKG_DIR / "static", "*.css")):
+        for p in sorted(mapa.glob(vzorec)):
+            st = p.stat()
+            odtisi.append(_odtis(str(p), st.st_mtime_ns, st.st_size))
+    return odtisi
+
 
 @app.get("/sw.js", include_in_schema=False)
 def sw(request: Request):
     """Service worker. Stoji v korenu, ker mu pot določa doseg.
 
-    Vsebina nosi odtise statike, zato se ob objavi spremeni sama in brskalnik
-    to zazna kot novega delavca. Brez tega bi bilo treba različico vzdrževati
-    ročno in prva pozabljena bi obiskovalcem postregla staro aplikacijo.
+    Vsebina nosi odtise statike in predlog, zato se ob objavi spremeni sama in
+    brskalnik to zazna kot novega delavca. Brez tega bi bilo treba različico
+    vzdrževati ročno in prva pozabljena bi obiskovalcem postregla staro
+    aplikacijo.
     """
     lupina = ["/brez-omrezja"] + [s(f) for f in _SW_LUPINA]
     # Odtis celotne lupine: ena sama datoteka drugačna, in vse gre ven.
-    odtis = hashlib.blake2s(" ".join(lupina).encode(), digest_size=8).hexdigest()
+    odtis = hashlib.blake2s(" ".join(lupina + _odtis_aplikacije()).encode(),
+                            digest_size=8).hexdigest()
     return templates.TemplateResponse(
-        request, "sw.js", {"razlicica": odtis, "lupina": lupina},
+        request, "sw.js",
+        {"razlicica": odtis, "lupina": lupina, "lupine_strani": list(_SW_STRANI)},
         media_type="text/javascript",
         headers={"Cache-Control": "no-cache"})
 

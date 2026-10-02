@@ -140,20 +140,22 @@ Izbran na domači strani (osnutek G), razširjen na vse strani prek skupnih grad
 * Opozorila (ovire) so tonska rumena (`#2e2811`, besedilo `#f2d36b`), brez obrobe.
 * Obvestila kajrosa (`obvestila.py`) so tonska modra (`--m-info`): niso ne zamuda ne ovira prevoznika, povedo, da govorimo mi.
 * Zgornja vrstica v barvi strani, brez obrobe.
-* **Glavni meni = plavajoča orodna vrstica na dnu** (`_orodna.html`, vključi jo `_nav.html`, domača stran posebej): Domov, Vlaki, Avtobusi, Pot, Zemljevid. Izbrana je pilula z imenom v poudarku, ostale ikona. Vlaki | Avtobusi sta tu **namesto segmentnega gumba v glavi** — izbrana pilula pove omrežje enako na prvi pogled. V glavi ostanejo ovire (samo železnica). Okno vožnje ima izbrano omrežje vožnje (`here`).
+* **Glavni meni = plavajoča orodna vrstica na dnu** (`_orodna.html`, vključi jo `_nav.html`, domača stran posebej): Domov, Vlaki, Avtobusi, Pot, Zemljevid. Izbrana je pilula z imenom v poudarku, ostale ikona. Vlaki | Avtobusi sta tu **namesto segmentnega gumba v glavi** — izbrana pilula pove omrežje enako na prvi pogled. V glavi ostanejo ovire (samo železnica) in ⋮ za meni Več (`_vec.html`, `strani.md`). Okno vožnje ima izbrano omrežje vožnje (`here`).
   * Kar je pod njo, ima zadnjih `--orodna-prostor` pik praznih: drseče strani spodnji odmik (`.domov`, `.conn-page`, v oknu vožnje `.col` oziroma `.train-body` na telefonu); na zemljevidih jo nosi zemljevid, dvignejo se le gumbi MapLibra in opombe (`.label-note*` nad navedbo vira, sicer se prekrivata).
   * Odprta spodnja plošča zemljevida (z-index 1100) jo pokrije; pri vodenju po pešpoti (`body.vodenje`) je ni. **Vsak modalni sloj mora biti nad 1000**: list budilke je imel 60 in vrstica je pokrila gumb „Nastavi“ (prijava 28. 9. 2026).
   * `view-transition-name: orodna` jo pri prehodu med stranmi pusti na mestu.
-  * **Na domači strani je razprta** (`.orodna-domov`, 1. 10. 2026): Vlaki in Avtobusi kot pilula z imenom v barvi omrežja, ločilo, Pot, Zemljevid; Domova ni. Namesto dveh velikih gumbov na strani, glej `strani.md`. Ob prehodu na drugo stran se zaradi `view-transition-name` skrči na mestu.
+  * **Na domači strani je razprta** (1. 10. 2026): Vlaki in Avtobusi kot pilula z imenom v barvi omrežja (`.orodna-omr`), ločilo, Pot, Zemljevid; Domova ni. Namesto dveh velikih gumbov na strani, glej `strani.md`.
+  * **Okvir je na vseh straneh enak** (2. 10. 2026): `--orodna-sirina` = `min(380px, 100vw − 24px)`, višina 64, gumbi 48. Pilula z imenom vzame, kolikor rabi, ikone si razdelijo ostanek (`flex: 1 1 0`). Prej se je širina ravnala po imenu izbrane pilule (pri 412 pikah od 292 do 368) in domača je bila višja (76) — vrstica je ob vsakem prehodu skočila, prijavljeno kot neprofesionalno; pri 360 pikah je zemljevidna segla čez rob. Pod 401 piko se skrčijo odmiki pilul, pod 360 ostane v piluli samo ime. **Ne dajaj vrstici višine ali širine po strani.**
 
 ## Znak
 
-Monogram **K**: navpično steblo + dve roki iz iste točke. Siva roka = vozni red, poudarjena = resnica — ista misel kot ime (*chronos* proti *kairosu*).
+Ikona aplikacije: **K kot kazalca na številčnici**, siva roka = vozni red, oranžna = resnica (*chronos* proti *kairosu*), po oranžni pelje avtobus. Vir **`static/favicon.svg`** (podlaga in znak v ločenih skupinah); `scripts/naredi-ikone.sh` iz njega naredi PNG, Android ima isto risbo v `ikona_znak.xml` brez prelivov, stisnjeno na 75 %, da oznake ure ostanejo v varni coni adaptivne ikone.
 
-* **V glavi strani** (`brand-mark`): znak brez podlage, bere `currentColor`, zato na avtobusni strani pozeleni skupaj s poudarkom. Steblo in zgornja roka: `stroke-opacity="0.5"`. Ostal preprost, ker pri 20 px podrobnosti ikone ni videti.
-* **Kot ikona** bolj podroben (izbrano 14. 9. 2026, „K je preveč preprost"): K kot kazalca na številčnici z dvanajstimi oznakami, oranžna roka = cesta, po njej pelje avtobus. Vir **`static/favicon.svg`** (podlaga in znak v ločenih skupinah); `scripts/naredi-ikone.sh` iz njega naredi PNG, Android ima isto risbo v `ikona_znak.xml` brez prelivov, stisnjeno na 75 %, da oznake ure ostanejo v varni coni adaptivne ikone.
+* **V glavi strani je od 2. 10. 2026 ista ikona** (`_znak.html`, makro `znak(px, id)`), ne več monogram K brez podlage (3.–30. 9.): potnik ikono vidi na zaslonu telefona in v zavihku, v aplikaciji je bila druga. Glava 30 px, domača 38, meni Več 52.
+* **Pod 48 px brez drobnih oznak ure, črtkane ceste in oken avtobusa** — pri 30 px so manjše od pike in risbo zamažejo. Poti morajo ostati iste kot v `favicon.svg`; varuje `test_znak_je_ista_risba_kot_ikona`.
+* **`id` preliva mora biti na strani edinstven** (`<defs>`): glava in meni Več sta na isti strani, meni ima `zv`.
+* **Znak na avtobusni strani ne pozeleni več** (monogram je bral `currentColor`). Omrežje pove pilula v orodni vrstici in poudarek strani.
 * **V komentarju SVG in XML ni `--`.** Favicon z `--` v komentarju ni veljaven XML, brskalnik ga ne pokaže; aapt gradnjo ustavi.
-* **Vlakov znak ni več znamka.** Ostane samo kjer pomeni **omrežje**: preklop v glavi in izbira na domači strani. Znamka mora pokrivati oboje.
 * Znak mora zdržati **svetlo in temno podlago**. Prvi poskus monograma: belo steblo, na svetli podlagi izginilo; Android si ozadje določi sam.
 
 **Chromium ne more brati iz `/tmp`** (isti razlog, kot da tja ne more pisati). Prva različica ikon zato = posnetek njegove strani z napako, videti kot uspeh — datoteka obstajala, 200, prava velikost v bajtih. Razkril šele enak `md5` dveh različnih ikon. `naredi-ikone.sh` zato po vsaki sliki preveri **dejansko velikost slike**, ne le obstoja datoteke.
@@ -180,11 +182,12 @@ Ostalo razdeljeno po tem, kaj se sme postarati:
 | kaj | ravnanje | zakaj |
 |---|---|---|
 | `/static/*` | najprej predpomnilnik | naslov nosi odtis vsebine → nespremenljiv |
-| strani | najprej omrežje, predpomnilnik kot rezerva | vsebujejo tudi številke |
+| strani orodne vrstice (`/`, `/app/train`, `/app/bus`, `/app/pot`, `/app/map`) | najprej predpomnilnik, v ozadju omrežje | HTML brez številk, vse živo iz `/api/`; čakanje na HTML je bilo pol prehoda (MERITVE, 2. 10. 2026) |
+| ostale strani | najprej omrežje, predpomnilnik kot rezerva | vsebujejo tudi številke (pristajalne, okno vožnje z relacijo v naslovu) |
 | `/api/*`, `/admin` | delavec se jih ne dotakne | glej zgoraj |
 | tuji izvori (ploščice) | delavec se jih ne dotakne | niso naši |
 
-Različica predpomnilnika = **odtis celotne lupine**, ne ročna številka: `sw.js` se ob objavi spremeni sam, brskalnik to zazna kot novega delavca. Ročna številka bi bila prej ali slej pozabljena, obiskovalci bi dobivali staro aplikacijo. Naslovi statike nosijo odtis, zato se stari vnosi ne povozijo, ampak kopičijo — ob novi različici gredo vsi ven naenkrat.
+**Na seznam `api._SW_STRANI` sme samo stran, katere HTML ne nosi ničesar iz baze** — sicer bi potnik dobil staro številko iz predpomnilnika. Različica predpomnilnika = **odtis lupine in vseh predlog in statike** (`_odtis_aplikacije()`), ne ročna številka: `sw.js` se ob objavi spremeni sam, brskalnik to zazna kot novega delavca. Ročna številka bi bila prej ali slej pozabljena, obiskovalci bi dobivali staro aplikacijo. Naslovi statike nosijo odtis, zato se stari vnosi ne povozijo, ampak kopičijo — ob novi različici gredo vsi ven naenkrat.
 
 `/brez-omrezja` **namerno ne ponudi zadnjih znanih zamud.** Stran se pokaže v predoru in dvigalu, natanko kjer je stara številka videti sveža.
 

@@ -23,6 +23,7 @@
       Oznaka mora ostati, sicer Bing lastništvo prekliče. -#}
   <meta name="msvalidate.01" content="344789E7AA383B8CA7EB4D69CFFCA2F2">
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
@@ -49,8 +50,10 @@
       sicer predpomnilnik ne zadene. #}
   <main class="domov" data-vnaprej="{{ s('dashboard.js') }} {{ s('dashboard.css') }} {{ s('vozila3d.js') }} {{ s('podlaga.json') }} /static/maplibre-6.10.0/maplibre-gl.mjs /static/maplibre-6.10.0/maplibre-gl-shared.mjs /static/maplibre-6.10.0/maplibre-gl-worker.mjs /static/maplibre-6.10.0/maplibre-gl.css">
     <header class="d-glava">
-      {{ znak(22, "#f0934f") }}
+      {{ znak(38) }}
       <span>kajros</span>
+      <span class="d-razmik"></span>
+      {{ vec_gumb() }}
     </header>
     {#- Do 29. 9. 2026 stran ni imela naslova, besed „zamude“ in „vozni red“
         pa ni bilo nikjer v besedilu -- iskalnik je videl gumbe brez vsebine.
@@ -153,7 +156,6 @@
       {%- endif %}
     </div>
 
-    {% include "_noga.html" %}
   </main>
   {% set here = "domov" %}
   {% include "_orodna.html" %}
@@ -163,5 +165,6 @@
   {%- if deli %}
   <script src="{{ s('deli.js') }}"></script>
   {%- endif %}
+  {{ vec_list() }}
 </body>
 </html>

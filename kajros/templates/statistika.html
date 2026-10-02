@@ -13,6 +13,7 @@
   {% endif %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
   {#- Umaknjena 19. 9. 2026 do prenove: ni povezana od nikoder in ni v
       zemljevidu strani, zato je tudi iskalnik ne sme ponujati. #}
   <meta name="robots" content="noindex">
@@ -42,6 +43,7 @@
       <button type="button" data-mode="advanced" aria-pressed="false">napredno</button>
     </div>
     {% include "_nav.html" with context %}
+  {{ vec_gumb() }}
   </header>
 
   <main class="conn-main stat-main">
@@ -91,5 +93,6 @@
 
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('statistika.js') }}"></script>
+  {{ vec_list() }}
 </body>
 </html>

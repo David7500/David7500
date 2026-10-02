@@ -2079,3 +2079,21 @@ Kjer je feed imel svežo meritev, se potnik z njim ujema na pol minute (A6335, L
 | 120 s (202) | 950 m | 354 m | 192 m |
 
 Mediane. Vlak zato drsi s 45 s postanka (`POSTANEK_VLAK_S`), avtobus ostane pri 15 s.
+
+## Prehod po orodni vrstici: pol časa je bilo čakanje na HTML (2. 10. 2026)
+
+Prijava: „ko klikaš po orodni vrstici, traja do pol sekunde, da odpre stran -- v aplikaciji se vidi, da ni prava Android“. Merjeno prek CDP v chromiumu (412 px, `deviceScaleFactor` 2,6, procesor upočasnjen 4×), od klika na pilulo do prvega izrisa nove strani (`timeOrigin + FCP − čas klika`), 12 prehodov med petimi stranmi vrstice, toplo (statika in service worker že v predpomnilniku).
+
+| kje | HTML (TTFB) | klik → izris, mediana | max |
+|---|---|---|---|
+| `kajros.app` z domačega omrežja, kot doslej | 132 ms | FCP 300 ms | 588 ms |
+| lokalno prek posrednika z 100 ms zamika, kot doslej | 231 ms | 378 ms | 432 ms |
+| isto, lupine iz predpomnilnika | **20 ms** | **190 ms** | 423 ms (edini zgrešek: prva stran pred registracijo delavca) |
+
+Telefon na mobilnem omrežju ima daljši TTFB, zato je prihranek tam večji, ne manjši. Na telefonu samem ni izmerjeno.
+
+**Kar ostane (~190 ms), je izris, ne omrežje.** Sled ene navigacije (`/app/bus` → `/app/train`, lupina iz predpomnilnika): 65 ms do začetka razčlenjevanja HTML (odhod s stare strani, delavec, predpomnilnik), skripte 14 ms (`common.js` 4, `connections.js` 6), slog in postavitev prve slike ~30 ms, druga slika do FCP pri 155 ms. Nobenega posameznega velikega kosa.
+
+Spremembe: service worker strani orodne vrstice (`/`, `/app/train`, `/app/bus`, `/app/pot`, `/app/map`) streže iz predpomnilnika in jih v ozadju osveži (`api._SW_STRANI`). V njihovem HTML ni številk. Različica delavca nosi odtis vseh predlog in vse statike, zato objava predpomnjene lupine zamenja. Pilula se premakne ob dotiku (`common.js`), ne šele z novo stranjo; nazaj iz predpomnilnika strani (bfcache) je spet izbrana prava.
+
+**Brez strežnika** (posrednik ugasnjen): lupina se pokaže, pika o živosti siva, podatkov ni. Doslej enako ob padcu omrežja (najprej omrežje, nato predpomnilnik). Drugače je pri odgovoru 5xx s Cloudflara: prej je šel na stran in aplikacija je pokazala nativni zaslon napake, zdaj se pokaže lupina.

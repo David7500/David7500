@@ -21,9 +21,10 @@
   width: 100%; max-width: 560px; padding: 0 16px 36px;
 }
 .d-glava {
-  display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 4px;
+  display: flex; align-items: center; gap: 12px; height: 68px; padding: 0 0 0 2px;
   font: 600 24px/1 var(--sans); letter-spacing: -0.01em;
 }
+.d-razmik { flex-grow: 1; }
 .d-geslo { margin: -10px 4px 14px; font: 400 15px/1.35 var(--sans); color: var(--ink-dim); }
 
 /* ---------- budilka ----------
@@ -153,8 +154,11 @@
 
 .home { width: 100%; max-width: 660px; padding: 64px 22px 40px; }
 .home-head { margin-bottom: 40px; }
+/* Znamka levo, meni Več (`_vec.html`) desno -- glava besedilnih in
+   pristajalnih strani, ki orodne vrstice nimajo. */
+.home-vrh { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .home-brand {
-  display: flex; align-items: center; gap: 9px;
+  display: flex; align-items: center; gap: 10px;
   font: 600 17px/1 var(--mono); color: var(--ink);
 }
 .home-lead {
@@ -189,6 +193,5 @@
   .home-lead { font-size: 23px; margin-top: 24px; }
 }
 
-/* Orodna vrstica na dnu (base.css) ne sme pokriti noge; na domači strani
-   je razprta in 12 pik višja. */
-.domov { padding-bottom: calc(var(--orodna-prostor) + 12px); }
+/* Orodna vrstica na dnu (base.css) ne sme pokriti zadnje vrstice strani. */
+.domov { padding-bottom: var(--orodna-prostor); }

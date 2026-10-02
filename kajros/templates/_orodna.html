@@ -11,9 +11,8 @@
   Vlaki in Avtobusi sta pilula z imenom v barvi omrežja, namesto dveh velikih
   gumbov na strani, ki sta isti dve mesti ponavljala tik nad vrstico.
   Prijavljeno 1. 10.: začetna stran „preveč overwhelming“ -- ista izbira dvakrat
-  na enem zaslonu je bila del razloga. Domova tu ni, ker si že doma. Na vseh
-  drugih straneh je vrstica taka kot prej; `view-transition-name` jo ob
-  prehodu skrči na mestu.
+  na enem zaslonu je bila del razloga. Domova tu ni, ker si že doma. Okvir
+  (širina, višina) je povsod isti, drugačna je samo vsebina.
 
   `here` iz pogleda (api.py): iskalnik, avtobusi, pot, zemljevid, ovire, domov.
   Okno vožnje dobi iskalnik ali avtobusi, glede na omrežje vožnje.
@@ -29,7 +28,7 @@
    {%- if on %} aria-current="page"{% endif %}>{{ ikona }}<span>{{ ime }}</span></a>
 {%- endmacro %}
 {%- if _h == "domov" %}
-<nav class="orodna orodna-domov" aria-label="Glavni meni">
+<nav class="orodna" aria-label="Glavni meni">
   {{ _g("Vlaki", "/app/train", false, _vlak, "orodna-omr orodna-vlak") }}
   {{ _g("Avtobusi", "/app/bus", false, _bus, "orodna-omr orodna-bus") }}
   <span class="orodna-locilo" aria-hidden="true"></span>

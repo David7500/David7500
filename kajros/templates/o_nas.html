@@ -7,6 +7,7 @@
   {% set og_desc = "Kajros beleži, koliko slovenski vlaki in avtobusi res zamujajo: zamude v živo, vozni red in zgodovina zamud za vlake SŽ, medkrajevne avtobuse in mestni LPP." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
@@ -16,10 +17,13 @@
 <body class="home-page">
 
   <main class="home besedilo">
-    <a class="home-brand" href="/" style="text-decoration:none">
-      {{ znak(26, "#f0934f") }}
-      <span>kajros</span>
-    </a>
+    <div class="home-vrh">
+      <a class="home-brand" href="/" style="text-decoration:none">
+        {{ znak() }}
+        <span>kajros</span>
+      </a>
+      {{ vec_gumb() }}
+    </div>
 
     <h1>O nas</h1>
 
@@ -99,8 +103,8 @@
       <a href="mailto:{{ stik }}">{{ stik }}</a>.{% endif %}
     </p>
 
-    {% include "_noga.html" %}
   </main>
 
+  {{ vec_list() }}
 </body>
 </html>

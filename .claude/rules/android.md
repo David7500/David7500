@@ -15,7 +15,7 @@ Da aplikacija ni videti kot splet v ovoju (modri pritisk, obviseli `:hover`, sve
 | PWA | alarma ob določeni uri ne zna. `Notification Triggers` v Chromu preizkušen, **nikoli izdan**; `Periodic Background Sync` dela v urah, vezan na Chrome; Web Push gre skozi FCM (Google), zahteval bi buden strežnik |
 | TWA | zahteva Chrome kot ponudnika. Telefon = razgooglana Volla 22 s Fennecom — TWA bi pomenil namestiti Chromium |
 | GeckoView | most do JavaScripta moreč; `addJavascriptInterface` na WebView = ena vrstica. Odločilno to, ne hitrost |
-| service worker | David: „ne zaenkrat pač nič ne pokaže". Posledica: nedosegljivega strežnika ne pokrije splet — pokrije ga **nativni zaslon napake** |
+| service worker | David: „ne zaenkrat pač nič ne pokaže". Posledica: nedosegljivega strežnika ne pokrije splet — pokrije ga **nativni zaslon napake**. Izjema od 2. 10. 2026: strani orodne vrstice so iz predpomnilnika (hitrost), zato ob 5xx Cloudflara pokažejo lupino brez podatkov, ne zaslona napake |
 
 Razdeljevanje: **prenos s strani** `kajros.app/android`. Brez trgovine, brez Googlovega računa.
 

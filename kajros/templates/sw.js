@@ -23,6 +23,10 @@ const STRANI = `kajros-strani-${RAZLICICA}`;
 // strani, ki jih ta obiskovalec morda nikoli ne odpre.
 const LUPINA_FILE = {{ lupina | tojson }};
 
+// Strani orodne vrstice. Poizvedba (`?od=…&do=…`) lupine ne spremeni, bere
+// jo JS, zato je v predpomnilniku ena kopija na pot.
+const LUPINE_STRANI = {{ lupine_strani | tojson }};
+
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(LUPINA).then((c) => c.addAll(LUPINA_FILE))
                                 .then(() => self.skipWaiting()));
@@ -63,8 +67,34 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Strani: najprej omrežje, ker vsebujejo tudi številke. Predpomnilnik je
-  // rezerva za predor in dvigalo, ne vir resnice.
+  // Lupine aplikacije: najprej predpomnilnik, v ozadju omrežje. Te strani
+  // nimajo v HTML nobene številke -- vse, kar se spreminja, si JS pobere pod
+  // `/api/`, ki gre mimo tega delavca. Čakanje na strežnik pred izrisom je
+  // bilo samo čakanje: pri prehodu po orodni vrstici polovica časa od
+  // dotika do slike (izmerjeno 2. 10. 2026, glej MERITVE). Sveža lupina
+  // pride v predpomnilnik za naslednjič; nova različica predlog ali statike
+  // ga izprazni. `ignoreVary`, ker `/` nosi `Vary: Accept` (JSON za API), v
+  // predpomnilniku pa je samo HTML za navigacijo.
+  if (req.mode === "navigate" && LUPINE_STRANI.includes(url.pathname)) {
+    e.respondWith(caches.open(STRANI).then((c) => c
+      .match(req, { ignoreSearch: true, ignoreVary: true })
+      .then((zadetek) => {
+        const sveza = fetch(req).then((odgovor) => {
+          if (odgovor.ok) c.put(url.pathname, odgovor.clone());
+          return odgovor;
+        });
+        if (zadetek) {
+          e.waitUntil(sveza.catch(() => {}));
+          return zadetek;
+        }
+        return sveza.catch(() => caches.match("/brez-omrezja"));
+      })));
+    return;
+  }
+
+  // Ostale strani: najprej omrežje, ker vsebujejo tudi številke (pristajalne
+  // so izrisane na strežniku). Predpomnilnik je rezerva za predor in
+  // dvigalo, ne vir resnice.
   if (req.mode === "navigate") {
     e.respondWith(fetch(req)
       .then((odgovor) => {

@@ -12,6 +12,7 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 {% from "_obvestila.html" import izrisana as obvestila_izrisana %}
   {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
   {% set kazalo = "/postajalisca" if network == "avtobus" else "/postaje" %}
@@ -32,10 +33,13 @@
 <body class="home-page{% if network == 'avtobus' %} net-avtobus{% endif %}">
 
   <main class="home besedilo pristanek">
-    <a class="home-brand" href="/" style="text-decoration:none">
-      {{ znak(26) }}
-      <span>kajros</span>
-    </a>
+    <div class="home-vrh">
+      <a class="home-brand" href="/" style="text-decoration:none">
+        {{ znak() }}
+        <span>kajros</span>
+      </a>
+      {{ vec_gumb() }}
+    </div>
 
     {{ obvestila_izrisana(network) }}
 
@@ -136,8 +140,8 @@
     </ul>
     {% endif %}
 
-    {% include "_noga.html" %}
   </main>
 
+  {{ vec_list() }}
 </body>
 </html>

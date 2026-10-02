@@ -192,11 +192,10 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
   padding: 0 16px;
 }
 
-.brand { display: flex; align-items: center; gap: 9px; text-decoration: none; min-width: 0; }
-/* Znak nosi barvo omrezja (`body.net-avtobus` prestavi --accent na zeleno).
-   Prej je bil trdo oranzen in je bil na avtobusni strani edini kos glave,
-   ki ni vedel, kje je. */
-.brand svg { flex-shrink: 0; color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; min-width: 0; }
+/* Znak je ikona aplikacije s svojimi barvami (`_znak.html`), na avtobusni
+   strani ne pozeleni: omrežje pove pilula v orodni vrstici. */
+.brand svg { flex-shrink: 0; }
 .brand-name {
   font: 600 18px/1 var(--sans);
   color: var(--ink);
@@ -404,6 +403,13 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   .top-nav { order: 10; flex: 1 1 auto; gap: 16px; }
   .topbar .top-link { font-size: 12px; }
   .clock-wrap { order: 11; margin-left: auto; }
+  /* Meni Več je vedno skrajno desno v prvi vrstici, kot ⋮ v Androidu. V
+     toku bi se pri 320 pikah na ovirah (znamka + preklop) prelomil v drugo
+     vrstico na levo, zato je pripet v kot, glava pa mu pusti prostor.
+     `:has` zaradi teže: zemljevid in okno vožnje imata svoj odmik glave in
+     bi ga sicer povozila -- ura je zlezla pod gumb. */
+  .topbar:has(> .vec-gumb) { position: relative; min-height: 52px; padding: 8px 52px 8px 12px; }
+  .topbar > .vec-gumb { position: absolute; top: 2px; right: 4px; margin: 0; }
 }
 
 /* ---------- nadomestni prevoz ----------
@@ -598,36 +604,70 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   border-radius: 4px;
 }
 
-/* ---------- skupna noga (_noga.html) ----------
- * Stik, o nas in podpora so gumbi, ne besedilo v odstavku: prej jih je bilo
- * treba iskati med navedbo virov. Barva gumba za podporo je poudarek strani,
- * zato je na avtobusnih straneh zelen -- isto kot vsak drug poudarek tam.
- * Izbirniki so dvojni (`.noga .x`), ker `.besedilo a` sicer povozi barvo. */
-.noga {
-  margin-top: 36px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line-soft);
-  font: 400 12px/1.6 var(--sans);
-  color: var(--ink-faint);
+/* ---------- meni Več (_vec.html) ----------
+ * Gumb ⋮ v glavi in spodnji list, ki je nadomestil skupno nogo (2. 10. 2026).
+ * Slog lista je pod `@supports`: brskalnik brez `popover` elementa ne skrije
+ * in ga pokaže na koncu strani -- takrat naj bo videti kot navaden razdelek,
+ * ne kot list, pripet na dno zaslona čez vsebino. Gumb za podporo nosi
+ * tonsko barvo strani (`--m-kont`), na avtobusnih straneh zeleno. */
+.vec-gumb {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; margin-right: -8px; padding: 0;
+  border: 0; border-radius: 50%; background: none;
+  color: #c4cad4; cursor: pointer;
 }
-.noga-gumbi { display: flex; flex-wrap: wrap; gap: 8px; }
-.noga .noga-gumb {
-  display: inline-flex; align-items: center; gap: 7px;
-  min-height: 40px; padding: 9px 16px;
-  border: 1px solid transparent; border-radius: var(--r-pilula);
-  background: var(--m-visoka);
-  font: 500 14px/1.2 var(--sans); color: var(--ink);
-  text-decoration: none;
+.vec-gumb:focus-visible { outline: 2px solid var(--accent-lit); outline-offset: -2px; }
+
+.vec {
+  box-sizing: border-box; width: 100%; max-width: 560px; margin: 36px auto 0;
+  padding: 10px 16px calc(26px + env(safe-area-inset-bottom, 0px));
+  color: var(--ink); background: var(--m-visoka); font: 400 15px/1.4 var(--sans);
 }
-@media (hover: hover) { .noga .noga-gumb:hover { background: var(--m-najvisja); } }
-.noga .noga-don { background: var(--m-kont); color: var(--m-na-kont); font-weight: 600; }
-.noga-gumb:focus-visible, .noga-poti a:focus-visible {
-  outline: 2px solid var(--accent-lit); outline-offset: 2px;
+.vec-rocaj { display: block; width: 32px; height: 4px; margin: 0 auto 18px; border-radius: 2px; background: var(--m-obroba); }
+.vec-glava { display: flex; align-items: center; gap: 14px; padding: 0 8px 18px; }
+.vec-glava svg { flex-shrink: 0; }
+.vec-glava div { display: grid; gap: 4px; }
+.vec-glava b { font: 600 20px/1.1 var(--sans); letter-spacing: -0.01em; }
+.vec-glava span { font: 400 13.5px/1.3 var(--sans); color: var(--ink-dim); }
+.vec-gumbi { display: flex; gap: 8px; padding-bottom: 12px; }
+.vec-gumbi a {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 48px; padding: 0 20px; border-radius: var(--r-pilula);
+  background: var(--m-najvisja); color: var(--ink);
+  font: 600 15px/1 var(--sans); text-decoration: none; white-space: nowrap;
 }
-.noga .noga-poti { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 14px 0 0; }
-.noga .noga-poti a { color: var(--ink-dim); text-decoration: none; padding: 4px 0; font-size: 12px; }
-@media (hover: hover) { .noga .noga-poti a:hover { color: var(--ink); text-decoration: underline; } }
-.noga .noga-vir { margin: 10px 0 0; max-width: 64ch; font: 400 11px/1.6 var(--sans); color: var(--ink-faint); }
+.vec-gumbi .vec-don { flex: 1 1 auto; padding: 0 16px; background: var(--m-kont); color: var(--m-na-kont); }
+.vec-poti { display: grid; }
+.vec-poti a {
+  display: flex; align-items: center; gap: 16px; min-height: 54px; padding: 0 8px;
+  color: var(--ink); font: 400 16px/1.25 var(--sans); text-decoration: none;
+}
+.vec-poti svg { flex-shrink: 0; color: #c4cad4; }
+.vec-poti span { flex-grow: 1; }
+.vec-poti a::after { content: "›"; color: var(--ink-mute); font-size: 20px; }
+.v-aplikaciji .vec-android { display: none; }
+.vec-vir {
+  margin: 12px 8px 0; padding-top: 14px; border-top: 1px solid var(--line-firm);
+  font: 400 12px/1.55 var(--sans); color: var(--ink-dim);
+}
+.vec a:focus-visible { outline: 2px solid var(--accent-lit); outline-offset: 2px; }
+
+@supports selector(:popover-open) {
+  .vec {
+    position: fixed; inset: auto 0 0; margin: 0 auto;
+    max-height: 88vh; max-height: 88dvh; height: auto; overflow-y: auto;
+    border: 0; border-radius: 28px 28px 0 0;
+    overscroll-behavior: contain;
+    transform: translateY(100%);
+    transition: transform .25s cubic-bezier(.2, 0, 0, 1), overlay .25s allow-discrete, display .25s allow-discrete;
+  }
+  .vec:popover-open { transform: none; }
+  @starting-style { .vec:popover-open { transform: translateY(100%); } }
+  .vec::backdrop { background: rgb(0 0 0 / 0.55); }
+  @media (prefers-reduced-motion: reduce) { .vec { transition: none; } }
+}
+@media print { .vec, .vec-gumb { display: none; } }
 
 /* ---------- orodna vrstica ----------
  *
@@ -638,55 +678,58 @@ body:not(.is-advanced) .adv-only { display: none !important; }
  *
  * Kar je pod njo, mora imeti zadnjih `--orodna-prostor` pik praznih: na
  * straneh, ki se drsijo, spodnji odmik; na zemljevidih jo zemljevid nosi pod
- * sabo, dvignejo se le gumbi in opombe v spodnjem robu. */
-:root { --orodna-prostor: calc(96px + env(safe-area-inset-bottom, 0px)); }
+ * sabo, dvignejo se le gumbi in opombe v spodnjem robu.
+ *
+ * **Okvir je na vseh straneh enak**: širina, višina in odmik od roba se ne
+ * ravnajo po vsebini. Prej je bila širina, kolikor je zahtevalo ime izbrane
+ * pilule (izmerjeno 2. 10. 2026 pri 412 pikah: od 292 na ovirah do 368 na
+ * zemljevidu) in na domači strani višja (76 namesto 64), zato je vrstica ob
+ * vsakem prehodu skočila. Pilula z imenom vzame, kolikor rabi, ikone si
+ * razdelijo ostanek. */
+:root {
+  --orodna-prostor: calc(96px + env(safe-area-inset-bottom, 0px));
+  --orodna-sirina: min(380px, calc(100vw - 24px));
+}
 
 .orodna {
   position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 1000;
   display: flex; align-items: center; gap: 4px;
-  height: 64px; padding: 0 8px;
+  width: var(--orodna-sirina); height: 64px; padding: 0 8px;
   border-radius: 32px; background: var(--m-najvisja);
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
   view-transition-name: orodna;
 }
 .orodna-g {
+  flex: 1 1 0; min-width: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  min-width: 52px; height: 48px; padding: 0 14px;
+  height: 48px; padding: 0;
   border-radius: 24px; color: #c4cad4; text-decoration: none;
   font: 600 14px/1 var(--sans); white-space: nowrap;
 }
 .orodna-g span { display: none; }
-.orodna-g.is-on { background: var(--accent-lit); color: #14161a; padding: 0 18px 0 14px; }
-.orodna-g.is-on span { display: inline; }
+.orodna-g.is-on, .orodna-omr { flex: 0 0 auto; color: #14161a; padding: 0 18px 0 14px; }
+.orodna-g.is-on { background: var(--accent-lit); }
+.orodna-g.is-on span, .orodna-omr span { display: inline; }
 .orodna-g:focus-visible { outline: 2px solid var(--accent-lit); outline-offset: 2px; }
 
-/* Na domači strani je vrstica razprta (osnutek D, 1. 10. 2026): Vlaki in
-   Avtobusi sta pilula z imenom v barvi omrežja, namesto dveh velikih gumbov
-   na strani. Barvi sta pomen (vlak oranžno, avtobus zeleno), zato trdo
-   zapisani -- izjema iz oznake.md. Na ožjem zaslonu se skrčijo odmiki, ne
-   napisi: brez imena bi bila pilula spet le ikona. */
-.orodna-domov { height: 76px; gap: 6px; padding: 0 10px; border-radius: 38px; }
-.orodna-domov .orodna-g { height: 56px; min-width: 48px; padding: 0 10px; }
-.orodna-domov .orodna-omr {
-  padding: 0 16px 0 12px; border-radius: 28px;
-  color: #14161a; font: 700 15.5px/1 var(--sans);
-}
-.orodna-domov .orodna-omr span { display: inline; }
+/* Na domači strani sta Vlaki in Avtobusi pilula z imenom v barvi omrežja
+   (osnutek D, 1. 10. 2026), namesto dveh velikih gumbov na strani; okvir
+   ostane isti kot drugod. Barvi sta pomen (vlak oranžno, avtobus zeleno),
+   zato trdo zapisani -- izjema iz oznake.md. */
 .orodna-vlak { background: #f0934f; }
 .orodna-bus { background: #4db97f; }
-.orodna-locilo { width: 1px; height: 28px; margin: 0 2px; background: var(--line-firm); }
-@media (max-width: 380px) {
-  .orodna-domov { gap: 4px; padding: 0 8px; }
-  .orodna-domov .orodna-g { min-width: 44px; padding: 0 8px; }
-  .orodna-domov .orodna-omr { padding: 0 12px 0 10px; }
+.orodna-locilo { flex: none; width: 1px; height: 28px; margin: 0 2px; background: var(--line-firm); }
+/* Na ožjem zaslonu se skrčijo odmiki pilul, ne napisi: brez imena bi bila
+   pilula spet le ikona. */
+@media (max-width: 400px) {
+  .orodna-g.is-on, .orodna-omr { padding: 0 12px 0 10px; }
 }
-/* Pod 340 pik (izmerjeno: pri 320 je vrstica segla čez oba roba) ostane v
-   pilulah samo ime; barva še vedno pove omrežje. */
-@media (max-width: 340px) {
-  .orodna-domov .orodna-omr svg { display: none; }
-  .orodna-domov .orodna-omr { padding: 0 14px; }
+/* Pod 360 pik ostane v pilulah samo ime; barva še vedno pove, kje si. */
+@media (max-width: 359px) {
+  .orodna-g.is-on svg, .orodna-omr svg { display: none; }
+  .orodna-g.is-on, .orodna-omr { padding: 0 14px; }
 }
 /* Tiskanje ne rabi menija. */
 @media print { .orodna { display: none; } }

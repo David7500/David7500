@@ -7,6 +7,7 @@
   {% set og_desc = "Od vrat do vrat po Sloveniji: vlak, avtobus in hoja v isti verigi, z zamudami v živo." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
@@ -28,6 +29,7 @@
     </a>
     <div class="spacer"></div>
     {% include "_nav.html" with context %}
+  {{ vec_gumb() }}
   </header>
 
   <main class="pot">
@@ -190,5 +192,6 @@
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('pot_karta.js') }}"></script>
   <script src="{{ s('pot.js') }}"></script>
+  {{ vec_list() }}
 </body>
 </html>

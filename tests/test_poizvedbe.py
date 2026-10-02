@@ -2313,20 +2313,53 @@ def test_tabla_prevozen_postanek_brez_potrditve_ni_izmerjen(conn):
     assert ("t1", 1) in potrjeni
 
 
-def test_noga_brez_donacij_ne_ponuja_podpore():
+def test_meni_vec_brez_donacij_ne_ponuja_podpore():
     """Brez `KAJROS_DONACIJE` ni gumba: `/donacije` je takrat 404 in gumb bi
-    peljal na napako. Stik in „o nas" sta v nogi vedno (stik, dokler obrazec
-    obstaja)."""
+    peljal na napako. Stik in „o nas" sta v meniju Več vedno (stik, dokler
+    obrazec obstaja). Meni je od 2. 10. 2026 nadomestil skupno nogo."""
     from kajros.api import templates
 
-    noga = templates.env.get_template("_noga.html")
-    brez = noga.render(donacije="", stik_obrazec=True)
-    z = noga.render(donacije="https://ko-fi.com/x", stik_obrazec=False)
+    t = templates.env.from_string(
+        '{% from "_vec.html" import list as vec_list with context %}{{ vec_list() }}')
+    brez = t.render(donacije="", stik_obrazec=True)
+    z = t.render(donacije="https://ko-fi.com/x", stik_obrazec=False)
     assert "/donacije" not in brez and "/donacije" in z
     assert 'href="/stik"' in brez and 'href="/stik"' not in z
     assert 'href="/o-nas"' in brez and 'href="/o-nas"' in z
+    # Kazali postaj sta edina pot do pristajalnih strani poleg zemljevida
+    # strani; iskalnik ju najde v HTML, tudi ko je list zaprt.
+    assert 'href="/postaje"' in brez and 'href="/postajalisca"' in brez
     # Navedba vira je pogoj licence CC BY-SA, ne okras.
     assert "CC BY-SA 4.0" in brez
+
+
+def test_znak_je_ista_risba_kot_ikona():
+    """Znak v glavi je ikona aplikacije (`favicon.svg`), prepisana v makro.
+    Popravek ene risbe brez druge bi dal v glavi drugo ikono kot na zaslonu
+    telefona."""
+    import re
+    from pathlib import Path
+    from kajros.api import templates
+
+    ikona = (Path(__file__).parent.parent / "kajros/static/favicon.svg").read_text()
+    t = templates.env.from_string('{% from "_znak.html" import znak %}{{ znak(96) }}')
+    glava = t.render()
+    poti = re.findall(r' d="([^"]+)"', glava)
+    assert len(poti) >= 4
+    for d in poti:
+        assert f'd="{d}"' in ikona, d
+    for oblika in re.findall(r'transform="([^"]+)"', glava):
+        assert oblika in ikona, oblika
+
+
+def test_strani_nimajo_noge():
+    """Noge ni nikjer več (2. 10. 2026); kar je bilo v njej, je v meniju Več.
+    Predloga `_noga.html` je izbrisana in vključitev bi padla šele v
+    zahtevi."""
+    from pathlib import Path
+
+    for p in (Path(__file__).parent.parent / "kajros/templates").glob("*.html"):
+        assert "_noga.html" not in p.read_text(), p.name
 
 
 def test_statistika_ni_v_zemljevidu_strani():

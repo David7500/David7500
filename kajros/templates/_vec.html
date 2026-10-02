@@ -1,0 +1,71 @@
+{#
+  Meni Več: gumb ⋮ v glavi in spodnji list (osnutek C, izbran 2. 10. 2026).
+
+  Nadomešča skupno nogo. Ob orodni vrstici na dnu je bila noga spletni
+  ostanek, ki ga nativna aplikacija nima; vsebina pa mora ostati dosegljiva:
+  podpora, stik in „o nas“, kazali postaj (edina pot do pristajalnih strani
+  poleg zemljevida strani) in navedba vira, ki je pogoj licence CC BY-SA.
+
+  List je `popover`, ne `<dialog>` z JS: odpre ga gumb s `popovertarget`, zapre
+  dotik zunaj ali Esc, brez ene vrstice skripta. Pristajalne in besedilne
+  strani JS nimajo, meni pa morajo imeti. Brskalnik brez `popover` (pred
+  Chromom 114) lista ne skrije in ga pokaže na koncu strani, kot je bila noga
+  -- zato je `list()` na koncu `<body>`, ne v glavi. `common.js` doda, kar
+  brez JS ne gre: tipka nazaj list zapre, poteg navzdol tudi.
+
+  Klic: {% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
+  {{ vec_gumb() }} v glavi, {{ vec_list() }} na koncu strani. `donacije` in
+  `stik_obrazec` sta globalni spremenljivki (`api.py`).
+#}
+{%- from "_znak.html" import znak -%}
+
+{%- macro gumb() -%}
+<button type="button" class="vec-gumb" popovertarget="vec" aria-label="Več">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5.5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="18.5" r="1.9"/></svg>
+</button>
+{%- endmacro %}
+
+{%- macro list() -%}
+<div class="vec" id="vec" popover aria-label="Več">
+  <span class="vec-rocaj" aria-hidden="true"></span>
+  <div class="vec-glava">
+    {{ znak(52, "zv") }}
+    <div><b>kajros</b><span>Zamude vlakov in avtobusov v živo</span></div>
+  </div>
+  <div class="vec-gumbi">
+    {%- if donacije %}
+    <a class="vec-don" href="/donacije">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.3h2c.7-1.2 2.2-2.3 4.3-2.3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>
+      Podpri kajros
+    </a>
+    {%- endif %}
+    {%- if stik_obrazec %}
+    <a href="/stik">Stik</a>
+    {%- endif %}
+    <a href="/o-nas">O nas</a>
+  </div>
+  <nav class="vec-poti" aria-label="O strani">
+    <a href="/postaje">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.3"/></svg>
+      <span>Vse postaje</span>
+    </a>
+    <a href="/postajalisca">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/></svg>
+      <span>Vsa postajališča</span>
+    </a>
+    {#- V aplikaciji je vabilo nanjo odveč (`.v-aplikaciji`, base.css). #}
+    <a class="vec-android" href="/android">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
+      <span>Aplikacija za Android</span>
+    </a>
+    <a href="/zasebnost">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.4 3 8 7 9.5 4-1.5 7-5.1 7-9.5V6z"/></svg>
+      <span>Zasebnost</span>
+    </a>
+  </nav>
+  <p class="vec-vir">
+    Podatki IJPP prek NAP (CC BY-SA 4.0), obdelava DERP. Vreme Open-Meteo
+    (CC BY 4.0). Kajros ni stran prevoznika.
+  </p>
+</div>
+{%- endmacro %}

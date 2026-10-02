@@ -7,6 +7,7 @@
   {% set og_desc = "Kje so slovenski vlaki in avtobusi ta trenutek in koliko zamujajo — oboje na enem zemljevidu." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
@@ -33,6 +34,7 @@
       <span id="feed-dot" class="dot"></span>
       <span id="clock" class="clock">--:--:--</span>
     </div>
+  {{ vec_gumb() }}
   </header>
 
   <div class="body">
@@ -140,5 +142,6 @@
   {#- Modul, ker MapLibre 6 je samo ES modul in ga `dashboard.js` uvozi. Moduli
       se izvedejo za klasicnimi skripti, zato je `common.js` takrat ze tu. -#}
   <script type="module" src="{{ s('dashboard.js') }}"></script>
+  {{ vec_list() }}
 </body>
 </html>

@@ -7,6 +7,7 @@
   {% set og_desc = page_desc | default('Iskalnik vlakovnih povezav po Sloveniji: vozni red, odhodi s postaje in zamude vlakov v živo, tudi s prestopom.') %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
@@ -37,6 +38,7 @@
       <span id="feed-dot" class="dot"></span>
       <span id="clock" class="clock">--:--:--</span>
     </div>
+  {{ vec_gumb() }}
   </header>
 
   <main class="conn-main">
@@ -181,7 +183,6 @@
     {# Vozovnica pod rezultati: najprej "ali kaj pelje", sele nato "kupi". #}
     <div id="vozovnica"></div>
 
-    {% include "_noga.html" %}
   </main>
 
   <script src="{{ s('common.js') }}"></script>
@@ -189,5 +190,6 @@
   {%- if deli %}
   <script src="{{ s('deli.js') }}"></script>
   {%- endif %}
+  {{ vec_list() }}
 </body>
 </html>

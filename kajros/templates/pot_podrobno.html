@@ -7,6 +7,7 @@
   {% set og_desc = "Ena pot razložena: kod hodiš, s čim se pelješ in kje izstopiš." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="/static/maplibre-6.10.0/maplibre-gl.css">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -26,6 +27,7 @@
     </a>
     <div class="spacer"></div>
     {% include "_nav.html" with context %}
+  {{ vec_gumb() }}
   </header>
 
   <main class="pot">
@@ -98,5 +100,6 @@
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('pot_karta.js') }}"></script>
   <script src="{{ s('pot_podrobno.js') }}"></script>
+  {{ vec_list() }}
 </body>
 </html>

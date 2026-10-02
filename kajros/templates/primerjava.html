@@ -17,6 +17,7 @@
   {% set og_desc = "Strani za zamude in vozni red javnega prevoza v Sloveniji: potniski.sz.si, zamudil.si, brezavta.si, slomet.si in kajros — kaj ima katera." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
@@ -26,10 +27,13 @@
 <body class="home-page">
 
   <main class="home besedilo">
-    <a class="home-brand" href="/" style="text-decoration:none">
-      {{ znak(26, "#f0934f") }}
-      <span>kajros</span>
-    </a>
+    <div class="home-vrh">
+      <a class="home-brand" href="/" style="text-decoration:none">
+        {{ znak() }}
+        <span>kajros</span>
+      </a>
+      {{ vec_gumb() }}
+    </div>
 
     <h1>Kje preveriti zamudo</h1>
 
@@ -85,8 +89,8 @@
       {%- else %} nam sporoči.{% endif %}
     </p>
 
-    {% include "_noga.html" %}
   </main>
 
+  {{ vec_list() }}
 </body>
 </html>

@@ -308,6 +308,103 @@ const MOST = (() => {
 // Slog, ki velja samo v aplikaciji (dolg pritisk na povezavo, base.css).
 if (MOST) document.documentElement.classList.add("v-aplikaciji");
 
+// ---------- orodna vrstica se odzove takoj ----------
+//
+// Nova stran se izriše šele, ko je naložena (izmerjeno 2. 10. 2026: od dotika
+// do slike ~190 ms tudi iz predpomnilnika, prek omrežja dvakrat toliko), do
+// takrat pa je bila na zaslonu nespremenjena stara. Nativna vrstica pilulo
+// premakne ob dotiku, zato jo tudi ta. Na domači strani izbrane ni: tam bi
+// tretja pilula z imenom vrstico prenapolnila, pritisk pokaže plast `:active`.
+document.addEventListener("click", (e) => {
+  const g = e.target.closest?.(".orodna-g");
+  if (!g || g.classList.contains("is-on") || e.defaultPrevented || e.button !== 0
+      || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const prej = g.parentElement.querySelector(".is-on");
+  if (!prej) return;
+  prej.classList.remove("is-on");
+  g.classList.add("is-on");
+  // Nazaj na to stran iz predpomnilnika (gumb nazaj) mora biti izbrana
+  // spet ona, ne cilj, kamor je človek medtem šel.
+  addEventListener("pageshow", function nazaj(ev) {
+    removeEventListener("pageshow", nazaj);
+    if (!ev.persisted) return;
+    g.classList.remove("is-on");
+    prej.classList.add("is-on");
+  });
+});
+
+// ---------- meni Več: nazaj in poteg navzdol ----------
+//
+// List odpre in zapre `popover` sam (`_vec.html`), brez skripta. Tu je samo,
+// kar ima spodnji list v Androidu in ga splet sam ne zna: tipka nazaj ga
+// zapre, namesto da bi zapustila stran, in poteg navzdol tudi. Zato ob
+// odprtju vnos v zgodovino; zaprt list ga vzame nazaj, da tipka nazaj potem
+// ne bi „ničesar naredila“. Povezava v listu gre najprej nazaj čez ta vnos in
+// šele nato na cilj -- sicer bi v zgodovini ostal mrtev korak.
+//
+// List je na koncu `<body>`, za skripti (`_vec.html` pove, zakaj), zato šele
+// po razčlenitvi strani.
+function pripniMeniVec() {
+  const vec = document.getElementById("vec");
+  if (!vec || typeof vec.showPopover !== "function") return;
+  let vZgodovini = false;
+  let cilj = null;
+  vec.addEventListener("toggle", (e) => {
+    if (e.newState === "open") {
+      history.pushState({ vec: true }, "");
+      vZgodovini = true;
+    } else if (vZgodovini) {
+      vZgodovini = false;
+      history.back();
+    }
+  });
+  addEventListener("popstate", () => {
+    if (vZgodovini) {
+      vZgodovini = false;
+      vec.hidePopover();
+    }
+    if (cilj) {
+      const c = cilj;
+      cilj = null;
+      location.href = c;
+    }
+  });
+  vec.addEventListener("click", (e) => {
+    const a = e.target.closest("a[href]");
+    if (!a || !vZgodovini || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    cilj = a.href;
+    vec.hidePopover();
+  });
+
+  // Poteg navzdol: list sledi prstu, nad 80 px se zapre. Samo, kadar je
+  // vsebina lista na vrhu -- sicer poteg pomeni drsenje po njej.
+  let y0 = null;
+  let dy = 0;
+  vec.addEventListener("touchstart", (e) => {
+    if (vec.scrollTop > 0) return;
+    y0 = e.touches[0].clientY;
+    dy = 0;
+  }, { passive: true });
+  vec.addEventListener("touchmove", (e) => {
+    if (y0 === null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    vec.style.transition = "none";
+    vec.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+  vec.addEventListener("touchend", () => {
+    if (y0 === null) return;
+    y0 = null;
+    // Prehod nazaj pred zapiranjem: list gre dol od tam, kjer ga je pustil
+    // prst, ne skoči najprej nazaj gor.
+    vec.style.transition = "";
+    if (dy > 80) vec.hidePopover();
+    vec.style.transform = "";
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pripniMeniVec);
+else pripniMeniVec();
+
 
 /** Telo odgovora kot JSON -- a samo uspešnega. Napaka FastAPI je tudi JSON
  *  (`{detail}`) in bi jo stran sicer brala kot podatke. */

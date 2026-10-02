@@ -1,4 +1,5 @@
 {% from "_znak.html" import znak -%}
+{% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 <!doctype html>
 <html lang="sl">
 <head>
@@ -15,10 +16,13 @@
 
   <main class="home">
     <header class="home-head">
-      <a class="home-brand" href="/" style="text-decoration:none">
-        {{ znak(26, "#f0934f") }}
-        <span>kajros</span>
-      </a>
+      <div class="home-vrh">
+        <a class="home-brand" href="/" style="text-decoration:none">
+          {{ znak() }}
+          <span>kajros</span>
+        </a>
+        {{ vec_gumb() }}
+      </div>
       <p class="napaka-koda">{{ koda }}</p>
       <p class="home-lead">{{ sporocilo }}</p>
     </header>
@@ -37,8 +41,8 @@
         <span>kje so vlaki in avtobusi ta trenutek</span>
       </a>
     </nav>
-    {% include "_noga.html" %}
   </main>
 
+  {{ vec_list() }}
 </body>
 </html>
