@@ -415,9 +415,13 @@ def prenos(pot: str, metoda: str, koda: int, obmocje: str) -> str | None:
 #: Strani za človeka zunaj `/app`. Do 29. 9. 2026 so bile pristajalne in
 #: besedilne strani „drugo“: ogledi se niso šteli, v pregledu „Katere strani“
 #: jih ni bilo -- prav tistih, na katere pride človek z iskalnika.
+#:
+#: `/brez-omrezja` ni med njimi: s strežnika jo vleče samo service worker ob
+#: namestitvi (`cache.addAll`), človek jo vidi iz predpomnilnika, brez
+#: zahteve. Kot stran je bila 2. 10. 2026 271 „ogledov“ od 1528.
 _STRANI = ("/vlak/", "/avtobus/", "/postaja/", "/postajalisce/", "/postaje",
            "/postajalisca", "/o-nas", "/primerjava", "/stik", "/zasebnost",
-           "/android", "/donacije", "/brez-omrezja")
+           "/android", "/donacije")
 
 
 def vrsta_poti(pot: str) -> str:

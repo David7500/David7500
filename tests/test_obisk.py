@@ -208,7 +208,7 @@ def test_statika_in_admin_se_ne_steje():
 
 @pytest.mark.parametrize("pot, vrsta", [
     ("/", "stran"), ("/app/train", "stran"), ("/app/map", "stran"),
-    ("/api/live", "api"), ("/docs", "drugo"),
+    ("/api/live", "api"), ("/docs", "drugo"), ("/brez-omrezja", "drugo"),
 ])
 def test_vrsta_poti(pot, vrsta):
     assert obisk.vrsta_poti(pot) == vrsta
