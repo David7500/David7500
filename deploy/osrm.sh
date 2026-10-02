@@ -95,7 +95,9 @@ if [ ${#manjka[@]} -gt 0 ]; then
     krepko "prenos OSM Slovenija"
     # Zemljevid se osveži dnevno, ceste in tiri pa se ne spreminjajo kot vozni
     # redi; ponovna gradnja enkrat ali dvakrat na leto je dovolj.
-    curl -fL --progress-bar -o "$PODATKI/slovenia.osm.pbf" "$VIR"
+    # Geofabrik zna vrniti 502 (2. 10. 2026 sredi prenosa na arwenu); brez
+    # ponovitve je skripta obstala, preden je karkoli zgradila.
+    curl -fL --retry 5 --retry-delay 30 --progress-bar -o "$PODATKI/slovenia.osm.pbf" "$VIR"
 
     for kaj in "${manjka[@]}"; do
         case "$kaj" in
