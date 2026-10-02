@@ -29,8 +29,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
-               naslovi, obisk, obvestila, peroni, pot, pristanek, stats, stik,
-               zdravje)
+               naslovi, obisk, obvestila, peroni, pot, pripni, pristanek, stats, stik,
+               tiri, zdravje)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -1699,7 +1699,7 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     now = int(zdaj.timestamp())
     now_s = journey.now_seconds(zdaj)
     rows = conn.execute(
-        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign, t.network "
+        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign, t.network, t.shape_id "
         "FROM vehicle_now v JOIN trip t USING (trip_id) "
         "WHERE v.seen_ts >= ? ORDER BY t.train_no",
         (now - collector.POSITION_FRESH_S,),
@@ -1707,6 +1707,14 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     out = [dict(r) for r in rows]
     for d in out:
         d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
+        # Lega za risbo: na pripeti trasi, desni pas, smer ceste (`pripni.py`).
+        # GPS je od osi ceste v mediani 3,8 m in zemljevid od blizu ga je
+        # risal ob cesti ali čeznjo. Meritev ostane v `lat`/`lon`.
+        trasa = deljenje.trasa(conn, d.pop("shape_id"))
+        if trasa is not None:
+            cesta = pripni.na_cesto(trasa, d["lat"], d["lon"], d["bearing"])
+            if cesta is not None:
+                d["cesta"] = cesta
 
     # Zamude v `vehicle_now` NI -- ta tabela pozna samo lego. Doda se iz
     # zadnje **prevozene** postaje, po istem pravilu kot zivi seznam in
@@ -1842,11 +1850,14 @@ def api_shape(trip_id: str):
     """
     with _conn() as conn:
         row = conn.execute(
-            "SELECT sh.points FROM trip t JOIN shape sh USING (shape_id) "
+            "SELECT COALESCE(sh.osm, sh.points) AS points, sh.osm IS NOT NULL AS osm "
+            "FROM trip t JOIN shape sh USING (shape_id) "
             "WHERE t.trip_id = ?", (trip_id,)).fetchone()
     if not row:
         raise HTTPException(404, "za to vožnjo trase ni")
-    return {"trip_id": trip_id, "points": json.loads(row["points"])}
+    # `osm`: trasa je pripeta na ceste oz. tire OSM (`pripni.py`) in se s
+    # podlago ujema; brez tega je surova iz GTFS, od ceste do ~15 m.
+    return {"trip_id": trip_id, "points": json.loads(row["points"]), "osm": bool(row["osm"])}
 
 
 @app.get("/api/shapes/live")
@@ -1871,7 +1882,7 @@ def _shapes_live_rows():
     now = int(datetime.now(TZ).timestamp())
     with _conn() as conn:
         rows = conn.execute(
-            "SELECT DISTINCT sh.shape_id, sh.points, t.network "
+            "SELECT DISTINCT sh.shape_id, COALESCE(sh.osm, sh.points) AS points, t.network "
             "FROM vehicle_now v JOIN trip t USING (trip_id) "
             "JOIN shape sh ON sh.shape_id = t.shape_id "
             "WHERE v.seen_ts >= ?",
@@ -1886,7 +1897,7 @@ def api_network(elementary_only: bool = True):
     """Geometrija prog z dolžino odseka v km. Za risanje zemljevida."""
     # Cista statika: spremeni se samo ob uvozu voznega reda.
     telo = _predpomni(
-        f"geojson:{elementary_only}", _znacka("gtfs_imported_at"), 3600,
+        f"geojson:{elementary_only}", _znacka("gtfs_imported_at", "pripeto_at"), 3600,
         lambda: json.dumps(_conn_klic(lambda c: stats.network_geojson(c, elementary_only)),
                            ensure_ascii=False, separators=(",", ":")).encode())
     return Response(content=telo, media_type="application/json")
@@ -2336,7 +2347,30 @@ def _live_rows(conn, service_date: str, now_s: int,
         if d["network"] == "zeleznica":
             d["na_postaji"] = _na_postaji(conn, d, now_s)
         out.append(d)
+    _na_svoj_tir(conn, [d for d in out if d.get("na_postaji")], service_date)
     return out
+
+
+def _na_svoj_tir(conn, vlaki: list[dict], service_date: str) -> None:
+    """Vlak, ki stoji na postaji s tirom na tabli SŽ, postavi na ta tir.
+
+    `_na_postaji` ga postavi na pripeto traso (`pripni.py`), torej na tir, po
+    katerem gre trasa -- na veliki postaji eden od desetih. Kjer tabla pove
+    tir in ga OSM pozna po številki (`tiri.py`), stoji na pravem.
+    """
+    if not vlaki:
+        return
+    peroni.dopolni(conn, vlaki, lambda d: (
+        d["train_no"], d["na_postaji"]["ime"],
+        stats.abs_time(service_date, d["na_postaji"].pop("_t_s"))))
+    for d in vlaki:
+        np = d["na_postaji"]
+        np.pop("_t_s", None)
+        tir = d.pop("tir", None)
+        d.pop("tir_prej", None)
+        lega = tiri.na_tiru(np["lat"], np["lon"], tir, np["smer"])
+        if lega:
+            np.update(lega, tir=tiri.stevilka(tir))
 
 
 #: Pol tetive, iz katere se računa smer proge na postaji. Garnitura je dolga
@@ -2376,8 +2410,10 @@ def _na_postaji(conn, r: dict, now_s: int) -> dict | None:
         if prihod is None or not prihod + d <= now_s < odhod + d:
             return None
     lat, lon = v.trasa.tocka(p["along"])
+    # `_t_s`: voznoredni čas na tej postaji, za tir s table (`_na_svoj_tir`).
     return {"ime": p["name"], "lat": round(lat, 6), "lon": round(lon, 6),
-            "smer": v.trasa.smer(p["along"], _SMER_POSTAJE_M), "koncna": koncna}
+            "smer": v.trasa.smer(p["along"], _SMER_POSTAJE_M), "koncna": koncna,
+            "_t_s": p["dep_s"] if p["dep_s"] is not None else p["arr_s"]}
 
 
 @app.get("/api/connections")

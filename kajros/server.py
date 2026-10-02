@@ -16,7 +16,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, opozorila,
-               peroni, stats, stik, weather, zamude_sz)
+               peroni, pripni, stats, stik, weather, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -135,6 +135,32 @@ def _ogrej_pot() -> None:
         _log(f"voznega reda za pot ni bilo mogoče ogreti: {exc}")
     finally:
         _ogrevanje.release()
+
+
+_pripenjanje = threading.Lock()
+
+
+def _pripni_v_ozadju() -> None:
+    """Trase na OSM (`pripni.py`) v svoji niti.
+
+    Prvi prehod čez vse trase je nekaj minut (izmerjeno 187 s na razvojnem
+    računalniku), vsak naslednji nekaj sekund. Zajem ne sme čakati nanj --
+    zato ne v zajemni zanki in ne v `kajros update`, ki ga zanka čaka.
+    Samo na strežniku: malina trase ne riše in OSRM nima.
+    """
+    def delo():
+        if not _pripenjanje.acquire(blocking=False):
+            return                      # en prehod hkrati je dovolj
+        conn = db.connect()
+        try:
+            pripni.pripni(conn, log=_log)
+        except Exception as exc:        # noqa: BLE001 -- prikaz ima surove trase
+            conn.rollback()
+            _log(f"pripenjanje tras ni uspelo: {exc}")
+        finally:
+            conn.close()
+            _pripenjanje.release()
+    threading.Thread(target=delo, daemon=True, name="kajros-pripni").start()
 
 
 def bootstrap() -> None:
@@ -405,6 +431,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:
                 conn.rollback()
                 _log(f"osvežitev voznega reda ni uspela: {exc}")
+            if _strezemo:
+                _pripni_v_ozadju()
 
         if next_weather and datetime.now(TZ) >= next_weather:
             next_weather += timedelta(days=1)
@@ -540,6 +568,7 @@ async def lifespan(app):
     global _strezemo
     _strezemo = True             # samo tu; `kajros collect` tega ne izvede
     bootstrap()
+    _pripni_v_ozadju()
     # Tabela za sporočila obstaja tudi, kadar je štetje obiska ugasnjeno:
     # obrazec za stik s štetjem nima nobene zveze.
     if config.STIK_OBRAZEC:

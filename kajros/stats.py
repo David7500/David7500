@@ -85,7 +85,10 @@ def stations(conn: sqlite3.Connection, network: str | None = None) -> list[dict]
 
 
 def network_geojson(conn: sqlite3.Connection, elementary_only: bool = True) -> dict:
-    sql = "SELECT e.*, a.name AS from_name, b.name AS to_name FROM edge e " \
+    # `osm`: ista geometrija, pripeta na tir OSM (`pripni.py`); dokler je ni,
+    # surova iz GTFS.
+    sql = "SELECT e.*, COALESCE(e.osm, e.geojson) AS geom, " \
+          "a.name AS from_name, b.name AS to_name FROM edge e " \
           "JOIN station a ON a.stop_id = e.from_id JOIN station b ON b.stop_id = e.to_id"
     if elementary_only:
         sql += " WHERE e.elementary = 1"
@@ -97,7 +100,7 @@ def network_geojson(conn: sqlite3.Connection, elementary_only: bool = True) -> d
                 "to_id": r["to_id"], "to": r["to_name"],
                 "km": r["km"], "elementary": bool(r["elementary"]), "trips": r["trips"],
             },
-            "geometry": json.loads(r["geojson"]),
+            "geometry": json.loads(r["geom"]),
         }
         for r in conn.execute(sql)
     ]

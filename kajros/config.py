@@ -167,6 +167,10 @@ ADMIN_TOKEN = _admin_zeton()
 # `deploy/osrm.sh`. Prazno ga ugasne in hoja pade na zračno razdaljo × faktor.
 # Samo krajevni naslov: strežnik nima avtentikacije in ga kliče ta proces.
 OSRM_URL = okolje("OSRM", "http://127.0.0.1:5000").rstrip("/")
+# Še dva OSRM, samo za pripenjanje tras na ceste in tire OSM (`pripni.py`):
+# avtobusni profil in tirni. Brez njiju prikaz riše surove trase GTFS.
+OSRM_AVTOBUS_URL = okolje("OSRM_AVTOBUS", "http://127.0.0.1:5001").rstrip("/")
+OSRM_TIR_URL = okolje("OSRM_TIR", "http://127.0.0.1:5002").rstrip("/")
 
 USER_AGENT = okolje("USER_AGENT", "kajros/0.1 (+https://github.com/David7500)")
 TIMEZONE = "Europe/Ljubljana"

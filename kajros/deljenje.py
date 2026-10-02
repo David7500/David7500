@@ -471,7 +471,9 @@ def _preveri_znacko(conn: sqlite3.Connection) -> None:
     global _pp_znacka, _pp_preverjeno
     if time.monotonic() - _pp_preverjeno < _PP_PREVERI_S:
         return
-    znacka = db.get_meta(conn, "gtfs_imported_at")
+    # Pripenjanje (`pripni.py`) teče po uvozu in traso pod istim id-jem
+    # zamenja s pripeto.
+    znacka = f'{db.get_meta(conn, "gtfs_imported_at")}|{db.get_meta(conn, "pripeto_at")}'
     with _pp_zaklep:
         _pp_preverjeno = time.monotonic()
         if znacka != _pp_znacka:
@@ -489,7 +491,11 @@ def trasa(conn: sqlite3.Connection, shape_id: str | None) -> Trasa | None:
     t = _trase.get(shape_id)
     if t is not None:
         return t
-    sh = conn.execute("SELECT points FROM shape WHERE shape_id = ?", (shape_id,)).fetchone()
+    # Pripeta na OSM, kadar je (`pripni.py`): na njej je vozilo narisano
+    # (okno vožnje drsi po njej, vlak na postaji stoji na njej), in od ceste
+    # je v mediani 0,4 m namesto 3,1 m.
+    sh = conn.execute("SELECT COALESCE(osm, points) AS points FROM shape WHERE shape_id = ?",
+                      (shape_id,)).fetchone()
     kosi = [[tuple(p) for p in kos] for kos in json.loads(sh["points"])] if sh else []
     if sum(len(k) for k in kosi) < 2:
         return None

@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
-               naslovi, ocena, pot, stats, weather, zamude_sz)
+               naslovi, ocena, pot, pripni, stats, tiri, weather, zamude_sz)
 
 
 def cmd_init(args):
@@ -311,6 +311,24 @@ def cmd_pespoti(args):
     print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
+def cmd_pripni(args):
+    """Trase na ceste in tire OSM. Strežnik to naredi sam ob zagonu in po
+    vsakem uvozu; ukaz je za ročni prehod in za merjenje."""
+    conn = db.connect()
+    db.init(conn)
+    if args.znova:
+        conn.execute("UPDATE shape SET osm = NULL")
+        conn.execute("UPDATE edge SET osm = NULL")
+        conn.commit()
+    print(json.dumps(pripni.pripni(conn), indent=2, ensure_ascii=False))
+
+
+def cmd_tiri(args):
+    """Tiri s številko iz izvoza OSM (`deploy/osrm.sh` ga pripravi)."""
+    cilj = Path(args.out) if args.out else tiri.pot()
+    print(json.dumps(tiri.zgradi(Path(args.vir), cilj), indent=2, ensure_ascii=False))
+
+
 def cmd_naslovi(args):
     """Kazalo naslovov iz izvoza OSM (`deploy/naslovi.sh` ga pripravi)."""
     cilj = Path(args.out) if args.out else naslovi.pot_kazala()
@@ -529,6 +547,16 @@ def main(argv=None):
     a.add_argument("--dan", help="prometni dan; privzeto danes")
     a.add_argument("--json", action="store_true")
     a.set_defaults(func=cmd_pot)
+
+    a = sub.add_parser("pripni", help="pripni trase na ceste in tire OSM (lastni OSRM)")
+    a.add_argument("--znova", action="store_true",
+                   help="pripni tudi že pripete (predpomnilnik po vsebini ostane)")
+    a.set_defaults(func=cmd_pripni)
+
+    a = sub.add_parser("tiri", help="tiri s številko iz izvoza OSM (geojsonseq) za vlak na postaji")
+    a.add_argument("vir")
+    a.add_argument("--out", help="privzeto ${KAJROS_DATA_DIR}/tiri.json")
+    a.set_defaults(func=cmd_tiri)
 
     a = sub.add_parser("naslovi", help="zgradi kazalo naslovov iz izvoza OSM (geojsonseq)")
     a.add_argument("vir", help="izvoz `osmium export -f geojsonseq`")

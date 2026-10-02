@@ -29,6 +29,8 @@ Pri **prvem** zagonu kavlja ni mogoče postaviti (datoteke v drevesu še ni); sk
 
 **Malina je druga zgodba**, ostane pri sudotu z geslom — glej spodaj.
 
+**Usmerjevalniki OSRM in tiri niso v gitu, potisk jih ne prinese** (2. 10. 2026). `ssh david@192.168.1.46 'cd ~/kajros && deploy/osrm.sh'` zgradi, kar manjka: peš (`:5000`, za hojo), avtobus (`:5001`) in tir (`:5002`, oba za `pripni.py`) ter `/var/lib/kajros/tiri.json` (`tiri.py`, osmium). Po njem strežnik trase pripne sam ob naslednjem zagonu (prvi prehod nekaj minut, v svoji niti): `sudo systemctl restart kajros.service` (brez gesla). Vrstni red s potiskom je vseeno -- strežnik brez OSRM pripenjanje preskoči in ga opravi ob naslednjem zagonu. **Slike ne vleci mimo skripte**: podatki so vezani na različico OSRM, nova slika ob starih podatkih ustavi peš strežnik (2. 10. 2026 na razvojnem: 26.9.0 → 26.10.0). Skripta vleče samo z `znova` in si zapiše sliko vsakega profila.
+
 **Kazalo naslovov ni v gitu, potisk ga ne prinese** (`naslovi.sqlite`, 51 MB, 23. 9. 2026). Na arwenu se zgradi enkrat, nato nekajkrat na leto: `ssh david@192.168.1.46 'cd ~/kajros && deploy/naslovi.sh'` (docker brez sudota, kot `osrm.sh`; piše v `/var/lib/kajros`, skupinsko pisljiv). Brez njega stran dela, le naslova ni mogoče vpisati — samo postajo.
 
 ## Objava

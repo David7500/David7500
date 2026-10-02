@@ -2098,6 +2098,73 @@ Spremembe: service worker strani orodne vrstice (`/`, `/app/train`, `/app/bus`, 
 
 **Brez strežnika** (posrednik ugasnjen): lupina se pokaže, pika o živosti siva, podatkov ni. Doslej enako ob padcu omrežja (najprej omrežje, nato predpomnilnik). Drugače je pri odgovoru 5xx s Cloudflara: prej je šel na stran in aplikacija je pokazala nativni zaslon napake, zdaj se pokaže lupina.
 
+## Zemljevid od blizu: trase, tiri in lega proti OSM (2. 10. 2026)
+
+Prijava: od blizu so trase, proge in postaje tanke črte in pike, ki se od podlage razlikujejo za več metrov in ceste ne zapolnijo. Referenca je OSM, isti vir kot podlaga: ceste in tiri iz Overpassa za Ljubljano (46,040–46,075 × 14,480–14,545, merjeno v notranjem oknu, da rob ne šteje) in tiri za vso Slovenijo. Za vsako točko na trasi, vzorčeno na 2 m, merimo razdaljo do najbližje OSM ceste (avtobus) oziroma tira (vlak). GTFS: IJPP z dne 30. 8., LPP z dne 6. 9. 2026.
+
+| trase v Ljubljani | oblik | mediana | p90 | p99 | nad 5 m |
+|---|---|---|---|---|---|
+| LPP mestni, surove | 49 | 1,0 m | 4,7 m | 5,7 m | 5 % |
+| LPP mestni, poenostavljene (`geo.simplify`, 1e-4°) | | 1,9 m | 5,3 m | 8,5 m | 12 % |
+| IJPP avtobusi, surove | 363 | 3,5 m | 6,0 m | 14,0 m | 24 % |
+| IJPP avtobusi, poenostavljene | | 3,2 m | 7,9 m | 15,3 m | 30 % |
+| SŽ, surove | 147 | 2,0 m | 5,3 m | 7,5 m | 16 % |
+
+* **Trase IJPP so šum, ne pas.** Odmiki so na obeh straneh osi (desno 52 %, levo 43 %, p25 −2,9 m, p75 +4,1 m). Poenostavitev jih skoraj ne poslabša, LPP-jevim podvoji mediano. Bolj natančnih od surovih ne moremo dobiti brez pripenjanja na OSM.
+* **Proge SŽ po vsej Sloveniji** (1 526 km tira, vzorec na 5 m): mediana 2,2 m, p90 7,8 m, 6,4 % nad 10 m, **28 km (1,9 %) nad 25 m**. Zgoščeno na nekaj mestih: Koper (4,3 km), Maribor (5,3 km v dveh celicah po 2 km). V Ljubljani trasa leži na tirih 3 in 4 ob peronih, nad 10 m ni nobenega vzorca. Bližina postaje sama odmika ne napove: do 100 m od postaje je nad 10 m 3,9 % vzorcev, dlje od 1 km 7,6 %.
+* **Overpassovo zrcalo `overpass.kumi.systems` je bilo pet mesecev staro** (podatki z dne 6. 5. 2026, 1 155 poti manj kot na `overpass-api.de`). Na njem sta tira 3 in 4 ljubljanske postaje manjkala in je bilo videti, da gre trasa 41–51 m mimo tira. Številke zgoraj so z glavnega strežnika (2. 10. 2026); pri meritvi proti OSM preveri `osm3s.timestamp_osm_base`.
+* OSM ima številko tira (`railway:track_ref`) na 1 678 tirih v izvozu Slovenije (Geofabrik; Overpassov okvir s sosednjimi državami jih da 3 054 od 14 905). Ljubljanska glavna postaja jo ima na tirih 3, 4 in 8–13.
+
+**Lega vozil (GPS)**: približno 5 minut žive lege z `kajros.app/api/vehicles`, 2. 10. 2026 okrog 14.15, v ljubljanskem oknu. Šteta so samo vozila, ki so se med zaporednima legama premaknila za vsaj 15 m (n = 565).
+
+| | do OSM ceste | do svoje trase |
+|---|---|---|
+| mediana | 3,8 m | 7,1 m |
+| p75 | 6,3 m | 16,1 m |
+| p90 | 9,9 m | 463 m |
+| nad 25 m | 0,2 % | 22,5 % |
+
+* **GPS je dober.** Do osi ceste je mediana 3,3–4,4 m pri vseh prevoznikih, rahlo desno od smeri vožnje (desni vozni pas).
+* **Rep pri „do svoje trase“ ni napaka GPS, ampak vožnja, ki se še ni začela.** Avtobusi na AP Ljubljana manevrirajo po peronih 350–500 m od prve točke trase (`Ljubljana AP`, 46,05778, 14,50879). Vozila LPP že nosijo naslednjo vožnjo (zamuda 46–51 min, `stop_seq` prazen). Pri IJPP feed `stop_seq` sploh ne izpolni, zato teh primerov iz lege same ni mogoče ločiti. **Pripenjanje lege na traso brez meje bi takšno vozilo prestavilo na napačno cesto.**
+
+**Prikaz**: trasa izbrane vožnje je 3 px, vse trase 1,6 px, proga 2 px, ne glede na približek. Pri Leafletovem z19 (MapLibrovem z18) je 1 px približno 0,21 m: trasa je torej 0,6 m široka na cesti, ki je široka ~7 m (34 px). Tudi ceste podlage se nad MapLibrovim z18 ne širijo več (glavna 16 px ≈ 3,3 m).
+
+### Pripenjanje tras na OSM (2. 10. 2026)
+
+Lastni OSRM z dvema profiloma (`deploy/osrm/avtobus.lua`, `tir.lua`), `/match` na poenostavljene točke trase, presoja **odsek po odsek** (`kajros/pripni.py`). Vse trase lokalne baze (2 957 oblik, 389 odsekov mreže), razvojni stroj:
+
+| | |
+|---|---|
+| prvi prehod | 187 s (OSRM odgovori v ~50 ms na traso) |
+| vsak naslednji, iz predpomnilnika po vsebini | 1,4 s |
+| velikost: surove / pripete (poenostavljene na 2e-5°) | 10,9 MB / 25,4 MB |
+| gradnja avtobusnega OSRM (6 jeder) | 81 s, vrh 1,66 GB, 688 MB podatkov |
+| gradnja tirnega | 5 s, vrh 1,1 GB |
+
+Prva različica je presojala cel matching naenkrat: en zgrešen konec (končno postajališče na dvorišču, ki ga OSM nima kot cesto) je zavrnil traso čez pol Slovenije, **994 od 2 667 avtobusnih tras ostalo surovih**. Po odsekih je delež pripete dolžine na prevoznika (mediana / p10): LPP primestni 0,999 / 0,93, Nomago 0,998 / 0,97, AP MS 1,0 / 0,95, Arriva 1,0 / 0,97, SŽ 1,0 / 0,94, mestni LPP 1,0 / 0,98.
+
+Odmik od OSM v ljubljanskem oknu, isti postopek kot zgoraj (vzorec na 2 m):
+
+| | surove | pripete |
+|---|---|---|
+| IJPP avtobusi, mediana / p90 / p99 | 3,1 / 7,8 / 15,6 m | **0,4 / 1,0 / 3,0 m** |
+| LPP mestni | 1,0 / 4,7 / 5,7 m | 0,4 / 1,1 / 2,1 m |
+| SŽ (samo vlaki) | 1,7 / 4,9 / 9,2 m | 0,5 / 1,6 / 8,0 m |
+
+**Nadomestni avtobusi SŽ imajo v GTFS za traso progo**, ki jo zamenjujejo: od najbližje ceste v mediani 25,7 m. Na ceste se ne pripnejo (pod polovico), zato dobijo pot po cesti skozi svoje postaje (`/route`, `pripni.po_cesti`).
+
+**Lega na cesti** (`pripni.na_cesto`, polje `cesta` v `/api/vehicles`): 552 leg vozil, ki so se med branjema premaknila, proti pripetim trasam:
+
+| meja | 8 m | 10 m | **15 m** | 20 m | 25 m |
+|---|---|---|---|---|---|
+| pripetih pri kotu 60° (vsa vozila, n = 1 093) | 45 % | 51 % | 55 % | 57 % | 57 % |
+
+Med vozečimi pri 15 m in 60° pripetih **69,6 %**, premik v mediani 4,2 m (p90 9,5 m). Odmik GPS od pripete trase desno od smeri vožnje: mediana +1,9 m (p25 −2,6, p75 +5,2) -- desni pas, zato se risba premakne za 1,9 m desno. 28 leg je bilo bližje od 15 m, a v nasprotni smeri (ista cesta, vožnja na začetek proge) -- te ostanejo na GPS. Cena: 1 000 projekcij 28 ms.
+
+**Tiri s številko** (`kajros/tiri.py`): izvoz OSM Slovenije ima 1 678 tirov s številko (`tiri.json` 344 kB). Od tirov, ki jih je objavila tabla SŽ (lokalna baza, 14 361 vnosov vlak × postaja × dan), jih OSM na tisti postaji pozna **32 %**: Maribor, Šentjur, Grobelno, Litija, Laško, Grosuplje in še 20 postaj v celoti, Ljubljana 40 % (OSM ima številke na tirih 3, 4 in 8–13), Zidani Most, Celje, Pragersko in 60 drugih nič. Kjer številke ni, vlak stoji na tiru, po katerem gre pripeta trasa.
+
+**Slika OSRM se ne sme posodobiti sama.** `docker pull` je 2. 10. 2026 prinesel 26.10.0, peš podatki so bili iz 26.9.0: „File is incompatible with this version of OSRM“, peš strežnik se ni več zagnal. `deploy/osrm.sh` zato vleče samo z `znova` in vsakemu profilu zapiše sliko, s katero je zgrajen.
+
 ## Kolesarsko prvenstvo: LPP vozi vožnje, ki jih vozni red nima (2. 10. 2026)
 
 Evropsko prvenstvo v cestnem kolesarstvu: v petek, soboto in nedeljo (2.–4. 10. 2026) od 9.30 do 14.30 popolna zapora Slovenske ceste med Aškerčevo in Šubičevo, obvozi za linije 1, 1B, 6, 6B, 2, 3, 3B, 3G, 9, 11, 19B, 19I in 27, poleg tega premične zapore ob dirki (obvestilo na lpp.si, objavljeno 29. 9.). V feedu derp.si o tem ni nič; edino obvestilo LPP je bilo „Čerinova na obvozu“.

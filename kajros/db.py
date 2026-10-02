@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS edge (
     elementary INTEGER NOT NULL,
     trips      INTEGER NOT NULL,
     geojson    TEXT NOT NULL,
+    osm        TEXT,              -- ista geometrija, pripeta na tir OSM (`pripni.py`)
     PRIMARY KEY (from_id, to_id)
 );
 
@@ -55,7 +56,21 @@ CREATE TABLE IF NOT EXISTS edge (
 -- torej to edini vir.
 CREATE TABLE IF NOT EXISTS shape (
     shape_id TEXT PRIMARY KEY,
-    points   TEXT NOT NULL      -- JSON [[lat,lon], ...], 5 decimalk (~1 m)
+    points   TEXT NOT NULL,     -- JSON [[lat,lon], ...], 5 decimalk (~1 m)
+    -- Ista trasa, pripeta na ceste oz. tire OSM (`pripni.py`), za prikaz.
+    -- NULL, dokler ni pripeta; prikaz takrat riše `points`.
+    osm      TEXT
+);
+
+-- Pripete trase po VSEBINI surove (ključ = točke + profil + različica
+-- postopka). Uvoz `shape` vsak dan zamenja, id-ji se ponovno uporabijo,
+-- točke pa ostanejo -- zato ključ ni `shape_id`. `delez` = del dolžine,
+-- ki je res na OSM (ostalo je ostalo surovo).
+CREATE TABLE IF NOT EXISTS pripeto (
+    kljuc TEXT PRIMARY KEY,
+    tocke TEXT NOT NULL,
+    delez REAL NOT NULL,
+    ts    INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS trip (
@@ -431,6 +446,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.commit()
         fill_trip_window(conn)
         conn.commit()
+
+    # Pripeta trasa za prikaz. Izračunljiva (`pripni.pripni()`), a šele z
+    # dosegljivim OSRM -- do takrat prikaz riše surovo, kot doslej.
+    for tabela in ("shape", "edge"):
+        stolpci = {r[1] for r in conn.execute(f"PRAGMA table_info({tabela})")}
+        if stolpci and "osm" not in stolpci:
+            conn.execute(f"ALTER TABLE {tabela} ADD COLUMN osm TEXT")
+            conn.commit()
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
