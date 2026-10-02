@@ -1924,19 +1924,26 @@ async function ustvariRunMap(v) {
     map.addSource(id, { type: "geojson", data: RUN_PRAZNO });
   }
   const okroglo = { "line-join": "round", "line-cap": "round" };
+  // Trasa na tleh: od blizu široka kot cesta oz. tir (`sirinaM`), pod
+  // stavbami -- nad njimi je bila v nagibu narisana čez hišo, za katero leži
+  // ulica. Pike in vozilo ostanejo nad stavbami (`RUN_POD`).
+  const naTleh = map.getLayer("stavbe-3d") ? "stavbe-3d" : RUN_POD;
+  const m = runMap.vlak ? 3.2 : 6.5;
   map.addLayer({ id: "run-trasa-obroba", type: "line", source: "run-trasa", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "trasa"],
-                 paint: { "line-color": "#0f1115", "line-width": 6, "line-opacity": 0.85 } },
-               RUN_POD);
+                 paint: { "line-color": "#0f1115", "line-width": sirinaM(m + 1.2, [[10, 6], [15, 6]]),
+                          "line-opacity": 0.85 } },
+               naTleh);
   map.addLayer({ id: "run-trasa", type: "line", source: "run-trasa", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "trasa"],
-                 paint: { "line-color": "#4db97f", "line-width": 3, "line-opacity": 0.95 } },
-               RUN_POD);
+                 paint: { "line-color": "#4db97f", "line-width": sirinaM(m, [[10, 3], [15, 3]]),
+                          "line-opacity": 0.95 } },
+               naTleh);
   map.addLayer({ id: "run-skozi", type: "line", source: "run-trasa",
                  filter: ["==", ["get", "vrsta"], "skozi"],
                  paint: { "line-color": "#4db97f", "line-width": 2.5, "line-opacity": 0.55,
                           "line-dasharray": [2, 2] } },
-               RUN_POD);
+               naTleh);
   // Pike so bile nekoc neme tocke na zemljevidu. Ime ob dotiku je edini
   // nacin, da se izve, katera postaja to je -- trajne oznake bi na mestni
   // liniji zakrile progo pod sabo.

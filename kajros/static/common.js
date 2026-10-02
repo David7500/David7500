@@ -1418,6 +1418,25 @@ function naloziKazalo() {
   return kazaloObljuba;
 }
 
+// ---------- širina črte v metrih ----------
+//
+// Trasa je bila 3 px pri vsakem približku. Pri Leafletovem z19 je piksel
+// 0,21 m, torej trasa 0,6 m na cesti, široki 7 m -- od blizu tanka črta ob
+// cesti namesto ceste (prijava 2. 10. 2026). Od MapLibrovega z16 naprej je
+// zato širina v metrih in raste s približkom kot cesta pod njo, od daleč pa
+// ostane v pikslih, da se vidi. 1 m = 65 536 / 54 307 px pri z16 na 46° š.;
+// po Sloveniji (45,4°–46,9°) se to spremeni za 2 %.
+const PX_NA_M_Z16 = 65536 / 54307;
+
+// `dalec`: pari [MapLibrov zoom, px] do z15 vključno.
+function sirinaM(metrov, dalec = [[10, 2], [15, 3]]) {
+  const [zz, pz] = dalec[dalec.length - 1];
+  return ["interpolate", ["exponential", 2], ["zoom"],
+    ...dalec.flat(),
+    ...(zz < 16 ? [16, Math.max(pz, metrov * PX_NA_M_Z16)] : []),
+    22, metrov * PX_NA_M_Z16 * 64];
+}
+
 // ---------- moja lega ----------
 //
 // Prikaz lastne lege je na obeh zemljevidih ista stvar, zato zivi tu.

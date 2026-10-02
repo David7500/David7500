@@ -4,6 +4,10 @@ paths:
   - "kajros/static/dashboard.css"
   - "kajros/static/train.js"
   - "kajros/static/train.css"
+  - "kajros/static/podlaga.json"
+  - "kajros/pripni.py"
+  - "kajros/tiri.py"
+  - "deploy/osrm/**"
 ---
 # Zemljevida: veliki in tisti v oknu vožnje
 
@@ -33,7 +37,7 @@ paths:
     z12,5, stranski od z15), **poti za pesce** črtkano čez zelenice,
     igrišča, pokopališča, letališke steze in **imena pomembnih točk** (šole,
     bolnišnice, cerkve) od z16, drobno in bledo. Naša mreža prog od blizu
-    pobledi (`k-proge`), da tirov ne prekrije. Napisi z `metadata.kajros:napisi = dodatni` (vasi, četrti,
+    izgine (`k-proge`, glej „Od blizu“ spodaj), da tirov ne prekrije. Napisi z `metadata.kajros:napisi = dodatni` (vasi, četrti,
     vode) so stikalo „Dodatna imena krajev“ — to so zdaj plasti v slogu, ne
     ploščice, zato se ugasnejo brez podlage. Imena ulic so v osnovi od
     MapLibrovega z14, torej **Leafletovega z15** (MapLibre ima 512-pikselne
@@ -59,6 +63,19 @@ paths:
     Esri 74 kB), namizje 3,4 MB; Ljubljana pri z13 367 kB, pri z15 1,0 MB
     (Esri 187 kB). Ploščice imajo `max-age` deset let in naslov z različico,
     zato se plačajo enkrat na napravo; MapLibre sam je 299 kB, prav tako enkrat.
+
+## Od blizu: trase na cesti, ne ob njej (2. 10. 2026)
+
+Prijava: od blizu so trase, proge in postaje tanke črte in pike, ki se od podlage razlikujejo za več metrov in ceste ne zapolnijo. Meritve v `docs/MERITVE.md` („Zemljevid od blizu“).
+
+* **Trase so pripete na OSM** (`kajros/pripni.py`, lastni OSRM s profiloma `deploy/osrm/avtobus.lua` in `tir.lua`, `deploy/osrm.sh`). Surove GTFS so od osi ceste v mediani 3,1 m (IJPP), razpršene na obe strani; pripete 0,4 m. Pripeta je v `shape.osm` in `edge.osm`, surova ostane v `points`/`geojson`. `/api/trip/{id}/shape`, `/api/shapes/live`, mreža prog in `deljenje.trasa()` berejo pripeto, kadar je. Brez OSRM je vse kot prej.
+* **Širina v metrih od MapLibrovega z16** (`sirinaM` v `common.js`), od daleč v pikslih. Velja za traso izbranega vozila (avtobus 7,5 m, vlak 3,2 m), vse trase (2,5 m), mali zemljevid in pot od vrat do vrat -- in za **ceste in tire podlage** (`podlaga.json`, `metadata.kajros:sirine`): glavna 10 m, srednja 8, manjša 6, servisna 4,5, pot 1,5, tir 3, pragovi od blizu pravi (0,26 m na 0,6 m). Prej je bila glavna cesta pri z18 16 px = 3,3 m, trasa 3 px = 0,6 m. Izraz s priblizkom mora biti na vrhu (`interpolate` nad `zoom`), zato se širina ob izbiri vlaka ali avtobusa zamenja cela (`trasaSirina`), ne vgnezdi v `case`.
+* **Črte na tleh so pod stavbami** (`naTleh` = `stavbe-3d`), pike in vozila nad njimi. Nad stavbami je bila v nagibu trasa narisana čez hišo, za katero leži ulica.
+* **Naša proga od Leafletovega z16 pobledi, pri z17,5 izgine** (prej: pobledela na pol in ostala). Podlaga od blizu nariše vsak tir posebej; ena črta po enem od desetih tirov postaje je trdila, da vlak vozi po tistem. Kod vozi izbrani vlak, pokaže njegova pot.
+* **Klik na vozilo pobarva njegovo pot** (`izberi` → `drawStops` → `narisiTraso`): naprej v barvi vozila (prevoznik, vlak oranžno), prevoženo sivo (`ZA_INK`). Razrez je pri vozilu, kot je narisano; vozilo dlje od 300 m od trase (pelje na začetek vožnje) ima vso pot pred sabo. Krožna linija: med enako bližnjimi odseki tisti, ki je najbliže prejšnji legi vzdolž trase. Pot gre s kartico -- zaprta kartica, pobarvana cesta brez razlage ostane uganka. Postaja z več vlaki: oblaček pot pobarva šele ob dotiku kartice vlaka (`data-trip`), z enim takoj.
+* **Avtobus je narisan na cesti** (`cesta` v `/api/vehicles`, `pripni.na_cesto`): na pripeti trasi svoje vožnje, 1,9 m desno (izmerjen desni pas), v smeri ceste, kadar je GPS do 15 m od trase in smer v 60°. Med vozečimi tako 69,6 %; ostali so vožnje, ki se še niso začele, in ostanejo na GPS. **To ni ocena lege** (te na velikem zemljevidu ni, glej spodaj): ista izmerjena lega, premaknjena v mediani 4,2 m na cesto. Meritev ostane v `lat`/`lon`.
+* **Vlak v 3D stoji na tiru**: `_na_postaji` ga postavi na pripeto traso (tir OSM, ne postajno poslopje); kjer tabla SŽ objavi tir in ga OSM pozna po številki (`kajros/tiri.py`, `${DATA_DIR}/tiri.json`), na tisti tir (`na_postaji.tir`, 32 % objavljenih tirov). Vlaki brez številke na isti postaji še vedno drug ob drugem (`VLAK_TIR_M`).
+* Pike postaj od z15 do z18 rastejo na dvojno in ležijo na tleh (`circle-pitch-alignment: map`).
 
 ## Pogled se ne premika sam (26. 9. 2026)
 
@@ -126,7 +143,7 @@ Resnična napaka **ni bila** manjkajoča povečava, ampak vlečenje z enim prsto
 
 **Razširjen zemljevid mora prezreti postavitev, in to zahteva `!important`.** Namizna pravila v `@media` (`body:not(.is-advanced) .col-run .run-map`) imajo specifičnost **(0,3,1)** in so `.run-map-wrap.is-max .run-map` **(0,3,0)** tiho premagala: zemljevid čez celo stran ostal visok **240 px** in zamaknjen za **12 px** margine, ostalo črno. Na telefonu se to **ni videlo**, ker tam teh pravil ni — popravljeno šele ob prijavi z namizja. Rešitev ni daljši selektor, ampak `!important` na `position`, `inset`, `margin`, `height`: element je iztrgan iz postavitve in mora prezreti vsa pravila o njej. Isti vzorec kot `adv-only` v `base.css`.
 
-**Na velikem zemljevidu tega ni** — odločitev, ne opustitev: tam je vprašanje „kje je vse skupaj", ocena za osemdeset vozil = osemdeset izmišljenih leg. V oknu vožnje gledaš eno vozilo, vprašanje je natanko „kje je zdaj".
+**Na velikem zemljevidu tega ni** — odločitev, ne opustitev: tam je vprašanje „kje je vse skupaj", ocena za osemdeset vozil = osemdeset izmišljenih leg. V oknu vožnje gledaš eno vozilo, vprašanje je natanko „kje je zdaj". (Avtobus na cesti, `cesta`, ni ocena: ista izmerjena lega, pripeta na traso, ne premaknjena naprej v času.)
 
 **Trasa se skoraj nikoli ni risala.** Pogoj `trasa.length > 1` napisan, ko je bil `points` ravna lista točk; odkar jih uvoz reže na kose (`SHAPE_BREAK_M`), je enodelna trasa dolga 1 in pogoj je ni spustil. To je bilo **2 706 od 2 897 oblik, torej 93 %** — v oknu vožnje in na velikem zemljevidu. Pravilen pogoj: „vsaj en kos z vsaj dvema točkama".
 

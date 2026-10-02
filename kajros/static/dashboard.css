@@ -498,6 +498,10 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
  */
 .veh-card { min-width: 210px; }
 .veh-card + .veh-card { margin-top: 10px; padding-top: 10px; border-top: 1px solid #23272f; }
+/* Kartica vlaka v oblačku postaje izbere pot z dotikom; izbrana je obrobljena
+   v barvi vlaka, iste kot pot na zemljevidu. */
+.veh-card[data-trip] { cursor: pointer; }
+.veh-card.is-on { box-shadow: -3px 0 0 #f0934f; padding-left: 7px; }
 .veh-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
 .veh-no {
   font: 600 14px/1.2 'IBM Plex Mono', ui-monospace, monospace; color: #e7eaf0;

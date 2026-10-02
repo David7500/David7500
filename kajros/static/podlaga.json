@@ -2,7 +2,8 @@
  "version": 8,
  "name": "kajros",
  "metadata": {
-  "kajros:vir": "Lastna temna podlaga za zemljevide kajrosa. Plasti in izbira podatkov po OpenMapTiles shemi, barve po Slometovi temni podlagi (vzorcene 22. 9. 2026). Napisi z metadata kajros:napisi=dodatni so stikalo 'Dodatna imena krajev'."
+  "kajros:vir": "Lastna temna podlaga za zemljevide kajrosa. Plasti in izbira podatkov po OpenMapTiles shemi, barve po Slometovi temni podlagi (vzorcene 22. 9. 2026). Napisi z metadata kajros:napisi=dodatni so stikalo 'Dodatna imena krajev'.",
+  "kajros:sirine": "Od MapLibrovega z16 so ceste in tiri siroki v metrih (2. 10. 2026): avtocesta 11 (vozisce), glavna 10, srednja 8, manjsa 6, servisna 4,5, pot 1,5, tir 3, pragi 2,6. Nase trase so v metrih od istega priblizka (sirinaM v common.js), da cesto pokrijejo, ne pa crte ob njej."
  },
  "sources": {
   "omt": {
@@ -402,8 +403,18 @@
      1.3,
      14,
      3,
+     15,
+     4.35,
+     16,
+     12.07,
+     17,
+     24.14,
      18,
-     14
+     48.27,
+     19,
+     96.54,
+     20,
+     193.08
     ],
     "line-opacity": 0.45
    }
@@ -465,17 +476,25 @@
      "interpolate",
      [
       "exponential",
-      1.2
+      1.5
      ],
      [
       "zoom"
      ],
      13,
      0.5,
+     15,
+     0.86,
      16,
-     1.1,
+     1.81,
+     17,
+     3.62,
+     18,
+     7.24,
      19,
-     2.6
+     14.48,
+     20,
+     28.96
     ],
     "line-dasharray": [
      1.5,
@@ -548,10 +567,63 @@
      0.4,
      14,
      1.4,
+     15,
+     2.44,
      16,
-     4,
+     [
+      "match",
+      [
+       "get",
+       "class"
+      ],
+      "service",
+      5.43,
+      7.24
+     ],
+     17,
+     [
+      "match",
+      [
+       "get",
+       "class"
+      ],
+      "service",
+      10.86,
+      14.48
+     ],
      18,
-     10
+     [
+      "match",
+      [
+       "get",
+       "class"
+      ],
+      "service",
+      21.72,
+      28.96
+     ],
+     19,
+     [
+      "match",
+      [
+       "get",
+       "class"
+      ],
+      "service",
+      43.44,
+      57.92
+     ],
+     20,
+     [
+      "match",
+      [
+       "get",
+       "class"
+      ],
+      "service",
+      86.89,
+      115.85
+     ]
     ]
    }
   },
@@ -622,10 +694,18 @@
      1,
      14,
      2.6,
+     15,
+     3.96,
      16,
-     6,
+     9.65,
+     17,
+     19.31,
      18,
-     14
+     38.62,
+     19,
+     77.23,
+     20,
+     154.47
     ]
    }
   },
@@ -696,10 +776,18 @@
      1.1,
      14,
      3.4,
+     15,
+     4.84,
      16,
-     7,
+     12.07,
+     17,
+     24.14,
      18,
-     16
+     48.27,
+     19,
+     96.54,
+     20,
+     193.08
     ]
    }
   },
@@ -769,10 +857,18 @@
      1.5,
      14,
      4,
+     15,
+     5.6,
      16,
-     8,
+     13.27,
+     17,
+     26.55,
      18,
-     18
+     53.1,
+     19,
+     106.2,
+     20,
+     212.39
     ]
    }
   },
@@ -830,17 +926,25 @@
      "interpolate",
      [
       "exponential",
-      1.3
+      1.5
      ],
      [
       "zoom"
      ],
      13,
      1.4,
+     15,
+     2.32,
      16,
-     3,
+     3.62,
+     17,
+     7.24,
+     18,
+     14.48,
      19,
-     6
+     28.96,
+     20,
+     57.92
     ]
    }
   },
@@ -895,24 +999,49 @@
    "paint": {
     "line-color": "#7a889a",
     "line-dasharray": [
-     1,
-     1.4
+     "step",
+     [
+      "zoom"
+     ],
+     [
+      "literal",
+      [
+       1,
+       1.4
+      ]
+     ],
+     16,
+     [
+      "literal",
+      [
+       0.1,
+       0.13
+      ]
+     ]
     ],
     "line-width": [
      "interpolate",
      [
       "exponential",
-      1.3
+      1.5
      ],
      [
       "zoom"
      ],
      13,
      0.9799999999999999,
+     15,
+     1.63,
      16,
-     2.0999999999999996,
+     3.14,
+     17,
+     6.28,
+     18,
+     12.55,
      19,
-     4.199999999999999
+     25.1,
+     20,
+     50.2
     ]
    }
   },
@@ -967,17 +1096,23 @@
      "interpolate",
      [
       "exponential",
-      1.3
+      1.5
      ],
      [
       "zoom"
      ],
      15,
      1.2,
+     16,
+     3.62,
      17,
-     2.2,
+     7.24,
+     18,
+     14.48,
      19,
-     4.5
+     28.96,
+     20,
+     57.92
     ]
    }
   },
@@ -1029,24 +1164,47 @@
    "paint": {
     "line-color": "#7a889a",
     "line-dasharray": [
-     1,
-     1.4
+     "step",
+     [
+      "zoom"
+     ],
+     [
+      "literal",
+      [
+       1,
+       1.4
+      ]
+     ],
+     16,
+     [
+      "literal",
+      [
+       0.1,
+       0.13
+      ]
+     ]
     ],
     "line-width": [
      "interpolate",
      [
       "exponential",
-      1.3
+      1.5
      ],
      [
       "zoom"
      ],
      15,
      0.84,
+     16,
+     3.14,
      17,
-     1.54,
+     6.28,
+     18,
+     12.55,
      19,
-     3.15
+     25.1,
+     20,
+     50.2
     ]
    }
   },

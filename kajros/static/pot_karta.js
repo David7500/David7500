@@ -139,13 +139,15 @@ async function pkUstvari(el, opts) {
     map.addSource(id, { type: "geojson", data: PK_PRAZNO });
   }
   const okroglo = { "line-join": "round", "line-cap": "round" };
+  // Vožnja od blizu široka kot cesta (`sirinaM`): trasa je pripeta na OSM in
+  // pokrije cesto, po kateri vozilo pelje, ne tanke črte ob njej.
   map.addLayer({ id: "k-voznja-obroba", type: "line", source: "k-pot", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "voznja"],
-                 paint: { "line-color": "#0f1115", "line-width": 7,
+                 paint: { "line-color": "#0f1115", "line-width": sirinaM(6, [[10, 7], [15, 7]]),
                           "line-opacity": ["coalesce", ["get", "prosojnost"], 0.85] } });
   map.addLayer({ id: "k-voznja", type: "line", source: "k-pot", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "voznja"],
-                 paint: { "line-color": PK_VOZNJA, "line-width": 4,
+                 paint: { "line-color": PK_VOZNJA, "line-width": sirinaM(5, [[10, 4], [15, 4]]),
                           "line-opacity": ["coalesce", ["get", "prosojnost"], 0.9] } });
   map.addLayer({ id: "k-hoja-obroba", type: "line", source: "k-pot", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "hoja"],
