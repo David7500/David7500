@@ -169,7 +169,8 @@ def cmd_ocena(args):
               else "brez podatkov")
     print(f"senca {razpon} · pokritih obratovalnih dni {r.get('pokritih_dni', 0)}"
           f" · razrešenih vrstic {r['vrstic']} na poti, {r.get('vrstic_pred_odhodom', 0)}"
-          f" pred odhodom · čaka na resnico {r['cakajo']}")
+          f" pred odhodom · čaka na resnico {r['cakajo']}"
+          f" · izločenih z resnico nad 3 h {r.get('nad_stropom', 0)}")
     if not r["vrstic"]:
         print("\nŠe nič razrešenega. Senca teče ob strežniku; prvi izidi so čez"
               " dobro uro.")

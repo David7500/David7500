@@ -1895,6 +1895,32 @@ odhodom 118 315: prikaz 2,36 min, strošek 6,71; običajno 2,27 / 6,70.
 Primerjava z `--days 3` okoli 3. 10. Pričakovana razlika majhna: strop
 spremeni ~2,4 % avtobusnih voženj.
 
+**Primerjava 3. 10. 2026** (`--days 3`, 30. 9.--3. 10., vse s stropom):
+na poti 71 655 vrstic, naša ocena 2,28 min, v 5 min 93,1 %, precenjenih
+2,5 % (prej 2,8), strošek 6,26; pred odhodom 54 678: prikaz 2,93 / 7,52,
+običajno 2,94 / 7,55. Na videz slabše, a dnevi so bili težji za vse
+reference: prenos zamude 3,36 → 3,90 min, prevoznik 2,74 → 3,04, vozni
+red pred odhodom 3,29 → 4,35. Razmerje do referenc se je izboljšalo
+(naša / prenos 0,64 → 0,58; prikaz / vozni red 0,72 → 0,67). Učinka stropa
+ta primerjava ne loči od razlike med dnevi -- za to je merilo izpuščeni dan
+zgoraj (3,03 → 2,44 min na 477 prizadetih vožnjah). Poslabšanja ni videti.
+
+Dve ugotovitvi ob tem:
+
+* **Resnica v senci ni imela stropa.** Avtobusi, 30. 9.--3. 10.: pred
+  odhodom 45 vrstic z resnico nad 3 h od 54 715 (od -6 do +4 h), MAE prikaza
+  z njimi 2,93 min, brez njih 2,74; na poti 5 od 71 685, 2,28 proti 2,25. V
+  izhodišču 22.--29. 9. 23 od 118 475 (2,36 proti 2,31) in 4 od 150 439.
+  Vlaki 0 od 62 491. `ocena.report` jih odtlej izloči in prešteje.
+* **„Brez običajnega“ pred odhodom je skočil z ~2 na 9--11 %.** Po dnevih:
+  22.--30. 9. 0,7--5,1 %, 1. 10. 9,3 %, 2. 10. 9,7 %. Vse iz mestnega LPP:
+  pred 1. 10. 40 od 29 791 vrstic (0,1 %), od 1. 10. 2 657 od 9 931
+  (27 %), 233 voženj. Na vzorcu 80 takih voženj 2. 10. jih ima 72 nič ali
+  en pretekli dan v `run`; vožnje z istim ključem `db.voznja_sql` z
+  meritvami bi ostale v `trip` kot nagrobniki, torej so te vožnje v voznem
+  redu nove od 1. oz. 2. 10. (vožnje z „običajnim“: 10--19 preteklih dni).
+  Ni napaka stropa; zaceli se sam po treh dneh (`MIN_RUNS_FOR_TYPICAL`).
+
 ## Iskalniki: kajros ni bil nikjer (29. 9. 2026)
 
 Povod: Grok na vprašanje „najboljša slovenska stran za zamude“ kajrosa ni omenil; omenil je zamudil.si, brezavta.si, slomet.si.

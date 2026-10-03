@@ -400,10 +400,21 @@ def report(conn: sqlite3.Connection, days: int = 30,
     ki precenitev nad rezervo zaračuna kot cel razmik do naslednjega vozila.
     """
     od = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    # Resnica nad `stats.MAX_REALNA_ZAMUDA_S` ni zamuda, ampak zamenjan
+    # prometni dan ali smet vira -- isti strop kot pri vsem branju `run`.
+    # `resolve` jo zapiše surovo (zgodovina ostane cela), izloči se tu.
+    # Izmerjeno na arwenu 3. 10. 2026, avtobusi 30. 9.--3. 10.: pred odhodom
+    # 45 takih od 54 715 vrstic (od -6 do +4 h), MAE prikaza z njimi 2,93 min,
+    # brez njih 2,74; na poti 5 od 71 685, 2,28 proti 2,25. Vlaki 0 od 62 491.
+    pogoj = ("actual_s IS NOT NULL AND service_date >= ?"
+             + (" AND network = ?" if network else ""))
+    param = (od, network) if network else (od,)
     vse = conn.execute(
-        "SELECT * FROM napoved WHERE actual_s IS NOT NULL AND service_date >= ?"
-        + (" AND network = ?" if network else ""),
-        (od, network) if network else (od,)).fetchall()
+        f"SELECT * FROM napoved WHERE {pogoj} "
+        f"AND ABS(actual_s) <= {stats.MAX_REALNA_ZAMUDA_S}", param).fetchall()
+    nad_stropom = conn.execute(
+        f"SELECT COUNT(*) FROM napoved WHERE {pogoj} "
+        f"AND ABS(actual_s) > {stats.MAX_REALNA_ZAMUDA_S}", param).fetchone()[0]
     # Pogled pred odhodom (brez izhodisca) je drugo vprasanje: tam ni ne
     # trenutne zamude ne prenosa. V isti tabeli merila bi mesal oboje in
     # meril razmerje med vrstama pogledov, ne modela.
@@ -455,7 +466,8 @@ def report(conn: sqlite3.Connection, days: int = 30,
     # senca res pokriva. Senca se polni samo, ko tece strezni proces, zato
     # koledarski razpon in pokriti dnevi nista isto.
     obr = sorted({r["service_date"] for r in vse})
-    izid = {"od": od, "vrstic": len(vrstice), "skupaj": rez(vrstice),
+    izid = {"od": od, "vrstic": len(vrstice), "nad_stropom": nad_stropom,
+            "skupaj": rez(vrstice),
             "prvi_dan": obr[0] if obr else None,
             "zadnji_dan": obr[-1] if obr else None,
             "pokritih_dni": len(obr)}

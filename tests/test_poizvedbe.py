@@ -1424,6 +1424,23 @@ def test_senca_pred_odhodom_zapise_kar_pokaze_iskalnik(conn):
     assert r["vrstic_pred_odhodom"] == 0        # resnice še ni
 
 
+def test_senca_ne_meri_resnice_nad_tremi_urami(conn):
+    """Resnica +6 h je zamenjan prometni dan, ne zamuda. 3. 10. 2026 je 45
+    takih vrstic od 54 715 premaknilo MAE prikaza pred odhodom z 2,74 na
+    2,93 min."""
+    ocena.init(conn)
+    for tid, resnica in (("t1", 300), ("t2", 6 * 3600)):
+        conn.execute(
+            "INSERT INTO napoved(trip_id, service_date, stop_seq, network, made_ts,"
+            " horizon_s, current_s, from_seq, ours_s, ours_own_s, carry_s, actual_s)"
+            " VALUES(?, ?, 3, 'zeleznica', 0, 1500, 240, 2, 240, 240, 240, ?)",
+            (tid, _pred(1), resnica))
+    conn.commit()
+    r = ocena.report(conn, days=3650)
+    assert (r["vrstic"], r["nad_stropom"]) == (1, 1)
+    assert r["skupaj"]["nasa"]["mae_min"] == 1.0
+
+
 def test_senca_posname_postanek_samo_enkrat(conn):
     """Potnik pogleda enkrat. Drugi obhod cez minuto ne sme prepisati prvega,
     sicer bi merili napoved z vedno krajsim horizontom."""
