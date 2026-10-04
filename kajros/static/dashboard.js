@@ -662,31 +662,52 @@ function groupPopupHtml(g) {
 }
 
 
+// Obroc vzame ikoni rob, zato je vlak za dve piki vecji od avtobusa pri
+// istem priblizku (`BUS_VELIKOST`); sicer je bil ob njem drobna klobasa.
 function trainSize(z) {
-  if (z >= 17) return 38;
-  if (z >= 13) return 30;
-  if (z >= 11) return 24;
-  if (z >= 9) return 19;
-  return 15;
+  if (z >= 17) return 42;
+  if (z >= 13) return 32;
+  if (z >= 11) return 26;
+  if (z >= 9) return 21;
+  return 17;
 }
 
-// Vlak od zgoraj, na obrocu. Obroc ni okras: pove, da je to POSTAJA in ne
-// izmerjena lega -- feed za vlake GPS nima in marker stoji na zadnji postaji
-// z meritvijo. Avtobus obroca nima, ker je njegova lega prava.
-function trainSvg(n, s) {
+// Vlak od zgoraj, na obrocu, v smeri proge -- v istem slogu kot avtobus
+// (svetlo steklo spredaj, temno zadaj), da se ikoni bereta kot ena druzina.
+// Daljsi, ozji in s prelomom med vozovoma, da se od avtobusa loci tudi po
+// obliki. Obroc ni okras: pove, da je to POSTAJA in ne izmerjena lega --
+// feed za vlake GPS nima in marker stoji na zadnji postaji z meritvijo.
+// Avtobus obroca nima, ker je njegova lega prava. Brez smeri (prometno
+// mesto ni na trasi) sta oba konca enaka: vlak ne kaze nikamor, namesto
+// da bi kazal na sever.
+function trainSvg(n, s, smer) {
+  const [steklo, prosojnost] = smer == null ? ["#0f1115", 0.7] : ["#e9f4ff", 0.95];
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="11" fill="none"
               stroke="${TRAIN_INK}" stroke-opacity="0.45" stroke-width="1.4"/>
-      <rect x="7" y="3.5" width="10" height="17" rx="3.4"
-            fill="${TRAIN_INK}" stroke="#0f1115" stroke-width="1.5"/>
-      <path d="M8.8 6.6 Q12 5.5 15.2 6.6 L15.2 9.2 Q12 8.2 8.8 9.2 Z"
-            fill="#0f1115" fill-opacity="0.7"/>
-      <circle cx="9.8" cy="18" r="1" fill="#0f1115" fill-opacity="0.8"/>
-      <circle cx="14.2" cy="18" r="1" fill="#0f1115" fill-opacity="0.8"/>
+      <g class="vlak-telo" transform="rotate(${smer ?? 0} 12 12)">
+        <path d="M8.2 7 C8.2 4.1 9.9 3 12 3 C14.1 3 15.8 4.1 15.8 7 L15.8 19.3
+                 Q15.8 21 14.1 21 L9.9 21 Q8.2 21 8.2 19.3 Z"
+              fill="${TRAIN_INK}" stroke="#0f1115" stroke-width="1.4"/>
+        <path d="M9.5 6.3 Q12 4.8 14.5 6.3 L14.5 8 Q12 7.2 9.5 8 Z"
+              fill="${steklo}" fill-opacity="${prosojnost}"/>
+        <path d="M8.2 13.4 H15.8" stroke="#0f1115" stroke-width="0.9" stroke-opacity="0.7"/>
+        <rect x="10" y="19" width="4" height="0.9" rx="0.4" fill="#0f1115" fill-opacity="0.7"/>
+      </g>
       ${n > 1 ? `<circle cx="19" cy="5" r="4" fill="#0f1115"/>
         <text x="19" y="7.4" text-anchor="middle" font-size="6"
               font-family="monospace" fill="${TRAIN_INK}">${n}</text>` : ""}
     </svg>`;
+}
+
+// Smer ikone glede na zaslon: proga je glede na sever, zemljevid pa se
+// lahko zavrti. Marker DOM se z njim ne vrti sam, oznaka ob njem pa se
+// vrteti ne sme -- zato zasukamo samo telo vlaka.
+function zasukajVlak(m) {
+  const telo = m.__icon.querySelector(".vlak-telo");
+  if (telo && m.__smer != null) {
+    telo.setAttribute("transform", `rotate(${m.__smer - map.getBearing()} 12 12)`);
+  }
 }
 
 // Vlaki so elementi DOM nad zemljevidom, avtobusi pa plast v njem. Vlakov je
@@ -730,9 +751,13 @@ function renderTrains(trains) {
     } else {
       marker.setLngLat([g.station.lon, g.station.lat]);
     }
+    // Smer prvega vlaka na seznamu: ikona je ena za vso postajo.
+    const t0 = g.trains[0];
+    marker.__smer = (naPotnikovi(t0) ? t0.potnik.smer : t0.smer) ?? null;
     const ikona = marker.__icon;
     ikona.style.width = ikona.style.height = `${s}px`;
-    ikona.innerHTML = trainSvg(g.trains.length, s);
+    ikona.innerHTML = trainSvg(g.trains.length, s, marker.__smer);
+    zasukajVlak(marker);
     marker.__label.innerHTML = groupLabelHtml(g);
     marker.getPopup().setOffset(s / 2).setHTML(groupPopupHtml(g));
     marker.__worst = worstDelay(g.trains);
@@ -813,6 +838,7 @@ function posodobiVlake3D() {
 // Ob vsakem koraku priblizevanja, ne sele ob koncu: sicer bi cez mejo
 // model in ikona do konca gibanja stala drug na drugem.
 map.on("zoom", posodobiVlake3D);
+map.on("rotate", () => { for (const m of stationMarkers.values()) zasukajVlak(m); });
 
 // Vlak v 3D pod prstom: odpre kartico postaje, isto kot ikona. Polmer je
 // pol garniture, a vsaj za prst.

@@ -505,6 +505,23 @@ def test_vlak_na_koncni_stoji(conn):
     assert p["smer"] == pytest.approx(90, abs=1)
 
 
+def test_ikona_vlaka_gleda_po_progi_tam_kjer_je_narisana(conn):
+    """Ikona vlaka je od zgoraj; smer je smer proge na kraju, kjer jo
+    zemljevid nariše, naprej po vožnji -- ne sever."""
+    from kajros import api
+    assert api._smer_vlaka(conn, _vrstica(1)) == pytest.approx(90, abs=1)
+    assert api._smer_vlaka(conn, _vrstica(1, trip="t2")) == pytest.approx(270, abs=1)
+    # Prometno mesto iz poročila prevoznika: projekcija na traso.
+    ob_progi = {**_vrstica(1), "reported_lat": LAT + 0.001, "reported_lon": 14.05}
+    assert api._smer_vlaka(conn, ob_progi) == pytest.approx(90, abs=1)
+    # Mesto 1,1 km od proge (ime se je ujelo s čim drugim): smeri ne vemo.
+    stran = {**_vrstica(1), "reported_lat": LAT + 0.01, "reported_lon": 14.05}
+    assert api._smer_vlaka(conn, stran) is None
+    # Vlak, ki stoji, ima smer postaje, ne prometnega mesta.
+    stoji = {**stran, "na_postaji": {"smer": 271.0}}
+    assert api._smer_vlaka(conn, stoji) == 271.0
+
+
 def test_vozilo_po_potnikih_samo_ob_soglasju(conn):
     """Mali zemljevid v oknu vožnje: en potnik je lahko že izstopil in čaka
     na peronu, zato lega šele od dveh, ki se ujemata."""

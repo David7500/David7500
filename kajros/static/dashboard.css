@@ -240,25 +240,27 @@ body {
 
 /* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
  * Avtobus obroča nima, ker je njegova lega prava. Oznaka je desno od ikone in
- * je del istega elementa, zato jo klik odpre tako kot ikono. */
+ * je del istega elementa, zato jo klik odpre tako kot ikono.
+ * Oznaka je napis z obrobo, kot številka ob avtobusu, ne škatla: neprosojna
+ * škatla je v vozlišču prekrila avtobuse in ime postaje pod sabo. */
 .train-marker { cursor: pointer; }
 .train-icon svg { display: block; }
 .train-label {
   position: absolute;
-  left: calc(100% + 5px);
+  left: calc(100% + 3px);
   top: 50%;
   transform: translateY(-50%);
-  padding: 2px 6px;
-  background: #1a1d23;
-  border: 1px solid #2b303a;
-  border-radius: 5px;
   color: #e7eaf0;
-  font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif;
+  font: 400 11px/1.25 'IBM Plex Sans', system-ui, sans-serif;
   white-space: nowrap;
+  /* Obroba iz senc, kot obroba napisov v plasti zemljevida. */
+  text-shadow: 0 0 2px #0f1115, 0 0 2px #0f1115, 1px 1px 1px #0f1115,
+               -1px -1px 1px #0f1115, 1px -1px 1px #0f1115, -1px 1px 1px #0f1115;
 }
 .train-label-line { display: flex; align-items: baseline; gap: 5px; }
-.train-label-code { font: 600 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; }
-.train-label-more { font: 400 10px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; }
+.train-label-code { font: 600 11px/1.25 'IBM Plex Sans', system-ui, sans-serif; }
+.train-label-more { font: 400 10px/1.25 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; }
+.train-label .train-label-more { color: #a3abb6; }
 
 /* ---------- popup s seznamom vlakov na postaji ---------- */
 
