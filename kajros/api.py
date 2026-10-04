@@ -2438,37 +2438,6 @@ def _na_postaji(conn, r: dict, now_s: int) -> dict | None:
             "_t_s": p["dep_s"] if p["dep_s"] is not None else p["arr_s"]}
 
 
-#: Prometno mesto, dlje od trase vožnje, ni kraj na njej: smeri tam ne vemo.
-_SMER_MESTO_M = 500
-
-
-def _smer_vlaka(conn, r: dict) -> float | None:
-    """Smer proge, naprej po vožnji, tam, kjer zemljevid vlak nariše.
-
-    Ikona vlaka je od zgoraj, kot avtobus; brez smeri je kazala na sever in
-    trdila smer, ki je ni. Kraj je isti kot v `trainPlace()` v
-    `dashboard.js`: postaja, kjer zdaj stoji, sicer prometno mesto iz
-    prevoznikovega poročila, sicer zadnja postaja z meritvijo. Potnikovo
-    smer zemljevid vzame iz `potnik`.
-    """
-    if r.get("na_postaji"):
-        return r["na_postaji"]["smer"]
-    v = deljenje.voznja(conn, r["trip_id"])
-    if v is None:
-        return None
-    if r.get("reported_lat") is not None:
-        along, odmik = v.trasa.projiciraj(r["reported_lat"], r["reported_lon"],
-                                          najvec_m=_SMER_MESTO_M)
-        if odmik > _SMER_MESTO_M:
-            return None
-    else:
-        p = next((p for p in v.postanki if p["stop_seq"] == r["stop_seq"]), None)
-        if p is None:
-            return None
-        along = p["along"]
-    return v.trasa.smer(along, _SMER_POSTAJE_M)
-
-
 @app.get("/api/connections")
 def api_connections(
     from_: str = Query(..., alias="from", description="ime izhodiščne postaje"),
@@ -2589,9 +2558,6 @@ def _live(network: str | None = None) -> list[dict]:
 
     with _conn() as conn:
         _add_gps_position(conn, rows)
-        for r in rows:
-            if r["network"] == "zeleznica":
-                r["smer"] = _smer_vlaka(conn, r)
     rows.sort(key=lambda r: (r["delay_s"] is None, -(r["delay_s"] or 0)))
     # Ziva vozjna je po definiciji ze prevozila `last_stop`, zato je njena
     # zamuda meritev -- `_live_rows` bere natanko do meje.

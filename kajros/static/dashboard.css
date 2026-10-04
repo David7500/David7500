@@ -238,9 +238,9 @@ body {
 }
 .kajros-tooltip .maplibregl-popup-tip { display: none; }
 
-/* Vlak je ikona na obroču: obroč pove, da je to POSTAJA in ne izmerjena lega.
- * Avtobus obroča nima, ker je njegova lega prava. Oznaka je desno od ikone in
- * je del istega elementa, zato jo klik odpre tako kot ikono.
+/* Vlak je ploščica na postaji (`trainSvg`): znak pove, da je to POSTAJA in ne
+ * izmerjena lega. Oznaka je desno od ikone in je del istega elementa, zato
+ * jo klik odpre tako kot ikono.
  * Oznaka je napis z obrobo, kot številka ob avtobusu, ne škatla: neprosojna
  * škatla je v vozlišču prekrila avtobuse in ime postaje pod sabo. */
 .train-marker { cursor: pointer; }

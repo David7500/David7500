@@ -16,7 +16,7 @@ Pravila zajema (kaj feed pove in kje laže): `.claude/rules/zajem.md`; tu samo s
 
 **Vožnja z zamudo čez `api.MAX_LIVE_DELAY_S` (6 h) ni živa.** Pravilo prikaza, ne pospešek: pri železnici ni zamude čez tri ure, pri avtobusih je nad šest ur 0,67 % vrstic — niso zamude, ampak feedova zamenjava prometnega dne.
 
-* **Položaj vlaka = interpoliran, ne GPS.** `vehicle_positions` vsebuje avtobuse, vlakov ne. Dashboard riše vlake na zadnji znani postaji. **Avtobusi GPS imajo** — z legendo, smerjo in hitrostjo (do 130 vozil hkrati). Zemljevid: avtobus = puščica v smeri vožnje, vlak = krog na postaji; enak simbol bi zabrisal razliko med izmerjeno lego in zadnjo znano postajo. Hrani se samo trenutna lega (`vehicle_now`, upsert): sled ~300 000 točk/dan, "kje je zdaj" rabi eno vrstico.
+* **Položaj vlaka = interpoliran, ne GPS.** `vehicle_positions` vsebuje avtobuse, vlakov ne. Dashboard riše vlake na zadnji znani postaji. **Avtobusi GPS imajo** — z legendo, smerjo in hitrostjo (do 130 vozil hkrati). Zemljevid: avtobus = oblika vozila v smeri vožnje, vlak = ploščica na postaji; enak simbol bi zabrisal razliko med izmerjeno lego in zadnjo znano postajo. Hrani se samo trenutna lega (`vehicle_now`, upsert): sled ~300 000 točk/dan, "kje je zdaj" rabi eno vrstico.
 
   **Ritem izmerjen, ne domnevan** (86 vozil, 492 prehodov med legami): vozilo objavi novo lego vsakih **20 s** (404 od 492 razmikov natanko 20 s); ko se pojavi v feedu, je že **20 s stara** (p90 30 s, najstarejša 104 s). Glava feeda sveža — naš prenos oddaljen 0,5--3 s — zaostanek ni na naši strani, ampak med vozilom in virom.
 
