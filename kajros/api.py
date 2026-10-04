@@ -1339,6 +1339,10 @@ def api_health():
             for vir, kljuc in (("ijpp", "rt_neznanih"), ("lpp", "lpp_rt_neznanih"))
             if (v := db.get_meta(conn, kljuc))
         }
+        # Ali se po voznem redu sploh kaj vozi: ponoči feed molči, ker molči
+        # promet, in to ni okvara (`zdravje.ocena`). Sveže, ker je od tega
+        # odvisna barva, ne predpomnjeno število.
+        out["vozi_zdaj"] = stats.vozi_zdaj(conn)
         # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
         # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
         # pregledu nikomur nič ne pove.

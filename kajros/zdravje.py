@@ -24,6 +24,9 @@ FEED_STALE_S = 90
 #: obstal.
 SZ_STOJI_S = 300
 
+#: Toliko voženj po voznem redu mora teči, da je molk feeda okvara.
+MIN_VOZENJ = 3
+
 
 def stroj() -> dict:
     """Disk in WAL -- tisto, česar baza sama o sebi ne ve."""
@@ -49,8 +52,17 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     out: dict[str, tuple[str, str]] = {}
     mreze = z.get("by_network") or {}
 
+    # Feed in omrežji molčijo po pravici, kadar po voznem redu nič ne vozi:
+    # ponoči od ~23:30 do ~4:30 so bili trije rdeči vrstici in do 10 mailov.
+    # Ena ali dve vožnji ne štejeta (kot pri `neznane` spodaj): 3. 10. 2026
+    # ob 2:30 vozi po voznem redu en sam avtobus, ki ga feed ne nosi nujno.
+    # `vozi_zdaj` manjka pri starem odgovoru -- takrat velja kot prej.
+    vozi = z.get("vozi_zdaj")
+    ponoci = vozi is not None and sum(vozi.values()) < MIN_VOZENJ
+
     ts = z.get("last_feed_ts")
-    out["feed"] = ((SLABA, "nobene zamude iz feeda") if not ts
+    out["feed"] = (("", "") if ponoci
+                   else (SLABA, "nobene zamude iz feeda") if not ts
                    else (SLABA, f"zadnja zamuda iz feeda pred {_min(zdaj - ts)}")
                    if zdaj - ts > FEED_STALE_S else (DOBRA, ""))
 
@@ -58,7 +70,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     # sicer bi predpomnilnik sam prižgal rdečo.
     for kljuc, ime in (("zeleznica", "vlaki"), ("avtobus", "avtobusi")):
         ts = (mreze.get(kljuc) or {}).get("last_feed_ts")
-        if not ts:
+        if vozi is not None and vozi.get(kljuc, 0) < MIN_VOZENJ:
+            out[kljuc] = ("", "")
+        elif not ts:
             out[kljuc] = (SLABA, f"{ime}: nobenega zapisa")
         elif zdaj - ts < 1200:
             out[kljuc] = (DOBRA, "")

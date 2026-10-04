@@ -52,6 +52,31 @@ def polnoc(service_date: str) -> int:
     return int(datetime(d.year, d.month, d.day, 12, tzinfo=TZ).timestamp()) - 43200
 
 
+def vozi_zdaj(conn: sqlite3.Connection, zdaj: float | None = None,
+              vsaj_s: int = 900) -> dict[str, int]:
+    """Koliko voženj po omrežjih se po voznem redu zdaj vozi vsaj `vsaj_s`.
+
+    Nadzor ("feed stoji") brez tega ponoči zvoni kot okvara, čeprav vlaki in
+    LPP stojijo v garaži: feed takrat res ni nič nov. `vsaj_s` je za zagon
+    zjutraj -- feed prve vožnje ne nosi od njenega odhoda, zato mu damo
+    četrt ure, preden je molk njegova krivda. Gledamo včerajšnji in današnji
+    prometni dan, ker nočni vlaki segajo čez polnoč (`end_s` > 86400).
+    """
+    zdaj = time.time() if zdaj is None else zdaj
+    danes = datetime.fromtimestamp(zdaj, TZ).date()
+    out = {"zeleznica": 0, "avtobus": 0}
+    for o in (-1, 0):
+        dan = (danes + timedelta(days=o)).isoformat()
+        t = zdaj - polnoc(dan)
+        for r in conn.execute(
+            "SELECT t.network, COUNT(*) FROM trip t "
+            "JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
+            "WHERE t.start_s <= ? AND t.end_s >= ? GROUP BY t.network",
+            (dan, t - vsaj_s, t)):
+            out[r[0]] = out.get(r[0], 0) + r[1]
+    return out
+
+
 def _abs_time(service_date: str, seconds: int | None) -> str | None:
     """Voznoredna sekunda od polnoči -> absolutni čas (zna čez polnoč)."""
     if seconds is None:

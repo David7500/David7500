@@ -53,6 +53,23 @@ def test_lpp_brez_voznega_reda_po_deležu():
     assert "LPP 30 od 282" in zdravje.ocena(z, STROJ, T)["neznane"][1]
 
 
+def test_ponoci_feed_ne_zvoni_podnevi_in_pri_okvari_pa():
+    """Od ~23:30 do ~4:30 nič ne vozi in feed molči po pravici: tri rdeče
+    vrstice in do 10 mailov na noč. Okvara, ko vozni red vozila ima, ostane."""
+    z = _zdravo()
+    z["last_feed_ts"] = T - 5 * 3600
+    z["by_network"]["zeleznica"]["last_feed_ts"] = T - 5 * 3600
+    z["by_network"]["avtobus"]["last_feed_ts"] = T - 5 * 3600
+    assert _rdece(z) == {"feed", "zeleznica", "avtobus"}          # brez podatka kot prej
+    z["vozi_zdaj"] = {"zeleznica": 0, "avtobus": 1}               # eden ne šteje
+    assert _rdece(z) == set()
+    z["vozi_zdaj"] = {"zeleznica": 5, "avtobus": 0}
+    assert _rdece(z) == {"feed", "zeleznica"}
+    # Pravi nočni alarm: disk in WAL se ne ozirata na vozni red.
+    z["vozi_zdaj"] = {"zeleznica": 0, "avtobus": 0}
+    assert _rdece(z, {**STROJ, "wal_bajtov": 5 * 2**30}) == {"wal"}
+
+
 def _ocena(*rdece):
     return {k: (zdravje.SLABA, f"{k} stoji") for k in rdece} | {"feed": (zdravje.DOBRA, "")}
 
