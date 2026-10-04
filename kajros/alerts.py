@@ -493,17 +493,25 @@ def live_delays(conn: sqlite3.Connection, service_date: str | None = None) -> li
     `run` tabela pozna samo voznoredne postanke in tega imena nima.
     """
     service_date = service_date or datetime.now(TZ).date().isoformat()
-    # Prometno mesto pripnemo koordinati, kadar ga poznamo kot postajo. Ni
-    # samoumevno -- prometnih mest je vec kot postajalisc -- a v zajetem
-    # vzorcu se je doslej ujelo vseh 23 imen, in tam, kjer se ujame, je to
-    # tocnejsa lega vlaka od nase "zadnje prevozene postaje z meritvijo".
+    # Prometno mesto pripnemo koordinati, kadar ga poznamo kot postajo; tam
+    # je to točnejša lega vlaka od naše "zadnje prevožene postaje z meritvijo".
+    # Samo ŽELEZNIŠKA postaja istega imena: avtobusi prinesejo postajališča z
+    # enakimi imeni, in iskanje samo po imenu je LPV 1897 narisalo na Celovško
+    # cesto -- na avtobusno postajališče "Ljubljana Tivoli", 1,1 km od postaje
+    # (4. 10. 2026). Od 264 zajetih prometnih mest ima 261 železniško postajo,
+    # 127 od teh se ujame tudi s postajališčem: mediana 480 m, Stranje 74 km.
+    # En stop_id na ime: Solkan ima dva, in JOIN bi vlak podvojil.
     rows = conn.execute(
         "WITH last AS ("
         "  SELECT *, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY seen_ts DESC) rn"
         "  FROM delay_report WHERE service_date = ?"
         ") "
         "SELECT last.*, st.lat AS station_lat, st.lon AS station_lon "
-        "FROM last LEFT JOIN station st ON st.name = last.station "
+        "FROM last LEFT JOIN station st ON st.stop_id = ("
+        "  SELECT p.stop_id FROM station p WHERE p.name = last.station AND EXISTS ("
+        "    SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id"
+        "    WHERE s.stop_id = p.stop_id AND t.network = 'zeleznica')"
+        "  ORDER BY p.stop_id LIMIT 1) "
         "WHERE rn = 1 ORDER BY delay_min DESC",
         (service_date,),
     )

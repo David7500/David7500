@@ -1757,6 +1757,36 @@ def test_obvestila_lpp_se_zdruzijo_po_besedilu(conn):
     assert alerts.for_stops(conn, ["S1"]) == []
 
 
+def test_prometno_mesto_dobi_lego_zelezniske_postaje(conn):
+    """Prevoznikovo poročilo nosi samo ime; avtobusno postajališče istega
+    imena ni kraj, kjer je vlak.
+
+    4. 10. 2026 je LPV 1897 s poročilom „Ljubljana Tivoli" stal na Celovški
+    cesti -- na avtobusnem postajališču, 1,1 km od postaje. Od 264 zajetih
+    prometnih mest se jih 127 ujame tudi s postajališčem.
+    """
+    from kajros import alerts
+
+    # `BC` se uredi pred `C`: brez pogoja omrežja bi ga izbral prvega.
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('BC', 'Celje', 46.21, 15.31), ('BL', 'Lavrica', 46.0, 14.56)")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+                 "                 mode, agency, network) "
+                 "VALUES('a1','ra','A 1','Celje - Lavrica','S1','bus','1118','avtobus')")
+    _sched(conn, "a1", [(1, "BC", None, 30000), (2, "BL", 33000, None)])
+    conn.executemany(
+        "INSERT INTO delay_report(trip_id, service_date, seen_ts, train_no,"
+        "                         delay_min, station) VALUES(?,?,?,?,?,?)",
+        [("t1", "2026-08-31", 100, "IC 1", 5, "Celje"),
+         # Ime, ki ga pozna le avtobus: vlak ostane brez lege iz poročila.
+         ("t2", "2026-08-31", 100, "LP 2", 3, "Lavrica")])
+    conn.commit()
+
+    lege = {r["train_no"]: (r["station_lat"], r["station_lon"])
+            for r in alerts.live_delays(conn, "2026-08-31")}
+    assert lege == {"IC 1": (46.2, 15.3), "LP 2": (None, None)}
+
+
 def test_izhodisce_dobi_obicajno_zamudo_naslednje_postaje():
     # Feed prvega postanka ne poroca nikoli (0 od 716 voznj), zato bi tam
     # ostal "?" tudi po devetnajstih zajetih vozjnah. Prepis je dovoljen samo
