@@ -211,6 +211,17 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
   white-space: nowrap;
 }
 @media (hover: hover) { .top-link:hover { color: var(--ink); } }
+/* Ovire: opozorilo, ne navigacija -- zato žeton v barvi pasice ovir na
+   iskalniku (`.ov-link`), ne siva beseda, ki se v kotu ni videla. Višina 28 px
+   ostane pod glavo; dotik pa je vseeno večji od besede. */
+.top-link.top-ovire {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 28px; padding: 0 11px 0 9px;
+  border-radius: var(--r-pilula, 999px);
+  background: #2e2811; color: #f2d36b;
+  font: 600 12.5px/1 var(--sans);
+}
+@media (hover: hover) { .top-link.top-ovire:hover { background: #3f3510; color: #f2d36b; } }
 /* Ista povezava, ki pa ni povezava: budilke odpre nativni zaslon aplikacije,
    zato je gumb. Brez tega bi imela obrobo in ozadje brskalnikovega gumba. */
 button.top-link {

@@ -424,7 +424,15 @@ _STRANI = ("/vlak/", "/avtobus/", "/postaja/", "/postajalisce/", "/postaje",
            "/android", "/donacije")
 
 
+#: Klik na „Podari“ gre prek naše poti, ki preusmeri na Ko-fi: drugače ne bi
+#: nikoli izvedeli, koliko od ljudi na `/donacije` je šlo res naprej. Ni stran
+#: (ogled bi napihnil `ogledov`), v `obisk_pot` je pa vseeno vrstica s `ljudi`.
+DONACIJE_NAPREJ = "/donacije/naprej"
+
+
 def vrsta_poti(pot: str) -> str:
+    if pot == DONACIJE_NAPREJ:
+        return "drugo"
     if pot == "/" or pot.startswith("/app") or pot.startswith(_STRANI):
         return "stran"
     if pot.startswith("/api"):
@@ -843,6 +851,26 @@ def pregled(conn: sqlite3.Connection, od: str | None = None,
             "p50": _percentil(v, 0.50), "p95": _percentil(v, 0.95),
         })
 
+    # Podpora: kdo je odprl `/donacije` in kdo je kliknil naprej. Klik ni
+    # donacija -- plačilo teče pri ponudniku in ga ne vidimo --, je pa zgornja
+    # meja, in prvi korak, ki ga sicer ne bi bilo mogoče izmeriti.
+    donacije = {"ogledi": 0, "ljudi": 0, "klikov": 0, "klikov_ljudi": 0}
+    for r in conn.execute(
+            "SELECT pot, SUM(zahtev) AS zahtev, SUM(ljudi) AS ljudi FROM obisk_pot "
+            "WHERE dan BETWEEN ? AND ? AND pot IN ('/donacije', ?) GROUP BY pot",
+            (od, do, DONACIJE_NAPREJ)):
+        if r["pot"] == DONACIJE_NAPREJ:
+            donacije["klikov"], donacije["klikov_ljudi"] = r["zahtev"], r["ljudi"]
+        else:
+            donacije["ogledi"], donacije["ljudi"] = r["zahtev"], r["ljudi"]
+
+    # Od kod po dnevih: vir je v razrezu že po dnevu, samo seštevali smo ga
+    # čez obdobje. Brez tega se vrh (2. 10.) ne da pripisati objavi.
+    vir_po_dnevih = [dict(r) for r in conn.execute(
+        "SELECT dan, kljuc, SUM(ogledov) AS ogledov FROM obisk_razrez "
+        "WHERE razsez = 'vir' AND dan BETWEEN ? AND ? GROUP BY dan, kljuc "
+        "ORDER BY dan, ogledov DESC", (od, do))]
+
     razrezi: dict[str, list] = {}
     for r in conn.execute(
             "SELECT razsez, kljuc, SUM(zahtev) AS zahtev, SUM(ogledov) AS ogledov "
@@ -879,5 +907,7 @@ def pregled(conn: sqlite3.Connection, od: str | None = None,
         "strani": strani,
         "endpointi": endpointi,
         "razrezi": razrezi,
+        "vir_po_dnevih": vir_po_dnevih,
+        "donacije": donacije,
         "preliv": db.get_meta(conn, "obisk_preliv"),
     }

@@ -14,6 +14,12 @@
       prevozi. Za avtobuse takih obvestil ni in povezava tja bi obljubljala
       podatek, ki zanje ne obstaja. #}
   {%- if here != 'ovire' and (network | default('zeleznica')) != 'avtobus' %}
-  <a class="top-link" href="/app/ovire">ovire</a>{% endif %}
+  {#- Žeton in ne golo besedilo: siva beseda „ovire“ v kotu ob znamki se ni
+      videla (4. 10. 2026, prijava). Barva je ista kot pasica ovir na iskalniku. #}
+  <a class="top-link top-ovire" href="/app/ovire">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+    </svg>ovire</a>{% endif %}
 </nav>
 {% include "_orodna.html" %}

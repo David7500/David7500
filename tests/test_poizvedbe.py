@@ -2599,3 +2599,21 @@ def test_iskalnik_nosi_mejo_nepotrjenega_odhoda(conn):
     z = next(x for x in stats.connections(conn, "Zidani Most", "Celje", "2026-08-31")
              if x["train_no"] == "IC 1")
     assert z["nepotrjen_do"] is None
+
+
+def test_podari_gre_prek_nase_preusmeritve(monkeypatch):
+    """Klik na „Podari“ mora iti prek `/donacije/naprej`, sicer se ne izmeri;
+    brez naslova ponudnika poti ni, kot ni `/donacije`."""
+    from fastapi import HTTPException
+
+    from kajros import api, config
+    monkeypatch.setattr(config, "DONACIJE", "https://ko-fi.com/x")
+    r = api.donacije_naprej()
+    assert r.status_code == 302 and r.headers["location"] == "https://ko-fi.com/x"
+    assert "no-store" in r.headers["cache-control"]
+    html = (api._PKG_DIR / "templates" / "donacije.html").read_text(encoding="utf-8")
+    assert 'href="/donacije/naprej"' in html
+    monkeypatch.setattr(config, "DONACIJE", "")
+    with pytest.raises(HTTPException) as e:
+        api.donacije_naprej()
+    assert e.value.status_code == 404

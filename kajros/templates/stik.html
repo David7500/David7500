@@ -29,8 +29,13 @@
 
     {% if poslano %}
     <p class="stik-ok">
+      {%- if anonimno_poslano %}
+      Sporočilo je prispelo. Poslal si ga anonimno, zato odgovora ne bo — a
+      prebere ga človek.
+      {%- else %}
       Sporočilo je prispelo. Odgovorimo ročno in ne takoj — stran vzdržuje
       ena oseba.
+      {%- endif %}
     </p>
     <p><a href="/">nazaj na začetek</a></p>
 
@@ -55,10 +60,18 @@
         <input id="naslov" name="naslov" type="text" tabindex="-1" autocomplete="off">
       </div>
 
+      {#- E-naslov ni `required`: brez JS bi to blokiralo anonimno pošiljanje.
+          Kdor ne obkljuka anonimnosti, ga mora vpisati -- preveri strežnik. #}
       <label class="stik-oznaka" for="email">Tvoj e-naslov</label>
       <input class="stik-polje" id="email" name="email" type="email"
-             required maxlength="254" autocomplete="email"
+             maxlength="254" autocomplete="email"
              placeholder="da ti lahko odgovorimo" value="{{ email | default('') }}">
+
+      <label class="stik-anonimno">
+        <input type="checkbox" name="anonimno" value="1"
+               {% if anonimno %}checked{% endif %}>
+        Pošlji anonimno: brez e-naslova in brez odgovora (za predloge)
+      </label>
 
       <label class="stik-oznaka" for="besedilo">Sporočilo</label>
       <textarea class="stik-polje stik-besedilo" id="besedilo" name="besedilo"
@@ -70,7 +83,7 @@
 
     <p class="drobno">
       Shranimo tvoj e-naslov in besedilo, da lahko odgovorimo — nič drugega,
-      naslova IP tudi tu ne. Podrobnosti na strani
+      naslova IP tudi tu ne. Anonimno sporočilo shrani samo besedilo. Podrobnosti na strani
       <a href="/zasebnost">zasebnost</a>.
     </p>
     {% endif %}

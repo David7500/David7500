@@ -239,14 +239,14 @@ function osveziPodlago() {
 
 // Pot izbranega vozila je od blizu siroka kot to, po cemer vozi: avtobus
 // 7,5 m (dva pasova; cesta v podlagi 6-11 m), vlak 3,2 m (en tir s pragovi,
-// sosednji tir je 4-5 m stran). Prevozeno je sivo.
+// sosednji tir je 4-5 m stran). Prevozeno je sivo (`ZA_INK`, common.js).
 const CESTA_M = 7.5;
 const TIR_M = 3.2;
-const ZA_INK = "#8b95a4";
 
-// Trase vseh vozil so iste barve kot pot izbranega avtobusa; ob izbiri
+// Trase vseh vozil so v barvi prevoznika, kot njegova vozila; ob izbiri
 // stopijo v ozadje, sicer se izbrana pot med njimi izgubi.
 const VSE_TRASE_OPACITY = 0.42;
+
 
 // Sirina zavisi od vozila, izraz s priblizkom pa mora biti na vrhu -- zato
 // se ob izbiri vozila zamenja cel izraz (`narisiTraso`), ne vrednost v njem.
@@ -281,7 +281,7 @@ function dodajSloje() {
     },
   }, prviNapis);
 
-  for (const id of ["k-proge", "k-vse-trase", "k-postaje", "k-postajalisca", "k-trasa",
+  for (const id of ["k-proge", "k-vse-trase", "k-postaje", "k-postajalisca", "k-izbrano", "k-trasa",
                     "k-trasa-skica", "k-trasa-postaje", "k-najdena", "k-jaz", "k-avtobusi"]) {
     map.addSource(id, { type: "geojson", data: PRAZNO });
   }
@@ -306,7 +306,7 @@ function dodajSloje() {
                naTleh);
   // Trase vseh vozil: od blizu 2,5 m, tanjse od trase izbranega vozila.
   map.addLayer({ id: "k-vse-trase", type: "line", source: "k-vse-trase", layout: OKROGLO,
-                 paint: { "line-color": ["match", ["get", "network"], "avtobus", BUS_INK, PROGA],
+                 paint: { "line-color": ["coalesce", ["get", "barva"], PROGA],
                           "line-width": sirinaM(2.5, [[10, 1.2], [15, 1.6]]),
                           "line-opacity": VSE_TRASE_OPACITY } }, naTleh);
   // Pika brez imena ne pove nicesar; trajna oznaka pri 267 postajah
@@ -317,12 +317,19 @@ function dodajSloje() {
   map.addLayer({ id: "k-postaje", type: "circle", source: "k-postaje",
                  paint: { "circle-radius": polmer(3.4), "circle-color": "#8b95a4",
                           "circle-pitch-alignment": "map" } });
+  // Postajališče je pika v barvi prevoznika (več prevoznikov: `SKUPNA_INK`).
+  // Od blizu jo zamenja nadstrešek ob cesti ali znak na drogu -- pika ostane
+  // nevidna pod njima, ker je ona tista, ki jo zadene prst (`zadetek`).
   map.addLayer({ id: "k-postajalisca", type: "circle", source: "k-postajalisca",
-                 minzoom: BUSSTOP_MIN_Z - LZ,
-                 paint: { "circle-radius": polmer(3.2), "circle-color": BUS_INK, "circle-opacity": 0.85,
+                 minzoom: BUSSTOP_MIN_Z - LZ, filter: ["==", ["get", "postaja"], 0],
+                 paint: { "circle-radius": polmer(3.2), "circle-color": ["get", "barva"],
+                          "circle-opacity": PIKA_POD_3D, "circle-stroke-opacity": PIKA_POD_3D,
                           "circle-stroke-color": "#0f1115", "circle-stroke-width": 1,
                           "circle-pitch-alignment": "map" } });
-  // Pot izbranega vozila: naprej v barvi vozila, prevozeno sivo (`del`).
+  map.addSource("k-postajalisca-nadstreski", { type: "geojson", data: PRAZNO });
+  slojiPostajalisc(map, { vir: "k-postajalisca", nadstresek: "k-nadstresek",
+                          postaja: "k-postaje-avtobusne", znak: "k-postajalisca-znak" });
+  // Pot izbranega vozila: naprej oranžno (`IZBRANA_INK`), prevozeno sivo (`del`).
   // Siroka kot vozni pas in pod stavbami -- od blizu pokrije cesto, po kateri
   // vozilo pelje, in ne lebdi nad njo.
   map.addLayer({ id: "k-trasa-obroba", type: "line", source: "k-trasa", layout: OKROGLO,
@@ -335,10 +342,10 @@ function dodajSloje() {
                naTleh);
   // Crta skozi postajalisca ni pot po cesti in mora biti videti drugace.
   map.addLayer({ id: "k-trasa-skica", type: "line", source: "k-trasa-skica",
-                 paint: { "line-color": BUS_INK, "line-width": 2.5, "line-opacity": 0.7,
+                 paint: { "line-color": IZBRANA_INK, "line-width": 2.5, "line-opacity": 0.7,
                           "line-dasharray": [2, 2] } }, naTleh);
   map.addLayer({ id: "k-trasa-postaje", type: "circle", source: "k-trasa-postaje",
-                 paint: { "circle-radius": polmer(3.6), "circle-color": ["coalesce", ["get", "barva"], BUS_INK],
+                 paint: { "circle-radius": polmer(3.6), "circle-color": ["coalesce", ["get", "barva"], IZBRANA_INK],
                           "circle-stroke-color": "#0f1115", "circle-stroke-width": 1.4,
                           "circle-pitch-alignment": "map" } });
   map.addLayer({ id: "k-najdena", type: "circle", source: "k-najdena",
@@ -377,6 +384,27 @@ async function loadStatic() {
   } catch (err) {
     console.error("mreže ni bilo mogoče naložiti", err);
   }
+}
+
+// Nadstreške dobijo samo postajališča v sliki in pas okrog nje, kot modeli.
+function posodobiNadstreske() {
+  if (!map.getSource("k-postajalisca-nadstreski")) return;
+  const z = map.getZoom();
+  if (!busStops || !vklop.busstops || !vklop["3d"] || z < NADSTRESKI_OD) {
+    nastaviVir("k-postajalisca-nadstreski", PRAZNO);
+    return;
+  }
+  const b = map.getBounds();
+  const dx = (b.getEast() - b.getWest()) / 2, dy = (b.getNorth() - b.getSouth()) / 2;
+  const k = nadstresekK(z);
+  const features = [];
+  for (const s of busStops) {
+    if (s.smer == null || s.postaja) continue;
+    if (s.lon < b.getWest() - dx || s.lon > b.getEast() + dx
+        || s.lat < b.getSouth() - dy || s.lat > b.getNorth() + dy) continue;
+    features.push(...nadstresekKosi(s, k));
+  }
+  nastaviVir("k-postajalisca-nadstreski", { type: "FeatureCollection", features });
 }
 
 // Seznam postaj {name, lat, lon} kot tocke z imenom, ki ga pokaze dotik.
@@ -492,12 +520,61 @@ function vehCardHtml(o) {
   return `<div class="veh-card${on}"${izbor}>
       <div class="veh-head">
         <span class="veh-no">${escapeHtml(o.no)}</span>${o.badge || ""}
+        <button type="button" class="veh-min" aria-label="Skrči ali razširi kartico"></button>
         <span class="veh-headsign">${escapeHtml(o.headsign || "")}</span>
       </div>
       <div class="veh-rows">${rows}</div>
       ${o.href ? `<a class="veh-open" href="${o.href}" target="_blank" rel="noopener">
         Odpri stran o vozilu →</a>` : ""}
     </div>`;
+}
+
+// Kartica prekriva traso, po kateri vozilo pelje -- prav tisto, zaradi česar
+// je bilo vozilo kliknjeno (3. 10. 2026, prijava). Zato je prosojna, premakne
+// se z vlekom glave in skrči na glavo. Poslušalci so na zunanjem elementu
+// oblačka: MapLibre ob vsakem `setHTML` (vsakih 10 s z novo lego) znova ustvari
+// `.maplibregl-popup-content`, in kar bi viselo tam, bi izginilo sredi vleka.
+// Premik je v `--px`/`--py`, ne v `transform` oblačka: tega nastavlja MapLibre
+// sam, ob vsakem premiku vozila.
+let karticaSkrcena = false;    // velja za naslednjo odprto kartico
+
+function omogociPremik(oblacek) {
+  const el = oblacek.getElement();
+  if (!el || el.__premik) return;
+  el.__premik = true;
+  el.classList.toggle("je-skrcena", karticaSkrcena);
+  let x = 0, y = 0, vlek = null, vlecen = false;
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button > 0 || !e.target.closest(".veh-head, .popup-station")
+        || e.target.closest("button")) return;
+    vlek = { x0: e.clientX, y0: e.clientY, x, y };
+    vlecen = false;
+    el.setPointerCapture(e.pointerId);
+    e.stopPropagation();       // zemljevid pod kartico se ne sme premikati
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!vlek) return;
+    const dx = e.clientX - vlek.x0, dy = e.clientY - vlek.y0;
+    // Prag, da navaden dotik glave ni vlek: kartica vlaka se z dotikom izbere.
+    if (!vlecen && Math.hypot(dx, dy) < 5) return;
+    vlecen = true;
+    x = vlek.x + dx; y = vlek.y + dy;
+    el.style.setProperty("--px", `${x}px`);
+    el.style.setProperty("--py", `${y}px`);
+    el.classList.add("je-premaknjena");     // konica kazala na vozilo ne velja več
+  });
+  const konec = () => { vlek = null; };
+  el.addEventListener("pointerup", konec);
+  el.addEventListener("pointercancel", konec);
+  // Klik po vleku ni klik: sicer bi spustitev prsta na kartici vlaka izbrala
+  // njegovo pot.
+  el.addEventListener("click", (e) => {
+    if (vlecen) { vlecen = false; e.stopPropagation(); e.preventDefault(); return; }
+    if (e.target.closest(".veh-min")) {
+      karticaSkrcena = el.classList.toggle("je-skrcena");
+      e.stopPropagation();
+    }
+  }, true);
 }
 
 function tripHref(trainNo, tripId, serviceDate, network) {
@@ -584,7 +661,6 @@ function groupPopupHtml(g) {
     <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>`;
 }
 
-const TRAIN_INK = "#f0934f";
 
 function trainSize(z) {
   if (z >= 17) return 38;
@@ -629,6 +705,7 @@ function trainMarker(g, s) {
   // En vlak na postaji: oblaček takoj pobarva njegovo pot. Več vlakov: pot
   // se izbere z dotikom kartice -- ugibati, katerega je človek hotel, ni naše.
   m.getPopup().on("open", () => {
+    omogociPremik(m.getPopup());
     const vlaki = m.__g ? m.__g.trains : [];
     if (vlaki.length === 1) izberi(vlaki[0], true);
   });
@@ -764,20 +841,6 @@ map.on("zoomend", () => {
 // isti sliki in ju je treba ločiti tudi na pogled: vlak je krog na postaji,
 // avtobus je oblika vozila na izmerjeni legi.
 
-// Barva na zemljevidu pove, CIGAV avtobus je. Izbrane so tako, da se locijo
-// tudi pri barvni slepoti: najslabsi par je pri deutan/protan ΔE 9,6 (prag 3)
-// in celo pri tritanopiji 4,8 -- preverjeno s scripts/preveri_paleto.py, ne na
-// oko. Proti lestvici zamud zelena in oranzna pri deutanu trcita (ΔE 1,2), a
-// to ni tezava: vozila locuje OBLIKA (avtobus je puscica, vlak krog), barva pa
-// nikoli ne nosi pomena sama -- oznaka poleg nosi ime prevoznika.
-const BUS_INK = "#4db97f";                    // privzeto, kadar prevoznik ni znan
-const AGENCY_INK = {
-  "1118": "#4db97f",   // LPP
-  "1123": "#6fb8ff",   // Arriva
-  "1119": "#9d7ae0",   // Nomago
-  "1121": "#c9a227",   // AP Murska Sobota
-};
-
 // LPP je EN prevoznik z dvema viroma: `1118` so primestne linije iz IJPP,
 // `lpp` mestne iz lastnega feeda. Na postajaliscu pise oboje "LPP", zato
 // morata imeti eno plast, en stevec in eno barvo. Brez tega so mestni
@@ -809,9 +872,12 @@ function legaVozila(v) {
 const BUS_VELIKOST = [[9, 15], [10, 20], [12, 26], [14, 34], [17, 44]];
 const BUS_SLIKA = 44;          // px, v katerih je slika narisana (in 2x za ostrino)
 
-// Avtobus od zgoraj: zaobljeno telo, svetlejše vetrobransko steklo spredaj in
-// zarezi za kolesi. Puščica je bila premalo -- pri približku je bila videti
-// kot pika in se od vlaka ni ločila.
+// Avtobus od zgoraj: zaobljeno telo, svetlo vetrobransko steklo spredaj,
+// temno zadnje steklo in zarezi za kolesi. Puščica je bila premalo -- pri
+// približku je bila videti kot pika in se od vlaka ni ločila. Steklo spredaj
+// je svetlo (4. 10. 2026): temno se pri 15–26 px ni videlo in smeri vožnje ni
+// bilo mogoče razbrati. Zgibni LPP v dveh delih je bil zmeden (en dan, 4. 10.),
+// zato je telo enodelno za vse.
 function busSvg(size, moving, ink) {
   const o = moving ? 1 : 0.5;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
@@ -819,8 +885,9 @@ function busSvg(size, moving, ink) {
         <rect x="7.5" y="2.5" width="9" height="19" rx="3.2"
               fill="${ink}" fill-opacity="${o}"
               stroke="#0f1115" stroke-width="1.5"/>
-        <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
-              fill="#0f1115" fill-opacity="0.65"/>
+        <path d="M9.1 5.6 Q12 4.3 14.9 5.6 L14.9 7.5 Q12 6.7 9.1 7.5 Z"
+              fill="#e9f4ff" fill-opacity="0.95"/>
+        <rect x="9.6" y="19.1" width="4.8" height="0.9" rx="0.4" fill="#0f1115" fill-opacity="0.7"/>
         <rect x="6.4" y="6.6" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
         <rect x="16" y="6.6" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
         <rect x="6.4" y="15" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
@@ -829,7 +896,22 @@ function busSvg(size, moving, ink) {
     </svg>`;
 }
 
+// Polmer obroča izbranega vozila: pol ikone in malo, od blizu pa dovolj za
+// model v 3D (pri MapLibrovem z15 je LPP s povečavo ~27 px od sredine).
+function obrocIzbranega(z3d) {
+  const ikona = BUS_VELIKOST.map(([z, px]) => [z - LZ, px * 0.5 + 3]);
+  if (!z3d) return ["interpolate", ["linear"], ["zoom"], ...ikona.flat()];
+  return ["interpolate", ["linear"], ["zoom"],
+    ...ikona.filter(([z]) => z < AVTO_3D_OD - 0.5).flat(),
+    AVTO_3D_OD - 0.01, 24, AVTO_3D_OD, 30, AVTO_3D_OD + 1, 42, AVTO_3D_OD + 2, 60,
+    AVTO_3D_OD + 3, 85];
+}
+
 const busIkona = (ink, moving) => `bus-${ink.slice(1)}-${moving ? "vozi" : "stoji"}`;
+// Številka linije ob avtobusu od blizu -- samo pri LPP, kjer je to res
+// številka, ki jo potnik vidi na postajališču. Pri medkrajevnih je v feedu
+// številka vožnje (A6325), ki je ni nikjer na vozilu.
+const OZNAKA_OD = 14;          // Leafletov zoom
 
 // Od blizu je avtobus model v 3D (`vozila3d.js`), od dalec ikona. Meja in
 // velikost modela sta tam, ker ju rabi tudi okno voznje.
@@ -850,6 +932,26 @@ async function dodajAvtobuse() {
     await img.decode();
     map.addImage(busIkona(ink, moving), img, { pixelRatio: 2 });
   })));
+  // Izbrano vozilo ima obroč v barvi izbrane poti: med dvajsetimi enakimi
+  // ikonami na cesti sicer ni jasno, čigava je oranžna pot. Tanek obroč s
+  // sijem, ne debel kolobar -- ta je bil štorast (4. 10. 2026). Od blizu
+  // raste z modelom v 3D (`avtoPovecava`), da ga obkroži, ne prereže.
+  const obroc = obrocIzbranega(vklop["3d"]);
+  map.addLayer({
+    id: "k-izbrano-sij", type: "circle", source: "k-izbrano",
+    paint: {
+      "circle-radius": obroc, "circle-color": IZBRANA_INK, "circle-opacity": 0.22,
+      "circle-blur": 0.55, "circle-pitch-alignment": "map",
+    },
+  });
+  map.addLayer({
+    id: "k-izbrano", type: "circle", source: "k-izbrano",
+    paint: {
+      "circle-radius": obroc, "circle-color": "rgba(0,0,0,0)",
+      "circle-stroke-color": IZBRANA_INK, "circle-stroke-width": 1.6,
+      "circle-stroke-opacity": 0.95, "circle-pitch-alignment": "map",
+    },
+  });
   map.addLayer({
     id: "k-avtobusi", type: "symbol", source: "k-avtobusi",
     layout: {
@@ -865,6 +967,18 @@ async function dodajAvtobuse() {
       // Vsa vozila, vedno: skrito vozilo je vozilo, ki ga ni.
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,
+      // Številka se lahko skrije, kadar bi prekrila drugo; vozilo ne.
+      "text-field": ["step", ["zoom"], "", OZNAKA_OD - LZ, ["get", "st"]],
+      "text-font": ["Noto Sans Bold"],
+      "text-size": 11.5,
+      "text-anchor": "left",
+      "text-offset": [1.1, 0],
+      "text-optional": true,
+    },
+    paint: {
+      "text-color": "#e7eaf0",
+      "text-halo-color": "#0f1115",
+      "text-halo-width": 1.6,
     },
   });
   avtobusi3d = avtobusi3D({
@@ -881,6 +995,7 @@ async function dodajAvtobuse() {
 // konici 1 500 modelov skozi risanje na vsak premik.
 function posodobi3D() {
   posodobiVlake3D();
+  posodobiNadstreske();
   if (!avtobusi3d) return;
   const vidni = new Set(LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag));
   const b = map.getBounds();
@@ -941,10 +1056,12 @@ function renderBuses(list) {
         kljuc, ag: busGroup(v), mesto: v.agency === "lpp",
         smer: l.smer,
         ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3),
+        st: busGroup(v) === "1118" ? v.train_no : "",
       },
     });
   }
   nastaviVir("k-avtobusi", { type: "FeatureCollection", features });
+  oznaciIzbranoVozilo();
   posodobi3D();
   // Odprta kartica gre z vozilom; ce ga ni vec, gre tudi ona.
   if (kartica && kartica.__kljuc) {
@@ -964,7 +1081,8 @@ function renderBuses(list) {
 // common.js); brez gumba za zapiranje, ker bi bil na telefonu manjsi od
 // prsta. Na napravi z misko se pokaze ze ob lebdenju, kot prej.
 
-const IMENA = ["k-postaje", "k-postajalisca", "k-trasa-postaje", "k-jaz"];
+const IMENA = ["k-postaje", "k-postajalisca", "k-postaje-avtobusne", "k-postajalisca-znak",
+               "k-trasa-postaje", "k-jaz"];
 // Dotik zadene, kar je v tem polmeru: pika postaje meri 7 px, prst dosti vec.
 const DOTIK_PX = 12;
 
@@ -1005,6 +1123,7 @@ function odpriKartico(v) {
   kartica = new maplibregl.Popup({ maxWidth: "280px", offset: 14 + nad })
     .setLngLat([l.lon, l.lat]).setHTML(busCardHtml(v)).addTo(map);
   kartica.__kljuc = busKey(v);
+  omogociPremik(kartica);
   const trip = v.trip_id;
   // Pot gre s kartico: zaprta kartica, pobarvana cesta brez razlage ostane
   // uganka.
@@ -1310,7 +1429,8 @@ async function loadBusStops() {
   try {
     busStops = (await fetch("/api/stations?network=avtobus").then(jsonOk))
       .filter((s) => s.lat != null);
-    nastaviVir("k-postajalisca", tocke(busStops));
+    nastaviVir("k-postajalisca", tockePostajalisc(busStops));
+    posodobiNadstreske();
   } catch (err) {
     console.warn("postajališč ni bilo mogoče naložiti", err);
   } finally {
@@ -1382,6 +1502,8 @@ map.on("moveend", () => {
 const AVTOBUSI_OD = 9;
 const MESTNI_OD = 12;
 
+const NADSTRESEK_SLOJI = ["tla", "steber", "stena", "streha"].map((d) => `k-nadstresek-${d}`);
+
 const LAYERS = [
   { id: "lay-train", key: "train", def: true },
   { id: "lay-lpp", key: "avtobus-lpp", def: true, ag: "1118" },
@@ -1392,7 +1514,8 @@ const LAYERS = [
   { id: "lay-net", key: "net", def: true, sloji: ["k-proge-obroba", "k-proge"] },
   { id: "lay-routes", key: "routes", def: false, sloji: ["k-vse-trase"] },
   { id: "lay-stations", key: "stations", def: true, sloji: ["k-postaje"] },
-  { id: "lay-busstops", key: "busstops", def: false, sloji: ["k-postajalisca"] },
+  { id: "lay-busstops", key: "busstops", def: false,
+    sloji: ["k-postajalisca", "k-postaje-avtobusne", "k-postajalisca-znak", ...NADSTRESEK_SLOJI] },
   { id: "lay-labels", key: "labels", def: false },
   { id: "lay-base", key: "base", def: true },
   { id: "lay-3d", key: "3d", def: true },
@@ -1412,6 +1535,13 @@ function layerPref(key, def) {
 function uveljavi() {
   if (!slojiDodani) return;
   for (const spec of LAYERS) for (const id of spec.sloji || []) vidnost(id, vklop[spec.key]);
+  // Brez 3D ni nadstreškov in znakov od blizu: pika ostane na vseh približkih.
+  if (map.getLayer("k-postajalisca")) {
+    for (const lastnost of ["circle-opacity", "circle-stroke-opacity"]) {
+      map.setPaintProperty("k-postajalisca", lastnost, vklop["3d"] ? PIKA_POD_3D : 0.85);
+    }
+    vidnost("k-postajalisca-znak", vklop.busstops && vklop["3d"]);
+  }
   if (map.getLayer("k-avtobusi")) {
     const ag = LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag);
     // Filter vidi celoštevilski MapLibrov zoom ploščice, zato sta praga cela.
@@ -1419,6 +1549,9 @@ function uveljavi() {
       ["in", ["get", "ag"], ["literal", ag]],
       [">=", ["zoom"], ["case", ["get", "mesto"], MESTNI_OD - LZ, AVTOBUSI_OD - LZ]]]);
     map.setLayerZoomRange("k-avtobusi", 0, vklop["3d"] ? AVTOBUS_3D_OD : 24);
+    for (const id of ["k-izbrano", "k-izbrano-sij"]) {
+      map.setPaintProperty(id, "circle-radius", obrocIzbranega(vklop["3d"]));
+    }
   }
   posodobi3D();
   osveziPodlago();
@@ -1572,7 +1705,7 @@ function renderFind() {
 // ---------- pot izbranega vozila ----------
 //
 // Klik na vozilo (ali izbira v iskalniku) pobarva pot, po kateri pelje:
-// naprej v barvi vozila, prevozeno sivo. Trasa je pripeta na ceste in tire
+// naprej oranžno (`IZBRANA_INK`), prevozeno sivo. Trasa je pripeta na ceste in tire
 // OSM (`pripni.py`), zato se od blizu ujema s podlago, ne lezi ob njej.
 // Trasa velja za VSE prevoznike -- uvoz jo hrani v `shape`, 2 897 oblik.
 // Kadar je iz kakršnega koli razloga ni, ostane črta skozi postajališča;
@@ -1584,7 +1717,7 @@ let trasaSt = 0;               // hitra druga izbira ne sme dobiti prve trase
 function pocistiTraso() {
   izbrana = null;
   trasaSt += 1;
-  for (const id of ["k-trasa", "k-trasa-skica", "k-trasa-postaje"]) nastaviVir(id, PRAZNO);
+  for (const id of ["k-trasa", "k-trasa-skica", "k-trasa-postaje", "k-izbrano"]) nastaviVir(id, PRAZNO);
   if (map.getLayer("k-vse-trase")) map.setPaintProperty("k-vse-trase", "line-opacity", VSE_TRASE_OPACITY);
   oznaciIzbrano();
 }
@@ -1646,7 +1779,15 @@ function razrezi(kosi, k) {
           [[p, ...kos.slice(k.j + 1)], ...kosi.slice(k.i + 1)]];
 }
 
+// Obroč okrog izbranega vozila, na isti legi kot je narisano.
+function oznaciIzbranoVozilo() {
+  const l = izbrana && legaIzbrane();
+  nastaviVir("k-izbrano", l ? { type: "Feature", properties: {},
+    geometry: { type: "Point", coordinates: [l[1], l[0]] } } : PRAZNO);
+}
+
 function narisiTraso() {
+  oznaciIzbranoVozilo();
   if (!izbrana || !izbrana.kosi) return;
   const lega = legaIzbrane();
   let k = lega && naTrasi(izbrana.kosi, lega[0], lega[1], izbrana.along);
@@ -1667,7 +1808,7 @@ function oznaciIzbrano() {
   }
 }
 
-async function drawStops(trainNo, tripId, vlak = false, barva = BUS_INK) {
+async function drawStops(trainNo, tripId, vlak = false, barva = IZBRANA_INK) {
   if (izbrana && izbrana.trip === tripId) {
     narisiTraso();
     return;
@@ -1676,6 +1817,7 @@ async function drawStops(trainNo, tripId, vlak = false, barva = BUS_INK) {
   const st = trasaSt;
   izbrana = { trip: tripId, vlak, barva, kosi: null, along: null };
   oznaciIzbrano();
+  oznaciIzbranoVozilo();
   map.setPaintProperty("k-vse-trase", "line-opacity", 0.15);
   map.setPaintProperty("k-trasa", "line-width", trasaSirina(vlak));
   map.setPaintProperty("k-trasa-obroba", "line-width", trasaSirina(vlak, true));
@@ -1714,13 +1856,13 @@ async function drawStops(trainNo, tripId, vlak = false, barva = BUS_INK) {
   }
 }
 
-// Pot vozila iz seznama: avtobus v barvi prevoznika, vlak v svoji.
+// Pot vozila iz seznama: oranžna, ne glede na vozilo (`IZBRANA_INK`).
 function izberi(v, vlak) {
   // Vožnje brez `trip_id` vozni red ne pozna (LPP mimo voznega reda, glej
   // `lpp.na_tablo`): njenih postaj in trase ni, izbira s praznim `trip` pa bi
   // se ujela z vsakim drugim takim vozilom (`legaIzbrane`).
   if (!v.trip_id) { pocistiTraso(); return; }
-  drawStops(v.train_no, v.trip_id, vlak, vlak ? TRAIN_INK : busInk(v));
+  drawStops(v.train_no, v.trip_id, vlak, IZBRANA_INK);
 }
 
 // Postaja iz iskalnika: obroč na njej in povezava na odhodno tablo -- to je
@@ -1815,7 +1957,10 @@ async function loadRoutes() {
   try {
     const list = await fetch("/api/shapes/live").then(jsonOk);
     nastaviVir("k-vse-trase", { type: "FeatureCollection",
-      features: list.map((r) => kosiVCrto(r.points, { network: r.network })) });
+      features: list.map((r) => kosiVCrto(r.points, {
+        network: r.network,
+        barva: r.network === "avtobus" ? busInk(r) : PROGA,
+      })) });
     routesLoaded = true;
     const el = document.getElementById("n-routes");
     if (el) el.textContent = list.length;

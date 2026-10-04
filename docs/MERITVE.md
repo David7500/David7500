@@ -2208,3 +2208,30 @@ Evropsko prvenstvo v cestnem kolesarstvu: v petek, soboto in nedeljo (2.–4. 10
 **Viri LPP, preverjeno 2. 10. 2026.** Vozni red jemljemo pri LPP (`avl.lpp.si`; `data.lpp.si/api/gtfs/feed.zip` in derp.si-jev `lpp.ojpp.derp.si` preusmerita tja). Uradni GTFS-RT LPP obstaja (`data.lpp.si/api/gtfs/gtfs-rt`, `…-trip-updates`, `…-vehicle-updates`, `…-alerts`), a vrne **401** — za ključem; derp.si ga posreduje. Dokumentacija API-ja je na `data.lpp.si/doc/` (`api_data.js`): `type` prihoda je **0 napoved, 1 po voznem redu, 2 prihaja na postajališče, 3 obvoz**; `depot = 1` je vožnja v garažo.
 
 **Popravek (`lpp.na_tablo`, `collector._zapisi_brez_voznje`).** Zajem šteje neznane vožnje po liniji; linija s **vsaj 3 in vsaj 20 %** neznanih (ob 15h samo 1; ob 18.40 1 s 25/25 in 27 s 3/13) dobi na današnji tabli „zdaj“ odhode z LPP-jevega `station/arrival` namesto voznega reda — do zadnjega LPP-jevega prihoda, naprej ostane vozni red. Vozila na neznanih vožnjah gredo na zemljevid z linijo in smerjo iz vzorca, brez zamude in brez strani vožnje. Ob 18.46 na kopiji: Tivoli, linija 1, 13 vrstic z LPP (7 napovedi, 6 po voznem redu — na tabli „po načrtu“) do 19.41, nato vozni red; na zemljevidu 12 vozil brez vožnje. V `run` ne gre nič — zamude brez voznega reda ni.
+
+## Ljubljana AP: trase na stari legi postaje, perone ima AP Ljubljana (4. 10. 2026)
+
+Prijava: vse trase iz Ljubljana AP se začnejo tam, kjer je bila postaja prej; začasna je nekaj sto metrov stran.
+
+* **Postanek v GTFS je pravi, trase niso.** `Ljubljana AP` (1126954) je na 46,05794, 14,51470. Posnetek leg na arwenu (28.–30. 9., 715 voženj z začetkom na AP, od tega 561 z lego v 15 min pred odhodom): zadnja lega pred odhodom v mediani **40 m** od postanka, na pasu 14,5142–14,5154 -- natanko peroni začasne postaje v OSM (`local_ref` 1–46, upravljavec Nomago). Trase IJPP pa se začnejo na 46,0578, 14,5088, **457 m zahodno**: stara postaja na Trgu OF (v OSM še „Avtobusna postaja Ljubljana (Peron 29/30)“).
+* **Vseh tras** (2 049 avtobusnih oblik po novem uvozu): začetek dlje od 150 m od prvega postanka 165, konec od zadnjega 161; od tega Ljubljana AP 111 in 117, nato Celje AP 6, Brežice 5, Murska Sobota AP 4. Mediana razdalje začetka 9 m, p90 457 m.
+* **Popravek** (`pripni.do_postaj`): kos, ki gre mimo postanka (v bližnji polovici bližje od 50 m), se tam odreže; drugače se do postanka podaljša po cesti. Od AP to pomeni izvoz na vzhodu in Masarykovo nazaj proti zahodu (764 m po OSRM za 457 m zračne). Po popravku začetek dlje od 150 m: **27** tras (Ljubljana AP **1**), konec **25** (AP **2**), p90 začetka **37 m**. Prehod čez vse trase lokalno 55,6 s (637 novih, ostalo iz predpomnilnika).
+* **Peroni.** OSM ima perone začasne postaje oštevilčene, linij na njih pa ne (Organic Maps kaže linije na starih, iz relacij poti). GTFS IJPP perona nima (`stops.txt` brez `platform_code`). **AP Ljubljana ga objavlja**: `https://www.ap-ljubljana.si/api/upcoming` (JSON brez ključa) vrne naslednjih ~22 odhodov s poljem `platform` („12“, „27-29“), prevoznikom, ciljem, vmesnimi postajami in zamudo (`has_delay`, `formatted_delayed_time`) -- 4. 10. ob 18:37 npr. Arriva Koper 12, Nomago Kočevje 19, Arriva Bled 8. Ujemanje z našimi vožnjami po uri, prevozniku in cilju bi bilo enako kot pri tablah SŽ (`peroni.py`). Ni vgrajeno.
+
+## LPP: devet linij brez trase (4. 10. 2026)
+
+Prijava: LPP 20Z na zemljevidu nima trase, samo črtkano črto med postajališči. Ni zaradi razvojnega strežnika: na produkciji je bilo istega večera **16 od 44** živih vozil LPP brez trase (linije 1B, 2, 14, 20Z).
+
+* **Vir je ne pošlje.** `lpp_gtfs.zip` (avl.lpp.si): 10 455 od 60 526 voženj ima prazen `shape_id`, vse na devetih linijah; `shapes.txt` ima 76 oblik. V bazi 4 581 takih voženj s 48 različnimi zaporedji postajališč.
+* **Pot po cesti skozi postajališča** (OSRM avtobus, `/route`) proti prevoznikovi trasi na 40 naključnih oblikah LPP, ki jo imajo: delež poti v 20 m od uradne v mediani **97,3 %**, p10 88,1 %, najmanj 60,2 %; nad 95 % pri 22 od 40. Živa vozila (16) so od take poti v mediani 3–5 m, največ 32 m; na uradnih trasah (26 vozil) največ 48 m.
+* Po `kajros pripni`: 46 od 48 zaporedij dobi pot (1 s), vsa živa vozila LPP imajo traso. Ostale vožnje brez trase imajo v `stop_times` en sam postanek (8 064 voženj LPP) -- poti ni kje iskati.
+
+## Postajališča od blizu: smer ceste iz pripetih tras (4. 10. 2026)
+
+Nadstrešek ob cesti rabi smer ceste in stran, na kateri postajališče stoji. Oboje iz pripete trase (`pripni.postajalisca`): najbližja daljica trase vseh voženj, ki tam ustavljajo.
+
+* **Ena vožnja na traso ni dovolj.** Prva različica je vzela eno vožnjo na traso: v Ljubljani je ostalo brez smeri **248** postajališč (Pošta, Aškerčeva, Razstavišče ...) -- vožnje IJPP si trase delijo, hitre izpustijo postajališča. Z vsakim zaporedjem postajališč na trasi posebej: **10**. Vseh: smer ima **9 800 od 10 234** (95,8 %), prej 8 901. Prehod 3,7 s na razvojnem računalniku.
+* Meja „ob cesti“ 15 m: pri 25 m bi jih dobilo smer le 134 več (prva različica), z večjim tveganjem napačne ceste.
+* Odmik postajališča od osi trase: mediana 5,0 m, p90 10,1 m. Postajališče na osi (pod 3,8 m) je narisano na robu pločnika.
+* **Avtobusne postaje**: ime z „AP“ 8, končnih z ≥ 20 trasami dveh prevoznikov 15, skupaj 20 (Ljubljana AP 308 tras, štirje prevozniki). Prevozniki na postajališče: en 9 494, dva 667, trije 72, štirje 1.
+* `/api/stations?network=avtobus` z novimi polji in lego na šest decimalk: 238 kB z gzipom (10 234 postajališč; prej 211 kB za 9 519).

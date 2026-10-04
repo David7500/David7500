@@ -20,7 +20,7 @@
 // linije z visokopodnimi vozili (Arriva je kupila 45 in nato 22
 // Mercedes-Benz Intouro, arriva.si).
 //
-// Streha nosi barvo prevoznika z legende (`AGENCY_INK` v dashboard.js):
+// Streha nosi barvo prevoznika z legende (`AGENCY_INK` v common.js):
 // od zgoraj je streha edino, kar se vidi, in brez tega bi bili Nomagov in
 // AP-jev avtobus od zgoraj ista bela skatla.
 
@@ -598,4 +598,135 @@ function plast3D({ id, modeli, vidna, povecava }) {
   }
 
   return { plast, nastavi };
+}
+
+// ---------------------------------------------------------- postajališča
+//
+// Od blizu (4. 10. 2026), na obeh zemljevidih enako, je avtobusno postajališče ob cesti nadstrešek, na
+// avtobusni postaji in tam, kjer smeri ceste ne poznamo, znak na drogu. Smer,
+// stran ceste in prevoznike izračuna `pripni.postajalisca` iz pripetih tras.
+// Barva je barva prevoznika; kjer jih ustavlja več, `SKUPNA_INK`.
+const NADSTRESKI_OD = AVTO_3D_OD;            // MapLibrov zoom, kot modeli avtobusov
+const SKUPNA_INK = "#d5dae2";
+// Pika do praga, nato nevidna (nadomestita jo nadstrešek ali znak).
+const PIKA_POD_3D = ["interpolate", ["linear"], ["zoom"], NADSTRESKI_OD - 0.3, 0.85, NADSTRESKI_OD, 0];
+// Postajališče na osi trase je narisano na robu pločnika: toliko od osi.
+const ROB_M = 3.8;
+
+function inkPostajalisca(s) {
+  const ag = (s.prevozniki || "").split(",").filter(Boolean);
+  if (ag.length > 1) return SKUPNA_INK;
+  return AGENCY_INK[ag[0]] || BUS_INK;
+}
+
+function tockePostajalisc(postaje) {
+  return {
+    type: "FeatureCollection",
+    features: postaje.map((s) => {
+      const barva = inkPostajalisca(s);
+      return {
+        type: "Feature",
+        properties: { ime: s.name, barva, znak: `znak-${barva.slice(1)}`,
+                      postaja: s.postaja ? 1 : 0, obCesti: s.smer != null ? 1 : 0 },
+        geometry: { type: "Point", coordinates: [s.lon, s.lat] },
+      };
+    }),
+  };
+}
+
+// Znak na drogu: tabla v barvi prevoznika z avtobusom. Na svetli tabli
+// (več prevoznikov, AP Murska Sobota) je avtobus temen, sicer bel.
+function dodajZnake(map) {
+  for (const ink of new Set([BUS_INK, SKUPNA_INK, ...Object.values(AGENCY_INK)])) {
+    const W = 56, H = 132;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    const rr = (x, y, w, h, r) => {
+      g.beginPath(); g.moveTo(x + r, y);
+      g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+      g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+    };
+    const [r, gg, b] = [1, 3, 5].map((i) => parseInt(ink.slice(i, i + 2), 16));
+    const svetla = 0.299 * r + 0.587 * gg + 0.114 * b > 150;
+    const risba = svetla ? "#0f1115" : "#ffffff";
+    g.fillStyle = "#c9ced6"; g.fillRect(W / 2 - 3, 44, 6, H - 44);
+    rr(3, 3, W - 6, W - 6, 8); g.fillStyle = ink; g.fill();
+    g.lineWidth = 3; g.strokeStyle = "#0f1115"; g.stroke();
+    rr(13, 13, W - 26, 24, 4); g.fillStyle = risba; g.fill();
+    g.fillStyle = ink; g.fillRect(16, 16, W - 32, 9);
+    g.fillStyle = risba;
+    g.beginPath(); g.arc(19, 40, 4, 0, 7); g.fill();
+    g.beginPath(); g.arc(W - 19, 40, 4, 0, 7); g.fill();
+    map.addImage(`znak-${ink.slice(1)}`, g.getImageData(0, 0, W, H), { pixelRatio: 2 });
+  }
+}
+
+// Nadstrešek: tla, dva stebra, steklena stena zadaj in streha v barvi
+// prevoznika. Mere v metrih, povečane kot modeli avtobusov (`avtoPovecava`),
+// sicer je ob njih škatlica; vsaj dvakrat, največ trikrat.
+const nadstresekK = (z) => Math.min(3, Math.max(2, 0.7 * avtoPovecava(z)));
+
+function nadstresekKosi(s, k) {
+  const kx = 111320 * Math.cos((s.lat * Math.PI) / 180), ky = 110574;
+  const a = (s.smer * Math.PI) / 180;
+  const ux = Math.sin(a), uy = Math.cos(a);          // smer vožnje (vzhod, sever)
+  const rx = uy, ry = -ux;                           // desno od nje
+  const stran = s.desno < 0 ? -1 : 1;                // kje ceste stoji postajališče
+  const premik = stran * Math.max(Math.abs(s.desno), ROB_M) - s.desno;
+  const tocka = (vzd, prec) => {
+    const p = premik + stran * prec;
+    return [s.lon + (rx * p + ux * vzd) / kx, s.lat + (ry * p + uy * vzd) / ky];
+  };
+  const pravokotnik = (dol, od, do_, vzd = 0) => [[
+    tocka(vzd - dol / 2, od), tocka(vzd + dol / 2, od), tocka(vzd + dol / 2, do_),
+    tocka(vzd - dol / 2, do_), tocka(vzd - dol / 2, od)]];
+  const barva = inkPostajalisca(s);
+  return [
+    ["tla", pravokotnik(8 * k, 0, 2.6 * k), "#5b6b63", 0, 0.2],
+    ["steber", pravokotnik(0.18 * k, 2.2 * k, 2.38 * k, -3.3 * k), "#c9ced6", 0, 2.6 * k],
+    ["steber", pravokotnik(0.18 * k, 2.2 * k, 2.38 * k, 3.3 * k), "#c9ced6", 0, 2.6 * k],
+    ["stena", pravokotnik(7 * k, 2.3 * k, 2.42 * k), "#a8d8ff", 0.3, 2.45 * k],
+    ["streha", pravokotnik(7 * k, 0.35 * k, 2.45 * k), barva, 2.55 * k, 2.8 * k],
+  ].map(([del, koordinate, b, od, do_]) => ({
+    type: "Feature", properties: { del, barva: b, od, do: do_ },
+    geometry: { type: "Polygon", coordinates: koordinate },
+  }));
+}
+
+// Plasti od blizu: nadstreški (`vir` + "-nadstreski"), znak avtobusne postaje
+// že od daleč, z imenom, in znak postajališča brez smeri ceste od blizu.
+// Točke v viru `vir` nosijo lastnosti iz `tockePostajalisc`.
+function slojiPostajalisc(map, { vir, nadstresek, postaja, znak }) {
+  dodajZnake(map);
+  const naBlizu = (do_) => ["interpolate", ["linear"], ["zoom"], NADSTRESKI_OD, 0, NADSTRESKI_OD + 0.3, do_];
+  for (const [del, prosojnost] of [["tla", 0.95], ["steber", 1], ["stena", 0.45], ["streha", 0.95]]) {
+    map.addLayer({ id: `${nadstresek}-${del}`, type: "fill-extrusion", source: `${vir}-nadstreski`,
+                   minzoom: NADSTRESKI_OD, filter: ["==", ["get", "del"], del],
+                   paint: { "fill-extrusion-color": ["get", "barva"],
+                            "fill-extrusion-base": ["get", "od"],
+                            "fill-extrusion-height": ["get", "do"],
+                            "fill-extrusion-opacity": naBlizu(prosojnost) } });
+  }
+  // Avtobusna postaja je znak že od daleč: tam se vožnje začnejo, in ni ob
+  // robu ceste, da bi ji pristajal nadstrešek. Postajališče brez smeri ceste
+  // (dlje od nje kot 15 m) dobi znak šele od blizu, namesto nadstreška.
+  const slika = (velikost) => ({
+    "icon-image": ["get", "znak"], "icon-anchor": "bottom",
+    "icon-allow-overlap": true, "icon-ignore-placement": true,
+    "icon-pitch-alignment": "viewport", "icon-rotation-alignment": "viewport",
+    "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.45 * velikost, 15, 0.8 * velikost,
+                  18, 1.2 * velikost],
+  });
+  map.addLayer({ id: postaja, type: "symbol", source: vir,
+                 minzoom: 12, filter: ["==", ["get", "postaja"], 1],
+                 layout: { ...slika(1.25),
+                           "text-field": ["step", ["zoom"], "", 13, ["get", "ime"]],
+                           "text-font": ["Noto Sans Regular"], "text-size": 12,
+                           "text-anchor": "top", "text-offset": [0, 0.3] },
+                 paint: { "text-color": "#e7eaf0", "text-halo-color": "#0f1115",
+                          "text-halo-width": 1.4 } });
+  map.addLayer({ id: znak, type: "symbol", source: vir, minzoom: NADSTRESKI_OD,
+                 filter: ["all", ["==", ["get", "postaja"], 0], ["==", ["get", "obCesti"], 0]],
+                 layout: slika(1) });
 }

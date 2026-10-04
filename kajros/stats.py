@@ -73,10 +73,18 @@ def stations(conn: sqlite3.Connection, network: str | None = None) -> list[dict]
     """
     if not network:
         return [dict(r) for r in conn.execute("SELECT * FROM station ORDER BY name")]
+    # Avtobusna postajališča nosijo še smer ceste, prevoznike in ali so
+    # avtobusna postaja (`pripni.postajalisca`): zemljevid od blizu nariše
+    # nadstrešek ob cesti ali znak, v barvi prevoznika.
+    # Lega na šest decimalk (10 cm): GTFS jih ima petnajst, in pri 10 000
+    # postajališčih je to tretjina odgovora.
+    stolpci = ("st.stop_id, st.name, ROUND(st.lat, 6) AS lat, ROUND(st.lon, 6) AS lon, "
+               "p.smer, p.desno, p.prevozniki, p.postaja") if network == "avtobus" else "st.*"
+    pridruzi = " LEFT JOIN postajalisce p ON p.stop_id = st.stop_id" if network == "avtobus" else ""
     return [
         dict(r)
         for r in conn.execute(
-            "SELECT st.* FROM station st WHERE EXISTS ("
+            f"SELECT {stolpci} FROM station st{pridruzi} WHERE EXISTS ("
             "  SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
             "  WHERE s.stop_id = st.stop_id AND t.network = ?) ORDER BY st.name",
             (network,),
@@ -209,11 +217,15 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
     rows = conn.execute(
         # `lat`/`lon` rabi zemljevid ene voznje v oknu: postanke narise kot
         # crto in pike. Poizvedba postajo ze pridruzuje, zato je to zastonj.
+        # `smer`, `desno`, `prevozniki`, `postaja` (`pripni.postajalisca`):
+        # nadstrešek ali znak od blizu, enako kot na velikem zemljevidu.
         "SELECT s.stop_seq, st.name, st.lat, st.lon, s.arr_s, s.dep_s, "
-        "       r.delay_arr, r.delay_dep, r.feed_ts "
+        "       r.delay_arr, r.delay_dep, r.feed_ts, "
+        "       p.smer, p.desno, p.prevozniki, p.postaja "
         "FROM sched s JOIN station st ON st.stop_id = s.stop_id "
         "LEFT JOIN run r ON r.trip_id = s.trip_id AND r.stop_seq = s.stop_seq "
         "                AND r.service_date = ? "
+        "LEFT JOIN postajalisce p ON p.stop_id = s.stop_id "
         "WHERE s.trip_id = ? ORDER BY s.stop_seq",
         (service_date, trip_id),
     )

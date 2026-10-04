@@ -1781,33 +1781,40 @@ function smerNaOceni(v, lega) {
   return smerTrase(runMap.trasa, runMap.cums, lega.vzdolz, pol) ?? iz;
 }
 
-// Ista oblika kot na velikem zemljevidu -- avtobus je vozilo, ne pika, in
-// kaze v smer voznje.
-// Na tem zemljevidu vozilo NI meritev, ampak ocena, zato ni zeleno: zelena je
-// v projektu barva izmerjenega (postajalisca, trasa), `ESTIMATE_COLOR` pa je
-// rezervirana prav za "tu meritve ni". Prosojnost pove isto se enkrat, za
-// tistega, ki barv ne loci.
-function busSvg(moving) {
+// Ista oblika in ista barva kot na velikem zemljevidu: avtobus v barvi
+// prevoznika, vlak oranzen. Do 4. 10. 2026 je bilo vozilo tu svetlo modro
+// (`ESTIMATE_COLOR`, "tu meritve ni") -- odkar je Arriva na velikem
+// zemljevidu modra, se je LPP bral kot Arriva. Da vozilo stoji na OCENI lege
+// in ne na meritvi, zdaj povesta prosojnost in crtkan svetel obris; meritev
+// je rdeca pika. Pod crtkanim obrisom je temen, da se loci od podlage.
+function inkVozila(v) {
+  if (runMap.vlak) return TRAIN_INK;
+  const ag = v && v.agency === "lpp" ? "1118" : v && v.agency;
+  return AGENCY_INK[ag] || BUS_INK;
+}
+
+const obrisOcene = (rect) => `<rect ${rect} fill="none" stroke="#0f1115" stroke-width="2.4"/>
+      <rect ${rect} fill="none" stroke="#f4f6fa" stroke-width="1.2" stroke-dasharray="2.4 1.6"/>`;
+
+function busSvg(moving, ink) {
   const s = 30;
+  const telo = 'x="7.5" y="2.5" width="9" height="19" rx="3.2"';
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="7.5" y="2.5" width="9" height="19" rx="3.2" fill="${ESTIMATE_COLOR}"
-            fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
-      <path d="M9.2 5.6 Q12 4.4 14.8 5.6 L14.8 7.4 Q12 6.6 9.2 7.4 Z"
-            fill="#0f1115" fill-opacity="0.55"/>
+      <rect ${telo} fill="${ink}" fill-opacity="${moving ? 0.55 : 0.32}"/>
+      ${obrisOcene(telo)}
+      <path d="M9.4 5.9 Q12 4.8 14.6 5.9 L14.6 7.5 Q12 6.8 9.4 7.5 Z"
+            fill="#e9f4ff" fill-opacity="0.9"/>
     </svg>`;
 }
 
-// Vlak v isti barvi ocene, z obliko vlaka z velikega zemljevida -- a brez
-// obroča: tam obroč pove "na postaji, ne izmerjeno", tu stoji na legi.
-function vlakSvg(moving) {
+function vlakSvg(moving, ink) {
   const s = 30;
+  const telo = 'x="7" y="2" width="10" height="20" rx="3.4"';
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="7" y="2" width="10" height="20" rx="3.4" fill="${ESTIMATE_COLOR}"
-            fill-opacity="${moving ? 0.78 : 0.45}" stroke="#0f1115" stroke-width="1.5"/>
-      <path d="M8.8 5.2 Q12 4.1 15.2 5.2 L15.2 7.8 Q12 6.8 8.8 7.8 Z"
+      <rect ${telo} fill="${ink}" fill-opacity="${moving ? 0.55 : 0.32}"/>
+      ${obrisOcene(telo)}
+      <path d="M9.2 5.5 Q12 4.5 14.8 5.5 L14.8 7.8 Q12 6.9 9.2 7.8 Z"
             fill="#0f1115" fill-opacity="0.6"/>
-      <circle cx="9.8" cy="19" r="1" fill="#0f1115" fill-opacity="0.7"/>
-      <circle cx="14.2" cy="19" r="1" fill="#0f1115" fill-opacity="0.7"/>
     </svg>`;
 }
 
@@ -1822,7 +1829,8 @@ function runVir(id, features) {
 // zadene, kar je v 12 px od prsta, kot na velikem zemljevidu: pika postaje
 // je manjsa od prsta.
 const RUN_ZADETEK_PX = 12;
-const RUN_IMENA = ["run-gps", "run-tvoja", "k-jaz", "run-postaje"];
+const RUN_IMENA = ["run-gps", "run-tvoja", "k-jaz", "run-postaje", "run-postaje-avtobusne",
+                   "run-postaje-znak"];
 
 function runImeNaDotik() {
   const { map, ml } = runMap;
@@ -1904,6 +1912,8 @@ async function ustvariRunMap(v) {
     const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
     runMap.trasa = kos;
     runMap.cums = kumulative(kos);
+    runMap.kosi = kosi;
+    runMap.kosIdx = kosi.indexOf(kos);
   }
   const postaje = (state.run.stops || []).filter((s) => s.lat != null && s.lon != null);
   const pts = postaje.map((s) => [s.lat, s.lon]);
@@ -1920,7 +1930,7 @@ async function ustvariRunMap(v) {
 
   const crte = kosi.length ? kosi.map((kos) => pkCrta(kos, { vrsta: "trasa" }))
     : pts.length > 1 ? [pkCrta(pts, { vrsta: "skozi" })] : [];
-  for (const id of ["run-trasa", "run-postaje", "run-tvoja", "run-gps"]) {
+  for (const id of ["run-trasa", "run-postaje", "run-postaje-nadstreski", "run-tvoja", "run-gps"]) {
     map.addSource(id, { type: "geojson", data: RUN_PRAZNO });
   }
   const okroglo = { "line-join": "round", "line-cap": "round" };
@@ -1934,28 +1944,42 @@ async function ustvariRunMap(v) {
                  paint: { "line-color": "#0f1115", "line-width": sirinaM(m + 1.2, [[10, 6], [15, 6]]),
                           "line-opacity": 0.85 } },
                naTleh);
+  // Kot izbrano vozilo na velikem zemljevidu: pot pred vozilom oranžna
+  // (`IZBRANA_INK`), prevožena siva (`narisiRunTraso`, 4. 10. 2026; prej vsa
+  // zelena).
+  const za = ["==", ["get", "del"], "za"];
   map.addLayer({ id: "run-trasa", type: "line", source: "run-trasa", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "trasa"],
-                 paint: { "line-color": "#4db97f", "line-width": sirinaM(m, [[10, 3], [15, 3]]),
-                          "line-opacity": 0.95 } },
+                 paint: { "line-color": ["case", za, ZA_INK, IZBRANA_INK],
+                          "line-width": sirinaM(m, [[10, 3], [15, 3]]),
+                          "line-opacity": ["case", za, 0.55, 0.95] } },
                naTleh);
   map.addLayer({ id: "run-skozi", type: "line", source: "run-trasa",
                  filter: ["==", ["get", "vrsta"], "skozi"],
-                 paint: { "line-color": "#4db97f", "line-width": 2.5, "line-opacity": 0.55,
+                 paint: { "line-color": IZBRANA_INK, "line-width": 2.5, "line-opacity": 0.7,
                           "line-dasharray": [2, 2] } },
                naTleh);
   // Pike so bile nekoc neme tocke na zemljevidu. Ime ob dotiku je edini
   // nacin, da se izve, katera postaja to je -- trajne oznake bi na mestni
   // liniji zakrile progo pod sabo.
+  // Pri avtobusu od blizu nadstrešek ali znak namesto pike, kot na velikem
+  // zemljevidu (`slojiPostajalisc`); pika ostane nevidna, ker jo zadene prst.
+  const pika = runMap.vlak ? 1 : PIKA_POD_3D;
   map.addLayer({ id: "run-postaje", type: "circle", source: "run-postaje",
-                 paint: { "circle-radius": 3.6, "circle-color": "#4db97f",
+                 paint: { "circle-radius": 3.6, "circle-color": IZBRANA_INK,
+                          "circle-opacity": pika, "circle-stroke-opacity": pika,
                           "circle-stroke-color": "#0f1115", "circle-stroke-width": 1.4,
                           "circle-pitch-alignment": "map" } },
                RUN_POD);
+  if (!runMap.vlak) {
+    slojiPostajalisc(map, { vir: "run-postaje", nadstresek: "run-nadstresek",
+                            postaja: "run-postaje-avtobusne", znak: "run-postaje-znak" });
+  }
   // Postaja, na kateri stoji potnik, mora biti vidna -- brez nje je to
-  // zemljevid o vozilu in ne o njegovi poti. Zato z imenom, trajno.
+  // zemljevid o vozilu in ne o njegovi poti. Zato z imenom, trajno. Bela, ker
+  // je pot oranžna in bi se oranžna pika na njej izgubila.
   map.addLayer({ id: "run-tvoja", type: "circle", source: "run-tvoja",
-                 paint: { "circle-radius": 6, "circle-color": "#f0934f",
+                 paint: { "circle-radius": 6, "circle-color": "#f4f6fa",
                           "circle-stroke-color": "#0f1115", "circle-stroke-width": 2,
                           "circle-pitch-alignment": "map" } },
                RUN_POD);
@@ -1963,12 +1987,12 @@ async function ustvariRunMap(v) {
                  layout: { "text-field": ["get", "ime"], "text-font": ["Noto Sans Bold"],
                            "text-size": 12, "text-anchor": "left", "text-offset": [0.9, 0],
                            "text-allow-overlap": true },
-                 paint: { "text-color": "#f5c7a3", "text-halo-color": "#0f1115",
+                 paint: { "text-color": "#f4f6fa", "text-halo-color": "#0f1115",
                           "text-halo-width": 1.6 } },
                RUN_POD);
   // Zadnja RESNICNA meritev je edina trdna tocka na tem zemljevidu, zato je
-  // polna in vidna -- ne bleda. Rdeca s svetlim obrocem: postajalisca in
-  // trasa so zeleni, zato se zelena pika med njimi izgubi. Rdeca ni iz nobene
+  // polna in vidna -- ne bleda. Rdeca s svetlim obrocem, ki jo loci od
+  // oranzne poti pod njo (prej zelene). Rdeca ni iz nobene
   // lestvice -- ne iz zamud in ne iz razmer -- zato tu ne more pomeniti
   // nicesar drugega. Rise se VEDNO: kadar vozilo stoji, jo oblika vozila
   // pokrije. Plast je zadnja med nasimi, da je 3 px siroka trasa ne prereze.
@@ -1979,19 +2003,24 @@ async function ustvariRunMap(v) {
                RUN_POD);
 
   // Od blizu model v 3D, kot na velikem zemljevidu: zemljevid se tu nagne
-  // enako, ploska ikona pa je med dvignjenimi stavbami ostala ploska.
-  // Oblika je prevoznikova, barva pa OCENE, ne prevoznika -- vozilo stoji na
-  // oceni lege in legenda pod zemljevidom to barvo tako imenuje.
+  // enako, ploska ikona pa je med dvignjenimi stavbami ostala ploska. Model
+  // je v barvah prevoznika, kot na velikem zemljevidu (do 4. 10. 2026 v barvi
+  // ocene); da stoji na oceni, pove podnapis "ocenjeno iz lege pred ...".
   runMap.avto3d = runMap.vlak
-    ? plast3D({ id: "run-vlak-3d", modeli: vlakModeli(ESTIMATE_COLOR),
+    ? plast3D({ id: "run-vlak-3d", modeli: vlakModeli(TRAIN_INK),
                 vidna: run3D, povecava: vlakPovecava })
-    : avtobusi3D({ id: "run-avtobus-3d", enotna: ESTIMATE_COLOR,
+    : avtobusi3D({ id: "run-avtobus-3d", inki: { ...AGENCY_INK, drugi: BUS_INK },
                    vidna: run3D, povecava: avtoPovecava });
   map.addLayer(runMap.avto3d.plast, RUN_POD);
   map.on("zoom", () => postavi3D());
 
   runVir("run-trasa", crte);
-  runVir("run-postaje", postaje.map((s) => pkTocka([s.lat, s.lon], { ime: s.name })));
+  runVir("run-postaje", tockePostajalisc(postaje).features);
+  runMap.postajeOdBlizu = postaje;
+  if (!runMap.vlak) {
+    postaviRunNadstreske();
+    map.on("zoomend", postaviRunNadstreske);
+  }
   const yours = yourStop(state.run.stops);
   if (yours && yours.lat != null) {
     runVir("run-tvoja", [pkTocka([yours.lat, yours.lon], { ime: yours.name })]);
@@ -2001,6 +2030,47 @@ async function ustvariRunMap(v) {
 }
 
 const run3D = () => !!runMap.map && runMap.map.getZoom() >= AVTO_3D_OD;
+
+// Nadstreški postajališč te vožnje -- nekaj deset, zato vsi naenkrat, znova
+// le ob spremembi približka (povečava `nadstresekK`).
+function postaviRunNadstreske() {
+  const { map, postajeOdBlizu } = runMap;
+  if (!map || !postajeOdBlizu) return;
+  const z = map.getZoom();
+  const k = z < NADSTRESKI_OD ? null : nadstresekK(z);
+  if (k === runMap.nadstresekK) return;
+  runMap.nadstresekK = k;
+  runVir("run-postaje-nadstreski", k == null ? [] : postajeOdBlizu
+    .filter((s) => s.smer != null && !s.postaja)
+    .flatMap((s) => nadstresekKosi(s, k)));
+}
+
+// Pot pred vozilom oranžna, prevožena siva -- kot izbrano vozilo na velikem
+// zemljevidu. Razrez je pri oceni lege. Osveži se ob novih podatkih in ko
+// ocena odpelje za 30 m, ne vsako sekundo: `setData` na telefonu ni zastonj.
+const RAZREZ_M = 30;
+
+function narisiRunTraso(vzdolz) {
+  const { kosi, kosIdx, trasa, cums } = runMap;
+  if (!kosi || !kosi.length) return;
+  runMap.razrez = vzdolz;
+  const crte = [];
+  kosi.forEach((kos, i) => {
+    if (i !== kosIdx || vzdolz == null) {
+      const del = vzdolz != null && i < kosIdx ? "za" : "naprej";
+      crte.push(pkCrta(kos, { vrsta: "trasa", del }));
+      return;
+    }
+    let j = 0;
+    while (j < cums.length - 2 && cums[j + 1] <= vzdolz) j += 1;
+    const p = tockaNaTrasi(trasa, cums, vzdolz);
+    const prevozeno = [...trasa.slice(0, j + 1), p];
+    const naprej = [p, ...trasa.slice(j + 1)];
+    if (prevozeno.length > 1) crte.push(pkCrta(prevozeno, { vrsta: "trasa", del: "za" }));
+    if (naprej.length > 1) crte.push(pkCrta(naprej, { vrsta: "trasa", del: "naprej" }));
+  });
+  runVir("run-trasa", crte);
+}
 
 // Model in ikona se ne rišeta hkrati: ikona je element nad platnom in bi
 // model prekrila. Skupina modela je prevoznik (`avtoModeli`), LPP pa v legah
@@ -2017,9 +2087,11 @@ function postavi3D(lega) {
                              model: modelVozila(v) }] : []);
 }
 
-const modelVozila = (v) => (runMap.vlak
-  ? vlakModel({ mode: state.mode, train_no: state.run && state.run.train_no })
-  : v.agency === "lpp" ? "1118" : v.agency);
+const modelVozila = (v) => {
+  if (runMap.vlak) return vlakModel({ mode: state.mode, train_no: state.run && state.run.train_no });
+  const ag = v.agency === "lpp" ? "1118" : v.agency;
+  return AGENCY_INK[ag] ? ag : "drugi";
+};
 // Garnitura FLIRT, najpogostejša na progi: trije vozovi po ~20 m.
 const VLAK_DOLZINA_M = 60;
 
@@ -2084,7 +2156,7 @@ function postaviVozilo(prvic, nova) {
   const el = runMap.marker.getElement();
   if (el.dataset.vozi !== String(moving)) {
     el.dataset.vozi = String(moving);
-    el.innerHTML = runMap.vlak ? vlakSvg(moving) : busSvg(moving);
+    el.innerHTML = runMap.vlak ? vlakSvg(moving, inkVozila(v)) : busSvg(moving, inkVozila(v));
   }
   // Izmerjena lega se spremeni samo z novim odgovorom; `setData` vsako
   // sekundo bi MapLibre silil, da vir na telefonu predeluje brez razloga.
@@ -2092,7 +2164,13 @@ function postaviVozilo(prvic, nova) {
     runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: meritevIme() })]);
     document.getElementById("run-map-key-meritev").textContent = meritevIme();
   }
+  const kljuc = document.querySelector(".run-map-key .key-bus");
+  if (kljuc) kljuc.style.backgroundColor = inkVozila(v);
   postavi3D(lega);
+  if (lega.vzdolz != null && (nova || runMap.razrez == null
+      || Math.abs(lega.vzdolz - runMap.razrez) > RAZREZ_M)) {
+    narisiRunTraso(lega.vzdolz);
+  }
 
   // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
   // sekundno osvezevanje trgalo izpod prsta.

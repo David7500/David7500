@@ -616,6 +616,35 @@ const AGENCY = {
 // barva samo pove, cigav avtobus je, zato je v zetonu vedno tudi prevoznik.
 const LINE_INK = "#4db97f";
 
+// ---------- barve zemljevidov ----------
+// Veliki zemljevid in okno vožnje si jih delita.
+
+// Barva na zemljevidu pove, CIGAV avtobus je. Izbrane so tako, da se locijo
+// tudi pri barvni slepoti: najslabsi par je pri deutan/protan ΔE 9,6 (prag 3)
+// in celo pri tritanopiji 4,8 -- preverjeno s scripts/preveri_paleto.py, ne na
+// oko. Proti lestvici zamud zelena in oranzna pri deutanu trcita (ΔE 1,2), a
+// to ni tezava: vozila locuje OBLIKA (avtobus je puscica, vlak krog), barva pa
+// nikoli ne nosi pomena sama -- oznaka poleg nosi ime prevoznika.
+const BUS_INK = "#4db97f";                    // privzeto, kadar prevoznik ni znan
+const AGENCY_INK = {
+  "1118": "#4db97f",   // LPP
+  "1123": "#6fb8ff",   // Arriva
+  "1119": "#9d7ae0",   // Nomago
+  "1121": "#c9a227",   // AP Murska Sobota
+};
+
+// Pot izbranega vozila in vozila v oknu vožnje je v barvi kajrosa (oranžna
+// znaka), ne v barvi vozila: v barvi prevoznika se je med enako obarvanimi
+// trasami LPP izgubila (4. 10. 2026). Ista oranžna kot vlak -- izbrana pot
+// vlaka je bila tako ali tako oranžna; od prevoznikov se loči tudi pri barvni
+// slepoti (`preveri_paleto.py`).
+const IZBRANA_INK = "#f0934f";
+
+// Prevoženi del poti izbranega vozila.
+const ZA_INK = "#8b95a4";
+// Vlak na zemljevidu: oznaka, model in pot.
+const TRAIN_INK = "#f0934f";
+
 function lineBadgeHtml(row) {
   if (!isBus(row.mode)) return "";
   // Na zeleznicni strani avtobus pomeni NADOMESTNI PREVOZ -- torej "namesto

@@ -524,6 +524,7 @@ def robots():
         "Disallow: /app/*?\n"
         "Disallow: /postajalisce/*?\n"
         "Disallow: /admin\n"
+        "Disallow: /donacije/naprej\n"
         "Disallow: /docs\n"
         "Disallow: /redoc\n"
         f"\nSitemap: {config.BASE_URL}/sitemap.xml\n",
@@ -688,7 +689,7 @@ def stik_stran(request: Request, poslano: int = 0):
     """Obrazec za sporočilo. Žeton v njem nosi čas izdaje (glej `stik.py`)."""
     _stik_vklopljen()
     return templates.TemplateResponse(request, "stik.html", {
-        "zeton": stik.zeton(), "poslano": bool(poslano),
+        "zeton": stik.zeton(), "poslano": bool(poslano), "anonimno_poslano": poslano == 2,
         "najdaljse": stik.NAJDALJSE,
     })
 
@@ -743,10 +744,11 @@ def _stik_sprejmi(request: Request, polja: dict):
         return (polja.get(ime) or [""])[0]
 
     email, besedilo = p("email"), p("besedilo")
+    anonimno = p("anonimno") == "1"
     with _conn() as conn:
         try:
             stik.sprejmi(
-                conn, email=email, besedilo=besedilo,
+                conn, email=email, besedilo=besedilo, anonimno=anonimno,
                 zeton_iz_obrazca=p("zeton"), vaba=p("naslov"),
                 kljuc=stik.kljuc_posiljatelja(request.headers),
                 drzava=request.headers.get("cf-ipcountry", ""),
@@ -755,12 +757,12 @@ def _stik_sprejmi(request: Request, polja: dict):
             return templates.TemplateResponse(
                 request, "stik.html",
                 {"zeton": stik.zeton(), "napaka": str(e),
-                 "email": email, "besedilo": besedilo,
+                 "email": email, "besedilo": besedilo, "anonimno": anonimno,
                  "najdaljse": stik.NAJDALJSE},
                 status_code=400)
     # Preusmeritev po uspehu, ne izris: brez nje osvežitev strani pošlje
     # sporočilo še enkrat in v nabiralniku sta dva enaka.
-    return RedirectResponse("/stik?poslano=1", status_code=303)
+    return RedirectResponse(f"/stik?poslano={2 if anonimno else 1}", status_code=303)
 
 
 @app.post("/api/deli")
@@ -862,7 +864,20 @@ def donacije(request: Request):
     ponudnik = urlsplit(config.DONACIJE).hostname or config.DONACIJE
     return templates.TemplateResponse(
         request, "donacije.html",
-        {"naslov": config.DONACIJE, "ponudnik": ponudnik.removeprefix("www.")})
+        {"ponudnik": ponudnik.removeprefix("www.")})
+
+
+@app.get(obisk.DONACIJE_NAPREJ, include_in_schema=False)
+def donacije_naprej():
+    """Klik na „Podari“: preusmeritev na plačilno stran, da se klik izmeri.
+
+    Ne hrani ničesar novega -- šteje ga navadno štetje obiska (`obisk.py`),
+    brez IP. `no-store`, da posrednik klika ne požre.
+    """
+    if not config.DONACIJE:
+        raise HTTPException(404, "donacije niso nastavljene")
+    return RedirectResponse(config.DONACIJE, status_code=302,
+                            headers={"Cache-Control": "no-store"})
 
 
 def _izdaja_androida() -> dict | None:
@@ -1422,7 +1437,7 @@ def api_stations(network: str = NETWORK_Q):
     # je manjsi del cene, vecino poje pretvorba 9 791 postaj v niz. Zato
     # `Response`, ne navadna vrnitev -- FastAPI bi jo sicer serializiral znova.
     telo = _predpomni(
-        f"stations:{network}", _znacka("gtfs_imported_at"), 3600,
+        f"stations:{network}", _znacka("gtfs_imported_at", "pripeto_at"), 3600,
         lambda: json.dumps(_conn_klic(lambda c: stats.stations(c, network)),
                            ensure_ascii=False, separators=(",", ":")).encode())
     return Response(content=telo, media_type="application/json")
@@ -1881,14 +1896,17 @@ def api_shapes_live():
 def _shapes_live_rows():
     now = int(datetime.now(TZ).timestamp())
     with _conn() as conn:
+        # `agency`: trasa je v barvi prevoznika, kot njegova vozila -- vse v
+        # eni zeleni se izbrana pot med njimi ni videla (4. 10. 2026).
         rows = conn.execute(
-            "SELECT DISTINCT sh.shape_id, COALESCE(sh.osm, sh.points) AS points, t.network "
+            "SELECT sh.shape_id, COALESCE(sh.osm, sh.points) AS points, t.network,"
+            "       MIN(t.agency) AS agency "
             "FROM vehicle_now v JOIN trip t USING (trip_id) "
             "JOIN shape sh ON sh.shape_id = t.shape_id "
-            "WHERE v.seen_ts >= ?",
+            "WHERE v.seen_ts >= ? GROUP BY sh.shape_id, t.network",
             (now - collector.POSITION_FRESH_S,),
         ).fetchall()
-    return [{"shape_id": r["shape_id"], "network": r["network"],
+    return [{"shape_id": r["shape_id"], "network": r["network"], "agency": r["agency"],
              "points": json.loads(r["points"])} for r in rows]
 
 

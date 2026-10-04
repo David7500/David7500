@@ -588,3 +588,33 @@ def test_prihod_z_googla_je_clovek_brez_js(conn):
                                  "/postaje", "/o-nas"])
 def test_pristajalne_in_besedilne_so_strani(pot):
     assert obisk.vrsta_poti(pot) == "stran"
+
+
+# ------------------------------------------------------------- podpora
+
+def test_klik_na_podari_ni_ogled_strani():
+    """`/donacije` je stran, preusmeritev za gumbom pa ne: ogled bi napihnil
+    `ogledov`, klik pa mora ostati ločena vrstica."""
+    assert obisk.vrsta_poti("/donacije") == "stran"
+    assert obisk.vrsta_poti(obisk.DONACIJE_NAPREJ) == "drugo"
+
+
+def test_pregled_steje_odprto_stran_in_klik(conn):
+    _js()                                                       # dokaz: človek
+    _zabelezi(pot="/donacije", vrsta="stran")
+    _zabelezi(pot=obisk.DONACIJE_NAPREJ, vrsta="drugo", koda=302)
+    _zabelezi(pot="/donacije", vrsta="stran", kljuc="drug")     # brez JS: ni človek
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn)["donacije"]
+    assert (p["ljudi"], p["klikov_ljudi"], p["klikov"]) == (1, 1, 1)
+    assert p["ogledi"] == 2, "zahtev je dve, ljudi ena"
+
+
+def test_vir_po_dnevih_loci_dneve(conn):
+    for dan, vir in (("2026-10-01", "Facebook"), ("2026-10-02", "Facebook"),
+                     ("2026-10-02", "Google")):
+        _zabelezi(pot="/", kljuc=dan + vir, vir=vir, dan=dan)
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn, "2026-10-01", "2026-10-02")
+    assert sorted((r["dan"], r["kljuc"]) for r in p["vir_po_dnevih"]) == [
+        ("2026-10-01", "Facebook"), ("2026-10-02", "Facebook"), ("2026-10-02", "Google")]

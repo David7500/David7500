@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS pripeto (
     ts    INTEGER NOT NULL
 );
 
+-- Avtobusno postajališče na zemljevidu (`pripni.postajalisca`): smer ceste
+-- ob njem in kdo tam ustavlja. Izračunljivo iz pripetih tras in voznega reda,
+-- shranjeno, ker je prehod čez vse trase predrag za zahtevo.
+CREATE TABLE IF NOT EXISTS postajalisce (
+    stop_id    TEXT PRIMARY KEY,
+    smer       REAL,              -- smer vožnje ob njem, ° od severa; NULL = ni ob cesti
+    desno      REAL,              -- m desno od osi pripete trase (levo negativno)
+    prevozniki TEXT NOT NULL,     -- '1118,1123'; mestni LPP je 1118
+    postaja    INTEGER NOT NULL DEFAULT 0   -- avtobusna postaja, ne postajališče ob cesti
+);
+
 CREATE TABLE IF NOT EXISTS trip (
     trip_id    TEXT PRIMARY KEY,
     route_id   TEXT NOT NULL,

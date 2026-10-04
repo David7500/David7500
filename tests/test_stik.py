@@ -262,3 +262,24 @@ def test_brisanje_ne_sprosti_omejitve(conn):
     with pytest.raises(stik.Zavrnjeno, match="kratkem času"):
         _poslji(conn, zdaj=zdaj + 10,
                 zeton_iz_obrazca=stik.zeton(zdaj - stik.NAJHITREJE_S - 1))
+
+
+# ------------------------------------------------------------- anonimno
+
+def test_anonimno_ne_shrani_epostnega_naslova(conn):
+    """Tudi če ga je človek že vpisal in si potem premislil: kar obljubimo, da
+    ga ne hranimo, ne sme končati v bazi."""
+    id_ = _poslji(conn, email="ana@primer.si", anonimno=True)
+    assert id_ > 0
+    assert stik.seznam(conn)[0]["email"] == ""
+
+
+def test_anonimno_ne_zahteva_naslova(conn):
+    _poslji(conn, email="", anonimno=True)
+    assert len(stik.seznam(conn)) == 1
+
+
+def test_brez_anonimnosti_naslov_se_vedno_obvezen(conn):
+    with pytest.raises(stik.Zavrnjeno):
+        _poslji(conn, email="", anonimno=False)
+    assert stik.seznam(conn) == []

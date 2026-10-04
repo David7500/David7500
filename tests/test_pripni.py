@@ -168,3 +168,145 @@ def test_na_cesto_ne_pripne_dalec_ali_v_nasprotni_smeri():
     assert pripni.na_cesto(t, 46.0503, 14.505, 90) is None    # 33 m stran
     assert pripni.na_cesto(t, 46.05005, 14.505, 270) is None  # nasprotna smer
     assert pripni.na_cesto(t, 46.05005, 14.505, None) is not None
+
+
+# ------------------------------------------------------------- konca trase
+
+# Postaja je ~460 m vzhodno od začetka trase, kot Ljubljana AP 4. 10. 2026.
+POSTAJA = [46.05, 14.506]
+
+
+def test_trasa_brez_postanka_na_zacetku_se_podaljsa_po_cesti():
+    """Trasa se začne na stari legi postaje in pelje stran od nove: do nove
+    jo podaljša pot po cesti, ne ravna črta."""
+    trasa = [[[46.05, 14.500], [46.05, 14.499], [46.05, 14.490]]]
+    cesta = [POSTAJA, [46.049, 14.503], [46.05, 14.500]]
+    klici = []
+    out = pripni.do_postaj(trasa, POSTAJA, [46.05, 14.490],
+                           lambda a, b: klici.append((a, b)) or cesta)
+    assert klici == [(POSTAJA, [46.05, 14.500])]
+    assert out[0][0] == POSTAJA and out[0][:3] == cesta
+    assert out[0][-1] == [46.05, 14.490]
+
+
+def test_trasa_ki_gre_mimo_postanka_se_tam_odreze():
+    """Trasa se začne v garaži in pelje mimo prvega postanka: odreže se pri
+    njem, pot po cesti ni potrebna."""
+    trasa = [[[46.05, 14.500], [46.05, 14.510], [46.05, 14.520]]]
+    out = pripni.do_postaj(trasa, [46.0501, 14.506], [46.05, 14.520],
+                           lambda a, b: (_ for _ in ()).throw(AssertionError("brez poti")))
+    assert out[0][0] == [46.05, 14.506]
+    assert out[0][-1] == [46.05, 14.520]
+
+
+def test_krozna_linija_se_ne_odreze_na_poti_nazaj():
+    """Krožna linija gre mimo začetnega postanka tudi na koncu. Začetek se
+    sme odrezati samo v prvi polovici, sicer bi ostal le zadnji kos."""
+    tja = [[46.05, 14.500 + i * 0.002] for i in range(6)]            # 14.500 -> 14.510
+    nazaj = [[46.0508, 14.510 - i * 0.002] for i in range(6)]        # 90 m severneje
+    postanek = [46.0508, 14.5061]
+    cesta = [postanek, [46.0502, 14.503], [46.05, 14.500]]
+    out = pripni.do_postaj([tja + nazaj], postanek, None, lambda a, b: cesta)
+    assert out[0][:3] == cesta, "podaljšana, ne odrezana na poti nazaj"
+
+
+def test_bliznji_konci_ostanejo():
+    trasa = [[A, B, C]]
+    assert not pripni.potrebuje_konca(trasa, A, C)
+    assert pripni.do_postaj(trasa, A, C, lambda a, b: None) == trasa
+
+
+def test_predalec_ni_preselitev_ampak_napaka():
+    trasa = [[A, B, C]]
+    assert not pripni.potrebuje_konca(trasa, [46.10, 14.5], None)        # 5,5 km
+
+
+def test_pripni_doda_pot_do_postaje(monkeypatch):
+    c = _baza()
+    c.execute("UPDATE trip SET first_seq = 1, last_seq = 2")
+    c.execute("UPDATE station SET lon = 14.508 WHERE stop_id = 'P1'")    # ~620 m od A
+    c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES('T1', 1, 'P1', 0, 0)")
+    c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES('T1', 2, 'P2', 60, 60)")
+    _osrm(monkeypatch, [])
+    poti = []
+    monkeypatch.setattr(pripni, "po_cesti",
+                        lambda naslov, p: poti.append(p) or [p[0], [46.051, 14.504], p[1]])
+    pripni.pripni(c, log=lambda *_: None)
+    assert poti and poti[0][0] == [46.05, 14.508]
+    osm = json.loads(c.execute("SELECT osm FROM shape").fetchone()[0])
+    assert osm[0][0] == [46.05, 14.508]
+
+    # Drugič iz predpomnilnika: ključ nosi postanka, pot se ne išče znova.
+    c.execute("UPDATE shape SET osm = NULL")
+    poti.clear()
+    pripni.pripni(c, log=lambda *_: None)
+    assert poti == []
+
+
+def test_voznja_brez_trase_dobi_pot_skozi_postajalisca(monkeypatch):
+    """LPP za devet linij trase nima; dobijo pot po cesti, enkrat na zaporedje
+    postajališč, in drugič iz predpomnilnika."""
+    c = _baza()
+    c.execute("UPDATE trip SET shape_id = NULL")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network) "
+              "VALUES('T2', 'R', '25', 'X', 'bus', 'lpp', 'avtobus')")
+    for t in ("T1", "T2"):
+        c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?, 1, 'P1', 0, 0)", (t,))
+        c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?, 2, 'P2', 60, 60)", (t,))
+    _osrm(monkeypatch, [])
+    cesta = [[46.05, 14.5], [46.0502, 14.501], [46.05, 14.502]]
+    poti = []
+    monkeypatch.setattr(pripni, "po_cesti", lambda naslov, p: poti.append(p) or cesta)
+    izid = pripni.pripni(c, log=lambda *_: None)
+    assert izid["iz_postajalisc"] == 1 and len(poti) == 1, "dve vožnji, eno zaporedje"
+    oblike = {r[0] for r in c.execute("SELECT shape_id FROM trip")}
+    assert len(oblike) == 1 and next(iter(oblike)).startswith(pripni.IZ_POSTAJALISC)
+    assert json.loads(c.execute("SELECT osm FROM shape WHERE shape_id = ?",
+                                (next(iter(oblike)),)).fetchone()[0]) == [cesta]
+
+    # Uvoz trase pobriše; drugič pride iz predpomnilnika.
+    c.execute("DELETE FROM shape WHERE shape_id LIKE 'postajalisca:%'")
+    c.execute("UPDATE trip SET shape_id = NULL")
+    poti.clear()
+    pripni.pripni(c, log=lambda *_: None)
+    assert poti == [] and c.execute("SELECT COUNT(*) FROM trip WHERE shape_id IS NULL").fetchone()[0] == 0
+
+
+# ------------------------------------------------------------- postajališča
+
+def test_ob_trasi_smer_in_stran():
+    """Trasa proti vzhodu; postajališče 5 m južno je desno od smeri vožnje."""
+    crta = [[46.05, 14.500], [46.05, 14.502]]
+    d, j, smer, desno = pripni._ob_trasi(crta, 46.05 - 5 / 110574, 14.501, 0)
+    assert abs(d - 5) < 0.1 and j == 0
+    assert abs(smer - 90) < 0.5
+    assert abs(desno - 5) < 0.1
+    _, _, _, levo = pripni._ob_trasi(crta, 46.05 + 5 / 110574, 14.501, 0)
+    assert abs(levo + 5) < 0.1
+
+
+def test_postajalisca_smer_prevozniki_postaja():
+    c = _baza()
+    c.execute("UPDATE trip SET first_seq = 1, last_seq = 2")
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('AP', 'Kraj AP', 46.05, 14.501)")
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('D', 'Daleč', 46.06, 14.501)")
+    for seq, sid in ((1, "P1"), (2, "AP"), (3, "D"), (4, "P2")):
+        c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES('T1', ?, ?, 0, 0)",
+                  (seq, sid))
+    c.execute("UPDATE trip SET last_seq = 4")
+    assert pripni.postajalisca(c) == 4
+    p = {r["stop_id"]: dict(r) for r in c.execute("SELECT * FROM postajalisce")}
+    assert abs(p["P1"]["smer"] - 90) < 1 and p["P1"]["prevozniki"] == "1118"   # mestni LPP = 1118
+    assert p["AP"]["postaja"] == 1, "ime z AP je avtobusna postaja"
+    assert p["D"]["smer"] is None, "1,1 km od trase ni ob cesti"
+    assert p["P1"]["postaja"] == 0
+
+
+def test_postaje_avtobus_nosijo_smer(monkeypatch):
+    c = _baza()
+    c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES('T1', 1, 'P1', 0, 0)")
+    c.execute("INSERT INTO postajalisce(stop_id, smer, desno, prevozniki, postaja) "
+              "VALUES('P1', 90, 4.2, '1118', 0)")
+    v = stats.stations(c, "avtobus")
+    assert v == [{"stop_id": "P1", "name": "Prva", "lat": 46.05, "lon": 14.5, "smer": 90.0,
+                  "desno": 4.2, "prevozniki": "1118", "postaja": 0}]

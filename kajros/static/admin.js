@@ -299,6 +299,48 @@ function blokVirov(d) {
   return v.slice(0, 10).map((x) => vrsta(x.kljuc, x.ogledov, naj)).join("");
 }
 
+// -------------------------------------------------------------------- podpora
+//
+// Od 4. 10. 2026. Klik na „Podari“ gre prek `/donacije/naprej`, ki preusmeri
+// na plačilno stran. Klik ni donacija -- plačilo teče pri ponudniku in ga ne
+// vidimo --, je pa zgornja meja in edini korak, ki ga lahko izmerimo.
+
+function blokPodpore(d) {
+  const p = d.donacije || {};
+  if (!p.ogledi && !p.klikov) return prazno("nihče ni odprl /donacije");
+  const naj = Math.max(1, p.ljudi, p.klikov_ljudi);
+  const delez = p.ljudi ? `${st(100 * p.klikov_ljudi / p.ljudi)} % jih je kliknilo naprej` : "";
+  return vrsta("odprlo /donacije", p.ljudi, naj, `${st(p.ogledi)}×`)
+    + vrsta("kliknilo Podari", p.klikov_ljudi, naj, `${st(p.klikov)}×`)
+    + (delez ? `<div class="adm-pod">${delez}</div>` : "");
+}
+
+/** Ogledi po dnevih in virih: kaj je sprožilo vrh. Samo znani viri; kdor pride naravnost, ni v tabeli. */
+function tabelaVirovPoDnevih(o) {
+  const vrstice = o.vir_po_dnevih || [];
+  if (!vrstice.length) return prazno("v tem obdobju ni prihodov z znanega vira");
+  const skupaj = new Map();
+  for (const r of vrstice) skupaj.set(r.kljuc, (skupaj.get(r.kljuc) || 0) + r.ogledov);
+  const stolpec = [...skupaj].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k);
+  const po = new Map();
+  for (const r of vrstice) {
+    if (!po.has(r.dan)) po.set(r.dan, {});
+    po.get(r.dan)[r.kljuc] = r.ogledov;
+  }
+  const ljudi = new Map((o.po_dnevih || []).map((r) => [r.dan, r.ljudi]));
+  const dni = [...po.keys()].sort().reverse().slice(0, 45);
+  return `<div class="adm-ovoj-t"><table class="adm-t"><thead><tr><th>dan</th><th class="n">ljudi</th>
+    ${stolpec.map((k) => `<th class="n">${escapeHtml(k)}</th>`).join("")}<th class="n">drugo</th></tr></thead><tbody>
+    ${dni.map((dan) => {
+      const v = po.get(dan);
+      const drugo = Object.entries(v).filter(([k]) => !stolpec.includes(k)).reduce((a, [, n]) => a + n, 0);
+      return `<tr><td>${dolgi(dan)}</td><td class="n">${st(ljudi.get(dan))}</td>
+        ${stolpec.map((k) => `<td class="n ${v[k] ? "" : "nic"}">${st(v[k] || 0)}</td>`).join("")}
+        <td class="n ${drugo ? "" : "nic"}">${st(drugo)}</td></tr>`;
+    }).join("")}
+    </tbody></table></div>`;
+}
+
 function blokRobotov(d) {
   const r = (d.razrezi || {}).robot || [];
   if (!r.length) return prazno("nobenega");
@@ -529,6 +571,7 @@ function stanje(d) {
     ${plosca("s8", "Zdravje", "isto kot /api/health", blokZdravja(d))}
     ${plosca("s6", "Od kod pridejo", "danes · ogledi", blokVirov(d), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
     ${plosca("s6", "Roboti", "danes · zahtev · desno strani", blokRobotov(d), "Po predstavitvi, ne preverjeno.")}
+    ${plosca("s6", "Podpora", "danes · ljudi", blokPodpore(d), "Klik ni donacija: plačilo teče pri ponudniku.")}
   </div>`;
 }
 
@@ -610,6 +653,8 @@ function zgodovina() {
     ${plosca("s3", "S čim in od kod", "ogledi", blokNaprav(o))}
     ${plosca("s6", "Od kod pridejo", "ogledi", blokVirov(o), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
     ${plosca("s6", "Roboti", "zahtev · desno strani", blokRobotov(o), "Po predstavitvi, ne preverjeno.")}
+    ${plosca(enDan ? "s12" : "s4", "Podpora", "ljudi", blokPodpore(o), "Klik ni donacija: plačilo teče pri ponudniku.")}
+    ${enDan ? "" : plosca("s8", "Od kod po dnevih", "ogledi z znanega vira", tabelaVirovPoDnevih(o), "Kaj je sprožilo vrh. Naravnost se ne šteje.")}
     ${enDan ? "" : plosca("s8", "Aplikacija", izbor.vrsta === "leto" ? "po mesecih" : "po dnevih",
       grafiAplikacije(o, o.po_dnevih, vedraObdobja(o)), podAplikacije(o))}
     ${plosca(enDan ? "s12" : "s4", "Aplikacija za Android", enDan ? "ta dan" : "vsota obdobja",
@@ -642,7 +687,9 @@ function sporocila(d) {
   h += `<div class="adm-sporocila" id="sporocila">${s.seznam.map((v) => `
     <article class="adm-sporocilo${v.prebrano ? " je-prebrano" : ""}" data-id="${v.id}">
       <header class="adm-sp-glava">
-        <a class="adm-sp-od" href="mailto:${encodeURIComponent(v.email)}">${escapeHtml(v.email)}</a>
+        ${v.email
+          ? `<a class="adm-sp-od" href="mailto:${encodeURIComponent(v.email)}">${escapeHtml(v.email)}</a>`
+          : `<span class="adm-sp-od">anonimno · brez odgovora</span>`}
         <span class="adm-sp-kdaj">${escapeHtml(v.prispelo.slice(0, 16).replace("T", " "))}</span>
         <span class="adm-sp-kje">${escapeHtml([v.drzava, v.naprava].filter(Boolean).join(" · "))}</span>
         <button type="button" class="adm-sp-gumb" data-prebrano="${v.prebrano ? 0 : 1}">

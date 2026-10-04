@@ -199,11 +199,15 @@ body {
 /* Oblacki morajo biti nad vlaki: ti so DOM kot oni, in vlak, ki se pojavi
    za odprto kartico, bi jo sicer prekril. */
 .maplibregl-marker { z-index: 1; }
-.maplibregl-popup { z-index: 2; }
+.maplibregl-popup { z-index: 2; user-select: none; -webkit-user-select: none; }
 
 .maplibregl-popup-content {
   padding: 12px 14px;
-  background: #1a1d23;
+  /* Prosojna: kartica vozila prekriva traso, po kateri vozilo pelje. Zabrisan
+     ozadje ohrani berljivost besedila, ne da bi zakrilo cesto pod njo. */
+  background: rgba(26, 29, 35, 0.78);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
   border: 1px solid #2b303a;
   border-radius: 8px;
   color: #e7eaf0;
@@ -503,6 +507,23 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
 .veh-card[data-trip] { cursor: pointer; }
 .veh-card.is-on { box-shadow: -3px 0 0 #f0934f; padding-left: 7px; }
 .veh-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+
+/* Vlečenje in skrčitev kartice (`omogociPremik` v dashboard.js). Glava je
+   ročaj; `touch-action: none`, sicer prst na telefonu pomika stran. */
+.maplibregl-popup .veh-head, .maplibregl-popup .popup-station { cursor: grab; touch-action: none; }
+.maplibregl-popup-content { transform: translate(var(--px, 0), var(--py, 0)); }
+.maplibregl-popup.je-premaknjena .maplibregl-popup-tip { display: none; }
+.veh-min {
+  margin: 0 24px 0 auto; padding: 0; width: 22px; height: 22px;
+  border: 1px solid #2b303a; border-radius: 5px; background: none;
+  color: #9aa3b0; font: 600 14px/1 'IBM Plex Mono', ui-monospace, monospace; cursor: pointer;
+}
+.veh-min::before { content: "\2013"; }
+.je-skrcena .veh-min::before { content: "+"; }
+/* En gumb na oblaček: pri več karticah vlakov v istem oblačku samo na prvi. */
+.veh-card + .veh-card .veh-min { display: none; }
+.je-skrcena .veh-rows, .je-skrcena .veh-open, .je-skrcena .veh-headsign { display: none; }
+@media (hover: hover) { .veh-min:hover { color: var(--ink); border-color: var(--accent-lit); } }
 .veh-no {
   font: 600 14px/1.2 'IBM Plex Mono', ui-monospace, monospace; color: #e7eaf0;
 }
@@ -528,7 +549,7 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
 }
 @media (hover: hover) { .veh-open:hover { color: var(--ink); border-color: var(--accent-lit); } }
 
-/* Barvni ključi prevoznikov. Iste vrednosti kot `AGENCY_INK` v dashboard.js
+/* Barvni ključi prevoznikov. Iste vrednosti kot `AGENCY_INK` v common.js
    in `OPERATERJI` v scripts/preveri_paleto.py -- ce se spremenijo tu, se
    morajo tam tudi, sicer legenda laze. */
 .layer-key-lpp::before,

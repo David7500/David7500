@@ -87,6 +87,13 @@
 
 .stik-besedilo { resize: vertical; min-height: 130px; }
 
+/* Anonimnost: obkljukano polje stoji pod e-naslovom, ne tekmuje z njim. */
+.stik-anonimno {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: -6px 0 18px; font-size: 14px; color: var(--ink-dim); cursor: pointer;
+}
+.stik-anonimno input { margin-top: 3px; flex: none; }
+
 .stik-gumb { align-self: flex-start; margin-top: 4px; }
 
 /* Napaka in uspeh sta obarvana po semaforju razmer, ne po lestvici zamud:

@@ -179,14 +179,22 @@ def _preveri_dnevni_strop(conn: sqlite3.Connection) -> None:
 
 # ------------------------------------------------------------- sprejem
 
-def preveri_vsebino(email: str, besedilo: str) -> tuple[str, str]:
-    """Pospravi in preveri, kar je vpisal človek. Vrne očiščeno."""
-    email = (email or "").strip()
+def preveri_vsebino(email: str, besedilo: str,
+                    anonimno: bool = False) -> tuple[str, str]:
+    """Pospravi in preveri, kar je vpisal človek. Vrne očiščeno.
+
+    Anonimno sporočilo (predlog, ki odgovora ne potrebuje) shrani prazen
+    e-naslov, tudi če ga je človek že vpisal in si potem premislil: kar je
+    obljubljeno kot „ne shranimo“, se ne sme shraniti.
+    """
+    email = "" if anonimno else (email or "").strip()
     besedilo = (besedilo or "").strip()
-    if not email:
-        raise Zavrnjeno("Vpiši svoj e-naslov, sicer ti ne moremo odgovoriti.")
-    if len(email) > NAJDALJSI_EMAIL or not _EMAIL.match(email):
-        raise Zavrnjeno("Ta e-naslov ni videti pravi.")
+    if not anonimno:
+        if not email:
+            raise Zavrnjeno("Vpiši svoj e-naslov, da ti lahko odgovorimo — "
+                            "ali obkljukaj, da pošiljaš anonimno.")
+        if len(email) > NAJDALJSI_EMAIL or not _EMAIL.match(email):
+            raise Zavrnjeno("Ta e-naslov ni videti pravi.")
     if len(besedilo) < NAJKRAJSE:
         raise Zavrnjeno("Sporočilo je prekratko — napiši, za kaj gre.")
     if len(besedilo) > NAJDALJSE:
@@ -197,7 +205,7 @@ def preveri_vsebino(email: str, besedilo: str) -> tuple[str, str]:
 def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
             zeton_iz_obrazca: str, vaba: str, kljuc: str,
             drzava: str = "", naprava: str = "",
-            zdaj: float | None = None) -> int:
+            zdaj: float | None = None, anonimno: bool = False) -> int:
     """Preveri vse varovalke in shrani. Vrne `id` sporočila.
 
     Vrstni red ni poljuben: **najprej poceni preverbe brez baze**, šele nato
@@ -209,7 +217,7 @@ def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
     if (vaba or "").strip():
         return 0
     _preveri_zeton(zeton_iz_obrazca, zdaj)
-    email, besedilo = preveri_vsebino(email, besedilo)
+    email, besedilo = preveri_vsebino(email, besedilo, anonimno)
     # Od preverbe pogostosti do zapisa je eno dejanje. Sprejem teče v niti
     # (`api.stik_poslji`), in dve hkratni pošiljanji istega pošiljatelja bi
     # sicer obe prešli `NA_URO`, preden bi katero zapisalo svoj čas.

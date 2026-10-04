@@ -17,6 +17,19 @@ cesta, obvoz, ki ga OSM ne pozna). Vsak pripet kos primerjamo s surovim; če
 se kjerkoli razideta za več kot `MEJA_M`, ostane surovi kos. Tako pripenjanje
 trase nikoli ne odpelje drugam, kot jo je narisal prevoznik.
 
+**Trasa se začne na prvem postanku in konča na zadnjem** (`do_postaj`).
+Trase IJPP se pogosto začnejo drugje: v garaži, na obračališču ali na stari
+legi postaje. Ljubljana AP je začasno ~450 m vzhodno od mesta, kjer se
+začne 151 tras -- vozila čakajo na novi legi, trasa pa jih je risala na
+stari. Trasa, ki gre mimo postanka, se tam odreže; ki ne gre, se do njega
+podaljša po cesti.
+
+**Vožnja brez trase dobi pot po cesti skozi svoja postajališča**
+(`brez_trase`). Mestni LPP je v svojem GTFS za devet linij nima (med njimi
+20Z; 10 455 od 60 526 voženj), prikaz je zato risal ravne črtkane črte med
+postajališči. Na 40 oblikah LPP, ki traso imajo, je taka pot v mediani 97 %
+dolžine v 20 m od prevoznikove (p10 88 %).
+
 Rezultat se hrani po **vsebini** (`pripeto`, ključ = surove točke + profil +
 `RAZLICICA`), ne po `shape_id`: uvoz tabelo `shape` vsak dan zamenja, id-ji
 se med voznimi redi ponovno uporabijo, točke pa ostanejo večinoma iste. Prvi
@@ -27,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import sqlite3
 import time
 from urllib.parse import quote
@@ -60,6 +74,29 @@ POENOSTAVI = 2e-5
 
 #: Zapis v predpomnilniku, ki ga 30 dni ni rabila nobena trasa, gre.
 HRANI_S = 30 * 86400
+
+#: Povečaj, kadar se spremeni `do_postaj`: trase se pripnejo znova, a samo
+#: tiste, ki jih konca zadenejo, gredo na OSRM -- druge so v predpomnilniku
+#: pod nespremenjenim ključem.
+KONCI_RAZLICICA = 1
+
+#: Trasa, ki se začne ali konča dlje od tega od prvega oziroma zadnjega
+#: postanka svoje vožnje, se na postanku odreže ali do njega podaljša.
+#: Izmerjeno 4. 10. 2026 na 2 957 trasah: začetek od prvega postanka v
+#: mediani 9 m, p90 164 m. Nad 150 m 298 začetkov in 299 koncev; od tega
+#: 151 in 162 Ljubljana AP, kjer vozila pred odhodom čakajo 40 m od postanka
+#: v GTFS (mediana 561 voženj, posnetek leg 28.--30. 9.), trasa pa se začne
+#: 457 m zahodno, na stari legi postaje.
+KONEC_M = 150.0
+
+#: Dlje od tega trasa ni z druge lege iste postaje, ampak napačna; ostane.
+#: Takih je 85 začetkov in 74 koncev.
+KONEC_NAJVEC_M = 3000.0
+
+#: Trasa gre mimo postanka, kadar mu je v svoji bližnji polovici bližje od
+#: tega -- takrat se tam odreže (pelje naprej v garažo ali na obračališče).
+#: Sicer se do postanka podaljša po cesti.
+MIMO_M = 50.0
 
 
 def _naslov(profil: str) -> str:
@@ -256,6 +293,78 @@ def po_cesti(naslov: str, postaje: list) -> list | None:
     return [[round(a, 5), round(b, 5)] for a, b in geo.simplify(crta, POENOSTAVI)]
 
 
+# ------------------------------------------------------------ konca trase
+
+def _najblizje(kos: list, lat: float, lon: float, od: int, do: int) -> tuple[float, int, float]:
+    """Najbližja točka daljic `kos[od..do]` točki: (razdalja v m, j, t)."""
+    kx, ky = 111320 * math.cos(math.radians(lat)), 110574
+    naj = (math.inf, od, 0.0)
+    for j in range(od, min(do, len(kos) - 1)):
+        ax, ay = (kos[j][1] - lon) * kx, (kos[j][0] - lat) * ky
+        vx, vy = (kos[j + 1][1] - kos[j][1]) * kx, (kos[j + 1][0] - kos[j][0]) * ky
+        l2 = vx * vx + vy * vy
+        t = 0.0 if l2 == 0 else max(0.0, min(1.0, -(ax * vx + ay * vy) / l2))
+        d = math.hypot(ax + t * vx, ay + t * vy)
+        if d < naj[0]:
+            naj = (d, j, t)
+    return naj
+
+
+def _tocka(kos: list, j: int, t: float) -> list:
+    a, b = kos[j], kos[j + 1]
+    return [round(a[0] + t * (b[0] - a[0]), 5), round(a[1] + t * (b[1] - a[1]), 5)]
+
+
+def _polovica(kos: list) -> int:
+    """Indeks točke, kjer se kos po dolžini prelomi na pol."""
+    dolzine = [geo.haversine(a[0], a[1], b[0], b[1]) for a, b in zip(kos, kos[1:])]
+    pol, vsota = sum(dolzine) / 2, 0.0
+    for i, d in enumerate(dolzine):
+        vsota += d
+        if vsota >= pol:
+            return i + 1
+    return len(kos) - 1
+
+
+def _dalec(tocka: list, postaja: list) -> bool:
+    return KONEC_M < geo.haversine(tocka[0], tocka[1], postaja[0], postaja[1]) <= KONEC_NAJVEC_M
+
+
+def potrebuje_konca(kosi: list, prva: list | None, zadnja: list | None) -> bool:
+    """Ali se trasa začne ali konča predaleč od svojih postankov."""
+    if not kosi or not kosi[0] or not kosi[-1]:
+        return False
+    return bool((prva and _dalec(kosi[0][0], prva)) or (zadnja and _dalec(kosi[-1][-1], zadnja)))
+
+
+def do_postaj(kosi: list, prva: list | None, zadnja: list | None, pot) -> list:
+    """Trasa, ki se začne na prvem postanku in konča na zadnjem.
+
+    Kos, ki gre v svoji bližnji polovici mimo postanka (bližje od `MIMO_M`),
+    se tam odreže. Kos, ki ne gre, se podaljša s `pot(od, do)` -- pot po
+    cesti ali None, kadar je ni. Polovica in ne cel kos: krožna linija gre
+    mimo svojega začetka tudi na koncu, in tam je ne smemo odrezati.
+    """
+    kosi = [list(k) for k in kosi]
+    if not potrebuje_konca(kosi, prva, zadnja):
+        return kosi
+    if prva and _dalec(kosi[0][0], prva):
+        kos = kosi[0]
+        d, j, t = _najblizje(kos, prva[0], prva[1], 0, _polovica(kos))
+        if d <= MIMO_M:
+            kosi[0] = [_tocka(kos, j, t)] + kos[j + 1:]
+        elif cesta := pot(prva, kos[0]):
+            kosi[0] = cesta + kos[1:]
+    if zadnja and _dalec(kosi[-1][-1], zadnja):
+        kos = kosi[-1]
+        d, j, t = _najblizje(kos, zadnja[0], zadnja[1], _polovica(kos) - 1, len(kos) - 1)
+        if d <= MIMO_M:
+            kosi[-1] = kos[:j + 1] + [_tocka(kos, j, t)]
+        elif cesta := pot(kos[-1], zadnja):
+            kosi[-1] = kos[:-1] + cesta
+    return kosi
+
+
 #: Nadomestni prevoz, katerega trasa se na ceste ne pripne niti do polovice,
 #: dobi pot po cesti skozi svoje postaje. GTFS mu kot traso pogosto da progo,
 #: ki jo zamenjuje: izmerjeno v Ljubljani, 25,7 m od najbližje ceste v
@@ -264,11 +373,13 @@ NADOMESTNI_PRAG = 0.5
 
 
 def _pripni_kose(conn, naslov: str, profil: str, kosi: list, kljuc: str,
-                 zdaj: int, postaje: list | None = None) -> tuple[str, float | None]:
+                 zdaj: int, postaje: list | None = None,
+                 konca: tuple | None = None) -> tuple[str, float | None]:
     """(JSON kosov, delež) iz predpomnilnika ali OSRM. Delež None = iz
     predpomnilnika (izračunan že prej).
 
     `postaje`: samo za nadomestni prevoz -- glej `NADOMESTNI_PRAG`.
+    `konca`: (prvi, zadnji postanek), kadar ju je treba doseči -- `do_postaj`.
     """
     shranjeno = _iz_predpomnilnika(conn, kljuc, zdaj)
     if shranjeno is not None:
@@ -285,10 +396,66 @@ def _pripni_kose(conn, naslov: str, profil: str, kosi: list, kljuc: str,
         cesta = po_cesti(naslov, postaje)
         if cesta:
             novi, delez = [cesta], 1.0
+    if konca:
+        novi = do_postaj(novi, konca[0], konca[1], lambda a, b: po_cesti(naslov, [a, b]))
     tocke_json = json.dumps(novi, separators=(",", ":"))
     conn.execute("INSERT OR REPLACE INTO pripeto(kljuc, tocke, delez, ts) VALUES(?,?,?,?)",
                  (kljuc, tocke_json, delez, zdaj))
     return tocke_json, delez
+
+
+#: Predpona trase, ki jo naredimo sami iz postajališč -- da je glavna zanka
+#: ne pripenja (je že po cesti) in da se v bazi loči od prevoznikovih.
+IZ_POSTAJALISC = "postajalisca:"
+
+
+def brez_trase(conn, naslov: str, zdaj: int) -> int:
+    """Avtobusnim vožnjam brez trase da pot po cesti skozi postajališča.
+
+    Vožnje z istim zaporedjem postajališč si delijo eno traso: 4 581 voženj
+    LPP brez trase je 48 zaporedij (4. 10. 2026). Vrne število tras.
+    """
+    po_voznji: dict[str, list] = {}
+    for trip_id, lat, lon in conn.execute(
+            "SELECT s.trip_id, st.lat, st.lon FROM trip t "
+            "JOIN sched s ON s.trip_id = t.trip_id JOIN station st ON st.stop_id = s.stop_id "
+            "WHERE t.shape_id IS NULL AND t.mode = 'bus' ORDER BY s.trip_id, s.stop_seq"):
+        po_voznji.setdefault(trip_id, []).append([round(lat, 6), round(lon, 6)])
+    vzorci: dict[str, list[str]] = {}
+    for trip_id, postaje in po_voznji.items():
+        if len(postaje) >= 2:
+            vzorci.setdefault(json.dumps(postaje, separators=(",", ":")), []).append(trip_id)
+    n = 0
+    for postaje_json, voznje in vzorci.items():
+        kljuc = _kljuc("postajalisca", postaje_json)
+        tocke_json = _iz_predpomnilnika(conn, kljuc, zdaj)
+        if tocke_json is None:
+            cesta = po_cesti(naslov, json.loads(postaje_json))
+            if not cesta:
+                continue                 # ostane črtkana skica skozi postajališča
+            tocke_json = json.dumps([cesta], separators=(",", ":"))
+            conn.execute("INSERT OR REPLACE INTO pripeto(kljuc, tocke, delez, ts) "
+                         "VALUES(?,?,?,?)", (kljuc, tocke_json, 1.0, zdaj))
+        shape_id = IZ_POSTAJALISC + kljuc[:16]
+        conn.execute("INSERT OR REPLACE INTO shape(shape_id, points, osm) VALUES(?,?,?)",
+                     (shape_id, tocke_json, tocke_json))
+        conn.executemany("UPDATE trip SET shape_id = ? WHERE trip_id = ?",
+                         [(shape_id, t) for t in voznje])
+        n += 1
+    conn.commit()
+    return n
+
+
+def _prvi_in_zadnji(conn, trip_id: str) -> tuple[list | None, list | None]:
+    """Lega prvega in zadnjega postanka vožnje."""
+    out = []
+    for stolpec in ("first_seq", "last_seq"):
+        r = conn.execute(
+            f"SELECT st.lat, st.lon FROM trip t JOIN sched s ON s.trip_id = t.trip_id "
+            f"AND s.stop_seq = t.{stolpec} JOIN station st ON st.stop_id = s.stop_id "
+            "WHERE t.trip_id = ?", (trip_id,)).fetchone()
+        out.append([r[0], r[1]] if r else None)
+    return out[0], out[1]
 
 
 def pripni(conn: sqlite3.Connection, log=print) -> dict:
@@ -304,6 +471,10 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
         conn.execute("UPDATE edge SET osm = NULL")
         db.set_meta(conn, "pripni_razlicica", str(RAZLICICA))
         conn.commit()
+    if db.get_meta(conn, "pripni_konci") != str(KONCI_RAZLICICA):
+        conn.execute("UPDATE shape SET osm = NULL")
+        db.set_meta(conn, "pripni_konci", str(KONCI_RAZLICICA))
+        conn.commit()
 
     naslovi = {p: _naslov(p) for p in ("avtobus", "tir")}
     dosegljivi = {p: _dosegljiv(u) for p, u in naslovi.items()}
@@ -317,7 +488,7 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
         "SELECT sh.shape_id, sh.points, t.mode, t.agency, t.trip_id "
         "FROM shape sh JOIN trip t ON t.trip_id = "
         "     (SELECT trip_id FROM trip WHERE shape_id = sh.shape_id LIMIT 1) "
-        "WHERE sh.osm IS NULL").fetchall()
+        "WHERE sh.osm IS NULL AND sh.shape_id NOT LIKE ?", (IZ_POSTAJALISC + "%",)).fetchall()
     for i, (shape_id, points, mode, agency, trip_id) in enumerate(delo):
         profil = "tir" if mode == "vlak" else "avtobus"
         if not dosegljivi[profil]:
@@ -330,8 +501,14 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
                 "SELECT st.lat, st.lon FROM sched s JOIN station st ON st.stop_id = s.stop_id "
                 "WHERE s.trip_id = ? ORDER BY s.stop_seq", (trip_id,))]
             kljuc = _kljuc("nadomestni", points + json.dumps(postaje))
+        konca = None
+        if profil == "avtobus" and postaje is None:
+            prva, zadnja = _prvi_in_zadnji(conn, trip_id)
+            if potrebuje_konca(kosi, prva, zadnja):
+                konca = (prva, zadnja)
+                kljuc = _kljuc(f"konci{KONCI_RAZLICICA}", points + json.dumps(konca))
         tocke_json, delez = _pripni_kose(conn, naslovi[profil], profil, kosi,
-                                         kljuc, zdaj, postaje)
+                                         kljuc, zdaj, postaje, konca)
         conn.execute("UPDATE shape SET osm = ? WHERE shape_id = ?", (tocke_json, shape_id))
         izid["trase"] += 1
         if delez is not None:
@@ -340,6 +517,11 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
         if i % 50 == 49:
             conn.commit()                  # zajem piše vzporedno; ne držimo ga
     conn.commit()
+    if dosegljivi["avtobus"]:
+        izid["iz_postajalisc"] = brez_trase(conn, naslovi["avtobus"], zdaj)
+        prazna = conn.execute("SELECT 1 FROM postajalisce LIMIT 1").fetchone() is None
+        if izid["trase"] or izid["iz_postajalisc"] or prazna:
+            izid["postajalisca"] = postajalisca(conn)
 
     if dosegljivi["tir"]:
         for from_id, to_id, gj in conn.execute(
@@ -360,8 +542,8 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
         conn.commit()
 
     conn.execute("DELETE FROM pripeto WHERE ts < ?", (zdaj - HRANI_S,))
-    if izid["trase"] or izid["odseki"]:
-        # Predpomnilnik mreže prog v `api.py` je vezan na to značko.
+    if izid["trase"] or izid["odseki"] or izid.get("iz_postajalisc") or izid.get("postajalisca"):
+        # Predpomnilnik mreže prog in postajališč v `api.py` je vezan na to značko.
         db.set_meta(conn, "pripeto_at", str(zdaj))
     conn.commit()
     d = sorted(izid.pop("delez"))
@@ -369,9 +551,120 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
         izid["delez_mediana"] = round(d[len(d) // 2], 3)
         izid["v_celoti"] = sum(1 for x in d if x > 0.99)
     izid["s"] = round(time.monotonic() - t0, 1)
-    if izid["trase"] or izid["odseki"]:
+    if izid["trase"] or izid["odseki"] or izid.get("iz_postajalisc"):
         log(f"pripenjanje tras na OSM: {izid}")
     return izid
+
+
+# ------------------------------------------------------------ postajališča
+
+#: Postajališče, ki je od pripete trase svojih voženj dlje od tega, ni ob
+#: cesti (dvorišče avtobusne postaje, napačna lega v GTFS) -- smeri nima in
+#: nadstreška ne dobi.
+OB_CESTI_M = 15.0
+
+#: Avtobusna postaja, ne postajališče ob cesti: ime z „AP“ ali končna vsaj
+#: toliko tras vsaj dveh prevoznikov. Izmerjeno 4. 10. 2026: imen z „AP“ je 8,
+#: končnih z ≥ 20 trasami dveh prevoznikov 15 (Ljubljana AP 308 tras, Maribor
+#: AP 155, Nova Gorica AP 108, Koper 79, Sežana 55 ...). Nadstrešek ob robu
+#: ceste bi tam lagal -- postaja ima perone na dvorišču, ne roba ceste.
+POSTAJA_TRAS = 20
+_AP = re.compile(r"\bAP\b|avtobusna postaja", re.IGNORECASE)
+
+#: Kako daleč vzdolž trase za prejšnjim postajališčem iščemo naslednje.
+#: Postajališča so na trasi po vrsti; brez okna bi bil prehod čez vse trase
+#: kvadraten in krožna linija bi postajališče našla na napačni strani.
+OKNO_M = 4000.0
+
+
+def _ob_trasi(crta: list, lat: float, lon: float, od: int) -> tuple:
+    """Najbližja daljica trase od `od` naprej, do `OKNO_M` vzdolž nje.
+    Vrne (razdalja m, j, smer °, desno m)."""
+    kx, ky = 111320 * math.cos(math.radians(lat)), 110574
+    naj = (math.inf, od, None, 0.0)
+    vzdolz = 0.0
+    for j in range(od, len(crta) - 1):
+        ax, ay = (crta[j][1] - lon) * kx, (crta[j][0] - lat) * ky
+        vx, vy = (crta[j + 1][1] - crta[j][1]) * kx, (crta[j + 1][0] - crta[j][0]) * ky
+        l2 = vx * vx + vy * vy
+        if l2 > 0:
+            t = max(0.0, min(1.0, -(ax * vx + ay * vy) / l2))
+            px, py = ax + t * vx, ay + t * vy          # od postajališča do osi
+            d = math.hypot(px, py)
+            if d < naj[0]:
+                dol = math.sqrt(l2)
+                ux, uy = vx / dol, vy / dol
+                # Desno od smeri vožnje je (uy, -ux); postajališče je v -p od osi.
+                naj = (d, j, math.degrees(math.atan2(ux, uy)) % 360, -(px * uy - py * ux))
+        vzdolz += math.sqrt(l2)
+        if vzdolz > OKNO_M and naj[0] < OB_CESTI_M:
+            break
+    return naj
+
+
+def postajalisca(conn) -> int:
+    """Napolni `postajalisce`: smer ceste, stran, prevozniki, postaja.
+
+    Smer je smer daljice pripete trase, ki je postajališču najbližja, med
+    vsemi trasami voženj, ki tam ustavljajo. En prehod po trasi na vožnjo:
+    postajališča so na njej po vrsti.
+    """
+    prevozniki = {sid: ",".join(sorted(set(ag.split(",")))) for sid, ag in conn.execute(
+        "SELECT s.stop_id, GROUP_CONCAT(DISTINCT CASE WHEN t.agency = 'lpp' "
+        "       THEN '1118' ELSE t.agency END) FROM sched s JOIN trip t USING (trip_id) "
+        "WHERE t.network = 'avtobus' GROUP BY s.stop_id")}
+    koncne = {sid: (n, p) for sid, n, p in conn.execute(
+        "SELECT s.stop_id, COUNT(DISTINCT t.shape_id), COUNT(DISTINCT CASE WHEN "
+        "       t.agency = 'lpp' THEN '1118' ELSE t.agency END) "
+        "FROM trip t JOIN sched s ON s.trip_id = t.trip_id "
+        " AND (s.stop_seq = t.first_seq OR s.stop_seq = t.last_seq) "
+        "WHERE t.network = 'avtobus' GROUP BY s.stop_id")}
+    imena = dict(conn.execute("SELECT stop_id, name FROM station"))
+    lege = {sid: (lat, lon) for sid, lat, lon in conn.execute("SELECT stop_id, lat, lon FROM station")}
+    # Vsako zaporedje postajališč na trasi posebej: vožnje IJPP si trase
+    # delijo, a ne ustavljajo vse povsod (hitre izpustijo postajališča). Z eno
+    # vožnjo na traso je ostalo brez smeri 248 postajališč v Ljubljani.
+    zaporedja: dict[str, set] = {}
+    trenutna, zap = None, []
+    for shape_id, trip_id, stop_id in conn.execute(
+            "SELECT t.shape_id, s.trip_id, s.stop_id FROM trip t JOIN sched s USING (trip_id) "
+            "WHERE t.network = 'avtobus' AND t.shape_id IS NOT NULL "
+            "ORDER BY t.shape_id, s.trip_id, s.stop_seq"):
+        if (shape_id, trip_id) != trenutna:
+            if trenutna:
+                zaporedja.setdefault(trenutna[0], set()).add(tuple(zap))
+            trenutna, zap = (shape_id, trip_id), []
+        zap.append(stop_id)
+    if trenutna:
+        zaporedja.setdefault(trenutna[0], set()).add(tuple(zap))
+    najblizje: dict[str, tuple] = {}
+    for shape_id, tocke in conn.execute("SELECT shape_id, COALESCE(osm, points) FROM shape"):
+        if shape_id not in zaporedja:
+            continue
+        crta = [p for kos in json.loads(tocke) for p in kos]
+        for zap in zaporedja[shape_id]:
+            od = 0
+            for stop_id in zap:
+                if stop_id not in lege:
+                    continue
+                d, j, smer, desno = _ob_trasi(crta, *lege[stop_id], od)
+                if d <= 50:
+                    od = j
+                if smer is not None and d < najblizje.get(stop_id, (math.inf,))[0]:
+                    najblizje[stop_id] = (d, smer, desno)
+    vrstice = []
+    for sid, prev in prevozniki.items():
+        d, smer, desno = najblizje.get(sid, (math.inf, None, None))
+        n, p = koncne.get(sid, (0, 0))
+        postaja = bool(_AP.search(imena.get(sid, ""))) or (n >= POSTAJA_TRAS and p >= 2)
+        ob_cesti = d <= OB_CESTI_M
+        vrstice.append((sid, round(smer, 1) if ob_cesti else None,
+                        round(desno, 1) if ob_cesti else None, prev, int(postaja)))
+    conn.execute("DELETE FROM postajalisce")
+    conn.executemany("INSERT INTO postajalisce(stop_id, smer, desno, prevozniki, postaja) "
+                     "VALUES(?,?,?,?,?)", vrstice)
+    conn.commit()
+    return len(vrstice)
 
 
 # ------------------------------------------------------------ lega na cesti
