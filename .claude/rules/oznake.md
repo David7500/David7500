@@ -208,7 +208,7 @@ Zato dvoje:
 
 Isto pravilo kot povsod: številka mora pomeniti tisto, kar bralec misli, da pomeni.
 
-**Možna dodatna zamuda** (`zapore.py`, 5. 10. 2026): zapora tira na poti ali vlak pred njim, ki je tam izgubil čas. V oknu vožnje odprta škatla nad obvestili, na tabli in v iskalniku rumena vrstica (`.opozorilo`, `common.opozorilaVrsticeHtml`), zapore v eni vrstici. Imena postaj v imenovalniku („odsek Zagorje – Sava“). Številka zamude se zaradi opozorila ne spremeni.
+**Možna dodatna zamuda** (`zapore.py`, 5. 10. 2026): zapora tira na poti ali vlak pred njim, ki je tam izgubil čas. V oknu vožnje odprta škatla nad obvestili, na tabli in v iskalniku rumena vrstica (`.opozorilo`, `common.opozorilaVrsticeHtml`), zapore v eni vrstici. Imena postaj v imenovalniku („odsek Zagorje – Sava“). Številka zamude se zaradi opozorila ne spremeni; pod njo „lahko do +41“ (`.stop-do`, `.conn-do`, v bloku potnika „lahko tudi do 11:52 (+41 min)“) — rumena kot opozorilo, ne barva lestvice, ker ni zamuda, ampak meja.
 
 ## „v živo" je tretja vrsta številke, poleg meritve in ocene
 

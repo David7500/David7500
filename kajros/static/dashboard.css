@@ -370,6 +370,8 @@ body {
 .stop-delay { font: 600 13px/1.3 'IBM Plex Mono', ui-monospace, monospace; flex-shrink: 0; padding-top: 1px; }
 .stop-delay.is-none { color: #4a515c; font-weight: 400; }
 .stop-delay.is-forecast { opacity: 0.75; }
+/* Zgornja meja ob zapori ali vlaku pred njim -- pod oceno, ne namesto nje. */
+.stop-do { display: block; font: 500 10.5px/1.3 var(--sans); color: var(--sev-hard); text-align: right; }
 
 .stop-row.is-muted .stop-name { color: #79828f; font-weight: 400; }
 .stop-row.is-forecast .stop-name { color: #9aa3b0; font-weight: 400; }

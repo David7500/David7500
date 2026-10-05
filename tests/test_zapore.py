@@ -136,8 +136,9 @@ def test_vlak_pred_tabo_v_isti_smeri(conn):
         [(DAN, 2, 0, 0, zdaj), (DAN, 3, 900, 900, zdaj)])
     conn.commit()
     o = zapore.za_voznjo(conn, "t2", DAN, None, None, 0, zdaj)
-    assert [(x["vrsta"], x["vlak"], x["izguba_s"], x["odsek"]) for x in o] == [
-        ("pred_tabo", "LP 1", 900, "Brezje – Cerkno")]
+    assert [(x["vrsta"], x["vlak"], x["izguba_s"], x["odsek"], x["od_seq"]) for x in o] == [
+        ("pred_tabo", "LP 1", 900, "Brezje – Cerkno", 3)]
+    assert zapore.dodatek(o, 3) == 900
     # nasprotna smer ga ne zadeva
     assert zapore.za_voznjo(conn, "t9", DAN, None, None, 0, zdaj) == []
     # uro pozneje ni več novica
@@ -161,4 +162,12 @@ def test_tveganje_iz_prejsnjih_dni_zapore(conn, monkeypatch):
     conn.commit()
     o, = zapore.za_voznjo(conn, "t1", DAN, None, None, 0, _ts(7 * 3600))
     assert o["tveganje"] == {"dni": 1, "prehodov": 2, "izgubilo": 1,
-                             "najmanj_s": 720, "najvec_s": 720}
+                             "najmanj_s": 720, "najvec_s": 720, "p90_s": 648}
+    # Zgornja meja velja od konca zaprtega odseka naprej (C), ne prej.
+    assert o["od_seq"] == 3
+    assert [zapore.dodatek([o], seq) for seq in (2, 3, 4)] == [0, 648, 648]
+    # Tabla: ocena ostane, zraven zgornja meja.
+    vrstica = {"trip_id": "t1", "network": "zeleznica", "stop_seq": 4, "delay_s": 120}
+    zapore.dopolni(conn, [vrstica], DAN, "stop_seq", "stop_seq",
+                   datetime.fromtimestamp(_ts(7 * 3600), zapore.TZ))
+    assert (vrstica["delay_s"], vrstica["do_s"]) == (120, 120 + 648)

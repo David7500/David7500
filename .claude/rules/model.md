@@ -39,6 +39,7 @@ Ob zapori enega tira vlak na odseku izgubi ≥ 5 min pri 16 % prehodov (brez zap
 * Dneve in uro zapore ima obvestilo **v besedilu**, `start_ts`/`end_ts` pokrivata vse obdobje. Branje (`zapore.razberi`) izpusti, česar ne razume — napačna zapora je slabša od nobene.
 * Odsek = elementarni odseki proge (`edge.elementary`), da ga ujame tudi hitri vlak brez postanka na njem.
 * Vlak pred njim le iz **prevoženih** postankov (`last_measured`): LPV 2214 je 5. 10. po uri „prevozil“ Savo do Laz s +4, nato je feed Zagorje popravil na +34.
+* **Interval, ne premik.** Številka ostane ocena, zraven „lahko do“ = ocena + `zapore.dodatek` (vsota p90 izgub zapor na poti ali izguba vlaka pred njim, kar je več) — resnica pod mejo 89,7–94,9 %. Premik ocene za +1 min strošek dvigne (zapora 10,12 → 10,46), čeprav MAE malo pade. Pravilo je samo v Pythonu: okno vožnje dobi `dodatek` po postankih, tabla in iskalnik `do_s`; JS ne računa.
 * Merilo: `scripts/preizkusi_zapore.py`; številke v `docs/MERITVE.md`.
 
 ## Zamuda čez dolg postanek in izhodišče

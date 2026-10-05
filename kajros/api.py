@@ -1571,7 +1571,7 @@ def api_departures(
         if network == "zeleznica":
             # Tir s table SZ (`peroni.py`). Kadar ga ni ali je star, ga ni.
             peroni.dopolni(conn, rows, lambda r: (r["train_no"], exact, r["sched"]))
-            zapore.dopolni(conn, rows, date, "stop_seq", now)
+            zapore.dopolni(conn, rows, date, "stop_seq", "stop_seq", now)
             # Obvestila o ovirah so SZ-jeva in vezana na vlak.
             notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
                                         mentions=[exact])
@@ -2077,17 +2077,20 @@ def api_run(train_no: str, date: str | None = None,
             meja_seq = _potniki_v_okno(conn, razresen, rows, potniki, meja_seq)
         # Kje lahko vlak naprej po progi izgubi čas: zapora tira, vlak pred
         # njim. Opozorilo, ne popravek napovedi (`zapore.py`).
-        opozorila = []
+        opozorila, dodatek = [], {}
         if ident["network"] == "zeleznica" and razresen and date >= zdaj.date().isoformat():
             zac = next((s for s in rows if s["stop_seq"] == meja_seq), None)
             opozorila = zapore.za_voznjo(
                 conn, razresen, date, meja_seq, None,
                 (zac["zamuda"] or {}).get("s") or 0 if zac else 0, int(zdaj.timestamp()))
+            # Zgornja meja zamude po postankih naprej; ocena ostane.
+            dodatek = {s["stop_seq"]: d for s in rows
+                       if (d := zapore.dodatek(opozorila, s["stop_seq"])) >= 60}
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
                 **ident, "last_measured_seq": meja_seq,
                 "zadnja_beseda": zadnja,
                 "tiho_s": (int(zdaj.timestamp()) - zadnja) if zadnja else None,
-                "zivi_vir": zivo, "potniki": potniki, "opozorila": opozorila, "stops": rows}
+                "zivi_vir": zivo, "potniki": potniki, "opozorila": opozorila, "dodatek": dodatek, "stops": rows}
 
 
 def _potniki_v_okno(conn, trip_id: str, rows: list[dict], potniki: dict,
@@ -2509,7 +2512,7 @@ def api_connections(
                     r["train_no"], r.get("from", a), r.get(k)))
                 peroni.dopolni(conn, vrstice, lambda r, k=do: (
                     r["train_no"], r.get("to", b), r.get(k)), "tir_prihod")
-            zapore.dopolni(conn, rows, date, "to_seq", now)
+            zapore.dopolni(conn, rows, date, "to_seq", "from_seq", now)
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
         notices = (alerts.for_trains(conn, nos, mentions=[a, b])
                    if network == "zeleznica" else [])

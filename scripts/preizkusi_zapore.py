@@ -7,6 +7,8 @@ Dve vprašanji, obe na isti kodi, kot jo streže `kajros/zapore.py`:
   senca   Pri napovedih, ki jih je potnik videl (`napoved`), bi opozorilo
           viselo -- kako pogosto je bila naša številka tam prenizka za več kot
           5 min (vlak je prišel pozneje), proti napovedim brez opozorila.
+          Zraven: ali naj se ocena premakne (strošek) in koliko resnic je pod
+          zgornjo mejo `zapore.dodatek`.
 
 Vlak pred tabo v senci vzame končne vrednosti `run`, ne stanja ob pogledu:
 izguba, ki se je zgodila pred pogledom, je morda feed sporočil šele po njem.
@@ -19,7 +21,7 @@ from collections import defaultdict
 from datetime import date, datetime
 
 sys.path.insert(0, ".")
-from kajros import db, zapore                             # noqa: E402
+from kajros import db, ocena, zapore                      # noqa: E402
 
 conn = db.connect()
 g = zapore._graf(conn)
@@ -86,11 +88,14 @@ def senca():
     zapore.izgube_danes = lambda _c, dan, zdaj: [
         p for p in velike.get(dan, ()) if zdaj - zapore.PRED_TABO_OKNO_S <= p[8] <= zdaj]
     skupine = defaultdict(list)
+    meje = []
     for r in vrstice:
         o = zapore.za_voznjo(conn, r["trip_id"], r["service_date"], r["from_seq"],
                              r["stop_seq"], r["current_s"] or 0, r["made_ts"])
         vrste = {x["vrsta"] for x in o}
         par = (r["ours_s"], r["actual_s"])
+        if o:
+            meje.append((r["ours_s"], r["actual_s"], zapore.dodatek(o, r["stop_seq"])))
         skupine["vse"].append(par)
         skupine["zapora" if "zapora" in vrste else "brez zapore"].append(par)
         skupine["vlak pred tabo" if "pred_tabo" in vrste else "brez vlaka pred tabo"].append(par)
@@ -108,6 +113,17 @@ def senca():
               f"  ≥10 {sum(x > 600 for x in razlika) / n * 100:5.1f} %"
               f"  MAE {st.mean(abs(x) for x in razlika) / 60:4.2f}"
               f"  povp. (resnica - naša) {st.mean(razlika) / 60:+5.2f} min")
+    print("\n== z opozorilom: premik ocene in zgornja meja")
+    for premik in (0, 60, 120, 180, 300):
+        m = ocena._meritve([(a + premik, b) for a, b, _ in meje], "zeleznica")
+        print(f"ocena +{premik // 60} min  MAE {m['mae_min']:5.2f}  precenj. {m['precenjenih']:4.1f} %"
+              f"  podcenj. {m['podcenjenih']:5.1f} %  strošek {m['strosek_min']:6.2f}")
+    z_mejo = [(a, b, d) for a, b, d in meje if d >= 60]
+    if z_mejo:
+        print(f"z mejo {len(z_mejo)} od {len(meje)}: resnica pod mejo "
+              f"{sum(b <= a + d for a, b, d in z_mejo) / len(z_mejo) * 100:.1f} %, širina mediana "
+              f"{st.median(d for *_, d in z_mejo) / 60:.0f} min; pod samo oceno "
+              f"{sum(b <= a for a, b, _ in z_mejo) / len(z_mejo) * 100:.1f} %")
 
 
 if __name__ == "__main__":

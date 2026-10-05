@@ -197,6 +197,7 @@
 .potnik { color: var(--accent-lit); }
 /* Zapora tira, vlak pred njim: "bodi pozoren", rumena semaforja kot ovire. */
 .opozorilo { color: var(--sev-hard); }
+.conn-do { font: 500 11px/1.4 var(--sans); color: var(--sev-hard); text-align: right; margin-top: 2px; }
 
 /* Naslednja vozjna je tista, ki jo clovek isce -- dobi rob, ne le vrstni red. */
 .conn-row.is-next {

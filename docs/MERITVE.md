@@ -2289,5 +2289,30 @@ Prijava: okno vožnje LPV 2206 je pokazalo Litijo ob 08:52 (+43, prevoznik) in K
 
   Mediana v vseh štirih 0. Prej merjeni Zagorje – Sava (28 % ob delavnikih) je med hujšimi.
 * **Senca** (78 945 napovedi 5. 9.–5. 10.; `zapore.za_voznjo` kliče isto kodo kot strežnik, vlak pred tabo iz končnih vrednosti `run`): opozorilo bi viselo pri **8 919 (11,3 %)**. Tam je vlak prišel ≥ 5 min pozneje od prikazane številke v **20,8 %** (brez opozorila 9,8 %), ≥ 10 min v 9,1 % (4,3 %); MAE 4,32 proti 2,63 min. Ločeno: zapora 20,6 % (5 249 napovedi), vlak pred tabo 23,3 % (4 453). Številke sence so izmerjene na stari napovedi (pred `SIDRO_PREVOZNIKA`).
-* **Vlak pred tabo** šteje, če je v isti smeri prevozil skupni elementarni odsek in tam izgubil ≥ 10 min, v uri pred tem, ko bo tam ta vlak. Le prevoženi postanki (`last_measured`) — LPV 2214 kaže, zakaj.
+* **Vlak pred tabo** šteje, če je v isti smeri izgubil ≥ 10 min na odseku, ki ga bo ta vlak prevozil **celega**, v uri pred tem, ko bo tam. Le prevoženi postanki (`last_measured`) — LPV 2214 kaže, zakaj. Samo stik odsekov ni dovolj: EN 415 je med Ljubljano in Zidanim Mostom (brez postanka) izgubil 43 min, verjetno pri Savi, in bi bil sicer pripisan vsakemu vlaku med Ljubljano in Litijo. S tem pravilom 3 448 napovedi z vlakom pred njim (prej 4 453), prišel ≥ 5 min pozneje v **25,1 %** (prej 23,3 %).
 * **Tveganje zapore na zaslonu** je iz prejšnjih dni iste zapore (Zagorje – Sava 5. 10.: 16 od 72 prehodov, 7–21 min; Ljubljana – Ljubljana Zalog: 119 od 745, 5–55 min), pod 10 prehodi brez številke. Računa se enkrat na dan na zaporo: prvi klic ~0,3–0,5 s (Ljubljana – Zalog ima 13 dni), nato tabla +1 ms, iskalnik zvez +3 ms (38 zvez Zidani Most – Ljubljana).
+
+### Interval: ocena ostane, zraven zgornja meja (5. 10. 2026)
+
+Kjer visi opozorilo, številka dobi še „lahko do“: ocena + `zapore.dodatek` — vsota p90 izgub zapor na poti (z ničlami, iz prejšnjih dni iste zapore) ali izguba vlaka pred njim, kar je več; od postanka za odsekom naprej. Na senci (napovedi, nad katerimi bi viselo opozorilo; `scripts/preizkusi_zapore.py` za opozorila, interval na isti kodi):
+
+* **Točke ne premikamo.** Premik ocene navzgor je za potnika dražji:
+
+  | | +0 | +1 min | +2 min | +3 min | +5 min |
+  |---|---|---|---|---|---|
+  | zapora (4 233): strošek | **10,12** | 10,46 | 11,54 | 14,84 | 30,22 |
+  | zapora: MAE | 3,93 | **3,88** | 4,03 | 4,36 | 5,36 |
+  | vlak pred njim (2 942): strošek | **13,23** | 14,38 | 15,65 | 18,19 | 31,79 |
+
+  MAE pri +1 min malenkost nižji, strošek višji — precenjenih 3,1 → 4,6 %. Odklon ostanka (resnica − ocena) z opozorilom: p10 −3, p50 +1, p90 +9 min (zapora), +11 (vlak pred njim); brez opozorila p50 0, p90 +5.
+* **Zgornja meja**, delež resnic pod njo:
+
+  | | napovedi | modelov p90 (obstoječi `p90_delay_s`) | ocena + `dodatek` | širina, mediana |
+  |---|---|---|---|---|
+  | zapora | 4 233 | 80,2 % | **89,7 %** | 8 min |
+  | vlak pred njim | 2 942 | 75,3 % | **94,9 %** | 13 min |
+  | oboje | 506 | 70,4 % | **93,3 %** | 15 min |
+  | brez opozorila | 71 264 | 85,2 % | (ni prikazana) | |
+
+  Delež izgub zapore: p75 73,3 %, p80 79,2 %, p85 84,1 %, p90 89,7 %, p95 93,7 % (11 min). Resnica pod samo oceno: z opozorilom 45,6 %, brez 60,0 %.
+* Tabeli zgoraj z izgubami zapore z vseh drugih dni iste zapore. **Tako, kot streže strežnik** (samo dnevi pred tistim dnem, `scripts/preizkusi_zapore.py`): opozorilo pri 8 152 napovedih, meja (≥ 1 min) pri 7 118, resnica pod mejo **93,3 %**, širina mediana 12 min, pod samo oceno 45,8 %; strošek ocene +0 / +1 / +2 min = 11,41 / 12,15 / 13,51. Ocena v senci je stara (pred `SIDRO_PREVOZNIKA`).

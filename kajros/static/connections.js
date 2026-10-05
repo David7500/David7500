@@ -456,6 +456,12 @@ function potnikiHtml(p, bus, prihod) {
   return `<span class="potnik">${kdo}: ${escapeHtml(kaj)}</span>`;
 }
 
+// Zgornja meja zamude ob zapori ali vlaku pred njim (`zapore.dodatek`).
+// Številka v znački ostane ocena: večina vlakov tam ne izgubi nič.
+function doHtml(s) {
+  return s != null ? `<div class="conn-do">lahko do ${delayLabel(s)} min</div>` : "";
+}
+
 function connectionRowHtml(c, nowMs, isNext, date, odKod) {
   const morda = nepotrjen(departedMs(c), c.nepotrjen_do, nowMs);
   const gone = nowMs && departedMs(c) < nowMs && !morda;
@@ -489,7 +495,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
       </div>
       <div class="conn-delay">${c.zamuda
         ? delayChipHtml(c.zamuda, c.delay_kind, c.delay_at)
-        : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}</div>
+        : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}${doHtml(c.do_s)}</div>
       <div class="conn-meta">
         ${tirHtml(c.tir, c.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
@@ -757,7 +763,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
       </div>
       <div class="conn-delay">${r.lpp_vrsta ? lppChipHtml(r.lpp_vrsta)
         : r.zamuda ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
-        : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}</div>
+        : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}${doHtml(r.do_s)}</div>
       <div class="board-meta">
         ${tirHtml(r.tir, r.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}

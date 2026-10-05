@@ -1024,7 +1024,7 @@ function gapStopHtml(s) {
   `;
 }
 
-function forecastStopHtml(s, f, w) {
+function forecastStopHtml(s, f, w, dod) {
   // Postaja, ki je vlak se ni dosegel. Uporabimo LASTNO oceno, ne vrednosti
   // iz feeda -- ta je za postanke naprej izmerjeno slaba (glej backtest.py):
   //
@@ -1084,7 +1084,8 @@ function forecastStopHtml(s, f, w) {
           t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}
       </div>
       ${stopWeatherHtml(w, true)}
-      <div class="stop-delay is-forecast" style="color:${color}">${delayText(d, true)}</div>
+      <div class="stop-delay is-forecast" style="color:${color}">${delayText(d, true)}${
+        d != null && dod ? `<span class="stop-do">do ${delayLabel(d + dod)}</span>` : ""}</div>
     </div>
   `;
 }
@@ -1124,7 +1125,9 @@ function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
         rows.push('<div class="stop-sep">naprej po progi — ocena, ne meritev</div>');
         seenAheadHead = true;
       }
-      html = forecastStopHtml(s, forecastBySeq.get(s.stop_seq), wx.get(s.stop_seq));
+      // Zgornja meja ob zapori ali vlaku pred njim (`zapore.dodatek`); ocena ostane.
+      const dod = ((opts && opts.run && opts.run.dodatek) || {})[s.stop_seq];
+      html = forecastStopHtml(s, forecastBySeq.get(s.stop_seq), wx.get(s.stop_seq), dod);
     }
     rows.push(isHi ? html.replace('class="stop-row', 'class="stop-row is-yours') : html);
   }

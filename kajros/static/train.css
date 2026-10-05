@@ -349,6 +349,7 @@
 }
 .yours-delay { font: 600 15px/1 var(--mono); }
 .yours-tag { margin-top: 5px; font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }
+.yours-do { margin-top: 4px; font: 500 12px/1.4 var(--sans); color: var(--sev-hard); }
 /* Poročilo potnika je opažanje, ne sklep iz ure -- zato poudarjeno. */
 .yours-potnik { margin-top: 4px; font: 500 12px/1.4 var(--sans); color: var(--accent-lit); }
 .detail-potniki {

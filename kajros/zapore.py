@@ -43,6 +43,13 @@ IZGUBA_STEJE_S = 300
 #: tveganje, ampak naključje.
 NAJMANJ_PREHODOV = 10
 
+#: Zgornja meja zamude ob zapori: ta delež izgub na prejšnjih dneh iste
+#: zapore, z ničlami. Izmerjeno na senci 5. 9.-5. 10. 2026 (4 233 napovedi z
+#: zaporo na poti): resnica pod mejo pri p75 73,3 %, p80 79,2 %, p85 84,1 %,
+#: **p90 89,7 %** (širina mediana 8 min), p95 93,7 % (11 min). Vlak pred njim
+#: prispeva svojo izgubo: 94,9 % (2 942), oboje 93,3 % (506).
+ZGORNJA_MEJA_DELEZ = 0.9
+
 _MESECI = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "maj": 5, "jun": 6, "jul": 7,
            "avg": 8, "sep": 9, "okt": 10, "nov": 11, "dec": 12}
 
@@ -329,18 +336,19 @@ def tveganje(conn: sqlite3.Connection, z: dict, danes: date) -> dict | None:
         return _TVEGANJE[kljuc]
     g = _graf(conn)
     dnevi = sorted({o[0].isoformat() for o in z["vsa_okna"] if o[0] < danes})
-    prehodov, izgube, dni = 0, [], set()
+    vse, dni = [], set()
     for p in _prehodi(conn, g, dnevi):
         if not ({frozenset(e) for e in p[10]} & z["robovi"]) or not _v_oknu(z["vsa_okna"], p[7]):
             continue
-        prehodov += 1
+        vse.append(p[9])
         dni.add(p[0])
-        if p[9] >= IZGUBA_STEJE_S:
-            izgube.append(p[9])
-    out = ({"dni": len(dni), "prehodov": prehodov, "izgubilo": len(izgube),
+    izgube = [x for x in vse if x >= IZGUBA_STEJE_S]
+    out = ({"dni": len(dni), "prehodov": len(vse), "izgubilo": len(izgube),
             "najmanj_s": min(izgube) if izgube else None,
-            "najvec_s": max(izgube) if izgube else None}
-           if prehodov >= NAJMANJ_PREHODOV else None)
+            "najvec_s": max(izgube) if izgube else None,
+            # Z ničlami vred: devet od desetih vlakov je izgubilo največ toliko.
+            "p90_s": max(0, round(stats._pct(vse, ZGORNJA_MEJA_DELEZ)))}
+           if len(vse) >= NAJMANJ_PREHODOV else None)
     if len(_TVEGANJE) > 500:
         _TVEGANJE.clear()
     _TVEGANJE[kljuc] = out
@@ -389,39 +397,66 @@ def za_voznjo(conn: sqlite3.Connection, trip_id: str, dan: str, od_seq: int | No
         "WHERE trip_id = ? ORDER BY stop_seq", (trip_id,))
         if (od_seq is None or r["stop_seq"] >= od_seq)
         and (do_seq is None or r["stop_seq"] <= do_seq)]
-    odseki = [(x, pot(g, x["stop_id"], y["stop_id"])) for x, y in zip(vrstice, vrstice[1:])]
+    odseki = [(x, pot(g, x["stop_id"], y["stop_id"]), y["stop_seq"])
+              for x, y in zip(vrstice, vrstice[1:])]
     if not odseki:
         return []
     polnoc = stats.polnoc(dan)
     najdene = []
     for z in zap:
-        for i, (x, p) in enumerate(odseki):
+        for i, (x, p, _) in enumerate(odseki):
             okno = (x["t_s"] is not None and {frozenset(e) for e in p} & z["robovi"]
                     and _v_oknu(z["okna"], polnoc + x["t_s"] + zamuda_s))
             if okno:
+                # Od katerega postanka naprej velja: konec odseka, na katerem je zapora.
                 najdene.append((i, {"vrsta": "zapora", "alert_id": z["alert_id"],
-                                    "odsek": z["odsek"],
+                                    "odsek": z["odsek"], "od_seq": odseki[i][2],
                                     "do_ure": f"{okno[2] // 60}.{okno[2] % 60:02d}",
                                     "tveganje": tveganje(conn, z, date.fromisoformat(dan))}))
                 break
     # Po vrsti, kot jih vlak sreča.
     out = [o for _, o in sorted(najdene, key=lambda x: x[0])]
-    # Vlak pred njim šteje, če je izgubil čas v uri pred tem, ko bo tam ta
-    # vlak -- isto okno kot v meritvi.
-    pred = [p for p in izg if p[1] != trip_id and any(
-        set(p[10]) & set(e) and x["t_s"] is not None
-        and polnoc + x["t_s"] + zamuda_s - PRED_TABO_OKNO_S <= p[8]
-        for x, e in odseki)]
+    # Vlak pred njim šteje, če je izgubil čas na odseku, ki ga bo ta vlak
+    # prevozil CELEGA, in v uri pred tem, ko bo tam. Samo stik ni dovolj:
+    # EN 415 je med Ljubljano in Zidanim Mostom (brez postanka) izgubil
+    # 43 min -- verjetno na zapori pri Savi, ne med Ljubljano in Litijo, kjer
+    # bi ga sicer pripisali LPV 2261.
+    na_poti = {ed: (x, seq) for x, e, seq in odseki for ed in e}
+    pred = []
+    for p in izg:
+        if p[1] == trip_id or not p[10] or not all(ed in na_poti for ed in p[10]):
+            continue
+        x0 = na_poti[p[10][0]][0]
+        if x0["t_s"] is not None and polnoc + x0["t_s"] + zamuda_s - PRED_TABO_OKNO_S <= p[8]:
+            pred.append((p, na_poti[p[10][-1]][1]))
     if pred:
-        p = max(pred, key=lambda p: p[8])
+        p, kje = max(pred, key=lambda x: x[0][8])
         out.append({"vrsta": "pred_tabo", "vlak": p[2], "odsek": f"{p[3]} – {p[4]}",
-                    "izguba_s": p[9], "ob": datetime.fromtimestamp(p[8], TZ).isoformat()})
+                    "od_seq": kje, "izguba_s": p[9],
+                    "ob": datetime.fromtimestamp(p[8], TZ).isoformat()})
     return out
 
 
+def dodatek(opozorila: list[dict], seq: int) -> int:
+    """Koliko nad našo oceno je lahko zamuda na postanku `seq` -- zgornja meja.
+
+    Ocena sama ostane: premik navzgor je na senci dražji za potnika (zapora:
+    strošek 10,12 min pri +0, 10,46 pri +1, 11,54 pri +2; vlak pred njim
+    13,23 / 14,38 / 15,65), ker večina vlakov tam ne izgubi nič. Meja pa pove, do kod je treba računati: vsota zapor
+    na poti (`ZGORNJA_MEJA_DELEZ` njihovih izgub), ali izguba vlaka pred njim,
+    kar je več.
+    """
+    zap = sum(o["tveganje"]["p90_s"] for o in opozorila
+              if o["vrsta"] == "zapora" and o["tveganje"] and o["od_seq"] <= seq)
+    pred = max((o["izguba_s"] for o in opozorila
+                if o["vrsta"] == "pred_tabo" and o["od_seq"] <= seq), default=0)
+    return max(zap, pred)
+
+
 def dopolni(conn: sqlite3.Connection, rows: list[dict], dan: str, do: str,
-            zdaj: datetime | None = None) -> None:
-    """`opozorila` k vrsticam table ali iskalnika: od vlaka do postanka `do`.
+            kje: str, zdaj: datetime | None = None) -> None:
+    """`opozorila` k vrsticam table ali iskalnika (od vlaka do postanka `do`)
+    in `do_s`, zgornja meja zamude na postanku `kje` (`dodatek`).
 
     Samo železnica in samo danes ali naprej. Za vlak, ki je postajo že
     prevozil, nič.
@@ -445,5 +480,13 @@ def dopolni(conn: sqlite3.Connection, rows: list[dict], dan: str, do: str,
                 continue
             o = za_voznjo(conn, r["trip_id"], d, lm["stop_seq"] if lm else None, r[do],
                           (lm["delay_s"] or 0) if lm else 0, ts)
-            if o:
-                r["opozorila"] = o
+            if not o:
+                continue
+            r["opozorila"] = o
+            # Osnova je številka, ki jo vrstica pokaže: ocena ali "običajno".
+            osnova = r.get("delay_s")
+            if osnova is None:
+                osnova = (r.get("typical") or r.get("typical_dep") or {}).get("median_s")
+            dod = dodatek(o, r[kje])
+            if osnova is not None and dod >= 60:
+                r["do_s"] = round(osnova) + dod

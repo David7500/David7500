@@ -475,6 +475,15 @@ function yourStopHtml(stops, forecast, current) {
         </span>
       </div>
       <div class="yours-tag">${escapeHtml(odkod)}</div>
+      ${(() => {
+        // Zgornja meja ob zapori ali vlaku pred njim: ocena ostane, ker večina
+        // vlakov tam ne izgubi nič -- a lahko pride tudi tako pozno.
+        const dod = !passed && d != null && state.run && state.run.dodatek
+          ? state.run.dodatek[s.stop_seq] : null;
+        if (!dod || !schedIso) return "";
+        const do_ = new Date(new Date(schedIso).getTime() + (d + dod) * 1000).toISOString();
+        return `<div class="yours-do">lahko tudi do ${hhmm(do_)} (${escapeHtml(delayText(d + dod))})</div>`;
+      })()}
       ${s.potniki ? `<div class="yours-potnik">${escapeHtml(potnikPostanekText(s.potniki))}</div>` : ""}
       ${(() => {
         // Samo pri nepotrjeni številki: kadar je potrjena, ni česa razkrivati.
