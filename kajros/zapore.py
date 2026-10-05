@@ -303,14 +303,17 @@ def _prehodi(conn: sqlite3.Connection, g: dict, dnevi: list[str]):
     """
     for dan in dnevi:
         polnoc = stats.polnoc(dan)
+        # Od voženj k meritvam (CROSS JOIN določi vrstni red), ne od dneva:
+        # `run` ima za dan tudi vse avtobuse. Na arwenu 0,75 s -> 0,06 s na
+        # dan; Ljubljana - Zalog ima 13 dni zapore in prva tabla je čakala 20 s.
         vrstice = conn.execute(
             "SELECT r.trip_id, t.train_no, s.stop_seq, s.stop_id, st.name, "
             "       COALESCE(s.dep_s, s.arr_s) AS t_s, "
             "       COALESCE(r.delay_dep, r.delay_arr) AS d "
-            "FROM run r JOIN trip t ON t.trip_id = r.trip_id AND t.network = 'zeleznica' "
+            "FROM trip t CROSS JOIN run r ON r.trip_id = t.trip_id AND r.service_date = ? "
             "JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
             "JOIN station st ON st.stop_id = s.stop_id "
-            "WHERE r.service_date = ? AND d IS NOT NULL "
+            "WHERE t.network = 'zeleznica' AND d IS NOT NULL "
             f"  AND ABS(d) <= {stats.MAX_REALNA_ZAMUDA_S} "
             "ORDER BY r.trip_id, s.stop_seq", (dan,)).fetchall()
         for x, y in zip(vrstice, vrstice[1:]):
