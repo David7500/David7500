@@ -126,7 +126,7 @@ Troje spoštovati, preden kdo piše nov model:
 | isto, polna teža | 2,089 | 89,6 % |
 | zamuda nasprotnega vlaka na isti postaji (križanje), 10 % teže | 2,020 | 90,4 % |
 
-Zakaj nobena: pri devetih dneh mediana po `(vlak, i, j, razred)` že zajame skoraj vso strukturo. **Strop izmerjen**: mediana, ki pozna tudi testni dan, da MAE 1,198 min in 95,0 % — razlika do naših 1,914 min = vrzel v **številu dni**, ne v domiselnosti modela. Obvestila o ovirah neuporabna iz drugega razloga: 522 od 779 vlakov ima kakšno, vsa veljala ves čas zajema — med dnevi ne ločijo ničesar.
+Zakaj nobena: pri devetih dneh mediana po `(vlak, i, j, razred)` že zajame skoraj vso strukturo. **Strop izmerjen**: mediana, ki pozna tudi testni dan, da MAE 1,198 min in 95,0 % — razlika do naših 1,914 min = vrzel v **številu dni**, ne v domiselnosti modela. Obvestila o ovirah neuporabna iz drugega razloga: 522 od 779 vlakov ima kakšno, vsa veljala ves čas zajema — med dnevi ne ločijo ničesar. **Ne drži za besedilo** (5. 10. 2026): zapore tira imajo dneve in uro v opisu („Na progi Zagorje - Sava (… 1., 2. ter 5. - 8. oktober, 7.00 - 13.30)“), `start_ts`/`end_ts` pa pokrivata vse obdobje. Ob delavnikih z zaporo izguba ≥ 5 min pri 28 % prehodov, sicer < 1 %; mediana tudi tedaj 0 → za opozorilo, ne za točkovno napoved. `docs/MERITVE.md`.
 
 **Preizkušeno in ne pomaga** (`kajros backtest --day-offset`): popravek za stanje mreže na ta dan. Zamisel razumna — če cel dan zamuja bolj kot običajno, bo tudi ta vlak — a povprečna sprememba zamude čez zajete dni le med 115 in 142 s. Premalo za rešitev, dovolj za šum: MAE 2,00 → 2,06 min, delež v petih minutah 90,2 % → 89,1 %. (Mediana neuporabna: pri večini sosednjih postankov se zamuda ne spremeni → vsak dan 0.)
 
