@@ -43,10 +43,12 @@ function itemHtml(a) {
   const kind = kindOf(a);
   const color = KIND_COLOR[kind];
   const trains = a.trains || [];
-  // Vec kot dvanajst stevilk je stena, ki je nihce ne bere; ostale so za
-  // napreden pogled.
+  // Vec kot dvanajst stevilk je stena, ki je nihce ne bere; ostale so en dotik
+  // stran. Prej so bile v naprednem pogledu -- da vidis, ali obvestilo zadene
+  // tvoj vlak, si moral preklopiti nacin strani (5. 10. 2026).
   const head = trains.slice(0, 12);
   const rest = trains.slice(12);
+  const pill = (t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`;
   return `
     <article class="alert-card">
       <div class="alert-card-top">
@@ -61,9 +63,9 @@ function itemHtml(a) {
       ${trains.length ? `
         <div class="alert-trains">
           <span class="alert-trains-label">${trains.length} ${sklon(trains.length, "vlak")}:</span>
-          ${head.map((t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join("")}
-          ${rest.length ? `<span class="adv-only">${rest.map((t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join("")}</span>
-                           <span class="more-note">+${rest.length} še (napredni pogled)</span>` : ""}
+          ${head.map(pill).join("")}
+          ${rest.length ? `<span class="alert-vec" hidden>${rest.map(pill).join("")}</span>
+                           <button type="button" class="vec-vlakov">+${rest.length} še</button>` : ""}
         </div>` : ""}
       <div class="alert-card-foot adv-only">
         ${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
@@ -94,6 +96,12 @@ function render() {
 }
 
 qEl.addEventListener("input", render);
+listEl.addEventListener("click", (e) => {
+  const b = e.target.closest(".vec-vlakov");
+  if (!b) return;
+  b.previousElementSibling.hidden = false;
+  b.remove();
+});
 
 // Preklop pogleda je skupen vsem stranem in zivi v common.js.
 initMode();
