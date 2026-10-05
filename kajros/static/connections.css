@@ -50,10 +50,11 @@
 }
 
 .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
-/* 150 px je bilo dovolj za sam datum; dve puscici v polju mu vzameta ~33 px,
-   sicer se izpis odreze na "06. 09. 2". Vec kot to pa polju za postajo pobere
-   toliko, da na tabli ostane "Ljublj" -- sirina je kompromis in izmerjena. */
-.field-date { flex: 0 0 180px; }
+/* 210 px, kot pravi `strani.md`: datum konca pri ~105 px, puscici zasedeta
+   68 px levo od koledarskega gumbka, ta je 28 px od roba. Pri 180 px je
+   "dan nazaj" lezal pod datumom in ga ni bilo videti (namizje, 5. 10. 2026).
+   Polju za postajo vzame 30 px, vrstica pa se ovije, kadar zmanjka prostora. */
+.field-date { flex: 0 0 210px; }
 .field-kind { flex: 0 0 168px; }
 .field-time { flex: 0 0 118px; }
 

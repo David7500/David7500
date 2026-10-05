@@ -276,6 +276,8 @@ function runHeadHtml(cur) {
   // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
   // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
   // "6 min prej" si nasprotuje, "6 min prej" pod njim pa besedo ponovi.
+  // Tudi kadar je podatek star: "Zadnja znana zamuda" nad "5 min" je bila
+  // na LPP 6B, ki je bil 5 min PREJ (5. 10. 2026) -- naslov je izgubil smer.
   const early = isEarly(z || d);
 
   // Voznja se ni zacela: "trenutne" zamude ni in vprasaj v najvecji pisavi na
@@ -299,7 +301,8 @@ function runHeadHtml(cur) {
   return `
     <div class="detail-now">
       ${tiho ? "" : `<div class="detail-now-label">${
-        stale ? "Zadnja znana zamuda" : early ? "Vozi prezgodaj"
+        stale ? (early ? "Nazadnje je vozil prezgodaj" : "Zadnja znana zamuda")
+        : early ? "Vozi prezgodaj"
         : t0 ? "Običajno ob odhodu" : "Trenutna zamuda"}</div>
       <div class="detail-now-value" style="color:${t0 ? delayColor(t0.median_s) : color}">
         <span class="detail-now-n">${

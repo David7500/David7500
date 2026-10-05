@@ -1876,11 +1876,24 @@ function pokaziPostajo(m) {
     .addTo(map);
 }
 
+// Izbira iz iskalnika ni klik na zemljevid, zato MapLibre odprtih oblačkov ne
+// zapre sam: postaja iz iskalnika je pristala pod kartico prej izbranega
+// vozila, drug čez drugega (5. 10. 2026). Nova izbira zapre prejšnje; trasa
+// gre z njimi (`close` kartice in oblačka postaje).
+function zapriOblacke() {
+  if (kartica) kartica.remove();
+  if (najdenaOkno) najdenaOkno.remove();
+  for (const mk of stationMarkers.values()) {
+    if (mk.getPopup().isOpen()) mk.togglePopup();
+  }
+}
+
 function focusVehicle(key) {
   selectedKey = key;
   const found = findListEl.__found || [];
   const m = found.find((x) => x.key === key);
   if (!m) return;
+  zapriOblacke();
   for (const b of findListEl.querySelectorAll(".find-row")) {
     b.classList.toggle("is-on", b.dataset.key === key);
   }
