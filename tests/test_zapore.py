@@ -171,3 +171,7 @@ def test_tveganje_iz_prejsnjih_dni_zapore(conn, monkeypatch):
     zapore.dopolni(conn, [vrstica], DAN, "stop_seq", "stop_seq",
                    datetime.fromtimestamp(_ts(7 * 3600), zapore.TZ))
     assert (vrstica["delay_s"], vrstica["do_s"]) == (120, 120 + 648)
+
+
+def test_ogrevanje_najde_danasnjo_zaporo(conn):
+    assert zapore.ogrej(conn, DAN) == 1

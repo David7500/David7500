@@ -109,6 +109,8 @@ def _ogrej_pot() -> None:
     In **kazalo postaj obeh omrežij**: prvi klic je bil na arwenu izmerjeno
     16,6 s, topel pa 0,5 s. Iskalnik ga vpraša ob nalaganju strani, torej bi
     ta račun plačal prvi obiskovalec po zagonu ali po dnevnem uvozu.
+
+    In **današnje zapore tira** (`zapore.ogrej`): ~3 s ob prvem klicu dneva.
     """
     if not _strezemo:
         return                   # `kajros collect`: odgovorov ni komu streci
@@ -116,11 +118,12 @@ def _ogrej_pot() -> None:
     # nakopičiti druge, ki bi čakala na isto ključavnico voznega reda.
     if not _ogrevanje.acquire(blocking=False):
         return
-    from . import api, hoja, journey, pot
+    from . import api, hoja, journey, pot, zapore
     try:
         conn = db.connect()
         dan = journey.today()
         t = time.monotonic()
+        zapore.ogrej(conn, dan)
         by_trip, _ = journey._timetable_for_day(conn, dan, None)
         pot._vozje(conn, dan)
         pot._imena(conn)

@@ -358,6 +358,19 @@ def tveganje(conn: sqlite3.Connection, z: dict, danes: date) -> dict | None:
     return out
 
 
+def ogrej(conn: sqlite3.Connection, dan: str) -> int:
+    """Današnje zapore in njihovo tveganje vnaprej, v niti za ogrevanje.
+
+    Na arwenu je prvi klic dneva stal ~3 s (tveganje Ljubljana - Zalog bere
+    13 dni); brez tega ga plača prva tabla po polnoči ali po zagonu.
+    """
+    d = date.fromisoformat(dan)
+    zap = zapore(conn, d)
+    for z in zap:
+        tveganje(conn, z, d)
+    return len(zap)
+
+
 _DANES: dict = {}
 
 
