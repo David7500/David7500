@@ -1309,6 +1309,49 @@ def test_napoved_ne_pade_na_prevoznikovo_niclo(conn):
     assert f["Celje"]["predicted_delay_s"] == f["Celje"]["own_delay_s"]
 
 
+def test_prevoznikova_visja_vrednost_velja_tudi_za_postajo_naprej(conn):
+    """LPV 2252, 5. 10. 2026: prevoznik za Savo +22, za Litijo nič novega.
+
+    Prej je okno vožnje pokazalo Savo ob 08:57 in Litijo ob 08:46 -- vlak
+    na naslednji postaji pred prejšnjo. Prevoznikova vrednost na Zidanem
+    Mostu zdaj velja kot novo izhodišče modela za Celje.
+    """
+    dan = _pred(0)
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) "
+                 "VALUES('S1', ?)", (dan,))
+    conn.execute("INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+                 "VALUES('t1',?,2,1800,1800,4102444800)", (dan,))
+    conn.commit()
+    f = {p["name"]: p for p in stats.predict(conn, "IC 1", 1, 600, service_date=dan)}
+    c = f["Celje"]
+    assert c["operator_delay_s"] is None
+    assert c["from_operator"] is False
+    assert c["od_prevoznika"] == "Zidani Most"
+    assert c["predicted_delay_s"] == 1800
+    assert c["own_delay_s"] < 1800          # brez prevoznika bi bilo manj
+
+
+def test_napoved_ne_pelje_nazaj_v_casu(conn):
+    """Dve mediani iz različnih dni lahko trdita, da vlak pride na naslednjo
+    postajo, preden odpelje s prejšnje. Na senci 2,49 % pogledov."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('k1','rk','LP 9','A - C','S1')")
+    # A 08:00 -> Z 08:10 -> C 08:12: med Z in C dve minuti
+    _sched(conn, "k1", [(1, "A", None, 28800), (2, "Z", 29400, 29400),
+                        (3, "C", 29520, None)])
+    for n in (1, 2, 3):
+        dan = _pred(n)
+        conn.executemany(
+            "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
+            "VALUES('k1',?,?,?,?,4102444800)",
+            [(dan, 1, 300, 300), (dan, 2, 900, 900), (dan, 3, 0, 0)])
+    conn.commit()
+    f = {p["name"]: p for p in stats.predict(conn, "LP 9", 1, 300, trip_id="k1")}
+    z, c = f["Zidani Most"], f["Celje"]
+    assert 29400 + z["predicted_delay_s"] <= 29520 + c["predicted_delay_s"]
+    assert c["own_delay_s"] < c["predicted_delay_s"]
+
+
 def test_prevoznikove_vrednosti_ne_vzamemo_dokler_vlak_stoji():
     """Dokler vlak stoji na dolgem postanku, njegova vrednost za naprej ni
     napoved, ampak prenos zamude, s katero je prišel.

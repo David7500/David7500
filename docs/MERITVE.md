@@ -2235,3 +2235,24 @@ Nadstrešek ob cesti rabi smer ceste in stran, na kateri postajališče stoji. O
 * Odmik postajališča od osi trase: mediana 5,0 m, p90 10,1 m. Postajališče na osi (pod 3,8 m) je narisano na robu pločnika.
 * **Avtobusne postaje**: ime z „AP“ 8, končnih z ≥ 20 trasami dveh prevoznikov 15, skupaj 20 (Ljubljana AP 308 tras, štirje prevozniki). Prevozniki na postajališče: en 9 494, dva 667, trije 72, štirje 1.
 * `/api/stations?network=avtobus` z novimi polji in lego na šest decimalk: 238 kB z gzipom (10 234 postajališč; prej 211 kB za 9 519).
+
+## Prevoznik ve več tudi za postajo naprej (5. 10. 2026)
+
+Prijava: okno vožnje LPV 2206 je pokazalo Litijo ob 08:52 (+43, prevoznik) in Kresnice ob 08:53 (+37) — med postajama 7 min po voznem redu, na zaslonu ena. Malo prej, pri „+19“, so bile Kresnice napovedane **pred** Savo. Istega jutra LPV 2252: izmerjen na Zagorju +4, prevoznik za Savo +22, okno pa Litija 08:46 (+5), Sava 08:57 (+22), Ljubljana Polje +7. Vlak je v Litiji bil +22.
+
+* **Feed SŽ prestavlja vlak po uri, ne po opažanju.** Dnevnik `obs` za LPV 2206 na arwenu: Sava +19 ob 08:11, Litija +19 ob 08:20, Kresnice +19 ob 08:27 — nato **Sava +37 ob 08:34**, Litija in Kresnice ostaneta pri +19. Vlak je pred Savo stal; feed je postanke naprej odšteval z isto zamudo. Isto LPV 2252 (Sava, Litija, Kresnice +5 ob 08:30, 08:40, 08:46, nato Sava +22 ob 08:51) in IC 503. Primer luknje „prehod ni izmerjen“.
+* **Vzrok na zaslonu: pravilo „prevoznik navzgor“ je veljalo za vsak postanek zase.** Kar je prevoznik vedel o Savi, ni veljalo za Litijo; tam je spet zmagal naš model od Zagorja.
+* **Popravek** (`stats.SIDRO_PREVOZNIKA`, samo železnica): kjer prevoznik ve več, model od tam računa naprej, kot da je vlak tam izmerjen z njegovo vrednostjo. Poleg tega čas v napovedi ne teče nazaj (vlak ne odpelje s postaje pred prejšnjo).
+* **Merjeno** s `scripts/preizkusi_sidro.py` na železniškem delu baze z arwena (420 830 zapisov `obs`, 21. 8.–5. 10.), učenje z izpuščanjem dneva, okno prevoznika obnovljeno iz `obs` ob trenutku pogleda:
+
+  | | MAE | v 5 min | podcenj. | precenj. | strošek | čas nazaj |
+  |---|---|---|---|---|---|---|
+  | senca 5. 9.–5. 10. (78 770), prej | 2,74 | 86,2 % | 10,9 % | 2,9 % | 8,79 | 2,49 % pogledov |
+  | senca, zdaj | **2,54** | **87,7 %** | **9,1 %** | 3,2 % | **8,72** | **0** |
+  | vsak zapis feeda, cilj do 60 min (2 397 304), prej | 1,98 | 90,2 % | 8,2 % | 1,7 % | 7,37 | 2,39 % |
+  | vsak zapis feeda, zdaj | **1,79** | **91,5 %** | **6,5 %** | 2,0 % | **7,29** | **0** |
+
+  Razlikuje se 28 % (senca) in 23 % (vsak zapis) napovedi; tam MAE 3,37 → 2,68 in 2,88 → 2,01 min. Precenjenih (nevarna smer) za 0,3 točke več, strošek, ki jih šteje z razmikom 87 min, vseeno nižji. Po oddaljenosti cilja nižji strošek do 45 min, pri 45–60 min 10,19 → 10,24.
+* **Slabše:** presežek prevoznika nesti naprej, trošiti ga le z rezervo postankov (2,57 / 1,82 min); zamuda, ki ne pade razen za rezervo (2,63 / 1,85, strošek slabši od sedanjega). Pravilo „čas ne teče nazaj“ sámo natančnosti ne spremeni (na dve decimalki enako), odpravi pa 0,93 % pogledov, kjer bi ga kršil model iz dveh median.
+* Izvedba v `predict` preverjena proti skriptu: na 3 000 naključnih pogledih sence z `run` postavljenim na takratno stanje enaka napoved v vseh 3 000 (530 drugačnih od prej).
+* **Avtobusi niso izmerjeni** in ostanejo pri starem. **Prihodna tabla** (`journey.board`, prihodi) še vedno računa prenos z rezervo in prevoznika samo na svoji postaji — prevoznikove vrednosti izpred postaje ne vidi.

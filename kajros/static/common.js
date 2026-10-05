@@ -1041,6 +1041,7 @@ function forecastStopHtml(s, f, w) {
           ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`
           : ""}
         ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.own_delay_s)} min</span></div>` : ""}
+        ${f && f.od_prevoznika && !f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">od prevoznikove napovedi za ${escapeHtml(f.od_prevoznika)}</span></div>` : ""}
         ${zivo && f ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.predicted_delay_s)} min</span></div>` : ""}
         ${t ? `<div class="stop-times adv-only"><span class="stop-tag">mediana ${pluralRuns(t.n)}${
           t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}

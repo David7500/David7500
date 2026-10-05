@@ -1174,6 +1174,32 @@ PREVOZNIK_NAVZGOR = {"avtobus": 0.5}
 #: velja za vir, ne za ime prevoznika.
 PREVOZNIK_NAVZGOR_AGENCIJA = {"lpp": 1.0}
 
+#: Kje prevoznikova visja vrednost velja tudi ZA svojim postankom: model od
+#: tam racuna naprej, kot da je vlak tam izmerjen z njo.
+#:
+#: Prej je pravilo "prevoznik navzgor" veljalo za vsak postanek zase. LPV 2252,
+#: 5. 10. 2026: izmerjen na Zagorju +4, prevoznik za Savo +22, za Litijo nic
+#: novega -- okno je pisalo Sava 08:57, Litija 08:46, Ljubljana Polje +7.
+#: Vlak pred Savo stoji; kar ve prevoznik o Savi, velja tudi za Litijo.
+#:
+#: Izmerjeno na dveh merilih (`scripts/preizkusi_sidro.py`, baza z arwena,
+#: ucenje z izpuscanjem dneva), skupaj s pravilom, da cas ne tece nazaj:
+#:
+#:   senca 5. 9.-5. 10. (78 770)   MAE   v 5 min  podcenj. precenj. strosek  cas nazaj
+#:     vsak postanek zase          2,74   86,2 %   10,9 %   2,9 %    8,79   2,49 % pogledov
+#:     **novo izhodisce**          2,54   87,7      9,1     3,2      8,72   0
+#:   vsak zapis feeda, cilj do 60 min (2,40 mio)
+#:     vsak postanek zase          1,98   90,2      8,2     1,7      7,37   2,39 %
+#:     **novo izhodisce**          1,79   91,5      6,5     2,0      7,29   0
+#:
+#: Razlikuje se 28 oz. 23 % napovedi; tam MAE 3,37 -> 2,68 in 2,88 -> 2,01 min.
+#: Precenjenih (nevarna smer) nekaj vec, strosek, ki jih steje z 87 min, nizji.
+#: Pri cilju 45-60 min strosek 10,19 -> 10,24, pri krajsih nizji.
+#: Preizkuseno in slabse: presezek prevoznika nesti naprej le z rezervo
+#: postankov (MAE 2,57 / 1,82) ali le nepadajoce zamude (2,63 / 1,85).
+#: Avtobusi niso izmerjeni in ostanejo pri starem.
+SIDRO_PREVOZNIKA = {"zeleznica"}
+
 
 def _with_operator(ocena: int, prevoznik: int | None,
                    network: str | None = None, agency: str | None = None) -> int:
@@ -1367,51 +1393,78 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     dwell_i = next((( t["dep_s"] or 0) - (t["arr_s"] or 0) for t in stops
                     if t["stop_seq"] == stop_seq
                     and t["arr_s"] is not None and t["dep_s"] is not None), 0)
-    razred = delay_bucket(current_delay_s)
-    out = []
-    slack = 0
-    for seq in sorted(s for s in names if s > stop_seq):
-        prej = _after_slack(current_delay_s, slack)
-        slack += dwell.get(seq, 0)
-        osnova = _after_slack(current_delay_s, slack)
-        # Koliko rezerve se porabi PRAV TU. Prikaz iz tega nariše padec na
-        # postaji namesto na odseku -- padec se zgodi med prihodom in odhodom.
-        tu = prej - osnova
+    def model(seq: int, od: int, d_od: int, rezerva: int):
+        """Rezerva + historicni ostanek od postanka `od` z zamudo `d_od` do `seq`."""
+        osnova = _after_slack(d_od, rezerva)
         # Ostanek: kar se je zgodilo POLEG rezerve -- zamude, ki nastanejo, in
         # rezerva, ki je v resnici ni bilo. Loceno po razredu zamude, ker
         # postanek vlaku z 11 minutami vzame dve, tocnemu pa nic.
-        pari = [(day[stop_seq], day[seq] - _after_slack(day[stop_seq], slack))
+        pari = [(day[od], day[seq] - _after_slack(day[od], rezerva))
                 for day in by_day.values()
-                if stop_seq in day and seq in day]
+                if od in day and seq in day]
+        razred = delay_bucket(d_od)
         podobni = [r for d0, r in pari if delay_bucket(d0) == razred]
         ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
         # Mediana iz enega dneva ni mediana, zato meja (`_omejen_ostanek`) --
         # a pri avtobusih samo, dokler dni ni dovolj (`OSTANEK_BREZ_MEJE_DNI`).
         ostanek = statistics.median(ostanki) if ostanki else 0
         if len(ostanki) < OSTANEK_BREZ_MEJE_DNI.get(network, math.inf):
-            ostanek = _omejen_ostanek(ostanek, current_delay_s, omeji_s, omeji_delez)
-        nasa = osnova + round(ostanek)
+            ostanek = _omejen_ostanek(ostanek, d_od, omeji_s, omeji_delez)
+        return osnova, ostanki, len(podobni) >= MIN_PREDICT_SAMPLES, osnova + round(ostanek)
+
+    # Sidro: postanek, od katerega model racuna. Zacne se na zadnjem
+    # izmerjenem; kjer prevoznik ve vec, se pri vlaku premakne tja
+    # (`SIDRO_PREVOZNIKA`) -- njegova vrednost velja tudi ZA tem postankom.
+    sidro, d_sidro, rez_sidro = stop_seq, current_delay_s, 0
+    premika = network in SIDRO_PREVOZNIKA
+    cas = {t["stop_seq"]: t["dep_s"] if t["dep_s"] is not None else t["arr_s"] for t in stops}
+    prejsnji_cas = (cas[stop_seq] + current_delay_s
+                    if cas.get(stop_seq) is not None else None)
+    out = []
+    slack = 0
+    for seq in sorted(s for s in names if s > stop_seq):
+        prej = _after_slack(d_sidro, rez_sidro)
+        slack += dwell.get(seq, 0)
+        rez_sidro += dwell.get(seq, 0)
+        osnova, ostanki, isti_razred, nasa = model(seq, sidro, d_sidro, rez_sidro)
+        # Koliko rezerve se porabi PRAV TU. Prikaz iz tega nariše padec na
+        # postaji namesto na odseku -- padec se zgodi med prihodom in odhodom.
+        tu = prej - osnova
+        # Naša vrednost brez prevoznika kjerkoli -- za senco (`ours_own_s`).
+        lastna = nasa if sidro == stop_seq else model(seq, stop_seq, current_delay_s, slack)[3]
         prevoznik = feed.get(seq)
         if _operator_is_stale(prevoznik, arr_i, current_delay_s, dwell_i):
             prevoznik = None            # samo prenos zamude, ne napoved
+        z_prevoznikom = _with_operator(nasa, prevoznik, network, agency)
+        napoved = z_prevoznikom
+        if premika and cas.get(seq) is not None:
+            # Cas ne tece nazaj: vlak ne odpelje s postaje, preden odpelje s
+            # prejsnje. Model iz dveh razlicnih median to obcasno trdi.
+            if prejsnji_cas is not None:
+                napoved = max(napoved, prejsnji_cas - cas[seq])
+            prejsnji_cas = cas[seq] + napoved
         out.append({
             "stop_seq": seq,
             "name": names[seq],
             "n_samples": len(ostanki),
-            "same_class": len(podobni) >= MIN_PREDICT_SAMPLES,
+            "same_class": isti_razred,
             "slack_s": slack,
             "slack_here_s": tu,
-            "own_delay_s": nasa,
+            "own_delay_s": lastna,
             "operator_delay_s": prevoznik,
             "from_operator": prevoznik is not None and prevoznik > nasa,
-            "predicted_delay_s": _with_operator(nasa, prevoznik, network, agency),
-            "p90_delay_s": (_with_operator(osnova + round(_pct(ostanki, 0.9)), prevoznik,
-                                           network, agency)
+            "od_prevoznika": names[sidro] if sidro != stop_seq else None,
+            "predicted_delay_s": napoved,
+            "p90_delay_s": (max(napoved, _with_operator(osnova + round(_pct(ostanki, 0.9)),
+                                                        prevoznik, network, agency))
                             if ostanki else None),
             "basis": ("prevoznik ve več" if prevoznik is not None and prevoznik > nasa
+                      else f"od prevoznikove napovedi za {names[sidro]}" if sidro != stop_seq
                       else "rezerva + historicni ostanek" if ostanki
                       else "rezerva voznega reda"),
         })
+        if premika and z_prevoznikom > nasa:
+            sidro, d_sidro, rez_sidro = seq, z_prevoznikom, 0
     return out
 
 
