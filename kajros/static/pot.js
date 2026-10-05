@@ -932,6 +932,22 @@ oznaciArm();
 naloziKazalo().then((k) => { KAZALO = k; });
 const izPovezave = izUrl();
 izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi
+// „Kam greš?“ z domače strani: človek je ravno odgovoril na „kam“, kazalec pa
+// je stal v Od kod (5. 10. 2026). Zdaj v Kam; Od kod dobi lego samo, kadar jo
+// je brskalnik tej strani že dovolil -- vprašanja za dovoljenje ne sprožimo sami.
+if (location.hash === "#kam" && !izPovezave) {
+  history.replaceState(null, "", location.pathname + location.search);
+  S.arm = "do";
+  oznaciArm();
+  $("#q-do").focus();
+  if (navigator.permissions) {
+    navigator.permissions.query({ name: "geolocation" }).then((p) => {
+      if (p.state === "granted" && !S.od) {
+        document.querySelector('.tocka[data-kaj="od"] [data-akcija="lega"]').click();
+      }
+    }).catch(() => {});
+  }
+}
 povej(izPovezave ? "" : "Vpiši naslov ali postajo, ali klikni na zemljevid.", null);
 S.obnovi = izPovezave;         // samo ob odprtju strani, ne ob "Poišči"
 if (izPovezave) isci();
