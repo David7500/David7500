@@ -2355,3 +2355,5 @@ Ob trenutkih objave (25 607 poročil):
 | C, L = 8 min | 85,5 % | 2,7 % | 11,8 % | 0,21 |
 
 Zemljevid zato zdaj riše po A (zadnja meritev, isto kot okno vožnje). C, L = 8 min napako „vlak je tu že bil“ (spredaj) zniža s 13,1 % na 2,7 % ob enaki točnosti, a premakne mejo meritve -- to bi moralo veljati v `stats.last_measured()` za vse zaslone hkrati, ne samo na zemljevidu. Odprto. Brez starostne meje je C slabši od A: med postankom na X poročilo še vedno pravi „proti X“. „Resnica“ je zadnja beseda feeda o postanku, ne opažanje (pri vlakih potrjena v 0,4 %, glej „Prehoda vlaka …“) -- isto merilo kot senca.
+
+**Proti resnici s perona še ni preverjeno** (`model.md`: prehod se meri proti človeku, ne proti feedu). V kopiji produkcijske baze 5. 10. 2026 ob 9:04 je bilo s potniki potrjenih prehodov vlakov (`deljenje_prehod`) samo **6** (LPV 2010 30. 9. pet postaj, RG 318); A je ob vseh šestih pravilen, C enak, sveže poročilo samo pri enem. Pri RG 318 je poročilo ob prihodu v Ljubljano imenovalo Litostroj -- postajo, ki jo je vlak že prevozil: ni vedno naslednja. C ostane predlog, dokler potnikov ni dovolj.
