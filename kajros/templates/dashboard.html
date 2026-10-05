@@ -89,6 +89,11 @@
         <label class="layer"><input type="checkbox" id="lay-net" checked>
           <span class="layer-key layer-key-net"></span>
           <span class="layer-name">Železniške proge</span><span class="layer-n"></span></label>
+        {# Zapore tira iz obvestil SŽ (`/api/zapore`): rumena ovir, črtkana.
+           Število = zapore danes, ne le tiste, ki veljajo zdaj. #}
+        <label class="layer"><input type="checkbox" id="lay-zapore" checked>
+          <span class="layer-key layer-key-zapora"></span>
+          <span class="layer-name">Ovire na progi</span><span class="layer-n" id="n-zapore"></span></label>
         <label class="layer"><input type="checkbox" id="lay-routes">
           <span class="layer-key layer-key-route"></span>
           <span class="layer-name">Trase vozil na poti</span><span class="layer-n" id="n-routes"></span></label>

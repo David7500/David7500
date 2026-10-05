@@ -644,6 +644,11 @@ const IZBRANA_INK = "#f0934f";
 const ZA_INK = "#8b95a4";
 // Vlak na zemljevidu: oznaka, model in pot.
 const TRAIN_INK = "#f0934f";
+// Zapora tira na zemljevidu: ista rumena kot opozorila o ovirah na straneh
+// (`oznake.md`). Od lestvice zamud in prevoznikov ločena tudi pri barvni
+// slepoti (`preveri_paleto.py`, najslabše proti 1–5 min ΔE 5,2), a jo loči
+// predvsem oblika: črtkana črta, ne vozilo in ne žeton.
+const OVIRA_INK = "#f2d36b";
 
 function lineBadgeHtml(row) {
   if (!isBus(row.mode)) return "";
@@ -911,6 +916,41 @@ function tirHtml(tir, prej) {
   if (!tir) return "";
   return `<span class="tir${prej ? " is-changed" : ""}">tir ${escapeHtml(tir)}${
     prej ? ` · prej ${escapeHtml(prej)}` : ""}</span>`;
+}
+
+// "Odpeljal" je pri vlaku skoraj vedno sklep iz ure, ne opažanje. Kadar vlak
+// čaka na prejšnji postaji in feed zamude ne osveži, ura laže: vrstica je šla
+// med odpeljane, vlak pa je šele prihajal. Do `nepotrjen_do` zato ostane med
+// živimi in pove, da je odhod sklep. Mejo postavi strežnik
+// (`stats.nepotrjen_do`); tu je le ura, ker teče tudi med osvežitvama.
+function nepotrjen(pricakovanoMs, doIso, nowMs) {
+  return !!(nowMs && doIso && pricakovanoMs < nowMs
+            && nowMs <= new Date(doIso).getTime());
+}
+
+function nepotrjenHtml(iso, prihod) {
+  return `<span class="nepotrjen">po zadnjem podatku bi ${prihod ? "prispel" : "odpeljal"}
+      ob ${hhmm(iso)}, potrditve ni</span>`;
+}
+
+/** Današnja tabla po PRIČAKOVANI uri: odpeljane, nepotrjene in prihajajoče.
+ *
+ * Po voznem redu je 25. 9. 2026 na Bavarskem dvoru na vrhu stal LPP 14 z
+ * 12:46 in +49 min, pod njim deset že odpeljanih -- odpeljanost je bila po
+ * pričakovani uri, vrstni red pa ne. Nepotrjen odhod ni odpeljan: ostane
+ * viden, pred naslednjim. Isto pravilo za odhodno tablo (`connections.js`)
+ * in oblaček postaje na zemljevidu (`dashboard.js`).
+ */
+function razvrstiTablo(list, nowMs) {
+  const kdaj = (r) => new Date(r.expected || r.sched).getTime();
+  const po = [...list].sort((a, b) => kdaj(a) - kdaj(b)
+    || new Date(a.sched).getTime() - new Date(b.sched).getTime());
+  const jeMorda = (r) => nepotrjen(kdaj(r), r.nepotrjen_do, nowMs);
+  return {
+    gone: po.filter((r) => kdaj(r) < nowMs && !jeMorda(r)),
+    morda: po.filter((r) => kdaj(r) < nowMs && jeMorda(r)),
+    ahead: po.filter((r) => kdaj(r) >= nowMs),
+  };
 }
 
 /** Kje lahko vlak naprej po progi izgubi čas (`zapore.py`).

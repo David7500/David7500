@@ -1606,6 +1606,41 @@ def api_alerts(lang: str = Query("sl", pattern="^(sl|en)$"),
         return alerts.active(conn, lang, tudi_napovedane=napovedane)
 
 
+#: Za koliko dni nazaj in naprej plast zapor odgovori. Obvestila SŽ segajo
+#: kak mesec naprej; dlje je samo nov ključ v predpomnilniku za vsak datum.
+ZAPORE_DNI = 31
+
+
+@app.get("/api/zapore")
+def api_zapore(dan: str | None = Query(None, description="YYYY-MM-DD; privzeto danes")):
+    """Zapore tira na ta dan kot GeoJSON, za plast „Ovire na progi“ na zemljevidu.
+
+    En `Feature` na zaporo: elementarni odseki proge (`MultiLineString`, pripeti
+    na tir OSM, kadar so), `odsek`, `postaje` na njem, `okna` tega dne in
+    `stanje` (`zdaj`, `pozneje` z uro `zacne`, `koncano`). Dneve in uro ima SŽ
+    samo v besedilu obvestila (`zapore.razberi`); zapore, ki jih ne razumemo,
+    tu ni -- napačna črta na zemljevidu je slabša od nobene.
+
+    Geometrija je predpomnjena na obvestila in vozni red; stanje se računa ob
+    vsaki strežbi, ker se spremeni sredi dneva brez novega podatka.
+    """
+    zdaj = datetime.now(TZ)
+    d = date.fromisoformat(_check_date(dan) or zdaj.date().isoformat())
+    if abs((d - zdaj.date()).days) > ZAPORE_DNI:
+        raise HTTPException(400, f"dan mora biti v {ZAPORE_DNI} dneh od danes")
+    zap = _predpomni(f"zapore:{d}", _znacka("alerts_etag", "gtfs_imported_at", "pripeto_at"),
+                     300, lambda: _conn_klic(lambda c: zapore.karta(c, d)))
+
+    def lastnosti(p, okna):
+        return json.dumps({**p, **zapore.stanje(okna, d, zdaj)},
+                          ensure_ascii=False, separators=(",", ":"))
+
+    kosi = [f'{{"type":"Feature","properties":{lastnosti(p, okna)},"geometry":{geom}}}'
+            for p, okna, geom in zap]
+    telo = '{"type":"FeatureCollection","features":[' + ",".join(kosi) + "]}"
+    return Response(content=telo.encode(), media_type="application/json")
+
+
 @app.get("/api/train/{train_no}/alerts")
 def api_train_alerts(train_no: str, lang: str = Query("sl", pattern="^(sl|en)$")):
     """Ovire, ki zadevajo prav ta vlak -- odgovor na 'zakaj zamuja'."""

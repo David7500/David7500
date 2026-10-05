@@ -175,3 +175,62 @@ def test_tveganje_iz_prejsnjih_dni_zapore(conn, monkeypatch):
 
 def test_ogrevanje_najde_danasnjo_zaporo(conn):
     assert zapore.ogrej(conn, DAN) == 1
+
+
+# ---------------------------------------------------------------- zemljevid
+
+def _zemljevid(conn, monkeypatch, dan=None):
+    import json
+    from kajros import api
+    monkeypatch.setattr(api, "_conn", lambda: conn)
+    for k in [k for k in api._ODGOVORI if k.startswith("zapore:")]:
+        api._ODGOVORI.pop(k)
+    return json.loads(api.api_zapore(dan).body)
+
+
+def test_zemljevid_dobi_odsek_zapore_kot_crto(conn, monkeypatch):
+    conn.execute("UPDATE edge SET geojson = '{\"type\":\"LineString\",\"coordinates\":"
+                 "[[14.0,46.0],[14.1,46.0]]}'")
+    # Pripeta geometrija ima prednost, kot v mreži prog.
+    conn.execute("UPDATE edge SET osm = '{\"type\":\"LineString\",\"coordinates\":"
+                 "[[14.1,46.0],[14.15,46.01],[14.2,46.0]]}' WHERE from_id = 'b'")
+    conn.commit()
+    d = _zemljevid(conn, monkeypatch)
+    f, = d["features"]
+    assert f["geometry"] == {"type": "MultiLineString",
+                             "coordinates": [[[14.1, 46.0], [14.15, 46.01], [14.2, 46.0]]]}
+    p = f["properties"]
+    assert (p["alert_id"], p["odsek"], p["postaje"], p["dan"]) == (
+        "SZ-OVIRA-1", "Brezje – Cerkno", ["Brezje", "Cerkno"], DAN)
+    assert p["okna"] == [{"od": "7.00", "do": "13.30", "ves_dan": False}]
+    assert p["naslov"] == "zapora"
+    assert p["stanje"] in ("zdaj", "pozneje", "koncano")
+    assert p["velja_zdaj"] is (p["stanje"] == "zdaj")
+
+
+def test_zemljevid_drug_dan_in_meje(conn, monkeypatch):
+    from fastapi import HTTPException
+    conn.execute("UPDATE edge SET geojson = '{\"type\":\"LineString\",\"coordinates\":"
+                 "[[14.0,46.0],[14.1,46.0]]}'")
+    conn.commit()
+    jutri = (date.today() + timedelta(days=1)).isoformat()
+    assert _zemljevid(conn, monkeypatch, jutri)["features"] == []
+    for slab in ("neki", (date.today() + timedelta(days=60)).isoformat()):
+        with pytest.raises(HTTPException) as exc:
+            _zemljevid(conn, monkeypatch, slab)
+        assert exc.value.status_code == 400
+
+
+def test_stanje_zapore_po_uri():
+    d = date(2026, 10, 5)
+    okna = [(420, 810)]
+    ob = lambda h, m=0: datetime(2026, 10, 5, h, m, tzinfo=zapore.TZ)  # noqa: E731
+    assert zapore.stanje(okna, d, ob(6)) == {"stanje": "pozneje", "velja_zdaj": False,
+                                            "zacne": "7.00"}
+    assert zapore.stanje(okna, d, ob(9))["stanje"] == "zdaj"
+    assert zapore.stanje(okna, d, ob(13, 30))["velja_zdaj"], "konec okna je vključen"
+    assert zapore.stanje(okna, d, ob(14))["stanje"] == "koncano"
+    assert zapore.stanje(okna, d, ob(9) - timedelta(days=1))["stanje"] == "pozneje"
+    assert zapore.stanje(okna, d, ob(9) + timedelta(days=1))["stanje"] == "koncano"
+    # Ves dan ("neprekinjeno") velja tudi ob polnoči.
+    assert zapore.stanje([(0, 1440)], d, ob(0))["velja_zdaj"]

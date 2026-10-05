@@ -421,21 +421,6 @@ function departedMs(c) {
   return new Date(c.expected_dep || c.sched_dep).getTime();
 }
 
-// "Odpeljal" je pri vlaku skoraj vedno sklep iz ure, ne opažanje. Kadar vlak
-// čaka na prejšnji postaji in feed zamude ne osveži, ura laže: vrstica je šla
-// med odpeljane, vlak pa je šele prihajal. Do `nepotrjen_do` zato ostane med
-// živimi in pove, da je odhod sklep. Mejo postavi strežnik
-// (`stats.nepotrjen_do`); tu je le ura, ker teče tudi med osvežitvama.
-function nepotrjen(pricakovanoMs, doIso, nowMs) {
-  return !!(nowMs && doIso && pricakovanoMs < nowMs
-            && nowMs <= new Date(doIso).getTime());
-}
-
-function nepotrjenHtml(iso, prihod) {
-  return `<span class="nepotrjen">po zadnjem podatku bi ${prihod ? "prispel" : "odpeljal"}
-      ob ${hhmm(iso)}, potrditve ni</span>`;
-}
-
 // Kar o vožnji poroča potnik, ki je na njej (`deljenje.py`). Z enim
 // poročevalcem je to vrstica ZRAVEN feeda -- en telefon se lahko moti; kadar
 // se ujemata dva, je strežnik feedovo zamudo in uro že zamenjal in vrstica
@@ -961,21 +946,11 @@ function renderBoard(data) {
     return;
   }
 
-  // **Danes je tabla po pricakovani uri, ne po voznem redu.** Po voznem redu
-  // je 25. 9. 2026 na Bavarskem dvoru na vrhu stal LPP 14 z 12:46 in +49 min,
-  // pod njim deset ze odpeljanih, nato mesanica svetlih in temnih vrstic --
-  // odpeljanost je bila po pricakovani uri, vrstni red pa ne. Poudarek
-  // "naslednja, cez 20 min" je dobila prav ta vozjna, ceprav je LPP 13
-  // peljal cez dve minuti. Vozni red ostane precrtan v vsaki vrstici.
-  const kdaj = (r) => new Date(r.expected || r.sched).getTime();
-  const po = [...list].sort((a, b) => kdaj(a) - kdaj(b)
-    || new Date(a.sched).getTime() - new Date(b.sched).getTime());
-  const jeMorda = (r) => nepotrjen(kdaj(r), r.nepotrjen_do, nowMs);
-  // Ze odpeljane so kontekst, ne izbira -- isto kot pri zvezah. Nepotrjen
-  // odhod ni odpeljan: ostane viden, pred naslednjim.
-  const gone = po.filter((r) => kdaj(r) < nowMs && !jeMorda(r));
-  const morda = po.filter((r) => kdaj(r) < nowMs && jeMorda(r));
-  const ahead = po.filter((r) => kdaj(r) >= nowMs);
+  // **Danes je tabla po pricakovani uri, ne po voznem redu** (`razvrstiTablo`
+  // v common.js, isto pravilo ima oblaček postaje na zemljevidu). Poudarek
+  // "naslednja, cez 20 min" je 25. 9. 2026 dobil LPP 14 z +49 min, ceprav je
+  // LPP 13 peljal cez dve minuti. Vozni red ostane precrtan v vsaki vrstici.
+  const { gone, morda, ahead } = razvrstiTablo(list, nowMs);
   // Osvezitev vsakih 30 s tablo izrise znova; odprt seznam naj ostane odprt.
   const odprto = !!resultsEl.querySelector(".past-box[open]");
   const rows = [];

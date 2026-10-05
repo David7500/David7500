@@ -282,7 +282,8 @@ function dodajSloje() {
   }, prviNapis);
 
   for (const id of ["k-proge", "k-vse-trase", "k-postaje", "k-postajalisca", "k-izbrano", "k-trasa",
-                    "k-trasa-skica", "k-trasa-postaje", "k-najdena", "k-jaz", "k-avtobusi"]) {
+                    "k-zapore", "k-trasa-skica", "k-trasa-postaje", "k-najdena", "k-jaz",
+                    "k-avtobusi"]) {
     map.addSource(id, { type: "geojson", data: PRAZNO });
   }
 
@@ -339,6 +340,25 @@ function dodajSloje() {
                  paint: { "line-color": ["case", ["==", ["get", "del"], "za"], ZA_INK, ["get", "barva"]],
                           "line-width": trasaSirina(false),
                           "line-opacity": ["case", ["==", ["get", "del"], "za"], 0.55, 0.9] } },
+               naTleh);
+  // Zapore tira (`/api/zapore`): rumena ovir, črtkana, nad progo in nad
+  // potjo izbranega vlaka -- zapora na njegovi poti je prav tisto, kar mora
+  // potnik videti. Še vedno na tleh: vlaki (DOM in 3D), avtobusi in pike
+  // postaj so nad njo, vlak ob zapori se pod črto ne skrije. Debelejša, ko
+  // velja zdaj; končana bledi, ker je danes še vedno lahko vzrok zamude.
+  const zdajZap = ["get", "velja_zdaj"];
+  map.addLayer({ id: "k-zapore-obroba", type: "line", source: "k-zapore",
+                 layout: { "line-join": "round" },
+                 paint: { "line-color": "#0f1115",
+                          "line-width": ["case", zdajZap, 8, 5.5],
+                          "line-opacity": ["case", ["==", ["get", "stanje"], "koncano"], 0.45, 0.8] } },
+               naTleh);
+  map.addLayer({ id: "k-zapore", type: "line", source: "k-zapore",
+                 layout: { "line-join": "round" },
+                 paint: { "line-color": OVIRA_INK,
+                          "line-width": ["case", zdajZap, 4.5, 2.5],
+                          "line-dasharray": [1.4, 1.1],
+                          "line-opacity": ["case", ["==", ["get", "stanje"], "koncano"], 0.5, 1] } },
                naTleh);
   // Crta skozi postajalisca ni pot po cesti in mora biti videti drugace.
   map.addLayer({ id: "k-trasa-skica", type: "line", source: "k-trasa-skica",
@@ -642,13 +662,19 @@ function groupLabelHtml(g) {
 
 function groupPopupHtml(g) {
   const koliko = g.trains.length === 1 ? "1 vlak" : `${g.trains.length} vlakov`;
+  // Ploščica vlaka prekrije piko postaje pod sabo; v vozlišču (Ljubljana,
+  // Zidani Most) stoji tam skoraj ves dan. Brez tega gumba do odhodov s
+  // postaje z dotikom ne bi prišel.
+  const postaja = !g.potnik && stationsByName.has(g.name)
+    ? `<button type="button" class="post-odpri" data-postaja="${escapeHtml(g.name)}">
+        odhodi s postaje ${escapeHtml(g.name)} ›</button>` : "";
   return `
     <div class="popup-station">${escapeHtml(g.name)}</div>
     <div class="popup-note">${g.potnik
       ? `${potnikov(g.trains[0].potnik.n)} na vlaku ${deliGlagol(g.trains[0].potnik.n)} lego`
       : g.stoji ? `po voznem redu in zamudi zdaj stoji tu — ${koliko}`
       : `zadnja postaja z meritvijo — ${koliko}`}</div>
-    <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>`;
+    <div class="popup-list">${g.trains.map(trainCardHtml).join("")}</div>${postaja}`;
 }
 
 
@@ -1141,6 +1167,14 @@ map.on("click", (e) => {
   // klik na zemljevid.
   if (e.originalEvent.target.closest(".maplibregl-marker, .maplibregl-popup")) return;
   const f = zadetek(e.point);
+  // Pike in vozila imajo prednost pred črto zapore: vlak ob zapori mora ostati
+  // dosegljiv.
+  const zap = f ? [] : zaporePod(e.point);
+  if (zap.length) {
+    if (lebdi) lebdi.remove();
+    odpriZaporo(zap, e.lngLat);
+    return;
+  }
   // Dotik praznega zemljevida zapre spodnjo plosco -- to je najbolj
   // pricakovana gesta in deluje tudi, ce kdo rocaja ne opazi.
   if (!f) { setSheet(false); return; }
@@ -1155,7 +1189,14 @@ map.on("click", (e) => {
     const m = stationMarkers.get(f.properties.kljuc);
     if (m && !m.getPopup().isOpen()) m.togglePopup();
   } else if (f.layer.id === "k-najdena") {
-    if (najdenaOkno) najdenaOkno.addTo(map);
+    if (najdena && najdena.vlak) odpriPostajo(najdena.ime, najdena.ll);
+    else if (najdenaOkno) najdenaOkno.addTo(map);
+  } else if (f.layer.id === "k-postaje") {
+    // Železniška postaja dobi oblaček z odhodi; postajališča in pike na poti
+    // izbranega vozila ostanejo pri imenu za pet sekund.
+    clearTimeout(imeCas);
+    if (imeOkno) imeOkno.remove();
+    odpriPostajo(f.properties.ime, f.geometry.coordinates);
   } else {
     pokaziIme(f);
   }
@@ -1171,7 +1212,13 @@ if (matchMedia("(hover: hover)").matches) {
     const sloji = ["k-avtobusi", ...IMENA].filter((id) => map.getLayer(id));
     const f = zadetek3D(e.point) || zadetekVlak3D(e.point)
       || map.queryRenderedFeatures(e.point, { layers: sloji })[0];
-    map.getCanvas().style.cursor = f ? "pointer" : "";
+    const zap = f ? [] : zaporePod(e.point);
+    map.getCanvas().style.cursor = f || zap.length ? "pointer" : "";
+    if (zap.length) {
+      lebdi.setText(`zapora tira ${zap.map((q) => q.odsek).join(", ")}`)
+        .setLngLat(e.lngLat).addTo(map);
+      return;
+    }
     if (!f) { lebdi.remove(); return; }
     const v = f.layer.id === "k-avtobusi" && busByKey.get(f.properties.kljuc);
     const m = f.layer.id === "k-vlaki-3d" && stationMarkers.get(f.properties.kljuc);
@@ -1186,11 +1233,211 @@ if (matchMedia("(hover: hover)").matches) {
 // Dotik kartice vlaka v oblačku postaje izbere njegovo pot. Povezava na
 // stran vozila ostane povezava.
 document.addEventListener("click", (ev) => {
+  const p = ev.target.closest(".maplibregl-popup .post-odpri");
+  const st = p && stationsByName.get(p.dataset.postaja);
+  if (st) {
+    odpriPostajo(st.name, [st.lon, st.lat]);
+    return;
+  }
   const k = ev.target.closest(".maplibregl-popup .veh-card[data-trip]");
   if (!k || ev.target.closest("a")) return;
   const t = liveTrains.find((x) => x.trip_id === k.dataset.trip);
   if (t) izberi(t, true);
 });
+
+// ---------- železniška postaja in zapore tira ----------
+//
+// Dotik železniške postaje je do 5. 10. 2026 pokazal samo ime za pet sekund,
+// ista postaja iz iskalnika pa oblaček s povezavo na tablo -- prijava „na
+// zemljevidu nimava možnosti za železniške postaje in za ovire“. Zdaj obe poti
+// odpreta isti oblaček: naslednji odhodi po ISTIH pravilih kot tabla
+// (`razvrstiTablo`, `nepotrjen`, `delayText`, `tirHtml`), zapore tira na
+// postaji in pot do cele table. Odhodi se vprašajo šele ob dotiku.
+
+//: Toliko odhodov v oblačku; več jih je na tabli.
+const POSTAJA_ODHODOV = 3;
+
+let postajaOkno = null;        // odprt oblaček železniške postaje
+let zaporaOkno = null;         // odprt oblaček zapore
+let najdena = null;            // postaja iz iskalnika: {ime, ll, vlak}
+
+// Zapore dneva. Stanje („velja zdaj“) računa strežnik ob vsaki strežbi, zato
+// se plast osveži na minuto; oblaček postaje jih vzame od tu tudi, kadar je
+// plast ugasnjena.
+let zapore = null;
+let zaporeCas = 0;
+const ZAPORE_MS = 60000;
+
+async function naloziZapore(sveze = false) {
+  if (!sveze && zapore && Date.now() - zaporeCas < ZAPORE_MS) return zapore;
+  zapore = await fetch("/api/zapore").then(jsonOk);
+  zaporeCas = Date.now();
+  nastaviVir("k-zapore", zapore);
+  const n = new Set(zapore.features.map((f) => f.properties.alert_id)).size;
+  const el = document.getElementById("n-zapore");
+  if (el) el.textContent = n || "";
+  return zapore;
+}
+
+function naloziZaporeTiho() {
+  if (!vklop.zapore) return;
+  naloziZapore(true).catch((err) => console.warn("zapor ni bilo mogoče naložiti", err));
+}
+
+// „danes 8.00–16.00 · velja zdaj“. Ure v slovenskem zapisu s piko, kot na
+// tabli („do 13.30“); stanje izračuna strežnik.
+function kdajZapore(p) {
+  const okna = p.okna.map((o) => (o.ves_dan ? "ves dan" : `${o.od}–${o.do}`)).join(", ");
+  const danes = p.dan === todayIso();
+  const stanje = p.stanje === "zdaj" ? "velja zdaj"
+    : p.stanje === "koncano" ? "končano"
+    : danes ? `začne ob ${p.zacne}` : "";
+  return [`${danes ? "danes" : dayLabel(p.dan)} ${okna}`, stanje].filter(Boolean).join(" · ");
+}
+
+function zaporaVrsticaHtml(p) {
+  return `<div class="zap-vrsta${p.velja_zdaj ? " is-zdaj" : ""}">
+      <span class="zap-odsek">zapora tira ${escapeHtml(p.odsek)}</span>
+      <span class="zap-kdaj">${escapeHtml(kdajZapore(p))}</span>
+    </div>`;
+}
+
+// Ena vrstica odhoda, z istimi besedami in barvami kot tabla: ura po
+// pričakovani uri, vozni red prečrtan, kadar se razlikujeta za minuto ali več
+// (`boardRowHtml`); nadomestni prevoz „po voznem redu“, ker feed zanj ne
+// poroča; nepotrjen odhod napol prosojen, z isto besedo.
+function odhodHtml(r, nowMs) {
+  const pricakovano = r.expected || r.sched;
+  const morda = nepotrjen(new Date(pricakovano).getTime(), r.nepotrjen_do, nowMs);
+  const off = r.delay_s != null && Math.abs(r.delay_s) >= 60;
+  // Tabla je `network=zeleznica`: avtobus na njej je nadomestni prevoz.
+  const nadomestni = isBus(r.mode);
+  const zamuda = r.zamuda
+    ? `<b class="odh-zam" style="color:${delayColor(r.zamuda)}">${escapeHtml(delayText(r.zamuda))}</b>`
+    : nadomestni ? '<b class="odh-zam odh-vr">po voznem redu</b>'
+    // Brez meritve za ta dan: kako je bilo doslej, z besedo kot na tabli --
+    // tanjša številka, ker to ni napoved za danes.
+    : r.typical ? `<b class="odh-zam odh-obicajno" style="color:${delayColor(r.typical.median_s)}">${
+      escapeHtml(delayText(r.typical.median_s))}</b>`
+    : '<b class="odh-zam odh-vr">brez podatka</b>';
+  const meta = [
+    off ? `<s>${hhmm(r.sched)}</s>` : "",
+    tirHtml(r.tir, r.tir_prej),
+    r.zamuda && r.delay_kind ? escapeHtml(r.delay_kind) : "",
+    !r.zamuda && !nadomestni && r.typical ? `običajno · ${pluralRuns(r.typical.n)}` : "",
+    r.do_s != null ? `<span class="opozorilo">lahko do ${delayLabel(r.do_s)} min</span>` : "",
+    morda ? nepotrjenHtml(pricakovano, false) : "",
+  ].filter(Boolean).join(" ");
+  return `<a class="odh${morda ? " is-unconfirmed" : ""}"
+       href="${tripHref(r.train_no, r.trip_id, r.service_date, "zeleznica")}">
+      <span class="odh-ura"${off ? ` style="color:${delayColor(r.zamuda)}"` : ""}>${hhmm(pricakovano)}</span>
+      <span class="odh-kam"><span class="odh-no">${escapeHtml(r.train_no)}</span>${
+        modeBadgeHtml(r.mode)} → ${escapeHtml(r.towards || r.destination || "")}</span>
+      ${zamuda}
+      ${meta ? `<span class="odh-meta">${meta}</span>` : ""}
+    </a>`;
+}
+
+function postajaHtml(ime, tabla, zap, napaka) {
+  let telo;
+  if (napaka) {
+    telo = '<div class="popup-note">Odhodov ni bilo mogoče naložiti.</div>';
+  } else if (!tabla) {
+    telo = '<div class="popup-note">nalagam odhode …</div>';
+  } else {
+    const nowMs = Date.now();
+    const { morda, ahead } = razvrstiTablo(tabla.board || [], nowMs);
+    const vrste = [...morda, ...ahead].slice(0, POSTAJA_ODHODOV);
+    telo = vrste.length
+      ? `<div class="odh-seznam">${vrste.map((r) => odhodHtml(r, nowMs)).join("")}</div>`
+      : `<div class="popup-note">V naslednjih ${Math.round(tabla.window_min / 60)} urah ni odhodov.</div>`;
+  }
+  const naPostaji = (zap ? zap.features : []).map((f) => f.properties)
+    .filter((p) => p.postaje.includes(ime));
+  return `<div class="veh-card postaja-card">
+      <div class="veh-head">
+        <span class="popup-station">${escapeHtml(ime)}</span>
+        <button type="button" class="veh-min" aria-label="Skrči ali razširi kartico"></button>
+        <span class="veh-headsign">naslednji odhodi</span>
+      </div>
+      <div class="veh-rows">${telo}${naPostaji.map(zaporaVrsticaHtml).join("")}</div>
+      <a class="veh-open" href="/app/train?station=${encodeURIComponent(ime)}">cela odhodna tabla ›</a>
+    </div>`;
+}
+
+async function osveziPostajo() {
+  const okno = postajaOkno;
+  if (!okno) return;
+  let tabla = null, zap = null, napaka = false;
+  try {
+    [tabla, zap] = await Promise.all([
+      fetch(`/api/departures?station=${encodeURIComponent(okno.__ime)}&network=zeleznica`)
+        .then(jsonOk),
+      // Brez zapor je oblaček še vedno odgovor; napaka tu ne sme skriti odhodov.
+      naloziZapore().catch(() => null),
+    ]);
+  } catch (err) {
+    console.warn("odhodov ni bilo mogoče naložiti", err);
+    napaka = true;
+  }
+  if (okno !== postajaOkno) return;    // medtem zaprt ali zamenjan
+  okno.setHTML(postajaHtml(okno.__ime, tabla, zap, napaka));
+}
+
+// Oblaček železniške postaje. Ena pot za dotik pike in izbiro v iskalniku.
+function odpriPostajo(ime, ll) {
+  zapriOblacke();
+  const okno = new maplibregl.Popup({ maxWidth: "300px", offset: 10 })
+    .setLngLat(ll).setHTML(postajaHtml(ime, null, zapore, false)).addTo(map);
+  okno.__ime = ime;
+  postajaOkno = okno;
+  omogociPremik(okno);
+  okno.on("close", () => { if (postajaOkno === okno) postajaOkno = null; });
+  osveziPostajo();
+}
+
+// Zapore pod prstom: črta je tanka, zato isti polmer kot pri pikah.
+function zaporePod(p) {
+  if (!vklop.zapore || !map.getLayer("k-zapore")) return [];
+  const r = DOTIK_PX;
+  const videne = new Set();
+  return map.queryRenderedFeatures([[p.x - r, p.y - r], [p.x + r, p.y + r]],
+                                   { layers: ["k-zapore"] })
+    .map((f) => f.properties)
+    .filter((q) => {
+      const k = `${q.alert_id}|${q.odsek}`;
+      if (videne.has(k)) return false;
+      videne.add(k);
+      return true;
+    });
+}
+
+function odpriZaporo(lastnosti, ll) {
+  zapriOblacke();
+  // MapLibre lastnosti vrne kot niz, kadar so seznam ali objekt.
+  const vse = lastnosti.map((q) => ({
+    ...q, okna: typeof q.okna === "string" ? JSON.parse(q.okna) : q.okna }));
+  const okno = new maplibregl.Popup({ maxWidth: "300px", offset: 6 })
+    .setLngLat(ll)
+    .setHTML(`<div class="veh-card zapora-card">
+        <div class="veh-head">
+          <span class="popup-station">Zapora enega tira</span>
+          <button type="button" class="veh-min" aria-label="Skrči ali razširi kartico"></button>
+        </div>
+        <div class="veh-rows">
+          ${vse.map((q) => `<div class="zap-vrsta${q.velja_zdaj ? " is-zdaj" : ""}">
+              <span class="zap-odsek">odsek ${escapeHtml(q.odsek)}</span>
+              <span class="zap-kdaj">${escapeHtml(kdajZapore(q))}</span>
+            </div>`).join("")}
+          <div class="popup-note">Vlak lahko tam čaka na križanje.</div>
+        </div>
+        <a class="veh-open" href="/app/ovire">vse ovire na progi ›</a>
+      </div>`)
+    .addTo(map);
+  zaporaOkno = okno;
+  omogociPremik(okno);
+  okno.on("close", () => { if (zaporaOkno === okno) zaporaOkno = null; });
+}
 
 // ---------- razvrščanje oznak ----------
 
@@ -1507,6 +1754,7 @@ const LAYERS = [
   { id: "lay-apms", key: "avtobus-apms", def: true, ag: "1121" },
   { id: "lay-bus-other", key: "avtobus-drugi", def: true, ag: "drugi" },
   { id: "lay-net", key: "net", def: true, sloji: ["k-proge-obroba", "k-proge"] },
+  { id: "lay-zapore", key: "zapore", def: true, sloji: ["k-zapore-obroba", "k-zapore"] },
   { id: "lay-routes", key: "routes", def: false, sloji: ["k-vse-trase"] },
   { id: "lay-stations", key: "stations", def: true, sloji: ["k-postaje"] },
   { id: "lay-busstops", key: "busstops", def: false,
@@ -1591,6 +1839,7 @@ function initLayers() {
         setLayer(spec, box.checked, true);
         // Prvi vklop mora tudi kaj narisati -- plast je ob zagonu prazna.
         if (spec.key === "routes" && box.checked && !routesLoaded) loadRoutes();
+        if (spec.key === "zapore" && box.checked) naloziZapore();
         if (spec.key === "busstops") {
           if (box.checked) loadBusStops();
           renderBusStops();
@@ -1860,15 +2109,23 @@ function izberi(v, vlak) {
   drawStops(v.train_no, v.trip_id, vlak, IZBRANA_INK);
 }
 
-// Postaja iz iskalnika: obroč na njej in povezava na odhodno tablo -- to je
-// naslednje vprašanje, ko jo človek najde. Mestno postajališče rabi ulico
-// (z16), železniška postaja kraj okrog sebe (z14).
+// Postaja iz iskalnika: obroč na njej in odhodi -- to je naslednje
+// vprašanje, ko jo človek najde. Železniška postaja dobi isti oblaček kot ob
+// dotiku pike (`odpriPostajo`), postajališče povezavo na tablo. Mestno
+// postajališče rabi ulico (z16), železniška postaja kraj okrog sebe (z14).
 function pokaziPostajo(m) {
   const { s, vlak } = m;
-  const tabla = `${vlak ? "/app/train" : "/app/bus"}?station=${encodeURIComponent(s.n)}`;
-  map.easeTo({ center: [s.lon, s.lat], zoom: Math.max(map.getZoom(), (vlak ? 14 : 16) - LZ) });
+  const ll = [s.lon, s.lat];
+  map.easeTo({ center: ll, zoom: Math.max(map.getZoom(), (vlak ? 14 : 16) - LZ) });
   nastaviVir("k-najdena", tocke([{ name: s.n, lat: s.lat, lon: s.lon }]));
+  najdena = { ime: s.n, ll, vlak };
   if (najdenaOkno) najdenaOkno.remove();
+  if (vlak) {
+    najdenaOkno = null;
+    odpriPostajo(s.n, ll);
+    return;
+  }
+  const tabla = `/app/bus?station=${encodeURIComponent(s.n)}`;
   najdenaOkno = new maplibregl.Popup({ offset: 12 })
     .setLngLat([s.lon, s.lat])
     .setHTML(`<div class="tt-title">${escapeHtml(s.n)}</div>
@@ -1883,6 +2140,8 @@ function pokaziPostajo(m) {
 function zapriOblacke() {
   if (kartica) kartica.remove();
   if (najdenaOkno) najdenaOkno.remove();
+  if (postajaOkno) postajaOkno.remove();
+  if (zaporaOkno) zaporaOkno.remove();
   for (const mk of stationMarkers.values()) {
     if (mk.getPopup().isOpen()) mk.togglePopup();
   }
@@ -1926,6 +2185,7 @@ document.getElementById("find-clear").addEventListener("click", () => {
   selectedKey = null;
   pocistiTraso();
   nastaviVir("k-najdena", PRAZNO);
+  najdena = null;
   if (najdenaOkno) { najdenaOkno.remove(); najdenaOkno = null; }
   renderFind();
   findEl.focus();
@@ -1944,6 +2204,8 @@ async function pollLive() {
   document.getElementById("n-train").textContent = liveTrains.length;
   renderTrains(liveTrains);
   if (izbrana && izbrana.vlak) narisiTraso();
+  // Odprt oblaček postaje teče z zemljevidom: ura in zamude se premikajo.
+  if (postajaOkno) osveziPostajo();
   if (findEl.value.trim()) renderFind();
   nalozeno.vlaki = true;
   pokaziVoziloIzNaslova();
@@ -2061,4 +2323,6 @@ map.once("style.load", async () => {
   vozilaPoll = pollVehicles("/api/vehicles", onVehicles, zgodaj.vozila);
   loadRoutes();
   setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
+  naloziZaporeTiho();
+  setInterval(naloziZaporeTiho, ZAPORE_MS);
 });

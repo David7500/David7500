@@ -62,6 +62,11 @@ OPERATERJI = [
 # ločiti sama; od vlaka se ne -- izbrana pot vlaka je bila oranžna že prej.
 IZBRANA = ("izbrana pot", "#f0934f")
 
+# Zapora tira na zemljevidu (`OVIRA_INK` v common.js): rumena opozoril o
+# ovirah. Leži na progi med vlaki, izbrano potjo in trasami prevoznikov; od
+# lestvice zamud se mora ločiti, sicer bi črto brali kot "tu zamuja".
+OVIRA = ("zapora tira", "#f2d36b")
+
 RESERVED = [
     ("ni meritve", "#a8d8ff"),
     ("nadomestni prevoz", "#b48ad8"),
@@ -214,7 +219,7 @@ def _line(ok: bool, text: str) -> str:
 
 def check_contrast(problems: list[str]) -> None:
     print("\nKONTRAST proti podlagi (WCAG 2.1; 4.5 za drobno besedilo, 3.0 za veliko)")
-    for group in (DELAY_RAMP, SEVERITY, OPERATERJI, RESERVED, INK, [IZBRANA]):
+    for group in (DELAY_RAMP, SEVERITY, OPERATERJI, RESERVED, INK, [IZBRANA], [OVIRA]):
         for name, color in group:
             for bg_name, bg in (("bg", BG), ("kartica", BG_RAISED)):
                 ratio = contrast(color, bg)
@@ -280,6 +285,15 @@ def check_cvd(problems: list[str]) -> None:
     print("  -- izbrana pot proti prevoznikom")
     n1, c1 = IZBRANA
     for n2, c2 in OPERATERJI:
+        worst = min(ciede2000(lab(simulate(c1, k)), lab(simulate(c2, k))) for k in _SIM)
+        ok = worst >= DE_MIN
+        if not ok:
+            problems.append(f"{n1} vs {n2}: ΔE {worst:.1f}")
+        print(_line(ok, f"{n1:12s} vs {n2:12s} ΔE {worst:5.1f}"))
+
+    print("  -- zapora tira proti zamudam, prevoznikom in izbrani poti")
+    n1, c1 = OVIRA
+    for n2, c2 in DELAY_RAMP + OPERATERJI + [IZBRANA]:
         worst = min(ciede2000(lab(simulate(c1, k)), lab(simulate(c2, k))) for k in _SIM)
         ok = worst >= DE_MIN
         if not ok:

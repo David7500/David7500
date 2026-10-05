@@ -63,3 +63,10 @@ def test_okno_voznje_uporablja_rezervirano_barvo_za_oceno():
     m = re.search(r'const ESTIMATE_COLOR = "(#[0-9a-fA-F]{6})"', train)
     assert m, "train.js nima ESTIMATE_COLOR"
     assert m.group(1).lower() == _css("d-none")
+
+
+def test_zapora_na_zemljevidu_je_ista_kot_v_preverjanju():
+    """Črta zapore je preverjena proti zamudam -- a samo, če je to ista barva."""
+    js = re.search(r'const OVIRA_INK = "(#[0-9a-fA-F]{6})"', JS).group(1).lower()
+    skripta = re.search(r'^OVIRA = \("[^"]+", "(#[0-9a-fA-F]{6})"\)', SKRIPTA, re.M).group(1).lower()
+    assert js == skripta, "common.js in preveri_paleto.py se razhajata"

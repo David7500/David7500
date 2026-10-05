@@ -21,6 +21,7 @@ tveganjem, ne popravek napovedi.
 from __future__ import annotations
 
 import heapq
+import json
 import re
 import sqlite3
 import time
@@ -506,3 +507,65 @@ def dopolni(conn: sqlite3.Connection, rows: list[dict], dan: str, do: str,
             dod = dodatek(o, r[kje])
             if osnova is not None and dod >= 60:
                 r["do_s"] = round(osnova) + dod
+
+
+# ---------------------------------------------------------------- zemljevid
+
+def _ura(m: int) -> str:
+    return f"{m // 60}.{m % 60:02d}"
+
+
+def karta(conn: sqlite3.Connection, dan: date) -> list[tuple[dict, list, str]]:
+    """Zapore dneva za plast zemljevida: [(lastnosti, okna, geometrija)].
+
+    Geometrija so elementarni odseki proge, ki jih zapora zapre, pripeti na
+    tir OSM, kadar so (`edge.osm`), sicer surovi -- ista črta kot mreža prog
+    pod njo. Vrne jo kot že zapisan JSON: stanje ("velja zdaj") se doda ob
+    vsaki strežbi, geometrija pa je ves čas ista in je večina odgovora.
+    """
+    zap = zapore(conn, dan)
+    if not zap:
+        return []
+    crte = {frozenset((r[0], r[1])): (r[0], r[1], r[2]) for r in conn.execute(
+        "SELECT from_id, to_id, COALESCE(osm, geojson) FROM edge WHERE elementary = 1")}
+    ids = sorted({sid for z in zap for e in z["robovi"] for sid in e})
+    imena = dict(conn.execute(
+        f"SELECT stop_id, name FROM station WHERE stop_id IN ({','.join('?' * len(ids))})",
+        ids).fetchall()) if ids else {}
+    naslovi = dict(conn.execute(
+        "SELECT alert_id, header FROM alert WHERE kind = 'ovira' AND lang = 'sl'").fetchall())
+    out = []
+    for z in zap:
+        kosi = [json.loads(crte[e][2])["coordinates"] for e in z["robovi"] if e in crte]
+        if not kosi:
+            continue
+        okna = sorted((o[1], o[2]) for o in z["okna"])
+        out.append((
+            {"alert_id": z["alert_id"], "naslov": naslovi.get(z["alert_id"]),
+             "odsek": z["odsek"], "dan": dan.isoformat(),
+             "postaje": sorted({imena[s] for e in z["robovi"] for s in e if s in imena}),
+             "okna": [{"od": _ura(a), "do": _ura(b), "ves_dan": (a, b) == (0, 24 * 60)}
+                      for a, b in okna]},
+            okna,
+            json.dumps({"type": "MultiLineString", "coordinates": kosi},
+                       separators=(",", ":"))))
+    return out
+
+
+def stanje(okna: list[tuple[int, int]], dan: date, zdaj: datetime) -> dict:
+    """Ali zapora ta hip velja: `zdaj`, `pozneje` (z uro začetka) ali `koncano`.
+
+    Računa se ob vsaki strežbi, ne v predpomnilniku -- sicer bi zapora, ki se
+    je začela ob osmih, do izteka predpomnilnika kazala "začne ob 8.00".
+    """
+    danes = zdaj.date()
+    if dan < danes:
+        return {"stanje": "koncano", "velja_zdaj": False}
+    m = zdaj.hour * 60 + zdaj.minute if dan == danes else -1
+    # Konec okna je vključen, kot v `_v_oknu`: ob 16.00 zapora še velja.
+    if any(a <= m <= b for a, b in okna):
+        return {"stanje": "zdaj", "velja_zdaj": True}
+    naprej = [a for a, _ in okna if a > m]
+    if naprej:
+        return {"stanje": "pozneje", "velja_zdaj": False, "zacne": _ura(min(naprej))}
+    return {"stanje": "koncano", "velja_zdaj": False}
