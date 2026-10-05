@@ -1,0 +1,160 @@
+/* /o-nas: zgodba v 3D (vir v o-nas/, glej .claude/rules/strani.md).
+ *
+ * Platno s svetom je pritrjeno pod besedilom; drsenje premika čas filma, ne
+ * strani. Kartice z besedilom so lepljive v vsakem taktu, JS jim nastavlja
+ * prosojnost. Brez JS ali brez WebGL (`.brez-3d`) se vse prebere kot navadna
+ * stran: takti izgubijo višino, kartice lepljivost.
+ *
+ * Grške besede (χρόνος, καιρός) so v Noto Serif Display, kurzivi; podmnožica
+ * samo z grškimi znaki, 9 kB, licenca SIL OFL 1.1. Plex grščine nima.
+ */
+@font-face {
+  font-family: 'Noto Serif Display';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/static/pisave/NotoSerifDisplay-it-grk.woff2') format('woff2');
+  unicode-range: U+0370-03FF, U+1F00-1FFF, U+00B7;
+}
+
+body.o-nas{
+  --crna:#0a0d12; --bela:#f4f2ed; --siva:rgba(244,242,237,.74); --tiha:rgba(244,242,237,.52);
+  --oranzna:var(--accent-lit);
+  --rob:16px;
+  --grk:'Noto Serif Display','IBM Plex Sans',serif;
+  margin:0;font:400 17px/1.55 var(--sans);background:var(--crna);color:var(--bela)}
+html{background:#0a0d12;scroll-behavior:auto}
+.o-nas a{color:inherit}
+#oder{position:fixed;inset:0;z-index:0;width:100vw;height:100vh;height:100lvh;display:block;opacity:0;transition:opacity 1.2s ease}
+.pripravljeno #oder{opacity:1}
+.brez-3d #oder,.brez-3d .tancica,.brez-3d .hud-ura,.brez-3d .oznaka3d,.brez-3d .prehod{display:none}
+/* zatemnitev ob besedilu: spodaj na telefonu, levo na namizju */
+.tancica{position:fixed;inset:0;pointer-events:none;z-index:3;
+  background:linear-gradient(to top,rgba(8,10,14,.82) 0%,rgba(8,10,14,.5) 30%,rgba(8,10,14,0) 58%),
+             radial-gradient(120% 90% at 50% 40%,rgba(0,0,0,0) 60%,rgba(0,0,0,.35) 100%)}
+.prehod{position:fixed;inset:0;pointer-events:none;opacity:0;z-index:4;background:#e9e4dc}
+/* filmsko zrno: šum iz SVG, premika se v skokih */
+.zrno{position:fixed;inset:-50%;pointer-events:none;opacity:.07;mix-blend-mode:overlay;z-index:4;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.6 -.3'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  animation:zrno .5s steps(3) infinite}
+@keyframes zrno{0%{transform:translate(0,0)}33%{transform:translate(-7%,4%)}66%{transform:translate(5%,-6%)}100%{transform:translate(0,0)}}
+@media (prefers-reduced-motion:reduce){.zrno{animation:none}}
+html:not(.pripravljeno) .zrno,.brez-3d .zrno{display:none}
+.nalaganje{position:fixed;left:0;right:0;top:0;height:2px;z-index:30;pointer-events:none;transition:opacity .6s}
+.nalaganje i{display:block;height:100%;width:0;background:var(--oranzna);transition:width .3s}
+.pripravljeno .nalaganje,.brez-3d .nalaganje,html:not(.js) .nalaganje{opacity:0}
+
+/* glava */
+.vrh{position:fixed;z-index:20;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 12px) var(--rob) 12px;
+  display:flex;align-items:center;gap:12px;pointer-events:none}
+.vrh>*{pointer-events:auto}
+/* nad dejstvi za filmom glava dobi podlago, sicer se besedilo prekriva */
+.vrh{transition:background .25s}
+.vrh.nad-dodatkom{background:rgba(10,13,18,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.znamka{display:flex;align-items:center;gap:9px;text-decoration:none;font-weight:600;font-size:18px;letter-spacing:-.01em}
+.znamka svg{width:30px;height:30px}
+.poglavja{margin-left:auto;display:flex;gap:2px;padding:4px;border-radius:999px;background:rgba(14,17,23,.55);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08)}
+.poglavja a{font-size:13px;text-decoration:none;color:var(--siva);padding:6px 11px;border-radius:999px;transition:background .25s,color .25s;white-space:nowrap}
+.poglavja a[aria-current="true"]{background:rgba(255,255,255,.12);color:var(--bela)}
+.poglavja .st{font-family:var(--mono);font-size:11px;opacity:.7;margin-right:5px}
+.vrh .vec-gumb{margin:0 -10px 0 -6px;color:var(--bela)}
+@media (max-width:719px){
+  .poglavja a:not([aria-current="true"]) .ime{display:none}
+  .poglavja a{padding:6px 9px}
+}
+/* na najožjih telefonih glava ne sme v drugo vrstico: ostane samo znak */
+@media (max-width:400px){.znamka span{display:none}}
+.hud-ura{position:fixed;z-index:19;right:var(--rob);top:calc(env(safe-area-inset-top) + 62px);opacity:0;pointer-events:none;
+  font:500 13px/1.2 var(--mono);color:var(--siva);text-align:right}
+.hud-ura b{display:block;font:600 22px/1.1 var(--mono);color:var(--bela);letter-spacing:.02em}
+
+/* zgodba */
+.o-nas main{position:relative;z-index:5}
+.takt{position:relative}
+.js .takt{height:calc(var(--h,120) * 1svh)}
+.kartica{max-width:34rem;padding:0 var(--rob)}
+.js .kartica{position:sticky;top:calc(100svh - var(--kv,40svh));will-change:opacity,transform}
+.oznaka{font:500 13px/1 var(--mono);color:var(--oranzna);margin:0 0 14px;display:flex;align-items:center;gap:10px}
+.oznaka::before{content:"";width:22px;height:1px;background:currentColor;opacity:.8}
+.o-nas h1,.o-nas h2{margin:0;font-weight:600;letter-spacing:-.025em;text-wrap:balance}
+.kartica h2{font-size:clamp(28px,7.4vw,56px);line-height:1.06}
+.kartica p{margin:14px 0 0;color:var(--siva);font-size:clamp(17px,4.4vw,20px);max-width:32ch;text-wrap:pretty}
+.kartica p.velik{color:var(--bela);font-size:clamp(24px,6.4vw,40px);line-height:1.15;font-weight:500;letter-spacing:-.015em;max-width:20ch}
+.grk{font:italic 500 clamp(52px,15vw,112px)/.95 var(--grk);letter-spacing:-.01em;display:block;margin-bottom:6px}
+.grk+.izg{font:500 15px/1 var(--mono);color:var(--tiha);display:block;margin-bottom:16px}
+.kairos .grk{color:var(--oranzna)}
+/* +13 min: razred 5-15 min temne lestvice zamud (--d-mid) */
+.razlika{font:600 clamp(64px,19vw,150px)/.9 var(--mono);color:var(--d-mid);letter-spacing:-.04em;margin:14px 0 0;display:block}
+.razlika small{font-size:.32em;letter-spacing:0;color:var(--siva);font-weight:500}
+
+/* uvod */
+.uvod .kartica{--kv:52svh}
+.o-nas h1{font-size:clamp(72px,24vw,210px);line-height:.86;letter-spacing:-.055em;margin-left:-.04em}
+.uvod p{color:var(--siva)}
+.namig{display:flex;align-items:center;gap:10px;margin-top:26px;font:500 13px var(--mono);color:var(--tiha)}
+.namig i{width:1px;height:34px;background:linear-gradient(var(--bela),transparent);animation:namig 2.2s ease-in-out infinite}
+@keyframes namig{0%{transform:scaleY(0);transform-origin:top}45%{transform:scaleY(1);transform-origin:top}55%{transform:scaleY(1);transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+html:not(.js) .namig,.brez-3d .namig{display:none}
+
+/* legenda zamud */
+.legenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:16px;font:500 13px/1.2 var(--mono);color:var(--siva)}
+.legenda span{display:flex;align-items:center;gap:7px}
+.legenda i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+/* podpora */
+.gumb{display:inline-flex;align-items:center;gap:10px;margin-top:24px;padding:15px 24px;border-radius:999px;background:var(--oranzna);
+  color:#1a0f07;font-weight:600;font-size:17px;text-decoration:none;box-shadow:0 10px 30px -10px rgba(240,147,79,.6);transition:transform .2s,background .2s}
+.o-nas .gumb{color:#1a0f07}
+@media (hover: hover) { .gumb:hover { background: #f6a468; transform: translateY(-1px); } }
+.gumb svg{width:18px;height:18px}
+.tiho{display:inline-block;margin:14px 0 0 4px;font-size:14px;color:var(--tiha)}
+.kam{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:8px;max-width:32ch}
+.kam li{display:flex;gap:12px;color:var(--siva);font-size:16px}
+.kam b{font:600 13px/1.6 var(--mono);color:var(--oranzna);min-width:1.4em}
+
+/* oznake v prostoru */
+.oznaka3d{position:fixed;left:0;top:0;z-index:2;opacity:0;pointer-events:none;white-space:nowrap;
+  font:500 12px/1.25 var(--mono);color:var(--bela);will-change:transform,opacity}
+.oznaka3d span{display:block;transform:translate(-50%,-100%);padding:6px 9px 7px;border-radius:9px;
+  background:rgba(10,13,18,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12)}
+.oznaka3d em{font-style:normal;color:var(--tiha);margin-right:6px}
+.oznaka3d.oranzna b{color:var(--oranzna)}
+html:not(.js) .oznaka3d{display:none}
+.karta-oznake{position:fixed;inset:0;z-index:2;pointer-events:none;transition:opacity .3s}
+.karta-oznake .mesto{position:absolute;left:0;top:0;opacity:0;font:500 12px/1 var(--sans);color:rgba(244,242,237,.82);white-space:nowrap;
+  text-shadow:0 1px 6px rgba(0,0,0,.8);will-change:transform,opacity;padding-left:9px}
+.karta-oznake .mesto::before{content:"";position:absolute;left:0;top:50%;width:4px;height:4px;margin-top:-2px;border-radius:50%;background:currentColor}
+.karta-oznake .oznaka3d{position:absolute}
+
+/* za filmom: dejstva o strani, berljiva brez platna */
+.dodatek{position:relative;z-index:6;background:var(--crna);padding:72px var(--rob) calc(64px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.06)}
+.dodatek>div{max-width:68rem;margin:0 auto}
+.dodatek h2{font-size:clamp(24px,5vw,32px);line-height:1.15;margin:0 0 18px}
+.dodatek h3{margin:0 0 8px;font-size:16px;font-weight:600}
+.dodatek p{margin:16px 0 0;color:var(--siva);font-size:15px;max-width:62ch}
+.dodatek a{color:var(--bela)}
+.dejstva{margin:0;padding:0 0 0 1.1em;display:grid;gap:10px;color:var(--siva);font-size:16px;max-width:62ch}
+.dejstva b{color:var(--bela);font-weight:600}
+.stolpci{display:grid;gap:30px;margin-top:52px}
+.stolpci p{margin:0}
+
+@media (min-width:860px){
+  body.o-nas{--rob:clamp(28px,5vw,72px)}
+  .tancica{background:linear-gradient(to right,rgba(8,10,14,.78) 0%,rgba(8,10,14,.45) 34%,rgba(8,10,14,0) 60%),
+             radial-gradient(120% 90% at 60% 45%,rgba(0,0,0,0) 60%,rgba(0,0,0,.3) 100%)}
+  .js .kartica{top:50svh;transform:translateY(-50%)}
+  .kartica{padding-left:var(--rob)}
+  .js .kartica{--kv:0px}
+  .uvod .kartica{top:auto}
+  .js .uvod .kartica{position:absolute;bottom:12svh;top:auto;transform:none}
+  .stolpci{grid-template-columns:repeat(2,1fr);gap:34px 48px}
+  .hud-ura{top:auto;bottom:28px}
+}
+@media (prefers-reduced-motion:reduce){.namig i{animation:none}}
+/* brez JS ali brez WebGL: navadno branje */
+html:not(.js) .takt{padding:12vh 0}
+.brez-3d .takt{height:auto!important;padding:10vh 0}
+.brez-3d .kartica{position:static!important;opacity:1!important;transform:none!important}
+.brez-3d .uvod .kartica{position:static!important}
+html:not(.js) #oder,html:not(.js) .tancica{display:none}

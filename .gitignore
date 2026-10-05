@@ -29,3 +29,10 @@ android/.gradle/
 android/app/build/
 android/build/
 android/local.properties
+
+# Orodji za gradnjo strani /o-nas (three, esbuild), prenese ju o-nas/gradi.sh;
+# vhodi priprave podatkov za Pogl. 3 (izvoz s strežnika, višine, meja).
+o-nas/node_modules/
+o-nas/prep/dem/
+o-nas/prep/*.json.gz
+o-nas/prep/*.geojson

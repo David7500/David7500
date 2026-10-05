@@ -2,42 +2,200 @@
 <html lang="sl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   {% set og_title = "O nas — kajros" %}
   {% set og_desc = "Kajros beleži, koliko slovenski vlaki in avtobusi res zamujajo: zamude v živo, vozni red in zgodovina zamud za vlake SŽ, medkrajevne avtobuse in mestni LPP." %}
 {% include "_meta.html" %}
 {% from "_znak.html" import znak %}
 {% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
+  <meta name="theme-color" content="#0a0d12">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
-  <link rel="stylesheet" href="{{ s('home.css') }}">
-  <link rel="stylesheet" href="{{ s('besedilo.css') }}">
+  <link rel="stylesheet" href="{{ s('o_nas.css') }}">
+  {#- Razred `js` pred prvim izrisom: takti dobijo višino filma, preden se
+      naloži svet. Brez JS ostane navadna stran za branje. #}
+  <script>document.documentElement.classList.add('js')</script>
 </head>
-<body class="home-page">
+{#-
+  Zgodba v 3D: ime, dijak, ki je z vlakom zamujal v šolo, kaj kajros dela,
+  podpora. Vir sveta je v `o-nas/` (three.js, gradnja `o-nas/gradi.sh`),
+  pravila v `.claude/rules/strani.md`. Vsak takt nosi `data-t0`/`data-t1`:
+  čas filma od vstopa do izstopa. Ure v zgodbi so ponazoritev (vozni red
+  7.42, vlak 7.55), ne trditev o kateri progi.
+#}
+<body class="o-nas">
+<canvas id="oder" aria-hidden="true"
+  data-karta="{{ s('o-nas/karta.json') }}" data-podatki="{{ s('o-nas/karta-podatki.png') }}" data-relief="{{ s('o-nas/relief.png') }}"></canvas>
+<div class="tancica" aria-hidden="true"></div>
+<div class="prehod" aria-hidden="true"></div>
+<div class="zrno" aria-hidden="true"></div>
+<div class="nalaganje" aria-hidden="true"><i></i></div>
 
-  <main class="home besedilo">
-    <div class="home-vrh">
-      <a class="home-brand" href="/" style="text-decoration:none">
-        {{ znak() }}
-        <span>kajros</span>
-      </a>
-      {{ vec_gumb() }}
+<header class="vrh">
+  <a class="znamka" href="/">{{ znak() }}<span>kajros</span></a>
+  <nav class="poglavja" aria-label="Poglavja">
+    <a href="#ime" data-od="0"><span class="st">1</span><span class="ime">Ime</span></a>
+    <a href="#zgodba" data-od="54"><span class="st">2</span><span class="ime">Zgodba</span></a>
+    <a href="#dela" data-od="128"><span class="st">3</span><span class="ime">Kaj dela</span></a>
+    <a href="#podpri" data-od="206"><span class="st">4</span><span class="ime">{{ "Podpri" if donacije else "Kdo" }}</span></a>
+  </nav>
+  {{ vec_gumb() }}
+</header>
+<div class="hud-ura" aria-hidden="true"><span>ura v zgodbi</span><b>07.42</b></div>
+
+<main>
+  <section class="takt uvod" data-t0="0" data-t1="0" style="--h:100">
+    <div class="kartica">
+      <p class="oznaka">o nas</p>
+      <h1>kajros</h1>
+      <p>Stari Grki so imeli za čas dve besedi. Ena od njiju je dala ime tej strani.</p>
+      <div class="namig" aria-hidden="true"><i></i>Podrsaj</div>
     </div>
+  </section>
 
-    <h1>O nas</h1>
+  <section class="takt" id="ime" data-t0="0" data-t1="14" style="--h:140">
+    <div class="kartica">
+      <p class="oznaka">1 · ime</p>
+      <span class="grk" lang="el">χρόνος</span><span class="izg">kronos</span>
+      <p class="velik">Čas, ki ga kaže ura.</p>
+      <p>Teče enakomerno, sekundo za sekundo. Po njem je napisan vozni red: vlak odpelje ob 7.42.</p>
+    </div>
+  </section>
 
-    <p class="vodilo">
-      Kajros odgovarja na eno vprašanje: kdaj mi pelje in koliko zamuja.
-      Vsako vožnjo vlaka in avtobusa si zapomnimo, zato vemo tudi, koliko
-      ista vožnja zamuja običajno.
-    </p>
+  <section class="takt" data-t0="14" data-t1="26" style="--h:110">
+    <div class="kartica">
+      <p class="velik">Ob 7.42 je tir prazen.</p>
+      <p>Tabla začne šteti zamudo: pet minut, nato deset, nato trinajst.</p>
+    </div>
+  </section>
 
-    <h2>Kaj je tu</h2>
+  <section class="takt kairos" data-t0="26" data-t1="44" style="--h:150">
+    <div class="kartica">
+      <span class="grk" lang="el">καιρός</span><span class="izg">kairos</span>
+      <p class="velik">Pravi trenutek.</p>
+      <p>Ne tisti z voznega reda, ampak tisti, ko vlak res pripelje: ob 7.55.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="44" data-t1="54" style="--h:120">
+    <div class="kartica">
+      <h2>Kajros meri razliko med njima.</h2>
+      <span class="razlika">+13 <small>min</small></span>
+      <p>Med uro na voznem redu in uro, ko vlak res pripelje. Za vsak vlak in avtobus, vsak dan.</p>
+    </div>
+  </section>
+
+  <section class="takt" id="zgodba" data-t0="54" data-t1="66" style="--h:130">
+    <div class="kartica">
+      <p class="oznaka">2 · zgodba</p>
+      <h2>Kajros je naredil dijak, ki je z vlakom zamujal v šolo.</h2>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="66" data-t1="82" style="--h:130">
+    <div class="kartica">
+      <p class="velik">Vozni red je povedal, kdaj vlak odpelje.</p>
+      <p>Koliko bo zamujal, ni povedal nihče. In naslednji dan tega ni hranil nihče.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="82" data-t1="100" style="--h:140">
+    <div class="kartica">
+      <p class="velik">Pouk se začne ob osmih.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="100" data-t1="114" style="--h:120">
+    <div class="kartica">
+      <p class="velik">Zvonec zazvoni. Vlak je še na progi.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="114" data-t1="128" style="--h:130">
+    <div class="kartica">
+      <h2>Zato je začel zapisovati, kdaj vlaki res pripeljejo.</h2>
+      <p>Vsak dan. Vsak vlak.</p>
+    </div>
+  </section>
+
+  <section class="takt" id="dela" data-t0="128" data-t1="146" style="--h:140">
+    <div class="kartica">
+      <p class="oznaka">3 · kaj dela</p>
+      <h2>Danes zapisuje vlake in avtobuse po vsej Sloveniji.</h2>
+      <p>Vlake SŽ, medkrajevne avtobuse in mestni LPP. Vsakih 30 sekund, od avgusta 2026.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="146" data-t1="168" style="--h:160">
+    <div class="kartica">
+      <h2>Ena ura enega jutra.</h2>
+      <p>Četrtek, 1. 10. 2026, od 7. do 8. ure: 77 vlakov in 1 106 avtobusov z zapisano zamudo. Vsaka pika je eden od njih.</p>
+      <div class="legenda" aria-hidden="true">
+        <span><i style="background:var(--d-ontime)"></i>točno</span><span><i style="background:var(--d-small)"></i>1–5 min</span>
+        <span><i style="background:var(--d-mid)"></i>5–15 min</span><span><i style="background:var(--d-big)"></i>nad 15 min</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="168" data-t1="184" style="--h:130">
+    <div class="kartica">
+      <h2>Koliko vožnja običajno zamuja</h2>
+      <p>IC 351 iz Ljubljane v Maribor, 42 zapisanih dni: polovico dni je pripeljal do 6 minut pozno, sedem dni 11 minut ali več. Iz takih dni kajros oceni zamudo, še preden vlak odpelje.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="184" data-t1="196" style="--h:120">
+    <div class="kartica">
+      <h2>Kje je vozilo zdaj</h2>
+      <p>Zemljevid vozil v živo, ovire na progi in tir na postaji. Iskalnik povezav s prestopi in pot od vrat do vrat.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="196" data-t1="206" style="--h:110">
+    <div class="kartica">
+      <h2>Budilka, ki počaka zamudo</h2>
+      <p>V aplikaciji za Android. Če vlak zamuja, zazvoni pozneje.</p>
+    </div>
+  </section>
+
+  <section class="takt" id="podpri" data-t0="206" data-t1="220" style="--h:130">
+    <div class="kartica">
+      <p class="oznaka">4 · {{ "podpri" if donacije else "kdo" }}</p>
+      <h2>Kajros je brezplačen in brez oglasov.</h2>
+      <p>Razvija ga dijak, v prostem času. Strežnik zapisuje dan in noč.</p>
+    </div>
+  </section>
+
+  <section class="takt" data-t0="220" data-t1="240" style="--h:150">
+    <div class="kartica">
+      {%- if donacije %}
+      <h2>Podpri kajros</h2>
+      <p>Večina prispevkov gre v razvoj:</p>
+      <ul class="kam">
+        <li><b>01</b>aplikacija za Android v Googlu Play</li>
+        <li><b>02</b>boljši strežnik</li>
+      </ul>
+      <a class="gumb" href="/donacije">Podpri kajros
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <br><span class="tiho">Hvala.</span>
+      {%- else %}
+      <h2>Hvala, ker ga uporabljaš.</h2>
+      {%- if obrazec %}
+      <p>Če kaj ne dela, <a href="/stik">nam piši</a>.</p>
+      {%- endif %}
+      {%- endif %}
+    </div>
+  </section>
+</main>
+
+<section class="dodatek" aria-labelledby="kaj-je-tu">
+  <div>
+    <h2 id="kaj-je-tu">Kaj je tu</h2>
     {#- Kratka dejstva, ki jih lahko navede iskalnik ali AI, ko ga kdo vpraša
         po strani za zamude (29. 9. 2026: Grok kajrosa ni poznal). Vsako mora
         biti res -- ob spremembi strani popravi tudi tu. #}
-    <ul>
+    <ul class="dejstva">
       <li><b>Vlaki SŽ, medkrajevni avtobusi</b> (Arriva, Nomago, AP Murska
         Sobota, primestni LPP) <b>in mestni avtobusi LPP</b> na enem mestu, z zamudo v živo.</li>
       <li><b>Iskalnik povezav</b> s prestopi in <b>pot od vrat do vrat</b>, ki
@@ -51,49 +209,36 @@
       <li><a href="/android">Aplikacija za Android</a> z <b>budilko, ki se
         premakne z zamudo</b>.</li>
     </ul>
-    <p>Katere druge strani so še in v čem so dobre: <a href="/primerjava">kje
-      preveriti zamudo</a>.</p>
+    <p>Katere druge strani so še in v čem so dobre: <a href="/primerjava">kje preveriti zamudo</a>.</p>
 
-    <h2>Zakaj</h2>
-    <p>
-      Vozni red pove, kdaj bi vlak moral priti. Kdaj res pride, se ve samo ta
-      hip — in naslednji dan tega ne hrani nihče. Če zamud ne zapišemo sami,
-      jih ni nikjer. Iz teh zapisov nastane ocena zamude, preden vlak
-      odpelje.
-    </p>
-
-    <h2>Ime</h2>
-    <p>
-      Stari Grki so imeli za čas dve besedi. <b>Kronos</b> je čas na uri —
-      vozni red. <b>Kairos</b> je pravi trenutek — ko vlak res pripelje.
-      Razlika med njima je ta stran.
-    </p>
-
-    <h2>Od kod so podatki</h2>
-    <p>
-      Vozni redi in zamude so odprti podatki javnega potniškega prometa (IJPP),
-      objavljeni na <a href="https://b2b.nap.si/">NAP</a> pod licenco
-      CC BY-SA 4.0; v obliko, ki jo beremo, jih pretvori DERP. Mestni promet
-      LPP pride iz odprtih virov LPP, vreme iz
-      <a href="https://open-meteo.com/">Open-Meteo</a>.
-    </p>
-    <p>
-      Zamuda je taka, kot jo sporoči prevoznik. Za postaje, do katerih vozilo
-      še ni prišlo, je to <b>ocena</b>, ne meritev — in stran to vedno napiše.
-    </p>
-
-    <h2>Česa tu ni</h2>
-    <p>
-      Cen vozovnic, sestave vlaka in zasedenosti. Teh podatkov med odprtimi
-      podatki ni, zato jih tudi mi ne moremo pokazati.
-    </p>
-
-    <h2>Kdo smo</h2>
-    <p>
-      Kajros je osebni projekt ene osebe. Ni stran Slovenskih železnic,
-      Arrive, LPP ali katerega drugega prevoznika in z njimi ni povezan.
-      Kar piše na postaji ali v vlaku, ima prednost.
-    </p>
+    <div class="stolpci">
+      <div>
+        <h3>Od kod so podatki</h3>
+        <p>Vozni redi in zamude so odprti podatki javnega potniškega prometa
+          (IJPP), objavljeni na <a href="https://b2b.nap.si/">NAP</a> pod
+          licenco CC BY-SA 4.0; v obliko, ki jo beremo, jih pretvori DERP.
+          Mestni promet LPP pride iz odprtih virov LPP, vreme iz
+          <a href="https://open-meteo.com/">Open-Meteo</a>. Relief na tej
+          strani: Terrain Tiles (Mapzen, AWS), meja države: Natural Earth.</p>
+      </div>
+      <div>
+        <h3>Koliko jim verjeti</h3>
+        <p>Zamuda je taka, kot jo sporoči prevoznik. Za postaje, do katerih
+          vozilo še ni prišlo, je to <b>ocena</b>, ne meritev, in stran to
+          vedno napiše.</p>
+      </div>
+      <div>
+        <h3>Česa tu ni</h3>
+        <p>Cen vozovnic, sestave vlaka in zasedenosti. Teh podatkov med
+          odprtimi podatki ni, zato jih tudi mi ne moremo pokazati.</p>
+      </div>
+      <div>
+        <h3>Kajros ni prevoznik</h3>
+        <p>Ni stran Slovenskih železnic, Arrive, Nomaga, LPP ali drugega
+          prevoznika in z njimi ni povezan. Kar piše na postaji ali v vlaku,
+          ima prednost.</p>
+      </div>
+    </div>
     <p>
       Brez oglasov in brez računa.
       <a href="/zasebnost">Česa o tebi ne hranimo</a>.
@@ -102,9 +247,16 @@
       {%- elif stik %} Če kaj ne dela ali te kaj zanima, piši na
       <a href="mailto:{{ stik }}">{{ stik }}</a>.{% endif %}
     </p>
+  </div>
+</section>
 
-  </main>
+{#- Oznake ob predmetih v svetu (lega v metrih, čas filma od-do). #}
+<div class="oznaka3d" data-p="-38.5,5.3,0.3" data-t0="40.5" data-t1="49" aria-hidden="true"><span><em>SŽ 313</em><b>Stadler KISS</b></span></div>
+<div class="oznaka3d" data-p="5.2,4.35,4.3" data-t0="44.5" data-t1="54" aria-hidden="true"><span><em>kronos</em><b>07.42</b></span></div>
+<div class="oznaka3d oranzna" data-p="0,2.62,3.05" data-t0="45.5" data-t1="54" aria-hidden="true"><span><em>kairos</em><b>07.55</b></span></div>
+<div class="oznaka3d" data-p="-3290,21,62" data-t0="101" data-t1="113" aria-hidden="true"><span><em>šola</em><b>08.00</b></span></div>
 
-  {{ vec_list() }}
+<script src="{{ s('o-nas/o3.js') }}" defer></script>
+{{ vec_list() }}
 </body>
 </html>

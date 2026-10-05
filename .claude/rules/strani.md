@@ -11,6 +11,8 @@ paths:
   - "kajros/static/home.js"
   - "kajros/static/home.css"
   - "kajros/templates/**"
+  - "kajros/static/o_nas.css"
+  - "o-nas/**"
 ---
 # Strani in kaj je na njih
 
@@ -258,6 +260,17 @@ Zato povezava vodi na trgovino in **to tudi piše** („relacijo vpišeš tam“
 ## `/primerjava`: druge strani po njihovih besedah
 
 Nastala 29. 9. 2026, ker AI na vprašanje „najboljša stran za zamude“ odgovori iz strani, ki primerjajo. **Pošteno ali nič**: o drugih samo to, kar povedo same (naslov, opis, stran „o projektu“, zemljevid strani), z datumom pregleda na strani; nič „samo pri nas“, česar ni mogoče dokazati; uradna stran SŽ prva, ker ima prednost. Lažne ocene in skrito besedilo za AI so zavrnjeni — v EU prepovedani (direktiva 2019/2161), in skupnost je majhna. Ob spremembi pri drugih se popravi besedilo in datum. Isto velja za `Kaj je tu` na `/o-nas`: vsaka alineja mora biti res.
+
+## `/o-nas` je zgodba v 3D, edina besedilna stran z JS (5. 10. 2026)
+
+Izbral David: stran naj bo „povezana čez celo drsenje“, ne 3D slike, in je edina, ki sme biti razkošna; ostale ostanejo čiste. En svet in ena kamera v three.js, drsenje premika čas filma. Vir v `o-nas/` (README tam), sveženj `static/o-nas/o3.js` 733 kB (gzip 201 kB) in podatki Pogl. 3 0,94 MB.
+
+* **Besedilo je v predlogi, ne v JS.** Iskalnik, agent (`Accept: text/markdown`) in brskalnik brez WebGL dobijo vso zgodbo in `Kaj je tu`; `.brez-3d` in `html:not(.js)` naredita iz taktov navadno stran. Oznake v prostoru so `aria-hidden`, zato jih Markdown izpusti.
+* **three.js samo tu.** Za zemljevide ostane zavrnjen (`zemljevid.md`: za nekaj škatel ni vreden 172 kB), tu je ves prizor 3D. V `requirements.txt` ni nič novega: `o-nas/gradi.sh` prenese pripeta three in esbuild (preverjena po sha512), sveženj je v gitu, strežnik ničesar ne gradi.
+* **Podatki Pogl. 3 so posnetek 1. 10. 2026**, ne živi. Številke v besedilu (77 vlakov, 1 106 avtobusov, IC 351 v 42 dneh) so iz istega izvoza; ob novem izvozu popravi oboje. Nalagajo se vzporedno z gradnjo sveta, prvi kader jih ne čaka.
+* **Zgodba:** o avtorju samo „dijak“ (brez proge, kraja, šole in imena). Ure so ponazoritev (vozni red 7.42, vlak 7.55, +13 min). Vlak je SŽ 313 (Stadler KISS), modeliran po fotografijah; dijak ima postavo „močan“, izbrano med tremi.
+* **Kar je bilo prijavljeno, da se ne vrne:** žice kot `LINES` so bile pod nadomestno meglo bele in so utripale → trak s pokritostjo; trak sijaja 1 mm nad tirnico je v daljavi migljal → sijaj v senčilniku, tirnice in pragovi z zamikom globine po plasteh; sekundni kazalec je ob drsenju skočil nazaj → švicarska podrejena ura z minutnim impulzom iz drsenja (`uraKorak`); kamera je med dvema ključema zanihala pod peron → tangente zlepka omejene (Fritsch–Carlson v `zlepek`); naslovi so bili ob svetlem slogu gostitelja temni → barve na `body.o-nas`.
+* Pred objavo spremembe poglej posnetke telefona in namizja z `o-nas/posnetek.py` (čas filma `T=`, lastna kamera `P=`); `preveri.sh` vidi le, da stran naloži brez napake.
 
 ## Besedilne strani govorijo potniku, ne razvijalcu
 

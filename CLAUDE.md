@@ -92,6 +92,7 @@ kajros/
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
 scripts/         dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
 android/         nativni ovoj z WebView (Kotlin); orodja ločeno v ~/kajros-android
+o-nas/           vir 3D strani /o-nas (three.js); gradi.sh → static/o-nas/o3.js
 ```
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
@@ -130,7 +131,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 | `/postaje` · `/postajalisca` | kazalo obojega — edina pot do pristajalnih strani, ki ni zemljevid strani |
 | `/stik` | obrazec za sporočilo; nabiralnik v `/admin` |
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
-| `/o-nas` | kaj je kajros, od kod podatki, da ni prevoznikova stran |
+| `/o-nas` | zgodba v 3D (ime, dijak, kaj dela, podpora), kaj je tu, od kod podatki; edina besedilna stran z JS (vir `o-nas/`) |
 | `/primerjava` | kje preveriti zamudo: druge strani po njihovih besedah, z datumom pregleda |
 | `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu, obvestila potnikom |
