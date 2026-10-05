@@ -489,30 +489,18 @@ def for_trains(conn: sqlite3.Connection, train_nos: list[str],
 def live_delays(conn: sqlite3.Connection, service_date: str | None = None) -> list[dict]:
     """Zadnje poročilo o zamudi za vsak vlak na dani dan.
 
-    To je merodajna vrednost prevoznika, vključno s prometnim mestom -- naša
-    `run` tabela pozna samo voznoredne postanke in tega imena nima.
+    Postaja v poročilu je naslednji postanek, zamuda napoved prihoda tja --
+    ne kraj, kjer je vlak (`docs/MERITVE.md`, 5. 10. 2026). Lege zato ne nosi:
+    do 5. 10. 2026 jo je dobila iz postaje istega imena in zemljevid je vlak
+    risal tja, kamor je šele peljal.
     """
     service_date = service_date or datetime.now(TZ).date().isoformat()
-    # Prometno mesto pripnemo koordinati, kadar ga poznamo kot postajo; tam
-    # je to točnejša lega vlaka od naše "zadnje prevožene postaje z meritvijo".
-    # Samo ŽELEZNIŠKA postaja istega imena: avtobusi prinesejo postajališča z
-    # enakimi imeni, in iskanje samo po imenu je LPV 1897 narisalo na Celovško
-    # cesto -- na avtobusno postajališče "Ljubljana Tivoli", 1,1 km od postaje
-    # (4. 10. 2026). Od 264 zajetih prometnih mest ima 261 železniško postajo,
-    # 127 od teh se ujame tudi s postajališčem: mediana 480 m, Stranje 74 km.
-    # En stop_id na ime: Solkan ima dva, in JOIN bi vlak podvojil.
     rows = conn.execute(
         "WITH last AS ("
         "  SELECT *, ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY seen_ts DESC) rn"
         "  FROM delay_report WHERE service_date = ?"
         ") "
-        "SELECT last.*, st.lat AS station_lat, st.lon AS station_lon "
-        "FROM last LEFT JOIN station st ON st.stop_id = ("
-        "  SELECT p.stop_id FROM station p WHERE p.name = last.station AND EXISTS ("
-        "    SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id"
-        "    WHERE s.stop_id = p.stop_id AND t.network = 'zeleznica')"
-        "  ORDER BY p.stop_id LIMIT 1) "
-        "WHERE rn = 1 ORDER BY delay_min DESC",
+        "SELECT * FROM last WHERE rn = 1 ORDER BY delay_min DESC",
         (service_date,),
     )
     return [{k: r[k] for k in r.keys() if k != "rn"} for r in rows]

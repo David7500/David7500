@@ -2331,3 +2331,27 @@ Kjer visi opozorilo, številka dobi še „lahko do“: ocena + `zapore.dodatek`
 `seen_ts` je čas našega branja (korak 60 s), torej je SŽ objavila kvečjemu še prej. Primera: EN 414 4. 10. „Kranj +18“ ob 22:21:04, ko je ravno odpeljal iz Ljubljane (odhod 22:10 + 11); LPV 2427 4. 10. postaja v poročilu zamenjana vsakič ob odhodu s prejšnje (Kranj 21:22 → Škofja Loka 21:34 → Reteče 21:42).
 
 Posledica: zemljevid (`trainPlace`) je vlak risal na postaji, ki je še ni dosegel; ob 21:30 EN 414 v Ljubljani, izmerjen v Zidanem Mostu. Hkrati `api._live` včerajšnjih poročil ni ločil od današnjih: ob 21:33 **4 od 22** živih vlakov s poročilom, starim 22–24 h (LPV 2427, LP 4220, EC 79, LP 3224).
+
+### Kam torej narisati vlak (5. 10. 2026)
+
+Isti podatki, tri pravila proti „resnici“ = zadnji postanek, na katerega je vlak po **končnih** zamudah (`run`) že pripeljal. A = isto po zamudah, ki jih je feed poznal ob tistem trenutku (`obs`); X = postaja iz poročila (pravilo zemljevida do 5. 10.); C = A, a največ do postanka pred X (vlak na X še ni).
+
+Ob trenutkih objave (25 607 poročil):
+
+| pravilo | točno | spredaj | zadaj | povpr. napaka |
+|---|---|---|---|---|
+| A zadnja meritev | 79,8 % | 19,9 % | 0,3 % | 0,42 postanka |
+| B vsaj postanek pred X | 79,1 % | 20,8 % | 0,1 % | 0,42 |
+| X (staro) | **1,9 %** | 97,7 % | 0,4 % | 1,04 |
+| C največ pred X | 94,3 % | 3,2 % | 2,5 % | 0,09 |
+
+Čez celo vožnjo, vzorec na 2 min (64 123 trenutkov), C samo, kadar je poročilo mlajše od L:
+
+| pravilo | točno | spredaj | zadaj | povpr. napaka |
+|---|---|---|---|---|
+| A | 85,7 % | 13,1 % | 1,2 % | 0,35 |
+| C brez meje | 78,1 % | 2,0 % | 20,0 % | 0,47 |
+| C, L = 15 min | 83,7 % | 2,3 % | 14,0 % | 0,24 |
+| C, L = 8 min | 85,5 % | 2,7 % | 11,8 % | 0,21 |
+
+Zemljevid zato zdaj riše po A (zadnja meritev, isto kot okno vožnje). C, L = 8 min napako „vlak je tu že bil“ (spredaj) zniža s 13,1 % na 2,7 % ob enaki točnosti, a premakne mejo meritve -- to bi moralo veljati v `stats.last_measured()` za vse zaslone hkrati, ne samo na zemljevidu. Odprto. Brez starostne meje je C slabši od A: med postankom na X poročilo še vedno pravi „proti X“. „Resnica“ je zadnja beseda feeda o postanku, ne opažanje (pri vlakih potrjena v 0,4 %, glej „Prehoda vlaka …“) -- isto merilo kot senca.

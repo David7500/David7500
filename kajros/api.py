@@ -2544,27 +2544,12 @@ def _live(network: str | None = None) -> list[dict]:
         if last_s is not None and now_s + 86400 <= last_s + MAX_LIVE_DELAY_S + _LIVE_GRACE_S:
             rows += _live_rows(conn, yesterday, now_s + 86400, network,
                                overnight_only=True)
-        # Prevoznikovo porocilo je merodajno in edino pozna prometno mesto:
-        # nasa `run` pozna samo voznoredne postanke, zamuda pa se meri tudi
-        # tam, kjer vlak ne ustavlja.
         # Tudi vcerajsnji prometni dan: nocni vlak po polnoci se vedno vozi
         # pod vcerajsnjim datumom, enako kot vrstice zgoraj.
-        reported = {r["train_no"]: r for r in alerts.live_delays(conn, yesterday)}
-        reported.update({r["train_no"]: r for r in alerts.live_delays(conn, today)})
+        porocila = alerts.live_delays(conn, yesterday) + alerts.live_delays(conn, today)
     now_ts = int(now.timestamp())
+    _dodaj_porocila(rows, porocila, now_ts)
     for r in rows:
-        rep = reported.get(r["train_no"])
-        if rep:
-            r["reported_delay_s"] = rep["delay_min"] * 60
-            r["reported_at_station"] = rep["station"]
-            r["reported_severe"] = bool(rep["severe"])
-            r["reported_age_s"] = now_ts - rep["seen_ts"]
-            # Lega, kadar prometno mesto poznamo kot postajo. Zemljevid jo ima
-            # raje od nase: nasa je zadnji voznoredni postanek z meritvijo,
-            # prevoznikova pa kraj, kjer je bila zamuda dejansko izmerjena.
-            if rep["station_lat"] is not None:
-                r["reported_lat"] = rep["station_lat"]
-                r["reported_lon"] = rep["station_lon"]
         # Koliko je stara meritev, na katero se sklicujemo. Brez tega prikaz
         # ob polnoci se vedno trdi "+20 min", ceprav je bilo to izmerjeno ob 17h.
         r["age_s"] = now_ts - r["feed_ts"] if r.get("feed_ts") else None
@@ -2577,6 +2562,33 @@ def _live(network: str | None = None) -> list[dict]:
     for r in rows:
         r["zamuda"] = stats.opis_zamude(r["delay_s"], "izmerjeno")
     return rows
+
+
+def _dodaj_porocila(rows: list[dict], porocila: list[dict], now_ts: int) -> None:
+    """Vožnjam pripiše zadnje poročilo prevoznika istega prometnega dne.
+
+    Poročilo `SZ-DELAY` pove zamudo ob prihodu na NASLEDNJI postanek, ne kraja
+    vlaka: od 26 711 poročil jih je 92 % zajetih pred prihodom na imenovano
+    postajo, 96 % po odhodu s prejšnje (`docs/MERITVE.md`, 5. 10. 2026). Zato
+    je napoved in nosi samo ime postaje, ne lege -- zemljevid je vlak risal
+    tja, kamor je šele peljal (EN 414 v Ljubljani, izmerjen v Zidanem Mostu).
+
+    Ključ je tudi prometni dan. Samo po številki je vlak, ki danes poročila še
+    ni dobil (pod 5 min zamude ga ne dobi -- najmanjša v 101 137 poročilih je
+    5), ves dan nosil včerajšnje: 5. 10. 2026 ob 21:33 štirje od 22 živih
+    vlakov, LPV 2427 v Ljubljani z +11 namesto v Kranju s +4.
+    Poročilo, starejše od naše meritve, ne pove nič novega -- postaja, za
+    katero je napovedovalo, je lahko že prevožena.
+    """
+    po_dnevu = {(p["train_no"], p["service_date"]): p for p in porocila}
+    for r in rows:
+        rep = po_dnevu.get((r["train_no"], r["service_date"]))
+        if not rep or rep["seen_ts"] <= (r.get("feed_ts") or 0):
+            continue
+        r["reported_delay_s"] = rep["delay_min"] * 60
+        r["reported_at_station"] = rep["station"]
+        r["reported_severe"] = bool(rep["severe"])
+        r["reported_age_s"] = now_ts - rep["seen_ts"]
 
 
 def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:

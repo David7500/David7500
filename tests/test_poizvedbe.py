@@ -1800,34 +1800,56 @@ def test_obvestila_lpp_se_zdruzijo_po_besedilu(conn):
     assert alerts.for_stops(conn, ["S1"]) == []
 
 
-def test_prometno_mesto_dobi_lego_zelezniske_postaje(conn):
-    """Prevoznikovo poročilo nosi samo ime; avtobusno postajališče istega
-    imena ni kraj, kjer je vlak.
-
-    4. 10. 2026 je LPV 1897 s poročilom „Ljubljana Tivoli" stal na Celovški
-    cesti -- na avtobusnem postajališču, 1,1 km od postaje. Od 264 zajetih
-    prometnih mest se jih 127 ujame tudi s postajališčem.
-    """
+def test_porocila_dneva_zadnje_na_voznjo(conn):
     from kajros import alerts
 
-    # `BC` se uredi pred `C`: brez pogoja omrežja bi ga izbral prvega.
-    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
-                 "VALUES('BC', 'Celje', 46.21, 15.31), ('BL', 'Lavrica', 46.0, 14.56)")
-    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
-                 "                 mode, agency, network) "
-                 "VALUES('a1','ra','A 1','Celje - Lavrica','S1','bus','1118','avtobus')")
-    _sched(conn, "a1", [(1, "BC", None, 30000), (2, "BL", 33000, None)])
     conn.executemany(
         "INSERT INTO delay_report(trip_id, service_date, seen_ts, train_no,"
         "                         delay_min, station) VALUES(?,?,?,?,?,?)",
         [("t1", "2026-08-31", 100, "IC 1", 5, "Celje"),
-         # Ime, ki ga pozna le avtobus: vlak ostane brez lege iz poročila.
-         ("t2", "2026-08-31", 100, "LP 2", 3, "Lavrica")])
+         ("t1", "2026-08-31", 200, "IC 1", 7, "Laško"),
+         ("t1", "2026-08-30", 300, "IC 1", 9, "Zidani Most")])
     conn.commit()
+    assert [(r["train_no"], r["station"], r["delay_min"])
+            for r in alerts.live_delays(conn, "2026-08-31")] == [("IC 1", "Laško", 7)]
 
-    lege = {r["train_no"]: (r["station_lat"], r["station_lon"])
-            for r in alerts.live_delays(conn, "2026-08-31")}
-    assert lege == {"IC 1": (46.2, 15.3), "LP 2": (None, None)}
+
+def test_porocilo_velja_samo_za_svoj_prometni_dan():
+    """Vlak brez današnjega poročila ne sme nositi včerajšnjega.
+
+    5. 10. 2026 ob 21:33 štirje od 22 živih vlakov: LPV 2427, danes v Kranju
+    s +4, je na zemljevidu stal v Ljubljani z +11 iz poročila izpred 23,6 h.
+    Nočni vlak po polnoči vozi pod včerajšnjim dnem in svoje obdrži.
+    """
+    from kajros import api
+
+    danes = {"train_no": "LPV 2427", "service_date": "2026-10-05", "feed_ts": None}
+    nocni = {"train_no": "EN 414", "service_date": "2026-10-04", "feed_ts": None}
+    porocila = [
+        {"train_no": "LPV 2427", "service_date": "2026-10-04", "seen_ts": 900,
+         "delay_min": 11, "station": "Ljubljana", "severe": 0},
+        {"train_no": "EN 414", "service_date": "2026-10-04", "seen_ts": 2000,
+         "delay_min": 15, "station": "Jesenice", "severe": 1},
+    ]
+    api._dodaj_porocila([danes, nocni], porocila, now_ts=2060)
+    assert "reported_delay_s" not in danes
+    assert (nocni["reported_at_station"], nocni["reported_delay_s"],
+            nocni["reported_severe"], nocni["reported_age_s"]) == ("Jesenice", 900, True, 60)
+    # Lege iz poročila ni: postaja v njem je tista, KAMOR vlak pelje.
+    assert "reported_lat" not in nocni
+
+
+def test_porocilo_starejse_od_meritve_ne_velja():
+    """Postaja, za katero je poročilo napovedovalo, je lahko že prevožena."""
+    from kajros import api
+
+    vlak = {"train_no": "MV 480", "service_date": "2026-10-05", "feed_ts": 5000}
+    staro = {"train_no": "MV 480", "service_date": "2026-10-05", "seen_ts": 4000,
+             "delay_min": 14, "station": "Borovnica", "severe": 0}
+    api._dodaj_porocila([vlak], [staro], now_ts=6000)
+    assert "reported_delay_s" not in vlak
+    api._dodaj_porocila([vlak], [{**staro, "seen_ts": 5500}], now_ts=6000)
+    assert (vlak["reported_at_station"], vlak["reported_age_s"]) == ("Borovnica", 500)
 
 
 def test_izhodisce_dobi_obicajno_zamudo_naslednje_postaje():

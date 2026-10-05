@@ -433,33 +433,20 @@ function kosiVCrto(kosi, lastnosti) {
 function worstDelay(trains) {
   // null (brez meritve) se ne sme obnašati kot 0 -- zato -Infinity kot izhodišče.
   return trains.reduce((acc, t) => {
-    const v = bestDelay(t).value;
+    const v = t.delay_s;
     return v != null && v > acc ? v : acc;
   }, -Infinity);
 }
 
-// Kraj in zamuda morata biti iz istega vira. Prevoznikovo poročilo pozna
-// prometno mesto in je običajno svežje; naša `run` pozna samo voznoredne
-// postanke. Kadar imamo oboje, vzamemo prevoznikovo -- a nikoli pol enega
-// in pol drugega, sicer piše "Dobova" ob zamudi, izmerjeni v Sevnici.
-function bestDelay(t) {
-  if (t.reported_lat != null) {
-    return {
-      value: t.reported_delay_s, where: t.reported_at_station,
-      ageS: t.reported_age_s, fromOperator: true,
-    };
-  }
-  return { value: t.delay_s, where: t.last_stop, ageS: t.age_s, fromOperator: false };
-}
-
 // Kje narisati vlak: kjer ga vidita potnika na njem, sicer na postaji, kjer
-// po voznem redu in zamudi ta hip stoji, sicer na postaji, ki jo je sporočil
-// prevoznik, sicer na zadnji postaji z meritvijo. Potnikova lega je edina
-// prava lega vlaka, ki jo imamo (`deljenje.py`), a samo, kadar se ujemata
-// vsaj dva: en sam je lahko že izstopil in čaka na peronu, vlak pa bi stal
-// tam z njim (odločil David, 1. 10. 2026; isto pravilo ima okno vožnje).
-// Postanek je sklep (`api._na_postaji`), a boljši od prejšnje postaje, na
-// kateri je vlak prej obstal ves postanek.
+// po voznem redu in zamudi ta hip stoji, sicer na zadnji postaji z meritvijo.
+// Potnikova lega je edina prava lega vlaka, ki jo imamo (`deljenje.py`), a
+// samo, kadar se ujemata vsaj dva: en sam je lahko že izstopil in čaka na
+// peronu, vlak pa bi stal tam z njim (odločil David, 1. 10. 2026; isto
+// pravilo ima okno vožnje). Postanek je sklep (`api._na_postaji`), a boljši
+// od prejšnje postaje, na kateri je vlak prej obstal ves postanek.
+// Postaje iz prevoznikovega poročila tu ni: to je postaja, KAMOR vlak pelje
+// (`api._dodaj_porocila`), do 5. 10. 2026 je stal tam pred prihodom.
 const naPotnikovi = (t) => !!(t.potnik && t.potnik.soglasje && t.potnik.lat != null);
 
 function trainPlace(t) {
@@ -470,10 +457,6 @@ function trainPlace(t) {
   if (t.na_postaji) {
     return { key: `stoji:${t.na_postaji.ime}`, name: t.na_postaji.ime,
              station: { lat: t.na_postaji.lat, lon: t.na_postaji.lon } };
-  }
-  if (t.reported_lat != null) {
-    return { key: t.reported_at_station, name: t.reported_at_station,
-             station: { lat: t.reported_lat, lon: t.reported_lon } };
   }
   return { key: t.last_stop, name: t.last_stop, station: stationsByName.get(t.last_stop) };
 }
@@ -494,7 +477,7 @@ function groupByStation(trains) {
     g.trains.push(t);
   }
   for (const g of groups.values()) {
-    g.trains.sort((a, b) => (bestDelay(b).value ?? -1) - (bestDelay(a).value ?? -1));
+    g.trains.sort((a, b) => (b.delay_s ?? -1) - (a.delay_s ?? -1));
   }
   return groups;
 }
@@ -586,7 +569,6 @@ function tripHref(trainNo, tripId, serviceDate, network) {
 }
 
 function trainCardHtml(t) {
-  const d = bestDelay(t);
   const p = t.potnik;
   // Z enim poročevalcem sta feed in potnik vsak v svoji vrstici; potnikova
   // lega je lahko pol postaje naprej od zadnje meritve.
@@ -599,11 +581,19 @@ function trainCardHtml(t) {
   return vehCardHtml({
     no: t.train_no, badge: modeBadgeHtml(t.mode), headsign: t.headsign, trip: t.trip_id,
     href: tripHref(t.train_no, t.trip_id, t.service_date, "zeleznica"),
+    // Kraj, zamuda in ura iz naše meritve; prevoznikovo poročilo je napoved
+    // za postajo pred vlakom, zato svoja vrstica z imenom postaje in uro.
+    // Prej je bila zamuda iz poročila, ura pa iz meritve -- „Borovnica,
+    // poročal prevoznik ob 20:58“, ob 20:58 pa je bil vlak v Postojni.
     rows: [
-      ["zamuda", delayText(d.value), delayColor(d.value)],
-      ["zadnja meritev", escapeHtml(d.where || "—")],
-      [d.fromOperator ? "poročal prevoznik" : "izmerjeno",
-       t.measured_at ? `ob ${hhmm(t.measured_at)}` : "—"],
+      ["zamuda", delayText(t.delay_s), delayColor(t.delay_s)],
+      ["zadnja meritev", escapeHtml(t.last_stop || "—")],
+      ["izmerjeno", t.measured_at ? `ob ${hhmm(t.measured_at)}` : "—"],
+      ...(t.reported_at_station ? [[
+        "napoved prevoznika",
+        `→ ${escapeHtml(t.reported_at_station)} · <span style="color:${delayColor(t.reported_delay_s)}">${
+          escapeHtml(delayText(t.reported_delay_s))}</span> · ob ${
+          hhmm(Date.now() - t.reported_age_s * 1000)}`]] : []),
       ...potnik,
     ],
   });
@@ -1674,10 +1664,10 @@ function findRowHtml(m) {
     </button>`;
   }
   const v = m.v;
-  const delay = m.kind === "bus" ? v.delay_s : bestDelay(v).value;
+  const delay = v.delay_s;
   const kje = m.kind === "bus"
     ? (v.last_stop ? `pri ${v.last_stop}` : "GPS lega")
-    : bestDelay(v).where;
+    : v.last_stop;
   return `<button type="button" class="find-row" data-key="${escapeHtml(m.key)}">
       <span class="find-kind find-kind-${m.kind}"></span>
       <span class="find-no">${escapeHtml(agencyPrefix(v))}${escapeHtml(v.train_no)}</span>

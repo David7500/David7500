@@ -292,8 +292,8 @@ function runHeadHtml(cur) {
   // pisavi na strani: stavek pod njim ze pove, da se voznja ni zacela.
   const tiho = !cur && !soglasje && jeTvoj;
 
-  // Prevoznikovo porocilo pozna prometno mesto, ki ga nas vozni red nima --
-  // zamuda se meri tudi tam, kjer vlak ne ustavlja.
+  // Prevoznikovo porocilo: zamuda ob prihodu na postajo PRED vlakom, torej
+  // napoved, ne kraj meritve (`api._dodaj_porocila`) -- zato z besedami SZ.
   const rep = state.report;
 
   return `
@@ -944,8 +944,8 @@ async function loadChain() {
 }
 
 async function loadReport() {
-  // Zadnje porocilo prevoznika o tej voznji: koliko in KJE. Prometno mesto
-  // pogosto ni voznoredni postanek, zato ga iz `run` ni mogoce dobiti.
+  // Zadnje porocilo prevoznika o tej voznji: koliko bo zamujal ob prihodu na
+  // naslednje prometno mesto, ki pogosto ni voznoredni postanek.
   try {
     const r = await fetch(`/api/train/${ENC}/reports${DATE_Q}`).then((x) => (x.ok ? x.json() : null));
     const list = (r && r.reports) || [];
