@@ -4,6 +4,7 @@ paths:
   - "kajros/backtest.py"
   - "kajros/journey.py"
   - "kajros/ocena.py"
+  - "kajros/zapore.py"
 ---
 # Napoved zamude, zveze in prestopi
 
@@ -30,6 +31,15 @@ Vsak nov model se najprej pomeri s **prenosom trenutne zamude naprej** (`kajros 
 
   Zakaj se to sploh zgodi: feed SŽ postanke pred vlakom **odšteva po uri** s staro zamudo (Sava, Litija, Kresnice +19 ob 08:11, 08:20, 08:27), dokler ne pride prava beseda za postanek nazaj (Sava +37 ob 08:34). Novejša višja vrednost na prejšnji postaji je zato pogosto edina resnica.
 * **Zamude naprej po progi = napoved, ne meritev** — in **izmerjeno slaba**. Feed za nedosežene postanke pogosto objavi 0, dokler nima prave vrednosti. Merjeno (`kajros backtest --operator`, 11 310 nalog): prevoznikova napoved MAE 7,9 min, 58 % v petih minutah; prenos trenutne zamude MAE 1,3 min, 94 %. Najhujši rez — feed 0, vlak zamuja ≥ 5 min: napaka 18,5 min, 6 % napovedi v petih minutah. **Zato prikaz naprej po progi uporablja lastno oceno, ne feedove vrednosti**; prevoznikova številka ostane vidna v naprednem pogledu.
+
+## Zapora tira in vlak pred njim: opozorilo, ne napoved (`zapore.py`, 5. 10. 2026)
+
+Ob zapori enega tira vlak na odseku izgubi ≥ 5 min pri 16 % prehodov (brez zapore 4 %), za vlakom, ki je tam v zadnji uri izgubil ≥ 10 min, naslednji pri ~18–23 %. **Mediana je 0** — kateri vlak čaka na križanje, se ne ve. Zato `opozorila` ob vrstici in v oknu vožnje, številka zamude ostane: višja bi trem od štirih potnikov vlak odpeljala pred nosom (precenitev = razmik 87 min). V senci je bila številka pod opozorilom prenizka za ≥ 5 min v 20,8 % (sicer 9,8 %).
+
+* Dneve in uro zapore ima obvestilo **v besedilu**, `start_ts`/`end_ts` pokrivata vse obdobje. Branje (`zapore.razberi`) izpusti, česar ne razume — napačna zapora je slabša od nobene.
+* Odsek = elementarni odseki proge (`edge.elementary`), da ga ujame tudi hitri vlak brez postanka na njem.
+* Vlak pred njim le iz **prevoženih** postankov (`last_measured`): LPV 2214 je 5. 10. po uri „prevozil“ Savo do Laz s +4, nato je feed Zagorje popravil na +34.
+* Merilo: `scripts/preizkusi_zapore.py`; številke v `docs/MERITVE.md`.
 
 ## Zamuda čez dolg postanek in izhodišče
 

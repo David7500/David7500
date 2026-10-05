@@ -913,6 +913,43 @@ function tirHtml(tir, prej) {
     prej ? ` · prej ${escapeHtml(prej)}` : ""}</span>`;
 }
 
+/** Kje lahko vlak naprej po progi izgubi čas (`zapore.py`).
+ *
+ * Ni napoved: ob zapori tira je mediana izgube 0 -- kateri vlak bo čakal na
+ * križanje, se ne ve. Zato beseda in izmerjeno tveganje, številka zamude
+ * ostane. Imena postaj v imenovalniku, ker se jih ne da splošno sklanjati.
+ */
+function opozoriloBesedilo(o, kratko) {
+  if (o.vrsta === "zapora") {
+    const t = o.tveganje;
+    const min = (s) => Math.round(s / 60);
+    const razpon = t && t.izgubilo
+      ? (min(t.najmanj_s) === min(t.najvec_s) ? `${min(t.najvec_s)}` : `${min(t.najmanj_s)}–${min(t.najvec_s)}`)
+      : "";
+    return `Zapora enega tira ${o.odsek} do ${o.do_ure}: vlak lahko tam čaka na križanje.`
+      + (!t ? ""
+        : t.izgubilo
+          ? ` Ob prejšnjih dneh te zapore je tam ${t.izgubilo} od ${t.prehodov} vlakov izgubilo ${razpon} min.`
+          : ` Ob prejšnjih dneh te zapore tam ni nobeden od ${t.prehodov} vlakov izgubil 5 min ali več.`);
+  }
+  const m = Math.round(o.izguba_s / 60);
+  return kratko
+    ? `pred njim ${o.vlak} izgubil ${m} min (${o.odsek})`
+    : `Vlak pred njim, ${o.vlak}, je ob ${hhmm(o.ob)} na odseku ${o.odsek} izgubil ${m} min.`;
+}
+
+// V vrstici table je prostora za eno vrstico: zapore skupaj, vlak pred njim
+// posebej.
+function opozorilaVrsticeHtml(list) {
+  if (!list || !list.length) return "";
+  const zap = list.filter((o) => o.vrsta === "zapora").map((o) => o.odsek);
+  const ostala = list.filter((o) => o.vrsta !== "zapora");
+  return [
+    ...(zap.length ? [`zapora tira ${zap.join(", ")}`] : []),
+    ...ostala.map((o) => opozoriloBesedilo(o, true)),
+  ].map((t) => `<span class="opozorilo">${escapeHtml(t)}</span>`).join(" · ");
+}
+
 function measuredStopHtml(s, isCurrent, w) {
   const d = stopDelay(s);
   const color = delayColor(d);

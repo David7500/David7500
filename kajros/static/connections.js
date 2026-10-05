@@ -495,6 +495,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(c.expected_dep || c.sched_dep, false) : ""}
         ${potnikiHtml(c.potniki, c.network === "avtobus", false)}
+        ${opozorilaVrsticeHtml(c.opozorila)}
         <span>${durationLabel(c.duration_s)}</span>
         <span>${stopsLabel(c.stops_between)}</span>
         <span>neposredno</span>
@@ -762,6 +763,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
         ${potnikiHtml(r.potniki, r.network === "avtobus", prihodi)}
+        ${opozorilaVrsticeHtml(r.opozorila)}
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
     </${tag}>`;

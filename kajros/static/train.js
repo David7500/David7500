@@ -1058,6 +1058,23 @@ function renderRunHead() {
   const cur = state.current;
   runHeadEl.innerHTML = yourStopHtml(run.stops, state.forecast, cur)
     + (cur ? runHeadHtml(cur) + veriga : veriga + runHeadHtml(cur));
+  document.getElementById("train-opozorila").innerHTML = opozorilaHtml(run.opozorila);
+}
+
+// Zapora tira ali vlak pred njim, ki je izgubil čas (`zapore.py`). Odprto, ne
+// zloženo kot obvestila SŽ: velja za to vožnjo danes, ne za progo na splošno.
+function opozorilaHtml(list) {
+  if (!list || !list.length) return "";
+  return `<div class="alert-box">
+      <div class="alert-head">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
+        </svg>
+        Možna dodatna zamuda
+      </div>
+      <div class="alert-list">${list.map((o) => `
+        <div class="alert-item">${escapeHtml(opozoriloBesedilo(o, false))}</div>`).join("")}</div>
+    </div>`;
 }
 
 // Casovnica se med pogledoma razlikuje, zato je svoja funkcija: preklop je

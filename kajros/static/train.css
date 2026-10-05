@@ -268,7 +268,8 @@
   color: var(--ink-faint);
 }
 
-#train-alerts .alert-box { margin: 0 14px 12px; }
+#train-alerts .alert-box,
+#train-opozorila .alert-box { margin: 0 14px 12px; }
 .alert-body {
   font: 400 11px/1.55 var(--sans);
   color: var(--ink-faint);

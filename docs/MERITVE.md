@@ -2259,7 +2259,7 @@ Prijava: okno vožnje LPV 2206 je pokazalo Litijo ob 08:52 (+43, prevoznik) in K
 
 ### Kaj je LPV 2206 res zadržalo in ali se je dalo predvideti (5. 10. 2026)
 
-* **Vzrok: zapora enega tira Zagorje – Sava**, objavljena 31. 8. (`SZ-OVIRA-11016`): „19. - 20. in 26. ter 27. september in 1., 2. ter 5. - 8. oktober, 7.00 - 13.30 … možne občasne ovire zaradi upočasnjene vožnje mimo gradbišča in križanja vlakov“. LPV 2206 je Zagorje zapustil +19, na Savo prišel +37, v Litijo +43, do Ljubljane Polje ostal +43. Za njim v isto smer IC 503 (Zagorje +27 → Litija +50) in LPV 2252 (+4 → +22). V nasprotni smeri LPV 2207 odsek prevozil 08:15–08:25 brez izgube. Prej in pozneje: LPV 2250 ob 07:15 −4 min, LPV 2214 ob 09:18 brez izgube.
+* **Vzrok: zapora enega tira Zagorje – Sava**, objavljena 31. 8. (`SZ-OVIRA-11016`): „19. - 20. in 26. ter 27. september in 1., 2. ter 5. - 8. oktober, 7.00 - 13.30 … možne občasne ovire zaradi upočasnjene vožnje mimo gradbišča in križanja vlakov“. LPV 2206 je Zagorje zapustil +19, na Savo prišel +37, v Litijo +43, do Ljubljane Polje ostal +43. Za njim v isto smer IC 503 (Zagorje +27 → Litija +50) in LPV 2252 (+4 → +22). V nasprotni smeri LPV 2207 odsek prevozil 08:15–08:25 brez izgube. Pred njim LPV 2250 ob 07:15 izgubil 4 min. **LPV 2214** (Zagorje 09:18) je po uri „prevozil“ Savo, Litijo in Laze s +4, ob 09:48 je feed Zagorje popravil na **+34** — isti primer še enkrat; v poizvedbi ob 09:30 je bil zato videti nedotaknjen. Zadnja vrednost v `run` med vožnjo ni meritev, tudi za vlak pred tabo ne.
 * **Feed o vlaku 22 minut ni vedel nič** (zadnja beseda Zagorje +19 ob 08:07, nato Sava +37 ob 08:34); vmes je postanke odšteval po uri. Pred 08:34 zamude +37 ni poznal nihče, ki ga beremo; po popravku (`SIDRO_PREVOZNIKA`) jo okno pokaže ob 08:34 namesto okoli 08:39.
 * **Obvestilo o zapori loči dneve — iz besedila, ne iz `start_ts`/`end_ts`** (ta pokrivata 19. 9.–8. 10. v celoti; zato je bilo v `model.md` zapisano, da obvestila med dnevi ne ločijo ničesar). Prehodi Zagorje–Sava med 7.00 in 13.30, izguba ≥ 5 min (iz `run`, 10. 9.–5. 10.):
 
@@ -2271,3 +2271,23 @@ Prijava: okno vožnje LPV 2206 je pokazalo Litijo ob 08:52 (+43, prevoznik) in K
 
   Mediana izgube tudi ob zapori 0 — kateri vlak čaka na križanje, se iz obvestila ne vidi. Za točkovno napoved premalo, za opozorilo z izmerjenim tveganjem dovolj. Od 44 veljavnih obvestil `ovira` jih 18 ima seznam dni v istem obrazcu („Na progi X - Y (dnevi, ura - ura)“).
 * **Vlak pred tabo na istem odseku**, vsi železniški odseki 10. 9.–5. 10. (130 801 prehodov; izguba = sprememba zamude med sosednjima postankoma): če je vlak v isti smeri v zadnji uri izgubil ≥ 10 min, ta izgubi ≥ 5 min v **17,9 %** (osnova 2,3 %), ≥ 10 min v 8,6 % (0,7 %); povprečno 2,95 min (0,34), mediana 0. Isto kot „stanje odseka danes“ zgoraj: točkovne napovedi ne izboljša, tveganje pa poveča osemkrat.
+
+### Opozorilo: zapora tira in vlak pred njim (5. 10. 2026)
+
+`kajros/zapore.py` iz besedila obvestil `SZ-OVIRA` razbere odseke, dneve in uro zapore; okno vožnje, tabla in iskalnik zvez dobijo `opozorila`. **Številka zamude ostane** — opozorilo je beseda z izmerjenim tveganjem. Merjeno s `scripts/preizkusi_zapore.py` na železniškem delu baze z arwena (21. 8.–5. 10.).
+
+* **Branje obvestil.** Od 32 obvestil o zapori tira od avgusta razbranih 31 (44 odsekov z okni); eno (Kresnice – Sava, odseki v oklepaju) namenoma izpuščeno — napačna zapora je slabša od nobene. Preverjeno ročno na vseh: dnevi, „neprekinjeno“ (ves dan), več odsekov v enem obvestilu, verige („Laško - Celje - Šentjur“), številčni mesec („17. 10.“).
+* **Odsek** = elementarni odseki proge (`edge.elementary`) med postajama; hitri vlak brez postanka na odseku ga prevozi vmes (IC 503 Zagorje → Litija čez Savo).
+* **Izguba na zaprtem odseku** (prehod med zaporednima izmerjenima postankoma, vsi odseki z zaporo):
+
+  | | prehodov | ≥ 5 min | ≥ 10 min | povprečje |
+  |---|---|---|---|---|
+  | zapora, delavnik | 2 795 | **16,0 %** | 6,6 % | 1,89 min |
+  | zapora, vikend | 979 | **16,8 %** | 6,8 % | 2,04 min |
+  | isti odsek in ura brez zapore, delavnik | 24 775 | 4,0 % | 1,3 % | 0,53 min |
+  | isti odsek in ura brez zapore, vikend | 6 301 | 4,8 % | 1,5 % | 0,62 min |
+
+  Mediana v vseh štirih 0. Prej merjeni Zagorje – Sava (28 % ob delavnikih) je med hujšimi.
+* **Senca** (78 945 napovedi 5. 9.–5. 10.; `zapore.za_voznjo` kliče isto kodo kot strežnik, vlak pred tabo iz končnih vrednosti `run`): opozorilo bi viselo pri **8 919 (11,3 %)**. Tam je vlak prišel ≥ 5 min pozneje od prikazane številke v **20,8 %** (brez opozorila 9,8 %), ≥ 10 min v 9,1 % (4,3 %); MAE 4,32 proti 2,63 min. Ločeno: zapora 20,6 % (5 249 napovedi), vlak pred tabo 23,3 % (4 453). Številke sence so izmerjene na stari napovedi (pred `SIDRO_PREVOZNIKA`).
+* **Vlak pred tabo** šteje, če je v isti smeri prevozil skupni elementarni odsek in tam izgubil ≥ 10 min, v uri pred tem, ko bo tam ta vlak. Le prevoženi postanki (`last_measured`) — LPV 2214 kaže, zakaj.
+* **Tveganje zapore na zaslonu** je iz prejšnjih dni iste zapore (Zagorje – Sava 5. 10.: 16 od 72 prehodov, 7–21 min; Ljubljana – Ljubljana Zalog: 119 od 745, 5–55 min), pod 10 prehodi brez številke. Računa se enkrat na dan na zaporo: prvi klic ~0,3–0,5 s (Ljubljana – Zalog ima 13 dni), nato tabla +1 ms, iskalnik zvez +3 ms (38 zvez Zidani Most – Ljubljana).

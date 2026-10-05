@@ -62,6 +62,7 @@ kajros/
   gtfs.py        pogojni prenos zipa, uvoz voznega reda
   collector.py   poll zamud in leg, obratovalni dan, varovalke pred smetmi
   alerts.py      ovire (SZ-OVIRA) in žive zamude s prometnim mestom (SZ-DELAY)
+  zapore.py      zapora tira iz besedila ovir, vlak pred tabo: opozorilo, ne napoved
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi
