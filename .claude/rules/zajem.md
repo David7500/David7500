@@ -61,6 +61,10 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas = `
 
   Zaporedje teh poročil = **dnevnik vožnje**, kakršnega nikjer drugje ni: IC 503 šel s +6 v Ormožu na +29 v Litiji, v Borovnici nadoknadil 8 min, do Postojne spet zdrsnil na +25. V oknu vožnje, napredni pogled.
 
+  **Postaja v poročilu je tista, KAMOR vlak pelje, ne tista, kjer je** (izmerjeno 5. 10. 2026). „Ob prihodu na postajo X“ je napoved prihoda na naslednji postanek: od 26 711 poročil s postajo na poti vlaka (železnica, 20. 9.–5. 10.) je bilo **92 %** zajetih več kot minuto **pred** pričakovanim prihodom na X (voznoredni prihod + objavljena zamuda; mediana 3,9 min prej, p10 11,8 min prej), **96 %** po odhodu s prejšnjega postanka. Čas je čas našega branja (do 60 s pozno), torej je SŽ objavila še prej. Primer: EN 414 ob 21:17 „Ljubljana +13“, izmerjen pa ob 21:19 v Zidanem Mostu, prejšnjem postanku (do Ljubljane po voznem redu 55 min). Okno vožnje ga zato prav kaže kot napoved prevoznika; **zemljevid ga še riše kot lego vlaka** (`api._live` → `reported_lat`, `dashboard.trainPlace`) in kartica piše „zadnja meritev“ — napaka, odprta 5. 10. 2026.
+
+  **Poročilo velja samo za svoj prometni dan.** `api._live` je do 5. 10. 2026 včerajšnja in današnja poročila združil po številki vlaka: današnja vožnja brez poročila (točen vlak ga ne dobi) je nosila včerajšnje. Ob 21:33 tako 4 od 22 živih vlakov (LPV 2427 na zemljevidu v Ljubljani z +11, v resnici v Kranju s +4; poročilo staro 23,6 h).
+
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
 * **Zakaj vlak zamuja, pove `service_alerts`.** `SZ-OVIRA-*` = dela na progi, nadomestni prevozi, združene garniture, vezani na `route_id` (1 : 1 s tripom → znamo pripeti na številko vlaka). Avgusta 2026 ~45 hkrati -- nadomestni prevoz Ljubljana–Logatec in Divača–Koper do 12. decembra, zapore enega tira Celje–Šentjur, Poljčane–Pragersko, Maribor–Hoče. **To pojasni, zakaj so zamude v zajetih dneh tako velike.**
 

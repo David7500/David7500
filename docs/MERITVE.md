@@ -2316,3 +2316,18 @@ Kjer visi opozorilo, številka dobi še „lahko do“: ocena + `zapore.dodatek`
 
   Delež izgub zapore: p75 73,3 %, p80 79,2 %, p85 84,1 %, p90 89,7 %, p95 93,7 % (11 min). Resnica pod samo oceno: z opozorilom 45,6 %, brez 60,0 %.
 * Tabeli zgoraj z izgubami zapore z vseh drugih dni iste zapore. **Tako, kot streže strežnik** (samo dnevi pred tistim dnem, `scripts/preizkusi_zapore.py`): opozorilo pri 8 152 napovedih, meja (≥ 1 min) pri 7 118, resnica pod mejo **93,3 %**, širina mediana 12 min, pod samo oceno 45,8 %; strošek ocene +0 / +1 / +2 min = 11,41 / 12,15 / 13,51. Ocena v senci je stara (pred `SIDRO_PREVOZNIKA`).
+
+## Postaja v poročilu SŽ je naslednja postaja, ne lega vlaka (5. 10. 2026)
+
+`SZ-DELAY` „ima zamudo N min ob prihodu na postajo X“: X je postanek, **proti kateremu** vlak pelje, N napoved prihoda tja. Iz `delay_report` (železnica, 20. 9.–5. 10. 2026), samo poročila, katerih X je voznoredni postanek te vožnje: **26 711**.
+
+| | |
+|---|---|
+| zajeto več kot 1 min pred pričakovanim prihodom na X (voznoredni + N) | 24 470 (92 %) |
+| ob prihodu ali po njem | 2 241 (8 %) |
+| objava − pričakovani prihod | p10 −11,8 min · mediana −3,9 min · p90 −1,1 min |
+| zajeto po odhodu s prejšnjega postanka (−2 min) | 24 565 od 25 469 s prejšnjim izmerjenim (96 %) |
+
+`seen_ts` je čas našega branja (korak 60 s), torej je SŽ objavila kvečjemu še prej. Primera: EN 414 4. 10. „Kranj +18“ ob 22:21:04, ko je ravno odpeljal iz Ljubljane (odhod 22:10 + 11); LPV 2427 4. 10. postaja v poročilu zamenjana vsakič ob odhodu s prejšnje (Kranj 21:22 → Škofja Loka 21:34 → Reteče 21:42).
+
+Posledica: zemljevid (`trainPlace`) je vlak risal na postaji, ki je še ni dosegel; ob 21:30 EN 414 v Ljubljani, izmerjen v Zidanem Mostu. Hkrati `api._live` včerajšnjih poročil ni ločil od današnjih: ob 21:33 **4 od 22** živih vlakov s poročilom, starim 22–24 h (LPV 2427, LP 4220, EC 79, LP 3224).
