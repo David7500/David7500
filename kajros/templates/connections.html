@@ -52,6 +52,27 @@
       <button type="button" class="tab" data-tab="board" role="tab" aria-selected="false">Odhodi s postaje</button>
     </div>
 
+    {# Na telefonu je obrazec cel zaslon: po iskanju se skrči v to vrstico, da
+       je odgovor nad pregibom, dotik nanjo ga spet odpre. Namizje ima obrazec
+       v eni vrstici in vrstice ne pokaže nikoli (CSS). #}
+    <div class="povzetek" id="povzetek">
+      <button type="button" class="povzetek-uredi" id="povzetek-uredi">
+        <span class="povzetek-pot" id="povzetek-pot"></span>
+        <span class="povzetek-dan" id="povzetek-dan"></span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+        </svg>
+      </button>
+      <button type="button" class="povzetek-swap" id="povzetek-swap"
+              title="zamenjaj postaji" aria-label="zamenjaj postaji">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
+        </svg>
+      </button>
+    </div>
+
     <form id="search-ab" class="search-card">
       <div class="field station-field">
         <label for="from">Od</label>

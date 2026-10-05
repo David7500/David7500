@@ -160,6 +160,33 @@
 
 .go { flex-shrink: 0; margin-bottom: 2px; }
 
+/* ---------- zloženo vprašanje (samo telefon, glej spodaj) ---------- */
+
+.povzetek { display: none; gap: 8px; align-items: stretch; }
+.povzetek-uredi {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 56px; padding: 8px 16px 8px 20px;
+  background: var(--bg-raised); border: none; border-radius: 28px;
+  color: var(--ink); font: 500 16px/1.25 var(--sans); text-align: left;
+  cursor: pointer;
+}
+/* Imena se prelomijo v drugo vrstico, ne odrežejo: pri 360 pikah je odrez
+   iz „Ljubljana Tivoli → Maribor Studenci“ naredil „Ljublja… → Maribor …“,
+   kar je isto kot Ljubljana in Maribor. Prelom samo med imeni; ime samo se
+   lomi le, če je daljše od vrstice. */
+.povzetek-pot { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.povzetek-ime { display: inline-block; max-width: 100%; }
+.povzetek-pus { color: var(--ink-mute); margin: 0 6px; }
+.povzetek-dan { flex-shrink: 0; color: var(--ink-dim); font-size: 14px; }
+.povzetek-uredi svg { flex-shrink: 0; color: var(--ink-mute); }
+.povzetek-swap {
+  flex: 0 0 56px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-raised); border: none; border-radius: 28px;
+  color: var(--ink-dim); cursor: pointer;
+}
+
 /* ---------- glava rezultatov ---------- */
 
 .result-head {
@@ -339,6 +366,11 @@
      polje za postajo -- prvo, kar clovek vidi, je bliznja postaja namesto
      iskalnika. */
   .near-me { flex: 1 1 100%; order: 5; justify-content: center; }
+
+  /* Po iskanju obrazec preda mesto vrstici z vprašanjem (`zlozi()`): odgovor
+     se začne ~300 pik nižje, nad pregibom so trije odhodi namesto pol enega. */
+  .zlozeno .search-card { display: none; }
+  .zlozeno .povzetek { display: flex; }
 
   .conn-row { grid-template-columns: 1fr auto; gap: 3px 12px; }
   .conn-times { grid-column: 1; }

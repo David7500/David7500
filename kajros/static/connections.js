@@ -324,8 +324,14 @@ function mejaHtml(data) {
 
 function renderAlerts(list, note) {
   // Obvestila pride ze urejena s streznika: najprej tista, ki imenujejo
-  // postajo s te poti. Prikaz jih samo izpise.
+  // postajo s te poti. Prikaz jih samo izpise. Osvezitev na 30 s skatlo
+  // izrise znova; kar je clovek odprl ali zaprl, naj tako ostane (novo
+  // iskanje polje izprazni prej, zato tam velja privzeto).
+  const prej = alertsEl.querySelector(".alert-box");
+  const odprta = prej ? prej.open : null;
   alertsEl.innerHTML = alertsHtml(list, note);
+  const box = alertsEl.querySelector(".alert-box");
+  if (box && odprta !== null) box.open = odprta;
 }
 
 // Povezava na eno vožnjo. `trip` gre zraven, ker številka linije pri
@@ -671,9 +677,11 @@ function renderConnections(data) {
   const morda = pred.filter(jeMorda);
   const ahead = nextIdx >= 0 ? list.slice(nextIdx) : list;
 
+  // Osvezitev vsakih 30 s seznam izrise znova; odprt seznam naj ostane odprt.
+  const odprto = !!resultsEl.querySelector(".past-box[open]");
   const neposredne = [];
   if (gone.length) {
-    neposredne.push(`<details class="past-box"><summary class="past-head">
+    neposredne.push(`<details class="past-box"${odprto ? " open" : ""}><summary class="past-head">
         pokaži ${gone.length} ${gone.length === 1 ? "prejšnjo vožnjo" : "prejšnjih"}
       </summary>
       ${gone.map((c) => connectionRowHtml(c, nowMs, false, data.date, data.from)).join("")}
@@ -816,6 +824,7 @@ let tablaZa = null;           // vnos, za katerega velja `izbranaSmer`
 // Zaporedna stevilka zahteve po tabli. Osvezitev, ki je bila na poti, ko je
 // clovek izbral drugo smer, ne sme njegove izbire povoziti s staro tablo.
 let tablaSt = 0;
+let zvezeSt = 0;   // isto za zveze: velja samo odgovor zadnje zahteve
 
 function smerIzSpomina(postaja) {
   try {
@@ -1338,6 +1347,42 @@ function revealResults() {
   bar.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// Pomik ni dovolj: pod obrazcem je ostala ena vrstica odgovora (Ljubljana ->
+// Celje na 412 pikah: prvi odhod do polovice, pod njim orodna vrstica). Po
+// iskanju se obrazec zato skrci v vrstico z vprasanjem, dotik nanjo ga odpre.
+// Samo ob lastnem iskanju ali povezavi, nikoli ob osvezitvi: ta bi zaprla
+// obrazec, ki ga clovek ravno popravlja. Kaj se skrije, odloci CSS -- na
+// namizju je obrazec ena vrstica in ostane.
+function zlozi() {
+  const ab = activeTab === "ab";
+  const ime = (id) => `<span class="povzetek-ime">${escapeHtml($(id).value.trim())}</span>`;
+  const dan = (ab ? $("date") : $("board-date")).value || todayIso();
+  const jutri = new Date(`${todayIso()}T12:00:00`);
+  jutri.setDate(jutri.getDate() + 1);
+  const napis = dan === todayIso() ? "danes"
+    : dan === jutri.toLocaleDateString("sv-SE") ? "jutri" : dayLabel(dan);
+  const ura = $("board-time").value;
+  $("povzetek-pot").innerHTML = ab
+    ? `${ime("from")}<span class="povzetek-pus" aria-hidden="true">→</span>${ime("to")}`
+    : ime("station");
+  $("povzetek-dan").textContent = ab ? napis
+    : `${$("board-kind").value} · ${napis}${ura ? ` od ${ura}` : ""}`;
+  $("povzetek-uredi").setAttribute("aria-label",
+    `spremeni iskanje: ${$("povzetek-pot").textContent}, ${$("povzetek-dan").textContent}`);
+  $("povzetek-swap").hidden = !ab;
+  document.body.classList.add("zlozeno");
+  // Fokus v skritem polju se izgubi (in tipkovnica telefona ostane odprta
+  // cez odgovor); naj ostane pri vprasanju, ki se ga da spet odpreti.
+  const f = document.activeElement;
+  if (f && f.closest(".search-card") && !f.offsetParent) {
+    $("povzetek-uredi").focus({ preventScroll: true });
+  }
+}
+
+function razlozi() {
+  document.body.classList.remove("zlozeno");
+}
+
 function schedulePoll(fn, isToday) {
   clearTimeout(pollTimer);
   if (isToday) pollTimer = setTimeout(fn, POLL_MS);
@@ -1357,32 +1402,55 @@ function koncajIskanje() {
   document.querySelectorAll(".go").forEach((b) => { b.disabled = false; });
 }
 
-async function searchAB(push) {
-  const from = $("from").value.trim();
-  const to = $("to").value.trim();
-  const date = $("date").value || todayIso();
+/** `tiho`: osvezitev na 30 s, ne novo iskanje. Do 5. 10. 2026 je vsaka
+ *  osvezitev zveze za hip zamenjala z "iščem …" in stran je skocila na vrh
+ *  (izmerjeno: s 900 na 0 pik) -- kdor je bral peto zvezo, jo je izgubil.
+ *  Tabla je to pravilo dobila 22. 9. (`searchBoard`), zveze ne.
+ *  `vpr`: osvezitev ponovi vprasanje, ki je na zaslonu, ne tistega, ki ga
+ *  clovek ravno tipka v odprt obrazec -- delno ime bi tiho zamenjalo odgovor. */
+async function searchAB(push, tiho = false, vpr = null) {
+  const from = vpr ? vpr.from : $("from").value.trim();
+  const to = vpr ? vpr.to : $("to").value.trim();
+  const date = vpr ? vpr.date : $("date").value || todayIso();
   if (!from || !to) return;
   if (fold(from) === fold(to)) {
     resultsEl.innerHTML = '<div class="empty-state">Izhodišče in cilj sta ista postaja.</div>';
     return;
   }
-  remember({ tab: "ab", from, to, date });
-  if (push) history.replaceState(null, "", `?${new URLSearchParams({ from, to, date })}`);
-  zacniIskanje(`iščem zveze ${from} → ${to} …`);
+  if (!tiho) {
+    // Osvezitev, ki bi se sprozila med novim iskanjem, bi ga prehitela s
+    // starim vprasanjem.
+    clearTimeout(pollTimer);
+    remember({ tab: "ab", from, to, date });
+  }
+  if (push) {
+    history.replaceState(null, "", `?${new URLSearchParams({ from, to, date })}`);
+    zlozi();
+  }
+  if (!tiho) zacniIskanje(`iščem zveze ${from} → ${to} …`);
+  const osvezi = () => searchAB(false, true, { from, to, date });
 
   try {
     const url = `/api/connections?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
       + `&date=${encodeURIComponent(date)}&network=${NETWORK}`;
+    // Pozen odgovor starega vprasanja ne sme prepisati novega: osvezitev je
+    // lahko na poti, ko clovek pritisne "Poisci".
+    const moja = ++zvezeSt;
     const res = await fetch(url);
+    if (moja !== zvezeSt) return;
     if (res.status === 404) {
+      if (tiho) return;
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
+      razlozi();   // popraviti je treba polje, ne gledati odgovora
       return;
     }
     const data = await res.json();
+    if (moja !== zvezeSt) return;
     // Vsak drug neuspeh pove strežnik sam (npr. "izhodišče in cilj sta ista
     // postaja"). Prej je `renderConnections` dobil `{detail: ...}` namesto
     // odgovora in stran je ostala prazna brez pojasnila.
     if (!res.ok) {
+      if (tiho) return;
       resultsEl.innerHTML = `<div class="empty-state">${
         escapeHtml(data && data.detail ? data.detail : "Iskanje ni uspelo.")}</div>`;
       if (push) revealResults();
@@ -1390,11 +1458,14 @@ async function searchAB(push) {
     }
     renderConnections(data);
     if (push) revealResults();
-    schedulePoll(() => searchAB(false), data.date === todayIso());
+    schedulePoll(osvezi, data.date === todayIso());
   } catch (err) {
     console.error("iskanje ni uspelo", err);
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
-    resultsEl.innerHTML = '<div class="empty-state">Iskanje ni uspelo. Strežnik morda ni dosegljiv.</div>';
+    // Tiha osvezitev pusti stare zveze (imajo uro) in poskusi znova: en
+    // izpad v predoru ne sme ustaviti osvezevanja do naslednjega iskanja.
+    if (tiho) schedulePoll(osvezi, date === todayIso());
+    else resultsEl.innerHTML = '<div class="empty-state">Iskanje ni uspelo. Strežnik morda ni dosegljiv.</div>';
   } finally {
     koncajIskanje();
   }
@@ -1428,6 +1499,7 @@ async function searchBoard(push, tiho = false) {
     if (from) q.set("ob", from);
     if (izbranaSmer) q.set("smer", izbranaSmer);
     history.replaceState(null, "", `?${q}`);
+    zlozi();
   }
 
   try {
@@ -1442,6 +1514,7 @@ async function searchBoard(push, tiho = false) {
     if (moja !== tablaSt) return;
     if (res.status === 404) {
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
+      razlozi();   // popraviti je treba polje, ne gledati odgovora
       return;
     }
     const data = await res.json();
@@ -1547,6 +1620,10 @@ function setTab(tab) {
   }
   $("search-ab").hidden = tab !== "ab";
   $("search-board").hidden = tab !== "board";
+  razlozi();   // drug zavihek = drugo vprasanje; iskanje ga po potrebi spet zlozi
+  // Odgovor, ki je se na poti, sodi v zavihek, ki ga ni vec.
+  zvezeSt++;
+  tablaSt++;
   resultsEl.innerHTML = "";
   resultHeadEl.innerHTML = "";
   alertsEl.innerHTML = "";
@@ -1583,6 +1660,20 @@ $("swap").addEventListener("click", () => {
   // Fokus na izhodisce: kdor je gumb dosegel s tipkovnico, mora videti izid.
   a.focus();
   if (a.value && b.value) searchAB(true);
+});
+
+// Pot nazaj je najpogostejse drugo vprasanje, zato zamenjava tudi v zlozeni
+// vrstici -- brez nje bi bila dva dotika in obrazec cez cel zaslon.
+$("povzetek-swap").addEventListener("click", () => {
+  const a = $("from"), b = $("to");
+  [a.value, b.value] = [b.value, a.value];
+  paintAllClears();
+  searchAB(true);
+});
+
+$("povzetek-uredi").addEventListener("click", () => {
+  razlozi();
+  window.scrollTo({ top: 0 });
 });
 
 // Preklop smeri: kadar je tabla ze na zaslonu, jo takoj osvezi -- gumb, ki
@@ -1625,14 +1716,17 @@ function restore() {
     setTab("board");
     smerIzNaslova = q.get("smer");
     searchBoard(false);
+    zlozi();
   } else if (from && to) {
     // Polji sta izpolnjeni iz spomina ali naslova, iskanja pa NE sprozimo,
     // razen ce je pot prislo iz naslova (deljena povezava -- tam je odgovor
     // prav to, po kar je clovek prisel). Vrnitev na stran je drugo: takrat
     // je vprasanje samo predlog in odgovor caka na "Poisci".
     setTab("ab");
-    if (q.has("from") && q.has("to")) searchAB(false);
-    else showOverview();
+    if (q.has("from") && q.has("to")) {
+      searchAB(false);
+      if (fold(from) !== fold(to)) zlozi();
+    } else showOverview();
   } else {
     showOverview();
   }
