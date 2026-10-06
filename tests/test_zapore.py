@@ -234,3 +234,58 @@ def test_stanje_zapore_po_uri():
     assert zapore.stanje(okna, d, ob(9) + timedelta(days=1))["stanje"] == "koncano"
     # Ves dan ("neprekinjeno") velja tudi ob polnoči.
     assert zapore.stanje([(0, 1440)], d, ob(0))["velja_zdaj"]
+
+
+# ---------------------------------------------------------------- stran ovir
+
+def test_kdaj_danes_naslednjic_in_konec():
+    d = date(2026, 10, 6)
+    zap = [{"alert_id": "X", "odsek": "Zagorje – Sava",
+            "okna": [(d, 420, 810), (d + timedelta(days=2), 480, 960)]}]
+    ob = lambda dan, h: datetime(dan.year, dan.month, dan.day, h, tzinfo=zapore.TZ)  # noqa: E731
+
+    k = zapore.kdaj(zap, ob(d, 9))
+    p, = k["danes"]
+    assert (p["odsek"], p["dan"], p["stanje"]) == ("Zagorje – Sava", "2026-10-06", "zdaj")
+    assert p["okna"] == [{"od": "7.00", "do": "13.30", "ves_dan": False}]
+    assert k["naslednjic"] is None, "kadar velja danes, naslednji dan ni novica"
+    assert k["odsekov"] == 1
+
+    k = zapore.kdaj(zap, ob(d + timedelta(days=1), 9))
+    assert k["danes"] == []
+    assert k["naslednjic"] == {"dan": "2026-10-08", "odsek": "Zagorje – Sava",
+                               "okna": [{"od": "8.00", "do": "16.00", "ves_dan": False}]}
+
+    k = zapore.kdaj(zap, ob(d + timedelta(days=3), 9))
+    assert (k["danes"], k["naslednjic"]) == ([], None), "po zadnjem dnevu ne velja več"
+
+
+def test_kdaj_vec_odsekov_po_uri_zacetka():
+    d = date(2026, 10, 6)
+    zap = [{"alert_id": "X", "odsek": "Krško – Brestanica", "okna": [(d, 600, 780)]},
+           {"alert_id": "X", "odsek": "Brestanica – Blanca", "okna": [(d, 420, 840)]},
+           {"alert_id": "X", "odsek": "Blanca – Sevnica", "okna": [(d + timedelta(days=4), 420, 780)]}]
+    k = zapore.kdaj(zap, datetime(2026, 10, 6, 12, tzinfo=zapore.TZ))
+    assert k["odsekov"] == 3
+    assert [p["odsek"] for p in k["danes"]] == ["Brestanica – Blanca", "Krško – Brestanica"]
+    assert all(p["stanje"] == "zdaj" for p in k["danes"])
+
+
+def test_ovire_dobijo_kdaj_samo_cele(conn):
+    """Oklepaj z uro, ki ga ne razumemo, je lahko prav današnji: takrat nič."""
+    zac = datetime(*map(int, DAN.split("-")), tzinfo=zapore.TZ)
+    dan = f"{zac.day}. {zac.month}."
+    conn.execute("INSERT INTO alert(alert_id, kind, lang, start_ts, end_ts, header, description, "
+                 "first_seen, last_seen) VALUES('SZ-OVIRA-2','ovira','sl',?,?,'zapora',?,0,0)",
+                 (int(zac.timestamp()), int((zac + timedelta(days=1)).timestamp()),
+                  f"Na progi Brezje - Cerkno ({dan}, 7.00 - 13.30) in Xyz - Qwe ({dan}, "
+                  "8.00 - 9.00) poteka občasna zapora enega tira na dvotirni progi."))
+    conn.commit()
+    opisi = dict(conn.execute("SELECT alert_id, description FROM alert"))
+    ovire = [{"alert_id": a, "description": opisi.get(a, "Dela brez ure.")}
+             for a in ("SZ-OVIRA-1", "SZ-OVIRA-2", "SZ-OVIRA-3")]
+    zapore.dopolni_ovire(conn, ovire, zac.replace(hour=10))
+    k = ovire[0]["kdaj"]
+    assert [(p["odsek"], p["stanje"]) for p in k["danes"]] == [("Brezje – Cerkno", "zdaj")]
+    assert "kdaj" not in ovire[1], "en odsek od dveh ni na progi"
+    assert "kdaj" not in ovire[2], "brez ure ni zapore"

@@ -990,6 +990,23 @@ function opozorilaVrsticeHtml(list) {
   ].map((t) => `<span class="opozorilo">${escapeHtml(t)}</span>`).join(" · ");
 }
 
+// Ure zapore tira v slovenskem zapisu s piko, kot na tabli („do 13.30“).
+function oknaZapore(okna) {
+  return okna.map((o) => (o.ves_dan ? "ves dan" : `${o.od}–${o.do}`)).join(", ");
+}
+
+// „danes 8.00–16.00 · velja zdaj“ / „· začne ob 8.00“ / „· končano“. Ena
+// beseda za isto zaporo na zemljevidu (oblaček črte in postaje) in na strani
+// ovir; okna in stanje izračuna strežnik ob vsaki strežbi (`zapore.stanje`).
+function kdajZapore(p) {
+  const danes = p.dan === todayIso();
+  const stanje = p.stanje === "zdaj" ? "velja zdaj"
+    : p.stanje === "koncano" ? "končano"
+    : danes ? `začne ob ${p.zacne}` : "";
+  return [`${danes ? "danes" : dayLabel(p.dan)} ${oknaZapore(p.okna)}`, stanje]
+    .filter(Boolean).join(" · ");
+}
+
 function measuredStopHtml(s, isCurrent, w) {
   const d = stopDelay(s);
   const color = delayColor(d);

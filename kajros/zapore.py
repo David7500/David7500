@@ -154,6 +154,19 @@ def _dnevi(d0: int, m0: int, d1: int, m1: int, zacetek: date):
     return [a + timedelta(days=i) for i in range((b - a).days + 1)]
 
 
+def _oklepaji_z_uro(t: str):
+    """Oklepaji, ki nosijo uro zapore -- vsak bi moral postati ena zapora."""
+    for m in re.finditer(r"\(([^()]*)\)", t):
+        if _URA.search(m.group(1)) or "neprekinjeno" in m.group(1):
+            yield m
+
+
+def oklepajev_z_uro(opis: str | None) -> int:
+    """Koliko zapor je v besedilu: toliko jih mora `razberi` vrniti, da smo
+    razumeli vse."""
+    return sum(1 for _ in _oklepaji_z_uro(_normaliziraj(opis or "")))
+
+
 def razberi(opis: str, zacetek: date, konec: date) -> list[dict]:
     """Zapore iz besedila obvestila: [{"odseki": [(od, do)], "okna": [...]}].
 
@@ -164,10 +177,8 @@ def razberi(opis: str, zacetek: date, konec: date) -> list[dict]:
     """
     t = _normaliziraj(opis or "")
     out = []
-    for m in re.finditer(r"\(([^()]*)\)", t):
+    for m in _oklepaji_z_uro(t):
         notranje = m.group(1)
-        if not (_URA.search(notranje) or "neprekinjeno" in notranje):
-            continue
         if re.search(r"[A-Za-zčšžČŠŽ]\s+-\s+[A-ZČŠŽ]", notranje):
             continue
         kos = re.split(r"Na progi|\bin\b|\bter\b|,|\)|\.\s", t[:m.start()].rstrip(" ."))[-1]
@@ -515,6 +526,12 @@ def _ura(m: int) -> str:
     return f"{m // 60}.{m % 60:02d}"
 
 
+def _okna_dneva(okna: list[tuple[int, int]]) -> list[dict]:
+    """Okna enega dne, kot jih pokažeta zemljevid in stran ovir."""
+    return [{"od": _ura(a), "do": _ura(b), "ves_dan": (a, b) == (0, 24 * 60)}
+            for a, b in okna]
+
+
 def karta(conn: sqlite3.Connection, dan: date) -> list[tuple[dict, list, str]]:
     """Zapore dneva za plast zemljevida: [(lastnosti, okna, geometrija)].
 
@@ -544,8 +561,7 @@ def karta(conn: sqlite3.Connection, dan: date) -> list[tuple[dict, list, str]]:
             {"alert_id": z["alert_id"], "naslov": naslovi.get(z["alert_id"]),
              "odsek": z["odsek"], "dan": dan.isoformat(),
              "postaje": sorted({imena[s] for e in z["robovi"] for s in e if s in imena}),
-             "okna": [{"od": _ura(a), "do": _ura(b), "ves_dan": (a, b) == (0, 24 * 60)}
-                      for a, b in okna]},
+             "okna": _okna_dneva(okna)},
             okna,
             json.dumps({"type": "MultiLineString", "coordinates": kosi},
                        separators=(",", ":"))))
@@ -569,3 +585,53 @@ def stanje(okna: list[tuple[int, int]], dan: date, zdaj: datetime) -> dict:
     if naprej:
         return {"stanje": "pozneje", "velja_zdaj": False, "zacne": _ura(min(naprej))}
     return {"stanje": "koncano", "velja_zdaj": False}
+
+
+# ---------------------------------------------------------------- stran ovir
+
+def kdaj(zap: list[dict], zdaj: datetime) -> dict:
+    """Kdaj velja obvestilo, katerega zapore so `zap` (vse, `zapore()` brez dneva).
+
+    `danes`: vsaka zapora z današnjimi okni, z istimi lastnostmi kot njena
+    črta na zemljevidu (`karta` in `stanje`) -- ista zapora ne sme na dveh
+    straneh povedati dveh stvari. Kadar danes ne velja, `naslednjic`: prvi
+    naslednji dan z okni, ali None, ko po besedilu ne velja več. `odsekov`:
+    pri enem odseku ga pove že naslov obvestila, pri več je treba povedati,
+    kateri je zaprt ta dan.
+    """
+    danes = zdaj.date()
+    out = {"odsekov": len({z["odsek"] for z in zap}), "danes": [], "naslednjic": None}
+    po_zaporah = [(sorted((o[1], o[2]) for o in z["okna"] if o[0] == danes), z) for z in zap]
+    # Po uri začetka, kot jih dan prinese.
+    for okna, z in sorted((x for x in po_zaporah if x[0]), key=lambda x: x[0]):
+        out["danes"].append({"odsek": z["odsek"], "dan": danes.isoformat(),
+                             "okna": _okna_dneva(okna), **stanje(okna, danes, zdaj)})
+    naprej = sorted(o for z in zap for o in z["okna"] if o[0] > danes)
+    if naprej and not out["danes"]:
+        dan = naprej[0][0]
+        out["naslednjic"] = {
+            "dan": dan.isoformat(),
+            "okna": _okna_dneva(sorted({(o[1], o[2]) for o in naprej if o[0] == dan})),
+            "odsek": ", ".join(dict.fromkeys(
+                z["odsek"] for z in zap if any(o[0] == dan for o in z["okna"])))}
+    return out
+
+
+def dopolni_ovire(conn: sqlite3.Connection, ovire: list[dict], zdaj: datetime) -> None:
+    """`kdaj` k obvestilom strani ovir (`alerts.active`), ki jih razumemo cela.
+
+    Cela = vsak oklepaj z uro je postal zapora na progi (`oklepajev_z_uro`).
+    „Danes ne velja“ je trditev o vsem besedilu; oklepaj, ki ga ne razumemo,
+    je lahko prav današnji. Obvestilo, ki ga ne razumemo, ne dobi ničesar --
+    napačna vrstica je slabša od nobene. Angleška imajo svoje številke in jih
+    `zapore()` ne bere.
+
+    Stanje se računa ob vsakem klicu, ne v predpomnilniku, kot na zemljevidu.
+    """
+    po_obvestilih: dict[str, list[dict]] = {}
+    for z in zapore(conn):
+        po_obvestilih.setdefault(z["alert_id"], []).append(z)
+    for a in ovire:
+        zap = po_obvestilih.get(a["alert_id"])
+        if zap and len(zap) == oklepajev_z_uro(a.get("description")):
+            a["kdaj"] = kdaj(zap, zdaj)

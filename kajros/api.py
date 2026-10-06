@@ -1601,9 +1601,17 @@ def api_alerts(lang: str = Query("sl", pattern="^(sl|en)$"),
     Privzeto **tudi napovedane** (do 14 dni naprej), označene z
     `napovedana: true`. Brez njih je stran ovir molčala o delih, ki se
     začnejo jutri — glej `alerts.active()`.
+
+    Obvestilo o zapori tira, katerega okna razumemo vsa, nosi `kdaj`:
+    današnja okna z `stanje` (isto kot `/api/zapore`) ali naslednji dan z
+    okni (`zapore.kdaj`). Obdobje obvestila pokriva vse dni, zapora pa velja
+    le nekatere in le ob nekaterih urah.
     """
     with _conn() as conn:
-        return alerts.active(conn, lang, tudi_napovedane=napovedane)
+        vse = alerts.active(conn, lang, tudi_napovedane=napovedane)
+        # Ob vsaki zahtevi, ne v predpomnilniku: ob devetih „začne ob 8.00“ laže.
+        zapore.dopolni_ovire(conn, vse, datetime.now(TZ))
+        return vse
 
 
 #: Za koliko dni nazaj in naprej plast zapor odgovori. Obvestila SŽ segajo

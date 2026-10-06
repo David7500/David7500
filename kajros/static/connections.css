@@ -500,6 +500,22 @@
 .alert-period { font: 400 11px/1.4 var(--mono); color: var(--ink-faint); }
 
 .alert-card-title { margin: 0 0 6px; font: 600 14px/1.45 var(--sans); color: var(--ink); }
+
+/* Ali zapora velja danes: tonska rumena ovir, kot opozorila na tabli. Kar je
+   danes končano, bledi kot črta na zemljevidu; kar danes ne velja, je brez
+   podlage -- ni opozorilo za danes, samo kdaj naslednjič. */
+.alert-kdaj {
+  width: fit-content; max-width: 100%;
+  margin: 2px 0 8px; padding: 6px 11px;
+  border-radius: var(--r-sm);
+  background: #2e2811; color: #f2d36b;
+  font: 500 12.5px/1.45 var(--sans);
+}
+.alert-kdaj + .alert-kdaj { margin-top: -2px; }
+.alert-kdaj.is-zdaj { font-weight: 600; }
+.alert-kdaj.is-koncano { color: color-mix(in srgb, #f2d36b 62%, #2e2811); }
+.alert-kdaj.is-ne { padding: 0; background: none; color: var(--sev-hard); font-weight: 400; }
+.kdaj-odsek { display: block; font-weight: 600; }
 .alert-card-body {
   margin: 0; font: 400 12.5px/1.65 var(--sans); color: var(--ink-dim);
   max-width: 74ch;

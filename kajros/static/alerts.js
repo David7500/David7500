@@ -39,6 +39,33 @@ function periodLabel(a) {
 // povezava v nogi kartice). Petnajstkrat prebrano nikoli.
 const REP = /\s*Potnikom se opravičujemo[\s\S]*$/;
 
+// Ali zapora velja danes (`kdaj`, `zapore.kdaj`). Obdobje obvestila pokriva
+// vse dni, zapora pa velja le nekatere in le ob nekaterih urah. Besedilo je
+// isto kot v oblačku zapore na zemljevidu (`kdajZapore`). Obvestilo, ki ga
+// strežnik ne razume celega, `kdaj` nima in ne dobi nič.
+function kdajHtml(k) {
+  if (!k) return "";
+  // Pri enem odseku ga pove že naslov obvestila.
+  const odsek = (o) => (k.odsekov > 1 ? `<span class="kdaj-odsek">odsek ${escapeHtml(o)}</span>` : "");
+  if (k.danes.length) {
+    return k.danes.map((p) => `<p class="alert-kdaj is-${p.stanje}">${odsek(p.odsek)}${
+      escapeHtml(kdajZapore(p))}</p>`).join("");
+  }
+  const n = k.naslednjic;
+  return `<p class="alert-kdaj is-ne">${n ? odsek(n.odsek) : ""}${escapeHtml(
+    ["danes ne velja", n ? `naslednjič ${dayLabel(n.dan)}, ${oknaZapore(n.okna)}` : ""]
+      .filter(Boolean).join(" · "))}</p>`;
+}
+
+// Med veljavnimi najprej, kar velja danes (zdaj, pozneje, že končano), nato
+// tista, za katera ne vemo, nazadnje tista, ki danes po besedilu ne veljajo.
+const KDAJ_RANG = { zdaj: 0, pozneje: 1, koncano: 2 };
+function kdajRang(a) {
+  if (!a.kdaj) return 3;
+  if (!a.kdaj.danes.length) return 4;
+  return Math.min(...a.kdaj.danes.map((p) => KDAJ_RANG[p.stanje]));
+}
+
 function itemHtml(a) {
   const kind = kindOf(a);
   const color = KIND_COLOR[kind];
@@ -57,6 +84,7 @@ function itemHtml(a) {
         <span class="alert-period">${escapeHtml(periodLabel(a))}</span>
       </div>
       <h3 class="alert-card-title">${escapeHtml(alertTitle(a.header))}</h3>
+      ${kdajHtml(a.kdaj)}
       <p class="alert-card-body">${escapeHtml((a.description || "").replace(REP, ""))}
         ${REP.test(a.description || "")
           ? `<span class="adv-only">${escapeHtml((REP.exec(a.description) || [""])[0].trim())}</span>` : ""}</p>
@@ -112,7 +140,11 @@ fetch("/api/alerts")
     // Najprej dela in nadomestni prevozi -- ta dvoje potnika res zadeva.
     const rank = { "dela na progi": 0, "nadomestni prevoz": 1, "združene garniture": 2, "obvestilo": 3 };
     // Veljavno pred napovedanim: potnika najprej zadeva to, kar velja danes.
+    // Med veljavnimi isto po besedilu zapore (`kdajRang`): 5. 10. 2026 sta
+    // bili od 8 veljavnih del na progi le 2 danes, „Laze – Ljubljana Zalog“
+    // (30. 9. in 11. 10.) pa je bila po številu vlakov druga kartica.
     all = data.sort((a, b) => (a.napovedana ? 1 : 0) - (b.napovedana ? 1 : 0) ||
+                              (a.napovedana ? 0 : kdajRang(a) - kdajRang(b)) ||
                               rank[kindOf(a)] - rank[kindOf(b)] ||
                               (b.trains || []).length - (a.trains || []).length);
     render();

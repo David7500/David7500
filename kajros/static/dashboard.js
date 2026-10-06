@@ -1284,17 +1284,7 @@ function naloziZaporeTiho() {
   naloziZapore(true).catch((err) => console.warn("zapor ni bilo mogoče naložiti", err));
 }
 
-// „danes 8.00–16.00 · velja zdaj“. Ure v slovenskem zapisu s piko, kot na
-// tabli („do 13.30“); stanje izračuna strežnik.
-function kdajZapore(p) {
-  const okna = p.okna.map((o) => (o.ves_dan ? "ves dan" : `${o.od}–${o.do}`)).join(", ");
-  const danes = p.dan === todayIso();
-  const stanje = p.stanje === "zdaj" ? "velja zdaj"
-    : p.stanje === "koncano" ? "končano"
-    : danes ? `začne ob ${p.zacne}` : "";
-  return [`${danes ? "danes" : dayLabel(p.dan)} ${okna}`, stanje].filter(Boolean).join(" · ");
-}
-
+// Kdaj velja, pove `kdajZapore` v common.js: ista beseda kot na strani ovir.
 function zaporaVrsticaHtml(p) {
   return `<div class="zap-vrsta${p.velja_zdaj ? " is-zdaj" : ""}">
       <span class="zap-odsek">zapora tira ${escapeHtml(p.odsek)}</span>
