@@ -57,7 +57,16 @@
            stolpec, casovnica pa desni; na telefonu je oboje eno za drugim. -->
       <div class="run-now">
       {{ obvestila_mesto(network | default('zeleznica')) }}
-      <div class="section-title">Ta vožnja</div>
+      <div class="section-title section-title-gumb">Ta vožnja
+        {#- Pošlji, ne Deli: „Deli, kje je vozilo“ je deljenje lege. -#}
+        <button type="button" class="poslji-voznjo" id="poslji" data-naslov="{{ naslov }}" hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7.5 7.5 12 3l4.5 4.5"></path>
+          </svg>
+          <span>Pošlji</span>
+        </button>
+      </div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
       <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo lego:

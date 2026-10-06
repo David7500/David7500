@@ -42,6 +42,18 @@
   border-bottom: 1px solid #1e2229;
 }
 .col-hist .section-title { padding-left: 0; padding-right: 0; }
+.section-title-gumb { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* Pošlji vožnjo: tih gumb ob naslovu. Predogled povezave nosi stanje
+   (`api._stanje_za_predogled`), besedilo zraven pa trenutno. */
+.poslji-voznjo {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 13px; margin: -6px 0;
+  border: 1px solid var(--line-firm); border-radius: var(--r-pilula);
+  background: none; color: var(--ink-dim);
+  font: 500 13px/1 var(--sans); cursor: pointer;
+}
+@media (hover: hover) { .poslji-voznjo:hover { color: var(--ink); } }
+.poslji-voznjo.je-poslano { color: var(--accent-lit); border-color: var(--accent-lit); }
 
 .fig-note {
   margin-top: 6px;

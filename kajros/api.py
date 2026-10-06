@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import threading
 import time
 import warnings
@@ -1021,6 +1022,36 @@ def stats_page(request: Request, omrezje: str = "vlak"):
                                       {"here": "statistika", "network": network})
 
 
+def _stanje_za_predogled(conn, train_no: str, trip: str | None, datum: str | None) -> str | None:
+    """Stanje vožnje za predogled povezave: „Zamuja 12 min (zadnji podatek s
+    postaje Postojna ob 14.05).“
+
+    Messenger, WhatsApp in Viber ob pošiljanju preberejo naslovno stran in
+    pokažejo `og:description`. Do zdaj je bil tam isti stavek za vsako vožnjo;
+    zdaj pove, kar je bilo res ob pošiljanju, z uro, da se pozneje ne bere
+    kot zdajšnje. Vedno „zadnji podatek“, nikoli „izmerjeno“: predogled ne
+    nosi razlike, ki jo okno vožnje pove z besedo (`oznake.md`).
+    """
+    zdaj = datetime.now(TZ)
+    try:
+        datum = _check_date(datum) or _active_service_date(conn, train_no, zdaj)
+    except HTTPException:
+        return None
+    tid = stats.resolve_trip(conn, train_no, datum, trip)
+    if not tid:
+        return None
+    lm = stats.last_measured(conn, datum, [tid],
+                             int(zdaj.timestamp()) - stats.polnoc(datum)).get(tid)
+    if not lm or lm["delay_s"] is None:
+        return None
+    # Ista zaokrožena minuta kot na zaslonu (`floor(x + 0.5)`, `oznake.md`).
+    m = math.floor(lm["delay_s"] / 60 + 0.5)
+    stanje = ("Vozi točno" if m == 0 else f"Zamuja {m} min" if m > 0
+              else f"Vozi {-m} min prej")
+    ura = datetime.fromtimestamp(stats.polnoc(datum) + lm["t_s"] + lm["delay_s"], TZ)
+    return f"{stanje} (zadnji podatek s postaje {lm['name']} ob {ura:%H:%M})."
+
+
 def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     """Okno ene vožnje. Pot mora ustrezati omrežju vožnje.
 
@@ -1039,6 +1070,9 @@ def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
         # „IC 503 — kajros“ ne pove, kam pelje. Mestna linija brez `trip` je
         # sto voženj v dveh smereh -- tam konca ne ugibamo.
         konca = None
+        # Brez `trip` je mestna linija sto voženj -- stanja ene ne ugibamo.
+        zivo = (_stanje_za_predogled(conn, train_no, trip, request.query_params.get("date"))
+                if row and prava == network and (trip or prava == "zeleznica") else None)
         if row and (trip or prava == "zeleznica"):
             konca = conn.execute(
                 "SELECT a.name AS od, b.name AS cilj FROM trip t"
@@ -1061,7 +1095,8 @@ def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
         "train_no": train_no, "network": prava,
         "here": "avtobusi" if prava == "avtobus" else "iskalnik",
         "naslov": f"{beseda} {ime} {relacija}".strip(),
-        "opis": f"Kje je {beseda.lower()} {ime}"
+        "opis": (f"{zivo} " if zivo else "")
+                + f"Kje je {beseda.lower()} {ime}"
                 + (f" ({relacija})" if relacija else "")
                 + " zdaj, koliko zamuja in kdaj pride na cilj — z zgodovino"
                   " zamud te vožnje.",

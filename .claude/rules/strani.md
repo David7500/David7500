@@ -243,6 +243,8 @@ Ista družina kot pravilo o mešanju `?` in `:ime` v SQL: ena reža, dva pomena.
 
 Ključ združevanja = **fizični odhod** (številka, voznoredna minuta, smer), ne `trip_id`. Obdrži se vrstica, ki ima kaj povedati: najprej izmerjeno, nato kakršnakoli vrednost, sicer prva. `resolve_trip()` isto rešuje za okno vožnje, a po dnevih veljavnosti — na tabli bolje po podatku, ker feed poroča za trip, ki dejansko vozi.
 
+**Okno vožnje se da poslati** (6. 10. 2026): gumb „Pošlji“ ob naslovu „Ta vožnja“ — „Pošlji“, ne „Deli“, ker je „Deli, kje je vozilo“ deljenje lege. Web Share s stavkom „RG 318 …: zamuja 23 min (zadnji podatek s postaje Trbovlje ob 07:10)“ in povezavo brez `postaja` (to je pošiljateljeva postaja „pri tebi“); kjer Web Share ni — WebView v aplikaciji, namizni Chrome na Linuxu —, se kopira, gumb za 2,5 s reče „kopirano“. **Predogled povezave nosi stanje ob pošiljanju**: `og:description` in `description` se začneta s „Zamuja 23 min (zadnji podatek s postaje Trbovlje ob 07:10).“ (`api._stanje_za_predogled`, ista zaokrožena minuta kot na zaslonu, vedno „zadnji podatek“, nikoli „izmerjeno“). Z uro, ker predogled v pogovoru ostane in se pozneje ne sme brati kot zdajšnji. Brez `trip` pri mestni liniji stanja ni (sto voženj).
+
 **Nakup vozovnice: povezava na `eshop.sz.si`, brez relacije.** V oknu vožnje in pod rezultati iskalnika, **samo pri železnici** (nadomestni prevoz SŽ vključno — `mode = bus`, a `network = zeleznica`; avtobusne vozovnice SŽ ne prodaja).
 
 Relacije v naslov **ni mogoče podati**, preizkušeno v dveh smereh:

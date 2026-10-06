@@ -1070,9 +1070,56 @@ async function loadRun() {
 // Glava okna: postanek potnika, trenutna zamuda in veriga vozila. Svoja
 // funkcija, ker jo prerisujeta dva vira (vozjna in vreme) in mora biti obakrat
 // enaka -- dva neodvisna izrisa sta se ze razsla.
+// ---------- pošlji vožnjo ----------
+// Kdor nekoga čaka z vlaka, mu pošlje povezavo. Predogled v Messengerju ali
+// WhatsAppu pove stanje ob pošiljanju (`api._stanje_za_predogled`), besedilo
+// zraven isto z uro. Kjer Web Share ni (WebView v aplikaciji), se kopira.
+const posljiEl = document.getElementById("poslji");
+
+function besediloZaPoslati() {
+  const naslov = posljiEl.dataset.naslov;
+  const cur = state.current;
+  if (!cur) return naslov;
+  const m = delayMin(stopDelay(cur));
+  const stanje = m === 0 ? "vozi točno" : m > 0 ? `zamuja ${m} min` : `vozi ${-m} min prej`;
+  return `${naslov}: ${stanje} (zadnji podatek s postaje ${cur.name} ob ${
+    hhmm(stopActualIso(cur))})`;
+}
+
+function potrdiPoslano(beseda) {
+  const napis = posljiEl.querySelector("span");
+  napis.textContent = beseda;
+  posljiEl.classList.add("je-poslano");
+  setTimeout(() => {
+    napis.textContent = "Pošlji";
+    posljiEl.classList.remove("je-poslano");
+  }, 2500);
+}
+
+posljiEl.addEventListener("click", async () => {
+  const url = new URL(location.href);
+  url.searchParams.delete("postaja");   // „pri tebi“ je pošiljateljeva postaja
+  const besedilo = besediloZaPoslati();
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: document.title, text: besedilo, url: url.toString() });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;   // premislil si je
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${besedilo}\n${url}`);
+    potrdiPoslano("kopirano");
+  } catch (err) {
+    potrdiPoslano("ni šlo");
+  }
+});
+
 function renderRunHead() {
   const run = state.run;
   if (!run) return;
+  posljiEl.hidden = false;
   // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in gre
   // nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
   const veriga = vehicleChainHtml();
