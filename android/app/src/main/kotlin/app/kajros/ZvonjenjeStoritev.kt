@@ -65,20 +65,32 @@ class ZvonjenjeStoritev : Service() {
          * (budnica je prišla pozno, ali pa je potnik nastavil budilko za
          * vlak, ki odpelje čez nekaj minut). Prej je v takem primeru takoj
          * zazvonilo glasno, in David je 6. 10. 2026 slišal ravno to: „začne
-         * že s srednjo jakostjo, namesto da začne čisto potihem“. Dvajset
-         * sekund je prvi, najtišji del zvoka (izmerjeno: od -61 do -48 dBFS);
-         * od rezerve vzame manj, kot vlak zamudi na eni postaji.
+         * že s srednjo jakostjo, namesto da začne čisto potihem“. V dvajsetih
+         * sekundah zvok zraste od šepeta do jasno slišnega (od 1.8: od -46 do
+         * -29 dBFS, glej `zvok_nezno.py`); od rezerve vzame manj, kot vlak
+         * zamudi na eni postaji.
          */
         private const val NAJMANJ_NEZNO_MS = 20_000L
 
         /**
-         * Tresenje se nežnemu delu pridruži šele pri 60 %, ko je zvok že
-         * slišen, in je mehko. Prej je kanal zavibriral takoj ob začetku, in
-         * na votli nočni omarici je bilo to glasneje od zvoka (David,
-         * 6. 10. 2026: „najprej zvok od nič, enkrat vmes še vibriranje“).
+         * Tresenje se nežnemu delu pridruži šele pri 35 %, ko je zvok že
+         * slišen. Prej je kanal zavibriral takoj ob začetku, in na votli
+         * nočni omarici je bilo to glasneje od zvoka (David, 6. 10. 2026:
+         * „najprej zvok od nič, enkrat vmes še vibriranje“).
+         *
+         * Sunki se začnejo mehko in redko, nato rastejo: do glasnega so
+         * dvakrat daljši, močnejši in vsako sekundo. V 1.7 so bili ves čas
+         * enaki (150 ms, 70/255, na 2,5 s), od 60 % naprej; David: „začne
+         * tresti čisto malo in počasi, kar mi je všeč, a bi lahko povečal,
+         * da bi hitreje treslo“.
          */
-        private const val TRESENJE_DELEZ = 0.6
-        private const val TRESENJE_RAZMIK_MS = 2_500L
+        private const val TRESENJE_DELEZ = 0.35
+        private val TRESENJE_RAZMIK_MS = 2_500L to 1_000L
+        private val TRESENJE_SUNEK_MS = 150L to 300L
+        private val TRESENJE_JAKOST = 70 to 200
+
+        private fun med(meji: Pair<Long, Long>, d: Double): Long =
+            (meji.first + (meji.second - meji.first) * d).toLong()
 
         /** Ali zaslon zvonjenja ta hip sveti; piše ga [ZvonjenjeDejavnost]. */
         @Volatile
@@ -110,10 +122,14 @@ class ZvonjenjeStoritev : Service() {
 
     private val roka = Handler(Looper.getMainLooper())
     private val glasno = Runnable { zvoniGlasno() }
+    private var tresenjeOd = 0L
     private val tresi = object : Runnable {
         override fun run() {
-            tresljaj()
-            roka.postDelayed(this, TRESENJE_RAZMIK_MS)
+            // Delež poti od prvega sunka do glasnega dela.
+            val d = ((System.currentTimeMillis() - tresenjeOd).toDouble() /
+                (glasnoOb - tresenjeOd).coerceAtLeast(1L)).coerceIn(0.0, 1.0)
+            tresljaj(d)
+            roka.postDelayed(this, med(TRESENJE_RAZMIK_MS, d))
         }
     }
     private var budnost: PowerManager.WakeLock? = null
@@ -151,7 +167,8 @@ class ZvonjenjeStoritev : Service() {
                 ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kajros:nezno")
                 ?.apply { acquire(doGlasnega + 10_000L) }
             roka.postDelayed(glasno, doGlasnega)
-            roka.postDelayed(tresi, (doGlasnega * TRESENJE_DELEZ).toLong())
+            tresenjeOd = zdaj + (doGlasnega * TRESENJE_DELEZ).toLong()
+            roka.postDelayed(tresi, tresenjeOd - zdaj)
             Dnevnik.zapisi(this, b, "zvoni nežno, glasno čez ${(doGlasnega + 500) / 1000} s")
         }
     }
@@ -170,11 +187,19 @@ class ZvonjenjeStoritev : Service() {
         Dnevnik.zapisi(this, b, "zvoni glasno")
     }
 
-    /** Mehak sunek, usmerjen kot budilka: pride tudi v tihem načinu. */
-    private fun tresljaj() {
+    /**
+     * Sunek, usmerjen kot budilka: pride tudi v tihem načinu. `d` je delež
+     * poti do glasnega (0 mehko, 1 najmočneje).
+     */
+    private fun tresljaj(d: Double) {
         val v = getSystemService(Vibrator::class.java) ?: return
-        val ucinek = if (v.hasAmplitudeControl()) VibrationEffect.createOneShot(150, 70)
-        else VibrationEffect.createOneShot(60, VibrationEffect.DEFAULT_AMPLITUDE)
+        val jakost = med(TRESENJE_JAKOST.first.toLong() to TRESENJE_JAKOST.second.toLong(), d).toInt()
+        // Brez nadzora jakosti ostane samo dolžina: kratek sunek je mehak.
+        val ucinek = if (v.hasAmplitudeControl()) {
+            VibrationEffect.createOneShot(med(TRESENJE_SUNEK_MS, d), jakost)
+        } else {
+            VibrationEffect.createOneShot(med(60L to 200L, d), VibrationEffect.DEFAULT_AMPLITUDE)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             v.vibrate(ucinek, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
         } else {
