@@ -11,8 +11,13 @@ Vorbisu bi bil ~150 kB, aplikacija jih ima 111. MIDI predvaja Sonivox, ki je
 del AOSP, torej tudi na telefonih brez Googla.
 
 Glasbena skrinjica (GM 11), razloženi akord E–G–C vsakih 2,5 s, jakost od
-komaj slišne do skoraj polne: če se glasni del iz kakršnegakoli razloga ne
-bi začel, je konec tega zvoka že dovolj glasen, da zbudi.
+tišine do skoraj polne: če se glasni del iz kakršnegakoli razloga ne bi
+začel, je konec tega zvoka že dovolj glasen, da zbudi.
+
+Začne se pri jakosti 1, ne 14 (David, 6. 10. 2026: „najprej začel z zvokom
+0 dB in potem počasi jačal glasnost“). Sonivox jakost udarca šteje približno
+v kvadratu (izmerjeno: 14 → 112 je 33 dB), zato krivulja raste s potenco
+1,8: prvih ~8 s je skoraj tišina, slišno postane postopoma.
 """
 from pathlib import Path
 
@@ -23,7 +28,7 @@ GLASBENA_SKRINJICA = 10     # GM program 11, šteto od 0
 NOTE = (76, 79, 84)         # E5, G5, C6
 ZAMIK_S = 0.22              # med notami razloženega akorda
 DOLZINA_S = 1.8
-JAKOST = (14, 112)          # od, do
+JAKOST = (1, 112)           # od, do
 
 
 def _vlq(n: int) -> bytes:
@@ -46,7 +51,7 @@ def dogodki() -> list[tuple[int, bytes]]:
     t = 0.0
     while t < TRAJANJE_S - 0.01:
         f = t / TRAJANJE_S
-        jakost = round(JAKOST[0] + (JAKOST[1] - JAKOST[0]) * f ** 1.4)
+        jakost = max(1, round(JAKOST[0] + (JAKOST[1] - JAKOST[0]) * f ** 1.8))
         for i, nota in enumerate(NOTE):
             z = t + i * ZAMIK_S
             d.append((_tick(z), bytes([0x90, nota, jakost])))

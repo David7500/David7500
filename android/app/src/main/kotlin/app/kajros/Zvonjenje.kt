@@ -30,11 +30,17 @@ object Zvonjenje {
     const val KANAL_ZBUDI = "budilka"
     /**
      * Nezni del zvonjenja: svoj kanal, ker je zvok last kanala. Zvok je
-     * `res/raw/nezno.mid` (glasbena skrinjica, ki v 45 s zraste od komaj
-     * slisne) -- glasnosti med zvonjenjem ne moremo vec spreminjati, odkar
-     * zvok predvaja sistem, zato mora biti narascanje v datoteki.
+     * `res/raw/nezno.mid` (glasbena skrinjica, ki v 45 s zraste iz tisine) --
+     * glasnosti med zvonjenjem ne moremo vec spreminjati, odkar zvok predvaja
+     * sistem, zato mora biti narascanje v datoteki.
+     *
+     * **Brez tresenja.** Prvi kanal (`budilka-nezno`, 1.5) je ob zacetku
+     * kratko zavibriral, in na votli nocni omarici je bil to najglasnejsi
+     * zvok nežnega dela (David, 6. 10. 2026). Kanala ni mogoce spremeniti,
+     * ko obstaja, zato nov; vibriranje pride sredi neznega dela iz storitve.
      */
-    const val KANAL_NEZNO = "budilka-nezno"
+    const val KANAL_NEZNO = "budilka-zacetek"
+    private const val KANAL_NEZNO_STARI = "budilka-nezno"
     /**
      * Glasni del, kadar zaslon zvonjenja že sveti: isti zvok kot [KANAL_ZBUDI],
      * a brez plavajočega obvestila. Na emulatorju (Android 15, zaklenjen s
@@ -52,6 +58,7 @@ object Zvonjenje {
     fun kanali(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
         nm.deleteNotificationChannel(KANAL_ZBUDI_STARI)
+        nm.deleteNotificationChannel(KANAL_NEZNO_STARI)
         // `USAGE_ALARM` gre skozi glasnost budilke, ne zvonjenja: slisi se tudi,
         // kadar je telefon na tiho -- prav to budilko loci od obvestila.
         // `DEFAULT_ALARM_ALERT_URI` in ne trenutni ton: ce potnik ton budilke
@@ -85,14 +92,14 @@ object Zvonjenje {
         nm.createNotificationChannel(
             NotificationChannel(KANAL_NEZNO, c.getString(R.string.kanal_nezno),
                 NotificationManager.IMPORTANCE_HIGH).apply {
-                setSound(android.net.Uri.parse("android.resource://${c.packageName}/${R.raw.nezno}"),
+                // Po imenu, ne po stevilki vira: stevilka se med gradnjami
+                // lahko premakne, kanal pa si zapomni naslov za vedno.
+                setSound(android.net.Uri.parse("android.resource://${c.packageName}/raw/nezno"),
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build())
-                // En kratek drsljaj na zacetku, ne trojni kot glasni kanal.
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 120)
+                enableVibration(false)
                 setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             })

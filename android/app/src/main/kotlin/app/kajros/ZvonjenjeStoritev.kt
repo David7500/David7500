@@ -6,11 +6,15 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
 
 /**
  * Zvonjenje: obvestilo, ki ga ni mogoce odmahniti, dokler ga kdo ne ustavi.
@@ -34,7 +38,7 @@ import android.os.PowerManager
  * budilka.
  *
  * **Najprej nezno, nato glasno** (6. 10. 2026). Zvonjenje se zacne
- * [Ura.NEZNO_MS] pred uro zvonjenja na kanalu `budilka-nezno` (zvoncek, ki
+ * [Ura.NEZNO_MS] pred uro zvonjenja na kanalu `budilka-zacetek` (zvoncek, ki
  * raste), ob sami uri pride obvestilo na glasnem kanalu. Dve obvestili, ker
  * zvok pripada kanalu in ga obstojecemu obvestilu ni mogoce zamenjati. Med
  * neznim delom drzimo delni `WakeLock`: brez njega bi procesor v Doze lahko
@@ -67,6 +71,15 @@ class ZvonjenjeStoritev : Service() {
          */
         private const val NAJMANJ_NEZNO_MS = 20_000L
 
+        /**
+         * Tresenje se nežnemu delu pridruži šele pri 60 %, ko je zvok že
+         * slišen, in je mehko. Prej je kanal zavibriral takoj ob začetku, in
+         * na votli nočni omarici je bilo to glasneje od zvoka (David,
+         * 6. 10. 2026: „najprej zvok od nič, enkrat vmes še vibriranje“).
+         */
+        private const val TRESENJE_DELEZ = 0.6
+        private const val TRESENJE_RAZMIK_MS = 2_500L
+
         /** Ali zaslon zvonjenja ta hip sveti; piše ga [ZvonjenjeDejavnost]. */
         @Volatile
         var zaslonViden = false
@@ -97,6 +110,12 @@ class ZvonjenjeStoritev : Service() {
 
     private val roka = Handler(Looper.getMainLooper())
     private val glasno = Runnable { zvoniGlasno() }
+    private val tresi = object : Runnable {
+        override fun run() {
+            tresljaj()
+            roka.postDelayed(this, TRESENJE_RAZMIK_MS)
+        }
+    }
     private var budnost: PowerManager.WakeLock? = null
 
     override fun onBind(i: Intent?): IBinder? = null
@@ -132,6 +151,7 @@ class ZvonjenjeStoritev : Service() {
                 ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kajros:nezno")
                 ?.apply { acquire(doGlasnega + 10_000L) }
             roka.postDelayed(glasno, doGlasnega)
+            roka.postDelayed(tresi, (doGlasnega * TRESENJE_DELEZ).toLong())
             Dnevnik.zapisi(this, b, "zvoni nežno, glasno čez ${(doGlasnega + 500) / 1000} s")
         }
     }
@@ -140,12 +160,32 @@ class ZvonjenjeStoritev : Service() {
     private fun zvoniGlasno() {
         val b = zvoni?.let { Shramba.ena(this, it) } ?: return
         ZvonjenjeStoritev.glasnoOb = System.currentTimeMillis()
+        // Glasni kanal trese sam; nežni sunki bi se mešali z njim.
+        nehajTresti()
         vOspredje(OBVESTILO, Zvonjenje.obvestiloZbudi(this, b, System.currentTimeMillis(),
             naZaslonu = zaslonViden))
         getSystemService(NotificationManager::class.java)?.cancel(OBVESTILO_NEZNO)
         budnost?.let { if (it.isHeld) it.release() }
         budnost = null
         Dnevnik.zapisi(this, b, "zvoni glasno")
+    }
+
+    /** Mehak sunek, usmerjen kot budilka: pride tudi v tihem načinu. */
+    private fun tresljaj() {
+        val v = getSystemService(Vibrator::class.java) ?: return
+        val ucinek = if (v.hasAmplitudeControl()) VibrationEffect.createOneShot(150, 70)
+        else VibrationEffect.createOneShot(60, VibrationEffect.DEFAULT_AMPLITUDE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            v.vibrate(ucinek, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(ucinek, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
+        }
+    }
+
+    private fun nehajTresti() {
+        roka.removeCallbacks(tresi)
+        getSystemService(Vibrator::class.java)?.cancel()
     }
 
     private fun vOspredje(stevilka: Int, n: Notification) {
@@ -182,6 +222,7 @@ class ZvonjenjeStoritev : Service() {
     /** Obvestilo gre stran skupaj s storitvijo -- in z njim zvok. */
     private fun ustavi() {
         roka.removeCallbacks(glasno)
+        nehajTresti()
         budnost?.let { if (it.isHeld) it.release() }
         budnost = null
         // Nezno obvestilo ni vec obvestilo storitve, kadar je glasno ze prislo;
@@ -198,6 +239,7 @@ class ZvonjenjeStoritev : Service() {
 
     override fun onDestroy() {
         roka.removeCallbacks(glasno)
+        nehajTresti()
         budnost?.let { if (it.isHeld) it.release() }
         zvoni = null
         super.onDestroy()

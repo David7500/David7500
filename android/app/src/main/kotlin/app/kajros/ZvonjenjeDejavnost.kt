@@ -3,6 +3,7 @@ package app.kajros
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.ActivityManager
 import android.app.KeyguardManager
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -71,19 +72,53 @@ class ZvonjenjeDejavnost : Activity() {
         val vlak = b.vlak && !b.trainNo.startsWith("BUS")
         napolniGlavo(b, vlak)
 
-        val r = PeronRisar(Peron(vlak), b.postaja, resources.displayMetrics.density, zmanjsano) {
-            roka.post { prispel(b) }
-        }
-        risar = r
-        pogled = findViewById<PeronPogled>(R.id.prizor).also {
-            it.zacni(r)
-            it.obUstavitvi = { ustavi() }
+        findViewById<Button>(R.id.ustavi_zasilno).setOnClickListener { ustavi(); finish() }
+        val gles = getSystemService(ActivityManager::class.java)
+            ?.deviceConfigurationInfo?.reqGlEsVersion ?: 0
+        if (gles < 0x20000) {
+            zasilno("OpenGL ES ${gles shr 16}")
+        } else {
+            val r = PeronRisar(Peron(vlak), b.postaja, resources.displayMetrics.density, zmanjsano,
+                obPrihodu = { roka.post { prispel(b) } },
+                obNapaki = { e -> roka.post { zasilno(e.toString()) } })
+            risar = r
+            varujNitRisanja()
+            pogled = findViewById<PeronPogled>(R.id.prizor).also {
+                it.zacni(r)
+                it.obUstavitvi = { ustavi() }
+            }
         }
 
         findViewById<Button>(R.id.se_malo).setOnClickListener { odlozi() }
         // Konec se zapre na dotik: potnik je buden in hoče naprej.
         findViewById<View>(R.id.konec).setOnClickListener { finish() }
         ZvonjenjeStoritev.obKoncu = zapri
+    }
+
+    /**
+     * Prizora ni: namesto vlečenja navaden gumb, kot pred 1.6. Budilka zvoni
+     * naprej -- zvok je v storitvi, ne tu.
+     */
+    private fun zasilno(zakaj: String) {
+        if (findViewById<View>(R.id.ustavi_zasilno).visibility == View.VISIBLE) return
+        Dnevnik.zapisi(this, id?.let { Shramba.ena(this, it) }, "zaslon brez prizora: $zakaj")
+        findViewById<View>(R.id.prizor).visibility = View.GONE
+        findViewById<View>(R.id.namig_vrstica).visibility = View.GONE
+        findViewById<View>(R.id.napredek_tir).visibility = View.GONE
+        findViewById<View>(R.id.ustavi_zasilno).visibility = View.VISIBLE
+    }
+
+    /**
+     * Zadnja mreža: izjema v niti risanja (tudi v izbiri nastavitve EGL, ki
+     * je zunaj risarja) ne sme podreti procesa, ker bi z njim utihnila
+     * budilka. Ujamemo jo samo za nit risanja; vse drugo gre naprej.
+     */
+    private fun varujNitRisanja() {
+        val prej = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { nit, e ->
+            if (nit.name.startsWith("GLThread")) roka.post { zasilno(e.toString()) }
+            else prej?.uncaughtException(nit, e)
+        }
     }
 
     private fun napolniGlavo(b: Budilka, vlak: Boolean) {

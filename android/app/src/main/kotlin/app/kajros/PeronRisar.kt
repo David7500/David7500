@@ -49,6 +49,12 @@ class PeronRisar(
     /** Sistemske animacije ugasnjene: brez vabila in utripanja. */
     private val zmanjsano: Boolean,
     private val obPrihodu: () -> Unit,
+    /**
+     * Prizora ni mogoče narisati (senčilnik, gonilnik). Klicano enkrat, v tej
+     * niti. Izjema iz risarja bi podrla proces -- in z njim storitev, ki
+     * zvoni, zato je risar nikoli ne spusti naprej.
+     */
+    private val obNapaki: (Throwable) -> Unit,
 ) : GLSurfaceView.Renderer {
 
     @Volatile var cilj = 0f
@@ -58,6 +64,8 @@ class PeronRisar(
     @Volatile var p = 0f
         private set
     @Volatile var koncano = false
+        private set
+    @Volatile var pokvarjen = false
         private set
     /** Vozilo na zaslonu v slikovnih točkah prizora: levo, zgoraj, desno, spodaj. */
     @Volatile var okvir = floatArrayOf(0f, 0f, 0f, 0f)
@@ -105,7 +113,23 @@ class PeronRisar(
 
     // ------------------------------------------------------------ življenje
 
-    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) = varno { pripravi() }
+
+    override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) = varno { velikost(w, h) }
+
+    override fun onDrawFrame(gl: GL10?) = varno { narisi() }
+
+    private inline fun varno(blok: () -> Unit) {
+        if (pokvarjen) return
+        try {
+            blok()
+        } catch (e: Throwable) {
+            pokvarjen = true
+            obNapaki(e)
+        }
+    }
+
+    private fun pripravi() {
         osvetljeno = program(OSVETLJENO_V, OSVETLJENO_F)
         osnovno = program(OSNOVNO_V, OSNOVNO_F)
         nebo = program(NEBO_V, NEBO_F)
@@ -134,7 +158,7 @@ class PeronRisar(
         prej = SystemClock.uptimeMillis()
     }
 
-    override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) {
+    private fun velikost(w: Int, h: Int) {
         sirina = maxOf(1, w)
         visina = maxOf(1, h)
         GLES20.glViewport(0, 0, sirina, visina)
@@ -145,7 +169,7 @@ class PeronRisar(
         Matrix.multiplyMM(vp, 0, proj, 0, pogled, 0)
     }
 
-    override fun onDrawFrame(gl: GL10?) {
+    private fun narisi() {
         val zdaj = SystemClock.uptimeMillis()
         val dt = min(0.05f, (zdaj - prej) / 1000f)
         prej = zdaj
@@ -528,7 +552,16 @@ class PeronRisar(
                 val izbor = arrayOfNulls<EGLConfig>(1)
                 return if (egl.eglChooseConfig(d, zahteva, izbor, 1, st) && st[0] > 0) izbor[0] else null
             }
-            return poskusi(4) ?: poskusi(0) ?: error("naprava nima nastavitve za OpenGL ES 2")
+            // Zadnja možnost brez globine: prizor bo narisan narobe, a tega
+            // potnik v trenutku zvonjenja ne opazi -- izjeme pa ne sme biti.
+            return poskusi(4) ?: poskusi(0) ?: najmanj(egl, d)
+        }
+
+        private fun najmanj(egl: EGL10, d: EGLDisplay): EGLConfig {
+            val st = IntArray(1)
+            val izbor = arrayOfNulls<EGLConfig>(1)
+            egl.eglChooseConfig(d, intArrayOf(EGL10.EGL_RENDERABLE_TYPE, 4, EGL10.EGL_NONE), izbor, 1, st)
+            return izbor[0] ?: error("naprava nima nastavitve za OpenGL ES 2")
         }
     }
 
