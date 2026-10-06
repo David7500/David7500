@@ -31,7 +31,7 @@ import sqlite3
 import time
 from datetime import date, timedelta
 
-from . import geo, hoja, journey, stats
+from . import geo, hoja, journey, nadomestni, stats
 
 TZ = journey.TZ
 
@@ -687,8 +687,69 @@ def _nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
     return prva or najdba
 
 
+#: Bliže od tega je nadomestni avtobus „pred postajo“ in hoje ne spreminjamo.
+NADOMESTNI_PREMIK_M = 60
+
+
+def _premakni_nadomestne(voznje: list[dict]) -> None:
+    """Vstop in izstop nadomestne vožnje na mesto, ki ga objavi SŽ, z opisom."""
+    for n in voznje:
+        if n["vrsta"] != "voznja" or n.get("mode") != "bus" or n.get("network") != "zeleznica":
+            continue
+        for kje in ("od", "do"):
+            mesto = nadomestni.za_postajo(n.get(kje))
+            ll = n.get(f"{kje}_ll")
+            if not mesto or mesto.get("lat") is None or not ll:
+                continue
+            if geo.haversine(ll[0], ll[1], mesto["lat"], mesto["lon"]) < NADOMESTNI_PREMIK_M:
+                continue
+            n[f"{kje}_ll"] = [mesto["lat"], mesto["lon"]]
+            n[f"{kje}_postanek"] = mesto["opis"]
+
+
+def _nadomestna_mesta(noge: list[dict], od: tuple[float, float] | None,
+                      do: tuple[float, float] | None, kmh: float) -> list[dict]:
+    """Nadomestni avtobus ne ustavi tam, kjer vlak: vstop in izstop na pravo mesto.
+
+    V voznem redu ima nadomestna vožnja lego železniške postaje (18 od 22
+    postajališč), SŽ pa objavi, kje avtobus res stoji (`nadomestni.py`): na
+    Ljubljani Tivoli 351 m stran, na Tobačni. Brez tega je pot vodila na
+    peron, s katerega avtobus ne pelje, in hoja je bila pet minut prekratka.
+
+    Hoja od vrat in do vrat se izmeri do pravega mesta; med dvema vožnjama,
+    ki se srečata na isti postaji, a ne na istem mestu, pride peš prestop.
+    """
+    _premakni_nadomestne(noge)
+    out: list[dict] = []
+    for i, n in enumerate(noge):
+        if n["vrsta"] == "hoja":
+            prej = noge[i - 1] if i > 0 else None
+            naprej = noge[i + 1] if i + 1 < len(noge) else None
+            if n.get("od") is None and naprej and naprej.get("od_postanek") and od:
+                sek, _ = hoja.sekunde(od[0], od[1], *naprej["od_ll"])
+                if sek is not None:
+                    n["sekunde"] = hoja.pri_hitrosti(sek, kmh)
+                n["do_ll"] = naprej["od_ll"]
+            if n.get("do") is None and prej and prej.get("do_postanek") and do:
+                sek, _ = hoja.sekunde(do[0], do[1], *prej["do_ll"], smer="do")
+                if sek is not None:
+                    n["sekunde"] = hoja.pri_hitrosti(sek, kmh)
+                n["od_ll"] = prej["do_ll"]
+        elif out and out[-1]["vrsta"] == "voznja" and out[-1].get("do_ll") and n.get("od_ll") \
+                and geo.haversine(*out[-1]["do_ll"], *n["od_ll"]) >= NADOMESTNI_PREMIK_M:
+            a, b = out[-1]["do_ll"], n["od_ll"]
+            sek, _ = hoja.sekunde(a[0], a[1], b[0], b[1])
+            out.append({"vrsta": "hoja", "sekunde": sek or 0,
+                        "od": out[-1]["do"], "do": n["od"],
+                        "od_stop": out[-1]["do_stop"], "do_stop": n["od_stop"],
+                        "od_ll": a, "do_ll": b})
+        out.append(n)
+    return out
+
+
 def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int],
-             service_date: str, vir_hoje: str) -> dict:
+             service_date: str, vir_hoje: str, od: tuple[float, float] | None = None,
+             do: tuple[float, float] | None = None, kmh: float = hoja.KMH) -> dict:
     """Iz surovih nog sestavi predlog, kot ga bere prikaz."""
     polnoc = stats.polnoc(service_date)
     vozje = _vozje(conn, service_date)
@@ -738,6 +799,7 @@ def _sestavi(conn, najdba: dict, izhodisca: dict[str, int], cilji: dict[str, int
     # Peš prestopi med vožnjama: čas je razlika med prihodom in odhodom, a
     # samo toliko, kolikor je hoje -- ostalo je čakanje.
     pes_med = hoja.pespoti(conn)
+    noge = _nadomestna_mesta(noge, od, do, kmh)
     for i, n in enumerate(noge):
         if n["vrsta"] == "hoja" and n["sekunde"] is None:
             n["sekunde"] = next((s for b, s in pes_med.get(n["od_stop"], ())
@@ -824,7 +886,10 @@ def _vceraj(service_date: str) -> str:
 def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
                   cilji: dict[str, int], service_date: str, odhod_s: int | None,
                   prihod_do_s: int | None, now_s: int | None, max_nog: int,
-                  pes_s: int | None, ponudi_pes: bool, vir_hoje: str) -> list[dict]:
+                  pes_s: int | None, ponudi_pes: bool, vir_hoje: str,
+                  od: tuple[float, float] | None = None,
+                  do: tuple[float, float] | None = None,
+                  kmh: float = hoja.KMH) -> list[dict]:
     """Predlogi z vozilom po voznem redu ENEGA prometnega dne, z zamudami.
 
     Vhodni časi so sekunde od polnoči tega dne, časi v predlogih pa absolutni,
@@ -835,7 +900,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
     zamik = zamiki(conn, service_date, now_s)
 
     def sestavi(najdba, izh=izhodisca, cil=cilji):
-        return _sestavi(conn, najdba, izh, cil, service_date, vir_hoje)
+        return _sestavi(conn, najdba, izh, cil, service_date, vir_hoje, od, do, kmh)
 
     def kratka():
         """Izhodišča in cilji z malo hoje: za vprašanje "z manj hoje"."""
@@ -1058,7 +1123,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
                 None if odhod_s is None else odhod_s + zamik_s,
                 None if prihod_do_s is None else prihod_do_s + zamik_s,
                 None if now_s is None else now_s + zamik_s,
-                max_nog, None if nadaljevanje else pes_s, ponudi_pes, vir_hoje)
+                max_nog, None if nadaljevanje else pes_s, ponudi_pes, vir_hoje, od, do, kmh)
 
     def kdaj(p):
         return p.get("prihod_ocena") or p["prihod"]
@@ -1395,13 +1460,14 @@ def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
                 "od": ime(od_stop) if od_stop else None,
                 "do": ime(do_stop) if do_stop else None,
                 "od_stop": od_stop, "do_stop": do_stop,
-                "od_ll": ll(od_stop) if od_stop else [a[0], a[1]],
-                "do_ll": ll(do_stop) if do_stop else [b[0], b[1]]}
+                # Točki poti, ne postaje: pri nadomestnem avtobusu se razlikujeta.
+                "od_ll": [a[0], a[1]], "do_ll": [b[0], b[1]]}
 
+    _premakni_nadomestne(voznje)
     noge = [hoja_noga(od, voznje[0]["od_ll"], None, voznje[0]["od_stop"])]
     for a, b in zip(voznje, voznje[1:]):
         noge.append(a)
-        if a["do_stop"] != b["od_stop"]:
+        if a["do_stop"] != b["od_stop"] or a["do_ll"] != b["od_ll"]:
             # Prestop je hoja tudi s kolesom, enako kot v `isci()`: sicer
             # podrobnosti kažejo drugo uro kot seznam, iz katerega so prišle.
             noge.append(hoja_noga(a["do_ll"], b["od_ll"], a["do_stop"], b["od_stop"],

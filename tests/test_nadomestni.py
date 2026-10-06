@@ -78,3 +78,26 @@ def test_pot_vzame_tocko_najdlje_od_postaje():
 def test_samo_pogled_je_zadnja_moznost():
     t, kako = skripta.tocka("https://www.google.com/maps/@46.058357,13.617482,120m/data=!3m1!1e3", None)
     assert (kako, t) == ("pogled", (46.058357, 13.617482))
+
+
+def test_potek_loci_hitri_in_pocasni_nadomestni_avtobus():
+    """Logatec 4.35, 7. 10. 2026: BUS 26018 v 42 min z enim postankom,
+    BUS 26019 v 75 min s šestimi."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE sched(trip_id, stop_seq, stop_id, arr_s, dep_s)")
+    t0 = 4 * 3600 + 35 * 60
+    conn.executemany("INSERT INTO sched VALUES(?,?,?,?,?)", [
+        ("h", 1, "logatec", None, t0), ("h", 2, "tivoli", t0 + 35 * 60, t0 + 35 * 60),
+        ("h", 3, "lj", t0 + 42 * 60, None),
+    ] + [("p", i + 1, f"s{i}", t0 + i * 600, t0 + i * 600) for i in range(7)]
+      + [("p", 8, "lj", t0 + 75 * 60, None)])
+    vrstice = [
+        {"trip_id": "h", "stop_seq": 1, "dep_s": t0, "mode": "bus", "network": "zeleznica"},
+        {"trip_id": "p", "stop_seq": 1, "dep_s": t0, "mode": "bus", "network": "zeleznica"},
+        {"trip_id": "v", "stop_seq": 1, "dep_s": t0, "mode": "vlak", "network": "zeleznica"},
+    ]
+    nadomestni.potek(conn, vrstice)
+    assert (vrstice[0]["voznja_s"], vrstice[0]["postankov"]) == (42 * 60, 1)
+    assert (vrstice[1]["voznja_s"], vrstice[1]["postankov"]) == (75 * 60, 6)
+    assert "voznja_s" not in vrstice[2]

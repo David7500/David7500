@@ -52,7 +52,7 @@
   function cilj(k) {
     const h = k.headsign || "";
     const i = h.lastIndexOf(" - ");
-    return i >= 0 ? h.slice(i + 3) : h;
+    return lepoIme(i >= 0 ? h.slice(i + 3) : h);
   }
 
   // Imena v imenovalniku, zato "pri postaji X" in ne "pri X": sklanjati se jih

@@ -638,7 +638,7 @@ function imeDni(dnevi) {
  */
 function smerVoznje() {
   const stops = (state.run && state.run.stops) || [];
-  return stops.length ? stops[stops.length - 1].name : "";
+  return stops.length ? lepoIme(stops[stops.length - 1].name) : "";
 }
 
 function budMinut(plast) {
@@ -910,7 +910,7 @@ function vehicleChainHtml() {
         <span class="chain-tag">vozilo</span>
         <span>${kje ? kje + " · " : ""}konča vožnjo
           <a href="${chainLink(prev)}">${escapeHtml(prev.train_no)}</a>
-          ${prev.headsign ? escapeHtml(prev.headsign) : ""}${zam ? ", zamuja " + zam : ""}</span>
+          ${prev.headsign ? escapeHtml(lepoIme(prev.headsign)) : ""}${zam ? ", zamuja " + zam : ""}</span>
       </div>
       ${prev.layover_s != null ? `<div class="chain-sub">vmes ${minLabel(prev.layover_s)} postanka —
         zamuda prejšnje vožnje <strong>ni</strong> napoved za tvojo, vozilo jo med
@@ -924,7 +924,7 @@ function vehicleChainHtml() {
         <span class="chain-tag">nato</span>
         <span>isto vozilo nadaljuje kot
           <a href="${chainLink(c.next)}">${escapeHtml(c.next.train_no)}</a>
-          ${c.next.headsign ? escapeHtml(c.next.headsign) : ""}</span>
+          ${c.next.headsign ? escapeHtml(lepoIme(c.next.headsign)) : ""}</span>
       </div>`);
   }
   // Okvir mora izginiti skupaj s svojo vsebino. Kadar je edina vrstica
@@ -2568,7 +2568,7 @@ async function loadHeadsign() {
     // `/api/train/…/run`, `loadHeadsign()` pa teče takoj ob nalaganju.
     const live = await fetch(`/api/live?network=${OMREZJE}`).then(jsonOk);
     const me = live.find((t) => t.train_no === TRAIN_NO);
-    if (me && me.headsign) headsignEl.textContent = me.headsign;
+    if (me && me.headsign) headsignEl.textContent = lepoIme(me.headsign);
   } catch (err) {
     /* smer je postranska -- brez nje stran deluje naprej */
   }

@@ -162,12 +162,14 @@ function voznjaHtml(n) {
       <div class="korak-vrh">
         <a class="noga-linija" href="${okno}">${escapeHtml(kdo)}</a>
         ${zamudaHtml(n.zamuda, n.brez_podatka)}
-        ${n.headsign ? `<span class="korak-smer">→ ${escapeHtml(n.headsign)}</span>` : ""}
+        ${n.headsign ? `<span class="korak-smer">→ ${escapeHtml(lepoIme(n.headsign))}</span>` : ""}
       </div>
       <div class="korak-vstop"><strong>${ura(odh)}</strong> ${escapeHtml(n.od)}</div>
+      ${n.od_postanek ? nadomestniPostanekHtml({ opis: n.od_postanek }) : ""}
       ${seznam}
       <div class="korak-izstop"><strong>${ura(prih)}</strong> ${escapeHtml(n.do)}
         <span class="korak-kam">izstop</span>${izstopHtml(n)}</div>
+      ${n.do_postanek ? nadomestniPostanekHtml({ opis: n.do_postanek }) : ""}
       ${vr}
     </div></li>`;
 }
@@ -520,7 +522,7 @@ function voziloHtml(nv, ostaneS) {
   const odh = nv.odhod_ocena || nv.odhod;
   const zam = nv.zamuda ? " " + zamudaHtml(nv.zamuda) : "";
   let vrstica = `<strong>${escapeHtml(kdo)}</strong> ${
-    nv.headsign ? `→ ${escapeHtml(nv.headsign)} ` : ""}odpelje ob <strong>${ura(odh)}</strong>${zam}`;
+    nv.headsign ? `→ ${escapeHtml(lepoIme(nv.headsign))} ` : ""}odpelje ob <strong>${ura(odh)}</strong>${zam}`;
   // Odštevanje samo za pot, ki je zdaj: za jutrišnjo je "čez 1 080 minut" šum.
   if (!ZIVO) return vrstica;
   const cez = odh - Date.now() / 1000;

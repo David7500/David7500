@@ -584,6 +584,43 @@ def pot_vozje(network: str, train_no: str, trip_id: str | None = None) -> str:
 _SIFRA_LINIJE = {"1123": "Arriva", "1119": "Nomago", "1121": "AP MS"}
 
 
+#: Ostanejo velike: LPP jih piše tako, in tako jih ljudje poznajo.
+_KRATICE = {"P+R", "BTC", "SŽ", "ZD", "NS", "AP", "OŠ", "UKC", "LPP", "IMP", "KPL", "AMZS", "TC"}
+#: Občna imena v imenih sosesk z malo: Zelena jama, Dolgi most, Tuji grm.
+_MALA_IMENA = {"naselje", "jama", "most", "grm", "log", "dvor", "kolodvor", "cesta", "ulica",
+               "trg", "vas", "breg", "hrib", "pri", "na", "v", "ob", "pod", "nad", "za", "in"}
+
+
+def lepo_ime(niz: str | None) -> str:
+    """LPP-jeva imena brez velikih črk in tehničnih pripon.
+
+    „BEŽIGRAD (ŽELEZNA) - ZOO - C. STOŽICE P+R_obvoz“ → „Bežigrad (Železna) –
+    Zoo – C. Stožice P+R (obvoz)“. Besede, ki niso v celoti velike, ostanejo,
+    zato se imena drugih prevoznikov ne spremenijo. Isto kot `common.lepoIme`.
+    """
+    if not niz:
+        return ""
+    t = re.sub(r"_obvoz$", " (obvoz)", str(niz), flags=re.I)
+    t = re.sub(r"\s*-\s+|\s+-\s*", " – ", t)
+    deli = []
+    for d in t.split(" – "):
+        prva = [True]
+
+        def beseda(m: re.Match) -> str:
+            w = m.group(0)
+            zacetek = prva[0]
+            prva[0] = False
+            if w != w.upper() or len(w) < 2 or w in _KRATICE:
+                return w
+            male = w.lower()
+            if not zacetek and male in _MALA_IMENA:
+                return male
+            return male[0].upper() + male[1:]
+
+        deli.append(re.sub(r"[^\W\d_]+(?:\+[^\W\d_]+)*|[^\W\d_]*\+[^\W\d_]+", beseda, d))
+    return " – ".join(deli)
+
+
 def cilj_voznje(headsign: str | None) -> str:
     """Kam pelje: zadnji kos „A - B“; krožna pove vmesno postajo in „in nazaj“."""
     d = [x.strip() for x in (headsign or "").split(" - ") if x.strip()]

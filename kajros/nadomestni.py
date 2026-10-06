@@ -56,6 +56,26 @@ def je_nadomestni(row: dict) -> bool:
     return row.get("mode") == "bus" and row.get("network") == "zeleznica"
 
 
+def potek(conn, rows: list[dict]) -> None:
+    """`voznja_s` in `postankov` k odhodom nadomestnih voženj: koliko traja do
+    konca in kolikokrat vmes ustavi.
+
+    Iz Logatca ob 4.35 odpeljeta dva nadomestna avtobusa v Ljubljano (BUS
+    26018 in 26019, 7. 10. 2026): prvi je tam v 42 minutah z enim postankom,
+    drugi v 75 s šestimi. Na tabli sta bila enaka -- „BUS … → Ljubljana“ --
+    in potnik je moral uganiti, kateri je hitri.
+    """
+    for r in rows:
+        if not je_nadomestni(r) or r.get("dep_s") is None or not r.get("trip_id"):
+            continue
+        v = conn.execute(
+            "SELECT COUNT(*) - 1, MAX(COALESCE(arr_s, dep_s)) FROM sched "
+            "WHERE trip_id = ? AND stop_seq > ?", (r["trip_id"], r["stop_seq"])).fetchone()
+        if v and v[1] is not None and v[0] >= 0:
+            r["postankov"] = v[0]
+            r["voznja_s"] = v[1] - r["dep_s"]
+
+
 def dopolni(rows: list[dict], postaja: str | None) -> None:
     """`nadomestni_postanek` k vrsticam nadomestnih voženj, ki ustavijo na
     `postaja` (tabla, iskalnik): potnik mora vedeti, kam iti, ne le kdaj."""

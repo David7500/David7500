@@ -626,6 +626,34 @@ function ciljVoznje(headsign) {
   return d[d.length - 1];
 }
 
+// ---------- imena, kot jih piše LPP ----------
+//
+// LPP smeri in končna postajališča piše z velikimi črkami in s tehničnimi
+// priponami: „BEŽIGRAD (ŽELEZNA) - ZOO - C. STOŽICE P+R_obvoz“. Na zaslonu
+// „Bežigrad (Železna) – Zoo – C. Stožice P+R (obvoz)“. Besede, ki niso v celoti
+// velike, ostanejo, kot so („NS RUDNIK (po Vilharjevi)“), zato se imena drugih
+// prevoznikov ne spremenijo. Isto pravilo kot `pristanek.lepo_ime`.
+const KRATICE = new Set(["P+R", "BTC", "SŽ", "ZD", "NS", "AP", "OŠ", "UKC", "LPP", "IMP", "KPL", "AMZS", "TC"]);
+// Občna imena v imenih sosesk z malo: Zelena jama, Dolgi most, Tuji grm.
+const MALA_IMENA = new Set(["naselje", "jama", "most", "grm", "log", "dvor", "kolodvor",
+  "cesta", "ulica", "trg", "vas", "breg", "hrib", "pri", "na", "v", "ob", "pod", "nad", "za", "in"]);
+
+function lepoIme(niz) {
+  if (!niz) return "";
+  const t = String(niz).replace(/_obvoz$/i, " (obvoz)").replace(/\s*-\s+|\s+-\s*/g, " – ");
+  return t.split(" – ").map((del) => {
+    let prva = true;
+    return del.replace(/[\p{L}+]+/gu, (w) => {
+      const zacetek = prva;
+      prva = false;
+      if (w !== w.toUpperCase() || w.length < 2 || KRATICE.has(w)) return w;
+      const male = w.toLocaleLowerCase("sl");
+      if (!zacetek && MALA_IMENA.has(male)) return male;
+      return male.charAt(0).toLocaleUpperCase("sl") + male.slice(1);
+    });
+  }).join(" – ");
+}
+
 /** „LPP 25“, „Arriva“ / „Arriva → Bohinj Ukanc“ (`sCiljem`, kjer smeri ne
  *  pove nič drugega), „IC 503“. */
 function imeVoznje(row, sCiljem = false) {
@@ -1055,6 +1083,15 @@ function nadomestniPostanekHtml(p) {
       <circle cx="12" cy="10" r="2.3"></circle>
     </svg>
     <span><span class="za-bralnik">nadomestni avtobus ustavlja: </span>${escapeHtml(p.opis)}</span></span>`;
+}
+
+// Nadomestni avtobusi ob isti uri so lahko hitri in počasni (Logatec 4.35:
+// 42 in 75 min do Ljubljane). Številka vožnje tega ne pove, trajanje pove.
+function potekNadomestnegaHtml(r) {
+  if (r.voznja_s == null || r.postankov == null) return "";
+  const min = Math.round(r.voznja_s / 60);
+  const vmes = r.postankov === 0 ? "brez postankov" : `${r.postankov} ${sklon(r.postankov, "postanek")}`;
+  return `<span class="potek-nadomestnega">vožnja ${min} min · ${vmes}</span>`;
 }
 
 function measuredStopHtml(s, isCurrent, w) {

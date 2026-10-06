@@ -484,7 +484,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
           // „A6346 Arriva A6346“); pri avtobusu je oznaka vse.
           ? lineBadgeHtml(c)
           : `${escapeHtml(c.train_no)}${isBus(c.mode) ? ` ${lineBadgeHtml(c)}` : ""}`}</div>
-        <div class="conn-headsign">${escapeHtml(c.headsign || "")}</div>
+        <div class="conn-headsign">${escapeHtml(lepoIme(c.headsign))}</div>
       </div>
       <div class="conn-delay">${c.zamuda
         ? delayChipHtml(c.zamuda, c.delay_kind, c.delay_at)
@@ -750,19 +750,20 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
       <div>
         <div class="board-towards">
           ${isBus(r.mode) && r.network === "avtobus" ? lineBadgeHtml(r) : ""}
-          <span>${escapeHtml(r.towards)}</span>
+          <span>${escapeHtml(lepoIme(r.towards))}</span>
         </div>
         <div class="board-train">${isBus(r.mode) && r.network === "avtobus"
           ? ""
           : `${escapeHtml(r.train_no)} `}${isBus(r.mode) && r.network === "zeleznica"
           ? lineBadgeHtml(r) + " "
-          : ""}${r.headsign ? escapeHtml(r.headsign) : ""}</div>
+          : ""}${r.headsign ? escapeHtml(lepoIme(r.headsign)) : ""}</div>
       </div>
       <div class="conn-delay">${r.lpp_vrsta ? lppChipHtml(r.lpp_vrsta)
         : r.zamuda ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}${doHtml(r.do_s)}</div>
       <div class="board-meta">
         ${nadomestniPostanekHtml(r.nadomestni_postanek)}
+        ${potekNadomestnegaHtml(r)}
         ${tirHtml(r.tir, r.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
@@ -1434,17 +1435,26 @@ async function searchAB(push, tiho = false, vpr = null) {
   }
   if (!tiho) zacniIskanje(`iščem zveze ${from} → ${to} …`);
   const osvezi = () => searchAB(false, true, { from, to, date });
+  // Pozen odgovor starega vprasanja ne sme prepisati novega: osvezitev je
+  // lahko na poti, ko clovek pritisne "Poisci". Tudi napaka starega ne sme
+  // nicesar: njen ponovni poskus bi novemu iskanju vzel osvezevanje in cez
+  // 30 s na zaslon vrnil staro vprasanje.
+  const moja = ++zvezeSt;
 
   try {
     const url = `/api/connections?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
       + `&date=${encodeURIComponent(date)}&network=${NETWORK}`;
-    // Pozen odgovor starega vprasanja ne sme prepisati novega: osvezitev je
-    // lahko na poti, ko clovek pritisne "Poisci".
-    const moja = ++zvezeSt;
     const res = await fetch(url);
     if (moja !== zvezeSt) return;
+    // Tiha osvezitev ob napaki pusti stare zveze in poskusi znova -- tudi ob
+    // 404 in 5xx: med nocnim uvozom voznega reda ali objavo je postaja za
+    // hip "neznana", in prej se je osvezevanje tedaj ustavilo do novega
+    // iskanja.
+    if (tiho && !res.ok) {
+      schedulePoll(osvezi, date === todayIso());
+      return;
+    }
     if (res.status === 404) {
-      if (tiho) return;
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
       razlozi();   // popraviti je treba polje, ne gledati odgovora
       return;
@@ -1455,7 +1465,6 @@ async function searchAB(push, tiho = false, vpr = null) {
     // postaja"). Prej je `renderConnections` dobil `{detail: ...}` namesto
     // odgovora in stran je ostala prazna brez pojasnila.
     if (!res.ok) {
-      if (tiho) return;
       resultsEl.innerHTML = `<div class="empty-state">${
         escapeHtml(data && data.detail ? data.detail : "Iskanje ni uspelo.")}</div>`;
       if (push) revealResults();
@@ -1465,6 +1474,7 @@ async function searchAB(push, tiho = false, vpr = null) {
     if (push) revealResults();
     schedulePoll(osvezi, data.date === todayIso());
   } catch (err) {
+    if (moja !== zvezeSt) return;
     console.error("iskanje ni uspelo", err);
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
     // Tiha osvezitev pusti stare zveze (imajo uro) in poskusi znova: en
@@ -1472,7 +1482,7 @@ async function searchAB(push, tiho = false, vpr = null) {
     if (tiho) schedulePoll(osvezi, date === todayIso());
     else resultsEl.innerHTML = '<div class="empty-state">Iskanje ni uspelo. Strežnik morda ni dosegljiv.</div>';
   } finally {
-    koncajIskanje();
+    if (moja === zvezeSt) koncajIskanje();
   }
 }
 
@@ -1485,7 +1495,7 @@ async function searchBoard(push, tiho = false) {
   const kind = $("board-kind").value;
   const from = $("board-time").value;
   if (!station) return;
-  remember({ tab: "board", station, date, kind, from });
+  remember({ tab: "board", station, date, kind, from }, !tiho);
   if (!tiho) zacniIskanje(`iščem odhode — ${station} …`);
   // Nova postaja vzame svojo zapomnjeno smer; osvezitev iste obdrzi izbrano.
   if (push || tablaZa !== station) {
@@ -1507,6 +1517,7 @@ async function searchBoard(push, tiho = false) {
     zlozi();
   }
 
+  const moja = ++tablaSt;
   try {
     // Brez ure streznik izbere sam: za danes tri ure naprej od zdaj, za drug
     // dan cel dan. Vpisana ura to povozi.
@@ -1514,12 +1525,20 @@ async function searchBoard(push, tiho = false) {
     const url = `/api/departures?station=${encodeURIComponent(station)}`
       + `&date=${encodeURIComponent(date)}&kind=${kind}&network=${NETWORK}${q}`
       + (izbranaSmer ? `&smer=${encodeURIComponent(izbranaSmer)}` : "");
-    const moja = ++tablaSt;
     const res = await fetch(url);
     if (moja !== tablaSt) return;
+    // Isto kot pri zvezah: tiha osvezitev ob napaki pusti tablo in poskusi znova.
+    if (tiho && !res.ok) {
+      schedulePoll(() => searchBoard(false, true), date === todayIso());
+      return;
+    }
     if (res.status === 404) {
       resultsEl.innerHTML = '<div class="empty-state">Te postaje ne poznam. Začni tipkati in izberi s seznama.</div>';
       razlozi();   // popraviti je treba polje, ne gledati odgovora
+      return;
+    }
+    if (!res.ok) {
+      resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
       return;
     }
     const data = await res.json();
@@ -1532,12 +1551,15 @@ async function searchBoard(push, tiho = false) {
     if (push) revealResults();
     schedulePoll(() => searchBoard(false, true), data.date === todayIso());
   } catch (err) {
+    if (moja !== tablaSt) return;
     console.error("tabla ni uspela", err);
     refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
     // Tiha osvezitev pusti staro tablo: ta ima uro in je uporabna, prazna ni.
-    if (!tiho) resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
+    // In poskusi znova: en izpad v predoru ne sme ustaviti osvezevanja.
+    if (tiho) schedulePoll(() => searchBoard(false, true), date === todayIso());
+    else resultsEl.innerHTML = '<div class="empty-state">Nalaganje ni uspelo.</div>';
   } finally {
-    koncajIskanje();
+    if (moja === tablaSt) koncajIskanje();
   }
 }
 
@@ -1546,12 +1568,69 @@ async function searchBoard(push, tiho = false) {
 // /app/bus, je tam dobil isto vprasanje, resemo na avtobusnem omrezju
 // ("Ljubljana AP") in prazen odgovor. Zdaj je zadnja poizvedba preprosto
 // prva v seznamu nedavnih, ta pa je po omrezju locen ze od zacetka.
-function remember(obj) {
+function remember(obj, novo = true) {
   const cur = obj.tab === "board"
     ? { net: NETWORK, kind: "board", station: obj.station, dir: obj.kind }
     : { net: NETWORK, kind: "ab", from: obj.from, to: obj.to };
   recentAdd(cur);
   renderRecents();
+  if (novo) predlagajShranjevanje(cur);
+}
+
+// Kdor isto pot ali tablo išče znova (vsaj pol ure pozneje, ne ob osvežitvi),
+// dobi ponudbo, da jo shrani na prvo stran. Vrhovi s Facebooka odtečejo v
+// nekaj dneh; šteje, ali se ljudje vračajo, in vrnitev je lažja s prve
+// strani. „Ne, hvala“ velja za to pot za vedno -- ponudba ne sme nadlegovati.
+const PONOVITVE_KEY = "kajros:ponovitve";
+const PONOVITEV_RAZMIK_MS = 30 * 60 * 1000;
+const PONOVITEV_NAJVEC = 40;
+
+function ponovitve() {
+  try {
+    const o = JSON.parse(localStorage.getItem(PONOVITVE_KEY) || "{}");
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function shraniPonovitve(o) {
+  const kljuci = Object.keys(o).sort((a, b) => (o[b].t || 0) - (o[a].t || 0))
+    .slice(0, PONOVITEV_NAJVEC);
+  try {
+    localStorage.setItem(PONOVITVE_KEY, JSON.stringify(Object.fromEntries(kljuci.map((k) => [k, o[k]]))));
+  } catch (err) {
+    /* zasebno okno: ponudba pač ne pride */
+  }
+}
+
+function predlagajShranjevanje(cur) {
+  const el = $("predlog-shrani");
+  if (!el) return;
+  el.hidden = true;
+  const k = `${NETWORK}|${favKey(cur)}`;
+  const vse = ponovitve();
+  const prej = vse[k];
+  const zdaj = Date.now();
+  const ponudi = prej && !prej.ne && zdaj - prej.t >= PONOVITEV_RAZMIK_MS
+    && !favLoad().some((f) => favKey(f) === favKey(cur));
+  vse[k] = { t: zdaj, ne: !!(prej && prej.ne) };
+  shraniPonovitve(vse);
+  if (!ponudi) return;
+  el.innerHTML = `<span>${cur.kind === "board" ? "To tablo" : "To pot"} iščeš večkrat.</span>
+    <button type="button" class="predlog-da">☆ Shrani na prvo stran</button>
+    <button type="button" class="predlog-ne">Ne, hvala</button>`;
+  el.hidden = false;
+  el.querySelector(".predlog-da").addEventListener("click", () => {
+    el.hidden = true;
+    favToggle();
+  });
+  el.querySelector(".predlog-ne").addEventListener("click", () => {
+    el.hidden = true;
+    const o = ponovitve();
+    o[k] = { t: Date.now(), ne: true };
+    shraniPonovitve(o);
+  });
 }
 
 // ---------- postajališča v bližini ----------
@@ -1626,9 +1705,11 @@ function setTab(tab) {
   $("search-ab").hidden = tab !== "ab";
   $("search-board").hidden = tab !== "board";
   razlozi();   // drug zavihek = drugo vprasanje; iskanje ga po potrebi spet zlozi
-  // Odgovor, ki je se na poti, sodi v zavihek, ki ga ni vec.
+  // Odgovor, ki je se na poti, sodi v zavihek, ki ga ni vec. Ker ga zdaj nihce
+  // ne bo koncal, gumba sprostimo tu.
   zvezeSt++;
   tablaSt++;
+  koncajIskanje();
   resultsEl.innerHTML = "";
   resultHeadEl.innerHTML = "";
   alertsEl.innerHTML = "";

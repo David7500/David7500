@@ -57,7 +57,7 @@
         <b>{{ n }}</b>
         {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.
         {% endif %}
-        Prva ob {{ odhodi[0].ura }}{% if odhodi[0].towards %}, smer {{ odhodi[0].towards }}{% endif %}.
+        Prva ob {{ odhodi[0].ura }}{% if odhodi[0].towards %}, smer {{ odhodi[0].towards | lepo_ime }}{% endif %}.
       {% else %}
         V naslednjih treh urah od tu ne pelje nič.
         <a href="{{ iskalnik }}">Poglej drug dan ali uro.</a>
@@ -113,7 +113,7 @@
         <tr>
           <td class="t">{% if o.vozni_red %}<s class="vozni-red">{{ o.vozni_red }}</s><span class="z-{{ o.zamuda.razred }}">{{ o.ura }}</span>{% else %}{{ o.ura }}{% endif %}</td>
           <td><a href="{{ pot_vozje(network, o.train_no, o.trip_id) }}">{{ o | ime_voznje }}</a></td>
-          <td class="kam">{{ o.towards }}</td>
+          <td class="kam">{{ o.towards | lepo_ime }}</td>
           {% if o.zamuda %}
           <td class="zam z-{{ o.zamuda.razred }}">{{ o.zamuda | besedilo }}</td>
           {% elif o.obicajno %}

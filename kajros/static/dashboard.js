@@ -518,7 +518,7 @@ function vehCardHtml(o) {
       <div class="veh-head">
         <span class="veh-no">${escapeHtml(o.no)}</span>${o.badge || ""}
         <button type="button" class="veh-min" aria-label="Skrči ali razširi kartico"></button>
-        <span class="veh-headsign">${escapeHtml(o.headsign || "")}</span>
+        <span class="veh-headsign">${escapeHtml(lepoIme(o.headsign))}</span>
       </div>
       <div class="veh-rows">${rows}</div>
       ${o.href ? `<a class="veh-open" href="${o.href}" target="_blank" rel="noopener">
@@ -1048,7 +1048,7 @@ function busTooltipHtml(v) {
   return `<div class="train-label-line">`
     + `<span class="train-label-code" style="color:${busInk(v)}">`
     + `${escapeHtml(imeVoznje(v))}</span>`
-    + `<span class="train-label-more">${escapeHtml(v.headsign || "")}</span></div>`
+    + `<span class="train-label-more">${escapeHtml(lepoIme(v.headsign))}</span></div>`
     + `<div class="train-label-more">`
     + `${v.speed_kmh != null ? (v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji") : "brez hitrosti"}`
     + ` · lega stara ${ageHtml(v.age_s)}</div>`;
@@ -1311,12 +1311,13 @@ function odhodHtml(r, nowMs) {
     !r.zamuda && !nadomestni && r.typical ? `običajno · ${pluralRuns(r.typical.n)}` : "",
     r.do_s != null ? `<span class="opozorilo">lahko do ${delayLabel(r.do_s)} min</span>` : "",
     morda ? nepotrjenHtml(pricakovano, false) : "",
+    nadomestni ? potekNadomestnegaHtml(r) : "",
   ].filter(Boolean).join(" ");
   return `<a class="odh${morda ? " is-unconfirmed" : ""}"
        href="${tripHref(r.train_no, r.trip_id, r.service_date, "zeleznica")}">
       <span class="odh-ura"${off ? ` style="color:${delayColor(r.zamuda)}"` : ""}>${hhmm(pricakovano)}</span>
       <span class="odh-kam"><span class="odh-no">${escapeHtml(r.train_no)}</span>${
-        modeBadgeHtml(r.mode)} → ${escapeHtml(r.towards || r.destination || "")}</span>
+        modeBadgeHtml(r.mode)} → ${escapeHtml(lepoIme(r.towards || r.destination))}</span>
       ${zamuda}
       ${meta ? `<span class="odh-meta">${meta}</span>` : ""}
       ${nadomestni ? nadomestniPostanekHtml(r.nadomestni_postanek) : ""}
@@ -1367,6 +1368,30 @@ async function osveziPostajo() {
   }
   if (okno !== postajaOkno) return;    // medtem zaprt ali zamenjan
   okno.setHTML(postajaHtml(okno.__ime, tabla, zap, napaka));
+  pokaziNadomestniPostanek(okno, tabla);
+}
+
+// Kje stoji nadomestni avtobus, kadar ne pred postajo: vijolična bucika ob
+// oblačku (Ljubljana Tivoli: Tobačna, 351 m stran). Gre stran z oblačkom.
+function pokaziNadomestniPostanek(okno, tabla) {
+  if (okno.__bucika) { okno.__bucika.remove(); okno.__bucika = null; }
+  const p = ((tabla && tabla.board) || []).map((r) => r.nadomestni_postanek)
+    .find((x) => x && x.lat != null);
+  if (!p) return;
+  const ll = okno.getLngLat();
+  const dx = (p.lon - ll.lng) * 111320 * Math.cos(ll.lat * Math.PI / 180);
+  const dy = (p.lat - ll.lat) * 111320;
+  if (Math.hypot(dx, dy) < 60) return;
+  const el = document.createElement("div");
+  el.className = "nadomestni-bucika";
+  el.setAttribute("role", "img");
+  el.setAttribute("aria-label", `nadomestni avtobus ustavlja: ${p.opis}`);
+  el.title = `nadomestni avtobus: ${p.opis}`;
+  el.innerHTML = `<svg width="26" height="32" viewBox="0 0 24 30" aria-hidden="true">
+      <path d="M12 29s-9-8.2-9-16a9 9 0 0 1 18 0c0 7.8-9 16-9 16z" fill="#b48ad8" stroke="#0f1115" stroke-width="1.5"/>
+      <circle cx="12" cy="12.5" r="3.6" fill="#0f1115"/></svg>`;
+  okno.__bucika = new maplibregl.Marker({ element: el, anchor: "bottom" })
+    .setLngLat([p.lon, p.lat]).addTo(map);
 }
 
 // Oblaček železniške postaje. Ena pot za dotik pike in izbiro v iskalniku.
@@ -1377,7 +1402,10 @@ function odpriPostajo(ime, ll) {
   okno.__ime = ime;
   postajaOkno = okno;
   omogociPremik(okno);
-  okno.on("close", () => { if (postajaOkno === okno) postajaOkno = null; });
+  okno.on("close", () => {
+    if (postajaOkno === okno) postajaOkno = null;
+    if (okno.__bucika) { okno.__bucika.remove(); okno.__bucika = null; }
+  });
   osveziPostajo();
 }
 

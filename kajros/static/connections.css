@@ -607,6 +607,21 @@
 .result-bar { display: flex; align-items: baseline; gap: 12px; }
 .result-bar .result-head { flex: 1 1 auto; }
 
+/* Ponudba ob ponovljenem iskanju (`predlagajShranjevanje`): tiha vrstica nad
+   rezultati, ne okno čez njih. */
+.predlog-shrani {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  margin: 0 0 10px; padding: 8px 12px; border-radius: 10px;
+  background: var(--bg-raised); border: 1px solid var(--line);
+  font-size: 13px; color: var(--ink-dim);
+}
+.predlog-shrani[hidden] { display: none; }
+.predlog-shrani button {
+  font: inherit; min-height: 32px; padding: 0 10px; border-radius: 7px; cursor: pointer;
+  background: none; border: 1px solid var(--line-firm); color: var(--ink);
+}
+.predlog-shrani .predlog-ne { border-color: transparent; color: var(--ink-mute); }
+
 .fav-toggle {
   flex-shrink: 0;
   background: none;

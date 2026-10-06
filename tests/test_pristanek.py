@@ -307,3 +307,24 @@ def test_cilj_krozne_voznje():
     assert pristanek.cilj_voznje("Kočevje - Borovec pri Kočevski Reki obračališče") == \
         "Borovec pri Kočevski Reki obračališče"
     assert pristanek.cilj_voznje(None) == ""
+
+
+def test_lepo_ime_lpp_brez_velikih_crk_in_pripon():
+    from kajros.pristanek import lepo_ime
+    assert lepo_ime("BEŽIGRAD (ŽELEZNA) - ZOO - C. STOŽICE P+R_obvoz") == \
+        "Bežigrad (Železna) – Zoo – C. Stožice P+R (obvoz)"
+    # LPP ponekod izpusti presledek pred pomišljajem.
+    assert lepo_ime("C. STOŽICE P+R- ZOO") == "C. Stožice P+R – Zoo"
+    assert lepo_ime("ŠTEPANJSKO NASELJE - PODUTIK") == "Štepanjsko naselje – Podutik"
+    assert lepo_ime("ZELENA JAMA - NOVE JARŠE") == "Zelena jama – Nove Jarše"
+    assert lepo_ime("SŽ KOLODVOR") == "SŽ kolodvor"
+    assert lepo_ime("BTC-ATLANTIS") == "BTC-Atlantis"
+
+
+def test_lepo_ime_ne_spreminja_imen_drugih_prevoznikov():
+    from kajros.pristanek import lepo_ime
+    assert lepo_ime("NS RUDNIK (po Vilharjevi)") == "NS Rudnik (po Vilharjevi)"
+    assert lepo_ime("O.š. Sostro") == "O.š. Sostro"
+    assert lepo_ime("Ljubljana AP - Bohinj Ukanc") == "Ljubljana AP – Bohinj Ukanc"
+    assert lepo_ime("Maribor") == "Maribor"
+    assert lepo_ime(None) == ""

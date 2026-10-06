@@ -241,7 +241,7 @@ async function odhodiPoti(f, datum) {
     const d = await fetch(`/api/departures?${q}`).then(jsonOk);
     return (d.board || []).map((r) => ({
       ura: r.sched, pricakovano: r.expected, zamuda: r.zamuda, nepotrjen_do: r.nepotrjen_do,
-      kam: r.towards, nadomestni: isBus(r.mode) && r.network === "zeleznica",
+      kam: lepoIme(r.towards), nadomestni: isBus(r.mode) && r.network === "zeleznica",
     }));
   }
   const q = new URLSearchParams({ from: f.from, to: f.to, network, with_transfers: "false" });
