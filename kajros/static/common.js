@@ -664,7 +664,7 @@ function lineBadgeHtml(row) {
         <circle cx="8" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
         <circle cx="16" cy="14.6" r="0.9" fill="currentColor" stroke="none"></circle>
       </svg>
-      nadomestni prevoz
+      <span class="mode-bus-beseda">nadomestni prevoz</span>
     </span>`;
   }
   const who = AGENCY[row.agency];
@@ -1007,6 +1007,22 @@ function kdajZapore(p) {
     .filter(Boolean).join(" · ");
 }
 
+// ---------- kje ustavi nadomestni avtobus ----------
+// Vozni red postavi nadomestni avtobus na tir, kjer ga ni: v Ljubljani stoji
+// na peronih 37-39 avtobusne postaje, v Jevnici na postajaliscu Senozeti ob
+// krozniscu. Kje res stoji, pove samo SZ na svoji strani (`nadomestni.py`,
+// 274 postaj); brez tega potnik caka na napacnem peronu.
+function nadomestniPostanekHtml(p) {
+  if (!p) return "";
+  return `<span class="nadomestni-postanek" title="kje ustavi nadomestni avtobus (po SŽ)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"></path>
+      <circle cx="12" cy="10" r="2.3"></circle>
+    </svg>
+    <span><span class="za-bralnik">nadomestni avtobus ustavlja: </span>${escapeHtml(p.opis)}</span></span>`;
+}
+
 function measuredStopHtml(s, isCurrent, w) {
   const d = stopDelay(s);
   const color = delayColor(d);
@@ -1035,6 +1051,7 @@ function measuredStopHtml(s, isCurrent, w) {
       <div class="stop-rail"><span class="stop-dot" style="background:${color}"></span><span class="stop-line"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
+        ${nadomestniPostanekHtml(s.nadomestni_postanek)}
         <div class="stop-times">${times}</div>
         ${split ? `<div class="stop-dwell">${escapeHtml(dwellNoteHtml(split))}</div>` : ""}
       </div>
@@ -1071,6 +1088,7 @@ function gapStopHtml(s) {
       <div class="stop-rail"><span class="stop-dot is-hollow"></span><span class="stop-line"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
+        ${nadomestniPostanekHtml(s.nadomestni_postanek)}
         <div class="stop-times"><span class="stop-sched-plain">${sched}</span> <span class="stop-tag">${
           zast ? "ura si nasprotuje" : "brez meritve"}</span></div>
         ${zast ? `<div class="stop-times adv-only"><span class="stop-tag">feed je zadnjič rekel ${
@@ -1129,6 +1147,7 @@ function forecastStopHtml(s, f, w, dod) {
       <div class="stop-rail"><span class="stop-dot is-hollow" style="border-color:${color}"></span><span class="stop-line is-dashed"></span></div>
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
+        ${nadomestniPostanekHtml(s.nadomestni_postanek)}
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span></div>
         ${dwellPlanHtml(s)}
         ${feedSaid != null && !zivo && !(f && f.from_operator)

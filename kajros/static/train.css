@@ -301,6 +301,10 @@
      -- izmerjeno na Volli: „EN 41" in „LPV 2". Zdaj se krči podnaslov (ki je
      tu tako ali tako skrit), preklop pa se zoži. */
   .train-head { min-width: 0; }
+  /* Oznaka nadomestnega prevoza v glavi samo z ikono: z besedo je pri 412
+     pikah segla pod preklop („nadomestn|preprosto“, 6. 10. 2026). Beseda je
+     v glavi odveč -- številka se začne z BUS, pod njo pove isto kartica. */
+  .train-head .mode-bus-beseda { display: none; }
   .mode-switch { flex-shrink: 0; padding: 1px; }
   .mode-switch button { padding: 6px 7px; font-size: 11px; }
 }

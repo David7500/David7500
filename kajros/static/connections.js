@@ -488,6 +488,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
         ? delayChipHtml(c.zamuda, c.delay_kind, c.delay_at)
         : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}${doHtml(c.do_s)}</div>
       <div class="conn-meta">
+        ${nadomestniPostanekHtml(c.nadomestni_postanek)}
         ${tirHtml(c.tir, c.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(c.expected_dep || c.sched_dep, false) : ""}
@@ -578,6 +579,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
         <span class="leg-train">${escapeHtml(l.train_no)}</span>
         <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
       </div>
+      ${l.nadomestni_postanek ? `<div class="leg">${nadomestniPostanekHtml(l.nadomestni_postanek)}</div>` : ""}
       ${next ? `<div class="leg is-prestop">
           <span class="leg-wait" style="color:${count === 1 ? st.color : "var(--sev-hard)"}">
             prestop na postaji ${escapeHtml(l.to)} · ${wait} min
@@ -758,6 +760,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
         : r.zamuda ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}${doHtml(r.do_s)}</div>
       <div class="board-meta">
+        ${nadomestniPostanekHtml(r.nadomestni_postanek)}
         ${tirHtml(r.tir, r.tir_prej)}
         ${cd ? `<span class="countdown">${cd}</span>` : ""}
         ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}

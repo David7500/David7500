@@ -441,6 +441,24 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 }
 .mode-bus svg { flex-shrink: 0; }
 
+/* Kje ustavi nadomestni avtobus (`common.nadomestniPostanekHtml`): ista
+   vijolična kot oznaka, ker govori o istem vozilu. Svoja vrstica, ker je to
+   navodilo, kam iti, ne podatek ob uri. */
+.nadomestni-postanek {
+  display: flex; align-items: flex-start; gap: 5px;
+  flex-basis: 100%;
+  margin-top: 2px;
+  font: 500 12px/1.45 var(--sans);
+  color: #b48ad8;
+}
+.nadomestni-postanek svg { flex-shrink: 0; margin-top: 2px; }
+
+/* Besedilo samo za bralnik zaslona: kar vidni del pove z ikono. */
+.za-bralnik {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
 /* ---------- vidna izostritev ----------
  * Brskalnikova privzeta izostritev je na temni podlagi komaj vidna, na
  * elementih z lastnim robom pa je pogosto sploh ni. Kdor se po strani premika

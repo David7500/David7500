@@ -1,0 +1,1924 @@
+{
+ "vir": "https://potniski.sz.si/vozni-redi/lokacije-postankov-nadomestnih-prevozov/",
+ "pregledano": "2026-10-06",
+ "postaje": [
+  {
+   "postaja": "Ajdovščina",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.886,
+   "lon": 13.9,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Anhovo",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.058357,
+   "lon": 13.617482,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Atomske Toplice hotel",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.158238,
+   "lon": 15.608208,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Avče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.108092,
+   "lon": 13.684228,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Birčna vas",
+   "opis": "Avtobusno postajališče Birčna vas ŽP",
+   "lat": 45.758474,
+   "lon": 15.148598,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Bistrica ob Dravi",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.557526,
+   "lon": 15.553534,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Blanca",
+   "opis": "Makadamsko parkirišče na glavni cesti ob železniški postaji",
+   "lat": 45.989951,
+   "lon": 15.396709,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Bled Jezero",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.368194,
+   "lon": 14.082778,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Bohinjska Bela",
+   "opis": "Avtobusno postajališče Bohinjska Bela vojašnica, pod železniško postajo",
+   "lat": 46.337631,
+   "lon": 14.060242,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Bohinjska Bistrica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.274353,
+   "lon": 13.95885,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Borovnica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.921235,
+   "lon": 14.367898,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Boštanj",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.007347,
+   "lon": 15.289176,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Branik",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.856111,
+   "lon": 13.784528,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Breg",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.041817,
+   "lon": 15.236184,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Brestanica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.988017,
+   "lon": 15.46924,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Brežice",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.923576,
+   "lon": 15.589989,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Brezovica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.0215,
+   "lon": 14.426335,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Buzet (HR)",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.426221,
+   "lon": 13.984993,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Čakovec (HR)",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.384077,
+   "lon": 16.420967,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Celje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.227956,
+   "lon": 15.267382,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Celje Lava",
+   "opis": "Ob postaji",
+   "lat": 46.235801,
+   "lon": 15.25375,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Cesta",
+   "opis": "Avtobusna postaja Cesta ob regionalni cesti",
+   "lat": 45.887794,
+   "lon": 13.865221,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Cirknica",
+   "opis": "Avtobusno postajališče Cirknica Švajncer",
+   "lat": 46.646537,
+   "lon": 15.666325,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Cirkovce",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Črnomelj",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.579915,
+   "lon": 15.190434,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Črnotiče",
+   "opis": "Avtobusno postajališče Črnotiče, pri cerkvi v naselju Črnotiče",
+   "lat": 45.55334,
+   "lon": 13.896701,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Čušperk",
+   "opis": "Avtobusno postajališče Čušperk – makadamski prostor ob železniški postaji",
+   "lat": 45.890608,
+   "lon": 14.699967,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Divača",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.68174,
+   "lon": 13.965281,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dobova",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.898325,
+   "lon": 15.654927,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dobovec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.220742,
+   "lon": 15.751617,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dobravice",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.632202,
+   "lon": 15.268954,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Dobravlje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.882592,
+   "lon": 13.845317,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dobrepolje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.858363,
+   "lon": 14.681503,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dobrije",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Dolga Gora",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.27715,
+   "lon": 15.497797,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Domžale",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.139288,
+   "lon": 14.592543,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dornberk",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Dornberk vas",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.889897,
+   "lon": 13.7363,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Dravograd",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.58717,
+   "lon": 15.026747,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Duplica-Bakovnik",
+   "opis": "Avtobusno postajališče Bakovnik Pošta ob lokalni cesti",
+   "lat": 46.207642,
+   "lon": 14.598364,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Dutovlje",
+   "opis": "Avtobusno postajališče Dutovlje, ob odcepu za železniško postajo",
+   "lat": 45.764374,
+   "lon": 13.829158,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Fala",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.5481,
+   "lon": 15.450909,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Florjan",
+   "opis": "Avtobusno postajališče Florjan pri Šoštanju",
+   "lat": 46.381366,
+   "lon": 15.030135,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Frankovci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.394897,
+   "lon": 16.195286,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Gaber",
+   "opis": "Pri odcepu za železniško postajo",
+   "lat": 45.94109,
+   "lon": 14.908634,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Globoko",
+   "opis": "Ob vznožju stopnic do železniške postaje",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Gomila",
+   "opis": "Avtobusno postajališče Gomila",
+   "lat": 45.935022,
+   "lon": 15.044195,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Gornje Ležeče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.666369,
+   "lon": 14.072003,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Gornji Petrovci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.800909,
+   "lon": 16.218603,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Gradac",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.614697,
+   "lon": 15.242076,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Grahovo",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.151569,
+   "lon": 13.856967,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Grlava",
+   "opis": "Avtobusno postajališče Krištanci ob železniški postaji",
+   "lat": 46.556135,
+   "lon": 16.175129,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Grobelno",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.21309,
+   "lon": 15.439771,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Grosuplje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.955998,
+   "lon": 14.652565,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Hajdina",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.403157,
+   "lon": 15.855077,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Hoče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.501036,
+   "lon": 15.663063,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Hodoš",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.82032,
+   "lon": 16.330099,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Holmec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.56654,
+   "lon": 14.84149,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Homec pri Kamniku",
+   "opis": "Avtobusno postajališče Homec ob lokalni cesti",
+   "lat": 46.178807,
+   "lon": 14.594694,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Hrastnik",
+   "opis": "Avtobusno postajališče Logar ŽP, pod železniško postajo",
+   "lat": 46.123215,
+   "lon": 15.093077,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Hrastovlje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.501713,
+   "lon": 13.90893,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Hrplje – Kozina",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.603767,
+   "lon": 13.934856,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Hudajužna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.179808,
+   "lon": 13.919608,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Hudo",
+   "opis": "Ob železniški postaji",
+   "lat": 45.833,
+   "lon": 15.136,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Ilirska Bistrica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.569464,
+   "lon": 14.236253,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Imeno",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.127067,
+   "lon": 15.600726,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Ivančna Gorica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.938213,
+   "lon": 14.802892,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ivanjkovci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.458993,
+   "lon": 16.156238,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Jarše-Mengeš",
+   "opis": "Avtobusno postajališče Preserje pri Radomljah ob lokalni cesti",
+   "lat": 46.167506,
+   "lon": 14.594708,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Jelovec",
+   "opis": "Avtobusno postajališče Jelovec pri Boštanju",
+   "lat": 45.9896,
+   "lon": 15.244188,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Jesenice",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.436458,
+   "lon": 14.05503,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Jevnica",
+   "opis": "Avtobusno postajališče Senožeti, ob krožišču",
+   "lat": 46.088384,
+   "lon": 14.734089,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Kamnik",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.220711,
+   "lon": 14.603958,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Kamnik Graben",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.228877,
+   "lon": 14.609531,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Kamnik mesto",
+   "opis": "Ob vznožju do železniške postaje",
+   "lat": 46.224681,
+   "lon": 14.60898,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Kanal",
+   "opis": "Avtobusno postajališče Kanal v naselju Kanal",
+   "lat": 46.085292,
+   "lon": 13.634349,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Kidričevo",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.4,
+   "lon": 15.8,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Kilovče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.615466,
+   "lon": 14.18538,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Kočevje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.646146,
+   "lon": 14.856811,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Kočna",
+   "opis": "Avtobusno postajališče Kočna (ob odcepu za železniško postajo)",
+   "lat": 46.422104,
+   "lon": 14.083288,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Koper",
+   "opis": "Na platoju ob tirih oz. peronu (tir 4)",
+   "lat": 45.539,
+   "lon": 13.738,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Kopriva",
+   "opis": "Avtobusno postajališče Kopriva, na regionalni cesti v naselju Kopriva",
+   "lat": 45.78229,
+   "lon": 13.834212,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Košana",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.670386,
+   "lon": 14.105837,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Kranj",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.239003,
+   "lon": 14.348442,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Kreplje",
+   "opis": "Na regionalni cesti ob odcepu za železniško postajo",
+   "lat": 45.743032,
+   "lon": 13.828201,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Kresnice",
+   "opis": "Avtobusno obračališče pri pošti",
+   "lat": 46.103449,
+   "lon": 14.788883,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Krško",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.956301,
+   "lon": 15.493586,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Laško",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.15457,
+   "lon": 15.232314,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Lavrica",
+   "opis": "Avtobusno postajališče Lavrica ob trgovini HOFER (za smer Ljubljana) in avtobusno postajališče Lavrica pri Malči ob trgovini SPAR (za smer Novo mesto)",
+   "lat": 46.0016,
+   "lon": 14.554226,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Laze",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.08797,
+   "lon": 14.6873,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Lesce Bled",
+   "opis": "Avtobusno postajališče Lesce ŽP, zunanja stran železniške postaje",
+   "lat": 46.360748,
+   "lon": 14.157908,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Libna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.945503,
+   "lon": 15.540358,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Limbuš",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.558875,
+   "lon": 15.582638,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Lipovci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.623649,
+   "lon": 16.211591,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Litija",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.057847,
+   "lon": 14.825635,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Litostroj",
+   "opis": "Avtobusno postajališče mestnega prometa Litostrojska (naprej, ob Litostrojski cesti in ne obračališče!)",
+   "lat": 46.07681,
+   "lon": 14.488618,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana",
+   "opis": "Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39)",
+   "lat": 46.058111,
+   "lon": 14.513667,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Ljubljana Brinje",
+   "opis": "Avtobusno postajališče mestnega prometa Vodovodna",
+   "lat": 46.07666,
+   "lon": 14.505476,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Črnuče",
+   "opis": "Ploščad železniške postaje ob tiru 1",
+   "lat": 46.101229,
+   "lon": 14.52784,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Dolgi most",
+   "opis": "Avtobusno postajališče mestnega prometa Dolgi most",
+   "lat": 46.036833,
+   "lon": 14.465202,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ljubljana Ježica",
+   "opis": "Avtobusno postajališče mestnega prometa 7. septembra",
+   "lat": 46.089991,
+   "lon": 14.50861,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Polje",
+   "opis": "Avtobusno postajališče Polje kolodvor, ob podvozu",
+   "lat": 46.056968,
+   "lon": 14.583687,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Rakovnik",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.037167,
+   "lon": 14.519106,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Stegne",
+   "opis": "Avtobusno postajališče mestnega prometa Tehnounion, ob železniški postaji",
+   "lat": 46.086432,
+   "lon": 14.480092,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Ljubljana Tivoli",
+   "opis": "Avtobusno postajališče mestnega prometa Tobačna",
+   "lat": 46.047037,
+   "lon": 14.493839,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Vižmarje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.100397,
+   "lon": 14.464469,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ljubljana Vodmat",
+   "opis": "Postanek na Grablovičevi ulici ob železniški postaji",
+   "lat": 46.055718,
+   "lon": 14.528982,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ljubljana Zalog",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.059613,
+   "lon": 14.615184,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ljutomer",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.529016,
+   "lon": 16.189246,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ljutomer mesto",
+   "opis": "Ob železniški postaji",
+   "lat": 46.520986,
+   "lon": 16.199626,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Logatec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.917753,
+   "lon": 14.235469,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Loka",
+   "opis": "Ob glavni cesti, pri odcepu za železniško postajo, ob Domu upokojencev",
+   "lat": 46.055811,
+   "lon": 15.208167,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Mačkovci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.783457,
+   "lon": 16.164354,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Maribor",
+   "opis": "Avtobusno postajališče ŽP Maribor, pred železniško postajo",
+   "lat": 46.561728,
+   "lon": 15.656944,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Maribor Sokolska",
+   "opis": "Zunanja stran železniške postaje, pri krožišču",
+   "lat": 46.557061,
+   "lon": 15.624301,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Maribor Studenci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.554,
+   "lon": 15.635,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Maribor Tabor",
+   "opis": "Avtobusno postajališče Magdalenski park",
+   "lat": 46.552755,
+   "lon": 15.645782,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Maribor Tezno",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.539447,
+   "lon": 15.651313,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Marles",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.558828,
+   "lon": 15.596987,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Medno",
+   "opis": "Avtobusno postajališče primestnega prometa ob gostilni Cirman, ob regionalni cesti",
+   "lat": 46.124461,
+   "lon": 14.436951,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Medvode",
+   "opis": "Avtobusni postajališči Medvoška AP na Gorenjski cesti (obe strani, za pripadajočo smer potovanja)",
+   "lat": 46.138281,
+   "lon": 14.413459,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Mekotnjak",
+   "opis": "Pri gostilni Tramšek, ob glavni cesti",
+   "lat": 46.498406,
+   "lon": 16.157309,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Mestinje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.23505,
+   "lon": 15.564267,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Metlika",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.642208,
+   "lon": 15.322341,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Mirna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.949178,
+   "lon": 15.062019,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Mirna Peč",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.866596,
+   "lon": 15.091238,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Mlačevo",
+   "opis": "Avtobusno postajališče V. Mlačevo ŽP, zunanja stran železniške postaje",
+   "lat": 45.940176,
+   "lon": 14.685363,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Mokronog",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.957566,
+   "lon": 15.120733,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Moškanjci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.423043,
+   "lon": 15.983571,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Most na Soči",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.146523,
+   "lon": 13.759594,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Murska Sobota",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.659392,
+   "lon": 16.171597,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Narin",
+   "opis": "Avtobusno postajališče v naselju Narin, ob gostilni “Pri Cerotu”",
+   "lat": 45.643986,
+   "lon": 14.194245,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Nomenj",
+   "opis": "Avtobusno postajališče Nomenj, na regionalni cesti pod železniško postajo",
+   "lat": 46.28923,
+   "lon": 14.002192,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Notranje Gorice",
+   "opis": "Avtobusno postajališče Notranje Gorice in avtobusno postajališče Notranje Gorice Š",
+   "lat": 45.987949,
+   "lon": 14.401769,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Nova Gorica",
+   "opis": "Zunanja, vzhodna stran železniške postaje (P+R parkirišče pri Prvomajski ulici)",
+   "lat": 45.955375,
+   "lon": 13.636588,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Novo mesto",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.811012,
+   "lon": 15.155917,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Novo mesto center",
+   "opis": "Avtobusno postajališče Novo mesto novi most (za smer Ljubljana) in avtobusno postajališče Šmihelski most (za smer Metlika)",
+   "lat": 45.805202,
+   "lon": 15.163373,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Novo mesto Kandija",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.799,
+   "lon": 15.16,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Novo mesto Šmihel",
+   "opis": "Avtobusno postajališče ŠČ, ob šolskem centru",
+   "lat": 45.79552,
+   "lon": 15.160099,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Obrež",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.391,
+   "lon": 16.225,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Okroglica",
+   "opis": "Parkirni prostor ob cestišču v naselju Dombrava ob odcepu za železniško postajo",
+   "lat": 45.897981,
+   "lon": 13.686612,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Orehova vas",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.473089,
+   "lon": 15.663553,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ormož",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.403303,
+   "lon": 16.156018,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ortnek",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.79,
+   "lon": 14.68,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Osluševci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.4192,
+   "lon": 16.048078,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ostrožno",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.264011,
+   "lon": 15.472886,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Otoče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.310534,
+   "lon": 14.231336,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Otovec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.598557,
+   "lon": 15.161218,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Ožbalt",
+   "opis": "Prečkanje HE Ožbalt do avtobusnega postajališča Ožbalt HE, glavna cesta ob železniški postaji",
+   "lat": 46.575043,
+   "lon": 15.410279,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Paška vas",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Pavlovci",
+   "opis": "Avtobusno postajališče Pavlovci ob glavni cesti",
+   "lat": 46.42305,
+   "lon": 16.178196,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Pesnica",
+   "opis": "Avtobusno postajališče Pesnica pri Mariboru",
+   "lat": 46.608041,
+   "lon": 15.675821,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Petrovče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.245953,
+   "lon": 15.189686,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Pijavice",
+   "opis": "Avtobusno postajališče Skrovnik ob glavni cesti Mokronog – Sevnica",
+   "lat": 45.966925,
+   "lon": 15.165359,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Pivka",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.675167,
+   "lon": 14.191483,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Planina",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.861636,
+   "lon": 14.274828,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Plave",
+   "opis": "Na regionalni cesti ob železniški postaji",
+   "lat": 46.045283,
+   "lon": 13.590002,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Pliberk / Bleiburg (A)",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.5746,
+   "lon": 14.786905,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Podbrdo",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.209281,
+   "lon": 13.966769,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Podčetrtek",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.150416,
+   "lon": 15.599187,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Podčetrtek Toplice",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.16552,
+   "lon": 15.604456,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Podgorje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.534381,
+   "lon": 13.943014,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Podhom",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.387561,
+   "lon": 14.094183,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Podklanc",
+   "opis": "Avtobusno postajališče ob železniški postaji",
+   "lat": 46.574113,
+   "lon": 15.021121,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Podmelec",
+   "opis": "Avtobusno postajališče Klavže, ob odcepu za železniško postajo",
+   "lat": 46.160275,
+   "lon": 13.810884,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Podnart",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Podplat",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.244182,
+   "lon": 15.572558,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Podvelka",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.590606,
+   "lon": 15.330573,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Poljčane",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.313571,
+   "lon": 15.577002,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Polzela",
+   "opis": "Avtobusno obračališče pri pošti",
+   "lat": 46.282697,
+   "lon": 15.066044,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Polževo",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.940668,
+   "lon": 14.778898,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Ponikva",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.247864,
+   "lon": 15.430778,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ponikve na Dolenjskem",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.897768,
+   "lon": 15.042032,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Postojna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.772975,
+   "lon": 14.221296,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Povir",
+   "opis": "Avtobusno postajališče Povir, ob regionalni cesti",
+   "lat": 45.701116,
+   "lon": 13.935092,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Pragersko",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.395461,
+   "lon": 15.66195,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Preserje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.96565,
+   "lon": 14.396367,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Prešnica",
+   "opis": "Pri cerkvi v naselju Prešnica",
+   "lat": 45.571247,
+   "lon": 13.938932,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Prestranek",
+   "opis": "Avtobusno postajališče Prestranek, ob regionalni cesti",
+   "lat": 45.730494,
+   "lon": 14.186556,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Prevalje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.549807,
+   "lon": 14.922033,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Pristava",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.199018,
+   "lon": 15.581756,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Prvačina",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.887663,
+   "lon": 13.722851,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ptuj",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.422395,
+   "lon": 15.878659,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Puconci",
+   "opis": "Avtobusno postajališče Puconci ob železniški postaji",
+   "lat": 46.703374,
+   "lon": 16.153648,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Pušenci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.409938,
+   "lon": 16.176591,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Rače",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.453751,
+   "lon": 15.664048,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Radeče",
+   "opis": "Avtobusno postajališče Radeče, ob železniški postaji",
+   "lat": 46.064306,
+   "lon": 15.19177,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Radohova vas",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.943563,
+   "lon": 14.872896,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Radovljica",
+   "opis": "Avtobusna postaja Radovljica",
+   "lat": 46.343505,
+   "lon": 14.172824,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Rakek",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.815221,
+   "lon": 14.312286,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Rakitovec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.466011,
+   "lon": 13.955585,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ravne na Koroškem",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.546459,
+   "lon": 14.96216,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Reteče",
+   "opis": "Avtobusno postajališče primestnega prometa Reteče na lokalni cesti",
+   "lat": 46.157667,
+   "lon": 14.370556,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ribnica",
+   "opis": "Avtobusno postajališče Ribnica/Dol ob železnici",
+   "lat": 45.744755,
+   "lon": 14.727378,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Rimske Toplice",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.123204,
+   "lon": 15.203234,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Rjavica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.219786,
+   "lon": 15.652289,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Rodica",
+   "opis": "Avtobusno postajališče Rodica ob železniški postaji",
+   "lat": 46.149647,
+   "lon": 14.592808,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Rodik",
+   "opis": "Avtobusno postajališče Rodik, ob glavni cesti nad železniško postajo",
+   "lat": 45.628354,
+   "lon": 13.976047,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Rogaška Slatina",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.231847,
+   "lon": 15.638297,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Rogatec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.224586,
+   "lon": 15.697922,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Rosalnice",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.648885,
+   "lon": 15.336218,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Rožni Dol",
+   "opis": "Pri odcepu za železniško postajo",
+   "lat": 45.680528,
+   "lon": 15.149644,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ruše",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.54072,
+   "lon": 15.503982,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Ruše tovarna",
+   "opis": "Parkirišče ob železniški postaji",
+   "lat": 46.545015,
+   "lon": 15.515165,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Ruta",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.563,
+   "lon": 15.431,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Šalovci",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.820959,
+   "lon": 16.280934,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sava",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.089764,
+   "lon": 14.897669,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Semič",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.643307,
+   "lon": 15.161337,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Šempeter pri Gorici",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.928144,
+   "lon": 13.646729,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šempeter v Savinjski dolini",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.260464,
+   "lon": 15.112158,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šentilj",
+   "opis": "Avtobusno postajališče Šentilj v Slovenskih Goricah (zunanja stran železniške postaje)",
+   "lat": 46.675005,
+   "lon": 15.656747,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šentjur",
+   "opis": "Avtobusno obračališče pri pošti",
+   "lat": 46.213181,
+   "lon": 15.396244,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šentlovrenc",
+   "opis": "Pri odcepu za železniško postajo",
+   "lat": 45.938414,
+   "lon": 14.940489,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Šentrupert",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.959649,
+   "lon": 15.086914,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Šentvid pri Grobelnem",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.227337,
+   "lon": 15.469622,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šentvid pri Stični",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.940791,
+   "lon": 14.850092,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sevnica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.009545,
+   "lon": 15.30152,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sežana",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.704274,
+   "lon": 13.863173,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šikole",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.40091,
+   "lon": 15.697165,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Škofja Loka",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.174239,
+   "lon": 14.335544,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Škofljica",
+   "opis": "Avtobusno postajališče Škofljica Špica – ob kapelici (za smer Ljubljana) in avtobusno postajališče Škofljica Žaga – ob tržnici (za smer Novo mesto)",
+   "lat": 45.986204,
+   "lon": 14.571352,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Slovenska Bistrica",
+   "opis": "Avtobusno postajališče Črešnjevec, ob železniški postaji",
+   "lat": 46.363614,
+   "lon": 15.598232,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Slovenski Javornik",
+   "opis": "Avtobusno postajališče Slovenski Javornik TURIST, ob odcepu",
+   "lat": 46.426709,
+   "lon": 14.088664,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šmarca",
+   "opis": "Avtobusno postajališče Šmarca K ob lokalni cesti",
+   "lat": 46.193565,
+   "lon": 14.589202,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Šmarje pri Jelšah",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.230525,
+   "lon": 15.5169,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Šmarje Sap",
+   "opis": "Avtobusno postajališče Šmarje Sap ŽP ob glavni cesti",
+   "lat": 45.97303,
+   "lon": 14.620674,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Šmartno ob Paki",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.327986,
+   "lon": 15.037714,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sodna vas",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.176089,
+   "lon": 15.60164,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Solkan",
+   "opis": "Avtobusno postajališče Solkan, nad železniško postajo",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Šoštanj",
+   "opis": "Avtobusno postajališče Šoštanju",
+   "lat": 46.377271,
+   "lon": 15.048888,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Špilje / Spielfeld-Strass (A)",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.709874,
+   "lon": 15.629267,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Spodnja Slivnica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.934634,
+   "lon": 14.654501,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Središče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.389191,
+   "lon": 16.27725,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Štanjel",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.817833,
+   "lon": 13.847694,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Stara Cerkev",
+   "opis": "Avtobusno postajališče Stara Cerkev ob glavni cesti",
+   "lat": 45.669264,
+   "lon": 14.837786,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Štefan",
+   "opis": "Avtobusno postajališče Štefan",
+   "lat": 45.910276,
+   "lon": 14.985108,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Steske",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.876106,
+   "lon": 13.757575,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Štore",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.221785,
+   "lon": 15.321519,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Stranje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.217349,
+   "lon": 15.56028,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Strnišče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.400615,
+   "lon": 15.770365,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sveti Danijel",
+   "opis": "Na lokalni cesti nad železniško postajo",
+   "lat": 46.602592,
+   "lon": 15.063669,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sveti Rok ob Sotli",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.208931,
+   "lon": 15.760056,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Sveti Vid",
+   "opis": "Pri odcepu za železniško postajo, ob Mizarstvo Zdravko Tretjak",
+   "lat": 46.608761,
+   "lon": 15.19031,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Tekačevo",
+   "opis": "Parkirišče ob železniški postaji",
+   "lat": 46.24,
+   "lon": 15.618,
+   "lega": "žebljiček"
+  },
+  {
+   "postaja": "Trbonje",
+   "opis": "Na parkirišču nad železniško postajo",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Trbonjsko jezero",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.593817,
+   "lon": 15.126256,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Trbovlje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.126446,
+   "lon": 15.036601,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Trebnje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.907054,
+   "lon": 15.008848,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Trebnje Kamna Gora",
+   "opis": "Avtobusno postajališče Trebnje Labod",
+   "lat": 45.907011,
+   "lon": 15.022234,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Trzin",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.133153,
+   "lon": 14.567833,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Trzin ind. cona",
+   "opis": "Avtobusno postajališče Trzin ind. cona ob železniški postaji",
+   "lat": 46.119903,
+   "lon": 14.551691,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Trzin Mlake",
+   "opis": "Avtobusno postajališče Trzin Mlake K ob železniški postaji",
+   "lat": 46.128007,
+   "lon": 14.558377,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Tržišče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.966476,
+   "lon": 15.189867,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Uršna sela",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.714595,
+   "lon": 15.126755,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Velenje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.363313,
+   "lon": 15.103593,
+   "lega": "pogled"
+  },
+  {
+   "postaja": "Velenje Pesje",
+   "opis": "Avtobusno postajališče Velenje Pesje (ob železniški postaji)",
+   "lat": null,
+   "lon": null,
+   "lega": null
+  },
+  {
+   "postaja": "Velika Loka",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.932237,
+   "lon": 14.969983,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Velika Nedelja",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.415057,
+   "lon": 16.104858,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Velike Lašče",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.841657,
+   "lon": 14.645307,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Veržej",
+   "opis": "Pri odcepu za železniško postajo",
+   "lat": 46.573031,
+   "lon": 16.180901,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Vidna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.216753,
+   "lon": 15.729717,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Vintgar",
+   "opis": "Avtobusno postajališče Blejska Dobrava trgovina, zunanja stran železniške postaje",
+   "lat": 46.409825,
+   "lon": 14.098196,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Višnja Gora",
+   "opis": "Avtobusno postajališče Višnja Gora, v bližini železniške postaje",
+   "lat": 45.957526,
+   "lon": 14.743858,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Volčja Draga",
+   "opis": "Avtobusno postajališče Volčja Draga, nad železniško postajo",
+   "lat": 45.905846,
+   "lon": 13.676599,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Vuhred",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.596289,
+   "lon": 15.235697,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Vuhred elektrarna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.586336,
+   "lon": 15.279416,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Vuzenica",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.593942,
+   "lon": 15.158517,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Zagorje",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.12059,
+   "lon": 14.991078,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Žalec",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.249692,
+   "lon": 15.166272,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Žalna",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 45.939486,
+   "lon": 14.707586,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Zamušani",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.421131,
+   "lon": 16.017265,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Zidani Most",
+   "opis": "Zunanja stran železniške postaje",
+   "lat": 46.085494,
+   "lon": 15.170708,
+   "lega": "kraj"
+  },
+  {
+   "postaja": "Žirovnica",
+   "opis": "Avtobusno postajališče Žirovnica OPC, ob regionalni cesti",
+   "lat": 46.4044,
+   "lon": 14.133666,
+   "lega": "pot"
+  },
+  {
+   "postaja": "Žlebič",
+   "opis": "Avtobusno postajališče Žlebič ob glavni cesti",
+   "lat": 45.767723,
+   "lon": 14.691298,
+   "lega": "pot"
+  }
+ ]
+}

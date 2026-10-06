@@ -1325,6 +1325,7 @@ function odhodHtml(r, nowMs) {
         modeBadgeHtml(r.mode)} → ${escapeHtml(r.towards || r.destination || "")}</span>
       ${zamuda}
       ${meta ? `<span class="odh-meta">${meta}</span>` : ""}
+      ${nadomestni ? nadomestniPostanekHtml(r.nadomestni_postanek) : ""}
     </a>`;
 }
 

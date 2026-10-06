@@ -486,14 +486,16 @@ def dopolni(conn: sqlite3.Connection, rows: list[dict], dan: str, do: str,
     """`opozorila` k vrsticam table ali iskalnika (od vlaka do postanka `do`)
     in `do_s`, zgornja meja zamude na postanku `kje` (`dodatek`).
 
-    Samo železnica in samo danes ali naprej. Za vlak, ki je postajo že
-    prevozil, nič.
+    Samo vlaki in samo danes ali naprej. Za vlak, ki je postajo že prevozil,
+    nič. Nadomestni avtobus vozi po cesti: zapora tira in vlak pred njim ga
+    ne zadeneta (do 6. 10. 2026 je BUS 14006 nosil „zapora tira Ljubljana –
+    Ljubljana Zalog“).
     """
     zdaj = zdaj or datetime.now(TZ)
     ts = int(zdaj.timestamp())
     danes = zdaj.date().isoformat()
     vlaki = [r for r in rows if r.get("trip_id") and r.get("network") == "zeleznica"
-             and r.get("service_date", dan) >= danes]
+             and r.get("mode") != "bus" and r.get("service_date", dan) >= danes]
     if not vlaki:
         return
     po_dnevih: dict[str, list[dict]] = {}

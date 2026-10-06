@@ -289,3 +289,13 @@ def test_ovire_dobijo_kdaj_samo_cele(conn):
     assert [(p["odsek"], p["stanje"]) for p in k["danes"]] == [("Brezje – Cerkno", "zdaj")]
     assert "kdaj" not in ovire[1], "en odsek od dveh ni na progi"
     assert "kdaj" not in ovire[2], "brez ure ni zapore"
+
+
+def test_nadomestni_avtobus_ne_dobi_zapore_tira(conn):
+    """Vozi po cesti: zapora tira in vlak pred njim ga ne zadeneta."""
+    ob = datetime.fromtimestamp(_ts(7 * 3600), zapore.TZ)
+    vlak = {"trip_id": "t1", "network": "zeleznica", "mode": "vlak", "stop_seq": 4}
+    bus = {"trip_id": "t1", "network": "zeleznica", "mode": "bus", "stop_seq": 4}
+    zapore.dopolni(conn, [vlak, bus], DAN, "stop_seq", "stop_seq", ob)
+    assert vlak.get("opozorila")
+    assert "opozorila" not in bus

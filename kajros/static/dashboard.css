@@ -603,6 +603,8 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
 }
 .odh-no { font: 600 12px/1.4 'IBM Plex Mono', ui-monospace, monospace; color: #e7eaf0; margin-right: 4px; }
 .odh-kam .mode-bus { margin-right: 4px; }
+/* Kje ustavi nadomestni avtobus: pod uro in smerjo, čez vso širino. */
+.odh .nadomestni-postanek { grid-column: 2 / -1; font-size: 11.5px; }
 .odh-zam { font: 600 12px/1.4 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; }
 .odh-obicajno { font-weight: 400; }
 .odh-vr { font: 400 11px/1.4 'IBM Plex Sans', system-ui, sans-serif; color: #79828f; }

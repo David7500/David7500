@@ -36,6 +36,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
 | Zamude vlakov, drugi vir | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
+| Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči.
 
@@ -63,6 +64,7 @@ kajros/
   collector.py   poll zamud in leg, obratovalni dan, varovalke pred smetmi
   alerts.py      ovire (SZ-OVIRA) in žive zamude s prometnim mestom (SZ-DELAY)
   zapore.py      zapora tira iz besedila ovir, vlak pred tabo: opozorilo, ne napoved
+  nadomestni.py  kje ustavi nadomestni avtobus na postaji (posnetek strani SŽ)
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h
   stats.py       zgodovina, porazdelitve, napoved, dnevni povzetek
   journey.py     odhodna tabla, iskanje postaj, zveze s prestopi

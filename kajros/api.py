@@ -29,7 +29,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
-               naslovi, obisk, obvestila, peroni, pot, pripni, pristanek, stats, stik,
+               nadomestni, naslovi, obisk, obvestila, peroni, pot, pripni, pristanek, stats, stik,
                tiri, zapore, zdravje)
 from .server import lifespan
 
@@ -1572,6 +1572,7 @@ def api_departures(
             # Tir s table SZ (`peroni.py`). Kadar ga ni ali je star, ga ni.
             peroni.dopolni(conn, rows, lambda r: (r["train_no"], exact, r["sched"]))
             zapore.dopolni(conn, rows, date, "stop_seq", "stop_seq", now)
+            nadomestni.dopolni(rows, exact)
             # Obvestila o ovirah so SZ-jeva in vezana na vlak.
             notices = alerts.for_trains(conn, [r["train_no"] for r in rows],
                                         mentions=[exact])
@@ -2103,6 +2104,11 @@ def api_run(train_no: str, date: str | None = None,
         if ident["network"] == "zeleznica":
             peroni.dopolni(conn, rows, lambda s: (
                 train_no, s["name"], s.get("sched_dep") or s.get("sched_arr")))
+        # Kje ta avtobus na postaji ustavi: vozni red ga postavi na tir.
+        if nadomestni.je_nadomestni(ident):
+            for s in rows:
+                if p := nadomestni.za_postajo(s["name"]):
+                    s["nadomestni_postanek"] = p
         zivo = _lpp_zivo(conn, razresen, rows, date, meja_seq, zdaj)
         # **Kdaj je feed o tej voznji nazadnje kaj rekel.** Brez tega prikaz ne
         # more lociti sveze stevilke od zadnje znane -- in prav ta razlika je
@@ -2121,7 +2127,8 @@ def api_run(train_no: str, date: str | None = None,
         # Kje lahko vlak naprej po progi izgubi čas: zapora tira, vlak pred
         # njim. Opozorilo, ne popravek napovedi (`zapore.py`).
         opozorila, dodatek = [], {}
-        if ident["network"] == "zeleznica" and razresen and date >= zdaj.date().isoformat():
+        if (ident["network"] == "zeleznica" and ident["mode"] != "bus" and razresen
+                and date >= zdaj.date().isoformat()):
             zac = next((s for s in rows if s["stop_seq"] == meja_seq), None)
             opozorila = zapore.za_voznjo(
                 conn, razresen, date, meja_seq, None,
@@ -2556,6 +2563,10 @@ def api_connections(
                 peroni.dopolni(conn, vrstice, lambda r, k=do: (
                     r["train_no"], r.get("to", b), r.get(k)), "tir_prihod")
             zapore.dopolni(conn, rows, date, "to_seq", "from_seq", now)
+            nadomestni.dopolni(rows, a)
+            for n in noge:
+                if nadomestni.je_nadomestni(n):
+                    nadomestni.dopolni([n], n.get("from"))
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
         notices = (alerts.for_trains(conn, nos, mentions=[a, b])
                    if network == "zeleznica" else [])
