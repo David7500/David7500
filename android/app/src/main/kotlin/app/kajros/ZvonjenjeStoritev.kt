@@ -56,8 +56,25 @@ class ZvonjenjeStoritev : Service() {
         const val OBVESTILO = 4711
         /** Obvestilo neznega dela. Svoja stevilka, ker ga glasno zamenja. */
         const val OBVESTILO_NEZNO = 4712
-        /** Krajsi nezni del ne pomaga -- takrat takoj glasno. */
-        private const val NAJMANJ_NEZNO_MS = 5_000L
+        /**
+         * Nežni del traja vsaj toliko, tudi ko je ura glasnega že mimo
+         * (budnica je prišla pozno, ali pa je potnik nastavil budilko za
+         * vlak, ki odpelje čez nekaj minut). Prej je v takem primeru takoj
+         * zazvonilo glasno, in David je 6. 10. 2026 slišal ravno to: „začne
+         * že s srednjo jakostjo, namesto da začne čisto potihem“. Dvajset
+         * sekund je prvi, najtišji del zvoka (izmerjeno: od -61 do -48 dBFS);
+         * od rezerve vzame manj, kot vlak zamudi na eni postaji.
+         */
+        private const val NAJMANJ_NEZNO_MS = 20_000L
+
+        /** Ali zaslon zvonjenja ta hip sveti; piše ga [ZvonjenjeDejavnost]. */
+        @Volatile
+        var zaslonViden = false
+
+        /** Ura glasnega dela budilke, ki ta hip zvoni; bere jo zaslon. */
+        @Volatile
+        var glasnoOb: Long = 0
+            private set
 
         /** Katera budilka ta hip zvoni, ali null. */
         @Volatile
@@ -101,9 +118,12 @@ class ZvonjenjeStoritev : Service() {
         // ni vec -- sicer sistem aplikacijo podre.
         Zvonjenje.kanali(this)
         val zdaj = System.currentTimeMillis()
-        val doGlasnega = glasnoOb - zdaj
-        val nezno = b != null && doGlasnega >= NAJMANJ_NEZNO_MS
-        if (b != null) zvoni = b.id
+        val doGlasnega = maxOf(glasnoOb - zdaj, NAJMANJ_NEZNO_MS)
+        val nezno = b != null
+        if (b != null) {
+            zvoni = b.id
+            ZvonjenjeStoritev.glasnoOb = zdaj + doGlasnega
+        }
         vOspredje(if (nezno) OBVESTILO_NEZNO else OBVESTILO,
             Zvonjenje.obvestiloZbudi(this, b, zdaj, nezno))
         if (b == null) { ustavi(); return }
@@ -119,7 +139,9 @@ class ZvonjenjeStoritev : Service() {
     /** Konec neznega dela: glasno obvestilo prevzame storitev, nezno gre stran. */
     private fun zvoniGlasno() {
         val b = zvoni?.let { Shramba.ena(this, it) } ?: return
-        vOspredje(OBVESTILO, Zvonjenje.obvestiloZbudi(this, b, System.currentTimeMillis()))
+        ZvonjenjeStoritev.glasnoOb = System.currentTimeMillis()
+        vOspredje(OBVESTILO, Zvonjenje.obvestiloZbudi(this, b, System.currentTimeMillis(),
+            naZaslonu = zaslonViden))
         getSystemService(NotificationManager::class.java)?.cancel(OBVESTILO_NEZNO)
         budnost?.let { if (it.isHeld) it.release() }
         budnost = null

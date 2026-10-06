@@ -13,6 +13,14 @@
         <item name="android:alertDialogTheme">@style/TemaOkna</item>
     </style>
 
+    <!-- Zaslon zvonjenja je noč, ne stran: brez tega bi se ob odpiranju za
+         trenutek pokazala siva podlaga strani in vrstici bi bili drugačni. -->
+    <style name="TemaZvonjenje" parent="Tema">
+        <item name="android:windowBackground">@color/noc</item>
+        <item name="android:statusBarColor">@color/noc</item>
+        <item name="android:navigationBarColor">@color/noc</item>
+    </style>
+
     <!-- Brez tega je pogovorno okno svetlo sivo: `Theme.Material` ima svojo
          podlago in ta ni nasa. Izmerjeno na posnetku — okno je bilo #545454
          sredi strani, ki je #0f1115. -->

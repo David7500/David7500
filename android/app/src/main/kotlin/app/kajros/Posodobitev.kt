@@ -15,10 +15,11 @@ import java.net.URL
  * različici, s katero jo je namestil -- in popravek napake, ki je videti kot
  * napaka strani, nikoli ne bi prišel do njega.
  *
- * Aplikacija zato **vpraša, ne ukrepa**: pokaže vrstico s povezavo, prenos in
- * namestitev pa sta uporabnikova klika. Samodejnega prenosa namenoma ni --
- * `REQUEST_INSTALL_PACKAGES` je dovoljenje, ki ga ta aplikacija ne rabi, in
- * tiho nameščanje iz omrežja je natanko tisto, pred čimer Android svari.
+ * Aplikacija zato **vpraša, ne ukrepa**: pokaže vrstico, prenos in namestitev
+ * pa sta uporabnikova klika. Samodejnega prenosa ni. Namesti pa aplikacija
+ * sama (`Namestitev`), ne brskalnik: sistemski namestitveni program ob vsaki
+ * posodobitvi vzame budilki dovoljenje za cel zaslon (izmerjeno 6. 10. 2026),
+ * in to je bila cena `REQUEST_INSTALL_PACKAGES`, ki ga prej nismo hoteli.
  */
 object Posodobitev {
 
@@ -30,7 +31,11 @@ object Posodobitev {
     /** Enkrat na dan je dovolj: izdaja je redka, zagon aplikacije ni. */
     private const val RAZMIK_MS = 24L * 60 * 60 * 1000
 
-    data class Izdaja(val koda: Int, val ime: String, val stran: String)
+    /** [url] je APK, [stran] stran s prenosom: ta ostane, kadar namestitev ne uspe. */
+    data class Izdaja(
+        val koda: Int, val ime: String, val stran: String,
+        val url: String, val sha256: String,
+    )
 
     /**
      * Preveri v ozadnji niti in [kaj] pokliče v glavni, kadar je kaj novega.
@@ -99,11 +104,14 @@ object Posodobitev {
         return try {
             val j = JSONObject(besedilo)
             val stran = j.optString("stran")
-            // Naslov iz odgovora mora biti v NAŠEM izvoru: odgovor je podatek
+            val apk = j.optString("url")
+            // Naslova iz odgovora morata biti v NAŠEM izvoru: odgovor je podatek
             // s strežnika, in tudi naš strežnik ne sme odpreti povezave, ki
-            // pelje drugam, samo zato, ker jo je vrnil.
-            if (!Nastavitve.jeNas(stran, Nastavitve.naslov(c))) null
-            else Izdaja(j.getInt("koda"), j.optString("ime"), stran)
+            // pelje drugam, ali namestiti datoteke od drugod, samo zato, ker jo
+            // je vrnil.
+            val nas = Nastavitve.naslov(c)
+            if (!Nastavitve.jeNas(stran, nas) || !Nastavitve.jeNas(apk, nas)) null
+            else Izdaja(j.getInt("koda"), j.optString("ime"), stran, apk, j.optString("sha256"))
         } catch (e: JSONException) {
             null
         }

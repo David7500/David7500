@@ -18,6 +18,7 @@
     <!-- budilka -->
     <string name="kanal_zbudi">Budilka</string>
     <string name="kanal_nezno">Budilka, nežni začetek</string>
+    <string name="kanal_zaslon">Budilka, ko je zaslon zvonjenja odprt</string>
     <string name="kanal_obvesti">Obvestila o odhodu</string>
     <string name="zvoni_naslov">%1$s ob %2$s</string>
     <string name="zvoni_zamuda">Upoštevana zamuda +%1$d min.</string>
@@ -30,6 +31,20 @@
     <string name="zvoni_ni_podatka">O zamudi te vožnje še ni podatka — velja vozni red (%1$s).</string>
     <string name="ustavi">Ustavi</string>
     <string name="se_malo">Še 2 minuti</string>
+    <string name="zvoni_odpelje">odpelje ob</string>
+    <string name="zvoni_zamuda_znak">+%1$d min</string>
+    <string name="zvoni_tocno_znak">točno</string>
+    <string name="faza_nezno">nežno · glasneje čez %1$d s</string>
+    <string name="faza_glasno">glasno</string>
+    <string name="namig_vlak">potegni vlak na postajo</string>
+    <string name="namig_avtobus">potegni avtobus na postajališče</string>
+    <string name="namig_puscica" translatable="false">→</string>
+    <string name="kljukica" translatable="false">✓</string>
+    <string name="prizor_opis">Budilka zvoni. Potegni vozilo do sebe ali se dvakrat dotakni, da jo ustaviš.</string>
+    <string name="konec_naslov">Budilka ustavljena</string>
+    <string name="konec_besedilo">%1$s odpelje ob %2$s%3$s. Kajros ga spremlja do odhoda.</string>
+    <string name="odlog_naslov">Zazvoni čez 2 minuti</string>
+    <string name="odlog_besedilo">Spet najprej nežno.</string>
     <string name="ni_celega_zaslona">Dovoli Kajrosu, da budilka prižge zaslon. Zvonila bo tudi brez tega, a zaslon ostane temen.</string>
     <string name="ni_tocnih_alarmov">Android ne dovoli točnih alarmov. Vklopi jih v nastavitvah aplikacije, sicer budilka ne bo zanesljiva.</string>
 
@@ -135,7 +150,10 @@
     <string name="tabla_obe_smeri">Obe smeri</string>
 
     <!-- posodobitev zunaj trgovine -->
-    <string name="posodobitev">Na voljo je različica %1$s. Odpri stran za prenos.</string>
+    <string name="posodobitev">Na voljo je različica %1$s. Pritisni za posodobitev.</string>
+    <string name="posodobitev_dovoli">Vklopi „Dovoli iz tega vira“ in se vrni. Kajros bo posodobitev namestil sam, da budilka obdrži dovoljenje za cel zaslon.</string>
+    <string name="posodobitev_prenasam">Prenašam različico %1$s …</string>
+    <string name="posodobitev_ni_uspela">Posodobitev ni uspela (%1$s). Pritisni za stran s prenosom.</string>
     <string name="zapri_znak">✕</string>
 
     <string name="lega_zavrnjena">Dovoljenje za lego je zavrnjeno trajno. Odpri Nastavitve → Aplikacije → Kajros → Dovoljenja in dovoli lego.</string>

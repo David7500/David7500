@@ -46,7 +46,8 @@
     <ul>
       <li><b>Budilka pred odhodom.</b> Poveš, koliko minut prej naj zazvoni.
         Če vlak zamuja, se ura premakne z njim. Če povezave ni, zvoni po
-        voznem redu — raje prezgodaj kot prepozno.</li>
+        voznem redu — raje prezgodaj kot prepozno. Najprej zazvoni nežno,
+        ustaviš pa jo tako, da vlak potegneš na svoj peron.</li>
       <li><b>Trije pripomočki za domači zaslon.</b> Odštevanje do naslednjega
         odhoda, seznam budilk s stikali in odhodna tabla tvoje postaje.</li>
     </ul>
@@ -75,7 +76,10 @@
           V angleščini: <b>Settings</b> → <b>Allow from this source</b>, oziroma
           Settings → Apps → Special app access → Install unknown apps.
         </p></li>
-      <li>Ko izide nova različica, te aplikacija opozori sama.</li>
+      <li>Ko izide nova različica, te aplikacija opozori sama. Pritisni vrstico
+        in jo namesti kar iz aplikacije: tako budilka obdrži dovoljenje za cel
+        zaslon. Prvič telefon vpraša, ali sme Kajros nameščati posodobitve —
+        vklopi <b>Dovoli iz tega vira</b>.</li>
     </ol>
 
     {#- Kratko in brez razlage o licencah, računih in preizkuševalcih -- to je
@@ -86,8 +90,10 @@
     </p>
 
     {#- Android 13+ vpraša za obvestila, 14+ ne da celega zaslona aplikaciji,
-        ki ni iz trgovine (izmerjeno 14. 9. 2026: USE_FULL_SCREEN_INTENT deny).
-        Brez teh dveh budilka ne zbudi. Glej .claude/rules/android.md. #}
+        ki ni iz trgovine (izmerjeno 14. 9. 2026: USE_FULL_SCREEN_INTENT deny),
+        in sistemski namestitveni program ga ob vsaki posodobitvi vzame
+        (6. 10. 2026) — zato od 1.6 namešča aplikacija sama. Brez teh dveh
+        budilka ne zbudi. Glej .claude/rules/android.md. #}
     <h2>Dovoljenja za budilko</h2>
     <p>Ko prvič nastaviš budilko, te aplikacija vodi skozi nastavitve. Dovoli:</p>
     <ul>
@@ -95,7 +101,9 @@
       <li><b>Alarmi in opomniki</b> — da zazvoni ob točni uri. Na večini
         telefonov je že vklopljeno.</li>
       <li><b>Obvestila čez cel zaslon</b> — da budilka prižge zaslon, ko je
-        telefon zaklenjen. Brez tega zvoni, a zaslon ostane temen.</li>
+        telefon zaklenjen. Brez tega zvoni, a zaslon ostane temen. Če
+        aplikacijo posodobiš s te strani namesto iz aplikacije, ti ga telefon
+        vzame in ga moraš dati znova.</li>
       <li><b>Lokacija</b> (neobvezno) — samo za gumb „kje sem“ na zemljevidu.</li>
     </ul>
     <p class="drobno">

@@ -23,4 +23,10 @@
     <!-- Besedilo NA poudarku, ne poudarek sam: belo na oranzni ne bi
          doseglo kontrasta. Ista vrednost kot `.btn` v base.css. -->
     <color name="na_poudarku">#14161a</color>
+    <!-- Zaslon zvonjenja: noč pred zoro na peronu (design/budilka/). Svoja
+         paleta, ker je prizor nebo, ne stran; poudarek je toplejši od
+         `accent`, da ga je v temi videti. -->
+    <color name="noc">#060912</color>
+    <color name="poudarek">#f0934f</color>
+    <color name="nezno">#8fb4ff</color>
 </resources>

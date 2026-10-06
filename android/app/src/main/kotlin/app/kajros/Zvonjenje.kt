@@ -35,6 +35,13 @@ object Zvonjenje {
      * zvok predvaja sistem, zato mora biti narascanje v datoteki.
      */
     const val KANAL_NEZNO = "budilka-nezno"
+    /**
+     * Glasni del, kadar zaslon zvonjenja že sveti: isti zvok kot [KANAL_ZBUDI],
+     * a brez plavajočega obvestila. Na emulatorju (Android 15, zaklenjen s
+     * kodo) je obvestilo glasnega dela sicer obviselo čez glavo zaslona --
+     * uro, vlak in odhod -- ves čas glasnega zvonjenja (18 s in več).
+     */
+    const val KANAL_ZASLON = "budilka-zaslon"
     private const val KANAL_ZBUDI_STARI = "zbudi"
     const val KANAL_OBVESTI = "obvesti"
     /** Za sporocila, ki niso alarm: preskocena voznja, ki danes ne vozi. */
@@ -52,6 +59,19 @@ object Zvonjenje {
         nm.createNotificationChannel(
             NotificationChannel(KANAL_ZBUDI, c.getString(R.string.kanal_zbudi),
                 NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(Settings.System.DEFAULT_ALARM_ALERT_URI,
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build())
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 600, 700, 600, 700)
+                setBypassDnd(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
+        nm.createNotificationChannel(
+            NotificationChannel(KANAL_ZASLON, c.getString(R.string.kanal_zaslon),
+                NotificationManager.IMPORTANCE_DEFAULT).apply {
                 setSound(Settings.System.DEFAULT_ALARM_ALERT_URI,
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
@@ -152,8 +172,14 @@ object Zvonjenje {
      * brez dovoljenja za cel zaslon in pri odklenjenem telefonu je to edino,
      * kar potnik vidi.
      */
-    fun obvestiloZbudi(c: Context, b: Budilka?, zdajMs: Long, nezno: Boolean = false): Notification {
-        val gradnik = Notification.Builder(c, if (nezno) KANAL_NEZNO else KANAL_ZBUDI)
+    fun obvestiloZbudi(c: Context, b: Budilka?, zdajMs: Long, nezno: Boolean = false,
+                       naZaslonu: Boolean = false): Notification {
+        val kanal = when {
+            nezno -> KANAL_NEZNO
+            naZaslonu -> KANAL_ZASLON
+            else -> KANAL_ZBUDI
+        }
+        val gradnik = Notification.Builder(c, kanal)
             .setSmallIcon(R.drawable.ikona_obvestilo)
             .setCategory(Notification.CATEGORY_ALARM)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -182,14 +208,16 @@ object Zvonjenje {
             // ne pridobimo s cakanjem.
             gradnik.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         }
-        val n = gradnik
+        gradnik
             .setContentTitle(naslov)
             .setContentText(zakaj)
             .setStyle(Notification.BigTextStyle().bigText(zakaj))
-            // Obvestilo s `fullScreenIntent` je edini nacin, da se zaslon odpre
-            // sam, kadar je telefon zaklenjen. Ce dovoljenja ni, ostane
-            // obvestilo -- zato ima naslov, besedilo in gumba.
-            .setFullScreenIntent(polni, true)
+        // Obvestilo s `fullScreenIntent` je edini nacin, da se zaslon odpre
+        // sam, kadar je telefon zaklenjen. Ce dovoljenja ni, ostane obvestilo
+        // -- zato ima naslov, besedilo in gumba. Kadar zaslon ze sveti, ga ne
+        // odpiramo znova.
+        if (!naZaslonu) gradnik.setFullScreenIntent(polni, true)
+        val n = gradnik
             .setContentIntent(polni)
             .addAction(gumb(ZvonjenjeStoritev.USTAVI, R.string.ustavi, 1))
             .addAction(gumb(ZvonjenjeStoritev.ODLOZI, R.string.se_malo, 2))

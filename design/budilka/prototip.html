@@ -186,8 +186,10 @@ button:focus-visible { outline: 2px solid var(--poudarek); outline-offset: 2px; 
 //
 // Ustaviš jo tako, da vozilo pripelješ do cilja: pri „Peronu“ ga potegneš
 // na svojo postajo, pri „V daljavo“ ga potisneš proti cilju na obzorju.
-// Začeti je treba NA vozilu in priti čez 85 % poti; krajši poteg se vrne,
-// zato je dlan, žep ali dotik ne ustavijo.
+// Začeti je treba NA vozilu in priti čez 60 % poti ali ga sunkovito
+// zalučati proti cilju; krajši poteg se vrne, zato je dlan, žep ali dotik ne
+// ustavijo. Pot je pol širine zaslona: pri 85 % treh četrtin (prva različica)
+// je bilo treba vleči skoraj do roba (David, 6. 10. 2026).
 //
 // Zvonjenje je dvofazno: najprej nežno (tih zvonček, ki 45 s raste), nato
 // glasno kot doslej. V aplikaciji to pomeni dva kanala obvestil.
@@ -206,7 +208,12 @@ const BUDILKA = {
 const NEZNO_S = 45;
 const ZAMUDA_BARVA = (m) => m <= 0 ? "#7c8698" : m <= 5 ? "#f2a87e" : m <= 15 ? "#e07b45" : "#b85417";
 const ZMANJSANO = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const PRAG = 0.85;
+const PRAG = 0.6;
+// Del zaslona, ki ga prst prepotuje za vso pot (0 → 1): širina pri Peronu,
+// višina pri V daljavo.
+const POT = { peron: 0.5, daljava: 0.45 };
+// Sunek: spust s hitrostjo vsaj toliko (px/ms) proti cilju po vsaj 30 % poti.
+const SUNEK_HITROST = 0.6, SUNEK_POT = 0.3;
 
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, "0");
@@ -701,7 +708,7 @@ function postaviUro() {
 }
 
 // ---------------------------------------------------------------- vlečenje
-// Začeti je treba na vozilu (z rezervo 32 px), sicer se nič ne zgodi.
+// Začeti je treba na vozilu (z rezervo za prst), sicer se nič ne zgodi.
 function naVozilu(cx, cy) {
   const r = prizorEl.getBoundingClientRect();
   const box = new THREE.Box3().setFromObject(vozilo);
@@ -713,32 +720,52 @@ function naVozilu(cx, cy) {
     const sx = (v.x + 1) / 2 * r.width, sy = (1 - v.y) / 2 * r.height;
     x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
   }
-  const px = cx - r.left, py = cy - r.top, rez = 32;
+  const px = cx - r.left, py = cy - r.top, rez = 44;
   return px >= x0 - rez && px <= x1 + rez && py >= y0 - rez && py <= y1 + rez;
 }
 
 prizorEl.addEventListener("pointerdown", (e) => {
   if (koncano || !naVozilu(e.clientX, e.clientY)) return;
   prizorEl.setPointerCapture(e.pointerId);
-  vlecem = { id: e.pointerId, x: e.clientX, y: e.clientY, p0: p };
+  vlecem = { id: e.pointerId, x: e.clientX, y: e.clientY, p0: p, sled: [] };
   zadnji = p;
   zvok.zacniVlek();
 });
 prizorEl.addEventListener("pointermove", (e) => {
   if (!vlecem || e.pointerId !== vlecem.id) return;
   const r = prizorEl.getBoundingClientRect();
-  const d = STANJE.pogled === "daljava"
-    ? (vlecem.y - e.clientY) / (r.height * 0.55)
-    : (e.clientX - vlecem.x) / (r.width * 0.68);
+  const gor = STANJE.pogled === "daljava";
+  const premikOd = (ev) => gor ? vlecem.y - ev.clientY : ev.clientX - vlecem.x;
+  const d = premikOd(e) / (gor ? r.height * POT.daljava : r.width * POT.peron);
   cilj = Math.max(0, Math.min(1, vlecem.p0 + d));
+  // Zadnjih 100 ms premika za hitrost ob spustu. Brskalnik premike združi v
+  // enega na sličico in pri počasnem risanju bi bila hitrost napačna, zato
+  // vsak vmesni dogodek s svojim časom.
+  const vmesni = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  for (const ev of vmesni.length ? vmesni : [e]) vlecem.sled.push([ev.timeStamp, premikOd(ev)]);
+  if (vlecem.sled.length > 40) vlecem.sled.splice(0, vlecem.sled.length - 40);
   // Ob vsaki četrtini poti kratek tresljaj, kot zobnik.
   if (Math.floor(cilj * 4) !== Math.floor(zadnji * 4)) brni(8);
   zadnji = cilj;
 });
+// Hitrost (px/ms) v zadnjih 100 ms pred spustom; kadar je v tem času samo en
+// vzorec, od prejšnjega.
+function hitrostSledi(sl) {
+  if (sl.length < 2) return 0;
+  const [tn, xn] = sl[sl.length - 1];
+  let k = sl.length - 2;
+  while (k > 0 && tn - sl[k - 1][0] <= 100) k--;
+  while (k > 0 && sl[k][0] >= tn) k--;
+  const [tk, xk] = sl[k];
+  return tn > tk ? (xn - xk) / (tn - tk) : 0;
+}
+let zadnjaHitrost = 0;
 function spusti(e) {
   if (!vlecem || (e && e.pointerId !== vlecem.id)) return;
+  const hitrost = hitrostSledi(vlecem.sled);
   vlecem = null;
-  cilj = cilj >= PRAG ? 1 : 0;
+  zadnjaHitrost = hitrost;
+  cilj = cilj >= PRAG || (hitrost >= SUNEK_HITROST && cilj >= SUNEK_POT) ? 1 : 0;
 }
 prizorEl.addEventListener("pointerup", spusti);
 prizorEl.addEventListener("pointercancel", spusti);
@@ -891,7 +918,7 @@ requestAnimationFrame(zanka);
 
 // Za preizkus prek CDP: kje na zaslonu je čelo vozila.
 window.__budilka = {
-  STANJE, get p() { return p; }, get koncano() { return koncano; },
+  STANJE, get p() { return p; }, get koncano() { return koncano; }, get hitrost() { return zadnjaHitrost; },
   celo() {
     const r = prizorEl.getBoundingClientRect();
     const v = new THREE.Vector3(vozilo.position.x - 3, 2, 0).project(camera);

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odlog na zaslonu zvonjenja: pilula z robom, tiše od prizora. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#22ffffff">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#08ffffff" />
+            <stroke android:width="1dp" android:color="@color/line_firm" />
+            <corners android:radius="26dp" />
+        </shape>
+    </item>
+</ripple>

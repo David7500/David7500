@@ -41,6 +41,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Ob ponovnem zagonu telefona so vse načrtovane budnice izgubljene. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Posodobitev namesti aplikacija sama (`Namestitev`): sistemski
+         namestitveni program, ki ga odpre brskalnik, ob vsaki posodobitvi
+         vzame dovoljenje za cel zaslon (izmerjeno 6. 10. 2026). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="false"
@@ -86,7 +90,10 @@
 
         <!-- Zvonjenje čez ves zaslon. `singleInstance`, da se dve budilki ne
              zložita ena na drugo, in brez zgodovine, da po ustavitvi ne ostane
-             v seznamu nedavnih. -->
+             v seznamu nedavnih. Pokončno: v ležečem bi glava (vlak, odhod)
+             vzela skoraj vso višino in za prizor, v katerem vlečeš vozilo, ne
+             bi ostalo nič. Na velikih zaslonih Android 16 to prezre, in tam je
+             višine dovolj. -->
         <activity
             android:name=".ZvonjenjeDejavnost"
             android:exported="false"
@@ -96,7 +103,8 @@
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
             android:taskAffinity=".zvonjenje"
-            android:theme="@style/Tema" />
+            android:screenOrientation="portrait"
+            android:theme="@style/TemaZvonjenje" />
 
         <service
             android:name=".ZvonjenjeStoritev"
@@ -161,6 +169,12 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_budilke_info" />
         </receiver>
+
+        <!-- Izid namestitve posodobitve. Namero sestavimo mi (`PendingIntent`
+             iz `Namestitev`), zato ni izvožen. -->
+        <receiver
+            android:name=".NamestitevSprejemnik"
+            android:exported="false" />
 
         <receiver
             android:name=".Sprozilec"
