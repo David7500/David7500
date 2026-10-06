@@ -10,6 +10,8 @@ Pravila zajema (kaj feed pove in kje laže): `.claude/rules/zajem.md`; tu samo s
 
 **Meja med meritvijo in napovedjo = `stats.last_measured()`.** Vsak odgovor z zamudo jo mora upoštevati — kar je za zadnjim prevoženim postankom, je feedova napoved. Napaka že dvakrat na zaslonu.
 
+**Meja ne gre čez postajo iz svežega poročila SŽ** (od 6. 10. 2026): poročilo „ob prihodu na postajo Y“, mlajše od 8 min (`stats.SVEZE_POROCILO_S`), pomeni, da vlak na Y še ni bil. Napaka „vlak je tu že bil“ 13,1 → 2,7 % ob enaki točnosti, „še ni bil“ 1,2 → 11,8 % (cenejša). Isto pravilo v `_LAST_MEASURED_SQL` in `api._LIVE_SQL`; meritev v MERITVE („Kam torej narisati vlak“).
+
 **Izračuna se na enem mestu.** `/api/train/{no}/run` vrne `last_measured_seq`; prikaz ga bere, **ne računa sam**. Do 3. 9. 2026 pravilo napisano dvakrat — `stats.py` in `common.lastMeasured()` — z lastnim ravnanjem ob ničli za še nedosežen postanek. Dve različici se prej ali slej razideta, tiho: prikaz bi feedovo napoved pokazal kot izmerjeno zamudo. Primerjava ob poenotenju na 27 živih vožnjah: ujemali sta se povsod.
 
 **Vsi potniški endpointi imajo `network`, privzeto `zeleznica`.** Filter **znotraj** poizvedbe, ne za njo: sicer železniško vprašanje (700 000 vrstic) plača avtobusne (12 M). Že dvakrat vzrok počasnosti.

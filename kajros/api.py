@@ -2431,10 +2431,31 @@ ranked AS (
 zadnja_beseda AS (
     SELECT trip_id, MAX(feed_ts) AS zadnji_ts FROM t GROUP BY trip_id
 ),
+-- Vlak na postaji iz svežega poročila SŽ še ni bil -- isto pravilo in iste
+-- meje kot v `stats._LAST_MEASURED_SQL`, kjer je razloženo.
+porocilo AS (
+    SELECT trip_id, station, seen_ts FROM (
+        SELECT trip_id, station, seen_ts, ROW_NUMBER() OVER (
+                   PARTITION BY trip_id ORDER BY seen_ts DESC) AS rn
+        FROM delay_report
+        WHERE service_date = :day AND seen_ts <= :polnoc + :now_s
+    ) WHERE rn = 1 AND seen_ts > :polnoc + :now_s - :sveze_porocilo
+),
+ne_dlje AS (
+    SELECT s.trip_id, MIN(s.stop_seq) AS do_seq
+    FROM porocilo p
+    JOIN sched s ON s.trip_id = p.trip_id
+    JOIN station st ON st.stop_id = s.stop_id AND st.name = p.station
+    GROUP BY s.trip_id
+    HAVING MIN(s.stop_seq) > (SELECT MIN(s0.stop_seq) FROM sched s0
+                              WHERE s0.trip_id = s.trip_id)
+),
 passed AS (
     SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn
     FROM ranked r JOIN zadnja_beseda z ON z.trip_id = r.trip_id
-    WHERE r.t_s + COALESCE(r.delay_s, 0) <= :now_s
+    LEFT JOIN ne_dlje n ON n.trip_id = r.trip_id
+    WHERE r.stop_seq < COALESCE(n.do_seq, 1 << 30)
+      AND r.t_s + COALESCE(r.delay_s, 0) <= :now_s
       AND r.t_s + COALESCE(r.delay_s, 0) <= z.zadnji_ts - :polnoc
       AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
       AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
@@ -2464,6 +2485,7 @@ def _live_rows(conn, service_date: str, now_s: int,
                                     "network": network,
                                     "polnoc": polnoc,
                                     "overnight_only": int(overnight_only),
+                                    "sveze_porocilo": stats.SVEZE_POROCILO_S,
                                     "max_delay": MAX_LIVE_DELAY_S}).fetchall()
     out = []
     for r in rows:

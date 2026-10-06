@@ -988,17 +988,42 @@ def last_measured(conn: sqlite3.Connection, service_date: str,
     ze zdavnaj molci. Zato je zamejen z zadnjo besedo feeda o tej voznji.
     Vrnjeni `feed_ts` je starost dokaza -- prikaz z njim pove, kdaj je bilo to
     nazadnje potrjeno.
+
+    **Meja tudi ne gre čez postajo iz svežega poročila SŽ** (`SVEZE_POROCILO_S`).
+    Postaja v poročilu je tista, proti kateri vlak pelje, ne tista, kjer je
+    (92 % od 26 711 poročil zajetih pred prihodom tja): vlak na njej še ni
+    bil, kar koli pravi ura. Brez tega pravila je prikaz trdil "vlak je tu
+    že bil" v 13,1 % trenutkov vožnje, z njim v 2,7 %, točnost enaka (85,7
+    proti 85,5 %; 64 123 trenutkov 20. 9.-5. 10. 2026, `docs/MERITVE.md`
+    "Kam torej narisati vlak"). Cena: "še ni bil", ko je že bil, s 1,2 na
+    11,8 % -- predvsem vlak, ki na tisti postaji že stoji. Ta napaka je
+    cenejša: potnik počaka, ne odide s perona. Resnica v tej meritvi je
+    zadnja beseda feeda, ne človek; potrjenih prehodov je bilo ob odločitvi
+    (David, 6. 10. 2026) šest.
     """
     if now_s is None or not trip_ids:
         return {}
     ids = list(dict.fromkeys(trip_ids))
     # Brez te pretvorbe bi primerjali dve razlicni merili (`t_s` in `feed_ts`).
     polnoc_s = polnoc(service_date)
+    zdaj_ts = polnoc_s + now_s
     # Vsi vezani parametri morajo biti istega sloga: sqlite jih ob mesanju
     # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
-    sql = _LAST_MEASURED_SQL % ",".join("?" * len(ids))
+    vprasaji = ",".join("?" * len(ids))
+    sql = _LAST_MEASURED_SQL % (vprasaji, vprasaji)
     return {r["trip_id"]: dict(r)
-            for r in conn.execute(sql, (service_date, *ids, now_s, polnoc_s))}
+            for r in conn.execute(sql, (service_date, *ids,
+                                        service_date, *ids, zdaj_ts,
+                                        zdaj_ts - SVEZE_POROCILO_S,
+                                        now_s, polnoc_s))}
+
+
+#: Kako dolgo velja poročilo SŽ "vlak X ob prihodu na postajo Y" kot dokaz,
+#: da vlak na Y še ni bil. Izmerjeno (64 123 trenutkov vožnje): brez meje je
+#: pravilo slabše od nobenega (točno 78,1 %, "še ni bil", ko je že bil,
+#: 20,0 %), ker poročilo med postankom na Y še vedno pravi "proti Y"; pri
+#: 15 min 83,7 %, pri 8 min 85,5 % -- toliko kot brez pravila.
+SVEZE_POROCILO_S = 8 * 60
 
 
 #: Koliko dni s podobno zamudo mora biti, da jim verjamemo mediano. Merjeno:
@@ -1517,10 +1542,33 @@ ranked AS (
 zadnja_beseda AS (
     SELECT trip_id, MAX(feed_ts) AS zadnji_ts FROM t GROUP BY trip_id
 ),
+-- Postanek iz zadnjega poročila SŽ pred zdaj, če je sveže: vlak pelje proti
+-- njemu, torej na njem še ni bil. Ime iz poročila se mora ujemati z
+-- imenom postanka te vožnje (prometno mesto, kjer vlak ne ustavlja, mejo
+-- pusti pri miru), in ne sme biti prvi postanek -- tako je bilo izmerjeno.
+porocilo AS (
+    SELECT trip_id, station, seen_ts FROM (
+        SELECT trip_id, station, seen_ts, ROW_NUMBER() OVER (
+                   PARTITION BY trip_id ORDER BY seen_ts DESC) AS rn
+        FROM delay_report
+        WHERE service_date = ? AND trip_id IN (%s) AND seen_ts <= ?
+    ) WHERE rn = 1 AND seen_ts > ?
+),
+ne_dlje AS (
+    SELECT s.trip_id, MIN(s.stop_seq) AS do_seq
+    FROM porocilo p
+    JOIN sched s ON s.trip_id = p.trip_id
+    JOIN station st ON st.stop_id = s.stop_id AND st.name = p.station
+    GROUP BY s.trip_id
+    HAVING MIN(s.stop_seq) > (SELECT MIN(s0.stop_seq) FROM sched s0
+                              WHERE s0.trip_id = s.trip_id)
+),
 passed AS (
     SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.trip_id ORDER BY r.stop_seq DESC) AS rn
     FROM ranked r JOIN zadnja_beseda z ON z.trip_id = r.trip_id
-    WHERE r.t_s + COALESCE(r.delay_s, 0) <= ?
+    LEFT JOIN ne_dlje n ON n.trip_id = r.trip_id
+    WHERE r.stop_seq < COALESCE(n.do_seq, 1 << 30)
+      AND r.t_s + COALESCE(r.delay_s, 0) <= ?
       -- **Meja ne sme prehiteti feeda.** Pogoj zgoraj je ura: vozni red plus
       -- zadnja znana zamuda je mimo. Kadar feed o voznji utihne, to ni vec
       -- meritev, ampak ekstrapolacija -- in ta se s casom sama od sebe

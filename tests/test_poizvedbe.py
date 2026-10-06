@@ -2309,6 +2309,63 @@ def test_meja_meritve_normalno_sledi_feedu(conn):
     assert m["t1"]["stop_seq"] == 3, "sveži feed mora dovoliti mejo do konca"
 
 
+def _porocilo_sz(conn, dan, seen_ts, postaja, delay_min=5):
+    conn.execute("INSERT INTO delay_report(trip_id, service_date, seen_ts, train_no, "
+                 "delay_min, station, event) VALUES('t1',?,?,'IC 1',?,?,'prihod')",
+                 (dan, seen_ts, delay_min, postaja))
+    conn.commit()
+
+
+def test_meja_ne_gre_cez_postajo_iz_svezega_porocila(conn):
+    """Postaja v poročilu SŽ je tista, proti kateri vlak pelje: vlak na njej
+    še ni bil, kar koli pravi ura (92 % od 26 711 poročil zajetih pred
+    prihodom tja, `docs/MERITVE.md`). Brez tega je prikaz trdil "vlak je tu že
+    bil" v 13,1 % trenutkov vožnje, s tem v 2,7 %.
+
+    IC 1: A 08:00 -> Z 09:00/09:05 -> C 10:00. Feed pravi +5 min, ura je
+    09:30, torej je Zidani Most po uri prevožen ob 09:10. Poročilo ob 09:25
+    pa pravi, da vlak šele pelje proti njemu.
+    """
+    from kajros import api
+    dan = "2026-08-31"
+    p = stats.polnoc(dan)
+    for seq in (1, 2, 3):
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                     "delay_dep, feed_ts) VALUES('t1',?,?,300,300,4102444800)", (dan, seq))
+    conn.commit()
+    zdaj = 9 * 3600 + 1800
+    assert stats.last_measured(conn, dan, ["t1"], zdaj)["t1"]["stop_seq"] == 2
+
+    _porocilo_sz(conn, dan, p + 9 * 3600 + 1500, "Zidani Most")
+    assert stats.last_measured(conn, dan, ["t1"], zdaj)["t1"]["stop_seq"] == 1, \
+        "vlak, ki pelje proti Zidanemu Mostu, tam še ni bil"
+    assert {r["trip_id"]: r["stop_seq"] for r in api._live_rows(conn, dan, zdaj)}["t1"] == 1, \
+        "zemljevid mora risati po istem pravilu"
+
+    # Poročilo, starejše od osmih minut, ne velja več: med postankom na Z bi
+    # še vedno pravilo "proti Z" (izmerjeno: brez meje je pravilo slabše od
+    # nobenega).
+    zdaj_pozneje = 9 * 3600 + 1500 + stats.SVEZE_POROCILO_S + 60
+    assert stats.last_measured(conn, dan, ["t1"], zdaj_pozneje)["t1"]["stop_seq"] == 2
+
+
+def test_porocilo_brez_postanka_ali_iz_prihodnosti_meje_ne_premakne(conn):
+    """Prometno mesto, kjer vlak ne ustavlja, ne pove, kateri postanek je
+    naslednji; poročilo, zajeto po trenutku vprašanja, takrat še ni obstajalo
+    (senčno merjenje vprašuje za nazaj)."""
+    dan = "2026-08-31"
+    p = stats.polnoc(dan)
+    for seq in (1, 2, 3):
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                     "delay_dep, feed_ts) VALUES('t1',?,?,300,300,4102444800)", (dan, seq))
+    conn.commit()
+    zdaj = 9 * 3600 + 1800
+    _porocilo_sz(conn, dan, p + 9 * 3600 + 1500, "Sevnica")
+    assert stats.last_measured(conn, dan, ["t1"], zdaj)["t1"]["stop_seq"] == 2
+    _porocilo_sz(conn, dan, p + 9 * 3600 + 1900, "Zidani Most")
+    assert stats.last_measured(conn, dan, ["t1"], zdaj)["t1"]["stop_seq"] == 2
+
+
 # ---------------------------------------------------------------- varovalka voznega reda
 
 def test_prevelik_vozni_red_vrze_napako(conn, monkeypatch):
