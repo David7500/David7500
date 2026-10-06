@@ -28,6 +28,13 @@ object Zvonjenje {
      * predvajala aplikacija) in bi tak ostal za vedno.
      */
     const val KANAL_ZBUDI = "budilka"
+    /**
+     * Nezni del zvonjenja: svoj kanal, ker je zvok last kanala. Zvok je
+     * `res/raw/nezno.mid` (glasbena skrinjica, ki v 45 s zraste od komaj
+     * slisne) -- glasnosti med zvonjenjem ne moremo vec spreminjati, odkar
+     * zvok predvaja sistem, zato mora biti narascanje v datoteki.
+     */
+    const val KANAL_NEZNO = "budilka-nezno"
     private const val KANAL_ZBUDI_STARI = "zbudi"
     const val KANAL_OBVESTI = "obvesti"
     /** Za sporocila, ki niso alarm: preskocena voznja, ki danes ne vozi. */
@@ -52,6 +59,20 @@ object Zvonjenje {
                         .build())
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 600, 700, 600, 700)
+                setBypassDnd(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
+        nm.createNotificationChannel(
+            NotificationChannel(KANAL_NEZNO, c.getString(R.string.kanal_nezno),
+                NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(android.net.Uri.parse("android.resource://${c.packageName}/${R.raw.nezno}"),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build())
+                // En kratek drsljaj na zacetku, ne trojni kot glasni kanal.
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 120)
                 setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             })
@@ -104,10 +125,10 @@ object Zvonjenje {
         return naslov to zakaj
     }
 
-    fun sprozi(c: Context, b: Budilka, zdajMs: Long) {
+    fun sprozi(c: Context, b: Budilka, zdajMs: Long, glasnoOb: Long) {
         kanali(c)
         if (b.zbudi) {
-            ZvonjenjeStoritev.zazeni(c, b.id)
+            ZvonjenjeStoritev.zazeni(c, b.id, glasnoOb)
             return
         }
         val (naslov, zakaj) = besedilo(c, b, zdajMs)
@@ -131,8 +152,8 @@ object Zvonjenje {
      * brez dovoljenja za cel zaslon in pri odklenjenem telefonu je to edino,
      * kar potnik vidi.
      */
-    fun obvestiloZbudi(c: Context, b: Budilka?, zdajMs: Long): Notification {
-        val gradnik = Notification.Builder(c, KANAL_ZBUDI)
+    fun obvestiloZbudi(c: Context, b: Budilka?, zdajMs: Long, nezno: Boolean = false): Notification {
+        val gradnik = Notification.Builder(c, if (nezno) KANAL_NEZNO else KANAL_ZBUDI)
             .setSmallIcon(R.drawable.ikona_obvestilo)
             .setCategory(Notification.CATEGORY_ALARM)
             .setVisibility(Notification.VISIBILITY_PUBLIC)

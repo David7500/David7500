@@ -152,3 +152,45 @@ class SledenjeTest {
         assertEquals(ob(7, 31), b.izracun(ob(7, 13)).odhodMs)
     }
 }
+
+/**
+ * Nezni zacetek (6. 10. 2026): zvonjenje se zacne prej, glasno ostane ob uri,
+ * ki jo je izbral potnik -- nezni del ne sme vzeti nic od rezerve.
+ */
+class NeznoTest {
+
+    private val CONA = ZoneId.of("Europe/Ljubljana")
+
+    private fun ob(ura: Int, minuta: Int, sekunda: Int = 0): Long =
+        ZonedDateTime.of(2026, 10, 6, ura, minuta, sekunda, 0, CONA).toInstant().toEpochMilli()
+
+    private fun budilka(zbudi: Boolean) = Budilka(
+        id = "b1", trainNo = "LPV 2002", tripId = "t1", omrezje = "zeleznica",
+        postaja = "Ljubljana Polje", stopSeq = 3, dan = "2026-10-06", voznoredniMs = ob(7, 31),
+        minutPrej = 20, zbudi = zbudi, dnevi = Ponovitev.VSI,
+    )
+
+    @Test
+    fun `zbudi zacne 45 s pred uro zvonjenja, glasno ostane ob uri`() {
+        val b = budilka(zbudi = true)
+        val zdaj = ob(6, 0)
+        val glasno = b.izracun(zdaj).zvoniOb
+        assertEquals(ob(7, 11), glasno)
+        assertEquals(glasno - 45_000L, b.zacetekZvonjenja(zdaj))
+    }
+
+    @Test
+    fun `obvestilo nima neznega dela`() {
+        val b = budilka(zbudi = false)
+        val zdaj = ob(6, 0)
+        assertEquals(0L, b.neznoMs)
+        assertEquals(b.izracun(zdaj).zvoniOb, b.zacetekZvonjenja(zdaj))
+    }
+
+    @Test
+    fun `odlog je spet najprej nezen`() {
+        // „Se dve minuti“: glasno cez dve minuti, nezno 45 s prej.
+        val b = budilka(zbudi = true).copy(odlozenoDoMs = ob(7, 13))
+        assertEquals(ob(7, 12, 15), b.zacetekZvonjenja(ob(7, 11)))
+    }
+}

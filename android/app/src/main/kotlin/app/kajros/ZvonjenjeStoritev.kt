@@ -1,11 +1,16 @@
 package app.kajros
 
+import android.app.Notification
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.PowerManager
 
 /**
  * Zvonjenje: obvestilo, ki ga ni mogoce odmahniti, dokler ga kdo ne ustavi.
@@ -27,6 +32,14 @@ import android.os.IBinder
  * (ponavlja se, dokler obvestila ni vec). Storitev v ospredju je tu samo zato,
  * ker takega obvestila ni mogoce podrsati stran -- odmahnjena budilka je tiha
  * budilka.
+ *
+ * **Najprej nezno, nato glasno** (6. 10. 2026). Zvonjenje se zacne
+ * [Ura.NEZNO_MS] pred uro zvonjenja na kanalu `budilka-nezno` (zvoncek, ki
+ * raste), ob sami uri pride obvestilo na glasnem kanalu. Dve obvestili, ker
+ * zvok pripada kanalu in ga obstojecemu obvestilu ni mogoce zamenjati. Med
+ * neznim delom drzimo delni `WakeLock`: brez njega bi procesor v Doze lahko
+ * zaspal in preklop na glasno zamudil. Ce se preklop vseeno ne bi zgodil,
+ * nezni zvok na koncu ze zbudi -- nikoli ni tisine.
  */
 class ZvonjenjeStoritev : Service() {
 
@@ -37,8 +50,14 @@ class ZvonjenjeStoritev : Service() {
         const val ODLOZI = "app.kajros.ODLOZI"
         /** "Se dve minuti" -- toliko, kolikor traja pot do vrat, ne pol ure. */
         private const val ODLOG_MS = 2 * 60 * 1000L
-        /** Obvestilo storitve v ospredju. Ena naenkrat, zato ena stevilka. */
+        /** Ura glasnega dela (epoch ms); do nje zvoni nezno. */
+        const val GLASNO_OB = "glasno_ob"
+        /** Obvestilo storitve v ospredju: glasno, kot doslej. */
         const val OBVESTILO = 4711
+        /** Obvestilo neznega dela. Svoja stevilka, ker ga glasno zamenja. */
+        const val OBVESTILO_NEZNO = 4712
+        /** Krajsi nezni del ne pomaga -- takrat takoj glasno. */
+        private const val NAJMANJ_NEZNO_MS = 5_000L
 
         /** Katera budilka ta hip zvoni, ali null. */
         @Volatile
@@ -52,19 +71,23 @@ class ZvonjenjeStoritev : Service() {
         fun namera(c: Context, akcija: String, id: String): Intent =
             Intent(c, ZvonjenjeStoritev::class.java).setAction(akcija).putExtra(ID, id)
 
-        fun zazeni(c: Context, id: String) {
-            val i = namera(c, ZVONI, id)
+        fun zazeni(c: Context, id: String, glasnoOb: Long) {
+            val i = namera(c, ZVONI, id).putExtra(GLASNO_OB, glasnoOb)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i)
             else c.startService(i)
         }
     }
+
+    private val roka = Handler(Looper.getMainLooper())
+    private val glasno = Runnable { zvoniGlasno() }
+    private var budnost: PowerManager.WakeLock? = null
 
     override fun onBind(i: Intent?): IBinder? = null
 
     override fun onStartCommand(i: Intent?, zastavice: Int, zagon: Int): Int {
         val id = i?.getStringExtra(ID)
         when (i?.action) {
-            ZVONI -> zacni(id)
+            ZVONI -> zacni(id, i.getLongExtra(GLASNO_OB, 0L))
             USTAVI -> koncaj(id, odlozi = false)
             ODLOZI -> koncaj(id, odlozi = true)
             else -> stopSelf()
@@ -72,19 +95,43 @@ class ZvonjenjeStoritev : Service() {
         return START_NOT_STICKY
     }
 
-    private fun zacni(id: String?) {
+    private fun zacni(id: String?, glasnoOb: Long) {
         val b = id?.let { Shramba.ena(this, it) }
         // `startForeground` mora priti v nekaj sekundah tudi, ce budilke vmes
         // ni vec -- sicer sistem aplikacijo podre.
         Zvonjenje.kanali(this)
-        val n = Zvonjenje.obvestiloZbudi(this, b, System.currentTimeMillis())
+        val zdaj = System.currentTimeMillis()
+        val doGlasnega = glasnoOb - zdaj
+        val nezno = b != null && doGlasnega >= NAJMANJ_NEZNO_MS
         if (b != null) zvoni = b.id
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(OBVESTILO, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)
-        } else {
-            startForeground(OBVESTILO, n)
+        vOspredje(if (nezno) OBVESTILO_NEZNO else OBVESTILO,
+            Zvonjenje.obvestiloZbudi(this, b, zdaj, nezno))
+        if (b == null) { ustavi(); return }
+        if (nezno) {
+            budnost = getSystemService(PowerManager::class.java)
+                ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kajros:nezno")
+                ?.apply { acquire(doGlasnega + 10_000L) }
+            roka.postDelayed(glasno, doGlasnega)
+            Dnevnik.zapisi(this, b, "zvoni nežno, glasno čez ${(doGlasnega + 500) / 1000} s")
         }
-        if (b == null) ustavi()
+    }
+
+    /** Konec neznega dela: glasno obvestilo prevzame storitev, nezno gre stran. */
+    private fun zvoniGlasno() {
+        val b = zvoni?.let { Shramba.ena(this, it) } ?: return
+        vOspredje(OBVESTILO, Zvonjenje.obvestiloZbudi(this, b, System.currentTimeMillis()))
+        getSystemService(NotificationManager::class.java)?.cancel(OBVESTILO_NEZNO)
+        budnost?.let { if (it.isHeld) it.release() }
+        budnost = null
+        Dnevnik.zapisi(this, b, "zvoni glasno")
+    }
+
+    private fun vOspredje(stevilka: Int, n: Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(stevilka, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)
+        } else {
+            startForeground(stevilka, n)
+        }
     }
 
     private fun koncaj(id: String?, odlozi: Boolean) {
@@ -112,6 +159,12 @@ class ZvonjenjeStoritev : Service() {
 
     /** Obvestilo gre stran skupaj s storitvijo -- in z njim zvok. */
     private fun ustavi() {
+        roka.removeCallbacks(glasno)
+        budnost?.let { if (it.isHeld) it.release() }
+        budnost = null
+        // Nezno obvestilo ni vec obvestilo storitve, kadar je glasno ze prislo;
+        // takrat ga `stopForeground` ne pobere.
+        getSystemService(NotificationManager::class.java)?.cancel(OBVESTILO_NEZNO)
         obKoncu?.invoke()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -122,6 +175,8 @@ class ZvonjenjeStoritev : Service() {
     }
 
     override fun onDestroy() {
+        roka.removeCallbacks(glasno)
+        budnost?.let { if (it.isHeld) it.release() }
         zvoni = null
         super.onDestroy()
     }

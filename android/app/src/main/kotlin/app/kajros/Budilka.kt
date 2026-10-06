@@ -73,6 +73,13 @@ data class Budilka(
         )
     }
 
+    /** Koliko pred uro zvonjenja se zacne nezni del ([Ura.NEZNO_MS]). Samo pri
+     *  budilki, ki zbudi -- obvestilo je en zvok in nima cesa stopnjevati. */
+    val neznoMs: Long get() = if (zbudi) Ura.NEZNO_MS else 0L
+
+    /** Kdaj se zvonjenje zacne: nezno, [neznoMs] pred uro glasnega dela. */
+    fun zacetekZvonjenja(zdajMs: Long): Long = izracun(zdajMs).zvoniOb - neznoMs
+
     fun izracun(zdajMs: Long): Ura.Izid {
         val i = Ura.izracunaj(
             voznoredniMs = voznoredniMs,

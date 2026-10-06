@@ -147,6 +147,16 @@ Storitev, zagnana iz ozadja, za zvok ni „v ospredju". Zato zvok zdaj predvaja 
 
 Dovoljenje za cel zaslon se zdaj zaprosi (`zahtevajZaBudilko`, 14+: `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`), stran ga pozna kot `cel_zaslon` v `dovoljenja()`, seznam budilk pove, kadar manjka.
 
+### Najprej nežno, nato glasno (1.5, 6. 10. 2026)
+
+David: „da te zbudi nežno, šele nato glasno kot zdaj“. Zvonjenje se začne **`Ura.NEZNO_MS` (45 s) pred uro zvonjenja** na kanalu `budilka-nezno`, ob sami uri pride obvestilo na glasnem kanalu `budilka`. Začne se prej, ne konča pozneje: glasno ostane ob uri, ki jo je potnik izbral, nežni del ne vzame nič od rezerve v X. Samo pri budilki, ki zbudi (`Budilka.neznoMs`); obvestilo je en zvok. Odlog „še 2 minuti“ je spet najprej nežen.
+
+* **Naraščanje je v datoteki, ne v kodi.** Zvok predvaja sistem prek kanala (glej zgoraj, AudioHardening), zato glasnosti med zvonjenjem ne moremo spreminjati. `res/raw/nezno.mid` (575 B, `android/zvok_nezno.py`): glasbena skrinjica, razložen akord E–G–C vsakih 2,5 s, jakost udarca od 14 do 112. MIDI predvaja Sonivox iz AOSP; enak posnetek v Vorbisu bi bil ~150 kB.
+* **Dve obvestili, dve številki** (`OBVESTILO_NEZNO` 4712, `OBVESTILO` 4711): zvok je last kanala, obstoječemu obvestilu ga ni mogoče zamenjati. Preklop = `startForeground` z glasnim, nato `cancel` nežnega.
+* **Preklop drži delni `WakeLock`** do ure glasnega + 10 s: v Doze bi `Handler` sicer lahko zamudil. Če se preklop vseeno ne zgodi, je konec nežnega zvoka že glasen (jakost 112) — tišine ni nikoli.
+* Krajši nežni del od 5 s (budnica je prišla pozno) ne pomaga: takrat takoj glasno. Zadnja budnica `Nacrtovalec.kdaj` pade na začetek nežnega dela (`Budilka.zacetekZvonjenja`). Testi: `NeznoTest`.
+* **Preverjeno na emulatorju** (Android 15, AOSP, 6. 10. 2026; storitev zagnana z `am start-foreground-service … --el glasno_ob`): obvestilo 4712 na `budilka-nezno`, sistem predvaja MIDI (`MediaPlayer`, 22 050 Hz, `USAGE_ALARM`, ni utišan); po 20 s obvestilo 4711 na `budilka`, nežno pobrano, glasni zvok 44 100 Hz; „Ustavi“ med nežnim delom prepreči glasno (17 s pozneje ni ne obvestila ne zvoka); odlog postavi glasno na +2 min. Na telefonu še ni preverjeno, zlasti ali Sonivox predvaja MIDI na Volli.
+
 ### „Strežnik nima podatka" ni izpad povezave
 
 Drugi preizkus (LPV 2002, Ljubljana začetna postaja) zazvonil preventivno ob prvem preverjanju: `vozi, zamuda neznana → preventiva`. Tabla za vlak, ki se še ni premaknil, vrne `zamuda: null` — isto kot brez odgovora. Zdaj `Budilka.stikObMs` hrani **vsak** odgovor, `Ura.Vir.NI_PODATKA` = vozni red **brez** preventive s stavkom „o zamudi te vožnje še ni podatka". Preventiva ostane samo, ko strežnika ni bilo mogoče vprašati.

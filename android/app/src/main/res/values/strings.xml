@@ -17,6 +17,7 @@
 
     <!-- budilka -->
     <string name="kanal_zbudi">Budilka</string>
+    <string name="kanal_nezno">Budilka, nežni začetek</string>
     <string name="kanal_obvesti">Obvestila o odhodu</string>
     <string name="zvoni_naslov">%1$s ob %2$s</string>
     <string name="zvoni_zamuda">Upoštevana zamuda +%1$d min.</string>

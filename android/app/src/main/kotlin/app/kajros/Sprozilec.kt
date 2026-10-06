@@ -72,17 +72,18 @@ class Sprozilec : BroadcastReceiver() {
         // ali preventivi, je vprasanje ravno, ali zamudo lahko izvemo zdaj.
         // 14. 9. 2026 je prav ta bliznjica zazvonila "zamude ni bilo mogoce
         // preveriti", ne da bi strežnik sploh vprasala.
-        if (zdaj + BLIZU_MS >= prej.zvoniOb &&
+        // Zvonjenje se zacne nezno, `neznoMs` pred uro glasnega dela.
+        if (zdaj + BLIZU_MS >= prej.zvoniOb - stara.neznoMs &&
             (prej.vir == Ura.Vir.ZAMUDA || stara.odlozenoDoMs > 0)
         ) {
-            zvoni(c, stara, zdaj)
+            zvoni(c, stara, zdaj, prej.zvoniOb)
             return
         }
 
         // Blizu zvonjenja poskusimo veckrat: takrat je odgovor vreden vec kot
         // sekunda cakanja, in prav takrat izpad povezave pomeni preventivno
         // zvonjenje. Dalec od ure en poskus zadosca.
-        val nujno = prej.zvoniOb - zdaj <= Ura.PREVENTIVA_MS
+        val nujno = prej.zvoniOb - stara.neznoMs - zdaj <= Ura.PREVENTIVA_MS
         val poskusov = if (nujno) 3 else 1
         var odgovor: Preverjevalec.Odgovor = Preverjevalec.Odgovor.BrezZveze
         for (i in 0 until poskusov) {
@@ -113,8 +114,8 @@ class Sprozilec : BroadcastReceiver() {
         val posodobljena = nova.copy(zvoniObMs = izid.zvoniOb)
         Dnevnik.zapisi(c, stara, "preverjeno: ${opis(odgovor)} → zvoni ${
             ura.format(Date(izid.zvoniOb))} (${izid.vir.name.lowercase()})")
-        if (zdaj + BLIZU_MS >= izid.zvoniOb) {
-            zvoni(c, posodobljena, zdaj)
+        if (zdaj + BLIZU_MS >= izid.zvoniOb - nova.neznoMs) {
+            zvoni(c, posodobljena, zdaj, izid.zvoniOb)
         } else {
             Shramba.shrani(c, posodobljena)
             Nacrtovalec.nastavi(c, posodobljena, zdaj)
@@ -171,13 +172,14 @@ class Sprozilec : BroadcastReceiver() {
         Nacrtovalec.vseZnova(c, zdajMs)
     }
 
-    private fun zvoni(c: Context, b: Budilka, zdajMs: Long) {
+    /** `glasnoOb`: ura zvonjenja iz racuna; do nje zvoni nezno. */
+    private fun zvoni(c: Context, b: Budilka, zdajMs: Long, glasnoOb: Long) {
         // Shranimo trenutek, ko je RES zazvonilo, ne nacrtovanega.
         val odzvonjena = b.copy(odzvonjeno = true, zvoniObMs = zdajMs)
         Shramba.shrani(c, odzvonjena)
         Dnevnik.zapisi(c, b, "zvoni (${b.izracun(zdajMs).vir.name.lowercase()}" +
             if (Zvonjenje.smeCelZaslon(c)) ")" else ", celozaslonsko NI dovoljeno)")
-        Zvonjenje.sprozi(c, b, zdajMs)
+        Zvonjenje.sprozi(c, b, zdajMs, glasnoOb)
         // Ista budnica odslej sledi vozilu do odhoda -- za widget.
         Nacrtovalec.nastavi(c, odzvonjena, zdajMs)
         Widgeti.osvezi(c)

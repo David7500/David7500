@@ -41,7 +41,8 @@ object Nacrtovalec {
      * potem na vsak korak; nazadnje ob samem zvonjenju.
      */
     fun kdaj(b: Budilka, zdajMs: Long): Long {
-        val zvoni = b.izracun(zdajMs).zvoniOb
+        // Zadnja budnica pade na zacetek NEZNEGA dela, ne na glasnega.
+        val zvoni = b.zacetekZvonjenja(zdajMs)
         // Avtobus zna biti prezgoden, zato racunamo z zaletom -- sicer bi prvo
         // preverjanje padlo sele za trenutkom, ko bi ze moralo zvoniti.
         val zacetek = zvoni - Ura.ZALET_MS
