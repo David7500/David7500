@@ -1,0 +1,901 @@
+<title>Budilka kajros</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Zaslon budilke kajros: noč pred zoro na peronu. Vozilo potegneš do postaje
+   (Peron) ali ga potisneš proti cilju na obzorju (V daljavo). Ena temna
+   podoba, kot aplikacija, zato barve samo na :root. */
+:root {
+  color-scheme: dark;
+  --noc: #060912;
+  --noc-2: #0f1932;
+  --obzorje: #24335c;
+  --ink: #e9ecf2;
+  --ink-dim: #a1aab8;
+  --ink-mute: #7a8392;
+  --rob: #2b303a;
+  --poudarek: #f0934f;
+  --nezno: #8fb4ff;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--noc); color: var(--ink); font-family: var(--sans); overflow: hidden; }
+
+.okvir { height: 100%; display: flex; justify-content: center; align-items: stretch; }
+.zaslon {
+  position: relative; width: 100%; max-width: 430px; height: 100%;
+  display: flex; flex-direction: column; overflow: hidden; background: var(--noc);
+}
+/* Na širokem zaslonu telefon na sredi, kot bi ga držal. */
+@media (min-width: 700px) {
+  .okvir { align-items: center; padding-block: 24px; box-sizing: border-box; }
+  .zaslon { height: min(900px, 100%); border-radius: 36px; box-shadow: 0 0 0 10px #15171c, 0 30px 80px #000c; }
+}
+
+/* ---------- prototip: izbire, ki jih na pravem zaslonu ni ---------- */
+.izbire {
+  position: relative; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 6px;
+  font-size: 12px; color: var(--ink-mute);
+}
+.seg { display: inline-flex; border: 1px solid var(--rob); border-radius: 999px; overflow: hidden; }
+.seg button, .zvok {
+  font: 500 12px/1 var(--sans); color: var(--ink-dim); background: none; border: 0;
+  padding: 7px 10px; cursor: pointer; min-height: 30px;
+}
+.seg button[aria-pressed="true"] { background: #2a2f3a; color: var(--ink); }
+.zvok { border: 1px solid var(--rob); border-radius: 999px; }
+.zvok[aria-pressed="true"] { color: var(--ink); background: #2a2f3a; }
+button:focus-visible { outline: 2px solid var(--poudarek); outline-offset: 2px; }
+
+/* ---------- glava: kaj pelje in kdaj ---------- */
+.glava { position: relative; z-index: 2; padding: 10px 24px 0; }
+.vrh { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ura-zdaj { font: 600 15px/1 var(--mono); color: var(--ink-dim); }
+.faza {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  font: 500 12px/1 var(--sans); color: var(--nezno); background: #8fb4ff14; border: 1px solid #8fb4ff33;
+}
+.faza.glasno { color: var(--poudarek); background: #f0934f14; border-color: #f0934f44; }
+.faza i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: utrip 2.4s ease-in-out infinite; }
+.faza.glasno i { animation-duration: 0.6s; }
+@keyframes utrip { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.naslov { margin: 10px 0 6px; font: 600 26px/1.18 var(--sans); text-wrap: balance; }
+.naslov .smer { color: var(--ink-dim); font-weight: 500; }
+.odhod { margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 17px; color: var(--ink-dim); }
+.odhod b { font: 600 34px/1 var(--mono); color: var(--ink); }
+.zam { font: 600 15px/1 var(--mono); padding: 5px 9px; border-radius: 8px; border: 1px dashed currentColor; }
+.zakaj { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-mute); max-width: 34ch; }
+
+/* ---------- prizor ---------- */
+.prizor {
+  position: relative; flex: 1 1 auto; min-height: 0; touch-action: none;
+  -webkit-user-select: none; user-select: none; outline: none;
+  background: linear-gradient(180deg, var(--noc) 0%, var(--noc-2) 45%, var(--obzorje) 100%);
+}
+.zarja {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(90% 46% at 50% 58%, #ffb07a 0%, #d0707e66 34%, #2a2f5a00 72%),
+              linear-gradient(180deg, #0d1428 0%, #34305d 45%, #b8655f 75%, #f6b17f 100%);
+}
+.prizor canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.prizor:focus-visible { box-shadow: inset 0 0 0 2px var(--poudarek); }
+.namig {
+  position: absolute; left: 0; right: 0; bottom: 16px; text-align: center;
+  font: 500 15px/1.3 var(--sans); color: var(--ink); pointer-events: none;
+  text-shadow: 0 1px 10px #000;
+}
+.namig .pus { display: inline-block; color: var(--poudarek); animation: pus 1.6s ease-in-out infinite; }
+.namig.gor .pus { animation-name: pus-gor; }
+@keyframes pus { 0%, 100% { transform: translateX(0); opacity: 0.5; } 50% { transform: translateX(7px); opacity: 1; } }
+@keyframes pus-gor { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(-7px); opacity: 1; } }
+.napredek {
+  position: absolute; left: 24px; right: 24px; bottom: 48px; height: 3px; border-radius: 3px;
+  background: #ffffff1c; pointer-events: none;
+}
+.napredek i { display: block; height: 100%; width: 0%; border-radius: 3px; background: var(--poudarek); }
+
+/* ---------- spodaj: odlog ---------- */
+.spodaj {
+  position: relative; z-index: 2; display: flex; justify-content: center;
+  padding: 12px 24px calc(env(safe-area-inset-bottom, 0px) + 22px); background: var(--noc);
+}
+.odlozi {
+  min-height: 52px; padding: 0 26px; border-radius: 999px;
+  border: 1px solid var(--rob); background: #ffffff08; color: var(--ink-dim);
+  font: 500 16px/1 var(--sans); cursor: pointer;
+}
+
+/* ---------- konec ---------- */
+.konec {
+  position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 10px; text-align: center; padding: 24px;
+  background: #060912cc; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.konec h2 { margin: 0; font: 600 28px/1.2 var(--sans); }
+.konec p { margin: 0; color: var(--ink-dim); font-size: 16px; line-height: 1.5; max-width: 30ch; }
+.znova {
+  margin-top: 14px; min-height: 44px; padding: 0 20px; border-radius: 999px;
+  border: 1px solid var(--rob); background: none; color: var(--ink-dim); font: 500 14px/1 var(--sans); cursor: pointer;
+}
+.kljukica { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: #f0934f22; color: var(--poudarek); }
+@media (prefers-reduced-motion: reduce) {
+  .namig .pus, .faza i { animation: none; opacity: 1; }
+}
+</style>
+
+<div class="okvir">
+  <main class="zaslon" id="zaslon">
+    <div class="izbire" aria-label="Prototip: izbire">
+      <div class="seg" data-izbira="pogled">
+        <button type="button" data-v="peron" aria-pressed="true">Peron</button>
+        <button type="button" data-v="daljava" aria-pressed="false">V daljavo</button>
+      </div>
+      <div class="seg" data-izbira="vozilo">
+        <button type="button" data-v="vlak" aria-pressed="true">vlak</button>
+        <button type="button" data-v="avtobus" aria-pressed="false">avtobus</button>
+      </div>
+      <div class="seg" data-izbira="zamuda">
+        <button type="button" data-v="0" aria-pressed="false">točno</button>
+        <button type="button" data-v="5" aria-pressed="true">+5</button>
+        <button type="button" data-v="17" aria-pressed="false">+17</button>
+        <button type="button" data-v="x" aria-pressed="false">?</button>
+      </div>
+      <button type="button" class="zvok" id="zvok" aria-pressed="false">zvok</button>
+    </div>
+
+    <header class="glava">
+      <div class="vrh">
+        <span class="ura-zdaj" id="ura-zdaj">07:12</span>
+        <span class="faza" id="faza"><i></i><span id="faza-besedilo">nežno</span></span>
+      </div>
+      <h1 class="naslov" id="naslov"></h1>
+      <p class="odhod" id="odhod"></p>
+      <p class="zakaj" id="zakaj"></p>
+    </header>
+
+    <div class="prizor" id="prizor" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="zarja" id="zarja"></div>
+      <canvas id="platno"></canvas>
+      <div class="napredek" aria-hidden="true"><i id="napredek"></i></div>
+      <div class="namig" id="namig" aria-hidden="true"></div>
+    </div>
+
+    <footer class="spodaj">
+      <button type="button" class="odlozi" id="odlozi">Še 2 minuti</button>
+    </footer>
+
+    <section class="konec" id="konec" hidden aria-live="assertive">
+      <div class="kljukica" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+      </div>
+      <h2 id="konec-naslov">Budilka ustavljena</h2>
+      <p id="konec-besedilo"></p>
+      <button type="button" class="znova" id="znova">Znova (prototip)</button>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// ======================================================================
+// Budilka kajros -- prototip zaslona zvonjenja.
+//
+// Ustaviš jo tako, da vozilo pripelješ do cilja: pri „Peronu“ ga potegneš
+// na svojo postajo, pri „V daljavo“ ga potisneš proti cilju na obzorju.
+// Začeti je treba NA vozilu in priti čez 85 % poti; krajši poteg se vrne,
+// zato je dlan, žep ali dotik ne ustavijo.
+//
+// Zvonjenje je dvofazno: najprej nežno (tih zvonček, ki 45 s raste), nato
+// glasno kot doslej. V aplikaciji to pomeni dva kanala obvestil.
+//
+// Geometrija je namerno preprosta (škatle, en izvlečen profil čela, valji
+// koles) in ima mere v metrih: za prenos v Kotlin + OpenGL ES 2.0 brez
+// knjižnic. Lambert po ploskvah, brez tekstur razen napisa na tabli in
+// številčnice ure, brez senc in naknadne obdelave.
+// ======================================================================
+
+const STANJE = { pogled: "peron", vozilo: "vlak", zamuda: "5" };
+const BUDILKA = {
+  vlak: { st: "LPV 2002", postaja: "Ljubljana Polje", smer: "Maribor", vozni: [7, 31] },
+  avtobus: { st: "Arriva", postaja: "Ljubljana AP", smer: "Bohinj Ukanc", vozni: [8, 0] },
+};
+const NEZNO_S = 45;
+const ZAMUDA_BARVA = (m) => m <= 0 ? "#7c8698" : m <= 5 ? "#f2a87e" : m <= 15 ? "#e07b45" : "#b85417";
+const ZMANJSANO = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const PRAG = 0.85;
+
+const $ = (id) => document.getElementById(id);
+const pad = (n) => String(n).padStart(2, "0");
+
+// ---------------------------------------------------------------- besedilo
+function osveziBesedilo() {
+  const b = BUDILKA[STANJE.vozilo];
+  const z = STANJE.zamuda === "x" ? null : Number(STANJE.zamuda);
+  const min = b.vozni[0] * 60 + b.vozni[1] + (z || 0);
+  const odhod = `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+  $("naslov").innerHTML = `${b.st} · ${b.postaja} <span class="smer">→ ${b.smer}</span>`;
+  $("odhod").innerHTML = `odpelje ob <b>${odhod}</b>` + (z == null ? ""
+    : `<span class="zam" style="color:${ZAMUDA_BARVA(z)}">${z === 0 ? "točno" : `+${z} min`}</span>`);
+  $("zakaj").textContent = z == null
+    ? `O zamudi še ni podatka — velja vozni red (${pad(b.vozni[0])}:${pad(b.vozni[1])}).`
+    : z === 0 ? "Vozi po voznem redu." : `Upoštevana zamuda +${z} min.`;
+  const vlak = STANJE.vozilo === "vlak";
+  const gor = STANJE.pogled === "daljava";
+  $("namig").className = "namig" + (gor ? " gor" : "");
+  $("namig").innerHTML = gor
+    ? `<span class="pus">↑</span> potisni ${vlak ? "vlak" : "avtobus"} proti cilju`
+    : `potegni ${vlak ? "vlak na postajo" : "avtobus na postajališče"} <span class="pus">→</span>`;
+  $("prizor").setAttribute("aria-label",
+    `${gor ? "Potisni" : "Potegni"} ${vlak ? "vlak" : "avtobus"} do cilja, da ustaviš budilko. Puščice ga premikajo.`);
+  $("konec-besedilo").textContent = `${b.st} odpelje ob ${odhod}${z ? ` (+${z} min)` : ""}. Kajros ga spremlja do odhoda.`;
+}
+
+// ---------------------------------------------------------------- 3D
+const platno = $("platno");
+const prizorEl = $("prizor");
+const renderer = new THREE.WebGLRenderer({ canvas: platno, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+const MEGLA_NOC = new THREE.Color("#18233f"), MEGLA_ZARJA = new THREE.Color("#c4877c");
+scene.fog = new THREE.Fog(MEGLA_NOC.clone(), 30, 330);
+const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 900);
+
+scene.add(new THREE.HemisphereLight(0x8d96b8, 0x080a10, 0.62));
+const luna = new THREE.DirectionalLight(0xc7d2f5, 0.5);
+luna.position.set(-40, 50, 30);
+scene.add(luna);
+const zarjaLuc = new THREE.DirectionalLight(0xffb27a, 0);
+zarjaLuc.position.set(300, 18, -20);
+scene.add(zarjaLuc);
+// Topla luč nadstreška: ena sama, ker je vsaka luč v senčilniku nov račun.
+const peronLuc = new THREE.PointLight(0xffd9a6, 1.3, 70, 1.6);
+scene.add(peronLuc);
+
+const matCache = new Map();
+function mat(barva, sij) {
+  const k = barva + "|" + (sij || "");
+  if (!matCache.has(k)) matCache.set(k, new THREE.MeshLambertMaterial({ color: barva, emissive: sij || 0x000000 }));
+  return matCache.get(k);
+}
+// Škatla po robovih: x0..x1, y0..y1, z0..z1 (metri). Edini gradnik večine sveta.
+function skatla(x0, x1, y0, y1, z0, z1, barva, sij) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat(barva, sij));
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  return m;
+}
+function sijTekstura() {
+  // Mehak krog za sij luči (aditivno).
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, "#ffffffff"); r.addColorStop(0.25, "#ffffff88"); r.addColorStop(1, "#ffffff00");
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+const SIJ = sijTekstura();
+function sij(barva, velikost) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: SIJ, color: barva, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  s.scale.set(velikost, velikost, 1);
+  return s;
+}
+
+// ---------- svet ----------
+const CILJ_X = 60;
+const svet = new THREE.Group();
+scene.add(svet);
+let zvezdeMat;
+{
+  const tla = new THREE.Mesh(new THREE.PlaneGeometry(1600, 600), mat("#090c14"));
+  tla.rotation.x = -Math.PI / 2;
+  tla.position.set(150, -0.02, 0);
+  svet.add(tla);
+  // Hribi na obzorju: nazobčan pas trikotnikov, temnejši od neba.
+  const tocke = [], N = 46;
+  for (let i = 0; i <= N; i++) {
+    const a = -1.15 + (i / N) * 2.3;
+    const r = 420;
+    const h = 14 + 16 * Math.abs(Math.sin(i * 1.7)) + 9 * Math.sin(i * 0.53);
+    tocke.push([Math.cos(a) * r + 60, Math.sin(a) * r, h]);
+  }
+  const pos = [];
+  for (let i = 0; i < N; i++) {
+    const [x0, z0, h0] = tocke[i], [x1, z1, h1] = tocke[i + 1];
+    pos.push(x0, 0, z0, x1, 0, z1, x1, h1, z1, x0, 0, z0, x1, h1, z1, x0, h0, z0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  const hribi = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: "#0e1528", side: THREE.DoubleSide, fog: false }));
+  svet.add(hribi);
+  // Zvezde: nekaj sto točk na kupoli, brez megle.
+  const zv = [];
+  for (let i = 0; i < 380; i++) {
+    const a = Math.random() * Math.PI * 2, e = 0.08 + Math.random() * 0.9, r = 700;
+    zv.push(Math.cos(a) * Math.cos(e) * r + 60, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r);
+  }
+  const zg = new THREE.BufferGeometry();
+  zg.setAttribute("position", new THREE.Float32BufferAttribute(zv, 3));
+  zvezdeMat = new THREE.PointsMaterial({ color: "#cfd8ff", size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.8 });
+  svet.add(new THREE.Points(zg, zvezdeMat));
+}
+
+const tir = new THREE.Group();
+tir.add(skatla(-200, 520, 0, 0.22, -1.8, 1.8, "#22242a"));
+for (const z of [-0.72, 0.72]) tir.add(skatla(-200, 520, 0.30, 0.45, z - 0.04, z + 0.04, "#9aa1ab"));
+{
+  const g = new THREE.BoxGeometry(0.24, 0.12, 2.5);
+  const n = Math.floor(720 / 0.62);
+  const prag = new THREE.InstancedMesh(g, mat("#3a342e"), n);
+  const m4 = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) { m4.makeTranslation(-200 + i * 0.62, 0.26, 0); prag.setMatrixAt(i, m4); }
+  tir.add(prag);
+}
+// Drogovi vozne mreže ob progi, vsakih 50 m, in vozni vod.
+for (let x = -180; x < 520; x += 50) {
+  tir.add(skatla(x - 0.12, x + 0.12, 0, 7.2, -3.4, -3.2, "#2c3038"));
+  tir.add(skatla(x - 0.08, x + 0.08, 6.6, 6.75, -3.3, 0.2, "#2c3038"));
+}
+tir.add(skatla(-200, 520, 5.95, 5.98, -0.02, 0.02, "#5b616b"));
+svet.add(tir);
+
+const cesta = new THREE.Group();
+cesta.add(skatla(-200, 520, 0, 0.06, -3.6, 3.6, "#1d2026"));
+{
+  const g = new THREE.BoxGeometry(3, 0.02, 0.14);
+  const n = 120;
+  const crte = new THREE.InstancedMesh(g, mat("#c9c3b4"), n);
+  const m4 = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) { m4.makeTranslation(-200 + i * 6, 0.07, 0); crte.setMatrixAt(i, m4); }
+  cesta.add(crte);
+}
+for (let x = -180; x < 520; x += 35) cesta.add(skatla(x - 0.08, x + 0.08, 0, 5.5, -4.6, -4.45, "#2c3038"));
+svet.add(cesta);
+
+// Peron z nadstreškom ob cilju, na strani kamere (+z).
+const peron = new THREE.Group();
+peron.add(skatla(CILJ_X - 90, CILJ_X + 18, 0, 0.55, 2.2, 8.5, "#363b44"));
+peron.add(skatla(CILJ_X - 90, CILJ_X + 18, 0.55, 0.565, 2.25, 2.6, "#d8a817"));
+peron.add(skatla(CILJ_X - 90, CILJ_X + 18, 0.55, 0.56, 2.75, 3.15, "#4a505b"));     // taktilni pas
+// Streha sveti sama malo: Lambert osvetli ogljišča, pri dolgi škatli so
+// daleč od luči in spodnja ploskev bi bila črna.
+peron.add(skatla(CILJ_X - 70, CILJ_X + 14, 4.3, 4.5, 2.9, 8.8, "#2a2f38", 0x161a22));    // streha
+peron.add(skatla(CILJ_X - 70, CILJ_X + 14, 4.22, 4.3, 3.0, 3.2, "#fff0d0", 0xffd9a6)); // svetlobni pas
+peron.add(skatla(CILJ_X - 70, CILJ_X + 14, 4.22, 4.3, 7.0, 7.2, "#fff0d0", 0xffd9a6));
+// Stebri nadstreška; tik ob tebi jih ni, da ne zastirajo pogleda.
+for (let x = CILJ_X - 64; x <= CILJ_X - 16; x += 12) {
+  peron.add(skatla(x - 0.09, x + 0.09, 0.55, 4.3, 7.4, 7.58, "#3b414b"));
+}
+svet.add(peron);
+
+// Tabla s krajem in postajna ura, ki visita z nadstreška.
+function napisTekstura(besedilo, ozadje) {
+  const c = document.createElement("canvas");
+  c.width = 1024; c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = ozadje; g.fillRect(0, 0, 1024, 256);
+  g.strokeStyle = "#ffffff55"; g.lineWidth = 6; g.strokeRect(10, 10, 1004, 236);
+  g.fillStyle = "#ffffff";
+  g.font = "600 120px 'IBM Plex Sans', system-ui, sans-serif";
+  g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(besedilo, 512, 134, 940);
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = 4;
+  return t;
+}
+const tablaMat = new THREE.MeshBasicMaterial({ map: napisTekstura("Ljubljana Polje", "#1d4f8a"), fog: false });
+const tabla = new THREE.Group();
+{
+  tabla.add(new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.7), tablaMat));
+  tabla.add(skatla(-1.1, -1.06, 0.35, 0.85, -0.02, 0.02, "#3b414b"));
+  tabla.add(skatla(1.06, 1.1, 0.35, 0.85, -0.02, 0.02, "#3b414b"));
+}
+svet.add(tabla);
+
+// Postajna ura: bela številčnica, črna kazalca, rdeč sekundni (kot na /o-nas).
+const ura = new THREE.Group();
+const kazalci = {};
+{
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#f4f2ec"; g.beginPath(); g.arc(128, 128, 124, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = "#16181c";
+  for (let i = 0; i < 60; i++) {
+    const a = i / 60 * Math.PI * 2, d = i % 5 === 0 ? 26 : 9;
+    g.lineWidth = i % 5 === 0 ? 9 : 3;
+    g.beginPath();
+    g.moveTo(128 + Math.sin(a) * (116 - d), 128 - Math.cos(a) * (116 - d));
+    g.lineTo(128 + Math.sin(a) * 116, 128 - Math.cos(a) * 116);
+    g.stroke();
+  }
+  const obraz = new THREE.Mesh(new THREE.CircleGeometry(0.42, 40),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), fog: false }));
+  ura.add(obraz);
+  ura.add(new THREE.Mesh(new THREE.RingGeometry(0.42, 0.47, 40), new THREE.MeshBasicMaterial({ color: "#20242b", fog: false })));
+  const kazalec = (dol, sir, barva, z) => {
+    const g2 = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(sir, dol), new THREE.MeshBasicMaterial({ color: barva, fog: false }));
+    m.position.set(0, dol / 2 - 0.05, z);
+    g2.add(m);
+    ura.add(g2);
+    return g2;
+  };
+  kazalci.h = kazalec(0.27, 0.05, "#16181c", 0.004);
+  kazalci.m = kazalec(0.38, 0.035, "#16181c", 0.006);
+  kazalci.s = kazalec(0.36, 0.012, "#c8102e", 0.008);
+  ura.add(skatla(-0.02, 0.02, 0.47, 1.0, -0.02, 0.02, "#262a31"));
+}
+svet.add(ura);
+
+// Napis cilja na obzorju in sonce za pogled „V daljavo“.
+const daljnaMat = new THREE.SpriteMaterial({ map: napisTekstura("Maribor", "#1d4f8a"), fog: false, transparent: true });
+const daljna = new THREE.Sprite(daljnaMat);
+daljna.scale.set(30, 7.5, 1);
+const sonce = sij("#ffb06a", 120);
+svet.add(daljna, sonce);
+
+// ---------- vlak: Stadler KISS SŽ 313, poenostavljen ----------
+// Mere s strani o-nas (vlak.js): širina 2,80 m, streha 4,34 m, čelni voz
+// 27 m, vmesni 26 m, kolo r 0,46 m. Pasovi po višini: modra 0,93-1,11 in
+// 2,50-2,68, črn pas spodnje etaže 1,11-2,50, okna zgornje 2,86-3,80.
+const BELA = "#eceae4", MODRA = "#1a9be6", CRNA = "#0b0d10", STEKLO = "#101a24", STREHA = "#3d4247";
+const OKNO_LUC = new THREE.Color("#ffd59a"), OKNO_SIJ = new THREE.Color("#7a5426");
+const kolesa = [], vrata = [], okna = [], zarometi = [];
+
+function kolo(x, z, r) {
+  // Kolo se vrti okoli osi z skupaj s svetlo piko, da se vrtenje vidi.
+  const o = new THREE.Group();
+  o.position.set(x, r, z);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.14, 14), mat("#5a5f66"));
+  m.rotation.x = Math.PI / 2;
+  o.add(m);
+  const zf = z > 0 ? 0.074 : -0.074;
+  o.add(skatla(r * 0.42, r * 0.78, -0.06, 0.06, zf - 0.005, zf + 0.005, "#c9ced6"));
+  kolesa.push({ o, r });
+  return o;
+}
+
+// Okno, ki se ob prihodu prižge (toplo); prej je temno steklo.
+const oknoMat = new THREE.MeshLambertMaterial({ color: STEKLO });
+function okno(x0, x1, y0, y1, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, 0.024), oknoMat);
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z);
+  okna.push(m);
+  return m;
+}
+
+function voz(x0, x1, celo, zadaj) {
+  // x0..x1 = karoserija; čelo (3,4 m) za x1, kadar `celo`, in pred x0,
+  // kadar `zadaj` (KISS ima kabino na obeh koncih).
+  const g = new THREE.Group();
+  const W = 1.40, Wz = 1.30;
+  const pas = (y0, y1, w, barva) => g.add(skatla(x0, x1, y0, y1, -w, w, barva));
+  pas(0.30, 0.93, W, BELA);
+  pas(0.93, 1.11, W + 0.005, MODRA);
+  pas(1.11, 2.50, W, CRNA);
+  pas(2.50, 2.68, W + 0.005, MODRA);
+  pas(2.68, 2.86, Wz + 0.08, BELA);
+  pas(2.86, 3.80, Wz - 0.02, CRNA);
+  pas(3.80, 4.05, Wz, BELA);
+  pas(4.05, 4.34, 1.05, STREHA);
+  for (const s of [-1, 1]) {
+    // Okna zgornje etaže med belimi stebrički in spodnje na črnem pasu.
+    for (let x = x0 + 1.4; x < x1 - 1.6; x += 1.92) {
+      g.add(okno(x + 0.2, x + 1.82, 2.92, 3.74, s * (Wz - 0.02)));
+      g.add(skatla(x, x + 0.2, 2.86, 3.80, s * Wz - 0.012, s * Wz + 0.012, BELA));
+    }
+    for (let x = x0 + 2.2; x < x1 - 2.5; x += 2.6) g.add(okno(x, x + 1.9, 1.2, 1.76, s * W));
+  }
+  // Vrata: dva para na voz, bela z oknom; na cilju se odprejo.
+  for (const xv of [x0 + 5.6, x1 - 7.2]) {
+    for (const s of [-1, 1]) {
+      const d = new THREE.Group();
+      d.add(skatla(0, 1.3, 0.45, 2.48, -0.015, 0.015, BELA));
+      d.add(skatla(0.25, 1.05, 1.14, 2.09, -0.02, 0.02, STEKLO));
+      d.position.set(xv, 0, s * (W + 0.01));
+      g.add(d);
+      vrata.push({ d, x: xv });
+    }
+  }
+  for (const xb of [x0 + 2.85, x1 - 2.85]) {
+    g.add(skatla(xb - 1.6, xb + 1.6, 0.18, 0.62, -1.2, 1.2, "#22252a"));
+    for (const xo of [xb - 1.2, xb + 1.2]) for (const z of [-0.78, 0.78]) g.add(kolo(xo, z, 0.46));
+  }
+  if (celo) g.add(celoVoza(x1, 1));
+  if (zadaj) g.add(celoVoza(x0, -1));
+  return g;
+}
+
+function celoVoza(x0, smer) {
+  // Stranski profil čela v (x, y), izvlečen čez širino 2,8 m. `smer` -1 je
+  // zadnja kabina: isto čelo, zrcaljeno okoli x0 (luči so tam rdeče).
+  const L = 3.4;
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.30); s.lineTo(L - 0.25, 0.30); s.lineTo(L, 0.62); s.lineTo(L, 1.30);
+  s.lineTo(L - 0.45, 2.25); s.lineTo(L - 1.95, 3.78); s.lineTo(0, 4.34); s.lineTo(0, 0.30);
+  const g = new THREE.ExtrudeGeometry(s, { depth: 2.8, bevelEnabled: false });
+  g.translate(0, 0, -1.4);
+  const grp = new THREE.Group();
+  grp.position.x = x0;
+  if (smer < 0) grp.scale.x = -1;
+  grp.add(new THREE.Mesh(g, mat(BELA)));
+  const nag = Math.atan2(3.78 - 2.25, 1.95 - 0.45);
+  const steklo = new THREE.Mesh(new THREE.PlaneGeometry(2.42, Math.hypot(1.5, 1.53) * 0.92), mat(STEKLO));
+  steklo.position.set(L - 1.2 + 0.03, (2.25 + 3.78) / 2, 0);
+  steklo.rotation.set(0, Math.PI / 2, 0);
+  steklo.rotateX(-(Math.PI / 2 - nag));
+  grp.add(steklo);
+  grp.add(skatla(L - 0.02, L + 0.02, 0.62, 1.30, -1.25, 1.25, CRNA));
+  grp.add(skatla(L - 0.2, L + 0.02, 0.93, 1.11, -1.2, 1.2, MODRA));
+  for (const z of [-0.95, 0.95]) {
+    const sprednja = smer > 0;
+    grp.add(skatla(L + 0.01, L + 0.05, 0.86, 1.06, z - 0.18, z + 0.18,
+      sprednja ? "#fff6d8" : "#ff3a2e", sprednja ? 0xfff1c8 : 0xff2a20));
+    const sv = sij(sprednja ? "#fff1d6" : "#ff5040", sprednja ? 3.2 : 1.8);
+    sv.position.set(L + 0.25, 0.96, z);
+    grp.add(sv);
+    if (sprednja) zarometi.push(sv);
+  }
+  return grp;
+}
+
+function narediVlak() {
+  // Čelo na x = 0 (konica), voza nazaj v -x.
+  const g = new THREE.Group();
+  const Lc = 23.6, Lv = 26, rega = 0.9;
+  g.add(voz(-Lc - 3.4, -3.4, true, false));
+  g.add(skatla(-Lc - 3.4 - rega, -Lc - 3.4, 0.6, 3.9, -1.1, 1.1, "#1c1f24"));
+  g.add(voz(-Lc - 3.4 - rega - Lv + 3.4, -Lc - 3.4 - rega, false, true));
+  // Pantograf.
+  g.add(skatla(-14.2, -12.2, 4.34, 4.40, -0.5, 0.5, "#555a61"));
+  const p1 = skatla(-13.2, -13.15, 4.4, 5.3, -0.03, 0.03, "#777c83"); p1.rotation.z = 0.5; g.add(p1);
+  g.add(skatla(-13.9, -12.6, 5.25, 5.3, -0.6, 0.6, "#777c83"));
+  g.userData.dolzina = Lc + 3.4 + rega + Lv;
+  return g;
+}
+
+// ---------- avtobus: medkrajevni, nevtralne barve, brez znamke ----------
+// 12 m × 2,55 m × 3,40 m; okna 1,25-2,55 m; tri osi (r 0,50 m).
+function narediAvtobus() {
+  const g = new THREE.Group();
+  const L = 12, W = 1.275;
+  g.add(skatla(-L, -0.35, 0.35, 1.20, -W, W, "#e3e6ea"));
+  g.add(skatla(-L, -0.35, 0.35, 0.62, -W - 0.005, W + 0.005, "#2b3036"));
+  g.add(skatla(-L, -0.35, 1.20, 2.58, -W + 0.02, W - 0.02, STEKLO));
+  g.add(skatla(-L, -0.35, 2.58, 3.40, -W, W, "#e3e6ea"));
+  g.add(skatla(-L, -0.35, 1.08, 1.18, -W - 0.006, W + 0.006, "#4db97f"));
+  for (const s of [-1, 1]) {
+    for (let x = -L + 1.1; x < -1.2; x += 1.55) {
+      g.add(okno(x + 0.16, x + 1.55, 1.28, 2.5, s * (W - 0.01)));
+      g.add(skatla(x, x + 0.16, 1.20, 2.58, s * (W - 0.02) - 0.02, s * (W - 0.02) + 0.02, "#e3e6ea"));
+    }
+  }
+  g.add(skatla(-0.35, 0, 0.35, 1.20, -W + 0.05, W - 0.05, "#e3e6ea"));
+  g.add(skatla(-0.35, -0.02, 1.20, 3.20, -W + 0.06, W - 0.06, STEKLO));
+  g.add(skatla(-0.35, -0.1, 3.20, 3.40, -W + 0.04, W - 0.04, "#e3e6ea"));
+  for (const z of [-0.95, 0.95]) {
+    g.add(skatla(-0.02, 0.03, 0.62, 0.80, z - 0.2, z + 0.2, "#fff6d8", 0xfff1c8));
+    const sv = sij("#fff1d6", 3); sv.position.set(0.25, 0.7, z); g.add(sv); zarometi.push(sv);
+    g.add(skatla(-L - 0.03, -L + 0.01, 0.62, 0.95, z - 0.15, z + 0.15, "#ff3a2e", 0xff2a20));
+  }
+  for (const xv of [-1.6, -6.9]) {
+    const d = new THREE.Group();
+    d.add(skatla(0, 1.1, 0.40, 2.95, -0.012, 0.012, STEKLO));
+    d.position.set(xv, 0, W + 0.02);
+    g.add(d);
+    vrata.push({ d, x: xv });
+  }
+  for (const xo of [-2.6, -8.4, -9.8]) for (const z of [-1.05, 1.05]) g.add(kolo(xo, z, 0.5));
+  g.userData.dolzina = L;
+  return g;
+}
+
+let vozilo = null;
+function zgradiVozilo() {
+  if (vozilo) scene.remove(vozilo);
+  kolesa.length = vrata.length = okna.length = zarometi.length = 0;
+  vozilo = STANJE.vozilo === "vlak" ? narediVlak() : narediAvtobus();
+  scene.add(vozilo);
+  const vlak = STANJE.vozilo === "vlak";
+  tir.visible = vlak;
+  cesta.visible = !vlak;
+  const b = BUDILKA[STANJE.vozilo];
+  const barva = vlak ? "#1d4f8a" : "#1f6b47";
+  tablaMat.map.dispose(); tablaMat.map = napisTekstura(b.postaja, barva); tablaMat.needsUpdate = true;
+  daljnaMat.map.dispose(); daljnaMat.map = napisTekstura(b.smer, barva); daljnaMat.needsUpdate = true;
+  postaviPogled();
+}
+
+// ---------- pogled in pot ----------
+// Napredek p (0..1) premakne čelo vozila od `zacetek` do `konec`.
+let zacetek = 0, konec = CILJ_X, p = 0, cilj = 0, vlecem = null, koncano = false, zadnji = 0, koncanoOb = 0;
+
+function postaviPogled() {
+  const daljava = STANJE.pogled === "daljava";
+  const vlak = STANJE.vozilo === "vlak";
+  peron.visible = tabla.visible = ura.visible = !daljava;
+  daljna.visible = sonce.visible = daljava;
+  if (daljava) {
+    zacetek = 0; konec = 300;
+    daljna.position.set(420, 17, 0);
+    sonce.position.set(430, 6, 0);
+    camera.fov = 50;
+  } else {
+    // S perona: vozilo pripelje iz daljave z leve in se ustavi ob tebi.
+    zacetek = CILJ_X - (vlak ? 95 : 70); konec = CILJ_X;
+    camera.fov = 56;
+    tabla.position.set(CILJ_X - 10, 3.85, 5.0);
+    ura.position.set(CILJ_X - 2, 3.5, 3.6);
+  }
+  peronLuc.position.set(CILJ_X - 8, 4.1, 5.5);
+  velikost();
+  narisi();
+}
+
+function velikost() {
+  const r = prizorEl.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+}
+
+const xVozila = () => zacetek + (konec - zacetek) * p;
+
+function kamera() {
+  const vlak = STANJE.vozilo === "vlak";
+  if (STANJE.pogled === "daljava") {
+    // Za zadnjim koncem vozila, nekoliko višje in vstran: vidi se vozilo in
+    // proga pred njim do obzorja, kjer je cilj.
+    const x = zacetek - vozilo.userData.dolzina - (vlak ? 20 : 12);
+    camera.position.set(x, vlak ? 8.5 : 5.6, vlak ? 7.5 : 5.0);
+    camera.lookAt(x + 110, vlak ? 2.6 : 2.0, -1.2);
+  } else {
+    // Stojiš na peronu pod nadstreškom in gledaš proti vozilu, ki prihaja.
+    camera.position.set(CILJ_X + 6, 2.35, 6.2);
+    camera.lookAt(CILJ_X - 30, 2.1, -0.6);
+    // Tabla in ura gledata proti tebi.
+    tabla.lookAt(camera.position.x, tabla.position.y, camera.position.z);
+    ura.lookAt(camera.position.x, ura.position.y, camera.position.z);
+  }
+}
+
+function narisi() {
+  if (!vozilo) return;
+  const x = xVozila();
+  vozilo.position.x = x;
+  const pot = x - zacetek;
+  for (const k of kolesa) k.o.rotation.z = -pot / k.r;
+  // Na cilju se vrata odprejo in okna prižgejo -- vstopi.
+  const t = koncano ? Math.min(1, (performance.now() - koncanoOb) / 700) : 0;
+  for (const v of vrata) v.d.position.x = v.x - t * 0.65;
+  const luc = Math.max(t, p > 0.6 ? (p - 0.6) / 0.4 * 0.35 : 0);
+  oknoMat.color.set(STEKLO).lerp(OKNO_LUC, luc);
+  oknoMat.emissive.set(0x000000).lerp(OKNO_SIJ, luc);
+  kamera();
+  // Zora: pri „V daljavo“ s potjo, pri „Peronu“ samo nakaže.
+  const z = STANJE.pogled === "daljava" ? Math.pow(p, 0.8) : p * 0.3;
+  $("zarja").style.opacity = z.toFixed(3);
+  scene.fog.color.copy(MEGLA_NOC).lerp(MEGLA_ZARJA, z * 0.85);
+  zarjaLuc.intensity = z * 0.9;
+  zvezdeMat.opacity = 0.8 * (1 - z);
+  sonce.material.opacity = z;
+  $("napredek").style.width = `${Math.round(p * 100)}%`;
+  prizorEl.setAttribute("aria-valuenow", String(Math.round(p * 100)));
+  renderer.render(scene, camera);
+}
+
+function postaviUro() {
+  const d = new Date();
+  const s = d.getSeconds() + d.getMilliseconds() / 1000;
+  // Švicarska ura: sekundni kazalec obkroži v 58,5 s in počaka na minuto.
+  const ss = Math.min(1, s / 58.5) * 60;
+  kazalci.s.rotation.z = -ss / 60 * Math.PI * 2;
+  kazalci.m.rotation.z = -d.getMinutes() / 60 * Math.PI * 2;
+  kazalci.h.rotation.z = -((d.getHours() % 12) + d.getMinutes() / 60) / 12 * Math.PI * 2;
+}
+
+// ---------------------------------------------------------------- vlečenje
+// Začeti je treba na vozilu (z rezervo 32 px), sicer se nič ne zgodi.
+function naVozilu(cx, cy) {
+  const r = prizorEl.getBoundingClientRect();
+  const box = new THREE.Box3().setFromObject(vozilo);
+  const v = new THREE.Vector3();
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const xx of [box.min.x, box.max.x]) for (const yy of [box.min.y, box.max.y]) for (const zz of [box.min.z, box.max.z]) {
+    v.set(xx, yy, zz).project(camera);
+    if (v.z > 1) continue;
+    const sx = (v.x + 1) / 2 * r.width, sy = (1 - v.y) / 2 * r.height;
+    x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+  }
+  const px = cx - r.left, py = cy - r.top, rez = 32;
+  return px >= x0 - rez && px <= x1 + rez && py >= y0 - rez && py <= y1 + rez;
+}
+
+prizorEl.addEventListener("pointerdown", (e) => {
+  if (koncano || !naVozilu(e.clientX, e.clientY)) return;
+  prizorEl.setPointerCapture(e.pointerId);
+  vlecem = { id: e.pointerId, x: e.clientX, y: e.clientY, p0: p };
+  zadnji = p;
+  zvok.zacniVlek();
+});
+prizorEl.addEventListener("pointermove", (e) => {
+  if (!vlecem || e.pointerId !== vlecem.id) return;
+  const r = prizorEl.getBoundingClientRect();
+  const d = STANJE.pogled === "daljava"
+    ? (vlecem.y - e.clientY) / (r.height * 0.55)
+    : (e.clientX - vlecem.x) / (r.width * 0.68);
+  cilj = Math.max(0, Math.min(1, vlecem.p0 + d));
+  // Ob vsaki četrtini poti kratek tresljaj, kot zobnik.
+  if (Math.floor(cilj * 4) !== Math.floor(zadnji * 4)) brni(8);
+  zadnji = cilj;
+});
+function spusti(e) {
+  if (!vlecem || (e && e.pointerId !== vlecem.id)) return;
+  vlecem = null;
+  cilj = cilj >= PRAG ? 1 : 0;
+}
+prizorEl.addEventListener("pointerup", spusti);
+prizorEl.addEventListener("pointercancel", spusti);
+
+// Tipkovnica in bralnik zaslona: puščice premikajo vozilo.
+prizorEl.addEventListener("keydown", (e) => {
+  if (koncano) return;
+  const k = e.key;
+  if (["ArrowRight", "ArrowUp", "PageUp"].includes(k)) cilj = Math.min(1, cilj + 0.1);
+  else if (["ArrowLeft", "ArrowDown", "PageDown"].includes(k)) cilj = Math.max(0, cilj - 0.1);
+  else if (k === "End") cilj = 1;
+  else if (k === "Home") cilj = 0;
+  else return;
+  e.preventDefault();
+});
+
+function brni(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { /* ni dovoljeno */ } }
+
+function koncaj() {
+  koncano = true;
+  koncanoOb = performance.now();
+  zvok.ustavi();
+  brni([30, 60, 30]);
+  setTimeout(() => { $("konec").hidden = false; $("znova").focus({ preventScroll: true }); }, ZMANJSANO ? 0 : 1100);
+}
+
+// ---------------------------------------------------------------- zvonjenje
+// Najprej nežno (tih zvonček, ki raste), po NEZNO_S glasno. V prototipu se
+// zvok sliši šele po dotiku na „zvok“ -- brskalnik brez dotika ne sme igrati.
+let zvonimOd = performance.now();
+const zvok = (() => {
+  let ac = null, vklop = false, naslednji = 0;
+  function ton(f, t0, dol, g, oblika) {
+    const o = ac.createOscillator(), a = ac.createGain();
+    o.type = oblika; o.frequency.value = f;
+    a.gain.setValueAtTime(0.0001, t0);
+    a.gain.exponentialRampToValueAtTime(g, t0 + 0.02);
+    a.gain.exponentialRampToValueAtTime(0.0001, t0 + dol);
+    o.connect(a).connect(ac.destination);
+    o.start(t0); o.stop(t0 + dol + 0.05);
+  }
+  return {
+    preklopi() {
+      vklop = !vklop;
+      if (vklop && !ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (ac && vklop) ac.resume();
+      return vklop;
+    },
+    tik(sekunde) {
+      if (!vklop || !ac || koncano) return;
+      const t = ac.currentTime;
+      if (t < naslednji) return;
+      if (sekunde >= NEZNO_S) {
+        // Glasno: kot doslej, trojni pisk.
+        for (let i = 0; i < 3; i++) ton(880, t + i * 0.18, 0.12, 0.35, "square");
+        naslednji = t + 1.1;
+      } else {
+        // Nežno: zvonček z alikvotom, ki v 45 s zraste od komaj slišnega.
+        const g = 0.015 + 0.13 * Math.min(1, sekunde / NEZNO_S);
+        ton(660, t, 2.2, g, "sine");
+        ton(990, t, 1.4, g * 0.4, "sine");
+        naslednji = t + 2.6;
+      }
+    },
+    zacniVlek() { if (ac && vklop) ac.resume(); },
+    ustavi() { naslednji = Infinity; },
+    znova() { naslednji = 0; },
+  };
+})();
+
+$("zvok").addEventListener("click", (e) => {
+  e.currentTarget.setAttribute("aria-pressed", String(zvok.preklopi()));
+});
+
+function znova(naslov) {
+  koncano = false; p = 0; cilj = 0; zvonimOd = performance.now();
+  zvok.znova();
+  $("konec").hidden = true;
+  $("konec-naslov").textContent = naslov || "Budilka ustavljena";
+  osveziBesedilo();
+}
+$("znova").addEventListener("click", () => znova());
+$("odlozi").addEventListener("click", () => {
+  koncano = true;
+  zvok.ustavi();
+  $("konec-naslov").textContent = "Zazvoni čez 2 minuti";
+  $("konec-besedilo").textContent = "Spet najprej nežno. Do takrat še enkrat preverim zamudo.";
+  $("konec").hidden = false;
+});
+
+// ---------------------------------------------------------------- zanka
+let prej = performance.now(), dih = 0;
+function zanka(t) {
+  const dt = Math.min(0.05, (t - prej) / 1000);
+  prej = t;
+  if (!koncano) {
+    // Vozilo sledi prstu z vzmetjo; spuščeno se vrne ali pripelje do konca.
+    const k = vlecem ? 18 : 5;
+    p += (cilj - p) * (1 - Math.exp(-k * dt));
+    if (Math.abs(cilj - p) < 0.0005) p = cilj;
+    if (!vlecem && p >= 0.999 && cilj === 1) koncaj();
+    // Vabilo: vozilo se vsake 3 s rahlo premakne naprej.
+    if (!vlecem && cilj === 0 && p < 0.03 && !ZMANJSANO) {
+      dih += dt;
+      const f = (dih % 3) / 3;
+      p = f < 0.2 ? Math.sin(f / 0.2 * Math.PI) * 0.02 : 0;
+    }
+    // Faza zvonjenja: nežno, nato glasno.
+    const sek = (t - zvonimOd) / 1000;
+    zvok.tik(sek);
+    const glasno = sek >= NEZNO_S;
+    $("faza").classList.toggle("glasno", glasno);
+    $("faza-besedilo").textContent = glasno ? "glasno"
+      : `nežno · glasneje čez ${Math.ceil(NEZNO_S - sek)} s`;
+    // Žarometi utripajo hitreje, ko je glasno.
+    const u = glasno ? 0.55 + 0.45 * Math.abs(Math.sin(t / 160)) : 0.85 + 0.15 * Math.sin(t / 900);
+    for (const s of zarometi) s.material.opacity = ZMANJSANO ? 1 : u;
+  }
+  postaviUro();
+  narisi();
+  requestAnimationFrame(zanka);
+}
+
+// ---------------------------------------------------------------- izbire
+for (const seg of document.querySelectorAll(".seg")) {
+  seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    for (const x of seg.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+    STANJE[seg.dataset.izbira] = b.dataset.v;
+    znova();
+    if (seg.dataset.izbira !== "zamuda") zgradiVozilo();
+  });
+}
+addEventListener("resize", () => { velikost(); narisi(); });
+
+function tik() {
+  const d = new Date();
+  $("ura-zdaj").textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+osveziBesedilo();
+tik();
+setInterval(tik, 10000);
+zgradiVozilo();
+if (document.fonts && document.fonts.load) {
+  // Napis na tabli nariše platno; ko pride pisava, ga narišemo znova.
+  document.fonts.load("600 120px 'IBM Plex Sans'").then(zgradiVozilo).catch(() => {});
+}
+requestAnimationFrame(zanka);
+
+// Za preizkus prek CDP: kje na zaslonu je čelo vozila.
+window.__budilka = {
+  STANJE, get p() { return p; }, get koncano() { return koncano; },
+  celo() {
+    const r = prizorEl.getBoundingClientRect();
+    const v = new THREE.Vector3(vozilo.position.x - 3, 2, 0).project(camera);
+    return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height];
+  },
+};
+</script>

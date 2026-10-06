@@ -33,3 +33,7 @@ Vsaka oznaka poleg barve vedno nosi število minut — barva nikoli ne nosi pome
 ## Ponovno sestavljanje platna
 
 Platno se generira iz teh datotek; rezultat (`kajros-smeri.html`) ni v gitu.
+
+## Budilka v 3D (6. 10. 2026)
+
+`budilka/prototip.html` je prototip zaslona zvonjenja (objavljen kot zasebna stran za preizkus na telefonu): vlak ali avtobus potegneš do postaje („Peron“) ali ga potisneš proti cilju na obzorju („V daljavo“). Začeti je treba na vozilu in priti čez 85 % poti, krajši poteg se vrne. Na vrhu je faza zvonjenja: najprej nežno, čez 45 s glasno, kot v aplikaciji 1.5. Geometrija je iz škatel, enega izvlečenega profila čela in valjev koles, z merami v metrih (KISS SŽ 313 po `o-nas/src/vlak.js`): narejena je za ročni prenos v Kotlin z OpenGL ES 2.0, brez knjižnic. Datoteka je v obliki strani za objavo (brez `<html>`), za ogled v brskalniku jo zavij v navadno ogrodje.
