@@ -570,9 +570,8 @@ function verigaHtml(p) {
       cleni.push(`<span class="v-hoja">${besedaHoje(p, i)} ${Math.floor(n.sekunde / 60 + 0.5)}</span>`);
       return;
     }
-    const kdo = AGENCY[n.agency];
-    const oznaka = kdo ? `${kdo} ${n.train_no}` : n.train_no;
-    cleni.push(`<span class="v-linija">${escapeHtml(oznaka)}</span>${zamudaHtml(n)}`);
+    // V verigi smeri ne pove nič drugega, zato medkrajevni s ciljem.
+    cleni.push(`<span class="v-linija">${escapeHtml(imeVoznje(n, true))}</span>${zamudaHtml(n)}`);
   });
   return cleni.join('<span class="v-loc" aria-hidden="true">›</span>');
 }

@@ -479,9 +479,11 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
           </div>` : ""}
       </div>
       <div class="conn-train">
-        <div class="conn-no">${escapeHtml(c.train_no)}${isBus(c.mode)
-          ? ` ${lineBadgeHtml(c)}`
-          : ""}</div>
+        <div class="conn-no">${c.network === "avtobus"
+          // Številka pred oznako je bila ista stvar dvakrat („25 LPP 25“,
+          // „A6346 Arriva A6346“); pri avtobusu je oznaka vse.
+          ? lineBadgeHtml(c)
+          : `${escapeHtml(c.train_no)}${isBus(c.mode) ? ` ${lineBadgeHtml(c)}` : ""}`}</div>
         <div class="conn-headsign">${escapeHtml(c.headsign || "")}</div>
       </div>
       <div class="conn-delay">${c.zamuda
@@ -576,7 +578,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
     return `
       <div class="leg">
         <span class="leg-time">${hhmm(l.dep)}–${hhmm(l.arr)}</span>
-        <span class="leg-train">${escapeHtml(l.train_no)}</span>
+        <span class="leg-train">${escapeHtml(imeVoznje(l))}</span>
         <span class="leg-where">${escapeHtml(l.from)} → ${escapeHtml(l.to)}</span>
       </div>
       ${l.nadomestni_postanek ? `<div class="leg">${nadomestniPostanekHtml(l.nadomestni_postanek)}</div>` : ""}
@@ -613,7 +615,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
         </div>
       </div>
       <div class="conn-train">
-        <div class="conn-no">${t.legs.map((l) => escapeHtml(l.train_no)).join(" → ")}</div>
+        <div class="conn-no">${t.legs.map((l) => escapeHtml(imeVoznje(l))).join(" → ")}</div>
         <div class="conn-headsign">prek ${escapeHtml(t.via)}</div>
       </div>
       <div class="conn-delay">${badge}</div>

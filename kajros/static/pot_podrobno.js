@@ -155,7 +155,7 @@ function voznjaHtml(n) {
       <ol>${vmes.map((s) => `<li><span class="vm-ura">${
         s.prihod ? ura(s.prihod) : "—"}</span> ${escapeHtml(s.ime)}</li>`).join("")}</ol>
     </details>` : "";
-  const kdo = AGENCY[n.agency] ? `${AGENCY[n.agency]} ${n.train_no}` : n.train_no;
+  const kdo = imeVoznje(n);
   return `<li class="korak je-voznja">
     <span class="korak-znak" aria-hidden="true">●</span>
     <div class="korak-telo">
@@ -516,7 +516,7 @@ function danOdhoda(pr) {
 }
 
 function voziloHtml(nv, ostaneS) {
-  const kdo = AGENCY[nv.agency] ? `${AGENCY[nv.agency]} ${nv.train_no}` : nv.train_no;
+  const kdo = imeVoznje(nv);
   const odh = nv.odhod_ocena || nv.odhod;
   const zam = nv.zamuda ? " " + zamudaHtml(nv.zamuda) : "";
   let vrstica = `<strong>${escapeHtml(kdo)}</strong> ${

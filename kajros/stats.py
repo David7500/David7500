@@ -217,15 +217,18 @@ def trip_identity(conn: sqlite3.Connection, train_no: str,
     "vlak je od takrat verjetno že pripeljal" pod linijo 47 ni le netočno,
     ampak zveni kot napaka programa.
     """
-    sql = "SELECT mode, network, agency FROM trip WHERE train_no = ?"
+    sql = "SELECT mode, network, agency, headsign FROM trip WHERE train_no = ?"
     params: tuple = (train_no,)
     if trip_id:
         sql += " AND trip_id = ?"
         params = (train_no, trip_id)
     row = conn.execute(sql + " LIMIT 1", params).fetchone()
     if not row:
-        return {"mode": "vlak", "network": "zeleznica", "agency": None}
-    return {"mode": row["mode"], "network": row["network"], "agency": row["agency"]}
+        return {"mode": "vlak", "network": "zeleznica", "agency": None, "headsign": None}
+    # Smer rabi glava okna medkrajevnega avtobusa: šifra linije (A6346) ni
+    # na avtobusu, cilj je (`common.imeVoznje`).
+    return {"mode": row["mode"], "network": row["network"], "agency": row["agency"],
+            "headsign": row["headsign"]}
 
 
 def trip_mode(conn: sqlite3.Connection, train_no: str) -> str:

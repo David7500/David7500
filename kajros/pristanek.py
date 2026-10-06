@@ -578,6 +578,33 @@ def pot_vozje(network: str, train_no: str, trip_id: str | None = None) -> str:
     return f"{naslov}?trip={quote(trip_id)}" if trip_id else naslov
 
 
+#: Medkrajevni prevozniki IJPP: `train_no` je šifra linije iz registra
+#: (A6346), ista za obe smeri in na avtobusu je ni. Isto pravilo kot
+#: `common.imeVoznje` v brskalniku; imena tudi ista kot tam (`AGENCY`).
+_SIFRA_LINIJE = {"1123": "Arriva", "1119": "Nomago", "1121": "AP MS"}
+
+
+def cilj_voznje(headsign: str | None) -> str:
+    """Kam pelje: zadnji kos „A - B“; krožna pove vmesno postajo in „in nazaj“."""
+    d = [x.strip() for x in (headsign or "").split(" - ") if x.strip()]
+    if not d:
+        return ""
+    if len(d) > 2 and d[0] == d[-1]:
+        return f"{d[len(d) // 2]} in nazaj"
+    return d[-1]
+
+
+def ime_voznje(row: dict, s_ciljem: bool = False) -> str:
+    """„LPP 25“, „Arriva“ / „Arriva → Bohinj Ukanc“, „IC 503“ -- kot na avtobusu."""
+    kdo = _SIFRA_LINIJE.get(str(row.get("agency")))
+    if row.get("network") == "avtobus" and kdo:
+        cilj = cilj_voznje(row.get("headsign")) if s_ciljem else ""
+        return f"{kdo} → {cilj}" if cilj else kdo
+    if row.get("network") == "avtobus" and str(row.get("agency")) in ("1118", "lpp"):
+        return f"LPP {row['train_no']}"
+    return row["train_no"]
+
+
 def stevnik(n: int, ena: str, dve: str, tri: str, pet: str) -> str:
     """Slovenska oblika ob številu: 1 vožnja, 2 vožnji, 3 vožnje, 5 voženj.
 

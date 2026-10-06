@@ -288,3 +288,22 @@ def test_izpisana_je_ura_po_kateri_je_vrstni_red():
     assert pristanek.ura_odhoda(
         {"sched": "2026-09-25T18:15:00+02:00",
          "expected": "2026-09-25T18:15:40+02:00"}) == ("18:15", None)
+
+
+def test_ime_voznje_kot_na_avtobusu():
+    """Šifra medkrajevne linije (A6346) ni na avtobusu; LPP 25 je."""
+    arriva = {"network": "avtobus", "agency": "1123", "train_no": "A6346",
+              "headsign": "Ljubljana AP - Bohinj Ukanc"}
+    assert pristanek.ime_voznje(arriva) == "Arriva"
+    assert pristanek.ime_voznje(arriva, s_ciljem=True) == "Arriva → Bohinj Ukanc"
+    assert pristanek.ime_voznje({"network": "avtobus", "agency": "1118", "train_no": "25"}) == "LPP 25"
+    assert pristanek.ime_voznje({"network": "avtobus", "agency": "lpp", "train_no": "6"}) == "LPP 6"
+    assert pristanek.ime_voznje({"network": "zeleznica", "agency": "1161", "train_no": "BUS 51206"}) == "BUS 51206"
+    assert pristanek.ime_voznje({"network": "zeleznica", "agency": "1161", "train_no": "IC 503"}) == "IC 503"
+
+
+def test_cilj_krozne_voznje():
+    assert pristanek.cilj_voznje("Novo mesto - Obrh - Novo mesto") == "Obrh in nazaj"
+    assert pristanek.cilj_voznje("Kočevje - Borovec pri Kočevski Reki obračališče") == \
+        "Borovec pri Kočevski Reki obračališče"
+    assert pristanek.cilj_voznje(None) == ""

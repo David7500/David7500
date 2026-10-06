@@ -602,6 +602,42 @@ const AGENCY = {
   "lpp": "LPP",
 };
 
+// ---------- ime vožnje, kot ga vidi potnik ----------
+//
+// Pri medkrajevnih prevoznikih IJPP je `train_no` šifra linije iz registra
+// (A6346, N0239, M2015): ista za obe smeri (A6135 vozi Škofja Loka ↔
+// Železniki) in na avtobusu je ni. Iskalnik je pisal „A6346 Arriva A6346“.
+// Potnik pozna prevoznika in kam avtobus pelje. LPP je drugače: „LPP 25“
+// piše na avtobusu in ostane. Nadomestni prevoz in vlaki ostanejo pri
+// številki. Iskanje po šifri na zemljevidu dela naprej (`vehText`).
+const SIFRA_LINIJE = new Set(["1123", "1119", "1121"]);
+
+function jeMedkrajevni(row) {
+  return row.network === "avtobus" && SIFRA_LINIJE.has(String(row.agency));
+}
+
+/** Kam pelje: zadnji kos „A - B“. Krožna („Novo mesto - Obrh - Novo mesto“,
+ *  564 od 17 846 medkrajevnih voženj) pove vmesno postajo in „in nazaj“ --
+ *  „→ Novo mesto“ iz Novega mesta bi bil nesmisel. */
+function ciljVoznje(headsign) {
+  const d = (headsign || "").split(" - ").map((x) => x.trim()).filter(Boolean);
+  if (!d.length) return "";
+  if (d.length > 2 && d[0] === d[d.length - 1]) return `${d[Math.floor(d.length / 2)]} in nazaj`;
+  return d[d.length - 1];
+}
+
+/** „LPP 25“, „Arriva“ / „Arriva → Bohinj Ukanc“ (`sCiljem`, kjer smeri ne
+ *  pove nič drugega), „IC 503“. */
+function imeVoznje(row, sCiljem = false) {
+  if (row.network !== "avtobus") return row.train_no;
+  const kdo = AGENCY[row.agency];
+  if (jeMedkrajevni(row)) {
+    const cilj = sCiljem ? ciljVoznje(row.headsign) : "";
+    return `${kdo || "avtobus"}${cilj ? ` → ${cilj}` : ""}`;
+  }
+  return kdo ? `${kdo} ${row.train_no}` : row.train_no;
+}
+
 // Ena barva za vse avtobusne linije, in ne barva iz vira.
 //
 // Prvi razlog je bil, da so vsi LPP-jevi `route_color` ista zelena
@@ -667,10 +703,8 @@ function lineBadgeHtml(row) {
       <span class="mode-bus-beseda">nadomestni prevoz</span>
     </span>`;
   }
-  const who = AGENCY[row.agency];
-  const label = who ? `${who} ${row.train_no}` : row.train_no;
   return `<span class="line-badge" style="color:${LINE_INK};border-color:${LINE_INK}55">
-    ${escapeHtml(label)}</span>`;
+    ${escapeHtml(imeVoznje(row))}</span>`;
 }
 
 function modeBadgeHtml(mode) {

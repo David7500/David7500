@@ -367,6 +367,7 @@ templates.env.filters["km"] = pristanek.km
 templates.env.globals["pot_relacije"] = pristanek.pot_relacije
 templates.env.globals["pot_postaje"] = pristanek.pot_postaje
 templates.env.globals["pot_vozje"] = pristanek.pot_vozje
+templates.env.filters["ime_voznje"] = pristanek.ime_voznje
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
 templates.env.globals["baza"] = config.BASE_URL
@@ -1029,7 +1030,7 @@ def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     """
     with _conn() as conn:
         row = conn.execute(
-            "SELECT trip_id, network FROM trip "
+            "SELECT trip_id, network, agency, train_no, headsign FROM trip "
             "WHERE (:trip IS NOT NULL AND trip_id = :trip) "
             "   OR (:trip IS NULL AND train_no = :no) LIMIT 1",
             {"trip": trip, "no": train_no}).fetchone()
@@ -1053,11 +1054,14 @@ def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     beseda = ("Avtobus" if prava == "avtobus" else
               "Nadomestni prevoz" if train_no.upper().startswith("BUS") else "Vlak")
     relacija = f"{konca['od']} → {konca['cilj']}" if konca else ""
+    # Avtobus po prevozniku („Avtobus Arriva“, „Avtobus LPP 25“), ne po šifri
+    # medkrajevne linije, ki je na avtobusu ni in je nihče ne išče (A6346).
+    ime = pristanek.ime_voznje(dict(row)) if row and prava == "avtobus" else train_no
     return templates.TemplateResponse(request, "train.html", {
         "train_no": train_no, "network": prava,
         "here": "avtobusi" if prava == "avtobus" else "iskalnik",
-        "naslov": f"{beseda} {train_no} {relacija}".strip(),
-        "opis": f"Kje je {beseda.lower()} {train_no}"
+        "naslov": f"{beseda} {ime} {relacija}".strip(),
+        "opis": f"Kje je {beseda.lower()} {ime}"
                 + (f" ({relacija})" if relacija else "")
                 + " zdaj, koliko zamuja in kdaj pride na cilj — z zgodovino"
                   " zamud te vožnje.",

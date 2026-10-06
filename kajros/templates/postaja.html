@@ -103,7 +103,7 @@
       <thead>
         <tr>
           <th>Odhod</th>
-          <th>{{ "Linija" if network == "avtobus" else "Vlak" }}</th>
+          <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
           <th>Proti</th>
           <th class="zam">Zamuda</th>
         </tr>
@@ -112,7 +112,7 @@
       {% for o in odhodi %}
         <tr>
           <td class="t">{% if o.vozni_red %}<s class="vozni-red">{{ o.vozni_red }}</s><span class="z-{{ o.zamuda.razred }}">{{ o.ura }}</span>{% else %}{{ o.ura }}{% endif %}</td>
-          <td><a href="{{ pot_vozje(network, o.train_no, o.trip_id) }}">{{ o.train_no }}</a></td>
+          <td><a href="{{ pot_vozje(network, o.train_no, o.trip_id) }}">{{ o | ime_voznje }}</a></td>
           <td class="kam">{{ o.towards }}</td>
           {% if o.zamuda %}
           <td class="zam z-{{ o.zamuda.razred }}">{{ o.zamuda | besedilo }}</td>

@@ -108,7 +108,7 @@ Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `sh
 Pri avtobusih drugače, hitro pozabljeno:
 
 * **Številka linije ≠ številka vožnje.** LPP linija 3G ima 388 voženj. Vsaka poizvedba po `train_no` skozi `stats.resolve_trip()`; povezave na eno vožnjo nosijo `?trip=<id>`. Isto velja za devet vlakov s sezonskimi različicami.
-* **Barva linije ≠ barva linije.** Vsi LPP `route_color` = ista zelena prevoznika, zato oznaka nosi ime prevoznika in številko („LPP 25“) — iskati se mora dati po tem, kar človek vidi na postajališču. Prevoznik v `trip.agency` kot GTFS ID (1118, 1123 …); ime v `common.AGENCY` in `stats.AGENCY_NAMES`.
+* **Barva linije ≠ barva linije.** Vsi LPP `route_color` = ista zelena prevoznika, zato oznaka nosi ime prevoznika in številko („LPP 25“) — iskati se mora dati po tem, kar človek vidi na postajališču. Prevoznik v `trip.agency` kot GTFS ID (1118, 1123 …); ime v `common.AGENCY` in `stats.AGENCY_NAMES`. **Medkrajevni (Arriva, Nomago, AP MS) nimajo številke na avtobusu**: `train_no` je šifra linije iz registra (A6346), zato oznaka „Arriva“, kjer smer ni povedana drugje „Arriva → Bohinj Ukanc“ (`common.imeVoznje`, `pristanek.ime_voznje`).
 * **Mestno postajališče ima svoj `stop_id` za vsako smer** in vsak vir svojega („Bavarski dvor“ v `station` štirikrat). Vse v aplikaciji teče po **imenu** postaje; stran ceste loči `journey.smeri_postaje()` po smeri vožnje do naslednjega postanka, tabla, widget in pristajalna stran jo nosijo kot `smer`.
 
 ## Številke vlakov

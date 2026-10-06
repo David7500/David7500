@@ -504,14 +504,8 @@ function groupByStation(trains) {
 
 // Kartica vozila. Klik na zemljevidu je doslej odprl novo stran -- to je
 // veliko za vprasanje "kaj pa je to". Kartica odgovori na mestu in ponudi
-// stran tistemu, ki jo res hoce.
-// Pri vlaku je stevilka enolicna in prevoznik je vedno SZ, zato ga ne pisemo;
-// pri avtobusu je "25" brez prevoznika dvoumna.
-function agencyPrefix(v) {
-  const ime = AGENCY[v.agency];
-  return ime && v.network !== "zeleznica" ? `${ime} ` : "";
-}
-
+// stran tistemu, ki jo res hoce. Ime vozila pove `imeVoznje` (common.js):
+// pri vlaku stevilka, pri avtobusu prevoznik, ker je "25" brez njega dvoumna.
 function vehCardHtml(o) {
   const rows = o.rows.map(([k, v, color]) => `
     <div class="veh-row"><span>${escapeHtml(k)}</span>
@@ -632,7 +626,7 @@ function busCardHtml(v) {
     : [["zamuda", delayText(v.delay_s), delayColor(v.delay_s)],
        ["zadnja meritev", escapeHtml(v.last_stop || "—")]];
   return vehCardHtml({
-    no: agencyPrefix(v) + v.train_no, badge: "", headsign: v.headsign,
+    no: imeVoznje(v), badge: "", headsign: v.headsign,
     href: v.trip_id ? tripHref(v.train_no, v.trip_id, v.service_date, "avtobus") : null,
     rows: rows.concat([
       ["hitrost", v.speed_kmh == null ? "ni podatka"
@@ -1053,7 +1047,7 @@ function zadetek3D(p) {
 function busTooltipHtml(v) {
   return `<div class="train-label-line">`
     + `<span class="train-label-code" style="color:${busInk(v)}">`
-    + `${escapeHtml(agencyPrefix(v))}${escapeHtml(v.train_no)}</span>`
+    + `${escapeHtml(imeVoznje(v))}</span>`
     + `<span class="train-label-more">${escapeHtml(v.headsign || "")}</span></div>`
     + `<div class="train-label-more">`
     + `${v.speed_kmh != null ? (v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji") : "brez hitrosti"}`
@@ -1910,7 +1904,7 @@ function findRowHtml(m) {
     : v.last_stop;
   return `<button type="button" class="find-row" data-key="${escapeHtml(m.key)}">
       <span class="find-kind find-kind-${m.kind}"></span>
-      <span class="find-no">${escapeHtml(agencyPrefix(v))}${escapeHtml(v.train_no)}</span>
+      <span class="find-no">${escapeHtml(m.kind === "bus" ? imeVoznje(v, true) : v.train_no)}</span>
       <span class="find-where">${escapeHtml(kje || "")}</span>
       <span class="find-delay" style="color:${delayColor(delay)}">${delayText(delay, true)}</span>
     </button>`;

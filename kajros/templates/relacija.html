@@ -100,7 +100,7 @@
         <tr>
           <th>Odhod</th>
           <th>Prihod</th>
-          <th>{{ "Linija" if network == "avtobus" else "Vlak" }}</th>
+          <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
           <th class="skrij-ozko">Traja</th>
           <th class="zam">Zamuda</th>
         </tr>
@@ -110,7 +110,7 @@
         <tr>
           <td class="t">{{ z.sched_dep | ura }}</td>
           <td class="t">{{ z.sched_arr | ura }}</td>
-          <td class="kam"><a href="{{ pot_vozje(network, z.train_no, z.trip_id) }}">{{ z.train_no }}</a></td>
+          <td class="kam"><a href="{{ pot_vozje(network, z.train_no, z.trip_id) }}">{{ z | ime_voznje }}</a></td>
           <td class="skrij-ozko">{{ z.duration_s | trajanje }}</td>
           {% if z.zamuda %}
           <td class="zam z-{{ z.zamuda.razred }}">{{ z.zamuda | besedilo }}</td>

@@ -45,8 +45,7 @@
   // ---------- besedilo ----------
 
   function oznaka(k) {
-    if (k.network === "avtobus") return `${AGENCY[k.agency] || ""} ${k.train_no}`.trim();
-    return k.train_no;
+    return imeVoznje(k);
   }
 
   // "Ljubljana - Maribor" -> "Maribor": potnik isce, kam pelje.

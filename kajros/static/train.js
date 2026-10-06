@@ -1036,7 +1036,16 @@ async function loadRun() {
       // bila ista stvar dvakrat ("25 LPP 25") v glavi, ki je na telefonu tesna.
       // Nadomestni prevoz obdrži številko -- njegova oznaka je beseda.
       if (run.network === "avtobus") {
-        document.querySelector(".train-head-code").hidden = true;
+        // Medkrajevni: oznaka pove prevoznika, namesto šifre linije, ki je na
+        // avtobusu ni, stoji cilj -- „Arriva → Bohinj Ukanc“.
+        const koda = document.querySelector(".train-head-code");
+        const cilj = jeMedkrajevni(run) ? ciljVoznje(run.headsign) : "";
+        if (cilj) {
+          koda.textContent = `→ ${cilj}`;
+          koda.classList.add("je-cilj");
+        } else {
+          koda.hidden = true;
+        }
       }
     }
     applyNetworkWording();
