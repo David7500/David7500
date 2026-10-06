@@ -36,9 +36,11 @@ class Most(
      *
      * 2: ponavljajoce budilke (`dnevi`), `preklopi()` in `odpriBudilke()`.
      * 3: deljenje lege (`deliZacni()`, `deliStanje()`, `deliUstavi()`).
+     * 4: deljenje ob voznji (`deliObVoznji()`, `nastaviDeliObVoznji()`,
+     *    `cakajVkrcanje()`).
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 3 else 0
+    fun razlicica(): Int = if (nas()) 4 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -230,6 +232,45 @@ class Most(
     fun deliUstavi() {
         if (!nas()) return
         glavna.post { DeljenjeStoritev.ustavi(dejavnost) }
+    }
+
+    /** `{vklopljeno, lega, caka}`: ali je deljenje ob voznji vklopljeno in mogoce. */
+    @JavascriptInterface
+    fun deliObVoznji(): String {
+        if (!nas()) return "{}"
+        return JSONObject()
+            .put("vklopljeno", Nastavitve.deliObVoznji(dejavnost))
+            .put("lega", DeljenjeStoritev.smeLego(dejavnost))
+            .put("caka", DeljenjeStoritev.caka)
+            .toString()
+    }
+
+    /**
+     * Vklop ali izklop. Vklop brez dovoljenja za lego ga zaprosi; stran
+     * stanje prebere znova z [deliObVoznji].
+     */
+    @JavascriptInterface
+    fun nastaviDeliObVoznji(da: Boolean) {
+        if (!nas()) return
+        Nastavitve.nastaviDeliObVoznji(dejavnost, da)
+        if (!da) glavna.post { DeljenjeStoritev.ustaviCakanje(dejavnost) }
+        else if (!DeljenjeStoritev.smeLego(dejavnost)) {
+            glavna.post { (dejavnost as? GlavnaDejavnost)?.zahtevajLego() }
+        }
+    }
+
+    /**
+     * Vodenje do postajalisca: cakaj, da se potnik pelje z naslednjo voznjo.
+     * `zapis` je JSON za `DeljenjeStoritev.cakaj`. Ne naredi nicesar, ce
+     * deljenje ob voznji ni vklopljeno -- privolitev je stikalo, ne ta klic.
+     */
+    @JavascriptInterface
+    fun cakajVkrcanje(zapis: String): Boolean {
+        if (!nas()) return false
+        try { JSONObject(zapis) } catch (e: org.json.JSONException) { return false }
+        if (!Nastavitve.deliObVoznji(dejavnost) || !DeljenjeStoritev.smeLego(dejavnost)) return false
+        glavna.post { DeljenjeStoritev.cakaj(dejavnost, zapis) }
+        return true
     }
 
     /** Kaj sistem trenutno dovoli. Stran naj gumba ne ponuja, ce ne bo delal. */

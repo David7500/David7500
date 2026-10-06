@@ -20,6 +20,7 @@ object Nastavitve {
 
     private const val DATOTEKA = "kajros"
     private const val KLJUC = "naslov"
+    private const val KLJUC_DELI = "deli_ob_voznji"
 
     /** Sheme, ki jih sploh obravnavamo. `intent:`, `javascript:` in `file:` ne. */
     private val SHEME = setOf("http", "https")
@@ -33,6 +34,19 @@ object Nastavitve {
     fun shrani(c: Context, naslov: String) {
         c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE)
             .edit().putString(KLJUC, naslov).apply()
+    }
+
+    /**
+     * Deljenje ob voznji (`DeljenjeStoritev.cakaj`). Privzeto ugasnjeno:
+     * privolitev mora biti izrecna in locena od uporabe aplikacije (GDPR,
+     * 7. clen), preklic pa enako lahek -- isto stikalo.
+     */
+    fun deliObVoznji(c: Context): Boolean =
+        c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).getBoolean(KLJUC_DELI, false)
+
+    fun nastaviDeliObVoznji(c: Context, da: Boolean) {
+        c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE)
+            .edit().putBoolean(KLJUC_DELI, da).apply()
     }
 
     /**

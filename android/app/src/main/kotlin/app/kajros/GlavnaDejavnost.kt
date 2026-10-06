@@ -45,6 +45,7 @@ class GlavnaDejavnost : Activity() {
         const val KAM = "kam"
         private const val ZAHTEVA_LEGA = 1
         private const val ZAHTEVA_OBVESTILA = 2
+        private const val ZAHTEVA_LEGA_DELI = 3
 
         /** Od Androida 13 je obvestilo dovoljenje, prej je bilo samoumevno. */
         fun smeObvescati(c: android.content.Context): Boolean =
@@ -372,6 +373,16 @@ class GlavnaDejavnost : Activity() {
         }
     }
 
+    /** Dovoljenje za lego brez strani, ki bi ga zahtevala (deljenje ob voznji). */
+    fun zahtevajLego() {
+        if (DeljenjeStoritev.smeLego(this)) return
+        requestPermissions(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION),
+            ZAHTEVA_LEGA_DELI,
+        )
+    }
+
     private fun odpriNastavitev(akcija: String) {
         try {
             startActivity(Intent(akcija, Uri.parse("package:$packageName")))
@@ -389,6 +400,12 @@ class GlavnaDejavnost : Activity() {
             // Ce so obvestila urejena, gremo takoj se na tocne alarme -- potnik
             // je pritisnil en gumb in ne bi smel dvakrat iskati istega.
             zahtevajZaBudilko()
+            return
+        }
+        if (koda == ZAHTEVA_LEGA_DELI) {
+            if (izidi.none { it == PackageManager.PERMISSION_GRANTED }) {
+                Toast.makeText(this, R.string.deli_ob_voznji_lega, Toast.LENGTH_LONG).show()
+            }
             return
         }
         if (koda != ZAHTEVA_LEGA) return

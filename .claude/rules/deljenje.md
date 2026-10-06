@@ -45,4 +45,15 @@ Izid deljenja: `konec` iz baze, sicer `deli` (sveže točke) ali **`utihnil`** �
 
 `DeljenjeStoritev` = storitev v ospredju vrste `location`: lego dobiva tudi z ugasnjenim zaslonom (preizkušeno na emulatorju: 8 točk v 40 s v ozadju). Začne jo **stran** prek `Most.deliZacni()` — voznjo izbere stran, storitev samo pošilja. Dvojno pošiljanje (stran in storitev) bi bilo dva „potnika“ in lažno soglasje, zato stran v aplikaciji lege ne pošilja. `zaganja` pokrije trenutek med klicem in zagonom storitve; brez njega je prvo branje stanja deljenje razglasilo za končano.
 
+### Deljenje ob vožnji (1.9, 6. 10. 2026)
+
+Gumb „Pelješ se?“ je dal 12 deljenj v prvem tednu, potrjenih prehodov vlakov je bilo do 6. 10. šest. Davidova zamisel „vsi ob progi, gruča = vlak“ je zavrnjena (brskalnik lege v ozadju ne da, „ves čas“ samo v sistemskih nastavitvah, strežnik bi dobil lego ljudi, ki niso na vlaku). Namesto nje **deljenje, vezano na trenutek, ko aplikacija ve, s katero vožnjo se boš peljal**:
+
+* **Privolitev = stikalo „Ko se peljem, pomagaj drugim“**, privzeto ugasnjeno (`Nastavitve.deliObVoznji`). V seznamu budilk in kot ponudba v vodenju do postajališča. Vklop brez dovoljenja za lego ga zaprosi; zavrnjeno = stikalo nazaj.
+* **Sprožilca**: poteg budilke (`ZvonjenjeDejavnost.ustavi`, samo z zaslona, ne z gumba v obvestilu) in vodenje do postajališča, kadar je naslednja vožnja v 30 min (`pot_podrobno.js`, `Most.cakajVkrcanje`). Oba z vidnega zaslona → zadošča dovoljenje „med uporabo“. Okno vožnje kot sprožilec še ne.
+* **Čakanje** (`DeljenjeStoritev.cakaj`): storitev vrste `location`, obvestilo „Deljenje ob vožnji · LP 3224 → Ljubljana“ z „Ne tokrat“, lega na 10 s. **Lega med čakanjem ne zapusti telefona.** Pri budilki vožnjo (`trip_id`) poišče tabla (`Preverjevalec`), lego postaje `/api/stations/search` — obe zahtevi brez potnikove lege.
+* **Vkrcan** (`Vkrcanje.kt`, testi `VkrcanjeTest`): bil na postaji (vlak 300 m, avtobus 120 m, z negotovostjo do 200 m), nato **dve zaporedni legi** zunaj nje s hitrostjo ≥ 6 m/s in natančnostjo ≤ 100 m, ne prej kot 3 min pred pričakovanim odhodom. Brez postaje ni vkrcanja: avto ob progi ob uri odhoda ni potnik. Pol ure po odhodu (ali 2 h čakanja) konec brez deljenja.
+* Od tam naprej **isto deljenje kot z gumbom**: prve točke so legi, s katerima je pravilo reklo „vkrcan“, strežnik jih preveri kot vsako prvo točko (na trasi, ob pravem času). Konec: izstop, cilj, „Ustavi“.
+* Obvestilo deljenja ima svojo številko (4713): 4712 je nežni del budilke, ki ga storitev zvonjenja ob koncu pobriše -- in prav takrat se čakanje začne.
+
 **Emulator:** `adb emu geo fix` vrne „unknown command“, ker konzola zahteva avtentikacijo (žeton v `~/.emulator_console_auth_token`). Lega gre prek vtičnice na 5554 z `auth <žeton>`. Za varen kontekst v WebView: `adb reverse tcp:8001 tcp:8001` in naslov `http://127.0.0.1:8001` (`-PkajrosUrl`, nato `pm clear`, ker je shranjen naslov močnejši).

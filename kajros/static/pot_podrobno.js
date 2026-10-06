@@ -449,7 +449,71 @@ function zacniVodenje(i) {
   // Ura teče tudi, ko stojiš: odštevanje do odhoda se mora premikati samo.
   V.osvezi = setInterval(() => posodobi(false, true), 5000);
   osveziZamude();
+  deliOb(i);
 }
+
+// ---------------------------------------------------------------- deljenje ob vožnji
+//
+// Vodenje do postajališča je trenutek, ko aplikacija ve, s katerim vozilom se
+// boš peljal (David, 6. 10. 2026). Kdor je deljenje ob vožnji vklopil, mu
+// aplikacija počaka, da se pelje, in šele nato deli lego vozila
+// (`DeljenjeStoritev.cakaj`); kdor ga ni, mu ga tu ponudimo. Brskalnik tega
+// ne zna: lege z ugasnjenim zaslonom ne dobiva.
+
+const DELI = Boolean(MOST && MOST.razlicica() >= 4);
+// Vodenje, ki se začne več kot pol ure pred odhodom, ni pot do vozila zdaj.
+const CAKAJ_PRED_S = 30 * 60;
+
+function deliStanje() {
+  try {
+    return JSON.parse(MOST.deliObVoznji() || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+
+function deliOb(i) {
+  const el = $("#vod-deli");
+  const nv = DELI && ZIVO ? nogaVozila(i) : null;
+  const odh = nv && (nv.odhod_ocena || nv.odhod);
+  const cez = odh ? odh - Date.now() / 1000 : null;
+  if (!nv || cez > CAKAJ_PRED_S || cez < -5 * 60) { el.hidden = true; return; }
+  const kdo = escapeHtml(imeVoznje(nv));
+  const st = deliStanje();
+  if (st.vklopljeno && st.lega) {
+    const ok = MOST.cakajVkrcanje(JSON.stringify({
+      trip_id: nv.trip_id, service_date: PREDLOG.datum, network: nv.network,
+      train_no: nv.train_no, headsign: lepoIme(nv.headsign || ""), agency: nv.agency,
+      lat: nv.od_ll[0], lon: nv.od_ll[1], odhod_ms: odh * 1000,
+    }));
+    el.innerHTML = ok ? `Ko boš na ${kdo}, bo kajros anonimno delil njegovo lego. `
+      + '<button type="button" data-deli="ne">Ne tokrat</button>' : "";
+  } else {
+    el.innerHTML = `Pomagaj drugim: ko boš na ${kdo}, lahko kajros anonimno deli `
+      + 'njegovo lego. <button type="button" data-deli="da">Vklopi</button>';
+  }
+  el.hidden = !el.innerHTML;
+}
+
+$("#vod-deli").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-deli]");
+  if (!b) return;
+  if (b.dataset.deli === "ne") {
+    MOST.deliUstavi();
+    $("#vod-deli").textContent = "Tokrat ne.";
+    return;
+  }
+  MOST.nastaviDeliObVoznji(true);
+  // Dovoljenje za lego je okno sistema; počakamo na odgovor in poskusimo znova.
+  let poskusov = 0;
+  const cakaj = setInterval(() => {
+    poskusov += 1;
+    if (deliStanje().lega || poskusov > 60) {
+      clearInterval(cakaj);
+      deliOb(V.i);
+    }
+  }, 1000);
+});
 
 function koncajVodenje() {
   V.aktivno = false;

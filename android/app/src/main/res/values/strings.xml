@@ -57,6 +57,14 @@
     <string name="deljenje_pri_bus">pri postajališču %1$s</string>
     <string name="deljenje_med_bus">med postajališčema %1$s in %2$s</string>
     <string name="deljenje_vidijo">Drugi vidijo: %1$s · %2$s min</string>
+    <!-- deljenje ob vožnji: čakanje na vkrcanje -->
+    <string name="cakanje_naslov">Deljenje ob vožnji · %1$s</string>
+    <string name="cakanje_besedilo">Ko boš na vlaku, bo kajros anonimno delil njegovo lego. Do takrat ne pošlje ničesar.</string>
+    <string name="cakanje_besedilo_bus">Ko boš na avtobusu, bo kajros anonimno delil njegovo lego. Do takrat ne pošlje ničesar.</string>
+    <string name="cakanje_ne_tokrat">Ne tokrat</string>
+    <string name="deli_ob_voznji">Ko se peljem, pomagaj drugim</string>
+    <string name="deli_ob_voznji_opis">Ko potegneš budilko ali te kajros vodi do postajališča, počaka, da se pelješ, in nato anonimno deli lego vozila. Drugi tako vidijo, kje je. Prej ne pošlje ničesar; ko izstopiš, neha.</string>
+    <string name="deli_ob_voznji_lega">Brez dovoljenja za lego deljenje ne gre.</string>
 
     <!-- pregled budilk -->
     <string name="budilke">Budilke</string>

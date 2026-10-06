@@ -2,6 +2,7 @@ package app.kajros
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -22,6 +23,10 @@ import java.util.Locale
  * v omrezje.
  */
 class BudilkeDejavnost : Activity() {
+
+    private companion object {
+        const val ZAHTEVA_LEGA = 1
+    }
 
     private val ura = SimpleDateFormat("HH:mm", Locale("sl"))
     private val dan = SimpleDateFormat("EEE d. M.", Locale("sl"))
@@ -54,6 +59,27 @@ class BudilkeDejavnost : Activity() {
             }
         }
         findViewById<Button>(R.id.dnevnik).setOnClickListener { pokaziDnevnik() }
+        findViewById<Switch>(R.id.deli_ob_voznji).setOnCheckedChangeListener { _, da ->
+            // `narisi()` stikalo postavi na shranjeno vrednost; to ni odločitev.
+            if (da == Nastavitve.deliObVoznji(this)) return@setOnCheckedChangeListener
+            Nastavitve.nastaviDeliObVoznji(this, da)
+            if (!da) DeljenjeStoritev.ustaviCakanje(this)
+            else if (!DeljenjeStoritev.smeLego(this)) {
+                requestPermissions(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION), ZAHTEVA_LEGA)
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(koda: Int, dovoljenja: Array<out String>,
+                                            izidi: IntArray) {
+        super.onRequestPermissionsResult(koda, dovoljenja, izidi)
+        if (koda != ZAHTEVA_LEGA || izidi.any { it == PackageManager.PERMISSION_GRANTED }) return
+        // Brez lege deljenja ni: stikalo, ki bi ostalo vklopljeno, bi lagalo.
+        Nastavitve.nastaviDeliObVoznji(this, false)
+        findViewById<Switch>(R.id.deli_ob_voznji).isChecked = false
+        android.widget.Toast.makeText(this, R.string.deli_ob_voznji_lega,
+            android.widget.Toast.LENGTH_LONG).show()
     }
 
     /** Vse drugo je urejeno, manjka samo cel zaslon. */
@@ -87,6 +113,7 @@ class BudilkeDejavnost : Activity() {
     }
 
     private fun narisi() {
+        findViewById<Switch>(R.id.deli_ob_voznji).isChecked = Nastavitve.deliObVoznji(this)
         findViewById<TextView>(R.id.opozorilo).apply {
             val vse = GlavnaDejavnost.smeObvescati(this@BudilkeDejavnost) &&
                 Nacrtovalec.smeTocenAlarm(this@BudilkeDejavnost)

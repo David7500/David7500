@@ -233,6 +233,9 @@ class ZvonjenjeDejavnost : Activity() {
         id?.let { startService(ZvonjenjeStoritev.namera(this, ZvonjenjeStoritev.USTAVI, it)) }
         getSystemService(Vibrator::class.java)?.vibrate(
             VibrationEffect.createWaveform(longArrayOf(0, 30, 60, 30), -1))
+        // Deljenje ob vožnji, če ga je potnik vklopil: zdaj, ko zaslon še
+        // sveti -- storitev za lego se sme začeti samo iz vidne aplikacije.
+        id?.let { DeljenjeStoritev.cakaj(this, org.json.JSONObject().put("budilka", it).toString()) }
     }
 
     /** Vozilo je pripeljalo: vrata se odprejo, nato pove, kaj sledi. */
