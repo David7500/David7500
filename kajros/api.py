@@ -2810,6 +2810,9 @@ def api_pot(
                       description="koliko minut do postaje na vsakem koncu"),
     kmh: float = Query(hoja.KMH, ge=3, le=25,
                        description="hitrost na obeh koncih: 5 peš, 15 kolo ali rolka"),
+    prevozniki: str | None = Query(None, description="s katerimi se potnik pelje, z "
+                                   "vejicami: " + ",".join(pot.PREVOZNIKI)
+                                   + "; privzeto vsi"),
 ):
     """Pot od vrat do vrat: hoja → vožnja → (prestop) → vožnja → hoja.
 
@@ -2828,7 +2831,8 @@ def api_pot(
     # "prometni dan D" in zamud ni.
     zdaj_s = journey.now_seconds(now) if dan == now.date().isoformat() else None
     od, do = (od_lat, od_lon), (do_lat, do_lon)
-    kako = {"max_hoje_s": hoje * 60, "kmh": kmh}
+    kako = {"max_hoje_s": hoje * 60, "kmh": kmh,
+            "prevozniki": _prevozniki(prevozniki)}
 
     # Nočni avtobus ob 01:00 nosi VČERAJŠNJI prometni dan; poišče ga
     # `pot.isci()` sam (`pot.NOCNI_S`), da gredo predlogi obeh dni skozi isto
@@ -2838,6 +2842,21 @@ def api_pot(
             return pot.isci_do(conn, od, do, dan, _ura_s(prihod, "prihod"), zdaj_s, **kako)
         odhod_s = _ura_s(ob, "ob") if ob else journey.now_seconds(now)
         return pot.isci(conn, od, do, dan, odhod_s, now_s=zdaj_s, **kako)
+
+
+def _prevozniki(niz: str | None) -> frozenset[str] | None:
+    """Izbira prevoznikov iz naslova; `None` = vsi. Neznano ime je napaka, ne
+    tiho prezrta izbira: iskanje brez nje bi vrnilo pot z Arrivo potniku, ki
+    je Arrivo izklopil."""
+    if niz is None:
+        return None
+    izbrani = frozenset(x.strip() for x in niz.split(",") if x.strip())
+    if not izbrani:
+        raise HTTPException(422, "izberi vsaj enega prevoznika")
+    neznani = izbrani - set(pot.PREVOZNIKI)
+    if neznani:
+        raise HTTPException(422, f"neznan prevoznik: {', '.join(sorted(neznani))}")
+    return izbrani
 
 
 def _zdaj_za_dan(dan: str, now: datetime) -> int | None:

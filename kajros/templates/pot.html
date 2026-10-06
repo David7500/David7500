@@ -159,6 +159,18 @@
           <input id="kolo" type="checkbox">
           <span>kolo ali rolka <small>15 km/h</small></span>
         </label>
+        {#- Za potnika z mesečno vozovnico enega prevoznika: najhitrejša pot z
+            drugim mu nič ne pomaga (prijava 6. 10. 2026: „imam vozovnico LPP,
+            izračuna pa vedno z Arrivo“). Imena so ta z vozila, ne iz GTFS;
+            izbira ostane v brskalniku, ker je lastnost potnika, ne poti. #}
+        <div class="moznost prevozniki" role="group" aria-label="Prevozniki, s katerimi se pelješ">
+          <span>prevozniki</span>
+          <button type="button" class="prevoznik" data-prevoznik="vlak" aria-pressed="true">vlak</button>
+          <button type="button" class="prevoznik" data-prevoznik="lpp" aria-pressed="true">LPP</button>
+          <button type="button" class="prevoznik" data-prevoznik="arriva" aria-pressed="true">Arriva</button>
+          <button type="button" class="prevoznik" data-prevoznik="nomago" aria-pressed="true">Nomago</button>
+          <button type="button" class="prevoznik" data-prevoznik="apms" aria-pressed="true">AP Murska Sobota</button>
+        </div>
       </div>
 
       <div id="pot-stanje" class="pot-stanje" aria-live="polite"></div>

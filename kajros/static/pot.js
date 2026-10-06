@@ -50,6 +50,70 @@ function nastaviHoje(minut) {
 const kolo = () => $("#kolo").checked;
 const KOLO_KMH = 15;
 
+// Prevozniki, s katerimi se potnik pelje. Lastnost potnika (njegova
+// vozovnica), ne poti -- zato v brskalniku in ne v naslovu: kdor pot deli,
+// prejemniku ne vsili svoje vozovnice.
+const PREVOZNIKI_KLJUC = "kajros:prevozniki";
+const gumbiPrevoznikov = () => [...document.querySelectorAll("[data-prevoznik]")];
+
+function izbraniPrevozniki() {
+  return gumbiPrevoznikov().filter((b) => b.getAttribute("aria-pressed") === "true")
+    .map((b) => b.dataset.prevoznik);
+}
+
+/** Izbira za zahtevo: `null`, kadar so izbrani vsi -- takrat ni omejitve. */
+function omejitevPrevoznikov() {
+  const izbrani = izbraniPrevozniki();
+  return izbrani.length === gumbiPrevoznikov().length ? null : izbrani;
+}
+
+function nastaviPrevoznike(izbrani) {
+  // Shranjena izbira brez znanega prevoznika (ime se je spremenilo) ni
+  // izbira nikogar: takrat vsi.
+  const znani = izbrani && izbrani.filter((k) =>
+    gumbiPrevoznikov().some((b) => b.dataset.prevoznik === k));
+  gumbiPrevoznikov().forEach((b) => b.setAttribute("aria-pressed",
+    String(!znani || !znani.length || znani.includes(b.dataset.prevoznik))));
+}
+
+function shraniPrevoznike() {
+  try {
+    const o = omejitevPrevoznikov();
+    if (o) localStorage.setItem(PREVOZNIKI_KLJUC, JSON.stringify(o));
+    else localStorage.removeItem(PREVOZNIKI_KLJUC);
+  } catch (e) { /* zasebno okno: izbira velja do konca obiska */ }
+}
+
+function prebraniPrevozniki() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PREVOZNIKI_KLJUC));
+    return Array.isArray(v) && v.length ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Omejitev mora biti vidna ob odgovoru: kdor jo je nastavil pred mesecem, bi
+// sicer mislil, da stran poti z Arrivo ne pozna.
+function izbiraHtml() {
+  const o = omejitevPrevoznikov();
+  if (!o) return "";
+  const imena = gumbiPrevoznikov().filter((b) => o.includes(b.dataset.prevoznik))
+    .map((b) => b.textContent.trim());
+  return ` <span class="nasvet izbira-prevoznikov">Samo ${escapeHtml(imena.join(", "))} — `
+    + '<button type="button" id="vsi-prevozniki">poišči z vsemi</button>.</span>';
+}
+
+function pripniIzbiro() {
+  const b = document.getElementById("vsi-prevozniki");
+  if (!b) return;
+  b.addEventListener("click", () => {
+    nastaviPrevoznike(null);
+    shraniPrevoznike();
+    isci();
+  });
+}
+
 function nastaviKdaj(kdaj, fokus) {
   S.kdaj = kdaj;
   document.querySelectorAll("[data-kdaj]").forEach((b) =>
@@ -731,8 +795,9 @@ function izrisi(izid) {
     stanje.innerHTML = (izid.prihod_do
       ? `Do ${ura(izid.prihod_do)}${danBeseda(izid.datum)} ni poti. Poskusi poznejšo uro`
       : "Za ta čas ni poti. Poskusi pozneje")
-      + " ali dovoli več do postaje." + nasvetHtml(izid.nasvet);
+      + " ali dovoli več do postaje." + nasvetHtml(izid.nasvet) + izbiraHtml();
     pripniNasvet();
+    pripniIzbiro();
     narisiPot(null);
     return;
   }
@@ -742,11 +807,12 @@ function izrisi(izid) {
   if (izid.predlogi.length === 1 && izid.predlogi[0].edina) {
     stanje.innerHTML = naslovIzida(izid)
       + ' <span class="nasvet">Z vozilom ni poti, ki bi bila hitrejša.</span>'
-      + nasvetHtml(izid.nasvet);
+      + nasvetHtml(izid.nasvet) + izbiraHtml();
     pripniNasvet();
   } else {
-    stanje.innerHTML = naslovIzida(izid);
+    stanje.innerHTML = naslovIzida(izid) + izbiraHtml();
   }
+  pripniIzbiro();
   izidiEl.innerHTML = izid.predlogi.map((p, i) => predlogHtml(p, i)).join("");
   // Kartica je povezava na podrobno stran, zato klik ne sme izbirati. Na
   // zemljevidu se pot pokaže ob dotiku ali fokusu.
@@ -793,6 +859,8 @@ async function isci() {
     hoje: hojeMin(),
   });
   if (kolo()) p.set("kmh", KOLO_KMH);
+  const omejitev = omejitevPrevoznikov();
+  if (omejitev) p.set("prevozniki", omejitev.join(","));
   if (S.kdaj === "do") {
     p.set("prihod", $("#tam").value);
     if ($("#dan").value) p.set("date", $("#dan").value);
@@ -871,6 +939,15 @@ for (const id of ["#dan", "#tam", "#hoje", "#kolo"]) {
   });
 }
 
+// Zadnjega prevoznika ni mogoče izklopiti: brez nobenega ni vprašanja.
+gumbiPrevoznikov().forEach((b) => b.addEventListener("click", () => {
+  const vklopljen = b.getAttribute("aria-pressed") === "true";
+  if (vklopljen && izbraniPrevozniki().length === 1) return;
+  b.setAttribute("aria-pressed", String(!vklopljen));
+  shraniPrevoznike();
+  if (S.izidi && (S.kdaj === "zdaj" || $("#tam").value)) isci();
+}));
+
 // ---------------------------------------------------------------- naslov strani
 //
 // Pot mora biti deljiva. Brez tega je edini način, da nekomu poveš, kako priti
@@ -928,6 +1005,7 @@ function izUrl() {
 
 pripniDnevnePuscice();
 oznaciArm();
+nastaviPrevoznike(prebraniPrevozniki());
 naloziKazalo().then((k) => { KAZALO = k; });
 const izPovezave = izUrl();
 izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi

@@ -93,6 +93,13 @@ Potnik ve, **kje stoji**, ne s katere postaje mu pelje. Zato dva vhoda = kraja (
 
 **Vprašanje časa = prihod, ne odhod.** „Kdaj moraš biti tam?": **čim prej** (privzeto, danes od zdaj; prvi predlog = najzgodnejši prihod) ali **do ure** (dan in ura; prvi predlog = tisti, s katerim od doma odideš **najpozneje**, z oznako „najpozneje" in rezervo do roka na vsaki kartici). Odhod ob uri izginil: odgovor na vprašanje, ki ga nihče ne postavi — človek ve, kdaj mora biti v službi, ne kdaj mora od doma. `/api/pot` `ob` ostane za druge odjemalce. Kadar za danes do roka ne gre več, stran ne reče „ni poti", ampak „Do 8:00 ne prideš več. Najhitreje si tam ob 8:14." (`ne_ujames`). Pot, ki po napovedi zamude pride prepozno, ostane na seznamu, na dnu in rdeče.
 
+**Prevozniki = izbira pod gumbom** (6. 10. 2026; `pot.PREVOZNIKI`, `/api/pot?prevozniki=lpp,vlak`). Prijava potnika z mesečno LPP: „izračuna vedno najhitrejšo pot, ampak z Arrivo“. Izmerjeno na 48 poteh po Ljubljani ob 7.30: pri 17 prvi predlog ni bil samo mestni LPP (11 primestni LPP, 6 Arriva/Nomago, 1 vlak), pri 16 od njih je bila pot samo z LPP na seznamu nižje. Pravila:
+
+* **Imena z vozila, ne šifre GTFS.** „LPP“ = mestni (`lpp`) in primestni (`1118`) skupaj (David: „LPP je vse v zvezi z LPP“); nadomestni avtobus SŽ je pod „vlak“. Prevoznik, ki ga v tabeli ni, ni nikoli izločen.
+* **Izbira je lastnost potnika, ne poti** → `localStorage` (`kajros:prevozniki`), ne naslov: deljena pot prejemniku ne vsili tuje vozovnice.
+* **Omejitev je vidna ob odgovoru** („Samo LPP — poišči z vsemi“), tudi ko poti ni: kdor jo je nastavil pred mesecem, bi sicer mislil, da stran Arrive ne pozna. Zadnjega prevoznika ni mogoče izklopiti.
+* Iskanje izločene vožnje preskoči prek iste poti kot že prikazane (`brez`), brez svoje veje v krogu čez vozni red.
+
 **Kolo ali rolka = potrditveno polje, ne drsnik** — 15 km/h na obeh koncih (`kmh`), drobno pod gumbom, ker ga večina ne rabi. V verigi „kolo 4" namesto „peš 12"; prestop med postajališči ostane „peš".
 
 **Na domači strani prva, ne med „ostalim".** Edina stran brez zahteve, da potnik ve postajo — prvo vprašanje, ne zadnje. Ni tretja izbira ob vlaku in avtobusu, ampak **drugo vprašanje**, zato iskalna vrstica, ne tretji enak gumb. Omrežji sta od 1. 10. 2026 v orodni vrstici na dnu. Ikona Pot v njej to vrstico podvaja; ostala je, da ima vrstica na vseh straneh iste cilje.

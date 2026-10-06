@@ -246,6 +246,32 @@ def test_po_vseh_merilih_slabsi_predlog_odpade(conn):
         "po kakem drugem merilu")
 
 
+def test_izbrani_prevozniki(conn):
+    """Potnik z mesečno LPP: najhitrejša pot z Arrivo mu nič ne pomaga
+    (prijava 6. 10. 2026: „izračuna vedno najhitrejšo pot, ampak z Arrivo“).
+    LPP sta dve šifri -- mestni promet je drug vir, primestne linije so v
+    IJPP --, za potnika pa en prevoznik."""
+    _voznja(conn, "a", "Arriva", [(1, "BLIZU", 8 * 3600 + 600),
+                                  (2, "CILJ", 8 * 3600 + 1200)])
+    _voznja(conn, "m", "LPP 6", [(1, "BLIZU", 8 * 3600 + 660),
+                                 (2, "CILJ", 8 * 3600 + 1500)])
+    _voznja(conn, "p", "LPP 51", [(1, "BLIZU", 8 * 3600 + 700),
+                                  (2, "CILJ", 8 * 3600 + 1400)])
+    for trip_id, agencija in (("a", "1123"), ("m", "lpp"), ("p", "1118")):
+        conn.execute("UPDATE trip SET agency = ? WHERE trip_id = ?", (agencija, trip_id))
+    conn.commit()
+
+    def prvi(**kw):
+        r = pot.isci(conn, OD, DO, D, 8 * 3600, **kw)
+        return [n["train_no"] for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja"]
+
+    assert prvi() == ["Arriva"]
+    assert prvi(prevozniki=frozenset({"lpp"})) == ["LPP 51"], "primestna LPP je LPP"
+    assert prvi(prevozniki=frozenset(pot.PREVOZNIKI)) == ["Arriva"], "vsi = brez omejitve"
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, prevozniki=frozenset({"vlak"}))
+    assert not any(n["vrsta"] == "voznja" for p in r["predlogi"] for n in p["noge"])
+
+
 # ---------------------------------------------------------------- pot po korakih
 
 def test_razberi_noge_prenese_dvopicje_v_id():
