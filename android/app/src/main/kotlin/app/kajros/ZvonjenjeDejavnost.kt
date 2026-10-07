@@ -61,7 +61,7 @@ class ZvonjenjeDejavnost : Activity() {
         setContentView(R.layout.zvonjenje)
 
         id = intent.getStringExtra(ID)
-        val b = id?.let { Shramba.ena(this, it) }
+        val b = id?.let { ZvonjenjeStoritev.budilka(this, it) }
         // Zvonjenje je lahko ze ustavil gumb v obvestilu; zaslon brez zvonjenja
         // bi cakal na poteg, ki nima vec cesa ustaviti.
         if (b == null || ZvonjenjeStoritev.zvoni != b.id) { finish(); return }
@@ -101,7 +101,7 @@ class ZvonjenjeDejavnost : Activity() {
      */
     private fun zasilno(zakaj: String) {
         if (findViewById<View>(R.id.ustavi_zasilno).visibility == View.VISIBLE) return
-        Dnevnik.zapisi(this, id?.let { Shramba.ena(this, it) }, "zaslon brez prizora: $zakaj")
+        Dnevnik.zapisi(this, id?.let { ZvonjenjeStoritev.budilka(this, it) }, "zaslon brez prizora: $zakaj")
         findViewById<View>(R.id.prizor).visibility = View.GONE
         findViewById<View>(R.id.namig_vrstica).visibility = View.GONE
         findViewById<View>(R.id.napredek_tir).visibility = View.GONE
@@ -235,7 +235,9 @@ class ZvonjenjeDejavnost : Activity() {
             VibrationEffect.createWaveform(longArrayOf(0, 30, 60, 30), -1))
         // Deljenje ob vožnji, če ga je potnik vklopil: zdaj, ko zaslon še
         // sveti -- storitev za lego se sme začeti samo iz vidne aplikacije.
-        id?.let { DeljenjeStoritev.cakaj(this, org.json.JSONObject().put("budilka", it).toString()) }
+        id?.takeIf { it != ZvonjenjeStoritev.PREIZKUS }?.let {
+            DeljenjeStoritev.cakaj(this, org.json.JSONObject().put("budilka", it).toString())
+        }
     }
 
     /** Vozilo je pripeljalo: vrata se odprejo, nato pove, kaj sledi. */

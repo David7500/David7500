@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.RingtoneManager
 import android.os.Build
 import android.provider.Settings
 import java.text.SimpleDateFormat
@@ -30,7 +32,7 @@ object Zvonjenje {
     const val KANAL_ZBUDI = "budilka"
     /**
      * Nezni del zvonjenja: svoj kanal, ker je zvok last kanala. Zvok je
-     * `res/raw/nezno.mid` (glasbena skrinjica, ki v 45 s zraste iz tisine) --
+     * `res/raw/nezno.mid` (harfa, ki v 20 s zraste od sepeta) --
      * glasnosti med zvonjenjem ne moremo vec spreminjati, odkar zvok predvaja
      * sistem, zato mora biti narascanje v datoteki.
      *
@@ -40,6 +42,13 @@ object Zvonjenje {
      * ko obstaja, zato nov; vibriranje pride sredi neznega dela iz storitve.
      */
     const val KANAL_NEZNO = "budilka-zacetek"
+    /**
+     * Nežni del, kadar zaslon zvonjenja že sveti: `IMPORTANCE_DEFAULT`, brez
+     * plavajočega obvestila. Na [KANAL_NEZNO] je obvestilo viselo čez glavo
+     * zaslona in ga je bilo naravno podrsati stran -- s tem pa tudi zvok
+     * (Volla, Android 16, 7. 10. 2026). Isto, kar je [KANAL_ZASLON] za glasni del.
+     */
+    const val KANAL_NEZNO_ZASLON = "budilka-zacetek-zaslon"
     private const val KANAL_NEZNO_STARI = "budilka-nezno"
     /**
      * Glasni del, kadar zaslon zvonjenja že sveti: isti zvok kot [KANAL_ZBUDI],
@@ -104,6 +113,18 @@ object Zvonjenje {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             })
         nm.createNotificationChannel(
+            NotificationChannel(KANAL_NEZNO_ZASLON, c.getString(R.string.kanal_nezno_zaslon),
+                NotificationManager.IMPORTANCE_DEFAULT).apply {
+                setSound(android.net.Uri.parse("android.resource://${c.packageName}/raw/nezno"),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build())
+                enableVibration(false)
+                setBypassDnd(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            })
+        nm.createNotificationChannel(
             NotificationChannel(KANAL_OBVESTI, c.getString(R.string.kanal_obvesti),
                 NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(
@@ -123,6 +144,74 @@ object Zvonjenje {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
             c.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() == true
 
+    /** Razlog, da bo budilka tiha, in nastavitev sistema, kjer se ga popravi. */
+    class Tisina(val besedilo: String, val nastavitev: String)
+
+    /**
+     * Kaj v telefonu utiša budilko, čeprav so dovoljenja urejena.
+     *
+     * Zvok predvaja sistem prek kanala obvestil (glej [ZvonjenjeStoritev]),
+     * zato ga utiša vse, kar utiša obvestila: utišan kanal, izklopljena
+     * obvestila, ton budilke „brez“, Ne moti brez izjem. Aplikacija tega ne
+     * more povoziti, lahko pa pove -- sicer je budilka brez zvoka videti kot
+     * okvara. Prijavljeno 7. 10. 2026 s Samsunga: „v glasnem načinu sploh ne
+     * zvoni“, vzrok še ni izmerjen.
+     */
+    fun zakajTiho(c: Context): List<Tisina> {
+        kanali(c)
+        val nm = c.getSystemService(NotificationManager::class.java) ?: return emptyList()
+        val obvestila = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+        val zvok = Settings.ACTION_SOUND_SETTINGS
+        val razlogi = mutableListOf<Tisina>()
+        if (!nm.areNotificationsEnabled()) {
+            razlogi += Tisina(c.getString(R.string.tiho_obvestila), obvestila)
+        }
+        // Pod `IMPORTANCE_DEFAULT` sistem zvoka obvestila ne predvaja.
+        for (id in listOf(KANAL_NEZNO, KANAL_NEZNO_ZASLON, KANAL_ZBUDI, KANAL_ZASLON)) {
+            val k = nm.getNotificationChannel(id) ?: continue
+            if (k.importance < NotificationManager.IMPORTANCE_DEFAULT || k.sound == null) {
+                razlogi += Tisina(c.getString(R.string.tiho_kanal, k.name), obvestila)
+            }
+        }
+        val am = c.getSystemService(AudioManager::class.java)
+        if (am != null && am.getStreamVolume(AudioManager.STREAM_ALARM) == 0) {
+            razlogi += Tisina(c.getString(R.string.tiho_glasnost), zvok)
+        }
+        // Glasni del zvoni s tonom budilke telefona; „brez“ je prazna nastavitev.
+        if (RingtoneManager.getActualDefaultRingtoneUri(c, RingtoneManager.TYPE_ALARM) == null) {
+            razlogi += Tisina(c.getString(R.string.tiho_ton), zvok)
+        }
+        if (nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
+            razlogi += Tisina(c.getString(R.string.tiho_ne_moti), zvok)
+        }
+        return razlogi
+    }
+
+    /**
+     * Vrstica za dnevnik ob začetku zvonjenja: vse, od česar je odvisno, ali
+     * se budilka sliši. Brez tega bi bilo treba tiho budilko na tujem telefonu
+     * spet sklepati iz kode.
+     */
+    fun stanjeZvoka(c: Context): String {
+        val deli = mutableListOf<String>()
+        c.getSystemService(AudioManager::class.java)?.let { am ->
+            deli += "glasnost budilke ${am.getStreamVolume(AudioManager.STREAM_ALARM)}/" +
+                am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+        }
+        c.getSystemService(NotificationManager::class.java)?.let { nm ->
+            deli += when (nm.currentInterruptionFilter) {
+                NotificationManager.INTERRUPTION_FILTER_ALL -> "ne moti izklopljen"
+                NotificationManager.INTERRUPTION_FILTER_PRIORITY -> "ne moti: prednostno"
+                NotificationManager.INTERRUPTION_FILTER_ALARMS -> "ne moti: samo budilke"
+                NotificationManager.INTERRUPTION_FILTER_NONE -> "ne moti: popolna tišina"
+                else -> "ne moti: neznano"
+            }
+        }
+        val tiho = zakajTiho(c)
+        deli += if (tiho.isEmpty()) "nič ne utiša" else tiho.joinToString(", ") { it.besedilo }
+        return "zvok: " + deli.joinToString(" · ")
+    }
+
     /**
      * Naslov obvestila: kaj pelje, od kod in kdaj.
      * Podnaslov: **zakaj ta ura** -- ali je zamuda upostevana ali ne.
@@ -131,6 +220,9 @@ object Zvonjenje {
      * meritev ali gol vozni red, ker se v drugem primeru splaca pohiteti.
      */
     fun besedilo(c: Context, b: Budilka, zdajMs: Long): Pair<String, String> {
+        if (b.id == ZvonjenjeStoritev.PREIZKUS) {
+            return c.getString(R.string.preizkus) to c.getString(R.string.preizkus_zakaj)
+        }
         val izid = b.izracun(zdajMs)
         // Ura v naslovu in razlog pod njo morata biti ista odlocitev.
         val odhod = izid.odhodMs
@@ -182,6 +274,7 @@ object Zvonjenje {
     fun obvestiloZbudi(c: Context, b: Budilka?, zdajMs: Long, nezno: Boolean = false,
                        naZaslonu: Boolean = false): Notification {
         val kanal = when {
+            nezno && naZaslonu -> KANAL_NEZNO_ZASLON
             nezno -> KANAL_NEZNO
             naZaslonu -> KANAL_ZASLON
             else -> KANAL_ZBUDI

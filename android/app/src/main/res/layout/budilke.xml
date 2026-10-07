@@ -99,6 +99,22 @@
         android:textColor="@color/ink_faint"
         android:textSize="13sp" />
 
+    <!-- Zvoni takoj, po isti poti kot prava budilka. Brez tega se je tiha
+         budilka pokazala šele, ko je že zamudila. -->
+    <Button
+        android:id="@+id/preizkusi"
+        style="?android:attr/borderlessButtonStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:textAllCaps="false"
+        android:textColor="@color/ink_faint"
+        android:textSize="13sp"
+        android:text="@string/preizkusi" />
+
     <!-- Kaj je budilka naredila in zakaj. Brez tega je bilo treba vzrok
          budilke, ki ni zbudila, sklepati iz kode: sistemski dnevnik je bil
          do večera že prepisan. -->

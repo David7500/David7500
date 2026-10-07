@@ -171,12 +171,12 @@ class NeznoTest {
     )
 
     @Test
-    fun `zbudi zacne 45 s pred uro zvonjenja, glasno ostane ob uri`() {
+    fun `zbudi zacne 20 s pred uro zvonjenja, glasno ostane ob uri`() {
         val b = budilka(zbudi = true)
         val zdaj = ob(6, 0)
         val glasno = b.izracun(zdaj).zvoniOb
         assertEquals(ob(7, 11), glasno)
-        assertEquals(glasno - 45_000L, b.zacetekZvonjenja(zdaj))
+        assertEquals(glasno - 20_000L, b.zacetekZvonjenja(zdaj))
     }
 
     @Test
@@ -189,8 +189,8 @@ class NeznoTest {
 
     @Test
     fun `odlog je spet najprej nezen`() {
-        // „Se dve minuti“: glasno cez dve minuti, nezno 45 s prej.
+        // „Se dve minuti“: glasno cez dve minuti, nezno 20 s prej.
         val b = budilka(zbudi = true).copy(odlozenoDoMs = ob(7, 13))
-        assertEquals(ob(7, 12, 15), b.zacetekZvonjenja(ob(7, 11)))
+        assertEquals(ob(7, 12, 40), b.zacetekZvonjenja(ob(7, 11)))
     }
 }

@@ -40,13 +40,14 @@ object Ura {
     const val IZPAD_MS = 30_000L
 
     /**
-     * Nezni zacetek zvonjenja: toliko pred uro zvonjenja zazvoni tih zvoncek,
+     * Nezni zacetek zvonjenja: toliko pred uro zvonjenja zazvoni tiha harfa,
      * ki raste, ob sami uri pa glasno kot prej (David, 6. 10. 2026: „da te
      * zbudi nezno, sele nato glasno“). Zacne se PREJ, ne konca pozneje:
      * glasno ostane ob uri, ki jo je izbral potnik, zato nezni del ne vzame
-     * nic od rezerve v X.
+     * nic od rezerve v X. Do 1.10 je bilo 45 s; David 7. 10. 2026: „moralo
+     * bi biti najvec 20 s“.
      */
-    const val NEZNO_MS = 45_000L
+    const val NEZNO_MS = 20_000L
 
     /** Koliko pred prvim moznim zvonjenjem se zacne preverjati. */
     const val ZALET_MS = 10 * 60 * 1000L

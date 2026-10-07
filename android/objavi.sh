@@ -38,6 +38,15 @@ KODA="$(sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" <<<"$BADGING" | head -1)"
 IME="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" <<<"$BADGING" | head -1)"
 DATOTEKA="kajros-$IME.apk"
 
+# Viri, ki jih koda bere samo po imenu, krčenje v izdaji ne vidi. Zvok
+# nežnega dela je tako izginil iz 1.7, 1.8 in 1.9 -- budilka je prvih 20 do
+# 45 sekund samo tresla. Razvojna različica se ne krči, zato tega ne ujame
+# noben preizkus na emulatorju; ujame ga samo pogled v izdajni APK.
+"$BT/aapt2" dump resources "$APK" | grep -q " raw/nezno$" || {
+    echo "V APK-ju ni raw/nezno: nežni del budilke bi bil nem (keep.xml?)" >&2
+    exit 1
+}
+
 mkdir -p "$IZHOD"
 cp "$APK" "$IZHOD/$DATOTEKA"
 VSOTA="$(sha256sum "$IZHOD/$DATOTEKA" | cut -d' ' -f1)"

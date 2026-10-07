@@ -29,6 +29,8 @@ class BudilkeDejavnost : Activity() {
     }
 
     private val ura = SimpleDateFormat("HH:mm", Locale("sl"))
+    /** Kam vodi opozorilo; postavi ga `narisi()`, ker ve, kaj opozorilo pravi. */
+    private var opozoriloNamera: Intent? = null
     private val dan = SimpleDateFormat("EEE d. M.", Locale("sl"))
 
     override fun onCreate(stanje: Bundle?) {
@@ -45,18 +47,20 @@ class BudilkeDejavnost : Activity() {
                 .setAction(GlavnaDejavnost.AKCIJA_NASTAVITVE))
         }
         findViewById<TextView>(R.id.opozorilo).setOnClickListener {
-            // Dovoljenje za cel zaslon ima svoj zaslon; v podrobnostih
-            // aplikacije ga na vecini telefonov ni mogoce najti.
-            val akcija = if (samoCelZaslon() &&
-                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-                android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT
-            else android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
             try {
-                startActivity(Intent(akcija, Uri.parse("package:$packageName")))
+                opozoriloNamera?.let { startActivity(it) }
             } catch (e: android.content.ActivityNotFoundException) {
                 startActivity(Intent(android.provider.Settings
                     .ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
             }
+        }
+        findViewById<Button>(R.id.preizkusi).setOnClickListener {
+            ZvonjenjeStoritev.preizkusi(this)
+            // Odpremo ga mi: dejavnost je vidna, zato sme. Prava budilka ga
+            // odpre prek obvestila, ker takrat aplikacija ni spredaj.
+            startActivity(Intent(this, ZvonjenjeDejavnost::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                .putExtra(ZvonjenjeDejavnost.ID, ZvonjenjeStoritev.PREIZKUS))
         }
         findViewById<Button>(R.id.dnevnik).setOnClickListener { pokaziDnevnik() }
         findViewById<Switch>(R.id.deli_ob_voznji).setOnCheckedChangeListener { _, da ->
@@ -81,11 +85,6 @@ class BudilkeDejavnost : Activity() {
         android.widget.Toast.makeText(this, R.string.deli_ob_voznji_lega,
             android.widget.Toast.LENGTH_LONG).show()
     }
-
-    /** Vse drugo je urejeno, manjka samo cel zaslon. */
-    private fun samoCelZaslon(): Boolean =
-        GlavnaDejavnost.smeObvescati(this) && Nacrtovalec.smeTocenAlarm(this) &&
-            !Zvonjenje.smeCelZaslon(this)
 
     private fun pokaziDnevnik() {
         val p = (16 * resources.displayMetrics.density).toInt()
@@ -114,13 +113,7 @@ class BudilkeDejavnost : Activity() {
 
     private fun narisi() {
         findViewById<Switch>(R.id.deli_ob_voznji).isChecked = Nastavitve.deliObVoznji(this)
-        findViewById<TextView>(R.id.opozorilo).apply {
-            val vse = GlavnaDejavnost.smeObvescati(this@BudilkeDejavnost) &&
-                Nacrtovalec.smeTocenAlarm(this@BudilkeDejavnost)
-            visibility = if (vse && Zvonjenje.smeCelZaslon(this@BudilkeDejavnost))
-                View.GONE else View.VISIBLE
-            setText(if (vse) R.string.budilka_cel_zaslon else R.string.budilka_dovoljenja)
-        }
+        narisiOpozorilo()
         findViewById<Button>(R.id.naslov).text =
             getString(R.string.budilke_naslov_streznika,
                 Nastavitve.naslov(this).removePrefix("https://").removePrefix("http://"))
@@ -136,6 +129,40 @@ class BudilkeDejavnost : Activity() {
             return
         }
         budilke.forEach { seznam.addView(vrstica(seznam, it, zdaj)) }
+    }
+
+    /**
+     * Eno opozorilo, najhujše najprej: brez dovoljenj budilka morda sploh ne
+     * pride, tiha pride brez zvoka, brez celega zaslona pa zvoni s temnim
+     * zaslonom.
+     */
+    private fun narisiOpozorilo() {
+        val paket = Uri.parse("package:$packageName")
+        val podrobnosti = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, paket)
+        val tiho = Zvonjenje.zakajTiho(this)
+        val (besedilo, namera) = when {
+            !GlavnaDejavnost.smeObvescati(this) || !Nacrtovalec.smeTocenAlarm(this) ->
+                getString(R.string.budilka_dovoljenja) to podrobnosti
+            tiho.isNotEmpty() -> {
+                val akcija = tiho.first().nastavitev
+                getString(R.string.budilka_tiha, tiho.joinToString(", ") { it.besedilo }) to
+                    if (akcija == android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS) {
+                        Intent(akcija).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                    } else Intent(akcija)
+            }
+            // Dovoljenje za cel zaslon ima svoj zaslon; v podrobnostih
+            // aplikacije ga na vecini telefonov ni mogoce najti.
+            !Zvonjenje.smeCelZaslon(this) -> getString(R.string.budilka_cel_zaslon) to
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                    Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, paket)
+                else podrobnosti
+            else -> null to null
+        }
+        opozoriloNamera = namera
+        findViewById<TextView>(R.id.opozorilo).apply {
+            visibility = if (besedilo == null) View.GONE else View.VISIBLE
+            text = besedilo
+        }
     }
 
     private fun besedilo(niz: Int, barva: Int, velikost: Int): TextView =

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zvok nežnega dela budilke se bere samo po imenu: kanal ima naslov
+     `android.resource://app.kajros/raw/nezno`, v kodi `R.raw.nezno` ni nikjer.
+     Krčenje virov v izdaji ga zato ni videlo in ga je vrglo iz APK-ja:
+     1.7, 1.8 in 1.9 so bile v nežnem delu neme, samo tresle so (izmerjeno
+     7. 10. 2026 z `aapt2 dump resources`: 1.6 ima `raw/nezno`, 1.7+ ne).
+     Razvojna različica se ne krči, zato emulator napake ni pokazal. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/nezno" />

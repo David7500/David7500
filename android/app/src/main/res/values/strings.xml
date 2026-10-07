@@ -18,6 +18,7 @@
     <!-- budilka -->
     <string name="kanal_zbudi">Budilka</string>
     <string name="kanal_nezno">Budilka, nežni začetek</string>
+    <string name="kanal_nezno_zaslon">Budilka, nežni začetek ob odprtem zaslonu</string>
     <string name="kanal_zaslon">Budilka, ko je zaslon zvonjenja odprt</string>
     <string name="kanal_obvesti">Obvestila o odhodu</string>
     <string name="zvoni_naslov">%1$s ob %2$s</string>
@@ -88,6 +89,15 @@
     <string name="budilka_ni_podatka">ob %1$s o zamudi še ni bilo podatka</string>
     <string name="budilka_dovoljenja">Android ne dovoli obvestil ali točnih alarmov — budilka ne bo zanesljiva. Pritisni za nastavitve.</string>
     <string name="budilka_cel_zaslon">Budilka ne sme prižgati zaslona. Zvonila bo, a zaslon ostane temen. Pritisni za nastavitev.</string>
+    <string name="budilka_tiha">Budilka bo zvonila brez zvoka: %1$s. Pritisni za nastavitve.</string>
+    <string name="tiho_obvestila">obvestila za Kajros so izklopljena</string>
+    <string name="tiho_kanal">obvestila »%1$s« so utišana</string>
+    <string name="tiho_glasnost">glasnost budilke je na ničli</string>
+    <string name="tiho_ton">v telefonu ni izbran ton budilke</string>
+    <string name="tiho_ne_moti">Ne moti utiša vse, tudi budilke</string>
+    <string name="preizkusi">Preizkusi zvonjenje</string>
+    <string name="preizkus">Preizkus budilke</string>
+    <string name="preizkus_zakaj">Tako bo zvonila budilka: najprej tiho, čez 20 sekund glasno.</string>
     <string name="dnevnik">Dnevnik budilk</string>
     <string name="dnevnik_prazen">Budilka še ni ničesar naredila.</string>
     <string name="zapri">Zapri</string>
