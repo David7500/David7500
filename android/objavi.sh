@@ -42,7 +42,9 @@ DATOTEKA="kajros-$IME.apk"
 # nežnega dela je tako izginil iz 1.7, 1.8 in 1.9 -- budilka je prvih 20 do
 # 45 sekund samo tresla. Razvojna različica se ne krči, zato tega ne ujame
 # noben preizkus na emulatorju; ujame ga samo pogled v izdajni APK.
-"$BT/aapt2" dump resources "$APK" | grep -q " raw/nezno$" || {
+# Brez `grep -q`: ta se ustavi ob prvem zadetku, aapt2 dobi SIGPIPE in
+# `pipefail` bi dober APK razglasil za slabega.
+"$BT/aapt2" dump resources "$APK" | grep " raw/nezno$" >/dev/null || {
     echo "V APK-ju ni raw/nezno: nežni del budilke bi bil nem (keep.xml?)" >&2
     exit 1
 }
