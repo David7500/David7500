@@ -1314,9 +1314,15 @@ def _obvestila_veljavna() -> list[dict]:
     to povezava na bazo na ogled za tabelo, ki je skoraj vedno prazna.
     Značka je `obvestila.razlicica`, ki jo premakne vsak zapis v tem procesu;
     minuta je varovalka, če bi kdaj pisal kdo drug.
+
+    Samodejna (`obvestila.samodejna`) gredo naprej: povedo, česa ta hip ne
+    vemo, in skrbnik jih ne more pozabiti umakniti. Na arwenu ~85 ms, zato v
+    ozadju -- sicer bi jih na minuto plačal en obiskovalec.
     """
-    return _predpomni("obvestila", obvestila.razlicica, 60,
-                      lambda: _conn_klic(obvestila.veljavna))
+    samodejna = _predpomni("obvestila-samodejna", None, 60,
+                           lambda: _conn_klic(obvestila.samodejna), v_ozadju=True)
+    return samodejna + _predpomni("obvestila", obvestila.razlicica, 60,
+                                  lambda: _conn_klic(obvestila.veljavna))
 
 
 @app.get("/api/obvestila")
