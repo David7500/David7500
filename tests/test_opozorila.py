@@ -110,3 +110,66 @@ def test_neuspela_posta_se_ponovi():
     # Pošta ne uspe: klicatelj stanja ne potrdi, naslednji obhod poskusi znova.
     _, sp, nove, _ = opozorila.korak(stanje, _ocena("wal"), T + ZAMIK_S + 60)
     assert sp and nove == ["wal"]
+
+
+class _Odgovor:
+    def __init__(self, koda):
+        self.status_code = koda
+
+    def close(self):
+        pass
+
+
+def _get(izidi):
+    """Ponaredek `requests.get`: naslov -> koda ali izjema; ostalo 200."""
+    def get(url, **_):
+        izid = next((v for k, v in izidi.items() if k in url), 200)
+        if isinstance(izid, Exception):
+            raise izid
+        return _Odgovor(izid)
+    return get
+
+
+def test_vir_pove_po_cloveško_kaj_je_narobe():
+    exc = opozorila.requests.exceptions
+    primeri = {
+        "a": exc.ConnectTimeout("Caused by ConnectTimeoutError"),
+        "b": exc.ConnectionError("[Errno 111] Connection refused"),
+        "c": exc.ConnectionError("NameResolutionError: Failed to resolve"),
+        "d": exc.ReadTimeout("Read timed out. (read timeout=20)"),
+        "e": 503,
+    }
+    get = _get(primeri)
+    assert [opozorila.preveri_vir(f"https://{k}/", get) for k in "abcde"] == [
+        (False, "ni povezave v 10 s"), (False, "zavrača povezave"),
+        (False, "ime se ne razreši (DNS)"), (False, "povezava je, odgovora ni v 20 s"),
+        (False, "odgovori 503")]
+    assert opozorila.preveri_vir("https://f/", get)[0]
+
+
+def test_vzrok_loci_izpad_vira_od_nasega_interneta():
+    """8. 10. 2026: derp.si ne sprejema povezav, kontrola dela -> izpad pri
+    viru. Brez kontrole bi bil isti izid videti kot izpad pri nas."""
+    exc = opozorila.requests.exceptions.ConnectTimeout("x")
+    besedilo = opozorila.vzrok(_get({"derp.si": exc}), zdaj=T)
+    assert "derp.si, zamude: ni povezave v 10 s" in besedilo
+    assert "izpad je pri njih, ne pri nas." in besedilo
+    besedilo = opozorila.vzrok(_get({"derp.si": exc, "cloudflare": exc}), zdaj=T)
+    assert "nima interneta" in besedilo
+    assert "Vsi viri odgovarjajo" in opozorila.vzrok(_get({}), zdaj=T)
+
+
+def test_vzrok_samo_pri_okvari_zajema():
+    """Preverjanje virov traja do pol minute; pri polnem disku ne pove nič."""
+    klici = []
+
+    def vzrok():
+        klici.append(1)
+        return "Vzrok: test"
+    stanje, _, _, _ = opozorila.korak({}, _ocena("wal"), T, vzrok)
+    _, sp, _, _ = opozorila.korak(stanje, _ocena("wal"), T + ZAMIK_S, vzrok)
+    assert sp and not klici
+    stanje, _, _, _ = opozorila.korak({}, _ocena("avtobus"), T, vzrok)
+    _, sp, _, _ = opozorila.korak(stanje, _ocena("avtobus"), T + ZAMIK_S, vzrok)
+    assert klici == [1] and "Vzrok: test" in sp[1]
+    assert sp[1].index("Vzrok") < sp[1].index("/admin")

@@ -20,10 +20,13 @@ import smtplib
 import ssl
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from email.message import EmailMessage
 from typing import Callable
 from zoneinfo import ZoneInfo
+
+import requests
 
 from . import config, db, zdravje
 
@@ -58,14 +61,90 @@ def _ura(ts: float) -> str:
     return datetime.fromtimestamp(ts, TZ).strftime("%H:%M")
 
 
+# --- vzrok: kdo ne odgovarja ----------------------------------------------
+#
+# 8. 10. 2026 je pošta ob 16:10 rekla „zadnja zamuda iz feeda pred 11 min“,
+# vzrok pa je bilo treba iskati ročno: journal na strežniku, curl na vsak vir,
+# isto še od zunaj. Odgovor je bil v vsakem od teh korakov isti -- strežnik
+# RT derp.si ne sprejema povezav, naš internet dela. To zdaj naredi pošta.
+
+#: Vrstice zdravja, ki pomenijo, da ne pride podatek od zunaj. Disk, WAL in
+#: neznane vožnje so naša stvar; tam preverjanje virov ne pove ničesar.
+ZAJEM = frozenset({"feed", "zeleznica", "avtobus", "zamude_sz"})
+#: Zajem čaka 60 s, a pošta ne sme stati minute na vir: vsi gredo hkrati,
+#: najdlje toliko, kolikor ti dve meji skupaj.
+POVEZAVA_S, ODGOVOR_S = 10, 20
+#: Neodvisen naslov: kadar tudi ta ne odgovori, ni interneta na strežniku.
+KONTROLA = ("internet (cloudflare.com)", "https://www.cloudflare.com/cdn-cgi/trace")
+
+
+def _viri() -> list[tuple[str, str]]:
+    viri = [("derp.si, zamude", config.TRIP_UPDATES_URL),
+            ("derp.si, lege vozil", config.VEHICLE_POSITIONS_URL)]
+    if config.LPP_ENABLED:
+        viri.append(("derp.si, mestni LPP", config.LPP_RT_URL))
+    if config.SZ_ZAMUDE:
+        viri.append(("zemljevid SŽ (modra.ninja)", f"{config.PERONI_URL}/lokacije"))
+    return viri
+
+
+def preveri_vir(url: str, get: Callable = requests.get) -> tuple[bool, str]:
+    """(odgovarja, opis po človeško). Telesa ne bere: dovolj je, da pride
+    glava -- vir, ki obvisi, obvisi že prej."""
+    t = time.monotonic()
+    try:
+        r = get(url, headers={"User-Agent": config.USER_AGENT},
+                timeout=(POVEZAVA_S, ODGOVOR_S), stream=True)
+        r.close()
+    except requests.exceptions.ConnectTimeout:
+        return False, f"ni povezave v {POVEZAVA_S} s"
+    except requests.exceptions.ReadTimeout:
+        return False, f"povezava je, odgovora ni v {ODGOVOR_S} s"
+    except requests.exceptions.ConnectionError as exc:
+        s = str(exc)
+        if "resolve" in s or "NameResolution" in s:
+            return False, "ime se ne razreši (DNS)"
+        if "refused" in s.lower():
+            return False, "zavrača povezave"
+        return False, "povezava pade"
+    except requests.RequestException as exc:
+        return False, f"napaka {type(exc).__name__}"
+    if r.status_code >= 400:
+        return False, f"odgovori {r.status_code}"
+    return True, f"odgovori {r.status_code} v {time.monotonic() - t:.1f} s".replace(".", ",")
+
+
+def vzrok(get: Callable = requests.get, zdaj: float | None = None) -> str:
+    """Odstavek za pošto: kateri vir odgovarja in kaj iz tega sledi."""
+    viri = _viri() + [KONTROLA]
+    with ThreadPoolExecutor(len(viri)) as ex:
+        izidi = list(ex.map(lambda v: preveri_vir(v[1], get), viri))
+    vrstice = [f"• {ime}: {opis}" for (ime, _), (_, opis) in zip(viri, izidi)]
+    padli = [ime for (ime, _), (ok, _) in zip(viri[:-1], izidi) if not ok]
+    if not izidi[-1][0]:
+        sklep = "Strežnik ne pride niti do kontrole -- verjetno nima interneta."
+    elif padli:
+        sklep = ("Internet dela, " + ("vir ne odgovarja" if len(padli) == 1 else
+                 f"{len(padli)} viri ne odgovarjajo") + " -- izpad je pri njih, ne pri nas.")
+    else:
+        sklep = ("Vsi viri odgovarjajo. Če podatkov vseeno ni, so prazni ali pa je "
+                 "napaka pri nas: journalctl -u kajros.service.")
+    ura = _ura(time.time() if zdaj is None else zdaj)
+    return f"Vzrok (preverjeno ob {ura}):\n" + "\n".join(vrstice) + "\n" + sklep
+
+
 def _trajanje(s: float) -> str:
     m = round(s / 60)
     return f"{m} min" if m < 60 else f"{m // 60} h {m % 60} min"
 
 
-def korak(stanje: dict, ocena: dict[str, tuple[str, str]],
-          zdaj: float) -> tuple[dict, tuple[str, str] | None, list[str], list[str]]:
+def korak(stanje: dict, ocena: dict[str, tuple[str, str]], zdaj: float,
+          vzrok: Callable[[], str] | None = None,
+          ) -> tuple[dict, tuple[str, str] | None, list[str], list[str]]:
     """Novo stanje, sporočilo (zadeva, telo) ali None, ključi novih in rešenih.
+
+    `vzrok` se pokliče samo, kadar je med novimi okvarami zajem (`ZAJEM`):
+    preverjanje virov traja do pol minute in pri polnem disku ne pove nič.
 
     Stanje je `{ključ: {od, poslano, razlog, dobro_od}}`. Ključ, ki ga ni v
     sporočilu, ostane, dokler pošta ne uspe -- zato klicatelj stanja ne
@@ -106,6 +185,8 @@ def korak(stanje: dict, ocena: dict[str, tuple[str, str]],
     if se:
         deli.append("Še vedno stoji:\n" + "\n".join(
             f"• {stanje[k]['razlog']} (od {_ura(stanje[k]['od'])})" for k in se))
+    if vzrok is not None and ZAJEM.intersection(nove):
+        deli.append(vzrok())
     deli.append(f"{config.BASE_URL}/admin")
     zadeva = (f"kajros: stoji -- {stanje[nove[0]]['razlog']}" if nove
               else f"kajros: spet dela -- {stanje[resene[0]]['razlog']}")
@@ -145,7 +226,7 @@ def teci(stop: threading.Event, log: Callable[[str], None],
             zdaj = time.time()
             try:
                 ocena = zdravje.ocena(beri_zdravje(), zdravje.stroj(), zdaj)
-                novo, sporocilo, nove, resene = korak(stanje, ocena, zdaj)
+                novo, sporocilo, nove, resene = korak(stanje, ocena, zdaj, vzrok)
                 if sporocilo:
                     poslji(n, *sporocilo)
                     novo = _potrdi(novo, nove, resene, zdaj)
