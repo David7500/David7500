@@ -159,3 +159,12 @@ def test_pred_prvim_branjem_feeda_nic():
     iz_lege.iz_feeda(c, _lege((36720, 14.019)))
     iz_lege.iz_feeda(c, _lege((36740, 14.021)))
     assert _run(c) == []
+
+
+def test_feed_ki_od_zagona_ne_odgovori_je_po_casu_prazen(monkeypatch):
+    """8. 10. 2026: derp.si ob zagonu mrtev. Brez meje bi drugi viri čakali
+    na prvo branje do konca izpada in nobena vožnja ne bi bila „brez feeda“."""
+    zdaj = time.time()
+    monkeypatch.setattr(iz_lege, "_zagon", zdaj)
+    assert not iz_lege.brez_feeda("x", zdaj + 60)
+    assert iz_lege.brez_feeda("x", zdaj + iz_lege.FEED_POZABI_S + 1)

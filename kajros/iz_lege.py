@@ -52,6 +52,9 @@ _zaklep = threading.Lock()
 _v_feedu: dict[str, float] = {}
 #: Kdaj je feed zamud prvič prebran. Pred tem ne vemo, katere vožnje nosi.
 _prvic: float | None = None
+#: Zagon procesa: feed, ki od zagona ni odgovoril, po `FEED_POZABI_S` ne nosi
+#: ničesar (`feed_prebran`).
+_zagon = time.time()
 #: Vir -> vožnje iz zadnje vsebine feeda. Ob 304 je vsebina ista in te
 #: vožnje so še vedno v njem.
 _zadnji_nabor: dict[str, list[str]] = {}
@@ -97,10 +100,18 @@ def brez_feeda(trip_id: str, zdaj: float | None = None) -> bool:
 
 
 def feed_prebran(zdaj: float | None = None) -> bool:
-    """Ali sta od zagona prebrana oba vira, torej `brez_feeda` kaj pomeni."""
+    """Ali sta od zagona prebrana oba vira, torej `brez_feeda` kaj pomeni.
+
+    Feed, ki od zagona sploh ni odgovoril, po `FEED_POZABI_S` velja za
+    prebran in prazen. 8. 10. 2026 je bil derp.si ob ponovnem zagonu mrtev:
+    drugi viri (`zamude_sz`, `zamude_lpp`) bi čakali do konca izpada -- prav
+    takrat, ko so edini.
+    """
     zdaj = time.time() if zdaj is None else zdaj
     with _zaklep:
-        return _prvic is not None and zdaj - _prvic >= 2 * config.POLL_SECONDS
+        if _prvic is None:
+            return zdaj - _zagon > FEED_POZABI_S
+        return zdaj - _prvic >= 2 * config.POLL_SECONDS
 
 
 def v_feedu(zdaj: float | None = None) -> set[str]:
