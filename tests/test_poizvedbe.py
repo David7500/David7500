@@ -2769,3 +2769,22 @@ def test_podari_gre_prek_nase_preusmeritve(monkeypatch):
     with pytest.raises(HTTPException) as e:
         api.donacije_naprej()
     assert e.value.status_code == 404
+
+
+def test_zastarela_lega_iz_predpomnilnika_ne_gre_na_zemljevid(conn, monkeypatch):
+    """Ko vir leg ne odgovarja, `positions_fetched` obstane in predpomnilnik
+    vozil ostane, kakršen je bil ob zadnjem uspehu. 8. 10. 2026 je zemljevid
+    uro po izpadu derp.si kazal 774 avtobusov na legah izpred ure."""
+    import time
+
+    from kajros import api, collector
+    db.set_meta(conn, "positions_fetched", "1")
+    monkeypatch.setattr(api, "_conn", lambda: conn)
+    zdaj = int(time.time())
+    monkeypatch.setitem(api._VEHICLES_CACHE, "key", "1")
+    monkeypatch.setitem(api._VEHICLES_CACHE, "rows", [
+        {"trip_id": "svez", "seen_ts": zdaj - 20},
+        {"trip_id": "star", "seen_ts": zdaj - collector.POSITION_FRESH_S - 60},
+    ])
+    vozila = json.loads(api.api_vehicles().body)
+    assert [v["trip_id"] for v in vozila] == ["svez"]

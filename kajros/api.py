@@ -1929,9 +1929,17 @@ def api_vehicles(trip: str | None = None):
     # `age_s` se racuna ob vsaki strezbi, ne ob predpomnjenju: starost lege je
     # edino, kar se med dvema branjema res spreminja, in prav ona pove, koliko
     # je piki na zaslonu mogoce verjeti.
+    #
+    # Svežino lege preveri še enkrat tu. Ključ predpomnilnika je
+    # `positions_fetched`, ta se premakne le ob uspešnem branju -- ko vir ne
+    # odgovarja, ostanejo vrstice zadnjega uspeha. 8. 10. 2026 je derp.si ob
+    # 16:00 utihnil in zemljevid je še uro pozneje kazal 774 avtobusov tam,
+    # kjer so bili ob 15:59.
     out = []
     for d in _VEHICLES_CACHE["rows"]:
         if trip is not None and d["trip_id"] != trip:
+            continue
+        if now - d["seen_ts"] > collector.POSITION_FRESH_S:
             continue
         d = dict(d)
         d["age_s"] = now - d["seen_ts"]
