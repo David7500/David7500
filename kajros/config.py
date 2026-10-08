@@ -85,6 +85,14 @@ LPP_ZAMUDE = LPP_ENABLED and LPP_ZIVO and okolje("LPP_ZAMUDE", "1") != "0"
 LPP_ZAMUDE_SECONDS = int(okolje("LPP_ZAMUDE_SECONDS", "120"))
 LPP_POSTAJ_KORAK = int(okolje("LPP_POSTAJ_KORAK", "12"))
 
+# **Lege avtobusov IJPP naravnost z NAP** (`nap.py`, SIRI-VM): izvirnik leg,
+# ki jih derp.si le pretvori. Rabi prijavo (`deploy/nap.sh`); brez nje nit
+# čaka in ne dela nič. Na 10 s, kot lege z derp.si (`POSITION_SECONDS`).
+# Izklopi se s `KAJROS_NAP=0`.
+NAP = okolje("NAP", "1") != "0"
+NAP_URL = okolje("NAP_URL", "https://b2b.nap.si/data/b2b.siri.api/ServiceRequest")
+NAP_SECONDS = int(okolje("NAP_SECONDS", "10"))
+
 # **Tir vlaka s table SŽ** (`peroni.py`). potniski.sz.si je za Cloudflarom,
 # `api.modra.ninja` ga strga in streže -- tretja oseba brez lastnika, zato je
 # tir dodatek, ki sme izginiti. Ena tabla je 13-17 s; bere jo ena sama nit.

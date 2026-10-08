@@ -70,7 +70,8 @@ def _ura(ts: float) -> str:
 
 #: Vrstice zdravja, ki pomenijo, da ne pride podatek od zunaj. Disk, WAL in
 #: neznane vožnje so naša stvar; tam preverjanje virov ne pove ničesar.
-ZAJEM = frozenset({"feed", "zeleznica", "avtobus", "derp", "zamude_sz", "zamude_lpp"})
+ZAJEM = frozenset({"feed", "zeleznica", "avtobus", "derp", "zamude_sz", "zamude_lpp",
+                   "nap"})
 #: Zajem čaka 60 s, a pošta ne sme stati minute na vir: vsi gredo hkrati,
 #: najdlje toliko, kolikor ti dve meji skupaj.
 POVEZAVA_S, ODGOVOR_S = 10, 20

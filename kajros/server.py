@@ -15,8 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, opozorila,
-               peroni, pripni, stats, stik, weather, zamude_lpp, zamude_sz)
+from . import (alerts, collector, config, db, deljenje, gtfs, nap, obisk, ocena,
+               opozorila, peroni, pripni, stats, stik, weather, zamude_lpp, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -293,6 +293,17 @@ def _zazeni_zamude_lpp() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=zamude_lpp.teci, args=(_stop, _log), daemon=True,
                            name="kajros-zamude-lpp")
+    nit.start()
+    return nit
+
+
+def _zazeni_nap() -> threading.Thread | None:
+    """Lege IJPP z NAP, v svoji niti: tuj strežnik, ki zna obviseti. Brez
+    prijave nit le čaka nanjo (`nap.prijava`)."""
+    if not config.NAP:
+        return None
+    nit = threading.Thread(target=nap.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-nap")
     nit.start()
     return nit
 
@@ -621,9 +632,10 @@ async def lifespan(app):
         peroni_nit = _zazeni_perone()
         sz_nit = _zazeni_zamude_sz()
         lpp_nit = _zazeni_zamude_lpp()
+        nap_nit = _zazeni_nap()
         _zazeni_opozorila()
     else:
-        peroni_nit = sz_nit = lpp_nit = None
+        peroni_nit = sz_nit = lpp_nit = nap_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -637,5 +649,7 @@ async def lifespan(app):
             sz_nit.join(timeout=5)
         if lpp_nit:
             lpp_nit.join(timeout=5)
+        if nap_nit:
+            nap_nit.join(timeout=5)
         if obisk_nit:
             obisk_nit.join(timeout=5)

@@ -231,8 +231,10 @@ def iz_feeda(conn: sqlite3.Connection, feed) -> int:
 def pospravi(zdaj: float | None = None) -> None:
     """Pozabi sledi voženj brez lege in vožnje, ki jih feed ne nosi več."""
     zdaj = time.time() if zdaj is None else zdaj
-    for k in [k for k, s in _sled.items() if zdaj - s[3] > SLED_POZABI_S]:
-        del _sled[k]
+    # `list()` najprej: sledi piše tudi nit NAP (`nap.zapisi`), in slovar, ki
+    # se med obhodom spremeni, vrže napako. `list(d.items())` je en klic v C.
+    for k in [k for k, s in list(_sled.items()) if zdaj - s[3] > SLED_POZABI_S]:
+        _sled.pop(k, None)
     with _zaklep:
         for t in [t for t, kdaj in _v_feedu.items() if zdaj - kdaj > SLED_POZABI_S]:
             del _v_feedu[t]

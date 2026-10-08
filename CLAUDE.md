@@ -36,6 +36,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
 | Zamude vlakov, drugi vir | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
 | Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
+| Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
 | Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
 
@@ -81,6 +82,7 @@ kajros/
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
   zamude_lpp.py  zamude mestnega LPP z LPP-jevih zaslonov, svoja nit; vozilo -> vožnja prek derp.si
+  nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; piše le, česar derp.si nima
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
   stik.py        sporočila obiskovalcev; piše iz zahteve

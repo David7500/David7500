@@ -258,6 +258,19 @@ Dve spremembi, ki ju je izpad pokazal tudi drugod:
 * **Feed, ki od zagona ni odgovoril, je po 5 min prazen** (`iz_lege.feed_prebran`). Prej je drugi vir čakal na prvo branje derp.si — po ponovnem zagonu med izpadom do konca izpada.
 * **Zadnji zapis v `run` ne pove več, ali derp.si dela**, ker ga ob izpadu pišeta tudi drugi viri. `/api/health` ima `derp_prebran` (zadnji uspešen `rt_fetched` in `lpp_rt_fetched`), pregled vrstico „derp.si · odgovoril“, rdeča po 5 min ob vsaj treh avtobusih na poti.
 
+## Lege IJPP naravnost z NAP (`nap.py`, od 8. 10. 2026)
+
+Lege medkrajevnih avtobusov na derp.si so NAP-ov SIRI-VM, le pretvorjen (`derp-si/ijpp-rt`, `ijppService.js`: POST na 5 s, basic avtentikacija). Ob izpadu derp.si 8. 10. so vozila lego pošiljala naprej, zemljevid pa je bil prazen. `nap.py` bere isti izvirnik sam.
+
+* **Dostop**: račun na nap.si (`kekec3201@proton.me`) in odobritev vsebine „SIRI dinamični podatki - API“ — zaprošeno 8. 10. 2026 (namen raziskovalni, 3 leta). Do odobritve NAP vrača **401** (preverjeno brez prijave in z napačno: `WWW-Authenticate: Basic`), nit takrat čaka 10 min, `/admin` rumeno. TLS se preveri normalno (derp.si ga izklaplja, mi ne rabimo).
+* **Prijava** v `${KAJROS_DATA_DIR}/.nap-prijava` (`e-naslov:geslo`, 640, skupina `kajros`), postavi jo `deploy/nap.sh` — geslo vpiše David, v ukazno vrstico ne gre. Bere se ob vsakem obhodu: restart ni potreben.
+* **Id vožnje** = zadnji štirje bajti GUID-a v `VehicleJourneyRef` (`SI:SI0:ServiceJourney:<GUID>:IJPP`), kot `realisToIjpp` pri derp.si; ujema se s `trip_id` IJPP. Obratovalni dan: `collector.resolve_service_date` (SIRI `start_date` nima). Prevod starih id-jev prek `zamenjava` kot pri derp.si.
+* **Čas naprej za uro** (±3 min) se popravi — derp.si to dela, ker naprave pošiljajo lokalni čas z napačnim zamikom. Koliko jih je pri nas, šteje `meta.nap.popravljenih`.
+* **Vožnja, ki se začne čez več kot 30 min, gre ven** (derp.si enako), da je primerjava primerljiva. Vlaki (`mode = 'rail'`) se samo štejejo (`vlakov`): ali jih NAP nosi, se še ne ve.
+* **Kam piše, dokler ujemanje ni izmerjeno**: `vehicle_now` in zamuda iz lege (`iz_lege.opazuj`) samo za vozila, ki jih derp.si na zadnjem branju leg (≤ 60 s, `collector.lege_derp`) nima. Kadar derp.si dela, je to ostanek; ko molči, vse. Ob uspešnem branju premakne `positions_fetched`, sicer `/api/vehicles` NAP-ovih leg ne bi videl.
+* **Primerjava**, kadar imata vozilo oba (`nap.primerjaj`, `/admin` „NAP · ujemanje z derp.si“): ista vožnja, odmik lege ob istem `ts` (mora biti 0 m), za koliko je NAP novejši, samo NAP / samo derp. derp.si bere isti vir, zato razhajanje pomeni napako pretvorbe na eni strani.
+* **Odprto, ko bo dostop**: velikost odgovora (`bajtov`, na 10 s), delež pripetih, ali NAP nosi vlake. Šele po meritvi odločiti, ali NAP postane prvi vir leg.
+
 ## Napaka pisanja: najprej `conn.rollback()`
 
 Vsaka nit ima svojo povezavo in vsak `except` okoli pisanja najprej razveljavi. Python ob napaki transakcije ne zapre; prvo branje v njej zamrzne posnetek, nato vsako pisanje vrne „database is locked“ (SQLITE_BUSY_SNAPSHOT) — za vedno, čakanje ne pomaga. 1. 10. 2026 je nočno vzdrževanje ob 3:30 drlo pisanje dlje od 30 s: nit zemljevida SŽ stala 4,3 h, WAL zrasel na 5,4 GB (za odprtim posnetkom ga ni mogoče prepisati), disk na 8 %. Od takrat `journal_size_limit` 64 MB v `db.connect()`, da se WAL po ponastavitvi skrči. Preizkus: `test_nit_po_zaklenjeni_bazi_ne_obstane`.

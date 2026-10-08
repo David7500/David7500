@@ -1410,6 +1410,9 @@ def api_health():
         # Isto za mestni LPP (`zamude_lpp`), z LPP-jevih zaslonov.
         zl = db.get_meta(conn, "zamude_lpp") if config.LPP_ZAMUDE else None
         out["zamude_lpp"] = json.loads(zl) if zl else None
+        # Lege IJPP z NAP (`nap.py`) in njihovo ujemanje z derp.si.
+        nm = db.get_meta(conn, "nap") if config.NAP else None
+        out["nap"] = json.loads(nm) if nm else None
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out

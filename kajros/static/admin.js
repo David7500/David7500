@@ -481,6 +481,18 @@ function vrsticeZdravja(d) {
   const [vrEn, vrDr, vrDv, vrBr] = (zl && zl.po_voznem_redu) || [0, 0, 0, 0];
   const vrVr = !(vrEn + vrDr + vrDv + vrBr) ? "—"
     : `zadel ${st(vrEn)} · zgrešil ${st(vrDr)} · dvoumno ${st(vrDv)} · brez ${st(vrBr)}`;
+  // Lege IJPP z NAP (`nap.py`) in kako se ujemajo z derp.si, ki bere isti vir.
+  const nm = z.nap;
+  const nmVr = !nm ? "—" : nm.http && zdaj - (nm.napaka_ts || 0) <= 900
+    ? `NAP zavrnil prijavo (HTTP ${nm.http}): dostop še ni odobren ali napačno geslo`
+    : !nm.ts || zdaj - nm.ts > 120
+      ? `NAP ne odgovarja ${pred(nm.napaka_ts || nm.ts)}${nm.napaka ? `: ${nm.napaka}` : ""}`
+      : `${st(nm.vozil)} vozil · pripetih ${st(nm.pripetih)} · brez voznega reda ${st(nm.brez_voznje)}`
+        + ` · zapisanih ${st(nm.zapisanih)}` + (nm.vlakov ? ` · vlakov ${st(nm.vlakov)}` : "");
+  const nmPr = !nm || !nm.derp || !nm.skupnih ? "—"
+    : `skupnih ${st(nm.skupnih)} · ista vožnja ${st(100 * nm.ista_voznja / nm.skupnih)} %`
+      + (nm.isti_cas ? ` · odmik ob istem času ${st(nm.odmik_m, 1)} m` : "")
+      + ` · NAP novejši za ${st(nm.prednost_s)} s · samo NAP ${st(nm.samo_nap)} · samo derp ${st(nm.samo_derp)}`;
   return [
     ["zadnja zamuda iz feeda", pred(z.last_feed_ts), r.feed || ""],
     ["derp.si · odgovoril", dp.length
@@ -502,6 +514,8 @@ function vrsticeZdravja(d) {
     ["LPP · vira zamud", zlVr, r.zamude_lpp || ""],
     ["LPP · ujemanje · 24 h", plrVr, ""],
     ["LPP · samo po voznem redu", vrVr, ""],
+    ["NAP · lege IJPP", nmVr, r.nap || ""],
+    ["NAP · ujemanje z derp.si", nmPr, ""],
     ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
     ["aktivnih obvestil", st(z.alerts_active), ""],
     ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, r.disk || ""],

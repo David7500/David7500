@@ -863,12 +863,41 @@ def ingest_positions(conn: sqlite3.Connection, feed,
     return {"vehicles": written}
 
 
+#: Zadnje lege IJPP z derp.si po vozilu, za `nap.py`: (kdaj potrjene,
+#: {vozilo: (trip_id iz feeda, ts, lat, lon)}). Nit NAP iz tega ve, katera
+#: vozila derp.si ta hip nosi -- tista pušča njemu -- in ju primerja.
+_LEGE_DERP: tuple[float, dict] = (0.0, {})
+
+
+def lege_derp(zdaj: float | None = None, svezina_s: float = 60) -> dict | None:
+    """Vozila z zadnjega branja leg derp.si ali None, če je to starejše od
+    `svezina_s` (derp.si ne odgovarja)."""
+    zdaj = time.time() if zdaj is None else zdaj
+    kdaj, lege = _LEGE_DERP
+    return lege if zdaj - kdaj <= svezina_s else None
+
+
+def _zapomni_lege_derp(feed) -> None:
+    global _LEGE_DERP
+    if feed is None:                # 304: iste lege, potrjene zdaj
+        _LEGE_DERP = (time.time(), _LEGE_DERP[1])
+        return
+    lege = {}
+    for e in feed.entity:
+        v = e.vehicle
+        if v.HasField("position") and v.vehicle.id:
+            lege[v.vehicle.id] = (v.trip.trip_id, v.timestamp,
+                                  v.position.latitude, v.position.longitude)
+    _LEGE_DERP = (time.time(), lege)
+
+
 def poll_positions(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.VEHICLE_POSITIONS_URL, conn, "positions_etag")
     # Cas branja zapisemo tudi ob 304: pomeni "ob tem casu smo lege potrdili".
     # Iz njega prikaz ve, kdaj ima smisel vprasati znova -- brez tega brskalnik
     # ugiba in polovico svojega ritma zapravi za cakanje na podatek, ki ze je.
     db.set_meta(conn, "positions_fetched", str(int(time.time())))
+    _zapomni_lege_derp(feed)
     if feed is None:
         conn.commit()
         return {"vehicles": 0, "unchanged": True}

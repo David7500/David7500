@@ -34,6 +34,10 @@ DERP_MOLCI_S = 300
 #: (8. 10. 2026: 75 postajališč 36 s). Četrt ure brez zapisa je obstala nit.
 LPP_STOJI_S = 900
 
+#: Nit NAP bere na 10 s, ob zavrnjeni prijavi na 10 min (`nap.NI_DOSTOPA_CAKAJ_S`):
+#: v tem času mora zapisati vsaj napako, sicer stoji.
+NAP_STOJI_S = 900
+
 
 def stroj() -> dict:
     """Disk in WAL -- tisto, česar baza sama o sebi ne ve."""
@@ -167,6 +171,22 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
                 else (SLABA, f"nit LPP-jevih zaslonov ne piše od pred {_min(zdaj - (zl.get('ts') or 0))}"))
         else:
             out["zamude_lpp"] = (DOBRA, "") if zl.get("oba") or zl.get("samo_lpp") else ("", "")
+
+    # Lege IJPP z NAP (`nap.py`). Zavrnjena prijava je rumena: dostop čaka
+    # na odobritev ali novo geslo, pošta tu ne pomaga. Rdeče, kadar stoji nit.
+    nm = z.get("nap")
+    if nm:
+        if nm.get("http") and zdaj - (nm.get("napaka_ts") or 0) <= NAP_STOJI_S:
+            out["nap"] = (MLACNA, "")
+        elif vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ:
+            out["nap"] = ("", "")
+        elif zdaj - (nm.get("ts") or 0) > NAP_STOJI_S:
+            napaka = nm.get("napaka_ts") or 0
+            out["nap"] = (
+                (MLACNA, "") if zdaj - napaka <= NAP_STOJI_S
+                else (SLABA, f"nit NAP ne piše od pred {_min(zdaj - (nm.get('ts') or 0))}"))
+        else:
+            out["nap"] = (DOBRA, "")
 
     if m.get("disk_vseh"):
         delez = m["disk_prostih"] / m["disk_vseh"]
