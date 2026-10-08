@@ -27,6 +27,13 @@ SZ_STOJI_S = 300
 #: Toliko voženj po voznem redu mora teči, da je molk feeda okvara.
 MIN_VOZENJ = 3
 
+#: derp.si se bere na 30 s; pet minut brez odgovora je deset zgrešenih branj.
+DERP_MOLCI_S = 300
+
+#: Nit LPP-jevih zaslonov obhod začne vsaki 2 min, obhod sam traja do ~1 min
+#: (8. 10. 2026: 75 postajališč 36 s). Četrt ure brez zapisa je obstala nit.
+LPP_STOJI_S = 900
+
 
 def stroj() -> dict:
     """Disk in WAL -- tisto, česar baza sama o sebi ne ve."""
@@ -137,6 +144,29 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
             out["zamude_sz"] = (MLACNA, "")
         else:
             out["zamude_sz"] = (DOBRA, "") if zs.get("oba") else ("", "")
+
+    # derp.si po viru. 8. 10. 2026 je od 16:00 zavračal povezave; vrstici
+    # zgoraj sta ostali zeleni, kolikor sta `zamude_lpp` in `zamude_sz` pisala
+    # v `run` -- zato posebej, kdaj je derp.si sam nazadnje odgovoril.
+    dp = z.get("derp_prebran")
+    if dp is not None and not (vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ):
+        stari = [f"{vir.upper()} pred {_min(zdaj - ts)}" for vir, ts in sorted(dp.items())
+                 if zdaj - ts > DERP_MOLCI_S]
+        out["derp"] = (SLABA, "derp.si ne odgovarja: " + ", ".join(stari)) if stari else (DOBRA, "")
+
+    # Mestni LPP z LPP-jevih zaslonov (`zamude_lpp`), kot zemljevid SŽ zgoraj:
+    # rdeče, kadar stoji nit, rumeno, kadar ne odgovarja vir.
+    zl = z.get("zamude_lpp")
+    if zl:
+        if vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ:
+            out["zamude_lpp"] = ("", "")
+        elif zdaj - (zl.get("ts") or 0) > LPP_STOJI_S:
+            napaka = zl.get("napaka_ts") or 0
+            out["zamude_lpp"] = (
+                (MLACNA, "") if zdaj - napaka <= LPP_STOJI_S
+                else (SLABA, f"nit LPP-jevih zaslonov ne piše od pred {_min(zdaj - (zl.get('ts') or 0))}"))
+        else:
+            out["zamude_lpp"] = (DOBRA, "") if zl.get("oba") or zl.get("samo_lpp") else ("", "")
 
     if m.get("disk_vseh"):
         delez = m["disk_prostih"] / m["disk_vseh"]

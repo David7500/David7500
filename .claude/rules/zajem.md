@@ -240,6 +240,24 @@ Izmerjeno 28. 9. 2026, 08:59–09:08, 17 branj po 30 s:
 
 **Kam gre:** vsaka pripeta vrednost v `sz_zamuda` (zadnje stanje na postanek). V `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`, ista meja kot zamuda iz lege) — tedaj `v_run = 1`. Kadar nosita oba, `run` ostane derp.si-jev in `kajros primerjava` / pregled („ujemanje virov · 24 h“) pokažeta razhajanja. **Kdo ima prav, še ni odločeno**: primerjav do objave ni bilo, ker derp.si vlakov ni imel. Nit čaka, da zajem derp.si prebere feed (`iz_lege.feed_prebran`), sicer bi bil ob zagonu vsak vlak „samo SŽ“.
 
+## Zamude mestnega LPP z LPP-jevih zaslonov (`zamude_lpp.py`, od 8. 10. 2026)
+
+Drugi vir poleg derp.si, po zgledu `zamude_sz`. Tistega dne je strežnik RT derp.si od 16:00 zavračal povezave (od zunaj `ECONNREFUSED`, ob 17:16 in 18:08 po en uspešen obhod); `data.lpp.si` je odgovarjal. Izmerjeno istega dne:
+
+* **`station/arrival` je poceni, `route/arrivals-on-route` ne.** Prvi 40–100 ms (gzip 1–4 kB), drugi 6–19 s ob zgrešenem predpomnilniku (mediana 7,4 s na 206 vzorcih, prehod vseh s štirimi delavci 410 s) — LPP ga očitno sestavi iz prvega za vsako postajališče. Zato beremo postajališča, ne vzorcev.
+* **Ne vseh**: 658 postajališč na 74 vzorcih. `izberi()` požrešno izbere tista, med katerimi ima vsako zaporedje postajališč (172 na 74 vzorcih — vožnje istega vzorca se razlikujejo) največ `LPP_POSTAJ_KORAK − 1` (privzeto 11) neizbranih zapored: na razvojnem voznem redu 76 (pri koraku 8 jih je 132). Obhod 75 postajališč z dvema delavcema **36 s**; ena za drugo jih je 177 trajalo 267 s (rep do 10 s na zahtevo). Na 2 min.
+* **Vrsta prihoda**: 0 napoved, 1 po voznem redu, 2 prihaja, 3 obvoz. Vrsta 1 je vozni red, ne meritev: pri 470 od 539 prihodov je bila najbližja vožnja našega voznega reda v 60 s (mediana 43 s — eta je cela minuta). Piše se samo 0 in 2.
+* **Vožnje vir ne pove**, le vzorec, vozilo in eto. Vozilo → vožnja prek `vehicle_now` (derp.si), velja, dokler ga ta hrani (uro), z istim vzorcem in **le, če je LPP-jeva zamuda v 10 min od zadnje derp-ove zamude te vožnje** (`SKLADNO_S`). Brez tega pogoja so bila vozila z legami izpred 14 min že na naslednji vožnji istega vzorca: mediana zamude 22 namesto 4,5 min. Lega mestnega LPP nima `service_date`, `trip_id` je za vsak dan svoj.
+* **Po voznem redu samem ne pripenjamo**: od 758 živih prihodov jih je imelo 398 dve ali več kandidatk z zamudo od −3 do +20 min, edina kandidatka pa je derp-ovo vožnjo zadela le 67-krat od 98 — zgreši pri velikih zamudah (linija 11 +45 → izbere vožnjo s +3). Sproti šteje `meta.zamude_lpp.po_voznem_redu` [zadel, zgrešil, dvoumno, brez], `/admin` („LPP · samo po voznem redu“). Posledica: po uri izpada derp.si (`vehicle_now` pozabi lege) vir v `run` ne piše več; tabla pa LPP-jeve prihode kaže še naprej (`strezba.md`).
+* 13 % živih prihodov (72 od 536) je na vzorcih ali postajališčih, ki jih vozni red nima — LPP vozi mimo objavljenega voznega reda (zgoraj).
+* **Kam gre**: vsaka vrednost v `lpp_zamuda` (zadnje stanje na postanek); v `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`), z odhodno zamudo (na zadnjem postanku prihodno). Vrednost je napoved prihoda, kot pri derp.si, ki pri mestnem LPP pošilja samo postanke pred vozilom. `kajros primerjava --lpp` in `/admin` („LPP · ujemanje · 24 h“).
+* **Samo na strežniku**, ne v `kajros collect`: obremenitve na malini nismo merili.
+
+Dve spremembi, ki ju je izpad pokazal tudi drugod:
+
+* **Feed, ki od zagona ni odgovoril, je po 5 min prazen** (`iz_lege.feed_prebran`). Prej je drugi vir čakal na prvo branje derp.si — po ponovnem zagonu med izpadom do konca izpada.
+* **Zadnji zapis v `run` ne pove več, ali derp.si dela**, ker ga ob izpadu pišeta tudi drugi viri. `/api/health` ima `derp_prebran` (zadnji uspešen `rt_fetched` in `lpp_rt_fetched`), pregled vrstico „derp.si · odgovoril“, rdeča po 5 min ob vsaj treh avtobusih na poti.
+
 ## Napaka pisanja: najprej `conn.rollback()`
 
 Vsaka nit ima svojo povezavo in vsak `except` okoli pisanja najprej razveljavi. Python ob napaki transakcije ne zapre; prvo branje v njej zamrzne posnetek, nato vsako pisanje vrne „database is locked“ (SQLITE_BUSY_SNAPSHOT) — za vedno, čakanje ne pomaga. 1. 10. 2026 je nočno vzdrževanje ob 3:30 drlo pisanje dlje od 30 s: nit zemljevida SŽ stala 4,3 h, WAL zrasel na 5,4 GB (za odprtim posnetkom ga ni mogoče prepisati), disk na 8 %. Od takrat `journal_size_limit` 64 MB v `db.connect()`, da se WAL po ponastavitvi skrči. Preizkus: `test_nit_po_zaklenjeni_bazi_ne_obstane`.

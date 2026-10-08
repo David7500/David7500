@@ -35,6 +35,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
 | Zamude vlakov, drugi vir | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
+| Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
 | Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
 
@@ -79,6 +80,7 @@ kajros/
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
+  zamude_lpp.py  zamude mestnega LPP z LPP-jevih zaslonov, svoja nit; vozilo -> vožnja prek derp.si
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
   stik.py        sporočila obiskovalcev; piše iz zahteve
@@ -99,7 +101,7 @@ o-nas/           vir 3D strani /o-nas (three.js); gradi.sh → static/o-nas/o3.j
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` (zamude z zemljevida SŽ, za primerjavo z derp.si) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
 
 ## Omrežji: `network` ni `mode`
 

@@ -105,7 +105,7 @@ Odjemalec, ki bere `delay_s` in sklepa sam = **star način**. V `common.js` `del
 
 ## Živi prihodi mestnega LPP (`lpp.py`)
 
-Drug vir za **isti** promet: `data.lpp.si` se spremeni na 10–30 s, derp.si na ~90 s. Uporablja se **samo za prikaz** in samo za postanke **za mejo meritve** — v bazo nič, sicer bi `backtest` in `ocena` merila dve merili hkrati, ne da bi vedela.
+Drug vir za **isti** promet: `data.lpp.si` se spremeni na 10–30 s, derp.si na ~90 s. Tu se uporablja **samo za prikaz** in samo za postanke **za mejo meritve** — iz te poti v bazo nič, sicer bi `backtest` in `ocena` merila dve merili hkrati, ne da bi vedela. V bazo ga piše `zamude_lpp` (od 8. 10. 2026), v svojo tabelo in v `run` le, kadar derp.si vožnje ne nosi (`zajem.md`).
 
 Štiri stvari, brez katerih spoj tiho laže; vse izmerjene:
 
@@ -117,6 +117,8 @@ Drug vir za **isti** promet: `data.lpp.si` se spremeni na 10–30 s, derp.si na 
 Ob 22:15 od 25 svežih mestnih vozil **19 z uporabno napovedjo naprej**, meje so se ujemale (meja 9 → eta 10–27, meja 16 → eta 17–21) — najmočnejši dokaz pravega spoja: dva vira neodvisno povesta isto lego vozila.
 
 **Linija mimo voznega reda (`lpp.na_tablo`, od 2. 10. 2026).** Kadar zajem pri liniji LPP vidi vsaj 3 in vsaj 20 % voženj, ki jih vozni red nima (`zajem.md`), današnja tabla „zdaj“ za to linijo pokaže LPP-jev `station/arrival` namesto voznega reda — do zadnjega LPP-jevega prihoda, dlje ostane vozni red. Vrstica nima `trip_id` (vožnje v voznem redu ni, povezava bi odprla napačno), nima zamude, nosi `lpp_vrsta` (`type` po dokumentaciji LPP: napoved / po načrtu / prihaja / obvoz); odgovor nosi `mimo_voznega_reda`. Ob kakršni koli napaki vira ostane vozni red. Postajališče → LPP-jeva koda po koordinati (25 m), seznam postajališč predpomnjen dan, prihodi 15 s. Zemljevid dobi vozila teh voženj brez `trip_id`, z `vehicle_id` kot ključem.
+
+**Kadar derp.si mestnega LPP 5 min ne da** (`lpp.derp_molci`, po `meta.lpp_rt_fetched`), tabla „zdaj“ vse linije LPP vzame z zaslona, ne le tistih mimo voznega reda (8. 10. 2026: derp.si od 16:00 mrtev, Bavarski dvor sicer vozni red brez ene zamude). Odgovor nosi `lpp_izpad`, stran napiše „Zamud mestnih avtobusov LPP ta hip ne dobivamo. Prihode kažemo, kot jih napove LPP.“
 
 Izklop: `KAJROS_LPP_ZIVO=0`.
 
@@ -214,4 +216,5 @@ Nastala 28. 9. 2026: DUJPP je objavil vozni red brez vlakov in s pomešanimi tra
 * **Zaprto si zapomni brskalnik** (`kajros:obvestila-skrita`, zadnjih 50 številk), ne piškotek: `/zasebnost` obljublja „piškotkov ni“.
 * Predpomnjeno na `obvestila.razlicica` (premakne jo vsak zapis, objava je na strani takoj), rok se preveri še ob strežbi. `/api/obvestila` 3–5 ms.
 * **Eno nastane samo** (`obvestila.samodejna`, od 7. 10. 2026): po voznem redu vozijo vsaj 3 vlaki, zadnji podatek o katerem koli pa je starejši od 20 min → „Od 01:24 ne dobivamo podatkov o vlakih …“ na straneh vlakov in `vse`. Tisto jutro sta oba vira vlakov utihnila ob 1:40, zemljevid je bil brez vlakov, pika zelena, `/admin` rdeč — a skrbnik ob petih ne bdi. Pravilo preverjeno na arwenu za mesec: tri epizode, vse prave (28. 9., 3. 10. 85 min, 7. 10.), najdaljša zdrava vrzel 15,6 min. `id` = čas zadnjega podatka: zaprto ostane zaprto do nove okvare. Ni v bazi in ni v seznamu pregleda; računa se na minuto v ozadju (~85 ms na arwenu).
-  **Od 8. 10. 2026 isto za avtobuse** (`obvestila.brez_podatkov(omrezje, …)`): izpad derp.si od 16:00, avtobusne strani brez besede. Isti meji (3 vožnje, 20 min), preverjeno na `obs` za 24. 9.–8. 10.: najdaljši zdrav molk ob ≥ 3 avtobusih 7,2 min, ena epizoda (prava). Avtobusni `id` ima odmik 10¹⁰ — omrežji utihneta ob istem branju z istim časom, sicer bi potnik z enim zaprl obe. Zadnji avtobusni podatek se bere nazaj po `run_feed_ts` (pod 10 ms), vlakovni ne: ista poizvedba za vlake 1,8 s, ker ob izpadu vlakov preleti vse avtobuse.
+  **Od 8. 10. 2026 isto za avtobuse** (`obvestila.brez_podatkov(vrsta, …)`): izpad derp.si od 16:00, avtobusne strani brez besede. Isti meji (3 vožnje, 20 min), preverjeno na `obs` za 24. 9.–8. 10.: najdaljši zdrav molk ob ≥ 3 avtobusih 7,2 min, ena epizoda (prava). Avtobusni `id` ima odmik 10¹⁰ — omrežji utihneta ob istem branju z istim časom, sicer bi potnik z enim zaprl obe. Zadnji avtobusni podatek se bere nazaj po `run_feed_ts` (pod 10 ms), vlakovni ne: ista poizvedba za vlake 1,8 s, ker ob izpadu vlakov preleti vse avtobuse.
+  **Avtobusi v dveh skupinah** (`stats.vozi_zdaj(lpp_posebej=True)`): medkrajevni in mestni LPP. Mestni ima drugi vir (`zamude_lpp`, tabla z LPP-jevih zaslonov), zato ob izpadu derp.si molčijo samo medkrajevni — „… o medkrajevnih avtobusih“. Mestni LPP „molči“ šele, kadar molči tudi nit LPP-jevih zaslonov (15 min brez obhoda); kadar oba, eno obvestilo „o avtobusih“. Brez delitve bi zapisi `zamude_lpp` v `run` prvo uro izpada skrili obvestilo za Arrivo in Nomago.

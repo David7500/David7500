@@ -53,7 +53,7 @@ def polnoc(service_date: str) -> int:
 
 
 def vozi_zdaj(conn: sqlite3.Connection, zdaj: float | None = None,
-              vsaj_s: int = 900) -> dict[str, int]:
+              vsaj_s: int = 900, lpp_posebej: bool = False) -> dict[str, int]:
     """Koliko voženj po omrežjih se po voznem redu zdaj vozi vsaj `vsaj_s`.
 
     Nadzor ("feed stoji") brez tega ponoči zvoni kot okvara, čeprav vlaki in
@@ -61,18 +61,22 @@ def vozi_zdaj(conn: sqlite3.Connection, zdaj: float | None = None,
     zjutraj -- feed prve vožnje ne nosi od njenega odhoda, zato mu damo
     četrt ure, preden je molk njegova krivda. Gledamo včerajšnji in današnji
     prometni dan, ker nočni vlaki segajo čez polnoč (`end_s` > 86400).
+
+    `lpp_posebej`: mestni LPP pod ključem `lpp`, ne med avtobusi -- ima svoj
+    drugi vir (`zamude_lpp`) in molči drugače kot medkrajevni.
     """
     zdaj = time.time() if zdaj is None else zdaj
     danes = datetime.fromtimestamp(zdaj, TZ).date()
-    out = {"zeleznica": 0, "avtobus": 0}
+    out = {"zeleznica": 0, "avtobus": 0, **({"lpp": 0} if lpp_posebej else {})}
     for o in (-1, 0):
         dan = (danes + timedelta(days=o)).isoformat()
         t = zdaj - polnoc(dan)
         for r in conn.execute(
-            "SELECT t.network, COUNT(*) FROM trip t "
+            "SELECT CASE WHEN ? AND t.agency = 'lpp' THEN 'lpp' ELSE t.network END, "
+            "       COUNT(*) FROM trip t "
             "JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
-            "WHERE t.start_s <= ? AND t.end_s >= ? GROUP BY t.network",
-            (dan, t - vsaj_s, t)):
+            "WHERE t.start_s <= ? AND t.end_s >= ? GROUP BY 1",
+            (lpp_posebej, dan, t - vsaj_s, t)):
             out[r[0]] = out.get(r[0], 0) + r[1]
     return out
 

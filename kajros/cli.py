@@ -11,7 +11,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
-               naslovi, ocena, pot, pripni, stats, tiri, weather, zamude_sz)
+               naslovi, ocena, pot, pripni, stats, tiri, weather, zamude_lpp,
+               zamude_sz)
 
 
 def cmd_init(args):
@@ -296,11 +297,12 @@ def cmd_zamenjave(args):
 
 
 def cmd_primerjava(args):
-    """Kako se zamude vlakov z zemljevida SŽ ujemajo z derp.si."""
+    """Kako se drugi vir zamud ujema z derp.si: zemljevid SŽ ali zasloni LPP."""
     conn = db.connect()
     db.init(conn)
     od = int(time.time()) - args.dni * 86400
-    print(json.dumps(zamude_sz.primerjava(conn, od, najvec=args.najvec),
+    vir = zamude_lpp if args.lpp else zamude_sz
+    print(json.dumps(vir.primerjava(conn, od, najvec=args.najvec),
                      indent=2, ensure_ascii=False))
 
 
@@ -530,7 +532,9 @@ def main(argv=None):
     a.set_defaults(func=cmd_zamenjave)
 
     a = sub.add_parser("primerjava",
-                       help="zamude vlakov: zemljevid SZ proti derp.si, z najvecjimi razhajanji")
+                       help="drugi vir zamud proti derp.si, z najvecjimi razhajanji")
+    a.add_argument("--lpp", action="store_true",
+                   help="mestni LPP z LPP-jevih zaslonov namesto zemljevida SZ")
     a.add_argument("--dni", type=int, default=1)
     a.add_argument("--najvec", type=int, default=20, help="koliko najvecjih razhajanj izpisati")
     a.set_defaults(func=cmd_primerjava)

@@ -5,6 +5,7 @@ samodejno obvestilo, kadar vlaki vozijo brez podatkov.
 """
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timezone
 
@@ -126,7 +127,7 @@ def test_vlaki_brez_podatkov_povedo_od_kdaj():
 def test_vlaki_brez_podatkov_ne_zvoni_brez_razloga():
     """Ponoči molk ni okvara; vrzel do 20 min tudi ne (zdrava je bila do 15,6)."""
     zadnji = ZDAJ - obvestila.MOLCI_S
-    assert obvestila.brez_podatkov("zeleznica", obvestila.VSAJ["zeleznica"] - 1, zadnji, ZDAJ) is None
+    assert obvestila.brez_podatkov("zeleznica", obvestila.VSAJ - 1, zadnji, ZDAJ) is None
     assert obvestila.brez_podatkov("zeleznica", 40, zadnji + 1, ZDAJ) is None
     assert obvestila.brez_podatkov("zeleznica", 40, zadnji, ZDAJ) is not None
 
@@ -144,7 +145,7 @@ def test_samodejno_obvestilo_na_straneh_vlakov(conn, monkeypatch):
     dan = datetime.fromtimestamp(zdaj, obvestila.TZ).date().isoformat()
     _voznja(conn, "v0")
     monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
-                        lambda c, t: {"zeleznica": 3, "avtobus": 0})
+                        lambda c, t, **_: {"zeleznica": 3, "avtobus": 0, "lpp": 0})
     conn.execute("INSERT INTO run VALUES('v0', ?, 1, 0, 0, ?)", (dan, zdaj - 1800))
     (o,) = obvestila.samodejna(conn, zdaj)
     assert o["id"] == zdaj - 1800
@@ -169,7 +170,7 @@ def test_samodejno_obvestilo_na_straneh_vlakov(conn, monkeypatch):
 
 def test_avtobusi_brez_podatkov_imajo_svoje_obvestilo(conn, monkeypatch):
     """8. 10. 2026: derp.si od 16:00 ne odgovarja, vlaki pa so tiho že od
-    prejšnjega dne. Dve obvestili, vsako na svojih straneh, z različnim id --
+    prejšnjega dne. Vsako obvestilo na svojih straneh, z različnim id --
     zaprto vlakovno ne sme zapreti avtobusnega."""
     zdaj = int(time.time())
     dan = datetime.fromtimestamp(zdaj, obvestila.TZ).date().isoformat()
@@ -177,21 +178,46 @@ def test_avtobusi_brez_podatkov_imajo_svoje_obvestilo(conn, monkeypatch):
     _voznja(conn, "b0", network="avtobus")
     conn.execute("INSERT INTO run VALUES('v0', ?, 1, 0, 0, ?)", (dan, zdaj - 1800))
     conn.execute("INSERT INTO run VALUES('b0', ?, 1, 0, 0, ?)", (dan, zdaj - 1800))
-    vsaj = obvestila.VSAJ["avtobus"]
+    vsaj = obvestila.VSAJ
     monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
-                        lambda c, t: {"zeleznica": 3, "avtobus": vsaj})
+                        lambda c, t, **_: {"zeleznica": 3, "avtobus": vsaj, "lpp": 0})
     vlak, bus = obvestila.samodejna(conn, zdaj)
     assert (vlak["omrezje"], bus["omrezje"]) == ("zeleznica", "avtobus")
-    assert "o avtobusih" in bus["besedilo"] and "avtobusov na zemljevidu" in bus["besedilo"]
+    assert "o medkrajevnih avtobusih" in bus["besedilo"]
     assert len(bus["besedilo"]) <= obvestila.NAJDALJSE
     assert vlak["id"] != bus["id"]
 
     # Premalo avtobusov na poti (ponoči): molk ni okvara.
     monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
-                        lambda c, t: {"zeleznica": 0, "avtobus": vsaj - 1})
+                        lambda c, t, **_: {"zeleznica": 0, "avtobus": vsaj - 1, "lpp": 0})
     assert obvestila.samodejna(conn, zdaj) == []
     # Avtobusi spet pošiljajo: obvestila ni, vlakovni podatek ne šteje.
     monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
-                        lambda c, t: {"zeleznica": 0, "avtobus": vsaj})
+                        lambda c, t, **_: {"zeleznica": 0, "avtobus": vsaj, "lpp": 0})
     conn.execute("UPDATE run SET feed_ts = ? WHERE trip_id = 'b0'", (zdaj - 60,))
     assert obvestila.samodejna(conn, zdaj) == []
+
+
+def test_mestni_lpp_molci_samo_brez_lpp_jevih_zaslonov(conn, monkeypatch):
+    """Mestni LPP ima drugi vir: dokler LPP-jevi zasloni odgovarjajo, tabla
+    kaže njihove prihode in obvestilo o mestnih avtobusih bi lagalo. Kadar
+    molčijo vsi, je obvestilo eno, o avtobusih."""
+    zdaj = int(time.time())
+    dan = datetime.fromtimestamp(zdaj, obvestila.TZ).date().isoformat()
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, network, agency)"
+                 " VALUES('l0', 'r', '6', 's', 'avtobus', 'lpp')")
+    _voznja(conn, "b0", network="avtobus")
+    conn.execute("INSERT INTO run VALUES('l0', ?, 1, 0, 0, ?)", (dan, zdaj - 1800))
+    conn.execute("INSERT INTO run VALUES('b0', ?, 1, 0, 0, ?)", (dan, zdaj - 60))
+    monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
+                        lambda c, t, **_: {"zeleznica": 0, "avtobus": 5, "lpp": 5})
+    monkeypatch.setattr(obvestila.config, "LPP_ZAMUDE", True)
+    obvestila.db.set_meta(conn, "zamude_lpp", json.dumps({"ts": zdaj - 120}))
+    assert obvestila.samodejna(conn, zdaj) == []
+    obvestila.db.set_meta(conn, "zamude_lpp", json.dumps({"ts": zdaj - 3600}))
+    (o,) = obvestila.samodejna(conn, zdaj)
+    assert "o mestnih avtobusih LPP" in o["besedilo"]
+    conn.execute("UPDATE run SET feed_ts = ? WHERE trip_id = 'b0'", (zdaj - 2400,))
+    (o,) = obvestila.samodejna(conn, zdaj)
+    assert o["besedilo"].startswith("Od ") and "o avtobusih" in o["besedilo"]
+    assert o["id"] == zdaj - 1800 + 10**10, "zadnji podatek katerega koli avtobusa"

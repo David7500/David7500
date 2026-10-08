@@ -6,9 +6,10 @@ spremeni vsakih 10–30 s. Izmerjeno 7. 9. 2026, razrez v `docs/MERITVE.md`.
 Cena je zaokroževanje na **celo minuto** (±30 s) — zato ta vir ne nadomesti
 meritve, ampak samo **napoved za postanke naprej**.
 
-**Nič od tega ne gre v bazo.** Zgodovina mora ostati iz enega vira, sicer
-`backtest` in `ocena` primerjata dve merili in tega ne vesta. Ta modul je
-samo za prikaz, na zahtevo, in ob vsaki napaki molči.
+**Ta modul ne piše v bazo.** Je za prikaz, na zahtevo, in ob vsaki napaki
+molči. Isti vir kot drugi vir zamud za bazo bere `zamude_lpp`, v svoji niti
+in v svojo tabelo: v `run` le, kadar derp.si vožnje ne nosi -- sicer bi
+`backtest` in `ocena` primerjala dve merili in tega ne bi vedela.
 
 Trije podatki, brez katerih se ta vir ne da uporabiti (vsi izmerjeni):
 
@@ -142,6 +143,11 @@ BREZ_VOZNJE_DELEZ = 0.2
 #: Starejši podatek zajema ne velja: feed se je morda vmes popravil.
 BREZ_VOZNJE_SVEZE_S = 600
 
+#: derp.si bere mestni LPP na 30 s. Kadar pet minut ne odgovori, tabla vse
+#: linije LPP vzame z LPP-jevega zaslona: 8. 10. 2026 je bil od 16:00 mrtev,
+#: data.lpp.si pa je odgovarjal.
+DERP_MOLCI_S = 300
+
 #: Vrste prihoda po dokumentaciji LPP (`data.lpp.si/doc`, polje `type`).
 VRSTE = {0: "napoved", 1: "po načrtu", 2: "prihaja", 3: "obvoz"}
 
@@ -167,6 +173,15 @@ def linije_brez_voznje(conn: sqlite3.Connection, zdaj: float) -> set[str]:
         return set()
     return {ime for ime, (n, vseh) in (zapis.get("linije") or {}).items()
             if je_brez_voznje(n, vseh)}
+
+
+def derp_molci(conn: sqlite3.Connection, zdaj: float) -> bool:
+    """Ali derp.si mestnega LPP že `DERP_MOLCI_S` ni dal. Brez zapisa ne
+    vemo nič -- in tedaj tabla ostane, kakršna je."""
+    if not config.LPP_ENABLED:
+        return False
+    ts = db.get_meta(conn, "lpp_rt_fetched")
+    return ts is not None and zdaj - int(ts) > DERP_MOLCI_S
 
 
 def _get(url: str, params: dict | None, timeout: float) -> list | dict | None:
@@ -259,8 +274,9 @@ def vrstice_prihodov(prihodi: list[dict], stop_id: str, linije: set[str],
 
 
 def na_tablo(conn: sqlite3.Connection, rows: list[dict], zdaj: datetime,
-             odhodi: bool, postaja: str) -> tuple[list[dict], list[str]]:
+             odhodi: bool, postaja: str, vse: bool = False) -> tuple[list[dict], list[str]]:
     """Današnjo tablo za linije, ki vozijo mimo voznega reda, napolni z LPP.
+    Z `vse` (derp.si molči, `derp_molci`) za vse linije LPP na tabli.
 
     Vrne (vrstice, zamenjane linije). Ob kakršni koli napaki vira tabla
     ostane, kot je -- vozni red je slabši odgovor, a ni prazen.
@@ -272,8 +288,8 @@ def na_tablo(conn: sqlite3.Connection, rows: list[dict], zdaj: datetime,
     """
     if not config.LPP_ZIVO:
         return rows, []
-    linije = linije_brez_voznje(conn, zdaj.timestamp()) & {
-        r["train_no"] for r in rows if r.get("agency") == "lpp"}
+    na_tabli = {r["train_no"] for r in rows if r.get("agency") == "lpp"}
+    linije = na_tabli if vse else linije_brez_voznje(conn, zdaj.timestamp()) & na_tabli
     if not linije:
         return rows, []
     sids = sorted({r["stop_id"] for r in rows

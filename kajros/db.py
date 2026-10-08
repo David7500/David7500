@@ -318,6 +318,21 @@ CREATE TABLE IF NOT EXISTS sz_zamuda (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS sz_zamuda_ts ON sz_zamuda(zadnjic_ts);
 
+-- Zamude mestnega LPP z LPP-jevih zaslonov (`zamude_lpp.py`), drugi vir
+-- poleg derp.si. Isto kot `sz_zamuda`: zadnje stanje na postanek, `v_run = 1`
+-- = derp.si voznje ni nosil in vrednost je sla tudi v `run`.
+CREATE TABLE IF NOT EXISTS lpp_zamuda (
+    trip_id      TEXT NOT NULL,
+    service_date TEXT NOT NULL,
+    stop_seq     INTEGER NOT NULL,
+    delay_s      INTEGER NOT NULL,
+    prvic_ts     INTEGER NOT NULL,
+    zadnjic_ts   INTEGER NOT NULL,
+    v_run        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (trip_id, service_date, stop_seq)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS lpp_zamuda_ts ON lpp_zamuda(zadnjic_ts);
+
 -- Obvestila skrbnika potnikom (`obvestila.py`). Vsako ima rok; umaknjeno
 -- dobi rok v preteklosti in ostane, da se ve, kaj je bilo recenega.
 -- `omrezje` NULL = obe omrezji.

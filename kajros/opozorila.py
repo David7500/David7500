@@ -70,7 +70,7 @@ def _ura(ts: float) -> str:
 
 #: Vrstice zdravja, ki pomenijo, da ne pride podatek od zunaj. Disk, WAL in
 #: neznane vožnje so naša stvar; tam preverjanje virov ne pove ničesar.
-ZAJEM = frozenset({"feed", "zeleznica", "avtobus", "zamude_sz"})
+ZAJEM = frozenset({"feed", "zeleznica", "avtobus", "derp", "zamude_sz", "zamude_lpp"})
 #: Zajem čaka 60 s, a pošta ne sme stati minute na vir: vsi gredo hkrati,
 #: najdlje toliko, kolikor ti dve meji skupaj.
 POVEZAVA_S, ODGOVOR_S = 10, 20
@@ -85,6 +85,9 @@ def _viri() -> list[tuple[str, str]]:
         viri.append(("derp.si, mestni LPP", config.LPP_RT_URL))
     if config.SZ_ZAMUDE:
         viri.append(("zemljevid SŽ (modra.ninja)", f"{config.PERONI_URL}/lokacije"))
+    if config.LPP_ZAMUDE:
+        viri.append(("LPP-jevi zasloni (data.lpp.si)",
+                     "https://data.lpp.si/api/station/arrival?station-code=600011"))
     return viri
 
 

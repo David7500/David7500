@@ -2368,3 +2368,25 @@ Kaj je videl potnik:
 * **Na avtobusnih straneh ni bilo obvestila** -- samodejno je obstajalo samo za vlake. Zdaj tudi za avtobuse, isti meji. Na `obs` za 24. 9.–8. 10. (vsaki 2 min, 10 428 korakov zdravega zajema): ob ≥ 3 avtobusih na poti najdaljši molk 7,2 min, ena epizoda nad 20 min (ta izpad). Ponoči med 1. in 3. uro vozijo 0–2 avtobusa; ob enem samem molk do 208 min, zato prag 3.
 
 Zajem bere štiri vire zaporedno in vsak čaka 60 s na povezavo, en obhod je ob izpadu ~4 min. Pošta skrbniku je prišla ob 16:10 („zadnja zamuda iz feeda pred 11 min“), vzrok pa je bilo treba iskati ročno. Zdaj pošta ob okvari zajema sama preveri vire (povezava 10 s, odgovor 20 s, vsi hkrati) in kontrolni naslov ter napiše, ali je izpad pri viru ali pri nas. Ob 17:33 z razvojnega računalnika: trije viri derp.si „ni povezave v 10 s“, modra.ninja „povezava je, odgovora ni v 20 s“, kontrola 200 v 0,1 s.
+
+## Mestni LPP z LPP-jevih zaslonov kot drugi vir (8. 10. 2026)
+
+Med izpadom derp.si (zgoraj) izmerjeno, kaj zmore `data.lpp.si` brez ključa. GTFS-RT (`gtfs/gtfs-rt*`) in lege (`bus/bus-details`, `buses-on-route`) vračajo 401; odprti so prihodi.
+
+| klic | čas | velikost (gzip) | kaj da |
+|---|---|---|---|
+| `route/active-routes` | 0,3 s | 11 kB | 206 vzorcev |
+| `route/arrivals-on-route` | mediana 7,4 s, p90 16,1 s, največ 32 s (206 vzorcev, 4 delavci, 410 s); ponovljen v nekaj sekundah 40 ms | 1,4–3 kB | vsa vozila na vseh postankih vzorca |
+| `station/arrival` | 40–100 ms, rep do 10 s | 1–4 kB | vsa vozila, ki prihajajo na postajališče |
+
+Prvi drag klic je očitno sestavljen iz drugega za vsako postajališče, zato zajem bere postajališča. Pokritje (vsako zaporedje postajališč največ `korak − 1` neizbranih zapored, 74 vzorcev, 172 zaporedij, včeraj in danes): korak 12 → 76 postajališč, 8 → 132, 4 → 343 (na en dan), 3 → 422. Obhod 75 postajališč z dvema delavcema 36 s; 177 ena za drugo 267 s, dve zahtevi od 177 čez 10 s.
+
+Kaj je v enem obhodu (75 postajališč, 18:00, derp.si mrtev): 985 prihodov, 536 živih (vrsta 0 ali 2), 72 od teh na vzorcu ali postajališču, ki ga vozni red nima (13 %).
+
+**Vrsta 1 („po voznem redu“) je vozni red**: od 539 takih prihodov (177 postajališč) jih je imelo 470 najbližjo vožnjo našega voznega reda v 60 s, mediana 43 s, p90 64 s — eta je cela minuta.
+
+**Pripenjanje samo po voznem redu je dvoumno**: od 758 živih prihodov z znanim vzorcem jih je imelo v oknu od −3 do +20 min 357 eno kandidatko, 358 dve, 40 tri ali več, 3 nobene. Linije na 5–10 min. Zato zajem vozilo pripne na vožnjo samo prek derp.si (`vehicle_now`); ali bi edina kandidatka zadela, se meri sproti (`/admin`, „LPP · samo po voznem redu“).
+
+**Derp-ova vožnja vozila velja samo, če se vira ujemata.** Ob 18:22 z legami derp.si izpred 14 min (zadnji uspešen obhod 18:08): samo z istim vzorcem in oknom −10/+60 min 195 pripetih, mediana zamude 22 min, p90 50 min — del vozil je bil že na naslednji vožnji istega vzorca. Z dodatnim pogojem, da je LPP-jeva zamuda v 10 min od zadnje derp-ove zamude te vožnje (`SKLADNO_S`): 120 od 562 živih prihodov, mediana 4,5 min, p90 44 min. Velike vrednosti so prave in obema viroma skupne: linija 11 (vožnja 17:12) LPP +45/+46, derp.si +45; linija 8 (17:12) +45 proti +47.
+
+**Edina kandidatka po voznem redu ni dovolj**: na istih prihodih je derp-ovo vožnjo zadela 67-krat, zgrešila 31-krat (68 %), 22 prihodov je imelo več kandidatk. Zgreši natanko tam, kjer zamuda šteje — pri liniji 11 (+45) izbere vožnjo s +3. Brez derp.si zato ne pripenjamo.

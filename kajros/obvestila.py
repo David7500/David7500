@@ -22,12 +22,13 @@ voznem redu vozijo, podatkov o njih pa ni. Skrbnik ob 5. uri zjutraj ne bdi.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, stats
+from . import config, db, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -183,27 +184,43 @@ def seznam(conn: sqlite3.Connection, limit: int = 30,
 MOLCI_S = 1200
 #: Najmanj voženj na poti, da je molk dokaz okvare. Kot `zdravje.MIN_VOZENJ`:
 #: ponoči en sam nočni vlak ali avtobus ni dokaz okvare.
-VSAJ = {"zeleznica": 3, "avtobus": 3}
-_IME = {"zeleznica": ("vlakih", "vlakov"), "avtobus": ("avtobusih", "avtobusov")}
+VSAJ = 3
+#: LPP-jevi zasloni (`zamude_lpp`) so živi, kadar je nit zapisala obhod v toliko
+#: (kot `zdravje.LPP_STOJI_S`). Tedaj tabla mestnega LPP kaže LPP-jeve prihode.
+ZASLONI_ZIVI_S = 900
+
+#: Kdo molči -> (o kom, kaj vidi potnik). Mestni LPP ima drugi vir: kadar
+#: derp.si utihne, LPP-jevi zasloni pa ne, molčijo samo medkrajevni.
+_BESEDILO = {
+    "zeleznica": ("o vlakih", "Odhodi so le po voznem redu, vlakov na zemljevidu "
+                  "pa ne moremo pokazati."),
+    "avtobus": ("o avtobusih", "Odhodi so le po voznem redu, avtobusov na zemljevidu "
+                "pa ne moremo pokazati."),
+    "medkrajevni": ("o medkrajevnih avtobusih", "Njihovi odhodi so le po voznem redu, "
+                    "na zemljevidu jih ne moremo pokazati."),
+    "mestni": ("o mestnih avtobusih LPP", "Njihovi odhodi so le po voznem redu, "
+               "na zemljevidu jih ne moremo pokazati."),
+}
 #: Vlak in avtobus utihneta ob istem branju derp.si, torej z istim časom
-#: zadnjega podatka. Brez odmika bi imeli obvestili isti `id` in potnik bi z
-#: enim zaprl obe. Epoha je ~1,8e9, odmik jo dvigne nad vse vlakovne.
-_ODMIK_ID = {"zeleznica": 0, "avtobus": 10**10}
+#: zadnjega podatka. Brez odmika bi imela obvestila isti `id` in potnik bi z
+#: enim zaprl vse. Epoha je ~1,8e9, odmiki jo ločijo za 2e9.
+_ODMIK_ID = {"zeleznica": 0, "avtobus": 10**10, "medkrajevni": 12 * 10**9,
+             "mestni": 14 * 10**9}
 
 
-def brez_podatkov(omrezje: str, vozi: int, zadnji_ts: int | None,
-                  zdaj: int) -> dict | None:
-    """Obvestilo, kadar po voznem redu vozi vsaj `VSAJ[omrezje]` voženj,
-    zadnji podatek o katerikoli pa je starejši od `MOLCI_S`. Sicer None.
+def molci(vozi: int, zadnji_ts: int | None, zdaj: int) -> bool:
+    """Po voznem redu vozi vsaj `VSAJ` voženj, zadnji podatek o katerikoli pa
+    je starejši od `MOLCI_S` (ali ga ni)."""
+    return vozi >= VSAJ and (zadnji_ts is None or zdaj - zadnji_ts >= MOLCI_S)
 
-    `id` je čas zadnjega podatka (pri avtobusih z odmikom): ista okvara ima
-    isti id, zato jo potnik zapre enkrat, nova pa se pokaže znova. Epoha je
-    daleč nad id-ji iz baze; brez vsakega podatka je id dan.
+
+def obvestilo(vrsta: str, zadnji_ts: int | None, zdaj: int) -> dict:
+    """Besedilo za vrsto iz `_BESEDILO`.
+
+    `id` je čas zadnjega podatka z odmikom vrste: ista okvara ima isti id,
+    zato jo potnik zapre enkrat, nova pa se pokaže znova. Epoha je daleč nad
+    id-ji iz baze; brez vsakega podatka je id dan.
     """
-    if vozi < VSAJ[omrezje]:
-        return None
-    if zadnji_ts is not None and zdaj - zadnji_ts < MOLCI_S:
-        return None
     od = "Ta hip"
     if zadnji_ts is not None:
         z, d = datetime.fromtimestamp(zadnji_ts, TZ), datetime.fromtimestamp(zdaj, TZ)
@@ -212,24 +229,32 @@ def brez_podatkov(omrezje: str, vozi: int, zadnji_ts: int | None,
             od = f"Od {ura}"
         elif z.date() == d.date() - timedelta(days=1):
             od = f"Od včeraj ob {ura}"
-    o_kom, koga = _IME[omrezje]
-    besedilo = (f"{od} ne dobivamo podatkov o {o_kom}, zato ne vemo, koliko zamujajo. "
-                f"Odhodi so le po voznem redu, {koga} na zemljevidu pa ne moremo "
-                "pokazati. Ko podatki spet pridejo, se vse pokaže samo.")
+    o_kom, vidi = _BESEDILO[vrsta]
+    besedilo = (f"{od} ne dobivamo podatkov {o_kom}, zato ne vemo, koliko zamujajo. "
+                f"{vidi} Ko podatki spet pridejo, se vse pokaže samo.")
     # `do_ts` le do naslednjega preverjanja: pogoj se računa znova, ne poteče.
-    return {"id": (zadnji_ts or zdaj - zdaj % 86400) + _ODMIK_ID[omrezje],
-            "besedilo": besedilo, "omrezje": omrezje,
+    return {"id": (zadnji_ts or zdaj - zdaj % 86400) + _ODMIK_ID[vrsta],
+            "besedilo": besedilo,
+            "omrezje": "zeleznica" if vrsta == "zeleznica" else "avtobus",
             "objavljeno": _iso(zdaj), "velja_do": _iso(zdaj + 300), "do_ts": zdaj + 300}
 
 
-def _zadnji_podatek(conn: sqlite3.Connection, omrezje: str, danes) -> int | None:
-    if omrezje == "avtobus":
+def brez_podatkov(vrsta: str, vozi: int, zadnji_ts: int | None, zdaj: int) -> dict | None:
+    """Obvestilo, kadar vrsta `molci`, sicer None."""
+    return obvestilo(vrsta, zadnji_ts, zdaj) if molci(vozi, zadnji_ts, zdaj) else None
+
+
+def _zadnji_podatek(conn: sqlite3.Connection, skupina: str, danes) -> int | None:
+    """Zadnji `feed_ts` v `run`: `zeleznica`, `avtobus` (brez mestnega LPP) ali `lpp`."""
+    if skupina != "zeleznica":
         # Nazaj po `run_feed_ts`: avtobusov je v `run` večina, prva vrstica je
-        # skoraj vedno avtobusna. Na arwenu 8. 10. 2026 pod 10 ms, vlakovna
+        # skoraj vedno prava. Na arwenu 8. 10. 2026 pod 10 ms, vlakovna
         # ista poizvedba pa 1,8 s -- zato vlaki po svoji poti spodaj.
+        pogoj = ("t.agency = 'lpp'" if skupina == "lpp"
+                 else "t.network = 'avtobus' AND t.agency IS NOT 'lpp'")
         r = conn.execute(
             "SELECT r.feed_ts FROM run r CROSS JOIN trip t ON t.trip_id = r.trip_id "
-            "WHERE t.network = 'avtobus' ORDER BY r.feed_ts DESC LIMIT 1").fetchone()
+            f"WHERE {pogoj} ORDER BY r.feed_ts DESC LIMIT 1").fetchone()
         return r[0] if r else None
     # Od voženj k `run`, po prvotnem ključu: pregled `run_feed_ts` nazaj bi ob
     # okvari prebral vse avtobuse od zadnjega vlaka -- prav takrat, ko štejemo.
@@ -240,17 +265,38 @@ def _zadnji_podatek(conn: sqlite3.Connection, omrezje: str, danes) -> int | None
         ((danes - timedelta(days=1)).isoformat(), danes.isoformat())).fetchone()[0]
 
 
+def _zasloni_zivi(conn: sqlite3.Connection, zdaj: int) -> bool:
+    if not config.LPP_ZAMUDE:
+        return False
+    try:
+        ts = json.loads(db.get_meta(conn, "zamude_lpp") or "{}").get("ts") or 0
+    except ValueError:
+        return False
+    return zdaj - ts <= ZASLONI_ZIVI_S
+
+
 def samodejna(conn: sqlite3.Connection, zdaj: int | None = None) -> list[dict]:
     """Obvestila, ki jih napišejo podatki sami. Na arwenu ~85 ms (vozni red
     58 ms, zadnji podatek vlakov 27 ms), zato jih `api` predpomni za minuto."""
     t = zdaj if zdaj is not None else _zdaj()
     danes = datetime.fromtimestamp(t, TZ).date()
-    vozi = stats.vozi_zdaj(conn, t)
+    vozi = stats.vozi_zdaj(conn, t, lpp_posebej=True)
+
+    def zadnji(skupina):
+        return _zadnji_podatek(conn, skupina, danes) if vozi[skupina] >= VSAJ else None
+
     out = []
-    for omrezje in ("zeleznica", "avtobus"):
-        if vozi.get(omrezje, 0) < VSAJ[omrezje]:
-            continue
-        o = brez_podatkov(omrezje, vozi[omrezje], _zadnji_podatek(conn, omrezje, danes), t)
-        if o:
-            out.append(o)
+    vlaki = zadnji("zeleznica")
+    if molci(vozi["zeleznica"], vlaki, t):
+        out.append(obvestilo("zeleznica", vlaki, t))
+    medkrajevni, mestni = zadnji("avtobus"), zadnji("lpp")
+    tiho_m = molci(vozi["avtobus"], medkrajevni, t)
+    # Mestni LPP ne molči, dokler kažemo LPP-jeve prihode (`lpp.na_tablo`).
+    tiho_l = molci(vozi["lpp"], mestni, t) and not _zasloni_zivi(conn, t)
+    if tiho_m and tiho_l:
+        out.append(obvestilo("avtobus", max(medkrajevni or 0, mestni or 0) or None, t))
+    elif tiho_m:
+        out.append(obvestilo("medkrajevni", medkrajevni, t))
+    elif tiho_l:
+        out.append(obvestilo("mestni", mestni, t))
     return out

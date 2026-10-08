@@ -468,8 +468,23 @@ function vrsticeZdravja(d) {
   const pr = zs && zs.primerjava;
   const prVr = !pr || !pr.parov ? "—"
     : `${st(100 * pr.v_minuti / pr.parov)} % v minuti od ${st(pr.parov)} · nad 5 min ${st(pr.nad_5_min)}`;
+  const dp = Object.entries(z.derp_prebran || {});
+  const zl = z.zamude_lpp;
+  const zlVr = !zl ? "—" : !zl.ts || zdaj - zl.ts > 900
+    ? `data.lpp.si ne odgovarja ${pred(zl.napaka_ts || zl.ts)}${zl.napaka ? `: ${zl.napaka}` : ""}`
+    : `oba ${st(zl.oba)} · samo LPP ${st(zl.samo_lpp)} · živih prihodov ${st(zl.zivih)}`
+      + ` · brez voznega reda ${st(zl.brez_voznega_reda)} · ${st(zl.postaj)} postajališč`;
+  const plr = zl && zl.primerjava;
+  const plrVr = !plr || !plr.parov ? "—"
+    : `${st(100 * plr.v_minuti / plr.parov)} % v minuti od ${st(plr.parov)} · nad 5 min ${st(plr.nad_5_min)}`;
+  // Meritev za odločitev, ali LPP-jeve prihode pripenjati tudi brez derp.si.
+  const [vrEn, vrDr, vrDv, vrBr] = (zl && zl.po_voznem_redu) || [0, 0, 0, 0];
+  const vrVr = !(vrEn + vrDr + vrDv + vrBr) ? "—"
+    : `zadel ${st(vrEn)} · zgrešil ${st(vrDr)} · dvoumno ${st(vrDv)} · brez ${st(vrBr)}`;
   return [
     ["zadnja zamuda iz feeda", pred(z.last_feed_ts), r.feed || ""],
+    ["derp.si · odgovoril", dp.length
+      ? dp.map(([vir, ts]) => `${vir.toUpperCase()} ${pred(ts)}`).join(" · ") : "—", r.derp || ""],
     ["vlaki · zadnji zapis", pred(zel.last_feed_ts), r.zeleznica || ""],
     ["avtobusi · zadnji zapis", pred(bus.last_feed_ts), r.avtobus || ""],
     ["vozil z lego", st(z.vehicles_with_gps), ""],
@@ -484,6 +499,9 @@ function vrsticeZdravja(d) {
       r.lega_brez_zamude || ""],
     ["vlaki · vira zamud", zsVr, r.zamude_sz || ""],
     ["ujemanje virov · 24 h", prVr, ""],
+    ["LPP · vira zamud", zlVr, r.zamude_lpp || ""],
+    ["LPP · ujemanje · 24 h", plrVr, ""],
+    ["LPP · samo po voznem redu", vrVr, ""],
     ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
     ["aktivnih obvestil", st(z.alerts_active), ""],
     ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, r.disk || ""],

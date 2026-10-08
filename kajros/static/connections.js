@@ -782,10 +782,15 @@ function lppChipHtml(vrsta) {
 }
 
 // Zakaj so odhodi neke linije drugačni od ostalih: LPP jo danes vozi mimo
-// objavljenega voznega reda (zapora), zato so ure z njegovega zaslona.
+// objavljenega voznega reda (zapora), zato so ure z njegovega zaslona. Ali pa
+// zamud mestnega LPP ne dobivamo (`lpp_izpad`) in so ure z zaslona za vse.
 function mimoHtml(data) {
   const l = data.mimo_voznega_reda || [];
   if (!l.length) return "";
+  if (data.lpp_izpad) {
+    return `<div class="note-partial">Zamud mestnih avtobusov LPP ta hip ne dobivamo.
+      Prihode kažemo, kot jih napove LPP.</div>`;
+  }
   const imena = l.length === 1 ? l[0] : `${l.slice(0, -1).join(", ")} in ${l[l.length - 1]}`;
   const [kdo, glagol] = l.length === 1 ? ["Linija", "ne vozi"]
     : l.length === 2 ? ["Liniji", "ne vozita"] : ["Linije", "ne vozijo"];

@@ -16,7 +16,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (alerts, collector, config, db, deljenje, gtfs, obisk, ocena, opozorila,
-               peroni, pripni, stats, stik, weather, zamude_sz)
+               peroni, pripni, stats, stik, weather, zamude_lpp, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -282,6 +282,17 @@ def _zazeni_zamude_sz() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=zamude_sz.teci, args=(_stop, _log), daemon=True,
                            name="kajros-zamude-sz")
+    nit.start()
+    return nit
+
+
+def _zazeni_zamude_lpp() -> threading.Thread | None:
+    """Zamude mestnega LPP z LPP-jevih zaslonov, v svoji niti. Samo na
+    strežniku: na malini (Pi Zero) obremenitev ni izmerjena."""
+    if not config.LPP_ZAMUDE:
+        return None
+    nit = threading.Thread(target=zamude_lpp.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-zamude-lpp")
     nit.start()
     return nit
 
@@ -609,9 +620,10 @@ async def lifespan(app):
         _log(_describe(settings))
         peroni_nit = _zazeni_perone()
         sz_nit = _zazeni_zamude_sz()
+        lpp_nit = _zazeni_zamude_lpp()
         _zazeni_opozorila()
     else:
-        peroni_nit = sz_nit = None
+        peroni_nit = sz_nit = lpp_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -623,5 +635,7 @@ async def lifespan(app):
             peroni_nit.join(timeout=5)
         if sz_nit:
             sz_nit.join(timeout=5)
+        if lpp_nit:
+            lpp_nit.join(timeout=5)
         if obisk_nit:
             obisk_nit.join(timeout=5)

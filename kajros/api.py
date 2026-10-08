@@ -1390,6 +1390,12 @@ def api_health():
         # promet, in to ni okvara (`zdravje.ocena`). Sveže, ker je od tega
         # odvisna barva, ne predpomnjeno število.
         out["vozi_zdaj"] = stats.vozi_zdaj(conn)
+        # Kdaj je derp.si nazadnje odgovoril, po viru. Zadnji zapis v `run` tega
+        # ne pove več: ob izpadu ga pišeta tudi `zamude_lpp` in `zamude_sz`.
+        out["derp_prebran"] = {
+            vir: int(v) for vir, kljuc in (("ijpp", "rt_fetched"), ("lpp", "lpp_rt_fetched"))
+            if (v := db.get_meta(conn, kljuc))
+        }
         # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
         # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
         # pregledu nikomur nič ne pove.
@@ -1401,6 +1407,9 @@ def api_health():
         # se ujemata. Zapiše jih nit ob vsakem branju zemljevida.
         zsz = db.get_meta(conn, "zamude_sz")
         out["zamude_sz"] = json.loads(zsz) if zsz else None
+        # Isto za mestni LPP (`zamude_lpp`), z LPP-jevih zaslonov.
+        zl = db.get_meta(conn, "zamude_lpp") if config.LPP_ZAMUDE else None
+        out["zamude_lpp"] = json.loads(zl) if zl else None
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out
@@ -1611,8 +1620,11 @@ def api_departures(
         # odhodi so z LPP-jevega zaslona, ne iz voznega reda. Samo za "zdaj" --
         # LPP napove uro naprej, ne izbrane ure zvečer.
         mimo: list[str] = []
+        lpp_izpad = False
         if network == "avtobus" and now_s is not None and not from_time:
-            rows, mimo = lpp.na_tablo(conn, rows, now, kind == "odhodi", exact)
+            lpp_izpad = lpp.derp_molci(conn, now.timestamp())
+            rows, mimo = lpp.na_tablo(conn, rows, now, kind == "odhodi", exact,
+                                      vse=lpp_izpad)
             for r in rows:
                 r.setdefault("smer", smer_od.get(r["stop_id"]))
         if network == "zeleznica":
@@ -1640,7 +1652,8 @@ def api_departures(
             "from_s": from_s, "window_min": window,
             "smeri": [{k: d[k] for k in ("kljuc", "naslednje", "odhodov")} for d in smeri],
             "smer": izbrana["kljuc"] if izbrana else None,
-            "board": rows, "mimo_voznega_reda": mimo, "alerts": notices}
+            "board": rows, "mimo_voznega_reda": mimo,
+            "lpp_izpad": lpp_izpad and bool(mimo), "alerts": notices}
 
 
 @app.get("/api/alerts")

@@ -66,14 +66,24 @@ LPP_RT_URL = okolje("LPP_RT_URL", "https://rt.gtfs.derp.si/sources/lpp/all")
 # postankov, kar je primerljivo z IJPP.
 LPP_DAYS = int(okolje("LPP_DAYS", "8"))
 
-# **Živi prihodi iz LPP-jevega lastnega API-ja, samo za prikaz.**
+# **Živi prihodi iz LPP-jevega lastnega API-ja, za prikaz.**
 # derp.si naredi nov posnetek na ~90 s, `data.lpp.si` pa se spremeni na
 # 10-30 s (izmerjeno 7. 9. 2026). Cena je zaokroževanje na celo minuto, zato
-# ta vir NE gre v bazo in ne nadomesti meritve -- popravi samo napoved za
-# postanke naprej, na strani, ki jo potnik ta hip gleda.
+# na strani popravi samo napoved za postanke naprej -- in tablo, kadar derp.si
+# molči (`lpp.na_tablo`).
 # Licenca `data.lpp.si` ni navedena; ko bo znana, sme ta zastavica pasti.
 # Izklopi se s `KAJROS_LPP_ZIVO=0`.
 LPP_ZIVO = okolje("LPP_ZIVO", "1") != "0"
+
+# **Isti vir kot drugi vir zamud za bazo** (`zamude_lpp.py`), po zgledu
+# `zamude_sz`: vsaka vrednost v `lpp_zamuda`, v `run` le, kadar derp.si vožnje
+# ne nosi. 8. 10. 2026 je strežnik RT derp.si od 16:00 zavračal povezave,
+# data.lpp.si je odgovarjal. Bere postajališča, ki vsak vzorec proge pokrijejo
+# vsaj na vsakih `LPP_POSTAJ_KORAK` postankov, eno za drugim.
+# Izklopi se s `KAJROS_LPP_ZAMUDE=0`.
+LPP_ZAMUDE = LPP_ENABLED and LPP_ZIVO and okolje("LPP_ZAMUDE", "1") != "0"
+LPP_ZAMUDE_SECONDS = int(okolje("LPP_ZAMUDE_SECONDS", "120"))
+LPP_POSTAJ_KORAK = int(okolje("LPP_POSTAJ_KORAK", "12"))
 
 # **Tir vlaka s table SŽ** (`peroni.py`). potniski.sz.si je za Cloudflarom,
 # `api.modra.ninja` ga strga in streže -- tretja oseba brez lastnika, zato je
