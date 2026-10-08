@@ -181,6 +181,8 @@ def seznam(conn: sqlite3.Connection, limit: int = 30,
 #: najdaljši molk 7,2 min (8. 10. ob 15:08, tik pred izpadom), ena sama
 #: epizoda nad 20 min -- izpad derp.si 8. 10. od 16:00. Ponoči med 1. in 3.
 #: uro vozijo 0--2 avtobusa; pri enem samem je bil molk tudi 208 min.
+#: Po skupinah (`samodejna`) ista meritev: medkrajevni najdaljši zdrav molk
+#: 10,7 min (ponoči ob 3 vožnjah), mestni LPP 7,7 min.
 MOLCI_S = 1200
 #: Najmanj voženj na poti, da je molk dokaz okvare. Kot `zdravje.MIN_VOZENJ`:
 #: ponoči en sam nočni vlak ali avtobus ni dokaz okvare.
