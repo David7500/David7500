@@ -17,8 +17,8 @@ Piše samo skrbnik (`POST /admin/obvestila`, isti žeton kot pregled), zato tu
 ni varovalk pred neznancem kot v `stik.py` -- le meje, ki varujejo stran
 pred tipkarsko napako.
 
-Eno obvestilo nastane samo (`samodejna`): vlaki po voznem redu vozijo,
-podatkov o njih pa ni. Skrbnik ob 5. uri zjutraj ne bdi.
+Eno obvestilo na omrežje nastane samo (`samodejna`): vlaki ali avtobusi po
+voznem redu vozijo, podatkov o njih pa ni. Skrbnik ob 5. uri zjutraj ne bdi.
 """
 from __future__ import annotations
 
@@ -158,35 +158,51 @@ def seznam(conn: sqlite3.Connection, limit: int = 30,
         "ORDER BY do_ts > ? DESC, od_ts DESC, id DESC LIMIT ?", (t, limit))]
 
 
-# --- samodejno: vlaki brez podatkov ------------------------------------------
+# --- samodejno: omrežje brez podatkov ----------------------------------------
 #
 # 7. 10. 2026 sta oba vira zamud vlakov (derp.si in zemljevid SŽ prek
 # api.modra.ninja) ob 1:40 hkrati utihnila. Zjutraj je bil zemljevid brez
 # vlakov, tabla brez zamud, pika ob uri zelena -- in potnik je bral, da
 # aplikacija ne dela. `/admin` je bil rdeč, a skrbnik ob 5. uri ne bdi.
+#
+# 8. 10. 2026 od 16:00 isto pri avtobusih: strežnik RT derp.si ni sprejemal
+# povezav, na avtobusnih straneh pa ni bilo nobenega obvestila.
 
-#: Toliko molka vlakov, medtem ko po voznem redu vozijo, je okvara vira in ne
-#: tišina prometa. Pravilo preverjeno na arwenu za 6. 9.--7. 10. 2026, vsakih
-#: 5 min ob živem zajemu: tri epizode, vse prave -- 28. 9. (zip DUJPP brez
-#: vlakov, 275 min), 3. 10. od 18:17 (85 min) in 7. 10. od 1:24 (230 min do
-#: meritve). Najdaljša vrzel zdravega zajema je bila 15,6 min (25. 9. ob 19:06,
-#: na progi 26 vlakov). Isto pri pragu 3, 5 ali 10 vlakov.
-VLAKI_MOLCIJO_S = 1200
-#: Kot `zdravje.MIN_VOZENJ`: ponoči en sam nočni vlak ni dokaz okvare.
-VLAKI_VSAJ = 3
+#: Toliko molka omrežja, medtem ko po voznem redu vozi, je okvara vira in ne
+#: tišina prometa. Pri vlakih preverjeno na arwenu za 6. 9.--7. 10. 2026,
+#: vsakih 5 min ob živem zajemu: tri epizode, vse prave -- 28. 9. (zip DUJPP
+#: brez vlakov, 275 min), 3. 10. od 18:17 (85 min) in 7. 10. od 1:24 (230 min
+#: do meritve). Najdaljša vrzel zdravega zajema je bila 15,6 min (25. 9. ob
+#: 19:06, na progi 26 vlakov). Isto pri pragu 3, 5 ali 10 vlakov.
+#:
+#: Pri avtobusih preverjeno na arwenu za 24. 9.--8. 10. 2026 (`obs`, vsaki
+#: 2 min, 10 428 korakov zdravega zajema): ob vsaj 3 avtobusih na poti je bil
+#: najdaljši molk 7,2 min (8. 10. ob 15:08, tik pred izpadom), ena sama
+#: epizoda nad 20 min -- izpad derp.si 8. 10. od 16:00. Ponoči med 1. in 3.
+#: uro vozijo 0--2 avtobusa; pri enem samem je bil molk tudi 208 min.
+MOLCI_S = 1200
+#: Najmanj voženj na poti, da je molk dokaz okvare. Kot `zdravje.MIN_VOZENJ`:
+#: ponoči en sam nočni vlak ali avtobus ni dokaz okvare.
+VSAJ = {"zeleznica": 3, "avtobus": 3}
+_IME = {"zeleznica": ("vlakih", "vlakov"), "avtobus": ("avtobusih", "avtobusov")}
+#: Vlak in avtobus utihneta ob istem branju derp.si, torej z istim časom
+#: zadnjega podatka. Brez odmika bi imeli obvestili isti `id` in potnik bi z
+#: enim zaprl obe. Epoha je ~1,8e9, odmik jo dvigne nad vse vlakovne.
+_ODMIK_ID = {"zeleznica": 0, "avtobus": 10**10}
 
 
-def brez_vlakov(vozi: int, zadnji_ts: int | None, zdaj: int) -> dict | None:
-    """Obvestilo, kadar po voznem redu vozi vsaj `VLAKI_VSAJ` vlakov, zadnji
-    podatek o kateremkoli pa je starejši od `VLAKI_MOLCIJO_S`. Sicer None.
+def brez_podatkov(omrezje: str, vozi: int, zadnji_ts: int | None,
+                  zdaj: int) -> dict | None:
+    """Obvestilo, kadar po voznem redu vozi vsaj `VSAJ[omrezje]` voženj,
+    zadnji podatek o katerikoli pa je starejši od `MOLCI_S`. Sicer None.
 
-    `id` je čas zadnjega podatka: ista okvara ima isti id, zato jo potnik
-    zapre enkrat, nova pa se pokaže znova. Epoha je daleč nad id-ji iz baze;
-    brez vsakega podatka je id dan.
+    `id` je čas zadnjega podatka (pri avtobusih z odmikom): ista okvara ima
+    isti id, zato jo potnik zapre enkrat, nova pa se pokaže znova. Epoha je
+    daleč nad id-ji iz baze; brez vsakega podatka je id dan.
     """
-    if vozi < VLAKI_VSAJ:
+    if vozi < VSAJ[omrezje]:
         return None
-    if zadnji_ts is not None and zdaj - zadnji_ts < VLAKI_MOLCIJO_S:
+    if zadnji_ts is not None and zdaj - zadnji_ts < MOLCI_S:
         return None
     od = "Ta hip"
     if zadnji_ts is not None:
@@ -196,26 +212,45 @@ def brez_vlakov(vozi: int, zadnji_ts: int | None, zdaj: int) -> dict | None:
             od = f"Od {ura}"
         elif z.date() == d.date() - timedelta(days=1):
             od = f"Od včeraj ob {ura}"
-    besedilo = (f"{od} ne dobivamo podatkov o vlakih, zato ne vemo, koliko zamujajo. "
-                "Odhodi so le po voznem redu, vlakov na zemljevidu pa ne moremo "
+    o_kom, koga = _IME[omrezje]
+    besedilo = (f"{od} ne dobivamo podatkov o {o_kom}, zato ne vemo, koliko zamujajo. "
+                f"Odhodi so le po voznem redu, {koga} na zemljevidu pa ne moremo "
                 "pokazati. Ko podatki spet pridejo, se vse pokaže samo.")
     # `do_ts` le do naslednjega preverjanja: pogoj se računa znova, ne poteče.
-    return {"id": zadnji_ts or zdaj - zdaj % 86400,
-            "besedilo": besedilo, "omrezje": "zeleznica",
+    return {"id": (zadnji_ts or zdaj - zdaj % 86400) + _ODMIK_ID[omrezje],
+            "besedilo": besedilo, "omrezje": omrezje,
             "objavljeno": _iso(zdaj), "velja_do": _iso(zdaj + 300), "do_ts": zdaj + 300}
 
 
-def samodejna(conn: sqlite3.Connection, zdaj: int | None = None) -> list[dict]:
-    """Obvestila, ki jih napišejo podatki sami. Na arwenu ~85 ms (vozni red
-    58 ms, zadnji podatek 27 ms), zato jih `api` predpomni za minuto."""
-    t = zdaj if zdaj is not None else _zdaj()
-    danes = datetime.fromtimestamp(t, TZ).date()
+def _zadnji_podatek(conn: sqlite3.Connection, omrezje: str, danes) -> int | None:
+    if omrezje == "avtobus":
+        # Nazaj po `run_feed_ts`: avtobusov je v `run` večina, prva vrstica je
+        # skoraj vedno avtobusna. Na arwenu 8. 10. 2026 pod 10 ms, vlakovna
+        # ista poizvedba pa 1,8 s -- zato vlaki po svoji poti spodaj.
+        r = conn.execute(
+            "SELECT r.feed_ts FROM run r CROSS JOIN trip t ON t.trip_id = r.trip_id "
+            "WHERE t.network = 'avtobus' ORDER BY r.feed_ts DESC LIMIT 1").fetchone()
+        return r[0] if r else None
     # Od voženj k `run`, po prvotnem ključu: pregled `run_feed_ts` nazaj bi ob
     # okvari prebral vse avtobuse od zadnjega vlaka -- prav takrat, ko štejemo.
-    zadnji = conn.execute(
+    return conn.execute(
         "SELECT MAX(r.feed_ts) FROM trip t "
         "CROSS JOIN run r ON r.trip_id = t.trip_id AND r.service_date IN (?, ?) "
         "WHERE t.network = 'zeleznica'",
         ((danes - timedelta(days=1)).isoformat(), danes.isoformat())).fetchone()[0]
-    o = brez_vlakov(stats.vozi_zdaj(conn, t)["zeleznica"], zadnji, t)
-    return [o] if o else []
+
+
+def samodejna(conn: sqlite3.Connection, zdaj: int | None = None) -> list[dict]:
+    """Obvestila, ki jih napišejo podatki sami. Na arwenu ~85 ms (vozni red
+    58 ms, zadnji podatek vlakov 27 ms), zato jih `api` predpomni za minuto."""
+    t = zdaj if zdaj is not None else _zdaj()
+    danes = datetime.fromtimestamp(t, TZ).date()
+    vozi = stats.vozi_zdaj(conn, t)
+    out = []
+    for omrezje in ("zeleznica", "avtobus"):
+        if vozi.get(omrezje, 0) < VSAJ[omrezje]:
+            continue
+        o = brez_podatkov(omrezje, vozi[omrezje], _zadnji_podatek(conn, omrezje, danes), t)
+        if o:
+            out.append(o)
+    return out

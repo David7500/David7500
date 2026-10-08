@@ -105,30 +105,30 @@ def test_napaka_obrazca_je_422_z_razlogom(conn, monkeypatch):
     assert exc.value.status_code == 422 and "mimo" in exc.value.detail
 
 
-# --- samodejno: vlaki brez podatkov ------------------------------------------
+# --- samodejno: omrežje brez podatkov ----------------------------------------
 
 def test_vlaki_brez_podatkov_povedo_od_kdaj():
     """7. 10. 2026: zadnji podatek ob 1:24, zjutraj vozi 40 vlakov."""
     zadnji = int(datetime(2026, 10, 6, 23, 24, tzinfo=timezone.utc).timestamp())  # 1:24
     zdaj = zadnji + 6 * 3600
-    o = obvestila.brez_vlakov(40, zadnji, zdaj)
+    o = obvestila.brez_podatkov("zeleznica", 40, zadnji, zdaj)
     assert o["besedilo"].startswith("Od 01:24 ne dobivamo podatkov o vlakih")
     assert o["omrezje"] == "zeleznica" and o["id"] == zadnji
     assert len(o["besedilo"]) <= obvestila.NAJDALJSE
-    assert obvestila.brez_vlakov(40, zadnji, zdaj + 600)["id"] == zadnji, \
+    assert obvestila.brez_podatkov("zeleznica", 40, zadnji, zdaj + 600)["id"] == zadnji, \
         "ista okvara, isti id -- zaprto ostane zaprto"
     # Prejšnji dan in nobenega podatka: čas pove, ali ga ne pove.
-    assert obvestila.brez_vlakov(40, zadnji - 7200, zdaj)["besedilo"].startswith(
+    assert obvestila.brez_podatkov("zeleznica", 40, zadnji - 7200, zdaj)["besedilo"].startswith(
         "Od včeraj ob 23:24")
-    assert obvestila.brez_vlakov(40, None, zdaj)["besedilo"].startswith("Ta hip")
+    assert obvestila.brez_podatkov("zeleznica", 40, None, zdaj)["besedilo"].startswith("Ta hip")
 
 
 def test_vlaki_brez_podatkov_ne_zvoni_brez_razloga():
     """Ponoči molk ni okvara; vrzel do 20 min tudi ne (zdrava je bila do 15,6)."""
-    zadnji = ZDAJ - obvestila.VLAKI_MOLCIJO_S
-    assert obvestila.brez_vlakov(obvestila.VLAKI_VSAJ - 1, zadnji, ZDAJ) is None
-    assert obvestila.brez_vlakov(40, zadnji + 1, ZDAJ) is None
-    assert obvestila.brez_vlakov(40, zadnji, ZDAJ) is not None
+    zadnji = ZDAJ - obvestila.MOLCI_S
+    assert obvestila.brez_podatkov("zeleznica", obvestila.VSAJ["zeleznica"] - 1, zadnji, ZDAJ) is None
+    assert obvestila.brez_podatkov("zeleznica", 40, zadnji + 1, ZDAJ) is None
+    assert obvestila.brez_podatkov("zeleznica", 40, zadnji, ZDAJ) is not None
 
 
 def _voznja(conn, trip_id, network="zeleznica"):
@@ -164,4 +164,34 @@ def test_samodejno_obvestilo_na_straneh_vlakov(conn, monkeypatch):
     conn.execute("INSERT INTO run VALUES('b0', ?, 1, 0, 0, ?)", (dan, zdaj))
     assert obvestila.samodejna(conn, zdaj)
     conn.execute("UPDATE run SET feed_ts = ? WHERE trip_id = 'v0'", (zdaj - 60,))
+    assert obvestila.samodejna(conn, zdaj) == []
+
+
+def test_avtobusi_brez_podatkov_imajo_svoje_obvestilo(conn, monkeypatch):
+    """8. 10. 2026: derp.si od 16:00 ne odgovarja, vlaki pa so tiho že od
+    prejšnjega dne. Dve obvestili, vsako na svojih straneh, z različnim id --
+    zaprto vlakovno ne sme zapreti avtobusnega."""
+    zdaj = int(time.time())
+    dan = datetime.fromtimestamp(zdaj, obvestila.TZ).date().isoformat()
+    _voznja(conn, "v0")
+    _voznja(conn, "b0", network="avtobus")
+    conn.execute("INSERT INTO run VALUES('v0', ?, 1, 0, 0, ?)", (dan, zdaj - 1800))
+    conn.execute("INSERT INTO run VALUES('b0', ?, 1, 0, 0, ?)", (dan, zdaj - 1800))
+    vsaj = obvestila.VSAJ["avtobus"]
+    monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
+                        lambda c, t: {"zeleznica": 3, "avtobus": vsaj})
+    vlak, bus = obvestila.samodejna(conn, zdaj)
+    assert (vlak["omrezje"], bus["omrezje"]) == ("zeleznica", "avtobus")
+    assert "o avtobusih" in bus["besedilo"] and "avtobusov na zemljevidu" in bus["besedilo"]
+    assert len(bus["besedilo"]) <= obvestila.NAJDALJSE
+    assert vlak["id"] != bus["id"]
+
+    # Premalo avtobusov na poti (ponoči): molk ni okvara.
+    monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
+                        lambda c, t: {"zeleznica": 0, "avtobus": vsaj - 1})
+    assert obvestila.samodejna(conn, zdaj) == []
+    # Avtobusi spet pošiljajo: obvestila ni, vlakovni podatek ne šteje.
+    monkeypatch.setattr(obvestila.stats, "vozi_zdaj",
+                        lambda c, t: {"zeleznica": 0, "avtobus": vsaj})
+    conn.execute("UPDATE run SET feed_ts = ? WHERE trip_id = 'b0'", (zdaj - 60,))
     assert obvestila.samodejna(conn, zdaj) == []
