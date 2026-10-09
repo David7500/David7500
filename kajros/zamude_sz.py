@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from . import collector, config, db, iz_lege, stats
+from . import collector, config, db, iz_lege, stats, viri
 from .peroni import _kljuc_imena, stevilka
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -200,10 +200,13 @@ def primerjava(conn: sqlite3.Connection, od_ts: int, najvec: int = 0) -> dict:
 
 
 def _get() -> list[dict]:
-    r = requests.get(f"{config.PERONI_URL}/lokacije",
-                     headers={"User-Agent": config.USER_AGENT}, timeout=30)
-    r.raise_for_status()
-    return r.json()
+    with viri.branje("zamude_sz") as b:
+        r = requests.get(f"{config.PERONI_URL}/lokacije",
+                         headers={"User-Agent": config.USER_AGENT}, timeout=30)
+        b.http = r.status_code
+        r.raise_for_status()
+        b.bajtov = len(r.content)
+        return r.json()
 
 
 def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float) -> dict:
@@ -240,6 +243,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
             # Dokler zajem feeda derp.si ni prebral, ne vemo, katere vlake
             # nosi -- vsak bi bil „samo SŽ“ in šel v `run` mimo derp.si.
             if not iz_lege.feed_prebran():
+                viri.caka("zamude_sz", "na prvo branje derp.si")
                 stop.wait(10)
                 continue
             zdaj = time.time()

@@ -315,7 +315,7 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     zamudo, se feed spreminja skoraj ob vsakem klicu; 304 je tu redkejši kot
     pri voznem redu, a nas nič ne stane.
     """
-    feed = fetch(config.SERVICE_ALERTS_URL, conn, "alerts_etag")
+    feed = fetch(config.SERVICE_ALERTS_URL, conn, "alerts_etag", "derp_ovire")
     if feed is None:
         return {"alerts": 0, "changed": 0, "unchanged": True}
     return ingest(conn, feed)

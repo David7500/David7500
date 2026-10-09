@@ -40,7 +40,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
 | Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
 
-SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči.
+SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči. **Vsak vir je opisan enkrat, v `kajros/viri.py`** (naslov, ritem, izvor, licenca, kaj storiti ob izpadu); vsak klic na tuj strežnik gre skozi `viri.branje()`, sicer ga /admin ne vidi (`test_vsak_klic_na_tuj_streznik_je_v_registru`).
 
 ## Pravila, ki veljajo povsod
 
@@ -82,13 +82,13 @@ kajros/
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
   zamude_lpp.py  zamude mestnega LPP z LPP-jevih zaslonov, svoja nit; vozilo -> vožnja prek derp.si
-  nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; piše le, česar derp.si nima
+  nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
   stik.py        sporočila obiskovalcev; piše iz zahteve
   obvestila.py   obvestila skrbnika potnikom: vsako z rokom in omrežjem
-  zdravje.py     kdaj je zajem zdrav: barve v /admin, ista pravila za pošto
-  opozorila.py   pošta skrbniku, ko je kaj rdeče 10 min; `${DATA_DIR}/.opozorila`
+  viri.py        register virov in dnevnik branj v pomnilniku: zavihek Viri v /admin, preverjanje
+  zdravje.py     kdaj je zajem zdrav (barve v /admin); opozorila.py pošlje rdeče po 10 min (`.opozorila`)
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   server.py      lifespan: bootstrap + zajem v ozadnji niti
   api.py         FastAPI: /api/* + strani /app*

@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import shutil
 import time
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
-from . import config
+from . import config, viri
+
+TZ = ZoneInfo(config.TIMEZONE)
 
 SLABA, MLACNA, DOBRA = "je-slaba", "je-mlacna", "je-dobra"
 
@@ -38,15 +42,34 @@ LPP_STOJI_S = 900
 #: v tem času mora zapisati vsaj napako, sicer stoji.
 NAP_STOJI_S = 900
 
+#: Vozni red IJPP sega mesece naprej; teden pred koncem je čas, da se ve,
+#: dva dni pred koncem je okvara (jutri ali pojutrišnjem ni voženj).
+VOZNI_RED_RUMENO_DNI, VOZNI_RED_RDECE_DNI = 7, 2
+
+
+def _rss() -> int | None:
+    """Pomnilnik procesa v bajtih (Linux). Malina in arwen imata ga malo."""
+    try:
+        with open("/proc/self/status", encoding="ascii") as fh:
+            for vrstica in fh:
+                if vrstica.startswith("VmRSS:"):
+                    return int(vrstica.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
 
 def stroj() -> dict:
-    """Disk in WAL -- tisto, česar baza sama o sebi ne ve."""
+    """Tisto, česar baza sama o sebi ne ve: disk, WAL, pomnilnik, niti in
+    dnevnik branj virov (`viri.py`), ki živi le v tem procesu."""
     raba = shutil.disk_usage(config.DATA_DIR)
     try:
         wal = config.DB_PATH.with_name(config.DB_PATH.name + "-wal").stat().st_size
     except OSError:
         wal = None
-    return {"disk_prostih": raba.free, "disk_vseh": raba.total, "wal_bajtov": wal}
+    return {"disk_prostih": raba.free, "disk_vseh": raba.total, "wal_bajtov": wal,
+            "rss_bajtov": _rss(), "niti": viri.niti(),
+            "pricakovane_niti": viri.pricakovane_niti(), "viri": viri.dnevnik()}
 
 
 def _min(s: float) -> str:
@@ -54,10 +77,20 @@ def _min(s: float) -> str:
     return f"{s // 60} min" if s < 5400 else f"{s / 3600:.1f} h".replace(".", ",")
 
 
+def _ura(ts: float) -> str:
+    return datetime.fromtimestamp(ts, TZ).strftime("%H:%M")
+
+
+def _do(dni: int, d: date) -> str:
+    return (f"se je končal {d.day}. {d.month}." if dni < 0
+            else f"znan le do {d.day}. {d.month}.")
+
+
 def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, str]]:
     """Vrstica -> (razred, razlog). `z` je `/api/health`, `m` je `stroj()`.
 
-    Razlog je ena vrstica za pošto; pri zdravi vrstici prazen.
+    Razlog je ena vrstica: pri rdeči gre v pošto, pri rumeni ga pokaže le
+    pregled, pri zdravi je prazen.
     """
     zdaj = time.time() if zdaj is None else zdaj
     out: dict[str, tuple[str, str]] = {}
@@ -103,8 +136,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     if nez:
         slabi = [f"{vir.upper()} {n} od {vseh}" for vir, (n, vseh) in nez.items()
                  if n >= 3 and vseh and n / vseh >= 0.02]
+        vse = [f"{vir.upper()} {n} od {vseh}" for vir, (n, vseh) in nez.items() if n > 0]
         out["neznane"] = ((SLABA, "vožnje brez voznega reda: " + ", ".join(slabi)) if slabi
-                          else (MLACNA, "") if any(n > 0 for n, _ in nez.values())
+                          else (MLACNA, "vožnje brez voznega reda: " + ", ".join(vse)) if vse
                           else (DOBRA, ""))
 
     # Obratno: vozilo vozi in ima lego, feed zamud pa ga ne nosi. Od 21. do
@@ -126,7 +160,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
                  if nz >= 3 and vseh and nz / vseh >= 0.05]
         out["lega_brez_zamude"] = (
             (SLABA, "vozila brez vsake zamude: " + ", ".join(slabi)) if slabi
-            else (MLACNA, "") if vidni else (DOBRA, ""))
+            else (MLACNA, "vozila brez feeda zamud, zamudo meri lega: " + ", ".join(
+                f"{ime} {nf} od {vseh}" for ime, (nf, _, vseh) in vidni.items()))
+            if vidni else (DOBRA, ""))
 
     # Dva vira zamud vlakov (`zamude_sz`). 28. 9. 2026 je derp.si z voznim
     # redom DUJPP izgubil vse vlake, zemljevid SŽ jih je imel. Rumeno, kadar
@@ -142,21 +178,25 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
         if zdaj - zadnji > SZ_STOJI_S:
             napaka = zs.get("napaka_ts") or 0
             out["zamude_sz"] = (
-                (MLACNA, "") if zdaj - napaka <= SZ_STOJI_S
+                (MLACNA, f"zemljevid SŽ ne odgovarja od pred {_min(zdaj - zadnji)}")
+                if zdaj - napaka <= SZ_STOJI_S
                 else (SLABA, f"nit zemljevida SŽ ne piše od pred {_min(zdaj - zadnji)}"))
         elif not zs.get("oba") and (zs.get("samo_sz") or zs.get("samo_derp")):
-            out["zamude_sz"] = (MLACNA, "")
+            out["zamude_sz"] = (MLACNA, "zamude vlakov samo z " + (
+                "zemljevida SŽ" if zs.get("samo_sz") else "derp.si"))
         else:
             out["zamude_sz"] = (DOBRA, "") if zs.get("oba") else ("", "")
 
     # derp.si po viru. 8. 10. 2026 je od 16:00 zavračal povezave; vrstici
     # zgoraj sta ostali zeleni, kolikor sta `zamude_lpp` in `zamude_sz` pisala
-    # v `run` -- zato posebej, kdaj je derp.si sam nazadnje odgovoril.
+    # v `run` -- zato posebej, kdaj je derp.si sam nazadnje odgovoril. Vsak
+    # vir svoja vrstica: pregled ju kaže na dveh karticah (`viri.py`).
     dp = z.get("derp_prebran")
     if dp is not None and not (vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ):
-        stari = [f"{vir.upper()} pred {_min(zdaj - ts)}" for vir, ts in sorted(dp.items())
-                 if zdaj - ts > DERP_MOLCI_S]
-        out["derp"] = (SLABA, "derp.si ne odgovarja: " + ", ".join(stari)) if stari else (DOBRA, "")
+        for vir, ts in sorted(dp.items()):
+            out[f"derp_{vir}"] = (
+                (SLABA, f"derp.si ({vir.upper()}) ne odgovarja od pred {_min(zdaj - ts)}")
+                if zdaj - ts > DERP_MOLCI_S else (DOBRA, ""))
 
     # Mestni LPP z LPP-jevih zaslonov (`zamude_lpp`), kot zemljevid SŽ zgoraj:
     # rdeče, kadar stoji nit, rumeno, kadar ne odgovarja vir.
@@ -167,7 +207,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
         elif zdaj - (zl.get("ts") or 0) > LPP_STOJI_S:
             napaka = zl.get("napaka_ts") or 0
             out["zamude_lpp"] = (
-                (MLACNA, "") if zdaj - napaka <= LPP_STOJI_S
+                (MLACNA, f"LPP-jevi zasloni ne odgovarjajo od pred "
+                         f"{_min(zdaj - (zl.get('ts') or 0))}")
+                if zdaj - napaka <= LPP_STOJI_S
                 else (SLABA, f"nit LPP-jevih zaslonov ne piše od pred {_min(zdaj - (zl.get('ts') or 0))}"))
         else:
             out["zamude_lpp"] = (DOBRA, "") if zl.get("oba") or zl.get("samo_lpp") else ("", "")
@@ -177,21 +219,68 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     nm = z.get("nap")
     if nm:
         if nm.get("http") and zdaj - (nm.get("napaka_ts") or 0) <= NAP_STOJI_S:
-            out["nap"] = (MLACNA, "")
+            out["nap"] = (MLACNA, f"NAP zavrnil prijavo (HTTP {nm['http']})")
         elif vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ:
             out["nap"] = ("", "")
         elif zdaj - (nm.get("ts") or 0) > NAP_STOJI_S:
             napaka = nm.get("napaka_ts") or 0
             out["nap"] = (
-                (MLACNA, "") if zdaj - napaka <= NAP_STOJI_S
+                (MLACNA, f"NAP ne odgovarja od pred {_min(zdaj - (nm.get('ts') or 0))}")
+                if zdaj - napaka <= NAP_STOJI_S
                 else (SLABA, f"nit NAP ne piše od pred {_min(zdaj - (nm.get('ts') or 0))}"))
         else:
             out["nap"] = (DOBRA, "")
 
+    # Vozni red, ki se konča. Uvoz ob 4:20 premakne okno LPP vsak dan za dan
+    # naprej (`config.LPP_DAYS`); če ne teče, mestne linije čez teden dni
+    # izginejo z vseh strani brez ene same napake v dnevniku -- tako je bilo
+    # na razvojnem računalniku. Brez meritve: meja je posledica, ne šum.
+    vr = z.get("vozni_red")
+    if vr:
+        danes = datetime.fromtimestamp(zdaj, TZ).date()
+        for kljuc, deli, rumeno in (
+                ("vozni_red", (("zeleznica", "vlakov"), ("avtobus", "avtobusov")),
+                 VOZNI_RED_RUMENO_DNI),
+                ("vozni_red_lpp", (("lpp", "mestnega LPP"),), config.LPP_DAYS - 2)):
+            slabi, mlacni = [], []
+            for omr, ime in deli:
+                if not vr.get(omr):
+                    continue
+                d = date.fromisoformat(vr[omr])
+                dni = (d - danes).days
+                if dni < VOZNI_RED_RDECE_DNI:
+                    slabi.append(f"vozni red {ime} {_do(dni, d)}")
+                elif dni < rumeno:
+                    mlacni.append(f"vozni red {ime} {_do(dni, d)}")
+            if any(vr.get(omr) for omr, _ in deli):
+                out[kljuc] = ((SLABA, ", ".join(slabi)) if slabi
+                              else (MLACNA, ", ".join(mlacni)) if mlacni else (DOBRA, ""))
+
+    # Nit, ki je umrla, ne vstane do ponovnega zagona: izjema mimo `except`
+    # v zanki ali napaka ob zagonu. Vir je bil tedaj viden le posredno („ne
+    # piše“), tir s table SŽ pa sploh ne.
+    zive = set(m.get("niti") or ())
+    for nit, kljuci in (m.get("pricakovane_niti") or {}).items():
+        out[f"nit:{nit}"] = ((DOBRA, "") if nit in zive
+                             else (SLABA, f"nit {nit} ne teče ({', '.join(kljuci)})"))
+
+    # Viri brez svojega pravila: rumeno, kadar zadnjih nekaj branj ni uspelo.
+    # Samo rumeno -- teh meja nismo merili, pošta pa mora pomeniti okvaro.
+    for v in viri.vsi():
+        d = (m.get("viri") or {}).get(v.kljuc)
+        if v.zdravje or not v.vklopljen or not d:
+            continue
+        if d["zaporednih"] >= v.prag_napak:
+            out[f"vir:{v.kljuc}"] = (MLACNA, f"{v.ime}: {d['napaka']} "
+                                             f"(od {_ura(d['izpad_od'] or d['napaka_ts'])})")
+        elif d["uspeh_ts"]:
+            out[f"vir:{v.kljuc}"] = (DOBRA, "")
+
     if m.get("disk_vseh"):
         delez = m["disk_prostih"] / m["disk_vseh"]
         out["disk"] = ((SLABA, f"prostora na disku le {100 * delez:.0f} %") if delez < 0.08
-                       else (MLACNA, "") if delez < 0.2 else (DOBRA, ""))
+                       else (MLACNA, f"prostora na disku {100 * delez:.0f} %") if delez < 0.2
+                       else (DOBRA, ""))
 
     # Z `journal_size_limit` (db.connect) se WAL po vsakem prepisu skrči na
     # 64 MB. Večji pomeni, da prepisa ni bilo -- kdo drži star posnetek. Tako
@@ -200,5 +289,5 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     if wal is not None:
         mb = wal / 2**20
         out["wal"] = ((SLABA, f"WAL {mb:.0f} MB -- prepis v bazo ne teče") if mb > 1024
-                      else (MLACNA, "") if mb > 256 else (DOBRA, ""))
+                      else (MLACNA, f"WAL {mb:.0f} MB") if mb > 256 else (DOBRA, ""))
     return out

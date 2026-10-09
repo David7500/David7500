@@ -21,6 +21,8 @@ body.adm { font-feature-settings: "tnum" 1; }
 .adm-zavihki a:hover { color: var(--ink); }
 .adm-zavihki a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
 .adm-osvezeno { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--ink-faint); white-space: nowrap; }
+.adm-osvezeno a { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.adm-osvezeno a:hover { color: var(--ink); }
 
 .adm-main { max-width: 1520px; margin: 0 auto; padding: 22px 28px 60px; }
 .adm-mreza { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
@@ -42,6 +44,10 @@ body.adm { font-feature-settings: "tnum" 1; }
 .adm-k-v.je-poudarek { color: var(--accent-lit); }
 .adm-k-i { font-size: 12.5px; color: var(--ink-dim); margin-top: 6px; }
 .adm-k-d { font: 11.5px var(--mono); margin-top: 3px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; }
+a.adm-k-povezava { display: block; text-decoration: none; color: inherit; }
+a.adm-k-povezava:hover { border-color: var(--line-firm); background: var(--bg-raised); }
+.adm-k-stanje { display: inline-flex; align-items: center; gap: 10px; }
+.adm-k-stanje .adm-pika { width: 12px; height: 12px; }
 
 /* ---------- navpični stolpci (SVG) ---------- */
 
@@ -118,6 +124,7 @@ body.adm { font-feature-settings: "tnum" 1; }
 .adm-zdr .vr { font: 12px var(--mono); color: var(--ink); text-align: right; }
 
 .adm-pika { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--sev-calm); }
+.adm-pika:not([class*="je-"]) { opacity: .55; }
 .adm-pika.je-dobra { background: var(--sev-mild); }
 .adm-pika.je-mlacna { background: var(--sev-hard); }
 .adm-pika.je-slaba { background: var(--sev-bad); }
@@ -317,3 +324,107 @@ body.adm { font-feature-settings: "tnum" 1; }
 .adm-obv-izid { margin-left: auto; font-size: 12.5px; color: var(--ok); }
 .adm-obv-izid.je-napaka { color: var(--sev-bad); }
 .adm-obvestilo { border-left-color: #4f8fd0; }
+
+/* Značka zavihka Viri pove nujnost, ne nabiralnika: barva semaforja. */
+.adm-znacka.je-slaba { background: var(--sev-bad); color: #fff; }
+.adm-znacka.je-mlacna { background: var(--sev-hard); color: var(--bg); }
+
+/* ---------- viri ----------
+ * Kartica na vir: kaj je in kaj daje zgoraj, stanje v vrsticah, od kod in
+ * pod katero licenco v nogi. Rdeča ali rumena kartica ima obrobo v barvi
+ * semaforja in pove, kaj storiti -- pregled je za človeka, ki ga zbudi pošta. */
+
+.adm-pas { display: flex; flex-direction: column; gap: 8px; }
+.adm-pas.je-slaba { border-color: color-mix(in srgb, var(--sev-bad) 55%, var(--line)); }
+.adm-pas.je-mlacna { border-color: color-mix(in srgb, var(--sev-hard) 45%, var(--line)); }
+.adm-pas-glava { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.adm-pas-glava h2 { margin: 0; font: 600 18px var(--sans); }
+.adm-pas-glava .adm-pika { width: 12px; height: 12px; }
+.adm-pas-glava .adm-gumb { margin-left: auto; }
+.adm-pas .adm-pod { margin: 0; }
+.adm-pas .adm-pod b.je-slaba { color: var(--sev-bad); }
+.adm-pas code { font: 11.5px var(--mono); }
+.adm-razlogi { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.adm-razlogi li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink); }
+.adm-pas-prev { margin: 0; font-size: 13px; color: var(--ink-dim); }
+.adm-pas-prev b { color: var(--ink); font-weight: 600; }
+.adm-pas-prev .je-slaba, .adm-pas-prev.je-slaba { color: var(--sev-bad); }
+.adm-gumb { font-size: 13px; padding: 7px 14px; }
+.adm-gumb:disabled { opacity: .55; cursor: default; }
+
+.adm-skupina { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.adm-skupina-ime { margin: 8px 2px 0; font: 600 13.5px var(--sans); color: var(--accent-lit); }
+.adm-viri { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+
+.adm-vir {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--r-lg);
+  padding: 14px 16px 12px; scroll-margin-top: 80px;
+}
+.adm-vir.je-slaba { border-color: color-mix(in srgb, var(--sev-bad) 60%, var(--line)); }
+.adm-vir.je-mlacna { border-color: color-mix(in srgb, var(--sev-hard) 50%, var(--line)); }
+.adm-vir.je-izklopljen { opacity: .55; }
+.adm-vir.je-izbran { outline: 2px solid var(--accent); outline-offset: 2px; }
+.adm-vir header { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.adm-vir h3 { margin: 0; font: 600 14px var(--sans); color: var(--ink); }
+.adm-vir-vloga { font-size: 11.5px; color: var(--ink-faint); flex-basis: 100%; padding-left: 17px; }
+.adm-vir-kaj { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
+.adm-vir-razlog { margin: 0; font-size: 13px; font-weight: 500; color: var(--sev-bad); }
+.adm-vir.je-mlacna .adm-vir-razlog { color: var(--sev-hard); }
+.adm-vir.je-izklopljen .adm-vir-razlog { color: var(--ink-faint); font-weight: 400; }
+.adm-vir-vr { display: flex; flex-direction: column; }
+.adm-vir-v {
+  display: grid; grid-template-columns: minmax(96px, 38%) 1fr; gap: 10px;
+  padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px;
+}
+.adm-vir-v:last-child { border-bottom: 0; }
+.adm-vir-v span { color: var(--ink-faint); }
+.adm-vir-v b { font: 400 12px/1.45 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.adm-vir-v.je-slaba b { color: var(--sev-bad); }
+.adm-vir-v.je-mlacna b { color: var(--sev-hard); }
+.adm-vir-v.je-dobra b { color: var(--sev-mild); }
+.adm-vir-ukrep {
+  margin: 2px 0 0; padding: 9px 11px; border-radius: var(--r);
+  background: var(--bg-raised); font-size: 12.5px; line-height: 1.5; color: var(--ink-dim);
+}
+.adm-vir-ukrep b { color: var(--ink); font-weight: 600; }
+.adm-vir-noga {
+  margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-faint);
+}
+.adm-vir-noga a { font: 11px var(--mono); color: var(--ink-mute); text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-vir-noga a:hover { color: var(--accent-lit); text-decoration: underline; }
+
+/* Viri na zavihku Stanje: vrstica na vir, celotna je povezava. */
+.adm-viri-kratko { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+.adm-viri-kratko a {
+  display: flex; align-items: center; gap: 9px; padding: 8px 0; min-width: 0;
+  border-bottom: 1px solid var(--line-soft); font-size: 13px; color: inherit; text-decoration: none;
+}
+.adm-viri-kratko a:hover .ime { color: var(--ink); }
+.adm-viri-kratko a.je-izklopljen { opacity: .5; }
+.adm-viri-kratko .ime { color: var(--ink-dim); flex-shrink: 0; }
+.adm-viri-kratko .vr { margin-left: auto; font: 12px var(--mono); color: var(--ink); text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+.adm-dn-mreza { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 24px; }
+.adm-dogodki, .adm-dnevnik { list-style: none; margin: 0; padding: 0; max-height: 380px; overflow-y: auto; }
+.adm-dogodki li, .adm-dnevnik li {
+  display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--ink-dim); line-height: 1.45;
+}
+.adm-dnevnik li { font: 11.5px/1.5 var(--mono); }
+.adm-dogodki time, .adm-dnevnik time { font: 11.5px/1.5 var(--mono); color: var(--ink-faint); flex-shrink: 0; min-width: 40px; }
+.adm-dogodki b { color: var(--ink); font-weight: 500; }
+.adm-dogodki li.je-slaba b { color: var(--sev-bad); }
+.adm-dogodki li.je-dobra b { color: var(--sev-mild); }
+
+@media (max-width: 1100px) {
+  .adm-dn-mreza { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .adm-viri-kratko { grid-template-columns: 1fr; }
+  .adm-pas-glava .adm-gumb { margin-left: 0; width: 100%; }
+  .adm-vir-v { grid-template-columns: minmax(84px, 34%) 1fr; gap: 8px; }
+}

@@ -15,7 +15,7 @@ import requests
 
 from zoneinfo import ZoneInfo
 
-from . import config, db, geo
+from . import config, db, geo, viri
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -42,16 +42,18 @@ def download(conn: sqlite3.Connection, force: bool = False) -> Path | None:
         if modified:
             headers["If-Modified-Since"] = modified
 
-    resp = requests.get(config.GTFS_URL, headers=headers, timeout=300, stream=True)
-    if resp.status_code == 304:
-        return None
-    resp.raise_for_status()
-
-    tmp = target.with_suffix(".tmp")
-    with open(tmp, "wb") as fh:
-        for chunk in resp.iter_content(1 << 20):
-            fh.write(chunk)
-    tmp.replace(target)
+    try:
+        with viri.branje("gtfs_ijpp") as b:
+            resp = requests.get(config.GTFS_URL, headers=headers, timeout=300, stream=True)
+            b.http = resp.status_code
+            if resp.status_code == 304:
+                b.nespremenjeno = True
+                return None
+            resp.raise_for_status()
+            b.bajtov = _shrani(resp, target)
+    finally:
+        # Na arwenu bere podproces: pregled vidi branje le prek baze.
+        viri.shrani(conn, "gtfs_ijpp")
 
     if resp.headers.get("ETag"):
         db.set_meta(conn, "gtfs_etag", resp.headers["ETag"])
@@ -59,6 +61,19 @@ def download(conn: sqlite3.Connection, force: bool = False) -> Path | None:
         db.set_meta(conn, "gtfs_last_modified", resp.headers["Last-Modified"])
     conn.commit()
     return target
+
+
+def _shrani(resp, target: Path) -> int:
+    """Zip na disk prek začasne datoteke; vrne bajte. Prenos, ki se pretrga,
+    ne sme pustiti pol zipa na mestu celega."""
+    tmp = target.with_suffix(".tmp")
+    bajtov = 0
+    with open(tmp, "wb") as fh:
+        for chunk in resp.iter_content(1 << 20):
+            fh.write(chunk)
+            bajtov += len(chunk)
+    tmp.replace(target)
+    return bajtov
 
 
 def download_lpp(conn: sqlite3.Connection, force: bool = False) -> Path | None:
@@ -77,16 +92,18 @@ def download_lpp(conn: sqlite3.Connection, force: bool = False) -> Path | None:
         if modified:
             headers["If-Modified-Since"] = modified
 
-    resp = requests.get(config.LPP_GTFS_URL, headers=headers, timeout=300, stream=True)
-    if resp.status_code == 304:
-        return None
-    resp.raise_for_status()
-
-    tmp = target.with_suffix(".tmp")
-    with open(tmp, "wb") as fh:
-        for chunk in resp.iter_content(1 << 20):
-            fh.write(chunk)
-    tmp.replace(target)
+    try:
+        with viri.branje("gtfs_lpp") as b:
+            resp = requests.get(config.LPP_GTFS_URL, headers=headers, timeout=300, stream=True)
+            b.http = resp.status_code
+            if resp.status_code == 304:
+                b.nespremenjeno = True
+                return None
+            resp.raise_for_status()
+            b.bajtov = _shrani(resp, target)
+    finally:
+        # Na arwenu bere podproces: pregled vidi branje le prek baze.
+        viri.shrani(conn, "gtfs_lpp")
 
     if resp.headers.get("ETag"):
         db.set_meta(conn, "lpp_etag", resp.headers["ETag"])

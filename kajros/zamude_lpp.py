@@ -50,7 +50,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, iz_lege, lpp, stats, zdravje
+from . import collector, config, db, iz_lege, lpp, stats, viri, zdravje
 
 _URL = "https://data.lpp.si/api/station/arrival"
 
@@ -323,11 +323,16 @@ def _obhod(kode: dict[str, str]) -> tuple[list[tuple[str, float, list]], int]:
         except (requests.RequestException, ValueError):
             return koda, time.time(), None
 
-    with ThreadPoolExecutor(DELAVCEV) as ex:
-        izidi = list(ex.map(ena, list(kode)))
-    napak = sum(p is None for _, _, p in izidi)
-    if izidi and napak > NAJVEC_NAPAK * len(izidi):
-        raise RuntimeError(f"data.lpp.si: {napak} od {len(izidi)} postajališč brez odgovora")
+    # Ves obhod je eno branje: posamezno postajališče brez odgovora je
+    # običajno (rep do 10 s), izpad je šele čez `NAJVEC_NAPAK`.
+    with viri.branje("zamude_lpp") as b:
+        with ThreadPoolExecutor(DELAVCEV) as ex:
+            izidi = list(ex.map(ena, list(kode)))
+        napak = sum(p is None for _, _, p in izidi)
+        if napak:
+            b.opomba = f"{napak} od {len(izidi)} postajališč brez odgovora"
+        if izidi and napak > NAJVEC_NAPAK * len(izidi):
+            raise RuntimeError(f"data.lpp.si: {napak} od {len(izidi)} postajališč brez odgovora")
     return [(k, ts, p) for k, ts, p in izidi if p is not None], napak
 
 
@@ -342,11 +347,14 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
             # Brez tega bi bila ob zagonu vsaka vožnja „samo LPP“ in bi šla v
             # `run` mimo derp.si (glej `zamude_sz.teci`).
             if not iz_lege.feed_prebran():
+                viri.caka("zamude_lpp", "na prvo branje derp.si")
                 stop.wait(10)
                 continue
             try:
                 # Ponoči vozijo 0-2 avtobusa: obhod 97 postajališč za nič.
                 if stats.vozi_zdaj(conn, zacetek)["avtobus"] < zdravje.MIN_VOZENJ:
+                    viri.caka("zamude_lpp", "ponoči ne bere: po voznem redu vozita "
+                                            "največ dva avtobusa")
                     stop.wait(config.LPP_ZAMUDE_SECONDS)
                     continue
                 dnevi = _dnevi(zacetek)

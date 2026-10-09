@@ -33,7 +33,7 @@ from datetime import datetime
 
 import requests
 
-from . import config, db, geo, stats
+from . import config, db, geo, stats, viri
 from .naslovi import fold
 
 _URL = "https://data.lpp.si/api/route/arrivals-on-route"
@@ -65,9 +65,12 @@ def _prinesi(vzorec: str) -> list | None:
     if v and zdaj - v[0] < _TTL_S:
         return v[1]
     try:
-        r = requests.get(_URL, params={"trip-id": vzorec}, timeout=_TIMEOUT_S)
-        r.raise_for_status()
-        podatki = r.json().get("data") or []
+        with viri.branje("lpp_zivo") as b:
+            r = requests.get(_URL, params={"trip-id": vzorec}, timeout=_TIMEOUT_S)
+            b.http = r.status_code
+            r.raise_for_status()
+            b.bajtov = len(r.content)
+            podatki = r.json().get("data") or []
     except Exception:
         # Tih izpad je namenoma: brez tega vira stran deluje naprej z derp.si.
         return None
@@ -186,9 +189,12 @@ def derp_molci(conn: sqlite3.Connection, zdaj: float) -> bool:
 
 def _get(url: str, params: dict | None, timeout: float) -> list | dict | None:
     try:
-        r = requests.get(url, params=params, timeout=timeout)
-        r.raise_for_status()
-        return r.json().get("data")
+        with viri.branje("lpp_zivo") as b:
+            r = requests.get(url, params=params, timeout=timeout)
+            b.http = r.status_code
+            r.raise_for_status()
+            b.bajtov = len(r.content)
+            return r.json().get("data")
     except Exception:
         return None
 

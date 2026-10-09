@@ -30,8 +30,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
-               nadomestni, naslovi, obisk, obvestila, peroni, pot, pripni, pristanek, stats, stik,
-               tiri, zapore, zdravje)
+               nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot, pripni, pristanek,
+               server, stats, stik, tiri, viri, zapore, zdravje)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -1450,6 +1450,14 @@ def _health_stevci(conn):
         "       COUNT(DISTINCT service_date) AS dni FROM napoved").fetchone()
     out["senca"] = {"dni": sen["dni"], "od": sen["od"], "do": sen["do_"],
                     "vrstic": sen["vseh"], "razresenih": sen["razresenih"]}
+    # Do kdaj vozni red sploh sega (`zdravje.ocena`): uvoz, ki ne teče, se
+    # pokaže šele, ko mestni LPP izgine z vseh strani. Predpomnjeno tu, ker se
+    # meja premakne enkrat na dan.
+    out["vozni_red"] = {
+        "zeleznica": stats.znano_do(conn, "zeleznica"),
+        "avtobus": stats.znano_do(conn, "avtobus"),
+        "lpp": stats.znano_do(conn, "avtobus", "lpp") if config.LPP_ENABLED else None,
+    }
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
     # `db_path` je bil tu, dokler je bil health viden samo domacemu omrezju.
@@ -3122,20 +3130,51 @@ def admin_podatki(request: Request,
         # Samo število za značko; zemljevid in sledi so v `/admin/deljenje`.
         deljenje.init(conn)
         out["deljenje"] = {"vklopljeno": config.DELI, "zdaj": deljenje.deli_zdaj(conn)}
+        # Samodejna so ta hip na straneh, a jih skrbnik ni napisal in jih ne
+        # more umakniti: brez tega bi jih videl šele kot potnik.
         out["obvestila"] = {"seznam": obvestila.seznam(conn),
+                            "samodejna": _predpomni(
+                                "obvestila-samodejna", None, 60,
+                                lambda: _conn_klic(obvestila.samodejna), v_ozadju=True),
                             "najdaljse": obvestila.NAJDALJSE,
                             "najdlje_dni": obvestila.NAJDLJE_S // 86400}
-    out["zdravje"] = api_health()
-    out["stroj"] = {
-        **zdravje.stroj(),
-        "zagon_ts": int(_ZAGON_TS), "teka_s": int(time.time() - _ZAGON_TS),
-        "razlicica": app.version,
-        "obisk_od": obisk.IZPRAZNI_S,
+        out["zdravje"] = api_health()
+        out["stroj"] = {
+            **zdravje.stroj(),
+            "zagon_ts": int(_ZAGON_TS), "teka_s": int(time.time() - _ZAGON_TS),
+            "razlicica": app.version,
+            "obisk_od": obisk.IZPRAZNI_S,
+            # Ali pošta ob okvari sploh gre: brez nastavitev je ni (razvoj),
+            # z njimi mora teči nit -- njen molk bi bil videti kot mir.
+            "posta": ("ni" if opozorila.nastavitve() is None
+                      else "tece" if "kajros-opozorila" in viri.niti() else "stoji"),
+        }
+        # Barve in razlogi iz `zdravje.ocena()`, ne iz prikaza: ista pravila
+        # berejo opozorila po pošti.
+        ocena = zdravje.ocena(out["zdravje"], out["stroj"])
+        out["razredi"] = {k: r for k, (r, _) in ocena.items()}
+        out["razlogi"] = {k: razlog for k, (r, razlog) in ocena.items()
+                          if razlog and r in (zdravje.SLABA, zdravje.MLACNA)}
+        out["viri"] = {"skupine": viri.SKUPINE, "seznam": viri.pregled(conn, ocena)}
+    # Dnevnik branj je zdaj pri virih; v `stroj` bi bil drugič.
+    out["stroj"].pop("viri", None)
+    out["dnevnik"] = {
+        "dogodki": viri.dogodki(),
+        "vrstice": [{"ts": int(ts), "besedilo": m} for ts, m in list(server.DNEVNIK)[-150:]],
     }
-    # Barve vrstic iz `zdravje.ocena()`, ne iz prikaza: ista pravila berejo
-    # opozorila po pošti.
-    out["razredi"] = {k: r for k, (r, _) in zdravje.ocena(out["zdravje"], out["stroj"]).items()}
     return out
+
+
+@app.get(f"{ADMIN_POT}/viri/preveri", include_in_schema=False)
+def admin_viri_preveri(request: Request):
+    """Ali viri ta hip odgovarjajo -- gumb „Preveri vire“ v pregledu.
+
+    Isto preverjanje kot v pošti ob okvari (`viri.preveri_vire`), le da ga
+    skrbnik sproži sam, ne da bi čakal deset minut na rdečo. GET, ker v bazo
+    ne piše; traja do 30 s, ker gredo vsi viri hkrati z mejo 10 + 20 s.
+    """
+    _preveri_admina(request)
+    return viri.preveri_vire()
 
 
 @app.get(f"{ADMIN_POT}/deljenje", include_in_schema=False)

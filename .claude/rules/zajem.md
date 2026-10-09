@@ -7,6 +7,10 @@ paths:
   - "kajros/peroni.py"
   - "kajros/zamude_sz.py"
   - "kajros/iz_lege.py"
+  - "kajros/viri.py"
+  - "kajros/nap.py"
+  - "kajros/zamude_lpp.py"
+  - "kajros/zdravje.py"
 ---
 
 # Kaj feed pošlje in kje laže
@@ -276,3 +280,16 @@ Lege medkrajevnih avtobusov na derp.si so NAP-ov SIRI-VM, le pretvorjen (`derp-s
 ## Napaka pisanja: najprej `conn.rollback()`
 
 Vsaka nit ima svojo povezavo in vsak `except` okoli pisanja najprej razveljavi. Python ob napaki transakcije ne zapre; prvo branje v njej zamrzne posnetek, nato vsako pisanje vrne „database is locked“ (SQLITE_BUSY_SNAPSHOT) — za vedno, čakanje ne pomaga. 1. 10. 2026 je nočno vzdrževanje ob 3:30 drlo pisanje dlje od 30 s: nit zemljevida SŽ stala 4,3 h, WAL zrasel na 5,4 GB (za odprtim posnetkom ga ni mogoče prepisati), disk na 8 %. Od takrat `journal_size_limit` 64 MB v `db.connect()`, da se WAL po ponastavitvi skrči. Preizkus: `test_nit_po_zaklenjeni_bazi_ne_obstane`.
+
+
+## Nov vir: vnos v `viri.vsi()` in `viri.branje()` (od 9. 10. 2026)
+
+Vsak vir je opisan enkrat, v `viri.vsi()`: naslov, izvor, licenca, ritem, nit, ključi zdravja, kaj storiti ob izpadu, naslov za preverjanje. Vsak klic na tuj strežnik gre skozi `with viri.branje("<ključ>") as b:` — dnevnik v pomnilniku šteje branja, napake (po človeško, `viri.opis_napake`), čas in bajte zadnje ure. `test_vsak_klic_na_tuj_streznik_je_v_registru` pade, če ključ v kodi ni v registru ali vnos v registru nima branja.
+
+* **Dogodek „ne odgovarja“ šele ob `prag_napak` zaporednih** (3; dnevni viri 1): ena izgubljena tabla od 266 ali en počasen odgovor LPP ni izpad.
+* **Vir brez svojega pravila v `zdravje.ocena()` dobi splošno: rumeno** ob pragu (`vir:<ključ>`), nikoli rdeče — tistih meja nismo merili, pošta pa mora pomeniti okvaro. Vir s svojim pravilom splošnega nima: dve vrstici o istem bi se razšli.
+* **Mrtva nit je rdeča** (`nit:<ime>`), kadar je `server.lifespan` zagnal zajem (`viri.zajem_zagnan`). Prej je bila vidna le posredno, tir pa sploh ne.
+* **Vozni red, ki se konča** (`vozni_red`, `vozni_red_lpp`): IJPP rumeno teden pred koncem, rdeče dva dni pred koncem; LPP rumeno, ko je okno krajše od `LPP_DAYS − 2` (dva zgrešena uvoza). 9. 10. 2026 na razvojnem računalniku LPP znan le do 12. 10. — brez vrstice bi mestne linije izginile brez ene napake v dnevniku.
+* **Dnevni vir in podproces** (`KAJROS_REFRESH=subprocess`): `viri.shrani()` zapiše stanje v `meta.vir:<ključ>`, pregled ga pokaže, kadar ta proces vira še ni bral.
+* **`derp` je razdeljen** na `derp_ijpp` in `derp_lpp` — vsak vir svoja vrstica in svoja pošta.
+

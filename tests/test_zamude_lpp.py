@@ -224,17 +224,19 @@ def test_zdravje_derp_in_lpp():
          "derp_prebran": {"ijpp": ZDAJ - 30, "lpp": ZDAJ - 30},
          "zamude_lpp": {"ts": ZDAJ - 100, "oba": 40, "samo_lpp": 0}}
     o = zdravje.ocena(z, {}, ZDAJ)
-    assert o["derp"][0] == zdravje.DOBRA and o["zamude_lpp"][0] == zdravje.DOBRA
+    assert o["derp_ijpp"][0] == o["derp_lpp"][0] == zdravje.DOBRA
+    assert o["zamude_lpp"][0] == zdravje.DOBRA
     z["derp_prebran"]["ijpp"] = ZDAJ - 3600
-    assert zdravje.ocena(z, {}, ZDAJ)["derp"] == (zdravje.SLABA,
-                                                  "derp.si ne odgovarja: IJPP pred 60 min")
+    o = zdravje.ocena(z, {}, ZDAJ)
+    assert o["derp_ijpp"] == (zdravje.SLABA, "derp.si (IJPP) ne odgovarja od pred 60 min")
+    assert o["derp_lpp"][0] == zdravje.DOBRA, "vsak vir svoja vrstica"
     z["zamude_lpp"] = {"ts": ZDAJ - 3600, "napaka_ts": ZDAJ - 60}
     assert zdravje.ocena(z, {}, ZDAJ)["zamude_lpp"][0] == zdravje.MLACNA
     z["zamude_lpp"] = {"ts": ZDAJ - 3600, "napaka_ts": ZDAJ - 3600}
     assert zdravje.ocena(z, {}, ZDAJ)["zamude_lpp"][0] == zdravje.SLABA
     z["vozi_zdaj"]["avtobus"] = 1                    # noč
     o = zdravje.ocena(z, {}, ZDAJ)
-    assert "derp" not in o and o["zamude_lpp"] == ("", "")
+    assert "derp_ijpp" not in o and o["zamude_lpp"] == ("", "")
 
 
 def test_vozi_zdaj_loci_mestni_lpp():

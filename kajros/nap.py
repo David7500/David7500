@@ -41,7 +41,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, iz_lege, stats
+from . import collector, config, db, geo, iz_lege, stats, viri
 
 TZ = collector.TZ
 
@@ -309,12 +309,15 @@ def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
 
 def beri(seja: requests.Session, prijava_: tuple[str, str]) -> bytes:
     cas = datetime.now(TZ).isoformat()
-    r = seja.post(config.NAP_URL, data=_ZAHTEVEK.format(cas=cas).encode(),
-                  headers={"Content-Type": "application/xml"},
-                  auth=prijava_, timeout=TIMEOUT_S)
-    if r.status_code in (401, 403):
-        raise NiDostopa(r.status_code)
-    r.raise_for_status()
+    with viri.branje("nap") as b:
+        r = seja.post(config.NAP_URL, data=_ZAHTEVEK.format(cas=cas).encode(),
+                      headers={"Content-Type": "application/xml"},
+                      auth=prijava_, timeout=TIMEOUT_S)
+        b.http = r.status_code
+        if r.status_code in (401, 403):
+            raise NiDostopa(r.status_code)
+        r.raise_for_status()
+        b.bajtov = len(r.content)
     return r.content
 
 
@@ -331,9 +334,12 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
             if p is None:
                 if not brez_prijave:
                     log("NAP: prijave ni (deploy/nap.sh), lege samo z derp.si")
+                    viri.caka("nap", "prijave ni: na strežniku `deploy/nap.sh`")
                 brez_prijave = True
                 stop.wait(60)
                 continue
+            if brez_prijave:
+                viri.caka("nap", None)
             brez_prijave = False
             cakaj = config.NAP_SECONDS
             try:

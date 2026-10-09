@@ -10,13 +10,15 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (alerts, collector, config, db, deljenje, gtfs, nap, obisk, ocena,
-               opozorila, peroni, pripni, stats, stik, weather, zamude_lpp, zamude_sz)
+               opozorila, peroni, pripni, stats, stik, viri, weather, zamude_lpp,
+               zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -31,7 +33,14 @@ _ogrevanje = threading.Lock()
 _strezemo = False
 
 
+#: Zadnje vrstice dnevnika za /admin. Journal na strežniku bere samo, kdor
+#: ima ssh; skrbnik s telefona vidi le pregled -- in prav tja sodi odgovor na
+#: „kaj je zajem rekel, ko je obstal“.
+DNEVNIK: deque = deque(maxlen=300)
+
+
 def _log(msg: str) -> None:
+    DNEVNIK.append((time.time(), msg))
     print(f"{datetime.now(TZ):%H:%M:%S}  {msg}", flush=True)
 
 
@@ -467,6 +476,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:      # vreme ni kriticno -- zajem tece naprej
                 conn.rollback()
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
+            viri.shrani(conn, "vreme")        # bere enkrat na dan: preživi zagon
 
         # Nocno vzdrzevanje: obrez dnevnika in razrezi statistike. Prej je bilo
         # oboje priklopljeno na vremensko opravilo in z `KAJROS_WEATHER=0` ni teklo
@@ -628,6 +638,7 @@ async def lifespan(app):
             daemon=True, name="kajros-collector",
         )
         thread.start()
+        viri.zajem_zagnan = True
         _log(_describe(settings))
         peroni_nit = _zazeni_perone()
         sz_nit = _zazeni_zamude_sz()

@@ -2,11 +2,11 @@
 
 // Pregled za skrbnika: kdo je bil na strani in ali stroj dela.
 //
-// Štirje zavihki -- Stanje, Zgodovina, Sporočila, Deljenje. Prvi trije imajo
-// en endpoint, `/admin/podatki?od=&do=`. Brez meja vrne današnji dan; odgovor
-// vedno nosi še `danes`, `zadnjih30`, zdravje in sporočila, zato Stanje in
-// Sporočila rabita en klic, Zgodovina pa enega več za izbrano obdobje.
-// Deljenje ima svoj endpoint in ritem (`admin_deljenje.js`).
+// Zavihki -- Stanje, Viri, Zgodovina, Sporočila, Obvestila, Deljenje. Vsi
+// razen zadnjega berejo en endpoint, `/admin/podatki?od=&do=`. Brez meja vrne
+// današnji dan; odgovor vedno nosi še `danes`, `zadnjih30`, zdravje, vire in
+// sporočila, zato vsi rabijo en klic, Zgodovina pa enega več za izbrano
+// obdobje. Deljenje ima svoj endpoint in ritem (`admin_deljenje.js`).
 //
 // Kar je na tej strani najlažje narobe prebrati, je vsota dnevnih
 // obiskovalcev. Sol se vsak dan zavrže (glej `obisk.py`), zato ista oseba v
@@ -448,96 +448,316 @@ function vedraObdobja(o) {
   }));
 }
 
-/** Zdravje zajema in stroja kot vrstice s piko stanja. */
-function vrsticeZdravja(d) {
-  const z = d.zdravje || {}, m = d.stroj || {}, mreze = z.by_network || {};
-  // Barve računa strežnik (`zdravje.ocena()`), ker ista pravila pošiljajo
-  // opozorila po pošti -- dve kopiji mej bi se razšli.
-  const r = d.razredi || {};
-  const zdaj = Date.now() / 1000;
-  const disk = m.disk_vseh ? m.disk_prostih / m.disk_vseh : null;
+// ------------------------------------------------------------------ viri
+//
+// Zavihek „Viri“ (od 9. 10. 2026). Prej je bilo zdravje 23 vrstic v eni
+// plošči sredi obiska: vir, njegov števec, primerjava dveh virov in disk
+// drug ob drugem, brez besede o tem, kaj je vir, kaj daje in kaj storiti, ko
+// ne dela. Zdaj ima vsak vir kartico (`viri.py` na strežniku pove, kaj je),
+// izid zajema in stroj pa vsak svojo ploščo.
+//
+// Barve in razloge še vedno računa strežnik (`zdravje.ocena()`): ista pravila
+// pošiljajo pošto, dve kopiji mej bi se razšli.
+
+const URA_TS = new Intl.DateTimeFormat("sl-SI", { timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit" });
+const DAN_TS = new Intl.DateTimeFormat("sl-SI", { timeZone: "Europe/Ljubljana", day: "numeric", month: "numeric" });
+/** Ura, ob starejšem od 20 h še dan: „16:02“ ali „8. 10. 16:02“. */
+function uraTs(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts * 1000);
+  return Date.now() / 1000 - ts > 72000 ? `${DAN_TS.format(d)} ${URA_TS.format(d)}` : URA_TS.format(d);
+}
+/** Datum ISO kot „12. 12. 2026“. */
+const datumIso = (s) => { const d = izIso(s); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
+
+const RANG = { "je-slaba": 3, "je-mlacna": 2, "je-dobra": 1, "": 0 };
+
+/** Slovenska množina: mn(2, "branje", "branji", "branja", "branj") -> „2 branji“. */
+function mn(n, ena, dve, tri, pet) {
+  const k = Math.abs(n) % 100;
+  return `${st(n)} ${k === 1 ? ena : k === 2 ? dve : k === 3 || k === 4 ? tri : pet}`;
+}
+const najslabse = (razredi) => razredi.reduce((a, r) => (RANG[r || ""] > RANG[a] ? r : a), "");
+
+/** Kako se pri katerem viru imenuje žig v bazi (`viri.zapisano`). */
+const ZAPIS_IME = {
+  derp_zamude: "zadnje branje v bazi", derp_lpp: "zadnje branje v bazi",
+  derp_ovire: "obvestilo nazadnje v feedu", nap: "nit nazadnje zapisala",
+  zamude_sz: "nit nazadnje zapisala", zamude_lpp: "nit nazadnje zapisala",
+  peroni: "zadnja prebrana tabla", gtfs_ijpp: "zadnji uvoz", gtfs_lpp: "zadnji uvoz",
+  vreme: "zadnji prenos",
+};
+
+let preverba = null;        // izid „Preveri vire“: {teče} ali odgovor strežnika
+let skokNaVir = null;       // kartica, na katero naj skoči zavihek Viri
+
+function ujemanje(p) {
+  return !p || !p.parov ? null
+    : `${st(100 * p.v_minuti / p.parov)} % v minuti od ${st(p.parov)} · nad 5 min ${st(p.nad_5_min)}`;
+}
+
+/** Vrstice, ki jih pozna samo ta vir: števci iz `/api/health`. */
+function podrobnostiVira(kljuc, d) {
+  const z = d.zdravje || {};
+  const out = [];
+  const dodaj = (ime, vr) => { if (vr != null && vr !== "") out.push([ime, vr]); };
+  const nez = (vir) => { const n = (z.rt_neznanih || {})[vir]; return n ? `${st(n[0])} od ${st(n[1])}` : null; };
+  if (kljuc === "derp_zamude") {
+    dodaj("vožnje brez voznega reda", nez("ijpp"));
+    const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
+    dodaj("vozila brez feeda zamud", lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
+      `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : null);
+  } else if (kljuc === "derp_lpp") {
+    dodaj("vožnje brez voznega reda", nez("lpp"));
+  } else if (kljuc === "derp_ovire") {
+    dodaj("ovir zdaj", st(z.alerts_active));
+  } else if (kljuc === "nap" && z.nap) {
+    const nm = z.nap;
+    if (nm.vozil != null) {
+      dodaj("v odgovoru", `${st(nm.vozil)} vozil · pripetih ${st(nm.pripetih)} · brez vožnje ${st(nm.brez_voznje)}`
+        + ` · zapisanih ${st(nm.zapisanih)}`);
+    }
+    if (nm.derp && nm.skupnih) {
+      dodaj("ujemanje z derp.si", `skupnih ${st(nm.skupnih)} · ista vožnja ${st(100 * nm.ista_voznja / nm.skupnih)} %`
+        + (nm.isti_cas ? ` · odmik ${st(nm.odmik_m, 1)} m` : "")
+        + ` · NAP novejši za ${st(nm.prednost_s)} s · samo NAP ${st(nm.samo_nap)} · samo derp ${st(nm.samo_derp)}`);
+    }
+  } else if (kljuc === "zamude_sz" && z.zamude_sz) {
+    const zs = z.zamude_sz;
+    dodaj("v odgovoru", `oba ${st(zs.oba)} · samo SŽ ${st(zs.samo_sz)} · samo derp ${st(zs.samo_derp)}`
+      + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : ""));
+    dodaj("ujemanje · 24 h", ujemanje(zs.primerjava));
+  } else if (kljuc === "zamude_lpp" && z.zamude_lpp) {
+    const zl = z.zamude_lpp;
+    dodaj("v obhodu", `oba ${st(zl.oba)} · samo LPP ${st(zl.samo_lpp)} · živih ${st(zl.zivih)}`
+      + ` · brez voznega reda ${st(zl.brez_voznega_reda)} · ${st(zl.postaj)} postajališč`);
+    dodaj("ujemanje · 24 h", ujemanje(zl.primerjava));
+    // Meritev za odločitev, ali LPP-jeve prihode pripenjati tudi brez derp.si.
+    const [a, b, c, e] = zl.po_voznem_redu || [0, 0, 0, 0];
+    if (a + b + c + e) dodaj("samo po voznem redu", `zadel ${st(a)} · zgrešil ${st(b)} · dvoumno ${st(c)} · brez ${st(e)}`);
+  } else if (kljuc === "gtfs_ijpp") {
+    const vr = z.vozni_red || {};
+    dodaj("znan do", [vr.zeleznica && `vlaki ${datumIso(vr.zeleznica)}`,
+      vr.avtobus && `avtobusi ${datumIso(vr.avtobus)}`].filter(Boolean).join(" · ") || null);
+  } else if (kljuc === "gtfs_lpp") {
+    const vr = z.vozni_red || {};
+    dodaj("znan do", vr.lpp ? datumIso(vr.lpp) : null);
+  }
+  return out;
+}
+
+/** Kratko stanje vira za seznam na zavihku Stanje. */
+function kratkoVira(v) {
+  const dn = v.dnevnik;
+  if (!v.vklopljen) return "izklopljen";
+  if (v.razlogi.length) return v.razlogi[0];
+  if (dn && dn.zaporednih) return `${dn.napaka} (${dn.zaporednih}×)`;
+  if (dn && dn.caka) return `čaka: ${dn.caka}`;
+  if (dn && dn.uspeh_ts) return `odgovoril ${pred(dn.uspeh_ts)}`;
+  if (v.zapisano) return `${ZAPIS_IME[v.kljuc] || "zapis"} ${pred(v.zapisano)}`;
+  return v.nit ? "v tem zagonu še ni bral" : "nihče še ni vprašal";
+}
+
+function vrsticaKartice(ime, vr, razred = "") {
+  return `<div class="adm-vir-v ${razred}"><span>${escapeHtml(ime)}</span><b>${escapeHtml(vr)}</b></div>`;
+}
+
+function karticaVira(v, d) {
+  const dn = v.dnevnik;
+  const razred = v.vklopljen ? v.razred || "" : "je-izklopljen";
+  let h = `<article class="adm-vir ${razred}" id="vir-${v.kljuc}">
+    <header><span class="adm-pika ${v.razred || ""}"></span><h3>${escapeHtml(v.ime)}</h3>
+      <span class="adm-vir-vloga">${escapeHtml(v.vloga)}</span></header>
+    <p class="adm-vir-kaj">${escapeHtml(v.kaj)}</p>`;
+  if (!v.vklopljen) {
+    return `${h}<p class="adm-vir-razlog">Izklopljen v nastavitvah.</p>${nogaVira(v)}</article>`;
+  }
+  if (v.razlogi.length) {
+    h += v.razlogi.map((r) => `<p class="adm-vir-razlog">${escapeHtml(r)}</p>`).join("");
+  }
+  h += `<div class="adm-vir-vr">`;
+  h += vrsticaKartice("ritem", v.ritem);
+  if (dn && dn.caka) h += vrsticaKartice("čaka", `${dn.caka} · od ${uraTs(dn.caka_ts)}`, "je-mlacna");
+  // Dnevni vir in vir, ki ga bere podproces: stanje iz baze, ne iz tega procesa.
+  const izBaze = dn && dn.iz_baze ? " · zapis v bazi" : "";
+  h += vrsticaKartice("zadnji odgovor", dn && dn.uspeh_ts
+    ? `${dn.iz_baze ? `${uraTs(dn.uspeh_ts)} · ` : ""}${pred(dn.uspeh_ts)}${dn.nespremenjeno ? " · nespremenjen" : ""}`
+      + `${dn.ms != null ? ` · ${ms(dn.ms)}` : ""}${dn.bajtov && dn.iz_baze ? ` · ${bajti(dn.bajtov)}` : ""}${izBaze}`
+    : v.nit ? "v tem zagonu še nobenega" : "nihče še ni vprašal");
+  if (dn && dn.ura && dn.ura.branj) {
+    const u = dn.ura;
+    h += vrsticaKartice("zadnja ura", `${mn(u.branj, "branje", "branji", "branja", "branj")} · `
+      + `${u.napak ? mn(u.napak, "napaka", "napaki", "napake", "napak") : "brez napak"}`
+      + ` · mediana ${ms(u.ms_mediana)}${u.bajtov ? ` · ${bajti(u.bajtov)}` : ""}`, u.napak ? "je-mlacna" : "");
+  }
+  if (v.zapisano) h += vrsticaKartice(ZAPIS_IME[v.kljuc] || "zadnji zapis", `${uraTs(v.zapisano)} · ${pred(v.zapisano)}`);
+  if (dn && dn.napaka_ts) {
+    h += vrsticaKartice("zadnja napaka", `${uraTs(dn.napaka_ts)} · ${dn.napaka}${dn.zaporednih ? ` · ${dn.zaporednih}× zapored` : ""}${izBaze}`,
+      dn.zaporednih ? "je-slaba" : "");
+  }
+  if (dn && dn.opomba) h += vrsticaKartice("opomba", dn.opomba);
+  if (v.nit) h += vrsticaKartice("nit", v.nit_tece ? `${v.nit} teče` : `${v.nit} NE TEČE`, v.nit_tece ? "" : "je-slaba");
+  for (const [ime, vr] of podrobnostiVira(v.kljuc, d)) h += vrsticaKartice(ime, vr);
+  const p = preverba && preverba.viri && preverba.viri.find((x) => x.kljuc === v.kljuc);
+  if (p) h += vrsticaKartice(`preverjeno ob ${uraTs(preverba.ts)}`, p.opis, p.ok ? "je-dobra" : "je-slaba");
+  h += `</div>`;
+  if (v.razred === "je-slaba" || v.razred === "je-mlacna" || (dn && dn.zaporednih)) {
+    h += `<p class="adm-vir-ukrep"><b>Kaj storiti.</b> ${escapeHtml(v.ukrep)}</p>`;
+  }
+  return `${h}${nogaVira(v)}</article>`;
+}
+
+function nogaVira(v) {
+  let kratko = v.naslov;
+  try { const u = new URL(v.naslov); kratko = u.host + (u.pathname.length > 1 ? u.pathname : ""); } catch (e) { /* ni naslov */ }
+  return `<footer class="adm-vir-noga">
+    <span>${escapeHtml(v.izvor)} · licenca ${escapeHtml(v.licenca)}</span>
+    <a href="${escapeHtml(v.naslov)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(v.naslov)}">${escapeHtml(kratko)}</a>
+  </footer>`;
+}
+
+/** Najhujše stanje in vsi razlogi: za piko v glavi, ploščico in pas na vrhu. */
+function skupnoZdravje(d) {
+  const r = Object.values(d.razredi || {});
+  const razlogi = Object.entries(d.razlogi || {})
+    .map(([k, besedilo]) => ({ k, besedilo, razred: (d.razredi || {})[k] }))
+    .sort((a, b) => RANG[b.razred] - RANG[a.razred]);
+  const slabih = razlogi.filter((x) => x.razred === "je-slaba").length;
+  const stoji = slabih <= 1 ? "nekaj stoji" : slabih === 2 ? "dve stvari stojita"
+    : slabih <= 4 ? `${slabih} stvari stojijo` : `${slabih} stvari stoji`;
+  if (r.includes("je-slaba")) return ["je-slaba", stoji, razlogi];
+  if (r.includes("je-mlacna")) return ["je-mlacna", "opozorilo", razlogi];
+  return ["je-dobra", "vse dela", razlogi];
+}
+
+function pasZdravja(d) {
+  const [raz, bes, razlogi] = skupnoZdravje(d);
+  let p = "";
+  if (preverba && preverba.tece) p = `<p class="adm-pas-prev">Preverjam vse vire hkrati … do 30 s.</p>`;
+  else if (preverba && preverba.napaka) p = `<p class="adm-pas-prev je-slaba">Preverjanja ni bilo mogoče izvesti — ${escapeHtml(preverba.napaka)}</p>`;
+  else if (preverba) {
+    p = `<p class="adm-pas-prev"><b>Preverjeno ob ${uraTs(preverba.ts)}.</b> ${escapeHtml(preverba.sklep)}
+      <span class="${preverba.kontrola.ok ? "" : "je-slaba"}">Kontrola: ${escapeHtml(preverba.kontrola.opis)}.</span></p>`;
+  }
+  return `<section class="adm-plosca s12 adm-pas ${raz}">
+    <div class="adm-pas-glava"><span class="adm-pika ${raz}"></span><h2>${escapeHtml(bes[0].toUpperCase() + bes.slice(1))}</h2>
+      <button type="button" class="btn adm-gumb" id="preveri-vire" ${preverba && preverba.tece ? "disabled" : ""}>Preveri vire zdaj</button></div>
+    ${razlogi.length ? `<ul class="adm-razlogi">${razlogi.map((x) =>
+      `<li class="${x.razred}"><span class="adm-pika ${x.razred}"></span>${escapeHtml(x.besedilo)}</li>`).join("")}</ul>`
+    : `<p class="adm-pod">Vsi viri odgovarjajo, niti tečejo, disk in vozni red sta v redu.</p>`}
+    ${p}
+    <p class="adm-pod">Rdeče, ki traja 10 min, gre po pošti (${{
+      tece: "vklopljeno", stoji: "<b class=\"je-slaba\">nit pošte ne teče</b> — ponovni zagon strežnika",
+      ni: "<b>ni nastavljeno</b> — datoteka <code>.opozorila</code>",
+    }[(d.stroj || {}).posta] || "—"}); rumeno samo tu.</p>
+  </section>`;
+}
+
+/** Izid zajema: ali podatki res pridejo v bazo, ne glede na vir. */
+function vrsticeZajema(d) {
+  const z = d.zdravje || {}, r = d.razredi || {}, mreze = z.by_network || {};
   const zel = mreze.zeleznica || {}, bus = mreze.avtobus || {}, sen = z.senca || {};
   const nez = Object.entries(z.rt_neznanih || {});
   const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
-  const zs = z.zamude_sz;
-  const zsVr = !zs ? "—" : !zs.ts || zdaj - zs.ts > 300
-    ? `zemljevid SŽ ne odgovarja ${pred(zs.napaka_ts || zs.ts)}${zs.napaka ? `: ${zs.napaka}` : ""}`
-    : `oba ${st(zs.oba)} · samo SŽ ${st(zs.samo_sz)} · samo derp ${st(zs.samo_derp)}`
-      + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : "");
-  // Brez barve, dokler ne vemo, kakšno razhajanje je običajno.
-  const pr = zs && zs.primerjava;
-  const prVr = !pr || !pr.parov ? "—"
-    : `${st(100 * pr.v_minuti / pr.parov)} % v minuti od ${st(pr.parov)} · nad 5 min ${st(pr.nad_5_min)}`;
-  const dp = Object.entries(z.derp_prebran || {});
-  const zl = z.zamude_lpp;
-  const zlVr = !zl ? "—" : !zl.ts || zdaj - zl.ts > 900
-    ? `data.lpp.si ne odgovarja ${pred(zl.napaka_ts || zl.ts)}${zl.napaka ? `: ${zl.napaka}` : ""}`
-    : `oba ${st(zl.oba)} · samo LPP ${st(zl.samo_lpp)} · živih prihodov ${st(zl.zivih)}`
-      + ` · brez voznega reda ${st(zl.brez_voznega_reda)} · ${st(zl.postaj)} postajališč`;
-  const plr = zl && zl.primerjava;
-  const plrVr = !plr || !plr.parov ? "—"
-    : `${st(100 * plr.v_minuti / plr.parov)} % v minuti od ${st(plr.parov)} · nad 5 min ${st(plr.nad_5_min)}`;
-  // Meritev za odločitev, ali LPP-jeve prihode pripenjati tudi brez derp.si.
-  const [vrEn, vrDr, vrDv, vrBr] = (zl && zl.po_voznem_redu) || [0, 0, 0, 0];
-  const vrVr = !(vrEn + vrDr + vrDv + vrBr) ? "—"
-    : `zadel ${st(vrEn)} · zgrešil ${st(vrDr)} · dvoumno ${st(vrDv)} · brez ${st(vrBr)}`;
-  // Lege IJPP z NAP (`nap.py`) in kako se ujemajo z derp.si, ki bere isti vir.
-  const nm = z.nap;
-  const nmVr = !nm ? "—" : nm.http && zdaj - (nm.napaka_ts || 0) <= 900
-    ? `NAP zavrnil prijavo (HTTP ${nm.http}): dostop še ni odobren ali napačno geslo`
-    : !nm.ts || zdaj - nm.ts > 120
-      ? `NAP ne odgovarja ${pred(nm.napaka_ts || nm.ts)}${nm.napaka ? `: ${nm.napaka}` : ""}`
-      : `${st(nm.vozil)} vozil · pripetih ${st(nm.pripetih)} · brez voznega reda ${st(nm.brez_voznje)}`
-        + ` · zapisanih ${st(nm.zapisanih)}` + (nm.vlakov ? ` · vlakov ${st(nm.vlakov)}` : "");
-  const nmPr = !nm || !nm.derp || !nm.skupnih ? "—"
-    : `skupnih ${st(nm.skupnih)} · ista vožnja ${st(100 * nm.ista_voznja / nm.skupnih)} %`
-      + (nm.isti_cas ? ` · odmik ob istem času ${st(nm.odmik_m, 1)} m` : "")
-      + ` · NAP novejši za ${st(nm.prednost_s)} s · samo NAP ${st(nm.samo_nap)} · samo derp ${st(nm.samo_derp)}`;
   return [
-    ["zadnja zamuda iz feeda", pred(z.last_feed_ts), r.feed || ""],
-    ["derp.si · odgovoril", dp.length
-      ? dp.map(([vir, ts]) => `${vir.toUpperCase()} ${pred(ts)}`).join(" · ") : "—", r.derp || ""],
-    ["vlaki · zadnji zapis", pred(zel.last_feed_ts), r.zeleznica || ""],
-    ["avtobusi · zadnji zapis", pred(bus.last_feed_ts), r.avtobus || ""],
-    ["vozil z lego", st(z.vehicles_with_gps), ""],
-    ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`, ""],
-    ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`, ""],
+    ["zadnja zamuda v bazi", pred(z.last_feed_ts), r.feed],
+    ["vlaki · zadnji zapis", pred(zel.last_feed_ts), r.zeleznica],
+    ["avtobusi · zadnji zapis", pred(bus.last_feed_ts), r.avtobus],
     ["vožnje brez voznega reda",
-      nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—",
-      r.neznane || ""],
-    ["vozila brez feeda zamud",
-      lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
-        `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : "—",
-      r.lega_brez_zamude || ""],
-    ["vlaki · vira zamud", zsVr, r.zamude_sz || ""],
-    ["ujemanje virov · 24 h", prVr, ""],
-    ["LPP · vira zamud", zlVr, r.zamude_lpp || ""],
-    ["LPP · ujemanje · 24 h", plrVr, ""],
-    ["LPP · samo po voznem redu", vrVr, ""],
-    ["NAP · lege IJPP", nmVr, r.nap || ""],
-    ["NAP · ujemanje z derp.si", nmPr, ""],
-    ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % od ${st(sen.vrstic)}` : "—", ""],
-    ["aktivnih obvestil", st(z.alerts_active), ""],
-    ["prostora na disku", `${bajti(m.disk_prostih)} (${st(100 * (disk || 0))} %)`, r.disk || ""],
-    ["WAL", bajti(m.wal_bajtov), r.wal || ""],
-    ["baza", bajti(z.db_bytes), ""],
-    ["zajetih dni", st(z.days_covered), ""],
-    ["strežnik teče", trajanje(m.teka_s), ""],
+      nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—", r.neznane],
+    ["vozila brez feeda zamud", lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
+      `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : "—", r.lega_brez_zamude],
+    ["vozil z lego", st(z.vehicles_with_gps)],
+    ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`],
+    ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`],
+    ["senca napovedi", sen.vrstic ? `${st(100 * sen.razresenih / sen.vrstic, 1)} % razrešenih od ${st(sen.vrstic)}` : "—"],
+    ["zajetih dni", st(z.days_covered)],
   ];
 }
 
-function blokZdravja(d) {
-  return `<div class="adm-zdr">${vrsticeZdravja(d).map(([ime, vr, raz]) =>
-    `<div><span class="adm-pika ${raz}"></span><span class="ime">${escapeHtml(ime)}</span>
+function vrsticeStroja(d) {
+  const z = d.zdravje || {}, m = d.stroj || {}, r = d.razredi || {};
+  const disk = m.disk_vseh ? m.disk_prostih / m.disk_vseh : null;
+  const zive = m.niti || [];
+  const pricakovane = Object.keys(m.pricakovane_niti || {});
+  const manjka = pricakovane.filter((n) => !zive.includes(n));
+  const nase = zive.filter((n) => n.startsWith("kajros-")).map((n) => n.slice(7));
+  return [
+    ["prostora na disku", disk == null ? "—" : `${bajti(m.disk_prostih)} (${st(100 * disk)} %)`, r.disk],
+    ["WAL", bajti(m.wal_bajtov), r.wal],
+    ["baza", bajti(z.db_bytes)],
+    ["pomnilnik procesa", bajti(m.rss_bajtov)],
+    ["strežnik teče", `${trajanje(m.teka_s)} · od ${uraTs(m.zagon_ts)}`],
+    ["niti zajema", !pricakovane.length ? "zajem izklopljen" : manjka.length ? `ne teče: ${manjka.join(", ")}`
+      : `teče vseh ${st(pricakovane.length)}`, manjka.length ? "je-slaba" : ""],
+    ["vse niti procesa", `${st(zive.length)} · ${nase.join(", ")}`],
+    ["različica", m.razlicica || "—"],
+  ];
+}
+
+function tabelaVrstic(vrstice) {
+  return `<div class="adm-zdr">${vrstice.map(([ime, vr, raz]) =>
+    `<div><span class="adm-pika ${raz || ""}"></span><span class="ime">${escapeHtml(ime)}</span>
       <span class="vr">${escapeHtml(vr)}</span></div>`).join("")}</div>`;
 }
 
-/** Najhujše stanje med vrsticami zdravja -- za piko v glavi. */
-function skupnoZdravje(d) {
-  const r = vrsticeZdravja(d).map((v) => v[2]);
-  if (r.includes("je-slaba")) return ["je-slaba", "nekaj stoji"];
-  if (r.includes("je-mlacna")) return ["je-mlacna", "opozorilo"];
-  return ["je-dobra", "vse dela"];
+function blokDnevnika(d) {
+  const dn = d.dnevnik || {};
+  const imena = Object.fromEntries(((d.viri || {}).seznam || []).map((v) => [v.kljuc, v.ime]));
+  const dogodki = (dn.dogodki || []).length
+    ? `<ul class="adm-dogodki">${dn.dogodki.map((e) => `<li class="${e.ok ? "je-dobra" : "je-slaba"}">
+        <time>${uraTs(e.ts)}</time><b>${escapeHtml(imena[e.kljuc] || e.kljuc)}</b> ${escapeHtml(e.besedilo)}</li>`).join("")}</ul>`
+    : prazno("od zagona noben vir ni izpadel");
+  const vrstice = (dn.vrstice || []).slice().reverse();
+  const dnevnik = vrstice.length
+    ? `<ol class="adm-dnevnik">${vrstice.map((v) => `<li><time>${uraTs(v.ts)}</time>${escapeHtml(v.besedilo)}</li>`).join("")}</ol>`
+    : prazno("prazen");
+  return `<div class="adm-dn-mreza"><div><h3 class="adm-mali">Izpadi in vrnitve virov</h3>${dogodki}</div>
+    <div><h3 class="adm-mali">Dnevnik strežnika · najnovejše zgoraj</h3>${dnevnik}</div></div>`;
+}
+
+function viriZavihek(d) {
+  const vv = d.viri || { skupine: [], seznam: [] };
+  let h = `<div class="adm-mreza">${pasZdravja(d)}`;
+  for (const [kljuc, ime] of vv.skupine) {
+    const viri = vv.seznam.filter((v) => v.skupina === kljuc);
+    if (!viri.length) continue;
+    h += `<section class="s12 adm-skupina"><h2 class="adm-skupina-ime">${escapeHtml(ime)}</h2>
+      <div class="adm-viri">${viri.map((v) => karticaVira(v, d)).join("")}</div></section>`;
+  }
+  h += plosca("s6", "Zajem", "kaj res pride v bazo, ne glede na vir", tabelaVrstic(vrsticeZajema(d)));
+  h += plosca("s6", "Stroj", "tisto, česar baza sama o sebi ne ve", tabelaVrstic(vrsticeStroja(d)));
+  h += plosca("s12", "Dnevnik", "od zagona strežnika · v pomnilniku, ne v bazi", blokDnevnika(d));
+  return `${h}</div>`;
+}
+
+/** Razlogi pod naslovom plošče Viri na zavihku Stanje. */
+function razlogiKratko(d) {
+  const [, , razlogi] = skupnoZdravje(d);
+  return razlogi.length ? razlogi.map((x) => escapeHtml(x.besedilo)).join(" · ") : "Vse dela.";
+}
+
+/** Viri na zavihku Stanje: ena vrstica na vir, klik odpre zavihek Viri. */
+function blokViriKratko(d) {
+  const seznam = (d.viri || {}).seznam || [];
+  if (!seznam.length) return prazno("ni podatka");
+  return `<div class="adm-viri-kratko">${seznam.map((v) => `
+    <a href="#viri" data-vir="${escapeHtml(v.kljuc)}" class="${v.vklopljen ? "" : "je-izklopljen"}">
+      <span class="adm-pika ${v.razred || ""}"></span><span class="ime">${escapeHtml(v.ime)}</span>
+      <span class="vr">${escapeHtml(kratkoVira(v))}</span></a>`).join("")}</div>`;
+}
+
+async function preveriVire() {
+  preverba = { tece: true };
+  risi();
+  try {
+    const r = await fetch("/admin/viri/preveri", { credentials: "same-origin" });
+    if (!r.ok) throw new Error(`strežnik: ${r.status}`);
+    preverba = await r.json();
+  } catch (e) {
+    preverba = { napaka: e.message };
+  }
+  risi();
 }
 
 /** Ogledi po urah za en dan; ure, ki še niso bile, izpustimo. */
@@ -579,8 +799,9 @@ function stanje(d) {
         `${st(t.botov)} botov · ${st(t.brez_js)} brez JS`)}
       ${ploscica(naj ? `<span class="${msRazred(naj.ms_naj)}">${ms(naj.ms_naj)}</span>` : "—",
         "najpočasneje danes", naj ? escapeHtml(naj.pot) : "")}
-      ${ploscica(`<span style="display:inline-flex;align-items:center;gap:10px"><span class="adm-pika ${zR}" style="width:12px;height:12px"></span>${zB}</span>`,
-        "zajem in stroj", `zadnji feed ${pred(d.zdravje && d.zdravje.last_feed_ts)}`)}
+      <a class="adm-k adm-k-povezava" href="#viri"><div class="adm-k-v"><span class="adm-k-stanje"><span class="adm-pika ${zR}"></span>${
+        zR === "je-slaba" ? "stoji" : zR === "je-mlacna" ? "opozorilo" : "dela"}</span></div>
+        <div class="adm-k-i">zajem in viri →</div><div class="adm-k-d">${escapeHtml(zB)} · feed ${pred(d.zdravje && d.zdravje.last_feed_ts)}</div></a>
     </div>
     ${plosca("s8", "Zadnjih 30 dni", "ljudi na dan · šrafirano: štetja še ni bilo · klik odpre dan",
       `<div id="graf-30">${stolpci(mes.map((r) => (r.prazen ? null : r.ljudi)), {
@@ -600,7 +821,8 @@ function stanje(d) {
     ${plosca("s8", "Kaj je bilo počasno", "danes · po najdaljši zahtevi", tabelaPocasnih(d, 8),
       "Čas v aplikaciji brez omrežja. Rdeče je nad 5 s — tam potnik odneha. p95 je razred, ne točna vrednost.")}
     ${plosca("s4", "S čim in od kod", "danes · ogledi", blokNaprav(d))}
-    ${plosca("s8", "Zdravje", "isto kot /api/health", blokZdravja(d))}
+    ${plosca("s8", "Viri", "klik odpre zavihek Viri", blokViriKratko(d),
+      razlogiKratko(d))}
     ${plosca("s6", "Od kod pridejo", "danes · ogledi", blokVirov(d), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
     ${plosca("s6", "Roboti", "danes · zahtev · desno strani", blokRobotov(d), "Po predstavitvi, ne preverjeno.")}
     ${plosca("s6", "Podpora", "danes · ljudi", blokPodpore(d), "Klik ni donacija: plačilo teče pri ponudniku.")}
@@ -802,6 +1024,10 @@ function obvObrazec(o) {
       </div>
     </form>
   </section>
+  <section class="adm-plosca adm-obv" id="obv-samodejna-plosca" hidden><h2>Samodejna <small>ta hip na straneh · napisali so jih podatki, ne skrbnik</small></h2>
+    <p class="adm-pod">Nastane, ko po voznem redu vozijo vsaj 3 vožnje, podatka o njih pa ni 20 min;
+      izgine samo, ko podatki spet pridejo. Umakniti se ga ne da.</p>
+    <div id="obv-samodejna" class="adm-sporocila"></div></section>
   <section class="adm-plosca adm-obv"><h2>Objavljena <small>umaknjena in potekla ostanejo, da se ve, kaj je bilo rečeno</small></h2>
     <div id="obv-seznam" class="adm-sporocila"></div></section>`;
 }
@@ -898,6 +1124,13 @@ function obvestilaRisi(v, d) {
     obvPovezi(o);
   }
   el("obv-seznam").innerHTML = obvSeznam(o.seznam);
+  const sam = o.samodejna || [];
+  el("obv-samodejna-plosca").hidden = !sam.length;
+  el("obv-samodejna").innerHTML = sam.map((v) => `
+    <article class="adm-sporocilo adm-obvestilo">
+      <header class="adm-sp-glava"><span class="adm-sp-od">velja, dokler podatkov ni</span>
+        <span class="adm-sp-kje">${v.omrezje === "zeleznica" ? "vlaki" : "avtobusi"}</span></header>
+      <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p></article>`).join("");
 }
 
 // ------------------------------------------------------------------ noga
@@ -923,7 +1156,7 @@ function noga(d) {
 /** `#zgodovina/teden/2026-09-14` -- stanje je v naslovu, da ga ohrani osvežitev. */
 function preberiNaslov() {
   const [zav, v, d] = location.hash.slice(1).split("/");
-  const zavihek = ["stanje", "zgodovina", "sporocila", "obvestila", "deljenje"].includes(zav) ? zav : "stanje";
+  const zavihek = ["stanje", "viri", "zgodovina", "sporocila", "obvestila", "deljenje"].includes(zav) ? zav : "stanje";
   if (zavihek === "zgodovina") {
     izbor = {
       vrsta: OBDOBJA[v] ? v : "dan",
@@ -952,6 +1185,7 @@ function risi() {
   deljenjeZapri();
   if (zavihek === "obvestila") { obvestilaRisi(v, zadnji); return; }
   if (zavihek === "sporocila") v.innerHTML = sporocila(zadnji);
+  else if (zavihek === "viri") v.innerHTML = viriZavihek(zadnji);
   else if (zavihek === "zgodovina") v.innerHTML = zgodovina();
   else v.innerHTML = stanje(zadnji);
   poveziDogodke();
@@ -960,6 +1194,17 @@ function risi() {
 function poveziDogodke() {
   const sp = el("sporocila");
   if (sp) sp.addEventListener("click", obSporocilu);
+  const pv = el("preveri-vire");
+  if (pv) pv.addEventListener("click", preveriVire);
+  // Vir na zavihku Stanje odpre zavihek Viri pri svoji kartici.
+  document.querySelectorAll(".adm-viri-kratko a[data-vir]").forEach((a) => {
+    a.addEventListener("click", () => { skokNaVir = a.dataset.vir; });
+  });
+  if (skokNaVir && el(`vir-${skokNaVir}`)) {
+    el(`vir-${skokNaVir}`).scrollIntoView({ block: "center" });
+    el(`vir-${skokNaVir}`).classList.add("je-izbran");
+    skokNaVir = null;
+  }
   const g30 = el("graf-30");
   if (g30) {
     const mes = zadnjih30(zadnji);
@@ -1022,16 +1267,24 @@ async function osvezi() {
     el("sporocil-znacka").hidden = !s.neprebranih;
     el("sporocil-znacka").textContent = s.neprebranih ? String(s.neprebranih) : "";
     // Veljavno obvestilo je nekaj, kar potniki ta hip berejo: značka je
-    // opomnik, da ga je treba umakniti, ko ne drži več.
-    const obv = ((zadnji.obvestila || {}).seznam || []).filter((o) => o.velja).length;
+    // opomnik, da ga je treba umakniti, ko ne drži več. Samodejna štejejo
+    // zraven, ker jih potnik bere enako.
+    const obv = ((zadnji.obvestila || {}).seznam || []).filter((o) => o.velja).length
+      + ((zadnji.obvestila || {}).samodejna || []).length;
     el("obvestil-znacka").hidden = !obv;
     el("obvestil-znacka").textContent = obv ? String(obv) : "";
     const zdaj = (zadnji.deljenje && zadnji.deljenje.zdaj) || 0;
     el("deljenje-znacka").hidden = !zdaj;
     el("deljenje-znacka").textContent = zdaj ? String(zdaj) : "";
     const [raz, bes] = skupnoZdravje(zadnji);
-    const ura = new Intl.DateTimeFormat("sl-SI", { timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit" }).format(new Date());
-    el("osvezeno").innerHTML = `<span class="adm-pika ${raz}"></span>${escapeHtml(bes)} · osveženo ${ura}`;
+    // Značka na zavihku Viri: koliko virov ni zdravih -- rdeča, kadar kaj stoji.
+    const nezdravih = ((zadnji.viri || {}).seznam || [])
+      .filter((v) => v.razred === "je-slaba" || v.razred === "je-mlacna").length;
+    el("viri-znacka").hidden = !nezdravih;
+    el("viri-znacka").textContent = nezdravih ? String(nezdravih) : "";
+    el("viri-znacka").className = `adm-znacka ${raz === "je-slaba" ? "je-slaba" : "je-mlacna"}`;
+    const ura = URA_TS.format(new Date());
+    el("osvezeno").innerHTML = `<a href="#viri"><span class="adm-pika ${raz}"></span>${escapeHtml(bes)}</a> · osveženo ${ura}`;
     noga(zadnji);
     risi();
   } catch (e) {

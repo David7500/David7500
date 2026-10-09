@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import requests
 
-from . import config
+from . import config, viri
 
 # Vremenska celica. Manjse od tega nima smisla: modeli, iz katerih arhiv
 # racuna, imajo mrezo nekaj kilometrov, zato bi finejsa delitev le podvojila
@@ -66,10 +66,13 @@ def _request(url: str, cells: list[tuple[str, float, float]], params: dict) -> l
         "timezone": "UTC",
         **params,
     }
-    resp = requests.get(url, params=q, timeout=TIMEOUT,
-                        headers={"User-Agent": config.USER_AGENT})
-    resp.raise_for_status()
-    data = resp.json()
+    with viri.branje("vreme") as b:
+        resp = requests.get(url, params=q, timeout=TIMEOUT,
+                            headers={"User-Agent": config.USER_AGENT})
+        b.http = resp.status_code
+        resp.raise_for_status()
+        b.bajtov = len(resp.content)
+        data = resp.json()
     return data if isinstance(data, list) else [data]
 
 

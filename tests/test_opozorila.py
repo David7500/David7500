@@ -152,7 +152,7 @@ def test_vzrok_loci_izpad_vira_od_nasega_interneta():
     viru. Brez kontrole bi bil isti izid videti kot izpad pri nas."""
     exc = opozorila.requests.exceptions.ConnectTimeout("x")
     besedilo = opozorila.vzrok(_get({"derp.si": exc}), zdaj=T)
-    assert "derp.si, zamude: ni povezave v 10 s" in besedilo
+    assert "derp.si · zamude IJPP: ni povezave v 10 s" in besedilo
     assert "izpad je pri njih, ne pri nas." in besedilo
     besedilo = opozorila.vzrok(_get({"derp.si": exc, "cloudflare": exc}), zdaj=T)
     assert "nima interneta" in besedilo

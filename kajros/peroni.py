@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from . import config, db
+from . import config, db, viri
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -84,10 +84,13 @@ def razberi(tabla: dict) -> tuple[dict[str, str], int]:
 
 
 def _get(pot: str):
-    r = requests.get(f"{config.PERONI_URL}{pot}",
-                     headers={"User-Agent": config.USER_AGENT}, timeout=90)
-    r.raise_for_status()
-    return r.json()
+    with viri.branje("peroni") as b:
+        r = requests.get(f"{config.PERONI_URL}{pot}",
+                         headers={"User-Agent": config.USER_AGENT}, timeout=90)
+        b.http = r.status_code
+        r.raise_for_status()
+        b.bajtov = len(r.content)
+        return r.json()
 
 
 def osvezi_postaje(conn: sqlite3.Connection) -> int:
@@ -184,6 +187,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
             odlozene = {st: do for st, do in odlozene.items() if do > zdaj}
             p = na_vrsti(conn, zdaj, odlozene)
             if p is None:
+                viri.caka("peroni", "nobena postaja ni na vrsti")
                 stop.wait(60)
                 continue
             try:

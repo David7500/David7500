@@ -16,25 +16,33 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, iz_lege, stats
+from . import config, db, iz_lege, stats, viri
 
 TZ = ZoneInfo(config.TIMEZONE)
 
 
-def fetch(url: str, conn: sqlite3.Connection, etag_key: str):
-    """Pogojni GET. Vrne None, kadar se feed ni spremenil."""
+def fetch(url: str, conn: sqlite3.Connection, etag_key: str, vir: str | None = None):
+    """Pogojni GET. Vrne None, kadar se feed ni spremenil.
+
+    `vir` je ključ v `viri.vsi()`: branje gre v dnevnik, ki ga kaže /admin.
+    Razbor je del branja -- feed, ki ga ni mogoče prebrati, ni odgovor.
+    """
     headers = {"User-Agent": config.USER_AGENT}
     etag = db.get_meta(conn, etag_key)
     if etag:
         headers["If-None-Match"] = etag
-    resp = requests.get(url, headers=headers, timeout=60)
-    if resp.status_code == 304:
-        return None
-    resp.raise_for_status()
+    with viri.branje(vir) as b:
+        resp = requests.get(url, headers=headers, timeout=60)
+        b.http = resp.status_code
+        if resp.status_code == 304:
+            b.nespremenjeno = True
+            return None
+        resp.raise_for_status()
+        b.bajtov = len(resp.content)
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.ParseFromString(resp.content)
     if resp.headers.get("ETag"):
         db.set_meta(conn, etag_key, resp.headers["ETag"])
-    feed = gtfs_realtime_pb2.FeedMessage()
-    feed.ParseFromString(resp.content)
     return feed
 
 
@@ -609,7 +617,7 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:
-    feed = fetch(config.TRIP_UPDATES_URL, conn, "rt_etag")
+    feed = fetch(config.TRIP_UPDATES_URL, conn, "rt_etag", "derp_zamude")
     # Znacka za predpomnilnik strezbe, po vzoru `positions_fetched`. Pise se
     # tudi ob 304 ("ob tem casu smo zamude potrdili"), ker mora predpomnilnik
     # vedeti, da je odgovor se vedno tocen, in ne le, da se je spremenil.
@@ -690,7 +698,7 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     """
     if not config.LPP_ENABLED:
         return {"trips": 0, "vehicles": 0, "unchanged": True}
-    feed = fetch(config.LPP_RT_URL, conn, "lpp_rt_etag")
+    feed = fetch(config.LPP_RT_URL, conn, "lpp_rt_etag", "derp_lpp")
     db.set_meta(conn, "lpp_rt_fetched", str(int(time.time())))
     if feed is None:
         iz_lege.feed_nespremenjen("lpp")
@@ -910,7 +918,7 @@ def _zapomni_lege_derp(feed) -> None:
 
 
 def poll_positions(conn: sqlite3.Connection) -> dict:
-    feed = fetch(config.VEHICLE_POSITIONS_URL, conn, "positions_etag")
+    feed = fetch(config.VEHICLE_POSITIONS_URL, conn, "positions_etag", "derp_lege")
     # Cas branja zapisemo tudi ob 304: pomeni "ob tem casu smo lege potrdili".
     # Iz njega prikaz ve, kdaj ima smisel vprasati znova -- brez tega brskalnik
     # ugiba in polovico svojega ritma zapravi za cakanje na podatek, ki ze je.
