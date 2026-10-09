@@ -242,6 +242,8 @@ Izmerjeno 28. 9. 2026, 08:59–09:08, 17 branj po 30 s:
 * **Pripetih 574 od 647 vrstic vlakov** (89 %). Ostanek brez izjeme upravičen: 42 z odhodom v prihodnosti (vlak stoji na postaji ali pred izhodiščem — zemljevid ob prihodu že pokaže naslednjo postajo), 31 brez naslednje postaje (na cilju). Nadomestni avtobusi (34) se ne štejejo: zamuda 0 v točki postaje je izračun.
 * Odgovor se spremeni ~vsako minuto (9 različnih v 17 branjih). Zamuda se med odsekom lahko popravi (10 od 556 zaporednih parov) — vrstica v `sz_zamuda` in `run` drži zadnjo, kot pri derp.si.
 
+**Ni neodvisen od derp.si** (8. 10. 2026, iz kode `derp-si/ijpp-rt`, `szService.js`): derp.si zamude vlakov bere z **istega** `api.modra.ninja/sz/lokacije` (na 15 s) in jih ujame na vozni red DUJPP; NAP nosi samo avtobuse. Ta vir torej varuje pred napako voznega reda (28. 9.), ne pred izpadom posrednika — 7. 10. ob 1:24 sta utihnila oba hkrati, 9. 10. ob 17:30 še vedno (zadnji zapis vlakov pred 63,8 h, `/admin`). Register (`viri.py`) to pove v vlogi vira.
+
 **Kam gre:** vsaka pripeta vrednost v `sz_zamuda` (zadnje stanje na postanek). V `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`, ista meja kot zamuda iz lege) — tedaj `v_run = 1`. Kadar nosita oba, `run` ostane derp.si-jev in `kajros primerjava` / pregled („ujemanje virov · 24 h“) pokažeta razhajanja. **Kdo ima prav, še ni odločeno**: primerjav do objave ni bilo, ker derp.si vlakov ni imel. Nit čaka, da zajem derp.si prebere feed (`iz_lege.feed_prebran`), sicer bi bil ob zagonu vsak vlak „samo SŽ“.
 
 ## Zamude mestnega LPP z LPP-jevih zaslonov (`zamude_lpp.py`, od 8. 10. 2026)

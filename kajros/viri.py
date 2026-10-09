@@ -90,11 +90,14 @@ def vsi() -> tuple[Vir, ...]:
     vozni_red = ("osveževanje izklopljeno (KAJROS_REFRESH=off)" if osvezi == "off"
                  else f"dnevno ob {ura}:20" + (", v podprocesu" if osvezi == "subprocess" else ""))
     vreme_ura = config.okolje("WEATHER_HOUR", "5")
-    derp = "DERP (derp.si) iz NAP (avtobusi) in SŽ (vlaki)"
+    # Vlake derp.si dobi z istega posrednika kot `zamude_sz` (`derp-si/ijpp-rt`,
+    # `szService.js`, prebrano 8. 10. 2026), avtobuse iz NAP.
+    derp = "DERP (derp.si): avtobusi iz NAP, vlaki z zemljevida SŽ prek api.modra.ninja"
     derp_ukrep = ("Izpad je skoraj vedno pri derp.si, ne pri nas — „Preveri vire“ "
                   "pove, ali odgovarja in ali imamo internet. Rezerve tečejo same: "
-                  "NAP za medkrajevne, LPP-jevi zasloni za mestni LPP, zemljevid SŽ "
-                  "za vlake. Obvestilo potnikom nastane samo po 20 min.")
+                  "NAP za medkrajevne, LPP-jevi zasloni za mestni LPP. Vlake derp.si "
+                  "dobi z api.modra.ninja: kadar ne odgovarja niti zemljevid SŽ, je "
+                  "izpad tam. Obvestilo potnikom nastane samo po 20 min.")
     return (
         Vir("derp_zamude", "derp.si · zamude IJPP", "zivo",
             "Zamude vlakov SŽ in medkrajevnih avtobusov (GTFS-RT).",
@@ -105,13 +108,13 @@ def vsi() -> tuple[Vir, ...]:
         Vir("derp_lege", "derp.si · lege IJPP", "zivo",
             "Lege avtobusov z GPS; vlakov ni.",
             "lege primestnega LPP; Arrivo, Nomago in AP MS ima NAP svežejše",
-            config.VEHICLE_POSITIONS_URL, derp, "CC BY-SA 4.0",
+            config.VEHICLE_POSITIONS_URL, "DERP (derp.si) iz NAP", "CC BY-SA 4.0",
             f"vsakih {lege} s", "kajros-collector", _okolje_vklop("POSITIONS"), (),
             derp_ukrep, preveri=config.VEHICLE_POSITIONS_URL),
         Vir("derp_ovire", "derp.si · obvestila IJPP", "zivo",
             "Ovire na progi (SZ-OVIRA) in poročila SŽ o zamudi s krajem (SZ-DELAY).",
             "edini vir ovir in nadomestnih prevozov",
-            config.SERVICE_ALERTS_URL, derp, "CC BY-SA 4.0",
+            config.SERVICE_ALERTS_URL, "DERP (derp.si)", "CC BY-SA 4.0",
             "izklopljeno" if ovire <= 0 else f"vsakih {ovire} s",
             "kajros-collector", ovire > 0, (), derp_ukrep,
             preveri=config.SERVICE_ALERTS_URL),
@@ -134,12 +137,13 @@ def vsi() -> tuple[Vir, ...]:
             preveri=config.NAP_URL, preveri_ok=(401, 403, 405)),
         Vir("zamude_sz", "zemljevid SŽ", "izvirniki",
             "Zamude vlakov z zemljevida potniski.sz.si, po številki vlaka.",
-            "rezerva za vlake, kadar jih derp.si nima; sicer primerjava",
+            "isti posrednik, s katerega vlake dobi derp.si: varuje pred napačnim "
+            "voznim redom DUJPP (28. 9.), ne pred izpadom modra.ninja (7. 10.)",
             f"{config.PERONI_URL}/lokacije", "SŽ (potniski.sz.si) prek api.modra.ninja, "
             "tretja oseba", "ni navedena", f"vsakih {config.SZ_ZAMUDE_SECONDS} s",
             "kajros-zamude-sz", config.SZ_ZAMUDE, ("zamude_sz",),
-            "Posrednik je tretja oseba brez lastnika: počakaj. Dokler derp.si "
-            "vlake ima, potnik ne izgubi ničesar.",
+            "Posrednik je tretja oseba brez lastnika: ko ne odgovarja, vlakov "
+            "nima nihče, tudi derp.si ne. Obvestilo potnikom nastane samo; počakaj.",
             preveri=f"{config.PERONI_URL}/lokacije"),
         Vir("zamude_lpp", "LPP · zasloni postajališč", "izvirniki",
             "Prihodi z LPP-jevih zaslonov na ~75 postajališčih, pripeti na vožnje.",

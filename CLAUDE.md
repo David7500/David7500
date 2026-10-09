@@ -34,7 +34,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
-| Zamude vlakov, drugi vir | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
+| Zamude vlakov — izvor tudi za derp.si, torej ne neodvisen | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
 | Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
 | Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
