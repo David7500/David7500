@@ -15,14 +15,18 @@ Id vožnje: `VehicleJourneyRef` je NeTEx id
 `SI:SI0:ServiceJourney:<GUID>:IJPP`, zadnji štirje bajti GUID-a so `trip_id`
 v GTFS IJPP -- isto pretvorbo dela `derp-si/ijpp-rt` (`realisToIjpp`).
 
-Kam gre, dokler ujemanje z derp.si ni izmerjeno:
+Kam gre:
 
-* `vehicle_now` samo za vozila, ki jih derp.si ta hip nima (`collector.
-  lege_derp`). Ko derp.si dela, je to ostanek; ko molči, so to vsa vozila.
-* zamuda iz lege (`iz_lege.opazuj`) za ista vozila, kadar feed zamud vožnje
-  ne nosi -- ob izpadu derp.si torej za vse.
+* `vehicle_now` za vsa pripeta vozila; zmaga novejša lega (`zapisi`).
+* zamuda iz lege (`iz_lege.opazuj`) za vozila, ki jih derp.si ta hip nima
+  (`collector.lege_derp`), kadar feed zamud vožnje ne nosi -- ob izpadu
+  derp.si torej za vse.
 * kadar imata vozilo oba, se primerjata (`primerjaj`): ista vožnja, odmik
   lege ob istem času, kateri je svežejši. Vse v `meta.nap` za `/admin`.
+
+NAP nima mestnega LPP in ne primestnih vozil LPP (`LJLPP…`), ki jih derp.si
+v isti feed doda iz LPP-jevega vira: 9. 10. 2026 55 od ~80 vozil „samo
+derp“. Vlakov nima (`VehicleMode` 705-krat `bus`).
 """
 from __future__ import annotations
 
@@ -250,11 +254,17 @@ def primerjaj(vozila: list[dict], derp: dict | None) -> dict:
 
 def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
            zdaj: float) -> dict:
-    """V `vehicle_now` in prek lege v `run` -- samo, česar derp.si nima."""
+    """Lega v `vehicle_now` za vsa vozila, zamuda iz lege samo za tista, ki
+    jih derp.si nima.
+
+    Lega: NAP je izvirnik in je novejši (9. 10. 2026 mediana 7-20 s na ~640
+    skupnih vozilih, ista vožnja 99,8 %, odmik ob istem času 0,1 m), zato
+    zmaga po `seen_ts`; derp-ova starejša lega istega vozila je ne povozi.
+    Zamuda iz lege: za vozilo, ki ga derp.si nosi, jo računa njegov zajem
+    (`iz_lege.iz_feeda`) -- isto sled bi sicer vodili dve niti.
+    """
     zapisanih = prehodov = 0
     for v in pripeta:
-        if derp is not None and v["vozilo"] in derp:
-            continue
         conn.execute(
             "INSERT INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon, bearing,"
             "                        vehicle_id) VALUES(?,?,?,?,?,?,?) "
@@ -266,6 +276,8 @@ def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
             "WHERE excluded.seen_ts > vehicle_now.seen_ts",
             (v["trip_id"], v["dan"], v["ts"], v["lat"], v["lon"], v["smer"], v["vozilo"]))
         zapisanih += 1
+        if derp is not None and v["vozilo"] in derp:
+            continue
         if config.ZAMUDA_IZ_LEGE and iz_lege.brez_feeda(v["trip_id"], zdaj):
             prehodov += iz_lege.opazuj(conn, v["trip_id"], v["dan"], v["ts"],
                                        v["lat"], v["lon"])

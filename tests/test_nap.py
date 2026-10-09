@@ -126,20 +126,32 @@ def test_pripni_prevede_star_id_na_naslednico():
     assert [v["trip_id"] for v in pripeta] == ["1001"]
 
 
-def test_derp_ima_vozilo_nap_ga_pusti_in_primerja():
-    """Kar derp.si ta hip nosi, ostane njegovo; NAP piše le ostanek. Ob istem
-    času mora biti lega ista, vožnja ista."""
-    c = _baza()
+def test_primerjava_z_derp():
+    """derp.si bere isti vir: ob istem času mora biti lega ista, vožnja ista."""
     v = [{"vozilo": "a", "ijpp": "1001", "ts": ZDAJ, "lat": 46.1, "lon": 14.4, "smer": None},
          {"vozilo": "b", "ijpp": "1001", "ts": ZDAJ, "lat": 46.1, "lon": 14.4, "smer": None}]
     derp = {"a": ("1001", ZDAJ, 46.1, 14.4), "z": ("1002", ZDAJ - 30, 46.0, 14.0)}
     p = nap.primerjaj(v, derp)
     assert p == {"derp": True, "skupnih": 1, "ista_voznja": 1, "isti_cas": 1, "odmik_m": 0.0,
                  "odmik_max_m": 0.0, "prednost_s": 0, "samo_nap": 1, "samo_derp": 1}
-    pripeta, _ = nap.pripni(c, v, ZDAJ)
-    assert nap.zapisi(c, pripeta, derp, ZDAJ)["zapisanih"] == 1
-    assert [r["vehicle_id"] for r in c.execute("SELECT vehicle_id FROM vehicle_now")] == ["b"]
     assert nap.primerjaj(v, None) == {"derp": False}
+
+
+def test_lega_za_vsa_vozila_zamuda_iz_lege_le_brez_derp(monkeypatch):
+    """Lega z NAP gre v `vehicle_now` za vsa vozila (novejša je); zamudo iz
+    lege za vozilo, ki ga derp.si nosi, računa zajem derp.si -- sicer bi isto
+    sled vodili dve niti."""
+    c = _baza()
+    klici = []
+    monkeypatch.setattr(iz_lege, "brez_feeda", lambda t, z=None: True)
+    monkeypatch.setattr(iz_lege, "opazuj", lambda conn, t, d, ts, lat, lon: klici.append(ts) or 0)
+    v = [{"vozilo": "a", "ijpp": "1001", "ts": ZDAJ, "lat": 46.1, "lon": 14.4, "smer": None}]
+    izid = nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], {"a": ("1001", ZDAJ - 20, 46.1, 14.4)}, ZDAJ)
+    assert izid["zapisanih"] == 1 and klici == []
+    assert tuple(c.execute("SELECT vehicle_id, seen_ts FROM vehicle_now").fetchone()) == ("a", ZDAJ)
+    v[0]["ts"] = ZDAJ + 10
+    nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], None, ZDAJ)
+    assert klici == [ZDAJ + 10]
 
 
 def test_derp_molči_nap_piše_vse_in_ne_povozi_novejšega():

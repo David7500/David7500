@@ -2392,3 +2392,24 @@ Kaj je v enem obhodu (75 postajališč, 18:00, derp.si mrtev): 985 prihodov, 536
 **Edina kandidatka po voznem redu ni dovolj**: na istih prihodih je derp-ovo vožnjo zadela 67-krat, zgrešila 31-krat (68 %), 22 prihodov je imelo več kandidatk. Zgreši natanko tam, kjer zamuda šteje — pri liniji 11 (+45) izbere vožnjo s +3. Brez derp.si zato ne pripenjamo.
 
 **Prvo ujemanje, ko se je derp.si vrnil** (spet odgovarja od 19:50, odčitano 20:35 iz `/admin`). Zasloni proti derp.si na istih postankih (`v_run = 0`): **629 parov, 450 v minuti (72 %)**, mediana razlike (LPP − derp) +27 s, nad 5 min 6. Edina kandidatka po voznem redu v enem obhodu (197 pripetih prek svežega derp.si): zadela 130, zgrešila 6, dvoumno 48, brez 13 — pri enoznačnih 96 %, ne 68 % kot zgoraj; tam je bil derp.si star 14 min in je sam kazal napačno vožnjo. Dvoumnih ostane četrtina, zato pravilo ostane: brez derp.si se ne pripenja. Vzorec je 45 min zvečer, brez konice; ponovi čez dan.
+
+## Lege IJPP z NAP proti derp.si (9. 10. 2026)
+
+NAP SIRI-VM (`nap.py`) od 15:49, ko je David vpisal prijavo. Šest obhodov po 20 s (15:52–15:54), iz `meta.nap`:
+
+| | |
+|---|---|
+| vozil v odgovoru | 692–714 (705 različnih, vsa `bus`) |
+| brez `VehicleJourneyRef` | 12 |
+| lega starejša od 180 s | 17–24 |
+| pripetih na našo vožnjo | 630–652; brez voznega reda 2, brez dneva 14, začne čez > 30 min 11 |
+| skupnih z derp.si | 633–658 |
+| ista vožnja | 630/633 – 657/658 (99,5–100 %) |
+| odmik ob istem času | mediana 0,1 m, največ 0,2–16 m |
+| NAP novejši za | mediana 7–20 s |
+| samo derp.si | 76–83, od tega 55 primestnih LPP (`LJLPP…`, derp.si jih doda iz LPP-jevega vira) in 21 brez vožnje |
+
+Odgovor 2 679 649 B XML, z gzip 162 371 B; prenos 0,69–0,76 s, razbor z `ElementTree` 0,20 s. Na 10 s ~1,4 GB prenosa na dan.
+
+Iz tega: NAP je isti vir kot derp.si, le brez enega posrednika, zato od 9. 10. piše lege vseh svojih vozil (zmaga novejša). Zamuda iz lege ostaja pri zajemu derp.si za vozila, ki jih ta nosi.
+

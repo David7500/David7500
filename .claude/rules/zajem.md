@@ -262,14 +262,15 @@ Dve spremembi, ki ju je izpad pokazal tudi drugod:
 
 Lege medkrajevnih avtobusov na derp.si so NAP-ov SIRI-VM, le pretvorjen (`derp-si/ijpp-rt`, `ijppService.js`: POST na 5 s, basic avtentikacija). Ob izpadu derp.si 8. 10. so vozila lego pošiljala naprej, zemljevid pa je bil prazen. `nap.py` bere isti izvirnik sam.
 
-* **Dostop**: račun na nap.si (`kekec3201@proton.me`) in odobritev vsebine „SIRI dinamični podatki - API“ — zaprošeno 8. 10. 2026 (namen raziskovalni, 3 leta). Do odobritve NAP vrača **401** (preverjeno brez prijave in z napačno: `WWW-Authenticate: Basic`), nit takrat čaka 10 min, `/admin` rumeno. TLS se preveri normalno (derp.si ga izklaplja, mi ne rabimo).
+* **Dostop**: račun na nap.si (`kekec3201@proton.me`), vsebina „SIRI dinamični podatki - API“ odobrena 9. 10. 2026 do 8. 10. 2029. Brez prijave ali ob zavrnjeni NAP vrača **401** (`WWW-Authenticate: Basic`), nit takrat čaka 10 min, `/admin` rumeno. TLS se preveri normalno (derp.si ga izklaplja, mi ne rabimo).
 * **Prijava** v `${KAJROS_DATA_DIR}/.nap-prijava` (`e-naslov:geslo`, 640, skupina `kajros`), postavi jo `deploy/nap.sh` — geslo vpiše David, v ukazno vrstico ne gre. Bere se ob vsakem obhodu: restart ni potreben.
 * **Id vožnje** = zadnji štirje bajti GUID-a v `VehicleJourneyRef` (`SI:SI0:ServiceJourney:<GUID>:IJPP`), kot `realisToIjpp` pri derp.si; ujema se s `trip_id` IJPP. Obratovalni dan: `collector.resolve_service_date` (SIRI `start_date` nima). Prevod starih id-jev prek `zamenjava` kot pri derp.si.
-* **Čas naprej za uro** (±3 min) se popravi — derp.si to dela, ker naprave pošiljajo lokalni čas z napačnim zamikom. Koliko jih je pri nas, šteje `meta.nap.popravljenih`.
-* **Vožnja, ki se začne čez več kot 30 min, gre ven** (derp.si enako), da je primerjava primerljiva. Vlaki (`mode = 'rail'`) se samo štejejo (`vlakov`): ali jih NAP nosi, se še ne ve.
-* **Kam piše, dokler ujemanje ni izmerjeno**: `vehicle_now` in zamuda iz lege (`iz_lege.opazuj`) samo za vozila, ki jih derp.si na zadnjem branju leg (≤ 60 s, `collector.lege_derp`) nima. Kadar derp.si dela, je to ostanek; ko molči, vse. Ob uspešnem branju premakne `positions_fetched`, sicer `/api/vehicles` NAP-ovih leg ne bi videl.
-* **Primerjava**, kadar imata vozilo oba (`nap.primerjaj`, `/admin` „NAP · ujemanje z derp.si“): ista vožnja, odmik lege ob istem `ts` (mora biti 0 m), za koliko je NAP novejši, samo NAP / samo derp. derp.si bere isti vir, zato razhajanje pomeni napako pretvorbe na eni strani.
-* **Odprto, ko bo dostop**: velikost odgovora (`bajtov`, na 10 s), delež pripetih, ali NAP nosi vlake. Šele po meritvi odločiti, ali NAP postane prvi vir leg.
+* **Čas naprej za uro** (±3 min) se popravi — derp.si to dela, ker naprave pošiljajo lokalni čas z napačnim zamikom. 9. 10. 2026 takih ni bilo (`popravljenih` 0 v šestih obhodih).
+* **Vožnja, ki se začne čez več kot 30 min, gre ven** (derp.si enako), da je primerjava primerljiva.
+* **Česa NAP nima**: vlakov (705 od 705 vozil `VehicleMode = bus`), mestnega LPP in primestnih vozil LPP (`LJLPP…`), ki jih derp.si v isti feed doda iz LPP-jevega vira — večina od ~80 vozil „samo derp“. Ob izpadu derp.si primestni LPP (1118) ostane brez lege.
+* **Kam piše** (od 9. 10. 2026, po meritvi): `vehicle_now` za **vsa** pripeta vozila, zmaga novejši `seen_ts` — NAP je izvirnik in je svežejši. Zamuda iz lege (`iz_lege.opazuj`) le za vozila, ki jih derp.si na zadnjem branju leg (≤ 60 s, `collector.lege_derp`) nima; za ostala jo računa zajem derp.si, sicer bi isto sled vodili dve niti. Ob uspešnem branju premakne `positions_fetched`, sicer `/api/vehicles` NAP-ovih leg ne bi videl.
+* **Ujemanje z derp.si** (`nap.primerjaj`, `/admin` „NAP · ujemanje z derp.si“), 9. 10. 2026 ob 15:52, šest obhodov po 20 s: skupnih 633–658 vozil, **ista vožnja 99,5–100 %**, odmik lege ob istem `RecordedAtTime` mediana **0,1 m** (največ 16 m), **NAP novejši za mediano 7–20 s** (derp.si bere na 5 s in ima svoj predpomnilnik, mi njega na 10 s).
+* **Cena**: odgovor 2,7 MB XML, **162 kB z gzip** (`requests` ga zahteva sam), prenos 0,7 s, razbor 0,2 s. Na 10 s ~1,4 GB na dan — 20-krat več od leg z derp.si (protobuf). ETag se spremeni ob vsakem odgovoru: pogojni GET ne pomaga.
 
 ## Napaka pisanja: najprej `conn.rollback()`
 
