@@ -10,6 +10,8 @@ from datetime import datetime
 
 import pytest
 
+from google.transit import gtfs_realtime_pb2
+
 from kajros import collector, db, iz_lege, nap, stats, zdravje
 
 DAN = "2026-10-08"
@@ -49,8 +51,10 @@ def _cist_spomin():
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
     iz_lege._prvic = None
+    iz_lege._nap_ts = 0.0
     collector._LEGE_DERP = (0.0, {})
     yield
+    iz_lege._nap_ts = 0.0
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
     iz_lege._prvic = None
@@ -201,3 +205,52 @@ def test_zdravje_zavrnjena_prijava_je_rumena_stoječa_nit_rdeča():
     assert ocena({"ts": ZDAJ - 15})[0] == zdravje.DOBRA
     assert ocena({"ts": ZDAJ - 1000, "napaka_ts": ZDAJ - 20})[0] == zdravje.MLACNA
     assert ocena({"ts": ZDAJ - 1000, "napaka_ts": ZDAJ - 1000})[0] == zdravje.SLABA
+
+
+def _feed_zamud(trip_id, zamuda):
+    f = gtfs_realtime_pb2.FeedMessage()
+    f.header.gtfs_realtime_version = "2.0"
+    e = f.entity.add()
+    e.id = "1"
+    e.trip_update.trip.trip_id = trip_id
+    e.trip_update.trip.start_date = DAN.replace("-", "")
+    stu = e.trip_update.stop_time_update.add()
+    stu.stop_sequence = 2
+    stu.departure.delay = zamuda
+    return f
+
+
+def test_nap_vodi_le_svoje_prevoznike_in_le_dokler_odgovarja():
+    assert not iz_lege.nap_vodi("1123", ZDAJ)            # NAP še ni prebran
+    iz_lege.nap_prebran(ZDAJ)
+    assert iz_lege.nap_vodi("1123", ZDAJ + 60)
+    assert not iz_lege.nap_vodi("1118", ZDAJ)            # primestni LPP ostane derp.si
+    assert not iz_lege.nap_vodi(None, ZDAJ)
+    assert not iz_lege.nap_vodi("1123", ZDAJ + 61)       # NAP obmolknil: spet derp.si
+
+
+def test_zajem_derp_izpusti_vožnje_ki_jih_vodi_nap():
+    """Ko NAP odgovarja, feed derp.si za Arrivo ne piše v `run`, vožnja pa ni
+    „v feedu“, da jo zamuda iz lege vzame takoj. Ko NAP obmolkne, piše."""
+    c = _baza()
+    iz_lege.zabelezi_feed(["1001"], ZDAJ - 30)
+    iz_lege.nap_prebran()
+    izid = collector.ingest(c, _feed_zamud("1001", 240))
+    assert izid["nap_prevzel"] == 1 and izid["trips"] == 1
+    assert c.execute("SELECT COUNT(*) FROM run").fetchone()[0] == 0
+    assert "1001" not in iz_lege._v_feedu
+    iz_lege._nap_ts = 0.0
+    assert collector.ingest(c, _feed_zamud("1001", 240))["nap_prevzel"] == 0
+    assert c.execute("SELECT delay_dep FROM run").fetchone()[0] == 240
+
+
+def test_nap_meri_zamudo_tudi_za_vozilo_ki_ga_ima_derp(monkeypatch):
+    c = _baza()
+    klici = []
+    monkeypatch.setattr(iz_lege, "brez_feeda", lambda t, z=None: True)
+    monkeypatch.setattr(iz_lege, "opazuj", lambda conn, t, d, ts, lat, lon: klici.append(t) or 0)
+    iz_lege.nap_prebran(ZDAJ)
+    v = [{"vozilo": "a", "ijpp": "1001", "ts": ZDAJ, "lat": 46.1, "lon": 14.4, "smer": None}]
+    nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], {"a": ("1001", ZDAJ - 20, 46.1, 14.4)}, ZDAJ)
+    assert klici == ["1001"]
+

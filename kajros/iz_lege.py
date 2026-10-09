@@ -60,6 +60,11 @@ _zagon = time.time()
 _zadnji_nabor: dict[str, list[str]] = {}
 #: (trip_id, dan) -> (t_s, along, zadnji zapisani stop_seq, kdaj osveženo)
 _sled: dict[tuple[str, str], tuple[float, float, int, float]] = {}
+#: Kdaj je nit NAP nazadnje uspešno prebrala lege (`nap.korak`).
+_nap_ts = 0.0
+#: Toliko po zadnjem branju NAP še vodi zamude svojih prevoznikov, potem jih
+#: spet piše feed derp.si. NAP se bere na 10 s: minuta je šest zgrešenih.
+NAP_VODI_S = 60
 
 
 def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp") -> None:
@@ -73,6 +78,32 @@ def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp") -> Non
         for t in trip_ids:
             _v_feedu[t] = zdaj
         _zadnji_nabor[vir] = trip_ids
+
+
+def nap_prebran(zdaj: float | None = None) -> None:
+    """Nit NAP je pravkar prebrala lege. Kliče `nap.korak`."""
+    global _nap_ts
+    _nap_ts = time.time() if zdaj is None else zdaj
+
+
+def nap_vodi(agency: str | None, zdaj: float | None = None) -> bool:
+    """Ali zamude tega prevoznika ta hip računamo iz leg NAP, ne iz derp.si.
+
+    Odločeno 9. 10. 2026: medkrajevni (`config.NAP_PREVOZNIKI`) gredo na NAP,
+    izvirnik leg, iz katerih derp.si zamude tudi sam računa. Feed derp.si se
+    za njihove vožnje ne bere, dokler NAP odgovarja; ko obmolkne, ga zajem
+    spet bere sam -- izpad enega vira ne pusti avtobusov brez zamud.
+    """
+    zdaj = time.time() if zdaj is None else zdaj
+    return agency in config.NAP_PREVOZNIKI and zdaj - _nap_ts <= NAP_VODI_S
+
+
+def izpusti(trip_ids) -> None:
+    """Feed te vožnje nosi, a jih ne beremo (`nap_vodi`): za `brez_feeda`
+    niso v njem, zato jih zamuda iz lege vzame takoj, ne šele čez 5 min."""
+    with _zaklep:
+        for t in trip_ids:
+            _v_feedu.pop(t, None)
 
 
 def feed_nespremenjen(vir: str, zdaj: float | None = None) -> None:
@@ -211,6 +242,7 @@ def iz_feeda(conn: sqlite3.Connection, feed) -> int:
     """
     okna = collector._rail_trip_windows(conn)
     zamenjave = collector._zamenjave(conn)
+    agencije = collector._agencije(conn)
     n = 0
     for e in feed.entity:
         v = e.vehicle
@@ -220,6 +252,10 @@ def iz_feeda(conn: sqlite3.Connection, feed) -> int:
         dan = v.trip.start_date
         if (tid not in okna or len(dan) != 8 or not v.timestamp
                 or not v.HasField("position") or not brez_feeda(tid)):
+            continue
+        # Vožnje prevoznikov NAP vodi nit NAP; ista sled v dveh nitih bi se
+        # prepletala.
+        if nap_vodi(agencije.get(tid)):
             continue
         n += opazuj(conn, tid, f"{dan[:4]}-{dan[4:6]}-{dan[6:]}", v.timestamp,
                     v.position.latitude, v.position.longitude)

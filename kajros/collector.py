@@ -119,6 +119,13 @@ def _zamenjave(conn: sqlite3.Connection) -> dict[str, tuple[str, dict]]:
     return _cached(conn, "zamenjave", n, build)
 
 
+def _agencije(conn: sqlite3.Connection) -> dict[str, str]:
+    """trip_id -> prevoznik (`trip.agency`)."""
+    def build():
+        return {r[0]: r[1] for r in conn.execute("SELECT trip_id, agency FROM trip")}
+    return _cached(conn, "agencije", None, build)
+
+
 def _cas_zamude(sched_row, kaj: str) -> int | None:
     """Voznoredni čas, na katerega se nanaša zamuda za `arrival`/`departure`."""
     t_s = sched_row[0] if kaj == "arrival" else sched_row[1]
@@ -392,6 +399,9 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     windows = _rail_trip_windows(conn)
     valid = _service_dates(conn, now)
     zamenjave = _zamenjave(conn)
+    agencije = _agencije(conn) if vir == "ijpp" else {}
+    # Vožnje, katerih zamudo ta hip računamo iz leg NAP (`iz_lege.nap_vodi`).
+    nap_prevzel: set[str] = set()
 
     def nas_id(tid):
         """Pod katerim id-jem vožnjo vodimo: pod njenim ali pod naslednico."""
@@ -441,6 +451,9 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
             continue
         zamenjanih += zamenjava is not None
         trips_seen += 1
+        if iz_lege.nap_vodi(agencije.get(trip_id)):
+            nap_prevzel.add(trip_id)
+            continue
         v_feedu.add(trip_id)
 
         service_date = tu.trip.start_date or None
@@ -529,7 +542,9 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
 
     conn.commit()
     iz_lege.zabelezi_feed(v_feedu, vir=vir)
+    iz_lege.izpusti(nap_prevzel)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
+            "nap_prevzel": len(nap_prevzel),
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
             "neznanih": neznanih, "zamenjanih": zamenjanih, "proge": proge}
@@ -584,7 +599,10 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
          (danes - timedelta(days=1)).isoformat(), now_s, BREZ_ZAMUDE_PO_S),
     ):
         stevec = out.setdefault(r["agency"], [0, 0, 0])
-        stevec[0] += iz_lege.brez_feeda(r["trip_id"], zdaj.timestamp())
+        # Pri prevoznikih, ki jih vodi NAP, je vir zamud lega sama: vozilo z
+        # lego v njem je.
+        stevec[0] += (iz_lege.brez_feeda(r["trip_id"], zdaj.timestamp())
+                      and not iz_lege.nap_vodi(r["agency"], zdaj.timestamp()))
         stevec[1] += not r["ima"]
         stevec[2] += 1
     return out

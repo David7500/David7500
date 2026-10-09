@@ -2413,3 +2413,9 @@ Odgovor 2 679 649 B XML, z gzip 162 371 B; prenos 0,69–0,76 s, razbor z `Eleme
 
 Iz tega: NAP je isti vir kot derp.si, le brez enega posrednika, zato od 9. 10. piše lege vseh svojih vozil (zmaga novejša). Zamuda iz lege ostaja pri zajemu derp.si za vozila, ki jih ta nosi.
 
+**Zamuda iz NAP-ovih leg proti derp.si** (9. 10. 2026, 16:20–16:33, 78 obhodov po 10 s, senca na arwenu brez pisanja). `iz_lege.opazuj` na vseh pripetih vozilih NAP, primerjano z vrednostjo derp.si v `run` na istem postanku: **1 753 prehodov, mediana −3 s, absolutna mediana 4 s, p90 52 s, 92,3 % v minuti, 95,9 % v dveh**. Po prevozniku: Arriva 897 (90,7 % v minuti), Nomago 767 (94,9 %), AP MS 89 (85,4 %). Isto kot 25. 9. na legah derp.si (92 %). Od 27 razlik nad 10 min (12 voženj) je večina vrednosti derp.si, osveženih 10 min po prehodu in višjih od NAP-ove (M2207 Turnišče: NAP +2, derp.si +22 min, osveženo 11 min po prehodu; A6101 Kranj: derp.si natanko +60 min) — vzorec „ura namesto zamude“, ko feed izgubi vozilo.
+
+Pokritost po prevozniku (vožnje z lego v 13 min): NAP Nomago 266, Arriva 308, AP MS 31; derp.si 274, 309, 31 in še 59 primestnih LPP. V 13 min je vsaj en prehod dobilo 399 od 605 voženj NAP (ostale so stale na izhodišču ali med dvema postankoma).
+
+Iz tega: od 9. 10. zamude Arrive, Nomaga in AP MS računamo iz leg NAP (`iz_lege.nap_vodi`), feed derp.si zanje ostane rezerva, ko NAP obmolkne.
+

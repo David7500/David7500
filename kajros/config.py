@@ -92,6 +92,11 @@ LPP_POSTAJ_KORAK = int(okolje("LPP_POSTAJ_KORAK", "12"))
 NAP = okolje("NAP", "1") != "0"
 NAP_URL = okolje("NAP_URL", "https://b2b.nap.si/data/b2b.siri.api/ServiceRequest")
 NAP_SECONDS = int(okolje("NAP_SECONDS", "10"))
+# Prevozniki, katerih zamude računamo iz leg NAP (`iz_lege`) namesto iz
+# feeda zamud derp.si, dokler NAP odgovarja (`iz_lege.nap_vodi`). Arriva,
+# Nomago, AP Murska Sobota: NAP nosi vse tri, primestnega LPP (1118) ne.
+NAP_PREVOZNIKI = frozenset(
+    a.strip() for a in (okolje("NAP_PREVOZNIKI", "1119,1121,1123") or "").split(",") if a.strip())
 
 # **Tir vlaka s table SŽ** (`peroni.py`). potniski.sz.si je za Cloudflarom,
 # `api.modra.ninja` ga strga in streže -- tretja oseba brez lastnika, zato je

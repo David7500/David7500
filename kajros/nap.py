@@ -206,6 +206,7 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
     dnevi = collector._service_dates(conn, zdaj_dt)
     zamenjave = collector._zamenjave(conn)
     nacin = _nacin(conn)
+    agencije = collector._agencije(conn)
     st = {"pripetih": 0, "brez_voznje": 0, "brez_dneva": 0, "prezgodaj": 0, "vlakov": 0}
     out = []
     for v in vozila:
@@ -226,7 +227,7 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
             st["vlakov"] += 1
             continue
         st["pripetih"] += 1
-        out.append({**v, "trip_id": tid, "dan": dan})
+        out.append({**v, "trip_id": tid, "dan": dan, "agency": agencije.get(tid)})
     return out, st
 
 
@@ -276,7 +277,8 @@ def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
             "WHERE excluded.seen_ts > vehicle_now.seen_ts",
             (v["trip_id"], v["dan"], v["ts"], v["lat"], v["lon"], v["smer"], v["vozilo"]))
         zapisanih += 1
-        if derp is not None and v["vozilo"] in derp:
+        if (derp is not None and v["vozilo"] in derp
+                and not iz_lege.nap_vodi(v.get("agency"), zdaj)):
             continue
         if config.ZAMUDA_IZ_LEGE and iz_lege.brez_feeda(v["trip_id"], zdaj):
             prehodov += iz_lege.opazuj(conn, v["trip_id"], v["dan"], v["ts"],
@@ -289,6 +291,7 @@ def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
 def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     """En odgovor NAP: razberi, primerjaj, pripni, zapiši, povzemi v `meta`."""
     vozila, st = razberi(vsebina, zdaj)
+    iz_lege.nap_prebran(zdaj)
     derp = collector.lege_derp(zdaj, DERP_SVEZE_S)
     st.update(primerjaj(vozila, derp))
     pripeta, s = pripni(conn, vozila, zdaj)
