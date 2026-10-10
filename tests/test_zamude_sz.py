@@ -455,3 +455,13 @@ def test_nit_bere_tablo_ob_vlakih_in_njena_napaka_ne_ustavi_zemljevida(monkeypat
     assert iz_lege.sz_vodi(), "napaka table zemljevida ne ustavi"
     assert "razdelka zamud" in json.loads(db.get_meta(pravi(pot), "zamude_sz_tabla"))["napaka"]
     assert any("tabla zamud SŽ ne odgovarja" in d for d in dnevnik)
+
+
+def test_brez_vlakov_sz_vrne_null(monkeypatch):
+    """Ob polnoči, ko ne vozi noben vlak, je odgovor `null` -- prazen zemljevid,
+    ne napaka (10. 10. 2026 ob 23:58, po ponovnem zagonu arwena)."""
+    monkeypatch.setattr(zamude_sz.brskalnik, "zahtevaj", lambda pot: "null")
+    assert zamude_sz._get() == []
+    monkeypatch.setattr(zamude_sz.brskalnik, "zahtevaj", lambda pot: '{"napaka": 1}')
+    with pytest.raises(RuntimeError, match="seznama vlakov"):
+        zamude_sz._get()

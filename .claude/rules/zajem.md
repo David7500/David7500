@@ -248,7 +248,7 @@ Ne GTFS ne NeTEx ne feed tira nimajo. Ima ga tabla prihodov in odhodov na potnis
 
 ## Zamude vlakov z zemljevida SŽ (`zamude_sz.py`, od 28. 9. 2026; vodi od 10. 10. 2026)
 
-Zemljevid vlakov s potniski.sz.si (`/wp-admin/admin-ajax.php?action=aktivni_vlaki`, JSON, 3–5 kB) je **izvor vseh zamud vlakov**, ki smo jih kdaj imeli: derp.si jih bere z `api.modra.ninja/sz/lokacije` (`derp-si/ijpp-rt`, `szService.js`, 8. 10. 2026), ta pa z tega naslova -- polja ista, preimenovana (`St_vlaka` → `st_vlaka`, `Postaja` → `naslednja_postaja`, `Zamuda_cas` → `zamuda_min`, `Odhod` → `raw_odhod`). Vlak vodi po **številki**, zato ga pokvarjen zip DUJPP ne prizadene (28. 9. 2026 je derp.si izgubil vse vlake, zemljevid ne).
+Zemljevid vlakov s potniski.sz.si (`/wp-admin/admin-ajax.php?action=aktivni_vlaki`, JSON, 3–5 kB; ko ne vozi noben vlak, `null`, ne `[]`) je **izvor vseh zamud vlakov**, ki smo jih kdaj imeli: derp.si jih bere z `api.modra.ninja/sz/lokacije` (`derp-si/ijpp-rt`, `szService.js`, 8. 10. 2026), ta pa z tega naslova -- polja ista, preimenovana (`St_vlaka` → `st_vlaka`, `Postaja` → `naslednja_postaja`, `Zamuda_cas` → `zamuda_min`, `Odhod` → `raw_odhod`). Vlak vodi po **številki**, zato ga pokvarjen zip DUJPP ne prizadene (28. 9. 2026 je derp.si izgubil vse vlake, zemljevid ne).
 
 **Vodi zamude vlakov** (Davidova odločitev 10. 10. 2026: „raje 15 s prej in brez posrednikov“). Dokler je prebran v zadnjih `iz_lege.SZ_VODI_S` (120 s), zajem derp.si vlakov (`network = zeleznica`, `mode != bus`) ne piše (`collector._sz_vlaki`, števec `sz_prevzel`); nadomestni avtobusi ostanejo derp.si. Ko obmolkne, derp.si vlake spet piše sam. Primerjave med viroma ni več: oba sta isti zemljevid.
 

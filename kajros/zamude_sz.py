@@ -379,6 +379,10 @@ def _get() -> list[dict]:
             vrstice = json.loads(besedilo)
         except ValueError:
             raise RuntimeError("zemljevid SŽ ni vrnil JSON") from None
+        # Ko ne vozi noben vlak, SŽ vrne `null`, ne prazen seznam (izmerjeno
+        # 10. 10. 2026 ob 23:58).
+        if vrstice is None:
+            vrstice = []
         if not isinstance(vrstice, list):
             raise RuntimeError("zemljevid SŽ ni vrnil seznama vlakov")
         odtis = hashlib.blake2s(besedilo.encode(), digest_size=8).hexdigest()
