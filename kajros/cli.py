@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import argparse
+import shutil
 import sqlite3
 import json
 import sys
@@ -310,7 +311,8 @@ def cmd_brskalnik(args):
     ena tabla postaje, s časi. Za preizkus po namestitvi (`deploy/brskalnik.sh`),
     kot uporabnik storitve. Svoj profil: Chroma strežnika ne zmoti."""
     print(f"Chrome: {brskalnik.najdi_chrome() or 'NI'} · Xvfb: {brskalnik.najdi_xvfb() or 'ni'}")
-    b = brskalnik.Brskalnik(config.DATA_DIR / "sz-brskalnik-preizkus")
+    profil = config.DATA_DIR / "sz-brskalnik-preizkus"
+    b = brskalnik.Brskalnik(profil)
     izid = 0
     try:
         t = time.monotonic()
@@ -323,13 +325,18 @@ def cmd_brskalnik(args):
         print(f"tabla postaje {args.postaja}: {len(tabla['departures'])} odhodov, "
               f"{len(tabla['arrivals'])} prihodov, tiri {peroni.razberi(tabla)[0]} "
               f"v {time.monotonic() - t:.1f} s")
+        t = time.monotonic()
+        vrstice, predvidenih = zamude_sz.razberi_tablo(b.zahtevaj(zamude_sz.TABLA))
+        print(f"tabla zamud: {len(vrstice)} izmerjenih, {predvidenih} napovedi "
+              f"v {time.monotonic() - t:.1f} s")
         if b.stanje().get("pomnilnik"):
             print(f"Chrome porabi {b.stanje()['pomnilnik'] / 2**20:.0f} MB (PSS)")
-    except brskalnik.NapakaBrskalnika as exc:
+    except RuntimeError as exc:             # tudi NapakaBrskalnika
         print(f"NE GRE: {exc}")
         izid = 1
     finally:
         b.ustavi()
+        shutil.rmtree(profil, ignore_errors=True)
     sys.exit(izid)
 
 

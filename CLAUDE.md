@@ -12,7 +12,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
 Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`, `pripni`, `tiri`, `indexnow`, `brskalnik`.
 
-**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (754 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (760 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 
@@ -34,7 +34,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
-| Zamude vlakov — **vodijo** (derp.si jih ima isto, prek posrednika) | zemljevid potniski.sz.si, `admin-ajax.php?action=aktivni_vlaki`, s Chromom | 5 s (SŽ preračuna na 15) |
+| Zamude vlakov — **vodijo** (derp.si jih ima isto, prek posrednika) | zemljevid potniski.sz.si, `admin-ajax.php?action=aktivni_vlaki`, s Chromom; tabla zamud v senci | 5 s (SŽ preračuna na 15); tabla 15 s |
 | Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
 | Tir vlaka | tabla postaje na potniski.sz.si, s Chromom | ~10 min na postajo |

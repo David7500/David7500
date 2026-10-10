@@ -483,7 +483,8 @@ const najslabse = (razredi) => razredi.reduce((a, r) => (RANG[r || ""] > RANG[a]
 const ZAPIS_IME = {
   derp_zamude: "zadnje branje v bazi", derp_lpp: "zadnje branje v bazi",
   derp_ovire: "obvestilo nazadnje v feedu", nap: "nit nazadnje zapisala",
-  zamude_sz: "nit nazadnje zapisala", zamude_lpp: "nit nazadnje zapisala",
+  zamude_sz: "nit nazadnje zapisala", tabla_sz: "nazadnje prebrana",
+  zamude_lpp: "nit nazadnje zapisala",
   peroni: "zadnja prebrana tabla", gtfs_ijpp: "zadnji uvoz", gtfs_lpp: "zadnji uvoz",
   vreme: "zadnji prenos",
 };
@@ -546,6 +547,22 @@ function podrobnostiVira(kljuc, d) {
       dodaj("zadnja sprememba", zs.spremenjeno_ts ? pred(zs.spremenjeno_ts) : null);
     }
     dodaj("brskalnik", opisBrskalnika((d.stroj || {}).brskalnik));
+  } else if (kljuc === "tabla_sz" && z.zamude_sz_tabla) {
+    const t = z.zamude_sz_tabla;
+    if (t.vrstic != null) {
+      dodaj("v odgovoru", `${st(t.vrstic)} vlakov · pripetih ${st(t.pripetih)}`
+        + (t.brez_zemljevida ? ` · brez zemljevida ${st(t.brez_zemljevida)}` : "")
+        + (t.zaostalih ? ` · zaostalih ${st(t.zaostalih)}` : "")
+        + (t.nepripetih ? ` · nepripetih ${st(t.nepripetih)}` : "")
+        + (t.predvidenih ? ` · napovedi ${st(t.predvidenih)}` : "")
+        + (t.pise ? ` · zapisanih ${st(t.zapisanih)}` : " · ne piše (senca)"));
+    }
+    const p = t.prednost;
+    dodaj("pred zemljevidom", p
+      ? `mediana ${st(p.mediana_s, 1)} s · p10 ${st(p.p10_s, 1)} s · p90 ${st(p.p90_s, 1)} s`
+        + ` · tabla prej ${st(p.tabla_prej)}, zemljevid prej ${st(p.zemljevid_prej)} od ${st(p.n)}`
+        + ` · od ${uraTs(t.od_ts)}`
+      : "še nobene vrednosti, ki bi jo pokazala oba");
   } else if (kljuc === "peroni") {
     dodaj("brskalnik", opisBrskalnika((d.stroj || {}).brskalnik));
   } else if (kljuc === "zamude_lpp" && z.zamude_lpp) {

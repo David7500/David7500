@@ -27,16 +27,27 @@ Kaj vrstica pove, po polju `Vrsta` (izmerjeno 10. 10. 2026, 84 branj po 15 s):
 
 Vsaka vrednost gre v `sz_zamuda` (zadnje stanje na postanek, s časom prvega in
 zadnjega branja) in v `run` in `obs`.
+
+**Tabla zamud** (`TABLA`) je isto minuto pokazala ~14 s pred zemljevidom (7 od
+8 sprememb, ponoči 10. 10. 2026; zemljevid SŽ preračuna le vsakih 15 s), a
+samo za vlake z vsaj 3 min in brez ure. Njeno vrstico pripnemo na vožnjo, ki
+jo je zemljevid že pripel z uro (`pripni_tablo`). Dokler meritev podnevi ne
+pokaže, da je to vredno 40 kB na 15 s, jo beremo **v senci**: pišemo le, za
+koliko je bila pred zemljevidom (`_opazi`, `meta.zamude_sz_tabla.prednost`);
+v bazo gre šele s `KAJROS_SZ_TABLA_PISE=1`.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
+import statistics
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import date, datetime, timedelta
+from html import unescape
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -57,6 +68,17 @@ NAJSTAREJSI_ODHOD_S = 6 * 3600
 #: Prihod z zamudo 0 po vožnji z več kot toliko zamude je SŽ-jeva ponastavitev
 #: vrstice na cilju, ne prihod (glava modula).
 PONASTAVITEV_S = 180
+
+#: Tabla zamud SŽ; ista stran je začetna za brskalnik (`brskalnik.ZACETNA`).
+#: 446 kB HTML, stisnjeno 40 kB, 0,75 s (10. 10. 2026).
+TABLA = "/pomoc-uporabnikom-in-stanje-v-prometu/"
+#: Za toliko postankov sme biti tabla pred zemljevidom. Ta zaostaja do 15 s;
+#: v tem času vlak pride na naslednjo postajo in morda še odpelje z nje.
+TABLA_NAPREJ = 2
+#: Vrednost, ki je vir toliko časa ne pokaže več, pozabimo (prihod na vmesno
+#: postajo pove samo tabla, zemljevid le odhod -- ta se ne primerja nikoli).
+TABLA_POTRDITEV_S = 600
+_CAS_TABLE = re.compile(r"(\d+)\s*min\s+V\s+(ODHODU|PRIHODU)", re.I)
 
 
 def vozni_red(conn: sqlite3.Connection, danes: date) -> dict[str, list[dict]]:
@@ -153,8 +175,9 @@ def pripni(vrstica: dict, voznje: list[dict], zdaj: float) -> tuple | None:
 
 
 def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
-            zdaj: float) -> tuple[list[tuple], dict]:
-    """Vse vrstice zemljevida -> (pripete, števci)."""
+            zdaj: float, po_vlaku: dict | None = None) -> tuple[list[tuple], dict]:
+    """Vse vrstice zemljevida -> (pripete, števci). `po_vlaku` dobi številko
+    vlaka -> (vožnja, dan, postanek), na kar se pripne tabla."""
     pripete = []
     stevci = {"vlakov": 0, "pred_odhodom": 0, "na_cilju": 0, "nepripetih": 0}
     for r in vrstice:
@@ -165,15 +188,83 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
             stevci["pred_odhodom"] += 1
             continue
         stevci["na_cilju"] += r.get("Vrsta") == 2
-        p = pripni(r, po_stevilki.get(stevilka(str(r.get("St_vlaka") or "")), []), zdaj)
+        st = stevilka(str(r.get("St_vlaka") or ""))
+        p = pripni(r, po_stevilki.get(st, []), zdaj)
         if p is None:
             stevci["nepripetih"] += 1
         else:
             pripete.append(p)
+            if po_vlaku is not None:
+                po_vlaku[st] = p[:3]
     return pripete, stevci
 
 
-def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
+def razberi_tablo(html: str) -> tuple[list[tuple[str, str, int, bool]], int]:
+    """Razdelek #zamude na tabli SŽ -> ([(postaja, vlak, minut, je_prihod)],
+    predvidenih).
+
+    Vrstica: postaja, relacija, vlak („RG 319“), čas („38 min V ODHODU“, „9 min
+    V PRIHODU“ ali „PREDVIDENA ZAMUDA 60 min“). Napoved ni meritev in ne gre
+    nikamor; zamudil.si jo kaže kot zamudo (RG 319: SŽ izmerjeno 10, zamudil 20).
+    """
+    i = html.find('id="zamude"')
+    if i < 0:
+        raise RuntimeError("na strani SŽ ni razdelka zamud (#zamude)")
+    j = html.find("</section>", i)
+    razdelek = html[i:j if j > 0 else None]
+    out, predvidenih = [], 0
+    for vrstica in re.findall(r"<tr[^>]*>(.*?)</tr>", razdelek, re.S):
+        celice = [" ".join(unescape(re.sub(r"<[^>]+>", " ", c)).split())
+                  for c in re.findall(r"<td[^>]*>(.*?)</td>", vrstica, re.S)]
+        if len(celice) < 4:
+            continue
+        postaja, _, vlak, cas = celice[:4]
+        m = _CAS_TABLE.search(cas)
+        if m:
+            out.append((postaja, vlak, int(m[1]), m[2].upper() == "PRIHODU"))
+        elif "PREDVIDENA" in cas.upper():
+            predvidenih += 1
+    return out, predvidenih
+
+
+def pripni_tablo(vrstice: list[tuple], po_stevilki: dict[str, list[dict]],
+                 na_zemljevidu: dict[str, tuple]) -> tuple[list[tuple], dict]:
+    """Vrstice table -> (pripete kot pri `pripni`, števci).
+
+    Tabla nima ure, zato vožnje in dneva ne ugibamo: velja vožnja, na katero
+    je zemljevid vlak pripel z uro. Postaja s table mora biti zemljevidov
+    zadnji prevoženi postanek ali do `TABLA_NAPREJ` za njim.
+    """
+    pripete = []
+    stevci = {"vrstic": 0, "brez_zemljevida": 0, "zaostalih": 0, "nepripetih": 0}
+    for postaja, vlak, minut, je_prihod in vrstice:
+        if vlak.upper().startswith("BUS"):
+            continue
+        stevci["vrstic"] += 1
+        st = stevilka(vlak)
+        z = na_zemljevidu.get(st)
+        if z is None:
+            stevci["brez_zemljevida"] += 1
+            continue
+        trip_id, dan, seq = z
+        v = next((v for v in po_stevilki.get(st, [])
+                  if v["trip_id"] == trip_id and v["dan"] == dan), None)
+        p = v["postanki"] if v else []
+        k = next((i for i, x in enumerate(p) if x[0] == seq), None)
+        kljuc = _kljuc_imena(postaja)
+        j = None if k is None else next(
+            (i for i in range(k, min(len(p), k + TABLA_NAPREJ + 1)) if p[i][1] == kljuc), None)
+        if j is not None:
+            pripete.append((trip_id, dan, p[j][0], minut * 60, je_prihod))
+        elif k is not None and any(x[1] == kljuc for x in p[:k]):
+            stevci["zaostalih"] += 1         # tabla še ni osvežena, zemljevid je
+        else:
+            stevci["nepripetih"] += 1
+    return pripete, stevci
+
+
+def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float,
+           zapolni: bool = False) -> dict:
     """Pripete zamude v `sz_zamuda`, `run` in `obs`.
 
     Dve varovali, obe izmerjeni na zemljevidu 10. 10. 2026:
@@ -181,7 +272,9 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
     * **Vlak ne gre nazaj.** LPV 2616 je ob 22:35 po Brezovici spet pisal
       „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz Ljubljane --
       postaje, ki jo je s +0 zapustil 10 min prej. Postanek pred zadnjim
-      zapisanim se zato ne prepiše.
+      zapisanim se zato ne prepiše. Z `zapolni` se prazen zapolni: tabla je
+      lahko za postanek pred zemljevidom, ta pa odhod s prejšnjega pove šele
+      za njo. Brez table ostane zavrnjen tudi prazen.
     * **Na cilju šteje prvi prihod** (glava modula), in ničla po zamudi nad
       `PONASTAVITEV_S` ni prihod, ampak ponastavitev.
     """
@@ -191,10 +284,17 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         zadnji = conn.execute(
             "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
             "ORDER BY stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
+        tu = conn.execute(
+            "SELECT delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
+            "AND stop_seq = ?", (trip_id, dan, seq)).fetchone()
         if zadnji and seq < zadnji[0]:
-            izid["nazaj"] += 1
-            continue
-        if je_prihod and zadnji:
+            # Ista vrednost ni vrnitev: zemljevid odhod s prejšnje postaje
+            # ponavlja, dokler vlak stoji na naslednji, tabla pa je prihod
+            # nanjo že zapisala.
+            if tu is not None or not zapolni:
+                izid["nazaj"] += tu is None or tu[0] != zamuda
+                continue
+        elif je_prihod and zadnji:
             if seq == zadnji[0]:
                 continue                       # prihod je že zapisan
             if zamuda == 0 and zadnji[1] > PONASTAVITEV_S:
@@ -216,6 +316,58 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
 #: Odtis zadnjega odgovora: nespremenjen zemljevid je v /admin opomba, dolgo
 #: nespremenjen ob vlakih na poti pa opozorilo (`zdravje.ocena`).
 _odtis: str | None = None
+#: Številka vlaka -> (vožnja, dan, postanek) z zadnjega spremenjenega
+#: zemljevida; na to se pripne tabla.
+_na_zemljevidu: dict[str, tuple] = {}
+#: Od kdaj ta proces meri prednost table (pregled: „od zagona“).
+_od_ts: float | None = None
+#: Kdaj je kateri vir prvič in nazadnje pokazal zamudo vožnje (vožnja, dan,
+#: zamuda): [prvič, nazadnje, iz prvega branja]. Brez postaje: tabla piše
+#: prometno mesto, kjer je bila zamuda sporočena (IC 350 „Ponikva“, kjer ne
+#: ustavi), zemljevid naslednjo postajo, ki jo izračuna sam -- primerja se,
+#: kdo novo minuto pokaže prej. Kar je bilo tam že ob prvem branju, ni nova
+#: vrednost in se ne primerja.
+_prvic: dict[str, dict[tuple, list]] = {"tabla": {}, "zemljevid": {}}
+_primerjano: set[tuple] = set()
+#: Vira, ki sta bila v tem procesu že prebrana (prvo branje ni sprememba).
+_prebrano: set[str] = set()
+#: Za koliko sekund je bila tabla pred zemljevidom (negativno: za njim),
+#: zadnjih 2000 vrednosti, ki sta jih pokazala oba.
+_prednost: deque = deque(maxlen=2000)
+
+
+def _opazi(vir: str, kljuci: list[tuple], zdaj: float) -> None:
+    """Zabeleži, kdaj je vir prvič pokazal vsako vrednost; ko jo pokažeta oba,
+    gre razlika v `_prednost`. Čas je čas našega branja: to je prednost, ki bi
+    jo dobil potnik, ne prednost na strežniku SŽ."""
+    moje = _prvic[vir]
+    tuje = _prvic["zemljevid" if vir == "tabla" else "tabla"]
+    zacetno = vir not in _prebrano
+    _prebrano.add(vir)
+    for k in kljuci:
+        if k in moje:
+            moje[k][1] = zdaj
+            continue
+        moje[k] = [zdaj, zdaj, zacetno]
+        t = tuje.get(k)
+        if not zacetno and t is not None and not t[2] and k not in _primerjano:
+            _primerjano.add(k)
+            _prednost.append(round(zdaj - t[0] if vir == "zemljevid" else t[0] - zdaj, 1))
+    for d in (moje, tuje):
+        for k in [k for k, v in d.items() if zdaj - v[1] > TABLA_POTRDITEV_S]:
+            del d[k]
+    for k in [k for k in _primerjano if k not in moje and k not in tuje]:
+        _primerjano.discard(k)
+
+
+def _povzetek_prednosti() -> dict | None:
+    if not _prednost:
+        return None
+    p = sorted(_prednost)
+    return {"n": len(p), "mediana_s": statistics.median(p),
+            "p10_s": p[int(0.1 * (len(p) - 1))], "p90_s": p[int(0.9 * (len(p) - 1))],
+            "tabla_prej": sum(x > 2 for x in p), "zemljevid_prej": sum(x < -2 for x in p)}
+
 
 
 def _get() -> list[dict]:
@@ -235,6 +387,13 @@ def _get() -> list[dict]:
         return vrstice
 
 
+def _get_tabla() -> str:
+    with viri.branje("tabla_sz") as b:
+        html = brskalnik.zahtevaj(TABLA)
+        b.http, b.bajtov = 200, len(html.encode())
+        return html
+
+
 def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
           nespremenjeno: bool = False) -> dict:
     """En odgovor zemljevida: pripni, zapiši, povzemi v `meta` za pregled.
@@ -251,9 +410,13 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
         db.set_meta(conn, "zamude_sz", json.dumps(prej, sort_keys=True))
         conn.commit()
         return prej
+    global _na_zemljevidu
     po_stevilki = vozni_red(conn, datetime.fromtimestamp(zdaj, TZ).date())
-    pripete, stevci = razberi(vrstice, po_stevilki, zdaj)
-    stevci.update(zapisi(conn, pripete, zdaj))
+    po_vlaku: dict[str, tuple] = {}
+    pripete, stevci = razberi(vrstice, po_stevilki, zdaj, po_vlaku)
+    _na_zemljevidu = po_vlaku
+    _opazi("zemljevid", [(p[0], p[1], p[3]) for p in pripete], zdaj)
+    stevci.update(zapisi(conn, pripete, zdaj, zapolni=config.SZ_TABLA_PISE))
     odtis = _odtis or ""
     stevci["odtis"] = odtis
     stevci["spremenjeno_ts"] = (prej.get("spremenjeno_ts") if prej.get("odtis") == odtis
@@ -264,11 +427,55 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
     return stevci
 
 
+def korak_tabla(conn: sqlite3.Connection, html: str, zdaj: float) -> dict:
+    """Ena tabla zamud: pripni na zemljevid, izmeri prednost, (s
+    `SZ_TABLA_PISE`) zapiši, povzemi v `meta`."""
+    vrstice, predvidenih = razberi_tablo(html)
+    po_stevilki = vozni_red(conn, datetime.fromtimestamp(zdaj, TZ).date())
+    pripete, stevci = pripni_tablo(vrstice, po_stevilki, _na_zemljevidu)
+    _opazi("tabla", [(*z[:2], minut * 60) for _, vlak, minut, _ in vrstice
+                     if (z := _na_zemljevidu.get(stevilka(vlak)))], zdaj)
+    if config.SZ_TABLA_PISE:
+        izid = zapisi(conn, pripete, zdaj, zapolni=True)
+        stevci.update(zapisanih=izid["zapisanih"], nazaj=izid["nazaj"])
+    stevci.update(predvidenih=predvidenih, pripetih=len(pripete), pise=config.SZ_TABLA_PISE,
+                  prednost=_povzetek_prednosti(), od_ts=int(_od_ts or zdaj), ts=int(zdaj))
+    db.set_meta(conn, "zamude_sz_tabla", json.dumps(stevci, sort_keys=True))
+    conn.commit()
+    return stevci
+
+
+def _beri_tablo(conn: sqlite3.Connection, log: Callable[[str], None], napak: int) -> int:
+    """Tabla je pospešek: njena napaka zemljevida ne ustavi. Vrne število
+    zaporednih napak."""
+    zdaj = time.time()
+    try:
+        s = korak_tabla(conn, _get_tabla(), zdaj)
+        if napak:
+            log(f"tabla zamud SŽ spet odgovarja: {s['vrstic']} vlakov, {s['pripetih']} pripetih")
+        return 0
+    except Exception as exc:        # noqa: BLE001 -- vir ni naš
+        conn.rollback()
+        if not napak:
+            log(f"tabla zamud SŽ ne odgovarja: {exc}; zamude piše zemljevid")
+        try:
+            s = json.loads(db.get_meta(conn, "zamude_sz_tabla") or "{}")
+            s.update(napaka=str(exc)[:200], napaka_ts=int(zdaj))
+            db.set_meta(conn, "zamude_sz_tabla", json.dumps(s, sort_keys=True))
+            conn.commit()
+        except sqlite3.Error:
+            conn.rollback()
+        return napak + 1
+
+
 def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
     """Svoja nit: brskalnik zna obviseti (izziv do 90 s) -- v zajemni zanki bi
     to zamaknilo zamude avtobusov."""
+    global _od_ts
     conn = db.connect()
     napak, prvic = 0, True
+    tabla_ts, napak_table = 0.0, 0
+    _od_ts = time.time()
     try:
         while not stop.is_set():
             zdaj = time.time()
@@ -305,6 +512,12 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                     conn.commit()
                 except sqlite3.Error:
                     conn.rollback()
+            # Tabla samo, ko zemljevid dela in nosi vsaj en vlak na poti: ponoči
+            # bi 40 kB na 15 s brali za prazno tabelo.
+            if (not napak and _na_zemljevidu and config.SZ_TABLA_SECONDS
+                    and zdaj - tabla_ts >= config.SZ_TABLA_SECONDS):
+                tabla_ts = zdaj
+                napak_table = _beri_tablo(conn, log, napak_table)
             # Takt od začetka branja, ne od konca: branje (0,5--0,8 s, dlje,
             # ko brskalnik bere tablo postaje) bi ga sicer raztegnilo.
             stop.wait(max(0.5, config.SZ_ZAMUDE_SECONDS - (time.time() - zdaj),
