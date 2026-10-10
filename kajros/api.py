@@ -571,6 +571,7 @@ def llms():
         "## Podatki\n\n"
         "Vozni redi in zamude: odprti podatki javnega potniškega prometa "
         "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP iz odprtih virov LPP, "
+        "zamude in tiri vlakov s strani Slovenskih železnic, "
         "vreme Open-Meteo. Navedba vira je pogoj rabe.\n\n"
         "## Neobvezno\n\n"
         f"- [Zemljevid strani]({b}/sitemap.xml)\n",

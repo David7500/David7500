@@ -1,25 +1,36 @@
-"""Zamude vlakov z zemljevida SŽ -- drugi vir poleg derp.si.
+"""Zamude vlakov z zemljevida SŽ, prebrane naravnost s potniski.sz.si.
 
-Zakaj: 28. 9. 2026 je DUJPP objavil vozni red brez voženj SŽ in derp.si je
-čez noč ostal brez vseh vlakov -- zamud, leg in obvestil `SZ-DELAY`. Zemljevid
-vlakov na potniski.sz.si (prek `api.modra.ninja/sz/lokacije`, isti posrednik
-kot pri tiru) je ob istem času nosil 41 vlakov z zamudo, med njimi vseh 31, ki
-so po voznem redu vozili. Vlak tam nosi številko, ne id vožnje iz zipa, zato ga
-pokvarjen zip DUJPP ne prizadene.
+Zakaj: zemljevid vlakov na potniski.sz.si (`admin-ajax.php?action=aktivni_vlaki`)
+je izvor vseh zamud vlakov, ki smo jih kdaj imeli. derp.si jih je bral z
+`api.modra.ninja/sz/lokacije` (8. 10. 2026, `szService.js`), ta pa s tega
+naslova -- polja so ista, le preimenovana. 7. 10. 2026 ob 1:24 sta posrednika
+utihnila, ker jima Cloudflare strani ni več odprl; mi jo beremo s Chromom
+(`brskalnik.py`). Od 10. 10. 2026 ta vir **vodi** zamude vlakov: zajem derp.si
+vlakov ne piše, dokler je zemljevid prebran (`iz_lege.sz_vodi`) -- isti
+podatek prek dveh posrednikov je le starejši.
 
-Kaj vrstica pove (izmerjeno na 12 vlakih istega jutra): `raw_odhod` je vedno
-voznoredni odhod s postaje PRED `naslednja_postaja` plus `zamuda_min`, na minuto
-natančno. Zamuda je torej odhodna zamuda zadnjega prevoženega postanka, in ta
-enakost je hkrati preizkus, da smo vlak pripeli na pravo vožnjo in dan.
+Vlak tam nosi številko, ne id vožnje iz zipa, zato ga pokvarjen zip DUJPP ne
+prizadene (28. 9. 2026 je derp.si izgubil vse vlake, zemljevid ne).
 
-Vira se primerjata, ne zamenjata. Vsaka vrednost gre v `sz_zamuda`; v `run`
-gre le, kadar feed derp.si te vožnje ne nosi (`iz_lege.brez_feeda`) -- tedaj
-ima `v_run = 1` in ne šteje v primerjavo, ker bi primerjala vir sam s sabo.
-Kadar nosita oba, `primerjava()` pove, kako se razhajata; kdo ima prav, se
-odloči šele na izmerjenih razhajanjih.
+Kaj vrstica pove, po polju `Vrsta` (izmerjeno 10. 10. 2026, 84 branj po 15 s):
+
+* **1 -- vozi.** `Postaja` je naslednja postaja, `Odhod` voznoredni odhod s
+  postaje PRED njo plus `Zamuda_cas` (izmerjeno na 12 vlakih 28. 9. 2026, ko
+  je isto bral modra.ninja). Zamuda je torej odhodna zamuda zadnjega
+  prevoženega postanka; enakost je hkrati preizkus, da je vlak pripet na
+  pravo vožnjo in dan.
+* **0 -- še stoji na izhodišču.** `Odhod` je voznoredni odhod. Ni meritev.
+* **2 -- na cilju.** `Postaja` je prazna, `Odhod` prihod na cilj, `Zamuda_cas`
+  zamuda ob prihodu. Ostane 1--2 min, nato ga SŽ ponastavi na zamudo 0 ob
+  voznorednem prihodu (1897: +7, dve minuti pozneje 0; 3287: +8, nato 0).
+  Šteje zato samo prvi prihod.
+
+Vsaka vrednost gre v `sz_zamuda` (zadnje stanje na postanek, s časom prvega in
+zadnjega branja) in v `run` in `obs`.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import threading
@@ -29,18 +40,23 @@ from datetime import date, datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-import requests
-
-from . import collector, config, db, iz_lege, stats, viri
+from . import brskalnik, collector, config, db, iz_lege, stats, viri
 from .peroni import _kljuc_imena, stevilka
 
 TZ = ZoneInfo(config.TIMEZONE)
 
-#: Toliko sme `raw_odhod` odstopati od voznega reda plus zamude. Oboje je v
+#: Zemljevid vlakov SŽ. Isti naslov bere njihova stran vsakih 15 s
+#: (`setInterval(…, 15e3)` v `main-*.js`), toliko je tudi takt odgovora.
+AKTIVNI = "/wp-admin/admin-ajax.php?action=aktivni_vlaki"
+
+#: Toliko sme `Odhod` odstopati od voznega reda plus zamude. Oboje je v
 #: celih minutah, zato ena minuta za zaokroževanje.
 ODSTOPA_ODHOD_S = 60
 #: Odhod, starejši od tega, ni odhod te vožnje, ampak ista številka drug dan.
 NAJSTAREJSI_ODHOD_S = 6 * 3600
+#: Prihod z zamudo 0 po vožnji z več kot toliko zamude je SŽ-jeva ponastavitev
+#: vrstice na cilju, ne prihod (glava modula).
+PONASTAVITEV_S = 180
 
 
 def vozni_red(conn: sqlite3.Connection, danes: date) -> dict[str, list[dict]]:
@@ -81,51 +97,75 @@ def _minute(hhmm: str) -> int | None:
         return None
 
 
-def pripni(vrstica: dict, voznje: list[dict], zdaj: float) -> tuple | None:
-    """Vrstica zemljevida -> (trip_id, dan, stop_seq, zamuda_s) ali None.
+def je_avtobus(vrstica: dict) -> bool:
+    return (str(vrstica.get("Vrsta_vlaka") or "").upper() == "B"
+            or str(vrstica.get("Rang") or "").upper() == "BUS")
 
-    Postanek je zadnji prevoženi, torej tisti PRED `naslednja_postaja`. Od več
-    voženj z isto številko (sezonske različice, včeraj in danes) velja tista,
-    pri kateri se `raw_odhod` ujema z voznim redom plus zamudo; kadar se ne
-    ujema nobena, vlaka ne pripnemo -- raje nič kot na napačno vožnjo.
+
+def _ujema(dan: str, t_s: int | None, zamuda_min: int, odhod_min: int,
+           zdaj: float) -> float | None:
+    """Koliko je minilo od voznega reda plus zamude, kadar se ura ujema z
+    `Odhod`; sicer None."""
+    if t_s is None:
+        return None
+    kdaj = stats.polnoc(dan) + t_s + zamuda_min * 60
+    if not (-ODSTOPA_ODHOD_S <= zdaj - kdaj <= NAJSTAREJSI_ODHOD_S):
+        return None
+    # Ura z zemljevida je lokalna ura dneva; primerjava po modulu dneva,
+    # ker vlak čez polnoč odpelje ob 00:10 prometnega dne včeraj.
+    ura = _minute(_ura(kdaj))
+    if min((ura - odhod_min) % 1440, (odhod_min - ura) % 1440) * 60 > ODSTOPA_ODHOD_S:
+        return None
+    return zdaj - kdaj
+
+
+def pripni(vrstica: dict, voznje: list[dict], zdaj: float) -> tuple | None:
+    """Vrstica zemljevida -> (trip_id, dan, stop_seq, zamuda_s, je_prihod) ali None.
+
+    Vozi: postanek je zadnji prevoženi, torej tisti PRED `Postaja`. Na cilju:
+    zadnji postanek vožnje. Od več voženj z isto številko (sezonske različice,
+    včeraj in danes) velja tista, pri kateri se `Odhod` ujema z voznim redom
+    plus zamudo; kadar se ne ujema nobena, vlaka ne pripnemo -- raje nič kot na
+    napačno vožnjo.
     """
-    naslednja = _kljuc_imena(vrstica.get("naslednja_postaja") or "")
-    zamuda = vrstica.get("zamuda_min")
-    odhod = _minute(vrstica.get("raw_odhod"))
-    if not naslednja or zamuda is None or odhod is None:
+    zamuda = vrstica.get("Zamuda_cas")
+    odhod = _minute(vrstica.get("Odhod"))
+    vrsta = vrstica.get("Vrsta")
+    if zamuda is None or odhod is None or vrsta not in (1, 2):
+        return None
+    naslednja = _kljuc_imena(vrstica.get("Postaja") or "")
+    if vrsta == 1 and not naslednja:
         return None
     najboljsa, razmik = None, None
     for v in voznje:
         p = v["postanki"]
-        for i in range(1, len(p)):
-            if p[i][1] != naslednja:
-                continue
-            seq, _, arr, dep = p[i - 1]
-            t = dep if dep is not None else arr
-            if t is None:
-                continue
-            kdaj = stats.polnoc(v["dan"]) + t + zamuda * 60
-            if not (-ODSTOPA_ODHOD_S <= zdaj - kdaj <= NAJSTAREJSI_ODHOD_S):
-                continue
-            # Ura z zemljevida je lokalna ura dneva; primerjava po modulu dneva,
-            # ker vlak čez polnoč odpelje ob 00:10 prometnega dne včeraj.
-            ura = _minute(_ura(kdaj))
-            if min((ura - odhod) % 1440, (odhod - ura) % 1440) * 60 > ODSTOPA_ODHOD_S:
-                continue
-            if razmik is None or zdaj - kdaj < razmik:
-                najboljsa, razmik = (v["trip_id"], v["dan"], seq, zamuda * 60), zdaj - kdaj
+        if vrsta == 2:
+            seq, _, arr, dep = p[-1]
+            kandidati = [(seq, arr if arr is not None else dep)]
+        else:
+            kandidati = [(p[i - 1][0], p[i - 1][3] if p[i - 1][3] is not None else p[i - 1][2])
+                         for i in range(1, len(p)) if p[i][1] == naslednja]
+        for seq, t_s in kandidati:
+            r = _ujema(v["dan"], t_s, zamuda, odhod, zdaj)
+            if r is not None and (razmik is None or r < razmik):
+                najboljsa, razmik = (v["trip_id"], v["dan"], seq, zamuda * 60, vrsta == 2), r
     return najboljsa
 
 
 def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
             zdaj: float) -> tuple[list[tuple], dict]:
     """Vse vrstice zemljevida -> (pripete, števci)."""
-    pripete, stevci = [], {"vlakov": 0, "nepripetih": 0}
+    pripete = []
+    stevci = {"vlakov": 0, "pred_odhodom": 0, "na_cilju": 0, "nepripetih": 0}
     for r in vrstice:
-        if r.get("bus"):
+        if je_avtobus(r):
             continue
         stevci["vlakov"] += 1
-        p = pripni(r, po_stevilki.get(stevilka(str(r.get("st_vlaka") or "")), []), zdaj)
+        if r.get("Vrsta") == 0:
+            stevci["pred_odhodom"] += 1
+            continue
+        stevci["na_cilju"] += r.get("Vrsta") == 2
+        p = pripni(r, po_stevilki.get(stevilka(str(r.get("St_vlaka") or "")), []), zdaj)
         if p is None:
             stevci["nepripetih"] += 1
         else:
@@ -133,130 +173,116 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
     return pripete, stevci
 
 
-def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float,
-           vlaki: set[str] = frozenset()) -> dict:
-    """Pripete zamude v `sz_zamuda`; v `run` samo tiste, ki jih derp.si nima.
+def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
+    """Pripete zamude v `sz_zamuda`, `run` in `obs`.
 
-    `vlaki` so vse vožnje vlakov voznega reda: med njimi `samo_derp` prešteje
-    tiste, ki jih derp.si nosi, zemljevid pa ne -- obratna vrzel.
+    Dve varovali, obe izmerjeni na zemljevidu 10. 10. 2026:
+
+    * **Vlak ne gre nazaj.** LPV 2616 je ob 22:35 po Brezovici spet pisal
+      „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz Ljubljane --
+      postaje, ki jo je s +0 zapustil 10 min prej. Postanek pred zadnjim
+      zapisanim se zato ne prepiše.
+    * **Na cilju šteje prvi prihod** (glava modula), in ničla po zamudi nad
+      `PONASTAVITEV_S` ni prihod, ampak ponastavitev.
     """
     ts = int(zdaj)
-    samo_sz = oba = 0
-    for trip_id, dan, seq, zamuda in pripete:
-        v_run = iz_lege.brez_feeda(trip_id, zdaj)
-        if v_run:
-            iz_lege.zapisi_meritev(conn, trip_id, dan, seq, None, zamuda, ts)
-            samo_sz += 1
-        else:
-            oba += 1
+    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0}
+    for trip_id, dan, seq, zamuda, je_prihod in pripete:
+        zadnji = conn.execute(
+            "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
+            "ORDER BY stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
+        if zadnji and seq < zadnji[0]:
+            izid["nazaj"] += 1
+            continue
+        if je_prihod and zadnji:
+            if seq == zadnji[0]:
+                continue                       # prihod je že zapisan
+            if zamuda == 0 and zadnji[1] > PONASTAVITEV_S:
+                izid["ponastavljenih"] += 1
+                continue
+        iz_lege.zapisi_meritev(conn, trip_id, dan, seq, zamuda if je_prihod else None,
+                               None if je_prihod else zamuda, ts, ohrani=True)
         conn.execute(
             "INSERT INTO sz_zamuda(trip_id, service_date, stop_seq, delay_s, "
-            "                      prvic_ts, zadnjic_ts, v_run) VALUES(?,?,?,?,?,?,?) "
+            "                      prvic_ts, zadnjic_ts, v_run) VALUES(?,?,?,?,?,?,1) "
             "ON CONFLICT(trip_id, service_date, stop_seq) DO UPDATE SET "
-            "  delay_s = excluded.delay_s, zadnjic_ts = excluded.zadnjic_ts, "
-            "  v_run = MAX(v_run, excluded.v_run)",
-            (trip_id, dan, seq, zamuda, ts, ts, int(v_run)))
+            "  delay_s = excluded.delay_s, zadnjic_ts = excluded.zadnjic_ts, v_run = 1",
+            (trip_id, dan, seq, zamuda, ts, ts))
+        izid["zapisanih"] += 1
     conn.commit()
-    samo_derp = len((iz_lege.v_feedu(zdaj) & vlaki) - {p[0] for p in pripete})
-    return {"samo_sz": samo_sz, "oba": oba, "samo_derp": samo_derp}
+    return izid
 
 
-def primerjava(conn: sqlite3.Connection, od_ts: int, najvec: int = 0) -> dict:
-    """Kako se zemljevid SŽ in derp.si razhajata na istih postankih.
-
-    Samo postanki, kjer je `run` od derp.si (`v_run = 0`). `mediana_s` je
-    zemljevid minus derp.si, v sekundah.
-    """
-    vrstice = conn.execute(
-        "SELECT z.trip_id, z.service_date, z.stop_seq, z.delay_s AS sz, "
-        "       COALESCE(r.delay_dep, r.delay_arr) AS derp, z.zadnjic_ts, t.train_no, "
-        "       st.name AS postaja "
-        "FROM sz_zamuda z "
-        "JOIN run r ON r.trip_id = z.trip_id AND r.service_date = z.service_date "
-        "          AND r.stop_seq = z.stop_seq "
-        "JOIN trip t ON t.trip_id = z.trip_id "
-        "LEFT JOIN sched s ON s.trip_id = z.trip_id AND s.stop_seq = z.stop_seq "
-        "LEFT JOIN station st ON st.stop_id = s.stop_id "
-        "WHERE z.zadnjic_ts >= ? AND z.v_run = 0 "
-        "  AND COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL", (od_ts,)).fetchall()
-    razlike = sorted(r["sz"] - r["derp"] for r in vrstice)
-    out = {
-        "parov": len(razlike),
-        "v_minuti": sum(abs(d) <= 60 for d in razlike),
-        "nad_5_min": sum(abs(d) > 300 for d in razlike),
-        "mediana_s": razlike[len(razlike) // 2] if razlike else None,
-        "samo_sz": conn.execute(
-            "SELECT COUNT(*) FROM sz_zamuda WHERE zadnjic_ts >= ? AND v_run = 1",
-            (od_ts,)).fetchone()[0],
-    }
-    if najvec:
-        out["najvecje"] = [
-            {"vlak": r["train_no"], "dan": r["service_date"], "postaja": r["postaja"],
-             "sz_min": round(r["sz"] / 60), "derp_min": round(r["derp"] / 60),
-             "ob": _ura(r["zadnjic_ts"])}
-            for r in sorted(vrstice, key=lambda r: -abs(r["sz"] - r["derp"]))[:najvec]
-            if r["sz"] != r["derp"]]
-    return out
+#: Odtis zadnjega odgovora: nespremenjen zemljevid je v /admin opomba, dolgo
+#: nespremenjen ob vlakih na poti pa opozorilo (`zdravje.ocena`).
+_odtis: str | None = None
 
 
 def _get() -> list[dict]:
+    global _odtis
     with viri.branje("zamude_sz") as b:
-        r = requests.get(f"{config.PERONI_URL}/lokacije",
-                         headers={"User-Agent": config.USER_AGENT}, timeout=30)
-        b.http = r.status_code
-        r.raise_for_status()
-        b.bajtov = len(r.content)
-        return r.json()
+        besedilo = brskalnik.zahtevaj(AKTIVNI)
+        b.http, b.bajtov = 200, len(besedilo.encode())
+        try:
+            vrstice = json.loads(besedilo)
+        except ValueError:
+            raise RuntimeError("zemljevid SŽ ni vrnil JSON") from None
+        if not isinstance(vrstice, list):
+            raise RuntimeError("zemljevid SŽ ni vrnil seznama vlakov")
+        odtis = hashlib.blake2s(besedilo.encode(), digest_size=8).hexdigest()
+        b.nespremenjeno = odtis == _odtis
+        _odtis = odtis
+        return vrstice
 
 
-def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float) -> dict:
-    """En odgovor zemljevida: pripni, zapiši, povzemi v `meta` za pregled."""
+def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
+          nespremenjeno: bool = False) -> dict:
+    """En odgovor zemljevida: pripni, zapiši, povzemi v `meta` za pregled.
+
+    Nespremenjen odgovor (dve od treh branj, ker beremo na 5 s, SŽ pa
+    preračuna na 15) samo potrdi, da vir živi: znova zapisan bi vsaki vrednosti
+    premaknil čas zadnjega podatka, čeprav SŽ ni povedal nič novega.
+    """
+    prej = json.loads(db.get_meta(conn, "zamude_sz") or "{}")
+    if nespremenjeno and prej.get("odtis") == _odtis and "vlakov" in prej:
+        prej["ts"] = int(zdaj)
+        prej.pop("napaka", None)
+        prej.pop("napaka_ts", None)
+        db.set_meta(conn, "zamude_sz", json.dumps(prej, sort_keys=True))
+        conn.commit()
+        return prej
     po_stevilki = vozni_red(conn, datetime.fromtimestamp(zdaj, TZ).date())
     pripete, stevci = razberi(vrstice, po_stevilki, zdaj)
-    vlaki = {v["trip_id"] for vv in po_stevilki.values() for v in vv}
-    stevci.update(zapisi(conn, pripete, zdaj, vlaki))
+    stevci.update(zapisi(conn, pripete, zdaj))
+    odtis = _odtis or ""
+    stevci["odtis"] = odtis
+    stevci["spremenjeno_ts"] = (prej.get("spremenjeno_ts") if prej.get("odtis") == odtis
+                                else None) or int(zdaj)
     stevci["ts"] = int(zdaj)
-    stevci["primerjava"] = primerjava(conn, int(zdaj) - 86400)
     db.set_meta(conn, "zamude_sz", json.dumps(stevci, sort_keys=True))
     conn.commit()
     return stevci
 
 
-def _stanje(s: dict) -> str:
-    """Kateri vir nosi vlake -- za dnevnik ob spremembi, ne ob vsakem branju."""
-    if not s.get("vlakov"):
-        return "zemljevid SŽ brez vlakov"
-    if s["samo_sz"] and not s["oba"]:
-        return "derp.si brez vlakov, zamude z zemljevida SŽ"
-    if s["samo_derp"] and not s["oba"]:
-        return "zemljevid SŽ brez vlakov, ki jih ima derp.si"
-    return "oba vira"
-
-
 def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
-    """Svoja nit: vir je tretja oseba in zna obviseti (25. 9. 2026 deset minut
-    samih timeoutov) -- v zajemni zanki bi to zamaknilo zamude."""
+    """Svoja nit: brskalnik zna obviseti (izziv do 90 s) -- v zajemni zanki bi
+    to zamaknilo zamude avtobusov."""
     conn = db.connect()
-    napak, stanje = 0, None
+    napak, prvic = 0, True
     try:
         while not stop.is_set():
-            # Dokler zajem feeda derp.si ni prebral, ne vemo, katere vlake
-            # nosi -- vsak bi bil „samo SŽ“ in šel v `run` mimo derp.si.
-            if not iz_lege.feed_prebran():
-                viri.caka("zamude_sz", "na prvo branje derp.si")
-                stop.wait(10)
-                continue
             zdaj = time.time()
             try:
-                s = korak(conn, _get(), zdaj)
-                if napak:
-                    log(f"zemljevid SŽ spet odgovarja (po {napak} napakah)")
-                napak = 0
-                if _stanje(s) != stanje:
-                    stanje = _stanje(s)
-                    log(f"zamude vlakov: {stanje} ({s['vlakov']} vlakov na zemljevidu, "
-                        f"{s['oba']} v obeh, {s['samo_sz']} samo SŽ, "
-                        f"{s['samo_derp']} samo derp.si, {s['nepripetih']} nepripetih)")
+                prej = _odtis
+                vrstice = _get()
+                s = korak(conn, vrstice, zdaj, nespremenjeno=prej is not None and _odtis == prej)
+                iz_lege.sz_prebran(zdaj)
+                if napak or prvic:
+                    log(f"zemljevid SŽ {'spet ' if napak else ''}odgovarja"
+                        f"{f' (po {napak} napakah)' if napak else ''}: {s['vlakov']} vlakov, "
+                        f"{s['zapisanih']} zapisanih, {s['nepripetih']} nepripetih; "
+                        "zamude vlakov vodi zemljevid SŽ")
+                napak, prvic = 0, False
             except Exception as exc:        # noqa: BLE001 -- vir ni naš
                 # Brez tega je nit obstala za vedno. 1. 10. 2026 ob 3:30 je
                 # nočno vzdrževanje drlo pisanje dlje od 30 s, `korak` je
@@ -268,7 +294,8 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                 conn.rollback()
                 napak += 1
                 if napak == 1:
-                    log(f"zemljevid SŽ ne odgovarja: {exc}")
+                    log(f"zemljevid SŽ ne odgovarja: {exc}; zamude vlakov spet piše "
+                        f"derp.si, ko mine {iz_lege.SZ_VODI_S} s")
                 # Zadnji uspešni števci ostanejo; pregled po `napaka_ts`
                 # vidi, da so stari in zakaj.
                 try:
@@ -278,6 +305,9 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                     conn.commit()
                 except sqlite3.Error:
                     conn.rollback()
-            stop.wait(config.SZ_ZAMUDE_SECONDS)
+            # Takt od začetka branja, ne od konca: branje (0,5--0,8 s, dlje,
+            # ko brskalnik bere tablo postaje) bi ga sicer raztegnilo.
+            stop.wait(max(0.5, config.SZ_ZAMUDE_SECONDS - (time.time() - zdaj),
+                          brskalnik.pocitek_s() if napak else 0.0))
     finally:
         conn.close()

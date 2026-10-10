@@ -5,6 +5,7 @@ paths:
   - "kajros/gtfs.py"
   - "kajros/db.py"
   - "kajros/peroni.py"
+  - "kajros/brskalnik.py"
   - "kajros/zamude_sz.py"
   - "kajros/iz_lege.py"
   - "kajros/viri.py"
@@ -220,31 +221,52 @@ Preden kdo išče napako pri sebi: primerjaj `seen_ts`, ki ga strežemo, s `vehi
 
 LPP feed **nima `ETag` ne `Last-Modified`**: pogojna zahteva ni mogoča, vsak zajem prenese vseh 315 kB.
 
+## potniski.sz.si: Chrome mimo Cloudflara (`brskalnik.py`, od 10. 10. 2026)
+
+Zemljevid vlakov in table postaj so na potniski.sz.si, za Cloudflarom. Do 7. 10. 2026 ju je za nas (in za derp.si) bral `api.modra.ninja`; tistega dne ob 1:24 je obstal, ker je Cloudflare začel zavračati brezglave brskalnike (naš brezglavi chromium 6. 10. še skozi, 7.–10. 10. ujet v izzivu). Odtlej vse vlake beremo sami, s Chromom. Izmerjeno 10. 10. 2026:
+
+* **Gre samo Chrome z oknom.** Na strežniku mu okno da Xvfb (`-displayfd`, prost zaslon izbere sam). Izziv reši sam v **3–7 s**; ena zahteva nato 0,5–0,8 s (`fetch` v naloženi strani, piškotek `cf_clearance` gre zraven, `cf-cache-status: DYNAMIC`).
+* **CDP po cevi ali z `--remote-debugging-port=0` NE gre**: v obeh primerih Chrome sam postavi `navigator.webdriver = true` in Cloudflare ga ne spusti (pet poskusov po 40–90 s). Z vrati, ki jih izberemo sami, je `webdriver` `false`. Zato `_prosta_vrata()` in lasten odjemalec WebSocket (`_Ws`, brez nove odvisnosti).
+* **Cloudflare piškotek občasno zavrne**: doma v 40 min enkrat 403 z izzivom (arwen: 240 branj v 60 min, nobenega); ponovno nalaganje strani ga reši v 7 s, zahteva se ponovi enkrat. Drugi izziv zapored ugasne Chrome; naslednja zahteva začne s praznim profilom.
+* **Cena**: Chrome ~400–560 MB PSS (14 procesov; vsota RSS 1,3 GB šteje deljeno večkrat), Xvfb 75 MB. Zažene se ob prvi zahtevi, vsakih 6 h znova (`NAJDLJE_ZIVI_S`). Po neuspelem zagonu 5 min ne poskusi znova.
+* **Kje teče**: arwen (`deploy/brskalnik.sh`: Google Chrome iz Googlovega paketa -- AppArmor ga pozna in dovoli peskovnik -- in Xvfb; preizkus v istem peskovniku kot storitev). **Malina ne more** (Pi Zero W, armv6). Razvoj: brez Xvfb se okno odpre na zaslonu in se po izzivu pomanjša (`sudo apt install xvfb` ga skrije). Preizkus: `kajros brskalnik`.
+* Stanje (teče, različica, zaslon, izzivi, pomnilnik, zadnja napaka) v `/admin` → Stroj in na karticah „zemljevid SŽ“ in „tabla SŽ · tiri“.
+
 ## Tir s table SŽ (`peroni.py`, od 25. 9. 2026)
 
-Ne GTFS ne NeTEx ne feed tira nimajo. Ima ga tabla prihodov in odhodov na potniski.sz.si (za Cloudflarom); beremo jo prek `api.modra.ninja/sz` („improviziran API“ tretje osebe, isti vir uporablja brezavta.si). Zato:
+Ne GTFS ne NeTEx ne feed tira nimajo. Ima ga tabla prihodov in odhodov na potniski.sz.si (`/odhodi-in-prihodi-na-postaji/?postaja=<št. SŽ>&datum=<d.m.llll>`), od 10. 10. 2026 brana naravnost (prej prek `api.modra.ninja/sz`). Stran izriše strežnik SŽ: tabla 150–175 kB HTML, seznam postaj (282) je v izbiri na isti strani. Zato:
 
 * **Tir je dodatek.** Pokaže se samo, kadar ga je potrdilo ZADNJE branje postaje in to branje ni zamujeno za več kot dva razmika (`peroni.tiri`). Ugasne se s `KAJROS_PERONI=0`, nič drugega ne sme pasti.
-* **Ena tabla je 13-17 s** (predpomnilnik vira 60 s). Bere jo SVOJA nit, ena postaja naenkrat -- v zajemni zanki bi zamaknila zamude.
+* **Tabelo loči naslov** („Odhodi vlakov“ / „Prihodi vlakov“), vrstica je slovar po glavi brez zvezdice („Št. vlaka“, „Tir“, „Zamude“).
+* **„BUS“ v stolpcu tira ni tir**: EN 414 je bil 10. 10. 2026 v Ljubljani nadomeščen z avtobusom, nekaj minut pozneje tir 9-B. Vlak brez številke (tudi to se zgodi, MV 19) se ne šteje.
+* **Bere ga SVOJA nit, ena postaja naenkrat** -- v zajemni zanki bi zamaknila zamude. Ritem je iz časov posrednika (13–17 s na tablo), zdaj ~0,8 s; ostaja, ker stran SŽ ni naša.
 * **Tir je lastnost postaje, ne vlaka.** Od 20 izmerjenih postaj ga je 14 imelo pri vseh vlakih, 6 (Jesenice, Novo mesto, Kranj, Dobova, Trbovlje, Škofja Loka) pri nobenem. Postaja brez tira se preveri enkrat na dan.
-* **Vseh postaj na deset minut ena nit ne zmore** (~20 s na tablo, 266 postaj). Razmik po prometu: Ljubljana, Maribor, Celje vsakih `KAJROS_PERONI_SECONDS` (600 s), majhne postaje redkeje, najdlje 2 h.
+* **Razmik po prometu**: Ljubljana, Maribor, Celje vsakih `KAJROS_PERONI_SECONDS` (600 s), majhne postaje redkeje, najdlje 2 h.
 * **Tabla kaže samo vlake, ki še pridejo** (tudi zamujene), zato se bere čez ves dan. Mednarodnih 1472, 210, 211, 79, 350 na njej ni.
 * **Ključ = koledarski dan table + številka brez vrste**, ne prometni dan, ne `trip_id`: vlak ob 00:30 je na tabli naslednjega dne.
 * **Tir se čez dan spreminja.** `prvi` ostane, `tir` se posodablja; prikaz razliko napiše z besedo („prej 6-A“). brezavta.si kaže „običajni“ tir iz zgodovine; v Ljubljani se je razlikoval od table pri 8 od 121 vlakov.
 
-## Zamude vlakov z zemljevida SŽ (`zamude_sz.py`, od 28. 9. 2026)
+## Zamude vlakov z zemljevida SŽ (`zamude_sz.py`, od 28. 9. 2026; vodi od 10. 10. 2026)
 
-Drugi vir poleg derp.si. Tistega dne je derp.si z zipom DUJPP izgubil vse vlake (zamude, `SZ-DELAY`, surovi `…/data/raw/sz/rt/trip-updates` 0 vnosov) — **derp.si pri vlakih visi na voznem redu DUJPP**. Zemljevid vlakov s potniski.sz.si (`api.modra.ninja/sz/lokacije`, isti posrednik kot tir) vlak vodi po **številki**, zato ga zip ne prizadene.
+Zemljevid vlakov s potniski.sz.si (`/wp-admin/admin-ajax.php?action=aktivni_vlaki`, JSON, 3–5 kB) je **izvor vseh zamud vlakov**, ki smo jih kdaj imeli: derp.si jih bere z `api.modra.ninja/sz/lokacije` (`derp-si/ijpp-rt`, `szService.js`, 8. 10. 2026), ta pa z tega naslova -- polja ista, preimenovana (`St_vlaka` → `st_vlaka`, `Postaja` → `naslednja_postaja`, `Zamuda_cas` → `zamuda_min`, `Odhod` → `raw_odhod`). Vlak vodi po **številki**, zato ga pokvarjen zip DUJPP ne prizadene (28. 9. 2026 je derp.si izgubil vse vlake, zemljevid ne).
 
-Izmerjeno 28. 9. 2026, 08:59–09:08, 17 branj po 30 s:
+**Vodi zamude vlakov** (Davidova odločitev 10. 10. 2026: „raje 15 s prej in brez posrednikov“). Dokler je prebran v zadnjih `iz_lege.SZ_VODI_S` (120 s), zajem derp.si vlakov (`network = zeleznica`, `mode != bus`) ne piše (`collector._sz_vlaki`, števec `sz_prevzel`); nadomestni avtobusi ostanejo derp.si. Ko obmolkne, derp.si vlake spet piše sam. Primerjave med viroma ni več: oba sta isti zemljevid.
 
-* **`raw_odhod` = voznoredni odhod s postaje PRED `naslednja_postaja` + `zamuda_min`**, na minuto, pri vseh 12 ročno preverjenih vlakih. Zamuda je torej odhodna zamuda zadnjega prevoženega postanka; enakost je hkrati preizkus, da je vlak pripet na pravo vožnjo in dan (sezonske različice z isto številko). Brez ujemanja se vlak ne pripne.
-* **Pripetih 574 od 647 vrstic vlakov** (89 %). Ostanek brez izjeme upravičen: 42 z odhodom v prihodnosti (vlak stoji na postaji ali pred izhodiščem — zemljevid ob prihodu že pokaže naslednjo postajo), 31 brez naslednje postaje (na cilju). Nadomestni avtobusi (34) se ne štejejo: zamuda 0 v točki postaje je izračun.
-* Odgovor se spremeni ~vsako minuto (9 različnih v 17 branjih). Zamuda se med odsekom lahko popravi (10 od 556 zaporednih parov) — vrstica v `sz_zamuda` in `run` drži zadnjo, kot pri derp.si.
+Polje `Vrsta` (10. 10. 2026, 84 branj po 15 s):
 
-**Ni neodvisen od derp.si** (8. 10. 2026, iz kode `derp-si/ijpp-rt`, `szService.js`): derp.si zamude vlakov bere z **istega** `api.modra.ninja/sz/lokacije` (na 15 s) in jih ujame na vozni red DUJPP; NAP nosi samo avtobuse. Ta vir torej varuje pred napako voznega reda (28. 9.), ne pred izpadom posrednika — 7. 10. ob 1:24 sta utihnila oba hkrati, 9. 10. ob 17:30 še vedno (zadnji zapis vlakov pred 63,8 h, `/admin`). Register (`viri.py`) to pove v vlogi vira.
+* **1 -- vozi.** `Postaja` = naslednja postaja, `Odhod` = voznoredni odhod s postaje PRED njo + `Zamuda_cas`, na minuto (12 od 12 vlakov 28. 9.). Zamuda je torej odhodna zamuda zadnjega prevoženega postanka; enakost je hkrati preizkus prave vožnje in dneva. Brez ujemanja se vlak ne pripne.
+* **0 -- stoji na izhodišču**, `Odhod` je vozni red. Ni meritev; do 7. 10. (prek modra.ninja, brez tega polja) se je ob voznorednem odhodu zapisala ničla tudi vlaku, ki še ni odpeljal.
+* **2 -- na cilju**: prazna `Postaja`, `Odhod` = dejanski prihod, `Zamuda_cas` = zamuda ob prihodu. Čez 1–2 min SŽ vrstico ponastavi na 0 ob voznorednem prihodu (1897: +7 → 0, 3287: +8 → 0). Velja prvi prihod; ničla po zamudi nad 3 min je ponastavitev (`ponastavljenih`). Prej (modra.ninja) prihoda na cilj nismo imeli.
 
-**Kam gre:** vsaka pripeta vrednost v `sz_zamuda` (zadnje stanje na postanek). V `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`, ista meja kot zamuda iz lege) — tedaj `v_run = 1`. Kadar nosita oba, `run` ostane derp.si-jev in `kajros primerjava` / pregled („ujemanje virov · 24 h“) pokažeta razhajanja. **Kdo ima prav, še ni odločeno**: primerjav do objave ni bilo, ker derp.si vlakov ni imel. Nit čaka, da zajem derp.si prebere feed (`iz_lege.feed_prebran`), sicer bi bil ob zagonu vsak vlak „samo SŽ“.
+**Vlak ne gre nazaj.** LPV 2616 je 10. 10. ob 22:35, po Brezovici, spet pisal „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz Ljubljane, ki jo je s +0 zapustil 10 min prej. Postanek pred zadnjim zapisanim se ne prepiše (`nazaj`). Popravek na istem odseku velja (10 od 1 052 trojic branj; ničle med dvema zamudama, kot pri feedu, nobene).
+
+**Kam gre**: vsaka vrednost v `sz_zamuda` (zadnje stanje na postanek; `v_run` je od 10. 10. vedno 1) in v `run` + `obs` (`iz_lege.zapisi_meritev(..., ohrani=True)`: odhod ne pobriše prihoda in obratno). `feed_ts` = čas našega branja, torej po prehodu -- `potrjen_prehod` pravilno reče „izmerjeno“.
+
+**Kaj pove pregled**: v `meta.zamude_sz` vlakov, zapisanih, pred odhodom, na cilju, nepripetih, nazaj, ponastavljenih in `spremenjeno_ts`. Odgovor se ob vlakih na poti spremeni ob **vsakem** branju (93 od 93 po 15 s; odšteva `Predviden_prihod`) -- 10 min brez spremembe je rumeno (`zdravje.SZ_ZAMRZNJEN_S`). Prazen zemljevid ob vsaj treh vlakih po voznem redu je rumen; nit, ki 5 min ne zapiše niti napake, rdeča.
+
+**Svežina, izmerjeno 10. 10. 2026** (MERITVE): tabla zamud SŽ (`/pomoc-uporabnikom-in-stanje-v-prometu/`, samo ≥ 3 min) in zemljevid kažeta isto minuto v 1 175 od 1 183 parov; zamudil.si sledi tabli z mediano 14 s, p90 29 s.
+
+**Beremo na 5 s, ker SŽ zemljevid preračuna na 15** (55 od 55 sprememb natanko 15 s narazen; njihova stran ga vpraša na 15 s, `setInterval(…, 15e3)`). Na 5 s novo stanje ujamemo v največ 5 s; nespremenjen odgovor (dve branji od treh) samo potrdi, da vir živi, in ne premakne časa zadnjega podatka (`korak(..., nespremenjeno=True)`). **Tabla zamud je od zemljevida hitrejša**: novo minuto pokaže prej v 7 od 8 sprememb, šestkrat za ~14 s (branje na 5 s, ponoči). Ne beremo je, ker je stran 446 kB HTML (zemljevid 3,5 kB) in nosi le vlake z vsaj 3 min; če bo to ~14 s vredno, je to naslednji korak.
 
 ## Zamude mestnega LPP z LPP-jevih zaslonov (`zamude_lpp.py`, od 8. 10. 2026)
 
@@ -256,7 +278,7 @@ Drugi vir poleg derp.si, po zgledu `zamude_sz`. Tistega dne je strežnik RT derp
 * **Vožnje vir ne pove**, le vzorec, vozilo in eto. Vozilo → vožnja prek `vehicle_now` (derp.si), velja, dokler ga ta hrani (uro), z istim vzorcem in **le, če je LPP-jeva zamuda v 10 min od zadnje derp-ove zamude te vožnje** (`SKLADNO_S`). Brez tega pogoja so bila vozila z legami izpred 14 min že na naslednji vožnji istega vzorca: mediana zamude 22 namesto 4,5 min. Lega mestnega LPP nima `service_date`, `trip_id` je za vsak dan svoj.
 * **Po voznem redu samem ne pripenjamo**: od 758 živih prihodov jih je imelo 398 dve ali več kandidatk z zamudo od −3 do +20 min, edina kandidatka pa je derp-ovo vožnjo zadela le 67-krat od 98 — zgreši pri velikih zamudah (linija 11 +45 → izbere vožnjo s +3). Sproti šteje `meta.zamude_lpp.po_voznem_redu` [zadel, zgrešil, dvoumno, brez], `/admin` („LPP · samo po voznem redu“). Posledica: po uri izpada derp.si (`vehicle_now` pozabi lege) vir v `run` ne piše več; tabla pa LPP-jeve prihode kaže še naprej (`strezba.md`).
 * 13 % živih prihodov (72 od 536) je na vzorcih ali postajališčih, ki jih vozni red nima — LPP vozi mimo objavljenega voznega reda (zgoraj).
-* **Kam gre**: vsaka vrednost v `lpp_zamuda` (zadnje stanje na postanek); v `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`), z odhodno zamudo (na zadnjem postanku prihodno). Vrednost je napoved prihoda, kot pri derp.si, ki pri mestnem LPP pošilja samo postanke pred vozilom. `kajros primerjava --lpp` in `/admin` („LPP · ujemanje · 24 h“).
+* **Kam gre**: vsaka vrednost v `lpp_zamuda` (zadnje stanje na postanek); v `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`), z odhodno zamudo (na zadnjem postanku prihodno). Vrednost je napoved prihoda, kot pri derp.si, ki pri mestnem LPP pošilja samo postanke pred vozilom. `kajros primerjava` in `/admin` („LPP · ujemanje · 24 h“).
 * **Samo na strežniku**, ne v `kajros collect`: obremenitve na malini nismo merili.
 
 Dve spremembi, ki ju je izpad pokazal tudi drugod:

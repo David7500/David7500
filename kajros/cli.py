@@ -10,9 +10,9 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import (alerts, backtest, config, collector, db, gtfs, hoja, journey,
-               naslovi, ocena, pot, pripni, stats, tiri, weather, zamude_lpp,
-               zamude_sz)
+from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
+               journey, naslovi, ocena, peroni, pot, pripni, stats, tiri, weather,
+               zamude_lpp, zamude_sz)
 
 
 def cmd_init(args):
@@ -297,13 +297,40 @@ def cmd_zamenjave(args):
 
 
 def cmd_primerjava(args):
-    """Kako se drugi vir zamud ujema z derp.si: zemljevid SŽ ali zasloni LPP."""
+    """Kako se zasloni LPP ujemajo z derp.si."""
     conn = db.connect()
     db.init(conn)
     od = int(time.time()) - args.dni * 86400
-    vir = zamude_lpp if args.lpp else zamude_sz
-    print(json.dumps(vir.primerjava(conn, od, najvec=args.najvec),
+    print(json.dumps(zamude_lpp.primerjava(conn, od, najvec=args.najvec),
                      indent=2, ensure_ascii=False))
+
+
+def cmd_brskalnik(args):
+    """Ali Chrome pride skozi Cloudflare do potniski.sz.si: zemljevid vlakov in
+    ena tabla postaje, s časi. Za preizkus po namestitvi (`deploy/brskalnik.sh`),
+    kot uporabnik storitve. Svoj profil: Chroma strežnika ne zmoti."""
+    print(f"Chrome: {brskalnik.najdi_chrome() or 'NI'} · Xvfb: {brskalnik.najdi_xvfb() or 'ni'}")
+    b = brskalnik.Brskalnik(config.DATA_DIR / "sz-brskalnik-preizkus")
+    izid = 0
+    try:
+        t = time.monotonic()
+        vlaki = json.loads(b.zahtevaj(zamude_sz.AKTIVNI))
+        s = b.stanje()
+        print(f"zagon in izziv: {s['zadnji_preboj_s']} s ({s['razlicica']}, {s['zaslon']})")
+        print(f"zemljevid vlakov: {len(vlaki)} vlakov v {time.monotonic() - t:.1f} s")
+        t = time.monotonic()
+        tabla = peroni.tabla(b.zahtevaj(peroni._pot_table(args.postaja, date.today())))
+        print(f"tabla postaje {args.postaja}: {len(tabla['departures'])} odhodov, "
+              f"{len(tabla['arrivals'])} prihodov, tiri {peroni.razberi(tabla)[0]} "
+              f"v {time.monotonic() - t:.1f} s")
+        if b.stanje().get("pomnilnik"):
+            print(f"Chrome porabi {b.stanje()['pomnilnik'] / 2**20:.0f} MB (PSS)")
+    except brskalnik.NapakaBrskalnika as exc:
+        print(f"NE GRE: {exc}")
+        izid = 1
+    finally:
+        b.ustavi()
+    sys.exit(izid)
 
 
 def cmd_pespoti(args):
@@ -532,12 +559,15 @@ def main(argv=None):
     a.set_defaults(func=cmd_zamenjave)
 
     a = sub.add_parser("primerjava",
-                       help="drugi vir zamud proti derp.si, z najvecjimi razhajanji")
-    a.add_argument("--lpp", action="store_true",
-                   help="mestni LPP z LPP-jevih zaslonov namesto zemljevida SZ")
+                       help="zasloni LPP proti derp.si, z najvecjimi razhajanji")
     a.add_argument("--dni", type=int, default=1)
     a.add_argument("--najvec", type=int, default=20, help="koliko najvecjih razhajanj izpisati")
     a.set_defaults(func=cmd_primerjava)
+
+    a = sub.add_parser("brskalnik",
+                       help="preizkusi Chrome za potniski.sz.si: zemljevid vlakov in tabla postaje")
+    a.add_argument("--postaja", default="42300", help="stevilka postaje SZ (privzeto Ljubljana)")
+    a.set_defaults(func=cmd_brskalnik)
 
     a = sub.add_parser("pespoti", help="izmeri pes poti med bliznjimi postajalisci")
     a.add_argument("--znova", action="store_true", help="pobrisi in izracunaj vse")

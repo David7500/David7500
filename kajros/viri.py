@@ -33,7 +33,7 @@ from typing import Callable
 
 import requests
 
-from . import config
+from . import brskalnik, config
 
 #: Skupine v vrstnem redu, v katerem jih pokaže pregled.
 SKUPINE = (
@@ -68,11 +68,18 @@ class Vir:
     ukrep: str
     #: Naslov za preverjanje dosegljivosti (GET, samo glava) ali None.
     preveri: str | None = None
-    #: Kode >= 400, ki vseeno pomenijo „strežnik je tu“ (NAP brez prijave: 403).
+    #: Kode >= 400, ki vseeno pomenijo „strežnik je tu“: NAP brez prijave 401,
+    #: potniski.sz.si brez brskalnika 403 (Cloudflare).
     preveri_ok: tuple[int, ...] = ()
     #: Zaporednih napak, preden je vir rumen (splošno pravilo). Dnevni vir
     #: že ob eni: naslednji poskus je šele jutri.
     prag_napak: int = 3
+
+
+def _zamude_sz_pot() -> str:
+    # Uvoz ob klicu: `zamude_sz` uvozi ta modul.
+    from .zamude_sz import AKTIVNI
+    return AKTIVNI
 
 
 def _okolje_vklop(ime: str) -> bool:
@@ -90,18 +97,25 @@ def vsi() -> tuple[Vir, ...]:
     vozni_red = ("osveževanje izklopljeno (KAJROS_REFRESH=off)" if osvezi == "off"
                  else f"dnevno ob {ura}:20" + (", v podprocesu" if osvezi == "subprocess" else ""))
     vreme_ura = config.okolje("WEATHER_HOUR", "5")
-    # Vlake derp.si dobi z istega posrednika kot `zamude_sz` (`derp-si/ijpp-rt`,
-    # `szService.js`, prebrano 8. 10. 2026), avtobuse iz NAP.
+    # Vlake derp.si dobi z zemljevida SŽ prek posrednika api.modra.ninja
+    # (`derp-si/ijpp-rt`, `szService.js`, prebrano 8. 10. 2026), avtobuse iz
+    # NAP. Isti zemljevid beremo sami (`zamude_sz`), zato derp.si vlake piše le
+    # še, kadar našega branja ni.
     derp = "DERP (derp.si): avtobusi iz NAP, vlaki z zemljevida SŽ prek api.modra.ninja"
     derp_ukrep = ("Izpad je skoraj vedno pri derp.si, ne pri nas — „Preveri vire“ "
                   "pove, ali odgovarja in ali imamo internet. Rezerve tečejo same: "
-                  "NAP za medkrajevne, LPP-jevi zasloni za mestni LPP. Vlake derp.si "
-                  "dobi z api.modra.ninja: kadar ne odgovarja niti zemljevid SŽ, je "
-                  "izpad tam. Obvestilo potnikom nastane samo po 20 min.")
+                  "NAP za medkrajevne, LPP-jevi zasloni za mestni LPP, zemljevid SŽ "
+                  "za vlake. Obvestilo potnikom nastane samo po 20 min.")
+    brskalnik_ukrep = ("Stran SŽ beremo s Chromom (`brskalnik.py`). „ni Chroma“ ali "
+                       "„ni zaslona“: na arwenu `deploy/brskalnik.sh` (namesti Chrome "
+                       "in Xvfb, rabi sudo). „Cloudflare ne spusti“: brskalnik se "
+                       "ob naslednjem branju zažene znova s praznim profilom; če "
+                       "ostane, SŽ je zaostril zaščito — glej MERITVE (10. 10. 2026). "
+                       "Vrstica „brskalnik“ spodaj pove, ali teče in koliko izzivov je rešil.")
     return (
         Vir("derp_zamude", "derp.si · zamude IJPP", "zivo",
             "Zamude vlakov SŽ in medkrajevnih avtobusov (GTFS-RT).",
-            "glavni vir zamud vlakov in primestnega LPP",
+            "glavni vir zamud primestnega LPP; vlake piše, kadar zemljevid SŽ ni prebran",
             config.TRIP_UPDATES_URL, derp, "CC BY-SA 4.0",
             f"vsakih {poll} s", "kajros-collector", True, ("derp_ijpp",), derp_ukrep,
             preveri=config.TRIP_UPDATES_URL),
@@ -136,15 +150,14 @@ def vsi() -> tuple[Vir, ...]:
             "in zamude medtem spet piše derp.si.",
             preveri=config.NAP_URL, preveri_ok=(401, 403, 405)),
         Vir("zamude_sz", "zemljevid SŽ", "izvirniki",
-            "Zamude vlakov z zemljevida potniski.sz.si, po številki vlaka.",
-            "isti posrednik, s katerega vlake dobi derp.si: varuje pred napačnim "
-            "voznim redom DUJPP (28. 9.), ne pred izpadom modra.ninja (7. 10.)",
-            f"{config.PERONI_URL}/lokacije", "SŽ (potniski.sz.si) prek api.modra.ninja, "
-            "tretja oseba", "ni navedena", f"vsakih {config.SZ_ZAMUDE_SECONDS} s",
-            "kajros-zamude-sz", config.SZ_ZAMUDE, ("zamude_sz",),
-            "Posrednik je tretja oseba brez lastnika: ko ne odgovarja, vlakov "
-            "nima nihče, tudi derp.si ne. Obvestilo potnikom nastane samo; počakaj.",
-            preveri=f"{config.PERONI_URL}/lokacije"),
+            "Zamude vseh vlakov z zemljevida potniski.sz.si, po številki vlaka; "
+            "beremo ga sami, s Chromom.",
+            "vodi zamude vlakov; ko ni prebran 2 min, jih spet piše derp.si "
+            "(isti zemljevid prek posrednika)",
+            f"{brskalnik.IZVOR}{_zamude_sz_pot()}", "SŽ (potniski.sz.si), brez posrednika",
+            "ni navedena", f"vsakih {config.SZ_ZAMUDE_SECONDS} s",
+            "kajros-zamude-sz", config.SZ_ZAMUDE, ("zamude_sz",), brskalnik_ukrep,
+            preveri=brskalnik.ZACETNA, preveri_ok=(403,)),
         Vir("zamude_lpp", "LPP · zasloni postajališč", "izvirniki",
             "Prihodi z LPP-jevih zaslonov na ~75 postajališčih, pripeti na vožnje.",
             "rezerva za mestni LPP, kadar ga derp.si nima; sicer primerjava",
@@ -157,12 +170,12 @@ def vsi() -> tuple[Vir, ...]:
         Vir("peroni", "tabla SŽ · tiri", "dodatki",
             "Tir vlaka na postaji s table prihodov in odhodov.",
             "dodatek: star ali manjkajoč tir se ne pokaže",
-            f"{config.PERONI_URL}/postaje", "SŽ (potniski.sz.si) prek api.modra.ninja, "
-            "tretja oseba", "ni navedena",
+            f"{brskalnik.IZVOR}/odhodi-in-prihodi-na-postaji/",
+            "SŽ (potniski.sz.si), brez posrednika", "ni navedena",
             f"velike postaje vsakih {config.PERONI_SECONDS // 60} min, male do 2 h",
             "kajros-peroni", config.PERONI, (),
-            "Tir je dodatek, ki sme izginiti: počakaj.",
-            preveri=f"{config.PERONI_URL}/postaje"),
+            "Tir je dodatek, ki sme izginiti. " + brskalnik_ukrep,
+            preveri=brskalnik.ZACETNA, preveri_ok=(403,)),
         Vir("lpp_zivo", "LPP · prihodi za prikaz", "dodatki",
             "Živa napoved prihoda mestnega LPP v oknu vožnje in na tabli.",
             "samo prikaz, v bazo ne gre nič",
@@ -555,7 +568,7 @@ def preveri(url: str, get: Callable = requests.get,
         return False, f"odgovori {r.status_code}"
     cas = f"{time.monotonic() - t:.1f} s".replace(".", ",")
     if r.status_code in ok_kode:
-        return True, f"dosegljiv v {cas} (brez prijave odgovori {r.status_code})"
+        return True, f"dosegljiv v {cas} (brez prijave ali brskalnika odgovori {r.status_code})"
     return True, f"odgovori {r.status_code} v {cas}"
 
 

@@ -491,6 +491,19 @@ const ZAPIS_IME = {
 let preverba = null;        // izid „Preveri vire“: {teče} ali odgovor strežnika
 let skokNaVir = null;       // kartica, na katero naj skoči zavihek Viri
 
+/** Chrome za potniski.sz.si (`brskalnik.py`) v eni vrstici. */
+function opisBrskalnika(b) {
+  if (!b) return "še ni bil zagnan (nihče ga ni rabil)";
+  if (!b.tece) {
+    return b.napaka ? `ne teče: ${b.napaka}` : b.pot ? "ne teče" : "ni Chroma";
+  }
+  const izzivi = b.izzivi ? ` · izzivov ${st(b.izzivi)}` : "";
+  return `${b.razlicica || "Chrome"} · ${b.zaslon || "?"} · teče od ${uraTs(b.od_ts)}`
+    + `${b.pomnilnik ? ` · ${bajti(b.pomnilnik)}` : ""} · zahtev ${st(b.zahtev)}`
+    + ` · zagonov ${st(b.zagonov)}${izzivi}`
+    + (b.zadnji_preboj_s != null ? ` · zadnji izziv ${st(b.zadnji_preboj_s, 1)} s ob ${uraTs(b.zadnji_preboj_ts)}` : "");
+}
+
 function ujemanje(p) {
   return !p || !p.parov ? null
     : `${st(100 * p.v_minuti / p.parov)} % v minuti od ${st(p.parov)} · nad 5 min ${st(p.nad_5_min)}`;
@@ -522,11 +535,19 @@ function podrobnostiVira(kljuc, d) {
         + (nm.isti_cas ? ` · odmik ${st(nm.odmik_m, 1)} m` : "")
         + ` · NAP novejši za ${st(nm.prednost_s)} s · samo NAP ${st(nm.samo_nap)} · samo derp ${st(nm.samo_derp)}`);
     }
-  } else if (kljuc === "zamude_sz" && z.zamude_sz) {
+  } else if (kljuc === "zamude_sz") {
     const zs = z.zamude_sz;
-    dodaj("v odgovoru", `oba ${st(zs.oba)} · samo SŽ ${st(zs.samo_sz)} · samo derp ${st(zs.samo_derp)}`
-      + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : ""));
-    dodaj("ujemanje · 24 h", ujemanje(zs.primerjava));
+    if (zs && zs.vlakov != null) {
+      dodaj("v odgovoru", `${st(zs.vlakov)} vlakov · zapisanih ${st(zs.zapisanih)}`
+        + ` · pred odhodom ${st(zs.pred_odhodom)} · na cilju ${st(zs.na_cilju)}`
+        + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : "")
+        + (zs.nazaj ? ` · nazaj zavrnjenih ${st(zs.nazaj)}` : "")
+        + (zs.ponastavljenih ? ` · ponastavitev na cilju ${st(zs.ponastavljenih)}` : ""));
+      dodaj("zadnja sprememba", zs.spremenjeno_ts ? pred(zs.spremenjeno_ts) : null);
+    }
+    dodaj("brskalnik", opisBrskalnika((d.stroj || {}).brskalnik));
+  } else if (kljuc === "peroni") {
+    dodaj("brskalnik", opisBrskalnika((d.stroj || {}).brskalnik));
   } else if (kljuc === "zamude_lpp" && z.zamude_lpp) {
     const zl = z.zamude_lpp;
     dodaj("v obhodu", `oba ${st(zl.oba)} · samo LPP ${st(zl.samo_lpp)} · živih ${st(zl.zivih)}`
@@ -691,6 +712,7 @@ function vrsticeStroja(d) {
     ["niti zajema", !pricakovane.length ? "zajem izklopljen" : manjka.length ? `ne teče: ${manjka.join(", ")}`
       : `teče vseh ${st(pricakovane.length)}`, manjka.length ? "je-slaba" : ""],
     ["vse niti procesa", `${st(zive.length)} · ${nase.join(", ")}`],
+    ["brskalnik za potniski.sz.si", opisBrskalnika(m.brskalnik)],
     ["različica", m.razlicica || "—"],
   ];
 }

@@ -98,20 +98,30 @@ NAP_SECONDS = int(okolje("NAP_SECONDS", "10"))
 NAP_PREVOZNIKI = frozenset(
     a.strip() for a in (okolje("NAP_PREVOZNIKI", "1119,1121,1123") or "").split(",") if a.strip())
 
-# **Tir vlaka s table SŽ** (`peroni.py`). potniski.sz.si je za Cloudflarom,
-# `api.modra.ninja` ga strga in streže -- tretja oseba brez lastnika, zato je
-# tir dodatek, ki sme izginiti. Ena tabla je 13-17 s; bere jo ena sama nit.
-# Izklopi se s `KAJROS_PERONI=0`.
+# **Brskalnik za potniski.sz.si** (`brskalnik.py`). Stran je za Cloudflarom,
+# ki od 7. 10. 2026 spusti samo Chrome z oknom; na strežniku ga dobi
+# navidezni zaslon Xvfb. Prazno = poišči sam (`google-chrome-stable`,
+# `chromium` ... in `Xvfb` v PATH). Brez Xvfb se okno odpre na zaslonu tega
+# stroja, brez zaslona pa brskalnika ni. Namestitev: `deploy/brskalnik.sh`.
+SZ_CHROME = okolje("SZ_CHROME", "")
+SZ_XVFB = okolje("SZ_XVFB", "")
+
+# **Tir vlaka s table SŽ** (`peroni.py`), z odhodov in prihodov na postaji,
+# prebranih z brskalnikom. Tir je dodatek, ki sme izginiti. Izklopi se s
+# `KAJROS_PERONI=0`.
 PERONI = okolje("PERONI", "1") != "0"
-PERONI_URL = okolje("PERONI_URL", "https://api.modra.ninja/sz")
 PERONI_SECONDS = int(okolje("PERONI_SECONDS", "600"))
 
-# **Zamude vlakov z zemljevida SŽ** (`zamude_sz.py`), isti posrednik kot tir.
-# Drugi vir poleg derp.si: ta je 28. 9. 2026 z voznim redom DUJPP izgubil vse
-# vlake, zemljevid SŽ jih je imel. Odgovor se spremeni ~vsako minuto.
-# Izklopi se s `KAJROS_SZ_ZAMUDE=0`.
+# **Zamude vlakov z zemljevida SŽ** (`zamude_sz.py`), prebrane z brskalnikom.
+# Vodijo zamude vlakov; derp.si (ki isti zemljevid bere prek posrednika) jih
+# piše le, kadar zemljevid ni prebran (`iz_lege.sz_vodi`). SŽ zemljevid
+# preračuna vsakih 15 s (izmerjeno 10. 10. 2026, 36 sprememb v 9 min, vse
+# natanko 15 s narazen) in tudi njihova stran ga vpraša na 15 s. Branje na 5 s
+# novo stanje ujame v največ 5 s namesto 15 (na 30 s: 30); nespremenjenega
+# odgovora ne obdelamo. Tri branja na 15 s = trije odprti zemljevidi na
+# njihovi strani, 3,5 kB vsak. Izklopi se s `KAJROS_SZ_ZAMUDE=0`.
 SZ_ZAMUDE = okolje("SZ_ZAMUDE", "1") != "0"
-SZ_ZAMUDE_SECONDS = int(okolje("SZ_ZAMUDE_SECONDS", "60"))
+SZ_ZAMUDE_SECONDS = int(okolje("SZ_ZAMUDE_SECONDS", "5"))
 
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in

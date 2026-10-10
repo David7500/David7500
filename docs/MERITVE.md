@@ -2419,3 +2419,29 @@ Pokritost po prevozniku (vožnje z lego v 13 min): NAP Nomago 266, Arriva 308, A
 
 Iz tega: od 9. 10. zamude Arrive, Nomaga in AP MS računamo iz leg NAP (`iz_lege.nap_vodi`), feed derp.si zanje ostane rezerva, ko NAP obmolkne.
 
+
+## Vlaki naravnost s potniski.sz.si, brez posrednika (10. 10. 2026)
+
+Od 7. 10. 2026 ob 1:24 vlakov ni imel nihče od naših virov: `api.modra.ninja` (in z njim derp.si) je obstal, ker Cloudflare na potniski.sz.si ne spusti več brezglavega brskalnika. Zamudil.si je zamude kazal naprej, zato najprej primerjava, nato lasten bralec (`brskalnik.py`, `zamude_sz.py`, `peroni.py`).
+
+**Zamudil.si proti tabli zamud SŽ** (`/pomoc-uporabnikom-in-stanje-v-prometu/`, vlaki z vsaj 3 min), 20:52–22:22, 360 branj po 15 s, 70 sprememb: zamudil isto minuto pokaže z zamikom **mediana 14 s, p90 29 s, največ 29 s**. Njihov odgovor se spremeni na 30 s in je ob streženju star ~13 s. Kjer SŽ napiše „predvidena zamuda“, zamudil prevzame napoved (RG 319: tabla 10 min izmerjeno, zamudil 20). Vlaka pod 3 min na tabli ni, zamudil ga kaže brez zamude.
+
+**Tabla in zemljevid** (`admin-ajax.php?action=aktivni_vlaki`) kažeta isto minuto v **1 175 od 1 183** parov istega branja. Zemljevid ima vse vlake (tudi 0–2 min) s številko postaje in uro odhoda, zato je on glavni vir.
+
+**Kdo je hitrejši**, branje obojega na 5 s, 22:47–23:07 (206 branj, brez napake):
+
+| | |
+|---|---|
+| zemljevid se spremeni | vsakih **15 s** (55 od 55 razmikov), tudi njihova stran ga vpraša na 15 s (`setInterval(…, 15e3)` v `main-*.js`) |
+| tabla se spremeni | ob dogodku (razmiki 5–180 s) |
+| tabla novo minuto prej | v 7 od 8 sprememb, šestkrat za **14 s**, enkrat 4 s; enkrat zemljevid 1 s prej |
+| zemljevid 3,5 kB JSON | prenos 0,53 s (mediana) |
+| tabla 446 kB HTML | prenos 0,74 s |
+
+Iz tega: zemljevid beremo na **5 s** (prej 30): novo stanje v največ 5 s namesto 30; nespremenjenega (dve branji od treh) ne obdelamo. Tri branja na 15 s = trije odprti zemljevidi na njihovi strani. Tabla bi dala še ~14 s pri vlakih z vsaj 3 min, a je 130-krat večja; ostaja odprto. Vzorec majhen (ponoči, 8 sprememb; prej na 15 s 13–15 parov z istim predznakom) — ponovi podnevi, preden se odločiš.
+
+**Cloudflare** (podrobnosti v `zajem.md`): brezglavi Chrome ostane v izzivu; Chrome z oknom (Xvfb) ga reši v 3–7 s. `--remote-debugging-pipe` in `--remote-debugging-port=0` postavita `navigator.webdriver = true` in ne gresta skozi (pet poskusov po 40–90 s); vrata, ki jih izberemo sami, gredo. Doma v 40 min en ponoven izziv (rešen z nalaganjem strani v 7 s). Na arwenu (Chrome for Testing, Xvfb) 60 min, 240 branj table po 15 s: **240 od 240 brez izziva**.
+
+**Cena**: Chrome 384–563 MB PSS (14 procesov), Xvfb 75 MB. Malina (Pi Zero W, armv6) Chroma nima, zato vlake zajema samo arwen.
+
+**Pripenjanje**: na razvojnem voznem redu 11 od 11 vlakov na poti pripetih na pravo vožnjo (ujemanje `Odhod` = vozni red + zamuda); razvojni strežnik ob 22:55: 13 vlakov, 12 zapisanih, 1 na cilju, 0 nepripetih. `Vrsta` (0 izhodišče, 1 vozi, 2 na cilju) in varovala (vlak ne gre nazaj, ponastavitev na cilju) v `zajem.md`.

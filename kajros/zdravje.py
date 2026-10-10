@@ -14,7 +14,7 @@ import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from . import config, viri
+from . import brskalnik, config, viri
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -24,9 +24,14 @@ SLABA, MLACNA, DOBRA = "je-slaba", "je-mlacna", "je-dobra"
 #: vsakih 30 s, zato je 90 s že tretji zgrešeni obhod.
 FEED_STALE_S = 90
 
-#: Nit zemljevida SŽ bere vsako minuto; po petih minutah brez odgovora je vir
+#: Nit zemljevida SŽ bere na 30 s; po petih minutah brez odgovora je vir
 #: obstal.
 SZ_STOJI_S = 300
+
+#: Zemljevid SŽ se ob vlakih na poti spremeni ob vsakem branju (10. 10. 2026:
+#: 93 od 93 zaporednih branj po 15 s -- odšteva čas do prihoda). Deset minut
+#: brez spremembe je zamrznjen odgovor, ne miren promet.
+SZ_ZAMRZNJEN_S = 600
 
 #: Toliko voženj po voznem redu mora teči, da je molk feeda okvara.
 MIN_VOZENJ = 3
@@ -60,8 +65,9 @@ def _rss() -> int | None:
 
 
 def stroj() -> dict:
-    """Tisto, česar baza sama o sebi ne ve: disk, WAL, pomnilnik, niti in
-    dnevnik branj virov (`viri.py`), ki živi le v tem procesu."""
+    """Tisto, česar baza sama o sebi ne ve: disk, WAL, pomnilnik, niti,
+    dnevnik branj virov (`viri.py`) in Chrome za potniski.sz.si -- vse to
+    živi le v tem procesu."""
     raba = shutil.disk_usage(config.DATA_DIR)
     try:
         wal = config.DB_PATH.with_name(config.DB_PATH.name + "-wal").stat().st_size
@@ -69,7 +75,8 @@ def stroj() -> dict:
         wal = None
     return {"disk_prostih": raba.free, "disk_vseh": raba.total, "wal_bajtov": wal,
             "rss_bajtov": _rss(), "niti": viri.niti(),
-            "pricakovane_niti": viri.pricakovane_niti(), "viri": viri.dnevnik()}
+            "pricakovane_niti": viri.pricakovane_niti(), "viri": viri.dnevnik(),
+            "brskalnik": brskalnik.stanje()}
 
 
 def _min(s: float) -> str:
@@ -164,28 +171,30 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
                 f"{ime} {nf} od {vseh}" for ime, (nf, _, vseh) in vidni.items()))
             if vidni else (DOBRA, ""))
 
-    # Dva vira zamud vlakov (`zamude_sz`). 28. 9. 2026 je derp.si z voznim
-    # redom DUJPP izgubil vse vlake, zemljevid SŽ jih je imel. Rumeno, kadar
-    # manjka eden od virov -- zamude so, a le iz enega; kadar ni nobenega,
-    # je rdeča že vrstica „vlaki · zadnji zapis“.
-    #
-    # Rdeče pa, kadar stoji NIT, ne vir. Ko vir ne odgovarja, nit ob vsakem
-    # poskusu zapiše `napaka_ts`; 1. 10. 2026 je obstala v transakciji in ni
-    # mogla zapisati ničesar -- 4,3 h je bila vrstica le rumena.
+    # Zemljevid SŽ (`zamude_sz`) vodi zamude vlakov. Rdeče, kadar stoji NIT:
+    # ko vir ne odgovarja, nit ob vsakem poskusu zapiše `napaka_ts`; 1. 10. 2026
+    # je obstala v transakciji in ni mogla zapisati ničesar -- 4,3 h je bila
+    # vrstica le rumena. Ko vir ne odgovarja, je rumeno: vlake medtem piše
+    # derp.si, kolikor jih ima, vrstica „vlaki · zadnji zapis“ pa pove, ali sploh.
     zs = z.get("zamude_sz")
     if zs:
         zadnji = zs.get("ts") or 0
+        vozijo = vozi is None or vozi.get("zeleznica", 0) >= MIN_VOZENJ
         if zdaj - zadnji > SZ_STOJI_S:
             napaka = zs.get("napaka_ts") or 0
             out["zamude_sz"] = (
-                (MLACNA, f"zemljevid SŽ ne odgovarja od pred {_min(zdaj - zadnji)}")
+                (MLACNA, f"zemljevid SŽ ne odgovarja od pred {_min(zdaj - zadnji)}"
+                         + (f": {zs['napaka']}" if zs.get("napaka") else ""))
                 if zdaj - napaka <= SZ_STOJI_S
                 else (SLABA, f"nit zemljevida SŽ ne piše od pred {_min(zdaj - zadnji)}"))
-        elif not zs.get("oba") and (zs.get("samo_sz") or zs.get("samo_derp")):
-            out["zamude_sz"] = (MLACNA, "zamude vlakov samo z " + (
-                "zemljevida SŽ" if zs.get("samo_sz") else "derp.si"))
+        elif vozijo and zdaj - (zs.get("spremenjeno_ts") or zadnji) > SZ_ZAMRZNJEN_S:
+            out["zamude_sz"] = (MLACNA, "zemljevid SŽ se ne spreminja od pred "
+                                        f"{_min(zdaj - zs['spremenjeno_ts'])}")
+        elif vozijo and vozi is not None and not zs.get("vlakov"):
+            out["zamude_sz"] = (MLACNA, f"zemljevid SŽ je prazen, po voznem redu "
+                                        f"vozi {vozi['zeleznica']} vlakov")
         else:
-            out["zamude_sz"] = (DOBRA, "") if zs.get("oba") else ("", "")
+            out["zamude_sz"] = (DOBRA, "")
 
     # derp.si po viru. 8. 10. 2026 je od 16:00 zavračal povezave; vrstici
     # zgoraj sta ostali zeleni, kolikor sta `zamude_lpp` in `zamude_sz` pisala

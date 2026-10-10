@@ -16,6 +16,8 @@ Enkratna nastavitev: `deploy/arwen-git.sh` (po cevi: `ssh david@192.168.1.46 'ba
 
 Prej kodo prinašal `rsync`, **mimo gita**: delovno drevo na strežniku novejše od svojega HEAD, katera različica teče, ugotovljivo le po datotekah. `posodobi.sh` še vedno mogoče pognati ročno (`~/kajros/deploy/posodobi.sh ~/kajros`), rabiš za ponovno namestitev istega commita.
 
+**Vlaki rabijo Chrome na arwenu** (od 10. 10. 2026). Zamude vlakov in tire beremo naravnost s potniski.sz.si, ki je za Cloudflarom in spusti le Chrome z oknom; na strežniku mu okno da Xvfb. Enkrat, s sudo: `ssh -t david@192.168.1.46 'sudo bash ~/kajros/deploy/brskalnik.sh'` -- namesti `xvfb` in `google-chrome-stable` (Googlov paket, posodablja ga `apt upgrade`), preizkusi branje v istem peskovniku kot storitev in znova zažene strežnik. Brez tega `/admin` pri zemljevidu SŽ piše „ni Chroma“, vlake pa piše derp.si, kolikor jih ima. Malina (Pi Zero W) Chroma ne more poganjati: tam vlakov ni.
+
 Starejši `~/posodobi.sh` **odstranjen 12. 9. 2026**: posodabljal prek `install-rpi.sh`, zato zahteval sudo geslo, ki ga v seji brez terminala ni mogoče vpisati. Podrobnosti in past z `/tmp` na malini: `.claude/rules/objava.md`.
 
 Spodaj namestitev na Raspberry Pi; za majhne gostitelje, ki sprejmejo zip, velja poglavje »Paket za gostitelja« naprej.
@@ -164,6 +166,9 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, 8000.
 | `KAJROS_REFRESH_HOUR` | 4 | ura osvežitve, kadar ni `off` |
 | `KAJROS_WEATHER` | 1 | `0` izklopi dnevno dopolnjevanje vremena |
 | `KAJROS_WEATHER_HOUR` | 5 | ura, ob kateri se vreme dopolni za zadnje 3 dni |
+| `KAJROS_SZ_ZAMUDE` | 1 | `0` izklopi zamude vlakov z zemljevida SŽ (prek Chroma) |
+| `KAJROS_PERONI` | 1 | `0` izklopi tire s table SŽ (prek Chroma) |
+| `KAJROS_SZ_CHROME`, `KAJROS_SZ_XVFB` | poišče sam | pot do Chroma in Xvfb, kadar nista v `PATH` |
 
 ### Kaj se zgodi ob prvem zagonu
 

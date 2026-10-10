@@ -10,9 +10,9 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 ./scripts/dev-restart.sh          # počaka na sproščen port in izpiše naslove
 ```
 
-Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`, `pripni`, `tiri`, `indexnow`.
+Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`, `pripni`, `tiri`, `indexnow`, `brskalnik`.
 
-**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (581 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (754 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi se uvozijo z `KAJROS_AGENCIES=1118,1119,1121,1123`. Brez tega so v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): v IJPP ga ni, ker je občinski. Podrobnosti v `.claude/rules/zajem.md`.
 
@@ -34,13 +34,13 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
-| Zamude vlakov — izvor tudi za derp.si, torej ne neodvisen | zemljevid potniski.sz.si prek `api.modra.ninja/sz/lokacije` (tretja oseba) | 60 s |
+| Zamude vlakov — **vodijo** (derp.si jih ima isto, prek posrednika) | zemljevid potniski.sz.si, `admin-ajax.php?action=aktivni_vlaki`, s Chromom | 5 s (SŽ preračuna na 15) |
 | Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
-| Tir vlaka | tabla potniski.sz.si prek `api.modra.ninja/sz` (tretja oseba) | ~10 min na postajo |
+| Tir vlaka | tabla postaje na potniski.sz.si, s Chromom | ~10 min na postajo |
 | Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
 
-SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči. **Vsak vir je opisan enkrat, v `kajros/viri.py`** (naslov, ritem, izvor, licenca, kaj storiti ob izpadu); vsak klic na tuj strežnik gre skozi `viri.branje()`, sicer ga /admin ne vidi (`test_vsak_klic_na_tuj_streznik_je_v_registru`).
+SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, ki od 7. 10. 2026 spusti le Chrome z oknom — beremo jo s Chromom pod Xvfb (`brskalnik.py`, namestitev `deploy/brskalnik.sh`); stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči. **Vsak vir je opisan enkrat, v `kajros/viri.py`** (naslov, ritem, izvor, licenca, kaj storiti ob izpadu); vsak klic na tuj strežnik gre skozi `viri.branje()`, sicer ga /admin ne vidi (`test_vsak_klic_na_tuj_streznik_je_v_registru`).
 
 ## Pravila, ki veljajo povsod
 
@@ -79,8 +79,9 @@ kajros/
   lpp.py         živi prihodi mestnega LPP (data.lpp.si), samo za prikaz; tabla linij mimo voznega reda
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
+  brskalnik.py   Chrome za potniski.sz.si (CDP na localhostu, Xvfb): edina pot mimo Cloudflara
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
-  zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; v `run` le, kadar derp.si vlaka nima
+  zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; vodi vlake, derp.si le ob molku
   zamude_lpp.py  zamude mestnega LPP z LPP-jevih zaslonov, svoja nit; vozilo -> vožnja prek derp.si
   nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
@@ -152,13 +153,12 @@ Poti za brskalnike in iskalnike: `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, 
 
 Ciljni uporabnik ni dispečer, ampak potnik z vprašanjem *„kdaj mi pelje in koliko zamuja“*. Iskalnik povezav = vstopna stran; zemljevid ostane, ker je uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude) čaka 2–3 mesece zajema — do takrat se vreme samo *pokaže ob* zamudi.
 
-Ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** od 25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20 izmerjenih); vir je tretja oseba, zato je dodatek, ki sme izginiti.
+Ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** od 25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20 izmerjenih); stran ni API, zato je dodatek, ki sme izginiti.
 
 ## Konvencije
 
 * **Jezik: slovenščina** povsod — koda, komentarji, commiti, UI, dokumentacija. Šumniki obvezni.
-* Komentarji povedo **zakaj**, ne kaj.
-* Commit sporočila: kratka prva vrstica, telo pojasni razlog in izmerjene posledice, ne naštevanja datotek.
+* Komentarji povedo **zakaj**, ne kaj. Commit sporočila: kratka prva vrstica, telo pojasni razlog in izmerjene posledice, ne naštevanja datotek.
 * Ne dodajaj odvisnosti brez razloga; `requirements.txt` ima pet vrstic.
 * `venv/`, `data/`, `export/`, `posnetki/`, `*.sqlite` so v `.gitignore` — **razen** `seed/kajros.sqlite`, ki ga rabi namestitev.
 * **Agregat čez vso zgodovino se ne računa v zahtevi** (`stats.summary_get()`, enkrat na dan ob 3:30, `KAJROS_MAINT_HOUR`). Vsaka taka številka mora na strani nositi **čas izračuna**.
@@ -167,7 +167,7 @@ Ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** od 25. 9. 2026, 
 
 ## Objava
 
-Malina doma (`david@192.168.1.166`) = **merodajen zajem**: teče ves čas, zajema vse prevoznike. Ta računalnik = razvoj; baza se **vleče z maline** (`./scripts/potegni.sh`), nikoli obratno. Podrobnosti: `.claude/rules/objava.md` in [DEPLOY.md](DEPLOY.md).
+Malina doma (`david@192.168.1.166`) = **merodajen zajem**: teče ves čas, zajema vse prevoznike. Ta računalnik = razvoj; baza se **vleče z maline** (`./scripts/potegni.sh`), nikoli obratno. **Vlakov malina od 7. 10. 2026 nima**: rabijo Chrome, ki ga Pi Zero W ne poganja — zajema jih samo arwen. Podrobnosti: `.claude/rules/objava.md` in [DEPLOY.md](DEPLOY.md).
 
 **Objava strežnika = `git push arwen <veja>`** — kavelj na arwenu sam požene `deploy/posodobi.sh`, izpis se vrne potiskajočemu. **Na malino deploy požene uporabnik sam**, ker `david` tam za sudo rabi geslo: pripravi ukaz in mu ga daj.
 
@@ -177,7 +177,7 @@ Poglobljena pravila so v `.claude/rules/`, naložijo se ob dotiku ustreznih dato
 
 | datoteka | velja za | o čem |
 |---|---|---|
-| `zajem.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py`, `peroni.py` | kaj feed pošlje in kje laže; varovalke pred smetmi |
+| `zajem.md` | `collector.py`, `alerts.py`, `gtfs.py`, `db.py`, `peroni.py`, `brskalnik.py` | kaj feed pošlje in kje laže; varovalke pred smetmi |
 | `strezba.md` | `api.py`, `lpp.py`, `obisk.py` | meja meritve, omrežje, živa vožnja, predpomnilnik leg, štetje obiska |
 | `model.md` | `stats.py`, `backtest.py`, `journey.py`, `ocena.py` | napoved zamude, prestopi, senčno merjenje, kaj ne pomaga |
 | `oznake.md` | `static/**`, `templates/**` | kako je zamuda napisana in pobarvana |

@@ -9,7 +9,7 @@ from kajros import db, peroni
 ZDAJ = 1_790_000_000
 DAN = "2026-09-25"
 
-# Oblika, kot jo vrne `/sz/postaje/{st}/prihodi_raw` (25. 9. 2026, Ljubljana).
+# Oblika, kot jo vrne `peroni.tabla()` (vrednosti s table 25. 9. 2026, Ljubljana).
 TABLA = {
     "departures": [
         {"Načrtovano": "12:50", "Št. vlaka": "2010", "Tir": "6-A", "Zamude*": ""},
@@ -23,6 +23,72 @@ TABLA = {
         {"Načrtovano": "12:42", "Št. vlaka": "0715", "Tir": "3", "Zamude*": ""},
     ],
 }
+
+
+# Stran SŽ, skrajšana, a z izvirnimi oznakami (Ljubljana, 10. 10. 2026 ob 22:16):
+# izbira postaje, dve tabeli z naslovom, ikone v glavi, zvezdica v „Zamude*“.
+HTML = """<form><select name="postaja" id="postaja" class="form-control">
+  <option value="" disabled selected>Izberite postajo</option>
+  <option value="44652" >
+      Ajdovščina                                        </option>
+  <option value="42300" >
+      Ljubljana                                        </option>
+  <option value="44011" >Ljubljana Tivoli</option></select>
+<input type="text" name="datum" id="datum" value="10.10.2026"></form>
+<div class="departures-arrivals-wrapper departures-wrapper">
+  <h2 class="h3"><i class="fa-regular fa-arrow-right-from-bracket"></i>
+    <span>Odhodi vlakov</span><span class="selected-date">10.10.2026</span></h2>
+  <table class="table table-borderless"><thead><tr>
+    <th><i class="fa-regular fa-clock-nine me-1"></i> Načrtovano </th>
+    <th><i class="fa-regular fa-route me-1"></i> Relacija po Sloveniji </th>
+    <th><i class="fa-regular fa-train me-1"></i> Št. vlaka </th>
+    <th><i class="fa-regular fa-train-track me-1"></i> Tir </th>
+    <th><i class="fa-regular fa-diamond-exclamation me-1"></i> Zamude* </th></tr></thead>
+  <tbody>
+    <tr class="mt-2 "><td>22:10</td><td class="relation">Savski Marof (HR) - Jesenice</td>
+      <td>414</td><td>BUS</td>
+      <td><span class="delay-text"><i class="fa-regular fa-clock-two me-1"></i>20 min</span> </td></tr>
+    <tr class="mt-2 "><td>22:21</td><td class="relation">Ljubljana - Ivančna Gorica</td>
+      <td>3229</td><td>5-A</td><td> </td></tr>
+  </tbody></table></div>
+<div class="departures-arrivals-wrapper arrivals-wrapper">
+  <h2 class="h3"><span>Prihodi vlakov</span><span class="selected-date">10.10.2026</span></h2>
+  <table class="table table-borderless"><thead><tr>
+    <th>Načrtovano</th><th>Predvideno*</th><th>Relacija po Sloveniji</th><th>Št. vlaka</th>
+    <th>Tir</th><th>Zamude*</th></tr></thead>
+  <tbody>
+    <tr><td>22:04</td><td>22:16</td><td>Šapjane (HR) - Ljubljana</td><td>480</td>
+      <td>11-A</td><td>12 min</td></tr>
+    <tr><td>22:09</td><td>22:23</td><td>Jesenice - Ljubljana</td><td></td><td>8-B</td>
+      <td>14 min</td></tr>
+    <tr><td>22:15</td><td>22:15</td><td>Celje - Ljubljana</td><td>Bus</td><td></td><td></td></tr>
+  </tbody></table></div>"""
+
+
+def test_stran_postaje_v_tablo_in_seznam_postaj():
+    assert peroni.postaje_sz(HTML) == [("44652", "Ajdovščina"), ("42300", "Ljubljana"),
+                                       ("44011", "Ljubljana Tivoli")]
+    t = peroni.tabla(HTML)
+    assert t["departures"][1] == {"Načrtovano": "22:21", "Relacija po Sloveniji":
+                                  "Ljubljana - Ivančna Gorica", "Št. vlaka": "3229",
+                                  "Tir": "5-A", "Zamude": ""}
+    assert t["departures"][0]["Zamude"] == "20 min"
+    assert [v["Št. vlaka"] for v in t["arrivals"]] == ["480", "", "Bus"]
+    assert t["arrivals"][0]["Predvideno"] == "22:16"
+
+
+def test_bus_v_stolpcu_tira_ni_tir():
+    """EN 414 je na tej postaji nadomeščen z avtobusom; vlak brez številke
+    (MV 19 je bil na tabli brez nje) ne šteje."""
+    tiri, vlakov = peroni.razberi(peroni.tabla(HTML))
+    assert tiri == {"3229": "5-A", "480": "11-A"}
+    assert vlakov == 3
+
+
+def test_naslov_table_postaje():
+    from datetime import date
+    assert (peroni._pot_table("42300", date(2026, 10, 5))
+            == "/odhodi-in-prihodi-na-postaji/?postaja=42300&datum=5.10.2026")
 
 
 def _baza():
@@ -139,9 +205,10 @@ def test_seznam_postaj_po_nasih_imenih(monkeypatch):
                    ("b", "r", "N1", "x", "S", "bus", "1119", "avtobus")])
     c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,0,0)",
                   [("t", 1, "1"), ("t", 2, "2"), ("b", 1, "3")])
-    monkeypatch.setattr(peroni, "_get", lambda pot: [
-        {"st": "42300", "naziv": "Ljubljana"}, {"st": "42320", "naziv": "Lavrica"},
-        {"st": "99999", "naziv": "Ljubljana AP"}, {"st": "11111", "naziv": "Villach"}])
+    monkeypatch.setattr(peroni, "_get", lambda pot: (
+        '<select name="postaja"><option value="42300">Ljubljana</option>'
+        '<option value="42320">Lavrica</option><option value="99999">Ljubljana AP</option>'
+        '<option value="11111">Villach</option></select>'))
     assert peroni.osvezi_postaje(c) == 2
     assert {r[0]: (r[1], r[2]) for r in c.execute(
         "SELECT st, postaja, promet FROM peron_postaja")} == {

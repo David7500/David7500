@@ -127,6 +127,15 @@ def _zamenjave(conn: sqlite3.Connection) -> dict[str, tuple[str, dict]]:
     return _cached(conn, "zamenjave", n, build)
 
 
+def _sz_vlaki(conn: sqlite3.Connection) -> frozenset[str]:
+    """Vožnje vlakov SŽ brez nadomestnih avtobusov: te vodi zemljevid SŽ
+    (`iz_lege.sz_vodi`), avtobusov na njem ni."""
+    def build():
+        return frozenset(r[0] for r in conn.execute(
+            "SELECT trip_id FROM trip WHERE network = 'zeleznica' AND mode != 'bus'"))
+    return _cached(conn, "sz_vlaki", None, build)
+
+
 def _agencije(conn: sqlite3.Connection) -> dict[str, str]:
     """trip_id -> prevoznik (`trip.agency`)."""
     def build():
@@ -410,6 +419,9 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     agencije = _agencije(conn) if vir == "ijpp" else {}
     # Vožnje, katerih zamudo ta hip računamo iz leg NAP (`iz_lege.nap_vodi`).
     nap_prevzel: set[str] = set()
+    # Vlaki, ki jih ta hip piše zemljevid SŽ (`iz_lege.sz_vodi`).
+    sz_vlaki = _sz_vlaki(conn) if vir == "ijpp" and iz_lege.sz_vodi() else frozenset()
+    sz_prevzel = 0
 
     def nas_id(tid):
         """Pod katerim id-jem vožnjo vodimo: pod njenim ali pod naslednico."""
@@ -461,6 +473,9 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
         trips_seen += 1
         if iz_lege.nap_vodi(agencije.get(trip_id)):
             nap_prevzel.add(trip_id)
+            continue
+        if trip_id in sz_vlaki:
+            sz_prevzel += 1
             continue
         v_feedu.add(trip_id)
 
@@ -552,7 +567,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     iz_lege.zabelezi_feed(v_feedu, vir=vir)
     iz_lege.izpusti(nap_prevzel)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
-            "nap_prevzel": len(nap_prevzel),
+            "nap_prevzel": len(nap_prevzel), "sz_prevzel": sz_prevzel,
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
             "neznanih": neznanih, "zamenjanih": zamenjanih, "proge": proge}

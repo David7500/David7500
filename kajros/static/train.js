@@ -1153,8 +1153,13 @@ function renderTimeline() {
 // Navedba vira mora povedati, CIGAV podatek je na zaslonu -- doslej je pisalo
 // "IJPP prek NAP" tudi pod mestnim LPP, ki v IJPP-ju sploh ni. Vozni red
 // mestnih linij je LPP-jev lastni GTFS, zivi prihodi pa pridejo z
-// `data.lpp.si` in takrat mora biti to zapisano, ne skrito za DERP.
+// `data.lpp.si` in takrat mora biti to zapisano, ne skrito za DERP. Zamude in
+// tir vlaka beremo naravnost s strani SŽ (`zamude_sz.py`, `peroni.py`);
+// nadomestni prevoz ima samo vozni red.
 function viriHtml(run) {
+  if (run.network === "zeleznica" && !isBus(run.mode)) {
+    return "vozni red IJPP prek NAP (CC BY-SA 4.0), zamude in tir SŽ";
+  }
   if (run.agency !== "lpp") {
     return "IJPP prek NAP (CC BY-SA 4.0), obdelava DERP";
   }

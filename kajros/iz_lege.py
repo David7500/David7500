@@ -65,6 +65,11 @@ _nap_ts = 0.0
 #: Toliko po zadnjem branju NAP še vodi zamude svojih prevoznikov, potem jih
 #: spet piše feed derp.si. NAP se bere na 10 s: minuta je šest zgrešenih.
 NAP_VODI_S = 60
+#: Kdaj je nit zemljevida SŽ nazadnje uspešno prebrala vlake (`zamude_sz`).
+_sz_ts = 0.0
+#: Toliko po zadnjem branju zemljevid SŽ še vodi zamude vlakov. Bere se na
+#: 30 s; dve minuti so štiri zgrešena branja, prebijanje izziva traja do 90 s.
+SZ_VODI_S = 120
 
 
 def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp") -> None:
@@ -96,6 +101,24 @@ def nap_vodi(agency: str | None, zdaj: float | None = None) -> bool:
     """
     zdaj = time.time() if zdaj is None else zdaj
     return agency in config.NAP_PREVOZNIKI and zdaj - _nap_ts <= NAP_VODI_S
+
+
+def sz_prebran(zdaj: float | None = None) -> None:
+    """Nit zemljevida SŽ je pravkar prebrala vlake. Kliče `zamude_sz.teci`."""
+    global _sz_ts
+    _sz_ts = time.time() if zdaj is None else zdaj
+
+
+def sz_vodi(zdaj: float | None = None) -> bool:
+    """Ali zamude vlakov ta hip piše zemljevid SŽ, ne feed derp.si.
+
+    Odločeno 10. 10. 2026: derp.si vlake bere z istega zemljevida prek
+    `api.modra.ninja`, torej isti podatek z dvema posrednikoma več in 15--45 s
+    pozneje. Ko zemljevid ni prebran `SZ_VODI_S`, zajem derp.si vlake spet
+    piše sam.
+    """
+    zdaj = time.time() if zdaj is None else zdaj
+    return zdaj - _sz_ts <= SZ_VODI_S
 
 
 def izpusti(trip_ids) -> None:
@@ -214,10 +237,12 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
 
 
 def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
-            arr: int | None, dep: int | None, ts: int) -> None:
+            arr: int | None, dep: int | None, ts: int, ohrani: bool = False) -> None:
     """Isto kot zapis iz feeda v `collector.ingest`, brez varoval za feedove
     napake (ničla, odpoklic prehoda) -- prehod iz lege je opažen, ne sporočen.
-    Isto pot uporablja `zamude_sz` za vlake, ki jih feed ne nosi."""
+
+    Isto pot uporablja `zamude_sz`, ki pove eno samo od obeh zamud postanka
+    (odhod na poti, prihod na cilju); z `ohrani` druga v `run` ostane."""
     last = conn.execute(
         "SELECT delay_arr, delay_dep FROM obs WHERE trip_id=? AND service_date=? "
         "AND stop_seq=? ORDER BY feed_ts DESC LIMIT 1", (trip_id, dan, seq)).fetchone()
@@ -226,11 +251,13 @@ def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
             "INSERT OR IGNORE INTO obs"
             "(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts,observed_at) "
             "VALUES(?,?,?,?,?,?,?)", (trip_id, dan, seq, arr, dep, ts, int(time.time())))
+    nastavi = ("delay_arr=COALESCE(excluded.delay_arr, run.delay_arr), "
+               "delay_dep=COALESCE(excluded.delay_dep, run.delay_dep), " if ohrani else
+               "delay_arr=excluded.delay_arr, delay_dep=excluded.delay_dep, ")
     conn.execute(
         "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
         "VALUES(?,?,?,?,?,?) "
-        "ON CONFLICT(trip_id,service_date,stop_seq) DO UPDATE SET "
-        "delay_arr=excluded.delay_arr, delay_dep=excluded.delay_dep, "
+        f"ON CONFLICT(trip_id,service_date,stop_seq) DO UPDATE SET {nastavi}"
         "feed_ts=excluded.feed_ts WHERE excluded.feed_ts >= run.feed_ts",
         (trip_id, dan, seq, arr, dep, ts))
 

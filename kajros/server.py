@@ -16,9 +16,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import (alerts, collector, config, db, deljenje, gtfs, nap, obisk, ocena,
-               opozorila, peroni, pripni, stats, stik, viri, weather, zamude_lpp,
-               zamude_sz)
+from . import (alerts, brskalnik, collector, config, db, deljenje, gtfs, nap, obisk,
+               ocena, opozorila, peroni, pripni, stats, stik, viri, weather,
+               zamude_lpp, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -285,8 +285,8 @@ def _zazeni_perone() -> threading.Thread | None:
 
 
 def _zazeni_zamude_sz() -> threading.Thread | None:
-    """Zamude vlakov z zemljevida SŽ, v SVOJI niti kot tir: isti posrednik,
-    ki zna obviseti, zajem pa ne sme čakati nanj."""
+    """Zamude vlakov z zemljevida SŽ, v SVOJI niti kot tir: brskalnik zna
+    obviseti (izziv do 90 s), zajem pa ne sme čakati nanj."""
     if not config.SZ_ZAMUDE:
         return None
     nit = threading.Thread(target=zamude_sz.teci, args=(_stop, _log), daemon=True,
@@ -596,6 +596,8 @@ def run_collector() -> None:
     except KeyboardInterrupt:
         _stop.set()
         _log("ustavljeno")
+    finally:
+        brskalnik.ustavi()
 
 
 @asynccontextmanager
@@ -664,3 +666,5 @@ async def lifespan(app):
             nap_nit.join(timeout=5)
         if obisk_nit:
             obisk_nit.join(timeout=5)
+        # Chrome in Xvfb sta svoja procesa: brez tega po restartu ostaneta.
+        brskalnik.ustavi()
