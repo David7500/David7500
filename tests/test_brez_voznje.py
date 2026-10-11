@@ -27,11 +27,15 @@ ZNANA = "D|znana|VZOREC1"
 def _cist_spomin():
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
+    iz_lege._zadnja.clear()
+    iz_lege._odklon.clear()
     iz_lege._prvic = None
     lpp._prihodi.clear()
     yield
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
+    iz_lege._zadnja.clear()
+    iz_lege._odklon.clear()
     iz_lege._prvic = None
     lpp._prihodi.clear()
 

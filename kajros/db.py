@@ -333,6 +333,26 @@ CREATE TABLE IF NOT EXISTS lpp_zamuda (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS lpp_zamuda_ts ON lpp_zamuda(zadnjic_ts);
 
+-- Odkloni od trase (`iz_lege`): lege vozila vec kot 150 m od trase med
+-- voznjo, z zadnjo lego na trasi pred njimi in prvo za njimi (sidri). Iz njih
+-- se vidi, kje vozila trase stalno ne vozijo (`kajros odkloni`). `along_*` =
+-- metri po trasi `shape_id`; `along_za` NULL = vozilo se na traso ni vrnilo.
+-- `tocke` = JSON [[ts, lat, lon], ...] s sidroma.
+CREATE TABLE IF NOT EXISTS odklon (
+    trip_id      TEXT NOT NULL,
+    service_date TEXT NOT NULL,
+    shape_id     TEXT,
+    od_ts        INTEGER NOT NULL,
+    do_ts        INTEGER NOT NULL,
+    along_pred   INTEGER NOT NULL,
+    along_za     INTEGER,
+    leg          INTEGER NOT NULL,
+    odmik_max    INTEGER NOT NULL,
+    tocke        TEXT NOT NULL,
+    PRIMARY KEY (trip_id, service_date, od_ts)
+);
+CREATE INDEX IF NOT EXISTS odklon_ts ON odklon(od_ts);
+
 -- Obvestila skrbnika potnikom (`obvestila.py`). Vsako ima rok; umaknjeno
 -- dobi rok v preteklosti in ostane, da se ve, kaj je bilo recenega.
 -- `omrezje` NULL = obe omrezji.

@@ -302,8 +302,8 @@ def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     # Ključ predpomnilnika `/api/vehicles`: brez tega ob izpadu derp.si
     # zemljevid NAP-ovih leg ne bi videl nikoli.
     db.set_meta(conn, "positions_fetched", str(int(zdaj)))
+    iz_lege.pospravi(zdaj, conn)
     conn.commit()
-    iz_lege.pospravi(zdaj)
     return st
 
 

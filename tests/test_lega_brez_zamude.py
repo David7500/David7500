@@ -26,10 +26,14 @@ def _cist_spomin(monkeypatch):
     monkeypatch.setattr(iz_lege, "_zagon", ZDAJ.timestamp())
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
+    iz_lege._zadnja.clear()
+    iz_lege._odklon.clear()
     iz_lege._prvic = None
     yield
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
+    iz_lege._zadnja.clear()
+    iz_lege._odklon.clear()
     iz_lege._prvic = None
 
 

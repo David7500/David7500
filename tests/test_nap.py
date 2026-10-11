@@ -50,6 +50,8 @@ def _odgovor(*aktivnosti, odgovor=ZDAJ) -> bytes:
 def _cist_spomin():
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
+    iz_lege._zadnja.clear()
+    iz_lege._odklon.clear()
     iz_lege._prvic = None
     iz_lege._nap_ts = 0.0
     collector._LEGE_DERP = (0.0, {})
@@ -57,6 +59,8 @@ def _cist_spomin():
     iz_lege._nap_ts = 0.0
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
+    iz_lege._zadnja.clear()
+    iz_lege._odklon.clear()
     iz_lege._prvic = None
     collector._LEGE_DERP = (0.0, {})
 

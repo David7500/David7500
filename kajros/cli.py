@@ -12,8 +12,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
-               journey, naslovi, ocena, peroni, pot, pripni, stats, tiri, weather,
-               zamude_lpp, zamude_sz)
+               journey, naslovi, ocena, odkloni, peroni, pot, pripni, stats, tiri,
+               weather, zamude_lpp, zamude_sz)
 
 
 def cmd_init(args):
@@ -306,6 +306,24 @@ def cmd_primerjava(args):
                      indent=2, ensure_ascii=False))
 
 
+def cmd_odkloni(args):
+    """Kje vozila ne vozijo po trasi, po odsekih: koliko prevozov je bilo
+    odklonjenih. Delež loči stalen odklon (trasa ne drži) od občasnega."""
+    conn = db.connect()
+    db.init(conn)
+    do = int(time.time())
+    vrstice = [r for r in odkloni.po_odsekih(conn, do - args.dni * 86400, do)
+               if r["prevozov"] >= args.najmanj]
+    razredi = {"nad 80 %": 0, "20-80 %": 0, "pod 20 %": 0}
+    for r in vrstice:
+        razredi["nad 80 %" if r["delez"] > 0.8 else "pod 20 %" if r["delez"] < 0.2 else "20-80 %"] += 1
+    print(f"zadnjih {args.dni} dni, odseki z vsaj {args.najmanj} prevozi: {len(vrstice)} z odklonom; "
+          + ", ".join(f"{k}: {v}" for k, v in razredi.items()))
+    for r in vrstice[:args.najvec]:
+        print(f"{100 * r['delez']:4.0f} %  {r['odklonjenih']:4d}/{r['prevozov']:<4d} {r['dni']} dni  "
+              f"do {r['odmik_max']:5d} m  {r['od_ime']} -> {r['do_ime']}")
+
+
 def cmd_brskalnik(args):
     """Ali Chrome pride skozi Cloudflare do potniski.sz.si: zemljevid vlakov in
     ena tabla postaje, s časi. Za preizkus po namestitvi (`deploy/brskalnik.sh`),
@@ -566,6 +584,12 @@ def main(argv=None):
     a.add_argument("--dni", type=int, default=1)
     a.add_argument("--najvec", type=int, default=20, help="koliko najvecjih razhajanj izpisati")
     a.set_defaults(func=cmd_primerjava)
+
+    a = sub.add_parser("odkloni", help="kje vozila ne vozijo po trasi, po odsekih")
+    a.add_argument("--dni", type=int, default=7)
+    a.add_argument("--najmanj", type=int, default=3, help="najmanj prevozov odseka")
+    a.add_argument("--najvec", type=int, default=40, help="koliko odsekov izpisati")
+    a.set_defaults(func=cmd_odkloni)
 
     a = sub.add_parser("brskalnik",
                        help="preizkusi Chrome za potniski.sz.si: zemljevid vlakov in tabla postaje")

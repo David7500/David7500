@@ -1414,6 +1414,12 @@ def api_health():
         # Lege IJPP z NAP (`nap.py`) in njihovo ujemanje z derp.si.
         nm = db.get_meta(conn, "nap") if config.NAP else None
         out["nap"] = json.loads(nm) if nm else None
+        # Lege izven trase (`iz_lege`, tabela `odklon`): kje vozila trase ne
+        # vozijo. Število zadnjih 24 h, razčlenitev po odsekih `kajros odkloni`.
+        n, vozenj = conn.execute(
+            "SELECT COUNT(*), COUNT(DISTINCT trip_id) FROM odklon WHERE od_ts >= ?",
+            (int(time.time()) - 86400,)).fetchone()
+        out["odkloni_24h"] = {"odklonov": n, "vozenj": vozenj}
     out["last_feed_ts"] = ts
     out["last_feed_at"] = (datetime.fromtimestamp(ts, TZ).isoformat() if ts else None)
     return out

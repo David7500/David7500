@@ -21,9 +21,19 @@ dvema točkama skočila čez osem postajališč. Cena: 0,13 ms na lego (mediana)
 
 Izhodišča ne merimo: vozilo pred odhodom kroži po postajališču in „prehod“
 izhodišča je bil v meritvi 10 min prezgodaj.
+
+**Kjer vozilo ne vozi po trasi, prehoda ni.** 11. 10. 2026 so Arriva, Nomago
+in AP MS zgrešili 3 % vmesnih postankov (Brnik letališče 15 od 17, Koper 7
+od 9): trasa zavije na postajo, letališče ali v krak, vozilo ne -- ali
+obratno --, in lega je več kot `ODMIK_MAX_M` od trase. Ohlapnejše meje tam
+dajo slab čas (mediana 83 s proti 29 s), zato se popravlja trasa: vsak
+odklon se zapiše v tabelo `odklon` (lege izven trase s sidroma na njej), iz
+katere se po nekaj dneh vidi, kje vozila trase stalno ne vozijo
+(`kajros odkloni`, docs/MERITVE.md).
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import time
@@ -46,6 +56,13 @@ OKNO_PREHITEVA_S = 1200
 FEED_POZABI_S = 300
 #: Sled vožnje, o kateri toliko časa ni bilo lege, se pozabi.
 SLED_POZABI_S = 3600
+#: Odklon, po katerem toliko časa ni bilo nove lege izven trase, vozilo pa se
+#: na traso ni vrnilo (vožnja končana drugje, izpad lege), se zapiše brez
+#: sidra za njim.
+ODKLON_ZAPRI_S = 600
+#: Sled tako blizu konca trase je vožnja, ki je prispela: kar sledi, je pot v
+#: garažo ali na naslednjo vožnjo, ne odklon.
+ODKLON_KONEC_M = 200
 
 _zaklep = threading.Lock()
 #: trip_id -> kdaj ga je feed zamud nazadnje omenil (time.time()).
@@ -60,6 +77,11 @@ _zagon = time.time()
 _zadnji_nabor: dict[str, list[str]] = {}
 #: (trip_id, dan) -> (t_s, along, zadnji zapisani stop_seq, kdaj osveženo)
 _sled: dict[tuple[str, str], tuple[float, float, int, float]] = {}
+#: (trip_id, dan) -> zadnja lega na trasi (ts, lat, lon, along): sidro odklona.
+_zadnja: dict[tuple[str, str], tuple[int, float, float, float]] = {}
+#: (trip_id, dan) -> odklon v teku: {"pred": sidro, "tocke": [(ts, lat, lon)],
+#: "odmik": največji}.
+_odklon: dict[tuple[str, str], dict] = {}
 #: Kdaj je nit NAP nazadnje uspešno prebrala lege (`nap.korak`).
 _nap_ts = 0.0
 #: Toliko po zadnjem branju NAP še vodi zamude svojih prevoznikov, potem jih
@@ -218,7 +240,11 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
         od, do = sled[1] - deljenje.NAZAJ_MAX_M, float("inf")
     along, odmik = v.trasa.projiciraj(lat, lon, od_m=od, do_m=do)
     if odmik > ODMIK_MAX_M:
+        _lega_izven(kljuc, v, t_s, ts, lat, lon, odmik)
         return 0
+    if kljuc in _odklon:
+        zapisi_odklon(conn, kljuc, (ts, lat, lon, along))
+    _zadnja[kljuc] = (ts, lat, lon, along)
     zapisan = sled[2] if sled else 0
     pari = prehodi(v, (sled[0], sled[1]) if sled else None, t_s, along, zapisan)
     zadnji = len(v.postanki) - 1
@@ -234,6 +260,39 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
     else:
         _sled[kljuc] = (sled[0], sled[1], zapisan, time.time())
     return len(pari)
+
+
+def _lega_izven(kljuc: tuple[str, str], v: deljenje.Voznja, t_s: float, ts: int,
+                lat: float, lon: float, odmik: float) -> None:
+    """Lega več kot `ODMIK_MAX_M` od trase: del odklona, ki se zapiše, ko se
+    vozilo vrne nanjo (`zapisi_odklon`)."""
+    pred = _zadnja.get(kljuc)
+    # Pred voznorednim odhodom vozilo pelje v prazno do izhodišča, po prihodu
+    # pa v garažo: to ni odklon trase.
+    if (pred is None or t_s < _cas(v.postanki[0])
+            or pred[3] >= v.postanki[-1]["along"] - ODKLON_KONEC_M):
+        return
+    o = _odklon.setdefault(kljuc, {"pred": pred, "tocke": [], "odmik": 0.0})
+    o["tocke"].append((ts, round(lat, 5), round(lon, 5)))
+    o["odmik"] = max(o["odmik"], odmik)
+
+
+def zapisi_odklon(conn: sqlite3.Connection, kljuc: tuple[str, str],
+                  za: tuple[int, float, float, float] | None) -> None:
+    """Odklon v `odklon`: lege izven trase s sidroma na njej (`za` je None,
+    kadar se vozilo ni vrnilo)."""
+    o = _odklon.pop(kljuc, None)
+    if o is None:
+        return
+    pred = o["pred"]
+    tocke = [list(pred[:3]), *map(list, o["tocke"])] + ([list(za[:3])] if za else [])
+    oblika = conn.execute("SELECT shape_id FROM trip WHERE trip_id = ?", (kljuc[0],)).fetchone()
+    conn.execute(
+        "INSERT OR IGNORE INTO odklon(trip_id, service_date, shape_id, od_ts, do_ts, along_pred,"
+        "                             along_za, leg, odmik_max, tocke) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (kljuc[0], kljuc[1], oblika[0] if oblika else None, o["tocke"][0][0], o["tocke"][-1][0],
+         round(pred[3]), None if za is None else round(za[3]), len(o["tocke"]),
+         round(o["odmik"]), json.dumps(tocke)))
 
 
 def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
@@ -286,18 +345,25 @@ def iz_feeda(conn: sqlite3.Connection, feed) -> int:
             continue
         n += opazuj(conn, tid, f"{dan[:4]}-{dan[4:6]}-{dan[6:]}", v.timestamp,
                     v.position.latitude, v.position.longitude)
+    pospravi(conn=conn)
     conn.commit()
-    pospravi()
     return n
 
 
-def pospravi(zdaj: float | None = None) -> None:
-    """Pozabi sledi voženj brez lege in vožnje, ki jih feed ne nosi več."""
+def pospravi(zdaj: float | None = None, conn: sqlite3.Connection | None = None) -> None:
+    """Pozabi sledi voženj brez lege in vožnje, ki jih feed ne nosi več; z
+    `conn` zapiše odklone, iz katerih se vozilo ni vrnilo."""
     zdaj = time.time() if zdaj is None else zdaj
     # `list()` najprej: sledi piše tudi nit NAP (`nap.zapisi`), in slovar, ki
     # se med obhodom spremeni, vrže napako. `list(d.items())` je en klic v C.
+    if conn is not None:
+        for k in [k for k, o in list(_odklon.items())
+                  if zdaj - o["tocke"][-1][0] > ODKLON_ZAPRI_S]:
+            zapisi_odklon(conn, k, None)
     for k in [k for k, s in list(_sled.items()) if zdaj - s[3] > SLED_POZABI_S]:
         _sled.pop(k, None)
+        _zadnja.pop(k, None)
+        _odklon.pop(k, None)
     with _zaklep:
         for t in [t for t, kdaj in _v_feedu.items() if zdaj - kdaj > SLED_POZABI_S]:
             del _v_feedu[t]

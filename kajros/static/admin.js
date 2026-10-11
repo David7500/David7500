@@ -535,6 +535,8 @@ function podrobnostiVira(kljuc, d) {
         + (nm.isti_cas ? ` · odmik ${st(nm.odmik_m, 1)} m` : "")
         + ` · NAP novejši za ${st(nm.prednost_s)} s · samo NAP ${st(nm.samo_nap)} · samo derp ${st(nm.samo_derp)}`);
     }
+    const ok = z.odkloni_24h;
+    dodaj("izven trase · 24 h", ok ? `${st(ok.odklonov)} odklonov na ${st(ok.vozenj)} vožnjah` : null);
   } else if (kljuc === "zamude_sz") {
     const zs = z.zamude_sz;
     if (zs && zs.vlakov != null) {
