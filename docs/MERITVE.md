@@ -2485,3 +2485,31 @@ Ob 11:55 je bila vrstica „vozila brez vsake zamude“ v /admin rdeča: Arriva 
 | Ljubljana AP | 11. 10. (do 12:00) | 4 | 1 | 5 |
 
 Trasa ni kriva: postaja leži na njej (0 m), odsek Izola–Koper se ne prekriva z delom pred Izolo (projekcija vsakih 500 m na 0–24 km brez meje vrne isti kraj). Arriva sicer meri drugi postanek enako pogosto kot ostale (10. 10.: 661 izmerjenih drugih, 665 tretjih). Zgodovine leg ne hranimo, zato se vzrok ugotavlja z opazovanjem v živo.
+
+**Ni samo Koper.** 10. 10. so Arriva, Nomago in AP MS na vmesnih postankih zgrešili 744 od 24 733 prehodov (3,0 %; postanek brez zapisa, naslednji z njim), na drugem postanku vožnje 85 od 1 283 (6,6 %) -- tam, kjer je to edina meritev pred dolgim odsekom, ostane vožnja brez zamude. Nekateri postanki se zgrešijo skoraj vedno: Jerneja vas 11 od 11, Slovenj Gradec ŽP 9 od 9, Gabrsko Iskra 8 od 8, Brnik letališče 15 od 17, Koper 7 od 9 (kot drugi postanek).
+
+**V živo, 11. 10. 12:22–12:50**, šest vozil mimo takih postankov, `iz_lege.opazuj` ponovljen korak za korakom na istih legah (strežnik je zapisal isto):
+
+| postanek | izid | zakaj |
+|---|---|---|
+| Brnik letališče (A6370) | zgrešen | vozilo 2,5 min več kot 150 m od trase, nato 4,6 km za postankom: skok 11,3 km v 160 s |
+| Trebnje (N0480) | zgrešen | legi 20 s narazen oklepata postanek, a 812 m po trasi = 41 m/s, meja 30 m/s |
+| Slovenj Gradec ŽP (N0339) | zgrešen | 80 s 200–300 m od trase, razmik nad 60 s |
+| Muta (N0317) | zgrešen | 1 161 m po trasi v 20 s = 58 m/s (trasa ima krak tja in nazaj) |
+| Dravograd (N0309) | izmerjen (+51 s) | |
+| Žalec (N0611) | izmerjen | odmik do 441 m šele za postankom |
+
+Skupno: **vozilo na tem mestu ne vozi po trasi** (trasa zavije na postajo, letališče ali krak, vozilo ne -- ali obratno), in vsaj eno od treh varoval (odmik 150 m, razmik 60 s, hitrost 30 m/s) prehod zavrže. Varovala so tam zaradi krožnih linij (glava `iz_lege.py`: brez njih p90 759 s). Krak tja in nazaj ima 3 od 14 pogosto zgrešenih in 0 od 14 dobro izmerjenih postankov (točke 1 km pred postankom v 40 m od trase za njim). **Ohlapnejše meje ne pomagajo, kjer vozilo ne vozi po trasi.** Posnetek leg Arrive, Nomaga in AP MS na arwenu, 11. 10. 12:55–13:52 (nedelja; 18 438 leg, 186 voženj), `iz_lege.opazuj` ponovljen z različnimi mejami:
+
+| | |
+|---|---|
+| strogo (60 s, 30 m/s) | 1 547 prehodov |
+| razmik do 180 s, en postanek vmes, brez meje hitrosti | +31 (+2,0 %) |
+| zapolnjena zamuda proti naslednji izmerjeni | mediana 83 s, p90 209 s, 36 % v 60 s (n = 22) |
+| za primerjavo: dva zaporedna stroga | mediana 29 s, p90 87 s, 78 % v 60 s (n = 1 378) |
+| dobri oklepaji, umetno razredčeni na 180 s | napaka mediana 11 s, p90 39 s, 95 % v 60 s (n = 1 119) |
+| ... na 300 s | mediana 20 s, p90 64 s, 89 % v 60 s |
+
+Daljši razmik sam je torej natančen, dokler vozilo vozi po trasi; kjer ne, je čas, interpoliran po trasi, ki je vozilo ni prevozilo, slab. Popraviti je treba traso, ne meje.
+
+**Odkloni po odsekih** (isti posnetek; lega po odhodu več kot 150 m od trase): 650 od 14 486 leg (4,5 %), od tega le 12 posamičnih (šum). Odklon vsaj dveh leg na 42 od 1 303 prevoženih odsekov (postanek–postanek), 50 od 1 607 prevozov (3 %). Skoraj povsod pri **vseh** prevozih v tej uri: Kranj Zlato Polje P+R → Naklo 3 od 3 (do 566 m), Novo Celje → Žalec in Žalec → Šempeter 2 od 2, Murska Sobota ↔ Maribor 2 od 2 (do 883 m), Slovenj Gradec → Sl. Gradec ŽP 2 od 2, Koper → Ljubljana Hajdrihova 1 od 1 (486 m), Bled → Brnik letališče 1 od 1 (996 m). Le štirje odseki delno (1 od 2 ali 1 od 3: Koper Sv. Ana, Zg. Velka, Cerkno, Piran Bernardin). Ena ura je eden do trije prevozi na odsek -- za mejo med stalnim in občasnim premalo.
