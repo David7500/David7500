@@ -1483,6 +1483,34 @@ def zive_voznje(conn: sqlite3.Connection, zdaj: datetime | None = None) -> list[
         "AND konec IS NULL", (zdaj_ts - NAJDALJE_S, zdaj_ts - SVEZE_S))]
 
 
+#: Rep za vozilom na velikem zemljevidu: koliko zadnjih sekund poročil.
+#: Pove smer, hitrost in mejo med izmerjenim in ocenjenim (odločil David
+#: 11. 10. 2026 med štirimi skicami).
+REP_S = 180
+
+
+def rep_od(conn: sqlite3.Connection, trip_id: str,
+           zdaj: datetime | None = None) -> dict | None:
+    """Kje na trasi se začne rep za vozilom: najbolj zadnja točka zadnjih
+    `REP_S` sekund svežih deljenj potnikov, ki so se peljali.
+
+    **Nikoli do začetka deljenja**: točka vstopa je pri avtobusu ob šestih
+    zjutraj lahko postajališče pred hišo. Zato šteje samo točka, mlajša od
+    začetka svojega deljenja za ves rep -- prve tri minute deljenja repa ni.
+    """
+    zdaj_ts = int((zdaj or datetime.now(TZ)).timestamp())
+    od = conn.execute(
+        "SELECT MIN(t.along_m) FROM deljenje_tocka t JOIN deljenje d ON d.id = t.deljenje "
+        "WHERE d.trip_id = ? AND d.konec IS NULL AND d.peljal_ts IS NOT NULL "
+        "AND d.zadnja_ts >= ? AND t.ts >= ? AND t.ts >= d.zacetek_ts + ?",
+        (trip_id, zdaj_ts - SVEZE_S, zdaj_ts - REP_S, REP_S)).fetchone()[0]
+    v = voznja(conn, trip_id) if od is not None else None
+    if v is None:
+        return None
+    lat, lon = v.trasa.tocka(od)
+    return {"lat": round(lat, 6), "lon": round(lon, 6)}
+
+
 def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
     """Današnja deljenja po vozilih, za skrbnika (`/admin`).
 

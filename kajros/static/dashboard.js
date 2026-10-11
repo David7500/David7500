@@ -341,6 +341,27 @@ function dodajSloje() {
                           "line-width": trasaSirina(false),
                           "line-opacity": ["case", ["==", ["get", "del"], "za"], 0.55, 0.9] } },
                naTleh);
+  // Rep za vlakom s potnikom (`premakniPotniske`): zadnje 3 minute poročil,
+  // indigo kot deljenje, bledi proti koncu, ker so točke tam starejše. Nad
+  // potjo izbranega vlaka, ki je pod njim oranžna; pod zaporami. Od daleč
+  // je 4 km črte nekaj pik, zato šele od Leafletovega z10. Črtkano od zadnjega
+  // poročila do vlaka, kadar je ta na oceni, s piko tam, kjer je potnik res bil.
+  map.addSource("k-rep", { type: "geojson", data: PRAZNO, lineMetrics: true });
+  map.addSource("k-rep-ocena", { type: "geojson", data: PRAZNO });
+  map.addLayer({ id: "k-rep", type: "line", source: "k-rep", layout: OKROGLO, minzoom: 10 - LZ,
+                 paint: { "line-width": 5,
+                          "line-gradient": ["interpolate", ["linear"], ["line-progress"],
+                                            0, "rgba(143, 156, 255, 0)", 1, "rgba(143, 156, 255, 0.95)"] } },
+               naTleh);
+  map.addLayer({ id: "k-rep-ocena", type: "line", source: "k-rep-ocena", minzoom: 10 - LZ,
+                 filter: ["==", ["geometry-type"], "LineString"],
+                 paint: { "line-color": "#b9c3ff", "line-width": 2, "line-dasharray": [2, 2] } },
+               naTleh);
+  map.addLayer({ id: "k-rep-pika", type: "circle", source: "k-rep-ocena", minzoom: 10 - LZ,
+                 filter: ["==", ["geometry-type"], "Point"],
+                 paint: { "circle-radius": 4.5, "circle-color": "#232b55",
+                          "circle-stroke-color": "#d9dfff", "circle-stroke-width": 2,
+                          "circle-pitch-alignment": "map" } }, naTleh);
   // Zapore tira (`/api/zapore`): rumena ovir, črtkana, nad progo in nad
   // potjo izbranega vlaka -- zapora na njegovi poti je prav tisto, kar mora
   // potnik videti. Še vedno na tleh: vlaki (DOM in 3D), avtobusi in pike
@@ -902,7 +923,8 @@ function spremljajPotniske() {
   for (const [trip, t] of zivi) {
     if (potniski.has(trip)) continue;
     const s = { tr: { trasa: null, cums: null, postaje: [], vlak: true },
-                v: null, since: 0, ocena: null, rez: null };
+                v: null, since: 0, ocena: null, rez: null,
+                proj: null, vRep: null, vPor: null };
     potniski.set(trip, s);
     naloziTrasoPotnika(t, s);
     s.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`,
@@ -957,10 +979,54 @@ function novoPorocilo(trip, vrstice) {
   if (mk && mk.__g && mk.getPopup().isOpen()) mk.getPopup().setHTML(groupPopupHtml(mk.__g));
 }
 
-// Vsako sekundo: vlak s potnikom na oceni po progi.
+// Del trase med `od` in `do_` metri, kot črta GeoJSON (od repa proti glavi:
+// `line-progress` gre v tej smeri).
+function kosTrase(pts, cums, od, do_) {
+  const out = [tockaNaTrasi(pts, cums, od)];
+  for (let i = 0; i < pts.length; i++) if (cums[i] > od && cums[i] < do_) out.push(pts[i]);
+  out.push(tockaNaTrasi(pts, cums, do_));
+  return { type: "Feature", properties: {},
+           geometry: { type: "LineString", coordinates: out.map(([la, lo]) => [lo, la]) } };
+}
+
+// Rep vlaka s potnikom: od začetka repa (`rep` iz strežnika, `deljenje.rep_od`;
+// prve tri minute deljenja ga ni) do vlaka. Na oceni se polni del konča pri
+// zadnjem poročilu, do vlaka je črtkan -- vidi se, kje je potnik res bil.
+// Lege projiciramo samo ob novem poročilu, ne vsako sekundo.
+function repVlaka(s, lega, stara, rep, ocena) {
+  const { trasa, cums } = s.tr;
+  if (!trasa || !s.v.rep) return;
+  if (s.proj !== s.v) {
+    s.proj = s.v;
+    const r = projekcijaNaTraso(trasa, cums, s.v.rep.lat, s.v.rep.lon);
+    const p = projekcijaNaTraso(trasa, cums, s.v.lat, s.v.lon);
+    s.vRep = r.odmik <= OCENA_MAX_ODMIK_M ? r.vzdolz : null;
+    s.vPor = p.odmik <= OCENA_MAX_ODMIK_M ? p.vzdolz : null;
+  }
+  if (s.vRep == null || s.vPor == null || s.vPor <= s.vRep) return;
+  const naOceni = stara && lega.vzdolz != null && lega.vzdolz > s.vPor + 1;
+  rep.push(kosTrase(trasa, cums, s.vRep, naOceni || lega.vzdolz == null ? s.vPor : lega.vzdolz));
+  if (naOceni) {
+    ocena.push(kosTrase(trasa, cums, s.vPor, lega.vzdolz));
+    const [la, lo] = tockaNaTrasi(trasa, cums, s.vPor);
+    ocena.push({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lo, la] } });
+  }
+}
+
+let repNarisan = false;
+
+// Vsako sekundo: vlak s potnikom na oceni po progi, z repom.
 function premakniPotniske() {
-  if (!potniski.size) return;
+  if (!potniski.size) {
+    if (repNarisan) {
+      nastaviVir("k-rep", PRAZNO);
+      nastaviVir("k-rep-ocena", PRAZNO);
+      repNarisan = false;
+    }
+    return;
+  }
   let premik = false;
+  const rep = [], ocena = [];
   for (const [trip, s] of potniski) {
     if (!s.v) continue;
     const starost = s.v.age_s + (Date.now() - s.since) / 1000;
@@ -973,6 +1039,7 @@ function premakniPotniske() {
     premik = true;
     mk.setLngLat([s.ocena.lon, s.ocena.lat]);
     const stara = starost > POROCILO_STARO_S;
+    if (vklop.train) repVlaka(s, lega, stara, rep, ocena);
     mk.getElement().classList.toggle("je-ocena", stara);
     const napis = mk.__label.querySelector(".train-label-starost");
     if (napis) napis.textContent = stara ? `poročilo pred ${Math.round(starost)} s` : "";
@@ -987,6 +1054,11 @@ function premakniPotniske() {
     }
   }
   if (premik && vidniVlaki3D()) posodobiVlake3D();
+  if (rep.length || repNarisan) {
+    nastaviVir("k-rep", { type: "FeatureCollection", features: rep });
+    nastaviVir("k-rep-ocena", { type: "FeatureCollection", features: ocena });
+    repNarisan = rep.length > 0;
+  }
 }
 
 setInterval(() => {

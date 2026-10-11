@@ -718,3 +718,33 @@ def test_vlak_gre_na_veliki_zemljevid_po_drugi_poti(monkeypatch):
     assert out == [] and not potniki
     out, potniki = _na_legah(monkeypatch, [], _potnik(5, "zeleznica"), trip="b1")
     assert potniki and len(out) == 1
+
+
+# ------------------------------------------------------------ rep za vozilom
+
+def test_rep_zajame_zadnje_tri_minute_nikoli_zacetka(conn):
+    """Rep na velikem zemljevidu: zadnjih `REP_S` poročil, a nikoli do
+    začetka deljenja -- vstop je lahko postajališče pred hišo. Prve tri
+    minute deljenja repa ni, nato raste do treh minut."""
+    from kajros import api
+    zacetek = _ob("10:01")
+    r = None
+    for i in range(41):                            # 13 m/s, točka na 10 s
+        z = zacetek + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _tocka(0.77 + 0.13 * i, z), ident=r["deljenje"] if r else None)
+        if i == 12:
+            assert deljenje.rep_od(conn, "t1", z) is None
+        if i == 30:                                # 300 s: od 180. sekunde
+            rep = deljenje.rep_od(conn, "t1", z)
+            assert rep["lon"] == pytest.approx(_lon(0.77 + 18 * 0.13), abs=2e-4)
+    zdaj = zacetek + timedelta(seconds=400)        # od 220. sekunde
+    rep = deljenje.rep_od(conn, "t1", zdaj)
+    assert rep["lat"] == pytest.approx(LAT, abs=1e-4)
+    assert rep["lon"] == pytest.approx(_lon(0.77 + 22 * 0.13), abs=2e-4)
+    assert api._vozilo_po_potnikih(conn, "t1", zdaj)["rep"] == rep
+
+
+def test_rep_samo_od_potnika_ki_se_je_peljal(conn):
+    zacetek = _ob("10:14")
+    _pelje(conn, zacetek, 7.72, 0.008, 25, v=0)      # stoji na Bledu
+    assert deljenje.rep_od(conn, "t1", zacetek + timedelta(seconds=240)) is None
