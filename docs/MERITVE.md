@@ -2269,6 +2269,18 @@ Cena, izmerjeno na razvojnem strežniku (MV 246, en potnik): `/api/vehicles?trip
 
 Preizkus od konca do konca (brezglavi Chrome, potnik iz skripte po `POST /api/deli`, 22 m/s, 45 s molka sredi vožnje): pika je bila od potnikove lege 2–19 m ves čas, tudi med molkom; „poročilo pred 15 s“ in črtkan obris ob 15. sekundi molka, ob vrnitvi poročil spet polna. Hitrost je bila stalna, zato to dokazuje, da veriga dela, **ne natančnosti** -- ta je zgornja meritev s pravih voženj.
 
+## Zasloni deljenja od konca do konca (11. 10. 2026)
+
+Brezglavi Chrome, potnik in gledalec v dveh ločenih profilih z različnim UA, živ vlak RG 211 na razvojnem strežniku (potnikova lega iz sledi po progi, 22 m/s):
+
+* Okno vožnje: vrstica vidna (vlak vozi), po pritisku v 3 s „Deliš lego“ s prvim korakom opravljenim; po ~60 s vožnje „Drugi te vidijo“, „ta vlak gleda 1 človek“ (gledalec v drugem profilu), 79 km/h.
+* Po 80 s na isti točki: na velikem zemljevidu pri gledalcu „stoji 1 min“, na kartici potnika isto.
+* Ustavi: „Hvala!“, 3 min deljenja, 1 človek je gledal.
+* Domača stran: en kandidat (RG 211, „odhod 12:50 iz Ilirska Bistrica · zdaj +31 min“), izbira, „Drugi te vidijo“ s povezavo na zemljevid, hvala, nazaj na obliko.
+* Okno vožnje 80 km od proge: „Nisi ob progi tega vlaka.“
+
+Konzola brez napak v vseh treh tekih. To dokazuje, da veriga dela; koliko ljudi bo zdaj delilo, pokaže lijak v `/admin#deljenje` po tednu na produkciji.
+
 ## Prevoznik ve več tudi za postajo naprej (5. 10. 2026)
 
 Prijava: okno vožnje LPV 2206 je pokazalo Litijo ob 08:52 (+43, prevoznik) in Kresnice ob 08:53 (+37) — med postajama 7 min po voznem redu, na zaslonu ena. Malo prej, pri „+19“, so bile Kresnice napovedane **pred** Savo. Istega jutra LPV 2252: izmerjen na Zagorju +4, prevoznik za Savo +22, okno pa Litija 08:46 (+5), Sava 08:57 (+22), Ljubljana Polje +7. Vlak je v Litiji bil +22.

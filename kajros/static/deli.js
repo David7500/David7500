@@ -86,92 +86,266 @@
 
   // ---------- izris ----------
   //
-  // Dve obliki iste stvari: oblika na domaci strani (`deli-oblika`) in
-  // vrstica v iskalniku (`deli-kompakt`), kamor clovek pride prvi -- tja, kjer
-  // ima shranjeno svojo pot, in prav tam je, ko sede na vlak. V obeh je
-  // povabilo en sam gumb; ko potnik zacne, se razpre v kartico.
+  // Tri oblike iste stvari: oblika na domaci strani (`deli-oblika`), vrstica
+  // v iskalniku (`deli-kompakt`), kamor clovek pride prvi, in vrstica v oknu
+  // voznje (`deli-okno`), kjer vozilo ze poznamo in izbire ni. Povabilo je en
+  // sam gumb; ko potnik zacne, se razpre v kartico v barvi deljenja (indigo,
+  // kot oblika "Deli lego"). Zasloni po prototipu, ki ga je David potrdil
+  // 11. 10. 2026 (platno "Deljenje lege: zasloni").
 
   const KOMPAKT = el.classList.contains("deli-kompakt");
+  const OKNO = el.classList.contains("deli-okno");
   // Obliko na domaci strani narise predloga (`home.html`), z risbo, ki v JS
   // nima kaj iskati; stran jo shrani in vrne, ko se deljenje konca.
   const VABILO = el.classList.contains("deli-oblika") ? el.innerHTML : null;
   const OMREZJE = el.dataset.omrezje || null;
   //: Od kod je potnik zacel (`deljenje.VIRI`), za lijak v pregledu.
-  const VIR = KOMPAKT ? "iskalnik" : "domov";
+  const VIR = OKNO ? "okno" : KOMPAKT ? "iskalnik" : "domov";
 
-  function kartica(oznaka, naslov, besedilo, gumbi) {
-    return `<span class="deli-oznaka${oznaka.zivo ? " deli-zivo" : ""}">${oznaka.besedilo}</span>
-      <strong class="deli-naslov">${naslov}</strong>
-      ${besedilo || ""}
-      ${gumbi || ""}`;
+  // Voznja, ki jo okno voznje pozna -- `train.js` jo zapise v data-*.
+  function fiksna() {
+    const d = el.dataset;
+    if (!OKNO || !d.trip || !d.dan) return null;
+    return { trip_id: d.trip, service_date: d.dan, network: d.omrezje || "zeleznica",
+             mode: d.mode || "", train_no: d.st || "", headsign: d.smer || "",
+             agency: d.prevoznik || null };
   }
 
-  function vrstica(besedilo) {
-    return besedilo ? `<span class="deli-besedilo">${besedilo}</span>` : "";
+  // "vlak" ali "avtobus" (tudi nadomestni): sklanja se pravilno z obrazili
+  // -a (rodilnik) in -u (mestnik) -- tega vlaka, na avtobusu.
+  const vozilo = (k) => (k && isBus(k.mode) ? "avtobus" : "vlak");
+  // Cigav podatek tvoja zamuda zamenja: nadomestni prevoz ga nima nobenega.
+  function zamenja(k) {
+    if (k.network === "avtobus") return "zadnji podatek prevoznika";
+    return isBus(k.mode) ? "vozni red" : "zadnji podatek SŽ";
   }
 
-  const POMAGAJ = { besedilo: "Pomagaj drugim" };
+  function ink(k) {
+    if (!isBus(k.mode)) return TRAIN_INK;
+    if (k.network === "zeleznica") return "#b48ad8";      // nadomestni prevoz
+    return AGENCY_INK[k.agency === "lpp" ? "1118" : k.agency] || BUS_INK;
+  }
+
+  const SVG_VLAK = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="3"/>
+    <path d="M6 11h12M9 21l2-4M15 21l-2-4"/></svg>`;
+  const SVG_BUS = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.8" aria-hidden="true"><rect x="5" y="3" width="14" height="15" rx="3"/>
+    <path d="M5 11h14M8 21v-3M16 21v-3"/></svg>`;
+  const SVG_VALOVI = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/>
+    <path d="M8 8a5.6 5.6 0 0 0 0 8M16 8a5.6 5.6 0 0 1 0 8M5.2 5.2a9.6 9.6 0 0 0 0 13.6M18.8 5.2a9.6 9.6 0 0 1 0 13.6"/></svg>`;
+  const SVG_OKO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/>
+    <circle cx="12" cy="12" r="3"/></svg>`;
+  const SVG_KLJUKA = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>`;
+  const SVG_NAPREJ = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>`;
+
+  // "ta vlak gleda 12 ljudi" -- glagol in samostalnik se ujemata s številom,
+  // odločata zadnji dve števki (kot `potnikov`).
+  function gledaText(n, kaj) {
+    const d = n % 100;
+    if (d === 1) return `ta ${kaj} gleda ${n} človek`;
+    if (d === 2) return `ta ${kaj} gledata ${n} človeka`;
+    if (d === 3 || d === 4) return `ta ${kaj} gledajo ${n} ljudje`;
+    return `ta ${kaj} gleda ${n} ljudi`;
+  }
+
+  function gledaloText(n, kaj) {
+    const d = n % 100;
+    if (d === 1) return `človek je gledal ta ${kaj}`;
+    if (d === 2) return `človeka sta gledala ta ${kaj}`;
+    if (d === 3 || d === 4) return `ljudje so gledali ta ${kaj}`;
+    return `ljudi je gledalo ta ${kaj}`;
+  }
+
+  function odhodovText(n, bus) {
+    const d = n % 100;
+    const s = bus ? "postajališč" : "postaj";
+    if (d === 1) return `potrjen odhod s ${bus ? "postajališča" : "postaje"}`;
+    if (d === 2) return `potrjena odhoda s ${s}`;
+    if (d === 3 || d === 4) return `potrjeni odhodi s ${s}`;
+    return `potrjenih odhodov s ${s}`;
+  }
+
+  function stojiText(st) {
+    if (!st || !st.stoji) return "";
+    const m = st.stoji_s != null ? Math.floor(st.stoji_s / 60) : 0;
+    return m >= 1 ? `stoji ${m} min` : "stoji";
+  }
+
+  const hitrostText = (st) => (st && !st.stoji && st.hitrost_ms >= 3
+    ? `${Math.round(st.hitrost_ms * 3.6)} km/h` : "");
+
+  // Zamuda nosi barvo lestvice, zato na podlagi strani: temna oranžna
+  // (`--d-big`) na indigu ne doseže kontrasta (2,8 : 1).
+  const zamudaHtml = (z, cls = "deli-zam") => (z
+    ? `<b class="${cls}" style="color:${delayColor(z)}">${escapeHtml(delayText(z))}</b>` : "");
+
+  function naslovVoznje(k) {
+    return `${escapeHtml(oznaka(k))}${cilj(k) ? ` → ${escapeHtml(cilj(k))}` : ""}`;
+  }
+
+  function vrstica(besedilo, cls = "deli-besedilo") {
+    return besedilo ? `<span class="${cls}">${besedilo}</span>` : "";
+  }
+
+  const oznakaHtml = (besedilo, zivo) =>
+    `<span class="deli-oznaka${zivo ? " deli-zivo" : ""}">${besedilo}</span>`;
+
+  // Brskalnik lege z ugasnjenim zaslonom ne pošilja; aplikacija jo.
+  function nasvetHtml(konec) {
+    if (NATIVNO) {
+      return konec ? `<div class="deli-nasvet">Z budilko se deljenje začne samo, ko vstopiš.
+          Vklopiš ga v seznamu budilk: <b>Ko se peljem, pomagaj drugim</b>.</div>` : "";
+    }
+    return `<div class="deli-nasvet"><span>${konec
+        ? "V aplikaciji za Android deliš tudi s telefonom v žepu, z budilko pa se deljenje začne samo, ko vstopiš."
+        : "Pusti to stran odprto in zaslon prižgan. Ko se zaslon ugasne, brskalnik lege ne pošilja več."}</span>
+      <a href="/android">${konec ? "Aplikacija za Android"
+        : "V aplikaciji za Android deliš tudi s telefonom v žepu"} ${SVG_NAPREJ}</a></div>`;
+  }
+
+  function kandidatHtml(k, i, n) {
+    const prvi = i === 0 && n > 1;
+    return `
+      <button type="button" class="deli-kandidat${prvi ? " je-prvi" : ""}" data-deli="izberi" data-i="${i}">
+        <span class="deli-ikona" style="background:${ink(k)}">${isBus(k.mode) ? SVG_BUS : SVG_VLAK}</span>
+        <span class="deli-kand-besedilo">
+          <strong>${naslovVoznje(k)}</strong>
+          ${vrstica(escapeHtml(kjeText(k, k.network === "avtobus")), "")}
+          ${uraText(k) ? `<span>${escapeHtml(uraText(k))}</span>` : ""}
+        </span>
+        ${prvi ? '<span class="deli-znacka">najbolj verjetno</span>' : ""}
+      </button>`;
+  }
+
+  // Deliš, a drugi te še ne vidijo: poročilo ni verodostojno, dokler se
+  // vozilo ne pelje (`deljenje.stanje`). Dva koraka povesta, kaj že velja in
+  // kaj pride, ko vozilo spelje.
+  function cakaHtml(k, st) {
+    const bus = k.network === "avtobus";
+    const kje = st && (st.pri || st.med) ? kjeText(st, bus) : "";
+    const pod = st
+      ? `Zdaj ${st.stoji ? "stoji " : ""}${escapeHtml(kje)}${st.zamuda ? " · " + zamudaHtml(st.zamuda) : ""}`
+      : "Pošiljam prvo lego …";
+    const v = vozilo(k);
+    return oznakaHtml("Deliš lego", true)
+      + `<strong class="deli-naslov">${naslovVoznje(k)}</strong>`
+      + vrstica(pod, "deli-pod")
+      + `<ol class="deli-koraki">
+          <li class="${st ? "je-opravljen" : ""}"><span class="deli-korak">${st ? SVG_KLJUKA : ""}</span>
+            <span>Tvoja lega je na progi tega ${v}a.<small>Na tabli že piše: potnik na ${v}u.</small></span></li>
+          <li><span class="deli-korak"></span>
+            <span>Ko ${v} spelje, te pokažemo na zemljevidu.<small>Takrat tvoja zamuda zamenja ${zamenja(k)}.</small></span></li>
+        </ol>`
+      + nasvetHtml(false)
+      + `<button type="button" class="deli-gumb" data-deli="ustavi">Ustavi</button>`;
+  }
+
+  // Drugi te vidijo: vozilo je na zemljevidu na tvoji legi, tvoja zamuda je
+  // na tablah. Število gledalcev je razlog, da deljenja ne ustaviš.
+  function voziHtml(k, st) {
+    const bus = k.network === "avtobus";
+    const v = vozilo(k);
+    const n = st.jaz ? st.jaz.gledajo : 0;
+    const kje = [kjeText(st, bus), stojiText(st) || hitrostText(st)].filter(Boolean).join(" · ");
+    return `<div class="deli-vrh">${oznakaHtml("Drugi te vidijo", true)}${n
+        ? `<span class="deli-gledajo">${SVG_OKO}${escapeHtml(gledaText(n, v))}</span>` : ""}</div>`
+      + `<strong class="deli-naslov">${naslovVoznje(k)}</strong>`
+      + vrstica(escapeHtml(kje), "deli-pod")
+      + (st.zamuda ? `<div class="deli-zamuda">${zamudaHtml(st.zamuda, "deli-zam deli-zam-velika")}
+          <span>tvoja zamuda je zdaj na tablah</span></div>` : "")
+      + (OKNO ? "" : `<a class="deli-povezava" href="/app/map?trip=${encodeURIComponent(k.trip_id)}">
+          poglej na zemljevidu ${SVG_NAPREJ}</a>`)
+      + `<button type="button" class="deli-gumb" data-deli="ustavi">Ustavi</button>`
+      + vrstica(`Ustavi se samo, ko izstopiš ali je ${v} na cilju.`, "deli-mala");
+  }
+
+  function hvalaHtml() {
+    const k = S.voznja || {};
+    const bus = isBus(k.mode);
+    const jaz = (S.stanje && S.stanje.jaz) || null;
+    const ploscice = [];
+    if (jaz) {
+      const min = Math.round(jaz.trajanje_s / 60);
+      ploscice.push([min >= 1 ? `${min} min` : "< 1 min", "deljenja"]);
+      if (jaz.odhodov) ploscice.push([String(jaz.odhodov), odhodovText(jaz.odhodov, k.network === "avtobus")]);
+      if (jaz.gledalo) ploscice.push([String(jaz.gledalo), gledaloText(jaz.gledalo, bus ? "avtobus" : "vlak")]);
+    }
+    return `<strong class="deli-naslov deli-hvala">Hvala!</strong>`
+      + vrstica(escapeHtml(S.sporocilo), "deli-pod")
+      + (ploscice.length ? `<div class="deli-stevila">${ploscice.map(([st, kaj]) =>
+          `<div><b>${escapeHtml(st)}</b><span>${escapeHtml(kaj)}</span></div>`).join("")}</div>` : "")
+      + nasvetHtml(true)
+      + `<button type="button" class="deli-gumb" data-deli="nazaj">V redu</button>`;
+  }
 
   function izrisi() {
     const f = S.faza;
     el.classList.toggle("je-odprt", f !== "miruje");
     if (f === "miruje") {
       if (VABILO !== null) { el.innerHTML = VABILO; return; }
+      if (OKNO) {
+        const k = fiksna();
+        const v = vozilo(k || { mode: el.dataset.mode });
+        el.innerHTML = `<button type="button" class="deli-vrstica" data-deli="zacni">
+            ${SVG_VALOVI}
+            <span class="deli-vrstica-besedilo"><b>Si na tem ${v}u? Deli, kje je</b>
+              <span>Kdor čaka na ${v === "vlak" ? "peronu" : "postajališču"}, bo videl, kje ${v} res je.</span></span>
+            ${SVG_NAPREJ}
+          </button>`;
+        return;
+      }
       el.innerHTML = KOMPAKT
         ? `<button type="button" class="deli-vabilo" data-deli="zacni">
              <span>Pelješ se? <b>Deli, kje je vozilo</b></span><span aria-hidden="true">›</span>
            </button>`
-        : kartica(POMAGAJ, "Pelješ se? Deli, kje je vozilo.",
-            vrstica("Kdor čaka na isti vlak ali avtobus, bo videl, kje je in koliko zamuja."),
-            `<button type="button" class="deli-gumb" data-deli="zacni">Deli lego</button>`);
+        : oznakaHtml("Pomagaj drugim") + `<strong class="deli-naslov">Pelješ se? Deli, kje je vozilo.</strong>`
+          + vrstica("Kdor čaka na isti vlak ali avtobus, bo videl, kje je in koliko zamuja.")
+          + `<button type="button" class="deli-gumb" data-deli="zacni">Deli lego</button>`;
       return;
     }
     if (f === "isce") {
-      el.innerHTML = kartica(POMAGAJ, "Iščem, s čim se pelješ …",
-        vrstica(escapeHtml(S.sporocilo || "Za smer vožnje rabim dve legi nekaj sekund narazen.")),
-        `<button type="button" class="deli-drugo" data-deli="ustavi">Prekliči</button>`);
+      el.innerHTML = oznakaHtml("Pomagaj drugim")
+        + `<strong class="deli-naslov">${OKNO ? "Iščem tvojo lego …" : "Iščem, s čim se pelješ …"}</strong>`
+        + vrstica(escapeHtml(S.sporocilo || (OKNO ? "Preverim, ali si ob progi tega vozila."
+          : "Za smer vožnje rabim dve legi nekaj sekund narazen.")))
+        + `<button type="button" class="deli-drugo" data-deli="ustavi">Prekliči</button>`;
       return;
     }
     if (f === "izbira") {
       const n = S.kandidati.length;
-      const seznam = S.kandidati.map((k, i) => `
-        <button type="button" class="deli-kandidat" data-deli="izberi" data-i="${i}">
-          <strong>${escapeHtml(oznaka(k))}${cilj(k) ? ` → ${escapeHtml(cilj(k))}` : ""}</strong>
-          <span>${escapeHtml(kjeText(k, k.network === "avtobus"))}</span>
-          ${uraText(k) ? `<span>${escapeHtml(uraText(k))}</span>` : ""}
-        </button>`).join("");
-      el.innerHTML = kartica(POMAGAJ,
-        n ? (n === 1 ? "Se pelješ s tem?" : "S čim se pelješ?")
-          : "Ne najdem vozila, ki bi bilo zdaj tu.",
-        n ? "" : vrstica("Poskusi znova, ko se vozilo premakne."),
-        `<div class="deli-seznam">${seznam}</div>
-         <div class="deli-gumbi">
-           <button type="button" class="deli-drugo" data-deli="znova">Poišči znova</button>
-           <button type="button" class="deli-drugo" data-deli="ustavi">${n
-             ? "Nisem na nobenem" : "Prekliči"}</button>
-         </div>`);
+      el.innerHTML = oznakaHtml("Pomagaj drugim")
+        + `<strong class="deli-naslov">${n ? (n === 1 ? "Se pelješ s tem?" : "S čim se pelješ?")
+          : "Ne najdem vozila, ki bi bilo zdaj tu."}</strong>`
+        + (n > 1 ? vrstica(`${n === 2 ? "Dve vozili sta" : n <= 4 ? `${n} vozila so` : `${n} vozil je`}
+            po voznem redu ta hip tu, kjer si ti.`) : n ? "" : vrstica("Poskusi znova, ko se vozilo premakne."))
+        + `<div class="deli-seznam">${S.kandidati.map((k, i) => kandidatHtml(k, i, n)).join("")}</div>
+           <div class="deli-gumbi">
+             <button type="button" class="deli-drugo" data-deli="ustavi">${n
+               ? "Nisem na nobenem" : "Prekliči"}</button>
+             <button type="button" class="deli-drugo" data-deli="znova">Poišči znova</button>
+           </div>`
+        + (n ? vrstica("Hitreje gre iz okna vožnje: tam veš, na katerem vozilu si, in izbire ni.",
+          "deli-mala") : "");
       return;
     }
     if (f === "deli") {
-      const k = S.voznja;
       const st = S.stanje;
-      const kje = st && (st.pri || st.med) ? kjeText(st, k.network === "avtobus") : "";
-      const z = st && st.zamuda ? st.zamuda : null;
-      el.innerHTML = kartica({ besedilo: "Deliš lego", zivo: true },
-        `${escapeHtml(oznaka(k))}${cilj(k) ? ` → ${escapeHtml(cilj(k))}` : ""}`,
-        vrstica(kje
-          ? `Drugi vidijo: ${escapeHtml(kje)}${z
-            ? ` · <b style="color:${delayColor(z)}">${escapeHtml(delayText(z))}</b>` : ""}`
-          : "Pošiljam prvo lego …")
-        + vrstica(NATIVNO
-          ? "Deli tudi, ko je telefon v žepu. Ustavi se sam, ko izstopiš."
-          : "Pusti to stran odprto in zaslon prižgan. Ustavi se sam, ko izstopiš."),
-        `<button type="button" class="deli-gumb deli-ustavi" data-deli="ustavi">Ustavi</button>`);
+      el.innerHTML = st && st.verodostojno ? voziHtml(S.voznja, st) : cakaHtml(S.voznja, st);
       return;
     }
-    el.innerHTML = kartica(POMAGAJ, f === "konec" ? "Hvala!" : "Deljenje ne gre",
-      vrstica(escapeHtml(S.sporocilo)),
-      `<button type="button" class="deli-drugo" data-deli="nazaj">V redu</button>`);
+    if (f === "konec") {
+      el.innerHTML = hvalaHtml();
+      return;
+    }
+    el.innerHTML = oznakaHtml("Pomagaj drugim")
+      + `<strong class="deli-naslov">Deljenje ne gre</strong>`
+      + vrstica(escapeHtml(S.sporocilo))
+      + `<button type="button" class="deli-drugo" data-deli="nazaj">V redu</button>`;
   }
 
   function napaka(besedilo) {
@@ -179,6 +353,19 @@
     S.faza = "napaka";
     S.sporocilo = besedilo;
     izrisi();
+  }
+
+  // Zavrnitev začetka iz okna vožnje pove, kaj storiti: kdor čaka na peronu,
+  // deli, ko vstopi (`deljenje.Zavrnjeno.koda`).
+  function zavrnjeno(e) {
+    const k = S.voznja || fiksna();
+    if (OKNO && k && (e.koda === "ni_tu" || e.koda === "ne_vozi")) {
+      return napaka(`Ta ${vozilo(k)} ta hip ni tu, kjer si ti. Deli, ko vstopiš.`);
+    }
+    if (OKNO && k && e.koda === "ni_na_trasi") {
+      return napaka(`Nisi ob progi tega ${vozilo(k)}a. Deliš lahko, ko si na njem.`);
+    }
+    return napaka(e.message);
   }
 
   // ---------- lega ----------
@@ -200,6 +387,9 @@
         izrisi();
         return;
       }
+      // Okno vožnje vožnjo pozna: ena dobra lega je dovolj, da strežnik
+      // preveri, ali je potnik ob progi in vozilo tu.
+      if (fiksna()) return izberi(fiksna());
       if (!S.prva) { S.prva = l; return; }
       if (l.t - S.prva.t >= SMER_MS || razdalja(S.prva, l) >= SMER_M) vprasaj();
       return;
@@ -238,6 +428,7 @@
     if (!r.ok) {
       const e = new Error(d.napaka || d.detail || `napaka ${r.status}`);
       e.status = r.status;
+      e.koda = d.koda || null;
       throw e;
     }
     return d;
@@ -257,7 +448,7 @@
     S.rok = setTimeout(() => {
       if (S.faza !== "isce") return;
       // Ena dobra lega je boljsa od nobene: brez smeri so kandidati oba vlaka.
-      if (S.zadnja && S.zadnja.acc <= DOVOLJ_M * 2) return vprasaj();
+      if (S.zadnja && S.zadnja.acc <= DOVOLJ_M * 2) return fiksna() ? izberi(fiksna()) : vprasaj();
       napaka("GPS se ni odzval. Pod streho pogosto nima signala — poskusi ob oknu.");
     }, ISCI_ROK_MS);
   }
@@ -269,7 +460,8 @@
     const prej = S.prva && S.prva !== l ? { lat: S.prva.lat, lon: S.prva.lon } : null;
     S.faza = "izbira";
     S.kandidati = [];
-    el.innerHTML = kartica(POMAGAJ, "Iščem vozila v bližini …");
+    el.innerHTML = oznakaHtml("Pomagaj drugim")
+      + `<strong class="deli-naslov">Iščem vozila v bližini …</strong>`;
     try {
       const d = await post({ lat: l.lat, lon: l.lon, acc: l.acc, prej });
       S.kandidati = d.kandidati || [];
@@ -329,7 +521,7 @@
         S.vrsta = tocke.concat(S.vrsta).slice(-NAJVEC_V_VRSTI);
         return;
       }
-      napaka(e.message);
+      zavrnjeno(e);
     }
   }
 
@@ -347,7 +539,7 @@
   }
 
   const KONCI = {
-    izstop: "Izstopil si, deljenje se je ustavilo samo.",
+    izstop: "Deljenje se je ob izstopu ustavilo samo.",
     cilj: "Vožnja je na cilju, deljenje se je ustavilo samo.",
     cas: "Deljenje se je po šestih urah ustavilo samo.",
     potnik: "Deljenje je ustavljeno.",
@@ -418,19 +610,28 @@
   });
 
   // Aplikacija deli tudi, ko je stran zaprta. Ob vrnitvi na domaco stran
-  // mora ploscica to pokazati, ne povabila k novemu deljenju.
-  if (NATIVNO) {
+  // mora ploscica to pokazati, ne povabila k novemu deljenju. V oknu voznje
+  // samo, kadar aplikacija deli prav to voznjo -- `train.js` jo pove z
+  // dogodkom `deli-voznja`, ko jo nalozi.
+  function nadaljujNativno() {
+    if (!NATIVNO || S.faza !== "miruje") return;
     try {
       const st = JSON.parse(MOST.deliStanje() || "{}");
-      if (st.aktivno && st.voznja) {
-        S.voznja = st.voznja;
-        S.stanje = st.stanje || null;
-        S.faza = "deli";
-        S.anketa = setInterval(beriNativno, 5000);
-      }
+      if (!st.aktivno || !st.voznja) return;
+      if (OKNO && (!fiksna() || st.voznja.trip_id !== fiksna().trip_id)) return;
+      S.voznja = st.voznja;
+      S.stanje = st.stanje || null;
+      S.faza = "deli";
+      S.anketa = setInterval(beriNativno, 5000);
     } catch (e) {
       /* stara aplikacija brez deljenja */
     }
   }
+
+  el.addEventListener("deli-voznja", () => {
+    nadaljujNativno();
+    izrisi();
+  });
+  nadaljujNativno();
   izrisi();
 })();

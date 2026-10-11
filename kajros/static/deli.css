@@ -1,62 +1,138 @@
-/* Deljenje lege (`deli.js`): ploscica na domaci strani in vrstica v
- * iskalniku. Kartica menja vsebino po korakih: povabilo, iskanje, izbira
- * vozila, deljenje, hvala. Gumb za deljenje je poudarjen, ker je to edino
- * dejanje; vse ostalo so tihi gumbi.
- *
- * Barve gredo skozi `--accent`, zato je na avtobusni strani zelena, na
- * zelezniski in domaci oranzna -- isto pravilo kot povsod (oznake.md). */
+/* Deljenje lege (`deli.js`): oblika na domači strani, vrstica v iskalniku in
+ * v oknu vožnje. Odprta je kartica v barvi deljenja (indigo, `--deli-*` v
+ * base.css), enako na obeh omrežjih: vir potnika ima svojo barvo, oranžna
+ * ostane zamuda. Zasloni po prototipu, ki ga je David potrdil 11. 10. 2026. */
 
 .deli { display: flex; flex-direction: column; gap: 4px; }
-.deli-oznaka { font: 500 14px/1.2 var(--sans); color: var(--accent-lit); }
-.deli-naslov { margin-top: 6px; font: 600 17px/1.25 var(--sans); color: var(--ink); }
-.deli-besedilo { font: 400 12.5px/1.45 var(--sans); color: var(--ink-mute); }
-.deli-besedilo b { font-weight: 600; }
+.deli.je-odprt {
+  gap: 6px; padding: 20px; border-radius: 28px;
+  background: var(--deli-kont); color: var(--deli-na-kont);
+}
+.deli-oznaka { font: 600 13.5px/1.2 var(--sans); color: var(--deli-gumb); }
+.deli-naslov { margin-top: 6px; font: 600 20px/1.25 var(--sans); }
+.deli-hvala { font-size: 28px; margin-top: 0; }
+.deli-pod { font: 400 14px/1.45 var(--sans); color: var(--deli-na-kont-2); }
+.deli-besedilo { font: 400 13.5px/1.45 var(--sans); color: var(--deli-na-kont-2); }
+.deli-mala { font: 400 12.5px/1.4 var(--sans); color: var(--deli-tiho); }
+.deli.je-odprt a { color: var(--deli-gumb); }
+
+/* Zamuda nosi barvo lestvice, zato na podlagi strani: temna oranžna
+   (`--d-big`) na indigu ne doseže kontrasta (2,8 : 1). */
+.deli-zam {
+  padding: 1px 7px; border-radius: 8px; background: var(--bg);
+  font-weight: 600; white-space: nowrap;
+}
+.deli-zamuda { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
+.deli-zamuda span { font: 400 14px/1.3 var(--sans); color: var(--deli-na-kont-2); }
+.deli-zam-velika { font: 600 30px/1.1 var(--sans); padding: 2px 10px; border-radius: 12px; }
 
 .deli-gumb, .deli-drugo {
-  align-self: flex-start; margin-top: 10px; min-height: 40px; padding: 10px 18px;
-  border-radius: var(--r-pilula); cursor: pointer; font: 600 14px var(--sans);
+  align-self: flex-start; margin-top: 10px; min-height: 44px; padding: 10px 22px;
+  border-radius: var(--r-pilula); cursor: pointer; font: 600 15px var(--sans);
 }
-.deli-gumb { border: 0; background: var(--accent-lit); color: #111; }
-.deli-drugo { border: 1px solid var(--line-firm); background: none; color: var(--ink-dim); }
-.deli-ustavi { background: var(--bg-hover); color: var(--ink); border: 1px solid var(--line-firm); }
+.deli-gumb { border: 0; background: var(--deli-gumb); color: var(--deli-na-gumb); }
+.deli-drugo { border: 1px solid var(--deli-tiho); background: none; color: var(--deli-na-kont); }
 .deli-gumbi { display: flex; flex-wrap: wrap; gap: 0 8px; }
-.deli-seznam { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+/* Izbira vozila: ikona v barvi vozila, najbolj verjetno poudarjeno. */
+.deli-seznam { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .deli-seznam:empty { display: none; }
 .deli-kandidat {
-  display: flex; flex-direction: column; gap: 2px; width: 100%;
-  padding: 12px 14px; text-align: left; cursor: pointer;
-  border: 0; border-radius: var(--r-lg);
-  background: var(--m-visoka); color: var(--ink);
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  padding: 14px; text-align: left; cursor: pointer;
+  border: 0; border-radius: 8px;
+  background: var(--deli-globlje); color: var(--deli-na-kont); font-family: var(--sans);
 }
-.deli-kandidat strong { font: 600 15px/1.3 var(--sans); }
-.deli-kandidat span { font: 400 12.5px/1.35 var(--sans); color: var(--ink-mute); }
+.deli-kandidat:first-child { border-radius: 20px 20px 8px 8px; }
+.deli-kandidat:last-child { border-radius: 8px 8px 20px 20px; }
+.deli-kandidat:only-child { border-radius: 20px; }
+.deli-kandidat.je-prvi { background: #2e3870; }
+.deli-ikona {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 10px; color: #1a1006;
+}
+.deli-kand-besedilo { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.deli-kand-besedilo strong { font: 600 16px/1.3 var(--sans); }
+.deli-kand-besedilo span { font: 400 13px/1.35 var(--sans); color: var(--deli-na-kont-2); }
+.deli-znacka {
+  align-self: center; flex-shrink: 0; padding: 3px 9px; border-radius: var(--r-pilula);
+  background: var(--deli-gumb); color: var(--deli-na-gumb); font: 600 11.5px/1.3 var(--sans);
+}
 
-/* Utripajoca pika pove, da deljenje tece -- brez nje je kartica videti kot
-   navodilo, ne kot stanje. */
-.deli-zivo { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-lit); }
-.deli-zivo::before {
-  content: ""; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent-lit); animation: deli-utrip 1.6s ease-in-out infinite;
+/* Deliš, drugi te še ne vidijo: dva koraka, prvi s kljukico. */
+.deli-koraki { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.deli-koraki li { display: flex; gap: 10px; align-items: flex-start; font: 400 14.5px/1.4 var(--sans); }
+.deli-koraki small { display: block; font-size: 13px; color: var(--deli-tiho); }
+.deli-korak {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 50%; border: 2px dashed #8e97cc;
 }
-@keyframes deli-utrip { 50% { opacity: .25; } }
+.je-opravljen .deli-korak { border: 0; background: var(--deli-gumb); color: var(--deli-na-gumb); }
+
+.deli-nasvet {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 12px 14px;
+  border-radius: 16px; background: var(--deli-globlje); font: 400 13.5px/1.45 var(--sans);
+}
+.deli-nasvet a, .deli-povezava {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 600 13.5px/1.3 var(--sans); text-decoration: none;
+}
+.deli-povezava { margin-top: 6px; }
+
+.deli-vrh { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.deli-gledajo {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 400 13px/1.2 var(--sans); color: var(--deli-na-kont-2);
+}
+
+/* Hvala: kaj je deljenje dalo. */
+.deli-stevila { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; margin-top: 10px; }
+.deli-stevila div {
+  display: flex; flex-direction: column; gap: 4px; padding: 12px;
+  border-radius: 6px; background: var(--deli-globlje);
+}
+.deli-stevila div:first-child { border-radius: 16px 6px 6px 16px; }
+.deli-stevila div:last-child { border-radius: 6px 16px 16px 6px; }
+.deli-stevila div:only-child { border-radius: 16px; }
+.deli-stevila b { font: 600 24px/1.1 var(--sans); }
+.deli-stevila span { font: 400 12px/1.3 var(--sans); color: var(--deli-tiho); }
+
+/* Utripajoča pika pove, da deljenje teče -- brez nje je kartica videti kot
+   navodilo, ne kot stanje. */
+.deli-zivo { display: inline-flex; align-items: center; gap: 8px; }
+.deli-zivo::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--deli-gumb); box-shadow: 0 0 0 4px rgba(185, 195, 255, 0.22);
+  animation: deli-utrip 1.6s ease-in-out infinite;
+}
+@keyframes deli-utrip { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .deli-zivo::before { animation: none; } }
 
-/* Iskalnik: zaprta je ena vrstica, da rezultatov ne potisne navzdol;
-   odprta je kartica kot na domaci strani. */
+/* Iskalnik: zaprta je ena vrstica, da rezultatov ne potisne navzdol. */
 .deli-kompakt { margin: 12px 0 4px; }
-.deli-kompakt.je-odprt {
-  padding: 16px; border-radius: var(--r-lg);
-  border: 0; background: var(--bg-raised);
-}
 .deli-vabilo {
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
   width: 100%; min-height: 52px; padding: 12px 16px; cursor: pointer; text-align: left;
   border: 0; border-radius: var(--r-lg);
   background: var(--m-visoka); color: var(--ink-dim); font: 400 14px var(--sans);
 }
-.deli-vabilo b { font-weight: 600; color: var(--accent-lit); }
+.deli-vabilo b { font-weight: 600; color: var(--deli-gumb); }
+
+/* Okno vožnje: ena vrstica pod trenutno zamudo, samo ko vožnja vozi ali
+   odpelje v 30 min (`train.js`). */
+.deli-okno { margin: 12px 0 0; }
+.deli-vrstica {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; cursor: pointer; text-align: left;
+  border: 0; border-radius: 20px;
+  background: var(--deli-kont); color: #d9dfff; font-family: var(--sans);
+}
+.deli-vrstica svg { flex-shrink: 0; }
+.deli-vrstica-besedilo { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.deli-vrstica-besedilo b { font: 600 15px/1.3 var(--sans); }
+.deli-vrstica-besedilo span { font: 400 12.5px/1.35 var(--sans); color: var(--deli-tiho); }
 
 .deli-gumb:focus-visible, .deli-drugo:focus-visible, .deli-kandidat:focus-visible,
-.deli-vabilo:focus-visible {
-  outline: 2px solid var(--accent-lit); outline-offset: 2px;
+.deli-vabilo:focus-visible, .deli-vrstica:focus-visible {
+  outline: 2px solid var(--deli-gumb); outline-offset: 2px;
 }

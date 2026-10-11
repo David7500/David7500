@@ -88,6 +88,9 @@ HITROST_MAX_BUS_MS = 36
 NAZAJ_MAX_M = 300
 #: Pod to hitrostjo vozilo stoji.
 STOJI_MS = 1.5
+#: Kako daleč nazaj po trasi je vozilo še „tu“, ko štejemo, koliko časa
+#: stoji: šum GPS, ki ga `sprejmi` ne zavrže (`NAZAJ_MAX_M`), je pod tem.
+STOJI_OD_M = 40
 #: Kako blizu postaje vozilo „je na postaji“. Vlak je dolg do 200 m in
 #: koordinata postaje ni nujno sredina perona; avtobus stoji na točki.
 NA_POSTAJI_M = {"zeleznica": 200, "avtobus": 60}
@@ -843,6 +846,42 @@ _deljenja_casi: dict[str, list[float]] = {}
 _zadnje_deljenje: dict[tuple[str, str], str] = {}
 
 
+# ------------------------------------------------------------ gledalci
+#
+# Koliko ljudi gleda vožnjo, na kateri kdo deli lego: razlog, da potnik
+# deljenja ne ustavi (odločil David 11. 10. 2026). Gledalec je, kdor ima
+# odprto okno vožnje, vlak na velikem zemljevidu ali vrstico s potnikom na
+# tabli ali v iskalniku. Brez identitete: ključ je obiskovalec iz `obisk.py`
+# (sol dneva, brez naslova), samo v pomnilniku, nikoli v bazi.
+
+#: „Gleda zdaj“: v zadnji minuti je vprašal po vožnji (okno vožnje na 30 s).
+GLEDA_S = 60
+_gledalci: dict[str, dict[str, int]] = {}      # trip_id -> {obiskovalec: zadnjič}
+#: Pošiljatelj deljenja kot obiskovalec: sam sebe ne gleda.
+_delilci: dict[str, str] = {}                   # deljenje -> obiskovalec
+
+
+def poglej(trip_id: str, kljuc: str, zdaj_ts: float | None = None) -> None:
+    """Obiskovalec je pravkar videl, kar potniki poročajo o vožnji."""
+    zdaj_ts = int(zdaj_ts if zdaj_ts is not None else time.time())
+    with _zaklep:
+        g = _gledalci.setdefault(trip_id, {})
+        g[kljuc] = zdaj_ts
+        if len(g) > 2000 or len(_gledalci) > 3000:
+            for t in list(_gledalci):
+                _gledalci[t] = {k: c for k, c in _gledalci[t].items()
+                                if zdaj_ts - c <= NAJDALJE_S}
+                if not _gledalci[t]:
+                    del _gledalci[t]
+
+
+def gledalcev(trip_id: str, od_ts: float, razen: str | None = None) -> int:
+    """Koliko različnih obiskovalcev je vožnjo videlo od `od_ts` naprej."""
+    with _zaklep:
+        return sum(1 for k, c in _gledalci.get(trip_id, {}).items()
+                   if c >= od_ts and k != razen)
+
+
 def _pogostost(slovar: dict[str, list[float]], kljuc: str, okno_s: float,
                najvec: int, sporocilo: str, zdaj: float) -> None:
     with _zaklep:
@@ -1001,11 +1040,13 @@ def _tocke(podatki: dict, zdaj_ts: int) -> list[dict]:
 
 
 def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
-            zdaj: datetime | None = None, odjemalec: str = "splet") -> dict:
+            zdaj: datetime | None = None, odjemalec: str = "splet",
+            gledalec: str | None = None) -> dict:
     """Zapiše točke enega deljenja. Vrne stanje in morebiten konec.
 
     Brez `deljenje` v zahtevi se deljenje začne -- a le, če je prva točka
-    na trasi vožnje in vožnja ta hip lahko je tu.
+    na trasi vožnje in vožnja ta hip lahko je tu. `gledalec` je pošiljatelj
+    kot obiskovalec (`obisk.kljuc_zahteve`): med gledalci ga ne štejemo.
     """
     zdaj = zdaj or datetime.now(TZ)
     zdaj_ts = int(zdaj.timestamp())
@@ -1038,10 +1079,15 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
                        podatki.get("vir"))
         d = dict(conn.execute("SELECT * FROM deljenje WHERE id = ?", (ident,)).fetchone())
 
+    if gledalec:
+        with _zaklep:
+            _delilci[ident] = gledalec
+            if len(_delilci) > 5000:
+                _delilci.clear()
     if d["konec"]:
         conn.commit()
         return {"deljenje": ident, "sprejetih": 0, "konec": d["konec"],
-                "stanje": stanje(conn, [trip_id], zdaj).get(trip_id)}
+                "stanje": _s_tabo(conn, d, stanje(conn, [trip_id], zdaj).get(trip_id), zdaj_ts)}
     polnoc = stats.polnoc(dan)
     sprejetih = 0
     for t in tocke:
@@ -1117,7 +1163,26 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
          d["zamuda_s"], d["tock"], d["zunaj"], d["konec"], d["peljal_ts"], ident))
     conn.commit()
     return {"deljenje": ident, "sprejetih": sprejetih, "konec": d["konec"],
-            "stanje": stanje(conn, [trip_id], zdaj).get(trip_id)}
+            "stanje": _s_tabo(conn, d, stanje(conn, [trip_id], zdaj).get(trip_id), zdaj_ts)}
+
+
+def _s_tabo(conn: sqlite3.Connection, d: dict, st: dict | None, zdaj_ts: int) -> dict:
+    """Stanje vožnje in pod `jaz`, kar velja samo za tega potnika: koliko
+    jih ta hip gleda vožnjo, koliko jih je gledalo, odkar deli, kako dolgo
+    deli in s koliko postaj je videl odhod. Zaslon „Hvala“ ga pokaže ob
+    koncu. Aplikacija hrani `stanje` celo (`DeljenjeStoritev`), zato je tu
+    in ne poleg njega.
+    """
+    razen = _delilci.get(d["id"])
+    odhodov = conn.execute(
+        "SELECT COUNT(*) FROM deljenje_prehod WHERE deljenje = ? AND odhod_ts IS NOT NULL",
+        (d["id"],)).fetchone()[0]
+    return {**(st or {}), "jaz": {
+        "gledajo": gledalcev(d["trip_id"], zdaj_ts - GLEDA_S, razen),
+        "gledalo": gledalcev(d["trip_id"], d["zacetek_ts"], razen),
+        "trajanje_s": max(0, d["zadnja_ts"] - d["zacetek_ts"]),
+        "odhodov": odhodov,
+    }}
 
 
 def _se_pelje(conn: sqlite3.Connection, ident: str, along: float, ts: int,
@@ -1287,6 +1352,14 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         now_s = zdaj_ts - stats.polnoc(dan)
         along = glavna["along_m"]
         stoji = glavna["hitrost_ms"] is not None and glavna["hitrost_ms"] < STOJI_MS
+        stoji_s = None
+        if stoji:
+            # Odkar je prišel do tu: lega vzdolž trase ne gre nazaj (`sprejmi`),
+            # zato je to prva točka v `STOJI_OD_M` od sedanje.
+            od = conn.execute(
+                "SELECT MIN(ts) FROM deljenje_tocka WHERE deljenje = ? AND along_m >= ?",
+                (glavna["id"], along - STOJI_OD_M)).fetchone()[0]
+            stoji_s = zdaj_ts - od if od is not None else None
         zamude = sorted(r["zamuda_s"] for r in skupina)
         zamuda = zamude[len(zamude) // 2]
         if stoji:
@@ -1305,6 +1378,8 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
             "lat": glavna["lat"], "lon": glavna["lon"],
             "along_m": round(along),
             "stoji": stoji,
+            # Napis „stoji 3 min“ na zemljevidu; prehiter bi bil šum.
+            "stoji_s": stoji_s,
             # Okno vožnje z njo pomika vlak med poročili (`ocenjenaLega`).
             "hitrost_ms": (None if glavna["hitrost_ms"] is None
                            else round(glavna["hitrost_ms"], 1)),

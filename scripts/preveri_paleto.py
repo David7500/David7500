@@ -309,9 +309,33 @@ def check_cvd(problems: list[str]) -> None:
                                    "   -> zato loceni register (krivulja vs stolpci)"))
 
 
+# Kartica deljenja lege (`deli.css`, `--deli-*` v base.css): besedilo na
+# indigu. Zamuda na njej stoji na podlagi strani (`.deli-zam`), ker temna
+# oranžna na indigu ne doseže niti 3 : 1.
+DELJENJE = [
+    ("besedilo", "#e3e6ff", "#232b55"),
+    ("drugotno", "#c7cdf0", "#232b55"),
+    ("tiho", "#aab3e6", "#232b55"),
+    ("tiho v globlji", "#aab3e6", "#1a2046"),
+    ("gumb", "#1a1d3a", "#b9c3ff"),
+    ("oznaka", "#b9c3ff", "#232b55"),
+]
+
+
+def check_deljenje(problems: list[str]) -> None:
+    print("\nDELJENJE: besedilo na indigu (4.5 za drobno besedilo)")
+    for name, ink, bg in DELJENJE:
+        ratio = contrast(ink, bg)
+        ok = ratio >= 4.5
+        if not ok:
+            problems.append(f"deljenje {name}: kontrast {ratio:.2f}")
+        print(_line(ok, f"{name:20s} {ink} na {bg}  {ratio:5.2f}:1"))
+
+
 def main() -> int:
     problems: list[str] = []
     check_contrast(problems)
+    check_deljenje(problems)
     check_monotone(problems)
     check_cvd(problems)
 

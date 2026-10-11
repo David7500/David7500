@@ -230,6 +230,10 @@ function potnikiKjeText(p) {
   return "";
 }
 
+// „stoji 3 min“: koliko časa, pove `deljenje.stanje` (`stoji_s`); pod
+// minuto samo „stoji“.
+const stojiMin = (p) => (p.stoji_s >= 60 ? `stoji ${Math.floor(p.stoji_s / 60)} min` : "stoji");
+
 function potnikiGlavaHtml() {
   const p = state.run && state.run.potniki;
   if (!p || p.lat == null) return "";
@@ -238,7 +242,7 @@ function potnikiGlavaHtml() {
   const z = p.zamuda;
   return `<div class="detail-potniki">
       <strong>${kdo}</strong>
-      <span>${escapeHtml(potnikiKjeText(p))}${p.stoji ? " · stoji" : ""}${z
+      <span>${escapeHtml(potnikiKjeText(p))}${p.stoji ? ` · ${stojiMin(p)}` : ""}${z
         ? ` · <b style="color:${delayColor(z)}">${escapeHtml(delayText(z))}</b>` : ""}
         · ${p.starost_s < 60 ? "pravkar" : `pred ${Math.round(p.starost_s / 60)} min`}</span>
     </div>`;
@@ -1117,10 +1121,45 @@ posljiEl.addEventListener("click", async () => {
   }
 });
 
+// ---------- deli, kje je ----------
+// Vrstica „Si na tem vlaku? Deli, kje je“ (`deli.js`). Okno vožnje vožnjo
+// pozna, zato potnik ne izbira med kandidati. Samo, ko vožnja vozi ali
+// odpelje v 30 min (odločil David 11. 10. 2026): kdor gleda jutrišnji vlak
+// ali tistega, ki je že na cilju, z njo nima kaj početi.
+const deliEl = document.getElementById("deli");
+const DELI_PRED_MS = 30 * 60 * 1000;
+const DELI_PO_CILJU_MS = 10 * 60 * 1000;
+
+function voziAliKmalu(run) {
+  const stops = run.stops || [];
+  const prvi = stops[0], zadnji = stops[stops.length - 1];
+  const od = prvi && (prvi.sched_dep || prvi.sched_arr);
+  const doIso = zadnji && (zadnji.sched_arr || zadnji.sched_dep);
+  if (!od || !doIso) return false;
+  const zamuda = state.current ? (stopDelay(state.current) || 0) * 1000 : 0;
+  const zdaj = Date.now();
+  return zdaj >= new Date(od).getTime() - DELI_PRED_MS
+    && zdaj <= new Date(doIso).getTime() + Math.max(zamuda, 0) + DELI_PO_CILJU_MS;
+}
+
+function posodobiDeli() {
+  const run = state.run;
+  if (!deliEl || !run || !run.trip_id) return;
+  const d = deliEl.dataset;
+  const nova = d.trip !== run.trip_id;
+  Object.assign(d, { trip: run.trip_id, dan: run.service_date, omrezje: state.network,
+                     mode: run.mode || "", st: run.train_no || TRAIN_NO,
+                     smer: run.headsign || "", prevoznik: run.agency || "" });
+  // Kartica, ki je odprta (deliš ali hvala), ostane, tudi ko vožnja konča.
+  deliEl.hidden = !deliEl.classList.contains("je-odprt") && !voziAliKmalu(run);
+  if (nova) deliEl.dispatchEvent(new Event("deli-voznja"));
+}
+
 function renderRunHead() {
   const run = state.run;
   if (!run) return;
   posljiEl.hidden = false;
+  posodobiDeli();
   // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in gre
   // nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
   const veriga = vehicleChainHtml();

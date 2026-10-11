@@ -18,6 +18,9 @@
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('dashboard.css') }}">
   <link rel="stylesheet" href="{{ s('train.css') }}">
+  {%- if deli %}
+  <link rel="stylesheet" href="{{ s('deli.css') }}">
+  {%- endif %}
 </head>
 <body class="train-page net-{{ network | default('zeleznica') }}"
       data-train-no="{{ train_no }}" data-network="{{ network | default('zeleznica') }}">
@@ -69,6 +72,11 @@
       </div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
+      {#- Si na tem vlaku? Deli, kje je: samo, ko vožnja vozi ali odpelje v
+          30 min (`train.js`, `posodobiDeli`); vožnjo izbere okno, ne potnik. #}
+      {%- if deli %}
+      <section class="deli deli-okno" id="deli" aria-live="polite" hidden></section>
+      {%- endif %}
       <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo lego:
            GPS ali vsaj dva potnika, ki na njem delita lego in se ujemata.
            Vlaki GPS-a nimajo, zato je zanje okvir redek. MapLibre se zato
@@ -154,6 +162,9 @@
   <script src="{{ s('pot_karta.js') }}"></script>
   <script src="{{ s('vozila3d.js') }}"></script>
   <script src="{{ s('train.js') }}"></script>
+  {%- if deli %}
+  <script src="{{ s('deli.js') }}"></script>
+  {%- endif %}
   {{ vec_list() }}
 </body>
 </html>

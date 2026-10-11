@@ -29,6 +29,8 @@ def conn():
     deljenje._kandidati_casi.clear()
     deljenje._deljenja_casi.clear()
     deljenje._zadnje_deljenje.clear()
+    deljenje._gledalci.clear()
+    deljenje._delilci.clear()
     c = db.connect(":memory:")
     db.init(c)
     deljenje.init(c)
@@ -748,3 +750,49 @@ def test_rep_samo_od_potnika_ki_se_je_peljal(conn):
     zacetek = _ob("10:14")
     _pelje(conn, zacetek, 7.72, 0.008, 25, v=0)      # stoji na Bledu
     assert deljenje.rep_od(conn, "t1", zacetek + timedelta(seconds=240)) is None
+
+
+# ------------------------------------------------------------ gledalci in povzetek
+
+def test_gledalci_brez_posiljatelja_zdaj_in_od_zacetka(conn):
+    """Potnik vidi, koliko ljudi gleda njegov vlak -- sam sebe ne šteje."""
+    zacetek = _ob("10:05")
+    ts = zacetek.timestamp()
+    deljenje.poglej("t1", "gost-a", ts - 30)          # pred deljenjem: ne šteje
+    r = deljenje.sprejmi(conn, {"trip_id": "t1", "service_date": zacetek.date().isoformat(),
+                                "tocke": [_tocka(3.0, zacetek)]}, "k", zacetek, gledalec="jaz")
+    deljenje.poglej("t1", "jaz", ts + 5)
+    deljenje.poglej("t1", "gost-b", ts + 10)
+    deljenje.poglej("t1", "gost-c", ts + 60)
+    deljenje.poglej("t2", "gost-d", ts + 20)          # druga vožnja
+    z = zacetek + timedelta(seconds=100)
+    r = _deli(conn, z, _tocka(4.0, z), ident=r["deljenje"])
+    jaz = r["stanje"]["jaz"]
+    assert jaz["gledalo"] == 2                        # b in c
+    assert jaz["gledajo"] == 1                        # c v zadnji minuti
+    assert jaz["trajanje_s"] == 100
+
+
+def test_konec_nosi_povzetek(conn):
+    """Zaslon „Hvala“ dobi trajanje in odhode tudi, ko vožnje ni več med živimi."""
+    zacetek = _ob("10:05")
+    r = _pelje(conn, zacetek, 6.5, 0.15, 12)         # čez Bled
+    z = zacetek + timedelta(seconds=120)
+    r = deljenje.sprejmi(conn, {"trip_id": "t1", "service_date": z.date().isoformat(),
+                                "deljenje": r["deljenje"], "tocke": [_tocka(8.3, z)],
+                                "konec": True}, "k", z)
+    assert r["konec"] == "potnik"
+    assert r["stanje"]["jaz"]["trajanje_s"] == 120
+    assert r["stanje"]["jaz"]["odhodov"] == 1
+
+
+def test_stoji_od_kdaj(conn):
+    """Napis „stoji 3 min“: odkar je vozilo prišlo do tu, ne odkar deli."""
+    zacetek = _ob("10:08")
+    r = _pelje(conn, zacetek, 7.0, 0.15, 5)          # pripelje na Bled
+    for i in range(1, 19):                          # tri minute stoji
+        z = zacetek + timedelta(seconds=40 + 10 * i)
+        r = _deli(conn, z, _tocka(7.6 + (i % 2) * 0.005, z, v=0), ident=r["deljenje"])
+    st = deljenje.stanje(conn, ["t1"], z)["t1"]
+    assert st["stoji"] is True
+    assert 170 <= st["stoji_s"] <= 190

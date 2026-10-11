@@ -68,6 +68,16 @@
   --m-info:      #10283d;
   --m-na-info:   #d6e9ff;
   --m-na-info-2: #9ec3e6;
+  /* Deljenje lege: indigo kot oblika „Deli lego“ na domači strani. Vir
+     potnika ima svojo barvo, ločeno od zamude (oranžna) in tebe (modra);
+     enako na obeh omrežjih. Kontrast v `preveri_paleto.py`. */
+  --deli-kont:     #232b55;
+  --deli-globlje:  #1a2046;
+  --deli-na-kont:  #e3e6ff;
+  --deli-na-kont-2:#c7cdf0;
+  --deli-tiho:     #aab3e6;
+  --deli-gumb:     #b9c3ff;
+  --deli-na-gumb:  #1a1d3a;
 }
 
 * { box-sizing: border-box; }

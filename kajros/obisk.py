@@ -574,13 +574,19 @@ def iz_zahteve(request, koda: int, ms: float) -> None:
     # stran sam -- večinoma nova namestitev.
     iz = "aplikacija" if request.query_params.get("iz") == "aplikacija" else "stran"
     zabelezi(pot=pot, vrsta=vrsta_poti(request.url.path),
-             kljuc=kljuc_obiskovalca(ip_zahteve(glave, _odjemalec(request)),
-                                     ua_za_kljuc(ua), _danes()),
+             kljuc=kljuc_zahteve(request),
              bot=bot, naprava_=naprava(ua),
              drzava=(glave.get("cf-ipcountry") or "??").upper()[:2],
              koda=koda, ms=ms, razlicica=razlicica, okno=okno,
              prenesel=(apk, iz) if apk else None, robot_ime=ime_robota,
              vir=vir)
+
+
+def kljuc_zahteve(request) -> str:
+    """Obiskovalec te zahteve, kot ga šteje obisk: brez naslova, s soljo dneva."""
+    glave = request.headers
+    return kljuc_obiskovalca(ip_zahteve(glave, _odjemalec(request)),
+                             ua_za_kljuc(glave.get("user-agent", "")), _danes())
 
 
 def _odjemalec(request) -> str | None:

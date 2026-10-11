@@ -108,7 +108,7 @@
 /* Deljenje lege: oblika je vabilo, `deli.js` na istem mestu razpre kartico
    čez vso širino (`je-odprt`) in jo po koncu vrne. Vsebina v `deli.css`. */
 .d-deli { flex: 1 1 0; min-width: 0; }
-.d-deli.je-odprt { flex-basis: 100%; padding: 20px; border-radius: 28px; background: var(--bg-raised); }
+.d-deli.je-odprt { flex-basis: 100%; }
 
 /* ---------- moje poti ----------
  *

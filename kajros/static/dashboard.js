@@ -621,7 +621,8 @@ function trainCardHtml(t) {
   const potnik = p && p.lat != null ? [
     [p.n > 1 ? `${potnikov(p.n)} na vlaku` : "potnik na vlaku",
      `${p.pri ? escapeHtml(`pri postaji ${p.pri}`) : p.med
-       ? escapeHtml(`med postajama ${p.med[0]} in ${p.med[1]}`) : "—"}${p.zamuda
+       ? escapeHtml(`med postajama ${p.med[0]} in ${p.med[1]}`) : "—"}${p.stoji
+       ? p.stoji_s >= 60 ? ` · stoji ${Math.floor(p.stoji_s / 60)} min` : " · stoji" : ""}${p.zamuda
        ? ` · <span style="color:${delayColor(p.zamuda)}">${escapeHtml(delayText(p.zamuda))}</span>` : ""}`],
     ...(p.starost_s != null ? [["poročilo", `pred ${ageHtml(p.starost_s)}`]] : []),
   ] : [];
@@ -971,7 +972,8 @@ function novoPorocilo(trip, vrstice) {
   s.since = Date.now();
   if (t && t.potnik) {
     Object.assign(t.potnik, { n: v.potnikov, starost_s: v.age_s, zamuda: v.zamuda,
-                              pri: v.pri, med: v.med });
+                              pri: v.pri, med: v.med, stoji: v.speed_ms === 0,
+                              stoji_s: v.stoji_s });
   }
   premakniPotniske();
   // Odprta kartica dobi nov kraj in starost; zaprta se izriše ob odprtju.
@@ -1041,8 +1043,15 @@ function premakniPotniske() {
     const stara = starost > POROCILO_STARO_S;
     if (vklop.train) repVlaka(s, lega, stara, rep, ocena);
     mk.getElement().classList.toggle("je-ocena", stara);
+    // Pod številko vlaka: starost poročila, kadar je vlak na oceni, sicer
+    // koliko časa stoji -- od minute naprej, krajši postanek je vsakdanji.
     const napis = mk.__label.querySelector(".train-label-starost");
-    if (napis) napis.textContent = stara ? `poročilo pred ${Math.round(starost)} s` : "";
+    const stoji = s.v.speed_ms === 0 && s.v.stoji_s != null
+      ? s.v.stoji_s + (Date.now() - s.since) / 1000 : null;
+    if (napis) {
+      napis.textContent = stara ? `poročilo pred ${Math.round(starost)} s`
+        : stoji >= 60 ? `stoji ${Math.floor(stoji / 60)} min` : "";
+    }
     if (izbrana && izbrana.vlak && izbrana.trip === trip) {
       const l = [s.ocena.lat, s.ocena.lon];
       if (!s.rez || razdaljaM(s.rez, l) > POTNIK_RAZREZ_M) {

@@ -806,7 +806,8 @@ def _deli(request: Request, podatki: dict):
         with _conn() as conn:
             if podatki.get("trip_id"):
                 try:
-                    return deljenje.sprejmi(conn, podatki, kljuc, odjemalec=odjemalec)
+                    return deljenje.sprejmi(conn, podatki, kljuc, odjemalec=odjemalec,
+                                            gledalec=obisk.kljuc_zahteve(request))
                 except deljenje.Zavrnjeno as e:
                     # Lijak šteje samo zavrnjene začetke; deljenje, ki že
                     # teče, se konča po svoje (`konec`).
@@ -830,7 +831,8 @@ def _deli(request: Request, podatki: dict):
             conn.commit()
             return {"kandidati": kandidati}
     except deljenje.Zavrnjeno as e:
-        return JSONResponse({"napaka": str(e)}, status_code=e.status)
+        # `koda`: okno vožnje iz nje pove, kaj storiti („deli, ko vstopiš“).
+        return JSONResponse({"napaka": str(e), "koda": e.koda}, status_code=e.status)
 
 
 @app.get("/zasebnost", response_class=HTMLResponse, include_in_schema=False)
@@ -1604,6 +1606,7 @@ def api_departures(
     network: str = NETWORK_Q,
     smer: str | None = Query(None, max_length=80,
                              description="stran ceste: `kljuc` iz `smeri`"),
+    request: Request = None,
 ):
     """Odhodna ali prihodna tabla postaje.
 
@@ -1650,6 +1653,7 @@ def api_departures(
         if now_s is not None and config.DELI:
             deljenje.dopolni(conn, rows, seq="stop_seq", t_s="t_s",
                              pricakovano="expected", ura="sched", zdaj=now)
+            _gledajo(request, _z_zivim_porocilom(rows))
         # Linije LPP, ki danes vozijo mimo voznega reda (zapora): njihovi
         # odhodi so z LPP-jevega zaslona, ne iz voznega reda. Samo za "zdaj" --
         # LPP napove uro naprej, ne izbrane ure zvečer.
@@ -1952,7 +1956,7 @@ def _vozilo_po_potnikih(conn, trip_id: str, zdaj: datetime,
             "speed_ms": hitrost,
             "speed_kmh": None if hitrost is None else round(hitrost * 3.6),
             "age_s": st["starost_s"], "delay_s": st["zamuda_s"],
-            "vir": "potniki", "potnikov": st["n"],
+            "vir": "potniki", "potnikov": st["n"], "stoji_s": st.get("stoji_s"),
             # Kartica vlaka na velikem zemljevidu bere lego na 5 s, ne le na
             # 30 s iz `/api/live`: kraj in zamuda morata iti z njo.
             "zamuda": st.get("zamuda"), "pri": st.get("pri"), "med": st.get("med"),
@@ -1960,7 +1964,7 @@ def _vozilo_po_potnikih(conn, trip_id: str, zdaj: datetime,
 
 
 @app.get("/api/vehicles")
-def api_vehicles(trip: str | None = None):
+def api_vehicles(trip: str | None = None, request: Request = None):
     """Trenutna lega vozil z GPS.
 
     Feed `vehicle_positions` nosi **samo avtobuse**. Za vlak lege ni in je
@@ -2010,12 +2014,33 @@ def api_vehicles(trip: str | None = None):
         out, potniki = _s_potniki_na_legah(conn, out, zdaj, trip)
         if potniki:
             cez = deljenje.POSILJANJE_S
+            if trip is not None:
+                _gledajo(request, [trip])
         elif trip is not None and not out:
             omrezje = conn.execute("SELECT network FROM trip WHERE trip_id = ?",
                                    (trip,)).fetchone()
             if omrezje and omrezje["network"] == "zeleznica":
                 cez = BREZ_LEGE_CEZ_S
     return JSONResponse(out, headers={"X-Osvezi-Cez": str(cez)})
+
+
+def _gledajo(request: Request | None, trip_ids) -> None:
+    """Obiskovalec je videl, kar potnik poroča o teh vožnjah, ta hip.
+    Potnik na vlaku vidi tako število ljudi, ki ga gledajo (`deljenje.poglej`).
+    Roboti niso ljudje."""
+    ids = {t for t in trip_ids if t}
+    if not ids or request is None or obisk.je_bot(request.headers.get("user-agent", "")):
+        return
+    kljuc = obisk.kljuc_zahteve(request)
+    for t in ids:
+        deljenje.poglej(t, kljuc)
+
+
+def _z_zivim_porocilom(vrstice: list[dict]) -> list[str]:
+    """Vožnje v tabli ali iskalniku, o katerih ta hip poroča potnik --
+    prehod izpred ure ni nekdo, ki se zdaj pelje."""
+    return [r["trip_id"] for r in vrstice
+            if (r.get("potniki") or {}).get("starost_s") is not None]
 
 
 def _s_potniki_na_legah(conn, out: list[dict], zdaj: datetime,
@@ -2179,7 +2204,8 @@ def _lpp_zivo(conn, trip_id: str | None, rows: list[dict], service_date: str,
 
 @app.get("/api/train/{train_no}/run")
 def api_run(train_no: str, date: str | None = None,
-            trip: str | None = Query(None, description="id vožnje, kadar številka ni enolična")):
+            trip: str | None = Query(None, description="id vožnje, kadar številka ni enolična"),
+            request: Request = None):
     """Ena vožnja: vozni red, zamuda in izračunani dejanski časi.
 
     `trip` je potreben pri avtobusih: `route_short_name` je številka linije in
@@ -2274,6 +2300,8 @@ def api_run(train_no: str, date: str | None = None,
                 potniki = None
         if potniki:
             meja_seq = _potniki_v_okno(conn, razresen, rows, potniki, meja_seq)
+            if potniki.get("along_m") is not None:
+                _gledajo(request, [razresen])
         # Kje lahko vlak naprej po progi izgubi čas: zapora tira, vlak pred
         # njim. Opozorilo, ne popravek napovedi (`zapore.py`).
         opozorila, dodatek = [], {}
@@ -2679,6 +2707,7 @@ def api_connections(
     date: str | None = None,
     with_transfers: bool = Query(True, description="poišči tudi zveze z enim prestopom"),
     network: str = NETWORK_Q,
+    request: Request = None,
 ):
     """Vožnje od postaje do postaje na dani dan, z zadnjo znano zamudo.
 
@@ -2707,6 +2736,7 @@ def api_connections(
         if now_s is not None and config.DELI:
             deljenje.dopolni(conn, rows, seq="from_seq", t_s="dep_s",
                              pricakovano="expected_dep", ura="sched_dep", zdaj=now)
+            _gledajo(request, _z_zivim_porocilom(rows))
         # Prestop ponudimo vedno, ne sele ko neposredne ni: cez dan je
         # neposrednih voznj lahko pet, med njimi pa stiri ure luknje.
         #
@@ -2838,7 +2868,7 @@ def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
         st = stanje.get(r["trip_id"])
         if st and r.get("service_date") == st["service_date"]:
             potnik = {k: st[k] for k in (
-                "lat", "lon", "n", "verodostojno", "starost_s", "stoji",
+                "lat", "lon", "n", "verodostojno", "starost_s", "stoji", "stoji_s",
                 "zamuda_s", "zamuda", "pri", "med") if k in st}
             # Smer proge pod potnikom: zemljevid tam od blizu nariše vlak.
             v = deljenje.voznja(conn, r["trip_id"])

@@ -24,6 +24,20 @@ Potnik na vozilu deli lego; drugi vidijo, kje je vozilo. Razlog: `docs/MERITVE.m
 * **Samo dokler so poročila sveža** (`SVEZE_S`, 120 s) **in deljenje teče** (`konec IS NULL`). Prehodi so opažanja in veljajo ves dan, tudi ko je poročevalec izstopil.
 * **En pošiljatelj = en poročevalec.** Kdor na isti vožnji začne znova (osvežena stran, izgubljen odgovor na prvo pošiljanje), konča prejšnje deljenje (`konec = 'znova'`, od 1. 10. 2026; prej `potnik` kot gumb Ustavi in se ni dalo ločiti); sicer bi en telefon dal soglasje dveh. Preslikava pošiljatelj → deljenje samo v pomnilniku. Pošiljatelj = naslov, za CGNAT si ga deli več ljudi: `znova`, medtem ko staro deljenje še pošilja, je lahko drug potnik na istem vlaku.
 
+## Zasloni (prototip potrjen 11. 10. 2026)
+
+Platno „Deljenje lege: zasloni“ (https://claude.ai/artifact/7HtH4tb627i9HpGnWbaXoo). Kartica je **indigo** (`--deli-*` v base.css, kontrast v `preveri_paleto.py`) na vseh straneh in obeh omrežjih: vir potnika ima svojo barvo, oranžna ostane zamuda. Zamuda na kartici stoji na podlagi strani (`.deli-zam`): `--d-big` na indigu 2,8 : 1.
+
+* **Okno vožnje: vrstica „Si na tem vlaku? Deli, kje je“** (`deli-okno`, `train.js` `posodobiDeli`). Vožnjo pozna okno, zato ni izbire: ena lega z natančnostjo do 120 m in strežnik preveri, ali je potnik ob progi in vozilo tu (`vir = okno`). **Samo, ko vožnja vozi ali odpelje v 30 min, do 10 min po prihodu na cilj** (David). Zavrnitev pove, kaj storiti: `ni_tu`/`ne_vozi` „Deli, ko vstopiš“, `ni_na_trasi` „Nisi ob progi“ (`koda` v odgovoru `/api/deli`). Strežnik začetek sprejme 15 min pred voznim redom (`KANDIDAT_PRED_S`), vrstica se pokaže 30 min prej -- kdor čaka na peronu, dobi „deli, ko vstopiš“.
+* **Izbira** (domača stran, iskalnik): ikona v barvi vozila, prvi kandidat „najbolj verjetno“, opomba, da gre iz okna vožnje hitreje.
+* **Deliš, drugi te še ne vidijo**: dva koraka (lega na progi ✓, „ko vlak spelje, te pokažemo“), v brskalniku nasvet o zaslonu in povezava na `/android`.
+* **Drugi te vidijo** (verodostojno): „ta vlak gleda N ljudi“, kraj s hitrostjo ali „stoji N min“, zamuda „je zdaj na tablah“; zunaj okna povezava na zemljevid.
+* **Hvala**: koliko minut je delil, potrjeni odhodi, koliko ljudi je gledalo (`jaz` v `stanje` odgovora). Brez spola v besedilu („Deljenje se je ob izstopu ustavilo samo“).
+
+**Gledalci** (`deljenje.poglej`, `gledalcev`): kdor je v zadnji minuti vprašal po vožnji z živim poročilom -- okno vožnje (`/api/train/{no}/run`), vlak na velikem zemljevidu ali okno (`/api/vehicles?trip=`), vrstica s potnikom na tabli ali v iskalniku. Ključ je obiskovalec iz `obisk.py` (`kljuc_zahteve`: sol dneva, brez naslova), **samo v pomnilniku**; pošiljatelj sam ni gledalec (`_delilci`), roboti niso. Po ponovnem zagonu strežnika začne od nič.
+
+**Koliko časa stoji** (`stanje()["stoji_s"]`): od prve točke v 40 m od sedanje lege (`STOJI_OD_M`; lega vzdolž trase ne gre nazaj). Napis od minute naprej: „stoji 3 min“ na velikem zemljevidu, kartici in v oknu vožnje.
+
 ## Kaj se hrani
 
 Točke **projicirane na traso** (`deljenje_tocka`: razdalja vzdolž, odmik, čas, natančnost, hitrost) — brez surovih koordinat in brez identitete. Hranijo se za kasnejše izboljšanje modela (Davidova zahteva). Lega pred potrditvijo vozila ne gre nikamor; kandidati so `POST`, da koordinate ne pristanejo v dnevnikih strežnika in tunela. `/zasebnost` to pove.
