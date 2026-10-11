@@ -17,7 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (alerts, brskalnik, collector, config, db, deljenje, gtfs, nap, obisk,
-               ocena, opozorila, peroni, pripni, stats, stik, viri, weather,
+               ocena, opozorila, ovire_sz, peroni, pripni, stats, stik, viri, weather,
                zamude_lpp, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -291,6 +291,16 @@ def _zazeni_zamude_sz() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=zamude_sz.teci, args=(_stop, _log), daemon=True,
                            name="kajros-zamude-sz")
+    nit.start()
+    return nit
+
+
+def _zazeni_ovire_sz() -> threading.Thread | None:
+    """Ovire s strani SŽ, v svoji niti kot zemljevid in table."""
+    if not config.OVIRE_SZ:
+        return None
+    nit = threading.Thread(target=ovire_sz.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-ovire-sz")
     nit.start()
     return nit
 
@@ -591,6 +601,7 @@ def run_collector() -> None:
     _log(_describe(s))
     _zazeni_perone()
     _zazeni_zamude_sz()
+    _zazeni_ovire_sz()
     try:
         _worker(**s)
     except KeyboardInterrupt:
@@ -644,11 +655,12 @@ async def lifespan(app):
         _log(_describe(settings))
         peroni_nit = _zazeni_perone()
         sz_nit = _zazeni_zamude_sz()
+        ovire_nit = _zazeni_ovire_sz()
         lpp_nit = _zazeni_zamude_lpp()
         nap_nit = _zazeni_nap()
         _zazeni_opozorila()
     else:
-        peroni_nit = sz_nit = lpp_nit = nap_nit = None
+        peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -660,6 +672,8 @@ async def lifespan(app):
             peroni_nit.join(timeout=5)
         if sz_nit:
             sz_nit.join(timeout=5)
+        if ovire_nit:
+            ovire_nit.join(timeout=5)
         if lpp_nit:
             lpp_nit.join(timeout=5)
         if nap_nit:

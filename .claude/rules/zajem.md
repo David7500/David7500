@@ -7,6 +7,7 @@ paths:
   - "kajros/peroni.py"
   - "kajros/brskalnik.py"
   - "kajros/zamude_sz.py"
+  - "kajros/ovire_sz.py"
   - "kajros/iz_lege.py"
   - "kajros/viri.py"
   - "kajros/nap.py"
@@ -71,7 +72,7 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas = `
   **Poročilo velja samo za svoj prometni dan in samo, dokler je novejše od naše meritve.** `api._live` je do 5. 10. 2026 včerajšnja in današnja poročila združil po številki vlaka: današnja vožnja brez poročila je nosila včerajšnje. Ob 21:33 tako 4 od 22 živih vlakov (LPV 2427 na zemljevidu v Ljubljani z +11, v resnici v Kranju s +4; poročilo staro 23,6 h). Poročilo, starejše od `feed_ts` zadnje meritve, napoveduje za postajo, ki je morda že prevožena.
 
 * **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
-* **Zakaj vlak zamuja, pove `service_alerts`.** `SZ-OVIRA-*` = dela na progi, nadomestni prevozi, združene garniture, vezani na `route_id` (1 : 1 s tripom → znamo pripeti na številko vlaka). Avgusta 2026 ~45 hkrati -- nadomestni prevoz Ljubljana–Logatec in Divača–Koper do 12. decembra, zapore enega tira Celje–Šentjur, Poljčane–Pragersko, Maribor–Hoče. **To pojasni, zakaj so zamude v zajetih dneh tako velike.**
+* **Zakaj vlak zamuja, povedo ovire** (od 11. 10. 2026 s strani SŽ, `ovire_sz.py`, spodaj; prej `service_alerts` derp.si). `SZ-OVIRA-*` = dela na progi, nadomestni prevozi, združene garniture, vezani na `route_id` (1 : 1 s tripom → znamo pripeti na številko vlaka). Avgusta 2026 ~45 hkrati -- nadomestni prevoz Ljubljana–Logatec in Divača–Koper do 12. decembra, zapore enega tira Celje–Šentjur, Poljčane–Pragersko, Maribor–Hoče. **To pojasni, zakaj so zamude v zajetih dneh tako velike.**
 
 * **Odpovedi niso strukturirane.** GTFS-RT ima `schedule_relationship` (CANCELED, SKIPPED), a SŽ ga ne uporablja -- v vseh zajetih zapisih `SCHEDULED`. Odpoved sporočijo z besedilom obvestila ("Vlak vozi samo do postaje Ljubljana Šiška", `effect = 6`). Zajem polje šteje in ob prvi neničelni vrednosti zavpije v dnevnik; prikaza namenoma še ni — bil bi prikaz za podatek, ki ne obstaja.
 
@@ -269,6 +270,15 @@ Polje `Vrsta` (10. 10. 2026, 84 branj po 15 s):
 **Svežina, izmerjeno 10. 10. 2026** (MERITVE): tabla zamud SŽ (`/pomoc-uporabnikom-in-stanje-v-prometu/`, samo ≥ 3 min) in zemljevid kažeta isto minuto v 1 175 od 1 183 parov; zamudil.si sledi tabli z mediano 14 s, p90 29 s.
 
 **Beremo na 5 s, ker SŽ zemljevid preračuna na 15** (55 od 55 sprememb natanko 15 s narazen; njihova stran ga vpraša na 15 s, `setInterval(…, 15e3)`). Na 5 s novo stanje ujamemo v največ 5 s; nespremenjen odgovor (dve branji od treh) samo potrdi, da vir živi, in ne premakne časa zadnjega podatka (`korak(..., nespremenjeno=True)`). **Tabla zamud se ne bere** (odločeno 11. 10. 2026 po dnevu v senci, MERITVE): ob branju table na 15 s in zemljevida na 5 s je isto minuto vožnje pokazala z mediano −0,5 s (246 parov; tabla > 2 s prej 106-krat, zemljevid 32-krat), torej je pri SŽ le ~5 s pred zemljevidom -- sekunde na zamudi v celih minutah, za 40 kB na 15 s in deset odgovorov 500 v 10 h. Pripeti bi se dala le tretjina vrstic (ob 9:52 6 od 18): tabla nima ure in piše **prometno mesto, kjer je bila zamuda sporočena**, ne postanka (IC 350 „Ponikva“, kjer ne ustavi), včasih postajo, ki jo je zemljevid že prevozil. Koda sence je v gitu (3c965ab); nazaj samo z novo meritvijo.
+
+## Ovire s strani SŽ (`ovire_sz.py`, od 11. 10. 2026)
+
+Ovire so na `potniski.sz.si/pomoc-uporabnikom-in-stanje-v-prometu/` v HTML kot `var roadworks = [...]` (skupine po kraju, polja vzporedni seznami: `ID_ovire`, `Naslov`, `Opis`, `Cas`, `Relacija`, `ID_vrste`). Prej: stran → `api.modra.ninja/sz/ovire_raw` → derp.si `service_alerts` → mi. Zdaj stran beremo sami, z istim Chromom, vsakih 5 min (`KAJROS_OVIRE_SZ_SECONDS`), v svoji niti. Stran ima 440 kB.
+
+* **Obvestilo je enako derp-ovemu**, preverjeno na produkciji 11. 10. 2026: 49 od 49 z istim `alert_id`, naslovom, opisom, vzrokom, učinkom in obdobjem. Besedilo: prelomi v presledke, robovi, šele nato oznake HTML (obratni vrstni red pusti presledek na začetku). Veljavnost od polnoči do 23:59:59; en sam dan nima konca.
+* **Vezi na vlake so izračun** (derp-ovo pravilo): relacija z „ - “ zadene vsako progo vlaka z vsaj dvema od naštetih postaj, brez „ - “ so naštete postaje. Računajo se **ob vsakem branju**, pišejo ob spremembi. derp.si jih je zapisal enkrat, ob prvem pogledu: ovira 11155 (Uršna sela - Črnomelj), prvič vidna 28. 9. 2026, ko je bil zip brez vlakov, je imela 0 vlakov, po novem 31; 11171 (Pragersko - Maribor, 30. 9.) 64 namesto 97. Pri 10 drugih je razlika le v vožnjah brez voznega reda (nagrobniki). Imena se primerjajo brez presledkov in vezajev, ločilo je vezaj s presledkom vsaj na eni strani: SŽ piše „Zidani Most -Hrastnik“ (zapora, derp.si 0 vlakov, zdaj 58) in „Lesce Bled“, vozni red „Lesce-Bled“. Brez vlakov ostane 7 od 49 -- nadomestni prevozi v tujino in Ljubljana - Ljubljana Šiška.
+* **Vodi slovenske ovire**: dokler je stran prebrana v zadnjih treh obhodih (`alerts.ovire_vodi_sz`), `alerts.ingest` derp-ovih slovenskih `SZ-OVIRA` ne piše (števec `ovir_vodi_sz`); angleških stran nima, te ostanejo derp.si. Ob molku derp.si piše vse kot prej.
+* Ovira, ki jo SŽ umakne pred rokom, ostane do `end_ts` -- tako je bilo tudi prej; 11. 10. 2026 je bila taka ena (angleška).
 
 ## Zamude mestnega LPP z LPP-jevih zaslonov (`zamude_lpp.py`, od 8. 10. 2026)
 

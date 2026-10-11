@@ -482,8 +482,9 @@ const najslabse = (razredi) => razredi.reduce((a, r) => (RANG[r || ""] > RANG[a]
 /** Kako se pri katerem viru imenuje žig v bazi (`viri.zapisano`). */
 const ZAPIS_IME = {
   derp_zamude: "zadnje branje v bazi", derp_lpp: "zadnje branje v bazi",
-  derp_ovire: "obvestilo nazadnje v feedu", nap: "nit nazadnje zapisala",
+  derp_ovire: "angleška ovira nazadnje v feedu", nap: "nit nazadnje zapisala",
   zamude_sz: "nit nazadnje zapisala", zamude_lpp: "nit nazadnje zapisala",
+  ovire_sz: "nit nazadnje zapisala",
   peroni: "zadnja prebrana tabla", gtfs_ijpp: "zadnji uvoz", gtfs_lpp: "zadnji uvoz",
   vreme: "zadnji prenos",
 };
@@ -522,8 +523,14 @@ function podrobnostiVira(kljuc, d) {
       `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : null);
   } else if (kljuc === "derp_lpp") {
     dodaj("vožnje brez voznega reda", nez("lpp"));
-  } else if (kljuc === "derp_ovire") {
+  } else if (kljuc === "ovire_sz") {
     dodaj("ovir zdaj", st(z.alerts_active));
+    const os = z.ovire_sz;
+    if (os && os.ovir != null) {
+      dodaj("na strani", `${st(os.ovir)} ovir · novih ${st(os.novih)} · brez vlakov ${st(os.brez_vezi)}`
+        + (os.vezi_spremenjenih ? ` · vezi spremenjenih ${st(os.vezi_spremenjenih)}` : ""));
+    }
+    dodaj("brskalnik", opisBrskalnika((d.stroj || {}).brskalnik));
   } else if (kljuc === "nap" && z.nap) {
     const nm = z.nap;
     if (nm.vozil != null) {

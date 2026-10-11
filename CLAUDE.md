@@ -31,13 +31,13 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vozni red | `gitlab.com/.../IJPP/latest/ijpp_gtfs.zip` (41 MB) | ~1×/dan |
 | Zamude | `rt.gtfs.derp.si/sources/ijpp/trip_updates` | 30 s |
 | Mestni LPP, vse troje | `rt.gtfs.derp.si/sources/lpp/all` + `avl.lpp.si/transit/api/gtfs` | 30 s |
-| Ovire in žive zamude | `.../service_alerts` | 60 s |
 | Lega vozil | `.../vehicle_positions` | 10 s (`KAJROS_POSITION_SECONDS`) |
 | Vreme | `open-meteo.com` (ima arhiv za nazaj) | dnevno |
 | Zamude vlakov — **vodijo** (derp.si jih ima isto, prek posrednika) | zemljevid potniski.sz.si, `admin-ajax.php?action=aktivni_vlaki`, s Chromom | 5 s (SŽ preračuna na 15) |
 | Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
 | Tir vlaka | tabla postaje na potniski.sz.si, s Chromom | ~10 min na postajo |
+| Ovire — **vodijo** (angleške in ob molku `.../service_alerts`) | stran stanja v prometu na potniski.sz.si (`var roadworks`), s Chromom | 5 min |
 | Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, ki od 7. 10. 2026 spusti le Chrome z oknom — beremo jo s Chromom pod Xvfb (`brskalnik.py`, namestitev `deploy/brskalnik.sh`); stari SOAP mrtev. Zip vsebuje **ves** slovenski javni potniški promet (pet agencij), ne le železnice; `config.RAIL_AGENCY_ID` = edino, kar jih loči. **Vsak vir je opisan enkrat, v `kajros/viri.py`** (naslov, ritem, izvor, licenca, kaj storiti ob izpadu); vsak klic na tuj strežnik gre skozi `viri.branje()`, sicer ga /admin ne vidi (`test_vsak_klic_na_tuj_streznik_je_v_registru`).
@@ -82,6 +82,7 @@ kajros/
   brskalnik.py   Chrome za potniski.sz.si (CDP na localhostu, Xvfb): edina pot mimo Cloudflara
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; vodi vlake, derp.si le ob molku
+  ovire_sz.py    ovire s strani SŽ, svoja nit; vodi slovenske ovire, derp.si le ob molku
   zamude_lpp.py  zamude mestnega LPP z LPP-jevih zaslonov, svoja nit; vozilo -> vožnja prek derp.si
   nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti

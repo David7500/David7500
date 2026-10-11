@@ -123,6 +123,14 @@ PERONI_SECONDS = int(okolje("PERONI_SECONDS", "600"))
 SZ_ZAMUDE = okolje("SZ_ZAMUDE", "1") != "0"
 SZ_ZAMUDE_SECONDS = int(okolje("SZ_ZAMUDE_SECONDS", "5"))
 
+# **Ovire s strani SŽ** (`ovire_sz.py`), prebrane z brskalnikom. Vodijo
+# slovenska obvestila o ovirah; derp.si (ki isto stran bere prek
+# api.modra.ninja na 2 min) jih piše le, kadar stran ni prebrana
+# (`alerts.ovire_vodi_sz`). Nove ovire pridejo 0--18 na dan (21. 9.--11. 10.
+# 2026), stran pa ima 440 kB, zato na 5 min. Izklopi se s `KAJROS_OVIRE_SZ=0`.
+OVIRE_SZ = okolje("OVIRE_SZ", "1") != "0"
+OVIRE_SZ_SECONDS = int(okolje("OVIRE_SZ_SECONDS", "300"))
+
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in
 # na relacijah, kjer vlak ne vozi (Ljubljana - Logatec, Divača - Koper), so

@@ -220,7 +220,7 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     windows = _rail_trip_windows(conn)
     valid = _service_dates(conn, now)
 
-    n_alerts = n_entities = n_reports = n_changed = 0
+    n_alerts = n_entities = n_reports = n_changed = n_prepuscenih = 0
 
     vec_obdobij = 0
     for entity in feed.entity:
@@ -238,22 +238,15 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
             vec_obdobij += 1
         period = a.active_period[0] if a.active_period else None
 
-        known = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
-                             (entity.id,)).fetchone() is not None
-        conn.execute(
-            "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
-            "                  header, description, url, lang, first_seen, last_seen) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(alert_id) DO UPDATE SET "
-            "  last_seen = excluded.last_seen, header = excluded.header,"
-            "  description = excluded.description, cause = excluded.cause,"
-            "  effect = excluded.effect, start_ts = excluded.start_ts,"
-            "  end_ts = excluded.end_ts",
-            (entity.id, kind, a.cause or None, a.effect or None,
-             period.start or None if period else None,
-             period.end or None if period else None,
-             header, desc, url, lang, seen_at, seen_at),
-        )
+        # Slovenske ovire piše stran SŽ sama (`ovire_sz`), dokler jo beremo:
+        # derp.si ima iste, z dvema posrednikoma vmes. Angleških stran nima.
+        if kind == "ovira" and lang == "sl" and ovire_vodi_sz():
+            n_prepuscenih += 1
+            continue
+        known = zapisi(conn, entity.id, kind, a.cause or None, a.effect or None,
+                       period.start or None if period else None,
+                       period.end or None if period else None,
+                       header, desc, url, lang, seen_at)
         n_alerts += 1
 
         # Prizadete poti se pri obstojecem obvestilu ne spreminjajo. Brez tega
@@ -308,7 +301,50 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
     # Samo kadar se zgodi -- v izpisu zajema naj ne stoji vsakih 60 s nicla.
     if vec_obdobij:
         izid["vec_obdobij"] = vec_obdobij
+    if n_prepuscenih:
+        izid["ovir_vodi_sz"] = n_prepuscenih
     return izid
+
+
+def zapisi(conn: sqlite3.Connection, alert_id: str, kind: str, cause: int | None,
+           effect: int | None, start_ts: int | None, end_ts: int | None,
+           header: str | None, desc: str | None, url: str | None, lang: str | None,
+           seen_at: int) -> bool:
+    """Eno obvestilo v `alert`. Vrne, ali je bilo že znano."""
+    known = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
+                         (alert_id,)).fetchone() is not None
+    conn.execute(
+        "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
+        "                  header, description, url, lang, first_seen, last_seen) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(alert_id) DO UPDATE SET "
+        "  last_seen = excluded.last_seen, header = excluded.header,"
+        "  description = excluded.description, cause = excluded.cause,"
+        "  effect = excluded.effect, start_ts = excluded.start_ts,"
+        "  end_ts = excluded.end_ts",
+        (alert_id, kind, cause, effect, start_ts, end_ts,
+         header, desc, url, lang, seen_at, seen_at),
+    )
+    return known
+
+
+#: Kdaj je nit `ovire_sz` nazadnje prebrala stran SŽ. V pomnilniku, kot
+#: `iz_lege._sz_ts`: vodenje velja za ta proces, ne za bazo.
+_ovire_sz_ts = 0.0
+#: Toliko po zadnjem branju strani SŽ ovire spet piše derp.si. Trije
+#: zgrešeni obhodi (`config.OVIRE_SZ_SECONDS`, privzeto 5 min).
+OVIRE_VODI_OBHODOV = 3
+
+
+def ovire_sz_prebrane(zdaj: float | None = None) -> None:
+    global _ovire_sz_ts
+    _ovire_sz_ts = time.time() if zdaj is None else zdaj
+
+
+def ovire_vodi_sz(zdaj: float | None = None) -> bool:
+    """Ali slovenske ovire ta hip piše stran SŽ (`ovire_sz`), ne derp.si."""
+    zdaj = time.time() if zdaj is None else zdaj
+    return zdaj - _ovire_sz_ts <= OVIRE_VODI_OBHODOV * config.OVIRE_SZ_SECONDS
 
 
 def poll_once(conn: sqlite3.Connection) -> dict:

@@ -82,6 +82,12 @@ def _zamude_sz_pot() -> str:
     return AKTIVNI
 
 
+def _ovire_vodi_min() -> int:
+    # Uvoz ob klicu: `alerts` prek `collector` uvozi ta modul.
+    from .alerts import OVIRE_VODI_OBHODOV
+    return OVIRE_VODI_OBHODOV * config.OVIRE_SZ_SECONDS // 60
+
+
 def _okolje_vklop(ime: str) -> bool:
     return config.okolje(ime, "1") != "0"
 
@@ -130,7 +136,7 @@ def vsi() -> tuple[Vir, ...]:
         Vir("derp_ovire", "derp.si · obvestila IJPP", "zivo",
             "Ovire na progi in nadomestni prevozi (SZ-OVIRA); poročila o zamudi "
             "(SZ-DELAY) le, kadar zemljevid SŽ ni prebran.",
-            "edini vir ovir in nadomestnih prevozov",
+            "rezerva za ovire, ko strani SŽ ne preberemo; edini vir angleških",
             config.SERVICE_ALERTS_URL,
             "DERP (derp.si) iz potniski.sz.si prek api.modra.ninja", "CC BY-SA 4.0",
             "izklopljeno" if ovire <= 0 else f"vsakih {ovire} s",
@@ -162,6 +168,16 @@ def vsi() -> tuple[Vir, ...]:
             f"{brskalnik.IZVOR}{_zamude_sz_pot()}", "SŽ (potniski.sz.si), brez posrednika",
             "ni navedena", f"vsakih {config.SZ_ZAMUDE_SECONDS} s",
             "kajros-zamude-sz", config.SZ_ZAMUDE, ("zamude_sz",), brskalnik_ukrep,
+            preveri=brskalnik.ZACETNA, preveri_ok=(403,)),
+        Vir("ovire_sz", "stran SŽ · ovire", "izvirniki",
+            "Ovire na progi, dela in nadomestni prevozi s strani potniski.sz.si "
+            "(var roadworks); beremo jo sami, s Chromom.",
+            f"vodi slovenske ovire; ko stran ni prebrana {_ovire_vodi_min()} min, "
+            "jih spet piše derp.si (ista stran prek api.modra.ninja)",
+            f"{brskalnik.IZVOR}/pomoc-uporabnikom-in-stanje-v-prometu/",
+            "SŽ (potniski.sz.si), brez posrednika", "ni navedena",
+            f"vsakih {config.OVIRE_SZ_SECONDS // 60} min", "kajros-ovire-sz",
+            config.OVIRE_SZ, (), brskalnik_ukrep,
             preveri=brskalnik.ZACETNA, preveri_ok=(403,)),
         Vir("zamude_lpp", "LPP · zasloni postajališč", "izvirniki",
             "Prihodi z LPP-jevih zaslonov na ~75 postajališčih, pripeti na vožnje.",
@@ -487,7 +503,10 @@ def _ena(conn, sql: str, *arg) -> int | None:
 _ZAPISANO: dict[str, Callable] = {
     "derp_zamude": lambda c, z: _meta_ts(c, "rt_fetched"),
     "derp_lpp": lambda c, z: _meta_ts(c, "lpp_rt_fetched"),
-    "derp_ovire": lambda c, z: _ena(c, "SELECT MAX(last_seen) FROM alert"),
+    # Angleške ovire piše samo derp.si, slovenske ob branju strani SŽ ne.
+    "derp_ovire": lambda c, z: _ena(c, "SELECT MAX(last_seen) FROM alert "
+                                       "WHERE kind = 'ovira' AND lang = 'en'"),
+    "ovire_sz": lambda c, z: _meta_json_ts(c, "ovire_sz"),
     "nap": lambda c, z: _meta_json_ts(c, "nap"),
     "zamude_sz": lambda c, z: _meta_json_ts(c, "zamude_sz"),
     "zamude_lpp": lambda c, z: _meta_json_ts(c, "zamude_lpp"),

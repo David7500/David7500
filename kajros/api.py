@@ -1408,6 +1408,10 @@ def api_health():
         # se ujemata. Zapiše jih nit ob vsakem branju zemljevida.
         zsz = db.get_meta(conn, "zamude_sz")
         out["zamude_sz"] = json.loads(zsz) if zsz else None
+        # Ovire s strani SŽ (`ovire_sz`): koliko jih je na strani in koliko
+        # brez vlaka, na katerega bi se dale pripeti.
+        ov = db.get_meta(conn, "ovire_sz") if config.OVIRE_SZ else None
+        out["ovire_sz"] = json.loads(ov) if ov else None
         # Isto za mestni LPP (`zamude_lpp`), z LPP-jevih zaslonov.
         zl = db.get_meta(conn, "zamude_lpp") if config.LPP_ZAMUDE else None
         out["zamude_lpp"] = json.loads(zl) if zl else None
