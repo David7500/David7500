@@ -2513,3 +2513,25 @@ Skupno: **vozilo na tem mestu ne vozi po trasi** (trasa zavije na postajo, letal
 Daljši razmik sam je torej natančen, dokler vozilo vozi po trasi; kjer ne, je čas, interpoliran po trasi, ki je vozilo ni prevozilo, slab. Popraviti je treba traso, ne meje.
 
 **Odkloni po odsekih** (isti posnetek; lega po odhodu več kot 150 m od trase): 650 od 14 486 leg (4,5 %), od tega le 12 posamičnih (šum). Odklon vsaj dveh leg na 42 od 1 303 prevoženih odsekov (postanek–postanek), 50 od 1 607 prevozov (3 %). Skoraj povsod pri **vseh** prevozih v tej uri: Kranj Zlato Polje P+R → Naklo 3 od 3 (do 566 m), Novo Celje → Žalec in Žalec → Šempeter 2 od 2, Murska Sobota ↔ Maribor 2 od 2 (do 883 m), Slovenj Gradec → Sl. Gradec ŽP 2 od 2, Koper → Ljubljana Hajdrihova 1 od 1 (486 m), Bled → Brnik letališče 1 od 1 (996 m). Le štirje odseki delno (1 od 2 ali 1 od 3: Koper Sv. Ana, Zg. Velka, Cerkno, Piran Bernardin). Ena ura je eden do trije prevozi na odsek -- za mejo med stalnim in občasnim premalo. Zato od 11. 10. zvečer `iz_lege` vsak odklon zapiše v tabelo `odklon`; pregled po odsekih `kajros odkloni --dni N`, število zadnjih 24 h v /admin (kartica NAP, „izven trase“). Ko bo nekaj dni z delavniki: porazdelitev deleža odklonjenih prevozov po odsekih -- ali se loči na „skoraj vedno“ in „redko“ -- in iz nje meja za traso po legah.
+
+## Kaj še teče prek derp.si (11. 10. 2026)
+
+Vrstice `run` za današnji dan na arwenu ob 14:20 (nedelja), po viru, ki jih piše:
+
+| | vrstic | vir |
+|---|---|---|
+| mestni LPP | 11 963 (44 %) | derp.si `lpp/all` |
+| primestni LPP (1118) | 2 425 (9 %) | derp.si `ijpp/trip_updates` (TransitClock) |
+| Arriva, Nomago, AP MS | 11 403 (42 %) | NAP, iz leg (`iz_lege`) |
+| vlaki | 1 354 (5 %) | zemljevid SŽ |
+| nadomestni avtobusi SŽ | 0 (zadnjih 14 dni 0) | nihče |
+
+**Od kod derp.si jemlje** (koda na gitlabu, prebrana ta dan):
+
+* **Mestni LPP**: `derp-si/lpp-gtfs-rt` bere `data.lpp.si/api/bus/bus-details?trip-info=1` **s ključem LPP** (glava `apikey`) in `route/arrivals-on-route` (odprt). Brez ključa id vožnje vozila ni; naš drugi vir (`zamude_lpp`) zato vozilo pripne prek derp-ovega `vehicle_now` -- ob izpadu derp.si po eni uri ne piše več.
+* **Primestni LPP**: NAP ga nima (`LJLPP…`); zamude računa derp-ov TransitClock. `derp-si/ijpp-rt` bere lege LPP z `mestnipromet.cyou/api/v1/resources/buses/info` (še en posrednik, linije od 30 naprej in 3B, 3G, 6B, 12D, 15, 19, 19I, 21D, 25 -- ravno primestne) -- da TransitClock dobi lege od tam, je sklep, ne preverjeno.
+* **Ovire (`SZ-OVIRA`)**: `api.modra.ninja/sz/ovire_raw`, ta pa jih vzame iz strani `potniski.sz.si/pomoc-uporabnikom-in-stanje-v-prometu/`, kjer so v HTML kot `var roadworks = [...]` (440 kB). Preverjeno z našim Chromom na arwenu: 49 ovir na strani, 49 pri modra.ninja (sl), enaki id-ji. Dva posrednika za stran, ki jo že beremo. Nove ovire 10. in 11. 10.: nobene (prej 2–18 na dan) -- vir ni zamrznjen, stran ima isto.
+* **`SZ-DELAY`**: ni od SŽ -- derp.si ga sestavi iz zemljevida SŽ (`naslednja_postaja`, `zamuda_min >= 5`). `delay_report` po dnevih: 5. 10. 3 932, 6. 10. 3 749, 7. 10. 28, 8.–10. 10. po 1. Od 11. 10. ga piše `zamude_sz.porocilo`; suho na arwenu ob 14:40: 22 pripetih vlakov, 7 poročil, naslednja postaja enaka zapisu SŽ 7 od 7. Prej se je ime postaje z našim ujemalo 98,4 % (26 553 od 26 995, 29. 9.–6. 10.).
+* **Vozni red IJPP**: zip z gitlaba derp.si = zip DUJPP (`dujpp.si/gtfs/dujpp-ijpp.zip`) + `trip_headsign` + sintetični `block_id` (`SYN_…`), brez 139 voženj (9. 10. 2026). Veriga vozila (`trip.block_id`) je torej derp-ova.
+
+Pretok derp.si v zadnji uri (/admin): zamude 2,2 MB, lege 0,7 MB, ovire 1,5 MB, LPP 3,3 MB.

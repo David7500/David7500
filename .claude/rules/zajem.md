@@ -60,7 +60,7 @@ Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas = `
 
   Prikaz kaže `COALESCE(delay_dep, delay_arr)` = **odhodno**. Prav — potnika zanima, kdaj gre vlak naprej — a ena številka na vrstico naredi v grafu videti nemogoč prepad („kako je zamuda padla za osem minut med dvema postajama"). Zato: kadar se številki razlikujeta za ≥1 min, vrstica pokaže **obe** (`+10 → +3`) z razlago postanka; krivulja gre v naslednjo postajo na **prihodno** vrednost in pade **navpično** na postaji. Padec se je zgodil tam, ne na odseku.
 
-* **Prevoznik objavi zamudo za prometno mesto, ne le za postajo.** Ime mesta **imamo** -- v `SZ-DELAY-*` obvestilih ("Vlak EC 79 ima izjemno zamudo 161 min ob prihodu na postajo Sevnica"). `run` pozna samo voznoredne postanke → edini vir. Hrani se v `delay_report`. Objavi ga šele od **5 min** zamude naprej (najmanjša vrednost v 101 137 poročilih): točen vlak poročila nima.
+* **Poročilo o zamudi (`delay_report`) ni od SŽ, ampak iz zemljevida SŽ.** `SZ-DELAY-*` ("Vlak EC 79 ima izjemno zamudo 161 min ob prihodu na postajo Sevnica") je sestavljal derp.si iz `naslednja_postaja` in `zamuda_min` zemljevida (`szService.js`, prebrano 11. 10. 2026): samo postanki vožnje, od **5 min**, izjemna od 30. Z modra.ninja je utihnil tudi ta (6. 10. 3 749 poročil, 7. 10. 28, nato eno na dan) -- štiri dni brez vrstice „napoved prevoznika“ in brez meje prehoda iz poročila, ne da bi kdo opazil. Od 11. 10. 2026 ga piše `zamude_sz.porocilo` iz istega branja, z našim imenom postaje (prej se je z njim po imenu ujemalo 98,4 %, 26 553 od 26 995); `alerts.ingest` derp-ovih ne piše, dokler vodi zemljevid.
 
   Prevoznikovo poročilo je tudi **svežejše od naše meritve**: na 64 primerjanih vožnjah novejše v 97 %, mediana razlike +40 s. A kraj in zamuda morata biti **iz istega vira**, sicer piše "Dobova" ob zamudi, izmerjeni v Sevnici.
 
@@ -262,7 +262,7 @@ Polje `Vrsta` (10. 10. 2026, 84 branj po 15 s):
 
 **Vlak ne gre nazaj.** LPV 2616 je 10. 10. ob 22:35, po Brezovici, spet pisal „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz Ljubljane, ki jo je s +0 zapustil 10 min prej. Postanek pred zadnjim zapisanim se ne prepiše (`nazaj`). Popravek na istem odseku velja (10 od 1 052 trojic branj; ničle med dvema zamudama, kot pri feedu, nobene).
 
-**Kam gre**: vsaka vrednost v `sz_zamuda` (zadnje stanje na postanek; `v_run` je od 10. 10. vedno 1) in v `run` + `obs` (`iz_lege.zapisi_meritev(..., ohrani=True)`: odhod ne pobriše prihoda in obratno). `feed_ts` = čas našega branja, torej po prehodu -- `potrjen_prehod` pravilno reče „izmerjeno“.
+**Kam gre**: vsaka vrednost v `sz_zamuda` (zadnje stanje na postanek; `v_run` je od 10. 10. vedno 1), od 5 min še v `delay_report` (zgoraj), in v `run` + `obs` (`iz_lege.zapisi_meritev(..., ohrani=True)`: odhod ne pobriše prihoda in obratno). `feed_ts` = čas našega branja, torej po prehodu -- `potrjen_prehod` pravilno reče „izmerjeno“.
 
 **Kaj pove pregled**: v `meta.zamude_sz` vlakov, zapisanih, pred odhodom, na cilju, nepripetih, nazaj, ponastavljenih in `spremenjeno_ts`. Odgovor se ob vlakih na poti spremeni ob **vsakem** branju (93 od 93 po 15 s; odšteva `Predviden_prihod`) -- 10 min brez spremembe je rumeno (`zdravje.SZ_ZAMRZNJEN_S`). Prazen zemljevid ob vsaj treh vlakih po voznem redu je rumen; nit, ki 5 min ne zapiše niti napake, rdeča.
 

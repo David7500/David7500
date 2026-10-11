@@ -26,7 +26,8 @@ Kaj vrstica pove, po polju `Vrsta` (izmerjeno 10. 10. 2026, 84 branj po 15 s):
   Šteje zato samo prvi prihod.
 
 Vsaka vrednost gre v `sz_zamuda` (zadnje stanje na postanek, s časom prvega in
-zadnjega branja) in v `run` in `obs`.
+zadnjega branja) in v `run` in `obs`; zamuda od pet minut naprej še v
+`delay_report` kot napoved prihoda na naslednjo postajo (`porocilo`).
 
 Tabla zamud SŽ (`/pomoc-uporabnikom-in-stanje-v-prometu/`) se ne bere: v senci
 11. 10. 2026 je isto minuto na 246 parih pokazala le nekaj sekund pred
@@ -61,6 +62,12 @@ NAJSTAREJSI_ODHOD_S = 6 * 3600
 #: Prihod z zamudo 0 po vožnji z več kot toliko zamude je SŽ-jeva ponastavitev
 #: vrstice na cilju, ne prihod (glava modula).
 PONASTAVITEV_S = 180
+#: Poročilo o zamudi (`delay_report`) šele od toliko minut. Mejo je postavil
+#: derp.si, ko je iz istega zemljevida sestavljal `SZ-DELAY` (`szService.js`,
+#: `zamuda_min >= 5`, izjemna od 30); vseh 101 137 poročil do 7. 10. 2026 jo
+#: ima, zato ostane -- zgodovina in novo sta tako primerljiva.
+POROCILO_OD_MIN = 5
+IZJEMNA_OD_MIN = 30
 
 
 def vozni_red(conn: sqlite3.Connection, danes: date) -> dict[str, list[dict]]:
@@ -178,7 +185,7 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
 
 
 def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
-    """Pripete zamude v `sz_zamuda`, `run` in `obs`.
+    """Pripete zamude v `sz_zamuda`, `run` in `obs` (in `delay_report`).
 
     Dve varovali, obe izmerjeni na zemljevidu 10. 10. 2026:
 
@@ -190,7 +197,7 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
       `PONASTAVITEV_S` ni prihod, ampak ponastavitev.
     """
     ts = int(zdaj)
-    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0}
+    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0}
     for trip_id, dan, seq, zamuda, je_prihod in pripete:
         zadnji = conn.execute(
             "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
@@ -213,8 +220,46 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
             "  delay_s = excluded.delay_s, zadnjic_ts = excluded.zadnjic_ts, v_run = 1",
             (trip_id, dan, seq, zamuda, ts, ts))
         izid["zapisanih"] += 1
+        if not je_prihod:
+            izid["porocil"] += porocilo(conn, trip_id, dan, seq, zamuda, ts)
     conn.commit()
     return izid
+
+
+def porocilo(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
+             zamuda_s: int, ts: int) -> int:
+    """Zamuda ob prihodu na naslednjo postajo v `delay_report`; 1, kadar je
+    zapisana nova vrstica.
+
+    Do 7. 10. 2026 je to pisal `alerts.ingest` iz obvestil `SZ-DELAY`, ki jih
+    je derp.si sestavil iz tega istega zemljevida („Vlak … ima zamudo N min ob
+    prihodu na postajo <naslednja>“). Z modra.ninja so utihnila tudi ta (6. 10.
+    3 749 poročil, od 8. 10. eno na dan) in z njimi vrstica „napoved
+    prevoznika“ v oknu vožnje in meja prehoda v `stats.last_measured()`.
+
+    Ime postaje je naše (`station.name`), ne zapis SŽ, ker se meja prehoda
+    nanj veže z enakostjo. Zapis samo ob spremembi, kot prej.
+    """
+    if zamuda_s < POROCILO_OD_MIN * 60:
+        return 0
+    r = conn.execute(
+        "SELECT t.train_no, st.name FROM trip t "
+        "JOIN sched s ON s.trip_id = t.trip_id AND s.stop_seq > ? "
+        "JOIN station st ON st.stop_id = s.stop_id "
+        "WHERE t.trip_id = ? ORDER BY s.stop_seq LIMIT 1", (seq, trip_id)).fetchone()
+    if r is None:
+        return 0
+    minut = zamuda_s // 60
+    prej = conn.execute(
+        "SELECT delay_min, station FROM delay_report WHERE trip_id = ? AND service_date = ? "
+        "ORDER BY seen_ts DESC LIMIT 1", (trip_id, dan)).fetchone()
+    if prej and (prej[0], prej[1]) == (minut, r[1]):
+        return 0
+    return conn.execute(
+        "INSERT OR IGNORE INTO delay_report(trip_id, service_date, seen_ts, train_no, "
+        "                                  delay_min, station, event, severe) "
+        "VALUES(?,?,?,?,?,?,'prihod',?)",
+        (trip_id, dan, ts, r[0], minut, r[1], int(minut >= IZJEMNA_OD_MIN))).rowcount
 
 
 #: Odtis zadnjega odgovora: nespremenjen zemljevid je v /admin opomba, dolgo

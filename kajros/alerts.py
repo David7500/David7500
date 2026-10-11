@@ -7,11 +7,11 @@ Ta vir je bil dolgo spregledan, čeprav nosi dvoje, česar `trip_updates` nima:
   znamo pripeti naravnost na številko vlaka. To je edini vir odgovora na
   vprašanje *zakaj* vlak zamuja; vse drugo v bazi pove le *koliko*.
 
-* **`SZ-DELAY-*`** -- živa zamuda z **imenom prometnega mesta**, kjer je
-  izmerjena ("Vlak EC 79 ima izjemno zamudo 161 min ob prihodu na postajo
-  Sevnica"). Prav to je vrednost, ki jo kaže tudi aplikacija SŽ, in prav to
-  je podatek, ki ga iz `trip_updates` ne moremo dobiti: tam imamo samo
-  `stop_sequence` voznorednega postanka, prometno mesto pa pogosto ni postanek.
+* **`SZ-DELAY-*`** -- živa zamuda z imenom postaje, proti kateri vlak pelje
+  ("Vlak EC 79 ima izjemno zamudo 161 min ob prihodu na postajo Sevnica").
+  Ni od SŽ: derp.si jo sestavi iz zemljevida SŽ (`szService.js`, polje
+  `naslednja_postaja`, samo postanki vožnje, od 5 min), ki ga od 10. 10.
+  2026 beremo sami -- dokler ga beremo, poročila piše `zamude_sz.porocilo`.
 
 Obvestila prihajajo v parih sl + en pod različnima `alert_id`. Obeh ne
 združujemo -- shranimo jezik in prikaz izbere svojega.
@@ -26,7 +26,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import config, db
+from . import config, db, iz_lege
 from .collector import fetch, resolve_service_date, _rail_trip_windows, _service_dates
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -268,7 +268,10 @@ def ingest(conn: sqlite3.Connection, feed) -> dict:
                 )
                 n_entities += 1
 
-        if kind != "delay":
+        # Poročila piše zemljevid SŽ sam (`zamude_sz.porocilo`), dokler ga
+        # beremo: derp.si jih sestavlja iz istega zemljevida, z zapisom
+        # postaje po SŽ, in dva pisca bi se vsakič razlikovala.
+        if kind != "delay" or iz_lege.sz_vodi():
             continue
 
         # Ziva zamuda: povezi jo s tripom in zapisi samo ob spremembi.

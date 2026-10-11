@@ -119,7 +119,7 @@ def test_zapis_v_run_ohrani_prihod():
     c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
               "VALUES('t1', ?, 20, 2900, NULL, ?)", (DAN, ZDAJ - 300))
     izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ)
-    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0}
+    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1}
     assert c.execute("SELECT delay_arr, delay_dep, feed_ts FROM run WHERE stop_seq = 20"
                      ).fetchone()[:] == (2900, 3000, int(ZDAJ))
     assert c.execute("SELECT delay_s, v_run FROM sz_zamuda").fetchone()[:] == (3000, 1)
@@ -153,6 +153,23 @@ def test_na_cilju_velja_prvi_prihod_nicla_po_zamudi_ni_prihod():
     c2 = _baza()
     zamude_sz.zapisi(c2, [("t1", DAN, 21, 60, False)], ZDAJ)
     assert zamude_sz.zapisi(c2, [("t1", DAN, 22, 0, True)], ZDAJ + 30)["zapisanih"] == 1
+
+
+def test_porocilo_o_zamudi_za_naslednjo_postajo():
+    """Do 7. 10. 2026 ga je iz istega zemljevida sestavljal derp.si (`SZ-DELAY`):
+    zamuda ob prihodu na naslednjo postajo, od 5 min, izjemna od 30."""
+    c = _baza()
+    vrstice = lambda: c.execute(  # noqa: E731
+        "SELECT train_no, delay_min, station, event, severe FROM delay_report "
+        "ORDER BY seen_ts").fetchall()
+    zamude_sz.zapisi(c, [("t1", DAN, 20, 240, False)], ZDAJ)
+    assert vrstice() == []                                  # 4 min: točen vlak poročila nima
+    zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ + 15)
+    zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ + 30)   # nespremenjeno
+    zamude_sz.zapisi(c, [("t1", DAN, 21, 1500, False)], ZDAJ + 45)
+    zamude_sz.zapisi(c, [("t1", DAN, 22, 1500, True)], ZDAJ + 60)    # prihod na cilj ne
+    assert [tuple(r) for r in vrstice()] == [
+        ("LP 4203", 50, "Solkan", "prihod", 1), ("LP 4203", 25, "Nova Gorica", "prihod", 0)]
 
 
 def _feed_zamud(trip_id, zamuda):

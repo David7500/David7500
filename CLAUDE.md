@@ -64,7 +64,7 @@ kajros/
   db.py          SQLite shema + merge_from() + migracije
   gtfs.py        pogojni prenos zipa, uvoz voznega reda
   collector.py   poll zamud in leg, obratovalni dan, varovalke pred smetmi
-  alerts.py      ovire (SZ-OVIRA) in žive zamude s prometnim mestom (SZ-DELAY)
+  alerts.py      ovire (SZ-OVIRA); poročila o zamudi piše zemljevid SŽ (`zamude_sz`)
   zapore.py      zapora tira iz besedila ovir, vlak pred tabo: opozorilo, ne napoved
   nadomestni.py  kje ustavi nadomestni avtobus na postaji (posnetek strani SŽ)
   weather.py     Open-Meteo, mreža 0,1° (~8 km) × 1 h

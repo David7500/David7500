@@ -37,7 +37,7 @@ from . import brskalnik, config
 
 #: Skupine v vrstnem redu, v katerem jih pokaže pregled.
 SKUPINE = (
-    ("zivo", "derp.si — glavni feed v živo"),
+    ("zivo", "derp.si — posrednik"),
     ("izvirniki", "Izvirniki in drugi viri"),
     ("dodatki", "Dodatki za prikaz"),
     ("statika", "Vozni red in vreme"),
@@ -114,7 +114,8 @@ def vsi() -> tuple[Vir, ...]:
                        "Vrstica „brskalnik“ spodaj pove, ali teče in koliko izzivov je rešil.")
     return (
         Vir("derp_zamude", "derp.si · zamude IJPP", "zivo",
-            "Zamude vlakov SŽ in medkrajevnih avtobusov (GTFS-RT).",
+            "Zamude IJPP (GTFS-RT): avtobusne računa derp.si sam (TransitClock), "
+            "vlakov z zemljevida SŽ od 7. 10. 2026 nima.",
             "glavni vir zamud primestnega LPP; vlake piše, kadar zemljevid SŽ ni prebran",
             config.TRIP_UPDATES_URL, derp, "CC BY-SA 4.0",
             f"vsakih {poll} s", "kajros-collector", True, ("derp_ijpp",), derp_ukrep,
@@ -122,20 +123,24 @@ def vsi() -> tuple[Vir, ...]:
         Vir("derp_lege", "derp.si · lege IJPP", "zivo",
             "Lege avtobusov z GPS; vlakov ni.",
             "lege primestnega LPP; Arrivo, Nomago in AP MS ima NAP svežejše",
-            config.VEHICLE_POSITIONS_URL, "DERP (derp.si) iz NAP", "CC BY-SA 4.0",
+            config.VEHICLE_POSITIONS_URL,
+            "DERP (derp.si) iz NAP; primestni LPP od LPP (NAP ga nima)", "CC BY-SA 4.0",
             f"vsakih {lege} s", "kajros-collector", _okolje_vklop("POSITIONS"), (),
             derp_ukrep, preveri=config.VEHICLE_POSITIONS_URL),
         Vir("derp_ovire", "derp.si · obvestila IJPP", "zivo",
-            "Ovire na progi (SZ-OVIRA) in poročila SŽ o zamudi s krajem (SZ-DELAY).",
+            "Ovire na progi in nadomestni prevozi (SZ-OVIRA); poročila o zamudi "
+            "(SZ-DELAY) le, kadar zemljevid SŽ ni prebran.",
             "edini vir ovir in nadomestnih prevozov",
-            config.SERVICE_ALERTS_URL, "DERP (derp.si)", "CC BY-SA 4.0",
+            config.SERVICE_ALERTS_URL,
+            "DERP (derp.si) iz potniski.sz.si prek api.modra.ninja", "CC BY-SA 4.0",
             "izklopljeno" if ovire <= 0 else f"vsakih {ovire} s",
             "kajros-collector", ovire > 0, (), derp_ukrep,
             preveri=config.SERVICE_ALERTS_URL),
         Vir("derp_lpp", "derp.si · mestni LPP", "zivo",
             "Zamude, lege in obvozi mestnih linij LPP v enem feedu.",
             "glavni vir mestnega LPP",
-            config.LPP_RT_URL, "DERP (derp.si) iz LPP (avl.lpp.si)", "CC BY-SA 4.0",
+            config.LPP_RT_URL, "DERP (derp.si) iz data.lpp.si, s ključem LPP",
+            "CC BY-SA 4.0",
             f"vsakih {poll} s", "kajros-collector", config.LPP_ENABLED, ("derp_lpp",),
             derp_ukrep, preveri=config.LPP_RT_URL),
         Vir("nap", "NAP · lege SIRI", "izvirniki",
