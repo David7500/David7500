@@ -19,8 +19,11 @@ ZDAJ = datetime(DANES.year, DANES.month, DANES.day, 12, 0, tzinfo=collector.TZ)
 
 
 @pytest.fixture(autouse=True)
-def _cist_spomin():
-    """`iz_lege` si feed zapomni v modulu; vsak preizkus začne od začetka."""
+def _cist_spomin(monkeypatch):
+    """`iz_lege` si feed zapomni v modulu; vsak preizkus začne od začetka.
+    Proces se zažene ob ZDAJ: s pravim časom zagona je feed, ki ni odgovoril,
+    veljal za prebran in prazen, kadar je preizkus tekel pred 11:55."""
+    monkeypatch.setattr(iz_lege, "_zagon", ZDAJ.timestamp())
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
     iz_lege._prvic = None
