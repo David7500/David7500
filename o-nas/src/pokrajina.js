@@ -2,7 +2,7 @@
 // daljavi, vas s cerkvijo na griču, kozolca, mestece s šolo na koncu.
 // Vse je izmišljen kraj -- zgodba ne pove, kje.
 import * as THREE from 'three';
-import { rng, sum2, fbm, zdruzi, M4, M4s, skatla, smooth, clamp, lerp, platno, tekstura } from './orodja.js';
+import { rng, sum2, fbm, zdruzi, M4, M4s, skatla, smooth, clamp, lerp, platno, tekstura, kosi } from './orodja.js';
 import { teksturaStrehe, strehaGeo } from './postaja.js';
 
 const N1 = sum2(101), N2 = sum2(202), N3 = sum2(303);
@@ -114,9 +114,29 @@ export function zgradiTeren(proga) {
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = _hr;');
   };
   m.customProgramCacheKey = () => 'teren';
-  const mesh = new THREE.Mesh(g, m);
-  mesh.receiveShadow = true;
-  return mesh;
+  // isti trikotniki, razvrščeni po krpah 1,3 × 1 km: izrez pred kamero riše
+  // le krpe v vidnem polju, ne vseh 160 000 trikotnikov doline
+  const TX = 64, TZ = 50, ix = [], meje = [];
+  for (let tz = 0; tz < nz; tz += TZ) {
+    for (let tx = 0; tx < nx; tx += TX) {
+      const a = ix.length;
+      for (let iy = tz; iy < Math.min(tz + TZ, nz); iy++) {
+        for (let jx = tx; jx < Math.min(tx + TX, nx); jx++) {
+          const A = jx + (nx + 1) * iy, B = jx + (nx + 1) * (iy + 1);
+          ix.push(A, B, A + 1, B, B + 1, A + 1);
+        }
+      }
+      meje.push([a, ix.length]);
+    }
+  }
+  g.setIndex(ix);
+  const sk = new THREE.Group();
+  for (const k of kosi(g, meje)) {
+    const mesh = new THREE.Mesh(k, m);
+    mesh.receiveShadow = true;
+    sk.add(mesh);
+  }
+  return sk;
 }
 
 // ---------- drevesa ----------

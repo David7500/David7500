@@ -51,7 +51,19 @@ async function zagon() {
   const maxDpr = fiksnaDpr || Math.min(devicePixelRatio || 1, telefon ? 1.6 : 2);
   let dpr = fiksnaDpr || Math.min(maxDpr, telefon ? 1.3 : 2);
   renderer.setPixelRatio(dpr);
-  renderer.setSize(innerWidth, innerHeight, false);
+  // Velikost sveta je velikost platna v CSS (100lvh), ne innerHeight. Na
+  // telefonu se naslovna vrstica brskalnika med drsenjem skrije in pokaže,
+  // innerHeight skoči za njeno višino; slika se je takrat raztegnila in ob
+  // naslednjem `resize` preskočila. Platno 100lvh ostane enako veliko.
+  let W = 0, H = 0;
+  function velikostPlatna() {
+    const w = platnoEl.clientWidth || innerWidth, h = platnoEl.clientHeight || innerHeight;
+    if (w === W && h === H) return false;
+    W = w; H = h;
+    renderer.setSize(W, H, false);
+    return true;
+  }
+  velikostPlatna();
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
@@ -61,9 +73,9 @@ async function zagon() {
   // zadržijo prvega kadra; do tja jih bralec ne rabi. Naslove z odtisom
   // vsebine da predloga (`s()` v api.py).
   let karta = null;
-  zgradiKarto(platnoEl.dataset)
-    .then((k) => { karta = k; })
-    .catch((e) => console.warn('kajros: karta se ni naložila', e));
+  const kartaNalozena = zgradiKarto(platnoEl.dataset)
+    .then((k) => { karta = k; return k; })
+    .catch((e) => { console.warn('kajros: karta se ni naložila', e); return null; });
   const korak = async (d) => { if (napredek) napredek.style.width = `${d * 100}%`; await nextFrame(); };
 
   await Promise.all([
@@ -102,8 +114,10 @@ async function zagon() {
   await korak(0.7);
   const naselja = zgradiNaselja(proga);
   svet.add(naselja, zgradiCerkev(proga));
+  // trije enaki kozolci: geometrija in materiali enkrat
+  const kozolec = zgradiKozolec();
   for (const [x, z, r] of KOZOLCI) {
-    const k = zgradiKozolec();
+    const k = kozolec.parent ? kozolec.clone() : kozolec;
     k.position.set(x, visina(x, z, proga) - 0.2, z);
     k.rotation.y = r;
     svet.add(k);
@@ -136,13 +150,16 @@ async function zagon() {
   }
 
   // nočne luči (Pogl. 4): nekaj točkovnih luči ob uri in vlaku; zadnja
-  // osvetli dijaka na klopi od zadaj, da v temi ni le silhueta
+  // osvetli dijaka na klopi od zadaj, da v temi ni le silhueta. Podnevi so
+  // skrite, ne le ugasnjene: ugasnjeno luč senčilnik vseeno računa v vsaki
+  // piki.
   const nocneLuci = [];
   for (const [x, y, z, c, i] of [[0, 4.0, 4.6, '#ffd7a0', 26], [-14, 4.0, 4.8, '#ffd7a0', 22], [14, 4.0, 4.8, '#ffd7a0', 22], [-40, 5.6, 7.0, '#ffe2b8', 14], [-17.25, 1.3, 6.55, '#a9c4ff', 1.6], [-18.9, 2.5, 8.9, '#ffd9b0', 2.4]]) {
-    const l = new THREE.PointLight(c, 0, 26, 1.6);
+    const l = new THREE.PointLight(c, i, 26, 1.6);
     l.position.set(x, y, z);
+    l.visible = false;
     svet.add(l);
-    nocneLuci.push([l, i]);
+    nocneLuci.push(l);
   }
 
   // zračna perspektiva v vse materiale sveta
@@ -151,17 +168,20 @@ async function zagon() {
     for (const m of [].concat(o.material)) atm.popravi(m);
   });
   await korak(0.88);
+  // nočno okolje šele, ko je prvi kader na zaslonu (`priprave`); pusti
+  // atmosfero v nočnem stanju, `postavi` jo pred vsakim kadrom nastavi znova
   const okolja = {};
   atm.nastavi('zora');
   okolja.zora = atm.okolje(renderer);
-  atm.nastavi('noc');
-  okolja.noc = atm.okolje(renderer);
-  atm.nastavi('zora');
   svet.environment = okolja.zora;
+  const nocnoOkolje = () => {
+    if (!okolja.noc) { atm.nastavi('noc'); okolja.noc = atm.okolje(renderer); }
+    return okolja.noc;
+  };
 
 
   // ---------- kamera ----------
-  const kamera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 60000);
+  const kamera = new THREE.PerspectiveCamera(40, W / H, 0.05, 60000);
 
   // Lega vlaka vzdolž proge (s konice) po T.
   const S_POSTAJA = proga.sPriX(-40);
@@ -247,7 +267,7 @@ async function zagon() {
     });
   }
   function Tiz(scroll) {
-    const c = scroll + innerHeight * 0.5;
+    const c = scroll + H * 0.5;
     if (!meje.length) return 0;
     if (c <= meje[0].top) return meje[0].t0;
     for (const m of meje) {
@@ -255,21 +275,47 @@ async function zagon() {
     }
     return meje[meje.length - 1].t1;
   }
-  function fadeBesedila() {
-    const c = scrollY + innerHeight * 0.5;
+  // T na piksel drsenja pri y (0 tam, kjer film stoji: uvod, dejstva)
+  function naklon(y) {
+    const c = y + H * 0.5;
+    for (const m of meje) if (c >= m.top && c < m.top + m.h) return (m.t1 - m.t0) / m.h;
+    return 0;
+  }
+  // Film ne sledi prstu naravnost, ampak navideznemu drsenju Yv: mehko kot
+  // prej in z omejeno hitrostjo. Hiter poteg na telefonu je prej v pol
+  // sekunde odvrtel vso vožnjo skozi dolino. Besedilo se ravna po Yv, zato
+  // napis pride skupaj s prizorom. Če prst prehiti film za več kot ZAOSTANEK
+  // zaslonov, ga film vleče za sabo; skok (poglavje v glavi, Home) je rez.
+  const HITROST = 10, HITROST_VOZNJA = 7, ZAOSTANEK = 4;   // T/s, T/s, zasloni
+  let Yv = scrollY, Yprej = scrollY;
+  function korakDrsenja(Yt, dt) {
+    const skok = Math.abs(Yt - Yprej) > H;
+    Yprej = Yt;
+    if (manjGibanja || skok) { Yv = Yt; return; }
+    const T = Tiz(Yv), k = naklon(Yv);
+    const v = (T > 86 && T < 126 ? HITROST_VOZNJA : HITROST) * dt;
+    const meja = k > 0 ? v / k : 1.5 * H * dt;
+    Yv += clamp((Yt - Yv) * (1 - Math.exp(-dt * 6.5)), -meja, meja);
+    if (Math.abs(Yt - Yv) > ZAOSTANEK * H) Yv = Yt - Math.sign(Yt - Yv) * ZAOSTANEK * H;
+    if (Math.abs(Yt - Yv) < 0.05) Yv = Yt;
+  }
+  function fadeBesedila(y) {
+    const c = y + H * 0.5;
     for (const m of meje) {
       if (!m.kart) continue;
       const p = (c - m.top) / m.h;
-      const o = manjGibanja ? (p > -0.1 && p < 1.1 ? 1 : 0) : okno(p, -0.02, 0.14, 0.84, 1.0);
-      m.kart.style.opacity = o.toFixed(3);
-      m.kart.style.transform = `translate3d(0, ${((1 - smooth(-0.02, 0.14, p)) * 18).toFixed(1)}px, 0)`;
+      const o = (manjGibanja ? (p > -0.1 && p < 1.1 ? 1 : 0) : okno(p, -0.02, 0.14, 0.84, 1.0)).toFixed(3);
+      const ty = ((1 - smooth(-0.02, 0.14, p)) * 18).toFixed(1);
+      // slog se piše le ob spremembi, sicer brskalnik vsak kader znova
+      // preračuna trinajst kartic
+      if (o === m.o && ty === m.ty) continue;
+      m.o = o; m.ty = ty;
+      m.kart.style.opacity = o;
+      m.kart.style.setProperty('--ty', `${ty}px`);
     }
   }
   izmeri();
-  addEventListener('resize', () => {
-    renderer.setSize(innerWidth, innerHeight, false);
-    izmeri();
-  });
+  addEventListener('resize', velikostPlatna);
   new ResizeObserver(izmeri).observe(document.body);
 
   // ---------- oznake v prostoru ----------
@@ -352,7 +398,7 @@ async function zagon() {
     if (noc) atm.nastavi('noc');
     else atm.nastavi('zora', 'jutro', smooth(60, 118, T));
     const zelenoOkolje = noc ? 'noc' : 'zora';
-    if (zelenoOkolje !== okoljeZdaj) { svet.environment = okolja[zelenoOkolje]; okoljeZdaj = zelenoOkolje; }
+    if (zelenoOkolje !== okoljeZdaj) { svet.environment = noc ? nocnoOkolje() : okolja.zora; okoljeZdaj = zelenoOkolje; }
     svet.environmentIntensity = atm.stanje.okolje;
     atm.U.uCasN.value = cas;
     renderer.toneMappingExposure = atm.stanje.izp;
@@ -402,7 +448,7 @@ async function zagon() {
     for (const m of postaja.fasade) m.emissiveIntensity = noc ? 1.1 : 0;
     naselja.userData.okna.emissiveIntensity = noc ? 0.9 : 0;
     sola.userData.okna.emissiveIntensity = noc ? 0 : okno(T, 98, 104, 120, 128) * 0.25;
-    for (const [l, i] of nocneLuci) l.intensity = noc ? i : 0;
+    for (const l of nocneLuci) l.visible = noc;
     megla.userData.mat.uniforms.uMoc.value = noc ? 0.25 : 1 - smooth(70, 120, T) * 0.6;
     // senčna kamera sledi pogledu; središče zaskoči na mrežo tekslov senčne
     // karte, da robovi senc ob premiku kamere ne migljajo
@@ -423,7 +469,7 @@ async function zagon() {
 
   // okvir: subjekt nad besedilom (telefon) ali desno od njega (namizje)
   function okvir(kam = kamera) {
-    const w = innerWidth, h = innerHeight;
+    const w = W, h = H;
     kam.aspect = w / h;
     const pokoncno = w / h < 0.85;
     // v uvodu je ura bolj desno (na telefonu višje), da ima velik naslov prostor
@@ -433,13 +479,32 @@ async function zagon() {
     kam.setViewOffset(FW, FH, FW / 2 - cx * w, FH / 2 - cy * h, w, h);
   }
 
+  // Ura v kotu. V Pogl. 2 pod njo še, kdaj se začne pouk, in od 8.00 naprej
+  // za koliko je dijak pozen; minute so takrat v barvi zamude. Piše se le ob
+  // spremembi.
+  const hudPouk = hud?.querySelector('i');
+  let hudZadnje = '';
+  function hudUra(oznaka, cas, pouk) {
+    const ura = fmt(cas);
+    const zam = pouk ? Math.floor((cas - hms(8, 0)) / 60) : 0;
+    const kljuc = `${oznaka}|${ura}|${pouk}|${zam}`;
+    if (kljuc === hudZadnje) return;
+    hudZadnje = kljuc;
+    hudOzn.textContent = oznaka;
+    // razred kot na strani: 1-5 min in 5-15 min
+    const r = zam > 5 ? 'z-sred' : 'z-mala';
+    hudCas.innerHTML = zam > 0 ? `${ura.slice(0, 3)}<em class="${r}">${ura.slice(3)}</em>` : ura;
+    if (hudPouk) hudPouk.innerHTML = !pouk ? '' : zam > 0 ? `pouk ob 8.00 · <em class="${r}">+${zam} min</em>` : 'pouk ob 8.00';
+  }
+
   // ---------- zanka ----------
-  let Tcilj = 0, T = 0, zadnji = performance.now(), mirujeOd = 0, prisilni = null;
-  let povpMs = 16, stejKadri = 0;
+  let T = 0, zadnji = performance.now(), mirujeOd = 0, prisilni = null;
+  let kadrov = 0, risalPrej = false, jsZadnji = 4, senceDolg = false;
   let pripravljeno = false;
-  const kmp = [];
   let pogled = null;   // preizkus: lastna kamera {p, c, f}
-  function risi(cas) {
+  // `sence`: senčna karta se nariše znova le, ko se je kaj premaknilo; v
+  // miru (sekundni kazalec, megla, oblaki) ostane ista
+  function risi(cas, sence = true) {
     const k = pogled ? [...pogled.p, ...pogled.c, pogled.f] : kameraVSvetu(T);
     const scenaKarta = T >= 128 && T < 206;
     let hudKarta = null;
@@ -452,7 +517,7 @@ async function zagon() {
       if (dih > 0) kamera.position.add(tA.set(Math.sin(cas * 0.33) * 0.03, Math.sin(cas * 0.27) * 0.02, Math.cos(cas * 0.21) * 0.02).multiplyScalar(dih));
       kamera.lookAt(k[3], k[4], k[5]);
       // vodoravno vidno polje ne sme biti preozko na telefonu
-      const asp = innerWidth / innerHeight;
+      const asp = W / H;
       const fv = THREE.MathUtils.degToRad(k[6]);
       const potreb = 2 * Math.atan(Math.tan(Math.atan(Math.tan(fv / 2) * 1.6) * 0.78) / asp);
       kamera.fov = THREE.MathUtils.radToDeg(Math.min(Math.max(fv, potreb), THREE.MathUtils.degToRad(78)));
@@ -461,7 +526,9 @@ async function zagon() {
       kamera.near = clamp(Math.hypot(k[3] - k[0], k[4] - k[1], k[5] - k[2]) * 0.02, 0.15, 0.6);
       kamera.updateProjectionMatrix();
       postavi(T, cas);
+      tir.pragoviBlizu(kamera.position);
       tir.zice.material.uniforms.uLoc.value.set(platnoEl.width, platnoEl.height);
+      if (sence) renderer.shadowMap.needsUpdate = true;
       renderer.render(svet, kamera);
     } else {
       if (karta) hudKarta = karta.risi(renderer, T, cas, okvir);
@@ -470,21 +537,26 @@ async function zagon() {
     // oznake in ura v kotu
     for (const o of oznake) {
       const vid = okno(T, o.t0, o.t0 + 1.5, o.t1 - 1.5, o.t1);
-      if (vid <= 0.001 || scenaKarta) { o.el.style.opacity = 0; continue; }
-      v4.set(o.p.x, o.p.y, o.p.z, 1).applyMatrix4(kamera.matrixWorldInverse).applyMatrix4(kamera.projectionMatrix);
-      const x = (v4.x / v4.w * 0.5 + 0.5) * innerWidth, y = (-v4.y / v4.w * 0.5 + 0.5) * innerHeight;
-      o.el.style.opacity = v4.w > 0 ? vid.toFixed(3) : 0;
-      o.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+      let op = '0', tr = o.tr;
+      if (vid > 0.001 && !scenaKarta) {
+        v4.set(o.p.x, o.p.y, o.p.z, 1).applyMatrix4(kamera.matrixWorldInverse).applyMatrix4(kamera.projectionMatrix);
+        const x = (v4.x / v4.w * 0.5 + 0.5) * W, y = (-v4.y / v4.w * 0.5 + 0.5) * H;
+        op = v4.w > 0 ? vid.toFixed(3) : '0';
+        tr = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+      }
+      if (op !== o.op) { o.el.style.opacity = op; o.op = op; }
+      if (tr !== o.tr) { o.el.style.transform = tr; o.tr = tr; }
     }
     const dodVrh = dodatek ? dodatek.getBoundingClientRect().top : Infinity;
     glava?.classList.toggle('nad-dodatkom', dodVrh < 64);
     if (hud) {
       const vid = (hudKarta ? hudKarta.vid : okno(T, 64, 70, 124, 128) + okno(T, 206, 212, 260, 270))
-        * (1 - smooth(innerHeight * 0.9, innerHeight * 0.55, dodVrh));
-      hud.style.opacity = vid.toFixed(3);
+        * (1 - smooth(H * 0.9, H * 0.55, dodVrh));
+      const op = vid.toFixed(3);
+      if (op !== hud.dataset.op) { hud.style.opacity = op; hud.dataset.op = op; }
       if (vid > 0) {
-        hudOzn.textContent = hudKarta ? hudKarta.oznaka : 'ura v zgodbi';
-        hudCas.textContent = fmt(hudKarta ? hudKarta.cas : uraC ?? casZgodbe(T));
+        if (hudKarta) hudUra(hudKarta.oznaka, hudKarta.cas, false);
+        else hudUra('ura v zgodbi', uraC ?? casZgodbe(T), T < 206);
       }
     }
     if (prehod) {
@@ -495,30 +567,66 @@ async function zagon() {
     }
   }
 
+  // Ločljivost se ravna po času med kadroma, ne po času JS: ta GPE ne vidi,
+  // na telefonu pa je navadno prav GPE ozko grlo -- prej je ločljivost rasla,
+  // ko je slika že zatikala. Spusti se le, kadar čaka GPE (JS porabi manj kot
+  // dve tretjini kadra); dvigne se po treh sekundah gladkega teka in nikoli
+  // nazaj tja, kjer je že zatikalo.
+  let povpKader = 16.7, premor = 40, strop = maxDpr, gladkih = 0;
+  function prilagodiLocljivost(kader) {
+    povpKader += (kader - povpKader) * 0.1;
+    if (fiksnaDpr || --premor > 0) return;
+    let nova = dpr;
+    if (povpKader > 24 && jsZadnji < povpKader * 0.66 && dpr > 0.75) {
+      strop = dpr - 0.1;
+      nova = Math.max(0.75, dpr - 0.15);
+    } else if (povpKader < 18.5 && ++gladkih > 180 && dpr < Math.min(maxDpr, strop)) {
+      nova = Math.min(maxDpr, strop, dpr + 0.1);
+    }
+    if (povpKader >= 18.5) gladkih = 0;
+    if (nova === dpr) return;
+    dpr = nova; gladkih = 0; premor = 30; povpKader = 16.7;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(W, H, false);
+  }
+
+  // Kar rabita šele Pogl. 3 in 4, se pripravi po prvem kadru, en kos na
+  // kader in pred risanjem: kar riše na platno, ga sicer za hip pobriše.
+  const priprave = [];
   function zanka() {
     const zdaj = performance.now();
-    const dt = Math.min(0.1, (zdaj - zadnji) / 1000);
+    const ms = zdaj - zadnji;
+    const dt = Math.min(0.1, ms / 1000);
     zadnji = zdaj;
-    Tcilj = prisilni ?? Tiz(scrollY);
+    kadrov++;
     const prej = T;
-    T = manjGibanja ? Tcilj : T + (Tcilj - T) * (1 - Math.exp(-dt * 6.5));
-    if (Math.abs(Tcilj - T) < 0.002) T = Tcilj;
-    fadeBesedila();
-    oznaciPoglavje(Tcilj);
+    if (prisilni !== null) T = prisilni;
+    else { korakDrsenja(scrollY, dt); T = Tiz(Yv); }
+    fadeBesedila(prisilni !== null ? scrollY : Yv);
+    oznaciPoglavje(Tiz(scrollY));
     const giba = Math.abs(T - prej) > 1e-4;
     if (giba) mirujeOd = zdaj;
+    const pripravil = kadrov > 10 && priprave.length > 0;
+    if (pripravil) priprave.shift()();
+    // pod dejstvi za filmom je platno pokrito: nič za risat
+    const pokrito = dodatek && dodatek.getBoundingClientRect().top <= 0;
     // v miru 30 sl/s (sekundni kazalec, megla), sicer vsak kader
-    if (giba || zdaj - mirujeOd < 400 || stejKadri++ % 2 === 0) {
+    const risem = !pokrito && (pripravil || giba || zdaj - mirujeOd < 400 || kadrov % 2 === 0);
+    if (risem) {
       // prilagodi ločljivost PRED risanjem: setSize pobriše platno
-      if (!fiksnaDpr) {
-        if (povpMs > 22 && dpr > 0.75) { dpr = Math.max(0.75, dpr - 0.15); renderer.setPixelRatio(dpr); renderer.setSize(innerWidth, innerHeight, false); povpMs = 16; }
-        else if (povpMs < 9 && dpr < maxDpr) { dpr = Math.min(maxDpr, dpr + 0.1); renderer.setPixelRatio(dpr); renderer.setSize(innerWidth, innerHeight, false); povpMs = 14; }
-      }
+      if (risalPrej && ms < 100) prilagodiLocljivost(ms);
+      // Sence med gibanjem vsak kader; kadar naprava ne dohaja (kader nad
+      // 22 ms), vsak drugi -- zaostanek za kader se ne vidi, polovica senčne
+      // poteze pa je pri počasnem procesorju poln kader več. Ponoči dijak na
+      // klopi diha: sence vsak šesti kader.
+      const zelimSence = giba || (T >= 206 && kadrov % 6 === 0);
+      const sence = senceDolg || (zelimSence && (povpKader <= 22 || kadrov % 2 === 0));
+      senceDolg = zelimSence && !sence;
       const t0 = performance.now();
-      risi(zdaj / 1000);
-      const ms = performance.now() - t0;
-      povpMs = povpMs * 0.95 + ms * 0.05;
+      risi(zdaj / 1000, sence);
+      jsZadnji = performance.now() - t0;
     }
+    risalPrej = risem;
     if (!pripravljeno) {
       pripravljeno = true;
       document.documentElement.classList.add('pripravljeno');
@@ -526,23 +634,52 @@ async function zagon() {
     }
     requestAnimationFrame(zanka);
   }
+  // Vse na GPE med nalaganjem: geometrije, teksture in senčilniki senc se
+  // sicer naložijo ob prvem pojavu sredi drsenja (vrata vlaka, šola, karta)
+  // in kader zatakne. Risanje v eno piko, brez izreza, skrito tudi.
+  function ogrej(scena, kam) {
+    const vrni = [];
+    scena.traverse((o) => {
+      if (!o.visible && !o.isLight) { o.visible = true; vrni.push(() => { o.visible = false; }); }
+      if (o.frustumCulled) { o.frustumCulled = false; vrni.push(() => { o.frustumCulled = true; }); }
+    });
+    renderer.setViewport(0, 0, 1, 1);
+    renderer.shadowMap.needsUpdate = true;
+    renderer.render(scena, kam);
+    renderer.setViewport(0, 0, W, H);
+    for (const f of vrni) f();
+  }
   // senčilnike prevedi med nalaganjem, ne ob prvem drsenju
+  renderer.shadowMap.autoUpdate = false;
   try {
     kamera.position.set(-1.5, 3.2, 2.6); kamera.lookAt(0, 3.3, 3.05);
     await renderer.compileAsync(svet, kamera);
   } catch (e) { /* starejši brskalnik: prevede ob prvem kadru */ }
+  ogrej(svet, kamera);
   await korak(1);
+  // noč: okolje in senčilniki s točkovnimi lučmi (GPE jih prevaja vzporedno)
+  priprave.push(() => nocnoOkolje(), () => {
+    for (const l of nocneLuci) l.visible = true;
+    renderer.compileAsync(svet, kamera).catch(() => {});
+    for (const l of nocneLuci) l.visible = T >= 206;
+  });
+  kartaNalozena.then((k) => {
+    if (!k) return;
+    renderer.compileAsync(k.scena, k.kamera).catch(() => {})
+      .then(() => priprave.push(() => ogrej(k.scena, k.kamera)));
+  });
   // prvi kader
   izmeri();
-  T = Tcilj = Tiz(scrollY);
+  Yv = Yprej = scrollY;
+  T = Tiz(Yv);
   risi(performance.now() / 1000);
   requestAnimationFrame(zanka);
 
   // kljuke za preizkus (CDP)
   window.__film = {
-    pojdi(t) { prisilni = t; T = Tcilj = t; risi(performance.now() / 1000); },
+    pojdi(t) { prisilni = t; T = t; risi(performance.now() / 1000); },
     pogled(p, c, f = 40) { pogled = p ? { p, c, f } : null; risi(performance.now() / 1000); },
-    skoci() { prisilni = null; T = Tcilj = Tiz(scrollY); fadeBesedila(); risi(performance.now() / 1000); },
+    skoci() { prisilni = null; Yv = Yprej = scrollY; T = Tiz(Yv); fadeBesedila(Yv); risi(performance.now() / 1000); },
     T: () => T,
     kam: (t) => kameraVSvetu(t),
     ura: () => uraC,

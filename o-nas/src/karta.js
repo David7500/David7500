@@ -392,7 +392,7 @@ export async function zgradiKarto(poti) {
     { t: 206, p: [-23.3, 2.4, 9.2], c: [-23.7, 0.2, 6.8], f: 40 },
   ];
   const kz = zlepek(K.map((k) => ({ t: k.t, v: [...k.p, ...k.c, k.f], mir: k.mir })));
-  const v4 = new THREE.Vector4();
+  const v4 = new THREE.Vector4(), vel = new THREE.Vector2();
   let zadnjaDpr = 0;
 
   function risi(r, T, cas, okvir) {
@@ -403,7 +403,9 @@ export async function zgradiKarto(poti) {
     kamera.near = Math.max(0.02, k[1] * 0.02);
     okvir(kamera);
     kamera.updateProjectionMatrix();
-    const w = innerWidth, h = innerHeight;
+    // velikost platna, ne okna: naslovna vrstica telefona je ne spreminja
+    r.getSize(vel);
+    const w = vel.x, h = vel.y;
     for (const m of [...crte, ...zavesaM]) m.resolution.set(w, h);
     const dpr = r.getPixelRatio();
     if (dpr !== zadnjaDpr) { uPike.uDpr.value = dpr; zadnjaDpr = dpr; }
@@ -441,10 +443,10 @@ export async function zgradiKarto(poti) {
   function postaviOznako(o2, vid) {
     if (vid <= 0.001) { o2.el.style.opacity = 0; return; }
     v4.set(o2.p.x, o2.p.y, o2.p.z, 1).applyMatrix4(kamera.matrixWorldInverse).applyMatrix4(kamera.projectionMatrix);
-    const x = (v4.x / v4.w * 0.5 + 0.5) * innerWidth, y = (-v4.y / v4.w * 0.5 + 0.5) * innerHeight;
+    const x = (v4.x / v4.w * 0.5 + 0.5) * vel.x, y = (-v4.y / v4.w * 0.5 + 0.5) * vel.y;
     o2.el.style.opacity = v4.w > 0 ? vid.toFixed(3) : 0;
     o2.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
   }
   function skrij() { plast.style.opacity = 0; }
-  return { risi, skrij, meta };
+  return { risi, skrij, meta, scena, kamera };
 }

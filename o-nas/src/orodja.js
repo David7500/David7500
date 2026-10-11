@@ -73,25 +73,31 @@ export function tekstura(c, { srgb = true, ponavljaj = false, aniz = 8 } = {}) {
   return t;
 }
 
-// Normalna karta iz višinske (Sobel), za tlakovce, opeke in balast.
+// Normalna karta iz višinske (Sobel), za tlakovce, opeke in balast. Brez
+// predmeta na piksel: peron ima 850 000 pik in nalaganje je čakalo nanj.
 export function normalnaIzVisine(c, moc = 2) {
   const w = c.width, h = c.height;
   const src = c.getContext('2d').getImageData(0, 0, w, h).data;
   const [o, g] = platno(w, h);
   const img = g.createImageData(w, h);
-  const H = (x, y) => src[(((y + h) % h) * w + ((x + w) % w)) * 4] / 255;
+  const H = new Float64Array(w * h);
+  for (let i = 0; i < w * h; i++) H[i] = src[i * 4] / 255;
+  const d = img.data;
   for (let y = 0; y < h; y++) {
+    const ym = ((y - 1 + h) % h) * w, y0 = y * w, yp = ((y + 1) % h) * w;
     for (let x = 0; x < w; x++) {
-      const dx = (H(x + 1, y - 1) + 2 * H(x + 1, y) + H(x + 1, y + 1)) -
-                 (H(x - 1, y - 1) + 2 * H(x - 1, y) + H(x - 1, y + 1));
-      const dy = (H(x - 1, y + 1) + 2 * H(x, y + 1) + H(x + 1, y + 1)) -
-                 (H(x - 1, y - 1) + 2 * H(x, y - 1) + H(x + 1, y - 1));
-      const n = new THREE.Vector3(-dx * moc, dy * moc, 1).normalize();
-      const i = (y * w + x) * 4;
-      img.data[i] = (n.x * 0.5 + 0.5) * 255;
-      img.data[i + 1] = (n.y * 0.5 + 0.5) * 255;
-      img.data[i + 2] = (n.z * 0.5 + 0.5) * 255;
-      img.data[i + 3] = 255;
+      const xm = (x - 1 + w) % w, xp = (x + 1) % w;
+      const dx = (H[ym + xp] + 2 * H[y0 + xp] + H[yp + xp]) -
+                 (H[ym + xm] + 2 * H[y0 + xm] + H[yp + xm]);
+      const dy = (H[yp + xm] + 2 * H[yp + x] + H[yp + xp]) -
+                 (H[ym + xm] + 2 * H[ym + x] + H[ym + xp]);
+      const nx = -dx * moc, ny = dy * moc;
+      const k = 1 / Math.sqrt(nx * nx + ny * ny + 1);
+      const i = (y0 + x) * 4;
+      d[i] = (nx * k * 0.5 + 0.5) * 255;
+      d[i + 1] = (ny * k * 0.5 + 0.5) * 255;
+      d[i + 2] = (k * 0.5 + 0.5) * 255;
+      d[i + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);
@@ -149,6 +155,29 @@ export function zdruzi(deli) {
     out.setAttribute(k, new THREE.BufferAttribute(a, sz));
   }
   return out;
+}
+
+// Kosi ene geometrije za izrez pred kamero: vsi delijo atribute in indeks
+// (na GPE gredo enkrat), vsak riše svoj obseg indeksov [a, b) in ima svojo
+// kroglo. Trikotniki so isti, zato je slika ista; nariše se le, kar je v
+// vidnem polju.
+export function kosi(g, meje) {
+  const p = g.attributes.position, ix = g.index;
+  const v = new THREE.Vector3();
+  return meje.map(([a, b]) => {
+    const k = new THREE.BufferGeometry();
+    for (const [ime, at] of Object.entries(g.attributes)) k.setAttribute(ime, at);
+    k.setIndex(ix);
+    k.setDrawRange(a, b - a);
+    const box = new THREE.Box3();
+    for (let i = a; i < b; i++) box.expandByPoint(v.fromBufferAttribute(p, ix.getX(i)));
+    const c = box.getCenter(new THREE.Vector3());
+    let r2 = 0;
+    for (let i = a; i < b; i++) r2 = Math.max(r2, c.distanceToSquared(v.fromBufferAttribute(p, ix.getX(i))));
+    k.boundingBox = box;
+    k.boundingSphere = new THREE.Sphere(c, Math.sqrt(r2));
+    return k;
+  });
 }
 
 export const M4 = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1) => {

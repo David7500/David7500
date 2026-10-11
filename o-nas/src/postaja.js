@@ -73,11 +73,28 @@ function teksturaUre() {
 
 // Odhodna tabla: LED pike, jantarne na črnem. Besedilo se nariše znova le,
 // ko se spremeni zamuda.
+// Pike so sličice: 8 500 krogov s potjo je bilo ob vsaki spremembi zamude
+// 40 ms na hitrem računalniku, na telefonu zatik sredi drsenja.
 function ustvariTablo() {
   const W = 1024, Hh = 300;
   const [c, g] = platno(W, Hh);
-  const [t, tg] = platno(W, Hh);
+  // besedilo se bere nazaj, zato platno v pomnilniku, ne na GPE
+  const t = document.createElement('canvas');
+  t.width = W; t.height = Hh;
+  const tg = t.getContext('2d', { willReadFrequently: true });
   const tex = tekstura(c, { aniz: 8 });
+  const k = 6;
+  const pika = (barva, r) => {
+    const [p, pg] = platno(k, k);
+    pg.fillStyle = barva;
+    pg.beginPath(); pg.arc(3, 3, r, 0, Math.PI * 2); pg.fill();
+    return p;
+  };
+  const piki = { zgoraj: pika('#ffb21f', 2.5), spodaj: pika('#ff7a1a', 2.5) };
+  const [ugasnjena, ug] = platno(W, Hh);
+  ug.fillStyle = '#050403'; ug.fillRect(0, 0, W, Hh);
+  ug.fillStyle = ug.createPattern(pika('#140b02', 1.5), 'repeat');
+  ug.fillRect(0, 0, W, Hh);
   let zadnje = null;
   function narisi(zamuda, ura = '07:42') {
     const kljuc = zamuda + ura;
@@ -95,14 +112,10 @@ function ustvariTablo() {
     tg.font = '600 62px "IBM Plex Mono", monospace';
     if (zamuda > 0) tg.fillText(`zamuda ${zamuda} min`, 300, 245);
     const src = tg.getImageData(0, 0, W, Hh).data;
-    g.fillStyle = '#050403'; g.fillRect(0, 0, W, Hh);
-    const k = 6;
+    g.drawImage(ugasnjena, 0, 0);
     for (let y = 0; y < Hh; y += k) {
       for (let x = 0; x < W; x += k) {
-        const v = src[((y + 3) * W + x + 3) * 4];
-        const vrsta = y > 200 ? '#ff7a1a' : '#ffb21f';
-        g.fillStyle = v > 100 ? vrsta : '#140b02';
-        g.beginPath(); g.arc(x + 3, y + 3, v > 100 ? 2.5 : 1.5, 0, Math.PI * 2); g.fill();
+        if (src[((y + 3) * W + x + 3) * 4] > 100) g.drawImage(y > 200 ? piki.spodaj : piki.zgoraj, x, y);
       }
     }
     tex.needsUpdate = true;
@@ -166,10 +179,13 @@ function teksturaFasade(sirina, nadstropja, okna, opts = {}) {
   return { bar: tekstura(c), emis: tekstura(e) };
 }
 
+// Opeke so pri vseh strehah enake, razlikuje se le barva: normalna karta se
+// izračuna enkrat (šest streh, prej šestkrat).
+let normalaStrehe = null;
 export function teksturaStrehe(barva = [150, 66, 44]) {
   const W = 256, Hh = 256;
   const [c, g] = platno(W, Hh);
-  const [h, hg] = platno(W, Hh);
+  const h = normalaStrehe ? null : platno(W, Hh);
   const r = rng(13);
   const vr = 32, st = 24;
   for (let y = 0; y < Hh; y += vr) {
@@ -178,13 +194,16 @@ export function teksturaStrehe(barva = [150, 66, 44]) {
       const v = 0.82 + r() * 0.3;
       g.fillStyle = `rgb(${barva[0] * v | 0},${barva[1] * v | 0},${barva[2] * v | 0})`;
       g.fillRect(x + zam, y, st - 1, vr);
+      if (!h) continue;
+      const hg = h[1];
       const gr = hg.createLinearGradient(0, y, 0, y + vr);
       gr.addColorStop(0, '#202020'); gr.addColorStop(1, '#d0d0d0');
       hg.fillStyle = gr; hg.fillRect(x + zam, y, st - 1, vr);
       hg.fillStyle = '#404040'; hg.fillRect(x + zam + st - 2, y, 2, vr);
     }
   }
-  return { bar: tekstura(c, { ponavljaj: true }), nor: tekstura(normalnaIzVisine(h, 2.5), { srgb: false, ponavljaj: true }) };
+  if (h) normalaStrehe = normalnaIzVisine(h[0], 2.5);
+  return { bar: tekstura(c, { ponavljaj: true }), nor: tekstura(normalaStrehe, { srgb: false, ponavljaj: true }) };
 }
 
 // Šotorasta streha nad pravokotnikom w × d (sleme vzdolž daljše stranice),

@@ -1,7 +1,7 @@
 // Proga: krivulja, tirnice, pragovi, gramozna greda in vozna mreža.
 // Vlak vozi od vzhoda (x > 0) proti zahodu; s raste v smeri vožnje.
 import * as THREE from 'three';
-import { platno, tekstura, normalnaIzVisine, rng, sum2, fbm, zdruzi, M4, skatla } from './orodja.js';
+import { platno, tekstura, normalnaIzVisine, rng, sum2, fbm, zdruzi, M4, skatla, kosi } from './orodja.js';
 
 export const TIR = 0.7175;   // pol tirne širine do sredine glave
 
@@ -66,14 +66,43 @@ function teksturaGramoza() {
   const img = g.createImageData(S, S);
   // kamenčki: Voronoi-like celice z naključnim tonom
   const tocke = [...Array(260)].map(() => [r() * S, r() * S, 0.55 + r() * 0.45, r()]);
+  // Najbližji in drugi najbližji kamenček se iščeta po mreži celic v obročih
+  // okrog piksla, dokler bližji ne more biti več: isti izid kot primerjava z
+  // vsemi 1 300 (260 in zamiki, da se tekstura ponavlja), a desetkrat
+  // hitreje. Ta zanka je bila na počasnem telefonu polovica nalaganja.
+  const C = 16, NG = (3 * S) / C, NP = tocke.length * 5;
+  const kx = new Float64Array(NP), ky = new Float64Array(NP), kt = new Float64Array(NP), ko = new Float64Array(NP);
+  let np = 0;
+  for (const [px, py, t, o] of tocke) {
+    for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
+      kx[np] = px + ox; ky[np] = py + oy; kt[np] = t; ko[np] = o; np++;
+    }
+  }
+  const celica = (i) => Math.floor((ky[i] + S) / C) * NG + Math.floor((kx[i] + S) / C);
+  const zac = new Int32Array(NG * NG + 1);
+  for (let i = 0; i < NP; i++) zac[celica(i) + 1]++;
+  for (let k = 0; k < NG * NG; k++) zac[k + 1] += zac[k];
+  const vCeli = new Int32Array(NP), pol = zac.slice(0, NG * NG);
+  for (let i = 0; i < NP; i++) vCeli[pol[celica(i)]++] = i;
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
       let d1 = 1e9, d2 = 1e9, ton = 0, odt = 0;
-      for (const [px, py, t, o] of tocke) {
-        for (const [ox, oy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) {
-          const d = (x - px - ox) ** 2 + (y - py - oy) ** 2;
-          if (d < d1) { d2 = d1; d1 = d; ton = t; odt = o; } else if (d < d2) d2 = d;
+      const cx = Math.floor((x + S) / C), cy = Math.floor((y + S) / C);
+      // obroč k: celice na robu kvadrata (2k+1)²; zunaj njega je vsaka
+      // točka dlje od k·C
+      for (let k = 0; k < NG; k++) {
+        for (let j = Math.max(0, cy - k); j <= Math.min(NG - 1, cy + k); j++) {
+          const korak = j === cy - k || j === cy + k ? 1 : 2 * k;
+          for (let i = cx - k; i <= cx + k; i += korak) {
+            if (i < 0 || i >= NG) continue;
+            for (let q = zac[j * NG + i], qk = zac[j * NG + i + 1]; q < qk; q++) {
+              const p = vCeli[q];
+              const d = (x - kx[p]) ** 2 + (y - ky[p]) ** 2;
+              if (d < d1) { d2 = d1; d1 = d; ton = kt[p]; odt = ko[p]; } else if (d < d2) d2 = d;
+            }
+          }
         }
+        if (d2 <= (k * C) ** 2) break;
       }
       const rob = Math.sqrt(d2) - Math.sqrt(d1);
       const v = Math.min(1, rob / 5) * ton * (0.85 + 0.15 * fbm(n, x / 9, y / 9, 3));
@@ -155,15 +184,27 @@ export function zgradiProgo(proga, { atmU, NEBO } = {}) {
   // tirnica leži na pragovih, ti v gramozu: ploskve so si v daljavi bližje,
   // kot zmore globinski medpomnilnik -- zamik po plasteh, da ne migljajo
   tMat.polygonOffset = true; tMat.polygonOffsetFactor = -2; tMat.polygonOffsetUnits = -2;
+  // tirnici v kosih po 300 m: cela dolina je 150 000 trikotnikov, v kadru
+  // jih je navadno nekaj sto metrov
   for (const st of [-TIR, TIR]) {
     const g = trak(proga, 0, L, 2, tirnica.map(([l, y, v]) => [l + st, y, v]), 0, 1);
-    const m = new THREE.Mesh(g, tMat);
-    m.castShadow = false; m.receiveShadow = true;
-    sk.add(m);
+    const naVrsto = 6 * (tirnica.length - 1), vrst = g.index.count / naVrsto;
+    const meje = [];
+    for (let a = 0; a < vrst; a += 150) meje.push([a * naVrsto, Math.min(a + 150, vrst) * naVrsto]);
+    for (const k of kosi(g, meje)) {
+      const m = new THREE.Mesh(k, tMat);
+      m.castShadow = false; m.receiveShadow = true;
+      sk.add(m);
+    }
   }
 
-  // pragovi: betonski, 2,6 m, vsakih 0,6 m; v kosih po 300 m zaradi izreza
-  const pragG = skatla(0.26, 0.19, 2.6, 0.02);
+  // pragovi: betonski, 2,6 m, vsakih 0,6 m. Zaobljeni robovi (300 trikotnikov
+  // na prag) se vidijo le od blizu: tam jih riše premično okno okrog kamere
+  // (`pragoviBlizu`), drugod so škatle z 12 trikotniki v kosih po 300 m
+  // zaradi izreza. Prej so bili zaobljeni vsi: 2,7 milijona trikotnikov, v
+  // kadru ob uri več kot polovica vsega, kar je šlo na GPE.
+  const pragBlizu = skatla(0.26, 0.19, 2.6, 0.02);
+  const pragDalec = new THREE.BoxGeometry(0.26, 0.19, 2.6);
   const pragMat = new THREE.MeshStandardMaterial({ color: '#a7a39b', roughness: 0.9 });
   // pragovi na 0,6 m v daljavi dajo moire; tam se zlijejo z gramozom
   pragMat.onBeforeCompile = (sh) => {
@@ -175,9 +216,10 @@ export function zgradiProgo(proga, { atmU, NEBO } = {}) {
   const KOS = 300;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), t = new THREE.Vector3();
   const r = rng(3);
+  const kosiPragov = [], sPraga = [], vKosu = [], matrike = [];
   for (let s0 = 0; s0 < L; s0 += KOS) {
     const n = Math.floor(Math.min(KOS, L - s0) / 0.6);
-    const im = new THREE.InstancedMesh(pragG, pragMat, n);
+    const im = new THREE.InstancedMesh(pragDalec, pragMat, n);
     for (let i = 0; i < n; i++) {
       const s = s0 + i * 0.6;
       proga.tocka(s, p); proga.smer(s, t);
@@ -185,10 +227,44 @@ export function zgradiProgo(proga, { atmU, NEBO } = {}) {
       p.y = -0.24;
       m4.compose(p, q, new THREE.Vector3(1, 1, 1));
       im.setMatrixAt(i, m4);
+      sPraga.push(s); vKosu.push([kosiPragov.length, i]); matrike.push(...m4.elements);
     }
     im.receiveShadow = true;
     im.computeBoundingSphere();
     sk.add(im);
+    kosiPragov.push(im);
+  }
+  const R_BLIZU = 40, NB = Math.ceil((2 * R_BLIZU) / 0.6) + 2;
+  const blizu = new THREE.InstancedMesh(pragBlizu, pragMat, NB);
+  blizu.receiveShadow = true;
+  blizu.frustumCulled = false;
+  blizu.visible = false;
+  sk.add(blizu);
+  const vse = new Float32Array(matrike), nic = new Float32Array(16);
+  const prviPo = (s) => { let a = 0, b = sPraga.length; while (a < b) { const m = (a + b) >> 1; if (sPraga[m] < s) a = m + 1; else b = m; } return a; };
+  let skA = 0, skB = 0;
+  const cT = new THREE.Vector3();
+  // pragi do R_BLIZU od kamere: zaobljeni v oknu, v kosih skriti (ničelna matrika)
+  function pragoviBlizu(kam) {
+    const s = proga.sPriX(kam.x);
+    proga.tocka(s, cT).setY(-0.24);
+    const d = kam.distanceTo(cT);
+    let a = 0, b = 0;
+    if (d < R_BLIZU) {
+      const w = Math.sqrt(R_BLIZU * R_BLIZU - d * d);
+      a = prviPo(s - w); b = Math.min(prviPo(s + w), a + NB);
+    }
+    if (a === skA && b === skB) return;
+    const spremenjeni = new Set();
+    const postavi = (g, m) => { const [k, i] = vKosu[g]; kosiPragov[k].instanceMatrix.array.set(m, i * 16); spremenjeni.add(k); };
+    for (let g = skA; g < skB; g++) if (g < a || g >= b) postavi(g, vse.subarray(g * 16, g * 16 + 16));
+    for (let g = a; g < b; g++) if (g < skA || g >= skB) postavi(g, nic);
+    for (const k of spremenjeni) kosiPragov[k].instanceMatrix.needsUpdate = true;
+    blizu.instanceMatrix.array.set(vse.subarray(a * 16, b * 16));
+    blizu.instanceMatrix.needsUpdate = true;
+    blizu.count = b - a;
+    blizu.visible = b > a;
+    skA = a; skB = b;
   }
 
   // vozna mreža: drogovi na severni strani (nasproti perona), konzola čez
@@ -244,7 +320,7 @@ export function zgradiProgo(proga, { atmU, NEBO } = {}) {
   }
   const zice = zgradiZice(seg, atmU, NEBO);
   sk.add(zice);
-  return { skupina: sk, VOD_Y, zice };
+  return { skupina: sk, VOD_Y, zice, pragoviBlizu };
 }
 
 // Žice kot trak čez zaslon: vsaj 1,2 piksla široke, tanjše postanejo

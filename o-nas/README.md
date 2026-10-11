@@ -14,10 +14,10 @@ Ure v zgodbi so ponazoritev, ne trditev o kateri progi; na strani o avtorju piš
 
 ## Datoteke
 
-* `src/main.js` — časovnica: drsenje → `T`, ključi kamere (Hermitov zlepek z omejenimi tangentami, rezi), ura postaje kot švicarska podrejena ura (`uraKorak`), pot dijaka skozi vrata, testne kljuke `window.__film`.
+* `src/main.js` — časovnica: drsenje → navidezno drsenje `Yv` (mehko, z omejeno hitrostjo filma) → `T`, ključi kamere (Hermitov zlepek z omejenimi tangentami, rezi), ura postaje kot švicarska podrejena ura (`uraKorak`), pot dijaka skozi vrata, ločljivost po času kadra, `ogrej` (vse na GPE med nalaganjem), testne kljuke `window.__film`.
 * `src/vlak.js` — Stadler KISS SŽ 313: karoserija iz obročev, čelo kot višinsko polje z luknjo za spenjačo, poslikava v senčilniku. Mere s fotografij na Commons (313-001, -002, -008, -010, -016, -017, -018). Za okni notranjost brez geometrije (žarek v škatlo etaže: sedeži, potniki, luči, daljna okna); pod nadstreškom se v karoseriji odbija nadstrešek. Za vrati vmesnega voza pravo preddverje s stopnicami, v karoseriji je takrat odprtina.
 * `src/postaja.js` — peron, nadstrešek, ura, tabla, poslopje, dijak (postava »močan«, izbrana med tremi).
-* `src/proga.js` — tir, pragovi, gramoz, vozna mreža. Žice so trak z najmanj 1,25 piksla in pokritostjo, ne `LINES`, zato ne utripajo; tirnice in pragovi imajo zamik globine po plasteh.
+* `src/proga.js` — tir, pragovi, gramoz, vozna mreža. Pragovi so zaobljeni le do 40 m od kamere, tirnice v kosih po 300 m. Žice so trak z najmanj 1,25 piksla in pokritostjo, ne `LINES`, zato ne utripajo; tirnice in pragovi imajo zamik globine po plasteh.
 * `src/pokrajina.js`, `src/nebo.js` — teren, drevesa, vasi, megla; nebo in zračna perspektiva v vseh materialih.
 * `src/karta.js` — Pogl. 3; podatki se nalagajo vzporedno in ne zadržijo prvega kadra. Barve zamud vzame iz spremenljivk v `base.css`.
 
@@ -46,6 +46,8 @@ mkdir -p dem && for x in 274 275 276 277 278 279; do for y in 180 181 182 183; d
 Meja (`slovenija.json`) je iz Natural Earth (`ne_10m_admin_0_countries`). Številke v besedilu Pogl. 3 (77 vlakov, 1 106 avtobusov, IC 351 v 42 dneh) so iz istega izvoza; ob novem izvozu jih popravi v predlogi.
 
 ## Pregled
+
+Hitrost (trikotniki, luči, nalaganje) in zakaj: `.claude/rules/strani.md`, razdelek o `/o-nas`. Število trikotnikov in klicev risanja vrne `__film.info()`.
 
 ```bash
 python o-nas/posnetek.py "http://127.0.0.1:8001/o-nas?dpr=1" --size 412x860 --mobile --shots T=0,T=50,T=230
