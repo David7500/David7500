@@ -167,8 +167,6 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, 8000.
 | `KAJROS_WEATHER` | 1 | `0` izklopi dnevno dopolnjevanje vremena |
 | `KAJROS_WEATHER_HOUR` | 5 | ura, ob kateri se vreme dopolni za zadnje 3 dni |
 | `KAJROS_SZ_ZAMUDE` | 1 | `0` izklopi zamude vlakov z zemljevida SŽ (prek Chroma) |
-| `KAJROS_SZ_TABLA_SECONDS` | 15 | branje table zamud SŽ ob zemljevidu (40 kB); `0` izklopi |
-| `KAJROS_SZ_TABLA_PISE` | 0 | `1`: tabla zamud piše v bazo; sicer samo meri, koliko je pred zemljevidom |
 | `KAJROS_PERONI` | 1 | `0` izklopi tire s table SŽ (prek Chroma) |
 | `KAJROS_SZ_CHROME`, `KAJROS_SZ_XVFB` | poišče sam | pot do Chroma in Xvfb, kadar nista v `PATH` |
 

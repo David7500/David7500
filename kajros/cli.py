@@ -316,7 +316,7 @@ def cmd_brskalnik(args):
     izid = 0
     try:
         t = time.monotonic()
-        vlaki = json.loads(b.zahtevaj(zamude_sz.AKTIVNI))
+        vlaki = json.loads(b.zahtevaj(zamude_sz.AKTIVNI)) or []    # brez vlakov `null`
         s = b.stanje()
         print(f"zagon in izziv: {s['zadnji_preboj_s']} s ({s['razlicica']}, {s['zaslon']})")
         print(f"zemljevid vlakov: {len(vlaki)} vlakov v {time.monotonic() - t:.1f} s")
@@ -325,13 +325,9 @@ def cmd_brskalnik(args):
         print(f"tabla postaje {args.postaja}: {len(tabla['departures'])} odhodov, "
               f"{len(tabla['arrivals'])} prihodov, tiri {peroni.razberi(tabla)[0]} "
               f"v {time.monotonic() - t:.1f} s")
-        t = time.monotonic()
-        vrstice, predvidenih = zamude_sz.razberi_tablo(b.zahtevaj(zamude_sz.TABLA))
-        print(f"tabla zamud: {len(vrstice)} izmerjenih, {predvidenih} napovedi "
-              f"v {time.monotonic() - t:.1f} s")
         if b.stanje().get("pomnilnik"):
             print(f"Chrome porabi {b.stanje()['pomnilnik'] / 2**20:.0f} MB (PSS)")
-    except RuntimeError as exc:             # tudi NapakaBrskalnika
+    except brskalnik.NapakaBrskalnika as exc:
         print(f"NE GRE: {exc}")
         izid = 1
     finally:

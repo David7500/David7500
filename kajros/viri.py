@@ -76,10 +76,10 @@ class Vir:
     prag_napak: int = 3
 
 
-def _zamude_sz_pot(ime: str = "AKTIVNI") -> str:
+def _zamude_sz_pot() -> str:
     # Uvoz ob klicu: `zamude_sz` uvozi ta modul.
-    from . import zamude_sz
-    return getattr(zamude_sz, ime)
+    from .zamude_sz import AKTIVNI
+    return AKTIVNI
 
 
 def _okolje_vklop(ime: str) -> bool:
@@ -158,17 +158,6 @@ def vsi() -> tuple[Vir, ...]:
             "ni navedena", f"vsakih {config.SZ_ZAMUDE_SECONDS} s",
             "kajros-zamude-sz", config.SZ_ZAMUDE, ("zamude_sz",), brskalnik_ukrep,
             preveri=brskalnik.ZACETNA, preveri_ok=(403,)),
-        Vir("tabla_sz", "tabla zamud SŽ", "izvirniki",
-            "Vlaki z vsaj 3 min zamude, s postajo in „v odhodu“ ali „v prihodu“.",
-            ("pospešek zemljevida SŽ: isto minuto pove prej; zaenkrat samo meri, "
-             "za koliko (v bazo s KAJROS_SZ_TABLA_PISE=1)") if not config.SZ_TABLA_PISE
-            else "pospešek zemljevida SŽ: isto minuto pove prej in jo zapiše",
-            f"{brskalnik.IZVOR}{_zamude_sz_pot('TABLA')}", "SŽ (potniski.sz.si), brez posrednika",
-            "ni navedena", f"vsakih {config.SZ_TABLA_SECONDS} s, ko vozi vsaj en vlak",
-            "kajros-zamude-sz", config.SZ_ZAMUDE and config.SZ_TABLA_SECONDS > 0, (),
-            "Tabla je pospešek: zamude vlakov piše zemljevid naprej. „ni razdelka "
-            "zamud“: SŽ je spremenil stran, popravi `zamude_sz.razberi_tablo`. "
-            + brskalnik_ukrep),
         Vir("zamude_lpp", "LPP · zasloni postajališč", "izvirniki",
             "Prihodi z LPP-jevih zaslonov na ~75 postajališčih, pripeti na vožnje.",
             "rezerva za mestni LPP, kadar ga derp.si nima; sicer primerjava",
@@ -496,7 +485,6 @@ _ZAPISANO: dict[str, Callable] = {
     "derp_ovire": lambda c, z: _ena(c, "SELECT MAX(last_seen) FROM alert"),
     "nap": lambda c, z: _meta_json_ts(c, "nap"),
     "zamude_sz": lambda c, z: _meta_json_ts(c, "zamude_sz"),
-    "tabla_sz": lambda c, z: _meta_json_ts(c, "zamude_sz_tabla"),
     "zamude_lpp": lambda c, z: _meta_json_ts(c, "zamude_lpp"),
     "peroni": lambda c, z: _ena(c, "SELECT MAX(preverjeno) FROM peron_postaja"),
     "gtfs_ijpp": lambda c, z: _uvoz_ts(c),

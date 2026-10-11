@@ -122,13 +122,6 @@ PERONI_SECONDS = int(okolje("PERONI_SECONDS", "600"))
 # njihovi strani, 3,5 kB vsak. Izklopi se s `KAJROS_SZ_ZAMUDE=0`.
 SZ_ZAMUDE = okolje("SZ_ZAMUDE", "1") != "0"
 SZ_ZAMUDE_SECONDS = int(okolje("SZ_ZAMUDE_SECONDS", "5"))
-# Tabla zamud SŽ je isto minuto pokazala ~14 s pred zemljevidom (ponoči, 8
-# sprememb), a je 40 kB stisnjeno (zemljevid 1 kB) in nosi samo vlake z vsaj
-# 3 min. Na 15 s, kot njihova stran zemljevid, in samo, ko vozi vsaj en vlak;
-# `0` jo izklopi. Do meritve podnevi (David, 10. 10. 2026) samo meri, koliko
-# je pred zemljevidom; `KAJROS_SZ_TABLA_PISE=1` jo pusti pisati v bazo.
-SZ_TABLA_SECONDS = int(okolje("SZ_TABLA_SECONDS", "15"))
-SZ_TABLA_PISE = okolje("SZ_TABLA_PISE", "0") == "1"
 
 # SŽ potniški promet. Poleg vlakov (GTFS route_type 2) uvozimo tudi njihove
 # **nadomestne prevoze** (route_type 3): avgusta 2026 je bilo teh 56 voženj in

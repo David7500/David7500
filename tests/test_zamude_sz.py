@@ -27,19 +27,14 @@ def _pozabi():
     iz_lege._prvic = None
     iz_lege._sz_ts = 0.0
     zamude_sz._odtis = None
-    zamude_sz._na_zemljevidu = {}
-    for d in zamude_sz._prvic.values():
-        d.clear()
-    zamude_sz._primerjano.clear()
-    zamude_sz._prebrano.clear()
-    zamude_sz._prednost.clear()
 
 
 @pytest.fixture(autouse=True)
 def _cist_spomin(monkeypatch):
     _pozabi()
     # Preizkus nikoli ne sme zagnati pravega Chroma.
-    monkeypatch.setattr(zamude_sz, "_get_tabla", lambda: pytest.fail("tabla brez nadomestka"))
+    monkeypatch.setattr(zamude_sz.brskalnik, "zahtevaj",
+                        lambda pot: pytest.fail("potniski.sz.si brez nadomestka"))
     yield
     _pozabi()
 
@@ -319,142 +314,6 @@ def test_napaka_vira_se_zapise_in_vlakov_ne_vodi(monkeypatch, tmp_path):
     assert "ni Chroma" in meta["napaka"] and meta["napaka_ts"]
     assert not iz_lege.sz_vodi()
     assert "derp.si" in dnevnik[0]
-
-
-# --- tabla zamud SŽ -----------------------------------------------------------
-
-# Razdelek #zamude, kot ga izriše potniski.sz.si 10. 10. 2026 (skrajšano): dve
-# tabeli, napoved, nadomestni avtobus in razdelek ovir za njim.
-TABLA_HTML = """<html><body><header><div class="delay">LPV 2002 +24</div></header>
-<section class="delays-section my-6 pb-6" id="zamude"><div class="container">
-<h3 class="no-decor">Izpostavljene zamude</h3>
-<table class="table delays over-30 mt-3"><thead><tr><th>Postaja</th><th>Relacija</th>
-<th>Vrsta</th><th width="25%">Čas</th></tr></thead><tbody>
-<tr><td>Solkan</td><td>Jesenice-Nova Gorica</td><td><span>LP 4203</span></td>
-<td><b>52 min</b> V PRIHODU</td></tr></tbody></table>
-<h3>Zamude</h3><table class="table delays under-30 mt-3"><tbody>
-<tr><td>Plave</td><td>Jesenice-Nova Gorica</td><td>LP 4204</td><td>5 min V ODHODU</td></tr>
-<tr><td>Ljubljana</td><td>Ljubljana-Maribor</td><td>LPV 2508</td>
-<td>PREDVIDENA ZAMUDA 015 min</td></tr>
-<tr><td>Logatec</td><td>Ljubljana-Logatec</td><td>BUS 26018</td><td>7 min V ODHODU</td></tr>
-<tr><td>Brežice &amp; okolica</td><td>X</td><td>RG 434</td><td>29 min V ODHODU</td></tr>
-</tbody></table></div></section>
-<section id="ovire"><table><tr><td>Sevnica</td><td>X</td><td>LP 1</td><td>3 min V ODHODU</td></tr>
-</table></section></body></html>"""
-
-
-def test_tabla_razbere_meritve_ne_napovedi():
-    vrstice, predvidenih = zamude_sz.razberi_tablo(TABLA_HTML)
-    assert vrstice == [("Solkan", "LP 4203", 52, True), ("Plave", "LP 4204", 5, False),
-                       ("Logatec", "BUS 26018", 7, False), ("Brežice & okolica", "RG 434", 29, False)]
-    assert predvidenih == 1
-    with pytest.raises(RuntimeError, match="razdelka zamud"):
-        zamude_sz.razberi_tablo("<html>Izvajanje varnostnega preverjanja</html>")
-
-
-def test_tabla_se_pripne_na_voznjo_z_zemljevida():
-    """Tabla nima ure: vožnjo in dan izbere zemljevid, tabla sme biti do
-    dveh postankov pred njim. Različica t2 z isto številko ne pride v poštev."""
-    vr = _vr(_baza())
-    zem = {"4203": ("t1", DAN, 20)}
-    vrstice = [("Solkan", "LP 4203", 52, True), ("Nova Gorica", "LP 4203", 53, True),
-               ("Plave", "LP 4203", 50, False), ("Bled", "LP 4203", 50, False),
-               ("Solkan", "LP 9999", 9, False), ("Logatec", "BUS 26018", 7, False)]
-    pripete, stevci = zamude_sz.pripni_tablo(vrstice, vr, zem)
-    assert pripete == [("t1", DAN, 21, 3120, True), ("t1", DAN, 22, 3180, True),
-                       ("t1", DAN, 20, 3000, False)]
-    assert stevci == {"vrstic": 5, "brez_zemljevida": 1, "zaostalih": 0, "nepripetih": 1}
-    # Zemljevid je že naprej: tabla, ki še kaže Plave, je zaostala, ne napačna.
-    _, stevci = zamude_sz.pripni_tablo([("Plave", "LP 4203", 50, False)], vr,
-                                       {"4203": ("t1", DAN, 21)})
-    assert stevci["zaostalih"] == 1
-
-
-def test_zapolni_prazen_postanek_za_tablo_samo_s_tablo():
-    """Tabla zapiše prihod v Solkan, zemljevid odhod iz Plav pove šele za njo."""
-    c = _baza()
-    zamude_sz.zapisi(c, [("t1", DAN, 21, 3120, True)], ZDAJ)
-    assert zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ + 14)["nazaj"] == 1
-    assert zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ + 14,
-                            zapolni=True)["zapisanih"] == 1
-    # Zemljevid isti odhod ponavlja, dokler vlak stoji v Solkanu: to ni vrnitev.
-    izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ + 30, zapolni=True)
-    assert izid == {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0}
-    # Drugačna vrednost za prevoženi postanek pa je (LPV 2616).
-    assert zamude_sz.zapisi(c, [("t1", DAN, 20, 3540, False)], ZDAJ + 45,
-                            zapolni=True)["nazaj"] == 1
-
-
-def test_prednost_table_pred_zemljevidom():
-    """Kdo novo minuto vožnje pokaže prej, ne glede na postajo. Šteje samo
-    vrednost, ki je nova pri obeh: kar je bilo tam ob prvem branju, ni
-    sprememba. Pozitivno = tabla prej."""
-    star, nov, drugi = ("t1", DAN, 2940), ("t1", DAN, 3000), ("t2", DAN, 600)
-    zamude_sz._opazi("zemljevid", [star], ZDAJ)
-    zamude_sz._opazi("tabla", [star], ZDAJ + 1)
-    assert not zamude_sz._prednost, "obe prvi branji"
-    zamude_sz._opazi("tabla", [nov], ZDAJ + 15)
-    zamude_sz._opazi("zemljevid", [nov], ZDAJ + 20)
-    zamude_sz._opazi("zemljevid", [nov, drugi], ZDAJ + 29)
-    zamude_sz._opazi("tabla", [nov, drugi], ZDAJ + 30)
-    assert list(zamude_sz._prednost) == [5.0, -1.0]
-    p = zamude_sz._povzetek_prednosti()
-    assert (p["n"], p["tabla_prej"], p["zemljevid_prej"]) == (2, 1, 0)
-    # Vrednost, ki je vir 10 min ne pokaže več, se pozabi.
-    zamude_sz._opazi("tabla", [], ZDAJ + 30 + zamude_sz.TABLA_POTRDITEV_S + 1)
-    assert nov not in zamude_sz._prvic["tabla"]
-
-
-def test_tabla_v_senci_ne_pise(monkeypatch):
-    c = _baza()
-    zamude_sz._odtis = "a"
-    zamude_sz.korak(c, [VRSTICA], ZDAJ)
-    n_run = c.execute("SELECT COUNT(*) FROM run").fetchone()[0]
-    s = zamude_sz.korak_tabla(c, TABLA_HTML, ZDAJ + 5)
-    assert (s["vrstic"], s["pripetih"], s["brez_zemljevida"], s["pise"]) == (3, 1, 2, False)
-    assert ("t1", DAN, 3120) in zamude_sz._prvic["tabla"], "meri tudi brez postaje"
-    assert c.execute("SELECT COUNT(*) FROM run").fetchone()[0] == n_run
-    assert json.loads(db.get_meta(c, "zamude_sz_tabla"))["ts"] == int(ZDAJ + 5)
-    monkeypatch.setattr(zamude_sz.config, "SZ_TABLA_PISE", True)
-    assert zamude_sz.korak_tabla(c, TABLA_HTML, ZDAJ + 20)["zapisanih"] == 1
-    assert c.execute("SELECT delay_arr FROM run WHERE trip_id = 't1' AND stop_seq = 21"
-                     ).fetchone()[0] == 3120
-
-
-def test_nit_bere_tablo_ob_vlakih_in_njena_napaka_ne_ustavi_zemljevida(monkeypatch, tmp_path):
-    pot = tmp_path / "k.sqlite"
-    pravi = db.connect
-    c = pravi(pot)
-    db.init(c)
-    c.commit()
-    monkeypatch.setattr(db, "connect", lambda path=None: pravi(pot))
-    monkeypatch.setattr(zamude_sz.config, "SZ_ZAMUDE_SECONDS", 0)
-    stop, branj, tabel = threading.Event(), [], []
-
-    def get():
-        branj.append(1)
-        if len(branj) == 3:
-            stop.set()
-        return []
-
-    def korak(conn, vrstice, zdaj, nespremenjeno=False):
-        # Prvo branje: zemljevid prazen (noč), tabla se ne bere; nato vlak.
-        zamude_sz._na_zemljevidu = {} if len(branj) == 1 else {"4203": ("t1", DAN, 20)}
-        return {"vlakov": 0, "zapisanih": 0, "nepripetih": 0}
-
-    def tabla():
-        tabel.append(1)
-        raise RuntimeError("na strani SŽ ni razdelka zamud (#zamude)")
-
-    monkeypatch.setattr(zamude_sz, "_get", get)
-    monkeypatch.setattr(zamude_sz, "korak", korak)
-    monkeypatch.setattr(zamude_sz, "_get_tabla", tabla)
-    dnevnik = []
-    zamude_sz.teci(stop, dnevnik.append)
-    assert len(tabel) == 1, "prvič ni vlakov, nato enkrat na SZ_TABLA_SECONDS"
-    assert iz_lege.sz_vodi(), "napaka table zemljevida ne ustavi"
-    assert "razdelka zamud" in json.loads(db.get_meta(pravi(pot), "zamude_sz_tabla"))["napaka"]
-    assert any("tabla zamud SŽ ne odgovarja" in d for d in dnevnik)
 
 
 def test_brez_vlakov_sz_vrne_null(monkeypatch):

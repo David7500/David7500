@@ -1408,9 +1408,6 @@ def api_health():
         # se ujemata. Zapiše jih nit ob vsakem branju zemljevida.
         zsz = db.get_meta(conn, "zamude_sz")
         out["zamude_sz"] = json.loads(zsz) if zsz else None
-        # Tabla zamud SŽ ob zemljevidu: za koliko je pred njim (`zamude_sz._opazi`).
-        zst = db.get_meta(conn, "zamude_sz_tabla") if config.SZ_TABLA_SECONDS else None
-        out["zamude_sz_tabla"] = json.loads(zst) if zst else None
         # Isto za mestni LPP (`zamude_lpp`), z LPP-jevih zaslonov.
         zl = db.get_meta(conn, "zamude_lpp") if config.LPP_ZAMUDE else None
         out["zamude_lpp"] = json.loads(zl) if zl else None

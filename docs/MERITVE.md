@@ -2442,6 +2442,20 @@ Iz tega: zemljevid beremo na **5 s** (prej 30): novo stanje v največ 5 s namest
 
 **Tabla ni zemljevid z drugo obliko.** Pripenjanje table na postanke 10. 10. ob 23:31 (7 vrstic): 3 na postanku, ki ga zemljevid še ni ali ga je ravnokar prevozil; 2 na postaji, ki jo je zemljevid že prevozil, z isto minuto (RG 434 „Ljubljana Zalog“, zemljevid že za Ljubljano Poljem; EC 39 „Lesce-Bled“, zemljevid že na cilju); 1 na prometnem mestu, kjer vlak ne ustavi (IC 350 „Ponikva“); 1 vlak, ki ga zemljevid nima (EN 414). Tabla piše, kje je bila zamuda sporočena, zemljevid postajo izračuna sam. Prednost se zato meri po vožnji in minuti, ne po postaji.
 
+**Senca podnevi** (arwen, 11. 10. 2026, nedelja, 0:00–9:53; zemljevid na 5 s, tabla na 15 s; prvo branje vsakega vira izključeno): **246 parov** (vožnja, dan, minuta), ki sta jih pokazala oba. Prednost table = čas, ko smo minuto videli na zemljevidu, minus čas na tabli:
+
+| | |
+|---|---|
+| mediana | **−0,5 s** |
+| p10 / p90 | −5,5 s / +9,5 s |
+| tabla več kot 2 s prej | 106 (43 %) |
+| zemljevid več kot 2 s prej | 32 (13 %) |
+| v ±2 s | 108 (44 %) |
+
+Del razlike je naš ritem: ko bi oba vira minuto pokazala hkrati, bi jo zemljevid (5 s) v povprečju videl 5 s prej kot tabla (15 s), tabla bi bila prej za več kot 2 s v ~6 %. Izmerjenih 43 % pomeni, da je tabla pri SŽ res nekaj sekund pred zemljevidom, ~5 s na mediani -- ne 14 s, kot je kazalo osem nočnih sprememb. Sekunde na zamudi, ki je v celih minutah, potniku ne spremenijo ničesar.
+
+Tudi pripenjanje omeji korist: ob 9:52 18 vrstic, od tega **6 pripetih**, 4 za zemljevidom, 6 brez postanka v dveh naprej, 2 vlaka, ki ju zemljevid nima (ob 9:46: 19 vrstic, 4 pripete). Tabla v 10 h desetkrat odgovori 500 (vsakič popravljeno v naslednjem branju, 15 s); zemljevid v istem času brez napake. **Odločitev (David, 11. 10.): tabla se ne bere več**, zemljevid na 5 s ostane edini vir zamud vlakov s strani SŽ.
+
 **Cloudflare** (podrobnosti v `zajem.md`): brezglavi Chrome ostane v izzivu; Chrome z oknom (Xvfb) ga reši v 3–7 s. `--remote-debugging-pipe` in `--remote-debugging-port=0` postavita `navigator.webdriver = true` in ne gresta skozi (pet poskusov po 40–90 s); vrata, ki jih izberemo sami, gredo. Doma v 40 min en ponoven izziv (rešen z nalaganjem strani v 7 s). Na arwenu (Chrome for Testing, Xvfb) 60 min, 240 branj table po 15 s: **240 od 240 brez izziva**.
 
 **Cena**: Chrome 384–563 MB PSS (14 procesov), Xvfb 75 MB. Malina (Pi Zero W, armv6) Chroma nima, zato vlake zajema samo arwen.
