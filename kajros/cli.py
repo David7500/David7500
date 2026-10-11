@@ -309,8 +309,13 @@ def cmd_primerjava(args):
 def cmd_odkloni(args):
     """Kje vozila ne vozijo po trasi, po odsekih: koliko prevozov je bilo
     odklonjenih. Delež loči stalen odklon (trasa ne drži) od občasnega."""
-    conn = db.connect()
-    db.init(conn)
+    if args.samo_branje:
+        # Na arwenu kot `david`: baza je od storitve, pisati vanjo ne smemo.
+        conn = sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+    else:
+        conn = db.connect()
+        db.init(conn)
     do = int(time.time())
     vrstice = [r for r in odkloni.po_odsekih(conn, do - args.dni * 86400, do)
                if r["prevozov"] >= args.najmanj]
@@ -589,6 +594,7 @@ def main(argv=None):
     a.add_argument("--dni", type=int, default=7)
     a.add_argument("--najmanj", type=int, default=3, help="najmanj prevozov odseka")
     a.add_argument("--najvec", type=int, default=40, help="koliko odsekov izpisati")
+    a.add_argument("--samo-branje", action="store_true", help="odpri bazo samo za branje (scripts/odkloni.sh)")
     a.set_defaults(func=cmd_odkloni)
 
     a = sub.add_parser("brskalnik",
