@@ -251,7 +251,9 @@ function oznaciZvezde() {
     b.hidden = !t || $(`#q-${kaj}`).value.trim() !== napisTocke(t);
     if (b.hidden) continue;
     const s = shranjenaZa(t);
-    b.textContent = s ? "★ shranjeno" : "☆ shrani";
+    // Samo zvezdica, beseda je v imenu gumba (`pot.css`).
+    b.textContent = s ? "★" : "☆";
+    b.setAttribute("aria-label", s ? "shranjeno" : "shrani");
     b.title = s ? `odstrani „${s.ime}“ med shranjenimi`
                 : "shrani to točko (dom, služba …)";
     b.setAttribute("aria-pressed", String(!!s));

@@ -54,8 +54,10 @@
 .deli-kand-besedilo { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .deli-kand-besedilo strong { font: 600 16px/1.3 var(--sans); }
 .deli-kand-besedilo span { font: 400 13px/1.35 var(--sans); color: var(--deli-na-kont-2); }
-.deli-znacka {
-  align-self: center; flex-shrink: 0; padding: 3px 9px; border-radius: var(--r-pilula);
+/* Nad imenom, ne desno od njega: desno je pri 412 pikah stisnila kraj in
+   uro v štiri vrstice. */
+.deli-kand-besedilo > .deli-znacka {
+  align-self: flex-start; margin-bottom: 3px; padding: 2px 9px; border-radius: var(--r-pilula);
   background: var(--deli-gumb); color: var(--deli-na-gumb); font: 600 11.5px/1.3 var(--sans);
 }
 
@@ -119,8 +121,9 @@
 .deli-vabilo b { font-weight: 600; color: var(--deli-gumb); }
 
 /* Okno vožnje: ena vrstica pod trenutno zamudo, samo ko vožnja vozi ali
-   odpelje v 30 min (`train.js`). */
-.deli-okno { margin: 12px 0 0; }
+   odpelje v 30 min (`train.js`). Rob kot kartica trenutne zamude nad njo:
+   brez njega je segla do roba zaslona in se dotikala opozorila pod sabo. */
+.deli-okno { margin: 0 12px 12px; }
 .deli-vrstica {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 14px 16px; cursor: pointer; text-align: left;

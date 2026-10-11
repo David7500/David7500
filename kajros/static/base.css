@@ -729,6 +729,10 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   --orodna-prostor: calc(96px + env(safe-area-inset-bottom, 0px));
   --orodna-sirina: min(380px, calc(100vw - 24px));
 }
+/* Kar stran sama pripelje na zaslon (`scrollIntoView`, fokus), mora pristati
+   nad vrstico, ne pod njo: kartica deljenja je ostala z gumbi pod njo. Okno
+   vožnje na telefonu drsi v `.train-body`, ki ima svoje pravilo. */
+html:has(.orodna) { scroll-padding-bottom: var(--orodna-prostor); }
 
 .orodna {
   position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px));

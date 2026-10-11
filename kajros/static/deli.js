@@ -214,11 +214,11 @@
       <button type="button" class="deli-kandidat${prvi ? " je-prvi" : ""}" data-deli="izberi" data-i="${i}">
         <span class="deli-ikona" style="background:${ink(k)}">${isBus(k.mode) ? SVG_BUS : SVG_VLAK}</span>
         <span class="deli-kand-besedilo">
+          ${prvi ? '<span class="deli-znacka">najbolj verjetno</span>' : ""}
           <strong>${naslovVoznje(k)}</strong>
           ${vrstica(escapeHtml(kjeText(k, k.network === "avtobus")), "")}
           ${uraText(k) ? `<span>${escapeHtml(uraText(k))}</span>` : ""}
         </span>
-        ${prvi ? '<span class="deli-znacka">najbolj verjetno</span>' : ""}
       </button>`;
   }
 
@@ -283,7 +283,35 @@
       + `<button type="button" class="deli-gumb" data-deli="nazaj">V redu</button>`;
   }
 
+  // Kartica se ob vsakem koraku razpre in zraste navzdol: na domači strani in
+  // v iskalniku pod rob zaslona ali pod orodno vrstico, kjer gumbov ni videti
+  // (prijava 11. 10. 2026: „moraš spet skrolat dol“). Nov zaslon jo zato
+  // pripelje na zaslon, a samo, če jo potnik gleda: osvežitev med deljenjem
+  // ali korak, ko je že drugje na strani, strani ne premakne. Deljenje ima
+  // tri zaslone (prva lega, drugi te še ne vidijo, vidijo te), ne enega.
+  function zaslon() {
+    if (S.faza !== "deli") return S.faza;
+    return !S.stanje ? "deli" : S.stanje.verodostojno ? "vozi" : "caka";
+  }
+  let prejZaslon = zaslon();
+  function naZaslon() {
+    if (zaslon() === prejZaslon) return;
+    prejZaslon = zaslon();
+    if (S.faza === "miruje") return;
+    const b = el.getBoundingClientRect();
+    if (b.top >= innerHeight || b.bottom <= 0) return;
+    el.scrollIntoView({
+      block: "nearest",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }
+
   function izrisi() {
+    narisi();
+    naZaslon();
+  }
+
+  function narisi() {
     const f = S.faza;
     el.classList.toggle("je-odprt", f !== "miruje");
     if (f === "miruje") {
@@ -622,6 +650,8 @@
       S.voznja = st.voznja;
       S.stanje = st.stanje || null;
       S.faza = "deli";
+      // Deljenje je teklo že prej, potnik ga ni začel zdaj: strani ne premakni.
+      prejZaslon = zaslon();
       S.anketa = setInterval(beriNativno, 5000);
     } catch (e) {
       /* stara aplikacija brez deljenja */

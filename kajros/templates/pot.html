@@ -54,7 +54,7 @@
           {#- Gumb se pokaže šele, ko je kraj postavljen: shraniti prazno polje
               ni mogoče, gumb pa bi to obljubljal. #}
           <button class="tocka-gumb tocka-shrani" data-akcija="shrani"
-                  aria-pressed="false" hidden>☆ shrani</button>
+                  aria-pressed="false" aria-label="shrani" hidden>☆</button>
           <ul id="z-od" class="tocka-zadetki" role="listbox" hidden></ul>
         </div>
         {#- Ime se vpraša v strani, ne s `prompt()`: v aplikaciji za Android
@@ -89,7 +89,7 @@
                  role="combobox" aria-expanded="false" aria-controls="z-do">
           <button class="tocka-gumb" data-akcija="karta" title="Izberi na zemljevidu">karta</button>
           <button class="tocka-gumb tocka-shrani" data-akcija="shrani"
-                  aria-pressed="false" hidden>☆ shrani</button>
+                  aria-pressed="false" aria-label="shrani" hidden>☆</button>
           <ul id="z-do" class="tocka-zadetki" role="listbox" hidden></ul>
         </div>
         <div class="tocka-ime" hidden>

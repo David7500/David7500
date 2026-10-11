@@ -105,10 +105,12 @@
 .d-obl:active { box-shadow: none; }
 .d-obl:active .d-obl-oblika { filter: brightness(1.35); transition: none; }
 
-/* Deljenje lege: oblika je vabilo, `deli.js` na istem mestu razpre kartico
-   čez vso širino (`je-odprt`) in jo po koncu vrne. Vsebina v `deli.css`. */
+/* Deljenje lege: oblika je vabilo, `deli.js` razpre kartico čez vso širino
+   (`je-odprt`) in jo po koncu vrne. Vsebina v `deli.css`. Odprta gre na
+   začetek vrstice, kjer je bil prst: na koncu se je prelomila pod Budilko in
+   Zemljevid, pod rob zaslona (prijava 11. 10. 2026). */
 .d-deli { flex: 1 1 0; min-width: 0; }
-.d-deli.je-odprt { flex-basis: 100%; }
+.d-deli.je-odprt { flex-basis: 100%; order: -1; }
 
 /* ---------- moje poti ----------
  *

@@ -95,6 +95,10 @@
 /* Zvezdica je ista govorica kot v iskalniku zvez (`.fav-toggle`): en gumb
    pove stanje in ga preklopi. */
 .tocka-shrani { white-space: nowrap; }
+/* Na gumbu je samo zvezdica, beseda je v `aria-label` in `title`: z njo je
+   bilo polje ob „lega“ in „karta“ ozko 160 pik na telefonu in v stranskem
+   stolpcu namizja, naslov odrezan („46.05690, 14.5“). */
+.tocka-shrani { min-width: 48px; font-size: 18px; }
 .tocka-shrani[aria-pressed="true"] {
   color: var(--accent-lit);
   border-color: color-mix(in srgb, var(--accent) 33%, transparent);

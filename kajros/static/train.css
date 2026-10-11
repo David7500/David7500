@@ -749,11 +749,15 @@
 .bud-dno .btn, .bud-dno .btn-quiet { padding: 10px 16px; border-radius: var(--r); }
 .bud-brisi { margin-right: auto; color: var(--sev-bad); border-color: var(--sev-bad); }
 
-/* Orodna vrstica (base.css): stolpca se drsita sama, zato odmik v njiju. */
-.col { padding-bottom: var(--orodna-prostor); }
+/* Orodna vrstica (base.css): stolpca se drsita sama, zato odmik v njiju --
+   in `scroll-padding`, da kar stran pripelje na zaslon, ne pristane pod njo. */
+.col { padding-bottom: var(--orodna-prostor); scroll-padding-bottom: var(--orodna-prostor); }
 @media (max-width: 860px) {
   .col { padding-bottom: 0; }
-  .train-body { padding-bottom: var(--orodna-prostor); }
+  .train-body { padding-bottom: var(--orodna-prostor); scroll-padding-bottom: var(--orodna-prostor); }
+  /* Na telefonu časovnica nima stranskega roba, vrstica bi segla do roba
+     zaslona; rob je isti kot pri kartici trenutne zamude. */
+  #run-timeline > .ticket-link { margin: 14px 12px 0; }
 }
 
 /* Trenutna zamuda je tonska kartica (Material 3), kot budilka na domači
