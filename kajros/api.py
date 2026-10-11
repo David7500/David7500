@@ -1952,7 +1952,10 @@ def _vozilo_po_potnikih(conn, trip_id: str, zdaj: datetime,
             "speed_ms": hitrost,
             "speed_kmh": None if hitrost is None else round(hitrost * 3.6),
             "age_s": st["starost_s"], "delay_s": st["zamuda_s"],
-            "vir": "potniki", "potnikov": st["n"]}
+            "vir": "potniki", "potnikov": st["n"],
+            # Kartica vlaka na velikem zemljevidu bere lego na 5 s, ne le na
+            # 30 s iz `/api/live`: kraj in zamuda morata iti z njo.
+            "zamuda": st.get("zamuda"), "pri": st.get("pri"), "med": st.get("med")}
 
 
 @app.get("/api/vehicles")

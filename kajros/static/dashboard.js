@@ -470,11 +470,20 @@ function worstDelay(trains) {
 // (`api._dodaj_porocila`), do 5. 10. 2026 je stal tam pred prihodom.
 const naPotnikovi = (t) => !!(t.potnik && t.potnik.verodostojno && t.potnik.lat != null);
 
+// Vlaki s potnikom, ki jih spremljamo na 5 s (razdelek „vlak s potnikom“
+// spodaj): trip_id -> {poll, tr, v, since, ocena}.
+const potniski = new Map();
+
+// Kje je vlak s potnikom zdaj: ocena po progi, dokler jo imamo, sicer
+// poročilo iz `/api/live`.
+const legaPotnika = (t) => (potniski.get(t.trip_id) || {}).ocena || t.potnik;
+
 function trainPlace(t) {
   if (naPotnikovi(t)) {
+    const l = legaPotnika(t);
     return { key: `potnik:${t.trip_id}`,
              name: `lega po poročilu ${t.potnik.n > 1 ? "potnikov" : "potnika"} na vlaku`,
-             station: { lat: t.potnik.lat, lon: t.potnik.lon } };
+             station: { lat: l.lat, lon: l.lon } };
   }
   if (t.na_postaji) {
     return { key: `stoji:${t.na_postaji.ime}`, name: t.na_postaji.ime,
@@ -593,6 +602,7 @@ function trainCardHtml(t) {
      `${p.pri ? escapeHtml(`pri postaji ${p.pri}`) : p.med
        ? escapeHtml(`med postajama ${p.med[0]} in ${p.med[1]}`) : "—"}${p.zamuda
        ? ` · <span style="color:${delayColor(p.zamuda)}">${escapeHtml(delayText(p.zamuda))}</span>` : ""}`],
+    ...(p.starost_s != null ? [["poročilo", `pred ${ageHtml(p.starost_s)}`]] : []),
   ] : [];
   return vehCardHtml({
     no: t.train_no, badge: modeBadgeHtml(t.mode), headsign: t.headsign, trip: t.trip_id,
@@ -653,6 +663,8 @@ function groupLabelHtml(g) {
   if (g.trains.length > 3) {
     shown.push(`<div class="train-label-more">…in še ${g.trains.length - 3}</div>`);
   }
+  // Starost poročila, ko je vlak na oceni (`premakniPotniske`).
+  if (g.potnik) shown.push('<div class="train-label-starost"></div>');
   return shown.join("");
 }
 
@@ -688,7 +700,17 @@ function trainSize(z) {
 // avtobus, ki je vozilo na izmerjeni legi. Zavrnjeno (4. 10. 2026): vlak od
 // zgoraj v smeri proge -- "zgleda kot bus"; obroc okoli njega -- spominjal
 // je na obroc izbranega avtobusa.
-function trainSvg(n, s) {
+// Vlak, na katerem potnik deli lego, ima v kotu značko v barvi deljenja
+// (indigo, kot oblika „Deli lego“ na domači strani), s številom, kadar jih
+// deli več. Tak vlak je vedno sam v skupini, zato se s številom vlakov ne
+// prekriva.
+function trainSvg(n, s, potnikov = 0) {
+  const znacka = !potnikov ? "" : `<circle cx="21" cy="3" r="5" fill="#232b55"
+        stroke="#0f1115" stroke-width="1.3"/>${potnikov > 1
+    ? `<text x="21" y="5.2" text-anchor="middle" font-size="6" font-weight="600"
+        font-family="'IBM Plex Sans', sans-serif" fill="#d9dfff">${potnikov}</text>`
+    : `<circle cx="21" cy="1.6" r="1.5" fill="#d9dfff"/>
+       <path d="M18.3 6.1a2.7 2.7 0 0 1 5.4 0z" fill="#d9dfff"/>`}`;
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" overflow="visible">
       <rect x="1" y="1" width="22" height="22" rx="6"
             fill="${TRAIN_INK}" stroke="#0f1115" stroke-width="1.4"/>
@@ -702,7 +724,7 @@ function trainSvg(n, s) {
       </g>
       ${n > 1 ? `<circle cx="21" cy="3" r="4.2" fill="#0f1115"/>
         <text x="21" y="5.3" text-anchor="middle" font-size="6"
-              font-family="monospace" fill="${TRAIN_INK}">${n}</text>` : ""}
+              font-family="monospace" fill="${TRAIN_INK}">${n}</text>` : ""}${znacka}
     </svg>`;
 }
 
@@ -749,7 +771,8 @@ function renderTrains(trains) {
     }
     const ikona = marker.__icon;
     ikona.style.width = ikona.style.height = `${s}px`;
-    ikona.innerHTML = trainSvg(g.trains.length, s);
+    ikona.innerHTML = trainSvg(g.trains.length, s,
+                               g.potnik ? g.trains[0].potnik.n || 1 : 0);
     marker.__label.innerHTML = groupLabelHtml(g);
     marker.getPopup().setOffset(s / 2).setHTML(groupPopupHtml(g));
     marker.__worst = worstDelay(g.trains);
@@ -789,13 +812,13 @@ function dodajVlake3D() {
   posodobiVlake3D();
 }
 
-const smerVlaka = (t) => (naPotnikovi(t) ? t.potnik.smer
+const smerVlaka = (t) => (naPotnikovi(t) ? legaPotnika(t).smer
   : t.na_postaji && t.na_postaji.smer) ?? 0;
 
 // Vlak stoji na svoji legi: potnikovi ali na postaji, na pripeti trasi svoje
 // vožnje (`api._na_postaji`), ki leži na tiru OSM -- ne na točki postaje,
 // ki je pogosto sredi postajnega poslopja.
-const legaVlaka = (t, g) => (naPotnikovi(t) ? t.potnik
+const legaVlaka = (t, g) => (naPotnikovi(t) ? legaPotnika(t)
   : g.stoji && t.na_postaji ? t.na_postaji : g.station);
 
 // Vlak s tirom s table SŽ, ki ga OSM pozna po številki, stoji na njem
@@ -845,6 +868,130 @@ function zadetekVlak3D(p) {
   return naj && { layer: { id: "k-vlaki-3d" }, properties: { kljuc: naj.kljuc },
                   geometry: { type: "Point", coordinates: [naj.lon, naj.lat] } };
 }
+
+// ---------- vlak s potnikom: lega na 5 s, med poročili po progi ----------
+//
+// Na tem zemljevidu ocene lege ni: za osemdeset vlakov bi bila osemdeset
+// izmišljenih leg. Izjema je vlak, na katerem potnik deli lego (odločil
+// David 11. 10. 2026) -- takih je hkrati nič do dva, lega je prava, a
+// zemljevid jo je bral z `/api/live` na 30 s in vlak je skakal po kilometer.
+// Izmerjeno na 273 točkah treh deljenj na vlakih (1. 10. 2026): vlak na
+// 30 s starem poročilu je od resnice v mediani 244 m, ocena po progi 31 m.
+// Zato tak vlak bere lego kot okno vožnje (`/api/vehicles?trip=`, na 5 s)
+// in med poročili drsi po trasi z isto oceno (`ocenaNaTrasi`).
+//
+// Kadar poročila zamujajo (predor, slab signal), vlak drsi naprej, a obris
+// postane črtkan in oznaka pove starost poročila -- meritev od ocene loči
+// oblika, kot v oknu vožnje. Po `deljenje.SVEZE_S` (120 s) ga strežnik ne
+// pošlje več in vlak se vrne na postajo po feedu.
+const POROCILO_STARO_S = 15;
+// Pot izbranega vlaka se razreže znova šele po toliko metrih premika, ne
+// vsako sekundo (isto kot `RAZREZ_M` v oknu vožnje).
+const POTNIK_RAZREZ_M = 30;
+
+// Ob vsakem odgovoru `/api/live`: začni spremljati nove vlake s potnikom,
+// nehaj pri tistih, ki to niso več.
+function spremljajPotniske() {
+  const zivi = new Map(liveTrains.filter(naPotnikovi).map((t) => [t.trip_id, t]));
+  for (const [trip, s] of potniski) {
+    if (!zivi.has(trip)) {
+      s.poll.stop();
+      potniski.delete(trip);
+    }
+  }
+  for (const [trip, t] of zivi) {
+    if (potniski.has(trip)) continue;
+    const s = { tr: { trasa: null, cums: null, postaje: [], vlak: true },
+                v: null, since: 0, ocena: null, rez: null };
+    potniski.set(trip, s);
+    naloziTrasoPotnika(t, s);
+    s.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`,
+                          (vrstice) => novoPorocilo(trip, vrstice));
+  }
+}
+
+// Trasa in postanki, enkrat na vlak. Brez njiju vlak stoji na zadnjem
+// poročilu, kot prej -- osvežen na 5 s namesto na 30.
+async function naloziTrasoPotnika(t, s) {
+  try {
+    const q = encodeURIComponent(t.trip_id);
+    const [oblika, vr] = await Promise.all([
+      fetch(`/api/trip/${q}/shape`).then(jsonOk),
+      fetch(`/api/train/${encodeURIComponent(t.train_no)}?trip=${q}`).then(jsonOk),
+    ]);
+    // Za oceno najdaljši kos trase -- vlak je skoraj vedno na njem.
+    const kosi = (oblika.points || []).filter((k) => k && k.length > 1);
+    if (!kosi.length) return;
+    const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
+    const cums = kumulative(kos);
+    s.tr.postaje = postankiNaTrasi(kos, cums, vr.timetable || []);
+    s.tr.cums = cums;
+    s.tr.trasa = kos;
+  } catch (err) {
+    console.warn("trase vlaka s potnikom ni bilo mogoče naložiti", err);
+  }
+}
+
+function novoPorocilo(trip, vrstice) {
+  const s = potniski.get(trip);
+  if (!s) return;
+  const v = vrstice.find((r) => r.vir === "potniki");
+  const t = liveTrains.find((x) => x.trip_id === trip);
+  if (!v) {
+    // Poročila so se postarala ali niso več verodostojna: vlak gre nazaj
+    // na postajo po feedu, ne čaka naslednjega `/api/live`.
+    if (t) t.potnik = null;
+    spremljajPotniske();
+    renderTrains(liveTrains);
+    return;
+  }
+  s.v = v;
+  s.since = Date.now();
+  if (t && t.potnik) {
+    Object.assign(t.potnik, { n: v.potnikov, starost_s: v.age_s, zamuda: v.zamuda,
+                              pri: v.pri, med: v.med });
+  }
+  premakniPotniske();
+  // Odprta kartica dobi nov kraj in starost; zaprta se izriše ob odprtju.
+  const mk = stationMarkers.get(`potnik:${trip}`);
+  if (mk && mk.__g && mk.getPopup().isOpen()) mk.getPopup().setHTML(groupPopupHtml(mk.__g));
+}
+
+// Vsako sekundo: vlak s potnikom na oceni po progi.
+function premakniPotniske() {
+  if (!potniski.size) return;
+  let premik = false;
+  for (const [trip, s] of potniski) {
+    if (!s.v) continue;
+    const starost = s.v.age_s + (Date.now() - s.since) / 1000;
+    const lega = ocenaNaTrasi(s.tr, s.v, starost);
+    const smer = lega.vzdolz != null
+      ? smerTrase(s.tr.trasa, s.tr.cums, lega.vzdolz, 20) ?? s.v.bearing : s.v.bearing;
+    s.ocena = { lat: lega.kje[0], lon: lega.kje[1], smer };
+    const mk = stationMarkers.get(`potnik:${trip}`);
+    if (!mk) continue;
+    premik = true;
+    mk.setLngLat([s.ocena.lon, s.ocena.lat]);
+    const stara = starost > POROCILO_STARO_S;
+    mk.getElement().classList.toggle("je-ocena", stara);
+    const napis = mk.__label.querySelector(".train-label-starost");
+    if (napis) napis.textContent = stara ? `poročilo pred ${Math.round(starost)} s` : "";
+    if (izbrana && izbrana.vlak && izbrana.trip === trip) {
+      const l = [s.ocena.lat, s.ocena.lon];
+      if (!s.rez || razdaljaM(s.rez, l) > POTNIK_RAZREZ_M) {
+        s.rez = l;
+        narisiTraso();
+      } else {
+        oznaciIzbranoVozilo();
+      }
+    }
+  }
+  if (premik && vidniVlaki3D()) posodobiVlake3D();
+}
+
+setInterval(() => {
+  if (document.visibilityState !== "hidden") premakniPotniske();
+}, 1000);
 
 // Velikost ikone vlaka je odvisna od zooma, marker pa se sam ne skalira.
 let zoomTimer = null;
@@ -2217,6 +2364,7 @@ async function pollLive() {
   zgodaj.vlaki = null;
   liveTrains = await (prvi || fetch("/api/live?network=zeleznica").then(jsonOk));
   document.getElementById("n-train").textContent = liveTrains.length;
+  spremljajPotniske();
   renderTrains(liveTrains);
   if (izbrana && izbrana.vlak) narisiTraso();
   // Odprt oblaček postaje teče z zemljevidom: ura in zamude se premikajo.

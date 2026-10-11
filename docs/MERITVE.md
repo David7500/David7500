@@ -2261,6 +2261,14 @@ Nadstrešek ob cesti rabi smer ceste in stran, na kateri postajališče stoji. O
 * **Avtobusne postaje**: ime z „AP“ 8, končnih z ≥ 20 trasami dveh prevoznikov 15, skupaj 20 (Ljubljana AP 308 tras, štirje prevozniki). Prevozniki na postajališče: en 9 494, dva 667, trije 72, štirje 1.
 * `/api/stations?network=avtobus` z novimi polji in lego na šest decimalk: 238 kB z gzipom (10 234 postajališč; prej 211 kB za 9 519).
 
+## Vlak s potnikom na velikem zemljevidu: 5 s in drsenje (11. 10. 2026)
+
+Prej je veliki zemljevid lego vlaka s potnikom bral iz `/api/live` na 30 s. Napaka take pike je izmerjena že 1. 10. 2026 (273 točk treh deljenj na vlakih): po 30 s mediana 244 m, po 60 s 482 m; ocena po progi 31 in 61 m. Zdaj vlak bere `/api/vehicles?trip=` in drsi po trasi (`ocenaNaTrasi`).
+
+Cena, izmerjeno na razvojnem strežniku (MV 246, en potnik): `/api/vehicles?trip=` **5–8 ms** toplo (prvi klic 38 ms), **447 B** brez stiskanja, glava `X-Osvezi-Cez: 5`. Brskalnik vpraša vsakih 6–7 s (5 s + zamik 1–2 s): v 132 s 19 zahtev. Na gledalca zemljevida in vlak s potnikom je to ~9 zahtev na minuto, brez potnikov nič.
+
+Preizkus od konca do konca (brezglavi Chrome, potnik iz skripte po `POST /api/deli`, 22 m/s, 45 s molka sredi vožnje): pika je bila od potnikove lege 2–19 m ves čas, tudi med molkom; „poročilo pred 15 s“ in črtkan obris ob 15. sekundi molka, ob vrnitvi poročil spet polna. Hitrost je bila stalna, zato to dokazuje, da veriga dela, **ne natančnosti** -- ta je zgornja meritev s pravih voženj.
+
 ## Prevoznik ve več tudi za postajo naprej (5. 10. 2026)
 
 Prijava: okno vožnje LPV 2206 je pokazalo Litijo ob 08:52 (+43, prevoznik) in Kresnice ob 08:53 (+37) — med postajama 7 min po voznem redu, na zaslonu ena. Malo prej, pri „+19“, so bile Kresnice napovedane **pred** Savo. Istega jutra LPV 2252: izmerjen na Zagorju +4, prevoznik za Savo +22, okno pa Litija 08:46 (+5), Sava 08:57 (+22), Ljubljana Polje +7. Vlak je v Litiji bil +22.

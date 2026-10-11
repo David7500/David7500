@@ -1773,74 +1773,9 @@ const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
                  avto3d: null, lega: null, vir: null, vlak: false };
 
 // ---------- ocena lege med dvema meritvama ----------
-//
-// Lega je ob strezbi ze ~30 s stara (izmerjeno), kar je pri 30 km/h cetrt
-// kilometra. Piko zato premaknemo naprej po trasi za `hitrost x starost`.
-//
-// Izmerjeno na 79 primerih (razmik 15-60 s), napaka proti dejanski naslednji
-// legi: pika pri miru mediana 63 m in 63 % v 100 m, premik po smeri 36 m in
-// 72 %, **premik po trasi 30 m in 80 %**. Trasa je boljsa od smeri, ker cesta
-// zavija, vozilo pa ne pove, da bo zavilo.
-//
-// Ocena, ne meritev -- zato se ne premika, kadar vozilo stoji ali kadar ni na
-// tej trasi, in podnapis pove, da je ocenjena.
-const OCENA_MAX_ODMIK_M = 120;
-
-// Smer trase pri `s` metrih, v stopinjah od severa: od tocke `pol` metrov
-// zadaj do tocke `pol` metrov spredaj. Brez dolzine vrne null.
-function smerTrase(pts, cums, s, pol) {
-  const a = tockaNaTrasi(pts, cums, s - pol);
-  const b = tockaNaTrasi(pts, cums, s + pol);
-  const k = metriNaStopinjo((a[0] + b[0]) / 2);
-  const dx = (b[1] - a[1]) * k.lon, dy = (b[0] - a[0]) * k.lat;
-  if (Math.hypot(dx, dy) < 0.5) return null;
-  return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
-}
-
-// Med dvema legama avtobus ne vozi ves cas -- na postajaliscih stoji, in
-// `hitrost x starost` ga zato odnese predalec. Izmerjeno na 139 parih
-// zaporednih leg (150 vozil, 1. 9. zvecer), napaka proti dejanski naslednji
-// legi -- rez na 35 parih, kjer na poti RES lezi postajalisce:
-//
-//   razlicica                mediana   povprecje   v 100 m
-//   premik po trasi (prej)    109 m      136 m      46 %
-//   ustavi pri prvi postaji    59 m      110 m      69 %
-//   **postanek 15 s**          53 m       99 m      71 %
-//
-// Cez vse pare 54 -> 45 m mediane in 69 -> 76 % v 100 m. Med 10 in 20 s je
-// rezultat raven (povprecje 84,4 / 83,0 / 83,6 m), zato 15 s ni izbrano
-// natancno, ampak je sredina izmerjene ravnine -- isto kot `MIN_DWELL_S`.
-const POSTANEK_S = 15;
-// Vlak stoji dlje. Izmerjeno 1. 10. 2026 na točkah treh deljenj na vlakih
-// (LPV 2010, RG 318, LPV 2221; 202--273 parov), napaka proti legi, ki jo je
-// potnik poslal pozneje, mediana: po 60 s 79 m s 15 s postanka in 61 m s 45,
-// po 120 s 354 in 192 m. Po 30 s ni razlike (31 m).
-const POSTANEK_VLAK_S = 45;
-// Postajalisce, na katerem vozilo ze stoji, ne steje se enkrat.
-const ZA_SABO_M = 15;
-
-// Kje je vozilo priblizno ZDAJ. Brez trase ali med mirovanjem vrne izmerjeno
-// lego -- ocena, ki ne ve, kam naprej, ni boljsa od meritve. `vzdolz` je
-// ocena na trasi v metrih, pri izmerjeni legi null.
-function ocenjenaLega(v, starostS) {
-  const izmerjena = { kje: [v.lat, v.lon], vzdolz: null };
-  if (!runMap.trasa || !v.speed_ms || v.speed_ms < 1) return izmerjena;
-  const { vzdolz, odmik } = projekcijaNaTraso(runMap.trasa, runMap.cums, v.lat, v.lon);
-  if (odmik > OCENA_MAX_ODMIK_M) return izmerjena;
-
-  // Vozi s trenutno hitrostjo, na vsakem vmesnem postajaliscu porabi postanek.
-  let ostanek = starostS, kje = vzdolz;
-  for (const p of (runMap.postaje || [])) {
-    if (p <= vzdolz + ZA_SABO_M) continue;
-    const doPostaje = (p - kje) / v.speed_ms;
-    if (doPostaje >= ostanek) break;
-    ostanek -= doPostaje + (runMap.vlak ? POSTANEK_VLAK_S : POSTANEK_S);
-    kje = p;
-    if (ostanek <= 0) break;
-  }
-  const cilj = kje + Math.max(0, ostanek) * v.speed_ms;
-  return { kje: tockaNaTrasi(runMap.trasa, runMap.cums, cilj), vzdolz: cilj };
-}
+// Pravilo in meritve so v common.js (`ocenaNaTrasi`): isto oceno ima veliki
+// zemljevid za vlak s potnikom.
+const ocenjenaLega = (v, starostS) => ocenaNaTrasi(runMap, v, starostS);
 
 // Kam je obrnjeno vozilo na oceni: po TRASI, ne po smeri iz feeda. Ta je
 // stara toliko kot lega (~30 s), in avtobus, ki ga je ocena odpeljala cez
@@ -2008,16 +1943,7 @@ async function ustvariRunMap(v) {
   }
   const postaje = (state.run.stops || []).filter((s) => s.lat != null && s.lon != null);
   const pts = postaje.map((s) => [s.lat, s.lon]);
-  // Kje vzdolz trase lezijo postanki -- ocena lege se na njih ustavi.
-  // Postaja, ki je od trase vec kot 60 m, tej trasi ne pripada (napacen
-  // kos, obvoz) in bi oceno ustavila na napacnem mestu.
-  if (runMap.trasa) {
-    runMap.postaje = postaje
-      .map((s) => projekcijaNaTraso(runMap.trasa, runMap.cums, s.lat, s.lon))
-      .filter((r) => r.odmik <= 60)
-      .map((r) => r.vzdolz)
-      .sort((a, b) => a - b);
-  }
+  if (runMap.trasa) runMap.postaje = postankiNaTrasi(runMap.trasa, runMap.cums, postaje);
 
   const crte = kosi.length ? kosi.map((kos) => pkCrta(kos, { vrsta: "trasa" }))
     : pts.length > 1 ? [pkCrta(pts, { vrsta: "skozi" })] : [];
