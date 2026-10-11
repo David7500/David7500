@@ -580,10 +580,11 @@ def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
     conn.commit()
 
 
-#: Koliko mora biti vožnja po voznem redu že na poti, preden je molk feeda
-#: napaka in ne le prvo sporočilo, ki še pride. Izmerjeno 25. 9. 2026 ob 11:50:
-#: pri tej meji je bilo brez zamude 0 od 295 vozil na vožnjah, ki jih feed
-#: nosi, in 10 od 10 na vožnjah z veljavnostjo od 21. 9., ki jih ne.
+#: Koliko mora biti vozilo po voznem redu že mimo drugega postanka, preden je
+#: molk feeda napaka in ne le prvo sporočilo, ki še pride. Izmerjeno 25. 9.
+#: 2026 ob 11:50 (takrat od odhoda z izhodišča): pri tej meji je bilo brez
+#: zamude 0 od 295 vozil na vožnjah, ki jih feed nosi, in 10 od 10 na vožnjah
+#: z veljavnostjo od 21. 9., ki jih ne.
 BREZ_ZAMUDE_PO_S = 600
 
 
@@ -601,9 +602,12 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
     „brez zamude“ (nobene vrstice v `run`) pa tisto, kar vidi potnik. Brez
     prvega bi zapolnitev napako vira skrila.
 
-    Vožnja „vozi“, kadar je po voznem redu na poti vsaj `BREZ_ZAMUDE_PO_S`;
-    brez tega bi štelo vsako vozilo, ki čaka na izhodišču ali je ravnokar
-    odpeljalo.
+    Vožnja „vozi“, kadar je po voznem redu vsaj `BREZ_ZAMUDE_PO_S` mimo
+    **drugega** postanka: prej zamude ni mogoče izmeriti, ker je `iz_lege` na
+    izhodišču ne meri. Do 11. 10. 2026 je štelo od odhoda z izhodišča, in
+    Arriva Koper 11:00 -> Ljubljana, ki do naslednjega postanka vozi 82 min,
+    je bila „brez zamude“ od 11:10 -- skupaj z dvema drugima je obarvala
+    Arrivo rdeče (3 od 25), čeprav je ni bilo česa izmeriti.
     """
     danes = zdaj.date()
     now_s = int(zdaj.timestamp()) - stats.polnoc(danes.isoformat())
@@ -616,7 +620,9 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
         "WHERE v.seen_ts >= ? AND t.start_s IS NOT NULL "
         "  AND CASE COALESCE(v.service_date, ?) "
         "        WHEN ? THEN ? WHEN ? THEN ? + 86400 END "
-        "      BETWEEN t.start_s + ? AND t.end_s",
+        "      BETWEEN (SELECT COALESCE(s.dep_s, s.arr_s) FROM sched s "
+        "               WHERE s.trip_id = t.trip_id ORDER BY s.stop_seq LIMIT 1 OFFSET 1) + ? "
+        "          AND t.end_s",
         (danes.isoformat(), int(zdaj.timestamp()) - POSITION_FRESH_S,
          danes.isoformat(), danes.isoformat(), now_s,
          (danes - timedelta(days=1)).isoformat(), now_s, BREZ_ZAMUDE_PO_S),

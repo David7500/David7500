@@ -2461,3 +2461,27 @@ Tudi pripenjanje omeji korist: ob 9:52 18 vrstic, od tega **6 pripetih**, 4 za z
 **Cena**: Chrome 384–563 MB PSS (14 procesov), Xvfb 75 MB. Malina (Pi Zero W, armv6) Chroma nima, zato vlake zajema samo arwen.
 
 **Pripenjanje**: na razvojnem voznem redu 11 od 11 vlakov na poti pripetih na pravo vožnjo (ujemanje `Odhod` = vozni red + zamuda); razvojni strežnik ob 22:55: 13 vlakov, 12 zapisanih, 1 na cilju, 0 nepripetih. `Vrsta` (0 izhodišče, 1 vozi, 2 na cilju) in varovala (vlak ne gre nazaj, ponastavitev na cilju) v `zajem.md`.
+
+## Avtobusi „brez vsake zamude“: drugi postanek in Koper (11. 10. 2026)
+
+Ob 11:55 je bila vrstica „vozila brez vsake zamude“ v /admin rdeča: Arriva 3 od 25, Nomago 1 od 15. Vsa štiri vozila so imela svežo lego (NAP, vsakih 20 s, 0–23 m od trase); manjkal je samo prehod postanka, iz katerega `iz_lege` izračuna zamudo:
+
+| vožnja | do drugega postanka | zakaj ni zamude |
+|---|---|---|
+| Arriva Koper 11:00 → Ljubljana | Ljubljana Hajdrihova 12:22, 101 km | ni česa izmeriti: izhodišča ne merimo, vmes ni postanka |
+| Nomago Nova Gorica 11:30 → Ljubljana | Ajdovščina 12:00, 28 km | ob 11:58 izmerjeno −1,8 min |
+| Arriva Izola 11:00 → Ljubljana | Koper 11:12, 8 km | **Koper prevožen, prehod ni zapisan** |
+| Arriva Izola 11:13 → Ljubljana | Koper 11:25, 8 km | **isto** |
+
+**Pravilo je štelo od odhoda z izhodišča** (+10 min), zato je bila vožnja z 82 min do prvega merljivega postanka „brez zamude“ 72 min. Od 11. 10. šteje 10 min po voznorednem odhodu z **drugega** postanka. Istega trenutka (12:05) na produkciji: po starem Arriva 3 od 21, AP MS 1 od 2; po novem Arriva 2 od 19 (obe zgrešeni v Kopru), AP MS 0 od 1. Poizvedba 3,5 ms namesto 4,0.
+
+**Koper v smeri Izola → Ljubljana se zgreši.** Arrivine vožnje z vmesnim postankom Koper (1121103), od 10. 10. (zamude Arrive od 9. 10. iz leg NAP):
+
+| izhodišče | dan | Koper izmerjen | naslednji postanek izmerjen | voženj |
+|---|---|---|---|---|
+| Izola | 10. 10. | 2 | 9 | 9 |
+| Izola | 11. 10. (do 12:00) | 1 | 2 | 3 |
+| Ljubljana AP | 10. 10. | 9 | 5 | 9 |
+| Ljubljana AP | 11. 10. (do 12:00) | 4 | 1 | 5 |
+
+Trasa ni kriva: postaja leži na njej (0 m), odsek Izola–Koper se ne prekriva z delom pred Izolo (projekcija vsakih 500 m na 0–24 km brez meje vrne isti kraj). Arriva sicer meri drugi postanek enako pogosto kot ostale (10. 10.: 661 izmerjenih drugih, 665 tretjih). Zgodovine leg ne hranimo, zato se vzrok ugotavlja z opazovanjem v živo.

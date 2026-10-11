@@ -38,11 +38,14 @@ def _feed(*trip_ids):
     iz_lege.zabelezi_feed(trip_ids, ZDAJ.timestamp() - 120)
 
 
-def _vozja(c, trip_id, agency, zacetek_s, konec_s):
+def _vozja(c, trip_id, agency, zacetek_s, konec_s, drugi_s=None):
+    """Tri postanki; drugi privzeto dve minuti za izhodiščem."""
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network)"
               " VALUES(?, 'r', 'N1', 'S', 'bus', ?, 'avtobus')", (trip_id, agency))
     c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
-                  [(trip_id, 1, "A", None, zacetek_s), (trip_id, 2, "B", konec_s, None)])
+                  [(trip_id, 1, "A", None, zacetek_s),
+                   (trip_id, 2, "B", None, drugi_s or zacetek_s + 120),
+                   (trip_id, 3, "C", konec_s, None)])
 
 
 def _lega(c, trip_id, dan=DANES.isoformat(), pred_s=20):
@@ -100,6 +103,21 @@ def test_ne_steje_vozila_ki_je_komaj_odpeljalo_ali_je_ze_na_koncu():
     _lega(c, "komaj")
     _lega(c, "konec")
     assert collector.lega_brez_zamude(c, ZDAJ) == {}
+
+
+def test_steje_sele_po_drugem_postanku():
+    """Arriva Koper 11:00 -> Ljubljana Hajdrihova 12:22, brez postanka vmes:
+    pred Ljubljano zamude ni mogoče izmeriti, ker izhodišča iz lege ne merimo.
+    11. 10. 2026 je taka vožnja ob 12:00 obarvala Arrivo rdeče. Izola 11:00 ->
+    Koper 11:12 pa bi zamudo do 12:00 že morala imeti."""
+    c = _baza()
+    _vozja(c, "avtocesta", "1123", 11 * 3600, 12 * 3600 + 29 * 60, drugi_s=12 * 3600 + 22 * 60)
+    _vozja(c, "izola", "1123", 11 * 3600, 12 * 3600 + 41 * 60, drugi_s=11 * 3600 + 12 * 60)
+    db.fill_trip_window(c)
+    _lega(c, "avtocesta")
+    _lega(c, "izola")
+    _feed()
+    assert collector.lega_brez_zamude(c, ZDAJ) == {"1123": [1, 1, 1]}
 
 
 def test_ne_steje_stare_lege():
