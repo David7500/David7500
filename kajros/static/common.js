@@ -1309,11 +1309,11 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
     for (const s of run.stops) if (stopDelay(s) != null) { base = s; break; }
   }
 
-  // Kadar se ujemata vsaj dva potnika na vozilu, je njuna zamuda svezejsa od
-  // feedove in napoved tece od njune lege (`deljenje.py`, odlocitev 25. 9.
-  // 2026). Z enim porocevalcem ostane feedova.
+  // Kadar je porocilo potnikov na vozilu verodostojno, je njihova zamuda
+  // svezejsa od feedove in napoved tece od njihove lege (`deljenje.stanje`,
+  // odlocitev 25. 9. 2026, za enega potnika 11. 10.). Sicer ostane feedova.
   const pp = run.potniki;
-  const izPotnikov = pp && pp.soglasje && pp.stop_seq != null && pp.zamuda_s != null;
+  const izPotnikov = pp && pp.verodostojno && pp.stop_seq != null && pp.zamuda_s != null;
   const odSeq = izPotnikov ? pp.stop_seq : base && base.stop_seq;
   const odZamude = izPotnikov ? pp.zamuda_s : base && stopDelay(base);
 

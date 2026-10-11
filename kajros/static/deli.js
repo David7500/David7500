@@ -32,6 +32,9 @@
   const DOVOLJ_M = 120;
   //: Najvec tock v vrsti, ko ni povezave; starejse odpadejo.
   const NAJVEC_V_VRSTI = 60;
+  //: Zamudo kandidata povemo sele od tod; manj je vsakdanje in gumb samo
+  //: podaljsa. Velika pove, da je to verjetno prejsnja voznja iste linije.
+  const ZAMUDA_POVEJ_S = 180;
 
   const NATIVNO = !!(MOST && typeof MOST.deliZacni === "function");
 
@@ -64,6 +67,16 @@
     return "";
   }
 
+  // Po čem ločiš dve vožnji z istim imenom: ura odhoda z izhodišča in
+  // zamuda, ki bi jo vozilo imelo, če bi bil na njem (`deljenje.kandidati`).
+  // Dve liniji Arrive proti Ljubljani sta bili brez tega dva enaka gumba.
+  function uraText(k) {
+    if (!k.odhod || !k.odhod.ura) return "";
+    const z = k.zamuda_s;
+    return `odhod ${hhmm(k.odhod.ura)} iz ${k.odhod.postaja}${
+      z != null && Math.abs(z) >= ZAMUDA_POVEJ_S ? ` · zdaj ${delayText(z)}` : ""}`;
+  }
+
   function razdalja(a, b) {
     const k = Math.cos(a.lat * Math.PI / 180);
     const dx = (b.lon - a.lon) * 111195 * k;
@@ -83,6 +96,8 @@
   // nima kaj iskati; stran jo shrani in vrne, ko se deljenje konca.
   const VABILO = el.classList.contains("deli-oblika") ? el.innerHTML : null;
   const OMREZJE = el.dataset.omrezje || null;
+  //: Od kod je potnik zacel (`deljenje.VIRI`), za lijak v pregledu.
+  const VIR = KOMPAKT ? "iskalnik" : "domov";
 
   function kartica(oznaka, naslov, besedilo, gumbi) {
     return `<span class="deli-oznaka${oznaka.zivo ? " deli-zivo" : ""}">${oznaka.besedilo}</span>
@@ -123,6 +138,7 @@
         <button type="button" class="deli-kandidat" data-deli="izberi" data-i="${i}">
           <strong>${escapeHtml(oznaka(k))}${cilj(k) ? ` → ${escapeHtml(cilj(k))}` : ""}</strong>
           <span>${escapeHtml(kjeText(k, k.network === "avtobus"))}</span>
+          ${uraText(k) ? `<span>${escapeHtml(uraText(k))}</span>` : ""}
         </button>`).join("");
       el.innerHTML = kartica(POMAGAJ,
         n ? (n === 1 ? "Se pelješ s tem?" : "S čim se pelješ?")
@@ -300,6 +316,7 @@
       const d = await post({
         trip_id: S.voznja.trip_id, service_date: S.voznja.service_date,
         deljenje: S.id, tocke: tocke.length ? tocke : [S.zadnja], konec: !!zadnjic,
+        vir: S.id ? undefined : VIR,
       });
       S.id = d.deljenje;
       S.stanje = d.stanje;

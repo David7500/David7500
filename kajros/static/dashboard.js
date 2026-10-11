@@ -461,17 +461,19 @@ function worstDelay(trains) {
 // Kje narisati vlak: kjer ga vidita potnika na njem, sicer na postaji, kjer
 // po voznem redu in zamudi ta hip stoji, sicer na zadnji postaji z meritvijo.
 // Potnikova lega je edina prava lega vlaka, ki jo imamo (`deljenje.py`), a
-// samo, kadar se ujemata vsaj dva: en sam je lahko že izstopil in čaka na
-// peronu, vlak pa bi stal tam z njim (odločil David, 1. 10. 2026; isto
-// pravilo ima okno vožnje). Postanek je sklep (`api._na_postaji`), a boljši
+// samo, kadar je verodostojna: potnik se je peljal (ali se ujemata dva) --
+// kdor je izstopil in čaka na peronu, bi vlak sicer ustavil tam z njim
+// (odločil David 1. 10. 2026 za dva, 11. 10. za enega; isto pravilo ima
+// okno vožnje). Postanek je sklep (`api._na_postaji`), a boljši
 // od prejšnje postaje, na kateri je vlak prej obstal ves postanek.
 // Postaje iz prevoznikovega poročila tu ni: to je postaja, KAMOR vlak pelje
 // (`api._dodaj_porocila`), do 5. 10. 2026 je stal tam pred prihodom.
-const naPotnikovi = (t) => !!(t.potnik && t.potnik.soglasje && t.potnik.lat != null);
+const naPotnikovi = (t) => !!(t.potnik && t.potnik.verodostojno && t.potnik.lat != null);
 
 function trainPlace(t) {
   if (naPotnikovi(t)) {
-    return { key: `potnik:${t.trip_id}`, name: "lega po poročilu potnikov",
+    return { key: `potnik:${t.trip_id}`,
+             name: `lega po poročilu ${t.potnik.n > 1 ? "potnikov" : "potnika"} na vlaku`,
              station: { lat: t.potnik.lat, lon: t.potnik.lon } };
   }
   if (t.na_postaji) {

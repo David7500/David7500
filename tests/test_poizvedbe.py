@@ -13,7 +13,7 @@ from datetime import date, timedelta
 import json
 import pytest
 
-from kajros import db, journey, ocena, stats
+from kajros import db, deljenje, journey, ocena, stats
 
 
 # Zakaj imajo vstavki v `run` velik `feed_ts` (4102444800 = 2100-01-01):
@@ -51,6 +51,9 @@ def _sched(conn, trip_id, stops):
 def conn():
     c = db.connect(":memory:")
     db.init(c)
+    # Kot na strežniku (`server.lifespan`): zemljevid in tabla vprašata, ali
+    # kdo deli lego.
+    deljenje.init(c)
 
     stations = [
         ("A", "Ajdovščina", 45.9, 13.9),

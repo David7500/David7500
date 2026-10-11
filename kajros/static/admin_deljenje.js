@@ -101,7 +101,7 @@ function deVozilo(v) {
   const tock = v.deljenja.reduce((a, x) => a + x.tock, 0);
   const vrstice = [];
   if (j) {
-    vrstice.push(`${escapeHtml(potnikov(j.n))}${j.soglasje ? ` · <b class="de-soglasje">soglasje</b>` : ""}
+    vrstice.push(`${escapeHtml(potnikov(j.n))}${j.verodostojno ? ` · <b class="de-verodostojno">verodostojno</b>` : ""}
       · ${escapeHtml(deKje(j))}${j.stoji ? " · stoji" : ""} · ${escapeHtml(deStarost(j.starost_s))}`);
     vrstice.push(`potniki ${deZamuda(j.zamuda)} · feed ${deZamuda(v.feed && v.feed.zamuda)}`
       + (v.gps ? ` · GPS ${escapeHtml(deStarost(v.gps.starost_s))}` : ""));
@@ -133,14 +133,47 @@ function deTabela(d) {
   if (!vrste.length) return prazno("ni deljenj");
   return `<div class="adm-ovoj-t"><table class="adm-t">
     <thead><tr><th>začetek</th><th>zadnja točka</th><th>vozilo</th><th class="n">trajanje</th>
-      <th class="n">točk</th><th class="n">prehodov</th><th>izid</th><th class="n">zamuda po potniku</th></tr></thead>
+      <th class="n">točk</th><th class="n">prehodov</th><th>izid</th><th class="n">zamuda po potniku</th>
+      <th title="ali se je peljal (deljenje.PELJE_MS): šele takrat lega velja za vozilo">peljal</th>
+      <th>od kod</th></tr></thead>
     <tbody>${vrste.map(({ v, x }) => `<tr>
       <td class="de-cas">${deUra(x.zacetek)}</td><td class="de-cas">${deUra(x.zadnja)}</td>
       <td><a class="de-na-karti" href="#deljenje" data-kljuc="${escapeHtml(deKljuc(v))}">${escapeHtml(deOznaka(v))}</a>
         <span class="nic">${escapeHtml(v.headsign || "")}</span></td>
       <td class="n">${x.trajanje_s ? trajanje(Math.max(60, x.trajanje_s)) : "—"}</td>
       <td class="n">${st(x.tock)}</td><td class="n">${st(x.prehodov)}</td>
-      <td>${deIzid(x.izid)}</td><td class="n">${deZamuda(x.zamuda, true)}</td></tr>`).join("")}
+      <td>${deIzid(x.izid)}</td><td class="n">${deZamuda(x.zamuda, true)}</td>
+      <td>${x.peljal ? "da" : `<span class="nic">ne</span>`}</td>
+      <td class="nic">${escapeHtml([x.odjemalec, x.vir].filter(Boolean).join(" · ") || "—")}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+
+// Lijak po dnevih (`deljenje.lijak`): kje se ljudje ustavijo. Iskanje je
+// ena zahteva po kandidatih (tudi „Poišči znova“), ne en človek.
+const DE_LIJAK = [
+  ["kandidati", "iskanj z vozilom"],
+  ["kandidati:0", "brez vozila"],
+  ["zacetek", "začetkov"],
+  ["zavrnjen", "zavrnjenih"],
+  ["peljal", "peljalo se"],
+];
+
+function deLijak(d) {
+  const dnevi = d.lijak || [];
+  if (!dnevi.length) return prazno("v zadnjih dveh tednih nihče ni iskal vozila");
+  // Začetki in zavrnitve so razrezani (`zacetek:android`, `zavrnjen:ni_tu`):
+  // v celici vsota, razrez v oblačku.
+  const razrez = (x, k) => Object.entries(x).filter(([d]) => d.startsWith(`${k}:`));
+  const celica = (x, k) => {
+    const deli = k === "zacetek" || k === "zavrnjen" ? razrez(x, k) : [];
+    const n = deli.length ? deli.reduce((a, [, m]) => a + m, 0) : x[k] || 0;
+    const t = deli.map(([d, m]) => `${d.slice(k.length + 1)} ${m}`).join(" · ");
+    return `<td class="n"${t ? ` title="${escapeHtml(t)}"` : ""}>${n ? st(n) : `<span class="nic">0</span>`}</td>`;
+  };
+  return `<div class="adm-ovoj-t"><table class="adm-t">
+    <thead><tr><th>dan</th>${DE_LIJAK.map(([, ime]) => `<th class="n">${ime}</th>`).join("")}</tr></thead>
+    <tbody>${dnevi.map(({ dan, dogodki: x }) => `<tr><td class="de-cas">${escapeHtml(dan)}</td>
+      ${DE_LIJAK.map(([k]) => celica(x, k)).join("")}</tr>`).join("")}
     </tbody></table></div>`;
 }
 
@@ -161,6 +194,11 @@ function deOkvir() {
       <h2>Današnja deljenja <small>eno deljenje je en telefon na eni vožnji · id se ne kaže, ker ne pove ničesar</small></h2>
       <p class="adm-pod"></p>
       <div id="de-tabela"></div>
+    </section>
+    <section class="adm-plosca s12">
+      <h2>Lijak <small>zadnjih 14 dni · podrobnosti začetkov in zavrnitev v oblačku</small></h2>
+      <p class="adm-pod">Iskanje je ena zahteva po vozilih v bližini, ne en človek. „Peljalo se“: deljenje, ki je doseglo hitrost vozila — šele od tod lega enega potnika velja za vozilo.</p>
+      <div id="de-lijak"></div>
     </section>
   </div>`;
 }
@@ -264,7 +302,7 @@ function deOblacek() {
   const j = v.javno;
   const html = `<div class="de-obl">
     <b>${escapeHtml(deOznaka(v))}</b> <span class="nic">${escapeHtml(v.headsign || "")}</span>
-    ${j ? `<div>${escapeHtml(potnikov(j.n))}${j.soglasje ? " · soglasje" : ""} · ${escapeHtml(deKje(j))}</div>
+    ${j ? `<div>${escapeHtml(potnikov(j.n))}${j.verodostojno ? " · verodostojno" : ""} · ${escapeHtml(deKje(j))}</div>
       <div>potniki ${deZamuda(j.zamuda)} · feed ${deZamuda(v.feed && v.feed.zamuda)}</div>
       <div class="nic">zadnja točka ${escapeHtml(deStarost(j.starost_s))}</div>`
       : `<div class="nic">zadnje deljenje ob ${deUra(v.deljenja[v.deljenja.length - 1].zadnja)}</div>`}
@@ -312,6 +350,7 @@ async function deNalozi() {
   }
   el("de-kpi").innerHTML = deKpi(d);
   el("de-tabela").innerHTML = deTabela(d);
+  el("de-lijak").innerHTML = deLijak(d);
   el("deljenje-znacka").hidden = !d.povzetek.deli_zdaj;
   el("deljenje-znacka").textContent = d.povzetek.deli_zdaj ? String(d.povzetek.deli_zdaj) : "";
   deNaKarto(d);

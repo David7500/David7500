@@ -801,10 +801,19 @@ async def api_deli(request: Request):
 
 def _deli(request: Request, podatki: dict):
     kljuc = stik.kljuc_posiljatelja(request.headers)
+    odjemalec = deljenje.odjemalec(request.headers.get("user-agent", ""))
     try:
         with _conn() as conn:
             if podatki.get("trip_id"):
-                return deljenje.sprejmi(conn, podatki, kljuc)
+                try:
+                    return deljenje.sprejmi(conn, podatki, kljuc, odjemalec=odjemalec)
+                except deljenje.Zavrnjeno as e:
+                    # Lijak šteje samo zavrnjene začetke; deljenje, ki že
+                    # teče, se konča po svoje (`konec`).
+                    if not podatki.get("deljenje"):
+                        deljenje.stej(conn, f"zavrnjen:{e.koda}")
+                        conn.commit()
+                    raise
             deljenje.preveri_kandidate(kljuc)
             lat, lon, acc = deljenje.lega(podatki)
             prej = podatki.get("prej")
@@ -816,7 +825,10 @@ def _deli(request: Request, podatki: dict):
                     prej = None
             else:
                 prej = None
-            return {"kandidati": deljenje.kandidati(conn, lat, lon, acc, prej)}
+            kandidati = deljenje.kandidati(conn, lat, lon, acc, prej)
+            deljenje.stej(conn, "kandidati" if kandidati else "kandidati:0")
+            conn.commit()
+            return {"kandidati": kandidati}
     except deljenje.Zavrnjeno as e:
         return JSONResponse({"napaka": str(e)}, status_code=e.status)
 
@@ -1914,23 +1926,29 @@ def _vozila_brez_voznje(conn, now: int) -> list[dict]:
 BREZ_LEGE_CEZ_S = 30
 
 
-def _vozilo_po_potnikih(conn, trip_id: str, zdaj: datetime) -> dict | None:
-    """Lega vozila brez GPS po potnikih na njem, v obliki vrstice GPS.
+def _vozilo_po_potnikih(conn, trip_id: str, zdaj: datetime,
+                        st: dict | None = None) -> dict | None:
+    """Lega vozila po potnikih na njem, v obliki vrstice GPS.
 
-    Samo ob soglasju dveh: en sam je lahko že izstopil in čaka na peronu,
-    vozilo pa bi stalo tam z njim (odločil David, 1. 10. 2026). Lega je že
-    na trasi (`deljenje.stanje`), smeri ni -- okno vožnje jo vzame iz trase.
+    Samo verodostojna (`deljenje.stanje`): potnik, ki se ni peljal, je lahko
+    že izstopil in čaka na peronu, vozilo pa bi stalo tam z njim. Do 11. 10.
+    2026 je za to rabilo dva, ki se ujemata (odločil David 1. 10., spremenil
+    11. 10.: dveh v 16 dneh ni bilo nikoli). Lega je že na trasi, smer je
+    smer trase pod njo.
     """
-    st = deljenje.stanje(conn, [trip_id], zdaj).get(trip_id)
-    if not st or st.get("lat") is None or not st["soglasje"]:
+    if st is None:
+        st = deljenje.stanje(conn, [trip_id], zdaj).get(trip_id)
+    if not st or st.get("lat") is None or not st["verodostojno"]:
         return None
     t = conn.execute("SELECT train_no, mode, agency, headsign, network FROM trip "
                      "WHERE trip_id = ?", (trip_id,)).fetchone()
     if t is None:
         return None
+    v = deljenje.voznja(conn, trip_id)
+    smer = v.trasa.smer(st["along_m"], _SMER_POSTAJE_M) if v is not None else None
     hitrost = 0.0 if st["stoji"] else st.get("hitrost_ms")
     return {**dict(t), "trip_id": trip_id, "service_date": st["service_date"],
-            "lat": st["lat"], "lon": st["lon"], "bearing": None,
+            "lat": st["lat"], "lon": st["lon"], "bearing": smer,
             "speed_ms": hitrost,
             "speed_kmh": None if hitrost is None else round(hitrost * 3.6),
             "age_s": st["starost_s"], "delay_s": st["zamuda_s"],
@@ -1946,8 +1964,9 @@ def api_vehicles(trip: str | None = None):
     zadnja postaja z meritvijo, ne položaj.
 
     `trip` zameji na eno vožnjo: okno vožnje rabi eno vrstico in ne stotih.
-    Vožnja brez GPS dobi tu lego potnikov na njej, kadar se ujemata dva
-    (`vir: "potniki"`) -- mali zemljevid jo bere isto kot GPS, na 5 s.
+    Lega potnika na vozilu (`vir: "potniki"`, `_s_potniki_na_legah`) zamenja
+    GPS, kadar je novejša, vožnja brez GPS pa jo dobi samo; mali zemljevid
+    jo bere isto kot GPS, na 5 s.
 
     Glava `X-Osvezi-Cez` pove, čez koliko sekund bomo lege brali znova.
     Brez nje brskalnik ugiba in polovico svojega ritma zapravi za čakanje na
@@ -1983,18 +2002,53 @@ def api_vehicles(trip: str | None = None):
     cez = config.POSITION_SECONDS
     if brano:
         cez = max(1, config.POSITION_SECONDS - (now - int(brano)))
-    if trip is not None and not out:
-        with _conn() as conn:
-            v = _vozilo_po_potnikih(conn, trip, zdaj)
-            if v is not None:
-                out.append(v)
-                cez = deljenje.POSILJANJE_S
-            else:
-                omrezje = conn.execute("SELECT network FROM trip WHERE trip_id = ?",
-                                       (trip,)).fetchone()
-                if omrezje and omrezje["network"] == "zeleznica":
-                    cez = BREZ_LEGE_CEZ_S
+    with _conn() as conn:
+        out, potniki = _s_potniki_na_legah(conn, out, zdaj, trip)
+        if potniki:
+            cez = deljenje.POSILJANJE_S
+        elif trip is not None and not out:
+            omrezje = conn.execute("SELECT network FROM trip WHERE trip_id = ?",
+                                   (trip,)).fetchone()
+            if omrezje and omrezje["network"] == "zeleznica":
+                cez = BREZ_LEGE_CEZ_S
     return JSONResponse(out, headers={"X-Osvezi-Cez": str(cez)})
+
+
+def _s_potniki_na_legah(conn, out: list[dict], zdaj: datetime,
+                        trip: str | None) -> tuple[list[dict], bool]:
+    """Lege vozil z dodanimi potniki na njih; drugo pove, ali je kateri.
+
+    **Zmaga novejša lega**, isto kot med viri leg (`nap.py`): potnik pošilja
+    na 5 s, GPS avtobusa je ob branju star 29 s (NAP), mestnega LPP 85 s
+    (derp.si; izmerjeno 11. 10. 2026). Star potnik svežega GPS ne premakne.
+    Brez `trip` samo avtobusi -- vlake in nadomestni prevoz veliki zemljevid
+    riše iz `/api/live` (`_s_potniki`).
+    """
+    if not config.DELI:
+        return out, False
+    ids = [trip] if trip is not None else deljenje.zive_voznje(conn, zdaj)
+    if not ids:
+        return out, False
+    po_voznji = {d["trip_id"]: i for i, d in enumerate(out) if d.get("trip_id")}
+    potniki = False
+    for trip_id, st in deljenje.stanje(conn, ids, zdaj).items():
+        p = _vozilo_po_potnikih(conn, trip_id, zdaj, st)
+        if p is None or (trip is None and p["network"] != "avtobus"):
+            continue
+        i = po_voznji.get(trip_id)
+        if i is None:
+            out.append(p)
+        elif p["age_s"] < out[i]["age_s"]:
+            # GPS-ova lega na cesti (`cesta`) ni več ta lega; potnikova je že
+            # na pripeti trasi.
+            gps = {k: v for k, v in out[i].items() if k != "cesta"}
+            out[i] = {**gps, **{k: p[k] for k in (
+                "lat", "lon", "bearing", "speed_ms", "speed_kmh", "age_s", "delay_s",
+                "vir", "potnikov")}, "seen_ts": int(zdaj.timestamp()) - p["age_s"]}
+        else:
+            continue
+        potniki = True
+    return out, potniki
 
 
 @app.get("/api/trip/{trip_id}/shape")
@@ -2240,11 +2294,11 @@ def _potniki_v_okno(conn, trip_id: str, rows: list[dict], potniki: dict,
     """Kar poročajo potniki, zapiše k postankom okna vožnje.
 
     Vsak postanek dobi `potniki`: odpeljal (s časom, kadar je bil prehod
-    viden), vozilo je tu, ali kdaj bo tu ob sedanji zamudi. Kadar odhod
-    potrjujeta vsaj dva poročevalca, je to meritev: postanek dobi zamudo iz
-    prehoda in meja meritve se premakne do njega -- feedov sklep iz ure tam ni
-    več potreben. Z enim poročevalcem ostane feedova vrednost, poročilo pa je
-    zraven.
+    viden), vozilo je tu, ali kdaj bo tu ob sedanji zamudi. Prehod, ki ga je
+    videl potnik, ki se je peljal (`deljenje.stanje`), je meritev: postanek
+    dobi zamudo iz prehoda in meja meritve se premakne do njega -- feedov
+    sklep iz ure tam ni več potreben. Ob poročilu, ki ni verodostojno,
+    ostane feedova vrednost, poročilo pa je zraven.
     """
     stara_meja = meja_seq
     for s in rows:
@@ -2252,7 +2306,7 @@ def _potniki_v_okno(conn, trip_id: str, rows: list[dict], potniki: dict,
         if not p:
             continue
         s["potniki"] = p
-        if not p.get("odpeljal") or p["n"] < 2:
+        if not p.get("odpeljal"):
             continue
         sched = s.get("sched_dep") or s.get("sched_arr")
         if not sched:
@@ -2263,10 +2317,10 @@ def _potniki_v_okno(conn, trip_id: str, rows: list[dict], potniki: dict,
         s["zamuda"] = stats.opis_zamude(z, "po poročilu potnikov")
         if meja_seq is None or s["stop_seq"] > meja_seq:
             meja_seq = s["stop_seq"]
-    # Dva ujemajoča se potnika za postajo pomenita, da je vozilo z nje
-    # odpeljalo, četudi ob kateri uri ne vemo (deljenje se je začelo za njo).
+    # Verodostojen potnik za postajo pomeni, da je vozilo z nje odpeljalo,
+    # četudi ob kateri uri ne vemo (deljenje se je začelo za njo).
     mimo = potniki.get("mimo_seq")
-    if potniki.get("soglasje") and mimo is not None and (meja_seq is None or mimo > meja_seq):
+    if potniki.get("verodostojno") and mimo is not None and (meja_seq is None or mimo > meja_seq):
         meja_seq = mimo
     # Postanki pred potrjenim prehodom so prevoženi, četudi feed zanje nosi
     # še napoved -- vozilo je šlo mimo njih, da je prišlo do poznejšega.
@@ -2764,8 +2818,9 @@ def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
 
     Vlak nima GPS-a in zemljevid ga riše na zadnji postaji z meritvijo. Kadar
     kdo na njem deli lego, kartica to pove; na potnikovo lego pa ga zemljevid
-    postavi šele, ko se ujemata dva (`soglasje`) -- en sam je lahko že
-    izstopil in čaka na peronu. Do takrat ostane tudi zamuda feedova.
+    postavi šele, ko je poročilo verodostojno (`deljenje.stanje`) -- kdor se
+    ni peljal, je lahko že izstopil in čaka na peronu. Do takrat ostane tudi
+    zamuda feedova.
 
     Vrne nov seznam: `rows` so iz predpomnilnika in jih ne smemo spreminjati.
     """
@@ -2779,7 +2834,7 @@ def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
         st = stanje.get(r["trip_id"])
         if st and r.get("service_date") == st["service_date"]:
             potnik = {k: st[k] for k in (
-                "lat", "lon", "n", "soglasje", "starost_s", "stoji",
+                "lat", "lon", "n", "verodostojno", "starost_s", "stoji",
                 "zamuda_s", "zamuda", "pri", "med") if k in st}
             # Smer proge pod potnikom: zemljevid tam od blizu nariše vlak.
             v = deljenje.voznja(conn, r["trip_id"])

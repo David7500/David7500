@@ -427,13 +427,13 @@ function departedMs(c) {
   return new Date(c.expected_dep || c.sched_dep).getTime();
 }
 
-// Kar o vožnji poroča potnik, ki je na njej (`deljenje.py`). Z enim
-// poročevalcem je to vrstica ZRAVEN feeda -- en telefon se lahko moti; kadar
-// se ujemata dva, je strežnik feedovo zamudo in uro že zamenjal in vrstica
-// samo pove, od kod je. Imena postaj v imenovalniku, kot povsod.
+// Kar o vožnji poroča potnik, ki je na njej (`deljenje.py`). Poročilo, ki
+// ni verodostojno, je vrstica ZRAVEN feeda -- telefon se lahko moti; kadar je
+// (potnik se je peljal), je strežnik feedovo zamudo in uro že zamenjal in
+// vrstica samo pove, od kod je. Imena postaj v imenovalniku, kot povsod.
 function potnikiHtml(p, bus, prihod) {
   if (!p) return "";
-  const kdo = p.soglasje ? "potniki na vozilu" : "potnik na vozilu";
+  const kdo = p.n > 1 ? "potniki na vozilu" : "potnik na vozilu";
   let kaj;
   if (p.odpeljal) kaj = `${prihod ? "prispel" : "odpeljal"} ob ${hhmm(p.odpeljal)}`;
   else if (p.mimo) kaj = "je že mimo";

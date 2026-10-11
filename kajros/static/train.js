@@ -255,14 +255,15 @@ function potnikPostanekText(sp) {
 
 function runHeadHtml(cur) {
   const bus = isBus(state.mode);   // glej vehicleNoun() za besedilo
-  // Kadar se ujemata vsaj dva potnika na vozilu, feed za trenutno zamudo ni
-  // vec potreben (odlocil David, 25. 9. 2026): njuna je izmerjena zdaj,
-  // feedova je sklep izpred minut. Z enim poročevalcem ostane feedova.
+  // Kadar je porocilo potnikov na vozilu verodostojno (eden, ki se pelje, ali
+  // dva, ki se ujemata; `deljenje.stanje`), feed za trenutno zamudo ni vec
+  // potreben (odlocil David, 25. 9. 2026, za enega 11. 10.): potnikova je
+  // izmerjena zdaj, feedova je sklep izpred minut. Sicer ostane feedova.
   const pp = state.run && state.run.potniki;
-  const soglasje = !!(pp && pp.soglasje && pp.lat != null);
+  const poPotnikih = !!(pp && pp.verodostojno && pp.lat != null);
   // Strezniku pustimo odlocitev (minuta, razred, prezgodaj); tu se le risze.
-  const z = soglasje ? pp.zamuda : cur ? stopZamuda(cur) : null;
-  const d = soglasje ? pp.zamuda_s : cur ? stopDelay(cur) : null;
+  const z = poPotnikih ? pp.zamuda : cur ? stopZamuda(cur) : null;
+  const d = poPotnikih ? pp.zamuda_s : cur ? stopDelay(cur) : null;
   const wx = cur ? state.weather.get(cur.stop_seq) : null;
   const color = delayColor(z || d);
   const atIso = cur ? stopActualIso(cur) : null;
@@ -271,7 +272,7 @@ function runHeadHtml(cur) {
   // kdaj smo nazadnje kaj IZVEDELI, druga le, kdaj naj bi se nekaj zgodilo.
   const tihoS = state.run && state.run.tiho_s != null ? state.run.tiho_s : null;
   const tiho2 = tihoS != null && tihoS > TIHO_S;
-  const stale = !soglasje && (tiho2 || (ageS != null && ageS > FRESH_S));
+  const stale = !poPotnikih && (tiho2 || (ageS != null && ageS > FRESH_S));
   // "-6 min" je uganka, beseda ni -- in prezgoden avtobus je za potnika hujsa
   // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
   // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
@@ -287,12 +288,12 @@ function runHeadHtml(cur) {
   // ...a le, kadar bloka "Pri tebi" ni. Ce je, je ista stevilka ze nad tem in
   // dve enaki "+8" druga pod drugo nista dva podatka, ampak ena ponovitev.
   const jeTvoj = !!(state.run && yourStop(state.run.stops));
-  const t0 = !cur && !soglasje && !jeTvoj && state.run && state.run.stops
+  const t0 = !cur && !poPotnikih && !jeTvoj && state.run && state.run.stops
     ? (state.run.stops.find((x) => x.typical) || {}).typical || null
     : null;
   // Brez meritve in brez svoje stevilke glava ne postavlja vprasaja v najvecji
   // pisavi na strani: stavek pod njim ze pove, da se voznja ni zacela.
-  const tiho = !cur && !soglasje && jeTvoj;
+  const tiho = !cur && !poPotnikih && jeTvoj;
 
   // Prevoznikovo porocilo: zamuda ob prihodu na postajo PRED vlakom, torej
   // napoved, ne kraj meritve (`api._dodaj_porocila`) -- zato z besedami SZ.
@@ -311,7 +312,7 @@ function runHeadHtml(cur) {
         <span class="detail-now-unit">min</span>
       </div>`}
       <div class="detail-now-where">
-        ${soglasje ? "po poročilu potnikov na vozilu"
+        ${poPotnikih ? `po poročilu ${pp.n > 1 ? "potnikov" : "potnika"} na vozilu`
           : cur
           // Ista razlika kot pri postanku potnika: "izmerjeno" smemo reci samo,
           // kadar je feed vrednost potrdil PO prehodu. Sicer je to zadnji
@@ -325,7 +326,7 @@ function runHeadHtml(cur) {
       ${t0 ? `<div class="detail-now-age">mediana ${pluralRuns(t0.n)}${
         t0.od_seq ? `, merjeno na postaji ${escapeHtml(t0.od_ime)}` : ""} · ${
         Math.round(t0.on_time_share * 100)} % v 5 min</div>` : ""}
-      ${atIso && !soglasje ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
+      ${atIso && !poPotnikih ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
         ${tiho2
           // Ena starost, ne dve. Ko feed molci, je edina, ki kaj pove,
           // starost NOVICE -- starost domnevnega prehoda je izpeljanka iz

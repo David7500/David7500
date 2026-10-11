@@ -1,4 +1,4 @@
-"""Deljenje lege potnikov: kandidati, varovalke, prehodi in soglasje.
+"""Deljenje lege potnikov: kandidati, varovalke, prehodi in verodostojnost.
 
 Sintetična proga: tri postaje na vzporedniku 46° N, 0,1° narazen (~7,7 km).
 Vlak t1 vozi A -> B -> C, vlak t2 isto progo v nasprotni smeri, ob istem času.
@@ -72,8 +72,10 @@ def _deli(conn, zdaj, *tocke, ident=None, trip="t1", kljuc="k"):
 # ------------------------------------------------------------ kandidati
 
 def test_kandidat_je_vlak_na_trasi_ob_pravem_casu(conn):
-    zdaj = _ob("10:05")
-    k = deljenje.kandidati(conn, LAT, _lon(3.8), 10, zdaj=zdaj)
+    # Pol kilometra pred Bledom sta po voznem redu oba: t1 je tu ob 10:09:27,
+    # t2 ob 10:11:33 (ob 10:05 pri Ajdovščini bi t2 prehiteval 11 min).
+    zdaj = _ob("10:10")
+    k = deljenje.kandidati(conn, LAT, _lon(7.3), 10, zdaj=zdaj)
     assert {x["trip_id"] for x in k} == {"t1", "t2"}   # brez smeri sta oba
 
 
@@ -241,39 +243,40 @@ def test_hoja_cez_rob_postaje_ni_odhod(conn):
     assert 2 not in r["stanje"]["prehodi"]
 
 
-# ------------------------------------------------------------ soglasje
+# ------------------------------------------------------------ verodostojnost
 
-def test_en_porocevalec_ni_soglasje(conn):
+def test_en_porocevalec_ki_stoji_ni_verodostojen(conn):
+    """Kdor se ni peljal, je lahko izstopil in čaka na peronu."""
     zdaj = _ob("10:14")
     _deli(conn, zdaj, _tocka(7.72, zdaj, v=0))
     st = deljenje.stanje(conn, ["t1"], zdaj)["t1"]
-    assert st["n"] == 1 and st["soglasje"] is False
+    assert st["n"] == 1 and st["verodostojno"] is False
 
 
-def test_dva_ujemajoca_se_sta_soglasje(conn):
+def test_dva_ujemajoca_se_sta_verodostojna(conn):
     zdaj = _ob("10:14")
     _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), kljuc="a")
     _deli(conn, zdaj, _tocka(7.80, zdaj, v=0), kljuc="b")
     st = deljenje.stanje(conn, ["t1"], zdaj)["t1"]
-    assert st["n"] == 2 and st["soglasje"] is True
+    assert st["n"] == 2 and st["verodostojno"] is True
 
 
-def test_dva_neujemajoca_se_nista_soglasje(conn):
+def test_dva_neujemajoca_se_nista_verodostojna(conn):
     zdaj = _ob("10:14")
     _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), kljuc="a")
     _deli(conn, zdaj, _tocka(2.0, zdaj), kljuc="b")   # ~10 min narazen
     st = deljenje.stanje(conn, ["t1"], zdaj)["t1"]
-    assert st["n"] == 2 and st["soglasje"] is False
+    assert st["n"] == 2 and st["verodostojno"] is False
 
 
 def test_isti_posiljatelj_znova_ni_drugi_porocevalec(conn):
     """Osvežena stran ali izgubljen odgovor začne novo deljenje; en telefon
-    pa ne sme dati soglasja dveh in zamenjati feeda."""
+    pa ne sme dati dveh, ki se ujemata, in zamenjati feeda."""
     zdaj = _ob("10:14")
     prvo = _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), kljuc="a")
     _deli(conn, zdaj, _tocka(7.74, zdaj, v=0), kljuc="a")
     st = deljenje.stanje(conn, ["t1"], zdaj)["t1"]
-    assert st["n"] == 1 and st["soglasje"] is False
+    assert st["n"] == 1 and st["verodostojno"] is False
     konec = conn.execute("SELECT konec FROM deljenje WHERE id = ?",
                          (prvo["deljenje"],)).fetchone()[0]
     assert konec == "znova"
@@ -363,18 +366,18 @@ def test_en_porocevalec_tabli_doda_in_ne_zamenja(conn):
     r = _vrstica_c(zdaj)
     pred = dict(r)
     deljenje.dopolni(conn, [r], seq="stop_seq", t_s="t_s", pricakovano="expected", ura="sched", zdaj=zdaj)
-    assert r["potniki"]["soglasje"] is False
+    assert r["potniki"]["verodostojno"] is False
     assert r["potniki"]["zamuda_s"] == 180
     assert r["expected"] == pred["expected"] and r["nepotrjen_do"] == pred["nepotrjen_do"]
 
 
-def test_soglasje_zamenja_feed_na_tabli(conn):
+def test_dva_ki_se_ujemata_zamenjata_feed_na_tabli(conn):
     zdaj = _ob("10:14")
     _deli(conn, zdaj, _tocka(7.72, zdaj, v=0), kljuc="a")
     _deli(conn, zdaj, _tocka(7.80, zdaj, v=0), kljuc="b")
     r = _vrstica_c(zdaj)
     deljenje.dopolni(conn, [r], seq="stop_seq", t_s="t_s", pricakovano="expected", ura="sched", zdaj=zdaj)
-    assert r["potniki"]["soglasje"] is True
+    assert r["potniki"]["verodostojno"] is True
     assert r["nepotrjen_do"] is None
     assert r["delay_s"] == 180
     assert r["zamuda"]["vrsta"] == "po poročilu potnikov"
@@ -517,3 +520,201 @@ def test_vozilo_po_potnikih_samo_ob_soglasju(conn):
     assert v["vir"] == "potniki" and v["potnikov"] == 2
     assert v["train_no"] == "LP 1" and v["speed_ms"] == 0 and v["age_s"] == 0
     assert v["lat"] == pytest.approx(LAT, abs=1e-4)
+
+
+# ------------------------------------------------------------ en verodostojen potnik
+
+def _pelje(conn, zacetek: datetime, km0: float, korak_km: float, n: int, kljuc="k", **kw):
+    """Potnik se pelje: `n` točk na 10 s, vsaka `korak_km` naprej."""
+    r = None
+    for i in range(n):
+        z = zacetek + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _tocka(km0 + korak_km * i, z, **kw),
+                  ident=r["deljenje"] if r else None, kljuc=kljuc)
+    return r
+
+
+def test_en_potnik_ki_se_pelje_je_verodostojen(conn):
+    """Od 11. 10. 2026 dovolj en: kdor se je peljal, ni na peronu."""
+    zdaj = _ob("10:05")
+    _pelje(conn, zdaj, 3.0, 0.1, 3)            # 100 m na 10 s
+    st = deljenje.stanje(conn, ["t1"], zdaj + timedelta(seconds=20))["t1"]
+    assert st["n"] == 1 and st["verodostojno"] is True
+    r = _vrstica_c(zdaj)
+    deljenje.dopolni(conn, [r], seq="stop_seq", t_s="t_s", pricakovano="expected",
+                     ura="sched", zdaj=zdaj + timedelta(seconds=20))
+    assert r["zamuda"]["vrsta"] == "po poročilu potnikov" and r["nepotrjen_do"] is None
+    assert r["delay_s"] == st["zamuda_s"] > 0
+
+
+def test_tresenje_lege_ni_voznja(conn):
+    """Lega, ki stoji, v 30 s ne naredi 100 m naprej, tudi če skače."""
+    zdaj = _ob("10:14")
+    _pelje(conn, zdaj, 7.72, 0.008, 4, v=0)    # 8 m na 10 s
+    assert deljenje.stanje(conn, ["t1"], zdaj + timedelta(seconds=30))["t1"]["verodostojno"] is False
+
+
+def test_vlak_ki_prehiteva_ni_verodostojen(conn):
+    """Vlak prezgodaj ne vozi: tak potnik je izbral napačno vožnjo."""
+    zdaj = _ob("10:03")
+    _pelje(conn, zdaj, 6.0, 0.1, 3)            # po voznem redu tu ob 10:08
+    st = deljenje.stanje(conn, ["t1"], zdaj + timedelta(seconds=20))["t1"]
+    assert st["verodostojno"] is False
+    assert st["zamuda_s"] == 0                 # vlaku se „prej“ ne napiše
+
+
+def test_prehod_steje_samo_od_potnika_ki_se_je_peljal(conn):
+    zdaj = _ob("10:14")
+    r = _stoji_v_bledu(conn, zdaj)
+    conn.execute("INSERT INTO deljenje_prehod(deljenje, trip_id, service_date, stop_seq, odhod_ts) "
+                 "VALUES(?, 't1', ?, 2, ?)", (r["deljenje"], zdaj.date().isoformat(),
+                                             int(zdaj.timestamp())))
+    assert deljenje.stanje(conn, ["t1"], zdaj)["t1"]["prehodi"] == {}
+    conn.execute("UPDATE deljenje SET peljal_ts = 1")
+    assert 2 in deljenje.stanje(conn, ["t1"], zdaj)["t1"]["prehodi"]
+
+
+# ------------------------------------------------------------ čakanje na odhod
+
+def _bus(conn):
+    conn.execute("UPDATE trip SET mode = 'bus', network = 'avtobus' WHERE trip_id = 't1'")
+    deljenje._predpomnilnik.clear()
+
+
+def test_cakanje_na_izhodiscu_ni_prezgodaj(conn):
+    """A5161 je 5. 10. 2026 sedem minut pred odhodom čakal v Kamniku, kartica
+    je pisala „6 min prej“, tabla naprej prihod pred voznim redom."""
+    _bus(conn)
+    zdaj = _ob("09:53")
+    r = _deli(conn, zdaj, _tocka(0.02, zdaj, v=0))
+    assert r["stanje"]["zamuda_s"] == 0
+
+
+def test_avtobus_ki_gre_skozi_prezgodaj_je_prezgoden(conn):
+    _bus(conn)
+    v = deljenje.voznja(conn, "t1")
+    assert v.zamuda(7.72 * 1000, 36480, stoji=False) == -120   # B ob 10:08, prihod 10:10
+    assert v.zamuda(7.72 * 1000, 36480, stoji=True) == 0
+
+
+def test_vlak_ob_prihodu_prej_caka(conn):
+    v = deljenje.voznja(conn, "t1")
+    assert v.zamuda(7.72 * 1000, 36480) == 0
+
+
+def test_hitrost_avtobusa_iz_telefona_ima_mejo(conn):
+    """Brskalnik je na avtobusu javil 186 km/h; okno vožnje z njo pomika vozilo."""
+    _bus(conn)
+    zdaj = _ob("10:05")
+    r = _pelje(conn, zdaj, 3.0, 0.1, 2, v=52)
+    assert r["stanje"]["hitrost_ms"] == pytest.approx(10, abs=0.5)
+
+
+# ------------------------------------------------------------ kandidati: ura
+
+def test_kandidat_pove_odhod_in_zamudo(conn):
+    zdaj = _ob("10:40")
+    k = next(x for x in deljenje.kandidati(conn, LAT, _lon(7.7), 10, zdaj=zdaj)
+             if x["trip_id"] == "t1")
+    assert k["odhod"]["postaja"] == "Ajdovščina"
+    assert datetime.fromisoformat(k["odhod"]["ura"]).strftime("%H:%M") == "10:00"
+    assert k["zamuda_s"] == 29 * 60                 # stoji v Bledu od 10:11
+
+
+def test_vlak_ki_bi_med_postajama_prehiteval_ni_kandidat(conn):
+    """Lokalni posnetek 11. 10. 2026: med Pragerskim in Celjem sta bila
+    kandidata še vlaka, ki bi bila tam 4 in 11 min pred voznim redom."""
+    zdaj = _ob("10:03")
+    assert "t1" not in {x["trip_id"] for x in deljenje.kandidati(conn, LAT, _lon(6.0), 10, zdaj=zdaj)}
+
+
+def test_na_postaji_lahko_caka_vlak_ki_sele_pride(conn):
+    zdaj = _ob("10:02")
+    k = {x["trip_id"]: x for x in deljenje.kandidati(conn, LAT, _lon(7.72), 10, zdaj=zdaj)}
+    assert "t1" in k and k["t1"]["zamuda_s"] == 0
+
+
+# ------------------------------------------------------------ lijak
+
+def test_lijak_steje_zacetke_po_odjemalcu(conn):
+    zdaj = _ob("10:05")
+    deljenje.sprejmi(conn, {"trip_id": "t1", "service_date": zdaj.date().isoformat(),
+                            "tocke": [_tocka(3.8, zdaj)], "vir": "okno"}, "k", zdaj,
+                     odjemalec="android")
+    deljenje.stej(conn, "kandidati:0", zdaj)
+    deljenje.stej(conn, "kandidati:0", zdaj)
+    dan = deljenje.lijak(conn, zdaj)[0]
+    assert dan["dogodki"] == {"zacetek:android": 1, "kandidati:0": 2}
+    assert conn.execute("SELECT odjemalec, vir FROM deljenje").fetchone()[:] == ("android", "okno")
+
+
+def test_vir_zunaj_seznama_se_ne_shrani(conn):
+    zdaj = _ob("10:05")
+    _deli(conn, zdaj, {**_tocka(3.8, zdaj)})
+    deljenje.sprejmi(conn, {"trip_id": "t1", "service_date": zdaj.date().isoformat(),
+                            "tocke": [_tocka(3.9, zdaj)], "vir": "<script>"}, "drug", zdaj)
+    assert {r[0] for r in conn.execute("SELECT vir FROM deljenje")} == {None}
+
+
+def test_odjemalec_iz_ua():
+    assert deljenje.odjemalec("Kajros/1.10 (Android)") == "android"
+    assert deljenje.odjemalec("Mozilla/5.0 (Linux; Android 15) Chrome/130 Kajros/1.10") == "aplikacija"
+    assert deljenje.odjemalec("Mozilla/5.0 (Linux; Android 15) Chrome/130") == "splet"
+
+
+def test_stara_tabela_dobi_nove_stolpce():
+    c = db.connect(":memory:")
+    c.execute("CREATE TABLE deljenje (id TEXT PRIMARY KEY, trip_id TEXT, service_date TEXT, "
+              "network TEXT, zacetek_ts INTEGER, zadnja_ts INTEGER, konec TEXT)")
+    deljenje.init(c)
+    stolpci = {r[1] for r in c.execute("PRAGMA table_info(deljenje)")}
+    assert {"peljal_ts", "odjemalec", "vir"} <= stolpci
+
+
+# ------------------------------------------------------------ zemljevid: novejša lega
+
+def _gps(age, cesta=True, trip="b1", network="avtobus"):
+    d = {"trip_id": trip, "network": network, "lat": 46.0, "lon": 14.0, "bearing": 90,
+         "speed_ms": 8, "speed_kmh": 29, "age_s": age, "seen_ts": 1000 - age,
+         "delay_s": 60, "vehicle_id": "v1"}
+    if cesta:
+        d["cesta"] = {"lat": 46.0, "lon": 14.0}
+    return d
+
+
+def _potnik(age, network="avtobus"):
+    return {"network": network, "lat": 46.1, "lon": 14.1, "bearing": 80, "speed_ms": 9,
+            "speed_kmh": 32, "age_s": age, "delay_s": 120, "vir": "potniki", "potnikov": 1,
+            "trip_id": "b1"}
+
+
+def _na_legah(monkeypatch, out, potnik, trip=None):
+    from kajros import api
+    monkeypatch.setattr(api.deljenje, "zive_voznje", lambda conn, zdaj: ["b1"])
+    monkeypatch.setattr(api.deljenje, "stanje", lambda conn, ids, zdaj: {"b1": {}})
+    monkeypatch.setattr(api, "_vozilo_po_potnikih", lambda conn, t, zdaj, st=None: potnik)
+    return api._s_potniki_na_legah(None, out, datetime.fromtimestamp(1000, TZ), trip)
+
+
+def test_novejsi_potnik_zamenja_gps(monkeypatch):
+    out, potniki = _na_legah(monkeypatch, [_gps(85)], _potnik(5))
+    assert potniki and out[0]["vir"] == "potniki" and out[0]["lat"] == 46.1
+    assert "cesta" not in out[0] and out[0]["vehicle_id"] == "v1" and out[0]["seen_ts"] == 995
+
+
+def test_starejsi_potnik_ne_premakne_gps(monkeypatch):
+    out, potniki = _na_legah(monkeypatch, [_gps(3)], _potnik(5))
+    assert not potniki and "vir" not in out[0] and out[0]["lat"] == 46.0
+
+
+def test_vozilo_brez_gps_dobi_potnika(monkeypatch):
+    out, potniki = _na_legah(monkeypatch, [], _potnik(5))
+    assert potniki and out[0]["vir"] == "potniki"
+
+
+def test_vlak_gre_na_veliki_zemljevid_po_drugi_poti(monkeypatch):
+    """Vlake in nadomestne riše veliki zemljevid iz `/api/live`; v legah jih ni."""
+    out, potniki = _na_legah(monkeypatch, [], _potnik(5, "zeleznica"))
+    assert out == [] and not potniki
+    out, potniki = _na_legah(monkeypatch, [], _potnik(5, "zeleznica"), trip="b1")
+    assert potniki and len(out) == 1

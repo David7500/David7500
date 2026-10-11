@@ -2106,6 +2106,31 @@ Kjer je feed imel svežo meritev, se potnik z njim ujema na pol minute (A6335, L
 
 Mediane. Vlak zato drsi s 45 s postanka (`POSTANEK_VLAK_S`), avtobus ostane pri 15 s.
 
+## Deljenje po 16 dneh: en potnik je dovolj, brskalnik ne deli (11. 10. 2026)
+
+Produkcija (arwen), 25. 9.–9. 10. 2026: **36 deljenj**, 30 na avtobusih (večinoma Arriva Kamnik–Ljubljana, verjetno en ali dva stalna potnika), 6 na vlakih, zadnje na vlaku 7. 10. **Dveh hkrati na isti vožnji ni bilo nikoli** -- lega na zemljevidu (soglasje dveh, 1. 10.) se ni pokazala niti enkrat. Odločitev (David): dovolj je en potnik, ki se je peljal (`deljenje.md`).
+
+**Brskalnik ne deli.** Odjemalca se iz baze ne vidi, iz razmika točk pa: brskalnik jih zbira na 3 s, storitev v aplikaciji na 5 s. Deljenj z mediano razmika 3–4,5 s je 9, največ 29 točk (~2 min) -- zaslon se ugasne. Vsa dolga deljenja (125–652 točk, 12–69 min) imajo razmik 5 s, torej Android. Od zdaj `deljenje.odjemalec` iz UA.
+
+**Napačno vozilo in vnovični začetki.** 7 epizod z 19 začetki (N6224 petkrat, A5161 trikrat, N6501 → N6152 trikrat, RG 318, M2129, A5210, LPP 25 po dvakrat). Primeri napačne izbire: M2129 v Murski Soboti ob 17:08 najprej vožnja za Maribor z odhodom ob 17:15, nato prava za Ljubljano; N6501 s +21 min, ko je feed za to vožnjo največ kazal 4, minuto pozneje N6152 na istem kraju. Verjetno tudi A6330 (+45 min, feed največ 12). Gumb kandidata je pri medkrajevnih kazal le „Arriva → Ljubljana AP“ -- dve liniji sta bili dva enaka gumba. Ponovitev kandidatov iz prvih točk na arwenu (brez GPS, ker `vehicle_now` hrani le zdajšnje lege; trase pred 2. 10. so bile še nepripete): izbrana vožnja prva v 23 od 35, med petimi v 28. Med 7, ki ju ponovitev ne najde, so tri sumljive izbire (M2129 za Maribor, A6330, LPP 69 s −12 min) -- ponovitev se s potnikom ni strinjala prav tam, kjer je potnik verjetno izbral narobe.
+
+**Čakanje na odhod je bilo „prej“.** A5161 je 5. 10. sedem minut pred odhodom stal v Kamniku: zamuda −382 s, kartica „6 min prej“, tabla postajam naprej prihod 6 min pred voznim redom; potnik je začel še dvakrat. M2129 isto (−401 s). Popravek: `Voznja.zamuda(stoji=True)`.
+
+**Starost lege GPS ob branju** (arwen, nedelja 11. 10. 2026, 15:26 in 15:35; samo vožnje, ki so po voznem redu na poti):
+
+| vir | vožnje s svežo lego | mediana | p90 |
+|---|---|---|---|
+| Arriva (NAP) | 32 od 32 | 29 s | 40 s |
+| Nomago (NAP) | 31 od 31 | 29 s | 41 s |
+| LPP primestni (NAP) | 7 od 7 | 33 s | 47 s |
+| LPP mestni (derp.si) | 19 od 20 | 85 s | 123 s |
+| AP Murska Sobota | 1 od 2 | 551 s (obstala) | |
+| nadomestni prevoz SŽ | **0 od 1** | — | |
+
+LPP mestni: paket pride na **60 s** (15:35:53, 36:53, 37:53, 38:53), najnovejša lega v njem je ob prihodu stara 42 s; 7. 9. je paket prihajal na ~90 s (57–147 s). Potnikova lega je ob branju stara 5–10 s: dobiček ~20–30 s pri medkrajevnih, ~75 s pri mestnem LPP (~350–400 m, eno postajališče). Zato deljenje ostane za vse, z zmago novejše lege, poudarek pa na vlakih in nadomestnem prevozu, ki lege nimajo.
+
+**Preizkus od konca do konca** (razvojni strežnik, brezglavi Chrome prek CDP, lega po trasi MV 246 na 5 s s 15 m/s): trije kandidati, pravi prvi; ob drugih dveh (MV 575, LPV 2917) bi bil vlak med Pragerskim in Celjem 4 in 11 min pred voznim redom -- zdaj nista kandidata (`PREZGODAJ_VLAK_S`). Po 11 točkah `/api/live` `verodostojno: true`, `/api/vehicles?trip=` `vir: potniki`, starost 6 s; glava okna vožnje „po poročilu potnika na vozilu“, konzola brez napak.
+
 ## Prehod po orodni vrstici: pol časa je bilo čakanje na HTML (2. 10. 2026)
 
 Prijava: „ko klikaš po orodni vrstici, traja do pol sekunde, da odpre stran -- v aplikaciji se vidi, da ni prava Android“. Merjeno prek CDP v chromiumu (412 px, `deviceScaleFactor` 2,6, procesor upočasnjen 4×), od klika na pilulo do prvega izrisa nove strani (`timeOrigin + FCP − čas klika`), 12 prehodov med petimi stranmi vrstice, toplo (statika in service worker že v predpomnilniku).

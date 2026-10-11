@@ -22,13 +22,16 @@ vozilo s trase ne gre; lega potnika pred potrditvijo in lega ob strani trase
 se ne zapišeta nikoli. Deljenje ima naključen id, ki ni povezan ne z obiskom
 ne z naslovom IP; z njim ločimo sledi in štejemo neodvisne poročevalce.
 
-**Kaj se pokaže** (odločil David, 25. 9. 2026):
+**Kaj se pokaže** (odločil David, 25. 9. 2026, spremenil 11. 10. 2026):
 
-* **en poročevalec** — prikaz pokaže feed IN poročilo, vsakega s svojo
-  oznako. En sam telefon lahko laže ali se moti;
-* **dva ali več, ki se ujemata** — feed za lego in prehod ni več potreben;
-  poročilo zamenja „po zadnjem podatku bi odpeljal …, potrditve ni“. To velja
-  le, dokler so poročila sveža (`SVEZE_S`); ko vsi nehajo deliti, se vrne feed.
+* **poročilo, ki ni verodostojno** — prikaz pokaže feed IN poročilo, vsakega
+  s svojo oznako. En sam telefon lahko laže ali se moti;
+* **verodostojno** (`_verodostojno()`: potnik se je že peljal, vlak po njem
+  ne prehiteva) ali **dva, ki se ujemata** — feed za lego in prehod ni več
+  potreben; poročilo zamenja „po zadnjem podatku bi odpeljal …, potrditve
+  ni“. To velja le, dokler so poročila sveža (`SVEZE_S`); ko vsi nehajo
+  deliti, se vrne feed. Do 11. 10. 2026 je bil pogoj samo soglasje dveh -- v
+  16 dneh in 36 deljenjih ga ni bilo niti enkrat.
 
 **Varovalke.** API nima avtentikacije, zato mora vsaka točka dokazati, da je
 na trasi vožnje, ki jo trdi (`ODMIK_MAX_M`), in se premikati kot vozilo
@@ -77,6 +80,10 @@ NATANCNOST_MAX_M = 250
 ZUNAJ_ZA_IZSTOP = 3
 #: 250 km/h. Hitreje ne vozi nič na tej mreži; skok čez to je napaka GPS.
 HITROST_MAX_MS = 70
+#: 130 km/h. Hitrost, ki jo javi telefon na avtobusu, nad tem ni hitrost:
+#: brskalnik je na Arrivi Kamnik--Ljubljana 2. 10. 2026 javil 186 km/h. Okno
+#: vožnje z njo pomika vozilo med poročili (`ocenjenaLega`).
+HITROST_MAX_BUS_MS = 36
 #: Nazaj po trasi toliko ali več ni šum, ampak napačna projekcija.
 NAZAJ_MAX_M = 300
 #: Pod to hitrostjo vozilo stoji.
@@ -102,6 +109,20 @@ VOZI_MS = 3
 #: kot vlak z rastočo zamudo: točke 150--185 m od proge so pod mejo izven
 #: trase (`ODMIK_MAX_M`) in vsaka je števec izstopa vrnila na nič.
 VSTRAN_M = 40
+#: Kdaj se je potnik peljal: vzdolž trase vsaj `PELJE_M` (in obe natančnosti)
+#: s povprečno hitrostjo vsaj `PELJE_MS`, v največ `PELJE_OKNO_S`. Človek na
+#: peronu tega ne zmore, zato šele od tod poročilo enega samega potnika velja
+#: za lego vozila: izstopivši potnik, ki čaka ob progi, je bil razlog, da je
+#: do 11. 10. 2026 za to rabilo dva. 6 m/s je meja vkrcanja v aplikaciji
+#: (`Vkrcanje.VOZI_MS`).
+PELJE_MS = 6
+PELJE_M = 100
+PELJE_OKNO_S = 30
+#: Vlak prezgodaj ne odpelje (0 od 78 082 postankov, `oznake.md`). Poročilo, po
+#: katerem prehiteva več od tega, je z napačne vožnje. Manj je linearni vozni
+#: red med postajama, ki ne pozna speljevanja. Meja ni izmerjena: vsi štirje
+#: vlaki s poročili do 11. 10. 2026 so zamujali (49--1 563 s).
+PREZGODAJ_VLAK_S = 180
 #: Najmanjši razmik med dvema točkami istega deljenja. Pogosteje ne prinese
 #: nič novega, bazo pa polni.
 RAZMIK_S = 3
@@ -159,7 +180,10 @@ CREATE TABLE IF NOT EXISTS deljenje (
     zamuda_s     INTEGER,            -- izpeljana iz zadnje točke
     tock         INTEGER NOT NULL DEFAULT 0,
     zunaj        INTEGER NOT NULL DEFAULT 0,  -- zaporedne točke izven trase
-    konec        TEXT                -- izstop | cilj | cas | potnik
+    konec        TEXT,               -- izstop | cilj | cas | potnik | znova
+    peljal_ts    INTEGER,            -- prvič, ko se je peljal (`PELJE_MS`)
+    odjemalec    TEXT,               -- splet | aplikacija | android
+    vir          TEXT                -- kje je začel (`VIRI`), kadar pove
 );
 CREATE INDEX IF NOT EXISTS deljenje_voznja ON deljenje(trip_id, zadnja_ts);
 CREATE INDEX IF NOT EXISTS deljenje_zacetek ON deljenje(zacetek_ts);
@@ -189,20 +213,62 @@ CREATE TABLE IF NOT EXISTS deljenje_prehod (
 );
 CREATE INDEX IF NOT EXISTS deljenje_prehod_voznja
     ON deljenje_prehod(trip_id, service_date);
+
+-- Koliko ljudi pride do katerega koraka, po dnevih. Brez tega ni bilo mogoče
+-- vedeti, koliko jih je gumb pritisnilo in dobilo „ne najdem vozila“: v
+-- obisku je `/api/deli` ena vrstica za iskanje in za vse pošiljanje točk.
+CREATE TABLE IF NOT EXISTS deljenje_lijak (
+    dan      TEXT NOT NULL,
+    dogodek  TEXT NOT NULL,       -- kandidati:0 | kandidati | zacetek:<odjemalec> | ...
+    n        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (dan, dogodek)
+);
 """
+
+#: Od kod je potnik začel, kot pove odjemalec. Drugo se ne shrani: polje
+#: piše kdorkoli.
+VIRI = {"domov", "iskalnik", "okno", "budilka", "vodenje"}
 
 
 class Zavrnjeno(Exception):
     """Zahteve nismo sprejeli. Besedilo je namenjeno potniku."""
 
-    def __init__(self, sporocilo: str, status: int = 400):
+    def __init__(self, sporocilo: str, status: int = 400, koda: str = "drugo"):
         super().__init__(sporocilo)
         self.status = status
+        #: Za lijak (`stej`): zakaj začetek ni uspel, brez besedila.
+        self.koda = koda
 
 
 def init(conn: sqlite3.Connection) -> None:
+    # Stolpci, dodani 11. 10. 2026; starejša deljenja jih nimajo izpolnjenih.
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(deljenje)")}
+    for ime in ("peljal_ts INTEGER", "odjemalec TEXT", "vir TEXT"):
+        if stolpci and ime.split()[0] not in stolpci:
+            conn.execute(f"ALTER TABLE deljenje ADD COLUMN {ime}")
     conn.executescript(SHEMA)
     conn.commit()
+
+
+def stej(conn: sqlite3.Connection, dogodek: str, zdaj: datetime | None = None) -> None:
+    """Prišteje en dogodek v lijak današnjega dne. Ne potrdi -- to naredi
+    klicatelj z ostalim pisanjem."""
+    dan = (zdaj or datetime.now(TZ)).date().isoformat()
+    conn.execute(
+        "INSERT INTO deljenje_lijak(dan, dogodek, n) VALUES(?, ?, 1) "
+        "ON CONFLICT(dan, dogodek) DO UPDATE SET n = n + 1", (dan, dogodek))
+
+
+def odjemalec(ua: str) -> str:
+    """Kdo pošilja: storitev v aplikaciji, stran v aplikaciji ali brskalnik.
+
+    Ni identiteta, samo vrsta. Iz razmika točk se je to dalo le uganiti
+    (brskalnik 3--4 s, storitev 5 s), in prav to je pokazalo, da v brskalniku
+    nobeno deljenje ni trajalo dlje od ~2 min (`docs/MERITVE.md`).
+    """
+    if "Kajros/" not in ua:
+        return "splet"
+    return "android" if "(Android)" in ua else "aplikacija"
 
 
 # ------------------------------------------------------------ geometrija
@@ -394,19 +460,28 @@ class Voznja:
         f = max(0.0, min(1.0, (along - a["along"]) / (b["along"] - a["along"])))
         return t_a + f * (t_b - t_a)
 
-    def zamuda(self, along: float, t_s: float) -> int:
+    def zamuda(self, along: float, t_s: float, stoji: bool = False) -> int:
         """Zamuda vozila, ki je ob `t_s` (s od polnoči) na razdalji `along`.
 
         Na postaji je vozni red interval [prihod, odhod]: kdor je tam vmes,
         je točen, kdor stoji po odhodu, zamuja vsaj za toliko, kolikor že
         stoji čez -- in ta zamuda raste, dokler ne odpelje. Prav to je
         primer, ko feed trdi, da je vlak že šel.
+
+        Kdor na postaji pred voznorednim odhodom **stoji**, čaka nanj in ni
+        prezgoden: avtobus A5161 je 5. 10. 2026 sedem minut pred odhodom
+        čakal v Kamniku, kartica je pisala „6 min prej“, tabla pa naprej
+        napovedala prihod 6 min pred voznim redom. Vlak tudi ob prihodu prej
+        počaka, zato pri njem velja to tudi med zaviranjem. Avtobus, ki gre
+        skozi prezgodaj, ostane prezgoden -- to se zgodi (`oznake.md`).
         """
         j = self.na_postaji(along)
         if j is not None:
             s = self.postanki[j]
             prihod = s["arr_s"] if s["arr_s"] is not None else s["dep_s"]
             odhod = s["dep_s"] if s["dep_s"] is not None else s["arr_s"]
+            if t_s <= odhod and (stoji or self.mode == "vlak"):
+                return 0
             if t_s < prihod:
                 return round(t_s - prihod)
             if t_s <= odhod:
@@ -732,12 +807,28 @@ def _ocenjeni(conn: sqlite3.Connection, lat: float, lon: float, meja: float,
         ocena += odmik / 5
         if smer:
             ocena /= 2
+        # Zamuda, ki bi jo vozilo imelo, če bi bil potnik na njem. Vlak med
+        # postajama ne prehiteva (`PREZGODAJ_VLAK_S`); na postaji pa potnik
+        # lahko čaka nanj in deliti začne pred vstopom.
+        zamuda_tu = v.zamuda(along, now_s, stoji=True)
+        if (v.mode == "vlak" and zamuda_tu < -PREZGODAJ_VLAK_S
+                and v.na_postaji(along) is None):
+            continue
         videno.add(trip_id)
+        prvi = v.postanki[0]
         out.append({
             "trip_id": trip_id, "service_date": dan,
             "train_no": v.train_no, "headsign": v.headsign,
             "network": v.network, "mode": v.mode, "agency": v.agency,
             "smer_potrjena": bool(smer), **_kje(v, along), "_ocena": ocena,
+            # Po čem potnik loči dve vožnji z istim imenom: dve liniji Arrive
+            # proti Ljubljani sta bili dva enaka gumba „Arriva → Ljubljana AP“,
+            # in prejšnja vožnja iste linije se loči po uri in zamudi, ki bi jo
+            # imela, če bi bil potnik na njej (A6330 5. 10. 2026: +45 min).
+            "odhod": {"postaja": prvi["name"],
+                      "ura": stats.abs_time(dan, prvi["dep_s"] if prvi["dep_s"] is not None
+                                            else prvi["arr_s"])},
+            "zamuda_s": zamuda_tu,
         })
     return out
 
@@ -757,7 +848,7 @@ def _pogostost(slovar: dict[str, list[float]], kljuc: str, okno_s: float,
     with _zaklep:
         casi = [c for c in slovar.get(kljuc, []) if zdaj - c < okno_s]
         if len(casi) >= najvec:
-            raise Zavrnjeno(sporocilo, 429)
+            raise Zavrnjeno(sporocilo, 429, "pogostost")
         casi.append(zdaj)
         slovar[kljuc] = casi
         if len(slovar) > 5000:
@@ -770,7 +861,7 @@ def je_json(content_type: str) -> bool:
     brskalnik pred tujo zahtevo vpraša CORS. Podniz ne zadošča:
     `text/plain;charset=application/json` je za brskalnik `text/plain` in gre
     brez vprašanja, tuja stran pa bi svoje obiskovalce spremenila v
-    poročevalce -- dva sta dovolj za soglasje, ki zamenja feed."""
+    poročevalce -- in poročilo lahko zamenja feed (`stanje`)."""
     return content_type.split(";")[0].strip().lower() == "application/json"
 
 
@@ -805,7 +896,7 @@ def _dnevni_strop(conn: sqlite3.Connection, zdaj: datetime) -> None:
         "SELECT COUNT(*), COALESCE(SUM(tock), 0) FROM deljenje WHERE zacetek_ts >= ?",
         (polnoc,)).fetchone()
     if n >= DELJENJ_NA_DAN or tock >= TOCK_NA_DAN:
-        raise Zavrnjeno("Danes je deljenja dovolj. Hvala — poskusi jutri.", 429)
+        raise Zavrnjeno("Danes je deljenja dovolj. Hvala — poskusi jutri.", 429, "strop")
 
 
 def _prva_lega(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
@@ -825,7 +916,8 @@ def _prva_lega(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
 
 
 def _zacni(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
-           prva: dict, kljuc: str, zdaj: datetime) -> str:
+           prva: dict, kljuc: str, zdaj: datetime, odjemalec: str = "splet",
+           vir: str | None = None) -> str:
     """Novo deljenje. Prva točka mora biti na trasi in ob pravem času.
 
     Omejitev na uro šteje le deljenja, ki so se res začela: potnik s slabim
@@ -835,19 +927,21 @@ def _zacni(conn: sqlite3.Connection, v: Voznja, dan: str, now_s: int,
     _dnevni_strop(conn, zdaj)
     along, odmik, zamuda = _prva_lega(conn, v, dan, now_s, prva["lat"], prva["lon"])
     if odmik > KANDIDAT_ODMIK_M + min(prva.get("acc") or 0, NATANCNOST_MAX_M):
-        raise Zavrnjeno("Tvoja lega ni na trasi te vožnje.")
+        raise Zavrnjeno("Tvoja lega ni na trasi te vožnje.", koda="ni_na_trasi")
     razlika = now_s - (v.voznoredni_cas(along) + zamuda)
     if razlika < -KANDIDAT_PRED_S and along > v.postanki[0]["along"] + v.na_postaji_m:
-        raise Zavrnjeno("Ta vožnja ta hip ni tu.")
+        raise Zavrnjeno("Ta vožnja ta hip ni tu.", koda="ni_tu")
     if razlika > KANDIDAT_ZA_S + stats.MAX_REALNA_ZAMUDA_S:
-        raise Zavrnjeno("Ta vožnja ta hip ni tu.")
+        raise Zavrnjeno("Ta vožnja ta hip ni tu.", koda="ni_tu")
     _pogostost(_deljenja_casi, kljuc, 3600, DELJENJ_NA_URO,
                "Preveč začetih deljenj. Poskusi čez kakšno uro.", zdaj.timestamp())
     ident = secrets.token_urlsafe(16)
     ts = int(zdaj.timestamp())
     conn.execute(
-        "INSERT INTO deljenje(id, trip_id, service_date, network, zacetek_ts, zadnja_ts) "
-        "VALUES(?, ?, ?, ?, ?, ?)", (ident, v.trip_id, dan, v.network, ts, ts))
+        "INSERT INTO deljenje(id, trip_id, service_date, network, zacetek_ts, zadnja_ts, "
+        "odjemalec, vir) VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+        (ident, v.trip_id, dan, v.network, ts, ts, odjemalec, vir if vir in VIRI else None))
+    stej(conn, f"zacetek:{odjemalec}", zdaj)
     # Isti pošiljatelj znova na isti vožnji (osvežena stran, izgubljen odgovor
     # na prvo pošiljanje) ni drugi potnik: prejšnje deljenje se konča, sicer
     # bi en telefon dal "soglasje dveh" in zamenjal feed. Konec je `znova`,
@@ -907,7 +1001,7 @@ def _tocke(podatki: dict, zdaj_ts: int) -> list[dict]:
 
 
 def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
-            zdaj: datetime | None = None) -> dict:
+            zdaj: datetime | None = None, odjemalec: str = "splet") -> dict:
     """Zapiše točke enega deljenja. Vrne stanje in morebiten konec.
 
     Brez `deljenje` v zahtevi se deljenje začne -- a le, če je prva točka
@@ -919,19 +1013,19 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
     dan = str(podatki.get("service_date") or "")
     dnevi = dict(_dneva(zdaj))
     if dan not in dnevi:
-        raise Zavrnjeno("Deliti se da samo vožnjo, ki vozi danes.")
+        raise Zavrnjeno("Deliti se da samo vožnjo, ki vozi danes.", koda="ne_vozi")
     now_s = dnevi[dan]
     tocke = _tocke(podatki, zdaj_ts)
     v = voznja(conn, trip_id)
     if v is None:
-        raise Zavrnjeno("Te vožnje ne poznam.", 404)
+        raise Zavrnjeno("Te vožnje ne poznam.", 404, "neznana")
     ok = conn.execute(
         "SELECT 1 FROM trip t JOIN service_day sd ON sd.service_id = t.service_id "
         "AND sd.date = ? WHERE t.trip_id = ? AND t.start_s <= ? AND t.end_s >= ?",
         (dan, trip_id, now_s + KANDIDAT_PRED_S,
          now_s - stats.MAX_REALNA_ZAMUDA_S - KANDIDAT_ZA_S)).fetchone()
     if not ok:
-        raise Zavrnjeno("Ta vožnja ta hip ne vozi.")
+        raise Zavrnjeno("Ta vožnja ta hip ne vozi.", koda="ne_vozi")
 
     ident = podatki.get("deljenje")
     if ident:
@@ -940,7 +1034,8 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
             raise Zavrnjeno("Deljenja ne poznam.", 404)
         d = dict(d)
     else:
-        ident = _zacni(conn, v, dan, now_s, tocke[0], kljuc, zdaj)
+        ident = _zacni(conn, v, dan, now_s, tocke[0], kljuc, zdaj, odjemalec,
+                       podatki.get("vir"))
         d = dict(conn.execute("SELECT * FROM deljenje WHERE id = ?", (ident,)).fetchone())
 
     if d["konec"]:
@@ -969,6 +1064,8 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
                 d["konec"] = "izstop"
             continue
         hitrost = t["v"]
+        if hitrost is not None and v.mode != "vlak" and hitrost > HITROST_MAX_BUS_MS:
+            hitrost = None
         if d["along_m"] is not None:
             dt = t["ts"] - d["zadnja_ts"]
             premik = along - d["along_m"]
@@ -992,9 +1089,15 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
             "VALUES(?, ?, ?, ?, ?, ?)",
             (ident, t["ts"], round(along, 1), round(odmik, 1), t["acc"],
              None if hitrost is None else round(hitrost, 2)))
+        if d["peljal_ts"] is None and _se_pelje(conn, ident, along, t["ts"], t["acc"]):
+            d["peljal_ts"] = t["ts"]
+            stej(conn, "peljal", zdaj)
         lat, lon = v.trasa.tocka(along)
+        # Brez hitrosti (prva točka iz brskalnika) velja, da stoji: raje
+        # „čaka na odhod“ kot „6 min prej“, ki ga naslednja točka popravi.
+        stoji = hitrost is None or hitrost < STOJI_MS
         d.update(along_m=along, zadnja_ts=t["ts"], lat=round(lat, 5), lon=round(lon, 5),
-                 hitrost_ms=hitrost, zamuda_s=v.zamuda(along, t["ts"] - polnoc),
+                 hitrost_ms=hitrost, zamuda_s=v.zamuda(along, t["ts"] - polnoc, stoji),
                  tock=d["tock"] + 1)
         sprejetih += 1
         zadnji = v.postanki[-1]
@@ -1008,12 +1111,37 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
         d["konec"] = "potnik"
     conn.execute(
         "UPDATE deljenje SET zadnja_ts = ?, along_m = ?, lat = ?, lon = ?, "
-        "hitrost_ms = ?, zamuda_s = ?, tock = ?, zunaj = ?, konec = ? WHERE id = ?",
+        "hitrost_ms = ?, zamuda_s = ?, tock = ?, zunaj = ?, konec = ?, peljal_ts = ? "
+        "WHERE id = ?",
         (d["zadnja_ts"], d["along_m"], d["lat"], d["lon"], d["hitrost_ms"],
-         d["zamuda_s"], d["tock"], d["zunaj"], d["konec"], ident))
+         d["zamuda_s"], d["tock"], d["zunaj"], d["konec"], d["peljal_ts"], ident))
     conn.commit()
     return {"deljenje": ident, "sprejetih": sprejetih, "konec": d["konec"],
             "stanje": stanje(conn, [trip_id], zdaj).get(trip_id)}
+
+
+def _se_pelje(conn: sqlite3.Connection, ident: str, along: float, ts: int,
+              acc: float | None) -> bool:
+    """Ali je potnik do te točke prevozil `PELJE_M` s hitrostjo vozila.
+
+    Merjeno od najstarejše točke v zadnjih `PELJE_OKNO_S`, ne od prejšnje:
+    lega, ki stoji, med dvema točkama 3 s narazen skoči tudi za 20 m, v pol
+    minute pa ne naredi 100 m naprej. Kadar v oknu ni točke (predor, brez
+    signala), od prejšnje: povprečna hitrost čez daljši čas je še boljši
+    dokaz. Lega vzdolž trase nazaj ne gre (šum se odreže v `sprejmi`), zato
+    nenatančna točka lahko le doda -- od tod obe natančnosti v meji.
+    """
+    prej = conn.execute(
+        "SELECT ts, along_m, natancnost_m FROM deljenje_tocka "
+        "WHERE deljenje = ? AND ts >= ? AND ts < ? ORDER BY ts LIMIT 1",
+        (ident, ts - PELJE_OKNO_S, ts)).fetchone() or conn.execute(
+        "SELECT ts, along_m, natancnost_m FROM deljenje_tocka "
+        "WHERE deljenje = ? AND ts < ? ORDER BY ts DESC LIMIT 1", (ident, ts)).fetchone()
+    if prej is None:
+        return False
+    premik = along - prej["along_m"]
+    meja = PELJE_M + (acc or 0) + (prej["natancnost_m"] or 0)
+    return premik >= meja and premik / (ts - prej["ts"]) >= PELJE_MS
 
 
 def _odmaknjen(conn: sqlite3.Connection, ident: str, odmik: float,
@@ -1091,15 +1219,31 @@ def _soglasni(vrstice: list[dict]) -> list[dict]:
     return naj
 
 
+def _verodostojno(v: Voznja, r: dict) -> bool:
+    """Ali poročilo enega potnika zadošča za lego in zamudo vozila.
+
+    Potnik se je moral peljati (`PELJE_MS`): kdor je izstopil in čaka ob
+    progi, je bil razlog, da je do 11. 10. 2026 za to rabilo dva -- in dveh
+    ni bilo v 16 dneh nikoli. Vlak po njem ne sme prehitevati
+    (`PREZGODAJ_VLAK_S`): tak potnik je izbral napačno vožnjo.
+    """
+    if r["peljal_ts"] is None:
+        return False
+    return not (v.mode == "vlak" and r["zamuda_s"] < -PREZGODAJ_VLAK_S)
+
+
 def stanje(conn: sqlite3.Connection, trip_ids: list[str],
            zdaj: datetime | None = None) -> dict[str, dict]:
     """Kaj poročajo potniki o teh vožnjah, po `trip_id`.
 
     Samo sveža poročila (`SVEZE_S`) povedo, kje je vozilo; prehodi pa so
-    opažanja in veljajo ves dan, tudi ko je poročevalec že izstopil.
+    opažanja in veljajo ves dan, tudi ko je poročevalec že izstopil. Šteje
+    samo prehod potnika, ki se je peljal: rob postaje se da prečkati tudi
+    peš (`VOZI_MS`).
 
-    `soglasje` je res samo, kadar se ujemata vsaj dva neodvisna poročevalca
-    -- takrat prikaz feeda za lego in prehod ne rabi več.
+    `verodostojno` je res, kadar je med svežimi vsaj eno verodostojno
+    poročilo (`_verodostojno`) ali se ujemata dva -- takrat prikaz feeda za
+    lego in prehod ne rabi več.
     """
     ids = list(dict.fromkeys(t for t in trip_ids if t))
     if not ids:
@@ -1110,18 +1254,20 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
     marks = ",".join("?" * len(ids))
     sveze = conn.execute(
         f"SELECT id, trip_id, service_date, zadnja_ts, along_m, lat, lon, "
-        f"       hitrost_ms, zamuda_s "
+        f"       hitrost_ms, zamuda_s, peljal_ts "
         f"FROM deljenje WHERE trip_id IN ({marks}) AND zadnja_ts >= ? "
         f"  AND konec IS NULL AND along_m IS NOT NULL AND zamuda_s IS NOT NULL "
         f"  AND service_date IN (?, ?)",
         (*ids, zdaj_ts - SVEZE_S, *dnevi)).fetchall()
     prehodi = conn.execute(
-        f"SELECT trip_id, service_date, stop_seq, "
-        f"       COUNT(odhod_ts) AS n_odhod, "
-        f"       CAST(AVG(odhod_ts) AS INTEGER) AS odhod_ts, "
-        f"       CAST(AVG(prihod_ts) AS INTEGER) AS prihod_ts "
-        f"FROM deljenje_prehod WHERE trip_id IN ({marks}) AND service_date IN (?, ?) "
-        f"GROUP BY trip_id, service_date, stop_seq",
+        f"SELECT p.trip_id, p.service_date, p.stop_seq, "
+        f"       COUNT(p.odhod_ts) AS n_odhod, "
+        f"       CAST(AVG(p.odhod_ts) AS INTEGER) AS odhod_ts, "
+        f"       CAST(AVG(p.prihod_ts) AS INTEGER) AS prihod_ts "
+        f"FROM deljenje_prehod p JOIN deljenje d ON d.id = p.deljenje "
+        f"WHERE p.trip_id IN ({marks}) AND p.service_date IN (?, ?) "
+        f"  AND d.peljal_ts IS NOT NULL "
+        f"GROUP BY p.trip_id, p.service_date, p.stop_seq",
         (*ids, *dnevi)).fetchall()
 
     po_voznji: dict[str, list[dict]] = {}
@@ -1135,7 +1281,8 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         # En dan na vožnjo: nočni vlak ima lahko sled včeraj in danes.
         dan = max(r["service_date"] for r in vrstice)
         vrstice = [r for r in vrstice if r["service_date"] == dan]
-        skupina = _soglasni(vrstice)
+        zanesljive = [r for r in vrstice if _verodostojno(v, r)]
+        skupina = _soglasni(zanesljive or vrstice)
         glavna = max(skupina, key=lambda r: r["zadnja_ts"])
         now_s = zdaj_ts - stats.polnoc(dan)
         along = glavna["along_m"]
@@ -1145,11 +1292,15 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         if stoji:
             # Vozilo, ki stoji po voznorednem odhodu, zamuja vsako sekundo
             # bolj -- tudi med dvema točkama.
-            zamuda = max(zamuda, v.zamuda(along, now_s))
+            zamuda = max(zamuda, v.zamuda(along, now_s, stoji=True))
+        if v.mode == "vlak":
+            # Vlak prezgodaj ne vozi; malo pod ničlo je linearni vozni red
+            # med postajama, ne prehitevanje (`PREZGODAJ_VLAK_S`).
+            zamuda = max(zamuda, 0)
         out[trip_id] = {
             "service_date": dan,
             "n": len(vrstice),
-            "soglasje": len(skupina) >= 2,
+            "verodostojno": bool(zanesljive) or len(skupina) >= 2,
             "starost_s": zdaj_ts - glavna["zadnja_ts"],
             "lat": glavna["lat"], "lon": glavna["lon"],
             "along_m": round(along),
@@ -1172,7 +1323,7 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         st = out.get(r["trip_id"])
         if st is None:
             st = out[r["trip_id"]] = {"service_date": zadnji_dan[r["trip_id"]], "n": 0,
-                                      "soglasje": False, "prehodi": {}}
+                                      "verodostojno": False, "prehodi": {}}
         if r["service_date"] != st["service_date"]:
             continue
         st["prehodi"][r["stop_seq"]] = {
@@ -1232,9 +1383,9 @@ def dopolni(conn: sqlite3.Connection, vrstice: list[dict], *, seq: str, t_s: str
     in iskalnikom (`from_seq`, `dep_s`, `expected_dep`, `sched_dep`), zato jih
     pove klicatelj.
 
-    Z enim poročevalcem vrstica dobi samo `potniki` -- feed ostane, kot je.
-    S soglasjem vsaj dveh poročilo **zamenja** feedovo zamudo, pričakovano uro
-    in nepotrjen odhod: sklep iz ure ni več potreben, ker je opažanje.
+    Poročilo, ki ni verodostojno, vrstici doda samo `potniki` -- feed ostane,
+    kot je. Verodostojno (`stanje`) **zamenja** feedovo zamudo, pričakovano
+    uro in nepotrjen odhod: sklep iz ure ni več potreben, ker je opažanje.
     """
     if not vrstice:
         return
@@ -1249,14 +1400,14 @@ def dopolni(conn: sqlite3.Connection, vrstice: list[dict], *, seq: str, t_s: str
         p = za_postanek(conn, st, r["trip_id"], r[seq], r.get(t_s))
         if not p:
             continue
-        # Prehod je opažanje enega deljenja; soglasje o njem je, kadar ga je
-        # videlo več deljenj. O legi pa soglašajo sveža poročila.
-        p["soglasje"] = (p["n"] >= 2 if p.get("odpeljal") else st["soglasje"])
+        # Prehod je opažanje potnika, ki se je peljal (`stanje`); o legi pa
+        # odločajo sveža poročila.
+        p["verodostojno"] = bool(p.get("odpeljal")) or st["verodostojno"]
         if st.get("along_m") is not None:
             p["starost_s"] = st["starost_s"]
             p["kje"] = {k: st[k] for k in ("pri", "med") if k in st}
         r["potniki"] = p
-        if not p["soglasje"]:
+        if not p["verodostojno"]:
             continue
         sched_s = r[t_s]
         if p.get("odpeljal"):
@@ -1323,10 +1474,19 @@ def deli_zdaj(conn: sqlite3.Connection, zdaj: datetime | None = None) -> int:
         "AND zacetek_ts >= ?", (zdaj_ts - SVEZE_S, zdaj_ts - NAJDALJE_S)).fetchone()[0]
 
 
+def zive_voznje(conn: sqlite3.Connection, zdaj: datetime | None = None) -> list[str]:
+    """Vožnje, na katerih ta hip kdo deli lego. Večino časa nobena, zato
+    zemljevid z njo vpraša `stanje()` samo za tiste, ki jih je."""
+    zdaj_ts = int((zdaj or datetime.now(TZ)).timestamp())
+    return [r[0] for r in conn.execute(
+        "SELECT DISTINCT trip_id FROM deljenje WHERE zacetek_ts >= ? AND zadnja_ts >= ? "
+        "AND konec IS NULL", (zdaj_ts - NAJDALJE_S, zdaj_ts - SVEZE_S))]
+
+
 def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
     """Današnja deljenja po vozilih, za skrbnika (`/admin`).
 
-    Kar vidi javnost -- število poročevalcev, soglasje, lega in zamuda --
+    Kar vidi javnost -- število poročevalcev, verodostojnost, lega, zamuda --
     pride iz `stanje()`, ne iz lastnega računa: pregled mora pokazati isto
     kot tabla in zemljevid, sicer ne pove ničesar o tem, kar potnik vidi.
     Zraven je feedova zamuda (in pri avtobusu GPS), da se razhajanje vidi.
@@ -1383,6 +1543,8 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
                 "zamuda": stats.opis_zamude(r["zamuda_s"], "po poročilu potnikov"),
                 "hitrost_ms": r["hitrost_ms"],
                 "lat": r["lat"], "lon": r["lon"],
+                "peljal": r["peljal_ts"] is not None,
+                "odjemalec": r["odjemalec"], "vir": r["vir"],
                 "sled": (_kosi(v.trasa, r["od_m"], r["do_m"])
                          if v is not None and r["od_m"] is not None else []),
             })
@@ -1393,7 +1555,7 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
             "od": v.postanki[0]["name"] if v else None,
             "do": v.postanki[-1]["name"] if v else None,
             "zivo": zivo,
-            "javno": ({k: st[k] for k in ("n", "soglasje", "starost_s", "lat", "lon",
+            "javno": ({k: st[k] for k in ("n", "verodostojno", "starost_s", "lat", "lon",
                                            "stoji", "zamuda", "pri", "med") if k in st}
                       if zivo else None),
             # Samo ob živem deljenju: feedova zamuda zdaj in potnikova izpred
@@ -1427,5 +1589,22 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
             "deli_zdaj": izidi.get("deli", 0),
             "izidi": izidi,
         },
+        "lijak": lijak(conn, zdaj),
         "vozila": vozila,
     }
+
+
+#: Koliko dni lijaka pokaže pregled.
+LIJAK_DNI = 14
+
+
+def lijak(conn: sqlite3.Connection, zdaj: datetime | None = None) -> list[dict]:
+    """Dogodki deljenja po dnevih, najnovejši prvi: koliko ljudi je iskalo,
+    koliko jih ni dobilo nobenega vozila, koliko jih je začelo in se peljalo,
+    in zakaj so bili začetki zavrnjeni (`stej`)."""
+    od = ((zdaj or datetime.now(TZ)).date() - timedelta(days=LIJAK_DNI - 1)).isoformat()
+    dnevi: dict[str, dict[str, int]] = {}
+    for r in conn.execute("SELECT dan, dogodek, n FROM deljenje_lijak WHERE dan >= ? "
+                          "ORDER BY dan DESC", (od,)):
+        dnevi.setdefault(r["dan"], {})[r["dogodek"]] = r["n"]
+    return [{"dan": d, "dogodki": x} for d, x in dnevi.items()]
