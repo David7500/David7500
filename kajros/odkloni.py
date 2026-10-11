@@ -31,6 +31,12 @@ def po_odsekih(conn: sqlite3.Connection, od_ts: int, do_ts: int,
     za njim. Kadar NAP molči, `run` piše derp.si z napovedmi za vse postanke
     -- takrat je prevozov preveč.
     """
+    # Prevoz pred prvim zapisanim odklonom (beleženje od 11. 10. 2026) ni mogel
+    # biti zapisan kot odklonjen in bi delež znižal.
+    zacetek = conn.execute("SELECT MIN(od_ts) FROM odklon").fetchone()[0]
+    if zacetek is None:
+        return []
+    od_ts = max(od_ts, zacetek)
     prevozniki = sorted(prevozniki or config.NAP_PREVOZNIKI)
     ph = ",".join("?" * len(prevozniki))
     odseki: dict[tuple[str, str], dict] = defaultdict(
