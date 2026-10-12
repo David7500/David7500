@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stikalo Material 3, kot `.stikalo` v home.css: 52 x 32, ugasnjeno je
+     obroba, vklopljeno polno. Barve so v `trackTint`, ker je ista oblika na
+     rjavi in na indigo kartici. Odmik 4 dp drži ročico od roba. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#ffffff" />
+            <corners android:radius="16dp" />
+            <size android:width="52dp" android:height="32dp" />
+            <padding android:left="4dp" android:right="4dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+            <stroke android:width="2dp" android:color="#ffffff" />
+            <corners android:radius="16dp" />
+            <size android:width="52dp" android:height="32dp" />
+            <padding android:left="4dp" android:right="4dp" />
+        </shape>
+    </item>
+</selector>

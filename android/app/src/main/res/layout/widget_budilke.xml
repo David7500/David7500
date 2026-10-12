@@ -1,23 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Majhen widget: do tri budilke, vsaka s stikalom.
-     Stikalo preklopi budilko na mestu, dotik vrstice odpre seznam. Zakaj je
-     stikalo napis in ne `Switch`, piše v `drawable/pilula_vklop.xml`. -->
+     Stikalo preklopi budilko na mestu, dotik vrstice odpre seznam. Vrstica
+     vklopljene budilke je tonska kot kartica v seznamu; stikalo je slika
+     (`drawable/stikalo_slika_vklop.xml` pove zakaj). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/bud_koren"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_ozadje"
-    android:padding="12dp">
+    android:padding="10dp">
 
     <TextView
         android:id="@+id/bud_glava"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:paddingStart="4dp"
         android:maxLines="1"
         android:ellipsize="end"
-        android:textColor="@color/ink_faint"
-        android:textSize="11sp" />
+        android:textColor="@color/ink"
+        android:textSize="13sp"
+        android:textStyle="bold" />
 
     <!-- Vrstica 1. Trikrat izpisana in ne `include`: RemoteViews naslavlja
          poglede po id, `include` pa notranjih idjev ne preimenuje. -->
@@ -25,19 +28,21 @@
         android:id="@+id/bud_vrstica1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingStart="10dp"
+        android:paddingEnd="2dp"
+        android:minHeight="40dp">
 
         <TextView
             android:id="@+id/bud_ura1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/accent"
-            android:textSize="15sp"
+            android:textColor="@color/m_na_kont"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:fontFeatureSettings="tnum" />
 
         <TextView
             android:id="@+id/bud_kaj1"
@@ -47,19 +52,15 @@
             android:layout_marginStart="8dp"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textColor="@color/ink_dim"
+            android:textColor="@color/m_na_kont_2"
             android:textSize="12sp" />
 
-        <TextView
+        <ImageView
             android:id="@+id/bud_stikalo1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:textSize="11sp" />
+            android:padding="6dp"
+            android:importantForAccessibility="yes" />
     </LinearLayout>
 
     <!-- Vrstica 2. Trikrat izpisana in ne `include`: RemoteViews naslavlja
@@ -68,19 +69,21 @@
         android:id="@+id/bud_vrstica2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingStart="10dp"
+        android:paddingEnd="2dp"
+        android:minHeight="40dp">
 
         <TextView
             android:id="@+id/bud_ura2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/accent"
-            android:textSize="15sp"
+            android:textColor="@color/m_na_kont"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:fontFeatureSettings="tnum" />
 
         <TextView
             android:id="@+id/bud_kaj2"
@@ -90,19 +93,15 @@
             android:layout_marginStart="8dp"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textColor="@color/ink_dim"
+            android:textColor="@color/m_na_kont_2"
             android:textSize="12sp" />
 
-        <TextView
+        <ImageView
             android:id="@+id/bud_stikalo2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:textSize="11sp" />
+            android:padding="6dp"
+            android:importantForAccessibility="yes" />
     </LinearLayout>
 
     <!-- Vrstica 3. Trikrat izpisana in ne `include`: RemoteViews naslavlja
@@ -111,19 +110,21 @@
         android:id="@+id/bud_vrstica3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingTop="5dp"
-        android:paddingBottom="5dp">
+        android:paddingStart="10dp"
+        android:paddingEnd="2dp"
+        android:minHeight="40dp">
 
         <TextView
             android:id="@+id/bud_ura3"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/accent"
-            android:textSize="15sp"
+            android:textColor="@color/m_na_kont"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:fontFamily="monospace" />
+            android:fontFeatureSettings="tnum" />
 
         <TextView
             android:id="@+id/bud_kaj3"
@@ -133,19 +134,15 @@
             android:layout_marginStart="8dp"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textColor="@color/ink_dim"
+            android:textColor="@color/m_na_kont_2"
             android:textSize="12sp" />
 
-        <TextView
+        <ImageView
             android:id="@+id/bud_stikalo3"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp"
-            android:textSize="11sp" />
+            android:padding="6dp"
+            android:importantForAccessibility="yes" />
     </LinearLayout>
 
     <!-- Brez budilk widget ne sme biti prazen pravokotnik: povedati mora, da
@@ -155,6 +152,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
+        android:paddingStart="4dp"
         android:maxLines="3"
         android:ellipsize="end"
         android:textColor="@color/ink_dim"
@@ -166,9 +164,10 @@
         android:id="@+id/bud_vec"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="4dp"
+        android:paddingStart="4dp"
         android:maxLines="1"
-        android:textColor="@color/ink_faint"
+        android:textColor="@color/ink_mute"
         android:textSize="11sp"
         android:visibility="gone" />
 </LinearLayout>

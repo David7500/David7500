@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- `.bud-vse` z domače strani: prosojna svetla pilula na tonski kartici. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33ffdbc8">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#1fffdbc8" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+</ripple>

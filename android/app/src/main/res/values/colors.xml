@@ -5,7 +5,6 @@
 <resources>
     <color name="bg">#0f1115</color>
     <color name="bg_raised">#16181c</color>
-    <color name="line">#23272f</color>
     <color name="ink">#e7eaf0</color>
     <color name="ink_dim">#9aa3b0</color>
     <color name="ink_mute">#79828f</color>
@@ -29,4 +28,22 @@
     <color name="noc">#060912</color>
     <color name="poudarek">#f0934f</color>
     <color name="nezno">#8fb4ff</color>
+    <!-- Materialove vloge iz base.css (vloge `m-*` in `deli-*`) za seznam budilk:
+         vklopljena budilka je tonska kartica kot na domači strani, ugasnjena
+         siva, deljenje indigo kot oblika „Deli lego“. -->
+    <color name="m_kont">#5a2e12</color>
+    <color name="m_na_kont">#ffdbc8</color>
+    <color name="m_na_kont_2">#e6b8a0</color>
+    <color name="m_visoka">#1e2229</color>
+    <color name="m_obroba">#79828f</color>
+    <color name="deli_kont">#232b55</color>
+    <color name="deli_na_kont">#e3e6ff</color>
+    <color name="deli_na_kont_2">#c7cdf0</color>
+    <color name="deli_tiho">#aab3e6</color>
+    <color name="deli_gumb">#b9c3ff</color>
+    <color name="deli_na_gumb">#1a1d3a</color>
+    <!-- Materialova barva napake na temni podlagi. `sev_bad` na rjavi kartici
+         ne doseže kontrasta (2,3 : 1), ta 7 : 1. -->
+    <color name="napaka">#ffb4ab</color>
+    <color name="napaka_kont">#3a1b1e</color>
 </resources>

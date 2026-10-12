@@ -120,4 +120,31 @@ class PonovitevTest {
         // Enkratna nabora nima in je ni treba premikati.
         assertTrue(Ponovitev.jeVNaboru(ponedeljek, 0, CONA))
     }
+
+    @Test
+    fun `ponavljajoca, ki bi zazvonila v preteklost, zacne naslednjic`() {
+        // RG 18 ob 19:29 v ponedeljek, nastavljena ob 19:14 z X = 25 + 3:
+        // zvonjenje 19:01 je mimo, zato prvic v torek, ne takoj.
+        val vr = ob(2026, 10, 12, 19, 29)
+        val prvic = Ponovitev.prva(vr, Ponovitev.DELAVNIKI, ob(2026, 10, 12, 19, 14),
+            28 * 60_000L, CONA)
+        assertEquals(ob(2026, 10, 13, 19, 29), prvic)
+    }
+
+    @Test
+    fun `ponavljajoca z zvonjenjem pred sabo ostane danes`() {
+        val vr = ob(2026, 10, 12, 19, 29)
+        val prvic = Ponovitev.prva(vr, Ponovitev.DELAVNIKI, ob(2026, 10, 12, 19, 0),
+            10 * 60_000L, CONA)
+        assertEquals(vr, prvic)
+    }
+
+    @Test
+    fun `petkova zamujena gre na ponedeljek, enkratna se ne premakne`() {
+        val petek = ob(2026, 10, 16, 7, 31)
+        val zdaj = ob(2026, 10, 16, 7, 20)
+        assertEquals(ob(2026, 10, 19, 7, 31),
+            Ponovitev.prva(petek, Ponovitev.DELAVNIKI, zdaj, 25 * 60_000L, CONA))
+        assertEquals(petek, Ponovitev.prva(petek, 0, zdaj, 25 * 60_000L, CONA))
+    }
 }

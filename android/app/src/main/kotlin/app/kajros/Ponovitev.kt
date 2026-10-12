@@ -60,6 +60,33 @@ object Ponovitev {
     }
 
     /**
+     * Prva ponovitev nove budilke: na dan iz nabora **in** z zvonjenjem, ki še
+     * ni mimo. [prejMs] je, koliko pred voznim redom budilka zvoni (minute in
+     * rezerva).
+     *
+     * Prvi pogoj: stran pošlje vožnjo, ki jo je človek gledal, in ta ni nujno
+     * na dan iz nabora (12. 9. 2026: tor + sre, vožnja v ponedeljek). Meja
+     * `max(voznja - 1 s, zdaj)` pusti vožnjo pri miru, kadar je njen dan v
+     * naboru, in premakne tisto, ki je danes že mimo.
+     *
+     * Drugi: ponavljajoča budilka, nastavljena 15 minut pred vlakom z
+     * X = 25, je zazvonila takoj (izmerjeno 12. 10. 2026 na RG 18: nastavljena
+     * 19:14, zazvonila 19:14:46). Kdor jo nastavi na peronu, jo rabi naslednjič,
+     * ne zdaj. Enkratna ostane, kot je: zvoni takoj in stran to pove.
+     */
+    fun prva(
+        voznoredniMs: Long,
+        dnevi: Int,
+        zdajMs: Long,
+        prejMs: Long,
+        cona: ZoneId = ZoneId.systemDefault(),
+    ): Long {
+        if (!jePonavljajoca(dnevi)) return voznoredniMs
+        val vr = naslednji(voznoredniMs, dnevi, maxOf(voznoredniMs - 1000L, zdajMs), cona)
+        return if (vr - prejMs > zdajMs) vr else naslednji(vr, dnevi, vr, cona)
+    }
+
+    /**
      * Ali shranjeni odhod pade na dan iz nabora.
      *
      * Enkratna budilka je vedno "v naboru" -- nabora nima in je ni treba

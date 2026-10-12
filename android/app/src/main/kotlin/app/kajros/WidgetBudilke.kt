@@ -93,7 +93,7 @@ class WidgetBudilke : AppWidgetProvider() {
          */
         fun zaPrikaz(c: Context, zdajMs: Long): List<Budilka> =
             Shramba.vse(c)
-                .filter { it.ponavljajoca || it.voznoredniMs > zdajMs - 60_000L }
+                .filterNot { it.opravljena(zdajMs) }
                 .sortedBy { it.voznoredniMs }
 
         private fun pogled(c: Context): RemoteViews {
@@ -133,9 +133,14 @@ class WidgetBudilke : AppWidgetProvider() {
             // Odstevanje do odhoda ima svoj widget in ga tu ne ponavljamo.
             v.setTextViewText(URE[i], URA.format(Date(b.izracun(zdajMs).zvoniOb)))
             // Ugasnjena mora biti ugasnjena na pogled, ne sele v napisu: ob
-            // treh zjutraj je pomembno, katera vrstica NE bo zvonila.
+            // treh zjutraj je pomembno, katera vrstica NE bo zvonila. Kot v
+            // seznamu: vklopljena tonska rjava, ugasnjena brez podlage.
+            v.setInt(VRSTICA[i], "setBackgroundResource",
+                if (b.ugasnjena) 0 else R.drawable.widget_vrstica_vklop)
             v.setTextColor(URE[i], c.getColor(
-                if (b.ugasnjena) R.color.ink_faint else R.color.accent))
+                if (b.ugasnjena) R.color.ink_faint else R.color.m_na_kont))
+            v.setTextColor(KAJ[i], c.getColor(
+                if (b.ugasnjena) R.color.ink_mute else R.color.m_na_kont_2))
             v.setTextViewText(KAJ[i], buildString {
                 append(if (b.trainNo.isBlank()) b.postaja else b.trainNo)
                 if (b.postaja.isNotBlank() && b.trainNo.isNotBlank()) {
@@ -144,13 +149,8 @@ class WidgetBudilke : AppWidgetProvider() {
             })
 
             val stikalo = STIKALA[i]
-            v.setTextViewText(stikalo, c.getString(
-                if (b.ugasnjena) R.string.widget_budilka_izklop
-                else R.string.widget_budilka_vklop))
-            v.setTextColor(stikalo, c.getColor(
-                if (b.ugasnjena) R.color.ink_mute else R.color.na_poudarku))
-            v.setInt(stikalo, "setBackgroundResource",
-                if (b.ugasnjena) R.drawable.pilula_izklop else R.drawable.pilula_vklop)
+            v.setImageViewResource(stikalo,
+                if (b.ugasnjena) R.drawable.stikalo_slika_izklop else R.drawable.stikalo_slika_vklop)
             // Bralnik zaslona bi sicer prebral samo stanje in ne bi povedal,
             // da je to gumb in kaj naredi.
             v.setContentDescription(stikalo, c.getString(

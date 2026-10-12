@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Pregled nastavljenih budilk. Nativen in ne spletni, ker mora delovati
-     ravno takrat, ko strežnika ni — vse potrebno je shranjeno v telefonu. -->
+     ravno takrat, ko strežnika ni — vse potrebno je shranjeno v telefonu.
+
+     Drsi vse razen gumba za aplikacijo. Do 12. 10. 2026 so bili deljenje,
+     naslov strežnika, preizkus in dnevnik pripeti pod seznam in so vzeli
+     45 % zaslona: druga budilka je bila odrezana, tretje ni bilo videti. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -8,143 +12,158 @@
     android:fitsSystemWindows="true"
     android:background="@color/bg">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:paddingTop="26dp"
-        android:paddingBottom="14dp"
-        android:text="@string/budilke"
-        android:textColor="@color/ink"
-        android:textSize="22sp"
-        android:textStyle="bold" />
-
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
         <LinearLayout
-            android:id="@+id/seznam"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
-            android:paddingBottom="20dp" />
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp">
+
+            <!-- Dolg pritisk odpre dnevnik budilk tudi v izdaji (glej
+                 `BudilkeDejavnost.onCreate`). -->
+            <TextView
+                android:id="@+id/glava"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="4dp"
+                android:paddingTop="22dp"
+                android:paddingBottom="6dp"
+                android:text="@string/budilke"
+                android:textColor="@color/ink"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <!-- Opozorilo, kadar Android budilki ne dovoli tega, kar rabi. Na
+                 vrhu, ker brez dovoljenj nobena budilka spodaj ne drži. -->
+            <TextView
+                android:id="@+id/opozorilo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/kartica_opozorilo"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:text="@string/budilka_dovoljenja"
+                android:textColor="@color/napaka"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/seznam"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- Zvoni takoj, po isti poti kot prava budilka. Brez tega se je
+                 tiha budilka pokazala šele, ko je že zamudila. -->
+            <Button
+                android:id="@+id/preizkusi"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/pilula_tonska"
+                android:stateListAnimator="@null"
+                android:textAllCaps="false"
+                android:textColor="@color/ink"
+                android:textSize="15sp"
+                android:text="@string/preizkusi" />
+
+            <!-- Deljenje ob vožnji: privolitev je to stikalo, privzeto
+                 ugasnjeno. Tu, ker se začne ob budilki — in ker je to edini
+                 nativni zaslon, ki ga potnik odpre namerno. -->
+            <LinearLayout
+                android:id="@+id/deli_vrstica"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/kartica_deli"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="18dp">
+
+                <Switch
+                    android:id="@+id/deli_ob_voznji"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/deli_ob_voznji"
+                    android:textColor="@color/deli_na_kont"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:thumb="@drawable/stikalo_rocica"
+                    android:track="@drawable/stikalo_sled"
+                    android:thumbTint="@color/stikalo_rocica_deli"
+                    android:trackTint="@color/stikalo_sled_deli" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/deli_ob_voznji_opis"
+                    android:textColor="@color/deli_na_kont_2"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Gumba za dnevnik in naslov strežnika samo v razvojni
+                 različici (`BudilkeDejavnost.onCreate`): orodji za razvoj,
+                 potniku ne povesta ničesar. Naslov je za potnika na zaslonu
+                 napake, ko strani ni, in samo tam ga rabi. -->
+            <Button
+                android:id="@+id/dnevnik"
+                android:visibility="gone"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/pilula_tiha"
+                android:minHeight="40dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textAllCaps="false"
+                android:textColor="@color/ink_mute"
+                android:textSize="13sp"
+                android:text="@string/dnevnik" />
+
+            <Button
+                android:id="@+id/naslov"
+                android:visibility="gone"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:background="@drawable/pilula_tiha"
+                android:minHeight="40dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textAllCaps="false"
+                android:textColor="@color/ink_mute"
+                android:textSize="13sp" />
+        </LinearLayout>
     </ScrollView>
-
-    <!-- Deljenje ob vožnji: privolitev je to stikalo, privzeto ugasnjeno.
-         Tu, ker se začne ob budilki — in ker je to edini nativni zaslon, ki
-         ga potnik odpre namerno. -->
-    <LinearLayout
-        android:id="@+id/deli_vrstica"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="10dp"
-        android:background="@drawable/vrstica"
-        android:orientation="vertical"
-        android:padding="14dp">
-
-        <Switch
-            android:id="@+id/deli_ob_voznji"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/deli_ob_voznji"
-            android:textColor="@color/ink"
-            android:textSize="15sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/deli_ob_voznji_opis"
-            android:textColor="@color/ink_dim"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <!-- Opozorilo, kadar Android budilki ne dovoli tega, kar rabi. Brez tega
-         je odpoved tiha in videti kot okvara aplikacije. -->
-    <TextView
-        android:id="@+id/opozorilo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="10dp"
-        android:background="@drawable/vrstica"
-        android:padding="12dp"
-        android:text="@string/budilka_dovoljenja"
-        android:textColor="@color/sev_bad"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
-    <!-- Naslov strežnika je bil doslej dosegljiv samo z dolgim pritiskom na
-         ikono. Tu je, ker je to edini nativni zaslon, ki ga potnik odpre
-         namerno — in ker ga rabi natanko takrat, ko stran ne dela. -->
-    <Button
-        android:id="@+id/naslov"
-        style="?android:attr/borderlessButtonStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="8dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:textAllCaps="false"
-        android:textColor="@color/ink_faint"
-        android:textSize="13sp" />
-
-    <!-- Zvoni takoj, po isti poti kot prava budilka. Brez tega se je tiha
-         budilka pokazala šele, ko je že zamudila. -->
-    <Button
-        android:id="@+id/preizkusi"
-        style="?android:attr/borderlessButtonStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
-        android:textAllCaps="false"
-        android:textColor="@color/ink_faint"
-        android:textSize="13sp"
-        android:text="@string/preizkusi" />
-
-    <!-- Kaj je budilka naredila in zakaj. Brez tega je bilo treba vzrok
-         budilke, ki ni zbudila, sklepati iz kode: sistemski dnevnik je bil
-         do večera že prepisan. -->
-    <Button
-        android:id="@+id/dnevnik"
-        style="?android:attr/borderlessButtonStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
-        android:textAllCaps="false"
-        android:textColor="@color/ink_faint"
-        android:textSize="13sp"
-        android:text="@string/dnevnik" />
 
     <Button
         android:id="@+id/odpri"
         style="?android:attr/borderlessButtonStyle"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="20dp"
-        android:background="@drawable/gumb_tih"
-        android:paddingTop="14dp"
-        android:paddingBottom="14dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/pilula_obroba"
         android:textAllCaps="false"
-        android:textColor="@color/ink_dim"
+        android:textColor="@color/ink"
         android:textSize="15sp"
         android:text="@string/odpri_kajros" />
 </LinearLayout>

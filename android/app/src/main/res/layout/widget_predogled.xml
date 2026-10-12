@@ -7,7 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/widget_ozadje"
+    android:background="@drawable/widget_ozadje_kont"
     android:padding="14dp">
 
     <TextView
@@ -16,7 +16,7 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/widget_predogled_kaj"
-        android:textColor="@color/ink"
+        android:textColor="@color/m_na_kont"
         android:textSize="14sp"
         android:textStyle="bold" />
 
@@ -26,7 +26,7 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/widget_predogled_kje"
-        android:textColor="@color/ink_dim"
+        android:textColor="@color/m_na_kont_2"
         android:textSize="12sp" />
 
     <TextView
@@ -34,10 +34,10 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text="@string/widget_predogled_stevec"
-        android:textColor="@color/accent"
+        android:textColor="@color/m_na_kont"
         android:textSize="32sp"
         android:textStyle="bold"
-        android:fontFamily="monospace" />
+        android:fontFeatureSettings="tnum" />
 
     <TextView
         android:layout_width="match_parent"
@@ -46,6 +46,6 @@
         android:maxLines="2"
         android:ellipsize="end"
         android:text="@string/widget_predogled_pod"
-        android:textColor="@color/ink_faint"
+        android:textColor="@color/m_na_kont_2"
         android:textSize="12sp" />
 </LinearLayout>

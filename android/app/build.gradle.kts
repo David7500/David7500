@@ -39,8 +39,8 @@ android {
         targetSdk = 35
         // `versionCode` je edino, kar telefon primerja -- ob vsaki objavi mora
         // narasti. `versionName` je za ljudi in sme biti karkoli.
-        versionCode = 11
-        versionName = "1.10"
+        versionCode = 12
+        versionName = "1.11"
         // Privzeti naslov je tu in ne v kodi, da ga je mogoce zamenjati z
         // `-PkajrosUrl=...`, ne da bi se dotaknil izvorne datoteke.
         buildConfigField("String", "PRIVZETI_NASLOV",

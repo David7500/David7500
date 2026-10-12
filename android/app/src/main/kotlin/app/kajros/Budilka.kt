@@ -113,6 +113,18 @@ data class Budilka(
         maxOf(voznoredniMs, voznoredniMs + (zamudaS ?: 0) * 1000L) + Ura.SLEDENJE_ZA_MS
 
     /**
+     * Enkratna budilka je opravljena, ko je mimo konec sledenja: vozilo je po
+     * zadnjem podatku odpeljalo in widget je nehal odštevati. Odtlej je ne rabi
+     * nihče -- ne zvoni več, ne odšteva, vožnje ni več na tabli.
+     *
+     * Do 12. 10. 2026 je ostala še dan in so jo seznam, domača stran in widget
+     * kazali kot "Zazvonila · odhod" z uro, ki je bila davno mimo. Odlog šteje
+     * zraven: kdor je rekel "še dve minuti", ga mora dobiti tudi po odhodu.
+     */
+    fun opravljena(zdajMs: Long): Boolean =
+        !ponavljajoca && zdajMs >= maxOf(konecSledenjaMs(), odlozenoDoMs)
+
+    /**
      * Po zvonjenju: naslednja osvezitev zamude, ali null, ce je odhod mimo.
      *
      * Zvonjenje ni konec: potnik gre proti postaji in widget odsteva do
@@ -204,8 +216,6 @@ object Shramba {
 
     private const val DATOTEKA = "budilke"
     private const val KLJUC = "seznam"
-    /** Odzvonjene drzimo se en dan, da jih zaslon brez omrezja lahko pokaze. */
-    private const val ZADRZI_MS = 24 * 3600 * 1000L
 
     @Synchronized
     fun vse(c: Context): List<Budilka> {
@@ -240,15 +250,18 @@ object Shramba {
     }
 
     /**
-     * Pobrise, kar je davno mimo. Klicano ob vsakem pisanju z zunanje strani.
+     * Pobriše opravljene enkratne budilke ([Budilka.opravljena]). Klicano iz
+     * `Nacrtovalec.vseZnova` -- tudi ob zadnji budnici sledenja, zato budilka
+     * odide natanko takrat, ko widget neha odštevati -- in ob nastavitvi nove.
      *
-     * Ponavljajoce se ne brisejo nikoli -- njihov odhod je vedno v prihodnosti,
-     * dokler jih `Ponovitev.prestavi()` prestavlja, in ce je kdaj v preteklosti,
-     * je to okvara, ki jo popravi prestavljanje, ne brisanje.
+     * Ponavljajoče se ne brišejo nikoli: njihov odhod je vedno v prihodnosti,
+     * dokler jih `Ponovitev.prestavi()` prestavlja, in če je kdaj v preteklosti,
+     * je to okvara, ki jo popravi prestavljanje, ne brisanje. Budilka, ki ta
+     * hip zvoni, ostane: zaslon zvonjenja jo bere iz shrambe.
      */
     fun pocisti(c: Context, zdajMs: Long) {
         val vse = vse(c)
-        val ostane = vse.filter { it.ponavljajoca || zdajMs - it.voznoredniMs < ZADRZI_MS }
+        val ostane = vse.filter { !it.opravljena(zdajMs) || ZvonjenjeStoritev.zvoni == it.id }
         if (ostane.size != vse.size) zapisi(c, ostane)
     }
 }

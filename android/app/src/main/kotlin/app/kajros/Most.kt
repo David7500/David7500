@@ -59,21 +59,10 @@ class Most(
         val dnevi = o.optInt("dnevi", 0) and Ponovitev.VSI
         val zdaj = System.currentTimeMillis()
 
-        // **Prva ponovitev mora biti v izbranem naboru dni.**
-        // Stran poslje uro voznje, ki jo je clovek gledal, in ta ni nujno na
-        // dan iz nabora: izmerjeno 12. 9. 2026 -- izbrana tor + sre, stran je
-        // kazala ponedeljek 14. 9., in budilka bi prvic zazvonila v ponedeljek,
-        // torej zunaj vzorca. `prestavljena()` to popravi sele PO zvonjenju,
-        // kar je prepozno.
-        //
-        // `poMs` je vecji od "sekundo pred voznjo" in "zdaj": prvo pusti
-        // voznjo pri miru, kadar njen dan v naboru je, drugo poskrbi, da
-        // voznja, ki je danes ze mimo, skoci na naslednji dan iz nabora.
-        val vrP = if (Ponovitev.jePonavljajoca(dnevi)) {
-            Ponovitev.naslednji(vr, dnevi, maxOf(vr - 1000L, zdaj))
-        } else {
-            vr
-        }
+        // Prva ponovitev: v naboru dni in z zvonjenjem, ki še ni mimo
+        // (`Ponovitev.prva`). Isti račun dela `napoved()`, da list na strani
+        // pove dan, ko bo budilka res prvič zazvonila.
+        val vrP = Ponovitev.prva(vr, dnevi, zdaj, prejMs(o))
 
         val odhod = vrP + o.optInt("zamuda_s", 0) * 1000L
         if (odhod <= zdaj) return ""
@@ -118,10 +107,13 @@ class Most(
         val vr = o.optLong("voznoredni_ms")
         if (vr <= 0) return "{}"
         val zdaj = System.currentTimeMillis()
+        // Stran od 12. 10. 2026 pošlje tudi `dnevi`: ponavljajoča budilka gre
+        // lahko na drug dan in takrat današnja zamuda zanjo ne velja.
+        val vrP = Ponovitev.prva(vr, o.optInt("dnevi", 0) and Ponovitev.VSI, zdaj, prejMs(o))
         val izid = Ura.izracunaj(
-            voznoredniMs = vr,
+            voznoredniMs = vrP,
             minutPrej = o.optInt("minut_prej", 25),
-            zamudaS = if (o.isNull("zamuda_s")) null else o.optInt("zamuda_s"),
+            zamudaS = if (o.isNull("zamuda_s") || vrP != vr) null else o.optInt("zamuda_s"),
             zamudaObMs = zdaj,
             zdajMs = zdaj,
             vlak = o.optString("omrezje") != "avtobus",
@@ -131,11 +123,20 @@ class Most(
             stikObMs = zdaj,
         )
         return JSONObject()
+            .put("voznoredni_ms", vrP)
             .put("zvoni_ob_ms", izid.zvoniOb)
             .put("odhod_ms", izid.odhodMs)
             .put("upostevana_s", izid.upostevanaS)
             .toString()
     }
+
+    /**
+     * Koliko pred voznim redom zvoni: minute in rezerva. **Brez zamude**, da
+     * `nastavi()` in `napoved()` izbereta isti dan -- list vpraša najprej brez
+     * nje. Današnja zamuda za ponavljajočo tako ali tako velja samo danes.
+     */
+    private fun prejMs(o: JSONObject): Long =
+        (o.optInt("minut_prej", 25) * 60L + o.optInt("rezerva_s", 0).coerceIn(0, 600)) * 1000L
 
     @JavascriptInterface
     fun seznam(): String {
@@ -144,7 +145,10 @@ class Most(
         val a = JSONArray()
         // Domača stran kaže naslednjo budilko z odhodom in zamudo. Račun je
         // tu, ne v strani: ista odločitev kot pri zvonjenju (glej `napoved`).
-        Shramba.vse(dejavnost).sortedBy { it.voznoredniMs }.forEach {
+        // Opravljene ne: shramba jih pobriše šele ob naslednjem obhodu
+        // `Nacrtovalec`, kartica pa se osveži vsakih 30 s.
+        Shramba.vse(dejavnost).filterNot { it.opravljena(zdaj) }
+            .sortedBy { it.voznoredniMs }.forEach {
             val izid = it.izracun(zdaj)
             a.put(it.json()
                 .put("zvoni_ob_ms", izid.zvoniOb)

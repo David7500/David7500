@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Ena budilka. Vrstni red je vrstni red vprašanj: kaj pelje, kdaj zvoni,
-     kdaj gre vozilo, kako in po čem — in nazadnje, kdaj smo to nazadnje
-     vedeli. Ura zvonjenja je največja, ker je edina, zaradi katere je budilka. -->
+<!-- Ena budilka, v obliki kartice z domače strani (`.d-bud`): ura zvonjenja
+     velika, ob njej dan in odštevanje, stikalo; pod njo vožnja, odhod z
+     zamudo, kako zvoni in kdaj smo zamudo nazadnje vedeli. Barve postavi
+     `BudilkeDejavnost.vrstica()`, ker so odvisne od tega, ali je vklopljena. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:layout_marginTop="10dp"
-    android:padding="14dp"
-    android:background="@drawable/vrstica">
+    android:layout_marginTop="12dp"
+    android:paddingStart="20dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="12dp"
+    android:background="@drawable/kartica_vklop">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -16,45 +20,53 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
+        <TextView
+            android:id="@+id/ura"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:includeFontPadding="false"
+            android:letterSpacing="-0.02"
+            android:textSize="40sp"
+            android:textStyle="bold" />
+
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginStart="14dp"
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/kaj"
+                android:id="@+id/kdaj"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="@color/ink"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textSize="13sp" />
 
             <TextView
-                android:id="@+id/smer"
+                android:id="@+id/cez"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
-                android:textColor="@color/ink_mute"
-                android:textSize="12sp"
-                android:visibility="gone" />
+                android:textSize="13sp" />
         </LinearLayout>
 
         <Switch
             android:id="@+id/vklop"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minWidth="0dp"
+            android:thumb="@drawable/stikalo_rocica"
+            android:track="@drawable/stikalo_sled"
+            android:thumbTint="@color/stikalo_rocica"
+            android:trackTint="@color/stikalo_sled"
             android:contentDescription="@string/budilka_vklop" />
     </LinearLayout>
 
     <TextView
-        android:id="@+id/zvoni"
+        android:id="@+id/kaj"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="9dp"
-        android:textColor="@color/accent"
-        android:textSize="19sp"
+        android:layout_marginTop="12dp"
+        android:textSize="15sp"
         android:textStyle="bold" />
 
     <TextView
@@ -62,56 +74,63 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="3dp"
-        android:textColor="@color/ink_dim"
+        android:lineSpacingExtra="2dp"
         android:textSize="13sp" />
 
     <TextView
         android:id="@+id/kako"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="5dp"
-        android:textColor="@color/ink_faint"
-        android:textSize="12sp" />
+        android:layout_marginTop="3dp"
+        android:textSize="13sp" />
 
     <TextView
         android:id="@+id/vir"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textColor="@color/ink_faint"
-        android:textSize="12sp" />
+        android:layout_marginTop="1dp"
+        android:textSize="13sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp"
-        android:gravity="end">
+        android:gravity="center_vertical">
 
         <Button
             android:id="@+id/odpri_voznjo"
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="36dp"
             android:minWidth="0dp"
-            android:paddingStart="10dp"
+            android:minHeight="0dp"
+            android:paddingStart="14dp"
             android:paddingEnd="14dp"
+            android:background="@drawable/pilula_kont"
+            android:stateListAnimator="@null"
             android:textAllCaps="false"
-            android:textColor="@color/ink_dim"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:text="@string/budilka_odpri_voznjo" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <Button
             android:id="@+id/odstrani"
             style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="36dp"
             android:minWidth="0dp"
+            android:minHeight="0dp"
             android:paddingStart="14dp"
-            android:paddingEnd="4dp"
+            android:paddingEnd="14dp"
+            android:background="@drawable/pilula_tiha"
             android:textAllCaps="false"
-            android:textColor="@color/sev_bad"
-            android:textSize="14sp"
+            android:textColor="@color/napaka"
+            android:textSize="13sp"
             android:text="@string/budilka_odstrani" />
     </LinearLayout>
 </LinearLayout>

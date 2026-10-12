@@ -129,6 +129,7 @@ class Widget : AppWidgetProvider() {
             val zdaj = System.currentTimeMillis()
             val b = naslednja(c, zdaj)
             v.setOnClickPendingIntent(R.id.widget_koren, kam(c, b))
+            barve(c, v, b != null)
             if (b == null) {
                 v.setContentDescription(R.id.widget_koren,
                     c.getString(R.string.widget_opis))
@@ -184,6 +185,20 @@ class Widget : AppWidgetProvider() {
                 append(", ").append(b.postaja).append(". ").append(podpis)
             })
             return v
+        }
+
+        /**
+         * Z budilko tonska rjava kot kartica na domači strani, brez nje siva:
+         * rjava kartica brez budilke bi obljubljala nekaj, česar ni.
+         */
+        private fun barve(c: Context, v: RemoteViews, budilka: Boolean) {
+            v.setInt(R.id.widget_koren, "setBackgroundResource",
+                if (budilka) R.drawable.widget_ozadje_kont else R.drawable.widget_ozadje)
+            val glavna = c.getColor(if (budilka) R.color.m_na_kont else R.color.ink)
+            val drugotna = c.getColor(if (budilka) R.color.m_na_kont_2 else R.color.ink_dim)
+            v.setTextColor(R.id.widget_kaj, glavna)
+            v.setTextColor(R.id.widget_kje, drugotna)
+            v.setTextColor(R.id.widget_pod, drugotna)
         }
 
         /**

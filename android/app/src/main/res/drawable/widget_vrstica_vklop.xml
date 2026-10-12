@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vklopljena budilka v widgetu: tonska vrstica kot kartica v seznamu. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/m_kont" />
+    <corners android:radius="16dp" />
+</shape>

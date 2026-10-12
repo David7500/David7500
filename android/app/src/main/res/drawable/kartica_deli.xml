@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Indigo kot oblika „Deli lego“ na domači strani: ista stvar, ista barva. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/deli_kont" />
+    <corners android:radius="28dp" />
+</shape>

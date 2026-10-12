@@ -91,7 +91,7 @@ Odštevanje do naslednjega odhoda, za katerega imaš budilko. Sekunde riše `Chr
 
 ## Naslov strežnika
 
-Bil na dolgem pritisku na ikono; zdaj na **zaslonu budilk** in zaslonu napake, torej kjer se rabi.
+Bil na dolgem pritisku na ikono; zdaj na **zaslonu napake**, torej kjer se rabi. V seznamu budilk samo v razvojni različici.
 
 ## Razdeljevanje: prenos s kajros.app
 

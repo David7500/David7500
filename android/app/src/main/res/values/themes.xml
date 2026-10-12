@@ -29,6 +29,15 @@
         <item name="android:colorAccent">@color/accent</item>
         <item name="android:textColorPrimary">@color/ink</item>
         <item name="android:windowTitleStyle">@style/NaslovOkna</item>
+        <item name="android:windowBackground">@drawable/okno</item>
+        <item name="android:buttonBarButtonStyle">@style/GumbOkna</item>
+    </style>
+
+    <!-- Gumbi okna v stavčni velikosti kot povsod na strani; velike črke
+         Materiala 1 so bile edino mesto v aplikaciji z njimi. -->
+    <style name="GumbOkna" parent="@android:style/Widget.Material.Button.Borderless.Colored">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
     </style>
 
     <style name="NaslovOkna" parent="@android:style/TextAppearance.Material.Title">

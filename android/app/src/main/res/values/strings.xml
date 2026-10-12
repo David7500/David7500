@@ -70,23 +70,27 @@
     <!-- pregled budilk -->
     <string name="budilke">Budilke</string>
     <string name="budilk_ni">Nobene budilke ni nastavljene.</string>
-    <string name="budilk_ni_kako">Nastavi jo v aplikaciji: odpri vožnjo, pri svoji postaji pritisni „budilka".</string>
+    <string name="budilk_ni_kako">Nastavi jo v aplikaciji: odpri vožnjo, pri svoji postaji pritisni „budilka“.</string>
     <string name="budilka_odstrani">Odstrani</string>
-    <string name="budilka_zvoni_ob">zvoni ob %1$s</string>
+    <string name="budilka_kdaj">Budilka · %1$s</string>
+    <string name="budilka_zazvonila">Zazvonila · odhod</string>
+    <string name="budilka_ugasnjena_kdaj">Ugasnjena · %1$s</string>
     <string name="budilka_vozni_red">vozni red %1$s</string>
-    <string name="budilka_odzvonjeno">odzvonjeno</string>
+    <string name="budilka_po_voznem_redu">po voznem redu</string>
+    <string name="budilka_tocno">vozi točno</string>
     <string name="budilka_zbudi">zbudi me</string>
     <string name="budilka_obvesti">obvesti</string>
     <string name="odpri_kajros">Odpri Kajros</string>
     <string name="budilka_vklop">Vklopljena</string>
     <string name="budilka_odpri_voznjo">Odpri vožnjo</string>
-    <string name="budilka_enkratna">enkratna</string>
-    <string name="budilka_ugasnjena">ugasnjena</string>
+    <string name="budilka_odstrani_vprasanje">Odstranim budilko?</string>
     <string name="budilka_cez">čez %1$s</string>
     <string name="budilka_odhod">odhod %1$s</string>
     <string name="budilka_preverjeno">zamuda preverjena ob %1$s</string>
-    <string name="budilka_nepreverjeno">zamude še nisem preveril</string>
-    <string name="budilka_ni_podatka">ob %1$s o zamudi še ni bilo podatka</string>
+    <string name="budilka_nepreverjeno">zamuda še ni preverjena</string>
+    <string name="budilka_nazadnje">zamuda nazadnje preverjena ob %1$s</string>
+    <string name="budilka_ni_podatka">o zamudi še ni podatka</string>
+    <string name="budilka_vprasano">vprašano ob %1$s</string>
     <string name="budilka_dovoljenja">Android ne dovoli obvestil ali točnih alarmov — budilka ne bo zanesljiva. Pritisni za nastavitve.</string>
     <string name="budilka_cel_zaslon">Budilka ne sme prižgati zaslona. Zvonila bo, a zaslon ostane temen. Pritisni za nastavitev.</string>
     <string name="budilka_tiha">Budilka bo zvonila brez zvoka: %1$s. Pritisni za nastavitve.</string>
@@ -100,6 +104,8 @@
     <string name="preizkus_zakaj">Tako bo zvonila budilka: najprej tiho, čez 20 sekund glasno.</string>
     <string name="dnevnik">Dnevnik budilk</string>
     <string name="dnevnik_prazen">Budilka še ni ničesar naredila.</string>
+    <string name="dnevnik_kopiraj">Kopiraj</string>
+    <string name="dnevnik_kopiran">Dnevnik je kopiran.</string>
     <string name="zapri">Zapri</string>
     <string name="budilke_naslov_streznika">Naslov strežnika: %1$s</string>
 
@@ -132,10 +138,8 @@
 
     <!-- widget: budilke s stikali -->
     <string name="widget_budilke_opis">Nastavljene budilke; stikalo jih vklopi ali ugasne brez odpiranja aplikacije.</string>
-    <string name="widget_budilke_glava">budilke</string>
+    <string name="widget_budilke_glava">Budilke</string>
     <string name="widget_budilke_vec">in še %1$d</string>
-    <string name="widget_budilka_vklop">vklopljena</string>
-    <string name="widget_budilka_izklop">ugasnjena</string>
     <string name="widget_budilka_vklop_opis">%1$s: budilka je vklopljena, dotik jo ugasne</string>
     <string name="widget_budilka_izklop_opis">%1$s: budilka je ugasnjena, dotik jo vklopi</string>
 

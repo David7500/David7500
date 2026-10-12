@@ -594,11 +594,13 @@ function budNapovedHtml(s) {
   const plast = document.getElementById("budilka");
   if (!plast || !MOST || typeof MOST.napoved !== "function") return "";
   const schedIso = s.sched_dep || s.sched_arr;
+  const dnevi = Number(plast.dataset.dnevi || 0);
   const skupno = {
     voznoredni_ms: new Date(schedIso).getTime(),
     minut_prej: budMinut(plast),
     rezerva_s: budRezerva() ? BUD_REZERVA_S : 0,
     omrezje: state.network,
+    dnevi: dnevi,
   };
   const vprasaj = (zamuda) => {
     try {
@@ -611,20 +613,50 @@ function budNapovedHtml(s) {
   const po = vprasaj(0);
   if (!po.zvoni_ob_ms) return "";
 
-  const dnevi = Number(plast.dataset.dnevi || 0);
+  // Aplikacija od 12. 10. 2026 vrne tudi vožnjo, za katero bo prvič zvonila:
+  // ponavljajoča, ki bi danes zazvonila v preteklost, začne naslednjič.
+  // Starejša ga ne vrne in takrat velja današnja.
+  const prvic = po.voznoredni_ms || skupno.voznoredni_ms;
+  const drugDan = budDatum(prvic) !== budDatum(skupno.voznoredni_ms);
+  const ura = hhmm(new Date(po.zvoni_ob_ms).toISOString());
   const cez = Math.round((po.zvoni_ob_ms - Date.now()) / 60000);
-  let html = `zvoni ob <strong>${hhmm(new Date(po.zvoni_ob_ms).toISOString())}</strong>`
-    + (cez > 0 ? ` · čez ${minLabel(cez * 60)}` : " · zdaj")
-    + (dnevi ? ` · ${escapeHtml(imeDni(dnevi))}` : "");
-
-  const zamuda = budZamuda(s);
+  // Današnja zamuda velja samo za današnjo vožnjo.
+  const zamuda = drugDan ? 0 : budZamuda(s);
   const z = zamuda ? vprasaj(zamuda) : null;
-  if (z && z.zvoni_ob_ms && z.zvoni_ob_ms !== po.zvoni_ob_ms) {
+  const zUra = z && z.zvoni_ob_ms ? hhmm(new Date(z.zvoni_ob_ms).toISOString()) : null;
+  const dniHtml = dnevi ? ` · ${escapeHtml(imeDni(dnevi))}` : "";
+
+  // Ura v preteklosti je bila "zvoni ob 19:01 · zdaj" -- in budilka je
+  // zazvonila v pol minute (RG 18, 12. 10. 2026). Kdor tega ne hoče, mora to
+  // vedeti, preden pritisne Nastavi.
+  if (!drugDan && cez <= 0) {
+    // Z zamudo, ki jo vozilo zdaj ima, je ura lahko še pred nami: prvo
+    // preverjanje jo bo dobilo. Brez podatka zvoni takoj.
+    if (z && z.zvoni_ob_ms > Date.now()) {
+      return `zvoni ob <strong>${zUra}</strong> · pri zdajšnjih ${escapeHtml(delayText(zamuda))}${dniHtml}`
+        + `<div class="bud-napoved-drugo">po voznem redu bi zvonilo ob ${ura} — če zamude
+          takrat ne bo mogoče preveriti, zazvoni takoj</div>`;
+    }
+    return `zvoni <strong>takoj</strong> — ${ura} je že mimo${dniHtml}`;
+  }
+
+  let html = `zvoni ob <strong>${ura}</strong>`
+    + (drugDan ? ` · prvič ${escapeHtml(budDan(po.zvoni_ob_ms))}` : ` · čez ${minLabel(cez * 60)}`)
+    + dniHtml;
+  if (zUra && z.zvoni_ob_ms !== po.zvoni_ob_ms) {
     html += `<div class="bud-napoved-drugo">zamudo preverim tik pred zvonjenjem —
-      pri zdajšnjih ${escapeHtml(delayText(zamuda))} bi zvonilo ob
-      ${hhmm(new Date(z.zvoni_ob_ms).toISOString())}</div>`;
+      pri zdajšnjih ${escapeHtml(delayText(zamuda))} bi zvonilo ob ${zUra}</div>`;
   }
   return html;
+}
+
+const budDatum = (ms) => new Date(ms).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+const BUD_DAN = new Intl.DateTimeFormat("sl-SI",
+  { weekday: "short", day: "numeric", month: "numeric", timeZone: "Europe/Ljubljana" });
+
+/** "jutri" ali "pon. 19. 10." -- kot `dan()` na domači strani. */
+function budDan(ms) {
+  return budDatum(ms) === budDatum(Date.now() + 86400000) ? "jutri" : BUD_DAN.format(new Date(ms));
 }
 
 /** Slovensko ime nabora dni. Isto pravilo kot `Ponovitev.ime()` v aplikaciji. */

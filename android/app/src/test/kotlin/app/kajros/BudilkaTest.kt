@@ -139,6 +139,22 @@ class SledenjeTest {
     }
 
     @Test
+    fun `enkratna je opravljena s koncem sledenja, ne prej`() {
+        val b = odzvonjena(300, ob(7, 29))
+        assertEquals(false, b.opravljena(ob(7, 37, 29)))
+        assertTrue(b.opravljena(ob(7, 37, 30)))
+        // Ugasnjena in neodzvonjena gre ob istem trenutku.
+        assertTrue(b.copy(odzvonjeno = false, ugasnjena = true).opravljena(ob(7, 37, 30)))
+    }
+
+    @Test
+    fun `ponavljajoca ni nikoli opravljena, odlog pa jo zadrzi`() {
+        val b = odzvonjena(300, ob(7, 29))
+        assertEquals(false, b.copy(dnevi = Ponovitev.VSI).opravljena(ob(9, 0)))
+        assertEquals(false, b.copy(odlozenoDoMs = ob(7, 40)).opravljena(ob(7, 39)))
+    }
+
+    @Test
     fun `prezgoden avtobus ne podaljsa sledenja cez vozni red`() {
         val b = odzvonjena(-120, ob(7, 25)).copy(omrezje = "avtobus")
         assertEquals(ob(7, 31) + Ura.SLEDENJE_ZA_MS, b.konecSledenjaMs())

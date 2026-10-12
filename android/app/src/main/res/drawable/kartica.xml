@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Siva kartica brez obrobe (vloga `m-visoka`): ugasnjena budilka, prazen seznam. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/m_visoka" />
+    <corners android:radius="28dp" />
+</shape>

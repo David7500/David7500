@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Widget: ena budilka, ena številka. Odšteva `Chronometer` v sistemskem
-     procesu; aplikacija ga samo nastavi in ga nič ne stane. -->
+     procesu; aplikacija ga samo nastavi in ga nič ne stane. Barve so tonske
+     kot kartica budilke na domači strani; brez budilke jih `Widget.kt`
+     zamenja s sivimi. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_koren"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@drawable/widget_ozadje"
+    android:background="@drawable/widget_ozadje_kont"
     android:padding="14dp">
 
     <TextView
@@ -15,7 +17,7 @@
         android:layout_height="wrap_content"
         android:maxLines="1"
         android:ellipsize="end"
-        android:textColor="@color/ink"
+        android:textColor="@color/m_na_kont"
         android:textSize="14sp"
         android:textStyle="bold" />
 
@@ -25,7 +27,7 @@
         android:layout_height="wrap_content"
         android:maxLines="1"
         android:ellipsize="end"
-        android:textColor="@color/ink_dim"
+        android:textColor="@color/m_na_kont_2"
         android:textSize="12sp" />
 
     <Chronometer
@@ -33,10 +35,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:textColor="@color/accent"
+        android:textColor="@color/m_na_kont"
         android:textSize="32sp"
         android:textStyle="bold"
-        android:fontFamily="monospace" />
+        android:fontFeatureSettings="tnum" />
 
     <!-- Kadar odhod ni blizu, tu stoji ura odhoda ("tor. 06:49") namesto
          odstevanja: 65 ur v sekundah bere kot stoparica, ne kot odgovor.
@@ -46,7 +48,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:textColor="@color/accent"
+        android:textColor="@color/m_na_kont"
         android:textSize="32sp"
         android:textStyle="bold"
         android:visibility="gone" />
@@ -58,6 +60,6 @@
         android:layout_marginTop="2dp"
         android:maxLines="2"
         android:ellipsize="end"
-        android:textColor="@color/ink_faint"
+        android:textColor="@color/m_na_kont_2"
         android:textSize="12sp" />
 </LinearLayout>
