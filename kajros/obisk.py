@@ -181,6 +181,29 @@ def _znan_vir(gost: str) -> str | None:
     return None
 
 
+#: Vrednosti `Sec-Fetch-Mode`, ki jih pošiljajo brskalniki. Drugo gre v ključ
+#: razreza kot „drugo“: glavo lahko pošlje kdorkoli in s čimerkoli.
+_NACINI = ("navigate", "same-origin", "no-cors", "cors", "websocket")
+
+
+def nacin_odpiranja(glava: str) -> str:
+    """Kako je brskalnik zahtevo poslal (`Sec-Fetch-Mode`), ali „brez“.
+
+    **`Referer` z Googla ponaredi vsak program, `Sec-Fetch-Mode` pa navaden
+    program izpusti.** 12. 10. 2026 je od 18:00 prišlo 122 „ljudi“ z enim
+    ogledom pristajalne strani in Googlom v `Referer`, vsak z drugega
+    naslova; Singapur 119 ogledov s 119 zahtevami, tam sredi noči. Prihod
+    z Googla je bil dokaz, zato je pregled kazal 357 ljudi namesto ~238 in
+    2,6 ogleda na osebo namesto 3,4. Brskalnik ob odprtju strani pošlje
+    `navigate` (Chrome od 76, Firefox od 90, Safari od 16.4); starejši
+    Safari nič -- tak človek z Googla se ne šteje, če ne požene JS.
+    """
+    glava = glava.strip().lower()
+    if not glava:
+        return "brez"
+    return glava if glava in _NACINI else "drugo"
+
+
 def robot(ua: str) -> str | None:
     """Ime znanega robota iz UA ali `None`."""
     male = (ua or "").lower()
@@ -218,7 +241,7 @@ CREATE TABLE IF NOT EXISTS obisk_pot (
 -- (`stran` | `aplikacija`) je `zahtev` število prenosov.
 CREATE TABLE IF NOT EXISTS obisk_razrez (
     dan     TEXT    NOT NULL,
-    razsez  TEXT    NOT NULL,      -- ura | naprava | drzava | prenos | prenos_iz | robot | vir
+    razsez  TEXT    NOT NULL,      -- ura | naprava | drzava | prenos | prenos_iz | robot | vir | prihod
     kljuc   TEXT    NOT NULL,
     zahtev  INTEGER NOT NULL DEFAULT 0,
     ogledov INTEGER NOT NULL DEFAULT 0,
@@ -452,16 +475,20 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
              ura: int | None = None, dan: str | None = None,
              razlicica: str | None = None, okno: bool = False,
              prenesel: tuple[str, str] | None = None,
-             robot_ime: str | None = None, vir: str | None = None) -> None:
+             robot_ime: str | None = None, vir: str | None = None,
+             nacin: str = "brez") -> None:
     """Doda eno zahtevo v števce. Samo pomnilnik -- v bazo gre `izprazni()`.
 
     `prenesel` je (datoteka, od kod) za začetek prenosa APK; glej `prenos()`.
     `robot_ime` je ime iz `ROBOTI`; gre v razrez `robot`, ki šteje zahteve in
-    oglede strani, a ne ljudi. `vir` je `vir_obiska()`.
+    oglede strani, a ne ljudi. `vir` je `vir_obiska()`, `nacin` pa
+    `nacin_odpiranja()`.
 
-    **Prihod z znanega vira je dokaz, da je človek.** Pristajalne strani nimajo
-    JS -- kdor pride z Googla nanje in odide, dokaza po starem ne pošlje in
-    ga ne bi šteli nikoli. Googlebot glave `Referer` z Googla ne pošilja.
+    **Prihod z znanega vira je dokaz, da je človek -- kadar je stran odprl
+    brskalnik.** Pristajalne strani nimajo JS -- kdor pride z Googla nanje in
+    odide, dokaza po starem ne pošlje in ga ne bi šteli nikoli. Googlebot
+    glave `Referer` z Googla ne pošilja, ponarejevalec pa jo (glej
+    `nacin_odpiranja()`).
     """
     global _prelito
     zdaj = time.time() if zdaj is None else zdaj
@@ -470,7 +497,8 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
     ura = trenutek.hour if ura is None else ura
     ogled = 1 if vrsta == "stran" else 0
     znan_vir = vir is not None and any(vir == ime for _, ime in _VIRI)
-    dokaz = je_dokaz(pot, vrsta, koda) or (bool(ogled) and znan_vir and koda < 400)
+    dokaz = je_dokaz(pot, vrsta, koda) or (
+        bool(ogled) and znan_vir and nacin == "navigate" and koda < 400)
     with _zaklep:
         if len(_poti) + len(_razrezi) + len(_ljudje) > NAJVEC_KLJUCEV:
             _prelito = True
@@ -496,6 +524,12 @@ def zabelezi(pot: str, vrsta: str, kljuc: str, bot: bool, naprava_: str,
                 prispevek[("razrez", razsez, k)] = [1, ogled]
             if vir and ogled:
                 prispevek[("razrez", "vir", vir)] = [1, 1]
+            # Vsak ogled z znanega vira, sprejet ali ne, po državi in načinu
+            # odpiranja: koliko ljudi pravilo izgubi (stari Safari) in ali se
+            # je ponarejevalec naučil glave -- brez tega ne bi vedeli ne enega
+            # ne drugega.
+            if znan_vir and ogled:
+                _pripisi(dan, {("razrez", "prihod", f"{drzava} {nacin}"): [1, 1]})
             obiskovalec = (dan, kljuc)
             if dokaz and obiskovalec not in _dokazani:
                 _dokazani.add(obiskovalec)
@@ -579,7 +613,7 @@ def iz_zahteve(request, koda: int, ms: float) -> None:
              drzava=(glave.get("cf-ipcountry") or "??").upper()[:2],
              koda=koda, ms=ms, razlicica=razlicica, okno=okno,
              prenesel=(apk, iz) if apk else None, robot_ime=ime_robota,
-             vir=vir)
+             vir=vir, nacin=nacin_odpiranja(glave.get("sec-fetch-mode", "")))
 
 
 def kljuc_zahteve(request) -> str:

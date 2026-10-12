@@ -150,6 +150,8 @@ Prvo pravilo projekta „meri, ne domnevaj", o sebi pa ni meril nič: strežnik 
 
 **Pristajalne strani so strani in prihod z iskalnika je človek** (29. 9. 2026). Do tedaj `vrsta_poti()` pozna samo `/` in `/app*`; pristajalne (brez JS) niso poslale dokaza in človek z Googla ni bil štet nikjer. Zdaj `_STRANI` in `vir_obiska()`: znan vir v `Referer` (ali `utm_source`) je dokaz. Shrani se **ime vira**, nikoli naslov (iskalni niz). `robot()` loči iskalnike in AI po imenu (razrez `robot`); `Claude-User` in `Perplexity-User` besede „bot“ nimata, zato ime robota sproži tudi `bot`. Domene se primerjajo po oznakah, ne kot podniz — „reddit.com“ vsebuje „t.co“. Nova stran za človeka = vnos v `_STRANI`, sicer se ne šteje.
 
+**Vir velja za dokaz le z `Sec-Fetch-Mode: navigate`** (12. 10. 2026). `Referer` ponaredi vsak program: tisti dan od 18:00 122 „ljudi“ z enim ogledom pristajalne strani in Googlom v glavi, vsak z drugega naslova, Singapur 119 ogledov s 119 zahtevami -- pregled je kazal 357 ljudi namesto ~238. Brskalnik ob odprtju strani pošlje `navigate`, `requests` ničesar; cena je stari Safari (pred 16.4) z Googla brez JS. Razrez `prihod` (država + način) šteje vsak ogled z znanega vira, sprejet ali ne -- iz njega se vidi, koliko ljudi pravilo izgubi in ali se je ponarejevalec naučil glave. Občasni pregled: `scripts/boti.sh [dan]`.
+
 **Pregled in števci se ne štejeta sama.** `/admin*` in `/static/*` gresta mimo štetja; sicer bi skrbnikovo osveževanje na minuto postalo največja postavka v lastni statistiki.
 
 ## Kar stran dolguje javnosti, ne aplikaciji

@@ -576,12 +576,43 @@ def test_vir_obiska(referer, utm, vir):
 def test_prihod_z_googla_je_clovek_brez_js(conn):
     """Pristajalne strani nimajo JS: kdor pride z Googla in odide, dokaza po
     starem ne pošlje nikoli -- in obiski iz iskalnika bi bili nevidni."""
-    _zabelezi(pot="/vlak/{od}/{cilj}", kljuc="iz-googla", vir="Google")
+    _zabelezi(pot="/vlak/{od}/{cilj}", kljuc="iz-googla", vir="Google",
+              nacin="navigate")
     _zabelezi(pot="/vlak/{od}/{cilj}", kljuc="skener")        # brez vira, brez JS
     obisk.izprazni(conn)
     p = obisk.pregled(conn)
     assert p["danes"]["ljudi"] == 1
     assert [(r["kljuc"], r["ogledov"]) for r in p["razrezi"]["vir"]] == [("Google", 1)]
+
+
+def test_ponarejen_referer_ni_clovek_a_se_vidi(conn):
+    """12. 10. 2026: 119 ogledov iz Singapurja z Googlom v `Referer`, vsak z
+    drugega naslova in brez `Sec-Fetch-Mode` -- šteti so bili kot ljudje."""
+    for i in range(3):
+        _zabelezi(pot="/postaja/{ime}", kljuc=f"sg{i}", vir="Google", drzava="SG")
+    _zabelezi(pot="/postaja/{ime}", kljuc="clovek", vir="Google", nacin="navigate")
+    obisk.izprazni(conn)
+    p = obisk.pregled(conn)
+    assert p["danes"]["ljudi"] == 1
+    assert p["danes"]["brez_js"] == 3
+    assert [(r["kljuc"], r["ogledov"]) for r in p["razrezi"]["vir"]] == [("Google", 1)]
+    assert {r["kljuc"]: r["ogledov"] for r in p["razrezi"]["prihod"]} == {
+        "SG brez": 3, "SI navigate": 1}
+
+
+def test_prihod_brez_vira_ni_v_razrezu(conn):
+    _zabelezi(pot="/postaja/{ime}", nacin="navigate")
+    _zabelezi(pot="/postaja/{ime}", kljuc="drug", vir="neznan.si", nacin="navigate")
+    obisk.izprazni(conn)
+    assert "prihod" not in obisk.pregled(conn)["razrezi"]
+
+
+@pytest.mark.parametrize("glava, nacin", [
+    ("navigate", "navigate"), (" Navigate ", "navigate"), ("cors", "cors"),
+    ("", "brez"), ("<script>", "drugo"),
+])
+def test_nacin_odpiranja(glava, nacin):
+    assert obisk.nacin_odpiranja(glava) == nacin
 
 
 @pytest.mark.parametrize("pot", ["/vlak/ljubljana/maribor", "/postaja/celje",
@@ -613,7 +644,7 @@ def test_pregled_steje_odprto_stran_in_klik(conn):
 def test_vir_po_dnevih_loci_dneve(conn):
     for dan, vir in (("2026-10-01", "Facebook"), ("2026-10-02", "Facebook"),
                      ("2026-10-02", "Google")):
-        _zabelezi(pot="/", kljuc=dan + vir, vir=vir, dan=dan)
+        _zabelezi(pot="/", kljuc=dan + vir, vir=vir, dan=dan, nacin="navigate")
     obisk.izprazni(conn)
     p = obisk.pregled(conn, "2026-10-01", "2026-10-02")
     assert sorted((r["dan"], r["kljuc"]) for r in p["vir_po_dnevih"]) == [
