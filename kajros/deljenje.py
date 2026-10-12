@@ -41,13 +41,14 @@ pri `stik.py`; dnevna stropa čez vse sta v bazi.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import secrets
 import sqlite3
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import config, db, geo, stats
@@ -1586,29 +1587,110 @@ def rep_od(conn: sqlite3.Connection, trip_id: str,
     return {"lat": round(lat, 6), "lon": round(lon, 6)}
 
 
-def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
-    """Današnja deljenja po vozilih, za skrbnika (`/admin`).
+def oznaka(ident: str) -> str:
+    """Ime deljenja v pregledu za skrbnika. Ni id: kdor id pozna, lahko
+    deljenju dodaja točke (`sprejmi`), zato ga ne pošiljamo nikamor."""
+    return hashlib.sha256(ident.encode()).hexdigest()[:12]
+
+
+def _prehodi_pregled(v: Voznja | None, dan: str, vrstice: list[dict]) -> list[dict]:
+    """Prehodi enega deljenja z imenom postaje, voznim redom in zamudo.
+
+    Prihod je vstop v `NA_POSTAJI_M` od postaje, odhod izstop na drugi strani
+    (`_prehodi`), zato je odhod nekoliko pozen -- vlak še pospešuje.
+    """
+    if v is None:
+        return []
+    po_seq = {p["stop_seq"]: p for p in v.postanki}
+    polnoc = stats.polnoc(dan)
+    out = []
+    for r in sorted(vrstice, key=lambda x: x["stop_seq"]):
+        p = po_seq.get(r["stop_seq"])
+        if p is None:
+            continue
+        vr_prihod = p["arr_s"] if p["arr_s"] is not None else p["dep_s"]
+        vr_odhod = p["dep_s"] if p["dep_s"] is not None else p["arr_s"]
+        lat, lon = v.trasa.tocka(p["along"])
+        out.append({
+            "ime": p["name"], "lat": round(lat, 5), "lon": round(lon, 5),
+            "along_m": round(p["along"]),
+            "prihod": _iso(r["prihod_ts"]), "odhod": _iso(r["odhod_ts"]),
+            "prihod_vr": _iso(polnoc + vr_prihod), "odhod_vr": _iso(polnoc + vr_odhod),
+            "zamuda_prihod": stats.opis_zamude(
+                r["prihod_ts"] - polnoc - vr_prihod if r["prihod_ts"] else None, "po poročilu potnikov"),
+            "zamuda_odhod": stats.opis_zamude(
+                r["odhod_ts"] - polnoc - vr_odhod if r["odhod_ts"] else None, "po poročilu potnikov"),
+        })
+    return out
+
+
+def _podrobno(conn: sqlite3.Connection, v: Voznja | None, r: dict) -> dict:
+    """Točke enega deljenja in vozni red okoli njih -- graf vožnje v pregledu.
+
+    Samo za izbrano deljenje: šest ur deljenja je 4 000 točk, pregled pa se
+    vleče na 10 s.
+    """
+    tocke = [[t["ts"], round(t["along_m"]), round(t["odmik_m"]),
+              None if t["natancnost_m"] is None else round(t["natancnost_m"]),
+              None if t["hitrost_ms"] is None else round(t["hitrost_ms"], 1)]
+             for t in conn.execute(
+                 "SELECT ts, along_m, odmik_m, natancnost_m, hitrost_ms FROM deljenje_tocka "
+                 "WHERE deljenje = ? ORDER BY ts", (r["id"],))]
+    postanki = []
+    if v is not None and r["od_m"] is not None:
+        polnoc = stats.polnoc(r["service_date"])
+        p = v.postanki
+        # Postaja pred prvo točko in za zadnjo, da je vozni red na grafu
+        # tudi tam, kamor je vozilo po zamudi šele prišlo.
+        i = max(0, max((j for j, s in enumerate(p) if s["along"] <= r["od_m"]), default=0))
+        k = min((j for j, s in enumerate(p) if s["along"] >= r["do_m"]), default=len(p) - 1)
+        for s in p[i:k + 1]:
+            prihod = s["arr_s"] if s["arr_s"] is not None else s["dep_s"]
+            odhod = s["dep_s"] if s["dep_s"] is not None else s["arr_s"]
+            postanki.append({"ime": s["name"], "along_m": round(s["along"]),
+                             "prihod": polnoc + prihod, "odhod": polnoc + odhod})
+    return {"oznaka": oznaka(r["id"]), "tocke": tocke, "postanki": postanki,
+            "na_postaji_m": v.na_postaji_m if v else None}
+
+
+def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None,
+            dan: str | None = None, izbrano: str | None = None) -> dict:
+    """Deljenja enega dne po vozilih, za skrbnika (`/admin`). Brez `dan`
+    današnji.
 
     Kar vidi javnost -- število poročevalcev, verodostojnost, lega, zamuda --
     pride iz `stanje()`, ne iz lastnega računa: pregled mora pokazati isto
     kot tabla in zemljevid, sicer ne pove ničesar o tem, kar potnik vidi.
     Zraven je feedova zamuda (in pri avtobusu GPS), da se razhajanje vidi.
+    Za pretekli dan javnega stanja ni: kar je bilo takrat na tabli, se ne
+    hrani.
 
     Sled deljenja je del trase med prvo in zadnjo sprejeto točko. Surovih
-    koordinat ni (glej `SHEMA`), in vozilo s trase ne gre.
+    koordinat ni (glej `SHEMA`), in vozilo s trase ne gre. `izbrano`
+    (`oznaka`) doda točke tega deljenja za graf vožnje (`podrobno`).
     """
     zdaj = zdaj or datetime.now(TZ)
     zdaj_ts = int(zdaj.timestamp())
-    polnoc = stats.polnoc(zdaj.date().isoformat())
+    danes = zdaj.date().isoformat()
+    dan = dan or danes
+    polnoc = stats.polnoc(dan)
+    do_ts = stats.polnoc((date.fromisoformat(dan) + timedelta(days=1)).isoformat())
     # `zacetek_ts` ima kazalo; deljenje, ki je začelo pred polnočjo, ni daljše
     # od `NAJDALJE_S`.
     vrstice = [dict(r) for r in conn.execute(
         "SELECT d.*, MIN(t.along_m) AS od_m, MAX(t.along_m) AS do_m, "
+        "       AVG(t.natancnost_m) AS natancnost_m, MAX(t.odmik_m) AS odmik_m, "
+        "       MAX(t.hitrost_ms) AS hitrost_max_ms, "
         "       (SELECT COUNT(*) FROM deljenje_prehod p WHERE p.deljenje = d.id) AS prehodov "
         "FROM deljenje d LEFT JOIN deljenje_tocka t ON t.deljenje = d.id "
-        "WHERE d.zacetek_ts >= ? GROUP BY d.id ORDER BY d.zacetek_ts",
-        (polnoc - NAJDALJE_S,))
+        "WHERE d.zacetek_ts >= ? AND d.zacetek_ts < ? GROUP BY d.id ORDER BY d.zacetek_ts",
+        (polnoc - NAJDALJE_S, do_ts))
         if max(r["zacetek_ts"], r["zadnja_ts"]) >= polnoc]
+    prehodi: dict[str, list[dict]] = {}
+    for r in conn.execute(
+            f"SELECT deljenje, stop_seq, prihod_ts, odhod_ts FROM deljenje_prehod "
+            f"WHERE deljenje IN ({','.join('?' * len(vrstice))})", [r["id"] for r in vrstice]):
+        prehodi.setdefault(r["deljenje"], []).append(dict(r))
 
     po_vozilu: dict[tuple[str, str], list[dict]] = {}
     for r in vrstice:
@@ -1618,25 +1700,32 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
     tripi = {r["trip_id"]: dict(r) for r in conn.execute(
         f"SELECT trip_id, train_no, headsign, network, mode, agency "
         f"FROM trip WHERE trip_id IN ({marks})", ids)} if ids else {}
-    javno = stanje(conn, ids, zdaj)
-    gps = _gps(conn, [t for t in ids if tripi.get(t, {}).get("network") == "avtobus"], zdaj_ts)
+    zivi = ids if dan == danes else []
+    javno = stanje(conn, zivi, zdaj)
+    gps = _gps(conn, [t for t in zivi if tripi.get(t, {}).get("network") == "avtobus"], zdaj_ts)
     feed: dict[tuple[str, str], dict] = {}
-    for dan in {d for _, d in po_vozilu}:
-        naj = [t for t, d in po_vozilu if d == dan]
-        for trip_id, m in stats.last_measured(conn, dan, naj, zdaj_ts - stats.polnoc(dan)).items():
-            feed[(trip_id, dan)] = m
+    for sd in {d for t, d in po_vozilu if t in zivi}:
+        naj = [t for t, d in po_vozilu if d == sd]
+        for trip_id, m in stats.last_measured(conn, sd, naj, zdaj_ts - stats.polnoc(sd)).items():
+            feed[(trip_id, sd)] = m
 
     vozila = []
-    for (trip_id, dan), dd in po_vozilu.items():
+    podrobno = None
+    for (trip_id, sd), dd in po_vozilu.items():
         v = voznja(conn, trip_id)
         t = tripi.get(trip_id, {})
         st = javno.get(trip_id)
-        zivo = bool(st and st.get("along_m") is not None and st["service_date"] == dan)
-        m = feed.get((trip_id, dan))
+        zivo = bool(st and st.get("along_m") is not None and st["service_date"] == sd)
+        m = feed.get((trip_id, sd))
         deljenja = []
         for r in dd:
             sveze = r["konec"] is None and r["zadnja_ts"] >= zdaj_ts - SVEZE_S
+            ozn = oznaka(r["id"])
+            if izbrano == ozn:
+                podrobno = _podrobno(conn, v, r)
+            ima_lego = v is not None and r["od_m"] is not None
             deljenja.append({
+                "oznaka": ozn,
                 "zacetek": _iso(r["zacetek_ts"]), "zadnja": _iso(r["zadnja_ts"]),
                 "trajanje_s": max(0, r["zadnja_ts"] - r["zacetek_ts"]),
                 "tock": r["tock"], "prehodov": r["prehodov"],
@@ -1646,10 +1735,18 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
                 "zamuda": stats.opis_zamude(r["zamuda_s"], "po poročilu potnikov"),
                 "hitrost_ms": r["hitrost_ms"],
                 "lat": r["lat"], "lon": r["lon"],
-                "peljal": r["peljal_ts"] is not None,
+                "peljal": _iso(r["peljal_ts"]),
                 "odjemalec": r["odjemalec"], "vir": r["vir"],
-                "sled": (_kosi(v.trasa, r["od_m"], r["do_m"])
-                         if v is not None and r["od_m"] is not None else []),
+                # Kje na trasi je bila prva in zadnja točka, in koliko vmes.
+                "od": _kje(v, r["od_m"]) if ima_lego else None,
+                "do": _kje(v, r["do_m"]) if ima_lego else None,
+                "km": round((r["do_m"] - r["od_m"]) / 1000, 1) if ima_lego else None,
+                "natancnost_m": None if r["natancnost_m"] is None else round(r["natancnost_m"]),
+                "odmik_m": None if r["odmik_m"] is None else round(r["odmik_m"]),
+                "hitrost_max_kmh": (None if r["hitrost_max_ms"] is None
+                                    else round(r["hitrost_max_ms"] * 3.6)),
+                "prehodi": _prehodi_pregled(v, sd, prehodi.get(r["id"], [])),
+                "sled": (_kosi(v.trasa, r["od_m"], r["do_m"]) if ima_lego else []),
             })
         g = gps.get(trip_id)
         vozila.append({
@@ -1677,23 +1774,35 @@ def pregled(conn: sqlite3.Connection, zdaj: datetime | None = None) -> dict:
     vozila.sort(key=lambda x: (not x["zivo"], -x["zadnja_ts"]))
 
     izidi: dict[str, int] = {}
+    odjemalci: dict[str, int] = {}
     for x in vozila:
         for d in x["deljenja"]:
             izidi[d["izid"]] = izidi.get(d["izid"], 0) + 1
+            o = d["odjemalec"] or "neznan"
+            odjemalci[o] = odjemalci.get(o, 0) + 1
+    prvi = conn.execute("SELECT MIN(zacetek_ts) FROM deljenje").fetchone()[0]
     return {
         "zdaj": zdaj.isoformat(timespec="seconds"),
+        "dan": dan, "danes": danes,
+        "prvi_dan": datetime.fromtimestamp(prvi, TZ).date().isoformat() if prvi else danes,
         "sveze_s": SVEZE_S,
         "povzetek": {
             "deljenj": len(vrstice),
             "tock": sum(r["tock"] for r in vrstice),
             "prehodov": sum(r["prehodov"] for r in vrstice),
+            # Prehod šteje samo od potnika, ki se je peljal (`stanje`).
+            "prehodov_javnih": sum(r["prehodov"] for r in vrstice if r["peljal_ts"] is not None),
+            "peljalo": sum(r["peljal_ts"] is not None for r in vrstice),
+            "trajanje_s": sum(max(0, r["zadnja_ts"] - r["zacetek_ts"]) for r in vrstice),
             "vozil": len(vozila),
             "vozil_zdaj": sum(x["zivo"] for x in vozila),
             "deli_zdaj": izidi.get("deli", 0),
             "izidi": izidi,
+            "odjemalci": odjemalci,
         },
         "lijak": lijak(conn, zdaj),
         "vozila": vozila,
+        "podrobno": podrobno,
     }
 
 

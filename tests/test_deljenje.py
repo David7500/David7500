@@ -425,6 +425,41 @@ def test_pregled_pokaze_zivo_in_koncano_po_vozilih(conn):
     assert all(t[0] == LAT for t in sled[0])
 
 
+def test_pregled_deljenje_posebej_s_prehodi_in_tockami(conn):
+    zdaj = _ob("10:14")
+    r = _deli(conn, zdaj, _tocka(7.72, zdaj - timedelta(seconds=20), v=0), _tocka(7.72, zdaj, v=0))
+    z2 = zdaj + timedelta(seconds=60)
+    _deli(conn, z2, _tocka(8.5, z2), ident=r["deljenje"])
+    x = deljenje.pregled(conn, z2)["vozila"][0]["deljenja"][0]
+    # Oznaka ni id: z id-jem bi kdorkoli deljenju dodajal točke.
+    assert x["oznaka"] == deljenje.oznaka(r["deljenje"]) and r["deljenje"] not in x["oznaka"]
+    assert x["od"]["pri"] == "Bled" and x["km"] == pytest.approx(0.8, abs=0.1)
+    [h] = x["prehodi"]
+    # Odhod je izstop iz 200 m okoli Bleda, med točkama ob 10:14 (7,72 km) in
+    # 10:15 (8,5 km) ob ~10:14:15; po voznem redu 10:11.
+    assert h["ime"] == "Bled" and h["odhod_vr"][11:16] == "10:11" and h["prihod"] is None
+    assert h["zamuda_odhod"]["s"] == pytest.approx(195, abs=5)
+    p = deljenje.pregled(conn, z2, izbrano=x["oznaka"])["podrobno"]
+    assert [t[1] for t in p["tocke"]] == pytest.approx([7720, 7720, 8500], abs=60)
+    # Vozni red okoli točk: postaja pred prvo (Bled je 4 m za njo) in za zadnjo.
+    assert [s["ime"] for s in p["postanki"]] == ["Ajdovščina", "Bled", "Celje"]
+    assert deljenje.pregled(conn, z2)["podrobno"] is None
+
+
+def test_pregled_preteklega_dne_brez_zivega_stanja(conn):
+    zdaj = _ob("10:14")
+    _deli(conn, zdaj, _tocka(7.72, zdaj, v=0))
+    dan = zdaj.date().isoformat()
+    # Isti trenutek, drug pogled: danes je vozilo živo, kot pretekli dan
+    # (pogled jutri) javnega stanja nima, deljenje pa je še tam.
+    assert deljenje.pregled(conn, zdaj)["vozila"][0]["zivo"]
+    jutri = deljenje.pregled(conn, zdaj + timedelta(days=1), dan=dan)
+    assert jutri["dan"] == dan and jutri["danes"] != dan
+    v = jutri["vozila"][0]
+    assert not v["zivo"] and v["javno"] is None and v["feed"] is None
+    assert deljenje.pregled(conn, zdaj, dan=(zdaj + timedelta(days=1)).date().isoformat())["vozila"] == []
+
+
 def test_pregled_koncanemu_ne_poslje_cele_trase(conn):
     zdaj = _ob("10:14")
     _deli(conn, zdaj, _tocka(7.72, zdaj, v=0))

@@ -3278,18 +3278,29 @@ def admin_viri_preveri(request: Request):
 
 
 @app.get(f"{ADMIN_POT}/deljenje", include_in_schema=False)
-def admin_deljenje(request: Request):
-    """Vozila, na katerih potniki danes delijo lego -- zavihek „Deljenje“.
+def admin_deljenje(request: Request,
+                   dan: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                   izbrano: str | None = Query(None, pattern=r"^[0-9a-f]{12}$")):
+    """Vozila, na katerih potniki delijo lego -- zavihek „Deljenje“.
+
+    `dan` je dan pregleda (brez njega danes), `izbrano` oznaka deljenja,
+    katerega točke pridejo zraven za graf vožnje (`deljenje.oznaka`). Ne `k`:
+    to je žeton (`_preveri_admina`).
 
     Svoj endpoint in ne del `/admin/podatki`: tisti je v ritmu minute, ker
     gredo števci v bazo na 60 s, lega poročevalca pa se spremeni na 5 s.
     """
     _preveri_admina(request)
+    try:
+        if dan:
+            date.fromisoformat(dan)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Ni datum.") from None
     with _conn() as conn:
         # Tabele naredi `lifespan` samo pri `KAJROS_DELI=1`; isti razlog kot
         # pri `stik.init()` v `admin_podatki`.
         deljenje.init(conn)
-        return {"vklopljeno": config.DELI, **deljenje.pregled(conn)}
+        return {"vklopljeno": config.DELI, **deljenje.pregled(conn, dan=dan, izbrano=izbrano)}
 
 
 @app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)

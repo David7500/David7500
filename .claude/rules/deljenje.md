@@ -60,7 +60,13 @@ Dnevni števci brez identitete (`stej`): `kandidati` / `kandidati:0` (iskanje z 
 
 ## Pregled za skrbnika (`/admin#deljenje`)
 
-Zemljevid in seznam današnjih deljenj po vozilih (`deljenje.pregled()`). **Kar je „javno“, pride iz `stanje()`**, ne iz lastnega računa: pregled mora pokazati isto kot tabla in zemljevid, sicer ne pove ničesar o tem, kar potnik vidi. Zraven feedova zamuda in GPS avtobusa, da se razhajanje vidi -- **samo ob živem deljenju**; feed proti potniku izpred dveh ur ni primerjava.
+**Vsako deljenje posebej** (12. 10. 2026, David: „vse se mora dobro videti in vsak posebej“): levo kartica na deljenje (ne na vozilo; filter po izidu), desno zemljevid, ki pokaže izbrano (modro, s prehodi in koncema; ostala sivo), pod njim podrobnosti: kar vidijo potniki (samo živo), dejstva (kdaj se je peljal, kje začel in končal, natančnost, odmik, hitrost telefona, odjemalec, vir), **graf vožnje** (čas proti legi na trasi, vozni red črtkano, razmik = zamuda, odčitek posamezne točke pod miško) in prehodi postaj z voznim redom in zamudo. Dan in izbira sta v naslovu: `#deljenje/2026-10-11/<oznaka>`; pretekli dan nima živega stanja (`javno`, `feed`, `gps` = None), ker se ne hrani.
+
+* **Oznaka ni id deljenja** (`deljenje.oznaka`, sha256[:12]): kdor pozna id, deljenju dodaja točke.
+* Parameter za izbrano je `izbrano`, **ne `k`**: `?k=` je žeton za `/admin` in je prvi poskus vrnil 403.
+* Točke gredo samo za izbrano deljenje (`podrobno`): šest ur deljenja je 4 000 točk, pregled se vleče na 10 s. Izmerjeno 12. 10. 2026 na razvojnem stroju (5 deljenj, 528 točk): 16 kB, 14 ms; z izbranim (246 točk) 24 kB (6 kB z gzipom), 17 ms.
+
+**Kar je „javno“, pride iz `stanje()`**, ne iz lastnega računa: pregled mora pokazati isto kot tabla in zemljevid, sicer ne pove ničesar o tem, kar potnik vidi. Zraven feedova zamuda in GPS avtobusa, da se razhajanje vidi -- **samo ob živem deljenju**; feed proti potniku izpred dveh ur ni primerjava.
 
 Sled = del trase med prvo in zadnjo sprejeto točko (`_kosi()`, razrezan na vrzelih), ker surovih koordinat ni. Cela trasa samo živim vozilom: odgovor se vleče na 10 s, trasa do 40 kB. Izmerjeno 25. 9. 2026 na razvojnem stroju, 9 vozil in 23 deljenj, nobeno živo: 10 kB (1,4 kB z gzipom), 4--19 ms; ko je traso nosilo vseh devet: 60 kB (16 kB), 15--44 ms.
 
