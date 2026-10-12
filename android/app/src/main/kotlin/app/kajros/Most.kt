@@ -38,9 +38,10 @@ class Most(
      * 3: deljenje lege (`deliZacni()`, `deliStanje()`, `deliUstavi()`).
      * 4: deljenje ob voznji (`deliObVoznji()`, `nastaviDeliObVoznji()`,
      *    `cakajVkrcanje()`).
+     * 5: zaslon „O aplikaciji“ (`oAplikaciji()`).
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 4 else 0
+    fun razlicica(): Int = if (nas()) 5 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -182,6 +183,20 @@ class Most(
         glavna.post {
             dejavnost.startActivity(
                 android.content.Intent(dejavnost, BudilkeDejavnost::class.java))
+        }
+    }
+
+    /**
+     * Različica in posodobitev. Pred 1.12 ju ni bilo mogoče videti nikjer:
+     * vrstica o posodobitvi se je pokazala enkrat na dan in po pritisku na
+     * križec do naslednje izdaje nikoli več.
+     */
+    @JavascriptInterface
+    fun oAplikaciji() {
+        if (!nas()) return
+        glavna.post {
+            dejavnost.startActivity(
+                android.content.Intent(dejavnost, AplikacijaDejavnost::class.java))
         }
     }
 

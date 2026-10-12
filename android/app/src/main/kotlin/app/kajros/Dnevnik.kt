@@ -1,7 +1,15 @@
 package app.kajros
 
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Typeface
 import android.util.Log
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,4 +47,34 @@ object Dnevnik {
     fun beri(c: Context): String =
         (c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).getString(KLJUC, "") ?: "")
             .lines().filter { it.isNotBlank() }.reversed().joinToString("\n")
+
+    /**
+     * Dnevnik v pogovornem oknu. Odpre ga dolg pritisk na naslov seznama
+     * budilk ali zaslona „O aplikaciji“ -- vzrok budilke, ki ni zazvonila, ali
+     * posodobitve, ki ni uspela, je samo tu.
+     */
+    fun pokazi(a: Activity) {
+        val p = (16 * a.resources.displayMetrics.density).toInt()
+        val vrstice = beri(a)
+        val besedilo = TextView(a).apply {
+            text = vrstice.ifBlank { a.getString(R.string.dnevnik_prazen) }
+            setTextColor(a.getColor(R.color.ink_dim))
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            setPadding(p, p / 2, p, 0)
+        }
+        AlertDialog.Builder(a)
+            .setTitle(R.string.dnevnik)
+            .setView(ScrollView(a).apply { addView(besedilo) })
+            .setPositiveButton(R.string.zapri, null)
+            // Kdor ga pošilja, ga pošlje celega: 120 vrstic z izbiro besedila
+            // na telefonu ne označiš.
+            .setNeutralButton(R.string.dnevnik_kopiraj) { _, _ ->
+                a.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
+                    ClipData.newPlainText(a.getString(R.string.dnevnik), vrstice))
+                Toast.makeText(a, R.string.dnevnik_kopiran, Toast.LENGTH_SHORT).show()
+            }
+            .show()
+    }
 }

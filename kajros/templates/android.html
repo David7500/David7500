@@ -56,6 +56,16 @@
     </ul>
 
     {% if izdaja %}
+    {#- Iz vrstice o posodobitvi v aplikaciji do 1.5 (od 1.6 namešča
+        aplikacija sama). Kdor pride od tam, ne išče opisa aplikacije, ampak
+        kako jo posodobi -- in boji se, da izgubi budilke. #}
+    {% if iz_aplikacije %}
+    <p class="vodilo">
+      <b>Posodabljaš na različico {{ izdaja.ime }}.</b> Prenesi jo in namesti
+      čez staro — budilke ostanejo. Naslednje posodobitve namesti aplikacija
+      sama.
+    </p>
+    {% endif %}
     <p>
       <a class="btn prenos-gumb" href="/prenos/{{ izdaja.datoteka }}{% if iz_aplikacije %}?iz=aplikacija{% endif %}">
         Prenesi za Android</a>
@@ -66,7 +76,14 @@
     </p>
 
     <h2>Namestitev</h2>
+    {#- 12. 10. 2026: prijatelj je ob posodobitvi obstal, ker je datoteko
+        „označilo za nevarno“. Brskalnik to reče za vsak APK s spleta, Play
+        Protect za vsako aplikacijo zunaj trgovine; brez te vrstice je videti
+        kot opozorilo o nas. #}
     <ol>
+      <li>Brskalnik morda opozori, da je datoteka lahko škodljiva. Tako pove
+        za vsako aplikacijo, ki ni iz trgovine. Pritisni <b>Vseeno prenesi</b>
+        (<b>Download anyway</b>).</li>
       <li>Odpri preneseno datoteko.</li>
       <li>Telefon opozori, da aplikacija ni iz trgovine. Pritisni
         <b>Nastavitve</b>, vklopi stikalo <b>Dovoli iz tega vira</b>, vrni se
@@ -79,10 +96,14 @@
           V angleščini: <b>Settings</b> → <b>Allow from this source</b>, oziroma
           Settings → Apps → Special app access → Install unknown apps.
         </p></li>
+      <li>Če Play Protect reče, da aplikacije ne pozna, pritisni
+        <b>Podrobnosti</b> in <b>Vseeno namesti</b> (<b>More details</b> →
+        <b>Install anyway</b>).</li>
       <li>Ko izide nova različica, te aplikacija opozori sama. Pritisni vrstico
         in jo namesti kar iz aplikacije: tako budilka obdrži dovoljenje za cel
         zaslon. Prvič telefon vpraša, ali sme Kajros nameščati posodobitve —
-        vklopi <b>Dovoli iz tega vira</b>.</li>
+        vklopi <b>Dovoli iz tega vira</b>. Različico in posodobitev najdeš
+        tudi v meniju ⋮ pod <b>O aplikaciji</b>.</li>
     </ol>
 
     {#- Kratko in brez razlage o licencah, računih in preizkuševalcih -- to je

@@ -90,9 +90,6 @@ class GlavnaDejavnost : Activity() {
      */
     private var naslovNapake: String? = null
 
-    /** Posodobitev, ki čaka, da potnik v nastavitvah dovoli nameščanje. */
-    private var cakajocaIzdaja: Posodobitev.Izdaja? = null
-
     /** Dovoljenje za lego zahteva sistem asinhrono; stran medtem caka na odgovor. */
     private var cakajocaLega: Pair<String, GeolocationPermissions.Callback>? = null
 
@@ -129,59 +126,21 @@ class GlavnaDejavnost : Activity() {
 
     private fun pokaziPosodobitev(izdaja: Posodobitev.Izdaja) {
         val vrstica = findViewById<View>(R.id.posodobitev)
-        val besedilo = findViewById<TextView>(R.id.posodobitev_besedilo)
-        besedilo.text = getString(R.string.posodobitev, izdaja.ime)
+        findViewById<TextView>(R.id.posodobitev_besedilo).text =
+            getString(R.string.posodobitev, izdaja.ime)
         vrstica.setOnClickListener {
-            // Prvič mora potnik Kajrosu dovoliti nameščanje. Sistemsko okno to
-            // sicer ponudi samo, a sejo ob vklopu stikala zavrže (izmerjeno na
-            // emulatorju, Android 15: „User rejected permissions“) in potnik
-            // bi moral vrstico pritisniti še enkrat. Zato najprej nastavitev,
-            // ob vrnitvi (`onResume`) pa namestitev brez drugega klika.
-            if (!packageManager.canRequestPackageInstalls()) {
-                cakajocaIzdaja = izdaja
-                Toast.makeText(this, R.string.posodobitev_dovoli, Toast.LENGTH_LONG).show()
-                odpriNastavitev(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-            } else {
-                namesti(izdaja)
-            }
+            // Namešča zaslon „O aplikaciji“, ne vrstica: ta je znala povedati
+            // samo „Prenašam …“, in kadar se sistemsko okno nato ni odprlo, se
+            // ni zgodilo nič več (12. 10. 2026, prijatelj z 1.x). Zaslon kaže
+            // vsak korak in ima za vsakega gumb naprej.
+            startActivity(Intent(this, AplikacijaDejavnost::class.java)
+                .putExtra(AplikacijaDejavnost.POSODOBI, true))
         }
         findViewById<Button>(R.id.posodobitev_zapri).setOnClickListener {
             Posodobitev.preskoci(this, izdaja.koda)
             vrstica.visibility = View.GONE
         }
         vrstica.visibility = View.VISIBLE
-    }
-
-    private fun namesti(izdaja: Posodobitev.Izdaja) {
-        val vrstica = findViewById<View>(R.id.posodobitev)
-        val besedilo = findViewById<TextView>(R.id.posodobitev_besedilo)
-        vrstica.isClickable = false
-        besedilo.text = getString(R.string.posodobitev_prenasam, izdaja.ime)
-        Namestitev.zacni(this, izdaja) { zakaj ->
-            vrstica.isClickable = true
-            if (zakaj == null) {
-                besedilo.text = getString(R.string.posodobitev, izdaja.ime)
-                return@zacni
-            }
-            // Ko namestitev v aplikaciji ne uspe, ostane stara pot: stran v
-            // brskalniku. Dela vedno, le dovoljenje za cel zaslon vzame.
-            besedilo.text = getString(R.string.posodobitev_ni_uspela, zakaj)
-            vrstica.setOnClickListener { odpriZunaj(Uri.parse(izdaja.stran)) }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        val izdaja = cakajocaIzdaja ?: return
-        if (!packageManager.canRequestPackageInstalls()) return
-        cakajocaIzdaja = null
-        namesti(izdaja)
-    }
-
-    override fun onDestroy() {
-        // Izid namestitve pride v sprejemnik, ki ne ve, ali ta zaslon še obstaja.
-        Namestitev.obNeuspehu = null
-        super.onDestroy()
     }
 
     override fun onNewIntent(nova: Intent?) {

@@ -88,6 +88,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Različica in posodobitev. Odpre jo vrstica o posodobitvi in meni
+             Več na strani (`Most.oAplikaciji()`), zato ni izvožena. -->
+        <activity
+            android:name=".AplikacijaDejavnost"
+            android:exported="false"
+            android:theme="@style/Tema" />
+
         <!-- Zvonjenje čez ves zaslon. `singleInstance`, da se dve budilki ne
              zložita ena na drugo, in brez zgodovine, da po ustavitvi ne ostane
              v seznamu nedavnih. Pokončno: v ležečem bi glava (vlak, odhod)

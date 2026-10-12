@@ -686,6 +686,9 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 .vec-poti span { flex-grow: 1; }
 .vec-poti a::after { content: "›"; color: var(--ink-mute); font-size: 20px; }
 .v-aplikaciji .vec-android { display: none; }
+.vec-poti .vec-aplikacija { display: none; }
+.ima-o-aplikaciji .vec-poti .vec-aplikacija { display: flex; }
+.vec-poti small { font: 400 14px/1 var(--sans); color: var(--ink-mute); }
 .vec-vir {
   margin: 12px 8px 0; padding-top: 14px; border-top: 1px solid var(--line-firm);
   font: 400 12px/1.55 var(--sans); color: var(--ink-dim);

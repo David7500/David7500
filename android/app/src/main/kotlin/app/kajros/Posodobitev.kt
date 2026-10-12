@@ -16,7 +16,8 @@ import java.net.URL
  * napaka strani, nikoli ne bi prišel do njega.
  *
  * Aplikacija zato **vpraša, ne ukrepa**: pokaže vrstico, prenos in namestitev
- * pa sta uporabnikova klika. Samodejnega prenosa ni. Namesti pa aplikacija
+ * pa sta uporabnikova klika. Samodejnega prenosa ni. Vrstica vodi na zaslon
+ * „O aplikaciji“ (`AplikacijaDejavnost`), kjer se da preveriti tudi ročno. Namesti pa aplikacija
  * sama (`Namestitev`), ne brskalnik: sistemski namestitveni program ob vsaki
  * posodobitvi vzame budilki dovoljenje za cel zaslon (izmerjeno 6. 10. 2026),
  * in to je bila cena `REQUEST_INSTALL_PACKAGES`, ki ga prej nismo hoteli.
@@ -34,8 +35,18 @@ object Posodobitev {
     /** [url] je APK, [stran] stran s prenosom: ta ostane, kadar namestitev ne uspe. */
     data class Izdaja(
         val koda: Int, val ime: String, val stran: String,
-        val url: String, val sha256: String,
-    )
+        val url: String, val sha256: String, val objavljeno: String,
+    ) {
+        val novejsa: Boolean get() = koda > BuildConfig.VERSION_CODE
+    }
+
+    /**
+     * Zadnji odgovor strežnika v tem procesu. Vrstica in zaslon „O aplikaciji“
+     * govorita o isti izdaji, ne da bi jo zaslon spraševal še enkrat.
+     */
+    @Volatile
+    var zadnja: Izdaja? = null
+        private set
 
     /**
      * Preveri v ozadnji niti in [kaj] pokliče v glavni, kadar je kaj novega.
@@ -46,15 +57,34 @@ object Posodobitev {
      */
     fun preveri(c: Context, kaj: (Izdaja) -> Unit) {
         if (!jeCas(c)) return
+        preveriZdaj(c) { izdaja ->
+            if (izdaja != null && izdaja.novejsa && izdaja.koda != preskocena(c)) kaj(izdaja)
+        }
+    }
+
+    /**
+     * Vpraša takoj, mimo enkrat na dan: zaslon „O aplikaciji“, kjer je
+     * potnik vprašal sam. [kaj] dobi `null`, kadar odgovora ni.
+     */
+    fun preveriZdaj(c: Context, kaj: (Izdaja?) -> Unit) {
+        val app = c.applicationContext
         val glavna = android.os.Handler(c.mainLooper)
         Thread {
-            val izdaja = vprasaj(c)
-            if (izdaja != null && izdaja.koda > BuildConfig.VERSION_CODE &&
-                izdaja.koda != preskocena(c)) {
-                glavna.post { kaj(izdaja) }
+            val izdaja = vprasaj(app)
+            if (izdaja != null) {
+                zadnja = izdaja
+                // Šteje šele odgovor: preverjanje brez omrežja bi sicer
+                // naslednje odložilo za ves dan.
+                app.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE)
+                    .edit().putLong(KLJUC_VPRASANO, System.currentTimeMillis()).apply()
             }
+            glavna.post { kaj(izdaja) }
         }.start()
     }
+
+    /** Kdaj je strežnik nazadnje odgovoril; 0, če še nikoli. */
+    fun nazadnjeVprasano(c: Context): Long =
+        c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).getLong(KLJUC_VPRASANO, 0)
 
     /** Te različice ne omenjaj več. Naslednja bo spet imela večjo kodo. */
     fun preskoci(c: Context, koda: Int) {
@@ -67,14 +97,10 @@ object Posodobitev {
             .getInt(KLJUC_PRESKOCENA, 0)
 
     private fun jeCas(c: Context): Boolean {
-        val p = c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE)
-        val zadnjic = p.getLong(KLJUC_VPRASANO, 0)
-        val zdaj = System.currentTimeMillis()
+        val zadnjic = nazadnjeVprasano(c)
         // Tudi ura naprej ali nazaj (ročna sprememba, potovanje) ne sme
         // preverjanja ustaviti za vedno, zato je pogoj razlika v obe smeri.
-        if (zdaj - zadnjic in 0 until RAZMIK_MS) return false
-        p.edit().putLong(KLJUC_VPRASANO, zdaj).apply()
-        return true
+        return System.currentTimeMillis() - zadnjic !in 0 until RAZMIK_MS
     }
 
     private fun vprasaj(c: Context): Izdaja? {
@@ -111,7 +137,8 @@ object Posodobitev {
             // je vrnil.
             val nas = Nastavitve.naslov(c)
             if (!Nastavitve.jeNas(stran, nas) || !Nastavitve.jeNas(apk, nas)) null
-            else Izdaja(j.getInt("koda"), j.optString("ime"), stran, apk, j.optString("sha256"))
+            else Izdaja(j.getInt("koda"), j.optString("ime"), stran, apk,
+                j.optString("sha256"), j.optString("objavljeno"))
         } catch (e: JSONException) {
             null
         }

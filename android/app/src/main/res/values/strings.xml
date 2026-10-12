@@ -171,11 +171,39 @@
     <string name="tabla_smer_pomoc">Na vsaki strani ceste je svoje postajališče. Izberi tisto, kjer čakaš — spoznaš ga po naslednji postaji.</string>
     <string name="tabla_obe_smeri">Obe smeri</string>
 
-    <!-- posodobitev zunaj trgovine -->
+    <!-- posodobitev zunaj trgovine in zaslon „O aplikaciji“ -->
     <string name="posodobitev">Na voljo je različica %1$s. Pritisni za posodobitev.</string>
-    <string name="posodobitev_dovoli">Vklopi „Dovoli iz tega vira“ in se vrni. Kajros bo posodobitev namestil sam, da budilka obdrži dovoljenje za cel zaslon.</string>
+    <!-- Obvestilo (toast) ima od Androida 12 največ dve vrstici; daljše se odreže. -->
+    <string name="posodobitev_dovoli">Vklopi „Dovoli iz tega vira“ in se vrni.</string>
+    <string name="o_aplikaciji">O aplikaciji</string>
+    <string name="aplikacija_razlicica">Različica %1$s</string>
+    <string name="aplikacija_podrobno">Nameščena %1$s · Android %2$s</string>
+    <string name="posodobitve">Posodobitve</string>
+    <string name="posodobitev_preverjam">Preverjam, ali je izšla nova različica …</string>
+    <string name="posodobitev_zadnja">Imaš najnovejšo različico.</string>
+    <string name="posodobitev_ni_zveze">Strežnik se ne odziva. Preveri povezavo in poskusi znova.</string>
+    <string name="posodobitev_nova">Na voljo je različica %1$s.</string>
+    <string name="posodobitev_nova_dan">Na voljo je različica %1$s, izšla %2$s.</string>
     <string name="posodobitev_prenasam">Prenašam različico %1$s …</string>
-    <string name="posodobitev_ni_uspela">Posodobitev ni uspela (%1$s). Pritisni za stran s prenosom.</string>
+    <string name="posodobitev_prenasam_del">Prenašam različico %1$s … %2$d %%</string>
+    <string name="posodobitev_potrdi">Telefon vpraša, ali naj posodobi Kajros. Pritisni <b>Posodobi</b>. Če okna ne vidiš, ga odpre gumb spodaj.</string>
+    <string name="posodobitev_napaka">Posodobitev ni uspela: %1$s.</string>
+    <string name="posodobitev_brez_dovoljenja">Brez dovoljenja Kajros posodobitve ne more namestiti. V nastavitvah vklopi „Dovoli iz tega vira“.</string>
+    <string name="posodobitev_preverjeno">Nazadnje preverjeno %1$s</string>
+    <string name="danes_ob">danes ob %1$s</string>
+    <string name="dan_ob">%1$s ob %2$s</string>
+    <string name="gumb_posodobi">Posodobi</string>
+    <string name="gumb_potrdi">Odpri okno za potrditev</string>
+    <string name="gumb_poskusi">Poskusi znova</string>
+    <string name="gumb_preveri">Preveri znova</string>
+    <string name="gumb_nastavitve">Odpri nastavitve</string>
+    <string name="gumb_s_strani">Prenesi s strani kajros.app</string>
+    <string name="namestitev_blokirana">telefon jo je zavrnil</string>
+    <string name="namestitev_spor">nameščena aplikacija je podpisana drugače, zato jo odstrani in namesti znova s strani</string>
+    <string name="namestitev_nezdruzljiva">ta različica na tem telefonu ne deluje</string>
+    <string name="namestitev_prostor">na telefonu ni dovolj prostora</string>
+    <string name="namestitev_neveljavna">prenesena datoteka ni veljavna</string>
+    <string name="namestitev_neznano">telefon ni povedal, zakaj</string>
     <string name="zapri_znak">✕</string>
 
     <string name="lega_zavrnjena">Dovoljenje za lego je zavrnjeno trajno. Odpri Nastavitve → Aplikacije → Kajros → Dovoljenja in dovoli lego.</string>

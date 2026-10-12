@@ -70,13 +70,13 @@ class BudilkeDejavnost : Activity() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 .putExtra(ZvonjenjeDejavnost.ID, ZvonjenjeStoritev.PREIZKUS))
         }
-        findViewById<Button>(R.id.dnevnik).setOnClickListener { pokaziDnevnik() }
+        findViewById<Button>(R.id.dnevnik).setOnClickListener { Dnevnik.pokazi(this) }
         // Dnevnik in naslov strežnika sta bila orodji za razvoj budilke; v
         // izdaji gumbov ni (12. 10. 2026). Naslov ostane na zaslonu napake.
         // Dnevnik pa ostane dosegljiv z dolgim pritiskom na naslov: vzrok
         // budilke, ki na tujem telefonu ne zvoni (Samsung, 7. 10. 2026), je
         // samo v njem -- izdaje z `adb` ni mogoče brati.
-        findViewById<View>(R.id.glava).setOnLongClickListener { pokaziDnevnik(); true }
+        findViewById<View>(R.id.glava).setOnLongClickListener { Dnevnik.pokazi(this); true }
         if (BuildConfig.DEBUG) {
             findViewById<View>(R.id.dnevnik).visibility = View.VISIBLE
             findViewById<View>(R.id.naslov).visibility = View.VISIBLE
@@ -102,32 +102,6 @@ class BudilkeDejavnost : Activity() {
         findViewById<Switch>(R.id.deli_ob_voznji).isChecked = false
         android.widget.Toast.makeText(this, R.string.deli_ob_voznji_lega,
             android.widget.Toast.LENGTH_LONG).show()
-    }
-
-    private fun pokaziDnevnik() {
-        val p = (16 * resources.displayMetrics.density).toInt()
-        val vrstice = Dnevnik.beri(this)
-        val besedilo = TextView(this).apply {
-            text = vrstice.ifBlank { getString(R.string.dnevnik_prazen) }
-            setTextColor(getColor(R.color.ink_dim))
-            textSize = 12f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setTextIsSelectable(true)
-            setPadding(p, p / 2, p, 0)
-        }
-        android.app.AlertDialog.Builder(this)
-            .setTitle(R.string.dnevnik)
-            .setView(android.widget.ScrollView(this).apply { addView(besedilo) })
-            .setPositiveButton(R.string.zapri, null)
-            // Kdor ga pošilja, ga pošlje celega: 120 vrstic z izbiro besedila
-            // na telefonu ne označiš.
-            .setNeutralButton(R.string.dnevnik_kopiraj) { _, _ ->
-                getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(
-                    android.content.ClipData.newPlainText(getString(R.string.dnevnik), vrstice))
-                android.widget.Toast.makeText(this, R.string.dnevnik_kopiran,
-                    android.widget.Toast.LENGTH_SHORT).show()
-            }
-            .show()
     }
 
     override fun onResume() {

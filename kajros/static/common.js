@@ -308,6 +308,28 @@ const MOST = (() => {
 // Slog, ki velja samo v aplikaciji (dolg pritisk na povezavo, base.css).
 if (MOST) document.documentElement.classList.add("v-aplikaciji");
 
+// ---------- O aplikaciji ----------
+//
+// Različica in posodobitev sta nativni zaslon (`AplikacijaDejavnost`), do
+// katerega vodi vrstica v meniju Več. Do 1.12 ju ni bilo mogoče pogledati
+// nikjer. Starejša aplikacija metode nima in vrstica ostane skrita.
+function pripniOAplikaciji() {
+  const a = document.querySelector(".vec-aplikacija");
+  if (!a || !MOST || MOST.razlicica() < 5) return;
+  document.documentElement.classList.add("ima-o-aplikaciji");
+  const r = navigator.userAgent.match(/Kajros\/([\d.]+)/);
+  if (r) a.querySelector("small").textContent = r[1];
+  a.addEventListener("click", (e) => {
+    // Pred poslušalcem lista, ki bi šel na `href`.
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById("vec")?.hidePopover?.();
+    MOST.oAplikaciji();
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pripniOAplikaciji);
+else pripniOAplikaciji();
+
 // ---------- orodna vrstica se odzove takoj ----------
 //
 // Nova stran se izriše šele, ko je naložena (izmerjeno 2. 10. 2026: od dotika
