@@ -83,8 +83,9 @@ class AplikacijaDejavnost : Activity() {
         val znana = izdaja
         if (takoj && znana != null && znana.novejsa) posodobi(znana)
         // Vrstica je lahko stara ves dan; zaslon, ki ga je potnik odprl sam,
-        // vpraša znova. Med namestitvijo ne: odgovor je že tu.
-        else if (Namestitev.stanje is Namestitev.Stanje.Miruje) {
+        // vpraša znova. Med namestitvijo ne: odgovor je že tu. Po napaki pa
+        // da -- brez tega je ostala na zaslonu, tudi ko novejše izdaje ni več.
+        else if (Namestitev.stanje.let { it is Namestitev.Stanje.Miruje || it is Namestitev.Stanje.Napaka }) {
             posodobiPoOdgovoru = takoj
             preveriZdaj()
         }
