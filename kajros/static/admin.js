@@ -544,6 +544,11 @@ function podrobnostiVira(kljuc, d) {
     }
     const ok = z.odkloni_24h;
     dodaj("izven trase · 24 h", ok ? `${st(ok.odklonov)} odklonov na ${st(ok.vozenj)} vožnjah` : null);
+    const g = nm.gps;
+    if (g && g.nacin !== "0") {
+      dodaj(`brez trase (${g.nacin}) · od zagona`, `${st(g.leg)} leg · ${st(g.prehodov)} prehodov`
+        + ` · dopolnjenih ${st(g.dopolnjenih)} · obnovljenih sledi ${st(g.obnovljenih)}`);
+    }
   } else if (kljuc === "zamude_sz") {
     const zs = z.zamude_sz;
     if (zs && zs.vlakov != null) {

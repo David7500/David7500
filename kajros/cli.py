@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
-               journey, naslovi, ocena, odkloni, peroni, pot, pripni, stats, tiri,
+               journey, naslovi, ocena, odkloni, peroni, pot, prehod, pripni, stats, tiri,
                weather, zamude_lpp, zamude_sz)
 
 
@@ -330,6 +330,36 @@ def cmd_odkloni(args):
               + (f"  (preskok {r['preskokov']})" if r["preskokov"] else ""))
 
 
+def cmd_prehodi(args):
+    """Prehod brez trase (`gps_prehod`) proti sedanjemu načinu (`run`)."""
+    if args.samo_branje:
+        conn = sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True)
+    else:
+        conn = db.connect()
+        db.init(conn)
+    do = date.today() - timedelta(days=args.pred)
+    p = prehod.primerjava(conn, (do - timedelta(days=args.dni - 1)).isoformat(), do.isoformat())
+
+    def opis(o):
+        return ("-" if o is None else f"n={o['n']}, mediana {o['mediana']:.0f} s, "
+                f"p90 {o['p90']:.0f} s, v 30 s {100 * o['v30']:.0f} %, v 60 s {100 * o['v60']:.0f} %")
+
+    n = max(1, p["vmesnih"])
+    print(f"{p['vozenj']} voženj, {p['vmesnih']} vmesnih postankov")
+    print(f"  po trasi:   {p['star']} ({100 * p['star'] / n:.1f} %), samo tako {p['samo_star']}")
+    print(f"  brez trase: {p['nov']} ({100 * p['nov'] / n:.1f} %), samo tako {p['samo_nov']}, "
+          f"dopolnjenih {p['dopolnjenih']}")
+    print(f"razlika na skupnih: {opis(p['razlika'])}")
+    print(f"sosednja postanka, po trasi:   {opis(p['sosed_star'])}")
+    print(f"sosednja postanka, brez trase: {opis(p['sosed_nov'])}")
+    c = p["cilj"]
+    print(f"cilj: {c['vozenj']} voženj, po trasi {c['star']}, brez trase {c['nov']}; "
+          f"razlika {opis(c['razlika'])}")
+    for ag, (vse, a, b) in sorted(p["po_prevozniku"].items()):
+        print(f"  {stats.AGENCY_NAMES.get(ag, ag)}: {vse} vmesnih, po trasi "
+              f"{100 * a / max(1, vse):.1f} %, brez trase {100 * b / max(1, vse):.1f} %")
+
+
 def cmd_brskalnik(args):
     """Ali Chrome pride skozi Cloudflare do potniski.sz.si: zemljevid vlakov in
     ena tabla postaje, s časi. Za preizkus po namestitvi (`deploy/brskalnik.sh`),
@@ -597,6 +627,12 @@ def main(argv=None):
     a.add_argument("--najvec", type=int, default=40, help="koliko odsekov izpisati")
     a.add_argument("--samo-branje", action="store_true", help="odpri bazo samo za branje (scripts/odkloni.sh)")
     a.set_defaults(func=cmd_odkloni)
+
+    a = sub.add_parser("prehodi", help="prehod brez trase proti sedanjemu nacinu")
+    a.add_argument("--dni", type=int, default=1)
+    a.add_argument("--pred", type=int, default=0, help="koliko dni nazaj je zadnji dan")
+    a.add_argument("--samo-branje", action="store_true", help="odpri bazo samo za branje (scripts/prehodi.sh)")
+    a.set_defaults(func=cmd_prehodi)
 
     a = sub.add_parser("brskalnik",
                        help="preizkusi Chrome za potniski.sz.si: zemljevid vlakov in tabla postaje")

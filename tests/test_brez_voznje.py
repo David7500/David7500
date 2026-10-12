@@ -15,7 +15,7 @@ from datetime import datetime
 import pytest
 from google.transit import gtfs_realtime_pb2
 
-from kajros import collector, db, iz_lege, lpp, stats
+from kajros import collector, db, iz_lege, lpp, prehod, stats
 
 DAN = "2026-10-02"
 ZDAJ = datetime(2026, 10, 2, 15, 0, tzinfo=stats.TZ)
@@ -29,6 +29,7 @@ def _cist_spomin():
     iz_lege._sled.clear()
     iz_lege._zadnja.clear()
     iz_lege._odklon.clear()
+    prehod._sledi.clear()
     iz_lege._prvic = None
     lpp._prihodi.clear()
     yield
@@ -36,6 +37,7 @@ def _cist_spomin():
     iz_lege._sled.clear()
     iz_lege._zadnja.clear()
     iz_lege._odklon.clear()
+    prehod._sledi.clear()
     iz_lege._prvic = None
     lpp._prihodi.clear()
 

@@ -15,7 +15,7 @@ from datetime import date
 import pytest
 from google.transit import gtfs_realtime_pb2
 
-from kajros import db, deljenje, iz_lege, odkloni, stats
+from kajros import db, deljenje, iz_lege, odkloni, prehod, stats
 
 DAN = date.today().isoformat()
 POLNOC = stats.polnoc(DAN)
@@ -25,12 +25,14 @@ LON = {"A": 14.00, "B": 14.01, "C": 14.02, "D": 14.03}
 @pytest.fixture(autouse=True)
 def _cist_spomin():
     for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnja, iz_lege._odklon,
-              iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase):
+              iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase,
+              prehod._sledi):
         s.clear()
     iz_lege._prvic = None
     yield
     for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnja, iz_lege._odklon,
-              iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase):
+              iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase,
+              prehod._sledi):
         s.clear()
     iz_lege._prvic = None
 

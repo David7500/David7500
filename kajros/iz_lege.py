@@ -33,6 +33,9 @@ katere se po nekaj dneh vidi, kje vozila trase stalno ne vozijo
 preskoči zanko ali krak, ki ga ima trasa: na posnetku 11. 10. 53 od 78
 zgrešenih postankov (Vrtojba 5,3 km po trasi v 20 s). Tak skok se zapiše kot
 `preskok`.
+
+Ob tem meri `prehod.py` brez trase (`KAJROS_PREHOD_GPS`): v senci samo v
+`gps_prehod`, z `vodi` namesto tega modula.
 """
 from __future__ import annotations
 
@@ -42,7 +45,7 @@ import threading
 import time
 
 # `collector` uvozi ta modul, zato ga tu beremo šele ob klicu.
-from . import collector, config, deljenje, stats
+from . import collector, config, deljenje, prehod, stats
 
 
 #: Dve legi dlje narazen ne povesta, kdaj je vozilo prevozilo postanek vmes.
@@ -230,6 +233,10 @@ def prehodi(v: deljenje.Voznja, prej: tuple[float, float] | None,
 def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
            lat: float, lon: float) -> int:
     """Ena lega vožnje brez zamud. Vrne število zapisanih prehodov."""
+    if config.PREHOD_GPS != "0":
+        n = _gps(conn, trip_id, dan, prehod.lega(conn, trip_id, dan, ts, lat, lon), ts)
+        if config.PREHOD_GPS == "vodi":
+            return n
     v = deljenje.voznja(conn, trip_id)
     if v is None:
         return 0
@@ -265,6 +272,18 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
     else:
         _sled[kljuc] = (sled[0], sled[1], zapisan, time.time())
     return len(pari)
+
+
+def _gps(conn: sqlite3.Connection, trip_id: str, dan: str, prehodi: list[tuple],
+         ts: int) -> int:
+    """Prehodi brez trase v `gps_prehod`, z `PREHOD_GPS=vodi` tudi v `run`."""
+    prehod.zapisi(conn, trip_id, dan, prehodi, ts)
+    if config.PREHOD_GPS != "vodi":
+        return 0
+    for seq, zamuda, je_cilj, _, _ in prehodi:
+        zapisi_meritev(conn, trip_id, dan, seq, zamuda if je_cilj else None,
+                       None if je_cilj else zamuda, ts)
+    return len(prehodi)
 
 
 def _lega_izven(kljuc: tuple[str, str], v: deljenje.Voznja, t_s: float, ts: int,
@@ -380,6 +399,9 @@ def pospravi(zdaj: float | None = None, conn: sqlite3.Connection | None = None) 
     """Pozabi sledi voženj brez lege in vožnje, ki jih feed ne nosi več; z
     `conn` zapiše odklone, iz katerih se vozilo ni vrnilo."""
     zdaj = time.time() if zdaj is None else zdaj
+    if conn is not None and config.PREHOD_GPS != "0":
+        for trip_id, dan, prehodi, ts in prehod.pospravi(conn, zdaj):
+            _gps(conn, trip_id, dan, prehodi, ts)
     # `list()` najprej: sledi piše tudi nit NAP (`nap.zapisi`), in slovar, ki
     # se med obhodom spremeni, vrže napako. `list(d.items())` je en klic v C.
     if conn is not None:

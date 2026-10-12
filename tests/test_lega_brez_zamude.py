@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from kajros import collector, db, iz_lege
+from kajros import collector, db, iz_lege, prehod
 
 DANES = date.today()
 ZDAJ = datetime(DANES.year, DANES.month, DANES.day, 12, 0, tzinfo=collector.TZ)
@@ -28,12 +28,14 @@ def _cist_spomin(monkeypatch):
     iz_lege._sled.clear()
     iz_lege._zadnja.clear()
     iz_lege._odklon.clear()
+    prehod._sledi.clear()
     iz_lege._prvic = None
     yield
     iz_lege._v_feedu.clear()
     iz_lege._sled.clear()
     iz_lege._zadnja.clear()
     iz_lege._odklon.clear()
+    prehod._sledi.clear()
     iz_lege._prvic = None
 
 

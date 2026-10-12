@@ -41,7 +41,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, iz_lege, stats, viri
+from . import collector, config, db, geo, iz_lege, prehod, stats, viri
 
 TZ = collector.TZ
 
@@ -297,7 +297,8 @@ def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     pripeta, s = pripni(conn, vozila, zdaj)
     st.update(s)
     st.update(zapisi(conn, pripeta, derp, zdaj))
-    st.update(ts=int(zdaj), bajtov=len(vsebina))
+    st.update(ts=int(zdaj), bajtov=len(vsebina),
+              gps={**prehod.stevci, "nacin": config.PREHOD_GPS})
     db.set_meta(conn, "nap", json.dumps(st, sort_keys=True))
     # Ključ predpomnilnika `/api/vehicles`: brez tega ob izpadu derp.si
     # zemljevid NAP-ovih leg ne bi videl nikoli.

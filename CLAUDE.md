@@ -10,7 +10,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 ./scripts/dev-restart.sh          # počaka na sproščen port in izpiše naslove
 ```
 
-Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`, `pripni`, `tiri`, `indexnow`, `brskalnik`, `odkloni`.
+Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik med razvojem pogosto že teče na 8001 — preveri `pgrep -af uvicorn`, preden zaženeš drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` — `init`, `update`, `poll`, `show`, `stats`, `merge`, `weather`, `export`, `alerts`, `backtest`, `repair`, `prune`, `ocena`, `seed`, `zamenjave`, `primerjava`, `pespoti`, `pot`, `naslovi`, `pripni`, `tiri`, `indexnow`, `brskalnik`, `odkloni`, `prehodi`.
 
 **Preverjanje pred „končano“: `./scripts/preveri.sh`** — testi, odzivi vseh strani, konzola brskalnika, **pyflakes**, **skladnost številk** in paleta v enem, z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q` (760 preizkusov). `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
@@ -92,9 +92,8 @@ kajros/
   viri.py        register virov in dnevnik branj v pomnilniku: zavihek Viri v /admin, preverjanje
   zdravje.py     kdaj je zajem zdrav (barve v /admin); opozorila.py pošlje rdeče po 10 min (`.opozorila`)
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
-  server.py      lifespan: bootstrap + zajem v ozadnji niti
+  server.py      lifespan: bootstrap + zajem v ozadnji niti; cli.py ukazna vrstica
   api.py         FastAPI: /api/* + strani /app*
-  cli.py         ukazna vrstica
   templates/     home, connections (vstopna), dashboard, train, alerts
   static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
 tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
@@ -105,7 +104,7 @@ o-nas/           vir 3D strani /o-nas (three.js); gradi.sh → static/o-nas/o3.j
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `odklon` (lege izven trase, od 11. 10. 2026) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `odklon` (lege izven trase, od 11. 10. 2026) · `lega` + `gps_prehod` (lege 14 dni, prehod brez trase, od 12. 10. 2026) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
 
 ## Omrežji: `network` ni `mode`
 

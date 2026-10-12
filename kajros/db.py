@@ -356,6 +356,31 @@ CREATE TABLE IF NOT EXISTS odklon (
 );
 CREATE INDEX IF NOT EXISTS odklon_ts ON odklon(od_ts);
 
+-- Lege voženj, iz katerih se meri prehod brez trase (`prehod.py`), zadnjih
+-- 14 dni: obnova sledi po zagonu in ponovitev meritve na pravih podatkih.
+CREATE TABLE IF NOT EXISTS lega (
+    service_date TEXT NOT NULL,
+    trip_id      TEXT NOT NULL,
+    ts           INTEGER NOT NULL,
+    lat          REAL NOT NULL,
+    lon          REAL NOT NULL,
+    PRIMARY KEY (service_date, trip_id, ts)
+) WITHOUT ROWID;
+
+-- Prehodi postankov iz GPS brez trase (`prehod.py`). `prehod_ts` = odhod,
+-- na cilju (`je_cilj`) prihod; `dopolnjen` = najden naknadno med sosedoma.
+CREATE TABLE IF NOT EXISTS gps_prehod (
+    service_date TEXT NOT NULL,
+    trip_id      TEXT NOT NULL,
+    stop_seq     INTEGER NOT NULL,
+    zamuda_s     INTEGER NOT NULL,
+    prehod_ts    INTEGER NOT NULL,
+    je_cilj      INTEGER NOT NULL,
+    dopolnjen    INTEGER NOT NULL,
+    zapisano_ts  INTEGER NOT NULL,
+    PRIMARY KEY (service_date, trip_id, stop_seq)
+) WITHOUT ROWID;
+
 -- Obvestila skrbnika potnikom (`obvestila.py`). Vsako ima rok; umaknjeno
 -- dobi rok v preteklosti in ostane, da se ve, kaj je bilo recenega.
 -- `omrezje` NULL = obe omrezji.

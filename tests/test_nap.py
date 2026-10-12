@@ -12,7 +12,7 @@ import pytest
 
 from google.transit import gtfs_realtime_pb2
 
-from kajros import collector, db, iz_lege, nap, stats, zdravje
+from kajros import collector, db, iz_lege, nap, prehod, stats, zdravje
 
 DAN = "2026-10-08"
 POLNOC = stats.polnoc(DAN)
@@ -52,6 +52,7 @@ def _cist_spomin():
     iz_lege._sled.clear()
     iz_lege._zadnja.clear()
     iz_lege._odklon.clear()
+    prehod._sledi.clear()
     iz_lege._prvic = None
     iz_lege._nap_ts = 0.0
     collector._LEGE_DERP = (0.0, {})
@@ -61,6 +62,7 @@ def _cist_spomin():
     iz_lege._sled.clear()
     iz_lege._zadnja.clear()
     iz_lege._odklon.clear()
+    prehod._sledi.clear()
     iz_lege._prvic = None
     collector._LEGE_DERP = (0.0, {})
 
