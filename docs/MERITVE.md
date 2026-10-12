@@ -2612,3 +2612,17 @@ Z zahtevo vsaj dveh ali treh leg v odklonu se slika skoraj ne spremeni (nad 80 %
 | razmik nad 60 s | 3 | |
 
 Pri preskoku je vozilo ves čas v 150 m od trase, trasa pa ima vmes zanko ali krak (na postajo, obračališče), ki ga vozilo ne prevozi; projekcija skoči čez njega. Isti vzrok kot odklon -- trasa ni pot vozila -- a ga beleženje do 12. 10. ni videlo. Od 12. 10. zvečer se zapiše kot `odklon.vrsta = 'preskok'` (legi pred in za skokom).
+
+**Prehod brez trase** (isti posnetek 11. 10. 12:55–13:52, 186 voženj). Namesto lege na trasi: kdaj je bilo vozilo postanku najbližje (tetiva med zaporednima legama, do 120 s narazen, lega, do katere bi vozilo vozilo hitreje od 45 m/s, izločena), postanki v vrstnem redu vožnje, v oknu −20 min do +4 h od voznega reda:
+
+| | sedanji (trasa) | brez trase |
+|---|---|---|
+| izmerjenih vmesnih postankov | 1 384 od 1 520 (91,1 %) | 1 484 (97,6 %) |
+| na skupnih 1 371: razlika časa | | mediana 0 s, p90 1 s, 98 % v 30 s |
+| zamuda proti naslednjemu postanku | mediana 29 s, p90 87 s, 78 % v 60 s | mediana 29 s, p90 87 s, 77 % v 60 s |
+
+Dodatni postanki so torej enako skladni kot drugi -- ohlapnejše meje na trasi so dale 83 s. Polmer 50–150 m in razmik 60–300 s skoraj ne spremenita ničesar (96,2–97,8 %). Ostanek: pri 30 od 44 neizmerjenih vozilo ni prišlo bližje od 300 m (postanka ni obiskalo), 7 v 100–300 m, 7 v 100 m (razmik ali okno).
+
+Sproti (lega za lego, obisk potrjen, ko vozilo zapusti krog, iskanje med naslednjimi osmimi postanki in skok zamude največ 20 min) 94,3 %, čas na skupnih enak (p90 0 s); razliko do 97 % da naknadno zaporedje čez vso vožnjo. **Odhod** (zadnji trenutek v 50 m od najbližje točke) je za najbližjo točko pri 91 % obiskov, mediana 7 s, p90 42 s -- pri stanju na postaji do minut. Odhod z izhodišča (zadnja lega v 100 m) je slabši: proti drugemu postanku mediana 39 s, 66 % v 60 s.
+
+NAP SIRI-VM zamude ne nosi (en odgovor 12. 10., 302 vozili: lega, smer, čas, vožnja, linija, deli poti -- nič o postankih ali zamudi).
