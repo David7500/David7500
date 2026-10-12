@@ -40,7 +40,7 @@ def po_odsekih(conn: sqlite3.Connection, od_ts: int, do_ts: int,
     prevozniki = sorted(prevozniki or config.NAP_PREVOZNIKI)
     ph = ",".join("?" * len(prevozniki))
     odseki: dict[tuple[str, str], dict] = defaultdict(
-        lambda: {"odklonjene": set(), "dnevi": set(), "leg": 0, "odmik_max": 0})
+        lambda: {"odklonjene": set(), "preskoki": set(), "dnevi": set(), "leg": 0, "odmik_max": 0})
     stop_id: dict[str, dict[int, str]] = {}
     for o in conn.execute(
             f"SELECT o.* FROM odklon o JOIN trip t USING (trip_id) "
@@ -60,6 +60,8 @@ def po_odsekih(conn: sqlite3.Connection, od_ts: int, do_ts: int,
         for k in range(i, min(max(i + 1, j), len(post) - 1)):
             d = odseki[(sid[post[k]["stop_seq"]], sid[post[k + 1]["stop_seq"]])]
             d["odklonjene"].add((o["trip_id"], o["service_date"]))
+            if o["vrsta"] == "preskok":
+                d["preskoki"].add((o["trip_id"], o["service_date"]))
             d["dnevi"].add(o["service_date"])
             d["leg"] += o["leg"]
             d["odmik_max"] = max(d["odmik_max"], o["odmik_max"])
@@ -91,7 +93,7 @@ def po_odsekih(conn: sqlite3.Connection, od_ts: int, do_ts: int,
     for (a, b), d in odseki.items():
         n = len(prevozi[(a, b)] | d["odklonjene"])
         out.append({"od": a, "do": b, "od_ime": imena.get(a, a), "do_ime": imena.get(b, b),
-                    "prevozov": n, "odklonjenih": len(d["odklonjene"]),
+                    "prevozov": n, "odklonjenih": len(d["odklonjene"]), "preskokov": len(d["preskoki"]),
                     "delez": len(d["odklonjene"]) / n, "dni": len(d["dnevi"]),
                     "leg": d["leg"], "odmik_max": d["odmik_max"]})
     out.sort(key=lambda r: (-r["delez"], -r["odklonjenih"]))

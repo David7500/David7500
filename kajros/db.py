@@ -333,11 +333,13 @@ CREATE TABLE IF NOT EXISTS lpp_zamuda (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS lpp_zamuda_ts ON lpp_zamuda(zadnjic_ts);
 
--- Odkloni od trase (`iz_lege`): lege vozila vec kot 150 m od trase med
--- voznjo, z zadnjo lego na trasi pred njimi in prvo za njimi (sidri). Iz njih
--- se vidi, kje vozila trase stalno ne vozijo (`kajros odkloni`). `along_*` =
--- metri po trasi `shape_id`; `along_za` NULL = vozilo se na traso ni vrnilo.
--- `tocke` = JSON [[ts, lat, lon], ...] s sidroma.
+-- Odkloni od trase (`iz_lege`), kjer vozila trase ne vozijo (`kajros
+-- odkloni`). `vrsta` 'izven' = lege vec kot 150 m od trase med voznjo, z
+-- zadnjo lego na trasi pred njimi in prvo za njimi (sidri); 'preskok' = dve
+-- zaporedni legi ob trasi, a vmes po trasi hitreje od 30 m/s: vozilo je
+-- preskocilo zanko ali krak, ki ga ima trasa. `along_*` = metri po trasi
+-- `shape_id`; `along_za` NULL = vozilo se na traso ni vrnilo. `tocke` = JSON
+-- [[ts, lat, lon], ...] s sidroma.
 CREATE TABLE IF NOT EXISTS odklon (
     trip_id      TEXT NOT NULL,
     service_date TEXT NOT NULL,
@@ -349,6 +351,7 @@ CREATE TABLE IF NOT EXISTS odklon (
     leg          INTEGER NOT NULL,
     odmik_max    INTEGER NOT NULL,
     tocke        TEXT NOT NULL,
+    vrsta        TEXT NOT NULL DEFAULT 'izven',
     PRIMARY KEY (trip_id, service_date, od_ts)
 );
 CREATE INDEX IF NOT EXISTS odklon_ts ON odklon(od_ts);
@@ -500,6 +503,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if stolpci and "osm" not in stolpci:
             conn.execute(f"ALTER TABLE {tabela} ADD COLUMN osm TEXT")
             conn.commit()
+    # `odklon` je 12. 10. 2026 dobil preskoke (vozilo ostane ob trasi, a
+    # preskoči zanko ali krak); do tedaj so bili vsi lege izven trase.
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(odklon)")}
+    if stolpci and "vrsta" not in stolpci:
+        conn.execute("ALTER TABLE odklon ADD COLUMN vrsta TEXT NOT NULL DEFAULT 'izven'")
+        conn.commit()
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"

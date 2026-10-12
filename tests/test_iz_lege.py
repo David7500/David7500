@@ -92,6 +92,10 @@ def test_skok_lege_ni_prehod():
     iz_lege.opazuj(c, "n", DAN, _ts(36400), 46.0, 14.001)
     iz_lege.opazuj(c, "n", DAN, _ts(36420), 46.0, 14.027)
     assert _run(c) == []
+    # Zapiše se kot preskok: trasa ima tu lahko zanko, ki je vozilo ne vozi.
+    (o,) = [dict(r) for r in c.execute("SELECT * FROM odklon")]
+    assert (o["vrsta"], o["od_ts"], o["do_ts"], o["leg"]) == ("preskok", _ts(36400), _ts(36420), 0)
+    assert o["along_za"] - o["along_pred"] > 1900
 
 
 def test_predolg_razmik_ni_prehod():
@@ -129,7 +133,7 @@ def test_odklon_se_zapise_s_sidroma():
     assert _odkloni(c) == [], "zapiše se, ko se vrne"
     iz_lege.opazuj(c, "n", DAN, _ts(36560), 46.0, 14.018)
     (o,) = _odkloni(c)
-    assert (o["trip_id"], o["service_date"], o["shape_id"], o["leg"]) == ("n", DAN, "sh", 2)
+    assert (o["trip_id"], o["service_date"], o["shape_id"], o["leg"], o["vrsta"]) == ("n", DAN, "sh", 2, "izven")
     assert (o["od_ts"], o["do_ts"]) == (_ts(36520), _ts(36540))
     assert o["along_pred"] < o["along_za"] and 1000 < o["odmik_max"] < 1200
     assert json.loads(o["tocke"]) == [[_ts(36500), 46.0, 14.012], [_ts(36520), 46.01, 14.014],

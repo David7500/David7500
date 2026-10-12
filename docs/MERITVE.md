@@ -2582,3 +2582,33 @@ Vrstice `run` za današnji dan na arwenu ob 14:20 (nedelja), po viru, ki jih pi�
 Pretok derp.si v zadnji uri (/admin): zamude 2,2 MB, lege 0,7 MB, ovire 1,5 MB, LPP 3,3 MB.
 
 **Ovire od 11. 10. 2026 s strani SŽ same** (`ovire_sz.py`). Razbor `var roadworks` proti temu, kar je v bazi napisal derp.si, na arwenu ob 15:00: 49 od 49 ovir z enakim naslovom, opisom, vzrokom, učinkom, začetkom in koncem. Vezi na vlake (isto derp-ovo pravilo, a izračunano ob vsakem branju, imena brez presledkov in vezajev): enake pri 35, pri 10 derp.si ima še vožnje brez voznega reda (nagrobnike), pri štirih ima derp.si premalo -- 11155 Uršna sela - Črnomelj 0 vlakov namesto 31 (prvič vidna 28. 9., zip brez vlakov), 11171 Pragersko - Maribor 64 namesto 97, 11179 „Zidani Most -Hrastnik“ (zapora tira) 0 namesto 58, 11058 Bled Jezero - Lesce Bled 0 namesto 2. Brez vlakov ostane 7 (prej 9): nadomestni prevozi v Beljak, Buzet, Špilje, Opčine in trije Ljubljana - Ljubljana Šiška. Branje strani s hladnim Chromom (zagon in izziv) 8,9 s; stran 440 632 B.
+
+## Odkloni od trase po prvem delavniku (12. 10. 2026)
+
+Beleženje (`odklon`) teče od 11. 10. ob 14:06. Do 12. 10. ob 18:01: nedelja popoldne 775 odklonov, ponedeljek 6 758 na 3 315 vožnjah (115 766 leg izven trase); tabela 6 MB.
+
+**Porazdelitev deleža odklonjenih prevozov** po (trasa, odsek postanek–postanek), prevozi Arrive, Nomaga in AP MS od začetka beleženja, odseki z vsaj 5 prevozi:
+
+| delež odklonjenih | odsekov |
+|---|---|
+| 0 % | 6 909 od 7 801 (88,6 %) |
+| do 20 % | 526 |
+| 20–80 % | 214 |
+| nad 80 % | 152 (od tega 117 nad 90 %) |
+
+Z zahtevo vsaj dveh ali treh leg v odklonu se slika skoraj ne spremeni (nad 80 %: 150 oziroma 139), šuma GPS je malo. Odklonjeni odseki so razpršeni (nad 80 %: 168 odsekov na 117 trasah); največji odmik v mediani 576 m, pod 250 m le 10 %.
+
+**Sredina je ponedeljek.** Odseki z 20–80 % so bili v nedeljo odklonjeni pri 7 od 316 prevozov, v ponedeljek pri 951 od 2 071: vozila tam med tednom vozijo drugod kot ob nedeljah (ali se je pot spremenila v ponedeljek). Meja zato ne sme gledati vseh prevozov skupaj, ampak zadnje.
+
+**Odkloni pojasnijo le četrtino zgrešenih postankov.** 12. 10. do 18:00 je bilo izmerjenih 104 551 vmesnih postankov, zgrešenih (naslednji izmerjen) 4 191 (3,9 %). Odklon iste vožnje čez postanek ima 1 043 (25 %).
+
+**Večino zgreši preskok, ne odklon.** Posnetek leg 11. 10. 12:55–13:52 ponovljen in vsak zgrešen vmesni postanek razvrščen po tem, zakaj sled čezenj ni dala prehoda (78):
+
+| razlog | zgrešenih | primer |
+|---|---|---|
+| legi ob trasi, a po trasi hitreje od 30 m/s | 53 (68 %) | Vrtojba 5 341 m v 20 s, Dravograd 2 436 m, Bled 1 440 m |
+| lege več kot 150 m od trase (odklon) | 14 | Brnik letališče, Žalec, Cerkno |
+| lega nazaj po trasi, nato skok | 8 | Ljubljana Tivoli |
+| razmik nad 60 s | 3 | |
+
+Pri preskoku je vozilo ves čas v 150 m od trase, trasa pa ima vmes zanko ali krak (na postajo, obračališče), ki ga vozilo ne prevozi; projekcija skoči čez njega. Isti vzrok kot odklon -- trasa ni pot vozila -- a ga beleženje do 12. 10. ni videlo. Od 12. 10. zvečer se zapiše kot `odklon.vrsta = 'preskok'` (legi pred in za skokom).

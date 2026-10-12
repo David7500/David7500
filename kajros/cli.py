@@ -326,7 +326,8 @@ def cmd_odkloni(args):
           + ", ".join(f"{k}: {v}" for k, v in razredi.items()))
     for r in vrstice[:args.najvec]:
         print(f"{100 * r['delez']:4.0f} %  {r['odklonjenih']:4d}/{r['prevozov']:<4d} {r['dni']} dni  "
-              f"do {r['odmik_max']:5d} m  {r['od_ime']} -> {r['do_ime']}")
+              f"do {r['odmik_max']:5d} m  {r['od_ime']} -> {r['do_ime']}"
+              + (f"  (preskok {r['preskokov']})" if r["preskokov"] else ""))
 
 
 def cmd_brskalnik(args):

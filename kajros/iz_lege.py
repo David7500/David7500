@@ -29,7 +29,10 @@ obratno --, in lega je več kot `ODMIK_MAX_M` od trase. Ohlapnejše meje tam
 dajo slab čas (mediana 83 s proti 29 s), zato se popravlja trasa: vsak
 odklon se zapiše v tabelo `odklon` (lege izven trase s sidroma na njej), iz
 katere se po nekaj dneh vidi, kje vozila trase stalno ne vozijo
-(`kajros odkloni`, docs/MERITVE.md).
+(`kajros odkloni`, docs/MERITVE.md). Pogosteje pa vozilo ostane ob trasi in
+preskoči zanko ali krak, ki ga ima trasa: na posnetku 11. 10. 53 od 78
+zgrešenih postankov (Vrtojba 5,3 km po trasi v 20 s). Tak skok se zapiše kot
+`preskok`.
 """
 from __future__ import annotations
 
@@ -244,6 +247,8 @@ def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
         return 0
     if kljuc in _odklon:
         zapisi_odklon(conn, kljuc, (ts, lat, lon, along))
+    else:
+        _preskok(conn, kljuc, v, t_s, (ts, lat, lon, along))
     _zadnja[kljuc] = (ts, lat, lon, along)
     zapisan = sled[2] if sled else 0
     pari = prehodi(v, (sled[0], sled[1]) if sled else None, t_s, along, zapisan)
@@ -275,6 +280,27 @@ def _lega_izven(kljuc: tuple[str, str], v: deljenje.Voznja, t_s: float, ts: int,
     o = _odklon.setdefault(kljuc, {"pred": pred, "tocke": [], "odmik": 0.0})
     o["tocke"].append((ts, round(lat, 5), round(lon, 5)))
     o["odmik"] = max(o["odmik"], odmik)
+
+
+def _preskok(conn: sqlite3.Connection, kljuc: tuple[str, str], v: deljenje.Voznja,
+             t_s: float, za: tuple[int, float, float, float]) -> None:
+    """Legi ob trasi, med katerima je vozilo po trasi vozilo hitreje od
+    `NAJVEC_HITROST_MS`: trasa ima vmes zanko ali krak, ki ga vozilo ni
+    prevozilo. Primerja se z zadnjo lego na trasi, ne s sledjo -- sled po
+    legi nazaj ostane stara in bi skok skrila."""
+    pred = _zadnja.get(kljuc)
+    if (pred is None or t_s < _cas(v.postanki[0])
+            or pred[3] >= v.postanki[-1]["along"] - ODKLON_KONEC_M
+            or not 0 < za[0] - pred[0] <= NAJVEC_RAZMIK_S
+            or (za[3] - pred[3]) / (za[0] - pred[0]) <= NAJVEC_HITROST_MS):
+        return
+    oblika = conn.execute("SELECT shape_id FROM trip WHERE trip_id = ?", (kljuc[0],)).fetchone()
+    conn.execute(
+        "INSERT OR IGNORE INTO odklon(trip_id, service_date, shape_id, od_ts, do_ts, along_pred,"
+        "                             along_za, leg, odmik_max, tocke, vrsta) "
+        "VALUES(?,?,?,?,?,?,?,0,0,?,'preskok')",
+        (kljuc[0], kljuc[1], oblika[0] if oblika else None, pred[0], za[0], round(pred[3]),
+         round(za[3]), json.dumps([list(pred[:3]), list(za[:3])])))
 
 
 def zapisi_odklon(conn: sqlite3.Connection, kljuc: tuple[str, str],
