@@ -147,8 +147,28 @@
 }
 .d-poti-prazno svg { flex-shrink: 0; margin-top: 1px; fill: #f0934f; }
 
+/* Povabilo (`home.js`): ista tiha podlaga kot namig zgoraj -- ni ne zamuda
+   ne obvestilo, zato brez barvne kartice. Gumb tonski, kot izbrano v
+   segmentnem gumbu. */
+.d-povabilo {
+  display: flex; align-items: flex-start; gap: 12px; margin-top: 12px; padding: 14px 16px;
+  border-radius: 24px; background: var(--bg-raised); color: var(--ink-dim); font: 400 14px/1.45 var(--sans);
+}
+.d-pov-znak { flex-shrink: 0; margin-top: 1px; color: var(--accent-lit); }
+.d-pov-telo { flex: 1; min-width: 0; }
+.d-pov-nasl { margin: 0; font: 600 15px/1.3 var(--sans); color: var(--ink); }
+.d-pov-besedilo { margin: 2px 0 0; }
+.d-pov-url { color: var(--ink); overflow-wrap: anywhere; user-select: all; }
+.d-pov-gumbi { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.d-pov-poslji, .d-pov-ne {
+  min-height: 40px; padding: 0 20px; border: 0; border-radius: var(--r-pilula);
+  font: 500 14px/1 var(--sans); cursor: pointer;
+}
+.d-pov-poslji { background: var(--m-sek); color: var(--m-na-sek); }
+.d-pov-ne { padding: 0 12px; background: none; color: var(--ink-dim); }
+
 .d-isci:focus-visible, .d-obl:focus-visible, .stikalo:focus-visible,
-.bud-vse:focus-visible, .d-pot:focus-visible {
+.bud-vse:focus-visible, .d-pot:focus-visible, .d-pov-poslji:focus-visible, .d-pov-ne:focus-visible {
   outline: 2px solid var(--accent-lit); outline-offset: 2px;
 }
 

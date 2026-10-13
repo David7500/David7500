@@ -308,6 +308,40 @@ const MOST = (() => {
 // Slog, ki velja samo v aplikaciji (dolg pritisk na povezavo, base.css).
 if (MOST) document.documentElement.classList.add("v-aplikaciji");
 
+// ---------- navigator.share v aplikaciji ----------
+// WebView sistemskega izbirnika nima. Aplikacija ga od mostu 6 odpre sama
+// (`Most.poslji`), tu ga oblečemo v spletni standard: stran pošilja z
+// `navigator.share` kot v brskalniku, tudi datoteke, in nova vsebina ne rabi
+// novega APK (David, 13. 10. 2026). Preklic je `AbortError` kot v Chromu;
+// izid aplikacija javi, ko se potnik vrne (`kajrosPoslano`).
+if (MOST && !navigator.share && MOST.razlicica() >= 6) {
+  const cakajo = new Map();
+  window.kajrosPoslano = (id, izbrano) => {
+    const c = cakajo.get(id);
+    if (!c) return;
+    cakajo.delete(id);
+    if (izbrano) c.ok();
+    else c.ne(new DOMException("Pošiljanje preklicano", "AbortError"));
+  };
+  const base64 = (f) => new Promise((ok, ne) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",", 2)[1] || "");
+    r.onerror = () => ne(r.error);
+    r.readAsDataURL(f);
+  });
+  navigator.canShare = (p) => !!p && ["title", "text", "url"].some((k) => p[k] != null)
+    || !!(p && p.files && p.files.length);
+  navigator.share = async (p = {}) => {
+    if (!navigator.canShare(p)) throw new TypeError("Ni česa poslati");
+    const files = await Promise.all([...(p.files || [])].map(async (f) => (
+      { name: f.name, type: f.type, data: await base64(f) })));
+    const id = MOST.poslji(JSON.stringify({ title: p.title, text: p.text, url: p.url, files }));
+    // Prazen id: preveč datotek ali ni zapisa. Kot brskalnik, ki ne more.
+    if (!id) throw new DOMException("Pošiljanje ni mogoče", "NotAllowedError");
+    return new Promise((ok, ne) => cakajo.set(id, { ok, ne }));
+  };
+}
+
 // ---------- O aplikaciji ----------
 //
 // Različica in posodobitev sta nativni zaslon (`AplikacijaDejavnost`), do
@@ -1917,6 +1951,53 @@ function sledi(cb) {
   );
   return () => navigator.geolocation.clearWatch(id);
 }
+
+// ---------- pošlji povezavo ----------
+// Okno vožnje in povabilo na domači strani. Kjer sistemskega izbirnika ni
+// (aplikacija pred 1.13, Firefox na računalniku), se povezava kopira. Vrne
+// „poslano“, „kopirano“, „preklicano“ ali „ni šlo“.
+async function posljiPovezavo(naslov, besedilo, url) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: naslov, text: besedilo, url });
+      return "poslano";
+    } catch (err) {
+      if (err.name === "AbortError") return "preklicano";   // premislil si je
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${besedilo}\n${url}`);
+    return "kopirano";
+  } catch (err) {
+    return "ni šlo";
+  }
+}
+
+// ---------- dnevi rabe ----------
+// Na katere dni je bil kajros odprt, zadnjih deset. Bere jih povabilo na
+// domači strani (`home.js`): novincu, ki še ne ve, ali stran dela, ga ne
+// ponudimo. Ostane v brskalniku, kot pove /zasebnost.
+const DNEVI_KLJUC = "kajros:dnevi";
+const DNEVI_SPOMIN = 10;
+
+function dneviRabe() {
+  try {
+    const v = JSON.parse(localStorage.getItem(DNEVI_KLJUC) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+(function zapisiDan() {
+  const danes = todayIso();
+  const v = dneviRabe();
+  if (v[0] === danes) return;
+  try {
+    localStorage.setItem(DNEVI_KLJUC, JSON.stringify(
+      [danes, ...v.filter((d) => d !== danes)].slice(0, DNEVI_SPOMIN)));
+  } catch (e) { /* zasebno okno: povabila pač ni */ }
+})();
 
 // ---------- obvestila skrbnika ----------
 // Kar kajros ve o sebi in podatki tega ne povedo sami: „vozni red avtobusov

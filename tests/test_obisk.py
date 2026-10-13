@@ -566,6 +566,8 @@ def test_robot_se_steje_po_imenu_in_ni_clovek(conn):
     ("https://t.co/abc", None, "X"),
     ("https://www.dropbox.com/", None, "dropbox.com"),        # vsebuje „x.com“
     ("", "chatgpt.com", "ChatGPT"),
+    ("", "povabilo", "Povabilo"),
+    ("https://l.messenger.com/", "poslano", "Poslano"),       # oznaka pred glavo
     ("https://kajros.app/postaje", None, None),                # z naše strani
     ("", None, None),
 ])

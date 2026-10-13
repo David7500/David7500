@@ -284,6 +284,7 @@ function odhodiHtml(odhodi, zdaj, jutri) {
   }).join("");
 }
 
+/** Vrne obljubo shranjenih poti, ki imajo danes ali jutri kak odhod. */
 function izrisiPoti() {
   const poti = mojePoti();
   document.getElementById("moje-prazno").hidden = poti.length > 0;
@@ -293,26 +294,28 @@ function izrisiPoti() {
       <span class="d-pot-glava">${ZVEZDICA}<span class="d-pot-ime">${escapeHtml(znackaOpis(f))}</span>${PUSICA}</span>
       <span class="d-pot-odh" id="pot-odh-${i}"></span>
     </a>`).join("");
-  osveziOdhode(poti);
-  return poti;
+  return osveziOdhode(poti).then((ima) => poti.filter((f, i) => ima[i]));
 }
 
 let mojeZadnje = [];
 function osveziOdhode(poti) {
   mojeZadnje = poti;
-  poti.forEach(async (f, i) => {
+  return Promise.all(poti.map(async (f, i) => {
     let html;
+    let ima = false;
     try {
       const zdaj = Date.now();
       const danes = naslednjiOdhodi(await odhodiPoti(f), zdaj);
       if (danes.length) {
         html = odhodiHtml(danes, zdaj, false);
+        ima = true;
       } else {
         // Danes ne pelje nic vec: prva jutrisnja, kot `danes_ni` pri poti.
         // Ob 23:20 je bila sicer prazna vsaka kartica, prav ko clovek
         // zvecer gleda, kdaj gre zjutraj.
         const jutri = (await odhodiPoti(f, datumLj(zdaj + 86400000))).slice(0, ODHODOV);
-        html = jutri.length ? odhodiHtml(jutri, zdaj, true)
+        ima = jutri.length > 0;
+        html = ima ? odhodiHtml(jutri, zdaj, true)
           : '<span class="d-pot-nic">danes in jutri ne pelje nič</span>';
       }
     } catch (err) {
@@ -320,7 +323,8 @@ function osveziOdhode(poti) {
     }
     const el = document.getElementById(`pot-odh-${i}`);
     if (el && mojeZadnje === poti) el.innerHTML = html;
-  });
+    return ima;
+  }));
 }
 
 document.addEventListener("visibilitychange", () => {
@@ -329,6 +333,104 @@ document.addEventListener("visibilitychange", () => {
 setInterval(() => {
   if (!document.hidden && mojeZadnje.length) osveziOdhode(mojeZadnje);
 }, OSVEZI_POTI_MS);
+
+// ---------- povabilo ----------
+//
+// Od ust do ust se ne vidi: sporočilne aplikacije glave `Referer` ne
+// pošljejo, 29. 9.-12. 10. 2026 je bilo 88 % ogledov brez znanega vira.
+// Kartica ponudi, da potnik pošlje stran SVOJE poti (konkretno, ne "deli
+// kajros"), povezava nosi `utm_source=povabilo` (`obisk._VIRI`). Samo kdor
+// ima shranjeno pot in je kajros odprl vsaj na štiri dni (`dneviRabe` v
+// common.js): novinec še ne ve, ali stran dela. Kartica, ne sistemsko
+// obvestilo: oglas v obvestilu je razlog za odstranitev aplikacije, budilka
+// pa mora ostati vredna zaupanja. "Pošlji", ne "Deli" -- to je deljenje lege.
+//
+// Pošlje se pristajalna stran, ne iskalnik: izriše jo strežnik in predogled
+// v sporočilu nosi relacijo in običajno zamudo. Pot brez neposredne vožnje
+// ("danes in jutri ne pelje nič") se ne ponudi -- njena stran je prazna.
+
+const POVABILO_KLJUC = "kajros:povabilo";
+const POVABILO_PO_DNEH = 4;
+// "Ne zdaj" utihne za dva meseca, poslano za štiri: povabilo ne sme nadlegovati.
+const POVABILO_PREMOR_MS = { ne: 60 * 86400000, poslano: 120 * 86400000 };
+
+// Isto kot `pristanek.slug()`: šumnike zloži `fold()`, ostalo postane vezaj.
+const slug = (ime) => fold(ime).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function povabiloUtisano() {
+  try {
+    const o = JSON.parse(localStorage.getItem(POVABILO_KLJUC) || "null");
+    return !!o && Date.now() - o.t < (POVABILO_PREMOR_MS[o.kaj] || 0);
+  } catch (e) {
+    return false;
+  }
+}
+
+function utisajPovabilo(kaj) {
+  try {
+    localStorage.setItem(POVABILO_KLJUC, JSON.stringify({ kaj, t: Date.now() }));
+  } catch (e) { /* zasebno okno: kartica se pokaže znova */ }
+}
+
+function povabiloZa(f) {
+  const bus = f.net === "avtobus";
+  if (f.kind === "board") {
+    const kje = `${bus ? "postajališča" : "postaje"} ${f.station}`;
+    return {
+      pot: `/${bus ? "postajalisce" : "postaja"}/${slug(f.station)}`,
+      kartica: `Pošlji mu odhode in zamude s ${kje}.`,
+      besedilo: `Odhodi in zamude s ${kje} v živo`,
+    };
+  }
+  const rel = `${f.from} → ${f.to}`;
+  return {
+    pot: `/${bus ? "avtobus" : "vlak"}/${slug(f.from)}/${slug(f.to)}`,
+    kartica: `Pošlji mu zamude za ${rel}.`,
+    besedilo: `Zamude ${bus ? "avtobusov" : "vlakov"} ${rel} v živo`,
+  };
+}
+
+const POSLJI_ZNAK = `<svg class="d-pov-znak" width="20" height="20" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
+  aria-hidden="true"><path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z"/></svg>`;
+
+function ponudiPovabilo(sOdhodi) {
+  const f = sOdhodi[0];
+  if (!f || povabiloUtisano() || dneviRabe().length < POVABILO_PO_DNEH) return;
+  const p = povabiloZa(f);
+  const el = document.getElementById("povabilo");
+  el.innerHTML = `${POSLJI_ZNAK}
+    <div class="d-pov-telo">
+      <p class="d-pov-nasl">Se s tabo vozi še kdo?</p>
+      <p class="d-pov-besedilo">${escapeHtml(p.kartica)}</p>
+      <div class="d-pov-gumbi">
+        <button type="button" class="d-pov-poslji">Pošlji</button>
+        <button type="button" class="d-pov-ne">Ne zdaj</button>
+      </div>
+    </div>`;
+  el.hidden = false;
+  el.querySelector(".d-pov-ne").addEventListener("click", () => {
+    el.hidden = true;
+    utisajPovabilo("ne");
+  });
+  el.querySelector(".d-pov-poslji").addEventListener("click", async () => {
+    const url = `${location.origin}${p.pot}?utm_source=povabilo`;
+    const izid = await posljiPovezavo(p.besedilo, p.besedilo, url);
+    if (izid === "preklicano") return;
+    const telo = el.querySelector(".d-pov-telo");
+    if (izid === "ni šlo") {
+      // Ne izbirnika ne odložišča (brskalnik brez dovoljenja): povezava za ročno kopiranje.
+      telo.querySelector(".d-pov-besedilo").innerHTML =
+        `Kopiranje ni uspelo. Povezava: <span class="d-pov-url">${escapeHtml(url)}</span>`;
+      return;
+    }
+    utisajPovabilo("poslano");
+    telo.innerHTML = izid === "kopirano"
+      ? '<p class="d-pov-nasl">Povezava je kopirana</p><p class="d-pov-besedilo">Prilepi jo v sporočilo.</p>'
+      : '<p class="d-pov-nasl">Hvala!</p>';
+    setTimeout(() => { el.hidden = true; }, 5000);
+  });
+}
 
 // ---------- zemljevid vnaprej ----------
 //
@@ -353,7 +455,7 @@ function kasneje() {
 }
 
 izrisiBudilke();
-izrisiPoti();
+izrisiPoti().then(ponudiPovabilo);
 if (MOST) {
   if (document.readyState === "complete") kasneje();
   else addEventListener("load", kasneje, { once: true });

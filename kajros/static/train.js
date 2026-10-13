@@ -1110,7 +1110,9 @@ async function loadRun() {
 // ---------- pošlji vožnjo ----------
 // Kdor nekoga čaka z vlaka, mu pošlje povezavo. Predogled v Messengerju ali
 // WhatsAppu pove stanje ob pošiljanju (`api._stanje_za_predogled`), besedilo
-// zraven isto z uro. Kjer Web Share ni (WebView v aplikaciji), se kopira.
+// zraven isto z uro. Kjer Web Share ni (aplikacija pred 1.13), se kopira.
+// `utm_source=poslano`: sporočilne aplikacije glave `Referer` ne pošljejo,
+// brez oznake je prejemnik v /admin obisk brez vira (`obisk._VIRI`).
 const posljiEl = document.getElementById("poslji");
 
 function besediloZaPoslati() {
@@ -1136,21 +1138,9 @@ function potrdiPoslano(beseda) {
 posljiEl.addEventListener("click", async () => {
   const url = new URL(location.href);
   url.searchParams.delete("postaja");   // „pri tebi“ je pošiljateljeva postaja
-  const besedilo = besediloZaPoslati();
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: document.title, text: besedilo, url: url.toString() });
-      return;
-    } catch (err) {
-      if (err.name === "AbortError") return;   // premislil si je
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(`${besedilo}\n${url}`);
-    potrdiPoslano("kopirano");
-  } catch (err) {
-    potrdiPoslano("ni šlo");
-  }
+  url.searchParams.set("utm_source", "poslano");
+  const izid = await posljiPovezavo(document.title, besediloZaPoslati(), url.toString());
+  if (izid === "kopirano" || izid === "ni šlo") potrdiPoslano(izid);
 });
 
 // ---------- deli, kje je ----------

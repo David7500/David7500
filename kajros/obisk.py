@@ -144,6 +144,10 @@ _VIRI = (
     ("reddit.com", "Reddit"), ("facebook.com", "Facebook"),
     ("instagram.com", "Instagram"), ("slo-tech.com", "Slo-Tech"),
     ("zamudil.si", "zamudil.si"), ("brezavta.si", "brezavta.si"),
+    # Naši `utm_source`: povezave, ki jih potnik pošlje sam (povabilo na
+    # domači strani, „Pošlji“ v oknu vožnje). Sporočilne aplikacije glave ne
+    # pošljejo; 29. 9.–12. 10. 2026 je bilo 88 % ogledov brez znanega vira.
+    ("povabilo", "Povabilo"), ("poslano", "Poslano"),
 )
 #: Največ znakov imena neznanega vira; ključ ne sme rasti s smetmi v glavi.
 _VIR_DOLZINA = 40
