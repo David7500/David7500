@@ -78,6 +78,16 @@ Mapa v podatkovnem imeniku, ne v `/srv`: ta je po `brez-sudo.sh` že skupinsko p
 
 **Zaradi preverjanja ob zagonu je 2027 vreden zaznamka**: Google od 30. 9. 2026 zahteva **preverjenega razvijalca** za namestitev na certificiranih napravah (Brazilija, Indonezija, Singapur, Tajska; globalno 2027). Naprav brez Googlove certifikacije (razgooglana Volla) ne zadeva, navadnega telefona bo. Takrat izbrati znova; do tedaj ta pot dela.
 
+## Pošiljanje: `navigator.share` iz aplikacije (1.13, most 6)
+
+WebView `navigator.share` nima, zato je „Pošlji“ (povabilo na domači strani, okno vožnje) v aplikaciji samo kopiral. Od 1.13 `Most.poslji(zapis)` odpre sistemski izbirnik, `common.js` pa ga obleče v **spletni standard**: stran kliče `navigator.share` / `navigator.canShare` kot v brskalniku. APK o besedilu, povezavi in gumbih ne ve nič, zato nova vsebina ali nov gumb za pošiljanje ne rabi nove različice (David, 13. 10. 2026: „da se bo lahko most uporabil kadarkoli v prihodnosti brez da bova morala spreminjati apk“).
+
+* **Zapis je oblika Web Share** (`title`, `text`, `url`, `files`), besedilo prejemniku = `text` + nova vrstica + `url` kot v Chromu, `title` gre v `EXTRA_SUBJECT`.
+* **Datoteke že zdaj** (Web Share Level 2), čeprav jih ob 1.13 ne pošlje še nobena stran — slike za Instagram bi sicer čakale na novo aplikacijo. `common.js` jih pošlje kot base64, `Posiljanje` jih zapiše v `cache/poslji/<čas>-<n>/<ime>` (največ 10 datotek, 10 MB; starejše od 10 min gredo ob naslednjem pošiljanju), streže jih lasten `Datoteke` (`ContentProvider`, ker je FileProvider v AndroidX), neizvožen; prejemnik bere z dovoljenjem iz namere (`ClipData` + `FLAG_GRANT_READ_URI_PERMISSION`). Ime s strani gre skozi `varnoIme()` ob zapisu **in** ob branju (`..`, `/`). Končnica iz vrste, ker `getType` bere iz nje.
+* **Izid kot v brskalniku**: izbira → obljuba se izpolni, preklic → `AbortError`. Izbirnik javi samo izbiro (`PendingIntent` na neizvoženi `PoslanoSprejemnik`); vrnitev v aplikacijo brez nje je preklic (`onResume`, pol sekunde za zakasnelo sporočilo). Stran izvede `kajrosPoslano(id, izbrano)`. Vgrajeno „Kopiraj“ v izbirniku Androida 14+ izbire ne javi in šteje za preklic.
+* **Združljivost v obe smeri**: stara aplikacija (most 5) polnila nima in kopira; nova aplikacija s starim strežnikom ima `poslji`, a ga nihče ne kliče.
+* Preverjeno na emulatorju (Android 15, AOSP) 13. 10. 2026 z razvojnim strežnikom: povabilo odpre izbirnik z besedilom in povezavo, nazaj = kartica ostane, Messaging = „Hvala!“ in `kajros:povabilo` poslano; slika (`canvas` → `File`) v izbirniku s sličico, Print jo prebere prek `Datoteke`. AOSP Messaging sliko zavrne („Cannot send private file“, njegovo lastno pravilo); WhatsApp, Signal in Instagram na telefonu še niso preizkušeni.
+
 ## Dovoljenje za lego skrije aplikacijo napravam brez GPS
 
 `ACCESS_*_LOCATION` = **privzeto `uses-feature required="true"`** — izmerjeno z `aapt2 dump badging`:

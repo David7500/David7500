@@ -3,6 +3,7 @@ package app.kajros
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -28,6 +29,7 @@ import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONObject
 
 /**
  * Ves prikaz kajrosa je spletna stran; ta dejavnost je ovoj okrog nje.
@@ -455,6 +457,40 @@ class GlavnaDejavnost : Activity() {
         skrijNapako()
         web.clearHistory()
         web.loadUrl(naslov)
+    }
+
+    // ---------- pošiljanje ----------
+
+    /** Odpre izbirnik za [Most.poslji]; izid pove stran ob vrnitvi ([onResume]). */
+    fun poslji(namera: Intent, id: String) {
+        val povratek = PendingIntent.getBroadcast(this, 0,
+            Intent(this, PoslanoSprejemnik::class.java).putExtra(PoslanoSprejemnik.ID, id),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        Posiljanje.caka = id
+        Posiljanje.izbran = null
+        try {
+            startActivity(Intent.createChooser(namera, null, povratek.intentSender))
+        } catch (e: ActivityNotFoundException) {
+            Posiljanje.caka = null
+            izidPosiljanja(id, false)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val id = Posiljanje.caka ?: return
+        // Izbirnik javi samo izbiro; vrnitev brez nje je preklic. Pol sekunde
+        // za sporočilo sprejemniku, ki je ob vrnitvi lahko še na poti.
+        web.postDelayed({
+            if (Posiljanje.caka != id) return@postDelayed
+            Posiljanje.caka = null
+            izidPosiljanja(id, Posiljanje.izbran == id)
+        }, 500)
+    }
+
+    private fun izidPosiljanja(id: String, izbrano: Boolean) {
+        web.evaluateJavascript(
+            "window.kajrosPoslano && window.kajrosPoslano(${JSONObject.quote(id)}, $izbrano)", null)
     }
 
     // ---------- zunanje povezave ----------

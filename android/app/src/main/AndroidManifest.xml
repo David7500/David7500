@@ -183,6 +183,18 @@
             android:name=".NamestitevSprejemnik"
             android:exported="false" />
 
+        <!-- Pošiljanje s strani (`Posiljanje`): izbirnik javi izbiro prek
+             našega `PendingIntent`, zato sprejemnik ni izvožen; datoteke
+             dobi prejemnik samo z dovoljenjem, ki ga nosi namera. -->
+        <receiver
+            android:name=".PoslanoSprejemnik"
+            android:exported="false" />
+        <provider
+            android:name=".Datoteke"
+            android:authorities="app.kajros.datoteke"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <receiver
             android:name=".Sprozilec"
             android:exported="true"

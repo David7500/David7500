@@ -39,9 +39,10 @@ class Most(
      * 4: deljenje ob voznji (`deliObVoznji()`, `nastaviDeliObVoznji()`,
      *    `cakajVkrcanje()`).
      * 5: zaslon „O aplikaciji“ (`oAplikaciji()`).
+     * 6: sistemski izbirnik za `navigator.share` (`poslji()`).
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 5 else 0
+    fun razlicica(): Int = if (nas()) 6 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -301,6 +302,27 @@ class Most(
             .put("tocni_alarmi", Nacrtovalec.smeTocenAlarm(dejavnost))
             .put("cel_zaslon", Zvonjenje.smeCelZaslon(dejavnost))
             .toString()
+    }
+
+    /**
+     * Sistemski izbirnik „Pošlji z …“. `zapis` je JSON v obliki Web Share
+     * (`title`, `text`, `url`, `files`), ki ga sestavi `common.js` iz klica
+     * `navigator.share` -- o vsebini APK ne odloča nič ([Posiljanje]). Vrne
+     * id pošiljanja ali prazen niz, kadar ni česa poslati; izid pride na
+     * stran kot `kajrosPoslano(id, izbrano)`, ko se potnik vrne.
+     */
+    @JavascriptInterface
+    fun poslji(zapis: String): String {
+        if (!nas()) return ""
+        val o = try { JSONObject(zapis) } catch (e: org.json.JSONException) { return "" }
+        val namera = try {
+            Posiljanje.namera(dejavnost, o)
+        } catch (e: java.io.IOException) {
+            null                                    // poln disk: stran pade na odložišče
+        } ?: return ""
+        val id = java.util.UUID.randomUUID().toString()
+        glavna.post { (dejavnost as? GlavnaDejavnost)?.poslji(namera, id) }
+        return id
     }
 
     @JavascriptInterface
