@@ -16,8 +16,9 @@ proti naslednjemu postanku enako skladno kot doslej (mediana 29 s). Ostanek
 so večinoma postanki, ki jim vozilo ni prišlo bližje od 300 m.
 
 Postanki se iščejo po vrstnem redu vožnje: dokler ni potrjen nobeden, med
-vsemi razen cilja, nato med naslednjimi `NAPREJ`. Preskok čez postanke velja,
-če se zamuda ne spremeni za več kot `SKOK_S`; preskočene se nato poišče v
+vsemi razen cilja, nato med naslednjimi `NAPREJ`. Prvi obisk, preskok čez
+postanke in skok zamude za več kot `SKOK_S` veljajo šele, ko jih potrdi
+skladen obisk naslednjega postanka (`_zakljuci`); preskočene se nato poišče v
 sledi med sosednjima potrjenima (`_dopolni`) -- sproti sam je na posnetku dal
 94,3 %. Izhodišča ne merimo: vozilo pred odhodom kroži (proti drugemu
 postanku mediana 39 s namesto 29 s).
@@ -35,7 +36,7 @@ import threading
 import time
 from datetime import date, timedelta
 
-from . import geo, stats
+from . import config, geo, stats
 
 #: Vozilo je pri postanku, ko pride tako blizu. 50--150 m je na posnetku dalo
 #: 96,2--97,5 %; perone ima postaja tudi ~100 m od točke v voznem redu.
@@ -193,10 +194,17 @@ def _zakljuci(sled: Sled, koncani: list[int]) -> list[tuple]:
     obiska in ki zamude ne spremenijo za več kot `SKOK_S`.
 
     Obisk, ki preskoči postanke, počaka na potrditev: velja, ko se konča
-    obisk kasnejšega postanka (ali ko vozilo utihne), in odpade, ko se konča
-    obisk katerega pred njim. Na posnetku je sicer vozilo na izletu tja in
-    nazaj ob prvem postanku „obiskalo“ zadnjega na istem mestu in preskočilo
-    vse vmes (dve vožnji, 5 in 3 postanki)."""
+    skladen obisk kasnejšega postanka (ali ko vozilo utihne), in odpade, ko
+    se konča obisk katerega pred njim. Na posnetku je sicer vozilo na izletu
+    tja in nazaj ob prvem postanku „obiskalo“ zadnjega na istem mestu in
+    preskočilo vse vmes (dve vožnji, 5 in 3 postanki).
+
+    Enako čaka prvi obisk vožnje in obisk s skokom zamude; neskladnega
+    zamenja naslednji. 13. 10. 2026 je vozilo na poti na izhodišče 18 min
+    pred voznim redom peljalo mimo drugega postanka (-1 092 s), ta je obveljal,
+    vsi naslednji (+119 do +1 324 s) pa so padli na skoku: na dan +488
+    vmesnih postankov. Skok, ki ga potrdi naslednji postanek, je tudi prava
+    zamuda (okvara, zastoj) -- prej se je vožnja na njem ustavila do konca."""
     out = []
     for i in sorted(koncani):
         o = sled.odprti.pop(i, None)
@@ -206,17 +214,25 @@ def _zakljuci(sled: Sled, koncani: list[int]) -> list[tuple]:
         c = sled.cakajoci
         if c is not None and i <= c[0]:
             sled.cakajoci = c = None
-        prej = sled.zadnja if c is None else c[2]
-        if prej is not None and abs(zamuda - prej) > SKOK_S:
-            continue
-        if c is not None:
+        if c is None:
+            if i == sled.k and _skladna(sled.zadnja, zamuda):
+                out += _premakni(sled, i, o)
+            else:
+                sled.cakajoci = (i, o, zamuda)
+        elif _skladna(c[2], zamuda):
             sled.cakajoci = None
             out += _premakni(sled, c[0], c[1])
-        if i == sled.k:
-            out += _premakni(sled, i, o)
+            if i == sled.k:
+                out += _premakni(sled, i, o)
+            else:
+                sled.cakajoci = (i, o, zamuda)
         else:
             sled.cakajoci = (i, o, zamuda)
     return out
+
+
+def _skladna(prej: float | None, zamuda: float) -> bool:
+    return prej is not None and abs(zamuda - prej) <= SKOK_S
 
 
 def dodaj(sled: Sled, t_s: float, lat: float, lon: float) -> list[tuple]:
@@ -263,16 +279,28 @@ def dodaj(sled: Sled, t_s: float, lat: float, lon: float) -> list[tuple]:
 
 
 def tiho(sled: Sled, zdaj: float) -> list[tuple]:
-    """Vsaj `CILJ_S` brez lege: obisk cilja je končan in obisk, ki čaka na
-    potrditev, velja."""
+    """Vsaj `CILJ_S` brez lege: končan je obisk cilja in vsak obisk, s
+    katerega je vozilo že odpeljalo (zadnja lega dlje od `ODHOD_M` za
+    najbližjo točko), obisk, ki čaka na potrditev, pa velja, če je skladen.
+
+    Vozilo, ki obmolkne tik za postankom (NAP ga prestavi na naslednjo
+    vožnjo, preden pride na cilj), bi sicer ostalo brez zadnjih postankov:
+    13. 10. 2026 +219 vmesnih postankov, z istim ujemanjem s trasnim načinom
+    kot drugi (mediana 6 s). Obisk, na katerem vozilo še stoji, ostane odprt
+    -- zapiranje vseh je dalo +293, a p90 83 s: odhod ob zadnji legi je
+    prezgoden, ko vozilo po molku spet javi z istega postanka."""
     if (not sled.tocke or zdaj - (sled.polnoc + sled.tocke[-1][0]) < CILJ_S
-            or len(sled.postanki) - 1 not in sled.odprti and sled.cakajoci is None):
+            or not sled.odprti and sled.cakajoci is None):
         return []
-    out = _zakljuci(sled, list(sled.odprti)) if len(sled.postanki) - 1 in sled.odprti else []
-    if sled.cakajoci is not None:
-        i, o, _ = sled.cakajoci
+    _, x, y = sled.tocke[-1]
+    cilj = len(sled.postanki) - 1
+    koncani = [i for i, o in sled.odprti.items() if i == cilj or math.hypot(
+        x - sled.postanki[i][1], y - sled.postanki[i][2]) > o["d"] + ODHOD_M]
+    out = _zakljuci(sled, koncani) if koncani else []
+    c = sled.cakajoci
+    if c is not None and _skladna(sled.zadnja, c[2]):
         sled.cakajoci = None
-        out += _premakni(sled, i, o)
+        out += _premakni(sled, c[0], c[1])
     return out
 
 
@@ -373,7 +401,9 @@ def _opis(x: list[float]) -> dict | None:
 
 
 def primerjava(conn: sqlite3.Connection, od_dan: str, do_dan: str) -> dict:
-    """Brez trase (`gps_prehod`) proti `run` na vožnjah z legami v `lega`.
+    """Brez trase (`gps_prehod`) proti `run` na vožnjah prevoznikov NAP z
+    legami v `lega`. Drugim (primestni LPP) zamude piše feed derp.si, iz lege
+    le ob njegovem molku -- tam bi primerjali feed s prehodom, ne dveh načinov.
 
     Šteti so vmesni postanki med prvim in zadnjim, ki ga je izmeril kdorkoli,
     in ne pred prvo lego (vožnja, ki je tekla že pred zagonom, nima sledi za
@@ -387,7 +417,9 @@ def primerjava(conn: sqlite3.Connection, od_dan: str, do_dan: str) -> dict:
     for dan, tid, prva, agency in conn.execute(
             "SELECT l.service_date, l.trip_id, MIN(l.ts), t.agency FROM lega l "
             "JOIN trip t USING (trip_id) WHERE l.service_date BETWEEN ? AND ? "
-            "GROUP BY l.service_date, l.trip_id", (od_dan, do_dan)).fetchall():
+            f"AND t.agency IN ({','.join('?' * len(config.NAP_PREVOZNIKI))}) "
+            "GROUP BY l.service_date, l.trip_id",
+            (od_dan, do_dan, *sorted(config.NAP_PREVOZNIKI))).fetchall():
         sched = conn.execute("SELECT stop_seq, COALESCE(dep_s, arr_s) FROM sched "
                              "WHERE trip_id = ? ORDER BY stop_seq", (tid,)).fetchall()
         if len(sched) < 3:

@@ -84,6 +84,44 @@ def test_izlet_tja_in_nazaj_ne_preskoci_postankov():
     assert all(0 <= out[q][0] <= 15 for q in (2, 3, 4)), out
 
 
+def test_prvi_obisk_pocaka_na_potrditev():
+    """Vozilo pelje na izhodišče mimo B 17 min pred voznim redom, nato vozi
+    s 5 min zamude. Prej je obveljal prvi obisk B, vsi naslednji pa so padli
+    na skoku zamude (13. 10. 2026: 18 min prej, nato do +22 min)."""
+    s = _ravna(5)
+    na_izhodisce = [(35000 + 20 * i, 46.0, 14.016 - 0.002 * i) for i in range(9)]
+    caka = [(35160 + 20 * i, 46.0, 14.0) for i in range(1, 58)]
+    out = _vozi(s, na_izhodisce + caka + _vzhod(36300, 14.0, 14.04))
+    assert sorted(out) == [2, 3, 4]
+    assert all(300 <= out[q][0] <= 310 for q in (2, 3, 4)), out
+
+
+def test_skok_zamude_potrdi_naslednji_postanek():
+    """Okvara med B in C: 25 min stoji. C pade na skoku, a ga D potrdi."""
+    s = _ravna(6)
+    pot = (_vzhod(36000, 14.0, 14.014)
+           + [(36140 + 20 * i, 46.0, 14.014) for i in range(1, 76)]
+           + _vzhod(37640, 14.014, 14.05)[1:])
+    out = _vozi(s, pot)
+    assert sorted(out) == [2, 3, 4, 5]
+    assert 0 <= out[2][0] <= 10
+    assert all(1500 <= out[q][0] <= 1510 for q in (3, 4, 5)), out
+
+
+def test_molk_za_postankom_ga_zakljuci_molk_na_njem_ne():
+    """Vozilo obmolkne 70 m za D (NAP ga prestavi na naslednjo vožnjo): D
+    velja. Ko obmolkne, ko na D stoji, odhod ni znan."""
+    za = _vzhod(36000, 14.0, 14.03) + [(36309, 46.0, 14.0309)]
+    s = _ravna(5)
+    out = _vozi(s, za)
+    assert 4 not in out
+    ((seq, zamuda, _, _, _),) = prehod.tiho(s, POLNOC + 36309 + prehod.CILJ_S)
+    assert seq == 4 and 0 <= zamuda <= 10
+    s = _ravna(5)
+    _vozi(s, _vzhod(36000, 14.0, 14.03) + [(36320, 46.0, 14.03)])
+    assert prehod.tiho(s, POLNOC + 36320 + prehod.CILJ_S) == []
+
+
 def test_obvoz_mimo_postanka():
     """Vozilo B obide 300 m severno: B ostane brez meritve, C počaka na
     potrditev z D in velja."""

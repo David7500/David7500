@@ -5,5 +5,7 @@
 #
 #   scripts/prehodi.sh [--dni N] [--pred N]
 set -euo pipefail
+args=""
+(($#)) && args=$(printf ' %q' "$@")   # printf brez argumentov da prazen '' in argparse pade
 ssh david@192.168.1.46 "cd /opt/kajros && KAJROS_DATA_DIR=/var/lib/kajros \
-  .venv/bin/python -m kajros.cli prehodi --samo-branje$(printf ' %q' "$@")"
+  .venv/bin/python -m kajros.cli prehodi --samo-branje$args"
