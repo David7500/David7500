@@ -34,8 +34,9 @@ preskoči zanko ali krak, ki ga ima trasa: na posnetku 11. 10. 53 od 78
 zgrešenih postankov (Vrtojba 5,3 km po trasi v 20 s). Tak skok se zapiše kot
 `preskok`.
 
-Ob tem meri `prehod.py` brez trase (`KAJROS_PREHOD_GPS`): v senci samo v
-`gps_prehod`, z `vodi` namesto tega modula.
+Od 13. 10. 2026 prehod meri `prehod.py` brez trase (`KAJROS_PREHOD_GPS=vodi`,
+privzeto; 96,9 % vmesnih postankov proti 89,7 %). Lega na traso spodaj teče
+le še z `KAJROS_PREHOD_GPS=0` (ali `senca`), kot rezerva do 27. 10. 2026.
 """
 from __future__ import annotations
 

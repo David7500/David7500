@@ -15,7 +15,7 @@ from datetime import date
 import pytest
 from google.transit import gtfs_realtime_pb2
 
-from kajros import db, deljenje, iz_lege, odkloni, prehod, stats
+from kajros import config, db, deljenje, iz_lege, odkloni, prehod, stats
 
 DAN = date.today().isoformat()
 POLNOC = stats.polnoc(DAN)
@@ -23,7 +23,10 @@ LON = {"A": 14.00, "B": 14.01, "C": 14.02, "D": 14.03}
 
 
 @pytest.fixture(autouse=True)
-def _cist_spomin():
+def _cist_spomin(monkeypatch):
+    # Lega na traso je od 13. 10. 2026 rezerva (`KAJROS_PREHOD_GPS=0`);
+    # prehod brez trase preizkuša tests/test_prehod.py.
+    monkeypatch.setattr(config, "PREHOD_GPS", "0")
     for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnja, iz_lege._odklon,
               iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase,
               prehod._sledi):

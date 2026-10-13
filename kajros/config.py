@@ -161,9 +161,11 @@ POSITION_SECONDS = int(okolje("POSITION_SECONDS", "10"))
 # Zamuda iz lege za vožnje, ki jih feed zamud ne nosi (`iz_lege.py`). Stane
 # projekcijo lege na traso za vsako tako vozilo ob vsakem branju leg.
 ZAMUDA_IZ_LEGE = okolje("ZAMUDA_IZ_LEGE", "1") != "0"
-# Prehod iz GPS brez trase (`prehod.py`): "senca" meri ob iz_lege v
-# `gps_prehod`, "vodi" piše v `run` namesto njega, "0" izklopi.
-PREHOD_GPS = okolje("PREHOD_GPS", "senca")
+# Prehod iz GPS brez trase (`prehod.py`): "vodi" piše v `run` namesto lege na
+# traso (od 13. 10. 2026, po dnevu v senci: 96,9 % vmesnih postankov proti
+# 89,7 %), "senca" meri ob iz_lege samo v `gps_prehod`, "0" izklopi -- takrat
+# teče stari način. Ta ostane kot rezerva do 27. 10. 2026; če vodi drži, gre ven.
+PREHOD_GPS = okolje("PREHOD_GPS", "vodi")
 # Sencno merjenje napovedi (`ocena.py`). Tece ob strezniku in samo bere.
 # Razmik 120 s: posnetek se zapise enkrat na postanek (kljuc tabele), zato
 # gostejsi obhod ne da vec vrstic, le vec praznih poizvedb.

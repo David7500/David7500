@@ -169,7 +169,7 @@ Pri drugi obliki se vrata preberejo iz `PORT`; če ga ni, 8000.
 | `KAJROS_SZ_ZAMUDE` | 1 | `0` izklopi zamude vlakov z zemljevida SŽ (prek Chroma) |
 | `KAJROS_PERONI` | 1 | `0` izklopi tire s table SŽ (prek Chroma) |
 | `KAJROS_SZ_CHROME`, `KAJROS_SZ_XVFB` | poišče sam | pot do Chroma in Xvfb, kadar nista v `PATH` |
-| `KAJROS_PREHOD_GPS` | `senca` | prehod postanka iz GPS brez trase: `senca` samo meri (`gps_prehod`), `vodi` piše zamude, `0` izklopi |
+| `KAJROS_PREHOD_GPS` | `vodi` | prehod postanka iz GPS brez trase: `vodi` piše zamude, `senca` samo meri (`gps_prehod`), `0` izklopi (stari način, lega na traso) |
 
 ### Kaj se zgodi ob prvem zagonu
 
