@@ -2791,3 +2791,38 @@ def test_zastarela_lega_iz_predpomnilnika_ne_gre_na_zemljevid(conn, monkeypatch)
     ])
     vozila = json.loads(api.api_vehicles().body)
     assert [v["trip_id"] for v in vozila] == ["svez"]
+
+
+def _odpeljal_in_prisel(conn, dan="2026-08-31", do_cilja=True):
+    """IC 1 odpelje iz A točno, v Z +5 min, na cilj C pride +15 min."""
+    p = _polnoc(dan)
+    vrstice = [(1, 0, 0, p + 28860), (2, 300, 300, p + 33060)]
+    if do_cilja:
+        vrstice.append((3, 900, None, p + 36960))
+    conn.executemany(
+        "INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts)"
+        " VALUES('t1',?,?,?,?,?)", [(dan, *v) for v in vrstice])
+    conn.commit()
+
+
+def test_odpeljana_voznja_nosi_zamudo_ob_prihodu(conn):
+    """Zvečer pristajalna stran kaže odpeljane vožnje: 13. 10. 2026 je RG 609
+    v tabeli pisal 0 min (odhod iz Ljubljane), v Novo mesto pa prišel +28."""
+    _odpeljal_in_prisel(conn)
+    z = next(x for x in stats.connections(conn, "Ajdovščina", "Celje", "2026-08-31", 37000)
+             if x["train_no"] == "IC 1")
+    assert z["zamuda"]["min"] == 0
+    assert (z["zamuda_prihod"]["min"], z["zamuda_prihod"]["vrsta"]) == (15, stats.IZMERJENO)
+
+
+def test_voznja_na_poti_ima_oceno_prihoda(conn):
+    _odpeljal_in_prisel(conn, do_cilja=False)
+    z = next(x for x in stats.connections(conn, "Ajdovščina", "Celje", "2026-08-31", 34000)
+             if x["train_no"] == "IC 1")
+    assert z["zamuda_prihod"]["vrsta"] == "ocena"
+
+
+def test_pred_odhodom_ni_zamude_ob_prihodu(conn):
+    z = next(x for x in stats.connections(conn, "Ajdovščina", "Celje", "2026-08-31", 28000)
+             if x["train_no"] == "IC 1")
+    assert z["zamuda_prihod"] is None

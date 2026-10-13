@@ -2017,6 +2017,22 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
             naprej.get(d["trip_id"], -1) > d["from_seq"])) if now_s is not None else None
         # Odlocitev o zamudi gre z vrstico vred -- glej `opis_zamude()`.
         d["zamuda"] = opis_zamude(d["delay_s"], d["delay_kind"])
+        # Ko je vožnja z izhodišča odpeljala, šteje prihod. Zvečer pristajalna
+        # stran kaže same odpeljane vožnje in ob odhodu iz Ljubljane je bila
+        # ničla skoraj povsod, pod naslovom „običajno +15 ob prihodu“
+        # (13. 10. 2026: RG 609 v tabeli 0 min, v Novo mesto +28). Isto
+        # pravilo kot za izhodišče: meritev, sicer ocena.
+        lm = last.get(d["trip_id"])
+        d["zamuda_prihod"] = None
+        if lm and lm["stop_seq"] >= d["from_seq"]:
+            zp = zamuda_na_postanku(
+                conn, train_no=d["train_no"], trip_id=d["trip_id"],
+                stop_seq=d["to_seq"], ime_postaje=to_name,
+                feed_delay_s=d["to_delay_s"], lm=lm,
+                slack_vrsta=slack.get(d["trip_id"], ()), service_date=service_date,
+                potrjen=(d["trip_id"], d["to_seq"]) in potrjeni,
+                obicajno_s=(d["typical_arr"] or {}).get("median_s"))
+            d["zamuda_prihod"] = opis_zamude(zp["delay_s"], zp["delay_kind"])
         # Kaj je o tej postaji rekel feed. Kadar je vozilo se pred njo, je to
         # napoved prevoznika in prikaz je ne uporablja -- a je tudi ne skriva.
         d["feed_delay_s"] = d["from_delay_s"]

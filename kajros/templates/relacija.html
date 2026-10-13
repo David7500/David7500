@@ -102,7 +102,7 @@
           <th>Prihod</th>
           <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
           <th class="skrij-ozko">Traja</th>
-          <th class="zam">Zamuda</th>
+          <th class="zam">{{ "Zamuda ob prihodu" if ob_prihodu else "Zamuda" }}</th>
         </tr>
       </thead>
       <tbody>
@@ -112,8 +112,11 @@
           <td class="t">{{ z.sched_arr | ura }}</td>
           <td class="kam"><a href="{{ pot_vozje(network, z.train_no, z.trip_id) }}">{{ z | ime_voznje }}</a></td>
           <td class="skrij-ozko">{{ z.duration_s | trajanje }}</td>
-          {% if z.zamuda %}
-          <td class="zam z-{{ z.zamuda.razred }}">{{ z.zamuda | besedilo }}</td>
+          {% set zam = z.zamuda_prihod if ob_prihodu else z.zamuda %}
+          {% if zam %}
+          {#- Ocena je za vožnjo, ki je še na poti: brez besede bi se brala
+              kot izmerjen prihod. -#}
+          <td class="zam z-{{ zam.razred }}">{% if ob_prihodu and zam.vrsta == "ocena" %}<span class="obicajno">na poti</span> {% endif %}{{ zam | besedilo }}</td>
           {% elif z.obicajno %}
           <td class="zam obicajno">običajno {{ z.obicajno | besedilo }}</td>
           {% else %}

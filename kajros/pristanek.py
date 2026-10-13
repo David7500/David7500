@@ -407,7 +407,8 @@ def sosednje(kaz: dict, ime: str, razen: str | None = None) -> list[dict]:
 
 
 def _dopolni_obicajno(vrstice: list[dict], polje: str) -> None:
-    """Vožnjam brez meritve pripiše, koliko so zamujale doslej.
+    """Pripiše, koliko so vožnje zamujale doslej; predloga ga pokaže, kadar
+    današnje številke ni.
 
     Brez tega ima stolpec zamude pri jutranjem vlaku pomišljaj -- in to je za
     obiskovalca isto kot prazna stran, čeprav o tej vožnji vemo osemnajst
@@ -416,8 +417,7 @@ def _dopolni_obicajno(vrstice: list[dict], polje: str) -> None:
     """
     for v in vrstice:
         t = v.get(polje)
-        v["obicajno"] = (stats.opis_zamude(round(t["median_s"]))
-                         if v.get("zamuda") is None and t else None)
+        v["obicajno"] = stats.opis_zamude(round(t["median_s"])) if t else None
 
 
 def _se_ni_odpeljal(sched: str | None, expected: str | None, zdaj: datetime) -> bool:
@@ -474,6 +474,10 @@ def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
     odslej = [z for z in zveze if _se_ni_odpeljal(z["sched_dep"], z["expected_dep"], zdaj)]
     prikaz = odslej or zveze
     return {
+        # Zvečer so na strani same odpeljane vožnje in zanje šteje prihod na
+        # cilj (`zamuda_prihod`), ne odhod -- isto kot naslov „običajno ob
+        # prihodu“ nad tabelo.
+        "ob_prihodu": not odslej,
         "od": od, "cilj": cilj, "network": network, "datum": datum,
         "zapis": zapis, "zveze": prikaz[:NAJVEC_ODHODOV], "vseh": len(zveze),
         # Čez ves dan, ne čez prikazane: zvečer so ostale le počasne vožnje in
