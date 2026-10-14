@@ -28,6 +28,14 @@ FEED_STALE_S = 90
 #: obstal.
 SZ_STOJI_S = 300
 
+#: Ko Chrome ne pride skozi Cloudflare, poskusi znova šele po
+#: `PO_NAPAKI_ZAGONA_S`, poskus sam pa traja do zagona, izziva in zahteve --
+#: `napaka_ts` je čas začetka poskusa. 14. 10. 2026 od 1:39 do 3:59 je bila
+#: napaka vsakih 6,5 min, starejša od `SZ_STOJI_S`, in vrstica je kazala
+#: „nit ne piše“ (pošta), čeprav je nit pisala napake po pravici.
+SZ_NAPAKA_S = (brskalnik.PO_NAPAKI_ZAGONA_S
+               + 2 * (brskalnik.ZAGON_S + brskalnik.PREBOJ_S + brskalnik.ZAHTEVA_S))
+
 #: Zemljevid SŽ se ob vlakih na poti spremeni ob vsakem branju (10. 10. 2026:
 #: 93 od 93 zaporednih branj po 15 s -- odšteva čas do prihoda). Deset minut
 #: brez spremembe je zamrznjen odgovor, ne miren promet.
@@ -176,6 +184,8 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     # je obstala v transakciji in ni mogla zapisati ničesar -- 4,3 h je bila
     # vrstica le rumena. Ko vir ne odgovarja, je rumeno: vlake medtem piše
     # derp.si, kolikor jih ima, vrstica „vlaki · zadnji zapis“ pa pove, ali sploh.
+    # Ponoči, ko vlaki ne vozijo, je tudi obstala nit le rumena: zamud ni
+    # komu kazati, zjutraj pa je z voznim redom spet rdeča.
     zs = z.get("zamude_sz")
     if zs:
         zadnji = zs.get("ts") or 0
@@ -185,8 +195,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
             out["zamude_sz"] = (
                 (MLACNA, f"zemljevid SŽ ne odgovarja od pred {_min(zdaj - zadnji)}"
                          + (f": {zs['napaka']}" if zs.get("napaka") else ""))
-                if zdaj - napaka <= SZ_STOJI_S
-                else (SLABA, f"nit zemljevida SŽ ne piše od pred {_min(zdaj - zadnji)}"))
+                if zdaj - napaka <= SZ_NAPAKA_S
+                else ((SLABA if vozijo else MLACNA),
+                      f"nit zemljevida SŽ ne piše od pred {_min(zdaj - zadnji)}"))
         elif vozijo and zdaj - (zs.get("spremenjeno_ts") or zadnji) > SZ_ZAMRZNJEN_S:
             out["zamude_sz"] = (MLACNA, "zemljevid SŽ se ne spreminja od pred "
                                         f"{_min(zdaj - zs['spremenjeno_ts'])}")

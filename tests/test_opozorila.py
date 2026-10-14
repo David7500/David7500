@@ -39,6 +39,26 @@ def test_obstala_nit_sz_je_rdeca_nedosegljiv_vir_pa_rumen():
     assert zdravje.ocena(z, STROJ, T)["zamude_sz"][0] == zdravje.MLACNA
 
 
+def test_cloudflare_s_premorom_ni_obstala_nit():
+    """14. 10. 2026 1:39--3:59: Chrome ni prišel skozi izziv, nov poskus po
+    5 min premora -- napaka vsakih 6,5 min. Pošta je rekla „nit ne piše“."""
+    z = _zdravo()
+    z["zamude_sz"] = {"ts": T - 3600, "napaka": "izziv ni rešen v 90 s", "napaka_ts": T - 480}
+    assert zdravje.ocena(z, STROJ, T)["zamude_sz"][0] == zdravje.MLACNA
+    z["zamude_sz"]["napaka_ts"] = T - 2 * zdravje.SZ_NAPAKA_S
+    assert _rdece(z) == {"zamude_sz"}
+
+
+def test_obstala_nit_sz_ponoci_ni_rdeca():
+    """Ko vlaki ne vozijo, zamud ni komu kazati; zjutraj spet rdeče."""
+    z = _zdravo()
+    z["zamude_sz"] = {"ts": T - 2 * 3600}
+    z["vozi_zdaj"] = {"zeleznica": 1, "avtobus": 20}
+    assert zdravje.ocena(z, STROJ, T)["zamude_sz"][0] == zdravje.MLACNA
+    z["vozi_zdaj"]["zeleznica"] = 5
+    assert "zamude_sz" in _rdece(z)
+
+
 def test_wal_in_disk():
     m = {**STROJ, "wal_bajtov": int(5.4 * 2**30)}
     assert _rdece(_zdravo(), m) == {"wal"}
