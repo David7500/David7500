@@ -36,6 +36,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Zamude vlakov — **vodijo** (derp.si jih ima isto, prek posrednika) | zemljevid potniski.sz.si, `admin-ajax.php?action=aktivni_vlaki`, s Chromom | 5 s (SŽ preračuna na 15) |
 | Zamude mestnega LPP, drugi vir | LPP-jevi zasloni `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
+| Promet na cestah — za primerjavo vlak/avto, **še brez prikaza** | NAP: FCD NCUP `b2b.fcd.datexii33.status` + potovalni časi AC DARS, v `promet.sqlite` | 1 min |
 | Tir vlaka | tabla postaje na potniski.sz.si, s Chromom | ~10 min na postajo |
 | Ovire — **vodijo** (angleške in ob molku `.../service_alerts`) | stran stanja v prometu na potniski.sz.si (`var roadworks`), s Chromom | 5 min |
 | Kje ustavi nadomestni avtobus | seznam na potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno, ko SŽ seznam spremeni |
@@ -85,6 +86,7 @@ kajros/
   ovire_sz.py    ovire s strani SŽ, svoja nit; vodi slovenske ovire, derp.si le ob molku
   zamude_lpp.py  zamude mestnega LPP z LPP-jevih zaslonov, svoja nit; vozilo -> vožnja prek derp.si
   nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
+  promet.py      promet na cestah z NAP (FCD, potovalni časi AC), svoja nit in baza `promet.sqlite`
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
   stik.py        sporočila obiskovalcev; piše iz zahteve
@@ -96,15 +98,13 @@ kajros/
   api.py         FastAPI: /api/* + strani /app*
   templates/     home, connections (vstopna), dashboard, train, alerts
   static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
-tests/           enotni testi čistih funkcij (pytest, requirements-dev.txt)
-scripts/         dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
-android/         nativni ovoj z WebView (Kotlin); orodja ločeno v ~/kajros-android
-o-nas/           vir 3D strani /o-nas (three.js); gradi.sh → static/o-nas/o3.js
+tests/           pytest (requirements-dev.txt) · scripts/ dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
+android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vir 3D /o-nas, gradi.sh → static/o-nas/o3.js
 ```
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `odklon` (lege izven trase, od 11. 10. 2026) · `lega` + `gps_prehod` (lege 14 dni, prehod brez trase, od 12. 10. 2026) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj).
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `odklon` (lege izven trase, od 11. 10. 2026) · `lega` + `gps_prehod` (lege 14 dni, prehod brez trase, od 12. 10. 2026) · `obvestilo` (obvestila skrbnika potnikom) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). V `promet.sqlite` (od 14. 10. 2026): `fcd` (dnevnik sprememb po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` (kdaj je bil podatek) · `ac`.
 
 ## Omrežji: `network` ni `mode`
 

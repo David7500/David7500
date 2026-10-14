@@ -17,8 +17,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import (alerts, brskalnik, collector, config, db, deljenje, gtfs, nap, obisk,
-               ocena, opozorila, ovire_sz, peroni, pripni, stats, stik, viri, weather,
-               zamude_lpp, zamude_sz)
+               ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
+               weather, zamude_lpp, zamude_sz)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -323,6 +323,17 @@ def _zazeni_nap() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=nap.teci, args=(_stop, _log), daemon=True,
                            name="kajros-nap")
+    nit.start()
+    return nit
+
+
+def _zazeni_promet() -> threading.Thread | None:
+    """Promet na cestah z NAP, v svoji niti: 12 MB XML na minuto. Brez
+    prijave NAP nit le čaka."""
+    if not config.PROMET:
+        return None
+    nit = threading.Thread(target=promet.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-promet")
     nit.start()
     return nit
 
@@ -658,9 +669,10 @@ async def lifespan(app):
         ovire_nit = _zazeni_ovire_sz()
         lpp_nit = _zazeni_zamude_lpp()
         nap_nit = _zazeni_nap()
+        promet_nit = _zazeni_promet()
         _zazeni_opozorila()
     else:
-        peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = None
+        peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = promet_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -678,6 +690,8 @@ async def lifespan(app):
             lpp_nit.join(timeout=5)
         if nap_nit:
             nap_nit.join(timeout=5)
+        if promet_nit:
+            promet_nit.join(timeout=5)
         if obisk_nit:
             obisk_nit.join(timeout=5)
         # Chrome in Xvfb sta svoja procesa: brez tega po restartu ostaneta.

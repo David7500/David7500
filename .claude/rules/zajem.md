@@ -315,6 +315,16 @@ Lege medkrajevnih avtobusov na derp.si so NAP-ov SIRI-VM, le pretvorjen (`derp-s
 * **Ujemanje z derp.si** (`nap.primerjaj`, `/admin` „NAP · ujemanje z derp.si“), 9. 10. 2026 ob 15:52, šest obhodov po 20 s: skupnih 633–658 vozil, **ista vožnja 99,5–100 %**, odmik lege ob istem `RecordedAtTime` mediana **0,1 m** (največ 16 m), **NAP novejši za mediano 7–20 s** (derp.si bere na 5 s in ima svoj predpomnilnik, mi njega na 10 s).
 * **Cena**: odgovor 2,7 MB XML, **162 kB z gzip** (`requests` ga zahteva sam), prenos 0,7 s, razbor 0,2 s. Na 10 s ~1,4 GB na dan — 20-krat več od leg z derp.si (protobuf). ETag se spremeni ob vsakem odgovoru: pogojni GET ne pomaga.
 
+## Promet na cestah z NAP (`promet.py`, od 14. 10. 2026)
+
+Za vprašanje „kdaj je vlak hitrejši od avta“: čas vožnje z avtom po urah. NAP ima samo trenutno stanje, zgodovino posnamemo sami. Ista prijava kot lege (`nap.prijava`), svoja nit (`kajros-promet`), vsako minuto, in **svoja baza** `promet.sqlite` (~40–60 MB na dan), da glavne ne napihne za vleko in varnostno kopijo. Varnostne kopije te baze ni.
+
+* **FCD nosi samo gnečo.** Vsak odsek v odgovoru je vsaj 20 % počasnejši od proste vožnje (14. 10. 2026: 11 201 od 11 201). Odsotnost = prosto, zato `fcd` piše `NULL`, ko odsek izgine. Kdaj je bil podatek sploh, pove `obhod`: vrzel med obhodoma je neznano, ne prosto.
+* **Dnevnik kot `obs`**: zapis ob spremembi za vsaj 0,5 s (`PRAG_DS`) od zadnje ZAPISANE vrednosti (`fcd_zdaj`). ~2 000 vrstic na minuto ob 13:30 na delavnik.
+* Metapodatki NAP pravijo „avtoceste“, a odgovor ima tudi mestne ulice (617 odsekov znotraj ljubljanske obvoznice). Geometrija odsekov je v `b2b.fcd.datexii33.locations` (OpenLR, 3 GB XML, letno), nit je ne bere.
+* Potovalni časi AC: deset relacij DARS, `ac` po času objave (ista objava enkrat).
+* Odgovor FCD je **datoteka gzip** (`application/x-gzip`, brez `Content-Encoding`): `requests` je ne razpakira, `razberi_fcd` jo sam.
+
 ## Napaka pisanja: najprej `conn.rollback()`
 
 Vsaka nit ima svojo povezavo in vsak `except` okoli pisanja najprej razveljavi. Python ob napaki transakcije ne zapre; prvo branje v njej zamrzne posnetek, nato vsako pisanje vrne „database is locked“ (SQLITE_BUSY_SNAPSHOT) — za vedno, čakanje ne pomaga. 1. 10. 2026 je nočno vzdrževanje ob 3:30 drlo pisanje dlje od 30 s: nit zemljevida SŽ stala 4,3 h, WAL zrasel na 5,4 GB (za odprtim posnetkom ga ni mogoče prepisati), disk na 8 %. Od takrat `journal_size_limit` 64 MB v `db.connect()`, da se WAL po ponastavitvi skrči. Preizkus: `test_nit_po_zaklenjeni_bazi_ne_obstane`.

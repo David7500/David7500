@@ -41,6 +41,7 @@ SKUPINE = (
     ("izvirniki", "Izvirniki in drugi viri"),
     ("dodatki", "Dodatki za prikaz"),
     ("statika", "Vozni red in vreme"),
+    ("analiza", "Za analizo, brez prikaza"),
 )
 
 
@@ -223,6 +224,23 @@ def vsi() -> tuple[Vir, ...]:
             "nobeni strani. Na arwenu `journalctl -u kajros` okoli 4:20; ročno "
             "`kajros update`.",
             preveri=config.LPP_GTFS_URL, prag_napak=1),
+        Vir("promet_fcd", "NAP · promet na cestah (FCD)", "analiza",
+            "Čas vožnje po odsekih cest, kjer je ta hip gneča; za primerjavo "
+            "vlak proti avtu po urah.",
+            "samo zbiranje v promet.sqlite, potnik ga še ne vidi",
+            config.PROMET_FCD_URL, "NCUP (FCD) prek NAP", "brezplačna licenca NAP",
+            f"vsakih {config.PROMET_SECONDS} s", "kajros-promet", config.PROMET, (),
+            "HTTP 401 ali 403: vsebina na nap.si ni (več) odobrena ali prijava "
+            "ne velja — glej vrstico „NAP · lege SIRI“. Drugače počakaj: izgubi "
+            "se le zgodovina za te minute.",
+            preveri=config.PROMET_FCD_URL, preveri_ok=(401, 403)),
+        Vir("promet_ac", "NAP · potovalni časi AC", "analiza",
+            "Čas vožnje po desetih avtocestnih relacijah (LJ - MB, LJ - KP …).",
+            "samo zbiranje v promet.sqlite, potnik ga še ne vidi",
+            config.PROMET_AC_URL, "DARS, PIC prek NAP", "brezplačna licenca NAP",
+            f"vsakih {config.PROMET_SECONDS} s", "kajros-promet", config.PROMET, (),
+            "Kot pri FCD: dostop na nap.si ali počakaj.",
+            preveri=config.PROMET_AC_URL, preveri_ok=(401, 403)),
         Vir("vreme", "vreme · Open-Meteo", "statika",
             "Vreme po celicah 0,1° za vsako uro, za nazaj iz arhiva.",
             "samo prikaz ob zamudi",
@@ -508,6 +526,8 @@ _ZAPISANO: dict[str, Callable] = {
                                        "WHERE kind = 'ovira' AND lang = 'en'"),
     "ovire_sz": lambda c, z: _meta_json_ts(c, "ovire_sz"),
     "nap": lambda c, z: _meta_json_ts(c, "nap"),
+    "promet_fcd": lambda c, z: _meta_json_ts(c, "promet_fcd"),
+    "promet_ac": lambda c, z: _meta_json_ts(c, "promet_ac"),
     "zamude_sz": lambda c, z: _meta_json_ts(c, "zamude_sz"),
     "zamude_lpp": lambda c, z: _meta_json_ts(c, "zamude_lpp"),
     "peroni": lambda c, z: _ena(c, "SELECT MAX(preverjeno) FROM peron_postaja"),

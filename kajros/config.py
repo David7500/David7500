@@ -98,6 +98,16 @@ NAP_SECONDS = int(okolje("NAP_SECONDS", "10"))
 NAP_PREVOZNIKI = frozenset(
     a.strip() for a in (okolje("NAP_PREVOZNIKI", "1119,1121,1123") or "").split(",") if a.strip())
 
+# **Promet na cestah z NAP** (`promet.py`): FCD in potovalni časi AC vsako
+# minuto, za primerjavo vlak proti avtu. Ista prijava kot lege NAP; brez nje
+# nit čaka. Svoja baza, ker je ~40-60 MB na dan. Izklop `KAJROS_PROMET=0`.
+PROMET = okolje("PROMET", "1") != "0"
+PROMET_FCD_URL = okolje("PROMET_FCD_URL", "https://b2b.nap.si/data/b2b.fcd.datexii33.status")
+PROMET_AC_URL = okolje("PROMET_AC_URL",
+                       "https://b2b.nap.si/data/b2b.traveltimes.promet.datexii33")
+PROMET_SECONDS = int(okolje("PROMET_SECONDS", "60"))
+PROMET_DB = Path(okolje("PROMET_DB", DATA_DIR / "promet.sqlite"))
+
 # **Brskalnik za potniski.sz.si** (`brskalnik.py`). Stran je za Cloudflarom,
 # ki od 7. 10. 2026 spusti samo Chrome z oknom; na strežniku ga dobi
 # navidezni zaslon Xvfb. Prazno = poišči sam (`google-chrome-stable`,
