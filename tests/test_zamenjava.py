@@ -153,6 +153,21 @@ def test_postanek_brez_para_se_izpusti_in_neznana_vozja_steje():
     assert collector.ingest(c, _feed("x9", _stu(1, delay=60)))["neznanih"] == 1
 
 
+def test_stara_vozja_prevoznika_nap_ni_neznana(monkeypatch):
+    """derp.si nosi staro vožnjo (nagrobnik brez voznega reda), ker ima star
+    vozni red; zamude prevoznika vodi NAP pod novo. Ni izgube, ne šteje se."""
+    from kajros import iz_lege
+    c = _baza()
+    for tid, agency in (("star_nap", "1119"), ("star_lpp", "1118")):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network)"
+                  " VALUES(?, 'r', 'N1', 'star', 'bus', ?, 'avtobus')", (tid, agency))
+    monkeypatch.setattr(iz_lege, "nap_vodi", lambda a, z=None: a == "1119")
+    assert collector.ingest(c, _feed("star_nap", _stu(1, delay=60)))["neznanih"] == 0
+    assert collector.ingest(c, _feed("star_lpp", _stu(1, delay=60)))["neznanih"] == 1
+    monkeypatch.setattr(iz_lege, "nap_vodi", lambda a, z=None: False)      # NAP molči
+    assert collector.ingest(c, _feed("star_nap", _stu(1, delay=60)))["neznanih"] == 1
+
+
 def test_lega_gre_k_novi_vozji():
     c = _baza()
     f = gtfs_realtime_pb2.FeedMessage()

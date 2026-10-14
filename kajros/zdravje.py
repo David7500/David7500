@@ -168,15 +168,24 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     # ~100, takoj po restartu 5 od 104 (4,8 %), preden je `iz_lege` dohitel.
     # Samo z deležem 2 % je bila vrstica -- in s tem vsa stran -- rdeča zaradi
     # dveh avtobusov. Pred zapolnitvijo je bilo 8 od 91 (8,8 %).
+    #
+    # Rumena vrstica pove obe števili, vsako le, kadar ni nič. Do 14. 10. 2026
+    # je kazala samo prvo, ki je pri prevoznikih NAP vedno 0 (vir zamud je
+    # lega sama), prižgalo pa jo je drugo: „Nomago 0 od 160“.
     lbz = z.get("lega_brez_zamude")
     if lbz is not None:
         vidni = {ime: v for ime, v in lbz.items() if v[0] > 0 or v[1] > 0}
         slabi = [f"{ime} {nz} od {vseh}" for ime, (_, nz, vseh) in vidni.items()
                  if nz >= 3 and vseh and nz / vseh >= 0.05]
+
+        def stevilo(i: int) -> str:
+            return ", ".join(f"{ime} {v[i]} od {v[2]}" for ime, v in vidni.items() if v[i])
+        brez, mimo = stevilo(1), stevilo(0)
         out["lega_brez_zamude"] = (
             (SLABA, "vozila brez vsake zamude: " + ", ".join(slabi)) if slabi
-            else (MLACNA, "vozila brez feeda zamud, zamudo meri lega: " + ", ".join(
-                f"{ime} {nf} od {vseh}" for ime, (nf, _, vseh) in vidni.items()))
+            else (MLACNA, "; ".join(x for x in (
+                brez and "vozila brez zamude: " + brez,
+                mimo and "feed zamud jih ne nosi, zamudo meri lega: " + mimo) if x))
             if vidni else (DOBRA, ""))
 
     # Zemljevid SŽ (`zamude_sz`) vodi zamude vlakov. Rdeče, kadar stoji NIT:

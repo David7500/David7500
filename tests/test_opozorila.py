@@ -59,6 +59,17 @@ def test_obstala_nit_sz_ponoci_ni_rdeca():
     assert "zamude_sz" in _rdece(z)
 
 
+def test_rumena_vrstica_pove_stevilo_ki_jo_prizge():
+    """Pri prevoznikih NAP je „ne v feedu“ vedno 0; prej je vrstica pisala
+    „Nomago 0 od 160“, prižgalo pa jo je 5 vozil brez zamude."""
+    z = _zdravo()
+    z["lega_brez_zamude"] = {"Nomago": [0, 2, 160], "Arriva": [0, 0, 137], "LPP": [3, 0, 40]}
+    raz, besedilo = zdravje.ocena(z, STROJ, T)["lega_brez_zamude"]
+    assert raz == zdravje.MLACNA
+    assert besedilo == ("vozila brez zamude: Nomago 2 od 160; "
+                        "feed zamud jih ne nosi, zamudo meri lega: LPP 3 od 40")
+
+
 def test_wal_in_disk():
     m = {**STROJ, "wal_bajtov": int(5.4 * 2**30)}
     assert _rdece(_zdravo(), m) == {"wal"}

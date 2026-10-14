@@ -358,12 +358,14 @@ CREATE INDEX IF NOT EXISTS odklon_ts ON odklon(od_ts);
 
 -- Lege voženj, iz katerih se meri prehod brez trase (`prehod.py`), zadnjih
 -- 14 dni: obnova sledi po zagonu in ponovitev meritve na pravih podatkih.
+-- `vozilo` od 14. 10. 2026 (prej NULL): NAP zna pod isto vožnjo javljati dve.
 CREATE TABLE IF NOT EXISTS lega (
     service_date TEXT NOT NULL,
     trip_id      TEXT NOT NULL,
     ts           INTEGER NOT NULL,
     lat          REAL NOT NULL,
     lon          REAL NOT NULL,
+    vozilo       TEXT,
     PRIMARY KEY (service_date, trip_id, ts)
 ) WITHOUT ROWID;
 
@@ -533,6 +535,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     stolpci = {r[1] for r in conn.execute("PRAGMA table_info(odklon)")}
     if stolpci and "vrsta" not in stolpci:
         conn.execute("ALTER TABLE odklon ADD COLUMN vrsta TEXT NOT NULL DEFAULT 'izven'")
+        conn.commit()
+    # `lega` je 14. 10. 2026 dobila vozilo: dve vozili na isti vožnji imata
+    # vsako svojo sled (`prehod._sledi`). Starejše lege ostanejo brez.
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(lega)")}
+    if stolpci and "vozilo" not in stolpci:
+        conn.execute("ALTER TABLE lega ADD COLUMN vozilo TEXT")
         conn.commit()
 
     row = conn.execute(

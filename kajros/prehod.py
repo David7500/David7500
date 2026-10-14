@@ -89,13 +89,14 @@ _M = geo.EARTH_R * math.pi / 180
 class Sled:
     """Lege ene vožnje in njeni postanki v krajevni ravnini (metri)."""
 
-    __slots__ = ("trip_id", "dan", "polnoc", "kx", "postanki", "k", "tocke",
-                 "odprti", "cakajoci", "zadnja", "t_zadnji", "osvezeno")
+    __slots__ = ("trip_id", "dan", "vozilo", "polnoc", "kx", "postanki", "k", "tocke",
+                 "odprti", "cakajoci", "zadnja", "t_zadnji", "osvezeno", "prehodi")
 
-    def __init__(self, trip_id: str, dan: str, postanki: list[tuple]):
+    def __init__(self, trip_id: str, dan: str, postanki: list[tuple],
+                 vozilo: str | None = None):
         """`postanki` = [(stop_seq, lat, lon, voznoredni čas)] v vrstnem redu
         vožnje, z izhodiščem; čas v s od polnoči prometnega dne."""
-        self.trip_id, self.dan = trip_id, dan
+        self.trip_id, self.dan, self.vozilo = trip_id, dan, vozilo
         self.polnoc = stats.polnoc(dan)
         self.kx = math.cos(math.radians(postanki[0][1])) * _M
         self.postanki = [(seq, lon * self.kx, lat * _M, cas) for seq, lat, lon, cas in postanki]
@@ -106,6 +107,7 @@ class Sled:
         self.zadnja: float | None = None    # zamuda zadnjega potrjenega
         self.t_zadnji: float | None = None  # najbližja točka zadnjega potrjenega
         self.osvezeno = time.time()
+        self.prehodi: dict[int, tuple] = {}  # stop_seq -> prehod, za izbor vozila
 
 
 def _blizina(tetiva: tuple, sx: float, sy: float) -> tuple[float, float]:
@@ -332,39 +334,86 @@ def tiho(sled: Sled, zdaj: float) -> list[tuple]:
 
 # ------------------------------------------------------------ v strežniku
 
-#: (trip_id, dan) -> Sled. Sledi pišeta nit NAP in zajem derp.si, vsaka za
-#: svoje vožnje; zaklep le okoli pomnilnika, nikoli okoli baze (dve niti s
-#: pisalnim prometom bi se zaklenili druga ob drugo).
-_sledi: dict[tuple[str, str], Sled] = {}
+#: (trip_id, dan, vozilo) -> Sled. Sledi pišeta nit NAP in zajem derp.si,
+#: vsaka za svoje vožnje; zaklep le okoli pomnilnika, nikoli okoli baze (dve
+#: niti s pisalnim prometom bi se zaklenili druga ob drugo).
+#:
+#: Po vozilu, ker NAP pod isto vožnjo zna javljati dve vozili hkrati: 14. 10.
+#: 2026 33 od 6 179 voženj, 13. 10. 41 od 8 469 -- eno vozi, drugo stoji na
+#: postaji ali vozi drugo progo. Ena sled je sledila tistemu, ki se je
+#: javilo prvo, lege drugega pa zavrgla kot skoke GPS: Nomago Ljubno -> Celje
+#: točen, a brez vsake zamude, ker je sled stala z vozilom v Mozirju.
+_sledi: dict[tuple[str, str, str | None], Sled] = {}
+#: (trip_id, dan) -> sled vozila, ki vožnjo vodi (`_izberi`).
+_vodje: dict[tuple[str, str], Sled] = {}
 _zaklep = threading.Lock()
 #: Od zagona, za /admin.
-stevci = {"leg": 0, "prehodov": 0, "dopolnjenih": 0, "obnovljenih": 0}
+stevci = {"leg": 0, "prehodov": 0, "dopolnjenih": 0, "obnovljenih": 0,
+          "tujih": 0, "zamenjav": 0}
 _brisi_po = 0.0
 
 
-def _nova(conn: sqlite3.Connection, trip_id: str, dan: str) -> Sled | None:
+def _nova(conn: sqlite3.Connection, trip_id: str, dan: str,
+          vozilo: str | None) -> Sled | None:
     postanki = conn.execute(
         "SELECT s.stop_seq, st.lat, st.lon, COALESCE(s.dep_s, s.arr_s) FROM sched s "
         "JOIN station st USING (stop_id) WHERE s.trip_id = ? ORDER BY s.stop_seq",
         (trip_id,)).fetchall()
-    return Sled(trip_id, dan, postanki) if len(postanki) >= 2 else None
+    return Sled(trip_id, dan, postanki, vozilo) if len(postanki) >= 2 else None
+
+
+def _izberi(sled: Sled, novi: list[tuple]) -> list[tuple]:
+    """Prehodi, ki veljajo za vožnjo: le od vozila, ki jo vodi. Vodi vozilo z
+    največ prehodi; ko ga drugo prehiti, veljajo vsi prehodi novega in
+    povozijo prejšnjega. Kliče se pod `_zaklep`.
+
+    Prvo vozilo s prehodom ni dovolj: na ponovitvi 13. in 14. 10. 2026 (vozilo
+    po hitrosti med legami, ker `lega` takrat vozila ni hranila) je tako
+    pravo vozilo izgubilo pri treh vožnjah (Slovenj Gradec -> Radlje 19
+    postankov proti 3), z največ prehodi pa je bilo na prizadetih vožnjah
+    904 izmerjenih postankov namesto 727 in 796 namesto 558."""
+    for p in novi:
+        sled.prehodi[p[0]] = p
+    kljuc = (sled.trip_id, sled.dan)
+    vodja = _vodje.get(kljuc)
+    if vodja is not None and _sledi.get((*kljuc, vodja.vozilo)) is not vodja:
+        vodja = None                    # pozabljena sled ne vodi
+    if vodja is sled:
+        return novi
+    if novi and (vodja is None or len(sled.prehodi) > len(vodja.prehodi)):
+        _vodje[kljuc] = sled
+        stevci["zamenjav"] += vodja is not None
+        return list(sled.prehodi.values())
+    stevci["tujih"] += len(novi)
+    return []
+
+
+def vodja(trip_id: str, dan: str) -> tuple[str | None, float] | None:
+    """Vozilo, ki vožnjo vodi, in čas njegove zadnje lege -- da zemljevid ne
+    skače med dvema voziloma iste vožnje."""
+    with _zaklep:
+        s = _vodje.get((trip_id, dan))
+        return (s.vozilo, s.polnoc + s.tocke[-1][0]) if s and s.tocke else None
 
 
 def lega(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int, lat: float,
-         lon: float) -> list[tuple]:
-    """Lega vožnje: v `lega`, v sled; vrne nove prehode. Sled, ki je ta proces
-    še nima, se najprej obnovi iz `lega` -- po ponovnem zagonu bi se sicer
-    izgubil obisk, ki je ravno trajal, in vsi postanki do naslednjega."""
-    conn.execute("INSERT OR IGNORE INTO lega(service_date, trip_id, ts, lat, lon) "
-                 "VALUES(?,?,?,?,?)", (dan, trip_id, ts, round(lat, 6), round(lon, 6)))
-    kljuc = (trip_id, dan)
+         lon: float, vozilo: str | None = None) -> list[tuple]:
+    """Lega vozila na vožnji: v `lega`, v sled; vrne nove prehode, ki veljajo.
+    Sled, ki je ta proces še nima, se najprej obnovi iz `lega` -- po ponovnem
+    zagonu bi se sicer izgubil obisk, ki je ravno trajal, in vsi postanki do
+    naslednjega. Lege brez vozila (zapisane pred 14. 10. 2026) gredo v vse
+    sledi vožnje."""
+    conn.execute("INSERT OR IGNORE INTO lega(service_date, trip_id, ts, lat, lon, vozilo) "
+                 "VALUES(?,?,?,?,?,?)", (dan, trip_id, ts, round(lat, 6), round(lon, 6), vozilo))
+    kljuc = (trip_id, dan, vozilo)
     prej = []
     if kljuc not in _sledi:
-        sled = _nova(conn, trip_id, dan)
+        sled = _nova(conn, trip_id, dan, vozilo)
         if sled is None:
             return []
         prej = conn.execute("SELECT ts, lat, lon FROM lega WHERE service_date = ? AND trip_id = ? "
-                            "AND ts < ? ORDER BY ts", (dan, trip_id, ts)).fetchall()
+                            "AND ts < ? AND (vozilo IS ? OR vozilo IS NULL) ORDER BY ts",
+                            (dan, trip_id, ts, vozilo)).fetchall()
         with _zaklep:
             _sledi.setdefault(kljuc, sled)
     out = []
@@ -373,6 +422,7 @@ def lega(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int, lat: float,
         for t, la, lo in prej:
             out += dodaj(sled, t - sled.polnoc, la, lo)
         out += dodaj(sled, ts - sled.polnoc, lat, lon)
+        out = _izberi(sled, out)
     stevci["leg"] += 1
     stevci["obnovljenih"] += bool(prej)
     return out
@@ -403,10 +453,12 @@ def pospravi(conn: sqlite3.Connection, zdaj: float | None = None) -> list[tuple]
     out = []
     with _zaklep:
         for k, s in list(_sledi.items()):
-            if s.tocke and (p := tiho(s, zdaj)):
+            if s.tocke and (p := _izberi(s, tiho(s, zdaj))):
                 out.append((s.trip_id, s.dan, p, round(s.polnoc + s.tocke[-1][0])))
             if zdaj - s.osvezeno > POZABI_S:
                 del _sledi[k]
+                if _vodje.get(k[:2]) is s:
+                    del _vodje[k[:2]]
     if zdaj >= _brisi_po:
         meja = (date.fromtimestamp(zdaj) - timedelta(days=HRANI_DNI)).isoformat()
         n = sum(conn.execute(

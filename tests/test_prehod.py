@@ -22,8 +22,10 @@ POLNOC = stats.polnoc(DAN)
 @pytest.fixture(autouse=True)
 def _cist_spomin():
     prehod._sledi.clear()
+    prehod._vodje.clear()
     yield
     prehod._sledi.clear()
+    prehod._vodje.clear()
 
 
 def _sled(postanki):
@@ -206,6 +208,42 @@ def test_sled_se_po_zagonu_obnovi_iz_tabele_lega():
     assert c.execute("SELECT COUNT(*) FROM lega").fetchone()[0] == len(pot)
 
 
+def test_dve_vozili_na_isti_vozji_vsako_svoja_sled():
+    """NAP pod isto vožnjo javlja dve vozili: eno stoji 5 km stran, drugo
+    vozi. Ena sled je sledila prvemu in lege drugega zavrgla kot skoke GPS
+    (14. 10. 2026 Nomago Ljubno -> Celje brez vsake zamude)."""
+    c = _baza()
+    stoji = [(36050 + 20 * i, 46.05, 14.015) for i in range(16)]
+    vozi = _vzhod(36060, 14.0, 14.03)
+    novi = []
+    for t, lat, lon, v in sorted([(*p, "stoji") for p in stoji] + [(*p, "vozi") for p in vozi]):
+        novi += prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, v)
+    assert [p[0] for p in novi] == [2, 3]
+    assert all(60 <= p[1] <= 70 for p in novi), novi
+    assert prehod.vodja("n", DAN)[0] == "vozi"
+    assert {r[0] for r in c.execute("SELECT vozilo FROM lega")} == {"stoji", "vozi"}
+
+
+def test_vozjo_prevzame_vozilo_z_vec_prehodi():
+    """Prvo vozilo prevozi B in C, nato zavije drugam; pravo vozi vso pot s
+    5 min zamude. Ko ima več prehodov, veljajo njegovi in povozijo prve."""
+    c = _baza()
+    napacno = _vzhod(36000, 14.0, 14.022) + [(36220 + 20 * i, 46.0 + 0.002 * i, 14.022)
+                                             for i in range(1, 10)]
+    prav = _vzhod(36300, 14.0, 14.03) + [(36600 + 20 * i, 46.0, 14.03) for i in range(1, 9)]
+    zapisano = {}
+    for t, lat, lon in napacno:
+        for p in prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, "napacno"):
+            zapisano[p[0]] = p[1]
+    assert sorted(zapisano) == [2, 3] and all(abs(z) < 30 for z in zapisano.values())
+    for t, lat, lon in prav:
+        for p in prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, "prav"):
+            zapisano[p[0]] = p[1]
+    assert sorted(zapisano) == [2, 3, 4]
+    assert all(290 <= z <= 320 for z in zapisano.values()), zapisano
+    assert prehod.vodja("n", DAN)[0] == "prav"
+
+
 def test_senca_pise_gps_prehod_ne_run(monkeypatch):
     monkeypatch.setattr(config, "PREHOD_GPS", "senca")
     c = _baza()
@@ -233,8 +271,8 @@ def test_vodi_pise_run(monkeypatch):
 def test_stare_lege_se_pobrisejo():
     c = _baza()
     staro = (date.today() - timedelta(days=prehod.HRANI_DNI + 1)).isoformat()
-    c.execute("INSERT INTO lega VALUES(?, 'n', 1, 46.0, 14.0)", (staro,))
-    c.execute("INSERT INTO lega VALUES(?, 'n', 2, 46.0, 14.0)", (DAN,))
+    c.execute("INSERT INTO lega(service_date, trip_id, ts, lat, lon) VALUES(?, 'n', 1, 46.0, 14.0)", (staro,))
+    c.execute("INSERT INTO lega(service_date, trip_id, ts, lat, lon) VALUES(?, 'n', 2, 46.0, 14.0)", (DAN,))
     prehod._brisi_po = 0
     prehod.pospravi(c)
     assert [r[0] for r in c.execute("SELECT service_date FROM lega")] == [DAN]
@@ -245,7 +283,7 @@ def test_primerjava_s_sedanjim_nacinom():
     c = _baza()
     for t, lat, lon in _vzhod(36060, 14.0, 14.03):
         prehod.zapisi(c, "n", DAN, prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon), int(POLNOC + t))
-    prehod.zapisi(c, "n", DAN, prehod.tiho(prehod._sledi[("n", DAN)], POLNOC + 37000), int(POLNOC + 36360))
+    prehod.zapisi(c, "n", DAN, prehod.tiho(prehod._sledi[("n", DAN, None)], POLNOC + 37000), int(POLNOC + 36360))
     c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
               "VALUES('n', ?, 2, NULL, 60, 0)", (DAN,))
     p = prehod.primerjava(c, DAN, DAN)

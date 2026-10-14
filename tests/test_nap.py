@@ -154,7 +154,7 @@ def test_lega_za_vsa_vozila_zamuda_iz_lege_le_brez_derp(monkeypatch):
     c = _baza()
     klici = []
     monkeypatch.setattr(iz_lege, "brez_feeda", lambda t, z=None: True)
-    monkeypatch.setattr(iz_lege, "opazuj", lambda conn, t, d, ts, lat, lon: klici.append(ts) or 0)
+    monkeypatch.setattr(iz_lege, "opazuj", lambda conn, t, d, ts, lat, lon, vozilo=None: klici.append(ts) or 0)
     v = [{"vozilo": "a", "ijpp": "1001", "ts": ZDAJ, "lat": 46.1, "lon": 14.4, "smer": None}]
     izid = nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], {"a": ("1001", ZDAJ - 20, 46.1, 14.4)}, ZDAJ)
     assert izid["zapisanih"] == 1 and klici == []
@@ -162,6 +162,20 @@ def test_lega_za_vsa_vozila_zamuda_iz_lege_le_brez_derp(monkeypatch):
     v[0]["ts"] = ZDAJ + 10
     nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], None, ZDAJ)
     assert klici == [ZDAJ + 10]
+
+
+def test_zemljevid_kaze_vozilo_ki_vozjo_vodi(monkeypatch):
+    """Dve vozili na isti vožnji: ikona ne skače k vozilu, ki je ne vodi."""
+    c = _baza()
+    monkeypatch.setattr(prehod, "vodja", lambda t, d: ("a", ZDAJ - 30))
+    v = [{"vozilo": "b", "ijpp": "1001", "ts": ZDAJ, "lat": 46.2, "lon": 14.4, "smer": None},
+         {"vozilo": "a", "ijpp": "1001", "ts": ZDAJ - 10, "lat": 46.1, "lon": 14.4, "smer": None}]
+    nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], None, ZDAJ)
+    assert tuple(c.execute("SELECT vehicle_id, seen_ts FROM vehicle_now").fetchone()) == ("a", ZDAJ - 10)
+    # Vodilno vozilo je utihnilo: drugo se pokaže.
+    monkeypatch.setattr(prehod, "vodja", lambda t, d: ("a", ZDAJ - 10 - prehod.RAZMIK_S - 60))
+    nap.zapisi(c, nap.pripni(c, v[:1], ZDAJ)[0], None, ZDAJ)
+    assert c.execute("SELECT vehicle_id FROM vehicle_now").fetchone()[0] == "b"
 
 
 def test_derp_molči_nap_piše_vse_in_ne_povozi_novejšega():
@@ -254,7 +268,7 @@ def test_nap_meri_zamudo_tudi_za_vozilo_ki_ga_ima_derp(monkeypatch):
     c = _baza()
     klici = []
     monkeypatch.setattr(iz_lege, "brez_feeda", lambda t, z=None: True)
-    monkeypatch.setattr(iz_lege, "opazuj", lambda conn, t, d, ts, lat, lon: klici.append(t) or 0)
+    monkeypatch.setattr(iz_lege, "opazuj", lambda conn, t, d, ts, lat, lon, vozilo=None: klici.append(t) or 0)
     iz_lege.nap_prebran(ZDAJ)
     v = [{"vozilo": "a", "ijpp": "1001", "ts": ZDAJ, "lat": 46.1, "lon": 14.4, "smer": None}]
     nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], {"a": ("1001", ZDAJ - 20, 46.1, 14.4)}, ZDAJ)

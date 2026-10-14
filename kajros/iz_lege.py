@@ -232,10 +232,10 @@ def prehodi(v: deljenje.Voznja, prej: tuple[float, float] | None,
 
 
 def opazuj(conn: sqlite3.Connection, trip_id: str, dan: str, ts: int,
-           lat: float, lon: float) -> int:
+           lat: float, lon: float, vozilo: str | None = None) -> int:
     """Ena lega vožnje brez zamud. Vrne število zapisanih prehodov."""
     if config.PREHOD_GPS != "0":
-        n = _gps(conn, trip_id, dan, prehod.lega(conn, trip_id, dan, ts, lat, lon), ts)
+        n = _gps(conn, trip_id, dan, prehod.lega(conn, trip_id, dan, ts, lat, lon, vozilo), ts)
         if config.PREHOD_GPS == "vodi":
             return n
     v = deljenje.voznja(conn, trip_id)
@@ -390,7 +390,7 @@ def iz_feeda(conn: sqlite3.Connection, feed) -> int:
         if nap_vodi(agencije.get(tid)):
             continue
         n += opazuj(conn, tid, f"{dan[:4]}-{dan[4:6]}-{dan[6:]}", v.timestamp,
-                    v.position.latitude, v.position.longitude)
+                    v.position.latitude, v.position.longitude, v.vehicle.id or None)
     pospravi(conn=conn)
     conn.commit()
     return n

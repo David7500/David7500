@@ -120,6 +120,14 @@ function pred(ts) {
   if (s < 5400) return `pred ${Math.round(s / 60)} min`;
   return `pred ${st(s / 3600, 1)} h`;
 }
+/** `lega_brez_zamude` po prevozniku: [ne v feedu zamud, brez zamude, vseh].
+ *  Pri prevoznikih NAP je prvo vedno 0 -- vir zamud je lega sama --, zato
+ *  vsako število le, kadar ni nič. */
+function brezZamude(z) {
+  const v = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
+  return v.length ? v.map(([ime, [nf, nz, vseh]]) => `${ime} ${st(nz)} od ${st(vseh)}`
+    + (nf ? `, feed zamud ne nosi ${st(nf)}` : "")).join(" · ") : null;
+}
 function prazno(kaj) { return `<div class="adm-prazno">${escapeHtml(kaj)}</div>`; }
 
 /** Sprememba proti prejšnjemu obdobju; brez podatka ne trdi ničesar. */
@@ -518,9 +526,7 @@ function podrobnostiVira(kljuc, d) {
   const nez = (vir) => { const n = (z.rt_neznanih || {})[vir]; return n ? `${st(n[0])} od ${st(n[1])}` : null; };
   if (kljuc === "derp_zamude") {
     dodaj("vožnje brez voznega reda", nez("ijpp"));
-    const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
-    dodaj("vozila brez feeda zamud", lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
-      `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : null);
+    dodaj("vozila brez zamude", brezZamude(z));
   } else if (kljuc === "derp_lpp") {
     dodaj("vožnje brez voznega reda", nez("lpp"));
   } else if (kljuc === "ovire_sz") {
@@ -547,7 +553,9 @@ function podrobnostiVira(kljuc, d) {
     const g = nm.gps;
     if (g && g.nacin !== "0") {
       dodaj(`brez trase (${g.nacin}) · od zagona`, `${st(g.leg)} leg · ${st(g.prehodov)} prehodov`
-        + ` · dopolnjenih ${st(g.dopolnjenih)} · obnovljenih sledi ${st(g.obnovljenih)}`);
+        + ` · dopolnjenih ${st(g.dopolnjenih)} · obnovljenih sledi ${st(g.obnovljenih)}`
+        + (g.tujih != null ? ` · zavrženih od drugega vozila iste vožnje ${st(g.tujih)}`
+          + ` · prevzemov ${st(g.zamenjav)}` : ""));
     }
   } else if (kljuc === "zamude_sz") {
     const zs = z.zamude_sz;
@@ -693,15 +701,13 @@ function vrsticeZajema(d) {
   const z = d.zdravje || {}, r = d.razredi || {}, mreze = z.by_network || {};
   const zel = mreze.zeleznica || {}, bus = mreze.avtobus || {}, sen = z.senca || {};
   const nez = Object.entries(z.rt_neznanih || {});
-  const lbz = Object.entries(z.lega_brez_zamude || {}).filter(([, [nf, nz]]) => nf > 0 || nz > 0);
   return [
     ["zadnja zamuda v bazi", pred(z.last_feed_ts), r.feed],
     ["vlaki · zadnji zapis", pred(zel.last_feed_ts), r.zeleznica],
     ["avtobusi · zadnji zapis", pred(bus.last_feed_ts), r.avtobus],
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—", r.neznane],
-    ["vozila brez feeda zamud", lbz.length ? lbz.map(([ime, [nf, nz, vseh]]) =>
-      `${ime} ${st(nf)} od ${st(vseh)}${nz ? `, brez zamude ${st(nz)}` : ""}`).join(" · ") : "—", r.lega_brez_zamude],
+    ["vozila brez zamude", brezZamude(z) || "—", r.lega_brez_zamude],
     ["vozil z lego", st(z.vehicles_with_gps)],
     ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`],
     ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`],

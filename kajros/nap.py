@@ -266,6 +266,12 @@ def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
     """
     zapisanih = prehodov = 0
     for v in pripeta:
+        # Dve vozili na isti vožnji: na zemljevidu tisto, ki jo vodi
+        # (`prehod.vodja`), dokler se javlja -- sicer ikona skače med njima.
+        vodi = prehod.vodja(v["trip_id"], v["dan"])
+        if vodi and vodi[0] != v["vozilo"] and v["ts"] - vodi[1] <= prehod.RAZMIK_S:
+            prehodov += _iz_lege(conn, v, derp, zdaj)
+            continue
         conn.execute(
             "INSERT INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon, bearing,"
             "                        vehicle_id) VALUES(?,?,?,?,?,?,?) "
@@ -277,15 +283,21 @@ def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
             "WHERE excluded.seen_ts > vehicle_now.seen_ts",
             (v["trip_id"], v["dan"], v["ts"], v["lat"], v["lon"], v["smer"], v["vozilo"]))
         zapisanih += 1
-        if (derp is not None and v["vozilo"] in derp
-                and not iz_lege.nap_vodi(v.get("agency"), zdaj)):
-            continue
-        if config.ZAMUDA_IZ_LEGE and iz_lege.brez_feeda(v["trip_id"], zdaj):
-            prehodov += iz_lege.opazuj(conn, v["trip_id"], v["dan"], v["ts"],
-                                       v["lat"], v["lon"])
+        prehodov += _iz_lege(conn, v, derp, zdaj)
     # Kot `collector.ingest_positions`: ob izpadu derp.si briše le ta nit.
     conn.execute("DELETE FROM vehicle_now WHERE seen_ts < ?", (int(zdaj) - 3600,))
     return {"zapisanih": zapisanih, "prehodov": prehodov}
+
+
+def _iz_lege(conn: sqlite3.Connection, v: dict, derp: dict | None, zdaj: float) -> int:
+    """Zamuda iz lege vozila: samo, kadar ga derp.si nima ali vodi NAP."""
+    if (derp is not None and v["vozilo"] in derp
+            and not iz_lege.nap_vodi(v.get("agency"), zdaj)):
+        return 0
+    if config.ZAMUDA_IZ_LEGE and iz_lege.brez_feeda(v["trip_id"], zdaj):
+        return iz_lege.opazuj(conn, v["trip_id"], v["dan"], v["ts"],
+                              v["lat"], v["lon"], v["vozilo"])
+    return 0
 
 
 def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:

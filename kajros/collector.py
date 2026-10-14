@@ -467,7 +467,12 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
             stevec[0] += trip_id is None
             stevec[1] += 1
         if trip_id is None:
-            neznanih += 1
+            # Staro vožnjo prevoznika, ki ga vodi NAP, derp.si še nosi: njegov
+            # TransitClock ima star vozni red. Isto vozilo NAP vodi pod novo
+            # (14. 10. 2026 v dveh vzorcih vseh 15 voženj Nomaga in Arrive)
+            # -- izgube ni, rumena vrstica pa je bila stalna.
+            if not iz_lege.nap_vodi(agencije.get(tu.trip.trip_id)):
+                neznanih += 1
             continue
         zamenjanih += zamenjava is not None
         trips_seen += 1
