@@ -542,12 +542,12 @@ document.querySelectorAll(".tocka").forEach((el) => {
       }
       // GPS brez omrežnega določanja lege rabi lahko pol minute. Molk je v
       // tem času videti kot pokvarjen gumb, zato povemo, kje smo.
-      povej("Iščem tvojo lego … (GPS zna rabiti pol minute)", null);
+      povej("Iščem tvojo lego … (GPS zna rabiti pol minute)", "isce");
       try {
         const loc = await locateMe({
           napredek: (l) => {
             risiJaz(l);
-            povej(`Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m`, null);
+            povej(`Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m`, "isce");
           },
         });
         risiJaz(loc);
@@ -841,8 +841,57 @@ function izrisi(izid) {
 
 let poizvedba = null;
 
+// Iskanje traja: v tednu 7.–13. 10. 2026 je bilo 53 % iskanj daljših od
+// 2,5 s in 32 % od 5 s (881 zahtev, `obisk_odziv`). Drobno sivo „Iščem …“
+// pod možnostmi je bilo premalo -- potnik je stran skoraj zaprl, ker je
+// mislil, da ne dela (prijava 14. 10. 2026). Zato pove gumb, ki ga je ravno
+// pritisnil, in sporočilo, ki se giblje; po treh sekundah še, da je to običajno.
+const gumbIsci = $("#isci");
+const NAPIS_ISCI = gumbIsci.textContent;
+const SE_ISCEM_MS = 3000;
+let iskanjeSt = 0;
+let seIscemUra = null;
+
+function zacniIskanje() {
+  const moje = ++iskanjeSt;
+  // Enter v polju pusti tipkovnico odprto in ta pokrije prav to sporočilo.
+  if (document.activeElement && document.activeElement !== document.body) {
+    document.activeElement.blur();
+  }
+  gumbIsci.disabled = true;
+  gumbIsci.classList.add("je-isce");
+  gumbIsci.textContent = "Iščem …";
+  povej("Iščem pot …", "isce");
+  stanje.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  clearTimeout(seIscemUra);
+  seIscemUra = setTimeout(() => {
+    if (moje === iskanjeSt && stanje.classList.contains("je-isce")) {
+      povej("Še iščem … daljša pot zna trajati nekaj sekund.", "isce");
+    }
+  }, SE_ISCEM_MS);
+  return moje;
+}
+
+// Gumb vrne samo zadnje iskanje: prejšnje, prekinjeno, konča prej in bi ga
+// sprostilo, medtem ko novo še teče.
+function koncajIskanje(moje) {
+  if (moje !== iskanjeSt) return;
+  clearTimeout(seIscemUra);
+  gumbIsci.disabled = false;
+  gumbIsci.classList.remove("je-isce");
+  gumbIsci.textContent = NAPIS_ISCI;
+}
+
 async function isci() {
-  povej("Iščem …", null);
+  const moje = zacniIskanje();
+  try {
+    await isciPot();
+  } finally {
+    koncajIskanje(moje);
+  }
+}
+
+async function isciPot() {
   const [a, b] = await Promise.all([razresi("od"), razresi("do")]);
   if (!a || !b) {
     const kaj = !a ? "od" : "do";
@@ -930,7 +979,7 @@ addEventListener("pagehide", () => {
   } catch (e) { /* brez obnove mesta */ }
 });
 
-$("#isci").addEventListener("click", isci);
+gumbIsci.addEventListener("click", isci);
 $("#tam").addEventListener("keydown", (e) => { if (e.key === "Enter") isci(); });
 // Kadar je odgovor že na zaslonu, ga spremenjeno vprašanje osveži; dokler ga
 // ni, išče samo gumb (isto pravilo kot na vstopni strani).

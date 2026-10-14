@@ -193,6 +193,20 @@
 }
 @media (hover: hover) { .pot-isci:hover { filter: brightness(1.06); } }
 
+/* Med iskanjem gumb pove, da je prijel: iskanje traja pogosto nad 5 s (glej
+   `zacniIskanje` v pot.js) in drobno sivo sporočilo pod možnostmi je potnik
+   spregledal. Barva gumba ostane -- posivel gumb je videti kot okvara. */
+.pot-isci.je-isce {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  cursor: progress;
+}
+.pot-isci.je-isce::before {
+  content: ""; width: 16px; height: 16px; flex: none;
+  border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: pot-vrti 0.8s linear infinite;
+}
+@keyframes pot-vrti { to { transform: rotate(360deg); } }
+
 .pot-stanje { min-height: 1.2em; font-size: 0.82rem; color: var(--ink-dim); line-height: 1.5; }
 /* Naslov izida pove, na katero vprašanje odgovarja -- "čim prej" in "do
    8:00" dasta drugačen vrstni red in ta mora biti viden. */
@@ -201,6 +215,26 @@
 .pot-stanje strong { color: var(--ink); font-family: var(--mono); }
 .pot-stanje.je-napaka { color: var(--sev-bad); }
 .pot-stanje.je-prazno { color: var(--ink-mute); }
+/* Sporočilo, da iščemo, je kartica z gibljivo črto, ne vrstica drobnega
+   besedila: ta je ostala na zaslonu tudi po petih sekundah, kot da se ni
+   zgodilo nič. */
+.pot-stanje.je-isce {
+  position: relative; overflow: hidden;
+  margin-top: 4px; padding: 12px 14px 14px;
+  font-size: 0.95rem; font-weight: 500; color: var(--ink);
+  background: var(--m-visoka); border-radius: var(--r);
+}
+.pot-stanje.je-isce::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--accent) 45%, var(--accent-lit) 50%, var(--accent) 55%,
+    transparent 100%);
+  animation: nalaganje-tek 1.1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pot-isci.je-isce::before { animation: none; border-right-color: currentColor; opacity: 0.6; }
+  .pot-stanje.je-isce::after { animation: none; opacity: 0.7; }
+}
 
 /* ---------------------------------------------------------------- predlogi */
 /*

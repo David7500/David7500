@@ -128,6 +128,7 @@ Potnik ve, **kje stoji**, ne s katere postaje mu pelje. Zato dva vhoda = kraja (
 * **Imen postaj ne sklanjaj.** „peš 7 min od izhodišča do Grosuplje" je narobe, „do Grosupljega" bi moral nekdo izpeljati — za „Bavarski dvor" ali „Vič Glince" ne bi delalo. Zato puščica: `izhodišče → Grosuplje`.
 * **Kateri klik gre kam, mora biti vidno.** Prvi klik postavi izhodišče, naslednji cilj; katero polje je „nabito", pove barva oznake.
 * **Vir hoje pride na zaslon.** Kadar usmerjevalnik ne odgovori, stran napiše „hoja je **ocena**" — zasilna številka je izmerjeno mediano 6 minut predolga, brez te besede se bere kot izmerjena.
+* **Iskanje mora biti vidno, ker traja** (14. 10. 2026). `/api/pot` 7.–13. 10.: 881 zahtev, 53 % nad 2,5 s, 32 % nad 5 s, najdaljša 29 s. Drobno sivo „Iščem …“ pod možnostmi je potnik spregledal in stran skoraj zaprl. Zdaj gumb „Iščem …“ z vrtavko (onemogočen, vrne ga samo zadnje iskanje), sporočilo je kartica z gibljivo črto, po 3 s „Še iščem … daljša pot zna trajati nekaj sekund.“; Enter v polju zapre tipkovnico, ki bi kartico pokrila. Hitrost sama ostaja odprta.
 
 **Pot deljiva prek naslova** (`?od=lat,lon&do=lat,lon&tam=HH:MM&dan=…&kolo=1`). Brez tega je edini način, da nekomu poveš pot do sebe, opis s stavki — stran naj bi ga nadomestila. Današnji dan v naslov ne gre.
 
