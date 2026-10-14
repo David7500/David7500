@@ -18,7 +18,8 @@ so večinoma postanki, ki jim vozilo ni prišlo bližje od 300 m.
 Postanki se iščejo po vrstnem redu vožnje: dokler ni potrjen nobeden, med
 vsemi razen cilja, nato med naslednjimi `NAPREJ`. Prvi obisk, preskok čez
 postanke in skok zamude za več kot `SKOK_S` veljajo šele, ko jih potrdi
-skladen obisk naslednjega postanka (`_zakljuci`); preskočene se nato poišče v
+skladen obisk naslednjega postanka (`_zakljuci`), prvi obisk brez preskoka pa
+tudi, ko ga `POTRDI_PRVI_S` ne zamenja drug; preskočene se nato poišče v
 sledi med sosednjima potrjenima (`_dopolni`) -- sproti sam je na posnetku dal
 94,3 %. Izhodišča ne merimo: vozilo pred odhodom kroži (proti drugemu
 postanku mediana 39 s namesto 29 s).
@@ -55,6 +56,19 @@ NAPREJ = 8
 #: Preskok z večjo spremembo zamude ni vožnja, ampak drug kraj na poti blizu
 #: kasnejšega postanka.
 SKOK_S = 1200
+#: Prvi obisk čaka na potrditev naslednjega postanka (`_zakljuci`). Na redkih
+#: postankih je to ure: Izola -> Ljubljana (Koper, nato Hajdrihova) 70 min,
+#: Murska Sobota -> Ljubljana do 97 min brez vsake zamude. Obisk brez
+#: preskoka, ki ga toliko časa ne zamenja drug, zato velja sam. Ponovitev
+#: 13. in 14. 10. 2026 (228 194 postankov): pri 15 min nobene razlike od
+#: potrditve z naslednjim, pri 10 min štiri (12--15 min: zamudno vozilo je
+#: na poti na izhodišče peljalo mimo drugega postanka), pri 5 min 36.
+#: Vožnje, ki so čakale dlje od 15 min (86 in 36), mediana 19 -> 15 min,
+#: najdlje 88 -> 65 in 97 -> 36 min.
+POTRDI_PRVI_S = 900
+#: ... razen prezgodnjega: to je pot na izhodišče (13. 10. 2026: -1 092 s).
+#: Potrjeni prvi obiski: p1 -107 do -137 s.
+PREZGODAJ_S = 120
 #: Obisk mora biti v tem oknu okoli voznega reda.
 OKNO_PREJ_S = 1200
 OKNO_POZNEJE_S = 4 * 3600
@@ -275,7 +289,19 @@ def dodaj(sled: Sled, t_s: float, lat: float, lon: float) -> list[tuple]:
                 koncani.append(i)
         elif o is not None:
             koncani.append(i)
-    return _zakljuci(sled, koncani)
+    return _zakljuci(sled, koncani) + _prvi_po_casu(sled, t_s)
+
+
+def _prvi_po_casu(sled: Sled, t_s: float) -> list[tuple]:
+    """Prvi obisk brez preskoka velja tudi brez naslednjega postanka, ko ga
+    `POTRDI_PRVI_S` ne zamenja noben drug obisk -- razen prezgodnjega, ki je
+    pot na izhodišče."""
+    c = sled.cakajoci
+    if (sled.zadnja is not None or c is None or c[0] != sled.k
+            or c[2] < -PREZGODAJ_S or t_s - c[1]["odhod"] < POTRDI_PRVI_S):
+        return []
+    sled.cakajoci = None
+    return _premakni(sled, c[0], c[1])
 
 
 def tiho(sled: Sled, zdaj: float) -> list[tuple]:

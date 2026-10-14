@@ -96,6 +96,27 @@ def test_prvi_obisk_pocaka_na_potrditev():
     assert all(300 <= out[q][0] <= 310 for q in (2, 3, 4)), out
 
 
+def test_prvi_obisk_pred_dolgim_odsekom_velja_po_casu():
+    """Izola -> Koper -> 80 km do Ljubljane: Koper je prej čakal do Ljubljane,
+    potnik pa 70 min ni videl zamude. Zdaj velja 15 min po odhodu."""
+    s = _sled([(46.0, 14.0, 36000), (46.0, 14.01, 36100), (46.0, 15.0, 39600)])
+    pot = _vzhod(36060, 14.0, 14.12)                   # B s +60 s, nato 18 min proti C
+    odhod_b = 36060 + 20 * 5 + 6
+    pred = _vozi(s, [p for p in pot if p[0] < odhod_b + prehod.POTRDI_PRVI_S])
+    assert pred == {}
+    po = _vozi(s, [p for p in pot if p[0] >= odhod_b + prehod.POTRDI_PRVI_S])
+    assert list(po) == [2] and 60 <= po[2][0] <= 70, po
+
+
+def test_prezgodnji_prvi_obisk_ne_velja_po_casu():
+    """Vozilo na poti na izhodišče pelje mimo B 15 min pred voznim redom in
+    nato dolgo stoji drugje: to ni obisk."""
+    s = _sled([(46.0, 14.0, 36000), (46.0, 14.01, 36100), (46.0, 15.0, 39600)])
+    mimo = [(35200 + 20 * i, 46.0, 14.016 - 0.002 * i) for i in range(6)]
+    stoji = [(35300 + 20 * i, 46.0, 14.005) for i in range(1, 80)]
+    assert _vozi(s, mimo + stoji) == {}
+
+
 def test_skok_zamude_potrdi_naslednji_postanek():
     """Okvara med B in C: 25 min stoji. C pade na skoku, a ga D potrdi."""
     s = _ravna(6)

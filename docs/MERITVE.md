@@ -2673,3 +2673,15 @@ Pošta „stoji -- vozila brez vsake zamude“ je šla tudi po preklopu na `vodi
 | 3. postanek + 10 min, prag 10 % | 6 min, 0 | 0 min, 0 |
 
 Ostane 13. 10. ob 10:36–10:53: med 10:25 in 10:35 je `lega` dobivala ~90 leg na minuto namesto ~1 260 (NAP), sledi so se po vrzeli začele znova. Prava okvara, ki je vrstica `nap` (rdeča šele po 15 min) ne vidi. Izbrano 3. postanek + 15 min: prag 5 % ostane, ker ujame tudi napako vira, kakršna je bila 21. 9. (11 % Nomagovih voženj). Delež brez zamude po minutah 13. 10. že pri tretjem postanku + 10 min: Arriva mediana 1,2 %, p99 7,1 %; Nomago 1,0 %, p99 6,1 % (pri drugem + 10: 3,0 % in 10,8 %; 1,9 % in 8,9 %).
+
+**Prvi obisk, potrjen po času** (isti dan, ponovitev 13. in 14. 10. skozi `prehod.py`; prvi obisk brez preskoka velja, ko ga N minut ne zamenja drug, in ni prezgoden): primerjava s potrditvijo z naslednjim postankom na 228 194 postankih.
+
+| N, meja prezgodaj | drugačnih postankov (≥ 60 s) | več izmerjenih | čakanje vožnje, ki je čakala > 15 min (mediana, najdlje) |
+|---|---|---|---|
+| zdaj | -- | -- | 13. 10.: 19 min, 88; 14. 10.: 20 min, 97 |
+| 5 min, −120 s | 23 + 13 (mediana 380 s) | 14 + 29 | |
+| 10 min, −120 s | 2 + 2 (12–15 min) | 13 + 15 | 10 min, 65; 10 min, 36 |
+| **15 min, −120 s** | **0** | 12 + 14 | **15 min, 65; 15 min, 36** |
+| 20 min, −120 s | 0 | 11 + 12 | |
+
+Napake pri 10 min so vse ista zgodba: zamudno vozilo pelje mimo drugega postanka na poti na izhodišče (A2205: +2 min namesto +17). Meja −120 s izloči prezgodnje (potrjeni prvi obiski: p1 −107 do −137 s); pri −300 s in 10 min več napak (4 + 5 proti 2 + 1 v prvi ponovitvi). Izbrano 15 min, −120 s (`prehod.POTRDI_PRVI_S`, `PREZGODAJ_S`). Koda v strežniku se z izmerjenim pravilom ujema na 6 007 od 6 015 voženj 14. 10.; pri osmih je isti zapis eno lego (10–120 s) pozneje.
