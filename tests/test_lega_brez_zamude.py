@@ -44,14 +44,16 @@ def _feed(*trip_ids):
     iz_lege.zabelezi_feed(trip_ids, ZDAJ.timestamp() - 120)
 
 
-def _vozja(c, trip_id, agency, zacetek_s, konec_s, drugi_s=None):
-    """Tri postanki; drugi privzeto dve minuti za izhodiščem."""
+def _vozja(c, trip_id, agency, zacetek_s, konec_s, drugi_s=None, tretji_s=None):
+    """Štirje postanki; vsak privzeto dve minuti za prejšnjim."""
+    drugi_s = drugi_s or zacetek_s + 120
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network)"
               " VALUES(?, 'r', 'N1', 'S', 'bus', ?, 'avtobus')", (trip_id, agency))
     c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
                   [(trip_id, 1, "A", None, zacetek_s),
-                   (trip_id, 2, "B", None, drugi_s or zacetek_s + 120),
-                   (trip_id, 3, "C", konec_s, None)])
+                   (trip_id, 2, "B", None, drugi_s),
+                   (trip_id, 3, "C", None, tretji_s or drugi_s + 120),
+                   (trip_id, 4, "D", konec_s, None)])
 
 
 def _lega(c, trip_id, dan=DANES.isoformat(), pred_s=20):
@@ -111,19 +113,36 @@ def test_ne_steje_vozila_ki_je_komaj_odpeljalo_ali_je_ze_na_koncu():
     assert collector.lega_brez_zamude(c, ZDAJ) == {}
 
 
-def test_steje_sele_po_drugem_postanku():
+def test_steje_sele_po_tretjem_postanku():
     """Arriva Koper 11:00 -> Ljubljana Hajdrihova 12:22, brez postanka vmes:
     pred Ljubljano zamude ni mogoče izmeriti, ker izhodišča iz lege ne merimo.
-    11. 10. 2026 je taka vožnja ob 12:00 obarvala Arrivo rdeče. Izola 11:00 ->
-    Koper 11:12 pa bi zamudo do 12:00 že morala imeti."""
+    11. 10. 2026 je taka vožnja ob 12:00 obarvala Arrivo rdeče. Prehod brez
+    trase prvi obisk potrdi šele z naslednjim: Izola 11:00 -> Koper 11:12 ->
+    Ljubljana 12:22 ga do 12:00 še ne more imeti. Vožnja s tretjim postankom
+    ob 11:30 pa bi ga ob 12:00 že morala."""
     c = _baza()
     _vozja(c, "avtocesta", "1123", 11 * 3600, 12 * 3600 + 29 * 60, drugi_s=12 * 3600 + 22 * 60)
-    _vozja(c, "izola", "1123", 11 * 3600, 12 * 3600 + 41 * 60, drugi_s=11 * 3600 + 12 * 60)
+    _vozja(c, "izola", "1123", 11 * 3600, 12 * 3600 + 41 * 60, drugi_s=11 * 3600 + 12 * 60,
+           tretji_s=12 * 3600 + 22 * 60)
+    _vozja(c, "gosto", "1123", 11 * 3600, 12 * 3600 + 41 * 60, drugi_s=11 * 3600 + 12 * 60,
+           tretji_s=11 * 3600 + 30 * 60)
     db.fill_trip_window(c)
     _lega(c, "avtocesta")
     _lega(c, "izola")
+    _lega(c, "gosto")
     _feed()
     assert collector.lega_brez_zamude(c, ZDAJ) == {"1123": [1, 1, 1]}
+
+
+def test_zamudni_avtobus_v_konici_se_ni_brez_zamude():
+    """Tretji postanek pred 10 min: avtobus z 10 min zamude ga še ni prevozil.
+    13. 10. 2026 ob 15:44 je bilo takih pri Arrivi 10 od 166."""
+    c = _baza()
+    _vozja(c, "konica", "1123", 11 * 3600 + 30 * 60, 13 * 3600, tretji_s=11 * 3600 + 50 * 60)
+    db.fill_trip_window(c)
+    _lega(c, "konica")
+    _feed()
+    assert collector.lega_brez_zamude(c, ZDAJ) == {}
 
 
 def test_ne_steje_stare_lege():

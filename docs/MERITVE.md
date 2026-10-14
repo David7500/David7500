@@ -2653,3 +2653,23 @@ Za primerjavo vlak proti avtu po urah. Vse vsebine, zaprošene 9. 10., so odobre
 **Odgovor FCD nosi samo gnečo.** Vseh 11 201 odsekov prvega odgovora ima čas vožnje nad 1,2-kratnikom časa brez prometa, `normallyExpectedTravelTime` je pri vseh enak času brez prometa, ta pa se v šestih minutah ni spremenil pri nobenem odseku. Odsek, ki ga v odgovoru ni, je torej prost (ali brez podatka), ne „neznano“. V šestih minutah se jih je zvrstilo 14 132.
 
 **`promet.py` na teh šestih odgovorih** (razvojni računalnik): razbor 0,2 s, zapis 0,01–0,03 s; prvi odgovor 11 201 vrstic, nato 1 861–2 327 na minuto (~600 novih, ~600 prostih, ostalo spremembe nad 0,5 s). Potovalni časi AC: razbor 0,13 s, 10 relacij.
+
+## Avtobusi „brez vsake zamude“ po preklopu na prehod brez trase (14. 10. 2026)
+
+Pošta „stoji -- vozila brez vsake zamude“ je šla tudi po preklopu na `vodi` (13. 10. ob 21:33): 14. 10. do 13:40 štiri epizode, osem sporočil, vse rumeno-rdeče okoli meje (Arriva 5 od 96, Nomago 8 od 150) in po 6–17 min spet „dela“. Ponovitev dneva: lege iz `lega` skozi današnji `prehod.py` na arwenu, nato števec po minutah kot v `collector.lega_brez_zamude` (sveža lega 3 min, prvi zapis vožnje = prva lega, ob kateri `dodaj` vrne prehod). Na 14. 10. ponovitev reproducira dve od štirih pravih epizod pred ponovnim zagonom ob 13:45 (pravi števec šteje `vehicle_now`, tudi vozila samo z derp.si) (ta je sledi obnovil iz `lega` in prepisal `zapisano_ts`, zato `gps_prehod` za ta dan ni merilo).
+
+**Kdo je brez zamude ob 13:54** (13 vozil): večina ima obisk drugega postanka, ki čaka na potrditev naslednjega (Krško OB → Brežice: drugi postanek ob 13:49 s +5 min, tretji še ne), ali se je na NAP pojavila šele sredi vožnje (Tolmin → Nova Gorica, prva lega ob 13:50 pri petem postanku). Dve vozili Arrive „Koper → Piran“ (13:10 in 13:40) stojita ves čas na koprski postaji, nobenega postanka nista prevozili -- NAP ju pripenja vožnji, ki je ne vozita.
+
+**Prvi obisk čaka na potrditev** (`prehod._zakljuci`): mediana 2,1 min, p90 4,5 min, p99 15 min (13. 10.: 8 247 voženj; 14. 10.: 5 084). Na redkih postankih ure: M2123 Murska Sobota → Ljubljana 88–97 min, A2527 Maribor → Ljubljana 37–90 min, A8425 Izola → Ljubljana 69–70 min (Koper, nato Hajdrihova), A6370/A6376 Bled → Ljubljana 33–37 min. Potnik ves ta čas zamude ne vidi. Takojšnja potrditev prvega obiska brez preskoka ni rešitev: tudi samo pri zamudi ≥ 0 bi obveljalo 106 (13. 10.) oziroma 60 (14. 10.) obiskov, ki jih je kasnejši obisk istega postanka popravil za 60–500 s.
+
+**Pravilo števca** (ponovitev, rdeče = vsaj 3 vozila in 5 % prevoznika, pošta = rdeče vsaj 10 min):
+
+| šteje od | 13. 10. (4:00–23:30) | 14. 10. (4:00–13:57) |
+|---|---|---|
+| 2. postanek + 10 min (dozdaj) | 258 rdečih min, 20 sporočil | 57 min, 4 |
+| 2. postanek + 20 min | 95 min, 6 | 28 min, 2 |
+| 3. postanek + 10 min | 55 min, 4 | 4 min, 0 |
+| **3. postanek + 15 min** | **25 min, 2** | **2 min, 0** |
+| 3. postanek + 10 min, prag 10 % | 6 min, 0 | 0 min, 0 |
+
+Ostane 13. 10. ob 10:36–10:53: med 10:25 in 10:35 je `lega` dobivala ~90 leg na minuto namesto ~1 260 (NAP), sledi so se po vrzeli začele znova. Prava okvara, ki je vrstica `nap` (rdeča šele po 15 min) ne vidi. Izbrano 3. postanek + 15 min: prag 5 % ostane, ker ujame tudi napako vira, kakršna je bila 21. 9. (11 % Nomagovih voženj). Delež brez zamude po minutah 13. 10. že pri tretjem postanku + 10 min: Arriva mediana 1,2 %, p99 7,1 %; Nomago 1,0 %, p99 6,1 % (pri drugem + 10: 3,0 % in 10,8 %; 1,9 % in 8,9 %).

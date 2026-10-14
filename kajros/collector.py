@@ -580,12 +580,15 @@ def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
     conn.commit()
 
 
-#: Koliko mora biti vozilo po voznem redu že mimo drugega postanka, preden je
-#: molk feeda napaka in ne le prvo sporočilo, ki še pride. Izmerjeno 25. 9.
-#: 2026 ob 11:50 (takrat od odhoda z izhodišča): pri tej meji je bilo brez
-#: zamude 0 od 295 vozil na vožnjah, ki jih feed nosi, in 10 od 10 na vožnjah
-#: z veljavnostjo od 21. 9., ki jih ne.
-BREZ_ZAMUDE_PO_S = 600
+#: Koliko mora biti vozilo po voznem redu že mimo tretjega postanka, preden je
+#: molk napaka in ne le meritev, ki še pride. 25. 9. 2026 (od izhodišča, 10
+#: min) je bilo brez zamude 0 od 295 vozil na vožnjah, ki jih feed nosi, in 10
+#: od 10 na vožnjah z veljavnostjo od 21. 9., ki jih ne. Od 13. 10. 2026
+#: prehod brez trase prvi obisk zapiše šele ob naslednjem postanku, zamudni
+#: avtobusi v konici pa so ob +10 min še pred njim: ponovitev 13. 10. skozi
+#: `prehod.py` je bila pri 10 min rdeča v dveh epizodah (pošta), pri 15 v eni
+#: -- 10 min brez leg NAP ob 10:25, ki je prava.
+BREZ_ZAMUDE_PO_S = 900
 
 
 def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list[int]]:
@@ -603,11 +606,16 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
     prvega bi zapolnitev napako vira skrila.
 
     Vožnja „vozi“, kadar je po voznem redu vsaj `BREZ_ZAMUDE_PO_S` mimo
-    **drugega** postanka: prej zamude ni mogoče izmeriti, ker je `iz_lege` na
-    izhodišču ne meri. Do 11. 10. 2026 je štelo od odhoda z izhodišča, in
+    **tretjega** postanka: izhodišča lega ne meri, prehod brez trase
+    (`prehod.py`) pa prvi obisk potrdi šele s skladnim obiskom naslednjega
+    postanka -- prej meritve ne more biti. Vožnja s tremi postanki ali manj
+    se zato ne šteje. Do 11. 10. 2026 je štelo od odhoda z izhodišča, in
     Arriva Koper 11:00 -> Ljubljana, ki do naslednjega postanka vozi 82 min,
-    je bila „brez zamude“ od 11:10 -- skupaj z dvema drugima je obarvala
-    Arrivo rdeče (3 od 25), čeprav je ni bilo česa izmeriti.
+    je bila „brez zamude“ od 11:10. Do 14. 10. 2026 od drugega postanka: na
+    ponovitvi 13. 10. 2026 (8 469 voženj) je bila vrstica rdeča 258 minut v
+    desetih epizodah, kar je 20 sporočil, od tretjega postanka 25 minut v
+    eni. Čakanje prvega obiska je mediana 2 min, p99 15 min, a na redkih
+    postankih ure: Izola -> Ljubljana 70 min (Koper, nato Hajdrihova).
     """
     danes = zdaj.date()
     now_s = int(zdaj.timestamp()) - stats.polnoc(danes.isoformat())
@@ -621,7 +629,7 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
         "  AND CASE COALESCE(v.service_date, ?) "
         "        WHEN ? THEN ? WHEN ? THEN ? + 86400 END "
         "      BETWEEN (SELECT COALESCE(s.dep_s, s.arr_s) FROM sched s "
-        "               WHERE s.trip_id = t.trip_id ORDER BY s.stop_seq LIMIT 1 OFFSET 1) + ? "
+        "               WHERE s.trip_id = t.trip_id ORDER BY s.stop_seq LIMIT 1 OFFSET 2) + ? "
         "          AND t.end_s",
         (danes.isoformat(), int(zdaj.timestamp()) - POSITION_FRESH_S,
          danes.isoformat(), danes.isoformat(), now_s,
