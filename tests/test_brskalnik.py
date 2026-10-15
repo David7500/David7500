@@ -10,8 +10,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import socket
 import threading
+import time
 
 import pytest
 
@@ -346,3 +348,33 @@ def test_chrome_ki_se_ustavi_pove_zakaj(monkeypatch, tmp_path):
                        match=r"koda 1\): Missing X server or \$DISPLAY$"):
         b._zazeni()
     assert "prva vrstica" in (tmp_path / "profil-chrome-napaka.log").read_text()
+
+
+def test_zaslon_se_bere_do_konca_vrstice():
+    """Xvfb piše „2“ in „\\n“ posebej; cev se sme zapreti šele po drugem."""
+    beri, pisi = os.pipe()
+    try:
+        os.write(pisi, b"2")
+        t = threading.Timer(0.2, os.write, (pisi, b"\n"))
+        t.start()
+        t0 = time.monotonic()
+        assert brskalnik._preberi_zaslon(beri, 2) == "2"
+        assert time.monotonic() - t0 >= 0.15, "vrnil pred koncem vrstice"
+        t.join()
+    finally:
+        os.close(beri)
+        os.close(pisi)
+
+
+def test_zaslon_brez_odgovora():
+    beri, pisi = os.pipe()
+    try:
+        with pytest.raises(brskalnik.NapakaBrskalnika, match="ne pove zaslona"):
+            brskalnik._preberi_zaslon(beri, 0.05)
+        os.close(pisi)
+        pisi = None
+        assert brskalnik._preberi_zaslon(beri, 1) == "", "Xvfb umrl: prazno, ne visi"
+    finally:
+        os.close(beri)
+        if pisi is not None:
+            os.close(pisi)

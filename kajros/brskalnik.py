@@ -283,6 +283,25 @@ def _rep(pot: Path, n: int = 300) -> str:
     return next((v.strip()[-n:] for v in reversed(vrstice) if v.strip()), "")
 
 
+def _preberi_zaslon(fd: int, cas: float) -> str:
+    """Številka zaslona, ki jo Xvfb zapiše v `-displayfd`. Brati do konca
+    vrstice: Xvfb številko in `\n` zapiše posebej, in če je cev ob drugem
+    zapisu že zaprta, umre („Cannot write display number to fd“). Chrome
+    nato konča s kodo 1 -- 15. 10. 2026 ujeto v dnevniku, prej 6 od 43
+    zagonov strežnika s 5 min brez zemljevida SŽ."""
+    prebrano = b""
+    konec = time.monotonic() + cas
+    while not prebrano.endswith(b"\n"):
+        ostane = konec - time.monotonic()
+        if ostane <= 0 or not select.select([fd], [], [], ostane)[0]:
+            raise NapakaBrskalnika(f"Xvfb ne pove zaslona v {cas:g} s")
+        kos = os.read(fd, 32)
+        if not kos:
+            break
+        prebrano += kos
+    return prebrano.decode(errors="replace").strip()
+
+
 def _prosta_vrata() -> int:
     """Prosta vrata na localhostu. Izberemo jih mi: ob `=0` bi Chrome izbral
     sam in se razglasil za avtomatiziranega (glej glavo modula)."""
@@ -456,9 +475,7 @@ class Brskalnik:
                     stderr=err, start_new_session=True)
             os.close(pisi)
             try:
-                if not select.select([beri], [], [], 10)[0]:
-                    raise NapakaBrskalnika("Xvfb ne pove zaslona v 10 s")
-                st = os.read(beri, 32).decode().strip()
+                st = _preberi_zaslon(beri, 10)
             finally:
                 os.close(beri)
             if not st.isdigit():
