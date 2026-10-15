@@ -58,6 +58,10 @@ ZAHTEVA_S = 45
 #: Po neuspelem zagonu (ni Chroma, ni zaslona) toliko ne poskusimo znova:
 #: niti ga kličeta vsako minuto in vsaka bi sicer zagnala svoj poskus.
 PO_NAPAKI_ZAGONA_S = 300
+#: Chrome je tekel, stran pa se ni naložila (ni DNS, ni povezave): to ni
+#: pokvarjen zagon, ki ga ponovitev ne popravi. 15. 10. 2026 po 25 min brez
+#: interneta zemljevid SŽ še 4 min rdeč, ker je čakal cel `PO_NAPAKI_ZAGONA_S`.
+PO_NAPAKI_OMREZJA_S = 30
 #: Chrome, ki teče dlje, se ob naslednji zahtevi zažene znova.
 NAJDLJE_ZIVI_S = 6 * 3600
 
@@ -83,6 +87,10 @@ class _Izziv(NapakaBrskalnika):
 
 class _Zastoj(NapakaBrskalnika):
     """Chrome ne odgovori: tak se ne popravi sam."""
+
+
+class _BrezOmrezja(NapakaBrskalnika):
+    """Chrome dela, stran SŽ se ne naloži (`net::ERR_...`)."""
 
 
 def najdi_chrome() -> str | None:
@@ -326,7 +334,8 @@ class Brskalnik:
         self._seja: str | None = None
         self._cilj: str | None = None
         self._napaka_zagona_ts = 0.0
-        self._s = {"pot": None, "razlicica": None, "zaslon": None, "od_ts": None,
+        self._pocitek = PO_NAPAKI_ZAGONA_S
+        self._s ={"pot": None, "razlicica": None, "zaslon": None, "od_ts": None,
                    "zagonov": 0, "preboji": 0, "izzivi": 0, "zadnji_preboj_ts": None,
                    "zadnji_preboj_s": None, "zahtev": 0, "napaka": None, "napaka_ts": None}
 
@@ -350,7 +359,10 @@ class Brskalnik:
                 self._napaka(exc)
                 raise
             except NapakaBrskalnika as exc:
-                if isinstance(exc, _Zastoj) or self._cdp is None or self._cdp.zaprt:
+                # Po neuspelem prebijanju ostane Chrome na strani z napako, kjer
+                # `fetch` ne gre nikoli več: naslednja zahteva z novim.
+                if (isinstance(exc, (_Zastoj, _BrezOmrezja))
+                        or self._cdp is None or self._cdp.zaprt):
                     self._ugasni()
                 self._napaka(exc)
                 raise
@@ -374,7 +386,7 @@ class Brskalnik:
         """Koliko sekund še ne poskusi zagona (po neuspelem). Nit, ki bere na
         5 s, sicer ves ta čas dobiva isto napako -- na malini brez Chroma vsakih
         5 s zapis napake v bazo."""
-        return max(0.0, PO_NAPAKI_ZAGONA_S - (time.time() - self._napaka_zagona_ts))
+        return max(0.0, self._pocitek - (time.time() - self._napaka_zagona_ts))
 
     # --- notranje ------------------------------------------------------
 
@@ -391,13 +403,15 @@ class Brskalnik:
         if zivi and time.time() - (self._s["od_ts"] or 0) < NAJDLJE_ZIVI_S:
             return
         self._ugasni()
-        if time.time() - self._napaka_zagona_ts < PO_NAPAKI_ZAGONA_S:
+        if self.pocitek_s() > 0:
             raise NapakaBrskalnika(self._s["napaka"] or "brskalnik se ne zažene")
         try:
             self._zazeni()
             self._prebij()
-        except NapakaBrskalnika:
+        except NapakaBrskalnika as exc:
             self._napaka_zagona_ts = time.time()
+            self._pocitek = (PO_NAPAKI_OMREZJA_S if isinstance(exc, _BrezOmrezja)
+                             else PO_NAPAKI_ZAGONA_S)
             self._ugasni()
             raise
         if not self._s["zaslon"].startswith("Xvfb"):
@@ -501,7 +515,7 @@ class Brskalnik:
         t0 = time.monotonic()
         r = self._cdp.ukaz("Page.navigate", seja=self._seja, cas=PREBOJ_S, url=ZACETNA)
         if r.get("errorText"):
-            raise NapakaBrskalnika(f"potniski.sz.si se ne naloži: {r['errorText']}")
+            raise _BrezOmrezja(f"potniski.sz.si se ne naloži: {r['errorText']}")
         while time.monotonic() - t0 < PREBOJ_S:
             time.sleep(0.5)
             try:

@@ -170,18 +170,21 @@ class _LazniProces:
 
 
 class _LazniCdp:
-    """Odigra odgovore `fetch` po vrsti; izziv se reši, kadar `resi`."""
+    """Odigra odgovore `fetch` po vrsti; izziv se reši, kadar `resi`.
+    `navigacije`: `errorText` nalaganj strani po vrsti (None = naloži se)."""
 
-    def __init__(self, odgovori, resi=True):
+    def __init__(self, odgovori, resi=True, navigacije=()):
         self.odgovori = list(odgovori)
         self.resi = resi
+        self.navigacije = list(navigacije)
         self.zaprt = None
         self.klici = []
 
     def ukaz(self, metoda, seja=None, cas=30, **par):
         self.klici.append(metoda)
         if metoda == "Page.navigate":
-            return {}
+            napaka = self.navigacije.pop(0) if self.navigacije else None
+            return {"errorText": napaka} if napaka else {}
         if metoda == "Runtime.evaluate":
             if par["expression"] == brskalnik._NALOZENA_JS:
                 return {"result": {"value": self.resi}}
@@ -203,11 +206,11 @@ def brsk(monkeypatch, tmp_path):
     b = brskalnik.Brskalnik(tmp_path / "profil")
     zagoni = []
 
-    def zazeni(odgovori, resi=True):
+    def zazeni(odgovori, resi=True, navigacije=()):
         def _zazeni():
             zagoni.append(1)
             b._chrome, b._seja = _LazniProces(), "S"
-            b._cdp = _LazniCdp(odgovori, resi)
+            b._cdp = _LazniCdp(odgovori, resi, navigacije)
             b._s.update(zaslon="Xvfb :7", od_ts=int(brskalnik.time.time()))
         monkeypatch.setattr(b, "_zazeni", _zazeni)
 
@@ -302,3 +305,29 @@ def test_brez_zaslona_ni_brskalnika(monkeypatch, tmp_path):
     with pytest.raises(brskalnik.NapakaBrskalnika, match="ni zaslona"):
         b._zaslon({})
     assert b._zaslon({"DISPLAY": ":0"}) == []
+
+
+def test_brez_omrezja_kratek_pocitek(brsk):
+    """Stran se ne naloži (ni DNS): Chrome je zdrav, po vrnitvi interneta naj
+    se poskusi v pol minute, ne v petih."""
+    b, zazeni, zagoni = brsk
+    zazeni([], navigacije=["net::ERR_NAME_NOT_RESOLVED"])
+    with pytest.raises(brskalnik.NapakaBrskalnika, match="ERR_NAME_NOT_RESOLVED"):
+        b.zahtevaj("/x")
+    assert b._chrome is None
+    assert brskalnik.PO_NAPAKI_OMREZJA_S - 5 < b.pocitek_s() <= brskalnik.PO_NAPAKI_OMREZJA_S
+    b._napaka_zagona_ts -= brskalnik.PO_NAPAKI_OMREZJA_S
+    zazeni([{"status": 200, "besedilo": "b"}])
+    assert b.zahtevaj("/x") == "b"
+    assert len(zagoni) == 2
+
+
+def test_brez_omrezja_ob_izzivu_ugasne_chrome(brsk):
+    """Po neuspelem prebijanju stoji Chrome na strani z napako; `fetch` od tam
+    ne gre nikoli več, zato naslednja zahteva začne z novim."""
+    b, zazeni, zagoni = brsk
+    zazeni([{"status": 403, "besedilo": IZZIV}],
+           navigacije=[None, "net::ERR_INTERNET_DISCONNECTED"])
+    with pytest.raises(brskalnik.NapakaBrskalnika, match="ERR_INTERNET_DISCONNECTED"):
+        b.zahtevaj("/x")
+    assert b._chrome is None
