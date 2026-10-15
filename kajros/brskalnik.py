@@ -272,6 +272,17 @@ class _Cdp:
 # --- procesi -----------------------------------------------------------------
 
 
+def _rep(pot: Path, n: int = 300) -> str:
+    """Zadnja neprazna vrstica dnevnika, za sporočilo napake."""
+    try:
+        with open(pot, "rb") as fh:
+            fh.seek(max(0, fh.seek(0, os.SEEK_END) - 4096))
+            vrstice = fh.read().decode(errors="replace").splitlines()
+    except OSError:
+        return ""
+    return next((v.strip()[-n:] for v in reversed(vrstice) if v.strip()), "")
+
+
 def _prosta_vrata() -> int:
     """Prosta vrata na localhostu. Izberemo jih mi: ob `=0` bi Chrome izbral
     sam in se razglasil za avtomatiziranega (glej glavo modula)."""
@@ -425,16 +436,24 @@ class Brskalnik:
             except (NapakaBrskalnika, KeyError):
                 pass
 
+    def _dnevnik(self, kdo: str) -> Path:
+        """Izpis napak Chroma in Xvfb, prepisan ob vsakem zagonu. 6 od 43
+        ponovnih zagonov strežnika (8.--15. 10. 2026) se je Chrome ob prvem
+        zagonu ustavil s kodo 1, izpis pa je šel v /dev/null."""
+        self._profil.parent.mkdir(parents=True, exist_ok=True)
+        return self._profil.with_name(f"{self._profil.name}-{kdo}.log")
+
     def _zaslon(self, env: dict) -> list[str]:
         """Navidezni zaslon, sicer zaslon tega stroja. Brez okna ne gre:
         brezglavega Chroma Cloudflare od 7. 10. 2026 ne spusti."""
         xvfb = najdi_xvfb()
         if xvfb:
             beri, pisi = os.pipe()
-            self._xvfb = subprocess.Popen(
-                [xvfb, "-displayfd", str(pisi), "-screen", "0", "1366x900x24", "-nolisten", "tcp"],
-                pass_fds=(pisi,), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, start_new_session=True)
+            with open(self._dnevnik("xvfb"), "wb") as err:
+                self._xvfb = subprocess.Popen(
+                    [xvfb, "-displayfd", str(pisi), "-screen", "0", "1366x900x24", "-nolisten", "tcp"],
+                    pass_fds=(pisi,), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=err, start_new_session=True)
             os.close(pisi)
             try:
                 if not select.select([beri], [], [], 10)[0]:
@@ -468,15 +487,16 @@ class Brskalnik:
         shutil.rmtree(self._profil, ignore_errors=True)
         self._profil.mkdir(parents=True, exist_ok=True)
         port = _prosta_vrata()
-        self._chrome = subprocess.Popen(
-            [chrome, *argumenti, f"--remote-debugging-port={port}", f"--user-data-dir={self._profil}",
-             "--no-first-run", "--no-default-browser-check", "--password-store=basic",
-             "--mute-audio", "--window-size=1366,900",
-             # Stran mora teči naprej tudi pomanjšana ali prekrita.
-             "--disable-renderer-backgrounding", "--disable-background-timer-throttling",
-             "--disable-backgrounding-occluded-windows", "about:blank"],
-            env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, start_new_session=True)
+        with open(self._dnevnik("chrome"), "wb") as err:
+            self._chrome = subprocess.Popen(
+                [chrome, *argumenti, f"--remote-debugging-port={port}", f"--user-data-dir={self._profil}",
+                 "--no-first-run", "--no-default-browser-check", "--password-store=basic",
+                 "--mute-audio", "--window-size=1366,900",
+                 # Stran mora teči naprej tudi pomanjšana ali prekrita.
+                 "--disable-renderer-backgrounding", "--disable-background-timer-throttling",
+                 "--disable-backgrounding-occluded-windows", "about:blank"],
+                env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=err, start_new_session=True)
         konec = time.monotonic() + ZAGON_S
         while True:
             try:
@@ -486,7 +506,16 @@ class Brskalnik:
                 break
             except (OSError, ValueError, KeyError, NapakaBrskalnika):
                 if self._chrome.poll() is not None:
-                    raise NapakaBrskalnika(f"Chrome se je ustavil ob zagonu (koda {self._chrome.returncode})")
+                    # Naslednji zagon dnevnik prepiše; ta ostane za pregled.
+                    for kdo in ("chrome", "xvfb"):
+                        try:
+                            shutil.copyfile(self._dnevnik(kdo), self._dnevnik(kdo + "-napaka"))
+                        except OSError:
+                            pass
+                    zakaj = _rep(self._dnevnik("chrome"))
+                    raise NapakaBrskalnika(
+                        f"Chrome se je ustavil ob zagonu (koda {self._chrome.returncode})"
+                        + (f": {zakaj}" if zakaj else ""))
                 if time.monotonic() > konec:
                     raise NapakaBrskalnika(f"Chrome ne odpre vrat v {ZAGON_S} s")
                 time.sleep(0.2)

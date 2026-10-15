@@ -236,6 +236,7 @@ Zemljevid vlakov in table postaj so na potniski.sz.si, za Cloudflarom. Do 7. 10.
 * **Cena**: Chrome ~400–560 MB PSS (14 procesov; vsota RSS 1,3 GB šteje deljeno večkrat), Xvfb 75 MB. Zažene se ob prvi zahtevi, vsakih 6 h znova (`NAJDLJE_ZIVI_S`). Po neuspelem zagonu 5 min ne poskusi znova; kadar se je Chrome zagnal, stran pa se ni naložila (`net::ERR_…`, ni interneta), le 30 s (`PO_NAPAKI_OMREZJA_S`) -- 15. 10. 2026 je bil zemljevid SŽ po vrnitvi interneta sicer še 4 min rdeč.
 * **Kje teče**: arwen (`deploy/brskalnik.sh`: Google Chrome iz Googlovega paketa -- AppArmor ga pozna in dovoli peskovnik -- in Xvfb; preizkus v istem peskovniku kot storitev). **Malina ne more** (Pi Zero W, armv6). Razvoj: brez Xvfb se okno odpre na zaslonu in se po izzivu pomanjša (`sudo apt install xvfb` ga skrije). Preizkus: `kajros brskalnik`.
 * Stanje (teče, različica, zaslon, izzivi, pomnilnik, zadnja napaka) v `/admin` → Stroj in na karticah „zemljevid SŽ“ in „tabla SŽ · tiri“.
+* **Izpis napak** Chroma in Xvfb: `${KAJROS_DATA_DIR}/sz-brskalnik-{chrome,xvfb}.log` (prepisan ob vsakem zagonu), ob zagonu, ki se konča s kodo, kopija v `…-chrome-napaka.log` / `…-xvfb-napaka.log` in zadnja vrstica v sporočilu napake. Od 15. 10. 2026; prej `/dev/null`, zato vzrok kode 1 ob prvem zagonu po restartu (6 od 43, 8.–15. 10.) še ni znan.
 
 ## Tir s table SŽ (`peroni.py`, od 25. 9. 2026)
 

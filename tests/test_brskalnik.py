@@ -331,3 +331,18 @@ def test_brez_omrezja_ob_izzivu_ugasne_chrome(brsk):
     with pytest.raises(brskalnik.NapakaBrskalnika, match="ERR_INTERNET_DISCONNECTED"):
         b.zahtevaj("/x")
     assert b._chrome is None
+
+
+def test_chrome_ki_se_ustavi_pove_zakaj(monkeypatch, tmp_path):
+    chrome = tmp_path / "chrome"
+    chrome.write_text("#!/bin/sh\necho 'prva vrstica' >&2\n"
+                      "echo 'Missing X server or $DISPLAY' >&2\nexit 1\n")
+    chrome.chmod(0o755)
+    monkeypatch.setattr(brskalnik, "najdi_chrome", lambda: str(chrome))
+    monkeypatch.setattr(brskalnik, "najdi_xvfb", lambda: None)
+    monkeypatch.setenv("DISPLAY", ":99")
+    b = brskalnik.Brskalnik(tmp_path / "profil")
+    with pytest.raises(brskalnik.NapakaBrskalnika,
+                       match=r"koda 1\): Missing X server or \$DISPLAY$"):
+        b._zazeni()
+    assert "prva vrstica" in (tmp_path / "profil-chrome-napaka.log").read_text()
