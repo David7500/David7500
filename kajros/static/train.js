@@ -265,12 +265,16 @@ function runHeadHtml(cur) {
   // izmerjena zdaj, feedova je sklep izpred minut. Sicer ostane feedova.
   const pp = state.run && state.run.potniki;
   const poPotnikih = !!(pp && pp.verodostojno && pp.lat != null);
+  // SŽ pove višjo zamudo, kot jo je vlak imel na zadnji prevoženi postaji:
+  // stoji ali se je zamuda povečala med postajama. Ta je trenutna (LPV 2417
+  // 16. 10. 2026: glava +1 s postaje prej, SŽ +14 in raste).
+  const sz = !poPotnikih && cur && state.run.trenutna;
   // Strezniku pustimo odlocitev (minuta, razred, prezgodaj); tu se le risze.
-  const z = poPotnikih ? pp.zamuda : cur ? stopZamuda(cur) : null;
-  const d = poPotnikih ? pp.zamuda_s : cur ? stopDelay(cur) : null;
+  const z = poPotnikih ? pp.zamuda : sz ? sz.zamuda : cur ? stopZamuda(cur) : null;
+  const d = poPotnikih ? pp.zamuda_s : sz ? sz.zamuda.s : cur ? stopDelay(cur) : null;
   const wx = cur ? state.weather.get(cur.stop_seq) : null;
   const color = delayColor(z || d);
-  const atIso = cur ? stopActualIso(cur) : null;
+  const atIso = sz ? new Date(sz.ts * 1000).toISOString() : cur ? stopActualIso(cur) : null;
   const ageS = atIso ? (Date.now() - new Date(atIso).getTime()) / 1000 : null;
   // Tisina feeda je merodajnejsa od starosti domnevnega prehoda: prva pove,
   // kdaj smo nazadnje kaj IZVEDELI, druga le, kdaj naj bi se nekaj zgodilo.
@@ -317,6 +321,8 @@ function runHeadHtml(cur) {
       </div>`}
       <div class="detail-now-where">
         ${poPotnikih ? `po poročilu ${pp.n > 1 ? "potnikov" : "potnika"} na vozilu`
+          : sz ? `po podatkih SŽ${sz.proti ? ` · pelje proti postaji <strong>${
+            escapeHtml(sz.proti)}</strong>` : ""}`
           : cur
           // Ista razlika kot pri postanku potnika: "izmerjeno" smemo reci samo,
           // kadar je feed vrednost potrdil PO prehodu. Sicer je to zadnji

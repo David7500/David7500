@@ -25,7 +25,8 @@ from .naslovi import fold as _fold
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, odhod_z_izhodisca, opis_zamude,
                     pred_odhodom,
-                    stanje_postankov, typical_at_stops, nepotrjen_do, zadnji_potrjeni,
+                    stanje_postankov, trenutna_zamuda, typical_at_stops, nepotrjen_do,
+                    zadnji_potrjeni,
                     IZMERJENO, MAX_REALNA_ZAMUDA_S, NEPOTRJEN_ODHOD_S, ZADNJI_PODATEK)
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -712,9 +713,9 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             # tam PREJSNJA postaja -- model bi torej odgovarjal o napacnem
             # kraju. Prihodi zato ostanejo pri prenosu z rezervo.
             ocena = (estimate_at(conn, d["train_no"], d["trip_id"], lm["stop_seq"],
-                                 lm["delay_s"], d["stop_seq"], service_date)
+                                 trenutna_zamuda(lm), d["stop_seq"], service_date)
                      if kind == "odhodi" else None)
-            zdaj = odhod_z_izhodisca(lm["delay_s"], lm["stop_seq"], d["_izhodisce"])
+            zdaj = odhod_z_izhodisca(trenutna_zamuda(lm), lm["stop_seq"], d["_izhodisce"])
             d["delay_s"] = (ocena if ocena is not None
                             else _with_operator(_after_slack(zdaj, rez), prev,
                                                 d["network"], d["agency"]))

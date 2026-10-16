@@ -633,9 +633,13 @@ function trainCardHtml(t) {
     // za postajo pred vlakom, zato svoja vrstica z imenom postaje in uro.
     // Prej je bila zamuda iz poročila, ura pa iz meritve -- „Borovnica,
     // poročal prevoznik ob 20:58“, ob 20:58 pa je bil vlak v Postojni.
+    // Kadar SŽ pove višjo zamudo, kot jo je vlak imel na zadnji postaji
+    // (stoji med postajama), je zamuda njihova, meritev pa ostane s svojo.
     rows: [
-      ["zamuda", delayText(t.delay_s), delayColor(t.delay_s)],
-      ["zadnja meritev", escapeHtml(t.last_stop || "—")],
+      ["zamuda", delayText(t.delay_s) + (t.trenutna_ts ? " · po podatkih SŽ" : ""),
+       delayColor(t.delay_s)],
+      ["zadnja meritev", escapeHtml(t.last_stop || "—") + (t.trenutna_ts
+        ? ` · ${escapeHtml(delayText(t.meja_delay_s))}` : "")],
       ["izmerjeno", t.measured_at ? `ob ${hhmm(t.measured_at)}` : "—"],
       ...(t.reported_at_station ? [[
         "napoved prevoznika",

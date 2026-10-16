@@ -1371,7 +1371,10 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   const pp = run.potniki;
   const izPotnikov = pp && pp.verodostojno && pp.stop_seq != null && pp.zamuda_s != null;
   const odSeq = izPotnikov ? pp.stop_seq : base && base.stop_seq;
-  const odZamude = izPotnikov ? pp.zamuda_s : base && stopDelay(base);
+  // Kadar SŽ pove višjo zamudo od zadnje prevožene postaje (vlak stoji med
+  // postajama), napoved teče od nje -- ista številka kot v glavi okna.
+  const odZamude = izPotnikov ? pp.zamuda_s
+    : cur && run.trenutna ? run.trenutna.zamuda.s : base && stopDelay(base);
 
   let forecast = [];
   const lastSeq = run.stops.length ? run.stops[run.stops.length - 1].stop_seq : 0;

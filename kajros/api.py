@@ -12,6 +12,7 @@ import math
 import threading
 import time
 import warnings
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -31,7 +32,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
                nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot, pripni, pristanek,
-               server, stats, stik, tiri, viri, zapore, zdravje)
+               server, stats, stik, tiri, viri, zamude_sz, zapore, zdravje)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -1061,9 +1062,12 @@ def _stanje_za_predogled(conn, train_no: str, trip: str | None, datum: str | Non
     if not lm or lm["delay_s"] is None:
         return None
     # Ista zaokrožena minuta kot na zaslonu (`floor(x + 0.5)`, `oznake.md`).
-    m = math.floor(lm["delay_s"] / 60 + 0.5)
+    m = math.floor(stats.trenutna_zamuda(lm) / 60 + 0.5)
     stanje = ("Vozi točno" if m == 0 else f"Zamuja {m} min" if m > 0
               else f"Vozi {-m} min prej")
+    if "trenutna_s" in lm:
+        ura = datetime.fromtimestamp(lm["sz_ts"], TZ)
+        return f"{stanje} (po podatkih SŽ ob {ura:%H:%M})."
     ura = datetime.fromtimestamp(stats.polnoc(datum) + lm["t_s"] + lm["delay_s"], TZ)
     return f"{stanje} (zadnji podatek s postaje {lm['name']} ob {ura:%H:%M})."
 
@@ -1901,7 +1905,7 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
 
     for d in out:
         m = izmerjeno.get(d["trip_id"])
-        d["delay_s"] = m["delay_s"] if m else None
+        d["delay_s"] = stats.trenutna_zamuda(m)
         d["last_stop"] = m["name"] if m else None
         d["measured_seq"] = m["stop_seq"] if m else None
     return out + _vozila_brez_voznje(conn, now)
@@ -2292,6 +2296,21 @@ def api_run(train_no: str, date: str | None = None,
         # izmerjeno", medtem ko je bila zadnja novica o njem stara 7 minut in
         # je feed cez cetrt ure povedal +29.
         zadnja = max((s["feed_ts"] for s in rows if s.get("feed_ts")), default=None)
+        # Zemljevid SŽ pove zamudo vsakih 15 s, tudi ko se v `run` ne zapiše nič
+        # (vlak stoji na postaji z odhodom v prihodnosti, `zamude_sz.trenutne`).
+        # Brez tega je okno po treh minutah pisalo „o vlaku ni novic“.
+        if meja and meja.get("sz_ts"):
+            zadnja = max(zadnja or 0, meja["sz_ts"])
+        # Trenutna zamuda, kadar jo SŽ pove višjo od zadnjega prevoženega
+        # postanka (`stats.trenutna_zamuda`): glava okna jo pokaže namesto
+        # meritve, napoved naprej teče od nje.
+        trenutna = None
+        if meja and "trenutna_s" in meja:
+            trenutna = {
+                "zamuda": stats.opis_zamude(meja["trenutna_s"], stats.PO_SZ),
+                "ts": meja["sz_ts"],
+                "proti": next((s["name"] for s in rows
+                               if s["stop_seq"] > meja["trenutna_seq"]), None)}
         potniki = None
         if config.DELI and razresen and date in (zdaj.date().isoformat(),
                                                  (zdaj.date() - timedelta(days=1)).isoformat()):
@@ -2318,6 +2337,7 @@ def api_run(train_no: str, date: str | None = None,
                 **ident, "last_measured_seq": meja_seq,
                 "zadnja_beseda": zadnja,
                 "tiho_s": (int(zdaj.timestamp()) - zadnja) if zadnja else None,
+                "trenutna": trenutna,
                 "zivi_vir": zivo, "potniki": potniki, "opozorila": opozorila, "dodatek": dodatek, "stops": rows}
 
 
@@ -2847,6 +2867,31 @@ def _dodaj_porocila(rows: list[dict], porocila: list[dict], now_ts: int) -> None
         r["reported_age_s"] = now_ts - rep["seen_ts"]
 
 
+def _s_trenutno(rows: list[dict], zdaj: float) -> list[dict]:
+    """Vlakom zamuda zdaj, kadar jo SŽ pove višjo od meritve -- isto pravilo
+    kot glava okna vožnje (`stats.trenutna_zamuda`); kraj in ura meritve
+    ostaneta. Po predpomnilniku, ker se zemljevid SŽ spremeni na 15 s.
+
+    Vrne nov seznam: `rows` so iz predpomnilnika in jih ne smemo spreminjati.
+    """
+    po_dnevih: dict[str, list[str]] = defaultdict(list)
+    for r in rows:
+        if r.get("network") == "zeleznica" and r.get("trip_id"):
+            po_dnevih[r["service_date"]].append(r["trip_id"])
+    sz = {(t, dan): v for dan, ids in po_dnevih.items()
+          for t, v in zamude_sz.trenutne(dan, ids, zdaj).items()}
+    if not sz:
+        return rows
+    out = []
+    for r in rows:
+        v = sz.get((r.get("trip_id"), r.get("service_date")))
+        if v and v["s"] - (r["delay_s"] or 0) >= stats.TRENUTNA_VISJA_S:
+            r = {**r, "meja_delay_s": r["delay_s"], "delay_s": v["s"],
+                 "zamuda": stats.opis_zamude(v["s"], stats.PO_SZ), "trenutna_ts": v["ts"]}
+        out.append(r)
+    return out
+
+
 def _s_potniki(conn, rows: list[dict], now: datetime) -> list[dict]:
     """Vlakom pripiše lego, ki jo pravkar deli potnik na njem.
 
@@ -3119,6 +3164,8 @@ def _live_predpomnjen(network: str | None) -> list[dict]:
     """
     rows = _predpomni(f"live:{network}", _znacka("rt_fetched"), 60,
                       lambda: _live(network))
+    if network != "avtobus":
+        rows = _s_trenutno(rows, time.time())
     # Potnik deli lego na 5 s, predpomnilnik pa živi do naslednjega branja
     # zamud (do 60 s) -- zato gre potnik zraven šele tu, mimo njega.
     if config.DELI and network != "avtobus":

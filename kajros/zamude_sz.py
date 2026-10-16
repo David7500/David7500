@@ -40,7 +40,7 @@ import json
 import sqlite3
 import threading
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict, deque
 from datetime import date, datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
@@ -59,6 +59,12 @@ AKTIVNI = "/wp-admin/admin-ajax.php?action=aktivni_vlaki"
 ODSTOPA_ODHOD_S = 60
 #: Odhod, starejši od tega, ni odhod te vožnje, ampak ista številka drug dan.
 NAJSTAREJSI_ODHOD_S = 6 * 3600
+#: Odhod do toliko v prihodnosti je še ista vožnja: SŽ je zamudo povečala,
+#: preden je vlak odpeljal (LP 314 16. 10. 2026 ob 14:40: +5 -> +10, odhod
+#: 2,5 min naprej), ali vlak še stoji na postaji. Takšna vrstica ne gre v
+#: `run` -- postanek, ki ga je vlak že prevozil, bi spet postal neprevožen --
+#: velja pa za trenutno zamudo (`trenutne`).
+NAJDLJE_NAPREJ_S = 3 * 3600
 #: Prihod z zamudo 0 po vožnji z več kot toliko zamude je SŽ-jeva ponastavitev
 #: vrstice na cilju, ne prihod (glava modula).
 PONASTAVITEV_S = 180
@@ -114,13 +120,13 @@ def je_avtobus(vrstica: dict) -> bool:
 
 
 def _ujema(dan: str, t_s: int | None, zamuda_min: int, odhod_min: int,
-           zdaj: float) -> float | None:
+           zdaj: float, naprej_s: int = 0) -> float | None:
     """Koliko je minilo od voznega reda plus zamude, kadar se ura ujema z
     `Odhod`; sicer None."""
     if t_s is None:
         return None
     kdaj = stats.polnoc(dan) + t_s + zamuda_min * 60
-    if not (-ODSTOPA_ODHOD_S <= zdaj - kdaj <= NAJSTAREJSI_ODHOD_S):
+    if not (-ODSTOPA_ODHOD_S - naprej_s <= zdaj - kdaj <= NAJSTAREJSI_ODHOD_S):
         return None
     # Ura z zemljevida je lokalna ura dneva; primerjava po modulu dneva,
     # ker vlak čez polnoč odpelje ob 00:10 prometnega dne včeraj.
@@ -130,14 +136,15 @@ def _ujema(dan: str, t_s: int | None, zamuda_min: int, odhod_min: int,
     return zdaj - kdaj
 
 
-def pripni(vrstica: dict, voznje: list[dict], zdaj: float) -> tuple | None:
+def pripni(vrstica: dict, voznje: list[dict], zdaj: float,
+           naprej_s: int = 0) -> tuple | None:
     """Vrstica zemljevida -> (trip_id, dan, stop_seq, zamuda_s, je_prihod) ali None.
 
     Vozi: postanek je zadnji prevoženi, torej tisti PRED `Postaja`. Na cilju:
     zadnji postanek vožnje. Od več voženj z isto številko (sezonske različice,
     včeraj in danes) velja tista, pri kateri se `Odhod` ujema z voznim redom
     plus zamudo; kadar se ne ujema nobena, vlaka ne pripnemo -- raje nič kot na
-    napačno vožnjo.
+    napačno vožnjo. `naprej_s` dovoli odhod v prihodnosti (`NAJDLJE_NAPREJ_S`).
     """
     zamuda = vrstica.get("Zamuda_cas")
     odhod = _minute(vrstica.get("Odhod"))
@@ -157,17 +164,20 @@ def pripni(vrstica: dict, voznje: list[dict], zdaj: float) -> tuple | None:
             kandidati = [(p[i - 1][0], p[i - 1][3] if p[i - 1][3] is not None else p[i - 1][2])
                          for i in range(1, len(p)) if p[i][1] == naslednja]
         for seq, t_s in kandidati:
-            r = _ujema(v["dan"], t_s, zamuda, odhod, zdaj)
-            if r is not None and (razmik is None or r < razmik):
+            r = _ujema(v["dan"], t_s, zamuda, odhod, zdaj, naprej_s)
+            if r is not None and (razmik is None or abs(r) < abs(razmik)):
                 najboljsa, razmik = (v["trip_id"], v["dan"], seq, zamuda * 60, vrsta == 2), r
     return najboljsa
 
 
 def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
-            zdaj: float) -> tuple[list[tuple], dict]:
-    """Vse vrstice zemljevida -> (pripete, števci)."""
-    pripete = []
-    stevci = {"vlakov": 0, "pred_odhodom": 0, "na_cilju": 0, "nepripetih": 0}
+            zdaj: float) -> tuple[list[tuple], dict, list[tuple]]:
+    """Vse vrstice zemljevida -> (pripete, števci, prihodnje).
+
+    Prihodnje so vlaki z odhodom v prihodnosti (`NAJDLJE_NAPREJ_S`), v isti
+    obliki kot pripete; v `run` ne gredo, le v trenutno zamudo."""
+    pripete, prihodnje = [], []
+    stevci = {"vlakov": 0, "pred_odhodom": 0, "na_cilju": 0, "nepripetih": 0, "prihodnjih": 0}
     for r in vrstice:
         if je_avtobus(r):
             continue
@@ -176,12 +186,16 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
             stevci["pred_odhodom"] += 1
             continue
         stevci["na_cilju"] += r.get("Vrsta") == 2
-        p = pripni(r, po_stevilki.get(stevilka(str(r.get("St_vlaka") or "")), []), zdaj)
-        if p is None:
-            stevci["nepripetih"] += 1
-        else:
+        voznje = po_stevilki.get(stevilka(str(r.get("St_vlaka") or "")), [])
+        p = pripni(r, voznje, zdaj)
+        if p is not None:
             pripete.append(p)
-    return pripete, stevci
+        elif r.get("Vrsta") == 1 and (p := pripni(r, voznje, zdaj, NAJDLJE_NAPREJ_S)):
+            prihodnje.append(p)
+            stevci["prihodnjih"] += 1
+        else:
+            stevci["nepripetih"] += 1
+    return pripete, stevci, prihodnje
 
 
 #: Vožnje, ki so v zadnjem spremenjenem odgovoru po zamudi pokazale ničlo
@@ -294,6 +308,120 @@ def porocilo(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
         (trip_id, dan, ts, r[0], minut, r[1], int(minut >= IZJEMNA_OD_MIN))).rowcount
 
 
+#: Trenutna zamuda vsake vožnje na zemljevidu: (trip_id, dan) -> (zamuda_s,
+#: čas odgovora, postanek pred `Postaja`). Ves slovar se zamenja ob vsakem
+#: spremenjenem odgovoru, zato ga niti strežbe berejo brez zaklepanja.
+_trenutne: dict[tuple[str, str], tuple[int, int, int]] = {}
+
+#: Kako dolgo velja trenutna zamuda brez novega odgovora. SŽ odgovor spremeni
+#: na 15 s; minuta so štirje zgrešeni.
+SVEZA_TRENUTNA_S = 60
+
+
+def _osvezi_trenutne(pripete: list[tuple], prihodnje: list[tuple], zdaj: float) -> None:
+    global _trenutne
+    novo = {}
+    for trip_id, dan, seq, zamuda, je_prihod in (*pripete, *prihodnje):
+        k = (trip_id, dan)
+        if je_prihod:
+            continue
+        if k in _nicle:
+            # Nepotrjena ničla (`zapisi`): velja, kar je SŽ rekel prej.
+            if k in _trenutne:
+                novo[k] = _trenutne[k]
+            continue
+        novo[k] = (zamuda, int(zdaj), seq)
+    _trenutne = novo
+
+
+def trenutne(dan: str, trip_ids, zdaj: float) -> dict[str, dict]:
+    """trip_id -> trenutna zamuda z zemljevida, kadar je sveža.
+
+    `Zamuda_cas` je zamuda vlaka ZDAJ (pred postajo `Postaja`), zamuda v
+    `run` pa odhodna zamuda zadnjega prevoženega postanka. Kadar vlak stoji
+    ali SŽ zamudo poveča med postajama, je prva višja, in to ves čas, dokler
+    vlak ne prevozi naslednje postaje: LPV 2417 16. 10. 2026 ob 14:58 SŽ +14,
+    prikaz +1 s postaje prej. Uporaba: `stats.last_measured`."""
+    t = _trenutne
+    out = {}
+    for trip_id in trip_ids:
+        z = t.get((trip_id, dan))
+        if z and zdaj - SVEZA_TRENUTNA_S <= z[1] <= zdaj + SVEZA_TRENUTNA_S:
+            out[trip_id] = {"s": z[0], "ts": z[1], "seq": z[2]}
+    return out
+
+
+#: Straža: kar shranimo in pokažemo, proti temu, kar SŽ pravi ta hip. Od 11.
+#: do 16. 10. 2026 je prikaz pri 611 od 1 444 voženj z zamudo kazal prenizko
+#: (RG 318 +0 in +12 namesto +18), pa ni nihče vedel: zdravje je bilo zeleno,
+#: ker je vir odgovarjal. Primerjamo le vlake, ki jim SŽ zamude vsaj
+#: `USTALJENA_S` ne spreminja -- vlak, ki stoji in mu zamuda raste, ima
+#: zadnji prevoženi postanek po pravici nižji. Na 3 381 takih primerjavah
+#: (25 min zemljevida 16. 10. 2026, ponovljenih skozi kodo) je bil prikaz
+#: za 3 min ali več mimo s staro kodo 2,3--4,1 %, z novo 0.
+USTALJENA_S = 120
+SKLADNOST_RAZLIKA_S = 180
+SKLADNOST_OKNO_S = 30 * 60
+
+#: (trip_id, dan) -> (zamuda_s, od kdaj jo SŽ ima)
+_ustaljene: dict[tuple[str, str], tuple[int, float]] = {}
+#: Po en vnos na spremenjen odgovor: (čas, primerjav, prenizko, previsoko,
+#: {vlak: „SŽ +18, prikaz +12“} za vlake, ki so bili mimo).
+_skladnost: deque = deque()
+
+
+def skladnost(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
+    """Ustaljena zamuda SŽ proti meji meritve (`stats.last_measured`) za
+    zadnjih `SKLADNOST_OKNO_S`; gre v `meta` in v zdravje (`skladnost_sz`).
+
+    Meja brez trenutne zamude (`trenutna_s`): ta bi zakrila prav tisto, kar
+    straža išče -- da `run` ne nosi tega, kar SŽ pravi."""
+    global _ustaljene
+    ustaljene, po_dnevih = {}, defaultdict(dict)
+    for trip_id, dan, _seq, zamuda, je_prihod in pripete:
+        k = (trip_id, dan)
+        if je_prihod or k in _nicle:
+            continue
+        prej = _ustaljene.get(k)
+        ustaljene[k] = prej if prej and prej[0] == zamuda else (zamuda, zdaj)
+        if zdaj - ustaljene[k][1] >= USTALJENA_S:
+            po_dnevih[dan][trip_id] = zamuda
+    _ustaljene = ustaljene
+    n = nizko = visoko = 0
+    mimo: dict[str, str] = {}
+    for dan, sz in po_dnevih.items():
+        meje = stats.last_measured(conn, dan, list(sz), int(zdaj - stats.polnoc(dan)))
+        for trip_id, zamuda in sz.items():
+            m = meje.get(trip_id)
+            prikaz = (m["delay_s"] or 0) if m else None
+            n += 1
+            if prikaz is None and zamuda >= SKLADNOST_RAZLIKA_S:
+                nizko += 1
+            elif prikaz is not None and prikaz <= zamuda - SKLADNOST_RAZLIKA_S:
+                nizko += 1
+            elif prikaz is not None and prikaz >= zamuda + SKLADNOST_RAZLIKA_S:
+                visoko += 1
+            else:
+                continue
+            st = conn.execute("SELECT train_no FROM trip WHERE trip_id = ?", (trip_id,)).fetchone()
+            mimo[st[0] if st else trip_id] = (
+                f"SŽ +{zamuda // 60}, prikaz " + ("brez" if prikaz is None else f"+{prikaz // 60}"))
+    _skladnost.append((zdaj, n, nizko, visoko, mimo))
+    while _skladnost[0][0] < zdaj - SKLADNOST_OKNO_S:
+        _skladnost.popleft()
+    kolikokrat: Counter = Counter()
+    zadnje: dict[str, str] = {}
+    for *_, v in _skladnost:
+        kolikokrat.update(v.keys())
+        zadnje.update(v)
+    return {"primerjav": sum(x[1] for x in _skladnost),
+            "prenizko": sum(x[2] for x in _skladnost),
+            "previsoko": sum(x[3] for x in _skladnost),
+            "vlakov": len(kolikokrat),
+            "primeri": [f"{vlak} ({zadnje[vlak]})" for vlak, _ in kolikokrat.most_common(5)],
+            "od_ts": int(_skladnost[0][0])}
+
+
 #: Odtis zadnjega odgovora: nespremenjen zemljevid je v /admin opomba, dolgo
 #: nespremenjen ob vlakih na poti pa opozorilo (`zdravje.ocena`).
 _odtis: str | None = None
@@ -337,8 +465,10 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
         conn.commit()
         return prej
     po_stevilki = vozni_red(conn, datetime.fromtimestamp(zdaj, TZ).date())
-    pripete, stevci = razberi(vrstice, po_stevilki, zdaj)
+    pripete, stevci, prihodnje = razberi(vrstice, po_stevilki, zdaj)
     stevci.update(zapisi(conn, pripete, zdaj))
+    _osvezi_trenutne(pripete, prihodnje, zdaj)
+    stevci["skladnost"] = skladnost(conn, pripete, zdaj)
     odtis = _odtis or ""
     stevci["odtis"] = odtis
     stevci["spremenjeno_ts"] = (prej.get("spremenjeno_ts") if prej.get("odtis") == odtis

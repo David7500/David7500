@@ -28,6 +28,9 @@ def _pozabi():
     iz_lege._sz_ts = 0.0
     zamude_sz._odtis = None
     zamude_sz._nicle.clear()
+    zamude_sz._trenutne = {}
+    zamude_sz._ustaljene = {}
+    zamude_sz._skladnost.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -109,9 +112,85 @@ def test_avtobus_in_vlak_pred_odhodom_nista_nepripeta():
     """Zemljevid kaže nadomestni avtobus z zamudo 0 v točki postaje -- to ni
     meritev; vlak pred odhodom ni napaka pripenjanja."""
     vrstice = [{**VRSTICA, "Vrsta_vlaka": "B", "Rang": "BUS"}, {**VRSTICA, "Vrsta": 0}, VRSTICA]
-    pripete, stevci = zamude_sz.razberi(vrstice, _vr(_baza()), ZDAJ)
-    assert len(pripete) == 1
-    assert stevci == {"vlakov": 2, "pred_odhodom": 1, "na_cilju": 0, "nepripetih": 0}
+    pripete, stevci, prihodnje = zamude_sz.razberi(vrstice, _vr(_baza()), ZDAJ)
+    assert len(pripete) == 1 and prihodnje == []
+    assert stevci == {"vlakov": 2, "pred_odhodom": 1, "na_cilju": 0, "nepripetih": 0,
+                      "prihodnjih": 0}
+
+
+# Ista vožnja 15 s pozneje: SŽ je zamudo z +50 povečal na +65, vlak pa je s
+# Plav odpeljal ob 08:46 (LP 314 16. 10. 2026: +5 -> +10, odhod 2,5 min naprej).
+POVECANA = {**VRSTICA, "Odhod": "09:01", "Zamuda_cas": 65}
+
+
+def test_odhod_v_prihodnosti_ni_prevozen_postanek_je_trenutna_zamuda():
+    """Postanek, s katerega je vlak že odpeljal, ne sme postati neprevožen:
+    +65 na Plavah bi pomenilo odhod ob 09:01. Zamuda vlaka zdaj pa je +65."""
+    c = _baza()
+    zamude_sz._odtis = "a"
+    zamude_sz.korak(c, [VRSTICA], ZDAJ)
+    zamude_sz._odtis = "b"
+    s = zamude_sz.korak(c, [POVECANA], ZDAJ + 15)
+    assert (s["zapisanih"], s["prihodnjih"], s["nepripetih"]) == (0, 1, 0)
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 20").fetchone()[0] == 3000
+    lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ + 15 - POLNOC))["t1"]
+    assert (lm["stop_seq"], lm["delay_s"], lm["trenutna_s"], lm["trenutna_seq"]) == (20, 3000, 3900, 20)
+    assert stats.trenutna_zamuda(lm) == 3900
+    # Brez novega odgovora minuto pozneje ne velja več.
+    lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ + 15 + 61 - POLNOC))["t1"]
+    assert "trenutna_s" not in lm and stats.trenutna_zamuda(lm) == 3000
+
+
+def test_trenutna_zamuda_samo_navzgor():
+    """Nižja zamuda SŽ od meje ne velja (prevoznik šteje samo navzgor), ničla
+    po zamudi, ki je SŽ še ni potrdil, pa trenutne zamude ne izbriše."""
+    c = _baza()
+    zamude_sz._odtis = "a"
+    zamude_sz.korak(c, [VRSTICA], ZDAJ)
+    zamude_sz._trenutne[("t1", DAN)] = (2000, int(ZDAJ), 20)
+    lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ - POLNOC))["t1"]
+    assert "trenutna_s" not in lm and lm["sz_ts"] == int(ZDAJ)
+    zamude_sz._odtis = "b"
+    zamude_sz.korak(c, [POVECANA], ZDAJ + 15)
+    zamude_sz._odtis = "c"
+    nicla = {**VRSTICA, "Postaja": "Nova Gorica", "Odhod": "08:07", "Zamuda_cas": 0}
+    assert zamude_sz.korak(c, [nicla], ZDAJ + 30)["nicel"] == 1
+    assert zamude_sz.trenutne(DAN, ["t1"], ZDAJ + 30)["t1"]["s"] == 3900
+
+
+def test_zemljevid_kaze_trenutno_zamudo_kot_okno_voznje():
+    """Kartica vlaka na zemljevidu in glava okna vožnje: ista številka."""
+    from kajros import api
+    zamude_sz._trenutne[("t1", DAN)] = (840, int(ZDAJ), 20)
+    vrstice = [{"trip_id": "t1", "service_date": DAN, "network": "zeleznica", "delay_s": 60},
+               {"trip_id": "t2", "service_date": DAN, "network": "zeleznica", "delay_s": 60}]
+    out = api._s_trenutno(vrstice, ZDAJ + 20)
+    assert (out[0]["delay_s"], out[0]["meja_delay_s"], out[0]["zamuda"]["vrsta"]) == (
+        840, 60, stats.PO_SZ)
+    assert out[1] is vrstice[1] and vrstice[0]["delay_s"] == 60, "predpomnilnik ostane cel"
+    assert api._s_trenutno(vrstice, ZDAJ + 120) is vrstice, "stara trenutna ne velja"
+
+
+def test_straza_vidi_prikaz_ki_ne_drzi():
+    """16. 10. 2026: vir je odgovarjal, zdravje zeleno, prikaz pri 611 od 1 444
+    voženj z zamudo prenizek. Straža primerja ustaljeno zamudo SŽ z mejo."""
+    c = _baza()
+    for i in range(10):
+        zamude_sz._odtis = str(i)
+        s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 15 * i)["skladnost"]
+    assert (s["primerjav"], s["prenizko"], s["previsoko"]) == (2, 0, 0), "ustaljena šele po 2 min"
+    # Meja zaostane za SŽ (kot ob zaskočki): straža to vidi.
+    c.execute("UPDATE run SET delay_dep = 600")
+    zamude_sz._odtis = "x"
+    s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 150)["skladnost"]
+    assert (s["primerjav"], s["prenizko"], s["vlakov"]) == (3, 0, 0), "korak je vrstico spet zapisal"
+    c.execute("UPDATE run SET delay_dep = 600")
+    s = zamude_sz.skladnost(c, zamude_sz.razberi([VRSTICA], _vr(c), ZDAJ + 165)[0], ZDAJ + 165)
+    assert (s["primerjav"], s["prenizko"], s["vlakov"]) == (4, 1, 1)
+    assert s["primeri"] == ["LP 4203 (SŽ +50, prikaz +10)"]
+    # Okno je pol ure.
+    s = zamude_sz.skladnost(c, [], ZDAJ + 165 + zamude_sz.SKLADNOST_OKNO_S - 10)
+    assert s["primerjav"] == 1
 
 
 def test_zapis_v_run_ohrani_prihod():
@@ -299,6 +378,23 @@ def test_zdravje_zemljevida():
     # Ponoči zemljevid ne sme biti ne prazen ne zamrznjen.
     z["vozi_zdaj"] = {"zeleznica": 1, "avtobus": 2}
     assert ocena({"ts": T - 30, "vlakov": 0, "spremenjeno_ts": T - 3600})[0] == zdravje.DOBRA
+
+
+def test_zdravje_straze():
+    z = {"vozi_zdaj": {"zeleznica": 20, "avtobus": 300}}
+
+    def ocena(**sk):
+        zs = {"ts": ZDAJ - 10, "vlakov": 20, "spremenjeno_ts": ZDAJ - 10,
+              "skladnost": {"vlakov": 0, "prenizko": 0, "previsoko": 0, "primeri": [], **sk}}
+        return zdravje.ocena({**z, "zamude_sz": zs}, {}, ZDAJ)["skladnost_sz"]
+
+    assert ocena(primerjav=100, prenizko=50, vlakov=10)[0] == "", "premalo primerjav"
+    assert ocena(primerjav=4000)[0] == zdravje.DOBRA
+    assert ocena(primerjav=4000, previsoko=20, vlakov=1)[0] == zdravje.MLACNA
+    # En vlak, ki je pol ure mimo, ni okvara zajema.
+    assert ocena(primerjav=4000, prenizko=110, vlakov=1)[0] == zdravje.MLACNA
+    r = ocena(primerjav=4000, prenizko=90, vlakov=12, primeri=["RG 318 (SŽ +18, prikaz +12)"])
+    assert r[0] == zdravje.SLABA and "RG 318" in r[1] and "2.2 %" in r[1]
 
 
 def test_nit_po_zaklenjeni_bazi_ne_obstane(tmp_path, monkeypatch):

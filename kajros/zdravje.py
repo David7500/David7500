@@ -41,6 +41,13 @@ SZ_NAPAKA_S = (brskalnik.PO_NAPAKI_ZAGONA_S
 #: brez spremembe je zamrznjen odgovor, ne miren promet.
 SZ_ZAMRZNJEN_S = 600
 
+#: Straža zemljevida SŽ (`zamude_sz.skladnost`): delež ustaljenih primerjav,
+#: pri katerih je meja meritve od SŽ za 3 min ali več. Stara koda 2,3--4,1 %,
+#: nova 0 (glej `ocena`). Pod `SKLADNOST_NAJMANJ` primerjav (ponoči, po
+#: zagonu) ne sodimo: podnevi jih je v pol ure ~4 000.
+SKLADNOST_RDECE, SKLADNOST_RUMENO = 0.01, 0.003
+SKLADNOST_NAJMANJ = 300
+
 #: Toliko voženj po voznem redu mora teči, da je molk feeda okvara.
 MIN_VOZENJ = 3
 
@@ -94,6 +101,12 @@ def _min(s: float) -> str:
 
 def _ura(ts: float) -> str:
     return datetime.fromtimestamp(ts, TZ).strftime("%H:%M")
+
+
+def _skladnost(sk: dict, n: int, mimo: int) -> str:
+    return (f"prikaz se s SŽ ne ujema pri {100 * mimo / n:.1f} % primerjav "
+            f"({mimo} od {n}, {sk.get('vlakov', 0)} vlakov, prenizko {sk.get('prenizko', 0)}, "
+            f"previsoko {sk.get('previsoko', 0)}): " + ", ".join(sk.get("primeri") or []))
 
 
 def _do(dni: int, d: date) -> str:
@@ -215,6 +228,24 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
                                         f"vozi {vozi['zeleznica']} vlakov")
         else:
             out["zamude_sz"] = (DOBRA, "")
+
+        # Straža (`zamude_sz.skladnost`): ali to, kar kažemo, drži s tem, kar
+        # SŽ pravi. Vir je od 11. do 16. 10. 2026 odgovarjal in vrstica zgoraj
+        # je bila zelena, prikaz pa je bil pri 611 od 1 444 voženj z zamudo
+        # prenizek. Ponovitev 25 min zemljevida skozi staro kodo: mimo 2,3 do
+        # 4,1 % ustaljenih primerjav, skozi novo 0 od 3 381. Rdeče pri 1 % in
+        # treh vlakih -- en sam vlak je posebnost, ne okvara zajema.
+        sk = zs.get("skladnost") or {}
+        n = sk.get("primerjav") or 0
+        mimo = (sk.get("prenizko") or 0) + (sk.get("previsoko") or 0)
+        if n < SKLADNOST_NAJMANJ:
+            out["skladnost_sz"] = ("", "")
+        elif mimo / n >= SKLADNOST_RDECE and (sk.get("vlakov") or 0) >= 3:
+            out["skladnost_sz"] = (SLABA, _skladnost(sk, n, mimo))
+        elif mimo / n >= SKLADNOST_RUMENO:
+            out["skladnost_sz"] = (MLACNA, _skladnost(sk, n, mimo))
+        else:
+            out["skladnost_sz"] = (DOBRA, "")
 
     # derp.si po viru. 8. 10. 2026 je od 16:00 zavračal povezave; vrstici
     # zgoraj sta ostali zeleni, kolikor sta `zamude_lpp` in `zamude_sz` pisala

@@ -221,7 +221,8 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                         pogledanih += 1
                     continue
 
-                trenutna = zadnji["delay_s"] or 0
+                # Kar prikaz pokaže kot trenutno zamudo in nese naprej.
+                trenutna = stats.trenutna_zamuda(zadnji) or 0
                 # `predict` enkrat na voznjo, ne enkrat na postanek: vrne vse
                 # postanke naprej in klic je isti.
                 napoved = {x["stop_seq"]: x for x in stats.predict(

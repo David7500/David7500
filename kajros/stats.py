@@ -1015,11 +1015,43 @@ def last_measured(conn: sqlite3.Connection, service_date: str,
     # `?` in `:ime` veze po vrstnem redu pojavitve, kar tiho zamenja vrednosti.
     vprasaji = ",".join("?" * len(ids))
     sql = _LAST_MEASURED_SQL % (vprasaji, vprasaji)
-    return {r["trip_id"]: dict(r)
-            for r in conn.execute(sql, (service_date, *ids,
-                                        service_date, *ids, zdaj_ts,
-                                        zdaj_ts - SVEZE_POROCILO_S,
-                                        now_s, polnoc_s))}
+    out = {r["trip_id"]: dict(r)
+           for r in conn.execute(sql, (service_date, *ids,
+                                       service_date, *ids, zdaj_ts,
+                                       zdaj_ts - SVEZE_POROCILO_S,
+                                       now_s, polnoc_s))}
+    # Trenutna zamuda z zemljevida SŽ, kadar je višja: glej `trenutna_zamuda`.
+    # Uvoz tu, ker `zamude_sz` uvaža ta modul.
+    from . import zamude_sz
+    for trip_id, sz in zamude_sz.trenutne(service_date, out, zdaj_ts).items():
+        m = out[trip_id]
+        m["sz_ts"] = sz["ts"]
+        if sz["s"] - (m["delay_s"] or 0) >= TRENUTNA_VISJA_S:
+            m.update(trenutna_s=sz["s"], trenutna_seq=sz["seq"])
+    return out
+
+
+#: Za toliko mora biti zamuda SŽ višja od zadnjega prevoženega postanka, da
+#: velja namesto nje. Prikaz kaže minute.
+TRENUTNA_VISJA_S = 60
+
+
+def trenutna_zamuda(lm: dict | None) -> int | None:
+    """Zamuda vozila zdaj: kar SŽ pove ta hip, kadar je več od zamude na
+    zadnjem prevoženem postanku (`last_measured`), sicer ta.
+
+    Ni meja meritve: postanek ostane `stop_seq`, `delay_s` ostane njegova
+    zamuda. Rabi jo vse, kar zamudo nese naprej ali jo pokaže kot trenutno --
+    glava okna vožnje, ocena za postanke naprej, tabla, iskalnik, zemljevid.
+    Vlak, ki stoji med postajama, ima zadnji prevoženi postanek po pravici
+    nizek: LPV 2417 16. 10. 2026 +1 s postaje prej, SŽ +14 in raste. Samo
+    navzgor, kot prevoznikova napoved (`_with_operator`): kadar prevoznik
+    pove več, ima izmerjeno prav. Na 25 min zemljevida 16. 10. 2026 je bila
+    SŽ višja od meje za 3 min ali več v 11 od 4 453 trenutkov.
+    """
+    if not lm:
+        return None
+    return lm.get("trenutna_s", lm["delay_s"])
 
 
 #: Kako dolgo velja poročilo SŽ "vlak X ob prihodu na postajo Y" kot dokaz,
@@ -1707,6 +1739,8 @@ def se_vozi_vceraj(conn: sqlite3.Connection, now_s: int,
 #: nikoli nimamo, in dvakrat v dveh dneh je poslala potnika s perona, s
 #: katerega vlak še ni odpeljal.
 IZMERJENO = "izmerjeno"
+#: Zamuda, ki jo SŽ pove za vlak zdaj, ne za postanek (`trenutna_zamuda`).
+PO_SZ = "po podatkih SŽ"
 ZADNJI_PODATEK = "zadnji podatek"
 
 
@@ -1856,13 +1890,13 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
                               dwell_at(slack_vrsta, lm["stop_seq"])):
             prev = None
         ocena = estimate_at(conn, train_no, trip_id, lm["stop_seq"],
-                            lm["delay_s"], stop_seq, service_date)
+                            trenutna_zamuda(lm), stop_seq, service_date)
         if ocena is None:
             # Omrezje samo tu: pravilo prevoznika je pri avtobusu drugacno,
             # model pa ga je ze uporabil sam (`predict`). Isto za izhodisce.
             jaz = conn.execute("SELECT network, agency, first_seq FROM trip WHERE trip_id = ?",
                                (trip_id,)).fetchone() if trip_id else None
-            zdaj = odhod_z_izhodisca(lm["delay_s"], lm["stop_seq"],
+            zdaj = odhod_z_izhodisca(trenutna_zamuda(lm), lm["stop_seq"],
                                      jaz["first_seq"] if jaz else None)
             ocena = _with_operator(_after_slack(zdaj, rez), prev,
                                    *((jaz["network"], jaz["agency"]) if jaz else ()))
@@ -2343,7 +2377,7 @@ def _add_live_state(conn: sqlite3.Connection, leg: dict, service_date: str,
                        now_s if now_s is not None else 48 * 3600)
     m = lm.get(leg["trip_id"])
     if m:
-        leg["delay_s"] = m["delay_s"]
+        leg["delay_s"] = trenutna_zamuda(m)
         leg["delay_stop"] = m["name"]
         leg["delay_stop_seq"] = m["stop_seq"]
 

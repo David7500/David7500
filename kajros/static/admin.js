@@ -563,10 +563,12 @@ function podrobnostiVira(kljuc, d) {
       dodaj("v odgovoru", `${st(zs.vlakov)} vlakov · zapisanih ${st(zs.zapisanih)}`
         + ` · pred odhodom ${st(zs.pred_odhodom)} · na cilju ${st(zs.na_cilju)}`
         + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : "")
+        + (zs.prihodnjih ? ` · z odhodom v prihodnosti ${st(zs.prihodnjih)}` : "")
         + (zs.nazaj ? ` · nazaj zavrnjenih ${st(zs.nazaj)}` : "")
         + (zs.nicel ? ` · ničla po zamudi čaka potrditev ${st(zs.nicel)}` : "")
         + (zs.ponastavljenih ? ` · ponastavitev na cilju ${st(zs.ponastavljenih)}` : ""));
       dodaj("zadnja sprememba", zs.spremenjeno_ts ? pred(zs.spremenjeno_ts) : null);
+      dodaj("prikaz proti SŽ · 30 min", skladnostSz(zs.skladnost));
     }
     dodaj("brskalnik", opisBrskalnika((d.stroj || {}).brskalnik));
   } else if (kljuc === "peroni") {
@@ -588,6 +590,16 @@ function podrobnostiVira(kljuc, d) {
     dodaj("znan do", vr.lpp ? datumIso(vr.lpp) : null);
   }
   return out;
+}
+
+/** Straža zemljevida SŽ (`zamude_sz.skladnost`): koliko ustaljenih zamud SŽ
+ * se z mejo meritve ne ujema za 3 min ali več, zadnjih 30 min. */
+function skladnostSz(sk) {
+  if (!sk || !sk.primerjav) return null;
+  const mimo = sk.prenizko + sk.previsoko;
+  return `${st(sk.primerjav)} primerjav · mimo ${st(mimo)}`
+    + (mimo ? ` (${st(100 * mimo / sk.primerjav, 1)} %, prenizko ${st(sk.prenizko)}, previsoko ${st(sk.previsoko)})`
+      + ` · ${(sk.primeri || []).join(", ")}` : "");
 }
 
 /** Kratko stanje vira za seznam na zavihku Stanje. */
@@ -709,6 +721,7 @@ function vrsticeZajema(d) {
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—", r.neznane],
     ["vozila brez zamude", brezZamude(z) || "—", r.lega_brez_zamude],
+    ["vlaki · prikaz proti SŽ", skladnostSz((z.zamude_sz || {}).skladnost) || "—", r.skladnost_sz],
     ["vozil z lego", st(z.vehicles_with_gps)],
     ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`],
     ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`],
