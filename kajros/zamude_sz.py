@@ -232,7 +232,8 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
       Ljubljane Polje (7:48) pisal +0, vozil pa +12 do +18. Od 11. do 16.
       10. 2026 so ničle zadele 611 od 1 444 voženj z zamudo. Velja za vsako
       zamudo, ne le veliko: tudi +3 bi vlak prestavil 3 min naprej. Cena je
-      15 s zakasnitve pravega okrevanja na 0.
+      15 s zakasnitve pravega okrevanja na 0. „Po zamudi“ pomeni po zadnji
+      besedi SŽ o vlaku, ne po postanku najdlje naprej (glej spodaj).
     """
     ts = int(zdaj)
     izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0, "nicel": 0}
@@ -241,7 +242,15 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         zadnji = conn.execute(
             "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
             "ORDER BY stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
-        if (not je_prihod and zamuda == 0 and zadnji and zadnji[1] > 0
+        # Ničlo primerjamo z ZADNJO besedo SŽ, ne s postankom najdlje naprej:
+        # ta je po ničli, ki je prišla skozi, sam ničla, in vsaka naslednja
+        # bi šla mimo kot „ničla po ničli“. Tako je bilo po prvem popravku
+        # 16. 10. 2026 pri vlakih, ki so ničlo naprej že imeli: LPV 2504 je
+        # +0 dobil ob 14:40, 14:47 in 14:51, SŽ pa je vmes kazal +16 do +18.
+        prejsnja = conn.execute(
+            "SELECT delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
+            "ORDER BY zadnjic_ts DESC, stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
+        if (not je_prihod and zamuda == 0 and prejsnja and prejsnja[0] > 0
                 and (trip_id, dan) not in _nicle):
             nicle.add((trip_id, dan))
             izid["nicel"] += 1

@@ -2,10 +2,11 @@
 """Enkratno čiščenje: lažne ničle zemljevida SŽ v `run`, 10.–16. 10. 2026.
 
 SŽ na vsake 3–4 min za en odgovor del vlakov pokaže po voznem redu, z
-zamudo 0. Do popravka (16. 10. 2026 ob 14:36:54, `zamude_sz.zapisi`, tretje
-varovalo) smo jih zapisovali kot meritev. Ničla po zamudi od 5 min naprej je
-bila 1.–6. 10. (prek posrednika) v 0,45–1,24 % vrstic vlakov, 11.–16. 10. v
-4,7–7,5 % -- devet od desetih je napaka. Prikaz jih je izpuščal, model,
+zamudo 0, včasih pa vlak tako riše tudi več minut. Do popravka 16. 10. 2026
+(`zamude_sz.zapisi`, tretje varovalo) smo jih zapisovali kot meritev.
+Ničla po zamudi od 5 min naprej je bila 1.–6. 10. (prek posrednika) v
+0,45–1,24 % vrstic vlakov, 11.–16. 10. v 4,7–7,5 % -- devet od desetih je
+napaka. Prikaz jih je izpuščal, model,
 „običajna zamuda“, končna zamuda in senca pa ne.
 
 Pobriše vrstico v `run` in `sz_zamuda` in razrešitev sence (`napoved`), ki
@@ -19,7 +20,7 @@ Brez `--zapisi` samo prešteje. Na arwenu (`david` je v skupini `kajros`):
     cd /opt/kajros && .venv/bin/python scripts/pocisti_nicle_sz.py --baza /var/lib/kajros/kajros.sqlite
     cd /opt/kajros && .venv/bin/python scripts/pocisti_nicle_sz.py --baza /var/lib/kajros/kajros.sqlite --zapisi
 
-16. 10. 2026 ob 15:50 je štetje dalo 2 336 ničel na 651 vožnjah.
+16. 10. 2026 ob 16:15 je štetje dalo 2 341 ničel na 654 vožnjah.
 
 Ko je pognan, skripta odide (rok 31. 10. 2026).
 """
@@ -28,16 +29,13 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import sys
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 sys.path.insert(0, ".")
 from kajros import config, db                       # noqa: E402
 
+#: Ves 16. 10.: prva različica popravka (14:36:54) je ničle še spuščala
+#: vlakom, ki so jih naprej že imeli (`zamude_sz.zapisi`).
 OD, DO = "2026-10-10", "2026-10-16"
-#: Ponovni zagon s popravkom (journal na arwenu): od tod je ničla potrjena.
-POPRAVEK_TS = int(datetime(2026, 10, 16, 14, 36, 54,
-                           tzinfo=ZoneInfo(config.TIMEZONE)).timestamp())
 
 _IZBOR = """
 WITH r AS (
@@ -53,7 +51,7 @@ WITH r AS (
 SELECT r.trip_id, r.service_date, r.stop_seq
 FROM r JOIN sz_zamuda z ON z.trip_id = r.trip_id AND z.service_date = r.service_date
                        AND z.stop_seq = r.stop_seq AND z.delay_s = 0
-WHERE r.d = 0 AND r.prej >= 300 AND r.feed_ts < :do_ts
+WHERE r.d = 0 AND r.prej >= 300
 """
 
 
@@ -65,7 +63,7 @@ def main() -> int:
     # Štetje samo bere: sme ga pognati vsak, tudi `david` ob tekoči storitvi.
     conn = (db.connect(a.baza) if a.zapisi
             else sqlite3.connect(f"file:{a.baza}?mode=ro", uri=True))
-    kljuci = [tuple(r) for r in conn.execute(_IZBOR, {"od": OD, "do": DO, "do_ts": POPRAVEK_TS})]
+    kljuci = [tuple(r) for r in conn.execute(_IZBOR, {"od": OD, "do": DO})]
     po_dnevih: dict[str, int] = {}
     for _, dan, _ in kljuci:
         po_dnevih[dan] = po_dnevih.get(dan, 0) + 1

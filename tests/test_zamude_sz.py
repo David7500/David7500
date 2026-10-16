@@ -257,6 +257,18 @@ def test_nicla_po_zamudi_velja_sele_potrjena():
     assert zamude_sz.zapisi(c2, [("t1", DAN, 21, 0, False)], ZDAJ + 15)["zapisanih"] == 1
 
 
+def test_nicla_naprej_ne_odpre_vrat_naslednji():
+    """Po prvem popravku 16. 10. 2026: vlak, ki je ničlo naprej že imel (od
+    prej ali potrjeno), je vsako naslednjo ničlo spustil skozi, ker je bil
+    postanek najdlje naprej ničla. LPV 2504 +0 ob 14:40, 14:47 in 14:51, SŽ
+    vmes +16 do +18. Šteje zadnja beseda SŽ, ne postanek najdlje naprej."""
+    c = _baza()
+    zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ)            # ničla od prej
+    zamude_sz.zapisi(c, [("t1", DAN, 20, 1080, False)], ZDAJ + 15)    # SŽ spet +18
+    izid = zamude_sz.zapisi(c, [("t1", DAN, 22, 0, False)], ZDAJ + 30)
+    assert (izid["nicel"], izid["zapisanih"]) == (1, 0)
+
+
 def test_na_cilju_velja_prvi_prihod_nicla_po_zamudi_ni_prihod():
     """SŽ vrstico na cilju po 1--2 min ponastavi na zamudo 0 (1897: +7 -> 0)."""
     c = _baza()
