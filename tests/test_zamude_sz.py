@@ -127,16 +127,32 @@ def test_zapis_v_run_ohrani_prihod():
     assert c.execute("SELECT COUNT(*) FROM obs").fetchone()[0] == 1
 
 
-def test_vlak_ne_gre_nazaj():
-    """10. 10. 2026: LPV 2616 je po Brezovici spet pisal „naslednja Ljubljana
-    Tivoli, +9“ -- in se ujemal z odhodom iz Ljubljane, ki jo je zapustil s +0."""
+def test_vlak_ne_gre_nazaj_z_manjso_zamudo():
+    """Zemljevid je vozni red plus trenutna zamuda: vlak, ki zamudo nabira,
+    se pomika naprej, ko poteče stara zamuda, in skoči nazaj, ko SŽ zamudo
+    poveča. Nazaj z isto ali manjšo zamudo je samo nihanje (RG 615 16. 10.
+    2026: „naslednja Šentjur“ / „naslednja Celje“ izmenoma, oboje +3)."""
     c = _baza()
-    zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ)
-    izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 540, False)], ZDAJ + 30)
+    zamude_sz.zapisi(c, [("t1", DAN, 21, 180, False)], ZDAJ)
+    izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 180, False)], ZDAJ + 30)
     assert izid["nazaj"] == 1
     assert c.execute("SELECT COUNT(*) FROM run WHERE stop_seq = 20").fetchone()[0] == 0
     # Popravek na istem odseku pa velja.
     assert zamude_sz.zapisi(c, [("t1", DAN, 21, 60, False)], ZDAJ + 60)["zapisanih"] == 1
+
+
+def test_nazaj_z_vecjo_zamudo_je_zvisana_zamuda():
+    """16. 10. 2026: LPV 2907 je SŽ ob odhodu risal po voznem redu (+0, tri
+    postaje naprej), nato s +7 nazaj na izhodišču. Staro varovalo je +7
+    zavračalo 10 min, prikaz je kazal točen vlak. Na 13 min zemljevida je bila
+    prikazana zamuda za 3 min ali več prenizka 63-krat, s tem pravilom enkrat.
+    Starejša vrstica naprej ostane, a `last_measured` je ne šteje za prevoženo,
+    ker je novejša od nje na postanku pred njo."""
+    c = _baza()
+    zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ)
+    assert zamude_sz.zapisi(c, [("t1", DAN, 20, 420, False)], ZDAJ + 30)["zapisanih"] == 1
+    lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ + 30 - POLNOC))["t1"]
+    assert (lm["stop_seq"], lm["delay_s"]) == (20, 420)
 
 
 def test_nicla_po_zamudi_velja_sele_potrjena():

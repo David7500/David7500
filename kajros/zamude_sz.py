@@ -194,10 +194,17 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
 
     Tri varovala, vsa izmerjena na zemljevidu:
 
-    * **Vlak ne gre nazaj.** LPV 2616 je 10. 10. 2026 ob 22:35 po Brezovici
-      spet pisal „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz
-      Ljubljane -- postaje, ki jo je s +0 zapustil 10 min prej. Postanek pred
-      zadnjim zapisanim se zato ne prepiše.
+    * **Vlak ne gre nazaj z isto ali manjšo zamudo.** Zemljevid je vozni
+      red plus trenutna zamuda, ne sled: vlak, ki zamudo nabira, gre naprej,
+      ko poteče stara zamuda, in skoči nazaj, ko SŽ zamudo poveča (RG 615 16.
+      10. 2026: „naslednja Šentjur“ / „naslednja Celje“ izmenoma, +3, +5, +8).
+      Nazaj z isto zamudo je nihanje in se ne zapiše; z večjo je zvišana
+      zamuda in velja. Do 16. 10. se ni zapisalo nobeno „nazaj“ (LPV 2616 10.
+      10.: „naslednja Ljubljana Tivoli, +9“ po odhodu iz Ljubljane s +0) --
+      in vlak, ki ga je SŽ najprej risal po voznem redu, je ostal točen:
+      LPV 2907 16. 10. 10 min +0 namesto +7. Na 13 min zemljevida je bila
+      prikazana zamuda prenizka za 3 min ali več 63-krat od 2 453, zdaj
+      enkrat. Cena: postanek zadaj dobi trenutno zamudo, ne odhodne.
     * **Na cilju šteje prvi prihod** (glava modula), in ničla po zamudi nad
       `PONASTAVITEV_S` ni prihod, ampak ponastavitev.
     * **Ničla po zamudi velja šele, ko jo potrdi naslednji odgovor.** SŽ na
@@ -205,9 +212,9 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
       zamuda 0, postaja in lega tam, kjer bi vlak bil, če bi bil točen. 16.
       10. 2026 ob 14:28:52 sedem od 59 vlakov, LP 3234 iz +21 pred Ivančno
       Gorico na 0 pred Žalno; 15 s pozneje spet +21. Takšen odgovor je vlak
-      prestavil naprej, prvo varovalo pa je nato prave vrstice zavračalo kot
-      vožnjo nazaj -- dokler ga ni pravi vlak dohitel in ga naslednja ničla
-      spet prestavila. RG 318 je tako 16. 10. od Zidanega Mosta (6:32) do
+      prestavil naprej, prvo varovalo (takrat še brez izjeme za večjo
+      zamudo) pa je nato prave vrstice zavračalo kot vožnjo nazaj -- dokler
+      ga ni pravi vlak dohitel in ga naslednja ničla spet prestavila. RG 318 je tako 16. 10. od Zidanega Mosta (6:32) do
       Ljubljane Polje (7:48) pisal +0, vozil pa +12 do +18. Od 11. do 16.
       10. 2026 so ničle zadele 611 od 1 444 voženj z zamudo. Velja za vsako
       zamudo, ne le veliko: tudi +3 bi vlak prestavil 3 min naprej. Cena je
@@ -225,7 +232,7 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
             nicle.add((trip_id, dan))
             izid["nicel"] += 1
             continue
-        if zadnji and seq < zadnji[0]:
+        if zadnji and seq < zadnji[0] and zamuda <= zadnji[1]:
             izid["nazaj"] += 1
             continue
         if je_prihod and zadnji:
