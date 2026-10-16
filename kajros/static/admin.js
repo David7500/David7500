@@ -564,6 +564,7 @@ function podrobnostiVira(kljuc, d) {
         + ` · pred odhodom ${st(zs.pred_odhodom)} · na cilju ${st(zs.na_cilju)}`
         + (zs.nepripetih ? ` · nepripetih ${st(zs.nepripetih)}` : "")
         + (zs.nazaj ? ` · nazaj zavrnjenih ${st(zs.nazaj)}` : "")
+        + (zs.nicel ? ` · ničla po zamudi čaka potrditev ${st(zs.nicel)}` : "")
         + (zs.ponastavljenih ? ` · ponastavitev na cilju ${st(zs.ponastavljenih)}` : ""));
       dodaj("zadnja sprememba", zs.spremenjeno_ts ? pred(zs.spremenjeno_ts) : null);
     }

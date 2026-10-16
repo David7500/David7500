@@ -27,6 +27,7 @@ def _pozabi():
     iz_lege._prvic = None
     iz_lege._sz_ts = 0.0
     zamude_sz._odtis = None
+    zamude_sz._nicle.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -119,7 +120,7 @@ def test_zapis_v_run_ohrani_prihod():
     c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
               "VALUES('t1', ?, 20, 2900, NULL, ?)", (DAN, ZDAJ - 300))
     izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ)
-    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1}
+    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1, "nicel": 0}
     assert c.execute("SELECT delay_arr, delay_dep, feed_ts FROM run WHERE stop_seq = 20"
                      ).fetchone()[:] == (2900, 3000, int(ZDAJ))
     assert c.execute("SELECT delay_s, v_run FROM sz_zamuda").fetchone()[:] == (3000, 1)
@@ -136,6 +137,29 @@ def test_vlak_ne_gre_nazaj():
     assert c.execute("SELECT COUNT(*) FROM run WHERE stop_seq = 20").fetchone()[0] == 0
     # Popravek na istem odseku pa velja.
     assert zamude_sz.zapisi(c, [("t1", DAN, 21, 60, False)], ZDAJ + 60)["zapisanih"] == 1
+
+
+def test_nicla_po_zamudi_velja_sele_potrjena():
+    """16. 10. 2026: SŽ na vsake 3--4 min za en odgovor del vlakov pokaže po
+    voznem redu, z zamudo 0 in postajo naprej. Sprejet tak odgovor je vlak
+    prestavil naprej in prvo varovalo je nato zavračalo prave vrstice (RG
+    318: +0 od Zidanega Mosta do Ljubljane Polje, v resnici +12 do +18)."""
+    c = _baza()
+    zamude_sz.zapisi(c, [("t1", DAN, 20, 1260, False)], ZDAJ)
+    izid = zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ + 15)
+    assert (izid["nicel"], izid["zapisanih"]) == (1, 0)
+    # Naslednji odgovor je spet pravi: vlak ni šel naprej ne nazaj.
+    izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 1260, False)], ZDAJ + 30)
+    assert (izid["nazaj"], izid["zapisanih"]) == (0, 1)
+    assert c.execute("SELECT MAX(stop_seq) FROM run").fetchone()[0] == 20
+    # Dve ničli zapored pa sta okrevanje, ne napaka.
+    zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ + 45)
+    assert zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ + 60)["zapisanih"] == 1
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 21").fetchone()[0] == 0
+    # Ničla po ničli pa ne čaka.
+    c2 = _baza()
+    zamude_sz.zapisi(c2, [("t1", DAN, 20, 0, False)], ZDAJ)
+    assert zamude_sz.zapisi(c2, [("t1", DAN, 21, 0, False)], ZDAJ + 15)["zapisanih"] == 1
 
 
 def test_na_cilju_velja_prvi_prihod_nicla_po_zamudi_ni_prihod():

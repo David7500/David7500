@@ -184,24 +184,47 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
     return pripete, stevci
 
 
+#: Vožnje, ki so v zadnjem spremenjenem odgovoru po zamudi pokazale ničlo
+#: (`zapisi`, tretje varovalo). Druga ničla zapored jo potrdi.
+_nicle: set[tuple[str, str]] = set()
+
+
 def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
     """Pripete zamude v `sz_zamuda`, `run` in `obs` (in `delay_report`).
 
-    Dve varovali, obe izmerjeni na zemljevidu 10. 10. 2026:
+    Tri varovala, vsa izmerjena na zemljevidu:
 
-    * **Vlak ne gre nazaj.** LPV 2616 je ob 22:35 po Brezovici spet pisal
-      „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz Ljubljane --
-      postaje, ki jo je s +0 zapustil 10 min prej. Postanek pred zadnjim
-      zapisanim se zato ne prepiše.
+    * **Vlak ne gre nazaj.** LPV 2616 je 10. 10. 2026 ob 22:35 po Brezovici
+      spet pisal „naslednja Ljubljana Tivoli, +9“ in se ujemal z odhodom iz
+      Ljubljane -- postaje, ki jo je s +0 zapustil 10 min prej. Postanek pred
+      zadnjim zapisanim se zato ne prepiše.
     * **Na cilju šteje prvi prihod** (glava modula), in ničla po zamudi nad
       `PONASTAVITEV_S` ni prihod, ampak ponastavitev.
+    * **Ničla po zamudi velja šele, ko jo potrdi naslednji odgovor.** SŽ na
+      vsake 3--4 min za en odgovor (15 s) del vlakov pokaže po voznem redu:
+      zamuda 0, postaja in lega tam, kjer bi vlak bil, če bi bil točen. 16.
+      10. 2026 ob 14:28:52 sedem od 59 vlakov, LP 3234 iz +21 pred Ivančno
+      Gorico na 0 pred Žalno; 15 s pozneje spet +21. Takšen odgovor je vlak
+      prestavil naprej, prvo varovalo pa je nato prave vrstice zavračalo kot
+      vožnjo nazaj -- dokler ga ni pravi vlak dohitel in ga naslednja ničla
+      spet prestavila. RG 318 je tako 16. 10. od Zidanega Mosta (6:32) do
+      Ljubljane Polje (7:48) pisal +0, vozil pa +12 do +18. Od 11. do 16.
+      10. 2026 so ničle zadele 611 od 1 444 voženj z zamudo. Velja za vsako
+      zamudo, ne le veliko: tudi +3 bi vlak prestavil 3 min naprej. Cena je
+      15 s zakasnitve pravega okrevanja na 0.
     """
     ts = int(zdaj)
-    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0}
+    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0, "nicel": 0}
+    nicle = set()
     for trip_id, dan, seq, zamuda, je_prihod in pripete:
         zadnji = conn.execute(
             "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
             "ORDER BY stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
+        if (not je_prihod and zamuda == 0 and zadnji and zadnji[1] > 0
+                and (trip_id, dan) not in _nicle):
+            nicle.add((trip_id, dan))
+            izid["nicel"] += 1
+            continue
         if zadnji and seq < zadnji[0]:
             izid["nazaj"] += 1
             continue
@@ -223,6 +246,8 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         if not je_prihod:
             izid["porocil"] += porocilo(conn, trip_id, dan, seq, zamuda, ts)
     conn.commit()
+    _nicle.clear()
+    _nicle.update(nicle)
     return izid
 
 
