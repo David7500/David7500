@@ -1409,6 +1409,15 @@ def api_health():
         # promet, in to ni okvara (`zdravje.ocena`). Sveže, ker je od tega
         # odvisna barva, ne predpomnjeno število.
         out["vozi_zdaj"] = stats.vozi_zdaj(conn)
+        # Zadnji zapis po omrežjih, SVEŽ. `by_network` ga ima tudi, a v
+        # desetminutnih števcih, ki se osvežijo v ozadju -- ob nočnem računu
+        # povzetkov se je osvežitev vlekla 40 min in 17. 10. 2026 ob 3:58 je šla
+        # pošta „vlaki: zadnji zapis pred 2,6 h“, ko so se vlaki pisali že pol ure.
+        # Indeks `run_feed_ts`, zadnja ura: 21 ms ob konici (5 000 vrstic).
+        # Omrežja brez zapisa v zadnji uri tu ni -- takrat odloča `by_network`.
+        out["svezina"] = {r[0]: r[1] for r in conn.execute(
+            "SELECT t.network, MAX(r.feed_ts) FROM run r JOIN trip t USING (trip_id) "
+            "WHERE r.feed_ts >= ? GROUP BY t.network", (int(time.time()) - 3600,))}
         # Kdaj je derp.si nazadnje odgovoril, po viru. Zadnji zapis v `run` tega
         # ne pove več: ob izpadu ga pišeta tudi `zamude_lpp` in `zamude_sz`.
         out["derp_prebran"] = {

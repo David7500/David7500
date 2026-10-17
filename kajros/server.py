@@ -270,6 +270,25 @@ def _obisk_worker() -> None:
         conn.close()
 
 
+def _povzetki() -> None:
+    """Nočni razrezi statistike, enkrat, v svoji niti in s svojo povezavo.
+
+    Racun samo bere `run` in na koncu vsakega razreza za hip pise v
+    `povzetek`; pri WAL zajem medtem pise naprej.
+    """
+    conn = db.connect()
+    try:
+        done = stats.refresh_summaries(conn)
+        worst = max((d["took_ms"] for d in done), default=0)
+        _log(f"povzetki osveženi: {len(done)} razrezov, "
+             f"najdlje {worst / 1000:.1f} s")
+    except Exception as exc:              # statistika ni kriticna za zajem
+        conn.rollback()
+        _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
+    finally:
+        conn.close()
+
+
 def _zazeni_perone() -> threading.Thread | None:
     """Tir s table SŽ, v SVOJI niti.
 
@@ -377,9 +396,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Obvestila so vecji prenos od zamud in se pocasneje spreminjajo (razen
     # SZ-DELAY), zato imajo svoj, redkejsi ritem.
     next_alerts = 0.0 if alert_interval > 0 else float("inf")
-    # Ob treh zjutraj je vceraj sklenjen, vlaki pa skoraj ne vozijo -- 34
-    # sekund agregata takrat nikogar ne moti.
+    # Ob treh zjutraj je vceraj sklenjen, vlaki pa skoraj ne vozijo.
     next_maint = _next_at(maint_hour, 30) if maint_hour >= 0 else None
+    povzetki_nit: threading.Thread | None = None
     # Ce povzetkov se ni (prva namestitev, nova sirina okna), jih zgradi ob
     # prvem obhodu -- sicer bi racun placal prvi obiskovalec strani, in pri
     # letu zajema je to 34 sekund cakanja.
@@ -535,21 +554,23 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     conn.rollback()
                     _log(f"števcev obiska ni bilo mogoče obrezati: {exc}")
 
-            # Razrezi cez vso zgodovino. Pri letu zajema je to agregat cez 12
-            # milijonov vrstic in traja 34 s, odgovor pa se med dvema dnevoma
-            # skoraj ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na
-            # dan tu, strani pa ga preberejo iz baze v milisekundi.
+            # Razrezi cez vso zgodovino: odgovor se med dvema dnevoma skoraj
+            # ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na dan,
+            # strani pa ga preberejo iz baze v milisekundi.
             # Na stroju, ki samo zajema, tega ne racunamo: razrez se da
             # kadarkoli izracunati iz `run`, izgubljena meritev pa nikoli.
+            #
+            # **V svoji niti.** Tu v zanki je zajem stal, dokler je racun
+            # tekel: na arwenu od 25. 9. do 17. 10. 2026 vsako noc 5-49 min
+            # (najdlje en razrez 93-1478 s, 17. 10. 47 min, 3:31-4:18), in
+            # prvi jutranji avtobusi so ostali brez zamud.
             if summaries:
-                try:
-                    done = stats.refresh_summaries(conn)
-                    worst = max((d["took_ms"] for d in done), default=0)
-                    _log(f"povzetki osveženi: {len(done)} razrezov, "
-                         f"najdlje {worst / 1000:.1f} s")
-                except Exception as exc:  # statistika ni kriticna za zajem
-                    conn.rollback()
-                    _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
+                if povzetki_nit is not None and povzetki_nit.is_alive():
+                    _log("povzetki od včeraj še tečejo, danes preskočeni")
+                else:
+                    povzetki_nit = threading.Thread(
+                        target=_povzetki, daemon=True, name="kajros-povzetki")
+                    povzetki_nit.start()
 
         # Spimo do PRVEGA naslednjega opravila, ne fiksen tik. Prej je bil
         # tik 10 s, naslednji cas pa se je racunal od trenutka PO delu -- zato

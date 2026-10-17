@@ -138,10 +138,12 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
                    else (SLABA, f"zadnja zamuda iz feeda pred {_min(zdaj - ts)}")
                    if zdaj - ts > FEED_STALE_S else (DOBRA, ""))
 
-    # Po omrežjih je `/api/health` predpomnjen do 10 min, zato meja 20 min --
-    # sicer bi predpomnilnik sam prižgal rdečo.
+    # Sveže iz `svezina`, kadar je omrežje v zadnji uri kaj zapisalo; sicer iz
+    # predpomnjenih števcev, ki pa takrat ne morejo biti novejši od ure.
+    # Meja 20 min je ostala od časa, ko so bili števci edini vir.
+    svezina = z.get("svezina") or {}
     for kljuc, ime in (("zeleznica", "vlaki"), ("avtobus", "avtobusi")):
-        ts = (mreze.get(kljuc) or {}).get("last_feed_ts")
+        ts = svezina.get(kljuc) or (mreze.get(kljuc) or {}).get("last_feed_ts")
         if vozi is not None and vozi.get(kljuc, 0) < MIN_VOZENJ:
             out[kljuc] = ("", "")
         elif not ts:

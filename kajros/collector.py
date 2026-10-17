@@ -53,6 +53,7 @@ def fetch(url: str, conn: sqlite3.Connection, etag_key: str, vir: str | None = N
 # voznj) se to ni videlo; z avtobusi je proces jedel 290-518 MB in bi malino
 # s 427 MB ubil.
 _STATIC_CACHE: dict[tuple, object] = {}
+_NI = object()
 
 
 def _cached(conn: sqlite3.Connection, name: str, extra, build):
@@ -60,7 +61,12 @@ def _cached(conn: sqlite3.Connection, name: str, extra, build):
     if key is None:                 # sveza ali testna baza -- ne predpomni
         return build()
     baza, key = key, (key, name, extra)
-    if key not in _STATIC_CACHE:
+    # Brez `in` + `[key]` in brez `del`: predpomnilnik delijo niti (zajem, NAP),
+    # in ko je druga po uvozu voznega reda pobrisala stare ključe, je prva med
+    # preverjanjem in branjem dobila KeyError -- 17. 10. 2026 ob 4:27 izgubljen
+    # obhod zajema („zajem ni uspel: (…, 'nap_nacin', None)“).
+    val = _STATIC_CACHE.get(key, _NI)
+    if val is _NI:
         # Nov uvoz razveljavi vse, tudi včerajšnji koledar -- a SAMO nov uvoz.
         # Prej je bil tu `clear()` ob vsakem novem ključu, in ključi so trije
         # (okna, koledar, zamenjave): vsak je izbrisal druga dva, zato se je
@@ -69,10 +75,10 @@ def _cached(conn: sqlite3.Connection, name: str, extra, build):
         # 58 zamenjav (2,1 s) -- 9 % jedra za predpomnilnik, ki ni predpomnil.
         # Stara vrednost ISTE vrste (včerajšnji koledar, prejšnje število
         # zamenjav) gre ven, da se ne kopiči.
-        for k in [k for k in _STATIC_CACHE if k[0] != baza or k[1] == name]:
-            del _STATIC_CACHE[k]
-        _STATIC_CACHE[key] = build()
-    return _STATIC_CACHE[key]
+        for k in [k for k in list(_STATIC_CACHE) if k[0] != baza or k[1] == name]:
+            _STATIC_CACHE.pop(k, None)
+        val = _STATIC_CACHE[key] = build()
+    return val
 
 
 def _rail_trip_windows(conn: sqlite3.Connection) -> dict[str, tuple[int, int]]:

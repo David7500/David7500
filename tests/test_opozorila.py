@@ -101,6 +101,20 @@ def test_ponoci_feed_ne_zvoni_podnevi_in_pri_okvari_pa():
     assert _rdece(z, {**STROJ, "wal_bajtov": 5 * 2**30}) == {"wal"}
 
 
+def test_sveza_svezina_premaga_stare_stevce():
+    """17. 10. 2026 ob 3:58: števci po omrežjih so ob nočnem računu povzetkov
+    obtičali pri 1:22, vlaki pa so se pisali od 3:24 -- pošta „vlaki: zadnji
+    zapis pred 2,6 h“. Sveži zapis zadnje ure odloči; brez njega števci."""
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 5, "avtobus": 30}
+    z["by_network"]["zeleznica"]["last_feed_ts"] = T - 2.6 * 3600
+    assert _rdece(z) == {"zeleznica"}
+    z["svezina"] = {"zeleznica": T - 120, "avtobus": T - 30}
+    assert _rdece(z) == set()
+    z["svezina"] = {"avtobus": T - 30}                    # vlakov zadnjo uro ni
+    assert _rdece(z) == {"zeleznica"}
+
+
 def _ocena(*rdece):
     return {k: (zdravje.SLABA, f"{k} stoji") for k in rdece} | {"feed": (zdravje.DOBRA, "")}
 
