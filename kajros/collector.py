@@ -993,30 +993,47 @@ OBS_KEEP_DAYS = 90
 OBS_KEEP_DAYS_BUS = 14
 
 
+#: Brisanje po kosih: ena transakcija z 1,86 mio avtobusnimi vrsticami je
+#: 17. 10. 2026 držala zapis 27--116 s, vsaka druga nit pa je po 30 s čakanja
+#: (`db.connect`) padla -- „database is locked“ v petih nitih vsako noč ob
+#: 3:30. Kos po `rowid` drži zapis za hip, vmes pišejo drugi.
+PRUNE_KOS = 20000
+PRUNE_PREMOR_S = 0.05
+
+
 def prune_obs(conn: sqlite3.Connection, rail_days: int = OBS_KEEP_DAYS,
-              bus_days: int = OBS_KEEP_DAYS_BUS) -> dict:
+              bus_days: int = OBS_KEEP_DAYS_BUS, kos: int = PRUNE_KOS,
+              prestej: bool = False) -> dict:
     """Pobriše stare vrstice dnevnika `obs`. `run` pusti pri miru.
 
     Idempotentno. Brisanje je nepovratno, zato meji nista skriti v kodi,
     ampak sta argumenta in ju `kajros prune` izpiše, preden briše.
+    `prestej`: še koliko vrstic ostane (poln pregled, samo za ukaz).
     """
     today = datetime.now(TZ).date()
-    rail_before = (today - timedelta(days=rail_days)).isoformat()
-    bus_before = (today - timedelta(days=bus_days)).isoformat()
-
-    with conn:
-        rail = conn.execute(
-            "DELETE FROM obs WHERE service_date < ? AND trip_id IN "
-            "(SELECT trip_id FROM trip WHERE network = 'zeleznica')",
-            (rail_before,),
-        ).rowcount
-        bus = conn.execute(
-            "DELETE FROM obs WHERE service_date < ? AND trip_id IN "
-            "(SELECT trip_id FROM trip WHERE network = 'avtobus')",
-            (bus_before,),
-        ).rowcount
-    return {
-        "rail_deleted": rail, "rail_before": rail_before,
-        "bus_deleted": bus, "bus_before": bus_before,
-        "obs_left": conn.execute("SELECT COUNT(*) FROM obs").fetchone()[0],
-    }
+    out = {}
+    for omr, dni, kljuc in (("zeleznica", rail_days, "rail"), ("avtobus", bus_days, "bus")):
+        pred = (today - timedelta(days=dni)).isoformat()
+        n, zadnji = 0, 0
+        # Iskanje je branje (zapisa ne drži), brisanje pa samo med najdenima
+        # `rowid`. Vrstice so po `rowid` v vrstnem redu zapisa, stare spredaj.
+        while True:
+            od, do, najdenih = conn.execute(
+                "SELECT MIN(r), MAX(r), COUNT(*) FROM (SELECT o.rowid AS r FROM obs o "
+                "JOIN trip t USING (trip_id) WHERE o.rowid > ? AND o.service_date < ? "
+                "AND t.network = ? ORDER BY o.rowid LIMIT ?)", (zadnji, pred, omr, kos)).fetchone()
+            if not najdenih:
+                break
+            with conn:
+                n += conn.execute(
+                    "DELETE FROM obs WHERE rowid BETWEEN ? AND ? AND service_date < ? "
+                    "AND trip_id IN (SELECT trip_id FROM trip WHERE network = ?)",
+                    (od, do, pred, omr)).rowcount
+            zadnji = do
+            if najdenih < kos:
+                break
+            time.sleep(PRUNE_PREMOR_S)
+        out[f"{kljuc}_deleted"], out[f"{kljuc}_before"] = n, pred
+    if prestej:
+        out["obs_left"] = conn.execute("SELECT COUNT(*) FROM obs").fetchone()[0]
+    return out

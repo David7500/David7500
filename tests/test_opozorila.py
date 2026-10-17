@@ -377,3 +377,34 @@ def test_stats_promet_od_zacne_po_nocnem_presledku():
     assert stats.promet_od(c, p + 2 * 3600) == {}          # ponoči ne vozi nič
     # Ob 4:50 vozita le še dva od treh: promet se je prekinil.
     assert stats.promet_od(c, p + 4 * 3600 + 3000) == {}
+
+
+def test_obrez_dnevnika_po_kosih(monkeypatch):
+    """17. 10. 2026: obrez 1,86 mio vrstic v eni transakciji je držal zapis
+    do 116 s -- „database is locked“ v petih nitih vsako noč ob 3:30. Po kosih
+    pobriše isto, nove vrstice in drugo omrežje ostanejo."""
+    from datetime import datetime, timedelta
+    from kajros import collector, db
+    monkeypatch.setattr(collector, "PRUNE_PREMOR_S", 0)
+    c = db.connect(":memory:")
+    db.init(c)
+    danes = datetime.now(collector.TZ).date()
+    staro, novo = (danes - timedelta(days=100)).isoformat(), danes.isoformat()
+    sredina = (danes - timedelta(days=30)).isoformat()
+    for tid, omr in (("v", "zeleznica"), ("b", "avtobus")):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, network) "
+                  "VALUES(?, 'r', ?, 'S', 'bus', ?)", (tid, tid, omr))
+    vrstice = [(tid, dan, seq, 60, ts, ts) for tid in "vb" for dan in (staro, sredina, novo)
+               for seq in range(1, 8) for ts in (1, 2)]
+    c.executemany("INSERT INTO obs(trip_id, service_date, stop_seq, delay_dep, feed_ts, "
+                  "observed_at) VALUES(?, ?, ?, ?, ?, ?)", vrstice)
+    c.commit()
+    izid = collector.prune_obs(c, 90, 14, kos=3, prestej=True)
+    assert (izid["rail_deleted"], izid["bus_deleted"]) == (14, 28)
+    ostane = [tuple(r) for r in c.execute("SELECT trip_id, service_date, COUNT(*) FROM obs "
+                                          "GROUP BY 1, 2 ORDER BY 1, 2")]
+    assert ostane == [("b", novo, 14), ("v", sredina, 14), ("v", novo, 14)]
+    assert izid["obs_left"] == 42
+    assert collector.prune_obs(c, 90, 14, kos=3) == {
+        "rail_deleted": 0, "rail_before": izid["rail_before"],
+        "bus_deleted": 0, "bus_before": izid["bus_before"]}

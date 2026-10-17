@@ -5,6 +5,7 @@ storitev. Na majhnem strežniku je to tudi cenejše -- en Python interpreter.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -224,7 +225,16 @@ def refresh_timetable(conn, mode: str) -> None:
             [sys.executable, "-m", "kajros.cli", "update"],
             capture_output=True, text=True, timeout=1800,
         )
-        _log(f"osvežitev (podproces): {proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-200:]}")
+        # Izid uvoza je JSON čez več vrstic; zadnja vrstica („}“) je bila od
+        # 10. do 17. 10. 2026 vse, kar je dnevnik povedal o uvozu.
+        izpis = proc.stdout.strip()
+        zadnje = izpis.splitlines()[-1] if izpis else proc.stderr.strip()[-300:]
+        if izpis.endswith("}") and "{" in izpis:
+            try:
+                zadnje = json.dumps(json.loads(izpis[izpis.index("{"):]), ensure_ascii=False)
+            except ValueError:
+                pass
+        _log(f"osvežitev (podproces, koda {proc.returncode}): {zadnje[:500]}")
         return
 
     path = gtfs.download(conn)
@@ -524,8 +534,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         if next_maint and datetime.now(TZ) >= next_maint:
             next_maint += timedelta(days=1)
 
-            # Z vsemi prevozniki nastane ~300 000 vrstic `obs` na dan (24 MB,
-            # 8,7 GB na leto). `run` se ne brise nikoli -- ta je zgodovina.
+            # Z vsemi prevozniki nastane ~1,7 mio avtobusnih vrstic `obs` na dan
+            # (17. 10. 2026; z NAP in prehodom). `run` se ne brise nikoli -- ta
+            # je zgodovina. Brisanje gre po kosih (`collector.PRUNE_KOS`).
             try:
                 info = collector.prune_obs(conn)
                 if info["rail_deleted"] or info["bus_deleted"]:

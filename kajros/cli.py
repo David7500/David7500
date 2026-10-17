@@ -226,7 +226,7 @@ def cmd_prune(args):
     db.init(conn)
     print(f"brišem dnevnik `obs`: železnica starejša od {args.rail_days} dni, "
           f"avtobusi od {args.bus_days}. `run` ostane nedotaknjen.")
-    print(json.dumps(collector.prune_obs(conn, args.rail_days, args.bus_days),
+    print(json.dumps(collector.prune_obs(conn, args.rail_days, args.bus_days, prestej=True),
                      indent=2, ensure_ascii=False))
 
 
