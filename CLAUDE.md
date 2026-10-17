@@ -92,7 +92,7 @@ kajros/
   stik.py        sporočila obiskovalcev; piše iz zahteve
   obvestila.py   obvestila skrbnika potnikom: vsako z rokom in omrežjem
   viri.py        register virov in dnevnik branj v pomnilniku: zavihek Viri v /admin, preverjanje
-  zdravje.py     kdaj je zajem zdrav (barve v /admin); opozorila.py pošlje rdeče po 10 min (`.opozorila`)
+  zdravje.py     kdaj je zajem zdrav (barve v /admin) in kaj gre v pošto (`posta`: samo, kar rabi poseg); opozorila.py pošlje (`.opozorila`)
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   server.py      lifespan: bootstrap + zajem v ozadnji niti; cli.py ukazna vrstica
   api.py         FastAPI: /api/* + strani /app*

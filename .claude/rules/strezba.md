@@ -120,6 +120,8 @@ Ob 22:15 od 25 svežih mestnih vozil **19 z uporabno napovedjo naprej**, meje so
 
 **Kadar derp.si mestnega LPP 5 min ne da** (`lpp.derp_molci`, po `meta.lpp_rt_fetched`), tabla „zdaj“ vse linije LPP vzame z zaslona, ne le tistih mimo voznega reda (8. 10. 2026: derp.si od 16:00 mrtev, Bavarski dvor sicer vozni red brez ene zamude). Odgovor nosi `lpp_izpad`, stran napiše „Zamud mestnih avtobusov LPP ta hip ne dobivamo. Prihode kažemo, kot jih napove LPP.“
 
+**Obvoz in odpoved na tabli** (od 17. 10. 2026, `api._oznaci_obvoze`): vrstica vožnje, ki po obvozu LPP tu ne ustavi (RT po vožnji, `alerts.ne_ustavi`; primestne po LPP-jevem zaslonu, toliko naslednjih odhodov, kolikor vozil zaslon kaže v obvozu) ali jo je feed odpovedal (`collector.odpovedane`), nosi `ne_ustavi` (in `odpovedano`). Prikaz jo pusti prečrtano, poudarek „naslednja“ dobi prva, ki ustavi; Moje poti jih ne štejejo; iskalnik zvez označi zvezo (`ne_ustavi`: `od` | `do`) in pokaže obvestili obeh postajališč; pot od vrat do vrat tam ne vstopi ne izstopi (danes); pristajalna stran jih izpusti in pove linije. Zaslon ob molku vira minuto ne bere (`lpp._zasloni_molcijo_do`).
+
 Izklop: `KAJROS_LPP_ZIVO=0`.
 
 ## Štetje obiska in pregled za skrbnika (`obisk.py`, `/admin`)
