@@ -81,7 +81,8 @@ fi
 # Ce tu cesa ni, je bil vir napacen. Bolje pasti zdaj kot pustiti storitev,
 # ki se ne bo zagnala ob naslednjem ponovnem zagonu.
 for f in deploy/kajros.service deploy/kajros-zajem.service \
-         deploy/kajros-backup.service deploy/kajros-backup.timer; do
+         deploy/kajros-backup.service deploy/kajros-backup.timer \
+         deploy/varnostna-kopija-baze.sh; do
     [ -f "$APP/$f" ] || {
         echo "NAPAKA: v namesceni kodi manjka $f."
         echo "Vir je bil ${KAJROS_SRC:-GitHub ($BRANCH)}. Ce commiti se niso potisnjeni,"

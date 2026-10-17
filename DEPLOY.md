@@ -92,7 +92,7 @@ Iz domačega omrežja dosegljiv na `http://<ip-pija>:8000/docs`.
 
 **Zapisovanje majhno.** Piše se samo ob spremembi zamude, nekaj tisoč vrstic na dan; za SD kartico zanemarljivo. USB SSD je vseeno boljše mesto — nastavi `KAJROS_DATA_DIR` nanj v enoti storitve.
 
-**Varnostne kopije** vsak dan ob 3:30 v `/var/lib/kajros/backup/` prek `sqlite3 .backup` (konsistentno tudi med pisanjem), stisnjene z `gzip -1` (~3,1× manjše, merjeno). Hranijo se **tri**, ne štirinajst: z vsemi prevozniki baza zraste ~3,4 GB na leto, štirinajst polnih kopij bi zapolnilo kartico. Če bi po kopiji ostalo manj kot 2 GB prostega, se preskoči in zapiše v dnevnik — polna kartica ustavi tudi zajem, kopija le kratkoročna varovalka.
+**Varnostne kopije** vsak dan ob 2:40 v `/var/lib/kajros/backup/` prek `VACUUM INTO` (`deploy/varnostna-kopija-baze.sh`), stisnjene z `gzip -1`. `VACUUM INTO` je ena bralna transakcija: posnetek je dosleden, zajem piše naprej. `sqlite3 .backup` se je ob vsakem zapisu druge povezave začel znova in se na arwenu 1.–17. 10. 2026 vrtel do 58 min (46 min procesorja). Prvi `VACUUM INTO` 17. 10.: baza 4,9 GB, kopija 4,0 GB, stisnjena 789 MB, 226 s in 2 min procesorja; obnova preizkušena (`PRAGMA quick_check` ok). Ob 2:40, ker ob 3:30 tečeta obrez dnevnika in nočni povzetki. Hranijo se **tri**, ne štirinajst: z vsemi prevozniki baza zraste ~3,4 GB na leto, štirinajst polnih kopij bi zapolnilo kartico. Če ni prostega vsaj toliko, kolikor je baza, in še 2 GB, se kopija preskoči in to zapiše v dnevnik — poln disk ustavi tudi zajem, kopija je le kratkoročna varovalka.
 
 **Dolgoročni arhiv = računalnik**, ki bazo potegne dol (`kajros merge`), ne Pi. Kartice odpovedo.
 
