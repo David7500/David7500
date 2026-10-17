@@ -115,15 +115,18 @@ def test_sveza_svezina_premaga_stare_stevce():
     assert _rdece(z) == {"zeleznica"}
 
 
-def _ocena(*rdece):
-    return {k: (zdravje.SLABA, f"{k} stoji") for k in rdece} | {"feed": (zdravje.DOBRA, "")}
+def _ocena(*rdece, neznano=()):
+    """Izid `zdravje.posta()`: rdeče ključe kot okvare, `neznano` kot None."""
+    return ({k: zdravje.Okvara(f"{k} stoji", f"popravi {k}") for k in rdece}
+            | {k: None for k in neznano})
 
 
 def _teci(koraki, zacetek=T):
-    """(sekunde od začetka, rdeče ključe) -> poslana sporočila (zadeva, čas)."""
+    """(sekunde od začetka, rdeče ključe[, neocenjene]) -> poslana sporočila."""
     stanje, poslano = {}, []
-    for t, rdece in koraki:
-        stanje, sp, nove, resene = opozorila.korak(stanje, _ocena(*rdece), zacetek + t)
+    for t, rdece, *neznano in koraki:
+        okvare = _ocena(*rdece, neznano=neznano[0] if neznano else ())
+        stanje, sp, nove, resene = opozorila.korak(stanje, okvare, zacetek + t)
         if sp:
             stanje = opozorila._potrdi(stanje, nove, resene, zacetek + t)
             poslano.append((sp[0], t, sp[1]))
@@ -132,11 +135,37 @@ def _teci(koraki, zacetek=T):
 
 def test_ena_posta_ob_okvari_in_ena_ob_koncu():
     koraki = [(t, ["zamude_sz"]) for t in range(0, 4 * 3600, 60)]
-    koraki += [(4 * 3600 + t, []) for t in range(0, 900, 60)]
+    koraki += [(4 * 3600 + t, []) for t in range(0, 1200, 60)]
     poslano = _teci(koraki)
     assert [(z.split(" -- ")[0], t) for z, t, _ in poslano] == [
-        ("kajros: stoji", ZAMIK_S), ("kajros: spet dela", 4 * 3600 + KONEC_S)]
+        ("kajros: stoji", ZAMIK_S), ("kajros: spet v redu", 4 * 3600 + KONEC_S)]
     assert "stalo 07:53–11:53, 4 h 0 min" in poslano[1][2]
+    # Pošta pove, kaj storiti, in ime vrstice, ne le razloga.
+    assert "zemljevid SŽ: zamude_sz stoji" in poslano[0][2]
+    assert "Kaj storiti: popravi zamude_sz" in poslano[0][2]
+
+
+def test_ponoci_okvara_ne_ugasne_in_ne_zvoni_znova():
+    """Obstala nit ob 23:40; ponoči vrstica nima ocene (nič ne vozi). Prej:
+    „spet dela“ ob polnoči in „stoji“ zjutraj znova -- dve lažni pošti."""
+    koraki = [(t, ["zamude_sz"]) for t in range(0, 1200, 60)]
+    koraki += [(1200 + t, [], ["zamude_sz"]) for t in range(0, 4 * 3600, 60)]
+    koraki += [(1200 + 4 * 3600 + t, ["zamude_sz"]) for t in range(0, 1800, 60)]
+    assert [z.split(" -- ")[0] for z, _, _ in _teci(koraki)] == ["kajros: stoji"]
+    # Zjutraj spet v redu: ena pošta o koncu, po `KONEC_S`.
+    koraki = koraki[:-30] + [(1200 + 4 * 3600 + t, []) for t in range(0, 1800, 60)]
+    assert [z.split(" -- ")[0] for z, _, _ in _teci(koraki)] == [
+        "kajros: stoji", "kajros: spet v redu"]
+
+
+def test_posta_dolocenega_trajanja():
+    """Okvara pove, koliko mora trajati, preden gre pošta."""
+    okvare = {"neznane": zdravje.Okvara("x", "y", 1800)}
+    stanje, sp, _, _ = opozorila.korak({}, okvare, T)
+    stanje, sp, _, _ = opozorila.korak(stanje, okvare, T + ZAMIK_S)
+    assert sp is None
+    _, sp, nove, _ = opozorila.korak(stanje, okvare, T + 1800)
+    assert nove == ["neznane"]
 
 
 def test_kratka_motnja_in_nihanje_sta_tiha():
@@ -218,3 +247,133 @@ def test_vzrok_samo_pri_okvari_zajema():
     _, sp, _, _ = opozorila.korak(stanje, _ocena("avtobus"), T + ZAMIK_S, vzrok)
     assert klici == [1] and "Vzrok: test" in sp[1]
     assert sp[1].index("Vzrok") < sp[1].index("/admin")
+
+
+def test_rumene_v_posti_samo_ob_novi_okvari():
+    rumene = ["zemljevid SŽ ne odgovarja od pred 70 min: izziv ni rešen v 90 s"]
+    stanje, _, _, _ = opozorila.korak({}, _ocena("zeleznica"), T, rumene=rumene)
+    stanje, sp, nove, _ = opozorila.korak(stanje, _ocena("zeleznica"), T + ZAMIK_S, rumene=rumene)
+    assert "Ob tem rumeno" in sp[1] and rumene[0] in sp[1]
+    stanje = opozorila._potrdi(stanje, nove, [], T + ZAMIK_S)
+    poslano = []
+    for t in range(60, 1200, 60):
+        stanje, sp, _, resene = opozorila.korak(stanje, {}, T + ZAMIK_S + t, rumene=rumene)
+        if sp:
+            stanje = opozorila._potrdi(stanje, [], resene, T + ZAMIK_S + t)
+            poslano.append(sp)
+    assert len(poslano) == 1 and "spet v redu" in poslano[0][0] and "rumeno" not in poslano[0][1]
+
+
+def _posta(z, m=STROJ, zdaj=T):
+    return zdravje.posta(z, m, zdravje.ocena(z, m, zdaj), zdaj)
+
+
+def test_v_posti_samo_kar_rabi_skrbnika():
+    """Od 1. do 17. 10. 2026 je šlo 67 pošt „stoji“, pri večini skrbnik ni
+    mogel nič: nekaj vozil brez zamude, LPP mimo voznega reda ob maratonu,
+    derp.si pol ure ne odgovarja (rezerve tečejo)."""
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
+    z["lega_brez_zamude"] = {"Arriva": [0, 3, 29], "Nomago": [0, 8, 150]}
+    z["rt_neznanih"] = {"ijpp": [1, 97], "lpp": [4, 197]}
+    z["derp_prebran"] = {"ijpp": T - 45 * 60, "lpp": T - 30}
+    rdece = _rdece(z)
+    assert {"lega_brez_zamude", "neznane", "derp_ijpp"} <= rdece
+    assert _posta(z) == {}
+    # Kar rabi poseg: obstala nit, poln disk, WAL.
+    assert set(_posta(z, {**STROJ, "wal_bajtov": 5 * 2**30})) == {"wal"}
+
+
+def test_vozila_brez_zamude_v_posti_sele_v_velikem():
+    z = _zdravo()
+    z["lega_brez_zamude"] = {"Arriva": [0, 9, 40]}
+    assert "lega_brez_zamude" not in _posta(z)
+    z["lega_brez_zamude"] = {"Arriva": [0, 25, 100], "Nomago": [0, 2, 150]}
+    o = _posta(z)["lega_brez_zamude"]
+    assert o.razlog == "vozila brez vsake zamude: Arriva 25 od 100" and o.po_s == ZAMIK_S
+    z["lega_brez_zamude"] = {"Arriva": [0, 15, 70]}         # 21 %: še resnica na cesti
+    assert "lega_brez_zamude" not in _posta(z)
+
+
+def test_neznane_v_posti_samo_ijpp():
+    """22. 9. 2026: IJPP 16 od 662 (2,4 %), stari id-ji po novem voznem redu --
+    popravilo je rabilo kodo. LPP vozi mimo voznega reda sam od sebe."""
+    z = _zdravo()
+    z["rt_neznanih"] = {"ijpp": [16, 662], "lpp": [40, 280]}
+    o = _posta(z)["neznane"]
+    assert o.razlog == "vožnje brez voznega reda: IJPP 16 od 662" and o.po_s == 1800
+    z["rt_neznanih"] = {"ijpp": [0, 662], "lpp": [40, 280]}
+    assert "neznane" not in _posta(z)
+
+
+def test_derp_v_posti_sele_po_dnevu():
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
+    z["derp_prebran"] = {"ijpp": T - 5 * 3600, "lpp": T - 30}
+    assert "derp_ijpp" in _rdece(z) and _posta(z) == {}
+    z["derp_prebran"]["ijpp"] = T - 25 * 3600
+    assert set(_posta(z)) == {"derp_ijpp"}
+
+
+def test_zavrnjena_prijava_nap_v_posti_po_uri():
+    z = _zdravo()
+    z["nap"] = {"ts": T - 20 * 60, "http": 401, "napaka_ts": T - 60}
+    assert zdravje.ocena(z, STROJ, T)["nap"][0] == zdravje.MLACNA
+    assert "nap" not in _posta(z)
+    z["nap"]["ts"] = T - 2 * 3600
+    assert "deploy/nap.sh" in _posta(z)["nap"].ukrep
+
+
+def test_mrtva_nit_in_vozni_red_v_posti():
+    z = _zdravo()
+    z["vozni_red"] = {"zeleznica": "2026-10-02", "avtobus": "2027-12-31"}
+    m = {**STROJ, "niti": ["kajros-collector"],
+         "pricakovane_niti": {"kajros-collector": ["derp_zamude"], "kajros-nap": ["nap"]}}
+    assert set(_posta(z, m)) == {"vozni_red", "nit:kajros-nap"}
+    assert "kajros update" in _posta(z, m)["vozni_red"].ukrep
+
+
+def test_ponoci_vrstice_zajema_niso_ocenjene():
+    """Ko nič ne vozi, pošta ne ve, ali je okvara mimo: None, ne „v redu“."""
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 0, "avtobus": 1}
+    z["zamude_sz"] = {"ts": T - 2 * 3600}
+    p = _posta(z)
+    assert p.get("feed", 1) is None and p.get("zeleznica", 1) is None
+    assert p.get("zamude_sz", 1) is None
+
+
+def test_jutro_molk_od_zacetka_prometa():
+    """Vsako jutro 7.–17. 10. 2026 ob ~3:58: „vlaki: zadnji zapis pred 2,6 h“.
+    Zadnji nočni zapis je iz 1:22; prvi vlaki po voznem redu vozijo od 3:20.
+    Molk šteje od začetka prometa (`stats.promet_od`), ne od noči."""
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 5, "avtobus": 30}
+    z["by_network"]["zeleznica"]["last_feed_ts"] = T - 2.6 * 3600
+    assert "zeleznica" in _rdece(z)
+    z["promet_od"] = {"zeleznica": T - 10 * 60, "avtobus": T - 3600}
+    assert _rdece(z) == set()
+    z["promet_od"]["zeleznica"] = T - 70 * 60        # promet teče 70 min, zapisa ni
+    assert "zeleznica" in _rdece(z)
+
+
+def test_stats_promet_od_zacne_po_nocnem_presledku():
+    """`stats.promet_od`: od kdaj vozijo vsaj tri vožnje, vsaka vsaj četrt
+    ure. Nočni vlak ob 0:17 ne šteje -- za njim je presledek."""
+    from kajros import db, stats
+    c = db.connect(":memory:")
+    db.init(c)
+    dan = "2026-10-17"
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S', ?)", (dan,))
+    voznje = [("zeleznica", 17 * 60, 3600), ("zeleznica", 3 * 3600 + 1200, 3600),
+              ("zeleznica", 3 * 3600 + 2100, 3600), ("zeleznica", 3 * 3600 + 2400, 3600),
+              ("zeleznica", 5 * 3600, 3600), ("avtobus", 4 * 3600, 3600)]
+    for i, (omr, start, traja) in enumerate(voznje):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, network, "
+                  "start_s, end_s) VALUES(?, 'r', ?, 'S', 'rail', ?, ?, ?)",
+                  (f"t{i}", f"LP {i}", omr, start, start + traja))
+    p = stats.polnoc(dan)
+    assert stats.promet_od(c, p + 4 * 3600) == {"zeleznica": p + 3 * 3600 + 2400 + 900}
+    assert stats.promet_od(c, p + 2 * 3600) == {}          # ponoči ne vozi nič
+    # Ob 4:50 vozita le še dva od treh: promet se je prekinil.
+    assert stats.promet_od(c, p + 4 * 3600 + 3000) == {}

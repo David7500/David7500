@@ -699,13 +699,14 @@ function pasZdravja(d) {
     <div class="adm-pas-glava"><span class="adm-pika ${raz}"></span><h2>${escapeHtml(bes[0].toUpperCase() + bes.slice(1))}</h2>
       <button type="button" class="btn adm-gumb" id="preveri-vire" ${preverba && preverba.tece ? "disabled" : ""}>Preveri vire zdaj</button></div>
     ${razlogi.length ? `<ul class="adm-razlogi">${razlogi.map((x) =>
-      `<li class="${x.razred}"><span class="adm-pika ${x.razred}"></span>${escapeHtml(x.besedilo)}</li>`).join("")}</ul>`
+      `<li class="${x.razred}"><span class="adm-pika ${x.razred}"></span>${escapeHtml(x.besedilo)}${
+        (d.v_posti || {})[x.k] ? " <b>· v pošti</b>" : ""}</li>`).join("")}</ul>`
     : `<p class="adm-pod">Vsi viri odgovarjajo, niti tečejo, disk in vozni red sta v redu.</p>`}
     ${p}
-    <p class="adm-pod">Rdeče, ki traja 10 min, gre po pošti (${{
+    <p class="adm-pod">V pošto gre samo, kar rabi tvoj poseg: obstala ali mrtva nit, zajem, ki nič ne zapiše, disk, WAL, vozni red, ki se konča, zavrnjena prijava NAP, dan dolg izpad derp.si (${{
       tece: "vklopljeno", stoji: "<b class=\"je-slaba\">nit pošte ne teče</b> — ponovni zagon strežnika",
       ni: "<b>ni nastavljeno</b> — datoteka <code>.opozorila</code>",
-    }[(d.stroj || {}).posta] || "—"}); rumeno samo tu.</p>
+    }[(d.stroj || {}).posta] || "—"}). Ostalo rdeče in rumeno samo tu.</p>
   </section>`;
 }
 

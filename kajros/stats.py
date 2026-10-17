@@ -81,6 +81,69 @@ def vozi_zdaj(conn: sqlite3.Connection, zdaj: float | None = None,
     return out
 
 
+#: Neprekinjeni odseki prometa po dnevih (`promet_od`): vozni red se med
+#: uvozi ne spremeni, račun čez ~15 000 voženj pa ne sodi v vsak klic
+#: `/api/health` (connections.js ga kliče na 30 s na zavihek).
+_ODSEKI: dict[tuple, list[tuple[int, int]]] = {}
+
+
+def _odseki_prometa(conn: sqlite3.Connection, dan: str, omr: str, vsaj_s: int,
+                    najmanj: int) -> list[tuple[int, int]]:
+    """Odseki časa (od epohe), ko po voznem redu vozi vsaj `najmanj` voženj
+    omrežja, vsaka vsaj `vsaj_s` (kot `vozi_zdaj`): včerajšnje in današnje."""
+    uvoz = db.get_meta(conn, "gtfs_imported_at")
+    kljuc = (dan, omr, vsaj_s, najmanj, uvoz)
+    if kljuc in _ODSEKI:
+        return _ODSEKI[kljuc]
+    dogodki = []
+    d = date.fromisoformat(dan)
+    for o in (-1, 0):
+        dd = (d + timedelta(days=o)).isoformat()
+        p = polnoc(dd)
+        for start, konec in conn.execute(
+                "SELECT t.start_s, t.end_s FROM trip t "
+                "JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
+                "WHERE t.network = ? AND t.start_s IS NOT NULL AND t.end_s >= t.start_s + ?",
+                (dd, omr, vsaj_s)):
+            dogodki += [(p + start + vsaj_s, 1), (p + konec, -1)]
+    dogodki.sort(key=lambda x: (x[0], -x[1]))
+    odseki, n, od = [], 0, None
+    for t, k in dogodki:
+        n += k
+        if n >= najmanj and od is None:
+            od = t
+        elif n < najmanj and od is not None:
+            odseki.append((od, t))
+            od = None
+    if od is not None:
+        odseki.append((od, 2**62))
+    # `list()`: slovar delijo niti (zahteve, pošta) -- glej `collector._cached`.
+    for k in [k for k in list(_ODSEKI) if k[0] != dan]:
+        _ODSEKI.pop(k, None)
+    _ODSEKI[kljuc] = odseki
+    return odseki
+
+
+def promet_od(conn: sqlite3.Connection, zdaj: float | None = None, vsaj_s: int = 900,
+              najmanj: int = 3) -> dict[str, int]:
+    """Od kdaj po omrežjih neprekinjeno vozi vsaj `najmanj` voženj (kot
+    `vozi_zdaj`), od epohe. Omrežja, ki ta hip ne vozi, ni.
+
+    Molk zajema se šteje šele od tod (`zdravje.ocena`). Zadnji zapis vlakov
+    je iz 1:22, prvi vlaki pa vozijo od 3:20: molk 2,6 h ni okvara, ker do
+    ~3:50 ni bilo česa zapisati. Vsako jutro 7.–17. 10. 2026 je zato ob ~3:58
+    šla pošta „vlaki: zadnji zapis pred 2,6 h“.
+    """
+    zdaj = time.time() if zdaj is None else zdaj
+    dan = datetime.fromtimestamp(zdaj, TZ).date().isoformat()
+    out = {}
+    for omr in ("zeleznica", "avtobus"):
+        for od, do in _odseki_prometa(conn, dan, omr, vsaj_s, najmanj):
+            if od <= zdaj < do:
+                out[omr] = int(od)
+    return out
+
+
 def _abs_time(service_date: str, seconds: int | None) -> str | None:
     """Voznoredna sekunda od polnoči -> absolutni čas (zna čez polnoč)."""
     if seconds is None:

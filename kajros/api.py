@@ -1409,6 +1409,8 @@ def api_health():
         # promet, in to ni okvara (`zdravje.ocena`). Sveže, ker je od tega
         # odvisna barva, ne predpomnjeno število.
         out["vozi_zdaj"] = stats.vozi_zdaj(conn)
+        # Od kdaj promet teče brez presledka: molk zjutraj šteje šele od tod.
+        out["promet_od"] = stats.promet_od(conn)
         # Zadnji zapis po omrežjih, SVEŽ. `by_network` ga ima tudi, a v
         # desetminutnih števcih, ki se osvežijo v ozadju -- ob nočnem računu
         # povzetkov se je osvežitev vlekla 40 min in 17. 10. 2026 ob 3:58 je šla
@@ -3311,6 +3313,9 @@ def admin_podatki(request: Request,
         out["razredi"] = {k: r for k, (r, _) in ocena.items()}
         out["razlogi"] = {k: razlog for k, (r, razlog) in ocena.items()
                           if razlog and r in (zdravje.SLABA, zdravje.MLACNA)}
+        # Kar od tega gre v pošto (`zdravje.posta`): rdeče ni nujno ukrep.
+        out["v_posti"] = {k: o.razlog for k, o in zdravje.posta(
+            out["zdravje"], out["stroj"], ocena).items() if o}
         out["viri"] = {"skupine": viri.SKUPINE, "seznam": viri.pregled(conn, ocena)}
     # Dnevnik branj je zdaj pri virih; v `stroj` bi bil drugič.
     out["stroj"].pop("viri", None)

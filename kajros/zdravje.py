@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import shutil
 import time
+from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -132,11 +133,18 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     vozi = z.get("vozi_zdaj")
     ponoci = vozi is not None and sum(vozi.values()) < MIN_VOZENJ
 
+    # Zjutraj molk šteje šele od začetka prometa (`stats.promet_od`), ne od
+    # zadnjega nočnega zapisa: ob 3:58 je bil zadnji zapis vlakov iz 1:22 in
+    # vrstica rdeča, čeprav prvi vlaki po voznem redu vozijo šele od 3:20.
+    jutro = z.get("promet_od") or {}
+
     ts = z.get("last_feed_ts")
+    # Feed je karkoli: šteje začetek omrežja, ki je začelo prvo.
+    zacetek = min(jutro.values(), default=0)
     out["feed"] = (("", "") if ponoci
                    else (SLABA, "nobene zamude iz feeda") if not ts
                    else (SLABA, f"zadnja zamuda iz feeda pred {_min(zdaj - ts)}")
-                   if zdaj - ts > FEED_STALE_S else (DOBRA, ""))
+                   if zdaj - max(ts, zacetek) > FEED_STALE_S else (DOBRA, ""))
 
     # Sveže iz `svezina`, kadar je omrežje v zadnji uri kaj zapisalo; sicer iz
     # predpomnjenih števcev, ki pa takrat ne morejo biti novejši od ure.
@@ -148,10 +156,10 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
             out[kljuc] = ("", "")
         elif not ts:
             out[kljuc] = (SLABA, f"{ime}: nobenega zapisa")
-        elif zdaj - ts < 1200:
+        elif (molk := zdaj - max(ts, jutro.get(kljuc, 0))) < 1200:
             out[kljuc] = (DOBRA, "")
         else:
-            out[kljuc] = (MLACNA if zdaj - ts < 3600 else SLABA,
+            out[kljuc] = (MLACNA if molk < 3600 else SLABA,
                           f"{ime}: zadnji zapis pred {_min(zdaj - ts)}")
 
     # Vožnje iz feeda, ki jih vozni red ne pozna, zajem zavrže. 22. 9. 2026 jih
@@ -353,3 +361,163 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
         out["wal"] = ((SLABA, f"WAL {mb:.0f} MB -- prepis v bazo ne teče") if mb > 1024
                       else (MLACNA, f"WAL {mb:.0f} MB") if mb > 256 else (DOBRA, ""))
     return out
+
+
+# --- pošta: samo kar rabi skrbnikov poseg ----------------------------------
+#
+# Rdeča vrstica pove, da potnik nekaj izgubi; pošta mora povedati, da mora
+# skrbnik nekaj NAREDITI. Ni isto: od 1. do 17. 10. 2026 je šlo 67 pošt
+# „stoji“, od tega 31 „vozila brez vsake zamude“ (3–8 vozil, nihanje),
+# 11 „vlaki: zadnji zapis“ ob 3:58 (nočni povzetki), 7 „vožnje brez voznega
+# reda“ LPP (obvozi za maraton) in 2 „prikaz proti SŽ“ (SŽ je vlak risal po
+# voznem redu) -- pri nobeni od teh skrbnik ni mogel nič. David, 17. 10.:
+# „na mail moram dobiti le, kadar stoji in rabim jaz posredovati“.
+
+#: Imena vrstic v pošti (pregled ima svoja, ob vrsticah tabel).
+IMENA = {
+    "feed": "zajem · zadnja zamuda v bazi",
+    "zeleznica": "vlaki · zadnji zapis",
+    "avtobus": "avtobusi · zadnji zapis",
+    "neznane": "vožnje brez voznega reda",
+    "lega_brez_zamude": "vozila brez zamude",
+    "zamude_sz": "zemljevid SŽ",
+    "skladnost_sz": "vlaki · prikaz proti SŽ",
+    "derp_ijpp": "derp.si · IJPP",
+    "derp_lpp": "derp.si · mestni LPP",
+    "zamude_lpp": "LPP · zasloni postajališč",
+    "nap": "NAP · lege SIRI",
+    "vozni_red": "vozni red IJPP",
+    "vozni_red_lpp": "vozni red LPP",
+    "disk": "disk",
+    "wal": "WAL",
+}
+
+
+def ime(kljuc: str) -> str:
+    if kljuc.startswith("nit:"):
+        return f"nit {kljuc[4:]}"
+    if kljuc.startswith("vir:"):
+        v = viri.po_kljucu().get(kljuc[4:])
+        return v.ime if v else kljuc
+    return IMENA.get(kljuc, kljuc)
+
+
+@dataclass(frozen=True)
+class Okvara:
+    razlog: str
+    #: Kaj naj skrbnik naredi -- brez tega pošta ni ukrep, ampak novica.
+    ukrep: str
+    #: Toliko mora okvara trajati, preden gre pošta.
+    po_s: int = 600
+
+
+_RESTART = "Na arwenu `sudo systemctl restart kajros.service`, vzrok v `journalctl -u kajros.service`."
+_ZAJEM = ("Spodaj piše, ali viri odgovarjajo. Če odgovarjajo, stoji pri nas: " + _RESTART
+          + " Če ne, je izpad pri viru; obvestilo potnikom nastane samo po 20 min.")
+
+#: Vrstica -> (ukrep, po koliko sekund rdečega). Vrstic, ki jih tu ni, v
+#: pošti ni: izpad zunanjega vira, ki ima rezervo, kakovost, ki je skrbnik
+#: ne more popraviti, splošno pravilo virov (`vir:*`).
+_POSTA: dict[str, tuple[str, int]] = {
+    "feed": (_ZAJEM, 600),
+    "zeleznica": (_ZAJEM + " Pri vlakih poglej še vrstico „zemljevid SŽ“ in brskalnik.", 600),
+    "avtobus": (_ZAJEM, 600),
+    "zamude_sz": ("Nit zemljevida SŽ ne zapiše niti napake -- obstala je. " + _RESTART, 600),
+    "zamude_lpp": ("Nit LPP-jevih zaslonov ne zapiše niti napake -- obstala je. " + _RESTART, 600),
+    "nap": ("Nit NAP ne zapiše niti napake -- obstala je. " + _RESTART, 600),
+    "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzameta `promet.sqlite` "
+             "in varnostne kopije.", 600),
+    "wal": ("Prepis WAL v bazo ne teče -- kdo drži star posnetek. " + _RESTART, 600),
+}
+_NIT = ("Nit je umrla in ne vstane do ponovnega zagona. " + _RESTART, 600)
+
+#: Vrstice, ki ponoči (nič ne vozi) nimajo ocene. Takrat pošta ne ve, ali je
+#: okvara mimo, zato ne pošlje ne „stoji“ ne „spet dela“: obstala nit ob
+#: 23:50 bi sicer ob 0:35 dobila „spet dela“ in ob 4:00 znova „stoji“.
+_PO_VOZNEM_REDU = frozenset({"feed", "zeleznica", "avtobus", "zamude_sz", "zamude_lpp", "nap",
+                             "skladnost_sz"})
+
+#: Vožnje IJPP brez voznega reda gredo v pošto šele, ko jih je veliko:
+#: 22. 9. 2026 (nov vozni red, stari id-ji v feedu) 16 od 662 = 2,4 %,
+#: popravilo je rabilo kodo (`zamenjava`). Mestni LPP nikoli: njegov živi
+#: sistem vozi mimo objavljenega voznega reda (1. in 2. 10. 2026, maraton
+#: 16. 10.), skrbnik pri tem ne more nič.
+NEZNANE_POSTA, NEZNANE_POSTA_DELEZ = 5, 0.02
+
+#: Vozila brez vsake zamude: pošta šele, ko izpeljava zamud iz leg odpove za
+#: velik del prevoznika. Ponovitev 14.–17. 10. 2026 po minutah: pri sedanji
+#: rdeči (3 vozila, 5 %) 5 pošt v treh dneh, vse zaradi resnice na cesti
+#: (odhod 30–120 min pozno, zastoj ob zapori za maraton, izpad interneta);
+#: pri 10 vozilih in 25 % nobene, prava okvara (prehod ne piše) pa doseže
+#: prag v 9–24 min. Vrhovi po vrzeli leg NAP (do 71 %) trajajo do 5 min.
+BREZ_ZAMUDE_POSTA, BREZ_ZAMUDE_POSTA_DELEZ = 10, 0.25
+
+#: derp.si ima za vse rezervo (NAP, LPP-jevi zasloni, zemljevid SŽ), razen
+#: primestnega LPP. Izpad pri njih skrbnik ne popravi; dan molka pa je lahko
+#: trajna sprememba, o kateri je treba odločiti.
+DERP_DOLGO_S = 86400
+
+#: NAP, ki zavrača prijavo, se ne popravi sam: novo geslo ali odobritev.
+NAP_PRIJAVA_S = 3600
+
+
+def posta(z: dict, m: dict, ocena: dict[str, tuple[str, str]],
+          zdaj: float | None = None) -> dict[str, Okvara | None]:
+    """Vrstica -> okvara, ki gre v pošto, ali None, kadar se je ta hip ne
+    da oceniti (ponoči nič ne vozi). Vrstic, ki so v redu ali niso za pošto,
+    ni. `ocena` je izid `ocena(z, m, zdaj)`.
+    """
+    zdaj = time.time() if zdaj is None else zdaj
+    out: dict[str, Okvara | None] = {}
+    for k, (raz, razlog) in ocena.items():
+        pravilo = _POSTA.get(k) or (_NIT if k.startswith("nit:") else None)
+        if pravilo is None:
+            continue
+        if raz == SLABA:
+            out[k] = Okvara(razlog, *pravilo)
+        elif k in _PO_VOZNEM_REDU and raz != DOBRA and (
+                raz == "" or k == "zamude_sz" and not _vozijo(z, "zeleznica")):
+            out[k] = None
+
+    # Vozni red, ki se konča: uvoz ne teče ali vir nima novega.
+    for k, vir in (("vozni_red", "gtfs_ijpp"), ("vozni_red_lpp", "gtfs_lpp")):
+        raz, razlog = ocena.get(k, ("", ""))
+        if raz == SLABA:
+            out[k] = Okvara(razlog, viri.po_kljucu()[vir].ukrep)
+
+    nez = (z.get("rt_neznanih") or {}).get("ijpp")
+    if nez and nez[0] >= NEZNANE_POSTA and nez[1] and nez[0] / nez[1] >= NEZNANE_POSTA_DELEZ:
+        out["neznane"] = Okvara(
+            f"vožnje brez voznega reda: IJPP {nez[0]} od {nez[1]}",
+            "Feed nosi vožnje, ki jih vozni red nima -- verjetno nov vozni red s "
+            "starimi id-ji. `KAJROS_AGENCIES=1118,1119,1121,1123 kajros update`; če "
+            "ostane, `kajros zamenjave` (zajem.md, „Nov vozni red, stari id-ji“).", 1800)
+
+    hudi = [f"{ime_} {nz} od {vseh}" for ime_, (_, nz, vseh)
+            in (z.get("lega_brez_zamude") or {}).items()
+            if nz >= BREZ_ZAMUDE_POSTA and vseh and nz / vseh >= BREZ_ZAMUDE_POSTA_DELEZ]
+    if hudi:
+        out["lega_brez_zamude"] = Okvara(
+            "vozila brez vsake zamude: " + ", ".join(hudi),
+            "Iz leg se zamude ne izpeljejo za velik del prevoznika -- poglej kartico "
+            "NAP v /admin (prehodov, vozil brez vožnje) in `journalctl -u kajros.service`.")
+
+    nm = z.get("nap")
+    if nm and nm.get("http") in (401, 403) and zdaj - (nm.get("ts") or 0) >= NAP_PRIJAVA_S:
+        out["nap"] = Okvara(
+            f"NAP zavrača prijavo (HTTP {nm['http']}) že {_min(zdaj - (nm.get('ts') or 0))}",
+            viri.po_kljucu()["nap"].ukrep)
+
+    for vir, ts in (z.get("derp_prebran") or {}).items():
+        if zdaj - ts >= DERP_DOLGO_S:
+            out[f"derp_{vir}"] = Okvara(
+                f"derp.si ({vir.upper()}) ne odgovarja že {_min(zdaj - ts)}",
+                "Rezerve tečejo same (NAP, LPP-jevi zasloni, zemljevid SŽ); brez "
+                "podatkov je primestni LPP. Preveri, ali je sprememba pri derp.si "
+                "trajna (gitlab.com/derp-si), in se odloči za drug vir.")
+    return out
+
+
+def _vozijo(z: dict, omr: str) -> bool:
+    vozi = z.get("vozi_zdaj")
+    return vozi is None or vozi.get(omr, 0) >= MIN_VOZENJ
