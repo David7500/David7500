@@ -100,6 +100,12 @@ def test_primestne_linije_po_lpp_jevem_zaslonu(conn, monkeypatch):
         {"route_name": "3G", "type": 3, "eta_min": 1},
         {"route_name": "1", "type": 0, "eta_min": 4}])
     assert lpp.obvozi_zaslonov(conn, ["KON"]) == {("3G", "KON"): 2}
+    # Postajališče IJPP z istim imenom 36 m stran (Konzorcij 1167156): ista koda.
+    conn.execute("INSERT INTO station(stop_id, name, lat, lon) "
+                 "VALUES('1167156', 'Konzorcij', 46.051095, 14.502932)")
+    monkeypatch.setattr(lpp, "_postaje_lpp", lambda: [
+        {"ref_id": "601012", "name": "Konzorcij", "latitude": 46.05141, "longitude": 14.50305}])
+    assert lpp.obvozi_zaslonov(conn, ["1167156"]) == {("3G", "1167156"): 2}
     zdaj = datetime.now().astimezone()
     vrstice = [{"trip_id": f"g{i}", "stop_id": "KON", "train_no": "3G", "agency": "1118",
                 "sched": datetime.fromtimestamp(zdaj.timestamp() + 600 * i).astimezone().isoformat()}

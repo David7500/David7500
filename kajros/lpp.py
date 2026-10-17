@@ -246,6 +246,7 @@ def kode_postaj(nasa: list[dict], lpp: list[dict]) -> dict[str, str]:
 
 
 _zasloni_molcijo_do = 0.0
+_ISTO_IME_M = 100
 
 
 def obvozi_zaslonov(conn: sqlite3.Connection, stop_ids) -> dict[tuple[str, str], int]:
@@ -270,14 +271,19 @@ def obvozi_zaslonov(conn: sqlite3.Connection, stop_ids) -> dict[tuple[str, str],
         return {}
     koda_za: dict[str, str] = {}
     for n in conn.execute(
-            f"SELECT stop_id, lat, lon FROM station WHERE stop_id IN ({','.join('?' * len(sids))}) "
+            f"SELECT stop_id, name, lat, lon FROM station WHERE stop_id IN ({','.join('?' * len(sids))}) "
             "AND lat IS NOT NULL", sids):
-        naj, najd = None, _UJEMANJE_M
+        # Postajališče IJPP je od LPP-jevega lahko dlje kot obe strani ceste
+        # narazen (Konzorcij 1167156 od 601012: 36 m), zato z istim imenom do
+        # `_ISTO_IME_M`, sicer kot drugod do `_UJEMANJE_M`.
+        ime = fold(n["name"] or "")
+        naj, najd = None, None
         for p in postaje:
             if p.get("latitude") is None or p.get("longitude") is None:
                 continue
             d = geo.haversine(n["lat"], n["lon"], p["latitude"], p["longitude"])
-            if d < najd:
+            meja = _ISTO_IME_M if fold(p.get("name") or "") == ime else _UJEMANJE_M
+            if d < meja and (najd is None or d < najd):
                 najd, naj = d, p
         if naj is not None and naj.get("ref_id"):
             koda_za[n["stop_id"]] = str(naj["ref_id"])
