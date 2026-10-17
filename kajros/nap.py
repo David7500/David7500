@@ -70,7 +70,20 @@ DERP_SVEZE_S = 60
 #: 401/403 = dostop (še) ni odobren. Ne trkaj na 10 s, ko se ne more nič
 #: spremeniti brez človeka.
 NI_DOSTOPA_CAKAJ_S = 600
+#: ... razen kadar je ista prijava pravkar delala: 17. 10. 2026 ob 6:35 in
+#: 7:36 je NAP pod obremenitvijo (časovne meje, prekinjene povezave) dvakrat
+#: vrnil 401 in se čez minuto vrnil sam; desetminutni premor je pustil dve
+#: devetminutni vrzeli leg. Zavrnjena prijava je šele `ZAVRNJENA_PO` zapored
+#: ali brez uspeha v zadnji uri.
+ZAVRNJENA_PO, ZAVRNJENA_CAKAJ_S = 3, 60
 TIMEOUT_S = (10, 20)
+
+
+def cakaj_po_zavrnitvi(zapored: int, od_uspeha_s: float) -> int:
+    """Koliko sekund počakati po `zapored`-ti zavrnitvi prijave zapored."""
+    if zapored < ZAVRNJENA_PO and od_uspeha_s < 3600:
+        return ZAVRNJENA_CAKAJ_S
+    return NI_DOSTOPA_CAKAJ_S
 
 
 class NiDostopa(RuntimeError):
@@ -340,6 +353,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
     seja = requests.Session()
     seja.headers["User-Agent"] = config.USER_AGENT
     napak, brez_prijave = 0, False
+    zavrnjenih, uspeh_ts = 0, 0.0
     try:
         while not stop.is_set():
             zacetek = time.time()
@@ -359,7 +373,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                 korak(conn, beri(seja, p), time.time())
                 if napak:
                     log(f"NAP spet odgovarja (po {napak} napakah)")
-                napak = 0
+                napak, zavrnjenih, uspeh_ts = 0, 0, time.time()
             except Exception as exc:        # noqa: BLE001 -- vir ni naš
                 conn.rollback()             # glej `zamude_sz.teci()`
                 napak += 1
@@ -367,7 +381,8 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                     log(f"NAP: {exc}")
                 http = getattr(exc, "http", None)
                 if http:
-                    cakaj = NI_DOSTOPA_CAKAJ_S
+                    zavrnjenih += 1
+                    cakaj = cakaj_po_zavrnitvi(zavrnjenih, time.time() - uspeh_ts)
                 try:
                     s = json.loads(db.get_meta(conn, "nap") or "{}")
                     s.update(napaka=str(exc)[:200], napaka_ts=int(time.time()), http=http)

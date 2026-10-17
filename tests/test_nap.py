@@ -274,3 +274,14 @@ def test_nap_meri_zamudo_tudi_za_vozilo_ki_ga_ima_derp(monkeypatch):
     nap.zapisi(c, nap.pripni(c, v, ZDAJ)[0], {"a": ("1001", ZDAJ - 20, 46.1, 14.4)}, ZDAJ)
     assert klici == ["1001"]
 
+
+
+def test_prehodna_zavrnitev_prijave_ne_cakaj_deset_minut():
+    """17. 10. 2026 6:35 in 7:36: NAP pod obremenitvijo vrne 401 z isto
+    prijavo, ki je minuto prej delala, in se čez minuto vrne sam."""
+    from kajros import nap
+    assert nap.cakaj_po_zavrnitvi(1, 30) == nap.ZAVRNJENA_CAKAJ_S
+    assert nap.cakaj_po_zavrnitvi(2, 120) == nap.ZAVRNJENA_CAKAJ_S
+    assert nap.cakaj_po_zavrnitvi(3, 180) == nap.NI_DOSTOPA_CAKAJ_S
+    # Brez uspeha v zadnji uri (ali od zagona) je zavrnitev prava.
+    assert nap.cakaj_po_zavrnitvi(1, 1e9) == nap.NI_DOSTOPA_CAKAJ_S
