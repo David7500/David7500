@@ -15,12 +15,14 @@ DATA="${DATA:-/var/lib/kajros}"
 KEEP="${KEEP:-3}"
 # Koliko prostora mora ostati, da se kopija sploh splača. Pod tem raje ne
 # naredimo ničesar in to povemo -- poln disk ustavi tudi ZAJEM, kopija pa je
-# le kratkoročna varovalka.
+# le kratkoročna varovalka. VACUUM INTO najprej napiše nestisnjeno kopijo
+# (17. 10. 2026: 4,9 GB), zato velikost baze šteje zraven.
 MIN_FREE_MB="${MIN_FREE_MB:-2000}"
 
 free_mb=$(df -Pm "$DATA" | awk 'NR==2{print $4}')
-if [ "$free_mb" -lt "$MIN_FREE_MB" ]; then
-  echo "premalo prostora ($free_mb MB) -- kopija preskočena"
+baza_mb=$(du -m "$DATA/kajros.sqlite" | cut -f1)
+if [ "$free_mb" -lt $((baza_mb + MIN_FREE_MB)) ]; then
+  echo "premalo prostora ($free_mb MB, baza $baza_mb MB) -- kopija preskočena"
   exit 0
 fi
 
