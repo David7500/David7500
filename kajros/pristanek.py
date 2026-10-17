@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from . import config, geo, journey, stats
+from . import alerts, config, geo, journey, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -521,6 +521,17 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
     zdaj = datetime.now(TZ)
     odhodi = _po_pricakovani(
         [o for o in odhodi if _se_ni_odpeljal(o["sched"], o["expected"], zdaj)])
+    # Po obvozu LPP tu ne ustavi (RT LPP po vožnji, `alerts.ne_ustavi`): to ni
+    # odhod s tega postajališča. 17. 10. 2026 ob maratonu je stran Konzorcija
+    # kazala redne odhode linij 1, 2, 3, 6, 9, 27 z zaprte Slovenske.
+    obvoz: list[str] = []
+    if network == "avtobus" and odhodi:
+        ne = alerts.ne_ustavi(conn, {o["stop_id"] for o in odhodi}, zdaj.timestamp())
+        if ne:
+            ven = [o for o in odhodi if (o.get("trip_id") or "", o["stop_id"]) in ne
+                   or ("", o["stop_id"]) in ne]
+            obvoz = alerts.razvrsti_linije(o["train_no"] for o in ven)
+            odhodi = [o for o in odhodi if o not in ven]
     _dopolni_obicajno(odhodi, "typical")
     for o in odhodi:
         o["ura"], o["vozni_red"] = ura_odhoda(o)
@@ -529,7 +540,7 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
         "smeri": smeri if len(smeri) > 1 else [],
         "smer": izbrana["kljuc"] if izbrana else None,
         "zapis": zapis, "odhodi": odhodi[:NAJVEC_ODHODOV],
-        "vseh": len(odhodi),
+        "vseh": len(odhodi), "obvoz": obvoz,
         "naprej": sosednje(kaz, ime),
         "izracunano": kaz.get("computed_at"),
         "indeksiraj": zapis is not None,

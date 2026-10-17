@@ -51,6 +51,8 @@
 /* ---------- odhodi ---------- */
 
 .odhodi { width: 100%; border-collapse: collapse; margin: 14px 0 6px; }
+/* Obvoz LPP: tonska rumena kot ovire (`oznake.md`). */
+.obvoz { background: #2e2811; color: #f2d36b; padding: 8px 12px; border-radius: 8px; }
 
 .odhodi th {
   text-align: left;

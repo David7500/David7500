@@ -1610,6 +1610,43 @@ def _znano_do(conn, network: str) -> dict:
     return out
 
 
+def _oznaci_obvoze(conn, rows: list[dict], zdaj: datetime, zasloni: bool = True) -> int:
+    """Vrstice table, kjer vožnja po obvozu LPP tu ne ustavi: `ne_ustavi`.
+
+    17. 10. 2026 (maraton, zaprta Slovenska) je tabla na Konzorciju, Pošti in
+    Ajdovščini kazala redne odhode linij 1, 2, 3, 6, 9, 27 -- avtobusi tam niso
+    ustavljali. Prvi vir je RT LPP po vožnji (`alerts.ne_ustavi`), za primestne
+    linije, ki jih ta nima, LPP-jev zaslon (`lpp.obvozi_zaslonov`): toliko
+    naslednjih odhodov linije, kolikor vozil zaslon kaže v obvozu. Vrne, koliko
+    vrstic je označenih.
+    """
+    if not rows:
+        return 0
+    sids = {r["stop_id"] for r in rows if r.get("stop_id")}
+    ne = alerts.ne_ustavi(conn, sids, zdaj.timestamp())
+    for r in rows:
+        if r.get("lpp_vrsta") == lpp.VRSTE[3] or (
+                ne and ((r.get("trip_id") or "", r.get("stop_id")) in ne
+                        or ("", r.get("stop_id")) in ne)):
+            r["ne_ustavi"] = True
+    po_lpp = lpp.obvozi_zaslonov(conn, {r["stop_id"] for r in rows
+                                        if r.get("agency") in ("lpp", "1118")}) if zasloni else {}
+    if po_lpp:
+        def kdaj(r):
+            try:
+                return datetime.fromisoformat(r.get("expected") or r["sched"]).timestamp()
+            except (TypeError, ValueError):
+                return 0.0
+        meja = zdaj.timestamp() - 120
+        for r in sorted(rows, key=kdaj):
+            k = (r.get("train_no"), r.get("stop_id"))
+            if po_lpp.get(k, 0) > 0 and kdaj(r) >= meja:
+                # Že označena vrstica (RT) je isto vozilo, ki ga kaže zaslon.
+                r["ne_ustavi"] = True
+                po_lpp[k] -= 1
+    return sum(1 for r in rows if r.get("ne_ustavi"))
+
+
 @app.get("/api/departures")
 def api_departures(
     station: str = Query(..., description="ime postaje; delno ime je dovolj"),
@@ -1680,6 +1717,10 @@ def api_departures(
                                       vse=lpp_izpad)
             for r in rows:
                 r.setdefault("smer", smer_od.get(r["stop_id"]))
+        if network == "avtobus" and now_s is not None:
+            # Obvoz velja zdaj: za izbrano uro zvečer ga zaslon ne pozna, RT pa
+            # po vožnji -- ta del velja tudi tam.
+            _oznaci_obvoze(conn, rows, now, zasloni=not from_time)
         if network == "zeleznica":
             # Tir s table SZ (`peroni.py`). Kadar ga ni ali je star, ga ni.
             peroni.dopolni(conn, rows, lambda r: (r["train_no"], exact, r["sched"]))
@@ -2801,11 +2842,40 @@ def api_connections(
                 if nadomestni.je_nadomestni(n):
                     nadomestni.dopolni([n], n.get("from"))
         nos = [c["train_no"] for c in rows] + [t["train1"] for t in legs]
-        notices = (alerts.for_trains(conn, nos, mentions=[a, b])
-                   if network == "zeleznica" else [])
+        if network == "zeleznica":
+            notices = alerts.for_trains(conn, nos, mentions=[a, b])
+        else:
+            # Obvoz LPP na izhodišču ali cilju (`alerts.ne_ustavi`): zveza, ki
+            # tam ne ustavi, ni zveza; obvestili obeh postajališč nad njimi.
+            if is_today:
+                _oznaci_obvoze_zvez(conn, rows, now)
+            notices = alerts.for_stops(conn, [r[0] for r in conn.execute(
+                "SELECT stop_id FROM station WHERE name IN (?, ?)", (a, b))])
         meje = _znano_do(conn, network)
     return {"from": a, "to": b, "date": date, "network": network, **meje,
             "connections": rows, "transfers": legs, "alerts": notices}
+
+
+def _oznaci_obvoze_zvez(conn, rows: list[dict], zdaj: datetime) -> None:
+    """Zveze, katerih vožnja po obvozu LPP ne ustavi na izhodišču (`od`) ali
+    cilju (`do`): `ne_ustavi`. Isto pravilo kot na tabli (`_oznaci_obvoze`)."""
+    ne = alerts.ne_ustavi(conn, None, zdaj.timestamp())
+    if not ne or not rows:
+        return
+    pari = sorted({(r["trip_id"], r[k]) for r in rows for k in ("from_seq", "to_seq")})
+    stop = {}
+    for i in range(0, len(pari), 400):
+        kos = pari[i:i + 400]
+        for t, q, sid in conn.execute(
+                "SELECT trip_id, stop_seq, stop_id FROM sched WHERE (trip_id, stop_seq) IN "
+                f"(VALUES {','.join(['(?, ?)'] * len(kos))})", [x for p in kos for x in p]):
+            stop[(t, q)] = sid
+    for r in rows:
+        for kje, k in (("od", "from_seq"), ("do", "to_seq")):
+            sid = stop.get((r["trip_id"], r[k]))
+            if sid and ((r["trip_id"], sid) in ne or ("", sid) in ne):
+                r["ne_ustavi"] = kje
+                break
 
 
 def _live(network: str | None = None) -> list[dict]:

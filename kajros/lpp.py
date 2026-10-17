@@ -245,6 +245,59 @@ def kode_postaj(nasa: list[dict], lpp: list[dict]) -> dict[str, str]:
     return out
 
 
+_zasloni_molcijo_do = 0.0
+
+
+def obvozi_zaslonov(conn: sqlite3.Connection, stop_ids) -> dict[tuple[str, str], int]:
+    """(linija, stop_id) -> koliko vozil te linije LPP-jev zaslon tega
+    postajališča kaže v obvozu (`type` 3, „tu ne ustavi“).
+
+    Za primestne linije LPP (3G, 6B, 19I, 51, 56 …, IJPP 1118) je to edini
+    živi vir obvoza: v RT LPP jih ni. 17. 10. 2026 ob maratonu na Konzorciju
+    3G in 19I v obvozu, obvestila zanju nobenega. Zaslon pozna le vozila, ki
+    jih LPP ta hip vidi (eta je pri obvozu vedno 1 min, ure ni), zato velja za
+    toliko naslednjih odhodov -- dlje ne ugibamo. Ob napaki vira nič.
+
+    Postajališče -> koda po koordinati kot v `kode_postaj`, a vsakemu našemu
+    svojo: isto mesto ima `stop_id` iz LPP-jevega GTFS in iz IJPP.
+    """
+    global _zasloni_molcijo_do
+    if not config.LPP_ZIVO or time.monotonic() < _zasloni_molcijo_do:
+        return {}
+    sids = sorted(set(stop_ids))
+    postaje = _postaje_lpp() if sids else None
+    if not postaje:
+        return {}
+    koda_za: dict[str, str] = {}
+    for n in conn.execute(
+            f"SELECT stop_id, lat, lon FROM station WHERE stop_id IN ({','.join('?' * len(sids))}) "
+            "AND lat IS NOT NULL", sids):
+        naj, najd = None, _UJEMANJE_M
+        for p in postaje:
+            if p.get("latitude") is None or p.get("longitude") is None:
+                continue
+            d = geo.haversine(n["lat"], n["lon"], p["latitude"], p["longitude"])
+            if d < najd:
+                najd, naj = d, p
+        if naj is not None and naj.get("ref_id"):
+            koda_za[n["stop_id"]] = str(naj["ref_id"])
+    po_kodi: dict[str, dict[str, int]] = {}
+    for koda in set(koda_za.values()):
+        stevec: dict[str, int] = {}
+        prihodi = _prihodi_postaje(koda)
+        if prihodi is None:
+            # Vir ne odgovarja: tabla ne sme čakati 2 s na vsako postajališče
+            # in vsako zahtevo -- minuto brez zaslonov, obvoz iz RT ostane.
+            _zasloni_molcijo_do = time.monotonic() + 60
+            return {}
+        for a in prihodi:
+            if a.get("type") == 3 and not a.get("depot") and a.get("route_name"):
+                stevec[str(a["route_name"])] = stevec.get(str(a["route_name"]), 0) + 1
+        po_kodi[koda] = stevec
+    return {(linija, sid): n for sid, koda in koda_za.items()
+            for linija, n in po_kodi.get(koda, {}).items()}
+
+
 def vrstice_prihodov(prihodi: list[dict], stop_id: str, linije: set[str],
                      zdaj: float, dan: str, odhodi: bool, postaja: str) -> list[dict]:
     """Prihodi z LPP-jevega zaslona kot vrstice table.

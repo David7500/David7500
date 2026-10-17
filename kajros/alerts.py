@@ -88,6 +88,20 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
 
     Zdruzimo jih po besedilu in zberemo prizadeta postajalisca. Za potnika je
     to natanko en podatek: „tu se avtobus ne bo ustavil".
+
+    **Entiteta je ena vožnja na enem postajališču** (`stop_id` in `trip`,
+    `route_id` nikoli). 17. 10. 2026 ob maratonu 2 808 parov, 720 voženj,
+    vse v našem voznem redu in vse današnje -- čez ves dan, ne le naslednja
+    ura. Pari gredo v `alert_entity`, da tabla in iskalnik poti vesta, katera
+    vožnja tu ne ustavi (`ne_ustavi`), ne le, da je postajališče „na obvozu“:
+    na Bavarskem dvoru so tisti dan ustavljale linije 7, 8, 13, 14 in 20Z, ne
+    pa 2, 6, 9 in 27. Entiteta brez vožnje (prazen niz) = ne ustavi nobena.
+
+    **Obdobje se ob vsakem branju prepiše.** LPP isti naslov rabi za nov
+    dogodek: „Postaja Pošta na obvozu“ 16. 10. 2026 najprej 9:55–15:00, nato
+    za maraton 16. 10. 15:00 – 18. 10. 23:59. Zapis je obdržal prvo obdobje
+    in tabla je od 15:00 skrila obvoz na treh zaprtih postajališčih Slovenske
+    (Pošta, Ajdovščina, Konzorcij), Čerinovo pa od 12. 10. (feed: do 30. 10.).
     """
     seen_at = int(time.time())
     skupine: dict[tuple, dict] = {}
@@ -101,16 +115,14 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
             continue
         kljuc = (header, desc, lang)
         s = skupine.setdefault(kljuc, {
-            "stops": set(), "routes": set(),
+            "pari": set(),
             "cause": a.cause or None, "effect": a.effect or None,
             "start": None, "end": None, "n": 0,
         })
         s["n"] += 1
         for e in a.informed_entity:
             if e.stop_id:
-                s["stops"].add(e.stop_id)
-            if e.route_id:
-                s["routes"].add(e.route_id)
+                s["pari"].add((e.trip.trip_id if e.HasField("trip") else "", e.stop_id))
         if a.active_period:
             p = a.active_period[0]
             if p.start:
@@ -124,19 +136,16 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
         db.set_meta(conn, LPP_OBVESTILA_PREBRANA, str(seen_at))
         for (header, desc, lang), s in skupine.items():
             aid = LPP_OBVOZ + hashlib.sha1(header.encode()).hexdigest()[:12]
-            znan = conn.execute("SELECT 1 FROM alert WHERE alert_id = ?",
-                                (aid,)).fetchone() is not None
-            conn.execute(
-                "INSERT INTO alert(alert_id, kind, cause, effect, start_ts, end_ts,"
-                "                  header, description, url, lang, first_seen, last_seen) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
-                "ON CONFLICT(alert_id) DO UPDATE SET last_seen = excluded.last_seen,"
-                "  header = excluded.header, description = excluded.description",
-                (aid, "obvoz", s["cause"], s["effect"], s["start"], s["end"],
-                 header, desc, None, lang or "sl", seen_at, seen_at))
-            if not znan:
+            if not zapisi(conn, aid, "obvoz", s["cause"], s["effect"], s["start"],
+                          s["end"], header, desc, None, lang or "sl", seen_at):
                 n_new += 1
-            # Prizadeta postajalisca zapisemo znova: obvoz se lahko razsiri.
+            # Prizadete vožnje in postajališča se pišejo samo ob spremembi,
+            # kot vezi ovir SŽ (`ovire_sz`): obvoz se lahko razširi, sicer pa
+            # bi se 17. 10. 2026 vsakih 30 s prepisalo istih 2 808 vrstic.
+            stari = {(r[0], r[1]) for r in conn.execute(
+                "SELECT trip_id, stop_id FROM alert_entity WHERE alert_id = ?", (aid,))}
+            if stari == s["pari"]:
+                continue
             conn.execute("DELETE FROM alert_entity WHERE alert_id = ?", (aid,))
             # **Prazen niz, ne NULL, in navaden INSERT.** `route_id` in
             # `trip_id` sta `NOT NULL DEFAULT ''`; z `NULL` je vsaka vrstica
@@ -145,22 +154,15 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
             # bilo, kot da zajem dela. Brez `OR IGNORE` bi se to slisalo takoj.
             conn.executemany(
                 "INSERT INTO alert_entity(alert_id, route_id, trip_id, stop_id) "
-                "VALUES(?,'','',?)",
-                [(aid, sid) for sid in s["stops"]])
+                "VALUES(?,'',?,?)",
+                [(aid, tid, sid) for tid, sid in sorted(s["pari"])])
     return {"obvestil": len(skupine), "novih": n_new,
             "iz_vrstic": sum(s["n"] for s in skupine.values())}
 
 
-def for_stops(conn: sqlite3.Connection, stop_ids, lang: str = "sl") -> list[dict]:
-    """Veljavna obvestila, ki zadevajo katero od teh postajalisc.
-
-    Za avtobusno tablo: „na tej postaji se avtobus ne bo ustavil" je edino
-    obvestilo, ki ga mestni feed sploh posilja, in brez tega ga ne vidi nihce.
-    """
-    ids = list(stop_ids)
-    if not ids:
-        return []
-    now = int(time.time())
+def _veljaven_obvoz_sql(conn: sqlite3.Connection, now: int) -> tuple[str, list]:
+    """Pogoj „obvoz LPP velja zdaj“ za `alert a` -- eno pravilo za obvestilo
+    nad tablo (`for_stops`) in za vožnje, ki ne ustavijo (`ne_ustavi`)."""
     # **Obvoz velja, dokler ga feed pošilja, ne do `end_ts`.** LPP obvestila
     # ob koncu obvoza ne skrajša, ampak ga neha pošiljati: „Postaja Bavarski
     # dvor na obvozu -- vozilo se ne bo ustavilo" je bil nazadnje v feedu
@@ -168,16 +170,68 @@ def for_stops(conn: sqlite3.Connection, stop_ids, lang: str = "sl") -> list[dict
     # prometnega postajališča v Ljubljani ga je kazala še 25. 9. Meja je
     # zadnje branje feeda, ne ura: če zajem stoji, ostane zadnje znano.
     prebrano = int(db.get_meta(conn, LPP_OBVESTILA_PREBRANA) or 0)
+    return ("(a.end_ts IS NULL OR a.end_ts >= ?) AND (a.start_ts IS NULL OR a.start_ts <= ?) "
+            "AND (a.kind != 'obvoz' OR a.last_seen >= ?)",
+            [now, now, prebrano - OBVOZ_REZERVA_S])
+
+
+def ne_ustavi(conn: sqlite3.Connection, stop_ids=None,
+              zdaj: float | None = None) -> set[tuple[str, str]]:
+    """(trip_id, stop_id), kjer vožnja po veljavnem obvozu LPP ne ustavi.
+
+    Prazen `trip_id` = na tem postajališču ne ustavi nobena. Vožnje so
+    LPP-jeve mestne (njihov feed); primestnih (IJPP 1118) tu ni -- zanje
+    obvoz pove samo LPP-jev zaslon (`lpp.obvozi_zaslonov`).
+    """
+    pogoj, args = _veljaven_obvoz_sql(conn, int(time.time() if zdaj is None else zdaj))
+    sql = ("SELECT e.trip_id, e.stop_id FROM alert a JOIN alert_entity e USING (alert_id) "
+           f"WHERE a.kind = 'obvoz' AND e.stop_id != '' AND {pogoj}")
+    if stop_ids is not None:
+        ids = list(stop_ids)
+        if not ids:
+            return set()
+        sql += f" AND e.stop_id IN ({','.join('?' * len(ids))})"
+        args += ids
+    return {(r[0], r[1]) for r in conn.execute(sql, args)}
+
+
+def razvrsti_linije(linije) -> list[str]:
+    """Linije po številki, kot na postajališču: 1, 2, 3G, 11B, 27, N1, N3."""
+    def kljuc(ime: str):
+        m = re.match(r"([^\d]*)(\d+)(.*)", ime)
+        return (1, ime, 0, "") if m is None else (bool(m[1]), m[1], int(m[2]), m[3])
+    return sorted(set(linije), key=kljuc)
+
+
+def for_stops(conn: sqlite3.Connection, stop_ids, lang: str = "sl") -> list[dict]:
+    """Veljavna obvestila, ki zadevajo katero od teh postajalisc.
+
+    Za avtobusno tablo: „na tej postaji se avtobus ne bo ustavil" je edino
+    obvestilo, ki ga mestni feed sploh posilja, in brez tega ga ne vidi nihce.
+
+    Obvoz nosi `linije`, ki tu ne ustavijo: obvestilo je na postajališče,
+    ustavijo pa nekatere linije vseeno (Bavarski dvor 17. 10. 2026: 7, 8, 13,
+    14, 20Z da, 2, 6, 9, 27 ne). Brez tega se je „Postaja Bavarski dvor na
+    obvozu“ bralo, kot da tam ne ustavi nič.
+    """
+    ids = list(stop_ids)
+    if not ids:
+        return []
+    pogoj, args = _veljaven_obvoz_sql(conn, int(time.time()))
     marks = ",".join("?" * len(ids))
     rows = conn.execute(
         f"SELECT DISTINCT a.* FROM alert a JOIN alert_entity e USING (alert_id) "
-        f"WHERE e.stop_id IN ({marks}) AND a.lang = ? "
-        f"  AND (a.end_ts IS NULL OR a.end_ts >= ?) "
-        f"  AND (a.start_ts IS NULL OR a.start_ts <= ?) "
-        f"  AND (a.kind != 'obvoz' OR a.last_seen >= ?) "
+        f"WHERE e.stop_id IN ({marks}) AND a.lang = ? AND {pogoj} "
         f"ORDER BY a.header",
-        (*ids, lang, now, now, prebrano - OBVOZ_REZERVA_S)).fetchall()
-    return [_alert_row(r) for r in rows]
+        (*ids, lang, *args)).fetchall()
+    out = [_alert_row(r) for r in rows]
+    for d in out:
+        if d["kind"] == "obvoz":
+            d["linije"] = razvrsti_linije(r[0] for r in conn.execute(
+                f"SELECT DISTINCT t.train_no FROM alert_entity e "
+                f"JOIN trip t ON t.trip_id = e.trip_id "
+                f"WHERE e.alert_id = ? AND e.stop_id IN ({marks})", (d["alert_id"], *ids)))
+    return out
 
 
 def _pick(translated, want: str = "sl") -> tuple[str | None, str | None]:

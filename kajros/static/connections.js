@@ -271,10 +271,15 @@ function alertsHtml(list, note) {
     // pusti `cause` na 1, kadar vzroka ne pove.
     const meta = [a.effect_label, a.cause_label]
       .filter((x) => x && x !== "neznano").map(escapeHtml).join(" · ");
+    // Obvoz LPP je na postajališče, ustavijo pa nekatere linije vseeno
+    // (Bavarski dvor 17. 10. 2026: 7, 8, 13, 14 da, 2, 6, 9, 27 ne).
+    const linije = a.linije && a.linije.length
+      ? `<div class="alert-desc">Ne ustavi: ${a.linije.map((l) => escapeHtml(l)).join(", ")}</div>` : "";
     return `
     <div class="alert-item">
       <strong>${escapeHtml(naslov)}</strong>
       ${nov ? `<div class="alert-desc">${escapeHtml(opis)}</div>` : ""}
+      ${linije}
       <div class="alert-meta">
         ${meta}${a.url ? `${meta ? " · " : ""}<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
       </div>
@@ -466,7 +471,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
     : null;
 
   return `
-    <a class="conn-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}"
+    <a class="conn-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}${c.ne_ustavi ? " is-obvoz" : ""}"
        href="${journeyHref(c.train_no, date, c.trip_id, odKod)}">
       <div class="conn-times">
         <div class="conn-clock">
@@ -486,7 +491,8 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
           : `${escapeHtml(c.train_no)}${isBus(c.mode) ? ` ${lineBadgeHtml(c)}` : ""}`}</div>
         <div class="conn-headsign">${escapeHtml(lepoIme(c.headsign))}</div>
       </div>
-      <div class="conn-delay">${c.zamuda
+      <div class="conn-delay">${c.ne_ustavi ? obvozChipHtml(c.ne_ustavi)
+        : c.zamuda
         ? delayChipHtml(c.zamuda, c.delay_kind, c.delay_at)
         : typicalChipHtml(c.typical_arr || c.typical_dep, null, jeNadomestni(c))}${doHtml(c.do_s)}</div>
       <div class="conn-meta">
@@ -670,7 +676,7 @@ function renderConnections(data) {
   // Naslednja vozjna je prva, ki se ni odpeljala. Prav to clovek isce, zato
   // je poudarjena, ne le prva po vrsti.
   let nextIdx = -1;
-  if (isToday) nextIdx = list.findIndex((c) => departedMs(c) >= nowMs);
+  if (isToday) nextIdx = list.findIndex((c) => departedMs(c) >= nowMs && !c.ne_ustavi);
 
   // Ze odpeljane vozjne so kontekst, ne izbira. Ostanejo dosegljive -- kdor
   // preverja, ali je zamudil vlak, jih rabi -- a ne stojijo pred odgovorom.
@@ -740,8 +746,11 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
   // Vrstica z LPP-jevega zaslona nima vožnje: tiste, ki ji pripada, v voznem
   // redu ni, povezava na katero koli drugo pa bi odprla napačno.
   const tag = r.trip_id ? "a" : "div";
+  // Po obvozu LPP vožnja tu ne ustavi (`api._oznaci_obvoze`): vrstica ostane,
+  // da potnik ve, kam je šel njegov avtobus, a ni odhod.
+  const obvoz = !!r.ne_ustavi;
   return `
-    <${tag} class="board-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}"
+    <${tag} class="board-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${off ? " has-delay" : ""}${obvoz ? " is-obvoz" : ""}"
        ${r.trip_id ? `href="${journeyHref(r.train_no, r.service_date || date, r.trip_id, station)}"` : ""}>
       <div>
         <div class="board-time">${hhmm(r.sched)}</div>
@@ -758,20 +767,27 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
           ? lineBadgeHtml(r) + " "
           : ""}${r.headsign ? escapeHtml(lepoIme(r.headsign)) : ""}</div>
       </div>
-      <div class="conn-delay">${r.lpp_vrsta ? lppChipHtml(r.lpp_vrsta)
+      <div class="conn-delay">${obvoz ? obvozChipHtml()
+        : r.lpp_vrsta ? lppChipHtml(r.lpp_vrsta)
         : r.zamuda ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}${doHtml(r.do_s)}</div>
       <div class="board-meta">
         ${nadomestniPostanekHtml(r.nadomestni_postanek)}
         ${potekNadomestnegaHtml(r)}
         ${tirHtml(r.tir, r.tir_prej)}
-        ${cd ? `<span class="countdown">${cd}</span>` : ""}
-        ${morda ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
+        ${cd && !obvoz ? `<span class="countdown">${cd}</span>` : ""}
+        ${morda && !obvoz ? nepotrjenHtml(r.expected || r.sched, prihodi) : ""}
         ${potnikiHtml(r.potniki, r.network === "avtobus", prihodi)}
         ${opozorilaVrsticeHtml(r.opozorila)}
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
     </${tag}>`;
+}
+
+// Obvoz: avtobus tu ne ustavi. Ne zamuda in ne „po LPP“ -- dejstvo o postanku.
+function obvozChipHtml(kje) {
+  return `<span class="chip chip-obvoz">obvoz</span>
+    <div class="conn-where">${kje === "do" ? "na cilju ne ustavi" : "tu ne ustavi"}</div>`;
 }
 
 // Ura je LPP-jeva, ne naša: zamude ni, ker ni voznega reda, od katerega bi jo
@@ -982,7 +998,9 @@ function renderBoard(data) {
     </details>`);
   }
   rows.push(...morda.map((r) => vrstica(r, false)));
-  rows.push(...ahead.map((r, i) => vrstica(r, i === 0)));
+  // Poudarek „naslednja“ dobi prva, ki tu res ustavi.
+  const prva = ahead.findIndex((r) => !r.ne_ustavi);
+  rows.push(...ahead.map((r, i) => vrstica(r, i === prva)));
   resultsEl.innerHTML = mejaHtml(data) + mimoHtml(data) + smeriHtml(data) + rows.join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
 }

@@ -30,8 +30,9 @@ import math
 import sqlite3
 import time
 from datetime import date, timedelta
+from functools import partial
 
-from . import config, geo, hoja, journey, nadomestni, stats
+from . import alerts, config, geo, hoja, journey, nadomestni, stats
 
 TZ = journey.TZ
 
@@ -313,10 +314,20 @@ def blizu(conn: sqlite3.Connection, lat: float, lon: float,
     return out, vir, cez_mejo
 
 
+def obvozi_po_postaji(pari) -> dict[str, set[str]]:
+    """Pari (vožnja, postajališče) obvoza -> postajališče -> vožnje. Iskanje
+    gleda vsak vstop in izstop; postajališča brez obvoza naj stanejo en vpogled
+    v slovar, ne dveh terk."""
+    out: dict[str, set[str]] = {}
+    for trip_id, stop_id in pari:
+        out.setdefault(stop_id, set()).add(trip_id)
+    return out
+
+
 def _isci_dan(conn, izhodisca: dict[str, int], cilji: dict[str, int],
               service_date: str, odhod_s: int, max_nog: int,
               meja: int | None = None, zamik: dict | None = None,
-              brez: set | None = None) -> dict | None:
+              brez: set | None = None, ne_ustavi: dict | None = None) -> dict | None:
     """Najzgodnejši prihod na cilj. Časi so sekunde od polnoči prometnega dne.
 
     Postopek je krog na nogo: iz vsakega doseženega postajališča se vkrcaj na
@@ -333,6 +344,9 @@ def _isci_dan(conn, izhodisca: dict[str, int], cilji: dict[str, int],
     `meja` je zgornja meja prihoda na cilj (npr. čas hoje vso pot). Vse, kar je
     za njo, ne more biti odgovor; brez tega obrezovanja zadnja kroga premetavata
     pol države, ki je ne bo nihče videl (izmerjeno 510 ms proti 7 ms).
+
+    `ne_ustavi` je obvoz LPP (`obvozi_po_postaji`): postajališče -> vožnje, ki
+    tam ne ustavijo (prazna = nobena). Tam ni ne vstopa ne izstopa.
     """
     by_trip, at_stop = journey._timetable_for_day(conn, service_date, None)
     if not by_trip:
@@ -389,6 +403,8 @@ def _isci_dan(conn, izhodisca: dict[str, int], cilji: dict[str, int],
                     continue
                 if vkrcani.get(trip_id, 1 << 30) <= seq:
                     continue
+                if ne_ustavi and (nu := ne_ustavi.get(sid)) is not None and ("" in nu or trip_id in nu):
+                    continue        # obvoz: tu ne ustavi
                 v = vozje.get(trip_id)
                 if v is None:
                     continue        # vožnja brez opisa; brez omrežja ne vemo praga
@@ -400,6 +416,8 @@ def _isci_dan(conn, izhodisca: dict[str, int], cilji: dict[str, int],
                 vkrcani[trip_id] = seq
                 for nseq, nstop, narr, _ in by_trip[trip_id]:
                     if nseq <= seq or narr is None:
+                        continue
+                    if ne_ustavi and (nu := ne_ustavi.get(nstop)) is not None and ("" in nu or trip_id in nu):
                         continue
                     narr = narr + z
                     if narr >= meja:
@@ -510,7 +528,7 @@ def _pespoti_nazaj(conn) -> dict[str, list[tuple[str, int]]]:
 def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
                 service_date: str, prihod_s: int, max_nog: int,
                 meja: int | None = None, zamik: dict | None = None,
-                brez: set | None = None) -> dict | None:
+                brez: set | None = None, ne_ustavi: dict | None = None) -> dict | None:
     """Najpoznejši odhod z izhodišča, s katerim si na cilju do `prihod_s`.
 
     Isti postopek kot `_isci_dan()`, obrnjen v času: začne se pri cilju z uro,
@@ -584,6 +602,8 @@ def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
                     continue
                 if izstopi.get(trip_id, -1) >= seq:
                     continue
+                if ne_ustavi and (nu := ne_ustavi.get(sid)) is not None and ("" in nu or trip_id in nu):
+                    continue        # obvoz: tu ne ustavi
                 v = vozje.get(trip_id)
                 if v is None:
                     continue        # vožnja brez opisa; brez omrežja ne vemo praga
@@ -593,6 +613,8 @@ def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
                     if bseq >= seq:
                         break
                     if bdep is None:
+                        continue
+                    if ne_ustavi and (nu := ne_ustavi.get(bstop)) is not None and ("" in nu or trip_id in nu):
                         continue
                     d = bdep + z
                     if d <= meja:
@@ -682,15 +704,16 @@ def _stevilo_vozenj(najdba: dict) -> int:
 def _naprej(conn, izhodisca: dict[str, int], cilji: dict[str, int],
             service_date: str, odhod_s: int, max_nog: int,
             meja: int | None = None, zamik: dict | None = None,
-            brez: set | None = None, vec_vozenj: bool = False) -> dict | None:
+            brez: set | None = None, vec_vozenj: bool = False,
+            ne_ustavi: dict | None = None) -> dict | None:
     """Najzgodnejši prihod, in od poti s tem prihodom tista, ki odide zadnja."""
     najdba = _isci_dan(conn, izhodisca, cilji, service_date, odhod_s, max_nog,
-                       meja, zamik, brez)
+                       meja, zamik, brez, ne_ustavi)
     if najdba is None:
         return None
     k = _stevilo_vozenj(najdba)
     zadnja = _isci_nazaj(conn, izhodisca, cilji, service_date, najdba["prihod_s"],
-                         k, odhod_s - 1, zamik, brez)
+                         k, odhod_s - 1, zamik, brez, ne_ustavi)
     # Z vožnjo več se od doma včasih odide ure pozneje in pride ob isti minuti.
     # Iskanje z enakim številom voženj tega ne vidi; prestop več se splača le,
     # kadar prinese vsaj PRESTOP_VREDEN_S doma na vsako dodatno vožnjo. Samo
@@ -698,7 +721,7 @@ def _naprej(conn, izhodisca: dict[str, int], cilji: dict[str, int],
     # drugo izbiro, in razvrstitev v `isci()` jih ob isti uri uredi sama.
     if vec_vozenj and k < max_nog:
         vec = _isci_nazaj(conn, izhodisca, cilji, service_date, najdba["prihod_s"],
-                          max_nog, odhod_s - 1, zamik, brez)
+                          max_nog, odhod_s - 1, zamik, brez, ne_ustavi)
         if vec and (zadnja is None or vec["odhod_s"] >= zadnja["odhod_s"]
                     + PRESTOP_VREDEN_S * (_stevilo_vozenj(vec) - k)):
             zadnja = vec
@@ -708,14 +731,15 @@ def _naprej(conn, izhodisca: dict[str, int], cilji: dict[str, int],
 def _nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
            service_date: str, prihod_s: int, max_nog: int,
            meja: int | None = None, zamik: dict | None = None,
-           brez: set | None = None) -> dict | None:
+           brez: set | None = None, ne_ustavi: dict | None = None) -> dict | None:
     """Najpoznejši odhod, in od poti s tem odhodom tista, ki pride prva."""
     najdba = _isci_nazaj(conn, izhodisca, cilji, service_date, prihod_s, max_nog,
-                         meja, zamik, brez)
+                         meja, zamik, brez, ne_ustavi)
     if najdba is None:
         return None
     prva = _isci_dan(conn, izhodisca, cilji, service_date, najdba["odhod_s"],
-                     _stevilo_vozenj(najdba), najdba["prihod_s"] + 1, zamik, brez)
+                     _stevilo_vozenj(najdba), najdba["prihod_s"] + 1, zamik, brez,
+                     ne_ustavi)
     return prva or najdba
 
 
@@ -932,6 +956,12 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
     polnoc = stats.polnoc(service_date)
     zamik = zamiki(conn, service_date, now_s)
     ven = izlocene(conn, service_date, prevozniki)
+    # Obvoz LPP velja zdaj (`alerts.ne_ustavi`), po vožnji: 17. 10. 2026 ob
+    # maratonu bi pot ponudila vstop na zaprti Slovenski (Konzorcij, Pošta).
+    # Za drug dan ga ne vemo; vožnje drugega dne imajo druge id-je.
+    obvozi = obvozi_po_postaji(alerts.ne_ustavi(conn)) if now_s is not None else None
+    naprej = partial(_naprej, ne_ustavi=obvozi)
+    nazaj = partial(_nazaj, ne_ustavi=obvozi)
 
     def brez(*druge: set) -> frozenset | None:
         """Vožnje, ki jih to iskanje preskoči: izločeni prevozniki in druge."""
@@ -951,7 +981,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
         # kot bi prišel peš, ni odgovor. Meja velja tudi takrat, ko hoje ne
         # ponudimo (nad uro) -- takrat je merilo, ne predlog.
         meja = odhod_s + pes_s if pes_s is not None else None
-        najdba = _naprej(conn, izhodisca, cilji, service_date, odhod_s,
+        najdba = naprej(conn, izhodisca, cilji, service_date, odhod_s,
                         max_nog, meja, zamik, brez(), vec_vozenj=True)
         if not najdba:
             pripni_zamude(conn, predlogi, service_date, now_s)
@@ -962,7 +992,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
         # od prvega sploh moreta razlikovati -- vsak je svoje iskanje.
         zgornja = najdba["prihod_s"]
         if prvi["prestopov"] > 0:
-            a = _naprej(conn, izhodisca, cilji, service_date, odhod_s,
+            a = naprej(conn, izhodisca, cilji, service_date, odhod_s,
                        prvi["prestopov"], meja, zamik, brez())
             if a:
                 predlogi.append(sestavi(a))
@@ -996,7 +1026,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
             if nov_s > okno:
                 break
             nova_meja = nov_s + pes_s if ponudi_pes else None
-            a = _naprej(conn, izhodisca, cilji, service_date, nov_s,
+            a = naprej(conn, izhodisca, cilji, service_date, nov_s,
                        max_nog, nova_meja, zamik, brez(prikazane))
             if not a:
                 break
@@ -1015,7 +1045,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
             # Meja je najdeni prihod plus toliko, kolikor sme biti druga pot
             # poznejša -- brez nje to iskanje premeta pol države za predlog,
             # ki ga bo naslednja vrstica tako ali tako zavrgla.
-            a = _naprej(conn, izhodisca, cilji, service_date, odhod_s,
+            a = naprej(conn, izhodisca, cilji, service_date, odhod_s,
                        max_nog, najdba["prihod_s"] + NAJVEC_POZNEJE_S,
                        zamik, brez(uporabljene))
             if a:
@@ -1024,7 +1054,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
         if prvi["hoje_s"] > MANJ_HOJE_S:
             kratka_i, kratka_c = kratka()
             if kratka_i and kratka_c:
-                a = _naprej(conn, kratka_i, kratka_c, service_date,
+                a = naprej(conn, kratka_i, kratka_c, service_date,
                            odhod_s, max_nog, meja, zamik, brez())
                 # Pot z manj hoje sme biti počasnejša -- to je njen smisel --
                 # a ne poljubno; sicer je to druga pot, ne druga izbira.
@@ -1035,7 +1065,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
         najprej = odhod_s if odhod_s is not None else -(1 << 30)
         # Oditi prej, kot je treba peš, ni odgovor; oditi pred zdaj ne gre.
         spodaj = max(najprej - 1, rok - pes_s if pes_s is not None else -(1 << 30))
-        najdba = _nazaj(conn, izhodisca, cilji, service_date, rok,
+        najdba = nazaj(conn, izhodisca, cilji, service_date, rok,
                         max_nog, spodaj, zamik, brez())
         if not najdba:
             pripni_zamude(conn, predlogi, service_date, now_s)
@@ -1046,7 +1076,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
         # poljubno; sicer so druga pot, ne druga izbira.
         spodnja = max(spodaj, najdba["odhod_s"] - NAJVEC_POZNEJE_S)
         if prvi["prestopov"] > 0:
-            a = _nazaj(conn, izhodisca, cilji, service_date, rok,
+            a = nazaj(conn, izhodisca, cilji, service_date, rok,
                        prvi["prestopov"], spodnja, zamik, brez())
             if a:
                 predlogi.append(sestavi(a))
@@ -1061,7 +1091,7 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
             nov_rok = zadnja["prihod_s"] - 60
             if nov_rok < rok - ISKALNO_OKNO_S:
                 break
-            a = _nazaj(conn, izhodisca, cilji, service_date, nov_rok,
+            a = nazaj(conn, izhodisca, cilji, service_date, nov_rok,
                        max_nog, spodaj, zamik, brez(prikazane))
             if not a:
                 break
@@ -1069,14 +1099,14 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
             zadnja = a
         uporabljene = {n["trip_id"] for n in prvi["noge"] if n["vrsta"] == "voznja"}
         if uporabljene:
-            a = _nazaj(conn, izhodisca, cilji, service_date, rok,
+            a = nazaj(conn, izhodisca, cilji, service_date, rok,
                        max_nog, spodnja, zamik, brez(uporabljene))
             if a:
                 predlogi.append(sestavi(a))
         if prvi["hoje_s"] > MANJ_HOJE_S:
             kratka_i, kratka_c = kratka()
             if kratka_i and kratka_c:
-                a = _nazaj(conn, kratka_i, kratka_c, service_date, rok,
+                a = nazaj(conn, kratka_i, kratka_c, service_date, rok,
                            max_nog, spodnja, zamik, brez())
                 if a:
                     predlogi.append(sestavi(a, kratka_i, kratka_c))

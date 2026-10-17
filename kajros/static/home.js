@@ -239,7 +239,8 @@ async function odhodiPoti(f, datum) {
     const smer = smerTable(f.station);
     if (smer) q.set("smer", smer);
     const d = await fetch(`/api/departures?${q}`).then(jsonOk);
-    return (d.board || []).map((r) => ({
+    // Po obvozu LPP tu ne ustavi (`ne_ustavi`): ni odhod.
+    return (d.board || []).filter((r) => !r.ne_ustavi).map((r) => ({
       ura: r.sched, pricakovano: r.expected, zamuda: r.zamuda, nepotrjen_do: r.nepotrjen_do,
       kam: lepoIme(r.towards), nadomestni: isBus(r.mode) && r.network === "zeleznica",
     }));
@@ -247,7 +248,7 @@ async function odhodiPoti(f, datum) {
   const q = new URLSearchParams({ from: f.from, to: f.to, network, with_transfers: "false" });
   if (datum) q.set("date", datum);
   const d = await fetch(`/api/connections?${q}`).then(jsonOk);
-  return (d.connections || []).map((c) => ({
+  return (d.connections || []).filter((c) => !c.ne_ustavi).map((c) => ({
     ura: c.sched_dep, pricakovano: c.expected_dep, zamuda: c.zamuda, nepotrjen_do: c.nepotrjen_do,
     kam: null, nadomestni: isBus(c.mode) && c.network === "zeleznica",
   }));

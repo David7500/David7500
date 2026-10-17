@@ -312,6 +312,10 @@
 }
 @media (hover: hover) { .board-row:hover { background: var(--bg-raised); } }
 .board-row.is-gone { opacity: 0.4; }
+/* Obvoz: vozilo tu ne ustavi. Ostane vidno (kam je šel avtobus), a ni odhod. */
+.board-row.is-obvoz, .conn-row.is-obvoz { opacity: 0.55; }
+.board-row.is-obvoz .board-time, .conn-row.is-obvoz .conn-dep { text-decoration: line-through; }
+.chip-obvoz { background: #2e2811; color: #f2d36b; font: 500 11px/1.5 var(--sans); }
 .board-row.is-next {
   background: color-mix(in srgb, var(--m-sek) 55%, var(--bg));
   border-radius: var(--r-lg);

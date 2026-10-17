@@ -98,6 +98,9 @@
       {% endfor %}
     </nav>
     {% endif %}
+    {% if obvoz %}
+    <p class="obvoz">Obvoz: tu ta hip ne ustavijo {{ obvoz | join(", ") }} — teh odhodov spodaj ni.</p>
+    {% endif %}
     {% if odhodi %}
     <table class="odhodi">
       <thead>
