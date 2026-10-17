@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enkratno čiščenje: lažne ničle zemljevida SŽ v `run`, 10.–16. 10. 2026.
+"""Enkratno čiščenje: lažne ničle zemljevida SŽ v `run`, 10.–17. 10. 2026.
 
 SŽ na vsake 3–4 min za en odgovor del vlakov pokaže po voznem redu, z
 zamudo 0, včasih pa vlak tako riše tudi več minut. Do popravka 16. 10. 2026
@@ -12,15 +12,25 @@ napaka. Prikaz jih je izpuščal, model,
 Pobriše vrstico v `run` in `sz_zamuda` in razrešitev sence (`napoved`), ki
 stoji na njej. Dnevnik `obs` ostane: je zapis tega, kar smo videli, in
 `kajros repair` pobrisane vrstice ne vrne (piše le v obstoječe). Postanek
-ostane brez meritve -- raje to kot lažna točnost. Pravih okrevanj na nič
-gre s tem ~10 % pobrisanih, kolikor jih je bilo pred 10. 10.
+ostane brez meritve -- raje to kot lažna točnost.
+
+Od 17. 10. 2026 izbor sledi meji meritve (`stats._LAST_MEASURED_SQL`): ničla
+(pri vlaku tudi do +2, fantom zna biti +1) po zamudi od 5 min naprej gre
+samo, kadar padca ne pojasni rezerva postankov od zadnjega postanka z zamudo
+nad 2 min. Prava okrevanja na dolgem postanku ostanejo (LPV 2419 16. 10. na
+Podnartu). Poleg tega gre prezgodnji prihod: cilj, zapisan preden je SŽ vlak
+spet pokazal pred njim z vsaj 2 min večjo zamudo (16.–17. 10., do popravka
+`zamude_sz`); pravega prihoda tam nimamo.
 
 Brez `--zapisi` samo prešteje. Na arwenu (`david` je v skupini `kajros`):
 
     cd /opt/kajros && .venv/bin/python scripts/pocisti_nicle_sz.py --baza /var/lib/kajros/kajros.sqlite
     cd /opt/kajros && .venv/bin/python scripts/pocisti_nicle_sz.py --baza /var/lib/kajros/kajros.sqlite --zapisi
 
-16. 10. 2026 ob 16:15 je štetje dalo 2 341 ničel na 654 vožnjah.
+16. 10. 2026 ob 16:15 je štetje dalo 2 341 ničel na 654 vožnjah. Na izvlečku
+17. 10. ob 17:26 po novem izboru 2 084 ničel na 633 vožnjah (od 2 369 po
+starem jih 349 ostane kot izvedljivih) in 38 prezgodnjih prihodov, na arwenu
+ob 21:41 skupaj 2 109 postankov na 659 vožnjah.
 
 Ko je pognan, skripta odide (rok 31. 10. 2026).
 """
@@ -34,24 +44,44 @@ sys.path.insert(0, ".")
 from kajros import config, db                       # noqa: E402
 
 #: Ves 16. 10.: prva različica popravka (14:36:54) je ničle še spuščala
-#: vlakom, ki so jih naprej že imeli (`zamude_sz.zapisi`).
-OD, DO = "2026-10-10", "2026-10-16"
+#: vlakom, ki so jih naprej že imeli (`zamude_sz.zapisi`); 17. 10. do večera
+#: prezgodnji prihodi.
+OD, DO = "2026-10-10", "2026-10-17"
 
 _IZBOR = """
 WITH r AS (
-    SELECT r.trip_id, r.service_date, r.stop_seq, r.feed_ts,
+    SELECT r.trip_id, r.service_date, r.stop_seq,
            COALESCE(r.delay_dep, r.delay_arr) AS d,
-           MAX(COALESCE(r.delay_dep, r.delay_arr, 0)) OVER (
-               PARTITION BY r.trip_id, r.service_date ORDER BY r.stop_seq
-               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prej
+           MAX(COALESCE(r.delay_dep, r.delay_arr, 0)) OVER w AS prej,
+           MAX(CASE WHEN COALESCE(r.delay_dep, r.delay_arr) > 120
+                    THEN r.stop_seq * 1000000 + COALESCE(r.delay_dep, r.delay_arr)
+               END) OVER w AS zadnja_vecja
     FROM run r JOIN trip t ON t.trip_id = r.trip_id
     WHERE t.network = 'zeleznica' AND t.mode != 'bus'
       AND r.service_date BETWEEN :od AND :do
+    WINDOW w AS (PARTITION BY r.trip_id, r.service_date ORDER BY r.stop_seq
+                 ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
 )
 SELECT r.trip_id, r.service_date, r.stop_seq
 FROM r JOIN sz_zamuda z ON z.trip_id = r.trip_id AND z.service_date = r.service_date
-                       AND z.stop_seq = r.stop_seq AND z.delay_s = 0
-WHERE r.d = 0 AND r.prej >= 300
+                       AND z.stop_seq = r.stop_seq AND z.delay_s <= 120
+WHERE r.d <= 120 AND r.prej >= 300 AND r.zadnja_vecja IS NOT NULL
+  AND r.zadnja_vecja - (r.zadnja_vecja / 1000000) * 1000000 - r.d > 120 + (
+      SELECT COALESCE(SUM(MAX(0, COALESCE(s.dep_s - s.arr_s, 0) - 120)), 0)
+      FROM sched s WHERE s.trip_id = r.trip_id
+        AND s.stop_seq >= r.zadnja_vecja / 1000000 AND s.stop_seq <= r.stop_seq)
+UNION
+SELECT f.trip_id, f.service_date, f.stop_seq
+FROM run f JOIN trip t ON t.trip_id = f.trip_id
+WHERE t.network = 'zeleznica' AND t.mode != 'bus'
+  AND f.service_date BETWEEN :od AND :do
+  AND f.stop_seq = (SELECT MAX(s.stop_seq) FROM sched s WHERE s.trip_id = f.trip_id)
+  AND EXISTS (
+      SELECT 1 FROM run p
+      WHERE p.trip_id = f.trip_id AND p.service_date = f.service_date
+        AND p.stop_seq < f.stop_seq AND p.feed_ts > f.feed_ts
+        AND COALESCE(p.delay_dep, p.delay_arr)
+            > COALESCE(f.delay_arr, f.delay_dep) + 120)
 """
 
 
@@ -68,7 +98,7 @@ def main() -> int:
     for _, dan, _ in kljuci:
         po_dnevih[dan] = po_dnevih.get(dan, 0) + 1
     voznj = len({(t, d) for t, d, _ in kljuci})
-    print(f"lažnih ničel {len(kljuci)} na {voznj} vožnjah: "
+    print(f"lažnih postankov {len(kljuci)} na {voznj} vožnjah: "
           + ", ".join(f"{d} {n}" for d, n in sorted(po_dnevih.items())))
     if not a.zapisi:
         print("nič pobrisano -- za brisanje dodaj --zapisi")
