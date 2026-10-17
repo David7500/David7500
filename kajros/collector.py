@@ -416,6 +416,27 @@ def _sched_times(conn: sqlite3.Connection, trip_ids: set[str]) -> dict:
     return out
 
 
+#: Odpovedane vožnje po viru feeda: vir -> (čas branja, {(trip_id, dan)}).
+#: V pomnilniku, kot trenutna zamuda SŽ: velja, kar je feed rekel zadnjič.
+#: 17. 10. 2026 je RT LPP nosil eno (20Z ob 17:45), tabla jo je kazala kot
+#: redni odhod.
+_ODPOVEDANE: dict[str, tuple[float, frozenset]] = {}
+#: GTFS-RT `TripDescriptor.ScheduleRelationship.CANCELED`.
+ODPOVEDANA = 3
+#: Odpoved velja, dokler jo feed nosi; feed, ki toliko ni odgovoril, ne šteje.
+ODPOVEDANE_SVEZE_S = 300
+
+
+def odpovedane(zdaj: float | None = None) -> frozenset:
+    """(trip_id, dan) odpovedanih voženj iz zadnjega branja vsakega vira."""
+    zdaj = time.time() if zdaj is None else zdaj
+    out: set = set()
+    for ts, voznje in list(_ODPOVEDANE.values()):
+        if zdaj - ts <= ODPOVEDANE_SVEZE_S:
+            out |= voznje
+    return frozenset(out)
+
+
 def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     """Zapiše spremembe zamud. Vrne števce za log."""
     now = datetime.now(TZ)
@@ -462,6 +483,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     # Po progah, ker LPP včasih ne izgubi vožnje, ampak linijo: 2. 10. 2026
     # je bilo 38 od 44 voženj linije 1 neznanih, liniji 11 in 27 pa 3 in 4.
     proge: dict[str, list[int]] = {}
+    odpovedano: set[tuple[str, str]] = set()
 
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
@@ -482,6 +504,12 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
             continue
         zamenjanih += zamenjava is not None
         trips_seen += 1
+        if tu.trip.schedule_relationship == ODPOVEDANA:
+            d = tu.trip.start_date
+            dan = (f"{d[:4]}-{d[4:6]}-{d[6:]}" if len(d) == 8 else
+                   resolve_service_date(trip_id, windows.get(trip_id), valid.get(trip_id), now))
+            if dan:
+                odpovedano.add((trip_id, dan))
         if iz_lege.nap_vodi(agencije.get(trip_id)):
             nap_prevzel.add(trip_id)
             continue
@@ -575,6 +603,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
             )
 
     conn.commit()
+    _ODPOVEDANE[vir] = (time.time(), frozenset(odpovedano))
     iz_lege.zabelezi_feed(v_feedu, vir=vir)
     iz_lege.izpusti(nap_prevzel)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,

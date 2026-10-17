@@ -32,7 +32,7 @@ import time
 from datetime import date, timedelta
 from functools import partial
 
-from . import alerts, config, geo, hoja, journey, nadomestni, stats
+from . import alerts, collector, config, geo, hoja, journey, nadomestni, stats
 
 TZ = journey.TZ
 
@@ -960,6 +960,8 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
     # maratonu bi pot ponudila vstop na zaprti Slovenski (Konzorcij, Pošta).
     # Za drug dan ga ne vemo; vožnje drugega dne imajo druge id-je.
     obvozi = obvozi_po_postaji(alerts.ne_ustavi(conn)) if now_s is not None else None
+    # Odpovedana vožnja (feed: CANCELED) ne vozi -- ni ne vstopa ne izstopa.
+    ven = ven | {t for t, d in collector.odpovedane() if d == service_date}
     naprej = partial(_naprej, ne_ustavi=obvozi)
     nazaj = partial(_nazaj, ne_ustavi=obvozi)
 

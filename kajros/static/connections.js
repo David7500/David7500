@@ -767,7 +767,7 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
           ? lineBadgeHtml(r) + " "
           : ""}${r.headsign ? escapeHtml(lepoIme(r.headsign)) : ""}</div>
       </div>
-      <div class="conn-delay">${obvoz ? obvozChipHtml()
+      <div class="conn-delay">${r.odpovedano ? odpovedanoChipHtml() : obvoz ? obvozChipHtml()
         : r.lpp_vrsta ? lppChipHtml(r.lpp_vrsta)
         : r.zamuda ? delayChipHtml(r.zamuda, r.delay_kind, r.delay_from)
         : typicalChipHtml(r.typical, r.typical_from, jeNadomestni(r))}${doHtml(r.do_s)}</div>
@@ -782,6 +782,12 @@ function boardRowHtml(r, nowMs, isNext, date, station, prihodi) {
         ${r.is_terminus ? "<span>konec proge</span>" : ""}
       </div>
     </${tag}>`;
+}
+
+// Odpoved iz feeda prevoznika (`collector.odpovedane`): vožnja ne vozi.
+function odpovedanoChipHtml() {
+  return `<span class="chip chip-obvoz">odpovedano</span>
+    <div class="conn-where">po podatkih prevoznika</div>`;
 }
 
 // Obvoz: avtobus tu ne ustavi. Ne zamuda in ne „po LPP“ -- dejstvo o postanku.

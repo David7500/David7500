@@ -139,3 +139,29 @@ def test_pot_ne_vstopi_tam_kjer_voznja_ne_ustavi(conn, monkeypatch):
     n = pot._isci_nazaj(conn, izh, cil, D, 9 * 3600, 2,
                         ne_ustavi=pot.obvozi_po_postaji({("t7", "KON")}))
     assert n["noge"][0][0] == "t1"
+
+
+
+def test_odpovedana_voznja(conn, monkeypatch):
+    """RT LPP 17. 10. 2026: 20Z ob 17:45 `CANCELED`; tabla jo je kazala kot
+    redni odhod. Odpoved velja, dokler jo feed nosi."""
+    from kajros import collector
+    monkeypatch.setattr(collector, "_ODPOVEDANE", {})
+    conn.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                     "VALUES('t7', ?, ?, ?, ?)", [(1, "BAV", 63900, 63900), (2, "TIV", 64500, 64500)])
+    db.fill_trip_window(conn)
+    feed = rt.FeedMessage()
+    feed.header.gtfs_realtime_version = "2.0"
+    e = feed.entity.add()
+    e.id = "1"
+    e.trip_update.trip.trip_id = "t7"
+    e.trip_update.trip.start_date = D.replace("-", "")
+    e.trip_update.trip.schedule_relationship = collector.ODPOVEDANA
+    collector.ingest(conn, feed, vir="lpp")
+    assert collector.odpovedane() == {("t7", D)}
+    vrstice = [{"trip_id": "t7", "service_date": D, "stop_id": "BAV", "train_no": "7"},
+               {"trip_id": "t1", "service_date": D, "stop_id": "BAV", "train_no": "1"}]
+    api._oznaci_obvoze(conn, vrstice, datetime.now(), zasloni=False)
+    assert [r.get("odpovedano", False) for r in vrstice] == [True, False]
+    # Feed, ki pet minut ni odgovoril, ne šteje več.
+    assert collector.odpovedane(time.time() + collector.ODPOVEDANE_SVEZE_S + 1) == frozenset()

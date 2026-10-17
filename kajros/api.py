@@ -1622,6 +1622,11 @@ def _oznaci_obvoze(conn, rows: list[dict], zdaj: datetime, zasloni: bool = True)
     """
     if not rows:
         return 0
+    # Odpovedana vožnja (`schedule_relationship` CANCELED v feedu) ne vozi.
+    odp = collector.odpovedane(zdaj.timestamp())
+    for r in rows:
+        if odp and (r.get("trip_id"), r.get("service_date")) in odp:
+            r["odpovedano"] = r["ne_ustavi"] = True
     sids = {r["stop_id"] for r in rows if r.get("stop_id")}
     ne = alerts.ne_ustavi(conn, sids, zdaj.timestamp())
     for r in rows:
