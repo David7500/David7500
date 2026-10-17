@@ -425,6 +425,12 @@ _POSTA: dict[str, tuple[str, int]] = {
     "zamude_sz": ("Nit zemljevida SŽ ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     "zamude_lpp": ("Nit LPP-jevih zaslonov ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     "nap": ("Nit NAP ne zapiše niti napake -- obstala je. " + _RESTART, 600),
+    # Straža prikaza proti SŽ: vlakov, ki jih SŽ riše po voznem redu, ne šteje
+    # (`zamude_sz.skladnost`), zato pol ure rdečega pomeni napako pri nas --
+    # potnik vidi napačno zamudo in to popravi samo koda.
+    "skladnost_sz": ("Prikaz zamud vlakov se pri več vlakih ne ujema s SŽ. Napaka je pri "
+                     "nas (meja meritve, zapis v `run`), ne pri SŽ; primeri so v vrstici. "
+                     "Za popravek odpri sejo s Claude.", 1800),
     "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzameta `promet.sqlite` "
              "in varnostne kopije.", 600),
     "wal": ("Prepis WAL v bazo ne teče -- kdo drži star posnetek. " + _RESTART, 600),

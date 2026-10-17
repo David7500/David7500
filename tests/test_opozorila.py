@@ -264,8 +264,10 @@ def test_rumene_v_posti_samo_ob_novi_okvari():
     assert len(poslano) == 1 and "spet v redu" in poslano[0][0] and "rumeno" not in poslano[0][1]
 
 
-def _posta(z, m=STROJ, zdaj=T):
-    return zdravje.posta(z, m, zdravje.ocena(z, m, zdaj), zdaj)
+def _posta(z, m=STROJ, zdaj=T, vse=False):
+    """Okvare za pošto; z `vse` tudi neocenjene vrstice (None)."""
+    p = zdravje.posta(z, m, zdravje.ocena(z, m, zdaj), zdaj)
+    return p if vse else {k: o for k, o in p.items() if o is not None}
 
 
 def test_v_posti_samo_kar_rabi_skrbnika():
@@ -306,6 +308,14 @@ def test_neznane_v_posti_samo_ijpp():
     assert "neznane" not in _posta(z)
 
 
+def test_straza_proti_sz_v_posti_po_pol_ure():
+    z = _zdravo()
+    z["zamude_sz"]["skladnost"] = {"primerjav": 2000, "prenizko": 60, "previsoko": 0,
+                                    "vlakov": 4, "primeri": ["RG 318 (SŽ +18, prikaz +12)"]}
+    o = _posta(z)["skladnost_sz"]
+    assert o.po_s == 1800 and "RG 318" in o.razlog
+
+
 def test_derp_v_posti_sele_po_dnevu():
     z = _zdravo()
     z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
@@ -338,7 +348,7 @@ def test_ponoci_vrstice_zajema_niso_ocenjene():
     z = _zdravo()
     z["vozi_zdaj"] = {"zeleznica": 0, "avtobus": 1}
     z["zamude_sz"] = {"ts": T - 2 * 3600}
-    p = _posta(z)
+    p = _posta(z, vse=True)
     assert p.get("feed", 1) is None and p.get("zeleznica", 1) is None
     assert p.get("zamude_sz", 1) is None
 

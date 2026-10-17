@@ -2559,7 +2559,7 @@ _LIVE_SQL = """
 WITH t AS (
     SELECT r.trip_id, r.stop_seq, r.feed_ts, s.stop_id,
            COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
-           COALESCE(s.dep_s, s.arr_s) AS t_s
+           COALESCE(s.dep_s, s.arr_s) AS t_s, tn.network
     -- **Od voženj k `run`, ne obratno** (`CROSS JOIN` ohrani zapisani vrstni
     -- red). Iz `run` po `run_date` se je bral CEL dan vseh omrežij in šele
     -- nato zožil na vožnje v oknu; izmerjeno na kopiji arwena 25. 9. 2026 ob
@@ -2628,7 +2628,12 @@ ranked AS (
            -- zemljevid vozilo postavil na napacno postajo z napacno zamudo.
            MAX(t.feed_ts) OVER (
                PARTITION BY t.trip_id ORDER BY t.stop_seq
-               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts,
+           -- Zadnji prejsnji postanek z zamudo nad 2 min -- isto kot v
+           -- `stats._LAST_MEASURED_SQL`, kjer je razlozeno.
+           MAX(CASE WHEN t.delay_s > 120 THEN t.stop_seq * 1000000 + t.delay_s END) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS zadnja_vecja
     FROM t
 ),
 -- Zadnji trenutek, ko je feed o TEJ voznji sploh kaj rekel. Isto pravilo kot
@@ -2664,7 +2669,16 @@ passed AS (
     WHERE r.stop_seq < COALESCE(n.do_seq, 1 << 30)
       AND r.t_s + COALESCE(r.delay_s, 0) <= :now_s
       AND r.t_s + COALESCE(r.delay_s, 0) <= z.zadnji_ts - :polnoc
-      AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
+      -- Padec, ki ga rezerva voznega reda ne pojasni -- `stats._LAST_MEASURED_SQL`.
+      AND NOT (r.prev_max >= 300 AND r.zadnja_vecja IS NOT NULL
+               AND (COALESCE(r.delay_s, 0) = 0
+                    OR (r.network = 'zeleznica' AND r.delay_s <= 120))
+               AND r.zadnja_vecja - (r.zadnja_vecja / 1000000) * 1000000
+                   - COALESCE(r.delay_s, 0) > 120 + (
+                   SELECT COALESCE(SUM(MAX(0, COALESCE(s.dep_s - s.arr_s, 0) - 120)), 0)
+                   FROM sched s WHERE s.trip_id = r.trip_id
+                     AND s.stop_seq >= r.zadnja_vecja / 1000000
+                     AND s.stop_seq <= r.stop_seq))
       AND NOT (r.feed_ts IS NOT NULL AND r.prev_ts IS NOT NULL AND r.feed_ts < r.prev_ts)
 )
 SELECT tr.train_no, tr.headsign, tr.mode, tr.network, p.trip_id,

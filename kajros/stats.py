@@ -1621,9 +1621,10 @@ _LAST_MEASURED_SQL = """
 WITH t AS (
     SELECT r.trip_id, r.stop_seq, s.stop_id, r.delay_arr, r.feed_ts,
            COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
-           COALESCE(s.dep_s, s.arr_s) AS t_s
+           COALESCE(s.dep_s, s.arr_s) AS t_s, tr.network
     FROM run r
     JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
+    JOIN trip tr ON tr.trip_id = r.trip_id
     WHERE r.service_date = ? AND r.trip_id IN (%s)
 ),
 -- Isto varovalo kot v /api/live: nicla za se nedosezen postanek ne sme
@@ -1634,7 +1635,12 @@ ranked AS (
                ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max,
            MAX(t.feed_ts) OVER (
                PARTITION BY t.trip_id ORDER BY t.stop_seq
-               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_ts,
+           -- Zadnji prejsnji postanek z zamudo nad 2 min, kot postanek * 10^6
+           -- + zamuda (okno ne zna vrniti vrednosti iz druge vrstice).
+           MAX(CASE WHEN t.delay_s > 120 THEN t.stop_seq * 1000000 + t.delay_s END) OVER (
+               PARTITION BY t.trip_id ORDER BY t.stop_seq
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS zadnja_vecja
     FROM t
 ),
 -- Zadnji trenutek, ko je feed o TEJ voznji sploh kaj rekel.
@@ -1682,7 +1688,23 @@ passed AS (
       -- le 11 od 733 cez 120 s (izmerjeno isti dan). V normalnem obratovanju
       -- ta pogoj ne spremeni nicesar.
       AND r.t_s + COALESCE(r.delay_s, 0) <= z.zadnji_ts - ?
-      AND NOT (COALESCE(r.delay_s, 0) = 0 AND r.prev_max >= 300)
+      -- Nicla (pri vlaku tudi do 2 min) po zamudi vsaj 5 min ne velja, kadar
+      -- padca ne more pojasniti rezerva voznega reda: vsota postankov nad
+      -- 120 s od zadnjega postanka z zamudo do tega, plus 2 min. SZ tak
+      -- vlak rise po voznem redu (RG 210 17. 10. 2026: Brezovica +16, nato
+      -- uro +0, vlak je stal; potem +36). Na dolgem postanku pa vlak res
+      -- nadoknadi: LPV 2419 16. 10. Podnart +10, postanek 16 min, odpeljal
+      -- tocen -- prej je prikaz 45 min trdil +10. Na zgodovini 11.-16. 10.
+      -- je bilo neizvedljivih 97,8 odstotka padcev, ki so se vrnili (fantomi).
+      AND NOT (r.prev_max >= 300 AND r.zadnja_vecja IS NOT NULL
+               AND (COALESCE(r.delay_s, 0) = 0
+                    OR (r.network = 'zeleznica' AND r.delay_s <= 120))
+               AND r.zadnja_vecja - (r.zadnja_vecja / 1000000) * 1000000
+                   - COALESCE(r.delay_s, 0) > 120 + (
+                   SELECT COALESCE(SUM(MAX(0, COALESCE(s.dep_s - s.arr_s, 0) - 120)), 0)
+                   FROM sched s WHERE s.trip_id = r.trip_id
+                     AND s.stop_seq >= r.zadnja_vecja / 1000000
+                     AND s.stop_seq <= r.stop_seq))
       -- Ostanek, ki ga feed ni vec osvezil, ni prevozen postanek: meja med
       -- meritvijo in napovedjo bi sicer padla nanj. To je LOKALNO pravilo
       -- (postanek, osvezen prej kot kateri od prejsnjih); celo vozjno gleda

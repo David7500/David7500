@@ -220,7 +220,8 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
       prikazana zamuda prenizka za 3 min ali več 63-krat od 2 453, zdaj
       enkrat. Cena: postanek zadaj dobi trenutno zamudo, ne odhodne.
     * **Na cilju šteje prvi prihod** (glava modula), in ničla po zamudi nad
-      `PONASTAVITEV_S` ni prihod, ampak ponastavitev.
+      `PONASTAVITEV_S` ni prihod, ampak ponastavitev. Razen kadar je SŽ vlak
+      po prihodu spet pokazal na progi: takrat je bil prihod prezgoden.
     * **Ničla po zamudi velja šele, ko jo potrdi naslednji odgovor.** SŽ na
       vsake 3--4 min za en odgovor (15 s) del vlakov pokaže po voznem redu:
       zamuda 0, postaja in lega tam, kjer bi vlak bil, če bi bil točen. 16.
@@ -248,7 +249,7 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         # 16. 10. 2026 pri vlakih, ki so ničlo naprej že imeli: LPV 2504 je
         # +0 dobil ob 14:40, 14:47 in 14:51, SŽ pa je vmes kazal +16 do +18.
         prejsnja = conn.execute(
-            "SELECT delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
+            "SELECT delay_s, stop_seq FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
             "ORDER BY zadnjic_ts DESC, stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
         if (not je_prihod and zamuda == 0 and prejsnja and prejsnja[0] > 0
                 and (trip_id, dan) not in _nicle):
@@ -259,9 +260,15 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
             izid["nazaj"] += 1
             continue
         if je_prihod and zadnji:
-            if seq == zadnji[0]:
+            # Prihod je že zapisan, kadar je bil zadnja beseda SŽ o vlaku. Če
+            # ga je SŽ potem spet pokazal pred ciljem (z večjo zamudo -- to
+            # sprejme pravilo „nazaj“ zgoraj), je bil prvi prihod prezgoden:
+            # SŽ obtičali vlak nariše na cilju ob voznem redu in stari zamudi.
+            # 16.–17. 10. 2026 32 od 360 prihodov (8,9 %), v `run` je ostal
+            # prvi: ICS 11 +15 namesto +75, RG 315 0 namesto +62.
+            if seq == zadnji[0] and (prejsnja is None or prejsnja[1] == seq):
                 continue                       # prihod je že zapisan
-            if zamuda == 0 and zadnji[1] > PONASTAVITEV_S:
+            if zamuda == 0 and (prejsnja[0] if prejsnja else zadnji[1]) > PONASTAVITEV_S:
                 izid["ponastavljenih"] += 1
                 continue
         iz_lege.zapisi_meritev(conn, trip_id, dan, seq, zamuda if je_prihod else None,
@@ -387,22 +394,33 @@ def skladnost(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> di
     straža išče -- da `run` ne nosi tega, kar SŽ pravi."""
     global _ustaljene
     ustaljene, po_dnevih = {}, defaultdict(dict)
-    for trip_id, dan, _seq, zamuda, je_prihod in pripete:
+    for trip_id, dan, seq, zamuda, je_prihod in pripete:
         k = (trip_id, dan)
         if je_prihod or k in _nicle:
             continue
         prej = _ustaljene.get(k)
         ustaljene[k] = prej if prej and prej[0] == zamuda else (zamuda, zdaj)
         if zdaj - ustaljene[k][1] >= USTALJENA_S:
-            po_dnevih[dan][trip_id] = zamuda
+            po_dnevih[dan][trip_id] = (zamuda, seq)
     _ustaljene = ustaljene
     n = nizko = visoko = 0
     mimo: dict[str, str] = {}
     for dan, sz in po_dnevih.items():
         meje = stats.last_measured(conn, dan, list(sz), int(zdaj - stats.polnoc(dan)))
-        for trip_id, zamuda in sz.items():
+        rezerve = stats._slack_ahead(conn, list(sz))
+        for trip_id, (zamuda, seq) in sz.items():
             m = meje.get(trip_id)
             prikaz = (m["delay_s"] or 0) if m else None
+            # SŽ vlak, ki obtiči, riše po voznem redu (RG 210 17. 10. 2026: uro
+            # +0, vlak je stal pred Borovnico; potem +36). Padca, ki ga
+            # rezerva voznega reda ne pojasni, prikaz namenoma ne vzame
+            # (`stats._LAST_MEASURED_SQL`) -- to ni neskladje, ampak SŽ.
+            # Straža je 16. in 17. 10. zaradi tega dvakrat lažno zvonila.
+            if prikaz is not None and prikaz >= zamuda + SKLADNOST_RAZLIKA_S:
+                rezerva = sum(r for q, r in rezerve.get(trip_id, ())
+                              if m["stop_seq"] <= q <= seq)
+                if prikaz - zamuda > rezerva + 120:
+                    continue
             n += 1
             if prikaz is None and zamuda >= SKLADNOST_RAZLIKA_S:
                 nizko += 1

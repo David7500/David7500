@@ -193,6 +193,22 @@ def test_straza_vidi_prikaz_ki_ne_drzi():
     assert s["primerjav"] == 1
 
 
+def test_straza_ne_steje_vlaka_ki_ga_sz_rise_po_voznem_redu():
+    """RG 210 17. 10. 2026: Brezovica +16, nato SŽ uro +0 (vlak je stal), nato
+    +36. Prikaz ničle namenoma ne vzame -- straža je dvakrat lažno zvonila."""
+    c = _baza()
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, feed_ts) "
+              "VALUES('t1', ?, 20, 3000, ?)", (DAN, ZDAJ))
+    p = [("t1", DAN, 21, 0, False)]
+    zamude_sz.skladnost(c, p, ZDAJ)
+    s = zamude_sz.skladnost(c, p, ZDAJ + zamude_sz.USTALJENA_S)
+    assert (s["primerjav"], s["previsoko"]) == (0, 0)
+    # Kjer padec pojasni rezerva (dolg postanek), je to primerjava in neskladje.
+    c.execute("UPDATE sched SET arr_s = dep_s - 3600 WHERE trip_id = 't1' AND stop_seq = 21")
+    s = zamude_sz.skladnost(c, p, ZDAJ + zamude_sz.USTALJENA_S + 15)
+    assert (s["primerjav"], s["previsoko"]) == (1, 1)
+
+
 def test_zapis_v_run_ohrani_prihod():
     """Zemljevid pove le odhod; prihod, ki je v `run` od prej, ostane."""
     c = _baza()
@@ -284,6 +300,21 @@ def test_na_cilju_velja_prvi_prihod_nicla_po_zamudi_ni_prihod():
     c2 = _baza()
     zamude_sz.zapisi(c2, [("t1", DAN, 21, 60, False)], ZDAJ)
     assert zamude_sz.zapisi(c2, [("t1", DAN, 22, 0, True)], ZDAJ + 30)["zapisanih"] == 1
+
+
+def test_prezgodnji_prihod_povozi_pravi_prihod():
+    """SŽ obtičali vlak nariše na cilju ob voznem redu in stari zamudi, nato ga
+    spet pokaže na progi z večjo. ICS 11 17. 10. 2026: „prihod“ +15 ob 07:57,
+    nato ZM +44, +75; v `run` je ostalo +15 (32 od 360 prihodov, 8,9 %)."""
+    c = _baza()
+    zamude_sz.zapisi(c, [("t1", DAN, 21, 900, False)], ZDAJ)
+    zamude_sz.zapisi(c, [("t1", DAN, 22, 900, True)], ZDAJ + 30)        # prezgodaj
+    assert zamude_sz.zapisi(c, [("t1", DAN, 21, 3600, False)], ZDAJ + 60)["zapisanih"] == 1
+    assert zamude_sz.zapisi(c, [("t1", DAN, 22, 3700, True)], ZDAJ + 300)["zapisanih"] == 1
+    assert c.execute("SELECT delay_arr FROM run WHERE stop_seq = 22").fetchone()[0] == 3700
+    # Ponastavitev po pravem prihodu ostane ponastavitev.
+    assert zamude_sz.zapisi(c, [("t1", DAN, 22, 0, True)], ZDAJ + 400)["zapisanih"] == 0
+    assert c.execute("SELECT delay_arr FROM run WHERE stop_seq = 22").fetchone()[0] == 3700
 
 
 def test_porocilo_o_zamudi_za_naslednjo_postajo():
