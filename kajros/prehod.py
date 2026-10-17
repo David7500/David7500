@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+import statistics
 import threading
 import time
 from datetime import date, timedelta
@@ -78,6 +79,12 @@ OKNO_POZNEJE_S = 4 * 3600
 CILJ_S = RAZMIK_S
 #: Sled brez lege toliko časa se pozabi.
 POZABI_S = 3600
+#: Vozilo, ki na skupnih postankih z vodjo zamuja toliko bolj, vozi drugo
+#: vožnjo pod isto številko (`_izberi`). 15.--17. 10. 2026 s pravimi vozili:
+#: Ljubljana -> Kočevje +64 min, Piran -> Koper +34 in +79, Dobrovo <-> Nova
+#: Gorica +149 in +161. Vozilo na poti na izhodišče pred pravim je -15 do
+#: -19 min; tega prag ne ustavi, ker je pravo bližje voznemu redu.
+DRUGA_S = 600
 #: Lege in prehodi toliko dni; brišejo se po toliko voženj naenkrat, da
 #: brisanje dneva ne zaklene baze.
 HRANI_DNI = 14
@@ -344,7 +351,8 @@ def tiho(sled: Sled, zdaj: float) -> list[tuple]:
 #: javilo prvo, lege drugega pa zavrgla kot skoke GPS: Nomago Ljubno -> Celje
 #: točen, a brez vsake zamude, ker je sled stala z vozilom v Mozirju.
 _sledi: dict[tuple[str, str, str | None], Sled] = {}
-#: (trip_id, dan) -> sled vozila, ki vožnjo vodi (`_izberi`).
+#: (trip_id, dan) -> sled vozila, ki vožnjo vodi (`_izberi`); ostane še
+#: `OKNO_POZNEJE_S` po zadnji legi, tudi ko je sled pozabljena.
 _vodje: dict[tuple[str, str], Sled] = {}
 _zaklep = threading.Lock()
 #: Od zagona, za /admin.
@@ -362,30 +370,56 @@ def _nova(conn: sqlite3.Connection, trip_id: str, dan: str,
     return Sled(trip_id, dan, postanki, vozilo) if len(postanki) >= 2 else None
 
 
-def _izberi(sled: Sled, novi: list[tuple]) -> list[tuple]:
-    """Prehodi, ki veljajo za vožnjo: le od vozila, ki jo vodi. Vodi vozilo z
-    največ prehodi; ko ga drugo prehiti, veljajo vsi prehodi novega in
-    povozijo prejšnjega. Kliče se pod `_zaklep`.
+def _odmik(sled: Sled, postanki: set[int]) -> float:
+    """Kako daleč od voznega reda je vozilo na teh postankih."""
+    return abs(statistics.median(sled.prehodi[q][1] for q in postanki))
 
-    Prvo vozilo s prehodom ni dovolj: na ponovitvi 13. in 14. 10. 2026 (vozilo
-    po hitrosti med legami, ker `lega` takrat vozila ni hranila) je tako
-    pravo vozilo izgubilo pri treh vožnjah (Slovenj Gradec -> Radlje 19
-    postankov proti 3), z največ prehodi pa je bilo na prizadetih vožnjah
-    904 izmerjenih postankov namesto 727 in 796 namesto 558."""
+
+def _izberi(sled: Sled, novi: list[tuple]) -> list[tuple]:
+    """Prehodi, ki veljajo za vožnjo: le od vozila, ki jo vodi. Kliče se pod
+    `_zaklep`.
+
+    Vodi prvo vozilo s prehodom. Drugo vožnjo prevzame, ko ima več prehodov
+    -- takrat veljajo vsi njegovi in povozijo prejšnjega (vozilo na poti na
+    izhodišče pelje pred pravim, -15 do -19 min) -- ali ko nadaljuje za
+    zadnjim postankom vodje, ki `CILJ_S` molči (Nomago Maribor -> Črna in
+    Radlje -> Črna vsak dan zamenjata avtobus na poti; drugi je imel manj
+    prehodov in je bil zavržen ves). Ne prevzame, ko je na vsaj dveh skupnih
+    postankih za `DRUGA_S` dlje od voznega reda kot vodja: to vozi naslednjo
+    vožnjo pod isto številko. Vodja ostane tudi, ko je njegova sled
+    pozabljena -- prej je ravno takrat vožnjo prevzelo vozilo za njim.
+
+    Ponovitev s pravimi vozili 15. in 16. 10. 2026 (98 in 97 voženj z več
+    vozili): 1 404 in 1 434 izmerjenih postankov (ena sled za vse 1 172 in
+    1 222, vodi samo vozilo z več prehodi 1 372 in 1 389), objavljenih več
+    kot 10 min za vozilom, ki jih je izmerilo prvo, 34 in 22 namesto 69 in
+    69. Ljubljana -> Kočevje 15. 10. ne kaže več +85 namesto +20 min, enako
+    Dobrovo <-> Nova Gorica 16. 10. (+154, +159) in Piran -> Koper 17. 10.
+    (+46 namesto +9)."""
     for p in novi:
         sled.prehodi[p[0]] = p
     kljuc = (sled.trip_id, sled.dan)
     vodja = _vodje.get(kljuc)
-    if vodja is not None and _sledi.get((*kljuc, vodja.vozilo)) is not vodja:
-        vodja = None                    # pozabljena sled ne vodi
-    if vodja is sled:
+    if vodja is not None and vodja.vozilo == sled.vozilo:
+        _vodje[kljuc] = sled            # ista sled ali obnovljena po pozabi
         return novi
-    if novi and (vodja is None or len(sled.prehodi) > len(vodja.prehodi)):
+    if not novi:
+        return []
+    if vodja is None:
         _vodje[kljuc] = sled
-        stevci["zamenjav"] += vodja is not None
         return list(sled.prehodi.values())
-    stevci["tujih"] += len(novi)
-    return []
+    skupni = sled.prehodi.keys() & vodja.prehodi.keys()
+    druga = len(skupni) >= 2 and _odmik(sled, skupni) > _odmik(vodja, skupni) + DRUGA_S
+    meja = max(vodja.prehodi, default=0)
+    if not druga and len(sled.prehodi) > len(vodja.prehodi):
+        meja = -1
+    elif druga or max(p[0] for p in novi) <= meja or (
+            sled.tocke[-1][0] - vodja.tocke[-1][0] < CILJ_S):
+        stevci["tujih"] += len(novi)
+        return []
+    _vodje[kljuc] = sled
+    stevci["zamenjav"] += 1
+    return [p for p in sled.prehodi.values() if p[0] > meja]
 
 
 def vodja(trip_id: str, dan: str) -> tuple[str | None, float] | None:
@@ -458,7 +492,11 @@ def pospravi(conn: sqlite3.Connection, zdaj: float | None = None) -> list[tuple]
             if zdaj - s.osvezeno > POZABI_S:
                 del _sledi[k]
                 if _vodje.get(k[:2]) is s:
-                    del _vodje[k[:2]]
+                    # Vodja ostane do konca okna, brez sledi.
+                    s.tocke, s.postanki, s.odprti = s.tocke[-1:], [], {}
+        for k, s in list(_vodje.items()):
+            if zdaj - s.osvezeno > OKNO_POZNEJE_S:
+                del _vodje[k]
     if zdaj >= _brisi_po:
         meja = (date.fromtimestamp(zdaj) - timedelta(days=HRANI_DNI)).isoformat()
         n = sum(conn.execute(

@@ -9,6 +9,7 @@ zamudo. Lega točno na postanku pomeni najbližjo točko; odhod je ~6 s za njo
 """
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 
 import pytest
@@ -181,16 +182,18 @@ def test_krozna_voznja_ob_odhodu_ni_na_cilju():
 
 # ------------------------------------------------------------ v strežniku
 
-def _baza():
+def _baza(postaje="ABCD"):
     c = db.connect(":memory:")
     db.init(c)
     c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,46.0,?)",
-                  [(k, k, 14.0 + 0.01 * i) for i, k in enumerate("ABCD")])
+                  [(k, k, 14.0 + 0.01 * i) for i, k in enumerate(postaje)])
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, shape_id,"
-              " mode, agency, network) VALUES('n', 'r', 'N1', 'D', 'S', NULL, 'bus', '1119', 'avtobus')")
+              " mode, agency, network) VALUES('n', 'r', 'N1', ?, 'S', NULL, 'bus', '1119', 'avtobus')",
+              (postaje[-1],))
+    n = len(postaje)
     c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES('n',?,?,?,?)",
-                  [(1, "A", None, 36000), (2, "B", 36100, 36100),
-                   (3, "C", 36200, 36200), (4, "D", 36300, None)])
+                  [(i + 1, k, 36000 + 100 * i if i else None, 36000 + 100 * i if i < n - 1 else None)
+                   for i, k in enumerate(postaje)])
     db.fill_trip_window(c)
     c.commit()
     return c
@@ -242,6 +245,70 @@ def test_vozjo_prevzame_vozilo_z_vec_prehodi():
     assert sorted(zapisano) == [2, 3, 4]
     assert all(290 <= z <= 320 for z in zapisano.values()), zapisano
     assert prehod.vodja("n", DAN)[0] == "prav"
+
+
+def _dve(c, prvo, drugo):
+    """Lege dveh vozil po času -> {stop_seq: (zamuda, vozilo)}, kar velja."""
+    zapisano = {}
+    for t, lat, lon, v in sorted([(*p, "prvo") for p in prvo] + [(*p, "drugo") for p in drugo]):
+        for p in prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, v):
+            zapisano[p[0]] = (p[1], v)
+    for _, _, p, _ in prehod.pospravi(c, POLNOC + 40000):
+        zapisano.update({q[0]: (q[1], "pospravi") for q in p})
+    return zapisano
+
+
+def test_vozilo_na_poti_zamenja_drugo():
+    """Prvi avtobus pripelje do E in obmolkne, drugi tam čaka in pelje
+    naprej s 3 min zamude. Prej so bili postanki drugega zavrženi, ker jih je
+    imel prvi več (Nomago Maribor -> Črna, vsak dan 25 postankov)."""
+    c = _baza("ABCDEFG")
+    prvo = _vzhod(36000, 14.0, 14.04) + [(36400 + 20 * i, 46.0, 14.04) for i in range(1, 4)]
+    caka = [(36300 + 20 * i, 46.0, 14.04) for i in range(15)]
+    drugo = caka + _vzhod(36580, 14.04, 14.06) + [(36780 + 20 * i, 46.0, 14.06) for i in range(1, 9)]
+    zapisano = _dve(c, prvo, drugo)
+    assert {q: v for q, (_, v) in zapisano.items()} == {
+        2: "prvo", 3: "prvo", 4: "prvo", 5: "drugo", 6: "drugo", 7: "drugo"}
+    assert all(170 <= zapisano[q][0] <= 200 for q in (5, 6, 7)), zapisano
+    assert prehod.vodja("n", DAN)[0] == "drugo"
+
+
+def test_naslednja_vozja_pod_isto_stevilko_ne_povozi_prve():
+    """NAP vozilo naslednje vožnje prijavi na isto (Ljubljana -> Kočevje
+    15. 10. 2026: +85 namesto +20 min). Ima več prehodov, ker je prvo izgubilo
+    lege, a na skupnih postankih zamuja za drugo vožnjo -- tudi ko je sled
+    prvega že pozabljena."""
+    c = _baza("ABCDEF")
+    prvo = [p for p in _vzhod(36060, 14.0, 14.05) if not 36230 < p[0] < 36380]
+    prvo += [(36560 + 20 * i, 46.0, 14.05) for i in range(1, 9)]
+    drugo = _vzhod(39660, 14.0, 14.05) + [(40160 + 20 * i, 46.0, 14.05) for i in range(1, 9)]
+    zapisano = {}
+    for t, lat, lon in prvo:
+        for p in prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, "prvo"):
+            zapisano[p[0]] = p[1]
+    prej = dict(zapisano)
+    assert len(prej) >= 2 and all(50 <= z <= 70 for z in prej.values()), prej
+    prehod.pospravi(c, time.time() + prehod.POZABI_S + 1)
+    assert ("n", DAN, "prvo") not in prehod._sledi
+    for t, lat, lon in drugo:
+        for p in prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, "drugo"):
+            zapisano[p[0]] = p[1]
+    assert len(prehod._sledi[("n", DAN, "drugo")].prehodi) > len(prej)
+    assert zapisano == prej
+    assert prehod.vodja("n", DAN)[0] == "prvo"
+
+
+def test_vozilo_pred_vodjo_ne_prevzame_dokler_vodja_javlja():
+    """Drugo vozilo stoji na E in nato odpelje na F, prvo pa ta čas še stoji
+    na D in javlja: E in F ostaneta prvemu."""
+    c = _baza("ABCDEF")
+    prvo = _vzhod(36000, 14.0, 14.03) + [(36300 + 20 * i, 46.0, 14.03) for i in range(1, 30)]
+    drugo = ([(36300 + 20 * i, 46.0, 14.04) for i in range(5)]
+             + _vzhod(36400, 14.04, 14.05) + [(36500 + 20 * i, 46.0, 14.05) for i in range(1, 9)])
+    zapisano = _dve(c, [p for p in prvo if p[0] <= 36800], drugo)
+    assert all(v == "prvo" for q, (_, v) in zapisano.items() if q < 4)
+    assert 5 not in zapisano and 6 not in zapisano, zapisano
+    assert prehod.vodja("n", DAN)[0] == "prvo"
 
 
 def test_senca_pise_gps_prehod_ne_run(monkeypatch):
