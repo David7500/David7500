@@ -2,7 +2,8 @@
 Description=kajros — dnevna varnostna kopija
 
 [Timer]
-OnCalendar=*-*-* 03:30:00
+# 2:40, ne 3:30: ob 3:30 tečeta obrez dnevnika in nočni povzetki.
+OnCalendar=*-*-* 02:40:00
 Persistent=true
 
 [Install]
