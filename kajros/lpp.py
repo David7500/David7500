@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from datetime import datetime
 
@@ -41,11 +42,38 @@ _URL = "https://data.lpp.si/api/route/arrivals-on-route"
 # Predpomnilnik po VZORCU, ne po vozilu: dva potnika, ki gledata dva avtobusa
 # iste linije, sprozita eno zahtevo. Vsebina se spremeni na 10-30 s.
 _TTL_S = 10
-_predpomnilnik: dict[str, tuple[float, list]] = {}
+#: vzorec -> (monotonic ob branju, podatki, epoha ob branju)
+_predpomnilnik: dict[str, tuple[float, list, float]] = {}
 
 # Kratka meja namenoma: to je postranski vir na poti do odgovora, ki ga potnik
 # ceka. Boljse je odgovoriti brez njega kot cakati nanj.
 _TIMEOUT_S = 2.0
+
+# Prihodi na vzorcu se berejo v OZADJU, zahteva vzame, kar je. Do 18. 10. 2026
+# je `/api/train/{no}/run` mestnega LPP sinhrono cakal na `arrivals-on-route`
+# do 2 s, neuspeh pa se ni zapomnil: na arwenu se je pol odprtij okna vožnje
+# koncalo pri 2,7 s namesto 0,7 (10 zahtev), vir je odgovoril v 2 s le v 5
+# od 20 poskusov (mediana 9,3 s; ob izteku njegovega predpomnilnika 9-24 s).
+# Nit sme cakati dlje, zahteva pa ob prvem ogledu vzorca le `_CAKAJ_S`: hiter
+# odgovor (30-140 ms) ujame takoj, sicer ga ima naslednja osvezitev okna.
+_OZADJE_TIMEOUT_S = 25.0
+_CAKAJ_S = 0.3
+#: Starejsi odgovor se ne uporabi: eta je v celih minutah od trenutka branja.
+_NAJSTAREJE_S = 90
+#: Po neuspehu tega vzorca toliko casa ne vprasamo znova.
+_PO_NAPAKI_S = 15
+_berem: set[str] = set()
+_neuspeh_do: dict[str, float] = {}
+_berem_lock = threading.Lock()
+_seja = threading.local()
+
+
+def _http():
+    """Seja na nit: povezava ostane odprta (TLS rokovanje ~50 ms na klic)."""
+    s = getattr(_seja, "s", None)
+    if s is None:
+        s = _seja.s = requests.Session()
+    return s
 
 # Koliko metrov se sme postajalisce razlikovati, da je se isto. Merjeno:
 # mediana razlike je 0,0 m, 704 od 714 pod 5 m -- 25 m je zato ohlapno dovolj
@@ -59,23 +87,53 @@ def _vzorec(trip_id: str) -> str | None:
     return deli[2] if len(deli) == 3 else None
 
 
-def _prinesi(vzorec: str) -> list | None:
-    zdaj = time.monotonic()
-    v = _predpomnilnik.get(vzorec)
-    if v and zdaj - v[0] < _TTL_S:
-        return v[1]
+def _beri_vzorec(vzorec: str) -> None:
     try:
         with viri.branje("lpp_zivo") as b:
-            r = requests.get(_URL, params={"trip-id": vzorec}, timeout=_TIMEOUT_S)
+            r = _http().get(_URL, params={"trip-id": vzorec}, timeout=_OZADJE_TIMEOUT_S)
             b.http = r.status_code
             r.raise_for_status()
             b.bajtov = len(r.content)
             podatki = r.json().get("data") or []
+        _predpomnilnik[vzorec] = (time.monotonic(), podatki, time.time())
     except Exception:
         # Tih izpad je namenoma: brez tega vira stran deluje naprej z derp.si.
-        return None
-    _predpomnilnik[vzorec] = (zdaj, podatki)
-    return podatki
+        _neuspeh_do[vzorec] = time.monotonic() + _PO_NAPAKI_S
+    finally:
+        with _berem_lock:
+            _berem.discard(vzorec)
+
+
+def _prinesi(vzorec: str) -> list | None:
+    """Zadnji odgovor za vzorec, ce ni starejsi od `_NAJSTAREJE_S`.
+
+    Star odgovor sprozi branje v ozadju -- eno na vzorec, ne eno na
+    obiskovalca. Kdor vzorec gleda prvi, pocaka najvec `_CAKAJ_S`.
+    """
+    v = _predpomnilnik.get(vzorec)
+    if v and time.monotonic() - v[0] < _TTL_S:
+        return v[1]
+    if time.monotonic() >= _neuspeh_do.get(vzorec, 0.0):
+        with _berem_lock:
+            zacni = vzorec not in _berem
+            if zacni:
+                _berem.add(vzorec)
+        if zacni:
+            nit = threading.Thread(target=_beri_vzorec, args=(vzorec,), daemon=True,
+                                   name="kajros-lpp-zivo")
+            nit.start()
+            if v is None:
+                nit.join(_CAKAJ_S)
+                v = _predpomnilnik.get(vzorec)
+    if v and time.monotonic() - v[0] < _NAJSTAREJE_S:
+        return v[1]
+    return None
+
+
+def _starost_min(vzorec: str) -> int:
+    """Koliko celih minut je star odgovor, ki ga je dal `_prinesi`."""
+    v = _predpomnilnik.get(vzorec)
+    return int((time.monotonic() - v[0]) / 60 + 0.5) if v else 0
 
 
 def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
@@ -92,6 +150,8 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
     podatki = _prinesi(vzorec)
     if not podatki:
         return None
+    # Odgovor je lahko star do `_NAJSTAREJE_S`: eta velja od branja, ne od zdaj.
+    starost = _starost_min(vzorec)
 
     nasi = [dict(r) for r in conn.execute(
         "SELECT s.stop_seq, st.lat, st.lon FROM sched s "
@@ -117,7 +177,8 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
         if naj is not None:
             # Isto postajalisce je lahko na vozji dvakrat (krozna linija);
             # velja PRVI prihod, ker je to tisti, ki potnika zanima.
-            out.setdefault(naj["stop_seq"], min(a["eta_min"] for a in prihodi))
+            out.setdefault(naj["stop_seq"],
+                           max(0, min(a["eta_min"] for a in prihodi) - starost))
     return out or None
 
 
@@ -188,14 +249,22 @@ def derp_molci(conn: sqlite3.Connection, zdaj: float) -> bool:
 
 
 def _get(url: str, params: dict | None, timeout: float) -> list | dict | None:
+    """Zaslon LPP v niti zahteve. Ob napaki minuto ne vprasamo vec
+    (`_zasloni_molcijo_do`) -- za obe poti, tablo in obvoze: prej je varovalo
+    imela le ena, in tabla Bavarskega dvora je ob mrtvem viru dvakrat zapored
+    cakala 2 s na isto kodo (4,1 s; presoja 18. 10. 2026)."""
+    global _zasloni_molcijo_do
+    if time.monotonic() < _zasloni_molcijo_do:
+        return None
     try:
         with viri.branje("lpp_zivo") as b:
-            r = requests.get(url, params=params, timeout=timeout)
+            r = _http().get(url, params=params, timeout=timeout)
             b.http = r.status_code
             r.raise_for_status()
             b.bajtov = len(r.content)
             return r.json().get("data")
     except Exception:
+        _zasloni_molcijo_do = time.monotonic() + 60
         return None
 
 
@@ -262,7 +331,6 @@ def obvozi_zaslonov(conn: sqlite3.Connection, stop_ids) -> dict[tuple[str, str],
     Postajališče -> koda po koordinati kot v `kode_postaj`, a vsakemu našemu
     svojo: isto mesto ima `stop_id` iz LPP-jevega GTFS in iz IJPP.
     """
-    global _zasloni_molcijo_do
     if not config.LPP_ZIVO or time.monotonic() < _zasloni_molcijo_do:
         return {}
     sids = sorted(set(stop_ids))
@@ -292,9 +360,8 @@ def obvozi_zaslonov(conn: sqlite3.Connection, stop_ids) -> dict[tuple[str, str],
         stevec: dict[str, int] = {}
         prihodi = _prihodi_postaje(koda)
         if prihodi is None:
-            # Vir ne odgovarja: tabla ne sme čakati 2 s na vsako postajališče
-            # in vsako zahtevo -- minuto brez zaslonov, obvoz iz RT ostane.
-            _zasloni_molcijo_do = time.monotonic() + 60
+            # Vir ne odgovarja (`_get` je že utišal zaslone za minuto): obvoz
+            # iz RT ostane.
             return {}
         for a in prihodi:
             if a.get("type") == 3 and not a.get("depot") and a.get("route_name"):

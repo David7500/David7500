@@ -2158,6 +2158,83 @@ def test_zivi_lpp_ob_izpadu_vira_molci(conn, monkeypatch):
     assert lpp.eta_po_postankih(conn, "a|b|c", "V1") is None
 
 
+class _PocasenLpp:
+    """`requests.Session` namesto data.lpp.si: odgovori po `zakasnitev` s."""
+
+    def __init__(self, zakasnitev, napaka=False):
+        self.zakasnitev, self.napaka, self.klicev = zakasnitev, napaka, 0
+
+    def get(self, url, params=None, timeout=None):
+        import time as _t
+        self.klicev += 1
+        _t.sleep(self.zakasnitev)
+        if self.napaka:
+            raise OSError("časovna meja")
+
+        class _R:
+            status_code = 200
+            content = b"{}"
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"data": _odgovor_lpp()}
+        return _R()
+
+
+def _pocakaj_branje(lpp, vzorec, cas=3.0):
+    import time as _t
+    konec = _t.monotonic() + cas
+    while vzorec in lpp._berem and _t.monotonic() < konec:
+        _t.sleep(0.01)
+
+
+def test_zivi_lpp_zahteva_ne_caka_na_pocasen_vir(monkeypatch):
+    """Okno vožnje mestnega LPP je čakalo 2 s na vsako drugo odprtje
+    (18. 10. 2026): data.lpp.si v 2 s odgovori le v četrtini poskusov.
+    Zdaj zahteva počaka največ `_CAKAJ_S`, branje teče naprej v ozadju in
+    naslednja osvežitev okna odgovor že ima."""
+    import time as _t
+    from kajros import lpp
+    vir = _PocasenLpp(0.5)
+    monkeypatch.setattr(lpp, "_http", lambda: vir)
+    monkeypatch.setattr(lpp, "_predpomnilnik", {})
+    monkeypatch.setattr(lpp, "_neuspeh_do", {})
+    t0 = _t.monotonic()
+    assert lpp._prinesi("vz1") is None
+    assert _t.monotonic() - t0 < lpp._CAKAJ_S + 0.15
+    _pocakaj_branje(lpp, "vz1")
+    assert lpp._prinesi("vz1") == _odgovor_lpp()
+    assert vir.klicev == 1
+
+
+def test_zivi_lpp_neuspeh_si_zapomni(monkeypatch):
+    """Po neuspehu isti vzorec `_PO_NAPAKI_S` ne sproži novega branja --
+    prej je vsaka zahteva v času izpada znova čakala na časovno mejo."""
+    from kajros import lpp
+    vir = _PocasenLpp(0.0, napaka=True)
+    monkeypatch.setattr(lpp, "_http", lambda: vir)
+    monkeypatch.setattr(lpp, "_predpomnilnik", {})
+    monkeypatch.setattr(lpp, "_neuspeh_do", {})
+    assert lpp._prinesi("vz2") is None
+    _pocakaj_branje(lpp, "vz2")
+    assert lpp._prinesi("vz2") is None
+    _pocakaj_branje(lpp, "vz2")
+    assert vir.klicev == 1
+
+
+def test_zivi_lpp_star_odgovor_steje_od_branja(conn, monkeypatch):
+    """Odgovor, star minuto, ne sme napovedati prihoda minuto prepozno:
+    eta velja od trenutka branja, ne od zdaj."""
+    import time as _t
+    from kajros import lpp
+    _lpp_voznja(conn)
+    monkeypatch.setattr(lpp, "_predpomnilnik", {"c": (_t.monotonic() - 65, _odgovor_lpp(), 0)})
+    monkeypatch.setattr(lpp, "_neuspeh_do", {"c": _t.monotonic() + 60})
+    assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {1: 0, 2: 3, 4: 8}
+
+
 def test_zivi_lpp_vzorec_je_tretja_komponenta():
     """Njihov `trip-id` je tretji del našega trojnega id-ja; drugod ga ni."""
     from kajros import lpp
