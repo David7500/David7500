@@ -468,7 +468,7 @@ def _get() -> list[dict]:
         if vrstice is None:
             vrstice = []
         if not isinstance(vrstice, list):
-            # Z začetkom odgovora: 17.–18. 10. 2026 ponoči večkrat 15–60 min
+            # Z začetkom odgovora: 17.–18. 10. 2026 ponoči petkrat po 1–62 min
             # tako, vmes `null` ali par vlakov -- ali je to nočni molk ali
             # okvara, se ve šele iz vsebine.
             raise RuntimeError(f"zemljevid SŽ ni vrnil seznama vlakov: {besedilo[:60]!r}")
