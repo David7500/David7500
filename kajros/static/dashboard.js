@@ -2563,12 +2563,17 @@ map.once("style.load", async () => {
   uveljavi();
   await dodajAvtobuse();
   dodajVlake3D();
+  // Avtobusi ne čakajo na železniške postaje: rabijo samo svoje ikone. Do
+  // 18. 10. 2026 so šli za `loadStatic()` in ob hladnem strežniku
+  // (`/api/stations?network=zeleznica` 6,7 s na produkciji) je bil zemljevid
+  // ~7 s brez avtobusov, čeprav je bil odgovor `/api/vehicles` v brskalniku
+  // po 1,5 s. Lega ima svoj ritem (`X-Osvezi-Cez`), zamude se spreminjajo
+  // redkeje.
+  vozilaPoll = pollVehicles("/api/vehicles", onVehicles, zgodaj.vozila);
+  // Vlaki pa postaje rabijo (`trainPlace`, `stationsByName`).
   await loadStatic();
   pollLiveTiho();
   setInterval(pollLiveTiho, POLL_MS);
-  // Lega avtobusov ima svoj ritem: feed jo osvežuje na ~30 s, zamude pa se
-  // spreminjajo redkeje.
-  vozilaPoll = pollVehicles("/api/vehicles", onVehicles, zgodaj.vozila);
   loadRoutes();
   setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
   naloziZaporeTiho();
