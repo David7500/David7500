@@ -1548,9 +1548,10 @@ def api_stations(network: str = NETWORK_Q):
     # je manjsi del cene, vecino poje pretvorba 9 791 postaj v niz. Zato
     # `Response`, ne navadna vrnitev -- FastAPI bi jo sicer serializiral znova.
     telo = _predpomni(
-        f"stations:{network}", _znacka("gtfs_imported_at", "pripeto_at"), 3600,
+        f"stations:{network}", _znacka("gtfs_imported_at", "pripeto_at"), STATIKA_S,
         lambda: json.dumps(_conn_klic(lambda c: stats.stations(c, network)),
-                           ensure_ascii=False, separators=(",", ":")).encode())
+                           ensure_ascii=False, separators=(",", ":")).encode(),
+        v_ozadju=True)
     return Response(content=telo, media_type="application/json")
 
 
@@ -1570,10 +1571,11 @@ def api_station_index(network: str = NETWORK_ISKANJE_Q,
     """
     net = None if network == "vse" else network
     telo = _predpomni(
-        f"stations-index:{network}:{int(koordinate)}", _znacka("gtfs_imported_at"), 3600,
+        f"stations-index:{network}:{int(koordinate)}", _znacka("gtfs_imported_at"), STATIKA_S,
         lambda: json.dumps(
             _conn_klic(lambda c: journey.station_index(c, net, koordinate)),
-            ensure_ascii=False, separators=(",", ":")).encode())
+            ensure_ascii=False, separators=(",", ":")).encode(),
+        v_ozadju=True)
     return Response(content=telo, media_type="application/json")
 
 
@@ -1854,6 +1856,13 @@ _VEHICLES_CACHE: dict = {"key": None, "rows": []}
 # obstal za vedno.
 _ODGOVORI: dict[str, tuple] = {}
 _ODGOVORI_LOCK = threading.Lock()
+
+# Statika voznega reda (postaje, kazalo postaj, proge) se spremeni samo ob
+# uvozu, in takrat se premakne znacka. Urna varovalka jo je vsako uro vrgla
+# stran in naslednji obiskovalec je cakal na izracun: `/api/stations/index`
+# na arwenu povprecje 1,6 s, najvec 9 s (presoja 18. 10. 2026). Dan in
+# osvezitev v ozadju: caka samo prvi po uvozu, pa se tega ogreje zagon.
+STATIKA_S = 86400
 _KLJUCAVNICE: dict[str, threading.Lock] = {}
 
 
@@ -2200,9 +2209,10 @@ def api_network(elementary_only: bool = True):
     """Geometrija prog z dolžino odseka v km. Za risanje zemljevida."""
     # Cista statika: spremeni se samo ob uvozu voznega reda.
     telo = _predpomni(
-        f"geojson:{elementary_only}", _znacka("gtfs_imported_at", "pripeto_at"), 3600,
+        f"geojson:{elementary_only}", _znacka("gtfs_imported_at", "pripeto_at"), STATIKA_S,
         lambda: json.dumps(_conn_klic(lambda c: stats.network_geojson(c, elementary_only)),
-                           ensure_ascii=False, separators=(",", ":")).encode())
+                           ensure_ascii=False, separators=(",", ":")).encode(),
+        v_ozadju=True)
     return Response(content=telo, media_type="application/json")
 
 

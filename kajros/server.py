@@ -139,8 +139,18 @@ def _ogrej_pot() -> None:
         pot._imena(conn)
         hoja.pespoti(conn)
         # Skozi ENDPOINT, ne skozi `journey.station_index()`: predpomnilnik
-        # napolni sele ovoj, sicer je delo opravljeno in zavrzeno.
+        # napolni sele ovoj, sicer je delo opravljeno in zavrzeno. Vsi kljuci,
+        # ki jih strani res vprasajo -- prej samo prvi, iskalnik zvez in
+        # zemljevid pa sta po vsakem uvozu cakala do 9 s (presoja 18. 10. 2026).
         api.api_station_index("vse", True)
+        for omr in ("zeleznica", "avtobus"):
+            api.api_station_index(omr, False)
+            api.api_stations(omr)
+        # Zvecer pot isce tudi jutri (`danes_ni`), in prvi tak klic je placal
+        # hladno sliko obeh omrezij -- na arwenu 10-15 s.
+        if datetime.now(TZ).hour >= 20:
+            jutri = (datetime.fromisoformat(dan) + timedelta(days=1)).date().isoformat()
+            journey._timetable_for_day(conn, jutri, None)
         trajalo = (time.monotonic() - t) * 1000
         if trajalo > 1000:       # tiho, kadar je bilo ze toplo
             _log(f"vozni red za pot ogret: {len(by_trip)} voženj, {trajalo:.0f} ms")

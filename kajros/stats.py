@@ -173,12 +173,22 @@ def stations(conn: sqlite3.Connection, network: str | None = None) -> list[dict]
     stolpci = ("st.stop_id, st.name, ROUND(st.lat, 6) AS lat, ROUND(st.lon, 6) AS lon, "
                "p.smer, p.desno, p.prevozniki, p.postaja") if network == "avtobus" else "st.*"
     pridruzi = " LEFT JOIN postajalisce p ON p.stop_id = st.stop_id" if network == "avtobus" else ""
+    # Pogoj po omrezju, izmerjeno (presoja 18. 10. 2026): EXISTS za vsako od
+    # 10 501 postaj isce vlak med njenimi postanki -- pri avtobusu ga najde
+    # takoj (47 ms), pri zeleznici skoraj nikoli in prebere ves `sched`
+    # (1,9 s, na arwenu do 8 s). Od voženj omrezja navzven: zeleznica 3 ms,
+    # avtobus pa 380 ms, ker so njegove voznje skoraj vse.
+    if network == "avtobus":
+        pogoj = ("EXISTS (SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
+                 "WHERE s.stop_id = st.stop_id AND t.network = ?)")
+    else:
+        pogoj = ("st.stop_id IN (SELECT s.stop_id FROM trip t "
+                 "JOIN sched s ON s.trip_id = t.trip_id WHERE t.network = ?)")
     return [
         dict(r)
         for r in conn.execute(
-            f"SELECT {stolpci} FROM station st{pridruzi} WHERE EXISTS ("
-            "  SELECT 1 FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
-            "  WHERE s.stop_id = st.stop_id AND t.network = ?) ORDER BY st.name",
+            f"SELECT {stolpci} FROM station st{pridruzi} WHERE {pogoj} "
+            "ORDER BY st.name, st.stop_id",
             (network,),
         )
     ]

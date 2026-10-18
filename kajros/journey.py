@@ -76,27 +76,25 @@ def station_index(conn: sqlite3.Connection, network: str | None,
     Nakljucno izbrano bi bilo pri "Bavarski dvor" enkrat ena stran ceste in
     enkrat druga; iskanje poti od tam bi dalo dva razlicna izida za isto ime.
     """
-    # Grupirano po postajaliscu in ne po imenu, ker rabimo tudi lego -- vsota
-    # po imenu je nato v Pythonu in je nad ~10 000 vrsticami zanemarljiva.
-    rows = conn.execute(
-        "SELECT st.name AS n, st.lat, st.lon, COUNT(*) AS t"
-        "  FROM sched s"
-        "  JOIN trip tr ON tr.trip_id = s.trip_id"
-        "  JOIN station st ON st.stop_id = s.stop_id"
-        " WHERE (? IS NULL OR tr.network = ?)"
-        " GROUP BY s.stop_id",
-        (network, network)).fetchall()
-
+    # Promet po postajaliscu je isti kot pri iskanju po imenu (`_promet`,
+    # predpomnjen do uvoza), vsota po imenu pa v Pythonu. Prej svoja poizvedba
+    # z `WHERE (? IS NULL OR tr.network = ?)`: tak pogoj SQLite ne zna
+    # uporabiti za indeks in je prebral ves `sched` -- 1,7 s namesto 6 ms za
+    # zeleznico (presoja 18. 10. 2026, produkcija do 9 s).
+    promet = _promet(conn, network)
     po_imenu: dict[str, dict] = {}
-    for r in rows:
-        d = po_imenu.get(r["n"])
-        if d is None:
-            po_imenu[r["n"]] = {"n": r["n"], "t": r["t"],
-                                "lat": r["lat"], "lon": r["lon"], "_naj": r["t"]}
+    for r in conn.execute("SELECT stop_id, name, lat, lon FROM station ORDER BY stop_id"):
+        t = promet.get(r["stop_id"])
+        if not t:
             continue
-        d["t"] += r["t"]
-        if r["t"] > d["_naj"]:
-            d["_naj"] = r["t"]
+        d = po_imenu.get(r["name"])
+        if d is None:
+            po_imenu[r["name"]] = {"n": r["name"], "t": t,
+                                   "lat": r["lat"], "lon": r["lon"], "_naj": t}
+            continue
+        d["t"] += t
+        if t > d["_naj"]:
+            d["_naj"] = t
             d["lat"], d["lon"] = r["lat"], r["lon"]
 
     out = sorted(po_imenu.values(), key=lambda d: (-d["t"], d["n"]))
@@ -1139,7 +1137,7 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
     # Brez ziga ne predpomnimo: to je sveza ali testna baza, kjer se vsebina
     # lahko spremeni pod nami in nam nihce ne pove.
     if stamp:
-        cached = _TT_CACHE.get(key)
+        cached = _tt_zadetek(key)
         if cached is not None:
             return cached
         # Kljucavnica NA KLJUC, ne skupna. Hladno nalaganje obeh omrezij je na
@@ -1148,7 +1146,7 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
         # ob ogrevanju. Skupna kljucavnica bi serializirala tudi razlicne dneve
         # in omrezja, ki se med sabo nic ne tiscejo.
         with _tt_kljucavnica(key):
-            cached = _TT_CACHE.get(key)
+            cached = _tt_zadetek(key)
             if cached is not None:
                 return cached        # medtem ga je nalozil kdo drug
             return _nalozi_vozni_red(conn, service_date, network, key, stamp)
@@ -1160,15 +1158,36 @@ def _tt_kljucavnica(key: tuple) -> threading.Lock:
         return _TT_LOCKS.setdefault(key, threading.Lock())
 
 
+def _tt_zadetek(key: tuple):
+    """Vnos iz predpomnilnika, premaknjen na konec vrste.
+
+    Izrine se najdlje neuporabljen, ne najprej vstavljen. Ogrevanje vstavi
+    "danes, obe omrezji" prvega, zato je ta sel ven prvi, cim se je nabralo
+    pet drugih dni in omrezij -- naslednja pot od vrat do vrat je placala
+    hladno sliko, na arwenu 10-15 s (presoja 18. 10. 2026).
+    """
+    cached = _TT_CACHE.get(key)
+    if cached is not None:
+        try:
+            _TT_CACHE[key] = _TT_CACHE.pop(key)
+        except KeyError:        # medtem izrinjen; vrednost imamo
+            pass
+    return cached
+
+
 def _nalozi_vozni_red(conn: sqlite3.Connection, service_date: str,
                       network: str | None, key: tuple, stamp: str | None):
+    # Omrezje kot `t.network = ?`, ne `(? IS NULL OR t.network = ?)`: drugega
+    # SQLite ne uporabi za indeks in prebere ves `sched` (zeleznica 235 ms
+    # proti 4 ms, avtobus 365 proti 93 ms; presoja 18. 10. 2026).
+    pogoj, par = ("WHERE t.network = ? ", (service_date, network)) if network \
+        else ("", (service_date,))
     rows = conn.execute(
         "SELECT s.trip_id, s.stop_seq, s.stop_id, s.arr_s, s.dep_s "
         "FROM sched s JOIN trip t ON t.trip_id = s.trip_id "
         "JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
-        "WHERE (? IS NULL OR t.network = ?) "
-        "ORDER BY s.trip_id, s.stop_seq",
-        (service_date, network, network),
+        f"{pogoj}ORDER BY s.trip_id, s.stop_seq",
+        par,
     ).fetchall()
     if len(rows) > MAX_STOP_TIMES:
         raise VozniRedPrevelik(
