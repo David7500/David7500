@@ -211,6 +211,19 @@ def test_nicla_ostane_nicla_kadar_jo_feed_res_pove():
     assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31") == 0
 
 
+def test_lpp_nicla_brez_casa_ni_tocno():
+    """Mestni LPP z `delay = 0` brez časa nosi vožnjo, ki je ne napoveduje.
+
+    18. 10. 2026 (maraton) linija 18L ni vozila, feed pa je vse njene vožnje
+    nosil tako -- zajem jih je zapisal kot točne. Čas ostane meritev.
+    """
+    s = _stu(3, arr_delay=0)
+    assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31", beri_delay=False) is None
+    polnoc = datetime(2026, 8, 31, tzinfo=ZoneInfo("Europe/Ljubljana")).timestamp()
+    s = _stu(3, arr_time=int(polnoc + 36000 + 420))
+    assert _delay_of(s, "arrival", (36000, 36060), "2026-08-31", beri_delay=False) == 420
+
+
 # ---------------------------------------------------------------- tekoca ura
 
 def _at(h, m, s=0):

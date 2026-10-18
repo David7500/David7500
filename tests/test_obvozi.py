@@ -165,3 +165,38 @@ def test_odpovedana_voznja(conn, monkeypatch):
     assert [r.get("odpovedano", False) for r in vrstice] == [True, False]
     # Feed, ki pet minut ni odgovoril, ne šteje več.
     assert collector.odpovedane(time.time() + collector.ODPOVEDANE_SVEZE_S + 1) == frozenset()
+
+
+def test_voznja_brez_napovedi_ni_tocna(conn, monkeypatch):
+    """RT LPP 18. 10. 2026: linija 18L ne vozi, feed pa vse njene vožnje nosi z
+    `arrival.delay = 0` brez časa, kot vsako vožnjo, ki je LPP ne napoveduje.
+    Zajem jih je zapisal kot točne. Vožnja s časom se zapiše kot prej."""
+    from kajros import collector, iz_lege, stats
+    monkeypatch.setattr(collector, "_ODPOVEDANE", {})
+    monkeypatch.setattr(iz_lege, "_v_feedu", {})
+    conn.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+                     [("t1", 1, "KON", 36000, 36000), ("t1", 2, "TIV", 36600, 36600),
+                      ("t7", 1, "BAV", 36000, 36000), ("t7", 2, "TIV", 36600, 36600)])
+    db.fill_trip_window(conn)
+    polnoc = stats.polnoc(D)
+    feed = rt.FeedMessage()
+    feed.header.gtfs_realtime_version = "2.0"
+    feed.header.timestamp = int(polnoc + 35000)
+    for tid in ("t1", "t7"):
+        e = feed.entity.add()
+        e.id = tid
+        e.trip_update.trip.trip_id = tid
+        e.trip_update.trip.start_date = D.replace("-", "")
+        for seq, plan in ((1, 36000), (2, 36600)):
+            s = e.trip_update.stop_time_update.add()
+            s.stop_sequence = seq
+            if tid == "t1":
+                s.arrival.delay = 0
+            else:
+                s.arrival.time = int(polnoc + plan + 120)
+    collector.ingest(conn, feed, vir="lpp")
+    vrstice = conn.execute("SELECT trip_id, stop_seq, delay_arr FROM run ORDER BY trip_id, stop_seq").fetchall()
+    assert [tuple(r) for r in vrstice] == [("t7", 1, 120), ("t7", 2, 120)]
+    # Pri IJPP je `delay` beseda prevoznika, tudi ničla.
+    collector.ingest(conn, feed, vir="ijpp")
+    assert conn.execute("SELECT COUNT(*) FROM run WHERE trip_id = 't1'").fetchone()[0] == 2

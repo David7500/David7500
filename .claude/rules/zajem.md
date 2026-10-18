@@ -122,6 +122,8 @@ Mestnih linij LPP (1, 2, 3, 6, 11, 14, 20, 22, nočne) **v IJPP ni** — nosi le
 
 **`delay` v tem feedu vedno 0.** Izmerjeno dvakrat — nedelja 22:00 (2 721 postankov) in ponedeljkova konica 07:11 (2 604): nobena zamuda neničelna, `trip_update.delay` nikjer izpolnjen. **Kdor bi ga bral, bi zapisal, da mestni LPP nikoli ne zamuja.**
 
+**In zajem ga je bral** do 18. 10. 2026 (`_delay_of` vzame `delay`, kadar je): `arrival.delay = 0` brez časa je LPP-jevo mesto za vožnjo, ki je ta hip ne napoveduje -- vozilo še čaka na izhodišču ali ga sploh ni; postanek pride v feed do 60 min pred voznim redom. 18. 10. v šestih branjih 4 550 takih polj, vsa 0, nobeno s časom; 48 od 53 voženj brez vozila jih ima samo takih. Ob maratonu 18L ni vozila, v `run` pa točna na vseh postankih vseh voženj; okno vožnje je pisalo „napoved prevoznika · točno“. Na navaden dan (malina, 6. 10.) 5 242 od 55 953 vrstic LPP (9,4 %), 93 % vseh ničel, 89 % prvih postankov, 137 od 2 261 voženj samo iz njih. Odslej `ingest(vir="lpp")` `delay` preskoči (`beri_delay`), šteje samo čas. Zgodovina pred tem ostane: pri starejših vožnjah LPP voznega reda ni več, iz katerega bi se ničla ločila.
+
 Zamuda v **absolutnih napovedanih časih** (1 882 od 4 517 postankov), kar `_delay_of()` že pokriva — bere `.time`, odšteje vozni red. Točno primer, za katerega funkcija obstaja.
 
 Kakovost boljša od avtobusov v IJPP: mediana 0, p95 +7 min, p99 +23 min, nad 30 min 0,65 % in **vse iz ene same vožnje**; nad 2 h ničesar. IJPP-jev avtobusni feed imel 2 541 vrstic nad 4 h.

@@ -158,14 +158,14 @@ def _cas_zamude(sched_row, kaj: str) -> int | None:
 
 
 def zamuda_po_zamenjavi(stu, kaj: str, stari_row, novi_row,
-                        service_date: str) -> int | None:
+                        service_date: str, beri_delay: bool = True) -> int | None:
     """Zamuda iz feeda, preračunana s starega voznega reda na novega.
 
     Feedova zamuda je razlika do voznega reda, ki ga pozna feed -- starega.
     Uro, ki jo pomeni, obdržimo in odštejemo novega: sicer bi vožnjo, ki je po
     novem voznem redu tri minute prej, kazali tri minute prepozno.
     """
-    d = _delay_of(stu, kaj, stari_row, service_date)
+    d = _delay_of(stu, kaj, stari_row, service_date, beri_delay)
     if d is None or novi_row is None:
         return None
     a, b = _cas_zamude(stari_row, kaj), _cas_zamude(novi_row, kaj)
@@ -371,7 +371,8 @@ def is_zero_blip(prev, last, arr, dep, sched_row=None, service_date=None) -> boo
     return True
 
 
-def _delay_of(stu, kaj: str, sched_row, service_date: str) -> int | None:
+def _delay_of(stu, kaj: str, sched_row, service_date: str,
+              beri_delay: bool = True) -> int | None:
     """Zamuda iz enega `stop_time_update`, ali None, kadar je feed ne pove.
 
     **Ne beri `stu.arrival.delay` naravnost.** Protobuf za neizpolnjeno polje
@@ -383,11 +384,17 @@ def _delay_of(stu, kaj: str, sched_row, service_date: str) -> int | None:
     Kadar zamude ni, a je absolutni cas, jo izracunamo iz njega -- to je
     meritev, ne ugibanje. Vlaki absolutnega casa nimajo nikoli, avtobusi
     skoraj vedno (87-100 %).
+
+    **Pri mestnem LPP `delay` ni podatek** (`beri_delay=False`): je vedno 0 in
+    nikoli ob času -- tako LPP nosi vožnjo, ki je ta hip ne napoveduje (vozilo
+    še čaka na izhodišču ali ga sploh ni). 18. 10. 2026 v šestih branjih 4 550
+    takih polj, vsa 0, nobeno s časom. Linija 18L tisti dan ni vozila, zajem
+    pa jo je zapisal kot točno na vseh postankih vseh voženj.
     """
     if not stu.HasField(kaj):
         return None
     m = getattr(stu, kaj)
-    if m.HasField("delay"):
+    if beri_delay and m.HasField("delay"):
         return m.delay
     if not m.HasField("time") or sched_row is None:
         return None
@@ -460,6 +467,8 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     # Vozni red postankov rabimo, kadar feed da absolutni cas namesto zamude.
     sched = _sched_times(conn, {nas_id(e.trip_update.trip.trip_id)[0]
                                 for e in feed.entity} - {None})
+    # Pri mestnem LPP je `delay` le mesto za vožnjo brez napovedi (`_delay_of`).
+    beri_delay = vir != "lpp"
     feed_ts = feed.header.timestamp or int(time.time())
     observed_at = int(time.time())
 
@@ -536,16 +545,20 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
                 non_scheduled += 1
             seq = stu.stop_sequence
             if zamenjava is None:
-                arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date)
-                dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date)
+                arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date,
+                                beri_delay)
+                dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date,
+                                beri_delay)
             else:
                 p = zamenjava.get(seq)
                 if p is None:
                     continue    # tega postanka nov vozni red nima
                 seq, stari = p[0], (p[1], p[2])
                 novi = sched.get((trip_id, seq))
-                arr = zamuda_po_zamenjavi(stu, "arrival", stari, novi, service_date)
-                dep = zamuda_po_zamenjavi(stu, "departure", stari, novi, service_date)
+                arr = zamuda_po_zamenjavi(stu, "arrival", stari, novi, service_date,
+                                          beri_delay)
+                dep = zamuda_po_zamenjavi(stu, "departure", stari, novi, service_date,
+                                          beri_delay)
             if arr is None and dep is None:
                 continue        # feed o tem postanku ni povedal nicesar
 
@@ -763,7 +776,9 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     (nedelja 22:00 in ponedeljkova konica 07:11, skupaj cez 5 000 postankov):
     nobena zamuda ni bila nenicelna, `trip_update.delay` pa ni izpolnjen nikjer.
     Zamuda je v ABSOLUTNIH napovedanih casih (1 882 od 4 517 postankov), kar
-    `_delay_of()` ze pokriva -- ta bere `.time` in odsteje vozni red.
+    `_delay_of()` pokriva -- ta bere `.time` in odsteje vozni red. Da `delay`
+    pri LPP preskoči, mu mora povedati `ingest` (`beri_delay`): do 18. 10. 2026
+    ga je bral in vsako vožnjo brez napovedi zapisal kot točno.
     """
     if not config.LPP_ENABLED:
         return {"trips": 0, "vehicles": 0, "unchanged": True}
