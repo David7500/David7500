@@ -668,6 +668,13 @@ def run_collector() -> None:
 async def lifespan(app):
     global _strezemo
     _strezemo = True             # samo tu; `kajros collect` tega ne izvede
+    # GIL predaj na 0,5 ms namesto 5. Zahteve, zajem in ogrevanje so niti
+    # istega procesa; `sqlite3` GIL ob vsakem koraku spusti in za vrnitev
+    # caka, da ga nit, ki racuna v Pythonu, odda -- do 5 ms na korak. Tabla
+    # odhodov je ~1 450 korakov: ob eni racunajoci niti je Ljubljana trajala
+    # 11,9 s namesto 7 ms, s tem 0,44 s (presoja 18. 10. 2026; na arwenu
+    # repi do 40 s). Cena: ~5 ms na zahtevo, kadar ne tece nic drugega.
+    sys.setswitchinterval(0.0005)
     bootstrap()
     _pripni_v_ozadju()
     # Tabela za sporočila obstaja tudi, kadar je štetje obiska ugasnjeno:
