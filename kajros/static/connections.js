@@ -570,6 +570,15 @@ function prestopTiriHtml(prej, nasl) {
     tirHtml(a || b, a ? prej.tir_prihod_prej : nasl.tir_prej)}</span>`;
 }
 
+// Zamuda vožnje na prestopni postaji, z imenom vožnje. Prej „prvi vlak −1 min“
+// tudi na avtobusni strani (18. 10. 2026, Bavarski dvor): beseda „vlak“ je bila
+// trdo zapisana, prezgodnji avtobus pa je dobil golo minuto z minusom namesto
+// „1 min prej“ (`delayText`, `oznake.md`). Zaokrožena ničla ni novica, zato je ni.
+function prestopZamudaHtml(voznja, s) {
+  if (!delayMin(s)) return "";
+  return `<span class="leg-note">${escapeHtml(imeVoznje(voznja))}: ${delayText(s)}</span>`;
+}
+
 function transferRowHtml(t, nowMs, date, odKod) {
   const tr = t.transfer;
   const st = TRANSFER_STYLE[(tr && tr.status) || "brez podatka"];
@@ -593,10 +602,8 @@ function transferRowHtml(t, nowMs, date, odKod) {
             prestop na postaji ${escapeHtml(l.to)} · ${wait} min
           </span>
           ${prestopTiriHtml(l, next)}
-          ${count === 1 && tr && tr.delay1_s
-            ? `<span class="leg-note">prvi vlak ${delayLabel(tr.delay1_s)} min</span>` : ""}
-          ${count === 1 && tr && tr.delay2_s
-            ? `<span class="leg-note">drugi ${delayLabel(tr.delay2_s)} min</span>` : ""}
+          ${count === 1 && tr ? prestopZamudaHtml(l, tr.delay1_s) : ""}
+          ${count === 1 && tr ? prestopZamudaHtml(next, tr.delay2_s) : ""}
         </div>` : ""}`;
   }).join("");
 
