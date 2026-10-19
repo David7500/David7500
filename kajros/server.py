@@ -78,6 +78,23 @@ def _ogrej_zive() -> None:
             return
 
 
+def _ogrej_vozila() -> None:
+    """Lege vozil izračunaj takoj po branju, ne v zahtevi zemljevida.
+
+    Branje leg je v dveh nitih (zajem in NAP), zato ta nit ne čaka na
+    nobeno od njiju, ampak vsako sekundo pogleda `positions_fetched`: ko se
+    premakne, izračuna predpomnilnik `/api/vehicles` (`api.ogrej_vozila`).
+    Zemljevid, ki pride po `X-Osvezi-Cez`, ga najde toplega.
+    """
+    from . import api
+    while not _stop.wait(1.0):
+        try:
+            api.ogrej_vozila()
+        except Exception as exc:  # noqa: BLE001
+            _log(f"leg vozil ni bilo mogoče ogreti: {exc}")
+            _stop.wait(30)
+
+
 def _ogrej_health() -> None:
     """`/api/health` na svojem, mnogo počasnejšem ritmu.
 
@@ -720,6 +737,8 @@ async def lifespan(app):
         nap_nit = _zazeni_nap()
         promet_nit = _zazeni_promet()
         _zazeni_opozorila()
+        threading.Thread(target=_ogrej_vozila, daemon=True,
+                         name="kajros-vozila").start()
     else:
         peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = promet_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")

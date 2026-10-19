@@ -1883,6 +1883,34 @@ def api_train_reports(train_no: str, date: str | None = None):
 # Kljuc je cas nasega zadnjega branja (`positions_fetched`), ne ura: tako se
 # predpomnilnik razveljavi natanko takrat, ko je res kaj novega.
 _VEHICLES_CACHE: dict = {"key": None, "rows": []}
+# Ena osvežitev na branje, ne ena na obiskovalca. Lege bereta dva vira
+# (derp.si in NAP), vsak na 10 s, in oba premakneta `positions_fetched`,
+# tudi ob nespremenjenem feedu. Zemljevidi po `X-Osvezi-Cez` pridejo vsi
+# hkrati, takoj po branju, in vsak je izračun začel sam: na arwenu
+# `/api/vehicles` povprečno 502 ms na 484 zahtevah, topel odgovor ~30 ms
+# (19. 10. 2026). Izračun zato praviloma opravi nit v strežniku
+# (`server._ogrej_vozila`), zahteva ga le še počaka.
+_VEHICLES_LOCK = threading.Lock()
+
+
+def _vozila_po_branju(conn, zdaj: datetime) -> tuple[str | None, list[dict]]:
+    """Vrstice leg za zadnje branje in značka tega branja."""
+    brano = db.get_meta(conn, "positions_fetched")
+    if _VEHICLES_CACHE["key"] == brano and brano is not None:
+        return brano, _VEHICLES_CACHE["rows"]
+    with _VEHICLES_LOCK:
+        if _VEHICLES_CACHE["key"] != brano or brano is None:
+            _VEHICLES_CACHE["rows"] = _vehicles_rows(conn, zdaj)
+            _VEHICLES_CACHE["key"] = brano
+        return brano, _VEHICLES_CACHE["rows"]
+
+
+def ogrej_vozila() -> None:
+    """Lege izračunaj po branju, preden pride zemljevid (`server.py`).
+    Brez značke (leg še ni) nič: zahteva bi izračun sicer ponovila vsakič."""
+    with _conn() as conn:
+        if db.get_meta(conn, "positions_fetched") is not None:
+            _vozila_po_branju(conn, datetime.now(TZ))
 
 
 # ---------------------------------------------------------------- predpomnilnik
@@ -2097,10 +2125,7 @@ def api_vehicles(trip: str | None = None, request: Request = None):
     zdaj = datetime.now(TZ)
     now = int(zdaj.timestamp())
     with _conn() as conn:
-        brano = db.get_meta(conn, "positions_fetched")
-        if _VEHICLES_CACHE["key"] != brano or brano is None:
-            _VEHICLES_CACHE["rows"] = _vehicles_rows(conn, zdaj)
-            _VEHICLES_CACHE["key"] = brano
+        brano, vrstice = _vozila_po_branju(conn, zdaj)
 
     # `age_s` se racuna ob vsaki strezbi, ne ob predpomnjenju: starost lege je
     # edino, kar se med dvema branjema res spreminja, in prav ona pove, koliko
@@ -2112,7 +2137,7 @@ def api_vehicles(trip: str | None = None, request: Request = None):
     # 16:00 utihnil in zemljevid je še uro pozneje kazal 774 avtobusov tam,
     # kjer so bili ob 15:59.
     out = []
-    for d in _VEHICLES_CACHE["rows"]:
+    for d in vrstice:
         if trip is not None and d["trip_id"] != trip:
             continue
         if now - d["seen_ts"] > collector.POSITION_FRESH_S:
