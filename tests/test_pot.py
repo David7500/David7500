@@ -250,6 +250,28 @@ def test_po_vseh_merilih_slabsi_predlog_odpade(conn):
         "po kakem drugem merilu")
 
 
+def test_skoraj_prevladan_predlog_odpade(conn, monkeypatch):
+    """Škofja Loka -> Ljubljana ob 7:00 (presoja 18. 10. 2026): „07:07 -> 08:19
+    z dvema prestopoma“ je stal pod „07:07 -> 07:53 z enim“, ker je imel 14 s
+    manj hoje. Prevlada se primerja po urah na kartici in s 3 min hoje
+    tolerance; prestopi brez nje."""
+    _postaja(conn, "BLIZU2", "Blizu 2", 46.0008, 14.500)    # 22 m bliže od BLIZU
+    _postaja(conn, "VMES", "Vmes", 46.050, 14.500)
+    _voznja(conn, "t1", "hitri", [(1, "BLIZU", 8 * 3600 + 600), (2, "CILJ", 8 * 3600 + 2400)])
+    _voznja(conn, "t2", "prvi", [(1, "BLIZU2", 8 * 3600 + 600), (2, "VMES", 8 * 3600 + 1800)])
+    _voznja(conn, "t3", "drugi", [(1, "VMES", 8 * 3600 + 2400), (2, "CILJ", 9 * 3600 + 360)])
+    conn.commit()
+
+    def voznje():
+        r = pot.isci(conn, OD, DO, D, 8 * 3600)
+        return [[n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"] for p in r["predlogi"]]
+
+    assert voznje()[0] == ["hitri"]
+    assert ["prvi", "drugi"] not in voznje(), "isti odhod, 26 min pozneje, prestop več"
+    monkeypatch.setattr(pot, "PREVLADA_HOJA_S", 0)
+    assert ["prvi", "drugi"] in voznje(), "brez tolerance ga 16 s manj hoje obdrži"
+
+
 def test_izbrani_prevozniki(conn):
     """Potnik z mesečno LPP: najhitrejša pot z Arrivo mu nič ne pomaga
     (prijava 6. 10. 2026: „izračuna vedno najhitrejšo pot, ampak z Arrivo“).

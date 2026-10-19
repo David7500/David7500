@@ -772,6 +772,17 @@ SKORAJ_ENAKO_S = 3 * 60
 VEC_HOJE_NAJVEC_S = 5 * 60
 PRIHRANEK_S = 5 * 60
 
+#: Prevlada, kot jo vidi potnik: predlog pade, kadar je že izbran tak, ki po
+#: urah na kartici (minuta) ne pride pozneje in ne odide prej, nima več kot
+#: `PREVLADA_HOJA_S` več hoje in nima več prestopov. Na sekundo primerjano je
+#: ostalo "07:07 -> 08:19 z dvema prestopoma" pod "07:07 -> 07:53 z enim", ker
+#: je imelo 14 s manj hoje (Škofja Loka -> Ljubljana, presoja 18. 10. 2026).
+#: Toleranca ±60 s na obeh urah, kot jo je predlagala presoja, je odstranila
+#: tudi naslednji odhod minuto pozneje (`test_naslednji_odhod_v_casu_hoje_ni_
+#: preskocen`) -- ta ni šum, ampak rezerva, če prvega ne ujameš. Najzgodnejšega
+#: prihoda ne odstrani: ostane, tudi kadar je prva druga (`SKORAJ_ENAKO_S`).
+PREVLADA_HOJA_S = 3 * 60
+
 
 def _stevilo_vozenj(najdba: dict) -> int:
     return sum(1 for n in najdba["noge"] if n[0] is not None)
@@ -1226,6 +1237,7 @@ def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
     8. 9. 2026: avtobus "13:35, pričakovano 13:43" je stal nad vlakom, ki
     pride ob 13:38.
     """
+    najzgodnejsi = None
     if rok is not None:
         # Iskanje je upoštevalo zamude vozil, ki so zdaj na poti; model ob
         # izstopu zna reči drugače. Pot, ki po njem pride prepozno, ostane na
@@ -1243,7 +1255,7 @@ def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
         # Skoraj enak prihod z manj čakanja ali prestopov gre prvi (glej
         # `SKORAJ_ENAKO_S`). Ostali ostanejo po prihodu.
         if vrstni:
-            p0 = vrstni[0]
+            p0 = najzgodnejsi = vrstni[0]
 
             def cena(p):
                 return _kdaj(p) - _odhod(p) + PRESTOP_VREDEN_S * p["prestopov"]
@@ -1262,21 +1274,27 @@ def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
     # 23. 9. 2026 pri obratnem iskanju). Obdrži se prva po razvrstitvi.
     # Prometni dan je v ključu: ista vožnja včeraj in danes nista isti odhod.
     #
-    # Za tem pade vse, kar je po VSEH merilih slabše od že izbranega.
-    # Brez tega je stran ponudila pot, ki odide prej, hodi dvakrat dlje in
-    # pride ob isti minuti -- videno na zaslonu 8. 9. 2026 (Grosuplje ->
-    # Zmajski most: 12:53 z 20 min hoje poleg 13:01 z 10 min, oba prihod
-    # 13:31). Vprašanje "z manj hoje" omejuje hojo na VSAKEM koncu, ne v
-    # vsoti, in zna zato dati pot z več hoje skupaj.
+    # Za tem pade vse, kar je po VSEH merilih slabše od že izbranega, kot ga
+    # vidi potnik (`PREVLADA_HOJA_S`). Brez tega je stran ponudila pot, ki
+    # odide prej, hodi dvakrat dlje in pride ob isti minuti -- videno na
+    # zaslonu 8. 9. 2026 (Grosuplje -> Zmajski most: 12:53 z 20 min hoje poleg
+    # 13:01 z 10 min, oba prihod 13:31). Vprašanje "z manj hoje" omejuje hojo
+    # na VSAKEM koncu, ne v vsoti, in zna zato dati pot z več hoje skupaj.
+    def prevlada(q, p):
+        if p is najzgodnejsi:
+            return (_kdaj(q) <= _kdaj(p) and _odhod(q) >= _odhod(p)
+                    and q["hoje_s"] <= p["hoje_s"] and q["prestopov"] <= p["prestopov"])
+        return (_kdaj(q) // 60 <= _kdaj(p) // 60 and _odhod(q) // 60 >= _odhod(p) // 60
+                and q["hoje_s"] <= p["hoje_s"] + PREVLADA_HOJA_S
+                and q["prestopov"] <= p["prestopov"])
+
     videni, izbrani = set(), []
     for p in vrstni:
         kljuc = (p["datum"],) + tuple((n["trip_id"], n["od_seq"])
                                       for n in p["noge"] if n["vrsta"] == "voznja")
         if kljuc in videni:
             continue
-        if any(_kdaj(q) <= _kdaj(p) and q["hoje_s"] <= p["hoje_s"]
-               and q["prestopov"] <= p["prestopov"] and _odhod(q) >= _odhod(p)
-               for q in izbrani):
+        if any(prevlada(q, p) for q in izbrani):
             continue
         videni.add(kljuc)
         izbrani.append(p)
