@@ -1113,7 +1113,7 @@ async function showOverview() {
   wirePopularChips();
   if (IS_BUS) return;
   try {
-    const n = (await fetch("/api/health").then(jsonOk)).alerts_active;
+    const n = (await fetch("/api/svezina").then(jsonOk)).alerts_active;
     const sekcija = resultsEl.querySelector(".overview");
     if (n && sekcija && !sekcija.querySelector(".ov-link")) {
       sekcija.insertAdjacentHTML("beforeend", ovireHtml(n));
@@ -1898,6 +1898,6 @@ renderRecents();
 
 tickClock();
 setInterval(tickClock, 1000);
-refreshFeedDot();
+// Prvi klic opravi `pollWhileVisible` sam (ročni pred njim ga je podvojil).
 pollWhileVisible(refreshFeedDot, 30000);
 restore();

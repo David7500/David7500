@@ -529,7 +529,7 @@ async function refreshFeedDot() {
   const dot = document.getElementById("feed-dot");
   if (!dot) return;
   try {
-    const h = await fetch("/api/health").then(jsonOk);
+    const h = await fetch("/api/svezina").then(jsonOk);
     const age = h.last_feed_ts ? Date.now() / 1000 - h.last_feed_ts : Infinity;
     const stale = age > FEED_STALE_S;
     dot.classList.toggle("stale", stale);

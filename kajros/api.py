@@ -47,7 +47,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"],
 # Odgovori so JSON s ponavljajocimi se imeni polj in se stisnejo na desetino.
 # Pri letu zajema ima lestvica avtobusnih linij 167 KB, stisnjena 20 KB --
 # in to prek Tailscala ali tunela ni vseeno. Brez nove odvisnosti (starlette).
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+# Raven 6, ne Starlettova privzeta 9: 1,4 MB avtobusnih postajališč 72 ms CPE
+# proti 18 ms za 4 % več bajtov (presoja 18. 10. 2026). Stiskanje teče v
+# procesu, ki streže vse, in vsaka milisekunda CPE tam podaljša čakanje drugih.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
 
 @app.middleware("http")
@@ -1458,6 +1461,24 @@ def api_health():
     return out
 
 
+@app.get("/api/svezina")
+def api_svezina():
+    """Ali zajem teče, in koliko ovir velja -- za piko na vsaki strani.
+
+    Pika in vstopna stran sta brali ves `/api/health`: na arwenu ~150-180 ms
+    strežnika na klic (vožnje na poti, svežina po omrežjih, zapisi iz
+    `meta` ...) za eno številko, na vsak odprt zavihek vsakih 30 s --
+    najpogostejši endpoint, 2 636 klicev v 1,8 dneva (presoja 18. 10. 2026).
+    Tu dve poizvedbi po indeksu. `/api/health` ostane za nadzor.
+    """
+    with _conn() as conn:
+        ts = conn.execute("SELECT MAX(feed_ts) FROM run").fetchone()[0]
+        n = alerts.active_count(conn)
+    return {"last_feed_ts": ts,
+            "last_feed_at": datetime.fromtimestamp(ts, TZ).isoformat() if ts else None,
+            "alerts_active": n}
+
+
 def _health_stevci(conn):
     row = conn.execute(
         "SELECT (SELECT COUNT(*) FROM trip) AS trips,"
@@ -2183,12 +2204,24 @@ def api_shapes_live():
     predpomni za minuto. Ce bi kdaj postala privzeta, jo je treba najprej
     razredciti (Douglas-Peucker je v `geo.py` ze).
     """
-    # Vezano na lege: dokler se vozila ne premaknejo, so trase iste.
-    return _predpomni("shapes-live", _znacka("positions_fetched"), 60, _shapes_live_rows)
-
-
-def _shapes_live_rows():
+    # Značka je NABOR oblik na poti, ne lega vozil: ta se premakne na 10 s,
+    # nabor pa le, ko vožnja začne ali konča. Odgovor je predpomnjen že
+    # serializiran -- prej sta ga FastAPI kodiranje in gzip vsakič delala
+    # znova (na arwenu povprečje 913 ms, presoja 18. 10. 2026).
     now = int(datetime.now(TZ).timestamp())
+    with _conn() as conn:
+        nabor = tuple(r[0] for r in conn.execute(
+            "SELECT DISTINCT t.shape_id || '|' || t.network FROM vehicle_now v "
+            "JOIN trip t USING (trip_id) WHERE v.seen_ts >= ? AND t.shape_id IS NOT NULL "
+            "ORDER BY 1", (now - collector.POSITION_FRESH_S,)))
+    znacka = (nabor, _znacka("pripeto_at"))
+    telo = _predpomni("shapes-live", znacka, 600,
+                      lambda: json.dumps(_shapes_live_rows(now), ensure_ascii=False,
+                                         separators=(",", ":")).encode())
+    return Response(content=telo, media_type="application/json")
+
+
+def _shapes_live_rows(now: int):
     with _conn() as conn:
         # `agency`: trasa je v barvi prevoznika, kot njegova vozila -- vse v
         # eni zeleni se izbrana pot med njimi ni videla (4. 10. 2026).
