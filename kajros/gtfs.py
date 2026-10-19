@@ -362,6 +362,13 @@ def _poenoti_imena(stops: dict) -> int:
     `ISTO_POSTAJALISCE_M`. Kanonicno je ime, ki ni v samih velikih crkah;
     ce jih je vec takih, odloci pogostost in nato abeceda, da je izid
     ponovljiv.
+
+    **Mesto je skupina postajalisc v dosegu, ne vse z istim imenom.** Do
+    19. 10. 2026 je odlocal najvecji razmik v vsej skupini: "TRNOVO" je bil
+    112 m od ljubljanskega "Trnovo", a ker je "Trnovo" tudi pri Novi Gorici
+    (70 km), je ostal sam; enako "LITOSTROJ" 18 m od "Litostroj", ker je eno
+    od postajalisc "Litostroj" 800 m stran. Iskalnik je kazal oba (presoja
+    18. 10. 2026).
     """
     from .journey import _fold
 
@@ -371,21 +378,35 @@ def _poenoti_imena(stops: dict) -> int:
 
     spremenjenih = 0
     for skupina in po_imenu.values():
-        imena = {s["name"] for s in skupina}
-        if len(imena) < 2:
+        if len({s["name"] for s in skupina}) < 2:
             continue
-        naj = max(
-            geo.haversine(a["lat"], a["lon"], b["lat"], b["lon"])
-            for a in skupina for b in skupina if a["name"] != b["name"]
-        )
-        if naj > ISTO_POSTAJALISCE_M:
-            continue        # razlicna kraja z istim imenom -- pusti pri miru
-        stevec = Counter(s["name"] for s in skupina)
-        kanon = min(imena, key=lambda n: (n.isupper(), -stevec[n], n))
-        for s in skupina:
-            if s["name"] != kanon:
-                s["name"] = kanon
-                spremenjenih += 1
+        # Postajalisca v dosegu drug drugega (tudi prek tretjega) so eno mesto.
+        oce = list(range(len(skupina)))
+
+        def koren(i: int) -> int:
+            while oce[i] != i:
+                oce[i] = oce[oce[i]]
+                i = oce[i]
+            return i
+
+        for i, a in enumerate(skupina):
+            for j in range(i + 1, len(skupina)):
+                b = skupina[j]
+                if geo.haversine(a["lat"], a["lon"], b["lat"], b["lon"]) <= ISTO_POSTAJALISCE_M:
+                    oce[koren(i)] = koren(j)
+        mesta: dict[int, list] = defaultdict(list)
+        for i, s in enumerate(skupina):
+            mesta[koren(i)].append(s)
+        for mesto in mesta.values():
+            imena = {s["name"] for s in mesto}
+            if len(imena) < 2:
+                continue
+            stevec = Counter(s["name"] for s in mesto)
+            kanon = min(imena, key=lambda n: (n.isupper(), -stevec[n], n))
+            for s in mesto:
+                if s["name"] != kanon:
+                    s["name"] = kanon
+                    spremenjenih += 1
     return spremenjenih
 
 

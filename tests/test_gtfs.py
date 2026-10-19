@@ -54,6 +54,20 @@ def test_poenoti_imena_zdruzi_le_isto_mesto():
     assert stops["c1"]["name"] == "AMZS"        # brez para ostane, kot je
 
 
+def test_poenoti_imena_po_mestu_ne_po_vsej_skupini():
+    """„TRNOVO" je 112 m od ljubljanskega „Trnovo", a „Trnovo" je tudi pri
+    Novi Gorici. Do 19. 10. 2026 je daljni par ustavil zlivanje bližnjega."""
+    stops = {
+        "lj": {"stop_id": "lj", "name": "Trnovo", "lat": 46.04189, "lon": 14.50981},
+        "LJ": {"stop_id": "LJ", "name": "TRNOVO", "lat": 46.04099, "lon": 14.50918},
+        "ng": {"stop_id": "ng", "name": "Trnovo", "lat": 45.97242, "lon": 13.74075},
+        # 800 m od ostalih: svoje mesto, a ime je že pravo
+        "x": {"stop_id": "x", "name": "Trnovo", "lat": 46.0480, "lon": 14.5150},
+    }
+    assert gtfs._poenoti_imena(stops) == 1
+    assert {s["name"] for s in stops.values()} == {"Trnovo"}
+
+
 def _zip(pot, trips, trasa=None):
     """Najmanjši IJPP zip: ena proga SŽ in vožnje, ki jih dobi.
 
