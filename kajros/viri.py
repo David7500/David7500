@@ -517,7 +517,8 @@ def _ena(conn, sql: str, *arg) -> int | None:
 
 
 #: Kdaj je vir nazadnje kaj zapisal -- preživi zagon. Lege derp.si nimajo
-#: svojega žiga (`positions_fetched` premakne tudi NAP), prikaz LPP ne piše.
+#: svojega žiga (`positions_fetched` premakneta tudi NAP in branje LPP),
+#: prikaz LPP ne piše.
 _ZAPISANO: dict[str, Callable] = {
     "derp_zamude": lambda c, z: _meta_ts(c, "rt_fetched"),
     "derp_lpp": lambda c, z: _meta_ts(c, "lpp_rt_fetched"),

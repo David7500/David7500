@@ -10,6 +10,7 @@ pa je izginilo 15 od 16 vozil linije.
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 
 import pytest
@@ -90,6 +91,23 @@ def test_zajem_steje_neznane_po_liniji_in_vozila_ohrani():
     assert [(x["train_no"], x["headsign"], x["vehicle_id"]) for x in v] == [
         ("1", "STANEŽIČE P+R - DOLGI MOST P+R", "bus-7")]
     assert c.execute("SELECT COUNT(*) FROM vehicle_now").fetchone()[0] == 0
+
+
+def test_lpp_premakne_kljuc_predpomnilnika_leg(monkeypatch):
+    """Nova lega mestnega LPP mora v `/api/vehicles` ob branju LPP, ne šele ob
+    naslednjem branju leg derp.si ali NAP. Nespremenjeno branje (304) ključa
+    ne premakne."""
+    c = _baza()
+    monkeypatch.setattr(collector.config, "LPP_ENABLED", True)
+    db.set_meta(c, "positions_fetched", "1")
+    monkeypatch.setattr(collector, "fetch", lambda *a, **k: None)
+    collector.poll_lpp(c)
+    assert db.get_meta(c, "positions_fetched") == "1"
+
+    monkeypatch.setattr(collector, "fetch", lambda *a, **k: _feed(ZNANA, vozilo_na=ZNANA))
+    pred = int(time.time())
+    collector.poll_lpp(c)
+    assert int(db.get_meta(c, "positions_fetched")) >= pred
 
 
 def test_ijpp_ne_steje_po_progah():

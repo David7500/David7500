@@ -793,6 +793,14 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     brez_voznje: list[dict] = []
     lege = ingest_positions(conn, feed, brez_voznje)
     _zapisi_brez_voznje(conn, izid.pop("proge"), brez_voznje)
+    # Ključ predpomnilnika `/api/vehicles`, kot ga premakneta `poll_positions`
+    # in NAP. Brez tega so nove lege mestnega LPP čakale na naslednji premik
+    # ključa: na razvojnem računalniku 0,61--0,75 s (19. 10. 2026, n = 10),
+    # ker obhod traja dlje od 10 s in branje derp.si sledi takoj; ob krajšem
+    # obhodu bi čakale do naslednjega branja derp.si ali NAP. Za zapisom vozil
+    # brez vožnje (`_zapisi_brez_voznje`), ker jih odgovor nosi tudi.
+    db.set_meta(conn, "positions_fetched", str(int(time.time())))
+    conn.commit()
     # Obvestila so v ISTEM feedu in jih doslej nismo brali -- 181 vrstic na
     # zajem v smeti. Zdruzena so v `alerts.ingest_lpp()`, ker jih feed poslje
     # na vozjno in ne na dogodek.
