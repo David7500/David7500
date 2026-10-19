@@ -40,6 +40,28 @@
         Od vrat do vrat — z vlakom, avtobusom in peš, v eni verigi.
       </p>
 
+      {#- Na telefonu je obrazec cel zaslon: po iskanju se skrči v to vrstico
+          (`pot.zlozi()`, isto kot iskalnik zvez), dotik jo odpre. Na namizju
+          je obrazec v stranskem stolpcu in vrstice ni (CSS). #}
+      <div class="povzetek" id="povzetek">
+        <button type="button" class="povzetek-uredi" id="povzetek-uredi">
+          <span class="povzetek-pot" id="povzetek-pot"></span>
+          <span class="povzetek-dan" id="povzetek-dan"></span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+          </svg>
+        </button>
+        <button type="button" class="povzetek-swap" id="povzetek-swap"
+                title="zamenjaj kraja" aria-label="zamenjaj kraja">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="pot-obrazec">
       {#- Zadetki iskanja visijo pod VRSTICO, ne pod celim blokom: pod njim sta
           vnos imena in žetoni shranjenih točk, in seznam bi se odpiral pod
           njimi -- torej stran od polja, v katero se tipka. #}
@@ -172,6 +194,7 @@
           <button type="button" class="prevoznik" data-prevoznik="apms" aria-pressed="true">AP Murska Sobota</button>
         </div>
       </div>
+      </div>{#- .pot-obrazec #}
 
       <div id="pot-stanje" class="pot-stanje" aria-live="polite"></div>
       <div id="pot-izidi" class="pot-izidi"></div>

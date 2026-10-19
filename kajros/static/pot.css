@@ -327,6 +327,12 @@ body.karta-velika .pot {
     height: auto;
   }
   .pot-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+
+  /* Po iskanju obrazec preda mesto vrstici z vprašanjem (`zlozi()` v pot.js):
+     prej je bila prva kartica pri 606 pikah od 915 in nad orodno vrstico sta
+     ostali dve. Podnaslov gre z obrazcem -- vprašanje je zdaj v vrstici. */
+  .zlozeno .pot-obrazec, .zlozeno .pot-lead { display: none; }
+  .zlozeno .povzetek { display: flex; margin-top: 10px; }
 }
 
 /* ---------------------------------------------------------------- zamude */

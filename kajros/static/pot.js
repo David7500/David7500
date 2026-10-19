@@ -188,7 +188,7 @@ function oznaciArm() {
 // Pot nazaj je isto vprašanje z zamenjanima koncema. Kadar je odgovor že na
 // zaslonu, se poišče takoj — gumb, ki vidno stanje pusti pri miru, je videti
 // kot okvara (isto pravilo kot pri zamenjavi postaj v iskalniku zvez).
-$("#zamenjaj").addEventListener("click", () => {
+function zamenjajKraja() {
   [S.od, S.do] = [S.do, S.od];
   for (const kaj of ["od", "do"]) $(`#q-${kaj}`).value = napisTocke(S[kaj]);
   // Naslednji klik na zemljevid gre v prazno polje, ne tja, kamor je meril prej.
@@ -197,6 +197,10 @@ $("#zamenjaj").addEventListener("click", () => {
   oznaciZvezde();
   narisiTocke(false);      // pogled ostane, kjer je: premaknili sta se le vlogi
   vUrl();
+}
+
+$("#zamenjaj").addEventListener("click", () => {
+  zamenjajKraja();
   if (S.izidi) isci();
 });
 
@@ -479,7 +483,7 @@ function pripniIskanje(kaj) {
       izberi(kaj, z[Math.max(0, IZBRAN_Z[kaj])]);
       return;
     }
-    isci();
+    isci(true);
   });
   // `mousedown` in ne `click`: klik bi prišel šele po `blur`, ki seznam zapre.
   $(`#z-${kaj}`).addEventListener("mousedown", (e) => {
@@ -913,29 +917,36 @@ function koncajIskanje(moje) {
   gumbIsci.textContent = NAPIS_ISCI;
 }
 
-async function isci() {
+/** `skrci`: lastno iskanje (gumb, Enter, naslov) skrči obrazec na telefonu;
+ *  ponovno iskanje ob spremembi možnosti ga pusti, kot ga je človek pustil. */
+async function isci(skrci = false) {
   const moje = zacniIskanje();
   try {
-    await isciPot();
+    await isciPot(skrci);
   } finally {
     koncajIskanje(moje);
   }
 }
 
-async function isciPot() {
+async function isciPot(skrci) {
   const [a, b] = await Promise.all([razresi("od"), razresi("do")]);
   if (!a || !b) {
     const kaj = !a ? "od" : "do";
+    razlozi();   // popraviti je treba polje, ne gledati odgovora
     povej($(`#q-${kaj}`).value.trim()
       ? `„${$(`#q-${kaj}`).value.trim()}“ ne najdem — poskusi drugače ali izberi na zemljevidu.`
       : `Manjka ${kaj === "od" ? "izhodišče" : "cilj"}.`, "napaka");
     return;
   }
   if (S.kdaj === "do" && !$("#tam").value) {
+    razlozi();
     povej("Vpiši uro, do katere moraš biti tam.", "napaka");
     $("#tam").focus();
     return;
   }
+  // Zložena vrstica mora govoriti o vprašanju na zaslonu: dotik zemljevida
+  // ali „poišči z vsemi“ spremeni kraj ali iskanje, ne da bi jo odprl.
+  if (skrci || document.body.classList.contains("zlozeno")) zlozi();
   const p = new URLSearchParams({
     od_lat: S.od.lat, od_lon: S.od.lon, do_lat: S.do.lat, do_lon: S.do.lon,
     hoje: hojeMin(),
@@ -1010,8 +1021,51 @@ addEventListener("pagehide", () => {
   } catch (e) { /* brez obnove mesta */ }
 });
 
-gumbIsci.addEventListener("click", isci);
-$("#tam").addEventListener("keydown", (e) => { if (e.key === "Enter") isci(); });
+gumbIsci.addEventListener("click", () => isci(true));
+$("#tam").addEventListener("keydown", (e) => { if (e.key === "Enter") isci(true); });
+
+// ---------------------------------------------------------------- zloženo vprašanje
+//
+// Na telefonu je obrazec cel zaslon: po iskanju je bila prva kartica pri 606
+// pikah od 915, nad orodno vrstico sta ostali dve (presoja 18. 10. 2026).
+// Lastno iskanje ali naslov ga zato skrči v vrstico z vprašanjem, dotik jo
+// odpre -- isto kot iskalnik zvez (`connections.zlozi()`). Ponovno iskanje ob
+// spremembi ure, prevoznikov ali kraja ne: to bi zaprlo obrazec, ki ga človek
+// popravlja. Kaj se skrije, odloči CSS; na namizju obrazec ostane.
+function kdajBeseda() {
+  if (S.kdaj !== "do") return "čim prej";
+  const dan = $("#dan").value || todayIso();
+  const jutri = new Date(`${todayIso()}T12:00:00`);
+  jutri.setDate(jutri.getDate() + 1);
+  const kdaj = dan === todayIso() ? "" : dan === jutri.toLocaleDateString("sv-SE")
+    ? " jutri" : ` ${dayLabel(dan)}`;
+  return `do ${$("#tam").value}${kdaj}`;
+}
+
+function zlozi() {
+  const ime = (t) => `<span class="povzetek-ime">${escapeHtml(napisTocke(t))}</span>`;
+  $("#povzetek-pot").innerHTML = `${ime(S.od)}<span class="povzetek-pus" aria-hidden="true">→</span>${ime(S.do)}`;
+  $("#povzetek-dan").textContent = kdajBeseda();
+  $("#povzetek-uredi").setAttribute("aria-label",
+    `spremeni iskanje: ${$("#povzetek-pot").textContent}, ${$("#povzetek-dan").textContent}`);
+  document.body.classList.add("zlozeno");
+}
+
+function razlozi() {
+  document.body.classList.remove("zlozeno");
+}
+
+$("#povzetek-uredi").addEventListener("click", () => {
+  razlozi();
+  window.scrollTo({ top: 0 });
+});
+
+// Pot nazaj je najpogostejše drugo vprašanje, zato zamenjava tudi v zloženi
+// vrstici -- brez nje bi bila dva dotika in obrazec čez cel zaslon.
+$("#povzetek-swap").addEventListener("click", () => {
+  zamenjajKraja();
+  isci(true);
+});
 // Kadar je odgovor že na zaslonu, ga spremenjeno vprašanje osveži; dokler ga
 // ni, išče samo gumb (isto pravilo kot na vstopni strani).
 for (const id of ["#dan", "#tam", "#hoje", "#kolo"]) {
@@ -1110,7 +1164,7 @@ if (location.hash === "#kam" && !izPovezave) {
 }
 povej(izPovezave ? "" : "Vpiši naslov ali postajo, ali klikni na zemljevid.", null);
 S.obnovi = izPovezave;         // samo ob odprtju strani, ne ob "Poišči"
-if (izPovezave) isci();
+if (izPovezave) isci(true);    // poizvedba iz naslova je vprašanje, ne osnutek
 
 pkUstvari($("#karta")).then((k) => {
   if (!k) {
