@@ -56,6 +56,16 @@ Pravila zajema (kaj feed pove in kje laže): `.claude/rules/zajem.md`; tu samo s
 
 * **`vehicle_now` pozna samo lego, zamude v njej ni.** `/api/vehicles` je vračal `v.*`, prikaz je bral neobstoječi `v.delay_s` — kartica na zemljevidu je pri vsakem avtobusu pisala „? min", njegova stran +15. Dve številki o istem vozilu, ena izmišljena. Zamudo doda `stats.last_measured()` — **isto pravilo kot živi seznam in okno vožnje**, ne nova poizvedba: sicer se razideta spet. Preverjeno na 67 vozilih z meritvijo, vsa se ujemajo z vrstico v `run`. Poceni: ~80 voženj z GPS, ne vse omrežje (20 ms).
 
+## En proces, GIL in kaj ne sme v zahtevo (presoja 18. 10. 2026)
+
+**Konvoj GIL je vzrok repov, ne posamezen endpoint.** `sqlite3` GIL ob vsakem koraku spusti in za vrnitev čaka `switchinterval`, dokler ga nit, ki računa v Pythonu, ne odda. Ob eni taki niti tabla Ljubljana 7 ms → 11,9 s (≈1 450 predaj na zahtevo). `server.lifespan` zato `sys.setswitchinterval(0.0005)` (10× krajši repi, ~5 ms na mirno zahtevo). Vzroka to ne odpravi: dolgo čisto Pythonovo delo v istem procesu (pot, ogrevanje voznega reda, NAP, povzetki) še vedno upočasni vse — novo tako delo daj v kos, ki sprošča GIL, ali iz procesa.
+
+**Tuj strežnik nikoli sinhrono v zahtevi.** `data.lpp.si` (`lpp._prinesi`) se bere v ozadju, eno branje na vzorec; zahteva vzame zadnji odgovor do 90 s star (eta od trenutka branja), ob prvem ogledu počaka največ 0,3 s, po neuspehu vzorec 15 s miruje. Zasloni (tabla, obvozi): ob napaki minuto tišine za obe poti. Prej 2 s čakanja na vsako drugo odprtje okna mestnega LPP.
+
+**Statika na znački uvoza** (`/api/stations*`, `/api/network.geojson`): `STATIKA_S` (dan) in `v_ozadju`; `_ogrej_pot` ogreje VSE ključe, ki jih strani vprašajo. Urna varovalka brez ozadja je vsako uro dala račun potniku (na arwenu do 9 s).
+
+**Pika živosti bere `/api/svezina`** (zadnji zajem, število ovir), ne `/api/health` — ta je bil najpogostejši endpoint in ~150 ms strežnika za eno številko. `pollWhileVisible` prvi korak sproži sam: ročni klic pred njim podvoji vsako zahtevo (okno vožnje je imelo pet podvojenih).
+
 ## Ogrevanje predpomnilnika: kdo dela in kdaj
 
 `/api/live` = najdražji odgovor, ki ga zemljevid vpraša vsakih 30 s. Predpomnilnik vezan na `rt_fetched`, ta se osveži ob vsakem zajemu (tudi 30 s) → skoraj vsak klic padel v prazno.

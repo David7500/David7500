@@ -239,6 +239,8 @@ Zdaj zraven tiste do **14 dni naprej** (`alerts.NAPOVEDANO_DNI`), z žetonom „
 
 Ista družina kot pravilo o mešanju `?` in `:ime` v SQL: ena reža, dva pomena.
 
+**Puščica ‹ v oknu vožnje in pilula Vlaki/Avtobusi vodita na zadnje iskanje** (18. 10. 2026, prijava „ko daš nazaj, se vnos resetira“): prej goli `/app/bus`, prazen iskalnik. Puščica je `history.back()`, kadar smo prišli z naše strani; sicer zadnje iskanje omrežja v tem zavihku (`common.zapomniIskanje`, sessionStorage — po zaprtju se polja iz spomina ne izpolnijo, kot doslej). Pilula na iskalniku samem ostane gola pot („začni znova“). Isto „‹ nazaj na predloge“ na poti od vrat do vrat, ki si imena krajev zavihka zapomni (`kajros:pot-imena`).
+
 **Iskanje na vstopni strani sproži samo gumb.** Izbira postaje iz predlogov ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib = zahteva za odgovor, ki ga nihče ni prosil. Izjema: poizvedba iz naslova (deljena povezava) — odgovor je tam prav to, po kar je človek prišel.
 
 **Po iskanju se obrazec na telefonu skrči v vrstico z vprašanjem** (5. 10. 2026, `zlozi()`): „Ljubljana → Celje · danes ✎“ in gumb za zamenjavo smeri; dotik odpre obrazec. Prej je bil obrazec cel zaslon in nad orodno vrstico je ostala polovica prve zveze (412 pik: odgovor pri 596 pikah, zdaj pri 303). Skrči ga samo lastno iskanje ali naslov, **nikoli osvežitev** — ta bi zaprla obrazec, ki ga človek popravlja. Neznana postaja (404) in preklop zavihka ga odpreta. Namizje ima obrazec v eni vrstici in vrstice ne pokaže (samo CSS). Imena se v vrstici prelomijo, ne odrežejo: „Ljublja… → Maribor …“ je bil pri 360 pikah isto kot Ljubljana–Maribor.
