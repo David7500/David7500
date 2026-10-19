@@ -1910,6 +1910,10 @@ _VEHICLES_CACHE: dict = {"key": None, "rows": []}
 # (19. 10. 2026). Izračun zato praviloma opravi nit v strežniku
 # (`server._ogrej_vozila`), zahteva ga le še počaka.
 _VEHICLES_LOCK = threading.Lock()
+# Kdaj je kdo nazadnje vprašal po legah. Brez gledalcev (ponoči) nit ne
+# računa: na arwenu je to 10 % jedra (en izračun ~1 s, 6-krat na minuto).
+_VOZILA_ZAHTEVANA = [0.0]
+_VOZILA_GLEDAJO_S = 120
 
 
 def _vozila_po_branju(conn, zdaj: datetime) -> tuple[str | None, list[dict]]:
@@ -1929,7 +1933,10 @@ def _vozila_po_branju(conn, zdaj: datetime) -> tuple[str | None, list[dict]]:
 
 def ogrej_vozila() -> None:
     """Lege izračunaj po branju, preden pride zemljevid (`server.py`).
-    Brez značke (leg še ni) nič: zahteva bi izračun sicer ponovila vsakič."""
+    Brez značke (leg še ni) nič: zahteva bi izračun sicer ponovila vsakič.
+    Brez zahteve v zadnjih dveh minutah tudi ne -- nikogar ni, ki bi čakal."""
+    if time.monotonic() - _VOZILA_ZAHTEVANA[0] > _VOZILA_GLEDAJO_S:
+        return
     with _conn() as conn:
         if db.get_meta(conn, "positions_fetched") is not None:
             _vozila_po_branju(conn, datetime.now(TZ))
@@ -2147,6 +2154,7 @@ def api_vehicles(trip: str | None = None, request: Request = None):
     zdaj = datetime.now(TZ)
     now = int(zdaj.timestamp())
     with _conn() as conn:
+        _VOZILA_ZAHTEVANA[0] = time.monotonic()
         brano, vrstice = _vozila_po_branju(conn, zdaj)
 
     # `age_s` se racuna ob vsaki strezbi, ne ob predpomnjenju: starost lege je
