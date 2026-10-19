@@ -2728,3 +2728,22 @@ David 17. 10.: „na mail moram dobiti le, kadar stoji in rabim jaz posredovati�
 **Na navaden dan prav tako** (malina, `data/kajros.sqlite`, 5.–11. 10.; vrstica = ničla, zapisana več kot 20 min pred voznim redom postanka in nikoli popravljena): 6. 10. 5 242 od 55 953 vrstic LPP v `run` (9,4 %), to je 93 % vseh ničel; 1 905 od 2 148 prvih postankov (89 %); 137 od 2 261 voženj samo iz takih (5.–11. 10. na dan 30–173, 3–12 %). Ločiti se da le, dokler je vozni red vožnje v bazi -- pri LPP okno uvoza, starejše vožnje so nagrobniki brez `sched`, zato zgodovina ni očiščena.
 
 Odslej `ingest(vir="lpp")` `delay` preskoči. Ocena vpliva ob 12:57: števec „vozila brez zamude“ bi pri mestnem LPP dobil 1 od 9 vozil (pošta šele pri 10 in 25 %).
+
+## Hitrost in prikaz: presoja 18.–19. 10. 2026
+
+David 18. 10.: „poglej vse API-je, ki so počasni; ko odpreš stran o vozilu, čakaš okoli 2 s; ko daš nazaj, se vnos resetira; pri Bavarskem dvoru piše ‚prvi vlak −1 min‘“. Pet presoj z agenti (najdbe v scratchpadu seje, povzetek tu), popravki v commitih 52aef25–c3dbbf1.
+
+**Produkcija pred popravki** (arwen, `/admin`, 17.–18. 10., povprečje / največ): `/api/health` 2 636 zahtev, 399 ms / 40,4 s; `/api/stations/index` 1 620 ms / 9,1 s (p50 ≤ 100 ms, p95 > 5 s); `/api/stations` 990 ms / 8,0 s; `/api/connections` 577 ms / 8,4 s; `/api/pot` 2 910 ms / 16,5 s; `/api/train/{no}/run` 274 ms / 2,9 s (p95 ≤ 2,5 s); `/api/shapes/live` 913 ms; `/avtobus/{od}/{cilj}` največ 34 s, `/postajalisce/{ime}` 12,8 s.
+
+**Vzroki, izmerjeni lokalno** (kopija baze, 864 k `sched`, 4 M `run`):
+* `(? IS NULL OR t.network = ?)` SQLite ne uporabi za indeks: kazalo postaj železnice 1 702 ms, z `t.network = ?` 6 ms; korelirani EXISTS za postaje železnice 1,9 s, z IN od voženj 3 ms (pri avtobusu obratno: EXISTS 47 ms, IN 380 ms). Statika je imela urno varovalko brez osvežitve v ozadju, ogreval se je en ključ od petih.
+* **Konvoj GIL**: `sqlite3` GIL ob vsakem koraku spusti in za vrnitev čaka `switchinterval` (5 ms), dokler ga računajoča nit ne odda. Ob eni niti s čisto Pythonovo zanko: tabla Ljubljana 7 ms → 11,9 s, Bavarski dvor 42 ms → 23,8 s, zveza LJ–MB 12 ms → 19,5 s (mediana 7 klicev). Pri 0,5 ms 0,44 / 1,47 / 1,77 s, mirno +~5 ms. Tabla Ljubljana = 66 stavkov in 1 368 vrstic (~1 450 predaj).
+* Mestni LPP: `/run` je sinhrono čakal `data.lpp.si` do 2 s, neuspeh se ni zapomnil. `arrivals-on-route` naravnost (20 vzorcev, 18. 10. 20:42–20:48): 15 nad 2 s, mediana 9,3 s; `/admin` zadnjo uro 26 napak od 31 branj. Produkcija `/run` LPP 14: 5 × 2,67–2,73 s, 5 × 0,68–0,93 s.
+* Prestopi (`_TRANSFER_SQL`): Bavarski dvor → Vič od 20:50 2,5 s, od 8:00 11,8 s, cel dan 13 s; produkcija Bavarski dvor → BROD 8,1–8,5 s (0 zvez). V pomnilniku z bisect: 14 parov × 4 ure, izid enak v vseh 56 primerjavah vrstica za vrstico, skupaj 389 s → 1,05 s.
+* Okno vožnje ob odprtju 16–17 klicev API, pet podvojenih (`pollWhileVisible` sproži prvi korak sam, stran ga je klicala še ročno); smer v glavi iz `/api/live` po številki linije — pri LPP 14 nasprotna smer.
+* Ura ob zamudi je sekunde odrezala, žeton minuto zaokrožil: okno vožnje 13 od 32 vrstic, tabla Kolodvor 6 od 8 neskladnih.
+* Značka „običajno“ z golo negativno minuto: tabla Bavarski dvor 46 od 64 značk.
+
+**Lokalno po popravkih**: kazalo železnice hladno 11 ms, avtobusa 510 ms (nato 12), postaje železnice 5 ms; `/api/connections` avtobus 60–190 ms (prej 2,5–13 s), vlak 25–45 ms; okno vožnje LPP 9 klicev, nobenega dvakrat, postanki 0,20–0,22 s, vozilo na zemljevidu 0,61–0,88 s; `/api/svezina` 8–9 ms (health 40–49 ms); `pot.zamiki` ob 8:41 158 → 73 ms, ponovno 0 ms; `typical_dwell` LPP 14 29 → 0,08 ms ponovno.
+
+**Produkcija takoj po objavi** (19. 10. ~9:00, ponedeljek, 625 vozil, nekaj minut po ponovnem zagonu, n = 2–6): kazalo železnice 78–127 ms, avtobusa 926 → 156 ms, postaje železnice 76 ms; `/api/svezina` ~100 ms (RTT ~75), `/api/health` 312–422 ms; Bavarski dvor → Vič 0,78–1,16 s (prej 8,3 s), → Brod 1,3–3,2 s (prej 8,1; zdaj vodi `plan()`, ker prestopa ni), Ljubljana → Maribor 0,35–0,51 s; `/run` LPP 1 0,65–0,99 s v šestih zaporednih (prej polovica 2,7 s). Arwen je pri isti zahtevi 5–10-krat počasnejši od razvojnega računalnika. Primerjavo porazdelitev ponovi v `/admin` čez dan ali dva.
