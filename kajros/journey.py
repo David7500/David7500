@@ -611,6 +611,21 @@ def _tabla_vozni_red(conn: sqlite3.Connection, station: str, day: str,
     return zapis
 
 
+def stevilo_odhodov(conn: sqlite3.Connection, station: str, service_date: str,
+                    od_s: int, do_s: int, network: str | None,
+                    stop_ids: set[str] | None = None) -> int:
+    """Koliko voženj po voznem redu odpelje s postaje med `od_s` in `do_s`.
+
+    Za stran, ki pokaže le prvih nekaj odhodov: „115 voženj, tu je prvih 24“
+    namesto „več kot 24“ (presoja 18. 10. 2026, Bavarski dvor ob 21:10).
+    Iz predpomnjenega voznega reda table, brez zamud in brez ocene.
+    """
+    stolpci, vrstice, ure = _tabla_vozni_red(conn, station, service_date, network)
+    i_sid, i_seq, i_zadnji = (stolpci.index(k) for k in ("stop_id", "stop_seq", "last_seq"))
+    return sum(1 for v in vrstice[bisect.bisect_left(ure, od_s):bisect.bisect_right(ure, do_s)]
+               if v[i_seq] != v[i_zadnji] and (stop_ids is None or v[i_sid] in stop_ids))
+
+
 def _vrstice_table(conn: sqlite3.Connection, station: str, service_date: str,
                    network: str | None, od_s: int, do_s: int, from_s: int,
                    rezerva: int) -> list[dict]:

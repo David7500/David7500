@@ -540,7 +540,11 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
         "smeri": smeri if len(smeri) > 1 else [],
         "smer": izbrana["kljuc"] if izbrana else None,
         "zapis": zapis, "odhodi": odhodi[:NAJVEC_ODHODOV],
-        "vseh": len(odhodi), "obvoz": obvoz,
+        "vseh": (max(len(odhodi), journey.stevilo_odhodov(
+            conn, ime, datum, now_s, now_s + 180 * 60, network,
+            set(izbrana["stop_ids"]) if izbrana else None))
+            if len(odhodi) > NAJVEC_ODHODOV else len(odhodi)),
+        "obvoz": obvoz,
         "naprej": sosednje(kaz, ime),
         "izracunano": kaz.get("computed_at"),
         "indeksiraj": zapis is not None,

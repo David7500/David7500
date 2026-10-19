@@ -48,10 +48,11 @@
     <p class="vodilo">
       {% if odhodi %}
         {% set n = odhodi | length %}
-        {#- Ob „več kot" je samostalnik v rodilniku ne glede na število, zato
-            svoja poved in ne pripis „in še več" na prejšnjo. -#}
+        {#- Vseh je več, kot jih stran pokaže: pove obe števili. Prej „več kot
+            24“ pri 115 vožnjah. -#}
         {% if vseh > n %}
-        V naslednjih treh urah odpelje <b>več kot {{ n }}</b> voženj.
+        V naslednjih treh urah {{ vseh | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
+        <b>{{ vseh }}</b> {{ vseh | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}, tu {{ n | stevnik("je prva", "sta prvi", "so prve", "je prvih") }} {{ n }}.
         {% else %}
         V naslednjih treh urah {{ n | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
         <b>{{ n }}</b>
