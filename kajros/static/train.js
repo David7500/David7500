@@ -1065,8 +1065,17 @@ async function loadAlerts() {
 
 async function loadRun() {
   try {
-    await Promise.all([loadReport(), loadChain()]);
-    const { run, forecast, current } = await fetchRunAndForecast(TRAIN_NO, URL_DATE, URL_TRIP);
+    // Vse tri hkrati: `/run` je prej čakal, da se končata poročilo in veriga
+    // (~120 ms na arwenu). Poročila prevoznika so samo pri vlakih (0 za
+    // avtobusne linije), veriga vozila (`block_id`) samo pri avtobusih (SŽ je
+    // nimajo) -- prej sta šli obe vedno, vsako odprtje dvakrat (presoja
+    // 18. 10. 2026).
+    const [, , izid] = await Promise.all([
+      OMREZJE === "zeleznica" ? loadReport() : null,
+      OMREZJE === "avtobus" ? loadChain() : null,
+      fetchRunAndForecast(TRAIN_NO, URL_DATE, URL_TRIP),
+    ]);
+    const { run, forecast, current } = izid;
     // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
     // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
     state.mode = run.mode;
@@ -1092,6 +1101,10 @@ async function loadRun() {
       }
     }
     applyNetworkWording();
+    // Smer iz te vožnje. Prej iz `/api/live` po številki linije: pri mestni
+    // liniji je bila prva najdena vožnja pogosto v nasprotni smeri (LPP 14
+    // Bokalce → Savlje je imela v glavi „Savlje – Bokalce“, 18. 10. 2026).
+    if (run.headsign) headsignEl.textContent = lepoIme(run.headsign);
     state.run = run;
     state.forecast = forecast;
     state.current = current;
@@ -1835,6 +1848,21 @@ function naloziSlogMapLibre() {
   return slogMapLibre;
 }
 
+// Lega in trasa avtobusa gresta na pot ob odprtju, vzporedno z `/run`. Prej so
+// lega, knjižnica in trasa čakale druga na drugo za `/run`: vozilo je prišlo na
+// zemljevid 0,5-0,8 s za postanki (arwen, presoja 18. 10. 2026). Knjižnica se
+// še vedno naloži šele, ko lega res obstaja.
+const zgodaj = { lega: null, trasa: null };
+if (OMREZJE === "avtobus" && URL_TRIP && !URL_DATE) {
+  zgodaj.lega = fetch(`/api/vehicles?trip=${encodeURIComponent(URL_TRIP)}`);
+  zgodaj.lega.then((r) => r.clone().json()).then((list) => {
+    if (!list || !list.length) return;
+    naloziSlogMapLibre();
+    pkNaloziMapLibre();
+    zgodaj.trasa = fetch(`/api/trip/${encodeURIComponent(URL_TRIP)}/shape`);
+  }).catch(() => { /* lego vpraša zanka sama */ });
+}
+
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
                  postaje: null, v: null, since: 0, loc: null, nastaja: null,
                  avto3d: null, lega: null, vir: null, vlak: false };
@@ -1962,6 +1990,13 @@ const RUN_POD = "k-voznja-obroba";
 async function ustvariRunMap(v) {
   const wrap = document.getElementById("run-map-wrap");
   const el = document.getElementById("run-map");
+  // Trasa po cesti oziroma progi gre na pot pred knjižnico, ne za njo.
+  const zacetaTrasa = state.run.trip_id === URL_TRIP ? zgodaj.trasa : null;
+  zgodaj.trasa = null;
+  const trasaP = (zacetaTrasa || fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`))
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => (d ? d.points : null))
+    .catch(() => null);           // brez trase narisemo postajalisca
   // MapLibre izmeri okvir ob nastanku; skrit okvir meri 0 x 0.
   wrap.hidden = false;
   await naloziSlogMapLibre();
@@ -1988,13 +2023,7 @@ async function ustvariRunMap(v) {
 
   // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
   // postajalisca -- ta ni pot in mora biti videti drugace (crtkano).
-  let trasa = null;
-  try {
-    const r = await fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`);
-    if (r.ok) trasa = (await r.json()).points;
-  } catch (err) {
-    /* brez trase narisemo postajalisca */
-  }
+  const trasa = await trasaP;
   // `trasa` je seznam KOSOV, ne tock: uvoz jo razreze tam, kjer je v GTFS
   // razmik nad kilometer. Pogoj `trasa.length > 1` je bil napisan se za
   // ravno listo tock in je zato izlocil vsako enodelno traso -- 2 706 od
@@ -2456,6 +2485,8 @@ function loadPosition() {
   if (runMap.pollTrip === trip) return;
   if (runMap.poll) runMap.poll.stop();
   runMap.pollTrip = trip;
+  const prva = trip === URL_TRIP ? zgodaj.lega : null;
+  zgodaj.lega = null;
   runMap.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
     const v = list[0];
     if (v) {
@@ -2464,7 +2495,7 @@ function loadPosition() {
     } else if (runMap.vir === "potniki") {
       skrijRunMap();
     }
-  });
+  }, prva);
 }
 
 // Vozilo brez GPS (vlak, ~10 % avtobusov) ima lego samo od potnikov na njem,
@@ -2556,22 +2587,7 @@ async function loadHistory() {
   }
 }
 
-// ---------- smer vlaka iz /api/live, ura ----------
-
-async function loadHeadsign() {
-  try {
-    // **Z omrežjem, ne brez.** Brez parametra gre poizvedba čez obe omrežji
-    // hkrati: na strežniku 4,6 s proti 0,38 s, in to ob vsakem odprtju okna
-    // vožnje. Ta stran gleda eno vožnjo in njeno omrežje pozna.
-    // Omrežje strani, ne `state.network`: ta se napolni šele iz odgovora
-    // `/api/train/…/run`, `loadHeadsign()` pa teče takoj ob nalaganju.
-    const live = await fetch(`/api/live?network=${OMREZJE}`).then(jsonOk);
-    const me = live.find((t) => t.train_no === TRAIN_NO);
-    if (me && me.headsign) headsignEl.textContent = lepoIme(me.headsign);
-  } catch (err) {
-    /* smer je postranska -- brez nje stran deluje naprej */
-  }
-}
+// ---------- ura ----------
 
 function tickClock() {
   const fmt = new Intl.DateTimeFormat("sl-SI", {
@@ -2582,7 +2598,8 @@ function tickClock() {
 
 tickClock();
 setInterval(tickClock, 1000);
-refreshFeedDot();
+// Prvi klic opravi `pollWhileVisible` sam, takoj. Ročni klic pred njim je
+// vsako zahtevo podvojil (health 2-4-krat ob odprtju, presoja 18. 10. 2026).
 pollWhileVisible(refreshFeedDot, 30000);
 
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
@@ -2595,11 +2612,19 @@ initMode(() => {
 });
 
 loadWeather();
-loadAlerts();
-loadHeadsign();
+// Ovire so samo pri železnici (tudi nadomestni prevoz je `zeleznica`).
+if (OMREZJE === "zeleznica") loadAlerts();
 
 // Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja ("zajetih N
 // PRED danasnjo"), zato sele za prvim `loadRun`. Vzporeden zagon bi danasnjo
-// voznjo stel v svoje lastno povprecje.
-pollWhileVisible(loadRun, RUN_POLL_MS);
-loadRun().then(() => pollWhileVisible(loadHistory, HIST_POLL_MS));
+// voznjo stel v svoje lastno povprecje. Ena zanka: prej je `loadRun` tekel
+// dvakrat hkrati (zanka ga sproži takoj, in še ročni klic), z njim vse
+// njegove zahteve -- polovica dela strežnika za okno vožnje.
+let zgodovinaTece = false;
+pollWhileVisible(async () => {
+  await loadRun();
+  if (!zgodovinaTece) {
+    zgodovinaTece = true;
+    pollWhileVisible(loadHistory, HIST_POLL_MS);
+  }
+}, RUN_POLL_MS);
