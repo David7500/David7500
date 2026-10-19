@@ -2075,7 +2075,15 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
         d["delay_s"] = stats.trenutna_zamuda(m)
         d["last_stop"] = m["name"] if m else None
         d["measured_seq"] = m["stop_seq"] if m else None
-    return out + _vozila_brez_voznje(conn, now)
+    out += _vozila_brez_voznje(conn, now)
+    # Lega v float32 iz baze nosi 15 števk: 0,1 m in 0,1° zadoščata, odgovor
+    # gre vsakemu zemljevidu na 10 s (600 vozil ~46 kB stisnjeno; zaokroženo
+    # 14 % manj, 19. 10. 2026).
+    for d in out:
+        for k, n in (("lat", 6), ("lon", 6), ("bearing", 1), ("speed_ms", 2)):
+            if isinstance(d.get(k), float):
+                d[k] = round(d[k], n)
+    return out
 
 
 def _vozila_brez_voznje(conn, now: int) -> list[dict]:
