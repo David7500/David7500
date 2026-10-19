@@ -1562,23 +1562,45 @@ def _active_service_date(conn, train_no: str, now: datetime) -> str:
     return today
 
 
+def _odgovor_statike(request: Request | None, kljuc: str, znacka: tuple,
+                     telo: bytes) -> Response:
+    """Statika z ETag: ponovni obisk dobi 304 brez telesa.
+
+    `/api/stations?network=avtobus` je 250 kB stisnjeno in se je prenesel ob
+    vsakem odprtju zemljevida (presoja 18. 10. 2026), skupaj s stiskanjem na
+    strežniku. `no-cache` je „vedno vprašaj“, ne „hrani“ -- star odgovor ne
+    pride nikoli; service worker `/api/` še vedno pusti pri miru (`oznake.md`).
+    Cloudflare ob stiskanju ETag oslabi (`W/`), zato se primerja brez tega.
+    """
+    etag = '"' + hashlib.blake2s(f"{kljuc}|{znacka}".encode(), digest_size=8).hexdigest() + '"'
+    glave = {"ETag": etag, "Cache-Control": "no-cache"}
+    if request is not None:
+        prosi = [x.strip().removeprefix("W/") for x in
+                 request.headers.get("if-none-match", "").split(",")]
+        if etag in prosi:
+            return Response(status_code=304, headers=glave)
+    return Response(content=telo, media_type="application/json", headers=glave)
+
+
 @app.get("/api/stations")
-def api_stations(network: str = NETWORK_Q):
+def api_stations(network: str = NETWORK_Q, request: Request = None):
     # 863 kB in 77 ms, vsebina pa se spremeni enkrat na dan ob uvozu GTFS.
     # Predpomnimo ze SERIALIZIRAN JSON, ne seznama slovarjev: sama poizvedba
     # je manjsi del cene, vecino poje pretvorba 9 791 postaj v niz. Zato
     # `Response`, ne navadna vrnitev -- FastAPI bi jo sicer serializiral znova.
+    kljuc, znacka = f"stations:{network}", _znacka("gtfs_imported_at", "pripeto_at")
     telo = _predpomni(
-        f"stations:{network}", _znacka("gtfs_imported_at", "pripeto_at"), STATIKA_S,
+        kljuc, znacka, STATIKA_S,
         lambda: json.dumps(_conn_klic(lambda c: stats.stations(c, network)),
                            ensure_ascii=False, separators=(",", ":")).encode(),
         v_ozadju=True)
-    return Response(content=telo, media_type="application/json")
+    return _odgovor_statike(request, kljuc, znacka, telo)
 
 
 @app.get("/api/stations/index")
 def api_station_index(network: str = NETWORK_ISKANJE_Q,
-                      koordinate: bool = Query(False, description="dodaj lego postaje")):
+                      koordinate: bool = Query(False, description="dodaj lego postaje"),
+                      request: Request = None):
     """Imena postaj omrežja, urejena po prometu — za iskanje brez omrežja.
 
     Vsebina se spremeni enkrat na dan ob uvozu GTFS, zato je predpomnjena
@@ -1591,13 +1613,14 @@ def api_station_index(network: str = NETWORK_ISKANJE_Q,
     kazalo se naloži enkrat in išče se v brskalniku, tako kot pri iskalniku zvez.
     """
     net = None if network == "vse" else network
+    kljuc, znacka = f"stations-index:{network}:{int(koordinate)}", _znacka("gtfs_imported_at")
     telo = _predpomni(
-        f"stations-index:{network}:{int(koordinate)}", _znacka("gtfs_imported_at"), STATIKA_S,
+        kljuc, znacka, STATIKA_S,
         lambda: json.dumps(
             _conn_klic(lambda c: journey.station_index(c, net, koordinate)),
             ensure_ascii=False, separators=(",", ":")).encode(),
         v_ozadju=True)
-    return Response(content=telo, media_type="application/json")
+    return _odgovor_statike(request, kljuc, znacka, telo)
 
 
 @app.get("/api/stations/search")
@@ -2238,15 +2261,16 @@ def _shapes_live_rows(now: int):
 
 
 @app.get("/api/network.geojson")
-def api_network(elementary_only: bool = True):
+def api_network(elementary_only: bool = True, request: Request = None):
     """Geometrija prog z dolžino odseka v km. Za risanje zemljevida."""
     # Cista statika: spremeni se samo ob uvozu voznega reda.
+    kljuc, znacka = f"geojson:{elementary_only}", _znacka("gtfs_imported_at", "pripeto_at")
     telo = _predpomni(
-        f"geojson:{elementary_only}", _znacka("gtfs_imported_at", "pripeto_at"), STATIKA_S,
+        kljuc, znacka, STATIKA_S,
         lambda: json.dumps(_conn_klic(lambda c: stats.network_geojson(c, elementary_only)),
                            ensure_ascii=False, separators=(",", ":")).encode(),
         v_ozadju=True)
-    return Response(content=telo, media_type="application/json")
+    return _odgovor_statike(request, kljuc, znacka, telo)
 
 
 @app.get("/api/train/{train_no}")
