@@ -142,6 +142,30 @@ def _promet(conn: sqlite3.Connection, network: str | None) -> dict[str, int]:
     return out
 
 
+# Vse postaje z zloženim imenom (`_fold`), do naslednjega uvoza -- `station`
+# piše samo uvoz. Iskalnik je ob vsakem pritisku tipke zložil vseh 10 503
+# imen: 16 ms lokalno, na arwenu nekajkrat toliko (presoja 19. 10. 2026).
+_IMENA_POSTAJ: dict[tuple, tuple[list, dict]] = {}
+
+
+def _imena_postaj(conn: sqlite3.Connection) -> tuple[list[tuple[str, dict]], dict[str, str]]:
+    """[(zloženo ime, postaja)] in {ime: zloženo ime}."""
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    kljuc = (kje, stamp)
+    zapis = _IMENA_POSTAJ.get(kljuc) if stamp and kje else None
+    if zapis is None:
+        vse = [(_fold(r["name"]), dict(r)) for r in conn.execute(
+            "SELECT stop_id, name, lat, lon FROM station")]
+        zapis = (vse, {r["name"]: f for f, r in vse})
+        if stamp and kje:      # baza v pomnilniku (testi) se lahko spremeni pod nami
+            _IMENA_POSTAJ.clear()
+            _IMENA_POSTAJ[kljuc] = zapis
+    return zapis
+
+
 def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
                     network: str | None = None) -> list[dict]:
     """Postaje, ki ustrezajo nizu. Urejene po tem, kako dobro se ujemajo.
@@ -161,10 +185,9 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
     # grupirala vseh 403 000 vrstic `sched`, da je izracunala promet postaj,
     # od katerih jih je nato v Pythonu obdrzala pescico. Zdaj najprej ujamemo
     # imena (9791 vrstic), promet pa stejemo samo za zadetke.
-    rows = conn.execute("SELECT stop_id, name, lat, lon FROM station").fetchall()
+    vse, zlozena = _imena_postaj(conn)
 
-    def rank_of(name: str) -> int:
-        folded = _fold(name)
+    def rang_zlozenega(folded: str) -> int:
         if folded == needle:
             return 0
         if folded.startswith(needle):
@@ -172,6 +195,9 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
         if any(w.startswith(needle) for w in folded.split()):
             return 2
         return 3 if needle in folded else 9
+
+    def rank_of(name: str) -> int:
+        return rang_zlozenega(zlozena.get(name) or _fold(name))
 
     def _razred(rang: int) -> int:
         """Zacetek imena in zacetek besede sta za potnika ISTO dobra zadetka.
@@ -187,7 +213,7 @@ def search_stations(conn: sqlite3.Connection, q: str, limit: int = 12,
         """
         return 1 if rang == 2 else rang
 
-    hits = [(rank_of(r["name"]), r["name"], r) for r in rows]
+    hits = [(rang_zlozenega(f), r["name"], r) for f, r in vse]
     hits = [h for h in hits if h[0] < 9]
     if not hits:
         return []
