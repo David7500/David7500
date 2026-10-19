@@ -897,3 +897,18 @@ def test_predpomnilnik_hrani_dva_dneva_brez_praznjenja():
     assert c == {"b": "B", "c": "C"}
     pot._shrani(c, "c", "C2")
     assert c == {"b": "B", "c": "C2"}
+
+
+def test_hoja_vso_pot_ne_izrine_voznje_s_toleranco():
+    """S toleranco prevlade je „peš 30 min“ izrinil avtobus z 28 min hoje, ki
+    pride minuto pozneje, in stran je trdila „zveze ta čas ni“ (nabor 1 280
+    vprašanj, 19. 10. 2026). Hoja vso pot se primerja na sekundo."""
+    from kajros import pot
+    pes = {"datum": "2026-10-21", "odhod": 61200, "prihod": 63000, "hoje_s": 1800,
+           "prestopov": 0, "noge": [{"vrsta": "hoja"}]}
+    bus = {"datum": "2026-10-21", "odhod": 61200, "prihod": 63050, "hoje_s": 1680,
+           "prestopov": 0, "noge": [{"vrsta": "hoja"},
+                                    {"vrsta": "voznja", "trip_id": "t", "od_seq": 3},
+                                    {"vrsta": "hoja"}]}
+    izbrani = pot.izberi_predloge([pes, bus])
+    assert bus in izbrani

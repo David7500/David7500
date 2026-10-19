@@ -1280,8 +1280,14 @@ def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
     # zaslonu 8. 9. 2026 (Grosuplje -> Zmajski most: 12:53 z 20 min hoje poleg
     # 13:01 z 10 min, oba prihod 13:31). Vprašanje "z manj hoje" omejuje hojo
     # na VSAKEM koncu, ne v vsoti, in zna zato dati pot z več hoje skupaj.
+    def z_vozilom(p):
+        return any(n["vrsta"] == "voznja" for n in p["noge"])
+
+    # Hoja vso pot se z vožnjo primerja na sekundo, kot prej: s toleranco je
+    # "peš 30 min" izrinil avtobus z 28 min hoje, ki pride minuto pozneje, in
+    # stran je trdila "zveze ta čas ni" (lj13 ob 17:10 na naboru 1 280).
     def prevlada(q, p):
-        if p is najzgodnejsi:
+        if p is najzgodnejsi or not (z_vozilom(p) and z_vozilom(q)):
             return (_kdaj(q) <= _kdaj(p) and _odhod(q) >= _odhod(p)
                     and q["hoje_s"] <= p["hoje_s"] and q["prestopov"] <= p["prestopov"])
         return (_kdaj(q) // 60 <= _kdaj(p) // 60 and _odhod(q) // 60 >= _odhod(p) // 60
