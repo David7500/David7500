@@ -338,9 +338,11 @@ function runHeadHtml(cur) {
         : t0 ? "Običajno ob odhodu" : "Trenutna zamuda"}</div>
       <div class="detail-now-value" style="color:${t0 ? delayColor(t0.median_s) : color}">
         <span class="detail-now-n">${
-          t0 ? delayLabel(t0.median_s)
+          t0 ? (isEarly(t0.median_s) ? Math.abs(delayMin(t0.median_s)) : delayLabel(t0.median_s))
           : early ? Math.abs(delayMin(z || d)) : delayLabel(z || d)}</span>
-        <span class="detail-now-unit">min</span>
+        <span class="detail-now-unit">${
+          // Pri "Vozi prezgodaj" smer nosi naslov; "Običajno ob odhodu" je ne.
+          t0 && isEarly(t0.median_s) ? "min prej" : "min"}</span>
       </div>`}
       <div class="detail-now-where">
         ${poPotnikih ? `po poročilu ${pp.n > 1 ? "potnikov" : "potnika"} na vozilu`
@@ -968,7 +970,7 @@ function vehicleChainHtml() {
                  <strong>${escapeHtml(ime)}</strong> (zračno)`
               : `zdaj pri postajališču <strong>${escapeHtml(ime)}</strong>`;
     const zam = prev.delay_s != null
-      ? `<span style="color:${delayColor(prev.delay_s)}">${delayLabel(prev.delay_s)} min</span>`
+      ? `<span style="color:${delayColor(prev.delay_s)}">${delayText(prev.delay_s)}</span>`
         + `<span class="adv-only"> (izmerjeno v ${escapeHtml(prev.delay_stop || "?")})</span>`
       : null;
     parts.push(`
@@ -1308,8 +1310,8 @@ function renderTiles(h) {
   // Pri eni sami voznji mediana ni mediana -- povej, kaj stevilka v resnici je.
   const medLabel = n === 1 ? "Končna zamuda" : "Mediana končne zamude";
   const tiles = [
-    tileHtml(medLabel, delayLabel(s.median_final_s), pluralRuns(n), delayColor(s.median_final_s)),
-    tileHtml("Najslabša vožnja", delayLabel(s.worst_final_s), "končna zamuda", delayColor(s.worst_final_s)),
+    tileHtml(medLabel, delayText(s.median_final_s, true), pluralRuns(n), delayColor(s.median_final_s)),
+    tileHtml("Najslabša vožnja", delayText(s.worst_final_s, true), "končna zamuda", delayColor(s.worst_final_s)),
     tileHtml("Delež v 5 min", `${Math.round((s.on_time_share || 0) * 100)} %`,
              "končna zamuda do 5 min"),
   ];
@@ -1321,7 +1323,7 @@ function renderTiles(h) {
   // bi jo bilo treba skriti: `_pct` interpolira in vrednosti se res zblizata,
   // oznaki pa povesta, kaj je kaj. Cela sekcija je poleg tega `adv-only`.
   if (n >= 5) {
-    tiles.splice(2, 0, tileHtml("p90", delayLabel(s.p90_final_s), "9 od 10 voženj do tega",
+    tiles.splice(2, 0, tileHtml("p90", delayText(s.p90_final_s, true), "9 od 10 voženj do tega",
                                 delayColor(s.p90_final_s)));
   }
   document.getElementById("hist-tiles").innerHTML = tiles.join("");
@@ -1445,20 +1447,20 @@ function profilePoints() {
 function stopTipHtml(p) {
   const rows = [];
   if (p.value != null) {
-    rows.push(`<div class="tt-row"><span>${KIND[p.kind].label}</span><b>${delayLabel(p.value)} min</b></div>`);
+    rows.push(`<div class="tt-row"><span>${KIND[p.kind].label}</span><b>${delayText(p.value)}</b></div>`);
     if (p.kind === "estimate") {
       rows.push(`<div class="tt-note">${p.samples > 0
         ? `mediana ${escapeHtml(pluralRuns(p.samples))}`
         : "le prenos trenutne zamude, brez zgodovine"}</div>`);
       if (p.feedSaid != null) {
-        rows.push(`<div class="tt-row is-part"><span>prevoznik napoveduje</span><b>${delayLabel(p.feedSaid)} min</b></div>`);
+        rows.push(`<div class="tt-row is-part"><span>prevoznik napoveduje</span><b>${delayText(p.feedSaid)}</b></div>`);
       }
     }
   } else {
     rows.push('<div class="tt-row"><span>zamuda</span><b>—</b></div>');
   }
   if (p.past) {
-    rows.push(`<div class="tt-row"><span>povprečje preteklih</span><b>${delayLabel(p.past.mean_s)} min</b></div>`);
+    rows.push(`<div class="tt-row"><span>povprečje preteklih</span><b>${delayText(p.past.mean_s)}</b></div>`);
     rows.push(`<div class="tt-note">${escapeHtml(pluralRuns(p.past.n))}</div>`);
   }
   const wxRows = weatherTipRows(p.wx);
@@ -1808,8 +1810,8 @@ function drawRuns(w, runs) {
     });
     rect.addEventListener("mousemove", (ev) => showTip(
       `<div class="tt-title">${escapeHtml(r.service_date)}</div>` +
-      `<div class="tt-row"><span>končna</span><b>${delayLabel(r.final_delay_s)} min</b></div>` +
-      `<div class="tt-row"><span>največja med potjo</span><b>${delayLabel(r.max_delay_s)} min</b></div>` +
+      `<div class="tt-row"><span>končna</span><b>${delayText(r.final_delay_s)}</b></div>` +
+      `<div class="tt-row"><span>največja med potjo</span><b>${delayText(r.max_delay_s)}</b></div>` +
       `<div class="tt-note">${r.stops_observed} postaj z meritvijo</div>`, ev));
     rect.addEventListener("mouseleave", hideTip);
     svg.appendChild(rect);
@@ -2602,7 +2604,7 @@ async function loadHistory() {
       <div class="run-row">
         <span class="run-date">${escapeHtml(r.service_date)}</span>
         <span class="run-meta">${r.stops_observed} postaj z meritvijo</span>
-        <span class="run-value" style="color:${delayColor(r.final_delay_s)}">${delayLabel(r.final_delay_s)}</span>
+        <span class="run-value" style="color:${delayColor(r.final_delay_s)}">${delayText(r.final_delay_s, true)}</span>
       </div>`).join("");
   } else {
     runsSub.textContent = "";

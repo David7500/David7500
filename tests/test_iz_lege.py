@@ -155,7 +155,12 @@ def test_pot_na_izhodisce_in_v_garazo_ni_odklon():
     assert _odkloni(c) == []
 
 
-def test_odklon_brez_vrnitve_zapise_pospravi():
+def test_odklon_brez_vrnitve_zapise_pospravi(monkeypatch):
+    # Sled si zapomni uro OPAZOVANJA po stenski uri (`time.time()`), pospravi
+    # pa dobi uro iz testa. Pred 10:08 je bil `_ts(36520)` v prihodnosti in
+    # pospravi je sled pozabil skupaj z odklonom -- test je padal zjutraj
+    # (19. 10. 2026 ob 8:30), zvečer ne. Stenska ura je zato ura opazovanja.
+    monkeypatch.setattr(iz_lege.time, "time", lambda: _ts(36520))
     c = _baza()
     iz_lege.opazuj(c, "n", DAN, _ts(36500), 46.0, 14.012)
     iz_lege.opazuj(c, "n", DAN, _ts(36520), 46.01, 14.014)

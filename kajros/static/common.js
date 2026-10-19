@@ -1206,9 +1206,9 @@ function measuredStopHtml(s, isCurrent, w) {
     ? leg("prihod", s.actual_arr, s.sched_arr) + leg("odhod", s.actual_dep, s.sched_dep)
     : `<span class="stop-actual">${actual}</span>${schedHtml}`;
   const delay = split
-    ? `<span style="color:${delayColor(split.arr)}">${delayLabel(split.arr)}</span>`
+    ? `<span style="color:${delayColor(split.arr)}">${delayText(split.arr, true)}</span>`
       + `<span class="stop-arrow">→</span>`
-      + `<span style="color:${delayColor(split.dep)}">${delayLabel(split.dep)}</span>`
+      + `<span style="color:${delayColor(split.dep)}">${delayText(split.dep, true)}</span>`
     : `<span style="color:${color}">${delayText(d, true)}</span>`;
 
   return `
@@ -1316,11 +1316,11 @@ function forecastStopHtml(s, f, w, dod) {
         <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span></div>
         ${dwellPlanHtml(s)}
         ${feedSaid != null && !zivo && !(f && f.from_operator)
-          ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayLabel(feedSaid)} min</span></div>`
+          ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayText(feedSaid)}</span></div>`
           : ""}
-        ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.own_delay_s)} min</span></div>` : ""}
+        ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayText(f.own_delay_s)}</span></div>` : ""}
         ${f && f.od_prevoznika && !f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">od prevoznikove napovedi za ${escapeHtml(f.od_prevoznika)}</span></div>` : ""}
-        ${zivo && f ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayLabel(f.predicted_delay_s)} min</span></div>` : ""}
+        ${zivo && f ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayText(f.predicted_delay_s)}</span></div>` : ""}
         ${t ? `<div class="stop-times adv-only"><span class="stop-tag">mediana ${pluralRuns(t.n)}${
           t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}
       </div>

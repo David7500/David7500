@@ -78,7 +78,7 @@ function zamudaHtml(z, brez) {
   const barva = delayColor(z);
   const vrsta = z.vrsta ? ` <span class="zam-vrsta">${escapeHtml(z.vrsta)}</span>` : "";
   return `<span class="zam" style="color:${barva};border-color:${barva}55">`
-    + `${escapeHtml(delayText(z))}</span>${vrsta}`;
+    + `${escapeHtml(delayMin(z) === 0 ? "točno" : delayText(z))}</span>${vrsta}`;
 }
 
 // Žeton ob izstopu samo takrat, kadar se od vstopnega res razlikuje -- dva

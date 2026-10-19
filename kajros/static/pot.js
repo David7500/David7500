@@ -598,8 +598,10 @@ function zamudaHtml(n) {
   const z = n.zamuda;
   if (!z) return n.brez_podatka ? '<span class="zam zam-brez">brez podatka</span>' : "";
   const barva = delayColor(z);
+  // Zaokrožena ničla je "točno", ne "0": siva ničla ob številki linije se je
+  // brala kot del imena (presoja 18. 10. 2026) -- isto kot Moje poti.
   return `<span class="zam" style="color:${barva};border-color:${barva}55">`
-    + `${escapeHtml(delayText(z, true))}</span>`;
+    + `${escapeHtml(delayMin(z) === 0 ? "točno" : delayText(z, true))}</span>`;
 }
 
 // Rezerva prestopa mora ostati v verigi. Brez nje "1 prestop" ne pove, ali

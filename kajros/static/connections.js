@@ -397,12 +397,24 @@ function typicalChipHtml(t, fromStop, nadomestni) {
   }
   if (!t) return '<span class="chip chip-none">brez podatka</span>';
   const color = delayColor(t.median_s);
-  return `<span class="chip chip-forecast" style="color:${color};border-color:${color}44">
-      <span class="chip-n">${delayLabel(t.median_s)}</span><span class="chip-unit">min</span>
+  return `<span class="chip chip-forecast${isEarly(t.median_s) ? " chip-early" : ""}"
+        style="color:${color};border-color:${color}44">
+      ${stevilkaZnackeHtml(t.median_s)}
     </span>
     <div class="conn-where">običajno · ${pluralRuns(t.n)}</div>
-    ${fromStop ? `<div class="conn-where">merjeno na postaji ${escapeHtml(fromStop)}</div>` : ""}
+    ${fromStop ? `<div class="conn-where">merjeno na ${IS_BUS ? "postajališču" : "postaji"} ${escapeHtml(fromStop)}</div>` : ""}
     <div class="conn-where">${Math.round(t.on_time_share * 100)} % v 5 min</div>`;
+}
+
+// Številka in enota značke. "-4 min" je za potnika uganka, "4 min prej" ni.
+// Barva ostane siva: to res ni zamuda -- a prav zato mora povedati beseda,
+// kar barva ne bo. Ena funkcija za značko zamude in značko "običajno": prej
+// je pravilo imela le prva, in tabla Bavarskega dvora je pisala "-3 min ·
+// običajno" pri 46 od 64 značk (presoja 18. 10. 2026).
+function stevilkaZnackeHtml(z) {
+  const early = isEarly(z);
+  return `<span class="chip-n">${early ? Math.abs(delayMin(z)) : delayLabel(z)}</span>
+      <span class="chip-unit">${early ? "min prej" : "min"}</span>`;
 }
 
 // `z` je strežnikov objekt `zamuda` -- minuta, razred in vrsta so izračunani
@@ -411,17 +423,15 @@ function delayChipHtml(z, kind, at) {
   if (z == null) return '<span class="chip chip-none">brez podatka</span>';
   const color = delayColor(z);
   const forecast = kind && kind !== "izmerjeno";
-  // "-4 min" je za potnika uganka, "4 min prej" ni. Barva ostane siva: to res
-  // ni zamuda -- a prav zato mora povedati beseda, kar barva ne bo.
-  const early = isEarly(z);
-  return `<span class="chip${forecast ? " chip-forecast" : ""}${early ? " chip-early" : ""}"
+  // Avtobus ustavi na postajališču, vlak na postaji.
+  const kraj = IS_BUS ? "postajališču" : "postaji";
+  return `<span class="chip${forecast ? " chip-forecast" : ""}${isEarly(z) ? " chip-early" : ""}"
         style="color:${color};border-color:${color}44">
-      <span class="chip-n">${early ? Math.abs(delayMin(z)) : delayLabel(z)}</span>
-      <span class="chip-unit">${early ? "min prej" : "min"}</span>
+      ${stevilkaZnackeHtml(z)}
     </span>
     ${kind ? `<div class="conn-where">${escapeHtml(kind)}${at
-      ? (kind === "ocena" ? ` — vozilo je pri postaji ${escapeHtml(at)}`
-                          : ` na postaji ${escapeHtml(at)}`)
+      ? (kind === "ocena" ? ` — vozilo je pri ${kraj} ${escapeHtml(at)}`
+                          : ` na ${kraj} ${escapeHtml(at)}`)
       : ""}</div>` : ""}`;
 }
 
@@ -599,7 +609,7 @@ function transferRowHtml(t, nowMs, date, odKod) {
       ${l.nadomestni_postanek ? `<div class="leg">${nadomestniPostanekHtml(l.nadomestni_postanek)}</div>` : ""}
       ${next ? `<div class="leg is-prestop">
           <span class="leg-wait" style="color:${count === 1 ? st.color : "var(--sev-hard)"}">
-            prestop na postaji ${escapeHtml(l.to)} · ${wait} min
+            prestop na ${IS_BUS ? "postajališču" : "postaji"} ${escapeHtml(l.to)} · ${wait} min
           </span>
           ${prestopTiriHtml(l, next)}
           ${count === 1 && tr ? prestopZamudaHtml(l, tr.delay1_s) : ""}
@@ -669,12 +679,17 @@ function renderConnections(data) {
     }
     // "od Metlika do Bohinjska Bistrica" je napačno; sklanja se "postaja",
     // ime ostane v imenovalniku -- ista rešitev kot pri "na postaji X".
+    // Opomba o koncu tedna samo ob koncu tedna: med tednom je bila nasvet
+    // brez pomena.
+    const kraja = IS_BUS ? "postajališča" : "postaje";
+    const vikend = [0, 6].includes(new Date(`${data.date}T12:00:00`).getDay());
     resultsEl.innerHTML = `<div class="empty-state">
-      Na ta dan ni vožnje od postaje <strong>${escapeHtml(data.from)}</strong>
-      do postaje <strong>${escapeHtml(data.to)}</strong> — ne neposredne
+      Na ta dan ni vožnje od ${kraja} <strong>${escapeHtml(data.from)}</strong>
+      do ${kraja} <strong>${escapeHtml(data.to)}</strong> — ne neposredne
       ne z enim prestopom.<br>
-      kajros išče največ en prestop; z dvema morda gre. Preveri tudi drug dan —
-      ${IS_BUS ? "ob koncu tedna vozi manj avtobusov" : "ob koncu tedna vozi bistveno manj vlakov"}.
+      kajros išče največ en prestop; z dvema morda gre. Preveri tudi drug dan${vikend
+        ? ` — ${IS_BUS ? "ob koncu tedna vozi manj avtobusov" : "ob koncu tedna vozi bistveno manj vlakov"}`
+        : ""}.
     </div>`;
     renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
     return;
