@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+from array import array
 import sqlite3
 import statistics
 import threading
@@ -843,15 +844,68 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
     v prihodnjem voznem redu napisano "brez podatka", čeprav o tem vlaku
     nekaj vemo -- pravkar ne tega, kar bi radi. Vrednost NI napoved za tisti
     dan; je opis preteklih voženj in prikaz jo mora tako tudi imenovati.
+
+    Dnevi pred včerajšnjim so predpomnjeni do konca dneva (`_TIPICNO_PREJ`),
+    včeraj in danes se bereta sproti -- včerajšnji prometni dan po polnoči
+    še vozi. Na arwenu je bilo to 208-249 ms vsake table in iskanja zvez na
+    Bavarskem dvoru (19. 10. 2026, 60 dni zgodovine).
     """
     if not pairs:
         return {}
-    since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    danes = datetime.now(TZ).date()
+    since = (danes - timedelta(days=days)).isoformat()
+    meja = (danes - timedelta(days=1)).isoformat()
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     wanted = sorted(set(pairs))
 
+    prej: dict[tuple[str, int], array] = {}
+    manjka = []
+    for par in wanted:
+        v = _TIPICNO_PREJ.get((kje, par, since)) if kje else None
+        if v is None:
+            manjka.append(par)
+        else:
+            prej[par] = v
+    if manjka:
+        for par, po_dnevih in _tipicno_po_dnevih(conn, manjka, since, meja).items():
+            prej[par] = array("i", po_dnevih.values())
+        if kje:            # baza v pomnilniku (testi) se lahko spremeni pod nami
+            if len(_TIPICNO_PREJ) + len(manjka) > _TIPICNO_MAX:
+                _TIPICNO_PREJ.clear()
+            for par in manjka:
+                _TIPICNO_PREJ[(kje, par, since)] = prej.get(par, _PRAZNO)
+    sveze = _tipicno_po_dnevih(conn, wanted, meja, None)
+
+    out: dict[tuple[str, int], dict] = {}
+    for key in wanted:
+        vals = [*prej.get(key, ()), *sveze.get(key, {}).values()]
+        if len(vals) < MIN_RUNS_FOR_TYPICAL:
+            continue
+        out[key] = {
+            "n": len(vals),
+            "median_s": _pct(vals, 0.5),
+            "p90_s": _pct(vals, 0.9),
+            "on_time_share": round(sum(1 for v in vals if _je_pravocasna(v)) / len(vals), 2),
+        }
+    return out
+
+
+# Pretekle vrednosti po (baza, par, začetek okna): `array` celih števil, ker
+# jih je ob 60 dneh zgodovine po ~60 na par in parov čez dan desettisoče.
+_TIPICNO_PREJ: dict[tuple, array] = {}
+_TIPICNO_MAX = 40_000
+_PRAZNO = array("i")
+
+
+def _tipicno_po_dnevih(conn: sqlite3.Connection, wanted: list[tuple[str, int]],
+                       od: str, do: str | None) -> dict[tuple[str, int], dict[str, int]]:
+    """{(trip_id, stop_seq): {dan: zamuda}} za dneve od `od` do pred `do`."""
     # Po dnevih, ne seznam: isti dan je lahko zajet pod novim id-jem IN pod
     # predhodnico (`db.PREDNIKI_SQL`), steti pa se sme enkrat -- nova velja.
     grouped: dict[tuple[str, int], dict[str, int]] = {}
+    do_r = "AND r.service_date < ? " if do else ""
+    do_p = "AND p.service_date < ? " if do else ""
+    meje = (od, do) if do else (od,)
     # Ena poizvedba na svezenj, ne ena na trip: odhodna tabla velike postaje
     # ima cez cel dan sto in vec voznj, pri avtobusih pa bo tega desetkrat vec.
     # Meja spremenljivk v sqlite je 32766; 400 parov (800 vezav) je varno tudi
@@ -883,9 +937,9 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
             f"FROM want w CROSS JOIN trip a ON a.trip_id = w.trip_id "
             f"CROSS JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
             f"CROSS JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
-            f"WHERE r.service_date >= ? AND d IS NOT NULL "
+            f"WHERE r.service_date >= ? {do_r}AND d IS NOT NULL "
             f"  AND ABS(d) <= {MAX_REALNA_ZAMUDA_S}",
-            (*params, since),
+            (*params, *meje),
         ).fetchall()
         for r in rows:
             grouped.setdefault((r["trip_id"], r["stop_seq"]), {})[r["service_date"]] = r["d"]
@@ -895,26 +949,14 @@ def typical_at_stops(conn: sqlite3.Connection, pairs: list[tuple[str, int]],
             f"       COALESCE(p.delay_dep, p.delay_arr) AS d "
             f"FROM want w CROSS JOIN ({db.PREDNIKI_SQL}) p "
             f"  ON p.trip_id = w.trip_id AND p.stop_seq = w.stop_seq "
-            f"WHERE p.service_date >= ? AND d IS NOT NULL "
+            f"WHERE p.service_date >= ? {do_p}AND d IS NOT NULL "
             f"  AND ABS(d) <= {MAX_REALNA_ZAMUDA_S}",
-            (*params, since),
+            (*params, *meje),
         ).fetchall()
         for r in rows:
             grouped.setdefault((r["trip_id"], r["stop_seq"]), {}).setdefault(
                 r["service_date"], r["d"])
-
-    out: dict[tuple[str, int], dict] = {}
-    for key, po_dnevih in grouped.items():
-        vals = list(po_dnevih.values())
-        if len(vals) < MIN_RUNS_FOR_TYPICAL:
-            continue
-        out[key] = {
-            "n": len(vals),
-            "median_s": _pct(vals, 0.5),
-            "p90_s": _pct(vals, 0.9),
-            "on_time_share": round(sum(1 for v in vals if _je_pravocasna(v)) / len(vals), 2),
-        }
-    return out
+    return grouped
 
 
 def _bucket_counts(values: list[int]) -> dict:
