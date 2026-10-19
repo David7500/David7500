@@ -34,8 +34,10 @@ function tickClock() {
 
 tickClock();
 setInterval(tickClock, 1000);
-refreshFeedDot();
-setInterval(refreshFeedDot, 30000);
+// Skrit zavihek ne sprašuje, ob vrnitvi vpraša takoj (`pollWhileVisible`).
+// Prvi korak sproži sam, zato funkcije ne kličemo še ročno -- prva zahteva bi
+// šla dvakrat.
+pollWhileVisible(refreshFeedDot, 30000);
 
 // Podatki gredo na pot takoj, med nalaganjem MapLibra, ne sele ko je slog
 // tu. Prej so cakali drug na drugega -- slog, postaje, proge, vlaki, avtobusi,
@@ -1508,8 +1510,8 @@ async function naloziZapore(sveze = false) {
 }
 
 function naloziZaporeTiho() {
-  if (!vklop.zapore) return;
-  naloziZapore(true).catch((err) => console.warn("zapor ni bilo mogoče naložiti", err));
+  if (!vklop.zapore) return undefined;
+  return naloziZapore(true).catch((err) => console.warn("zapor ni bilo mogoče naložiti", err));
 }
 
 // Kdaj velja, pove `kdajZapore` v common.js: ista beseda kot na strani ovir.
@@ -2572,10 +2574,10 @@ map.once("style.load", async () => {
   vozilaPoll = pollVehicles("/api/vehicles", onVehicles, zgodaj.vozila);
   // Vlaki pa postaje rabijo (`trainPlace`, `stationsByName`).
   await loadStatic();
-  pollLiveTiho();
-  setInterval(pollLiveTiho, POLL_MS);
-  loadRoutes();
-  setInterval(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
-  naloziZaporeTiho();
-  setInterval(naloziZaporeTiho, ZAPORE_MS);
+  // Skrit zavihek ne sprašuje -- do 18. 10. 2026 je telefon v žepu z odprtim
+  // zemljevidom v dveh minutah štirikrat vprašal `/api/live` in `/api/health`.
+  // Ob vrnitvi vprašajo takoj; prvi korak sprožijo sami.
+  pollWhileVisible(pollLiveTiho, POLL_MS);
+  pollWhileVisible(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
+  pollWhileVisible(naloziZaporeTiho, ZAPORE_MS);
 });
