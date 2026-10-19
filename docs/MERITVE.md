@@ -2748,6 +2748,27 @@ David 18. 10.: „poglej vse API-je, ki so počasni; ko odpreš stran o vozilu, 
 
 **Produkcija takoj po objavi** (19. 10. ~9:00, ponedeljek, 625 vozil, nekaj minut po ponovnem zagonu, n = 2–6): kazalo železnice 78–127 ms, avtobusa 926 → 156 ms, postaje železnice 76 ms; `/api/svezina` ~100 ms (RTT ~75), `/api/health` 312–422 ms; Bavarski dvor → Vič 0,78–1,16 s (prej 8,3 s), → Brod 1,3–3,2 s (prej 8,1; zdaj vodi `plan()`, ker prestopa ni), Ljubljana → Maribor 0,35–0,51 s; `/run` LPP 1 0,65–0,99 s v šestih zaporednih (prej polovica 2,7 s). Arwen je pri isti zahtevi 5–10-krat počasnejši od razvojnega računalnika. Primerjavo porazdelitev ponovi v `/admin` čez dan ali dva.
 
+**Produkcija čez dopoldne** (19. 10., `/admin` od polnoči do 11:19, ponedeljek; povprečje strežnika na zahtevo): `/api/vehicles` 484 zahtev, 502 ms; `/api/health` 498, 387 ms (stari odjemalci -- pika živosti je od 3d4c42d `/api/svezina`); `/api/connections` 162, 921 ms; `/api/shapes/live` 111, 1 030 ms; `/api/train/{no}/run` 245, 451 ms; `/api/departures` 53, 450 ms; `/api/stations/search` 38, 2 229 ms. Proces na arwenu (i5-6200U, Python 3.12) porabi pol jedra, nit zajema sama 24 % (vzorec 60 s po nitih iz `/proc`), na razvojnem računalniku 3,4 %. Zato je produkcija pri isti zahtevi 5–10-krat počasnejša, ne le 2,5-krat, kolikor je počasnejši procesor.
+
+**Popravki popoldne** (lokalno, ista baza; stara in nova različica vsakič vrstica za vrstico primerjani na istih vprašanjih):
+
+| kaj | prej | zdaj | enako na |
+|---|---|---|---|
+| `/api/vehicles`, 30 odjemalcev kot zemljevid, 60 s | povprečje 1 642 ms, p90 5,3 s | 83 ms, p90 154 ms | -- |
+| iskalnik zvez Bavarski dvor → Kolodvor (cel klic) | 90 ms | 33 ms | 170 vprašanj |
+| tabla Bavarski dvor (`board`) | 76 ms | 41 ms | 56 postaj, 4 288 vrstic |
+| običajna zamuda (`typical_at_stops`, 7 postaj) | 728 ms | 215 ms | 7 348 parov |
+| okno vožnje LPP 1 (`/run`) | 21 ms | 4 ms | test na polnoči |
+| iskanje postaje (toplo) | 16–20 ms | 3,5–6 ms | 252 iskanj |
+| več prestopov pri avtobusih (`plan`, toplo) | 35,5 ms + lastna slika 92 MB | 45,8 ms, skupna slika | 126 vprašanj |
+| ogrevanje `/api/live?network=avtobus` po vsakem zajemu | 310 ms lokalno, 3,1 s arwen na 30 s | ni ga | nobena stran ga ne vpraša |
+
+Vzroki: lege je računal vsak zemljevid sam, ker jih je `X-Osvezi-Cez` poslal vse hkrati takoj po branju (zdaj ključavnica in nit `kajros-vozila`, ki računa le, kadar je kdo v zadnjih dveh minutah vprašal); poizvedbi zvez in table sta prečesali postanke postaje čez vse dni voznega reda, ker ima mestni LPP za vsak datum svoje vožnje (zdaj vozni red do uvoza v predpomnilniku, zamude posebej); „običajno“ je ob vsaki zahtevi bralo 90 dni zgodovine (zdaj dnevi pred včerajšnjim do konca dneva v predpomnilniku); okno vožnje je prometni dan računalo čez vse vožnje linije.
+
+**Na arwenu, na produkcijski bazi** (profil zunaj strežnika, `nice 10`, toplo): tabla Bavarski dvor 600 → 205 ms, zveze Bavarski dvor → Kolodvor 440 → 320 ms (ostanek je meja meritve in stanje postankov za 191 voženj, oboje živo). Nit zajema po ukinitvi ogrevanja avtobusov 24 → 9 % jedra. Prek tunela po objavi (n = 6, mediana z RTT ~100 ms): tabla Bavarski dvor 926 → 617 ms, Ljubljana → Maribor 345 → 236 ms, iskanje postaje 228 → 201 ms; porazdelitve v `/admin` primerjaj čez dan ali dva.
+
+**Pregled pred objavo** (dva agenta, vsak svojo najdbo preveril s skripto) je našel dvoje: nočna vožnja včerajšnjega prometnega dne, ki še ni odpeljala (LPP 6 ob 24:18, gledana ob 00:05), je z oknom vožnje namesto linije dobila današnji dan -- na lokalni bazi za 17. in 18. 10. stara koda 24 od 198 preverb napačnih, nova 0 (popravek a2dee87); in ključ leg, ki ga je zahteva s starejšo značko lahko premaknila nazaj (3 izračuni namesto 1). Ostalo enako do bajta: 11 650 klicev table in 5 958 klicev zvez, vključno z robovi okna, negativnimi zamudami na meji sita in nočnim repom.
+
 ## Veliki zemljevid: svežina leg, izbrani avtobus po trasi, odprtje (18.–19. 10. 2026)
 
 David: „Dovolj ljudi celo uporablja zemljevid, da gleda, kje so busi. A tam niso najnovejše pozicije.“ Presoja (brezglavi Chrome na produkciji in lokalno, 18. 10. zvečer) in izvedba (lokalno, 19. 10. dopoldne, ~600 vozil).

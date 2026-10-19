@@ -66,6 +66,8 @@ Pravila zajema (kaj feed pove in kje laže): `.claude/rules/zajem.md`; tu samo s
 
 **Statika na znački uvoza** (`/api/stations*`, `/api/network.geojson`): `STATIKA_S` (dan) in `v_ozadju`; `_ogrej_pot` ogreje VSE ključe, ki jih strani vprašajo. Urna varovalka brez ozadja je vsako uro dala račun potniku (na arwenu do 9 s).
 
+**Vozni red v zahtevi samo iz predpomnilnika** (19. 10. 2026): vozni red zveze (`stats._vozni_red_zveze`), postaje za tablo (`journey._tabla_vozni_red`), zložena imena za iskanje in pretekli dnevi „običajno“ (`stats._TIPICNO_PREJ`, do konca dneva; včeraj in danes sproti) so na znački uvoza. Poizvedba po postankih postaje brez tega prečeše vse dni voznega reda -- mestni LPP ima za vsak datum svoje vožnje. Lege računa nit `kajros-vozila` po premiku `positions_fetched` (ključavnica; samo, kadar je kdo v zadnjih 2 min vprašal), ne vsak zemljevid sam. Številke v MERITVE (19. 10. popoldne).
+
 **Pika živosti bere `/api/svezina`** (zadnji zajem, število ovir), ne `/api/health` — ta je bil najpogostejši endpoint in ~150 ms strežnika za eno številko. `pollWhileVisible` prvi korak sproži sam: ročni klic pred njim podvoji vsako zahtevo (okno vožnje je imelo pet podvojenih).
 
 ## Ogrevanje predpomnilnika: kdo dela in kdaj
