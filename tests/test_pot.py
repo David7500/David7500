@@ -504,6 +504,61 @@ def test_cim_prej_prestop_vec_ni_vreden_minute(conn):
     assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["direkt"]
 
 
+def _lesce(conn, direkt_od="BLIZU", direkt_odhod=8 * 3600 + 1680,
+           direkt_prihod=9 * 3600 + 2460):
+    """Lesce v malem: vlak do VMES in 31 min čakanja na avtobus, prihod 9:40;
+    neposredni avtobus (privzeto 8:28 -> 9:41) pride minuto pozneje."""
+    _postaja(conn, "VMES", "Vmes", 46.050, 14.500)
+    _voznja(conn, "t1", "vlak", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "VMES", 8 * 3600 + 2400)], "zeleznica")
+    _voznja(conn, "t2", "avtobus", [(1, "VMES", 9 * 3600 + 660),
+                                    (2, "CILJ", 9 * 3600 + 2400)])
+    _voznja(conn, "t3", "direkt", [(1, direkt_od, direkt_odhod),
+                                   (2, "CILJ", direkt_prihod)])
+    conn.commit()
+
+
+def _voznje_prvega(r):
+    return [n["train_no"] for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja"]
+
+
+def test_cim_prej_skoraj_enak_prihod_brez_cakanja_je_prvi(conn, monkeypatch):
+    """Ljubljana -> Bled ob 7:00 (presoja 18. 10. 2026): prvi je bil vlak do
+    Lesc z 31 min čakanja na avtobus, prihod 9:14; neposredni avtobus ob 7:50
+    je prišel ob 9:15. Minuta prihoda ne odtehta 18 minut doma in prestopa."""
+    _lesce(conn)
+    r = pot.isci(conn, OD, DO, D, 8 * 3600)
+    assert _voznje_prvega(r) == ["direkt"]
+    voznje = [[n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"] for p in r["predlogi"]]
+    assert ["vlak", "avtobus"] in voznje, "minuto hitrejša pot ostane na seznamu"
+
+    monkeypatch.setattr(pot, "SKORAJ_ENAKO_S", 0)
+    assert _voznje_prvega(pot.isci(conn, OD, DO, D, 8 * 3600)) == ["vlak", "avtobus"]
+
+
+def test_cim_prej_vec_kot_tri_minute_pozneje_ni_prvi(conn):
+    """Okno je tri minute: pot, ki pride pet minut pozneje, ne gre na vrh,
+    pa naj ima še toliko manj čakanja."""
+    _lesce(conn, direkt_prihod=9 * 3600 + 2400 + 300 + 60)
+    assert _voznje_prvega(pot.isci(conn, OD, DO, D, 8 * 3600)) == ["vlak", "avtobus"]
+
+
+def test_cim_prej_vec_hoje_ni_prvi(conn):
+    """Merilo ne sme nagraditi hoje: neposredni z Daleč (13 min hoje namesto
+    1,3) ne gre na vrh, čeprav ima manj čakanja."""
+    _lesce(conn, direkt_od="DALEC")
+    assert _voznje_prvega(pot.isci(conn, OD, DO, D, 8 * 3600)) == ["vlak", "avtobus"]
+
+
+def test_cim_prej_minuta_doma_ne_odtehta_poznejsega_prihoda(conn):
+    """Brez prestopa na obeh straneh: tri minute pozneje od doma in dve
+    pozneje na cilju je premalo za prvo mesto (prag `PRIHRANEK_S`)."""
+    _voznja(conn, "t1", "prvi", [(1, "BLIZU", 8 * 3600 + 600), (2, "CILJ", 9 * 3600)])
+    _voznja(conn, "t2", "drugi", [(1, "BLIZU", 8 * 3600 + 780), (2, "CILJ", 9 * 3600 + 120)])
+    conn.commit()
+    assert _voznje_prvega(pot.isci(conn, OD, DO, D, 8 * 3600)) == ["prvi"]
+
+
 def test_zvecer_brez_zveze_ponudi_jutrisnje(conn):
     """Ob 22:00 danes ne pelje nič več: odgovor je prva zveza jutri, ne "ni poti"."""
     conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S1', '2026-09-09')")

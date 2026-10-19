@@ -811,11 +811,43 @@ function glavaIzida(besedilo, izid, razred = "") {
     izid.predlogi.length ? POSLJI_HTML : ""}</div>`;
 }
 
+// Prvi predlog pri "čim prej" je lahko do 3 min za najzgodnejšim, kadar ta
+// čaka na prestopu ali ima prestop več (`pot.SKORAJ_ENAKO_S`; Lesce: 9:14 s
+// 31 min čakanja proti neposrednemu ob 9:15). Naslov mora ostati resničen,
+// zato najzgodnejši prihod po minuti, kot ga kaže kartica. Hoja vso pot
+// „edina“ ni izbira, ampak opomba (zvečer današnja ob jutrišnjih zvezah).
+const prihodMin = (p) => Math.floor((p.prihod_ocena || p.prihod) / 60);
+
+function najzgodnejsi(izid) {
+  return izid.predlogi.filter((p) => !p.edina)
+    .reduce((a, p) => (!a || prihodMin(p) < prihodMin(a) ? p : a), null);
+}
+
+// "1 min pozneje kot najhitrejša pot, a 18 min pozneje od doma in brez
+// prestopa." -- zakaj je prvi prvi. Razlike iz številk, ki jih kartici
+// pokažeta (ura brez sekund, hoja na minuto), sicer bralec odšteje 07:50 -
+// 07:32 in dobi 18, stavek pa trdi 19.
+function razlikaBeseda(prvi, naj) {
+  const deli = [];
+  const odhodMin = (p) => Math.floor((p.odhod_ocena || p.odhod) / 60);
+  const odhod = odhodMin(prvi) - odhodMin(naj);
+  if (odhod >= 1) deli.push(`${odhod} min pozneje od doma`);
+  const manj = naj.prestopov - prvi.prestopov;
+  if (manj > 0) {
+    deli.push(prvi.prestopov === 0 ? "brez prestopa" : `${manj} ${sklon(manj, "prestop")} manj`);
+  }
+  const hojaMin = (p) => Math.floor(p.hoje_s / 60 + 0.5);
+  const hoja = hojaMin(naj) - hojaMin(prvi);
+  if (hoja >= 3) deli.push(`${hoja} min manj hoje`);
+  const kaj = deli.length > 1 ? `${deli.slice(0, -1).join(", ")} in ${deli[deli.length - 1]}` : deli[0];
+  return ` ${prihodMin(prvi) - prihodMin(naj)} min pozneje kot najhitrejša pot${kaj ? `, a ${kaj}` : ""}.`;
+}
+
 function naslovIzida(izid) {
   const opomba = izid.vir_hoje === "osrm" ? ""
     : " · pot do postaje je <strong>ocena</strong>, ker usmerjevalnik ne odgovarja";
   if (izid.ne_ujames) {
-    const prvi = izid.predlogi[0];
+    const prvi = najzgodnejsi(izid);
     const kdaj = prvi ? ura(prvi.prihod_ocena || prvi.prihod) : null;
     return glavaIzida(`Do ${ura(izid.prihod_do)} ne prideš več.`, izid, " je-pozno")
       + (kdaj ? ` Najhitreje si tam ob <strong>${kdaj}</strong>${
@@ -832,6 +864,12 @@ function naslovIzida(izid) {
     const odidi = prvi ? ` Odidi najpozneje ob <strong>${ura(prvi.odhod_ocena || prvi.odhod)}</strong>.` : "";
     return glavaIzida(`Da boš tam do ${ura(izid.prihod_do)}${danBeseda(izid.datum)}`, izid)
       + odidi + opomba;
+  }
+  const prvi = izid.predlogi[0];
+  const naj = najzgodnejsi(izid);
+  if (prvi && naj && prihodMin(naj) < prihodMin(prvi)) {
+    return glavaIzida(`Skoraj najhitreje na cilju${danBeseda(izid.datum)}`, izid)
+      + razlikaBeseda(prvi, naj) + opomba;
   }
   return glavaIzida(`Najhitreje na cilju${danBeseda(izid.datum)}`, izid) + opomba;
 }

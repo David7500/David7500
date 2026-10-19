@@ -754,6 +754,24 @@ def _isci_nazaj(conn, izhodisca: dict[str, int], cilji: dict[str, int],
 #: vreden pol ure čakanja.
 PRESTOP_VREDEN_S = 10 * 60
 
+#: Prvo mesto pri "čim prej" ni nujno minuto najzgodnejši prihod. Lesce,
+#: Ljubljana -> Bled ob 7:00 (presoja 18. 10. 2026): prvi je bil RG 318 do
+#: Lesc z 31 min čakanja na avtobus, prihod 9:14; neposredni avtobus ob 7:50
+#: je prišel ob 9:15. Ena minuta prihoda je povozila 18 minut doma in prestop
+#: -- prav to je prijava "uro za prestope" (30. 9. 2026). Zato: med predlogi,
+#: ki pridejo največ `SKORAJ_ENAKO_S` za najzgodnejšim in nimajo več kot
+#: `VEC_HOJE_NAJVEC_S` več hoje, gre prvi tisti z najmanj časa od vrat do vrat
+#: (prestop šteje `PRESTOP_VREDEN_S`) -- a le, kadar prihrani vsaj
+#: `PRIHRANEK_S`; za manj ostane najzgodnejši. Izmerjeno na naboru 1 280
+#: vprašanj (21. 10. 2026 po voznem redu): prvi zamenjan v 38 od 1 138 z
+#: vozilom, prihod mediano 1,7 min pozneje (največ 3), od doma 11 min pozneje,
+#: od vrat do vrat 8,8 min manj, 13-krat prestop manj, hoje več nikjer za več
+#: kot 3 min. Brez praga prihranka (kot je predlagala presoja) 92 zamenjav,
+#: tudi za minuto doma ob 3 min poznejšem prihodu, in 3-krat več kot 3 min hoje.
+SKORAJ_ENAKO_S = 3 * 60
+VEC_HOJE_NAJVEC_S = 5 * 60
+PRIHRANEK_S = 5 * 60
+
 
 def _stevilo_vozenj(najdba: dict) -> int:
     return sum(1 for n in najdba["noge"] if n[0] is not None)
@@ -1189,6 +1207,82 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
     return predlogi
 
 
+def _kdaj(p: dict) -> int:
+    """Prihod na cilj, kot ga pokaže kartica: z zamudo, kadar jo poznamo."""
+    return p.get("prihod_ocena") or p["prihod"]
+
+
+def _odhod(p: dict) -> int:
+    """Odhod od doma, kot ga pokaže kartica."""
+    return p.get("odhod_ocena") or p["odhod"]
+
+
+def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
+    """Vrstni red predlogov in kateri ostanejo. `rok` (absolutno) je ura, do
+    katere mora biti potnik na cilju; brez njega je vprašanje "čim prej".
+
+    Zamude so že pripete: stran razvršča po uri, ki jo pokaže, ne po
+    voznoredni. Sicer si vrstni red in številke nasprotujeta -- ujeto v živo
+    8. 9. 2026: avtobus "13:35, pričakovano 13:43" je stal nad vlakom, ki
+    pride ob 13:38.
+    """
+    if rok is not None:
+        # Iskanje je upoštevalo zamude vozil, ki so zdaj na poti; model ob
+        # izstopu zna reči drugače. Pot, ki po njem pride prepozno, ostane na
+        # seznamu, a ne na vrhu in ne brez besede.
+        for p in predlogi:
+            p["prepozno"] = _kdaj(p) > rok
+        vrstni = sorted(predlogi, key=lambda p: (p["prepozno"], -_odhod(p),
+                                                 _kdaj(p), p["hoje_s"]))
+    else:
+        # Ob isti minuti prihoda je prvi tisti, s katerim odideš najpozneje --
+        # prestop več pa mora prinesti vsaj PRESTOP_VREDEN_S doma.
+        vrstni = sorted(predlogi, key=lambda p: (
+            _kdaj(p) // 60, -(_odhod(p) - PRESTOP_VREDEN_S * p["prestopov"]),
+            _kdaj(p), p["hoje_s"]))
+        # Skoraj enak prihod z manj čakanja ali prestopov gre prvi (glej
+        # `SKORAJ_ENAKO_S`). Ostali ostanejo po prihodu.
+        if vrstni:
+            p0 = vrstni[0]
+
+            def cena(p):
+                return _kdaj(p) - _odhod(p) + PRESTOP_VREDEN_S * p["prestopov"]
+            boljsi = min((p for p in vrstni
+                          if _kdaj(p) <= _kdaj(p0) + SKORAJ_ENAKO_S
+                          and p["hoje_s"] <= p0["hoje_s"] + VEC_HOJE_NAJVEC_S), key=cena)
+            if cena(boljsi) <= cena(p0) - PRIHRANEK_S:
+                vrstni.insert(0, vrstni.pop(next(
+                    i for i, p in enumerate(vrstni) if p is boljsi)))
+
+    # Ista pot se rodi iz dveh vprašanj. Ključ so **samo vožnje in vstopi**:
+    # dve poti z istima avtobusoma sta ista pot, tudi če se hoja na koncu vije
+    # čez drugo postajališče in se ure razlikujejo za pol minute. Izstop ni v
+    # ključu: "25 ob 6:51, izstop Kolodvor" in "... izstop Bavarski dvor" sta
+    # za potnika en odhod, na zaslonu pa sta stala drug pod drugim (videno
+    # 23. 9. 2026 pri obratnem iskanju). Obdrži se prva po razvrstitvi.
+    # Prometni dan je v ključu: ista vožnja včeraj in danes nista isti odhod.
+    #
+    # Za tem pade vse, kar je po VSEH merilih slabše od že izbranega.
+    # Brez tega je stran ponudila pot, ki odide prej, hodi dvakrat dlje in
+    # pride ob isti minuti -- videno na zaslonu 8. 9. 2026 (Grosuplje ->
+    # Zmajski most: 12:53 z 20 min hoje poleg 13:01 z 10 min, oba prihod
+    # 13:31). Vprašanje "z manj hoje" omejuje hojo na VSAKEM koncu, ne v
+    # vsoti, in zna zato dati pot z več hoje skupaj.
+    videni, izbrani = set(), []
+    for p in vrstni:
+        kljuc = (p["datum"],) + tuple((n["trip_id"], n["od_seq"])
+                                      for n in p["noge"] if n["vrsta"] == "voznja")
+        if kljuc in videni:
+            continue
+        if any(_kdaj(q) <= _kdaj(p) and q["hoje_s"] <= p["hoje_s"]
+               and q["prestopov"] <= p["prestopov"] and _odhod(q) >= _odhod(p)
+               for q in izbrani):
+            continue
+        videni.add(kljuc)
+        izbrani.append(p)
+    return izbrani
+
+
 def isci(conn: sqlite3.Connection, od: tuple[float, float],
          do: tuple[float, float], service_date: str, odhod_s: int | None,
          max_hoje_s: int = MAX_HOJE_S, max_nog: int = MAX_NOG,
@@ -1264,12 +1358,6 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
                 max_nog, None if nadaljevanje else pes_s, ponudi_pes, vir_hoje, od, do, kmh,
                 prevozniki)
 
-    def kdaj(p):
-        return p.get("prihod_ocena") or p["prihod"]
-
-    def odhod(p):
-        return p.get("odhod_ocena") or p["odhod"]
-
     # Pot z vozilom, v kateri je HOJE več, kot bi je bilo, če bi šel kar peš,
     # ni predlog, ampak ovinek. Ta primer je bil na zaslonu: vlak stran od
     # cilja in nato osem kilometrov peš nazaj.
@@ -1277,48 +1365,7 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
         predlogi = [p for p in predlogi
                     if not any(n["vrsta"] == "voznja" for n in p["noge"])
                     or p["hoje_s"] < pes_s]
-
-    if nazaj:
-        # Iskanje je upoštevalo zamude vozil, ki so zdaj na poti; model ob
-        # izstopu zna reči drugače. Pot, ki po njem pride prepozno, ostane na
-        # seznamu, a ne na vrhu in ne brez besede.
-        for p in predlogi:
-            p["prepozno"] = kdaj(p) > polnoc + prihod_do_s
-        vrstni = sorted(predlogi, key=lambda p: (p["prepozno"], -odhod(p),
-                                                 kdaj(p), p["hoje_s"]))
-    else:
-        # Ob isti minuti prihoda je prvi tisti, s katerim odideš najpozneje --
-        # prestop več pa mora prinesti vsaj PRESTOP_VREDEN_S doma.
-        vrstni = sorted(predlogi, key=lambda p: (
-            kdaj(p) // 60, -(odhod(p) - PRESTOP_VREDEN_S * p["prestopov"]),
-            kdaj(p), p["hoje_s"]))
-
-    # Ista pot se rodi iz dveh vprašanj. Ključ so **samo vožnje in vstopi**:
-    # dve poti z istima avtobusoma sta ista pot, tudi če se hoja na koncu vije
-    # čez drugo postajališče in se ure razlikujejo za pol minute. Izstop ni v
-    # ključu: "25 ob 6:51, izstop Kolodvor" in "... izstop Bavarski dvor" sta
-    # za potnika en odhod, na zaslonu pa sta stala drug pod drugim (videno
-    # 23. 9. 2026 pri obratnem iskanju). Obdrži se prva po razvrstitvi.
-    # Prometni dan je v ključu: ista vožnja včeraj in danes nista isti odhod.
-    #
-    # Za tem pade vse, kar je po VSEH merilih slabše od že izbranega.
-    # Brez tega je stran ponudila pot, ki odide prej, hodi dvakrat dlje in
-    # pride ob isti minuti -- videno na zaslonu 8. 9. 2026 (Grosuplje ->
-    # Zmajski most: 12:53 z 20 min hoje poleg 13:01 z 10 min, oba prihod
-    # 13:31). Vprašanje "z manj hoje" omejuje hojo na VSAKEM koncu, ne v
-    # vsoti, in zna zato dati pot z več hoje skupaj.
-    videni, izbrani = set(), []
-    for p in vrstni:
-        kljuc = (p["datum"],) + tuple((n["trip_id"], n["od_seq"])
-                                      for n in p["noge"] if n["vrsta"] == "voznja")
-        if kljuc in videni:
-            continue
-        if any(kdaj(q) <= kdaj(p) and q["hoje_s"] <= p["hoje_s"]
-               and q["prestopov"] <= p["prestopov"] and odhod(q) >= odhod(p)
-               for q in izbrani):
-            continue
-        videni.add(kljuc)
-        izbrani.append(p)
+    izbrani = izberi_predloge(predlogi, polnoc + prihod_do_s if nazaj else None)
 
     # Kadar z vozilom ni ničesar, je "ni poti" slabši odgovor od resnice.
     # Hoja uro in pol ni predlog, ki bi ga kdo dal prvi -- je pa edini, ki
