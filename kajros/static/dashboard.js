@@ -2837,6 +2837,9 @@ map.once("style.load", async () => {
   // zemljevidom v dveh minutah štirikrat vprašal `/api/live` in `/api/health`.
   // Ob vrnitvi vprašajo takoj; prvi korak sprožijo sami.
   pollWhileVisible(pollLiveTiho, POLL_MS);
-  pollWhileVisible(loadRoutes, 60000);   // trase se spreminjajo pocasneje od leg
+  // Trase se spreminjajo počasneje od leg, in vse skupaj je ~870 kB stisnjeno
+  // (19. 10. 2026): na minuto je to 50 MB na uro za vklopljeno plast. Na pet
+  // minut; pot izbranega vozila ima svoj klic in ne čaka na to.
+  pollWhileVisible(loadRoutes, 300000);
   pollWhileVisible(naloziZaporeTiho, ZAPORE_MS);
 });

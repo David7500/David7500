@@ -2246,7 +2246,7 @@ def api_shape(trip_id: str):
 
 
 @app.get("/api/shapes/live")
-def api_shapes_live():
+def api_shapes_live(request: Request = None):
     """Trase vseh vozil, ki so zdaj na poti — po obliki, ne po vožnji.
 
     Dve vozili iste linije v isti smeri imata isto traso, zato jih zdruzimo.
@@ -2273,7 +2273,9 @@ def api_shapes_live():
     telo = _predpomni("shapes-live", znacka, 600,
                       lambda: json.dumps(_shapes_live_rows(now), ensure_ascii=False,
                                          separators=(",", ":")).encode())
-    return Response(content=telo, media_type="application/json")
+    # Z ETag: ponoči in med vožnjami istih linij se nabor ne spremeni in
+    # plast vklopljenih tras (~870 kB stisnjeno, 19. 10. 2026) dobi 304.
+    return _odgovor_statike(request, "shapes-live", znacka, telo)
 
 
 def _shapes_live_rows(now: int):
