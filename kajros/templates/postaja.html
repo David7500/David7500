@@ -57,7 +57,9 @@
         <b>{{ n }}</b>
         {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.
         {% endif %}
-        Prva ob {{ odhodi[0].ura }}{% if odhodi[0].towards %}, smer {{ odhodi[0].towards | lepo_ime }}{% endif %}.
+        {#- Ime smeri se lahko konča s piko („… obr.“): druge ne dodamo. -#}
+        {% set smer_prve = (odhodi[0].towards | lepo_ime) if odhodi[0].towards else "" %}
+        Prva ob {{ odhodi[0].ura }}{% if smer_prve %}, smer {{ smer_prve }}{% endif %}{{ "" if smer_prve.endswith(".") else "." }}
       {% else %}
         V naslednjih treh urah od tu ne pelje nič.
         <a href="{{ iskalnik }}">Poglej drug dan ali uro.</a>
