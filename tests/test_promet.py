@@ -116,3 +116,14 @@ def test_potovalni_casi_ac_ista_objava_enkrat(conn):
     assert promet.zapisi_ac(conn, 100, [("LJ - MB", 4251, 3726), ("LJ - KP", 3840, 3265)]) == 2
     assert promet.zapisi_ac(conn, 100, [("LJ - MB", 4251, 3726)]) == 0
     assert promet.zapisi_ac(conn, 400, [("LJ - MB", 4300, 3726)]) == 1
+
+
+def test_razbor_v_svojem_procesu_da_isto():
+    """Razbor teče v svojem procesu (svoj GIL); izid mora biti isti kot tu."""
+    xml = gzip.compress(_fcd("2026-10-14T13:25:19", [(1586, 6.535), (1602, 31.843)]))
+    razbor = promet._Razbor()
+    try:
+        assert razbor(promet.razberi_fcd, xml) == promet.razberi_fcd(xml)
+        assert razbor(promet.razberi_ac, AC) == promet.razberi_ac(AC)
+    finally:
+        razbor.ustavi()

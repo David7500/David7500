@@ -31,10 +31,12 @@ from __future__ import annotations
 import gzip
 import io
 import json
+import multiprocessing
 import sqlite3
 import threading
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
 import requests
@@ -45,6 +47,14 @@ from . import config, db, nap, viri
 #: odgovorih 14. 10. 2026 prag 0,1 s 1 100 sprememb na minuto, 0,5 s 700.
 PRAG_DS = 5
 TIMEOUT_S = (10, 60)
+
+#: Razbor teče v svojem procesu, ker je čisti Python (19. 10. 2026). Nit si z
+#: zahtevami deli GIL: dnevni odgovor FCD (11 201 odsekov) je na arwenu 1,25 s
+#: razbora na minuto, in zahteva, ki medtem bere bazo, ga čaka ob vsakem
+#: koraku SQLite. Ponoči (1 442 odsekov in potovalni časi AC, ~0,9 s CPE na
+#: minuto) sta bili 2 od 180 tabel Ljubljana 520 in 610 ms namesto 22 ms --
+#: obe v sekundi te niti. Proces ima svoj GIL; v nit se vrne le slovar.
+RAZBOR_CAKAJ_S = 120
 
 SHEMA = """
 CREATE TABLE IF NOT EXISTS obhod(
@@ -214,11 +224,15 @@ def _povzetek(glavna: sqlite3.Connection, kljuc: str, st: dict) -> None:
         glavna.rollback()
 
 
-def korak_fcd(conn, glavna, seja, prijava) -> dict:
+def _tukaj(fn, vsebina):
+    return fn(vsebina)
+
+
+def korak_fcd(conn, glavna, seja, prijava, razberi=_tukaj) -> dict:
     with viri.branje("promet_fcd") as b:
         vsebina = _get(seja, b, config.PROMET_FCD_URL, prijava)
     zacetek = time.monotonic()
-    objava, odseki = razberi_fcd(vsebina)
+    objava, odseki = razberi(razberi_fcd, vsebina)
     if objava is None:
         raise ValueError("FCD brez časa objave")
     st = zapisi_fcd(conn, objava, odseki)
@@ -229,10 +243,10 @@ def korak_fcd(conn, glavna, seja, prijava) -> dict:
     return st
 
 
-def korak_ac(conn, glavna, seja, prijava) -> int:
+def korak_ac(conn, glavna, seja, prijava, razberi=_tukaj) -> int:
     with viri.branje("promet_ac") as b:
         vsebina = _get(seja, b, config.PROMET_AC_URL, prijava)
-    objava, relacije = razberi_ac(vsebina)
+    objava, relacije = razberi(razberi_ac, vsebina)
     if objava is None:
         raise ValueError("potovalni časi AC brez časa objave")
     novih = zapisi_ac(conn, objava, relacije)
@@ -242,6 +256,32 @@ def korak_ac(conn, glavna, seja, prijava) -> int:
     return novih
 
 
+class _Razbor:
+    """En proces za razbor, ob okvari (ubit, zmanjkalo pomnilnika) nov.
+
+    `spawn`, ne `fork`: proces strežnika ima ducat niti in odprte baze, kopija
+    tega bi bila past. Nov tolmač uvozi le `kajros.promet`, enkrat.
+    """
+
+    def __init__(self):
+        self._izvajalec = None
+
+    def __call__(self, fn, vsebina):
+        if self._izvajalec is None:
+            self._izvajalec = ProcessPoolExecutor(
+                1, mp_context=multiprocessing.get_context("spawn"))
+        try:
+            return self._izvajalec.submit(fn, vsebina).result(timeout=RAZBOR_CAKAJ_S)
+        except Exception:
+            self.ustavi()
+            raise
+
+    def ustavi(self):
+        if self._izvajalec is not None:
+            self._izvajalec.shutdown(wait=False, cancel_futures=True)
+            self._izvajalec = None
+
+
 def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
     """Svoja nit: 12 MB XML na minuto ne sme zamikati zajema zamud."""
     conn = povezi()
@@ -249,6 +289,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
     seja = requests.Session()
     seja.headers["User-Agent"] = config.USER_AGENT
     napak = {"promet_fcd": 0, "promet_ac": 0}
+    razbor = _Razbor()
     try:
         while not stop.is_set():
             zacetek = time.time()
@@ -262,7 +303,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
             for kljuc, korak in (("promet_fcd", korak_fcd), ("promet_ac", korak_ac)):
                 viri.caka(kljuc, None)
                 try:
-                    korak(conn, glavna, seja, prijava)
+                    korak(conn, glavna, seja, prijava, razbor)
                     if napak[kljuc]:
                         log(f"{kljuc} spet odgovarja (po {napak[kljuc]} napakah)")
                     napak[kljuc] = 0
@@ -275,5 +316,6 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                         cakaj = nap.NI_DOSTOPA_CAKAJ_S
             stop.wait(max(1.0, cakaj - (time.time() - zacetek)))
     finally:
+        razbor.ustavi()
         conn.close()
         glavna.close()
