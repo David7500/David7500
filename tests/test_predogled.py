@@ -30,3 +30,14 @@ def test_tocno_in_prej_po_zaokrozeni_minuti(monkeypatch):
 def test_brez_meritve_ni_stanja(monkeypatch):
     assert _stanje(monkeypatch, None) is None
     assert _stanje(monkeypatch, {"delay_s": None, "t_s": 0, "name": "X"}) is None
+
+
+def test_prednalozeni_run_je_isti_naslov_kot_v_brskalniku():
+    """`encodeURIComponent` + `URLSearchParams` (`common.fetchRunAndForecast`):
+    presledek v številki %20, v poizvedbi +; `|` v id-ju LPP %7C; `date` pred
+    `trip`. Drugačen naslov = brskalnik vpraša dvakrat."""
+    assert api._run_url("BUS 26729", "2026-10-20", None) == \
+        "/api/train/BUS%2026729/run?date=2026-10-20"
+    assert api._run_url("11B", None, "a|b c") == "/api/train/11B/run?trip=a%7Cb+c"
+    assert api._run_url("3G", "2026-10-20", "x") == "/api/train/3G/run?date=2026-10-20&trip=x"
+    assert api._run_url("LP (x)*", None, None) == "/api/train/LP%20(x)*/run"

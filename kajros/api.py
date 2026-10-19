@@ -16,7 +16,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, quote, quote_plus, urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -1075,6 +1075,20 @@ def _stanje_za_predogled(conn, train_no: str, trip: str | None, datum: str | Non
     return f"{stanje} (zadnji podatek s postaje {lm['name']} ob {ura:%H:%M})."
 
 
+def _run_url(train_no: str, date: str | None, trip: str | None) -> str:
+    """Naslov `/run`, ki ga okno vožnje prednaloži.
+
+    `/run` gre na pot ob branju glave, ne šele po izvedbi skript: na telefonu
+    50–90 ms prej (presoja 18. 10. 2026). Naslov mora biti znak za znakom isti
+    kot v `common.fetchRunAndForecast` (`encodeURIComponent`, nato
+    `URLSearchParams` z `date` pred `trip`), sicer brskalnik prednaloženega ne
+    uporabi in vpraša dvakrat.
+    """
+    p = {k: v for k, v in (("date", date), ("trip", trip)) if v}
+    return (f"/api/train/{quote(train_no, safe=chr(39) + '!()*')}/run"
+            + (f"?{urlencode(p, quote_via=quote_plus, safe='*')}" if p else ""))
+
+
 def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     """Okno ene vožnje. Pot mora ustrezati omrežju vožnje.
 
@@ -1117,6 +1131,8 @@ def _trip_page(request: Request, train_no: str, trip: str | None, network: str):
     ime = pristanek.ime_voznje(dict(row)) if row and prava == "avtobus" else train_no
     return templates.TemplateResponse(request, "train.html", {
         "train_no": train_no, "network": prava,
+        "run_url": _run_url(train_no, request.query_params.get("date"),
+                            request.query_params.get("trip")),
         "here": "avtobusi" if prava == "avtobus" else "iskalnik",
         "naslov": f"{beseda} {ime} {relacija}".strip(),
         "opis": (f"{zivo} " if zivo else "")
