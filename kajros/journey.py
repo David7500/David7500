@@ -14,6 +14,7 @@ Trije odgovori:
 """
 from __future__ import annotations
 
+import bisect
 import math
 import sqlite3
 import threading
@@ -821,52 +822,112 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
 
 # ---------------------------------------------------------------- prestopi
 
-_TRANSFER_SQL = """
-WITH a AS (
-    SELECT s.trip_id, s.stop_seq, COALESCE(s.dep_s, s.arr_s) AS dep_s
-    FROM sched s JOIN station z ON z.stop_id = s.stop_id AND z.name = :a
-    JOIN trip t ON t.trip_id = s.trip_id
-    JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
-                       AND (:network IS NULL OR t.network = :network)
-),
-b AS (
-    SELECT s.trip_id, s.stop_seq, COALESCE(s.arr_s, s.dep_s) AS arr_s
-    FROM sched s JOIN station z ON z.stop_id = s.stop_id AND z.name = :b
-    JOIN trip t ON t.trip_id = s.trip_id
-    JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
-                       AND (:network IS NULL OR t.network = :network)
-)
-SELECT t1.train_no AS train1, t1.trip_id AS trip1, t1.headsign AS headsign1,
-       t2.train_no AS train2, t2.trip_id AS trip2, t2.headsign AS headsign2,
-       a.stop_seq AS a_seq, a.dep_s AS dep_s,
-       x1.stop_seq AS x1_seq, COALESCE(x1.arr_s, x1.dep_s) AS x_arr_s,
-       x2.stop_seq AS x2_seq, COALESCE(x2.dep_s, x2.arr_s) AS x_dep_s,
-       b.stop_seq AS b_seq, b.arr_s AS arr_s,
-       zx.name AS via
-FROM a
-JOIN sched x1   ON x1.trip_id = a.trip_id AND x1.stop_seq > a.stop_seq
-JOIN sched x2   ON x2.stop_id = x1.stop_id
-JOIN b          ON b.trip_id = x2.trip_id AND b.stop_seq > x2.stop_seq
-JOIN trip t1    ON t1.trip_id = a.trip_id
-JOIN trip t2    ON t2.trip_id = b.trip_id
-JOIN station zx ON zx.stop_id = x1.stop_id
-WHERE t1.trip_id <> t2.trip_id
-  AND COALESCE(x2.dep_s, x2.arr_s) - COALESCE(x1.arr_s, x1.dep_s)
-      BETWEEN :min_gap AND :max_gap
-  AND b.arr_s > a.dep_s
-  AND a.dep_s >= :earliest
-  -- Ce drugi vlak ustavi tudi na izhodiscu in tam odpelje po nasem odhodu,
-  -- potnik nima razloga za prestop: pocakal bi in se peljal naravnost.
-  -- Brez tega pogoja iskalnik ponuja 75 minut cakanja na vmesni postaji
-  -- namesto vlaka, ki cez uro odpelje z iste postaje.
-  AND NOT EXISTS (
-        SELECT 1 FROM sched s0
-        JOIN station z0 ON z0.stop_id = s0.stop_id AND z0.name = :a
-        WHERE s0.trip_id = t2.trip_id
-          AND s0.stop_seq < x2.stop_seq
-          AND COALESCE(s0.dep_s, s0.arr_s) >= a.dep_s
-  )
-"""
+def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
+              service_date: str, network: str | None, min_gap: int, max_gap: int,
+              earliest: int) -> list[dict]:
+    """Vse zveze z enim prestopom: (prva vožnja, prestop, druga vožnja).
+
+    Nad dnevnim voznim redom v pomnilniku, ne v SQL. Poizvedba je za vsak
+    postanek za izhodiščem pregledala vse odhode s tistega postajališča ves
+    dan in šele nato okno prestopa: Bavarski dvor → Vič zvečer 2,5 s, čez
+    dan do 13 s, na arwenu 8 s ob vsakem iskanju in vsaki 30-sekundni
+    osvežitvi (presoja 18. 10. 2026). Tu je okno prestopa iskanje po
+    urejenem seznamu odhodov (`bisect`): na petih parih isti izid, vrstica
+    za vrstico, v 1-6 ms.
+
+    Avtobusi berejo skupno sliko obeh omrežij -- ogreta je za pot od vrat do
+    vrat, avtobusna sama bi bila še 92 MB -- in vožnje drugega omrežja
+    preskočijo; železnica svojo, ki je majhna.
+    """
+    by_trip, at_stop = _timetable_for_day(
+        conn, service_date, "zeleznica" if network == "zeleznica" else None)
+    omr = _omrezja_voznj(conn) if network == "avtobus" else None
+
+    def v_omrezju(tid: str) -> bool:
+        return omr is None or omr.get(tid) == network
+
+    a_ids, b_ids = _stop_ids_of(conn, from_name), _stop_ids_of(conn, to_name)
+    # Vožnje skozi cilj: trip -> [(stop_seq, prihod)]. Prihod je
+    # COALESCE(arr, dep) -- `by_trip` ga nosi na mestu 2.
+    na_b: dict[str, list] = {}
+    for sid in b_ids:
+        for _dep, tid, seq in at_stop.get(sid, ()):
+            if v_omrezju(tid):
+                na_b.setdefault(tid, []).append(seq)
+    if not na_b:
+        return []
+    prihod: dict[str, list] = {}
+    for tid, seqs in na_b.items():
+        seqs = set(seqs)
+        prihod[tid] = [(st[0], st[2]) for st in by_trip[tid] if st[0] in seqs]
+
+    out = []
+    for sid in a_ids:
+        for a_dep, t1, a_seq in at_stop.get(sid, ()):
+            if a_dep < earliest or not v_omrezju(t1):
+                continue
+            for x1_seq, x1_sid, x1_arr, _d in by_trip[t1]:
+                if x1_seq <= a_seq or x1_arr is None:
+                    continue
+                ev = at_stop.get(x1_sid)
+                if not ev:
+                    continue
+                i = bisect.bisect_left(ev, (x1_arr + min_gap,))
+                while i < len(ev) and ev[i][0] <= x1_arr + max_gap:
+                    x2_dep, t2, x2_seq = ev[i]
+                    i += 1
+                    if t2 == t1 or t2 not in prihod:
+                        continue
+                    for b_seq, b_arr in prihod[t2]:
+                        if b_seq <= x2_seq or b_arr is None or b_arr <= a_dep:
+                            continue
+                        # Ce druga voznja ustavi tudi na izhodiscu in tam
+                        # odpelje po nasem odhodu, potnik nima razloga za
+                        # prestop: pocakal bi in se peljal naravnost. Brez
+                        # tega iskalnik ponuja 75 minut cakanja na vmesni
+                        # postaji namesto vlaka, ki cez uro odpelje z iste.
+                        if any(s0 < x2_seq and s0sid in a_ids and d0 is not None
+                               and d0 >= a_dep for s0, s0sid, _a0, d0 in by_trip[t2]):
+                            continue
+                        out.append({"trip1": t1, "trip2": t2, "a_seq": a_seq,
+                                    "dep_s": a_dep, "x1_seq": x1_seq, "x_arr_s": x1_arr,
+                                    "x2_seq": x2_seq, "x_dep_s": x2_dep, "b_seq": b_seq,
+                                    "arr_s": b_arr, "_via": x1_sid})
+    if not out:
+        return out
+    tripi = sorted({d["trip1"] for d in out} | {d["trip2"] for d in out})
+    opis = {r["trip_id"]: r for r in conn.execute(
+        f"SELECT trip_id, train_no, headsign FROM trip WHERE trip_id IN "
+        f"({','.join('?' * len(tripi))})", tripi)}
+    postaje = sorted({d["_via"] for d in out})
+    imena = {r["stop_id"]: r["name"] for r in conn.execute(
+        f"SELECT stop_id, name FROM station WHERE stop_id IN "
+        f"({','.join('?' * len(postaje))})", postaje)}
+    for d in out:
+        t1, t2 = opis[d["trip1"]], opis[d["trip2"]]
+        d.update(train1=t1["train_no"], headsign1=t1["headsign"],
+                 train2=t2["train_no"], headsign2=t2["headsign"],
+                 via=imena.get(d.pop("_via")))
+    return out
+
+
+_OMREZJA: dict[tuple, dict[str, str]] = {}
+
+
+def _omrezja_voznj(conn: sqlite3.Connection) -> dict[str, str]:
+    """`{trip_id: omrezje}`, predpomnjeno do uvoza voznega reda."""
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    where = conn.execute("PRAGMA database_list").fetchone()["file"]
+    key = (where, stamp)
+    if stamp and key in _OMREZJA:
+        return _OMREZJA[key]
+    out = {r["trip_id"]: r["network"] for r in conn.execute("SELECT trip_id, network FROM trip")}
+    if stamp:
+        _OMREZJA.clear()
+        _OMREZJA[key] = out
+    return out
 
 
 # Kdaj prestop ne more pomagati, ker neposredne vozijo pogosto.
@@ -923,17 +984,13 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
     """
     min_min, max_min = TRANSFER_LIMITS.get(network or "zeleznica",
                                            TRANSFER_LIMITS["zeleznica"])
-    rows = conn.execute(_TRANSFER_SQL, {
-        "a": from_name, "b": to_name, "day": service_date, "network": network,
-        "min_gap": min_min * 60, "max_gap": max_min * 60,
-        "earliest": earliest_s,
-    }).fetchall()
+    rows = _prestopi(conn, from_name, to_name, service_date, network,
+                     min_min * 60, max_min * 60, earliest_s)
 
     # Za vsak par (odhod, prihod) obdrzi najkrajso izvedbo. Isti par vlakov
     # se lahko srecá na vec postajah -- ponudimo tisto z najmanj cakanja.
     best: dict[tuple, dict] = {}
-    for r in rows:
-        d = dict(r)
+    for d in rows:
         d["wait_s"] = d["x_dep_s"] - d["x_arr_s"]
         d["duration_s"] = d["arr_s"] - d["dep_s"]
         key = (d["trip1"], d["trip2"])
