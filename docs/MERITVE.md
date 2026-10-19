@@ -2769,6 +2769,15 @@ Vzroki: lege je računal vsak zemljevid sam, ker jih je `X-Osvezi-Cez` poslal vs
 
 **Pregled pred objavo** (dva agenta, vsak svojo najdbo preveril s skripto) je našel dvoje: nočna vožnja včerajšnjega prometnega dne, ki še ni odpeljala (LPP 6 ob 24:18, gledana ob 00:05), je z oknom vožnje namesto linije dobila današnji dan -- na lokalni bazi za 17. in 18. 10. stara koda 24 od 198 preverb napačnih, nova 0 (popravek a2dee87); in ključ leg, ki ga je zahteva s starejšo značko lahko premaknila nazaj (3 izračuni namesto 1). Ostalo enako do bajta: 11 650 klicev table in 5 958 klicev zvez, vključno z robovi okna, negativnimi zamudami na meji sita in nočnim repom.
 
+**Konvoj GIL na arwenu, izmerjen po nitih** (19. 10. 2026, 22:56–23:12, ponedeljek zvečer; `scripts/konvoj_gil.py`: vsako sekundo tabla Ljubljana in `/api/svezina` na `127.0.0.1:8000`, zraven CPE vsake niti iz `/proc`, 180 vzorcev). Zahteva ne traja „toliko kot zajem“: čaka le, ko druga nit računa v čistem Pythonu, in to ob vsakem koraku SQLite do `switchinterval` (0,5 ms). Lahka zahteva (~10 korakov) zato skoraj nič, tabla (~1 450) do ~0,7 s.
+
+| | tabla p50 | p90 | najdlje | `/api/svezina` najdlje |
+|---|---|---|---|---|
+| pred (razbor prometa v niti strežnika) | 22 ms | 31 ms | **608 ms** | 14 ms |
+| po (razbor v svojem procesu, 55c634c) | 16 ms | 30 ms | **80 ms** | 14 ms |
+
+Pred: edina repa (520 in 608 ms, 2 od 180) sta padla v sekundo, ko je nit prometa porabila ~0,9 s CPE (razbor FCD in potovalnih časov AC, vsako minuto). Nit zajema (~10 % jedra, sunki do 1 s CPE na 5 s, večinoma v SQLite in protobufu) je tablo podaljšala največ na 44 ms; kratka nit, ki je 15 s porabljala vse jedro v SQLite, nič (17–23 ms). Razbor dnevnega odgovora FCD (11 201 odsekov, sintetičen po obliki iz `test_promet.py`) je na arwenu 1 250 ms CPE, nočnega (1 442) 160 ms -- čez dan je bil promet torej večji vir kot ponoči. **Merjeno samo zvečer**: kaj čez dan dodajo NAP (2,7 MB XML na 10 s) in zajem ob 700 vozilih, pokaže ista skripta v konici.
+
 ## Veliki zemljevid: svežina leg, izbrani avtobus po trasi, odprtje (18.–19. 10. 2026)
 
 David: „Dovolj ljudi celo uporablja zemljevid, da gleda, kje so busi. A tam niso najnovejše pozicije.“ Presoja (brezglavi Chrome na produkciji in lokalno, 18. 10. zvečer) in izvedba (lokalno, 19. 10. dopoldne, ~600 vozil).

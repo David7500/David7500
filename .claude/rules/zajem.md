@@ -135,7 +135,7 @@ LPP-jev živi sistem vozi **drug vozni red**, kot ga objavi: `data.lpp.si/api/st
 
 **2. 10. 2026 enako, a cela linija** (kolesarsko prvenstvo, zaprta Slovenska): linija 1 38 od 44, zvečer 25 od 25. Odtlej `ingest` za LPP šteje neznane **po progi** (`proge`), `poll_lpp` zapiše `meta.lpp_linije_brez_voznje` (linija → [neznanih, vseh]) in `meta.lpp_vozila_brez_voznje` (lega, linija in smer iz vzorca). V `run` in `vehicle_now` ne gre nič — brez voznega reda ni ure, od katere bi merili zamudo, `vehicle_now` pa teče prek `JOIN trip`. Tablo za take linije napolni `lpp.na_tablo` (`strezba.md`). Podrobnosti v `docs/MERITVE.md`.
 
-**Imena postajališč se pišejo drugače.** 12 % samih velikih črk („ČRNUČE"), IJPP normalno — ker vse teče po imenu, sta to dve postaji. Uvoz jih poenoti, a samo kadar sta zapisa tudi fizično na istem mestu (500 m): med 24 takimi pari jih je 14 v razmiku 3–215 m, deset 0,8–111,6 km; „Celje" in „Čelje" 112 km narazen. Glej `gtfs._poenoti_imena()`.
+**Imena postajališč se pišejo drugače.** 12 % samih velikih črk („ČRNUČE"), IJPP normalno — ker vse teče po imenu, sta to dve postaji. Uvoz jih poenoti, a samo kadar sta zapisa tudi fizično na istem mestu (500 m): med 24 takimi pari jih je 14 v razmiku 3–215 m, deset 0,8–111,6 km; „Celje" in „Čelje" 112 km narazen. Glej `gtfs._poenoti_imena()` Odloča **mesto** (postajališča v 500 m drug od drugega, tudi prek tretjega), ne vsa skupina istega imena: do 19. 10. 2026 je daljni „Trnovo“ pri Novi Gorici ustavil zlivanje „TRNOVO“, 112 m od ljubljanskega, in eno „Litostroj“ 800 m stran zlivanje „LITOSTROJ“ (18 m).
 
 **Pošilja samo postanke PRED vozilom.** Izmerjeno 7. 9. 2026 s projekcijo lege vozila na postaje vožnje: vozilo 174 m od postaje 8 (od 26), `stop_time_update` samo za 9–26. Posledica težja od zapisa: pri mestnem LPP v `run` **nikoli ni meritve** — vedno le zadnja napoved pred prehodom (mediana 42 s pred njim, p90 27 s po njem). IJPP drugače: 56 % voženj ima v seznamu še prvi postanek, prevoženi postanki se osvežujejo.
 
@@ -341,6 +341,7 @@ Za vprašanje „kdaj je vlak hitrejši od avta“: čas vožnje z avtom po urah
 * Metapodatki NAP pravijo „avtoceste“, a odgovor ima tudi mestne ulice (617 odsekov znotraj ljubljanske obvoznice). Geometrija odsekov je v `b2b.fcd.datexii33.locations` (OpenLR, 3 GB XML, letno), nit je ne bere.
 * Potovalni časi AC: deset relacij DARS, `ac` po času objave (ista objava enkrat).
 * Odgovor FCD je **datoteka gzip** (`application/x-gzip`, brez `Content-Encoding`): `requests` je ne razpakira, `razberi_fcd` jo sam.
+* **Razbor teče v svojem procesu** (`promet._Razbor`, `spawn`, od 19. 10. 2026). Je čisti Python -- dnevni odgovor 1,25 s CPE na arwenu -- in v niti strežnika je vsako minuto zadržal GIL: tabla Ljubljana 520–610 ms namesto 22 ms, kadar je padla v to sekundo. Branje, dnevnik virov in pisanje ostanejo v niti; nazaj pride slovar.
 
 ## Napaka pisanja: najprej `conn.rollback()`
 
