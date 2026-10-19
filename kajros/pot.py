@@ -97,6 +97,9 @@ NASLEDNJIH = 3
 #: Meja hkrati dovoli preskočiti odhode pred potnikovim prihodom: vožnja z
 #: zamudo lahko odpelje pozneje, kot piše v voznem redu, a ne poljubno pozneje.
 MAX_ZAMIK_S = 60 * 60
+#: Kako dolgo velja izračun `zamiki()`. Zajem je na 30 s; za izbiro poti je
+#: dve minuti stara zamuda dovolj, številke na zaslonu so sveže.
+ZAMIK_VELJA_S = 120
 
 #: Kako daleč naprej sploh gledamo naslednje odhode. Brez te meje bi na progi
 #: s tremi vožnjami na dan ponudili odhod čez sedem ur kot "naslednjega".
@@ -221,27 +224,32 @@ def zamiki(conn: sqlite3.Connection, service_date: str,
     je dovolj -- prikazane številke gredo tako ali tako skozi `pripni_zamude()`,
     kjer teče pravi model.
 
-    Predpomnjeno na žig zajema (`rt_fetched`), ker je izračun za vseh 13 107
-    voženj dneva izmerjeno 541 ms.
+    Na arwenu je bil to večji del vsakega klica (presoja 18. 10. 2026): klic,
+    ki je padel v novo okno zajema (`rt_fetched`, 30 s), je trajal 1,8-2 s,
+    v istem oknu 0,3-0,7 s; na delavnik ob 17h 13 000 vezanih id-jev. Zato
+    dvoje: samo vožnje, ki so na poti ali odpeljejo v uri (končana pred več
+    kot uro ali začeta čez več kot uro zamude za izbiro od zdaj nimata), in
+    rezultat velja `ZAMIK_VELJA_S` -- za IZBIRO poti je dovolj, prikazane
+    številke so sveže iz `pripni_zamude()`.
     """
     if now_s is None:
         return {}
-    zig = conn.execute(
-        "SELECT value FROM meta WHERE key = 'rt_fetched'").fetchone()
-    zig = zig["value"] if zig else None
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
-    kljuc = (kje, service_date, zig)
-    if zig and (v := _ZAMIK_CACHE.get(kljuc)) is not None:
-        return v
+    kljuc = (kje, service_date)
+    zapis = _ZAMIK_CACHE.get(kljuc)
+    if zapis and 0 <= now_s - zapis[0] < ZAMIK_VELJA_S:
+        return zapis[1]
 
     vse = [r[0] for r in conn.execute(
         "SELECT t.trip_id FROM trip t JOIN service_day sd "
-        "ON sd.service_id = t.service_id AND sd.date = ?", (service_date,))]
+        "ON sd.service_id = t.service_id AND sd.date = ? "
+        "WHERE t.end_s >= ? AND t.start_s <= ?",
+        (service_date, now_s - MAX_ZAMIK_S, now_s + MAX_ZAMIK_S))]
     lm = stats.last_measured(conn, service_date, vse, now_s)
     out = {t: max(-MAX_ZAMIK_S, min(MAX_ZAMIK_S, v["delay_s"]))
            for t, v in lm.items() if v.get("delay_s")}
-    if zig:
-        _shrani(_ZAMIK_CACHE, kljuc, out)
+    if kje:          # baza v pomnilniku (testi) se lahko spremeni pod nami
+        _shrani(_ZAMIK_CACHE, kljuc, (now_s, out))
     return out
 
 
