@@ -2747,3 +2747,26 @@ David 18. 10.: „poglej vse API-je, ki so počasni; ko odpreš stran o vozilu, 
 **Lokalno po popravkih**: kazalo železnice hladno 11 ms, avtobusa 510 ms (nato 12), postaje železnice 5 ms; `/api/connections` avtobus 60–190 ms (prej 2,5–13 s), vlak 25–45 ms; okno vožnje LPP 9 klicev, nobenega dvakrat, postanki 0,20–0,22 s, vozilo na zemljevidu 0,61–0,88 s; `/api/svezina` 8–9 ms (health 40–49 ms); `pot.zamiki` ob 8:41 158 → 73 ms, ponovno 0 ms; `typical_dwell` LPP 14 29 → 0,08 ms ponovno.
 
 **Produkcija takoj po objavi** (19. 10. ~9:00, ponedeljek, 625 vozil, nekaj minut po ponovnem zagonu, n = 2–6): kazalo železnice 78–127 ms, avtobusa 926 → 156 ms, postaje železnice 76 ms; `/api/svezina` ~100 ms (RTT ~75), `/api/health` 312–422 ms; Bavarski dvor → Vič 0,78–1,16 s (prej 8,3 s), → Brod 1,3–3,2 s (prej 8,1; zdaj vodi `plan()`, ker prestopa ni), Ljubljana → Maribor 0,35–0,51 s; `/run` LPP 1 0,65–0,99 s v šestih zaporednih (prej polovica 2,7 s). Arwen je pri isti zahtevi 5–10-krat počasnejši od razvojnega računalnika. Primerjavo porazdelitev ponovi v `/admin` čez dan ali dva.
+
+## Veliki zemljevid: svežina leg, izbrani avtobus po trasi, odprtje (18.–19. 10. 2026)
+
+David: „Dovolj ljudi celo uporablja zemljevid, da gleda, kje so busi. A tam niso najnovejše pozicije.“ Presoja (brezglavi Chrome na produkciji in lokalno, 18. 10. zvečer) in izvedba (lokalno, 19. 10. dopoldne, ~600 vozil).
+
+**Zemljevid ni manj svež od okna vožnje.** Oba bereta `/api/vehicles` na ~10 s (produkcija: mediana razmika 10,2 s, 14 razmikov, `X-Osvezi-Cez` 6–8) z istimi legami (LPP 13 v obeh 85→119 s). Starost lege na zaslonu (15 odgovorov, 1 767 opažanj): Arriva, Nomago, AP MS in LPP 1118 mediana 28–32 s (p90 38–48), **mestni LPP 98 s** (p90 122, največ 175). Nova lega: IJPP vsakih 20 s, mestni LPP vsakih **60 s** (79 od 590 odgovorov); ob njej mestni LPP skoči v mediani 272 m (p90 509). Paket derp.si `lpp/all` pride natanko na 60 s, ob pojavu star 23–24 s, lege v njem v mediani 48–51 s. Hitrost (`speed_ms`) pošiljata samo mestni LPP (44 od 44) in 1118 (7 od 7); Arriva, Nomago, AP MS 0 od 68. Pogostejše branje torej ne prinese nič, razlika do okna vožnje je drsenje.
+
+**Ocena po trasi za izbranega** (lokalni zajem 18. 10. 21:31–21:46, 72 posnetkov `/api/vehicles` na 10 s, `ocenaNaTrasi` prevedena v Python, samo pari, kjer ocena drsi; razdalja do lege, ki jo je vozilo res imelo pozneje):
+
+| | n | stoji (mediana / p90) | ocena (mediana / p90) | ocena bližje |
+|---|---|---|---|---|
+| mestni LPP po 60 s | 165 | 374 / 646 m | **106** / 303 m | 81 % |
+| mestni LPP po 120 s | 153 | 677 / 1 219 m | **198** / 477 m | 88 % |
+| LPP 1118 po 20 s | 73 | 178 m | **42** m | |
+| LPP 1118 po 60 s | 248 | 447 m | **131** m | 92 % |
+
+Pri mestnem LPP ocena ne drsi pri 32 % opažanj s traso (vozilo stoji). Za vsa vozila hkrati se ne dela: N vozil = N izmišljenih leg in N tras.
+
+**V brskalniku** (19. 10. 2026, telefon s 4-krat počasnejšim CPU): sekundni korak izbranega mediana **1,9 ms** (p90 3,5, največ 8,8; n = 151); `renderBuses` na 596 vozilih 4,8–19 ms na klic, v prototipu (`setData` na vseh vsako sekundo) 9 ms/s pri 110 vozilih -- zato ima izbrani svojo plast. Profil 30 s: 4,1 ms/s, dokler je korak bral `clientWidth` (preračun postavitve, ~1 ms/s) in v 3D prestavljal vsa vozila (1,3 ms/s); nato 2,6 ms/s. LPP 13, 150 s: ocena vsako sekundo, 35 s mirovanja na postajališčih; ob dveh novih meritvah skok **394 m nazaj** (hitrost ob prejšnji meritvi 10,1 m/s, ob novi 2,4) in **671 m naprej** (obratno) -- hitrost ob meritvi pri mestnem LPP ni nujno tipična. Ocena je bila od meritve v mediani 657 m (lega ob prihodu 64–85 s stara). Ob odprtju iz okna vožnje (`&trip=`, z15, telefon) je bila ocena LPP 13 že prvo sekundo izven slike, zato pogled sledi izbranemu, dokler ga človek ne povleče. Skrit zavihek 20 s: nič računanja.
+
+**Odprtje.** Hladni strežnik: `/api/stations?network=zeleznica` 6,67 s (takoj nato 0,10 s), in avtobusi so čakali nanj. Z umetno zakasnjenimi postajami (6,5 s, telefon, 3 odprtja) je bil števec LPP poln prej pri 6,60–6,68 s, zdaj pri **0,19–0,56 s**; vlaki ostanejo za postajami.
+
+**Skrit zavihek.** Zemljevid odprt 6 s, nato drug zavihek 120 s: prej `/api/health` 4-krat, `/api/live` 4-krat, `/api/zapore` 2-krat, zdaj nič; ob vrnitvi v 4 s prej samo `/api/vehicles`, zdaj vse štiri.
