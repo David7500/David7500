@@ -1640,9 +1640,7 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
 _CONNECTIONS_SQL = """
 SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
        sa.stop_seq AS from_seq, COALESCE(sa.dep_s, sa.arr_s) AS dep_s,
-       sb.stop_seq AS to_seq,   COALESCE(sb.arr_s, sb.dep_s) AS arr_s,
-       COALESCE(ra.delay_dep, ra.delay_arr) AS from_delay_s,
-       COALESCE(rb.delay_arr, rb.delay_dep) AS to_delay_s
+       sb.stop_seq AS to_seq,   COALESCE(sb.arr_s, sb.dep_s) AS arr_s
 FROM trip t
 JOIN sched sa   ON sa.trip_id = t.trip_id
 JOIN station za ON za.stop_id = sa.stop_id AND za.name = :a
@@ -1650,10 +1648,68 @@ JOIN sched sb   ON sb.trip_id = t.trip_id AND sb.stop_seq > sa.stop_seq
 JOIN station zb ON zb.stop_id = sb.stop_id AND zb.name = :b
 JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = :day
                    AND (:network IS NULL OR t.network = :network)
-LEFT JOIN run ra ON ra.trip_id = t.trip_id AND ra.service_date = :day AND ra.stop_seq = sa.stop_seq
-LEFT JOIN run rb ON rb.trip_id = t.trip_id AND rb.service_date = :day AND rb.stop_seq = sb.stop_seq
 ORDER BY dep_s
 """
+
+# Vozni red zveze se spremeni samo ob uvozu, zamude pa vsakih 30 s -- zato
+# sta ločena. Prvi del prečeše vse postanke izhodišča čez VSE dni voznega
+# reda (mestni LPP ima za vsak datum svoje vožnje): Bavarski dvor -> Kolodvor
+# 56 od 90 ms vse zahteve, iskalnik pa isto vpraša vsakih 30 s (presoja
+# 19. 10. 2026). Ključ je značka uvoza, kot pri `journey._timetable_for_day`.
+_ZVEZE_RED: dict[tuple, list[dict]] = {}
+_ZVEZE_RED_MAX = 500
+
+
+def _vozni_red_zveze(conn: sqlite3.Connection, a: str, b: str, day: str,
+                     network: str | None) -> list[dict]:
+    """Vožnje od `a` do `b` na dan `day`, po ena na vožnjo, po odhodu.
+
+    Vlak lahko isto postajo obišče dvakrat (obrat) -- obdrži najzgodnejši
+    odhod. Vrne kopije: klicatelj vrstice dopolni.
+    """
+    stamp = db.get_meta(conn, "gtfs_imported_at")
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    kljuc = (kje, stamp, a, b, day, network)
+    vrstice = _ZVEZE_RED.get(kljuc) if stamp and kje else None
+    if vrstice is None:
+        best: dict[str, dict] = {}
+        for r in conn.execute(_CONNECTIONS_SQL, {"a": a, "b": b, "day": day,
+                                                  "network": network}):
+            d = dict(r)
+            prev = best.get(d["trip_id"])
+            if prev is None or d["dep_s"] < prev["dep_s"]:
+                best[d["trip_id"]] = d
+        vrstice = sorted(best.values(), key=lambda d: d["dep_s"])
+        if stamp and kje:      # baza v pomnilniku (testi) se lahko spremeni pod nami
+            if len(_ZVEZE_RED) >= _ZVEZE_RED_MAX:
+                _ZVEZE_RED.clear()
+            _ZVEZE_RED[kljuc] = vrstice
+    return [dict(d) for d in vrstice]
+
+
+def _zamude_zveze(conn: sqlite3.Connection, day: str, vrstice: list[dict]) -> None:
+    """Feedova zamuda na izhodišču in cilju vsake zveze, v vrstico.
+
+    Na izhodišču odhod pred prihodom, na cilju obratno -- glej CLAUDE.md.
+    """
+    if not vrstice:
+        return
+    pari = [(d["trip_id"], d["from_seq"]) for d in vrstice] + \
+           [(d["trip_id"], d["to_seq"]) for d in vrstice]
+    zam: dict[tuple, tuple] = {}
+    for i in range(0, len(pari), 400):
+        kos = pari[i:i + 400]
+        for r in conn.execute(
+                "SELECT trip_id, stop_seq, delay_arr, delay_dep FROM run "
+                "WHERE service_date = ? AND (trip_id, stop_seq) IN "
+                f"(VALUES {','.join(['(?,?)'] * len(kos))})",
+                [day, *(x for par in kos for x in par)]):
+            zam[(r["trip_id"], r["stop_seq"])] = (r["delay_arr"], r["delay_dep"])
+    for d in vrstice:
+        prihod, odhod = zam.get((d["trip_id"], d["from_seq"]), (None, None))
+        d["from_delay_s"] = odhod if odhod is not None else prihod
+        prihod, odhod = zam.get((d["trip_id"], d["to_seq"]), (None, None))
+        d["to_delay_s"] = prihod if prihod is not None else odhod
 
 # Zadnja postaja vsake voznje, katere (voznored + zamuda) cas je ze minil.
 # Ista logika kot pri /api/live: kar je naprej, je napoved, ne meritev.
@@ -2102,18 +2158,8 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
     ena-na-ena s tripom. Edini vir je zaporedje postaj: izhodišče mora imeti
     manjši `stop_seq` od cilja.
     """
-    rows = conn.execute(_CONNECTIONS_SQL,
-                        {"a": from_name, "b": to_name, "day": service_date,
-                         "network": network}).fetchall()
-
-    # Vlak lahko isto postajo obišče dvakrat (obrat) -- obdrži najzgodnejši par.
-    best: dict[str, dict] = {}
-    for r in rows:
-        d = dict(r)
-        prev = best.get(d["trip_id"])
-        if prev is None or d["dep_s"] < prev["dep_s"]:
-            best[d["trip_id"]] = d
-    out = sorted(best.values(), key=lambda d: d["dep_s"])
+    out = _vozni_red_zveze(conn, from_name, to_name, service_date, network)
+    _zamude_zveze(conn, service_date, out)
 
     # Vceraj zacet promet, ki se ni koncan. Isti razlog kot pri `journey.board`:
     # vozjna, ki odpelje ob 23:50, ima svoje postanke ob 24:21 in pripada
