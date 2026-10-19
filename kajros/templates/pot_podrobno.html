@@ -32,7 +32,18 @@
 
   <main class="pot">
     <section class="pot-panel" aria-label="Pot po korakih">
-      <a class="nazaj" id="nazaj" href="/app/pot">‹ nazaj na predloge</a>
+      <div class="podr-vrh">
+        <a class="nazaj" id="nazaj" href="/app/pot">‹ nazaj na predloge</a>
+        {#- Pošlji, ne Deli: „Deli lego“ je deljenje lege. Pot je v naslovu,
+            zato jo prejemnik odpre celo. #}
+        <button type="button" class="poslji-pot" id="poslji" hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7.5 7.5 12 3l4.5 4.5"></path>
+          </svg>
+          <span>Pošlji</span>
+        </button>
+      </div>
       <div id="glava" class="podr-glava"></div>
       <div id="stanje" class="pot-stanje"></div>
       <ol id="koraki" class="koraki"></ol>

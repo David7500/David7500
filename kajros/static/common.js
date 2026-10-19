@@ -108,6 +108,24 @@ function trajanjePrikaz(p) {
   return (p.prihod_ocena || p.prihod) - (p.odhod_ocena || p.odhod);
 }
 
+/** Pot od vrat do vrat v enem stavku, za sporočilo ob poslani povezavi:
+ * „Odhod ob 07:31 · LPP 6 (Bavarski dvor 07:36) › RG 318 · na cilju ob 08:52“.
+ *
+ * Imen krajev ni: kraj je lahko shranjena točka („dom“), in povezava ne sme
+ * povedati, da je tista točka tvoj dom (strani.md). Vstopno postajališče je
+ * javno ime -- pove, kje se dobita. Ure so te s kartice. */
+function stavekPoti(p) {
+  const u = (ts) => new Date(ts * 1000).toLocaleTimeString("sl-SI",
+    { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Ljubljana" });
+  const odhod = p.odhod_ocena || p.odhod;
+  const dan = new Date(odhod * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+  const voznje = p.noge.filter((n) => n.vrsta === "voznja");
+  const veriga = voznje.map((n, i) => (i === 0
+    ? `${imeVoznje(n)} (${n.od} ${u(n.odhod_ocena || n.odhod)})` : imeVoznje(n))).join(" › ");
+  return [`Odhod${dan === todayIso() ? "" : ` ${dayLabel(dan)}`} ob ${u(odhod)}`,
+          veriga || "peš", `na cilju ob ${u(p.prihod_ocena || p.prihod)}`].join(" · ");
+}
+
 /** Rezerva prestopa na poti od vrat do vrat, po urah, ki jih stran kaže.
  *
  * Prva vožnja šteje z zamudo ob IZSTOPU -- vmes rezervo porabi ali izgubi --,

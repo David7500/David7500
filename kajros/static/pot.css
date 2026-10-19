@@ -210,7 +210,19 @@
 .pot-stanje { min-height: 1.2em; font-size: 0.82rem; color: var(--ink-dim); line-height: 1.5; }
 /* Naslov izida pove, na katero vprašanje odgovarja -- "čim prej" in "do
    8:00" dasta drugačen vrstni red in ta mora biti viden. */
+.izid-glava { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .izid-naslov { display: block; font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+
+/* Pošlji: tih gumb ob naslovu, kot v oknu vožnje (`train.css`, `.poslji-voznjo`). */
+.poslji-pot {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  min-height: 36px; padding: 0 13px;
+  border: 1px solid var(--line-firm); border-radius: var(--r-pilula);
+  background: none; color: var(--ink-dim);
+  font: 500 13px/1 var(--sans); cursor: pointer;
+}
+@media (hover: hover) { .poslji-pot:hover { color: var(--ink); } }
+.poslji-pot.je-poslano { color: var(--accent-lit); border-color: var(--accent-lit); }
 .izid-naslov.je-pozno { color: var(--sev-bad); }
 .pot-stanje strong { color: var(--ink); font-family: var(--mono); }
 .pot-stanje.je-napaka { color: var(--sev-bad); }
@@ -355,6 +367,10 @@ body.karta-velika .pot {
   font-size: 0.82rem; color: var(--ink-dim); text-decoration: none;
 }
 @media (hover: hover) { .nazaj:hover { color: var(--ink); } }
+/* Nazaj levo, Pošlji desno: oboje je o strani, ne o poti. */
+.podr-vrh { display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; margin-bottom: 10px; }
+.podr-vrh .nazaj { margin-bottom: 0; }
 
 .podr-glava { margin-bottom: 12px; }
 .podr-ure { font-family: var(--mono); font-size: 1.25rem; }

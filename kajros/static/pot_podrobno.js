@@ -838,6 +838,27 @@ $("#nazaj").addEventListener("click", (ev) => {
   }
 });
 
+// Pošlji pot: naslov nosi vožnje in oba kraja, prejemnik dobi isto pot. Dan
+// mora biti zraven -- brez njega (danes ga naslov ne nosi) bi jutri odprl
+// jutrišnje vožnje z istimi id-ji ali „vožnje ta dan ni“. Imena krajev ne gredo
+// v besedilo (`stavekPoti`); `utm_source=poslano` kot v oknu vožnje.
+let DATUM = null;
+$("#poslji").addEventListener("click", async () => {
+  if (!PREDLOG) return;
+  const url = new URL(location.href);
+  if (DATUM && !url.searchParams.get("date")) url.searchParams.set("date", DATUM);
+  url.searchParams.set("utm_source", "poslano");
+  const b = $("#poslji");
+  const rez = await posljiPovezavo(document.title, stavekPoti(PREDLOG), url.toString());
+  if (rez !== "kopirano" && rez !== "ni šlo") return;
+  b.querySelector("span").textContent = rez;
+  b.classList.add("je-poslano");
+  setTimeout(() => {
+    b.querySelector("span").textContent = "Pošlji";
+    b.classList.remove("je-poslano");
+  }, 2500);
+});
+
 async function nalozi() {
   $("#nazaj").href = nazajUrl();
   const p = naslovPodrobno();
@@ -856,6 +877,8 @@ async function nalozi() {
     const d = await r.json();
     const pr = d.predlog;
     PREDLOG = pr;
+    DATUM = d.datum;
+    $("#poslji").hidden = false;
     ZIVO = Boolean(d.zivo);
     $("#stanje").textContent = "";
     $("#glava").innerHTML = `

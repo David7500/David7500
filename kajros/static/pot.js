@@ -798,29 +798,67 @@ function danBeseda(datum) {
   return datum === todayIso() ? "" : ` · ${dayLabel(datum)}`;
 }
 
+// Pošlji, ne Deli: „Deli lego“ je deljenje lege (isto kot v oknu vožnje).
+const POSLJI_HTML = `<button type="button" class="poslji-pot" id="poslji-pot">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7.5 7.5 12 3l4.5 4.5"></path>
+  </svg><span>Pošlji</span></button>`;
+
+// Naslov izida in gumb Pošlji v eni vrstici. Gumb samo, kadar je kaj poslati.
+function glavaIzida(besedilo, izid, razred = "") {
+  return `<div class="izid-glava"><span class="izid-naslov${razred}">${besedilo}</span>${
+    izid.predlogi.length ? POSLJI_HTML : ""}</div>`;
+}
+
 function naslovIzida(izid) {
   const opomba = izid.vir_hoje === "osrm" ? ""
     : " · pot do postaje je <strong>ocena</strong>, ker usmerjevalnik ne odgovarja";
   if (izid.ne_ujames) {
     const prvi = izid.predlogi[0];
     const kdaj = prvi ? ura(prvi.prihod_ocena || prvi.prihod) : null;
-    return `<span class="izid-naslov je-pozno">Do ${ura(izid.prihod_do)} ne prideš več.</span>`
+    return glavaIzida(`Do ${ura(izid.prihod_do)} ne prideš več.`, izid, " je-pozno")
       + (kdaj ? ` Najhitreje si tam ob <strong>${kdaj}</strong>${
         izid.danes_ni ? danBeseda(izid.datum) : ""}.` : "") + opomba;
   }
   // Zvečer, ko danes ne pelje nič več, so predlogi jutrišnji -- to mora
   // stati v naslovu, kartice nosijo samo uri.
   if (izid.danes_ni) {
-    return `<span class="izid-naslov">Danes ne pelje nič več. Prve zveze${
-      danBeseda(izid.datum)}</span>${opomba}`;
+    return glavaIzida(`Danes ne pelje nič več. Prve zveze${danBeseda(izid.datum)}`, izid)
+      + opomba;
   }
   if (izid.prihod_do) {
     const prvi = izid.predlogi[0];
     const odidi = prvi ? ` Odidi najpozneje ob <strong>${ura(prvi.odhod_ocena || prvi.odhod)}</strong>.` : "";
-    return `<span class="izid-naslov">Da boš tam do ${ura(izid.prihod_do)}${
-      danBeseda(izid.datum)}</span>${odidi}${opomba}`;
+    return glavaIzida(`Da boš tam do ${ura(izid.prihod_do)}${danBeseda(izid.datum)}`, izid)
+      + odidi + opomba;
   }
-  return `<span class="izid-naslov">Najhitreje na cilju${danBeseda(izid.datum)}</span>${opomba}`;
+  return glavaIzida(`Najhitreje na cilju${danBeseda(izid.datum)}`, izid) + opomba;
+}
+
+// Pot, ki jo potnik pošlje, je VPRAŠANJE (od, do, rok) v naslovu: prejemnik
+// jo odpre in dobi odgovor za takrat, ko jo odpre. Stavek ob povezavi pove,
+// kar je videl pošiljatelj -- prvi predlog. `utm_source=poslano`: sporočilne
+// aplikacije glave `Referer` ne pošljejo (`obisk._VIRI`).
+function pripniPoslji() {
+  const b = document.getElementById("poslji-pot");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    const izid = S.izidi;
+    const p = izid && izid.predlogi[0];
+    if (!p) return;
+    const rok = izid.prihod_do && !izid.ne_ujames ? `Da boš tam do ${ura(izid.prihod_do)}: ` : "";
+    const url = new URL(location.href);
+    url.searchParams.set("utm_source", "poslano");
+    const rez = await posljiPovezavo(document.title, rok + stavekPoti(p), url.toString());
+    if (rez !== "kopirano" && rez !== "ni šlo") return;
+    b.querySelector("span").textContent = rez;
+    b.classList.add("je-poslano");
+    setTimeout(() => {
+      b.querySelector("span").textContent = "Pošlji";
+      b.classList.remove("je-poslano");
+    }, 2500);
+  });
 }
 
 function izrisi(izid) {
@@ -850,6 +888,7 @@ function izrisi(izid) {
     stanje.innerHTML = naslovIzida(izid) + izbiraHtml();
   }
   pripniIzbiro();
+  pripniPoslji();
   izidiEl.innerHTML = izid.predlogi.map((p, i) => predlogHtml(p, i)).join("");
   // Kartica je povezava na podrobno stran, zato klik ne sme izbirati. Na
   // zemljevidu se pot pokaže ob dotiku ali fokusu.
