@@ -1874,15 +1874,20 @@ function naloziSlogMapLibre() {
 // lega, knjižnica in trasa čakale druga na drugo za `/run`: vozilo je prišlo na
 // zemljevid 0,5-0,8 s za postanki (arwen, presoja 18. 10. 2026). Knjižnica se
 // še vedno naloži šele, ko lega res obstaja.
+//
+// Obljuba trase stoji od začetka, ne šele ob odgovoru o legi: zanka lege isti
+// odgovor zna prebrati prej, zemljevid je tedaj traso vprašal še enkrat
+// (dvojna zahteva ob prvem odprtju, arwen 19. 10. 2026). Vrne `null`, kadar
+// lege ni -- trase tedaj nihče ne rabi.
 const zgodaj = { lega: null, trasa: null };
 if (OMREZJE === "avtobus" && URL_TRIP && !URL_DATE) {
   zgodaj.lega = fetch(`/api/vehicles?trip=${encodeURIComponent(URL_TRIP)}`);
-  zgodaj.lega.then((r) => r.clone().json()).then((list) => {
-    if (!list || !list.length) return;
+  zgodaj.trasa = zgodaj.lega.then((r) => r.clone().json()).then((list) => {
+    if (!list || !list.length) return null;
     naloziSlogMapLibre();
     pkNaloziMapLibre();
-    zgodaj.trasa = fetch(`/api/trip/${encodeURIComponent(URL_TRIP)}/shape`);
-  }).catch(() => { /* lego vpraša zanka sama */ });
+    return fetch(`/api/trip/${encodeURIComponent(URL_TRIP)}/shape`);
+  }).catch(() => null);          // lego vpraša zanka sama
 }
 
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
@@ -2015,7 +2020,8 @@ async function ustvariRunMap(v) {
   // Trasa po cesti oziroma progi gre na pot pred knjižnico, ne za njo.
   const zacetaTrasa = state.run.trip_id === URL_TRIP ? zgodaj.trasa : null;
   zgodaj.trasa = null;
-  const trasaP = (zacetaTrasa || fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`))
+  const trasaP = Promise.resolve(zacetaTrasa)
+    .then((r) => r || fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`))
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => (d ? d.points : null))
     .catch(() => null);           // brez trase narisemo postajalisca
