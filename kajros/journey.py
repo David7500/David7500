@@ -26,7 +26,7 @@ from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _opera
                     _with_operator, dwell_at, last_measured, odhod_z_izhodisca, opis_zamude,
                     pred_odhodom,
                     stanje_postankov, trenutna_zamuda, typical_at_stops, nepotrjen_do,
-                    zadnji_potrjeni,
+                    ura_z_zamudo, zadnji_potrjeni,
                     IZMERJENO, MAX_REALNA_ZAMUDA_S, NEPOTRJEN_ODHOD_S, ZADNJI_PODATEK)
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -726,7 +726,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             d["delay_s"] = None
             d["delay_kind"] = None
         d["feed_delay_s"] = own
-        d["expected"] = (_abs_time(service_date, d["t_s"] + d["delay_s"])
+        d["expected"] = (_abs_time(service_date, ura_z_zamudo(d["t_s"], d["delay_s"]))
                          if d["delay_s"] is not None else None)
         # Odlocitev o zamudi gre z vrstico vred -- glej `stats.opis_zamude()`.
         d["zamuda"] = opis_zamude(d["delay_s"], d["delay_kind"])
@@ -781,7 +781,7 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
                                     d["feed_delay_s"], d["network"], d["agency"])
             if vrsta:
                 d["delay_s"], d["delay_kind"] = z, vrsta
-                d["expected"] = _abs_time(service_date, d["t_s"] + z)
+                d["expected"] = _abs_time(service_date, ura_z_zamudo(d["t_s"], z))
                 d["zamuda"] = opis_zamude(z, vrsta)
 
     # Odhod, ki ga je ura ze pretekla, a ga nihce ni potrdil, ni odhod --

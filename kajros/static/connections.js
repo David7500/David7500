@@ -476,9 +476,7 @@ function connectionRowHtml(c, nowMs, isNext, date, odKod) {
   const cd = isNext && nowMs ? countdownLabel(c.expected_dep || c.sched_dep, nowMs) : "";
 
   // Pricakovani prihod = voznoredni + ista zamuda, torej prenos, ne meritev.
-  const expArr = late && c.sched_arr
-    ? hhmm(new Date(new Date(c.sched_arr).getTime() + c.delay_s * 1000).toISOString())
-    : null;
+  const expArr = late && c.sched_arr ? hhmm(pricakovanaUra(c.sched_arr, c.delay_s)) : null;
 
   return `
     <a class="conn-row${gone ? " is-gone" : ""}${morda ? " is-unconfirmed" : ""}${isNext ? " is-next" : ""}${late ? " has-delay" : ""}${c.ne_ustavi ? " is-obvoz" : ""}"

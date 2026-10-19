@@ -465,23 +465,20 @@ function yourStopHtml(stops, forecast, current) {
     // Prevoznikova ziva napoved iz lege vozila. Pri mestnem LPP je to edina
     // stevilka, ki ne stoji na napovedi o napovedi -- glej `zivaNapoved()`.
     d = zivo.s;
-    kdaj = schedIso && d != null
-      ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
+    kdaj = schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso;
     znak = "v živo";
     odkod = s.eta_min != null
       ? `LPP pravi čez ${s.eta_min} min` : "LPP, iz lege vozila";
   } else if (f) {
     d = f.predicted_delay_s;
-    kdaj = schedIso && d != null
-      ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
+    kdaj = schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso;
     odkod = f.n_samples > 0 ? `mediana ${pluralRuns(f.n_samples)}` : "prenos trenutne zamude";
   } else if (s.typical) {
     // Voznja se ni zacela: napovedi ni, zgodovina pa je. "?" je bil tu tudi
     // takrat, ko je iskalnik za isto voznjo pisal "obicajno 0 min, 16 voznj"
     // -- ista stevilka, dva prikaza, en brez nje.
     d = s.typical.median_s;
-    kdaj = schedIso && d != null
-      ? new Date(new Date(schedIso).getTime() + d * 1000).toISOString() : schedIso;
+    kdaj = schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso;
     znak = "običajno";
     // Izhodisca feed ne poroca (0 od 716 voznj), zato tam mediana pripada
     // NASLEDNJI postaji. Prepis je posten samo, ce je povedan.
@@ -520,7 +517,7 @@ function yourStopHtml(stops, forecast, current) {
         const dod = !passed && d != null && state.run && state.run.dodatek
           ? state.run.dodatek[s.stop_seq] : null;
         if (!dod || !schedIso) return "";
-        const do_ = new Date(new Date(schedIso).getTime() + (d + dod) * 1000).toISOString();
+        const do_ = pricakovanaUra(schedIso, d + dod);
         return `<div class="yours-do">lahko tudi do ${hhmm(do_)} (${escapeHtml(delayText(d + dod))})</div>`;
       })()}
       ${s.potniki ? `<div class="yours-potnik">${escapeHtml(potnikPostanekText(s.potniki))}</div>` : ""}

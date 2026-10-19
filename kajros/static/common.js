@@ -123,6 +123,15 @@ function rezervaPrestopa(t, pred, po) {
   return preostanekPrestopa(t.nacrtovano_s, z1 == null ? 0 : z1, z2 == null ? 0 : z2);
 }
 
+/** Ura ob zamudi, kot jo zaslon pokaže: vozni red + ZAOKROŽENA minuta (ISO).
+ *
+ * Prej vozni red + sekunde: `hhmm` je sekunde odrezal, žeton pa minuto
+ * zaokrožil -- „21:42 ~~21:45~~ · 2 min prej“. Isto pravilo kot strežnikov
+ * `stats.ura_z_zamudo` (presoja 18. 10. 2026). */
+function pricakovanaUra(schedIso, z) {
+  return new Date(new Date(schedIso).getTime() + delayMin(z) * 60000).toISOString();
+}
+
 function isEarly(z) {
   if (z == null) return false;
   if (typeof z === "object") return !!z.prezgodaj;
@@ -1191,7 +1200,11 @@ function potekNadomestnegaHtml(r) {
 function measuredStopHtml(s, isCurrent, w) {
   const d = stopDelay(s);
   const color = delayColor(d);
-  const actual = hhmm(stopActualIso(s));
+  // Prikazana ura = vozni red + zaokrožena minuta žetona (`pricakovanaUra`).
+  // `actual_*` ostaneta na sekundo: po njiju strežnik loči „izmerjeno“ od
+  // „zadnji podatek“, zato ju ne zaokrožujemo tam.
+  const ura = (sched, z) => (sched && z != null ? pricakovanaUra(sched, z) : null);
+  const actual = hhmm(ura(s.sched_dep || s.sched_arr, d) || stopActualIso(s));
   const sched = hhmm(s.sched_dep || s.sched_arr);
   const schedHtml = actual !== sched ? `<span class="stop-sched">${sched}</span>` : "";
   const split = dwellSplit(s);
@@ -1203,7 +1216,8 @@ function measuredStopHtml(s, isCurrent, w) {
     + `<span class="stop-actual">${hhmm(act)}</span>`
     + `<span class="stop-sched">${hhmm(sch)}</span></span>`;
   const times = split
-    ? leg("prihod", s.actual_arr, s.sched_arr) + leg("odhod", s.actual_dep, s.sched_dep)
+    ? leg("prihod", ura(s.sched_arr, split.arr) || s.actual_arr, s.sched_arr)
+      + leg("odhod", ura(s.sched_dep, split.dep) || s.actual_dep, s.sched_dep)
     : `<span class="stop-actual">${actual}</span>${schedHtml}`;
   const delay = split
     ? `<span style="color:${delayColor(split.arr)}">${delayText(split.arr, true)}</span>`
@@ -1289,7 +1303,7 @@ function forecastStopHtml(s, f, w, dod) {
   const t = !zivo && !f && s.typical ? s.typical : null;
   const d = zivo ? zivo.s : f ? f.predicted_delay_s : t ? t.median_s : null;
   const color = delayColor(d);
-  const eta = d != null && schedIso ? hhmm(new Date(new Date(schedIso).getTime() + d * 1000)) : "—";
+  const eta = d != null && schedIso ? hhmm(pricakovanaUra(schedIso, d)) : "—";
   const schedHtml = eta !== sched ? `<span class="stop-sched">${sched}</span>` : "";
   // Kadar prevoznik napove VEC od nase ocene, je njegova stevilka merjeno
   // skoraj tocna (MAE 0,21 min proti nasim 2,66) -- takrat ve za nekaj, cesar

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from datetime import datetime
 import urllib.parse
 import urllib.request
 
@@ -190,6 +191,46 @@ def tabla_in_okno_isto():
     return None
 
 
+def ura_in_znacka():
+    """Ura ob zamudi in žeton zamude morata dati isto razliko.
+
+    Ura je sekunde odrezala, žeton minuto zaokrožil: „21:42 ~~21:45~~ ·
+    2 min prej“ (18. 10. 2026: tabla Kolodvor 6 od 8 živih vrstic, okno
+    vožnje 13 od 32). Obe sta zdaj iz zaokrožene minute
+    (`stats.ura_z_zamudo`); ta straža ujame, če se kje spet razideta.
+    """
+    def minuta(iso):
+        return int(datetime.fromisoformat(iso).timestamp() // 60)
+
+    preverjenih = 0
+    for ime, net in (("Ljubljana", "zeleznica"), ("Bavarski dvor", "avtobus"),
+                     ("Kolodvor", "avtobus")):
+        q = urllib.parse.urlencode({"station": ime, "network": net})
+        d = json.load(urllib.request.urlopen(f"{BASE}/api/departures?{q}", timeout=30))
+        for r in d["board"]:
+            z = r.get("zamuda")
+            if not z or not r.get("expected") or not r.get("sched"):
+                continue
+            if minuta(r["expected"]) - minuta(r["sched"]) != z["min"]:
+                return (f'{r["train_no"]} na {ime}: {r["sched"][11:16]} → '
+                        f'{r["expected"][11:16]}, žeton {z["min"]} min')
+            preverjenih += 1
+    for od, do, net in (("Ljubljana", "Maribor", "zeleznica"),
+                        ("Bavarski dvor", "Kolodvor", "avtobus")):
+        q = urllib.parse.urlencode({"from": od, "to": do, "network": net})
+        d = json.load(urllib.request.urlopen(f"{BASE}/api/connections?{q}", timeout=60))
+        for c in d.get("connections") or []:
+            z = c.get("zamuda")
+            if not z or not c.get("expected_dep") or not c.get("sched_dep"):
+                continue
+            if minuta(c["expected_dep"]) - minuta(c["sched_dep"]) != z["min"]:
+                return (f'{c["train_no"]} {od} → {do}: {c["sched_dep"][11:16]} → '
+                        f'{c["expected_dep"][11:16]}, žeton {z["min"]} min')
+            preverjenih += 1
+    print(f"       (preverjenih vrstic: {preverjenih})")
+    return None
+
+
 def zemljevid_brez_404():
     """Vsak naslov iz zemljevida strani mora najti svojo postajo.
 
@@ -218,6 +259,7 @@ for opis, fn in (
     ("prestop pod ničlo z besedo", prestop_brez_minusa),
     ("ovire povsod ista številka", ovire_povsod_isto),
     ("tabla in okno vožnje ista številka", tabla_in_okno_isto),
+    ("ura ob zamudi = vozni red + žeton", ura_in_znacka),
     ("zemljevid strani brez 404", zemljevid_brez_404),
 ):
     preveri(opis, fn)

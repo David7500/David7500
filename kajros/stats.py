@@ -675,6 +675,18 @@ def _minute(v: int) -> int:
     return math.floor(v / 60 + 0.5)
 
 
+def ura_z_zamudo(t: int, zamuda_s: int) -> int:
+    """Ura, ki jo zaslon pokaže ob zamudi: vozni red + ZAOKROŽENA minuta.
+
+    Prej vozni red + sekunde: ura je sekunde odrezala, značka pa minuto
+    zaokrožila -- „21:42 ~~21:45~~ · 2 min prej“, „21:37 · +1“. Bralec, ki
+    odšteje, dobi drugo število kot stoji poleg (presoja 18. 10. 2026: v oknu
+    vožnje 13 od 32 vrstic, na tabli Kolodvor 6 od 8). Isto pravilo kot pri
+    razredu: zaokroži enkrat, potem računaj (`oznake.md`).
+    """
+    return t + 60 * _minute(zamuda_s)
+
+
 def _je_pravocasna(v: int) -> bool:
     """Ali je vozjna "tocna" -- po ISTI zaokrozeni minuti, kot jo prikaz izpise."""
     return _minute(v) <= ON_TIME_MIN
@@ -2136,7 +2148,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
         d["delay_s"], d["delay_at"], d["delay_kind"] = (
             z["delay_s"], z["delay_at"], z["delay_kind"])
 
-        d["expected_dep"] = (_abs_time(service_date, d["dep_s"] + d["delay_s"])
+        d["expected_dep"] = (_abs_time(service_date, ura_z_zamudo(d["dep_s"], d["delay_s"]))
                              if d["delay_s"] is not None else None)
         # Do kdaj je "odpeljal" samo sklep iz ure -- glej `NEPOTRJEN_ODHOD_S`.
         # Brez tega je iskalnik vlak, ki je cakal na prejsnji postaji, spravil

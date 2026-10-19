@@ -1392,14 +1392,15 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
         if z["delay_s"] is None:
             n["odhod_ocena"] = n["prihod_ocena"] = None
             continue
-        n["odhod_ocena"] = n["odhod"] + z["delay_s"]
+        # Vozni red + zaokrožena minuta, ki jo kaže žeton (`stats.ura_z_zamudo`).
+        n["odhod_ocena"] = stats.ura_z_zamudo(n["odhod"], z["delay_s"])
         # Zamuda ob izstopu ni ista kot ob vstopu: vlak vmes porabi rezervo
         # voznega reda. Isti model kot v oknu vožnje.
         ob_izstopu = stats.estimate_at(conn, n["train_no"], tid, n["od_seq"],
                                        z["delay_s"], n["do_seq"], service_date)
         if ob_izstopu is None:
             ob_izstopu = z["delay_s"]
-        n["prihod_ocena"] = n["prihod"] + ob_izstopu
+        n["prihod_ocena"] = stats.ura_z_zamudo(n["prihod"], ob_izstopu)
         # Zamuda ob izstopu je pogosto DRUGA od tiste ob vstopu -- vozilo vmes
         # porabi rezervo ali jo izgubi. En sam žeton nad vrstico, ki kaže obe
         # uri, si zato nasprotuje: "+1 min" nad prihodom šest minut za voznim
