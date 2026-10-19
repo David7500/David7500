@@ -143,15 +143,38 @@ function caveatText() {
   return "Lega je izmerjena z GPS, zamuda ima ločljivost ene minute.";
 }
 
-// Nazaj na tisto stran, s katere se pride: iskalnik vlakov ali avtobusov.
+// Nazaj na tisto stran, s katere se pride: iskalnik vlakov ali avtobusov,
+// z zadnjim iskanjem, ne prazen (`zadnjeIskanje`).
 function applyNetworkWording() {
   const back = document.querySelector(".back-link");
   if (back && state.network === "avtobus") {
-    back.setAttribute("href", "/app/bus");
+    back.setAttribute("href", zadnjeIskanje("avtobus") || "/app/bus");
     const label = back.querySelector("span");
     if (label) label.textContent = "avtobusi";
   }
 }
+
+// Puščica ‹ je korak nazaj, kadar smo prišli z naše strani (iskalnik, tabla,
+// zemljevid, pot) -- brskalnik vrne stran z vnosom, izidom in mestom na
+// seznamu, kot sistemska tipka. S tuje povezave je to zadnje iskanje v tem
+// zavihku ali goli iskalnik. Prej vedno goli: nov vnos v zgodovini, prazna
+// polja, in sistemski nazaj je potem vodil spet v okno vožnje.
+(function pripniPuscico() {
+  const back = document.querySelector(".back-link");
+  if (!back) return;
+  const zadnje = zadnjeIskanje(OMREZJE);
+  if (zadnje) back.setAttribute("href", zadnje);
+  back.addEventListener("click", (ev) => {
+    let nasa = false;
+    try {
+      nasa = !!document.referrer && new URL(document.referrer).origin === location.origin;
+    } catch (e) { /* neveljaven referrer: ni naša stran */ }
+    if (nasa && history.length > 1) {
+      ev.preventDefault();
+      history.back();
+    }
+  });
+})();
 
 // Koliko casa sme meritev veljati za "trenutno". Cez to je vrednost zgodovina
 // in prikaz mora to povedati -- "+20 min" ob polnoci, izmerjeno ob 17h, je laz.

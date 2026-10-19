@@ -909,6 +909,7 @@ function izberiSmer(kljuc) {
   if (izbranaSmer) q.set("smer", izbranaSmer);
   else q.delete("smer");
   history.replaceState(null, "", `?${q}`);
+  zapomniIskanje(NETWORK);
   // Iz cele table se izbrana stran da pokazati takoj. Iz ze filtrirane ne --
   // druge strani v njej ni, in "v tej smeri ni odhodov" bi bila laz za pol
   // sekunde.
@@ -1467,6 +1468,7 @@ async function searchAB(push, tiho = false, vpr = null) {
   }
   if (push) {
     history.replaceState(null, "", `?${new URLSearchParams({ from, to, date })}`);
+    zapomniIskanje(NETWORK);
     zlozi();
   }
   if (!tiho) zacniIskanje(`iščem zveze ${from} → ${to} …`);
@@ -1550,6 +1552,7 @@ async function searchBoard(push, tiho = false) {
     if (from) q.set("ob", from);
     if (izbranaSmer) q.set("smer", izbranaSmer);
     history.replaceState(null, "", `?${q}`);
+    zapomniIskanje(NETWORK);
     zlozi();
   }
 
@@ -1834,6 +1837,8 @@ function restore() {
   $("station").value = station;
   paintAllClears();
 
+  // Iskanje iz naslova (deljena povezava, vrnitev) je zadnje iskanje.
+  if ((q.has("station") && station) || (q.has("from") && q.has("to"))) zapomniIskanje(NETWORK);
   if (q.has("station") && station) {
     setTab("board");
     smerIzNaslova = q.get("smer");

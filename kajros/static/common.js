@@ -461,6 +461,44 @@ function pripniMeniVec() {
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pripniMeniVec);
 else pripniMeniVec();
 
+// ---------- zadnje iskanje ----------
+//
+// Puščica ‹ v oknu vožnje in pilula Vlaki/Avtobusi v orodni vrstici sta
+// vodili na goli `/app/bus` -- iskalnik je bil prazen, brez polj in izida
+// (prijava 18. 10. 2026: „ko daš nazaj, se vnos resetira“; 3 od 3 iskanj).
+// Zdaj vodita na zadnje iskanje tega omrežja v tem zavihku. sessionStorage,
+// ne localStorage: po zaprtju zavihka ali aplikacije se polja iz spomina ne
+// izpolnijo (`connections.restore()`), deljena povezava pa ga ne prinese.
+const ZADNJE_ISKANJE = "kajros:zadnje-iskanje:";
+const ISKALNIK = { zeleznica: "/app/train", avtobus: "/app/bus" };
+
+function zapomniIskanje(omrezje) {
+  try {
+    sessionStorage.setItem(ZADNJE_ISKANJE + omrezje, location.pathname + location.search);
+  } catch (e) { /* zasebno okno: pilula ostane gola pot */ }
+}
+
+function zadnjeIskanje(omrezje) {
+  try {
+    return sessionStorage.getItem(ZADNJE_ISKANJE + omrezje);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Pilula vodi na zadnje iskanje z vsake strani razen z iskalnika samega:
+// tam je dotik lastne pilule „začni znova“, kot pri zavihkih aplikacije.
+function pripniZadnjeIskanje() {
+  for (const [omrezje, pot] of Object.entries(ISKALNIK)) {
+    if (location.pathname === pot) continue;
+    const zadnje = zadnjeIskanje(omrezje);
+    if (!zadnje) continue;
+    document.querySelectorAll(`.orodna a[href="${pot}"]`).forEach((a) => a.setAttribute("href", zadnje));
+  }
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pripniZadnjeIskanje);
+else pripniZadnjeIskanje();
+
 
 /** Telo odgovora kot JSON -- a samo uspešnega. Napaka FastAPI je tudi JSON
  *  (`{detail}`) in bi jo stran sicer brala kot podatke. */
