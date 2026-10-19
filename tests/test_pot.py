@@ -27,8 +27,12 @@ def hoja_po_zraku(monkeypatch):
     hoja._PES_CACHE.clear()
     pot._VOZJE_CACHE.clear()
     pot._IMENA_CACHE.clear()
+    pot._HOJA_TOCKE.clear()
+    pot._HOJA_VSO_POT.clear()
     yield
     hoja._PES_CACHE.clear()
+    pot._HOJA_TOCKE.clear()
+    pot._HOJA_VSO_POT.clear()
 
 
 def _postaja(c, stop_id, ime, lat, lon):
@@ -515,6 +519,45 @@ def test_zvecer_brez_zveze_ponudi_jutrisnje(conn):
 
     r = pot.isci(conn, OD, DO, D, 22 * 3600, jutri=False)
     assert "danes_ni" not in r and r["nasvet"] == {"ni_zveze": True}
+
+
+def _stej_matrike(monkeypatch) -> list:
+    """Vsak klic matrike hoje kot (točka, smer, cilji)."""
+    klici = []
+    stara = hoja.matrika
+
+    def matrika(lat, lon, cilji, smer="od"):
+        klici.append((lat, lon, smer, tuple(cilji)))
+        return stara(lat, lon, cilji, smer)
+    monkeypatch.setattr(hoja, "matrika", matrika)
+    return klici
+
+
+def test_zvecer_hoja_izmerjena_enkrat(conn, monkeypatch):
+    """Jutrišnje iskanje (`danes_ni`) ne meri hoje do istih postajališč znova:
+    lokalno je bilo pri Koper -> Ljubljana ob 23:40 štirikrat namesto dvakrat."""
+    klici = _stej_matrike(monkeypatch)
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S1', '2026-09-09')")
+    _voznja(conn, "t1", "jutranji", [(1, "BLIZU", 8 * 3600 + 600),
+                                     (2, "CILJ", 8 * 3600 + 1500)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 22 * 3600)
+    assert r["danes_ni"] is True
+    # Izhodišče, cilj in hoja vso pot: vsako enkrat.
+    assert len(klici) == len(set(klici)) == 3, klici
+
+
+def test_rok_ki_ga_ne_ujames_hoja_izmerjena_enkrat(conn, monkeypatch):
+    """Drugo iskanje pri `ne_ujames` je isto vprašanje brez roka: ista hoja."""
+    klici = _stej_matrike(monkeypatch)
+    _voznja(conn, "t1", "odpeljal", [(1, "BLIZU", 8 * 3600 + 600),
+                                     (2, "CILJ", 8 * 3600 + 1500)])
+    _voznja(conn, "t2", "naslednji", [(1, "BLIZU", 9 * 3600),
+                                      (2, "CILJ", 9 * 3600 + 900)])
+    conn.commit()
+    r = pot.isci_do(conn, OD, DO, D, 8 * 3600 + 1800, 8 * 3600 + 900)
+    assert r["ne_ujames"] is True
+    assert len(klici) == len(set(klici)) == 3, klici
 
 
 def test_tam_do_ne_caka_na_prestopu_namesto_na_cilju(conn):

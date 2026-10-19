@@ -193,21 +193,41 @@ def _vozje(conn: sqlite3.Connection, service_date: str) -> dict[str, dict]:
     return out
 
 
-def _imena(conn: sqlite3.Connection) -> dict[str, tuple]:
+def _postaje_kljuc(conn: sqlite3.Connection) -> tuple:
+    """Ključ statike postajališč: baza in število vrstic."""
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    return kje, conn.execute("SELECT COUNT(*) FROM station").fetchone()[0]
+
+
+def _imena(conn: sqlite3.Connection, kljuc: tuple | None = None) -> dict[str, tuple]:
     """`{stop_id: (ime, lat, lon)}`. Statika, ki se med uvozi ne spreminja;
     branje vseh 10 509 vrstic ob vsakem predlogu je bilo brez potrebe.
 
     Koordinate so zraven, ker mora zemljevid pot narisati -- brez njih bi jih
     prikaz iskal z novo zahtevo na postajališče."""
-    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
-    n = conn.execute("SELECT COUNT(*) FROM station").fetchone()[0]
-    kljuc = (kje, n)
+    kljuc = kljuc or _postaje_kljuc(conn)
     if (v := _IMENA_CACHE.get(kljuc)) is not None:
         return v
     return _shrani(_IMENA_CACHE, kljuc,
                    {r["stop_id"]: (r["name"], r["lat"], r["lon"])
                     for r in conn.execute("SELECT stop_id, name, lat, lon FROM station")},
                    mest=1)
+
+
+#: Izmerjena hoja ene točke: `{(postaje, lat, lon, smer): (čas, {stop_id: s})}`.
+#:
+#: Ista točka se v enem vprašanju išče večkrat: zvečer, ko danes ne pelje nič
+#: več, še enkrat za jutri (`danes_ni`), pri roku, ki ga ne ujameš, še enkrat
+#: čim prej (`ne_ujames`) -- in vsakič je šla ista matrika na usmerjevalnik.
+#: Izmerjeno lokalno 19. 10. 2026: pri Koper -> Ljubljana ob 23:40 štirje
+#: klici matrike (78 ms) in štirje pregledi postajališč (143 ms) za dve točki.
+#: Potnik isto točko vpraša tudi ob vsaki spremembi ure, prevoznikov ali meje.
+#: Pešpoti se med uvozi ne spreminjajo; ura je meja proti premaknjenemu
+#: postajališču z istim številom vrstic.
+_HOJA_TOCKE: dict[tuple, tuple] = {}
+_HOJA_VSO_POT: dict[tuple, tuple] = {}
+HOJA_VELJA_S = 3600
+_HOJA_MEST = 200
 
 
 def zamiki(conn: sqlite3.Connection, service_date: str,
@@ -253,6 +273,28 @@ def zamiki(conn: sqlite3.Connection, service_date: str,
     return out
 
 
+def _matrika_tocke(kljuc_p: tuple, lat: float, lon: float, merjeni: list[tuple],
+                   smer: str) -> tuple[list[int | None], str]:
+    """`hoja.matrika()` za kandidate `blizu()`, ki že izmerjenih ne meri znova.
+
+    Zapomni se samo, kar je izmeril usmerjevalnik: ocena po zraku, kadar ta ne
+    odgovarja, ni meritev in ne sme ostati, ko spet odgovarja.
+    """
+    kljuc = (kljuc_p, lat, lon, smer)
+    zdaj = time.monotonic()
+    zapis = _HOJA_TOCKE.get(kljuc)
+    znano = zapis[1] if zapis and zdaj - zapis[0] < HOJA_VELJA_S else {}
+    novi = [k for k in merjeni if k[1] not in znano]
+    vir, izmerjeno = hoja.OSRM, {}
+    if novi:
+        sekunde, vir = hoja.matrika(lat, lon, [(k[2], k[3]) for k in novi], smer)
+        izmerjeno = {k[1]: s for k, s in zip(novi, sekunde)}
+        if vir == hoja.OSRM:
+            _shrani(_HOJA_TOCKE, kljuc, (zapis[0] if znano else zdaj, {**znano, **izmerjeno}),
+                    mest=_HOJA_MEST)
+    return [znano[k[1]] if k[1] in znano else izmerjeno[k[1]] for k in merjeni], vir
+
+
 def blizu(conn: sqlite3.Connection, lat: float, lon: float,
           streze: set[str], najvec_s: int = MAX_HOJE_S,
           smer: str = "od",
@@ -269,16 +311,24 @@ def blizu(conn: sqlite3.Connection, lat: float, lon: float,
 
     `streze` so postajališča, s katerih ta dan sploh kaj pelje. Prihaja iz že
     naloženega voznega reda in ne iz svoje poizvedbe: ista stvar v SQL (JOIN
-    čez `sched`) je izmerjeno 629 ms, tu pa je zastonj.
+    čez `sched`) je izmerjeno 629 ms, tu pa je zastonj. Postajališča z legami
+    so v pomnilniku (`_imena`), ne iz baze ob vsakem klicu.
+
+    Matrika gre na usmerjevalnik samo za postajališča, ki jih ta točka še ni
+    izmerila (`_HOJA_TOCKE`).
     """
+    kljuc_p = _postaje_kljuc(conn)
+    imena = _imena(conn, kljuc_p)
     polmer = hoja.doseg_zracno(max(najvec_s, NASVET_MEJA_S), kmh)
     dlat = polmer / 111_320.0
     dlon = dlat / max(0.2, abs(math.cos(math.radians(lat))))
     kandidati = []
-    for stop_id, ime, la, lo in conn.execute("SELECT stop_id, name, lat, lon FROM station"):
-        if stop_id not in streze or la is None:
+    for stop_id in streze:
+        v = imena.get(stop_id)
+        if v is None:
             continue
-        if abs(la - lat) > dlat or abs(lo - lon) > dlon:
+        ime, la, lo = v
+        if la is None or abs(la - lat) > dlat or abs(lo - lon) > dlon:
             continue
         m = geo.haversine(lat, lon, la, lo)
         if m <= polmer:
@@ -307,7 +357,7 @@ def blizu(conn: sqlite3.Connection, lat: float, lon: float,
     if not merjeni:
         return {}, hoja.OSRM, None
 
-    sekunde, vir = hoja.matrika(lat, lon, [(k[2], k[3]) for k in merjeni], smer)
+    sekunde, vir = _matrika_tocke(kljuc_p, lat, lon, merjeni, smer)
     out = {}
     cez_mejo = None
     for k, s in zip(merjeni, sekunde):
@@ -932,7 +982,16 @@ def _pes_vso_pot(od: tuple[float, float], do: tuple[float, float],
     if geo.haversine(od[0], od[1], do[0], do[1]) > hoja.doseg_zracno(
             MAX_PES_PRIMERJAVA_S, kmh):
         return None, hoja.OSRM
-    sek, vir = hoja.sekunde(od[0], od[1], do[0], do[1])
+    # Isti par se v enem vprašanju vpraša dvakrat (`danes_ni`, `ne_ujames`);
+    # zapomni se samo, kar je izmeril usmerjevalnik (glej `_HOJA_TOCKE`).
+    zdaj = time.monotonic()
+    zapis = _HOJA_VSO_POT.get((od, do))
+    if zapis and zdaj - zapis[0] < HOJA_VELJA_S:
+        sek, vir = zapis[1], hoja.OSRM
+    else:
+        sek, vir = hoja.sekunde(od[0], od[1], do[0], do[1])
+        if vir == hoja.OSRM:
+            _shrani(_HOJA_VSO_POT, (od, do), (zdaj, sek), mest=_HOJA_MEST)
     return hoja.pri_hitrosti(sek, kmh), vir
 
 
