@@ -708,7 +708,7 @@ function renderConnections(data) {
   const ahead = nextIdx >= 0 ? list.slice(nextIdx) : list;
 
   // Osvezitev vsakih 30 s seznam izrise znova; odprt seznam naj ostane odprt.
-  const odprto = !!resultsEl.querySelector(".past-box[open]");
+  const odprto = !!resultsEl.querySelector(".past-box[open]") || !!(mesto && mesto.odprto);
   const neposredne = [];
   if (gone.length) {
     neposredne.push(`<details class="past-box"${odprto ? " open" : ""}><summary class="past-head">
@@ -749,6 +749,7 @@ function renderConnections(data) {
     ? [...prestopi, '<div class="result-head"><span>Neposredno</span></div>', ...neposredne]
     : [...neposredne, ...prestopi];
   resultsEl.innerHTML = mejaHtml(data) + rows.join("");
+  obnoviMesto();
 
   renderAlerts(data.alerts, "Na tej poti so obvestila o ovirah");
 }
@@ -1015,7 +1016,7 @@ function renderBoard(data) {
   // LPP 13 peljal cez dve minuti. Vozni red ostane precrtan v vsaki vrstici.
   const { gone, morda, ahead } = razvrstiTablo(list, nowMs);
   // Osvezitev vsakih 30 s tablo izrise znova; odprt seznam naj ostane odprt.
-  const odprto = !!resultsEl.querySelector(".past-box[open]");
+  const odprto = !!resultsEl.querySelector(".past-box[open]") || !!(mesto && mesto.odprto);
   const rows = [];
   if (gone.length) {
     rows.push(`<details class="past-box"${odprto ? " open" : ""}><summary class="past-head">
@@ -1030,7 +1031,44 @@ function renderBoard(data) {
   rows.push(...ahead.map((r, i) => vrstica(r, i === prva)));
   resultsEl.innerHTML = mejaHtml(data) + mimoHtml(data) + smeriHtml(data) + rows.join("");
   renderAlerts(data.alerts, `Obvestila o ovirah — ${data.station}`);
+  obnoviMesto();
 }
+
+// ---------- mesto na seznamu ob vrnitvi ----------
+//
+// Brez predpomnilnika strani (bfcache) -- aplikacija za Android, WebView -- se
+// je vrnitev iz okna vožnje končala na vrhu seznama, z zaprtimi prejšnjimi:
+// brskalnik je mesto obnovil ob nalaganju, ko izida še ni bilo (presoja 18. 10.
+// 2026: 1 304 px → 0). Mesto gre zato v sessionStorage ob odhodu in se
+// postavi po prvem izrisu, samo ob vrnitvi na isto vprašanje.
+const MESTO_KLJUC = `kajros:iskalnik-mesto:${NETWORK}`;
+let mesto = (() => {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (!nav || nav.type !== "back_forward") return null;
+    const m = JSON.parse(sessionStorage.getItem(MESTO_KLJUC));
+    return m && m.q === location.search ? m : null;
+  } catch (e) {
+    return null;
+  }
+})();
+if (mesto) history.scrollRestoration = "manual";
+
+function obnoviMesto() {
+  if (!mesto) return;
+  const y = mesto.y;
+  mesto = null;
+  requestAnimationFrame(() => window.scrollTo(0, y));
+}
+
+addEventListener("pagehide", () => {
+  try {
+    sessionStorage.setItem(MESTO_KLJUC, JSON.stringify({
+      q: location.search, y: window.scrollY,
+      odprto: !!resultsEl.querySelector(".past-box[open]"),
+    }));
+  } catch (e) { /* zasebno okno: brez obnove mesta */ }
+});
 
 
 // ---------- vstopni pregled ----------
