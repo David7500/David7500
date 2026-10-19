@@ -1203,6 +1203,15 @@ def typical_dwell(conn: sqlite3.Connection, train_no: str, days: int = 90) -> di
     izbira in ne vozni red. Kadar pride tocen, stoji predpisano in to o
     njegovi sposobnosti nadoknaditi ne pove nicesar.
     """
+    # Predpomnjeno uro: zgodovina 90 dni se čez dan skoraj ne spremeni,
+    # poizvedba pa prečeše vse vožnje linije -- pri mestnem LPP tisoče, izid
+    # skoraj vedno prazen. Bila je večina dela `/api/train/{no}/run` pri
+    # velikih linijah (LPP 14: 30 od 42 ms lokalno; presoja 18. 10. 2026).
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    kljuc = (kje, train_no, days, datetime.now(TZ).date().isoformat())
+    zapis = _POSTANKI.get(kljuc)
+    if kje and zapis and time.monotonic() - zapis[0] < _POSTANKI_S:
+        return zapis[1]
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     vzorci: dict[int, list[int]] = {}
     sched: dict[int, int] = {}
@@ -1237,12 +1246,21 @@ def typical_dwell(conn: sqlite3.Connection, train_no: str, days: int = 90) -> di
             continue                       # zaporedje si ni skladno -- dan izpustimo
         vzorci.setdefault(r["stop_seq"], []).append(r["red"] + a - r["delay_arr"])
         sched[r["stop_seq"]] = r["red"]
-    return {
+    out = {
         seq: {"sched_dwell_s": sched[seq],
               "typical_dwell_s": round(statistics.median(v)),
               "n_samples": len(v)}
         for seq, v in vzorci.items() if len(v) >= MIN_DWELL_SAMPLES
     }
+    if kje:          # baza v pomnilniku (testi) se lahko spremeni pod nami
+        if len(_POSTANKI) >= 4000:
+            _POSTANKI.clear()
+        _POSTANKI[kljuc] = (time.monotonic(), out)
+    return out
+
+
+_POSTANKI: dict[tuple, tuple[float, dict]] = {}
+_POSTANKI_S = 3600
 
 
 def dwell_at(slack_list, stop_seq: int) -> int:
