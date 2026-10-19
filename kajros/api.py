@@ -1539,30 +1539,42 @@ def _active_service_date(conn, train_no: str, now: datetime,
     Izbiramo med včeraj in danes; zmaga dan, katerega voznoredno okno vsebuje
     trenutni čas. Če ga ne vsebuje nobeno, ostane današnji.
 
-    Z znano vožnjo (`trip`) šteje njeno okno, ne okno vse linije: mestna
-    linija ima tisoče voženj in poizvedba čez vse je bila večina
+    Z znano vožnjo (`trip`) odloči ta vožnja, ne vsa linija: mestna linija
+    ima tisoče voženj in poizvedba čez vse je bila večina
     `/api/train/{no}/run` (LPP 1: 18 od 21 ms lokalno, 19. 10. 2026) -- in
-    ob polnoči je okno linije za jutranjo vožnjo izbralo včeraj.
+    ob polnoči je okno linije za jutranjo vožnjo izbralo včeraj. Vožnja je
+    včerajšnja, kadar ta dan vozi in se njeno včerajšnje okno še ni izteklo:
+    tudi kadar še ni odpeljala (LPP 6 ob 24:18, gledana ob 00:05) in o njej
+    še ni nobene meritve.
     """
     today = now.date().isoformat()
-    pogoj, par = ("t.trip_id = ?", (trip,)) if trip else ("t.train_no = ?", (train_no,))
-    row = conn.execute(
-        "SELECT MIN(COALESCE(s.dep_s, s.arr_s)) AS a, MAX(COALESCE(s.arr_s, s.dep_s)) AS b "
-        f"FROM trip t JOIN sched s USING (trip_id) WHERE {pogoj}",
-        par,
-    ).fetchone()
-    if not row or row["a"] is None:
-        return today
-
     now_s = journey.now_seconds(now)
     yesterday = (now.date() - timedelta(days=1)).isoformat()
     # Vceraj gledamo z zamikom cez polnoc; grace pokrije vlak, ki zamuja.
     grace = 3 * 3600
+    if trip:
+        row = conn.execute(
+            "SELECT MAX(COALESCE(s.arr_s, s.dep_s)) AS b FROM sched s WHERE s.trip_id = ?",
+            (trip,)).fetchone()
+        if not row or row["b"] is None or now_s + 86400 > row["b"] + grace:
+            return today
+        vozi = conn.execute(
+            "SELECT 1 FROM trip t JOIN service_day sd ON sd.service_id = t.service_id "
+            "WHERE t.trip_id = ? AND sd.date = ?", (trip, yesterday)).fetchone()
+        return yesterday if vozi else today
+
+    row = conn.execute(
+        "SELECT MIN(COALESCE(s.dep_s, s.arr_s)) AS a, MAX(COALESCE(s.arr_s, s.dep_s)) AS b "
+        "FROM trip t JOIN sched s USING (trip_id) WHERE t.train_no = ?",
+        (train_no,),
+    ).fetchone()
+    if not row or row["a"] is None:
+        return today
     if row["a"] <= now_s + 86400 <= row["b"] + grace:
         has = conn.execute(
             "SELECT 1 FROM run r JOIN trip t USING (trip_id) "
-            f"WHERE {pogoj} AND r.service_date = ? LIMIT 1",
-            (*par, yesterday),
+            "WHERE t.train_no = ? AND r.service_date = ? LIMIT 1",
+            (train_no, yesterday),
         ).fetchone()
         if has:
             return yesterday
@@ -1906,6 +1918,9 @@ def _vozila_po_branju(conn, zdaj: datetime) -> tuple[str | None, list[dict]]:
     if _VEHICLES_CACHE["key"] == brano and brano is not None:
         return brano, _VEHICLES_CACHE["rows"]
     with _VEHICLES_LOCK:
+        # Značko preberi znova: kdor je čakal na ključavnico, ima morda starejšo,
+        # in ključ bi premaknil nazaj -- naslednji bi računal še enkrat.
+        brano = db.get_meta(conn, "positions_fetched")
         if _VEHICLES_CACHE["key"] != brano or brano is None:
             _VEHICLES_CACHE["rows"] = _vehicles_rows(conn, zdaj)
             _VEHICLES_CACHE["key"] = brano

@@ -2929,3 +2929,24 @@ def test_prometni_dan_voznje_po_njenem_oknu_ne_po_liniji(conn):
     assert api._active_service_date(conn, "LPP 9", polnoc) == vceraj
     assert api._active_service_date(conn, "LPP 9", polnoc, "noc") == vceraj
     assert api._active_service_date(conn, "LPP 9", polnoc, "jutro") == danes
+
+
+def test_nocna_voznja_pred_odhodom_je_vcerajsnja(conn):
+    """LPP 6 ob 24:18 sodi v včerajšnji prometni dan. Ob 00:05 še ni
+    odpeljala in o njej ni meritve -- okno vožnje mora vseeno pokazati
+    včerajšnjo, ne današnje (ta vozi šele jutri ob 00:18)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from kajros import api
+    danes, vceraj = "2026-09-02", "2026-09-01"
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('SV', ?)", (vceraj,))
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('noc18','r6','LPP 6','A - C','SV')")
+    _sched(conn, "noc18", [(1, "A", None, 24 * 3600 + 18 * 60), (2, "C", 24 * 3600 + 33 * 60, None)])
+    conn.commit()
+    ob = datetime(2026, 9, 2, 0, 5, tzinfo=ZoneInfo("Europe/Ljubljana"))
+    assert api._active_service_date(conn, "LPP 6", ob, "noc18") == vceraj
+    # Ko se včerajšnje okno izteče (z rezervo treh ur), ostane današnji dan.
+    pozneje = datetime(2026, 9, 2, 3, 40, tzinfo=ZoneInfo("Europe/Ljubljana"))
+    assert api._active_service_date(conn, "LPP 6", pozneje, "noc18") == danes
