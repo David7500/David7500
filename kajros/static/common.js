@@ -809,6 +809,16 @@ const IZBRANA_INK = "#f0934f";
 
 // Prevoženi del poti izbranega vozila.
 const ZA_INK = "#8b95a4";
+// Zadnja IZMERJENA lega vozila, ki je narisano na oceni (okno vožnje,
+// izbrani avtobus na velikem zemljevidu): rdeča pika s svetlim obročem.
+// Rdeča ni iz nobene lestvice (ne zamud, ne razmer), tu ne more pomeniti
+// drugega.
+const MERITEV_INK = "#ff4d5e";
+// Vozilo na OCENI lege: prosojno telo (nariše ga zemljevid sam) s črtkanim
+// svetlim obrisom čez temnega, ki ga loči od podlage. Meritev od ocene loči
+// oblika, ne barva -- vozilo ostane v barvi prevoznika (4. 10. 2026).
+const obrisOcene = (rect) => `<rect ${rect} fill="none" stroke="#0f1115" stroke-width="2.4"/>
+      <rect ${rect} fill="none" stroke="#f4f6fa" stroke-width="1.2" stroke-dasharray="2.4 1.6"/>`;
 // Vlak na zemljevidu: oznaka, model in pot.
 const TRAIN_INK = "#f0934f";
 // Zapora tira na zemljevidu: ista rumena kot opozorila o ovirah na straneh
@@ -1561,6 +1571,9 @@ function tockaNaTrasi(pts, cums, dolzina) {
 // Ocena, ne meritev -- zato se ne premika, kadar vozilo stoji ali kadar ni na
 // tej trasi, in podnapis pove, da je ocenjena.
 const OCENA_MAX_ODMIK_M = 120;
+// Od toliko metrov med oceno in meritvijo besedilo pove „ocenjeno iz lege
+// pred N s“ namesto „lega stara N s“; bliže je to ista točka na zaslonu.
+const OCENA_VIDNA_M = 40;
 
 // Smer trase pri `s` metrih, v stopinjah od severa: od tocke `pol` metrov
 // zadaj do tocke `pol` metrov spredaj. Brez dolzine vrne null.
@@ -1630,6 +1643,32 @@ function postankiNaTrasi(trasa, cums, postaje) {
     .filter((r) => r.odmik <= 60)
     .map((r) => r.vzdolz)
     .sort((a, b) => a - b);
+}
+
+// Kam je obrnjeno vozilo na oceni: po TRASI, ne po smeri iz feeda. Ta je
+// stara toliko kot lega (~30 s), in avtobus, ki ga je ocena odpeljala cez
+// ovinek, je z njo stal pocez na cesto. Izmerjeno na 324 parih zaporednih
+// leg LPP (31 vozil, 25. 9. 2026 ob 19h, razmik 10-90 s), napaka proti
+// smeri, ki jo feed pove ob naslednji legi (ta se s traso na dejanski
+// legi ujema: 95 % v 15°, torej je dobro merilo):
+//
+//   smer na oceni            mediana   v 20°   nad 45°
+//   iz feeda (prej)            5,6°     74 %    12,3 %
+//   **po trasi, tetiva ±35 m** 2,4°     87 %     8,0 %
+//
+// Kar ostane nad 45° (26 parov), je napaka LEGE, ne smeri: v 16 je ocena od
+// resnice vzdolz trase vec kot 100 m, v ostalih je projekcija padla na
+// nasprotni krak trase ali pa vozilo po svoji trasi pelje nazaj (12D, 69).
+//
+// `pol` je pol dolzine NARISANEGA vozila v metrih (ve ga zemljevid, ki ga
+// rise: ikona ali povecan model), zato oba konca lezita na trasi tudi v
+// ovinku. Natancnosti dolzina tetive skoraj ne spremeni -- od 0 do +-150 m
+// je v 20° med 84 in 87 % -- zato je izbrana po sliki. `lega` je izid
+// `ocenaNaTrasi`, `tr` njena trasa.
+function smerNaOceni(tr, v, lega, pol) {
+  const iz = v.bearing || 0;
+  if (lega.vzdolz == null) return iz;
+  return smerTrase(tr.trasa, tr.cums, lega.vzdolz, pol) ?? iz;
 }
 
 // ---------- osvezevanje leg ----------

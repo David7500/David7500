@@ -1896,37 +1896,18 @@ const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
 
 // ---------- ocena lege med dvema meritvama ----------
 // Pravilo in meritve so v common.js (`ocenaNaTrasi`): isto oceno ima veliki
-// zemljevid za vlak s potnikom.
+// zemljevid za vlak s potnikom in za izbrani avtobus z izmerjeno hitrostjo.
 const ocenjenaLega = (v, starostS) => ocenaNaTrasi(runMap, v, starostS);
 
-// Kam je obrnjeno vozilo na oceni: po TRASI, ne po smeri iz feeda. Ta je
-// stara toliko kot lega (~30 s), in avtobus, ki ga je ocena odpeljala cez
-// ovinek, je z njo stal pocez na cesto. Izmerjeno na 324 parih zaporednih
-// leg LPP (31 vozil, 25. 9. 2026 ob 19h, razmik 10-90 s), napaka proti
-// smeri, ki jo feed pove ob naslednji legi (ta se s traso na dejanski
-// legi ujema: 95 % v 15°, torej je dobro merilo):
-//
-//   smer na oceni            mediana   v 20°   nad 45°
-//   iz feeda (prej)            5,6°     74 %    12,3 %
-//   **po trasi, tetiva ±35 m** 2,4°     87 %     8,0 %
-//
-// Kar ostane nad 45° (26 parov), je napaka LEGE, ne smeri: v 16 je ocena od
-// resnice vzdolz trase vec kot 100 m, v ostalih je projekcija padla na
-// nasprotni krak trase ali pa vozilo po svoji trasi pelje nazaj (12D, 69).
-//
-// Smer je tetiva od repa do cela NARISANEGA vozila, zato oba konca lezita na
-// trasi tudi v ovinku. Model je povecan (pri z15 zgibni meri 89 m), ikona
-// ~24 px. Natancnosti dolzina tetive skoraj ne spremeni -- od 0 do +-150 m
-// je v 20° med 84 in 87 % -- zato je izbrana po sliki.
-function smerNaOceni(v, lega) {
-  const iz = v.bearing || 0;
-  if (lega.vzdolz == null) return iz;
+// Pol dolzine NARISANEGA vozila v metrih: tetiva, po kateri gleda vozilo na
+// oceni (`smerNaOceni` v common.js, tam meritev). Model je povecan (pri z15
+// zgibni meri 89 m), ikona ~24 px.
+function polVozila(v) {
   const z = runMap.map.getZoom();
-  const pol = !run3D()
+  return !run3D()
     ? 12 * (40075016.686 * Math.cos(v.lat * Math.PI / 180)) / (512 * 2 ** z)
     : runMap.vlak ? (VLAK_DOLZINA_M / 2) * vlakPovecava(z)
       : (avtoDolzina(modelVozila(v)) / 2) * avtoPovecava(z);
-  return smerTrase(runMap.trasa, runMap.cums, lega.vzdolz, pol) ?? iz;
 }
 
 // Ista oblika in ista barva kot na velikem zemljevidu: avtobus v barvi
@@ -1940,9 +1921,6 @@ function inkVozila(v) {
   const ag = v && v.agency === "lpp" ? "1118" : v && v.agency;
   return AGENCY_INK[ag] || BUS_INK;
 }
-
-const obrisOcene = (rect) => `<rect ${rect} fill="none" stroke="#0f1115" stroke-width="2.4"/>
-      <rect ${rect} fill="none" stroke="#f4f6fa" stroke-width="1.2" stroke-dasharray="2.4 1.6"/>`;
 
 function busSvg(moving, ink) {
   const s = 30;
@@ -2138,7 +2116,7 @@ async function ustvariRunMap(v) {
   // nicesar drugega. Rise se VEDNO: kadar vozilo stoji, jo oblika vozila
   // pokrije. Plast je zadnja med nasimi, da je 3 px siroka trasa ne prereze.
   map.addLayer({ id: "run-gps", type: "circle", source: "run-gps",
-                 paint: { "circle-radius": 5.5, "circle-color": "#ff4d5e",
+                 paint: { "circle-radius": 5.5, "circle-color": MERITEV_INK,
                           "circle-stroke-color": "#e7eaf0", "circle-stroke-width": 2,
                           "circle-stroke-opacity": 0.95, "circle-pitch-alignment": "map" } },
                RUN_POD);
@@ -2280,7 +2258,7 @@ function postaviVozilo(prvic, nova) {
   const moving = (v.speed_kmh || 0) >= 3;
   const starost = v.age_s + (Date.now() - runMap.since) / 1000;
   const lega = ocenjenaLega(v, starost);
-  lega.smer = smerNaOceni(v, lega);
+  lega.smer = smerNaOceni(runMap, v, lega, polVozila(v));
   const { kje } = lega;
   const odmik = razdaljaM(kje, [v.lat, v.lon]);
 
@@ -2336,7 +2314,7 @@ function podnapis(v, odmik) {
     (runMap.vir === "potniki"
       ? `${escapeHtml(potnikov(v.potnikov))} ${deliGlagol(v.potnikov)} lego · ` : "")
     + (v.speed_kmh == null ? "" : `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `)
-    + (odmik > 40 ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
+    + (odmik > OCENA_VIDNA_M ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
                   : `lega stara ${ageHtml(v.age_s)}`);
 }
 

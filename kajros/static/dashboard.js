@@ -285,7 +285,7 @@ function dodajSloje() {
 
   for (const id of ["k-proge", "k-vse-trase", "k-postaje", "k-postajalisca", "k-izbrano", "k-trasa",
                     "k-zapore", "k-trasa-skica", "k-trasa-postaje", "k-najdena", "k-jaz",
-                    "k-avtobusi"]) {
+                    "k-avtobusi", "k-avtobus-izbran", "k-izbrano-meritev"]) {
     map.addSource(id, { type: "geojson", data: PRAZNO });
   }
 
@@ -671,7 +671,9 @@ function busCardHtml(v) {
     rows: rows.concat([
       ["hitrost", v.speed_kmh == null ? "ni podatka"
         : v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji"],
-      ["lega stara", ageHtml(v.age_s)],
+      // Na oceni je pred starostjo rdeča pika: to je ona pika na zemljevidu.
+      [starostLege(v), (naOceni(v) ? '<i class="pika-meritev" aria-hidden="true"></i>' : "")
+        + ageHtml(v.age_s)],
     ]),
   });
 }
@@ -897,25 +899,63 @@ function zadetekVlak3D(p) {
                   geometry: { type: "Point", coordinates: [naj.lon, naj.lat] } };
 }
 
+// ---------- ocena lege: vozila, ki jih gledaš eno po eno ----------
+//
+// Na tem zemljevidu ocene lege za vsa vozila ni: za osemdeset vozil bi bila
+// osemdeset izmišljenih leg. Izjemi sta vozili, pri katerih je vprašanje isto
+// kot v oknu vožnje -- „kje je zdaj“: vlak, na katerem potnik deli lego
+// (spodaj), in izbrani avtobus z izmerjeno hitrostjo (`premakniIzbrano`).
+// Ocena, smer in razrez poti so isti za oba.
+
+// Pot izbranega vozila se razreže znova šele po toliko metrih premika, ne
+// vsako sekundo (isto kot `RAZREZ_M` v oknu vožnje).
+const RAZREZ_M = 30;
+
+// Trasa za oceno lege (`ocenaNaTrasi`): najdaljši kos -- vozilo je skoraj
+// vedno na njem -- in kje vzdolž njega so postanki, na katerih ocena stoji.
+function trasaZaOceno(kosi, postaje, vlak) {
+  const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
+  const cums = kumulative(kos);
+  return { trasa: kos, cums, postaje: postankiNaTrasi(kos, cums, postaje), vlak };
+}
+
+// Kje je vozilo zdaj: ocena po trasi iz zadnje lege, ki je prispela ob
+// `s.since`, in smer po trasi s tetivo `pol` metrov (`smerNaOceni`). `s` =
+// {tr, v, since}; `vzdolz` je null, kadar ocena ne drsi (stoji, ni na trasi).
+function ocenaZdaj(s, pol) {
+  const starost = s.v.age_s + (Date.now() - s.since) / 1000;
+  const l = ocenaNaTrasi(s.tr, s.v, starost);
+  return { lat: l.kje[0], lon: l.kje[1], vzdolz: l.vzdolz, starost,
+           smer: smerNaOceni(s.tr, s.v, l, pol) };
+}
+
+// Obroč gre z izbranim vozilom vsako sekundo, pot se razreže znova šele po
+// `RAZREZ_M` premika ali ob novi legi -- `setData` cele poti vsako sekundo bi
+// bil zastonj.
+function premakniPotIzbrane(s, l, nova = false) {
+  if (nova || !s.rez || razdaljaM(s.rez, l) > RAZREZ_M) {
+    s.rez = l;
+    narisiTraso();
+  } else {
+    oznaciIzbranoVozilo();
+  }
+}
+
 // ---------- vlak s potnikom: lega na 5 s, med poročili po progi ----------
 //
-// Na tem zemljevidu ocene lege ni: za osemdeset vlakov bi bila osemdeset
-// izmišljenih leg. Izjema je vlak, na katerem potnik deli lego (odločil
-// David 11. 10. 2026) -- takih je hkrati nič do dva, lega je prava, a
-// zemljevid jo je bral z `/api/live` na 30 s in vlak je skakal po kilometer.
-// Izmerjeno na 273 točkah treh deljenj na vlakih (1. 10. 2026): vlak na
-// 30 s starem poročilu je od resnice v mediani 244 m, ocena po progi 31 m.
-// Zato tak vlak bere lego kot okno vožnje (`/api/vehicles?trip=`, na 5 s)
-// in med poročili drsi po trasi z isto oceno (`ocenaNaTrasi`).
+// Vlak, na katerem potnik deli lego (odločil David 11. 10. 2026) -- takih je
+// hkrati nič do dva, lega je prava, a zemljevid jo je bral z `/api/live` na
+// 30 s in vlak je skakal po kilometer. Izmerjeno na 273 točkah treh deljenj
+// na vlakih (1. 10. 2026): vlak na 30 s starem poročilu je od resnice v
+// mediani 244 m, ocena po progi 31 m. Zato tak vlak bere lego kot okno
+// vožnje (`/api/vehicles?trip=`, na 5 s) in med poročili drsi po trasi z isto
+// oceno (`ocenaNaTrasi`).
 //
 // Kadar poročila zamujajo (predor, slab signal), vlak drsi naprej, a obris
 // postane črtkan in oznaka pove starost poročila -- meritev od ocene loči
 // oblika, kot v oknu vožnje. Po `deljenje.SVEZE_S` (120 s) ga strežnik ne
 // pošlje več in vlak se vrne na postajo po feedu.
 const POROCILO_STARO_S = 15;
-// Pot izbranega vlaka se razreže znova šele po toliko metrih premika, ne
-// vsako sekundo (isto kot `RAZREZ_M` v oknu vožnje).
-const POTNIK_RAZREZ_M = 30;
 
 // Ob vsakem odgovoru `/api/live`: začni spremljati nove vlake s potnikom,
 // nehaj pri tistih, ki to niso več.
@@ -948,14 +988,9 @@ async function naloziTrasoPotnika(t, s) {
       fetch(`/api/trip/${q}/shape`).then(jsonOk),
       fetch(`/api/train/${encodeURIComponent(t.train_no)}?trip=${q}`).then(jsonOk),
     ]);
-    // Za oceno najdaljši kos trase -- vlak je skoraj vedno na njem.
     const kosi = (oblika.points || []).filter((k) => k && k.length > 1);
     if (!kosi.length) return;
-    const kos = kosi.reduce((a, b) => (b.length > a.length ? b : a));
-    const cums = kumulative(kos);
-    s.tr.postaje = postankiNaTrasi(kos, cums, vr.timetable || []);
-    s.tr.cums = cums;
-    s.tr.trasa = kos;
+    s.tr = trasaZaOceno(kosi, vr.timetable || [], true);
   } catch (err) {
     console.warn("trase vlaka s potnikom ni bilo mogoče naložiti", err);
   }
@@ -1037,11 +1072,10 @@ function premakniPotniske() {
   const rep = [], ocena = [];
   for (const [trip, s] of potniski) {
     if (!s.v) continue;
-    const starost = s.v.age_s + (Date.now() - s.since) / 1000;
-    const lega = ocenaNaTrasi(s.tr, s.v, starost);
-    const smer = lega.vzdolz != null
-      ? smerTrase(s.tr.trasa, s.tr.cums, lega.vzdolz, 20) ?? s.v.bearing : s.v.bearing;
-    s.ocena = { lat: lega.kje[0], lon: lega.kje[1], smer };
+    // Smer s tetivo 20 m: ploščica je pokončna, smer rabi le model v 3D.
+    const lega = ocenaZdaj(s, 20);
+    const { starost } = lega;
+    s.ocena = lega;
     const mk = stationMarkers.get(`potnik:${trip}`);
     if (!mk) continue;
     premik = true;
@@ -1059,13 +1093,7 @@ function premakniPotniske() {
         : stoji >= 60 ? `stoji ${Math.floor(stoji / 60)} min` : "";
     }
     if (izbrana && izbrana.vlak && izbrana.trip === trip) {
-      const l = [s.ocena.lat, s.ocena.lon];
-      if (!s.rez || razdaljaM(s.rez, l) > POTNIK_RAZREZ_M) {
-        s.rez = l;
-        narisiTraso();
-      } else {
-        oznaciIzbranoVozilo();
-      }
+      premakniPotIzbrane(s, [s.ocena.lat, s.ocena.lon]);
     }
   }
   if (premik && vidniVlaki3D()) posodobiVlake3D();
@@ -1076,8 +1104,12 @@ function premakniPotniske() {
   }
 }
 
+// Vsako sekundo, dokler je stran vidna: vozila na oceni lege. Skrit zavihek
+// ne računa -- ob vrnitvi je prva lega spet prava, ker se računa, ne šteje.
 setInterval(() => {
-  if (document.visibilityState !== "hidden") premakniPotniske();
+  if (document.visibilityState === "hidden") return;
+  premakniPotniske();
+  premakniIzbrano();
 }, 1000);
 
 // Velikost ikone vlaka je odvisna od zooma, marker pa se sam ne skalira.
@@ -1105,15 +1137,34 @@ const busInk = (v) => AGENCY_INK[agencyKey(v)] || BUS_INK;
 const busKey = (v) => v.trip_id
   || (v.vehicle_id ? `v:${v.vehicle_id}` : `${v.train_no}:${v.lat},${v.lon}`);
 
-// Kje avtobus narisati: na pripeti trasi svoje vožnje, na desnem pasu in v
+// Izmerjena lega za risbo: na pripeti trasi svoje vožnje, na desnem pasu in v
 // smeri ceste (`cesta` iz /api/vehicles, `pripni.na_cesto`), sicer na legi
 // GPS. GPS je od osi ceste v mediani 3,8 m; od blizu, ko je cesta široka
 // 50 px, je bil avtobus narisan ob cesti ali čeznjo. Meritev ostane v
 // `lat`/`lon` -- kartica pove starost lege, ne risbe.
-function legaVozila(v) {
+function legaIzmerjena(v) {
   return v.cesta ? { lat: v.cesta[0], lon: v.cesta[1], smer: v.cesta[2] }
     : { lat: v.lat, lon: v.lon, smer: v.bearing ?? 0 };
 }
+
+const jeIzbrani = (v) => !!(izbrana && !izbrana.vlak && v.trip_id && v.trip_id === izbrana.trip);
+
+// Kje avtobus JE narisan: izbrani na oceni, dokler ta drsi (`premakniIzbrano`),
+// vsi ostali na izmerjeni legi. En vir za obroč, kartico, model v 3D in razrez
+// poti -- dve legi istega vozila na zaslonu bi si nasprotovali.
+function legaVozila(v) {
+  return (jeIzbrani(v) && izbrana.ocena) || legaIzmerjena(v);
+}
+
+// Izbrani avtobus je na oceni in ta je od meritve dovolj daleč, da je to
+// treba povedati (`OCENA_VIDNA_M`, isto kot podnapis okna vožnje).
+function naOceni(v) {
+  const o = jeIzbrani(v) && izbrana.ocena;
+  return !!o && razdaljaM([o.lat, o.lon], [v.lat, v.lon]) > OCENA_VIDNA_M;
+}
+
+// Kako je napisana starost lege: narisana lega ni stara, kadar je ocena.
+const starostLege = (v) => (naOceni(v) ? "ocenjeno iz lege pred" : "lega stara");
 
 // Velikost sledi približevanju. Pri pogledu na vso Slovenijo je vozil do sto
 // in majhna oblika je edina, ki se ne slepi; ko kdo približa na eno ulico,
@@ -1129,13 +1180,16 @@ const BUS_SLIKA = 44;          // px, v katerih je slika narisana (in 2x za ostr
 // je svetlo (4. 10. 2026): temno se pri 15–26 px ni videlo in smeri vožnje ni
 // bilo mogoče razbrati. Zgibni LPP v dveh delih je bil zmeden (en dan, 4. 10.),
 // zato je telo enodelno za vse.
-function busSvg(size, moving, ink) {
-  const o = moving ? 1 : 0.5;
+// Izbrani avtobus na oceni lege je prosojen s črtkanim svetlim obrisom, kot
+// vozilo v oknu vožnje (`obrisOcene`): meritev od ocene loči oblika.
+function busSvg(size, moving, ink, ocena = false) {
+  const o = ocena ? 0.55 : moving ? 1 : 0.5;
+  const telo = 'x="7.5" y="2.5" width="9" height="19" rx="3.2"';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
       <g>
-        <rect x="7.5" y="2.5" width="9" height="19" rx="3.2"
-              fill="${ink}" fill-opacity="${o}"
-              stroke="#0f1115" stroke-width="1.5"/>
+        <rect ${telo} fill="${ink}" fill-opacity="${o}"
+              ${ocena ? "" : 'stroke="#0f1115" stroke-width="1.5"'}/>
+        ${ocena ? obrisOcene(telo) : ""}
         <path d="M9.1 5.6 Q12 4.3 14.9 5.6 L14.9 7.5 Q12 6.7 9.1 7.5 Z"
               fill="#e9f4ff" fill-opacity="0.95"/>
         <rect x="9.6" y="19.1" width="4.8" height="0.9" rx="0.4" fill="#0f1115" fill-opacity="0.7"/>
@@ -1158,7 +1212,20 @@ function obrocIzbranega(z3d) {
     AVTO_3D_OD + 3, 85];
 }
 
-const busIkona = (ink, moving) => `bus-${ink.slice(1)}-${moving ? "vozi" : "stoji"}`;
+const busIkona = (ink, moving, ocena = false) =>
+  `bus-${ink.slice(1)}-${ocena ? "ocena" : moving ? "vozi" : "stoji"}`;
+
+// Velikost ikone v px pri Leafletovem zoomu, kot jo nariše plast (`icon-size`).
+function ikonaPx(z) {
+  const t = BUS_VELIKOST;
+  if (z <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i += 1) {
+    const [z0, p0] = t[i - 1], [z1, p1] = t[i];
+    if (z <= z1) return p0 + ((p1 - p0) * (z - z0)) / (z1 - z0);
+  }
+  return t[t.length - 1][1];
+}
+
 // Številka linije ob avtobusu od blizu -- samo pri LPP, kjer je to res
 // številka, ki jo potnik vidi na postajališču. Pri medkrajevnih je v feedu
 // številka vožnje (A6325), ki je ni nikjer na vozilu.
@@ -1173,15 +1240,16 @@ let vozila3d = [];             // kar plast 3D ta hip rise, za dotik
 const povecava3D = avtoPovecava;
 const vidni3D = () => !!avtobusi3d && vklop["3d"] && map.getZoom() >= AVTOBUS_3D_OD;
 
-// Slike avtobusov za plast: ena na barvo in stanje (vozi / stoji).
+// Slike avtobusov za plast: ena na barvo in stanje (vozi / stoji / na oceni).
 async function dodajAvtobuse() {
   const barve = [...new Set([BUS_INK, ...Object.values(AGENCY_INK)])];
-  await Promise.all(barve.flatMap((ink) => [true, false].map(async (moving) => {
+  const stanja = [[true, false], [false, false], [true, true]];
+  await Promise.all(barve.flatMap((ink) => stanja.map(async ([moving, ocena]) => {
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${
-      encodeURIComponent(busSvg(BUS_SLIKA * 2, moving, ink))}`;
+      encodeURIComponent(busSvg(BUS_SLIKA * 2, moving, ink, ocena))}`;
     await img.decode();
-    map.addImage(busIkona(ink, moving), img, { pixelRatio: 2 });
+    map.addImage(busIkona(ink, moving, ocena), img, { pixelRatio: 2 });
   })));
   // Izbrano vozilo ima obroč v barvi izbrane poti: med dvajsetimi enakimi
   // ikonami na cesti sicer ni jasno, čigava je oranžna pot. Tanek obroč s
@@ -1203,8 +1271,19 @@ async function dodajAvtobuse() {
       "circle-stroke-opacity": 0.95, "circle-pitch-alignment": "map",
     },
   });
+  // Zadnja izmerjena lega izbranega avtobusa, kadar je ta narisan na oceni:
+  // rdeča pika kot v oknu vožnje. Pod vozili -- kadar se ocena ustavi blizu
+  // nje, jo oblika vozila pokrije, dveh oznak ni videti.
   map.addLayer({
-    id: "k-avtobusi", type: "symbol", source: "k-avtobusi",
+    id: "k-izbrano-meritev", type: "circle", source: "k-izbrano-meritev",
+    paint: {
+      "circle-radius": 5.5, "circle-color": MERITEV_INK,
+      "circle-stroke-color": "#e7eaf0", "circle-stroke-width": 2,
+      "circle-stroke-opacity": 0.95, "circle-pitch-alignment": "map",
+    },
+  });
+  const avtobus = (id) => ({
+    id, type: "symbol", source: id,
     layout: {
       "icon-image": ["get", "ikona"],
       "icon-size": ["interpolate", ["linear"], ["zoom"],
@@ -1232,6 +1311,9 @@ async function dodajAvtobuse() {
       "text-halo-width": 1.6,
     },
   });
+  map.addLayer(avtobus("k-avtobusi"));
+  // Izbrani avtobus je v svoji plasti, nad ostalimi (`narisiIzbrano`).
+  map.addLayer(avtobus("k-avtobus-izbran"));
   avtobusi3d = avtobusi3D({
     id: "k-avtobusi-3d",
     inki: { ...AGENCY_INK, drugi: BUS_INK },
@@ -1242,11 +1324,16 @@ async function dodajAvtobuse() {
   uveljavi();
 }
 
-// Plasti 3D damo samo vozila v sliki in pas okrog nje: brez tega gre ob
-// konici 1 500 modelov skozi risanje na vsak premik.
 function posodobi3D() {
   posodobiVlake3D();
   posodobiNadstreske();
+  posodobiAvtobuse3D();
+}
+
+// Plasti 3D damo samo vozila v sliki in pas okrog nje: brez tega gre ob
+// konici 1 500 modelov skozi risanje na vsak premik. Izbrani avtobus stoji na
+// oceni (`legaVozila`), zato ga `premakniIzbrano` prestavi vsako sekundo.
+function posodobiAvtobuse3D() {
   if (!avtobusi3d) return;
   const vidni = new Set(LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag));
   const b = map.getBounds();
@@ -1287,44 +1374,166 @@ function busTooltipHtml(v) {
     + `<span class="train-label-more">${escapeHtml(lepoIme(v.headsign))}</span></div>`
     + `<div class="train-label-more">`
     + `${v.speed_kmh != null ? (v.speed_kmh >= 3 ? `${v.speed_kmh} km/h` : "stoji") : "brez hitrosti"}`
-    + ` · lega stara ${ageHtml(v.age_s)}</div>`;
+    + ` · ${starostLege(v)} ${ageHtml(v.age_s)}</div>`;
 }
 
 let busByKey = new Map();      // kljuc -> vozilo
 
+// Avtobus kot točka plasti. `ocena`: izbrani, narisan na oceni lege.
+function avtobusTocka(v, l, ocena = false) {
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [l.lon, l.lat] },
+    properties: {
+      kljuc: busKey(v), ag: busGroup(v), mesto: v.agency === "lpp",
+      smer: l.smer,
+      ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3, ocena),
+      st: busGroup(v) === "1118" ? v.train_no : "",
+    },
+  };
+}
+
+// Plast vseh avtobusov dobi IZMERJENO lego tudi za izbranega: tega ta plast
+// ne riše (`filtrirajAvtobuse`), ob preklicu izbire pa mora stati tam, kjer je
+// bil izmerjen, ne na zadnji oceni.
 function renderBuses(list) {
   busByKey = new Map();
   const features = [];
   for (const v of list) {
     if (v.lat == null) continue;
-    const kljuc = busKey(v);
-    busByKey.set(kljuc, v);
-    const l = legaVozila(v);
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [l.lon, l.lat] },
-      properties: {
-        kljuc, ag: busGroup(v), mesto: v.agency === "lpp",
-        smer: l.smer,
-        ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3),
-        st: busGroup(v) === "1118" ? v.train_no : "",
-      },
-    });
+    busByKey.set(busKey(v), v);
+    features.push(avtobusTocka(v, legaIzmerjena(v)));
   }
   nastaviVir("k-avtobusi", { type: "FeatureCollection", features });
+  narisiIzbrano();
   oznaciIzbranoVozilo();
   posodobi3D();
   // Odprta kartica gre z vozilom; ce ga ni vec, gre tudi ona.
   if (kartica && kartica.__kljuc) {
-    const v = busByKey.get(kartica.__kljuc);
-    if (v) {
-      const l = legaVozila(v);
-      kartica.setLngLat([l.lon, l.lat]).setHTML(busCardHtml(v));
-    } else {
-      kartica.remove();
-    }
+    if (busByKey.has(kartica.__kljuc)) postaviKartico();
+    else kartica.remove();
   }
 }
+
+// Odprta kartica avtobusa na legi, kjer je narisan, z besedilom, ki ji
+// ustreza („lega stara“ ali „ocenjeno iz lege pred“). Ne vsako sekundo:
+// `ageHtml` ob vsakem izpisu postavi novo izhodišče.
+function postaviKartico() {
+  const v = kartica && kartica.__kljuc && busByKey.get(kartica.__kljuc);
+  if (!v) return;
+  const l = legaVozila(v);
+  kartica.setLngLat([l.lon, l.lat]).setHTML(busCardHtml(v));
+  if (jeIzbrani(v)) izbrana.napis = naOceni(v);
+}
+
+// ---------- izbrani avtobus: med meritvama po trasi ----------
+//
+// Mestni LPP je na zaslonu star v mediani 98 s (p90 122 s) in se objavlja na
+// 60 s; izbrani avtobus je zato stal na stari legi in nato skočil 300--600 m.
+// Okno vožnje isti avtobus pomika po trasi (`ocenaNaTrasi`), zdaj tudi veliki
+// zemljevid, a samo IZBRANEGA -- za vse bi bila to N izmišljenih leg in N tras.
+// Izmerjeno 18. 10. 2026 (72 posnetkov `/api/vehicles` na 10 s, mestni LPP
+// in LPP 1118, samo pari, kjer ocena drsi), razdalja do lege, ki jo je vozilo
+// res imelo pozneje: mestni LPP po 60 s stoji 374 m -> ocena 106 m (bližje v
+// 81 % od 165), po 120 s 677 -> 198 m (n=153); LPP 1118 po 60 s 447 -> 131 m
+// (n=248). Hitrost pošiljata samo mestni LPP in 1118; Arriva, Nomago in AP MS
+// ne (0 od 68), zato ti ostanejo na meritvi. Nobene nove zahteve: trasa in
+// postanki pridejo z izbiro (`drawStops`), lega z `/api/vehicles`.
+//
+// Izbrani je v svoji plasti z enim samim vozilom: `setData` na vseh avtobusih
+// vsako sekundo je stal 9 ms (110 vozil, telefon s 4-krat počasnejšim CPU),
+// v konici bi ~70 ms.
+
+let vozilaPrejeta = 0;          // kdaj je prispel zadnji odgovor `/api/vehicles`
+
+// Pol dolžine narisanega avtobusa v metrih -- tetiva smeri na oceni
+// (`smerNaOceni`): od blizu povečan model, sicer telo ikone (19 od 24 enot).
+function polAvtobusa(v) {
+  const z = map.getZoom();
+  if (vidni3D()) return (avtoDolzina(busGroup(v)) / 2) * povecava3D(z);
+  return ((ikonaPx(z + LZ) * 19) / 24 / 2) * mppZdaj();
+}
+
+// Ocena izbranega avtobusa iz zadnje lege; null, kadar ne drsi (stoji, brez
+// hitrosti, ni na trasi) -- takrat je narisan na meritvi, kot vsi.
+function oceniIzbrano() {
+  if (!izbrana || izbrana.vlak) return;
+  const o = izbrana.tr && izbrana.v ? ocenaZdaj(izbrana, polAvtobusa(izbrana.v)) : null;
+  izbrana.ocena = o && o.vzdolz != null ? o : null;
+}
+
+let pikaMeritve = "";           // kar ta hip riše `k-izbrano-meritev`
+
+function narisiIzbrano() {
+  const v = izbrana && !izbrana.vlak ? izbrana.v : null;
+  const ocena = !!(v && izbrana.ocena);
+  nastaviVir("k-avtobus-izbran", { type: "FeatureCollection",
+    features: v && v.lat != null ? [avtobusTocka(v, legaVozila(v), ocena)] : [] });
+  // Meritev se premakne samo z novo lego ali ob začetku in koncu ocene, zato
+  // ji `setData` ni treba vsako sekundo.
+  const pika = ocena ? `${v.lon},${v.lat}` : "";
+  if (pika === pikaMeritve) return;
+  pikaMeritve = pika;
+  nastaviVir("k-izbrano-meritev", ocena ? { type: "Feature",
+    properties: { ime: "zadnja izmerjena lega" },
+    geometry: { type: "Point", coordinates: [v.lon, v.lat] } } : PRAZNO);
+}
+
+// Vsako sekundo: izbrani avtobus na oceni, z obročem, kartico, modelom v 3D
+// in razrezom poti. Kadar ne drsi in ni drsel, se ne zgodi nič.
+function premakniIzbrano() {
+  if (!izbrana || izbrana.vlak) return;
+  const prej = izbrana.ocena;
+  oceniIzbrano();
+  if (!izbrana.ocena && !prej) return;
+  narisiIzbrano();
+  const v = izbrana.v;
+  if (!v || v.lat == null) return;
+  const l = legaVozila(v);
+  premakniPotIzbrane(izbrana, [l.lat, l.lon]);
+  if (izbrana.sledi) drziVSliki(l);
+  if (kartica && kartica.__kljuc === izbrana.trip) {
+    // Besedilo kartice samo, kadar se spremeni, kaj trdi; lega vsako sekundo.
+    if (naOceni(v) !== izbrana.napis) postaviKartico();
+    else kartica.setLngLat([l.lon, l.lat]);
+  }
+  if (vidni3D()) premakniIzbranega3D(l);
+}
+
+// Model v 3D: vsako sekundo samo izbrani, ostali se premaknejo z novimi
+// podatki. Kadar ga v plasti ni (zunaj slike, prevoznik ugasnjen), ga doda
+// naslednji `posodobi3D` (premik zemljevida ali nova lega).
+function premakniIzbranega3D(l) {
+  const i = vozila3d.findIndex((a) => a.kljuc === izbrana.trip);
+  if (i < 0) return;
+  vozila3d[i] = { ...vozila3d[i], lon: l.lon, lat: l.lat, smer: l.smer };
+  avtobusi3d.nastavi(vozila3d);
+}
+
+// Izbrani avtobus na oceni ne sme odpeljati iz slike: ocena je že ob izbiri
+// lahko kilometer pred meritvijo, ki jo je človek kliknil ali na kateri se je
+// zemljevid odprl (`&trip=` iz okna vožnje; izmerjeno 19. 10. 2026: LPP 13
+// pri z15 na telefonu iz slike v prvi sekundi). Pogled zato gre za njim, kot
+// v oknu vožnje -- a samo, dokler človek zemljevida ne povleče sam: takrat
+// gleda drugam in pogled ostane, kjer ga je pustil (isto kot vodenje po
+// pešpoti). Med gibanjem zemljevida ne, sicer bi prekinili prste.
+const ROB_SLIKE = 0.15;         // delež slike ob robu, ki ga avtobus ne prečka
+
+function drziVSliki(l) {
+  if (map.isMoving()) return;
+  // Velikost iz platna, ne iz `clientWidth`: ta bi za premaknjeno kartico
+  // vsako sekundo sprožil preračun postavitve (izmerjeno ~1 ms/s pri 4x CPU).
+  const k = map.getCanvas(), r = map.getPixelRatio();
+  const w = k.width / r, h = k.height / r;
+  const p = map.project([l.lon, l.lat]);
+  if (p.x >= w * ROB_SLIKE && p.x <= w * (1 - ROB_SLIKE)
+      && p.y >= h * ROB_SLIKE && p.y <= h * (1 - ROB_SLIKE)) return;
+  map.easeTo({ center: [l.lon, l.lat], duration: 600 });
+}
+
+map.on("dragstart", () => {
+  if (izbrana && !izbrana.vlak) izbrana.sledi = false;
+});
 
 // ---------- dotik in lebdenje ----------
 //
@@ -1332,8 +1541,13 @@ function renderBuses(list) {
 // common.js); brez gumba za zapiranje, ker bi bil na telefonu manjsi od
 // prsta. Na napravi z misko se pokaze ze ob lebdenju, kot prej.
 
-const IMENA = ["k-postaje", "k-postajalisca", "k-postaje-avtobusne", "k-postajalisca-znak",
-               "k-trasa-postaje", "k-jaz"];
+// Rdeča pika izbranega na oceni je prva: pogosto leži na postajališču, kot v
+// oknu vožnje -- „zadnja izmerjena lega“ pove več od imena postaje pod njo.
+const IMENA = ["k-izbrano-meritev", "k-postaje", "k-postajalisca", "k-postaje-avtobusne",
+               "k-postajalisca-znak", "k-trasa-postaje", "k-jaz"];
+// Avtobusi so ena plast in izbrani svoja (`narisiIzbrano`), za dotik pa en razred.
+const AVTOBUSNI = ["k-avtobus-izbran", "k-avtobusi"];
+const jeAvtobusni = (f) => AVTOBUSNI.includes(f.layer.id);
 // Dotik zadene, kar je v tem polmeru: pika postaje meri 7 px, prst dosti vec.
 const DOTIK_PX = 12;
 
@@ -1346,7 +1560,7 @@ let najdenaOkno = null;
 function zadetek(p) {
   const v3d = zadetek3D(p) || zadetekVlak3D(p);
   if (v3d) return v3d;
-  const sloji = ["k-avtobusi", "k-najdena", ...IMENA].filter((id) => map.getLayer(id));
+  const sloji = [...AVTOBUSNI, "k-najdena", ...IMENA].filter((id) => map.getLayer(id));
   const r = DOTIK_PX;
   const f = map.queryRenderedFeatures([[p.x - r, p.y - r], [p.x + r, p.y + r]],
                                       { layers: sloji });
@@ -1354,7 +1568,8 @@ function zadetek(p) {
   for (const x of f) {
     if (x.geometry.type !== "Point") continue;
     const q = map.project(x.geometry.coordinates);
-    const d = Math.hypot(q.x - p.x, q.y - p.y) + sloji.indexOf(x.layer.id) * 1000;
+    const razred = jeAvtobusni(x) ? 0 : sloji.indexOf(x.layer.id);
+    const d = Math.hypot(q.x - p.x, q.y - p.y) + razred * 1000;
     if (d < najd) { najd = d; naj = x; }
   }
   return naj;
@@ -1409,7 +1624,7 @@ map.on("click", (e) => {
   // pricakovana gesta in deluje tudi, ce kdo rocaja ne opazi.
   if (!f) { setSheet(false); return; }
   if (lebdi) lebdi.remove();
-  if (f.layer.id === "k-avtobusi") {
+  if (jeAvtobusni(f)) {
     const v = busByKey.get(f.properties.kljuc);
     if (v) {
       odpriKartico(v);
@@ -1439,7 +1654,7 @@ if (matchMedia("(hover: hover)").matches) {
   lebdi = new maplibregl.Popup({ closeButton: false, closeOnClick: false,
                                  className: "kajros-tooltip", offset: 12 });
   map.on("mousemove", (e) => {
-    const sloji = ["k-avtobusi", ...IMENA].filter((id) => map.getLayer(id));
+    const sloji = [...AVTOBUSNI, ...IMENA].filter((id) => map.getLayer(id));
     const f = zadetek3D(e.point) || zadetekVlak3D(e.point)
       || map.queryRenderedFeatures(e.point, { layers: sloji })[0];
     const zap = f ? [] : zaporePod(e.point);
@@ -1450,7 +1665,7 @@ if (matchMedia("(hover: hover)").matches) {
       return;
     }
     if (!f) { lebdi.remove(); return; }
-    const v = f.layer.id === "k-avtobusi" && busByKey.get(f.properties.kljuc);
+    const v = jeAvtobusni(f) && busByKey.get(f.properties.kljuc);
     const m = f.layer.id === "k-vlaki-3d" && stationMarkers.get(f.properties.kljuc);
     if (v) lebdi.setHTML(busTooltipHtml(v));
     else if (m) lebdi.setHTML(groupLabelHtml(m.__g));
@@ -2035,12 +2250,8 @@ function uveljavi() {
     vidnost("k-postajalisca-znak", vklop.busstops && vklop["3d"]);
   }
   if (map.getLayer("k-avtobusi")) {
-    const ag = LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag);
-    // Filter vidi celoštevilski MapLibrov zoom ploščice, zato sta praga cela.
-    map.setFilter("k-avtobusi", ["all",
-      ["in", ["get", "ag"], ["literal", ag]],
-      [">=", ["zoom"], ["case", ["get", "mesto"], MESTNI_OD - LZ, AVTOBUSI_OD - LZ]]]);
-    map.setLayerZoomRange("k-avtobusi", 0, vklop["3d"] ? AVTOBUS_3D_OD : 24);
+    filtrirajAvtobuse();
+    for (const id of AVTOBUSNI) map.setLayerZoomRange(id, 0, vklop["3d"] ? AVTOBUS_3D_OD : 24);
     for (const id of ["k-izbrano", "k-izbrano-sij"]) {
       map.setPaintProperty(id, "circle-radius", obrocIzbranega(vklop["3d"]));
     }
@@ -2048,6 +2259,20 @@ function uveljavi() {
   posodobi3D();
   osveziPodlago();
   opombaPriblizka();
+}
+
+// Kateri avtobusi se rišejo: prižgani prevozniki od svojega približka. Plast
+// vseh izpusti izbranega -- tega riše njegova plast (`narisiIzbrano`), ki se
+// sme premikati vsako sekundo. Ob izbiri se spremeni le filter, podatki ne.
+function filtrirajAvtobuse() {
+  if (!map.getLayer("k-avtobusi")) return;
+  const ag = LAYERS.filter((s) => s.ag && vklop[s.key]).map((s) => s.ag);
+  // Filter vidi celoštevilski MapLibrov zoom ploščice, zato sta praga cela.
+  const vidni = ["all", ["in", ["get", "ag"], ["literal", ag]],
+    [">=", ["zoom"], ["case", ["get", "mesto"], MESTNI_OD - LZ, AVTOBUSI_OD - LZ]]];
+  const izbran = izbrana && !izbrana.vlak ? izbrana.trip : "";
+  map.setFilter("k-avtobusi", ["all", vidni, ["!=", ["get", "kljuc"], izbran]]);
+  map.setFilter("k-avtobus-izbran", vidni);
 }
 
 // `zapomni` samo ob človekovi izbiri: kar je stran nastavila sama (privzetek,
@@ -2204,14 +2429,24 @@ function renderFind() {
 // Kadar je iz kakršnega koli razloga ni, ostane črta skozi postajališča;
 // ta ni pot po cesti in videti mora drugače (črtkano).
 
-let izbrana = null;            // {trip, vlak, barva, kosi, along}
+// {trip, vlak, barva, kosi, along}; avtobus še {tr, v, since, ocena, rez,
+// napis, sledi} za oceno lege (`premakniIzbrano`).
+let izbrana = null;
 let trasaSt = 0;               // hitra druga izbira ne sme dobiti prve trase
 
 function pocistiTraso() {
+  const bilNaOceni = !!(izbrana && !izbrana.vlak && izbrana.ocena);
   izbrana = null;
   trasaSt += 1;
   for (const id of ["k-trasa", "k-trasa-skica", "k-trasa-postaje", "k-izbrano"]) nastaviVir(id, PRAZNO);
   if (map.getLayer("k-vse-trase")) map.setPaintProperty("k-vse-trase", "line-opacity", VSE_TRASE_OPACITY);
+  // Avtobus gre nazaj med vse, na izmerjeno lego; rdeča pika odide z njim.
+  narisiIzbrano();
+  filtrirajAvtobuse();
+  if (bilNaOceni) {
+    posodobiAvtobuse3D();
+    postaviKartico();
+  }
   oznaciIzbrano();
 }
 
@@ -2309,6 +2544,14 @@ async function drawStops(trainNo, tripId, vlak = false, barva = IZBRANA_INK) {
   pocistiTraso();
   const st = trasaSt;
   izbrana = { trip: tripId, vlak, barva, kosi: null, along: null };
+  if (!vlak) {
+    // Avtobus gre v svojo plast takoj; na oceno, ko prideta trasa in postanki.
+    Object.assign(izbrana, { tr: null, ocena: null, rez: null, napis: false, sledi: true,
+                             v: liveBuses.find((x) => x.trip_id === tripId) || null,
+                             since: vozilaPrejeta });
+    filtrirajAvtobuse();
+    narisiIzbrano();
+  }
   oznaciIzbrano();
   oznaciIzbranoVozilo();
   map.setPaintProperty("k-vse-trase", "line-opacity", 0.15);
@@ -2344,6 +2587,11 @@ async function drawStops(trainNo, tripId, vlak = false, barva = IZBRANA_INK) {
     const pike = tocke(postaje);
     for (const f of pike.features) f.properties.barva = barva;
     nastaviVir("k-trasa-postaje", pike);
+    // Ocena rabi oboje: brez postankov bi avtobus peljal mimo postajališč.
+    if (!vlak && kosi.length) {
+      izbrana.tr = trasaZaOceno(kosi, postaje, false);
+      premakniIzbrano();
+    }
   } catch (err) {
     /* brez postajališč je trasa še vedno uporabna */
   }
@@ -2491,6 +2739,14 @@ async function loadRoutes() {
 
 function onVehicles(list) {
   liveBuses = list;
+  vozilaPrejeta = Date.now();
+  // Izbrani avtobus: nova lega, ocena od nje naprej -- pred risanjem, da sta
+  // vozilo in kartica takoj na novi oceni.
+  if (izbrana && !izbrana.vlak) {
+    izbrana.v = list.find((x) => x.trip_id === izbrana.trip) || null;
+    izbrana.since = vozilaPrejeta;
+    oceniIzbrano();
+  }
   // Stevec na prevoznika. Vrstica "drugi" se pokaze samo, ce kdo tam res je --
   // sicer je prazna izbira, ki nicesar ne pojasni.
   const poAgenciji = { "1118": 0, "1123": 0, "1119": 0, "1121": 0, drugi: 0 };
@@ -2506,7 +2762,10 @@ function onVehicles(list) {
   const drugiRow = document.getElementById("row-bus-other");
   if (drugiRow) drugiRow.hidden = poAgenciji.drugi === 0;
   renderBuses(liveBuses);
-  if (izbrana && !izbrana.vlak) narisiTraso();
+  if (izbrana && !izbrana.vlak) {
+    izbrana.rez = legaIzbrane();
+    narisiTraso();
+  }
   if (findEl.value.trim()) renderFind();
   nalozeno.avtobusi = true;
   pokaziVoziloIzNaslova();

@@ -559,6 +559,13 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
 .veh-row b {
   font: 600 12.5px/1.4 'IBM Plex Mono', ui-monospace, monospace; color: #e7eaf0;
 }
+/* Izbrani avtobus na oceni: pred starostjo ista rdeča pika kot na zemljevidu
+   (zadnja izmerjena lega, `MERITEV_INK`) -- kartica je njena legenda. */
+.pika-meritev {
+  display: inline-block; vertical-align: -1px; margin-right: 5px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #ff4d5e; border: 1.5px solid #e7eaf0;
+}
 .veh-open {
   display: block;
   padding: 7px 10px;
