@@ -1298,9 +1298,14 @@ def plan(conn: sqlite3.Connection, from_name: str, to_name: str,
     najmanj prestopi, je pa pot, ki te najprej pripelje -- in prav to je
     vprašanje, ko drugega odgovora ni.
     """
-    by_trip, at_stop = _timetable_for_day(conn, service_date, network)
+    # Avtobusi berejo skupno sliko obeh omrežij in vožnje drugega preskočijo,
+    # kot `_prestopi()`: lastna avtobusna slika je bila še 92 MB in hladna
+    # na arwenu 1,3-1,8 s ob vsakem prvem iskanju dneva brez prestopa.
+    by_trip, at_stop = _timetable_for_day(
+        conn, service_date, "zeleznica" if network == "zeleznica" else None)
     if not by_trip:
         return []
+    omr = _omrezja_voznj(conn) if network == "avtobus" else None
     starts = _stop_ids_of(conn, from_name)
     targets = _stop_ids_of(conn, to_name)
     if not starts or not targets:
@@ -1328,7 +1333,7 @@ def plan(conn: sqlite3.Connection, from_name: str, to_name: str,
         for sid in frontier:
             ready = tau[leg - 1][sid] + (0 if leg == 1 else min_gap)
             for dep_s, trip_id, seq in at_stop.get(sid, ()):
-                if dep_s < ready:
+                if dep_s < ready or (omr is not None and omr.get(trip_id) != network):
                     continue
                 # Po tej voznji naprej: sprosti prihode na vse nadaljnje postanke.
                 for nseq, nstop, narr, _ in by_trip[trip_id]:
