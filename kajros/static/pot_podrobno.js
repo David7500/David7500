@@ -822,6 +822,22 @@ function nazajUrl() {
   return q.toString() ? `/app/pot?${q}` : "/app/pot";
 }
 
+// „‹ nazaj na predloge“ je korak nazaj, kadar smo prišli s seznama: brskalnik
+// ga vrne celega, z imeni krajev in mestom na seznamu. Prej je bila nova
+// navigacija: zgodovina je rasla, sistemski nazaj je vodil spet sem (zanka
+// seznam ↔ podrobnosti), polja pa so imela koordinate (presoja 18. 10. 2026).
+$("#nazaj").addEventListener("click", (ev) => {
+  let sSeznama = false;
+  try {
+    const r = document.referrer && new URL(document.referrer);
+    sSeznama = !!r && r.origin === location.origin && r.pathname === "/app/pot";
+  } catch (e) { /* neveljaven referrer: ni naša stran */ }
+  if (sSeznama && history.length > 1) {
+    ev.preventDefault();
+    history.back();
+  }
+});
+
 async function nalozi() {
   $("#nazaj").href = nazajUrl();
   const p = naslovPodrobno();

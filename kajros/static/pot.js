@@ -166,6 +166,7 @@ function napisTocke(t) {
 
 function postavi(kaj, tocka) {
   S[kaj] = tocka;
+  zapomniIme(tocka);
   $(`#q-${kaj}`).value = napisTocke(tocka);
   zapriZadetke(kaj);
   narisiTocke();
@@ -237,6 +238,33 @@ function shranjenaZa(t) {
   if (!t) return null;
   return tockeBeri().find((s) => Math.abs(s.lat - t.lat) < TOCKA_PRAG
                               && Math.abs(s.lon - t.lon) < TOCKA_PRAG) || null;
+}
+
+// Imena krajev tega zavihka (naslov, postaja, „moja lega“). Naslov strani nosi
+// samo koordinate, zato je bilo po vrnitvi s podrobnosti -- v aplikaciji, ob
+// osvežitvi -- v poljih „46.13899, 14.59426“ namesto „Domžale“ (presoja
+// 18. 10. 2026). sessionStorage: samo ta zavihek, nikamor ne gre, v naslov
+// ne pride (deljena povezava ne izda, kako je kraj kdo imenoval).
+const IMENA_KLJUC = "kajros:pot-imena";
+
+function imeIzZavihka(t) {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(IMENA_KLJUC) || "[]");
+    const s = v.find((x) => Math.abs(x.lat - t.lat) < TOCKA_PRAG && Math.abs(x.lon - t.lon) < TOCKA_PRAG);
+    return s ? s.ime : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function zapomniIme(t) {
+  if (!t || !t.ime) return;
+  try {
+    const v = (JSON.parse(sessionStorage.getItem(IMENA_KLJUC) || "[]") || [])
+      .filter((x) => !(Math.abs(x.lat - t.lat) < TOCKA_PRAG && Math.abs(x.lon - t.lon) < TOCKA_PRAG));
+    v.unshift({ lat: t.lat, lon: t.lon, ime: t.ime });
+    sessionStorage.setItem(IMENA_KLJUC, JSON.stringify(v.slice(0, 12)));
+  } catch (e) { /* zasebno okno: polje pokaže koordinate */ }
 }
 
 // Zvezdica govori isto kot v iskalniku zvez (`fav-toggle`): en gumb pove
@@ -489,6 +517,7 @@ async function razresi(kaj) {
     const z = await zadetkiZa(kaj, q);
     if (!z.length) return false;
     S[kaj] = { lat: z[0].lat, lon: z[0].lon, ime: z[0].ime };
+    zapomniIme(S[kaj]);
     $(`#q-${kaj}`).value = z[0].ime;
     zapriZadetke(kaj);
     narisiTocke(false);
@@ -1036,6 +1065,7 @@ function izUrl() {
     // sam — „dom“ pove več kot 46.05611, 14.50577.
     const s = shranjenaZa(t);
     if (s) t.ime = s.ime;
+    else t.ime = imeIzZavihka(t) || undefined;
     S[kaj] = t;
     $(`#q-${kaj}`).value = napisTocke(t);
   }
