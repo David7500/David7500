@@ -745,7 +745,19 @@ function predlogHtml(p, i) {
 // Ravna črta med postajama ni proga. Zato se najprej nariše kot skica, nato
 // pa jo zamenja prava trasa iz `shape` -- ista, ki jo riše zemljevid.
 let izrisZeton = 0;
-async function narisiPot(p) {
+// Okvir zemljevida ob prvem izrisu zajame le konce nog; trasa vožnje pride
+// pozneje in zna zaviti daleč čez (mestna linija v zanki, vlak po dolini).
+// Ko pride, okvir razširimo nanjo -- a samo, če zemljevida vmes ni premaknil
+// človek (`premaknjen`): pogled pod prstom se ne premika sam.
+let premaknjen = false;
+
+function prilagodiPoti(p, opts) {
+  premaknjen = false;
+  pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon],
+                      ...p.noge.flatMap((n) => [n.od_ll, n.do_ll])], opts);
+}
+
+async function narisiPot(p, okvir = false) {
   const moj = ++izrisZeton;
   if (!K) return;
   if (!p) { pkVir(K.map, "k-pot", []); narisiTocke(false); return; }
@@ -766,6 +778,13 @@ async function narisiPot(p) {
     if (t) c.tocke = t;
   }
   risi(0.9);
+  if (okvir && !premaknjen) {
+    const meje = K.map.getBounds();
+    const tocke = crte.flatMap((c) => c.tocke);
+    if (tocke.some((t) => t && !meje.contains([t[1], t[0]]))) {
+      pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon], ...tocke]);
+    }
+  }
 }
 
 // Kaj bi pomagalo, kadar z vozilom ni ničesar. Meja velja do postaje; kadar je
@@ -941,12 +960,8 @@ function izrisi(izid) {
     el.addEventListener("mouseenter", pokazi);
     el.addEventListener("focus", pokazi);
   });
-  narisiPot(izid.predlogi[0]);
-  if (K) {
-    const p = izid.predlogi[0];
-    pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon],
-                        ...p.noge.flatMap((n) => [n.od_ll, n.do_ll])]);
-  }
+  if (K) prilagodiPoti(izid.predlogi[0]);
+  narisiPot(izid.predlogi[0], true);
 }
 
 // ---------------------------------------------------------------- poizvedba
@@ -1261,12 +1276,10 @@ pkUstvari($("#karta")).then((k) => {
     postavi(S.arm, { lat: e.lngLat.lat, lon: e.lngLat.lng });
   });
   if (S.jaz) pkJaz(K.map, S.jaz);
+  K.map.on("movestart", (e) => { if (e.originalEvent) premaknjen = true; });
   if (S.izidi && S.izidi.predlogi.length) {
-    narisiPot(S.izidi.predlogi[S.izbran]);
-    const p = S.izidi.predlogi[S.izbran];
-    pkPrilagodi(K.map, [[S.od.lat, S.od.lon], [S.do.lat, S.do.lon],
-                        ...p.noge.flatMap((n) => [n.od_ll, n.do_ll])],
-                { animate: false });
+    prilagodiPoti(S.izidi.predlogi[S.izbran], { animate: false });
+    narisiPot(S.izidi.predlogi[S.izbran], true);
   } else {
     narisiTocke();
   }
