@@ -1656,8 +1656,9 @@ ORDER BY dep_s
 # reda (mestni LPP ima za vsak datum svoje vožnje): Bavarski dvor -> Kolodvor
 # 56 od 90 ms vse zahteve, iskalnik pa isto vpraša vsakih 30 s (presoja
 # 19. 10. 2026). Ključ je značka uvoza, kot pri `journey._timetable_for_day`.
+# Najbolj prometna zveza (191 voženj) je 0,2 MB, večina pod desetinko.
 _ZVEZE_RED: dict[tuple, list[dict]] = {}
-_ZVEZE_RED_MAX = 500
+_ZVEZE_RED_MAX = 300
 
 
 def _vozni_red_zveze(conn: sqlite3.Connection, a: str, b: str, day: str,

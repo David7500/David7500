@@ -514,16 +514,17 @@ def smer_za(smeri: list[dict], stop_id: str | None) -> dict | None:
 # trip_id)` -- polni pregled 403 208 vrstic ob VSAKI zahtevi, 117 ms od 120.
 # Vozni red se med uvozi ne spreminja, zato je to statika in sodi v `trip`
 # (napolni `db.fill_trip_window`).
+# Vozni red table: vsi postanki na postaji ta dan, z izhodiščem, ciljem in
+# naslednjim postankom. Zamude in okno so v `board()` -- ta del se spremeni
+# samo ob uvozu in je predpomnjen (`_tabla_vozni_red`).
 _BOARD_SQL = """
 SELECT t.trip_id, t.train_no, t.headsign, t.mode, t.agency, t.network,
        s.stop_id, s.stop_seq, s.arr_s, s.dep_s,
        COALESCE(s.dep_s, s.arr_s) AS t_s,
        t.first_seq, t.last_seq,
        origin.name AS origin, dest.name AS destination,
-       COALESCE(r.delay_dep, r.delay_arr) AS delay_s,
        sn.stop_seq AS next_seq,
-       zn.name AS next_stop,
-       r.feed_ts
+       zn.name AS next_stop
 FROM sched s
 JOIN station here ON here.stop_id = s.stop_id AND here.name = :station
 JOIN trip t       ON t.trip_id = s.trip_id
@@ -533,8 +534,6 @@ JOIN sched sd     ON sd.trip_id = s.trip_id AND sd.stop_seq = t.last_seq
 JOIN station dest ON dest.stop_id = sd.stop_id
 JOIN service_day sday ON sday.service_id = t.service_id AND sday.date = :day
                      AND (:network IS NULL OR t.network = :network)
-LEFT JOIN run r  ON r.trip_id = t.trip_id AND r.service_date = :day
-                 AND r.stop_seq = s.stop_seq
 -- Feed ni nikoli porocal stop_seq = 1: prva meritev pride sele na drugi
 -- postaji. Za odhod z izhodisca je torej edini priblizek OBICAJNA zamuda na
 -- naslednji postaji (`typical_from`), prikaz pa mora povedati, da je od tam.
@@ -548,17 +547,80 @@ LEFT JOIN sched sn ON sn.trip_id = t.trip_id
                                      WHERE x.trip_id = t.trip_id
                                        AND x.stop_seq > s.stop_seq)
 LEFT JOIN station zn ON zn.stop_id = sn.stop_id
-WHERE COALESCE(s.dep_s, s.arr_s) BETWEEN :from_s - :nazaj AND :to_s
-  AND (COALESCE(s.dep_s, s.arr_s) >= :from_s
-       -- Pred oknom samo vozjne, ki jim je kdaj danes zamuda segla cez rob
-       -- okna. Koncno odloci `board()` po pricakovani uri; to je le sito,
-       -- da mestno postajalisce ne racuna ocene za vse tri ure nazaj.
-       OR EXISTS (SELECT 1 FROM run x
-                  WHERE x.trip_id = s.trip_id AND x.service_date = :day
-                    AND COALESCE(s.dep_s, s.arr_s)
-                        + COALESCE(x.delay_dep, x.delay_arr) + :rezerva >= :from_s))
+WHERE COALESCE(s.dep_s, s.arr_s) IS NOT NULL
 ORDER BY t_s
 """
+
+# Prej je ena poizvedba brala vozni red, okno in zamude hkrati in prečesala
+# postanke postaje čez VSE dni voznega reda (mestni LPP ima za vsak datum
+# svoje vožnje): Bavarski dvor 46 od 112 ms table (presoja 19. 10. 2026),
+# tabla pa se osveži vsakih 30 s. Ključ je značka uvoza; vrstice so
+# n-terice, ker ima prometna postaja tisoče postankov na dan: Bavarski dvor
+# 2 061 vrstic in 2,0 MB, Ljubljana AP 0,9 MB, železniška postaja ~0,15 MB.
+# Zato meja 60 postaj, nato se predpomnilnik izprazni.
+_TABLA_RED: dict[tuple, tuple] = {}
+_TABLA_RED_MAX = 60
+
+
+def _tabla_vozni_red(conn: sqlite3.Connection, station: str, day: str,
+                     network: str | None) -> tuple[list[str], list[tuple], list[int]]:
+    """Stolpci, vrstice po uri in ure (za `bisect`) voznega reda table."""
+    stamp = conn.execute(
+        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
+    stamp = stamp["value"] if stamp else None
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    kljuc = (kje, stamp, station, day, network)
+    zapis = _TABLA_RED.get(kljuc) if stamp and kje else None
+    if zapis is None:
+        cur = conn.execute(_BOARD_SQL, {"station": station, "day": day,
+                                        "network": network})
+        stolpci = [c[0] for c in cur.description]
+        vrstice = [tuple(r) for r in cur]
+        i = stolpci.index("t_s")
+        zapis = (stolpci, vrstice, [v[i] for v in vrstice])
+        if stamp and kje:      # baza v pomnilniku (testi) se lahko spremeni pod nami
+            if len(_TABLA_RED) >= _TABLA_RED_MAX:
+                _TABLA_RED.clear()
+            _TABLA_RED[kljuc] = zapis
+    return zapis
+
+
+def _vrstice_table(conn: sqlite3.Connection, station: str, service_date: str,
+                   network: str | None, od_s: int, do_s: int, from_s: int,
+                   rezerva: int) -> list[dict]:
+    """Postanki table med `od_s` in `do_s`, z zamudo feeda na tem postanku.
+
+    Pred `from_s` samo vožnje, ki jim je kdaj danes zamuda segla čez rob
+    okna. Končno odloči `board()` po pričakovani uri; to je le sito, da
+    mestno postajališče ne računa ocene za vse tri ure nazaj.
+    """
+    stolpci, vrstice, ure = _tabla_vozni_red(conn, station, service_date, network)
+    rows = [dict(zip(stolpci, v)) for v in
+            vrstice[bisect.bisect_left(ure, od_s):bisect.bisect_right(ure, do_s)]]
+    pred = sorted({d["trip_id"] for d in rows if d["t_s"] < from_s})
+    najvec: dict[str, int] = {}
+    for i in range(0, len(pred), 500):
+        kos = pred[i:i + 500]
+        najvec.update(conn.execute(
+            "SELECT trip_id, MAX(COALESCE(delay_dep, delay_arr)) FROM run "
+            f"WHERE service_date = ? AND trip_id IN ({','.join('?' * len(kos))}) "
+            "GROUP BY trip_id", [service_date, *kos]).fetchall())
+    rows = [d for d in rows if d["t_s"] >= from_s
+            or (najvec.get(d["trip_id"]) is not None
+                and d["t_s"] + najvec[d["trip_id"]] + rezerva >= from_s)]
+    zam: dict[tuple, tuple] = {}
+    pari = [(d["trip_id"], d["stop_seq"]) for d in rows]
+    for i in range(0, len(pari), 400):
+        kos = pari[i:i + 400]
+        for r in conn.execute(
+                "SELECT trip_id, stop_seq, COALESCE(delay_dep, delay_arr), feed_ts FROM run "
+                "WHERE service_date = ? AND (trip_id, stop_seq) IN "
+                f"(VALUES {','.join(['(?,?)'] * len(kos))})",
+                [service_date, *(x for par in kos for x in par)]):
+            zam[(r[0], r[1])] = (r[2], r[3])
+    for d in rows:
+        d["delay_s"], d["feed_ts"] = zam.get((d["trip_id"], d["stop_seq"]), (None, None))
+    return rows
 
 
 def board(conn: sqlite3.Connection, station: str, service_date: str,
@@ -599,11 +661,8 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
     # avtobusih bi le podvojila cas table (Ljubljana AP ob 16:30: 52 vrstic
     # skozi sito, 6 na tabli; 35 -> 72 ms).
     rezerva = NEPOTRJEN_ODHOD_S if network != "avtobus" else 0
-    rows = conn.execute(_BOARD_SQL, {
-        "station": station, "day": service_date, "network": network,
-        "from_s": from_s, "to_s": from_s + window_min * 60,
-        "nazaj": nazaj, "rezerva": rezerva,
-    }).fetchall()
+    rows = _vrstice_table(conn, station, service_date, network, from_s - nazaj,
+                          from_s + window_min * 60, from_s, rezerva)
 
     out = []
     v_oknu = 0
