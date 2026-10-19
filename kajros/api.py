@@ -1054,7 +1054,7 @@ def _stanje_za_predogled(conn, train_no: str, trip: str | None, datum: str | Non
     """
     zdaj = datetime.now(TZ)
     try:
-        datum = _check_date(datum) or _active_service_date(conn, train_no, zdaj)
+        datum = _check_date(datum) or _active_service_date(conn, train_no, zdaj, trip)
     except HTTPException:
         return None
     tid = stats.resolve_trip(conn, train_no, datum, trip)
@@ -1527,7 +1527,8 @@ def _health_stevci(conn):
     return out
 
 
-def _active_service_date(conn, train_no: str, now: datetime) -> str:
+def _active_service_date(conn, train_no: str, now: datetime,
+                         trip: str | None = None) -> str:
     """Kateri prometni dan te vožnje je "zdaj".
 
     Nočni vlak se po polnoči še vedno vozi pod včerajšnjim datumom in njegove
@@ -1537,12 +1538,18 @@ def _active_service_date(conn, train_no: str, now: datetime) -> str:
 
     Izbiramo med včeraj in danes; zmaga dan, katerega voznoredno okno vsebuje
     trenutni čas. Če ga ne vsebuje nobeno, ostane današnji.
+
+    Z znano vožnjo (`trip`) šteje njeno okno, ne okno vse linije: mestna
+    linija ima tisoče voženj in poizvedba čez vse je bila večina
+    `/api/train/{no}/run` (LPP 1: 18 od 21 ms lokalno, 19. 10. 2026) -- in
+    ob polnoči je okno linije za jutranjo vožnjo izbralo včeraj.
     """
     today = now.date().isoformat()
+    pogoj, par = ("t.trip_id = ?", (trip,)) if trip else ("t.train_no = ?", (train_no,))
     row = conn.execute(
         "SELECT MIN(COALESCE(s.dep_s, s.arr_s)) AS a, MAX(COALESCE(s.arr_s, s.dep_s)) AS b "
-        "FROM trip t JOIN sched s USING (trip_id) WHERE t.train_no = ?",
-        (train_no,),
+        f"FROM trip t JOIN sched s USING (trip_id) WHERE {pogoj}",
+        par,
     ).fetchone()
     if not row or row["a"] is None:
         return today
@@ -1554,8 +1561,8 @@ def _active_service_date(conn, train_no: str, now: datetime) -> str:
     if row["a"] <= now_s + 86400 <= row["b"] + grace:
         has = conn.execute(
             "SELECT 1 FROM run r JOIN trip t USING (trip_id) "
-            "WHERE t.train_no = ? AND r.service_date = ? LIMIT 1",
-            (train_no, yesterday),
+            f"WHERE {pogoj} AND r.service_date = ? LIMIT 1",
+            (*par, yesterday),
         ).fetchone()
         if has:
             return yesterday
@@ -2367,7 +2374,7 @@ def api_run(train_no: str, date: str | None = None,
     """
     date = _check_date(date)
     with _conn() as conn:
-        date = date or _active_service_date(conn, train_no, datetime.now(TZ))
+        date = date or _active_service_date(conn, train_no, datetime.now(TZ), trip)
         # Vrnemo RAZRESENO vozjno, ne tistega, kar je poslal odjemalec. Prej je
         # bil `trip_id` pri vlaku brez `?trip=` vedno None, zato prikaz naprej
         # ni vedel, katero od vec voznj z isto stevilko gleda -- in `predict`
@@ -2555,7 +2562,7 @@ def api_run_weather(train_no: str, date: str | None = None, trip: str | None = N
     """Vreme na vsaki postaji te vožnje, po uri, ko je vlak tam."""
     date = _check_date(date)
     with _conn() as conn:
-        date = date or _active_service_date(conn, train_no, datetime.now(TZ))
+        date = date or _active_service_date(conn, train_no, datetime.now(TZ), trip)
         rows = stats.run_weather(conn, train_no, date, trip)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
@@ -2594,7 +2601,7 @@ def api_vehicle_chain(train_no: str, date: str | None = None,
     date = _check_date(date)
     now = datetime.now(TZ)
     with _conn() as conn:
-        date = date or _active_service_date(conn, train_no, now)
+        date = date or _active_service_date(conn, train_no, now, trip)
         chain = stats.vehicle_chain(
             conn, train_no, date, trip,
             now_ts=int(now.timestamp()),

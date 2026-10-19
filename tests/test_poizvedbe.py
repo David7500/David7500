@@ -2903,3 +2903,29 @@ def test_pred_odhodom_ni_zamude_ob_prihodu(conn):
     z = next(x for x in stats.connections(conn, "Ajdovščina", "Celje", "2026-08-31", 28000)
              if x["train_no"] == "IC 1")
     assert z["zamuda_prihod"] is None
+
+
+def test_prometni_dan_voznje_po_njenem_oknu_ne_po_liniji(conn):
+    """Ob 00:20 je okno vse linije (do 24:30) izbralo včeraj tudi za jutranjo
+    vožnjo, ki včeraj ne vozi -- okno vožnje bi bilo prazno. Z znano vožnjo
+    šteje njeno okno; brez nje ostane okno linije (nočni vlak)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from kajros import api
+    danes, vceraj = "2026-09-02", "2026-09-01"
+    conn.executemany("INSERT OR IGNORE INTO service_day(service_id, date) VALUES(?, ?)",
+                     [("SN", vceraj), ("SN", danes), ("SJ", danes)])
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('noc','rn','LPP 9','A - C','SN')")
+    _sched(conn, "noc", [(1, "A", None, 23 * 3600 + 50 * 60), (2, "C", 24 * 3600 + 30 * 60, None)])
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('jutro','rj','LPP 9','A - C','SJ')")
+    _sched(conn, "jutro", [(1, "A", None, 5 * 3600), (2, "C", 5 * 3600 + 30 * 60, None)])
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts)"
+                 " VALUES('noc', ?, 1, 0, 0, 4102444800)", (vceraj,))
+    conn.commit()
+    polnoc = datetime(2026, 9, 2, 0, 20, tzinfo=ZoneInfo("Europe/Ljubljana"))
+    assert api._active_service_date(conn, "LPP 9", polnoc) == vceraj
+    assert api._active_service_date(conn, "LPP 9", polnoc, "noc") == vceraj
+    assert api._active_service_date(conn, "LPP 9", polnoc, "jutro") == danes
