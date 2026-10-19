@@ -352,6 +352,8 @@ body:not(.is-advanced) .adv-only { display: none !important; }
   color: var(--ink-faint);
 }
 .empty-state strong { color: var(--ink-dim); }
+/* Povezava v praznem izidu je edini korak naprej: v poudarku, ne siva. */
+.empty-state a { color: var(--accent); }
 
 /* ---------- obvestila o ovirah ----------
  * Svoja barva, ne lestvica zamud: ovira ni "velika zamuda", ampak drugo

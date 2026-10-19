@@ -165,6 +165,23 @@ def test_isto_ime_se_sesteje_pred_razvrscanjem(conn):
     assert hits[0]["trips"] == 4        # obe smeri skupaj, ne le najmocnejsa
 
 
+def test_lega_postaje_je_najprometnejse_postajalisce(conn):
+    """Pot od vrat do vrat iz praznega izida zvez dobi točko, ne ime: ista
+    stran ceste kot v kazalu (`station_index`), sicer dva izida za isto ime."""
+    for sid, lat in (("L1", 46.11), ("L2", 46.12)):
+        conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,'Lega',?,14.5)",
+                     (sid, lat))
+    for i, sid in enumerate(("L1", "L2", "L2")):
+        conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                     f"VALUES('tl{i}','rl{i}','LP {40 + i}','x','S1')")
+        _sched(conn, f"tl{i}", [(1, sid, None, 30000 + i), (2, "C", 34000, None)])
+    conn.commit()
+    assert journey.lega_postaje(conn, "Lega") == [46.12, 14.5]
+    assert journey.lega_postaje(conn, "Ni je") is None
+    kazalo = {d["n"]: [d["lat"], d["lon"]] for d in journey.station_index(conn, None, True)}
+    assert kazalo["Lega"] == [46.12, 14.5]
+
+
 def test_tocno_ime_je_pred_delnim(conn):
     conn.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('C2','Celje Center',46.2,15.3)")
     names = [s["name"] for s in journey.search_stations(conn, "celje")]

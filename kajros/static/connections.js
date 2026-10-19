@@ -679,13 +679,21 @@ function renderConnections(data) {
     // ime ostane v imenovalniku -- ista rešitev kot pri "na postaji X".
     // Opomba o koncu tedna samo ob koncu tedna: med tednom je bila nasvet
     // brez pomena.
+    // Strežnik ob praznem izidu išče do treh prestopov (`journey.plan`), zato
+    // „z dvema morda gre“ ni bil nasvet. Pot od vrat do vrat pa šteje še hojo
+    // do drugega postajališča in obe omrežji: Ljubljana AP -> Kolodvor (LPP)
+    // je pet minut peš, iskalnik zvez pa je rekel „ni vožnje“.
     const kraja = IS_BUS ? "postajališča" : "postaje";
     const vikend = [0, 6].includes(new Date(`${data.date}T12:00:00`).getDay());
+    const lega = data.lega || {};
+    const pot = lega.od && lega.do
+      ? `<a href="/app/pot?od=${lega.od.join(",")}&do=${lega.do.join(",")}">Poišči pot od vrat do vrat</a> — šteje tudi hojo in ${IS_BUS ? "vlake" : "avtobuse"}.`
+      : "";
     resultsEl.innerHTML = `<div class="empty-state">
       Na ta dan ni vožnje od ${kraja} <strong>${escapeHtml(data.from)}</strong>
       do ${kraja} <strong>${escapeHtml(data.to)}</strong> — ne neposredne
-      ne z enim prestopom.<br>
-      kajros išče največ en prestop; z dvema morda gre. Preveri tudi drug dan${vikend
+      ne s prestopi.<br>
+      ${pot} Preveri tudi drug dan${vikend
         ? ` — ${IS_BUS ? "ob koncu tedna vozi manj avtobusov" : "ob koncu tedna vozi bistveno manj vlakov"}`
         : ""}.
     </div>`;

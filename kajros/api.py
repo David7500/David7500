@@ -3003,6 +3003,11 @@ def api_connections(
             notices = alerts.for_stops(conn, [r[0] for r in conn.execute(
                 "SELECT stop_id FROM station WHERE name IN (?, ?)", (a, b))])
         meje = _znano_do(conn, network)
+        # Brez zveze s prestopi je pot morda peš do drugega postajališča ali čez
+        # obe omrežji: prazen izid pokaže povezavo na pot od vrat do vrat.
+        if not rows and not legs:
+            meje["lega"] = {"od": journey.lega_postaje(conn, a),
+                            "do": journey.lega_postaje(conn, b)}
     return {"from": a, "to": b, "date": date, "network": network, **meje,
             "connections": rows, "transfers": legs, "alerts": notices}
 

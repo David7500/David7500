@@ -1230,12 +1230,32 @@ function izUrl() {
   return S.od && S.do;
 }
 
+// Naslov nosi samo koordinate. Kadar je točka postaja iz kazala (povezava s
+// praznega izida iskalnika zvez, deljena pot med postajama), ime pove kazalo:
+// „Kolodvor“ pove več kot 46.05757, 14.51120. Polje, v katerega je človek
+// medtem že tipkal, ostane pri miru.
+function poimenujIzKazala() {
+  if (!KAZALO) return;
+  let spremenjeno = false;
+  for (const kaj of ["od", "do"]) {
+    const t = S[kaj];
+    if (!t || t.ime || $(`#q-${kaj}`).value !== napisTocke(t)) continue;
+    const s = KAZALO.find((x) => Math.abs(x.lat - t.lat) < TOCKA_PRAG
+      && Math.abs(x.lon - t.lon) < TOCKA_PRAG);
+    if (!s) continue;
+    t.ime = s.n;
+    $(`#q-${kaj}`).value = napisTocke(t);
+    spremenjeno = true;
+  }
+  if (spremenjeno && document.body.classList.contains("zlozeno")) zlozi();
+}
+
 // ---------------------------------------------------------------- zagon
 
 pripniDnevnePuscice();
 oznaciArm();
 nastaviPrevoznike(prebraniPrevozniki());
-naloziKazalo().then((k) => { KAZALO = k; });
+naloziKazalo().then((k) => { KAZALO = k; poimenujIzKazala(); });
 const izPovezave = izUrl();
 izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi
 // „Kam greš?“ z domače strani: človek je ravno odgovoril na „kam“, kazalec pa

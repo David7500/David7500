@@ -105,6 +105,20 @@ def station_index(conn: sqlite3.Connection, network: str | None,
     return [{"n": d["n"], "t": d["t"]} for d in out]
 
 
+def lega_postaje(conn: sqlite3.Connection, ime: str) -> list[float] | None:
+    """`[lat, lon]` najprometnejšega postajališča tega imena v obeh omrežjih.
+
+    Za prazen izid iskalnika zvez: povezava na pot od vrat do vrat rabi točko,
+    ime samo ji ne pove, katera stran ceste. Ista točka kot v kazalu poti
+    (`station_index(None, True)`), zato ji ta stran zna vrniti ime.
+    """
+    promet = _promet(conn, None)
+    vrste = conn.execute("SELECT stop_id, lat, lon FROM station WHERE name = ?",
+                         (ime,)).fetchall()
+    naj = max(vrste, key=lambda r: promet.get(r["stop_id"], 0), default=None)
+    return [round(naj["lat"], 5), round(naj["lon"], 5)] if naj else None
+
+
 # Promet po postajaliscu, predpomnjen do naslednjega uvoza GTFS.
 #
 # Prej se je stel ob VSAKEM pritisku tipke: za do `CANDIDATE_CAP` kandidatov
