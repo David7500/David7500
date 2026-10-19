@@ -63,19 +63,20 @@ def _ogrej_zive() -> None:
     # Samo tisto, kar strani res vprasajo. Zemljevid klice
     # `/api/live?network=zeleznica`; `network=None` je 802 ms dela za
     # odgovor, ki ga aplikacija ne uporablja -- ogrevati ga pomeni zamikati
-    # koristna dva.
+    # koristnega.
     #
     # **Klici morajo iti skozi ENDPOINT, ne skozi notranjo funkcijo.**
     # `_live()` samo racuna; predpomnilnik napolni sele `api_live()`, ki ga
     # ovije v `_predpomni`. Prva razlicica tega ogrevanja je klicala `_live()`
     # -- delo je opravila in ga zavrgla, ucinka pa ni bilo nobenega.
-    for kaj, klic in (("žive vožnje (železnica)", lambda: api.api_live("zeleznica")),
-                      ("žive vožnje (avtobusi)", lambda: api.api_live("avtobus"))):
-        try:
-            klic()
-        except Exception as exc:  # noqa: BLE001
-            _log(f"predpomnilnika ni bilo mogoče ogreti ({kaj}): {exc}")
-            return
+    #
+    # Avtobusov ne. Okno vožnje je `/api/live?network=avtobus` bralo za smer
+    # vožnje, od 18. 10. 2026 jo ima iz `/run`; nobena stran ga ne vpraša več.
+    # Ogrevanje pa je na arwenu stalo 3,1 s CPU na vsakih 30 s (25. 9. 2026).
+    try:
+        api.api_live("zeleznica")
+    except Exception as exc:  # noqa: BLE001
+        _log(f"predpomnilnika ni bilo mogoče ogreti (žive vožnje): {exc}")
 
 
 def _ogrej_vozila() -> None:
