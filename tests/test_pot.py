@@ -912,3 +912,15 @@ def test_hoja_vso_pot_ne_izrine_voznje_s_toleranco():
                                     {"vrsta": "hoja"}]}
     izbrani = pot.izberi_predloge([pes, bus])
     assert bus in izbrani
+
+
+def test_pot_z_manj_hoje_ne_sme_trajati_poljubno_dlje():
+    """Jesenice -> Ljubljana ob 16:00 (presoja 18. 10. 2026): „16:21 -> 18:22,
+    6 min hoje“ ob „16:52 -> 18:18, 18 min hoje“ -- 12 min manj hoje za pol
+    ure dlje zdoma. Dlje sme trajati za 10 min ali za prihranjeno hojo."""
+    from kajros import pot
+    prvi = {"trajanje_s": 86 * 60, "hoje_s": 18 * 60}
+    assert not pot._manj_hoje_vredna({"trajanje_s": 121 * 60, "hoje_s": 6 * 60}, prvi)
+    assert pot._manj_hoje_vredna({"trajanje_s": 96 * 60, "hoje_s": 12 * 60}, prvi)
+    # Prihranek hoje nad 10 min razširi mejo nanj.
+    assert pot._manj_hoje_vredna({"trajanje_s": 100 * 60, "hoje_s": 4 * 60}, prvi)

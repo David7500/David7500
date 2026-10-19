@@ -80,6 +80,19 @@ MANJ_HOJE_S = 10 * 60
 #: Koliko pozneje sme priti pot z manj hoje, da je še izbira in ne druga pot.
 NAJVEC_POZNEJE_S = 30 * 60
 
+#: Za koliko dlje od vrat do vrat sme trajati pot z manj hoje: za toliko, ali
+#: za toliko, kolikor hoje prihrani, če je to več. Sama meja prihoda je
+#: pustila oditi poljubno prej -- Jesenice -> Ljubljana ob 16:00 „16:21 ->
+#: 18:22, 2 prestopa, 6 min hoje“ ob „16:52 -> 18:18, 18 min hoje“: 12 min
+#: manj hoje za pol ure dlje zdoma (presoja 18. 10. 2026).
+MANJ_HOJE_DLJE_S = 10 * 60
+
+
+def _manj_hoje_vredna(k: dict, prvi: dict) -> bool:
+    """Ali je pot z manj hoje `k` še izbira ob prvem predlogu (`MANJ_HOJE_DLJE_S`)."""
+    return k["trajanje_s"] <= prvi["trajanje_s"] + max(MANJ_HOJE_DLJE_S,
+                                                       prvi["hoje_s"] - k["hoje_s"])
+
 #: Koliko naslednjih odhodov ponudimo poleg prvega. Potnik, ki vpraša "kdaj mi
 #: pelje", hoče seznam in ne ene ure -- prvi odhod je lahko čez minuto in ga ne
 #: ujame. Vsak je svoje iskanje, a peš matriki sta že izračunani.
@@ -1157,7 +1170,9 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
                 # Pot z manj hoje sme biti počasnejša -- to je njen smisel --
                 # a ne poljubno; sicer je to druga pot, ne druga izbira.
                 if a and a["prihod_s"] <= zgornja + NAJVEC_POZNEJE_S:
-                    predlogi.append(sestavi(a, kratka_i, kratka_c))
+                    k = sestavi(a, kratka_i, kratka_c)
+                    if _manj_hoje_vredna(k, prvi):
+                        predlogi.append(k)
     else:
         rok = prihod_do_s
         najprej = odhod_s if odhod_s is not None else -(1 << 30)
@@ -1207,7 +1222,9 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
                 a = nazaj(conn, kratka_i, kratka_c, service_date, rok,
                            max_nog, spodnja, zamik, brez())
                 if a:
-                    predlogi.append(sestavi(a, kratka_i, kratka_c))
+                    k = sestavi(a, kratka_i, kratka_c)
+                    if _manj_hoje_vredna(k, prvi):
+                        predlogi.append(k)
 
     # Zamude PRED razvrščanjem: stran razvršča po uri, ki jo pokaže, ne po
     # voznoredni. Sicer si vrstni red in številke nasprotujeta -- ujeto v živo
