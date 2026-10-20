@@ -63,7 +63,6 @@ def _sprejmi(conn, **kw) -> str:
 # ---------------------------------------------------------- kdo sme pisati
 
 @pytest.mark.parametrize("telo", [
-    "",
     "data=",
     "data=ni-json",
     urlencode({"data": "[1, 2]"}),          # veljaven JSON, a ne predmet
@@ -77,6 +76,14 @@ def test_brez_pravega_zetona_ni_nic(conn, telo):
         donacije.razberi(telo, ZETON)
     assert donacije.zavrnjeno["ts"] is not None
     assert conn.execute("SELECT COUNT(*) FROM donacija").fetchone()[0] == 0
+
+
+def test_prazno_telo_je_preverba_skripte_ne_poskus(conn):
+    """`deploy/kofi.sh` pošlje prazen POST; v `/admin` ne sme videti kot
+    zavrnjeno sporočilo, sicer zakrije, da Ko-fi še ni poslal ničesar."""
+    with pytest.raises(donacije.Zavrnjeno):
+        donacije.razberi("", ZETON)
+    assert donacije.zavrnjeno["ts"] is None
 
 
 def test_brez_nastavljenega_zetona_ne_sprejme_niti_praznega(conn):

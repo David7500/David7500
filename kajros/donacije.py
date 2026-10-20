@@ -104,8 +104,12 @@ def razberi(telo: str, pricakovan: str) -> dict:
     # `compare_digest` nad nizi z ne-ASCII znaki vrže TypeError -- zato bajti.
     if not (pricakovan and isinstance(dano, str)
             and hmac.compare_digest(dano.encode(), pricakovan.encode())):
-        zavrnjeno.update(ts=int(time.time()),
-                         razlog="napačen žeton" if isinstance(dano, str) else "ni sporočilo Ko-fi")
+        # Prazno telo pošlje `deploy/kofi.sh`, da vidi, ali strežnik žeton
+        # bere (403 proti 404) -- to ni poskus sporočila in ne sme v `/admin`
+        # zakriti, ali je Ko-fi sploh kdaj kaj poslal.
+        if telo.strip():
+            zavrnjeno.update(ts=int(time.time()),
+                             razlog="napačen žeton" if isinstance(dano, str) else "ni sporočilo Ko-fi")
         raise Zavrnjeno("Napačen žeton.")
     return podatki
 
