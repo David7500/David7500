@@ -30,7 +30,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (alerts, collector, config, db, deljenje, hoja, journey, lpp, markdown,
+from . import (alerts, collector, config, db, deljenje, donacije, hoja, journey, lpp, markdown,
                nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot, pripni, pristanek,
                server, stats, stik, tiri, viri, zamude_sz, zapore, zdravje)
 from .server import lifespan
@@ -875,7 +875,7 @@ def primerjava(request: Request):
 
 
 @app.get("/donacije", response_class=HTMLResponse, include_in_schema=False)
-def donacije(request: Request):
+def donacije_stran(request: Request):
     """Za kaj gre denar in gumb do plačilne strani.
 
     Brez `KAJROS_DONACIJE` poti ni (404): prošnja brez naslova, kamor bi
@@ -900,6 +900,27 @@ def donacije_naprej():
         raise HTTPException(404, "donacije niso nastavljene")
     return RedirectResponse(config.DONACIJE, status_code=302,
                             headers={"Cache-Control": "no-store"})
+
+
+@app.post(donacije.POT, include_in_schema=False)
+async def donacije_kofi(request: Request):
+    """**Pot, ki piše v bazo iz zahteve** Ko-fi: eno sporočilo na plačilo.
+
+    Brez nastavljenega žetona poti ni (404), z napačnim 403. Vsa varovalka
+    je v `donacije.py`. Telo se bere kot pri `/stik` (po kosih, z mejo),
+    baza gre v nit iz istega razloga.
+    """
+    pricakovan = donacije.zeton()
+    if not pricakovan:
+        raise HTTPException(status_code=404)
+    telo = await _preberi_telo(request)
+    try:
+        podatki = donacije.razberi(telo, pricakovan)
+    except donacije.Zavrnjeno as e:
+        raise HTTPException(403, str(e)) from None
+    izid = await run_in_threadpool(lambda: _conn_klic(
+        lambda conn: donacije.sprejmi(conn, podatki)))
+    return JSONResponse({"izid": izid}, headers={"Cache-Control": "no-store"})
 
 
 def _izdaja_androida() -> dict | None:
@@ -3527,6 +3548,8 @@ def admin_podatki(request: Request,
         out["sporocila"] = {"vklopljeno": config.STIK_OBRAZEC,
                             **stik.stevec(conn),
                             "seznam": stik.seznam(conn, limit=100)}
+        # Ali povezava s Ko-fi stoji in kaj je prišlo.
+        out["kofi"] = donacije.pregled(conn)
         # Samo število za značko; zemljevid in sledi so v `/admin/deljenje`.
         deljenje.init(conn)
         out["deljenje"] = {"vklopljeno": config.DELI, "zdaj": deljenje.deli_zdaj(conn)}

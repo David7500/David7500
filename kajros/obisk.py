@@ -458,7 +458,9 @@ DONACIJE_NAPREJ = "/donacije/naprej"
 
 
 def vrsta_poti(pot: str) -> str:
-    if pot == DONACIJE_NAPREJ:
+    # Pod `/donacije/` sta klik naprej in sporočilo Ko-fi (`donacije.POT`);
+    # nobeno ni ogled strani, čeprav se začne kot `/donacije`.
+    if pot.startswith("/donacije/"):
         return "drugo"
     if pot == "/" or pot.startswith("/app") or pot.startswith(_STRANI):
         return "stran"

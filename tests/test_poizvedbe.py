@@ -1731,6 +1731,9 @@ def test_pisalne_poti_so_nastete():
 
     `/admin/obvestila` (28. 9. 2026): obvestila potnikom. Zaprta z istim
     žetonom kot pregled, piše samo skrbnik.
+
+    `/donacije/ko-fi` (20. 10. 2026): plačila, ki jih javi Ko-fi. Piše samo,
+    kdor pozna žeton iz nastavitev Ko-fi; varovalke v `donacije.py`.
     """
     from fastapi.routing import APIRoute
     from kajros.api import app
@@ -1738,7 +1741,7 @@ def test_pisalne_poti_so_nastete():
     pisejo = sorted(r.path for r in app.routes
                     if isinstance(r, APIRoute) and "POST" in r.methods)
     assert pisejo == ["/admin/obvestila", "/admin/sporocila/{id_}", "/api/deli",
-                      "/stik"], pisejo
+                      "/donacije/ko-fi", "/stik"], pisejo
 
 
 def test_head_ni_v_dokumentaciji():

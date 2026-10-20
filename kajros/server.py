@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import (alerts, brskalnik, collector, config, db, deljenje, gtfs, nap, obisk,
+from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, nap, obisk,
                ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
                weather, zamude_lpp, zamude_sz)
 
@@ -709,6 +709,13 @@ async def lifespan(app):
             deljenje.init(conn)
         finally:
             conn.close()
+    # Vedno, ne le z žetonom Ko-fi: tega `deploy/kofi.sh` zapiše brez
+    # restarta, tabela pa mora obstajati že ob prvem plačilu.
+    conn = db.connect()
+    try:
+        donacije.init(conn)
+    finally:
+        conn.close()
     obisk_nit = None
     if config.OBISK:
         conn = db.connect()

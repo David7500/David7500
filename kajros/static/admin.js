@@ -310,17 +310,36 @@ function blokVirov(d) {
 // -------------------------------------------------------------------- podpora
 //
 // Od 4. 10. 2026. Klik na „Podari“ gre prek `/donacije/naprej`, ki preusmeri
-// na plačilno stran. Klik ni donacija -- plačilo teče pri ponudniku in ga ne
-// vidimo --, je pa zgornja meja in edini korak, ki ga lahko izmerimo.
+// na plačilno stran. Klik ni donacija, je pa zgornja meja. Plačilo samo
+// vidimo, odkar ga javlja Ko-fi (`blokKofi`), in ga ne moremo povezati s
+// klikom -- nobeden od obeh ne nosi, kdo je.
 
 function blokPodpore(d) {
   const p = d.donacije || {};
-  if (!p.ogledi && !p.klikov) return prazno("nihče ni odprl /donacije");
   const naj = Math.max(1, p.ljudi, p.klikov_ljudi);
   const delez = p.ljudi ? `${st(100 * p.klikov_ljudi / p.ljudi)} % jih je kliknilo naprej` : "";
-  return vrsta("odprlo /donacije", p.ljudi, naj, `${st(p.ogledi)}×`)
-    + vrsta("kliknilo Podari", p.klikov_ljudi, naj, `${st(p.klikov)}×`)
-    + (delez ? `<div class="adm-pod">${delez}</div>` : "");
+  return (!p.ogledi && !p.klikov ? prazno("nihče ni odprl /donacije")
+    : vrsta("odprlo /donacije", p.ljudi, naj, `${st(p.ogledi)}×`)
+      + vrsta("kliknilo Podari", p.klikov_ljudi, naj, `${st(p.klikov)}×`)
+      + (delez ? `<div class="adm-pod">${delez}</div>` : ""))
+    + blokKofi(d.kofi);
+}
+
+// Od 20. 10. 2026: plačila, ki jih Ko-fi javi na `/donacije/ko-fi`. Vsota je
+// vedno vsa zgodovina, ne izbrano obdobje. Preizkus in zavrnjena zahteva sta
+// tu, ker brez njiju prva nastavitev ne pove, kje se je ustavilo.
+function blokKofi(k) {
+  if (!k) return "";
+  if (!k.vklopljeno) return `<div class="adm-pod">Ko-fi: žeton ni nastavljen (<code>deploy/kofi.sh</code>)</div>`;
+  const evri = (c) => st(c / 100, 2);
+  const vrstice = (k.valute || []).map((v) =>
+    `${evri(v.centi)} ${escapeHtml(v.valuta)} · ${st(v.stevilo)}×`);
+  const deli = [vrstice.length ? `Ko-fi skupaj: ${vrstice.join(", ")} · zadnja ${pred(k.zadnja)}`
+    : "Ko-fi: še nobenega plačila"];
+  if (k.preizkus) deli.push(`preizkus ${pred(k.preizkus)}`);
+  const z = k.zavrnjeno || {};
+  if (z.ts) deli.push(`zavrnjeno ${pred(z.ts)} (${escapeHtml(z.razlog)})`);
+  return `<div class="adm-pod">${deli.join(" · ")}</div>`;
 }
 
 /** Ogledi po dnevih in virih: kaj je sprožilo vrh. Samo znani viri; kdor pride naravnost, ni v tabeli. */
@@ -882,7 +901,7 @@ function stanje(d) {
       razlogiKratko(d))}
     ${plosca("s6", "Od kod pridejo", "danes · ogledi", blokVirov(d), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
     ${plosca("s6", "Roboti", "danes · zahtev · desno strani", blokRobotov(d), "Po predstavitvi, ne preverjeno.")}
-    ${plosca("s6", "Podpora", "danes · ljudi", blokPodpore(d), "Klik ni donacija: plačilo teče pri ponudniku.")}
+    ${plosca("s6", "Podpora", "danes · ljudi", blokPodpore(d), "Klik ni donacija. Ko-fi: vsa zgodovina, ne samo danes.")}
   </div>`;
 }
 
@@ -964,7 +983,7 @@ function zgodovina() {
     ${plosca("s3", "S čim in od kod", "ogledi", blokNaprav(o))}
     ${plosca("s6", "Od kod pridejo", "ogledi", blokVirov(o), "Z iskalnika, AI ali omrežja; naravnost se ne šteje.")}
     ${plosca("s6", "Roboti", "zahtev · desno strani", blokRobotov(o), "Po predstavitvi, ne preverjeno.")}
-    ${plosca(enDan ? "s12" : "s4", "Podpora", "ljudi", blokPodpore(o), "Klik ni donacija: plačilo teče pri ponudniku.")}
+    ${plosca(enDan ? "s12" : "s4", "Podpora", "ljudi", blokPodpore(o), "Klik ni donacija. Ko-fi: vsa zgodovina, ne samo obdobje.")}
     ${enDan ? "" : plosca("s8", "Od kod po dnevih", "ogledi z znanega vira", tabelaVirovPoDnevih(o), "Kaj je sprožilo vrh. Naravnost se ne šteje.")}
     ${enDan ? "" : plosca("s8", "Aplikacija", izbor.vrsta === "leto" ? "po mesecih" : "po dnevih",
       grafiAplikacije(o, o.po_dnevih, vedraObdobja(o)), podAplikacije(o))}
