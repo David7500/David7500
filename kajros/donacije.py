@@ -50,9 +50,10 @@ CREATE TABLE IF NOT EXISTS donacija (
 );
 """
 
-#: Id plačila, ki ga nosi preizkusno sporočilo Ko-fi (vzorec v vtičnikih
-#: activepieces in fleetyards). Prvi preizkus z gumba to potrdi ali ovrže --
-#: zato se v `/admin` pokaže posebej, ne v vsoti.
+#: Id plačila, ki ga nosi preizkusno sporočilo Ko-fi. Izmerjeno 20. 10. 2026
+#: na kajros.app: preizkusni gumbi na ko-fi.com/manage/webhooks (napitnina,
+#: mesečna, članarina, trgovina) so prišli s tem id-jem, prvi kot Donation
+#: 3.00 USD. Zato ena vrstica, ki jo vsak nov preizkus le osveži.
 PREIZKUS_ID = "00000000-1111-2222-3333-444444444444"
 
 #: Več od tega ni donacija, ampak tipkarska napaka ali okvara pri Ko-fi.
