@@ -179,6 +179,9 @@
   border: 0; border-radius: 50%; background: none; color: var(--ink-faint); cursor: pointer;
 }
 a.d-pov-poslji { display: inline-flex; align-items: center; text-decoration: none; }
+/* Kdo je „ena oseba“, pove `/o-nas`. Podčrtano v barvi besedila: poudarek
+   je za gumb Podpri. */
+.d-pod-mi { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 /* Trak in številka sta skupna z `/donacije` (ta nalaga home.css). */
 .pod-trak { height: 8px; margin: 10px 0 6px; border-radius: 4px; background: var(--m-visoka); overflow: hidden; }
 .pod-trak > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }

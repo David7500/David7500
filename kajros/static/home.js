@@ -473,7 +473,7 @@ async function izrisiPodporo() {
       aria-valuemax="${c.cilj_centov / 100}" aria-valuenow="${c.zbrano_centov / 100}"><span style="width:${delez.toFixed(1)}%"></span></div>
     <p class="pod-stevilka"><b>${evri(c.zbrano_centov)} €</b> od ${evri(c.cilj_centov)} €${
       c.zbrano_centov >= c.cilj_centov ? " · cilj dosežen, hvala!" : ""}</p>
-    <p class="d-pov-besedilo">Kajros je brez oglasov in ga vzdržuje ena oseba.</p>
+    <p class="d-pov-besedilo">Kajros je brez oglasov in ga vzdržuje <a class="d-pod-mi" href="/o-nas">ena oseba</a>.</p>
     <div class="d-pov-gumbi"><a class="d-pov-poslji" href="/donacije">Podpri</a></div>`;
   el.hidden = false;
   el.querySelector(".d-pod-zapri").addEventListener("click", () => {
