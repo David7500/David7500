@@ -34,7 +34,8 @@ const IMENA_STRANI = {
   "/vlak/{od}/{cilj}": "Relacija · vlak", "/avtobus/{od}/{cilj}": "Relacija · avtobus",
   "/postaja/{ime}": "Postaja", "/postajalisce/{ime}": "Postajališče",
   "/postaje": "Kazalo postaj", "/postajalisca": "Kazalo postajališč",
-  "/o-nas": "O nas", "/primerjava": "Primerjava",
+  "/o-nas": "O nas", "/primerjava": "Primerjava", "/donacije": "Podpora",
+  "/stik": "Stik", "/zasebnost": "Zasebnost", "/android": "Android",
 };
 const imeStrani = (p) => IMENA_STRANI[p] || p;
 
@@ -265,10 +266,17 @@ function tabelaPocasnih(d, n) {
 }
 
 function blokStrani(d, n) {
-  const vrst = (d.strani || []).filter((s) => s.zahtev > 0).slice(0, n);
+  const vse = (d.strani || []).filter((s) => s.zahtev > 0);
+  const vrst = vse.slice(0, n);
   if (!vrst.length) return prazno("nobene odprte strani");
   const naj = Math.max(1, ...vrst.map((s) => s.ljudi));
-  return vrst.map((s) => vrsta(imeStrani(s.pot), s.ljudi, naj, `${st(s.zahtev)}×`)).join("");
+  // Pod prvimi `n` so strani, ki jih odpre malo ljudi -- med njimi O nas in
+  // Podpora, ki ju je bilo prej mogoče videti samo v bazi. V eni vrstici, da
+  // ploščica ne zraste, a nobena stran ne izgine.
+  const ostale = vse.slice(n);
+  return vrst.map((s) => vrsta(imeStrani(s.pot), s.ljudi, naj, `${st(s.zahtev)}×`)).join("")
+    + (ostale.length ? `<div class="adm-pod">še (ljudi): ${ostale.map((s) =>
+      `${escapeHtml(imeStrani(s.pot))} ${st(s.ljudi)}`).join(" · ")}</div>` : "");
 }
 
 function blokNaprav(d) {
