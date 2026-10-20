@@ -266,6 +266,21 @@ DELI = okolje("DELI", "1") != "0"
 # šel, je slabša od nobene.
 DONACIJE = okolje("DONACIJE", "https://ko-fi.com/kajros").strip()
 
+# Cilj zbiranja: kartica na začetni strani in trak na `/donacije`
+# (`donacije.cilj()`). V kodi iz istega razloga kot naslov zgoraj; nov cilj
+# je commit, z novim `od` in `prej_centov` 0.
+#
+# `od` je dan, od katerega se plačila s Ko-fi štejejo v ta cilj. `prej_centov`
+# je zbrano, preden je Ko-fi plačila javljal nam (webhook od 20. 10. 2026):
+# 7 €, kot so jih darovalci plačali na Ko-fi -- isti znesek, kot ga pošlje
+# webhook. Provizijo plačila (38 c na donacijo) krije skrbnik sam.
+#
+# 30 €: 25 $ stane račun razvijalca v Googlu Play, ostalo gre za razvoj
+# aplikacije (odločil David 20. 10. 2026).
+CILJ = {"namen": "Kajros v Googlu Play", "evrov": 30, "od": "2026-10-20",
+        "prej_centov": 700,
+        "zakaj": "račun razvijalca v Googlu Play stane 25 $, ostalo gre v razvoj aplikacije"}
+
 # Aplikacija za Android: podpisan APK in `razlicica.json`, ki ju naredi
 # `android/objavi.sh`. Trgovin ni -- glavni F-Droid zahteva prosto licenco,
 # koda pa je zaprta, Play pa rabi racun, 25 $ in dva tedna zaprtega preizkusa.

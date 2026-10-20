@@ -26,6 +26,7 @@ import re
 import sqlite3
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qs
 
@@ -59,6 +60,8 @@ PREIZKUS_ID = "00000000-1111-2222-3333-444444444444"
 NAJVEC = Decimal(100_000)
 
 _VALUTA = re.compile(r"^[A-Z]{3}$")
+
+TZ = ZoneInfo(config.TIMEZONE)
 
 #: Zadnja zavrnjena zahteva, samo v pomnilniku. Ob prvi nastavitvi je
 #: tipkarska napaka v žetonu najverjetnejša okvara; ta vrstica v `/admin`
@@ -180,3 +183,28 @@ def pregled(conn: sqlite3.Connection) -> dict:
         "       MAX(CASE WHEN preizkus = 1 THEN prejeto END) FROM donacija").fetchone()
     return {"vklopljeno": bool(zeton()), "valute": valute, "zadnja": zadnja,
             "preizkus": preizkus, "zavrnjeno": dict(zavrnjeno)}
+
+
+def evri(centi: int) -> str:
+    """700 -> „7“, 750 -> „7,50“: celi evri brez ničel, kot na ceniku."""
+    return f"{centi // 100}" if centi % 100 == 0 else f"{centi / 100:.2f}".replace(".", ",")
+
+
+def cilj(conn: sqlite3.Connection) -> dict | None:
+    """Zbrano od cilja (`config.CILJ`), v centih. Brez donacij ali cilja `None`.
+
+    Vsota teče v zahtevi, ne enkrat na dan kot agregati čez `run`: tabela ima
+    nekaj vrstic na mesec. Šteje samo evre -- stran Ko-fi je v evrih, tečaja
+    za drugo pa nimamo (`pregled`).
+    """
+    c = config.CILJ
+    if not (config.DONACIJE and c):
+        return None
+    od = int(datetime.fromisoformat(c["od"]).replace(tzinfo=TZ).timestamp())
+    (vsota,) = conn.execute(
+        "SELECT COALESCE(SUM(centi), 0) FROM donacija "
+        "WHERE preizkus = 0 AND valuta = 'EUR' AND placano >= ?", (od,)).fetchone()
+    return {"namen": c["namen"], "zakaj": c["zakaj"], "cilj_centov": c["evrov"] * 100,
+            "zbrano_centov": c["prej_centov"] + vsota,
+            # Kartica, ki jo je obiskovalec zaprl, se vrne šele ob novem cilju.
+            "kljuc": f"{c['od']}/{c['evrov']}"}

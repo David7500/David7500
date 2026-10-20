@@ -141,7 +141,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 | `/zasebnost` | kaj o obiskovalcu hranimo; skladna z `obisk.py` in `stik.py` |
 | `/o-nas` | zgodba v 3D (ime, dijak, kaj dela, podpora), kaj je tu, od kod podatki; edina besedilna stran z JS (vir `o-nas/`) |
 | `/primerjava` | kje preveriti zamudo: druge strani po njihovih besedah, z datumom pregleda |
-| `/donacije` | za kaj gre denar + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
+| `/donacije` | za kaj gre denar, trak cilja (`config.CILJ`, ista kartica na `/`) + gumb do `ko-fi.com/kajros` (privzetek v `config.py`); `KAJROS_DONACIJE=` skrije vse |
 | `/admin` | **za skrbnika**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege na zemljevidu, obvestila potnikom |
 
 **Pristajalne strani obstajajo zaradi iskalnika in so brez JS**: človek išče „vlak ljubljana koper“, odgovor mora biti v odgovoru strežnika. Meja, katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po teži (promet izhodišča × promet cilja, ne število voženj), ostalo `noindex`. Kaj ljudje iščejo, izmerjeno v `docs/MERITVE.md` („Iskalniki“).

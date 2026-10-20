@@ -433,6 +433,57 @@ function ponudiPovabilo(sOdhodi) {
   });
 }
 
+// ---------- podpora ----------
+//
+// Cilj zbiranja (`config.CILJ`, 20. 10. 2026). Vsota pride iz `/api/podpora`,
+// ne iz HTML: to stran streže service worker iz predpomnilnika. Zaprta
+// kartica ostane zaprta do novega cilja (`kljuc`), ne za vedno in ne za dan.
+// Gumb pelje na `/donacije`, ne naravnost na Ko-fi: tam piše, za kaj je
+// denar in kdo ga pobere.
+
+const PODPORA_KLJUC = "kajros:podpora";
+
+const evri = (centi) => (centi / 100).toLocaleString("sl-SI",
+  { minimumFractionDigits: centi % 100 ? 2 : 0, maximumFractionDigits: 2 });
+
+async function izrisiPodporo() {
+  const el = document.getElementById("podpora");
+  if (!el) return;
+  let c;
+  try {
+    const r = await fetch("/api/podpora");
+    if (!r.ok) return;
+    c = await r.json();
+  } catch (e) {
+    return;                       // brez omrežja kartice ni -- ni nujna
+  }
+  try {
+    if (localStorage.getItem(PODPORA_KLJUC) === c.kljuc) return;
+  } catch (e) { /* zasebno okno: kartica se pokaže */ }
+  const delez = Math.min(100, (100 * c.zbrano_centov) / c.cilj_centov);
+  el.innerHTML = `
+    <div class="d-pod-glava">
+      <p class="d-pov-nasl">${escapeHtml(c.namen)}</p>
+      <button type="button" class="d-pod-zapri" aria-label="Skrij do novega cilja">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="pod-trak" role="progressbar" aria-label="Zbrano" aria-valuemin="0"
+      aria-valuemax="${c.cilj_centov / 100}" aria-valuenow="${c.zbrano_centov / 100}"><span style="width:${delez.toFixed(1)}%"></span></div>
+    <p class="pod-stevilka"><b>${evri(c.zbrano_centov)} €</b> od ${evri(c.cilj_centov)} €${
+      c.zbrano_centov >= c.cilj_centov ? " · cilj dosežen, hvala!" : ""}</p>
+    <p class="d-pov-besedilo">Kajros je brez oglasov in ga vzdržuje ena oseba.</p>
+    <div class="d-pov-gumbi"><a class="d-pov-poslji" href="/donacije">Podpri</a></div>`;
+  el.hidden = false;
+  el.querySelector(".d-pod-zapri").addEventListener("click", () => {
+    el.hidden = true;
+    try {
+      localStorage.setItem(PODPORA_KLJUC, c.kljuc);
+    } catch (e) { /* zasebno okno: ob naslednjem obisku se pokaže znova */ }
+  });
+}
+
 // ---------- zemljevid vnaprej ----------
 //
 // Zemljevid je najtezja stran (MapLibre 1,1 MB, stisnjeno okrog 300 kB). V
@@ -457,6 +508,7 @@ function kasneje() {
 
 izrisiBudilke();
 izrisiPoti().then(ponudiPovabilo);
+izrisiPodporo();
 if (MOST) {
   if (document.readyState === "complete") kasneje();
   else addEventListener("load", kasneje, { once: true });

@@ -173,3 +173,32 @@ def test_zeton_iz_datoteke(tmp_path, monkeypatch):
     assert donacije.zeton() == ""
     (tmp_path / ".kofi-zeton").write_text(ZETON + "\n", encoding="utf-8")
     assert donacije.zeton() == ZETON
+
+
+# -------------------------------------------------------------------- cilj
+
+def test_cilj_steje_evre_od_dneva_cilja_in_prej_zbrano(conn, monkeypatch):
+    monkeypatch.setattr(donacije.config, "DONACIJE", "https://ko-fi.com/x")
+    monkeypatch.setattr(donacije.config, "CILJ", {
+        "namen": "N", "zakaj": "z", "evrov": 30, "od": "2026-10-20", "prej_centov": 700})
+    _sprejmi(conn, kofi_transaction_id="a", amount="5.00")                  # šteje
+    _sprejmi(conn, kofi_transaction_id="b", amount="3.00",
+             timestamp="2026-10-19T21:59:00Z")       # 23:59 dan prej po naši uri
+    _sprejmi(conn, kofi_transaction_id="c", amount="3.00",
+             timestamp="2026-10-19T22:00:00Z")       # polnoč po naši uri: šteje
+    _sprejmi(conn, kofi_transaction_id="d", amount="9.00", currency="USD")
+    _sprejmi(conn, kofi_transaction_id=donacije.PREIZKUS_ID, amount="9.00")
+    c = donacije.cilj(conn)
+    assert (c["cilj_centov"], c["zbrano_centov"]) == (3000, 700 + 500 + 300)
+    assert c["kljuc"] == "2026-10-20/30"
+
+
+def test_brez_naslova_za_donacije_ni_cilja(conn, monkeypatch):
+    """`KAJROS_DONACIJE=` skrije vse -- tudi kartico, ki bi vodila nikamor."""
+    monkeypatch.setattr(donacije.config, "DONACIJE", "")
+    assert donacije.cilj(conn) is None
+
+
+@pytest.mark.parametrize("centi, besedilo", [(700, "7"), (750, "7,50"), (3005, "30,05"), (0, "0")])
+def test_evri_kot_na_ceniku(centi, besedilo):
+    assert donacije.evri(centi) == besedilo

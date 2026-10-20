@@ -160,6 +160,12 @@
       {%- endif %}
     </div>
 
+    {#- Cilj zbiranja (`config.CILJ`). Številko vpiše `home.js` iz
+        `/api/podpora`: to stran streže service worker iz predpomnilnika. #}
+    {%- if donacije %}
+    <section class="d-podpora" id="podpora" aria-label="Podpri kajros" hidden></section>
+    {%- endif %}
+
   </main>
   {% set here = "domov" %}
   {% include "_orodna.html" %}

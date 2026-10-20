@@ -884,9 +884,27 @@ def donacije_stran(request: Request):
     if not config.DONACIJE:
         raise HTTPException(404, "donacije niso nastavljene")
     ponudnik = urlsplit(config.DONACIJE).hostname or config.DONACIJE
+    # Trak izriše strežnik: besedilne strani so brez JS, `/donacije` pa ni
+    # v `_SW_STRANI`, zato vsota v HTML ne obvisi v predpomnilniku.
+    with _conn() as conn:
+        c = donacije.cilj(conn)
     return templates.TemplateResponse(
         request, "donacije.html",
-        {"ponudnik": ponudnik.removeprefix("www.")})
+        {"ponudnik": ponudnik.removeprefix("www."), "cilj": c, "evri": donacije.evri})
+
+
+@app.get("/api/podpora", include_in_schema=False)
+def api_podpora():
+    """Zbrano od cilja za kartico na začetni strani (`home.js`).
+
+    Posebej in ne v HTML: domačo stran streže service worker iz predpomnilnika
+    (`_SW_STRANI`), vsota v njej bi obvisela. Brez cilja 404.
+    """
+    with _conn() as conn:
+        c = donacije.cilj(conn)
+    if c is None:
+        raise HTTPException(404, "cilja ni")
+    return c
 
 
 @app.get(obisk.DONACIJE_NAPREJ, include_in_schema=False)

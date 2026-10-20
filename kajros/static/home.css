@@ -167,7 +167,28 @@
 .d-pov-poslji { background: var(--m-sek); color: var(--m-na-sek); }
 .d-pov-ne { padding: 0 12px; background: none; color: var(--ink-dim); }
 
-.d-isci:focus-visible, .d-obl:focus-visible, .stikalo:focus-visible,
+/* Podpora (`home.js`): ista tiha podlaga kot povabilo -- prošnja, ne
+   obvestilo. Trak je v poudarku strani, ne v lestvici zamud. */
+.d-podpora {
+  margin-top: 20px; padding: 14px 16px 16px;
+  border-radius: 24px; background: var(--bg-raised); color: var(--ink-dim); font: 400 14px/1.45 var(--sans);
+}
+.d-pod-glava { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.d-pod-zapri {
+  display: grid; place-items: center; width: 40px; height: 40px; margin: -8px -10px -8px 0;
+  border: 0; border-radius: 50%; background: none; color: var(--ink-faint); cursor: pointer;
+}
+a.d-pov-poslji { display: inline-flex; align-items: center; text-decoration: none; }
+/* Trak in številka sta skupna z `/donacije` (ta nalaga home.css). */
+.pod-trak { height: 8px; margin: 10px 0 6px; border-radius: 4px; background: var(--m-visoka); overflow: hidden; }
+.pod-trak > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.pod-stevilka { margin: 0; color: var(--ink-dim); }
+.pod-stevilka b { color: var(--ink); font-weight: 600; }
+.besedilo .pod-cilj { margin: 20px 0 8px; padding: 14px 16px 16px; border-radius: 24px; background: var(--bg-raised); }
+.besedilo .pod-cilj p { margin: 0; }
+.besedilo .pod-namen { font: 600 15px/1.3 var(--sans); color: var(--ink); }
+
+.d-isci:focus-visible, .d-obl:focus-visible, .stikalo:focus-visible, .d-pod-zapri:focus-visible,
 .bud-vse:focus-visible, .d-pot:focus-visible, .d-pov-poslji:focus-visible, .d-pov-ne:focus-visible {
   outline: 2px solid var(--accent-lit); outline-offset: 2px;
 }

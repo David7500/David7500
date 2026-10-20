@@ -78,6 +78,16 @@ Mapa v podatkovnem imeniku, ne v `/srv`: ta je po `brez-sudo.sh` že skupinsko p
 
 **Zaradi preverjanja ob zagonu je 2027 vreden zaznamka**: Google od 30. 9. 2026 zahteva **preverjenega razvijalca** za namestitev na certificiranih napravah (Brazilija, Indonezija, Singapur, Tajska; globalno 2027). Naprav brez Googlove certifikacije (razgooglana Volla) ne zadeva, navadnega telefona bo. Takrat izbrati znova; do tedaj ta pot dela.
 
+## Podpora v Playu (pregledano 20. 10. 2026)
+
+Aplikacija kaže stran, zato bo v njej tudi kartica cilja in gumb do Ko-fi (`strani.md`). Pravilo plačil v Playu (`support.google.com/googleplay/android-developer/answer/9858738`, razdelek 4): aplikacija **ne sme voditi do plačila mimo Googla**, tudi ne prek WebView-a ali povezave. Izjema je v pogostih vprašanjih (`answer/10281818`): napitnina, pri kateri **gre 100 % ustvarjalcu** in ki **ne odklene ničesar digitalnega**, je plačilo med osebama in Googlovega obračuna ne rabi. Kar od tega velja ob oddaji:
+
+* **Nič v zameno.** Ne značke, ne „brez oglasov za podpornike“, ne zgodnjega dostopa — vsaka ugodnost naredi iz napitnine nakup, ki mora skozi Google (15–30 %).
+* **Samo enkratne donacije.** Ko-fi od njih na brezplačnem načrtu ne vzame nič; od članarin, trgovine in naročil 5 % in te praviloma nekaj dajo. Na strani Ko-fi naj jih ne bo, sicer gumb iz aplikacije vodi do plačila za vsebino.
+* **Provizija plačila (PayPal/Stripe) je siva cona** za „100 %“. David jo krije sam (38 c na donacijo); tako je to tudi povedati v pregledu, če vprašajo.
+* **Rezerva:** če pregled kljub temu zavrne, se kartica in gumb skrijeta samo v aplikaciji (razred `.v-aplikaciji`, ki ga postavi `common.js` iz `MOST`) — stran v brskalniku ostane enaka. Ena vrstica CSS, nova različica APK ni potrebna.
+* Programi za zunanje ponudbe v EGP (DMA) so za prodajo digitalnih vsebin s provizijo; za napitnino niso potrebni.
+
 ## Pošiljanje: `navigator.share` iz aplikacije (1.13, most 6)
 
 WebView `navigator.share` nima, zato je „Pošlji“ (povabilo na domači strani, okno vožnje) v aplikaciji samo kopiral. Od 1.13 `Most.poslji(zapis)` odpre sistemski izbirnik, `common.js` pa ga obleče v **spletni standard**: stran kliče `navigator.share` / `navigator.canShare` kot v brskalniku. APK o besedilu, povezavi in gumbih ne ve nič, zato nova vsebina ali nov gumb za pošiljanje ne rabi nove različice (David, 13. 10. 2026: „da se bo lahko most uporabil kadarkoli v prihodnosti brez da bova morala spreminjati apk“).

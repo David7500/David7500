@@ -32,10 +32,22 @@
       oseba v prostem času.
     </p>
 
+    {%- if cilj %}
+    {%- set delez = [100 * cilj.zbrano_centov / cilj.cilj_centov, 100] | min %}
+    <div class="pod-cilj">
+      <p class="pod-namen">{{ cilj.namen }}</p>
+      <div class="pod-trak" role="progressbar" aria-label="Zbrano"
+           aria-valuemin="0" aria-valuemax="{{ cilj.cilj_centov / 100 }}"
+           aria-valuenow="{{ cilj.zbrano_centov / 100 }}"><span style="width:{{ '%.1f' % delez }}%"></span></div>
+      <p class="pod-stevilka"><b>{{ evri(cilj.zbrano_centov) }} €</b> od {{ evri(cilj.cilj_centov) }} €
+        {%- if cilj.zbrano_centov >= cilj.cilj_centov %} · cilj dosežen, hvala!{% endif %}</p>
+    </div>
+    {%- endif %}
+
     <h2>Kam gre denar</h2>
     <p>
-      Večina gre v razvoj: aplikacijo za Android v Googlu Play in boljši
-      strežnik, da stran ostane hitra, ko jo odpre več ljudi.
+      {%- if cilj %} Zdaj zbiramo {{ evri(cilj.cilj_centov) }} €: {{ cilj.zakaj }}.{% endif %}
+      Potem v boljši strežnik, da stran ostane hitra, ko jo odpre več ljudi.
     </p>
 
     {#- Ime ponudnika je izpisano, ker gumb pelje s strani: kdor klikne, mora

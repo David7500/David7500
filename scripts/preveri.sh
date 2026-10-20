@@ -87,6 +87,8 @@ api "ista postaja"        "/api/connections?from=Ljubljana&to=Ljubljana" 400
 api "neobstojeca postaja" "/api/connections?from=Nikjer&to=Maribor"      404
 api "neobstojec trip"     "/api/train/3G?trip=999999999"                 404
 api "nesmiseln datum"     "/api/connections?from=Ljubljana&to=Maribor&date=neki" 400
+# Kartica na domači strani bere cilj zbiranja; 404 bi jo tiho skril.
+api "cilj zbiranja"       /api/podpora                                   200
 # Pregled za skrbnika ne sme biti odprt. 404 brez zetona (pot naj ne obstaja
 # za nikogar, ki ga nima) in 403 z napacnim (tipkarska napaka se mora lociti
 # od pozabljene nastavitve).
