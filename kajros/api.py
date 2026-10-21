@@ -32,7 +32,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, donacije, hoja, journey, lpp, markdown,
                nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot, pripni, pristanek,
-               server, stats, stik, tiri, viri, zamude_sz, zapore, zdravje)
+               server, stats, stik, tiri, viri, zamude_sz, zapore, zasedenost, zdravje)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -382,6 +382,7 @@ templates.env.globals["baza"] = config.BASE_URL
 templates.env.globals["donacije"] = config.DONACIJE
 templates.env.globals["stik_obrazec"] = config.STIK_OBRAZEC
 templates.env.globals["deli"] = config.DELI
+templates.env.globals["zasedenost"] = config.ZASEDENOST
 
 
 def _conn():
@@ -622,8 +623,8 @@ def auth_md():
         f"description [{b_}/openapi.json]({b_}/openapi.json)\n\n"
         "## Terms\n\n"
         "Data is CC BY-SA 4.0; attribution (kajros.app, IJPP data via NAP) is a "
-        "condition of use. The write paths (`POST /stik`, `POST /api/deli`) are "
-        "for visitors, not for agents.\n",
+        "condition of use. The write paths (`POST /stik`, `POST /api/deli`, "
+        "`POST /api/zasedenost`) are for visitors, not for agents.\n",
         media_type="text/markdown; charset=utf-8")
 
 
@@ -693,12 +694,17 @@ def _stik_vklopljen() -> None:
 
 
 @app.get("/stik", response_class=HTMLResponse, include_in_schema=False)
-def stik_stran(request: Request, poslano: int = 0):
-    """Obrazec za sporočilo. Žeton v njem nosi čas izdaje (glej `stik.py`)."""
+def stik_stran(request: Request, poslano: int = 0, prijava: int | None = Query(None, ge=1)):
+    """Obrazec za sporočilo. Žeton v njem nosi čas izdaje (glej `stik.py`).
+
+    `prijava` je gumb „Prijavi“ pri objavljeni opombi potnika (DSA, čl. 16):
+    obrazec ima že vpisano, katero opombo kdo prijavlja.
+    """
     _stik_vklopljen()
     return templates.TemplateResponse(request, "stik.html", {
         "zeton": stik.zeton(), "poslano": bool(poslano), "anonimno_poslano": poslano == 2,
         "najdaljse": stik.NAJDALJSE,
+        "besedilo": f"Prijavljam opombo potnika št. {prijava}, ker " if prijava else "",
     })
 
 
@@ -751,6 +757,8 @@ def _stik_sprejmi(request: Request, polja: dict):
     def p(ime: str) -> str:
         return (polja.get(ime) or [""])[0]
 
+    if p("opomba_trip"):
+        return _stik_opomba(request, p)
     email, besedilo = p("email"), p("besedilo")
     anonimno = p("anonimno") == "1"
     with _conn() as conn:
@@ -771,6 +779,84 @@ def _stik_sprejmi(request: Request, polja: dict):
     # Preusmeritev po uspehu, ne izris: brez nje osvežitev strani pošlje
     # sporočilo še enkrat in v nabiralniku sta dva enaka.
     return RedirectResponse(f"/stik?poslano={2 if anonimno else 1}", status_code=303)
+
+
+def _stik_opomba(request: Request, p) -> JSONResponse:
+    """Komentar k vožnji iz okna vožnje (`zasedenost.js`): v nabiralnik, ne javno.
+
+    Ista pot in iste varovalke kot sporočilo (`stik.sprejmi`), le odgovor je
+    JSON, ker obrazec ni stran: okno vožnje ostane, kjer je. Javen je komentar
+    šele, ko ga skrbnik objavi.
+    """
+    if not config.ZASEDENOST:
+        raise HTTPException(status_code=404)
+    with _conn() as conn:
+        try:
+            besedilo, kontekst = zasedenost.preveri_opombo(
+                conn, p("opomba_trip"), p("opomba_datum"), p("opomba_postaja"), p("besedilo"))
+            stik.sprejmi(
+                conn, email="", besedilo=besedilo, anonimno=True,
+                zeton_iz_obrazca=p("zeton"), vaba=p("naslov"),
+                kljuc=stik.kljuc_posiljatelja(request.headers),
+                drzava=request.headers.get("cf-ipcountry", ""),
+                naprava=obisk.naprava(request.headers.get("user-agent", "")),
+                opomba=kontekst,
+                meje=(zasedenost.OPOMBA_NAJKRAJSE, zasedenost.OPOMBA_NAJDALJSE))
+        except (stik.Zavrnjeno, zasedenost.Zavrnjeno) as e:
+            return JSONResponse({"napaka": str(e)}, status_code=getattr(e, "status", 400))
+    return JSONResponse({"poslano": True})
+
+
+@app.get("/api/zasedenost")
+def api_zasedenost(trip: str = Query(..., max_length=80),
+                   date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                   postaja: str | None = Query(None, max_length=120)):
+    """Zasedenost ene vožnje po poročilih potnikov, za okno vožnje.
+
+    Današnja poročila tega odhoda, prejšnji odhod v isto smer (je danes koga
+    pustil zunaj, je pravkar odpeljal), povzetek zadnjih osmih tednov z vzorcem
+    in objavljeni komentarji. Vožnja brez zbiranja (mestni LPP) vrne
+    `vklopljeno: false`. Žeton je za komentar skozi `POST /stik`.
+    """
+    if not config.ZASEDENOST:
+        raise HTTPException(status_code=404)
+    with _conn() as conn:
+        try:
+            out = zasedenost.pregled(conn, trip, date, postaja)
+        except zasedenost.Zavrnjeno as e:
+            return {"vklopljeno": False, "razlog": str(e)}
+    out["zeton"] = stik.zeton() if config.STIK_OBRAZEC else None
+    return out
+
+
+@app.post("/api/zasedenost")
+async def api_zasedenost_porocilo(request: Request):
+    """Potnik javi, kako polno je: en dotik v oknu vožnje.
+
+    Telo je JSON `{trip_id, service_date, postaja, stopnja, naprava}`, za
+    preklic `{..., preklic: true}`. Šesta pisalna pot (21. 10. 2026); vsa
+    varovalka je v `zasedenost.py`. `application/json` iz istega razloga kot
+    pri `/api/deli`: brskalnik pred tujo zahtevo vpraša CORS.
+    """
+    if not config.ZASEDENOST:
+        raise HTTPException(status_code=404)
+    if not deljenje.je_json(request.headers.get("content-type", "")):
+        raise HTTPException(415, "telo mora biti application/json")
+    try:
+        podatki = json.loads(await _preberi_telo(request))
+    except (ValueError, RecursionError):
+        raise HTTPException(400, "telo ni veljaven JSON") from None
+    if not isinstance(podatki, dict):
+        raise HTTPException(400, "telo mora biti objekt")
+    return await run_in_threadpool(_zasedenost_porocilo, request, podatki)
+
+
+def _zasedenost_porocilo(request: Request, podatki: dict):
+    try:
+        with _conn() as conn:
+            return zasedenost.sprejmi(conn, podatki, stik.kljuc_posiljatelja(request.headers))
+    except zasedenost.Zavrnjeno as e:
+        return JSONResponse({"napaka": str(e), "koda": e.koda}, status_code=e.status)
 
 
 @app.post("/api/deli")
@@ -3563,9 +3649,11 @@ def admin_podatki(request: Request,
         # bi pregled padel na „no such table", kar je videti kot okvara,
         # pomeni pa samo, da obrazca ni. Isti razlog kot pri štetju zgoraj.
         stik.init(conn)
+        zasedenost.init(conn)
         out["sporocila"] = {"vklopljeno": config.STIK_OBRAZEC,
                             **stik.stevec(conn),
-                            "seznam": stik.seznam(conn, limit=100)}
+                            "seznam": zasedenost.oznaci_objavljene(
+                                conn, stik.seznam(conn, limit=100))}
         # Ali povezava s Ko-fi stoji in kaj je prišlo.
         out["kofi"] = donacije.pregled(conn)
         # Samo število za značko; zemljevid in sledi so v `/admin/deljenje`.
@@ -3649,9 +3737,9 @@ def admin_deljenje(request: Request,
 
 @app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)
 async def admin_sporocilo(request: Request, id_: int):
-    """Označi sporočilo za prebrano ali ga izbriši.
+    """Označi sporočilo za prebrano ali ga izbriši; komentar k vožnji objavi ali umakni.
 
-    Dejanji sta na **isti poti** in ne vsaka na svoji: pisalne poti so
+    Dejanja so na **isti poti** in ne vsako na svoji: pisalne poti so
     naštete v `test_pisalne_poti_so_nastete` in vsaka nova je odločitev,
     ne podrobnost. Žeton je isti kot za pregled; brez njega poti ni (404).
     """
@@ -3662,9 +3750,18 @@ async def admin_sporocilo(request: Request, id_: int):
 
 
 def _admin_sporocilo(id_: int, polja: dict) -> dict:
+    akcija = (polja.get("akcija") or [""])[0]
     with _conn() as conn:
-        if (polja.get("akcija") or [""])[0] == "brisi":
+        zasedenost.init(conn)
+        if akcija == "brisi":
+            # Izbrisano sporočilo ne sme ostati objavljeno kot opomba.
+            zasedenost.umakni(conn, id_)
             return {"id": id_, "izbrisano": stik.izbrisi(conn, id_)}
+        # Komentar k vožnji: objava in umik na isti poti (`zasedenost.py`).
+        if akcija == "objavi":
+            return {"id": id_, "objavljeno": zasedenost.objavi(conn, id_)}
+        if akcija == "umakni":
+            return {"id": id_, "objavljeno": not zasedenost.umakni(conn, id_)}
         prebrano = (polja.get("prebrano") or ["1"])[0] != "0"
         stik.oznaci_prebrano(conn, id_, prebrano)
     return {"id": id_, "prebrano": prebrano}

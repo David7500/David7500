@@ -1225,11 +1225,31 @@ function posodobiDeli() {
   if (nova) deliEl.dispatchEvent(new Event("deli-voznja"));
 }
 
+// Razdelek o zasedenosti (`zasedenost.js`) dobi vožnjo in postajo od okna:
+// postajo „pri tebi“, sicer tisto, do katere vozilo pride naslednjo, pred
+// odhodom izhodišče. Kdor je ostal na postaji, pride s table, ta pa postajo nosi.
+const zasEl = document.getElementById("zasedenost");
+
+function posodobiZasedenost() {
+  const run = state.run;
+  if (!zasEl || !run || !run.trip_id) return;
+  const tvoja = yourStop(run.stops);
+  const meja = run.last_measured_seq;
+  const naslednja = meja == null ? null
+    : run.stops.find((s) => s.stop_seq > meja && s !== run.stops[run.stops.length - 1]);
+  const postaja = (tvoja || naslednja || run.stops[0]).name;
+  const d = zasEl.dataset;
+  const nova = d.trip !== run.trip_id || d.dan !== run.service_date || d.privzeta !== postaja;
+  Object.assign(d, { trip: run.trip_id, dan: run.service_date, privzeta: postaja });
+  if (nova) zasEl.dispatchEvent(new Event("zas-voznja"));
+}
+
 function renderRunHead() {
   const run = state.run;
   if (!run) return;
   posljiEl.hidden = false;
   posodobiDeli();
+  posodobiZasedenost();
   // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in gre
   // nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
   const veriga = vehicleChainHtml();

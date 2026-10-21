@@ -22,6 +22,9 @@
   {%- if deli %}
   <link rel="stylesheet" href="{{ s('deli.css') }}">
   {%- endif %}
+  {%- if zasedenost %}
+  <link rel="stylesheet" href="{{ s('zasedenost.css') }}">
+  {%- endif %}
 </head>
 <body class="train-page net-{{ network | default('zeleznica') }}"
       data-train-no="{{ train_no }}" data-network="{{ network | default('zeleznica') }}">
@@ -73,6 +76,11 @@
       </div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
+      {#- Zgoraj samo ena vrstica, in to le, kadar o zasedenosti kaj vemo
+          (David, 21. 10. 2026: „ne sme veliko motiti“); razdelek je spodaj. #}
+      {%- if zasedenost %}
+      <a class="zas-vrh" id="zas-vrh" href="#zasedenost" hidden></a>
+      {%- endif %}
       {#- Si na tem vlaku? Deli, kje je: samo, ko vožnja vozi ali odpelje v
           30 min (`train.js`, `posodobiDeli`); vožnjo izbere okno, ne potnik. #}
       {%- if deli %}
@@ -126,7 +134,15 @@
       <div id="train-opozorila"></div>
       <div id="train-alerts"></div>
       </div>
-      <div id="run-timeline"><div class="empty-state is-busy">nalagam postanke …</div></div>
+      {#- Ovoj, ker na namizju časovnica stoji desno od „zdaj“: razdelek o
+          zasedenosti mora biti pod njo v istem stolpcu, ne tretji stolpec.
+          Svoj element in ne del časovnice, ki jo prikaz na 30 s preriše. #}
+      <div class="run-pot">
+        <div id="run-timeline"><div class="empty-state is-busy">nalagam postanke …</div></div>
+        {%- if zasedenost %}
+        <section class="zas" id="zasedenost" aria-label="Zasedenost po poročilih potnikov" hidden></section>
+        {%- endif %}
+      </div>
     </section>
 
     <section class="col col-hist adv-only">
@@ -165,6 +181,9 @@
   <script src="{{ s('train.js') }}"></script>
   {%- if deli %}
   <script src="{{ s('deli.js') }}"></script>
+  {%- endif %}
+  {%- if zasedenost %}
+  <script src="{{ s('zasedenost.js') }}"></script>
   {%- endif %}
   {{ vec_list() }}
 </body>

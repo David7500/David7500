@@ -52,7 +52,7 @@ SŽ nimajo javnega API-ja; `potniski.sz.si` za Cloudflarom, ki od 7. 10. 2026 sp
 * **Voznoredne sekunde štejejo od poldneva minus 12 h, ne od polnoči** (GTFS). Epoha ↔ `t_s` samo prek `stats.polnoc()` ali `stats.abs_time()`; na dan premika ure je polnoč za uro zamaknjena (25. 10. 2026 bi bila zamuda LPP +60 min).
 * **Meja med meritvijo in napovedjo = `stats.last_measured()`.** Kar je za zadnjim prevoženim postankom, je napoved — vsak prikaz zamude to upošteva. Napaka je bila že dvakrat na zaslonu. **Trenutna zamuda = `stats.trenutna_zamuda(lm)`, ne `lm["delay_s"]`**: vlak, ki stoji med postajama, ima po SŽ višjo. Mejo straži primerjava z zemljevidom SŽ (`skladnost_sz` v zdravju): 11.–16. 10. 2026 je bil prikaz pri 42 % voženj z zamudo prenizek, zdravje pa zeleno (`zajem.md`).
 * **Omrežje filtriraj znotraj poizvedbe, ne za njo** (`WHERE t.network = ?`), in ne z `(? IS NULL OR t.network = ?)` — tega SQLite ne uporabi za indeks (1,7 s namesto 6 ms, 18. 10. 2026). Bil že trikrat vzrok počasnosti.
-* **Pisalne poti natanko pet** — `POST /stik`, `POST /admin/sporocila/{id}`, `POST /api/deli` (deljenje lege, od 25. 9. 2026), `POST /admin/obvestila` (obvestila potnikom, od 28. 9. 2026, za žetonom) in `POST /donacije/ko-fi` (plačila, ki jih javi Ko-fi, od 20. 10. 2026, za žetonom Ko-fi). Vse ostalo `GET`. Nova pisalna pot = zavestna odločitev: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke na enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`, `obvestila.py`, `donacije.py`).
+* **Pisalne poti natanko šest** — `POST /stik`, `POST /admin/sporocila/{id}`, `POST /api/deli` (deljenje lege, od 25. 9. 2026), `POST /admin/obvestila` (obvestila potnikom, od 28. 9. 2026, za žetonom), `POST /donacije/ko-fi` (plačila, ki jih javi Ko-fi, od 20. 10. 2026, za žetonom Ko-fi) in `POST /api/zasedenost` (kako polno je vozilo, od 21. 10. 2026, za `KAJROS_ZASEDENOST`; komentar gre skozi `/stik`). Vse ostalo `GET`. Nova pisalna pot = zavestna odločitev: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša. Varovalke na enem mestu v modulu, ki piše (`stik.py`, `deljenje.py`, `obvestila.py`, `donacije.py`, `zasedenost.py`).
 * **V enem SQL stavku ne mešaj `?` in `:ime`** — sqlite veže po vrstnem redu pojavitve, tiho vrne napačne vrstice.
 * **`run` hrani zadnje stanje postanka**, zato `MAX(stop_seq)` po koncu vožnje ni dokaz, da vozilo še vozi. Živost sklepaj iz `_LIVE_SQL`.
 * **Spremembo prikaza poglej, preden jo razglasiš za končano.** `chromium --headless --disable-gpu --window-size=1850,1000 --virtual-time-budget=7000 --screenshot=$PWD/posnetki/x.png <url>`. V `/tmp` chromium ne more pisati; `posnetki/` v `.gitignore`. **Ne v `$HOME`.**
@@ -88,24 +88,21 @@ kajros/
   nap.py         lege IJPP naravnost z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
   promet.py      promet na cestah z NAP (FCD, potovalni časi AC), svoja nit in baza `promet.sqlite`
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
-  markdown.py    stran kot Markdown za agente z `Accept: text/markdown` (middleware v api.py)
-  stik.py        sporočila obiskovalcev; piše iz zahteve
-  obvestila.py   obvestila skrbnika potnikom: vsako z rokom in omrežjem
-  donacije.py    plačila s Ko-fi (webhook): znesek, valuta, čas -- brez imena darovalca
+  stik.py        sporočila obiskovalcev; obvestila.py skrbnik potnikom (z rokom); donacije.py Ko-fi brez imena
   viri.py        register virov in dnevnik branj v pomnilniku: zavihek Viri v /admin, preverjanje
   zdravje.py     kdaj je zajem zdrav (barve v /admin) in kaj gre v pošto (`posta`: samo, kar rabi poseg); opozorila.py pošlje (`.opozorila`)
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
+  zasedenost.py  kako polno je vozilo po poročilih potnikov: en dotik, povzetek po smeri in dnevu
   server.py      lifespan: bootstrap + zajem v ozadnji niti; cli.py ukazna vrstica
-  api.py         FastAPI: /api/* + strani /app*
-  templates/     home, connections (vstopna), dashboard, train, alerts
-  static/        base.css (barvni žetoni) + common.js + po ena .js/.css na stran
+  api.py         FastAPI: /api/* + strani /app*; markdown.py stran za agente (`Accept: text/markdown`)
+  templates/ · static/   predloge; base.css (barvni žetoni) + common.js + po ena .js/.css na stran
 tests/           pytest (requirements-dev.txt) · scripts/ dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
 android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vir 3D /o-nas, gradi.sh → static/o-nas/o3.js
 ```
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavlja `service_day('S1','2026-08-31')`, testi dan računajo (`_pred`). Ko se datuma ujameta: `UNIQUE constraint failed` — 31. 8. 2026 podrlo pet zelenih preizkusov. Računani vstavki zato skozi `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `odklon` (lege izven trase, od 11. 10. 2026) · `lega` + `gps_prehod` (lege 14 dni, prehod brez trase, od 12. 10. 2026) · `obvestilo` (obvestila skrbnika potnikom) · `donacija` (plačila s Ko-fi) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). V `promet.sqlite` (od 14. 10. 2026): `fcd` (dnevnik sprememb po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` (kdaj je bil podatek) · `ac`.
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` (poročila potnikov) · `peron` + `peron_postaja` (tir s table SŽ) · `sz_zamuda` + `lpp_zamuda` (drugi vir zamud vlakov in mestnega LPP, za primerjavo z derp.si) · `odklon` (lege izven trase, od 11. 10. 2026) · `lega` + `gps_prehod` (lege 14 dni, prehod brez trase, od 12. 10. 2026) · `obvestilo` (obvestila skrbnika potnikom) · `donacija` (plačila s Ko-fi) · `zasedenost` + `opomba` (poročila potnikov in objavljeni komentarji) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). V `promet.sqlite` (od 14. 10. 2026): `fcd` (dnevnik sprememb po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` (kdaj je bil podatek) · `ac`.
 
 ## Omrežji: `network` ni `mode`
 
@@ -154,7 +151,7 @@ Poti za brskalnike in iskalnike: `/favicon.ico`, `/robots.txt`, `/sitemap.xml`, 
 
 Ciljni uporabnik ni dispečer, ampak potnik z vprašanjem *„kdaj mi pelje in koliko zamuja“*. Iskalnik povezav = vstopna stran; zemljevid ostane, ker je uporaben, a ni cilj razvoja. Globlja analiza (vreme kot **dejavnik** zamude) čaka 2–3 mesece zajema — do takrat se vreme samo *pokaže ob* zamudi.
 
-Ne bo, ker podatka ni: cene, sestava vlaka, zasedenost. **Tir** od 25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20 izmerjenih); stran ni API, zato je dodatek, ki sme izginiti.
+Ne bo, ker podatka ni: cene, sestava vlaka. **Zasedenost** od 21. 10. 2026 iz poročil potnikov (`zasedenost.py`, za stikalom); noben vir je ne objavi, validacije ima DUJPP. **Tir** od 25. 9. 2026, s table SŽ in samo na postajah, kjer ga SŽ objavi (14 od 20 izmerjenih); stran ni API, zato je dodatek, ki sme izginiti.
 
 ## Konvencije
 
@@ -187,6 +184,7 @@ Poglobljena pravila so v `.claude/rules/`, naložijo se ob dotiku ustreznih dato
 | `objava.md` | `deploy/**`, `scripts/**` | malina, namestitev, vleka baze |
 | `android.md` | `android/**` | ovoj z WebView, meja izvora, budilka, orodja |
 | `deljenje.md` | `deljenje.py`, `deli.*`, `DeljenjeStoritev.kt` | lega potnikov: kaj se pokaže, kaj hrani, varovalke |
+| `zasedenost.md` | `zasedenost.*` | poročila o zasedenosti: ključ odhoda, smer, povzetek, komentarji |
 
 Razrez **po datotekah, ki znanje rabijo**, ne po temah: le to se pozna pri porabi konteksta.
 

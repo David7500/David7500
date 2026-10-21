@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS sporocilo (
     besedilo TEXT    NOT NULL,
     drzava   TEXT,                      -- dvočrkovna, iz Cloudflarove glave
     naprava  TEXT,                      -- telefon | računalnik | ...
-    prebrano INTEGER NOT NULL DEFAULT 0
+    prebrano INTEGER NOT NULL DEFAULT 0,
+    opomba   TEXT                       -- JSON vožnje, kadar je komentar (`zasedenost.py`)
 );
 CREATE INDEX IF NOT EXISTS ix_sporocilo_cas ON sporocilo(prispelo DESC);
 """
@@ -97,6 +98,9 @@ class Zavrnjeno(Exception):
 
 def init(conn: sqlite3.Connection) -> None:
     conn.executescript(SHEMA)
+    # Komentarji k vožnji (21. 10. 2026) gredo skozi ta nabiralnik.
+    if "opomba" not in {r[1] for r in conn.execute("PRAGMA table_info(sporocilo)")}:
+        conn.execute("ALTER TABLE sporocilo ADD COLUMN opomba TEXT")
     conn.commit()
 
 
@@ -179,8 +183,8 @@ def _preveri_dnevni_strop(conn: sqlite3.Connection) -> None:
 
 # ------------------------------------------------------------- sprejem
 
-def preveri_vsebino(email: str, besedilo: str,
-                    anonimno: bool = False) -> tuple[str, str]:
+def preveri_vsebino(email: str, besedilo: str, anonimno: bool = False,
+                    meje: tuple[int, int] = (NAJKRAJSE, NAJDALJSE)) -> tuple[str, str]:
     """Pospravi in preveri, kar je vpisal človek. Vrne očiščeno.
 
     Anonimno sporočilo (predlog, ki odgovora ne potrebuje) shrani prazen
@@ -195,18 +199,22 @@ def preveri_vsebino(email: str, besedilo: str,
                             "ali obkljukaj, da pošiljaš anonimno.")
         if len(email) > NAJDALJSI_EMAIL or not _EMAIL.match(email):
             raise Zavrnjeno("Ta e-naslov ni videti pravi.")
-    if len(besedilo) < NAJKRAJSE:
+    if len(besedilo) < meje[0]:
         raise Zavrnjeno("Sporočilo je prekratko — napiši, za kaj gre.")
-    if len(besedilo) > NAJDALJSE:
-        raise Zavrnjeno(f"Sporočilo je predolgo (največ {NAJDALJSE} znakov).")
+    if len(besedilo) > meje[1]:
+        raise Zavrnjeno(f"Sporočilo je predolgo (največ {meje[1]} znakov).")
     return email, besedilo
 
 
 def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
             zeton_iz_obrazca: str, vaba: str, kljuc: str,
             drzava: str = "", naprava: str = "",
-            zdaj: float | None = None, anonimno: bool = False) -> int:
+            zdaj: float | None = None, anonimno: bool = False,
+            opomba: str | None = None, meje: tuple[int, int] = (NAJKRAJSE, NAJDALJSE)) -> int:
     """Preveri vse varovalke in shrani. Vrne `id` sporočila.
+
+    `opomba` je komentar k vožnji (`zasedenost.preveri_opombo`): gre skozi iste
+    varovalke in v isti nabiralnik, javen pa je šele, ko ga skrbnik objavi.
 
     Vrstni red ni poljuben: **najprej poceni preverbe brez baze**, šele nato
     poizvedba za dnevni strop. Robot, ki tolče po obrazcu, tako ne povzroči
@@ -217,7 +225,7 @@ def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
     if (vaba or "").strip():
         return 0
     _preveri_zeton(zeton_iz_obrazca, zdaj)
-    email, besedilo = preveri_vsebino(email, besedilo, anonimno)
+    email, besedilo = preveri_vsebino(email, besedilo, anonimno, meje)
     # Od preverbe pogostosti do zapisa je eno dejanje. Sprejem teče v niti
     # (`api.stik_poslji`), in dve hkratni pošiljanji istega pošiljatelja bi
     # sicer obe prešli `NA_URO`, preden bi katero zapisalo svoj čas.
@@ -226,10 +234,10 @@ def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
         _preveri_dnevni_strop(conn)
 
         cur = conn.execute(
-            "INSERT INTO sporocilo(prispelo, email, besedilo, drzava, naprava) "
-            "VALUES(?, ?, ?, ?, ?)",
+            "INSERT INTO sporocilo(prispelo, email, besedilo, drzava, naprava, opomba) "
+            "VALUES(?, ?, ?, ?, ?, ?)",
             (_zdaj().isoformat(timespec="seconds"), email, besedilo,
-             (drzava or "")[:2].upper() or None, (naprava or "")[:20] or None))
+             (drzava or "")[:2].upper() or None, (naprava or "")[:20] or None, opomba))
         conn.commit()
         _zabelezi_poslano(kljuc, zdaj)
     return int(cur.lastrowid)
@@ -239,7 +247,7 @@ def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
 
 def seznam(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
     vrstice = conn.execute(
-        "SELECT id, prispelo, email, besedilo, drzava, naprava, prebrano "
+        "SELECT id, prispelo, email, besedilo, drzava, naprava, prebrano, opomba "
         "FROM sporocilo ORDER BY prispelo DESC, id DESC LIMIT ?",
         (limit,)).fetchall()
     return [dict(v) for v in vrstice]

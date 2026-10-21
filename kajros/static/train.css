@@ -588,7 +588,7 @@
     width: 400px;
     flex-shrink: 0;
   }
-  body:not(.is-advanced) .col-run > #run-timeline {
+  body:not(.is-advanced) .col-run > .run-pot {
     flex: 1 1 auto;
     min-width: 0;
     /* Vrstica postaje ima ime levo in zamudo desno. Pri 750 px je med njima

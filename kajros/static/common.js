@@ -227,6 +227,7 @@ const SKLONI = {
   prestop: ["prestop", "prestopa", "prestopi", "prestopov"],
   postanek: ["postanek", "postanka", "postanki", "postankov"],
   navodilo: ["navodilo", "navodili", "navodila", "navodil"],
+  porocilo: ["poročilo", "poročili", "poročila", "poročil"],
 };
 
 function sklon(n, kljuc) {

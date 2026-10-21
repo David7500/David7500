@@ -58,10 +58,12 @@ def test_naslov_ip_ni_v_shemi(conn):
     Kdor bo kdaj dodal stolpec za IP „samo za odkrivanje spama", naj tu
     pade. Omejevanje teče nad zgoščeno vrednostjo v pomnilniku in prav to
     je obljuba na strani o zasebnosti.
+
+    `opomba` (21. 10. 2026) je vožnja, h kateri je komentar -- ne pošiljatelj.
     """
     stolpci = {v[1] for v in conn.execute("PRAGMA table_info(sporocilo)")}
     assert stolpci == {"id", "prispelo", "email", "besedilo", "drzava",
-                       "naprava", "prebrano"}
+                       "naprava", "prebrano", "opomba"}
 
 
 # --------------------------------------------------------------- vsebina

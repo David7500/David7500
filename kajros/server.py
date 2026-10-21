@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, nap, obisk,
                ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
-               weather, zamude_lpp, zamude_sz)
+               weather, zamude_lpp, zamude_sz, zasedenost)
 
 TZ = ZoneInfo(config.TIMEZONE)
 _stop = threading.Event()
@@ -593,6 +593,16 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     conn.rollback()
                     _log(f"števcev obiska ni bilo mogoče obrezati: {exc}")
 
+            # Poročila o zasedenosti 13 mesecev (`zasedenost.HRAMBA_DNI`).
+            if _strezemo and config.ZASEDENOST:
+                try:
+                    n = zasedenost.pocisti(conn)
+                    if n:
+                        _log(f"poročila o zasedenosti obrezana: {n} vrstic")
+                except Exception as exc:
+                    conn.rollback()
+                    _log(f"poročil o zasedenosti ni bilo mogoče obrezati: {exc}")
+
             # Razrezi cez vso zgodovino: odgovor se med dvema dnevoma skoraj
             # ne spremeni -- en nov dan je 1/90 vzorca. Zato enkrat na dan,
             # strani pa ga preberejo iz baze v milisekundi.
@@ -707,6 +717,12 @@ async def lifespan(app):
         conn = db.connect()
         try:
             deljenje.init(conn)
+        finally:
+            conn.close()
+    if config.ZASEDENOST:
+        conn = db.connect()
+        try:
+            zasedenost.init(conn)
         finally:
             conn.close()
     # Vedno, ne le z žetonom Ko-fi: tega `deploy/kofi.sh` zapiše brez

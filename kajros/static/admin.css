@@ -241,6 +241,13 @@ a.adm-k-povezava:hover { border-color: var(--line-firm); background: var(--bg-ra
 .adm-sp-brisi { margin-left: 0; color: var(--ink-faint); }
 .adm-sp-brisi:hover { color: var(--sev-bad); border-color: var(--sev-bad); }
 
+/* Komentar k vožnji (`zasedenost.py`): objavi ga skrbnik, v barvi deljenja,
+   ker je to glas potnikov. Gumb „prebrano“ za njim ne odriva več desno. */
+.adm-sp-objavi { color: var(--deli-gumb); border-color: var(--deli-tiho); }
+.adm-sp-objavi + .adm-sp-gumb { margin-left: 0; }
+.adm-sp-opomba { margin: 0 0 6px; font: 400 12px/1.4 var(--sans); color: var(--ink-mute); }
+.adm-sp-opomba b { color: var(--deli-gumb); font-weight: 600; }
+
 /* ---------- deljenje ---------- */
 
 /* Značka na zavihku je živa stvar (kdo deli ta hip), ne nabiralnik -- zato

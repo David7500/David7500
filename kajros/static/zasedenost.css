@@ -1,0 +1,80 @@
+/* Zasedenost po poročilih potnikov (`zasedenost.js`). Barve deljenja lege
+   (`--deli-*`): oboje prihaja od potnikov, oranžna ostane zamuda
+   (`oznake.md`). Polnost pove risba, ne barva. Prototip potrdil David
+   21. 10. 2026: zgoraj ena vrstica brez okvirja, razdelek na dnu. */
+
+.zas-vrh {
+  display: flex; align-items: center; gap: 10px; margin: 8px 16px 2px;
+  color: var(--deli-gumb); text-decoration: none; font: 400 13px/1.35 var(--sans);
+}
+.zas-vrh span { color: var(--ink-dim); }
+.zas-vrh b { font-weight: 600; color: var(--ink); }
+.zas-vrh small { display: block; font-size: 12px; color: var(--ink-mute); }
+.zas-vrh svg { flex: none; }
+
+.zas {
+  margin: 18px 12px 8px; padding: 12px 12px 10px; border: 1px solid var(--line);
+  border-radius: 16px; background: var(--bg-raised); color: var(--ink); font-family: var(--sans);
+}
+.zas-glava { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.zas-naslov { margin: 0; font: 600 14px/1.3 var(--sans); color: var(--ink); }
+.zas-postaja {
+  padding: 0; border: 0; background: none; text-align: right;
+  font: 400 12.5px/1.3 var(--sans); color: var(--ink-dim);
+}
+.zas-postaja u { text-decoration: none; color: var(--deli-gumb); }
+.zas-izbira {
+  max-width: 62%; padding: 4px 6px; border: 1px solid var(--line-firm); border-radius: 8px;
+  background: var(--bg-panel); color: var(--ink); font: 400 13px/1.3 var(--sans);
+}
+
+.zas-stopnje { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; margin-top: 8px; }
+.zas-stopnja {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px;
+  padding: 6px 2px 5px; border: 1px solid var(--line-firm); border-radius: 12px;
+  background: var(--bg-panel); color: var(--deli-gumb);
+  font: 500 11px/1.15 var(--sans); text-align: center;
+}
+.zas-stopnja span { color: var(--ink-dim); }
+.zas-stopnja.je-izbrana { border-color: transparent; background: var(--deli-gumb); color: var(--deli-na-gumb); }
+.zas-stopnja.je-izbrana span { color: var(--deli-na-gumb); font-weight: 600; }
+.zas-stopnja:disabled { opacity: .45; }
+
+.zas-pod { margin: 9px 0 0; font: 400 13px/1.45 var(--sans); color: var(--ink-dim); }
+.zas-pod b { font-weight: 600; color: var(--ink); }
+.zas-tiho { font-size: 12px; color: var(--ink-mute); }
+.zas-hvala { margin: 9px 0 0; font: 400 13px/1.4 var(--sans); color: var(--ink-dim); }
+.zas-hvala b { color: var(--ink); }
+.zas-hvala.je-napaka { color: var(--sev-bad); }
+.zas-povezava {
+  display: block; margin-top: 6px; padding: 0; border: 0; background: none; text-align: left;
+  font: 500 13px/1.3 var(--sans); color: var(--deli-gumb);
+}
+.zas-tiho-gumb {
+  margin-left: 4px; padding: 0; border: 0; background: none;
+  font: 400 12.5px/1.3 var(--sans); color: var(--ink-mute); text-decoration: underline;
+}
+
+.zas-polje {
+  box-sizing: border-box; width: 100%; min-height: 58px; margin-top: 8px; padding: 8px 10px;
+  border: 1px solid var(--line-firm); border-radius: 10px; background: var(--bg-panel);
+  color: var(--ink); font: 400 14px/1.4 var(--sans); resize: none;
+}
+.zas-vrsta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.zas-gumb {
+  flex: none; padding: 7px 16px; border: 0; border-radius: var(--r-pilula);
+  background: var(--deli-gumb); color: var(--deli-na-gumb); font: 600 13px/1 var(--sans);
+}
+
+.zas-opombe { margin-top: 8px; }
+.zas-opombe summary { font: 500 13px/1.3 var(--sans); color: var(--ink-dim); cursor: pointer; }
+.zas-opomba {
+  margin-top: 6px; padding: 7px 10px; border-left: 2px solid var(--deli-tiho);
+  border-radius: 0 10px 10px 0; background: var(--bg-panel); font: 400 13px/1.4 var(--sans);
+}
+.zas-opomba small { display: block; font-size: 11.5px; color: var(--ink-mute); }
+/* Besedilo je vpisal potnik: prelome ohrani slog, ne pretvorba v `<br>`. */
+.zas-opomba p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.zas-prijavi { font-size: 11.5px; color: var(--ink-faint); }
+.zas-noga { margin: 10px 0 0; font: 400 11.5px/1.35 var(--sans); color: var(--ink-faint); }
+.zas-noga a { color: var(--ink-mute); }

@@ -1030,11 +1030,15 @@ function sporocila(d) {
           : `<span class="adm-sp-od">anonimno · brez odgovora</span>`}
         <span class="adm-sp-kdaj">${escapeHtml(v.prispelo.slice(0, 16).replace("T", " "))}</span>
         <span class="adm-sp-kje">${escapeHtml([v.drzava, v.naprava].filter(Boolean).join(" · "))}</span>
+        ${v.opomba ? `<button type="button" class="adm-sp-gumb adm-sp-objavi" data-akcija="${v.objavljeno ? "umakni" : "objavi"}">
+          ${v.objavljeno ? "umakni z vožnje" : "objavi pri vožnji"}</button>` : ""}
         <button type="button" class="adm-sp-gumb" data-prebrano="${v.prebrano ? 0 : 1}">
           ${v.prebrano ? "označi kot novo" : "prebrano"}
         </button>
         <button type="button" class="adm-sp-gumb adm-sp-brisi" data-brisi="1">izbriši</button>
       </header>
+      ${v.opomba ? `<p class="adm-sp-opomba">opomba k vožnji ${escapeHtml(v.opomba.oznaka)}, ${escapeHtml(v.opomba.datum)}
+        · ${v.objavljeno ? "<b>objavljena</b>" : "ni objavljena"} · brez imen in osebnih podatkov, sicer ne objavi</p>` : ""}
       <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p>
     </article>`).join("")}</div>`;
   return `${h}</section>`;
@@ -1052,7 +1056,8 @@ async function obSporocilu(e) {
     await fetch(`/admin/sporocila/${id}`, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: gumb.dataset.brisi ? "akcija=brisi" : `prebrano=${gumb.dataset.prebrano}`,
+      body: gumb.dataset.brisi ? "akcija=brisi"
+        : gumb.dataset.akcija ? `akcija=${gumb.dataset.akcija}` : `prebrano=${gumb.dataset.prebrano}`,
     });
     await osvezi();
   } finally {
