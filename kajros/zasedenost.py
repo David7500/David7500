@@ -46,19 +46,17 @@ from . import config, pristanek, stats
 TZ = ZoneInfo(config.TIMEZONE)
 
 #: Davidove stopnje (21. 10. 2026). „polno“ = vsi sedeži zasedeni,
-#: medkrajevni avtobusi stojišč nimajo; „vrsta zunaj“ = ljudje so ostali na
-#: postaji. Indeks + 1 je vrednost v bazi.
+#: medkrajevni avtobusi stojišč nimajo; „vrsta zunaj“ = poln, ljudje čakajo
+#: zunaj ali so ostali na postaji -- to se vidi že pred odhodom, ko avtobus
+#: stoji na peronu, zato ni omejeno na čas odhoda. Indeks + 1 je vrednost v bazi.
 STOPNJE = ("prazno", "pol polno", "skoraj polno", "polno", "vrsta zunaj")
 #: Od te stopnje naprej je vozilo polno -- za „koliko prej priti“.
 POLNO = 4
-ZUNAJ = 5
 
 #: Poročilo velja od ure pred voznoredno uro na postaji do treh ur po njej:
 #: kdor čaka, vidi avtobus na peronu, kdor se pelje, poroča med vožnjo.
 PRED_S = 3600
 PO_S = 3 * 3600
-#: Da so ljudje ostali zunaj, se zgodi ob odhodu, ne pol ure prej.
-ZUNAJ_PRED_S = 600
 #: Zgrešen dotik se da preklicati toliko časa.
 PREKLIC_S = 600
 
@@ -263,10 +261,9 @@ def voznja(conn: sqlite3.Connection, trip_id: str, datum: str) -> Voznja:
         raise Zavrnjeno("Te vožnje ne poznam.", "voznja", 404)
     if not v["vozi"]:
         raise Zavrnjeno("Ta vožnja ta dan ne vozi.", "ne_vozi")
-    # Mestni LPP gneče na postaji nima (David, 21. 10. 2026), ima pa sto
-    # voženj na linijo -- poročila bi bila šum.
-    if v["agency"] == "lpp":
-        raise Zavrnjeno("Za mestne avtobuse LPP zasedenosti ne zbiramo.", "lpp")
+    # Mestni LPP je od 21. 10. 2026 zraven (David: „vklopi za vse“): prej je
+    # bil izklopljen po viru, LPP 25 iz IJPP pa vklopljen -- potnik razlike ne
+    # vidi in je dobil gumbe pri eni liniji LPP, pri drugi ne.
     postanki = [(r["name"], int(r["t_s"])) for r in conn.execute(
         "SELECT st.name, COALESCE(s.dep_s, s.arr_s) AS t_s FROM sched s"
         "  JOIN station st ON st.stop_id = s.stop_id"
@@ -285,6 +282,26 @@ def _ista_smer(nasa: list[str], njihova: list[str]) -> bool:
     avtobus v Kamnik.
     """
     return bool(nasa and njihova) and (nasa[-1] in njihova or njihova[-1] in nasa)
+
+
+def _lpp(agency: str | None) -> bool:
+    return agency in ("lpp", "1118")
+
+
+def _primerljiv(v: Voznja, naprej: list[str], agency: str, train_no: str,
+                njihova: list[str]) -> bool:
+    """Ali poročilo o drugem odhodu pove kaj o tem.
+
+    Medkrajevni in vlaki po smeri, ne glede na prevoznika: potnik v Maribor
+    vzame prvega, ki pelje. LPP samo ista linija v isto smer: na postajališču
+    čakaš na 11, ne na 6, in mestni avtobus do Stadiona ni v isti smeri kot
+    medkrajevni v Maribor, čeprav je Stadion na njegovi poti.
+    """
+    if _lpp(v.agency) != _lpp(agency):
+        return False
+    if _lpp(v.agency) and train_no != v.train_no:
+        return False
+    return _ista_smer(naprej, njihova)
 
 
 # ------------------------------------------------------------------ sprejem
@@ -378,8 +395,6 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
     odhod = stats.polnoc(datum) + t_s
     if not odhod - PRED_S <= t <= odhod + PO_S:
         raise Zavrnjeno("Javiš lahko od ure pred odhodom do treh ur po njem.", "cas")
-    if stopnja == ZUNAJ and t < odhod - ZUNAJ_PRED_S:
-        raise Zavrnjeno("Da so ljudje ostali zunaj, se javi ob odhodu.", "prezgodaj")
 
     with _sprejem:
         _preveri_pogostost(kljuc, t)
@@ -485,6 +500,9 @@ def _te_ni_vzel(conn: sqlite3.Connection, v: Voznja, datum: str, postaja: str,
     od, do = max(zdaj_s - PREJSNJI_ODPELJAL_S, t_s - PREJSNJI_S), min(zdaj_s, t_s - 1)
     if od > do:
         return None
+    # LPP šteje samo ista linija (`_primerljiv`); filter v poizvedbi, ker ima
+    # mestno postajališče v pol ure deset linij.
+    linija, param = (" AND t.train_no = ?", (v.train_no,)) if _lpp(v.agency) else ("", ())
     vrstice = conn.execute(
         "SELECT t.trip_id, t.train_no, t.agency, t.network, t.headsign,"
         "       COALESCE(s.dep_s, s.arr_s) AS t_s, b.stop_seq, sb.name AS naprej"
@@ -494,15 +512,15 @@ def _te_ni_vzel(conn: sqlite3.Connection, v: Voznja, datum: str, postaja: str,
         "  JOIN sched b ON b.trip_id = t.trip_id AND b.stop_seq > s.stop_seq"
         "  JOIN station sb ON sb.stop_id = b.stop_id"
         " WHERE d.date = ? AND t.network = ? AND st.name = ? AND t.trip_id != ?"
-        "   AND t.agency != 'lpp' AND COALESCE(s.dep_s, s.arr_s) BETWEEN ? AND ?"
+        "   AND COALESCE(s.dep_s, s.arr_s) BETWEEN ? AND ?" + linija +
         " ORDER BY t_s DESC, t.trip_id, b.stop_seq",
-        (datum, v.network, postaja, v.trip_id, od, do)).fetchall()
+        (datum, v.network, postaja, v.trip_id, od, do, *param)).fetchall()
     voznje: dict[str, dict] = {}
     for r in vrstice:
         x = voznje.setdefault(r["trip_id"], {**dict(r), "postaje": []})
         x["postaje"].append(r["naprej"])
     for x in voznje.values():                 # najnovejši odhod prvi
-        if _ista_smer(naprej, x["postaje"]):
+        if _primerljiv(v, naprej, x["agency"], x["train_no"], x["postaje"]):
             return {"trip_id": x["trip_id"], "ura": _ura(x["t_s"]),
                     "oznaka": pristanek.ime_voznje(x)}
     return None
@@ -546,7 +564,8 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
         (postaja, v.network, od, datum, t_s - PAS_S, t_s + PAS_S))]
     for r in vrstice:
         r["postaje"] = json.loads(r["naprej"])
-    v_smer = [r for r in vrstice if _ista_smer(naprej, r["postaje"])]
+    v_smer = [r for r in vrstice
+              if _primerljiv(v, naprej, r["agency"], r["train_no"], r["postaje"])]
     obicajno = _obicajno([r for r in v_smer if r["datum"] < datum], datum, t_s)
 
     # Danes poln prejšnji odhod v isto smer: kdor čaka na ta odhod, mora to vedeti.
@@ -575,14 +594,15 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
             (int(t) - OPOMBE_DNI * 86400, v.network, postaja, v.train_no, v.start_s)):
         isti_odhod = (r["agency"], r["train_no"], r["headsign"], r["start_s"]) == k
         if isti_odhod or (r["postaja"] == postaja and abs(r["t_s"] - t_s) <= PAS_S
-                          and _ista_smer(naprej, json.loads(r["naprej"]))):
+                          and _primerljiv(v, naprej, r["agency"], r["train_no"],
+                                          json.loads(r["naprej"]))):
             opombe.append({"id": r["id"], "datum": r["datum"], "dan": _dan(r["datum"]),
                            "postaja": r["postaja"], "besedilo": r["besedilo"]})
         if len(opombe) >= NAJVEC_OPOMB:
             break
 
     return {"vklopljeno": True, "postaja": postaja, "odhod": _ura(t_s),
-            "odhod_ts": stats.polnoc(datum) + t_s, "okno": [PRED_S, PO_S, ZUNAJ_PRED_S],
+            "odhod_ts": stats.polnoc(datum) + t_s, "okno": [PRED_S, PO_S],
             "postaje": [{"ime": p, "ura": _ura(s)} for p, s in v.postanki[:-1]],
             "stopnje": STOPNJE, "danes": danes, "prejsnji": prejsnji,
             "te_ni_vzel": te_ni_vzel, "obicajno": obicajno, "zgodovina": zgodovina,

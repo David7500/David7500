@@ -175,11 +175,16 @@ def test_preklic_samo_kmalu(conn):
     assert len(_vrstice(conn)) == 1
 
 
-@pytest.mark.parametrize("ura,stopnja", [("15:10", 4), ("19:30", 4), ("16:00", 5)])
-def test_cas_porocila(conn, ura, stopnja):
-    """Od ure pred odhodom do treh ur po njem; „vrsta zunaj“ šele ob odhodu."""
+@pytest.mark.parametrize("ura", ["15:10", "19:30"])
+def test_cas_porocila(conn, ura):
+    """Od ure pred odhodom do treh ur po njem."""
     with pytest.raises(zasedenost.Zavrnjeno):
-        _javi(conn, stopnja, ura=ura)
+        _javi(conn, 4, ura=ura)
+
+
+def test_vrsta_zunaj_ze_pred_odhodom(conn):
+    """Avtobus stoji na peronu poln, vrsta je zunaj: to se vidi pred odhodom."""
+    assert _javi(conn, 5, ura="15:40")["stopnja"] == 5
 
 
 @pytest.mark.parametrize("stopnja", [0, 6, True, "4", None])
@@ -189,8 +194,8 @@ def test_stopnja_mora_biti_stevilka(conn, stopnja):
 
 
 def test_mestni_lpp_in_tuja_postaja(conn):
-    with pytest.raises(zasedenost.Zavrnjeno, match="LPP"):
-        _javi(conn, 4, trip="lpp")
+    """Mestni LPP je zraven kot vsi: prej je bil LPP 25 iz IJPP vklopljen, 11 ne."""
+    assert _javi(conn, 4, trip="lpp", ura="16:05")["stopnja"] == 4
     # Id mestnega LPP so trije UUID-ji: dolg id je „ne poznam“, ne napaka oblike.
     with pytest.raises(zasedenost.Zavrnjeno, match="ne poznam"):
         _javi(conn, 4, trip="|".join(["5075f5b4-daea-425d-b3fe-c4807ebf11c7"] * 3))
@@ -279,6 +284,23 @@ def test_vlak_in_avtobus_se_ne_mesata(conn):
     _zgodovina(conn, "v", PETKI[:5], 4, ura_porocila="15:55")
     p = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
     assert p["obicajno"] is None
+
+
+def test_lpp_samo_ista_linija(conn):
+    """LPP 6 do Stadiona ni v smeri Maribora; druga linija LPP ni ta linija."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, mode,"
+                 " agency, network) VALUES('lpp2', 'lpp2', '11', 'Črnuče', 'S', 'bus', 'lpp',"
+                 " 'avtobus')")
+    conn.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+                     [("lpp2", 1, "LJ", _s("16:00"), _s("16:00")), ("lpp2", 2, "ST", _s("16:08"), _s("16:08"))])
+    db.fill_trip_window(conn)
+    _zgodovina(conn, "lpp", PETKI[:5], 5, ura_porocila="16:05")
+    p = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
+    assert p["obicajno"] is None
+    p = zasedenost.pregled(conn, "lpp2", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
+    assert p["obicajno"] is None
+    p = zasedenost.pregled(conn, "lpp", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
+    assert p["obicajno"]["stopnje"] == [0, 0, 0, 0, 5]
 
 
 def test_drugi_dnevi_tipa_ko_istega_dne_ni_dovolj(conn):
@@ -385,7 +407,7 @@ def test_api_pregled_in_mestni_lpp(conn, monkeypatch):
     monkeypatch.setattr(api, "_conn", lambda: conn)
     p = api.api_zasedenost("m1620", PETEK, "Ljubljana AP")
     assert p["vklopljeno"] and p["zeton"]
-    assert api.api_zasedenost("lpp", PETEK, None)["vklopljeno"] is False
+    assert api.api_zasedenost("lpp", PETEK, None)["vklopljeno"] is True
 
 
 def test_skrbnik_objavi_in_brisanje_umakne(conn, monkeypatch):

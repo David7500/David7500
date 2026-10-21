@@ -23,6 +23,7 @@
     oddano: null,           // kar je ta naprava javila za ta odhod
     izbiraPostaje: false,
     opomba: "", opombaOdprta: false, opombaPoslana: false, opombeOdprte: false,
+    potrdiNiVzel: false,
     sporocilo: null,
     zaposlen: false,
     zeton: null,
@@ -86,14 +87,14 @@
     const poln = o && o.mediana >= 4;
     const danesZunaj = d.danes.find((x) => x.stopnja === 5);
     const pod = [];
-    if (danesZunaj) pod.push(`danes ob ${danesZunaj.ura} ljudje ostali zunaj`);
+    if (danesZunaj) pod.push(`danes ob ${danesZunaj.ura} poln, vrsta zunaj`);
     else if (d.prejsnji) {
-      pod.push(`danes prejšnji (${d.prejsnji.ura}) ${d.prejsnji.stopnja === 5 ? "pustil ljudi zunaj" : "poln"}`);
+      pod.push(`danes prejšnji (${d.prejsnji.ura}) ${d.prejsnji.stopnja === 5 ? "poln, vrsta zunaj" : "poln"}`);
     }
     if (!poln && !pod.length) return "";
     let glavno;
     if (poln) {
-      glavno = `<b>${o.mediana === 5 ? "Običajno ostanejo ljudje zunaj" : "Običajno poln"}</b>`
+      glavno = `<b>${o.mediana === 5 ? "Običajno poln, vrsta zunaj" : "Običajno poln"}</b>`
         + (o.prej ? ` · pridi vsaj ${o.prej.nasvet_min} min prej` : "");
       pod.unshift(`${o.porocil} ${sklon(o.porocil, "porocilo")}`);
     } else {
@@ -108,9 +109,8 @@
 
   function okno(d) {
     const zdaj = Date.now() / 1000;
-    const [pred, po, zunaj] = d.okno;
+    const [pred, po] = d.okno;
     return { pred: zdaj < d.odhod_ts - pred, po: zdaj > d.odhod_ts + po,
-             zunajPrezgodaj: zdaj < d.odhod_ts - zunaj,
              odUra: hhmm(new Date((d.odhod_ts - pred) * 1000).toISOString()) };
   }
 
@@ -118,7 +118,7 @@
     const izbrana = S.oddano && !S.oddano.prejsnji ? S.oddano.stopnja : 0;
     return `<div class="zas-stopnje" role="group" aria-label="Kako polno je zdaj">${d.stopnje.map((ime, i) => {
       const n = i + 1;
-      const onemogoceno = ok.pred || (n === 5 && ok.zunajPrezgodaj) || S.zaposlen;
+      const onemogoceno = ok.pred || S.zaposlen;
       return `<button type="button" class="zas-stopnja${n === izbrana ? " je-izbrana" : ""}"
           data-stopnja="${n}" aria-pressed="${n === izbrana}"${onemogoceno ? " disabled" : ""}>
           ${glif(n)}<span>${escapeHtml(ime)}</span></button>`;
@@ -190,9 +190,15 @@
     } else if (!danes.length && !S.oddano && !ok.po) {
       h += `<p class="zas-pod zas-tiho">Še nihče ni javil. En dotik pomaga tistim, ki čakajo na naslednjega.</p>`;
     }
+    // Javi tuj odhod, zato dva koraka: povezava se je na telefonu oddala ob
+    // dotiku med drsenjem (David, 21. 10. 2026).
     if (d.te_ni_vzel && !ok.po && !(S.oddano && S.oddano.prejsnji)) {
-      h += `<button type="button" class="zas-povezava" data-akcija="ni-vzel">Prejšnji ob ${d.te_ni_vzel.ura}
-        (${escapeHtml(d.te_ni_vzel.oznaka)}) te ni vzel? Javi</button>`;
+      const p = `${escapeHtml(d.te_ni_vzel.oznaka)} ob ${d.te_ni_vzel.ura}`;
+      h += S.potrdiNiVzel
+        ? `<div class="zas-potrdi"><p>Javim, da te ${p} zaradi gneče ni vzel?</p>
+            <div class="zas-gumbi"><button type="button" class="zas-gumb" data-akcija="ni-vzel-da"${S.zaposlen ? " disabled" : ""}>Da, javi</button>
+            <button type="button" class="zas-drugo" data-akcija="ni-vzel-ne">Ne</button></div></div>`
+        : `<button type="button" class="zas-povezava" data-akcija="ni-vzel">Te prejšnji (${p}) ni vzel?</button>`;
     }
 
     // Komentar samo k današnji ali včerajšnji vožnji (`zasedenost.preveri_opombo`).
@@ -315,7 +321,9 @@
     if (g.dataset.stopnja) return javi(+g.dataset.stopnja);
     switch (g.dataset.akcija) {
       case "postaja": S.izbiraPostaje = true; izrisi(); el.querySelector(".zas-izbira").focus(); break;
-      case "ni-vzel": niVzel(); break;
+      case "ni-vzel": S.potrdiNiVzel = true; izrisi(); break;
+      case "ni-vzel-ne": S.potrdiNiVzel = false; izrisi(); break;
+      case "ni-vzel-da": S.potrdiNiVzel = false; niVzel(); break;
       case "preklic": preklici(); break;
       case "opomba": posljiOpombo(); break;
       case "odpri-opombo": S.opombaOdprta = true; izrisi(); el.querySelector(".zas-polje").focus(); break;
@@ -346,7 +354,8 @@
       // Druga vožnja: nič od prejšnje ne sme ostati, ne odgovor ne osnutek --
       // dotik pred novim odgovorom bi poslal novo vožnjo s staro postajo.
       Object.assign(S, { izbrana: null, oddano: null, sporocilo: null, opombaPoslana: false,
-                         d: null, opomba: "", opombaOdprta: false, izbiraPostaje: false });
+                         d: null, opomba: "", opombaOdprta: false, izbiraPostaje: false,
+                         potrdiNiVzel: false });
       el.hidden = true;
       if (vrh) vrh.hidden = true;
     }
