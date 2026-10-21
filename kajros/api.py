@@ -808,7 +808,7 @@ def _stik_opomba(request: Request, p) -> JSONResponse:
 
 
 @app.get("/api/zasedenost")
-def api_zasedenost(trip: str = Query(..., max_length=80),
+def api_zasedenost(trip: str = Query(..., max_length=zasedenost.TRIP_NAJDALJSI),
                    date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
                    postaja: str | None = Query(None, max_length=120)):
     """Zasedenost ene vožnje po poročilih potnikov, za okno vožnje.

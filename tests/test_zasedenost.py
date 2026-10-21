@@ -191,6 +191,9 @@ def test_stopnja_mora_biti_stevilka(conn, stopnja):
 def test_mestni_lpp_in_tuja_postaja(conn):
     with pytest.raises(zasedenost.Zavrnjeno, match="LPP"):
         _javi(conn, 4, trip="lpp")
+    # Id mestnega LPP so trije UUID-ji: dolg id je „ne poznam“, ne napaka oblike.
+    with pytest.raises(zasedenost.Zavrnjeno, match="ne poznam"):
+        _javi(conn, 4, trip="|".join(["5075f5b4-daea-425d-b3fe-c4807ebf11c7"] * 3))
     with pytest.raises(zasedenost.Zavrnjeno):
         _javi(conn, 4, postaja="Kamnik AP")
     # Na zadnji postaji se ne vstopa.
