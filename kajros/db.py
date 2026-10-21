@@ -178,9 +178,24 @@ CREATE TABLE IF NOT EXISTS zamenjava (
     stari_dep_s INTEGER,
     PRIMARY KEY (stari_trip, stari_seq)
 );
--- Zgodovina gre v obratno smer kot zajem: od nove vožnje k stari
--- (`PREDNIKI_SQL`). Brez indeksa je to pregled cele tabele za vsak postanek table.
-CREATE INDEX IF NOT EXISTS zamenjava_novi ON zamenjava(novi_trip, novi_seq);
+
+-- Ista vožnja pod starim id-jem, za zgodovino: običajna zamuda, okno vožnje in
+-- model štejejo tudi meritve stare (`PREDNIKI_SQL`). Obe strani sta vožnji čez
+-- dneve (`voznja_sql`), ne `trip_id`, in vrstica ostane: `zamenjava` je za
+-- zajem in izgine z voznim redom nove vožnje. Mestni LPP ima za vsak dan svoj
+-- id; 13.–20. 10. 2026 je 228 voženj na 11 linijah dobilo nov srednji del,
+-- `zamenjava` pa je vsako povezala s staro vožnjo ISTEGA dne -- ta ni nikoli
+-- vozila (0 od 824), zgodovine ni bilo od nikoder. Polni `zapisi_prednike`.
+CREATE TABLE IF NOT EXISTS prednik (
+    nova        TEXT NOT NULL,
+    stara       TEXT NOT NULL,
+    stari_seq   INTEGER NOT NULL,
+    novi_seq    INTEGER NOT NULL,
+    stari_arr_s INTEGER,
+    stari_dep_s INTEGER,
+    PRIMARY KEY (nova, stara, stari_seq)
+);
+CREATE INDEX IF NOT EXISTS prednik_postanek ON prednik(nova, novi_seq);
 
 -- ---------- zajem (iz GTFS-RT) ----------
 
@@ -542,6 +557,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if stolpci and "vozilo" not in stolpci:
         conn.execute("ALTER TABLE lega ADD COLUMN vozilo TEXT")
         conn.commit()
+    # Rabil ga je `PREDNIKI_SQL`, ki od 21. 10. 2026 bere `prednik`.
+    conn.execute("DROP INDEX IF EXISTS zamenjava_novi")
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='alert'"
@@ -630,7 +647,7 @@ def voznja(trip_id: str, agency: str | None) -> str:
     return trip_id
 
 
-#: Pretekle meritve vožnje, ki jo je nov vozni red zamenjal (`zamenjava`),
+#: Pretekle meritve vožnje, ki jo je nov vozni red zamenjal (`prednik`),
 #: prevedene na postanke in vozni red NOVE. Stolpci: `trip_id` (nova vožnja),
 #: `stop_seq` (njen postanek), `service_date`, `delay_arr`, `delay_dep`.
 #:
@@ -642,25 +659,31 @@ def voznja(trip_id: str, agency: str | None) -> str:
 #:
 #: Zamuda se preračuna na nov vozni red kot v zajemu
 #: (`collector.zamuda_po_zamenjavi`): absolutni čas ostane, premakne se
-#: vozni red. Stari 15:29 +2 min je pri novem 15:28 +3 min.
-#:
-#: Veriga dveh zamenjav se ne sestavi: ko nova vožnja izgubi vozni red, uvoz
-#: njen par pobriše (`gtfs._zapisi_zamenjave`).
+#: vozni red. Stari 15:29 +2 min je pri novem 15:28 +3 min. Izmerjeno
+#: 21. 10. 2026, mediana stare vožnje proti vsakemu dnevu nove od 14. 10.:
+#: IJPP s spremenjenim voznim redom (95 parov) MAE 3,12 min, brez prevoda
+#: 6,32; z istim (112) 2,22 min, brez zgodovine (ničla) 4,84.
 #:
 #: Ta oblika je za posamezne postanke (`WHERE p.trip_id = ? AND p.stop_seq = ?`).
 #: Za celo vožnjo je `PREDNIKI_VOZNJE_SQL`.
-_PREDNIKI_STOLPCI = (
-    "z.novi_trip AS trip_id, z.novi_seq AS stop_seq, r.service_date, "
-    "r.delay_arr + COALESCE(z.stari_arr_s, z.stari_dep_s) "
+#:
+#: Plus pred `stara` ni tipkarska napaka: stolpec je TEXT, izraz `voznja_sql`
+#: brez afinitete, in primerjava z afiniteto TEXT indeksa `trip_voznja` ne sme
+#: uporabiti -- vsaka vožnja s predhodnico bi prebrala vso tabelo `trip`.
+_PREDNIKI_ZAMUDE = (
+    "r.service_date, "
+    "r.delay_arr + COALESCE(p.stari_arr_s, p.stari_dep_s) "
     "            - COALESCE(s.arr_s, s.dep_s) AS delay_arr, "
-    "r.delay_dep + COALESCE(z.stari_dep_s, z.stari_arr_s) "
+    "r.delay_dep + COALESCE(p.stari_dep_s, p.stari_arr_s) "
     "            - COALESCE(s.dep_s, s.arr_s) AS delay_dep "
 )
 PREDNIKI_SQL = (
-    f"SELECT {_PREDNIKI_STOLPCI}"
-    "FROM zamenjava z "
-    "JOIN run r ON r.trip_id = z.stari_trip AND r.stop_seq = z.stari_seq "
-    "JOIN sched s ON s.trip_id = z.novi_trip AND s.stop_seq = z.novi_seq"
+    f"SELECT a.trip_id AS trip_id, p.novi_seq AS stop_seq, {_PREDNIKI_ZAMUDE}"
+    "FROM trip a "
+    f"CROSS JOIN prednik p ON p.nova = {voznja_sql('a')} "
+    f"CROSS JOIN trip t ON {voznja_sql('t')} = +p.stara "
+    "CROSS JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = p.stari_seq "
+    "CROSS JOIN sched s ON s.trip_id = a.trip_id AND s.stop_seq = p.novi_seq"
 )
 #: Isto za vse postanke ene vožnje; edini parameter (`?`) je nova vožnja.
 #:
@@ -669,22 +692,76 @@ PREDNIKI_SQL = (
 #: postanek posebej. Izmerjeno na LPP 25 (36 postankov, 17 dni): 9,8 ms na
 #: klic in `predict` 1,3 -> 11,5 ms. Tu se `run` prebere enkrat.
 PREDNIKI_VOZNJE_SQL = (
-    f"SELECT {_PREDNIKI_STOLPCI}"
-    "FROM (SELECT DISTINCT stari_trip FROM zamenjava WHERE novi_trip = ?) k "
-    "CROSS JOIN run r ON r.trip_id = k.stari_trip "
-    "CROSS JOIN zamenjava z ON z.stari_trip = r.trip_id AND z.stari_seq = r.stop_seq "
-    "CROSS JOIN sched s ON s.trip_id = z.novi_trip AND s.stop_seq = z.novi_seq"
+    f"SELECT k.novi AS trip_id, p.novi_seq AS stop_seq, {_PREDNIKI_ZAMUDE}"
+    "FROM (SELECT DISTINCT a.trip_id AS novi, q.nova, q.stara FROM trip a "
+    f"      CROSS JOIN prednik q ON q.nova = {voznja_sql('a')} WHERE a.trip_id = ?) k "
+    f"CROSS JOIN trip t ON {voznja_sql('t')} = +k.stara "
+    "CROSS JOIN run r ON r.trip_id = t.trip_id "
+    "CROSS JOIN prednik p ON p.nova = k.nova AND p.stara = k.stara "
+    "                    AND p.stari_seq = r.stop_seq "
+    "CROSS JOIN sched s ON s.trip_id = k.novi AND s.stop_seq = p.novi_seq"
 )
+
+#: Mestni LPP: zgodovina gre na novo vožnjo samo, če se vozni red na nobenem
+#: skupnem postanku ne razlikuje za več kot toliko. Pri IJPP prevod po uri
+#: drži (zgoraj) -- nova vožnja vozi ob urah stare --, pri mestnem LPP je nova
+#: ura prava: LPP 16 iz Črnega Loga od 16. 10. 2026 ob 07:35 namesto 07:45,
+#: prevod bi mu pripisal +10 min (46 primerjav: MAE 12,2 min, vse precenjene),
+#: brez zgodovine 1,6 min. Do 3 min razlike (4 vožnje, 108 primerjav) MAE
+#: 5,0 min, precenjenih 0,9 %.
+PREDNIK_LPP_RAZLIKA_S = 180
+
+
+def zapisi_prednike(conn: sqlite3.Connection) -> None:
+    """Pare iz `zamenjava` zapiše v `prednik`: vožnjo čez dneve k vožnji.
+
+    Zapisano ostane, tudi ko par v `zamenjava` izgine z voznim redom nove
+    vožnje. Kliče jo vsak uvoz (`gtfs._zapisi_zamenjave`).
+    """
+    pari: dict[tuple, list[tuple]] = {}
+    for r in conn.execute(
+            "SELECT z.stari_trip, z.novi_trip, n.agency, z.stari_seq, z.novi_seq, "
+            "       z.stari_arr_s, z.stari_dep_s, "
+            "       COALESCE(z.stari_dep_s, z.stari_arr_s), COALESCE(s.dep_s, s.arr_s) "
+            "FROM zamenjava z JOIN trip n ON n.trip_id = z.novi_trip "
+            "JOIN sched s ON s.trip_id = z.novi_trip AND s.stop_seq = z.novi_seq"):
+        r = tuple(r)
+        pari.setdefault(r[:3], []).append(r[3:])
+    vrstice = []
+    for (stari, novi, agency), postanki in pari.items():
+        if agency == "lpp" and any(
+                staro is None or novo is None or abs(novo - staro) > PREDNIK_LPP_RAZLIKA_S
+                for *_, staro, novo in postanki):
+            continue
+        vrstice += [(voznja(novi, agency), voznja(stari, agency), *p[:4]) for p in postanki]
+    conn.executemany(
+        "INSERT OR IGNORE INTO prednik(nova, stara, stari_seq, novi_seq,"
+        "                              stari_arr_s, stari_dep_s) VALUES(?,?,?,?,?,?)",
+        vrstice)
+    # Stara vožnja je lahko že sama naslednica: nova dobi tudi zgodovino njene
+    # predhodnice. Vsak klic sestavi en člen verige več.
+    conn.execute(
+        "INSERT OR IGNORE INTO prednik(nova, stara, stari_seq, novi_seq,"
+        "                              stari_arr_s, stari_dep_s) "
+        "SELECT q.nova, p.stara, p.stari_seq, q.novi_seq, p.stari_arr_s, p.stari_dep_s "
+        "FROM prednik q CROSS JOIN prednik p ON p.nova = q.stara AND p.novi_seq = q.stari_seq "
+        "WHERE p.stara <> q.nova")
 
 
 def init(conn: sqlite3.Connection) -> None:
     _migrate(conn)
+    brez_prednikov = not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'prednik'").fetchone()
     conn.executescript(SCHEMA)
     # Izrazni indeks, ne stolpec: vrednost je izpeljana iz `trip_id` in
     # `agency`, zato je ni treba polniti ne ob uvozu ne ob prilivanju, in
     # nagrobniki (vožnje brez voznega reda, ki jih uvoz obdrži) jo imajo sami
     # od sebe. Izmerjeno: 30 ms za 60 951 voženj.
     conn.execute(f"CREATE INDEX IF NOT EXISTS trip_voznja ON trip({voznja_sql()})")
+    # Pari izpred tabele `prednik` gredo vanjo takoj: naslednji uvoz bi jih
+    # pobral šele, ko bi bil del že izginil z voznim redom nove vožnje.
+    if brez_prednikov:
+        zapisi_prednike(conn)
     conn.commit()
 
 

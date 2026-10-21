@@ -606,7 +606,8 @@ def _zapisi_zamenjave(conn: sqlite3.Connection, stare: dict, nove: dict) -> int:
 
     Par velja, dokler ima nova vožnja vozni red in stara ne. Kar je bilo
     povezano ob prejšnjih uvozih, ostane: starega voznega reda takrat ni več in
-    para ne bi bilo mogoče sestaviti znova.
+    para ne bi bilo mogoče sestaviti znova. Zgodovina gre čez par trajno
+    (`db.zapisi_prednike`): ostane tudi, ko ga tu pobrišemo.
     """
     conn.execute(
         "DELETE FROM zamenjava WHERE novi_trip NOT IN "
@@ -619,6 +620,7 @@ def _zapisi_zamenjave(conn: sqlite3.Connection, stare: dict, nove: dict) -> int:
             "INSERT INTO zamenjava(stari_trip, stari_seq, novi_trip, novi_seq,"
             "                      stari_arr_s, stari_dep_s) VALUES(?,?,?,?,?,?)",
             [(stari, s_seq, novi, n_seq, arr, dep) for s_seq, n_seq, arr, dep in postanki])
+    db.zapisi_prednike(conn)
     return len(pari)
 
 

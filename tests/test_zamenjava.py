@@ -122,6 +122,7 @@ def _baza():
         "INSERT INTO zamenjava(stari_trip, stari_seq, novi_trip, novi_seq, stari_arr_s, stari_dep_s)"
         " VALUES(?,?,?,?,?,?)",
         [("s1", 1, "n1", 1, None, 15 * 3600), ("s1", 3, "n1", 2, None, 15 * 3600 + 29 * 60)])
+    db.zapisi_prednike(c)
     c.commit()
     return c
 
@@ -223,6 +224,9 @@ def _z_zgodovino():
     c = _baza()
     c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,0,0)",
                   [("A", "Zadobrova"), ("C", "Novo Polje")])
+    # Nagrobnik: uvoz obdrži vožnjo z meritvami, ki je nov vozni red nima.
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network)"
+              " VALUES('s1','r','25','star','bus','1118','avtobus')")
     for k in (4, 3, 2):
         _run(c, "s1", _pred(k), 1, 0)
         _run(c, "s1", _pred(k), 3, 1200)
@@ -262,8 +266,96 @@ def test_zgodovina_in_model_vidita_predhodnico():
 def test_predhodnica_gre_po_indeksu():
     c = _baza()
     plan = " ".join(r[3] for r in c.execute(
-        f"EXPLAIN QUERY PLAN SELECT * FROM ({db.PREDNIKI_SQL}) p WHERE p.trip_id = 'n1'"))
-    assert "zamenjava_novi" in plan
+        f"EXPLAIN QUERY PLAN SELECT * FROM ({db.PREDNIKI_SQL}) p "
+        "WHERE p.trip_id = 'n1' AND p.stop_seq = 2"))
+    assert "prednik_postanek" in plan and "trip_voznja" in plan and "SCAN" not in plan
     plan = " ".join(r[3] for r in c.execute(
         f"EXPLAIN QUERY PLAN SELECT * FROM ({db.PREDNIKI_VOZNJE_SQL}) p", ("n1",)))
-    assert "zamenjava_novi" in plan and "SCAN" not in plan.replace("SCAN k", "")
+    assert "trip_voznja" in plan and "SCAN" not in plan.replace("SCAN k", "")
+
+
+def test_pari_izpred_tabele_gredo_vanjo_ob_zagonu():
+    c = _baza()
+    c.execute("DROP TABLE prednik")
+    db.init(c)
+    assert c.execute("SELECT COUNT(*) FROM prednik").fetchone()[0] == 2
+
+
+def test_veriga_dveh_zamenjav():
+    """s1 -> n1 ob enem uvozu, n1 -> z1 ob naslednjem: z1 vidi oba."""
+    c = _z_zgodovino()
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network)"
+              " VALUES('z1','r','25','nov','bus','1118','avtobus')")
+    c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+                  [("z1", 1, "A", None, 15 * 3600), ("z1", 2, "C", None, 15 * 3600 + 28 * 60)])
+    c.execute("DELETE FROM zamenjava")
+    c.executemany(
+        "INSERT INTO zamenjava(stari_trip, stari_seq, novi_trip, novi_seq, stari_arr_s, stari_dep_s)"
+        " VALUES(?,?,?,?,?,?)",
+        [("n1", 1, "z1", 1, None, 15 * 3600), ("n1", 2, "z1", 2, None, 15 * 3600 + 28 * 60)])
+    db.zapisi_prednike(c)
+    got = stats.typical_at_stops(c, [("z1", 2)])[("z1", 2)]
+    assert got["n"] == 4                    # trije dnevi s1 in en n1
+    assert got["median_s"] == 1260
+
+
+# ---------------------------------------------------------------- mestni LPP
+
+def _lpp(c, dan, voznja, odhod_s=7 * 3600, datum=None):
+    """Vožnja mestnega LPP za en dan (`dan|vožnja|vzorec`). Z datumom ima
+    vozni red, brez njega je nagrobnik preteklega dne."""
+    tid = f"{dan}|{voznja}|vz"
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency,"
+              " network) VALUES(?, 'r', '18', ?, 'bus', 'lpp', 'avtobus')", (tid, dan))
+    if datum:
+        c.execute("INSERT INTO service_day(service_id, date) VALUES(?, ?)", (dan, datum))
+        c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s)"
+                      " VALUES(?,?,?,?,?)",
+                      [(tid, 1, "A", None, odhod_s), (tid, 2, "B", None, odhod_s + 600)])
+    return tid
+
+
+def _lpp_preimenovana(premik_s=0):
+    """Vožnja X tri dni po +4 min na B, nato pod novim id-jem Y, `premik_s`
+    drugače. Par v `zamenjava` je samo za danes, stara vožnja danes ni vozila."""
+    c = db.connect(":memory:")
+    db.init(c)
+    for k in (5, 4, 3):
+        _run(c, _lpp(c, f"d{k}", "X"), _pred(k), 2, 240)
+    danes = _lpp(c, "d0", "Y", 7 * 3600 + premik_s, DANES)
+    jutri = _lpp(c, "d1", "Y", 7 * 3600 + premik_s,
+                 (date.today() + timedelta(days=1)).isoformat())
+    db.fill_trip_window(c)
+    c.executemany(
+        "INSERT INTO zamenjava(stari_trip, stari_seq, novi_trip, novi_seq, stari_arr_s, stari_dep_s)"
+        " VALUES(?,?,?,?,?,?)",
+        [("d0|X|vz", 1, danes, 1, None, 7 * 3600), ("d0|X|vz", 2, danes, 2, None, 7 * 3600 + 600)])
+    db.zapisi_prednike(c)
+    c.commit()
+    return c, jutri
+
+
+def test_mestni_lpp_vidi_vse_dni_stare_voznje():
+    """LPP je 13.–20. 10. 2026 228 vožnjam zamenjal srednji del id-ja. Par je
+    kazal na staro vožnjo istega dne, ki ni nikoli vozila, in okno vožnje je
+    bilo pred odhodom prazno. Jutrišnja vožnja para sploh nima."""
+    c, jutri = _lpp_preimenovana()
+    got = stats.typical_at_stops(c, [(jutri, 2)])[(jutri, 2)]
+    assert got["n"] == 3 and got["median_s"] == 240
+
+
+def test_zgodovina_ostane_ko_par_izgine():
+    """Par izgine z voznim redom nove vožnje -- pri LPP po osmih dneh."""
+    c, jutri = _lpp_preimenovana()
+    c.execute("DELETE FROM zamenjava")
+    assert stats.typical_at_stops(c, [(jutri, 2)])[(jutri, 2)]["n"] == 3
+
+
+def test_mestni_lpp_s_premaknjeno_uro_ostane_brez_zgodovine():
+    """LPP 16 iz Črnega Loga od 16. 10. 2026 ob 07:35 namesto 07:45: prevod
+    po uri bi mu pripisal +10 min, vozil pa je ob novi uri."""
+    c, jutri = _lpp_preimenovana(premik_s=-600)
+    assert stats.typical_at_stops(c, [(jutri, 2)]) == {}
+    c, jutri = _lpp_preimenovana(premik_s=-db.PREDNIK_LPP_RAZLIKA_S)
+    got = stats.typical_at_stops(c, [(jutri, 2)])[(jutri, 2)]
+    assert got["median_s"] == 240 + db.PREDNIK_LPP_RAZLIKA_S     # prevedeno na nov vozni red

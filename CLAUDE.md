@@ -118,7 +118,7 @@ Pri avtobusih drugače, hitro pozabljeno:
 
 `LPV 2010` ni oznaka proge, ampak **ena vožnja** (trip). `route_id` 1 : 1 s tripom, za združevanje neuporaben — zgodovino gradi po `train_no` **znotraj `trip_id`**. Parnost številke nosi smer. Predpona (`LP`, `LPV`, `IC`, `MV`, `EN` …) = vrsta vlaka; `BUS …` = nadomestni prevoz.
 
-**`trip_id` niso vedno stabilni.** Vse poizvedbe gredo skozi `JOIN trip` (omrežje je tam), zato uvoz **obdrži vožnjo z meritvami**, tudi če je nov vozni red nima („nagrobnik“ brez `sched`; 1. 9. 2026 bi sicer izginilo 114 voženj s 3 043 meritvami), in izginulo vožnjo poveže z naslednico (tabela `zamenjava`), na katero zajem prevede zamudo in lego (22. 9. 2026: LPP 25, 12D, 15). `kajros repair` prešteje osirotele meritve. Podrobnosti: `.claude/rules/zajem.md`.
+**`trip_id` niso vedno stabilni.** Vse poizvedbe gredo skozi `JOIN trip` (omrežje je tam), zato uvoz **obdrži vožnjo z meritvami**, tudi če je nov vozni red nima („nagrobnik“ brez `sched`; 1. 9. 2026 bi sicer izginilo 114 voženj s 3 043 meritvami), in izginulo vožnjo poveže z naslednico (tabela `zamenjava`), na katero zajem prevede zamudo in lego (22. 9. 2026: LPP 25, 12D, 15); zgodovina gre nanjo trajno, po vožnji čez dneve (`prednik`). `kajros repair` prešteje osirotele meritve. Podrobnosti: `.claude/rules/zajem.md`.
 
 ## Strani
 
