@@ -3761,7 +3761,8 @@ def _admin_sporocilo(id_: int, polja: dict) -> dict:
         if akcija == "objavi":
             return {"id": id_, "objavljeno": zasedenost.objavi(conn, id_)}
         if akcija == "umakni":
-            return {"id": id_, "objavljeno": not zasedenost.umakni(conn, id_)}
+            zasedenost.umakni(conn, id_)
+            return {"id": id_, "objavljeno": False}
         prebrano = (polja.get("prebrano") or ["1"])[0] != "0"
         stik.oznaci_prebrano(conn, id_, prebrano)
     return {"id": id_, "prebrano": prebrano}

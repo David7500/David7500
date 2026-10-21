@@ -593,8 +593,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     conn.rollback()
                     _log(f"števcev obiska ni bilo mogoče obrezati: {exc}")
 
-            # Poročila o zasedenosti 13 mesecev (`zasedenost.HRAMBA_DNI`).
-            if _strezemo and config.ZASEDENOST:
+            # Poročila o zasedenosti 13 mesecev (`zasedenost.HRAMBA_DNI`), tudi
+            # z ugasnjenim stikalom: obljuba o hrambi velja za že zbrano.
+            if _strezemo:
                 try:
                     n = zasedenost.pocisti(conn)
                     if n:

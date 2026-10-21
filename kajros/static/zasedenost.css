@@ -73,8 +73,9 @@
   border-radius: 0 10px 10px 0; background: var(--bg-panel); font: 400 13px/1.4 var(--sans);
 }
 .zas-opomba small { display: block; font-size: 11.5px; color: var(--ink-mute); }
-/* Besedilo je vpisal potnik: prelome ohrani slog, ne pretvorba v `<br>`. */
-.zas-opomba p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Besedilo je vpisal potnik; strežnik ga stisne v eno vrstico
+   (`preveri_opombo`), dolge besede pa se lomijo. */
+.zas-opomba p { margin: 0; overflow-wrap: anywhere; }
 .zas-prijavi { font-size: 11.5px; color: var(--ink-faint); }
 .zas-noga { margin: 10px 0 0; font: 400 11.5px/1.35 var(--sans); color: var(--ink-faint); }
 .zas-noga a { color: var(--ink-mute); }

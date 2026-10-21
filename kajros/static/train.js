@@ -1235,8 +1235,10 @@ function posodobiZasedenost() {
   if (!zasEl || !run || !run.trip_id) return;
   const tvoja = yourStop(run.stops);
   const meja = run.last_measured_seq;
+  // Na cilju se ne vstopa: po zadnji meritvi na koncu ostane predzadnja.
   const naslednja = meja == null ? null
-    : run.stops.find((s) => s.stop_seq > meja && s !== run.stops[run.stops.length - 1]);
+    : run.stops.find((s) => s.stop_seq > meja && s !== run.stops[run.stops.length - 1])
+      || run.stops[run.stops.length - 2];
   const postaja = (tvoja || naslednja || run.stops[0]).name;
   const d = zasEl.dataset;
   const nova = d.trip !== run.trip_id || d.dan !== run.service_date || d.privzeta !== postaja;

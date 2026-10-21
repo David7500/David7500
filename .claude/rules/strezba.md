@@ -195,7 +195,7 @@ Od 12. 9. 2026 `kajros.app` odprt komurkoli. Poti niso za aplikacijo, ampak za b
 
 ## Obrazec za stik: edina pot, ki piše iz zahteve
 
-Do 12. 9. 2026 `api.py` samo `GET`, zapisano kot razlog, zakaj je javna izpostavitev varna. Zdaj štiri pisalne poti (seznam v CLAUDE.md), nobena nova ne sme priti mimogrede: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša.
+Do 12. 9. 2026 `api.py` samo `GET`, zapisano kot razlog, zakaj je javna izpostavitev varna. Zdaj šest pisalnih poti (seznam v CLAUDE.md), nobena nova ne sme priti mimogrede: `test_pisalne_poti_so_nastete` pade, če se seznam podaljša.
 
 **Brisanje in označevanje na ISTI poti** (`POST /admin/sporocila/{id}`, loči ju polje `akcija`), ne vsako na svoji. Pisalne poti so naštete, vsaka nova = odločitev, ne podrobnost. Brisanje nepovratno, ima potrditev: gumb tik ob „prebrano“, zgrešen klik na telefonu bi stal sporočilo.
 

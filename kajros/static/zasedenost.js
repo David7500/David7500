@@ -11,6 +11,11 @@
   if (!el) return;
 
   const OSVEZI_MS = 60000;
+  // Kot `zasedenost.PREKLIC_S`: od zadnjega dotika.
+  const PREKLIC_MS = 10 * 60000;
+  // `stik.py` zavrne žeton, mlajši od 4 s, in starejši od 2 h. Osvežitev na
+  // minuto bi vsakič prinesla nov žeton, opomba v 4 s po njej pa bi padla.
+  const ZETON_NAJDLJE_S = 90 * 60;
   const S = {
     trip: null, dan: null, privzeta: null,
     izbrana: null,          // postaja, ki jo je izbral potnik ali na kateri je javil
@@ -20,6 +25,7 @@
     opomba: "", opombaOdprta: false, opombaPoslana: false, opombeOdprte: false,
     sporocilo: null,
     zaposlen: false,
+    zeton: null,
   };
   let poller = null;
 
@@ -30,19 +36,22 @@
   }
 
   // Id naprave za „en glas na odhod na dan“. Strežnik ga ne shrani (samo
-  // zgoščeno v pomnilniku); brez shrambe velja do zaprtja strani.
-  const naprava = (() => {
+  // zgoščeno v pomnilniku). Nastane šele ob prvem poročilu: kdor nikoli ne
+  // javi, ga nima. Brez shrambe velja do zaprtja strani.
+  let napravaId = null;
+  function naprava() {
+    if (napravaId) return napravaId;
     try {
-      let n = localStorage.getItem("kajros:naprava");
-      if (!/^[0-9a-f]{32}$/.test(n || "")) {
-        n = nakljucno();
-        localStorage.setItem("kajros:naprava", n);
+      napravaId = localStorage.getItem("kajros:naprava");
+      if (!/^[0-9a-f]{32}$/.test(napravaId || "")) {
+        napravaId = nakljucno();
+        localStorage.setItem("kajros:naprava", napravaId);
       }
-      return n;
     } catch (e) {
-      return nakljucno();
+      napravaId = nakljucno();
     }
-  })();
+    return napravaId;
+  }
 
   const postaja = () => S.izbrana || S.privzeta;
 
@@ -162,7 +171,8 @@
         ? `prejšnji ob ${S.oddano.prejsnji.ura} te ni vzel`
         : `${escapeHtml(stopnja(S.oddano.stopnja))}, ${escapeHtml(lepoIme(S.oddano.postaja))}`;
       h += `<p class="zas-hvala"><b>Hvala,</b> zapisano ob ${S.oddano.ura}: ${kaj}.
-        <button type="button" class="zas-tiho-gumb" data-akcija="preklic">prekliči</button></p>`;
+        ${Date.now() - S.oddano.t < PREKLIC_MS
+          ? `<button type="button" class="zas-tiho-gumb" data-akcija="preklic">prekliči</button>` : ""}</p>`;
     }
     if (S.sporocilo) {
       h += `<p class="zas-hvala${S.sporocilo.napaka ? " je-napaka" : ""}">${escapeHtml(S.sporocilo.napaka || S.sporocilo.ok)}</p>`;
@@ -187,7 +197,7 @@
 
     // Komentar samo k današnji ali včerajšnji vožnji (`zasedenost.preveri_opombo`).
     const vceraj = new Date(Date.now() - 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
-    const smeOpombo = d.zeton && (S.dan === todayIso() || S.dan === vceraj) && !S.opombaPoslana;
+    const smeOpombo = S.zeton && (S.dan === todayIso() || S.dan === vceraj) && !S.opombaPoslana;
     if (smeOpombo && (S.opombaOdprta || S.oddano)) {
       h += `<textarea class="zas-polje" maxlength="280" aria-label="Opomba za druge potnike"
           placeholder="Opomba za druge potnike (neobvezno): kje je bila vrsta, je prišel še en ${OMREZJE === "avtobus" ? "avtobus" : "vlak"} …">${escapeHtml(S.opomba)}</textarea>
@@ -218,14 +228,20 @@
     if (!S.trip) return;
     const q = new URLSearchParams({ trip: S.trip, date: S.dan });
     if (postaja()) q.set("postaja", postaja());
-    S.d = await jsonOk(await fetch(`/api/zasedenost?${q}`));
+    const trip = S.trip;
+    const d = await jsonOk(await fetch(`/api/zasedenost?${q}`));
+    if (trip !== S.trip) return;          // medtem druga vožnja
+    S.d = d;
+    const izdan = S.zeton ? +S.zeton.split(".")[0] : 0;
+    if (!d.zeton) S.zeton = null;
+    else if (Date.now() / 1000 - izdan > ZETON_NAJDLJE_S) S.zeton = d.zeton;
     izrisi();
   }
 
   async function posljiPorocilo(telo) {
     const r = await fetch("/api/zasedenost", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service_date: S.dan, postaja: S.d.postaja, naprava, ...telo }),
+      body: JSON.stringify({ service_date: S.dan, postaja: S.d.postaja, naprava: naprava(), ...telo }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.napaka || "Ni uspelo. Poskusi znova.");
@@ -250,7 +266,7 @@
   function javi(n) {
     return dejanje(async () => {
       const j = await posljiPorocilo({ trip_id: S.trip, stopnja: n });
-      S.oddano = { ...j, trip: S.trip, prejsnji: null };
+      S.oddano = { ...j, trip: S.trip, prejsnji: null, t: Date.now() };
       // Postaja ostane, kjer je potnik javil, tudi ko vozilo pelje naprej.
       S.izbrana = j.postaja;
     });
@@ -260,7 +276,7 @@
     const p = S.d.te_ni_vzel;
     return dejanje(async () => {
       const j = await posljiPorocilo({ trip_id: p.trip_id, stopnja: 5 });
-      S.oddano = { ...j, trip: p.trip_id, prejsnji: p };
+      S.oddano = { ...j, trip: p.trip_id, prejsnji: p, t: Date.now() };
       S.izbrana = j.postaja;
     });
   }
@@ -281,7 +297,7 @@
         method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           opomba_trip: S.oddano ? S.oddano.trip : S.trip, opomba_datum: S.dan,
-          opomba_postaja: S.d.postaja, besedilo, zeton: S.d.zeton, naslov: "",
+          opomba_postaja: S.d.postaja, besedilo, zeton: S.zeton, naslov: "",
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -326,7 +342,14 @@
     const nova = d.trip !== S.trip || d.dan !== S.dan;
     const premik = d.privzeta !== S.privzeta && !S.izbrana;
     Object.assign(S, { trip: d.trip, dan: d.dan, privzeta: d.privzeta });
-    if (nova) Object.assign(S, { izbrana: null, oddano: null, sporocilo: null, opombaPoslana: false });
+    if (nova) {
+      // Druga vožnja: nič od prejšnje ne sme ostati, ne odgovor ne osnutek --
+      // dotik pred novim odgovorom bi poslal novo vožnjo s staro postajo.
+      Object.assign(S, { izbrana: null, oddano: null, sporocilo: null, opombaPoslana: false,
+                         d: null, opomba: "", opombaOdprta: false, izbiraPostaje: false });
+      el.hidden = true;
+      if (vrh) vrh.hidden = true;
+    }
     if (!poller) poller = pollWhileVisible(nalozi, OSVEZI_MS);
     else if (nova || premik) poller.zdaj().catch(() => {});
   });

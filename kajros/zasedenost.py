@@ -71,8 +71,11 @@ VSEH_NA_DAN = 2000
 TEDNOV = 8
 PAS_S = 90 * 60
 #: Pod tem povzetka ni, so samo poročila z datumi -- majhnega vzorca ne
-#: skrijemo, a ga tudi ne napihnemo v „običajno“.
+#: skrijemo, a ga tudi ne napihnemo v „običajno“. Šteje odhod na dan (ne
+#: poročilo), in vsaj `NAJMANJ_DNI` različnih dni: pet ljudi na enem
+#: avtobusu ali en človek s petimi id-ji naprave ni „običajno“.
 NAJMANJ = 5
+NAJMANJ_DNI = 3
 #: „Poln je bil že N min pred odhodom“ šele iz toliko različnih dni.
 PREJ_DNI = 3
 NAJVEC_ZGODOVINE = 5
@@ -88,6 +91,9 @@ PREJSNJI_S = 2 * 3600
 
 OPOMBA_NAJKRAJSE = 3
 OPOMBA_NAJDALJSE = 280
+#: Opombe gredo skozi nabiralnik in si z njim delijo `stik.VSEH_NA_DAN` (50).
+#: Brez lastnega stropa bi 50 opomb zaprlo nabiralnik za navadna sporočila.
+OPOMB_NA_DAN = 20
 
 DNEVI = ("ob ponedeljkih", "ob torkih", "ob sredah", "ob četrtkih", "ob petkih",
          "ob sobotah", "ob nedeljah")
@@ -125,6 +131,7 @@ CREATE TABLE IF NOT EXISTS opomba (
     sporocilo   INTEGER NOT NULL UNIQUE,
     objavljeno  INTEGER NOT NULL,
     datum       TEXT    NOT NULL,
+    omrezje     TEXT    NOT NULL,
     agency      TEXT    NOT NULL,
     train_no    TEXT    NOT NULL,
     headsign    TEXT    NOT NULL,
@@ -149,10 +156,12 @@ _zaklep = threading.Lock()
 _sprejem = threading.Lock()
 #: `naslov -> [časi]`, samo v pomnilniku.
 _poslana: dict[str, list[float]] = {}
-#: `glas -> (id vrstice, čas prvega poročila)`. Glas je zgoščen s soljo
-#: dneva, ki se ob prehodu dneva zavrže skupaj s slovarjem.
-_glasovi: dict[str, tuple[int, float]] = {}
-_sol: dict[str, object] = {"dan": None, "bajti": b""}
+#: `glas -> (id vrstice, čas zadnjega poročila)`. Glas je zgoščen s soljo
+#: obratovalnega dne (`_soli`), ki se zavrže dva dni pozneje skupaj z glasovi
+#: tega dne -- po obratovalnem, ne koledarskem dnevu, sicer bi bil popravek
+#: ob 00:05 za vožnjo ob 23:58 drug potnik.
+_glasovi: dict[str, dict[str, tuple[int, float]]] = {}
+_soli: dict[str, bytes] = {}
 
 
 class Zavrnjeno(Exception):
@@ -293,14 +302,23 @@ def _datum(v) -> str:
     return v
 
 
-def _kljuc_glasu(naprava: str, v: Voznja, datum: str, zdaj: float) -> str:
-    dan = datetime.fromtimestamp(zdaj, TZ).date().isoformat()
+def _glasovi_dne(datum: str, zdaj: float) -> tuple[bytes, dict]:
+    """Sol in glasovi obratovalnega dne; starejši od dveh dni gredo ven."""
+    meja = (datetime.fromtimestamp(zdaj, TZ).date() - timedelta(days=2)).isoformat()
     with _zaklep:
-        if _sol["dan"] != dan:
-            _sol.update(dan=dan, bajti=secrets.token_bytes(16))
-            _glasovi.clear()
-        sol = _sol["bajti"]
-    besedilo = "\0".join([naprava, *map(str, v.kljuc), datum])
+        for d in [d for d in _soli if d < meja]:
+            _soli.pop(d, None)
+            _glasovi.pop(d, None)
+        if datum not in _soli:
+            _soli[datum] = secrets.token_bytes(16)
+        return _soli[datum], _glasovi.setdefault(datum, {})
+
+
+def _kljuc_glasu(sol: bytes, naprava: str, v: Voznja, postaja: str) -> str:
+    """En glas na napravo, odhod in postajo. Postaja je v ključu, ker je
+    poročilo opažanje na njej: popravek z druge postaje bi sicer prepisal
+    postajo, `prejeto` pa ostal s prve -- „poln že 110 min pred odhodom“."""
+    besedilo = "\0".join([naprava, *map(str, v.kljuc), postaja])
     return hashlib.blake2s(besedilo.encode(), key=sol, digest_size=16).hexdigest()
 
 
@@ -336,16 +354,18 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
     datum = _datum(podatki.get("service_date"))
     v = voznja(conn, _niz(podatki.get("trip_id"), 80), datum)
     postaja, t_s, naprej = v.na(_niz(podatki.get("postaja"), 120))
-    glas = _kljuc_glasu(naprava, v, datum, t)
+    sol, glasovi = _glasovi_dne(datum, t)
+    glas = _kljuc_glasu(sol, naprava, v, postaja)
 
     if podatki.get("preklic") is True:
         with _sprejem:
-            prej = _glasovi.get(glas)
+            prej = glasovi.get(glas)
+            # Od zadnjega dotika, ne od prvega: popravek se mora dati preklicati.
             if not prej or t - prej[1] > PREKLIC_S:
                 raise Zavrnjeno("Poročila ni več mogoče preklicati.", "preklic")
             conn.execute("DELETE FROM zasedenost WHERE id = ?", (prej[0],))
             conn.commit()
-            _glasovi.pop(glas, None)
+            glasovi.pop(glas, None)
         return {"preklicano": True}
 
     stopnja = podatki.get("stopnja")
@@ -360,7 +380,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
 
     with _sprejem:
         _preveri_pogostost(kljuc, t)
-        prej = _glasovi.get(glas)
+        prej = glasovi.get(glas)
         staro = (conn.execute("SELECT stopnja FROM zasedenost WHERE id = ?",
                               (prej[0],)).fetchone() if prej else None)
         if staro:
@@ -368,12 +388,10 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
             # `prejeto` je čas, ko je potnik vozilo prvič videl polno: iz njega
             # je „poln je bil že N min pred odhodom“.
             conn.execute(
-                "UPDATE zasedenost SET stopnja = ?, spremenjeno = ?, postaja = ?, t_s = ?,"
-                "       naprej = ?, prejeto = CASE WHEN ? >= ? AND stopnja < ? THEN ?"
-                "                                  ELSE prejeto END"
+                "UPDATE zasedenost SET stopnja = ?, spremenjeno = ?,"
+                "       prejeto = CASE WHEN ? >= ? AND stopnja < ? THEN ? ELSE prejeto END"
                 " WHERE id = ?",
-                (stopnja, int(t), postaja, t_s, json.dumps(naprej, ensure_ascii=False),
-                 stopnja, POLNO, POLNO, int(t), id_))
+                (stopnja, int(t), stopnja, POLNO, POLNO, int(t), id_))
         else:
             (n,) = conn.execute("SELECT COUNT(*) FROM zasedenost WHERE prejeto >= ?",
                                 (_zacetek_dneva(t),)).fetchone()
@@ -388,7 +406,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
                  v.start_s, v.trip_id, postaja, t_s, json.dumps(naprej, ensure_ascii=False),
                  stopnja)).lastrowid)
         conn.commit()
-        _glasovi[glas] = (id_, prej[1] if staro else t)
+        glasovi[glas] = (id_, t)
     return {"id": id_, "stopnja": stopnja, "postaja": postaja, "ura": _ura_epohe(t)}
 
 
@@ -398,23 +416,36 @@ def _dan(datum: str) -> str:
     return DNEVI_KRATKO[date.fromisoformat(datum).weekday()]
 
 
+def _odhod_dne(r: dict) -> tuple:
+    return (r["datum"], r["agency"], r["train_no"], r["headsign"], r["start_s"])
+
+
 def _obicajno(vrstice: list[dict], datum: str, t_s: int) -> dict | None:
     """Povzetek po istem dnevu v tednu, sicer po tipu dneva -- z vzorcem."""
     d = date.fromisoformat(datum)
     tip = tip_dneva(datum)
     istega = [r for r in vrstice if tip_dneva(r["datum"]) == tip
               and date.fromisoformat(r["datum"]).weekday() == d.weekday()]
-    if len(istega) >= NAJMANJ:
+    def dovolj(vr: list[dict]) -> bool:
+        return (len({_odhod_dne(r) for r in vr}) >= NAJMANJ
+                and len({r["datum"] for r in vr}) >= NAJMANJ_DNI)
+
+    if dovolj(istega):
         izbor, kdaj = istega, DNEVI[d.weekday()]
     else:
         izbor = [r for r in vrstice if tip_dneva(r["datum"]) == tip]
         kdaj = TIPI[tip]
-    if len(izbor) < NAJMANJ:
+    if not dovolj(izbor):
         return None
-    stopnje = [0] * len(STOPNJE)
+    # En glas na odhod na dan: mediana poročil tistega avtobusa.
+    po_odhodih: dict[tuple, list[int]] = {}
     for r in izbor:
-        stopnje[r["stopnja"] - 1] += 1
-    urejene = sorted(r["stopnja"] for r in izbor)
+        po_odhodih.setdefault(_odhod_dne(r), []).append(r["stopnja"])
+    enote = [sorted(v)[(len(v) - 1) // 2] for v in po_odhodih.values()]
+    stopnje = [0] * len(STOPNJE)
+    for n in enote:
+        stopnje[n - 1] += 1
+    urejene = sorted(enote)
     datumi = sorted({r["datum"] for r in izbor})
     # Najzgodnejše „polno“ pred odhodom, po dnevu in odhodu. Poročilo pove,
     # kdaj je potnik videl polno, ne kdaj se je napolnilo -- zato „vsaj“.
@@ -422,19 +453,21 @@ def _obicajno(vrstice: list[dict], datum: str, t_s: int) -> dict | None:
     for r in izbor:
         odhod = stats.polnoc(r["datum"]) + r["t_s"]
         if r["stopnja"] >= POLNO and r["prejeto"] < odhod:
-            k = (r["datum"], r["agency"], r["train_no"], r["headsign"], r["start_s"])
+            k = _odhod_dne(r)
             prvo[k] = max(prvo.get(k, 0), odhod - r["prejeto"])
     prej = None
     po_dnevih: dict[str, float] = {}
     for (dan, *_), s in prvo.items():
         po_dnevih[dan] = max(po_dnevih.get(dan, 0), s)
     if len(po_dnevih) >= PREJ_DNI:
-        mini = round(min(po_dnevih.values()) / 60)
-        maksi = round(max(po_dnevih.values()) / 60)
-        prej = {"dni": len(po_dnevih), "od_min": mini, "do_min": maksi,
-                "nasvet_min": max(5, math.ceil(maksi / 5) * 5)}
+        minute = sorted(round(s / 60) for s in po_dnevih.values())
+        # Zgornja četrtina, ne največja: en potnik, ki je 55 min prej videl
+        # prejšnji avtobus na peronu, ne sme postaviti nasveta.
+        zgornja = minute[math.ceil(0.75 * len(minute)) - 1]
+        prej = {"dni": len(minute), "od_min": minute[0], "do_min": minute[-1],
+                "nasvet_min": max(5, math.ceil(zgornja / 5) * 5)}
     return {"kdaj": kdaj, "od": _ura(t_s - PAS_S), "do": _ura(t_s + PAS_S),
-            "porocil": len(izbor), "dni": len(datumi), "prvi": datumi[0],
+            "porocil": len(izbor), "voznj": len(enote), "dni": len(datumi), "prvi": datumi[0],
             "zadnji": datumi[-1], "stopnje": stopnje,
             "mediana": urejene[(len(urejene) - 1) // 2], "prej": prej}
 
@@ -505,9 +538,9 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
 
     vrstice = [dict(r) for r in conn.execute(
         "SELECT datum, agency, train_no, headsign, start_s, t_s, naprej, stopnja, prejeto"
-        "  FROM zasedenost WHERE postaja = ? AND datum >= ? AND datum <= ?"
+        "  FROM zasedenost WHERE postaja = ? AND omrezje = ? AND datum >= ? AND datum <= ?"
         "   AND skrito = 0 AND t_s BETWEEN ? AND ?",
-        (postaja, od, datum, t_s - PAS_S, t_s + PAS_S))]
+        (postaja, v.network, od, datum, t_s - PAS_S, t_s + PAS_S))]
     for r in vrstice:
         r["postaje"] = json.loads(r["naprej"])
     v_smer = [r for r in vrstice if _ista_smer(naprej, r["postaje"])]
@@ -534,9 +567,9 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
     for r in conn.execute(
             "SELECT id, datum, postaja, t_s, naprej, besedilo, agency, train_no,"
             "       headsign, start_s FROM opomba"
-            " WHERE objavljeno >= ? AND (postaja = ? OR (train_no = ? AND start_s = ?))"
+            " WHERE objavljeno >= ? AND omrezje = ? AND (postaja = ? OR (train_no = ? AND start_s = ?))"
             " ORDER BY datum DESC, id DESC LIMIT 100",
-            (int(t) - OPOMBE_DNI * 86400, postaja, v.train_no, v.start_s)):
+            (int(t) - OPOMBE_DNI * 86400, v.network, postaja, v.train_no, v.start_s)):
         isti_odhod = (r["agency"], r["train_no"], r["headsign"], r["start_s"]) == k
         if isti_odhod or (r["postaja"] == postaja and abs(r["t_s"] - t_s) <= PAS_S
                           and _ista_smer(naprej, json.loads(r["naprej"]))):
@@ -576,6 +609,10 @@ def preveri_opombo(conn: sqlite3.Connection, trip_id: str, datum: str, postaja: 
     danes = datetime.fromtimestamp(t, TZ).date()
     if date.fromisoformat(datum) not in (danes, danes - timedelta(days=1)):
         raise Zavrnjeno("Opombo lahko dodaš samo k današnji ali včerajšnji vožnji.", "cas")
+    (n,) = conn.execute("SELECT COUNT(*) FROM sporocilo WHERE opomba IS NOT NULL"
+                        " AND prispelo >= ?", (danes.isoformat(),)).fetchone()
+    if n >= OPOMB_NA_DAN:
+        raise Zavrnjeno("Danes opomb ne sprejemamo več. Poskusi jutri.", "strop", 429)
     v = voznja(conn, _niz(trip_id, 80), datum)
     postaja, t_s, naprej = v.na(_niz(postaja, 120))
     kontekst = {"trip_id": v.trip_id, "datum": datum, "postaja": postaja, "t_s": t_s,
@@ -593,9 +630,9 @@ def objavi(conn: sqlite3.Connection, sporocilo_id: int, zdaj: float | None = Non
         return False
     o = json.loads(r["opomba"])
     conn.execute(
-        "INSERT OR REPLACE INTO opomba(sporocilo, objavljeno, datum, agency, train_no,"
-        " headsign, start_s, postaja, t_s, naprej, besedilo) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-        (sporocilo_id, int(zdaj if zdaj is not None else time.time()), o["datum"],
+        "INSERT OR REPLACE INTO opomba(sporocilo, objavljeno, datum, omrezje, agency, train_no,"
+        " headsign, start_s, postaja, t_s, naprej, besedilo) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (sporocilo_id, int(zdaj if zdaj is not None else time.time()), o["datum"], o["network"],
          o["agency"], o["train_no"], o["headsign"], o["start_s"], o["postaja"], o["t_s"],
          json.dumps(o["naprej"], ensure_ascii=False), r["besedilo"]))
     conn.commit()
@@ -610,18 +647,25 @@ def umakni(conn: sqlite3.Connection, sporocilo_id: int) -> bool:
 
 def oznaci_objavljene(conn: sqlite3.Connection, sporocila: list[dict]) -> list[dict]:
     """Nabiralniku pove, kateri komentarji so javni (gumb „objavi“ / „umakni“)."""
-    objavljeni = {r[0] for r in conn.execute("SELECT sporocilo FROM opomba")}
+    # Številka objavljene opombe: gumb „Prijavi“ na strani jo nosi v /stik.
+    objavljeni = dict(conn.execute("SELECT sporocilo, id FROM opomba").fetchall())
     for s in sporocila:
         if s.get("opomba"):
             s["opomba"] = json.loads(s["opomba"])
             s["objavljeno"] = s["id"] in objavljeni
+            s["opomba_id"] = objavljeni.get(s["id"])
     return sporocila
 
 
 # ------------------------------------------------------------------ vzdrževanje
 
 def pocisti(conn: sqlite3.Connection, zdaj: float | None = None) -> int:
-    """Poročila in komentarji, starejši od `HRAMBA_DNI`, gredo ven."""
+    """Poročila in komentarji, starejši od `HRAMBA_DNI`, gredo ven.
+
+    Tudi ko je stikalo ugasnjeno: obljuba o hrambi velja za že zbrano.
+    """
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'zasedenost'").fetchone():
+        return 0
     t = zdaj if zdaj is not None else time.time()
     meja = datetime.fromtimestamp(t - HRAMBA_DNI * 86400, TZ).date().isoformat()
     n = conn.execute("DELETE FROM zasedenost WHERE datum < ?", (meja,)).rowcount

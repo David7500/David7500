@@ -31,6 +31,7 @@ def _s(ura: str) -> int:
 @pytest.fixture()
 def conn():
     zasedenost._glasovi.clear()
+    zasedenost._soli.clear()
     zasedenost._poslana.clear()
     stik._poslana.clear()
     c = db.connect(":memory:")
@@ -127,6 +128,35 @@ def test_prejeto_ostane_ob_prvem_polnem(conn):
     _javi(conn, 4, ura="16:05")
     _javi(conn, 5, ura="16:21")
     assert _vrstice(conn)[0]["prejeto"] == int(_ob(PETEK, "16:05"))
+
+
+def test_druga_postaja_je_drugo_opazanje(conn):
+    """Popravek z druge postaje ne sme vzeti `prejeto` s prve (pregled e955c1a)."""
+    _javi(conn, 4, ura="16:15")
+    _javi(conn, 4, ura="18:00", postaja="Maribor AP")
+    v = _vrstice(conn)
+    assert [r["postaja"] for r in v] == ["Ljubljana AP", "Maribor AP"]
+    assert v[1]["prejeto"] == int(_ob(PETEK, "18:00"))
+
+
+def test_preklic_po_popravku(conn):
+    _javi(conn, 4, ura="16:05")
+    _javi(conn, 5, ura="16:12")
+    assert _javi(conn, None, ura="16:17", preklic=True) == {"preklicano": True}
+    assert _vrstice(conn) == []
+
+
+def test_glas_cez_polnoc(conn):
+    """Vožnja ob 23:50 je ista po polnoči: popravek ne sme biti drug potnik."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, mode,"
+                 " agency, network) VALUES('n', 'n', 'A9', 'Ljubljana AP - Maribor AP', 'S',"
+                 " 'bus', '1123', 'avtobus')")
+    conn.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+                     [("n", 1, "LJ", _s("23:50"), _s("23:50")), ("n", 2, "MB", _s("25:30"), _s("25:30"))])
+    db.fill_trip_window(conn)
+    _javi(conn, 4, trip="n", ura="23:45")
+    _javi(conn, 5, trip="n", ura="24:05")
+    assert len(_vrstice(conn)) == 1
 
 
 def test_druga_naprava_je_drug_potnik(conn):
@@ -227,6 +257,27 @@ def test_obicajno_zdruzi_prevoznike_v_isti_smeri(conn):
     assert o["stopnje"] == [0, 0, 0, 0, 5]
 
 
+def test_en_dan_ni_obicajno(conn):
+    """Pet potnikov istega avtobusa (ali en z petimi id-ji) je en dan, ne navada."""
+    for i in range(6):
+        _javi(conn, 5, trip="m1620", datum=PETKI[0], ura="16:21", naprava=f"{i + 1:032x}")
+    p = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
+    assert p["obicajno"] is None
+
+
+def test_vlak_in_avtobus_se_ne_mesata(conn):
+    """Ista postaja, ista smer, drugo omrežje: pri vlaku „polno“ pomeni stojijo."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, mode,"
+                 " agency, network) VALUES('v', 'v', 'IC 1', 'Ljubljana AP - Maribor AP', 'S',"
+                 " 'vlak', '1161', 'zeleznica')")
+    conn.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+                     [("v", 1, "LJ", _s("16:00"), _s("16:00")), ("v", 2, "MB", _s("17:50"), _s("17:50"))])
+    db.fill_trip_window(conn)
+    _zgodovina(conn, "v", PETKI[:5], 4, ura_porocila="15:55")
+    p = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
+    assert p["obicajno"] is None
+
+
 def test_drugi_dnevi_tipa_ko_istega_dne_ni_dovolj(conn):
     """Ponedeljek ni torek: tip dneva, ne cel teden (vozni red ima ob ponedeljkih ojačitve)."""
     srede = ["2026-10-07", "2026-10-14", "2026-10-21"]
@@ -287,6 +338,18 @@ def test_opomba_skozi_nabiralnik_do_objave(conn):
     assert [o["besedilo"] for o in op] == ["Vrsta do konca perona že ob 16:00."]
     assert zasedenost.umakni(conn, id_)
     assert zasedenost.pregled(conn, "m1620", teden, "Ljubljana AP", _ob(teden, "15:00"))["opombe"] == []
+
+
+def test_opombe_imajo_svoj_strop(conn, monkeypatch):
+    """Opombe si z nabiralnikom delijo `stik.VSEH_NA_DAN`; ne smejo ga zapolniti."""
+    monkeypatch.setattr(zasedenost, "OPOMB_NA_DAN", 1)
+    zdaj = _ob(PETEK, "16:30")
+    besedilo, kontekst = zasedenost.preveri_opombo(conn, "m1620", PETEK, "Ljubljana AP",
+                                                   "Polno.", zdaj)
+    conn.execute("INSERT INTO sporocilo(prispelo, email, besedilo, opomba) VALUES(?, '', ?, ?)",
+                 (f"{PETEK}T16:30:00+02:00", besedilo, kontekst))
+    with pytest.raises(zasedenost.Zavrnjeno):
+        zasedenost.preveri_opombo(conn, "m1620", PETEK, "Ljubljana AP", "Še vedno polno.", zdaj)
 
 
 def test_opomba_samo_za_danes_in_vceraj(conn):
