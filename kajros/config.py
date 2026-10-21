@@ -260,10 +260,11 @@ STIK_OBRAZEC = okolje("STIK_OBRAZEC", "1") != "0"
 DELI = okolje("DELI", "1") != "0"
 
 # Zasedenost po poročilih potnikov (`zasedenost.py`, `POST /api/zasedenost`).
-# Pisalna pot iz zahteve kot `DELI`, zato svoje stikalo. Privzeto ugasnjeno,
-# dokler David ne potrdi objave (21. 10. 2026): poti ni (404), okno vožnje
-# razdelka ne pokaže.
-ZASEDENOST = okolje("ZASEDENOST", "0") != "0"
+# Pisalna pot iz zahteve kot `DELI`, zato svoje stikalo: ugasnjeno pomeni, da
+# poti ni (404) in okno vožnje razdelka ne pokaže. Vklopljeno z objavo
+# 21. 10. 2026 (David: „kar objavi“); privzetek je v kodi, ker enote na
+# strežniku agent ne more pisati.
+ZASEDENOST = okolje("ZASEDENOST", "1") != "0"
 
 # Naslov strani za donacije. Privzeto je v kodi in ne v enoti na strežniku,
 # ker enote v `/etc` agent ne more pisati, naslov pa ni skrivnost. Prazen

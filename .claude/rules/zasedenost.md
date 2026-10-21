@@ -16,7 +16,7 @@ Nastalo 21. 10. 2026 na prošnjo potnice (Ljubljana–Maribor: ob petkih pride 2
 * **Ne sme motiti:** razdelek je na dnu okna vožnje (`#zasedenost` v `.run-pot`, na namizju pod časovnico), zgoraj samo vrstica brez okvirja (`#zas-vrh`), in to le, kadar so podatki. Prototip in videz potrdil.
 * **„Kdaj si prišel na postajo“ ni vprašanje.** Potnik pove trenutno stanje; „pridi vsaj N min prej“ se izpelje iz časa najzgodnejšega poročila „polno“ ali več pred odhodom (`prejeto`), iz vsaj `PREJ_DNI` dni. Poročilo pove, kdaj je potnik videl polno, ne kdaj se je napolnil -- zato „vsaj“.
 * **Vlaki tudi**, mestni LPP ne (`agency = 'lpp'`: gneče ni, sto voženj na linijo).
-* **Za stikalom** `KAJROS_ZASEDENOST`, privzeto ugasnjeno, dokler David ne potrdi objave.
+* **Stikalo** `KAJROS_ZASEDENOST`, privzeto vklopljeno od objave 21. 10. 2026 (David: „kar objavi“); `=0` pot in razdelek skrije, obrez poročil teče naprej.
 
 ## Ključ, smer, povzetek
 
