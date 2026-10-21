@@ -46,17 +46,20 @@ from . import config, pristanek, stats
 TZ = ZoneInfo(config.TIMEZONE)
 
 #: Davidove stopnje (21. 10. 2026). „polno“ = vsi sedeži zasedeni,
-#: medkrajevni avtobusi stojišč nimajo; „vrsta zunaj“ = poln, ljudje čakajo
-#: zunaj ali so ostali na postaji -- to se vidi že pred odhodom, ko avtobus
-#: stoji na peronu, zato ni omejeno na čas odhoda. Indeks + 1 je vrednost v bazi.
+#: medkrajevni avtobusi stojišč nimajo; „vrsta zunaj“ = poln, ljudje so
+#: ostali na postaji. Indeks + 1 je vrednost v bazi.
 STOPNJE = ("prazno", "pol polno", "skoraj polno", "polno", "vrsta zunaj")
 #: Od te stopnje naprej je vozilo polno -- za „koliko prej priti“.
 POLNO = 4
+ZUNAJ = 5
 
 #: Poročilo velja od ure pred voznoredno uro na postaji do treh ur po njej:
 #: kdor čaka, vidi avtobus na peronu, kdor se pelje, poroča med vožnjo.
 PRED_S = 3600
 PO_S = 3 * 3600
+#: „Vrsta zunaj“ šele od 10 min pred odhodom: prej vozila še ni, da bi koga
+#: pustilo (David, 21. 10. 2026: „prav je“).
+ZUNAJ_PRED_S = 600
 #: Zgrešen dotik se da preklicati toliko časa.
 PREKLIC_S = 600
 
@@ -395,6 +398,8 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
     odhod = stats.polnoc(datum) + t_s
     if not odhod - PRED_S <= t <= odhod + PO_S:
         raise Zavrnjeno("Javiš lahko od ure pred odhodom do treh ur po njem.", "cas")
+    if stopnja == ZUNAJ and t < odhod - ZUNAJ_PRED_S:
+        raise Zavrnjeno("Da so ljudje ostali zunaj, se javi ob odhodu.", "prezgodaj")
 
     with _sprejem:
         _preveri_pogostost(kljuc, t)
@@ -602,7 +607,7 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
             break
 
     return {"vklopljeno": True, "postaja": postaja, "odhod": _ura(t_s),
-            "odhod_ts": stats.polnoc(datum) + t_s, "okno": [PRED_S, PO_S],
+            "odhod_ts": stats.polnoc(datum) + t_s, "okno": [PRED_S, PO_S, ZUNAJ_PRED_S],
             "postaje": [{"ime": p, "ura": _ura(s)} for p, s in v.postanki[:-1]],
             "stopnje": STOPNJE, "danes": danes, "prejsnji": prejsnji,
             "te_ni_vzel": te_ni_vzel, "obicajno": obicajno, "zgodovina": zgodovina,

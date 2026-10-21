@@ -109,8 +109,9 @@
 
   function okno(d) {
     const zdaj = Date.now() / 1000;
-    const [pred, po] = d.okno;
+    const [pred, po, zunaj] = d.okno;
     return { pred: zdaj < d.odhod_ts - pred, po: zdaj > d.odhod_ts + po,
+             zunajPrezgodaj: zdaj < d.odhod_ts - zunaj,
              odUra: hhmm(new Date((d.odhod_ts - pred) * 1000).toISOString()) };
   }
 
@@ -118,7 +119,7 @@
     const izbrana = S.oddano && !S.oddano.prejsnji ? S.oddano.stopnja : 0;
     return `<div class="zas-stopnje" role="group" aria-label="Kako polno je zdaj">${d.stopnje.map((ime, i) => {
       const n = i + 1;
-      const onemogoceno = ok.pred || S.zaposlen;
+      const onemogoceno = ok.pred || (n === 5 && ok.zunajPrezgodaj) || S.zaposlen;
       return `<button type="button" class="zas-stopnja${n === izbrana ? " je-izbrana" : ""}"
           data-stopnja="${n}" aria-pressed="${n === izbrana}"${onemogoceno ? " disabled" : ""}>
           ${glif(n)}<span>${escapeHtml(ime)}</span></button>`;

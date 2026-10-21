@@ -175,16 +175,13 @@ def test_preklic_samo_kmalu(conn):
     assert len(_vrstice(conn)) == 1
 
 
-@pytest.mark.parametrize("ura", ["15:10", "19:30"])
-def test_cas_porocila(conn, ura):
-    """Od ure pred odhodom do treh ur po njem."""
+@pytest.mark.parametrize("ura,stopnja", [("15:10", 4), ("19:30", 4), ("16:00", 5)])
+def test_cas_porocila(conn, ura, stopnja):
+    """Od ure pred odhodom do treh ur po njem; „vrsta zunaj“ od 10 min pred odhodom."""
     with pytest.raises(zasedenost.Zavrnjeno):
-        _javi(conn, 4, ura=ura)
-
-
-def test_vrsta_zunaj_ze_pred_odhodom(conn):
-    """Avtobus stoji na peronu poln, vrsta je zunaj: to se vidi pred odhodom."""
-    assert _javi(conn, 5, ura="15:40")["stopnja"] == 5
+        _javi(conn, stopnja, ura=ura)
+    if stopnja == 5:
+        assert _javi(conn, 5, ura="16:10")["stopnja"] == 5
 
 
 @pytest.mark.parametrize("stopnja", [0, 6, True, "4", None])
