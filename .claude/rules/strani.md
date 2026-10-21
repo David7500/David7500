@@ -189,6 +189,8 @@ Seznam = „s čim in kdaj", ta stran = **„kako"**. Klik na predlog pelje sem,
 
 **Žeton zamude ob izstopu je drug od vstopnega in mora biti viden.** Vozilo vmes rezervo porabi ali izgubi: „+1 min" nad prihodom šest minut za voznim redom je videti kot napaka, čeprav je napoved. Zato drugi žeton na izstopni vrstici — samo kadar se od prvega res razlikuje.
 
+**Povezava na okno vožnje nosi `postaja` (vstop) in `date` (dan predloga)**, kot iz iskalnika zvez (21. 10. 2026). Brez `postaja` okno ni imelo bloka „Pri tebi“: LPP 11 pred odhodom, brez žive napovedi in z 2 vožnjama zgodovine (`MIN_RUNS_FOR_TYPICAL` = 3), je bil 39 vrstic „brez ocene“ in „?“ — prijavljeno kot „prazno vse“. Okno zdaj tako vožnjo pove enkrat (ločilna vrstica „vozni red, ocene še ni“), postanki nosijo neprečrtan vozni red.
+
 **Pot je v naslovu** (`?noge=trip:od_seq:do_seq;…`), ne v seji: kdor jo pošlje, pošlje pot, ne svojega brskalnika. `trip_id` LPP nosi navpičnice → `encodeURIComponent`; ločnica se bere **z desne** — sicer se id z dvopičjem razlomi na napačnem mestu.
 
 **`date` = prometni dan predloga, `dan` = dan vprašanja** (23. 9. 2026). Pred 04:00 iskanje bere tudi včerajšnji prometni dan (`pot.NOCNI_S`) — IC 350 ob 00:05 je včerajšnji. Povezava je nosila dan vprašanja, podrobnosti so pokazale **jutrišnjo** vožnjo ob isti uri. Zdaj vsak predlog nosi `datum`, podrobnosti `zivo` (ali odštevati in osveževati zamude) — prej je stran sklepala iz „dan je danes". Glava kaže koledarski dan odhoda, ne prometnega.

@@ -211,10 +211,15 @@ function ageLabel(iso) {
 
 // Voznja, ki se ni zacela, NI voznja brez podatkov -- to je razlika, ki jo
 // potnik bere kot "aplikacija ne dela" proti "avtobus se ni odpeljal".
-function notStartedText() {
+function odhodPrvega() {
   const first = state.run && state.run.stops && state.run.stops[0];
   const iso = first && (first.sched_dep || first.sched_arr);
-  if (iso && new Date(iso).getTime() > Date.now()) {
+  return iso && new Date(iso).getTime() > Date.now() ? iso : null;
+}
+
+function notStartedText() {
+  const iso = odhodPrvega();
+  if (iso) {
     return `${vehicleNoun()} se še ni odpeljal — po voznem redu ob
             <strong>${hhmm(iso)}</strong>`;
   }
@@ -323,8 +328,10 @@ function runHeadHtml(cur) {
     ? (state.run.stops.find((x) => x.typical) || {}).typical || null
     : null;
   // Brez meritve in brez svoje stevilke glava ne postavlja vprasaja v najvecji
-  // pisavi na strani: stavek pod njim ze pove, da se voznja ni zacela.
-  const tiho = !cur && !poPotnikih && jeTvoj;
+  // pisavi na strani: stavek pod njim ze pove, da se voznja ni zacela. Isto
+  // brez bloka "Pri tebi", kadar ni niti obicajne zamude -- "Trenutna zamuda
+  // ? min" pred odhodom vprasa po necem, cesar se ne more biti.
+  const tiho = !cur && !poPotnikih && (jeTvoj || (!t0 && !!odhodPrvega()));
 
   // Prevoznikovo porocilo: zamuda ob prihodu na postajo PRED vlakom, torej
   // napoved, ne kraj meritve (`api._dodaj_porocila`) -- zato z besedami SZ.
@@ -507,7 +514,7 @@ function yourStopHtml(stops, forecast, current) {
         ${cas !== sched ? `<span class="yours-sched">${sched}</span>` : ""}
         <span class="yours-delay-box">
           <span class="yours-kind">${escapeHtml(znak)}</span>
-          <span class="yours-delay" style="color:${color}">${delayText(d)}</span>
+          ${d != null ? `<span class="yours-delay" style="color:${color}">${delayText(d)}</span>` : ""}
         </span>
       </div>
       <div class="yours-tag">${escapeHtml(odkod)}</div>

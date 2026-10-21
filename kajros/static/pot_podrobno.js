@@ -142,7 +142,12 @@ function hojaHtml(n, i) {
 
 function voznjaHtml(n) {
   const pot = n.network === "avtobus" ? "bus" : "train";
-  const okno = `/app/${pot}/${encodeURIComponent(n.train_no)}?trip=${encodeURIComponent(n.trip_id)}`;
+  // Kot iz iskalnika zvez: dan predloga (nočni avtobus je včerajšnji) in
+  // postajališče vstopa, da okno pokaže "Pri tebi" -- brez tega je človek
+  // svoje postajališče iskal med 39 postanki, vse z "brez ocene".
+  const q = new URLSearchParams({ trip: n.trip_id, postaja: n.od });
+  if (PREDLOG && PREDLOG.datum) q.set("date", PREDLOG.datum);
+  const okno = `/app/${pot}/${encodeURIComponent(n.train_no)}?${q}`;
   const odh = n.odhod_ocena || n.odhod;
   const prih = n.prihod_ocena || n.prihod;
   const vr = n.odhod_ocena && n.odhod_ocena !== n.odhod

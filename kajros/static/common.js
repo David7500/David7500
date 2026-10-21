@@ -1306,7 +1306,7 @@ function gapStopHtml(s) {
   `;
 }
 
-function forecastStopHtml(s, f, w, dod) {
+function forecastStopHtml(s, f, w, dod, brezOcene) {
   // Postaja, ki je vlak se ni dosegel. Uporabimo LASTNO oceno, ne vrednosti
   // iz feeda -- ta je za postanke naprej izmerjeno slaba (glej backtest.py):
   //
@@ -1331,8 +1331,12 @@ function forecastStopHtml(s, f, w, dod) {
   const t = !zivo && !f && s.typical ? s.typical : null;
   const d = zivo ? zivo.s : f ? f.predicted_delay_s : t ? t.median_s : null;
   const color = delayColor(d);
-  const eta = d != null && schedIso ? hhmm(pricakovanaUra(schedIso, d)) : "—";
-  const schedHtml = eta !== sched ? `<span class="stop-sched">${sched}</span>` : "";
+  // Brez številke je vozni red edina ura, ne popravljena: prečrtana ob "—"
+  // je trdila, da avtobus ob njej ne bo vozil (LPP 11 pred odhodom, 21. 10.).
+  const eta = d != null && schedIso ? hhmm(pricakovanaUra(schedIso, d)) : null;
+  const casiHtml = eta == null ? `<span class="stop-sched-plain">${sched}</span>`
+    : `<span class="stop-actual">${eta}</span>${
+      eta !== sched ? `<span class="stop-sched">${sched}</span>` : ""}`;
   // Kadar prevoznik napove VEC od nase ocene, je njegova stevilka merjeno
   // skoraj tocna (MAE 0,21 min proti nasim 2,66) -- takrat ve za nekaj, cesar
   // iz zgodovine ni mogoce vedeti. Povejmo, da stevilka pride od njega.
@@ -1355,7 +1359,7 @@ function forecastStopHtml(s, f, w, dod) {
       <div class="stop-main">
         <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
         ${nadomestniPostanekHtml(s.nadomestni_postanek)}
-        <div class="stop-times"><span class="stop-actual">${eta}</span>${schedHtml} <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span></div>
+        <div class="stop-times">${casiHtml}${brezOcene ? "" : ` <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span>`}</div>
         ${dwellPlanHtml(s)}
         ${feedSaid != null && !zivo && !(f && f.from_operator)
           ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayText(feedSaid)}</span></div>`
@@ -1367,7 +1371,7 @@ function forecastStopHtml(s, f, w, dod) {
           t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}
       </div>
       ${stopWeatherHtml(w, true)}
-      <div class="stop-delay is-forecast" style="color:${color}">${delayText(d, true)}${
+      <div class="stop-delay is-forecast" style="color:${color}">${brezOcene ? "" : delayText(d, true)}${
         d != null && dod ? `<span class="stop-do">do ${delayLabel(d + dod)}</span>` : ""}</div>
     </div>
   `;
@@ -1391,6 +1395,12 @@ function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
     if (cur.stop_seq < zadnji) from = cur.stop_seq;
   }
   const shown = from == null ? stops : stops.filter((s) => s.stop_seq >= from);
+  // Kadar naprej po progi ni nobene številke -- vožnja se še ni začela, žive
+  // napovedi ni, preteklih voženj je premalo -- je to ena novica, ne
+  // devetintrideset: pove jo ločilna vrstica, postanki nosijo vozni red.
+  // Prej je stalo "brez ocene" in "?" v vsaki vrstici, videti kot prazna stran.
+  const brezOcene = shown.every((s) => (cur && s.stop_seq <= cur.stop_seq)
+    || (!zivaNapoved(s) && !forecastBySeq.get(s.stop_seq) && !s.typical));
 
   // Koliko postaj je vlak ze prevozil, ne pove nicesar, kar bi potnik rabil:
   // seznam se zacne pri vozilu in to je vidno samo po sebi.
@@ -1405,12 +1415,13 @@ function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
         : gapStopHtml(s);
     } else {
       if (!seenAheadHead) {
-        rows.push('<div class="stop-sep">naprej po progi — ocena, ne meritev</div>');
+        rows.push(`<div class="stop-sep">${brezOcene
+          ? "naprej po progi — vozni red, ocene še ni" : "naprej po progi — ocena, ne meritev"}</div>`);
         seenAheadHead = true;
       }
       // Zgornja meja ob zapori ali vlaku pred njim (`zapore.dodatek`); ocena ostane.
       const dod = ((opts && opts.run && opts.run.dodatek) || {})[s.stop_seq];
-      html = forecastStopHtml(s, forecastBySeq.get(s.stop_seq), wx.get(s.stop_seq), dod);
+      html = forecastStopHtml(s, forecastBySeq.get(s.stop_seq), wx.get(s.stop_seq), dod, brezOcene);
     }
     rows.push(isHi ? html.replace('class="stop-row', 'class="stop-row is-yours') : html);
   }
