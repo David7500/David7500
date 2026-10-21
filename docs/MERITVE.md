@@ -2802,3 +2802,26 @@ Pri mestnem LPP ocena ne drsi pri 32 % opažanj s traso (vozilo stoji). Za vsa v
 **Skrit zavihek.** Zemljevid odprt 6 s, nato drug zavihek 120 s: prej `/api/health` 4-krat, `/api/live` 4-krat, `/api/zapore` 2-krat, zdaj nič; ob vrnitvi v 4 s prej samo `/api/vehicles`, zdaj vse štiri.
 
 **Lege mestnega LPP in ključ predpomnilnika** (19. 10. 2026 dopoldne, razvojni strežnik s staro kodo in brez NAP; baza samo za branje na 0,1 s, 10 min). Novih leg mestnega LPP 10, premikov `positions_fetched` 59 (vsakih 10,0 s, največ 10,3). Nobena lega LPP ni prišla s premikom ključa: zapisana je bila 9,3–9,7 s za branjem leg derp.si istega obhoda in **0,61–0,75 s pred naslednjim** -- obhod (zamude IJPP, lege derp.si, LPP) traja dlje od 10 s, naslednje branje derp.si pride po 0,5 s čakanja. V odgovoru `/api/vehicles` (vprašan na 1 s) je bila nova lega 0,7–1,5 s po zapisu; prva meritev (5 min, n = 6) 0,1–1,8 s. Presojina ocena „0–10 s“ tu torej ne drži, drži le ob obhodu, krajšem od 10 s. Odslej `poll_lpp` ključ premakne sam, ne glede na obhod; cena je glava `X-Osvezi-Cez`, ki po zapisu LPP do naslednjega branja derp.si kaže ~10 s namesto 1 (`strezba.md`). Produkcija (z NAP, drug obhod) ni izmerjena.
+
+## Zasedenost: od kod bi jo dobili (21. 10. 2026)
+
+Sporočilo potnice 21. 10. (avtobus Ljubljana–Maribor): ob nekaterih dnevih in urah je avtobus ob odhodu poln, zato na postajo pride 20 min prej. Vprašanje: ali podatek o zasedenosti kje obstaja.
+
+**Strojnega vira ni.** Izmerjeno 21. 10. okoli 14:30: derp.si `ijpp/vehicle_positions` ima `occupancy_status` ali `occupancy_percentage` pri 0 od 829 vozil, `lpp/all` pri 0 od 142. NAP SIRI-VM nima elementa `Occupancy` pri nobenem od 802 vozil. `data.lpp.si/api/station/arrival` (64 prihodov na Bavarskem dvoru) in zemljevid SŽ (`aktivni_vlaki`, 14 polj) nimata polja o zasedenosti ali kapaciteti. Katalog NAP (112 vsebin) nima nič o zasedenosti ali štetju potnikov. AP Ljubljana v JSON odhodov sedežev ne objavi. Flixbus `available.seats` objavi, a direktne vožnje LJ → MB nima (22.–30. 10.: 0 od 10–12 zadetkov). Vozovnica IJPP velja za relacijo, ne za odhod; rezervacij sedežev ni, ministrstvo jih je leta 2020 zavrnilo. Javnih kamer na AP Ljubljana in AP Maribor nismo našli.
+
+**Podatek ima DUJPP**: validacije IJPP (avtobus 28,7 mio potnikov v 2025). Letno poročilo 2025 omenja analizo obremenjenosti posameznih linij in pogled v Power BI. Na OPSI ni nič (iskanje `validacije` in `IJPP`: 0 zadetkov). Beleži se vstop, izstopa ne. Po LPP (2025) več kot 15 % potnikov ne validira, zato validacije gnečo podcenijo. Na izhodiščni postaji je število vstopov hkrati zasedenost ob odhodu, kar je natanko vprašanje potnice. Naslovnik zahteve ZDIJZ: DUJPP. SŽ od 1. 5. 2026 validira tudi na peronu, a podatka ne objavi.
+
+**Relacija Ljubljana AP ↔ Maribor AP** (vozni red, teden 21.–25. 10.):
+
+| dan | LJ → MB | MB → LJ |
+|---|---|---|
+| delavnik (sreda) | 7 | 7 |
+| petek | 11 | 9 |
+| sobota | 6 | 5 |
+| nedelja | 7 | 6 |
+
+Vozita AP Murska Sobota (M2123, M2119, M2125, M2129, 98 min) in Arriva (A2527, 110 min, samo delavniki). Nomago (N0680/N0681, prek Celja) v tem tednu ne vozi. Ojačitve, ko gresta dva avtobusa ob isti minuti: petek 16:20 LJ → MB, petek 11:00 MB → LJ, nedelja 20:40 LJ → MB, nedelja 18:00 MB → LJ. To je edini posreden znak, da prevoznik ve, kdaj je polno.
+
+**Koliko poročil bi dalo deljenje lege.** 27. 9.–21. 10.: 122 deljenj, od tega 51 „peljal“, na 66 voženj. Po tednih (avtobus / vlak): 6 / 0, 7 / 5, 22 / 2, 24 / 24, 22 / 10 (zadnji pon–sre). Na LJ–MB je 9 deljenj, vsa na isti vožnji (M2129 Lendava → Ljubljana, tri nedelje). To je en reden potnik; v smeri LJ → MB ni nobenega. Relacija ima 44 celic (vožnja × delavnik/sobota/nedelja). Za 5 poročil na celico v 4 tednih bi jih rabili ~55 na teden samo na tej relaciji, zdaj pride ~1. Večji lijak je okno vožnje: `/app/bus/{no}` je imel 14.–20. 10. 1 217 ogledov. Deljenj se začne ~8 na dan, za obe omrežji skupaj.
+
+**Izkušnje drugje.** Transit GO (2020): vprašanje z enim dotikom ob vstopu, odgovori več kot polovica tistih, ki ga vidijo. iRail Spitsgids (2016): ~1 400 vnosov v prvem mesecu za vse belgijske vlake; avtorji pravijo, da model iz njih ni dovolj dober. Google je 8 mesecev zbiral poročila po vožnji, preden je pokazal napoved. Vsi prikazujejo zgodovino odhoda, ne žive ocene. Standardne stopnje: GTFS-RT `OccupancyStatus`, SIRI `OccupancyEnumeration`.
