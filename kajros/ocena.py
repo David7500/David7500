@@ -511,3 +511,40 @@ def report(conn: sqlite3.Connection, days: int = 30,
     izid["pred_odhodom"] = {net: pred_rez([r for r in pred if r["network"] == net], net)
                             for net in sorted({r["network"] for r in pred})}
     return izid
+
+
+# ---------------------------------------------------------------- napaka prikaza za prestop
+
+#: Napaka prikaza (resnica - kar je prikaz kazal) po razredih po 30 s, od
+#: -30 do +30 min; kar je zunaj, gre v robni razred. Iz nje je verjetnost, da
+#: prestop drži, ko sta vozili že na poti (`pot.verjetnost_zdaj`): preostala
+#: rezerva na zaslonu je ena številka, napaka obeh ocen pa je izmerjena tu.
+NAPAKA_KORAK_S = 30
+NAPAKA_MEJA_S = 30 * 60
+
+
+def porazdelitev_napak(conn: sqlite3.Connection, days: int, network: str) -> dict:
+    """Porazdelitev napake sence za omrežje, ločeno za vozilo na poti in pred odhodom.
+
+    Ločeno, ker sta to dve različni številki na zaslonu (`ocena.py` zgoraj):
+    na poti je ocena iz meritve, pred odhodom „običajno“ ali prevoznikova.
+    Agregat čez vse dni sence, zato v dnevnem povzetku (`stats.summary_get`),
+    ne v zahtevi.
+    """
+    od = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
+    razredov = 2 * NAPAKA_MEJA_S // NAPAKA_KORAK_S + 1
+    stevci = {"na_poti": [0] * razredov, "pred_odhodom": [0] * razredov}
+    try:
+        vrstice = conn.execute(
+            "SELECT current_s IS NOT NULL AS na_poti, actual_s - ours_s AS e FROM napoved "
+            "WHERE network = ? AND service_date >= ? AND actual_s IS NOT NULL "
+            "  AND ours_s IS NOT NULL AND ABS(actual_s) <= ? AND ABS(ours_s) <= ?",
+            (network, od, stats.MAX_REALNA_ZAMUDA_S, stats.MAX_REALNA_ZAMUDA_S)).fetchall()
+    except sqlite3.OperationalError:
+        vrstice = []          # senca tu ne teče (nova baza): verjetnosti zdaj ni
+    for r in vrstice:
+        e = max(-NAPAKA_MEJA_S, min(NAPAKA_MEJA_S, r["e"]))
+        i = (e + NAPAKA_MEJA_S + NAPAKA_KORAK_S // 2) // NAPAKA_KORAK_S
+        stevci["na_poti" if r["na_poti"] else "pred_odhodom"][min(i, razredov - 1)] += 1
+    return {"korak_s": NAPAKA_KORAK_S, "od_s": -NAPAKA_MEJA_S, **stevci,
+            "runs": sum(stevci["na_poti"]) + sum(stevci["pred_odhodom"])}

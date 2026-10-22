@@ -48,6 +48,9 @@ Ob zapori enega tira izguba ≥ 5 min pri 16 % prehodov (sicer 4 %), za vlakom z
 * Pragi po omrežju (`journey.TRANSFER_LIMITS`): železnica 6–120 min, avtobus 3–30.
 * **Prestop upošteva OBA vozila**: `wait = načrtovano + zamuda2 − zamuda1`; izpis „drugi +N min“. **Zaokroži enkrat, potem računaj.**
 * Za prestop je nevarna **podcenitev** prvega vozila (obratno od vstopa).
+* **Tveganje prestopa** (`pot.pripni_tveganje`, `docs/MERITVE.md` „Ali prestop drži“): vnaprej zgodovina ISTEGA prestopa (oba isti dan, prihodna zamuda prvega, odhodna drugega), skrčena proti `PRESTOP_IZHODISCE` z 2 dnevoma (Brier 0,098; razred sam 0,152); prvo vozilo na poti → `verjetnost_zdaj` iz napake sence (`ocena.porazdelitev_napak`, dnevni povzetek `napake_sence`; 0,066 proti 0,078). Vlak na izhodišču brez zgodovine = 0. Zanesljivost predloga = zmnožek delov, pri roku × zadnja vožnja v rezervi (0,113 proti 0,117 za delež dni celega predloga).
+* Iskanje ponuja prestope, ki ne držijo: vlak → avtobus s 3–6 min rezerve 49 %, avtobus → avtobus 70 %. **Pri roku prvi = najpoznejši z zanesljivostjo ≥ 0,9** (`ZANESLJIVO_P`); prvi predlog brez tega je bil pravočasen v 70,6 % dni. Prevlada ne izrine predloga, ki je za > 0,05 zanesljivejši.
+* Izhodišča so izmerjena na planerju (`scripts/preizkusi_prestope.py`); ob spremembi praga ali iskanja meri znova.
 
 ## Model napovedi (`stats.predict`)
 

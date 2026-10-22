@@ -2396,6 +2396,13 @@ def _pristanek(conn, days, network):
     return pristanek.zgradi(conn, days, network)
 
 
+def _napake_sence(conn, days, network):
+    """Napaka prikaza po senci, za verjetnost prestopa. Uvoz pozen iz istega
+    razloga kot zgoraj: `ocena` bere `stats`."""
+    from . import ocena
+    return ocena.porazdelitev_napak(conn, days, network)
+
+
 SUMMARY_BUILDERS = {
     "network_stats": lambda conn, days, network: {
         "rows": network_stats(conn, days, network)},
@@ -2404,6 +2411,9 @@ SUMMARY_BUILDERS = {
     # izmerjeno. Isti razlog kot pri ostalih: agregat cez vso zgodovino
     # (20 s za obe omrezji) se ne racuna v zahtevi.
     "pristanek": _pristanek,
+    # Napaka prikaza 15-25 min prej (senca, 30 dni): iz nje pot od vrat do
+    # vrat pove, ali prestop drži, ko sta vozili na poti (`pot.verjetnost_zdaj`).
+    "napake_sence": _napake_sence,
 }
 
 # Katera okna vzdrzujemo. Sirse okno ni drazje od ozjega toliko, kolikor je

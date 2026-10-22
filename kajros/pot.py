@@ -26,13 +26,14 @@ voznem redu je 121 680, torej 33:48) in relativni čas bi jo pokvaril.
 from __future__ import annotations
 
 import bisect
+import itertools
 import math
 import sqlite3
 import time
 from datetime import date, timedelta
 from functools import partial
 
-from . import alerts, collector, config, geo, hoja, journey, nadomestni, stats
+from . import alerts, collector, config, db, geo, hoja, journey, nadomestni, stats
 
 TZ = journey.TZ
 
@@ -1245,6 +1246,17 @@ def _odhod(p: dict) -> int:
     return p.get("odhod_ocena") or p["odhod"]
 
 
+def _zanesljivost(p: dict) -> float:
+    """Verjetnost, da gre vse po načrtu; pot brez prestopa in roka je 1."""
+    z = p.get("zanesljivost")
+    return z["p"] if z and z.get("p") is not None else 1.0
+
+
+#: Za koliko manj zanesljiv sme biti predlog, ki drugega izrine (prevlada).
+#: Pet točk je pod ločljivostjo kratke zgodovine (dva dneva od dvajsetih).
+PREVLADA_ZANESLJIVOST = 0.05
+
+
 def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
     """Vrstni red predlogov in kateri ostanejo. `rok` (absolutno) je ura, do
     katere mora biti potnik na cilju; brez njega je vprašanje "čim prej".
@@ -1261,8 +1273,16 @@ def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
         # seznamu, a ne na vrhu in ne brez besede.
         for p in predlogi:
             p["prepozno"] = _kdaj(p) > rok
-        vrstni = sorted(predlogi, key=lambda p: (p["prepozno"], -_odhod(p),
-                                                 _kdaj(p), p["hoje_s"]))
+        # Kdor mora biti tam, hoče najpoznejši odhod, ki je ZANESLJIV: prvi
+        # predlog "biti tam do" je bil po voznem redu pravočasen v 70 % dni
+        # (`scripts/preizkusi_prestope.py`). Tvegani ostanejo pod njimi, med
+        # sabo najzanesljivejši prvi.
+        def po_roku(p):
+            z = _zanesljivost(p)
+            if z >= ZANESLJIVO_P:
+                return (p["prepozno"], 0, -_odhod(p), _kdaj(p), p["hoje_s"])
+            return (p["prepozno"], 1, -z, -_odhod(p), p["hoje_s"])
+        vrstni = sorted(predlogi, key=po_roku)
     else:
         # Ob isti minuti prihoda je prvi tisti, s katerim odideš najpozneje --
         # prestop več pa mora prinesti vsaj PRESTOP_VREDEN_S doma.
@@ -1304,6 +1324,10 @@ def izberi_predloge(predlogi: list[dict], rok: int | None = None) -> list[dict]:
     # "peš 30 min" izrinil avtobus z 28 min hoje, ki pride minuto pozneje, in
     # stran je trdila "zveze ta čas ni" (lj13 ob 17:10 na naboru 1 280).
     def prevlada(q, p):
+        # Tveganje je na kartici kot ura: hitrejša pot s prestopom, ki drži
+        # trikrat od štirih, zanesljivejše ne izrine.
+        if _zanesljivost(q) < _zanesljivost(p) - PREVLADA_ZANESLJIVOST:
+            return False
         if p is najzgodnejsi or not (z_vozilom(p) and z_vozilom(q)):
             return (_kdaj(q) <= _kdaj(p) and _odhod(q) >= _odhod(p)
                     and q["hoje_s"] <= p["hoje_s"] and q["prestopov"] <= p["prestopov"])
@@ -1406,6 +1430,10 @@ def isci(conn: sqlite3.Connection, od: tuple[float, float],
         predlogi = [p for p in predlogi
                     if not any(n["vrsta"] == "voznja" for n in p["noge"])
                     or p["hoje_s"] < pes_s]
+    # Tveganje PRED izbiro: pri roku odloča, kateri predlog je prvi, in pot,
+    # ki je hitrejša, a tvegana, zanesljivejše ne izrine (`izberi_predloge`).
+    pripni_tveganje(conn, predlogi, {d for d, _ in dnevi} if now_s is not None else set(),
+                    polnoc + prihod_do_s if nazaj else None)
     izbrani = izberi_predloge(predlogi, polnoc + prihod_do_s if nazaj else None)
 
     # Kadar z vozilom ni ničesar, je "ni poti" slabši odgovor od resnice.
@@ -1534,6 +1562,9 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
             obicajno_s=(typ.get((tid, n["od_seq"])) or {}).get("median_s"))
         n["zamuda"] = stats.opis_zamude(z["delay_s"], z["delay_kind"])
         n["zamuda_od"] = z["delay_at"]
+        # Vozilo, ki je že kje izmerjeno, je na poti: njegova ocena je iz
+        # meritve, in tveganje prestopa se računa iz nje (`verjetnost_zdaj`).
+        n["na_poti"] = lm.get(tid) is not None
         # Brez podatka ni isto kot točno, na zaslonu pa je bilo videti enako:
         # prazno mesto ob liniji. 22. 9. 2026 je tako stal 25, ki je zamujal
         # 20 minut, ker feed zanj ni prišel do nas. Samo za danes -- za drug
@@ -1599,6 +1630,285 @@ def pripni_zamude(conn: sqlite3.Connection, predlogi: list[dict],
             })
 
 
+# ---------------------------------------------------------------- tveganje prestopa
+#
+# Prestop drži, kadar zamuda prvega vozila ob prihodu ne poje rezerve po
+# voznem redu in zamude drugega ob odhodu. Kaj o tem vemo, je odvisno od
+# trenutka (`scripts/preizkusi_prestope.py`):
+#
+# * vnaprej (jutri, čez uro) samo, kako je ISTI prestop držal prejšnje dni --
+#   isti vožnji čez dneve, isti postanki, oba isti dan, da ostane tudi to,
+#   da slabo vreme zamudi obe;
+# * ko je prvo vozilo na poti, njegovo zamudo; negotova je le še napaka
+#   ocene, in ta je izmerjena (senca, `ocena.porazdelitev_napak`).
+
+#: Koliko dni nazaj šteje zgodovina prestopa.
+TVEGANJE_DNI = 60
+
+#: Najmanj vrstic sence na omrežje in stanje vozila, da porazdelitvi napak
+#: verjamemo. Senca jih ima na dan nekaj tisoč; to je varovalka za novo bazo.
+NAPAK_NAJMANJ = 500
+
+#: Kako dolgo velja prebrani povzetek napak v pomnilniku. Računa se enkrat
+#: na dan (`stats.refresh_summaries`), branje iz baze ob vsakem iskanju pa
+#: je samo razčlenjevanje istega JSON-a.
+NAPAKE_VELJA_S = 600
+
+_NAPAKE: list = [0.0, None, None]          # (kdaj, baza, porazdelitve)
+
+
+def napake_sence(conn: sqlite3.Connection) -> dict:
+    """`{omrežje: povzetek}` napake prikaza iz dnevnega povzetka sence."""
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    if _NAPAKE[1] == kje and time.monotonic() - _NAPAKE[0] < NAPAKE_VELJA_S:
+        return _NAPAKE[2]
+    out = {omr: stats.summary_get(conn, "napake_sence", omr, stats.SUMMARY_WINDOWS[0])
+           for omr in ("zeleznica", "avtobus")}
+    if kje:          # baza v pomnilniku (testi) se lahko spremeni pod nami
+        _NAPAKE[:] = [time.monotonic(), kje, out]
+    return out
+
+
+def _delezi_napak(napake: dict, omrezje: str, na_poti: bool) -> tuple | None:
+    """(korak, od, deleži po razredih) ali `None`, kadar sence ni dovolj."""
+    p = (napake or {}).get(omrezje)
+    stevci = p and p.get("na_poti" if na_poti else "pred_odhodom")
+    vsota = sum(stevci or ())
+    if vsota < NAPAK_NAJMANJ:
+        return None
+    return p["korak_s"], p["od_s"], [c / vsota for c in stevci]
+
+
+def verjetnost_zdaj(ostane_s: int, omr_a: str, omr_b: str, na_poti_a: bool,
+                    na_poti_b: bool, napake: dict) -> float | None:
+    """Verjetnost, da prestop drži, kadar prikaz kaže `ostane_s` rezerve.
+
+    Resnica = kar prikaz kaže + napaka, zato prestop drži, kadar napaka
+    prvega vozila (pride pozneje, kot piše) minus napaka drugega ne preseže
+    rezerve. Napaki sta iz sence za omrežje in stanje vozila, vzeti kot
+    neodvisni -- slabo vreme ju premakne skupaj, zato je to stran previdnosti.
+    `None`, kadar sence ni dovolj.
+    """
+    a = _delezi_napak(napake, omr_a, na_poti_a)
+    b = _delezi_napak(napake, omr_b, na_poti_b)
+    if a is None or b is None:
+        return None
+    korak, od, pa = a
+    kum = list(itertools.accumulate(pa))
+    p = 0.0
+    for j, wb in enumerate(b[2]):
+        if wb:
+            # Prvo vozilo sme zamuditi največ toliko več, kot kaže prikaz.
+            i = math.floor((ostane_s + b[1] + j * b[0] - od) / korak)
+            if i >= 0:
+                p += wb * kum[min(i, len(kum) - 1)]
+    return min(1.0, p)
+
+
+def _razred_rezerve(rezerva_s: int) -> str:
+    return "0-3" if rezerva_s < 180 else "3-6" if rezerva_s < 360 \
+        else "6-10" if rezerva_s < 600 else "10+"
+
+
+_ZAMUDE_DNI: dict[tuple, tuple] = {}
+#: Pretekli dnevi se ne spreminjajo; ura je zato, da včerajšnji pozni
+#: podatki pridejo zraven in da predpomnilnik ne raste brez meje.
+ZAMUDE_DNI_VELJA_S = 3600
+_ZAMUDE_DNI_NAJVEC = 20_000
+
+
+def zamude_po_dnevih(conn: sqlite3.Connection, pari: list[tuple[str, int]],
+                     dan: str, prihod: bool) -> dict[tuple[str, int], dict[str, int]]:
+    """`{(trip_id, stop_seq): {dan: zamuda}}` za `TVEGANJE_DNI` pred `dan`.
+
+    `prihod=True` je zamuda ob PRIHODU (`COALESCE(delay_arr, delay_dep)`):
+    za vozilo, s katerega izstopiš -- vlak na dolgem postanku odpelje z manjšo
+    zamudo, kot je pripeljal. Sicer odhodna, kot povsod drugje.
+
+    Po vožnji čez dneve (`db.voznja_sql`) in s predhodnicami (`PREDNIKI_SQL`),
+    isto kot `stats._tipicno_po_dnevih`; tam je tudi, zakaj `CROSS JOIN`.
+    """
+    kje = conn.execute("PRAGMA database_list").fetchone()["file"]
+    zdaj = time.monotonic()
+    out: dict[tuple[str, int], dict[str, int]] = {}
+    manjka = []
+    for par in sorted(set(pari)):
+        v = _ZAMUDE_DNI.get((kje, dan, prihod, par)) if kje else None
+        if v and zdaj - v[0] < ZAMUDE_DNI_VELJA_S:
+            out[par] = v[1]
+        else:
+            manjka.append(par)
+    if not manjka:
+        return out
+    zamuda = "COALESCE({0}delay_arr, {0}delay_dep)" if prihod \
+        else "COALESCE({0}delay_dep, {0}delay_arr)"
+    od = (date.fromisoformat(dan) - timedelta(days=TVEGANJE_DNI)).isoformat()
+    novi: dict[tuple[str, int], dict[str, int]] = {par: {} for par in manjka}
+    for i in range(0, len(manjka), 400):
+        kos = manjka[i:i + 400]
+        vals = ",".join(["(?,?)"] * len(kos))
+        vezave = [x for par in kos for x in par] + [od, dan]
+        for r in conn.execute(
+                f"WITH want(trip_id, stop_seq) AS (VALUES {vals}) "
+                f"SELECT w.trip_id, w.stop_seq, r.service_date, {zamuda.format('r.')} AS d "
+                f"FROM want w CROSS JOIN trip a ON a.trip_id = w.trip_id "
+                f"CROSS JOIN trip t ON {db.voznja_sql('t')} = {db.voznja_sql('a')} "
+                f"CROSS JOIN run r ON r.trip_id = t.trip_id AND r.stop_seq = w.stop_seq "
+                f"WHERE r.service_date >= ? AND r.service_date < ? AND d IS NOT NULL "
+                f"  AND ABS(d) <= {stats.MAX_REALNA_ZAMUDA_S}", vezave):
+            novi[(r["trip_id"], r["stop_seq"])][r["service_date"]] = r["d"]
+        # Isti dan pod novim id-jem in pod predhodnico šteje enkrat -- nova velja.
+        for r in conn.execute(
+                f"WITH want(trip_id, stop_seq) AS (VALUES {vals}) "
+                f"SELECT p.trip_id, p.stop_seq, p.service_date, {zamuda.format('p.')} AS d "
+                f"FROM want w CROSS JOIN ({db.PREDNIKI_SQL}) p "
+                f"  ON p.trip_id = w.trip_id AND p.stop_seq = w.stop_seq "
+                f"WHERE p.service_date >= ? AND p.service_date < ? AND d IS NOT NULL "
+                f"  AND ABS(d) <= {stats.MAX_REALNA_ZAMUDA_S}", vezave):
+            novi[(r["trip_id"], r["stop_seq"])].setdefault(r["service_date"], r["d"])
+    if kje:          # baza v pomnilniku (testi) se lahko spremeni pod nami
+        if len(_ZAMUDE_DNI) + len(novi) > _ZAMUDE_DNI_NAJVEC:
+            _ZAMUDE_DNI.clear()
+        for par, v in novi.items():
+            _ZAMUDE_DNI[(kje, dan, prihod, par)] = (zdaj, v)
+    out.update(novi)
+    return out
+
+
+#: Delež prestopov, ki so držali, po omrežju obeh vozil in rezervi po voznem
+#: redu. Izhodišče za prestop brez lastne zgodovine in vrednost, proti kateri
+#: se kratka zgodovina skrči. Izmerjeno 22. 10. 2026
+#: (`scripts/preizkusi_prestope.py`, 500 vprašanj na voznem redu četrtka,
+#: 1 867 prestopov iz predlogov, 15 689 dni-prestopov). Rezerva 3-6 min pri
+#: vlaku na avtobus drži v 49 %, med avtobusi v 70 %: iskanje je take
+#: prestope ponujalo brez besede. Pod 6 min na vlak jih ni (prag iskanja).
+PRESTOP_IZHODISCE = {
+    ("avtobus", "avtobus", "3-6"): 0.70,
+    ("avtobus", "avtobus", "6-10"): 0.77,
+    ("avtobus", "avtobus", "10+"): 0.91,
+    ("avtobus", "zeleznica", "6-10"): 0.92,
+    ("avtobus", "zeleznica", "10+"): 0.97,
+    ("zeleznica", "avtobus", "3-6"): 0.49,
+    ("zeleznica", "avtobus", "6-10"): 0.62,
+    ("zeleznica", "avtobus", "10+"): 0.86,
+    ("zeleznica", "zeleznica", "6-10"): 0.87,
+    ("zeleznica", "zeleznica", "10+"): 0.93,
+}
+#: Utež izhodišča v dneh. Na izpustitvi dneva (isti nabor) je par sam
+#: Brier 0,100 in log-loss 0,393 (dva dneva zgodovine sta trdna "vedno"),
+#: z utežjo 2 0,098 in 0,321, z 8 0,105; razred rezerve sam 0,152.
+IZHODISCE_DNI = 2
+#: Delež dni, ko je zadnja vožnja predloga "biti tam do" prišla v rezervi do
+#: roka (isti nabor, 89,6 %): izhodišče za njeno kratko zgodovino.
+ROK_IZHODISCE = 0.90
+
+#: Meji stopenj. Predlog z rokom, ki je pravočasen manj kot devetkrat od
+#: desetih, ni odgovor na "moram biti tam" (David, 22. 10. 2026: "je precej
+#: važno, da je tveganost precej nizka").
+ZANESLJIVO_P = 0.9
+TVEGANO_P = 0.7
+
+
+def _izhodisce(omr_a: str, omr_b: str, rezerva_s: int) -> float:
+    r = _razred_rezerve(rezerva_s)
+    return PRESTOP_IZHODISCE.get((omr_a, omr_b, r)) \
+        or PRESTOP_IZHODISCE.get((omr_a, omr_b, "6-10" if r in ("0-3", "3-6") else r)) or 0.8
+
+
+def stopnja(p: float) -> str:
+    return "zanesljivo" if p >= ZANESLJIVO_P else "tvegano" if p >= TVEGANO_P else "zelo tvegano"
+
+
+def pripni_tveganje(conn: sqlite3.Connection, predlogi: list[dict],
+                    zivi_dnevi: set[str], rok: int | None = None) -> None:
+    """Vsakemu prestopu verjetnost, da drži, predlogu pa `zanesljivost`.
+
+    Zanesljivost je verjetnost, da gre vse po načrtu: da držijo vsi prestopi,
+    pri roku pa še, da je zadnja vožnja pravočasna. Zmnožek delov je na
+    izpustitvi dneva najboljši izmed preizkušenih (Brier 0,113 proti 0,117 za
+    delež dni celega predloga in 0,208 za delež vseh): delov ima vsak več dni
+    kot cel predlog, in umerjen je (napoved 90-100 % -> 96,6 % proti 96,7 %).
+
+    `zivi_dnevi` so prometni dnevi, za katere je zdaj -- le tam je vozilo
+    lahko na poti in velja `verjetnost_zdaj`. `rok` je absoluten.
+    """
+    if not predlogi:
+        return
+    napake = None
+    po_dnevih: dict[str, list] = {}
+    for p in predlogi:
+        voznje = [n for n in p["noge"] if n["vrsta"] == "voznja"]
+        if voznje:
+            po_dnevih.setdefault(p["datum"], []).append((p, voznje))
+    for dan, skupina in po_dnevih.items():
+        by_trip = journey._timetable_for_day(conn, dan, None)[0]
+        prihodi = zamude_po_dnevih(conn, [(n["trip_id"], n["do_seq"]) for _, vv in skupina
+                                          for n in vv], dan, prihod=True)
+        odhodi = zamude_po_dnevih(conn, [(n["trip_id"], n["od_seq"]) for _, vv in skupina
+                                         for n in vv[1:]], dan, prihod=False)
+        zivo = dan in zivi_dnevi
+        if zivo and napake is None:
+            napake = napake_sence(conn)
+        for p, voznje in skupina:
+            deli, zivi = [], False
+            for a, b, t in zip(voznje, voznje[1:], p.get("prestopi") or ()):
+                omr_a, omr_b = a.get("network"), b.get("network")
+                za = prihodi.get((a["trip_id"], a["do_seq"]), {})
+                zb = odhodi.get((b["trip_id"], b["od_seq"]), {})
+                # Vlak na izhodišču ne poroča nikoli (`model.md`), pred voznim
+                # redom pa ne odpelje: brez zgodovine odhoda je nič -- previdno,
+                # ker zamuda drugega prestopu samo pomaga.
+                if not zb and omr_b == "zeleznica" and by_trip.get(b["trip_id"]) \
+                        and by_trip[b["trip_id"]][0][0] == b["od_seq"]:
+                    zb = dict.fromkeys(za, 0)
+                skupni = [d for d in za if d in zb]
+                drzal = sum(1 for d in skupni if t["nacrtovano_s"] + zb[d] - za[d] >= 0)
+                izh = _izhodisce(omr_a, omr_b, t["nacrtovano_s"])
+                verj = (drzal + IZHODISCE_DNI * izh) / (len(skupni) + IZHODISCE_DNI)
+                tv = {"p": round(verj, 3), "vir": "zgodovina", "dni": len(skupni),
+                      "drzal": drzal}
+                if zivo and a.get("na_poti") and t.get("ostane_s") is not None:
+                    z = verjetnost_zdaj(t["ostane_s"], omr_a, omr_b, True,
+                                        bool(b.get("na_poti")), napake)
+                    if z is not None:
+                        tv.update(p=round(z, 3), vir="zdaj")
+                        zivi = True
+                tv["stopnja"] = stopnja(tv["p"])
+                t["tveganje"] = tv
+                deli.append(tv["p"])
+            zan = {"p": math.prod(deli) if deli else None,
+                   "vir": "zdaj" if zivi else "zgodovina"}
+            if rok is not None:
+                zan["p"] = (zan["p"] if deli else 1.0) * _pravocasno(
+                    p, voznje[-1], rok, prihodi, zivo, napake)
+                zan["rok"] = True
+            if zan["p"] is None:
+                continue                  # brez prestopa in brez roka: ni o čem
+            zan["p"] = round(zan["p"], 3)
+            zan["stopnja"] = stopnja(zan["p"])
+            p["zanesljivost"] = zan
+
+
+def _pravocasno(p: dict, zadnja: dict, rok: int, prihodi: dict, zivo: bool,
+                napake: dict | None) -> float:
+    """Verjetnost, da zadnja vožnja pripelje v rezervi do roka.
+
+    Na poti iz napake ocene ob prihodu, sicer iz njene zgodovine: delež dni,
+    ko je zamuda ob prihodu ostala v rezervi, skrčen proti `ROK_IZHODISCE`.
+    """
+    if zivo and zadnja.get("na_poti") and napake and zadnja.get("prihod_ocena"):
+        d = _delezi_napak(napake, zadnja.get("network"), True)
+        if d is not None:
+            korak, od, delezi = d
+            rezerva = rok - (p.get("prihod_ocena") or p["prihod"])
+            i = math.floor((rezerva - od) / korak)
+            return sum(delezi[:max(0, min(i + 1, len(delezi)))])
+    rezerva = rok - p["prihod"]
+    dnevi = prihodi.get((zadnja["trip_id"], zadnja["do_seq"]), {})
+    ok = sum(1 for z in dnevi.values() if z <= rezerva)
+    return (ok + IZHODISCE_DNI * ROK_IZHODISCE) / (len(dnevi) + IZHODISCE_DNI)
+
+
 # ---------------------------------------------------------------- ena pot, razložena
 
 def razberi_noge(niz: str) -> list[tuple[str, int, int]]:
@@ -1622,7 +1932,8 @@ def razberi_noge(niz: str) -> list[tuple[str, int, int]]:
 def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
                 od: tuple[float, float], do: tuple[float, float],
                 service_date: str, now_s: int | None = None,
-                kmh: float = hoja.KMH, geometrija: bool = True) -> dict:
+                kmh: float = hoja.KMH, geometrija: bool = True,
+                rok: int | None = None) -> dict:
     """Ena pot, razložena: kod hodiš in kje izstopiš.
 
     Seznam predlogov odgovarja na „s čim in kdaj"; to na „kako". Zato dvoje,
@@ -1720,6 +2031,8 @@ def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
     }
     predlog["trajanje_s"] = predlog["prihod"] - predlog["odhod"]
     pripni_zamude(conn, [predlog], service_date, now_s)
+    # Na poti je to edino mesto, kjer potnik vidi, ali prestop še drži.
+    pripni_tveganje(conn, [predlog], {service_date} if now_s is not None else set(), rok)
     # `zivo` pove prikazu, ali ima smisel odštevati do odhoda in osveževati
     # zamude. Prej je to sklepal iz "datum je danes", in nočna vožnja, ki nosi
     # včerajšnji prometni dan, je ostala brez obojega.

@@ -2862,3 +2862,36 @@ Na Slovenski liha = proti severu (Bavarski dvor 600011 → Razstavišče, 600012
 **Najbližja postaja za žeton** (agent, 435 044 naslovov iz OSM): do 2 km zračne črte ima avtobusno postajališče 95,8 % naslovov (mediana 343 m), železniško postajo 37,7 % (mediana 3,1 km). Simulirana napaka lege na 20 000 naslovih, najbližje postaja z drugim imenom: pri 100 m avtobus 6,1 %, vlak 2,1 %; pri 200 m 12,3 % in 4,3 % → meja natančnosti 100 m.
 
 **Android (emulator, Android 15, WebView 124)**: `navigator.permissions` v WebView ni — stari `#kam` (lega v Od kod) v aplikaciji ni nikoli delal. Sistem pri trajni zavrnitvi odgovori brez okna v 72 in 51 ms, nastavitve odprte po 106 in 67 ms. Samo približna lega v WebView: natančnost 2 000 m.
+
+## Ali prestop drži: tveganje predlogov poti (22. 10. 2026)
+
+`scripts/preizkusi_prestope.py`, razvojna baza (vlaki od 21. 8., avtobusi od 29. 8.), vozni red četrtka 22. 10.: 500 vprašanj od vrat do vrat (pol mestnih 2–10 km, pol medkrajevnih 10–80 km, ura 6–20, pol „čim prej“, pol „do ure“), brez zamud v iskanju. Iz predlogov 1 867 prestopov, na pretekle dni 15 689 dni-prestopov (oba vozila isti dan, vožnja čez dneve). Drži = rezerva po voznem redu (brez hoje) + odhodna zamuda drugega − prihodna zamuda prvega ≥ 0.
+
+**Iskanje ponuja prestope, ki ne držijo.** Delež dni, ko bi prestop držal:
+
+| prvo → drugo | rezerva 3–6 min | 6–10 min | 10+ min |
+|---|---|---|---|
+| avtobus → avtobus | 70,2 % (4 659) | 76,6 % (3 342) | 91,1 % (4 629) |
+| avtobus → vlak | — | 91,9 % (222) | 96,7 % (483) |
+| vlak → avtobus | **49,2 %** (567) | 61,9 % (396) | 85,5 % (876) |
+| vlak → vlak | — | 86,6 % (202) | 93,3 % (313) |
+
+Pod 6 min na vlak in 3 min na avtobus prestopov ni (prag iskanja, `journey.TRANSFER_LIMITS`).
+
+**Vnaprej (jutri, čez uro): zgodovina ISTEGA prestopa.** Izpustitev dneva, napoved iz ostalih dni:
+
+| model | Brier | log-loss |
+|---|---|---|
+| delež vseh | 0,164 | 0,509 |
+| po razredu rezerve in omrežjih | 0,152 | 0,473 |
+| par sam | 0,100 | 0,393 |
+| **par, skrčen proti razredu z 2 dnevoma** | **0,098** | **0,321** |
+| par, skrčen z 8 dnevi | 0,105 | 0,343 |
+
+Umerjen: napoved 90–100 % → res 96,3 % (7 989), 80–90 % → 88,9 %, 50–60 % → 55,3 %. Prestop ima zgodovine mediana 6 dni (p10 2), brez nje 158 od 1 867. Medkrajevni avtobusi imajo malo dni (zamude IJPP od 21. 9. večinoma iz leg).
+
+**Zdaj (prvo vozilo na poti): napaka prikaza iz sence.** 393 prestopov, kjer ima senca za oba postanka istega dne številko 15–25 min prej in resnico. Prestop drži, kadar napaka prvega − napaka drugega ≤ preostala rezerva na zaslonu; napaki iz `ocena.porazdelitev_napak` (omrežje × na poti / pred odhodom), kot neodvisni. Brier 0,066 (log-loss 0,223) proti 0,078 (0,269) za delež po razredu preostale rezerve; napoved 90–100 % → res 96,5 % (260). Napaka prikaza 30 dni: vlak na poti pozneje za ≥ 3 min v 18,5 %, ≥ 5 min 11,3 %; avtobus na poti ≥ 3 min 10,0 %, prej za ≥ 3 min 8,9 %.
+
+**„Biti tam do“: prvi predlog je bil pravočasen v 70,6 % dni** (6 906 dni-predlogov: vsi prestopi držijo in zadnja vožnja pride v rezervi do roka). Zadnja vožnja sama pride v rezervi v 89,6 %. Modeli: delež vseh 0,208, delež dni celega predloga (skrčen) 0,117, **zmnožek delov** (prestopi × zadnja vožnja, vsak skrčen) **0,113** (log-loss 0,361), umerjen: 90–100 % → 96,7 %, 80–90 % → 86,9 %. Zato `pot.pripni_tveganje` = zmnožek, pri roku je prvi najpoznejši predlog z zanesljivostjo ≥ 0,9.
+
+Na resničnih vprašanjih (razvojni strežnik): Ljubljana → Kranj do 8:00 jutri — vsi štirje predlogi s prestopom pod 0,9 (zgodovine 1–4 dni, izhodišče 0,70–0,77); zadnji, prihod 7:59, 0,13. Center → Fužine do 8:00: prvi zanesljiv odhod 6:26 (0,91), 7:09 je 0,85.

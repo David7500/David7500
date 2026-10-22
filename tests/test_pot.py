@@ -924,3 +924,140 @@ def test_pot_z_manj_hoje_ne_sme_trajati_poljubno_dlje():
     assert pot._manj_hoje_vredna({"trajanje_s": 96 * 60, "hoje_s": 12 * 60}, prvi)
     # Prihranek hoje nad 10 min razširi mejo nanj.
     assert pot._manj_hoje_vredna({"trajanje_s": 100 * 60, "hoje_s": 4 * 60}, prvi)
+
+
+# ---------------------------------------------------------------- tveganje prestopa
+
+def _pretekli_dnevi(conn, trip_id, seq, zamude):
+    """Zamude na postanku za dneve pred D (D-1, D-2, ...), ena na dan."""
+    from datetime import date, timedelta
+    for i, z in enumerate(zamude, start=1):
+        dan = (date.fromisoformat(D) - timedelta(days=i)).isoformat()
+        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                     "delay_dep, feed_ts) VALUES(?,?,?,?,?,0)", (trip_id, dan, seq, z, z))
+
+
+def _prestop(conn, omrezje_b="avtobus"):
+    """t1 pripelje v Daleč ob 8:15, t2 odpelje ob 8:25: deset minut rezerve."""
+    _voznja(conn, "t1", "prva", [(1, "BLIZU", 8 * 3600 + 600),
+                                 (2, "DALEC", 8 * 3600 + 900)])
+    _voznja(conn, "t2", "druga", [(1, "DALEC", 8 * 3600 + 1500),
+                                  (2, "CILJ", 8 * 3600 + 1800)], omrezje=omrezje_b)
+
+
+def _s_prestopom(r):
+    return next(p for p in r["predlogi"] if p["prestopov"] == 1)
+
+
+def test_prestop_pove_kolikokrat_je_drzal(conn):
+    """Ista vožnja čez dneve, oba isti dan: prestop drži, kadar rezerva in
+    zamuda drugega pokrijeta prihodno zamudo prvega."""
+    _prestop(conn)
+    _pretekli_dnevi(conn, "t1", 2, [700, 100, 0, 650, 200])
+    _pretekli_dnevi(conn, "t2", 1, [0, 0, 0, 100, 0])
+    conn.commit()
+    t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600))["prestopi"][0]
+    # Dan 1: 600 + 0 - 700 < 0. Dan 4: 600 + 100 - 650 >= 0 -- drugi je počakal.
+    assert (t["tveganje"]["dni"], t["tveganje"]["drzal"]) == (5, 4)
+    izh = pot.PRESTOP_IZHODISCE[("avtobus", "avtobus", "10+")]
+    assert t["tveganje"]["p"] == round((4 + pot.IZHODISCE_DNI * izh) / (5 + pot.IZHODISCE_DNI), 3)
+    assert t["tveganje"]["vir"] == "zgodovina"
+
+
+def test_prestop_brez_zgodovine_je_izhodisce(conn):
+    _prestop(conn)
+    conn.commit()
+    p = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600))
+    t = p["prestopi"][0]["tveganje"]
+    assert t["dni"] == 0
+    assert t["p"] == pot.PRESTOP_IZHODISCE[("avtobus", "avtobus", "10+")]
+    assert p["zanesljivost"]["p"] == t["p"], "en prestop, brez roka: zanesljivost je prestop"
+
+
+def test_vlak_na_izhodiscu_brez_zgodovine_odpelje_po_voznem_redu(conn):
+    """Vlak na prvem postanku ne poroča nikoli; pred voznim redom pa ne
+    odpelje. Brez tega prestop na vlak, ki tam začne, nikoli nima zgodovine."""
+    _prestop(conn, omrezje_b="zeleznica")
+    _pretekli_dnevi(conn, "t1", 2, [700, 100, 0])
+    conn.commit()
+    t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600))["prestopi"][0]["tveganje"]
+    assert (t["dni"], t["drzal"]) == (3, 2)
+
+
+def test_rok_prvi_je_najpoznejsi_zanesljiv(conn):
+    """„Moram biti tam“: poznejši odhod s prestopom, ki ne drži, ni prvi --
+    prvi je najpoznejši, ki je zanesljiv; tvegani ostane spodaj, z besedo."""
+    _voznja(conn, "t3", "zanesljiv", [(1, "BLIZU", 8 * 3600 + 300),
+                                      (2, "CILJ", 8 * 3600 + 2400)])
+    _voznja(conn, "t1", "prva", [(1, "BLIZU", 8 * 3600 + 1200),
+                                 (2, "DALEC", 8 * 3600 + 2100)])
+    _voznja(conn, "t2", "druga", [(1, "DALEC", 8 * 3600 + 2340),
+                                  (2, "CILJ", 8 * 3600 + 3000)])
+    _pretekli_dnevi(conn, "t1", 2, [400, 500, 450, 600, 380])     # vedno čez 4 min
+    _pretekli_dnevi(conn, "t2", 1, [0, 0, 0, 0, 0])
+    _pretekli_dnevi(conn, "t3", 2, [0, 60, 0, 120, 0])
+    conn.commit()
+    # Meja hoje 10 min: Daleč (13 min) ni izhodišče, druga vožnja sama ne pride v poštev.
+    r = pot.isci(conn, OD, DO, D, None, prihod_do_s=9 * 3600, max_hoje_s=600)
+    voznje = [[n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"]
+              for p in r["predlogi"]]
+    assert voznje[0] == ["zanesljiv"]
+    assert ["prva", "druga"] in voznje, "tvegani ostane na seznamu"
+    tvegan = r["predlogi"][voznje.index(["prva", "druga"])]
+    assert tvegan["zanesljivost"]["stopnja"] == "zelo tvegano"
+    assert r["predlogi"][0]["zanesljivost"]["stopnja"] == "zanesljivo"
+    assert r["predlogi"][0]["zanesljivost"]["rok"]
+
+
+def test_prevlada_ne_izrine_zanesljivejsega():
+    """Hitrejša pot s tveganim prestopom zanesljivejše, ki je po urah slabša,
+    ne izrine: na kartici je tveganje, ne le ura."""
+    def predlog(odhod, prihod, p, trip):
+        return {"datum": D, "odhod": odhod, "prihod": prihod, "hoje_s": 300,
+                "prestopov": 1, "zanesljivost": {"p": p},
+                "noge": [{"vrsta": "voznja", "trip_id": trip, "od_seq": 1},
+                         {"vrsta": "voznja", "trip_id": trip + "b", "od_seq": 1}]}
+    hiter = predlog(29000, 31000, 0.5, "a")
+    varen = predlog(28800, 31200, 0.97, "b")
+    assert varen in pot.izberi_predloge([hiter, varen])
+    # Enako zanesljiv pa je po urah res slabši.
+    varen["zanesljivost"]["p"] = 0.52
+    assert varen not in pot.izberi_predloge([hiter, varen])
+
+
+def test_verjetnost_zdaj_iz_napak_sence():
+    """Drži, kadar napaka prvega minus napaka drugega ne preseže rezerve."""
+    razredov = 2 * 1800 // 30 + 1
+    vse_nic = [0] * razredov
+    vse_nic[60] = 1000                      # napaka 0 s
+    pol = [0] * razredov
+    pol[60], pol[64] = 500, 500             # polovica 0 s, polovica +120 s
+    napake = {"avtobus": {"korak_s": 30, "od_s": -1800,
+                          "na_poti": pol, "pred_odhodom": vse_nic}}
+    assert pot.verjetnost_zdaj(0, "avtobus", "avtobus", False, False, napake) == 1.0
+    assert pot.verjetnost_zdaj(-60, "avtobus", "avtobus", False, False, napake) == 0.0
+    assert pot.verjetnost_zdaj(60, "avtobus", "avtobus", True, False, napake) == 0.5
+    assert pot.verjetnost_zdaj(120, "avtobus", "avtobus", True, False, napake) == 1.0
+    assert pot.verjetnost_zdaj(60, "zeleznica", "avtobus", True, False, napake) is None
+
+
+def test_prestop_na_poti_iz_napak_sence(conn, monkeypatch):
+    """Ko je prvo vozilo na poti, šteje njegova zamuda zdaj, ne zgodovina."""
+    _prestop(conn)
+    _pretekli_dnevi(conn, "t1", 2, [0, 0, 0, 0, 0])
+    # Prvo vozilo je odpeljalo s prvega postanka z +9 min in je na poti: od
+    # deset minut rezerve ostane ena.
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, "
+                 "delay_arr, feed_ts) VALUES('t1', ?, 1, 540, 540, ?)", (D, 4102444800))
+    conn.commit()
+    razredov = 2 * 1800 // 30 + 1
+    pol = [0] * razredov
+    pol[60], pol[64] = 500, 500
+    monkeypatch.setattr(pot, "napake_sence", lambda c: {
+        "avtobus": {"korak_s": 30, "od_s": -1800, "na_poti": pol, "pred_odhodom": pol}})
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, now_s=8 * 3600 + 1200)
+    p = _s_prestopom(r)
+    t = p["prestopi"][0]
+    assert t["tveganje"]["vir"] == "zdaj"
+    assert t["ostane_s"] == 60
+    assert t["tveganje"]["p"] < 0.9, "minuta rezerve ob napaki do dveh minut ni zanesljiva"

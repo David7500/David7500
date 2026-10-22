@@ -3445,6 +3445,8 @@ def api_pot_podrobno(
     date: str | None = None,
     kmh: float = Query(hoja.KMH, ge=3, le=25),
     geometrija: bool = Query(True, description="0 = samo zamude, brez pešpoti"),
+    rok: int | None = Query(None, ge=0, description="biti tam do (sekunde epoch): "
+                                                    "zanesljivost šteje tudi prihod do roka"),
 ):
     """Ena pot, razložena: kod hodiš in kje izstopiš.
 
@@ -3465,7 +3467,7 @@ def api_pot_podrobno(
     with _conn() as conn:
         try:
             return pot.podrobnosti(conn, spec, (od_lat, od_lon), (do_lat, do_lon),
-                                   dan, zdaj_s, kmh=kmh, geometrija=geometrija)
+                                   dan, zdaj_s, kmh=kmh, geometrija=geometrija, rok=rok)
         except KeyError as e:
             # Vozni red se je med iskanjem in klikom lahko zamenjal (uvoz je
             # dnevni). Deljena povezava od včeraj torej ni napaka odjemalca.
