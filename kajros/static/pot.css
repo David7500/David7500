@@ -716,12 +716,13 @@ body.vodenje .pot-karta-okvir .maplibregl-ctrl-bottom-right { bottom: 0; }
 .vod-povzetek strong { font-family: var(--mono); font-weight: 600; }
 .vod-spodaj.je-zlozena .vod-povzetek { display: block; }
 /* Zloženo ostane, kar je treba videti brez dotika: vozilo z rezervo,
-   opozorilo, da prestop ne drži, in gumb za ta korak. Ostalo (vsa pot,
-   deljenje, „nova pot“, konec) je en dotik stran. */
+   opozorilo, da prestop ne drži, stare zamude in gumb za ta korak -- ali
+   tisti, ki je zdaj glavni („nova pot od tu“ ob zamujenem vozilu, „sledi mi“
+   po premiku zemljevida). Ostalo (vsa pot, deljenje, konec) je en dotik stran. */
 .vod-spodaj.je-zlozena .vod-cilj, .vod-spodaj.je-zlozena .vod-pot,
 .vod-spodaj.je-zlozena .vod-deli,
-.vod-spodaj.je-zlozena .vod-opomba:not(.je-opozorilo),
-.vod-spodaj.je-zlozena .vod-gumbi > :not(#vod-dalje) { display: none; }
+.vod-spodaj.je-zlozena .vod-opomba:not(.je-opozorilo):not(.je-staro),
+.vod-spodaj.je-zlozena .vod-gumbi > :not(#vod-dalje):not(#vod-sledi):not(.je-nujno) { display: none; }
 .vod-spodaj.je-zlozena .vod-gumbi { margin-top: 6px; }
 .vod-spodaj.je-zlozena { padding-bottom: 8px; }
 /* Razprta plošča na poti nosi vso pot: drsi sama, zemljevid ostane viden. */

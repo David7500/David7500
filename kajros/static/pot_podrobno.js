@@ -172,7 +172,7 @@ function voznjaHtml(n, i) {
     ? `<div class="korak-opomba">vozni red ${ura(n.odhod)} → ${ura(n.prihod)}</div>` : "";
   // Vmesni postanki so zaprti: potnika najprej zanima, kje izstopi, in šele
   // potem, kaj je vmes. Prvi in zadnji sta v vrsticah nad in pod, zato ju tu ni.
-  const vmes = n.postanki.slice(1, -1);
+  const vmes = (n.postanki || []).slice(1, -1);
   const seznam = vmes.length ? `<details class="vmesni">
       <summary>${vmes.length} ${sklon(vmes.length, "postanek")} vmes</summary>
       <ol>${vmes.map((s) => `<li><span class="vm-ura">${
@@ -264,6 +264,8 @@ function narisi(p) {
       CRTE[i] = { vrsta: "voznja", tocke: [n.od_ll, n.do_ll], skica: true };
     }
   });
+  // Trase tudi brez zemljevida: pot, na kateri si, iz njih ve, ali se pelješ.
+  nalozTrase(p);
   if (!K) return;
   // Postajališča vstopa in izstopa z imeni; start in cilj sta svoji oznaki.
   const f = [];
@@ -277,17 +279,31 @@ function narisi(p) {
   pkKonca(K, { lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] });
   risiCrte();
   if (!V.aktivno) priblizaj(null, false);
-  (async () => {
-    for (let i = 0; i < p.noge.length; i += 1) {
-      const n = p.noge[i];
-      if (n.vrsta !== "voznja") continue;
-      const t = await trasa(n).catch(() => null);
-      if (t) CRTE[i] = { vrsta: "voznja", tocke: t };
-      else CRTE[i].skica = false;
-      risiCrte();
-    }
-  })();
 }
+
+/** Trase voženj namesto skic. Brez omrežja ostane skica in se naloži, ko se
+ *  omrežje vrne; vožnja, ki trase na strežniku nima, ostane ravna črta
+ *  (`ravna`) -- ta pa ni dokaz, kje se pelješ (`trasaVoznje`). */
+async function nalozTrase(p) {
+  // `nalaga`: trasa še pride -- pot, na kateri si, do takrat ne gre po uri
+  // (`korakNaPoti`), sicer bi ob odprtju preskočila čakanje na zamujeno vozilo.
+  const cakajo = p.noge.map((n, i) => n.vrsta === "voznja" && CRTE[i] && CRTE[i].skica);
+  cakajo.forEach((da, i) => { if (da) CRTE[i].nalaga = true; });
+  for (let i = 0; i < p.noge.length; i += 1) {
+    if (!cakajo[i]) continue;
+    let t;
+    try {
+      t = await trasa(p.noge[i]);
+    } catch (e) {
+      if (PREDLOG === p && CRTE[i]) CRTE[i].nalaga = false;
+      continue;                              // brez omrežja: znova ob `online`
+    }
+    if (PREDLOG !== p || !CRTE[i]) return;   // medtem druga pot
+    CRTE[i] = t ? { vrsta: "voznja", tocke: t } : { vrsta: "voznja", tocke: CRTE[i].tocke, ravna: true };
+    risiCrte();
+  }
+}
+addEventListener("online", () => { if (PREDLOG) nalozTrase(PREDLOG); });
 
 /** Približaj na eno nogo (ali na vso pot, kadar je `i` `null`). */
 function priblizaj(i, pomakni = true) {
@@ -335,9 +351,11 @@ function obLegi(loc) {
 /** Pot, na kateri si, ali vodenje po eni pešpoti. */
 function posodobiVse(skok) {
   if (NP.aktivno && naPotiPoteklo(AKTIVNA, Date.now())) {
-    // Na cilju ali dolgo po prihodu: pot gre sama, tudi s te strani.
+    // Na cilju ali dolgo po prihodu: pot gre sama. Kdor ravno gleda, jo vidi
+    // končano -- stran mu ne pobegne izpod prsta.
     NA_POTI.koncaj();
-    location.replace(nazajUrl());
+    if (document.hidden) location.replace(nazajUrl());
+    else potKoncana();
     return;
   }
   if (NP.aktivno) {
@@ -734,7 +752,10 @@ function posodobi(skok, samoBesedilo) {
   }
   $("#vod-sledi").hidden = V.sledi || !vodim;
   const opomba = $("#vod-opomba");
-  if (dalec) {
+  if (NP.aktivno && NP.opomba) {
+    // Na poti ima prednost opomba poti (prestop, ki ne drži, stare zamude):
+    // prepis vsako sekundo bi pojedel dotik na njenem gumbu.
+  } else if (dalec) {
     opomba.textContent = `Pot se začne ${dolzina(razdaljaM([JAZ.lat, JAZ.lon], V.tocke[0]))}`
       + ` od tebe${n.od ? ` (${n.od})` : ""} — do takrat lahko listaš po navodilih.`;
   } else if (!JAZ && !opomba.textContent) {
@@ -859,8 +880,11 @@ $("#vod-naprej").addEventListener("click", () => {
 const NP = {
   aktivno: false, koraki: [], k: 0, trasa: {},
   vozilo: null, vozilaTrip: null, vozilaZanka: null, voziloOznaka: null,
-  najavljen: -1, zamujeno: null, odlozi: 0, opozorjen: "", zacel: false,
-  kameraOb: 0, potrdi: 0, osvezi: null, ura: null,
+  najavljen: -1, zamujeno: null, odlozi: 0, zacel: false,
+  kameraOb: 0, potrdi: 0, zamenjaj: 0, osvezi: null, ura: null,
+  // Pot ni več v voznem redu (404); zadnja napaka osvežitve; napaka lege;
+  // do kdaj ura ne premika koraka (vrnitev na stran, osvežitev še teče).
+  niVec: false, napaka: null, legaNapaka: null, cakaOsvezitev: 0, opomba: null,
 };
 //: Lega, starejša od tega, o koraku ne odloča -- takrat velja ura.
 const NP_LEGA_SVEZA_MS = 60000;
@@ -871,6 +895,10 @@ const NP_ZAMUJENO_S = 150;
 const NP_ZAMUJENO_BREZ_VOZILA_S = 300;
 //: Od toliko metrov pred izstopom „izstopi na naslednji“ in tresljaj.
 const NP_IZSTOP_M = 500;
+//: Lega šteje za korak šele toliko pred začetkom poti.
+const NP_LEGA_PRED_S = 30 * 60;
+//: Zamude, starejše od tega, so na plošči z besedo (osvežitev je na 30 s).
+const NP_STARO_MS = 2 * 60000;
 const NP_PLOSCA_KLJUC = "kajros:na-poti-plosca";
 
 function svezaLega() {
@@ -880,7 +908,7 @@ function svezaLega() {
 /** Trasa vožnje z lego postankov vzdolž nje; `null`, dokler je le skica. */
 function trasaVoznje(i) {
   const c = CRTE[i];
-  if (!c || c.skica || !c.tocke || c.tocke.length < 2) return null;
+  if (!c || c.skica || c.ravna || !c.tocke || c.tocke.length < 2) return null;
   if (NP.trasa[i] && NP.trasa[i].tocke === c.tocke) return NP.trasa[i];
   const kum = kumulative(c.tocke);
   const postaje = (PREDLOG.noge[i].postanki || []).filter((x) => x.ll).map((x) => {
@@ -897,15 +925,20 @@ function naTrasi(i, l) {
   return tr && l ? projekcijaNaTraso(tr.tocke, tr.kum, l.lat, l.lon) : null;
 }
 
-/** Ali se potnik pelje z vožnjo koraka `r`: na njeni trasi, za vstopom, v gibanju. */
-function seVozi(r, l, zdaj, prag) {
+/** Ali se potnik pelje z vožnjo koraka `r`: na njeni trasi, za vstopom, v
+ *  gibanju. `strogo` je za vožnjo za prestopom: lega ob prestopnem
+ *  postajališču je lahko še v prvem vozilu, ki tja pripelje -- šele 120 m po
+ *  trasi drugega in ne pred njegovim odhodom. */
+function seVozi(r, l, zdaj, prag, strogo = false) {
   const s = NP.koraki[r];
   const n = PREDLOG.noge[s.i];
   const na = naTrasi(s.i, l);
-  if (!na || na.odmik > prag || zdaj < (n.odhod_ocena || n.odhod) - 180) return false;
+  if (!na || na.odmik > prag || zdaj < (n.odhod_ocena || n.odhod) - (strogo ? 60 : 180)) {
+    return false;
+  }
   const tr = trasaVoznje(s.i);
   const konec = tr.kum[tr.kum.length - 1];
-  return na.vzdolz < konec - 15 && ((l.hitrost || 0) >= 3 || na.vzdolz >= 120);
+  return na.vzdolz < konec - 15 && (na.vzdolz >= 120 || (!strogo && (l.hitrost || 0) >= 3));
 }
 
 /** Korak, ki ga dokazuje lega, ali `null`. Gleda le naprej od `k`. */
@@ -913,7 +946,10 @@ function korakIzLege(l, zdaj, k) {
   const koraki = NP.koraki;
   const ll = [l.lat, l.lon];
   const prag = Math.max(35, Math.min(l.acc || 35, 80));
-  if (razdaljaM(ll, doKod()) <= prag) return koraki.length - 1;
+  // Na cilju šele za zadnjo vožnjo: avtobus, ki pelje mimo vrat pred
+  // izstopom, ali pot za zvečer, izbrana doma, nista prihod.
+  const zadnja = koraki.map((s) => s.vrsta).lastIndexOf("voznja");
+  if (k > zadnja && razdaljaM(ll, doKod()) <= prag) return koraki.length - 1;
   const korak = koraki[k];
   const hitrost = l.hitrost || 0;
   const r = koraki.findIndex((s, j) => j >= k && s.vrsta === "voznja");
@@ -926,9 +962,9 @@ function korakIzLege(l, zdaj, k) {
     if (razdaljaM(ll, n.do_ll) <= prag + 20 && hitrost < 2) return k + 1;
     if (na && tr && na.odmik <= prag && na.vzdolz >= tr.kum[tr.kum.length - 1] - 15
         && hitrost < 2) return k + 1;
-    // Na naslednji vožnji, ne da bi te videli na prestopu.
+    // Na naslednji vožnji, ne da bi te videli na prestopu -- z dokazom.
     const r2 = koraki.findIndex((s, j) => j > k && s.vrsta === "voznja");
-    return r2 > 0 && seVozi(r2, l, zdaj, prag) ? r2 : null;
+    return r2 > 0 && seVozi(r2, l, zdaj, prag, true) ? r2 : null;
   }
   if (seVozi(r, l, zdaj, prag)) return r;
   // Ob vstopnem postajališču čakaš (čakanje je vedno tik pred vožnjo).
@@ -941,17 +977,32 @@ function korakNaPoti() {
   const koraki = NP.koraki;
   if (!koraki.length) return;
   let k = NP.k;
-  const l = svezaLega();
+  // Lega o koraku odloča šele blizu začetka: doma zjutraj ni korak večerne poti.
+  const l = zdaj >= koraki[0].od - NP_LEGA_PRED_S ? svezaLega() : null;
   if (l) {
     const iz = korakIzLege(l, zdaj, k);
     if (iz != null && iz > k) k = iz;
     // Vodenje po pešpoti ve, kdaj si na koncu hoje (`V.prispel`).
     if (koraki[k].vrsta === "hoja" && V.i === koraki[k].i && V.prispel) k += 1;
-  } else {
+    // Brez trase lega vožnje ne dokaže (zemljevida ni, trasa se ni naložila):
+    // takrat gre pot naprej tudi po uri, kot brez lege -- sicer obstane pred
+    // vozilom, na katerem potnik že sedi.
+    const r = koraki.findIndex((s, j) => j >= k && s.vrsta === "voznja");
+    const c = r >= 0 ? CRTE[koraki[r].i] : null;
+    if (c && !c.nalaga && !trasaVoznje(koraki[r].i) && poUri()) {
+      k = Math.max(k, korakPoCasu(koraki, zdaj));
+    }
+  } else if (poUri()) {
     k = Math.max(k, korakPoCasu(koraki, zdaj));
   }
   if (k !== NP.k) nastaviKorak(Math.min(k, koraki.length - 1));
   preveriZamujeno(l, zdaj);
+}
+
+/** Ali sme ura premakniti korak. Ob vrnitvi na stran so zamude stare, korak
+ *  pa nazaj ne gre: najprej osvežitev (`osveziNaPoti`), nato ura. */
+function poUri() {
+  return Date.now() >= NP.cakaOsvezitev;
 }
 
 function nastaviKorak(k) {
@@ -1005,7 +1056,8 @@ function preveriZamujeno(l, zdaj) {
   // Vozilo z lego je odpeljalo, kadar je na trasi že za vstopnim postajališčem.
   const v = NP.vozilo;
   const tr = trasaVoznje(NP.koraki[r].i);
-  if (v && tr && NP.vozilaTrip === n.trip_id) {
+  if (!tr) return;                // brez trase lega ne pove, ali si na njem
+  if (v && NP.vozilaTrip === n.trip_id) {
     const pv = projekcijaNaTraso(tr.tocke, tr.kum, v.lat, v.lon);
     if (pv.odmik > 150 || pv.vzdolz < 100) return;
   } else if (zdaj < odh + NP_ZAMUJENO_BREZ_VOZILA_S) {
@@ -1044,8 +1096,9 @@ function ogrozenPrestop() {
   const korak = NP.koraki[NP.k];
   for (let v = 1; v < voznje.length; v += 1) {
     const t = PREDLOG.prestopi && PREDLOG.prestopi[v - 1];
-    if (!t || !t.tveganje || PREDLOG.noge.indexOf(voznje[v]) <= korak.i
-        && korak.vrsta !== "hoja") continue;
+    // Prestop, katerega drugo vozilo je že za tabo (čakaš nanj ali se z njim
+    // pelješ), ni več pred tabo; med hojo do njega pa še je.
+    if (!t || !t.tveganje || PREDLOG.noge.indexOf(voznje[v]) <= korak.i) continue;
     const mins = rezervaPrestopa(t, voznje[v - 1], voznje[v]);
     if ((mins != null && mins < 0) || (t.tveganje.vir === "zdaj" && t.tveganje.p < 0.5)) {
       return { t, mins };
@@ -1209,32 +1262,56 @@ function risiPlosco(korak, pred, zdaj) {
     $("#vod-vozilo").innerHTML = !v ? "" : pred ? voziloHtml(v, n.sekunde) : cakanjeHtml(v, zdaj);
     $("#vod-vozilo").hidden = !v;
   }
-  // Opozorilo: prestop, ki ne drži, ima prednost pred vsem drugim.
+  // Ena opomba, po pomembnosti, vsakič znova -- prej je ostala tudi, ko ni več
+  // veljala (stara „brez povezave“ po vrnitvi omrežja).
   const op = $("#vod-opomba");
+  let html = "";
+  let razred = "vod-opomba";
+  const staro = ZIVO ? Date.now() - (AKTIVNA.osvezeno || AKTIVNA.sprejeto) : 0;
   if (ogrozen) {
     const t = ogrozen.t;
-    op.innerHTML = `<strong>Prestop v ${escapeHtml(t.kje)} morda ne bo držal</strong>${
+    html = `<strong>Prestop v ${escapeHtml(t.kje)} morda ne bo držal</strong>${
       ogrozen.mins != null && ogrozen.mins < 0 ? `: zmanjka ${-ogrozen.mins} min` : ""}. `
-      + `<button type="button" data-nova="prestop">Poišči drugo pot</button>`;
-    op.className = "vod-opomba je-opozorilo";
-    const kljuc = `${t.kje}:${t.tveganje && t.tveganje.p}`;
-    if (NP.opozorjen !== kljuc && navigator.vibrate) navigator.vibrate([300, 150, 300]);
-    NP.opozorjen = kljuc;
-  } else if (op.classList.contains("je-opozorilo")) {
-    op.className = "vod-opomba";
-    op.textContent = "";
-  }
-  if (!svezaLega() && !op.textContent && korak.vrsta !== "cilj" && ZIVO) {
+      + '<button type="button" data-nova="prestop">Poišči drugo pot</button>';
+    razred += " je-opozorilo";
+    // Tresljaj enkrat na prestop, tudi čez znova odprto stran: verjetnost se
+    // ob vsaki osvežitvi premakne, prestop pa je isti.
+    const kljuc = `${PREDLOG.prestopi.indexOf(t)}:${t.kje}`;
+    if ((AKTIVNA.stanje || {}).opozorjen !== kljuc) {
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+      AKTIVNA.stanje = { ...(AKTIVNA.stanje || {}), opozorjen: kljuc };
+      shraniNaPoti();
+    }
+  } else if (NP.niVec) {
+    // Vozni red se uvaža vsak dan; jutrišnja vožnja ima lahko drug id.
+    html = 'Vozni red se je spremenil in te poti ni več. '
+      + '<button type="button" data-nova="znova">Poišči jo znova</button>';
+    razred += " je-opozorilo";
+  } else if (NP.legaNapaka) {
+    html = escapeHtml(NP.legaNapaka);
+  } else if (staro > NP_STARO_MS && korak.vrsta !== "cilj") {
+    html = `${NP.napaka ? `${NP.napaka} — z` : "Z"}amude so izpred ${Math.round(staro / 60000)} min.`;
+    razred += " je-staro";
+  } else if (!svezaLega() && korak.vrsta !== "cilj" && ZIVO) {
     // Brez lege stran ne ve, ali si na vozilu: gre po uri, korak pa lahko
     // potrdiš sam. Okna za dovoljenje ne odpremo sami -- samo ta dotik.
-    op.innerHTML = 'Brez lege gre pot naprej po uri. <button type="button" data-lega>Pokaži, kje sem</button>';
+    html = 'Brez lege gre pot naprej po uri. <button type="button" data-lega>Pokaži, kje sem</button>';
   }
+  // Med hojo piše v isto vrstico tudi vodenje po pešpoti (`posodobi`); svojo
+  // opombo pot prepozna po oznaki in jo napiše znova le, kadar je ni.
+  if (html !== NP.opomba || (html && !op.querySelector(":scope > [data-np]"))) {
+    if (html) op.innerHTML = `<span data-np>${html}</span>`;
+    else if (NP.opomba) op.textContent = "";
+    NP.opomba = html;
+  }
+  op.className = html ? razred : "vod-opomba";
 
   // Gumbi: en glavni za ta korak, „nova pot“ in konec.
   const dalje = $("#vod-dalje");
   // „Grem zdaj“ samo, kadar je odhod blizu -- za jutrišnjo pot je vabilo k
   // vodenju, ki ga še ni.
-  const beseda = pred ? (korak.od - zdaj < 30 * 60 ? "grem zdaj" : "")
+  const beseda = NP.niVec ? ""
+    : pred ? (korak.od - zdaj < 30 * 60 ? "grem zdaj" : "")
     : NP.zamujeno != null ? "sem na vozilu"
     : korak.vrsta === "cakanje" ? "sem na vozilu"
     : korak.vrsta === "voznja" ? "izstopil sem"
@@ -1242,6 +1319,9 @@ function risiPlosco(korak, pred, zdaj) {
   dalje.textContent = beseda;
   dalje.hidden = !beseda;
   $("#vod-nova").hidden = korak.vrsta === "cilj";
+  // Zložena plošča kaže le glavni gumb; ob zamujenem vozilu ali prestopu, ki
+  // ne drži, je „nova pot od tu“ prav tako glavni.
+  $("#vod-nova").classList.toggle("je-nujno", NP.zamujeno != null || !!ogrozen);
   const konec = $("#vod-konec");
   if (!NP.potrdi) konec.textContent = korak.vrsta === "cilj" ? "končano" : "končaj pot";
   $("#vod-sledi").hidden = V.sledi;
@@ -1347,16 +1427,40 @@ function shraniNaPoti() {
 }
 
 async function osveziNaPoti() {
-  if (!NP.aktivno || !ZIVO) return;
-  const r = await fetch(`/api/pot/podrobno?${naslovPodrobno()}&geometrija=0`);
-  if (!r.ok) return;
+  if (!NP.aktivno || !ZIVO || NP.niVec) return;
+  let r;
+  try {
+    r = await fetch(`/api/pot/podrobno?${naslovPodrobno()}&geometrija=0`);
+  } catch (e) {
+    NP.napaka = "Brez povezave";
+  }
+  if (r && r.status === 404) NP.niVec = true;   // vožnje po novem voznem redu ni več
+  else if (r && !r.ok) NP.napaka = "Strežnik ne odgovarja";
+  if (!r || !r.ok) {
+    NP.cakaOsvezitev = 0;
+    posodobiVse(false);
+    return;
+  }
   prepisiZamude(await r.json());
+  NP.napaka = null;
+  NP.cakaOsvezitev = 0;
   // Ure korakov so se z zamudami premaknile; napredek ostane.
   NP.koraki = korakiPoti(PREDLOG);
   AKTIVNA.osvezeno = Date.now();
   shraniNaPoti();
   posodobiVse(false);
 }
+
+/** Osveževanje zamud na poti: vsakih 30 s in ob vrnitvi na stran takoj
+ *  (`pollWhileVisible`). Le za pot, ki je zdaj -- in ta to postane tudi med
+ *  odprto stranjo (jutrišnja pot, odprta zvečer). */
+function zivoZanka() {
+  if (NP.aktivno && ZIVO && !NP.osvezi) NP.osvezi = pollWhileVisible(osveziNaPoti, 30000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && NP.aktivno && ZIVO) NP.cakaOsvezitev = Date.now() + 4000;
+});
 
 /** Kje si po poti, kadar lege ni: na postajališču, s katerega greš, ali na
  *  tistem, kjer izstopiš; pred prvim korakom doma. */
@@ -1387,6 +1491,23 @@ function novaPot(odKje) {
   // Seznam ve, da je to nadomestna pot: izbrana zamenja tekočo brez vprašanja.
   q.set("nova", "1");
   location.href = `/app/pot?${q}`;
+}
+
+/** Potekla pot na zaslonu: vodenje se ustavi, koraki ostanejo za pogled nazaj. */
+function potKoncana() {
+  NP.aktivno = false;
+  clearInterval(NP.ura);
+  if (NP.osvezi) NP.osvezi.stop();
+  if (NP.vozilaZanka) NP.vozilaZanka.stop();
+  NP.vozilaTrip = null;
+  NP.vozilo = null;
+  risiVozilo(null);
+  if (NP.korakiDom) NP.korakiDom.appendChild($("#koraki"));
+  document.body.classList.remove("na-poti");
+  delete document.body.dataset.korak;
+  koncajVodenje();
+  $("#stanje").className = "pot-stanje";
+  $("#stanje").innerHTML = `Pot je končana. <a href="${escapeHtml(nazajUrl())}">Nova pot ›</a>`;
 }
 
 function koncajPot() {
@@ -1446,8 +1567,12 @@ $("#vod-nova").addEventListener("click", () => novaPot(null));
 document.addEventListener("click", (e) => {
   if (!e.target.closest("[data-lega]")) return;
   prosiZaSmer();
-  zacniLego().then(() => posodobiVse(true)).catch((err) => {
-    $("#vod-opomba").textContent = err.message;
+  zacniLego().then(() => {
+    NP.legaNapaka = null;
+    posodobiVse(true);
+  }).catch((err) => {
+    NP.legaNapaka = err.message;
+    posodobiVse(false);
   });
 });
 
@@ -1461,6 +1586,7 @@ function zacniNaPoti() {
   $("#vod-manever").hidden = false;
   $("#vod-spodaj").hidden = false;
   $("#vod-pot").hidden = false;
+  NP.korakiDom = $("#koraki").parentNode;
   $("#vod-pot").appendChild($("#koraki"));
   // Privzeto zložena: med potjo je zemljevid pomembnejši od seznama, vrstica
   // pod njim pa pove, kar je treba vedeti (vozilo z rezervo, kaj pride).
@@ -1478,15 +1604,37 @@ function zacniNaPoti() {
     posodobiVse(true);
   });
   // Ura teče tudi, ko stojiš: odštevanje in korak po uri se premikata sama.
-  NP.ura = setInterval(() => { if (!document.hidden) posodobiVse(false); }, 5000);
+  NP.ura = setInterval(() => {
+    if (document.hidden) return;
+    // Pot, odprta dan prej, postane živa sama: zamude, vozilo, opozorila.
+    if (!ZIVO && DATUM && jeZdaj(DATUM)) {
+      ZIVO = true;
+      zivoZanka();
+      voziloKoraka();
+    }
+    posodobiVse(false);
+  }, 5000);
   // Prvo osvežitev opravi `nalozi`; zanka začne pol minute za njo.
-  setTimeout(() => { if (NP.aktivno && ZIVO) NP.osvezi = pollWhileVisible(osveziNaPoti, 30000); },
-             30000);
+  setTimeout(zivoZanka, 30000);
 }
 
-// Pot, ki jo je kdo poslal ali odprl s seznama, se da izbrati tudi tu.
+// Pot, ki jo je kdo poslal ali odprl s seznama, se da izbrati tudi tu. Ista,
+// ki je že izbrana, se nadaljuje z napredkom; druga tekočo zamenja šele na
+// drugi dotik -- kot pri seznamu (`pot.js` `sprejmi`).
 $("#zacni").addEventListener("click", () => {
   if (!PREDLOG) return;
+  const izbrana = NA_POTI.beri();
+  if (izbrana && izbrana.spec.noge === Q.get("noge")) {
+    location.assign(NA_POTI_STRAN);
+    return;
+  }
+  const gumb = $("#zacni");
+  if (izbrana && !NP.zamenjaj) {
+    gumb.textContent = "zamenjam tekočo pot?";
+    NP.zamenjaj = setTimeout(() => { NP.zamenjaj = 0; gumb.textContent = "Začni pot"; }, 4000);
+    return;
+  }
+  clearTimeout(NP.zamenjaj);
   const spec = {};
   for (const k of ["noge", "od_lat", "od_lon", "do_lat", "do_lon", "kmh"]) {
     if (Q.get(k)) spec[k] = k === "noge" ? Q.get(k) : Number(Q.get(k));
@@ -1585,10 +1733,7 @@ function prikazi(pr, datum) {
   const izbrana = !NA_POTI_NACIN && NA_POTI.beri();
   const zacni = $("#zacni");
   zacni.hidden = NA_POTI_NACIN;
-  if (izbrana && izbrana.spec.noge === Q.get("noge")) {
-    zacni.textContent = "Nadaljuj pot";
-    zacni.onclick = () => location.assign(NA_POTI_STRAN);
-  }
+  if (izbrana && izbrana.spec.noge === Q.get("noge")) zacni.textContent = "Nadaljuj pot";
 }
 
 /** Ali je pot „zdaj“ -- isto pravilo kot strežnikov `zivo` (`api._zdaj_za_dan`). */
@@ -1615,7 +1760,10 @@ async function nalozi() {
   }
   // Na poti je zadnja shranjena pot takoj na zaslonu, tudi brez omrežja --
   // aplikacija se odpre sredi vožnje, v predoru ali ob slabem signalu.
-  const izShrambe = AKTIVNA && AKTIVNA.predlog.noge.some((n) => n.postanki);
+  // Tudi kartica s seznama (brez postankov) pove, kje izstopiš in kam
+  // prestopiš -- prva podrobna osvežitev jo dopolni.
+  const izShrambe = !!AKTIVNA && AKTIVNA.predlog.noge.length > 0;
+  const polna = izShrambe && AKTIVNA.predlog.noge.some((n) => n.postanki);
   if (izShrambe) {
     ZIVO = jeZdaj(AKTIVNA.spec.date);
     prikazi(AKTIVNA.predlog, AKTIVNA.spec.date);
@@ -1634,32 +1782,28 @@ async function nalozi() {
     const d = await r.json();
     ZIVO = Boolean(d.zivo);
     if (izShrambe) {
-      prepisiZamude(d);
+      if (polna) prepisiZamude(d);
+      else prikazi(d.predlog, d.datum);
       NP.koraki = korakiPoti(PREDLOG);
+      AKTIVNA.osvezeno = Date.now();
       shraniNaPoti();
-      posodobiVse(false);
+      voziloKoraka();               // strežnik zna reči „zdaj“ drugače kot ura
+      posodobiVse(!polna);
     } else {
       prikazi(d.predlog, d.datum);
-      if (AKTIVNA) {
-        shraniNaPoti();
-        zacniNaPoti();
-      }
     }
   } catch (e) {
     if (izShrambe) {
-      // Pot je na zaslonu iz shrambe; povemo, da so zamude stare.
-      $("#vod-opomba").textContent = `Brez povezave — zamude so izpred ${
-        Math.round((Date.now() - (AKTIVNA.osvezeno || AKTIVNA.sprejeto)) / 60000)} min.`;
+      // Pot je na zaslonu iz shrambe; plošča pove, kaj je narobe in kako
+      // stare so zamude (`risiPlosco`).
+      if (e.status === 404) NP.niVec = true;
+      else NP.napaka = e.status ? "Strežnik ne odgovarja" : "Brez povezave";
+      posodobiVse(false);
       return;
     }
     $("#stanje").className = "pot-stanje je-napaka";
-    if (AKTIVNA && e.status === 404) {
-      // Vozni red se uvaža vsak dan; jutrišnja vožnja ima lahko drug id.
-      $("#stanje").innerHTML = "Vozni red se je spremenil in te poti ni več. "
-        + '<button type="button" class="hoja-gumb" data-nova="znova">Poišči jo znova</button>';
-      return;
-    }
-    $("#stanje").textContent = e.message;
+    $("#stanje").textContent = e.status ? e.message
+      : "Brez povezave — pot se naloži, ko bo omrežje.";
   }
 }
 

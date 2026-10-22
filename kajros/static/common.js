@@ -1940,13 +1940,17 @@ function naCrti(tocke, ll) {
 async function trasa(n) {
   if (!n.trip_id || !n.od_ll || !n.do_ll) return null;
   if (!TRASE.has(n.trip_id)) {
-    TRASE.set(n.trip_id, (async () => {
+    const obljuba = (async () => {
       const r = await fetch(`/api/trip/${encodeURIComponent(n.trip_id)}/shape`);
       if (!r.ok) return null;
       const deli = (await r.json()).points || [];
       // Trasa je lahko večdelna; za izrez vzamemo najdaljši del.
       return deli.reduce((a, b) => (b.length > a.length ? b : a), []);
-    })());
+    })();
+    TRASE.set(n.trip_id, obljuba);
+    // Brez omrežja zavrnjena ne sme ostati: stran, odprta v predoru, bi bila
+    // do konca brez trase (pot, na kateri si, iz nje ve, ali se pelješ).
+    obljuba.catch(() => TRASE.delete(n.trip_id));
   }
   const del = await TRASE.get(n.trip_id);
   if (!del || del.length < 2) return null;
@@ -2405,6 +2409,10 @@ const NA_POTI_KLJUC = "kajros:na-poti";
 const NA_POTI_PO_PRIHODU_MS = 45 * 60000;
 //: Na cilju gre pot sama čez toliko -- pogled nazaj, ne seznam za ves dan.
 const NA_POTI_NA_CILJU_MS = 10 * 60000;
+//: Kadar je potnik po napredku še na poti do zadnjega vozila ali na njem:
+//: ura prihoda je morda stara (stran poti ni bila odprta), vlak z zamudo pa
+//: pot ne sme izbrisati sredi vožnje.
+const NA_POTI_NA_VOZILU_MS = 2 * 3600000;
 const NA_POTI_STRAN = "/app/pot/podrobno?na-poti=1";
 
 const NA_POTI = {
@@ -2439,7 +2447,11 @@ const NA_POTI = {
 function naPotiPoteklo(a, zdajMs) {
   const st = a.stanje || {};
   if (st.cilj_ob && zdajMs - st.cilj_ob > NA_POTI_NA_CILJU_MS) return true;
-  return zdajMs > (a.predlog.prihod_ocena || a.predlog.prihod) * 1000 + NA_POTI_PO_PRIHODU_MS;
+  const koraki = korakiPoti(a.predlog);
+  const zadnja = koraki.map((x) => x.vrsta).lastIndexOf("voznja");
+  const naVozilu = st.korak > 0 && st.korak <= zadnja;
+  return zdajMs > (a.predlog.prihod_ocena || a.predlog.prihod) * 1000
+    + (naVozilu ? NA_POTI_NA_VOZILU_MS : NA_POTI_PO_PRIHODU_MS);
 }
 
 /**
@@ -2485,10 +2497,13 @@ function prestopDrzi(t) {
   return `takšen drži v ${Math.round(tv.p * 100)} %`;
 }
 
-/** Korak, na katerem si po uri: prvi, ki se še ni končal. */
+/** Korak, na katerem si po uri: prvi, ki se še ni končal -- a ne cilj. Ta
+ *  je iz lege ali dotika: ura ob vrnitvi na stran je lahko iz stare zamude in
+ *  „na cilju si“ bi potnika sredi zamujene vožnje poslal z vlaka. */
 function korakPoCasu(koraki, zdajS) {
   const k = koraki.findIndex((x) => x.do > zdajS);
-  return k < 0 ? koraki.length - 1 : k;
+  const zadnji = Math.max(0, koraki.length - 2);
+  return k < 0 ? zadnji : Math.min(k, zadnji);
 }
 
 /** Vožnja, h kateri vodi korak (hoja ali čakanje pred njo, ali ona sama). */
@@ -2502,10 +2517,11 @@ function voznjaKoraka(p, korak) {
 const URA_POTI = (ts) => new Date(ts * 1000).toLocaleTimeString("sl-SI",
   { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Ljubljana" });
 
-/** „čez 6 min“, „čez 1 h 20“, „zdaj“; drug dan „jutri“ ali datum. */
+/** „čez 6 min“, „čez 1 h 20“, „zdaj“; drug dan „jutri“ ali datum -- a ne
+ *  ponoči: nočni avtobus ob 00:05 je ob 23:50 „čez 15 min“, ne „jutri“. */
 function cezPoti(ts, zdajS) {
   const dan = new Date(ts * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
-  if (dan !== todayIso()) {
+  if (dan !== todayIso() && Math.abs(ts - zdajS) >= 6 * 3600) {
     const jutri = new Date(`${todayIso()}T12:00:00`);
     jutri.setDate(jutri.getDate() + 1);
     return dan === jutri.toLocaleDateString("sv-SE") ? "jutri" : dayLabel(dan);

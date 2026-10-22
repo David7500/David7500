@@ -753,6 +753,9 @@ function podrobnoUrl(p) {
   // Meja hoje je del vprašanja: brez nje je "nazaj na predloge" iskal z 25 min.
   if (hojeMin() !== 25) q.set("hoje", hojeMin());
   if (S.izidi && S.izidi.prihod_do) q.set("tam", ura(S.izidi.prihod_do));
+  // Rok kot trenutek: z njim podrobnosti pravočasnost računajo enako kot
+  // seznam, izbrana pot pa ga nese naprej (nova pot od tu z istim rokom).
+  if (S.izidi && S.izidi.prihod_do && !S.izidi.ne_ujames) q.set("rok", S.izidi.prihod_do);
   return `/app/pot/podrobno?${q}`;
 }
 
@@ -1211,7 +1214,12 @@ addEventListener("popstate", (e) => {
 /** Vprašanje in pot v obliki, ki jo bere stran poti (`NA_POTI`). */
 function sprejmi(p, zamenjaj = false) {
   const prej = NA_POTI.beri();
-  if (prej && !zamenjaj && !S.nadomesti && prej.spec.noge !== nogeKljuc(p)) {
+  // Ista pot znova (nazaj s strani poti, nato „Začni“): napredek ostane.
+  if (prej && prej.spec.noge === nogeKljuc(p) && prej.spec.date === p.datum) {
+    location.href = NA_POTI_STRAN;
+    return;
+  }
+  if (prej && !zamenjaj && !S.nadomesti) {
     // Izbrana pot je ena; druga jo zamenja, a ne brez vprašanja -- potnik je
     // morda na avtobusu in je le pogledal, kako bi šel drugače.
     const s = naslednjeNaPoti(prej, Date.now() / 1000);
@@ -1222,6 +1230,8 @@ function sprejmi(p, zamenjaj = false) {
     el.hidden = false;
     el.querySelector("[data-da]").addEventListener("click", () => sprejmi(p, true));
     el.querySelector("[data-ne]").addEventListener("click", () => { el.hidden = true; });
+    // Na telefonu je gumb pritrjen spodaj, vprašanje pa pod koraki.
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
     return;
   }
   const izid = S.izidi;
