@@ -123,3 +123,28 @@ def test_tabla_s_smerjo_kaze_samo_to_stran(conn):
                         stop_ids=set(h1["stop_ids"]))
     assert {r["trip_id"] for r in ena} == {"vzhod0", "vzhod1", "vzhod2", "vzhod-ijpp"}
     assert {r["stop_id"] for r in ena} == {"H1", "H3"}
+
+
+def test_koda_lpp_pove_v_center_ali_iz_centra(conn):
+    """LPP-jeva koda postajališča: zadnja števka liha = proti centru, soda =
+    iz centra. Brez kode (IJPP, H3) dodatek ostane, kar pove LPP-jeva."""
+    conn.execute("UPDATE station SET koda = '602041' WHERE stop_id = 'H1'")
+    conn.execute("UPDATE station SET koda = '602042' WHERE stop_id = 'H2'")
+    smeri = _po_kljucu(journey.smeri_postaje(conn, "Hajdrihova"))
+    assert smeri["H1"]["center"] == "v center"
+    assert smeri["H2"]["center"] == "iz centra"
+    assert _po_kljucu(journey.smeri_postaje(conn, "Zanka"))["Z1"]["center"] is None
+
+
+def test_kodi_v_nasprotju_ne_povesta_nicesar():
+    assert journey._center(["602041", "602042"]) is None
+    assert journey._center([None, "600011"]) == "v center"
+    assert journey._center([None]) is None
+
+
+def test_v_srediscu_kode_ne_povesta_centra(conn, monkeypatch):
+    """Bavarski dvor 600012 pelje na Ajdovščino, v center -- koda pa je soda."""
+    conn.execute("UPDATE station SET koda = '602041' WHERE stop_id = 'H1'")
+    monkeypatch.setattr(journey, "SREDISCE", (46.04570, 14.49050))
+    smeri = _po_kljucu(journey.smeri_postaje(conn, "Hajdrihova"))
+    assert smeri["H1"]["center"] is None

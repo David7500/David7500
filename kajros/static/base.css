@@ -812,6 +812,9 @@ html:has(.orodna) { scroll-padding-bottom: var(--orodna-prostor); }
 }
 /* Tiskanje ne rabi menija. */
 @media print { .orodna { display: none; } }
+/* Odprta tipkovnica (`common.js`): vrstica ostane spodaj, pod tipkovnico, ne
+ * nad njo čez polje za vnos. */
+html.tipkovnica .orodna { display: none; }
 
 /* ---------- obvestila kajrosa ----------
  *

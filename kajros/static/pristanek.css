@@ -137,6 +137,7 @@
   text-decoration: none;
 }
 @media (hover: hover) { .smeri a:hover { color: var(--ink); border-color: var(--accent); } }
+.smer-center { color: var(--ink-mute); }
 .smeri a[aria-current="true"] {
   color: var(--ink); border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);

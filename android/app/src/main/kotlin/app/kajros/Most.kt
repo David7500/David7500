@@ -40,9 +40,11 @@ class Most(
      *    `cakajVkrcanje()`).
      * 5: zaslon „O aplikaciji“ (`oAplikaciji()`).
      * 6: sistemski izbirnik za `navigator.share` (`poslji()`).
+     * 7: lastna lega (`dovoljenja()` pove `lega`, `zahtevajLego()`, izid na
+     *    strani `kajrosLega(stanje, nastavitve)`).
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 6 else 0
+    fun razlicica(): Int = if (nas()) 7 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -293,7 +295,13 @@ class Most(
         return true
     }
 
-    /** Kaj sistem trenutno dovoli. Stran naj gumba ne ponuja, ce ne bo delal. */
+    /**
+     * Kaj sistem trenutno dovoli. Stran naj gumba ne ponuja, ce ne bo delal.
+     *
+     * `lega` (natančna ali približna) od mostu 7: stran z njo prižge lego
+     * sama, brez dotika. Klic `navigator.geolocation` brez dovoljenja bi
+     * odprl sistemsko okno, ki ga nihče ni prosil.
+     */
     @JavascriptInterface
     fun dovoljenja(): String {
         if (!nas()) return "{}"
@@ -301,7 +309,19 @@ class Most(
             .put("obvestila", GlavnaDejavnost.smeObvescati(dejavnost))
             .put("tocni_alarmi", Nacrtovalec.smeTocenAlarm(dejavnost))
             .put("cel_zaslon", Zvonjenje.smeCelZaslon(dejavnost))
+            .put("lega", DeljenjeStoritev.smeLego(dejavnost))
             .toString()
+    }
+
+    /**
+     * „Vklopi“ na kartici domače strani: sistemsko okno za lego, ob trajni
+     * zavrnitvi nastavitve aplikacije. Samo na dotik -- stran ga ne kliče
+     * sama. Izid pride na stran kot `kajrosLega(stanje, nastavitve)`.
+     */
+    @JavascriptInterface
+    fun zahtevajLego() {
+        if (!nas()) return
+        glavna.post { (dejavnost as? GlavnaDejavnost)?.vklopiLego() }
     }
 
     /**

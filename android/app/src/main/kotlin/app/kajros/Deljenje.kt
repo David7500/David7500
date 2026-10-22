@@ -97,4 +97,16 @@ object Deljenje {
      * pozna) in ponavljanje ne pomaga; 429 in 5xx sta prehodna.
      */
     fun jeZavrnitev(koda: Int): Boolean = koda in 400..499 && koda != 429
+
+    /**
+     * Razlog konca ob zavrnitvi. Zavrnjen **začetek** (`deljenje` še null)
+     * nosi strežnikovo `koda` (`ni_tu`, `ni_na_trasi`, `neznana` ...), da
+     * stran pove, kaj storiti. Do 1.14 je bil vsak „napaka“ in stran je
+     * potniku, ki ga strežnik ni sprejel niti enkrat, pisala „Hvala! Strežnik
+     * deljenja ni več sprejel“ (mestni LPP, 21. 10. 2026). Koda gre v niz, ki
+     * ga bere stran, zato le male črke in podčrtaj.
+     */
+    fun konecZavrnitve(zacetek: Boolean, koda: String?): String =
+        if (zacetek && koda != null && Regex("[a-z_]{1,24}").matches(koda)) "zavrnjen:$koda"
+        else "napaka"
 }

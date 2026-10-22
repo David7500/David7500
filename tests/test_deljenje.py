@@ -128,6 +128,19 @@ def test_deljenje_zapise_prehod_in_zamudo(conn):
     assert ts == 3
 
 
+def test_dolg_trip_id_mestnega_lpp_se_deli(conn):
+    """Mestni LPP ima za `trip_id` tri UUID-je (110 znakov). Rez na 64 je
+    vsak začetek zavrnil s „Te vožnje ne poznam“ (21. 10. 2026 osemkrat)."""
+    dolg = "|".join(["5075f5b4-daea-425d-b3fe-c4807ebf11c7"] * 3)
+    assert len(dolg) == 110
+    conn.execute("UPDATE trip SET trip_id = ? WHERE trip_id = 't1'", (dolg,))
+    conn.execute("UPDATE sched SET trip_id = ? WHERE trip_id = 't1'", (dolg,))
+    conn.commit()
+    zdaj = _ob("10:05")
+    r = _deli(conn, zdaj, _tocka(3.8, zdaj), trip=dolg)
+    assert r["konec"] is None and r["sprejetih"] == 1
+
+
 def test_tocke_se_hranijo_brez_koordinat(conn):
     zdaj = _ob("10:05")
     _deli(conn, zdaj, _tocka(3.8, zdaj))

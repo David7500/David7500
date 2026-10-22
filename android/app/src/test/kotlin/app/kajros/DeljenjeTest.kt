@@ -61,4 +61,14 @@ class DeljenjeTest {
         assertFalse(Deljenje.jeZavrnitev(502))
         assertFalse(Deljenje.jeZavrnitev(200))
     }
+
+    @Test
+    fun zavrnjen_zacetek_nosi_kodo_streznika() {
+        assertEquals("zavrnjen:ni_tu", Deljenje.konecZavrnitve(true, "ni_tu"))
+        assertEquals("zavrnjen:neznana", Deljenje.konecZavrnitve(true, "neznana"))
+        // Med deljenjem in brez kode ostane splošni konec.
+        assertEquals("napaka", Deljenje.konecZavrnitve(false, "ni_tu"))
+        assertEquals("napaka", Deljenje.konecZavrnitve(true, null))
+        assertEquals("napaka", Deljenje.konecZavrnitve(true, "<script>"))
+    }
 }

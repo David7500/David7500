@@ -13,6 +13,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -48,6 +49,7 @@ class GlavnaDejavnost : Activity() {
         private const val ZAHTEVA_LEGA = 1
         private const val ZAHTEVA_OBVESTILA = 2
         private const val ZAHTEVA_LEGA_DELI = 3
+        private const val ZAHTEVA_LEGA_STRAN = 4
 
         /** Od Androida 13 je obvestilo dovoljenje, prej je bilo samoumevno. */
         fun smeObvescati(c: android.content.Context): Boolean =
@@ -94,6 +96,12 @@ class GlavnaDejavnost : Activity() {
 
     /** Dovoljenje za lego zahteva sistem asinhrono; stran medtem caka na odgovor. */
     private var cakajocaLega: Pair<String, GeolocationPermissions.Callback>? = null
+
+    /** Kdaj je „Vklopi“ vprašal sistem: odgovor brez okna pride takoj ([Lega.BREZ_OKNA_MS]). */
+    private var legaVprasanaMs = 0L
+
+    /** Ali je bila lega dovoljena ob odhodu iz aplikacije; ob vrnitvi (iz nastavitev) stran izve spremembo. */
+    private var legaObOdhodu: Boolean? = null
 
     private lateinit var most: Most
 
@@ -290,9 +298,11 @@ class GlavnaDejavnost : Activity() {
             izvor: String, odgovor: GeolocationPermissions.Callback,
         ) {
             if (!Nastavitve.jeNas(izvor, naslov)) { odgovor.invoke(izvor, false, false); return }
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED
-            ) {
+            // Tudi samo približna lega je dovoljenje. Prej je štela samo
+            // natančna, in kdor je izbral „približno“, je ob vsakem klicu dobil
+            // sistemsko okno -- od 1.14 kliče stran lego tudi sama, kadar je
+            // dovoljena (`Most.dovoljenja`, `lega`), in okno bi prišlo brez dotika.
+            if (DeljenjeStoritev.smeLego(this@GlavnaDejavnost)) {
                 // Tretji argument je "zapomni si" in je vedno `false`: ce bi
                 // WebView shranil "dovoljeno", nas naslednjic ne bi vprasal
                 // in Androidovega dovoljenja ne bi preveril nihce.
@@ -344,6 +354,43 @@ class GlavnaDejavnost : Activity() {
         )
     }
 
+    /**
+     * „Vklopi“ na kartici domače strani (`Most.zahtevajLego`, most 7). Okno
+     * sistema samo na dotik; kadar ga sistem ne pokaže več (zavrnjeno za
+     * vedno, odgovor brez okna), gremo v nastavitve aplikacije -- gumb, ki ne
+     * naredi ničesar, je slabši od poti tja. Izid gre na stran ([izidLege]).
+     *
+     * Vpraša vedno najprej sistem, tudi ko je bilo prej zavrnjeno za vedno:
+     * v nastavitvah se da izbrati „vprašaj vsakič“, in zapomnjena zavrnitev
+     * bi takrat potnika poslala v nastavitve namesto v okno.
+     */
+    fun vklopiLego() {
+        if (DeljenjeStoritev.smeLego(this)) { izidLege(false); return }
+        legaVprasanaMs = SystemClock.elapsedRealtime()
+        requestPermissions(
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION),
+            ZAHTEVA_LEGA_STRAN,
+        )
+    }
+
+    private fun odpriNastavitveLege() {
+        Toast.makeText(this, R.string.lega_v_nastavitvah, Toast.LENGTH_LONG).show()
+        try {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName")))
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.lega_zavrnjena, Toast.LENGTH_LONG).show()
+        }
+        izidLege(true)
+    }
+
+    /** Stran izve stanje lege (`kajrosLega` v common.js); [nastavitve]: odprte so nastavitve. */
+    private fun izidLege(nastavitve: Boolean) {
+        val stanje = if (DeljenjeStoritev.smeLego(this)) "dano" else "vprasaj"
+        web.evaluateJavascript("window.kajrosLega && window.kajrosLega(\"$stanje\", $nastavitve)", null)
+    }
+
     private fun odpriNastavitev(akcija: String) {
         try {
             startActivity(Intent(akcija, Uri.parse("package:$packageName")))
@@ -363,23 +410,28 @@ class GlavnaDejavnost : Activity() {
             zahtevajZaBudilko()
             return
         }
-        if (koda == ZAHTEVA_LEGA_DELI) {
-            if (izidi.none { it == PackageManager.PERMISSION_GRANTED }) {
-                Toast.makeText(this, R.string.deli_ob_voznji_lega, Toast.LENGTH_LONG).show()
-            }
-            return
-        }
-        if (koda != ZAHTEVA_LEGA) return
-        val (izvor, odgovor) = cakajocaLega ?: return
-        cakajocaLega = null
+        if (koda != ZAHTEVA_LEGA && koda != ZAHTEVA_LEGA_DELI && koda != ZAHTEVA_LEGA_STRAN) return
+        // Prazen odgovor: zahteva je bila prekinjena (zasuk, druga dejavnost).
+        // Nič se ni odločilo; stran samo izve, kar velja.
+        if (izidi.isEmpty()) { izidLege(false); return }
         val da = izidi.any { it == PackageManager.PERMISSION_GRANTED }
-        odgovor.invoke(izvor, da, false)
-        // Ce je clovek rekel "ne vprasaj vec", sistem naslednjic okna sploh ne
-        // pokaze in stran bi cakala v prazno. Povejmo, kje se to odklene.
-        if (!da && !shouldShowRequestPermissionRationale(
-                Manifest.permission.ACCESS_FINE_LOCATION)) {
-            Toast.makeText(this, R.string.lega_zavrnjena, Toast.LENGTH_LONG).show()
+        val o = Lega.poOdgovoru(
+            da = da,
+            razlog = shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION),
+            trajaloMs = SystemClock.elapsedRealtime() - legaVprasanaMs,
+            zaGumb = koda == ZAHTEVA_LEGA_STRAN,
+        )
+        if (koda == ZAHTEVA_LEGA_DELI && !da) {
+            Toast.makeText(this, R.string.deli_ob_voznji_lega, Toast.LENGTH_LONG).show()
         }
+        if (koda == ZAHTEVA_LEGA) {
+            cakajocaLega?.let { (izvor, odgovor) -> odgovor.invoke(izvor, da, false) }
+            cakajocaLega = null
+            // Ce je clovek rekel "ne vprasaj vec", sistem naslednjic okna sploh ne
+            // pokaze in stran bi cakala v prazno. Povejmo, kje se to odklene.
+            if (o.trajno) Toast.makeText(this, R.string.lega_zavrnjena, Toast.LENGTH_LONG).show()
+        }
+        if (o.nastavitve) odpriNastavitveLege() else izidLege(false)
     }
 
     // ---------- napaka ----------
@@ -476,8 +528,18 @@ class GlavnaDejavnost : Activity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        legaObOdhodu = DeljenjeStoritev.smeLego(this)
+    }
+
     override fun onResume() {
         super.onResume()
+        // Lega, vklopljena v nastavitvah, mora na stran takoj, ne šele ob
+        // naslednjem nalaganju: kartica na domači strani čaka nanjo.
+        val prej = legaObOdhodu
+        legaObOdhodu = null
+        if (prej != null && prej != DeljenjeStoritev.smeLego(this)) izidLege(false)
         val id = Posiljanje.caka ?: return
         // Izbirnik javi samo izbiro; vrnitev brez nje je preklic. Pol sekunde
         // za sporočilo sprejemniku, ki je ob vrnitvi lahko še na poti.

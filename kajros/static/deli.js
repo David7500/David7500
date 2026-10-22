@@ -198,8 +198,10 @@
   // Brskalnik lege z ugasnjenim zaslonom ne pošilja; aplikacija jo.
   function nasvetHtml(konec) {
     if (NATIVNO) {
-      return konec ? `<div class="deli-nasvet">Z budilko se deljenje začne samo, ko vstopiš.
-          Vklopiš ga v seznamu budilk: <b>Ko se peljem, pomagaj drugim</b>.</div>` : "";
+      // Besedilo v enem <span>: `.deli-nasvet` je stolpec in pika za <b> je
+      // sicer pristala sama v svoji vrstici.
+      return konec ? `<div class="deli-nasvet"><span>Z budilko se deljenje začne samo, ko vstopiš.
+          Vklopiš ga v seznamu budilk: <b>Ko se peljem, pomagaj drugim</b>.</span></div>` : "";
     }
     return `<div class="deli-nasvet"><span>${konec
         ? "V aplikaciji za Android deliš tudi s telefonom v žepu, z budilko pa se deljenje začne samo, ko vstopiš."
@@ -383,17 +385,26 @@
     izrisi();
   }
 
-  // Zavrnitev začetka iz okna vožnje pove, kaj storiti: kdor čaka na peronu,
-  // deli, ko vstopi (`deljenje.Zavrnjeno.koda`).
-  function zavrnjeno(e) {
+  // Zavrnjen začetek pove, kaj storiti: kdor čaka na peronu, deli, ko vstopi
+  // (`deljenje.Zavrnjeno.koda`). Aplikacija od 1.14 pošlje samo kodo
+  // („zavrnjen:ni_tu“), brskalnik še strežnikovo besedilo.
+  const ZAVRNITVE = {
+    neznana: "Te vožnje strežnik ne pozna. Osveži stran in poskusi znova.",
+    strop: "Danes je deljenja dovolj. Hvala — poskusi jutri.",
+  };
+  function zavrnitevText(koda, sporocilo) {
     const k = S.voznja || fiksna();
-    if (OKNO && k && (e.koda === "ni_tu" || e.koda === "ne_vozi")) {
-      return napaka(`Ta ${vozilo(k)} ta hip ni tu, kjer si ti. Deli, ko vstopiš.`);
+    if (k && (koda === "ni_tu" || koda === "ne_vozi")) {
+      return `Ta ${vozilo(k)} ta hip ni tu, kjer si ti. Deli, ko vstopiš.`;
     }
-    if (OKNO && k && e.koda === "ni_na_trasi") {
-      return napaka(`Nisi ob progi tega ${vozilo(k)}a. Deliš lahko, ko si na njem.`);
+    if (k && koda === "ni_na_trasi") {
+      return `Nisi ob progi tega ${vozilo(k)}a. Deliš lahko, ko si na njem.`;
     }
-    return napaka(e.message);
+    return sporocilo || ZAVRNITVE[koda] || "Strežnik deljenja ni sprejel.";
+  }
+
+  function zavrnjeno(e) {
+    return napaka(zavrnitevText(e.koda, e.message));
   }
 
   // ---------- lega ----------
@@ -436,7 +447,7 @@
   // rok iskanja (`ISCI_ROK_MS`).
   function obNapakiLege(e) {
     if (e.code !== 1) return;
-    napaka("Dostop do lege je zavrnjen. Dovoli ga v nastavitvah strani.");
+    napaka(`Dostop do lege je zavrnjen. Dovoli ga v nastavitvah ${MOST ? "aplikacije" : "strani"}.`);
   }
 
   function spremljaj() {
@@ -576,6 +587,11 @@
   };
 
   function koncaj(razlog) {
+    if (String(razlog).startsWith("zavrnjen:")) return napaka(zavrnitevText(razlog.slice(9)));
+    // Aplikacija do 1.13 javi vsako zavrnitev kot „napaka“, tudi zavrnjen
+    // začetek. Brez enega sprejetega stanja deljenja ni bilo -- „Hvala!“ in
+    // „ni več sprejel“ bi lagala.
+    if (razlog === "napaka" && !S.stanje) return napaka("Strežnik deljenja ni sprejel.");
     pospravi();
     S.faza = "konec";
     S.sporocilo = KONCI[razlog] || KONCI.potnik;

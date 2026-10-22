@@ -1051,7 +1051,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
     """
     zdaj = zdaj or datetime.now(TZ)
     zdaj_ts = int(zdaj.timestamp())
-    trip_id = str(podatki.get("trip_id") or "")[:64]
+    trip_id = str(podatki.get("trip_id") or "")[:stats.TRIP_NAJDALJSI]
     dan = str(podatki.get("service_date") or "")
     dnevi = dict(_dneva(zdaj))
     if dan not in dnevi:

@@ -2327,7 +2327,7 @@ function postaviVozilo(prvic, nova) {
   }
 
   // Vozilo se premika, torej se razdalja spreminja tudi brez novega dotika.
-  if (runMap.loc) izracunajRazdaljo(runMap.loc);
+  if (runMap.loc) razdaljaDoMene(runMap.loc);
 
   if (nova) podnapis(v, odmik);
 }
@@ -2418,6 +2418,15 @@ function izracunajRazdaljo(loc) {
   // Vozilo jemljemo na OCENJENI legi -- isti, ki je narisana. Dve stevilki o
   // istem vozilu, ena s slike in ena iz besedila, se ne smeta razhajati.
   const starost = v.age_s + (Date.now() - runMap.since) / 1000;
+  // Lega daleč od poti ni lega na poti: projekcija bi iz avtobusa na
+  // avtocesti naredila „še 420 m“ (prijava 22. 10. 2026).
+  const meritev = projekcijaNaTraso(runMap.trasa, runMap.cums, v.lat, v.lon);
+  if (meritev.odmik > NA_TRASI_M) {
+    el.innerHTML = `<span class="slabo">Vozilo je ${razdaljaText(meritev.odmik)} od poti `
+      + "te vožnje, zato razdalje po poti ni mogoče izmeriti.</span>";
+    el.hidden = false;
+    return;
+  }
   const { kje } = ocenjenaLega(v, starost);
   const vozilo = projekcijaNaTraso(runMap.trasa, runMap.cums, kje[0], kje[1]);
   const d = vozilo.vzdolz - jaz.vzdolz;
@@ -2429,20 +2438,36 @@ function izracunajRazdaljo(loc) {
   el.hidden = false;
 }
 
+// Kadar lega pride sama (dovoljenje dano, `LEGA`), se razdalja pokaže samo,
+// kadar jo je mogoče izmeriti: „od te proge si 40 km stran“ je odgovor na
+// vprašanje, ki ga nihče ni postavil. Po dotiku gumba (`runMap.legaGumb`)
+// povemo tudi, zakaj je ni.
+function razdaljaDoMene(loc) {
+  izracunajRazdaljo(loc);
+  const el = document.getElementById("run-map-me-line");
+  if (el && !runMap.legaGumb && el.querySelector(".slabo")) el.hidden = true;
+}
+
 function initLocate() {
   const btn = document.getElementById("run-map-me");
   if (!btn) return;
   btn.hidden = false;
+  // Vprasanje "kako dalec je vozilo od mene" se med cakanjem spreminja na
+  // obeh straneh, zato lega sledi; ena izmerjena bi po petih minutah lagala.
+  // Pogled se zanjo ne premakne -- ostane pri vozilu.
+  LEGA.poslusaj((l) => {
+    runMap.loc = l;
+    pkJaz(runMap.map, l);
+    if (l) razdaljaDoMene(l);
+    else document.getElementById("run-map-me-line").hidden = true;
+  });
   btn.addEventListener("click", async () => {
+    runMap.legaGumb = true;
     const el = document.getElementById("run-map-me-line");
     el.innerHTML = '<span class="slabo">iščem lokacijo …</span>';
     el.hidden = false;
     try {
-      const loc = await locateMe({
-        napredek: (l) => { runMap.loc = l; pkJaz(runMap.map, l); },
-      });
-      runMap.loc = loc;
-      pkJaz(runMap.map, loc);
+      const loc = await poisciMe();
       // Pogled naj zajame OBOJE -- vprasanje je razmerje med tabo in vozilom,
       // ne ena ali druga tocka.
       if (runMap.marker) {
@@ -2453,15 +2478,6 @@ function initLocate() {
         runMap.map.easeTo({ center: [loc.lon, loc.lat], zoom: 15 - PK_LZ });
       }
       izracunajRazdaljo(loc);
-      // Vprasanje "kako dalec je vozilo od mene" se med cakanjem spreminja na
-      // obeh straneh. Ena izmerjena lega bi po petih minutah lagala.
-      if (!runMap.sledim) {
-        runMap.sledim = sledi((l) => {
-          pkJaz(runMap.map, l);
-          runMap.loc = l;
-          izracunajRazdaljo(l);
-        });
-      }
     } catch (err) {
       el.innerHTML = `<span class="slabo">${escapeHtml(err.message)}</span>`;
     }

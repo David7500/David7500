@@ -261,7 +261,8 @@ class DeljenjeStoritev : Service() {
         }
         val o = try { JSONObject(odgovor ?: "") } catch (e: JSONException) { null }
         if (Deljenje.jeZavrnitev(koda) || o == null) {
-            koncaj("napaka"); return
+            koncaj(Deljenje.konecZavrnitve(deljenje == null,
+                o?.optString("koda")?.ifBlank { null })); return
         }
         deljenje = o.optString("deljenje").ifBlank { deljenje }
         o.optJSONObject("stanje")?.let { stanje = it.toString() }

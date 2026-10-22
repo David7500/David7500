@@ -152,6 +152,7 @@ try {
   brezZemljevida(err);
   await new Promise(() => {});
 }
+zapriNavedbo(map);
 
 const lz = () => map.getZoom() + LZ;
 
@@ -400,10 +401,6 @@ function dodajSloje() {
   map.addLayer({ id: "k-jaz-rob", type: "line", source: "k-jaz",
                  filter: ["==", ["get", "vrsta"], "obroc"],
                  paint: { "line-color": ME_COLOR, "line-width": 1, "line-opacity": 0.35 } });
-  map.addLayer({ id: "k-jaz", type: "circle", source: "k-jaz",
-                 filter: ["==", ["get", "vrsta"], "pika"],
-                 paint: { "circle-radius": 6, "circle-color": ME_COLOR,
-                          "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
 }
 
 const stationMarkers = new Map();   // ime postaje -> maplibregl.Marker
@@ -1544,7 +1541,7 @@ map.on("dragstart", () => {
 // Rdeča pika izbranega na oceni je prva: pogosto leži na postajališču, kot v
 // oknu vožnje -- „zadnja izmerjena lega“ pove več od imena postaje pod njo.
 const IMENA = ["k-izbrano-meritev", "k-postaje", "k-postajalisca", "k-postaje-avtobusne",
-               "k-postajalisca-znak", "k-trasa-postaje", "k-jaz"];
+               "k-postajalisca-znak", "k-trasa-postaje"];
 // Avtobusi so ena plast in izbrani svoja (`narisiIzbrano`), za dotik pa en razred.
 const AVTOBUSNI = ["k-avtobus-izbran", "k-avtobusi"];
 const jeAvtobusni = (f) => AVTOBUSNI.includes(f.layer.id);
@@ -1952,12 +1949,16 @@ map.on("moveend", () => requestAnimationFrame(declutterLabels));
 
 // ---------- moja lega ----------
 //
-// Gumb pod priblizevanjem, kot je navada pri zemljevidih. Klik jo poisce in
-// priblizka nanjo; drugi klik jo skrije -- to je hkrati "moznost prikaza",
-// zato zanjo ni se ene izbire v seznamu plasti.
+// Gumb pod priblizevanjem, kot je navada pri zemljevidih. Klik premakne pogled
+// k tebi; drugi klik piko skrije -- to je hkrati "moznost prikaza", zato
+// zanjo ni se ene izbire v seznamu plasti.
 //
-// Lokacije ne zahtevamo sami ob nalaganju (glej `locateMe` v common.js).
+// Kadar je dovoljenje dano, je pika tu sama, brez klika (`LEGA` v common.js),
+// pogled pa se zanjo ne premakne. Drugi klik jo skrije tudi takrat, a samo za
+// ta ogled: dovoljenje velja naprej in naslednjič je spet tu.
 let meLoc = null;
+let meOdjava = null;       // prijava na `LEGA`; brez nje pike ni
+let meOgled = false;       // gumb je pogled premaknil k tebi: drugi klik skrije
 
 function meNote(text) {
   const n = document.getElementById("me-note");
@@ -1982,24 +1983,51 @@ function krog(lat, lon, m, n = 48) {
 
 // Pika z obrocem tocnosti. Obroc ni okras: GPS v mestu zna zgresiti za sto
 // metrov in pika brez njega trdi natancnost, ki je nima (isto kot `pkJaz`).
+//
+// **Pika je oznaka DOM nad vozili, obroč plast na tleh pod njimi.** Kot plast
+// je bila pika pod avtobusi (plasti nad njo) in pod vlaki (oznake DOM so vedno
+// nad zemljevidom): na postajališču te je vozilo pokrilo (David, 22. 10. 2026:
+// „nad“). Ime na dotik kot pri plasteh (`pokaziIme`).
+let mePika = null;
+
 function narisiMe(loc) {
   const features = [];
   if (loc && loc.acc && loc.acc > 25) {
     features.push({ type: "Feature", properties: { vrsta: "obroc" },
                     geometry: { type: "Polygon", coordinates: [krog(loc.lat, loc.lon, loc.acc)] } });
   }
-  if (loc) {
-    features.push({
-      type: "Feature",
-      properties: { vrsta: "pika",
-                    ime: loc.acc ? `tvoja lega (±${Math.round(loc.acc)} m)` : "tvoja lega" },
-      geometry: { type: "Point", coordinates: [loc.lon, loc.lat] },
-    });
-  }
   nastaviVir("k-jaz", { type: "FeatureCollection", features });
+  if (!loc) {
+    if (mePika) mePika.remove();
+    mePika = null;
+    return;
+  }
+  const ime = loc.acc ? `tvoja lega (±${Math.round(loc.acc)} m)` : "tvoja lega";
+  if (!mePika) {
+    const el = document.createElement("div");
+    el.className = "me-pika";
+    el.setAttribute("role", "img");
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const ll = mePika.getLngLat();
+      pokaziIme({ geometry: { coordinates: [ll.lng, ll.lat] },
+                  properties: { ime: el.getAttribute("aria-label") } });
+    });
+    mePika = new maplibregl.Marker({ element: el, anchor: "center" });
+  }
+  mePika.getElement().setAttribute("aria-label", ime);
+  mePika.setLngLat([loc.lon, loc.lat]).addTo(map);
 }
 
-let ustaviSledenje = null;
+function mojaLega(l) {
+  meLoc = l;
+  narisiMe(l);
+}
+
+// Klice ga nalaganje sloga, ko vir `k-jaz` obstaja, in gumb.
+function prizgiMojoLego() {
+  if (!meOdjava) meOdjava = LEGA.poslusaj(mojaLega);
+}
 
 // Gumb na zemljevidu. Videz podeduje od MapLibrove skupine gumbov, da je
 // videti kot del zemljevida in ne kot nalepka na njem.
@@ -2022,25 +2050,23 @@ class LocateControl {
     b.title = "Moja lega";
     b.setAttribute("aria-label", "Moja lega");
     b.addEventListener("click", async () => {
-      if (meLoc) {                       // drugi klik skrije
-        narisiMe(null);
-        meLoc = null;
-        if (ustaviSledenje) { ustaviSledenje(); ustaviSledenje = null; }
+      if (meOgled) {                     // drugi klik skrije
+        meOgled = false;
+        if (meOdjava) { meOdjava(); meOdjava = null; }
+        mojaLega(null);
         el.classList.remove("is-on");
         return;
       }
       el.classList.add("is-busy");
       try {
-        const loc = await locateMe({ napredek: narisiMe });
-        narisiMe(loc);
-        meLoc = loc;
+        prizgiMojoLego();
+        const loc = await poisciMe();
+        meOgled = true;
         el.classList.add("is-on");
         map.easeTo({ center: [loc.lon, loc.lat], zoom: Math.max(map.getZoom(), 15 - LZ) });
-        // Ena lega ni dovolj: prvi popravek GPS pogosto zgresi za sto metrov in
-        // ga v naslednjih sekundah popravi, clovek pa se medtem premika. Pogled
-        // se NE premika za njim -- zemljevid, ki bezi izpod prsta, je slabsi od
-        // pike, ki jo je treba poiskati.
-        ustaviSledenje = sledi((l) => { narisiMe(l); meLoc = l; });
+        // Pika sledi naprej (prvi popravek GPS pogosto zgresi za sto metrov in
+        // ga v naslednjih sekundah popravi), pogled pa NE -- zemljevid, ki
+        // bezi izpod prsta, je slabsi od pike, ki jo je treba poiskati.
       } catch (err) {
         meNote(err.message);
       } finally {
@@ -2465,10 +2491,6 @@ function legaIzbrane() {
   return [l.lat, l.lon];
 }
 
-// Vozilo, ki je od svoje trase dlje od tega, ni na njej (pelje na začetek
-// vožnje) -- takrat je vsa pot še pred njim.
-const NA_TRASI_M = 300;
-
 // Kje na trasi (kosi [[lat, lon], ...]) je točka. Kadar trasa gre dvakrat
 // mimo istega mesta (krožna linija), med enako bližnjimi odseki vzamemo
 // tistega, ki je najbliže prejšnji legi vzdolž trase -- vozilo ne skoči za
@@ -2822,6 +2844,8 @@ map.once("style.load", async () => {
   dodajSloje();
   slojiDodani = true;
   uveljavi();
+  // Lastna lega, kadar je dovoljena; vir `k-jaz` zdaj obstaja.
+  prizgiMojoLego();
   await dodajAvtobuse();
   dodajVlake3D();
   // Avtobusi ne čakajo na železniške postaje: rabijo samo svoje ikone. Do

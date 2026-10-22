@@ -910,16 +910,18 @@ function smerNapis(d) {
   return `→ ${(d.naslednje || []).join(" · ") || "končna"}`;
 }
 
+// Mestni LPP doda „v center“ / „iz centra“, kot ju pove LPP-jeva koda
+// postajališča (`journey.smeri_postaje`): tako so smer navajeni brati.
 function smeriHtml(data) {
   const smeri = data.smeri || [];
   if (smeri.length < 2) return "";
-  const gumb = (kljuc, napis) => `<button type="button" class="route-chip smer-chip"
+  const gumb = (kljuc, napis, center) => `<button type="button" class="route-chip smer-chip"
       data-smer="${escapeHtml(kljuc || "")}" aria-pressed="${String((izbranaSmer || "") === (kljuc || ""))}"
-      >${escapeHtml(napis)}</button>`;
+      >${escapeHtml(napis)}${center ? ` <span class="smer-center">${escapeHtml(center)}</span>` : ""}</button>`;
   return `<div class="smeri" role="group" aria-label="Smer vožnje s postajališča">
       <span class="field-label smeri-label" title="po naslednji postaji">Smer</span>
       ${gumb(null, "obe")}
-      ${smeri.map((d) => gumb(d.kljuc, smerNapis(d))).join("")}
+      ${smeri.map((d) => gumb(d.kljuc, smerNapis(d), d.center)).join("")}
     </div>`;
 }
 
@@ -1745,11 +1747,12 @@ async function showNearby() {
   // 8. 9. 2026 druga kopija istega pravila -- s `maximumAge: 60000`, torej je
   // prvi klik pokazal, kje si BIL, in z osemsekundnim rokom, ki ga telefon
   // brez omreznega dolocanja lege pogosto ne ujame. Isti razred napake kot
-  // "isto pravilo na dveh mestih" povsod drugod v tem projektu.
+  // "isto pravilo na dveh mestih" povsod drugod v tem projektu. `poisciMe`
+  // vzame svežo lego, kadar jo stran že ima (žeton najbližje postaje).
   resultsEl.innerHTML = '<div class="empty-state">iščem lokacijo …</div>';
   let loc;
   try {
-    loc = await locateMe({
+    loc = await poisciMe({
       napredek: (l) => {
         resultsEl.innerHTML = '<div class="empty-state">iščem lokacijo … zaenkrat na '
           + `${Math.round(l.acc)} m</div>`;
@@ -1790,6 +1793,109 @@ async function showNearby() {
 
 $("near-me").addEventListener("click", showNearby);
 $("fav-toggle").addEventListener("click", favToggle);
+
+// ---------- najbližja postaja ----------
+// Kadar je lega dovoljena, prazno polje dobi tih predlog „Najbližje: Bavarski
+// dvor · 120 m“ (David, 22. 10. 2026). Dotik ga vpiše v Od (Od–do) ali odpre
+// tablo (Odhodi). Brez dovoljenja ga ni: vprašanja ne sprožimo sami. Ime je
+// ime postaje, kot drugod: mestno postajališče ima pod istim imenom
+// postajališče za vsako smer, tabla pa stran ceste ponudi sama.
+//
+// Meja 2 km zračne črte. Izmerjeno na 435 044 naslovih iz OSM (22. 10.
+// 2026): do 2 km od avtobusnega postajališča je 95,8 % naslovov, od
+// železniške postaje 37,7 % (mediana 3,1 km). 2 km zračne črte je ~34 min
+// hoje (obvoz 1,43, 5 km/h, `hoja.py`); dlje se do postaje pelješ in
+// najbližja ni nujno tvoja.
+//
+// Lega mora biti natančna (`LEGA_DOVOLJ_M`, 100 m). Pri taki napaki je na
+// istih naslovih najbližje drugo postajališče v 6,1 % (vlak 2,1 %), pri
+// 200 m v 12,3 % (vlak 4,3 %).
+const NAJBLIZJE_DO_M = 2000;
+// Aplikacija stran pusti odprto ure: predlog od doma ni predlog v službi.
+const NAJBLIZJE_STARO_MS = 5 * 60000;
+
+const najblizje = { postaja: null, ts: 0, odjava: null, rok: null };
+
+function najblizjePolje() {
+  return activeTab === "board" ? $("station") : $("from");
+}
+
+function izrisiNajblizje() {
+  const el = $("najblizje");
+  if (!el) return;
+  const p = najblizje.postaja;
+  if (!p || najblizjePolje().value.trim()) {
+    el.hidden = true;
+    return;
+  }
+  // Isti zapis kot seznam „v bližini“, ki je lahko hkrati na zaslonu.
+  const kje = p.meters < 1000 ? `${p.meters} m`
+    : `${(p.meters / 1000).toFixed(1).replace(".", ",")} km`;
+  // Prerisuje se ob vsakem kliku na strani; enak žeton ostane isti element.
+  const sig = `${p.name}|${kje}`;
+  if (el.dataset.sig !== sig) {
+    el.dataset.sig = sig;
+    el.innerHTML = `<button type="button" class="route-chip najblizje-zeton"
+        aria-label="${IS_BUS ? "Najbližje postajališče" : "Najbližja postaja"}: ${escapeHtml(p.name)}, ${kje}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.4"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+      </svg>
+      <span>Najbližje: <b>${escapeHtml(p.name)}</b> · ${kje}</span></button>`;
+  }
+  el.hidden = false;
+}
+
+function koncajNajblizje() {
+  if (najblizje.odjava) { najblizje.odjava(); najblizje.odjava = null; }
+  clearTimeout(najblizje.rok);
+}
+
+async function obLegiNajblizje(l) {
+  if (!l || l.acc > LEGA_DOVOLJ_M) return;
+  // Ena natančna lega je dovolj: tabla ni zemljevid in GPS ugasne.
+  koncajNajblizje();
+  try {
+    const list = await fetch(
+      `/api/stations/near?lat=${l.lat}&lon=${l.lon}&network=${NETWORK}&limit=1`).then(jsonOk);
+    najblizje.postaja = list[0] && list[0].meters <= NAJBLIZJE_DO_M ? list[0] : null;
+    najblizje.ts = Date.now();
+    izrisiNajblizje();
+  } catch (err) {
+    /* predlog je postranski; brez njega ostane polje */
+  }
+}
+
+function poisciNajblizje() {
+  if (najblizje.odjava || Date.now() - najblizje.ts < NAJBLIZJE_STARO_MS) return;
+  najblizje.odjava = LEGA.poslusaj(obLegiNajblizje);
+  // GPS, ki v pol minute ne pove dovolj natančno, ne sveti naprej za predlog.
+  najblizje.rok = setTimeout(koncajNajblizje, LEGA_ROK_MS);
+}
+
+$("najblizje").addEventListener("click", (ev) => {
+  const p = najblizje.postaja;
+  if (!p || !ev.target.closest(".najblizje-zeton")) return;
+  najblizjePolje().value = p.name;
+  paintAllClears();
+  paintFavButton();
+  izrisiNajblizje();
+  if (activeTab === "board") searchBoard(true);
+  else if ($("to").value.trim()) searchAB(true);
+  else $("to").focus();
+});
+// Polje se spremeni s tipkanjem in s klikom (zavihek, shranjena pot,
+// zamenjava, „v bližini“), zato žeton posluša oboje in ne vsake poti posebej.
+for (const id of ["from", "station"]) $(id).addEventListener("input", izrisiNajblizje);
+document.addEventListener("click", () => requestAnimationFrame(izrisiNajblizje));
+
+LEGA.obStanju((s) => { if (s === "dano") poisciNajblizje(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    stanjeLege().then((s) => { if (s === "dano") poisciNajblizje(); });
+  }
+});
+stanjeLege().then((s) => { if (s === "dano") poisciNajblizje(); });
 
 // ---------- zavihka ----------
 

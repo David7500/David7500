@@ -142,6 +142,18 @@
   font-size: 11px;
 }
 
+/* Najbližja postaja (`connections.js`): tih predlog nad shranjenimi potmi.
+   Brez obrobe poudarka -- shranjeno je izbral človek, tega ne. */
+.najblizje { margin-top: 12px; }
+.najblizje-zeton {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
+  color: var(--ink-dim);
+}
+.najblizje-zeton svg { flex-shrink: 0; color: #2f7fff; }
+.najblizje-zeton span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.najblizje-zeton b { color: var(--ink); font-weight: 600; }
+.najblizje:not([hidden]) + .recents { margin-top: 8px; }
+
 /* Shranjene in nedavne poti: pod iskalnikom, kjer so vedno pri roki. */
 .recents { margin-top: 12px; }
 .recents:empty { display: none; }
@@ -625,6 +637,7 @@
   padding: 2px 2px 12px;
 }
 .smeri-label { margin-right: 3px; }
+.smer-center { color: var(--ink-mute); }
 .smer-chip[aria-pressed="true"] {
   color: var(--ink);
   border-color: var(--accent);

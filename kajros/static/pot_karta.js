@@ -98,6 +98,7 @@ async function pkUstvari(el, opts) {
     console.warn("zemljevida ni mogoče odpreti:", e && e.message);
     return null;
   }
+  zapriNavedbo(map);
 
   let izrisano = false;
   map.on("error", (e) => {

@@ -218,6 +218,13 @@ def network_geojson(conn: sqlite3.Connection, elementary_only: bool = True) -> d
     return {"type": "FeatureCollection", "features": feats}
 
 
+#: Najdaljši `trip_id`, ki ga pot iz zahteve sprejme. Mestni LPP ima tri
+#: UUID-je (110 znakov), ostali po šest. Z mejo 80 je okno vožnje mestne linije
+#: od zasedenosti dobilo 422, z rezom na 64 deljenje lege 404 „Te vožnje ne
+#: poznam“ -- mestnega LPP do 22. 10. 2026 ni delil nihče (0 od 128 deljenj).
+TRIP_NAJDALJSI = 200
+
+
 def resolve_trip(conn: sqlite3.Connection, train_no: str,
                  service_date: str | None = None,
                  trip_id: str | None = None) -> str | None:

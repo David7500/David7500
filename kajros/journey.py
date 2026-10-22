@@ -390,9 +390,23 @@ def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
 # postajaliscema je smer pri 3 596 nasprotna (> 120°) in le pri 65 podobna
 # (< 45°) -- to so enosmerne ulice, kjer izbire res ni.
 #
-# "Proti centru / iz centra" (Trola, ljbus.cc) je bilo zavrnjeno: v sredisču
-# (Bavarski dvor, Konzorcij) nima pomena, medkrajevna postajalisca pa bi
-# rabila drugo pravilo.
+# **"v center / iz centra" je dodatek k oznaki, ne oznaka** (David, 22. 10.
+# 2026: "kot so navajeni"; 22. 9. kot oznaka zavrnjeno, ker v sredisču nima
+# pomena in medkrajevna postajalisca bi rabila drugo pravilo). Ne racunamo ga:
+# pove ga LPP-jeva koda postajalisca (`station.koda`, 600011), zadnja stevka
+# liha = proti centru, soda = iz centra. Brez kode (IJPP, medkrajevni) ga ni.
+#
+# **V sredisču koda centra ne pomeni** in dodatka tam ni. Izmerjeno na voznem
+# redu LPP 22. 10. 2026, koda proti smeri do postanka tri naprej (blizje ali
+# dlje od Kongresnega trga), po prometu:
+#
+#   od sredisča    ujemanje
+#   do 0,5 km        47 %     (Pošta, Ajdovščina: liha = proti severu)
+#   0,5-0,8 km       63 %     (Bavarski dvor 600012 pelje na Ajdovščino)
+#   0,8-1,5 km      100 %     (52 od 52 postajalisc)
+#   nad 1,5 km       95 %     (razlike: zanke, kjer razdalja smeri ne pove)
+#
+# Bavarski dvor bi sicer proti Ajdovščini pisal „iz centra“.
 
 #: Najvec kota med smerema, da sta dve postajalisci ista stran ceste.
 SMER_KOT = 60
@@ -402,6 +416,10 @@ SMER_KOT = 60
 SMER_RAZDALJA_M = 250
 #: Oznaka smeri: naslednje postaje, dokler ne pokrijejo toliko odhodov.
 SMER_POKRITJE = 0.75
+#: Sredisče Ljubljane (Kongresni trg) in polmer, v katerem LPP-jeva koda
+#: postajalisca ne pove, ali vozilo pelje proti centru (glej zgoraj).
+SREDISCE = (46.0514, 14.5060)
+SREDISCE_M = 800
 
 _SMERI: dict[tuple, dict[str, list[dict]]] = {}
 _SMERI_MAX = 4
@@ -413,6 +431,17 @@ def _smer_voznje(a: sqlite3.Row, b: sqlite3.Row) -> float:
     dl = math.radians(b["lon"] - a["lon"])
     return math.atan2(math.sin(dl) * math.cos(f2),
                       math.cos(f1) * math.sin(f2) - math.sin(f1) * math.cos(f2) * math.cos(dl))
+
+
+def _center(kode) -> str | None:
+    """"v center" ali "iz centra" po LPP-jevih kodah postajalisc smeri.
+
+    Samo, kadar se vse kode smeri strinjajo -- dvoje bi bilo ugibanje.
+    """
+    lihe = {int(k[-1]) % 2 == 1 for k in kode if k and k[-1].isdigit()}
+    if len(lihe) != 1:
+        return None
+    return "v center" if lihe.pop() else "iz centra"
 
 
 def _kot_med(a: float, b: float) -> float:
@@ -459,7 +488,7 @@ def smeri_postaje(conn: sqlite3.Connection, ime: str,
         (network, ime)).fetchall()
     ids = {r["sid"] for r in rows} | {r["nxt"] for r in rows if r["nxt"]}
     lega = {r["stop_id"]: r for r in conn.execute(
-        f"SELECT stop_id, name, lat, lon FROM station WHERE stop_id IN "
+        f"SELECT stop_id, name, lat, lon, koda FROM station WHERE stop_id IN "
         f"({','.join('?' * len(ids))})", tuple(ids))} if ids else {}
 
     # Na postajalisce: vsota enotskih vektorjev smeri (utezena z odhodi),
@@ -529,6 +558,10 @@ def smeri_postaje(conn: sqlite3.Connection, ime: str,
             continue
         out.append({"kljuc": g[0], "stop_ids": g, "naslednje": oznaka,
                     "odhodov": sum(vek[s][2] for s in g)})
+    for d in out:
+        k = lega[d["kljuc"]]
+        d["center"] = (None if geo.haversine(k["lat"], k["lon"], *SREDISCE) < SREDISCE_M
+                       else _center(lega[s]["koda"] for s in d["stop_ids"]))
     out.sort(key=lambda d: (-d["odhodov"], d["kljuc"]))
 
     if stamp:

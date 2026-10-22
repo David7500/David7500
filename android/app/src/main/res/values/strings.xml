@@ -207,4 +207,5 @@
     <string name="zapri_znak">✕</string>
 
     <string name="lega_zavrnjena">Dovoljenje za lego je zavrnjeno trajno. Odpri Nastavitve → Aplikacije → Kajros → Dovoljenja in dovoli lego.</string>
+    <string name="lega_v_nastavitvah">Izberi Dovoljenja → Lokacija in dovoli lego med uporabo aplikacije.</string>
 </resources>

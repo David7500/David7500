@@ -292,8 +292,9 @@ $("#karta-max").addEventListener("click", () => {
 
 // ---------------------------------------------------------------- lega in smer
 
+// Lega teče sama, kadar je dovoljenje dano (`LEGA` v common.js, prijava ob
+// koncu datoteke); pogled se zanjo ne premakne, razen med vodenjem.
 let JAZ = null;
-let ustaviSledenje = null;
 // Smer telefona (kompas), kadar jo pozna. Brez nje se zemljevid pri vodenju
 // obrne po poti, ne po telefonu.
 let KOMPAS = null;
@@ -301,24 +302,22 @@ let KOMPAS = null;
 function obLegi(loc) {
   JAZ = loc;
   if (K) pkJaz(K.map, loc);
-  $("#karta-lega").classList.add("je-on");
+  $("#karta-lega").classList.toggle("je-on", !!loc);
   posodobi(false);
 }
 
+// Lega na dotik (gumb, „vodi me“). Med hojo je edino vprašanje "grem v pravo
+// smer", zato po tem lega sledi in se ne izmeri enkrat: prvi popravek GPS
+// pogosto zgreši za sto metrov. `lega` je tekoče iskanje -- dva dotika ne
+// začneta dveh.
 let lega = null;
 function zacniLego() {
   if (lega) return lega;
   $("#karta-lega").classList.add("je-iskanje");
-  lega = locateMe({ napredek: obLegi }).then((loc) => {
-    obLegi(loc);
-    // Med hojo je edino vprašanje "grem v pravo smer". Zato lega sledi in se
-    // ne izmeri enkrat: prvi popravek GPS pogosto zgreši za sto metrov.
-    ustaviSledenje = sledi(obLegi);
-    return loc;
-  }).catch((e) => {
+  lega = poisciMe().finally(() => {
     lega = null;
-    throw e;
-  }).finally(() => $("#karta-lega").classList.remove("je-iskanje"));
+    $("#karta-lega").classList.remove("je-iskanje");
+  });
   return lega;
 }
 
@@ -909,6 +908,7 @@ async function nalozi() {
 }
 
 nalozi();
+LEGA.poslusaj(obLegi);
 pkUstvari($("#karta")).then((k) => {
   if (!k) {
     document.body.classList.add("brez-zemljevida");

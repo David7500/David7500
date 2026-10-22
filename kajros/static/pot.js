@@ -164,12 +164,12 @@ function napisTocke(t) {
   return t ? (t.ime || `${t.lat.toFixed(5)}, ${t.lon.toFixed(5)}`) : "";
 }
 
-function postavi(kaj, tocka) {
+function postavi(kaj, tocka, premakni = true) {
   S[kaj] = tocka;
   zapomniIme(tocka);
   $(`#q-${kaj}`).value = napisTocke(tocka);
   zapriZadetke(kaj);
-  narisiTocke();
+  narisiTocke(premakni);
   // Prvi klik postavi izhodišče, naslednji cilj -- brez tega bi moral človek
   // pred vsakim klikom povedati, kaj postavlja.
   S.arm = S.od && !S.do ? "do" : kaj === "od" ? "do" : "od";
@@ -533,12 +533,33 @@ async function razresi(kaj) {
 }
 
 // ---------------------------------------------------------------- moja lega
-
-let ustaviSledenje = null;
+//
+// Pika teče sama, kadar je dovoljenje dano (`LEGA` v common.js), gumb „lega“
+// jo vpiše v polje.
 
 function risiJaz(loc) {
   S.jaz = loc;
   if (K) pkJaz(K.map, loc);
+  if (loc) odKodIzLege(loc);
+}
+
+// Od kod = tvoja lega tudi brez gumba, kadar izhodišča ni dal naslov in ga
+// človek še ni vpisal ali izbral (David, 22. 10. 2026). Enkrat na ogled:
+// izbrisano polje je odločitev, ne prostor za naslednjo lego. Lega mora biti
+// natančna (`LEGA_DOVOLJ_M`) -- groba iz baznih postaj zna zgrešiti za
+// kilometer, pot od tam pa bi bila pot od nekod drugod. Pogled se ne
+// premakne: na pot gre, ko je znan tudi cilj.
+let odKodCaka = false;
+
+function odKodIzLege(loc) {
+  if (!odKodCaka || loc.acc > LEGA_DOVOLJ_M) return;
+  odKodCaka = false;
+  const polje = $("#q-od");
+  if (S.od || polje.value.trim()) return;
+  // `sam`: zemljevid, ki nastane šele za lego, ga ne gre iskat (`pkUstvari` spodaj).
+  postavi("od", { lat: loc.lat, lon: loc.lon, ime: "moja lega", sam: true }, false);
+  // Kdor je polje ravno odprl, z vnosom napis zamenja, ne dopiše.
+  if (document.activeElement === polje) polje.select();
 }
 
 document.querySelectorAll(".tocka").forEach((el) => {
@@ -573,20 +594,18 @@ document.querySelectorAll(".tocka").forEach((el) => {
         $("#karta").scrollIntoView({ behavior: "smooth", block: "nearest" });
         return;
       }
+      // Gumb lego vpiše sam; samodejni vpis bi ga podvojil.
+      odKodCaka = false;
       // GPS brez omrežnega določanja lege rabi lahko pol minute. Molk je v
       // tem času videti kot pokvarjen gumb, zato povemo, kje smo.
       povej("Iščem tvojo lego … (GPS zna rabiti pol minute)", "isce");
       try {
-        const loc = await locateMe({
-          napredek: (l) => {
-            risiJaz(l);
-            povej(`Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m`, "isce");
-          },
+        // Pika sledi naprej (`risiJaz` prek `LEGA`): prvi popravek GPS
+        // pogosto zgreši za sto metrov.
+        const loc = await poisciMe({
+          napredek: (l) => povej(`Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m`, "isce"),
         });
-        risiJaz(loc);
         postavi(kaj, { lat: loc.lat, lon: loc.lon, ime: "moja lega" });
-        // Sledenje teče naprej: prvi popravek GPS pogosto zgreši za sto metrov.
-        if (!ustaviSledenje) ustaviSledenje = sledi(risiJaz);
         povej(loc.acc > 200
           ? `Lega je natančna na ${Math.round(loc.acc)} m — po potrebi popravi na zemljevidu.`
           : "");
@@ -1259,21 +1278,17 @@ naloziKazalo().then((k) => { KAZALO = k; poimenujIzKazala(); });
 const izPovezave = izUrl();
 izrisiTocke();                 // zvezdice vedo za kraja šele, ko ju naslov postavi
 // „Kam greš?“ z domače strani: človek je ravno odgovoril na „kam“, kazalec pa
-// je stal v Od kod (5. 10. 2026). Zdaj v Kam; Od kod dobi lego samo, kadar jo
-// je brskalnik tej strani že dovolil -- vprašanja za dovoljenje ne sprožimo sami.
+// je stal v Od kod (5. 10. 2026). Zdaj v Kam; Od kod dobi lego sam
+// (`odKodIzLege`), kadar je dovoljena -- vprašanja za dovoljenje ne sprožimo.
 if (location.hash === "#kam" && !izPovezave) {
   history.replaceState(null, "", location.pathname + location.search);
   S.arm = "do";
   oznaciArm();
   $("#q-do").focus();
-  if (navigator.permissions) {
-    navigator.permissions.query({ name: "geolocation" }).then((p) => {
-      if (p.state === "granted" && !S.od) {
-        document.querySelector('.tocka[data-kaj="od"] [data-akcija="lega"]').click();
-      }
-    }).catch(() => {});
-  }
 }
+odKodCaka = !S.od;
+$("#q-od").addEventListener("input", () => { odKodCaka = false; }, { once: true });
+LEGA.poslusaj(risiJaz);
 povej(izPovezave ? "" : "Vpiši naslov ali postajo, ali klikni na zemljevid.", null);
 S.obnovi = izPovezave;         // samo ob odprtju strani, ne ob "Poišči"
 if (izPovezave) isci(true);    // poizvedba iz naslova je vprašanje, ne osnutek
@@ -1301,6 +1316,7 @@ pkUstvari($("#karta")).then((k) => {
     prilagodiPoti(S.izidi.predlogi[S.izbran], { animate: false });
     narisiPot(S.izidi.predlogi[S.izbran], true);
   } else {
-    narisiTocke();
+    // Od kod, ki ga je postavila lega sama, pogleda ne premakne.
+    narisiTocke(!(S.od && S.od.sam && !S.do));
   }
 });

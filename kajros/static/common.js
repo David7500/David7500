@@ -208,6 +208,45 @@ function imaWebGL2() {
   }
 }
 
+// MapLibrova stisnjena navedba vira (i) je ob nalaganju razprta in se zapre
+// šele ob vleki: na telefonu je trak „OpenFreeMap © OpenMapTiles …“ ležal čez
+// zemljevid, dokler se ga ni premaknilo (David, 22. 10. 2026: „mora biti
+// privzeto zagrnjen“). Smernice OSMF (Licence/Attribution Guidelines) dovolijo
+// navedbo zapreti sama po petih sekundah in je ne zahtevajo ob vsakem odprtju,
+// dokler jo (i) odpre. Zato razprta samo prvič na napravi, pet sekund.
+const NAVEDBA_MS = 5000;
+const NAVEDBA_KLJUC = "kajros:navedba";
+
+function zapriNavedbo(map) {
+  const el = map.getContainer().querySelector(".maplibregl-ctrl-attrib");
+  if (!el) return;
+  let cas = null;
+  const razprta = () => {
+    let videna = false;
+    try {
+      videna = localStorage.getItem(NAVEDBA_KLJUC) === "1";
+      localStorage.setItem(NAVEDBA_KLJUC, "1");
+    } catch (e) { /* zasebno okno: vsakič pet sekund */ }
+    const zapri = () => el.classList.remove("maplibregl-compact-show");
+    if (videna) zapri();
+    else cas = setTimeout(zapri, NAVEDBA_MS);
+  };
+  // MapLibre jo razpre šele, ko pridejo viri z navedbo (`styledata`), ne ob
+  // `new Map` -- zato čakamo na razred, ne na dogodek zemljevida.
+  if (el.classList.contains("maplibregl-compact-show")) {
+    razprta();
+  } else {
+    const opazovalec = new MutationObserver(() => {
+      if (!el.classList.contains("maplibregl-compact-show")) return;
+      opazovalec.disconnect();
+      razprta();
+    });
+    opazovalec.observe(el, { attributes: true, attributeFilter: ["class"] });
+  }
+  // Kdor se je navedbe dotaknil, jo upravlja sam.
+  el.addEventListener("click", () => clearTimeout(cas), { once: true });
+}
+
 // Naslovi obvestil SŽ kricijo in ponavljajo znacko nad sabo: "DELA NA PROGI:
 // Obcasna zapora ..." stoji pod zetonom "dela na progi". Predpono odrezemo --
 // v sestih od sestnajstih obvestil je ista beseda dvakrat, v verzalkah.
@@ -416,6 +455,38 @@ document.addEventListener("click", (e) => {
     prej.classList.add("is-on");
   });
 });
+
+// ---------- tipkovnica prekrije orodno vrstico ----------
+//
+// Aplikacija (`adjustResize`) in Firefox ob tipkovnici skrčita okno, in
+// vrstica, pripeta na dno, je skočila nad tipkovnico -- čez polje, v katerega
+// človek tipka (David, 22. 10. 2026: „naj ostane spodaj in jo tipkovnica
+// prekrije“). Chrome okna ne skrči in vrstica že ostane pod tipkovnico.
+// Tipkovnica = okno vsaj za `TIPKOVNICA_PX` nižje od najvišjega pri isti
+// širini, medtem ko ima fokus polje za vnos; sama višina ne zadošča (vrstica
+// naslova v brskalniku se skrije in pokaže), sam fokus pa ne (tipka nazaj
+// tipkovnico zapre, fokus ostane).
+const TIPKOVNICA_PX = 150;
+(() => {
+  const najvisje = new Map();          // širina okna -> največja višina
+  const piše = () => {
+    const el = document.activeElement;
+    return !!el && (el.isContentEditable || el.tagName === "TEXTAREA"
+      || (el.tagName === "INPUT" && !/^(button|checkbox|radio|range|submit|reset|color|file|image)$/
+        .test(el.type)));
+  };
+  const preveri = () => {
+    const w = innerWidth, h = innerHeight;
+    najvisje.set(w, Math.max(najvisje.get(w) || 0, h));
+    document.documentElement.classList.toggle("tipkovnica",
+      piše() && najvisje.get(w) - h >= TIPKOVNICA_PX);
+  };
+  addEventListener("resize", preveri);
+  document.addEventListener("focusin", preveri);
+  // Ob izgubi fokusa je novi aktivni element znan šele po dogodku.
+  document.addEventListener("focusout", () => setTimeout(preveri, 0));
+  preveri();
+})();
 
 // ---------- meni Več: nazaj in poteg navzdol ----------
 //
@@ -1601,6 +1672,12 @@ function tockaNaTrasi(pts, cums, dolzina) {
 // Ocena, ne meritev -- zato se ne premika, kadar vozilo stoji ali kadar ni na
 // tej trasi, in podnapis pove, da je ocenjena.
 const OCENA_MAX_ODMIK_M = 120;
+// Vozilo, ki je od svoje trase dlje od tega, ni na njej: pelje na začetek
+// vožnje ali pa lega ni njegova (feed vozilo prišteje drugi vožnji). Na
+// velikem zemljevidu je takrat vsa pot še pred njim, v oknu vožnje razdalje
+// po poti ne računamo. 22. 10. 2026 od 109 mestnih LPP 105 v 50 m, 2 dlje od
+// 2 km (oba na končni, prišteta naslednji ali prejšnji vožnji).
+const NA_TRASI_M = 300;
 // Od toliko metrov med oceno in meritvijo besedilo pove „ocenjeno iz lege
 // pred N s“ namesto „lega stara N s“; bliže je to ista točka na zaslonu.
 const OCENA_VIDNA_M = 40;
@@ -1979,10 +2056,19 @@ function sirinaM(metrov, dalec = [[10, 2], [15, 3]]) {
 
 // ---------- moja lega ----------
 //
-// Prikaz lastne lege je na obeh zemljevidih ista stvar, zato zivi tu.
-// Lokacije NE zahtevamo sami ob nalaganju: dovoljenje, ki ga nihce ni prosil,
-// je vsiljivo in ga brskalnik ob zavrnitvi pogosto zapomni za vedno. Zahteva
-// se sele ob dotiku gumba.
+// Prikaz lastne lege je na vseh zemljevidih ista stvar, zato živi tu: stanje
+// dovoljenja (`stanjeLege`), sledenje (`LEGA`), lega na dotik gumba
+// (`poisciMe`) in vklop s kartice na domači strani (`vklopiLego`).
+//
+// **Okna za dovoljenje stran ne odpre sama.** Dovoljenje, ki ga nihče ni
+// prosil, je vsiljivo in ga brskalnik ob zavrnitvi pogosto zapomni za vedno.
+// Vprašanje sproži samo dotik: gumb lege ali „Vklopi“ na domači strani.
+//
+// **Kadar pa je dovoljenje že dano, lega teče sama** (David, 22. 10. 2026).
+// Do takrat jo je bilo treba na vsakem zemljevidu prižgati z gumbom, tudi
+// kadar je bila dovoljena -- „če je prižgana, še ne pomeni, da je
+// aktivirana“. Sama se prižge samo pika; pogled ostane, kjer je, k tebi ga
+// premakne gumb.
 //
 // Modra `#2f7fff` ne nastopa v nobeni lestvici -- ne med zamudami (oranzna),
 // ne v semaforju razmer, in je dovolj nasicena, da se loci od blede `#a8d8ff`,
@@ -2046,7 +2132,7 @@ function locateMe(opts) {
         if (l.acc <= dovolj) konec(null);
       },
       (e) => konec(new Error(
-        e.code === 1 ? "Dostop do lokacije je zavrnjen — dovoli ga v nastavitvah strani."
+        e.code === 1 ? `Dostop do lokacije je zavrnjen — dovoli ga v nastavitvah ${MOST ? "aplikacije" : "strani"}.`
         : e.code === 2 ? "Naprava lege ne zna dobiti (GPS ugasnjen ali brez signala)."
         : `GPS se ni odzval v ${Math.round(rok / 1000)} s.`)),
       // `maximumAge: 0`: brez tega brskalnik vrne do minuto star popravek in
@@ -2056,24 +2142,223 @@ function locateMe(opts) {
   });
 }
 
-/** Neprekinjeno sledenje: `cb(lega)` ob vsakem popravku, vrne ustavitev.
+//: Lega, starejša od tega, ob vrnitvi na stran ni več tvoja: v minuti hoje
+//: (5 km/h, `hoja.KMH`) se premakneš za 83 m, približno `LEGA_DOVOLJ_M`.
+const LEGA_STARA_MS = 60000;
+//: Gumb lege vzame lego sledenja, kadar je mlajša od tega, in ne čaka znova
+//: na GPS, ki jo je pravkar povedal.
+const LEGA_SVEZA_MS = 30000;
+const STANJE_DOVOLJENJA = { granted: "dano", prompt: "vprasaj", denied: "zavrnjeno" };
+
+/**
+ * Lastna lega za vso stran: eno sledenje (`watchPosition`), ki ga delijo vsi
+ * zemljevidi na njej.
  *
- * Ena lega ob kliku ni dovolj -- GPS prvi popravek pogosto zgresi za sto
- * metrov in ga v naslednjih sekundah popravi, potnik pa se medtem premika.
+ * Teče, dokler je kdo prijavljen (`poslusaj`), stran vidna in lega dovoljena:
+ * dovoljenje je dano ali pa je lega ta ogled že prišla (gumb, `potrdi`).
+ * Skrita stran GPS ugasne: pike v žepu ne gleda nihče, baterija pa teče.
  */
-function sledi(cb) {
-  if (!navigator.geolocation || !window.isSecureContext) return () => {};
-  // Smer in hitrost sta za vodenje po pešpoti: GPS smer gibanja pozna samo
-  // med hojo, kompas telefona pa tudi na mestu. Na mestu je `heading` po
-  // specifikaciji `NaN`, ne `null` -- in `??` na NaN ne pade na kompas.
-  const id = navigator.geolocation.watchPosition(
-    (p) => cb({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy,
-                smer: Number.isFinite(p.coords.heading) ? p.coords.heading : null,
-                hitrost: p.coords.speed }),
-    () => {},                       // tiho: gumb "lega" je tisti, ki porocá
-    { enableHighAccuracy: true, maximumAge: 0 },
-  );
-  return () => navigator.geolocation.clearWatch(id);
+const LEGA = (() => {
+  const narocniki = new Set();      // `cb(lega | null)`
+  const opazovalci = new Set();     // `cb(stanje)` ob spremembi dovoljenja
+  let stanje = null;                // `null`: še nismo vprašali
+  let branje = null;
+  let dovoljenje = null;            // `PermissionStatus` brskalnika
+  let potrjeno = false;
+  let id = null;
+  let zadnja = null;
+  let cakaIzid = null;              // `vklopi()` v aplikaciji čaka na `kajrosLega`
+
+  // V aplikaciji je resnica Androidovo dovoljenje (`Most.dovoljenja`). WebView
+  // si ga ne zapomni (`retain = false`, android.md), `navigator.permissions`
+  // pa v njem sploh ni (WebView 124, 22. 10. 2026). Trajne zavrnitve stran ne
+  // loči: „Vklopi“ najprej vpraša sistem, ta pa ob trajni zavrnitvi odgovori
+  // brez okna in aplikacija odpre svoje nastavitve. Aplikacija pred mostom 7
+  // stanja ne pove: tam lega ostane na dotik.
+  const izMostu = () => {
+    if (MOST.razlicica() < 7) return "neznano";
+    let d = {};
+    try { d = JSON.parse(MOST.dovoljenja() || "{}"); } catch (e) { /* prazno */ }
+    return d.lega ? "dano" : "vprasaj";
+  };
+
+  async function preberi() {
+    if (!navigator.geolocation || !window.isSecureContext) return "neznano";
+    if (MOST) return izMostu();
+    if (!navigator.permissions) return "neznano";
+    try {
+      if (!dovoljenje) {
+        dovoljenje = await navigator.permissions.query({ name: "geolocation" });
+        // Dovoljenje, dano drugje (gumb, kartica, Deli lego), prižge sledenje
+        // tudi tu; preklicano ga ugasne.
+        dovoljenje.addEventListener("change", () =>
+          nastavi(STANJE_DOVOLJENJA[dovoljenje.state] || "neznano"));
+      }
+      return STANJE_DOVOLJENJA[dovoljenje.state] || "neznano";
+    } catch (e) {
+      return "neznano";
+    }
+  }
+
+  function osvezi() {
+    if (!branje) branje = preberi().then((s) => { branje = null; nastavi(s); return s; });
+    return branje;
+  }
+
+  // `potrjeno` velja tudi ob „vprasaj“: Firefox ob dovoljenju brez „zapomni
+  // si“ ostane pri `prompt`, lega pa ta ogled dela. Prekliče ga samo prehod
+  // z „dano“ (dovoljenje preklicano) ali zavrnitev.
+  const sme = () => stanje === "dano" || (potrjeno && stanje !== "zavrnjeno");
+
+  function nastavi(s) {
+    const prej = stanje;
+    stanje = s;
+    if (s !== "dano" && (prej === "dano" || s === "zavrnjeno")) potrjeno = false;
+    if (sme()) zazeni();
+    else pozabi();
+    if (s !== prej) for (const cb of opazovalci) cb(s);
+  }
+
+  function zazeni() {
+    if (id !== null || !narocniki.size || document.visibilityState === "hidden" || !sme()) return;
+    // `maximumAge: 0` iz istega razloga kot v `locateMe`. Roka ni: sledenje
+    // čaka, kolikor je treba, in o izteku nima komu poročati.
+    id = navigator.geolocation.watchPosition(obPopravku, obNapaki,
+      { enableHighAccuracy: true, maximumAge: 0 });
+  }
+
+  function ustavi() {
+    if (id === null) return;
+    navigator.geolocation.clearWatch(id);
+    id = null;
+  }
+
+  function pozabi() {
+    ustavi();
+    if (!zadnja) return;
+    zadnja = null;
+    for (const cb of narocniki) cb(null);
+  }
+
+  // Vsaka lega, tudi iz `locateMe`, je dokaz, da dovoljenje je.
+  function sporoci(l) {
+    potrjeno = true;
+    zadnja = { ...l, ts: Date.now() };
+    for (const cb of narocniki) cb(zadnja);
+  }
+
+  function obPopravku(p) {
+    // Smer in hitrost sta za vodenje po pešpoti: GPS smer gibanja pozna samo
+    // med hojo, kompas telefona pa tudi na mestu. Na mestu je `heading` po
+    // specifikaciji `NaN`, ne `null` -- in `??` na NaN ne pade na kompas.
+    sporoci({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy,
+              smer: Number.isFinite(p.coords.heading) ? p.coords.heading : null,
+              hitrost: p.coords.speed });
+  }
+
+  // Brez signala sledenje teče naprej in molči: vzrok pove gumb lege
+  // (`locateMe`). Zavrnjeno dovoljenje ga ustavi.
+  function obNapaki(e) {
+    if (e.code !== 1) return;
+    potrjeno = false;
+    pozabi();
+    osvezi();
+  }
+
+  function obVrnitvi() {
+    if (zadnja && Date.now() - zadnja.ts > LEGA_STARA_MS) pozabi();
+    // Dovoljenje se je medtem lahko spremenilo (nastavitve aplikacije ali
+    // brskalnika); `nastavi` nato sledenje prižge znova.
+    if (narocniki.size || opazovalci.size) osvezi();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") ustavi();
+    else obVrnitvi();
+  });
+  // Stran iz predpomnilnika nazaj (gumb nazaj) je stara stran, ki se vrača.
+  addEventListener("pageshow", (e) => { if (e.persisted) obVrnitvi(); });
+
+  if (MOST && MOST.razlicica() >= 7) {
+    // Izid sistemskega okna ali vrnitve iz nastavitev (`GlavnaDejavnost.izidLege`).
+    window.kajrosLega = (s, nastavitve) => {
+      nastavi(s);
+      if (cakaIzid) { cakaIzid({ stanje: s, nastavitve: !!nastavitve }); cakaIzid = null; }
+    };
+  }
+
+  return {
+    /** `cb(lega)` ob vsakem popravku, `cb(null)`, ko lege ni več. Vrne odjavo. */
+    poslusaj(cb) {
+      narocniki.add(cb);
+      // Zadnjo lego dobi takoj za prijavo, ko ima klicatelj odjavo že v rokah.
+      const z = zadnja;
+      if (z) queueMicrotask(() => { if (narocniki.has(cb) && zadnja === z) cb(z); });
+      if (stanje === null) osvezi();
+      else zazeni();
+      return () => {
+        narocniki.delete(cb);
+        if (!narocniki.size) ustavi();
+      };
+    },
+    obStanju(cb) { opazovalci.add(cb); },
+    stanje: osvezi,
+    get zadnja() { return zadnja; },
+    sporoci,
+    /** Gumb lege je lego dobil: dovoljenje je zdaj gotovo dano. */
+    potrdi() {
+      potrjeno = true;
+      zazeni();
+    },
+    vklopi() {
+      if (MOST) {
+        if (MOST.razlicica() < 7) return Promise.resolve({ stanje: "neznano" });
+        return new Promise((ok) => {
+          cakaIzid = ok;
+          MOST.zahtevajLego();
+        });
+      }
+      // Brskalnik vpraša sam ob prvem klicu. Šteje samo dovoljenje, zato
+      // groba lega brez GPS: odgovor pride takoj, ne čez pol minute.
+      return new Promise((ok) => {
+        navigator.geolocation.getCurrentPosition(
+          (p) => { obPopravku(p); ok({ stanje: "dano" }); },
+          (e) => ok({ stanje: e.code === 1 ? "zavrnjeno" : "dano" }),
+          { enableHighAccuracy: false, maximumAge: Infinity, timeout: LEGA_ROK_MS });
+      }).then((izid) => {
+        osvezi();
+        return izid;
+      });
+    },
+  };
+})();
+
+/** Ali sme stran lego brati, ne da bi koga kaj vprašala: `dano`, `vprasaj`,
+ *  `zavrnjeno` (brskalnik; odklene ga nastavitev strani v brskalniku) ali
+ *  `neznano` (tega ne vemo, zato lega teče samo na dotik). */
+function stanjeLege() {
+  return LEGA.stanje();
+}
+
+/**
+ * Lega za gumb lege: zadnja iz sledenja, kadar je sveža in natančna, sicer
+ * nova (`locateMe`, ki ob prvem dotiku sproži vprašanje za dovoljenje). Po
+ * uspehu sledenje teče naprej za vse prijavljene.
+ */
+async function poisciMe(opts) {
+  const z = LEGA.zadnja;
+  if (z && Date.now() - z.ts < LEGA_SVEZA_MS && z.acc <= LEGA_DOVOLJ_M) {
+    LEGA.potrdi();
+    return z;
+  }
+  const napredek = opts && opts.napredek;
+  const loc = await locateMe({ ...opts, napredek: (l) => { LEGA.sporoci(l); if (napredek) napredek(l); } });
+  LEGA.potrdi();
+  return loc;
+}
+
+/** „Vklopi“ na kartici domače strani; vrne `{stanje, nastavitve}`. */
+function vklopiLego() {
+  return LEGA.vklopi();
 }
 
 // ---------- pošlji povezavo ----------

@@ -146,9 +146,6 @@ CREATE INDEX IF NOT EXISTS ix_opomba_postaja ON opomba(postaja);
 """
 
 _NAPRAVA = re.compile(r"[0-9a-f]{16,64}")
-#: `trip_id` mestnega LPP so trije UUID-ji (110 znakov); z mejo 80 je okno
-#: vožnje mestne linije dobilo 422 namesto „tu ne zbiramo“.
-TRIP_NAJDALJSI = 200
 _DATUM = re.compile(r"\d{4}-\d{2}-\d{2}")
 #: Komentar brez povezav, e-naslovov in telefonskih številk: prvo je oglas,
 #: drugo in tretje osebni podatek, ki ga pred objavo ne bi smeli spregledati.
@@ -375,7 +372,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
     if not isinstance(naprava, str) or not _NAPRAVA.fullmatch(naprava):
         raise Zavrnjeno("Osveži stran in poskusi znova.", "naprava")
     datum = _datum(podatki.get("service_date"))
-    v = voznja(conn, _niz(podatki.get("trip_id"), TRIP_NAJDALJSI), datum)
+    v = voznja(conn, _niz(podatki.get("trip_id"), stats.TRIP_NAJDALJSI), datum)
     postaja, t_s, naprej = v.na(_niz(podatki.get("postaja"), 120))
     sol, glasovi = _glasovi_dne(datum, t)
     glas = _kljuc_glasu(sol, naprava, v, postaja)
@@ -641,7 +638,7 @@ def preveri_opombo(conn: sqlite3.Connection, trip_id: str, datum: str, postaja: 
                         " AND prispelo >= ?", (danes.isoformat(),)).fetchone()
     if n >= OPOMB_NA_DAN:
         raise Zavrnjeno("Danes opomb ne sprejemamo več. Poskusi jutri.", "strop", 429)
-    v = voznja(conn, _niz(trip_id, TRIP_NAJDALJSI), datum)
+    v = voznja(conn, _niz(trip_id, stats.TRIP_NAJDALJSI), datum)
     postaja, t_s, naprej = v.na(_niz(postaja, 120))
     kontekst = {"trip_id": v.trip_id, "datum": datum, "postaja": postaja, "t_s": t_s,
                 "agency": v.agency, "train_no": v.train_no, "headsign": v.headsign,

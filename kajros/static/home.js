@@ -433,6 +433,86 @@ function ponudiPovabilo(sOdhodi) {
   });
 }
 
+// ---------- lega na zemljevidih ----------
+//
+// Lega teče sama, kadar je dovoljena (`LEGA` v common.js); kdor je še ni
+// dovolil, dobi tu tiho kartico (David, 22. 10. 2026). Vprašanje sproži šele
+// „Vklopi“: v aplikaciji sistemsko okno, ob trajni zavrnitvi nastavitve
+// aplikacije, v brskalniku poziv brskalnika.
+//
+// Komu ne: zavrnjeno v brskalniku (to je nastavitev strani v brskalniku in je
+// gumb ne popravi), stran brez varnega konteksta in aplikacija pred mostom 7
+// (`stanjeLege` „neznano“). Stara aplikacija po vklopu lege zemljevidom ne bi
+// znala prižgati sama, kartica pa bi to obljubila.
+
+const LEGA_KARTICA_KLJUC = "kajros:lega-kartica";
+// "Ne zdaj" in zavrnitev utihneta za dva meseca, kot povabilo.
+const LEGA_KARTICA_PREMOR_MS = 60 * 86400000;
+
+const LEGA_ZNAK = `<svg class="d-pov-znak" width="20" height="20" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+  <circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/>
+  <path d="M12 1.5v2.5M12 20v2.5M1.5 12h2.5M20 12h2.5"/></svg>`;
+
+function legaKarticaUtisana() {
+  try {
+    const o = JSON.parse(localStorage.getItem(LEGA_KARTICA_KLJUC) || "null");
+    return !!o && Date.now() - o.t < LEGA_KARTICA_PREMOR_MS;
+  } catch (e) {
+    return false;
+  }
+}
+
+function utisajLegaKartico() {
+  try {
+    localStorage.setItem(LEGA_KARTICA_KLJUC, JSON.stringify({ t: Date.now() }));
+  } catch (e) { /* zasebno okno: kartica se pokaže znova */ }
+}
+
+
+async function ponudiLego() {
+  const el = document.getElementById("lega");
+  if (!el || legaKarticaUtisana() || await stanjeLege() !== "vprasaj") return;
+  el.innerHTML = `${LEGA_ZNAK}
+    <div class="d-pov-telo">
+      <p class="d-pov-nasl">Pokaži, kje si, na zemljevidih</p>
+      <p class="d-pov-besedilo">Zemljevid te pokaže sam, iskalnik ponudi najbližjo postajo. Lege ne shranimo.</p>
+      <div class="d-pov-gumbi">
+        <button type="button" class="d-pov-poslji">Vklopi</button>
+        <button type="button" class="d-pov-ne">Ne zdaj</button>
+      </div>
+    </div>`;
+  el.hidden = false;
+  let vklopljena = false;
+  const potrdi = () => {
+    if (vklopljena) return;
+    vklopljena = true;
+    el.querySelector(".d-pov-telo").innerHTML = '<p class="d-pov-nasl">Lega je vklopljena</p>'
+      + '<p class="d-pov-besedilo">Na zemljevidih boš modra pika.</p>';
+    setTimeout(() => { el.hidden = true; }, 4000);
+  };
+  // Dovoljenje, dano drugje (Deli lego, nastavitve), kartico odvzame.
+  LEGA.obStanju((s) => {
+    if (el.hidden) return;
+    if (s === "dano") potrdi();
+    else if (s !== "vprasaj") el.hidden = true;
+  });
+  el.querySelector(".d-pov-ne").addEventListener("click", () => {
+    el.hidden = true;
+    utisajLegaKartico();
+  });
+  el.querySelector(".d-pov-poslji").addEventListener("click", async () => {
+    const izid = await vklopiLego();
+    if (izid.stanje === "dano") return potrdi();
+    // Ob trajni zavrnitvi je aplikacija odprla svoje nastavitve; kartica
+    // počaka, da se potnik vrne (`LEGA.obStanju`).
+    if (izid.nastavitve) return;
+    // Rekel je ne: jutri ga ne sprašujmo znova.
+    el.hidden = true;
+    utisajLegaKartico();
+  });
+}
+
 // ---------- podpora ----------
 //
 // Cilj zbiranja (`config.CILJ`, 20. 10. 2026). Vsota pride iz `/api/podpora`,
@@ -508,6 +588,7 @@ function kasneje() {
 
 izrisiBudilke();
 izrisiPoti().then(ponudiPovabilo);
+ponudiLego();
 izrisiPodporo();
 if (MOST) {
   if (document.readyState === "complete") kasneje();

@@ -167,7 +167,8 @@ def beri_lpp(zip_path: Path, dni: int, danes: str | None = None) -> dict:
         used = {sid for v in seq_by_trip.values() for _, sid in v}
         stops = {
             s["stop_id"]: {"stop_id": s["stop_id"], "name": s["stop_name"],
-                           "lat": float(s["stop_lat"]), "lon": float(s["stop_lon"])}
+                           "lat": float(s["stop_lat"]), "lon": float(s["stop_lon"]),
+                           "koda": (s.get("stop_code") or "").strip() or None}
             for s in _rows(zf, "stops.txt") if s["stop_id"] in used
         }
 
@@ -823,8 +824,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         for table in ("station", "edge", "trip", "sched", "service_day", "shape"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany(
-            "INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
-            [(s["stop_id"], s["name"], s["lat"], s["lon"]) for s in stops.values()],
+            "INSERT INTO station(stop_id, name, lat, lon, koda) VALUES(?,?,?,?,?)",
+            [(s["stop_id"], s["name"], s["lat"], s["lon"], s.get("koda"))
+             for s in stops.values()],
         )
         conn.executemany(
             "INSERT INTO edge(from_id,to_id,km,elementary,trips,geojson) VALUES(?,?,?,?,?,?)", edges

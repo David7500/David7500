@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS station (
     stop_id TEXT PRIMARY KEY,
     name    TEXT NOT NULL,
     lat     REAL NOT NULL,
-    lon     REAL NOT NULL
+    lon     REAL NOT NULL,
+    -- LPP-jeva koda postajališča (`stop_code`, 600011): zadnja števka liha =
+    -- proti centru, soda = iz centra (`journey.smeri_postaje`). Samo mestni LPP.
+    koda    TEXT
 );
 -- Vse potniske poizvedbe se zacnejo pri IMENU postaje, ne pri stop_id.
 CREATE INDEX IF NOT EXISTS station_name ON station(name);
@@ -556,6 +559,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
     stolpci = {r[1] for r in conn.execute("PRAGMA table_info(lega)")}
     if stolpci and "vozilo" not in stolpci:
         conn.execute("ALTER TABLE lega ADD COLUMN vozilo TEXT")
+        conn.commit()
+    # `station.koda` od 22. 10. 2026. Napolni jo uvoz LPP-jevega zipa; da ne
+    # čaka, da LPP objavi nov vozni red, pozabimo njegov ETag -- naslednja
+    # osvežitev ga prenese in uvozi znova.
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(station)")}
+    if stolpci and "koda" not in stolpci:
+        conn.execute("ALTER TABLE station ADD COLUMN koda TEXT")
+        conn.execute("DELETE FROM meta WHERE key IN ('lpp_etag', 'lpp_last_modified')")
         conn.commit()
     # Rabil ga je `PREDNIKI_SQL`, ki od 21. 10. 2026 bere `prednik`.
     conn.execute("DROP INDEX IF EXISTS zamenjava_novi")
