@@ -36,6 +36,7 @@ Ob zapori enega tira izguba ≥ 5 min pri 16 % prehodov (sicer 4 %), za vlakom z
 
 * **Zamude ne prenašaj čez dolg postanek** (RG 1604: +15, odpelje po voznem redu; tabla je pisala 23:20). `journey.board()`, `stats.connections()` odštejeta **rezervo voznega reda** (`stats._slack_ahead()` + `_after_slack()`); pri **prihodni** tabli postanek na tej postaji ne šteje.
 * **Vse troje skozi `stats.estimate_at()`** (kliče `predict()`; brez modela prenos z rezervo) — prej iskalnik +11, okno +24 za isti vlak. **Prihodna tabla ostane pri prenosu z rezervo** (`predict()` računa odhodno).
+* **Postaja izstopa = PRIHOD**: `estimate_at(prihod=True)` / `zamuda_na_postanku(prihod=True)` prišteje rezervo, porabljeno na tej postaji (`slack_here_s`). Na postanku > 2 min z zamudo ≥ 3 min je prihodna zamuda višja od odhodne za 4,0 min (vlak, 1 411) oz. 3,0 (avtobus, 3 383) — toliko kot prestop. Pot (`pripni_zamude`) in iskalnik zvez (`zamuda_prihod`) isto.
 * **Vlak s `stop_seq = 1` nikoli ne poroča** — tabla vzame naslednjo postajo in napiše, od kod („izmerjeno na postaji Grosuplje“). Avtobusi poročajo.
 
 ## Ena odločitev za potnikov postanek
@@ -48,8 +49,10 @@ Ob zapori enega tira izguba ≥ 5 min pri 16 % prehodov (sicer 4 %), za vlakom z
 * Pragi po omrežju (`journey.TRANSFER_LIMITS`): železnica 6–120 min, avtobus 3–30.
 * **Prestop upošteva OBA vozila**: `wait = načrtovano + zamuda2 − zamuda1`; izpis „drugi +N min“. **Zaokroži enkrat, potem računaj.**
 * Za prestop je nevarna **podcenitev** prvega vozila (obratno od vstopa).
-* **Tveganje prestopa** (`pot.pripni_tveganje`, `docs/MERITVE.md` „Ali prestop drži“): vnaprej zgodovina ISTEGA prestopa (oba isti dan, prihodna zamuda prvega, odhodna drugega), skrčena proti `PRESTOP_IZHODISCE` z 2 dnevoma (Brier 0,098; razred sam 0,152); prvo vozilo na poti → `verjetnost_zdaj` iz napake sence (`ocena.porazdelitev_napak`, dnevni povzetek `napake_sence`; 0,066 proti 0,078). Vlak na izhodišču brez zgodovine = 0. Zanesljivost predloga = zmnožek delov, pri roku × zadnja vožnja v rezervi (0,113 proti 0,117 za delež dni celega predloga).
-* Iskanje ponuja prestope, ki ne držijo: vlak → avtobus s 3–6 min rezerve 49 %, avtobus → avtobus 70 %. **Pri roku prvi = najpoznejši z zanesljivostjo ≥ 0,9** (`ZANESLJIVO_P`); prvi predlog brez tega je bil pravočasen v 70,6 % dni. Prevlada ne izrine predloga, ki je za > 0,05 zanesljivejši.
+* **Tveganje prestopa** (`pot.pripni_tveganje`, `docs/MERITVE.md` „Ali prestop drži“): vnaprej zgodovina ISTEGA prestopa (oba isti dan, prihodna zamuda prvega, odhodna drugega, z izhodišča nikoli negativna), skrčena proti `PRESTOP_IZHODISCE` z 2 dnevoma (Brier 0,098; razred sam 0,152; razred pod najnižjim izmerjenim dobi najnižjega). Vlak na izhodišču ne poroča: dan, ko je vozil (meritev na naslednjem postanku), = 0.
+* **Zdaj**: kadar je na poti **katerokoli** od obeh vozil → `verjetnost_zdaj` iz napake sence (`ocena.porazdelitev_napak`, povzetek `napake_sence`; Brier 0,059 proti 0,068 na 398). Senca meri le `ocena.HORIZONT_S` (15/25 min) pred vozilom: dlje **največ izhodišče za živo rezervo** — meja, ne meritev; izmeri z drugim horizontom sence. Isto za zadnjo vožnjo pri roku (`ROK_IZHODISCE`), `vir` = „zdaj“.
+* Zanesljivost predloga = zmnožek delov, pri roku × zadnja vožnja v rezervi (0,114 proti 0,118 za delež dni celega predloga).
+* Iskanje ponuja prestope, ki ne držijo: vlak → avtobus s 3–6 min rezerve 48 %, avtobus → avtobus 70 %. **Pri roku prvi = najpoznejši z zanesljivostjo ≥ 0,9** (`ZANESLJIVO_P`). Iskanje nazaj vidi le nekaj zvez pred rokom → brez zanesljive išče znova z rokom −20 in −40 min (`ROK_PREJ_S`): prvi zanesljiv 88 → 93 % (6–25 km), 91 → 99 % (2–4 km), odhod mediana 3 min prej (`scripts/preizkusi_rok.py`). Prevlada ne izrine predloga, ki je za > 0,05 zanesljivejši — **razen hoje vso pot**: vožnja brez prestopa, ki odpelje ob isti uri ali pozneje, pripelje prej in hodi manj, jo izrine (prej prva v 8 od 100 mestnih).
 * Izhodišča so izmerjena na planerju (`scripts/preizkusi_prestope.py`); ob spremembi praga ali iskanja meri znova.
 
 ## Model napovedi (`stats.predict`)

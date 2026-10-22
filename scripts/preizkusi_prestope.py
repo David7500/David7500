@@ -246,6 +246,9 @@ for k, o in prestopi.items():
         if not b:
             continue
         ours_b, act_b, poti_b = b
+        # Resnica za prvega je PRIHOD (`run`, kot pri "vnaprej"); senca hrani
+        # odhodno, ki je na dolgem postanku nižja za porabljeno rezervo.
+        act_a = prihodi.get((k[0], k[1]), {}).get(d, act_a)
         zivo.append((k, d, o["rezerva_s"] + ours_b - ours_a, o["omr_a"], o["omr_b"],
                      poti_a, poti_b, o["rezerva_s"] + act_b - act_a >= 0))
 print(f"prestopov z obema številkama sence istega dne: {len(zivo)}")

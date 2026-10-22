@@ -978,12 +978,15 @@ def test_prestop_brez_zgodovine_je_izhodisce(conn):
 
 def test_vlak_na_izhodiscu_brez_zgodovine_odpelje_po_voznem_redu(conn):
     """Vlak na prvem postanku ne poroča nikoli; pred voznim redom pa ne
-    odpelje. Brez tega prestop na vlak, ki tam začne, nikoli nima zgodovine."""
+    odpelje. Brez tega prestop na vlak, ki tam začne, nikoli nima zgodovine.
+    Šteje samo dan, ko je vlak vozil (meritev na naslednjem postanku): vlak,
+    ki ob sobotah ne vozi, je sicer dobil „točen odhod“ tudi v soboto."""
     _prestop(conn, omrezje_b="zeleznica")
     _pretekli_dnevi(conn, "t1", 2, [700, 100, 0])
+    _pretekli_dnevi(conn, "t2", 2, [60, 0])         # tretji dan ni vozil
     conn.commit()
     t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600))["prestopi"][0]["tveganje"]
-    assert (t["dni"], t["drzal"]) == (3, 2)
+    assert (t["dni"], t["drzal"]) == (2, 1)
 
 
 def test_rok_brez_zanesljivega_prvi_najzanesljivejsi(conn):
@@ -1077,3 +1080,131 @@ def test_prestop_na_poti_iz_napak_sence(conn, monkeypatch):
     assert t["tveganje"]["vir"] == "zdaj"
     assert t["ostane_s"] == 60
     assert t["tveganje"]["p"] < 0.9, "minuta rezerve ob napaki do dveh minut ni zanesljiva"
+
+
+def test_rok_hojo_izrine_voznja_ob_isti_uri(conn):
+    """Hoja vso pot nima tveganja vozila, a ni prva pred avtobusom, ki odpelje
+    pozneje, pripelje prej in hodi manj -- tudi kadar ta ni zanesljiv."""
+    _postaja(conn, "BLIZU2", "Blizu 2", 46.017, 14.500)
+    _voznja(conn, "t1", "avtobus", [(1, "BLIZU", 8 * 3600 + 1500),
+                                   (2, "BLIZU2", 8 * 3600 + 1860)])
+    conn.commit()
+    # Cilj 2 km od izhodišča: peš 24 min, odhod ob 8:21.
+    r = pot.isci(conn, OD, (46.018, 14.500), D, None, prihod_do_s=8 * 3600 + 2700)
+    assert all(pot._z_vozilom(p) for p in r["predlogi"])
+    assert r["predlogi"][0]["zanesljivost"]["stopnja"] == "tvegano"
+
+
+def test_rok_isce_zanesljivo_pred_tveganimi(conn):
+    """Štiri tvegane zveze tik pred rokom zakrijejo zanesljivo: iskanje nazaj
+    pogleda le nekaj zvez. Brez zanesljive išče znova s prejšnjim rokom."""
+    for i, prihod in enumerate((8 * 3600 + 1800, 8 * 3600 + 2520, 8 * 3600 + 2760,
+                                8 * 3600 + 3000, 8 * 3600 + 3240)):
+        _voznja(conn, f"t{i}", f"bus{i}", [(1, "BLIZU", prihod - 900), (2, "CILJ", prihod)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, None, prihod_do_s=9 * 3600)
+    prvi = r["predlogi"][0]
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["bus0"]
+    assert prvi["zanesljivost"]["stopnja"] == "zanesljivo"
+    assert len(r["predlogi"]) > 1, "tvegane ostanejo pod njo"
+
+
+def _brez_napake(monkeypatch):
+    razredov = 2 * 1800 // 30 + 1
+    nic = [0] * razredov
+    nic[60] = 1000
+    monkeypatch.setattr(pot, "napake_sence", lambda c: {
+        "avtobus": {"korak_s": 30, "od_s": -1800, "na_poti": nic, "pred_odhodom": nic}})
+
+
+def _drugi_na_poti(conn, a_odhod):
+    """Prvi (brez meritve) pripelje v Daleč pet minut po `a_odhod`; drugi po
+    voznem redu odpelje minuto za njim, a je na poti z zamudo +10 min."""
+    _voznja(conn, "t1", "prva", [(1, "BLIZU", a_odhod), (2, "DALEC", a_odhod + 300)])
+    _voznja(conn, "t2", "druga", [(1, "BLIZU", 7 * 3600 + 3000), (2, "DALEC", a_odhod + 360),
+                                  (3, "CILJ", a_odhod + 1200)])
+    _pretekli_dnevi(conn, "t1", 2, [120] * 10)
+    _pretekli_dnevi(conn, "t2", 2, [0] * 10)
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, delay_arr, "
+                 "feed_ts) VALUES('t2', ?, 1, 600, 600, ?)", (D, 4102444800))
+    db.fill_trip_window(conn)                       # okvir vožnje za `pot.zamiki`
+    conn.commit()
+
+
+def test_prestop_na_drugega_na_poti_steje_zdaj(conn, monkeypatch):
+    """Zamuda drugega, ki je na poti, je znana in prestop je zaradi nje sploh
+    ponujen; zgodovina z minuto rezerve bi rekla, da nikoli ne drži."""
+    _brez_napake(monkeypatch)
+    _drugi_na_poti(conn, 8 * 3600 + 600)
+    # Meja hoje 10 min: Daleč (13 min) ni izhodišče, drugi sam ne pride v poštev.
+    t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600 + 60, now_s=8 * 3600 + 60,
+                              max_hoje_s=600))["prestopi"][0]
+    assert t["ostane_s"] == 660
+    assert (t["tveganje"]["vir"], t["tveganje"]["p"]) == ("zdaj", 1.0)
+
+
+def test_prestop_dlje_od_horizonta_sence_najvec_izhodisce(conn, monkeypatch):
+    """Senca meri napako 15 min pred avtobusom; prestop čez 24 min dobi
+    največ izhodišče za tako rezervo, ne gotovosti."""
+    _brez_napake(monkeypatch)
+    _drugi_na_poti(conn, 8 * 3600 + 1200)
+    # Meja hoje 10 min: Daleč (13 min) ni izhodišče, drugi sam ne pride v poštev.
+    t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600 + 60, now_s=8 * 3600 + 60,
+                              max_hoje_s=600))["prestopi"][0]
+    assert t["tveganje"]["vir"] == "zdaj"
+    assert t["tveganje"]["p"] == pot.PRESTOP_IZHODISCE[("avtobus", "avtobus", "10+")]
+
+
+def test_avtobus_z_izhodisca_ne_odpelje_prej(conn):
+    """Negativen odhod s prvega postanka je čakanje (`stats.odhod_z_izhodisca`),
+    ne odhod: prestop na avtobus, ki tam začne, je tiste dni držal."""
+    _voznja(conn, "t1", "prva", [(1, "BLIZU", 8 * 3600 + 600), (2, "DALEC", 8 * 3600 + 900)])
+    _voznja(conn, "t2", "druga", [(1, "DALEC", 8 * 3600 + 1140), (2, "CILJ", 8 * 3600 + 1800)])
+    _pretekli_dnevi(conn, "t1", 2, [120] * 5)
+    _pretekli_dnevi(conn, "t2", 1, [-150] * 5)
+    db.fill_trip_window(conn)                       # first_seq, kot ob uvozu
+    conn.commit()
+    t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600))["prestopi"][0]["tveganje"]
+    assert (t["dni"], t["drzal"]) == (5, 5)
+
+
+def test_izhodisce_pod_pragom_je_najnizje_izmerjeno():
+    """Prestop pod pragom iskanja (nastane z zamudo v živo) ni varnejši od
+    tistega s štirimi minutami."""
+    assert pot._izhodisce("avtobus", "avtobus", 60) \
+        == pot.PRESTOP_IZHODISCE[("avtobus", "avtobus", "3-6")]
+    assert pot._izhodisce("zeleznica", "avtobus", -120) \
+        == pot.PRESTOP_IZHODISCE[("zeleznica", "avtobus", "3-6")]
+    assert pot._izhodisce("avtobus", "zeleznica", 240) \
+        == pot.PRESTOP_IZHODISCE[("avtobus", "zeleznica", "6-10")]
+
+
+def test_rok_na_poti_pove_vir_zdaj(conn, monkeypatch):
+    """Zadnja vožnja na poti: pravočasnost je iz zamude zdaj in to piše; čez
+    horizont sence največ izhodišče za to rezervo."""
+    _brez_napake(monkeypatch)
+    _voznja(conn, "t1", "edina", [(1, "DALEC", 8 * 3600), (2, "BLIZU", 8 * 3600 + 600),
+                                  (3, "CILJ", 8 * 3600 + 1500)])
+    conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, delay_arr, "
+                 "feed_ts) VALUES('t1', ?, 1, 60, 60, ?)", (D, 4102444800))
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, 8 * 3600 + 180, now_s=8 * 3600 + 180,
+                 prihod_do_s=8 * 3600 + 2400)
+    z = r["predlogi"][0]["zanesljivost"]
+    assert z["vir"] == "zdaj"
+    assert z["p"] == pot.ROK_IZHODISCE[("avtobus", "10-20")]
+
+
+def test_ocena_ob_prihodu_ne_porabi_postanka_na_tej_postaji(conn):
+    """Vlak z +7 min stoji po voznem redu osem minut: odpelje z +1, pripelje
+    pa z +7 -- prestop šteje prihod."""
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id, "
+                 "mode, network) VALUES('v1', 'r1', 'LP 1', 'kam', 'S1', 'rail', 'zeleznica')")
+    for seq, stop_id, arr, dep in ((1, "BLIZU", None, 8 * 3600), (2, "DALEC", 8 * 3600 + 900,
+                                                                  8 * 3600 + 1380),
+                                   (3, "CILJ", 8 * 3600 + 2400, None)):
+        conn.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                     "VALUES(?,?,?,?,?)", ("v1", seq, stop_id, arr, dep))
+    conn.commit()
+    assert stats.estimate_at(conn, "LP 1", "v1", 1, 420, 2, D) == 60
+    assert stats.estimate_at(conn, "LP 1", "v1", 1, 420, 2, D, prihod=True) == 420

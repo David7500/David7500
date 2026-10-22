@@ -1869,7 +1869,7 @@ WHERE p.rn = 1
 
 def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
                 from_stop_seq: int, current_delay_s: int, target_seq: int,
-                service_date: str | None = None) -> int | None:
+                service_date: str | None = None, prihod: bool = False) -> int | None:
     """Ocena zamude na `target_seq` po ISTEM modelu kot okno vožnje.
 
     Iskalnik zvez in odhodna tabla sta prej računala samo prenos zamude minus
@@ -1885,12 +1885,19 @@ def estimate_at(conn: sqlite3.Connection, train_no: str, trip_id: str | None,
 
     Vrne `None`, kadar modela ni mogoče uporabiti (postanka ni v napovedi);
     klicatelj takrat ostane pri prenosu z rezervo.
+
+    `prihod=True` je zamuda ob PRIHODU na `target_seq`: model je odhodni in v
+    rezervo šteje tudi postanek na tej postaji, ki ga vozilo ob prihodu še ni
+    opravilo -- ta del rezerve se prišteje nazaj. Kjer vozni red stoji dlje od
+    dveh minut in vozilo pripelje z zamudo vsaj 3 min, je prihodna zamuda za
+    4,0 min (vlak, 1 411 primerov) oz. 3,0 min (avtobus, 3 383) višja od
+    odhodne (razvojna baza, 30 dni do 22. 10. 2026) -- toliko, kot ima prestop.
     """
     for x in predict(conn, train_no, from_stop_seq, current_delay_s,
                      exclude_date=service_date, service_date=service_date,
                      trip_id=trip_id):
         if x["stop_seq"] == target_seq:
-            return x["predicted_delay_s"]
+            return x["predicted_delay_s"] + (x["slack_here_s"] if prihod else 0)
     return None
 
 
@@ -2082,7 +2089,8 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
                        feed_delay_s: int | None, lm: dict | None,
                        slack_vrsta, service_date: str,
                        potrjen: bool = False,
-                       obicajno_s: float | None = None) -> dict:
+                       obicajno_s: float | None = None,
+                       prihod: bool = False) -> dict:
     """Zamuda na potnikovem postanku: koliko je in **od kod je**.
 
     Eno pravilo na enem mestu. Iskalnik zvez in pot od vrat do vrat sta ista
@@ -2093,7 +2101,8 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
     `lm` je vrstica iz `last_measured()` za to vožnjo, `slack_vrsta` pa njena
     rezerva voznega reda iz `_slack_ahead()`, `obicajno_s` mediana iz
     `typical_at_stops()` za ta postanek (rabi jo vožnja brez meritve,
-    glej `pred_odhodom`).
+    glej `pred_odhodom`). `prihod=True` je za postanek, kjer potnik IZSTOPI:
+    postanek na njem ne porabi rezerve, preden vozilo pripelje (`estimate_at`).
     """
     # Kaj potnik res rabi: zamudo na SVOJI postaji, ce je ze izmerjena;
     # sicer zadnjo znano zamudo in kje je bila izmerjena.
@@ -2111,7 +2120,8 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
         #
         # Prej rezerva voznega reda, isto kot na tabli: vlak, ki stoji na
         # vmesni postaji dvajset minut, do potnika zamude ne prinese.
-        rez = sum(w for seq, w in slack_vrsta if lm["stop_seq"] < seq <= stop_seq)
+        rez = sum(w for seq, w in slack_vrsta
+                  if lm["stop_seq"] < seq < stop_seq or (seq == stop_seq and not prihod))
         # Prevoznikova vrednost samo navzgor: nizka je nerazresena nicla,
         # visoka pa pomeni, da ve nekaj, cesar iz zgodovine ni mogoce vedeti.
         # Izjema: dokler vlak stoji na dolgem postanku, je njegova vrednost
@@ -2121,7 +2131,7 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
                               dwell_at(slack_vrsta, lm["stop_seq"])):
             prev = None
         ocena = estimate_at(conn, train_no, trip_id, lm["stop_seq"],
-                            trenutna_zamuda(lm), stop_seq, service_date)
+                            trenutna_zamuda(lm), stop_seq, service_date, prihod=prihod)
         if ocena is None:
             # Omrezje samo tu: pravilo prevoznika je pri avtobusu drugacno,
             # model pa ga je ze uporabil sam (`predict`). Isto za izhodisce.
@@ -2286,7 +2296,7 @@ def connections(conn: sqlite3.Connection, from_name: str, to_name: str,
                 feed_delay_s=d["to_delay_s"], lm=lm,
                 slack_vrsta=slack.get(d["trip_id"], ()), service_date=service_date,
                 potrjen=(d["trip_id"], d["to_seq"]) in potrjeni,
-                obicajno_s=(d["typical_arr"] or {}).get("median_s"))
+                obicajno_s=(d["typical_arr"] or {}).get("median_s"), prihod=True)
             d["zamuda_prihod"] = opis_zamude(zp["delay_s"], zp["delay_kind"])
         # Kaj je o tej postaji rekel feed. Kadar je vozilo se pred njo, je to
         # napoved prevoznika in prikaz je ne uporablja -- a je tudi ne skriva.
