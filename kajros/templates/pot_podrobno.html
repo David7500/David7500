@@ -36,6 +36,9 @@
         <a class="nazaj" id="nazaj" href="/app/pot">‹ nazaj na predloge</a>
         {#- Pošlji, ne Deli: „Deli lego“ je deljenje lege. Pot je v naslovu,
             zato jo prejemnik odpre celo. #}
+        {#- Pot, ki jo je kdo poslal ali odprl s seznama, se da izbrati:
+            potem ostane, dokler je ne končaš (`NA_POTI` v common.js). #}
+        <button type="button" class="poslji-pot zacni-pot" id="zacni" hidden>Začni pot</button>
         <button type="button" class="poslji-pot" id="poslji" hidden>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -95,16 +98,29 @@
           <button type="button" id="vod-naprej" aria-label="naslednje navodilo">›</button>
         </span>
       </div>
+      {#- Plošča se zloži v eno vrstico (ročaj): zemljevid je med vožnjo
+          pomembnejši od besedila, plošča pa je zasedla pol zaslona in se je
+          ni dalo skriti (prijava 22. 10. 2026). #}
       <div id="vod-spodaj" class="vod-spodaj" hidden>
-        <div id="vod-cilj" class="vod-cilj"></div>
-        <div id="vod-vozilo" class="vod-vozilo"></div>
-        <div id="vod-opomba" class="vod-opomba"></div>
-        {#- Deljenje ob vožnji, samo v aplikaciji (`Most.cakajVkrcanje`). #}
-        <div id="vod-deli" class="vod-opomba vod-deli" hidden></div>
-        <div class="vod-gumbi">
-          <button type="button" id="vod-sledi" class="vod-gumb" hidden>sledi mi</button>
-          <button type="button" id="vod-dalje" class="vod-gumb je-glavni" hidden></button>
-          <button type="button" id="vod-konec" class="vod-gumb">končaj</button>
+        <button type="button" id="vod-rocaj" class="vod-rocaj" aria-expanded="true"
+                aria-controls="vod-vec">
+          <span class="vod-rocaj-crta" aria-hidden="true"></span>
+          <span id="vod-povzetek" class="vod-povzetek"></span>
+        </button>
+        <div id="vod-vec" class="vod-vec">
+          <div id="vod-cilj" class="vod-cilj"></div>
+          <div id="vod-vozilo" class="vod-vozilo"></div>
+          <div id="vod-opomba" class="vod-opomba"></div>
+          {#- Deljenje ob vožnji, samo v aplikaciji (`Most.cakajVkrcanje`). #}
+          <div id="vod-deli" class="vod-opomba vod-deli" hidden></div>
+          {#- Na poti: vsi koraki, trenutni poudarjen (sem jih prestavi stran). #}
+          <div id="vod-pot" class="vod-pot" hidden></div>
+          <div class="vod-gumbi">
+            <button type="button" id="vod-sledi" class="vod-gumb" hidden>sledi mi</button>
+            <button type="button" id="vod-dalje" class="vod-gumb je-glavni" hidden></button>
+            <button type="button" id="vod-nova" class="vod-gumb" hidden>nova pot od tu</button>
+            <button type="button" id="vod-konec" class="vod-gumb">končaj</button>
+          </div>
         </div>
       </div>
     </div>

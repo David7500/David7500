@@ -11,6 +11,15 @@
 
 const $ = (s) => document.querySelector(s);
 const Q = new URLSearchParams(location.search);
+// Pot, na kateri si (`NA_POTI` v common.js): `?na-poti` jo vzame iz shrambe,
+// ne iz naslova -- trak na drugih straneh vodi sem brez vsega drugega. Kar
+// bere naslov spodaj (kraja, dan, hitrost), dobi njene vrednosti.
+const NA_POTI_NACIN = Q.has("na-poti");
+const AKTIVNA = NA_POTI_NACIN ? NA_POTI.beri() : null;
+if (AKTIVNA) {
+  for (const [k, v] of Object.entries(AKTIVNA.spec)) if (v != null) Q.set(k, String(v));
+  if (AKTIVNA.vprasanje && AKTIVNA.vprasanje.rok) Q.set("rok", String(AKTIVNA.vprasanje.rok));
+}
 // Hitrost na koncih poti: hoja ali kolo. Ista, s katero je strežnik računal
 // minute -- druga bi dala vodenju drugo uro prihoda kot seznamu.
 const KMH = Number(Q.get("kmh")) || 5;
@@ -61,6 +70,15 @@ function znakSvg(znak, px = 30) {
   }
   if (znak === "nazaj") {
     return ovoj('<path d="M8 22V10a4 4 0 0 1 8 0v7"/><path d="M13 14l3 3 3-3"/>');
+  }
+  if (znak === "ura") return ovoj('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
+  if (znak === "bus") {
+    return ovoj('<rect x="4" y="3.5" width="16" height="14.5" rx="2.6"/>'
+      + '<path d="M4 10.5h16M7.5 18.5v2.5M16.5 18.5v2.5M8 14.5h.01M16 14.5h.01"/>');
+  }
+  if (znak === "vlak") {
+    return ovoj('<rect x="6" y="3" width="12" height="14" rx="3"/>'
+      + '<path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/>');
   }
   const r = (ZNAK_KOT[znak] || 0) * Math.PI / 180;
   const tx = 12 + 8 * Math.sin(r);
@@ -122,7 +140,7 @@ function hojaHtml(n, i) {
   // ravna črta na zemljevidu bi trdila pot, ki je ni.
   const opomba = n.tocke ? "" :
     '<span class="korak-opomba">pešpot ni izračunana — na zemljevidu je zračna črta</span>';
-  return `<li class="korak je-hoja">
+  return `<li class="korak je-hoja" data-noga="${i}">
     <span class="korak-znak" aria-hidden="true">↓</span>
     <div class="korak-telo">
       <div class="korak-vrh">${jeKolo(i) ? "s kolesom" : "peš"} <strong>${
@@ -140,7 +158,7 @@ function hojaHtml(n, i) {
     </div></li>`;
 }
 
-function voznjaHtml(n) {
+function voznjaHtml(n, i) {
   const pot = n.network === "avtobus" ? "bus" : "train";
   // Kot iz iskalnika zvez: dan predloga (nočni avtobus je včerajšnji) in
   // postajališče vstopa, da okno pokaže "Pri tebi" -- brez tega je človek
@@ -161,7 +179,7 @@ function voznjaHtml(n) {
         s.prihod ? ura(s.prihod) : "—"}</span> ${escapeHtml(s.ime)}</li>`).join("")}</ol>
     </details>` : "";
   const kdo = imeVoznje(n);
-  return `<li class="korak je-voznja">
+  return `<li class="korak je-voznja" data-noga="${i}">
     <span class="korak-znak" aria-hidden="true">●</span>
     <div class="korak-telo">
       <div class="korak-vrh">
@@ -193,7 +211,15 @@ function prestopHtml(t, pred, po) {
       ${escapeHtml(mins == null ? `${nacrt} min za prestop` : prestopText(mins))}
       <span class="korak-kam">v ${escapeHtml(t.kje)}${pes}${
         mins == null ? " · brez zamud" : ""}</span>
+      ${tveganjeHtml(t)}
     </div></li>`;
+}
+
+// Tveganje prestopa: ista govorica kot na seznamu predlogov (common.js).
+function tveganjeHtml(t) {
+  if (!t.tveganje) return "";
+  return `<div class="korak-tveganje"><span class="tveganje ${STOPNJA_RAZRED[t.tveganje.stopnja] || ""}">${
+    escapeHtml(t.tveganje.stopnja)}</span> ${escapeHtml(prestopDrzi(t))}</div>`;
 }
 
 function korakiHtml(p) {
@@ -204,7 +230,7 @@ function korakiHtml(p) {
     if (v > 0 && p.prestopi && p.prestopi[v - 1]) {
       out.push(prestopHtml(p.prestopi[v - 1], voznje[v - 1], n));
     }
-    out.push(n.vrsta === "hoja" ? hojaHtml(n, i) : voznjaHtml(n));
+    out.push(n.vrsta === "hoja" ? hojaHtml(n, i) : voznjaHtml(n, i));
   });
   return out.join("");
 }
@@ -303,7 +329,23 @@ function obLegi(loc) {
   JAZ = loc;
   if (K) pkJaz(K.map, loc);
   $("#karta-lega").classList.toggle("je-on", !!loc);
-  posodobi(false);
+  posodobiVse(false);
+}
+
+/** Pot, na kateri si, ali vodenje po eni pešpoti. */
+function posodobiVse(skok) {
+  if (NP.aktivno && naPotiPoteklo(AKTIVNA, Date.now())) {
+    // Na cilju ali dolgo po prihodu: pot gre sama, tudi s te strani.
+    NA_POTI.koncaj();
+    location.replace(nazajUrl());
+    return;
+  }
+  if (NP.aktivno) {
+    korakNaPoti();
+    risiNaPoti(skok);
+  } else {
+    posodobi(skok);
+  }
 }
 
 // Lega na dotik (gumb, „vodi me“). Med hojo je edino vprašanje "grem v pravo
@@ -679,14 +721,17 @@ function posodobi(skok, samoBesedilo) {
   $("#vod-vozilo").innerHTML = nv ? voziloHtml(nv, V.prispel ? 0 : ostaneS) : "";
   $("#vod-vozilo").hidden = !nv;
 
-  // Kaj po tem: ob vozilu "ko izstopiš, vodi me naprej", na cilju konec.
+  // Kaj po tem: ob vozilu "ko izstopiš, vodi me naprej", na cilju konec. Na
+  // poti gre stran naprej sama (`korakNaPoti`) in gumbe postavi `risiPlosco`.
   const dalje = naslednjaHoja(V.i);
-  $("#vod-dalje").hidden = !(V.prispel && dalje !== null);
-  if (dalje !== null) {
-    $("#vod-dalje").textContent = `ko izstopiš: vodi me ${kamBeseda(PREDLOG.noge[dalje])}`;
-    $("#vod-dalje").dataset.vodi = dalje;
+  if (!NP.aktivno) {
+    $("#vod-dalje").hidden = !(V.prispel && dalje !== null);
+    if (dalje !== null) {
+      $("#vod-dalje").textContent = `ko izstopiš: vodi me ${kamBeseda(PREDLOG.noge[dalje])}`;
+      $("#vod-dalje").dataset.vodi = dalje;
+    }
+    $("#vod-konec").textContent = V.prispel && dalje === null ? "končano" : "končaj";
   }
-  $("#vod-konec").textContent = V.prispel && dalje === null ? "končano" : "končaj";
   $("#vod-sledi").hidden = V.sledi || !vodim;
   const opomba = $("#vod-opomba");
   if (dalec) {
@@ -786,9 +831,12 @@ async function osveziZamude() {
   if (V.aktivno) V.zamude = setTimeout(osveziZamude, 30000);
 }
 
-$("#vod-konec").addEventListener("click", koncajVodenje);
-$("#vod-sledi").addEventListener("click", () => { V.sledi = true; posodobi(true); });
-$("#vod-dalje").addEventListener("click", () => zacniVodenje(Number($("#vod-dalje").dataset.vodi)));
+$("#vod-konec").addEventListener("click", () => (NP.aktivno ? koncajPot() : koncajVodenje()));
+$("#vod-sledi").addEventListener("click", () => { V.sledi = true; posodobiVse(true); });
+$("#vod-dalje").addEventListener("click", () => {
+  if (NP.aktivno) naprejRocno();
+  else zacniVodenje(Number($("#vod-dalje").dataset.vodi));
+});
 $("#vod-prej").addEventListener("click", () => {
   V.listaj = Math.max(0, V.listaj - 1);
   V.sledi = true;
@@ -800,11 +848,664 @@ $("#vod-naprej").addEventListener("click", () => {
   posodobi(true);
 });
 
+// ---------------------------------------------------------------- na poti
+//
+// Izbrana pot (`NA_POTI` v common.js) kot navigacija: zemljevid čez vso
+// stran, zgoraj, kaj zdaj, spodaj plošča s celo potjo, ki se zloži v vrstico.
+// Korak (hoja, čakanje, vožnja, cilj) pove lega, kadar jo imamo, sicer ura --
+// sam od sebe nikoli nazaj. Napredek se shrani, da ga zaprta aplikacija ne
+// pozabi (prijava 22. 10. 2026: na prvem avtobusu ni več vedel, kje prestopi).
+
+const NP = {
+  aktivno: false, koraki: [], k: 0, trasa: {},
+  vozilo: null, vozilaTrip: null, vozilaZanka: null, voziloOznaka: null,
+  najavljen: -1, zamujeno: null, odlozi: 0, opozorjen: "", zacel: false,
+  kameraOb: 0, potrdi: 0, osvezi: null, ura: null,
+};
+//: Lega, starejša od tega, o koraku ne odloča -- takrat velja ura.
+const NP_LEGA_SVEZA_MS = 60000;
+//: Vozilo, ki ga čakaš, je morda odpeljalo brez tebe toliko po pričakovanem
+//: odhodu (z zamudo), ko te lega še ni videla na njem. Z lego vozila, ki je
+//: že za postajališčem, prej; brez nje šele po petih minutah.
+const NP_ZAMUJENO_S = 150;
+const NP_ZAMUJENO_BREZ_VOZILA_S = 300;
+//: Od toliko metrov pred izstopom „izstopi na naslednji“ in tresljaj.
+const NP_IZSTOP_M = 500;
+const NP_PLOSCA_KLJUC = "kajros:na-poti-plosca";
+
+function svezaLega() {
+  return JAZ && Date.now() - (JAZ.ts || 0) < NP_LEGA_SVEZA_MS && (JAZ.acc || 999) <= 150 ? JAZ : null;
+}
+
+/** Trasa vožnje z lego postankov vzdolž nje; `null`, dokler je le skica. */
+function trasaVoznje(i) {
+  const c = CRTE[i];
+  if (!c || c.skica || !c.tocke || c.tocke.length < 2) return null;
+  if (NP.trasa[i] && NP.trasa[i].tocke === c.tocke) return NP.trasa[i];
+  const kum = kumulative(c.tocke);
+  const postaje = (PREDLOG.noge[i].postanki || []).filter((x) => x.ll).map((x) => {
+    const pr = projekcijaNaTraso(c.tocke, kum, x.ll[0], x.ll[1]);
+    return { ...x, vzdolz: pr.vzdolz, odmik: pr.odmik };
+  }).filter((x) => x.odmik <= 80);
+  NP.trasa[i] = { tocke: c.tocke, kum, postaje };
+  return NP.trasa[i];
+}
+
+/** Kje na trasi vožnje je potnik: `{vzdolz, odmik}` ali `null`. */
+function naTrasi(i, l) {
+  const tr = trasaVoznje(i);
+  return tr && l ? projekcijaNaTraso(tr.tocke, tr.kum, l.lat, l.lon) : null;
+}
+
+/** Ali se potnik pelje z vožnjo koraka `r`: na njeni trasi, za vstopom, v gibanju. */
+function seVozi(r, l, zdaj, prag) {
+  const s = NP.koraki[r];
+  const n = PREDLOG.noge[s.i];
+  const na = naTrasi(s.i, l);
+  if (!na || na.odmik > prag || zdaj < (n.odhod_ocena || n.odhod) - 180) return false;
+  const tr = trasaVoznje(s.i);
+  const konec = tr.kum[tr.kum.length - 1];
+  return na.vzdolz < konec - 15 && ((l.hitrost || 0) >= 3 || na.vzdolz >= 120);
+}
+
+/** Korak, ki ga dokazuje lega, ali `null`. Gleda le naprej od `k`. */
+function korakIzLege(l, zdaj, k) {
+  const koraki = NP.koraki;
+  const ll = [l.lat, l.lon];
+  const prag = Math.max(35, Math.min(l.acc || 35, 80));
+  if (razdaljaM(ll, doKod()) <= prag) return koraki.length - 1;
+  const korak = koraki[k];
+  const hitrost = l.hitrost || 0;
+  const r = koraki.findIndex((s, j) => j >= k && s.vrsta === "voznja");
+  if (r < 0) return null;                   // pred tabo je le še hoja do cilja
+  const n = PREDLOG.noge[koraki[r].i];
+  if (korak.vrsta === "voznja") {
+    // Izstop: ob izstopnem postajališču počasi, ali na trasi že na njenem koncu.
+    const na = naTrasi(korak.i, l);
+    const tr = trasaVoznje(korak.i);
+    if (razdaljaM(ll, n.do_ll) <= prag + 20 && hitrost < 2) return k + 1;
+    if (na && tr && na.odmik <= prag && na.vzdolz >= tr.kum[tr.kum.length - 1] - 15
+        && hitrost < 2) return k + 1;
+    // Na naslednji vožnji, ne da bi te videli na prestopu.
+    const r2 = koraki.findIndex((s, j) => j > k && s.vrsta === "voznja");
+    return r2 > 0 && seVozi(r2, l, zdaj, prag) ? r2 : null;
+  }
+  if (seVozi(r, l, zdaj, prag)) return r;
+  // Ob vstopnem postajališču čakaš (čakanje je vedno tik pred vožnjo).
+  if (korak.vrsta === "hoja" && razdaljaM(ll, n.od_ll) <= prag + 10) return r - 1;
+  return null;
+}
+
+function korakNaPoti() {
+  const zdaj = Date.now() / 1000;
+  const koraki = NP.koraki;
+  if (!koraki.length) return;
+  let k = NP.k;
+  const l = svezaLega();
+  if (l) {
+    const iz = korakIzLege(l, zdaj, k);
+    if (iz != null && iz > k) k = iz;
+    // Vodenje po pešpoti ve, kdaj si na koncu hoje (`V.prispel`).
+    if (koraki[k].vrsta === "hoja" && V.i === koraki[k].i && V.prispel) k += 1;
+  } else {
+    k = Math.max(k, korakPoCasu(koraki, zdaj));
+  }
+  if (k !== NP.k) nastaviKorak(Math.min(k, koraki.length - 1));
+  preveriZamujeno(l, zdaj);
+}
+
+function nastaviKorak(k) {
+  NP.k = k;
+  NP.zamujeno = null;
+  const korak = NP.koraki[k];
+  if (korak.vrsta === "hoja") pripraviNogo(korak.i);
+  else V.i = korak.vrsta === "cilj" ? -1 : korak.i;
+  if (korak.vrsta === "cilj" && !(AKTIVNA.stanje && AKTIVNA.stanje.cilj_ob)) {
+    AKTIVNA.stanje = { ...(AKTIVNA.stanje || {}), cilj_ob: Date.now() };
+    if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+  }
+  V.sledi = true;
+  risiCrte();
+  voziloKoraka();
+  shraniNaPoti();
+  // Deljenje ob vožnji (aplikacija): pred vozilom, ki ga čakaš.
+  if (korak.vrsta === "hoja" || korak.vrsta === "cakanje") {
+    deliOb(korak.vrsta === "hoja" ? korak.i : korak.i - 1);
+  } else {
+    $("#vod-deli").hidden = true;
+  }
+}
+
+/** Ročni korak naprej: „sem na vozilu“, „izstopil sem“, „grem“. */
+function naprejRocno() {
+  const korak = NP.koraki[NP.k];
+  if (NP.k === 0 && korak.vrsta === "hoja" && !NP.zacel) {
+    NP.zacel = true;
+    risiNaPoti(true);
+    return;
+  }
+  if (NP.zamujeno != null) {
+    nastaviKorak(NP.zamujeno);
+  } else if (NP.k < NP.koraki.length - 1) {
+    nastaviKorak(NP.k + 1);
+  }
+  risiNaPoti(true);
+}
+
+function preveriZamujeno(l, zdaj) {
+  NP.zamujeno = null;
+  const korak = NP.koraki[NP.k];
+  if (!ZIVO || !l || !korak || (korak.vrsta !== "hoja" && korak.vrsta !== "cakanje")) return;
+  if (Date.now() < NP.odlozi) return;
+  const r = NP.koraki.findIndex((s, j) => j >= NP.k && s.vrsta === "voznja");
+  if (r < 0) return;
+  const n = PREDLOG.noge[NP.koraki[r].i];
+  const odh = n.odhod_ocena || n.odhod;
+  if (zdaj < odh + NP_ZAMUJENO_S) return;
+  // Vozilo z lego je odpeljalo, kadar je na trasi že za vstopnim postajališčem.
+  const v = NP.vozilo;
+  const tr = trasaVoznje(NP.koraki[r].i);
+  if (v && tr && NP.vozilaTrip === n.trip_id) {
+    const pv = projekcijaNaTraso(tr.tocke, tr.kum, v.lat, v.lon);
+    if (pv.odmik > 150 || pv.vzdolz < 100) return;
+  } else if (zdaj < odh + NP_ZAMUJENO_BREZ_VOZILA_S) {
+    return;
+  }
+  NP.zamujeno = r;
+}
+
+/** Postaje vožnje pred tabo do izstopa: po legi na trasi, sicer po uri. */
+function postajeNaprej(i, zdaj) {
+  const n = PREDLOG.noge[i];
+  const vse = (n.postanki || []).slice(1);
+  const l = svezaLega();
+  const na = naTrasi(i, l);
+  const tr = trasaVoznje(i);
+  if (na && tr && na.odmik <= 120 && tr.postaje.length >= 2) {
+    const naprej = tr.postaje.filter((x) => x.vzdolz > na.vzdolz + 20 && x.stop_seq !== n.od_seq);
+    return { postaje: naprej, doIzstopa: Math.max(0, tr.kum[tr.kum.length - 1] - na.vzdolz) };
+  }
+  const zam = ((n.zamuda_izstop || n.zamuda) || {}).s || 0;
+  return { postaje: vse.filter((x) => (x.prihod || x.odhod || 0) + zam > zdaj - 30), doIzstopa: null };
+}
+
+/** Prestop za vožnjo tega koraka (ali prvo za njim): kaj pride potem. */
+function nato(korak) {
+  if (korak.vrsta === "cilj") return null;
+  const voznje = PREDLOG.noge.filter((n) => n.vrsta === "voznja");
+  const v = voznje.findIndex((n) => PREDLOG.noge.indexOf(n) >= korak.i);
+  if (v < 0 || v + 1 >= voznje.length || !PREDLOG.prestopi || !PREDLOG.prestopi[v]) return null;
+  return { prestop: PREDLOG.prestopi[v], pred: voznje[v], po: voznje[v + 1] };
+}
+
+/** Prestop pred tabo, ki po zamudah zdaj ne drži. */
+function ogrozenPrestop() {
+  const voznje = PREDLOG.noge.filter((n) => n.vrsta === "voznja");
+  const korak = NP.koraki[NP.k];
+  for (let v = 1; v < voznje.length; v += 1) {
+    const t = PREDLOG.prestopi && PREDLOG.prestopi[v - 1];
+    if (!t || !t.tveganje || PREDLOG.noge.indexOf(voznje[v]) <= korak.i
+        && korak.vrsta !== "hoja") continue;
+    const mins = rezervaPrestopa(t, voznje[v - 1], voznje[v]);
+    if ((mins != null && mins < 0) || (t.tveganje.vir === "zdaj" && t.tveganje.p < 0.5)) {
+      return { t, mins };
+    }
+  }
+  return null;
+}
+
+/** Vozilo, ki ga čakaš: kdaj odpelje in, kadar ima lego, kako daleč je. Ura
+ *  sama ne pove „je že odpeljal“ -- zamujeno vozilo je pogosto še na poti. */
+function cakanjeHtml(n, zdaj) {
+  const odh = n.odhod_ocena || n.odhod;
+  let s = `<strong>${escapeHtml(imeVoznje(n))}</strong> odpelje ob <strong>${ura(odh)}</strong>${
+    n.zamuda ? " " + zamudaHtml(n.zamuda) : ""}`;
+  if (NP.vozilo && NP.vozilaTrip === n.trip_id && n.od_ll) {
+    s += ` · vozilo je ${dolzina(razdaljaM([NP.vozilo.lat, NP.vozilo.lon], n.od_ll))} od postajališča`;
+  } else if (odh > zdaj + 45) {
+    s += ` · čez ${minute(odh - zdaj)}`;
+  }
+  return s;
+}
+
+function zamudaBeseda(z) {
+  if (!z || delayMin(z) === 0) return "";
+  return ` (${delayText(z, true)})`;
+}
+
+/** Zgornja kartica za korak, ki ni hoja: kaj zdaj, in koliko časa. */
+function risiKorak(korak, n, pred, zdaj) {
+  const man = $("#vod-manever");
+  man.classList.remove("je-pozor");
+  $("#vod-listaj").hidden = true;
+  const znak = (x) => znakSvg(x && x.network === "zeleznica" ? "vlak" : "bus", 38);
+  if (pred) {
+    const v = nogaVozila(korak.i);
+    $("#vod-znak").innerHTML = znakSvg("ura", 38);
+    $("#vod-razdalja").textContent = cezPoti(korak.od, zdaj);
+    $("#vod-navodilo").textContent = `Odidi ob ${ura(korak.od)}`;
+    $("#vod-ulica").textContent = v
+      ? `${minute(n.sekunde)} ${jeKolo(korak.i) ? "s kolesom" : "peš"} do ${v.od} · ${imeVoznje(v)} ob ${
+        ura(v.odhod_ocena || v.odhod)}` : "";
+    return;
+  }
+  if (korak.vrsta === "cilj") {
+    $("#vod-znak").innerHTML = znakSvg("cilj", 38);
+    $("#vod-razdalja").textContent = "";
+    $("#vod-navodilo").textContent = "Na cilju si";
+    $("#vod-ulica").textContent = `ob ${ura(korak.od)} po načrtu`;
+    return;
+  }
+  if (NP.zamujeno != null) {
+    const z = PREDLOG.noge[NP.koraki[NP.zamujeno].i];
+    man.classList.add("je-pozor");
+    $("#vod-znak").innerHTML = znak(z);
+    $("#vod-razdalja").textContent = "";
+    $("#vod-navodilo").textContent = `Si zamudil ${imeVoznje(z)}?`;
+    $("#vod-ulica").textContent = NP.vozilo && NP.vozilaTrip === z.trip_id
+      ? "Po legi je že odpeljal s postajališča."
+      : `Po zadnjem podatku bi odpeljal ob ${ura(z.odhod_ocena || z.odhod)}.`;
+    return;
+  }
+  if (korak.vrsta === "cakanje") {
+    const odh = n.odhod_ocena || n.odhod;
+    $("#vod-znak").innerHTML = znak(n);
+    $("#vod-razdalja").textContent = odh > zdaj ? cezPoti(odh, zdaj) : "prihaja";
+    $("#vod-navodilo").textContent = `${imeVoznje(n)}${n.headsign ? ` → ${lepoIme(n.headsign)}` : ""}`;
+    $("#vod-ulica").textContent = `${n.od} · ${ura(odh)}${zamudaBeseda(n.zamuda)}`;
+    return;
+  }
+  // Vožnja: koliko postaj še in kje izstopiš.
+  const prih = n.prihod_ocena || n.prihod;
+  const { postaje, doIzstopa } = postajeNaprej(korak.i, zdaj);
+  const st = Math.max(1, postaje.length);
+  const naslednja = st <= 1 || (doIzstopa != null && doIzstopa <= NP_IZSTOP_M && st <= 2);
+  $("#vod-znak").innerHTML = znak(n);
+  $("#vod-razdalja").textContent = naslednja ? "izstopi" : `še ${st} ${sklon(st, "postaja")}`;
+  $("#vod-navodilo").textContent = naslednja ? `Na naslednji izstopi: ${n.do}` : `Izstopi na ${n.do}`;
+  $("#vod-ulica").textContent = `ob ${ura(prih)}${!naslednja && postaje[0]
+    ? ` · naslednja ${postaje[0].ime}` : ""}`;
+  man.classList.toggle("je-pozor", naslednja);
+  if (naslednja && NP.najavljen !== korak.i) {
+    NP.najavljen = korak.i;
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  }
+}
+
+/** Kamera za korak, ki ni hoja; hojo vodi `posodobi`. */
+function kameraNaPoti(korak, n, pred, skok) {
+  if (!K || !V.sledi) return;
+  // Med dvema premikoma vsaj tri sekunde: lega pride vsako sekundo, kamera,
+  // ki se ves čas premika, je ne pustí brati.
+  if (!skok && Date.now() - NP.kameraOb < 3000) return;
+  NP.kameraOb = Date.now();
+  const l = svezaLega();
+  if (pred) {
+    priblizaj(null, false);
+    return;
+  }
+  if (korak.vrsta === "cilj") {
+    const [a, b] = doKod();
+    K.map.easeTo({ center: [b, a], zoom: 16.5 - PK_LZ, bearing: 0, duration: 900 });
+    return;
+  }
+  if (korak.vrsta === "cakanje") {
+    const v = NP.vozilo;
+    const tocke = [n.od_ll, l && [l.lat, l.lon], v && razdaljaM([v.lat, v.lon], n.od_ll) < 4000
+      && [v.lat, v.lon]].filter(Boolean);
+    pkPrilagodi(K.map, tocke.length > 1 ? tocke : [n.od_ll, n.od_ll],
+                { maxZoom: 16.5, padding: 60, bearing: 0, duration: 900 });
+    return;
+  }
+  // Vožnja: za tabo, kadar te lega vidi na trasi; sicer za vozilom.
+  const tr = trasaVoznje(korak.i);
+  const na = naTrasi(korak.i, l);
+  let kje = null;
+  let vzdolz = null;
+  if (na && na.odmik <= 150) {
+    kje = [l.lat, l.lon];
+    vzdolz = na.vzdolz;
+  } else if (NP.vozilo && NP.vozilaTrip === n.trip_id) {
+    kje = [NP.vozilo.lat, NP.vozilo.lon];
+  } else if (tr) {
+    // Brez obojega po uri: delež poti med odhodom in prihodom.
+    const odh = n.odhod_ocena || n.odhod, prih = n.prihod_ocena || n.prihod;
+    const f = Math.max(0, Math.min(1, (Date.now() / 1000 - odh) / Math.max(60, prih - odh)));
+    vzdolz = f * tr.kum[tr.kum.length - 1];
+    kje = tockaNaTrasi(tr.tocke, tr.kum, vzdolz);
+  }
+  if (!kje) return;
+  const smer = tr && vzdolz != null ? smerTrase(tr.tocke, tr.kum, vzdolz, 60) : null;
+  const h = K.map.getContainer().clientHeight;
+  K.map.easeTo({ center: [kje[1], kje[0]], zoom: 15.6 - PK_LZ,
+                 bearing: smer ?? K.map.getBearing(),
+                 padding: { top: Math.round(h * 0.3), bottom: 0, left: 0, right: 0 }, duration: 1000 });
+}
+
+/** Spodnja plošča na poti: vrstica, ko je zložena, in vsa pot, ko ni. */
+function risiPlosco(korak, pred, zdaj) {
+  const n = PREDLOG.noge[korak.i];
+  const naprej = nato(korak);
+  const ogrozen = ZIVO ? ogrozenPrestop() : null;
+  // Zložena vrstica: kar pride za tem korakom -- prestop s tveganjem ali cilj.
+  let vrstica;
+  if (naprej && korak.vrsta !== "cilj") {
+    const t = naprej.prestop;
+    vrstica = `Nato <strong>${escapeHtml(imeVoznje(naprej.po))}</strong> ob ${
+      ura(naprej.po.odhod_ocena || naprej.po.odhod)} v ${escapeHtml(t.kje)}${t.tveganje
+      ? ` <span class="tveganje ${STOPNJA_RAZRED[t.tveganje.stopnja] || ""}">${escapeHtml(t.tveganje.stopnja)}</span>`
+      : ""}`;
+  } else {
+    vrstica = `Na cilju ob <strong>${ura(PREDLOG.prihod_ocena || PREDLOG.prihod)}</strong>${
+      ZIVO ? "" : ` · ${escapeHtml(dayLabel(danOdhoda(PREDLOG)))}`}`;
+  }
+  $("#vod-povzetek").innerHTML = vrstica;
+
+  if (korak.vrsta !== "hoja" || pred) {
+    $("#vod-cilj").innerHTML = korak.vrsta === "voznja" && n.headsign
+      ? `${escapeHtml(imeVoznje(n))} → ${escapeHtml(lepoIme(n.headsign))}${n.zamuda ? " " + zamudaHtml(n.zamuda) : ""}`
+      : "";
+    const v = korak.vrsta === "cakanje" || pred ? (pred ? nogaVozila(korak.i) : n) : null;
+    $("#vod-vozilo").innerHTML = !v ? "" : pred ? voziloHtml(v, n.sekunde) : cakanjeHtml(v, zdaj);
+    $("#vod-vozilo").hidden = !v;
+  }
+  // Opozorilo: prestop, ki ne drži, ima prednost pred vsem drugim.
+  const op = $("#vod-opomba");
+  if (ogrozen) {
+    const t = ogrozen.t;
+    op.innerHTML = `<strong>Prestop v ${escapeHtml(t.kje)} morda ne bo držal</strong>${
+      ogrozen.mins != null && ogrozen.mins < 0 ? `: zmanjka ${-ogrozen.mins} min` : ""}. `
+      + `<button type="button" data-nova="prestop">Poišči drugo pot</button>`;
+    op.className = "vod-opomba je-opozorilo";
+    const kljuc = `${t.kje}:${t.tveganje && t.tveganje.p}`;
+    if (NP.opozorjen !== kljuc && navigator.vibrate) navigator.vibrate([300, 150, 300]);
+    NP.opozorjen = kljuc;
+  } else if (op.classList.contains("je-opozorilo")) {
+    op.className = "vod-opomba";
+    op.textContent = "";
+  }
+  if (!svezaLega() && !op.textContent && korak.vrsta !== "cilj" && ZIVO) {
+    // Brez lege stran ne ve, ali si na vozilu: gre po uri, korak pa lahko
+    // potrdiš sam. Okna za dovoljenje ne odpremo sami -- samo ta dotik.
+    op.innerHTML = 'Brez lege gre pot naprej po uri. <button type="button" data-lega>Pokaži, kje sem</button>';
+  }
+
+  // Gumbi: en glavni za ta korak, „nova pot“ in konec.
+  const dalje = $("#vod-dalje");
+  // „Grem zdaj“ samo, kadar je odhod blizu -- za jutrišnjo pot je vabilo k
+  // vodenju, ki ga še ni.
+  const beseda = pred ? (korak.od - zdaj < 30 * 60 ? "grem zdaj" : "")
+    : NP.zamujeno != null ? "sem na vozilu"
+    : korak.vrsta === "cakanje" ? "sem na vozilu"
+    : korak.vrsta === "voznja" ? "izstopil sem"
+    : korak.vrsta === "hoja" && !svezaLega() ? "naprej" : "";
+  dalje.textContent = beseda;
+  dalje.hidden = !beseda;
+  $("#vod-nova").hidden = korak.vrsta === "cilj";
+  const konec = $("#vod-konec");
+  if (!NP.potrdi) konec.textContent = korak.vrsta === "cilj" ? "končano" : "končaj pot";
+  $("#vod-sledi").hidden = V.sledi;
+
+  // Vsa pot, trenutni korak poudarjen.
+  document.querySelectorAll("#koraki .korak[data-noga]").forEach((el) => {
+    el.classList.toggle("je-zdaj", Number(el.dataset.noga) === korak.i && korak.vrsta !== "cilj");
+    el.classList.toggle("je-mimo", Number(el.dataset.noga) < korak.i || korak.vrsta === "cilj");
+  });
+}
+
+function risiNaPoti(skok) {
+  if (!NP.aktivno || !PREDLOG || !NP.koraki.length) return;
+  const zdaj = Date.now() / 1000;
+  const korak = NP.koraki[NP.k];
+  const n = PREDLOG.noge[korak.i];
+  const pred = NP.k === 0 && korak.vrsta === "hoja" && zdaj < korak.od - 60 && !NP.zacel;
+  document.body.dataset.korak = pred ? "pred" : korak.vrsta;
+  if (korak.vrsta === "hoja" && !pred && NP.zamujeno == null) {
+    if (V.i !== korak.i) pripraviNogo(korak.i);
+    posodobi(skok);                 // vodenje po pešpoti, kot doslej
+  } else {
+    risiKorak(korak, n, pred, zdaj);
+    kameraNaPoti(korak, n, pred, skok);
+    // „Ti“ tudi med čakanjem in vožnjo: puščica iz vodenja ostane edina
+    // oznaka tebe, smer je smer vožnje (zemljevid je obrnjen vanjo).
+    const l = svezaLega();
+    if (l && K) {
+      const na = korak.vrsta === "voznja" ? naTrasi(korak.i, l) : null;
+      const tr = na && trasaVoznje(korak.i);
+      const smer = tr ? smerTrase(tr.tocke, tr.kum, na.vzdolz, 60) : null;
+      puscica([l.lat, l.lon], smer ?? l.smer ?? KOMPAS ?? K.map.getBearing());
+    }
+  }
+  risiPlosco(korak, pred, zdaj);
+}
+
+// ---- vozilo, ki ga čakaš ali na katerem si
+
+function voziloKoraka() {
+  const korak = NP.koraki[NP.k];
+  const r = NP.koraki.findIndex((s, j) => j >= NP.k && s.vrsta === "voznja");
+  const n = r >= 0 && korak.vrsta !== "cilj" ? PREDLOG.noge[NP.koraki[r].i] : null;
+  const trip = ZIVO && n ? n.trip_id : null;
+  if (trip === NP.vozilaTrip) return;
+  if (NP.vozilaZanka) NP.vozilaZanka.stop();
+  NP.vozilaZanka = null;
+  NP.vozilo = null;
+  NP.vozilaTrip = trip;
+  risiVozilo(n);
+  if (!trip) return;
+  NP.vozilaZanka = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (d) => {
+    if (NP.vozilaTrip !== trip) return;
+    NP.vozilo = Array.isArray(d) && d.length ? d[0] : null;
+    risiVozilo(n);
+  });
+}
+
+function risiVozilo(n) {
+  if (!K) return;
+  const v = NP.vozilo;
+  if (!v || !n) {
+    if (NP.voziloOznaka) { NP.voziloOznaka.remove(); NP.voziloOznaka = null; }
+    return;
+  }
+  if (!NP.voziloOznaka) {
+    const el = document.createElement("div");
+    el.className = "np-vozilo";
+    NP.voziloOznaka = new K.ml.Marker({ element: el, anchor: "center" })
+      .setLngLat([v.lon, v.lat]).addTo(K.map);
+  }
+  const el = NP.voziloOznaka.getElement();
+  el.innerHTML = `${znakSvg(n.network === "zeleznica" ? "vlak" : "bus", 16)}<span>${
+    escapeHtml(imeVoznje(n))}</span>`;
+  el.style.setProperty("--barva", n.network === "zeleznica" ? TRAIN_INK
+    : (AGENCY_INK[n.agency] || BUS_INK));
+  NP.voziloOznaka.setLngLat([v.lon, v.lat]);
+}
+
+// ---- osvežitev, shramba, konec
+
+/** Zamude in tveganje z zadnjega odgovora v pot, ki je na zaslonu. */
+function prepisiZamude(d) {
+  d.predlog.noge.forEach((n) => {
+    const moja = PREDLOG.noge.find((m) => m.vrsta === "voznja"
+      && m.trip_id === n.trip_id && m.od_seq === n.od_seq);
+    if (n.vrsta !== "voznja" || !moja) return;
+    for (const k of ["zamuda", "zamuda_izstop", "odhod_ocena", "prihod_ocena", "brez_podatka",
+                     "na_poti"]) {
+      moja[k] = n[k];
+    }
+  });
+  for (const k of ["odhod_ocena", "prihod_ocena", "prestopi", "zanesljivost"]) {
+    PREDLOG[k] = d.predlog[k];
+  }
+}
+
+function shraniNaPoti() {
+  if (!AKTIVNA) return;
+  AKTIVNA.predlog = PREDLOG;
+  AKTIVNA.stanje = { ...(AKTIVNA.stanje || {}), korak: NP.k };
+  NA_POTI.zapisi(AKTIVNA);
+}
+
+async function osveziNaPoti() {
+  if (!NP.aktivno || !ZIVO) return;
+  const r = await fetch(`/api/pot/podrobno?${naslovPodrobno()}&geometrija=0`);
+  if (!r.ok) return;
+  prepisiZamude(await r.json());
+  // Ure korakov so se z zamudami premaknile; napredek ostane.
+  NP.koraki = korakiPoti(PREDLOG);
+  AKTIVNA.osvezeno = Date.now();
+  shraniNaPoti();
+  posodobiVse(false);
+}
+
+/** Kje si po poti, kadar lege ni: na postajališču, s katerega greš, ali na
+ *  tistem, kjer izstopiš; pred prvim korakom doma. */
+function kjeSiPoPoti() {
+  const korak = NP.koraki[NP.k];
+  const n = korak && PREDLOG.noge[korak.i];
+  if (!n || korak.vrsta === "cilj") return doKod();
+  if (korak.vrsta === "cakanje") return n.od_ll;
+  if (korak.vrsta === "voznja") return n.do_ll;
+  return n.od_ll || odKod();
+}
+
+/** Nova pot do istega cilja, z istim rokom: zamujeno, prestop ne drži. */
+function novaPot(odKje) {
+  const q = new URLSearchParams();
+  const l = svezaLega();
+  const od = odKje || (l ? [l.lat, l.lon] : kjeSiPoPoti());
+  q.set("od", `${od[0].toFixed(5)},${od[1].toFixed(5)}`);
+  q.set("do", `${Number(Q.get("do_lat")).toFixed(5)},${Number(Q.get("do_lon")).toFixed(5)}`);
+  const rok = AKTIVNA && AKTIVNA.vprasanje && AKTIVNA.vprasanje.rok;
+  if (rok && rok > Date.now() / 1000) {
+    q.set("tam", ura(rok));
+    const dan = new Date(rok * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+    if (dan !== todayIso()) q.set("dan", dan);
+  }
+  if (KOLO) q.set("kolo", "1");
+  if (Q.get("hoje")) q.set("hoje", Q.get("hoje"));
+  // Seznam ve, da je to nadomestna pot: izbrana zamenja tekočo brez vprašanja.
+  q.set("nova", "1");
+  location.href = `/app/pot?${q}`;
+}
+
+function koncajPot() {
+  // Pot, ki ostane čez zaprto aplikacijo, se ne konča z enim zgrešenim
+  // dotikom: prvi vpraša, drugi v štirih sekundah konča.
+  const gumb = $("#vod-konec");
+  const korak = NP.koraki[NP.k];
+  if (korak.vrsta !== "cilj" && !NP.potrdi) {
+    gumb.textContent = "res končam?";
+    NP.potrdi = setTimeout(() => { NP.potrdi = 0; risiNaPoti(false); }, 4000);
+    return;
+  }
+  clearTimeout(NP.potrdi);
+  NA_POTI.koncaj();
+  NP.aktivno = false;
+  location.replace(nazajUrl());
+}
+
+function zloziPlosco(zlozena) {
+  $("#vod-spodaj").classList.toggle("je-zlozena", zlozena);
+  $("#vod-rocaj").setAttribute("aria-expanded", String(!zlozena));
+  $("#vod-rocaj").setAttribute("aria-label", zlozena ? "pokaži vso pot" : "skrij podrobnosti");
+  try { localStorage.setItem(NP_PLOSCA_KLJUC, zlozena ? "1" : "0"); } catch (e) { /* ni nujno */ }
+}
+
+$("#vod-rocaj").addEventListener("click", () =>
+  zloziPlosco(!$("#vod-spodaj").classList.contains("je-zlozena")));
+// Poteg ročaja navzdol zloži, navzgor razpre -- kot spodnja plošča v Androidu.
+(() => {
+  let y0 = null;
+  const r = $("#vod-rocaj");
+  r.addEventListener("pointerdown", (e) => { y0 = e.clientY; });
+  r.addEventListener("pointerup", (e) => {
+    if (y0 == null) return;
+    const dy = e.clientY - y0;
+    y0 = null;
+    if (Math.abs(dy) < 24) return;
+    e.preventDefault();
+    zloziPlosco(dy > 0);
+  });
+})();
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-nova]");
+  if (!b) return;
+  // Vozni red se je spremenil: isto vprašanje kot prej, od istega kraja.
+  if (b.dataset.nova === "znova") {
+    novaPot(odKod());
+    return;
+  }
+  // Pri prestopu, ki ne drži, od kraja prestopa -- tam boš, ko izstopiš.
+  const t = b.dataset.nova === "prestop" && ogrozenPrestop();
+  const pr = t && PREDLOG.noge.find((n) => n.vrsta === "voznja" && n.do === t.t.kje);
+  novaPot(pr && pr.do_ll);
+});
+$("#vod-nova").addEventListener("click", () => novaPot(null));
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("[data-lega]")) return;
+  prosiZaSmer();
+  zacniLego().then(() => posodobiVse(true)).catch((err) => {
+    $("#vod-opomba").textContent = err.message;
+  });
+});
+
+function zacniNaPoti() {
+  NP.aktivno = true;
+  NP.koraki = korakiPoti(PREDLOG);
+  NP.k = Math.min((AKTIVNA.stanje && AKTIVNA.stanje.korak) || 0, NP.koraki.length - 1);
+  V.aktivno = true;
+  V.sledi = true;
+  document.body.classList.add("vodenje", "na-poti");
+  $("#vod-manever").hidden = false;
+  $("#vod-spodaj").hidden = false;
+  $("#vod-pot").hidden = false;
+  $("#vod-pot").appendChild($("#koraki"));
+  // Privzeto zložena: med potjo je zemljevid pomembnejši od seznama, vrstica
+  // pod njim pa pove, kar je treba vedeti (vozilo z rezervo, kaj pride).
+  let zlozena = true;
+  try { zlozena = localStorage.getItem(NP_PLOSCA_KLJUC) !== "0"; } catch (e) { /* zložena */ }
+  zloziPlosco(zlozena);
+  zakleniZaslon();
+  const korak = NP.koraki[NP.k];
+  if (korak.vrsta === "hoja") pripraviNogo(korak.i);
+  else V.i = korak.vrsta === "cilj" ? -1 : korak.i;
+  voziloKoraka();
+  risiCrte();
+  requestAnimationFrame(() => {
+    if (K) K.map.resize();
+    posodobiVse(true);
+  });
+  // Ura teče tudi, ko stojiš: odštevanje in korak po uri se premikata sama.
+  NP.ura = setInterval(() => { if (!document.hidden) posodobiVse(false); }, 5000);
+  // Prvo osvežitev opravi `nalozi`; zanka začne pol minute za njo.
+  setTimeout(() => { if (NP.aktivno && ZIVO) NP.osvezi = pollWhileVisible(osveziNaPoti, 30000); },
+             30000);
+}
+
+// Pot, ki jo je kdo poslal ali odprl s seznama, se da izbrati tudi tu.
+$("#zacni").addEventListener("click", () => {
+  if (!PREDLOG) return;
+  const spec = {};
+  for (const k of ["noge", "od_lat", "od_lon", "do_lat", "do_lon", "kmh"]) {
+    if (Q.get(k)) spec[k] = k === "noge" ? Q.get(k) : Number(Q.get(k));
+  }
+  spec.date = PREDLOG.datum;
+  const ok = NA_POTI.zapisi({
+    v: 1, sprejeto: Date.now(), spec, predlog: PREDLOG, osvezeno: Date.now(),
+    vprasanje: { rok: Q.get("rok") ? Number(Q.get("rok")) : null, kmh: KMH,
+                 hoje: Q.get("hoje") ? Number(Q.get("hoje")) : null, dan: Q.get("dan") || null },
+    stanje: { korak: 0 },
+  });
+  if (ok) location.replace(NA_POTI_STRAN);
+});
+
 // ---------------------------------------------------------------- nalaganje
 
 function naslovPodrobno() {
   const p = new URLSearchParams();
-  for (const k of ["noge", "od_lat", "od_lon", "do_lat", "do_lon", "date", "kmh"]) {
+  for (const k of ["noge", "od_lat", "od_lon", "do_lat", "do_lon", "date", "kmh", "rok"]) {
     if (Q.get(k)) p.set(k, Q.get(k));
   }
   return p;
@@ -863,49 +1564,129 @@ $("#poslji").addEventListener("click", async () => {
   }, 2500);
 });
 
+/** Pot na zaslon: glava, koraki, zemljevid. Na poti dvakrat -- iz shrambe
+ *  takoj, nato sveža s strežnika. */
+function prikazi(pr, datum) {
+  PREDLOG = pr;
+  DATUM = datum;
+  $("#poslji").hidden = false;
+  $("#stanje").textContent = "";
+  $("#glava").innerHTML = `
+    <div class="podr-ure"><strong>${ura(pr.odhod_ocena || pr.odhod)}</strong>
+      → <strong>${ura(pr.prihod_ocena || pr.prihod)}</strong></div>
+    <div class="podr-meta">${minute(trajanjePrikaz(pr))}${
+      pr.hoje_s >= 60 ? ` · ${minute(pr.hoje_s)} ${KOLO ? "do postaj" : "hoje"}` : ""} · ${
+      pr.prestopov === 0 ? "brez prestopa"
+        : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(danOdhoda(pr))}</div>`;
+  $("#koraki").innerHTML = korakiHtml(pr);
+  NP.trasa = {};
+  narisi(pr);
+  // Pot, ki je že izbrana, se nadaljuje; druga se izbere.
+  const izbrana = !NA_POTI_NACIN && NA_POTI.beri();
+  const zacni = $("#zacni");
+  zacni.hidden = NA_POTI_NACIN;
+  if (izbrana && izbrana.spec.noge === Q.get("noge")) {
+    zacni.textContent = "Nadaljuj pot";
+    zacni.onclick = () => location.assign(NA_POTI_STRAN);
+  }
+}
+
+/** Ali je pot „zdaj“ -- isto pravilo kot strežnikov `zivo` (`api._zdaj_za_dan`). */
+function jeZdaj(datum) {
+  const vceraj = new Date(`${todayIso()}T12:00:00`);
+  vceraj.setDate(vceraj.getDate() - 1);
+  const ura_ = Number(new Date().toLocaleTimeString("sv-SE", { timeZone: "Europe/Ljubljana",
+                                                               hour: "2-digit" }));
+  return datum === todayIso() || (datum === vceraj.toLocaleDateString("sv-SE") && ura_ < 4);
+}
+
 async function nalozi() {
   $("#nazaj").href = nazajUrl();
+  if (NA_POTI_NACIN && !AKTIVNA) {
+    $("#stanje").innerHTML = 'Nisi na nobeni poti — izbrana je končana ali je potekla. '
+      + '<a href="/app/pot">Poišči pot ›</a>';
+    return;
+  }
   const p = naslovPodrobno();
   if (!p.get("noge")) {
     $("#stanje").textContent = "Poti v naslovu ni.";
     $("#stanje").className = "pot-stanje je-napaka";
     return;
   }
-  $("#stanje").textContent = "Nalagam …";
+  // Na poti je zadnja shranjena pot takoj na zaslonu, tudi brez omrežja --
+  // aplikacija se odpre sredi vožnje, v predoru ali ob slabem signalu.
+  const izShrambe = AKTIVNA && AKTIVNA.predlog.noge.some((n) => n.postanki);
+  if (izShrambe) {
+    ZIVO = jeZdaj(AKTIVNA.spec.date);
+    prikazi(AKTIVNA.predlog, AKTIVNA.spec.date);
+    zacniNaPoti();
+  } else {
+    $("#stanje").textContent = "Nalagam …";
+  }
   try {
     const r = await fetch(`/api/pot/podrobno?${p}`);
     if (!r.ok) {
       const telo = await r.json().catch(() => ({}));
-      throw new Error(telo.detail || `strežnik je vrnil ${r.status}`);
+      const e = new Error(telo.detail || `strežnik je vrnil ${r.status}`);
+      e.status = r.status;
+      throw e;
     }
     const d = await r.json();
-    const pr = d.predlog;
-    PREDLOG = pr;
-    DATUM = d.datum;
-    $("#poslji").hidden = false;
     ZIVO = Boolean(d.zivo);
-    $("#stanje").textContent = "";
-    $("#glava").innerHTML = `
-      <div class="podr-ure"><strong>${ura(pr.odhod_ocena || pr.odhod)}</strong>
-        → <strong>${ura(pr.prihod_ocena || pr.prihod)}</strong></div>
-      <div class="podr-meta">${minute(trajanjePrikaz(pr))}${
-        pr.hoje_s >= 60 ? ` · ${minute(pr.hoje_s)} ${KOLO ? "do postaj" : "hoje"}` : ""} · ${
-        pr.prestopov === 0 ? "brez prestopa"
-          : `${pr.prestopov} ${sklon(pr.prestopov, "prestop")}`} · ${dayLabel(danOdhoda(pr))}</div>`;
-    $("#koraki").innerHTML = korakiHtml(pr);
-    narisi(pr);
-    $("#koraki").addEventListener("click", (e) => {
-      const v = e.target.closest("[data-vodi]");
-      if (v) { zacniVodenje(Number(v.dataset.vodi)); return; }
-      const b = e.target.closest(".hoja-gumb[data-korak]");
-      if (b) priblizaj(Number(b.dataset.korak));
-    });
-    $("#cela").addEventListener("click", () => priblizaj(null));
+    if (izShrambe) {
+      prepisiZamude(d);
+      NP.koraki = korakiPoti(PREDLOG);
+      shraniNaPoti();
+      posodobiVse(false);
+    } else {
+      prikazi(d.predlog, d.datum);
+      if (AKTIVNA) {
+        shraniNaPoti();
+        zacniNaPoti();
+      }
+    }
   } catch (e) {
-    $("#stanje").textContent = e.message;
+    if (izShrambe) {
+      // Pot je na zaslonu iz shrambe; povemo, da so zamude stare.
+      $("#vod-opomba").textContent = `Brez povezave — zamude so izpred ${
+        Math.round((Date.now() - (AKTIVNA.osvezeno || AKTIVNA.sprejeto)) / 60000)} min.`;
+      return;
+    }
     $("#stanje").className = "pot-stanje je-napaka";
+    if (AKTIVNA && e.status === 404) {
+      // Vozni red se uvaža vsak dan; jutrišnja vožnja ima lahko drug id.
+      $("#stanje").innerHTML = "Vozni red se je spremenil in te poti ni več. "
+        + '<button type="button" class="hoja-gumb" data-nova="znova">Poišči jo znova</button>';
+      return;
+    }
+    $("#stanje").textContent = e.message;
   }
 }
+
+$("#koraki").addEventListener("click", (e) => {
+  const v = e.target.closest("[data-vodi]");
+  if (v) {
+    const i = Number(v.dataset.vodi);
+    if (NP.aktivno) {
+      // Na poti je „vodi me“ skok na ta korak: potnik ve, kje je.
+      const k = NP.koraki.findIndex((s) => s.vrsta === "hoja" && s.i === i);
+      if (k >= 0) {
+        NP.zacel = true;
+        nastaviKorak(k);
+        risiNaPoti(true);
+      }
+    } else {
+      zacniVodenje(i);
+    }
+    return;
+  }
+  const b = e.target.closest(".hoja-gumb[data-korak]");
+  if (b) {
+    V.sledi = false;
+    priblizaj(Number(b.dataset.korak));
+  }
+});
+$("#cela").addEventListener("click", () => priblizaj(null));
 
 nalozi();
 LEGA.poslusaj(obLegi);
@@ -921,7 +1702,10 @@ pkUstvari($("#karta")).then((k) => {
   // Kdor zemljevid premakne s prstom, hoče pogledati drugam: kamera mu ne sme
   // skočiti nazaj ob naslednjem popravku lege. "Sledi mi" jo vrne.
   K.map.on("dragstart", (e) => {
-    if (V.aktivno && e.originalEvent) { V.sledi = false; $("#vod-sledi").hidden = !JAZ; }
+    if (V.aktivno && e.originalEvent) {
+      V.sledi = false;
+      $("#vod-sledi").hidden = !JAZ && !NP.aktivno;
+    }
   });
   if (JAZ) pkJaz(K.map, JAZ);
   if (PREDLOG) narisi(PREDLOG);

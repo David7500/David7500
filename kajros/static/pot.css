@@ -90,6 +90,25 @@
 .z-shranjena { border: 0; width: auto; height: auto; border-radius: 0; color: var(--accent-lit); }
 .z-shranjena::before { content: "★"; font-size: 0.8rem; }
 
+/* Kar se s krajem dogaja, ob polju (`povejOb` v pot.js): iskanje lege je bilo
+   pod obrazcem, na telefonu pogosto pod tipkovnico. */
+.tocka-stanje {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 2px 0; font: 500 13px/1.4 var(--sans); color: var(--ink-dim);
+}
+.tocka-stanje.je-isce { color: var(--ink); }
+.tocka-stanje.je-isce::before {
+  content: ""; flex: none; width: 13px; height: 13px;
+  border: 2px solid var(--accent-lit); border-right-color: transparent; border-radius: 50%;
+  animation: pot-vrti 0.8s linear infinite;
+}
+.tocka-stanje.je-napaka { color: var(--sev-bad); }
+/* Med iskanjem lege gumb „lega“ ne vabi k drugemu dotiku. */
+.tocka-vrstica.je-lega [data-akcija="lega"] { color: var(--ink-faint); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tocka-stanje.je-isce::before { animation: none; border-right-color: var(--accent-lit); }
+}
+
 /* ---------------------------------------------------------------- shranjene točke */
 
 /* Zvezdica je ista govorica kot v iskalniku zvez (`.fav-toggle`): en gumb
@@ -259,16 +278,19 @@
 .pot-izidi { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 
 .predlog {
-  display: block; text-decoration: none; color: inherit;
-  padding: 10px 12px;
-  background: var(--bg-raised);
-  border: 1px solid var(--line); border-left: 3px solid transparent;
-  border-radius: var(--r);
+  display: block; width: 100%; text-align: left; text-decoration: none;
+  font: inherit; color: inherit; cursor: pointer;
+  padding: 12px 14px;
+  background: var(--m-visoka);
+  border: 2px solid transparent;
+  border-radius: var(--r-lg);
 }
-@media (hover: hover) { .predlog:hover { background: var(--bg-hover); } }
-/* Prvi predlog je najhitrejsi; to mora biti vidno brez branja. */
-.predlog.je-prvi { border-left-color: var(--accent); }
-.predlog.je-izbran { border-color: var(--line-firm); }
+@media (hover: hover) { .predlog:hover { background: var(--m-najvisja); } }
+/* Prvi predlog je odgovor na vprašanje; to mora biti vidno brez branja --
+   obroba v poudarku, ne trak na levem robu (`oznake.md`, Material 3). */
+.predlog.je-prvi { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.predlog.je-izbran { background: var(--m-najvisja); }
+.predlog:focus-visible { outline: 2px solid var(--accent-lit); outline-offset: 2px; }
 
 .p-ure {
   display: flex; align-items: baseline; gap: 7px;
@@ -298,7 +320,27 @@
 }
 .p-rok.je-zadnji::after { content: ""; }
 .p-rok.je-pozno { color: var(--sev-bad); }
-.predlog.je-pozno { border-left-color: var(--sev-bad); }
+.predlog.je-pozno { border-color: color-mix(in srgb, var(--sev-bad) 55%, transparent); }
+
+/* ---------------------------------------------------------------- tveganje
+ * Stopnja zanesljivosti (`pot.pripni_tveganje`): značka v tonski barvi z
+ * besedo, številka in vzorec zraven. Barve so preverjene v
+ * `scripts/preveri_paleto.py` (TVEGANJE). */
+.p-tveganje {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  margin: 6px 0 4px; font-size: 0.8rem; color: var(--ink-dim);
+}
+.tveganje {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 2px 9px 2px 7px; border-radius: var(--r-pilula);
+  font: 600 12px/1.35 var(--sans);
+  color: #7fd39a; background: #1c3324;
+}
+.tveganje::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.tveganje.je-tvegano { color: #e8c55a; background: #3a3216; }
+.tveganje.je-zelo-tvegano { color: #ff8a80; background: #4a1f22; }
+/* Zelo tvegana kartica nosi opozorilo tudi v obrobi -- izbrati jo je smelo. */
+.predlog.je-zelo-tvegano:not(.je-prvi) { border-color: #4a1f22; }
 .p-vr { color: var(--ink-faint); }
 
 .zam {
@@ -306,6 +348,75 @@
   padding: 0 4px; border: 1px solid; border-radius: var(--r-sm);
 }
 .zam-vrsta { font-size: 0.7rem; color: var(--ink-mute); }
+
+/* ---------------------------------------------------------------- predogled
+ * Dotik predloga ga pokaže: koraki na kratko, tveganje, „Začni pot“. Na
+ * telefonu gre zemljevid NAD predogled -- pot se vidi brez drsenja. */
+.pot-predogled { margin-top: 10px; }
+.pp-vrh { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pp-nazaj, .pp-podrobno {
+  min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center;
+  font: 500 14px/1 var(--sans); color: var(--ink-dim); text-decoration: none;
+  background: none; border: 0; border-radius: var(--r-pilula); cursor: pointer;
+}
+.pp-nazaj { padding-left: 4px; }
+.pp-podrobno { color: var(--accent-lit); }
+.pp-ure {
+  display: flex; align-items: baseline; gap: 8px; margin: 8px 0 6px;
+  font-family: var(--mono); font-size: 1.35rem;
+}
+.pp-ure strong { font-weight: 600; }
+.pp-tveganje {
+  display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px;
+  font-size: 0.86rem; line-height: 1.45; color: var(--ink-dim);
+}
+.pp-tveganje .tveganje { margin-top: 1px; }
+
+/* Koraki: ura levo, črta z znakom, besedilo. Ista navpičnica kot na podrobni
+   strani -- pot je ena veriga. */
+.pk-seznam { list-style: none; margin: 0 0 14px; padding: 0; }
+.pk { display: grid; grid-template-columns: 46px 18px 1fr; align-items: start; position: relative; }
+.pk-ura { font: 500 13px/1.6 var(--mono); color: var(--ink-dim); padding-top: 1px; }
+.pk-znak { position: relative; align-self: stretch; }
+.pk-znak::before {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0; transform: translateX(-50%);
+  border-left: 2px dotted var(--line-firm);
+}
+.pk.je-voznja .pk-znak::before, .pk.je-izstop .pk-znak::before { border-left: 3px solid var(--accent); }
+.pk.je-izstop .pk-znak::before { bottom: 50%; }
+.pk.je-voznja .pk-znak::after, .pk.je-izstop .pk-znak::after, .pk.je-cilj .pk-znak::after {
+  content: ""; position: absolute; left: 50%; top: 6px; transform: translateX(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg-panel); border: 2.5px solid var(--accent);
+}
+.pk.je-cilj .pk-znak::after { background: var(--accent-lit); border-color: var(--accent-lit); }
+.pk.je-cilj .pk-znak::before { bottom: 60%; }
+.pk-telo { padding: 0 0 12px 6px; font-size: 0.88rem; line-height: 1.5; min-width: 0; }
+.pk-telo strong { font-weight: 600; }
+.pk-smer, .pk-kje { color: var(--ink-mute); font-size: 0.8rem; }
+.pk-kje { display: block; }
+.pk.je-hoja .pk-telo { color: var(--ink-dim); }
+.pk.je-prestop .pk-telo { color: var(--ink-dim); }
+.pk-tveganje { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+
+.pp-zamenjaj {
+  margin: 0 0 10px; padding: 12px 14px; border-radius: var(--r);
+  background: var(--m-visoka); font-size: 0.88rem; line-height: 1.45;
+}
+.pp-zamenjaj-gumbi { display: flex; gap: 8px; margin-top: 8px; }
+.pp-zamenjaj button {
+  min-height: 40px; padding: 0 16px; font: 600 14px/1 var(--sans);
+  color: var(--ink); background: var(--m-najvisja); border: 0;
+  border-radius: var(--r-pilula); cursor: pointer;
+}
+.pp-zamenjaj button[data-da] { color: #14161a; background: var(--accent-lit); }
+.pp-zacni {
+  display: block; width: 100%; min-height: 52px; padding: 12px 16px;
+  font: 600 16px/1 var(--sans); color: #14161a; background: var(--accent-lit);
+  border: 0; border-radius: var(--r-pilula); cursor: pointer;
+  /* Na namizju plošča drsi sama: gumb ostane na dnu vidnega dela. */
+  position: sticky; bottom: 12px; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
 
 /* ---------------------------------------------------------------- zemljevid */
 
@@ -345,6 +456,23 @@ body.karta-velika .pot {
      ostali dve. Podnaslov gre z obrazcem -- vprašanje je zdaj v vrstici. */
   .zlozeno .pot-obrazec, .zlozeno .pot-lead { display: none; }
   .zlozeno .povzetek { display: flex; margin-top: 10px; }
+
+  /* Predogled: zemljevid s potjo zgoraj, koraki pod njim (kot predogled
+     poti v navigaciji) -- prej je bil zemljevid pod celim seznamom. */
+  body.je-predogled .pot { grid-template-rows: 42vh auto; }
+  body.je-predogled .pot-karta-okvir { order: -1; }
+  body.je-predogled .pot-title, body.je-predogled .povzetek,
+  body.je-predogled .obvestila { display: none; }
+  body.je-predogled .pot-panel { border-bottom: 0; padding-bottom: calc(var(--orodna-prostor) + 64px); }
+  /* „Začni pot“ je vedno pod palcem, nad orodno vrstico -- ne na dnu
+     seznama korakov, ki ga je treba odrsati. Trak poti bi stal na istem
+     mestu; predogled pove sam, kadar pot že teče. */
+  body.je-predogled .pp-zacni {
+    position: fixed; z-index: 999; left: 50%; transform: translateX(-50%);
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    width: var(--orodna-sirina); box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  }
+  body.je-predogled .na-poti-trak { display: none; }
 }
 
 /* ---------------------------------------------------------------- zamude */
@@ -565,5 +693,82 @@ body.brez-zemljevida .karta-max, body.brez-zemljevida .karta-lega { display: non
 /* Orodna vrstica (base.css) plava nad zemljevidom. Pri vodenju po pešpoti je
    ni: zemljevid je takrat ves zaslon in vrstica bi pokrila navodilo. */
 body.vodenje .orodna { display: none; }
+/* Brez vrstice je navedba vira spet v kotu -- dvignjena bi stala pod ploščo. */
+body.vodenje .pot-karta-okvir .maplibregl-ctrl-bottom-left,
+body.vodenje .pot-karta-okvir .maplibregl-ctrl-bottom-right { bottom: 0; }
 .pot-karta-okvir .maplibregl-ctrl-bottom-left,
 .pot-karta-okvir .maplibregl-ctrl-bottom-right { bottom: calc(var(--orodna-prostor) - 16px); }
+
+/* ---------------------------------------------------------------- na poti
+ * Izbrana pot kot navigacija (`pot_podrobno.js`, `NP`): zemljevid čez stran,
+ * zgoraj kaj zdaj, spodaj plošča s potjo. Plošča se zloži v eno vrstico --
+ * ni se je dalo skriti in je zasedla pol zaslona (prijava 22. 10. 2026). */
+
+/* Ročaj: črtica in, zloženo, vrstica s tem, kar pride. Ves ročaj je gumb --
+   cilj za palec, ne le črtica. */
+.vod-rocaj {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%;
+  margin: -6px 0 2px; padding: 4px 0 6px; font: inherit; color: inherit;
+  background: none; border: 0; cursor: pointer; touch-action: none;
+}
+.vod-rocaj-crta { width: 36px; height: 4px; border-radius: 2px; background: var(--m-obroba); opacity: 0.7; }
+.vod-povzetek { display: none; align-self: stretch; text-align: left; font-size: 0.9rem; line-height: 1.4; }
+.vod-povzetek strong { font-family: var(--mono); font-weight: 600; }
+.vod-spodaj.je-zlozena .vod-povzetek { display: block; }
+/* Zloženo ostane, kar je treba videti brez dotika: vozilo z rezervo,
+   opozorilo, da prestop ne drži, in gumb za ta korak. Ostalo (vsa pot,
+   deljenje, „nova pot“, konec) je en dotik stran. */
+.vod-spodaj.je-zlozena .vod-cilj, .vod-spodaj.je-zlozena .vod-pot,
+.vod-spodaj.je-zlozena .vod-deli,
+.vod-spodaj.je-zlozena .vod-opomba:not(.je-opozorilo),
+.vod-spodaj.je-zlozena .vod-gumbi > :not(#vod-dalje) { display: none; }
+.vod-spodaj.je-zlozena .vod-gumbi { margin-top: 6px; }
+.vod-spodaj.je-zlozena { padding-bottom: 8px; }
+/* Razprta plošča na poti nosi vso pot: drsi sama, zemljevid ostane viden. */
+body.na-poti .vod-vec { max-height: 52dvh; overflow-y: auto; overscroll-behavior: contain; }
+body.na-poti .vod-pot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-firm); }
+body.na-poti .vod-pot .koraki { font-size: 0.95em; }
+body.na-poti .korak.je-zdaj .korak-telo {
+  margin: -4px -8px 0; padding: 4px 8px 6px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, #2f7fff 16%, transparent);
+}
+body.na-poti .korak.je-mimo { opacity: 0.55; }
+body.na-poti .korak-gumbi .vodi-gumb { display: none; }
+/* Na poti je stran pot sama: gumba „Začni pot“ ni. */
+body.na-poti .podr-vrh .zacni-pot { display: none; }
+
+/* „Izstopi na naslednji“, „si zamudil?“: kartica v poudarku, da jo vidiš s
+   kotičkom očesa. */
+.vod-manever.je-pozor { background: #3a2a10; border-color: var(--accent-lit); }
+.vod-manever.je-pozor .vod-znak { background: var(--accent-lit); color: #1a1206; }
+body.na-poti[data-korak="voznja"] .vod-znak,
+body.na-poti[data-korak="cakanje"] .vod-znak { background: var(--m-najvisja); }
+body.na-poti[data-korak="cilj"] .vod-znak { background: var(--ok); }
+body.na-poti[data-korak="pred"] .vod-znak { background: var(--m-najvisja); }
+
+.vod-opomba.je-opozorilo {
+  padding: 8px 10px; border-radius: var(--r-sm); font-size: 0.84rem; line-height: 1.45;
+  color: #ffdad6; background: #4a1f22;
+}
+.vod-opomba button {
+  padding: 0; font: inherit; font-weight: 600; color: inherit;
+  background: none; border: 0; text-decoration: underline; cursor: pointer;
+}
+.vod-gumb.je-glavni:empty { display: none; }
+
+/* Vozilo, ki ga čakaš ali na katerem si: ikona z imenom v barvi prevoznika. */
+.np-vozilo {
+  display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 5px;
+  border-radius: var(--r-pilula); background: var(--barva, #4db97f); color: #0f1115;
+  font: 700 12px/1 var(--sans); white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.np-vozilo svg { flex: none; }
+
+.korak-tveganje { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px;
+                  color: var(--ink-dim); font-size: 0.8rem; }
+
+/* Začni pot na podrobni strani: glavni gumb ob Pošlji. */
+.zacni-pot { margin-left: auto; color: #14161a; background: var(--accent-lit); border-color: var(--accent-lit);
+             font-weight: 600; }
+@media (hover: hover) { .zacni-pot:hover { color: #14161a; filter: brightness(1.06); } }

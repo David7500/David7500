@@ -18,13 +18,27 @@ const izidiEl = $("#pot-izidi");
 
 // Kaj bo pobral naslednji klik na zemljevid. Brez tega bi bil klik dvoumen:
 // prvi klik postavi izhodišče, drugi cilj, tretji pa nič ne pomeni.
-const S = { od: null, do: null, arm: "od", izidi: null, izbran: 0, jaz: null, kdaj: "zdaj" };
+const S = { od: null, do: null, arm: "od", izidi: null, izbran: 0, jaz: null, kdaj: "zdaj",
+            predogled: null,
+            // Prišli s poti, na kateri si (zamujeno, prestop ne drži): izbrana
+            // zamenja tekočo brez vprašanja (`sprejmi`).
+            nadomesti: new URLSearchParams(location.search).has("nova") };
 
 let K = null;                  // { map, ml } ali null, dokler/ker ga ni
 
 function povej(besedilo, vrsta) {
   stanje.className = "pot-stanje" + (vrsta ? " je-" + vrsta : "");
   stanje.textContent = besedilo || "";
+}
+
+// Kar se dogaja s krajem, se pove OB polju, ne pod obrazcem: iskanje lege je
+// bilo „nekje spodaj, težko vidno“ (prijava 22. 10. 2026) -- na telefonu pod
+// gumbom in možnostmi, pogosto pod tipkovnico.
+function povejOb(kaj, besedilo, vrsta) {
+  const el = document.querySelector(`.tocka[data-kaj="${kaj}"] .tocka-stanje`);
+  el.className = "tocka-stanje" + (vrsta ? " je-" + vrsta : "");
+  el.textContent = besedilo || "";
+  el.hidden = !besedilo;
 }
 
 // ---------------------------------------------------------------- nastavitve
@@ -443,6 +457,7 @@ function pripniIskanje(kaj) {
   const vnos = $(`#q-${kaj}`);
   const isci_ = () => {
     oznaciZvezde();          // polje se je razšlo s točko: zvezdica gre stran
+    if (!legaTece) povejOb(kaj, "");
     const q = vnos.value.trim();
     clearTimeout(zakasnitev);
     if (iskanjeNaslovov[kaj]) iskanjeNaslovov[kaj].abort();
@@ -590,31 +605,51 @@ document.querySelectorAll(".tocka").forEach((el) => {
       if (b.dataset.akcija === "karta") {
         S.arm = kaj;
         oznaciArm();
-        povej("Klikni na zemljevid.", null);
+        povejOb(kaj, "Dotakni se zemljevida tam, kjer je.", null);
         $("#karta").scrollIntoView({ behavior: "smooth", block: "nearest" });
         return;
       }
-      // Gumb lego vpiše sam; samodejni vpis bi ga podvojil.
-      odKodCaka = false;
-      // GPS brez omrežnega določanja lege rabi lahko pol minute. Molk je v
-      // tem času videti kot pokvarjen gumb, zato povemo, kje smo.
-      povej("Iščem tvojo lego … (GPS zna rabiti pol minute)", "isce");
-      try {
-        // Pika sledi naprej (`risiJaz` prek `LEGA`): prvi popravek GPS
-        // pogosto zgreši za sto metrov.
-        const loc = await poisciMe({
-          napredek: (l) => povej(`Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m`, "isce"),
-        });
-        postavi(kaj, { lat: loc.lat, lon: loc.lon, ime: "moja lega" });
-        povej(loc.acc > 200
-          ? `Lega je natančna na ${Math.round(loc.acc)} m — po potrebi popravi na zemljevidu.`
-          : "");
-      } catch (e) {
-        povej(e.message, "napaka");
-      }
+      legaV(kaj);
     });
   });
 });
+
+/** Lega v polje `kaj`. Napredek in napaka ob polju; `true`, ko je lega tam.
+ *  Gumb lego vpiše sam, zato samodejni vpis ob tem ugasne. */
+let legaTece = null;
+async function legaV(kaj) {
+  odKodCaka = false;
+  if (legaTece) return legaTece;
+  const polje = $(`#q-${kaj}`);
+  const vrstica = polje.closest(".tocka-vrstica");
+  vrstica.classList.add("je-lega");
+  const prej = polje.placeholder;
+  polje.placeholder = "Iščem tvojo lego …";
+  // GPS brez omrežnega določanja lege rabi lahko pol minute. Molk je v tem
+  // času videti kot pokvarjen gumb, zato povemo, kje smo.
+  povejOb(kaj, "Iščem tvojo lego … GPS zna rabiti pol minute.", "isce");
+  legaTece = (async () => {
+    try {
+      // Pika sledi naprej (`risiJaz` prek `LEGA`): prvi popravek GPS pogosto
+      // zgreši za sto metrov.
+      const loc = await poisciMe({
+        napredek: (l) => povejOb(kaj, `Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m natančno.`, "isce"),
+      });
+      povejOb(kaj, loc.acc > 200
+        ? `Lega je natančna na ${Math.round(loc.acc)} m — po potrebi popravi na zemljevidu.` : "");
+      postavi(kaj, { lat: loc.lat, lon: loc.lon, ime: "moja lega" });
+      return true;
+    } catch (e) {
+      povejOb(kaj, e.message, "napaka");
+      return false;
+    } finally {
+      vrstica.classList.remove("je-lega");
+      polje.placeholder = prej;
+      legaTece = null;
+    }
+  })();
+  return legaTece;
+}
 
 // ---------------------------------------------------------------- zemljevid na veliko
 
@@ -732,8 +767,36 @@ function rokHtml(p, i) {
   }
   const rezerva = rok - prihod;
   const beseda = rezerva < 60 ? "točno ob roku" : `${minute(rezerva)} pred rokom`;
-  return `${i === 0 ? '<span class="p-rok je-zadnji">najpozneje</span>' : ""}`
+  // Prvi je najpoznejši ZANESLJIV odhod (`pot.izberi_predloge`); kadar
+  // zanesljivega ni, „najpozneje“ ne bi bilo res.
+  const zanesljiv = !p.zanesljivost || p.zanesljivost.stopnja === "zanesljivo";
+  return `${i === 0 && zanesljiv ? '<span class="p-rok je-zadnji">najpozneje</span>' : ""}`
     + `<span class="p-rok">${beseda}</span>`;
+}
+
+// Tveganje je na kartici kot ura: prestop, ki drži trikrat od štirih, ni isti
+// predlog kot tisti, ki drži vedno (`pot.pripni_tveganje`). Barva je stopnja,
+// beseda in številka zraven -- barva sama ne nosi pomena (`STOPNJA_RAZRED`,
+// `prestopDrzi` v common.js).
+
+/** Najšibkejši prestop predloga: tisti, ki o stopnji odloča. */
+function najsibkejsiPrestop(p) {
+  return (p.prestopi || []).filter((t) => t.tveganje)
+    .reduce((a, t) => (!a || t.tveganje.p < a.tveganje.p ? t : a), null);
+}
+
+function razlogTveganja(p) {
+  const z = p.zanesljivost;
+  if (!z) return "";
+  if (z.rok) return `pravočasno v ${Math.round(z.p * 100)} %`;
+  const t = najsibkejsiPrestop(p);
+  return t ? `prestop ${prestopDrzi(t)}` : "";
+}
+
+function stopnjaHtml(p) {
+  const z = p.zanesljivost;
+  if (!z) return "";
+  return `<span class="tveganje ${STOPNJA_RAZRED[z.stopnja] || ""}">${escapeHtml(z.stopnja)}</span>`;
 }
 
 function predlogHtml(p, i) {
@@ -743,13 +806,16 @@ function predlogHtml(p, i) {
     : `${p.prestopov} ${sklon(p.prestopov, "prestop")}`;
   const zamudno = p.prihod_ocena && p.prihod_ocena !== p.prihod
     ? ` · <span class="p-vr">vozni red ${ura(p.odhod)} → ${ura(p.prihod)}</span>` : "";
-  const url = podrobnoUrl(p);
-  const znacka = url ? "a" : "article";
-  const kam = url ? ` href="${url}"` : "";
   const hoje = p.hoje_s >= 60 && !brezVozila
     ? ` · ${minute(p.hoje_s)} ${S.izidi.kmh > 7 ? "do postaj" : "hoje"}` : "";
-  return `<${znacka} class="predlog${i === 0 ? " je-prvi" : ""}${p.prepozno ? " je-pozno" : ""}"
-      data-i="${i}"${kam}>
+  const razlog = razlogTveganja(p);
+  const stopnja = p.zanesljivost ? p.zanesljivost.stopnja : "";
+  // Dotik kartice pot pokaže, ne odpre (David, 22. 10. 2026): najprej
+  // predogled, nato „Začni pot“ ali nazaj na seznam.
+  return `<button type="button" class="predlog${i === 0 ? " je-prvi" : ""}${
+      p.prepozno ? " je-pozno" : ""} ${STOPNJA_RAZRED[stopnja] || ""}" data-i="${i}"
+      aria-label="Predlog ${ura(p.odhod_ocena || p.odhod)} do ${ura(p.prihod_ocena || p.prihod)}${
+        stopnja ? `, ${stopnja}` : ""}">
     <div class="p-ure">
       <strong>${ura(p.odhod_ocena || p.odhod)}</strong>
       <span class="p-pusc" aria-hidden="true">→</span>
@@ -757,8 +823,9 @@ function predlogHtml(p, i) {
       <span class="p-traj">${minute(trajanjePrikaz(p))}</span>
     </div>
     <div class="p-veriga">${verigaHtml(p)}</div>
+    ${razlog ? `<div class="p-tveganje">${stopnjaHtml(p)}<span>${escapeHtml(razlog)}</span></div>` : ""}
     <div class="p-meta">${rokHtml(p, i)}${prestopi}${hoje}${zamudno}</div>
-  </${znacka}>`;
+  </button>`;
 }
 
 // Ravna črta med postajama ni proga. Zato se najprej nariše kot skica, nato
@@ -898,8 +965,23 @@ function naslovIzida(izid) {
       + opomba;
   }
   if (izid.prihod_do) {
+    // Kdor mora biti tam, hoče najpoznejši odhod, ki drži, in vedeti, kaj
+    // bi tvegal s poznejšim (prvi predlog po voznem redu je bil pravočasen
+    // v 70 % dni, `docs/MERITVE.md`).
     const prvi = izid.predlogi[0];
-    const odidi = prvi ? ` Odidi najpozneje ob <strong>${ura(prvi.odhod_ocena || prvi.odhod)}</strong>.` : "";
+    const odh = (p) => p.odhod_ocena || p.odhod;
+    let odidi = "";
+    if (prvi) {
+      const z = prvi.zanesljivost;
+      odidi = !z || z.stopnja === "zanesljivo"
+        ? ` Odidi najpozneje ob <strong>${ura(odh(prvi))}</strong>.`
+        : ` Zanesljive poti ni — najbolj zanesljiva odide ob <strong>${ura(odh(prvi))}</strong>.`;
+      const pozneje = izid.predlogi.find((p) => !p.prepozno && odh(p) > odh(prvi));
+      if (pozneje) {
+        odidi += ` Ob ${ura(odh(pozneje))} je ${pozneje.zanesljivost
+          ? pozneje.zanesljivost.stopnja : "tvegano"} (${escapeHtml(razlogTveganja(pozneje))}).`;
+      }
+    }
     return glavaIzida(`Da boš tam do ${ura(izid.prihod_do)}${danBeseda(izid.datum)}`, izid)
       + odidi + opomba;
   }
@@ -938,6 +1020,7 @@ function pripniPoslji() {
 }
 
 function izrisi(izid) {
+  zapriPredogled(false);
   S.izidi = izid;
   S.izbran = 0;
   if (!izid.predlogi.length) {
@@ -966,8 +1049,8 @@ function izrisi(izid) {
   pripniIzbiro();
   pripniPoslji();
   izidiEl.innerHTML = izid.predlogi.map((p, i) => predlogHtml(p, i)).join("");
-  // Kartica je povezava na podrobno stran, zato klik ne sme izbirati. Na
-  // zemljevidu se pot pokaže ob dotiku ali fokusu.
+  // Dotik odpre predogled; miška in fokus pot pokažeta že prej -- na
+  // namizju je zemljevid ob seznamu.
   izidiEl.querySelectorAll(".predlog").forEach((el) => {
     const pokazi = () => {
       if (S.izbran === Number(el.dataset.i)) return;
@@ -978,9 +1061,181 @@ function izrisi(izid) {
     };
     el.addEventListener("mouseenter", pokazi);
     el.addEventListener("focus", pokazi);
+    el.addEventListener("click", () => odpriPredogled(Number(el.dataset.i)));
   });
   if (K) prilagodiPoti(izid.predlogi[0]);
   narisiPot(izid.predlogi[0], true);
+}
+
+// ---------------------------------------------------------------- predogled
+//
+// Dotik predloga ga pokaže, ne odpre (David, 22. 10. 2026): pot na zemljevidu,
+// koraki in kako zanesljivi so prestopi. Šele „Začni pot“ jo izbere -- in
+// izbrana ostane (`NA_POTI` v common.js), dokler je potnik ne konča, tudi čez
+// zaprto aplikacijo in brskanje po drugih straneh.
+
+const predogledEl = $("#pot-predogled");
+
+function prestopVrsticaHtml(t, pred, po) {
+  const mins = rezervaPrestopa(t, pred, po);
+  const koliko = mins == null ? `${Math.floor(t.nacrtovano_s / 60 + 0.5)} min za prestop`
+    : prestopText(mins);
+  const tv = t.tveganje;
+  return `<li class="pk je-prestop ${tv ? STOPNJA_RAZRED[tv.stopnja] || "" : ""}">
+    <span class="pk-ura"></span><span class="pk-znak" aria-hidden="true"></span>
+    <span class="pk-telo">${escapeHtml(koliko)} v ${escapeHtml(t.kje)}${
+      t.pes_s >= 60 ? ` · ${minute(t.pes_s)} peš` : ""}${tv ? `<span class="pk-tveganje"><span
+      class="tveganje ${STOPNJA_RAZRED[tv.stopnja] || ""}">${escapeHtml(tv.stopnja)}</span>
+      ${escapeHtml(prestopDrzi(t))}</span>` : ""}</span></li>`;
+}
+
+/** Koraki predloga na kratko: ura, kaj, kje. Vmesni postanki in pešpoti so
+ *  na podrobni strani; tu je odločitev, ali je to prava pot. */
+function korakiPredogledaHtml(p) {
+  const voznje = p.noge.filter((n) => n.vrsta === "voznja");
+  const vrstice = [];
+  let t = p.odhod_ocena || p.odhod;
+  p.noge.forEach((n, i) => {
+    const v = voznje.indexOf(n);
+    if (v > 0 && p.prestopi && p.prestopi[v - 1]) {
+      vrstice.push(prestopVrsticaHtml(p.prestopi[v - 1], voznje[v - 1], n));
+    }
+    if (n.vrsta === "hoja") {
+      vrstice.push(`<li class="pk je-hoja"><span class="pk-ura">${ura(t)}</span>
+        <span class="pk-znak" aria-hidden="true"></span>
+        <span class="pk-telo">${besedaHoje(p, i)} ${minute(n.sekunde)} → ${
+          n.do ? escapeHtml(n.do) : "cilj"}</span></li>`);
+      t += n.sekunde;
+      return;
+    }
+    const odh = n.odhod_ocena || n.odhod;
+    const prih = n.prihod_ocena || n.prihod;
+    vrstice.push(`<li class="pk je-voznja"><span class="pk-ura">${ura(odh)}</span>
+      <span class="pk-znak" aria-hidden="true"></span>
+      <span class="pk-telo"><strong>${escapeHtml(imeVoznje(n))}</strong>${
+        n.headsign ? ` <span class="pk-smer">→ ${escapeHtml(lepoIme(n.headsign))}</span>` : ""}
+        ${zamudaHtml(n)}<span class="pk-kje">vstop ${escapeHtml(n.od)}</span></span></li>
+      <li class="pk je-izstop"><span class="pk-ura">${ura(prih)}</span>
+      <span class="pk-znak" aria-hidden="true"></span>
+      <span class="pk-telo">izstop <strong>${escapeHtml(n.do)}</strong></span></li>`);
+    t = prih;
+  });
+  vrstice.push(`<li class="pk je-cilj"><span class="pk-ura">${ura(p.prihod_ocena || p.prihod)}</span>
+    <span class="pk-znak" aria-hidden="true"></span><span class="pk-telo">na cilju</span></li>`);
+  return `<ol class="pk-seznam">${vrstice.join("")}</ol>`;
+}
+
+function zanesljivostHtml(p) {
+  const z = p.zanesljivost;
+  if (!z) return "";
+  const t = najsibkejsiPrestop(p);
+  const deli = [];
+  if (z.rok) {
+    deli.push(`Na cilju do ${ura(S.izidi.prihod_do)} v ${Math.round(z.p * 100)} %`
+      + (z.vir === "zdaj" ? " po zamudah zdaj." : " po preteklih dneh."));
+  }
+  if (t) deli.push(`Prestop v ${t.kje}: ${prestopDrzi(t)}.`);
+  return `<p class="pp-tveganje">${stopnjaHtml(p)} ${escapeHtml(deli.join(" "))}</p>`;
+}
+
+/** Ključ poti za primerjavo z izbrano: vožnje in vstopi. */
+function nogeKljuc(p) {
+  return p.noge.filter((n) => n.vrsta === "voznja")
+    .map((n) => `${n.trip_id}:${n.od_seq}:${n.do_seq}`).join(";");
+}
+
+function predogledHtml(p) {
+  const odh = p.odhod_ocena || p.odhod;
+  const zDanes = danBeseda(new Date(odh * 1000).toLocaleDateString("sv-SE",
+    { timeZone: "Europe/Ljubljana" }));
+  // Pot, ki se začne čez več kot dve uri, se izbere za pozneje; stran poti
+  // takrat pove, kdaj oditi, in ne vodi že zdaj.
+  const kmalu = odh - Date.now() / 1000 < 2 * 3600;
+  const z = podrobnoUrl(p);
+  return `<div class="pp-vrh">
+      <button type="button" class="pp-nazaj" id="pp-nazaj">‹ vsi predlogi</button>
+      ${z ? `<a class="pp-podrobno" href="${z}">podrobno</a>` : ""}
+    </div>
+    <div class="pp-ure"><strong>${ura(odh)}</strong><span class="p-pusc" aria-hidden="true">→</span><strong>${
+      ura(p.prihod_ocena || p.prihod)}</strong><span class="p-traj">${minute(trajanjePrikaz(p))}${
+      zDanes ? escapeHtml(zDanes) : ""}</span></div>
+    ${zanesljivostHtml(p)}
+    ${korakiPredogledaHtml(p)}
+    <div class="pp-zamenjaj" id="pp-zamenjaj" hidden></div>
+    ${z ? `<button type="button" class="pp-zacni" id="pp-zacni">${kmalu ? "Začni pot" : "Izberi to pot"}</button>`
+      : ""}`;
+}
+
+function odpriPredogled(i, vZgodovino = true) {
+  const p = S.izidi && S.izidi.predlogi[i];
+  if (!p) return;
+  S.izbran = i;
+  S.predogled = i;
+  predogledEl.innerHTML = predogledHtml(p);
+  predogledEl.hidden = false;
+  izidiEl.hidden = true;
+  stanje.hidden = true;
+  document.body.classList.add("je-predogled");
+  // Sistemski nazaj zapre predogled, ne strani.
+  if (vZgodovino) history.pushState({ ...(history.state || {}), predogled: i }, "", location.href);
+  window.scrollTo({ top: 0 });
+  requestAnimationFrame(() => {
+    if (!K) return;
+    K.map.resize();
+    prilagodiPoti(p);
+    narisiPot(p, true);
+  });
+  $("#pp-nazaj").addEventListener("click", () => zapriPredogled(true));
+  const zacni = $("#pp-zacni");
+  if (zacni) zacni.addEventListener("click", () => sprejmi(p));
+}
+
+function zapriPredogled(nazaj) {
+  if (S.predogled == null) return;
+  S.predogled = null;
+  predogledEl.hidden = true;
+  predogledEl.innerHTML = "";
+  izidiEl.hidden = false;
+  stanje.hidden = false;
+  document.body.classList.remove("je-predogled");
+  requestAnimationFrame(() => K && K.map.resize());
+  if (nazaj && history.state && history.state.predogled != null) history.back();
+  const kartica = izidiEl.querySelector(`.predlog[data-i="${S.izbran}"]`);
+  if (kartica) kartica.scrollIntoView({ block: "nearest" });
+}
+
+addEventListener("popstate", (e) => {
+  if (S.predogled != null && !(e.state && e.state.predogled != null)) zapriPredogled(false);
+});
+
+/** Vprašanje in pot v obliki, ki jo bere stran poti (`NA_POTI`). */
+function sprejmi(p, zamenjaj = false) {
+  const prej = NA_POTI.beri();
+  if (prej && !zamenjaj && !S.nadomesti && prej.spec.noge !== nogeKljuc(p)) {
+    // Izbrana pot je ena; druga jo zamenja, a ne brez vprašanja -- potnik je
+    // morda na avtobusu in je le pogledal, kako bi šel drugače.
+    const s = naslednjeNaPoti(prej, Date.now() / 1000);
+    const el = $("#pp-zamenjaj");
+    el.innerHTML = `Si že na poti (${escapeHtml(s.glavno)}). Jo zamenjam s to?
+      <span class="pp-zamenjaj-gumbi"><button type="button" data-da>Zamenjaj</button>
+      <button type="button" data-ne>Ne</button></span>`;
+    el.hidden = false;
+    el.querySelector("[data-da]").addEventListener("click", () => sprejmi(p, true));
+    el.querySelector("[data-ne]").addEventListener("click", () => { el.hidden = true; });
+    return;
+  }
+  const izid = S.izidi;
+  const spec = { noge: nogeKljuc(p), od_lat: +S.od.lat.toFixed(5), od_lon: +S.od.lon.toFixed(5),
+                 do_lat: +S.do.lat.toFixed(5), do_lon: +S.do.lon.toFixed(5), date: p.datum };
+  if (izid.kmh > 7) spec.kmh = izid.kmh;
+  const ok = NA_POTI.zapisi({
+    v: 1, sprejeto: Date.now(), spec, predlog: p, osvezeno: Date.now(),
+    vprasanje: { od: S.od, do: S.do, hoje: hojeMin(), kmh: izid.kmh, dan: izid.datum,
+                 rok: izid.prihod_do && !izid.ne_ujames ? izid.prihod_do : null },
+    stanje: { korak: 0 },
+  });
+  // Brez shrambe (zasebno okno) pot ne more ostati izbrana: vsaj podrobnosti.
+  location.href = ok ? NA_POTI_STRAN : podrobnoUrl(p);
 }
 
 // ---------------------------------------------------------------- poizvedba
@@ -1040,15 +1295,29 @@ async function isci(skrci = false) {
 }
 
 async function isciPot(skrci) {
-  const [a, b] = await Promise.all([razresi("od"), razresi("do")]);
+  let [a, b] = await Promise.all([razresi("od"), razresi("do")]);
+  // Prazno „Od kod“ ob dovoljeni legi je tvoja lega: „Poišči“ jo počaka in to
+  // pove ob polju, ne nekje spodaj (prijava 22. 10. 2026).
+  if (!a && !$("#q-od").value.trim() && await stanjeLege() === "dano") {
+    povej("Čakam na tvojo lego …", "isce");
+    a = await legaV("od");
+    if (a) povej("Iščem pot …", "isce");
+  }
   if (!a || !b) {
     const kaj = !a ? "od" : "do";
     razlozi();   // popraviti je treba polje, ne gledati odgovora
-    povej($(`#q-${kaj}`).value.trim()
-      ? `„${$(`#q-${kaj}`).value.trim()}“ ne najdem — poskusi drugače ali izberi na zemljevidu.`
-      : `Manjka ${kaj === "od" ? "izhodišče" : "cilj"}.`, "napaka");
+    povej("");
+    const q = $(`#q-${kaj}`).value.trim();
+    // Napaka lege je že ob polju (`legaV`) in ostane tam.
+    if (q || kaj === "do" || !document.querySelector('.tocka[data-kaj="od"] .tocka-stanje.je-napaka')) {
+      povejOb(kaj, q ? `„${q}“ ne najdem — poskusi drugače ali izberi na zemljevidu.`
+        : kaj === "od" ? "Od kod greš? Vpiši naslov ali se dotakni »lega«." : "Kam greš?", "napaka");
+    }
+    $(`#q-${kaj}`).focus();
     return;
   }
+  povejOb("od", "");
+  povejOb("do", "");
   if (S.kdaj === "do" && !$("#tam").value) {
     razlozi();
     povej("Vpiši uro, do katere moraš biti tam.", "napaka");
@@ -1214,7 +1483,7 @@ function vUrl() {
   if (kolo()) q.set("kolo", "1");
   // Velikost zemljevida gre v naslov: kdor pot deli, deli tudi pogled nanjo.
   if (document.body.classList.contains("karta-velika")) q.set("karta", "velika");
-  history.replaceState(null, "", q.toString() ? `?${q}` : location.pathname);
+  history.replaceState(history.state, "", q.toString() ? `?${q}` : location.pathname);
 }
 
 function izUrl() {
@@ -1256,6 +1525,9 @@ function izUrl() {
 function poimenujIzKazala() {
   if (!KAZALO) return;
   let spremenjeno = false;
+  // Nova pot s poti, na kateri si: izhodišče je lega ali postajališče; tega
+  // poimenuje kazalo spodaj, lego pa beseda -- ne koordinate v polju.
+  const tu = S.nadomesti && S.od && !S.od.ime && $("#q-od").value === napisTocke(S.od);
   for (const kaj of ["od", "do"]) {
     const t = S[kaj];
     if (!t || t.ime || $(`#q-${kaj}`).value !== napisTocke(t)) continue;
@@ -1264,6 +1536,11 @@ function poimenujIzKazala() {
     if (!s) continue;
     t.ime = s.n;
     $(`#q-${kaj}`).value = napisTocke(t);
+    spremenjeno = true;
+  }
+  if (tu && !S.od.ime) {
+    S.od.ime = "tu";
+    $("#q-od").value = "tu";
     spremenjeno = true;
   }
   if (spremenjeno && document.body.classList.contains("zlozeno")) zlozi();

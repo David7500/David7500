@@ -332,10 +332,46 @@ def check_deljenje(problems: list[str]) -> None:
         print(_line(ok, f"{name:20s} {ink} na {bg}  {ratio:5.2f}:1"))
 
 
+# Stopnja tveganja poti (`pot.css`, `.tveganje`): besedilo na svoji tonski
+# podlagi, značka na kartici predloga. Beseda je vedno zraven, barve pa se
+# morajo ločiti tudi pri barvni slepoti -- zelena proti rdeči je prav tisti par.
+TVEGANJE = [
+    ("zanesljivo", "#7fd39a", "#1c3324"),
+    ("tvegano", "#e8c55a", "#3a3216"),
+    ("zelo tvegano", "#ff8a80", "#4a1f22"),
+]
+
+# Trak „na poti“ nad orodno vrstico (`base.css`, `--pot-*`) in opozorilo, da
+# prestop ne drži (`.vod-opomba.je-opozorilo`).
+NA_POTI = [
+    ("trak besedilo", "#dce7ff", "#12284a"),
+    ("trak drugotno", "#a9c1ea", "#12284a"),
+    ("opozorilo", "#ffdad6", "#4a1f22"),
+]
+
+
+def check_tveganje(problems: list[str]) -> None:
+    print("\nTVEGANJE IN TRAK NA POTI: besedilo na tonski podlagi (4.5 za drobno besedilo)")
+    for name, ink, bg in TVEGANJE + NA_POTI:
+        ratio = contrast(ink, bg)
+        ok = ratio >= 4.5
+        if not ok:
+            problems.append(f"{name}: kontrast {ratio:.2f}")
+        print(_line(ok, f"{name:20s} {ink} na {bg}  {ratio:5.2f}:1"))
+    for i, (n1, c1, _) in enumerate(TVEGANJE):
+        for n2, c2, _ in TVEGANJE[i + 1:]:
+            worst, kind = min((ciede2000(lab(simulate(c1, k)), lab(simulate(c2, k))), k) for k in _SIM)
+            ok = worst >= DE_MIN
+            if not ok:
+                problems.append(f"{n1} vs {n2}: ΔE {worst:.1f} ({kind})")
+            print(_line(ok, f"{n1:12s} vs {n2:12s} ΔE {worst:5.1f} ({kind})"))
+
+
 def main() -> int:
     problems: list[str] = []
     check_contrast(problems)
     check_deljenje(problems)
+    check_tveganje(problems)
     check_monotone(problems)
     check_cvd(problems)
 

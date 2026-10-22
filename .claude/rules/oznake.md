@@ -54,6 +54,12 @@ Glava: „izmerjeno na postaji Blanca“ / „zadnji podatek s postaje Blanca“
 * Ocena/napoved: rezervirana `#a8d8ff`.
 * Vreme ima svoj semafor.
 
+### Tveganje poti in trak
+
+* **Stopnja tveganja** (`.tveganje`, `pot.css`): značka z besedo na tonski podlagi — zanesljivo `#7fd39a` na `#1c3324`, tvegano `#e8c55a` na `#3a3216`, zelo tvegano `#ff8a80` na `#4a1f22`. Barva nikoli sama: beseda in vzorec zraven. `preveri_paleto.py` (TVEGANJE): kontrast ≥ 6, najslabše ΔE 4,5 (tritan).
+* Kartica predloga brez traku na levi: prvi z obrobo v poudarku, zelo tvegani z rdečo.
+* **Trak „na poti“** (`--pot-kont` `#12284a`, `--pot-na-kont` `#dce7ff`): tonsko modra, ker je to tvoja pot (modra = ti). Opozorilo „prestop ne drži“ `#ffdad6` na `#4a1f22`.
+
 ### Semafor razmer
 
 | stopnja | oznaka | barva |

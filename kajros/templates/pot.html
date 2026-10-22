@@ -79,6 +79,9 @@
                   aria-pressed="false" aria-label="shrani" hidden>☆</button>
           <ul id="z-od" class="tocka-zadetki" role="listbox" hidden></ul>
         </div>
+        {#- Kar se s krajem dogaja (iskanje lege, napaka), se pove OB polju:
+            pod obrazcem je bilo „nekje spodaj, težko vidno“ (22. 10. 2026). #}
+        <p class="tocka-stanje" aria-live="polite" hidden></p>
         {#- Ime se vpraša v strani, ne s `prompt()`: v aplikaciji za Android
             `Krom` (`WebChromeClient`) `onJsPrompt` ne obravnava, zato okna
             tam sploh ni in shranjevanje bi tiho odpovedalo. #}
@@ -114,6 +117,7 @@
                   aria-pressed="false" aria-label="shrani" hidden>☆</button>
           <ul id="z-do" class="tocka-zadetki" role="listbox" hidden></ul>
         </div>
+        <p class="tocka-stanje" aria-live="polite" hidden></p>
         <div class="tocka-ime" hidden>
           <input class="tocka-ime-vnos" type="text" maxlength="24"
                  autocomplete="off" aria-label="Ime točke" placeholder="dom, služba …">
@@ -198,6 +202,9 @@
 
       <div id="pot-stanje" class="pot-stanje" aria-live="polite"></div>
       <div id="pot-izidi" class="pot-izidi"></div>
+      {#- Dotik predloga ga najprej pokaže, ne odpre: pot je na zemljevidu, pod
+          njo koraki in tveganje, potnik jo sprejme ali gre nazaj na seznam. #}
+      <section id="pot-predogled" class="pot-predogled" aria-label="Predlog" hidden></section>
 
       {#- Navedba vira ni okras, ampak pogoj rabe. Pešpoti in naslovi so iz
           OpenStreetMap (ODbL), vozni red in zamude pa iz IJPP prek NAP. #}

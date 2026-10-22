@@ -816,6 +816,45 @@ html:has(.orodna) { scroll-padding-bottom: var(--orodna-prostor); }
  * nad njo čez polje za vnos. */
 html.tipkovnica .orodna { display: none; }
 
+/* ---------- trak „na poti“ ----------
+ *
+ * Izbrana pot (`NA_POTI` v common.js) nad orodno vrstico, na vseh straneh z
+ * njo: kot vrnitev v navigacijo -- en dotik nazaj na pot in tudi brez dotika
+ * pove, kje izstopiš. Okvir vrstice, tonsko modra, ker je to tvoja pot (modra
+ * je „ti“, `oznake.md`). Kontrast v `preveri_paleto.py` (NA POTI). */
+:root {
+  --pot-kont: #12284a;
+  --pot-na-kont: #dce7ff;
+  --pot-na-kont-2: #a9c1ea;
+}
+html.ima-pot { --orodna-prostor: calc(152px + env(safe-area-inset-bottom, 0px)); }
+.na-poti-trak {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  z-index: 999;
+  display: flex; align-items: center; gap: 12px;
+  width: var(--orodna-sirina); min-height: 52px; padding: 6px 16px 6px 10px;
+  border-radius: 26px; background: var(--pot-kont); color: var(--pot-na-kont);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5); text-decoration: none;
+  view-transition-name: na-poti-trak;
+}
+.npt-znak {
+  flex: none; width: 32px; height: 32px; border-radius: 50%;
+  background: #2f7fff center / 18px 18px no-repeat;
+  /* Pot: dve točki in vijuga, isti znak kot gumb Pot v vrstici. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='6' cy='18' r='2.5'/%3E%3Ccircle cx='18' cy='6' r='2.5'/%3E%3Cpath d='M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5'/%3E%3C/svg%3E");
+}
+.npt-besedilo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.npt-besedilo strong, .npt-besedilo span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.npt-besedilo strong { font: 600 14px/1.25 var(--sans); }
+.npt-besedilo span { font: 500 12.5px/1.25 var(--sans); color: var(--pot-na-kont-2); }
+.npt-cez { flex: none; font: 600 13px/1 var(--mono); color: var(--pot-na-kont); }
+.na-poti-trak:focus-visible { outline: 2px solid var(--pot-na-kont); outline-offset: 2px; }
+html.tipkovnica .na-poti-trak { display: none; }
+@media print { .na-poti-trak { display: none; } }
+
 /* ---------- obvestila kajrosa ----------
  *
  * Pasica nad vsebino strani (`common.js`, na pristajalnih `_obvestila.html`).

@@ -265,6 +265,7 @@ const SKLONI = {
   voznja: ["vožnja", "vožnji", "vožnje", "voženj"],
   prestop: ["prestop", "prestopa", "prestopi", "prestopov"],
   postanek: ["postanek", "postanka", "postanki", "postankov"],
+  postaja: ["postaja", "postaji", "postaje", "postaj"],
   navodilo: ["navodilo", "navodili", "navodila", "navodil"],
   porocilo: ["poročilo", "poročili", "poročila", "poročil"],
 };
@@ -2381,6 +2382,214 @@ async function posljiPovezavo(naslov, besedilo, url) {
     return "ni šlo";
   }
 }
+
+// ---------- pot, na kateri si ----------
+//
+// Izbrana pot od vrat do vrat ostane, dokler je potnik ne konča ali ne
+// poteče: tudi čez zaprto aplikacijo in brskanje po drugih straneh, kot pri
+// navigaciji. Prijava 22. 10. 2026: na prvem avtobusu je pozabil, kje
+// prestopi, ker je vmes pogledal drugam in predloga ni bilo več.
+//
+// Samo v tej napravi (localStorage). Kam kdo gre, ne gre nikamor; strežnik ob
+// osvežitvi dobi iste vožnje in koordinate kot ob iskanju.
+//
+// Zapis: `{v, sprejeto, vprasanje: {od, do, rok, hoje, kmh, dan}, spec: {noge,
+// od_lat, od_lon, do_lat, do_lon, date, kmh}, predlog, osvezeno, stanje}`.
+// `predlog` je zadnji odgovor `/api/pot/podrobno` (sprva kartica s seznama),
+// `stanje` napredek, ki ga vodi stran poti (`pot_podrobno.js`).
+
+const NA_POTI_KLJUC = "kajros:na-poti";
+//: Koliko po pričakovanem prihodu pot še velja, kadar potnik ni rekel, da je
+//: na cilju. Pričakovani prihod že nosi znano zamudo; ostanek je za zamudo,
+//: ki je feed ne pozna, in za pogled nazaj, kje si izstopil.
+const NA_POTI_PO_PRIHODU_MS = 45 * 60000;
+//: Na cilju gre pot sama čez toliko -- pogled nazaj, ne seznam za ves dan.
+const NA_POTI_NA_CILJU_MS = 10 * 60000;
+const NA_POTI_STRAN = "/app/pot/podrobno?na-poti=1";
+
+const NA_POTI = {
+  /** Pot, na kateri si, ali `null`. Potekla se ob branju pozabi. */
+  beri() {
+    let a = null;
+    try {
+      a = JSON.parse(localStorage.getItem(NA_POTI_KLJUC));
+    } catch (e) {
+      return null;
+    }
+    if (!a || a.v !== 1 || !a.predlog || !Array.isArray(a.predlog.noge) || !a.spec) return null;
+    if (naPotiPoteklo(a, Date.now())) {
+      NA_POTI.koncaj();
+      return null;
+    }
+    return a;
+  },
+  zapisi(a) {
+    try {
+      localStorage.setItem(NA_POTI_KLJUC, JSON.stringify(a));
+      return true;
+    } catch (e) {
+      return false;     // zasebno okno ali polna shramba: pot velja ta ogled
+    }
+  },
+  koncaj() {
+    try { localStorage.removeItem(NA_POTI_KLJUC); } catch (e) { /* ni je bilo */ }
+  },
+};
+
+function naPotiPoteklo(a, zdajMs) {
+  const st = a.stanje || {};
+  if (st.cilj_ob && zdajMs - st.cilj_ob > NA_POTI_NA_CILJU_MS) return true;
+  return zdajMs > (a.predlog.prihod_ocena || a.predlog.prihod) * 1000 + NA_POTI_PO_PRIHODU_MS;
+}
+
+/**
+ * Pot kot zaporedje korakov, kot jih potnik doživi: hoja, čakanje, vožnja,
+ * cilj. `{vrsta, i, od, do}`: `i` je indeks noge v `p.noge`, `od` in `do`
+ * sta pričakovani uri (sekunde epoch) z znanimi zamudami.
+ *
+ * Hoja pred prvo vožnjo se začne ob odhodu od doma, vsaka druga ob prihodu
+ * prejšnje vožnje; kar ostane do naslednjega odhoda, je čakanje.
+ */
+function korakiPoti(p) {
+  const out = [];
+  let t = p.odhod_ocena || p.odhod;
+  p.noge.forEach((n, i) => {
+    if (n.vrsta === "hoja") {
+      out.push({ vrsta: "hoja", i, od: t, do: t + n.sekunde });
+      t += n.sekunde;
+      return;
+    }
+    const odh = n.odhod_ocena || n.odhod;
+    const prih = n.prihod_ocena || n.prihod;
+    // Čakanje je tudi brez minute rezerve: na postajališču si, vozila še ni.
+    out.push({ vrsta: "cakanje", i, od: t, do: Math.max(t, odh) });
+    out.push({ vrsta: "voznja", i, od: odh, do: prih });
+    t = prih;
+  });
+  out.push({ vrsta: "cilj", i: p.noge.length, od: t, do: t });
+  return out;
+}
+
+// Tveganje prestopa (`pot.pripni_tveganje`): stopnja z besedo in vzorec.
+// Ista govorica na seznamu predlogov, v predogledu in na poti -- zato tu.
+const STOPNJA_RAZRED = { zanesljivo: "je-zanesljivo", tvegano: "je-tvegano",
+                         "zelo tvegano": "je-zelo-tvegano" };
+
+/** „držal 27 od 29 dni“ -- vzorec ob številki. Z manj kot tremi dnevi je
+ *  številka večinoma delež podobnih prestopov („takšen“); ko je prvo vozilo
+ *  na poti, verjetnost po zamudah zdaj. */
+function prestopDrzi(t) {
+  const tv = t.tveganje;
+  if (tv.vir === "zdaj") return `po zamudah zdaj drži v ${Math.round(tv.p * 100)} %`;
+  if (tv.dni >= 3) return `držal ${tv.drzal} od ${tv.dni} dni`;
+  return `takšen drži v ${Math.round(tv.p * 100)} %`;
+}
+
+/** Korak, na katerem si po uri: prvi, ki se še ni končal. */
+function korakPoCasu(koraki, zdajS) {
+  const k = koraki.findIndex((x) => x.do > zdajS);
+  return k < 0 ? koraki.length - 1 : k;
+}
+
+/** Vožnja, h kateri vodi korak (hoja ali čakanje pred njo, ali ona sama). */
+function voznjaKoraka(p, korak) {
+  for (let j = korak.i; j < p.noge.length; j += 1) {
+    if (p.noge[j].vrsta === "voznja") return p.noge[j];
+  }
+  return null;
+}
+
+const URA_POTI = (ts) => new Date(ts * 1000).toLocaleTimeString("sl-SI",
+  { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Ljubljana" });
+
+/** „čez 6 min“, „čez 1 h 20“, „zdaj“; drug dan „jutri“ ali datum. */
+function cezPoti(ts, zdajS) {
+  const dan = new Date(ts * 1000).toLocaleDateString("sv-SE", { timeZone: "Europe/Ljubljana" });
+  if (dan !== todayIso()) {
+    const jutri = new Date(`${todayIso()}T12:00:00`);
+    jutri.setDate(jutri.getDate() + 1);
+    return dan === jutri.toLocaleDateString("sv-SE") ? "jutri" : dayLabel(dan);
+  }
+  const m = Math.round((ts - zdajS) / 60);
+  if (m <= 0) return "zdaj";
+  return m < 60 ? `čez ${m} min` : `čez ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Kaj je naslednje, v eni vrstici: `{glavno, ura, cez, vrsta}`. Za trak na
+ * drugih straneh in za glavo plošče na poti. Kadar napredka ne ve stran poti
+ * (`a.stanje.korak`), velja ura -- in besedilo mora držati tudi, če potnik
+ * vozilo čaka dlje, kot piše: zato ob vožnji ime vozila IN kraj izstopa.
+ */
+function naslednjeNaPoti(a, zdajS) {
+  const p = a.predlog;
+  const koraki = korakiPoti(p);
+  const k = Math.max(korakPoCasu(koraki, zdajS),
+                     Math.min((a.stanje && a.stanje.korak) || 0, koraki.length - 1));
+  const korak = koraki[k];
+  const n = p.noge[korak.i];
+  const v = voznjaKoraka(p, korak);
+  const prva = k === 0 && zdajS < korak.od - 60;
+  if (korak.vrsta === "cilj") {
+    return { vrsta: "cilj", glavno: "Na cilju", ura: URA_POTI(korak.od), cez: "" };
+  }
+  if (prva) {
+    return { vrsta: "pred", glavno: `Odidi ob ${URA_POTI(korak.od)}`,
+             ura: v ? `${imeVoznje(v)} ob ${URA_POTI(v.odhod_ocena || v.odhod)}` : "",
+             cez: cezPoti(korak.od, zdajS) };
+  }
+  if (korak.vrsta === "voznja") {
+    const prih = n.prihod_ocena || n.prihod;
+    return { vrsta: "voznja", glavno: `Izstopi: ${n.do}`,
+             ura: `${imeVoznje(n)} · ${URA_POTI(prih)}`, cez: cezPoti(prih, zdajS) };
+  }
+  if (!v) {
+    return { vrsta: "hoja", glavno: "Do cilja", ura: `na cilju ob ${URA_POTI(p.prihod_ocena || p.prihod)}`,
+             cez: cezPoti(p.prihod_ocena || p.prihod, zdajS) };
+  }
+  const odh = v.odhod_ocena || v.odhod;
+  const prestop = p.noge.slice(0, p.noge.indexOf(v)).some((x) => x.vrsta === "voznja");
+  return { vrsta: korak.vrsta,
+           glavno: `${prestop ? "Prestopi na" : ""} ${imeVoznje(v)} ob ${URA_POTI(odh)}`.trim(),
+           ura: v.od, cez: cezPoti(odh, zdajS) };
+}
+
+// Trak „na poti“ nad orodno vrstico, na vseh straneh z njo razen strani poti
+// same: kot „vrni se v navigacijo“ -- en dotik nazaj, in tudi brez dotika
+// pove, kje izstopiš. Brez omrežja: ure so iz zadnje osvežitve.
+(function trakNaPoti() {
+  const naStraniPoti = location.pathname === "/app/pot/podrobno"
+    && new URLSearchParams(location.search).has("na-poti");
+  if (!document.querySelector(".orodna") || naStraniPoti) return;
+  let el = null;
+  const risi = () => {
+    const a = NA_POTI.beri();
+    document.documentElement.classList.toggle("ima-pot", !!a);
+    if (!a) {
+      if (el) { el.remove(); el = null; }
+      return;
+    }
+    const s = naslednjeNaPoti(a, Date.now() / 1000);
+    if (!el) {
+      el = document.createElement("a");
+      el.className = "na-poti-trak";
+      el.href = NA_POTI_STRAN;
+      document.body.appendChild(el);
+    }
+    el.dataset.vrsta = s.vrsta;
+    el.setAttribute("aria-label", `Tvoja pot: ${s.glavno}, ${s.ura} ${s.cez}`.trim());
+    el.innerHTML = `<span class="npt-znak" aria-hidden="true"></span>
+      <span class="npt-besedilo"><strong>${escapeHtml(s.glavno)}</strong>${
+        s.ura ? `<span>${escapeHtml(s.ura)}</span>` : ""}</span>
+      ${s.cez ? `<span class="npt-cez">${escapeHtml(s.cez)}</span>` : ""}`;
+  };
+  risi();
+  setInterval(() => { if (!document.hidden) risi(); }, 20000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) risi(); });
+  // Druga stran (zavihek) je pot končala ali izbrala novo.
+  addEventListener("storage", (e) => { if (e.key === NA_POTI_KLJUC) risi(); });
+  addEventListener("pageshow", (e) => { if (e.persisted) risi(); });
+})();
 
 // ---------- dnevi rabe ----------
 // Na katere dni je bil kajros odprt, zadnjih deset. Bere jih povabilo na

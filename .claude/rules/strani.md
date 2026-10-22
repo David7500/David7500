@@ -77,6 +77,10 @@ Vhoda = kraja (naslov, postaja, shranjena točka, lega, klik), iskanje **čez ob
 * **Pot z manj hoje sme trajati dlje za 10 min ali prihranjeno hojo** (`pot.MANJ_HOJE_DLJE_S`).
 * Zemljevid seznama zajame traso prvega, če ga človek ni premaknil (`premaknjen`). Sprememba dneva/ure/meje/kolesa osveži le odgovor na zaslonu.
 * **Po iskanju se obrazec na telefonu skrči v vrstico** (`pot.zlozi()`, `.povzetek` v `base.css`): gumb, Enter, naslov; **ponovno iskanje ob spremembi ne** (zaprlo bi obrazec), vrstica se prepiše. Neznan kraj in manjkajoča ura odpreta. Namizje nima (CSS).
+* **Dotik predloga = predogled, ne odpre** (David, 22. 10. 2026): kartica je gumb; predogled (`#pot-predogled`) ima na telefonu zemljevid zgoraj (`body.je-predogled`), pod njim korake na kratko (`korakiPredogledaHtml`) in tveganje. „Začni pot“ (odhod v 2 h) ali „Izberi to pot“ je pripet nad orodno vrstico. Sistemski nazaj zapre predogled (`pushState`, `vUrl` ohrani `history.state`). Druga izbrana pot vpraša „Jo zamenjam?“, razen s `?nova=1` (prišel s poti).
+* **Tveganje na kartici** (`pot.pripni_tveganje`): značka `zanesljivo` / `tvegano` / `zelo tvegano` (≥ 0,9 / ≥ 0,7) z vzorcem — „prestop držal 27 od 29 dni“ (≥ 3 dni), sicer „takšen drži v 85 %“, prvo vozilo na poti „po zamudah zdaj drži v 85 %“; pri roku „pravočasno v 92 %“. Besedilo `prestopDrzi`, `STOPNJA_RAZRED` v common.js (ena govorica za seznam, predogled in pot).
+* **Pri roku je prvi najpoznejši zanesljiv odhod**; naslov „Odidi najpozneje ob 06:04. Ob 06:32 je tvegano (pravočasno v 72 %).“ Brez zanesljivega: „Zanesljive poti ni — najbolj zanesljiva odide ob …“, „najpozneje“ na kartici samo ob zanesljivem.
+* **Lega ob polju, ne pod obrazcem** (`povejOb`, `.tocka-stanje`; prijava 22. 10.: „nekje spodaj, težko vidno“): napredek, napaka, „Dotakni se zemljevida“. Prazno Od kod ob dovoljeni legi: „Poišči“ lego počaka (`legaV`), napis „Iščem tvojo lego …“ je v polju.
 * **Shranjene točke („dom“) samo v brskalniku** (`kajros:tocke`, šest). Strežnik dobi koordinate, **ime nikamor**, tudi ne v naslov. Naslov s koordinatami shranjene točke se poimenuje. Ujemanje po razdalji (`TOCKA_PRAG` 1e-4 ≈ 11 m). Žetoni pod obema poljema. Zvezdica `☆`/`★` (beseda v `aria-label`). Isto ime = isti kraj. Ime se vpraša **v strani**, ne s `prompt()` (WebView `onJsPrompt` ne dela).
 
 ### `/app/pot/podrobno` — ista pot, razložena
@@ -92,7 +96,22 @@ Vhoda = kraja (naslov, postaja, shranjena točka, lega, klik), iskanje **čez ob
 * **Povezava na okno vožnje nosi `postaja` in `date`** (brez `postaja` ni bloka „Pri tebi“; vožnja pod `MIN_RUNS_FOR_TYPICAL` = 3 dni zgodovine: ločilna vrstica „vozni red, ocene še ni“).
 * **Pot v naslovu** (`?noge=trip:od_seq:do_seq;…`); `trip_id` LPP → `encodeURIComponent`, ločnica se bere **z desne**.
 * **`date` = prometni dan predloga, `dan` = dan vprašanja.** Pred 04:00 iskanje bere včerajšnji prometni dan (`pot.NOCNI_S`). Predlog nosi `datum`, podrobnosti `zivo`. Glava kaže koledarski dan.
-* Kartica predloga je povezava; pot na zemljevidu ob dotiku ali fokusu.
+* Na podrobno vodi „podrobno“ v predogledu; pot na zemljevidu seznama ob lebdenju ali fokusu.
+* **Odprta s povezavo ima „Začni pot“** (`#zacni`); izbrana pot „Nadaljuj pot“.
+
+### Pot, na kateri si (`/app/pot/podrobno?na-poti`)
+
+Izbrana pot ostane, dokler je ne končaš ali ne poteče — čez zaprto aplikacijo in druge strani (prijava 22. 10. 2026: na prvem avtobusu ni več vedel, kje prestopi). `NA_POTI` v common.js, `kajros:na-poti` (samo naprava): `spec` (noge, kraja, dan), `vprasanje` (rok), `predlog` (zadnji odgovor `/api/pot/podrobno`), `stanje.korak`.
+* **Koraki** `korakiPoti()`: hoja, čakanje (vedno pred vožnjo, tudi brez minute), vožnja, cilj; ure z zamudami. **Korak pove lega, sicer ura, sam nikoli nazaj** (`korakNaPoti`). Na vozilu: na trasi vožnje (odmik ≤ max(35 m, točnost do 80)), po odhodu −3 min, ≥ 3 m/s ali ≥ 120 m za vstopom. Izstop: ob izstopnem počasi ali na koncu trase. Brez lege gumb „sem na vozilu“, „izstopil sem“.
+* Zgoraj kaj zdaj (`risiKorak`): „Odidi ob“, čakanje z odštevanjem, „še 3 postaje · Izstopi na X“ (postaje iz `postanki[].ll` na trasi, sicer po uri), „Na naslednji izstopi“ v poudarku in tresljaj (`NP_IZSTOP_M` 500 m), „Na cilju si“. Hoja = vodenje po pešpoti kot doslej.
+* **Zamujeno** (`preveriZamujeno`): 150 s po pričakovanem odhodu, ko je vozilo z lego že za postajališčem; brez lege vozila po 300 s. Vozilo, ki po GPS še prihaja, ni zamujeno. Ponudi „sem na vozilu“ in „nova pot od tu“.
+* **Prestop, ki ne drži** (`ogrozenPrestop`: rezerva pod nič ali „zdaj“ pod 0,5): rdeče opozorilo, „Poišči drugo pot“ od kraja prestopa z istim rokom (`/app/pot?…&nova=1`).
+* Vozilo trenutne ali naslednje vožnje na zemljevidu (`/api/vehicles?trip=`, `pollVehicles`); med čakanjem „vozilo je 1,2 km od postajališča“, ne „je že odpeljal“ po uri.
+* **Plošča se zloži** (ročaj, poteg; privzeto zložena, `kajros:na-poti-plosca`): zloženo ostanejo vrstica „Nato … ob … v …“ s stopnjo, vozilo z rezervo, opozorilo in gumb koraka. Razprta ima vso pot (`#koraki` se prestavi vanjo), trenutni korak poudarjen.
+* Kamera: hoja kot vodenje; čakanje postajališče, ti in vozilo; vožnja za tabo (sicer za vozilom, sicer po uri), obrnjena po trasi, premik največ na 3 s. Puščica „ti“ tudi med vožnjo.
+* Iz shrambe takoj, tudi brez omrežja („zamude so izpred N min“), nato sveže; na 30 s. 404 (vozni red zamenjan) → „Poišči jo znova“.
+* **Konec**: „končaj pot“ v dveh dotikih; sama 10 min po cilju ali 45 min po pričakovanem prihodu (`naPotiPoteklo`).
+* **Trak na poti** nad orodno vrstico na vseh straneh z njo, razen na poti sami (`trakNaPoti` v common.js, `html.ima-pot` dvigne `--orodna-prostor`): „Izstopi: Kolodvor · LPP 6 · 7:38 · čez 6 min“, ob čakanju vozilo in postajališče, pred odhodom „Odidi ob“. Brez omrežja, iz shrambe; v predogledu skrit.
 
 ## Iskalnik zvez in tabla (`connections.*`)
 
