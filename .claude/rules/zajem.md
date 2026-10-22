@@ -17,9 +17,9 @@ paths:
 
 # Kaj feed pošlje in kje laže
 
-Vse spodnje **izmerjeno na živem feedu**, ne domnevano. Kdor pravilo spreminja, naj izmeri znova in številko zapiše sem. Kar velja za strežbo (starost leg, predpomnilnik, meja žive vožnje): `.claude/rules/strezba.md`.
+Vse **izmerjeno na živem feedu**. Kdor pravilo spremeni, izmeri znova in številko zapiše sem. Strežba (starost leg, predpomnilnik, meja žive vožnje): `strezba.md`.
 
-**Vlaki in avtobusi ne pošiljajo istega.** Izmerjeno na živem feedu, po prevozniku (delež postankov v enem klicu):
+**Vlaki in avtobusi ne pošiljajo istega** (delež postankov v enem klicu):
 
 | | `arrival.delay` | `departure.delay` | absolutni čas | `uncertainty` | `vehicle.id` |
 |---|---|---|---|---|---|
@@ -29,345 +29,197 @@ Vse spodnje **izmerjeno na živem feedu**, ne domnevano. Kdor pravilo spreminja,
 | LPP | 39 % | 99 % | 100 % | 0 % | da |
 | AP MS | 31 % | 100 % | 94 % | 0 % | da |
 
-Iz tega dvoje:
+* **Nikoli `stu.arrival.delay` naravnost.** Neizpolnjeno = 0 = „točno“: zapisalo 11 906 od 20 523 avtobusnih vrstic (58 %), delež točnih 84,3 % namesto 71,2 %. `collector._delay_of()` polje preveri, ob absolutnem času zamudo izračuna (proti poročani odhodni: mediana −9 s, 87 % v minuti).
+* **`COALESCE(delay_dep, delay_arr)`, ne obratno.**
 
-* **Nikoli ne beri `stu.arrival.delay` naravnost.** Protobuf za neizpolnjeno polje vrne 0 = videti „točno". Ta napaka je v bazo zapisala 11 906 od 20 523 avtobusnih vrstic (58 %) kot točne; delež točnih **84,3 % namesto 71,2 %**. Železnica: nobena vrstica prizadeta. Uporabljaj `collector._delay_of()`: polje preveri, ob absolutnem času zamudo **izračuna** — preverjeno proti poročani odhodni zamudi: mediana razlike −9 s, 87 % v eni minuti.
-* **Povsod `COALESCE(delay_dep, delay_arr)`, ne obratno.** `departure.delay` izpolnjen pri vseh prevoznikih ~100 %.
+Vlak nosi **samo `delay`**; dejanski čas = vozni red + zamuda:
 
-Feed pri vlakih nosi **samo `delay`**, brez absolutnega časa. Dejanski čas = `vozni red + zamuda`. Iz tega:
+* **Ločljivost 60 s**, `uncertainty: 120`. Sekund ne kaži. Hitrosti samo na odsekih ≥ 5 km (`segment_speeds()`).
+* **Feed = drseče okno** — klic da postanke okoli vozila; vožnja se sestavi iz zaporednih pollov.
+* **Meja meritev/napoved = `stats.last_measured()`.** Napaka že dvakrat (`/api/live`, tabla: IC 502 +17 v Borovnici, tabla v Litiji **0 min**).
+* **Enotna zamuda čez vso vožnjo pri avtobusih sumljiva, ni dokaz.** 3 636 voženj z ≥ 5 postanki: železnica enotna 19,7 %, **nikoli nad 60 min**; avtobusi 2,2 %, a 11 od 20 nad 60 min (A6345: 7 800 s na 46 postankih). Prikaza namenoma ni: fizično mogoče, 20 primerov premalo. Velja samo `api.MAX_LIVE_DELAY_S`.
+* **Iz `obs` se ne vidi, kdaj je bila vrednost POTRJENA** — piše le ob spremembi (`OBS_MIN_DELTA_S`). Za nazaj meritve od nepopravljene napovedi ni mogoče ločiti (RG 1604 na Zalogu 4 od 8 dni natanko zamuda ob prihodu v Ljubljano = napoved). Živo reši `last_measured()`, zgodovina ne. **Ne pomaga**: vsiliti fiziko zaporedju napovedi (MAE 1,92 → 1,96, v 5 min 91,0 → 90,8 %) — rezerva je tudi v voznem času.
+* **Ne verjemi ničli za en klic.** 14 % postankov z > 2 zapisoma: X, 0, X v minuti. `run` ničlo po zamudi ≥ 5 min sprejme šele po drugem pollu (`collector.is_zero_blip`); `obs` vse. Isto pri legi vlaka.
+* **Odhodni zamudi na dolgem postanku ne verjemi** — feed objavi ničlo pred prihodom in je ne popravi (RG 1604 Ljubljana prihod +19, odhod 0, Zalog +5; pet dni od devetih). `stats.typical_dwell()` dan šteje le, ko sta naslednja postanka skladna (< 2 min), postanek računa iz **naslednjega** postanka.
+* **Prihodna ≠ odhodna.** LP 4219 Most na Soči (9 min križanja): +10 → +3. 406 postankov ima > 2 min zadrževanja; v 9 dneh razlika pri 1 307, od tega 362 ≥ 5 min. Prikaz = odhodna; pri razliki ≥ 1 min vrstica pokaže **obe** (`+10 → +3`), krivulja gre v postajo na prihodni in pade **navpično** na postaji.
+* **`delay_report` je iz zemljevida SŽ, ne od SŽ.** `SZ-DELAY-*` je sestavljal derp.si iz `naslednja_postaja` + `zamuda_min` (od 5 min, izjemna od 30). Od 11. 10. 2026 piše `zamude_sz.porocilo` z našim imenom postaje; `alerts.ingest` derp-ovih ne piše, dokler vodi zemljevid. Poročilo je **svežejše od meritve** (64 voženj: 97 %, mediana +40 s); kraj in zamuda **iz istega vira**. Zaporedje poročil = dnevnik vožnje (napredni pogled okna).
+  * **Postaja v poročilu = KAMOR vlak pelje.** 26 711 poročil: 92 % zajetih > 1 min **pred** pričakovanim prihodom na X (mediana 3,9 min), 96 % po odhodu s prejšnjega. Zato je na kartici „napoved prevoznika → X“ (`api._dodaj_porocila`), vlak stoji na zadnji meritvi; **lege iz poročila ni**.
+  * **Velja samo za svoj prometni dan in dokler je novejše od meritve.** Združevanje po številki čez dneve je dalo 4 od 22 vlakov včerajšnjo zamudo (LPV 2427, poročilo staro 23,6 h).
+* **Zakaj zamuja, povedo ovire** (`ovire_sz.py`). `SZ-OVIRA-*` vezane na `route_id` (1 : 1 s tripom). Avgusta 2026 ~45 hkrati.
+* **Odpovedi niso strukturirane.** SŽ `schedule_relationship` vedno `SCHEDULED`; odpoved je besedilo (`effect = 6`). Zajem polje šteje in zavpije ob prvi neničelni; prikaza namenoma ni.
+* **Ko feed izgubi vozilo, objavlja uro namesto zamude**: za prevožene postanke vrednost raste natanko minuto na minuto (LPP 25: +58/+126 → +482 … +842 → nazaj). 11 827 zaporedij pri 947 vožnjah; pojasni tudi enotno zamudo (N6571 27 060 s). `collector.undoes_passing` zavrne vrednost, ki bi postanek z meritvijo prevoza izpred > 120 s prestavila v prihodnost; **dokaz prevoza = različna prihod in odhod** (EN 1276 `0/0` = napoved, nato pravih +114). `kajros repair` na 10 dneh: 852 vrstic (277 avtobus, mediana 51 min; 300 železnica, mediana 14 min). **`repair` popravi samo postanke, kjer je varovalka sprožila** — prepis vsega je 16 696 vrstic pogrobil za 4 217 popravkov.
+* **Zamuda za vožnjo, ki se še ni začela = zamuda PREJŠNJE vožnje vozila** (LPP 25 Medvode: +8 … +14 pred odhodom, odpeljal točno; `run` obtičal, ker `is_zero_blip` čaka drugo ničlo). `collector.is_forecast`: vrednost, ki postanek postavlja v prihodnost, ni meritev; ničla, ki jo popravlja, ni blip.
+* **Zgodovina poti zamejena na `trip_id`**, ne `train_no` + `stop_seq` (LPP 25: dva kraja pod „postanek 2“). Železnica 0 od 663 številk z več vožnjami, avtobusi 205 od 242.
+* **Na izhodišču prihoda ni** — feed ga za `stop_seq = 1` pošlje kot smet (−267 s, −1771 s). `common.dwellSplit()` prvi postanek preskoči.
+* **Ni** cen, sestave, zasedenosti, tira (tir s table SŽ, spodaj). EN/MV pogosto brez realtime.
+* Vreme ima arhiv: `kajros weather` dopolni kadarkoli.
 
-* **Ločljivost 60 s**, `uncertainty: 120`. Ne kaži sekund. Hitrosti samo na odsekih ≥ 5 km (`segment_speeds()` že filtrira).
-* **Feed = drseče okno** — en klic da le postanke okoli trenutnega položaja. Celo vožnjo sestavljamo iz zaporednih pollov.
-* **Meja med meritvijo in napovedjo = `stats.last_measured()`.** Vsak prikaz z zamudo jo mora upoštevati: kar je za zadnjim prevoženim postankom, je feedova napoved. Napaka že dvakrat -- v `/api/live` in v odhodni tabli, kjer je IC 502 pri +17 min v Borovnici na tabli v Litiji pisal **0 min**. Potnik bi bral, da je vlak točen.
+## Avtobusi
 
-* **Enotna zamuda čez vso vožnjo pri avtobusih sumljiva, a ni dokaz.** Merjeno na 3 636 vožnjah z ≥5 zajetimi postanki: **železnica** — enotna zamuda pogosta (19,7 % voženj), a **nikoli nad 60 min** (vlak ves čas dve minuti pozen). **Avtobusi** — enotnih le 2,2 % voženj, a **11 od teh 20 je nad 60 min**; od 19 avtobusnih voženj z zamudo nad uro jih je 11 takih. A6345: 7 800 s enako na vseh 46 postankih.
+* **Veriga vozila (`block_id`) = edini odgovor, kje je avtobus pred začetkom.** Samo avtobusi, 7 547 od 20 736 voženj (36 %), 1 385 blokov; 0,9 % prekrivanj, mediana postanka 14 min. Isti blok pri več `service_id` → sosed **po obratovalnem dnevu**. Ob 20:22 17 od 25 bližnjih voženj s prejšnjo v bloku, 11 s svežo lego.
+* **Zamude prejšnje vožnje ne prenašaj.** 195 parov: prenos MAE 4,53, „točno“ 2,29 — slabši od nevednosti; prenese se 11 %. Prejšnja vožnja = **dejstvo o vozilu**, ne napoved.
+* **`bikes_allowed` povsod 0** (ni podatka), `wheelchair_accessible` ga ni — uvoz ne bere.
 
-  **Prikaza za to (še) ni namenoma.** Feed te zapise pošilja z današnjim `start_date` → naša razrešitev obratovalnega dne ni kriva; enotna zamuda fizično mogoča: vozilo odpelje pozno, nato vozi po voznem redu. Devet dni in dvajset primerov premalo za pravilo, ki bi skrival podatke. Razrešila bi sled skozi `obs`: ali se postanki v zaporednih pollih premikajo. Do takrat velja samo `api.MAX_LIVE_DELAY_S`.
+## Mestni LPP: drug feed, laže drugače
 
-* **Iz `obs` se ne da ugotoviti, kdaj je bila vrednost nazadnje POTRJENA.** Dnevnik piše samo ob spremembi (`OBS_MIN_DELTA_S`) → zadnji zapis = zadnja *sprememba*, ne potrditev; feed isto vrednost pošilja naprej vsakih 30 s, mi je ne zapišemo. Posledica: za nazaj **ni mogoče ločiti meritve od napovedi, ki se ni nikoli popravila.** Živi prikaz reši `stats.last_measured()` (vozni red + zamuda ≤ zdaj), zgodovina ne more.
+Mestnih linij **v IJPP ni** (le primestne 40–84). Vozni red `avl.lpp.si/transit/api/gtfs` (31 prog), živo `rt.gtfs.derp.si/sources/lpp/all`. Brez ključa.
 
-  Primer: RG 1604 ima v `run` na Ljubljani Zalogu 15, 2, 7, 14, 13, 11, 16 min — na **štirih od osmih dni natanko toliko, kolikor zamuda ob prihodu v Ljubljano** = feedova napoved izpred postaje. Na Litiji, 19 min pozneje: 0, 2, 6, 0, 1, 1, 2, ujema se z Zagorjem za njo. +13 na Zalogu in +1 v Litiji fizično nemogoče, a iz zapisa se ne vidi, katera je napoved.
-
-  **Preizkušeno in ne pomaga:** vsiliti modelovo fiziko zaporedju napovedi (v točki j ne moreš biti bolj pozen, kot boš v j+1, plus rezerva vmes). MAE 1,92 → 1,96 min, delež v petih minutah 91,0 → 90,8 %. Rezerva je tudi v voznem času, ne le v postankih → pravilo prereže preveč pravih okrevanj.
-
-* **Ne verjemi ničli, ki jo feed vrne za en klic.** Pri 14 % postankov z >2 zapisoma vzorec X, 0, X v razmiku ene minute. Zamuda med dvema klicema ne more pasti za več, kot je vmes minilo časa. `run` ničlo po zamudi ≥ 5 min sprejme šele, ko jo potrdi drugi zaporedni poll (`collector.is_zero_blip`); `obs` obdrži vse. Isto varovalo pri določanju lege vlaka -- sicer (vozni red + 0) pomeni, da je postanek že minil, in vlak na zemljevidu skoči naprej.
-* **Odhodni zamudi na dolgem postanku ne verjemi.** Feed jo objavi kot ničlo, preden vlak pride, in pogosto ne popravi. Ujeto v živo 29. 8.: RG 1604 v Ljubljani prihod +19 in **odhod 0** — dve minuti stanja — na Ljubljani Zalogu 8 min pozneje **+5**, sedem minut stanja. Oboje hkrati ne drži; tokrat prvič vemo, katera stran je napačna: Zalog in Litija (+3) skladna med sabo, odhodna ničla ne z nikomer.
-
-  Isti vzorec na tej postaji **pet dni od devetih**. `stats.typical_dwell()` zato dan šteje le, kadar sta naslednja dva postanka skladna (razlika pod 2 min), postanek pa izračuna iz **naslednjega** postanka, ne iz odhodne vrednosti. RG 1604 v Ljubljani: štirje uporabni dnevi od devetih, postanki 7, 9, 11 in 17 min proti 21 po voznem redu.
-
-* **Zamuda ni ena številka na postanek: prihodna in odhodna se lahko razlikujeta.** Vlak ne odide takrat, ko pride. LP 4219 ima na Mostu na Soči po voznem redu **9 min postanka** (20:38 → 20:47, križanje na enotirni bohinjski progi): 29. 8. pripeljal +10, odpeljal +3 — stal 2 min namesto 9. Feed je oboje povedal (`prihod 600 / odhod 180`).
-
-  Redko, a ne zanemarljivo: 406 postankov po voznem redu ima >2 min zadrževanja; v devetih dneh se prihodna in odhodna zamuda razlikujeta pri 1 307 postankih, od tega 362 za ≥5 min.
-
-  Prikaz kaže `COALESCE(delay_dep, delay_arr)` = **odhodno**. Prav — potnika zanima, kdaj gre vlak naprej — a ena številka na vrstico naredi v grafu videti nemogoč prepad („kako je zamuda padla za osem minut med dvema postajama"). Zato: kadar se številki razlikujeta za ≥1 min, vrstica pokaže **obe** (`+10 → +3`) z razlago postanka; krivulja gre v naslednjo postajo na **prihodno** vrednost in pade **navpično** na postaji. Padec se je zgodil tam, ne na odseku.
-
-* **Poročilo o zamudi (`delay_report`) ni od SŽ, ampak iz zemljevida SŽ.** `SZ-DELAY-*` ("Vlak EC 79 ima izjemno zamudo 161 min ob prihodu na postajo Sevnica") je sestavljal derp.si iz `naslednja_postaja` in `zamuda_min` zemljevida (`szService.js`, prebrano 11. 10. 2026): samo postanki vožnje, od **5 min**, izjemna od 30. Z modra.ninja je utihnil tudi ta (6. 10. 3 749 poročil, 7. 10. 28, nato eno na dan) -- štiri dni brez vrstice „napoved prevoznika“ in brez meje prehoda iz poročila, ne da bi kdo opazil. Od 11. 10. 2026 ga piše `zamude_sz.porocilo` iz istega branja, z našim imenom postaje (prej se je z njim po imenu ujemalo 98,4 %, 26 553 od 26 995); `alerts.ingest` derp-ovih ne piše, dokler vodi zemljevid.
-
-  Prevoznikovo poročilo je tudi **svežejše od naše meritve**: na 64 primerjanih vožnjah novejše v 97 %, mediana razlike +40 s. A kraj in zamuda morata biti **iz istega vira**, sicer piše "Dobova" ob zamudi, izmerjeni v Sevnici.
-
-  Zaporedje teh poročil = **dnevnik vožnje**, kakršnega nikjer drugje ni: IC 503 šel s +6 v Ormožu na +29 v Litiji, v Borovnici nadoknadil 8 min, do Postojne spet zdrsnil na +25. V oknu vožnje, napredni pogled.
-
-  **Postaja v poročilu je tista, KAMOR vlak pelje, ne tista, kjer je** (izmerjeno 5. 10. 2026). „Ob prihodu na postajo X“ je napoved prihoda na naslednji postanek: od 26 711 poročil s postajo na poti vlaka (železnica, 20. 9.–5. 10.) je bilo **92 %** zajetih več kot minuto **pred** pričakovanim prihodom na X (voznoredni prihod + objavljena zamuda; mediana 3,9 min prej, p10 11,8 min prej), **96 %** po odhodu s prejšnjega postanka. Čas je čas našega branja (do 60 s pozno), torej je SŽ objavila še prej. Primer: EN 414 ob 21:17 „Ljubljana +13“, izmerjen pa ob 21:19 v Zidanem Mostu, prejšnjem postanku (do Ljubljane po voznem redu 55 min). Okno vožnje ga zato prav kaže kot napoved prevoznika. Zemljevid je do 5. 10. 2026 vlak risal na tej postaji in kartica je pisala „zadnja meritev“; zdaj stoji na zadnji meritvi, poročilo je na kartici vrstica „napoved prevoznika → X“ (`api._dodaj_porocila`). **Lege iz poročila ni** -- `live_delays()` koordinat ne vrača več.
-
-  **Poročilo velja samo za svoj prometni dan in samo, dokler je novejše od naše meritve.** `api._live` je do 5. 10. 2026 včerajšnja in današnja poročila združil po številki vlaka: današnja vožnja brez poročila je nosila včerajšnje. Ob 21:33 tako 4 od 22 živih vlakov (LPV 2427 na zemljevidu v Ljubljani z +11, v resnici v Kranju s +4; poročilo staro 23,6 h). Poročilo, starejše od `feed_ts` zadnje meritve, napoveduje za postajo, ki je morda že prevožena.
-
-* **Zgodovine ni nikjer.** Če je ne posnamemo sami, je ni.
-* **Zakaj vlak zamuja, povedo ovire** (od 11. 10. 2026 s strani SŽ, `ovire_sz.py`, spodaj; prej `service_alerts` derp.si). `SZ-OVIRA-*` = dela na progi, nadomestni prevozi, združene garniture, vezani na `route_id` (1 : 1 s tripom → znamo pripeti na številko vlaka). Avgusta 2026 ~45 hkrati -- nadomestni prevoz Ljubljana–Logatec in Divača–Koper do 12. decembra, zapore enega tira Celje–Šentjur, Poljčane–Pragersko, Maribor–Hoče. **To pojasni, zakaj so zamude v zajetih dneh tako velike.**
-
-* **Odpovedi niso strukturirane.** GTFS-RT ima `schedule_relationship` (CANCELED, SKIPPED), a SŽ ga ne uporablja -- v vseh zajetih zapisih `SCHEDULED`. Odpoved sporočijo z besedilom obvestila ("Vlak vozi samo do postaje Ljubljana Šiška", `effect = 6`). Zajem polje šteje in ob prvi neničelni vrednosti zavpije v dnevnik; prikaza namenoma še ni — bil bi prikaz za podatek, ki ne obstaja.
-
-* **Ko feed izgubi vozilo, začne objavljati uro namesto zamude.** Za postanke, ki jih je vozilo *že prevozilo*, objavi vrednost, ki raste natanko minuto na minuto. Ujeto v živo 30. 8., LPP 25 (vožnja 452632, Poliklinika): ob 12:19:36 prihod +58 s, odhod +126 s — prava meritev z **različnima** vrednostma — ob 12:23:48 skok na +482, sedem klicev zapored rast natanko +60 s na +60 s do **+842 (+14 min)**, ob 12:30:29 vrnitev na +58/+126. Vozilo ves čas že davno mimo.
-
-  V zajetem takih zaporedij **11 827 pri 947 vožnjah**. Pojasni tudi odprto vprašanje o **enotni zamudi čez vso vožnjo**: Nomagov N6571 s 27 060 s na vseh postankih je natanko ta vzorec, ujet po ustavitvi (4 od 12 takih voženj imajo zaporedje v `obs`; pri ostalih smo se priključili, ko je vrednost že zmrznila).
-
-  Varovalka `collector.undoes_passing`: zavrne vrednost, ki bi postanek, za katerega smo **že zapisali meritev** o prevozu pred >120 s, prestavila nazaj v prihodnost. `obs` obdrži vse; čaka samo `run`.
-
-  **Prva različica pravila je bila preširoka, merljivo.** Brez dodatnega pogoja je vzela pravo dvourno zamudo nočnega vlaka: EN 1276 je 28. 8. ob 00:03 imel za Celje zapisano `0/0` — feedova napoved pred prihodom, ne meritev — in ob 01:57 pravih +114 min. Zato **za dokaz o prevozu šteje samo zapis z različnima vrednostma za prihod in odhod**: te feed za nerazrešen postanek ne objavi. Ista past v projektu zapisana že dvakrat („ne verjemi ničli, ki jo feed vrne za en klic").
-
-  Učinek `kajros repair` na 10 dneh zajema: **852 vrstic** v `run`, od tega 277 avtobusnih (mediana 51 min, največ 11 h) in **300 železniških** (mediana 14 min, največ 80 min). Povprečna zamuda pri avtobusih pade z 9,8 na 8,8 min, pri železnici s 6,7 na 6,5. Železniški primeri isti vzorec: LPV 2252 22. 8. ob 08:23 v Zagorju izmerjen s prihodom +2, odhodom +1; uro in četrt pozneje feed zanj objavil +79 min.
-
-  **`repair` popravlja samo postanke, na katerih je varovalka sprožila.** Prej je čez `run` prepisal ves ponovljeni dnevnik — ker `obs` beleži le spremembe nad `OBS_MIN_DELTA_S`, je 16 696 vrstic zamenjal za do minuto grobejše, da bi popravil 4 217 pokvarjenih. Popravilo mora popravljati, ne glajenja.
-
-* **Feed objavlja zamudo za vožnjo, ki se še ni začela — to je zamuda PREJŠNJE vožnje istega vozila.** LPP 25 (452632) 30. 8.: postanek Medvode novo naselje ima vozni red 11:41, feed pa je zanj od 11:11 objavljal +8, +10, +11, +12, +13 in ob 11:33:55 **+14 min** — vsakič čas, ki je bil še v prihodnosti = napoved. Ob 11:35:44 popravil na 0, avtobus odpeljal skoraj točno.
-
-  `run` je obtičal na +14, ker je popravek zavrnil `is_zero_blip`: čaka na potrditev druge ničle, feed pa ničlo povedal **enkrat samkrat**, drseče okno šlo naprej. V grafu: devet postaj pri +14, nato **padec za 15 min v enem koraku** — tam se je končala napoved in začela meritev.
-
-  Zato `collector.is_forecast`: vrednost, ki ob nastanku postanek postavlja v prihodnost, **ni meritev**, ničla, ki jo popravlja, ni blip. Merilo brez prostih parametrov.
-
-* **Zgodovina poti mora biti zamejena na `trip_id`.** `stats.history()` je filtrirala po `train_no` in gradila profil po `stop_seq` — **zaporedni številki** postanka. Pri LPP liniji 25 (217 voženj) se je pod „postanek 2" sešlo *Medvode novo naselje* (drugi postanek proti Zadobrovi, povprečje +7 min) in *Novo Polje* (drugi postanek v **nasprotni smeri**, +1 min) — dva kraja pod eno oznako; stolpec je pisal „1 vožnja" nad 850 meritvami iz 25 voženj. Isto velja za devet vlakov s sezonskimi različicami.
-
-  Železnica brez posledic: **0 od 663 številk z meritvami ima več kot eno vožnjo**. Avtobusi: 205 od 242, največ 42.
-
-  Ista funkcija edina v projektu brala `delay_arr` pred `delay_dep` — obratno od pravila povsod drugod. Popravljeno.
-
-* **Na izhodišču prihoda ni.** Feed ga za `stop_seq = 1` vseeno pošlje = smet: LPP 25 je 30. 8. na Medvodah naselju poročal prihod −267 s ob odhodu −2 s, na drugi vožnji istega dne −1771 s. Prikaz je sestavil „vlak je stal 4 min namesto 0 — izgubil 4 min" = zgodba o dogodku, ki se ni zgodil. `common.dwellSplit()` zdaj prvi postanek preskoči.
-
-* **Ni** cen, sestave vlaka, zasedenosti. Mednarodni vlaki (EN/MV) pogosto brez realtime pokritja. **Tira v feedu ni** -- je s table SŽ, glej spodaj.
-
-Izjema **vreme**: Open-Meteo ima arhiv za nazaj, zato ga ni treba zbirati vnaprej — `kajros weather` ga dopolni za že zajete zamude kadarkoli.
-
-## Kar je pri avtobusih drugače
-
-* **Veriga vozila = edini vir odgovora, kje je avtobus, ki se še ni začel.** `trips.txt` nosi `block_id` -- zaporedje voženj istega fizičnega vozila. Ga imajo **samo avtobusi** (vseh 789 voženj SŽ brez) in tudi tam le 7 547 od 20 736 voženj (36 %), v 1 385 blokih. Veriga resnična: med zaporednima vožnjama le 0,9 % prekrivanj, mediana postanka 14 min, v 69 % se konec ene ujema z začetkom naslednje. Isti `block_id` pri več `service_id` (788 od 1385), zato se sosed **išče po obratovalnem dnevu**, ne po `service_id`.
-
-  Merjeno ob 20:22: od 25 voženj, ki so se začenjale v naslednji uri in pol, jih je 17 imelo prejšnjo vožnjo v bloku, 11 od teh svežo GPS lego. Edini način, da o avtobusu pred odhodom kaj povemo -- takrat ni ne zamude ne lege, vozilo pa obstaja.
-
-  **Zamude prejšnje vožnje ne prenašaj naprej.** Izmerjeno na 195 parih zajetih voženj: prenos zamude MAE 4,53 min, „predpostavi točno" 2,29 min -- prenos **slabši od nevednosti**. Vozilo zamudo med vožnjama nadoknadi: kadar prejšnja zamuja ≥ 5 min (mediana 12 min) in ima vmes 15--60 min postanka, se na naslednjo prenese 11 %. Zato je prejšnja vožnja v prikazu **dejstvo o vozilu** („zdaj pri postajališču X, na prejšnji vožnji +1 min"), ne napoved odhoda; prikaz to pove.
-
-* **`bikes_allowed` v celotnem GTFS ničla.** Vseh 20 736 voženj petih agencij ima `0` = „ni podatka". Polje obstaja, podatka ni -- uvoz ga ne bere, v shemi ga ni. Isto `wheelchair_accessible`, ki ga `trips.txt` sploh nima. Če se spremeni, je oboje en stolpec dela.
-
-## Mestni LPP je drug feed in laže drugače
-
-Mestnih linij LPP (1, 2, 3, 6, 11, 14, 20, 22, nočne) **v IJPP ni** — nosi le primestne (40–84). Uvoz iz LPP-jevega lastnega GTFS (`avl.lpp.si/transit/api/gtfs`, 31 prog), živi del iz `rt.gtfs.derp.si/sources/lpp/all` — **isti derp.si** kot IJPP, drug vir. Oboje odprto, brez ključa.
-
-**`delay` v tem feedu vedno 0.** Izmerjeno dvakrat — nedelja 22:00 (2 721 postankov) in ponedeljkova konica 07:11 (2 604): nobena zamuda neničelna, `trip_update.delay` nikjer izpolnjen. **Kdor bi ga bral, bi zapisal, da mestni LPP nikoli ne zamuja.**
-
-**In zajem ga je bral** do 18. 10. 2026 (`_delay_of` vzame `delay`, kadar je): `arrival.delay = 0` brez časa je LPP-jevo mesto za vožnjo, ki je ta hip ne napoveduje -- vozilo še čaka na izhodišču ali ga sploh ni; postanek pride v feed do 60 min pred voznim redom. 18. 10. v šestih branjih 4 550 takih polj, vsa 0, nobeno s časom; 48 od 53 voženj brez vozila jih ima samo takih. Ob maratonu 18L ni vozila, v `run` pa točna na vseh postankih vseh voženj; okno vožnje je pisalo „napoved prevoznika · točno“. Na navaden dan (malina, 6. 10.) 5 242 od 55 953 vrstic LPP (9,4 %), 93 % vseh ničel, 89 % prvih postankov, 137 od 2 261 voženj samo iz njih. Odslej `ingest(vir="lpp")` `delay` preskoči (`beri_delay`), šteje samo čas. Zgodovina pred tem ostane: pri starejših vožnjah LPP voznega reda ni več, iz katerega bi se ničla ločila.
-
-Zamuda v **absolutnih napovedanih časih** (1 882 od 4 517 postankov), kar `_delay_of()` že pokriva — bere `.time`, odšteje vozni red. Točno primer, za katerega funkcija obstaja.
-
-Kakovost boljša od avtobusov v IJPP: mediana 0, p95 +7 min, p99 +23 min, nad 30 min 0,65 % in **vse iz ene same vožnje**; nad 2 h ničesar. IJPP-jev avtobusni feed imel 2 541 vrstic nad 4 h.
-
-`trip_id` = trojni UUID (`service|?|trip`), ujemanje 1 : 1 z `avl.lpp.si`, **ne** z NAP. Uvoz okna osmih dni, ker ima LPP svojo vožnjo za vsak datum: cel mesec 62 989 voženj in 1,6 milijona postankov.
-
-**Ujemanje 1 : 1 ni zagotovljeno.** 1. 10. 2026 je feed nosil 37–41 od ~225 voženj (17 %, linije 14, 6, 2, 27, 11, 7) s srednjim UUID-jem, ki ga ni v nobenem voznem redu: ne v zipu `avl.lpp.si` (izvoz 01:06, ves dan isti), ne v derpovem `lpp_gtfs.zip` z gitlaba (istih 63 669 voženj), ne v bazi izpred uvoza (varnostna kopija 03:32: 0 od 37). Tretji del (vzorec) je znan. Isti izvoz je na teh linijah dal nov id 424 današnjim vožnjam (6: 133, 2: 95, 11: 81, 14: 58, 27: 28, 11B: 22, 7: 7) — feed ne nosi ne starih ne novih, ampak tretje. Zajem zavrže zamudo **in lego**: linija 14 do 17. ure 47 ujetih voženj, 30. 9. ves dan 147. Para po vzorcu in uri ni: 18 od 37 brez enega samega časa, od ostalih 8 z enim kandidatom, ti z „zamudo“ do 29 min — ugibanje. Obvestila LPP za ta dan ni. Pregled je bil prav rdeč (`neznane`), pošta šla ob 08:37.
-LPP-jev živi sistem vozi **drug vozni red**, kot ga objavi: `data.lpp.si/api/station/timetable` za linijo 14 na Bavarskem dvoru (600011) med 5. in 22. uro 78 odhodov, GTFS 66, skupnih 47; razlike večinoma 1–2 min (13:24 proti 13:25, 13:35 proti 13:34, 15:47 proti 15:49). Linija 2: 62 proti 47, skupnih 40. Urbana in data.lpp.si teh avtobusov zato ne izgubita, mi pa jih.
-
-**2. 10. 2026 enako, a cela linija** (kolesarsko prvenstvo, zaprta Slovenska): linija 1 38 od 44, zvečer 25 od 25. Odtlej `ingest` za LPP šteje neznane **po progi** (`proge`), `poll_lpp` zapiše `meta.lpp_linije_brez_voznje` (linija → [neznanih, vseh]) in `meta.lpp_vozila_brez_voznje` (lega, linija in smer iz vzorca). V `run` in `vehicle_now` ne gre nič — brez voznega reda ni ure, od katere bi merili zamudo, `vehicle_now` pa teče prek `JOIN trip`. Tablo za take linije napolni `lpp.na_tablo` (`strezba.md`). Podrobnosti v `docs/MERITVE.md`.
-
-**Imena postajališč se pišejo drugače.** 12 % samih velikih črk („ČRNUČE"), IJPP normalno — ker vse teče po imenu, sta to dve postaji. Uvoz jih poenoti, a samo kadar sta zapisa tudi fizično na istem mestu (500 m): med 24 takimi pari jih je 14 v razmiku 3–215 m, deset 0,8–111,6 km; „Celje" in „Čelje" 112 km narazen. Glej `gtfs._poenoti_imena()` Odloča **mesto** (postajališča v 500 m drug od drugega, tudi prek tretjega), ne vsa skupina istega imena: do 19. 10. 2026 je daljni „Trnovo“ pri Novi Gorici ustavil zlivanje „TRNOVO“, 112 m od ljubljanskega, in eno „Litostroj“ 800 m stran zlivanje „LITOSTROJ“ (18 m).
-
-**Pošilja samo postanke PRED vozilom.** Izmerjeno 7. 9. 2026 s projekcijo lege vozila na postaje vožnje: vozilo 174 m od postaje 8 (od 26), `stop_time_update` samo za 9–26. Posledica težja od zapisa: pri mestnem LPP v `run` **nikoli ni meritve** — vedno le zadnja napoved pred prehodom (mediana 42 s pred njim, p90 27 s po njem). IJPP drugače: 56 % voženj ima v seznamu še prvi postanek, prevoženi postanki se osvežujejo.
-
-Kdor bo računal kakovost napovedi po omrežjih, mora vedeti: pri LPP primerja napoved z napovedjo.
-
-**Obvestilo o obvozu je po vožnji** (izmerjeno 17. 10. 2026, maraton): vsaka entiteta je ena vožnja na enem postajališču (`stop_id` + `trip`, nikoli `route_id`), 2 808 parov, 720 voženj, vse v voznem redu, ves dan. Pari gredo v `alert_entity` (samo ob spremembi), `alerts.ne_ustavi` jih da tabli, iskalniku zvez in poti: na Bavarskem dvoru so tisti dan ustavljale 7, 8, 13, 14, 20Z, ne pa 2, 6, 9, 27. **Isti naslov za nov dogodek**: „Postaja Pošta na obvozu“ 16. 10. 9:55–15:00, nato za maraton do 18. 10. 23:59 -- obdobje se ob vsakem branju prepiše (`alerts.zapisi`), prej je ostalo prvo in tabla je obvoz na zaprti Slovenski skrila. Primestnih linij (IJPP 1118) v RT LPP ni; zanje LPP-jev zaslon (`lpp.obvozi_zaslonov`, `type` 3). Odpoved (`schedule_relationship` CANCELED) pri LPP obstaja (17. 10. ena vožnja): `collector.odpovedane`, v pomnilniku, 5 min po branju.
-
-**Obvoz se konča tako, da ga feed neha pošiljati** — `end_ts` ostane v prihodnosti. „Postaja Bavarski dvor na obvozu — vozilo se ne bo ustavilo“ nazadnje v feedu 22. 9. 2026 ob 22:31, `end_ts` decembra; tabla najprometnejšega postajališča v Ljubljani ga kazala še 25. 9. Od 4 „veljavnih“ obvozov 2 taka. Zato `ingest_lpp()` ob vsakem branju zapiše `meta.lpp_obvestila_prebrana`, `for_stops()` pa obvoz pokaže samo, če viden največ 10 min pred tem branjem (`OBVOZ_REZERVA_S`). Meja = branje, ne ura: če zajem stoji, ostane zadnje znano. Ponoči, ko feed voženj nima, obvozov ni — tudi avtobusov ne.
+* **`delay` vedno 0** (2 721 in 2 604 postankov, nobena neničelna). `arrival.delay = 0` brez časa = mesto za vožnjo, ki je ne napoveduje (18. 10. 4 550 takih; navaden dan 9,4 % vrstic LPP, 93 % vseh ničel). Od 18. 10. 2026 `ingest(vir="lpp")` `delay` preskoči (`beri_delay`), šteje samo čas. Zgodovina pred tem ostane.
+* Zamuda v absolutnih časih — `_delay_of()` bere `.time`.
+* Kakovost: mediana 0, p95 +7, p99 +23, nad 2 h nič (IJPP 2 541 vrstic nad 4 h).
+* `trip_id` = trojni UUID (`service|?|trip`), 1 : 1 z `avl.lpp.si`, ne z NAP. Okno uvoza osem dni (mesec = 62 989 voženj).
+* **Koda postajališča** (`stop_code`, 600011) → `station.koda` ob uvozu (od 22. 10. 2026; IJPP brez). Migracija pozabi `lpp_etag`, da jo naslednja osvežitev napolni. Rabi jo smer table („v center“, `strani.md`). Poti z `trip_id` iz zahteve: meja `stats.TRIP_NAJDALJSI` (200).
+* **1 : 1 ni zagotovljeno.** 1. 10. 2026 17 % voženj z UUID-jem, ki ga ni v nobenem voznem redu; para ni (ugibanje). LPP vozi **drug vozni red**, kot ga objavi (linija 14: 78 odhodov proti 66 v GTFS). Ob zaprti liniji (2. 10.) `ingest` šteje neznane **po progi**, `meta.lpp_linije_brez_voznje` in `meta.lpp_vozila_brez_voznje`; v `run`/`vehicle_now` nič; tablo napolni `lpp.na_tablo` (`strezba.md`).
+* **Imena postajališč**: 12 % VELIKE ČRKE. `gtfs._poenoti_imena()` zlije le zapise **na istem mestu** (500 m, tudi prek tretjega), ne vse skupine istega imena („Celje“/„Čelje“ 112 km; daljni „Trnovo“ je do 19. 10. ustavil zlivanje).
+* **Pošilja samo postanke PRED vozilom** → v `run` pri LPP **nikoli meritve**, le zadnja napoved pred prehodom (mediana 42 s pred). Kakovost napovedi pri LPP = napoved proti napovedi.
+* **Obvoz je po vožnji** (`stop_id` + `trip`, nikoli `route_id`; maraton 17. 10.: 2 808 parov). V `alert_entity`, `alerts.ne_ustavi` za tablo, zveze, pot. **Isti naslov za nov dogodek** — obdobje se ob vsakem branju prepiše (`alerts.zapisi`). Primestni (1118): `lpp.obvozi_zaslonov` (`type` 3). Odpoved (CANCELED) pri LPP obstaja: `collector.odpovedane`, v pomnilniku 5 min.
+* **Obvoz se konča tako, da izgine iz feeda** — `end_ts` ostane v prihodnosti (2 od 4 „veljavnih“). `meta.lpp_obvestila_prebrana`; `for_stops()` kaže obvoz le, če viden ≤ 10 min pred zadnjim branjem (`OBVOZ_REZERVA_S`).
 
 ## Nov vozni red, stari id-ji v feedu
 
-**Feed v živo ima svojo kopijo voznega reda, ne osveži je hkrati z nami.**
-22. 9. 2026: linije LPP 25, 12D, 15 (prevoznik 1118 v IJPP) dobile novo storitev `…260922…` z novimi id-ji od istega dne. Uvoz ob 04:23 stare vožnje spremenil v nagrobnike brez `sched`; feed pa vseh 12 vozil teh linij še popoldne javljal pod **starimi** id-ji (452xxx, 468xxx, 460xxx). Zajem jih zavrgel (`trip_id not in windows`), nove vožnje brez zamude in lege — 0 od 62 voženj linije 25 z vrstico v `run`.
+* **Feed ima svojo kopijo voznega reda.** 22. 9. 2026 LPP 25, 12D, 15 nova storitev; feed še popoldne pod **starimi** id-ji → zavrženo, 0 od 62 voženj v `run`. Id pride **iz naprave na vozilu** (NAP SIRI `VehicleJourneyRef`), ne od derp.si.
+* **Nov vozni red ni le preštevilčen** (25: 65 → 52 min). `gtfs.povezi_zamenjave()`: ista linija in prevoznik, skupen dan, ≥ 60 % postankov v istem vrstnem redu (po `stop_id`), najmanjši premik na **prvem skupnem postanku** ≤ 10 min, nova vožnja največ enkrat. 22. 9.: 195 od 210. Širiti 10 min ne pomaga — manjka vozilo v feedu, ne pravilo (linija 15 ni v feedu pod nobenim id-jem; edini vir data.lpp.si).
+* **Zamuda se preračuna, ne prepiše** (`collector.zamuda_po_zamenjavi`): ohrani se ura, odšteje nov vozni red (15:29 +20 → 15:28 +21). Preverjeno: feed +345 s, po prevodu +45 s = resnica.
+* **Par nastane samo ob uvozu**; pozneje: `kajros zamenjave <varnostna kopija izpred uvoza>`.
+* **Zip brez prevoznika se zavrne** (`gtfs.izginuli_prevozniki`; 28. 9. 2026 DUJPP 0 voženj SŽ). Meja nič, ne delež. **Pomešane trase** (`gtfs.tuje_trase`): prevoznik z ≥ 20 vožnjami s traso in > polovico tujih (prvi postanek > 2 km od začetka) → zavrnjen.
+* **Neznane se štejejo**: `meta.rt_neznanih`, `lpp_rt_neznanih` (`n/vseh`), rdeče nad 2 %. Stare vožnje prevoznikov, ki jih vodi NAP, se ne štejejo (od 14. 10.), ko NAP molči, spet.
+* **Vožnje, ki jih feed zamud sploh ne nosi** (od 21. 9. 2026 IJPP brez voženj z veljavnostjo od 21. 9.; lege so): `lega_brez_zamude` [ne v feedu, brez zamude, z lego] po prevozniku. Šteje 15 min po voznem redu **tretjega** postanka (pri drugem + 10 min: 10 lažnih epizod 13. 10.; izhodišča lega ne meri). Vožnja s ≤ 3 postanki se ne šteje.
+* **Zgodovina gre čez zamenjavo** (`db.PREDNIKI_SQL`, `prednik`). **Vez po vožnji čez dneve, trajna** (od 21. 10. 2026): `zamenjava` je za zajem in pri LPP po dnevih; `db.zapisi_prednike` ob uvozu prepiše pare v `prednik` (ključi `voznja_sql`), veriga se sestavi. LPP 13.–20. 10. zamenjal id 228 vožnjam; brez tega okno prazno do treh dni.
 
-Posledica na zaslonu: iskalnik poti ob 15:20 ponudil 25 s Tržnice Moste ob 15:28, LPP pisal, da pride čez 25 minut. Vozilo te vožnje ob 16:01 na koncu proge, ki bi jo po voznem redu doseglo ob 15:41; sosednja vožnja ob 16:14 v feedu +18 do +20 min.
+  21. 10. 2026, mediana stare (≥ 3 dni) proti vsakemu dnevu nove:
 
-**Nov vozni red ni le preštevilčen.** Vozni čas linije 25 padel s 65 na 52 minut, nekateri odhodi premaknjeni. Par zato ni „isti id + konstanta", ampak `gtfs.povezi_zamenjave()`: ista linija in prevoznik, skupen dan, vsaj 60 % postankov v istem vrstnem redu (po `stop_id`, ne `stop_seq`), najmanjši premik na **prvem skupnem postanku**, največ 10 min, vsaka nova vožnja največ enkrat. Zamenjava 22. 9.: **195 od 210** izginulih voženj dobi par (12D 85/85, 25 88/88, N0315 3/3, 15 pa 19/34 — odhodi premaknjeni za 15–30 min, para ne ugibamo). Mediana primerjave po vsej progi bi bila napačno merilo: pri pravih parih zaradi krajšega voznega časa naraste do 17 min.
+  | | parov | zgodovina | brez (ničla) |
+  |---|---|---|---|
+  | mestni LPP, isti vozni red | 223 | 3,73 min · 81 % v 5 min | 4,84 · 73 % |
+  | IJPP, isti vozni red | 112 | 2,22 · 90 % | 4,84 · 70 % |
+  | IJPP, drug vozni red, prevod po uri | 95 | 3,12 | 8,00 (brez prevoda 6,32) |
 
-**Zamuda se preračuna, ne prepiše** (`collector.zamuda_po_zamenjavi`): feedova vrednost = razlika do STAREGA voznega reda, zato se ohrani ura in odšteje nov. Staro 15:29 +20 = 15:49, po novem 15:28 → +21.
+  **Mestni LPP ne vozi ob urah stare** (LPP 16: 07:35 namesto 07:45, prevod +10, MAE 12,2) → vez le, če razlika na nobenem skupnem postanku ne preseže 3 min (`db.PREDNIK_LPP_RAZLIKA_S`); do 3 min MAE 4,97.
+
+## Zamuda iz lege in prehod brez trase
+
+* **Kar feed zamud izpušča, izmerimo iz lege.** Rezerva (`KAJROS_PREHOD_GPS=0`): `iz_lege.py` — lega na traso, prehod med legama ≤ 60 s narazen, zapis v `run`/`obs` kot iz feeda s časom lege po prehodu; s feedom 92 % na minuto. Izhodišča ne meri. Samo s strežnikom (malina `KAJROS_POSITIONS=0`), izklop `KAJROS_ZAMUDA_IZ_LEGE=0`. Vožnja, ki jo feed v 5 min omeni, gre mimo; 304 = vožnje ostanejo „v feedu“ (`iz_lege.feed_nespremenjen`).
+* **Kjer vozilo ne vozi po trasi, prehoda ni** (3 % vmesnih postankov). **Varoval ne rahljaj** (mediana 83 s proti 29 s) — popravi se trasa. Stari način beleži `odklon` in `vrsta = 'preskok'` (projekcija skoči čez zanko > 30 m/s); `kajros odkloni` po odsekih.
+* **Prehod brez trase** (`prehod.py`, vodi od 13. 10. 2026): obisk = vozilo v 100 m; čas = odhod (zadnji trenutek v 50 m), na cilju prihod. Postanki po vrsti, med naslednjimi osmimi; obisk s preskokom velja šele, ko se konča skladen kasnejši. Prvi obisk in skok > 20 min čakata; prvi brez preskoka velja sam po 15 min (`POTRDI_PRVI_S`; pri 10 štiri napake, pri 15 nič), razen pod −120 s. Prvi dan: 96,9 % vmesnih proti 89,7 %, mediana 7 s, p90 44 s, cilj 84 % proti 39 %. `KAJROS_PREHOD_GPS`: `vodi` (privzeto) / `senca` / `0` (rezerva **do 27. 10. 2026, nato ven**, če vodi drži). Z `vodi` se odklonov ne beleži. Lege v `lega` 14 dni, sled se ob zagonu obnovi.
+* **Sled je po vozilu** (`lega.vozilo`): NAP pod isto vožnjo javi dve vozili (~0,5 % voženj). Velja vozilo z največ prehodi (`prehod._izberi`). Prevzame tudi vozilo, ki nadaljuje za zadnjim postankom vodje, ko vodja `CILJ_S` molči (Nomago menja avtobus na poti). **Ne prevzame**, če je na ≥ 2 skupnih postankih `DRUGA_S` (10 min) dlje od voznega reda (NAP prijavi naslednjo vožnjo). Vodja ostane `OKNO_POZNEJE_S` po zadnji legi. Zemljevid kaže vodjo (`prehod.vodja`, `nap.zapisi`). `kajros prehodi` smiseln le do 13. 10.
 
-Preverjeno na arwenu po popravku: v minuti 161 vrstic `run` za linijo 25, neznanih v IJPP 5 od 538. Za Tržnico Moste zajem ob 16:36 dal vožnji s 16:31 +467 s, torej 16:38:47; LPP ob 16:37:30 pisal „čez 1 min".
+## Vožnja, obratovalni dan, dnevnik
 
-**Id vožnje v IJPP feedu pride iz naprave na vozilu, ne od derp.si.** `derp-si/ijpp-rt` (gitlab) ga vzame iz NAP SIRI (`VehicleJourneyRef`, sistem Realis) in samo pretvori. Stari id-ji = vozilo ima še stari plan voženj — kdaj ga zamenjajo, ni odvisno od derp.si ne od nas.
-
-**Linija 15 dokazuje, da par ni vedno mogoč.** LPP-jev lastni vozni red (data.lpp.si) se 22. 9. ujema z novim IJPP (Stanežiče → Sora 15 od 15 odhodov, obratno 13 od 14; izjema 15:35 pri LPP proti 15:50 v IJPP). Avtobus ob 17:45 pri LPP vozil v živo (`type 0`), v IJPP feedu ga ni **pod nobenim id-jem** — ne starim ne novim, v okolici proge nobenega vozila linije 15. Takega vozila nobeno pravilo povezovanja ne reši; edini živi vir zanj: data.lpp.si. Isti dan feed od 16:31 naprej za linijo 15 molčal.
-
-**Vozilo vozi NOV vozni red, feed mu pripne najbližji stari id — prevod to popravi.** Izmerjeno 22. 9. na 14 vzorcih lege vozila, ki ga je feed vodil kot staro vožnjo 21:20 (460289): odmik od **novega** voznega reda (478164, 21:25) 0 do +2 min, od starega +3 do +7. Feedova zamuda +345 s, `run` po prevodu zapisal **+45 s** — vrednost, ki se ujema z resnico, ne s starim voznim redom. Dokaz, da je prevod prek ure pravilen tudi ko se vozni red premakne.
-
-**Širiti mejo 10 minut se ne izplača.** Pri liniji 15 od 16:31 do 21:40 v feed prišla ena sama vožnja od šestih, ki bi jih večja meja lahko povezala, in ta bila povezana že tako. Manjka **vozilo v feedu**, ne pravilo.
-
-**Zip brez prevoznika se zavrne** (`gtfs.izginuli_prevozniki`). 28. 9. 2026 je DUJPP (`dujpp.si/gtfs/dujpp-ijpp.zip`, derp.si ga le prenese) objavil 783 prog SŽ in **0 voženj**; uvoz ob 04:22 pobrisal vozni red vseh 726 vlakov, tabla za Ljubljano „postaje ne poznam“. Feed zamud in leg ob 08:13 ni imel nobenega vlaka (0 od 560 vnosov) — z uvozom tega ne popraviš, stari vozni red pa vsaj pokaže odhode. Meja je nič, ne delež: LPP v IJPP med 30. 8. in 28. 9. padel s 3 060 na 556 voženj (−82 %) brez opažene napake — prag v deležu bi bil ugibanje.
-
-Isti zip je imel **pomešane trase** in izgubil LPP primestni: prvi postanek več kot 2 km od začetka trase pri 74–100 % voženj vsakega avtobusnega prevoznika (Arriva 6 429 od 7 821; zip 30. 8.: 1–7 %), LPP v IJPP za 28. 9. 281 voženj namesto 1 215. Posledica: `iz_lege` obstal (vozilo 55–145 km od „svoje“ trase), napačne trase na zemljevidu, 33 voženj v feedu brez voznega reda. Zato druga varovalka `gtfs.tuje_trase`: prevoznik z ≥ 20 vožnjami s traso in več kot polovico tujih → zip zavrnjen. Preverjeno na obeh zipih: 28. 9. zavrnjen v 9 s, 30. 8. uvožen.
-
-**Par nastane samo ob uvozu**, ker je stari vozni red takrat še v bazi — pozneje ga ni. Če je uvoz že tekel brez tega (arwen 22. 9.): `kajros zamenjave <razpakirana varnostna kopija izpred uvoza>`.
-
-**Kar še ostane neznano, se šteje.** `ingest` vrne `neznanih`, zajem zapiše v `meta` (`rt_neznanih`, `lpp_rt_neznanih`, oblika `n/vseh`), pregled za skrbnika pokaže med zdravjem. Ob zamenjavi 22. 9. v IJPP 16 od 662 (2,4 %); prag za rdečo 2 %. Brez števca se je napaka videla šele, ko je potnik čakal na avtobus. **Stare vožnje prevoznikov, ki jih vodi NAP, se ne štejejo** (od 14. 10. 2026): derp.si jih nosi, ker ima njegov TransitClock star vozni red, isto vozilo pa NAP vodi pod novo vožnjo (v dveh vzorcih vseh 15) -- izgube ni, rumena vrstica je bila stalna (IJPP 8–9 od ~850). Ko NAP molči, se štejejo spet.
-
-**Obratne napake števec ne vidi: vožnje, ki jih feed zamud sploh ne nosi.** Od 21. 9. 2026 IJPP `trip_updates` nima **nobene** vožnje z veljavnostjo od 21. 9. naprej — Nomago ~430 na dan (11 % njegovih), Arriva 51 — v `vehicle_positions` pa ista vozila so, pod novimi id-ji (25. 9. ob 11:16: 22 vozil, nobeno v `trip_updates`). Vožnje z veljavnostjo od 7. in 14. 9. imajo zamude normalno. Najverjetneje derp.si za zamude ima star vozni red: lega ga ne rabi, zamuda na postanek pa ga. Tabla pri teh vožnjah pisala „brez podatka“, četudi vozilo vozilo in videli na zemljevidu. Izmerjeno in razčlenjeno v `docs/MERITVE.md` (25. 9. 2026).
-
-Pregled to kaže kot `lega_brez_zamude` (`collector`), trojka [ne v feedu zamud, brez vsake zamude, vozil z lego] po prevozniku. Števca dva, ker vrzel zapolnjujemo sami in prvi sicer ne bi več videl napake vira. Vozilo šteje šele 15 min po voznem redu **tretjega** postanka: izhodišča lega ne meri (od izhodišča je bila Arriva Koper → Ljubljana, 82 min brez postanka, 11. 10. „brez zamude“ in je Arrivo obarvala rdeče), prehod brez trase pa prvi obisk potrdi šele z naslednjim. Pri drugem postanku + 10 min je bila ponovitev 13. 10. 2026 skozi `prehod.py` rdeča v desetih epizodah (20 sporočil) -- zamudni avtobusi v konici in redki postanki (Izola → Ljubljana: Koper, nato 70 min do Hajdrihove) --, pri tretjem + 15 min v eni (10 min brez leg NAP). Vožnja s tremi postanki ali manj se ne šteje.
-
-**Kar feed zamud izpušča, izmerimo iz lege** -- od 13. 10. 2026 s prehodom brez trase (spodaj), prej in kot rezerva (`KAJROS_PREHOD_GPS=0`) z `iz_lege.py`: lega na traso, prehod postanka med dvema legama, največ 60 s narazen, zapis v `run` in `obs` kot iz feeda, s časom lege po prehodu. Na vožnjah z obojim se s feedom ujema v 92 % na minuto natančno (izmerjeno v `docs/MERITVE.md`). Izhodišča ne meri. Teče samo s strežnikom: `kajros collect` na malini leg ne bere (`KAJROS_POSITIONS=0`), izklop `KAJROS_ZAMUDA_IZ_LEGE=0`. Vožnja, ki jo feed zamud v zadnjih 5 min omeni, gre mimo -- iz lege se piše samo tam, kjer feeda ni. Odgovor 304 = ista vsebina: vožnje zadnjega branja tega vira ostanejo "v feedu" (`iz_lege.feed_nespremenjen`).
-
-**Kjer vozilo ne vozi po trasi, prehoda ni** (11. 10. 2026: 3 % vmesnih postankov pri Arrivi, Nomagu, AP MS; Brnik letališče 15 od 17). Trasa zavije na postajo, letališče ali v krak, vozilo ne, in eno od varoval (odmik 150 m, razmik 60 s, hitrost 30 m/s) prehod zavrže. **Varoval ne rahljaj**: zapolnjena zamuda je bila tam slaba (mediana 83 s proti 29 s), daljši razmik sam pa je natančen (180 s: mediana 11 s) -- popravi se trasa. Zato se vsak odklon zapiše v `odklon`: lege izven trase z zadnjo lego na trasi pred njimi in prvo za njimi; ne pred voznorednim odhodom (pot v prazno na izhodišče) in ne po prihodu (`ODKLON_KONEC_M`). Odklon, iz katerega se vozilo 10 min ne vrne, zapiše `pospravi` brez drugega sidra. **Pogostejši je preskok** (posnetek 11. 10.: 53 od 78 zgrešenih): vozilo ostane v 150 m od trase, trasa pa ima zanko ali krak, ki ga ne prevozi, in projekcija skoči čezenj hitreje od 30 m/s (Vrtojba 5,3 km v 20 s). Od 12. 10. se zapiše kot `vrsta = 'preskok'` -- primerja se z zadnjo lego na trasi, ne s sledjo, ki po legi nazaj ostane stara. `kajros odkloni` jih razvrsti po odsekih z deležem odklonjenih prevozov; meja med stalnim in občasnim se določi po nekaj dneh beleženja (MERITVE, 11. 10. 2026).
-
-**Prehod brez trase** (`prehod.py`, od 12. 10. 2026 v senci, od 13. 10. vodi): postanek je obiskan, ko pride vozilo v 100 m od njega; čas je odhod (zadnji trenutek v 50 m od najbližje točke), na cilju prihod. Postanki po vrstnem redu, med naslednjimi osmimi; obisk, ki preskoči postanke, velja šele, ko se konča skladen obisk kasnejšega -- sicer izlet tja in nazaj ob prvem postanku „obišče“ zadnjega na istem mestu in vse vmes izpusti. Enako čakata prvi obisk vožnje (vozilo na poti na izhodišče pelje mimo postankov) in skok zamude nad 20 min; molk zaključi obisk, s katerega je vozilo že odpeljalo. Prvi obisk brez preskoka velja tudi sam, ko ga 15 min ne zamenja drug (`POTRDI_PRVI_S`), razen prezgodnjega (pod −120 s, pot na izhodišče) -- sicer je Izola → Ljubljana 70 min čakala na Hajdrihovo; pri 10 min so bile na dveh dneh štiri napake po 12–15 min, pri 15 nobena. Prvi dan v senci (13. 10. 2026, 8 052 voženj): 96,9 % vmesnih postankov proti 89,7 % po trasi, na skupnih mediana 7 s, p90 44 s, cilj 84 % voženj proti 39 % (MERITVE). `KAJROS_PREHOD_GPS`: `vodi` (privzeto od 13. 10. 2026, Davidova odločitev) piše `run` in `gps_prehod` namesto lege na traso, `senca` samo `gps_prehod`, `0` izklopi in vrne stari način (rezerva do 27. 10. 2026, nato ven, če vodi drži). Z `vodi` se odklonov (`odklon`, `kajros odkloni`) ne beleži več -- beleži jih le stari način. Lege so v `lega` 14 dni: sled se po zagonu obnovi iz nje. **Sled je po vozilu** (`lega.vozilo`, od 14. 10. 2026): NAP pod isto vožnjo zna javljati dve vozili (13. 10. 41 od 8 469 voženj, 14. 10. 33 od 6 179) -- eno vozi, drugo stoji ali vozi drugam. Ena sled je sledila prvemu, lege drugega zavrgla kot skoke GPS in prava vožnja je ostala brez zamude. Velja vozilo z največ prehodi (`prehod._izberi`); ko ga drugo prehiti, njegovi prehodi povozijo prejšnje. Vožnjo prevzame tudi vozilo, ki nadaljuje za zadnjim postankom vodje, ko vodja `CILJ_S` molči: Nomago Maribor → Črna in Radlje → Črna vsak dan zamenjata avtobus na poti, drugi ima manj prehodov in je bil zavržen ves. **Ne prevzame** je vozilo, ki je na vsaj dveh skupnih postankih `DRUGA_S` (10 min) dlje od voznega reda kot vodja: NAP vozilo naslednje vožnje prijavi pod isto (Ljubljana → Kočevje 15. 10. 2026 +85 namesto +20 min). Vodja ostane `OKNO_POZNEJE_S` po zadnji legi, tudi ko je sled pozabljena -- prej je ravno takrat vožnjo prevzelo vozilo za njim. S pravimi vozili 15. in 16. 10.: 1 404 in 1 434 postankov na vožnjah z več vozili namesto 1 372 in 1 389 (MERITVE). Zemljevid kaže vodilno vozilo, dokler se javlja (`prehod.vodja`, `nap.zapisi`). Primerjava `kajros prehodi` / `scripts/prehodi.sh` -- smiselna le za dneve do 13. 10. 2026: z `vodi` je `run` pri prevoznikih NAP isti kot `gps_prehod`.
-
-**Zgodovina gre čez zamenjavo** (`db.PREDNIKI_SQL`, tabela `prednik`): običajna zamuda, okno vožnje in model štejejo tudi meritve stare vožnje, prevedene na nov vozni red. Brez tega je bila vožnja z novim id-jem tri dni „brez podatka“.
-
-**Vez je po vožnji čez dneve in trajna** (od 21. 10. 2026). `zamenjava` je za zajem: izgine z voznim redom nove vožnje, pri mestnem LPP pa je po dnevih. 13.–20. 10. 2026 je LPP 228 vožnjam na 11 linijah (18 in 18L vsem) zamenjal srednji del id-ja, dan in vzorec sta ostala; par je vsako povezal s staro vožnjo **istega dne**, ki ni nikoli vozila (0 od 824), in okno vožnje je bilo pred odhodom prazno, dokler nova ni nabrala treh dni. `db.zapisi_prednike` ob vsakem uvozu pare prepiše v `prednik` med ključi `voznja_sql`; vrstica ostane, veriga zamenjav se sestavi.
-
-Izmerjeno 21. 10. 2026 na arwenu, mediana stare vožnje (vsaj 3 dni) proti vsakemu dnevu nove od 14. 10.:
-
-| | parov | zgodovina | brez (ničla) |
-|---|---|---|---|
-| mestni LPP, isti vozni red | 223 | 3,73 min · 81 % v 5 min | 4,84 · 73 % |
-| IJPP, isti vozni red | 112 | 2,22 · 90 % | 4,84 · 70 % |
-| IJPP, drug vozni red, prevod po uri | 95 | 3,12 | 8,00 (brez prevoda 6,32) |
-
-Pri IJPP nova vožnja vozi ob urah stare, pri **mestnem LPP ne**: LPP 16 iz Črnega Loga od 16. 10. ob 07:35 namesto 07:45 -- prevod po uri mu pripiše +10 min (46 primerjav, MAE 12,2 min, vse precenjene), brez zgodovine 1,6 min. Zato pri mestnem LPP vez nastane le, če se ura na nobenem skupnem postanku ne razlikuje za več kot 3 min (`db.PREDNIK_LPP_RAZLIKA_S`); od 228 izpade ta ena. Do 3 min (4 vožnje, 108 primerjav): MAE 4,97 min, precenjenih 0,9 %.
-
-## Vožnja, obratovalni dan in dnevnik
-
-`trip.start_s` / `trip.end_s` = **prvi odhod in zadnji prihod vožnje**, izpeljana iz `sched`, shranjena v `trip`, ker ju rabi najbolj vroča poizvedba — "kaj se zdaj vozi". Polni ju `db.fill_trip_window()` ob uvozu GTFS in migraciji. Kdor vstavlja vožnje mimo uvoza (test, ročni popravek), ju mora zapolniti, sicer vožnja **ni na seznamu živih**.
-
-**Feed občasno objavi vožnjo z JUTRIŠNJIM obratovalnim dnem.** Izmerjeno 31. 8.: 44 vrstic v `run` (0,026 %) v **dveh** vožnjah ima `service_date` v prihodnosti — Nomagov N6507 z voznorednim odhodom 04:25 in enotno zamudo 48 240 s (13,4 h) na vseh postankih. Isti vzorec kot pri N6571: feed zamenja prometni dan, razliko objavi kot zamudo.
-
-**Pravila za to ni namenoma.** Vseh 44 vrstic ima zamudo nad 6 h, zato jih `api.MAX_LIVE_DELAY_S` že drži izven živega prikaza. Dve vožnji = premalo za varovalko ob zajemu — isti razlog kot pri enotni zamudi čez vso vožnjo. Meri se z `SELECT COUNT(*) FROM run WHERE service_date > date('now','localtime')`; če delež zraste, je čas za pravilo.
-
-**Vožnja z zamudo nad `api.MAX_LIVE_DELAY_S` (6 h) ni živa.** Pravilo prikaza, ne pospešek. Pri železnici ni zamude čez tri ure (najhujša EC 79 z 2,9 h); pri avtobusih je nad šest ur 0,67 % vrstic in te niso zamude — Nomagov N6571 je imel 27 060 s enako na vseh 44 postankih vožnje ob 04:15 = feedova zamenjava prometnega dne.
-
-`trip.block_id` = veriga voženj istega vozila (glej zgoraj). Indeks `trip_block` je **delen** (`WHERE block_id IS NOT NULL`): dve tretjini voženj in vsi vlaki ga nimajo, v indeksu nimajo kaj iskati.
-
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day` (statika) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `weather` · `alert` + `alert_entity` (ovire) · `delay_report` (kje in koliko, po prevozniku).
-
-Zajem piše **samo ob spremembi vrednosti**, sprememba pa mora biti vsaj `collector.OBS_MIN_DELTA_S` (60 s) od zadnje **zapisane**. Prikaz ima ločljivost ene minute, sekund ne kaže nikoli, feed sam prilaga `uncertainty: 120` -- sprememba za 15 s = šum, ne sprememba.
-
-Vlaki poročajo v celih minutah: **1,6 zapisa na postanek**. Mestni avtobusi **23,3**, z mediano spremembe 15 s — 14 000 vrstic na uro za nihanje, ki ga ne pokažemo. Brez praga bi vlaki + LPP dali ~1,5 GB na leto, z vsemi prevozniki 8,7 GB.
-
-Primerjava z zadnjo **zapisano** vrednostjo, ne s prejšnjo prebrano, da se počasno lezenje sešteva in ne izgine. `run` ostane točen -- prag velja samo za dnevnik.
-
-**Dnevnik se obrezuje, `run` nikoli.** Tudi s pragom z vsemi prevozniki je bilo ~300 000 vrstic `obs` na dan; železnica 4 000 = 1 %. Z NAP in prehodom brez trase (17. 10. 2026) **1,6–1,9 mio avtobusnih vrstic na dan** -- obrez v eni transakciji je držal zapis do 116 s in druge niti so po 30 s padle; zato po kosih (`collector.PRUNE_KOS`). Vrstica stane 79 B (41 B tabela + 38 B ključ, merjeno z `dbstat`) — 24 MB na dan, 8,7 GB na leto brez obrezovanja. Zato dve meji (`collector.prune_obs`, dnevno ob osvežitvi vremena, ali `kajros prune`): železnica 90 dni, avtobusi 14. Železnica = jedro, njen dnevnik poceni; pri avtobusih za prikaz zadošča `run`. `run` = zgodovina, iz katere živijo statistika, "običajna zamuda" in backtest -- se ne briše.
-
-Disk, izmerjeno (`dbstat`, 69 B na vrstico): `run` dobi največ toliko vrstic, kolikor je na dan prevoženih postankov -- železnica 7 832, avtobusi 134 859. Na leto 0,2 GB proti 3,4 GB.
-
-**Dolgoročno raste `run`, ne `obs`.** Dnevnik se z obrezovanjem ustali pri ~356 MB (železnica 90 dni = 28 MB, avtobusi 14 dni = 327 MB), naprej ne raste. `run` raste za vedno, po enem letu ga prekaša desetkrat. **Lega vozil ne stane nič**: `vehicle_now` = upsert na vožnjo, starejše od ure se brišejo -- sled se ne hrani. Zavestna izbira, ne spregled: `run` je edino, iz česar se da kasneje karkoli izračunati, brisati ga = brisati projekt. Če bo treba, najprej avtobusni `run`, ne železniški.
-
-## Obvestila SŽ: kaj feed res pošlje (izmerjeno 4. 9. 2026)
-
-* **Razčlemba živih zamud pokrije vse.** 474 `SZ-DELAY` obvestil, **474 razčlenjenih (100 %)**. Regex v `parse_delay_text()` ni približek, ampak opis oblike, ki jo SŽ res uporablja.
-* **Poln zapis je v `description`, ne v `header`.** Glava „Vlak zamuja 13 min“ — brez številke vlaka in postaje. `ingest` bere `parse_delay_text(desc) or parse_delay_text(header)`; vrstni red ni kozmetičen: pri obratnem se razčleni **nič**.
-* **Vsa poročila so `prihod`.** 31 196 vrstic v `delay_report`, nobene z `odhod`; izjemnih (`severe`) 2 369. Veja za odhod v kodi doslej ni nikoli stekla — ostane, ker je poceni, a nanjo se ne zanašaj.
-* **Vrste „drugo“ ni.** Vsa obvestila `SZ-DELAY` (474) ali `SZ-OVIRA` (123); `_kind()` tretje veje doslej ni potreboval.
-* **Vsako obvestilo ima natanko eno obdobje veljavnosti.** Vseh 102 v živem feedu; glej varovalo `vec_obdobij` v `ingest()`.
-
-## Lege so stare, in to ni naša zamuda
-
-`seen_ts` = `vehicle.timestamp` **iz feeda**, ne čas našega branja — namenoma, ker prikaz trdi „lega stara N" in mora biti to res starost meritve.
-
-Pri mestnem LPP je normalna starost **57–147 s**: lega je ob pakiranju stara mediano 35 s, feed se osveži šele vsakih ~90 s (vsa vozila hkrati, v paketu), naš 30-sekundni cikel doda do 30 s. Izmerjeno 7. 9. 2026, podrobnosti in razrez po členih v [docs/MERITVE.md](../../docs/MERITVE.md).
-
-Preden kdo išče napako pri sebi: primerjaj `seen_ts`, ki ga strežemo, s `vehicle.timestamp` v feedu ta hip. Ob zadnji meritvi ujemanje **99 od 99**.
-
-LPP feed **nima `ETag` ne `Last-Modified`**: pogojna zahteva ni mogoča, vsak zajem prenese vseh 315 kB.
-
-## potniski.sz.si: Chrome mimo Cloudflara (`brskalnik.py`, od 10. 10. 2026)
-
-Zemljevid vlakov in table postaj so na potniski.sz.si, za Cloudflarom. Do 7. 10. 2026 ju je za nas (in za derp.si) bral `api.modra.ninja`; tistega dne ob 1:24 je obstal, ker je Cloudflare začel zavračati brezglave brskalnike (naš brezglavi chromium 6. 10. še skozi, 7.–10. 10. ujet v izzivu). Odtlej vse vlake beremo sami, s Chromom. Izmerjeno 10. 10. 2026:
-
-* **Gre samo Chrome z oknom.** Na strežniku mu okno da Xvfb (`-displayfd`, prost zaslon izbere sam). Izziv reši sam v **3–7 s**; ena zahteva nato 0,5–0,8 s (`fetch` v naloženi strani, piškotek `cf_clearance` gre zraven, `cf-cache-status: DYNAMIC`).
-* **CDP po cevi ali z `--remote-debugging-port=0` NE gre**: v obeh primerih Chrome sam postavi `navigator.webdriver = true` in Cloudflare ga ne spusti (pet poskusov po 40–90 s). Z vrati, ki jih izberemo sami, je `webdriver` `false`. Zato `_prosta_vrata()` in lasten odjemalec WebSocket (`_Ws`, brez nove odvisnosti).
-* **Cloudflare piškotek občasno zavrne**: doma v 40 min enkrat 403 z izzivom (arwen: 240 branj v 60 min, nobenega); ponovno nalaganje strani ga reši v 7 s, zahteva se ponovi enkrat. Drugi izziv zapored ugasne Chrome; naslednja zahteva začne s praznim profilom.
-* **Cena**: Chrome ~400–560 MB PSS (14 procesov; vsota RSS 1,3 GB šteje deljeno večkrat), Xvfb 75 MB. Zažene se ob prvi zahtevi, vsakih 6 h znova (`NAJDLJE_ZIVI_S`). Po neuspelem zagonu 5 min ne poskusi znova; kadar se je Chrome zagnal, stran pa se ni naložila (`net::ERR_…`, ni interneta), le 30 s (`PO_NAPAKI_OMREZJA_S`) -- 15. 10. 2026 je bil zemljevid SŽ po vrnitvi interneta sicer še 4 min rdeč.
-* **Kje teče**: arwen (`deploy/brskalnik.sh`: Google Chrome iz Googlovega paketa -- AppArmor ga pozna in dovoli peskovnik -- in Xvfb; preizkus v istem peskovniku kot storitev). **Malina ne more** (Pi Zero W, armv6). Razvoj: brez Xvfb se okno odpre na zaslonu in se po izzivu pomanjša (`sudo apt install xvfb` ga skrije). Preizkus: `kajros brskalnik`.
-* Stanje (teče, različica, zaslon, izzivi, pomnilnik, zadnja napaka) v `/admin` → Stroj in na karticah „zemljevid SŽ“ in „tabla SŽ · tiri“.
-* **Izpis napak** Chroma in Xvfb: `${KAJROS_DATA_DIR}/sz-brskalnik-{chrome,xvfb}.log` (prepisan ob vsakem zagonu), ob zagonu, ki se konča s kodo, kopija v `…-chrome-napaka.log` / `…-xvfb-napaka.log` in zadnja vrstica v sporočilu napake. Od 15. 10. 2026; prej `/dev/null`. Prvi ujeti vzrok: Chrome s kodo 1 („Missing X server“) ob prvem zagonu po restartu (6 od 43, 8.–15. 10.) -- Xvfb številko zaslona in `\n` zapiše posebej (strace), mi smo cev zaprli po številki, Xvfb je ob drugem zapisu umrl. `_preberi_zaslon` bere do konca vrstice.
-
-## Tir s table SŽ (`peroni.py`, od 25. 9. 2026)
-
-Ne GTFS ne NeTEx ne feed tira nimajo. Ima ga tabla prihodov in odhodov na potniski.sz.si (`/odhodi-in-prihodi-na-postaji/?postaja=<št. SŽ>&datum=<d.m.llll>`), od 10. 10. 2026 brana naravnost (prej prek `api.modra.ninja/sz`). Stran izriše strežnik SŽ: tabla 150–175 kB HTML, seznam postaj (282) je v izbiri na isti strani. Zato:
-
-* **Tir je dodatek.** Pokaže se samo, kadar ga je potrdilo ZADNJE branje postaje in to branje ni zamujeno za več kot dva razmika (`peroni.tiri`). Ugasne se s `KAJROS_PERONI=0`, nič drugega ne sme pasti.
-* **Tabelo loči naslov** („Odhodi vlakov“ / „Prihodi vlakov“), vrstica je slovar po glavi brez zvezdice („Št. vlaka“, „Tir“, „Zamude“).
-* **„BUS“ v stolpcu tira ni tir**: EN 414 je bil 10. 10. 2026 v Ljubljani nadomeščen z avtobusom, nekaj minut pozneje tir 9-B. Vlak brez številke (tudi to se zgodi, MV 19) se ne šteje.
-* **Bere ga SVOJA nit, ena postaja naenkrat** -- v zajemni zanki bi zamaknila zamude. Ritem je iz časov posrednika (13–17 s na tablo), zdaj ~0,8 s; ostaja, ker stran SŽ ni naša.
-* **Tir je lastnost postaje, ne vlaka.** Od 20 izmerjenih postaj ga je 14 imelo pri vseh vlakih, 6 (Jesenice, Novo mesto, Kranj, Dobova, Trbovlje, Škofja Loka) pri nobenem. Postaja brez tira se preveri enkrat na dan.
-* **Razmik po prometu**: Ljubljana, Maribor, Celje vsakih `KAJROS_PERONI_SECONDS` (600 s), majhne postaje redkeje, najdlje 2 h.
-* **Tabla kaže samo vlake, ki še pridejo** (tudi zamujene), zato se bere čez ves dan. Mednarodnih 1472, 210, 211, 79, 350 na njej ni.
-* **Ključ = koledarski dan table + številka brez vrste**, ne prometni dan, ne `trip_id`: vlak ob 00:30 je na tabli naslednjega dne.
-* **Tir se čez dan spreminja.** `prvi` ostane, `tir` se posodablja; prikaz razliko napiše z besedo („prej 6-A“). brezavta.si kaže „običajni“ tir iz zgodovine; v Ljubljani se je razlikoval od table pri 8 od 121 vlakov.
-
-## Zamude vlakov z zemljevida SŽ (`zamude_sz.py`, od 28. 9. 2026; vodi od 10. 10. 2026)
-
-Zemljevid vlakov s potniski.sz.si (`/wp-admin/admin-ajax.php?action=aktivni_vlaki`, JSON, 3–5 kB; ko ne vozi noben vlak, `null`, ne `[]`) je **izvor vseh zamud vlakov**, ki smo jih kdaj imeli: derp.si jih bere z `api.modra.ninja/sz/lokacije` (`derp-si/ijpp-rt`, `szService.js`, 8. 10. 2026), ta pa z tega naslova -- polja ista, preimenovana (`St_vlaka` → `st_vlaka`, `Postaja` → `naslednja_postaja`, `Zamuda_cas` → `zamuda_min`, `Odhod` → `raw_odhod`). Vlak vodi po **številki**, zato ga pokvarjen zip DUJPP ne prizadene (28. 9. 2026 je derp.si izgubil vse vlake, zemljevid ne).
-
-**Vodi zamude vlakov** (Davidova odločitev 10. 10. 2026: „raje 15 s prej in brez posrednikov“). Dokler je prebran v zadnjih `iz_lege.SZ_VODI_S` (120 s), zajem derp.si vlakov (`network = zeleznica`, `mode != bus`) ne piše (`collector._sz_vlaki`, števec `sz_prevzel`); nadomestni avtobusi ostanejo derp.si. Ko obmolkne, derp.si vlake spet piše sam. Primerjave med viroma ni več: oba sta isti zemljevid.
-
-Polje `Vrsta` (10. 10. 2026, 84 branj po 15 s):
-
-* **1 -- vozi.** `Postaja` = naslednja postaja, `Odhod` = voznoredni odhod s postaje PRED njo + `Zamuda_cas`, na minuto (12 od 12 vlakov 28. 9.). Zamuda je torej odhodna zamuda zadnjega prevoženega postanka, dokler je SŽ med postajama ne poveča (spodaj, „Trenutna zamuda“); enakost je hkrati preizkus prave vožnje in dneva. Brez ujemanja se vlak ne pripne.
-* **0 -- stoji na izhodišču**, `Odhod` je vozni red. Ni meritev; do 7. 10. (prek modra.ninja, brez tega polja) se je ob voznorednem odhodu zapisala ničla tudi vlaku, ki še ni odpeljal.
-* **2 -- na cilju**: prazna `Postaja`, `Odhod` = dejanski prihod, `Zamuda_cas` = zamuda ob prihodu. Čez 1–2 min SŽ vrstico ponastavi na 0 ob voznorednem prihodu (1897: +7 → 0, 3287: +8 → 0). Velja prvi prihod; ničla po zamudi nad 3 min je ponastavitev (`ponastavljenih`). Prej (modra.ninja) prihoda na cilj nismo imeli.
-
-**Vlak ne gre nazaj z isto ali manjšo zamudo** (`nazaj`). Prvotno pravilo (10. 10. 2026, LPV 2616 po Brezovici spet „naslednja Ljubljana Tivoli, +9“ po odhodu iz Ljubljane s +0) je zavračalo vsako vrnitev; od 16. 10. velja vrnitev z **večjo** zamudo -- glej „Zemljevid je izračun“ spodaj. Popravek na istem odseku velja.
-
-**Ničla po zamudi velja šele potrjena** (od 16. 10. 2026). SŽ na vsake 3–4 min za **en** odgovor (15 s) del vlakov pokaže po voznem redu: zamuda 0, postaja in lega tam, kjer bi bil točen vlak. Ujeto 16. 10. ob 14:28:52: 7 od 59 vlakov (LP 3234 +21 pred Ivančno Gorico → 0 pred Žalno), naslednji odgovor spet +21. V `obs` takih trenutkov (≥ 6 vrstic, ≥ 80 % ničel) 15. 10. 160, 16. 10. do 14:16 84. Skupaj z „vlak ne gre nazaj“ je to **zaskočka**: ničla vlak prestavi naprej, prave vrstice so nato „nazaj“, dokler jih pravi vlak ne dohiti, naslednja ničla ga spet prestavi. RG 318 16. 10.: +0 od Zidanega Mosta (6:32) do Ljubljane Polje, vozil +12 do +18; prikaz je kazal staro +12 iz Sevnice kot svežo. Od 11. do 16. 10. so ničle zadele **611 od 1 444 voženj z zamudo**; zamuda 0 za postankom z zamudo 0,3 % vrstic `sz_zamuda` prek modra.ninja (28. 9.–6. 10.), 8–11,5 % od 11. 10. Zato `zapisi` ničlo po katerikoli zamudi zapiše šele, ko jo ponovi naslednji spremenjeni odgovor (`_nicle`, števec `nicel`); cena je 15 s pri pravem okrevanju. Ponovitev 12 min zemljevida skozi novo kodo: 0 ničel za zamudo (staro 3). **Primerja se z zadnjo besedo SŽ** (`sz_zamuda` po `zadnjic_ts`), ne s postankom najdlje naprej: ta je po ničli, ki je prišla skozi, sam ničla, in vsaka naslednja je šla mimo kot „ničla po ničli“. Prva različica popravka je tako po objavi spustila ničle vlakom, ki so jih naprej že imeli (LPV 2504 +0 ob 14:40, 14:47 in 14:51, SŽ vmes +16 do +18). **SŽ sam vlak včasih riše po voznem redu več minut**: EC 115 16. 10. od 15:35 do 15:56 +0 iz Jesenic, nato +21 na Jesenicah; LPV 2607 iz Sežane +0 do Divače, nato +5 na Povirju. Brez prejšnje zamude tega ne loči nobeno varovalo -- ista ničla je na strani SŽ.
-
-**Zemljevid je izračun, ne sled.** Lega in `Postaja` sta vozni red plus trenutna zamuda: vlak, ki zamudo nabira, gre naprej, ko poteče voznoredni čas plus stara zamuda, in skoči nazaj, ko SŽ zamudo poveča (RG 615 16. 10. ob 14:22–14:29: „naslednja Šentjur“ / „naslednja Celje“ izmenoma, +3, +5, +8). Vrnitev z večjo zamudo je zato zvišana zamuda, ne napaka. Staro pravilo jo je zavračalo: LPV 2907 je SŽ ob odhodu risal po voznem redu (+0, tri postaje naprej), nato s +7 na izhodišču -- pri nas 10 min točen; LP 3215 +17 namesto +22, LP 4213 0 namesto +10. Ponovitev 13 min zemljevida (16. 10. 14:37–14:50, 2 453 primerjav prikazane zamude, `stats.last_measured`, s trenutno zamudo SŽ): prikaz za 3 min ali več **prenizek** staro 76-krat, s potrjeno ničlo 63, z vrnitvijo ob večji zamudi **1**; previsok 39 / 49 / 52. Vrstica naprej ostane v `run`, a je `last_measured` ne šteje, ker je starejša od vrstice pred njo. Cena: postanek zadaj dobi trenutno zamudo, ne odhodne -- tako je bilo že na istem odseku.
-
-**Trenutna zamuda ni zamuda zadnjega postanka** (od 16. 10. 2026, `zamude_sz.trenutne`, `stats.trenutna_zamuda`). Ko vlak stoji ali se med postajama ustavi, SŽ `Zamuda_cas` dviga sproti, `Odhod` (vozni red prejšnjega postanka + zamuda) pa je zdaj ali v prihodnosti: LPV 2417 ob 14:58 +14 in raste, prikaz +1 s postaje prej, ker postanka z odhodom ob 14:58 meja ne šteje za prevoženega; LP 314 ob 14:40 z +5 na +10, odhod 2,5 min naprej, se 90 s sploh ni pripel. Takšna vrstica **ne gre v `run`** (postanek, s katerega je vlak že odpeljal, bi spet postal neprevožen), pripne pa se z odhodom do 3 h naprej (`NAJDLJE_NAPREJ_S`, števec `prihodnjih`) in velja za trenutno zamudo. `last_measured` doda `trenutna_s`, kadar je SŽ vsaj minuto višja in sveža (≤ 60 s), meja in `delay_s` ostaneta. Uporabljajo jo glava okna vožnje (`trenutna` v `/api/train/{no}/run`, „po podatkih SŽ · pelje proti postaji Y“), napoved naprej, tabla, iskalnik, kartica na zemljevidu (`api._s_trenutno`), senca; čas zadnje besede (`tiho_s`) šteje tudi odgovor, ki ni šel v `run`. Samo navzgor, kot prevoznikova napoved. Na 25 min zemljevida 16. 10. je bila SŽ nad mejo za 3 min ali več v 11 od 4 453 trenutkov (MV 246, LP 3234, LP 314) -- redko, a prav takrat, ko vlak obtiči.
-
-**Ničla po zamudi velja, kadar jo pojasni rezerva** (od 17. 10. 2026, `stats._LAST_MEASURED_SQL` in `api._LIVE_SQL`). Do tedaj meja meritve ničle po zamudi ≥ 5 min ni štela nikoli -- tudi prave: LPV 2419 16. 10. na Podnartu (postanek 16 min) prišel +10, odpeljal točen, prikaz 45 min +10 (nevarna smer). Zdaj ničla (pri vlaku tudi do 2 min -- SŽ fantom zna biti +1, LP 3217) velja, kadar padec od zadnjega postanka z zamudo nad 2 min ni večji od vsote postankov nad 120 s vmes (vključno s tem postankom) plus 2 min. Fantomov stare kode, ki se vrnejo, je neizvedljivih 97,8 %; izvedljivi so na dolgem postanku, kjer jih iz trenutnih podatkov ni mogoče ločiti od okrevanja -- prikaz tam verjame SŽ, ker je ničla za zamujen vlak (počakaš) cenejša od zamude za točen vlak (zamudiš ga). Avtobus z malo zamude velja kot prej.
-
-**Prezgodnji prihod na cilj ne zaklene `run`** (od 17. 10. 2026). SŽ obtičali vlak nariše na cilju ob voznem redu in stari zamudi (`Vrsta` 2), nato ga spet pokaže na progi z večjo; 16.–17. 10. 32 od 360 prihodov (8,9 %), ICS 11 +15 namesto ≥ +75. Prihod je „že zapisan“ le, kadar je bil zadnja beseda SŽ o vlaku; ponastavitev (ničla po zamudi nad `PONASTAVITEV_S`) ostane ponastavitev.
-
-**Straža: prikaz proti SŽ** (od 16. 10. 2026, `zamude_sz.skladnost`, vrstica zdravja `skladnost_sz`). **Ne šteje vlaka, ki ga SŽ riše po voznem redu** (od 17. 10.): padca, ki ga rezerva ne pojasni, prikaz namenoma ne vzame -- 16. in 17. 10. je straža zaradi tega lažno zvonila (RG 210: SŽ uro +0, vlak je stal pred Borovnico, nato +36). Od tedaj gre v pošto po 30 min. Od 11. do 16. 10. je vir odgovarjal in zdravje je bilo zeleno, prikaz pa pri 611 od 1 444 voženj z zamudo prenizek -- pet dni, dokler ni potnik zamudil šole. Zato ob vsakem spremenjenem odgovoru: zamuda SŽ, ki je vsaj 2 min ista (`USTALJENA_S`; vlak, ki stoji in mu raste, ima mejo po pravici nižjo), proti meji `last_measured` **brez** trenutne zamude (ta bi zakrila prav to, kar straža išče). Okno 30 min. Ponovitev 25 min zemljevida: staro mimo za 3 min ali več **2,3–4,1 %** ustaljenih primerjav, novo **0 od 3 381**. Rdeče (pošta) pri ≥ 1 % in ≥ 3 vlakih, rumeno od 0,3 %, pod 300 primerjav brez ocene. Pregled pokaže primere („RG 318 (SŽ +18, prikaz +12)“) v vrstici „vlaki · prikaz proti SŽ“ in na kartici zemljevida SŽ.
-
-**Kam gre**: vsaka vrednost v `sz_zamuda` (zadnje stanje na postanek; `v_run` je od 10. 10. vedno 1), od 5 min še v `delay_report` (zgoraj), in v `run` + `obs` (`iz_lege.zapisi_meritev(..., ohrani=True)`: odhod ne pobriše prihoda in obratno). `feed_ts` = čas našega branja, torej po prehodu -- `potrjen_prehod` pravilno reče „izmerjeno“.
-
-**Kaj pove pregled**: v `meta.zamude_sz` vlakov, zapisanih, pred odhodom, na cilju, nepripetih, z odhodom v prihodnosti, nazaj, nepotrjenih ničel, ponastavljenih, `skladnost` (straža) in `spremenjeno_ts`. Odgovor se ob vlakih na poti spremeni ob **vsakem** branju (93 od 93 po 15 s; odšteva `Predviden_prihod`) -- 10 min brez spremembe je rumeno (`zdravje.SZ_ZAMRZNJEN_S`). Prazen zemljevid ob vsaj treh vlakih po voznem redu je rumen; nit, ki 5 min ne zapiše niti napake, rdeča.
-
-**Svežina, izmerjeno 10. 10. 2026** (MERITVE): tabla zamud SŽ (`/pomoc-uporabnikom-in-stanje-v-prometu/`, samo ≥ 3 min) in zemljevid kažeta isto minuto v 1 175 od 1 183 parov; zamudil.si sledi tabli z mediano 14 s, p90 29 s.
-
-**Beremo na 5 s, ker SŽ zemljevid preračuna na 15** (55 od 55 sprememb natanko 15 s narazen; njihova stran ga vpraša na 15 s, `setInterval(…, 15e3)`). Na 5 s novo stanje ujamemo v največ 5 s; nespremenjen odgovor (dve branji od treh) samo potrdi, da vir živi, in ne premakne časa zadnjega podatka (`korak(..., nespremenjeno=True)`). **Tabla zamud se ne bere** (odločeno 11. 10. 2026 po dnevu v senci, MERITVE): ob branju table na 15 s in zemljevida na 5 s je isto minuto vožnje pokazala z mediano −0,5 s (246 parov; tabla > 2 s prej 106-krat, zemljevid 32-krat), torej je pri SŽ le ~5 s pred zemljevidom -- sekunde na zamudi v celih minutah, za 40 kB na 15 s in deset odgovorov 500 v 10 h. Pripeti bi se dala le tretjina vrstic (ob 9:52 6 od 18): tabla nima ure in piše **prometno mesto, kjer je bila zamuda sporočena**, ne postanka (IC 350 „Ponikva“, kjer ne ustavi), včasih postajo, ki jo je zemljevid že prevozil. Koda sence je v gitu (3c965ab); nazaj samo z novo meritvijo.
-
-## Ovire s strani SŽ (`ovire_sz.py`, od 11. 10. 2026)
-
-Ovire so na `potniski.sz.si/pomoc-uporabnikom-in-stanje-v-prometu/` v HTML kot `var roadworks = [...]` (skupine po kraju, polja vzporedni seznami: `ID_ovire`, `Naslov`, `Opis`, `Cas`, `Relacija`, `ID_vrste`). Prej: stran → `api.modra.ninja/sz/ovire_raw` → derp.si `service_alerts` → mi. Zdaj stran beremo sami, z istim Chromom, vsakih 5 min (`KAJROS_OVIRE_SZ_SECONDS`), v svoji niti. Stran ima 440 kB.
-
-* **Obvestilo je enako derp-ovemu**, preverjeno na produkciji 11. 10. 2026: 49 od 49 z istim `alert_id`, naslovom, opisom, vzrokom, učinkom in obdobjem. Besedilo: prelomi v presledke, robovi, šele nato oznake HTML (obratni vrstni red pusti presledek na začetku). Veljavnost od polnoči do 23:59:59; en sam dan nima konca.
-* **Vezi na vlake so izračun** (derp-ovo pravilo): relacija z „ - “ zadene vsako progo vlaka z vsaj dvema od naštetih postaj, brez „ - “ so naštete postaje. Računajo se **ob vsakem branju**, pišejo ob spremembi. derp.si jih je zapisal enkrat, ob prvem pogledu: ovira 11155 (Uršna sela - Črnomelj), prvič vidna 28. 9. 2026, ko je bil zip brez vlakov, je imela 0 vlakov, po novem 31; 11171 (Pragersko - Maribor, 30. 9.) 64 namesto 97. Pri 10 drugih je razlika le v vožnjah brez voznega reda (nagrobniki). Imena se primerjajo brez presledkov in vezajev, ločilo je vezaj s presledkom vsaj na eni strani: SŽ piše „Zidani Most -Hrastnik“ (zapora, derp.si 0 vlakov, zdaj 58) in „Lesce Bled“, vozni red „Lesce-Bled“. Brez vlakov ostane 7 od 49 -- nadomestni prevozi v tujino in Ljubljana - Ljubljana Šiška.
-* **Vodi slovenske ovire**: dokler je stran prebrana v zadnjih treh obhodih (`alerts.ovire_vodi_sz`), `alerts.ingest` derp-ovih slovenskih `SZ-OVIRA` ne piše (števec `ovir_vodi_sz`); angleških stran nima, te ostanejo derp.si. Ob molku derp.si piše vse kot prej.
-* Ovira, ki jo SŽ umakne pred rokom, ostane do `end_ts` -- tako je bilo tudi prej; 11. 10. 2026 je bila taka ena (angleška).
-
-## Zamude mestnega LPP z LPP-jevih zaslonov (`zamude_lpp.py`, od 8. 10. 2026)
-
-Drugi vir poleg derp.si, po zgledu `zamude_sz`. Tistega dne je strežnik RT derp.si od 16:00 zavračal povezave (od zunaj `ECONNREFUSED`, ob 17:16 in 18:08 po en uspešen obhod); `data.lpp.si` je odgovarjal. Izmerjeno istega dne:
-
-* **`station/arrival` je poceni, `route/arrivals-on-route` ne.** Prvi 40–100 ms (gzip 1–4 kB), drugi 6–19 s ob zgrešenem predpomnilniku (mediana 7,4 s na 206 vzorcih, prehod vseh s štirimi delavci 410 s) — LPP ga očitno sestavi iz prvega za vsako postajališče. Zato beremo postajališča, ne vzorcev.
-* **Ne vseh**: 658 postajališč na 74 vzorcih. `izberi()` požrešno izbere tista, med katerimi ima vsako zaporedje postajališč (172 na 74 vzorcih — vožnje istega vzorca se razlikujejo) največ `LPP_POSTAJ_KORAK − 1` (privzeto 11) neizbranih zapored: na razvojnem voznem redu 76 (pri koraku 8 jih je 132). Obhod 75 postajališč z dvema delavcema **36 s**; ena za drugo jih je 177 trajalo 267 s (rep do 10 s na zahtevo). Na 2 min.
-* **Vrsta prihoda**: 0 napoved, 1 po voznem redu, 2 prihaja, 3 obvoz. Vrsta 1 je vozni red, ne meritev: pri 470 od 539 prihodov je bila najbližja vožnja našega voznega reda v 60 s (mediana 43 s — eta je cela minuta). Piše se samo 0 in 2.
-* **Vožnje vir ne pove**, le vzorec, vozilo in eto. Vozilo → vožnja prek `vehicle_now` (derp.si), velja, dokler ga ta hrani (uro), z istim vzorcem in **le, če je LPP-jeva zamuda v 10 min od zadnje derp-ove zamude te vožnje** (`SKLADNO_S`). Brez tega pogoja so bila vozila z legami izpred 14 min že na naslednji vožnji istega vzorca: mediana zamude 22 namesto 4,5 min. Lega mestnega LPP nima `service_date`, `trip_id` je za vsak dan svoj.
-* **Po voznem redu samem ne pripenjamo**: od 758 živih prihodov jih je imelo 398 dve ali več kandidatk z zamudo od −3 do +20 min, edina kandidatka pa je derp-ovo vožnjo zadela le 67-krat od 98 — zgreši pri velikih zamudah (linija 11 +45 → izbere vožnjo s +3). Sproti šteje `meta.zamude_lpp.po_voznem_redu` [zadel, zgrešil, dvoumno, brez], `/admin` („LPP · samo po voznem redu“). Posledica: po uri izpada derp.si (`vehicle_now` pozabi lege) vir v `run` ne piše več; tabla pa LPP-jeve prihode kaže še naprej (`strezba.md`).
-* 13 % živih prihodov (72 od 536) je na vzorcih ali postajališčih, ki jih vozni red nima — LPP vozi mimo objavljenega voznega reda (zgoraj).
-* **Kam gre**: vsaka vrednost v `lpp_zamuda` (zadnje stanje na postanek); v `run` in `obs` samo, kadar derp.si vožnje ne nosi (`iz_lege.brez_feeda`), z odhodno zamudo (na zadnjem postanku prihodno). Vrednost je napoved prihoda, kot pri derp.si, ki pri mestnem LPP pošilja samo postanke pred vozilom. `kajros primerjava` in `/admin` („LPP · ujemanje · 24 h“).
-* **Samo na strežniku**, ne v `kajros collect`: obremenitve na malini nismo merili.
-
-Dve spremembi, ki ju je izpad pokazal tudi drugod:
-
-* **Feed, ki od zagona ni odgovoril, je po 5 min prazen** (`iz_lege.feed_prebran`). Prej je drugi vir čakal na prvo branje derp.si — po ponovnem zagonu med izpadom do konca izpada.
-* **Zadnji zapis v `run` ne pove več, ali derp.si dela**, ker ga ob izpadu pišeta tudi drugi viri. `/api/health` ima `derp_prebran` (zadnji uspešen `rt_fetched` in `lpp_rt_fetched`), pregled vrstico „derp.si · odgovoril“, rdeča po 5 min ob vsaj treh avtobusih na poti.
-
-## Lege IJPP naravnost z NAP (`nap.py`, od 8. 10. 2026)
-
-Lege medkrajevnih avtobusov na derp.si so NAP-ov SIRI-VM, le pretvorjen (`derp-si/ijpp-rt`, `ijppService.js`: POST na 5 s, basic avtentikacija). Ob izpadu derp.si 8. 10. so vozila lego pošiljala naprej, zemljevid pa je bil prazen. `nap.py` bere isti izvirnik sam.
-
-* **Dostop**: račun na nap.si (`kekec3201@proton.me`), vsebina „SIRI dinamični podatki - API“ odobrena 9. 10. 2026 do 8. 10. 2029. Brez prijave ali ob zavrnjeni NAP vrača **401** (`WWW-Authenticate: Basic`), nit takrat čaka 10 min, `/admin` rumeno. TLS se preveri normalno (derp.si ga izklaplja, mi ne rabimo).
-* **Prijava** v `${KAJROS_DATA_DIR}/.nap-prijava` (`e-naslov:geslo`, 640, skupina `kajros`), postavi jo `deploy/nap.sh` — geslo vpiše David, v ukazno vrstico ne gre. Bere se ob vsakem obhodu: restart ni potreben.
-* **Id vožnje** = zadnji štirje bajti GUID-a v `VehicleJourneyRef` (`SI:SI0:ServiceJourney:<GUID>:IJPP`), kot `realisToIjpp` pri derp.si; ujema se s `trip_id` IJPP. Obratovalni dan: `collector.resolve_service_date` (SIRI `start_date` nima). Prevod starih id-jev prek `zamenjava` kot pri derp.si.
-* **Čas naprej za uro** (±3 min) se popravi — derp.si to dela, ker naprave pošiljajo lokalni čas z napačnim zamikom. 9. 10. 2026 takih ni bilo (`popravljenih` 0 v šestih obhodih).
-* **Vožnja, ki se začne čez več kot 30 min, gre ven** (derp.si enako), da je primerjava primerljiva.
-* **Česa NAP nima**: vlakov (705 od 705 vozil `VehicleMode = bus`), mestnega LPP in primestnih vozil LPP (`LJLPP…`), ki jih derp.si v isti feed doda iz LPP-jevega vira — večina od ~80 vozil „samo derp“. Ob izpadu derp.si primestni LPP (1118) ostane brez lege.
-* **Kam piše** (od 9. 10. 2026, po meritvi): `vehicle_now` za **vsa** pripeta vozila, zmaga novejši `seen_ts` — NAP je izvirnik in je svežejši. Ob uspešnem branju premakne `positions_fetched`, sicer `/api/vehicles` NAP-ovih leg ne bi videl.
-* **Zamude medkrajevnih vodi NAP** (od 9. 10. 2026, Davidova odločitev): za prevoznike v `config.NAP_PREVOZNIKI` (Arriva 1123, Nomago 1119, AP MS 1121) zajem feeda zamud derp.si vožnje izpusti (`iz_lege.nap_vodi`, števec `nap_prevzel`) in jih vzame iz `_v_feedu` (`iz_lege.izpusti`), zamudo pa izmeri `iz_lege.opazuj` iz leg NAP — tudi za vozila, ki jih ima derp.si. `iz_lege.iz_feeda` (lege derp.si) te vožnje preskoči, da iste sledi ne vodita dve niti. Velja, dokler je NAP prebran v zadnjih 60 s (`NAP_VODI_S`); ko obmolkne, feed derp.si spet piše sam. Izgubi se: napoved derp.si za postanke naprej (prikaz jo je rabil le, kadar je višja od našega modela) in odhod z izhodišča (iz lege ga ne merimo). Primestni LPP (1118), vlaki in nadomestni avtobusi ostanejo na derp.si.
-* **Ujemanje z derp.si** (`nap.primerjaj`, `/admin` „NAP · ujemanje z derp.si“), 9. 10. 2026 ob 15:52, šest obhodov po 20 s: skupnih 633–658 vozil, **ista vožnja 99,5–100 %**, odmik lege ob istem `RecordedAtTime` mediana **0,1 m** (največ 16 m), **NAP novejši za mediano 7–20 s** (derp.si bere na 5 s in ima svoj predpomnilnik, mi njega na 10 s).
-* **Cena**: odgovor 2,7 MB XML, **162 kB z gzip** (`requests` ga zahteva sam), prenos 0,7 s, razbor 0,2 s. Na 10 s ~1,4 GB na dan — 20-krat več od leg z derp.si (protobuf). ETag se spremeni ob vsakem odgovoru: pogojni GET ne pomaga.
-
-## Promet na cestah z NAP (`promet.py`, od 14. 10. 2026)
-
-Za vprašanje „kdaj je vlak hitrejši od avta“: čas vožnje z avtom po urah. NAP ima samo trenutno stanje, zgodovino posnamemo sami. Ista prijava kot lege (`nap.prijava`), svoja nit (`kajros-promet`), vsako minuto, in **svoja baza** `promet.sqlite` (~40–60 MB na dan), da glavne ne napihne za vleko in varnostno kopijo. Varnostne kopije te baze ni.
-
-* **FCD nosi samo gnečo.** Vsak odsek v odgovoru je vsaj 20 % počasnejši od proste vožnje (14. 10. 2026: 11 201 od 11 201). Odsotnost = prosto, zato `fcd` piše `NULL`, ko odsek izgine. Kdaj je bil podatek sploh, pove `obhod`: vrzel med obhodoma je neznano, ne prosto.
-* **Dnevnik kot `obs`**: zapis ob spremembi za vsaj 0,5 s (`PRAG_DS`) od zadnje ZAPISANE vrednosti (`fcd_zdaj`). ~2 000 vrstic na minuto ob 13:30 na delavnik.
-* Metapodatki NAP pravijo „avtoceste“, a odgovor ima tudi mestne ulice (617 odsekov znotraj ljubljanske obvoznice). Geometrija odsekov je v `b2b.fcd.datexii33.locations` (OpenLR, 3 GB XML, letno), nit je ne bere.
-* Potovalni časi AC: deset relacij DARS, `ac` po času objave (ista objava enkrat).
-* Odgovor FCD je **datoteka gzip** (`application/x-gzip`, brez `Content-Encoding`): `requests` je ne razpakira, `razberi_fcd` jo sam.
-* **Razbor teče v svojem procesu** (`promet._Razbor`, `spawn`, od 19. 10. 2026). Je čisti Python -- dnevni odgovor 1,25 s CPE na arwenu -- in v niti strežnika je vsako minuto zadržal GIL: tabla Ljubljana 520–610 ms namesto 22 ms, kadar je padla v to sekundo. Branje, dnevnik virov in pisanje ostanejo v niti; nazaj pride slovar.
+* `trip.start_s` / `end_s` = prvi odhod in zadnji prihod, iz `sched` (`db.fill_trip_window()`). Vstavljanje mimo uvoza ju mora zapolniti, sicer vožnja **ni živa**.
+* **Feed včasih objavi jutrišnji obratovalni dan** (0,026 % vrstic, 2 vožnji, zamuda > 6 h). Pravila namenoma ni — `api.MAX_LIVE_DELAY_S` (6 h) jih drži ven. Meri: `SELECT COUNT(*) FROM run WHERE service_date > date('now','localtime')`. Železnica nikoli čez 3 h (EC 79 2,9 h).
+* Indeks `trip_block` je delen (`WHERE block_id IS NOT NULL`).
+* **Zajem piše samo ob spremembi ≥ `OBS_MIN_DELTA_S` (60 s) od zadnje ZAPISANE** (lezenje se sešteva). Vlaki 1,6 zapisa na postanek, mestni avtobusi 23,3 (mediana spremembe 15 s). `run` ostane točen.
+* **Dnevnik se obrezuje, `run` nikoli.** Z NAP in prehodom 1,6–1,9 mio avtobusnih vrstic `obs` na dan; obrez v eni transakciji držal zapis 116 s → po kosih (`collector.PRUNE_KOS`). 79 B na vrstico. `collector.prune_obs` / `kajros prune`: železnica 90 dni, avtobusi 14. `run` = zgodovina (statistika, običajna zamuda, backtest), brisati ga = brisati projekt; če že, najprej avtobusni. `vehicle_now` = upsert, starejše od ure se briše.
+
+## Obvestila SŽ (4. 9. 2026)
+
+`parse_delay_text()` razčleni 474 od 474. Poln zapis je v `description`, ne `header` — `parse_delay_text(desc) or parse_delay_text(header)`, obratno nič. Vsa poročila `prihod` (veja za odhod nikoli stekla). Vrste samo `SZ-DELAY` / `SZ-OVIRA`. Vsako obvestilo eno obdobje (varovalo `vec_obdobij`).
+
+## Lege so stare, ni naša zamuda
+
+`seen_ts` = `vehicle.timestamp` **iz feeda** (prikaz trdi „lega stara N“). Mestni LPP normalno **57–147 s** (feed se osveži na ~90 s v paketu). Preden iščeš napako: `seen_ts` proti `vehicle.timestamp` (99 od 99). LPP feed brez `ETag`/`Last-Modified` — vsakič 315 kB.
+
+## potniski.sz.si: Chrome mimo Cloudflara (`brskalnik.py`)
+
+Od 7. 10. 2026 Cloudflare zavrača brezglave; beremo s Chromom (10. 10.):
+
+* **Samo Chrome z oknom** (Xvfb `-displayfd`). Izziv reši v 3–7 s, zahteva nato 0,5–0,8 s (`fetch` v strani, `cf_clearance`).
+* **CDP po cevi ali `--remote-debugging-port=0` NE gre** — Chrome postavi `navigator.webdriver = true`. Lastna vrata → `false`: `_prosta_vrata()`, lasten WebSocket (`_Ws`, brez odvisnosti).
+* Piškotek občasno zavrnjen (403): ponovno nalaganje (7 s), zahteva enkrat znova; drugi izziv zapored ugasne Chrome.
+* Cena: Chrome ~400–560 MB PSS, Xvfb 75 MB. Zagon ob prvi zahtevi, vsakih 6 h znova (`NAJDLJE_ZIVI_S`). Po neuspelem zagonu 5 min pavze; po `net::ERR_…` le 30 s (`PO_NAPAKI_OMREZJA_S`).
+* Teče na arwenu (`deploy/brskalnik.sh`: Google Chrome — AppArmor dovoli peskovnik — in Xvfb). **Malina ne more** (armv6). Razvoj brez Xvfb odpre okno. Preizkus: `kajros brskalnik`. Stanje v `/admin` → Stroj.
+* Izpis napak: `${KAJROS_DATA_DIR}/sz-brskalnik-{chrome,xvfb}.log`, ob izhodu s kodo kopija `…-napaka.log`. `_preberi_zaslon` bere do konca vrstice (Xvfb številko in `\n` zapiše posebej; prej „Missing X server“ 6 od 43 zagonov).
+
+## Tir s table SŽ (`peroni.py`)
+
+Tir ima samo tabla (`/odhodi-in-prihodi-na-postaji/?postaja=<št. SŽ>&datum=<d.m.llll>`, 150–175 kB HTML; 282 postaj).
+
+* **Tir je dodatek**: samo, če ga je potrdilo ZADNJE branje, ne zamujeno za > 2 razmika (`peroni.tiri`). `KAJROS_PERONI=0` ugasne, nič drugega ne pade.
+* Tabelo loči naslov („Odhodi vlakov“ / „Prihodi vlakov“), vrstica = slovar po glavi brez zvezdice.
+* „BUS“ v stolpcu tira ni tir. Vlak brez številke se ne šteje.
+* **Svoja nit, ena postaja naenkrat.** Ritem: Ljubljana, Maribor, Celje vsakih `KAJROS_PERONI_SECONDS` (600 s), majhne redkeje, najdlje 2 h.
+* **Tir je lastnost postaje**: 14 od 20 vedno, 6 nikoli (Jesenice, Novo mesto, Kranj, Dobova, Trbovlje, Škofja Loka); brez tira enkrat na dan.
+* Tabla kaže le vlake, ki še pridejo; mednarodnih 1472, 210, 211, 79, 350 ni.
+* **Ključ = koledarski dan table + številka brez vrste** (vlak ob 00:30 je na naslednjem dnevu).
+* Tir se čez dan spreminja: `prvi` ostane, `tir` se posodablja, prikaz napiše „prej 6-A“.
+
+## Zamude vlakov z zemljevida SŽ (`zamude_sz.py`, vodi od 10. 10. 2026)
+
+`/wp-admin/admin-ajax.php?action=aktivni_vlaki` (JSON 3–5 kB; brez vlakov `null`) = **izvor vseh zamud vlakov** (derp.si isto prek `api.modra.ninja`). Vlak po **številki** — pokvarjen zip DUJPP ga ne prizadene.
+
+**Vodi** (David: „raje 15 s prej in brez posrednikov“): dokler prebran v `iz_lege.SZ_VODI_S` (120 s), derp.si vlakov (`zeleznica`, `mode != bus`) ne piše (`collector._sz_vlaki`, `sz_prevzel`); nadomestni avtobusi ostanejo derp.si.
+
+Polje `Vrsta`:
+* **1 vozi**: `Postaja` = naslednja, `Odhod` = vozni red PREJŠNJE + `Zamuda_cas` (preizkus prave vožnje in dneva; brez ujemanja se ne pripne).
+* **0 stoji na izhodišču**: ni meritev.
+* **2 na cilju**: `Odhod` = dejanski prihod. Čez 1–2 min SŽ ponastavi na 0 — velja prvi prihod; ničla po > 3 min = ponastavitev (`PONASTAVITEV_S`).
+
+Pravila:
+* **Vlak ne gre nazaj z isto ali manjšo zamudo** (`nazaj`); **z večjo velja** (od 16. 10.) — zemljevid je **izračun** (vozni red + trenutna zamuda), vlak, ki nabira zamudo, skoči nazaj. Staro zavračanje: 76 prikazov ≥ 3 min prenizkih na 13 min, novo 1.
+* **Ničla po zamudi velja šele potrjena** (`_nicle`, `nicel`): SŽ na 3–4 min za en odgovor del vlakov nariše po voznem redu (16. 10.: 7 od 59). Z „ne gre nazaj“ je bila **zaskočka** — 11.–16. 10. **611 od 1 444 voženj z zamudo** prenizkih. **Primerja se z zadnjo besedo SŽ** (`sz_zamuda` po `zadnjic_ts`), ne s postankom najdlje naprej. SŽ včasih sam riše vlak po voznem redu več minut (EC 115 +0, nato +21) — tega ne loči nič.
+* **Trenutna zamuda ≠ zamuda zadnjega postanka** (`zamude_sz.trenutne`, `stats.trenutna_zamuda`): vlak stoji, SŽ `Zamuda_cas` raste, `Odhod` je v prihodnosti. Ta vrstica **ne gre v `run`**, pripne se z odhodom do 3 h naprej (`NAJDLJE_NAPREJ_S`, `prihodnjih`). `last_measured` doda `trenutna_s`, kadar SŽ ≥ 1 min višja in sveža (≤ 60 s); rabijo jo glava okna, napoved, tabla, iskalnik, kartica (`api._s_trenutno`), senca. Samo navzgor. 11 od 4 453 trenutkov — a ravno ko vlak obtiči.
+* **Ničla po zamudi velja, kadar jo pojasni rezerva** (od 17. 10., `stats._LAST_MEASURED_SQL`, `api._LIVE_SQL`): padec od zadnjega postanka z > 2 min ni večji od vsote postankov > 120 s vmes + 2 min (pri vlaku tudi ničla do 2 min). Fantomov neizvedljivih 97,8 %; na dolgem postanku verjame SŽ (ničla za zamujen vlak je cenejša od zamude za točen).
+* **Prezgodnji prihod na cilj ne zaklene `run`** (32 od 360 prihodov, 8,9 %): prihod je „zapisan“ le, ko je bil zadnja beseda SŽ.
+* **Straža `zamude_sz.skladnost`** (vrstica `skladnost_sz`): ustaljena zamuda SŽ (≥ 2 min ista, `USTALJENA_S`) proti meji `last_measured` **brez** trenutne. Ne šteje vlaka, ki ga SŽ riše po voznem redu. Okno 30 min; rdeče (pošta po 30 min) ≥ 1 % in ≥ 3 vlaki, rumeno od 0,3 %, pod 300 primerjav brez ocene. Staro 2,3–4,1 % mimo, novo 0 od 3 381.
+* **Kam gre**: `sz_zamuda` (zadnje stanje), od 5 min `delay_report`, `run` + `obs` (`iz_lege.zapisi_meritev(..., ohrani=True)`). `feed_ts` = čas branja (po prehodu).
+* **Pregled**: `meta.zamude_sz` (zapisanih, pred odhodom, na cilju, nepripetih, prihodnjih, nazaj, nicel, ponastavljenih, `skladnost`, `spremenjeno_ts`). Odgovor se spremeni ob vsakem branju; 10 min brez spremembe rumeno (`zdravje.SZ_ZAMRZNJEN_S`), prazen ob ≥ 3 vlakih po voznem redu rumeno, nit 5 min tiho rdeče.
+* **Beremo na 5 s, SŽ preračuna na 15** (55 od 55 sprememb). Nespremenjen odgovor ne premakne časa podatka (`korak(..., nespremenjeno=True)`).
+* **Tabla zamud SŽ se ne bere** (11. 10. 2026): le ~5 s pred zemljevidom, pripne se tretjina vrstic, piše prometno mesto, ne postanek. Koda sence v gitu (3c965ab); nazaj samo z novo meritvijo.
+
+## Ovire s strani SŽ (`ovire_sz.py`)
+
+`/pomoc-uporabnikom-in-stanje-v-prometu/`, `var roadworks = [...]` (vzporedni seznami `ID_ovire`, `Naslov`, `Opis`, `Cas`, `Relacija`, `ID_vrste`), 440 kB, isti Chrome, na 5 min (`KAJROS_OVIRE_SZ_SECONDS`), svoja nit.
+
+* Enako derp-ovemu (49 od 49). Besedilo: prelomi v presledke, robovi, šele nato oznake HTML. Veljavnost polnoč–23:59:59.
+* **Vezi na vlake so izračun ob vsakem branju** (derp.si enkrat, ob prvem pogledu → 11155 0 vlakov namesto 31). Relacija z „ - “ = proga vlaka z ≥ 2 naštetima postajama, brez = naštete postaje. Imena brez presledkov in vezajev; ločilo = vezaj s presledkom vsaj na eni strani („Zidani Most -Hrastnik“).
+* **Vodi slovenske**: dokler prebrana v zadnjih treh obhodih (`alerts.ovire_vodi_sz`), derp-ovih slovenskih `SZ-OVIRA` ne pišemo (`ovir_vodi_sz`); angleške ostanejo derp.si.
+* Ovira, umaknjena pred rokom, ostane do `end_ts`.
+
+## Zamude mestnega LPP z zaslonov (`zamude_lpp.py`)
+
+* **`station/arrival` poceni (40–100 ms), `route/arrivals-on-route` ne (mediana 7,4 s)** — beremo postajališča.
+* `izberi()` požrešno izbere postajališča, da ima vsako zaporedje ≤ `LPP_POSTAJ_KORAK − 1` (11) neizbranih zapored: ~76. Obhod z dvema delavcema 36 s, na 2 min.
+* **Vrsta**: 0 napoved, 1 vozni red (ni meritev), 2 prihaja, 3 obvoz. Piše se le 0 in 2.
+* **Vožnje vir ne pove.** Vozilo → vožnja prek `vehicle_now` (derp.si, dokler ga hrani), isti vzorec, **LPP-jeva zamuda v 10 min od derp-ove** (`SKLADNO_S`; brez tega mediana 22 namesto 4,5 min).
+* **Po voznem redu ne pripenjamo** (edina kandidatka zadela 67 od 98). `meta.zamude_lpp.po_voznem_redu`. Po uri izpada derp.si vir v `run` ne piše; tabla LPP-jeve prihode kaže naprej.
+* **Kam**: `lpp_zamuda`; v `run`/`obs` le, ko derp.si vožnje ne nosi (`iz_lege.brez_feeda`). `kajros primerjava`, `/admin` „LPP · ujemanje · 24 h“. Samo na strežniku.
+* **Feed, ki od zagona ni odgovoril, je po 5 min prazen** (`iz_lege.feed_prebran`).
+* Zadnji `run` ne pove, ali derp.si dela: `/api/health` `derp_prebran`, pregled „derp.si · odgovoril“ (rdeča po 5 min ob ≥ 3 avtobusih).
+
+## Lege IJPP z NAP (`nap.py`)
+
+* **Dostop**: račun nap.si (`kekec3201@proton.me`), SIRI odobren do 8. 10. 2029. Brez prijave **401**, nit čaka 10 min, rumeno. TLS se preverja.
+* **Prijava** `${KAJROS_DATA_DIR}/.nap-prijava` (`e-naslov:geslo`, 640, `kajros`), postavi `deploy/nap.sh` — geslo vpiše David. Bere se ob vsakem obhodu.
+* **Id vožnje** = zadnji štirje bajti GUID-a v `VehicleJourneyRef` (kot derp-ov `realisToIjpp`). Dan: `collector.resolve_service_date`. Stari id-ji prek `zamenjava`.
+* Čas naprej za uro (±3 min) se popravi. Vožnja čez > 30 min gre ven.
+* **NAP nima**: vlakov, mestnega in primestnega LPP (`LJLPP…`) — primestni ob izpadu derp.si brez lege.
+* **Piše** `vehicle_now` za vsa pripeta vozila, zmaga novejši `seen_ts`; premakne `positions_fetched`.
+* **Zamude medkrajevnih vodi NAP** (`config.NAP_PREVOZNIKI`: 1123, 1119, 1121): feed derp.si te vožnje izpusti (`iz_lege.nap_vodi`, `nap_prevzel`, `iz_lege.izpusti`), zamudo meri `iz_lege.opazuj` iz leg NAP; `iz_lege.iz_feeda` jih preskoči. Dokler prebran v 60 s (`NAP_VODI_S`). Izgubi se derp-ova napoved naprej in odhod z izhodišča.
+* Ujemanje z derp.si (`nap.primerjaj`): ista vožnja 99,5–100 %, odmik 0,1 m, NAP novejši 7–20 s.
+* Cena: 2,7 MB XML, 162 kB gzip; ~1,4 GB/dan. ETag se spremeni vsakič.
+
+## Promet na cestah z NAP (`promet.py`)
+
+Za „kdaj je vlak hitrejši od avta“. Ista prijava, nit `kajros-promet`, vsako minuto, **svoja baza** `promet.sqlite` (40–60 MB/dan, brez varnostne kopije).
+
+* **FCD nosi samo gnečo** (vsak odsek ≥ 20 % počasnejši od proste). Odsotnost = prosto → `fcd` piše `NULL`. Vrzel med `obhod` = neznano, ne prosto.
+* Dnevnik ob spremembi ≥ 0,5 s (`PRAG_DS`) od zadnje ZAPISANE (`fcd_zdaj`).
+* Ima tudi mestne ulice. Geometrija v `b2b.fcd.datexii33.locations` (OpenLR, 3 GB) — nit je ne bere.
+* AC: deset relacij DARS, `ac` po času objave.
+* FCD je **datoteka gzip** brez `Content-Encoding` — `razberi_fcd` razpakira sam.
+* **Razbor v svojem procesu** (`promet._Razbor`, `spawn`): v niti je držal GIL (tabla 520–610 ms namesto 22).
 
 ## Napaka pisanja: najprej `conn.rollback()`
 
-Vsaka nit ima svojo povezavo in vsak `except` okoli pisanja najprej razveljavi. Python ob napaki transakcije ne zapre; prvo branje v njej zamrzne posnetek, nato vsako pisanje vrne „database is locked“ (SQLITE_BUSY_SNAPSHOT) — za vedno, čakanje ne pomaga. 1. 10. 2026 je nočno vzdrževanje ob 3:30 drlo pisanje dlje od 30 s: nit zemljevida SŽ stala 4,3 h, WAL zrasel na 5,4 GB (za odprtim posnetkom ga ni mogoče prepisati), disk na 8 %. Od takrat `journal_size_limit` 64 MB v `db.connect()`, da se WAL po ponastavitvi skrči. Preizkus: `test_nit_po_zaklenjeni_bazi_ne_obstane`.
+Vsaka nit svojo povezavo, vsak `except` okoli pisanja najprej razveljavi. Sicer zamrznjen posnetek → vsako pisanje „database is locked“ (SQLITE_BUSY_SNAPSHOT) za vedno (1. 10. 2026: nit stala 4,3 h, WAL 5,4 GB). `journal_size_limit` 64 MB v `db.connect()`. Preizkus `test_nit_po_zaklenjeni_bazi_ne_obstane`.
 
+## Nov vir: `viri.vsi()` in `viri.branje()`
 
-## Nov vir: vnos v `viri.vsi()` in `viri.branje()` (od 9. 10. 2026)
+Vir opisan enkrat v `viri.vsi()` (naslov, izvor, licenca, ritem, nit, ključi zdravja, ukrep ob izpadu, naslov za preverjanje). Klic na tuj strežnik: `with viri.branje("<ključ>") as b:`. `test_vsak_klic_na_tuj_streznik_je_v_registru`.
 
-Vsak vir je opisan enkrat, v `viri.vsi()`: naslov, izvor, licenca, ritem, nit, ključi zdravja, kaj storiti ob izpadu, naslov za preverjanje. Vsak klic na tuj strežnik gre skozi `with viri.branje("<ključ>") as b:` — dnevnik v pomnilniku šteje branja, napake (po človeško, `viri.opis_napake`), čas in bajte zadnje ure. `test_vsak_klic_na_tuj_streznik_je_v_registru` pade, če ključ v kodi ni v registru ali vnos v registru nima branja.
-
-* **Dogodek „ne odgovarja“ šele ob `prag_napak` zaporednih** (3; dnevni viri 1): ena izgubljena tabla od 266 ali en počasen odgovor LPP ni izpad.
-* **Vir brez svojega pravila v `zdravje.ocena()` dobi splošno: rumeno** ob pragu (`vir:<ključ>`), nikoli rdeče — tistih meja nismo merili, pošta pa mora pomeniti okvaro. Vir s svojim pravilom splošnega nima: dve vrstici o istem bi se razšli.
-* **Mrtva nit je rdeča** (`nit:<ime>`), kadar je `server.lifespan` zagnal zajem (`viri.zajem_zagnan`). Prej je bila vidna le posredno, tir pa sploh ne.
-* **Vozni red, ki se konča** (`vozni_red`, `vozni_red_lpp`): IJPP rumeno teden pred koncem, rdeče dva dni pred koncem; LPP rumeno, ko je okno krajše od `LPP_DAYS − 2` (dva zgrešena uvoza). 9. 10. 2026 na razvojnem računalniku LPP znan le do 12. 10. — brez vrstice bi mestne linije izginile brez ene napake v dnevniku.
-* **Dnevni vir in podproces** (`KAJROS_REFRESH=subprocess`): `viri.shrani()` zapiše stanje v `meta.vir:<ključ>`, pregled ga pokaže, kadar ta proces vira še ni bral.
-* **`derp` je razdeljen** na `derp_ijpp` in `derp_lpp` — vsak vir svoja vrstica in svoja pošta.
-
+* „Ne odgovarja“ šele ob `prag_napak` zaporednih (3; dnevni 1).
+* Vir brez svojega pravila v `zdravje.ocena()`: rumeno (`vir:<ključ>`), nikoli rdeče. Vir s pravilom splošnega nima.
+* Mrtva nit rdeča (`nit:<ime>`), kadar je zajem zagnan (`viri.zajem_zagnan`).
+* Vozni red, ki se konča: IJPP rumeno teden prej, rdeče dva dni prej; LPP rumeno, ko okno < `LPP_DAYS − 2`.
+* Podproces (`KAJROS_REFRESH=subprocess`): `viri.shrani()` v `meta.vir:<ključ>`.
+* `derp` razdeljen na `derp_ijpp` in `derp_lpp`.

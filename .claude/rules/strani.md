@@ -16,338 +16,163 @@ paths:
 ---
 # Strani in kaj je na njih
 
-## Strani
+## `/app/statistika` (umaknjena 19. 9. 2026, `noindex`, dela)
 
-**Hitrosti po odsekih ni več nikjer.** Bila = isti podatek v drugi enoti, zložen v zaprt `<details>` na dnu okna vožnje. Tu je pisalo, da `/api/speeds` in `stats.segment_speeds()` ostaneta, „ker ju rabi izvoz in mreža razdalj" — **ni držalo**: `kajros export` zapiše `network.geojson` in `stations.json`, oba iz `network_geojson()`; `segment_speeds()` ni klical nihče. Odstranjena (45 + 4 vrstice); v zgodovini, če bi zatrebala. Odpadel tudi `/api/trains` s `stats.trains()` — prav tako ga ni klical nihče.
+Odgovarja na „kdaj se splača potovati“. Pravila, če se vrne:
+* **Merilo stolpcev postavijo samo vrstice z dovolj vzorca** (`MIN_VZOREC`, 30), pri urah tudi z dovolj prometa (`poPrometu`); presežek odrezan na 100 % z `›`. Pri vrstah vlaka ne (EN 2 % prometa, a resnična ugotovitev).
+* Število meritev ostane vidno tudi na telefonu — skrči se ime, ne vzorec.
+* **Ure po POSTANKU, ne po odhodu vožnje** (`by_stop_hour`; ob 04:00 po odhodu 4 min, po postanku 0).
+* Naslov primerja samo ure z rednim prometom (`DELEZ_PROMETA`, 25 % najprometnejše ure; prelom čist 34 → 4,9 %).
+* Blok po dnevu v tednu pod štirimi ponovitvami to napiše s številko.
+* **Lestvica najhujših nosi sidro** („Čez vse vožnje je mediana …“; železnica 3 min, p90 20, 60 % v 5 min). Polja `median_s`, `p90_s`, `on_time_share` v `breakdowns()`.
+* **Ob spremembi polj povečaj `stats.SUMMARY_VERSION`** — `povzetek` velja 36 h, sicer streže staro obliko.
 
-**`/app/statistika` odgovarja na „kdaj se splača potovati", ne „kakšna je statistika".** Stran prej odstranjena do prenove; vrnjena s tem vprašanjem, ker je edino, ki ga potnik res ima. **19. 9. 2026 spet umaknjena** („v taki obliki skoraj neuporabna"): ploščica na domači strani odšla, pot iz zemljevida strani, stran ima `noindex`. Stran in endpointa ostanejo do prenove. Na vrhu ena poved (najboljša in najslabša ura), pod njo razrezi po uri, dnevu v tednu in vrsti vlaka, na dnu dan za dnem, ki je `adv-only`.
+## Domača stran je razcepišče
 
-Tri pravila, ki so se pokazala šele na posnetku prve različice:
+* **Živih številk o omrežju ni** (povprečna zamuda, vozila na poti, ovire, obseg zajema) — nič od tega ne spremeni, kar človek tu stori. Ovire (samo vlaki; 62 oseb/dan proti 1 196 na `/`) so na strani Vlaki in v oknu vožnje; na domačo samo, če zadenejo shranjeno pot (ni narejeno).
+* **Noge ni nikjer**; vsebina v **meniju Več** (`_vec.html`, ⋮ desno v glavi, razen `/admin` in `/brez-omrezja`): „Podpri kajros“ (`--m-kont`), Stik, O nas, Vse postaje, Vsa postajališča, Android (v aplikaciji skrito), Zasebnost, navedba vira CC BY-SA.
+  * List = `popover`, ne `<dialog>` z JS (pristajalne strani JS nimajo). Brez `popover` (pred Chromom 114) razdelek na koncu → `vec_list()` za skripti na koncu `<body>`, slog pod `@supports selector(:popover-open)`.
+  * Tipka nazaj list zapre (`common.pripniMeniVec()`, vnos v zgodovino); povezava v listu gre najprej nazaj čez vnos. Poteg navzdol > 80 px zapre.
+  * Gumb pripet v kot glave (pod 560 px `position: absolute`, glava `padding-right: 52px` prek `:has`).
+* **`/donacije` → `ko-fi.com/kajros`** (PayPal Business na „kajros“). Naslov privzetek v `config.py`. Prazen `KAJROS_DONACIJE=` skrije vse. Stran pove ponudnika ob gumbu.
+* **Povedi kot se piše, ne kot se govori** („Odhodi in zamude slovenskih vlakov in avtobusov“).
+* **Naslov strani: najprej iskane besede, znamka zadnja** („Vozni red vlakov in zamude v živo — kajros“). Opis pristajalne nosi številke. Domača ima `<h1>` (`.d-geslo`).
+* **Material 3 Expressive** (osnutek G, 26. 9. 2026). Zavrnjeno: kartice z ikonami in prelivom, tipografske vrstice, enako zaobljene kartice z obrobo („zgleda tako AI“).
+* **Budilka = tonska kartica na vrhu, samo kadar budilka obstaja** (`--m-kont` #5a2e12, besedilo #ffdbc8, 8,8 : 1). `home.js` bere `Kajros.seznam()`: ura 40 px, dan, odštevanje, stikalo (`preklopi`), vožnja z zamudo, „Vse budilke (N)“. Uro in odhod računa Kotlin (`odhod_ms`, `vir`). Zamuda = žeton na podlagi strani (`.bud-zam`; `--d-big` na rjavem ne doseže kontrasta). Skrčena 1. 10. („preveč overwhelming“): dnevi in druge budilke so v seznamu. Vse ugasnjene → kartica ostane. Nobene → oblika „Budilke · ni nastavljenih“. V brskalniku oblika „Budilka · za Android“ (`#bud-oblika` → `/android`).
+* **Vlaki in Avtobusi v razprti orodni vrstici**, ne na strani (pilula z imenom v barvi omrežja, Pot in Zemljevid ikoni, brez Domov). Okvir vrstice isti kot drugod. Teža (7 dni): `/` 1 196, `/app/bus` 644, `/app/train` 405, `/app/pot` 376, `/app/map` 189, `/app/ovire` 62.
+* **„Kam greš?“** = prva pod naslovom, `/app/pot#kam` (kazalec v polju Kam). Od kod = lega sama (glej `/app/pot`).
+* **Moje poti** = shranjene (`kajros:fav`, obe omrežji, največ šest) z naslednjima odhodoma in zamudo: `/api/connections` brez prestopov ali `/api/departures` (stran ceste iz `kajros:smer`), 40–90 ms, osvežitev na 60 s. „točno“ pri zaokroženi ničli; mimo šele po pričakovani uri; nepotrjen do `nepotrjen_do`; „brez podatka“ le v 30 min (`pot.BREZ_PODATKA_PRED_S`); nadomestni „po voznem redu“. Danes nič → prva jutrišnja „jutri“. Novinec dobi eno poved, kako shrani.
+* **Povabilo = tiha kartica pod Mojimi potmi** („Se s tabo vozi še kdo? Pošlji mu zamude za Ljubljana → Kranj.“, `utm_source=povabilo`, `obisk._VIRI` „Povabilo“). Komu: shranjena pot z odhodom danes/jutri in kajros odprt ≥ 4 dni (`kajros:dnevi`). Kaj: pristajalna stran poti (`slug` v JS = `pristanek.slug`, 0 razlik na 5 496). **„Pošlji“, ne „Deli“** (Deli = lega); ne sistemsko obvestilo. „Ne zdaj“ 60 dni, poslano 120 (`kajros:povabilo`). `common.posljiPovezavo()`: Web Share, sicer odložišče; aplikacija od 1.13 (most 6).
+* **Lega = tiha kartica pod Povabilom** („Pokaži, kje si, na zemljevidih“ · Vklopi · Ne zdaj), samo ob `stanjeLege() === "vprasaj"`: ne ob zavrnitvi v brskalniku (gumb je ne popravi), ne brez varnega konteksta, ne v aplikaciji pred mostom 7. „Vklopi“: v aplikaciji sistemsko okno (`Most.zahtevajLego`), ob trajni zavrnitvi nastavitve aplikacije; v brskalniku `getCurrentPosition`. Zavrnitev in „Ne zdaj“ 60 dni (`kajros:lega-kartica`).
+* **Budilka, Zemljevid, Deli lego = ikone v oblikah** (cvet, detelja, zvezda; `r = R(1 + a·cos nθ)`), rjava, modrozelena, indigo, s podnapisom. Pritisk posvetli obliko.
+* **Deli lego**: `deli.js` vrne HTML oblike v fazi `miruje`, sicer razpre kartico na **začetek** vrstice (`je-odprt` → `flex-basis: 100%; order: -1`). Nov zaslon kartico pripelje na zaslon (`naZaslon`), `scroll-padding-bottom` nad orodno vrstico.
+* **Podpora = kartica cilja pod oblikami** („7 € od 30 €“, gumb na `/donacije`). `config.CILJ`, vsota iz `/api/podpora` (`donacije.cilj()`), ne iz HTML (domačo streže service worker). ✕ do novega cilja (`kajros:podpora`). Pred Playem: `android.md` („Podpora v Playu“).
+* **Plavajoča orodna vrstica** (`_orodna.html`) na straneh aplikacije, ne na besedilnih in pristajalnih.
 
-* **Merilo stolpcev postavijo samo vrstice z dovolj vzorca** (`MIN_VZOREC`, 30 voženj). Prva različica: nočna ura s 13 vožnjami in mediano 24 min je določila merilo — cel dan se stisnil v pahljačo po dve piki. Vrstica, ki ji ne verjamemo dovolj za naslov, ne sme voditi slike; presežek se odreže na 100 % in dobi znak `›`.
-* **Število meritev ostane vidno tudi na telefonu.** Prvi poskus ga je skril („širina je dragocenejša") — a telefon je glavna naprava in prav tam bi „sreda je najhujša" ostala brez vzorca. Skrči se ime, ne vzorec.
-* **Ure so po POSTANKU, ne po odhodu vožnje.** „Ura odhoda" odgovarja na drugo vprašanje, kot ga potnik ima: vlak, ki odpelje ob 05:00 in nabira zamudo do 09:00, jo v tistem rezu vso pripiše peti uri, ko na omrežju še ni bilo nič narobe. Izmerjeno na železnici: ob 04:00 rez po odhodu **4 min**, po postanku **0 min**; ob 23:00 **10 min** proti **3 min**. Vzorec desetkrat večji (ob 06:00 4 485 postankov proti 367 vožnjam), zato nobena ura ne pade pod prag. Polje `by_stop_hour`; `by_hour` ostaja v API-ju, še vedno po vožnji.
-* **Ista meja velja za sliko, ne le za naslov.** Prva različica je merilo postavljala po vzorcu (≥ 30 postankov), zato so ga postavljale nočne ure: 02:00 s 6 min in 115 postanki najdaljši stolpec, dnevne ure stisnjene v enako dolge palice. Kar ne sme voditi povedi, ne sme voditi slike. Pri **vrstah vlaka to NE velja** — EN s 46 vožnjami = 2 % prometa in hkrati resnična ugotovitev (nočni vlak, ki vedno zamuja), zato je merilo prometa vklopljeno samo pri urah (`poPrometu`).
-* **Naslov primerja samo ure z rednim prometom** (`DELEZ_PROMETA`, 25 % postankov najprometnejše ure). Brez tega odgovor „ob 03:00 vlaki zamujajo 0 min" — resničen, a za izbiro poti neuporaben. Prag izmerjen, ne izbran: delež pade s 34 % (04:00) na 4,9 % (03:00) in z 39 % (22:00) na 21,6 % (23:00) → prelom čist.
-* **Blok po dnevu v tednu sam pove, kdaj mu ni za verjeti.** Pri manj kot štirih ponovitvah vsakega dne (28 dni zajema) podnaslov to napiše z izračunano številko, ne z občutkom.
+`home.css` rabijo tudi napaka, stik, zasebnost, `/android`, `/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`) — preveri tudi tam.
 
-* **Lestvica najhujših nosi sidro čez vse vožnje.** Razrez urejen padajoče → prva vrstica najhujša, ne tipična; brez primerjave se „EC 211 · 46 min“ bere kot opis omrežja. Mediana vseh železniških voženj **3 min**, p90 20 min, 60 % jih konča v petih minutah (6 472 voženj); avtobusi 1,6 min in 74 % (38 272). Zato uvodna poved doda „Čez vse vožnje je mediana …“, podnaslov lestvice pove „najhujši, ne tipični“.
+## `/app/pot` — edina stran, ki se ne začne pri postaji
 
-  Ni domnevana zmeda: prvi, ki je `kajros stats` prebral kot „vlaki zamujajo 46 minut“, je bil avtor kode, ki je imel poizvedbo pred sabo. Potnik nima niti te prednosti.
+Vhoda = kraja (naslov, postaja, shranjena točka, lega, klik), iskanje **čez obe omrežji** (`/api/stations/search` `network=vse`).
 
-  Polja `median_s`, `p90_s`, `on_time_share` v `breakdowns()`; računajo se iz vrstic, ki jih razrezi tako ali tako berejo → brez nove poizvedbe in brez agregata v zahtevi.
-
-  **Ob spremembi polj povečaj `stats.SUMMARY_VERSION`.** Povzetek shranjen v `povzetek`, velja 36 ur; brez tega predpomnilnik streže staro obliko, stran novo polje izpusti, videti je, kot da sprememba ne dela. Točno to se je zgodilo pri `median_s`.
-
-## Domača stran je razcepišče, ne nadzorna plošča
-
-**Živih številk tam ni** (odstranjeni 12. 9. 2026 na prijavo). Bili sta dve:
-
-* „danes običajno: vlaki +2 min · avtobusi +1 min" — vsak dan skoraj ista številka, ne spremeni ničesar, kar bo človek na tej strani storil;
-* števec vozil „na poti" na vsaki kartici — podatek o omrežju, ne o njegovi poti.
-
-Odpadli **dve zahtevi od treh** (`/api/overview` in `/api/overview/bus`, najdražji na strani, ki je samo razcepišče). 1. 10. 2026 odpadla še tretja, `/api/health` za število ovir — ovir na domači strani ni več (spodaj). Obseg zajema („zajetih N meritev v M dneh") je bil v nogi do 19. 9. 2026, odšel — potniku ne pove ničesar.
-
-**Noge ni nikjer** (od 2. 10. 2026). Ob orodni vrstici na dnu je bila spletni ostanek, ki ga nativna aplikacija nima (prijava: „mogoče je malo čudno“). Vsebina je v **meniju Več** (`_vec.html`): gumb ⋮ skrajno desno v glavi vsake strani razen `/admin` in `/brez-omrezja`, odpre **spodnji list** (osnutek C od petih, platno „Kajros: meni v zgornji vrstici“): ikona in ime, „Podpri kajros“ (tonski, `--m-kont`) ob Stik in O nas, nato Vse postaje, Vsa postajališča (edina pot do kazal pristajalnih strani poleg zemljevida strani), Aplikacija za Android (v aplikaciji skrita), Zasebnost, na dnu navedba vira, pogoj CC BY-SA.
-
-* **List je `popover`, ne `<dialog>` z JS.** Pristajalne in besedilne strani JS nimajo, meni pa morajo imeti. Odpre ga `popovertarget`, zapre dotik zunaj ali Esc. Brskalnik brez `popover` (pred Chromom 114) ga pokaže na koncu strani kot navaden razdelek — zato je `vec_list()` za skripti na koncu `<body>`, slog lista pa pod `@supports selector(:popover-open)`.
-* **Tipka nazaj list zapre**, ne zapusti strani (`common.js`, `pripniMeniVec()`): ob odprtju vnos v zgodovino, zaprt list ga vzame nazaj. Povezava v listu gre najprej nazaj čez ta vnos, šele nato na cilj — brez tega mrtev korak v zgodovini. Poteg navzdol nad 80 px list zapre. Preverjeno prek CDP s pravim dotikom.
-* **Gumb je v kotu glave pripet** (pod 560 px `position: absolute`, glava `padding-right: 52px` prek `:has`): v toku se je pri 320 px na ovirah prelomil v drugo vrstico na levo; zemljevid in okno vožnje imata svoj odmik glave, ki bi ga brez `:has` povozila.
-* **Podpora je zdaj vidna le, kdor meni odpre.** Obisk `/donacije` primerjaj pred 2. 10. 2026 in po njem, preden sklepaš, da meni deluje.
-
-**Podpora (`/donacije`) pelje na `ko-fi.com/kajros`** (odprto 19. 9. 2026, PayPal Business na ime „kajros“, da donator ne vidi lastnikovega imena). Naslov = privzetek v `config.py`, ne v enoti, ker ga agent tam ne more pisati. Prazen `KAJROS_DONACIJE=` skrije vse: pot je ploščice na domači strani (na mestu nekdanje „Kdaj potovati") in gumba v meniju Več ni: prošnja brez naslova, kamor bi denar šel, je slabša od nobene. Stran pove ime ponudnika ob gumbu, ker gumb pelje s strani.
-
-**Povedi so pisane, kot se piše, ne kot se govori.** „Kdaj ti pelje in koliko zamuja" in „kje je zdaj kaj" prijavljena kot stavka, ki se v slovenščini tako ne uporabljata; zdaj „Odhodi in zamude slovenskih vlakov in avtobusov" in „kje so vlaki in avtobusi ta trenutek". Isto za naslove v zavihku brskalnika: „Vozni red vlakov in zamude v živo — kajros", ne „kdaj mi pelje vlak".
-
-**Naslov strani se začne s tem, kar človek vtipka v iskalnik, znamka je zadnja** (29. 9. 2026). „vozni red“, „zamude“, „v živo“, „vlakov/avtobusov“ — besede iz Googlovega samodejnega dopolnjevanja („vozni red vlakov zamude“, „sž zamude vlakov danes“). „kajros — …“ je porabil prvo mesto za besedo, ki je nihče ne išče. Opis pristajalne strani nosi številke (vožnje danes, najhitrejša, običajna zamuda), ne splošnega stavka, ki je bil enak na 800 straneh.
-
-**Domača stran ima `<h1>`** — eno vrstico pod znamko (`.d-geslo`). Brez nje je iskalnik videl gumbe: 296 znakov besedila, ne „zamude“ ne „vozni red“.
-
-**Domača stran je Material 3 Expressive** (osnutek G, izbran 26. 9. 2026 med devetimi na platnu „Domača stran kajros"). Zavrnjene prej: kartice z ikonami in prelivom („preveč AI generirano"), tipografske vrstice („vse isto oblikovano in dolgočasno"), ploščice 14.–26. 9. („zgleda tako AI": vse enako zaobljene kartice z obrobo, razprte velike črke, pastelna polja). Sestava:
-
-* **Budilka = tonska kartica na vrhu, a samo, kadar budilka obstaja** (`--m-kont` #5a2e12, besedilo #ffdbc8, 8,8 : 1). „Budilke morajo biti takoj dostopne, ne da iščeš, kje so." V aplikaciji `home.js` bere `Kajros.seznam()`: ura zvonjenja 40 px, dan in odštevanje ob njej, stikalo (`preklopi`); pod njo čez vso širino vožnja in odhod z zamudo; gumb „Vse budilke (N)". Po zvonjenju kaže odhod, kot widget. Uro in odhod izračuna Kotlin (`odhod_ms`, `vir`), stran samo izpiše. **Zamuda v kartici je žeton na podlagi strani** (`.bud-zam`): `--d-big` na rjavem vsebniku ne doseže kontrasta.
-  * **Skrčena 1. 10. 2026** (osnutek 1 od dveh; prijava obiskovalke: začetna stran „preveč overwhelming“, „rabila minuto, da sem jo pregledala“). Prej je bila kartica vedno, tudi prazna („Ni nastavljenih budilk — odpri vožnjo in pritisni budilka“: navodilo za funkcijo, ki je novinec še ne pozna), z dnevi v krogih in še do tremi budilkami s stikali — največji element strani. Dnevi, „zvoni N min prej“ in druge budilke so zdaj en dotik stran, v seznamu.
-  * **Vse ugasnjene → kartica ostane** („Vse budilke so ugasnjene“ + seznam), sicer jih s prve strani ne bi bilo mogoče prižgati. Nobene budilke → kartice ni, namesto nje oblika „Budilke · ni nastavljenih“ ob zemljevidu, ki odpre seznam.
-  * **V brskalniku** budilk ni; povabilo na aplikacijo je oblika „Budilka · za Android“ (`#bud-oblika` → `/android`), ne prva kartica.
-* **Vlaki in Avtobusi sta v razprti orodni vrstici, ne na strani** (osnutek D od štirih, 1. 10. 2026). Prej dva velika povezana gumba tik nad orodno vrstico, ki je imela isti dve mesti še enkrat — ista izbira dvakrat na enem zaslonu, del prijavljene zmede. Na domači strani: Vlaki in Avtobusi kot pilula z imenom v barvi omrežja, ločilo, Pot in Zemljevid kot ikoni; Domova ni, ker si doma. Okvir vrstice je isti kot drugod (od 2. 10. 2026, prej 76 px visoka — skok ob prehodu, glej `oznake.md`). Barvi sta pomen (trdo zapisani, izjema iz `oznake.md`).
-
-  Teža izmerjena na obisku (7 dni do 1. 10. 2026, osebe po dnevih): `/` 1 196, `/app/bus` 644, `/app/train` 405, `/app/pot` 376, `/app/map` 189, `/app/ovire` 62. Omrežji sta najpogostejša pot naprej, zato v vrstici z imenom in barvo, ne kot gola ikona.
-* **Najhitrejša pot = iskalna vrstica** „Kam greš?" z okroglim gumbom, prva pod naslovom. Pelje na `/app/pot#kam` (od 5. 10. 2026): kazalec v polju **Kam**, ne Od kod — človek je ravno odgovoril na „kam“. Od kod dobi „moja lega“ samo, kadar brskalnik strani lego že dovoli (`navigator.permissions`); dovoljenja ne zahtevamo sami (`zemljevid.md`). Lojtra, ne poizvedba: hash ne gre ne na strežnik ne v ključ service workerja.
-* **Moje poti = shranjene poti z naslednjima odhodoma in zamudo** (osnutek A, 1. 10. 2026), pod iskanjem. Iz `kajros:fav` (zvezdica v iskalniku, obe omrežji, največ šest), kartica na pot: `/api/connections` brez prestopov ali `/api/departures` za shranjeno tablo (s stranjo ceste iz `kajros:smer`); izmerjeno na arwenu 40–90 ms, ~20 kB na pot; osvežitev na 60 s in ob vrnitvi na stran. Prej značke z imeni, ki so samo odprle iskalnik. Ni živa številka o omrežju (te so odšle 12. 9.), ampak o tvoji poti.
-  * Ura je voznoredna, ob njej zamuda iz `zamuda` (strežnik), „točno“ pri zaokroženi ničli; mimo je odhod šele po pričakovani uri, nepotrjen ostane do `nepotrjen_do` („potrditve odhoda ni“). „brez podatka“ samo za odhode v 30 min (kot `pot.BREZ_PODATKA_PRED_S`), nadomestni prevoz „po voznem redu“.
-  * **Danes nič več → prva jutrišnja** z oznako „jutri“: ob 23:20 je bila sicer prazna vsaka kartica (prvi preizkus).
-  * **Novinec pogostih poti ne vidi** (zavrnjeno ob osnutku): ena poved v tihi kartici, kako pot shrani. Tuje poti so šum.
-* **Povabilo = tiha kartica pod Mojimi potmi** (13. 10. 2026, `home.js` „povabilo“): „Se s tabo vozi še kdo? Pošlji mu zamude za Ljubljana → Kranj.“ Od ust do ust se v /admin ne vidi (sporočilne aplikacije `Referer` ne pošljejo; 29. 9.–12. 10. 2026 88 % ogledov brez znanega vira), zato povezava nosi `utm_source=povabilo` (`obisk._VIRI`, vir „Povabilo“).
-  * **Komu:** shranjena pot z odhodom danes ali jutri (pot brez neposredne vožnje ima prazno pristajalno stran) in kajros odprt vsaj na 4 dni (`kajros:dnevi`, zadnjih deset, piše ga `common.js` na vsaki strani aplikacije). Novinec še ne ve, ali stran dela.
-  * **Kaj:** pristajalna stran prve take poti (`/vlak|avtobus/{od}/{cilj}`, za tablo `/postaja|postajalisce/{ime}`), ne iskalnik: brez JS, predogled v sporočilu nosi relacijo in običajno zamudo. `slug` v JS = `pristanek.slug` (preverjeno na 5 496 imenih, 0 razlik).
-  * **„Pošlji“, ne „Deli“** — „Deli“ je deljenje lege. Ne sistemsko obvestilo: oglas v obvestilu je razlog za odstranitev aplikacije, budilka mora ostati vredna zaupanja.
-  * „Ne zdaj“ utihne za 60 dni, poslano ali kopirano za 120 (`kajros:povabilo`). Preklic izbirnika ne šteje.
-  * Pošiljanje je `common.posljiPovezavo()`, isto kot „Pošlji“ v oknu vožnje (ta nosi `utm_source=poslano`): Web Share, sicer odložišče, ob napaki povezava za ročno kopiranje. WebView Web Share nima; aplikacija od 1.13 (most 6) ga da sama (`android.md`, „Pošiljanje“), starejša samo kopira.
-* **Budilka, Zemljevid, Deli lego = ikone v oblikah** (cvet, detelja, zvezda; poti iz `r = R(1 + a·cos nθ)`, v predlogi), vsaka v svoji barvi — rjava, modrozelena, indigo (izbrano 1. 10. 2026 med šestimi kombinacijami) — in s podnapisom: „za Android“, „vozila v živo“, „pomagaj drugim“. Brez podnapisa „Deli lego“ ni povedal, čemu je. Pritisk posvetli obliko, ne pravokotnika okrog nje.
-* **Ovir na domači strani ni** (od 1. 10. 2026). Veljajo samo za vlake, domača stran je obema omrežjema; `/app/ovire` je v 7 dneh odprlo 62 oseb na dan proti 1 196 na `/`; rumena značka je bila 28 dni zapored opoldne med 15 in 25 — nikoli ni povedala, da je danes kaj drugače, kar je bil njen razlog. Ostanejo na strani Vlaki (povezava v glavi, kartica pod iskalnikom) in v oknu vožnje za tisti vlak. Na domačo stran sodijo samo, kadar zadenejo potnikovo shranjeno pot — to še ni narejeno.
-* **Deli lego:** oblika je vabilo (`deli-oblika`); `deli.js` shrani njen HTML in ga vrne v fazi `miruje`, v drugih fazah razpre kartico čez vso širino na **začetek** vrstice oblik (`je-odprt` → `flex-basis: 100%; order: -1`), tja, kjer je bil prst. Na koncu vrstice se je prelomila pod Budilko in Zemljevid, pod rob zaslona in orodno vrstico — potnik je moral iskati gumbe (prijava 11. 10. 2026). Vsak nov zaslon deljenja (`deli.js`, `naZaslon`) kartico pripelje na zaslon, kadar jo potnik gleda; nad orodno vrstico jo drži `scroll-padding-bottom` (`base.css`, v oknu vožnje `.train-body` in `.col`).
-* **Podpora = kartica cilja pod oblikami** (20. 10. 2026, `home.js` „podpora“), poleg gumba v meniju Več: namen, trak, „7 € od 30 €“, gumb Podpri na `/donacije` (ne naravnost na Ko-fi: tam piše, za kaj je denar in kdo ga pobere). Cilj v `config.CILJ`, vsota iz `/api/podpora` (`donacije.cilj()`), ne iz HTML — domačo stran streže service worker iz predpomnilnika. ✕ jo skrije do novega cilja (`kajros:podpora` = `kljuc`). `/donacije` ima isti trak, izrisan na strežniku. Pogoj: `KAJROS_DONACIJE`. **Pred objavo v Googlu Play** glej `android.md` („Podpora v Playu“).
-* **Plavajoča orodna vrstica** (`_orodna.html`) je od 26. 9. 2026 na vseh straneh aplikacije (domača, iskalnik, pot, zemljevid, ovire, okno vožnje), ne na besedilnih in pristajalnih; na domači razprta (zgoraj). Glej „Slog: Material 3“ v `oznake.md`.
-
-`home.css` rabijo tudi napaka, stik, zasebnost, `/android` in `/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`) — spremembo teh razredov preveri tudi tam.
-
-## `/app/pot` („Najhitrejša pot") — edina stran, ki se ne začne pri postaji
-
-Potnik ve, **kje stoji**, ne s katere postaje mu pelje. Zato dva vhoda = kraja (naslov, ulica, kraj, postaja, shranjena točka, lastna lega, klik na zemljevid), ne dve imeni; iskanje teče **čez obe omrežji** — vlak in avtobus lahko v isti verigi. Za zemljevidom druga stran, ki omrežji namerno meša; zato ima `/api/stations/search` tu `network=vse`, drugod privzeto `zeleznica`.
-
-**Naslovi so iz našega kazala, ne iz geokodirnika** (23. 9. 2026, `kajros/naslovi.py`, `/api/naslovi`). Tuji ponudnik bi ob vsaki tipki izvedel, kam kdo gre; prej zato naslova ni bilo mogoče vpisati. Kazalo iz OSM (hišne številke GURS tam za vso državo), 51 MB, poizvedba 1–15 ms. Polje: en seznam s tremi viri: shranjene točke, postaje (kazalo v brskalniku, takoj), naslovi/ulice/kraji/točke (strežnik, 160 ms zakasnitve, prekinjeno ob naslednji tipki). S številko v poizvedbi naslovi prvi, brez nje postaje. Razvrščanje upošteva **okolico** — drugi konec poti, lastno lego ali sredino zemljevida —, sicer „Trubarjeva 5" v Laškem pred Ljubljano. „Poišči" po tipkanju brez izbire vzame prvi zadetek, ne javi „manjka cilj". Kadar kazala na strežniku ni, polje išče samo po postajah, kot prej.
-
-**Vprašanje časa = prihod, ne odhod.** „Kdaj moraš biti tam?": **čim prej** (privzeto, danes od zdaj; prvi predlog = najzgodnejši prihod) ali **do ure** (dan in ura; prvi predlog = tisti, s katerim od doma odideš **najpozneje**, z oznako „najpozneje" in rezervo do roka na vsaki kartici). Odhod ob uri izginil: odgovor na vprašanje, ki ga nihče ne postavi — človek ve, kdaj mora biti v službi, ne kdaj mora od doma. `/api/pot` `ob` ostane za druge odjemalce. Kadar za danes do roka ne gre več, stran ne reče „ni poti", ampak „Do 8:00 ne prideš več. Najhitreje si tam ob 8:14." (`ne_ujames`). Pot, ki po napovedi zamude pride prepozno, ostane na seznamu, na dnu in rdeče.
-
-**Prevozniki = izbira pod gumbom** (6. 10. 2026; `pot.PREVOZNIKI`, `/api/pot?prevozniki=lpp,vlak`). Prijava potnika z mesečno LPP: „izračuna vedno najhitrejšo pot, ampak z Arrivo“. Izmerjeno na 48 poteh po Ljubljani ob 7.30: pri 17 prvi predlog ni bil samo mestni LPP (11 primestni LPP, 6 Arriva/Nomago, 1 vlak), pri 16 od njih je bila pot samo z LPP na seznamu nižje. Pravila:
-
-* **Imena z vozila, ne šifre GTFS.** „LPP“ = mestni (`lpp`) in primestni (`1118`) skupaj (David: „LPP je vse v zvezi z LPP“); nadomestni avtobus SŽ je pod „vlak“. Prevoznik, ki ga v tabeli ni, ni nikoli izločen.
-* **Izbira je lastnost potnika, ne poti** → `localStorage` (`kajros:prevozniki`), ne naslov: deljena pot prejemniku ne vsili tuje vozovnice.
-* **Omejitev je vidna ob odgovoru** („Samo LPP — poišči z vsemi“), tudi ko poti ni: kdor jo je nastavil pred mesecem, bi sicer mislil, da stran Arrive ne pozna. Zadnjega prevoznika ni mogoče izklopiti.
-* Iskanje izločene vožnje preskoči prek iste poti kot že prikazane (`brez`), brez svoje veje v krogu čez vozni red.
-
-**Kolo ali rolka = potrditveno polje, ne drsnik** — 15 km/h na obeh koncih (`kmh`), drobno pod gumbom, ker ga večina ne rabi. V verigi „kolo 4" namesto „peš 12"; prestop med postajališči ostane „peš".
-
-**Na domači strani prva, ne med „ostalim".** Edina stran brez zahteve, da potnik ve postajo — prvo vprašanje, ne zadnje. Ni tretja izbira ob vlaku in avtobusu, ampak **drugo vprašanje**, zato iskalna vrstica, ne tretji enak gumb. Omrežji sta od 1. 10. 2026 v orodni vrstici na dnu. Ikona Pot v njej to vrstico podvaja; ostala je, da ima vrstica na vseh straneh iste cilje.
-
-**Iskanje postaj gre skozi kazalo, ne strežnik.** `/api/stations/search` za `network=vse` izmerjeno **1,35 s** na razvojnem računalniku — okoli pet na arwenu, na vsako tipko. Postaje se ne spreminjajo vsak dan: `/api/stations/index?network=vse&koordinate=1` se naloži enkrat (323 kB, 12 h v `localStorage`), išče se v brskalniku z istim razvrščanjem kot strežnik (`iskalnikKazala()` v `common.js`). Toplo 3,6 ms.
-
-**Kazalo nosi tudi lego** — postajališče z **največ prometa** pod tem imenom. Naključno izbrano bi pri „Bavarski dvor" enkrat dalo eno stran ceste, enkrat drugo → iskanje poti od tam dva različna izida za isto ime.
-
-**Predlog = vrstica, ne izpis.** Prej vsaka noga svoja vrstica z urami in postajami — štirje predlogi = dvajset vrstic, med katerimi ni mogoče izbirati na pogled. Zdaj troje: ure in trajanje, **veriga** (`peš 7 › LPP 9 › 7 min za prestop › LPP 25 +2 › peš 10`), drobno o prestopih. Rezerva prestopa mora ostati v verigi — brez nje „1 prestop" ne pove, ali zveza drži, in prav to je edino, zaradi česar je prestop vreden pozornosti.
-
-**Brez podatka ≠ točno.** Vožnja, o kateri feed danes ni povedal ničesar, nosi v verigi sivo „brez podatka" — isto besedo kot iskalnik zvez. Prej prazno mesto, brano kot „vozi po voznem redu": 22. 9. 2026 je tako stal 25 s Tržnice Moste, ki je zamujal 20 minut, ker njegov feed zaradi novih id-jev ni prišel do nas (`zajem.md`, „Nov vozni red, stari id-ji v feedu"). Kdaj velja, pove strežnik (`brez_podatka`); za drug dan podatka v živo ne more biti, žetona ni. **Samo za odhode v naslednjih 30 minutah** (`pot.BREZ_PODATKA_PRED_S`, 30. 9. 2026): prej je stal pri 86 % voženj na seznamu, mediana 78 min do odhoda — tam podatka še ne more biti in beseda je bila šum.
-
-**Zemljevid čez celo stran**, ne čez cel zaslon — isti razlog kot pri oknu vožnje: fullscreen skrije naslovno vrstico, gumb nazaj in vsak drug orientir, izhod je tipka, ki je na telefonu ni.
-
-**Lega se ne izmeri enkrat, ampak ji sledimo.** Prvi popravek GPS pogosto zgreši za sto metrov, v naslednjih sekundah ga popravi, potnik se medtem premika; `maximumAge` zato **0** — brez tega brskalnik vrne do minuto star popravek in prvi klik pokaže, kje si bil, ne kje si.
-
-Štiri stvari, pokazale se šele na zaslonu:
-
-* **Ravna črta med postajama ni proga.** Prva različica je Grosuplje–Ljubljana narisala kot daljico čez pokrajino, kar trdi pot, ki je ni. Zdaj najprej skica, nato jo zamenja **prava trasa iz `shape`**, izrezana med vstopnim in izstopnim postajališčem. Hoja črtkana modra, vožnja polna oranžna — potnik mora videti, kje ga nese vozilo in kje njegove noge.
-* **Imen postaj ne sklanjaj.** „peš 7 min od izhodišča do Grosuplje" je narobe, „do Grosupljega" bi moral nekdo izpeljati — za „Bavarski dvor" ali „Vič Glince" ne bi delalo. Zato puščica: `izhodišče → Grosuplje`.
-* **Kateri klik gre kam, mora biti vidno.** Prvi klik postavi izhodišče, naslednji cilj; katero polje je „nabito", pove barva oznake.
-* **Vir hoje pride na zaslon.** Kadar usmerjevalnik ne odgovori, stran napiše „hoja je **ocena**" — zasilna številka je izmerjeno mediano 6 minut predolga, brez te besede se bere kot izmerjena.
-* **Iskanje mora biti vidno, ker traja** (14. 10. 2026). `/api/pot` 7.–13. 10.: 881 zahtev, 53 % nad 2,5 s, 32 % nad 5 s, najdaljša 29 s. Drobno sivo „Iščem …“ pod možnostmi je potnik spregledal in stran skoraj zaprl. Zdaj gumb „Iščem …“ z vrtavko (onemogočen, vrne ga samo zadnje iskanje), sporočilo je kartica z gibljivo črto, po 3 s „Še iščem … daljša pot zna trajati nekaj sekund.“; Enter v polju zapre tipkovnico, ki bi kartico pokrila. Hitrost sama ostaja odprta.
-
-**Pot deljiva prek naslova** (`?od=lat,lon&do=lat,lon&tam=HH:MM&dan=…&kolo=1`). Brez tega je edini način, da nekomu poveš pot do sebe, opis s stavki — stran naj bi ga nadomestila. Današnji dan v naslov ne gre.
-
-**Gumb „Pošlji“ ob naslovu predlogov in na podrobnostih** (19. 10. 2026; prej pot ni bila deljiva nikjer, kjer naslovne vrstice ni — aplikacija za Android). `common.posljiPovezavo`, `utm_source=poslano`, kot okno vožnje. Seznam pošlje **vprašanje** (prejemnik dobi odgovor za takrat, ko odpre), podrobnosti **pot** z dnem (`date` — brez njega bi jutri odprl jutrišnje vožnje z istimi id-ji ali „vožnje ta dan ni“). Besedilo je prvi predlog v enem stavku (`common.stavekPoti`): „Odhod ob 11:23 · LPP 2 (Lutkovno gl. 11:30) · na cilju ob 11:52“ — **brez imen krajev**, ker je kraj lahko shranjena točka („dom“); vstopno postajališče je javno ime.
-
-**Polje se glasi „do postaje največ".** Brez „do postaje" si stran nasprotuje: polje pravi 25 minut, pot „vso pot peš" ima 85. Omejitev velja za dostop do postajališča in z njega, ne za hojo sploh — razlika je bila prijavljena kot napaka, ker je bila nevidna. „Po meri" odšel s poenostavitvijo obrazca (23. 9. 2026); vrednost iz naslova, ki je med izbirami ni, dobi svojo izbiro. Meji kot na endpointu (3–45).
-
-**Polje ostane, izmerjeno.** Na 40 parih točk (1,5–25 km, jutranja konica) je ura prihoda pri **vsaki** vrednosti meje enaka — mediana razlike 0 minut. Meja ne izbira med „hitreje" in „manj hoje", ampak med **ali odgovor obstaja** in **koliko hodiš**: 10 min da pot v 28 % primerov s 16 minutami hoje, 45 min v 95 % s 40 minutami. Brez polja bi bilo treba izbrati eno številko za vse, obe skrajnosti slabi. Preizkušeno tudi „iskati vedno na 45 in ponuditi tudi pot z malo hoje" — **ne gre**, taka pot med predlogi le v 2 primerih od 38.
-
-Koraki izbirnika po isti meritvi 10 / 15 / 25 / 35 / 45: pri vsakem se delež najdenih poti merljivo spremeni (28 / 38 / 75 / 88 / 95 %).
-
-**Ko z vozilom ni ničesar, stran pove dvoje**, ne le „ni poti": koliko traja hoja vso pot (resnica, ki jo imamo) in **koliko hoje bi bilo treba**, da bi bilo v dosegu prvo postajališče — s številko in gumbom, ki jo nastavi. Zadnje ni obljuba: postajališče v dosegu še ni zveza, tako tudi piše. Zato prefilter kandidatov meri do **45 minut** ne glede na nastavljeno mejo; sicer postajališča tik čez mejo ne izmeri in številke ni od kod dobiti.
-
-**Zamenjava krajev in dan sta manjkala** (dodano 12. 9. 2026):
-
-* **Zamenjava** = gumb med poljema. Pot nazaj = isto vprašanje z zamenjanima koncema; kraja z lego iz GPS ali klikom na zemljevid ni bilo mogoče prepisati. Kadar je odgovor že na zaslonu, se poišče takoj — gumb, ki vidno stanje pusti pri miru, je videti kot okvara.
-* **Dan** = polje z dvema puščicama, isto kot v iskalniku zvez. `/api/pot` je `date` sprejemal ves čas, stran ga ni pošiljala. Ker ima polje zdaj dve strani, slog (`.date-row`, `.day-nav`, `.day-step`) v `base.css`, poslušalec v `common.pripniDnevnePuscice()`; dve različici istega računa bi se razšli ob prvem prehodu na zimski čas. Najmanjša širina **210 px** ni na oko: pri 160 px leva puščica ležala čez besedilo datuma — datum konča pri ~105 px, puščici zasedeta 68 px levo od koledarskega gumbka brskalnika, ki je 28 px od desnega roba.
-* **Dan in ura vidna samo pri „do ure"**; „čim prej" je vedno danes. Rok, ki je danes že mimo, ne vrne poti za nazaj, ampak `ne_ujames` in najhitrejšo pot od zdaj.
-* **Danes ne pelje nič več → jutrišnje zveze** (`danes_ni`, 30. 9. 2026), ne „ni poti": ob 22:30 je bilo brez vozila 74 od 100 vprašanj, jutrišnjo zvezo jih ima 54. Naslov to pove z dnem („Danes ne pelje nič več. Prve zveze · 1. 10."), kartice nosijo samo uri. Jutrišnje iskanje gre od polnoči brez meje hoje in brez ponovnega iskanja današnjega dne (`nadaljevanje=True`) — sicer bi ga odrezala hoja ob polnoči.
-* **Ob isti minuti prihoda je prvi tisti, s katerim odideš najpozneje**; prestop več mora prinesti vsaj 10 min doma (`pot.PRESTOP_VREDEN_S`). Prej: 05:44 z dvema prestopoma nad 11:43 s tremi, isti prihod. Trajanje na kartici = razlika prikazanih ur (`trajanjePrikaz`), rezerva prestopa po urah, ki jih stran kaže (`rezervaPrestopa`: zamuda prve vožnje ob izstopu, vožnja brez podatka po voznem redu).
-* **Do 3 min poznejši prihod sme na vrh, kadar prihrani vsaj 5 min od vrat do vrat** (19. 10. 2026, `pot.izberi_predloge`: `SKORAJ_ENAKO_S`, `PRIHRANEK_S`, prestop šteje 10 min), a ne z več kot 5 min več hoje. Ljubljana → Bled ob 7:00: prej vlak do Lesc z 31 min čakanja (9:14), zdaj neposredni ob 7:50 (9:15). Na 1 280 vprašanjih zamenjan prvi v 37 od 1 138, prihod mediano 1,7 min pozneje, od doma 11 min pozneje; brez praga prihranka bi bilo 92 zamenjav, tudi za minuto doma. Najzgodnejši ostane na seznamu, **naslov pa tedaj ne trdi „Najhitreje“**: „Skoraj najhitreje na cilju“ in „1 min pozneje kot najhitrejša pot, a 18 min pozneje od doma in brez prestopa.“ — razlike iz številk s kartic (ura brez sekund). Isto „Najhitreje si tam ob“ pri `ne_ujames` vzame najzgodnejši prihod, ne prvega.
-* **Prevlada po urah na kartici, ne na sekundo** (19. 10. 2026, `pot.PREVLADA_HOJA_S`): predlog pade, kadar je že izbran tak, ki po minuti ne pride pozneje in ne odide prej, ima kvečjemu 3 min več hoje in ne več prestopov. Na sekundo je ostal „07:07 → 08:19 z dvema prestopoma“ pod „07:07 → 07:53 z enim“ zaradi 14 s manj hoje. Toleranca ±60 s na obeh urah (predlog presoje) bi odstranila tudi naslednji odhod minuto pozneje — ta je rezerva, ne šum. Najzgodnejši prihod ostane vedno. Na 1 280 vprašanjih 61 predlogov manj (1,4 %), pri roku 38 (1,3 %), prvi nikjer drug.
-* **Pot z manj hoje sme trajati dlje za 10 min ali za prihranjeno hojo** (`pot.MANJ_HOJE_DLJE_S`, 19. 10. 2026): prej Jesenice → Ljubljana „16:21 → 18:22, 6 min hoje“ ob „16:52 → 18:18, 18 min hoje“. Na 240 vprašanjih 990 → 983 predlogov, prvi nikjer drug.
-* **Zemljevid seznama zajame traso prvega predloga**, ko pride (mestna linija v zanki, vlak po dolini), a samo, če ga človek vmes ni premaknil (`pot.js`, `premaknjen`).
-* Sprememba dneva, ure, meje ali kolesa odgovor **osveži samo, kadar je že na zaslonu**; dokler ga ni, išče samo gumb — isto pravilo kot na vstopni strani.
-
-**Po iskanju se obrazec na telefonu skrči v vrstico z vprašanjem** (19. 10. 2026, `pot.zlozi()`; vzorec in slog iskalnika zvez, `.povzetek` je zato v `base.css`): „Prešernov trg → BTC-Emporium · čim prej ✎“ in zamenjava krajev, dotik odpre obrazec. Prva kartica pri 412 × 915 s 606 na 202 pik, nad orodno vrstico tri namesto dveh. Skrči ga gumb, Enter in naslov (deljena povezava, vrnitev s podrobnosti); **ponovno iskanje ob spremembi ure, prevoznikov ali kraja ne** — zaprlo bi obrazec, ki ga človek popravlja; vrstica pa se ob njem prepiše, da govori o vprašanju na zaslonu. Kraj, ki ga ni mogoče najti, in manjkajoča ura ga odpreta. Namizje vrstice nima (samo CSS).
-
-**Shranjene točke („dom", „služba") ostanejo v brskalniku.** Kje kdo stanuje = najobčutljivejši podatek, ki ga aplikacija lahko drži, zato `localStorage` (`kajros:tocke`, največ šest). Strežnik dobi samo koordinate, ki jih poizvedba nosi tako ali tako (`/api/pot?od_lat=…`); **ime ne gre nikamor**, tudi v naslov strani ne — sicer bi deljena povezava povedala, da je tista točka tvoj dom. Obratno naslov, ki ga odpreš sam, koordinate **poimenuje**: če se ujemajo s shranjeno točko, v polju piše „dom", ne 46.05611, 14.50577.
-
-Ujemanje po razdalji (`TOCKA_PRAG`, 1e-4 ≈ 11 m), ne po enakosti: naslov nosi pet decimalk, lega iz GPS vse, dve zapisovanji istega praga bi se razšli.
-
-Troje odločeno:
-
-* **Žetoni pod obema poljema, ne enkrat na stran.** „Dom" je enkrat izhodišče, enkrat cilj; en sam seznam bi bil isti ugib kot klik na zemljevid, preden je oznaka povedala, kateri klik gre kam.
-* **Zvezdica govori isto kot v iskalniku zvez** (`☆ shrani` / `★ shranjeno`): en gumb pove stanje in ga preklopi, križca na žetonu ni. Na gumbu je od 11. 10. 2026 samo zvezdica (beseda v `aria-label` in `title`): z besedo je bilo polje ob „lega“ in „karta“ ozko 160 pik, na telefonu in v stranskem stolpcu namizja, in naslov odrezan. Odstrani se tako, da točko postaviš in odtakneš zvezdico — dve poti do istega dejanja pri dveh poljih = dvanajst gumbov za šest točk.
-* **Isto ime = isti kraj.** Shranjevanje pod obstoječim imenom popravi koordinate; brez tega bi seznam tiho dobil dva žetona z napisom „služba".
-
-Ime se vpraša **v strani**, ne s `prompt()`: v aplikaciji za Android `WebChromeClient` (`Krom`) `onJsPrompt` ne obravnava, zato okna tam ni in shranjevanje bi tiho odpovedalo.
+* **Naslovi iz našega kazala** (`naslovi.py`, `/api/naslovi`, OSM, 51 MB, 1–15 ms) — tuji geokodirnik bi izvedel, kam kdo gre. En seznam: shranjene točke, postaje (kazalo v brskalniku), naslovi (strežnik, 160 ms zakasnitve, prekinjeno ob tipki). S številko naslovi prvi. Razvrščanje po **okolici** (drugi konec, lega, sredina zemljevida). „Poišči“ brez izbire vzame prvi zadetek. Brez kazala samo postaje.
+* **Vprašanje časa = prihod.** **Čim prej** (prvi = najzgodnejši prihod) ali **do ure** (prvi = najpoznejši odhod od doma, „najpozneje“, rezerva). Danes do roka ne gre → „Do 8:00 ne prideš več. Najhitreje si tam ob 8:14.“ (`ne_ujames`). Prepozna po napovedi ostane, na dnu, rdeča.
+* **Prevozniki = izbira pod gumbom** (`pot.PREVOZNIKI`, `?prevozniki=lpp,vlak`; 17 od 48 poti prej ni bilo samo LPP). „LPP“ = mestni + primestni (1118); nadomestni pod „vlak“. Izbira v `localStorage` (`kajros:prevozniki`), ne v naslovu. Omejitev vidna ob odgovoru („Samo LPP — poišči z vsemi“). Zadnjega ni mogoče izklopiti. Izločena vožnja prek `brez`.
+* **Kolo/rolka = potrditveno polje**, 15 km/h (`kmh`); prestop ostane „peš“.
+* **Postaje iz kazala v brskalniku** (`/api/stations/index?network=vse&koordinate=1`, 323 kB, 12 h `localStorage`, `iskalnikKazala()`, 3,6 ms; strežnik 1,35 s). Lega = postajališče z **največ prometa** pod imenom.
+* **Predlog = vrstica**: ure in trajanje, **veriga** (`peš 7 › LPP 9 › 7 min za prestop › LPP 25 +2 › peš 10`), prestopi. Rezerva prestopa v verigi.
+* **Brez podatka ≠ točno** — sivo „brez podatka“ (strežnik `brez_podatka`), samo v 30 min (prej pri 86 % voženj = šum).
+* Zemljevid čez stran, ne fullscreen. Lega se sledi, `maximumAge` **0**.
+* **Od kod = tvoja lega**, kadar ga ni dal naslov in ga človek ni vpisal; enkrat na ogled, samo lega ≤ 100 m (`LEGA_DOVOLJ_M`), pogled se ne premakne (`S.od.sam`).
+* Ravna črta ni proga — skica, nato trasa iz `shape` med postajališčema. Hoja črtkana modra, vožnja polna oranžna. **Imen postaj ne sklanjaj** (`izhodišče → Grosuplje`). Barva oznake pove, kateri klik gre kam. Brez usmerjevalnika „hoja je **ocena**“ (zasilna mediano 6 min predolga).
+* **Iskanje vidno, ker traja** (53 % nad 2,5 s, najdaljše 29 s): gumb „Iščem …“ z vrtavko, kartica z gibljivo črto, po 3 s „Še iščem …“; Enter zapre tipkovnico.
+* **Pot deljiva prek naslova** (`?od=lat,lon&do=lat,lon&tam=HH:MM&dan=…&kolo=1`), današnji dan ne gre v naslov. **„Pošlji“** ob predlogih in podrobnostih (`common.posljiPovezavo`, `utm_source=poslano`): seznam pošlje vprašanje, podrobnosti pot z `date`. Besedilo `common.stavekPoti` **brez imen krajev** (kraj je lahko „dom“).
+* **„do postaje največ“** (meja dostopa, 3–45). Polje ostane: ura prihoda pri vsaki meji enaka (40 parov, mediana 0), meja odloča **ali odgovor obstaja** (10 min 28 %, 45 min 95 %). Koraki 10/15/25/35/45 (28/38/75/88/95 %). „Vedno 45 + pot z malo hoje“ ne gre (2 od 38).
+* **Brez vozila pove dvoje**: hoja vso pot in koliko hoje do prvega postajališča (z gumbom). Prefilter do 45 min ne glede na mejo.
+* **Zamenjava krajev** = gumb, ob odgovoru išče takoj. **Dan** = polje z dvema puščicama (`.date-row`, `.day-nav`, `.day-step` v `base.css`, `common.pripniDnevnePuscice()`), min. širina 210 px. Dan in ura le pri „do ure“.
+* **Danes nič več → jutrišnje** (`danes_ni`; ob 22:30 74 od 100), od polnoči brez meje hoje (`nadaljevanje=True`).
+* **Ob istem prihodu prvi tisti z najpoznejšim odhodom**; prestop več mora prinesti ≥ 10 min doma (`pot.PRESTOP_VREDEN_S`). Trajanje = razlika prikazanih ur (`trajanjePrikaz`), rezerva po prikazanih urah (`rezervaPrestopa`).
+* **Do 3 min poznejši prihod sme na vrh, če prihrani ≥ 5 min od vrat do vrat** (`pot.izberi_predloge`, `SKORAJ_ENAKO_S`, `PRIHRANEK_S`, prestop = 10 min), ne z > 5 min več hoje. 37 od 1 138 zamenjav. Takrat naslov ne trdi „Najhitreje“ („Skoraj najhitreje na cilju“). `ne_ujames` vzame najzgodnejši prihod.
+* **Prevlada po urah na kartici** (`pot.PREVLADA_HOJA_S`): pade predlog, ko je izbran tak, ki po minuti ne pride pozneje, ne odide prej, ≤ 3 min več hoje, ne več prestopov. Naslednji odhod minuto pozneje ostane. Najzgodnejši ostane vedno.
+* **Pot z manj hoje sme trajati dlje za 10 min ali prihranjeno hojo** (`pot.MANJ_HOJE_DLJE_S`).
+* Zemljevid seznama zajame traso prvega, če ga človek ni premaknil (`premaknjen`). Sprememba dneva/ure/meje/kolesa osveži le odgovor na zaslonu.
+* **Po iskanju se obrazec na telefonu skrči v vrstico** (`pot.zlozi()`, `.povzetek` v `base.css`): gumb, Enter, naslov; **ponovno iskanje ob spremembi ne** (zaprlo bi obrazec), vrstica se prepiše. Neznan kraj in manjkajoča ura odpreta. Namizje nima (CSS).
+* **Shranjene točke („dom“) samo v brskalniku** (`kajros:tocke`, šest). Strežnik dobi koordinate, **ime nikamor**, tudi ne v naslov. Naslov s koordinatami shranjene točke se poimenuje. Ujemanje po razdalji (`TOCKA_PRAG` 1e-4 ≈ 11 m). Žetoni pod obema poljema. Zvezdica `☆`/`★` (beseda v `aria-label`). Isto ime = isti kraj. Ime se vpraša **v strani**, ne s `prompt()` (WebView `onJsPrompt` ne dela).
 
 ### `/app/pot/podrobno` — ista pot, razložena
 
-Seznam = „s čim in kdaj", ta stran = **„kako"**. Klik na predlog pelje sem, doda dvoje:
-
-* **prava pešpot na zemljevidu**, ne ravna črta (`hoja.pot()`, OSRM `route` z geometrijo). Brez usmerjevalnika: se **napiše** in nariše zračna črta; ravna črta brez opombe trdi pot, ki je ni;
-* **vmesni postanki vožnje** v `<details>` — potnika najprej zanima, kje izstopi, potem šele kaj je vmes.
-
-**Črta mora biti sklenjena od starta do cilja** (23. 9. 2026, prijavljeno z zaslona). Dve vrzeli: usmerjevalnik začne pešpot na najbližji poti, ne na vratih/postajališču (`hoja.pot()` zdaj doda priključek na oba konca); trasa vožnje odrezana na najbližjem **ogljišču**, ponekod sto metrov od postajališča (`common.trasa()` zdaj reže na projekciji + doda priključek do postajališča; projekcijo bližje od 35 m izpusti, sicer kljukica ob obroču). **Start in cilj = oznaki z besedo** (`pkKonca()`), ne krogca v plasti: obroč velikosti postajališča se je med ulicami izgubil. Oznaka MapLibra ne sme dobiti `position` iz našega sloga — z `relative` je start stal v Tivoliju. Postajališča nosijo ime od Leafletovega z13.
-
-**Lastna lega in izhodišče nista ista pika.** Izhodišče je bilo polna modra pika, enaka lastni legi — pri iskanju od svoje lege dve enaki piki eno na drugi, postajališča sploh ne. Zdaj: polna modra = samo „ti", izhodišče prazen svetel obroč, postajališče obroč v barvi vožnje, cilj polna oranžna. Isto na seznamu predlogov (`pot.js`).
-
-**Peš korak ima vodenje** („vodi me do postajališča / do cilja", 23. 9. 2026). Zamenjalo kompas: puščica proti koncu koraka je povedala smer, ne poti. Zemljevid gre čez stran, od blizu in nagnjen (`pot_karta.js`, isti nagib kot veliki zemljevid), obrnjen v smer hoje, lega v spodnji tretjini. Zgoraj **samo naslednji zavoj** (znak, „čez 120 m", „Zavij levo", ulica v imenovalniku — sklanjati ne znamo), spodaj koliko je še in **ali ujameš vozilo**: „LPP 6 odpelje ob 12:03 · čez 9 min · 3 min rezerve" (zeleno / rumeno pod 3 min / rdeče „pohiti"). Navodila iz OSRM (`steps=true`, `hoja.navodilo()`).
-
-* **Smer kamere**: smer gibanja iz GPS pri hoji (> 0,7 m/s), sicer kompas telefona (`deviceorientationabsolute`, iOS na prošnjo iz dotika), sicer smer poti. Če zemljevid premakneš s prstom, kamera ne vleče nazaj, dokler ne pritisneš „sledi mi".
-* **Zašel**: odmik od poti nad 35 m in nad dvojno točnostjo, trikrat zapored → nova pot od tu (`/api/pot/hoja`), največ vsakih 20 s (šum GPS 15 m: 149 lažnih preračunov na 305 km namesto 630). Preračun samo, ko si pot že začel (bil v **35 m** od nje; s 60 m je vozilo, ki pelje mimo pešpoti, sprožilo preračun sredi vožnje v 69 od 70 simuliranih voženj): „vodi me do cilja" se pogosto pritisne na vlaku, pot sedem kilometrov stran ni zašla, ampak je pred tabo. Takrat in brez lege se po navodilih lista na roko (‹ ›).
-* **Prihod**: konec bližje od točnosti lege (najmanj 15 m) — „Tu je postajališče" z vozilom in gumbom „ko izstopiš: vodi me do cilja".
-* Zaslon med vodenjem ne ugasne (`wakeLock`), zamude se osvežujejo vsakih 30 s, odštevanje vsakih 5 s; tresljaj 20 m pred zavojem in ob prihodu.
-
-**Žeton zamude ob izstopu je drug od vstopnega in mora biti viden.** Vozilo vmes rezervo porabi ali izgubi: „+1 min" nad prihodom šest minut za voznim redom je videti kot napaka, čeprav je napoved. Zato drugi žeton na izstopni vrstici — samo kadar se od prvega res razlikuje.
-
-**Povezava na okno vožnje nosi `postaja` (vstop) in `date` (dan predloga)**, kot iz iskalnika zvez (21. 10. 2026). Brez `postaja` okno ni imelo bloka „Pri tebi“: LPP 11 pred odhodom, brez žive napovedi in z 2 vožnjama zgodovine (`MIN_RUNS_FOR_TYPICAL` = 3), je bil 39 vrstic „brez ocene“ in „?“ — prijavljeno kot „prazno vse“. Okno zdaj tako vožnjo pove enkrat (ločilna vrstica „vozni red, ocene še ni“), postanki nosijo neprečrtan vozni red.
-
-**Pot je v naslovu** (`?noge=trip:od_seq:do_seq;…`), ne v seji: kdor jo pošlje, pošlje pot, ne svojega brskalnika. `trip_id` LPP nosi navpičnice → `encodeURIComponent`; ločnica se bere **z desne** — sicer se id z dvopičjem razlomi na napačnem mestu.
-
-**`date` = prometni dan predloga, `dan` = dan vprašanja** (23. 9. 2026). Pred 04:00 iskanje bere tudi včerajšnji prometni dan (`pot.NOCNI_S`) — IC 350 ob 00:05 je včerajšnji. Povezava je nosila dan vprašanja, podrobnosti so pokazale **jutrišnjo** vožnjo ob isti uri. Zdaj vsak predlog nosi `datum`, podrobnosti `zivo` (ali odštevati in osveževati zamude) — prej je stran sklepala iz „dan je danes". Glava kaže koledarski dan odhoda, ne prometnega.
-
-**Kartica predloga je povezava, zato klik ne izbira.** Pot na zemljevidu seznama se pokaže ob dotiku ali fokusu; na telefonu ne naredi nič v napoto, na namizju ostane predogled.
-
-**Predlogi poti so ločeni po omrežju in izračunani, ne ugibani.** Avtobusna stran jih doslej ni imela — prazen obrazec brez izhodišča; železniški seznam tja ne sodi, ker se „Ljubljana“ na avtobusnem omrežju razreši drugam. Avtobusnih šest = **šest najpogostejših relacij po številu voženj** v zajetem voznem redu (4. 9. 2026): Grosuplje ↔ Ljubljana Železna 194×, Ljubljana AP → Kamnik 189×, → Škofja Loka 186×, → Kranj AP 129×, → Vrhnika Voljčeva 118×. Preverjeno: vsa imena se razrešijo z `resolve_station()`, predlog da rezultat (Ljubljana AP → Kamnik: 84 neposrednih).
-
-Žetone riše `popularChipsHtml()`, poslušalca pripne `wirePopularChips()` — oboje skupno. Prej poslušalec pripet samo v železniški veji, zato avtobusna žetonov ne bi imela, tudi če bi jih izrisala.
-
-**Pregled pod iskalnikom = žetoni + (pri vlakih) povezava na ovire, nič drugega.** Kartica „Kako vozijo vlaki/avtobusi" (mediana končne zamude dneva, razredi) odstranjena 29. 9. 2026 z `/api/overview*` in `stats.day_summary`. Ob 00:03 je kazala „avtobusi +839 min": tri vožnje, vse s feedovo zamenjavo prometnega dne (14–22 h) — dnevni povzetek edini ni imel stropa `MAX_REALNA_ZAMUDA_S`, avtobusna kartica pa ni brala `yesterday`, ki ga je strežnik pošiljal od 3. 9. Isti razlog kot na domači strani: tudi pravilna številka potniku ne pove, kdaj mu pelje. Število ovir iz `/api/health`; doda se le, če je pregled še na zaslonu, sicer bi prepisal medtem sproženo iskanje.
-
-**Iskalnik si zapomni vse poti, ne zadnje.** Dva seznama, ker dve vprašanji: `kajros:fav` = „to je moja pot", človek pove sam (zvezdica); `kajros:recent` = „tu sem pravkar bil", napiše se sam (šest zadnjih). Oba v žetonih **pod iskalnikom**, ne v pregledu — pregled prva poizvedba pobriše prav takrat, ko bi seznam rabil za naslednjo. Prazno polje za postajo ob dotiku ponudi imena iz teh poizvedb; drugega ugibanja za prazno polje ni.
-
-Oba seznama **ločena po omrežju**. Prejšnji `kajros:last` ni bil: kdor je na `/app` iskal Celje–Ljubljana, nato odprl `/app/bus`, dobil isto vprašanje razrešeno na avtobusnem omrežju („Ljubljana AP") in prazen odgovor. Zadnja poizvedba je zdaj prva med nedavnimi, svojega zapisa nima več.
-
-Okno vožnje isto za vlak in avtobus, a govori o tem, kar je pred potnikom: besedo (vlak / nadomestni prevoz / avtobus), opozorilo in povezavo nazaj izbere iz `network`. Pri avtobusu z več vožnjami na isto številko linije je v naslovu `?trip=<id>`.
-
-**Vstopna stran preklopa preprosto/napredno nima namenoma.** Izbira med dvema odgovoroma pri „kdaj mi pelje vlak" je sama breme: potnik ne vidi, kaj mu drugi pogled skriva, dokler ne vidi, ni razloga vklopiti. Napredno na njej se je razdelilo na dvoje, nič ni skrito: razumljivo vsakomur (**neposredno**, **načrtovano N min za prestop**, **točnih N %**, **najslabša**, koliko je zajetega) zdaj vedno vidno; ostalo s strani odšlo, ker tja ni sodilo — številka postanka, „izhodišče — feed odhodne zamude ne poroča", prevoznikova napoved (prikaz je tako ali tako ne uporablja). Preklop obdržita okno vožnje in ovire: tam gre za eno vožnjo ali eno številko, ne za izbiro poti.
-
-Druge strani imajo preklop **preprosto / napredno**. Ni druga stran: napredni pogled = razred `is-advanced` na `<body>`, ki odkrije elemente z `adv-only` (p90, delež točnih, številka postanka, kaj pravi feed). Potnik in radovednež gledata isto vožnjo.
-
-**Pot mora povedati, s čim greš.** `/app` je bil vlakovni samo po dogovoru, iz naslova nevidno; zdaj `/app/train`, `/app` preusmerja (308). Okno vožnje ima obe poti: `/app/train/{no}` in `/app/bus/{no}`. Streženo z isto predlogo, a naslov ne sme lagati — `/app/train/25` za mestno linijo 25 = napačen naslov, ki ga bo nekdo delil naprej; strežnik pogleda `trip.network` in preusmeri (307).
-
-**Za nadomestni prevoz SŽ feed ne poroča zamud — nikoli.** Izmerjeno 4. 9. 2026: 56 voženj `BUS …` v voznem redu, **0 meritev** v petnajstih dneh; pri pravih vlakih pokritost **99,5 %** (601 voženj v voznem redu, 598 zajetih). Skupna železniška pokritost je videti kot 91 % samo ker nadomestne prevoze šteje zraven.
-
-Zato okno vožnje pove „feed **ne poroča zamud** — velja vozni red“, ne „še ni nobene meritve“. Beseda **„še“** obljublja številko, ki ne pride, potnik čaka zaman. Pravilo v `train.jeNadomestni()`.
-
-**Vrste vlaka ostanejo kratice, ker imena ni.** Statistika piše „AVT“ in „MO“ brez pojasnila — avtovlak na bohinjski progi (10 voženj) in Maribor–Šentilj (20). Polnega imena ne moremo pripisati: `route_long_name` v GTFS **prazen pri vseh 2 571 progah** (izmerjeno 2. 9. 2026); ugibanje pomena kratice = domneva zapisana kot dejstvo.
-
-Konkretna posledica manjka iz pisma DUJPP-u (`docs/pismo-podatki.md`, nit #6). Če polje kdaj dobimo, eno mesto, kjer se takoj pozna.
-
-**Stran ovir kaže tudi napovedane, ne le veljavnih.** Doslej je `active()` filtrirala `start_ts <= zdaj` in stran je molčala prav o tem, čemur je namenjena: izmerjeno 4. 9. 2026 **16 veljavnih in 32 še nezačetih**, najbližja že naslednji dan. Potnik, ki v četrtek gleda sobotno pot, o sobotnem nadomestnem prevozu ni izvedel nič.
-
-Zdaj zraven tiste do **14 dni naprej** (`alerts.NAPOVEDANO_DNI`), z žetonom „napovedano“, razvrščene za veljavne. Števec pove oboje: „16 veljavnih, 24 napovedanih“ — „40 veljavnih“ bi bilo neresnično.
-
-**Števec na vstopni strani ostane pri veljavnih** (`active_count`): piše „veljavnih obvestil“, napovedana bi besedo naredila neresnično. Zato `/api/alerts` privzeto vrne oboje z zastavico `napovedana`, števca ne.
-
-**Kartica zapore pove, kaj velja danes** (6. 10. 2026). Obdobje obvestila („7. 9. – 8. 10.“) pokriva vse dni, zapora pa velja le nekatere in le ob nekaterih urah — to je samo v besedilu SŽ. Zdaj pod naslovom „danes 8.00–16.00 · začne ob 8.00 / velja zdaj / končano“, pri več odsekih z imenom odseka, sicer „danes ne velja · naslednjič 11. 10., 7.00–17.30“. Razčlenjevalnik in stanje sta ista kot na zemljevidu (`zapore.kdaj`, beseda `common.kdajZapore`), stanje se računa ob vsaki zahtevi. **Samo obvestila, ki jih razumemo cela** (vsak oklepaj z uro je postal zapora na progi, `zapore.dopolni_ovire`): „danes ne velja“ je trditev o vsem besedilu, oklepaj, ki ga ne razumemo, je lahko prav današnji. 6. 10. 2026 zjutraj: 13 od 43 obvestil dobi vrstico (vseh 13, ki govorijo o zapori tira), 3 veljajo danes, 10 danes ne. Med veljavnimi gredo današnje naprej, nato tista brez ure, nazadnje „danes ne velja“; napovedana ostanejo za veljavnimi.
-
-**Nadomestni prevoz pove „po voznem redu“, ne „brez podatka“.** Velja na odhodni tabli in v iskalniku, kot že v oknu vožnje: feed zanje ne poroča nikoli (56 voženj, 0 meritev v petnajstih dneh), „brez podatka“ obljublja številko, ki ne pride. Ob žetonu stoji razlog — brez njega je „po voznem redu“ videti kot izbira prikaza, ne dejstvo o viru.
-
-**Nadomestni prevoz pove, kje ustavi** (6. 10. 2026, `nadomestni.py`). Vozni red ga postavi na tir: nadomestne vožnje v GTFS stojijo na legi železniške postaje (18 od 22 postajališč), v Ljubljani pa avtobus od 24. 8. 2026 odpelje s perona 37–39 nove avtobusne postaje. Kje res stoji, objavi samo SŽ na svoji strani (274 postaj na 19 progah, opis in povezava na Googlov zemljevid); obvestila ga povedo le za Ljubljano. Posnetek strani je v gitu (`kajros/nadomestna_postajalisca.json`), osveži ga `scripts/nadomestna_postajalisca.py` (CDP, ker je stran za Cloudflarom). Vijolična vrstica z žebljičkom (`common.nadomestniPostanekHtml`, barva oznake nadomestnega prevoza) stoji pod nadomestno vožnjo v iskalniku (tudi v nogi prestopa), na tabli, v oknu vožnje ob vsakem postanku in v kartici postaje na zemljevidu. Lega je samo, kjer je prestala preverjanje z razdaljo do postaje: od 274 jih ima 265, zavržene so tri napačne povezave (Paška vas in Velenje Pesje kažeta na drugo postajo, 33 in 38 km; Trbonje 1,5 km) in dve, kjer opis pravi „pri postaji“, točka pa je 550 m stran (Cirkovce, Dobrije).
-  * **Pot od vrat do vrat hodi do pravega mesta** (`pot._nadomestna_mesta`): vstop in izstop nadomestne vožnje gresta na točko SŽ, kadar je več kot 60 m od zapisane (11 od 22 postajališč voznega reda, Ljubljana Tivoli → Tobačna 351 m), hoja od vrat in do vrat se izmeri do nje, med vlakom in nadomestnim avtobusom na isti postaji pride peš prestop. Podrobnosti pod vožnjo napišejo, kje avtobus stoji. Primer: od Gospodarskega razstavišča do Logatca ob 4.00 — 14 min hoje do perona 37–39, ne do železniške postaje.
-  * **Na zemljevidu** kartica postaje doda vijolično buciko na mesto nadomestnega avtobusa, kadar ni pred postajo (`dashboard.pokaziNadomestniPostanek`); gre stran z oblačkom.
-  * **Lege nadomestnega avtobusa v NAP ni**, tudi ne pod drugo vožnjo: 6. 10. 2026 ob 18.25 v `vehicle_positions` (294 voženj) in `trip_updates` (358) nobene od 9 nadomestnih voženj z produkcijskih tabel; vozila brez vožnje (7) so bila vsa okoli Kranja; ob odhodih 18.37 in 18.43 s Tobačne so bila tam samo vozila rednih linij (LPP 6B, 51, 47, Nomago, Arriva). En kraj, en večer — ponovi, preden kaj gradiš na tem.
-  * **Hitri in počasni nadomestni avtobus se razlikujeta po trajanju** (`nadomestni.potek`): odhod na tabli in v kartici postaje pove „vožnja 42 min · 1 postanek“. Iz Logatca ob 4.35 odpeljeta dva (BUS 26018: 42 min, en postanek; BUS 26019: 75 min, šest) in na tabli sta bila enaka.
-
-**Zapora tira in vlak pred njim nadomestnega avtobusa ne zadeneta** — vozi po cesti. Do 6. 10. 2026 je iskalnik pod BUS 14006 pisal „zapora tira Ljubljana – Ljubljana Zalog“ in „pred njim LPV 2002 izgubil 30 min“; `zapore.dopolni` in okno vožnje zdaj vožnje z `mode = bus` preskočita.
-
-**Ovire so samo pri vlakih.** `SZ-OVIRA` obvestila = dela na progi, zapore tira, nadomestni prevozi SŽ; za avtobuse takih obvestil ni, povezava tja bi obljubljala podatek, ki zanje ne obstaja.
-
-**Omrežji sta ločeni tudi na pogled.** V glavi segmentni preklop `Vlaki | Avtobusi`, ne dve povezavi med štirimi; avtobusna stran ima svojo barvo (`body.net-avtobus` prestavi `--accent` na zeleno, isto kot vozila na zemljevidu). Doslej trenutna stran samo izpuščena iz seznama povezav, razlika nikjer vidna — kdor je na `/app/bus` iskal „Ljubljana", dobil postajališče LPP in ni razumel zakaj.
-
-**Eno ime v naslovu, en pomen.** Ura na odhodni tabli = `ob`, ne `from`: `from` je na isti strani že izhodiščna postaja iskanja A–B, `restore()` ga tako bere. Ko sta bila isto ime, je deljena povezava na tablo z uro (`?station=Ljubljana&from=08:00`, jo je tvorila aplikacija sama) vpisala **„08:00“ v polje OD**. Ni bilo takoj vidno, ker se je odprla tabla — pokazalo se šele ob preklopu na zavihek Od–do. `/api/departures` ostane pri `from`; dvoumnost je bila v naslovu strani, ne v API-ju.
-
-Ista družina kot pravilo o mešanju `?` in `:ime` v SQL: ena reža, dva pomena.
-
-**Puščica ‹ v oknu vožnje in pilula Vlaki/Avtobusi vodita na zadnje iskanje** (18. 10. 2026, prijava „ko daš nazaj, se vnos resetira“): prej goli `/app/bus`, prazen iskalnik. Puščica je `history.back()`, kadar smo prišli z naše strani; sicer zadnje iskanje omrežja v tem zavihku (`common.zapomniIskanje`, sessionStorage — po zaprtju se polja iz spomina ne izpolnijo, kot doslej). Pilula na iskalniku samem ostane gola pot („začni znova“). Isto „‹ nazaj na predloge“ na poti od vrat do vrat, ki si imena krajev zavihka zapomni (`kajros:pot-imena`).
-
-**Iskanje na vstopni strani sproži samo gumb.** Izbira postaje iz predlogov ne išče: človek pogosto popravi še drugo polje ali dan, vsak vmesni ugib = zahteva za odgovor, ki ga nihče ni prosil. Izjema: poizvedba iz naslova (deljena povezava) — odgovor je tam prav to, po kar je človek prišel.
-
-**Po iskanju se obrazec na telefonu skrči v vrstico z vprašanjem** (5. 10. 2026, `zlozi()`): „Ljubljana → Celje · danes ✎“ in gumb za zamenjavo smeri; dotik odpre obrazec. Prej je bil obrazec cel zaslon in nad orodno vrstico je ostala polovica prve zveze (412 pik: odgovor pri 596 pikah, zdaj pri 303). Skrči ga samo lastno iskanje ali naslov, **nikoli osvežitev** — ta bi zaprla obrazec, ki ga človek popravlja. Neznana postaja (404) in preklop zavihka ga odpreta. Namizje ima obrazec v eni vrstici in vrstice ne pokaže (samo CSS). Imena se v vrstici prelomijo, ne odrežejo: „Ljublja… → Maribor …“ je bil pri 360 pikah isto kot Ljubljana–Maribor.
-
-**Osvežitev zvez je tiha, kot tabla** (5. 10. 2026). Do tedaj je vsakih 30 s odgovor za hip zamenjala z „iščem …“ in stran je skočila na vrh (izmerjeno: s 900 na 0 pik). Zdaj ponovi vprašanje, ki je na zaslonu (ne tistega, ki se tipka v odprt obrazec), pozen odgovor ne prepiše novejšega (`zvezeSt`), odprt seznam prejšnjih in škatla ovir ostaneta, kot ju je človek pustil, izpad povezave osvežitve ne ustavi.
-
-**Avtobusna tabla ima smer: stran ceste** (22. 9. 2026). Mestno postajališče je dvoje, tabla kazala oboje: Bavarski dvor 53 odhodov v pol ure, polovica z druge strani ceste. Na imenih z vsaj dvema postajališčema je **89 %** avtobusnega prometa, torej ni posebnost LPP. Nad tablo gumbi „obe · → Tobačna · → Vič Glince · Jadranska“; oznaka = **naslednja postaja**, ker jo potnik vidi na postajališču in je kratka (cilji na hubu deset različnih). Imen se ne sklanja — „→ Tobačna“, ne „proti Tobačni“.
-
-* **Strani izračuna strežnik** (`journey.smeri_postaje`): smer vožnje do naslednjega postanka in lega. `stop_id` sam tega ne pove, ker ima vsak vir svojega (Bavarski dvor: dva LPP, dva IJPP, strani dve). Od 4 126 imen z dvema postajališčema je smer pri 3 596 nasprotna (> 120°), pri 65 podobna (< 45° — enosmerne ulice, kjer izbire ni). Meji: 60° in 250 m; IJPP-jev Bavarski dvor 149 m od LPP-jevega z isto naslednjo postajo, kraji z istim imenom kilometre narazen.
-* **„Proti centru / iz centra“ (Trola, ljbus.cc) zavrnjeno**: v središču (Bavarski dvor, Konzorcij) nima pomena, medkrajevna postajališča bi rabila drugo pravilo.
-* **Filtrira strežnik, ne brskalnik.** Tabla ima mejo 150 vrstic; rezana po obeh straneh bi izbrano smer končala sredi okna, glava bi trdila „6 h naprej“ (Hajdrihova, 14. 9. od 07:00: 150 skupaj, 79 v eni smeri). Preklop vseeno takojšen — iz cele table se izbrana stran pokaže takoj, nato pride prava. Osvežitev na 30 s odtlej **tiha** (`searchBoard(push, tiho)`): prej je tablo za hip zamenjala z „iščem …“ in stran skočila na vrh.
-* **Izbira se zapomni po pravem imenu postajališča** (`kajros:smer`), ne po vnosu — „hajdri“ in „Hajdrihova“ = ista tabla. Ključ, ki ga strežnik ne pozna več, se tiho pozabi, tabla spet cela. Ključ = katerikoli `stop_id` smeri, zato ga ne podre, če ob uvozu prevlada drugo postajališče.
-* Odhodi/prihodi odtlej **„Tabla“**, ne „Smer“: dve izbiri z istim imenom na enem zaslonu = uganka.
-
-**Današnja tabla je po pričakovani uri, ne po voznem redu** (25. 9. 2026). Po voznem redu je na Bavarskem dvoru na vrhu stal LPP 14 z 12:46 in +49 min, pod njim deset že odpeljanih, nato mešanica svetlih in temnih vrstic: odpeljanost po pričakovani uri, vrstni red ne. Poudarek „čez 20 min“ je dobila prav ta vožnja, LPP 13 pa peljal čez dve. Zdaj: odpeljane pod „pokaži N prejšnjih“ (kot pri zvezah, odprtost preživi osvežitev), nepotrjen odhod nad naslednjo, poudarjena prva po pričakovani uri. Vozni red ostane prečrtan v vrstici. Drug dan po voznem redu — tam „zdaj“ ni. Pristajalna stran postaje razvršča enako (`pristanek._po_pricakovani`) in **izpiše pričakovano uro**, voznoredno prečrtano nad njo (`pristanek.ura_odhoda`) — z voznoredno so ure tekle nazaj (17:55, 17:57, 17:50 z +10, 18:15). API in widget ne, tam vrstni red še voznoredni.
-
-**Prestop gre v iskalniku nad neposredne, kadar prej pripelje** (25. 9. 2026). Ljubljana → Maribor ob 17:31: poudarjen na vrhu LPV 2002 ob 20:50 s prihodom ob 23:26, zveza s prestopom ob 17:50 pa pripeljala ob 20:34, skoraj tri ure prej — pod njim. Strežnik prestope, ki jih kakšna neposredna prekaša, že izloči, zato je vsak preostali prava izbira. Kadar najzgodnejši prihod s prestopom prehiti naslednjo neposredno (ali neposredne danes ni več), je razdelek „Z enim prestopom — prej na cilju“ prvi, pod njim „Neposredno“. Samo danes; drug dan seznam = vozni red.
-
-**Odhodna tabla združi sezonske različice.** Devet vlakov ima dva ali tri tripe z različnimi obdobji veljavnosti; kadar oba veljata isti dan, bila ista vožnja na tabli **dvakrat**. Izmerjeno na Bled Jezeru 3. 9. 2026: LP 4208 ob 09:13 v dveh vrsticah, ena brez meritve, ena s +6 min — potnik vidi dva vlaka, kjer je en.
-
-Ključ združevanja = **fizični odhod** (številka, voznoredna minuta, smer), ne `trip_id`. Obdrži se vrstica, ki ima kaj povedati: najprej izmerjeno, nato kakršnakoli vrednost, sicer prva. `resolve_trip()` isto rešuje za okno vožnje, a po dnevih veljavnosti — na tabli bolje po podatku, ker feed poroča za trip, ki dejansko vozi.
-
-**Okno vožnje se da poslati** (6. 10. 2026): gumb „Pošlji“ ob naslovu „Ta vožnja“ — „Pošlji“, ne „Deli“, ker je „Deli, kje je vozilo“ deljenje lege. Web Share s stavkom „RG 318 …: zamuja 23 min (zadnji podatek s postaje Trbovlje ob 07:10)“ in povezavo brez `postaja` (to je pošiljateljeva postaja „pri tebi“); kjer Web Share ni — WebView v aplikaciji, namizni Chrome na Linuxu —, se kopira, gumb za 2,5 s reče „kopirano“. **Predogled povezave nosi stanje ob pošiljanju**: `og:description` in `description` se začneta s „Zamuja 23 min (zadnji podatek s postaje Trbovlje ob 07:10).“ (`api._stanje_za_predogled`, ista zaokrožena minuta kot na zaslonu, vedno „zadnji podatek“, nikoli „izmerjeno“). Z uro, ker predogled v pogovoru ostane in se pozneje ne sme brati kot zdajšnji. Brez `trip` pri mestni liniji stanja ni (sto voženj).
-
-**Nakup vozovnice: povezava na `eshop.sz.si`, brez relacije.** V oknu vožnje in pod rezultati iskalnika, **samo pri železnici** (nadomestni prevoz SŽ vključno — `mode = bus`, a `network = zeleznica`; avtobusne vozovnice SŽ ne prodaja).
-
-Relacije v naslov **ni mogoče podati**, preizkušeno v dveh smereh:
-
-* `eshop.sz.si` = `POST` z internimi ID-ji postaj (`TravelFromId`); GET parametri se tiho ignorirajo — `?TravelFrom=Ljubljana&TravelTo=Koper` pusti polji prazni.
-* `potniski.sz.si/vozni-redi-results/` GET **sprejme** (`entry-station` = UIC koda brez predpone `79`, Ljubljana 7942300 → `42300`), a **gumb za nakup pelje v trgovino brez prenesene relacije** — ovinek brez koristi. Ugotovil uporabnik; z naše strani se ne da preveriti, ker je `potniski.sz.si` za Cloudflarom (403 tudi iz brskalnika brez zaslona).
-
-Zato povezava vodi na trgovino in **to tudi piše** („relacijo vpišeš tam“). Obljubiti izpolnjeno pot = laž, ki bi jo potnik odkril šele tam.
-
-**Da mi na `potniski.sz.si` ne moremo, samo po sebi povezave ne bi oviralo** — odpre jo uporabnikov brskalnik, ne naš strežnik. Ta razloček je bil enkrat spregledan in stran prehitro zavržena; zavrnjena zdaj iz drugega razloga.
-
-## Pristajalne strani so za iskalnik in nimajo JS
-
-`/vlak/{od}/{cilj}`, `/postaja/{ime}` in kazali `/postaje` · `/postajalisca`. Zakaj obstajajo in po čem so izbrane: `kajros/pristanek.py`; številke v `docs/MERITVE.md`. Tu: kar velja za izris.
-
-* **Brez JS — to je ves njihov razlog.** Kar bi se dorisalo v brskalniku, `/app/*` že ima. Zato tudi ni žetonov iz `common.js` — zamuda = navaden `<span>`, pravilo o besedi in razredu pride s strežnika (`stats.opis_zamude()`), ne iz predloge.
-* **Razred zamude mora premagati okvir, v katerem stoji.** `.odhodi td` in `.stevilo b` sta specifičnejša od enega razreda in sta barvo tiho povozila — „+15 min" je bil bel. Zato `.pristanek .z-…`.
-* **Imen postaj se ne sklanja, tudi tu ne.** „ob prihodu v Ljubljana" je bilo na prvem posnetku; zdaj „običajna zamuda ob prihodu" (cilj je v naslovu) in „Prva ob 14:23, **smer** Dobova".
-* **Ob številu pravilna oblika** (`pristanek.stevnik()`): 1 vožnja, 2 vožnji, 3 vožnje, 5 voženj. Odločata **zadnji dve števki** — 21 = „enaindvajset voženj", 101 = „sto ena vožnja".
-* **Vožnja brez meritve ne dobi pomišljaja, ampak zgodovino.** „običajno +13 min", sivo in z besedo: brez nje je stolpec pri jutranjem vlaku prazen, čeprav o njem vemo osemnajst prejšnjih voženj. Vrednost **ni napoved za ta dan**; stran jo tako tudi imenuje (`stats.typical_at_stops()`).
-* **Vsaka številka nosi vzorec in čas izračuna** — „na 734 vožnjah od 21. 8. do 17. 9., preračunano 17. 9. ob 03:31". Velja povsod, kjer je agregat čez vso zgodovino.
-* **Kar ni v kazalu, dobi `noindex, follow`.** Prostor naslovov je neskončen (91 000 parov postaj pri avtobusih), iskalnik ga bo prehodil. **Zato je izbor kazala ključen**: do 29. 9. 2026 je bil po številu voženj in `noindex` sta dobili Ljubljana → Maribor in → Koper, najbolj iskani relaciji. Zdaj po `pristanek._teza()`; pravilo ne sme nazaj na število voženj. Naslov se pred izrisom **zloži v našo obliko in preusmeri s 301**, sicer sta `/postaja/Celje` in `/postaja/celje` dve strani z isto vsebino.
-* **Drobtine (`BreadcrumbList`) in `WebSite` v JSON-LD** se pišejo s `tojson`, ne ročno — imena postaj so vnos iz GTFS.
-
-## `/primerjava`: druge strani po njihovih besedah
-
-Nastala 29. 9. 2026, ker AI na vprašanje „najboljša stran za zamude“ odgovori iz strani, ki primerjajo. **Pošteno ali nič**: o drugih samo to, kar povedo same (naslov, opis, stran „o projektu“, zemljevid strani), z datumom pregleda na strani; nič „samo pri nas“, česar ni mogoče dokazati; uradna stran SŽ prva, ker ima prednost. Lažne ocene in skrito besedilo za AI so zavrnjeni — v EU prepovedani (direktiva 2019/2161), in skupnost je majhna. Ob spremembi pri drugih se popravi besedilo in datum. Isto velja za `Kaj je tu` na `/o-nas`: vsaka alineja mora biti res.
-
-## `/o-nas` je zgodba v 3D, edina besedilna stran z JS (5. 10. 2026)
-
-Izbral David: stran naj bo „povezana čez celo drsenje“, ne 3D slike, in je edina, ki sme biti razkošna; ostale ostanejo čiste. En svet in ena kamera v three.js, drsenje premika čas filma. Vir v `o-nas/` (README tam), sveženj `static/o-nas/o3.js` 737 kB (gzip 204 kB) in podatki Pogl. 3 0,94 MB.
-
-* **Besedilo je v predlogi, ne v JS.** Iskalnik, agent (`Accept: text/markdown`) in brskalnik brez WebGL dobijo vso zgodbo in `Kaj je tu`; `.brez-3d` in `html:not(.js)` naredita iz taktov navadno stran. Oznake v prostoru so `aria-hidden`, zato jih Markdown izpusti.
-* **three.js samo tu.** Za zemljevide ostane zavrnjen (`zemljevid.md`: za nekaj škatel ni vreden 172 kB), tu je ves prizor 3D. V `requirements.txt` ni nič novega: `o-nas/gradi.sh` prenese pripeta three in esbuild (preverjena po sha512), sveženj je v gitu, strežnik ničesar ne gradi.
-* **Podatki Pogl. 3 so posnetek 1. 10. 2026**, ne živi. Številke v besedilu (77 vlakov, 1 106 avtobusov, IC 351 v 42 dneh) so iz istega izvoza; ob novem izvozu popravi oboje. Nalagajo se vzporedno z gradnjo sveta, prvi kader jih ne čaka.
-* **Zgodba:** o avtorju samo „dijak“ (brez proge, kraja, šole in imena). Ure so ponazoritev (vozni red 7.42, vlak 7.55, +13 min). Vlak je SŽ 313 (Stadler KISS), modeliran po fotografijah; dijak ima postavo „močan“, izbrano med tremi.
-* **Kar je bilo prijavljeno, da se ne vrne:** žice kot `LINES` so bile pod nadomestno meglo bele in so utripale → trak s pokritostjo; trak sijaja 1 mm nad tirnico je v daljavi migljal → sijaj v senčilniku, tirnice in pragovi z zamikom globine po plasteh; sekundni kazalec je ob drsenju skočil nazaj → švicarska podrejena ura z minutnim impulzom iz drsenja (`uraKorak`); kamera je med dvema ključema zanihala pod peron → tangente zlepka omejene (Fritsch–Carlson v `zlepek`); naslovi so bili ob svetlem slogu gostitelja temni → barve na `body.o-nas`.
-* **Telefon je merilo, ne računalnik** (11. 10. 2026, prijava: na malo starejših telefonih zatika, nalaganje nekaj sekund). Na tem računalniku (Intel ARL) se čas kadra skoraj ne pozna; šteje, kar se ne vidi: trikotniki, število luči, delo JS. Pravila:
-  * **Podrobno je samo blizu kamere.** Zaobljeni pragovi (300 trikotnikov) le do 40 m (`pragoviBlizu`), drugod škatle; tirnice in teren v kosih, da jih izreže kamera (`kosi()` v `orodja.js`: isti trikotniki, ista slika). Prej 1,0–1,5 milijona trikotnikov na kader, od tega 2,7 milijona pragov po vsej dolini; zdaj 0,43–0,56 milijona. Novo stvar preveri s `__film.info()` (`tri`, `klici`).
-  * **Ugasnjena luč ni skrita luč**: senčilnik računa vsako vidno luč v vsaki piki. Nočne luči so podnevi `visible = false`, njihovi senčilniki se prevedejo po prvem kadru (`priprave`).
-  * **Nalaganje ne sme računati po pikah v JS brez potrebe**: gramoz (Voronoi) je bil 2 s od 4,6 s pri 4× počasnejšem CPE. Zdaj 4,4–5,5 s → 2,2–3,3 s; slika enaka do piksla (primerjava posnetkov pri zamrznjenem času).
-  * **Kar se prvič pokaže sredi drsenja, zatakne** (vrata vlaka, karta, sence): `ogrej()` vse naloži na GPE med nalaganjem.
-  * **Ločljivost po času med kadroma (rAF), ne po času JS** — ta GPE ne vidi in je ločljivost dvigoval, ko je že zatikalo. Sence se rišejo le, ko se kaj premakne; kadar kader traja nad 22 ms, vsak drugi.
-  * Drsenje pri 6× počasnejšem CPE: kadri nad 50 ms 11–15 → 4–6, najdaljši 117–133 → 67 ms.
-* **Kar je bilo prijavljeno 11. 10. 2026, da se ne vrne:** slika je ob skrivanju naslovne vrstice telefona preskočila (platno 100lvh, risba pa `innerHeight`) → velikost sveta je velikost platna (`velikostPlatna`), `innerHeight` se v svetu ne uporablja; hiter poteg je v pol sekunde odvrtel vožnjo skozi dolino → film največ 10 s/s, vožnja 7 (`HITROST`), besedilo se ravna po filmu, prst prehiteva največ 4 zaslone; uro v zgodbi je bilo lahko spregledati → podlaga, 30 px, pod njo „pouk ob 8.00 · +N min“ v barvi zamude.
-* **Kartice so lepljive šele od 11. 10. 2026**: `overflow-x: hidden` iz `base.css` na `html` in `body` naredi iz `body` drsni vsebnik, ki se nikoli ne drsa, in `position: sticky` ni nikoli prijel — besedilo je odplavalo pod glavo. Na tej strani `overflow-x: clip`. Zamik ob prihodu je spremenljivka `--ty`, ne slog `transform` (ta je na namizju povozil `-50 %`).
-* Pred objavo spremembe poglej posnetke telefona in namizja z `o-nas/posnetek.py` (čas filma `T=`, lastna kamera `P=`); `preveri.sh` vidi le, da stran naloži brez napake.
-
-## Besedilne strani govorijo potniku, ne razvijalcu
-
-Prijavljeno 12. 9. 2026 na `/android` in `/zasebnost`: obe „naklada[li] in posreduj[ali] zelo tehnične podatke“. Sprožilni primer:
-
-> Lastna lega dela povsod. V brskalniku po domačem omrežju (`http://192.168…`)
-> je ni, ker to ni varen kontekst.
-
-To opisuje **razvojno okolje**, ne lastnosti aplikacije.
-
-Prvi popravek je take odstavke le zložil v `<details>` — **zavrnjeno**: „noben produkt nima tako podrobno napisanih stvari, to naj bi bilo samo za naju“. Zloženo ni skrito; isto besedilo z enim klikom več.
-
-Pravilo: kar zanima naju, **ne gre na stran v nobeni obliki**. Mesto: `docs/` in `.claude/rules/`. Tako odpadli: licenčna politika trgovin, kontrolna vsota SHA-256, `sha256sum`, formula `blake2s(sol ‖ IP ‖ UA)`, doba hrambe, oblika poti v števcih, razlaga omejevanja neželene pošte.
-
-Ostane **obljuba, ne dokaz**: „naslova IP ne shranimo nikoli“ zadošča, „ker je sol zavržena ob polnoči“ je za naju. Skladnost z `obisk.py` in `stik.py` velja naprej — krajše ne sme pomeniti manj resnično.
-
-Izrisana stran: `/android` 8,5 → **3,0 kB**, `/zasebnost` 9,6 → **4,1 kB**.
+* Prava pešpot (`hoja.pot()`, OSRM z geometrijo); brez usmerjevalnika se napiše in nariše zračna. Vmesni postanki v `<details>`.
+* **Črta sklenjena od starta do cilja**: `hoja.pot()` doda priključek na oba konca; `common.trasa()` reže na projekciji + priključek (projekcijo < 35 m izpusti). Start in cilj = oznaki z besedo (`pkKonca()`); oznaka MapLibra ne sme dobiti `position` iz našega sloga.
+* Polna modra = samo „ti“; izhodišče prazen svetel obroč, postajališče obroč v barvi vožnje, cilj polna oranžna.
+* **Vodenje peš** (`pot_karta.js`): zemljevid od blizu, nagnjen, v smer hoje, lega v spodnji tretjini. Zgoraj le naslednji zavoj (ulica v imenovalniku), spodaj ostanek in **ali ujameš vozilo** (zeleno / rumeno pod 3 min / rdeče „pohiti“). OSRM `steps=true`, `hoja.navodilo()`.
+  * Smer: GPS pri > 0,7 m/s, sicer kompas (`deviceorientationabsolute`), sicer smer poti; premik s prstom ustavi sledenje do „sledi mi“.
+  * **Zašel**: > 35 m in > dvojna točnost, trikrat zapored → `/api/pot/hoja`, največ na 20 s. Le, ko si bil že v **35 m** od poti (s 60 m preračun med vožnjo v 69 od 70). Sicer listanje na roko (‹ ›).
+  * Prihod: bližje od točnosti (≥ 15 m). `wakeLock`, zamude na 30 s, odštevanje na 5 s, tresljaj 20 m pred zavojem.
+* Žeton zamude ob izstopu drug od vstopnega — pokaže se, ko se res razlikuje.
+* **Povezava na okno vožnje nosi `postaja` in `date`** (brez `postaja` ni bloka „Pri tebi“; vožnja pod `MIN_RUNS_FOR_TYPICAL` = 3 dni zgodovine: ločilna vrstica „vozni red, ocene še ni“).
+* **Pot v naslovu** (`?noge=trip:od_seq:do_seq;…`); `trip_id` LPP → `encodeURIComponent`, ločnica se bere **z desne**.
+* **`date` = prometni dan predloga, `dan` = dan vprašanja.** Pred 04:00 iskanje bere včerajšnji prometni dan (`pot.NOCNI_S`). Predlog nosi `datum`, podrobnosti `zivo`. Glava kaže koledarski dan.
+* Kartica predloga je povezava; pot na zemljevidu ob dotiku ali fokusu.
+
+## Iskalnik zvez in tabla (`connections.*`)
+
+* **Predlogi poti po omrežju**: avtobusnih šest = najpogostejše relacije po številu voženj (preverjene z `resolve_station()`). `popularChipsHtml()` + `wirePopularChips()` skupno.
+* **Najbližja postaja = tih žeton nad shranjenimi** („Najbližje: Drama · 76 m“), ko je lega dovoljena in polje prazno (Od–do: Od; tabla: postaja). Dotik vpiše Od ali odpre tablo. `/api/stations/near?limit=1` po omrežju. Meja 2 km (`NAJBLIZJE_DO_M`; 95,8 % od 435 044 naslovov OSM do postajališča, 37,7 % do železniške postaje), lega ≤ 100 m (pri 100 m drugo ime v 6,1 %, pri 200 m 12,3 %). Ena natančna lega, nato GPS ugasne.
+* Pod iskalnikom samo žetoni + (vlaki) povezava na ovire. Dnevne kartice ni (avtobusi „+839 min“ ob 00:03). Število ovir iz `/api/health` le, če je pregled še na zaslonu.
+* **Dva seznama**: `kajros:fav` (zvezdica) in `kajros:recent` (šest zadnjih), oba v žetonih pod iskalnikom, **ločena po omrežju**.
+* Okno vožnje isto za vlak in avtobus; besedo izbere iz `network`. Več voženj na liniji → `?trip=<id>`.
+* **Vstopna stran preklopa preprosto/napredno nima**; okno vožnje in ovire ga imajo (`is-advanced` na `<body>` odkrije `adv-only`).
+* **Pot pove, s čim greš**: `/app` → `/app/train` (308); `/app/train/{no}` za avtobus preusmeri po `trip.network` (307).
+* **Nadomestni prevoz SŽ: feed zamud ne poroča nikoli** (56 voženj, 0 meritev; pravi vlaki 99,5 %). Okno: „feed **ne poroča zamud** — velja vozni red“ (ne „še ni“); tabla in iskalnik „po voznem redu“ z razlogom. `train.jeNadomestni()`.
+* Vrste vlaka ostanejo kratice („AVT“, „MO“): `route_long_name` prazen pri vseh 2 571 progah.
+* **Ovire**: tudi napovedane do 14 dni (`alerts.NAPOVEDANO_DNI`) z žetonom, za veljavnimi; števec „16 veljavnih, 24 napovedanih“. Vstopni števec samo veljavne (`active_count`); `/api/alerts` vrne oboje z `napovedana`.
+* **Kartica zapore pove, kaj velja danes** („danes 8.00–16.00 · velja zdaj“, sicer „danes ne velja · naslednjič …“; `zapore.kdaj`, `common.kdajZapore`). **Samo obvestila, ki jih razumemo cela** (`zapore.dopolni_ovire`). Današnje naprej, nato brez ure, nato „danes ne velja“.
+* **Nadomestni pove, kje ustavi** (`nadomestni.py`, posnetek `kajros/nadomestna_postajalisca.json`, osveži `scripts/nadomestna_postajalisca.py`). GTFS ga postavi na lego železniške postaje; Ljubljana od 24. 8. peron 37–39 avtobusne. Vijolična vrstica z žebljičkom (`common.nadomestniPostanekHtml`) v iskalniku, na tabli, v oknu, v kartici postaje. Lega le po preverjanju razdalje (265 od 274).
+  * `pot._nadomestna_mesta`: vstop/izstop na točko SŽ, kadar > 60 m od zapisane; peš prestop vlak ↔ nadomestni.
+  * Zemljevid: vijolična bucika (`dashboard.pokaziNadomestniPostanek`).
+  * Lege nadomestnega v NAP ni (en večer — ponovi, preden kaj gradiš).
+  * Hitri in počasni se ločita po trajanju (`nadomestni.potek`, „vožnja 42 min · 1 postanek“).
+* **Zapora tira in vlak pred njim nadomestnega ne zadeneta** (`mode = bus` preskočen v `zapore.dopolni` in oknu).
+* **Ovire samo pri vlakih.**
+* **Omrežji ločeni na pogled**: segmentni preklop `Vlaki | Avtobusi`, `body.net-avtobus` prestavi `--accent` na zeleno.
+* **Eno ime v naslovu, en pomen**: ura table = `ob`, ne `from` (`from` = izhodišče iskanja; deljena tabla je pisala „08:00“ v polje OD). `/api/departures` ostane `from`.
+* **‹ in pilula vodita na zadnje iskanje** (`common.zapomniIskanje`, sessionStorage; `history.back()`, kadar s naše strani). Pilula na iskalniku = gola pot. Pot: `kajros:pot-imena`.
+* **Iskanje sproži samo gumb** (izjema: poizvedba iz naslova).
+* **Po iskanju obrazec skrčen v vrstico** (`zlozi()`): le lastno iskanje ali naslov, **nikoli osvežitev**. 404 in preklop zavihka odpreta. Imena se prelomijo, ne odrežejo.
+* **Osvežitev zvez je tiha** (30 s): ponovi vprašanje na zaslonu, pozen odgovor ne prepiše novejšega (`zvezeSt`), odprt seznam in škatla ovir ostaneta.
+* **Avtobusna tabla ima stran ceste** (89 % prometa na imenih z ≥ 2 postajališčema). Gumbi „obe · → Tobačna · → Vič Glince“ = **naslednja postaja**, brez sklanjanja.
+  * Računa strežnik (`journey.smeri_postaje`; meji 60° in 250 m). „Proti centru“ kot oznaka zavrnjeno (22. 9.).
+  * **Mestni LPP: dodatek „v center“ / „iz centra“** ob naslednji postaji (David, 22. 10. 2026: „kot so navajeni“). Ne računamo ga: LPP-jeva koda postajališča (`station.koda`, uvoz iz `stop_code`), liha = proti centru. **Ne v središču** (`SREDISCE_M` 800 m od Kongresnega trga): tam koda smeri ne pove (do 0,5 km 47 %, 0,5–0,8 km 63 % ujemanja po prometu; Bavarski dvor 600012 pelje na Ajdovščino), 0,8–1,5 km 100 %, dlje 95 %. Kode v nasprotju = brez dodatka. Tabla (`.smer-center`) in pristajalna.
+  * **Filtrira strežnik** (meja 150 vrstic); preklop takojšen iz cele table, nato prava. Osvežitev tiha (`searchBoard(push, tiho)`).
+  * Izbira po pravem imenu (`kajros:smer`), ključ = katerikoli `stop_id` smeri; neznan se tiho pozabi.
+  * Zavihek „Tabla“, ne „Smer“.
+* **Današnja tabla po pričakovani uri**: odpeljane pod „pokaži N prejšnjih“, nepotrjen nad naslednjo, poudarjena prva po pričakovani uri, vozni red prečrtan. Drug dan po voznem redu. Pristajalna enako (`pristanek._po_pricakovani`, `pristanek.ura_odhoda`). API in widget voznoredno.
+* **Prestop nad neposredne, kadar prej pripelje** (le danes): „Z enim prestopom — prej na cilju“ prvi.
+* **Tabla združi sezonske različice** po fizičnem odhodu (številka, minuta, smer); obdrži izmerjeno, nato katerokoli vrednost.
+* **Okno vožnje se da poslati** („Pošlji“): stavek „RG 318 …: zamuja 23 min (zadnji podatek s postaje Trbovlje ob 07:10)“, povezava brez `postaja`; brez Web Share kopira („kopirano“ 2,5 s). Predogled nosi stanje ob pošiljanju (`api._stanje_za_predogled`, vedno „zadnji podatek“, z uro). Mestna linija brez `trip` stanja nima.
+* **Vozovnica: `eshop.sz.si` brez relacije**, samo železnica (z nadomestnim). Relacije ni mogoče podati (POST z internimi ID-ji; `potniski.sz.si/vozni-redi-results/` relacije v trgovino ne prenese) — povezava pove „relacijo vpišeš tam“.
+* **Ponudba „Shrani na prvo stran“**: isto iskanje znova ≥ 30 min po prejšnjem (`connections.predlagajShranjevanje`, `kajros:ponovitve`, 40 poti); „Ne, hvala“ za vedno.
+* **Tiha osvežitev ob napaki poskusi znova**, stari odgovor ostane. Števec zahtev (`zvezeSt`, `tablaSt`) velja tudi v `catch` in `finally`, da napaka starega vprašanja ne vzame osveževanja novemu.
+
+## Pristajalne strani: za iskalnik, brez JS
+
+Zakaj in katere: `kajros/pristanek.py`, številke `docs/MERITVE.md`. Izris:
+
+* **Brez JS** — zamuda = navaden `<span>`, beseda in razred s strežnika (`stats.opis_zamude()`).
+* Razred zamude mora premagati okvir: `.pristanek .z-…` (sicer bel „+15 min“).
+* Imen ne sklanjaj („Prva ob 14:23, **smer** Dobova“). Število: `pristanek.stevnik()` po zadnjih dveh števkah (101 = „sto ena vožnja“).
+* Vožnja brez meritve dobi zgodovino „običajno +13 min“, sivo — ni napoved za ta dan (`stats.typical_at_stops()`).
+* **Številka nosi vzorec in čas izračuna** („na 734 vožnjah od 21. 8. do 17. 9., preračunano 17. 9. ob 03:31“).
+* **Kar ni v kazalu: `noindex, follow`.** Izbor po `pristanek._teza()`, **nikoli nazaj na število voženj** (takrat sta Ljubljana → Maribor in → Koper dobili `noindex`). Naslov se zloži v našo obliko, 301.
+* JSON-LD (`BreadcrumbList`, `WebSite`) s `tojson`.
+
+## `/primerjava`
+
+**Pošteno ali nič**: o drugih le, kar povedo same, z datumom pregleda; uradna SŽ prva; nič „samo pri nas“ brez dokaza. Lažne ocene in skrito besedilo za AI zavrnjeni (direktiva 2019/2161). Isto za „Kaj je tu“ na `/o-nas`.
+
+## `/o-nas`: zgodba v 3D, edina besedilna stran z JS
+
+En svet in kamera v three.js, drsenje premika čas filma. Vir `o-nas/` (README), sveženj `static/o-nas/o3.js` 737 kB (gzip 204), podatki Pogl. 3 0,94 MB.
+
+* **Besedilo v predlogi, ne v JS** (iskalnik, `Accept: text/markdown`, brez WebGL). `.brez-3d`, `html:not(.js)`; oznake v prostoru `aria-hidden`.
+* three.js samo tu (za zemljevide zavrnjen). `o-nas/gradi.sh` prenese pripeta three in esbuild (sha512), sveženj v gitu.
+* Podatki Pogl. 3 = posnetek 1. 10. 2026; številke v besedilu (77 vlakov, 1 106 avtobusov, IC 351 v 42 dneh) iz istega izvoza.
+* Avtor samo „dijak“; ure ponazoritev (7.42, 7.55, +13). Vlak SŽ 313 (Stadler KISS).
+* Ne vrni: žice kot `LINES` (utripale) → trak; sijaj 1 mm nad tirnico → v senčilniku, zamik globine; sekundni kazalec nazaj → podrejena ura (`uraKorak`); kamera pod peron → Fritsch–Carlson (`zlepek`); temni naslovi → barve na `body.o-nas`.
+* **Telefon je merilo**:
+  * Podrobno samo blizu kamere (`pragoviBlizu` 40 m, `kosi()` v `orodja.js`); 0,43–0,56 mio trikotnikov na kader. Preveri s `__film.info()` (`tri`, `klici`).
+  * Ugasnjena luč ni skrita: nočne `visible = false`, senčilniki po prvem kadru (`priprave`).
+  * Brez računanja po pikah v JS (gramoz 2 s).
+  * `ogrej()` naloži vse na GPE med nalaganjem.
+  * Ločljivost po času med kadroma (rAF); sence ob premiku, nad 22 ms vsak drugi.
+* Ne vrni (11. 10.): velikost sveta = velikost platna (`velikostPlatna`), ne `innerHeight`; film največ 10 s/s, vožnja 7 (`HITROST`); ura na podlagi 30 px s „pouk ob 8.00 · +N min“.
+* Kartice lepljive le z `overflow-x: clip` (ne `hidden` iz `base.css`); zamik `--ty`, ne `transform`.
+* Pred objavo posnetki telefona in namizja z `o-nas/posnetek.py` (`T=`, `P=`).
+
+## Besedilne strani govorijo potniku
+
+Kar zanima naju (razvojno okolje, licence trgovin, SHA-256, formula soli, doba hrambe), **ne gre na stran v nobeni obliki** — tudi ne v `<details>`. Mesto: `docs/`, `.claude/rules/`. Ostane obljuba („naslova IP ne shranimo nikoli“), skladna z `obisk.py` in `stik.py`.
 
 ## Imena, kot jih piše LPP
 
-LPP smeri in končna postajališča piše z velikimi črkami in s tehničnimi priponami („BEŽIGRAD (ŽELEZNA) - ZOO - C. STOŽICE P+R_obvoz“, 37 od 10 234 postajališč). Prikaz jih izpiše kot „Bežigrad (Železna) – Zoo – C. Stožice P+R (obvoz)“: `common.lepoIme` v brskalniku, `pristanek.lepo_ime` (filter `lepo_ime`) na strežniku, ista pravila, preverjeno na istih primerih. Spremeni samo besede, ki so v celoti velike; kratice (P+R, BTC, SŽ, ZD, NS …) ostanejo, občna imena za prvo besedo gredo z malo (Zelena jama, Dolgi most). **Samo prikaz**: shranjena imena so ključi (`lpp.na_tablo` veže LPP-jeve prihode z voznim redom po `(linija, headsign)`, postaje se iščejo po imenu).
-
-## Ponudba „Shrani na prvo stran“
-
-Kdor isto pot ali tablo išče znova, vsaj 30 min po prejšnjem iskanju (ne ob osvežitvi), dobi nad rezultati vrstico „To pot iščeš večkrat. ☆ Shrani na prvo stran · Ne, hvala“ (`connections.predlagajShranjevanje`, `localStorage` `kajros:ponovitve`, največ 40 poti). „Ne, hvala“ velja za to pot za vedno. Shranjena pot je na domači strani z naslednjima odhodoma. Razlog: vrhovi obiska s Facebooka odtečejo v nekaj dneh, šteje, ali se ljudje vračajo.
-
-## Tiha osvežitev ob napaki poskusi znova
-
-Zveze in tabla se osvežujejo na 30 s brez „iščem …“. Ob napaki (izpad, 404 med nočnim uvozom, 5xx med objavo) ostane stari odgovor in osvežitev se poskusi znova; prej se je ustavila do novega iskanja. Napaka **starega** vprašanja ne sme ničesar: njen ponovni poskus bi novemu iskanju vzel osveževanje in čez 30 s vrnil staro vprašanje na zaslon — zato števec zahtev (`zvezeSt`, `tablaSt`) velja tudi v `catch` in `finally`.
+„BEŽIGRAD (ŽELEZNA) - ZOO - C. STOŽICE P+R_obvoz“ → „Bežigrad (Železna) – Zoo – C. Stožice P+R (obvoz)“: `common.lepoIme` in `pristanek.lepo_ime` (filter `lepo_ime`), ista pravila. Le besede v celoti velike; kratice ostanejo. **Samo prikaz** — shranjena imena so ključi (`lpp.na_tablo` po `(linija, headsign)`).

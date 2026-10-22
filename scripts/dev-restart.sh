@@ -14,6 +14,14 @@ LOG="${KAJROS_DEV_LOG:-/tmp/kajros-dev.log}"
 HOST="${KAJROS_HOST:-0.0.0.0}"
 PORT="${KAJROS_PORT:-8001}"
 
+# Brskalniški zajem (tir, zamude in ovire SŽ) tu privzeto izklopljen -- samo
+# arwen ima Xvfb in profil za Chrome (`.claude/rules/objava.md`), na razvojnem
+# računalniku se zato odpre vidno okno. Za preizkus vklopi eksplicitno:
+# KAJROS_PERONI=1 KAJROS_SZ_ZAMUDE=1 KAJROS_OVIRE_SZ=1 ./scripts/dev-restart.sh
+export KAJROS_PERONI="${KAJROS_PERONI:-0}"
+export KAJROS_SZ_ZAMUDE="${KAJROS_SZ_ZAMUDE:-0}"
+export KAJROS_OVIRE_SZ="${KAJROS_OVIRE_SZ:-0}"
+
 # Zeton za /admin. Brez njega te poti ni -- privzetega gesla namenoma ni,
 # ker bi ostalo tudi na stroju, ki visi na kajros.app. V razvoju pa mora biti
 # stran dosegljiva brez iskanja po dokumentaciji, zato si tu enkrat naredimo

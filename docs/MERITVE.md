@@ -2559,6 +2559,10 @@ Daljši razmik sam je torej natančen, dokler vozilo vozi po trasi; kjer ne, je 
 
 **Odkloni po odsekih** (isti posnetek; lega po odhodu več kot 150 m od trase): 650 od 14 486 leg (4,5 %), od tega le 12 posamičnih (šum). Odklon vsaj dveh leg na 42 od 1 303 prevoženih odsekov (postanek–postanek), 50 od 1 607 prevozov (3 %). Skoraj povsod pri **vseh** prevozih v tej uri: Kranj Zlato Polje P+R → Naklo 3 od 3 (do 566 m), Novo Celje → Žalec in Žalec → Šempeter 2 od 2, Murska Sobota ↔ Maribor 2 od 2 (do 883 m), Slovenj Gradec → Sl. Gradec ŽP 2 od 2, Koper → Ljubljana Hajdrihova 1 od 1 (486 m), Bled → Brnik letališče 1 od 1 (996 m). Le štirje odseki delno (1 od 2 ali 1 od 3: Koper Sv. Ana, Zg. Velka, Cerkno, Piran Bernardin). Ena ura je eden do trije prevozi na odsek -- za mejo med stalnim in občasnim premalo. Zato od 11. 10. zvečer `iz_lege` vsak odklon zapiše v tabelo `odklon`; pregled po odsekih `kajros odkloni --dni N`, število zadnjih 24 h v /admin (kartica NAP, „izven trase“). Ko bo nekaj dni z delavniki: porazdelitev deleža odklonjenih prevozov po odsekih -- ali se loči na „skoraj vedno“ in „redko“ -- in iz nje meja za traso po legah.
 
+**Zvečer spet rdeče (11. 10. ob 19:39, Arriva 4 od 24; ob 19:42 3 od 23).** Pravilo drugega postanka dela, rdeče je zaradi malo vozil v nedeljo zvečer: trije zgrešeni so 13 %. Dva sta Izola 18:53 → Ljubljana (dve vožnji, dve vozili), Koper zgrešen kot zjutraj -- ob Kopru (21 163 m po trasi) zapisana odklona 350–405 m, 19:00–19:03 in 19:09–19:11; zadnja lega na trasi pred prvim je bila že 115 m za postankom, zato ga sled ne prizna več. Od 11 današnjih voženj A8425 je Koper izmerjen pri 1 (04:53), do naslednjega postanka (Hajdrihova) 80 min. Tretji je Bled 19:00 → Ljubljana: Bled Union zgrešen brez odklona, ob 19:42 vozilo 25,5 km po trasi, kamor bi po voznem redu prišlo okoli 19:22 -- ~20 min zamude, potnik ne vidi nič. Bled Union je sicer izmerjen pri 22 od 25 voženj (9. 10.: 40 od 42), vzrok tu ni znan.
+
+**Prvi dan beleženja odklonov** (`odkloni.sh --dni 1`, nedelja ~14:20–19:45): 77 odsekov z vsaj tremi prevozi ima odklon; nad 80 % prevozov 26, 20–80 % 33, pod 20 % 18. Na vrhu Koper → Ljubljana Hajdrihova 10 od 10, Murska Sobota → Maribor 8 od 8, Bled Union → Šentvid 7 od 7. Vzorci 3–11 prevozov, en sam dan, brez delavnika -- sredina (33) je še prevelika za mejo.
+
 ## Kaj še teče prek derp.si (11. 10. 2026)
 
 Vrstice `run` za današnji dan na arwenu ob 14:20 (nedelja), po viru, ki jih piše:
@@ -2833,3 +2837,28 @@ Vozita AP Murska Sobota (M2123, M2119, M2125, M2129, 98 min) in Arriva (A2527, 1
 **Petek vozni red skoraj nikoli ne loči.** Med 19. 10. in 8. 11. vozi samo ob petkih 111 medkrajevnih voženj, pon–pet pa 9 535. Prazniki so v voznem redu samo posredno: 25. 12. (petek) vozi 1 074 medkrajevnih voženj, 18. 12. (navaden petek) 8 744. Funkcije za tip dneva v kodi ni.
 
 **Ali je zasedenost ob isti uri vse delavnike enaka** (Davidovo vprašanje, 21. 10.). Zasedenosti ne vemo, vozni red pa pokaže, kje prevoznik pričakuje več potnikov (razvojna baza, teden 19.–25. 10.). Ljubljana AP → Maribor AP: ponedeljek 8 odhodov (dodatni ob 10:25), torek–četrtek 7, isti, petek 11. Maribor AP → Ljubljana AP: ponedeljek 9 (drugi avtobus ob 7:00 in še 7:20), torek–četrtek 7, petek 9. Vseh medkrajevnih odhodov z Ljubljana AP je od ponedeljka do petka 586, 582, 582, 586 in 604. Zato povzetek najprej išče isti dan v tednu, sicer tip dneva: ponedeljek, torek–četrtek, petek, sobota, nedelja s prazniki (`zasedenost.tip_dneva`).
+
+## Deljenje na mestnem LPP, smer centra, lastna lega (22. 10. 2026)
+
+**Deljenja na mestnem LPP ni bilo nikoli.** Lijak 21. 10.: `zavrnjen:neznana` 8, začetkov 8 (vse vlaki in medkrajevni). V tabeli `deljenje` 128 vrstic, vse s `trip_id` dolžine 6; mestni LPP ima trojni UUID (110 znakov, 107 228 od 107 228 voženj), strežnik ga je rezal na 64. Meja zdaj `stats.TRIP_NAJDALJSI` (200), ista kot zasedenost.
+
+**Mestni avtobus daleč od trase** (prijava: na avtocesti, „še 420 m“). Zgodovine leg mestnega LPP ni (`lega` 21. 10.: 0 vrstic `agency = 'lpp'`, samo NAP), primera ni mogoče obnoviti. V živo (`vehicle_now`, svežih 5 min, 09:48): mestni LPP 105 od 109 v 50 m od trase, 4 do 150 m, 2 nad 2 km (oba na končni, prišteta prejšnji/naslednji vožnji); 1118 34 / 2 / 2. Pripete trase proti surovim: 422 od 427 v 100 m, LPP 11 ni med odstopajočimi (pet: 18, 18L, 24 do 1,1 km). Razdalja „do tebe“ se zdaj ne računa, ko je vozilo > 300 m od trase.
+
+**„v center / iz centra“ iz LPP-jeve kode postajališča** (`stop_code`, zadnja števka liha = proti centru), proti smeri do postanka tri naprej (bližje ali dlje od Kongresnega trga, 46.0514, 14.5060), vozni red LPP:
+
+| od središča | ujemanje po prometu | postajališč |
+|---|---|---|
+| do 0,5 km | 47 % | 5 / 12 |
+| 0,5–0,8 km | 63 % | 15 / 18 |
+| 0,8–1,0 km | 100 % | 8 / 8 |
+| 1,0–1,5 km | 100 % | 44 / 44 |
+| 1,5–2,5 km | 94,9 % | 84 / 94 |
+| nad 2,5 km | 94,6 % | 489 / 540 |
+
+Na Slovenski liha = proti severu (Bavarski dvor 600011 → Razstavišče, 600012 → Ajdovščina), na Navju liha = proti jugu — v središču koda smeri ne pove, zato tam dodatka ni (`journey.SREDISCE_M` 800 m). Razvojna baza: 316 smeri „v center“, 310 „iz centra“, 43 brez.
+
+**Navedba vira na zemljevidu**: smernice OSMF (Licence/Attribution Guidelines) dovolijo samodejno zapiranje po petih sekundah ali ob dejanju; ob zagonu je ni treba kazati vsakič. Brezglavi Chrome: razprta po 3 s, zaprta po 8 s; z `kajros:navedba` zaprta takoj.
+
+**Najbližja postaja za žeton** (agent, 435 044 naslovov iz OSM): do 2 km zračne črte ima avtobusno postajališče 95,8 % naslovov (mediana 343 m), železniško postajo 37,7 % (mediana 3,1 km). Simulirana napaka lege na 20 000 naslovih, najbližje postaja z drugim imenom: pri 100 m avtobus 6,1 %, vlak 2,1 %; pri 200 m 12,3 % in 4,3 % → meja natančnosti 100 m.
+
+**Android (emulator, Android 15, WebView 124)**: `navigator.permissions` v WebView ni — stari `#kam` (lega v Od kod) v aplikaciji ni nikoli delal. Sistem pri trajni zavrnitvi odgovori brez okna v 72 in 51 ms, nastavitve odprte po 106 in 67 ms. Samo približna lega v WebView: natančnost 2 000 m.

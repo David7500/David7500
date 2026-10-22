@@ -4,126 +4,84 @@ paths:
 ---
 # Aplikacija za Android
 
-Nativni ovoj z WebView na `kajros.app`. Vmesnik ostane **en sam — spletni**; nativno samo, česar splet ne zmore. Zaenkrat ena stvar: budilka.
+Nativni ovoj z WebView na `kajros.app`. Vmesnik **en sam — spletni**; nativno samo, česar splet ne zmore: budilka. Da ni videti kot splet v ovoju, se ureja v CSS strani („Dotik“ v `oznake.md`).
 
-Da aplikacija ni videti kot splet v ovoju (modri pritisk, obviseli `:hover`, svetli izbirnik datuma), se ureja v CSS strani, ne tu — razdelek „Dotik" v `oznake.md`.
-
-## Zakaj tako in ne drugače
+## Zakaj tako
 
 | možnost | zakaj ne |
 |---|---|
-| PWA | alarma ob določeni uri ne zna. `Notification Triggers` v Chromu preizkušen, **nikoli izdan**; `Periodic Background Sync` dela v urah, vezan na Chrome; Web Push gre skozi FCM (Google), zahteval bi buden strežnik |
-| TWA | zahteva Chrome kot ponudnika. Telefon = razgooglana Volla 22 s Fennecom — TWA bi pomenil namestiti Chromium |
-| GeckoView | most do JavaScripta moreč; `addJavascriptInterface` na WebView = ena vrstica. Odločilno to, ne hitrost |
-| service worker | David: „ne zaenkrat pač nič ne pokaže". Posledica: nedosegljivega strežnika ne pokrije splet — pokrije ga **nativni zaslon napake**. Izjema od 2. 10. 2026: strani orodne vrstice so iz predpomnilnika (hitrost), zato ob 5xx Cloudflara pokažejo lupino brez podatkov, ne zaslona napake |
+| PWA | alarma ob uri ne zna (`Notification Triggers` nikoli izdan; Web Push skozi FCM) |
+| TWA | rabi Chrome; telefon = razgooglana Volla 22 s Fennecom |
+| GeckoView | most do JS moreč; `addJavascriptInterface` = ena vrstica |
+| service worker | „nič ne pokaže“ → nedosegljiv strežnik pokrije **nativni zaslon napake**. Izjema od 2. 10. 2026: strani orodne vrstice iz predpomnilnika, ob 5xx Cloudflara lupina brez podatkov |
 
-Razdeljevanje: **prenos s strani** `kajros.app/android`. Brez trgovine, brez Googlovega računa.
+Razdeljevanje **s strani** `kajros.app/android`, brez trgovine.
 
-## Meja zaupanja je ena sama funkcija
+## Meja zaupanja = `Nastavitve.izvor()`
 
-`Nastavitve.izvor()` pove, katera stran je naša. Vse drugo jo bere:
+Povezava zunaj izvora gre v brskalnik, lego dobi le izvor, most (`window.Kajros`) ga preveri ob klicu — `addJavascriptInterface` vidi **vsaka** naložena stran. Sheme ven naštete; `intent:` ni med njimi. Razčlemba z `java.net.URI` (ne `android.net.Uri`): preizkusljivo brez naprave.
 
-* povezava zunaj izvora se **ne odpre v WebView**, ampak v brskalniku;
-* dovoljenje za lego dobi samo ta izvor;
-* most (`window.Kajros`) ga bo preveril ob vsakem klicu.
+## Lastna lega: `retain` vedno `false`
 
-Ni pedantnost: `addJavascriptInterface` viden **vsaki** strani, ki jo WebView naloži. Zato tudi sheme, ki smejo ven, naštete — `intent:` ni med njimi: znana pot, s katero tuja stran odpre poljubno dejavnost.
+WebView si dovoljenje zapomni sam (`AwGeolocationPermissions … = true`), sistemsko „samo tokrat“ pa poteče → `onGeolocationPermissionsShowPrompt` ni več poklican, lega mrtva za vedno (tri dni tihe okvare). Ob zagonu `GeolocationPermissions.getInstance().clearAll()`; resnica = Androidovo dovoljenje.
+* **Most 7 (1.14)**: `dovoljenja().lega` = natančna ali približna (`DeljenjeStoritev.smeLego`); po njej stran lego prižge sama. `onGeolocationPermissionsShowPrompt` odobri tudi samo približno (prej okno ob vsakem klicu). V WebView `navigator.permissions` ni (WebView 124) — resnica je most.
+* `Most.zahtevajLego()` → `vklopiLego()`: vedno najprej sistem; odgovor brez okna (< `Lega.BREZ_OKNA_MS` 1 s, izmerjeno 72 in 51 ms) = trajna zavrnitev → nastavitve aplikacije + Toast. Izid `kajrosLega(stanje, nastavitve)`, tudi ob `onResume` po spremembi.
+* Most ≤ 6: stran lege ne prižge sama, kartice ni.
 
-Razčlenjevanje skozi `java.net.URI`, **ne** `android.net.Uri`: prvi navaden JVM, preizkusljiv brez naprave. Varnostno pravilo brez testov ni pravilo.
-
-## Lastna lega: WebView si dovoljenje zapomni sam
-
-Stalo tri dni tihe okvare. Izmerjeno na telefonu 9. 9. 2026:
-
-```
-WebViewProfilePrefsDefault.xml  AwGeolocationPermissions%https://kajros.app/ = true
-dumpsys package app.kajros      ACCESS_FINE_LOCATION: granted=false … ONE_TIME
-```
-
-Sistemsko dovoljenje „samo tokrat“ poteklo; WebViewov **lasten** zapis ostal. Ker rekel „dovoljeno“, `onGeolocationPermissionsShowPrompt` ni bil več poklican — edini kraj, kjer aplikacija zaprosi Android. Lega odpovedala za vedno, sama se ni mogla rešiti.
-
-Zato: **`retain` vedno `false`**, ob zagonu `GeolocationPermissions.getInstance().clearAll()`. Vir resnice = Androidovo dovoljenje, ne WebViewov spomin. Preverjeno: po popravku shramba ostane prazna (`<map />`) tudi po tem, ko potnik lego dovoli.
-
-## Razdeljevanje: zakaj ni trgovine (12. 9. 2026)
+## Razdeljevanje (12. 9. 2026)
 
 | trgovina | ovira |
 |---|---|
-| F-Droid (glavni), IzzyOnDroid | sprejmeta **samo prosto programje**; koda zaprta (3. 9. 2026) |
-| Google Play | račun, 25 $, identiteta, **12 preizkuševalcev × 14 dni** (osebni račun po 13. 11. 2023), AAB, od 31. 8. 2026 `targetSdk` 36 |
-| Accrescent | zaprto kodo sprejme, a rabi pregled in `bundletool` — ostaja odprto |
+| F-Droid, IzzyOnDroid | samo prosto programje; koda zaprta |
+| Google Play | 25 $, identiteta, **12 preizkuševalcev × 14 dni**, AAB, `targetSdk` 36 |
+| Accrescent | zaprto sprejme, rabi pregled in `bundletool` — odprto |
 
-Zato **stran `/android`**: podpisan APK, vsota SHA-256, navodilo v treh korakih. Pot: `android/objavi.sh` zgradi in podpiše, prepiše APK v mapo z `razlicica.json`, `rsync` pošlje na strežnik, `api.py` mapo streže na `/prenos` (`config.PRENOS_DIR` = `${KAJROS_DATA_DIR}/prenos`). Brez mape ni poti; stran pove, da izdaje še ni.
+* `android/objavi.sh` zgradi, podpiše, APK + `razlicica.json` z `rsync` na strežnik; `api.py` streže na `/prenos` (`config.PRENOS_DIR` = `${KAJROS_DATA_DIR}/prenos`). Brez mape ni poti. Po **prvi** objavi restart storitve (mount).
+* **Podpisni ključ = trajna identiteta** (`podpis.sh`, `~/kajros-android/podpis/`), nikoli v git; geslo v `podpis.properties` zunaj repozitorija; brez njega gradnja naredi nepodpisan APK.
+* **Dvig `versionCode` = edini pogoj za posodobitev.**
+* **Posodobitev javi aplikacija sama** (`Posodobitev.kt`, enkrat na dan `/api/android/razlicica`):
+  * Nič se ne prenese samo; sistemski „Posodobi“ = potnikov drugi klik.
+  * **Namesti aplikacija, ne brskalnik** (od 1.6, `Namestitev.kt`): sistemski namestitveni program ob vsaki namestitvi postavi `USE_FULL_SCREEN_INTENT` na `deny`; seja `PackageInstaller` (`SessionParams.setPermissionState`, Android 14+) ga ohrani (`allow`, `installerPackageName=app.kajros`). Vsota SHA-256 iz odgovora pred `commit`.
+  * Najprej `canRequestPackageInstalls()` (`REQUEST_INSTALL_PACKAGES`), ob `onResume` namestitev brez drugega klika.
+  * Namešča zaslon „O aplikaciji“ (`AplikacijaDejavnost`, od 1.12) z `Namestitev.Stanje` (odstotek, potrditev, napaka v slovenščini) in gumbom naprej. Okno za potrditev odpre sprejemnik, gumb „Odpri okno za potrditev“ znova (zagon iz ozadja sme biti zavrnjen; namera v `Stanje.Potrdi`). Ob neuspehu stara pot: stran v brskalniku.
+  * Različica vidna v meniju Več (`Most.oAplikaciji()`, most 5) in na zaslonu. „Preveri znova“ mimo dnevne meje; dan šteje šele **odgovor**.
+  * Do 1.5 vrstica odpre `/android?iz=aplikacija` — stran tam pove „posodabljaš, budilke ostanejo“ in opozorila brskalnika in Play Protecta.
+  * Toast od Androida 12 največ dve vrstici.
+  * **`stran` in `url` iz odgovora skozi `Nastavitve.jeNas()`.**
+  * Preizkus: razvojni strežnik s `KAJROS_BASE_URL=http://10.0.2.2:8001 KAJROS_PRENOS_DIR=<mapa>`, prvi APK `adb install`, `appops set app.kajros REQUEST_INSTALL_PACKAGES allow`. Sistemsko okno z `am start … content://media/…` **ne kot root**.
+* **Play Protect** (`developers.google.com/android/play-protect/warning-dev-guidance`): trdo blokira le ob SMS, poslušalcu obvestil, dostopnosti — Kajros nič od tega. Opozorilo odstrani le, da Google aplikacijo pozna; pritožba za „Harmful app blocked“ `support.google.com/googleplay/android-developer/contact/protectappeals`. Seja ga tudi sproži: `STATUS_FAILURE_BLOCKED` → „ustavil jo je Play Protect …“.
+* **2027**: Google zahteva preverjenega razvijalca na certificiranih napravah (od 30. 9. 2026 BR, ID, SG, TH; globalno 2027). Volle ne zadeva. Takrat izbrati znova.
 
-Mapa v podatkovnem imeniku, ne v `/srv`: ta je po `brez-sudo.sh` že skupinsko pisljiv in ga enota sme brati — objava = navaden `rsync` kot `david`, brez sudota, brez spremembe enote v `/etc`. Mount nastane ob zagonu, zato po **prvi** objavi potreben restart storitve.
+## Podpora v Playu (20. 10. 2026)
 
-**Podpisni ključ = trajna identiteta aplikacije** (`podpis.sh`, `~/kajros-android/podpis/`): brez njega ni posodobitve, vsak uporabnik bi moral aplikacijo odstraniti in namestiti znova. V gitu ga ni in ne sme biti; `build.gradle.kts` bere geslo iz `podpis.properties` **zunaj** repozitorija; če datoteke ni, gradnja še vedno teče in naredi nepodpisan APK — merjenje velikosti zato ne zahteva ključa.
-
-**Dvig `versionCode` = edini pogoj, da posodobitev pride do telefona.** `versionName` je za ljudi, ne pomeni ničesar.
-
-**Zunaj trgovine mora na posodobitev opozoriti aplikacija sama** (`Posodobitev.kt`): enkrat na dan vpraša `/api/android/razlicica`, ob večji kodi pokaže vrstico. Pravila:
-
-* **Nič se ne prenese ali namesti samo**, šele na potnikov pritisk na vrstico, in sistemsko okno „Posodobi“ ostane njegov drugi klik.
-* **Namesti aplikacija, ne brskalnik** (od 1.6, `Namestitev.kt`). Sistemski namestitveni program, ki ga odpre brskalnik, ob **vsaki** namestitvi postavi `USE_FULL_SCREEN_INTENT` na `deny` — izmerjeno na emulatorju 6. 10. 2026, 1.4 → 1.5 prek sistemskega okna: `allow` → `deny`. David: „vsakič ko posodobiš, moraš spet dati dovoljenje“. Namestitveni program sme od Androida 14 to (edino) posebno dovoljenje podeliti sam (`SessionParams.setPermissionState`), zato seja `PackageInstaller` iz aplikacije: prenos v sejo, vsota SHA-256 iz odgovora, šele nato `commit`. Izmerjeno po posodobitvi iz aplikacije: `USE_FULL_SCREEN_INTENT: allow`, `installerPackageName=app.kajros`.
-* **Najprej dovoljenje za nameščanje, nato seja.** Prvič mora potnik Kajrosu dovoliti nameščanje (`REQUEST_INSTALL_PACKAGES`, „Dovoli iz tega vira“, kot prej brskalniku). Seja brez njega sistemsko okno sicer ponudi, a jo ob vklopu stikala zavrže (`User rejected permissions`) in potnik bi moral vrstico pritisniti še enkrat. Zato `canRequestPackageInstalls()` pred sejo; ob vrnitvi iz nastavitev (`onResume`) namestitev brez drugega klika. Izmerjeno na emulatorju: pritisk na vrstico → stikalo → nazaj → „Posodobi“.
-* **Namešča zaslon „O aplikaciji“, ne vrstica** (od 1.12, `AplikacijaDejavnost`). Vrstica samo odpre zaslon z `POSODOBI` in ta začne sam (pritisk na vrstico je bil potnikov klik). Vsak korak je `Namestitev.Stanje` (prenos z odstotkom, čaka na potrditev, napaka z razlogom v slovenščini) in ima gumb naprej. Do 1.11 je vrstica napisala „Prenašam …“, postala nepritisljiva in čakala na sistemsko okno; če ga ni bilo, se ni zgodilo nič več.
-* **Okno za potrditev odpre sprejemnik, gumb „Odpri okno za potrditev“ pa znova.** Zagon dejavnosti iz sprejemnika sme sistem tiho zavrniti (zagon iz ozadja); namera ostane v `Stanje.Potrdi`. Preverjeno na emulatorju: okno pustiš, vrneš se na zaslon, gumb ga odpre, „Update“ namesti.
-* Ko namestitev v aplikaciji ne uspe ali potnik nameščanja ne dovoli, zaslon ponudi staro pot: stran v brskalniku.
-* **Različica je vidna** v meniju Več na strani („O aplikaciji 1.12“, `Most.oAplikaciji()`, most 5) in na zaslonu (koda, datum namestitve, Android). Prej je ni bilo nikjer. Ročno „Preveri znova“ gre mimo enkrat na dan; dan šteje šele **odgovor** strežnika, ne poskus (preverjanje brez omrežja je prej odložilo naslednje za 24 h).
-* **Do 1.5 vrstica odpre stran v brskalniku** (`/android?iz=aplikacija`), tam je prenos označen kot nevaren. 12. 10. 2026 (do 21:45) je bilo med 27 obiskovalci z aplikacijo 11 na 1.2–1.5, 16 na 1.10 (`obiskovalec.aplikacija`), torej na tej poti; tisti dan 12 prenosov s `?iz=aplikacija`. Zanje pomaga samo stran: z `iz=aplikacija` pove „posodabljaš, budilke ostanejo“, korak za korakom pa opozorilo brskalnika („Vseeno prenesi“) in Play Protecta („Vseeno namesti“). Prijatelja je ustavil **Play Protect** (David, 12. 10. 2026; točen napis še ni znan).
-* Obvestilo (toast) ima od Androida 12 največ dve vrstici, daljše se odreže (izmerjeno na emulatorju): `posodobitev_dovoli` je zato kratek.
-* **Oba naslova iz odgovora (`stran`, `url`) gresta skozi `Nastavitve.jeNas()`.** Odgovor = podatek s strežnika; tudi naš strežnik ne sme odpreti povezave drugam ali namestiti datoteke od drugod samo zato, ker jo je vrnil. Ista meja zaupanja kot pri povezavah v WebView.
-* Preizkus poti: dva izdajna APK-ja z `-PkajrosUrl=http://10.0.2.2:<vrata>` in različno `versionCode`, `api/android/razlicica` kot datoteka na `python -m http.server`; prvega namesti sistemsko okno (`am start -a android.intent.action.VIEW -d content://media/…`, **ne kot root**: tako `InstallStart` tiho odneha). Enostavneje (12. 10. 2026): razvojni strežnik s `KAJROS_BASE_URL=http://10.0.2.2:8001 KAJROS_PRENOS_DIR=<mapa>` (naslova v odgovoru morata biti v izvoru aplikacije), prvi APK z `adb install`, dovoljenje z `appops set app.kajros REQUEST_INSTALL_PACKAGES allow`. Napaka: v `razlicica.json` napačna vsota.
-
-**Play Protect** (Googlova navodila za razvijalce, `developers.google.com/android/play-protect/warning-dev-guidance`): trdo blokira aplikacijo s spleta samo, če zahteva RECEIVE_SMS, READ_SMS, poslušalca obvestil ali dostopnost -- Kajros nič od tega. Za neznano aplikacijo ponudi pregled („Send app for security check“, „App scan recommended“); **pritožba tega ne odstrani**, odstrani ga to, da Google aplikacijo pozna (pregled, Play, verjetno registracija). Za „Harmful app blocked“ je pritožba `support.google.com/googleplay/android-developer/contact/protectappeals`. Registracija v Android Developer Console (polna distribucija 25 $ in osebni dokument; omejena brez pristojbine, a le 20 naprav) po FAQ do 2027 v EU ničesar ne spremeni, o opozorilih Play Protecta FAQ molči. Seja `PackageInstaller` gre skozi isti preverjevalnik, zato tudi posodobitev v aplikaciji lahko ustavi: `STATUS_FAILURE_BLOCKED` → „ustavil jo je Play Protect …“.
-
-**Zaradi preverjanja ob zagonu je 2027 vreden zaznamka**: Google od 30. 9. 2026 zahteva **preverjenega razvijalca** za namestitev na certificiranih napravah (Brazilija, Indonezija, Singapur, Tajska; globalno 2027). Naprav brez Googlove certifikacije (razgooglana Volla) ne zadeva, navadnega telefona bo. Takrat izbrati znova; do tedaj ta pot dela.
-
-## Podpora v Playu (pregledano 20. 10. 2026)
-
-Aplikacija kaže stran, zato bo v njej tudi kartica cilja in gumb do Ko-fi (`strani.md`). Pravilo plačil v Playu (`support.google.com/googleplay/android-developer/answer/9858738`, razdelek 4): aplikacija **ne sme voditi do plačila mimo Googla**, tudi ne prek WebView-a ali povezave. Izjema je v pogostih vprašanjih (`answer/10281818`): napitnina, pri kateri **gre 100 % ustvarjalcu** in ki **ne odklene ničesar digitalnega**, je plačilo med osebama in Googlovega obračuna ne rabi. Kar od tega velja ob oddaji:
-
-* **Nič v zameno.** Ne značke, ne „brez oglasov za podpornike“, ne zgodnjega dostopa — vsaka ugodnost naredi iz napitnine nakup, ki mora skozi Google (15–30 %).
-* **Samo enkratne donacije.** Ko-fi od njih na brezplačnem načrtu ne vzame nič; od članarin, trgovine in naročil 5 % in te praviloma nekaj dajo. Na strani Ko-fi naj jih ne bo, sicer gumb iz aplikacije vodi do plačila za vsebino.
-* **Provizija plačila (PayPal/Stripe) je siva cona** za „100 %“. David jo krije sam (38 c na donacijo); tako je to tudi povedati v pregledu, če vprašajo.
-* **Rezerva:** če pregled kljub temu zavrne, se kartica in gumb skrijeta samo v aplikaciji (razred `.v-aplikaciji`, ki ga postavi `common.js` iz `MOST`) — stran v brskalniku ostane enaka. Ena vrstica CSS, nova različica APK ni potrebna.
-* Programi za zunanje ponudbe v EGP (DMA) so za prodajo digitalnih vsebin s provizijo; za napitnino niso potrebni.
+Play (`answer/9858738` §4) prepove plačilo mimo Googla, tudi prek WebView-a; izjema (`answer/10281818`): napitnina, **100 % ustvarjalcu**, **nič digitalnega v zameno**.
+* Nič v zameno (ne značke, ne brez oglasov).
+* Samo enkratne donacije; članarin/trgovine na Ko-fi ne bo.
+* Provizijo PayPal/Stripe krije David (38 c) — tako povedati ob pregledu.
+* Rezerva ob zavrnitvi: skrij kartico in gumb samo v aplikaciji (`.v-aplikaciji` iz `common.js` po `MOST`), ena vrstica CSS, brez novega APK.
+* Programi DMA niso potrebni.
 
 ## Pošiljanje: `navigator.share` iz aplikacije (1.13, most 6)
 
-WebView `navigator.share` nima, zato je „Pošlji“ (povabilo na domači strani, okno vožnje) v aplikaciji samo kopiral. Od 1.13 `Most.poslji(zapis)` odpre sistemski izbirnik, `common.js` pa ga obleče v **spletni standard**: stran kliče `navigator.share` / `navigator.canShare` kot v brskalniku. APK o besedilu, povezavi in gumbih ne ve nič, zato nova vsebina ali nov gumb za pošiljanje ne rabi nove različice (David, 13. 10. 2026: „da se bo lahko most uporabil kadarkoli v prihodnosti brez da bova morala spreminjati apk“).
+`Most.poslji(zapis)` odpre sistemski izbirnik; `common.js` ga obleče v Web Share (`navigator.share`/`canShare`). APK o vsebini ne ve nič — nov gumb ne rabi novega APK.
+* Zapis = Web Share (`title` → `EXTRA_SUBJECT`, besedilo `text` + `\n` + `url`).
+* **Datoteke** (Level 2): base64, `cache/poslji/<čas>-<n>/<ime>` (10 datotek, 10 MB, starejše od 10 min gredo), lasten neizvožen `Datoteke` (`ContentProvider`), `ClipData` + `FLAG_GRANT_READ_URI_PERMISSION`. Ime skozi `varnoIme()` ob zapisu **in** branju.
+* Izid: izbira → obljuba izpolnjena, preklic → `AbortError` (`PendingIntent` na `PoslanoSprejemnik`; `onResume` brez izbire = preklic). `kajrosPoslano(id, izbrano)`. „Kopiraj“ v izbirniku 14+ šteje za preklic.
+* Stara aplikacija (most 5) kopira. WhatsApp, Signal, Instagram še niso preizkušeni.
 
-* **Zapis je oblika Web Share** (`title`, `text`, `url`, `files`), besedilo prejemniku = `text` + nova vrstica + `url` kot v Chromu, `title` gre v `EXTRA_SUBJECT`.
-* **Datoteke že zdaj** (Web Share Level 2), čeprav jih ob 1.13 ne pošlje še nobena stran — slike za Instagram bi sicer čakale na novo aplikacijo. `common.js` jih pošlje kot base64, `Posiljanje` jih zapiše v `cache/poslji/<čas>-<n>/<ime>` (največ 10 datotek, 10 MB; starejše od 10 min gredo ob naslednjem pošiljanju), streže jih lasten `Datoteke` (`ContentProvider`, ker je FileProvider v AndroidX), neizvožen; prejemnik bere z dovoljenjem iz namere (`ClipData` + `FLAG_GRANT_READ_URI_PERMISSION`). Ime s strani gre skozi `varnoIme()` ob zapisu **in** ob branju (`..`, `/`). Končnica iz vrste, ker `getType` bere iz nje.
-* **Izid kot v brskalniku**: izbira → obljuba se izpolni, preklic → `AbortError`. Izbirnik javi samo izbiro (`PendingIntent` na neizvoženi `PoslanoSprejemnik`); vrnitev v aplikacijo brez nje je preklic (`onResume`, pol sekunde za zakasnelo sporočilo). Stran izvede `kajrosPoslano(id, izbrano)`. Vgrajeno „Kopiraj“ v izbirniku Androida 14+ izbire ne javi in šteje za preklic.
-* **Združljivost v obe smeri**: stara aplikacija (most 5) polnila nima in kopira; nova aplikacija s starim strežnikom ima `poslji`, a ga nihče ne kliče.
-* Preverjeno na emulatorju (Android 15, AOSP) 13. 10. 2026 z razvojnim strežnikom: povabilo odpre izbirnik z besedilom in povezavo, nazaj = kartica ostane, Messaging = „Hvala!“ in `kajros:povabilo` poslano; slika (`canvas` → `File`) v izbirniku s sličico, Print jo prebere prek `Datoteke`. AOSP Messaging sliko zavrne („Cannot send private file“, njegovo lastno pravilo); WhatsApp, Signal in Instagram na telefonu še niso preizkušeni.
+## Lega ne sme skriti aplikacije napravam brez GPS
 
-## Dovoljenje za lego skrije aplikacijo napravam brez GPS
-
-`ACCESS_*_LOCATION` = **privzeto `uses-feature required="true"`** — izmerjeno z `aapt2 dump badging`:
-
-```
-uses-implied-feature: name='android.hardware.location'
-  reason='requested ACCESS_COARSE_LOCATION … ACCESS_FINE_LOCATION permission'
-```
-
-Trgovina aplikacijo skrije vsaki napravi brez GPS, čeprav brez lege dela vse razen gumba „kje sem“. Zato v manifestu tri izrecne vrstice `uses-feature … required="false"` (`location`, `location.gps`, `location.network`). Nikjer ni vidno, dokler se ne pogleda z `aapt2`.
+`ACCESS_*_LOCATION` = privzeto `uses-feature required="true"` (`aapt2 dump badging`). V manifestu `required="false"` za `location`, `location.gps`, `location.network`.
 
 ## Nič odvisnosti
 
-Ne AndroidX, ne `appcompat`. Vse potrebno v ogrodju od API 26: `WebView`, `AlarmManager`, `NotificationChannel`, `Ringtone`. Zato objavljeni APK **70 kB** (71 822 B podpisan, 61 854 B pred podpisom; 12. 9. 2026, prej 50 kB 7. 9. in 28 kB pred budilko z vmesnikom), v njem **nobenega** Googlovega niza — preverjeno z `aapt2 dump strings`, 0 zadetkov za „google", „firebase" in „gms". Če se v `dependencies` kdaj pojavi vrstica, mora biti zraven razlog.
+Ne AndroidX ne `appcompat` — ogrodje od API 26. APK ~70–80 kB, **nobenega** Googlovega niza (`aapt2 dump strings`: „google“, „firebase“, „gms“ 0). Nova vrstica v `dependencies` rabi razlog.
 
-`-keepclassmembers` za `@JavascriptInterface` v `proguard-rules.pro` **mora ostati**: R8 bi sicer preimenoval metode mostu, `Kajros.nastavi()` bi tiho ne obstajal — samo v izdajni različici.
+**`-keepclassmembers` za `@JavascriptInterface` v `proguard-rules.pro` mora ostati** (R8 bi preimenoval most, samo v izdaji). **Vir, bran samo po imenu, rabi `res/raw/keep.xml`** (krčenje virov je vrglo `raw/nezno`, 1.7–1.9 nema; `objavi.sh` APK brez `raw/nezno` zavrne).
 
-## Orodja puščajo, in to je treba loviti sproti
+## Orodja puščajo
 
-`orodja.sh` postavi vse v `~/kajros-android` in **dokaže**, da drugod ni nič. Trije primeri, ki jih je dokaz ujel, v [docs/MERITVE.md](../../docs/MERITVE.md). Najhujši: AGP ob vsaki gradnji naredi `~/.android/analytics.settings` z obstojnim `userId`; premakne ga **samo `-Duser.home`**, ne `ANDROID_USER_HOME` in ne `HOME`.
-
-Zato dokaz ni enkraten — `zgradi.sh` ga ponovi ob vsaki gradnji in pade, če kaj uide.
-
-**Ista izolacija je enkrat že skrila podpisni ključ.** `build.gradle.kts` je mapo iskal prek `System.getProperty("user.home")`, ta pa je zaradi `-Duser.home` **lažni dom** (`~/kajros-android/domov`). Ključ obstajal, gradnja ga ni našla in **tiho** naredila nepodpisan APK — brez opozorila, ker je nepodpisana izdaja veljavna. Zato pot iz okolja (`KAJROS_PODPIS`, `KAJROS_ANDROID`, `HOME`), `zgradi.sh izdaja` pa po gradnji izpiše prstni odtis podpisa: ime datoteke (`app-release.apk` proti `app-release-unsigned.apk`) je edini drugi znak, lahko ga je spregledati.
-
-Spremenljivk okolja ne dodajaj na slepo: AGP pade, če najde več različnih poti do svoje mape (`ANDROID_PREFS_ROOT`, `ANDROID_SDK_HOME`, `ANDROID_USER_HOME`). Emulator `ANDROID_USER_HOME` sploh ne bere, rabi `ANDROID_AVD_HOME`.
+`orodja.sh` postavi vse v `~/kajros-android` in **dokaže**, da drugod nič; `zgradi.sh` dokaz ponovi ob vsaki gradnji. AGP piše `~/.android/analytics.settings` z `userId` — premakne ga **samo `-Duser.home`**. Zato je `user.home` lažni dom: pot do ključa iz okolja (`KAJROS_PODPIS`, `KAJROS_ANDROID`, `HOME`), `zgradi.sh izdaja` izpiše prstni odtis (prej tiho nepodpisan APK). Okolja ne dodajaj na slepo: AGP pade ob več poteh (`ANDROID_PREFS_ROOT`, `ANDROID_SDK_HOME`, `ANDROID_USER_HOME`); emulator rabi `ANDROID_AVD_HOME`.
 
 ## Preverjanje
 
@@ -134,259 +92,103 @@ KAJROS_EMULATOR=1 ./orodja.sh && ./zgradi.sh emulator
 adb exec-out screencap -p > ../posnetki/x.png
 ```
 
-Emulatorjeva slika = `default`, **ne** `google_apis` — AOSP brez Googlovih storitev, ista izbira kot pri telefonu.
-
-`variations_seed_loader.cc: Seed missing signature` v dnevniku ni naša napaka: WebViewova lastna konfiguracija, na AOSP je ni.
+Emulator `default`, **ne** `google_apis`. `variations_seed_loader.cc: Seed missing signature` ni naša napaka.
 
 ## Budilka
 
-Davidovo pravilo, dobesedno: *„uporabnik vnese, koliko časa (x minut) preden pride vlak naj zazvoni (upošteva se zamude); če pa ni povezave, potem zazvoni x minut preden je napovedan vozni red"* in *„uporabnik ne sme zamuditi, raje kej rezerve, če ni zihr"*.
+David: *„uporabnik vnese, koliko časa (x minut) preden pride vlak naj zazvoni (upošteva se zamude); če pa ni povezave, potem zazvoni x minut preden je napovedan vozni red“* in *„uporabnik ne sme zamuditi, raje kej rezerve, če ni zihr“*.
 
-Vse, kar budilka rabi, **shranjeno lokalno** — predvsem voznoredna ura. Nadomestna pot za pridobivanje bi rabila ravno tisto, česar takrat ni.
+Vse za budilko **shranjeno lokalno** (voznoredna ura). Aritmetika v `Ura.kt`, čista, s testi.
 
-**Aritmetika v `Ura.kt`, čista** (brez Androida): preizkus brez naprave. Tam je vse, kar je mogoče narediti narobe.
+### Dostop in seznam
 
-### Do seznama budilk se pride samo s prve strani
+* Do seznama s prve strani (kartica, glej `strani.md`); v glavi drugih strani ni. „Naslednja budilka“ v sistemu odpre seznam (`AlarmClockInfo` → `BudilkeDejavnost`).
+* Ura v sistemskem meniju = **prvo preverjanje** (10 min pred), `setAlarmClock` ena budnica za oboje (`Nacrtovalec`).
+* Seznam = kartica kot `.d-bud`: ura 40 sp, stikalo M3, zamuda kot žeton (`Zeton`, `ReplacementSpan`); vklopljena rjava (`m_kont`), ugasnjena siva, deljenje indigo. Besede iste kot `home.js`.
+  * Drsi vse razen „Odpri Kajros“; opozorilo o dovoljenjih na vrhu.
+  * Stikalo M3 brez AndroidX: `Switch` z `android:thumb`/`track` (`stikalo_*.xml`), `thumbTint`/`trackTint` (`res/color/`).
+  * Odstrani vpraša. Okna `TemaOkna` 28 dp. `napaka` `#ffb4ab` (`sev_bad` na rjavi 2,3 : 1).
+  * **Enkratna budilka odide s koncem sledenja** (`Budilka.opravljena`: odhod po zadnji zamudi + 90 s ali poznejši odlog); `Shramba.pocisti` ob `vseZnova` razen zvoneče; `Most.seznam()` in `WidgetBudilke` opravljene preskočita.
+  * Odprt seznam se osveži na 30 s.
+  * **Ponavljajoča ne zazvoni takoj** (`Ponovitev.prva`): v preteklosti → naslednja iz nabora. **Enkratna zvoni takoj** in list to pove („zvoni **takoj** — 19:01 je že mimo“). Dan izbere `Most.napoved()` po računu `nastavi()`, **brez zamude**.
+  * Dnevnik v izdaji: dolg pritisk na „Budilke“, gumb „Kopiraj“. `Dnevnik.kt` 120 vrstic, nikamor ne gre; gumb in naslov strežnika samo v razvojni.
+* **Rezerve v računu ni**: `zvoni = voznoredna + zamuda − X`, rezerva je v X. Vlak pred voznim redom ne odpelje (0 od 10 775) → pri vlakih `max(0, zamuda)`; **pri avtobusih ne** (prezgodaj v 25 %).
 
-Domača stran: **prva kartica, a samo, kadar budilka obstaja** (od 1. 10. 2026), kaže naslednjo budilko s stikalom in gumb „Vse budilke“ (`home.js` bere `Most.seznam()`, dotik odpre `odpriBudilke()`); vse ugasnjene → kartica ostane s seznamom, nobene → oblika „Budilke“ ob zemljevidu odpre seznam; glej `strani.md`. V glavi drugih strani je **ni** (odločeno 14. 9. 2026): budilka se nastavi v oknu vožnje, seznam = pregled. „Naslednja budilka" v vrhnjem meniju sistema odpre seznam (`AlarmClockInfo` → `BudilkeDejavnost`), ne glavne strani, ki o budilki ne pove ničesar.
+### Kaj budilko utiša — ne vrni
 
-Ura v vrhnjem meniju = **prvo preverjanje** (10 min pred zvonjenjem), ne zvonjenje — `setAlarmClock` = ena budnica za oboje, glej `Nacrtovalec`.
+* **14. 9. 2026 ni zbudila — štiri napake**: (1) veljavnost od voznega reda, ne od zvonjenja z zamudo → `Ura.veljavnost(do, starost)` = korak ob prihodu + zdajšnji korak + 15 s; (2) „čas je tu“ brez vprašanja strežnika → brez omrežja zvoni samo na sveži zamudi ali odlogu; (3) `USE_FULL_SCREEN_INTENT: deny` (14+ ga dobijo le budilke iz trgovine) → `zahtevajZaBudilko` (`ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`), `cel_zaslon` v `dovoljenja()`; (4) zanka po „Ustavi“ → `prestavljena()` po `max(zdaj, voznoredni)` (`BudilkaTest`).
+* **Zvoni obvestilo, ne aplikacija**: storitev iz ozadja Android 16 utiša (`AudioHardening … muted`). Kanal `budilka`: `DEFAULT_ALARM_ALERT_URI`, `USAGE_ALARM`, `FLAG_INSISTENT`, `FOREGROUND_SERVICE_IMMEDIATE`. `ZvonjenjeStoritev` (`systemExempted`, `USE_EXACT_ALARM`) ostane; „Ustavi“ in „Še 2 minuti“ v obvestilu. **Kanala ni mogoče spremeniti** — nov kanal pod novim imenom, stari se v `kanali()` izbriše.
+* **Najprej nežno, nato glasno** (1.5): nežno `Ura.NEZNO_MS` (20 s) **pred** uro na `budilka-zacetek`, glasno ob uri na `budilka`. Le budilka, ki zbudi (`Budilka.neznoMs`); odlog spet nežen.
+  * Naraščanje v datoteki `res/raw/nezno.mid` (`android/zvok_nezno.py`): harfa, C–Am–F–G po 2 s; glasnost kot krivulja v dBFS (`KRIVULJA`) iz izmerjene `KALIBRACIJA`. Kanal ima zvok **po imenu** (`android.resource://app.kajros/raw/nezno`).
+  * Dve obvestili (`OBVESTILO_NEZNO` 4712, `OBVESTILO` 4711); preklop = `startForeground` glasnega, `cancel` nežnega, pod delnim `WakeLock` do glasnega + 10 s. Konec nežnega je že glasen (112) — tišine ni.
+  * Nežni del vsaj 20 s tudi, ko je ura mimo (`NAJMANJ_NEZNO_MS`; `NeznoTest`); zadnja budnica na začetku nežnega (`Budilka.zacetekZvonjenja`).
+  * Glasnost: `android/zvok_meri.sh` (PCM iz `MidiExtractor` prek `app_process`). Sonivox šum −65 dBFS. Od 1.10 začetek −67, 15 s −44, 20 s −34 — na telefonu dobra (David, 12. 10.). Meri znova le ob spremembi `nezno.mid`, `KRIVULJA` ali kanala.
+  * Brez tresenja na začetku; tresenje doda storitev pri 35 % nežnega, `USAGE_ALARM`, sunki 150 ms 70/255 na 2,5 s do 300 ms 200/255 vsako sekundo.
+  * Ob vidnem zaslonu zvonjenja glasno na `budilka-zaslon`, nežno na `budilka-zacetek-zaslon` (`DEFAULT`, brez plavajočega obvestila); vidnost `ZvonjenjeStoritev.zaslonViden`.
+* **Straža zvoka** (1.10): tipka za glasnost in podrsano obvestilo utišata zvok, budilka ostane. `ZvonjenjeStoritev` na 2 s gleda `AudioManager.activePlaybackConfigurations` (`USAGE_ALARM`); po dveh tihih isto fazo objavi pod drugo številko (4711↔4715, 4712↔4716), največ trikrat, nato zapis v dnevnik.
+* **„Preizkusi zvonjenje“** po isti poti kot prava (`ZvonjenjeStoritev.PREIZKUS`, ni v shrambi). `Zvonjenje.zakajTiho()` našteje, kar utiša (obvestila, kanal, glasnost 0, ton „brez“, Ne moti); ob zvonjenju vrstica `zvok: …` v dnevnik.
 
-### Seznam je videti kot kartica domače strani (12. 10. 2026)
+### Zaslon zvonjenja: Peron (1.6)
 
-Dotik „Vse budilke“ je vodil s tonske kartice Material 3 na zaslon v starem slogu (kartice z obrobo, stikalo Materiala 1, „ugasnjena“ v isti oranžni kot ura zvonjenja). Zdaj ista kartica kot `.d-bud`: ura 40 sp, dan in odštevanje, stikalo M3, zamuda kot žeton na podlagi strani (`Zeton`, `ReplacementSpan`); vklopljena rjava (`m_kont`), ugasnjena siva, deljenje indigo kot „Deli lego“. Besede iste kot v `home.js` („zamuda še ni preverjena“, „Zazvonila · odhod“).
+Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne. OpenGL ES 2.0 brez knjižnic.
+* `Peron.kt` geometrija in `Peron.ustavi()` (`PeronTest`); `Mreza.kt` gradniki.
+* `PeronRisar.kt`: Lambert kot three.js r128 `MeshLambertMaterial`; **megla po sliki, ne po ogliščih** (tla 1,6 km).
+* `PeronPogled.kt`: začeti na vozilu (rezerva 44 dp), 60 % poti ali sunek ≥ 0,6 dp/ms po ≥ 30 %; ob dvigu šteje **lega iz dviga**. Utihne ob odločitvi.
+* Po potegu `DeljenjeStoritev.cakaj` (1.9, `deljenje.md`); „Ustavi“ v obvestilu ne.
+* Bralnik zaslona: dvojni dotik (`ACTION_CLICK`) ustavi.
+* **Brez prizora navaden gumb „Ustavi“** (1.7): risar ujame vsako izjemo (`varno`), lovilec za `GLThread*`; izjema bi podrla storitev, ki zvoni.
+* Animacije sistema ugasnjene → brez vabila.
+* Preizkus potegov: `InputManagerGlobal.injectInputEvent` iz `app_process` (`input swipe` ima premor, hitrost 0).
 
-* **Drsi vse razen „Odpri Kajros“.** Deljenje, naslov, preizkus in dnevnik so bili pripeti pod seznam in vzeli 45 % zaslona (1080 × 2400): druga budilka odrezana, tretje ni bilo videti. Opozorilo o dovoljenjih je na vrhu.
-* **Stikalo M3 brez AndroidX**: `Switch` z `android:thumb`/`track` (oblika v `stikalo_*.xml`, odmik 4 dp v `padding` sledi) in barvami v `thumbTint`/`trackTint` (`res/color/`), ker je ista oblika na rjavi in indigo kartici.
-* **Odstrani vpraša** — en dotik je zbrisal ponavljajočo budilko z dnevi in rezervo. Pogovorna okna (`TemaOkna`) so zaobljena 28 dp, gumbi v stavčni velikosti.
-* `sev_bad` na rjavi ne doseže kontrasta (2,3 : 1), zato `napaka` `#ffb4ab`.
-* **Enkratna budilka odide s koncem sledenja** (`Budilka.opravljena`: odhod po zadnji znani zamudi + 90 s, ali odlog, če je poznejši). Do 12. 10. 2026 je ostala še dan in seznam, domača stran in widget so jo kazali kot „Zazvonila · odhod“ z davno minulo uro. Briše `Shramba.pocisti` ob vsakem `vseZnova` (tudi ob zadnji budnici sledenja) razen budilke, ki ta hip zvoni; `Most.seznam()` in `WidgetBudilke` opravljene preskočita, ker do naslednjega obhoda še ležijo v shrambi. Ugasnjena enkratna gre ob istem trenutku.
-* **Odprt seznam se osveži na 30 s** (kot kartica na domači strani): „čez 7 min“ je sicer obstal, odzvonjena budilka ostala po odhodu.
-* **Ponavljajoča budilka ne zazvoni takoj** (`Ponovitev.prva`): kadar bi danes zvonila v preteklost, je prva ponovitev naslednja iz nabora. Izmerjeno 12. 10. 2026 na RG 18 ob 19:29, nastavljeno ob 19:14 z X = 25 + 3: zazvonila 19:14:46, glasno 19:15:06. **Enkratna zvoni takoj** (raje rezerva) in list to pove: „zvoni **takoj** — 19:01 je že mimo“, prej „zvoni ob 19:01 · zdaj“. Dan izbere `Most.napoved()` po istem računu kot `nastavi()`, **brez zamude** (sicer bi list in shranjena budilka izbrala različen dan); list pove „prvič jutri“. Stara aplikacija `voznoredni_ms` v napovedi ne vrne, list takrat velja za danes.
-* **Dnevnik v izdaji: dolg pritisk na naslov „Budilke“**, z gumbom „Kopiraj“ (120 vrstic se na telefonu ne da označiti). Brez tega vzroka za Samsung („v glasnem načinu sploh ne zvoni“) ne bi bilo od kod dobiti: izdaje z `adb` ni mogoče brati.
-* **Widgeta v istem slogu** (12. 10. 2026): podlaga `m-visoka` brez obrobe (velja tudi za tablo), odštevanje tonsko rjavo, brez budilke sivo (`Widget.barve`); v seznamu budilk vklopljena vrstica rjava, stikalo je **slika** stikala M3 (`stikalo_slika_*.xml`, `ImageView`), ne napis „vklopljena“ — `Switch` v RemoteViews je šele API 31.
+### Preverjanje zamude
 
-### Budilka 14. 9. 2026 ni zbudila — štiri napake naenkrat
+* **`/api/departures`, ne `/api/train/{no}/run`** — ta vrne `zamuda: null` za nedosežen postanek. Tabla = številka, ki jo potnik vidi, na njej umerjena rezerva.
+* **„Strežnik nima podatka“ ni izpad**: `Budilka.stikObMs` hrani vsak odgovor; `Ura.Vir.NI_PODATKA` = vozni red brez preventive („o zamudi te vožnje še ni podatka“).
+* Korak: 5 min daleč, 60 s v 15 min, 30 s v zadnjih 5; blizu ure trikrat zapored. Odgovor starejši od **dveh korakov** = ni povezave: zvonjenje nikoli pozneje od voznega reda; v zadnjih **3,5 min** zazvoni takoj in to pove.
+* **„Ni odgovora“ ≠ „danes ne vozi“** (`Preverjevalec.Odgovor`, tri stanja): ponavljajoča molči in se prestavi; enkratna ne.
+* Obvestilo ne trdi ure, ki ji račun ni verjel: `Ura.Izid.odhodMs` iz iste odločitve.
+* List: shranjena ura + „pri zdajšnjih +5 min bi zvonilo ob 16:56“. Uro računa **Kotlin** (`Most.napoved()`), ne JS.
+* Blok „Pri tebi“ zapiše odločitev (`state.tvojaZamudaS`), budilka bere njo.
 
-RG 318, Ljubljana Polje 7:31, X = 20 + 3 min rezerve, vlak +20 min. Obvestilo ob 7:08 „zamude ni bilo mogoče preveriti — zvonim prej", zvonjenje šele, ko je potnik ob 7:30 sam vzel telefon, po „Ustavi" znova in znova. Sistemski dnevnik zvečer že prepisan; vzrok sestavljen iz `dumpsys appops`, `dumpsys alarm` in kode, potrjen s preizkusom na telefonu.
+### Po zvonjenju sledi do odhoda
 
-1. **Veljavnost merjena od voznega reda, ne od zvonjenja z zamudo.** Preverjanje na 5 minut (do zvonjenja še 20), meja izračunana od 7:08 = 75 s — vsak podatek izpad. Zdaj `Ura.veljavnost(do, starost)` = korak ob prihodu podatka + zdajšnji korak + 15 s, oboje od ure zvonjenja z zamudo. Test: `velika zamuda ne skrajsa veljavnosti na vozni red`.
-2. **Bližnjica „čas je tu, zvoni" zazvonila brez vprašanja strežnika.** Zdaj brez omrežja zvoni samo, kadar ura stoji na sveži zamudi ali odlogu.
-3. **Zvonil zaslon, zaslon se ni odprl.** `USE_FULL_SCREEN_INTENT: deny` — Android 14+ ga sam da le budilkam **iz trgovine**. Obvestilo kanala brez zvoka tiho. Glej naslednji razdelek.
-4. **Zanka po „Ustavi".** `prestavljena()` iskala naslednji odhod po *zdaj* — isti vlak ob 7:35, zvonjenje v preteklosti → takoj znova. Zdaj po `max(zdaj, voznoredni)`. Test: `BudilkaTest`.
+* Budnica na 2 min (`setExactAndAllowWhileIdle`) osvežuje zamudo; 90 s po odhodu `vseZnova` prestavi ponavljajočo.
+* Po zvonjenju zamuda velja dve osvežitvi (4 min 15 s): `Ura.izracunaj(sledenje = odzvonjeno)`.
+* **Do kdaj odštevati** = sveža zamuda (brez nje do voznega reda). **Do kdaj slediti** = `Budilka.konecSledenjaMs()` po zadnji znani zamudi. Ena budnica na sam odhod (`SledenjeTest`).
 
-### Zvoni obvestilo, ne aplikacija
+### Ponavljanje
 
-Po popravku 3 je zvok najprej predvajala storitev v ospredju — Android 16 ga utišal. Izmerjeno na telefonu 14. 9. 2026 ob 20:03:55:
+* Nabor dni = bitna maska (pon = bit 0). Naslednji odhod po **zidni uri**, ne +86 400 s (`Ponovitev.kt`, testa za oba prehoda).
+* `trip_id` se zavrže; ključ = številka + voznoredna ura.
+* Prva ponovitev mora biti v naboru: `Most.nastavi()` poravna, `Nacrtovalec.vseZnova()` popravi shranjene (`Ponovitev.jeVNaboru()`), meja `max(voznja − 1 s, zdaj)`.
 
-```
-AS.AudioService: AudioHardening background playback would be muted for app.kajros (10024), level: full
-AudioPlaybackConfiguration … u/pid:10024 state:started … usage=USAGE_ALARM … muted
-```
-
-Storitev, zagnana iz ozadja, za zvok ni „v ospredju". Zato zvok zdaj predvaja **sistem**: kanal `budilka` ima zvok `DEFAULT_ALARM_ALERT_URI` z `USAGE_ALARM`, obvestilo `FLAG_INSISTENT` (ponavlja, dokler obvestila ni) in `FOREGROUND_SERVICE_IMMEDIATE`. Preizkus ob 20:39: zazvonilo, `AudioHardening` v dnevniku ni bilo, „Ustavi" ob 20:40:09, brez ponovitve.
-
-`ZvonjenjeStoritev` (vrsta `systemExempted`, pripada aplikacijam z `USE_EXACT_ALARM`) je ostala, ker obvestila storitve do Androida 13 ni bilo mogoče podrsati stran — odmahnjena budilka = tiha budilka. **Od 14 se ga da** (izmerjeno 7. 10. 2026), zato zvok varuje še straža (spodaj, „Zvok utihne, budilka ne“). Gumba „Ustavi" in „Še 2 minuti" v obvestilu, ker zaslona brez dovoljenja ni.
-
-**Kanalu zvoka ni mogoče spremeniti, ko obstaja.** Zato kanal preimenovan (`zbudi` → `budilka`), stari se ob vsakem `kanali()` izbriše.
-
-Dovoljenje za cel zaslon se zdaj zaprosi (`zahtevajZaBudilko`, 14+: `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`), stran ga pozna kot `cel_zaslon` v `dovoljenja()`, seznam budilk pove, kadar manjka.
-
-### Najprej nežno, nato glasno (1.5, 6. 10. 2026)
-
-David: „da te zbudi nežno, šele nato glasno kot zdaj“. Zvonjenje se začne **`Ura.NEZNO_MS` (20 s; do 1.10 45 s, David 7. 10. 2026: „največ 20 s“) pred uro zvonjenja** na kanalu `budilka-zacetek` (do 1.6 `budilka-nezno`), ob sami uri pride obvestilo na glasnem kanalu `budilka`. Začne se prej, ne konča pozneje: glasno ostane ob uri, ki jo je potnik izbral, nežni del ne vzame nič od rezerve v X. Samo pri budilki, ki zbudi (`Budilka.neznoMs`); obvestilo je en zvok. Odlog „še 2 minuti“ je spet najprej nežen.
-
-* **Naraščanje je v datoteki, ne v kodi.** Zvok predvaja sistem prek kanala (glej zgoraj, AudioHardening), zato glasnosti med zvonjenjem ne moremo spreminjati. `res/raw/nezno.mid` (1 221 B, `android/zvok_nezno.py`): **harfa**, razloženi akordi C–Am–F–G, vsak 2 s (od 1.10; David izbral 7. 10. 2026 med osmimi predlogi: „taka nežna in ni piskajoča“; prej glasbena skrinjica). **Glasnost je zapisana kot krivulja v dBFS** (`KRIVULJA`), jakost udarca se izračuna iz **izmerjene** tabele `KALIBRACIJA`, ne iz formule. MIDI predvaja Sonivox iz AOSP; enak posnetek v Vorbisu bi bil ~150 kB. Zvok kanala je naslov **po imenu** (`android.resource://app.kajros/raw/nezno`), ne po številki vira: številka se med gradnjami lahko premakne, kanal pa si naslov zapomni za vedno.
-* **Dve obvestili, dve številki** (`OBVESTILO_NEZNO` 4712, `OBVESTILO` 4711): zvok je last kanala, obstoječemu obvestilu ga ni mogoče zamenjati. Preklop = `startForeground` z glasnim, nato `cancel` nežnega.
-* **Preklop drži delni `WakeLock`** do ure glasnega + 10 s: v Doze bi `Handler` sicer lahko zamudil. Če se preklop vseeno ne zgodi, je konec nežnega zvoka že glasen (jakost 112) — tišine ni nikoli.
-* **Nežni del traja vsaj 20 s, tudi ko je ura glasnega že mimo** (`NAJMANJ_NEZNO_MS`). Prej je pod 5 s takoj zazvonilo glasno; David je budilko preizkusil z vlakom čez nekaj minut (ura zvonjenja = mimo) in slišal ravno to: „začne že s srednjo jakostjo, namesto da začne čisto potihem“. Zadnja budnica `Nacrtovalec.kdaj` pade na začetek nežnega dela (`Budilka.zacetekZvonjenja`). Testi: `NeznoTest`.
-* **Kako tiho je, izmerjeno**: `android/zvok_meri.sh` -- PCM, ki ga naredi Androidov `MidiExtractor` (Sonivox), prek `app_process` na priklopljenem telefonu, RMS in vrh po 2,5 s. Na Volli 7. 10. 2026: Sonivox ima tudi v tišini šum pri **−65 dBFS RMS**, pod jakostjo ~16 glasnost skoraj ne pada več (harfa: jakost 16 → −59, 4 → −63), zato je formula s kvadratom jakosti tihe začetke cenila za 6 dB pretiho. Harfa 1.10 izmerjena: 0 s −61, 15 s −41, 20 s −33, konec −24 (cilj ±2 dB; razlika je med akordi). Krivulja 1.8: začetek −46 dBFS RMS (vrh −29), pri 20 s −29 (vrh −12), konec −23 (vrh −7) -- s krivuljo se ujema na 1 dB. **Od 1.10 začetek −67** (do 15 s −44, pri 20 s −34): ko je zvok 7. 10. 2026 prvič res zazvonil, je bil −46 na Volli (glasnost budilke 6/7) „preglasen“, −62 „še čisto malo preglasen“. Nova krivulja je izračunana po isti formuli, z `MidiExtractor` ni izmerjena; **na telefonu preslišana in dobra** (David, 12. 10. 2026). Meriti znova samo, kadar se spremeni `nezno.mid`, `KRIVULJA` ali kanal. Glasneje skrinjica ne zna: pri jakosti 127, glasnosti kanala 127 in oktavi je to strop. Namizni Sonivox (`pedrolcl/sonivox`, 22 050 Hz) je ~2,5 dB glasnejši. Sistemski zvok budilke je okoli −10 dBFS.
-* **1.7, 1.8 in 1.9 so bile v nežnem delu neme, ker zvoka v APK-ju ni bilo** (odkrito 7. 10. 2026, `aapt2 dump resources`: 1.6 ima `raw/nezno`, 1.7+ ne). 1.7 je naslov kanala zamenjala s `${R.raw.nezno}` na ime `raw/nezno`; `R.raw.nezno` ni bil nikjer več, **krčenje virov v izdaji** (`isShrinkResources`) je datoteko vrglo ven. Razvojna različica se ne krči, zato emulator (debug APK) napake ni pokazal; telefon je imel izdajo. Zdaj `res/raw/keep.xml` (`tools:keep="@raw/nezno"`) in `objavi.sh` zavrne APK brez `raw/nezno`. Kanalu ni bilo treba nič: hrani naslov po imenu, ki se z vrnjeno datoteko spet razreši. Pravilo: **vir, brán samo po imenu, rabi `keep.xml`** -- ista past kot `@JavascriptInterface` v R8.
-* **1.7 je bila na začetku nema** (David, 6. 10. 2026: „na začetku ni zvoka v nežnem načinu, začne pa malo tresti“). Vzrok je bil zgornji (datoteke ni bilo), takrat pa pripisan krivulji: jakost je rasla od 1 s potenco 1,8: prvih 7,5 s digitalna tišina, do 20 s pod −53 dBFS. Kadar je ura glasnega že mimo, nežni del traja samo 20 s (`NAJMANJ_NEZNO_MS`) -- in to je bil natanko neslišni del. Njegova želja: „na začetku glasnost tihega šepetanja, počasi glasnejše šepetanje, potem po 15–20 s glasneje“. Zato krivulja v dBFS, ne potenca jakosti.
-* **Brez tresenja na začetku** (1.7). Kanal 1.5 je ob začetku kratko zavibriral; na votli nočni omarici je bilo to glasneje od zvoka (David). Kanala ni mogoče spremeniti, zato nov `budilka-zacetek` brez vibriranja, stari se ob `kanali()` izbriše. Tresenje doda storitev pri 35 % nežnega dela, z usmeritvijo `USAGE_ALARM` (pride tudi v tihem načinu), do glasnega, ki trese sam. Sunki rastejo (od 1.8; v 1.7 ves čas 150 ms, 70/255, na 2,5 s, od 60 %, David: „čisto malo in počasi, kar mi je všeč, a bi lahko hitreje treslo“): od 150 ms, 70/255 na 2,5 s do 300 ms, 200/255 vsako sekundo. Izmerjeno (`dumpsys vibrator_manager`, nežni del 40 s): prvi sunek po 14 s (0,27, 150 ms), razmik 2,55 → 1,2 s, zadnji 0,77 in 295 ms; prej nobenega.
-* **Glasni del, kadar zaslon zvonjenja že sveti, gre na kanal `budilka-zaslon`** (`IMPORTANCE_DEFAULT`, isti zvok, brez celozaslonske namere). Na `budilka` (`HIGH`) je sistem čez odprt zaslon pokazal plavajoče obvestilo in ga pustil viseti čez glavo (ura, vlak, odhod) ves glasni del — izmerjeno na emulatorju, zaklenjenem s kodo, 18 s in več. Vidnost piše `ZvonjenjeDejavnost` (`ZvonjenjeStoritev.zaslonViden`); ko zaslona ni, ostane `budilka` s celozaslonsko namero.
-* **Preverjeno na emulatorju** (z **razvojnim** APK-jem, zato je spregledalo manjkajočo datoteko v izdaji; Android 15, AOSP, 6. 10. 2026; storitev zagnana z `am start-foreground-service … --el glasno_ob`): obvestilo 4712 na nežnem kanalu, sistem predvaja MIDI (`MediaPlayer`, 22 050 Hz, `USAGE_ALARM`, ni utišan); po 20 s obvestilo 4711 na `budilka`, nežno pobrano, glasni zvok 44 100 Hz; „Ustavi“ med nežnim delom prepreči glasno (17 s pozneje ni ne obvestila ne zvoka); odlog postavi glasno na +2 min. Na telefonu še ni preverjeno, zlasti ali Sonivox predvaja MIDI na Volli.
-
-### Preizkus zvonjenja in kaj utiša budilko (1.10, 7. 10. 2026)
-
-Gumb **„Preizkusi zvonjenje“** v seznamu budilk zvoni takoj, po isti poti kot prava budilka: isti kanali, ista storitev, zaslon Peron. Nežni del 20 s (`NAJMANJ_NEZNO_MS`), nato glasno. Budilka preizkusa (`ZvonjenjeStoritev.PREIZKUS`) ni v shrambi: ne prestavi se, ne pride v widget, po potegu ne čaka na vkrcanje; storitev in zaslon jo dobita prek `ZvonjenjeStoritev.budilka(id)`. Brez preizkusa se je tiha budilka pokazala šele, ko je že zamudila.
-
-Zvok predvaja sistem prek kanala (glej „Zvoni obvestilo“), zato budilko utiša vse, kar utiša obvestila. `Zvonjenje.zakajTiho()` našteje, kar aplikacija lahko prebere: izklopljena obvestila, kanal budilke pod `IMPORTANCE_DEFAULT` ali brez zvoka, glasnost budilke 0, ton budilke telefona „brez“ (`getActualDefaultRingtoneUri(TYPE_ALARM) == null`; glasni kanal ima `DEFAULT_ALARM_ALERT_URI`), Ne moti v popolni tišini. Seznam budilk to pove kot opozorilo z nastavitvijo; ob vsakem zvonjenju gre v dnevnik vrstica `zvok: glasnost budilke 6/7 · ne moti izklopljen · nič ne utiša`.
-
-### Zvok utihne, budilka ne (1.10, 7. 10. 2026)
-
-Izmerjeno na Volli (Android 16) pri preizkusu, `logcat -b events`: zvok obvestila ugasne, tresenje in zaslon ostaneta — „samo malo vibrira“. Dve poti, obe brez „Ustavi“:
-
-* **tipka za glasnost**: sistem utiša zvok obvestila, preden tipka pride do aplikacije (`RingtonePlayer: stop` 13:28:14,33, `input_interaction` z zaslonom zvonjenja 14,48). Aplikacija tega ne more preprečiti.
-* **podrsano plavajoče obvestilo**: `notification_dismissed`, `notification_canceled` z razlogom 2 (13:28:45,51). Nežni kanal (`HIGH`) je plavajoče obvestilo kazal čez zaslon Peron, podrsati ga je bilo naravno.
-
-Glasni del je potem zazvonil (novo obvestilo), nežni pa je bil izgubljen; podrsano glasno obvestilo brez zaslona bi bilo tiho do konca.
-
-Zato **straža** v `ZvonjenjeStoritev`: vsaki 2 s pogleda `AudioManager.activePlaybackConfigurations` za `USAGE_ALARM`; po dveh tihih pogledih isto fazo objavi znova pod drugo številko (4711↔4715, 4712↔4716 — zvok se začne samo ob **novem** obvestilu, posodobitev ga ne sproži). Največ trikrat na fazo, nato zapis „zvok se ne začne“ s stanjem zvoka v dnevnik. Ista straža zamenja kanal, kadar se zaslon odpre ali zapre: nežni ob odprtem zaslonu gre na `budilka-zacetek-zaslon` (`DEFAULT`, brez plavajočega obvestila), kot glasni na `budilka-zaslon`.
-
-Sprožilo: Samsung prijatelja 7. 10. 2026 „v glasnem načinu sploh ne zvoni“. Vzrok tam še ni izmerjen; nežni del je bil nem povsod (zgoraj), za glasnega pove dnevnik po preizkusu.
-
-### Zaslon zvonjenja: Peron (1.6, 6. 10. 2026)
-
-Prototip `design/budilka/` v aplikaciji: stojiš na peronu, vozilo pripelje iz daljave, potegneš ga do sebe in budilka se ustavi; na cilju se prižgejo okna in odprejo vrata. David je izbral ta pogled izmed dveh. Brez knjižnic, OpenGL ES 2.0:
-
-* `Peron.kt` — geometrija (škatle, izvlečen profil čela, valji koles; mere in barve iz prototipa) in pravilo potega `Peron.ustavi()`. Čista koda, preizkusi `PeronTest`. `Mreza.kt` — gradniki in toga pretvorba (normale gredo skozi isto matriko, zato je zrcaljena zadnja kabina pravilno osvetljena).
-* `PeronRisar.kt` — osvetlitev kot three.js r128 `MeshLambertMaterial` (Lambert po ogliščih: nebesna, mesečna, zorna in ena točkasta luč, sij prištet), barve brez pretvorbe. **Megla po sliki, ne po ogliščih**: tla so ena ploskev, dolga 1,6 km, in faktor iz oglišč je bil čez vso ploskev napačen (daljna tla 16,24,43 namesto 6,8,16). Popravljeno se izris s prototipom ujema na točko v vseh vzorcih (nebo, streha, peron, tla, megla).
-* `PeronPogled.kt` — poteg: začeti na vozilu (zaslonski okvir objavlja risar, rezerva 44 dp), 60 % poti ali sunek ≥ 0,6 dp/ms po ≥ 30 %; pot je pol širine prizora. Ob dvigu šteje **lega iz dviga**, ne zadnjega premika (pri hitrem sunku zadnji premik zaostaja). **Zvonjenje utihne ob odločitvi**, ne ob prihodu: vozilo pelje še sekundo ali dve.
-* **Po potegu se lahko začne deljenje ob vožnji** (1.9): kdor ga je vklopil, mu `ustavi()` sproži `DeljenjeStoritev.cakaj` -- tu, ker je zaslon še viden in se storitev za lego sme začeti. Gumb „Ustavi“ v obvestilu tega ne naredi (storitev iz ozadja). Pravila v `deljenje.md`.
-* Bralnik zaslona: prizor je gumb, dvojni dotik (`ACTION_CLICK`) ustavi. Gumba „Ustavi“ na zaslonu ni več, v obvestilu je.
-* **Ko prizora ni mogoče narisati, je na zaslonu navaden gumb „Ustavi“** (1.7). Izjema v niti risanja bi podrla proces in z njim storitev, ki zvoni — budilka bi utihnila. Zato risar vsako izjemo ujame (`varno`), izbira nastavitve EGL nikoli ne vrže, za vsak primer pa ujame še privzeti lovilec izjem za nit `GLThread*`. Brez OpenGL ES 2 se prizor sploh ne ustvari. Preverjeno z namerno izjemo v `pripravi()`: gumb „Ustavi“ in „Še 2 minuti“, zvok teče naprej, „Ustavi“ ustavi.
-* Animacije sistema ugasnjene → brez vabila, utripanja in čakanja na vrata.
-* Preizkus na emulatorju: budilka zapisana v `shared_prefs/budilke.xml` (debug APK, `run-as`), storitev zagnana kot root na ugasnjenem zaslonu; potegi z natančnimi časi dogodkov prek `InputManagerGlobal.injectInputEvent` iz `app_process` (`input swipe` ima pred dvigom premor in hitrost je 0). Izid (zaslon 1080 px): 360 px v 1,2 s ustavi, 200 px v 0,9 s se vrne, sunek 200 px v 0,1 s (0,76 dp/ms) ustavi, sunek 110 px ne, sunek mimo vozila nič. APK z zaslonom: 143 kB.
-
-### „Strežnik nima podatka" ni izpad povezave
-
-Drugi preizkus (LPV 2002, Ljubljana začetna postaja) zazvonil preventivno ob prvem preverjanju: `vozi, zamuda neznana → preventiva`. Tabla za vlak, ki se še ni premaknil, vrne `zamuda: null` — isto kot brez odgovora. Zdaj `Budilka.stikObMs` hrani **vsak** odgovor, `Ura.Vir.NI_PODATKA` = vozni red **brez** preventive s stavkom „o zamudi te vožnje še ni podatka". Preventiva ostane samo, ko strežnika ni bilo mogoče vprašati.
-
-### Po zvonjenju budilka sledi vozilu do odhoda
-
-Vprašanje po zvonjenju: „koliko imam še do vlaka" → widget odšteva do **odhoda** odzvonjene budilke (odhod, ne prihod: potnik lovi trenutek, ko vlak spelje). Ista budnica se po zvonjenju nastavi na vsaki 2 minuti (`setExactAndAllowWhileIdle`, ne `setAlarmClock` — to ni budilka) in osveži zamudo; 90 s po odhodu `vseZnova` ponavljajočo prestavi na naslednji dan. Prej se je prestavila takoj ob zvonjenju → widget kazal jutrišnji odhod.
-
-**Po zvonjenju zamuda velja dve osvezitvi sledenja (4 min 15 s), ne 75 s.** Prijavljeno 22. 9. 2026: odštevanje izginilo „recimo pet minut pred prihodom“. Veljavnost se je tudi po zvonjenju merila po koraku do ure zvonjenja — ta bila mimo, korak 30 s, meja 75 s — sledenje pa zamudo osveži na dve minuti. Zamuda zato večino časa „zastarela“, odhod padel na vozni red, sledenje končano 90 s za njim: **natanko toliko pred prihodom, kolikor je vlak zamujal.** `Ura.izracunaj(sledenje = odzvonjeno)`.
-
-Dvoje ločeno namenoma:
-
-* **Do kdaj odštevati** pove sveža zamuda. Brez nje števec teče do voznega reda (pred njim vlak ne odpelje), vrstica pod njim pove zadnje znano („vozni red 07:31 · ob 07:29 je zamujal 5 min“).
-* **Do kdaj slediti in kazati** pove najpoznejši odhod, ki ga je kdo trdil — `Budilka.konecSledenjaMs()` po zadnji znani zamudi, tudi zastareli. Mejo berejo sledenje in widget; dve meji za isto stvar bi se razšli.
-
-Ena budnica sledenja pade **na sam odhod**: `Chronometer` čez ničlo šteje z minusom, widget „zdaj“ napiše samo ob izrisu. Testi: `SledenjeTest`.
-
-### Dotik widgeta odpre vožnjo, ne domače strani
-
-Widget odgovarja na „koliko časa imam še“; naslednje vprašanje „in kje je zdaj“. Domača stran nanj ne odgovori, do njega še dva klika — ravno ko potnik hiti. Zato vodi na **okno tiste vožnje**, isti naslov kot gumb „Odpri vožnjo“ v seznamu budilk.
-
-Naslov sestavlja `Budilka.naslovVoznje(izvor)`. Vzame niz, ne `Context`: čist JVM, ima teste — naslov je bil že enkrat narobe (`+` namesto `%20` v poti), na napravi se vidi šele kot „vlak s to številko ne obstaja“.
-
-**`FLAG_UPDATE_CURRENT` tu ni okras.** `extras` se pri primerjavi namer ne upoštevajo → widget bi brez njega odpiral prvo vožnjo, kar jih je kdaj kazal. Ista past kot pri `PendingIntent` budilk, le da se tam rešuje z `data`.
-
-Brez budilke ni kam peljati → ostane domača stran.
-
-### Trije widgeti, tri vprašanja
+### Widgeti
 
 | widget | vprašanje | omrežje |
 |---|---|---|
-| `Widget` (odštevanje) | koliko časa do **moje** vožnje | nič — računa iz shranjene budilke |
-| `WidgetBudilke` (seznam s stikali) | katere budilke nastavljene, ali jutri sploh grem | nič |
-| `WidgetTabla` (odhodna tabla) | kdaj pelje z **moje postaje** | `/api/departures`, na 15 min |
+| `Widget` (odštevanje) | koliko do **moje** vožnje | nič |
+| `WidgetBudilke` (seznam s stikali) | katere budilke | nič |
+| `WidgetTabla` (odhodna tabla) | kdaj z **moje postaje** | `/api/departures`, na 15 min |
 
-**Prva dva ne pošljeta nobene zahteve.** Vse je v telefonu → delata tudi brez strežnika; `updatePeriodMillis` = `0`, ker se ura zvonjenja med dvema spremembama budilk ne premakne. Prerišejo ju `Widgeti.osvezi()` in `Sprozilec`, ko se budilka tako ali tako zbudi.
+* Prva dva brez zahtev, `updatePeriodMillis = 0`; prerišeta `Widgeti.osvezi()` (budilka se spremeni na sedmih mestih) in `Sprozilec`.
+* Dotik widgeta odpre **vožnjo** (`Budilka.naslovVoznje(izvor)`, čist JVM). Brez budilke domača stran.
+* **`FLAG_UPDATE_CURRENT` + svoj `data`** (`kajros://preklop/<id>`, `kajros://budilka/<id>`) — `extras` se pri primerjavi namer ne upoštevajo.
+* **Stikalo je slika** (`stikalo_slika_*.xml`, `ImageView`): `Switch` v RemoteViews šele API 31.
+* Odštevanje riše `Chronometer` (`setChronometerCountDown`) v sistemskem procesu; časovnica `elapsedRealtime`.
+* `onUpdate` (30 min) kliče `Nacrtovalec.vseZnova` — samopopravek obviselih `odzvonjeno`.
+* Slog: `m-visoka` brez obrobe, odštevanje rjavo, temen ne glede na temo, brez Material You (AndroidX).
+* Smernice: `previewLayout` (12+), `minResizeWidth/Height`, `system_app_widget_background_radius` (`@dimen/widget_rob`, `values-v31`), `setContentDescription` z uro odhoda.
+* **Tabla: 15 min je cilj** — `setInexactRepeating`, `ELAPSED_REALTIME` **brez** `_WAKEUP`; sistem korak raztegne do 25 min. Zato **widget nosi uro podatka**, od 30 min z besedo in rdeče; dotik ure osveži.
+  * Omrežje ne na glavno nit: `goAsync()`.
+  * Samo odgovor prepiše stanje; izpad pusti staro tablo.
+  * „Ni zveze“ ≠ „te postaje ni“ (`Tabla.Izid`); postaje ni mogoče shraniti brez strežnika.
+  * Postaja se izbere (`/api/stations/search`, 250 ms, od dveh črk, predlogi pod poljem); shrani se ime strežnika (`Izid.Odhodi.popravi`). Pri avtobusih tudi `smer` (ključ in napis); `smer: null` = tabla cela.
+  * `fitsSystemWindows` povozi `padding` — zunanji okvir za odmike, zrak na notranjem; `adjustResize` + `ScrollView`.
 
-`Widgeti.osvezi()` obstaja, ker se budilka spremeni na sedmih mestih, widgeta pa sta dva. Tretji bi tiho zamrznil povsod, kjer bi ga kdo pozabil dodati.
+### Pasti na napravi
 
-**Stikalo je slika, ne `Switch`.** `setCompoundButtonChecked` je šele API 31, aplikacija gre od 26 — `Switch` v `RemoteViews` bi na starejšem telefonu podrl risanje, ne le izgledal drugače. Do 12. 10. 2026 je bilo napis v piluli („vklopljena“ / „ugasnjena“); zdaj slika stikala M3 v stanju, z opisom za bralnik zaslona.
-
-Vsako stikalo ima svoj `data` (`kajros://preklop/<id>`). Brez tega bi `FLAG_UPDATE_CURRENT` vsa tri združil v eno in vsako bi preklopilo isto budilko — `extras` se pri primerjavi namer ne upoštevajo. Ista past kot pri budnicah v `Nacrtovalec`. Preverjeno na emulatorju: dotik prve vrstice ugasnil prvo budilko, drugi dve pustil pri miru.
-
-### Odhodna tabla: 15 minut je cilj, ne obljuba
-
-`updatePeriodMillis` tega ne zmore — sistemski minimum 30 minut. Tabla ima zato svojo budnico, `setInexactRepeating` z `ELAPSED_REALTIME` (**brez** `_WAKEUP`): spečega telefona ne budimo zaradi table, ki je nihče ne gleda.
-
-Izmerjeno, ne domnevano (`dumpsys alarm`, Android 15): `repeatInterval=900000`, a `whenElapsed=+13m46s` proti `maxWhenElapsed=+25m1s` — sistem sme korak raztegniti na 25 minut in ga združiti z drugimi alarmi. Podrobnosti v [docs/MERITVE.md](../../docs/MERITVE.md).
-
-**Zato widget nosi uro podatka.** Od 30 minut naprej to pove z besedo in pordeči. Številka brez ure bi trdila svežino, ki je ritem ne more zagotoviti — „+4 min“ izpred pol ure je videti enako kot izpred pol minute. Dotik ure osveži takoj.
-
-Troje, kar velja:
-
-* **Omrežje ne sme na glavno nit.** `onReceive` teče na njej, `NetworkOnMainThreadException` bi widget podrl. Nit drži pokonci `goAsync()` — v `onUpdate` deluje, ker ta teče znotraj `onReceive`. Brez njega sme sistem proces ubiti sredi zahteve.
-* **Samo odgovor prepiše shranjeno stanje.** Izpad zveze pusti, kar widget že kaže: stara tabla z uro je uporabna, prazna ni.
-* **„Ni zveze“ in „te postaje ni“ nista isto** (`Tabla.Izid`, enaka razlika kot v `Preverjevalec.Odgovor`). Prvo je začasno, postaje ne sme zavreči; drugo je tipkarska napaka, nastavitev jo mora povedati takoj. Postaje zato ni mogoče shraniti, ne da bi jo strežnik prej našel — prazen widget je za potnika okvara aplikacije, ne napaka izpred treh dni.
-
-Ime postaje razreši strežnik (`resolve_station()`), isto kot stran. Svoj seznam postaj v telefonu bi bil drugo pravilo za isto stvar in bi se ob naslednjem uvozu voznega reda razšel.
-
-**Postaja se izbere, ne vtipka** (22. 9. 2026). Prej je bilo ime treba napisati na pamet in widget je shranil kar vnos („bavarski“). Zdaj vnos išče (`/api/stations/search`, 250 ms po zadnji tipki, od dveh črk — enako kot predlogi na strani), predlogi so pod poljem, ne v spustnem oknu (tega bi prekrila tipkovnica), „Končano“ vzame prvega, „Shrani“ ugasnjen, dokler ime ni s seznama. Omrežje je nad poljem, ker od njega zavisi seznam. Shrani se ime, kot ga vrne strežnik (`Izid.Odhodi.popravi`), zato se ob prvi osvežitvi popravi tudi star widget z delnim imenom — preverjeno na emulatorju.
-
-**Pri avtobusih se izbere tudi stran ceste** (`smer`, glej `strani.md`): widget kaže tri vrstice, in če sta dve z druge strani ceste, sta dve od treh neuporabni. Strani pove `/api/departures` ob izbiri postaje; ključ in napis („→ Tobačna“) se shranita, ker napis widget izpiše tudi brez omrežja, glava pa odpre stran z isto smerjo. Izbrana smer = rob v poudarku, ne poln gumb: poln je za dejanje („Shrani“). Če strežnik ključa ne pozna več (nov vozni red), odgovor nosi `smer: null`, tabla je cela, napis gre stran.
-
-**`fitsSystemWindows` povozi `padding`.** Nastavitvena dejavnost je imela na prvem posnetku naslov prilepljen na levi rob zaslona, čeprav je imel korenski pogled `padding="20dp"`. Zunanji okvir je zato samo za odmike sistema, zrak je na notranjem — enako kot v `budilke.xml`. Ob tem je bil gumb „Poišči in shrani“ pod tipkovnico; rešita ga `adjustResize` in `ScrollView`.
-
-### Kaj je widget dolgoval smernicam (17. 9. 2026)
-
-Preverjeno proti Googlovim smernicam za widgete; štiri stvari so manjkale:
-
-| kaj | zakaj |
-|---|---|
-| `previewLayout` (12+) | izbirnik je kazal **ikono aplikacije**, ne widgeta. Človek izbira, kar vidi. `previewImage` ostane za starejše |
-| `minResizeWidth/Height` | brez njiju sme launcher widget stisniti poljubno globoko, podnapis se tiho odreže |
-| sistemski `system_app_widget_background_radius` | trdih 18 dp je bilo na Androidu 12+ edino, kar se ni ujemalo z ostalimi widgeti. Zdaj `@dimen/widget_rob`, v `values-v31` sistemska vrednost |
-| `setContentDescription` | bralnik zaslona je prebral samo stoparico, brez konteksta gola številka. `Chronometer` se ne da prebrati, zato je ura odhoda v opisu |
-
-**Že prav**: `description`, `targetCellWidth/Height`, `updatePeriodMillis` na sistemskem minimumu (30 min), `exported="false"`, odštevanje v sistemskem procesu.
-
-**Zavestno drugače**: widget je temen ne glede na temo naprave (`values-night` aplikacija nima nikjer, ker je stran temna); ne uporablja Material You barv — te so v AndroidX, odvisnosti pa aplikacija nima.
-
-Cena vsega: **1 472 B** (izdajni APK 79 394 → 80 866 B).
-
-### Dnevnik budilk
-
-`Dnevnik.kt` hrani zadnjih 120 vrstic (preverjanje in izid, zvonjenje in ali je cel zaslon dovoljen, ustavitev, odlog, napake) v telefonu; gumb zanj je v seznamu budilk **samo v razvojni različici** (od 12. 10. 2026, David: „le začasno v dev“), enako naslov strežnika — potniku ga ponudi zaslon napake. Ne gre nikamor. Brez njega je bilo treba vzrok budilke, ki ni zbudila, sklepati iz kode.
-
-### Rezervo določi potnik, ne aplikacija
-
-`zvoni = voznoredna + zamuda − X`. **Rezerve v računu ni** (odločeno 6. 9. 2026): v X je že. Meritev, da bi 5 minut prihranilo tretjino zamujenih vlakov in dve tretjini avtobusov, ostaja — zapisana je v vmesniku, kjer se X izbira, ne vgrajena v formulo.
-
-Iz meritve v kodi ostaja eno: **vlak pred voznim redom ne odpelje** (0 primerov od 10 775), zato je pri vlakih zamuda omejena na `max(0, zamuda)`. Pri avtobusih te omejitve NI in je ne sme biti — ti prezgodaj gredo v 25 % primerov.
-
-### Izpad povezave ima svoje pravilo
-
-Zamuda se preverja do konca, korak se krajša: 5 min daleč, 60 s znotraj petnajstih minut, 30 s v zadnjih petih. Blizu ure poskusi trikrat zapored.
-
-Če zadnji odgovor strežnika ni mlajši od **dveh korakov** (glej spodaj, „štiri napake"), velja, da povezave ni. Takrat:
-
-* zvonjenje se **nikoli ne načrtuje pozneje od voznega reda** — sicer bi dvajset minut stara „+15" držala uro, tudi ko vlak vmes nadoknadi;
-* v zadnjih **3,5 minute** pred zvonjenjem budilka zazvoni **takoj** in to pove. Cena: do 3,5 minute spanca, samo ko povezave res ni.
-
-### Ponavljanje: zidna ura, ne 86 400 sekund
-
-Nabor dni = bitna maska (ponedeljek = bit 0). Naslednji odhod se išče po **uri po zidni uri**; prištevanje enega dne v ms je narobe dvakrat na leto, ker ima dan ob prehodu 23 ali 25 ur. `Ponovitev.kt` zato čist JVM, ima teste za oba prehoda.
-
-`trip_id` se pri ponovitvi **zavrže**: naslednji dan je vožnja druga (LPP linija 3G ima 388 voženj). Ključ = številka + voznoredna ura, ne `stop_seq` — sezonska različica ima lahko drugačen vrstni red postankov.
-
-### Prva ponovitev mora biti v naboru, ne šele druga
-
-Stran pošlje uro vožnje, ki jo je človek **gledal**; ta ni nujno na dan iz nabora. Izmerjeno 12. 9. 2026: izbrana `tor + sre`, stran kazala ponedeljek 14. 9., budilka bi prvič zazvonila v **ponedeljek** — zunaj vzorca. `prestavljena()` to popravi šele po zvonjenju = prepozno.
-
-Zato `Most.nastavi()` poravna prvo ponovitev, `Nacrtovalec.vseZnova()` poravna tudi budilke, ki so v shrambi že nastale narobe (`Ponovitev.jeVNaboru()`). Meja = `max(voznja − 1 s, zdaj)`: prvo pusti vožnjo pri miru, kadar njen dan v naboru je; drugo poskrbi, da vožnja, ki je danes že mimo, skoči na naslednji dan iz nabora.
-
-### „Ni odgovora“ in „danes ne vozi“ nista isti izid
-
-`Preverjevalec.Odgovor` ima tri stanja namenoma. Tabla odgovori in te vožnje na njej **ni**: ponavljajoča budilka molči in se prestavi — nedeljski alarm za delavniški vlak je natanko tisto, zaradi česar ljudje budilke ugasnejo za vedno. Pri **enkratni** budilki se to ne dela: vožnjo za določen dan je izbral človek; če je izginila z voznega reda, je to novica, ne razlog za tišino.
-
-### Kje budilka bere zamudo
-
-**`/api/departures`, ne `/api/train/{no}/run`.** Prva izbira je bila `run` in napačna: vrne `zamuda: null` za vsak postanek, ki ga feed še ni dosegel — ravno za tistega, na katerem potnik čaka. Izmerjeno na EN 414: Zidani Most imel napoved prevoznika, Ljubljana nič, tabla pa kazala +24 min iz naše ocene.
-
-Odhodna tabla vrne natanko številko, ki jo potnik vidi. **Na njej je umerjena tudi rezerva** (senca meri `ours_s`, isti izračun kot `stats.predict`); vsak drug vir bi pomenil, da rezerva varuje pred napako, ki je ne merimo.
-
-### Obvestilo ne sme trditi ure, ki ji račun ni verjel
-
-Napaka je bila na zaslonu: naslov „ob 22:34" (iz zamude), pod njim „po voznem redu — zamude nisem mogel preveriti". Zato `Ura.Izid` nosi `odhodMs`, ki ga izračuna **ista odločitev** kot uro zvonjenja.
-
-### Widget odšteva sam, mi ga ne rišemo
-
-Sekunde riše `Chronometer` s `setChronometerCountDown` — v **sistemskem** procesu. Widget, ki bi ga risali mi, bi zahteval prebujanje vsako sekundo. Njegova časovnica = `elapsedRealtime`, ne epoch; razliko je treba prišteti.
-
-`onUpdate` (vsakih 30 min, sistemski minimum) kliče `Nacrtovalec.vseZnova`. Ni okrasek: ponavljajoča budilka, ki je odzvonila in je nihče ni ustavil, bi sicer ostala `odzvonjeno` za vedno — widget bi pisal „ni budilke“, jutrišnji alarm pa ne bi bil nastavljen. Sistem nas zaradi widgeta tako ali tako zbudi; najcenejši kraj za samopopravek.
-
-### Prikaz ne sme obljubiti ure, ki je ni v shrambi
-
-List budilke pisal „zvoni ob 16:56“, seznam budilk „16:51“ — budilka se shrani **brez** zamude (vpraša jo šele deset minut pred zvonjenjem). Zdaj list ima dve vrstici: shranjena ura, ki velja tudi brez omrežja, pod njo „pri zdajšnjih +5 min bi zvonilo ob 16:56“.
-
-Uro računa **Kotlin** (`Most.napoved()` → `Ura`), ne stran. Dvojnik pravila v JavaScriptu bi se razšel s tem, kar budilka res naredi.
-
-### Zamuda pri potnikovem postanku je ena sama
-
-`/api/train/{no}/run` vrne `zamuda: null` za vsak še nedosežen postanek — ravno za potnikovega. Budilka je zato računala z ničlo, dva prsta više pa pisalo „+5 min“ (izmerjeno na LPV 2268, 9. 9. 2026: prikaz 17:24, budilka 17:19). Blok „Pri tebi“ zato zapiše svojo odločitev (`state.tvojaZamudaS`), budilka bere **njo**, ne podatka pod njo.
-
-### Pasti, ki so se pokazale šele na napravi
-
-* **Napaka HTTP pride pred `onPageStarted`, ne za njim.** Izmerjeno 12. 9. 2026 na 525: `httpError` postavil zastavico, `onPageStarted` iste navigacije jo pobrisal, `onPageFinished` skril nativni zaslon — potnik videl Cloudflarovo angleško stran. Zato `onPageStarted` briše stanje samo pri **drugem** naslovu (`naslovNapake`). Primer ni redek: kadar arwen ne teče, Cloudflare vrne 52x za vsako zahtevo.
-* **`setAlarmClock` brez dovoljenja vrže `SecurityException`.** Od Androida 12 točen alarm ni pravica. Ujet, nadomeščen s `setAndAllowWhileIdle` — slabša budilka je boljša od podrte aplikacije.
-* **`PendingIntent` brez `data` se zlije v enega.** `extras` se pri primerjavi ne upoštevajo, zato bi `FLAG_UPDATE_CURRENT` vse budilke združil v eno. Ločuje jih `kajros://budilka/<id>`.
-* **Zagon dejavnosti iz ozadja blokiran** (`Background activity launch blocked!` v dnevniku). Zaslon odpre obvestilo s `fullScreenIntent`, ne naš `startActivity` — le kadar je telefon **zaklenjen**; sicer navadno obvestilo. Preizkušeno z `locksettings set-pin`.
-* **`display` iz razreda premaga `[hidden]`** iz brskalnikovega sloga. `.bud-plast` brez `[hidden] { display: none }` leži čez vso stran in požira vsak klik — tudi v brskalniku, kjer gumba za budilko sploh ni.
-* **`URLEncoder` ne sodi v pot naslova.** Obrazčno kodiranje, presledek zapiše kot `+`; v poizvedbi prav, v poti `+` = dobesedni plus. Gumb „Odpri vožnjo“ zato odprl `/app/train/LPV+2001`, stran pisala „vlak s to številko ne obstaja“. Izmerjeno na produkciji 12. 9. 2026: `/api/train/LPV+2001/run` → **404**, `/api/train/LPV%202001/run` → **200**. Za oboje `Nastavitve.zaPot()`, ker je `%20` veljaven tudi v poizvedbi — eno pravilo = manj priložnosti za napako kot dve.
+* **Napaka HTTP pride pred `onPageStarted`**: briše stanje samo pri drugem naslovu (`naslovNapake`), sicer potnik vidi Cloudflarovo stran.
+* `setAlarmClock` brez dovoljenja vrže `SecurityException` → `setAndAllowWhileIdle`.
+* Zagon dejavnosti iz ozadja blokiran: zaslon odpre `fullScreenIntent`, le ko je telefon **zaklenjen**.
+* `display` iz razreda premaga `[hidden]`: `.bud-plast` rabi `[hidden] { display: none }`.
+* **`URLEncoder` ne v pot** (`+` = plus; `/api/train/LPV+2001/run` 404). `Nastavitve.zaPot()` (`%20`).
