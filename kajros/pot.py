@@ -1799,8 +1799,22 @@ PRESTOP_IZHODISCE = {
 #: z utežjo 2 0,098 in 0,321, z 8 0,105; razred rezerve sam 0,152.
 IZHODISCE_DNI = 2
 #: Delež dni, ko je zadnja vožnja predloga "biti tam do" prišla v rezervi do
-#: roka (isti nabor, 89,6 %): izhodišče za njeno kratko zgodovino.
-ROK_IZHODISCE = 0.90
+#: roka, po omrežju in rezervi (isti nabor, 12 404 dni-voženj): izhodišče za
+#: njeno kratko zgodovino. Rezerva odloča skoraj vse -- z dvema minutama je
+#: avtobus pravočasen v 27 %, z dvajsetimi v 98 % --, zato eno samo izhodišče
+#: (89 %) ni šlo: 50 minut rezerve brez zgodovine je bilo „92 %“. Zmnožek z
+#: izhodiščem po rezervi Brier 0,111 proti 0,112.
+ROK_IZHODISCE = {
+    ("avtobus", "0-2"): 0.27, ("avtobus", "2-5"): 0.54, ("avtobus", "5-10"): 0.71,
+    ("avtobus", "10-20"): 0.87, ("avtobus", "20+"): 0.98,
+    ("zeleznica", "0-2"): 0.32, ("zeleznica", "2-5"): 0.39, ("zeleznica", "5-10"): 0.88,
+    ("zeleznica", "10-20"): 0.97, ("zeleznica", "20+"): 0.98,
+}
+
+
+def _razred_roka(rezerva_s: int) -> str:
+    return "0-2" if rezerva_s < 120 else "2-5" if rezerva_s < 300 else "5-10" \
+        if rezerva_s < 600 else "10-20" if rezerva_s < 1200 else "20+"
 
 #: Meji stopenj. Predlog z rokom, ki je pravočasen manj kot devetkrat od
 #: desetih, ni odgovor na "moram biti tam" (David, 22. 10. 2026: "je precej
@@ -1894,7 +1908,8 @@ def _pravocasno(p: dict, zadnja: dict, rok: int, prihodi: dict, zivo: bool,
     """Verjetnost, da zadnja vožnja pripelje v rezervi do roka.
 
     Na poti iz napake ocene ob prihodu, sicer iz njene zgodovine: delež dni,
-    ko je zamuda ob prihodu ostala v rezervi, skrčen proti `ROK_IZHODISCE`.
+    ko je zamuda ob prihodu ostala v rezervi, skrčen proti `ROK_IZHODISCE`
+    za to rezervo.
     """
     if zivo and zadnja.get("na_poti") and napake and zadnja.get("prihod_ocena"):
         d = _delezi_napak(napake, zadnja.get("network"), True)
@@ -1906,7 +1921,8 @@ def _pravocasno(p: dict, zadnja: dict, rok: int, prihodi: dict, zivo: bool,
     rezerva = rok - p["prihod"]
     dnevi = prihodi.get((zadnja["trip_id"], zadnja["do_seq"]), {})
     ok = sum(1 for z in dnevi.values() if z <= rezerva)
-    return (ok + IZHODISCE_DNI * ROK_IZHODISCE) / (len(dnevi) + IZHODISCE_DNI)
+    izh = ROK_IZHODISCE.get((zadnja.get("network"), _razred_roka(rezerva)), 0.9)
+    return (ok + IZHODISCE_DNI * izh) / (len(dnevi) + IZHODISCE_DNI)
 
 
 # ---------------------------------------------------------------- ena pot, razložena
@@ -1977,8 +1993,9 @@ def podrobnosti(conn: sqlite3.Connection, noge_spec: list[tuple[str, int, int]],
             "odhod": polnoc + postanki[0][3],
             "prihod": polnoc + postanki[-1][2],
             # Vmesni postanki: kje si in koliko jih je še do izstopa. Brez njih
-            # potnik ne ve, kdaj vstati.
-            "postanki": [{"stop_seq": s[0], "ime": ime(s[1]),
+            # potnik ne ve, kdaj vstati. Lega zato, da stran na poti iz GPS
+            # ve, katera postaja je naslednja (`pot_podrobno.js`).
+            "postanki": [{"stop_seq": s[0], "ime": ime(s[1]), "ll": ll(s[1]),
                           "prihod": polnoc + s[2] if s[2] is not None else None,
                           "odhod": polnoc + s[3] if s[3] is not None else None}
                          for s in postanki],

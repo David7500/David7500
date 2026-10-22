@@ -457,13 +457,15 @@ def test_brez_podatka_ni_isto_kot_tocno(conn):
 
 def test_nazaj_da_najpoznejsi_odhod_za_rok(conn):
     """„Moram biti tam ob 8:45" -- prvi predlog je tisti, s katerim od doma
-    odideš najpozneje, ne tisti, s katerim si najprej tam."""
+    odideš najpozneje, ne tisti, s katerim si najprej tam -- kadar je
+    zanesljiv: pravi pride vseh deset preteklih dni točno."""
     _voznja(conn, "t1", "zgodnji", [(1, "BLIZU", 8 * 3600 + 600),
                                     (2, "CILJ", 8 * 3600 + 1500)])
     _voznja(conn, "t2", "pravi", [(1, "BLIZU", 8 * 3600 + 1200),
                                   (2, "CILJ", 8 * 3600 + 2400)])
     _voznja(conn, "t3", "prepozni", [(1, "BLIZU", 8 * 3600 + 1800),
                                      (2, "CILJ", 8 * 3600 + 3300)])
+    _pretekli_dnevi(conn, "t2", 2, [0] * 10)
     conn.commit()
     r = pot.isci(conn, OD, DO, D, None, prihod_do_s=8 * 3600 + 2700)
     voznje = [[n["train_no"] for n in p["noge"] if n["vrsta"] == "voznja"]
@@ -982,6 +984,20 @@ def test_vlak_na_izhodiscu_brez_zgodovine_odpelje_po_voznem_redu(conn):
     conn.commit()
     t = _s_prestopom(pot.isci(conn, OD, DO, D, 8 * 3600))["prestopi"][0]["tveganje"]
     assert (t["dni"], t["drzal"]) == (3, 2)
+
+
+def test_rok_brez_zanesljivega_prvi_najzanesljivejsi(conn):
+    """Brez zgodovine pride „pravi“ s tremi minutami rezerve v 54 % dni
+    (`ROK_IZHODISCE`): kadar zanesljivega ni, je prvi najzanesljivejši."""
+    _voznja(conn, "t1", "zgodnji", [(1, "BLIZU", 8 * 3600 + 600),
+                                    (2, "CILJ", 8 * 3600 + 1500)])
+    _voznja(conn, "t2", "pravi", [(1, "BLIZU", 8 * 3600 + 1200),
+                                  (2, "CILJ", 8 * 3600 + 2400)])
+    conn.commit()
+    r = pot.isci(conn, OD, DO, D, None, prihod_do_s=8 * 3600 + 2700)
+    prvi = r["predlogi"][0]
+    assert [n["train_no"] for n in prvi["noge"] if n["vrsta"] == "voznja"] == ["zgodnji"]
+    assert prvi["zanesljivost"]["p"] > r["predlogi"][1]["zanesljivost"]["p"]
 
 
 def test_rok_prvi_je_najpoznejsi_zanesljiv(conn):

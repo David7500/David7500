@@ -2894,4 +2894,13 @@ Umerjen: napoved 90–100 % → res 96,3 % (7 989), 80–90 % → 88,9 %, 50–6
 
 **„Biti tam do“: prvi predlog je bil pravočasen v 70,6 % dni** (6 906 dni-predlogov: vsi prestopi držijo in zadnja vožnja pride v rezervi do roka). Zadnja vožnja sama pride v rezervi v 89,6 %. Modeli: delež vseh 0,208, delež dni celega predloga (skrčen) 0,117, **zmnožek delov** (prestopi × zadnja vožnja, vsak skrčen) **0,113** (log-loss 0,361), umerjen: 90–100 % → 96,7 %, 80–90 % → 86,9 %. Zato `pot.pripni_tveganje` = zmnožek, pri roku je prvi najpoznejši predlog z zanesljivostjo ≥ 0,9.
 
+**Rezerva do roka odloča skoraj vse** (zadnja vožnja v rezervi, 12 404 dni-voženj):
+
+| zadnja vožnja | 0–2 min | 2–5 | 5–10 | 10–20 | 20+ |
+|---|---|---|---|---|---|
+| avtobus | 26,9 % | 53,7 % | 71,4 % | 87,2 % | 98,2 % |
+| vlak | 31,8 % (22) | 39,3 % (28) | 87,7 % (65) | 96,5 % | 98,4 % |
+
+Eno izhodišče (89 %) je predlogu s 50 min rezerve brez zgodovine dalo „92 %“. Izhodišče po rezervi (`pot.ROK_IZHODISCE`): zmnožek Brier 0,111 (log-loss 0,356) proti 0,112; umerjen 90–100 % → 96,5 %, 80–90 % → 87,5 %.
+
 Na resničnih vprašanjih (razvojni strežnik): Ljubljana → Kranj do 8:00 jutri — vsi štirje predlogi s prestopom pod 0,9 (zgodovine 1–4 dni, izhodišče 0,70–0,77); zadnji, prihod 7:59, 0,13. Center → Fužine do 8:00: prvi zanesljiv odhod 6:26 (0,91), 7:09 je 0,85.

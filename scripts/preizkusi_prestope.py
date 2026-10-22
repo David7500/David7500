@@ -303,6 +303,22 @@ for i, (noge, _, rezerva, _) in enumerate(roki):
         zadnja[i][1] += 1
 q0 = sum(c[0] for c in zadnja.values()) / max(1, sum(c[1] for c in zadnja.values()))
 print(f"zadnja vožnja v rezervi roka: {q0 * 100:.1f} %")
+
+
+def razred_roka(r):
+    return "0-2" if r < 120 else "2-5" if r < 300 else "5-10" if r < 600 \
+        else "10-20" if r < 1200 else "20+"
+
+
+po_rezervi = defaultdict(lambda: [0, 0])
+for i, (noge, _, rezerva, omr) in enumerate(roki):
+    for z in prihodi.get((noge[-1][0], noge[-1][2]), {}).values():
+        c = po_rezervi[(omr, razred_roka(rezerva))]
+        c[0] += z <= rezerva
+        c[1] += 1
+print("\n== zadnja vožnja v rezervi do roka, po omrežju in rezervi")
+for (omr, r), (ok, n) in sorted(po_rezervi.items()):
+    print(f"  {omr:10} rezerva {r:>6} min  {ok / n * 100:5.1f} %  n={n}")
 rok_napovedi = defaultdict(list)
 for i, d, ok in pravocasni:
     g = (skupaj[0] - dan_skupaj[d][0]) / max(1, skupaj[1] - dan_skupaj[d][1])
@@ -311,12 +327,18 @@ for i, d, ok in pravocasni:
     z_d = prihodi[(noge[-1][0], noge[-1][2])][d] <= rezerva
     q = ocena(zadnja[i][0] - z_d, zadnja[i][1] - 1, q0, 2)
     zmnozek = q * math.prod(par_k2[(k, d)] for k in kljuci)
+    # Izhodišče po rezervi do roka (kot `pot.ROK_IZHODISCE`): z dvema
+    # minutama rezerve je zadnja vožnja pravočasna v 27 %, z dvajsetimi v 98 %.
+    c = po_rezervi[(roki[i][3], razred_roka(rezerva))]
+    q_r = ocena(zadnja[i][0] - z_d, zadnja[i][1] - 1, (c[0] - z_d) / max(1, c[1] - 1), 2)
+    rok_napovedi["zmnožek, izhodišče po rezervi"].append(
+        (q_r * math.prod(par_k2[(k, d)] for k in kljuci), ok))
     rok_napovedi["globalno"].append((g, ok))
     rok_napovedi["predlog+k2"].append((ocena(ok_p, n_p, g, 2), ok))
     rok_napovedi["zmnožek"].append((zmnozek, ok))
     rok_napovedi["predlog+k2 proti zmnožku"].append((ocena(ok_p, n_p, zmnozek, 2), ok))
 print(f"\n== rok: {len(pravocasni)} dan-predlogov, pravočasno {skupaj[0] / max(1, skupaj[1]) * 100:.1f} %")
 vrednoti("globalno", rok_napovedi["globalno"])
-for m in ("predlog+k2", "zmnožek", "predlog+k2 proti zmnožku"):
+for m in ("predlog+k2", "zmnožek", "predlog+k2 proti zmnožku", "zmnožek, izhodišče po rezervi"):
     vrednoti(m, rok_napovedi[m])
-umerjenost("rok, zmnožek", rok_napovedi["zmnožek"])
+umerjenost("rok, zmnožek, izhodišče po rezervi", rok_napovedi["zmnožek, izhodišče po rezervi"])
