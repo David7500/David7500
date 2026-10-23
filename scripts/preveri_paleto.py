@@ -319,6 +319,11 @@ DELJENJE = [
     ("tiho v globlji", "#aab3e6", "#1a2046"),
     ("gumb", "#1a1d3a", "#b9c3ff"),
     ("oznaka", "#b9c3ff", "#232b55"),
+    # Razdelek zasedenosti: stopnje in polje na globljem indigu, napaka.
+    ("drugotno v globlji", "#c7cdf0", "#1a2046"),
+    ("oznaka v globlji", "#b9c3ff", "#1a2046"),
+    ("besedilo v globlji", "#e3e6ff", "#1a2046"),
+    ("napaka", "#ffb4ab", "#232b55"),
 ]
 
 

@@ -1192,11 +1192,12 @@ posljiEl.addEventListener("click", async () => {
 });
 
 // ---------- deli, kje je ----------
-// Vrstica „Si na tem vlaku? Deli, kje je“ (`deli.js`). Okno vožnje vožnjo
+// Gumb „Deli, kje je“ v vrstici Pomagaj drugim (`deli.js`). Okno vožnje vožnjo
 // pozna, zato potnik ne izbira med kandidati. Samo, ko vožnja vozi ali
 // odpelje v 30 min (odločil David 11. 10. 2026): kdor gleda jutrišnji vlak
-// ali tistega, ki je že na cilju, z njo nima kaj početi.
+// ali tistega, ki je že na cilju, z njim nima kaj početi.
 const deliEl = document.getElementById("deli");
+const deliGumb = document.getElementById("pomoc-deli");
 const DELI_PRED_MS = 30 * 60 * 1000;
 const DELI_PO_CILJU_MS = 10 * 60 * 1000;
 
@@ -1220,8 +1221,8 @@ function posodobiDeli() {
   Object.assign(d, { trip: run.trip_id, dan: run.service_date, omrezje: state.network,
                      mode: run.mode || "", st: run.train_no || TRAIN_NO,
                      smer: run.headsign || "", prevoznik: run.agency || "" });
-  // Kartica, ki je odprta (deliš ali hvala), ostane, tudi ko vožnja konča.
-  deliEl.hidden = !deliEl.classList.contains("je-odprt") && !voziAliKmalu(run);
+  // Deljenje, ki teče (deliš ali hvala), ostane, tudi ko vožnja konča.
+  if (deliGumb) deliGumb.hidden = !deliEl.classList.contains("je-odprt") && !voziAliKmalu(run);
   if (nova) deliEl.dispatchEvent(new Event("deli-voznja"));
 }
 

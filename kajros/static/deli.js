@@ -95,7 +95,7 @@
   // ---------- izris ----------
   //
   // Tri oblike iste stvari: oblika na domaci strani (`deli-oblika`), vrstica
-  // v iskalniku (`deli-kompakt`), kamor clovek pride prvi, in vrstica v oknu
+  // v iskalniku (`deli-kompakt`), kamor clovek pride prvi, in gumb v oknu
   // voznje (`deli-okno`), kjer vozilo ze poznamo in izbire ni. Povabilo je en
   // sam gumb; ko potnik zacne, se razpre v kartico v barvi deljenja (indigo,
   // kot oblika "Deli lego"). Zasloni po prototipu, ki ga je David potrdil
@@ -109,6 +109,19 @@
   const OMREZJE = el.dataset.omrezje || null;
   //: Od kod je potnik zacel (`deljenje.VIRI`), za lijak v pregledu.
   const VIR = OKNO ? "okno" : KOMPAKT ? "iskalnik" : "domov";
+
+  // Okno voznje: gumb je v vrstici "Pomagaj drugim" ob gumbu zasedenosti
+  // (`#pomoc`, David 23. 10. 2026), kartica je razdelek pod njo in se odpre
+  // na dotik. Kateri razdelek je odprt, nosi vrstica (`data-odprto`): odprt je
+  // samo eden, drugi modul ob dogodku `pomoc` zapre svojega.
+  const GUMB = OKNO ? document.getElementById("pomoc-deli") : null;
+  const POMOC = GUMB && GUMB.closest(".pomoc");
+  const odprto = () => !!POMOC && POMOC.dataset.odprto === "deli";
+  function odpri(da) {
+    if (!POMOC || odprto() === da) return;
+    POMOC.dataset.odprto = da ? "deli" : "";
+    POMOC.dispatchEvent(new Event("pomoc"));
+  }
 
   // Voznja, ki jo okno voznje pozna -- `train.js` jo zapise v data-*.
   function fiksna() {
@@ -316,15 +329,35 @@
     if (S.faza === "miruje") return;
     const b = el.getBoundingClientRect();
     if (b.top >= innerHeight || b.bottom <= 0) return;
-    el.scrollIntoView({
-      block: "nearest",
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
+    el.scrollIntoView({ block: "nearest", behavior: gibanje() });
   }
+  const gibanje = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
   function izrisi() {
     narisi();
+    if (GUMB) {
+      // Deljenja ni vec (V redu, Preklici): razdelek ni vec odprt.
+      if (S.faza === "miruje" && odprto()) POMOC.dataset.odprto = "";
+      el.hidden = S.faza === "miruje" || !odprto();
+      narisiGumb();
+    }
     naZaslon();
+  }
+
+  // Gumb v vrstici pove stanje deljenja tudi, ko je razdelek zaprt.
+  function narisiGumb() {
+    const f = S.faza;
+    const v = vozilo(S.voznja || fiksna() || { mode: el.dataset.mode });
+    let naslov = "Deli, kje je", pod = escapeHtml(`si na tem ${v}u?`);
+    if (f === "isce") { naslov = "Deliš lego"; pod = "iščem tvojo lego …"; }
+    else if (f === "deli") {
+      naslov = "Deliš lego";
+      pod = `<span class="pomoc-zivo" aria-hidden="true"></span>${
+        S.stanje && S.stanje.verodostojno ? "drugi te vidijo" : "drugi te še ne vidijo"}`;
+    } else if (f === "konec") { naslov = "Hvala!"; pod = "deljenje je končano"; }
+    else if (f === "napaka") { naslov = "Deljenje ne gre"; pod = "poglej, zakaj"; }
+    GUMB.innerHTML = `${SVG_VALOVI}<span class="pomoc-besedilo"><b>${naslov}</b><small>${pod}</small></span>`;
+    GUMB.setAttribute("aria-expanded", String(!el.hidden));
   }
 
   function narisi() {
@@ -332,17 +365,8 @@
     el.classList.toggle("je-odprt", f !== "miruje");
     if (f === "miruje") {
       if (VABILO !== null) { el.innerHTML = VABILO; return; }
-      if (OKNO) {
-        const k = fiksna();
-        const v = vozilo(k || { mode: el.dataset.mode });
-        el.innerHTML = `<button type="button" class="deli-vrstica" data-deli="zacni">
-            ${SVG_VALOVI}
-            <span class="deli-vrstica-besedilo"><b>Si na tem ${v}u? Deli, kje je</b>
-              <span>Kdor čaka na ${v === "vlak" ? "peronu" : "postajališču"}, bo videl, kje ${v} res je.</span></span>
-            ${SVG_NAPREJ}
-          </button>`;
-        return;
-      }
+      // Okno: zacne gumb v vrstici Pomagaj drugim, razdelek je prazen.
+      if (OKNO) { el.innerHTML = ""; return; }
       el.innerHTML = KOMPAKT
         ? `<button type="button" class="deli-vabilo" data-deli="zacni">
              <span>Pelješ se? <b>Deli, kje je vozilo</b></span><span aria-hidden="true">›</span>
@@ -683,6 +707,18 @@
     else if (kaj === "izberi") izberi(S.kandidati[Number(b.dataset.i)]);
     else if (kaj === "nazaj") { S.faza = "miruje"; izrisi(); }
   });
+
+  if (GUMB) {
+    // Prvi dotik zacne deljenje, med deljenjem razdelek odpre in zapre --
+    // deljenje ustavi samo gumb Ustavi v njem.
+    GUMB.addEventListener("click", () => {
+      odpri(S.faza === "miruje" || !odprto());
+      if (S.faza === "miruje") zacni();
+      else izrisi();
+      if (!el.hidden) el.scrollIntoView({ block: "nearest", behavior: gibanje() });
+    });
+    POMOC.addEventListener("pomoc", () => { if (!odprto()) izrisi(); });
+  }
 
   // Aplikacija deli tudi, ko je stran zaprta. Ob vrnitvi na domaco stran
   // mora ploscica to pokazati, ne povabila k novemu deljenju. V oknu voznje

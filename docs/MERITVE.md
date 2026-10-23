@@ -2861,6 +2861,8 @@ Vozita AP Murska Sobota (M2123, M2119, M2125, M2129, 98 min) in Arriva (A2527, 1
 
 **Ali je zasedenost ob isti uri vse delavnike enaka** (Davidovo vprašanje, 21. 10.). Zasedenosti ne vemo, vozni red pa pokaže, kje prevoznik pričakuje več potnikov (razvojna baza, teden 19.–25. 10.). Ljubljana AP → Maribor AP: ponedeljek 8 odhodov (dodatni ob 10:25), torek–četrtek 7, isti, petek 11. Maribor AP → Ljubljana AP: ponedeljek 9 (drugi avtobus ob 7:00 in še 7:20), torek–četrtek 7, petek 9. Vseh medkrajevnih odhodov z Ljubljana AP je od ponedeljka do petka 586, 582, 582, 586 in 604. Zato povzetek najprej išče isti dan v tednu, sicer tip dneva: ponedeljek, torek–četrtek, petek, sobota, nedelja s prazniki (`zasedenost.tip_dneva`).
 
+**Razdelek na dnu ni videl nihče (23. 10. 2026).** Poročil od objave (21. 10. zvečer): 21. 10. 5 (deloma preizkus), 22. 10. 1, 23. 10. 6 do 16:00; v oknih voženj (`/app/bus/…`, `/app/train/…`) hkrati 255, 293 in 197 ljudi na dan. Opomb 0. Odtlej gumb „Kako polno?“ v vrstici ob „Deli, kje je“, pod trenutno zamudo (`zasedenost.md`). Po tednu primerjaj poročila na dan.
+
 ## Deljenje na mestnem LPP, smer centra, lastna lega (22. 10. 2026)
 
 **Deljenja na mestnem LPP ni bilo nikoli.** Lijak 21. 10.: `zavrnjen:neznana` 8, začetkov 8 (vse vlaki in medkrajevni). V tabeli `deljenje` 128 vrstic, vse s `trip_id` dolžine 6; mestni LPP ima trojni UUID (110 znakov, 107 228 od 107 228 voženj), strežnik ga je rezal na 64. Meja zdaj `stats.TRIP_NAJDALJSI` (200), ista kot zasedenost.

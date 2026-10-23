@@ -13,7 +13,7 @@ Od 21. 10. 2026, na prošnjo potnice (LJ–MB ob petkih 20 min prej, ker je avto
 ## Davidove odločitve (21. 10. 2026)
 
 * **Stopnje:** prazno, pol polno, skoraj polno, polno, vrsta zunaj. Medkrajevni nimajo stojišč („polno“ = vsi sedeži); vlak in mestni LPP „polno“ = stojijo. **„Vrsta zunaj“ šele od 10 min pred voznorednim odhodom** (`ZUNAJ_PRED_S`), prej siv — David: „prav je“ (vrnjeno isti večer).
-* **Ne sme motiti:** razdelek na dnu okna (`#zasedenost` v `.run-pot`), zgoraj le vrstica brez okvirja (`#zas-vrh`), samo s podatki.
+* **Gumb „Kako polno?“ v vrstici Pomagaj drugim ob „Deli, kje je“, razdelek se odpre na dotik** (David, 23. 10. 2026; `#pomoc` v oknu vožnje, `deli.css`). Do tedaj razdelek na dnu okna in vrstica zgoraj samo s podatki („ne sme motiti“, 21. 10.) — ni ga videl nihče: 1–6 poročil na dan ob ~250 ljudeh na dan v oknih voženj. Podnapis gumba = kar vemo (`gumbHtml`): tvoje poročilo › danes vrsta zunaj › poln prejšnji › običajno (pri polnem „pridi N min prej“) › zadnje današnje › „javi z enim dotikom“. Odprt je en razdelek vrstice (`data-odprto`, dogodek `pomoc`).
 * **„Kdaj si prišel“ ni vprašanje**: „pridi vsaj N min prej“ iz najzgodnejšega poročila „polno“ ali več (`prejeto`), iz ≥ `PREJ_DNI` dni („vsaj“, ker je videl polno, ne kdaj se je napolnil).
 * **Vlaki in ves LPP** („vklopi za vse“).
 * `KAJROS_ZASEDENOST` privzeto vklopljeno; `=0` skrije pot in razdelek, obrez teče.

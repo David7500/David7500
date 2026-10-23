@@ -28,7 +28,7 @@ Potnik na vozilu deli lego, drugi vidijo vozilo. Razlog: feed prehod vlaka potrd
 
 Platno „Deljenje lege: zasloni“ (https://claude.ai/artifact/7HtH4tb627i9HpGnWbaXoo). Kartica **indigo** (`--deli-*` v `base.css`, `preveri_paleto.py`); zamuda na podlagi strani (`.deli-zam`; `--d-big` na indigu 2,8 : 1).
 
-* **Okno vožnje: „Si na tem vlaku? Deli, kje je“** (`deli-okno`, `train.js` `posodobiDeli`, `vir = okno`): ena lega ≤ 120 m, strežnik preveri. **Samo, ko vozi ali odpelje v 30 min, do 10 min po prihodu.** Zavrnitve s `koda`: `ni_tu`/`ne_vozi` „Deli, ko vstopiš“, `ni_na_trasi` „Nisi ob progi“. Strežnik sprejme 15 min pred voznim redom (`KANDIDAT_PRED_S`).
+* **Okno vožnje: gumb „Deli, kje je“ v vrstici Pomagaj drugim** ob „Kako polno?“ (`#pomoc`, David 23. 10. 2026: kartica „Si na tem vlaku? Deli, kje je“ je bila prevelika). Prvi dotik začne, kartica je razdelek pod vrstico (`deli-okno`); med deljenjem gumb nosi stanje („Deliš lego · drugi te vidijo“) in razdelek odpre/zapre, ustavi samo „Ustavi“. Gumb skrije `train.js` `posodobiDeli`, razdelek `deli.js`; `vir = okno`. Ena lega ≤ 120 m, strežnik preveri. **Samo, ko vozi ali odpelje v 30 min, do 10 min po prihodu.** Zavrnitve s `koda`: `ni_tu`/`ne_vozi` „Deli, ko vstopiš“, `ni_na_trasi` „Nisi ob progi“. Strežnik sprejme 15 min pred voznim redom (`KANDIDAT_PRED_S`).
 * **Izbira** (domača, iskalnik): ikona v barvi vozila, prvi „najbolj verjetno“ (značka nad imenom), opomba, da gre iz okna hitreje.
 * **Kartica nov zaslon pripelje na zaslon** (`naZaslon`), nad orodno vrstico, samo ko je vsaj delno vidna; deljenje iz aplikacije ob odprtju strani ne premakne ničesar.
 * **Drugi te še ne vidijo**: lega na progi ✓, „ko vlak spelje, te pokažemo“; v brskalniku nasvet o zaslonu in `/android`.

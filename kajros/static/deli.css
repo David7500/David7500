@@ -120,22 +120,46 @@
 }
 .deli-vabilo b { font-weight: 600; color: var(--deli-gumb); }
 
-/* Okno vožnje: ena vrstica pod trenutno zamudo, samo ko vožnja vozi ali
-   odpelje v 30 min (`train.js`). Rob kot kartica trenutne zamude nad njo:
-   brez njega je segla do roba zaslona in se dotikala opozorila pod sabo. */
-.deli-okno { margin: 0 12px 12px; }
-.deli-vrstica {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 14px 16px; cursor: pointer; text-align: left;
-  border: 0; border-radius: 20px;
-  background: var(--deli-kont); color: #d9dfff; font-family: var(--sans);
+/* Okno vožnje: Pomagaj drugim. Deljenje lege in zasedenost sta dva gumba v
+   eni vrstici, dotik odpre razdelek pod njima (David, 23. 10. 2026: kartica
+   deljenja je bila prevelika, zasedenosti na dnu okna ni videl nihče).
+   Povezana gumba M3: zunanja vogala okrogla, notranja ozka; odprt je poln in
+   okrogel. Kadar velja samo eden, je sam v vrstici in okrogel. */
+.pomoc { margin: 0 12px 12px; }
+.pomoc:not(:has(.pomoc-gumb:not([hidden]))) { display: none; }
+.pomoc-vrsta { display: flex; gap: 3px; }
+.pomoc-gumb {
+  flex: 1 1 0; min-width: 0; min-height: 64px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px;
+  border: 0; border-radius: 22px 6px 6px 22px; cursor: pointer; text-align: left;
+  background: var(--deli-kont); color: var(--deli-na-kont); font-family: var(--sans);
+  transition: border-radius .2s ease-out, box-shadow .2s ease-out;
 }
-.deli-vrstica svg { flex-shrink: 0; }
-.deli-vrstica-besedilo { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.deli-vrstica-besedilo b { font: 600 15px/1.3 var(--sans); }
-.deli-vrstica-besedilo span { font: 400 12.5px/1.35 var(--sans); color: var(--deli-tiho); }
+.pomoc-gumb + .pomoc-gumb { border-radius: 6px 22px 22px 6px; }
+.pomoc-gumb:has(+ .pomoc-gumb[hidden]), .pomoc-gumb[hidden] + .pomoc-gumb,
+.pomoc-gumb[aria-expanded="true"] { border-radius: 22px; }
+.pomoc-gumb[aria-expanded="true"] { background: var(--deli-gumb); color: var(--deli-na-gumb); }
+.pomoc-gumb svg { flex-shrink: 0; }
+.pomoc-besedilo { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.pomoc-besedilo b { font: 600 15px/1.2 var(--sans); }
+.pomoc-besedilo small {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font: 400 12.5px/1.25 var(--sans); color: var(--deli-tiho);
+}
+.pomoc-gumb[aria-expanded="true"] small { color: var(--deli-na-gumb); }
+/* Deljenje teče, tudi ko je razdelek zaprt. */
+.pomoc-zivo {
+  display: inline-block; width: 7px; height: 7px; margin-right: 6px; vertical-align: 1px;
+  border-radius: 50%; background: currentColor; animation: deli-utrip 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pomoc-zivo { animation: none; }
+  .pomoc-gumb { transition: none; }
+}
+.pomoc > .deli-okno, .pomoc > .zas { margin-top: 8px; }
+.pomoc > .deli-okno.je-odprt { padding: 18px; border-radius: 22px; }
 
 .deli-gumb:focus-visible, .deli-drugo:focus-visible, .deli-kandidat:focus-visible,
-.deli-vabilo:focus-visible, .deli-vrstica:focus-visible {
+.deli-vabilo:focus-visible, .pomoc-gumb:focus-visible {
   outline: 2px solid var(--deli-gumb); outline-offset: 2px;
 }

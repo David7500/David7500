@@ -76,15 +76,29 @@
       </div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
-      {#- Zgoraj samo ena vrstica, in to le, kadar o zasedenosti kaj vemo
-          (David, 21. 10. 2026: „ne sme veliko motiti“); razdelek je spodaj. #}
-      {%- if zasedenost %}
-      <a class="zas-vrh" id="zas-vrh" href="#zasedenost" hidden></a>
-      {%- endif %}
-      {#- Si na tem vlaku? Deli, kje je: samo, ko vožnja vozi ali odpelje v
-          30 min (`train.js`, `posodobiDeli`); vožnjo izbere okno, ne potnik. #}
-      {%- if deli %}
-      <section class="deli deli-okno" id="deli" aria-live="polite" hidden></section>
+      {#- Pomagaj drugim: deljenje lege in zasedenost sta dva gumba v eni
+          vrstici, dotik odpre svoj razdelek pod njima (David, 23. 10. 2026:
+          kartica deljenja je bila prevelika, zasedenosti na dnu okna ni videl
+          nihče). Gumb in razdelek riše vsak svoj modul (`deli.js`,
+          `zasedenost.js`); deljenje samo, ko vožnja vozi ali odpelje v 30 min
+          (`train.js`, `posodobiDeli`). #}
+      {%- if deli or zasedenost %}
+      <div class="pomoc" id="pomoc">
+        <div class="pomoc-vrsta" role="group" aria-label="Pomagaj drugim">
+          {%- if deli %}
+          <button type="button" class="pomoc-gumb" id="pomoc-deli" aria-controls="deli" aria-expanded="false" hidden></button>
+          {%- endif %}
+          {%- if zasedenost %}
+          <button type="button" class="pomoc-gumb" id="pomoc-zas" aria-controls="zasedenost" aria-expanded="false" hidden></button>
+          {%- endif %}
+        </div>
+        {%- if deli %}
+        <section class="deli deli-okno" id="deli" aria-live="polite" hidden></section>
+        {%- endif %}
+        {%- if zasedenost %}
+        <section class="zas" id="zasedenost" aria-label="Zasedenost po poročilih potnikov" hidden></section>
+        {%- endif %}
+      </div>
       {%- endif %}
       <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo lego:
            GPS ali vsaj dva potnika, ki na njem delita lego in se ujemata.
@@ -134,14 +148,9 @@
       <div id="train-opozorila"></div>
       <div id="train-alerts"></div>
       </div>
-      {#- Ovoj, ker na namizju časovnica stoji desno od „zdaj“: razdelek o
-          zasedenosti mora biti pod njo v istem stolpcu, ne tretji stolpec.
-          Svoj element in ne del časovnice, ki jo prikaz na 30 s preriše. #}
+      {#- Na namizju časovnica stoji desno od „zdaj“ (`train.css`). #}
       <div class="run-pot">
         <div id="run-timeline"><div class="empty-state is-busy">nalagam postanke …</div></div>
-        {%- if zasedenost %}
-        <section class="zas" id="zasedenost" aria-label="Zasedenost po poročilih potnikov" hidden></section>
-        {%- endif %}
       </div>
     </section>
 

@@ -78,6 +78,8 @@
   --deli-tiho:     #aab3e6;
   --deli-gumb:     #b9c3ff;
   --deli-na-gumb:  #1a1d3a;
+  /* Napaka na indigu: `--sev-bad` tu ne doseže niti 2,5 : 1. */
+  --deli-napaka:   #ffb4ab;
 }
 
 * { box-sizing: border-box; }
