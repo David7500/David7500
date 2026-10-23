@@ -12,6 +12,7 @@ Zajem (kaj feed pove in kje laže): `zajem.md`; tu strežba.
 * **Meja ne gre čez postajo iz svežega poročila SŽ**: poročilo „ob prihodu na Y“, mlajše od 8 min (`stats.SVEZE_POROCILO_S`) = vlak na Y še ni bil. „Je tu že bil“ 13,1 → 2,7 %, „še ni bil“ 1,2 → 11,8 % (cenejša). V `_LAST_MEASURED_SQL` in `api._LIVE_SQL`.
 * **`network` povsod, privzeto `zeleznica`, filter v poizvedbi** (železnica 700 000 vrstic, avtobusi 12 M).
 * **Zamuda čez `api.MAX_LIVE_DELAY_S` (6 h) ni živa.**
+* **Odprto: `journey.now_seconds` je ura stene**, včerajšnji okvir `now_s + 86400` (deset mest). Na dan premika ure (25. 10. 2026, 28. 3. 2027) do treh zjutraj je današnji okvir za uro stran, včerajšnji jeseni slučajno prav. Popravek le oboje hkrati skozi `stats.polnoc` (razlika polnoči obeh dni, ne 86 400); sam `now_seconds` pokvari včerajšnje nočne. Zveze z `od` (`_ura_ts`, `_odhod_ts`) že gredo skozi epoho.
 * `vehicle_now` = samo lega (upsert); **zamude v njej ni** — doda jo `stats.last_measured()`, isto pravilo kot živi seznam (prej kartica „? min“).
 
 ## Lege: zaostanek je feed, ne mi
