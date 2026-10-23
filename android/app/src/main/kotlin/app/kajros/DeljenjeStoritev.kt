@@ -97,9 +97,17 @@ class DeljenjeStoritev : Service() {
                 c.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
 
-        fun zacni(c: Context, voznjaJson: String) {
+        /**
+         * Stran je izbrala voznjo in storitev bo zacela v trenutku. Klice se
+         * takoj ([Most.deliZacni]), da `deliStanje()` vmes ne javi "ne deli".
+         */
+        fun zaganjam() {
             zaganja = true
             konec = null
+        }
+
+        fun zacni(c: Context, voznjaJson: String) {
+            zaganjam()
             val i = Intent(c, DeljenjeStoritev::class.java)
                 .setAction(ZACNI).putExtra("voznja", voznjaJson)
             c.startForegroundService(i)
@@ -204,11 +212,10 @@ class DeljenjeStoritev : Service() {
         // Potnik je sam izbral vozilo: cakanje na drugo ni vec potrebno.
         if (caka) prekiniCakanje()
         val o = try { JSONObject(json ?: "") } catch (e: JSONException) { null }
-        tripId = o?.optString("trip_id").orEmpty()
-        dan = o?.optString("service_date").orEmpty()
+        val novTrip = o?.optString("trip_id").orEmpty()
+        val novDan = o?.optString("service_date").orEmpty()
         oznaka = listOf(o?.optString("oznaka"), o?.optString("cilj"))
             .filter { !it.isNullOrBlank() }.joinToString(" → ")
-        bus = o?.optString("network") == "avtobus"
         kanal()
         // `startForeground` mora priti v nekaj sekundah tudi, ce je zahteva
         // pokvarjena -- sicer sistem aplikacijo podre.
@@ -223,27 +230,46 @@ class DeljenjeStoritev : Service() {
             // Android 14+: brez dovoljenja za lego storitve vrste `location` ni.
             zaganja = false; konec = "lega"; stopSelf(); return
         }
-        if (tripId.isBlank() || dan.isBlank() || !smeLego(this)) {
+        if (novTrip.isBlank() || novDan.isBlank() || !smeLego(this)) {
             konec = "lega"; koncaj(null); return
         }
-        voznja = json
-        stanje = null
-        konec = null
-        deljenje = null
-        aktivno = true
-        zaganja = false
-        zacetekMs = System.currentTimeMillis()
-        poslanoMs = 0L
-        lm = getSystemService(LocationManager::class.java)
-        try {
-            val ponudniki = lm?.getProviders(true).orEmpty()
-            for (p in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
-                if (p in ponudniki) lm?.requestLocationUpdates(p, LEGA_MS, 0f, poslusalec, nit.looper)
+        // Na delavcevi niti, kjer tece `poslji`: sicer bi odgovor prejsnje
+        // voznje, ki je ravno na poti, vrnil njen `deljenje` in nova voznja
+        // bi posiljala na tujega (404, konec).
+        delavec.post {
+            voznja = json
+            if (aktivno && novTrip == tripId && novDan == dan) {
+                // Ista voznja, izbrana znova: isto deljenje. Novo bi streznik
+                // zacel od zacetka (`znova`), in drugi potnika ne bi videli,
+                // dokler se spet ne bi peljal.
+                zaganja = false
+                osveziObvestilo()
+                return@post
             }
-        } catch (e: SecurityException) {
-            konec = "lega"; koncaj(null); return
+            tripId = novTrip
+            dan = novDan
+            bus = o?.optString("network") == "avtobus"
+            vrsta.vzemi()
+            stanje = null
+            konec = null
+            deljenje = null
+            aktivno = true
+            zaganja = false
+            zacetekMs = System.currentTimeMillis()
+            poslanoMs = 0L
+            lm = getSystemService(LocationManager::class.java)
+            try {
+                val ponudniki = lm?.getProviders(true).orEmpty()
+                for (p in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                    if (p in ponudniki) lm?.requestLocationUpdates(p, LEGA_MS, 0f, poslusalec, nit.looper)
+                }
+            } catch (e: SecurityException) {
+                konec = "lega"; koncaj(null); return@post
+            }
+            // Ena ura, tudi ko potnik zamenja voznjo med deljenjem.
+            delavec.removeCallbacks(ura)
+            delavec.postDelayed(ura, Deljenje.POSLJI_MS)
         }
-        delavec.postDelayed(ura, Deljenje.POSLJI_MS)
     }
 
     /** Poslje nabrane tocke. Tece na delavcevi niti, nikoli na glavni. */

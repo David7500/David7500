@@ -32,7 +32,8 @@ const DE_IZIDI = {
   utihnil: ["utihnil", "brez konca in brez svežih točk: aplikacija zaprta ali brez signala"],
   potnik: ["ustavil", "potnik je deljenje ustavil sam"],
   znova: ["znova", "z istega naslova se je na isti vožnji začelo novo deljenje"],
-  izstop: ["izstopil", "tri zaporedne natančne točke izven trase ali odmaknjene, medtem ko vozilo stoji"],
+  izstop: ["izstopil", "minuto (pred vožnjo deset minut) stal ali hodil izven trase ali stran od vozila, ki stoji"],
+  trasa: ["mimo trase", "deset minut brez točke na trasi: drugo vozilo ali dolg obvoz"],
   cilj: ["na cilju", "vozilo je prišlo na zadnjo postajo in stoji"],
   cas: ["predolgo", "deljenje je trajalo dlje od šestih ur"],
 };

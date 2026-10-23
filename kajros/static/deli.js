@@ -35,6 +35,12 @@
   //: Zamudo kandidata povemo sele od tod; manj je vsakdanje in gumb samo
   //: podaljsa. Velika pove, da je to verjetno prejsnja voznja iste linije.
   const ZAMUDA_POVEJ_S = 180;
+  //: Toliko casa sme storitev v aplikaciji rabiti, da zacne deliti. Zacne se
+  //: sele za klicem `deliZacni()` (`glavna.post`), aplikacija do 1.14 pa je
+  //: vmes javila "ne deli": stran je napisala "Deljenje je ustavljeno.",
+  //: storitev pa je delila naprej. Potnik je zacel znova -- 16 od 70 deljenj
+  //: v aplikaciji do 23. 10. 2026, A6215 stirikrat v minuti in pol.
+  const ZAGON_MS = 15000;
 
   const NATIVNO = !!(MOST && typeof MOST.deliZacni === "function");
 
@@ -43,6 +49,8 @@
     watch: null, rok: null, posiljalec: null, wake: null, anketa: null,
     prva: null, zadnja: null, vrsta: [], id: null, voznja: null,
     kandidati: [], stanje: null, poslanih: 0, sporocilo: "",
+    // Aplikacija: kdaj je stran zacela in ali je storitev ze javila, da deli.
+    zagonOd: 0, zagnano: false,
   };
 
   // ---------- besedilo ----------
@@ -229,16 +237,22 @@
   // kaj pride, ko vozilo spelje.
   function cakaHtml(k, st) {
     const bus = k.network === "avtobus";
-    const kje = st && (st.pri || st.med) ? kjeText(st, bus) : "";
-    const pod = st
-      ? `Zdaj ${st.stoji ? "stoji " : ""}${escapeHtml(kje)}${st.zamuda ? " · " + zamudaHtml(st.zamuda) : ""}`
-      : "Pošiljam prvo lego …";
     const v = vozilo(k);
+    // `st` ima vedno `jaz`; kraj ima samo, kadar je poročilo sveže.
+    const kje = st && (st.pri || st.med) ? kjeText(st, bus) : "";
+    // Vozilo vozi mimo trase (obvoz, trasa ob progi zgrešena) ali potnik
+    // morda izstopa: deljenje teče, drugi ga ne vidijo (`deljenje._izven_trase`).
+    const mimo = !!(st && st.jaz && st.jaz.na_trasi === false);
+    const pod = kje
+      ? `Zdaj ${st.stoji ? "stoji " : ""}${escapeHtml(kje)}${st.zamuda ? " · " + zamudaHtml(st.zamuda) : ""}`
+      : mimo ? `Tvoja lega zdaj ni na progi tega ${v}a. Ko se vrne nanjo, te spet pokažemo.`
+      : st && st.jaz && st.jaz.trajanje_s > 0 ? "Čakam na novo lego …" : "Pošiljam prvo lego …";
+    const naProgi = !!(st && st.jaz && st.jaz.na_trasi);
     return oznakaHtml("Deliš lego", true)
       + `<strong class="deli-naslov">${naslovVoznje(k)}</strong>`
       + vrstica(pod, "deli-pod")
       + `<ol class="deli-koraki">
-          <li class="${st ? "je-opravljen" : ""}"><span class="deli-korak">${st ? SVG_KLJUKA : ""}</span>
+          <li class="${naProgi ? "je-opravljen" : ""}"><span class="deli-korak">${naProgi ? SVG_KLJUKA : ""}</span>
             <span>Tvoja lega je na progi tega ${v}a.<small>Na tabli že piše: potnik na ${v}u.</small></span></li>
           <li><span class="deli-korak"></span>
             <span>Ko ${v} spelje, te pokažemo na zemljevidu.<small>Takrat tvoja zamuda zamenja ${zamenja(k)}.</small></span></li>
@@ -526,11 +540,17 @@
       // Storitev v aplikaciji ima svojo lego in poslje sama. Stran le bere,
       // kaj je poslala -- dvojno posiljanje bi bila dva "potnika".
       ustaviLego();
+      // Razlog konca prejsnjega deljenja (ali cakanja ob voznji) se prebere
+      // zdaj, sicer bi ga stran pripisala temu.
+      MOST.deliStanje();
       // Cel kandidat gre zraven: `deliStanje()` ga vrne in ploscica ga po
       // vrnitvi na stran izrise enako kot ob izbiri.
       const ok = MOST.deliZacni(JSON.stringify({ ...k, oznaka: oznaka(k), cilj: cilj(k) }));
       if (!ok) return napaka("Aplikacija deljenja ni mogla začeti. Dovoli ji lego.");
+      S.zagonOd = Date.now();
+      S.zagnano = false;
       S.anketa = setInterval(beriNativno, 5000);
+      setTimeout(beriNativno, 1000);
       beriNativno();
       return;
     }
@@ -565,15 +585,23 @@
   }
 
   function beriNativno() {
+    if (S.faza !== "deli") return;
     let st = {};
     try {
       st = JSON.parse(MOST.deliStanje() || "{}");
     } catch (e) {
       st = {};
     }
-    if (st.stanje) S.stanje = st.stanje;
+    if (st.aktivno) S.zagnano = true;
+    // Med zagonom storitev se nosi prejsnjo voznjo in njeno stanje.
+    const ta = st.voznja && S.voznja && st.voznja.trip_id === S.voznja.trip_id;
+    if (st.stanje && ta) S.stanje = st.stanje;
     if (st.konec) return koncaj(st.konec);
-    if (!st.aktivno) return koncaj("potnik");
+    if (!st.aktivno) {
+      if (!S.zagnano && Date.now() - S.zagonOd < ZAGON_MS) return izrisi();
+      if (!S.zagnano) return napaka("Aplikacija deljenja ni začela. Poskusi znova.");
+      return koncaj("potnik");
+    }
     izrisi();
   }
 
@@ -581,6 +609,7 @@
     izstop: "Deljenje se je ob izstopu ustavilo samo.",
     cilj: "Vožnja je na cilju, deljenje se je ustavilo samo.",
     cas: "Deljenje se je po šestih urah ustavilo samo.",
+    trasa: "Tvoja lega je bila deset minut mimo trase te vožnje, zato se je deljenje ustavilo. Si morda na drugem vozilu?",
     potnik: "Deljenje je ustavljeno.",
     napaka: "Strežnik deljenja ni več sprejel. Morda vožnja ne vozi več.",
     lega: "Aplikacija nima dovoljenja za lego.",
@@ -592,6 +621,8 @@
     // začetek. Brez enega sprejetega stanja deljenja ni bilo -- „Hvala!“ in
     // „ni več sprejel“ bi lagala.
     if (razlog === "napaka" && !S.stanje) return napaka("Strežnik deljenja ni sprejel.");
+    // Brez dovoljenja deljenja ni bilo: ni za kaj reči „Hvala!“.
+    if (razlog === "lega") return napaka(KONCI.lega);
     pospravi();
     S.faza = "konec";
     S.sporocilo = KONCI[razlog] || KONCI.potnik;
@@ -666,6 +697,7 @@
       S.voznja = st.voznja;
       S.stanje = st.stanje || null;
       S.faza = "deli";
+      S.zagnano = true;
       // Deljenje je teklo že prej, potnik ga ni začel zdaj: strani ne premakni.
       prejZaslon = zaslon();
       S.anketa = setInterval(beriNativno, 5000);

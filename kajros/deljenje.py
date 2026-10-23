@@ -76,9 +76,33 @@ ODMIK_MAX_M = 200
 #: štejejo kot izstop: v predoru je natančnost slaba, potnik pa je še vedno
 #: na vlaku.
 NATANCNOST_MAX_M = 250
-#: Toliko zaporednih natančnih točk izven trase ali odmaknjenih med stanjem
-#: (`VSTRAN_M`) pomeni, da je potnik izstopil.
+#: Do te natančnosti je točka iz GPS. Android ima na 11 274 sprejetih točkah
+#: mediano 3,8 m in p90 16 m; slabše so večinoma lege iz omrežja, ki jih
+#: storitev dobi poleg GPS. V 11 od 16 skokov naprej po trasi (nad 40 m/s,
+#: 11.--23. 10. 2026) je skočila točka z 77--200 m takoj za točko GPS do
+#: 12 m, in lega je nato stala, dokler je vozilo ni dohitelo.
+NATANCNA_M = 50
+#: Nenatančna točka toliko časa po natančni ne pove ničesar novega.
+NATANCNA_VELJA_S = 20
+#: Izstop je, ko toliko zaporednih točk pravi, da potnika ni več na vozilu
+#: (`_dokaz_izstopa`), in to traja vsaj `IZSTOP_S`. Do 23. 10. 2026 so bile
+#: dovolj tri točke (~15 s): od 34 izstopov od 11. 10. je bilo pravih 14, vsi
+#: pri hoji (0--2,1 m/s), 14 potnikov pa se je ta hip peljalo s 5--28 m/s
+#: -- trasa ob progi Jesenice--Lesce je do 200 m mimo tira, M2129 vozi po
+#: avtocesti mimo trase. Kdor se pelje s hitrostjo vozila, zato ni izstopil.
 ZUNAJ_ZA_IZSTOP = 3
+IZSTOP_S = 60
+#: Pred vožnjo (`peljal_ts`) potnik čaka: hodi po postaji, gre pod streho.
+#: Šest od 34 izstopov je bilo takih -- dva sta šla na avtobus nekaj minut
+#: pozneje in začela znova. Odšel je šele, kdor je toliko časa stran.
+IZSTOP_PRED_VOZNJO_S = 600
+#: Toliko časa brez točke na trasi, medtem ko točke prihajajo, in deljenja je
+#: konec: kdor se toliko pelje mimo trase, je na drugem vozilu (`trasa`).
+MIMO_TRASE_S = 600
+#: Poročilo potnika, ki ga toliko zadnjih točk kaže stran od vozila, se ne
+#: pokaže, dokler izstop ni potrjen: vozilo je medtem lahko že odpeljalo, po
+#: poročilu pa bi „stalo“ z rastočo zamudo (`IZSTOP_S`).
+SUMLJIV_ZUNAJ = 2
 #: 250 km/h. Hitreje ne vozi nič na tej mreži; skok čez to je napaka GPS.
 HITROST_MAX_MS = 70
 #: 130 km/h. Hitrost, ki jo javi telefon na avtobusu, nad tem ni hitrost:
@@ -183,8 +207,9 @@ CREATE TABLE IF NOT EXISTS deljenje (
     hitrost_ms   REAL,
     zamuda_s     INTEGER,            -- izpeljana iz zadnje točke
     tock         INTEGER NOT NULL DEFAULT 0,
-    zunaj        INTEGER NOT NULL DEFAULT 0,  -- zaporedne točke izven trase
-    konec        TEXT,               -- izstop | cilj | cas | potnik | znova
+    zunaj        INTEGER NOT NULL DEFAULT 0,  -- zaporedne točke za izstop
+    zunaj_od     INTEGER,            -- prva med njimi (`IZSTOP_S`)
+    konec        TEXT,               -- izstop | trasa | cilj | cas | potnik | znova
     peljal_ts    INTEGER,            -- prvič, ko se je peljal (`PELJE_MS`)
     odjemalec    TEXT,               -- splet | aplikacija | android
     vir          TEXT                -- kje je začel (`VIRI`), kadar pove
@@ -245,9 +270,10 @@ class Zavrnjeno(Exception):
 
 
 def init(conn: sqlite3.Connection) -> None:
-    # Stolpci, dodani 11. 10. 2026; starejša deljenja jih nimajo izpolnjenih.
+    # Stolpci, dodani 11. in 23. 10. 2026; starejša deljenja jih nimajo
+    # izpolnjenih.
     stolpci = {r[1] for r in conn.execute("PRAGMA table_info(deljenje)")}
-    for ime in ("peljal_ts INTEGER", "odjemalec TEXT", "vir TEXT"):
+    for ime in ("peljal_ts INTEGER", "odjemalec TEXT", "vir TEXT", "zunaj_od INTEGER"):
         if stolpci and ime.split()[0] not in stolpci:
             conn.execute(f"ALTER TABLE deljenje ADD COLUMN {ime}")
     conn.executescript(SHEMA)
@@ -1091,12 +1117,20 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
                 "stanje": _s_tabo(conn, d, stanje(conn, [trip_id], zdaj).get(trip_id), zdaj_ts)}
     polnoc = stats.polnoc(dan)
     sprejetih = 0
+    natancna_ts = _zadnja_natancna(conn, ident, tocke[0]["ts"])
+    # Ali je bila zadnja obravnavana točka mimo trase ali stran od vozila.
+    mimo = None
     for t in tocke:
         if d["konec"]:
             break
-        if t["acc"] is not None and t["acc"] > NATANCNOST_MAX_M:
+        acc = t["acc"]
+        if acc is not None and acc > NATANCNOST_MAX_M:
             continue
         if d["along_m"] is not None and t["ts"] < d["zadnja_ts"] + RAZMIK_S:
+            continue
+        nenatancna = acc is not None and acc > NATANCNA_M
+        if (nenatancna and natancna_ts is not None
+                and t["ts"] - natancna_ts <= NATANCNA_VELJA_S):
             continue
         if d["along_m"] is None:
             along, odmik, _ = _prva_lega(conn, v, dan, now_s, t["lat"], t["lon"])
@@ -1105,37 +1139,45 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
             along, odmik = v.trasa.projiciraj(
                 t["lat"], t["lon"], d["along_m"] - NAZAJ_MAX_M - 200,
                 d["along_m"] + HITROST_MAX_MS * dt + 500)
+        # Hitrost iz telefona pove, ali se potnik pelje, tudi mimo trase.
+        v_tel = t["v"]
+        if v_tel is not None and v.mode != "vlak" and v_tel > HITROST_MAX_BUS_MS:
+            v_tel = None
         if odmik > ODMIK_MAX_M:
-            d["zunaj"] += 1
-            if d["zunaj"] >= ZUNAJ_ZA_IZSTOP:
-                d["konec"] = "izstop"
+            mimo = True
+            _izven_trase(d, t, odmik, v_tel)
             continue
-        hitrost = t["v"]
-        if hitrost is not None and v.mode != "vlak" and hitrost > HITROST_MAX_BUS_MS:
-            hitrost = None
+        hitrost = v_tel
         if d["along_m"] is not None:
             dt = t["ts"] - d["zadnja_ts"]
             premik = along - d["along_m"]
             if premik < -NAZAJ_MAX_M or abs(premik) / max(dt, 1) > HITROST_MAX_MS:
                 continue
+            if nenatancna:
+                # Brez GPS (predor, pod streho) naprej samo, kolikor je točka
+                # pred prejšnjo za več od svoje negotovosti.
+                along = d["along_m"] + max(premik - acc, 0)
             # Nazaj za manj kot `NAZAJ_MAX_M` je šum GPS: vozilo stoji.
             along = max(along, d["along_m"])
             if hitrost is None and dt > 0:
-                hitrost = max(premik, 0) / dt
+                hitrost = (along - d["along_m"]) / dt
             if ((along - d["along_m"]) / max(dt, 1) < VOZI_MS
-                    and _odmaknjen(conn, ident, odmik, t["acc"])):
-                d["zunaj"] += 1
-                if d["zunaj"] >= ZUNAJ_ZA_IZSTOP:
-                    d["konec"] = "izstop"
+                    and (v_tel is None or v_tel < VOZI_MS)
+                    and _odmaknjen(conn, ident, odmik, acc)):
+                mimo = True
+                _dokaz_izstopa(d, t["ts"])
                 continue
             _prehodi(conn, v, ident, dan, d["along_m"], d["zadnja_ts"], along, t["ts"])
-        d["zunaj"] = 0
+        mimo = False
+        d["zunaj"], d["zunaj_od"] = 0, None
         conn.execute(
             "INSERT OR IGNORE INTO deljenje_tocka"
             "(deljenje, ts, along_m, odmik_m, natancnost_m, hitrost_ms) "
             "VALUES(?, ?, ?, ?, ?, ?)",
-            (ident, t["ts"], round(along, 1), round(odmik, 1), t["acc"],
+            (ident, t["ts"], round(along, 1), round(odmik, 1), acc,
              None if hitrost is None else round(hitrost, 2)))
+        if acc is not None and acc <= NATANCNA_M:
+            natancna_ts = t["ts"]
         if d["peljal_ts"] is None and _se_pelje(conn, ident, along, t["ts"], t["acc"]):
             d["peljal_ts"] = t["ts"]
             stej(conn, "peljal", zdaj)
@@ -1158,32 +1200,82 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
         d["konec"] = "potnik"
     conn.execute(
         "UPDATE deljenje SET zadnja_ts = ?, along_m = ?, lat = ?, lon = ?, "
-        "hitrost_ms = ?, zamuda_s = ?, tock = ?, zunaj = ?, konec = ?, peljal_ts = ? "
-        "WHERE id = ?",
+        "hitrost_ms = ?, zamuda_s = ?, tock = ?, zunaj = ?, zunaj_od = ?, konec = ?, "
+        "peljal_ts = ? WHERE id = ?",
         (d["zadnja_ts"], d["along_m"], d["lat"], d["lon"], d["hitrost_ms"],
-         d["zamuda_s"], d["tock"], d["zunaj"], d["konec"], d["peljal_ts"], ident))
+         d["zamuda_s"], d["tock"], d["zunaj"], d["zunaj_od"], d["konec"],
+         d["peljal_ts"], ident))
     conn.commit()
     return {"deljenje": ident, "sprejetih": sprejetih, "konec": d["konec"],
-            "stanje": _s_tabo(conn, d, stanje(conn, [trip_id], zdaj).get(trip_id), zdaj_ts)}
+            "stanje": _s_tabo(conn, d, stanje(conn, [trip_id], zdaj).get(trip_id), zdaj_ts,
+                              mimo)}
 
 
-def _s_tabo(conn: sqlite3.Connection, d: dict, st: dict | None, zdaj_ts: int) -> dict:
+def _s_tabo(conn: sqlite3.Connection, d: dict, st: dict | None, zdaj_ts: int,
+            mimo: bool | None = None) -> dict:
     """Stanje vožnje in pod `jaz`, kar velja samo za tega potnika: koliko
     jih ta hip gleda vožnjo, koliko jih je gledalo, odkar deli, kako dolgo
     deli in s koliko postaj je videl odhod. Zaslon „Hvala“ ga pokaže ob
     koncu. Aplikacija hrani `stanje` celo (`DeljenjeStoritev`), zato je tu
     in ne poleg njega.
+
+    `na_trasi`: zadnja točka tega potnika je štela za lego vozila. Kadar ne
+    (vozilo vozi mimo trase, potnik je morda izstopil), ga drugi ne vidijo,
+    deljenje pa teče naprej -- stran to pove.
     """
     razen = _delilci.get(d["id"])
     odhodov = conn.execute(
         "SELECT COUNT(*) FROM deljenje_prehod WHERE deljenje = ? AND odhod_ts IS NOT NULL",
         (d["id"],)).fetchone()[0]
+    if mimo is None:
+        mimo = bool(d["zunaj"])
     return {**(st or {}), "jaz": {
         "gledajo": gledalcev(d["trip_id"], zdaj_ts - GLEDA_S, razen),
         "gledalo": gledalcev(d["trip_id"], d["zacetek_ts"], razen),
         "trajanje_s": max(0, d["zadnja_ts"] - d["zacetek_ts"]),
         "odhodov": odhodov,
+        "na_trasi": d["along_m"] is not None and not mimo,
     }}
+
+
+def _zadnja_natancna(conn: sqlite3.Connection, ident: str, od_ts: int) -> int | None:
+    """Čas zadnje sprejete točke iz GPS (`NATANCNA_M`), ki še velja za točke
+    od `od_ts` naprej (`NATANCNA_VELJA_S`)."""
+    return conn.execute(
+        "SELECT MAX(ts) FROM deljenje_tocka WHERE deljenje = ? AND ts >= ? "
+        "AND natancnost_m <= ?", (ident, od_ts - NATANCNA_VELJA_S, NATANCNA_M)).fetchone()[0]
+
+
+def _dokaz_izstopa(d: dict, ts: int) -> None:
+    """Še ena točka, po kateri potnika ni več na vozilu. Izstop šele, ko jih
+    je `ZUNAJ_ZA_IZSTOP` zapored in trajajo `IZSTOP_S` -- pred vožnjo
+    `IZSTOP_PRED_VOZNJO_S`, ker kdor čaka, hodi po postaji."""
+    if not d["zunaj"] or d["zunaj_od"] is None:
+        d["zunaj_od"] = ts
+    d["zunaj"] += 1
+    traja = IZSTOP_S if d["peljal_ts"] is not None else IZSTOP_PRED_VOZNJO_S
+    if d["zunaj"] >= ZUNAJ_ZA_IZSTOP and ts - d["zunaj_od"] >= traja:
+        d["konec"] = "izstop"
+
+
+def _izven_trase(d: dict, t: dict, odmik: float, v_tel: float | None) -> None:
+    """Točka dlje od trase, kot sme biti (`ODMIK_MAX_M`).
+
+    Kdor se pelje s hitrostjo vozila (`VOZI_MS`), ni izstopil: vozilo vozi
+    obvoz ali trasa gre drugod kot tir ali cesta. Za izstop šteje samo, kdor
+    stoji ali hodi in je od trase dlje od svoje negotovosti; nenatančna
+    točka brez hitrosti ne pove ne enega ne drugega. Kdor je predolgo
+    (`MIMO_TRASE_S`) brez točke na trasi, ni več na tem vozilu.
+    """
+    acc = t["acc"] or 0
+    vozi = v_tel is not None and v_tel >= VOZI_MS
+    if vozi:
+        d["zunaj"], d["zunaj_od"] = 0, None
+    elif odmik > ODMIK_MAX_M + acc and (v_tel is not None or acc <= NATANCNA_M):
+        _dokaz_izstopa(d, t["ts"])
+        return
+    if t["ts"] - d["zadnja_ts"] >= MIMO_TRASE_S:
+        d["konec"] = "trasa" if vozi else "izstop"
 
 
 def _se_pelje(conn: sqlite3.Connection, ident: str, along: float, ts: int,
@@ -1302,10 +1394,11 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
            zdaj: datetime | None = None) -> dict[str, dict]:
     """Kaj poročajo potniki o teh vožnjah, po `trip_id`.
 
-    Samo sveža poročila (`SVEZE_S`) povedo, kje je vozilo; prehodi pa so
-    opažanja in veljajo ves dan, tudi ko je poročevalec že izstopil. Šteje
-    samo prehod potnika, ki se je peljal: rob postaje se da prečkati tudi
-    peš (`VOZI_MS`).
+    Samo sveža poročila (`SVEZE_S`) povedo, kje je vozilo, in ne tista, po
+    katerih potnik morda izstopa (`SUMLJIV_ZUNAJ`); prehodi pa so opažanja
+    in veljajo ves dan, tudi ko je poročevalec že izstopil. Šteje samo
+    prehod potnika, ki se je peljal: rob postaje se da prečkati tudi peš
+    (`VOZI_MS`).
 
     `verodostojno` je res, kadar je med svežimi vsaj eno verodostojno
     poročilo (`_verodostojno`) ali se ujemata dva -- takrat prikaz feeda za
@@ -1323,8 +1416,8 @@ def stanje(conn: sqlite3.Connection, trip_ids: list[str],
         f"       hitrost_ms, zamuda_s, peljal_ts "
         f"FROM deljenje WHERE trip_id IN ({marks}) AND zadnja_ts >= ? "
         f"  AND konec IS NULL AND along_m IS NOT NULL AND zamuda_s IS NOT NULL "
-        f"  AND service_date IN (?, ?)",
-        (*ids, zdaj_ts - SVEZE_S, *dnevi)).fetchall()
+        f"  AND zunaj < ? AND service_date IN (?, ?)",
+        (*ids, zdaj_ts - SVEZE_S, SUMLJIV_ZUNAJ, *dnevi)).fetchall()
     prehodi = conn.execute(
         f"SELECT p.trip_id, p.service_date, p.stop_seq, "
         f"       COUNT(p.odhod_ts) AS n_odhod, "

@@ -315,7 +315,7 @@ a.adm-k-povezava:hover { border-color: var(--line-firm); background: var(--bg-ra
 }
 .de-izid-deli { color: #9cc1ff; background: color-mix(in srgb, #2f7fff 24%, transparent); }
 .de-izid-izstop, .de-izid-cilj { color: var(--sev-mild); background: color-mix(in srgb, var(--sev-mild) 16%, transparent); }
-.de-izid-utihnil, .de-izid-znova { color: var(--sev-hard); background: color-mix(in srgb, var(--sev-hard) 15%, transparent); }
+.de-izid-utihnil, .de-izid-znova, .de-izid-trasa { color: var(--sev-hard); background: color-mix(in srgb, var(--sev-hard) 15%, transparent); }
 .de-zam { font-weight: 600; }
 .adm-k-v small { font: 500 16px var(--sans); color: var(--ink-mute); }
 

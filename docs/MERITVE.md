@@ -2917,3 +2917,23 @@ Eno izhodišče (89 %) je predlogu s 50 min rezerve brez zgodovine dalo „92 %�
 | iskanje p90 | 84 ms | 108 ms | 18 ms | 22 ms |
 
 Na resničnih vprašanjih (razvojni strežnik): Ljubljana → Kranj do 8:00 jutri — vsi štirje predlogi s prestopom pod 0,9 (zgodovine 1–4 dni, izhodišče 0,70–0,77); zadnji, prihod 7:59, 0,13. Center → Fužine do 8:00: prvi zanesljiv odhod 6:26 (0,91), 7:09 je 0,85.
+
+## Deljenje se je ustavljalo samo (23. 10. 2026)
+
+Prijava iz aplikacije: „izberem pravi prevoz in deljenje se ustavi, napiše *Deljenje je ustavljeno*; drugič je okej.“ Produkcija (arwen), 138 deljenj od 25. 9., analiza na izvlečku (`deljenje*`, vožnje, trase, `lega`).
+
+**Zagon v aplikaciji.** `Most.deliZacni()` začne storitev v `glavna.post`, `deli.js` pa takoj za tem vpraša `deliStanje()`; `zaganja` je do 1.14 nastal šele v `glavna.post` → „ne deli“ → `koncaj("potnik")`. Storitev je delila naprej, dokler potnik ni začel znova (vrzel med zadnjo točko starega in začetkom novega 5–9 s v 13 od 18 primerov). Android: 70 deljenj, 18 `znova`, od tega 16 krajših od minute in 14 brez „peljal“. A6215 23. 10.: štirje začetki v 95 s, A6432 dva v 81 s. Ponovljeno v brezglavem Chromiumu s ponaredkom mostu (storitev aktivna po 300 ms): stara stran „Hvala! Deljenje je ustavljeno.“, nova „Deliš lego“; nova stran tudi, ko storitev ne začne (napaka po 15 s) ali konča z `lega`.
+
+**Izstop med vožnjo.** Izstopov od 11. 10. (ko obstaja `peljal_ts`): 34. Razred po hitrosti zadnjih treh shranjenih točk:
+
+| razred | n | hitrost | primeri |
+|---|---|---|---|
+| med vožnjo (lažen) | 14 | 5,2–28 m/s | trasa Jesenice–Lesce–Žirovnica do 200 m mimo tira (LPV 2404, LP 4290 na istem kraju, LPV 2417 trikrat v 50 min 20. 10.), Bled Jezero–Podhom, M2129 na avtocesti dvakrat, N6158 skozi avtobusno postajo Ajdovščina |
+| pred vožnjo | 6 | 0–27,8 m/s | dva na Ljubljani AP hodila pred vstopom (začela znova čez 1 in 6 min), LPV 2423 33 min čakal v Lescah, LPV 2252 stal med Lazami in Zalogom |
+| hodil ali stal (pravi) | 14 | 0–2,1 m/s | GPS avtobusa je v vseh 9 primerih z lego pokazal, da je vozilo odpeljalo |
+
+Meja 3 m/s (`VOZI_MS`) loči oba razreda brez prekrivanja. Točke, ki so sprožile izstop, niso shranjene (zavrnjenih ne hranimo), zato je razred iz zadnjih sprejetih.
+
+**Lega iz omrežja.** Sprejete točke Android (n = 11 274): natančnost mediana 3,8 m, p90 15,8, p95 42,5, p98 100 m; nad 50 m 4,5 %. Skokov naprej po trasi nad 40 m/s od 11. 10.: 16; v 11 je skočila točka z natančnostjo 77–200 m takoj za točko GPS do 12 m (storitev posluša oba ponudnika). Lega je nato stala, dokler je vozilo ni dohitelo, hitrost iz premika do 68,6 m/s.
+
+**Ponovitev** sprejetih točk skozi `sprejmi` (lega rekonstruirana iz razdalje vzdolž trase in odmika): stara koda 11 645 od 11 646 točk, 21 skokov (avtobus > 36, vlak > 50 m/s), „peljal“ 61; nova 11 265 točk (−3,3 %), **8 skokov**, „peljal“ 61, dvakrat 5 s prej. Nobeno deljenje se v ponovitvi ne konča drugače.

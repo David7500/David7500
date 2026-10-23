@@ -21,7 +21,7 @@ Potnik na vozilu deli lego, drugi vidijo vozilo. Razlog: feed prehod vlaka potrd
 * **Vlak prezgodaj ne vozi**: zamuda navzdol omejena z 0; na postaji pred odhodom čaka (`Voznja.zamuda(stoji=True)`).
 * Odjemalca pošiljata na `POSILJANJE_S` (5 s).
 * **Ujemanje po zamudi, ne po legi** (`SOGLASJE_S` 2 min); izbere se največja skupina.
-* **Samo sveže** (`SVEZE_S` 120 s) **in teče** (`konec IS NULL`). Prehodi veljajo ves dan.
+* **Samo sveže** (`SVEZE_S` 120 s) **in teče** (`konec IS NULL`), **ne med izstopanjem** (`zunaj < SUMLJIV_ZUNAJ`, 2): izstop se potrdi šele po minuti, vozilo bi vmes po poročilu „stalo“. Prehodi veljajo ves dan.
 * **En pošiljatelj = en poročevalec**: nov začetek na isti vožnji konča prejšnjega (`konec = 'znova'`). Preslikava v pomnilniku; za CGNAT je `znova` lahko drug potnik.
 
 ## Zasloni (potrjeni 11. 10. 2026)
@@ -48,7 +48,9 @@ Točke **projicirane na traso** (`deljenje_tocka`: razdalja, odmik, čas, natan�
 API brez avtentikacije:
 * Začetek samo za vožnjo, ki je lahko tu.
 * Točka ≤ 200 m od trase, ≤ 250 km/h; avtobus nad 130 km/h (`HITROST_MAX_BUS_MS`) ni hitrost.
-* Tri zaporedne natančne točke izven trase **ali vstran, medtem ko vozilo stoji** (`VSTRAN_M`) = izstop.
+* **Izstop = dokaz ≥ 3 točke IN ≥ `IZSTOP_S` (60 s)**, pred vožnjo (`peljal_ts`) `IZSTOP_PRED_VOZNJO_S` (10 min) — `_dokaz_izstopa`. Dokaz: izven trase za več od 200 m + natančnost, **ne s hitrostjo vozila**; ali vstran, medtem ko vozilo stoji (`VSTRAN_M`). Do 23. 10. 2026 tri točke (~15 s): od 34 izstopov 14 lažnih med vožnjo (5–28 m/s, trasa Jesenice–Lesce do 200 m mimo tira, M2129 na avtocesti), 6 pred vožnjo (čakanje na postaji), 14 pravih (hoja 0–2,1 m/s).
+* **Izven trase s hitrostjo vozila (`VOZI_MS`) ni izstop** (obvoz, zgrešena trasa): točka ne šteje, deljenje teče, `jaz.na_trasi = false`. Po `MIMO_TRASE_S` (10 min) brez točke na trasi konec `trasa` (drugo vozilo).
+* **Lega iz omrežja med GPS se preskoči** (natančnost > `NATANCNA_M` 50 m do `NATANCNA_VELJA_S` 20 s po natančni); brez GPS sme naprej le za premik minus natančnost. V 11 od 16 skokov naprej je skočila taka točka; ponovitev 11 646 točk: skokov 20 → 8, točk −3,3 %, „peljal“ isti.
 * Prehod čez rob postaje le, če se je potnik peljal (`VOZI_MS`).
 * Natančnost slabša od 250 m se preskoči (predor ni izstop).
 * Omejitve na pošiljatelja v pomnilniku, dnevni strop v bazi; urna šteje le začeta deljenja.
@@ -73,11 +75,13 @@ Vsako deljenje posebej: kartice levo (filter po izidu), zemljevid (izbrano modro
 * Točke samo za izbrano (`podrobno`; 6 h = 4 000 točk).
 * **„Javno“ iz `stanje()`**, ne iz lastnega računa; feed in GPS zraven samo ob živem.
 * Sled = del trase med prvo in zadnjo točko (`_kosi()`); cela trasa le živim.
-* Izid: `konec`, sicer `deli` ali **`utihnil`**.
+* Izid: `konec` (`izstop`, `trasa`, `cilj`, `cas`, `potnik`, `znova`), sicer `deli` ali **`utihnil`**.
 
 ## Android
 
-`DeljenjeStoritev` = storitev v ospredju `location` (lega z ugasnjenim zaslonom). Začne jo **stran** (`Most.deliZacni()`), storitev le pošilja; stran v aplikaciji lege ne pošilja (sicer dva „potnika“). `zaganja` pokrije zagon.
+`DeljenjeStoritev` = storitev v ospredju `location` (lega z ugasnjenim zaslonom). Začne jo **stran** (`Most.deliZacni()`), storitev le pošilja; stran v aplikaciji lege ne pošilja (sicer dva „potnika“).
+* **Zagon**: storitev začne šele v `glavna.post`, stran pa `deliStanje()` vpraša takoj. Do 1.14 je `zaganja` nastal šele v `glavna.post` → „ne deli“ → stran „Deljenje je ustavljeno.“, storitev delila naprej, potnik začel znova: **16 od 70 deljenj v aplikaciji** (`znova` v minuti), A6215 23. 10. štirikrat v 95 s. Popravek dvojen: `deli.js` čaka do `ZAGON_MS` (15 s), da storitev javi `aktivno`, in pred `deliZacni()` prebere star `konec` (velja za 1.14); od naslednje različice `Most` postavi `zaganja` takoj (`DeljenjeStoritev.zaganjam`).
+* Ista vožnja, izbrana znova med deljenjem = isto deljenje (brez `znova`, brez novega čakanja na „peljal“). Menjava vožnje na delavčevi niti (sicer odgovor stare vrne njen `deljenje` → 404).
 
 ### Deljenje ob vožnji (1.9)
 

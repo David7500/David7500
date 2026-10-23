@@ -160,14 +160,60 @@ def test_zacetek_ob_napacnem_casu_je_zavrnjen(conn):
         _deli(conn, zdaj, _tocka(3.8, zdaj))
 
 
-def test_tri_tocke_izven_trase_so_izstop(conn):
+def _izven(km: float, zdaj: datetime, **kw) -> dict:
+    """Točka 1,1 km severno od proge."""
+    return {"lat": LAT + 0.01, "lon": _lon(km), "acc": 10, "t": zdaj.timestamp() * 1000, **kw}
+
+
+def test_izven_trase_je_izstop_sele_po_minuti(conn):
+    """Do 23. 10. 2026 so bile dovolj tri točke (~15 s); polovica izstopov je
+    bila takrat lažnih."""
     zdaj = _ob("10:05")
-    r = _deli(conn, zdaj, _tocka(3.8, zdaj))
-    for i in range(1, 4):
-        z = zdaj + timedelta(seconds=10 * i)
-        r = _deli(conn, z, {"lat": LAT + 0.01, "lon": _lon(3.8), "acc": 10,
-                            "t": z.timestamp() * 1000}, ident=r["deljenje"])
-    assert r["konec"] == "izstop"
+    r = _pelje(conn, zdaj, 3.0, 0.1, 3)
+    for i in range(1, 8):
+        z = zdaj + timedelta(seconds=20 + 10 * i)
+        r = _deli(conn, z, _izven(3.2, z, v=0), ident=r["deljenje"])
+        assert r["konec"] == (None if i < 7 else "izstop"), i
+    assert r["stanje"]["jaz"]["na_trasi"] is False
+
+
+def test_izven_trase_s_hitrostjo_vozila_ni_izstop(conn):
+    """Trasa je ob progi Jesenice--Lesce do 200 m mimo tira: potniki so se
+    peljali s 5--28 m/s, deljenje pa se je končalo z „izstop“ (14 od 34)."""
+    zdaj = _ob("10:05")
+    r = _pelje(conn, zdaj, 3.0, 0.1, 3)
+    for i in range(1, 31):
+        z = zdaj + timedelta(seconds=20 + 10 * i)
+        r = _deli(conn, z, _izven(3.2 + 0.1 * i, z, v=10), ident=r["deljenje"])
+    assert r["konec"] is None and r["sprejetih"] == 0
+    assert r["stanje"]["jaz"]["na_trasi"] is False
+    # Spet na trasi: deljenje teče naprej, kot da obvoza ni bilo.
+    z = zdaj + timedelta(seconds=340)
+    r = _deli(conn, z, _tocka(6.4, z, v=10), ident=r["deljenje"])
+    assert r["sprejetih"] == 1 and r["stanje"]["jaz"]["na_trasi"] is True
+
+
+def test_dolgo_mimo_trase_je_drugo_vozilo(conn):
+    zdaj = _ob("10:05")
+    r = _pelje(conn, zdaj, 3.0, 0.1, 3)
+    for i in range(1, 62):
+        z = zdaj + timedelta(seconds=20 + 10 * i)
+        r = _deli(conn, z, _izven(3.2, z, v=10), ident=r["deljenje"])
+        if r["konec"]:
+            break
+    assert r["konec"] == "trasa" and i == 60
+
+
+def test_porocilo_med_izstopanjem_se_ne_pokaze(conn):
+    """Izstop se potrdi šele po minuti; vmes bi po poročilu vozilo „stalo“ z
+    rastočo zamudo, odpeljalo pa je že."""
+    zdaj = _ob("10:05")
+    r = _pelje(conn, zdaj, 3.0, 0.1, 3)
+    assert deljenje.stanje(conn, ["t1"], zdaj + timedelta(seconds=20))["t1"]["verodostojno"]
+    for i in (1, 2):
+        z = zdaj + timedelta(seconds=20 + 10 * i)
+        r = _deli(conn, z, _izven(3.2, z, v=0), ident=r["deljenje"])
+    assert "t1" not in deljenje.stanje(conn, ["t1"], zdaj + timedelta(seconds=40))
 
 
 def test_nenatancna_tocka_ni_izstop(conn):
@@ -179,6 +225,21 @@ def test_nenatancna_tocka_ni_izstop(conn):
         r = _deli(conn, z, {"lat": LAT + 0.01, "lon": _lon(3.8), "acc": 900,
                             "t": z.timestamp() * 1000}, ident=r["deljenje"])
     assert r["konec"] is None
+
+
+def test_lega_iz_omrezja_med_gps_se_preskoci(conn):
+    """Android pošilja lego iz GPS in omrežja: v 11 od 16 skokov naprej je
+    skočila točka 77--200 m takoj za točko GPS."""
+    zdaj = _ob("10:05")
+    r = _deli(conn, zdaj, _tocka(3.8, zdaj, acc=5))
+    z = zdaj + timedelta(seconds=4)
+    r = _deli(conn, z, _tocka(4.1, z, acc=150), ident=r["deljenje"])
+    assert r["sprejetih"] == 0
+    # Brez GPS točka šteje, a naprej le za toliko, kolikor je čez negotovost.
+    z = zdaj + timedelta(seconds=30)
+    r = _deli(conn, z, _tocka(4.1, z, acc=150), ident=r["deljenje"])
+    assert r["sprejetih"] == 1
+    assert r["stanje"]["along_m"] == pytest.approx(3950, abs=5)
 
 
 def test_skok_prehitro_se_zavrze(conn):
@@ -216,15 +277,39 @@ def _vstran(km: float, metrov: float, zdaj: datetime, acc: float = 10) -> dict:
             "t": zdaj.timestamp() * 1000, "v": 0}
 
 
+def _pripelje_v_bled(conn, zdaj):
+    """Potnik se pripelje v Bled in vlak tam stoji do `zdaj`."""
+    r = _pelje(conn, zdaj - timedelta(seconds=70), 7.3, 0.1, 4)
+    for s in (30, 20, 10, 0):
+        z = zdaj - timedelta(seconds=s)
+        r = _deli(conn, z, _tocka(7.72, z, v=0), ident=r["deljenje"])
+    assert r["stanje"]["pri"] == "Bled"
+    return r
+
+
 def test_potnik_odide_s_postaje_je_izstop(conn):
     """Izstopil je in čaka ob progi: 100 m vstran je še pod mejo izven trase,
     a vlak, ki stoji, se vstran ne premika."""
     zdaj = _ob("10:14")
-    r = _stoji_v_bledu(conn, zdaj)
-    for i in range(1, 4):
+    r = _pripelje_v_bled(conn, zdaj)
+    for i in range(1, 8):
         z = zdaj + timedelta(seconds=10 * i)
         r = _deli(conn, z, _vstran(7.72, 100, z), ident=r["deljenje"])
-    assert r["konec"] == "izstop" and r["sprejetih"] == 0
+        assert r["konec"] == (None if i < 7 else "izstop"), i
+    assert r["sprejetih"] == 0
+
+
+def test_pred_voznjo_hoja_po_postaji_ni_izstop(conn):
+    """Kdor čaka, hodi po postaji. Dva potnika na Ljubljani AP sta bila zato
+    „izstopila“, preden sta vstopila, in začela znova (19. in 20. 10. 2026)."""
+    zdaj = _ob("10:14")
+    r = _stoji_v_bledu(conn, zdaj)
+    for i in range(1, 70):
+        z = zdaj + timedelta(seconds=10 * i)
+        r = _deli(conn, z, _vstran(7.72, 100, z), ident=r["deljenje"])
+        if r["konec"]:
+            break
+    assert r["konec"] == "izstop" and i == 61
 
 
 def test_premik_vstran_v_meji_natancnosti_ni_izstop(conn):

@@ -227,6 +227,11 @@ class Most(
         // Dovoljenje za lego je stran ze dobila (`navigator.geolocation` pri
         // iskanju kandidatov). Brez njega storitev vrste `location` ne sme teci.
         if (!DeljenjeStoritev.smeLego(dejavnost)) return false
+        // Takoj, ne sele v `glavna.post`: stran za tem klicem nemudoma vprasa
+        // `deliStanje()`. Do 1.14 je vmes dobila "ne deli", napisala "Deljenje
+        // je ustavljeno.", storitev pa je delila naprej -- 16 od 70 deljenj v
+        // aplikaciji do 23. 10. 2026 je potnik zato zacel znova.
+        DeljenjeStoritev.zaganjam()
         glavna.post { DeljenjeStoritev.zacni(dejavnost, zapis) }
         return true
     }
