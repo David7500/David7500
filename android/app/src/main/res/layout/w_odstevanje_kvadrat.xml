@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Odštevanje 2×2 in 3×2: vožnja, smer in postaja, velika številka, žetona
+     zamude in tira, spodaj vozni red. Rjavo za vlak, zeleno za avtobus
+     (barve nastavi `Widget`). Koren je `android:id/background` zaradi prehoda. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_ozadje_kont"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/kaj"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/m_na_kont"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/kje"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/m_na_kont_2"
+        android:textSize="12sp" />
+
+    <!-- 2×2 je širok od 110 do 240 dp: številka in „jutri 06:57“ se
+         pomanjšata sama (samodejna velikost rabi omejeno širino in višino). -->
+    <TextView
+        android:id="@+id/glavno"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:layout_marginTop="8dp"
+        android:autoSizeMaxTextSize="34sp"
+        android:autoSizeMinTextSize="14sp"
+        android:autoSizeStepGranularity="0.5sp"
+        android:autoSizeTextType="uniform"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:textColor="@color/m_na_kont"
+        android:textStyle="bold" />
+
+    <Chronometer
+        android:id="@+id/stevec"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:layout_marginTop="8dp"
+        android:autoSizeMaxTextSize="34sp"
+        android:autoSizeMinTextSize="14sp"
+        android:autoSizeStepGranularity="0.5sp"
+        android:autoSizeTextType="uniform"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:textColor="@color/m_na_kont"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/zamuda"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/zeton_temen"
+            android:maxLines="1"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tir"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/zeton_vlak"
+            android:maxLines="1"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:textColor="@color/m_na_kont"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/pod"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="@color/m_na_kont_2"
+        android:textSize="11.5sp" />
+</LinearLayout>

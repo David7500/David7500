@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Samo razvojna gradnja: pregled widgetov za posnetke (`PregledWidgetov`).
+     Izvožen, da ga odpre `adb shell am start`; v izdaji ga ni. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pregled postavi enobarvno ozadje zaslona, da se preizkusi videz brez
+         podlage na svetlem in temnem. Samo razvojna gradnja. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <application>
+        <activity
+            android:name=".PregledWidgetov"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+    </application>
+</manifest>

@@ -164,25 +164,40 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
 
 ### Widgeti
 
-| widget | vprašanje | omrežje |
-|---|---|---|
-| `Widget` (odštevanje) | koliko do **moje** vožnje | nič |
-| `WidgetBudilke` (seznam s stikali) | katere budilke | nič |
-| `WidgetTabla` (odhodna tabla) | kdaj z **moje postaje** | `/api/departures`, na 15 min |
+| widget | vprašanje | omrežje | privzeto |
+|---|---|---|---|
+| `Widget` (odštevanje) | koliko do **moje** vožnje | nič; gumb „preveri“ = `Sprozilec` | 2×1 |
+| `WidgetBudilke` (stikala) | katere budilke | nič | 2×2 |
+| `WidgetTabla` (odhodna tabla) | kdaj z **moje postaje** | `/api/departures?limit=30`, na 15 min | 4×2 |
 
-* Prva dva brez zahtev, `updatePeriodMillis = 0`; prerišeta `Widgeti.osvezi()` (budilka se spremeni na sedmih mestih) in `Sprozilec`.
-* Dotik widgeta odpre **vožnjo** (`Budilka.naslovVoznje(izvor)`, čist JVM). Brez budilke domača stran.
-* **`FLAG_UPDATE_CURRENT` + svoj `data`** (`kajros://preklop/<id>`, `kajros://budilka/<id>`) — `extras` se pri primerjavi namer ne upoštevajo.
-* **Stikalo je slika** (`stikalo_slika_*.xml`, `ImageView`): `Switch` v RemoteViews šele API 31.
+* **Velikost odloči vsebino** (`Velikost.kt`, čist JVM, `VelikostTest`): MINI 40×40, PAS 110×40, TRAK 110×64, TRAK_SIROK 240×64, KVADRAT 110×110, SREDNJI 240×110, STOLPEC 110×250, VELIK 240×250 dp. Googlova mreža: pokončno vrstice 102/220/337, ležeče 51/117/184. Izbira = največja, ki se prilega, sicer najmanjša — **isto pravilo kot launcher**.
+  * 12+: `RemoteViews(Map<SizeF, RemoteViews>)` (`Izris.odzivno`), launcher izbere sam, brez prebujanja. Prej iz `OPTION_APPWIDGET_*` (pokončno min širina × max višina, ležeče obratno) in `onAppWidgetOptionsChanged`.
+  * Seznam (`RemoteCollectionItems`) samo 12+; prej STOLPEC/VELIK nista ponujena. Predloga vrstic `FLAG_MUTABLE`, vrstica `setOnClickFillInIntent`.
+  * **Ležeči 2 vrstici = 117 dp**: kar mora ostati, gre na vrh (žeton zamude ob številki, ne v stavek spodaj). Budilke 4×2 na 12+ = seznam: nepremične vrstice bi se odrezale na pol.
+  * Ozko (2×2, 2×3): vrstica v dveh vrsticah (ura + zamuda/stikalo, pod njima cilj ali vožnja z dnevi); v eni vrsti je cilj izginil.
+  * `minResize` 40 dp povsod; prej 180 → widget ni šel pod 3×2.
+* **Pregled brez telefona**: `src/debug/…/PregledWidgetov.kt` (samo razvojni APK), vse velikosti z vzorci: `adb shell am start -n app.kajros/.PregledWidgetov -e kaj odstevanje|budilke|tabla -e stanje N`. `-e kaj zivo` veže prave widgete (prej `adb shell appwidget grantbind --package app.kajros`), `-e tapeta svetla|temna` za videz brez podlage. Pod 12 pregled widgete veže sam: velikost je samo v `OPTION_APPWIDGET_*` vezanega widgeta. Posnetki v `posnetki/widgeti/`.
+  * Android 9 = AVD `kajros28` (`emulator -avd kajros28 -port 5556 …`, `adb -s emulator-5556`); slika `system-images;android-28;default;x86_64`.
+* **RemoteViews ne zna `<View>`**: razmik = `<FrameLayout>`; z `<View>` „Couldn't add widget“.
+* **Samodejna velikost** (`autoSizeTextType`): z omejeno širino in višino zanesljiva; pri `wrap_content` samo zmanjša, širina se meri po `textSize` — **brez `textSize` je številka 14 sp**. `setTextViewTextSize` jo izklopi.
+* **Odštevanje šteje zadnjo uro** (do 23. 10. dve: „1:05:31“ se ob žetonu na 2×1 in 2×2 ne izide); prej ura odhoda („16:57“, „jutri 06:57“, `Izris.danUra` po koledarju).
+  * Zamuda = `odhodMs − voznoredniMs`, **ne `upostevanaS`**: ta ima odšteto potnikovo rezervo — vlak z zamudo je bil „1 min pred redom“.
+  * Minuta in razred lokalno (`Tabla.minute`, `Tabla.razred`, meje `stats._razred_zamude`): budilka hrani sekunde, `Ura` presodi svežino.
+  * Gumb „preveri“ (4×1, 4×2) = `Sprozilec.PROZI` s `kajros://preveri/<id>`: ista pot kot budnica, svoj `data`, da je ne povozi.
+* Barve omrežja (`Izris.ton`): vlak rjav, avtobus zelen; lestvica zamud ista. Žeton zamude na tonski podlagi ima temno podlago (`zeton_temen`; `d_big` na rjavem 2,1 : 1).
+* **Videz brez podlage** (tabla, `TablaNastavitev`) samo za 1×1 in trak (`Izris.slog`); večji in pas ostanejo tonski. Svetlo ozadje zaslona iz `WallpaperColors` (12+ `HINT_SUPPORTS_DARK_TEXT`, 8.1+ svetlost glavne barve). Senca je samo v XML → svoje postavitve `w_*_brez*`, **izpeljane iz `w_mini` in `w_trak`**: sprememba tam mora tudi tja. Zamuda = pika razreda + številka v barvi besedila.
+* Prva dva brez zahtev; prerišeta `Widgeti.osvezi()` (budilka se spremeni na sedmih mestih) in `Sprozilec`. `onUpdate` (30 min) kliče `Nacrtovalec.vseZnova` — samopopravek obviselih `odzvonjeno`.
+* Dotik odštevanja odpre **vožnjo** (`Budilka.naslovVoznje(izvor)`, čist JVM), tabla tablo, vrstica table svojo vožnjo, budilke seznam.
+* **`FLAG_UPDATE_CURRENT` + svoj `data`** (`kajros://preklop/<id>`, `kajros://odpri/<koda>`; koda = id widgeta × 20 + n) — `extras` se pri primerjavi namer ne upoštevajo.
+* **Stikalo je slika** (`stikalo_slika_*.xml`): `Switch` v RemoteViews šele API 31.
 * Odštevanje riše `Chronometer` (`setChronometerCountDown`) v sistemskem procesu; časovnica `elapsedRealtime`.
-* `onUpdate` (30 min) kliče `Nacrtovalec.vseZnova` — samopopravek obviselih `odzvonjeno`.
-* Slog: `m-visoka` brez obrobe, odštevanje rjavo, temen ne glede na temo, brez Material You (AndroidX).
-* Smernice: `previewLayout` (12+), `minResizeWidth/Height`, `system_app_widget_background_radius` (`@dimen/widget_rob`, `values-v31`), `setContentDescription` z uro odhoda.
-* **Tabla: 15 min je cilj** — `setInexactRepeating`, `ELAPSED_REALTIME` **brez** `_WAKEUP`; sistem korak raztegne do 25 min. Zato **widget nosi uro podatka**, od 30 min z besedo in rdeče; dotik ure osveži.
+* Koren postavitve `@android:id/background` (prehod widget → aplikacija, 12+). `previewLayout` = privzeta velikost z vzorcem; zaobljenost `@dimen/widget_rob` (`values-v31`). Opis za bralnik zaslona z uro odhoda.
+* **Tabla: 15 min je cilj** — `setInexactRepeating`, `ELAPSED_REALTIME` **brez** `_WAKEUP`; sistem korak raztegne do 25 min. Zato **widget nosi uro podatka**, od 30 min z besedo in rumeno (pas: „ob 14:03“ spredaj); dotik ure osveži. Ko prvi odpelje, se preriše iz shrambe (`naslednjiIzris`, `setWindow`, brez zahteve).
   * Omrežje ne na glavno nit: `goAsync()`.
   * Samo odgovor prepiše stanje; izpad pusti staro tablo.
   * „Ni zveze“ ≠ „te postaje ni“ (`Tabla.Izid`); postaje ni mogoče shraniti brez strežnika.
-  * Postaja se izbere (`/api/stations/search`, 250 ms, od dveh črk, predlogi pod poljem); shrani se ime strežnika (`Izid.Odhodi.popravi`). Pri avtobusih tudi `smer` (ključ in napis); `smer: null` = tabla cela.
+  * Postaja se izbere (`/api/stations/search`, 250 ms, od dveh črk, predlogi pod poljem); shrani se ime strežnika (`Izid.Odhodi.popravi`). Pri avtobusih tudi `smer` (ključ in napis); `smer: null` = tabla cela; ⇄ na widgetu = druga stran ceste.
+  * Odpadla vožnja prečrtana z „odpade“; ovira (prva, ki imenuje progo) = gumb ⚠, na seznamu vrstica.
   * `fitsSystemWindows` povozi `padding` — zunanji okvir za odmike, zrak na notranjem; `adjustResize` + `ScrollView`.
 
 ### Pasti na napravi

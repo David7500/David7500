@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Budilke 4×3 in več (od Androida 12): vse, v seznamu, ki se drsi, in spodaj,
+     kdaj zazvoni naslednja. Vrstico napolni `w_budilka_vrstica`. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_ozadje"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/bud_glava"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:text="@string/widget_budilke_glava"
+        android:textColor="@color/ink"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- Brez budilk widget ne sme biti prazen pravokotnik: povedati mora, da
+         ni okvara, in kje se budilka nastavi. -->
+    <TextView
+        android:id="@+id/bud_prazno"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="3"
+        android:paddingStart="4dp"
+        android:text="@string/widget_budilke_kako"
+        android:textColor="@color/ink_dim"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <ListView
+        android:id="@+id/seznam"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="4dp"
+        android:layout_weight="1"
+        android:divider="@null"
+        android:dividerHeight="0dp" />
+
+    <TextView
+        android:id="@+id/bud_naslednja"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:textColor="@color/ink_dim"
+        android:textSize="11.5sp" />
+</LinearLayout>

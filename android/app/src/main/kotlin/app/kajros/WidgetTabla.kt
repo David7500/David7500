@@ -8,7 +8,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StrikethroughSpan
 import android.view.View
 import android.widget.RemoteViews
 import java.text.SimpleDateFormat
@@ -16,12 +24,16 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Odhodna tabla ene postaje na domacem zaslonu.
+ * Odhodna tabla ene postaje na domacem zaslonu, od ene ikone do pol zaslona.
  *
  * **Vprasanje je "kdaj mi pelje z moje postaje".** Widget z budilko nanj ne
  * odgovori: ta pove, koliko casa je se do voznje, ki si jo ze izbral. Ta pove,
  * katere so -- in prav to je vsakodnevno vprasanje, za katero je bilo doslej
  * treba odpreti aplikacijo.
+ *
+ * Velikost odloci, koliko pove (`Velikost`): 1×1 naslednji odhod, trak enega
+ * s podrobnostmi ali tri v vrsti, 4×2 glavo z gumboma in tri vrstice, od 4×3
+ * naprej seznam vseh odhodov v stirih urah, ki se drsi.
  *
  * Postajo izbere potnik ob dodajanju widgeta ([TablaNastavitev]) in vsak widget
  * ima svojo: dva sta dva konca iste poti.
@@ -36,14 +48,46 @@ class WidgetTabla : AppWidgetProvider() {
         vOzadju(c, idji, goAsync())
     }
 
+    /**
+     * Potnik je widget raztegnil. Od Androida 12 postavitev izbere launcher
+     * sam; prej jo izberemo mi iz nove velikosti ([Izris.odzivno]).
+     */
+    override fun onAppWidgetOptionsChanged(c: Context, am: AppWidgetManager, id: Int, o: Bundle?) {
+        am.updateAppWidget(id, pogled(c, id))
+    }
+
     override fun onReceive(c: Context, namera: Intent) {
-        if (namera.action == OSVEZI) {
-            val am = AppWidgetManager.getInstance(c) ?: return
-            vOzadju(c, am.getAppWidgetIds(ComponentName(c, WidgetTabla::class.java)),
-                goAsync())
-            return
+        when (namera.action) {
+            OSVEZI -> {
+                val am = AppWidgetManager.getInstance(c) ?: return
+                vOzadju(c, am.getAppWidgetIds(ComponentName(c, WidgetTabla::class.java)),
+                    goAsync())
+            }
+            OBRNI -> {
+                val id = namera.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
+                    AppWidgetManager.INVALID_APPWIDGET_ID)
+                if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
+                obrni(c, id)
+                vOzadju(c, intArrayOf(id), goAsync())
+            }
+            IZRISI -> osvezi(c)
+            else -> super.onReceive(c, namera)
         }
-        super.onReceive(c, namera)
+    }
+
+    /**
+     * Gumb ⇄ na avtobusni tabli: druga stran ceste.
+     *
+     * Stara tabla gre stran, preden pride nova: vrstice z druge strani ceste
+     * pod novim napisom bi bile napačne, in brez omrežja bi tam tudi ostale.
+     */
+    private fun obrni(c: Context, id: Int) {
+        val n = Tabla.nastavitev(c, id) ?: return
+        val s = Tabla.stanje(c, id) ?: return
+        val nova = Tabla.naslednjaSmer(s.smeri, n.smer) ?: return
+        Tabla.nastavi(c, id, n.copy(smer = nova.kljuc, smerNapis = nova.napis))
+        Tabla.pozabiStanje(c, id)
+        AppWidgetManager.getInstance(c)?.updateAppWidget(id, pogled(c, id))
     }
 
     /**
@@ -56,7 +100,7 @@ class WidgetTabla : AppWidgetProvider() {
     private fun vOzadju(c: Context, idji: IntArray, rezultat: PendingResult) {
         val am = AppWidgetManager.getInstance(c)
         if (am == null || idji.isEmpty()) { rezultat.finish(); return }
-        idji.forEach { am.updateAppWidget(it, pogled(c, it, null)) }
+        idji.forEach { am.updateAppWidget(it, pogled(c, it)) }
         Thread {
             try {
                 for (id in idji) {
@@ -70,10 +114,11 @@ class WidgetTabla : AppWidgetProvider() {
                     // napis nad njo ne sme vec trditi ene strani.
                     val popravljena = izid.popravi(n)
                     if (popravljena != n) Tabla.nastavi(c, id, popravljena)
-                    Tabla.shraniStanje(c, id,
-                        Tabla.Stanje(izid.vrstice, System.currentTimeMillis()))
-                    am.updateAppWidget(id, pogled(c, id, null))
+                    Tabla.shraniStanje(c, id, Tabla.Stanje(izid.vrstice,
+                        System.currentTimeMillis(), izid.opozorilo, izid.smeri))
+                    am.updateAppWidget(id, pogled(c, id))
                 }
+                naslednjiIzris(c)
             } finally {
                 rezultat.finish()
             }
@@ -86,7 +131,9 @@ class WidgetTabla : AppWidgetProvider() {
 
     /** Zadnji widget je odstranjen: budnice ni vec komu buditi. */
     override fun onDisabled(c: Context) {
-        c.getSystemService(AlarmManager::class.java)?.cancel(budnica(c))
+        val am = c.getSystemService(AlarmManager::class.java) ?: return
+        am.cancel(budnica(c))
+        am.cancel(izris(c))
     }
 
     override fun onDeleted(c: Context, idji: IntArray) {
@@ -95,6 +142,8 @@ class WidgetTabla : AppWidgetProvider() {
 
     companion object {
         const val OSVEZI = "app.kajros.TABLA"
+        private const val OBRNI = "app.kajros.TABLA_OBRNI"
+        private const val IZRISI = "app.kajros.TABLA_IZRISI"
 
         /**
          * Kako pogosto widget vprasa streznik.
@@ -110,17 +159,26 @@ class WidgetTabla : AppWidgetProvider() {
          */
         private val KORAK_MS = AlarmManager.INTERVAL_FIFTEEN_MINUTES
 
+        /** Seznam (4×3 in več) zna RemoteViews brez storitve šele od Androida 12. */
+        private val PONUJENE: List<Velikost> =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Velikost.values().toList()
+            else Velikost.values().toList() - Velikost.STOLPEC - Velikost.VELIK
+
         private val URA = SimpleDateFormat("HH:mm", Locale("sl"))
 
-        private val VRSTICA = intArrayOf(
-            R.id.tab_vrstica1, R.id.tab_vrstica2, R.id.tab_vrstica3)
-        private val URE = intArrayOf(R.id.tab_ura1, R.id.tab_ura2, R.id.tab_ura3)
-        private val KAM = intArrayOf(R.id.tab_kam1, R.id.tab_kam2, R.id.tab_kam3)
-        private val ZAMUDE = intArrayOf(
-            R.id.tab_zamuda1, R.id.tab_zamuda2, R.id.tab_zamuda3)
+        private val URE = intArrayOf(R.id.ura1, R.id.ura2, R.id.ura3)
+        private val PARI = intArrayOf(R.id.par1, R.id.par2, R.id.par3)
+        private val KAM = intArrayOf(R.id.kam1, R.id.kam2, R.id.kam3)
+        private val TIRI = intArrayOf(R.id.tir1, R.id.tir2, R.id.tir3)
+        private val ZAMUDE = intArrayOf(R.id.zam1, R.id.zam2, R.id.zam3)
+        private val VRSTICE = intArrayOf(R.id.v1, R.id.v2, R.id.v3)
 
         private fun budnica(c: Context): PendingIntent = PendingIntent.getBroadcast(
             c, 0, Intent(c, WidgetTabla::class.java).setAction(OSVEZI),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        private fun izris(c: Context): PendingIntent = PendingIntent.getBroadcast(
+            c, 0, Intent(c, WidgetTabla::class.java).setAction(IZRISI),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         /** Nastavi ponavljajoco osvezitev. Klice se ob zagonu, dodajanju in vsaki osvezitvi. */
@@ -134,6 +192,28 @@ class WidgetTabla : AppWidgetProvider() {
         }
 
         /**
+         * Tabla se premakne naprej sama, ko prvi vlak odpelje.
+         *
+         * Shranjeno stanje ima [Tabla.SHRANI] vrstic; ko prva odide
+         * ([Tabla.Odhod.odideMs]), jo prerisemo iz shrambe -- brez zahteve.
+         * Spet `ELAPSED_REALTIME` brez prebujanja: na ugasnjenem zaslonu ni
+         * kaj premikati, ob prvem prizigu pa se to zgodi takoj.
+         */
+        private fun naslednjiIzris(c: Context) {
+            val am = c.getSystemService(AlarmManager::class.java) ?: return
+            val wm = AppWidgetManager.getInstance(c) ?: return
+            val zdaj = System.currentTimeMillis()
+            val kdaj = wm.getAppWidgetIds(ComponentName(c, WidgetTabla::class.java)).asList()
+                .mapNotNull { Tabla.stanje(c, it) }
+                .flatMap { s -> s.odhodi.filter { it.vidno(zdaj) && it.voznoredniMs > 0 } }
+                .minOfOrNull { it.odideMs() }
+            if (kdaj == null) { am.cancel(izris(c)); return }
+            am.setWindow(AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + maxOf(kdaj - zdaj, 30_000L),
+                60_000L, izris(c))
+        }
+
+        /**
          * Prerise vse table iz shranjenega stanja, brez prenosa.
          *
          * Rabi jo nastavitev, ko widget dobi postajo: takrat je stanje ze
@@ -142,7 +222,8 @@ class WidgetTabla : AppWidgetProvider() {
         fun osvezi(c: Context) {
             val am = AppWidgetManager.getInstance(c) ?: return
             am.getAppWidgetIds(ComponentName(c, WidgetTabla::class.java))
-                .forEach { am.updateAppWidget(it, pogled(c, it, null)) }
+                .forEach { am.updateAppWidget(it, pogled(c, it)) }
+            naslednjiIzris(c)
         }
 
         /** Sveze podatke naroci sistem sam; to je samo prosnja zanje. */
@@ -151,124 +232,47 @@ class WidgetTabla : AppWidgetProvider() {
         }
 
         /**
-         * Kaj widget kaze.
-         *
-         * [vsiljeno] je za predogled in preizkus; sicer se bere shranjeno
-         * stanje. Prenosa tu ni -- risanje mora delati tudi brez omrezja.
+         * Kaj widget kaze, za vse velikosti hkrati ([Izris.odzivno]), iz
+         * shranjenega stanja. Prenosa tu ni -- risanje mora delati tudi brez
+         * omrezja.
          */
-        fun pogled(c: Context, widgetId: Int, vsiljeno: Tabla.Stanje?): RemoteViews {
-            val v = RemoteViews(c.packageName, R.layout.widget_tabla)
-            val n = Tabla.nastavitev(c, widgetId)
-            val zdaj = System.currentTimeMillis()
+        fun pogled(c: Context, widgetId: Int): RemoteViews =
+            pogled(c, widgetId, Tabla.nastavitev(c, widgetId), Tabla.stanje(c, widgetId),
+                System.currentTimeMillis())
 
-            if (n == null) {
-                // Widget brez postaje: nastavitev je bila preklicana ali je
-                // ostal iz varnostne kopije. Dotik jo odpre znova.
-                v.setTextViewText(R.id.tab_postaja, c.getString(R.string.ime))
-                v.setTextViewText(R.id.tab_sporocilo,
-                    c.getString(R.string.widget_tabla_brez_postaje))
-                v.setViewVisibility(R.id.tab_sporocilo, View.VISIBLE)
-                VRSTICA.forEach { v.setViewVisibility(it, View.GONE) }
-                v.setTextViewText(R.id.tab_ob, "")
-                v.setOnClickPendingIntent(R.id.tab_koren, PendingIntent.getActivity(
-                    c, widgetId,
-                    Intent(c, TablaNastavitev::class.java)
-                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-                        .setData(Uri.parse("kajros://tabla/$widgetId")),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-                return v
+        /** Izris iz [n] in [s] brez shrambe; pregled widgetov ga kliče z vzorcem. */
+        fun pogled(
+            c: Context, widgetId: Int, n: Tabla.Nastavitev?, s: Tabla.Stanje?, zdajMs: Long,
+        ): RemoteViews {
+            val slog = Izris.slog(c, n?.videz ?: Izris.Videz.TONSKA)
+            return Izris.odzivno(c, widgetId, PONUJENE, Velikost.SREDNJI) { v ->
+                if (n == null) brezPostaje(c, widgetId, v, slog)
+                else Risba(c, widgetId, n, s, zdajMs, slog).zgradi(v)
             }
-
-            v.setTextViewText(R.id.tab_postaja, glava(c, n))
-            // Glava odpre tablo te postaje v aplikaciji -- isti pogled, cel.
-            v.setOnClickPendingIntent(R.id.tab_koren, odpri(c, widgetId, naslovTable(c, n)))
-
-            val s = vsiljeno ?: Tabla.stanje(c, widgetId)
-            if (s == null) {
-                v.setTextViewText(R.id.tab_sporocilo, c.getString(R.string.widget_tabla_caka))
-                v.setViewVisibility(R.id.tab_sporocilo, View.VISIBLE)
-                VRSTICA.forEach { v.setViewVisibility(it, View.GONE) }
-                v.setTextViewText(R.id.tab_ob, "")
-                return v
-            }
-
-            v.setViewVisibility(R.id.tab_sporocilo,
-                if (s.odhodi.isEmpty()) View.VISIBLE else View.GONE)
-            if (s.odhodi.isEmpty()) {
-                // Prazna tabla ni okvara: pozno zvecer od tod res ne pelje nic.
-                v.setTextViewText(R.id.tab_sporocilo, c.getString(R.string.widget_tabla_nic))
-            }
-
-            for (i in VRSTICA.indices) {
-                val o = s.odhodi.getOrNull(i)
-                v.setViewVisibility(VRSTICA[i], if (o == null) View.GONE else View.VISIBLE)
-                if (o == null) continue
-                narisi(c, v, i, o, widgetId, n)
-            }
-
-            // **Ura podatka je del podatka.** Brez nje je "+4 min" izpred pol
-            // ure videti enako kot "+4 min" izpred pol minute. Dotik osvezi.
-            val star = Tabla.jeStaro(s.obMs, zdaj)
-            v.setTextViewText(R.id.tab_ob, when {
-                s.obMs <= 0 -> ""
-                star -> c.getString(R.string.widget_tabla_staro,
-                    URA.format(Date(s.obMs)), Tabla.starostMin(s.obMs, zdaj))
-                else -> c.getString(R.string.widget_tabla_ob, URA.format(Date(s.obMs)))
-            })
-            v.setTextColor(R.id.tab_ob,
-                c.getColor(if (star) R.color.sev_hard else R.color.ink_faint))
-            v.setContentDescription(R.id.tab_ob, c.getString(R.string.widget_tabla_osvezi))
-            v.setOnClickPendingIntent(R.id.tab_ob, PendingIntent.getBroadcast(
-                c, 0, Intent(c, WidgetTabla::class.java).setAction(OSVEZI),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-            return v
-        }
-
-        private fun narisi(
-            c: Context, v: RemoteViews, i: Int, o: Tabla.Odhod,
-            widgetId: Int, n: Tabla.Nastavitev,
-        ) {
-            v.setTextViewText(URE[i], o.ura)
-            v.setTextViewText(KAM[i], if (o.kam.isBlank()) o.trainNo
-                else "${o.trainNo} → ${o.kam}")
-            v.setTextViewText(ZAMUDE[i], Tabla.zamudaNapis(o))
-            v.setTextColor(ZAMUDE[i], c.getColor(barva(o)))
-            if (o.zamudaMin == null) {
-                // Pomisljaj sam ne pove nicesar; bralnik zaslona mora izvedeti,
-                // da to ni nicla, ampak manjkajoc podatek.
-                v.setContentDescription(ZAMUDE[i],
-                    c.getString(R.string.widget_tabla_ni_zamude))
-            }
-            // Vrstica odpre SVOJO voznjo. Widget pove, da nekaj zamuja;
-            // naslednje vprasanje je "kje je" in to je okno vozje.
-            v.setOnClickPendingIntent(VRSTICA[i],
-                odpri(c, widgetId * 10 + i, naslovVoznje(c, n, o)))
         }
 
         /**
-         * "Bavarski dvor → Razstavišče · Kolodvor": ime postaje in pomirjeno
-         * stran ceste. Brez smeri tri vrstice ne povedo, s katere strani so --
-         * in prav to je bilo narobe, preden je smer obstajala.
+         * Widget brez postaje: nastavitev je bila preklicana ali je ostal iz
+         * varnostne kopije. Dotik jo odpre znova.
          */
-        private fun glava(c: Context, n: Tabla.Nastavitev): CharSequence {
-            val smer = n.smerNapis ?: return n.postaja
-            val b = android.text.SpannableStringBuilder(n.postaja).append("  ")
-            val od = b.length
-            b.append(smer)
-            b.setSpan(android.text.style.ForegroundColorSpan(c.getColor(R.color.ink_mute)),
-                od, b.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            b.setSpan(android.text.style.RelativeSizeSpan(0.9f),
-                od, b.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            return b
-        }
-
-        /** Razred pride s streznika; barva je oblikovanje in sme biti tu. */
-        private fun barva(o: Tabla.Odhod): Int = when (o.razred) {
-            "tocno" -> R.color.d_ontime
-            "1-5" -> R.color.d_small
-            "5-15" -> R.color.d_mid
-            "nad-15" -> R.color.d_big
-            else -> R.color.ink_faint
+        private fun brezPostaje(c: Context, id: Int, vel: Velikost, slog: Izris.Slog): RemoteViews {
+            val klik = PendingIntent.getActivity(
+                c, id,
+                Intent(c, TablaNastavitev::class.java)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .setData(Uri.parse("kajros://tabla/$id")),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val v = if (vel == Velikost.MINI) RemoteViews(c.packageName, slog.mini).apply {
+                setTextViewText(R.id.nad, c.getString(R.string.ime))
+                setTextViewText(R.id.glavno, "—")
+                setTextViewText(R.id.pod, c.getString(R.string.widget_tabla_izberi_kratko))
+                setTextColor(R.id.pod, slog.drugotna)
+            } else RemoteViews(c.packageName, R.layout.w_sporocilo).apply {
+                setTextViewText(R.id.naslov, c.getString(R.string.ime))
+                setTextViewText(R.id.besedilo, c.getString(R.string.widget_tabla_brez_postaje))
+            }
+            v.setOnClickPendingIntent(android.R.id.background, klik)
+            return v
         }
 
         // Z isto stranjo ceste kot widget: stran bi sicer odprla obe in
@@ -292,17 +296,378 @@ class WidgetTabla : AppWidgetProvider() {
             }
 
         /**
-         * Namera, ki odpre naslov v aplikaciji.
-         *
-         * [koda] loci namere med sabo: brez nje bi `FLAG_UPDATE_CURRENT` vse
-         * vrstice zdruzil v eno, ker se `extras` pri primerjavi ne upostevajo.
+         * Ena tabla v vseh velikostih. Razred in ne funkcija s sedmimi
+         * parametri: vsaka velikost rabi isto -- postajo, vrstice, ki se niso
+         * odpeljale, staro uro in slog.
          */
-        private fun odpri(c: Context, koda: Int, kam: String): PendingIntent =
-            PendingIntent.getActivity(
-                c, koda,
-                Intent(c, GlavnaDejavnost::class.java)
-                    .setAction(GlavnaDejavnost.AKCIJA_ODPRI)
-                    .putExtra(GlavnaDejavnost.KAM, kam),
+        private class Risba(
+            val c: Context,
+            val id: Int,
+            val n: Tabla.Nastavitev,
+            val s: Tabla.Stanje?,
+            val zdaj: Long,
+            val slog: Izris.Slog,
+        ) {
+            /** Vrstice, ki se niso odpeljale ([Tabla.Odhod.vidno]). */
+            val vidni: List<Tabla.Odhod> = s?.odhodi?.filter { it.vidno(zdaj) } ?: emptyList()
+            val staro: Boolean = s != null && Tabla.jeStaro(s.obMs, zdaj)
+            val koda = id * 20
+
+            fun zgradi(vel: Velikost): RemoteViews = when (vel) {
+                Velikost.MINI -> mini()
+                Velikost.PAS -> trak(R.layout.w_pas, pas = true)
+                Velikost.TRAK -> trak(slog.trak, pas = false)
+                Velikost.TRAK_SIROK -> trakSirok()
+                Velikost.KVADRAT -> kvadrat()
+                Velikost.SREDNJI -> srednji()
+                Velikost.STOLPEC -> velik(ozek = true)
+                Velikost.VELIK -> velik(ozek = false)
+            }
+
+            /**
+             * Barvi besedila tonske podlage. Brez podlage sta samo 1×1 in trak
+             * ([slog]); vse drugo ima podlago tudi pri videzu "brez", in temno
+             * besedilo za svetlo ozadje zaslona bi se na njej izgubilo.
+             */
+            private val tonski = Izris.slog(c, Izris.Videz.TONSKA)
+
+            /** Prazna tabla ni okvara: pozno zvecer od tod res ne pelje nic. */
+            private fun prazno(): String = c.getString(
+                if (s == null) R.string.widget_tabla_caka else R.string.widget_tabla_nic)
+
+            /** "Ljubljana" ali "Bavarski dvor → Razstavišče" pri izbrani strani ceste. */
+            private fun glava(): CharSequence {
+                val smer = n.smerNapis ?: return n.postaja
+                val b = SpannableStringBuilder(n.postaja).append("  ")
+                val od = b.length
+                b.append(smer)
+                b.setSpan(ForegroundColorSpan(c.getColor(R.color.ink_mute)),
+                    od, b.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                b.setSpan(RelativeSizeSpan(0.9f), od, b.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                return b
+            }
+
+            /** "LPV 2010 → Koper" (pri avtobusu "LPP 6 → Črnuče"). */
+            private fun voznja(o: Tabla.Odhod): String =
+                if (o.kam.isBlank()) o.trainNo else "${o.trainNo} → ${o.kam}"
+
+            /** Odpadla vožnja je prečrtana, ne izbrisana: potnik mora vedeti, da je ne bo. */
+            private fun precrtaj(besedilo: String, da: Boolean): CharSequence {
+                if (!da) return besedilo
+                return SpannableString(besedilo).apply {
+                    setSpan(StrikethroughSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+
+            /** Barva zamude te vrstice; odpadla je v barvi napake. */
+            private fun barvaZamude(o: Tabla.Odhod): Int = c.getColor(
+                if (o.odpadla) R.color.napaka else Izris.barvaZamude(o.razred))
+
+            /** "odpade", "+4", "točno" ali pomisljaj. */
+            private fun napisZamude(o: Tabla.Odhod): String =
+                if (o.odpadla) c.getString(R.string.widget_tabla_odpade) else Tabla.zamudaNapis(o)
+
+            /**
+             * Zamuda z barvo razreda. Brez podlage ([brez]) je stevilka v barvi
+             * besedila s piko razreda pred njo: oranzna na svetlem ozadju
+             * zaslona ne doseze kontrasta, beseda pa nosi minute tako ali tako.
+             */
+            private fun zamuda(v: RemoteViews, viewId: Int, o: Tabla.Odhod, brez: Boolean = false) {
+                if (o.odpadla) {
+                    v.setTextViewText(viewId, napisZamude(o))
+                    v.setTextColor(viewId, barvaZamude(o))
+                    return
+                }
+                val napis = napisZamude(o)
+                val barva = barvaZamude(o)
+                if (brez) {
+                    v.setTextViewText(viewId, Izris.spikoZamude(napis, barva))
+                    v.setTextColor(viewId, slog.glavna)
+                } else {
+                    v.setTextViewText(viewId, napis)
+                    v.setTextColor(viewId, barva)
+                }
+                if (o.zamudaMin == null) {
+                    // Pomisljaj sam ne pove nicesar; bralnik zaslona mora izvedeti,
+                    // da to ni nicla, ampak manjkajoc podatek.
+                    v.setContentDescription(viewId, c.getString(R.string.widget_tabla_ni_zamude))
+                }
+            }
+
+            /** "osveženo ob 06:52" ali, ko je star, "podatek ob 06:12 — star 40 min". */
+            private fun ob(v: RemoteViews, viewId: Int) {
+                val st = s ?: run { v.setTextViewText(viewId, ""); return }
+                v.setTextViewText(viewId, when {
+                    st.obMs <= 0 -> ""
+                    staro -> c.getString(R.string.widget_tabla_staro,
+                        URA.format(Date(st.obMs)), Tabla.starostMin(st.obMs, zdaj))
+                    else -> c.getString(R.string.widget_tabla_ob, URA.format(Date(st.obMs)))
+                })
+                v.setTextColor(viewId, c.getColor(if (staro) R.color.sev_hard else R.color.ink_faint))
+                v.setContentDescription(viewId, c.getString(R.string.widget_tabla_osvezi))
+                v.setOnClickPendingIntent(viewId, osveziNamera())
+            }
+
+            private fun osveziNamera(): PendingIntent = PendingIntent.getBroadcast(
+                c, 0, Intent(c, WidgetTabla::class.java).setAction(OSVEZI),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+            private fun obrniNamera(): PendingIntent = PendingIntent.getBroadcast(
+                c, id,
+                Intent(c, WidgetTabla::class.java).setAction(OBRNI)
+                    .setData(Uri.parse("kajros://tabla-obrni/$id"))
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+            private fun klikTabla(v: RemoteViews) =
+                v.setOnClickPendingIntent(android.R.id.background,
+                    Izris.odpri(c, koda, naslovTable(c, n)))
+
+            /** Bralnik zaslona prebere vrstico kot stavek, ne kot stiri besede. */
+            private fun opis(o: Tabla.Odhod): String = buildString {
+                append(o.ura).append(", ").append(voznja(o))
+                if (!o.tir.isNullOrBlank()) append(", tir ").append(o.tir)
+                append(", ")
+                append(if (o.odpadla) c.getString(R.string.widget_tabla_odpade)
+                    else if (o.zamudaMin == null) c.getString(R.string.widget_tabla_ni_zamude)
+                    else Tabla.zamudaNapis(o))
+            }
+
+            // ---------- velikosti ----------
+
+            /** 1×1: naslednji odhod in njegova zamuda; star podatek pove uro. */
+            private fun mini(): RemoteViews {
+                val v = RemoteViews(c.packageName, slog.mini)
+                klikTabla(v)
+                v.setTextViewText(R.id.nad, n.postaja)
+                v.setTextColor(R.id.nad, slog.drugotna)
+                val o = vidni.firstOrNull()
+                if (o == null) {
+                    v.setTextViewText(R.id.glavno, "—")
+                    v.setTextColor(R.id.glavno, slog.drugotna)
+                    v.setTextViewText(R.id.pod, c.getString(
+                        if (s == null) R.string.widget_tabla_caka_kratko
+                        else R.string.widget_tabla_nic_kratko))
+                    v.setTextColor(R.id.pod, slog.drugotna)
+                    v.setContentDescription(android.R.id.background, n.postaja + ": " + prazno())
+                    return v
+                }
+                v.setTextViewText(R.id.glavno, precrtaj(o.ura, o.odpadla))
+                v.setTextColor(R.id.glavno, if (staro) slog.drugotna else slog.glavna)
+                if (staro) {
+                    v.setTextViewText(R.id.pod, c.getString(R.string.widget_tabla_ob_kratko,
+                        URA.format(Date(s!!.obMs))))
+                    v.setTextColor(R.id.pod, c.getColor(R.color.sev_hard))
+                } else {
+                    zamuda(v, R.id.pod, o, slog.brez)
+                }
+                v.setContentDescription(android.R.id.background, n.postaja + ": " + opis(o))
+                return v
+            }
+
+            /** Trak: prvi odhod s podrobnostmi; pas je isto v eni vrsti. */
+            private fun trak(postavitev: Int, pas: Boolean): RemoteViews {
+                val v = RemoteViews(c.packageName, postavitev)
+                klikTabla(v)
+                val o = vidni.firstOrNull()
+                // Pas ima podlago vedno (`w_pas`), tudi pri videzu "brez".
+                val sl = if (pas) tonski else slog
+                v.setTextColor(R.id.nad, sl.drugotna)
+                v.setTextColor(R.id.opis, sl.drugotna)
+                if (o == null) {
+                    v.setTextViewText(R.id.nad, n.postaja)
+                    v.setTextViewText(R.id.glavno, "—")
+                    v.setTextColor(R.id.glavno, sl.drugotna)
+                    v.setTextViewText(R.id.pod, "")
+                    v.setTextViewText(R.id.opis, prazno())
+                    if (pas) v.setTextViewText(R.id.nad, n.postaja + " · " + prazno())
+                    return v
+                }
+                v.setTextViewText(R.id.glavno, precrtaj(o.ura, o.odpadla))
+                v.setTextColor(R.id.glavno, if (staro) sl.drugotna else sl.glavna)
+                zamuda(v, R.id.pod, o, sl.brez)
+                val podrobno = voznja(o) + (if (o.tir.isNullOrBlank()) "" else " · " + c.getString(R.string.widget_tir, o.tir))
+                if (pas) {
+                    // Pas nima vrstice za uro podatka: star podatek pove spredaj, rumeno.
+                    v.setTextViewText(R.id.nad, if (!staro) n.postaja + " · " + podrobno
+                        else SpannableStringBuilder().apply {
+                            append(c.getString(R.string.widget_tabla_ob_kratko, URA.format(Date(s!!.obMs))))
+                            setSpan(ForegroundColorSpan(c.getColor(R.color.sev_hard)), 0, length,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            append(" · ").append(n.postaja).append(" · ").append(podrobno)
+                        })
+                } else {
+                    v.setTextViewText(R.id.nad, glava())
+                    if (staro) {
+                        v.setTextViewText(R.id.opis, c.getString(R.string.widget_tabla_staro,
+                            URA.format(Date(s!!.obMs)), Tabla.starostMin(s.obMs, zdaj)))
+                        v.setTextColor(R.id.opis, c.getColor(R.color.sev_hard))
+                    } else {
+                        v.setTextViewText(R.id.opis, precrtaj(podrobno, o.odpadla))
+                    }
+                }
+                v.setContentDescription(android.R.id.background, n.postaja + ": " + opis(o))
+                return v
+            }
+
+            /** 4×1: trije odhodi v vrsti in gumb za osvezitev. */
+            private fun trakSirok(): RemoteViews {
+                val v = RemoteViews(c.packageName, R.layout.w_tabla_trak_sirok)
+                klikTabla(v)
+                v.setTextViewText(R.id.postaja, glava())
+                v.setOnClickPendingIntent(R.id.osvezi, osveziNamera())
+                ob(v, R.id.ob)
+                val pokazi = vidni.isNotEmpty()
+                v.setViewVisibility(R.id.odhodi, if (pokazi) View.VISIBLE else View.GONE)
+                v.setViewVisibility(R.id.sporocilo, if (pokazi) View.GONE else View.VISIBLE)
+                if (!pokazi) { v.setTextViewText(R.id.sporocilo, prazno()); return v }
+                for (i in PARI.indices) {
+                    // Prazna tretjina ostane, da odhodi ne skacejo po sirini.
+                    val o = vidni.getOrNull(i)
+                    v.setTextViewText(PARI[i], if (o == null) "" else par(o))
+                }
+                v.setContentDescription(android.R.id.background,
+                    n.postaja + ": " + vidni.take(3).joinToString("; ") { opis(it) })
+                return v
+            }
+
+            /** "14:45 +4" v enem napisu: ura krepko, zamuda manjsa v barvi razreda. */
+            private fun par(o: Tabla.Odhod): CharSequence = SpannableStringBuilder().apply {
+                append(precrtaj(o.ura, o.odpadla))
+                append(" ")
+                val od = length
+                append(napisZamude(o))
+                setSpan(ForegroundColorSpan(barvaZamude(o)), od, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(RelativeSizeSpan(0.8f), od, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+
+            /** Krog z vlakom ali avtobusom pred imenom postaje. */
+            private fun ikona(v: RemoteViews) {
+                val t = Izris.ton(c, n.vlak)
+                v.setInt(R.id.ikona, "setBackgroundResource", t.krog)
+                v.setImageViewResource(R.id.ikona, t.ikona)
+                v.setInt(R.id.ikona, "setColorFilter", t.glavna)
+            }
+
+            /** Tri fiksne vrstice (2×2 in 4×2); vsaka odpre svojo vožnjo. */
+            private fun vrstice(v: RemoteViews, polne: Boolean) {
+                val pokazi = vidni.isNotEmpty()
+                v.setViewVisibility(R.id.sporocilo, if (pokazi) View.GONE else View.VISIBLE)
+                if (!pokazi) v.setTextViewText(R.id.sporocilo, prazno())
+                for (i in VRSTICE.indices) {
+                    val o = vidni.getOrNull(i)
+                    v.setViewVisibility(VRSTICE[i], if (o == null) View.GONE else View.VISIBLE)
+                    if (o == null) continue
+                    v.setTextViewText(URE[i], precrtaj(o.ura, o.odpadla))
+                    v.setTextViewText(KAM[i], precrtaj(
+                        if (polne) voznja(o) else kratko(o), o.odpadla))
+                    if (polne) v.setTextViewText(TIRI[i], tir(o))
+                    zamuda(v, ZAMUDE[i], o)
+                    v.setContentDescription(VRSTICE[i], opis(o))
+                    // Vrstica odpre SVOJO voznjo. Widget pove, da nekaj zamuja;
+                    // naslednje vprasanje je "kje je" in to je okno voznje.
+                    v.setOnClickPendingIntent(VRSTICE[i],
+                        Izris.odpri(c, koda + 1 + i, naslovVoznje(c, n, o)))
+                }
+            }
+
+            /** "tir 3" ali nic. */
+            private fun tir(o: Tabla.Odhod): String =
+                if (o.tir.isNullOrBlank()) "" else c.getString(R.string.widget_tir, o.tir)
+
+            /** Ozka vrstica pod uro: "Koper · tir 3" (avtobus: "LPP 6 → Črnuče"). */
+            private fun kratko(o: Tabla.Odhod): String =
+                listOf(if (n.vlak) o.kam.ifBlank { o.trainNo } else voznja(o), tir(o))
+                    .filter { it.isNotBlank() }.joinToString(" · ")
+
+            /** 2×2 in 3×2: ime postaje, tri kratke vrstice, ura podatka. */
+            private fun kvadrat(): RemoteViews {
+                val v = RemoteViews(c.packageName, R.layout.w_tabla_kvadrat)
+                klikTabla(v)
+                ikona(v)
+                v.setTextViewText(R.id.postaja, n.postaja)
+                vrstice(v, polne = false)
+                ob(v, R.id.ob)
+                return v
+            }
+
+            /** Glava 4×2 in velikega: ikona, postaja, stran ceste in gumbi. */
+            private fun glavaZGumbi(v: RemoteViews) {
+                ikona(v)
+                v.setTextViewText(R.id.postaja, n.postaja)
+                v.setViewVisibility(R.id.smer, if (n.smerNapis == null) View.GONE else View.VISIBLE)
+                n.smerNapis?.let { v.setTextViewText(R.id.smer, it) }
+                v.setOnClickPendingIntent(R.id.osvezi, osveziNamera())
+                // Obrni samo, kjer je kaj obrniti: postajalisce z vec stranmi ceste.
+                val obrniti = !n.vlak && (s?.smeri?.size ?: 0) > 1
+                v.setViewVisibility(R.id.obrni, if (obrniti) View.VISIBLE else View.GONE)
+                if (obrniti) v.setOnClickPendingIntent(R.id.obrni, obrniNamera())
+                val ovira = s?.opozorilo
+                v.setViewVisibility(R.id.ovira, if (ovira == null) View.GONE else View.VISIBLE)
+                if (ovira != null) {
+                    // Ovire železnice imajo svojo stran; avtobusne so na tabli
+                    // postajališča (`alerts.for_stops`).
+                    val kam = if (n.vlak) Nastavitve.naslov(c) + "/app/ovire" else naslovTable(c, n)
+                    v.setContentDescription(R.id.ovira, ovira)
+                    v.setOnClickPendingIntent(R.id.ovira, Izris.odpri(c, koda + 9, kam))
+                }
+            }
+
+            /** 4×2: glava z gumbi, tri polne vrstice, ura podatka. */
+            private fun srednji(): RemoteViews {
+                val v = RemoteViews(c.packageName, R.layout.w_tabla_srednji)
+                klikTabla(v)
+                glavaZGumbi(v)
+                vrstice(v, polne = true)
+                ob(v, R.id.ob)
+                return v
+            }
+
+            /**
+             * 4×3 in vec (Android 12+): seznam vseh odhodov, ki se drsi. Ozek
+             * (2×3) ima vrstice v dveh vrsticah in glavo brez znaka in gumba za
+             * osvezitev -- ime postaje je v tej sirini pomembnejse, osvezi pa
+             * tudi dotik ure podatka.
+             */
+            private fun velik(ozek: Boolean): RemoteViews {
+                val v = RemoteViews(c.packageName, R.layout.w_tabla_velik)
+                klikTabla(v)
+                glavaZGumbi(v)
+                if (ozek) {
+                    v.setViewVisibility(R.id.ikona, View.GONE)
+                    v.setViewVisibility(R.id.osvezi, View.GONE)
+                }
+                // Na velikem je ovira vrstica nad seznamom; gumb bi jo podvojil.
+                v.setViewVisibility(R.id.ovira, View.GONE)
+                val ovira = s?.opozorilo
+                v.setViewVisibility(R.id.opozorilo, if (ovira == null) View.GONE else View.VISIBLE)
+                if (ovira != null) v.setTextViewText(R.id.opozorilo_besedilo, ovira)
+                ob(v, R.id.ob)
+                val pokazi = vidni.isNotEmpty()
+                v.setViewVisibility(R.id.sporocilo, if (pokazi) View.GONE else View.VISIBLE)
+                v.setViewVisibility(R.id.seznam, if (pokazi) View.VISIBLE else View.GONE)
+                if (!pokazi) { v.setTextViewText(R.id.sporocilo, prazno()); return v }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val b = RemoteViews.RemoteCollectionItems.Builder()
+                        .setHasStableIds(true).setViewTypeCount(1)
+                    vidni.forEachIndexed { i, o -> b.addItem(i.toLong(), vrsticaSeznama(o, ozek)) }
+                    v.setRemoteAdapter(R.id.seznam, b.build())
+                    v.setPendingIntentTemplate(R.id.seznam, Izris.predlogaOdpri(c, koda + 10))
+                }
+                return v
+            }
+
+            private fun vrsticaSeznama(o: Tabla.Odhod, ozek: Boolean): RemoteViews {
+                val r = RemoteViews(c.packageName,
+                    if (ozek) R.layout.w_tabla_vrstica_ozka else R.layout.w_tabla_vrstica)
+                r.setTextViewText(R.id.ura, precrtaj(o.ura, o.odpadla))
+                r.setTextViewText(R.id.kam, precrtaj(if (ozek) kratko(o) else voznja(o), o.odpadla))
+                r.setTextViewText(R.id.tir, tir(o))
+                zamuda(r, R.id.zam, o)
+                r.setContentDescription(R.id.vrstica, opis(o))
+                r.setOnClickFillInIntent(R.id.vrstica, Izris.vstavekOdpri(naslovVoznje(c, n, o)))
+                return r
+            }
+        }
     }
 }

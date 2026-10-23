@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trak brez podlage na temnem ozadju zaslona: svetlo besedilo s senco. Iste
+     oznake kot `w_trak`; senca je samo v XML (`setShadowLayer` ni v
+     RemoteViews), zato je postavitev svoja. Izpeljana iz `w_trak`: sprememba
+     tam mora priti tudi sem. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingEnd="8dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/nad"
+            android:shadowColor="@color/brez_senca"
+            android:shadowDy="1"
+            android:shadowRadius="4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:textColor="@color/brez_svetlo_2"
+            android:textSize="11.5sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/glavno"
+                android:shadowColor="@color/brez_senca"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="24sp"
+                android:autoSizeMinTextSize="14sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:textSize="24sp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/brez_svetlo"
+                android:textStyle="bold" />
+
+            <Chronometer
+                android:id="@+id/stevec"
+                android:shadowColor="@color/brez_senca"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="24sp"
+                android:autoSizeMinTextSize="14sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:textSize="24sp"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/brez_svetlo"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/pod"
+                android:shadowColor="@color/brez_senca"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="13.5sp"
+                android:autoSizeMinTextSize="9sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:textSize="13.5sp"
+                android:layout_marginStart="6dp"
+                android:maxLines="1"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:textColor="@color/brez_svetlo_2"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/opis"
+            android:shadowColor="@color/brez_senca"
+            android:shadowDy="1"
+            android:shadowRadius="4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/brez_svetlo_2"
+            android:textSize="11.5sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/gumb"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/gumb_krog"
+        android:importantForAccessibility="yes"
+        android:padding="10dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/stikalo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:importantForAccessibility="yes"
+        android:padding="4dp"
+        android:visibility="gone" />
+</LinearLayout>

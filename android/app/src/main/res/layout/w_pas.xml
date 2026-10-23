@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nizek in širok widget (vrstica na ležečem zaslonu, 51 dp): vse v eni
+     vrsti, ker se tri vrstice traku tu ne izidejo. Iste oznake kot `w_trak`. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_ozadje"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="6dp">
+
+    <TextView
+        android:id="@+id/glavno"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFeatureSettings="tnum"
+        android:maxLines="1"
+        android:textColor="@color/ink"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <Chronometer
+        android:id="@+id/stevec"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFeatureSettings="tnum"
+        android:textColor="@color/ink"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/pod"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:autoSizeMaxTextSize="12.5sp"
+        android:autoSizeMinTextSize="9sp"
+        android:autoSizeStepGranularity="0.5sp"
+        android:autoSizeTextType="uniform"
+        android:textSize="12.5sp"
+        android:layout_marginStart="6dp"
+        android:maxLines="1"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:textColor="@color/ink_dim"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/nad"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/ink_dim"
+        android:textSize="12sp" />
+
+    <ImageView
+        android:id="@+id/gumb"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/gumb_krog"
+        android:importantForAccessibility="yes"
+        android:padding="9dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/stikalo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:importantForAccessibility="yes"
+        android:padding="2dp"
+        android:visibility="gone" />
+</LinearLayout>

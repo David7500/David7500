@@ -46,4 +46,23 @@
          ne doseže kontrasta (2,3 : 1), ta 7 : 1. -->
     <color name="napaka">#ffb4ab</color>
     <color name="napaka_kont">#3a1b1e</color>
+
+    <!-- Widgeti. Avtobus prestavi samo tonski vsebnik, kot `body.net-avtobus`
+         v base.css: lestvica zamud ostane ista na obeh omrežjih. `bus_na_kont_2`
+         na `bus_kont` je 6,5 : 1. -->
+    <color name="bus_kont">#16452e</color>
+    <color name="bus_na_kont">#c1f0d6</color>
+    <color name="bus_na_kont_2">#9fd3b6</color>
+    <color name="m_najvisja">#272b33</color>
+    <color name="gumb_ikona">#c4cad4</color>
+    <!-- Ovire tonsko rumene, kot na strani (oznake.md). -->
+    <color name="ovira_kont">#2e2811</color>
+    <color name="ovira_na_kont">#f2d36b</color>
+    <!-- Widget brez podlage: besedilo leži na ozadju zaslona. Svetlo s
+         senco na temnem ozadju, temno brez sence na svetlem. -->
+    <color name="brez_svetlo">#ffffff</color>
+    <color name="brez_svetlo_2">#e7eaf0</color>
+    <color name="brez_temno">#17191d</color>
+    <color name="brez_temno_2">#3a3631</color>
+    <color name="brez_senca">#99000000</color>
 </resources>

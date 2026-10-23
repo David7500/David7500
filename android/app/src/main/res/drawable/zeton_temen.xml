@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Žeton zamude na tonskem vsebniku: podlaga strani, kot `.bud-zam` na domači strani. Temna oranžna (`d_big`) na rjavem ne bi dosegla kontrasta. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bg" />
+    <corners android:radius="8dp" />
+</shape>

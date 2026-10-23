@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Okrogel gumb na rjavem vsebniku: 14 % barve besedila, kot gumbi na kartici budilke. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33ffffff">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#24ffdbc8" />
+        </shape>
+    </item>
+</ripple>

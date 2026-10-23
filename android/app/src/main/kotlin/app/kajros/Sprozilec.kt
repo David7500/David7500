@@ -147,13 +147,15 @@ class Sprozilec : BroadcastReceiver() {
         // stara vrednost s svojim casom je se vedno boljsa od nicesar in
         // `Ura` sama presodi, kdaj je prestara.
         if (vozi.zamudaS == null) {
-            return b.copy(tripId = vozi.tripId ?: b.tripId, stikObMs = zdaj)
+            return b.copy(tripId = vozi.tripId ?: b.tripId, stikObMs = zdaj,
+                tir = vozi.tir ?: b.tir)
         }
         return b.copy(
             zamudaS = vozi.zamudaS,
             zamudaObMs = zdaj,
             stikObMs = zdaj,
             tripId = vozi.tripId ?: b.tripId,
+            tir = vozi.tir ?: b.tir,
         )
     }
 

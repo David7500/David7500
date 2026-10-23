@@ -374,6 +374,25 @@ Zadnjega najtežje ujeti: preizkušeno troje, dve nista delovali — `ANDROID_US
 
 `android/zgradi.sh` isto revizijo ponovi ob vsaki gradnji in **pade**, če kaj uide — enkratna meritev tega razreda napake ne ujame.
 
+## Widgeti po velikostih (23. 10. 2026)
+
+Trije widgeti (odštevanje, budilke, tabla) v osmih velikostnih razredih, od 1×1 do seznama (`Velikost.kt`).
+
+**APK.** Izdajni, gradnja iz `git worktree` na HEAD `b7205e9` proti delovni kopiji: **180 176 → 223 241 B (+43 065 B)**. Postavitve in slike +21 880 B (35 novih virov), koda +12 060 B, tabela virov +5 764 B. Nobene nove odvisnosti.
+
+**Tabla prek mobilnega omrežja** (`/api/departures`, nov `limit`, widget vzame 30 vrstic; izmerjeno lokalno 23. 10. 2026):
+
+| postaja | vrstic | JSON | gzip |
+|---|---|---|---|
+| Bavarski dvor, brez `limit` | 149 | 119,4 kB | 10,8 kB |
+| Bavarski dvor, `limit=30` | 30 | 24,7 kB | 3,5 kB |
+| Ljubljana, brez `limit` | 39 | 34,9 kB | 4,1 kB |
+| Ljubljana, `limit=30` | 30 | 28,8 kB | 3,8 kB |
+
+Na 15 minut je to ~96 zahtev na dan na widget: mestno postajališče **1,04 MB → 0,34 MB** stisnjeno na dan.
+
+**Preverjeno na emulatorju** (`AppWidgetHostView`, `PregledWidgetov`): Android 15 vsaka velikost z vzorci (šteje, daleč, avtobus prej, zastarela po zvonjenju, zdaj, brez budilke; tri, pet, ugasnjena, zazvonila, nobene; vlak z oviro, stran ceste, star podatek, prazna, brez postaje, brez podlage), pravi strežnik (`zivo`: Ljubljana, RG 211 +3, tir 7-A, ovira) ter svetlo in temno ozadje zaslona. Android 9 (pot brez zemljevida velikosti, izbira iz `OPTION_APPWIDGET_*` vezanega widgeta): vse tri v vseh velikostih in `zivo`, brez sesutja; žeton na 1×1 je tam manjši (samodejna velikost pri `wrap_content`). **Ni preverjeno**: launcherji izdelovalcev (Samsung, Xiaomi).
+
 ## Rezerva budilke: koliko prej naj zazvoni (6. 9. 2026)
 
 David: *„Uporabnik pa ne sme zamuditi, raje kej rezerve, če ni zihr."* Koliko rezerve = vprašanje s številko. Vir: senca (`napoved`, 63 843 razrešenih vrstic): `ours_s` = kar bi prikaz **takrat** povedal, `actual_s` = resnica. Napaka budilke = `ours_s − actual_s` — pozitivna = obljubili večjo zamudo, kot je bila, budilka bi zvonila **prepozno**.

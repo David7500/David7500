@@ -29,8 +29,16 @@ object Tabla {
 
     private const val DATOTEKA = "tabla"
     private const val CAKAJ_MS = 5000
-    /** Kolikor vrstic gre na widget. */
-    const val VRSTIC = 3
+    /**
+     * Koliko vrstic widget shrani. Velik widget jih pokaže v seznamu, manjši
+     * prve, ki še niso odpeljale -- shramba jih ima več, da se tabla med dvema
+     * osvežitvama premakne naprej sama, brez zahteve.
+     *
+     * Avtobusno postajališče v središču ima v štirih urah 150 odhodov
+     * (Bavarski dvor: 119 kB, gzip 10 kB, 22. 10. 2026); 30 je več, kot jih
+     * kdo prebere na domačem zaslonu.
+     */
+    const val SHRANI = 30
     /** Koliko naprej vprasamo. Manj bi pri redki progi vrnilo prazno tablo. */
     private const val OKNO_MIN = 240
     /** Toliko predlogov kot na strani (`attachSuggest`); vec jih tipkovnica prekrije. */
@@ -49,10 +57,47 @@ object Tabla {
         /** `tocno`, `1-5`, `5-15`, `nad-15` -- kljuc razreda s streznika. */
         val razred: String?,
         val prezgodaj: Boolean,
-    )
+        /** Tir s table SŽ (`peroni.py`), kadar ga SŽ objavi in ni star. */
+        val tir: String? = null,
+        /** Odpovedana vožnja ali obvoz, ki tu ne ustavi: vrstica je prečrtana. */
+        val odpadla: Boolean = false,
+        /** Voznoredni odhod v epohi (ms); 0 = ni znan (stanje izpred 23. 10. 2026). */
+        val voznoredniMs: Long = 0,
+    ) {
+        /**
+         * Ali vrstica še sodi na tablo ob [zdajMs].
+         *
+         * Shranjena tabla je stara do pol ure; brez tega bi widget ob 7:10 še
+         * kazal vlak ob 6:57 kot naslednjega. Odpeljal je, ko je mimo ura z
+         * zamudo in še minuta. **Brez podatka o zamudi ostane deset minut** --
+         * toliko nazaj gre tudi strežnik (`api_departures`): vlak, o katerem
+         * feed molči, morda šele prihaja.
+         */
+        fun vidno(zdajMs: Long): Boolean {
+            if (voznoredniMs <= 0) return true
+            val doMs = if (zamudaMin == null) voznoredniMs + 10 * 60_000L
+                else voznoredniMs + zamudaMin * 60_000L + 60_000L
+            return zdajMs < doMs
+        }
 
-    /** Kaj widget kaze in od kdaj. */
-    data class Stanje(val odhodi: List<Odhod>, val obMs: Long)
+        /** Kdaj [vidno] postane false. */
+        fun odideMs(): Long =
+            if (zamudaMin == null) voznoredniMs + 10 * 60_000L
+            else voznoredniMs + zamudaMin * 60_000L + 60_000L
+    }
+
+    /**
+     * Kaj widget kaze in od kdaj.
+     *
+     * [opozorilo] je prva ovira, ki imenuje to postajo; [smeri] so strani
+     * ceste, med katerimi gumb na widgetu preklaplja.
+     */
+    data class Stanje(
+        val odhodi: List<Odhod>,
+        val obMs: Long,
+        val opozorilo: String? = null,
+        val smeri: List<Smer> = emptyList(),
+    )
 
     // ---------- nastavitev widgeta ----------
 
@@ -76,6 +121,8 @@ object Tabla {
         val smer: String? = null,
         /** "→ Tobačna" -- shranjena, ker jo widget izpise tudi brez omrezja. */
         val smerNapis: String? = null,
+        /** Tonska podlaga ali brez nje (`Izris.Videz`). */
+        val videz: Izris.Videz = Izris.Videz.TONSKA,
     ) {
         val vlak: Boolean get() = omrezje == "zeleznica"
     }
@@ -90,12 +137,26 @@ object Tabla {
     fun smerNapis(naslednje: List<String>): String =
         "→ " + naslednje.joinToString(" · ").ifBlank { "končna" }
 
+    /**
+     * Gumb ⇄: druga stran ceste.
+     *
+     * Iz „obeh“ (`null`) na prvo, nato po vrsti v krogu. Nazaj na obe gumb ne
+     * gre: ⇄ pomeni „druga stran“, in pri dveh straneh bi vsak drugi pritisk
+     * pokazal obe, kar ni odgovor na vprašanje. Obe se izbere v nastavitvi.
+     */
+    fun naslednjaSmer(smeri: List<Smer>, zdaj: String?): Smer? {
+        if (smeri.isEmpty()) return null
+        val i = smeri.indexOfFirst { it.kljuc == zdaj }
+        return smeri[(i + 1).mod(smeri.size)]
+    }
+
     fun nastavi(c: Context, widgetId: Int, n: Nastavitev) {
         c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).edit()
             .putString("postaja_$widgetId", n.postaja)
             .putString("omrezje_$widgetId", n.omrezje)
             .putString("smer_$widgetId", n.smer)
             .putString("smer_napis_$widgetId", n.smerNapis)
+            .putString("videz_$widgetId", n.videz.name)
             .apply()
     }
 
@@ -103,7 +164,8 @@ object Tabla {
         val p = c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE)
         val postaja = p.getString("postaja_$widgetId", null) ?: return null
         return Nastavitev(postaja, p.getString("omrezje_$widgetId", "zeleznica")!!,
-            p.getString("smer_$widgetId", null), p.getString("smer_napis_$widgetId", null))
+            p.getString("smer_$widgetId", null), p.getString("smer_napis_$widgetId", null),
+            Izris.Videz.iz(p.getString("videz_$widgetId", null)))
     }
 
     /** Widget je odstranjen z zaslona; njegova nastavitev nima vec lastnika. */
@@ -113,6 +175,7 @@ object Tabla {
             .remove("omrezje_$widgetId")
             .remove("smer_$widgetId")
             .remove("smer_napis_$widgetId")
+            .remove("videz_$widgetId")
             .remove("stanje_$widgetId")
             .apply()
     }
@@ -133,12 +196,25 @@ object Tabla {
                 put("min", o.zamudaMin ?: JSONObject.NULL)
                 put("razred", o.razred ?: JSONObject.NULL)
                 put("prezgodaj", o.prezgodaj)
+                put("tir", o.tir ?: JSONObject.NULL)
+                put("odpadla", o.odpadla)
+                put("vr_ms", o.voznoredniMs)
             })
         }
+        val smeri = JSONArray()
+        s.smeri.forEach { smeri.put(JSONObject().put("kljuc", it.kljuc).put("napis", it.napis)) }
         c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).edit()
-            .putString("stanje_$widgetId",
-                JSONObject().put("ob", s.obMs).put("odhodi", a).toString())
+            .putString("stanje_$widgetId", JSONObject()
+                .put("ob", s.obMs).put("odhodi", a)
+                .put("opozorilo", s.opozorilo ?: JSONObject.NULL)
+                .put("smeri", smeri).toString())
             .apply()
+    }
+
+    /** Shranjena tabla ne velja več (druga stran ceste); nova pride s prenosom. */
+    fun pozabiStanje(c: Context, widgetId: Int) {
+        c.getSharedPreferences(DATOTEKA, Context.MODE_PRIVATE).edit()
+            .remove("stanje_$widgetId").apply()
     }
 
     fun stanje(c: Context, widgetId: Int): Stanje? {
@@ -157,8 +233,18 @@ object Tabla {
                     zamudaMin = if (r.isNull("min")) null else r.getInt("min"),
                     razred = if (r.isNull("razred")) null else r.optString("razred"),
                     prezgodaj = r.optBoolean("prezgodaj"),
+                    tir = if (r.isNull("tir")) null else r.optString("tir").ifBlank { null },
+                    odpadla = r.optBoolean("odpadla"),
+                    voznoredniMs = r.optLong("vr_ms"),
                 )
-            }, o.optLong("ob"))
+            }, o.optLong("ob"),
+                opozorilo = if (o.isNull("opozorilo")) null else o.optString("opozorilo").ifBlank { null },
+                smeri = (o.optJSONArray("smeri") ?: JSONArray()).let { sm ->
+                    (0 until sm.length()).map { i ->
+                        val d = sm.getJSONObject(i)
+                        Smer(d.optString("kljuc"), d.optString("napis"))
+                    }
+                })
         } catch (e: org.json.JSONException) {
             null
         }
@@ -176,11 +262,31 @@ object Tabla {
      * zamude se ni, je to **pomisljaj in ne nicla** -- "tocno" za voznjo, o
      * kateri feed se ni rekel nicesar, bi bila trditev, ki je nimamo.
      */
-    fun zamudaNapis(o: Odhod): String {
-        val m = o.zamudaMin ?: return "—"
-        if (o.prezgodaj) return "${-m} prej"
+    fun zamudaNapis(o: Odhod): String = napis(o.zamudaMin, o.prezgodaj)
+
+    /**
+     * Isto za zamudo budilke, ki jo widget izpelje sam: budilka hrani sekunde
+     * z zadnjega preverjanja, ne odločitve strežnika, in `Ura` presodi, ali
+     * še velja. Prag za „prej“ je isti kot `prezgodaj` na strežniku.
+     */
+    fun zamudaNapis(m: Int?): String = napis(m, m != null && m <= -1)
+
+    private fun napis(m: Int?, prezgodaj: Boolean): String {
+        if (m == null) return "—"
+        if (prezgodaj) return "${-m} prej"
         if (m <= 0) return "točno"
         return "+$m"
+    }
+
+    /** Zaokrožena minuta, `floor(x + 0.5)` kot `stats._minute()` -- ne bančno. */
+    fun minute(s: Int): Int = Math.floorDiv(s + 30, 60)
+
+    /** Ključ razreda iz zaokrožene minute, isti pragovi kot `stats._razred_zamude()`. */
+    fun razred(m: Int): String = when {
+        m <= 0 -> "tocno"
+        m <= 5 -> "1-5"
+        m <= 15 -> "5-15"
+        else -> "nad-15"
     }
 
     /** Koliko minut je star podatek. */
@@ -228,6 +334,8 @@ object Tabla {
              * kar vnos ("bavarski"); s tem se ob prvi osvezitvi popravi.
              */
             val postaja: String? = null,
+            /** Naslov prve ovire, ki zadeva to postajo ([opozorilo]). */
+            val opozorilo: String? = null,
         ) : Izid() {
             /**
              * Nastavitev, kot jo potrjuje odgovor: ime postaje streznikovo,
@@ -251,10 +359,13 @@ object Tabla {
         append(URLEncoder.encode(n.postaja, "UTF-8"))
         append("&network=").append(n.omrezje)
         append("&window=").append(OKNO_MIN)
+        // Strežnik pred 23. 10. 2026 `limit` prezre in vrne vse; widget vseeno
+        // shrani samo [SHRANI].
+        append("&limit=").append(SHRANI)
         if (!n.smer.isNullOrBlank()) append("&smer=").append(URLEncoder.encode(n.smer, "UTF-8"))
     }
 
-    /** Prve [VRSTIC] vrstice odhodne table te postaje. */
+    /** Prvih [SHRANI] vrstic odhodne table te postaje. */
     fun prenesi(c: Context, n: Nastavitev): Izid {
         val (koda, besedilo) = prenesi(naslov(Nastavitve.naslov(c), n))
         if (koda == 404) return Izid.NiPostaje
@@ -269,14 +380,34 @@ object Tabla {
                 Smer(d.optString("kljuc"), smerNapis((0 until nasl.length()).map { nasl.optString(it) }))
             }.filter { it.kljuc.isNotBlank() }
             Izid.Odhodi(
-                (0 until minOf(a.length(), VRSTIC)).map { vrstica(a.getJSONObject(it)) },
+                (0 until minOf(a.length(), SHRANI)).map { vrstica(a.getJSONObject(it)) },
                 if (smeri.size > 1) smeri else emptyList(),
                 smerVelja = n.smer.isNullOrBlank() || !o.isNull("smer"),
                 postaja = o.optString("station").ifBlank { null },
+                opozorilo = opozorilo(o.optJSONArray("alerts"), n.vlak),
             )
         } catch (e: org.json.JSONException) {
             Izid.BrezZveze
         }
+    }
+
+    /**
+     * Ovira, ki jo widget pokaže nad seznamom.
+     *
+     * Pri vlakih **samo tista, ki imenuje to postajo** (`mentions_route` s
+     * strežnika): splošno obvestilo visi na 75 vlakih in bi bilo nad vsako
+     * tablo, kar je enako, kot če ga ne bi bilo. Pri avtobusih so obvestila že
+     * vezana na postajališče (`alerts.for_stops`).
+     */
+    private fun opozorilo(a: JSONArray?, vlak: Boolean): String? {
+        a ?: return null
+        for (i in 0 until a.length()) {
+            val o = a.optJSONObject(i) ?: continue
+            if (vlak && !o.optBoolean("mentions_route")) continue
+            val naslov = o.optString("header").trim()
+            if (naslov.isNotEmpty() && naslov != "null") return naslov
+        }
+        return null
     }
 
     /**
@@ -316,7 +447,20 @@ object Tabla {
             zamudaMin = if (z == null || z.isNull("min")) null else z.getInt("min"),
             razred = z?.optString("razred")?.ifBlank { null },
             prezgodaj = z?.optBoolean("prezgodaj") ?: false,
+            tir = if (r.isNull("tir")) null else r.optString("tir").ifBlank { null },
+            // Odpovedana vožnja ima oboje; obvoz, ki tu ne ustavi, samo drugo.
+            odpadla = r.optBoolean("odpovedano") || r.optBoolean("ne_ustavi"),
+            voznoredniMs = casMs(r.optString("sched")),
         )
+    }
+
+    private fun casMs(iso: String?): Long {
+        if (iso.isNullOrBlank()) return 0
+        return try {
+            OffsetDateTime.parse(iso).toInstant().toEpochMilli()
+        } catch (e: DateTimeParseException) {
+            0
+        }
     }
 
     private fun ura(iso: String?): String {

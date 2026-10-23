@@ -1869,6 +1869,8 @@ def api_departures(
     network: str = NETWORK_Q,
     smer: str | None = Query(None, max_length=80,
                              description="stran ceste: `kljuc` iz `smeri`"),
+    limit: int | None = Query(None, ge=1, le=500,
+                              description="največ vrstic tabele, od začetka"),
     request: Request = None,
 ):
     """Odhodna ali prihodna tabla postaje.
@@ -1881,6 +1883,11 @@ def api_departures(
     odjemalca, ki vzame samo prve vrstice -- widget na telefonu. Neznan kljuc
     (postajalisce je ob uvozu izginilo) ni napaka: tabla je cela, `smer` v
     odgovoru pa `null`, da odjemalec ve, da izbira ni bila upostevana.
+
+    `limit` je za isti widget: shrani jih 30, mestno postajalisce pa ima v
+    treh urah tudi 150 odhodov in vse gre cez mobilno omrezje vsakih 15
+    minut. Odreze se sele na koncu -- zasloni LPP vrstice dodajajo in
+    prerazvrstijo, ovire pa veljajo za celo tablo.
     """
     now = datetime.now(TZ)
     date = _check_date(date) or now.date().isoformat()
@@ -1952,6 +1959,8 @@ def api_departures(
                 conn, izbrana["stop_ids"] if izbrana else [r["stop_id"] for r in conn.execute(
                     "SELECT stop_id FROM station WHERE name = ?", (exact,))])
         meje = _znano_do(conn, network)
+    if limit:
+        rows = rows[:limit]
     return {"station": exact, "date": date, "kind": kind, "network": network,
             **meje,
             "from_s": from_s, "window_min": window,

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ovira nad seznamom odhodov: tonsko rumena kot ovire na strani. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/ovira_kont" />
+    <corners android:radius="12dp" />
+</shape>

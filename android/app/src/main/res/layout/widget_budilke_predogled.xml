@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Samo za izbirnik widgetov (`previewLayout`). Izmišljene budilke, ne
-     podatek; tretja je ugasnjena, ker je ravno to tisto, kar widget zna in se
-     iz treh enakih vrstic ne bi videlo. -->
+<!-- Samo za izbirnik widgetov (`previewLayout`). Privzeti 2×2 z izmišljenima
+     budilkama; druga je ugasnjena, ker je ravno to tisto, kar widget zna in
+     se iz dveh enakih vrstic ne bi videlo. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@drawable/widget_ozadje"
+    android:orientation="vertical"
     android:padding="10dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="4dp"
-        android:maxLines="1"
         android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="4dp"
         android:text="@string/widget_budilke_glava"
         android:textColor="@color/ink"
         android:textSize="13sp"
@@ -22,117 +22,79 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginTop="4dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
+        android:layout_weight="1"
         android:background="@drawable/widget_vrstica_vklop"
-        android:paddingStart="10dp"
-        android:paddingEnd="2dp"
-        android:minHeight="40dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="2dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="06:25"
+            android:fontFeatureSettings="tnum"
+            android:text="06:31"
             android:textColor="@color/m_na_kont"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:fontFeatureSettings="tnum" />
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:maxLines="1"
+            android:layout_weight="1"
             android:ellipsize="end"
-            android:text="LPV 2010 · Grosuplje"
+            android:maxLines="1"
+            android:text="LPV 2010 · Ljubljana"
             android:textColor="@color/m_na_kont_2"
-            android:textSize="12sp" />
+            android:textSize="11.5sp" />
 
         <ImageView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/stikalo_slika_vklop"
+            android:importantForAccessibility="no"
             android:padding="6dp"
-            android:importantForAccessibility="yes" />
+            android:src="@drawable/stikalo_slika_vklop" />
     </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginTop="4dp"
-        android:orientation="horizontal"
+        android:layout_weight="1"
+        android:background="@drawable/widget_vrstica_izklop"
         android:gravity="center_vertical"
-        android:background="@drawable/widget_vrstica_vklop"
-        android:paddingStart="10dp"
-        android:paddingEnd="2dp"
-        android:minHeight="40dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="07:40"
-            android:textColor="@color/m_na_kont"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:fontFeatureSettings="tnum" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:text="LPP 25 · Bavarski dvor"
-            android:textColor="@color/m_na_kont_2"
-            android:textSize="12sp" />
-
-        <ImageView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/stikalo_slika_vklop"
-            android:padding="6dp"
-            android:importantForAccessibility="yes" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="10dp"
-        android:paddingEnd="2dp"
-        android:minHeight="40dp">
+        android:paddingStart="12dp"
+        android:paddingEnd="2dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="15:05"
+            android:fontFeatureSettings="tnum"
+            android:text="17:02"
             android:textColor="@color/ink_faint"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:fontFeatureSettings="tnum" />
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:maxLines="1"
+            android:layout_weight="1"
             android:ellipsize="end"
-            android:text="IC 502 · Celje"
+            android:maxLines="1"
+            android:text="LPV 2015 · Koper"
             android:textColor="@color/ink_mute"
-            android:textSize="12sp" />
+            android:textSize="11.5sp" />
 
         <ImageView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/stikalo_slika_izklop"
+            android:importantForAccessibility="no"
             android:padding="6dp"
-            android:importantForAccessibility="yes" />
+            android:src="@drawable/stikalo_slika_izklop" />
     </LinearLayout>
 </LinearLayout>

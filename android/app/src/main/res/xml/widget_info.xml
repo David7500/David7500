@@ -9,19 +9,20 @@
   pravo postavitev z vzorčno vožnjo, ne ikone aplikacije. `previewImage` ostane
   za starejše naprave, kjer `previewLayout` ni brano.
 
-  `minResizeWidth/Height` sta ista kot `minWidth/minHeight` namenoma: pod tem
-  se štiri vrstice besedila ne izidejo. Brez njiju sme launcher widget stisniti
-  poljubno globoko in podnapis tiho odreže.
+  Privzeto 2×1 (vožnja, števec, žeton, ura odhoda), pomanjšati se da do ene
+  ikone: `minResize` 40 dp je ena celica. Kaj pokaže katera velikost, odloči
+  `Velikost`; `minWidth/minHeight` sta za launcherje pred Androidom 12, ki
+  `targetCell*` ne berejo.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="180dp"
-    android:minHeight="80dp"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="80dp"
-    android:targetCellWidth="3"
-    android:targetCellHeight="2"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/widget"
+    android:initialLayout="@layout/w_trak"
     android:previewLayout="@layout/widget_predogled"
     android:previewImage="@drawable/ikona_znak"
     android:resizeMode="horizontal|vertical"

@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Budilke 4×2: tri, z dnevi, vsaka s stikalom. Vrstice so izpisane in ne
+     `include`: RemoteViews naslavlja poglede po id, `include` pa notranjih
+     idjev ne preimenuje. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_ozadje"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/bud_glava"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:text="@string/widget_budilke_glava"
+        android:textColor="@color/ink"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- Brez budilk widget ne sme biti prazen pravokotnik: povedati mora, da
+         ni okvara, in kje se budilka nastavi. -->
+    <TextView
+        android:id="@+id/bud_prazno"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="3"
+        android:paddingStart="4dp"
+        android:text="@string/widget_budilke_kako"
+        android:textColor="@color/ink_dim"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/bud_vrstica1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:minHeight="44dp"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:id="@+id/bud_ura1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:textColor="@color/m_na_kont"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/bud_kaj1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont_2"
+                android:textSize="12.5sp" />
+
+            <TextView
+                android:id="@+id/bud_dni1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont_2"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/bud_stikalo1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:importantForAccessibility="yes"
+            android:padding="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/bud_vrstica2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:minHeight="44dp"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:id="@+id/bud_ura2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:textColor="@color/m_na_kont"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/bud_kaj2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont_2"
+                android:textSize="12.5sp" />
+
+            <TextView
+                android:id="@+id/bud_dni2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont_2"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/bud_stikalo2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:importantForAccessibility="yes"
+            android:padding="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/bud_vrstica3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:minHeight="44dp"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:id="@+id/bud_ura3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFeatureSettings="tnum"
+            android:textColor="@color/m_na_kont"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/bud_kaj3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont_2"
+                android:textSize="12.5sp" />
+
+            <TextView
+                android:id="@+id/bud_dni3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont_2"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/bud_stikalo3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:importantForAccessibility="yes"
+            android:padding="6dp" />
+    </LinearLayout>
+
+    <!-- Kadar jih je več, kot jih gre na widget. -->
+    <TextView
+        android:id="@+id/bud_vec"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:textColor="@color/ink_mute"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</LinearLayout>

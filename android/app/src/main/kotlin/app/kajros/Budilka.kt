@@ -43,6 +43,11 @@ data class Budilka(
     val odzvonjeno: Boolean = false,
     /** Ce je potnik pritisnil "se dve minuti": takrat, ne po racunu. */
     val odlozenoDoMs: Long = 0,
+    /**
+     * Tir s table SŽ ob zadnjem preverjanju (`/api/departures`), za widget.
+     * Brez njega widget ne pove ničesar o tiru -- ne ugiba.
+     */
+    val tir: String? = null,
 ) {
     val vlak: Boolean get() = omrezje == "zeleznica"
     val ponavljajoca: Boolean get() = Ponovitev.jePonavljajoca(dnevi)
@@ -70,6 +75,7 @@ data class Budilka(
             zvoniObMs = 0,
             odzvonjeno = false,
             odlozenoDoMs = 0,
+            tir = null,
         )
     }
 
@@ -173,6 +179,7 @@ data class Budilka(
         put("stik_ob_ms", stikObMs)
         put("zvoni_ob_ms", zvoniObMs); put("odzvonjeno", odzvonjeno)
         put("odlozeno_do_ms", odlozenoDoMs)
+        put("tir", tir ?: JSONObject.NULL)
     }
 
     companion object {
@@ -201,6 +208,7 @@ data class Budilka(
                 zvoniObMs = o.optLong("zvoni_ob_ms"),
                 odzvonjeno = o.optBoolean("odzvonjeno"),
                 odlozenoDoMs = o.optLong("odlozeno_do_ms"),
+                tir = if (o.isNull("tir")) null else o.optString("tir").ifBlank { null },
             )
         }
     }

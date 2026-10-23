@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tonski vsebnik avtobusne budilke: zelen kot kartica na avtobusnih
+     straneh (`body.net-avtobus`). Vlak ostane rjav (`widget_ozadje_kont`). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/bus_kont" />
+    <corners android:radius="@dimen/widget_rob" />
+</shape>

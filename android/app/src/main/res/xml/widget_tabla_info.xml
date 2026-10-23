@@ -7,20 +7,26 @@
 
   `configure` je obvezen: widget brez postaje ne ve, kaj naj kaže, in
   ugibati je najslabše, kar lahko naredi — „Ljubljana“ je na železnici in na
-  mestnih linijah drug kraj.
+  mestnih linijah drug kraj. `reconfigurable` (Android 9+): dolg pritisk na
+  widget ponudi nastavitev, ne da bi ga bilo treba odstraniti in dodati znova.
+
+  Privzeto 4×2 (glava z gumboma in tri vrstice), pomanjšati se da do ene
+  ikone: `minResize` 40 dp je ena celica. Kaj pokaže katera velikost, odloči
+  `Velikost`.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="110dp"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="110dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:updatePeriodMillis="0"
-    android:initialLayout="@layout/widget_tabla"
+    android:initialLayout="@layout/w_tabla_srednji"
     android:previewLayout="@layout/widget_tabla_predogled"
     android:previewImage="@drawable/ikona_znak"
     android:configure="app.kajros.TablaNastavitev"
+    android:widgetFeatures="reconfigurable"
     android:resizeMode="horizontal|vertical"
     android:description="@string/widget_tabla_opis"
     android:widgetCategory="home_screen" />

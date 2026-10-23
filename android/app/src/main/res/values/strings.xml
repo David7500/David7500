@@ -117,9 +117,8 @@
     <!-- widget -->
     <!-- Vzorcna vsebina v izbirniku widgetov. Izmisljena vozja, ne podatek. -->
     <string name="widget_predogled_kaj">LPV 2010 → Koper</string>
-    <string name="widget_predogled_kje">Ljubljana</string>
-    <string name="widget_predogled_stevec">00:18:24</string>
-    <string name="widget_predogled_pod">odhod 06:53 · zamuja 4 min</string>
+    <string name="widget_predogled_stevec">18:24</string>
+    <string name="widget_predogled_pod">odhod 06:57 · Ljubljana</string>
     <string name="widget_opis">Odštevanje do naslednjega odhoda, za katerega imaš budilko.</string>
     <string name="widget_brez">ni budilke</string>
     <string name="widget_brez_kako">Nastavi jo pri svoji postaji v aplikaciji.</string>
@@ -135,6 +134,21 @@
     <string name="widget_prezgodaj">odhod %1$s · %2$d min pred redom</string>
     <string name="widget_tocno">odhod %1$s · vozi točno</string>
     <string name="widget_zastarela">vozni red %1$s · ob %2$s je zamujal %3$d min</string>
+    <string name="widget_zastarela_kratko">ob %1$s je zamujal %2$d min</string>
+    <string name="widget_brez_naslov">Ni budilke</string>
+    <string name="widget_preveri">Preveri zamudo zdaj</string>
+    <string name="widget_preverjeno">preverjeno ob %1$s</string>
+    <string name="widget_odhod_kje">odhod %1$s · %2$s</string>
+    <string name="widget_red_kje">vozni red %1$s · %2$s</string>
+    <string name="widget_red_nepreverjena">vozni red %1$s · ni preverjena</string>
+    <string name="widget_odhod_red">odhod %1$s · vozni red %2$s</string>
+    <string name="widget_tir">tir %1$s</string>
+    <!-- Žeton zamude, kjer je prostora za besedo. Ožji widgeti pišejo „+4“. -->
+    <string name="widget_zeton_zamuja">+%1$d min</string>
+    <string name="widget_zeton_prej">%1$d min prej</string>
+    <string name="widget_zeton_tocno">točno</string>
+    <string name="widget_danes">danes</string>
+    <string name="widget_jutri">jutri</string>
 
     <!-- widget: budilke s stikali -->
     <string name="widget_budilke_opis">Nastavljene budilke; stikalo jih vklopi ali ugasne brez odpiranja aplikacije.</string>
@@ -142,6 +156,12 @@
     <string name="widget_budilke_vec">in še %1$d</string>
     <string name="widget_budilka_vklop_opis">%1$s: budilka je vklopljena, dotik jo ugasne</string>
     <string name="widget_budilka_izklop_opis">%1$s: budilka je ugasnjena, dotik jo vklopi</string>
+    <string name="widget_budilke_prazno">Ni budilk</string>
+    <string name="widget_budilke_kako">Budilko nastaviš pri svoji postaji v aplikaciji.</string>
+    <string name="widget_budilke_naslednja">naslednja zvoni %1$s ob %2$s</string>
+    <string name="widget_budilke_vse_ugasnjene">vse so ugasnjene</string>
+    <string name="widget_budilka_enkratna">enkratna · %1$s</string>
+    <string name="widget_budilka_zazvonila">zazvonila · odhod %1$s</string>
 
     <!-- widget: odhodna tabla ene postaje -->
     <string name="widget_tabla_opis">Naslednji odhodi z ene postaje, z zamudo.</string>
@@ -152,6 +172,18 @@
     <string name="widget_tabla_nic">Danes od tod ne pelje nič več.</string>
     <string name="widget_tabla_ni_zamude">zamuda še ni znana</string>
     <string name="widget_tabla_brez_postaje">Postaja ni izbrana. Pritisni in jo izberi.</string>
+    <!-- Kratke različice za 1×1, kjer je prostora za dve besedi. -->
+    <string name="widget_tabla_izberi_kratko">izberi</string>
+    <string name="widget_tabla_caka_kratko">čakam</string>
+    <string name="widget_tabla_nic_kratko">nič več</string>
+    <string name="widget_tabla_ob_kratko">ob %1$s</string>
+    <!-- Odpovedana vožnja ali obvoz, ki tu ne ustavi. -->
+    <string name="widget_tabla_odpade">odpade</string>
+    <string name="widget_tabla_obrni">Druga stran ceste</string>
+    <string name="tabla_videz">Videz</string>
+    <string name="tabla_videz_tonska">S podlago</string>
+    <string name="tabla_videz_brez">Brez podlage</string>
+    <string name="tabla_videz_pomoc">Brez podlage velja za majhen widget (ena ikona ali trak); večji ostane s podlago, sicer se ne bere.</string>
     <string name="widget_tabla_predogled_postaja">Ljubljana</string>
     <string name="widget_tabla_predogled_ob">osveženo ob 06:48</string>
 

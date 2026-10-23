@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vrstica ozkega seznama budilk (2×3): ura in stikalo, pod njima vožnja z
+     dnevi, kot v `w_budilke_kvadrat`. Stikalo pošlje `PREKLOPI` z id-jem
+     budilke (`setOnClickFillInIntent`). Okvir dá razmik med vrsticami, ki ga
+     seznam v RemoteViews sam nima. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/bud_vrstica"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/widget_vrstica_vklop"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="6dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/bud_ura"
+                android:layout_width="0dp"
+                android:layout_height="28dp"
+                android:layout_weight="1"
+                android:autoSizeMaxTextSize="18sp"
+                android:autoSizeMinTextSize="12sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:fontFeatureSettings="tnum"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:textColor="@color/m_na_kont"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/bud_stikalo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:importantForAccessibility="yes"
+                android:padding="2dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/bud_kaj"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/m_na_kont_2"
+            android:textSize="11.5sp" />
+    </LinearLayout>
+</FrameLayout>

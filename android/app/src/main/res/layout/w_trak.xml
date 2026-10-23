@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2×1 in 3×1: nadnaslov, glavna številka z žetonom in vrstica opisa, na
+     desni po potrebi gumb ali stikalo. Skupen vsem widgetom (`Izris`).
+     Številka in žeton se pomanjšata sama, kadar jima stikalo ali gumb na
+     2×1 vzame prostor: pri `wrap_content` se širina meri po `textSize`,
+     `autoSizeTextType` pa samo zmanjša, ko zmanjka širine starša. Brez
+     `textSize` bi bila številka ves čas 14 sp.
+     Koren je `android:id/background` zaradi prehoda v aplikacijo (12+). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_ozadje"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingEnd="8dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/nad"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:textColor="@color/ink_dim"
+            android:textSize="11.5sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/glavno"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="24sp"
+                android:autoSizeMinTextSize="14sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:textSize="24sp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/ink"
+                android:textStyle="bold" />
+
+            <Chronometer
+                android:id="@+id/stevec"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="24sp"
+                android:autoSizeMinTextSize="14sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:textSize="24sp"
+                android:fontFeatureSettings="tnum"
+                android:textColor="@color/ink"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/pod"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="13.5sp"
+                android:autoSizeMinTextSize="9sp"
+                android:autoSizeStepGranularity="0.5sp"
+                android:autoSizeTextType="uniform"
+                android:textSize="13.5sp"
+                android:layout_marginStart="6dp"
+                android:maxLines="1"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:textColor="@color/ink_dim"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/opis"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/ink_dim"
+            android:textSize="11.5sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/gumb"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/gumb_krog"
+        android:importantForAccessibility="yes"
+        android:padding="10dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/stikalo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:importantForAccessibility="yes"
+        android:padding="4dp"
+        android:visibility="gone" />
+</LinearLayout>

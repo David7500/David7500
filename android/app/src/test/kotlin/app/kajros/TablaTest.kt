@@ -12,6 +12,10 @@ import kotlin.test.assertTrue
  * (`stats.opis_zamude()`), ker bi se drugace pravilo pisalo dvakrat.
  * `kotlin.math.round` zaokrozi pol na sodo in bi se pri 30 s s stranjo razsel.
  * Preizkuseno je torej samo, kar je res nase -- beseda.
+ *
+ * Izjema je budilka: hrani sekunde z zadnjega preverjanja in `Ura` sama
+ * presodi, ali zamuda se velja, zato minuto in razred widget odstevanja
+ * izpelje sam. Pragovi so zato tu preizkuseni na istih mejah kot na strezniku.
  */
 class TablaTest {
 
@@ -38,6 +42,36 @@ class TablaTest {
     @Test
     fun `nicla je tocno`() {
         assertEquals("točno", Tabla.zamudaNapis(odhod(0)))
+    }
+
+    @Test
+    fun `minuta budilke se zaokrozi kot na strezniku`() {
+        // `floor(x + 0.5)`: 30 s je minuta, -30 s je nic, -31 s je minuta prej.
+        assertEquals(0, Tabla.minute(29))
+        assertEquals(1, Tabla.minute(30))
+        assertEquals(2, Tabla.minute(90))
+        assertEquals(0, Tabla.minute(-30))
+        assertEquals(-1, Tabla.minute(-31))
+    }
+
+    @Test
+    fun `razred budilke ima meje strezniskega`() {
+        // `stats._razred_zamude()`: 5 je se "1-5", 6 je "5-15", 16 "nad-15".
+        assertEquals("tocno", Tabla.razred(0))
+        assertEquals("tocno", Tabla.razred(-3))
+        assertEquals("1-5", Tabla.razred(1))
+        assertEquals("1-5", Tabla.razred(5))
+        assertEquals("5-15", Tabla.razred(6))
+        assertEquals("5-15", Tabla.razred(15))
+        assertEquals("nad-15", Tabla.razred(16))
+    }
+
+    @Test
+    fun `beseda budilke je ista kot na tabli`() {
+        assertEquals("—", Tabla.zamudaNapis(null as Int?))
+        assertEquals("+4", Tabla.zamudaNapis(4))
+        assertEquals("3 prej", Tabla.zamudaNapis(-3))
+        assertEquals("točno", Tabla.zamudaNapis(0))
     }
 
     @Test

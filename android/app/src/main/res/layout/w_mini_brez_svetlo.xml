@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1×1 brez podlage na svetlem ozadju zaslona: temno besedilo brez sence.
+     Iste oznake kot `w_mini`, izpeljana iz nje. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
+
+        <TextView
+            android:id="@+id/nad"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/brez_temno_2"
+            android:textSize="10.5sp" />
+
+        <!-- Ena ikona je široka od 40 do 70 dp: številka se pomanjša sama, da
+             se „18:24“ ne prelomi v dve vrstici. Samodejna velikost rabi
+             omejeno širino in višino, zato ne `wrap_content`. -->
+        <TextView
+            android:id="@+id/glavno"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:autoSizeMaxTextSize="20sp"
+            android:autoSizeMinTextSize="10sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:fontFeatureSettings="tnum"
+            android:gravity="center"
+            android:maxLines="1"
+            android:textColor="@color/brez_temno"
+            android:textStyle="bold" />
+
+        <Chronometer
+            android:id="@+id/stevec"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:autoSizeMaxTextSize="20sp"
+            android:autoSizeMinTextSize="10sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:fontFeatureSettings="tnum"
+            android:gravity="center"
+            android:maxLines="1"
+            android:textColor="@color/brez_temno"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- Žeton ali kratka beseda. Samodejna velikost pri `wrap_content`
+             pomanjša šele, ko zmanjka širine starša (začne pri `textSize`):
+             „točno“ in „nič več“ se na 1×1 sicer odrežeta. -->
+        <TextView
+            android:id="@+id/pod"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:autoSizeMaxTextSize="13sp"
+            android:autoSizeMinTextSize="8sp"
+            android:autoSizeStepGranularity="0.5sp"
+            android:autoSizeTextType="uniform"
+            android:textSize="13sp"
+            android:maxLines="1"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:textColor="@color/brez_temno_2"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/stikalo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:importantForAccessibility="yes"
+            android:padding="2dp"
+            android:visibility="gone" />
+    </LinearLayout>
+</FrameLayout>

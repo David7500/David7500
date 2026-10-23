@@ -134,6 +134,52 @@
         android:layout_height="wrap_content"
         android:orientation="vertical" />
 
+    <!-- Videz: s podlago ali samo besedilo na ozadju zaslona. Dva gumba kot
+         pri omrežju, ker sta izbiri dve in obe morata biti vidni. -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/tabla_videz"
+        android:textColor="@color/accent"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/videz_tonska"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:text="@string/tabla_videz_tonska" />
+
+        <Button
+            android:id="@+id/videz_brez"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:text="@string/tabla_videz_brez" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/tabla_videz_pomoc"
+        android:textColor="@color/ink_faint"
+        android:textSize="12sp" />
+
     <!-- Izid iskanja. Postaje, ki je ni, ni mogoče shraniti: widget, ki bi
          ostal prazen, bi bil videti kot okvara aplikacije. -->
     <TextView

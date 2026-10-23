@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ugasnjena budilka v seznamu na widgetu: siva podlaga, da je vrstica še
+     vedno vrstica in stikalo ne visi v praznem. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/m_najvisja" />
+    <corners android:radius="16dp" />
+</shape>

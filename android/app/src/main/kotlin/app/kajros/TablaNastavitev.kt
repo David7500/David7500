@@ -44,6 +44,7 @@ class TablaNastavitev : Activity() {
 
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var omrezje = "zeleznica"
+    private var videz = Izris.Videz.TONSKA
     private val glavna = Handler(Looper.getMainLooper())
 
     /** Ime, kot ga je vrnil streznik, ali null, dokler ni izbrano. */
@@ -76,6 +77,8 @@ class TablaNastavitev : Activity() {
 
         findViewById<Button>(R.id.vlak).setOnClickListener { izberiOmrezje("zeleznica") }
         findViewById<Button>(R.id.avtobus).setOnClickListener { izberiOmrezje("avtobus") }
+        findViewById<Button>(R.id.videz_tonska).setOnClickListener { izberiVidez(Izris.Videz.TONSKA) }
+        findViewById<Button>(R.id.videz_brez).setOnClickListener { izberiVidez(Izris.Videz.BREZ) }
         shrani.setOnClickListener { poisciInShrani() }
 
         vnos.addTextChangedListener(object : TextWatcher {
@@ -104,7 +107,9 @@ class TablaNastavitev : Activity() {
         if (prej != null) {
             omrezje = prej.omrezje
             izbranaSmer = prej.smer
+            videz = prej.videz
         }
+        izberiVidez(videz)
         izberiOmrezje(omrezje, ohraniVnos = true)
         if (prej != null) izberi(prej.postaja, ohraniSmer = true)
         else osveziGumb()
@@ -125,6 +130,12 @@ class TablaNastavitev : Activity() {
             pozabiIzbiro()
             isciZdaj()
         }
+    }
+
+    private fun izberiVidez(kaj: Izris.Videz) {
+        videz = kaj
+        oznaci(findViewById(R.id.videz_tonska), kaj == Izris.Videz.TONSKA)
+        oznaci(findViewById(R.id.videz_brez), kaj == Izris.Videz.BREZ)
     }
 
     private fun oznaci(b: Button, vklop: Boolean) {
@@ -263,7 +274,7 @@ class TablaNastavitev : Activity() {
         val ime = izbrana ?: run { povej(R.string.tabla_izberi, R.color.sev_bad); return }
         povej(R.string.tabla_iscem, R.color.ink_dim)
         val smer = smeri.firstOrNull { it.kljuc == izbranaSmer }
-        val n = Tabla.Nastavitev(ime, omrezje, smer?.kljuc, smer?.napis)
+        val n = Tabla.Nastavitev(ime, omrezje, smer?.kljuc, smer?.napis, videz)
         // Omrezje na svoji niti; pet sekund cakanja na glavni bi bila zamrznjena
         // aplikacija.
         Thread {
@@ -288,10 +299,10 @@ class TablaNastavitev : Activity() {
         }
         val odhodi = izid as Tabla.Izid.Odhodi
         Tabla.nastavi(this, widgetId, odhodi.popravi(n))
-        Tabla.shraniStanje(this, widgetId,
-            Tabla.Stanje(odhodi.vrstice, System.currentTimeMillis()))
+        Tabla.shraniStanje(this, widgetId, Tabla.Stanje(odhodi.vrstice,
+            System.currentTimeMillis(), odhodi.opozorilo, odhodi.smeri))
         val am = AppWidgetManager.getInstance(this)
-        am.updateAppWidget(widgetId, WidgetTabla.pogled(this, widgetId, null))
+        am.updateAppWidget(widgetId, WidgetTabla.pogled(this, widgetId))
         // Ritem se zacne tu in ne sele ob prvem sistemskem obhodu: widget, ki
         // se pol ure ne osvezi, je videti kot pokvarjen, ne kot varcen.
         WidgetTabla.naRitem(this)
