@@ -2585,6 +2585,39 @@ def test_tabla_prevozen_postanek_brez_potrditve_ni_izmerjen(conn):
     assert ("t1", 1) in potrjeni
 
 
+def test_prehod_je_odhod_na_tabli_in_v_oknu(conn, monkeypatch):
+    """Vlak je v Z prišel +5 min (09:05), odhod 09:10. Feed je vrednost v Z
+    nazadnje osvežil ob 09:07, ko je vlak še stal: prihod je potrjen, odhod
+    ne. Za tem je vlak prišel v C.
+
+    Okno vožnje je prehod bralo iz prihoda, ker odhodne zamude ni bilo, in
+    reklo „izmerjeno“ -- „vlak je tu že bil“ potniku, ob katerem vlak še
+    stoji. Tabla je rekla „zadnji podatek“ (RG 210, Ljubljana, 23. 10. 2026).
+    """
+    from kajros import api
+    monkeypatch.setattr(api, "_conn", lambda: conn)
+    dan = "2026-08-31"
+    p = _polnoc(dan)
+    conn.executemany(
+        "INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts)"
+        " VALUES('t1',?,?,?,?,?)",
+        [(dan, 1, 0, 0, p + 28860), (dan, 2, 300, None, p + 32400 + 420),
+         (dan, 3, 300, None, p + 36000 + 700)])
+    conn.commit()
+
+    def besedi():
+        _, potrjeni = stats.stanje_postankov(conn, dan, ["t1"])
+        okno = api.api_run("IC 1", date=dan, trip=None)
+        z = next(s for s in okno["stops"] if s["stop_seq"] == 2)["zamuda"]
+        return ("t1", 2) in potrjeni, z["vrsta"]
+
+    assert besedi() == (False, stats.ZADNJI_PODATEK)
+    conn.execute("UPDATE run SET feed_ts=? WHERE trip_id='t1' AND stop_seq=2",
+                 (p + 32700 + 300,))
+    conn.commit()
+    assert besedi() == (True, stats.IZMERJENO)
+
+
 def test_meni_vec_brez_donacij_ne_ponuja_podpore():
     """Brez `KAJROS_DONACIJE` ni gumba: `/donacije` je takrat 404 in gumb bi
     peljal na napako. Stik in „o nas" sta v meniju Več vedno (stik, dokler

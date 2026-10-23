@@ -19,6 +19,8 @@ Velja povsod, kjer se zamuda pokaže: kartica zemljevida, iskalnik, časovnica, 
 
 Beseda velja le, kadar je feed vrednost osvežil **po** trenutku prehoda (`stats.potrjen_prehod()`): železnica 0,3 % postankov, avtobusi 69,6 %.
 
+**Prehod = odhod**, kjer ga vozni red ima (`stats.prehod_s()`, tabla in okno vožnje isto): potrjen prihod vlaka, ki še stoji, ni prehod. Železnica 16.–23. 10. 2026: 17 od 39 postankov z le prihodno zamudo je potrdil samo prihod — okno je tam pisalo „izmerjeno“, tabla „zadnji podatek“.
+
 | kaj vemo | žeton | stavek |
 |---|---|---|
 | feed potrdil po prehodu | `izmerjeno` | „vlak je tu že bil“ |

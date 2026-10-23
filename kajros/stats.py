@@ -1992,6 +1992,21 @@ def potrjen_prehod(feed_ts: int | None, prehod_ts: int | None) -> bool:
             and feed_ts >= prehod_ts)
 
 
+def prehod_s(x: dict) -> int | None:
+    """Sekunda prometnega dne, ob kateri postanek trdi prehod.
+
+    Prehod je ODHOD, kjer ga vozni red ima, z zamudo, ki jo prikaz pokaže
+    (`COALESCE(delay_dep, delay_arr)`). Potrjen prihod ni prehod: vlak še
+    stoji, „vlak je tu že bil“ pa bi potnika poslal s perona. Okno vožnje je
+    prehod bralo iz dejanskega prihoda, kadar odhodne zamude ni bilo, tabla iz
+    odhoda -- 23. 10. 2026 je bil RG 210 v Ljubljani na tabli „zadnji
+    podatek“, v oknu „izmerjeno“. Zato eno pravilo za oba.
+    """
+    z = x.get("delay_dep") if x.get("delay_dep") is not None else x.get("delay_arr")
+    t = x.get("dep_s") if x.get("dep_s") is not None else x.get("arr_s")
+    return None if z is None or t is None else t + z
+
+
 #: Kako dolgo po domnevnem odhodu vlak še velja za mogoč, kadar odhoda ni
 #: potrdil nihče.
 #:
@@ -2076,10 +2091,8 @@ def stanje_postankov(conn: sqlite3.Connection, service_date: str,
         for x in postanki:
             if x.get("neskladno"):
                 slabi.add((trip_id, x["stop_seq"]))
-            z = x["delay_dep"] if x["delay_dep"] is not None else x["delay_arr"]
-            t = x["dep_s"] if x["dep_s"] is not None else x["arr_s"]
-            if z is not None and t is not None and potrjen_prehod(
-                    x["feed_ts"], polnoc_s + t + z):
+            t = prehod_s(x)
+            if t is not None and potrjen_prehod(x["feed_ts"], polnoc_s + t):
                 potrjeni.add((trip_id, x["stop_seq"]))
     return slabi, potrjeni
 

@@ -2589,6 +2589,7 @@ def api_run(train_no: str, date: str | None = None,
         # mejo nosi feedovo NAPOVED, ne meritve -- in prav to je razlika, ki
         # je bila ze dvakrat na zaslonu narobe. Odjemalec zdaj ne sklepa:
         # `zamuda.vrsta` mu pove naravnost.
+        polnoc_s = stats.polnoc(date)
         for s in rows:
             if s["zamuda"] is None:
                 continue
@@ -2598,11 +2599,11 @@ def api_run(train_no: str, date: str | None = None,
             # "Izmerjeno" pomeni opažanje, in to je feed potrdil samo, če je
             # vrednost osvežil PO trenutku, ko trdi prehod. Pri železnici se to
             # zgodi v 0,4 % primerov -- do 9. 9. 2026 je ta beseda tam trdila
-            # opažanje, ki ga skoraj nikoli nimamo.
-            prehod = s.get("actual_dep") or s.get("actual_arr")
+            # opažanje, ki ga skoraj nikoli nimamo. Prehod šteje kot tabla
+            # (`stats.prehod_s`): odhod, ne prihod vlaka, ki še stoji.
+            prehod = stats.prehod_s(s)
             potrjen = stats.potrjen_prehod(
-                s.get("feed_ts"),
-                int(datetime.fromisoformat(prehod).timestamp()) if prehod else None)
+                s.get("feed_ts"), None if prehod is None else polnoc_s + prehod)
             s["zamuda"]["vrsta"] = ("neskladno" if s.get("neskladno")
                                     else (stats.IZMERJENO if potrjen
                                           else stats.ZADNJI_PODATEK)
