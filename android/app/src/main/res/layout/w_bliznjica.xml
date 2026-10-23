@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bližnjica: oblika z ikono in ime pod njo, na ozadju zaslona. Ista oblika
+     kot na domači strani (`home.html`), ime kot pod ikono v launcherju.
+
+     Oblika in ime sta skupina na sredini celice. Oblika se ne raztegne:
+     `adjustViewBounds` in `maxWidth` jo ustavita pri 64 dp, kot so velike
+     ikone launcherja; nižja celica jo pomanjša. Ime ima stalno višino in se
+     zmanjša, da se izpiše cele (Zemljevid v stolpcu 57 dp); kjer ga ne bi
+     bilo videti, ga koda skrije (`WidgetBliznjica.Z_IMENOM_DP`).
+
+     Ta postavitev je za temno ozadje zaslona: svetlo ime s senco. Za svetlo
+     je `w_bliznjica_svetlo` (temno ime brez sence), ker senca iz kode v
+     RemoteViews ni nastavljiva. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bliznjica"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <ImageView
+            android:id="@+id/oblika"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:adjustViewBounds="true"
+            android:importantForAccessibility="no"
+            android:maxWidth="64dp"
+            android:maxHeight="64dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/oblika_krog" />
+
+        <ImageView
+            android:id="@+id/ikona"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ikona_pot" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/ime"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:layout_marginTop="4dp"
+        android:autoSizeMaxTextSize="12sp"
+        android:autoSizeMinTextSize="9sp"
+        android:autoSizeTextType="uniform"
+        android:gravity="center"
+        android:importantForAccessibility="no"
+        android:maxLines="1"
+        android:shadowColor="@color/brez_senca"
+        android:shadowDy="1"
+        android:shadowRadius="4"
+        android:textColor="@color/brez_svetlo"
+        android:textSize="12sp" />
+</LinearLayout>

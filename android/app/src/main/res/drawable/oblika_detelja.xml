@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Oblika „detelja“: ista pot kot Zemljevid na domači strani (`home.html`,
+     r = R(1 + a·cos nθ)). Bela, barvo ji da widget (`setColorFilter`). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="88dp"
+    android:viewportWidth="88"
+    android:viewportHeight="88">
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M44.0 4.0L46.8 4.3L49.5 5.1L52.0 6.4L54.3 8.0L56.4 10.0L58.2 12.1L59.8 14.3L61.3 16.4L62.6 18.4L64.0 20.2L65.4 21.8L67.0 23.3L68.7 24.7L70.6 26.1L72.7 27.5L74.8 29.0L77.0 30.7L79.0 32.6L80.8 34.8L82.3 37.2L83.4 39.9L83.9 42.6L83.9 45.4L83.4 48.1L82.3 50.8L80.8 53.2L79.0 55.4L77.0 57.3L74.8 59.0L72.7 60.5L70.6 61.9L68.7 63.3L67.0 64.7L65.4 66.2L64.0 67.8L62.6 69.6L61.3 71.6L59.8 73.7L58.2 75.9L56.4 78.0L54.3 80.0L52.0 81.6L49.5 82.9L46.8 83.7L44.0 84.0L41.2 83.7L38.5 82.9L36.0 81.6L33.7 80.0L31.6 78.0L29.8 75.9L28.2 73.7L26.7 71.6L25.4 69.6L24.0 67.8L22.6 66.2L21.0 64.7L19.3 63.3L17.4 61.9L15.3 60.5L13.2 59.0L11.0 57.3L9.0 55.4L7.2 53.2L5.7 50.8L4.6 48.1L4.1 45.4L4.1 42.6L4.6 39.9L5.7 37.2L7.2 34.8L9.0 32.6L11.0 30.7L13.2 29.0L15.3 27.5L17.4 26.1L19.3 24.7L21.0 23.3L22.6 21.8L24.0 20.2L25.4 18.4L26.7 16.4L28.2 14.3L29.8 12.1L31.6 10.0L33.7 8.0L36.0 6.4L38.5 5.1L41.2 4.3Z" />
+</vector>

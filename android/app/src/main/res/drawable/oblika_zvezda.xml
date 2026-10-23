@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Oblika „zvezda“: ista pot kot Deli lego na domači strani (`home.html`,
+     r = R(1 + a·cos nθ)). Bela, barvo ji da widget (`setColorFilter`). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="88dp"
+    android:viewportWidth="88"
+    android:viewportHeight="88">
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M44.0 4.0L46.7 4.8L49.2 6.7L51.5 8.6L53.9 9.5L56.6 9.4L59.7 8.8L62.7 8.8L65.1 10.2L66.7 12.8L67.7 15.8L68.9 18.2L70.9 19.8L73.7 20.8L76.6 22.0L78.6 24.0L79.3 26.8L79.0 29.9L78.5 32.8L78.8 35.3L80.3 37.6L82.3 40.0L83.8 42.6L83.8 45.4L82.3 48.0L80.3 50.4L78.8 52.7L78.5 55.2L79.0 58.1L79.3 61.2L78.6 64.0L76.6 66.0L73.7 67.2L70.9 68.2L68.9 69.8L67.7 72.2L66.7 75.2L65.1 77.8L62.7 79.2L59.7 79.2L56.6 78.6L53.9 78.5L51.5 79.4L49.2 81.3L46.7 83.2L44.0 84.0L41.3 83.2L38.8 81.3L36.5 79.4L34.1 78.5L31.4 78.6L28.3 79.2L25.3 79.2L22.9 77.8L21.3 75.2L20.3 72.2L19.1 69.8L17.1 68.2L14.3 67.2L11.4 66.0L9.4 64.0L8.7 61.2L9.0 58.1L9.5 55.2L9.2 52.7L7.7 50.4L5.7 48.0L4.2 45.4L4.2 42.6L5.7 40.0L7.7 37.6L9.2 35.3L9.5 32.8L9.0 29.9L8.7 26.8L9.4 24.0L11.4 22.0L14.3 20.8L17.1 19.8L19.1 18.2L20.3 15.8L21.3 12.8L22.9 10.2L25.3 8.8L28.3 8.8L31.4 9.4L34.1 9.5L36.5 8.6L38.8 6.7L41.3 4.8Z" />
+</vector>

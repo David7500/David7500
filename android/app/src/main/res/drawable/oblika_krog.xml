@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Krog v mreži 88 kot oblike z domače strani, da je ikona v vseh enako
+     velika. Bel, barvo mu da widget (`setColorFilter`). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="88dp"
+    android:viewportWidth="88"
+    android:viewportHeight="88">
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M44,4a40,40 0,1 1,0 80a40,40 0,1 1,0 -80z" />
+</vector>

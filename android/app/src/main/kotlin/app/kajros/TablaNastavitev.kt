@@ -53,6 +53,7 @@ class TablaNastavitev : Activity() {
 
     private val smeriOkvir by lazy { findViewById<LinearLayout>(R.id.smeri) }
     private val shrani by lazy { findViewById<Button>(R.id.shrani) }
+    private val oznaka by lazy { findViewById<EditText>(R.id.oznaka) }
 
     private lateinit var postaja: Iskalnik
     private lateinit var cilj: Iskalnik
@@ -187,6 +188,7 @@ class TablaNastavitev : Activity() {
         izberiVidez(videz)
         izberiOmrezje(omrezje, ohraniVnos = true)
         if (prej != null) {
+            prej.oznaka?.let { oznaka.setText(it) }
             prej.cilj?.let { cilj.izberi(it) }
             postaja.izberi(prej.postaja)
             // Izbira postaje stran ceste pozabi; shranjena se vrne, preden
@@ -322,7 +324,9 @@ class TablaNastavitev : Activity() {
         if (kam == ime) { povej(R.string.tabla_isti_cilj, R.color.sev_bad); return }
         povej(R.string.tabla_iscem, R.color.ink_dim)
         val smer = if (kam != null) null else smeri.firstOrNull { it.kljuc == izbranaSmer }
-        val n = Tabla.Nastavitev(ime, omrezje, smer?.kljuc, smer?.napis, videz, kam)
+        val ozn = oznaka.text.toString().trim().ifBlank { null }
+        val n = Tabla.Nastavitev(ime, omrezje, smer?.kljuc, smer?.napis, videz, kam,
+            oznaka = ozn, oznakaOd = ozn?.let { ime })
         // Omrezje na svoji niti; pet sekund cakanja na glavni bi bila zamrznjena
         // aplikacija.
         Thread {

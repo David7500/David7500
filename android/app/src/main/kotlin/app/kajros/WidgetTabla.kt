@@ -375,8 +375,12 @@ class WidgetTabla : AppWidgetProvider() {
             /** Podnaslov pod imenom postaje: "→ Ljubljana" pri relaciji, sicer stran ceste. */
             private val podnaslov: String? = n.cilj?.let { "→ $it" } ?: n.smerNapis
 
-            /** "Ljubljana", "Kranj → Ljubljana" ali "Bavarski dvor → Razstavišče". */
+            /**
+             * "Ljubljana", "Kranj → Ljubljana" ali "Bavarski dvor → Razstavišče";
+             * potnikovo ime ("Domov") namesto vsega tega.
+             */
             private fun glava(): CharSequence {
+                n.oznakaZdaj()?.let { return it }
                 val smer = podnaslov ?: return n.postaja
                 val b = SpannableStringBuilder(n.postaja).append("  ")
                 val od = b.length
@@ -494,7 +498,7 @@ class WidgetTabla : AppWidgetProvider() {
                 val v = RemoteViews(c.packageName, slog.mini)
                 klikTabla(v)
                 // Pri relaciji cilj: od kod potnik ve, kam pa je na ikoni treba povedati.
-                v.setTextViewText(R.id.nad, n.cilj?.let { "→ $it" } ?: n.postaja)
+                v.setTextViewText(R.id.nad, n.oznakaZdaj() ?: n.cilj?.let { "→ $it" } ?: n.postaja)
                 v.setTextColor(R.id.nad, slog.drugotna)
                 val o = vidni.firstOrNull()
                 if (o == null) {
@@ -530,12 +534,12 @@ class WidgetTabla : AppWidgetProvider() {
                 v.setTextColor(R.id.nad, sl.drugotna)
                 v.setTextColor(R.id.opis, sl.drugotna)
                 if (o == null) {
-                    v.setTextViewText(R.id.nad, n.postaja)
+                    v.setTextViewText(R.id.nad, n.oznakaZdaj() ?: n.postaja)
                     v.setTextViewText(R.id.glavno, "—")
                     v.setTextColor(R.id.glavno, sl.drugotna)
                     v.setTextViewText(R.id.pod, "")
                     v.setTextViewText(R.id.opis, prazno())
-                    if (pas) v.setTextViewText(R.id.nad, n.postaja + " · " + prazno())
+                    if (pas) v.setTextViewText(R.id.nad, (n.oznakaZdaj() ?: n.postaja) + " · " + prazno())
                     return v
                 }
                 v.setTextViewText(R.id.glavno, precrtaj(o.ura, o.odpadla))
@@ -649,7 +653,8 @@ class WidgetTabla : AppWidgetProvider() {
                 val v = RemoteViews(c.packageName, R.layout.w_tabla_kvadrat)
                 klikTabla(v)
                 ikona(v)
-                v.setTextViewText(R.id.postaja, if (n.cilj != null) glava().toString() else n.postaja)
+                v.setTextViewText(R.id.postaja,
+                    n.oznakaZdaj() ?: if (n.cilj != null) glava().toString() else n.postaja)
                 vrstice(v, polne = false)
                 ob(v, R.id.ob)
                 return v
@@ -658,9 +663,13 @@ class WidgetTabla : AppWidgetProvider() {
             /** Glava 4×2 in velikega: ikona, postaja, stran ceste in gumbi. */
             private fun glavaZGumbi(v: RemoteViews) {
                 ikona(v)
-                v.setTextViewText(R.id.postaja, n.postaja)
-                v.setViewVisibility(R.id.smer, if (podnaslov == null) View.GONE else View.VISIBLE)
-                podnaslov?.let { v.setTextViewText(R.id.smer, it) }
+                // S potnikovim imenom gre pot pod ime: "Domov", pod njim "Kranj → Ljubljana".
+                val oznaka = n.oznakaZdaj()
+                val pod = if (oznaka == null) podnaslov
+                    else listOfNotNull(n.postaja, podnaslov).joinToString(" ")
+                v.setTextViewText(R.id.postaja, oznaka ?: n.postaja)
+                v.setViewVisibility(R.id.smer, if (pod == null) View.GONE else View.VISIBLE)
+                pod?.let { v.setTextViewText(R.id.smer, it) }
                 v.setOnClickPendingIntent(R.id.osvezi, osveziNamera())
                 // Obrni samo, kjer je kaj obrniti: relacija (druga smer) ali
                 // postajalisce z vec stranmi ceste.

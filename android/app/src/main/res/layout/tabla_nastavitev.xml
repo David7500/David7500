@@ -173,6 +173,38 @@
         android:layout_height="wrap_content"
         android:orientation="vertical" />
 
+    <!-- Ime ni nujno: „Domov“ na ikoni 1×1 pove več kot dve imeni postaj. -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:letterSpacing="0.08"
+        android:text="@string/tabla_oznaka"
+        android:textColor="@color/ink_mute"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/oznaka"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/tabla_oznaka_vnos"
+        android:imeOptions="actionDone"
+        android:inputType="textCapSentences"
+        android:maxLength="20"
+        android:singleLine="true"
+        android:textColor="@color/ink"
+        android:textColorHint="@color/ink_faint"
+        android:textSize="17sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/tabla_oznaka_pomoc"
+        android:textColor="@color/ink_faint"
+        android:textSize="12sp" />
+
     <!-- Videz: s podlago ali samo besedilo na ozadju zaslona. Dva gumba kot
          pri omrežju, ker sta izbiri dve in obe morata biti vidni. -->
     <TextView

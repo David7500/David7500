@@ -58,6 +58,10 @@
     <!-- Ovire tonsko rumene, kot na strani (oznake.md). -->
     <color name="ovira_kont">#2e2811</color>
     <color name="ovira_na_kont">#f2d36b</color>
+    <!-- Zemljevid modrozelen kot njegova oblika na domači strani (home.css,
+         ikona proti polnilu 9,3 : 1). -->
+    <color name="zem_kont">#123a3c</color>
+    <color name="zem_na_kont">#aeeaec</color>
     <!-- Widget brez podlage: besedilo leži na ozadju zaslona. Svetlo s
          senco na temnem ozadju, temno brez sence na svetlem. -->
     <color name="brez_svetlo">#ffffff</color>

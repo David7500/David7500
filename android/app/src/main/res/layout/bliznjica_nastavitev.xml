@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nastavitev bližnjice: kaj odpre in ali ima pod obliko ime.
+
+     Seznam in ne spustni meni: možnosti je šest in vsaka ima obliko, kakršno
+     bo imel widget. Okvir je isti kot pri nastavitvi table (`fitsSystemWindows`
+     na zunanjem, zrak na notranjem; razlaga v `tabla_nastavitev.xml`). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+  <ScrollView
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1">
+
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="vertical"
+      android:paddingStart="20dp"
+      android:paddingTop="20dp"
+      android:paddingEnd="20dp"
+      android:paddingBottom="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="16dp"
+        android:paddingBottom="6dp"
+        android:text="@string/bliznjica_nastavitev"
+        android:textColor="@color/ink"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:text="@string/bliznjica_pomoc"
+        android:textColor="@color/ink_dim"
+        android:textSize="13sp" />
+
+    <!-- Vrstice (`bliznjica_vrstica`) doda koda, po eno za vsako dejanje. -->
+    <LinearLayout
+        android:id="@+id/dejanja"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/bliznjica_ime"
+        android:textColor="@color/accent"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/ime_da"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:text="@string/bliznjica_ime_da"
+            android:textAllCaps="false"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/ime_ne"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="@string/bliznjica_ime_ne"
+            android:textAllCaps="false"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+  </LinearLayout>
+  </ScrollView>
+
+    <Button
+        android:id="@+id/shrani"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/gumb"
+        android:text="@string/bliznjica_shrani"
+        android:textAllCaps="false"
+        android:textColor="@color/na_poudarku"
+        android:textSize="16sp" />
+</LinearLayout>

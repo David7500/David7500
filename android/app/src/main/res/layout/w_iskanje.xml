@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Iskalna vrstica: „Kam greš?“ kot prva stvar na domači strani, ob njej
+     iskalnika vlakov in avtobusov v barvah omrežij.
+
+     Vrstica je visoka 48 dp in ostane na sredini tudi v višjem widgetu:
+     višja bi bila videti kot polje, ki se ga da razpreti, pa se ga ne da.
+     Ožji widget skrije gumba omrežij (`WidgetIskanje`). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
+
+    <LinearLayout
+        android:id="@+id/kam"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_weight="1"
+        android:background="@drawable/pilula_tonska"
+        android:contentDescription="@string/widget_iskanje_kam"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ikona_isci"
+            android:tint="@color/ink_dim" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:autoSizeMaxTextSize="16sp"
+            android:autoSizeMinTextSize="11sp"
+            android:autoSizeTextType="uniform"
+            android:gravity="center_vertical"
+            android:importantForAccessibility="no"
+            android:maxLines="1"
+            android:text="@string/widget_iskanje_kam"
+            android:textColor="@color/ink_dim"
+            android:textSize="16sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/vlaki"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/krog_vlak"
+        android:contentDescription="@string/widget_iskanje_vlaki"
+        android:scaleType="center"
+        android:src="@drawable/ikona_vlak"
+        android:tint="@color/m_na_kont" />
+
+    <ImageView
+        android:id="@+id/avtobusi"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/krog_bus"
+        android:contentDescription="@string/widget_iskanje_avtobusi"
+        android:scaleType="center"
+        android:src="@drawable/ikona_bus"
+        android:tint="@color/bus_na_kont" />
+</LinearLayout>

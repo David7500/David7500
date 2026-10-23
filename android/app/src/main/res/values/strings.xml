@@ -207,11 +207,49 @@
     <string name="tabla_smer_pomoc">Na vsaki strani ceste je svoje postajališče. Izberi tisto, kjer čakaš — spoznaš ga po naslednji postaji.</string>
     <string name="tabla_obe_smeri">Obe smeri</string>
     <string name="tabla_cilj">CILJ (NI NUJNO)</string>
+    <string name="tabla_oznaka">IME (NI NUJNO)</string>
+    <string name="tabla_oznaka_vnos">npr. Domov</string>
+    <string name="tabla_oznaka_pomoc">Na widgetu namesto imen postaj. Velja za to smer; po ⇄ so spet postaje.</string>
     <string name="tabla_cilj_pomoc">S ciljem widget kaže samo zveze do njega, s prihodom in prestopom. Gumb ⇄ na widgetu obrne smer.</string>
     <string name="tabla_cilj_vnos">npr. Koper</string>
     <string name="tabla_cilj_vnos_bus">npr. Tobačna</string>
     <string name="tabla_izberi_cilj">Cilj izberi s seznama ali ga izbriši.</string>
     <string name="tabla_isti_cilj">Cilj je ista postaja kot izhodišče.</string>
+
+    <!-- Imena widgetov v izbirniku. Brez njih je vsak „kajros“ in loči jih
+         samo slika. -->
+    <string name="widget_ime_odstevanje">Odštevanje</string>
+    <string name="widget_ime_budilke">Budilke</string>
+    <string name="widget_ime_tabla">Odhodi</string>
+    <string name="widget_ime_bliznjica">Bližnjica</string>
+    <string name="widget_ime_iskanje">Kam greš?</string>
+
+    <!-- widget: bližnjica -->
+    <string name="widget_bliznjica_opis">En dotik do poti, iskalnika, zemljevida, ovir ali budilk.</string>
+    <string name="bliznjica_nastavitev">Kaj odpre bližnjica</string>
+    <string name="bliznjica_pomoc">Spremeniš jo pozneje z dolgim pritiskom na widget.</string>
+    <string name="bliznjica_pot">Pot</string>
+    <string name="bliznjica_pot_opis">kam greš: od vrat do vrat</string>
+    <string name="bliznjica_vlaki">Vlaki</string>
+    <string name="bliznjica_vlaki_opis">iskalnik zvez in odhodna tabla</string>
+    <string name="bliznjica_avtobusi">Avtobusi</string>
+    <string name="bliznjica_avtobusi_opis">iskalnik zvez in odhodna tabla</string>
+    <string name="bliznjica_zemljevid">Zemljevid</string>
+    <string name="bliznjica_zemljevid_opis">vozila v živo</string>
+    <string name="bliznjica_ovire">Ovire</string>
+    <string name="bliznjica_ovire_opis">dela na progi in nadomestni prevoz</string>
+    <string name="bliznjica_budilke">Budilke</string>
+    <string name="bliznjica_budilke_opis">vse tvoje budilke</string>
+    <string name="bliznjica_ime">Ime pod obliko</string>
+    <string name="bliznjica_ime_da">Z imenom</string>
+    <string name="bliznjica_ime_ne">Samo oblika</string>
+    <string name="bliznjica_shrani">Shrani</string>
+
+    <!-- widget: iskalna vrstica -->
+    <string name="widget_iskanje_opis">„Kam greš?“ in iskalnika vlakov in avtobusov, en dotik od domačega zaslona.</string>
+    <string name="widget_iskanje_kam">Kam greš?</string>
+    <string name="widget_iskanje_vlaki">Iskalnik vlakov</string>
+    <string name="widget_iskanje_avtobusi">Iskalnik avtobusov</string>
 
     <!-- posodobitev zunaj trgovine in zaslon „O aplikaciji“ -->
     <string name="posodobitev">Na voljo je različica %1$s. Pritisni za posodobitev.</string>

@@ -169,6 +169,8 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
 | `Widget` (odštevanje) | koliko do **moje** vožnje | nič; gumb „preveri“ = `Sprozilec` | 2×1 |
 | `WidgetBudilke` (stikala) | katere budilke | nič | 2×2 |
 | `WidgetTabla` (odhodna tabla) | kdaj z **moje postaje**; s ciljem: kdaj **do cilja** | `/api/departures?limit=30` ali `/api/connections?od=&limit=30`, na 15 min | 4×2 |
+| `WidgetBliznjica` | en dotik do poti, vlakov, avtobusov, zemljevida, ovir, budilk | nič | 1×1 |
+| `WidgetIskanje` | „Kam greš?“ (`/app/pot#kam`) in iskalnika omrežij | nič | 4×1 |
 
 * **Velikost odloči vsebino** (`Velikost.kt`, čist JVM, `VelikostTest`): MINI 40×40, PAS 110×40, TRAK 110×64, TRAK_SIROK 240×64, KVADRAT 110×110, SREDNJI 240×110, STOLPEC 110×250, VELIK 240×250 dp. Googlova mreža: pokončno vrstice 102/220/337, ležeče 51/117/184. Izbira = največja, ki se prilega, sicer najmanjša — **isto pravilo kot launcher**.
   * 12+: `RemoteViews(Map<SizeF, RemoteViews>)` (`Izris.odzivno`), launcher izbere sam, brez prebujanja. Prej iz `OPTION_APPWIDGET_*` (pokončno min širina × max višina, ležeče obratno) in `onAppWidgetOptionsChanged`.
@@ -176,7 +178,7 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
   * **Ležeči 2 vrstici = 117 dp**: kar mora ostati, gre na vrh (žeton zamude ob številki, ne v stavek spodaj). Budilke 4×2 na 12+ = seznam: nepremične vrstice bi se odrezale na pol.
   * Ozko (2×2, 2×3): vrstica v dveh vrsticah (ura + zamuda/stikalo, pod njima cilj ali vožnja z dnevi); v eni vrsti je cilj izginil.
   * `minResize` 40 dp povsod; prej 180 → widget ni šel pod 3×2.
-* **Pregled brez telefona**: `src/debug/…/PregledWidgetov.kt` (samo razvojni APK), vse velikosti z vzorci: `adb shell am start -n app.kajros/.PregledWidgetov -e kaj odstevanje|budilke|tabla -e stanje N`. `-e kaj zivo` veže prave widgete (prej `adb shell appwidget grantbind --package app.kajros`), `-e tapeta svetla|temna` za videz brez podlage. Pod 12 pregled widgete veže sam: velikost je samo v `OPTION_APPWIDGET_*` vezanega widgeta. Posnetki v `posnetki/widgeti/`.
+* **Pregled brez telefona**: `src/debug/…/PregledWidgetov.kt` (samo razvojni APK), vse velikosti z vzorci: `adb shell am start -n app.kajros/.PregledWidgetov -e kaj odstevanje|budilke|tabla|bliznjica|iskanje -e stanje N`. `-e kaj zivo` veže prave widgete (prej `adb shell appwidget grantbind --package app.kajros`), `-e tapeta svetla|temna` za videz brez podlage. Pod 12 pregled widgete veže sam: velikost je samo v `OPTION_APPWIDGET_*` vezanega widgeta. Posnetki v `posnetki/widgeti/`.
   * Android 9 = AVD `kajros28` (`emulator -avd kajros28 -port 5556 …`, `adb -s emulator-5556`); slika `system-images;android-28;default;x86_64`.
 * **RemoteViews ne zna `<View>`**: razmik = `<FrameLayout>`; z `<View>` „Couldn't add widget“.
 * **Samodejna velikost** (`autoSizeTextType`): z omejeno širino in višino zanesljiva; pri `wrap_content` samo zmanjša, širina se meri po `textSize` — **brez `textSize` je številka 14 sp**. `setTextViewTextSize` jo izklopi.
@@ -199,7 +201,12 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
   * Postaja se izbere (`/api/stations/search`, 250 ms, od dveh črk, predlogi pod poljem); shrani se ime strežnika (`Izid.Odhodi.popravi`). Pri avtobusih tudi `smer` (ključ in napis); `smer: null` = tabla cela; ⇄ na widgetu = druga stran ceste.
   * Odpadla vožnja prečrtana z „odpade“; ovira (prva, ki imenuje progo) = gumb ⚠, na seznamu vrstica.
   * **Cilj (ni nujen) = relacija** (`Nastavitev.cilj`): iste postavitve, vrstica s prihodom („prihod 07:29 · prestop Medvode (tesno) · LP 2435“ — prihod prvi, tropičje sme odrezati številko), ⇄ = druga smer (`obrnjena()`), dotik odpre iskalnik `?from=&to=`. Zveze s prestopom brez zamude (strežnik je ob odhodu ne pove). Odpeljane se izločijo **pred** rezom na 30: strežnik brez `od` vrne cel dan (mestna relacija 115 zvez). S ciljem stran ceste ne velja.
-  * `fitsSystemWindows` povozi `padding` — zunanji okvir za odmike, zrak na notranjem; `adjustResize` + `ScrollView`.
+  * **Rez `od` je po pričakovanem odhodu** (`api._odhod_ts`), ne po voznem redu: vlak z zamudo 18 min je bil 12 min po uri že s seznama. `od` skozi epoho (`api._ura_ts`): na dan premika ure je ura stene do treh za uro stran od `dep_s`. Prihod na vrstici = vozni red + zamuda ob odhodu, kot druga vrstica zveze na strani.
+  * **Ime** (`Nastavitev.oznaka`, „Domov“) namesto postaj na vseh velikostih, na velikih postaji pod njim. Velja za smer, v kateri je nastavljeno (`oznakaOd`); po ⇄ postaje.
+  * `fitsSystemWindows` povozi `padding` — zunanji okvir za odmike, zrak na notranjem; `adjustResize` + `ScrollView`. Nastavitev ima `configChanges`: obrat bi pobrisal izbiro.
+  * Ritem (`naRitem`) samo, kadar je tabla na zaslonu; sicer ga ob zagonu telefona pobriše. Do 23. 10. je vsem brez table vsakih 15 min zaman zagnal aplikacijo.
+* **Bližnjica** = oblika z domače strani (cvet budilke, detelja zemljevida, `oblika_*.xml` iz `home.html`) z ikono, ime pod njo kot pod ikono launcherja (barva po ozadju zaslona, `w_bliznjica_svetlo`). Ime od 92 dp višine (`Z_IMENOM_DP`), nižje samo oblika. Nastavitev `BliznjicaNastavitev` brez strežnika. „Kam greš?“ ima ime „Pot“: v stolpcu 57 dp se ne izpiše.
+* **Iskalna vrstica**: 1×1 povečevalo, ožja od 240 dp brez gumbov omrežij (ležeči 4×1 tudi: 51 dp < `TRAK_SIROK`). Imena widgetov v izbirniku = `android:label` na sprejemniku; brez njega je vsak „kajros“.
 
 ### Pasti na napravi
 

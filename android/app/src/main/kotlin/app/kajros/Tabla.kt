@@ -140,11 +140,24 @@ object Tabla {
          * velja: smer pove cilj sam.
          */
         val cilj: String? = null,
+        /**
+         * Potnikovo ime table ("Domov", "Služba") namesto imen postaj -- na
+         * ikoni 1×1 je to vse, kar je treba vedeti, kam gre.
+         */
+        val oznaka: String? = null,
+        /**
+         * Izhodišče, za katero [oznaka] velja. Po ⇄ je ni: "Domov" v drugo
+         * smer bi bila laž. Drugi ⇄ jo vrne.
+         */
+        val oznakaOd: String? = null,
     ) {
         val vlak: Boolean get() = omrezje == "zeleznica"
 
         /** Ista relacija v drugo smer (gumb ⇄); brez cilja ni česa obrniti. */
         fun obrnjena(): Nastavitev? = cilj?.let { copy(postaja = it, cilj = postaja) }
+
+        /** Ime za smer, ki je zdaj na tabli, ali null. */
+        fun oznakaZdaj(): String? = oznaka?.takeIf { oznakaOd == null || oznakaOd == postaja }
     }
 
     /** Ena stran ceste, kot jo pove streznik. */
@@ -178,6 +191,8 @@ object Tabla {
             .putString("smer_napis_$widgetId", n.smerNapis)
             .putString("videz_$widgetId", n.videz.name)
             .putString("cilj_$widgetId", n.cilj)
+            .putString("oznaka_$widgetId", n.oznaka)
+            .putString("oznaka_od_$widgetId", n.oznakaOd)
             .apply()
     }
 
@@ -187,7 +202,8 @@ object Tabla {
         return Nastavitev(postaja, p.getString("omrezje_$widgetId", "zeleznica")!!,
             p.getString("smer_$widgetId", null), p.getString("smer_napis_$widgetId", null),
             Izris.Videz.iz(p.getString("videz_$widgetId", null)),
-            p.getString("cilj_$widgetId", null))
+            p.getString("cilj_$widgetId", null),
+            p.getString("oznaka_$widgetId", null), p.getString("oznaka_od_$widgetId", null))
     }
 
     /** Widget je odstranjen z zaslona; njegova nastavitev nima vec lastnika. */
@@ -199,6 +215,8 @@ object Tabla {
             .remove("smer_napis_$widgetId")
             .remove("videz_$widgetId")
             .remove("cilj_$widgetId")
+            .remove("oznaka_$widgetId")
+            .remove("oznaka_od_$widgetId")
             .remove("stanje_$widgetId")
             .apply()
     }
@@ -378,6 +396,8 @@ object Tabla {
                 smer = if (smerVelja) n.smer else null,
                 smerNapis = if (smerVelja) n.smerNapis else null,
                 cilj = cilj ?: n.cilj,
+                // Ime gre s postajo, ki jo je strežnik zapisal po svoje.
+                oznakaOd = if (n.oznakaOd == n.postaja) postaja ?: n.oznakaOd else n.oznakaOd,
             )
         }
     }

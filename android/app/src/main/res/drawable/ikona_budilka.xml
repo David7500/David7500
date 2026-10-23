@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Budilka: zvonec. Črta 2 dp kot ikone na strani; barvo da widget
+     (`setColorFilter`), zato je tu bela. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:pathData="M6.5,16.5 V11.5 A5.5,5.5 0 0 1 17.5,11.5 V16.5 L19,18 H5 Z"
+        android:strokeColor="#ffffff" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M10,20.5 H14"
+        android:strokeColor="#ffffff" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>

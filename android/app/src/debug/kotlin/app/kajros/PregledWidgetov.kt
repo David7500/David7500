@@ -281,6 +281,21 @@ class PregledWidgetov : Activity() {
                 val (opis, b) = vzorci[stanje.coerceIn(vzorci.indices)]
                 Triple(WidgetBudilke::class.java.name, opis) { id -> WidgetBudilke.pogled(this, id, b, zdaj) }
             }
+            "bliznjica" -> {
+                // Vsak widget na zaslonu dobi naslednje dejanje, da je vseh
+                // šest na enem posnetku; id je ob vezavi lahko katerikoli.
+                val dejanja = WidgetBliznjica.Dejanje.values()
+                val kdo = mutableMapOf<Int, Int>()
+                val ime = stanje == 0
+                Triple(WidgetBliznjica::class.java.name,
+                    if (ime) "vsa dejanja z imenom" else "vsa dejanja, samo oblika") { id ->
+                    val d = dejanja[kdo.getOrPut(id) { kdo.size } % dejanja.size]
+                    WidgetBliznjica.izris(this, id, d, ime)
+                }
+            }
+            "iskanje" -> Triple(WidgetIskanje::class.java.name, "vse velikosti") { id ->
+                WidgetIskanje.pogled(this, id)
+            }
             else -> {
                 val vlak = Tabla.Nastavitev("Ljubljana", "zeleznica")
                 val bus = Tabla.Nastavitev("Bavarski dvor", "avtobus", "s1", "→ Razstavišče · Kolodvor")
@@ -319,6 +334,8 @@ class PregledWidgetov : Activity() {
                     Triple("brez podlage", vlak.copy(videz = Izris.Videz.BREZ),
                         Tabla.Stanje(vrstice, zdaj - 60_000L)),
                     Triple("relacija", relacija, Tabla.Stanje(zveze, zdaj - 60_000L)),
+                    Triple("relacija z imenom", relacija.copy(oznaka = "Domov", oznakaOd = "Kranj"),
+                        Tabla.Stanje(zveze, zdaj - 60_000L)),
                 )
                 val (opis, n, st) = vzorci[stanje.coerceIn(vzorci.indices)]
                 Triple(WidgetTabla::class.java.name, opis) { id -> WidgetTabla.pogled(this, id, n, st, zdaj) }

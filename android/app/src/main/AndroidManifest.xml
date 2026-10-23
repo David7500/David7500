@@ -128,7 +128,8 @@
              akcije, zato ga ni treba odpirati vsem. -->
         <receiver
             android:name=".Widget"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/widget_ime_odstevanje">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -141,7 +142,8 @@
              brez nje widget ne ve, kaj naj kaze, in ugibati ne sme. -->
         <receiver
             android:name=".WidgetTabla"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/widget_ime_tabla">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -170,13 +172,53 @@
              `PendingIntent`, zunaj je ni mogoce sestaviti. -->
         <receiver
             android:name=".WidgetBudilke"
-            android:exported="false">
+            android:exported="false"
+            android:label="@string/widget_ime_budilke">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_budilke_info" />
+        </receiver>
+
+        <!-- Bližnjica: ena oblika, en dotik. Kaj odpre, izbere potnik v
+             `BliznjicaNastavitev`. -->
+        <receiver
+            android:name=".WidgetBliznjica"
+            android:exported="false"
+            android:label="@string/widget_ime_bliznjica">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_bliznjica_info" />
+        </receiver>
+
+        <!-- Odpre jo sistem ob dodajanju bližnjice, zato `exported`, kot
+             nastavitev table. -->
+        <activity
+            android:name=".BliznjicaNastavitev"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="true"
+            android:theme="@style/Tema">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Iskalna vrstica „Kam greš?“ z iskalnikoma omrežij. -->
+        <receiver
+            android:name=".WidgetIskanje"
+            android:exported="false"
+            android:label="@string/widget_ime_iskanje">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_iskanje_info" />
         </receiver>
 
         <!-- Izid namestitve posodobitve. Namero sestavimo mi (`PendingIntent`

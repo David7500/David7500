@@ -395,6 +395,8 @@ Tabla s ciljem (relacija, `/api/connections` z novima `od` in `limit`): Bavarski
 
 **Preverjeno na emulatorju** (`AppWidgetHostView`, `PregledWidgetov`): Android 15 vsaka velikost z vzorci (šteje, daleč, avtobus prej, zastarela po zvonjenju, zdaj, brez budilke; tri, pet, ugasnjena, zazvonila, nobene; vlak z oviro, stran ceste, star podatek, prazna, brez postaje, brez podlage), pravi strežnik (`zivo`: Ljubljana, RG 211 +3, tir 7-A, ovira) ter svetlo in temno ozadje zaslona. Android 9 (pot brez zemljevida velikosti, izbira iz `OPTION_APPWIDGET_*` vezanega widgeta): vse tri v vseh velikostih in `zivo`, brez sesutja; žeton na 1×1 je tam manjši (samodejna velikost pri `wrap_content`). **Ni preverjeno**: launcherji izdelovalcev (Samsung, Xiaomi).
 
+Bližnjica (šest dejanj, z imenom in brez) in iskalna vrstica ter tabla z imenom („Domov“): preverjeno na emulatorju 15 in 9 v vseh velikostih pregleda, na temnem in svetlem ozadju zaslona; ime pod obliko se izpiše celo v stolpcu 57 dp, v ležeči vrstici (51 dp) ga ni.
+
 ## Rezerva budilke: koliko prej naj zazvoni (6. 9. 2026)
 
 David: *„Uporabnik pa ne sme zamuditi, raje kej rezerve, če ni zihr."* Koliko rezerve = vprašanje s številko. Vir: senca (`napoved`, 63 843 razrešenih vrstic): `ours_s` = kar bi prikaz **takrat** povedal, `actual_s` = resnica. Napaka budilke = `ours_s − actual_s` — pozitivna = obljubili večjo zamudo, kot je bila, budilka bi zvonila **prepozno**.
