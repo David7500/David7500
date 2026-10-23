@@ -168,7 +168,7 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
 |---|---|---|---|
 | `Widget` (odštevanje) | koliko do **moje** vožnje | nič; gumb „preveri“ = `Sprozilec` | 2×1 |
 | `WidgetBudilke` (stikala) | katere budilke | nič | 2×2 |
-| `WidgetTabla` (odhodna tabla) | kdaj z **moje postaje** | `/api/departures?limit=30`, na 15 min | 4×2 |
+| `WidgetTabla` (odhodna tabla) | kdaj z **moje postaje**; s ciljem: kdaj **do cilja** | `/api/departures?limit=30` ali `/api/connections?od=&limit=30`, na 15 min | 4×2 |
 
 * **Velikost odloči vsebino** (`Velikost.kt`, čist JVM, `VelikostTest`): MINI 40×40, PAS 110×40, TRAK 110×64, TRAK_SIROK 240×64, KVADRAT 110×110, SREDNJI 240×110, STOLPEC 110×250, VELIK 240×250 dp. Googlova mreža: pokončno vrstice 102/220/337, ležeče 51/117/184. Izbira = največja, ki se prilega, sicer najmanjša — **isto pravilo kot launcher**.
   * 12+: `RemoteViews(Map<SizeF, RemoteViews>)` (`Izris.odzivno`), launcher izbere sam, brez prebujanja. Prej iz `OPTION_APPWIDGET_*` (pokončno min širina × max višina, ležeče obratno) in `onAppWidgetOptionsChanged`.
@@ -198,6 +198,7 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
   * „Ni zveze“ ≠ „te postaje ni“ (`Tabla.Izid`); postaje ni mogoče shraniti brez strežnika.
   * Postaja se izbere (`/api/stations/search`, 250 ms, od dveh črk, predlogi pod poljem); shrani se ime strežnika (`Izid.Odhodi.popravi`). Pri avtobusih tudi `smer` (ključ in napis); `smer: null` = tabla cela; ⇄ na widgetu = druga stran ceste.
   * Odpadla vožnja prečrtana z „odpade“; ovira (prva, ki imenuje progo) = gumb ⚠, na seznamu vrstica.
+  * **Cilj (ni nujen) = relacija** (`Nastavitev.cilj`): iste postavitve, vrstica s prihodom („prihod 07:29 · prestop Medvode (tesno) · LP 2435“ — prihod prvi, tropičje sme odrezati številko), ⇄ = druga smer (`obrnjena()`), dotik odpre iskalnik `?from=&to=`. Zveze s prestopom brez zamude (strežnik je ob odhodu ne pove). Odpeljane se izločijo **pred** rezom na 30: strežnik brez `od` vrne cel dan (mestna relacija 115 zvez). S ciljem stran ceste ne velja.
   * `fitsSystemWindows` povozi `padding` — zunanji okvir za odmike, zrak na notranjem; `adjustResize` + `ScrollView`.
 
 ### Pasti na napravi

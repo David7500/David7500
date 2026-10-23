@@ -17,17 +17,18 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Katera postaja gre na widget z odhodno tablo -- in pri avtobusih katera
- * stran ceste.
+ * Katera postaja gre na widget z odhodno tablo -- pri avtobusih katera stran
+ * ceste, in po zelji cilj, ki tablo spremeni v relacijo.
  *
  * **Postaja se izbere, ne vtipka** (22. 9. 2026). Doslej je bilo treba ime
  * napisati na pamet in widget je shranil kar vnos ("bavarski"). Zdaj vnos samo
  * isce (`/api/stations/search`, isto kot predlogi na strani), shrani pa se
- * lahko samo ime, ki ga je vrnil streznik.
+ * lahko samo ime, ki ga je vrnil streznik. Isto velja za cilj.
  *
  * **Postaje ni mogoce shraniti, ne da bi jo prej nasli.** Gumb vprasa
- * streznik za tablo in shrani sele, ko ta res pride -- widget, ki bi ostal
- * prazen, je za potnika okvara aplikacije in ne napaka izpred treh dni.
+ * streznik za tablo (ali zveze do cilja) in shrani sele, ko ta res pride --
+ * widget, ki bi ostal prazen, je za potnika okvara aplikacije in ne napaka
+ * izpred treh dni.
  *
  * Svojega seznama postaj v telefonu ni: imena in vrstni red pozna streznik.
  * Seznam v telefonu bi bil drugo pravilo za isto stvar in bi se ob naslednjem
@@ -47,21 +48,111 @@ class TablaNastavitev : Activity() {
     private var videz = Izris.Videz.TONSKA
     private val glavna = Handler(Looper.getMainLooper())
 
-    /** Ime, kot ga je vrnil streznik, ali null, dokler ni izbrano. */
-    private var izbrana: String? = null
     private var smeri: List<Tabla.Smer> = emptyList()
     private var izbranaSmer: String? = null
-    /** Zaporedna stevilka iskanja: odgovor na staro tipkanje se zavrze. */
-    private var iskanje = 0
-    /** Besedilo v polje pise tudi program; takrat to ni novo iskanje. */
-    private var tiho = false
 
-    private val vnos by lazy { findViewById<EditText>(R.id.postaja) }
-    private val zadetki by lazy { findViewById<LinearLayout>(R.id.zadetki) }
     private val smeriOkvir by lazy { findViewById<LinearLayout>(R.id.smeri) }
     private val shrani by lazy { findViewById<Button>(R.id.shrani) }
 
-    private val isci = Runnable { isciZdaj() }
+    private lateinit var postaja: Iskalnik
+    private lateinit var cilj: Iskalnik
+
+    /**
+     * Polje, ki isce postajo na strezniku in pod sabo kaze predloge. Na
+     * zaslonu sta dve: izhodisce in neobvezen cilj.
+     *
+     * [ime] je ime, kot ga je vrnil streznik, ali null, dokler ni izbrano.
+     */
+    private inner class Iskalnik(
+        val vnos: EditText,
+        val zadetki: LinearLayout,
+        val izbrano: (String) -> Unit,
+        val spremenjeno: () -> Unit,
+    ) {
+        var ime: String? = null
+        /** Zaporedna stevilka iskanja: odgovor na staro tipkanje se zavrze. */
+        private var iskanje = 0
+        /** Besedilo v polje pise tudi program; takrat to ni novo iskanje. */
+        private var tiho = false
+        private val isci = Runnable { isciZdaj() }
+
+        init {
+            vnos.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, d: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, d: Int) {}
+                override fun afterTextChanged(s: Editable?) {
+                    if (tiho) return
+                    // Popravljeno ime ni vec izbrana postaja -- in stran ceste
+                    // tiste postaje ne velja za drugo.
+                    ime = null
+                    spremenjeno()
+                    glavna.removeCallbacks(isci)
+                    glavna.postDelayed(isci, PREMOR_MS)
+                }
+            })
+            // "Koncano" na tipkovnici vzame prvi predlog: to je tisti, ki bi ga
+            // clovek tako ali tako izbral, in brez tega tipka ne naredi nicesar.
+            vnos.setOnEditorActionListener { _, akcija, _ ->
+                if (akcija != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
+                (zadetki.getChildAt(0) as? TextView)?.let { izberi(it.text.toString()) }
+                true
+            }
+        }
+
+        val prazen: Boolean get() = vnos.text.isNullOrBlank()
+
+        fun isciZdaj() {
+            val q = vnos.text.toString().trim()
+            val moje = ++iskanje
+            if (ime != null || q.length < NAJMANJ_CRK) {
+                zadetki.removeAllViews()
+                return
+            }
+            val kje = omrezje
+            // Omrezje na svoji niti; cakanje na glavni bi bila zamrznjena tipkovnica.
+            Thread {
+                val imena = Tabla.isci(this@TablaNastavitev, q, kje)
+                glavna.post {
+                    if (moje != iskanje || isFinishing) return@post
+                    pokaziZadetke(imena)
+                }
+            }.start()
+        }
+
+        private fun pokaziZadetke(imena: List<String>?) {
+            zadetki.removeAllViews()
+            when {
+                imena == null -> povej(R.string.tabla_ni_zveze, R.color.sev_bad)
+                imena.isEmpty() -> povej(R.string.tabla_ni_postaje, R.color.sev_bad)
+                else -> skrijIzid()
+            }
+            imena?.forEach { ime ->
+                val v = layoutInflater.inflate(R.layout.tabla_zadetek, zadetki, false) as TextView
+                v.text = ime
+                v.setOnClickListener { izberi(ime) }
+                zadetki.addView(v)
+            }
+        }
+
+        fun izberi(novo: String) {
+            ime = novo
+            tiho = true
+            vnos.setText(novo)
+            vnos.setSelection(novo.length)
+            tiho = false
+            iskanje++
+            zadetki.removeAllViews()
+            getSystemService(InputMethodManager::class.java)
+                ?.hideSoftInputFromWindow(vnos.windowToken, 0)
+            izbrano(novo)
+        }
+
+        /** Drugo omrezje: isto ime je tam druga postaja (ali je sploh ni). */
+        fun znova() {
+            ime = null
+            isciZdaj()
+        }
+    }
 
     override fun onCreate(stanje: Bundle?) {
         super.onCreate(stanje)
@@ -75,44 +166,35 @@ class TablaNastavitev : Activity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return }
 
+        postaja = Iskalnik(findViewById(R.id.postaja), findViewById(R.id.zadetki),
+            izbrano = { naIzbiroPostaje(it) }, spremenjeno = { pozabiIzbiro() })
+        cilj = Iskalnik(findViewById(R.id.cilj), findViewById(R.id.zadetki_cilj),
+            izbrano = { narisiSmeri(); osveziGumb() }, spremenjeno = { narisiSmeri(); osveziGumb() })
+
         findViewById<Button>(R.id.vlak).setOnClickListener { izberiOmrezje("zeleznica") }
         findViewById<Button>(R.id.avtobus).setOnClickListener { izberiOmrezje("avtobus") }
         findViewById<Button>(R.id.videz_tonska).setOnClickListener { izberiVidez(Izris.Videz.TONSKA) }
         findViewById<Button>(R.id.videz_brez).setOnClickListener { izberiVidez(Izris.Videz.BREZ) }
         shrani.setOnClickListener { poisciInShrani() }
 
-        vnos.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, d: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, d: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (tiho) return
-                // Popravljeno ime ni vec izbrana postaja -- in stran ceste
-                // tiste postaje ne velja za drugo.
-                pozabiIzbiro()
-                glavna.removeCallbacks(isci)
-                glavna.postDelayed(isci, PREMOR_MS)
-            }
-        })
-        // "Koncano" na tipkovnici vzame prvi predlog: to je tisti, ki bi ga
-        // clovek tako ali tako izbral, in brez tega tipka ne naredi nicesar.
-        vnos.setOnEditorActionListener { _, akcija, _ ->
-            if (akcija != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
-            (zadetki.getChildAt(0) as? TextView)?.let { izberi(it.text.toString()) }
-            true
-        }
-
         // Ze nastavljen widget: pokaze, kaj je v njem, da ga je mogoce
         // popraviti in ne le prepisati na slepo.
         val prej = Tabla.nastavitev(this, widgetId)
         if (prej != null) {
             omrezje = prej.omrezje
-            izbranaSmer = prej.smer
             videz = prej.videz
         }
         izberiVidez(videz)
         izberiOmrezje(omrezje, ohraniVnos = true)
-        if (prej != null) izberi(prej.postaja, ohraniSmer = true)
-        else osveziGumb()
+        if (prej != null) {
+            prej.cilj?.let { cilj.izberi(it) }
+            postaja.izberi(prej.postaja)
+            // Izbira postaje stran ceste pozabi; shranjena se vrne, preden
+            // pride seznam strani -- ta jo obdrži, če jo še pozna.
+            izbranaSmer = prej.smer
+        } else {
+            osveziGumb()
+        }
     }
 
     private fun izberiOmrezje(kaj: String, ohraniVnos: Boolean = false) {
@@ -123,12 +205,14 @@ class TablaNastavitev : Activity() {
         // enakih gumbov in nobeden ne pove, kaj velja.
         oznaci(findViewById(R.id.vlak), vlak)
         oznaci(findViewById(R.id.avtobus), !vlak)
-        vnos.setHint(if (vlak) R.string.tabla_postaja else R.string.tabla_postajalisce)
+        postaja.vnos.setHint(if (vlak) R.string.tabla_postaja else R.string.tabla_postajalisce)
+        cilj.vnos.setHint(if (vlak) R.string.tabla_cilj_vnos else R.string.tabla_cilj_vnos_bus)
         if (zamenjava && !ohraniVnos) {
             // Isto ime je na drugem omrezju druga postaja (ali je sploh ni):
             // izbira ne velja, iskanje pa gre znova po novem omrezju.
             pozabiIzbiro()
-            isciZdaj()
+            postaja.znova()
+            cilj.znova()
         }
     }
 
@@ -143,41 +227,6 @@ class TablaNastavitev : Activity() {
         b.setTextColor(getColor(if (vklop) R.color.na_poudarku else R.color.ink_dim))
     }
 
-    // ---------- iskanje ----------
-
-    private fun isciZdaj() {
-        val q = vnos.text.toString().trim()
-        val moje = ++iskanje
-        if (izbrana != null || q.length < NAJMANJ_CRK) {
-            zadetki.removeAllViews()
-            return
-        }
-        val kje = omrezje
-        // Omrezje na svoji niti; cakanje na glavni bi bila zamrznjena tipkovnica.
-        Thread {
-            val imena = Tabla.isci(this, q, kje)
-            glavna.post {
-                if (moje != iskanje || isFinishing) return@post
-                pokaziZadetke(imena)
-            }
-        }.start()
-    }
-
-    private fun pokaziZadetke(imena: List<String>?) {
-        zadetki.removeAllViews()
-        when {
-            imena == null -> povej(R.string.tabla_ni_zveze, R.color.sev_bad)
-            imena.isEmpty() -> povej(R.string.tabla_ni_postaje, R.color.sev_bad)
-            else -> skrijIzid()
-        }
-        imena?.forEach { ime ->
-            val v = layoutInflater.inflate(R.layout.tabla_zadetek, zadetki, false) as TextView
-            v.text = ime
-            v.setOnClickListener { izberi(ime) }
-            zadetki.addView(v)
-        }
-    }
-
     // ---------- izbira ----------
 
     /**
@@ -185,19 +234,10 @@ class TablaNastavitev : Activity() {
      * vec strani ceste -- in ce odgovora ni, je bolje to vedeti zdaj kot ob
      * shranjevanju.
      */
-    private fun izberi(ime: String, ohraniSmer: Boolean = false) {
-        izbrana = ime
-        if (!ohraniSmer) izbranaSmer = null
+    private fun naIzbiroPostaje(ime: String) {
+        izbranaSmer = null
         smeri = emptyList()
         narisiSmeri()
-        tiho = true
-        vnos.setText(ime)
-        vnos.setSelection(ime.length)
-        tiho = false
-        iskanje++
-        zadetki.removeAllViews()
-        getSystemService(InputMethodManager::class.java)
-            ?.hideSoftInputFromWindow(vnos.windowToken, 0)
         osveziGumb()
 
         if (omrezje != "avtobus") { skrijIzid(); return }
@@ -206,7 +246,7 @@ class TablaNastavitev : Activity() {
         Thread {
             val izid = Tabla.prenesi(this, n)
             glavna.post {
-                if (izbrana != ime || isFinishing) return@post
+                if (postaja.ime != ime || isFinishing) return@post
                 when (izid) {
                     is Tabla.Izid.Odhodi -> {
                         skrijIzid()
@@ -222,21 +262,23 @@ class TablaNastavitev : Activity() {
     }
 
     private fun pozabiIzbiro() {
-        if (izbrana == null && smeri.isEmpty()) return
-        izbrana = null
         izbranaSmer = null
         smeri = emptyList()
         narisiSmeri()
         osveziGumb()
     }
 
-    /** Gumb za vsako stran ceste in "obe". Brez vec strani ni izbire. */
+    /**
+     * Gumb za vsako stran ceste in "obe". Brez vec strani ni izbire -- in s
+     * ciljem tudi ne: smer pove cilj sam.
+     */
     private fun narisiSmeri() {
         smeriOkvir.removeAllViews()
-        val vidno = if (smeri.size > 1) View.VISIBLE else View.GONE
+        val pokazi = smeri.size > 1 && cilj.prazen
+        val vidno = if (pokazi) View.VISIBLE else View.GONE
         findViewById<View>(R.id.smeri_glava).visibility = vidno
         findViewById<View>(R.id.smeri_pomoc).visibility = vidno
-        if (smeri.size < 2) return
+        if (!pokazi) return
         (listOf<Tabla.Smer?>(null) + smeri).forEach { s ->
             val b = layoutInflater.inflate(R.layout.tabla_smer, smeriOkvir, false) as Button
             b.text = s?.napis ?: getString(R.string.tabla_obe_smeri)
@@ -251,9 +293,11 @@ class TablaNastavitev : Activity() {
         }
     }
 
+    /** Shraniti se da, ko je postaja izbrana, cilj pa izbran ali prazen. */
     private fun osveziGumb() {
-        shrani.isEnabled = izbrana != null
-        shrani.alpha = if (izbrana != null) 1f else 0.45f
+        val gre = postaja.ime != null && (cilj.prazen || cilj.ime != null)
+        shrani.isEnabled = gre
+        shrani.alpha = if (gre) 1f else 0.45f
     }
 
     private fun povej(niz: Int, barva: Int) {
@@ -271,10 +315,14 @@ class TablaNastavitev : Activity() {
     // ---------- shranjevanje ----------
 
     private fun poisciInShrani() {
-        val ime = izbrana ?: run { povej(R.string.tabla_izberi, R.color.sev_bad); return }
+        val ime = postaja.ime ?: run { povej(R.string.tabla_izberi, R.color.sev_bad); return }
+        if (!cilj.prazen && cilj.ime == null) { povej(R.string.tabla_izberi_cilj, R.color.sev_bad); return }
+        val kam = cilj.ime
+        // Strežnik isto postajo zavrne (400); brez tega bi okno trdilo, da ga ni.
+        if (kam == ime) { povej(R.string.tabla_isti_cilj, R.color.sev_bad); return }
         povej(R.string.tabla_iscem, R.color.ink_dim)
-        val smer = smeri.firstOrNull { it.kljuc == izbranaSmer }
-        val n = Tabla.Nastavitev(ime, omrezje, smer?.kljuc, smer?.napis, videz)
+        val smer = if (kam != null) null else smeri.firstOrNull { it.kljuc == izbranaSmer }
+        val n = Tabla.Nastavitev(ime, omrezje, smer?.kljuc, smer?.napis, videz, kam)
         // Omrezje na svoji niti; pet sekund cakanja na glavni bi bila zamrznjena
         // aplikacija.
         Thread {

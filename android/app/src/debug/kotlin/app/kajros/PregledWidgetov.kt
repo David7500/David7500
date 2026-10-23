@@ -157,7 +157,9 @@ class PregledWidgetov : Activity() {
             setPadding(dp(4), dp(28), dp(4), dp(8))
         }
         val vsi = am.getInstalledProvidersForPackage(packageName, null)
+        var relacija = false
         for ((razred, s, v) in listOf(
+            Triple(WidgetTabla::class.java, 276, 220),
             Triple(WidgetTabla::class.java, 276, 220),
             Triple(Widget::class.java, 276, 102),
             Triple(WidgetBudilke::class.java, 276, 220),
@@ -175,7 +177,10 @@ class PregledWidgetov : Activity() {
             // Nastavitev pred prvim `onUpdate`: ta pride kot oddaja in teče za
             // tem `onCreate`, na isti niti.
             if (razred == WidgetTabla::class.java) {
-                Tabla.nastavi(this, id, Tabla.Nastavitev("Ljubljana", "zeleznica"))
+                // Prva je tabla, druga relacija.
+                Tabla.nastavi(this, id, if (relacija) Tabla.Nastavitev("Kranj", "zeleznica", cilj = "Ljubljana")
+                    else Tabla.Nastavitev("Ljubljana", "zeleznica"))
+                relacija = true
             }
             val hv = h.createView(this, id, info)
             hv.layoutParams = LinearLayout.LayoutParams(dp(s), dp(v)).apply {
@@ -211,10 +216,13 @@ class PregledWidgetov : Activity() {
 
     private fun odhod(
         vr: Long, kam: String, no: String, min: Int?, tir: String? = null, odpadla: Boolean = false,
+        voznjaMin: Int? = null, prestop: String? = null, prestopStanje: String? = null,
     ) = Tabla.Odhod(
         ura = String.format("%tR", vr), kam = kam, trainNo = no, tripId = "t-$no",
         zamudaMin = min, razred = min?.let { Tabla.razred(it) }, prezgodaj = (min ?: 0) <= -1,
         tir = tir, odpadla = odpadla, voznoredniMs = vr,
+        prihod = voznjaMin?.let { String.format("%tR", vr + it * 60_000L) },
+        prestop = prestop, prestopStanje = prestopStanje,
     )
 
     /** Razred ponudnika, opis vzorca in izris za id. */
@@ -293,6 +301,14 @@ class PregledWidgetov : Activity() {
                 )
                 val smeri = listOf(Tabla.Smer("s1", "→ Razstavišče · Kolodvor"),
                     Tabla.Smer("s2", "→ Tivoli"))
+                val relacija = Tabla.Nastavitev("Kranj", "zeleznica", cilj = "Ljubljana")
+                val zveze = listOf(
+                    odhod(m + 6 * 60_000L, "Ljubljana", "LPV 2010", 4, tir = "2", voznjaMin = 32),
+                    odhod(m + 21 * 60_000L, "Ljubljana", "LP 2433", null, tir = "1", voznjaMin = 29),
+                    odhod(m + 36 * 60_000L, "Ljubljana", "EC 115", 12, voznjaMin = 27),
+                    odhod(m + 50 * 60_000L, "Ljubljana", "LP 2435 + LP 2210", null, voznjaMin = 58,
+                        prestop = "Medvode", prestopStanje = "tesno"),
+                )
                 val vzorci = listOf(
                     Triple("vlak, ovira", vlak, Tabla.Stanje(vrstice, zdaj - 3 * 60_000L,
                         "Med Ljubljano in Kamnikom nadomestni avtobus.")),
@@ -302,6 +318,7 @@ class PregledWidgetov : Activity() {
                     Triple("brez postaje", null, null),
                     Triple("brez podlage", vlak.copy(videz = Izris.Videz.BREZ),
                         Tabla.Stanje(vrstice, zdaj - 60_000L)),
+                    Triple("relacija", relacija, Tabla.Stanje(zveze, zdaj - 60_000L)),
                 )
                 val (opis, n, st) = vzorci[stanje.coerceIn(vzorci.indices)]
                 Triple(WidgetTabla::class.java.name, opis) { id -> WidgetTabla.pogled(this, id, n, st, zdaj) }

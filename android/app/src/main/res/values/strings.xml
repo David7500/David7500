@@ -164,12 +164,16 @@
     <string name="widget_budilka_zazvonila">zazvonila · odhod %1$s</string>
 
     <!-- widget: odhodna tabla ene postaje -->
-    <string name="widget_tabla_opis">Naslednji odhodi z ene postaje, z zamudo.</string>
+    <string name="widget_tabla_opis">Naslednji odhodi z ene postaje ali zveze do cilja, z zamudo.</string>
     <string name="widget_tabla_ob">osveženo ob %1$s</string>
     <string name="widget_tabla_staro">podatek ob %1$s — star %2$d min</string>
     <string name="widget_tabla_osvezi">Osveži zdaj</string>
     <string name="widget_tabla_caka">Še nisem uspel vprašati strežnika.</string>
     <string name="widget_tabla_nic">Danes od tod ne pelje nič več.</string>
+    <string name="widget_tabla_nic_zvez">Danes ni več zvez.</string>
+    <string name="widget_tabla_prihod">prihod %1$s</string>
+    <string name="widget_tabla_prestop">prestop %1$s</string>
+    <string name="widget_tabla_zamenjaj">Obrni smer</string>
     <string name="widget_tabla_ni_zamude">zamuda še ni znana</string>
     <string name="widget_tabla_brez_postaje">Postaja ni izbrana. Pritisni in jo izberi.</string>
     <!-- Kratke različice za 1×1, kjer je prostora za dve besedi. -->
@@ -202,6 +206,12 @@
     <string name="tabla_smer">SMER</string>
     <string name="tabla_smer_pomoc">Na vsaki strani ceste je svoje postajališče. Izberi tisto, kjer čakaš — spoznaš ga po naslednji postaji.</string>
     <string name="tabla_obe_smeri">Obe smeri</string>
+    <string name="tabla_cilj">CILJ (NI NUJNO)</string>
+    <string name="tabla_cilj_pomoc">S ciljem widget kaže samo zveze do njega, s prihodom in prestopom. Gumb ⇄ na widgetu obrne smer.</string>
+    <string name="tabla_cilj_vnos">npr. Koper</string>
+    <string name="tabla_cilj_vnos_bus">npr. Tobačna</string>
+    <string name="tabla_izberi_cilj">Cilj izberi s seznama ali ga izbriši.</string>
+    <string name="tabla_isti_cilj">Cilj je ista postaja kot izhodišče.</string>
 
     <!-- posodobitev zunaj trgovine in zaslon „O aplikaciji“ -->
     <string name="posodobitev">Na voljo je različica %1$s. Pritisni za posodobitev.</string>

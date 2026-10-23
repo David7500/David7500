@@ -76,13 +76,21 @@ class WidgetTabla : AppWidgetProvider() {
     }
 
     /**
-     * Gumb ⇄ na avtobusni tabli: druga stran ceste.
+     * Gumb ⇄: pri relaciji druga smer (iz službe domov), na avtobusni tabli
+     * druga stran ceste.
      *
      * Stara tabla gre stran, preden pride nova: vrstice z druge strani ceste
      * pod novim napisom bi bile napačne, in brez omrežja bi tam tudi ostale.
      */
     private fun obrni(c: Context, id: Int) {
         val n = Tabla.nastavitev(c, id) ?: return
+        val obrnjena = n.obrnjena()
+        if (obrnjena != null) {
+            Tabla.nastavi(c, id, obrnjena)
+            Tabla.pozabiStanje(c, id)
+            AppWidgetManager.getInstance(c)?.updateAppWidget(id, pogled(c, id))
+            return
+        }
         val s = Tabla.stanje(c, id) ?: return
         val nova = Tabla.naslednjaSmer(s.smeri, n.smer) ?: return
         Tabla.nastavi(c, id, n.copy(smer = nova.kljuc, smerNapis = nova.napis))
@@ -276,9 +284,12 @@ class WidgetTabla : AppWidgetProvider() {
         }
 
         // Z isto stranjo ceste kot widget: stran bi sicer odprla obe in
-        // potnik bi iskal vrstice, ki jih je pravkar videl.
+        // potnik bi iskal vrstice, ki jih je pravkar videl. Relacija odpre
+        // iskalnik z isto relacijo.
         private fun naslovTable(c: Context, n: Tabla.Nastavitev): String =
-            Nastavitve.naslov(c) + (if (n.vlak) "/app/train" else "/app/bus") +
+            if (n.cilj != null) Nastavitve.naslov(c) + (if (n.vlak) "/app/train" else "/app/bus") +
+                "?from=" + Nastavitve.zaPot(n.postaja) + "&to=" + Nastavitve.zaPot(n.cilj)
+            else Nastavitve.naslov(c) + (if (n.vlak) "/app/train" else "/app/bus") +
                 "?station=" + Nastavitve.zaPot(n.postaja) +
                 (if (n.smer.isNullOrBlank()) "" else "&smer=" + Nastavitve.zaPot(n.smer))
 
@@ -332,12 +343,18 @@ class WidgetTabla : AppWidgetProvider() {
             private val tonski = Izris.slog(c, Izris.Videz.TONSKA)
 
             /** Prazna tabla ni okvara: pozno zvecer od tod res ne pelje nic. */
-            private fun prazno(): String = c.getString(
-                if (s == null) R.string.widget_tabla_caka else R.string.widget_tabla_nic)
+            private fun prazno(): String = c.getString(when {
+                s == null -> R.string.widget_tabla_caka
+                n.cilj != null -> R.string.widget_tabla_nic_zvez
+                else -> R.string.widget_tabla_nic
+            })
 
-            /** "Ljubljana" ali "Bavarski dvor → Razstavišče" pri izbrani strani ceste. */
+            /** Podnaslov pod imenom postaje: "→ Ljubljana" pri relaciji, sicer stran ceste. */
+            private val podnaslov: String? = n.cilj?.let { "→ $it" } ?: n.smerNapis
+
+            /** "Ljubljana", "Kranj → Ljubljana" ali "Bavarski dvor → Razstavišče". */
             private fun glava(): CharSequence {
-                val smer = n.smerNapis ?: return n.postaja
+                val smer = podnaslov ?: return n.postaja
                 val b = SpannableStringBuilder(n.postaja).append("  ")
                 val od = b.length
                 b.append(smer)
@@ -347,9 +364,23 @@ class WidgetTabla : AppWidgetProvider() {
                 return b
             }
 
-            /** "LPV 2010 → Koper" (pri avtobusu "LPP 6 → Črnuče"). */
-            private fun voznja(o: Tabla.Odhod): String =
-                if (o.kam.isBlank()) o.trainNo else "${o.trainNo} → ${o.kam}"
+            /**
+             * "LPV 2010 → Koper" (pri avtobusu "LPP 6 → Črnuče"); pri relaciji
+             * "prihod 07:29 · prestop Medvode · LP 2435" -- prihod prvi, ker ga
+             * tropičje na ozkem widgetu ne sme odrezati, številka vlaka pa sme.
+             */
+            private fun voznja(o: Tabla.Odhod): String = when {
+                o.prihod != null -> listOfNotNull(c.getString(R.string.widget_tabla_prihod, o.prihod),
+                    prestop(o), o.trainNo.ifBlank { null }).joinToString(" · ")
+                o.kam.isBlank() -> o.trainNo
+                else -> "${o.trainNo} → ${o.kam}"
+            }
+
+            /** "prestop Ljubljana", "prestop Ljubljana (tesno)" ali "… ne drži". */
+            private fun prestop(o: Tabla.Odhod): String? = o.prestop?.let {
+                c.getString(R.string.widget_tabla_prestop, it) +
+                    (o.prestopStanje?.let { st -> " ($st)" } ?: "")
+            }
 
             /** Odpadla vožnja je prečrtana, ne izbrisana: potnik mora vedeti, da je ne bo. */
             private fun precrtaj(besedilo: String, da: Boolean): CharSequence {
@@ -423,7 +454,7 @@ class WidgetTabla : AppWidgetProvider() {
                 v.setOnClickPendingIntent(android.R.id.background,
                     Izris.odpri(c, koda, naslovTable(c, n)))
 
-            /** Bralnik zaslona prebere vrstico kot stavek, ne kot stiri besede. */
+            /** Bralnik zaslona prebere vrstico kot stavek, ne kot štiri besede. */
             private fun opis(o: Tabla.Odhod): String = buildString {
                 append(o.ura).append(", ").append(voznja(o))
                 if (!o.tir.isNullOrBlank()) append(", tir ").append(o.tir)
@@ -439,7 +470,8 @@ class WidgetTabla : AppWidgetProvider() {
             private fun mini(): RemoteViews {
                 val v = RemoteViews(c.packageName, slog.mini)
                 klikTabla(v)
-                v.setTextViewText(R.id.nad, n.postaja)
+                // Pri relaciji cilj: od kod potnik ve, kam pa je na ikoni treba povedati.
+                v.setTextViewText(R.id.nad, n.cilj?.let { "→ $it" } ?: n.postaja)
                 v.setTextColor(R.id.nad, slog.drugotna)
                 val o = vidni.firstOrNull()
                 if (o == null) {
@@ -489,12 +521,13 @@ class WidgetTabla : AppWidgetProvider() {
                 val podrobno = voznja(o) + (if (o.tir.isNullOrBlank()) "" else " · " + c.getString(R.string.widget_tir, o.tir))
                 if (pas) {
                     // Pas nima vrstice za uro podatka: star podatek pove spredaj, rumeno.
-                    v.setTextViewText(R.id.nad, if (!staro) n.postaja + " · " + podrobno
+                    val kje = glava().toString()
+                    v.setTextViewText(R.id.nad, if (!staro) "$kje · $podrobno"
                         else SpannableStringBuilder().apply {
                             append(c.getString(R.string.widget_tabla_ob_kratko, URA.format(Date(s!!.obMs))))
                             setSpan(ForegroundColorSpan(c.getColor(R.color.sev_hard)), 0, length,
                                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                            append(" · ").append(n.postaja).append(" · ").append(podrobno)
+                            append(" · ").append(kje).append(" · ").append(podrobno)
                         })
                 } else {
                     v.setTextViewText(R.id.nad, glava())
@@ -575,17 +608,25 @@ class WidgetTabla : AppWidgetProvider() {
             private fun tir(o: Tabla.Odhod): String =
                 if (o.tir.isNullOrBlank()) "" else c.getString(R.string.widget_tir, o.tir)
 
-            /** Ozka vrstica pod uro: "Koper · tir 3" (avtobus: "LPP 6 → Črnuče"). */
-            private fun kratko(o: Tabla.Odhod): String =
-                listOf(if (n.vlak) o.kam.ifBlank { o.trainNo } else voznja(o), tir(o))
-                    .filter { it.isNotBlank() }.joinToString(" · ")
+            /**
+             * Ozka vrstica pod uro: "Koper · tir 3" (avtobus: "LPP 6 → Črnuče"),
+             * pri relaciji "prihod 07:29 · tir 3".
+             */
+            private fun kratko(o: Tabla.Odhod): String = listOfNotNull(
+                when {
+                    o.prihod != null -> c.getString(R.string.widget_tabla_prihod, o.prihod)
+                    n.vlak -> o.kam.ifBlank { o.trainNo }
+                    else -> voznja(o)
+                },
+                prestop(o), tir(o).ifBlank { null },
+            ).joinToString(" · ")
 
             /** 2×2 in 3×2: ime postaje, tri kratke vrstice, ura podatka. */
             private fun kvadrat(): RemoteViews {
                 val v = RemoteViews(c.packageName, R.layout.w_tabla_kvadrat)
                 klikTabla(v)
                 ikona(v)
-                v.setTextViewText(R.id.postaja, n.postaja)
+                v.setTextViewText(R.id.postaja, if (n.cilj != null) glava().toString() else n.postaja)
                 vrstice(v, polne = false)
                 ob(v, R.id.ob)
                 return v
@@ -595,13 +636,18 @@ class WidgetTabla : AppWidgetProvider() {
             private fun glavaZGumbi(v: RemoteViews) {
                 ikona(v)
                 v.setTextViewText(R.id.postaja, n.postaja)
-                v.setViewVisibility(R.id.smer, if (n.smerNapis == null) View.GONE else View.VISIBLE)
-                n.smerNapis?.let { v.setTextViewText(R.id.smer, it) }
+                v.setViewVisibility(R.id.smer, if (podnaslov == null) View.GONE else View.VISIBLE)
+                podnaslov?.let { v.setTextViewText(R.id.smer, it) }
                 v.setOnClickPendingIntent(R.id.osvezi, osveziNamera())
-                // Obrni samo, kjer je kaj obrniti: postajalisce z vec stranmi ceste.
-                val obrniti = !n.vlak && (s?.smeri?.size ?: 0) > 1
+                // Obrni samo, kjer je kaj obrniti: relacija (druga smer) ali
+                // postajalisce z vec stranmi ceste.
+                val obrniti = n.cilj != null || (!n.vlak && (s?.smeri?.size ?: 0) > 1)
                 v.setViewVisibility(R.id.obrni, if (obrniti) View.VISIBLE else View.GONE)
-                if (obrniti) v.setOnClickPendingIntent(R.id.obrni, obrniNamera())
+                if (obrniti) {
+                    v.setOnClickPendingIntent(R.id.obrni, obrniNamera())
+                    v.setContentDescription(R.id.obrni, c.getString(
+                        if (n.cilj != null) R.string.widget_tabla_zamenjaj else R.string.widget_tabla_obrni))
+                }
                 val ovira = s?.opozorilo
                 v.setViewVisibility(R.id.ovira, if (ovira == null) View.GONE else View.VISIBLE)
                 if (ovira != null) {

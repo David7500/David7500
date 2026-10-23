@@ -15,6 +15,11 @@ import java.time.format.DateTimeParseException
 /**
  * Odhodna tabla ene postaje za widget: nastavitev, prenos in shramba.
  *
+ * **S ciljem je to relacija** (23. 10. 2026): samo zveze do izbrane postaje, s
+ * prihodom (`/api/connections`). Vozaču je tabla s 30 odhodi v vse smeri
+ * odgovor na vprašanje, ki ga ni postavil; "kdaj mi pelje v službo" je ena
+ * vrstica. Isti widget in iste postavitve -- vrstica ima samo še prihod.
+ *
  * **Zakaj tu in ne v `Preverjevalec`.** Ta vprasa po ENI voznji, ker to rabi
  * budilka; widget vprasa po postaji in vzame prve tri. Odgovor je isti
  * endpoint (`/api/departures`) in to ni nakljucje: to je tabla, ki jo potnik
@@ -45,6 +50,8 @@ object Tabla {
     private const val ZADETKOV = 8
 
     private val URA = DateTimeFormatter.ofPattern("HH:mm")
+    /** Strežnik bere uro `od` v svojem pasu, ne v telefonovem. */
+    private val LJUBLJANA = ZoneId.of("Europe/Ljubljana")
 
     /** Ena vrstica table, ze pripravljena za izpis. */
     data class Odhod(
@@ -63,6 +70,11 @@ object Tabla {
         val odpadla: Boolean = false,
         /** Voznoredni odhod v epohi (ms); 0 = ni znan (stanje izpred 23. 10. 2026). */
         val voznoredniMs: Long = 0,
+        /** Relacija: voznoredni prihod na cilj ("07:29"); na tabli null. */
+        val prihod: String? = null,
+        /** Relacija s prestopom: kje ("Ljubljana") in ali drži ("tesno", "ne drži"). */
+        val prestop: String? = null,
+        val prestopStanje: String? = null,
     ) {
         /**
          * Ali vrstica še sodi na tablo ob [zdajMs].
@@ -123,8 +135,16 @@ object Tabla {
         val smerNapis: String? = null,
         /** Tonska podlaga ali brez nje (`Izris.Videz`). */
         val videz: Izris.Videz = Izris.Videz.TONSKA,
+        /**
+         * Cilj relacije, ali null = vsi odhodi. S ciljem stran ceste ne
+         * velja: smer pove cilj sam.
+         */
+        val cilj: String? = null,
     ) {
         val vlak: Boolean get() = omrezje == "zeleznica"
+
+        /** Ista relacija v drugo smer (gumb ⇄); brez cilja ni česa obrniti. */
+        fun obrnjena(): Nastavitev? = cilj?.let { copy(postaja = it, cilj = postaja) }
     }
 
     /** Ena stran ceste, kot jo pove streznik. */
@@ -157,6 +177,7 @@ object Tabla {
             .putString("smer_$widgetId", n.smer)
             .putString("smer_napis_$widgetId", n.smerNapis)
             .putString("videz_$widgetId", n.videz.name)
+            .putString("cilj_$widgetId", n.cilj)
             .apply()
     }
 
@@ -165,7 +186,8 @@ object Tabla {
         val postaja = p.getString("postaja_$widgetId", null) ?: return null
         return Nastavitev(postaja, p.getString("omrezje_$widgetId", "zeleznica")!!,
             p.getString("smer_$widgetId", null), p.getString("smer_napis_$widgetId", null),
-            Izris.Videz.iz(p.getString("videz_$widgetId", null)))
+            Izris.Videz.iz(p.getString("videz_$widgetId", null)),
+            p.getString("cilj_$widgetId", null))
     }
 
     /** Widget je odstranjen z zaslona; njegova nastavitev nima vec lastnika. */
@@ -176,6 +198,7 @@ object Tabla {
             .remove("smer_$widgetId")
             .remove("smer_napis_$widgetId")
             .remove("videz_$widgetId")
+            .remove("cilj_$widgetId")
             .remove("stanje_$widgetId")
             .apply()
     }
@@ -199,6 +222,9 @@ object Tabla {
                 put("tir", o.tir ?: JSONObject.NULL)
                 put("odpadla", o.odpadla)
                 put("vr_ms", o.voznoredniMs)
+                put("prihod", o.prihod ?: JSONObject.NULL)
+                put("prestop", o.prestop ?: JSONObject.NULL)
+                put("prestop_stanje", o.prestopStanje ?: JSONObject.NULL)
             })
         }
         val smeri = JSONArray()
@@ -236,6 +262,9 @@ object Tabla {
                     tir = if (r.isNull("tir")) null else r.optString("tir").ifBlank { null },
                     odpadla = r.optBoolean("odpadla"),
                     voznoredniMs = r.optLong("vr_ms"),
+                    prihod = niz(r, "prihod"),
+                    prestop = niz(r, "prestop"),
+                    prestopStanje = niz(r, "prestop_stanje"),
                 )
             }, o.optLong("ob"),
                 opozorilo = if (o.isNull("opozorilo")) null else o.optString("opozorilo").ifBlank { null },
@@ -336,9 +365,11 @@ object Tabla {
             val postaja: String? = null,
             /** Naslov prve ovire, ki zadeva to postajo ([opozorilo]). */
             val opozorilo: String? = null,
+            /** Ime cilja, kot ga pozna streznik (samo pri relaciji). */
+            val cilj: String? = null,
         ) : Izid() {
             /**
-             * Nastavitev, kot jo potrjuje odgovor: ime postaje streznikovo,
+             * Nastavitev, kot jo potrjuje odgovor: imeni postaj streznikovi,
              * smer pa samo, ce jo streznik se pozna -- napis nad tablo, ki
              * kaze obe strani, ne sme trditi ene.
              */
@@ -346,6 +377,7 @@ object Tabla {
                 postaja = postaja ?: n.postaja,
                 smer = if (smerVelja) n.smer else null,
                 smerNapis = if (smerVelja) n.smerNapis else null,
+                cilj = cilj ?: n.cilj,
             )
         }
     }
@@ -353,8 +385,18 @@ object Tabla {
     /**
      * Naslov table za widget. Cist JVM (izvor je niz), da ga je mogoce
      * preizkusiti -- `smer` je `stop_id` in v poizvedbo gre kodiran.
+     *
+     * Relacija vpraša za zveze od [od] naprej (ura v Ljubljani, kot jo bere
+     * strežnik): brez tega pride ves dan, mestna relacija 115 zvez in 85 kB.
      */
-    fun naslov(izvor: String, n: Nastavitev): String = buildString {
+    fun naslov(izvor: String, n: Nastavitev, od: String? = null): String = if (n.cilj != null) buildString {
+        append(izvor).append("/api/connections?from=")
+        append(URLEncoder.encode(n.postaja, "UTF-8"))
+        append("&to=").append(URLEncoder.encode(n.cilj, "UTF-8"))
+        append("&network=").append(n.omrezje)
+        if (od != null) append("&od=").append(od)
+        append("&limit=").append(SHRANI)
+    } else buildString {
         append(izvor).append("/api/departures?station=")
         append(URLEncoder.encode(n.postaja, "UTF-8"))
         append("&network=").append(n.omrezje)
@@ -365,8 +407,9 @@ object Tabla {
         if (!n.smer.isNullOrBlank()) append("&smer=").append(URLEncoder.encode(n.smer, "UTF-8"))
     }
 
-    /** Prvih [SHRANI] vrstic odhodne table te postaje. */
+    /** Prvih [SHRANI] vrstic odhodne table te postaje ali zvez do cilja. */
     fun prenesi(c: Context, n: Nastavitev): Izid {
+        if (n.cilj != null) return prenesiZveze(c, n)
         val (koda, besedilo) = prenesi(naslov(Nastavitve.naslov(c), n))
         if (koda == 404) return Izid.NiPostaje
         if (besedilo == null) return Izid.BrezZveze
@@ -390,6 +433,87 @@ object Tabla {
             Izid.BrezZveze
         }
     }
+
+    /**
+     * Zveze do cilja od pred desetimi minutami naprej -- toliko nazaj gre tudi
+     * tabla (`api_departures`), ker vlak z zamudo še ni odpeljal.
+     *
+     * Neposredne in s prestopom v eni vrsti po odhodu. Strežnik vrne vsake
+     * po [SHRANI]; skupaj jih ostane [SHRANI].
+     */
+    private fun prenesiZveze(c: Context, n: Nastavitev): Izid {
+        val od = java.time.LocalTime.now(LJUBLJANA).minusMinutes(10)
+        // Tik po polnoči bi "23:55" vprašal za konec dneva, ki je že mimo.
+        val ura = if (od.hour >= 23 && java.time.LocalTime.now(LJUBLJANA).hour < 1) null
+            else od.format(URA)
+        val (koda, besedilo) = prenesi(naslov(Nastavitve.naslov(c), n, ura))
+        if (koda == 404) return Izid.NiPostaje
+        if (besedilo == null) return Izid.BrezZveze
+        return try {
+            val o = JSONObject(besedilo)
+            val neposredne = o.optJSONArray("connections") ?: return Izid.BrezZveze
+            val s = o.optJSONArray("transfers") ?: JSONArray()
+            val vse = (0 until neposredne.length()).map { zveza(neposredne.getJSONObject(it), n) } +
+                (0 until s.length()).map { prestop(s.getJSONObject(it), n) }
+            // Odpeljane stran, preden se odreže: strežnik pred 23. 10. 2026 `od`
+            // prezre in vrne cel dan, mestna relacija pa ima 115 zvez.
+            val zdaj = System.currentTimeMillis()
+            Izid.Odhodi(
+                vse.filter { it.vidno(zdaj) }.sortedBy { it.voznoredniMs }.take(SHRANI),
+                postaja = o.optString("from").ifBlank { null },
+                cilj = o.optString("to").ifBlank { null },
+                opozorilo = opozorilo(o.optJSONArray("alerts"), n.vlak),
+            )
+        } catch (e: org.json.JSONException) {
+            Izid.BrezZveze
+        }
+    }
+
+    /** Neposredna zveza: kot vrstica table, z uro prihoda. */
+    private fun zveza(r: JSONObject, n: Nastavitev): Odhod {
+        val z = r.optJSONObject("zamuda")
+        return Odhod(
+            ura = ura(r.optString("sched_dep")),
+            kam = n.cilj ?: "",
+            trainNo = r.optString("train_no"),
+            tripId = r.optString("trip_id").ifBlank { null },
+            zamudaMin = if (z == null || z.isNull("min")) null else z.getInt("min"),
+            razred = z?.optString("razred")?.ifBlank { null },
+            prezgodaj = z?.optBoolean("prezgodaj") ?: false,
+            tir = niz(r, "tir"),
+            odpadla = r.optBoolean("odpovedano") || r.optBoolean("ne_ustavi"),
+            voznoredniMs = casMs(r.optString("sched_dep")),
+            prihod = ura(r.optString("sched_arr")),
+        )
+    }
+
+    /**
+     * Zveza s prestopom: obe vožnji v imenu, kraj prestopa in ali drži.
+     * Zamude ob odhodu strežnik tu ne pove (`transfer` je zamuda na
+     * prestopu), zato je pomišljaj -- ne izračunana ničla.
+     */
+    private fun prestop(r: JSONObject, n: Nastavitev): Odhod {
+        val noge = r.optJSONArray("legs")
+        val prva = noge?.optJSONObject(0)
+        val stanje = r.optJSONObject("transfer")?.optString("status")
+        return Odhod(
+            ura = ura(r.optString("sched_dep")),
+            kam = n.cilj ?: "",
+            trainNo = listOf(r.optString("train1"), r.optString("train2"))
+                .filter { it.isNotBlank() }.joinToString(" + "),
+            tripId = r.optString("trip1").ifBlank { null },
+            zamudaMin = null, razred = null, prezgodaj = false,
+            tir = prva?.let { niz(it, "tir") },
+            voznoredniMs = casMs(r.optString("sched_dep")),
+            prihod = ura(r.optString("sched_arr")),
+            prestop = r.optString("via").ifBlank { null },
+            prestopStanje = stanje?.takeIf { it == "tesno" || it == "ne drži" },
+        )
+    }
+
+    /** Niz ali null: `optString` za JSON null vrne "null". */
+    private fun niz(o: JSONObject, kljuc: String): String? =
+        if (o.isNull(kljuc)) null else o.optString(kljuc).ifBlank { null }
 
     /**
      * Ovira, ki jo widget pokaže nad seznamom.

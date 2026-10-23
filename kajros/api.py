@@ -3080,6 +3080,9 @@ def api_connections(
     date: str | None = None,
     with_transfers: bool = Query(True, description="poišči tudi zveze z enim prestopom"),
     network: str = NETWORK_Q,
+    od: str | None = Query(None, description="HH:MM; samo zveze z odhodom od te ure"),
+    limit: int | None = Query(None, ge=1, le=200,
+                              description="največ zvez vsake vrste, od začetka"),
     request: Request = None,
 ):
     """Vožnje od postaje do postaje na dani dan, z zadnjo znano zamudo.
@@ -3087,9 +3090,14 @@ def api_connections(
     Relacija se izračuna iz zaporedja postaj, ne iz številke vlaka: `train_no`
     označuje eno konkretno vožnjo, `route_id` pa je v tem feedu ena-na-ena
     s tripom in za grupiranje neuporaben.
+
+    `od` in `limit` sta za widget na telefonu, ki hoče samo naslednje zveze
+    vsakih 15 minut prek mobilnega omrežja: mestna relacija ima čez dan tudi
+    115 zvez (85 kB). Stran vzame cel dan, kot doslej.
     """
     now = datetime.now(TZ)
     date = _check_date(date) or now.date().isoformat()
+    od_s = _ura_s(od, "od") if od else None
     is_today = date == now.date().isoformat()
     now_s = journey.now_seconds(now) if is_today else None
     with _conn() as conn:
@@ -3117,15 +3125,23 @@ def api_connections(
         # avtobuse, ne pa za mestne: pri sestminutnem taktu prestop nima kaj
         # prihraniti, poizvedba pa je izmerjeno 26,5 s. Glej `dovolj_gosto()`.
         gosto = journey.dovolj_gosto(rows)
-        legs = (journey.transfers(conn, a, b, date, earliest_s=(now_s or 0),
+        # Gostota in "ni neposredne" po celem dnevu, ne po izrezu: zvečer
+        # bi widget sicer vsakih 15 minut sprožil iskanje z več prestopi.
+        cel_dan = rows
+        if od_s is not None:
+            rows = [r for r in rows if r["dep_s"] >= od_s]
+        zacetek = max(now_s or 0, od_s or 0)
+        legs = (journey.transfers(conn, a, b, date, earliest_s=zacetek,
                                   direct=rows, network=network)
                 if with_transfers and not gosto else [])
         # Sele ko neposredna voznja in en prestop ne dasta nic. V vzorcu 80
         # parov zeleznickih postaj je bilo takih 36 % -- pot je obstajala, le
         # dva ali tri prestope je rabila.
-        if with_transfers and not rows and not legs:
-            legs = journey.plan(conn, a, b, date, earliest_s=(now_s or 0),
+        if with_transfers and not cel_dan and not legs:
+            legs = journey.plan(conn, a, b, date, earliest_s=zacetek,
                                 network=network)
+        if limit:
+            rows, legs = rows[:limit], legs[:limit]
         # Obvestila pobere streznik, ne brskalnik: prikaz jih je sicer iskal
         # z eno zahtevo na vlak, torej z dvanajstimi za eno iskanje.
         if network == "zeleznica":

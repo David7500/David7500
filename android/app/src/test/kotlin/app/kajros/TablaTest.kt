@@ -137,3 +137,32 @@ class TablaPopravekTest {
         assertEquals("bavarski", p.postaja)
     }
 }
+
+/** Tabla s ciljem je relacija: druga poizvedba, obrat smeri, imeni s strežnika. */
+class TablaRelacijaTest {
+
+    private val n = Tabla.Nastavitev("kranj", "zeleznica", cilj = "ljubljana")
+
+    @Test
+    fun `s ciljem vprasa za zveze od ure naprej`() {
+        val url = Tabla.naslov("https://kajros.app", n, "16:05")
+        assertTrue(url.startsWith("https://kajros.app/api/connections?from=kranj&to=ljubljana"), url)
+        assertTrue("&od=16:05" in url && "&limit=${Tabla.SHRANI}" in url, url)
+        assertTrue("departures" !in url, url)
+    }
+
+    @Test
+    fun `obrat zamenja izhodisce in cilj, brez cilja ga ni`() {
+        val o = n.obrnjena()!!
+        assertEquals("ljubljana", o.postaja)
+        assertEquals("kranj", o.cilj)
+        assertEquals(null, Tabla.Nastavitev("Kranj", "zeleznica").obrnjena())
+    }
+
+    @Test
+    fun `imeni prevzame streznikovi`() {
+        val p = Tabla.Izid.Odhodi(emptyList(), postaja = "Kranj", cilj = "Ljubljana").popravi(n)
+        assertEquals("Kranj", p.postaja)
+        assertEquals("Ljubljana", p.cilj)
+    }
+}

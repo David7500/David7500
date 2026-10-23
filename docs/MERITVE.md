@@ -391,6 +391,8 @@ Trije widgeti (odštevanje, budilke, tabla) v osmih velikostnih razredih, od 1×
 
 Na 15 minut je to ~96 zahtev na dan na widget: mestno postajališče **1,04 MB → 0,34 MB** stisnjeno na dan.
 
+Tabla s ciljem (relacija, `/api/connections` z novima `od` in `limit`): Bavarski dvor → Tobačna cel dan 115 zvez, 84,3 kB (7,5 kB gzip), od zdaj z `limit=30` **22,4 kB (2,5 kB)**; Kranj → Ljubljana 20,7 → 10,9 kB (3,7 → 2,8 kB).
+
 **Preverjeno na emulatorju** (`AppWidgetHostView`, `PregledWidgetov`): Android 15 vsaka velikost z vzorci (šteje, daleč, avtobus prej, zastarela po zvonjenju, zdaj, brez budilke; tri, pet, ugasnjena, zazvonila, nobene; vlak z oviro, stran ceste, star podatek, prazna, brez postaje, brez podlage), pravi strežnik (`zivo`: Ljubljana, RG 211 +3, tir 7-A, ovira) ter svetlo in temno ozadje zaslona. Android 9 (pot brez zemljevida velikosti, izbira iz `OPTION_APPWIDGET_*` vezanega widgeta): vse tri v vseh velikostih in `zivo`, brez sesutja; žeton na 1×1 je tam manjši (samodejna velikost pri `wrap_content`). **Ni preverjeno**: launcherji izdelovalcev (Samsung, Xiaomi).
 
 ## Rezerva budilke: koliko prej naj zazvoni (6. 9. 2026)

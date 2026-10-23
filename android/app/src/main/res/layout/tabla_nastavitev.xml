@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nastavitev widgeta z odhodno tablo: katero omrežje, katera postaja in
-     pri avtobusih katera stran ceste.
+<!-- Nastavitev widgeta z odhodno tablo: katero omrežje, katera postaja,
+     neobvezen cilj (relacija) in pri avtobusih brez cilja katera stran ceste.
 
      Vrstni red je vrstni red odločitev. Omrežje je prvo, ker od njega zavisi
      seznam predlogov: „Ljubljana“ je na železnici vozlišče in na mestnih
@@ -105,7 +105,46 @@
         android:layout_height="wrap_content"
         android:orientation="vertical" />
 
-    <!-- Stran ceste, samo pri avtobusnem postajališču z več stranmi. -->
+    <!-- Cilj ni nujen: brez njega je tabla vseh odhodov, z njim relacija:
+         samo zveze do cilja, s prihodom. Isto iskanje kot pri postaji. -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:letterSpacing="0.08"
+        android:text="@string/tabla_cilj"
+        android:textColor="@color/ink_mute"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/cilj"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/tabla_cilj_vnos"
+        android:imeOptions="actionDone"
+        android:inputType="text|textNoSuggestions"
+        android:singleLine="true"
+        android:textColor="@color/ink"
+        android:textColorHint="@color/ink_faint"
+        android:textSize="17sp" />
+
+    <LinearLayout
+        android:id="@+id/zadetki_cilj"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/tabla_cilj_pomoc"
+        android:textColor="@color/ink_faint"
+        android:textSize="12sp" />
+
+    <!-- Stran ceste, samo pri avtobusnem postajališču z več stranmi in brez
+         cilja: s ciljem smer pove cilj sam. -->
     <TextView
         android:id="@+id/smeri_glava"
         android:layout_width="match_parent"

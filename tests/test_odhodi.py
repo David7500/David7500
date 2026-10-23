@@ -45,3 +45,25 @@ def test_brez_omejitve_cela_tabla(conn):
 def test_omejitev_vzame_prve_po_uri(conn):
     vrstice = _tabla(limit=2)["board"]
     assert [r["train_no"] for r in vrstice] == ["LP 2400", "LP 2401"]
+
+
+# ---------- relacija (`/api/connections`): widget s ciljem ----------
+
+def _zveze(**kw):
+    return api.api_connections(from_="Postaja", to="Konec", date="2026-09-22",
+                               with_transfers=False, network="zeleznica", **kw)
+
+
+def test_zveze_brez_od_ves_dan(conn):
+    assert len(_zveze(od=None, limit=None)["connections"]) == 5
+
+
+def test_zveze_od_ure_in_omejene(conn):
+    # Odhodi so ob 8:20, 8:30, 8:40, 8:50 in 9:00 (30000 s + 600 s na vožnjo).
+    z = _zveze(od="08:35", limit=2)["connections"]
+    assert [r["train_no"] for r in z] == ["LP 2402", "LP 2403"]
+
+
+def test_napacna_ura_je_napaka(conn):
+    with pytest.raises(api.HTTPException):
+        _zveze(od="25:99", limit=None)
