@@ -880,6 +880,7 @@ $("#vod-naprej").addEventListener("click", () => {
 const NP = {
   aktivno: false, koraki: [], k: 0, trasa: {},
   vozilo: null, vozilaTrip: null, vozilaZanka: null, voziloOznaka: null,
+  voziloNoga: null, vozilo3d: {}, zoom3D: false,
   najavljen: -1, zamujeno: null, odlozi: 0, zacel: false,
   kameraOb: 0, potrdi: 0, zamenjaj: 0, osvezi: null, ura: null,
   // Pot ni več v voznem redu (404); zadnja napaka osvežitve; napaka lege;
@@ -1240,7 +1241,7 @@ function risiPlosco(korak, pred, zdaj) {
   const n = PREDLOG.noge[korak.i];
   const naprej = nato(korak);
   const ogrozen = ZIVO ? ogrozenPrestop() : null;
-  // Zložena vrstica: kar pride za tem korakom -- prestop s tveganjem ali cilj.
+  // Vrstica ob puščici: kar pride za tem korakom -- prestop s tveganjem ali cilj.
   let vrstica;
   if (naprej && korak.vrsta !== "cilj") {
     const t = naprej.prestop;
@@ -1324,6 +1325,7 @@ function risiPlosco(korak, pred, zdaj) {
   $("#vod-nova").classList.toggle("je-nujno", NP.zamujeno != null || !!ogrozen);
   const konec = $("#vod-konec");
   if (!NP.potrdi) konec.textContent = korak.vrsta === "cilj" ? "končano" : "končaj pot";
+  konec.classList.toggle("je-potrdi", !!NP.potrdi);
   $("#vod-sledi").hidden = V.sledi;
 
   // Vsa pot, trenutni korak poudarjen.
@@ -1380,25 +1382,70 @@ function voziloKoraka() {
   });
 }
 
+// Kot na drugih zemljevidih: od daleč vozilo od zgoraj v smeri vožnje, od
+// blizu model v 3D (`vozila3d.js`). Prej pilula z imenom -- edina oznaka
+// vozila, ki se ni ujemala z nobenim drugim zemljevidom (David, 23. 10. 2026).
+// Ikona je element nad platnom in bi model prekrila, zato ne oboje hkrati.
+const np3D = () => !!K && K.map.getZoom() >= AVTO_3D_OD;
+
 function risiVozilo(n) {
   if (!K) return;
   const v = NP.vozilo;
+  NP.voziloNoga = n;
   if (!v || !n) {
     if (NP.voziloOznaka) { NP.voziloOznaka.remove(); NP.voziloOznaka = null; }
+    postaviVozilo3D();
     return;
   }
+  const vlak = n.network === "zeleznica";
   if (!NP.voziloOznaka) {
     const el = document.createElement("div");
     el.className = "np-vozilo";
-    NP.voziloOznaka = new K.ml.Marker({ element: el, anchor: "center" })
-      .setLngLat([v.lon, v.lat]).addTo(K.map);
+    NP.voziloOznaka = new K.ml.Marker({
+      element: el, rotationAlignment: "map", pitchAlignment: "viewport",
+    }).setLngLat([v.lon, v.lat]).addTo(K.map);
+    if (!NP.zoom3D) {
+      NP.zoom3D = true;
+      K.map.on("zoom", postaviVozilo3D);
+    }
   }
   const el = NP.voziloOznaka.getElement();
-  el.innerHTML = `${znakSvg(n.network === "zeleznica" ? "vlak" : "bus", 16)}<span>${
-    escapeHtml(imeVoznje(n))}</span>`;
-  el.style.setProperty("--barva", n.network === "zeleznica" ? TRAIN_INK
-    : (AGENCY_INK[n.agency] || BUS_INK));
-  NP.voziloOznaka.setLngLat([v.lon, v.lat]);
+  el.title = imeVoznje(n);
+  el.innerHTML = voziloSvg(30, (v.speed_kmh || 0) >= 3,
+    vlak ? TRAIN_INK : AGENCY_INK[agencijaModela(n)] || BUS_INK, { vlak });
+  NP.voziloOznaka.setLngLat([v.lon, v.lat]).setRotation(v.bearing || 0);
+  postaviVozilo3D();
+}
+
+// Mestni LPP ima v voznem redu svoj ID, model in barvo pa deli s primestnim.
+const agencijaModela = (n) => (n.agency === "lpp" ? "1118" : n.agency);
+
+function postaviVozilo3D() {
+  const v = NP.vozilo, n = NP.voziloNoga;
+  const vlak = !!n && n.network === "zeleznica";
+  const blizu = !!v && !!n && !!NP.voziloOznaka && np3D();
+  if (NP.voziloOznaka) NP.voziloOznaka.getElement().hidden = blizu;
+  for (const [k, p] of Object.entries(NP.vozilo3d)) {
+    if (!blizu || k !== (vlak ? "vlak" : "avto")) p.nastavi([]);
+  }
+  if (!blizu) return;
+  const model = vlak ? vlakModel(n) : AGENCY_INK[agencijaModela(n)] ? agencijaModela(n) : "drugi";
+  plastVozila(vlak).nastavi([{ lon: v.lon, lat: v.lat, smer: v.bearing || 0, model }]);
+}
+
+// Plast nastane ob prvem vozilu od blizu: senčilnik ni zastonj, pot vso pot
+// peš ali od daleč ga ne rabi. Pod „ti“, nad potjo in postajališči.
+function plastVozila(vlak) {
+  const k = vlak ? "vlak" : "avto";
+  if (!NP.vozilo3d[k]) {
+    NP.vozilo3d[k] = vlak
+      ? plast3D({ id: "np-vlak-3d", modeli: vlakModeli(TRAIN_INK), vidna: np3D,
+                  povecava: vlakPovecava })
+      : avtobusi3D({ id: "np-avto-3d", inki: { ...AGENCY_INK, drugi: BUS_INK }, vidna: np3D,
+                     povecava: avtoPovecava });
+    K.map.addLayer(NP.vozilo3d[k].plast, "k-jaz");
+  }
+  return NP.vozilo3d[k];
 }
 
 // ---- osvežitev, shramba, konec
@@ -1517,6 +1564,7 @@ function koncajPot() {
   const korak = NP.koraki[NP.k];
   if (korak.vrsta !== "cilj" && !NP.potrdi) {
     gumb.textContent = "res končam?";
+    gumb.classList.add("je-potrdi");
     NP.potrdi = setTimeout(() => { NP.potrdi = 0; risiNaPoti(false); }, 4000);
     return;
   }

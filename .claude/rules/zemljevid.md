@@ -61,7 +61,7 @@ Od prvega izrisa: **pogled iz naslova** (`lat`/`lon`/`z`), sicer **zadnji na nap
 
 Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_height`. Stikalo „3D od blizu“ privzeto vklopljeno.
 
-* Okno vožnje 3D iz `pkUstvari()` (`pot_karta.js`), brez stikala; od blizu je avtobus model (meja `AVTO_3D_OD`, velikost `avtoPovecava` v `vozila3d.js`). Od daleč ikona kot DOM (`rotationAlignment: map`, `pitchAlignment: viewport`), skrita ob modelu.
+* Okno vožnje in pot (`/app/pot/podrobno`) 3D iz `pkUstvari()` (`pot_karta.js`), brez stikala; od blizu je vozilo model (meja `AVTO_3D_OD`, velikost `avtoPovecava`/`vlakPovecava` v `vozila3d.js`). Od daleč ikona kot DOM (`rotationAlignment: map`, `pitchAlignment: viewport`), skrita ob modelu. Ikona od zgoraj `voziloSvg` v `vozila3d.js` (veliki zemljevid in pot; okno ima svojo, ker je vedno na oceni).
 * **Nagib = lastnost približka** (`transformCameraUpdate`), `touchPitch` in `pitchWithRotate` ugasnjena.
 * **`z` v naslovu v Leafletovih enotah** (MapLibre + 1; `train.js` pelje na `&z=15`, `LZ` v `dashboard.js`).
 * **Vlaki DOM, avtobusi plast** (1 530 v konici). Avtobus v nagibu `icon-pitch-alignment: viewport`.

@@ -634,11 +634,15 @@ body.vodenje .pot {
   background: none; border: 0; text-decoration: underline; cursor: pointer;
 }
 .vod-gumbi { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; flex-wrap: wrap; }
+/* Obroba v `--m-obroba`, ne `--line-firm`: na temni plošči se gumb z
+   njo ni ločil od podlage („končaj“ je bil skoraj neviden, 23. 10. 2026). */
 .vod-gumb {
   padding: 8px 14px; font: inherit; font-size: 0.84rem;
   color: var(--ink); background: var(--bg-raised);
-  border: 1px solid var(--line-firm); border-radius: var(--r); cursor: pointer;
+  border: 1px solid var(--m-obroba); border-radius: var(--r); cursor: pointer;
 }
+/* „res končam?“: drugi dotik konča pot, zato v barvi opozorila. */
+.vod-gumb.je-potrdi { color: #ffdad6; background: #4a1f22; border-color: #ff8a80; }
 .vod-gumb.je-glavni { margin-right: auto; color: #fff; background: #2f7fff; border-color: #2f7fff; font-weight: 600; }
 
 /* Puščica "ti" pri vodenju leži na tleh in se vrti z zemljevidom. */
@@ -711,23 +715,41 @@ body.vodenje .pot-karta-okvir .maplibregl-ctrl-bottom-right { bottom: 0; }
   margin: -6px 0 2px; padding: 4px 0 6px; font: inherit; color: inherit;
   background: none; border: 0; cursor: pointer; touch-action: none;
 }
-.vod-rocaj-crta { width: 36px; height: 4px; border-radius: 2px; background: var(--m-obroba); opacity: 0.7; }
-.vod-povzetek { display: none; align-self: stretch; text-align: left; font-size: 0.9rem; line-height: 1.4; }
+.vod-rocaj-crta { width: 40px; height: 4px; border-radius: 2px; background: var(--m-obroba); }
+/* Vrstica „Nato …“ s puščico ostane v obeh stanjih: puščica je vedno na
+   istem mestu, gor razpre, dol zloži. */
+.vod-rocaj-vrsta { display: none; }
+body.na-poti .vod-rocaj-vrsta { display: flex; align-items: center; gap: 10px; align-self: stretch; }
+/* S puščico je črtica odveč (David, 23. 10. 2026); poteg gre po vsej vrstici. */
+body.na-poti .vod-rocaj-crta { display: none; }
+body.na-poti .vod-rocaj { margin-top: -4px; padding-top: 0; }
+.vod-povzetek { flex: 1; min-width: 0; text-align: left; font-size: 0.9rem; line-height: 1.4; }
 .vod-povzetek strong { font-family: var(--mono); font-weight: 600; }
-.vod-spodaj.je-zlozena .vod-povzetek { display: block; }
+.vod-rocaj-znak {
+  flex: none; display: grid; place-items: center; width: 34px; height: 34px;
+  border-radius: 50%; color: var(--ink); background: var(--m-najvisja);
+}
+.vod-rocaj-znak svg { transition: transform 0.16s; }
+.vod-rocaj[aria-expanded="true"] .vod-rocaj-znak svg { transform: rotate(180deg); }
 /* Zloženo ostane, kar je treba videti brez dotika: vozilo z rezervo,
-   opozorilo, da prestop ne drži, stare zamude in gumb za ta korak -- ali
+   opozorilo, da prestop ne drži, stare zamude, gumb za ta korak -- ali
    tisti, ki je zdaj glavni („nova pot od tu“ ob zamujenem vozilu, „sledi mi“
-   po premiku zemljevida). Ostalo (vsa pot, deljenje, konec) je en dotik stran. */
+   po premiku zemljevida) -- in konec poti. Vsa pot in deljenje sta en dotik
+   stran. */
 .vod-spodaj.je-zlozena .vod-cilj, .vod-spodaj.je-zlozena .vod-pot,
 .vod-spodaj.je-zlozena .vod-deli,
 .vod-spodaj.je-zlozena .vod-opomba:not(.je-opozorilo):not(.je-staro),
-.vod-spodaj.je-zlozena .vod-gumbi > :not(#vod-dalje):not(#vod-sledi):not(.je-nujno) { display: none; }
+.vod-spodaj.je-zlozena .vod-gumbi > :not(#vod-dalje):not(#vod-sledi):not(#vod-konec):not(.je-nujno) { display: none; }
 .vod-spodaj.je-zlozena .vod-gumbi { margin-top: 6px; }
 .vod-spodaj.je-zlozena { padding-bottom: 8px; }
-/* Razprta plošča na poti nosi vso pot: drsi sama, zemljevid ostane viden. */
-body.na-poti .vod-vec { max-height: 52dvh; overflow-y: auto; overscroll-behavior: contain; }
-body.na-poti .vod-pot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-firm); }
+/* Razprta plošča na poti nosi vso pot: drsi samo seznam korakov, gumbi
+   ostanejo pod njim na zaslonu -- „končaj“ je bil prej na dnu seznama. */
+body.na-poti .vod-vec { display: flex; flex-direction: column; max-height: 58dvh; }
+body.na-poti .vod-pot {
+  min-height: 0; overflow: hidden auto; overscroll-behavior: contain;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-firm);
+}
+body.na-poti .vod-gumbi { flex: none; }
 body.na-poti .vod-pot .koraki { font-size: 0.95em; }
 body.na-poti .korak.je-zdaj .korak-telo {
   margin: -4px -8px 0; padding: 4px 8px 6px; border-radius: var(--r-sm);
@@ -757,14 +779,10 @@ body.na-poti[data-korak="pred"] .vod-znak { background: var(--m-najvisja); }
 }
 .vod-gumb.je-glavni:empty { display: none; }
 
-/* Vozilo, ki ga čakaš ali na katerem si: ikona z imenom v barvi prevoznika. */
-.np-vozilo {
-  display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 5px;
-  border-radius: var(--r-pilula); background: var(--barva, #4db97f); color: #0f1115;
-  font: 700 12px/1 var(--sans); white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-}
-.np-vozilo svg { flex: none; }
+/* Vozilo, ki ga čakaš ali na katerem si: od daleč ikona kot v oknu vožnje
+   (oznaka DOM, vrti jo MapLibre -- zato brez lastnega `transform`), od
+   blizu model v 3D. */
+.np-vozilo { line-height: 0; }
 
 .korak-tveganje { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px;
                   color: var(--ink-dim); font-size: 0.8rem; }

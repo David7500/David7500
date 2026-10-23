@@ -1171,33 +1171,6 @@ const starostLege = (v) => (naOceni(v) ? "ocenjeno iz lege pred" : "lega stara")
 const BUS_VELIKOST = [[9, 15], [10, 20], [12, 26], [14, 34], [17, 44]];
 const BUS_SLIKA = 44;          // px, v katerih je slika narisana (in 2x za ostrino)
 
-// Avtobus od zgoraj: zaobljeno telo, svetlo vetrobransko steklo spredaj,
-// temno zadnje steklo in zarezi za kolesi. Puščica je bila premalo -- pri
-// približku je bila videti kot pika in se od vlaka ni ločila. Steklo spredaj
-// je svetlo (4. 10. 2026): temno se pri 15–26 px ni videlo in smeri vožnje ni
-// bilo mogoče razbrati. Zgibni LPP v dveh delih je bil zmeden (en dan, 4. 10.),
-// zato je telo enodelno za vse.
-// Izbrani avtobus na oceni lege je prosojen s črtkanim svetlim obrisom, kot
-// vozilo v oknu vožnje (`obrisOcene`): meritev od ocene loči oblika.
-function busSvg(size, moving, ink, ocena = false) {
-  const o = ocena ? 0.55 : moving ? 1 : 0.5;
-  const telo = 'x="7.5" y="2.5" width="9" height="19" rx="3.2"';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
-      <g>
-        <rect ${telo} fill="${ink}" fill-opacity="${o}"
-              ${ocena ? "" : 'stroke="#0f1115" stroke-width="1.5"'}/>
-        ${ocena ? obrisOcene(telo) : ""}
-        <path d="M9.1 5.6 Q12 4.3 14.9 5.6 L14.9 7.5 Q12 6.7 9.1 7.5 Z"
-              fill="#e9f4ff" fill-opacity="0.95"/>
-        <rect x="9.6" y="19.1" width="4.8" height="0.9" rx="0.4" fill="#0f1115" fill-opacity="0.7"/>
-        <rect x="6.4" y="6.6" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
-        <rect x="16" y="6.6" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
-        <rect x="6.4" y="15" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
-        <rect x="16" y="15" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
-      </g>
-    </svg>`;
-}
-
 // Polmer obroča izbranega vozila: pol ikone in malo, od blizu pa dovolj za
 // model v 3D (pri MapLibrovem z15 je LPP s povečavo ~27 px od sredine).
 function obrocIzbranega(z3d) {
@@ -1244,7 +1217,7 @@ async function dodajAvtobuse() {
   await Promise.all(barve.flatMap((ink) => stanja.map(async ([moving, ocena]) => {
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${
-      encodeURIComponent(busSvg(BUS_SLIKA * 2, moving, ink, ocena))}`;
+      encodeURIComponent(voziloSvg(BUS_SLIKA * 2, moving, ink, { ocena }))}`;
     await img.decode();
     map.addImage(busIkona(ink, moving, ocena), img, { pixelRatio: 2 });
   })));

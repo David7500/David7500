@@ -37,6 +37,36 @@ const avtoPovecava = (z) => 3.5 * 2 ** (-(z - 16) * 0.5);
 // Resnicna dolzina modela v metrih (glej `avtoModeli`): LPP zgibni, ostali 12 m.
 const avtoDolzina = (model) => (model === "1118" ? 18 : 12);
 
+// Od dalec: vozilo od zgoraj -- zaobljeno telo, svetlo vetrobransko steklo
+// spredaj, temno zadnje steklo in zarezi za kolesi. Puščica je bila premalo --
+// pri približku je bila videti kot pika in se od vlaka ni ločila. Steklo spredaj
+// je svetlo (4. 10. 2026): temno se pri 15–26 px ni videlo in smeri vožnje ni
+// bilo mogoče razbrati. Zgibni LPP v dveh delih je bil zmeden (en dan, 4. 10.),
+// zato je telo enodelno za vse.
+// Vozilo na oceni lege je prosojno s črtkanim svetlim obrisom, kot v oknu
+// vožnje (`obrisOcene`): meritev od ocene loči oblika. Vlak (pot od vrat do
+// vrat) je daljši, s temnim steklom kot v oknu vožnje.
+function voziloSvg(size, moving, ink, { ocena = false, vlak = false } = {}) {
+  const o = ocena ? 0.55 : moving ? 1 : 0.5;
+  const telo = vlak ? 'x="7" y="2" width="10" height="20" rx="3.4"'
+    : 'x="7.5" y="2.5" width="9" height="19" rx="3.2"';
+  const kolesa = vlak ? "" : `
+        <rect x="9.6" y="19.1" width="4.8" height="0.9" rx="0.4" fill="#0f1115" fill-opacity="0.7"/>
+        <rect x="6.4" y="6.6" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
+        <rect x="16" y="6.6" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
+        <rect x="6.4" y="15" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>
+        <rect x="16" y="15" width="1.6" height="3.2" rx="0.7" fill="#0f1115" fill-opacity="0.75"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
+      <g>
+        <rect ${telo} fill="${ink}" fill-opacity="${o}"
+              ${ocena ? "" : 'stroke="#0f1115" stroke-width="1.5"'}/>
+        ${ocena ? obrisOcene(telo) : ""}
+        ${vlak ? '<path d="M9.2 5.5 Q12 4.5 14.8 5.5 L14.8 7.8 Q12 6.9 9.2 7.8 Z" fill="#0f1115" fill-opacity="0.6"/>'
+    : '<path d="M9.1 5.6 Q12 4.3 14.9 5.6 L14.9 7.5 Q12 6.7 9.1 7.5 Z" fill="#e9f4ff" fill-opacity="0.95"/>'}${kolesa}
+      </g>
+    </svg>`;
+}
+
 const AVTO_BELA = "#eef1f3";
 const AVTO_STEKLO = "#1c2530";
 const AVTO_GUMA = "#17191c";

@@ -105,7 +105,17 @@
         <button type="button" id="vod-rocaj" class="vod-rocaj" aria-expanded="true"
                 aria-controls="vod-vec">
           <span class="vod-rocaj-crta" aria-hidden="true"></span>
-          <span id="vod-povzetek" class="vod-povzetek"></span>
+          {#- Puščica pove, da se plošča razpre: sama črtica je bila premalo
+              (prijava 23. 10. 2026). #}
+          <span class="vod-rocaj-vrsta">
+            <span id="vod-povzetek" class="vod-povzetek"></span>
+            <span class="vod-rocaj-znak" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 15l6-6 6 6"/>
+              </svg>
+            </span>
+          </span>
         </button>
         <div id="vod-vec" class="vod-vec">
           <div id="vod-cilj" class="vod-cilj"></div>
@@ -128,6 +138,7 @@
 
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('pot_karta.js') }}"></script>
+  <script src="{{ s('vozila3d.js') }}"></script>
   <script src="{{ s('pot_podrobno.js') }}"></script>
   {{ vec_list() }}
 </body>
