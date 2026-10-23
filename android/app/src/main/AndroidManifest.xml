@@ -152,9 +152,11 @@
 
         <!-- Sistem to dejavnost odpre sam, ko potnik widget dodaja, zato mora
              biti `exported`. Widget id pride od njega; brez veljavnega se
-             takoj zapre. -->
+             takoj zapre. `configChanges`: obrat zaslona ne sme pobrisati
+             izbrane postaje in cilja, ki ju okno ne shranjuje. -->
         <activity
             android:name=".TablaNastavitev"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Tema">

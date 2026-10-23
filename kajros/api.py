@@ -3098,7 +3098,7 @@ def api_connections(
     """
     now = datetime.now(TZ)
     date = _check_date(date) or now.date().isoformat()
-    od_s = _ura_s(od, "od") if od else None
+    od_ts = _ura_ts(date, od, "od") if od else None
     is_today = date == now.date().isoformat()
     now_s = journey.now_seconds(now) if is_today else None
     with _conn() as conn:
@@ -3129,9 +3129,14 @@ def api_connections(
         # Gostota in "ni neposredne" po celem dnevu, ne po izrezu: zvečer
         # bi widget sicer vsakih 15 minut sprožil iskanje z več prestopi.
         cel_dan = rows
-        if od_s is not None:
-            rows = [r for r in rows if r["dep_s"] >= od_s]
-        zacetek = max(now_s or 0, od_s or 0)
+        zacetek = now_s or 0
+        if od_ts is not None:
+            # Rez po pričakovanem odhodu, ne po voznem redu: vlak ob 7:00 z
+            # zamudo 18 min ob 7:12 še ni odpeljal, in prav ta vrstica je
+            # potniku najpomembnejša. Prestopi od iste ure, prikaz izloči
+            # odpeljane sam.
+            rows = [r for r in rows if _odhod_ts(r) >= od_ts]
+            zacetek = round(od_ts) - stats.polnoc(date)
         legs = (journey.transfers(conn, a, b, date, earliest_s=zacetek,
                                   direct=rows, network=network)
                 if with_transfers and not gosto else [])
@@ -3381,6 +3386,24 @@ def _ura_s(vrednost: str, ime: str) -> int:
     if not (0 <= h < 30 and 0 <= m < 60):
         raise HTTPException(400, f"{ime} mora biti HH:MM")
     return h * 3600 + m * 60
+
+
+def _ura_ts(dan: str, vrednost: str, ime: str) -> float:
+    """HH:MM na uri stene dneva `dan`, kot epoha; 25:10 je naslednji dan.
+
+    Ura stene ni voznoredna sekunda: ta šteje od poldneva minus 12 h
+    (`stats.polnoc`), in na dan premika ure se razideta za uro. Primerjava z
+    voznim redom zato gre skozi epoho.
+    """
+    d = date.fromisoformat(dan)
+    return (datetime(d.year, d.month, d.day, tzinfo=TZ)
+            + timedelta(seconds=_ura_s(vrednost, ime))).timestamp()
+
+
+def _odhod_ts(r: dict) -> float:
+    """Pričakovani odhod vrstice zvez v epohi: vozni red in zamuda, ki jo
+    prikaz pokaže; brez zamude vozni red."""
+    return datetime.fromisoformat(r["sched_dep"]).timestamp() + (r.get("delay_s") or 0)
 
 
 @app.get("/api/pot")

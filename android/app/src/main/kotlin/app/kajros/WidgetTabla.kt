@@ -19,9 +19,9 @@ import android.text.style.RelativeSizeSpan
 import android.text.style.StrikethroughSpan
 import android.view.View
 import android.widget.RemoteViews
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Odhodna tabla ene postaje na domacem zaslonu, od ene ikone do pol zaslona.
@@ -118,6 +118,9 @@ class WidgetTabla : AppWidgetProvider() {
                     // uporabna, prazna ni.
                     val izid = Tabla.prenesi(c, n)
                     if (izid !is Tabla.Izid.Odhodi) continue
+                    // ⇄ med prenosom: odgovor je za staro smer, pod novim
+                    // napisom bi bil napačen do naslednje osvežitve.
+                    if (Tabla.nastavitev(c, id) != n) continue
                     // Stran ceste je ob uvozu izginila: tabla je cela, zato
                     // napis nad njo ne sme vec trditi ene strani.
                     val popravljena = izid.popravi(n)
@@ -172,7 +175,15 @@ class WidgetTabla : AppWidgetProvider() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Velikost.values().toList()
             else Velikost.values().toList() - Velikost.STOLPEC - Velikost.VELIK
 
-        private val URA = SimpleDateFormat("HH:mm", Locale("sl"))
+        /**
+         * `DateTimeFormatter` in ne `SimpleDateFormat`: izris teče hkrati na
+         * glavni niti in v niti prenosa (`vOzadju`), `SimpleDateFormat` pa med
+         * nitmi ni varen in sme vrniti zmešano uro.
+         */
+        private val URA = DateTimeFormatter.ofPattern("HH:mm")
+
+        private fun ob(ms: Long): String =
+            URA.format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
 
         private val URE = intArrayOf(R.id.ura1, R.id.ura2, R.id.ura3)
         private val PARI = intArrayOf(R.id.par1, R.id.par2, R.id.par3)
@@ -189,9 +200,21 @@ class WidgetTabla : AppWidgetProvider() {
             c, 0, Intent(c, WidgetTabla::class.java).setAction(IZRISI),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        /** Nastavi ponavljajoco osvezitev. Klice se ob zagonu, dodajanju in vsaki osvezitvi. */
+        /**
+         * Nastavi ponavljajoco osvezitev. Klice se ob zagonu, dodajanju in vsaki osvezitvi.
+         *
+         * **Samo, kadar je tabla na zaslonu.** Ob zagonu telefona in posodobitvi
+         * aplikacije se je ritem nastavil vsem, tudi brez table, in odtlej je
+         * vsakih 15 minut zagnal aplikacijo zaman: `onDisabled` ga pobriše
+         * šele, ko zadnjo tablo odstraniš.
+         */
         fun naRitem(c: Context) {
             val am = c.getSystemService(AlarmManager::class.java) ?: return
+            val wm = AppWidgetManager.getInstance(c)
+            if (wm == null || wm.getAppWidgetIds(ComponentName(c, WidgetTabla::class.java)).isEmpty()) {
+                am.cancel(budnica(c))
+                return
+            }
             // `setInexactRepeating` in ne tocen alarm: to ni budilka. Sistem jih
             // sme zdruziti z drugimi in prav zato skoraj nic ne stane.
             am.setInexactRepeating(
@@ -431,8 +454,8 @@ class WidgetTabla : AppWidgetProvider() {
                 v.setTextViewText(viewId, when {
                     st.obMs <= 0 -> ""
                     staro -> c.getString(R.string.widget_tabla_staro,
-                        URA.format(Date(st.obMs)), Tabla.starostMin(st.obMs, zdaj))
-                    else -> c.getString(R.string.widget_tabla_ob, URA.format(Date(st.obMs)))
+                        ob(st.obMs), Tabla.starostMin(st.obMs, zdaj))
+                    else -> c.getString(R.string.widget_tabla_ob, ob(st.obMs))
                 })
                 v.setTextColor(viewId, c.getColor(if (staro) R.color.sev_hard else R.color.ink_faint))
                 v.setContentDescription(viewId, c.getString(R.string.widget_tabla_osvezi))
@@ -488,7 +511,7 @@ class WidgetTabla : AppWidgetProvider() {
                 v.setTextColor(R.id.glavno, if (staro) slog.drugotna else slog.glavna)
                 if (staro) {
                     v.setTextViewText(R.id.pod, c.getString(R.string.widget_tabla_ob_kratko,
-                        URA.format(Date(s!!.obMs))))
+                        ob(s!!.obMs)))
                     v.setTextColor(R.id.pod, c.getColor(R.color.sev_hard))
                 } else {
                     zamuda(v, R.id.pod, o, slog.brez)
@@ -524,7 +547,7 @@ class WidgetTabla : AppWidgetProvider() {
                     val kje = glava().toString()
                     v.setTextViewText(R.id.nad, if (!staro) "$kje · $podrobno"
                         else SpannableStringBuilder().apply {
-                            append(c.getString(R.string.widget_tabla_ob_kratko, URA.format(Date(s!!.obMs))))
+                            append(c.getString(R.string.widget_tabla_ob_kratko, ob(s!!.obMs)))
                             setSpan(ForegroundColorSpan(c.getColor(R.color.sev_hard)), 0, length,
                                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                             append(" · ").append(kje).append(" · ").append(podrobno)
@@ -533,7 +556,7 @@ class WidgetTabla : AppWidgetProvider() {
                     v.setTextViewText(R.id.nad, glava())
                     if (staro) {
                         v.setTextViewText(R.id.opis, c.getString(R.string.widget_tabla_staro,
-                            URA.format(Date(s!!.obMs)), Tabla.starostMin(s.obMs, zdaj)))
+                            ob(s!!.obMs), Tabla.starostMin(s.obMs, zdaj)))
                         v.setTextColor(R.id.opis, c.getColor(R.color.sev_hard))
                     } else {
                         v.setTextViewText(R.id.opis, precrtaj(podrobno, o.odpadla))

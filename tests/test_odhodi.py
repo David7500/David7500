@@ -64,6 +64,33 @@ def test_zveze_od_ure_in_omejene(conn):
     assert [r["train_no"] for r in z] == ["LP 2402", "LP 2403"]
 
 
+def test_zveze_od_obdrzi_zamujeni_vlak(conn, monkeypatch):
+    """Rez gre po pričakovanem odhodu: LP 2401 (8:30) z zamudo 10 min ob
+    8:35 še ni odpeljal. Po voznem redu bi šel ven -- in widget bi kazal
+    naslednjega, medtem ko zamujeni še stoji na peronu."""
+    from kajros import stats
+    prava = stats.connections
+
+    def z_zamudo(*a, **kw):
+        vrstice = prava(*a, **kw)
+        for r in vrstice:
+            if r["train_no"] == "LP 2401":
+                r["delay_s"] = 600
+        return vrstice
+
+    monkeypatch.setattr(stats, "connections", z_zamudo)
+    z = _zveze(od="08:35", limit=2)["connections"]
+    assert [r["train_no"] for r in z] == ["LP 2401", "LP 2402"]
+
+
+def test_od_na_dan_premika_ure():
+    """25. 10. 2026 vozni red do treh šteje od 01:00 poletnega časa
+    (`stats.polnoc`): ura stene 01:30 je `dep_s` 1800, ne 5400."""
+    from kajros import stats
+    assert api._ura_ts("2026-10-25", "01:30", "od") - stats.polnoc("2026-10-25") == 1800
+    assert api._ura_ts("2026-09-22", "08:35", "od") - stats.polnoc("2026-09-22") == 30900
+
+
 def test_napacna_ura_je_napaka(conn):
     with pytest.raises(api.HTTPException):
         _zveze(od="25:99", limit=None)

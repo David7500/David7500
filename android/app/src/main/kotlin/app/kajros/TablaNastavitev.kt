@@ -327,7 +327,9 @@ class TablaNastavitev : Activity() {
         // aplikacija.
         Thread {
             val izid = Tabla.prenesi(this, n)
-            glavna.post { koncaj(n, izid) }
+            // Okno je med čakanjem zaprl (nazaj): launcher je widget že
+            // odstranil, shranjena nastavitev in ritem bi ostala brez lastnika.
+            glavna.post { if (!isFinishing && !isDestroyed) koncaj(n, izid) }
         }.start()
     }
 

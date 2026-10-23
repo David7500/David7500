@@ -435,8 +435,9 @@ object Tabla {
     }
 
     /**
-     * Zveze do cilja od pred desetimi minutami naprej -- toliko nazaj gre tudi
-     * tabla (`api_departures`), ker vlak z zamudo še ni odpeljal.
+     * Zveze do cilja s pričakovanim odhodom od pred desetimi minutami naprej:
+     * strežnik reže po voznem redu in zamudi, zato vlak ob 7:00 z zamudo
+     * 18 min ob 7:12 še pride. Kdaj vrstica res odide, odloči [Odhod.vidno].
      *
      * Neposredne in s prestopom v eni vrsti po odhodu. Strežnik vrne vsake
      * po [SHRANI]; skupaj jih ostane [SHRANI].
@@ -469,22 +470,34 @@ object Tabla {
         }
     }
 
-    /** Neposredna zveza: kot vrstica table, z uro prihoda. */
+    /** Neposredna zveza: kot vrstica table, s prihodom. */
     private fun zveza(r: JSONObject, n: Nastavitev): Odhod {
         val z = r.optJSONObject("zamuda")
+        val min = if (z == null || z.isNull("min")) null else z.getInt("min")
         return Odhod(
             ura = ura(r.optString("sched_dep")),
             kam = n.cilj ?: "",
             trainNo = r.optString("train_no"),
             tripId = r.optString("trip_id").ifBlank { null },
-            zamudaMin = if (z == null || z.isNull("min")) null else z.getInt("min"),
+            zamudaMin = min,
             razred = z?.optString("razred")?.ifBlank { null },
             prezgodaj = z?.optBoolean("prezgodaj") ?: false,
             tir = niz(r, "tir"),
             odpadla = r.optBoolean("odpovedano") || r.optBoolean("ne_ustavi"),
             voznoredniMs = casMs(r.optString("sched_dep")),
-            prihod = ura(r.optString("sched_arr")),
+            prihod = prihod(r.optString("sched_arr"), min),
         )
+    }
+
+    /**
+     * Prihod, kot ga potnik dočaka: vozni red in zamuda ob odhodu, ista
+     * ocena kot druga vrstica zveze na strani (`connections.js`). Sam vozni
+     * red ob „+18“ pri odhodu bi se bral kot obljuba prihoda -- in z njim bi
+     * potnik zamudil prestop.
+     */
+    private fun prihod(iso: String?, zamudaMin: Int?): String {
+        val ms = casMs(iso)
+        return if (ms == 0L) "--:--" else uraMs(ms + (zamudaMin ?: 0) * 60_000L)
     }
 
     /**
@@ -587,14 +600,21 @@ object Tabla {
         }
     }
 
+    /**
+     * Ura na postaji: vozni red je slovenski, tudi kadar je telefon v drugem
+     * časovnem pasu -- tabla ob postaji ne sme kazati ure, ki je na peronu ni.
+     */
     private fun ura(iso: String?): String {
         if (iso.isNullOrBlank()) return "--:--"
         return try {
-            OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).format(URA)
+            OffsetDateTime.parse(iso).atZoneSameInstant(LJUBLJANA).format(URA)
         } catch (e: DateTimeParseException) {
             "--:--"
         }
     }
+
+    private fun uraMs(ms: Long): String =
+        java.time.Instant.ofEpochMilli(ms).atZone(LJUBLJANA).format(URA)
 
     /** Koda odgovora in telo. Koda je 0, kadar odgovora sploh ni bilo. */
     private fun prenesi(url: String): Pair<Int, String?> {
