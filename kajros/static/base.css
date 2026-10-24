@@ -256,9 +256,8 @@ button.top-link {
 .clock-wrap .dot.stale { background: var(--ink-faint); }
 .clock { font: 400 12px/1 var(--mono); color: var(--ink-dim); }
 
-/* ---------- preklop preprosto / napredno ----------
- * Napreden pogled ne odpre druge strani -- pokaze vec na isti. Potnik in
- * radovednez gledata isto vozjnjo, le da drugi hoce zraven se stevilke.
+/* ---------- segmentni preklop ----------
+ * Do 24. 10. 2026 tudi preprosto / napredno; zdaj samo izbire v /admin.
  */
 
 .mode-switch {
@@ -280,10 +279,6 @@ button.top-link {
 }
 @media (hover: hover) { .mode-switch button:hover { color: var(--ink); } }
 .mode-switch button[aria-pressed="true"] { background: var(--m-sek); color: var(--m-na-sek); }
-
-/* Vse, kar je samo za napreden pogled, je v DOM-u vedno -- preklop je
- * en atribut na <body>, ne ponovno risanje strani. */
-body:not(.is-advanced) .adv-only { display: none !important; }
 
 /* ---------- gumbi ---------- */
 

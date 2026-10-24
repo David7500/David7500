@@ -131,7 +131,7 @@ Osnutek E (David, 24. 10. 2026): iskanje iz A, zadetki iz B — vse vrstice enak
 * Pri vlakih še povezava na ovire. Dnevne kartice ni (avtobusi „+839 min“ ob 00:03). Število ovir iz `/api/svezina` le, če je pregled še na zaslonu.
 * **Shranjeno** (`kajros:fav`, zvezdica) = vrstice z naslednjim odhodom (`odhodiPoti` v common.js, isto kot Moje poti na domači), osvežitev 60 s; zvezdica v vrstici odstrani v dveh dotikih („odstrani?“). `kajros:recent` (šest zadnjih) samo v predlogih praznega polja. Oba **ločena po omrežju**.
 * Okno vožnje isto za vlak in avtobus; besedo izbere iz `network`. Več voženj na liniji → `?trip=<id>`.
-* **Preklop preprosto/napredno je zastarel** (David, 23. 10. 2026): vstopna stran in okno vožnje ga nimata; ima ga še `/app/ovire` (`is-advanced` na `<body>` odkrije `adv-only`).
+* **Preklopa preprosto/napredno ni nikjer** (David, 23. 10. 2026; zadnji `/app/ovire` 24. 10.). Ovira pokaže vrsto in vzrok (brez „neznano“) in povezavo na obvestilo SŽ; interni ključ in opravičilo z repa opisa ne.
 * **Pot pove, s čim greš**: `/app` → `/app/train` (308); `/app/train/{no}` za avtobus preusmeri po `trip.network` (307).
 * **Nadomestni prevoz SŽ: feed zamud ne poroča nikoli** (56 voženj, 0 meritev; pravi vlaki 99,5 %). Okno: „feed **ne poroča zamud** — velja vozni red“ (ne „še ni“); tabla in iskalnik „po voznem redu“ z razlogom. `train.jeNadomestni()`.
 * Vrste vlaka ostanejo kratice („AVT“, „MO“): `route_long_name` prazen pri vseh 2 571 progah.

@@ -85,9 +85,7 @@ function itemHtml(a) {
       </div>
       <h3 class="alert-card-title">${escapeHtml(alertTitle(a.header))}</h3>
       ${kdajHtml(a.kdaj)}
-      <p class="alert-card-body">${escapeHtml((a.description || "").replace(REP, ""))}
-        ${REP.test(a.description || "")
-          ? `<span class="adv-only">${escapeHtml((REP.exec(a.description) || [""])[0].trim())}</span>` : ""}</p>
+      <p class="alert-card-body">${escapeHtml((a.description || "").replace(REP, ""))}</p>
       ${trains.length ? `
         <div class="alert-trains">
           <span class="alert-trains-label">${trains.length} ${sklon(trains.length, "vlak")}:</span>
@@ -95,12 +93,17 @@ function itemHtml(a) {
           ${rest.length ? `<span class="alert-vec" hidden>${rest.map(pill).join("")}</span>
                            <button type="button" class="vec-vlakov">+${rest.length} še</button>` : ""}
         </div>` : ""}
-      <div class="alert-card-foot adv-only">
-        ${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
-        · <code>${escapeHtml(a.alert_id)}</code>
-        ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}
-      </div>
+      ${nogaHtml(a)}
     </article>`;
+}
+
+// Kaj je obvestilo in od kod. Preklopa preprosto/napredno ni več (David,
+// 23. 10. 2026); interni ključ obvestila potnika ne zanima, opravičilo na
+// koncu vsakega opisa tudi ne (`REP`). „neznano“ je prazno polje.
+function nogaHtml(a) {
+  const deli = [a.effect_label, a.cause_label].filter((x) => x && x !== "neznano").map(escapeHtml);
+  if (a.url) deli.push(`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>`);
+  return deli.length ? `<div class="alert-card-foot">${deli.join(" · ")}</div>` : "";
 }
 
 function render() {
@@ -130,9 +133,6 @@ listEl.addEventListener("click", (e) => {
   b.previousElementSibling.hidden = false;
   b.remove();
 });
-
-// Preklop pogleda je skupen vsem stranem in zivi v common.js.
-initMode();
 
 fetch("/api/alerts")
   .then(jsonOk)

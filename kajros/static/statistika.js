@@ -135,7 +135,7 @@ function glava(d) {
       <span>zajetih dni <b>${dni}</b></span>
       <span>voženj <b>${(d.runs || 0).toLocaleString("sl-SI")}</b></span>
       <span>zadnji dan <b>${escapeHtml(d.through || "—")}</b></span>
-      <span class="adv-only">izračunano <b>${escapeHtml((d.computed_at || "").replace("T", " ").slice(0, 16))}</b></span>
+      <span>izračunano <b>${escapeHtml((d.computed_at || "").replace("T", " ").slice(0, 16))}</b></span>
     </div>`;
 
   // Brez dovolj vzorca se poved ne napiše. Prazen prostor je boljši od
