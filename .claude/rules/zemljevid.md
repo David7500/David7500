@@ -86,10 +86,10 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
 | premaknemo po smeri (`bearing`) | 36 m | 72 % |
 | **premaknemo po trasi** | **30 m** | **80 %** |
 
-* Ne premikamo stoječega (`speed_ms < 1`), > 120 m od trase, nikoli čez konec. Podnapis „ocenjeno iz lege pred 42 s“.
+* Ne premikamo stoječega (`speed_ms < 1`), > 120 m od trase, nikoli čez konec. Podnapis „ocena · GPS pred 42 s“ (beseda od `OCENA_VIDNA_M`, 40 m).
 * **Na oceni vozilo gleda po trasi**: smer = tetiva od repa do čela **narisanega** vozila (`smerNaOceni`); 324 parov: mediana 5,6° → 2,4°.
 * Samo LPP (mestni in 1118) — Arriva, Nomago, AP MS hitrosti ne pošiljajo, stojijo na meritvi s smerjo iz feeda.
-* **Meritev od ocene loči oblika, ne barva**: vozilo v barvi prevoznika, na oceni **prosojno s črtkanim obrisom**; zadnja izmerjena lega **rdeča** pika s svetlim obročem (`bringToFront()`), vedno narisana. Pot kot pri izbranem (`narisiRunTraso`, osveži na 30 m premika); potnikova postaja bela. Barve v `common.js` (`AGENCY_INK`, `IZBRANA_INK`, `ZA_INK`). Enovrstična legenda pod zemljevidom.
+* **Meritev od ocene loči oblika, ne barva**: vozilo v barvi prevoznika, na oceni **prosojno s črtkanim obrisom**; zadnja izmerjena lega **rdeča** pika s svetlim obročem (`bringToFront()`), vedno narisana. Pot razreže ocena (`narisiRunTraso`, osveži na 30 m premika): naprej `--accent-lit`, prevoženo `ZA_INK`. Barve v `common.js` (`AGENCY_INK`, `ZA_INK`, `MERITEV_INK`). Legende ni — oceno pove podnapis.
 * **Na velikem zemljevidu ne za vsa vozila** — 80 ocen = 80 izmišljenih leg.
 * **Izjema: izbrani avtobus s `speed_ms`** (19. 10. 2026): mestni LPP po 60 s stoji 374 m → ocena 106 m (n=165), po 120 s 677 → 198. Ista koda kot okno (`ocenaNaTrasi`, `smerNaOceni`, `polAvtobusa`).
   * Brez novih zahtev (trasa iz `drawStops`, lega iz `/api/vehicles`).
@@ -103,9 +103,22 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
 * **Lastna lega teče sama, kadar je dovoljenje že dano** (David, 22. 10. 2026); **okna za dovoljenje ne odpremo sami** — samo dotik (gumb lege, „Vklopi“ na domači). Ena pot: `LEGA` v `common.js` (en `watchPosition` na stran, samo vidna stran, ob vrnitvi lega > 60 s pade), `stanjeLege()` (`dano`/`vprasaj`/`zavrnjeno`/`neznano`; v aplikaciji iz mostu), gumb `poisciMe()`. **Pogled se za piko ne premakne**; gumb ga premakne k tebi, drugi dotik na velikem zemljevidu piko skrije za ta ogled. `#2f7fff`, **obroč točnosti obvezen**. Na velikem zemljevidu **pika nad vozili** (oznaka DOM `.me-pika`, z-index 2 med vlaki 1 in oblački 3), obroč plast na tleh pod njimi (David, 22. 10.). Lege ne beri mimo `common.js` (`tests/test_lega.py`; izjema `deli.js`).
 * **Razdalja do vozila po poti** (`projekcijaNaTraso`), z **ocenjeno** lego. Nad **1 km** od proge (`OB_PROGI_M`) ne računamo; tudi ne, ko je **vozilo** dlje od `NA_TRASI_M` (300 m, `common.js`) od trase — lega ni na poti (pelje na začetek ali je feed prištel drugo vozilo; 22. 10. avtobus na avtocesti „še 420 m“). Mestni LPP v živo: 105 od 109 v 50 m, 2 nad 2 km (na končni, prišteta sosednji vožnji). Zgodovine leg mestnega LPP ni (`lega` ima samo NAP). „Do tebe ima še 1,2 km poti“ / „Tvojo lego je že prevozil — 420 m naprej po poti“. Brez dotika gumba se vrstica pokaže samo, ko je razdaljo mogoče izmeriti (`razdaljaDoMene`); razlog, zakaj je ni, šele po dotiku.
 
-## Okno vožnje
+## Okno vožnje (osnutek E, David 23.–24. 10. 2026)
 
-* **Živ zemljevid v preprostem pogledu, samo ko lega obstaja.** GPS ali **verodostojna lega potnikov** (`deljenje.md`); avtobus z GPS dobi potnikovo, kadar je novejša. `/api/vehicles?trip=` (`api._vozilo_po_potnikih`, `vir: "potniki"`), ritem v `X-Osvezi-Cez` (GPS 10 s, potniki 5 s, vlak brez 30 s). Vlak na postaji 45 s (`POSTANEK_VLAK_S`).
+* **Vrh = en postanek in koliko še do njega** (`ciljOkna`): tvoj (`postaja` v naslovu) › pred odhodom izhodišče › cilj. Odštevanje v obliki, ura z žetonom, beseda vira (`izmerjeno` / `zadnji podatek` / `ocena` / `običajno` / `v živo`), tir, vreme. Isti vrh riše kartica na zemljevidu avtobusa (`kartaOdstHtml`), budilka bere isto številko (`vrhOkna`). 20 min po pričakovani uri brez potrditve „ni potrditve“ (`NEPOTRJEN_MIN` = `stats.NEPOTRJEN_ODHOD_S`).
+* **Avtobus ima zemljevid vedno, vlak nikoli** („je itak samo tir“). Avtobus: pot naprej v barvi omrežja, prevoženo sivo, postajališča, tvoje belo z imenom (stran imena po legi na zaslonu). Vozilo z lego: GPS ali **verodostojna lega potnikov** (`deljenje.md`), avtobus z GPS dobi potnikovo, kadar je novejša; `/api/vehicles?trip=` (`api._vozilo_po_potnikih`, `vir: "potniki"`), ritem v `X-Osvezi-Cez` (GPS 10 s, potniki 5 s).
+  * Brez lege pilula pove zakaj (`pilulaBrezVozila`): „odpelje ob“, „še na prejšnji vožnji“ z vozilom verige na njegovem GPS (`postaviVoziloVerige`), „lege vozila ni“. Pot reže zadnja meritev. Prazen zemljevid brez besede je videti kot okvara.
+  * Prvi pogled počaka prvo lego ≤ 1,5 s (`zacetniPogled`), nato se ne premika sam. (i) zgoraj desno (spodaj kartica čez vso širino; na 360 px je odrezala ime), +/− samo pri `pointer: fine`, brez vrtenja.
+  * Brez WebGL2 vrh in trak kot pri vlaku.
+* **Vlak: trak od izhodišča do cilja** (`trakHtml`), merilo vozni red. Vlak med zadnjo prevoženo in naslednjo po uri (15–85 %), s potnikom na njegovi legi v indigu (`legaPotnikaNaTraku`).
+* **Osvežitev na 10 s med vožnjo** (30 min pred odhodom do 10 min po cilju, `voziAliKmalu`), sicer 60 s (`ritemOkna`; `pollWhileVisible` vzame ritem kot funkcijo): SŽ preračuna na 15 s, derp.si pošlje na 30. Napoved (`/predict`) ob istem naslovu predpomnjena 30 s (`fetchRunAndForecast`). Veriga vozila (`/vehicle`) samo pred odhodom.
+  * Pod vrhom svežina, teče sama: „novica pred N s“ (od `tiho_s`), nad `TIHO_S` „N min brez novic“, s potnikom „potnik pred N s“. Ob „GPS pred N s“ se „novica pred“ skrije — dve starosti druga ob drugi sta uganka.
+  * Neuspela osvežitev stran pusti: „brez zveze · podatki od HH:MM“ (`brezZveze`); prazno stran bi sicer pustil vsak predor.
+  * Sprememba na vrhu se dvigne (`je-novo` po `podpisVrha`; ob `prefers-reduced-motion` samo obroč).
+* **Vreme = žeton ob postanku na vrhu** (ikona + °, črtkan = napoved, od „zahtevnih“ beseda); v vrstici postanka samo zahtevne in hude.
+* **Skupina dejanj** (povezani gumbi, ikona nad besedo, robove postavi vidnost — `uredSkupino`): budilka (aplikacija), „Deli lego“, „Polno?“, pri vlaku „N ovir“. Odprt en razdelek (`data-odprto`).
+* **Postanki na črti**: prevoženi zloženi, vozilo je vrstica med zadnjim in naslednjim, naprej črtkano. Ničla = „točno“, tudi v kartici deljenja.
+* **Okno nima** preklopa preprosto/napredno, krivulje zamude, končnih zamud po dnevih, poročil prevoznika (`/reports`), legende pod zemljevidom in ure v glavi — zgodovina gre v statistiko (`strani.md`).
 * **Geste**: `cooperativeGestures` (namig v `pkUstvari`), razširjen pogled ga ugasne.
 
   | | vgrajen | čez celo stran |
@@ -114,13 +127,11 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
   | **miška** | **vleče zemljevid** | isto |
   | en prst | pomika **stran** | pomika zemljevid |
   | dva prsta | pomikata in približujeta | isto |
-  | gumba +/− | vedno | vedno |
+  | gumba +/− | samo miška | samo miška |
 
 * **Razširi čez stran, ne čez zaslon** (`is-max`, `position: fixed; inset: 0`). **Rabi `!important`** na `position`, `inset`, `margin`, `height` — `@media` pravila (0,3,1) so premagala (0,3,0), na namizju 240 px.
 * **Starost lege teče sama**: `common.ageHtml()` → `<span class="age-live">` z izhodiščem v `data-`; ena sekundna zanka po razredu. Ura odjemalca ni v računu. **Kdor izpiše `ageHtml()`, ponastavi števec** — podnapis samo ob novih podatkih (`nova`), ne v sekundni zanki.
-* Nad 1000 px dva stolpca (flex, ne grid): levo zdaj (zemljevid 240 px), desno postaje.
-* Ena slika, ne zavihki: krivulja zamude + pas razmer v istem grafu. Končna zamuda po dnevih: 15 dni v širini, drsi (`.runs-ovoj`).
-* **Vanilla JS, ročni SVG z lastnim tooltipom** — brez chart knjižnice.
+* Nad 1000 px dva stolpca (flex, ne grid): levo zdaj 420 px, lepljivo (zemljevid 340 px), desno postanki do 560 px.
 * **Ena vožnja, ena zanka leg** (`runMap.pollTrip`; prej vsak `loadRun` nova).
 * Opomb malo — le, kar spremeni ravnanje („čakaj na postajališču, ne na peronu“).
 * Statika z `Cache-Control: no-cache` (+ `ETag`).

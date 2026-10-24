@@ -26,6 +26,7 @@ Odgovarja na „kdaj se splača potovati“. Pravila, če se vrne:
 * Blok po dnevu v tednu pod štirimi ponovitvami to napiše s številko.
 * **Lestvica najhujših nosi sidro** („Čez vse vožnje je mediana …“; železnica 3 min, p90 20, 60 % v 5 min). Polja `median_s`, `p90_s`, `on_time_share` v `breakdowns()`.
 * **Ob spremembi polj povečaj `stats.SUMMARY_VERSION`** — `povzetek` velja 36 h, sicer streže staro obliko.
+* **Grafi: vanilla JS, ročni SVG z lastnim tooltipom**, brez knjižnice. Zgodovina ene vožnje (krivulja zamude s pasom razmer v istem grafu, končna zamuda po dnevih — 15 dni, drsi) je bila v oknu vožnje do 24. 10. 2026; vrne se sem (git).
 
 ## Domača stran je razcepišče
 
@@ -126,7 +127,7 @@ Izbrana pot ostane, dokler je ne končaš ali ne poteče — čez zaprto aplikac
 * Pod iskalnikom samo žetoni + (vlaki) povezava na ovire. Dnevne kartice ni (avtobusi „+839 min“ ob 00:03). Število ovir iz `/api/health` le, če je pregled še na zaslonu.
 * **Dva seznama**: `kajros:fav` (zvezdica) in `kajros:recent` (šest zadnjih), oba v žetonih pod iskalnikom, **ločena po omrežju**.
 * Okno vožnje isto za vlak in avtobus; besedo izbere iz `network`. Več voženj na liniji → `?trip=<id>`.
-* **Vstopna stran preklopa preprosto/napredno nima**; okno vožnje in ovire ga imajo (`is-advanced` na `<body>` odkrije `adv-only`).
+* **Preklop preprosto/napredno je zastarel** (David, 23. 10. 2026): vstopna stran in okno vožnje ga nimata; ima ga še `/app/ovire` (`is-advanced` na `<body>` odkrije `adv-only`).
 * **Pot pove, s čim greš**: `/app` → `/app/train` (308); `/app/train/{no}` za avtobus preusmeri po `trip.network` (307).
 * **Nadomestni prevoz SŽ: feed zamud ne poroča nikoli** (56 voženj, 0 meritev; pravi vlaki 99,5 %). Okno: „feed **ne poroča zamud** — velja vozni red“ (ne „še ni“); tabla in iskalnik „po voznem redu“ z razlogom. `train.jeNadomestni()`.
 * Vrste vlaka ostanejo kratice („AVT“, „MO“): `route_long_name` prazen pri vseh 2 571 progah.

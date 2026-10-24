@@ -21,7 +21,7 @@ Nov model najprej proti **prenosu trenutne zamude** (`kajros backtest`). Česar 
 
 * **Izjema `stats._operator_is_stale`**: vlak **stoji na dolgem postanku** (≥ 5 min), prevoznikova vrednost = natanko zamuda ob prihodu (±1 min) → to je prenos, ne napoved (RG 1604: +19 → vlak +5). Na 926 od 63 967 tam `max` slabši; z izjemo skupno 1,189 → 1,177. Velja v `predict`, tabli, iskalniku. Meri **vsak poll posebej** (`kajros backtest --operator`) — ena naloga na par postankov podpisa ne vsebuje (0 od 12 154).
 * **Pri vlaku velja prevoznikova beseda tudi naprej** (`stats.SIDRO_PREVOZNIKA`): izhodišče modela se premakne na postanek, kjer prevoznik zmaga (LPV 2252: Sava +22, Litija prej 08:46). Čas ne teče nazaj. Senca 2,74 → 2,54, strošek 8,79 → 8,72. Merilo `scripts/preizkusi_sidro.py` (okno iz `obs`). `own_delay_s` = naša brez prevoznika (`ours_own_s`); `od_prevoznika` pove postajo. Avtobusi niso izmerjeni. Vzrok: SŽ postanke pred vlakom odšteva po uri s staro zamudo.
-* **Zamude naprej po progi = napoved, izmerjeno slaba** (11 310 nalog: prevoznik MAE 7,9, 58 %; prenos 1,3, 94 %; feed 0 pri ≥ 5 min zamude: 18,5 min). Prikaz naprej = lastna ocena; prevoznikova v naprednem pogledu.
+* **Zamude naprej po progi = napoved, izmerjeno slaba** (11 310 nalog: prevoznik MAE 7,9, 58 %; prenos 1,3, 94 %; feed 0 pri ≥ 5 min zamude: 18,5 min). Prikaz naprej = lastna ocena; prevoznikova le, kjer napove več (`from_operator`, opomba „napoved prevoznika“ v vrstici).
 
 ## Zapora tira in vlak pred njim: opozorilo, ne napoved (`zapore.py`)
 
