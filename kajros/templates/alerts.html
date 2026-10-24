@@ -41,13 +41,15 @@
       vse drugo v tej aplikaciji pove le, koliko.
     </p>
 
-    <div class="filter-row">
-      <input id="q" type="search" placeholder="filtriraj po besedilu ali postaji"
+    <label class="ovire-isci">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+      <input id="q" type="search" placeholder="vlak, postaja ali proga" aria-label="Poišči med ovirami"
              autocomplete="off" spellcheck="false">
-      <span id="count" class="filter-count"></span>
-    </div>
+    </label>
+    <p id="count" class="ovire-stevec"></p>
 
-    <div id="list" class="alert-page-list"><div class="empty-state">nalagam …</div></div>
+    <div id="list" class="ovire-seznam"><div class="empty-state">nalagam …</div></div>
 
     <p class="page-foot">
       Obvestila objavljajo Slovenske železnice; tu je slovenska različica.

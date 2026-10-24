@@ -20,17 +20,23 @@ function kindOf(a) {
   return "obvestilo";
 }
 
-const KIND_COLOR = {
-  "dela na progi": "#d9b33c",
-  "nadomestni prevoz": "#e07b45",
-  "združene garniture": "#5aa87d",
-  "obvestilo": "#79828f",
+// Vrsta je tonski žeton v barvi, ki jo ta stvar nosi povsod: dela rumeno kot
+// ovire, nadomestni prevoz vijolično kot njegova oznaka v iskalniku.
+const KIND_CLASS = {
+  "dela na progi": "je-dela",
+  "nadomestni prevoz": "je-nadomestni",
+  "združene garniture": "je-zdruzene",
+  "obvestilo": "je-obvestilo",
 };
 
+// „23. 10. – 24. 10.“; leto le, kadar katera meja ni letos (prenova postaj
+// do 2027) -- potem na obeh, sicer bi „1. 1. – 31. 12. 2027“ bral kot eno leto.
 function periodLabel(a) {
   if (!a.start_ts && !a.end_ts) return "";
-  const f = (ts) => new Date(ts * 1000).toLocaleDateString("sl-SI",
-    { timeZone: "Europe/Ljubljana", day: "numeric", month: "numeric", year: "numeric" });
+  const leto = new Date().getFullYear();
+  const zLetom = [a.start_ts, a.end_ts].some((ts) => ts && new Date(ts * 1000).getFullYear() !== leto);
+  const f = (ts) => new Date(ts * 1000).toLocaleDateString("sl-SI", { timeZone: "Europe/Ljubljana",
+    day: "numeric", month: "numeric", year: zLetom ? "numeric" : undefined });
   if (a.start_ts && a.end_ts) return `${f(a.start_ts)} – ${f(a.end_ts)}`;
   return a.start_ts ? `od ${f(a.start_ts)}` : `do ${f(a.end_ts)}`;
 }
@@ -48,11 +54,11 @@ function kdajHtml(k) {
   // Pri enem odseku ga pove že naslov obvestila.
   const odsek = (o) => (k.odsekov > 1 ? `<span class="kdaj-odsek">odsek ${escapeHtml(o)}</span>` : "");
   if (k.danes.length) {
-    return k.danes.map((p) => `<p class="alert-kdaj is-${p.stanje}">${odsek(p.odsek)}${
+    return k.danes.map((p) => `<p class="ovira-kdaj is-${p.stanje}">${odsek(p.odsek)}${
       escapeHtml(kdajZapore(p))}</p>`).join("");
   }
   const n = k.naslednjic;
-  return `<p class="alert-kdaj is-ne">${n ? odsek(n.odsek) : ""}${escapeHtml(
+  return `<p class="ovira-kdaj is-ne">${n ? odsek(n.odsek) : ""}${escapeHtml(
     ["danes ne velja", n ? `naslednjič ${dayLabel(n.dan)}, ${oknaZapore(n.okna)}` : ""]
       .filter(Boolean).join(" · "))}</p>`;
 }
@@ -66,32 +72,39 @@ function kdajRang(a) {
   return Math.min(...a.kdaj.danes.map((p) => KDAJ_RANG[p.stanje]));
 }
 
+// Opis prenove postaj Brezovica in Preserje ima 900 znakov; kartica pokaže
+// štiri vrstice, ostalo en dotik stran.
+const DOLG_OPIS = 320;
+
 function itemHtml(a) {
   const kind = kindOf(a);
-  const color = KIND_COLOR[kind];
   const trains = a.trains || [];
   // Vec kot dvanajst stevilk je stena, ki je nihce ne bere; ostale so en dotik
   // stran. Prej so bile v naprednem pogledu -- da vidis, ali obvestilo zadene
   // tvoj vlak, si moral preklopiti nacin strani (5. 10. 2026).
   const head = trains.slice(0, 12);
   const rest = trains.slice(12);
-  const pill = (t) => `<a class="train-pill" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`;
+  const pill = (t) => `<a class="ovira-vlak" href="/app/train/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`;
+  const opis = (a.description || "").replace(REP, "");
+  const dolg = opis.length > DOLG_OPIS;
   return `
-    <article class="alert-card">
-      <div class="alert-card-top">
-        <span class="kind-tag" style="color:${color};border-color:${color}55">${escapeHtml(kind)}</span>
-        ${a.napovedana ? '<span class="kind-tag is-later">napovedano</span>' : ""}
-        <span class="alert-period">${escapeHtml(periodLabel(a))}</span>
+    <article class="ovira">
+      <div class="ovira-glava">
+        <span class="ovira-vrsta ${KIND_CLASS[kind]}">${escapeHtml(kind)}</span>
+        ${a.napovedana ? '<span class="ovira-vrsta je-napovedano">napovedano</span>' : ""}
+        <span class="sp"></span>
+        <span class="ovira-obdobje">${escapeHtml(periodLabel(a))}</span>
       </div>
-      <h3 class="alert-card-title">${escapeHtml(alertTitle(a.header))}</h3>
+      <h3 class="ovira-naslov">${escapeHtml(alertTitle(a.header))}</h3>
       ${kdajHtml(a.kdaj)}
-      <p class="alert-card-body">${escapeHtml((a.description || "").replace(REP, ""))}</p>
+      ${opis ? `<p class="ovira-opis${dolg ? " je-dolg" : ""}">${escapeHtml(opis)}</p>
+        ${dolg ? '<button type="button" class="ovira-vec">Preberi vse</button>' : ""}` : ""}
       ${trains.length ? `
-        <div class="alert-trains">
-          <span class="alert-trains-label">${trains.length} ${sklon(trains.length, "vlak")}:</span>
+        <div class="ovira-vlaki">
+          <span class="ovira-vlaki-n">${trains.length} ${sklon(trains.length, "vlak")}</span>
           ${head.map(pill).join("")}
-          ${rest.length ? `<span class="alert-vec" hidden>${rest.map(pill).join("")}</span>
-                           <button type="button" class="vec-vlakov">+${rest.length} še</button>` : ""}
+          ${rest.length ? `<span class="ovira-ostali" hidden>${rest.map(pill).join("")}</span>
+                           <button type="button" class="ovira-se">+${rest.length} še</button>` : ""}
         </div>` : ""}
       ${nogaHtml(a)}
     </article>`;
@@ -103,7 +116,7 @@ function itemHtml(a) {
 function nogaHtml(a) {
   const deli = [a.effect_label, a.cause_label].filter((x) => x && x !== "neznano").map(escapeHtml);
   if (a.url) deli.push(`<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>`);
-  return deli.length ? `<div class="alert-card-foot">${deli.join(" · ")}</div>` : "";
+  return deli.length ? `<div class="ovira-noga">${deli.join(" · ")}</div>` : "";
 }
 
 function render() {
@@ -128,10 +141,17 @@ function render() {
 
 qEl.addEventListener("input", render);
 listEl.addEventListener("click", (e) => {
-  const b = e.target.closest(".vec-vlakov");
-  if (!b) return;
-  b.previousElementSibling.hidden = false;
-  b.remove();
+  const se = e.target.closest(".ovira-se");
+  if (se) {
+    se.previousElementSibling.hidden = false;
+    se.remove();
+    return;
+  }
+  const vec = e.target.closest(".ovira-vec");
+  if (vec) {
+    vec.previousElementSibling.classList.remove("je-dolg");
+    vec.remove();
+  }
 });
 
 fetch("/api/alerts")

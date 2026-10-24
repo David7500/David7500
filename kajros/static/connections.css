@@ -626,97 +626,82 @@
 }
 .lead strong { color: var(--ink); font-weight: 600; }
 
-.filter-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.filter-row input {
-  flex: 1 1 auto; min-width: 0;
-  background: var(--bg-raised);
-  border: 1px solid var(--line-firm);
-  border-radius: var(--r);
-  padding: 9px 11px;
-  color: var(--ink);
-  font: 400 13.5px/1.2 var(--sans);
+/* Iskanje med ovirami: zapolnjeno polje kot v iskalniku zvez. */
+.ovire-isci {
+  display: flex; align-items: center; gap: 12px;
+  height: 52px; padding: 0 16px;
+  border-radius: var(--r-pilula); background: var(--m-visoka); color: var(--ink-dim);
 }
-.filter-row input:focus { outline: none; border-color: var(--accent); }
-.filter-count { font: 400 12px/1 var(--sans); color: var(--ink-mute); white-space: nowrap; }
-
-.alert-page-list { display: flex; flex-direction: column; gap: 10px; }
-
-.alert-card {
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 14px 15px;
+.ovire-isci:focus-within { box-shadow: inset 0 0 0 2px var(--accent-lit); }
+.ovire-isci input {
+  flex: 1 1 auto; min-width: 0; padding: 0; border: 0; outline: none;
+  background: transparent; color: var(--ink); font: 400 16px/1.3 var(--sans);
 }
-.alert-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.kind-tag {
-  font: 500 10.5px/1.5 var(--sans);
-  border: 1px solid; border-radius: 3px; padding: 1px 6px;
-  text-transform: lowercase;
-}
-.alert-period { font: 400 11px/1.4 var(--mono); color: var(--ink-faint); }
+.ovire-isci input::placeholder { color: var(--ink-mute); }
+.ovire-stevec { margin: 10px 4px 14px; font: 400 13px/1.3 var(--sans); color: var(--ink-dim); }
 
-.alert-card-title { margin: 0 0 6px; font: 600 14px/1.45 var(--sans); color: var(--ink); }
+.ovire-seznam { display: flex; flex-direction: column; gap: 10px; }
+
+/* Ovira: kartica kot zveza v iskalniku (osnutek E), vrsta je tonski žeton. */
+.ovira {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border-radius: 24px;
+  background: var(--m-visoka); color: var(--ink);
+}
+.ovira-glava { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ovira-vrsta {
+  padding: 4px 10px; border-radius: var(--r-pilula);
+  background: var(--line-firm); color: var(--ink-dim);
+  font: 600 12.5px/1.2 var(--sans); white-space: nowrap;
+}
+.ovira-vrsta.je-dela { background: #2e2811; color: #f2d36b; }
+.ovira-vrsta.je-nadomestni { background: #3b2a4f; color: #e3cff7; }
+/* Ovira, ki se še ni začela. Stran ovir jih je doslej sploh ni pokazala —
+   izmerjeno 4. 9. 2026: 16 veljavnih proti 32 napovedanim, najbližja
+   naslednji dan. */
+.ovira-vrsta.je-napovedano { background: transparent; color: var(--sev-hard); box-shadow: inset 0 0 0 1.5px currentColor; }
+.ovira-obdobje { font: 400 13px/1.3 var(--sans); color: var(--ink-dim); white-space: nowrap; }
+.ovira-naslov { margin: 0; font: 600 16px/1.4 var(--sans); }
 
 /* Ali zapora velja danes: tonska rumena ovir, kot opozorila na tabli. Kar je
    danes končano, bledi kot črta na zemljevidu; kar danes ne velja, je brez
    podlage -- ni opozorilo za danes, samo kdaj naslednjič. */
-.alert-kdaj {
-  width: fit-content; max-width: 100%;
-  margin: 2px 0 8px; padding: 6px 11px;
-  border-radius: var(--r-sm);
-  background: #2e2811; color: #f2d36b;
-  font: 500 12.5px/1.45 var(--sans);
+.ovira-kdaj {
+  width: fit-content; max-width: 100%; box-sizing: border-box;
+  margin: 0; padding: 7px 12px;
+  border-radius: var(--r); background: #2e2811; color: #f2d36b;
+  font: 500 13.5px/1.45 var(--sans);
 }
-.alert-kdaj + .alert-kdaj { margin-top: -2px; }
-.alert-kdaj.is-zdaj { font-weight: 600; }
-.alert-kdaj.is-koncano { color: color-mix(in srgb, #f2d36b 62%, #2e2811); }
-.alert-kdaj.is-ne { padding: 0; background: none; color: var(--sev-hard); font-weight: 400; }
+.ovira-kdaj.is-zdaj { font-weight: 600; }
+.ovira-kdaj.is-koncano { color: color-mix(in srgb, #f2d36b 62%, #2e2811); }
+.ovira-kdaj.is-ne { padding: 0; background: none; color: var(--sev-hard); font-weight: 400; }
 .kdaj-odsek { display: block; font-weight: 600; }
-.alert-card-body {
-  margin: 0; font: 400 12.5px/1.65 var(--sans); color: var(--ink-dim);
-  max-width: 74ch;
+
+.ovira-opis { margin: 0; font: 400 14px/1.6 var(--sans); color: var(--ink-dim); max-width: 74ch; }
+.ovira-opis.je-dolg {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden;
+}
+.ovira-vec, .ovira-se {
+  width: fit-content; padding: 0; border: 0; background: none;
+  color: var(--accent-lit); font: 600 13.5px/1.4 var(--sans); cursor: pointer;
 }
 
-.alert-trains {
-  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
-  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+.ovira-vlaki {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding-top: 12px; border-top: 1px solid var(--line-firm);
 }
-.alert-trains-label { font: 400 11px/1.4 var(--sans); color: var(--ink-mute); margin-right: 3px; }
-.alert-vec { display: contents; }
-.vec-vlakov {
-  font: 500 11px/1.5 var(--sans);
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--line-firm);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
+.ovira-vlaki-n { margin-right: 4px; font: 500 13px/1.3 var(--sans); color: var(--ink-dim); }
+.ovira-ostali { display: contents; }
+.ovira-se { padding: 4px 6px; }
+.ovira-vlak {
+  padding: 4px 8px; border-radius: var(--r-sm);
+  background: var(--m-najvisja); color: var(--ink);
+  font: 600 12.5px/1.2 var(--sans); text-decoration: none; white-space: nowrap;
 }
-.train-pill {
-  font: 500 11px/1.5 var(--mono);
-  color: var(--ink-dim);
-  background: var(--bg);
-  border: 1px solid var(--line-firm);
-  border-radius: 4px;
-  padding: 1px 6px;
-  text-decoration: none;
-}
-@media (hover: hover) { .train-pill:hover { color: var(--ink); border-color: var(--accent); } }
+@media (hover: hover) { .ovira-vlak:hover { box-shadow: inset 0 0 0 1.5px var(--accent-lit); } }
 
-.alert-card-foot {
-  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line-soft);
-  font: 400 10.5px/1.5 var(--sans); color: var(--ink-faint);
-}
-.alert-card-foot code { font-family: var(--mono); }
-
-/* Ovira, ki se še ni začela. Stran ovir jih je doslej sploh ni pokazala —
-   izmerjeno 4. 9. 2026: 16 veljavnih proti 32 napovedanim, najbližja
-   naslednji dan. */
-.kind-tag.is-later {
-  color: var(--sev-hard);
-  border-color: color-mix(in srgb, var(--sev-hard) 35%, transparent);
-}
-
+.ovira-noga { font: 400 12.5px/1.5 var(--sans); color: var(--ink-mute); }
+.ovira-noga a { color: var(--ink-dim); }
 
 /* Iskalnik, ovire, statistika: orodna vrstica na dnu (base.css) ne sme
    pokriti zadnje vrstice table. */
