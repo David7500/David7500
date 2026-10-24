@@ -88,34 +88,79 @@
 
   // ------------------------------------------------------------- gumb
 
-  // Kar o zasedenosti vemo, v eni vrstici pod „Kako polno?“: najprej
-  // potnikovo poročilo, nato kar je danes nevarno (vrsta zunaj, poln
-  // prejšnji), nato običajno -- s tem, koliko prej priti, kadar je poln.
+  // Ljudje: „Polno?“, dokler o tem odhodu ne vemo nič.
+  const SVG_LJUDJE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3.5"/>'
+    + '<path d="M20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.6a3.5 3.5 0 0 1 0 6.8"/></svg>';
+  const velika = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+
+  // Gumb v skupini dejanj (osnutek E, platno „Polno? — kaj pokaže gumb“) sam
+  // pove, kar vemo: najprej potnikovo poročilo, nato kar je danes nevarno
+  // (vrsta zunaj, poln prejšnji -- rdeče), nato običajno, nato zadnje današnje.
+  // Ena beseda pod risbo, cel stavek v `title` in za bralnik zaslona.
   function gumbHtml(d) {
     const ok = okno(d);
     const o = d.obicajno;
     const danesZunaj = d.danes.find((x) => x.stopnja === 5);
     const zadnje = d.danes[d.danes.length - 1];
-    let n = 0, pod;
+    let n = 0, ime = "Polno?", pod, opozorilo = false;
     if (S.oddano && !S.oddano.prejsnji) {
       n = S.oddano.stopnja;
+      ime = `Javil si: ${stopnja(n)}`;
       pod = `zapisano: ${stopnja(n)}`;
     } else if (danesZunaj) {
       n = 5;
+      ime = "Vrsta zunaj";
       pod = `danes ob ${danesZunaj.ura} vrsta zunaj`;
+      opozorilo = true;
     } else if (d.prejsnji) {
       n = d.prejsnji.stopnja;
+      ime = "Prejšnji poln";
       pod = `prejšnji ob ${d.prejsnji.ura} ${n === 5 ? "poln, vrsta zunaj" : "poln"}`;
+      opozorilo = true;
     } else if (o) {
       n = o.mediana;
+      ime = `Običajno ${stopnja(n)}`;
       pod = `običajno ${stopnja(n)}${o.mediana >= 4 && o.prej ? ` · pridi ${o.prej.nasvet_min} min prej` : ""}`;
     } else if (zadnje) {
       n = zadnje.stopnja;
+      ime = velika(stopnja(n));
       pod = `danes ob ${zadnje.ura} ${stopnja(n)}`;
     } else {
       pod = ok.po ? "poročila potnikov" : ok.pred ? `javiš od ${ok.odUra}` : "javi z enim dotikom";
     }
-    return `${glif(n, 30)}<span class="pomoc-besedilo"><b>Kako polno?</b><small>${escapeHtml(pod)}</small></span>`;
+    gumb.classList.toggle("je-opozorilo", opozorilo);
+    gumb.title = `Kako polno? ${pod}`;
+    gumb.setAttribute("aria-label", `Kako polno? ${pod}`);
+    return `${n ? glif(n, 30) : SVG_LJUDJE}<span class="pomoc-ime">${escapeHtml(ime)}</span>`;
+  }
+
+  // Kar velja za ta odhod, pod uro na vrhu okna (`#zas-namig`): danes vrsta
+  // zunaj ali poln prejšnji (rdeče), sicer pri običajno polnem „pridi N min
+  // prej“ (rumeno). Današnje poročilo samo pove gumb.
+  const namigEl = document.getElementById("zas-namig");
+  const SVG_NAMIG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/>'
+    + '<path d="M12 7.5V12l3 2"/></svg>';
+  function namig(d) {
+    if (!namigEl) return;
+    const o = d && d.vklopljeno ? d.obicajno : null;
+    const danesZunaj = d && d.vklopljeno ? d.danes.find((x) => x.stopnja === 5) : null;
+    let html = "", razred = "";
+    if (danesZunaj) {
+      html = `<b>danes ob ${danesZunaj.ura} vrsta zunaj</b>`;
+      razred = "je-rdece";
+    } else if (d && d.vklopljeno && d.prejsnji) {
+      html = `<b>prejšnji ob ${d.prejsnji.ura} poln</b>${d.prejsnji.stopnja === 5 ? ", vrsta zunaj" : ""}`;
+      razred = "je-rdece";
+    } else if (o && o.mediana >= 4 && o.prej) {
+      html = `<b>pridi ${o.prej.nasvet_min} min prej</b>, običajno ${escapeHtml(stopnja(o.mediana))}`;
+      razred = "je-rumeno";
+    }
+    namigEl.className = `ov-namig ${razred}`;
+    namigEl.innerHTML = html ? `${SVG_NAMIG}<span>${html}</span>` : "";
+    namigEl.hidden = !html;
   }
 
   // ------------------------------------------------------------ razdelek
@@ -158,6 +203,7 @@
 
   function izrisi() {
     const d = S.d;
+    namig(d);
     if (!d || !d.vklopljeno) {
       el.hidden = gumb.hidden = true;
       return;

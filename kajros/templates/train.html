@@ -26,71 +26,106 @@
   <link rel="stylesheet" href="{{ s('zasedenost.css') }}">
   {%- endif %}
 </head>
-<body class="train-page net-{{ network | default('zeleznica') }}"
+{#- Okno ene vožnje (prenova 23. 10. 2026, osnutek E na platnu „Okno vožnje —
+    osnutki“): na vrhu odštevanje do postanka, o katerem človek sprašuje, pod
+    njim pri vlaku trak vožnje, pri avtobusu z lego zemljevid; nato skupina
+    dejanj in postanki na črti. Preklopa preprosto/napredno ni več, zgodovina
+    zamud gre v statistiko. #}
+{%- set _vrsta, _st = (train_no.split(' ', 1) if ' ' in train_no and network != 'avtobus' else ['', train_no]) %}
+<body class="train-page okno net-{{ network | default('zeleznica') }}"
       data-train-no="{{ train_no }}" data-network="{{ network | default('zeleznica') }}">
 
-  <header class="topbar">
+  <header class="topbar ov-glava">
     <a class="back-link" href="{{ '/app/bus' if network == 'avtobus' else '/app/train' }}"
-       title="nazaj na iskalnik">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+       aria-label="Nazaj" title="Nazaj">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M15 5l-7 7 7 7"></path>
       </svg>
-      <span>{{ 'avtobusi' if network == 'avtobus' else 'vlaki' }}</span>
+      <span class="za-bralnik">{{ 'avtobusi' if network == 'avtobus' else 'vlaki' }}</span>
     </a>
-    <div class="divider"></div>
-    <div class="train-head">
-      <span class="train-head-code">{{ train_no }}</span>
-      <span id="train-mode"></span>
-      <span id="train-headsign" class="train-head-sub"></span>
+    <div class="ov-naslov">
+      <div class="ov-naslov-vrsta">
+        <span id="ov-znacka" class="ov-znacka"{% if not _vrsta %} hidden{% endif %}>{{ _vrsta }}</span>
+        <h1 id="ov-ime" class="ov-ime">{{ _st }}</h1>
+      </div>
+      <span id="train-headsign" class="ov-smer"></span>
     </div>
-    <div class="spacer"></div>
-    <div class="mode-switch" id="mode-switch">
-      <button type="button" data-mode="simple" aria-pressed="true">preprosto</button>
-      <button type="button" data-mode="advanced" aria-pressed="false">napredno</button>
-    </div>
+    {#- Pošlji, ne Deli: „Deli lego“ je deljenje lege. #}
+    <button type="button" class="ov-ikona poslji-voznjo" id="poslji" data-naslov="{{ naslov }}"
+            aria-label="Pošlji vožnjo" title="Pošlji" hidden>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7.5 7.5 12 3l4.5 4.5"></path>
+      </svg>
+    </button>
     {% include "_nav.html" with context %}
-    <div class="divider"></div>
-    <div class="clock-wrap">
-      <span id="feed-dot" class="dot"></span>
-      <span id="clock" class="clock">--:--:--</span>
-    </div>
   {{ vec_gumb() }}
   </header>
 
-  <div class="train-body">
+  <main class="ov-telo">
 
-    <section class="col col-run">
-      <!-- Kar velja ZDAJ. Na sirokem zaslonu v preprostem pogledu je to levi
-           stolpec, casovnica pa desni; na telefonu je oboje eno za drugim. -->
-      <div class="run-now">
+    <section class="ov-zdaj" aria-label="Ta vožnja">
       {{ obvestila_mesto(network | default('zeleznica')) }}
-      <div class="section-title section-title-gumb">Ta vožnja
-        {#- Pošlji, ne Deli: „Deli, kje je vozilo“ je deljenje lege. -#}
-        <button type="button" class="poslji-voznjo" id="poslji" data-naslov="{{ naslov }}" hidden>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7.5 7.5 12 3l4.5 4.5"></path>
-          </svg>
-          <span>Pošlji</span>
-        </button>
-      </div>
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
-      <div id="run-head"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
-      {#- Pomagaj drugim: deljenje lege in zasedenost sta dva gumba v eni
-          vrstici, dotik odpre svoj razdelek pod njima (David, 23. 10. 2026:
-          kartica deljenja je bila prevelika, zasedenosti na dnu okna ni videl
-          nihče). Gumb in razdelek riše vsak svoj modul (`deli.js`,
-          `zasedenost.js`); deljenje samo, ko vožnja vozi ali odpelje v 30 min
-          (`train.js`, `posodobiDeli`). #}
-      {%- if deli or zasedenost %}
+      <div id="run-head" class="ov-vrh-ovoj" aria-live="polite"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
+      {#- Kar o zasedenosti velja za ta odhod („pridi 15 min prej“), piše
+          `zasedenost.js`; zunaj `#run-head`, ki ga okno vsakih 15 s preriše. #}
+      <div id="zas-namig" class="ov-namig" hidden></div>
+      {#- Trak vožnje od izhodišča do cilja: vlak vedno, avtobus samo, kadar
+          brskalnik zemljevida ne zna narisati (brez WebGL2). #}
+      <div id="ov-trak" class="ov-trak-ovoj"></div>
+      {#- Zemljevid avtobusa, vedno (osnutek E): pot, postajališča, vozilo z
+          lego (GPS ali potnik); odštevanje leži na njem. Vlak ga nima. #}
+      <div id="run-map-wrap" class="run-map-wrap" hidden>
+        <div class="run-map-holder">
+          <div id="run-map" class="run-map"></div>
+          <p class="ov-razdalja" id="run-map-me-line" hidden></p>
+          <div class="ov-karta-gumbi">
+            <button type="button" class="run-map-fs" id="run-map-fs"
+                    title="Čez celo stran" aria-label="Čez celo stran" hidden>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path>
+              </svg>
+            </button>
+            <button type="button" class="run-map-fs" id="run-map-me"
+                    title="Pokaži mojo lego" aria-label="Pokaži mojo lego" hidden>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.4"></circle>
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+              </svg>
+            </button>
+            <button type="button" class="run-map-fs run-map-osvezi" id="run-map-osvezi"
+                    title="Osveži zdaj" aria-label="Osveži zdaj" hidden>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-1.9 6.2"></path>
+                <path d="M20 5v6h-6"></path>
+              </svg>
+            </button>
+          </div>
+          <div id="ov-karta-odst" class="ov-karta-odst" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="ov-stanje" id="ov-stanje">
+        <span id="ov-stanje-kje" class="ov-stanje-kje"></span>
+        <span class="ov-stanje-desno"><span id="run-map-sub" class="run-map-sub"></span><span id="ov-stanje-svez"></span></span>
+      </div>
+      {#- Skupina dejanj (ikone kot v osnutku B): budilka (samo v aplikaciji),
+          deljenje lege, zasedenost, pri vlaku ovire. Dotik odpre svoj razdelek
+          pod skupino; odprt je en sam (`data-odprto`). Gumbe rišejo moduli
+          (`deli.js`, `zasedenost.js`, `train.js`). #}
       <div class="pomoc" id="pomoc">
-        <div class="pomoc-vrsta" role="group" aria-label="Pomagaj drugim">
+        <div class="pomoc-vrsta" role="group" aria-label="Dejanja">
+          <button type="button" class="pomoc-gumb pomoc-bud" id="pomoc-bud" hidden></button>
           {%- if deli %}
-          <button type="button" class="pomoc-gumb" id="pomoc-deli" aria-controls="deli" aria-expanded="false" hidden></button>
+          <button type="button" class="pomoc-gumb pomoc-deli" id="pomoc-deli" aria-controls="deli" aria-expanded="false" hidden></button>
           {%- endif %}
           {%- if zasedenost %}
-          <button type="button" class="pomoc-gumb" id="pomoc-zas" aria-controls="zasedenost" aria-expanded="false" hidden></button>
+          <button type="button" class="pomoc-gumb pomoc-zas" id="pomoc-zas" aria-controls="zasedenost" aria-expanded="false" hidden></button>
           {%- endif %}
+          <button type="button" class="pomoc-gumb pomoc-ovire" id="pomoc-ovire" aria-controls="train-alerts" aria-expanded="false" hidden></button>
         </div>
         {%- if deli %}
         <section class="deli deli-okno" id="deli" aria-live="polite" hidden></section>
@@ -98,90 +133,20 @@
         {%- if zasedenost %}
         <section class="zas" id="zasedenost" aria-label="Zasedenost po poročilih potnikov" hidden></section>
         {%- endif %}
-      </div>
-      {%- endif %}
-      <!-- Ziv zemljevid ene voznje. Nalozi se SAMO, kadar ima vozilo lego:
-           GPS ali vsaj dva potnika, ki na njem delita lego in se ujemata.
-           Vlaki GPS-a nimajo, zato je zanje okvir redek. MapLibre se zato
-           prinese sele takrat in ne obtezi vsake strani z vlakom. -->
-      <div id="run-map-wrap" class="run-map-wrap" hidden>
-        <div class="run-map-head">
-          <span class="run-map-title">Kje je zdaj</span>
-          <span class="run-map-sub" id="run-map-sub"></span>
-          <span class="run-map-acts">
-            <a class="run-map-full" id="run-map-full" href="/app/map">na velik zemljevid</a>
-            <button type="button" class="run-map-fs run-map-osvezi" id="run-map-osvezi"
-                    title="Osveži zdaj" aria-label="Osveži zdaj" hidden>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                   stroke-linejoin="round">
-                <path d="M20 11a8 8 0 1 0-1.9 6.2"></path>
-                <path d="M20 5v6h-6"></path>
-              </svg>
-            </button>
-            <button type="button" class="run-map-fs" id="run-map-me"
-                    title="Pokaži mojo lego" aria-label="Pokaži mojo lego" hidden>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <circle cx="12" cy="12" r="3.4"></circle>
-                <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
-              </svg>
-            </button>
-            <button type="button" class="run-map-fs" id="run-map-fs"
-                    title="Celoten zaslon" aria-label="Celoten zaslon" hidden>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-                <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path>
-              </svg>
-            </button>
-          </span>
-        </div>
-        <div class="run-map-holder">
-          <div id="run-map" class="run-map"></div>
-        </div>
-        <p class="run-map-me" id="run-map-me-line" hidden></p>
-        <p class="run-map-key">
-          <span class="key-dot"></span> <span id="run-map-key-meritev">zadnja izmerjena lega</span> ·
-          <span class="key-bus"></span> ocena trenutne lege — <strong>približna</strong>
-        </p>
+        <section class="ov-ovire" id="train-alerts" aria-label="Ovire na progi" hidden></section>
       </div>
       <div id="train-opozorila"></div>
-      <div id="train-alerts"></div>
-      </div>
-      {#- Na namizju časovnica stoji desno od „zdaj“ (`train.css`). #}
-      <div class="run-pot">
-        <div id="run-timeline"><div class="empty-state is-busy">nalagam postanke …</div></div>
-      </div>
     </section>
 
-    <section class="col col-hist adv-only">
-      <div class="section-title">Zgodovina te poti</div>
-      <div id="hist-note" class="hist-note"></div>
-      <div id="hist-tiles" class="tile-row"></div>
-
-      <figure class="figure">
-        <figcaption class="fig-title">Zamuda po postajah</figcaption>
-        <div class="fig-sub" id="profile-sub"></div>
-        <div class="fig-legend" id="profile-legend"></div>
-        <div class="fig-body" id="profile-chart"></div>
-        <div class="fig-note" id="weather-note" hidden></div>
-      </figure>
-
-      <figure class="figure">
-        <figcaption class="fig-title">Končna zamuda po dnevih</figcaption>
-        <div class="fig-sub" id="runs-sub"></div>
-        <div class="fig-body" id="runs-chart"></div>
-      </figure>
-
+    <section class="ov-pot" aria-label="Postanki">
+      <div id="run-timeline"><div class="empty-state is-busy">nalagam postanke …</div></div>
     </section>
 
-  </div>
+  </main>
 
-  <div id="tooltip" class="chart-tooltip" hidden></div>
-
-  {# Nastavitve budilke so svoj sloj in ne del `#run-head`: tega prikaz vsakih
-     30 s preriše in izbira bi izginila potniku pod prsti. V brskalniku ostane
-     prazen — gumb, ki ga odpre, nastane samo v aplikaciji. #}
+  {# Nastavitve budilke so svoj sloj: `#run-head` se preriše in izbira bi
+     izginila potniku pod prsti. V brskalniku ostane prazen — gumb, ki ga
+     odpre, nastane samo v aplikaciji. #}
   <div id="budilka" class="bud-plast" hidden></div>
 
   <script src="{{ s('common.js') }}"></script>

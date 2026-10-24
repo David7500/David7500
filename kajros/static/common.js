@@ -268,6 +268,7 @@ const SKLONI = {
   postaja: ["postaja", "postaji", "postaje", "postaj"],
   navodilo: ["navodilo", "navodili", "navodila", "navodil"],
   porocilo: ["poročilo", "poročili", "poročila", "poročil"],
+  ovira: ["ovira", "oviri", "ovire", "ovir"],
 };
 
 function sklon(n, kljuc) {
@@ -647,6 +648,8 @@ function pollWhileVisible(fn, ms) {
   let timer = null;
   let zadnji = 0;
   let ustavljen = false;
+  // Ritem je lahko funkcija: okno vožnje med vožnjo vpraša pogosteje kot pred njo.
+  const korak = () => (typeof ms === "function" ? ms() : ms);
 
   // Naslednji korak si naroči samo, če ga medtem ni naročil kdo drug
   // (`zdaj`, `wake`) -- sicer tečeta dve verigi in vsaka zahteva gre dvakrat.
@@ -658,7 +661,7 @@ function pollWhileVisible(fn, ms) {
     } catch (err) {
       /* posamezna zahteva sme spodleteti; ritem se ne sme ustaviti */
     }
-    if (!document.hidden && !ustavljen && !timer) timer = setTimeout(tick, ms);
+    if (!document.hidden && !ustavljen && !timer) timer = setTimeout(tick, korak());
   };
 
   const wake = () => {
@@ -670,12 +673,22 @@ function pollWhileVisible(fn, ms) {
     if (timer) return;                    // ze tece
     // Ce je od zadnjega osvezevanja minilo manj kot pol intervala, ne
     // podvajamo zahteve -- kratek preklop med aplikacijama ni razlog zanjo.
-    const potekel = Date.now() - zadnji >= ms / 2;
-    timer = setTimeout(tick, potekel ? 0 : ms - (Date.now() - zadnji));
+    const potekel = Date.now() - zadnji >= korak() / 2;
+    timer = setTimeout(tick, potekel ? 0 : korak() - (Date.now() - zadnji));
+  };
+
+  // Stran, vrnjena iz predpomnilnika brskalnika (tipka nazaj): časovnik je
+  // med zamrznitvijo stal, zato bi stari podatki čakali še ostanek koraka.
+  const vrnjena = (ev) => {
+    if (!ev.persisted) return;
+    clearTimeout(timer);
+    timer = null;
+    wake();
   };
 
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", wake);
+  window.addEventListener("pageshow", vrnjena);
   wake();
   return {
     // Za zmeraj: brez odjave bi ga prva vrnitev na zavihek zbudila znova,
@@ -686,6 +699,7 @@ function pollWhileVisible(fn, ms) {
       timer = null;
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("online", wake);
+      window.removeEventListener("pageshow", vrnjena);
     },
     // Takoj, ne ob naslednjem koraku -- to je gumb "osvezi" pod prstom. Za
     // razliko od `tick` napake NE pogoltne: gumb mora povedati, ali je
@@ -697,7 +711,7 @@ function pollWhileVisible(fn, ms) {
       try {
         return await fn();
       } finally {
-        if (!document.hidden && !timer && !ustavljen) timer = setTimeout(tick, ms);
+        if (!document.hidden && !timer && !ustavljen) timer = setTimeout(tick, korak());
       }
     },
   };
@@ -1153,19 +1167,6 @@ function dwellSplit(s) {
 // Zato pokazemo, koliko ta vlak tam RES stoji, kadar zamuja.
 const DWELL_SHOW_S = 300;
 
-function dwellPlanHtml(s) {
-  if (!s || !s.sched_dwell_s || s.sched_dwell_s < DWELL_SHOW_S) return "";
-  const red = Math.round(s.sched_dwell_s / 60);
-  if (s.typical_dwell_s == null) {
-    return `<div class="stop-dwell">vozni red tu čaka ${red} min</div>`;
-  }
-  const res = Math.round(s.typical_dwell_s / 60);
-  return `<div class="stop-dwell">vozni red tu čaka ${red} min;`
-    + ` ${VEHICLE_NOUN === "vlak" ? "ta vlak" : "ta " + VEHICLE_NOUN},`
-    + ` kadar zamuja, stoji običajno <strong>${res}</strong>`
-    + `<span class="adv-only"> (${escapeHtml(pluralRuns(s.dwell_samples))})</span></div>`;
-}
-
 function dwellNoteHtml(d) {
   if (d.gained > 0) {
     return `vozni red tu čaka ${d.sched} min, ${VEHICLE_NOUN} je stal ${Math.max(d.real, 0)}`
@@ -1298,49 +1299,6 @@ function potekNadomestnegaHtml(r) {
   return `<span class="potek-nadomestnega">vožnja ${min} min · ${vmes}</span>`;
 }
 
-function measuredStopHtml(s, isCurrent, w) {
-  const d = stopDelay(s);
-  const color = delayColor(d);
-  // Prikazana ura = vozni red + zaokrožena minuta žetona (`pricakovanaUra`).
-  // `actual_*` ostaneta na sekundo: po njiju strežnik loči „izmerjeno“ od
-  // „zadnji podatek“, zato ju ne zaokrožujemo tam.
-  const ura = (sched, z) => (sched && z != null ? pricakovanaUra(sched, z) : null);
-  const actual = hhmm(ura(s.sched_dep || s.sched_arr, d) || stopActualIso(s));
-  const sched = hhmm(s.sched_dep || s.sched_arr);
-  const schedHtml = actual !== sched ? `<span class="stop-sched">${sched}</span>` : "";
-  const split = dwellSplit(s);
-
-  // Vsak par (beseda + cas + vozni red) je svoj nedeljiv kos: na telefonu se
-  // sme vrstica prelomiti MED prihodom in odhodom, ne pa sredi enega od njiju.
-  const leg = (lab, act, sch) =>
-    `<span class="stop-leg"><span class="stop-lab">${lab}</span> `
-    + `<span class="stop-actual">${hhmm(act)}</span>`
-    + `<span class="stop-sched">${hhmm(sch)}</span></span>`;
-  const times = split
-    ? leg("prihod", ura(s.sched_arr, split.arr) || s.actual_arr, s.sched_arr)
-      + leg("odhod", ura(s.sched_dep, split.dep) || s.actual_dep, s.sched_dep)
-    : `<span class="stop-actual">${actual}</span>${schedHtml}`;
-  const delay = split
-    ? `<span style="color:${delayColor(split.arr)}">${delayText(split.arr, true)}</span>`
-      + `<span class="stop-arrow">→</span>`
-      + `<span style="color:${delayColor(split.dep)}">${delayText(split.dep, true)}</span>`
-    : `<span style="color:${color}">${delayText(d, true)}</span>`;
-
-  return `
-    <div class="stop-row${isCurrent ? " is-current" : ""}">
-      <div class="stop-rail"><span class="stop-dot" style="background:${color}"></span><span class="stop-line"></span></div>
-      <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
-        ${nadomestniPostanekHtml(s.nadomestni_postanek)}
-        <div class="stop-times">${times}</div>
-        ${split ? `<div class="stop-dwell">${escapeHtml(dwellNoteHtml(split))}</div>` : ""}
-      </div>
-      ${stopWeatherHtml(w)}
-      <div class="stop-delay">${delay}</div>
-    </div>
-  `;
-}
-
 // Postanek, katerega ura si nasprotuje z vecino ostalih na tej vozjni.
 // Odlocitev je strezenikova (`stats.oznaci_neskladne`) in pride v
 // `zamuda.vrsta`: pravilo gleda celo vozjno, zato ga odjemalec ne more
@@ -1357,149 +1315,12 @@ function zivaNapoved(s) {
   return s && s.zamuda && s.zamuda.vrsta === "živo" ? s.zamuda : null;
 }
 
-function gapStopHtml(s) {
-  const sched = hhmm(s.sched_dep || s.sched_arr);
-  // "Brez meritve" in "podatek si nasprotuje" nista isto: prvo pomeni, da ni
-  // prislo nic, drugo, da je prislo in bilo nemogoce -- naslednja postaja
-  // PRED prejsnjo. Stevilke zato tu ni, povemo pa, zakaj je ni.
-  const zast = jeNeskladen(s);
-  return `
-    <div class="stop-row is-muted">
-      <div class="stop-rail"><span class="stop-dot is-hollow"></span><span class="stop-line"></span></div>
-      <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
-        ${nadomestniPostanekHtml(s.nadomestni_postanek)}
-        <div class="stop-times"><span class="stop-sched-plain">${sched}</span> <span class="stop-tag">${
-          zast ? "ura si nasprotuje" : "brez meritve"}</span></div>
-        ${zast ? `<div class="stop-times adv-only"><span class="stop-tag">feed je zadnjič rekel ${
-          delayText(stopDelay(s))}, kar bi pomenilo vožnjo nazaj</span></div>` : ""}
-      </div>
-      <div class="stop-delay is-none">—</div>
-    </div>
-  `;
-}
-
-function forecastStopHtml(s, f, w, dod, brezOcene) {
-  // Postaja, ki je vlak se ni dosegel. Uporabimo LASTNO oceno, ne vrednosti
-  // iz feeda -- ta je za postanke naprej izmerjeno slaba (glej backtest.py):
-  //
-  //   feed pravi 0, vlak pa zdaj zamuja >= 5 min:  napaka 18,5 min, v 5 min  6 %
-  //   prenos trenutne zamude naprej:               napaka  1,6 min, v 5 min 91 %
-  //
-  // Feed za se nedosezene postanke pogosto objavi niclo, dokler nima prave
-  // napovedi. Prevoznikovo stevilko zato pokazemo le v naprednem pogledu,
-  // da ni skrita, a nanjo ne racunamo.
-  const schedIso = s.sched_dep || s.sched_arr;
-  const sched = hhmm(schedIso);
-  // Kadar ocene ni -- voznja se ni zacela, zato ni cesa prenasati naprej --
-  // o njej vseeno nekaj vemo: kako je vozila doslej. Brez tega je bilo v oknu
-  // voznje povsod "?" in "brez ocene", medtem ko je iskalnik za ISTO voznjo
-  // pisal "obicajno 0 min, 16 voznj". Ni napoved za ta dan; je opis preteklih
-  // voznj in zeton to pove z besedo "obicajno", ne "ocena".
-  // Ziva prevoznikova napoved ima prednost pred nasim modelom -- ne zato, ker
-  // bi bila nacelno boljsa, ampak ker je pri mestnem LPP nasa zgodovina
-  // zgrajena iz NAPOVEDI: feed poslje samo postanke pred vozilom, zato v
-  // `run` meritve nikoli ni. Ziva stevilka pride iz lege vozila ta hip.
-  const zivo = zivaNapoved(s);
-  const t = !zivo && !f && s.typical ? s.typical : null;
-  const d = zivo ? zivo.s : f ? f.predicted_delay_s : t ? t.median_s : null;
-  const color = delayColor(d);
-  // Brez številke je vozni red edina ura, ne popravljena: prečrtana ob "—"
-  // je trdila, da avtobus ob njej ne bo vozil (LPP 11 pred odhodom, 21. 10.).
-  const eta = d != null && schedIso ? hhmm(pricakovanaUra(schedIso, d)) : null;
-  const casiHtml = eta == null ? `<span class="stop-sched-plain">${sched}</span>`
-    : `<span class="stop-actual">${eta}</span>${
-      eta !== sched ? `<span class="stop-sched">${sched}</span>` : ""}`;
-  // Kadar prevoznik napove VEC od nase ocene, je njegova stevilka merjeno
-  // skoraj tocna (MAE 0,21 min proti nasim 2,66) -- takrat ve za nekaj, cesar
-  // iz zgodovine ni mogoce vedeti. Povejmo, da stevilka pride od njega.
-  const tag = zivo ? (s.eta_min != null ? `LPP v živo · čez ${s.eta_min} min` : "LPP v živo")
-    : !f ? (t ? "običajno" : "brez ocene")
-    : f.from_operator ? "prevoznik napoveduje več"
-    : f.n_samples > 0 ? `ocena · mediana ${pluralRuns(f.n_samples)}`
-    : "ocena · le prenos zamude";
-  // "ocena - mediana 11 vozenj" je stala v vsaki vrstici naprej po progi:
-  // sest enakih zetonov pod seboj, medtem ko locilna vrstica nad njimi ze
-  // pove "naprej po progi -- ocena, ne meritev". Stevilo vzorcev je podatek
-  // za radovednega, ne za potnika, zato v preprostem pogledu odpade.
-  // Ostanejo zetoni, ki povedo nekaj DRUGEGA: da napoveduje prevoznik, da
-  // ocene ni ali da za njo ni zgodovine.
-  const rutinska = !zivo && !!f && !f.from_operator && f.n_samples > 0;
-  const feedSaid = stopDelay(s);
-  return `
-    <div class="stop-row is-forecast">
-      <div class="stop-rail"><span class="stop-dot is-hollow" style="border-color:${color}"></span><span class="stop-line is-dashed"></span></div>
-      <div class="stop-main">
-        <div class="stop-name">${escapeHtml(s.name)}${tirHtml(s.tir, s.tir_prej)}</div>
-        ${nadomestniPostanekHtml(s.nadomestni_postanek)}
-        <div class="stop-times">${casiHtml}${brezOcene ? "" : ` <span class="stop-tag${rutinska ? " adv-only" : ""}">${escapeHtml(tag)}</span>`}</div>
-        ${dwellPlanHtml(s)}
-        ${feedSaid != null && !zivo && !(f && f.from_operator)
-          ? `<div class="stop-times adv-only"><span class="stop-tag">prevoznik napoveduje ${delayText(feedSaid)}</span></div>`
-          : ""}
-        ${f && f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayText(f.own_delay_s)}</span></div>` : ""}
-        ${f && f.od_prevoznika && !f.from_operator ? `<div class="stop-times adv-only"><span class="stop-tag">od prevoznikove napovedi za ${escapeHtml(f.od_prevoznika)}</span></div>` : ""}
-        ${zivo && f ? `<div class="stop-times adv-only"><span class="stop-tag">naša ocena bi bila ${delayText(f.predicted_delay_s)}</span></div>` : ""}
-        ${t ? `<div class="stop-times adv-only"><span class="stop-tag">mediana ${pluralRuns(t.n)}${
-          t.od_seq ? `, merjeno na postaji ${escapeHtml(t.od_ime)}` : ""}</span></div>` : ""}
-      </div>
-      ${stopWeatherHtml(w, true)}
-      <div class="stop-delay is-forecast" style="color:${color}">${brezOcene ? "" : delayText(d, true)}${
-        d != null && dod ? `<span class="stop-do">do ${delayLabel(d + dod)}</span>` : ""}</div>
-    </div>
-  `;
-}
-
-function runTimelineHtml(stops, forecast, weatherBySeq, opts) {
-  // Meja pride s streznikom in jo poda klicatelj (`opts.run`), ker jo pozna
-  // samo cel odgovor `/api/train/{no}/run`, ne seznam postankov.
-  const cur = lastMeasured((opts && opts.run) || null);
-  const forecastBySeq = new Map((forecast || []).map((f) => [f.stop_seq, f]));
-  const wx = weatherBySeq || new Map();
-  const highlight = (opts && opts.highlight) || null;
-
-  // Preprosti pogled kaze samo, kar je pred potnikom: trenutno lego in naprej.
-  // Postaje, ki jih je vozilo ze prevozilo, so odgovor na drugo vprasanje --
-  // "kako je bilo" -- in ta sodi v napredni pogled. Kadar je voznja koncana in
-  // naprej ni nicesar, pokazemo vse: prazen seznam ne pove nicesar.
-  let from = null;
-  if (opts && opts.aheadOnly && cur) {
-    const zadnji = stops.length ? stops[stops.length - 1].stop_seq : 0;
-    if (cur.stop_seq < zadnji) from = cur.stop_seq;
-  }
-  const shown = from == null ? stops : stops.filter((s) => s.stop_seq >= from);
-  // Kadar naprej po progi ni nobene številke -- vožnja se še ni začela, žive
-  // napovedi ni, preteklih voženj je premalo -- je to ena novica, ne
-  // devetintrideset: pove jo ločilna vrstica, postanki nosijo vozni red.
-  // Prej je stalo "brez ocene" in "?" v vsaki vrstici, videti kot prazna stran.
-  const brezOcene = shown.every((s) => (cur && s.stop_seq <= cur.stop_seq)
-    || (!zivaNapoved(s) && !forecastBySeq.get(s.stop_seq) && !s.typical));
-
-  // Koliko postaj je vlak ze prevozil, ne pove nicesar, kar bi potnik rabil:
-  // seznam se zacne pri vozilu in to je vidno samo po sebi.
-  const rows = [];
-  let seenAheadHead = false;
-  for (const s of shown) {
-    const isHi = highlight != null && s.stop_seq === highlight;
-    let html;
-    if (cur && s.stop_seq <= cur.stop_seq) {
-      html = stopActualIso(s) && !jeNeskladen(s)
-        ? measuredStopHtml(s, s.stop_seq === cur.stop_seq, wx.get(s.stop_seq))
-        : gapStopHtml(s);
-    } else {
-      if (!seenAheadHead) {
-        rows.push(`<div class="stop-sep">${brezOcene
-          ? "naprej po progi — vozni red, ocene še ni" : "naprej po progi — ocena, ne meritev"}</div>`);
-        seenAheadHead = true;
-      }
-      // Zgornja meja ob zapori ali vlaku pred njim (`zapore.dodatek`); ocena ostane.
-      const dod = ((opts && opts.run && opts.run.dodatek) || {})[s.stop_seq];
-      html = forecastStopHtml(s, forecastBySeq.get(s.stop_seq), wx.get(s.stop_seq), dod, brezOcene);
-    }
-    rows.push(isHi ? html.replace('class="stop-row', 'class="stop-row is-yours') : html);
-  }
-  return `<div class="stop-list">${rows.join("")}</div>`;
-}
+// Napoved naprej je odvisna od izhodišča in zamude, od zgodovine (ves dan ista)
+// in od prevoznikove napovedi, ki pride na 30 s (derp.si). Okno vožnje vpraša
+// na 10 s, zato isti odgovor vzame znova, dokler ni starejši od 30 s in se
+// izhodišče ne premakne: pol manj zahtev za isto sliko.
+const NAPOVED_VELJA_MS = 30000;
+let zadnjaNapoved = null;
 
 async function fetchRunAndForecast(trainNo, date, tripId) {
   const enc = encodeURIComponent(trainNo);
@@ -1543,16 +1364,21 @@ async function fetchRunAndForecast(trainNo, date, tripId) {
   let forecast = [];
   const lastSeq = run.stops.length ? run.stops[run.stops.length - 1].stop_seq : 0;
   if (odSeq != null && odZamude != null && odSeq < lastSeq) {
+    // Prikazani dan izpustimo iz ucenja -- isto kot pri zgodovini.
+    const url = `/api/train/${enc}/predict?stop_seq=${odSeq}&delay_s=${odZamude}`
+      + `&exclude_date=${encodeURIComponent(run.service_date)}`
+      // Brez `trip` se model pri avtobusu uci iz vseh voznj te linije,
+      // obeh smeri skupaj. Pri vlaku je isti trip in sprememba nicesar.
+      + (run.trip_id ? `&trip=${encodeURIComponent(run.trip_id)}` : "");
     try {
-      // Prikazani dan izpustimo iz ucenja -- isto kot pri zgodovini.
-      const p = await fetch(
-        `/api/train/${enc}/predict?stop_seq=${odSeq}&delay_s=${odZamude}`
-        + `&exclude_date=${encodeURIComponent(run.service_date)}`
-        // Brez `trip` se model pri avtobusu uci iz vseh voznj te linije,
-        // obeh smeri skupaj. Pri vlaku je isti trip in sprememba nicesar.
-        + (run.trip_id ? `&trip=${encodeURIComponent(run.trip_id)}` : "")
-      ).then((r) => (r.ok ? r.json() : null));
-      forecast = (p && p.forecast) || [];
+      if (zadnjaNapoved && zadnjaNapoved.url === url
+          && Date.now() - zadnjaNapoved.ob < NAPOVED_VELJA_MS) {
+        forecast = zadnjaNapoved.forecast;
+      } else {
+        const p = await fetch(url).then((r) => (r.ok ? r.json() : null));
+        forecast = (p && p.forecast) || [];
+        if (p) zadnjaNapoved = { url, ob: Date.now(), forecast };
+      }
     } catch (err) {
       console.warn("napovedi ni bilo mogoče naložiti", err);
     }

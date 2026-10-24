@@ -58,11 +58,11 @@ def test_rezervirana_barva_ni_v_lestvici():
 
 
 def test_okno_voznje_uporablja_rezervirano_barvo_za_oceno():
-    """Ocena lege ni meritev in mora biti v rezervirani barvi, ne v zeleni."""
-    train = (KOREN / "kajros/static/train.js").read_text()
-    m = re.search(r'const ESTIMATE_COLOR = "(#[0-9a-fA-F]{6})"', train)
-    assert m, "train.js nima ESTIMATE_COLOR"
-    assert m.group(1).lower() == _css("d-none")
+    """Ocena ni meritev in mora biti v rezervirani barvi, ne v zeleni."""
+    train = (KOREN / "kajros/static/train.css").read_text()
+    m = re.search(r"\.ov-vrsta\.je-ocena \{([^}]*)\}", train)
+    assert m, "train.css nima žetona ocene"
+    assert "var(--d-none)" in m.group(1)
 
 
 def test_zapora_na_zemljevidu_je_ista_kot_v_preverjanju():

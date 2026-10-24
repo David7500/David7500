@@ -201,9 +201,11 @@
     ? `${Math.round(st.hitrost_ms * 3.6)} km/h` : "");
 
   // Zamuda nosi barvo lestvice, zato na podlagi strani: temna oranžna
-  // (`--d-big`) na indigu ne doseže kontrasta (2,8 : 1).
+  // (`--d-big`) na indigu ne doseže kontrasta (2,8 : 1). Ničla je beseda, kot
+  // povsod v oknu vožnje: „0 min“ je uganka.
   const zamudaHtml = (z, cls = "deli-zam") => (z
-    ? `<b class="${cls}" style="color:${delayColor(z)}">${escapeHtml(delayText(z))}</b>` : "");
+    ? `<b class="${cls}" style="color:${delayColor(z)}">${
+      escapeHtml(delayMin(z) === 0 ? "točno" : delayText(z))}</b>` : "");
 
   function naslovVoznje(k) {
     return `${escapeHtml(oznaka(k))}${cilj(k) ? ` → ${escapeHtml(cilj(k))}` : ""}`;
@@ -344,19 +346,22 @@
     naZaslon();
   }
 
-  // Gumb v vrstici pove stanje deljenja tudi, ko je razdelek zaprt.
+  // Gumb v skupini dejanj pove stanje deljenja tudi, ko je razdelek zaprt:
+  // beseda pod ikono, cel stavek v `title` in za bralnik zaslona.
   function narisiGumb() {
     const f = S.faza;
     const v = vozilo(S.voznja || fiksna() || { mode: el.dataset.mode });
-    let naslov = "Deli, kje je", pod = escapeHtml(`si na tem ${v}u?`);
-    if (f === "isce") { naslov = "Deliš lego"; pod = "iščem tvojo lego …"; }
+    let ime = "Deli lego", opis = `Deli lego, si na tem ${v}u?`;
+    if (f === "isce") { ime = "Iščem lego …"; opis = "Deliš lego: iščem tvojo lego"; }
     else if (f === "deli") {
-      naslov = "Deliš lego";
-      pod = `<span class="pomoc-zivo" aria-hidden="true"></span>${
-        S.stanje && S.stanje.verodostojno ? "drugi te vidijo" : "drugi te še ne vidijo"}`;
-    } else if (f === "konec") { naslov = "Hvala!"; pod = "deljenje je končano"; }
-    else if (f === "napaka") { naslov = "Deljenje ne gre"; pod = "poglej, zakaj"; }
-    GUMB.innerHTML = `${SVG_VALOVI}<span class="pomoc-besedilo"><b>${naslov}</b><small>${pod}</small></span>`;
+      const vidijo = S.stanje && S.stanje.verodostojno;
+      ime = `<span class="pomoc-zivo" aria-hidden="true"></span>${vidijo ? "Te vidijo" : "Deliš"}`;
+      opis = `Deliš lego: ${vidijo ? "drugi te vidijo" : "drugi te še ne vidijo"}`;
+    } else if (f === "konec") { ime = "Hvala!"; opis = "Deljenje je končano"; }
+    else if (f === "napaka") { ime = "Ne gre"; opis = "Deljenje ne gre, poglej, zakaj"; }
+    GUMB.innerHTML = `${SVG_VALOVI}<span class="pomoc-ime">${ime}</span>`;
+    GUMB.title = opis;
+    GUMB.setAttribute("aria-label", opis);
     GUMB.setAttribute("aria-expanded", String(!el.hidden));
   }
 

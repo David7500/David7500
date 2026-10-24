@@ -26,96 +26,35 @@ const DATE_Q = (() => {
   return p.toString() ? `?${p}` : "";
 })();
 
-const RUN_POLL_MS = 30000;
-const HIST_POLL_MS = 600000;
+// Kako pogosto okno vpraša po vožnji. Med vožnjo na 10 s (prej 30): SŽ zamudo
+// preračuna na 15 s, derp.si pošlje na 30 s, zajem oboje bere sproti -- nova
+// številka je tako na zaslonu v nekaj sekundah, ne v pol minute (David,
+// 24. 10. 2026: „nove informacije morajo biti hitro vidne“). Pred odhodom in
+// po cilju se nič ne spremeni tako hitro.
+const RITEM_VOZI_MS = 10000;
+const RITEM_MIRUJE_MS = 60000;
+const ritemOkna = () => (!state.run || voziAliKmalu(state.run) ? RITEM_VOZI_MS : RITEM_MIRUJE_MS);
+// Zanka vožnje; gumb „osveži“ na zemljevidu jo sproži takoj (`initOsvezi`).
+let oknoPoll = null;
 
-// Rezervirano za "to ni meritev". Preverjeno z validatorjem palete proti vsem
-// stiriv barvam lestvice zamud: najslabsi par ΔE 16,4 (deutan) -- lahko locljivo.
-const ESTIMATE_COLOR = "#a8d8ff";
-
-const INK_LINE = "#4a515c";
-const INK_GRID = "#23272f";
-const INK_AXIS = "#79828f";
-const PAST_COLOR = "#79828f";
-const SURFACE = "#14161a";
-
-const tooltipEl = document.getElementById("tooltip");
-
-function showTip(html, ev) {
-  tooltipEl.innerHTML = html;
-  tooltipEl.hidden = false;
-  const pad = 12;
-  const r = tooltipEl.getBoundingClientRect();
-  let x = ev.clientX + pad;
-  let y = ev.clientY + pad;
-  if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - pad;
-  if (y + r.height > window.innerHeight - 8) y = ev.clientY - r.height - pad;
-  tooltipEl.style.left = `${x}px`;
-  tooltipEl.style.top = `${y}px`;
-}
-
-function hideTip() {
-  tooltipEl.hidden = true;
-}
-
-// Korak osi naj bo cela minuta iz znanega nabora -- sicer os pokaze 0, 4, 8, 11, 15.
-const NICE_MIN = [1, 2, 5, 10, 15, 20, 30, 60, 120];
-
-function niceTicks(maxSeconds, wanted) {
-  const maxMin = Math.max(1, maxSeconds / 60);
-  const step = NICE_MIN.find((m) => maxMin / m <= (wanted || 5)) || NICE_MIN[NICE_MIN.length - 1];
-  const top = Math.ceil(maxMin / step) * step;
-  const out = [];
-  for (let m = 0; m <= top; m += step) out.push(m * 60);
-  return { top: top * 60, values: out };
-}
-
-function svgEl(name, attrs, text) {
-  const el = document.createElementNS("http://www.w3.org/2000/svg", name);
-  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
-  if (text != null) el.textContent = text;
-  return el;
-}
-
-// Graf se prerise ob spremembi sirine -- pisava tako ostane v pravi velikosti,
-// namesto da bi jo viewBox skaliral.
-const redrawers = new Map();
-
-function mountChart(el, draw) {
-  const render = () => {
-    // clientWidth steje tudi padding kartice -- brez odstevanja je SVG vsakic
-    // za 24 px sirsi od prostora in spodaj zraste vodoravni drsnik.
-    const cs = getComputedStyle(el);
-    const w = Math.floor(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
-    if (w <= 0) return;
-    el.replaceChildren(draw(w));
-  };
-  redrawers.set(el, render);
-  render();
-}
-
-let resizeTimer = null;
-window.addEventListener("resize", () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => redrawers.forEach((f) => f()), 120);
-});
-
-// Skupno stanje: profil zamude potrebuje tekoco voznjo IN zgodovino, ki se
-// nalagata loceno in z razlicnim ritmom.
-const state = { run: null, forecast: null, past: null, pastRuns: 0,
-                weather: new Map(), report: null,
+// Stanje okna: vožnja, ocena naprej, vreme po postankih in veriga vozila.
+// `novicaOb` = trenutek zadnje novice o vožnji po uri TE naprave (iz `tiho_s`
+// ob odgovoru: ura strežnika in telefona se lahko razlikujeta); `brezZveze` od
+// prve neuspele osvežitve; `vrh` = kar je bilo na vrhu, da se sprememba vidi.
+const state = { run: null, forecast: null, weather: new Map(),
                 mode: "vlak", network: "zeleznica", agency: null,
-                current: null, chain: null };
-// Katera postaja je pod misko -- deljeno med grafoma, da se oznaka ne izgubi
-// ob preklopu pogleda.
-let hoverSeq = null;
+                current: null, chain: null, prevozene: false,
+                novicaOb: null, brezZveze: null, odziv: null, vrh: null };
 
 // ---------- ta voznja ----------
 
 const runHeadEl = document.getElementById("run-head");
 const runTimelineEl = document.getElementById("run-timeline");
 const headsignEl = document.getElementById("train-headsign");
-const feedDotEl = document.getElementById("feed-dot");
+const trakEl = document.getElementById("ov-trak");
+const stanjeKjeEl = document.getElementById("ov-stanje-kje");
+const stanjeSvezEl = document.getElementById("ov-stanje-svez");
+const kartaOdstEl = document.getElementById("ov-karta-odst");
 
 
 // Prikaz mora govoriti o tem, kar je pred potnikom. "Vlak je od takrat verjetno
@@ -129,18 +68,6 @@ function vehicleNoun() {
 function vehicleWord() {
   if (!isBus(state.mode)) return "ta vlak";
   return state.network === "zeleznica" ? "ta prevoz" : "ta avtobus";
-}
-
-// Kratko in samo tisto, kar spremeni potnikovo ravnanje. Ostalo je bilo
-// razlaga o virih podatkov na mestu, kjer clovek gleda svojo voznjo.
-function caveatText() {
-  if (!isBus(state.mode)) {
-    return "Zamuda je izmerjena v prometnem mestu, ne nujno na peronu.";
-  }
-  if (state.network === "zeleznica") {
-    return "Nadomestni prevoz: čakaj na postajališču, ne na peronu.";
-  }
-  return "Lega je izmerjena z GPS, zamuda ima ločljivost ene minute.";
 }
 
 // Nazaj na tisto stran, s katere se pride: iskalnik vlakov ali avtobusov,
@@ -180,7 +107,7 @@ function applyNetworkWording() {
 // in prikaz mora to povedati -- "+20 min" ob polnoci, izmerjeno ob 17h, je laz.
 const FRESH_S = 20 * 60;
 
-// Koliko sekund tisine feeda o EN I voznji je ze nenormalno.
+// Koliko sekund tisine feeda o ENI voznji je ze nenormalno.
 //
 // To ni isto kot `FRESH_S`. Ta meri starost domnevnega prehoda (vozni red plus
 // zamuda), tisina pa starost NOVICE. Razlika je bila 8. 9. 2026 na zaslonu:
@@ -199,14 +126,6 @@ function trajanje(sekund) {
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
   return `${h} h ${String(min % 60).padStart(2, "0")} min`;
-}
-
-function ageLabel(iso) {
-  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (min < 1) return "pravkar";
-  if (min < 60) return `pred ${min} min`;
-  const h = Math.floor(min / 60);
-  return `pred ${h} h ${String(min % 60).padStart(2, "0")} min`;
 }
 
 // Voznja, ki se ni zacela, NI voznja brez podatkov -- to je razlika, ki jo
@@ -236,10 +155,12 @@ function notStartedText() {
   // kot pri "mestnih linij LPP ni" nad zetoni LPP 25: poved mora govoriti o
   // TEM, cesar ni, in takoj povedati, kaj je namesto tega.
   if (state.run && state.run.zivi_vir) {
-    return `meritve za to vožnjo še ni — spodnje ure so
+    return `meritve za to vožnjo še ni — ure so
             <strong>živa napoved ${escapeHtml(state.run.zivi_vir)}</strong>`;
   }
-  return `za ${vehicleWord()} na ta dan še ni nobene meritve`;
+  // Za pretekli dan ni „še“: ta dan je mimo.
+  const mimo = state.run && state.run.service_date < todayIso();
+  return `za ${vehicleWord()} na ta dan ${mimo ? "" : "še "}ni nobene meritve`;
 }
 
 // Nadomestni prevoz SZ: `mode = bus`, a `network = zeleznica`. Na tej relaciji
@@ -262,138 +183,18 @@ function potnikiKjeText(p) {
 // minuto samo „stoji“.
 const stojiMin = (p) => (p.stoji_s >= 60 ? `stoji ${Math.floor(p.stoji_s / 60)} min` : "stoji");
 
-function potnikiGlavaHtml() {
-  const p = state.run && state.run.potniki;
-  if (!p || p.lat == null) return "";
-  const kdo = p.n === 1 ? "Potnik na vozilu deli lego"
-    : `${potnikov(p.n)} na vozilu ${deliGlagol(p.n)} lego`;
-  const z = p.zamuda;
-  return `<div class="detail-potniki">
-      <strong>${kdo}</strong>
-      <span>${escapeHtml(potnikiKjeText(p))}${p.stoji ? ` · ${stojiMin(p)}` : ""}${z
-        ? ` · <b style="color:${delayColor(z)}">${escapeHtml(delayText(z))}</b>` : ""}
-        · ${p.starost_s < 60 ? "pravkar" : `pred ${Math.round(p.starost_s / 60)} min`}</span>
-    </div>`;
-}
-
+// „Tu okoli 09:40“ je prenos potnikove zamude. Kadar je poročilo verodostojno,
+// teče ocena naprej že od njegove lege (`fetchRunAndForecast`) in ura ob
+// postanku je ista beseda -- druga ura zraven bi bila dve resnici v vsaki
+// vrstici. Ostane, kadar je potnik edini glas poleg feeda.
 function potnikPostanekText(sp) {
   if (!sp) return "";
   if (sp.odpeljal) return `potnik na vozilu: odpeljal ob ${hhmm(sp.odpeljal)}`;
   if (sp.mimo) return "potnik na vozilu: je že mimo";
   if (sp.tu) return `potnik na vozilu: ${vehicleNoun()} je tu`;
-  if (sp.pricakovano) return `potnik na vozilu: tu okoli ${hhmm(sp.pricakovano)}`;
-  return "";
-}
-
-function runHeadHtml(cur) {
-  const bus = isBus(state.mode);   // glej vehicleNoun() za besedilo
-  // Kadar je porocilo potnikov na vozilu verodostojno (eden, ki se pelje, ali
-  // dva, ki se ujemata; `deljenje.stanje`), feed za trenutno zamudo ni vec
-  // potreben (odlocil David, 25. 9. 2026, za enega 11. 10.): potnikova je
-  // izmerjena zdaj, feedova je sklep izpred minut. Sicer ostane feedova.
   const pp = state.run && state.run.potniki;
-  const poPotnikih = !!(pp && pp.verodostojno && pp.lat != null);
-  // SŽ pove višjo zamudo, kot jo je vlak imel na zadnji prevoženi postaji:
-  // stoji ali se je zamuda povečala med postajama. Ta je trenutna (LPV 2417
-  // 16. 10. 2026: glava +1 s postaje prej, SŽ +14 in raste).
-  const sz = !poPotnikih && cur && state.run.trenutna;
-  // Strezniku pustimo odlocitev (minuta, razred, prezgodaj); tu se le risze.
-  const z = poPotnikih ? pp.zamuda : sz ? sz.zamuda : cur ? stopZamuda(cur) : null;
-  const d = poPotnikih ? pp.zamuda_s : sz ? sz.zamuda.s : cur ? stopDelay(cur) : null;
-  const wx = cur ? state.weather.get(cur.stop_seq) : null;
-  const color = delayColor(z || d);
-  const atIso = sz ? new Date(sz.ts * 1000).toISOString() : cur ? stopActualIso(cur) : null;
-  const ageS = atIso ? (Date.now() - new Date(atIso).getTime()) / 1000 : null;
-  // Tisina feeda je merodajnejsa od starosti domnevnega prehoda: prva pove,
-  // kdaj smo nazadnje kaj IZVEDELI, druga le, kdaj naj bi se nekaj zgodilo.
-  const tihoS = state.run && state.run.tiho_s != null ? state.run.tiho_s : null;
-  const tiho2 = tihoS != null && tihoS > TIHO_S;
-  const stale = !poPotnikih && (tiho2 || (ageS != null && ageS > FRESH_S));
-  // "-6 min" je uganka, beseda ni -- in prezgoden avtobus je za potnika hujsa
-  // novica od zamude: pride ob objavljeni uri in vozila ni vec. Smer nosi
-  // NASLOV ("Vozi prezgodaj"), stevilka pa velikost: "Trenutna zamuda" nad
-  // "6 min prej" si nasprotuje, "6 min prej" pod njim pa besedo ponovi.
-  // Tudi kadar je podatek star: "Zadnja znana zamuda" nad "5 min" je bila
-  // na LPP 6B, ki je bil 5 min PREJ (5. 10. 2026) -- naslov je izgubil smer.
-  const early = isEarly(z || d);
-
-  // Voznja se ni zacela: "trenutne" zamude ni in vprasaj v najvecji pisavi na
-  // strani ne pove nicesar, medtem ko o vozjni vemo, kako obicajno odpelje.
-  // Jemljemo PRVI postanek z zgodovino -- to je zamuda ob odhodu, ne tista na
-  // koncu proge, ki je po definiciji vecja.
-  // ...a le, kadar bloka "Pri tebi" ni. Ce je, je ista stevilka ze nad tem in
-  // dve enaki "+8" druga pod drugo nista dva podatka, ampak ena ponovitev.
-  const jeTvoj = !!(state.run && yourStop(state.run.stops));
-  const t0 = !cur && !poPotnikih && !jeTvoj && state.run && state.run.stops
-    ? (state.run.stops.find((x) => x.typical) || {}).typical || null
-    : null;
-  // Brez meritve in brez svoje stevilke glava ne postavlja vprasaja v najvecji
-  // pisavi na strani: stavek pod njim ze pove, da se voznja ni zacela. Isto
-  // brez bloka "Pri tebi", kadar ni niti obicajne zamude -- "Trenutna zamuda
-  // ? min" pred odhodom vprasa po necem, cesar se ne more biti.
-  const tiho = !cur && !poPotnikih && (jeTvoj || (!t0 && !!odhodPrvega()));
-
-  // Prevoznikovo porocilo: zamuda ob prihodu na postajo PRED vlakom, torej
-  // napoved, ne kraj meritve (`api._dodaj_porocila`) -- zato z besedami SZ.
-  const rep = state.report;
-
-  return `
-    <div class="detail-now">
-      ${tiho ? "" : `<div class="detail-now-label">${
-        stale ? (early ? "Nazadnje je vozil prezgodaj" : "Zadnja znana zamuda")
-        : early ? "Vozi prezgodaj"
-        : t0 ? "Običajno ob odhodu" : "Trenutna zamuda"}</div>
-      <div class="detail-now-value" style="color:${t0 ? delayColor(t0.median_s) : color}">
-        <span class="detail-now-n">${
-          t0 ? (isEarly(t0.median_s) ? Math.abs(delayMin(t0.median_s)) : delayLabel(t0.median_s))
-          : early ? Math.abs(delayMin(z || d)) : delayLabel(z || d)}</span>
-        <span class="detail-now-unit">${
-          // Pri "Vozi prezgodaj" smer nosi naslov; "Običajno ob odhodu" je ne.
-          t0 && isEarly(t0.median_s) ? "min prej" : "min"}</span>
-      </div>`}
-      <div class="detail-now-where">
-        ${poPotnikih ? `po poročilu ${pp.n > 1 ? "potnikov" : "potnika"} na vozilu`
-          : sz ? `po podatkih SŽ${sz.proti ? ` · pelje proti postaji <strong>${
-            escapeHtml(sz.proti)}</strong>` : ""}`
-          : cur
-          // Ista razlika kot pri postanku potnika: "izmerjeno" smemo reci samo,
-          // kadar je feed vrednost potrdil PO prehodu. Sicer je to zadnji
-          // podatek s te postaje, ne meritev na njej.
-          ? `${cur.zamuda && cur.zamuda.vrsta === "izmerjeno"
-              ? "izmerjeno na postaji" : "zadnji podatek s postaje"} <strong>${
-              escapeHtml(cur.name)}</strong> ob ${hhmm(atIso)}`
-          : notStartedText()}
-      </div>
-      ${potnikiGlavaHtml()}
-      ${t0 ? `<div class="detail-now-age">mediana ${pluralRuns(t0.n)}${
-        t0.od_seq ? `, merjeno na postaji ${escapeHtml(t0.od_ime)}` : ""} · ${
-        Math.round(t0.on_time_share * 100)} % v 5 min</div>` : ""}
-      ${atIso && !poPotnikih ? `<div class="${stale ? "stale-note" : "detail-now-age"}">
-        ${tiho2
-          // Ena starost, ne dve. Ko feed molci, je edina, ki kaj pove,
-          // starost NOVICE -- starost domnevnega prehoda je izpeljanka iz
-          // nje in bralca samo zmede.
-          ? `⚠ o ${vehicleNoun()}u <strong>${escapeHtml(trajanje(tihoS))}</strong> ni novic — to je zadnja znana številka, ne trenutna`
-          : stale
-            ? `⚠ ${escapeHtml(ageLabel(atIso))} — ${vehicleNoun()} je od takrat verjetno že pripeljal`
-            : escapeHtml(ageLabel(atIso))}
-      </div>` : ""}
-      ${rep ? `<div class="detail-report adv-only">
-        Prevoznik poroča <strong style="color:${delayColor(rep.delay_min * 60)}">${rep.delay_min > 0 ? "+" : ""}${rep.delay_min} min</strong>
-        ob ${escapeHtml(rep.event)}u na postajo <strong>${escapeHtml(rep.station)}</strong>
-        ${rep.severe ? '<span class="tag">izjemna zamuda</span>' : ""}
-      </div>` : ""}
-      ${wx && wx.severity != null ? `
-        <div class="detail-weather">
-          ${weatherIconHtml(wx, 15)}
-          <span>razmere <strong style="color:${severityColor(wx.severity_label)}">${wx.severity}/10</strong> · ${escapeHtml(wx.severity_label)}</span>
-        </div>
-        <div class="detail-weather-raw">${escapeHtml(weatherSummary(wx))}</div>` : ""}
-      <div class="detail-caveat adv-only">
-        ${caveatText()}
-      </div>
-    </div>
-  `;
+  if (sp.pricakovano && !(pp && pp.verodostojno)) return `potnik na vozilu: tu okoli ${hhmm(sp.pricakovano)}`;
+  return "";
 }
 
 // Postanek, ki ga je potnik izbral -- tisti, na katerem stoji. Iscemo po
@@ -405,8 +206,6 @@ function yourStop(stops) {
   return stops.find((s) => fold(s.name) === want) || null;
 }
 
-// "Kdaj pride po mene in koliko bo takrat zamujal" -- edino vprasanje, ki ga
-// ima potnik na peronu. Zato je to prva stvar v oknu, nad vsem drugim.
 // Najnovejša beseda o vožnji s POZNEJŠEGA postanka.
 //
 // Kadar številka za potnikovo postajo ni potrjena (zamrznjena napoved), feed pa
@@ -429,125 +228,358 @@ function novejsaBeseda(s, stops) {
   return Math.abs(naj.zamuda.s - s.zamuda.s) >= RAZKRIJ_RAZLIKO_S ? naj : null;
 }
 
-function yourStopHtml(stops, forecast, current) {
-  const s = yourStop(stops);
-  if (!s) return "";
-  // Neskladna vrednost pri postanku potnika bi bila "izmerjena" nicla pod
-  // vlakom, ki zamuja pol ure. Raje ocena.
-  const passed = current && s.stop_seq <= current.stop_seq && !jeNeskladen(s);
-  const f = (forecast || []).find((x) => x.stop_seq === s.stop_seq);
+// ---------- vrh okna: odštevanje do postanka, o katerem človek sprašuje ----------
+//
+// Osnutek E (David, 23. 10. 2026): na vrhu je en postanek in koliko je še do
+// njega. S table ali iskalnika je to potnikova postaja (`postaja` v naslovu),
+// pred odhodom izhodišče („kdaj odpelje“), sicer cilj vožnje -- kdor ima
+// poslano povezavo, nekoga čaka tam.
+
+function ciljOkna() {
+  const stops = state.run.stops;
+  const tvoj = yourStop(stops);
+  if (tvoj) return { s: tvoj, kaj: "tvoj" };
+  if (!state.current && odhodPrvega()) return { s: stops[0], kaj: "odhod" };
+  return { s: stops[stops.length - 1], kaj: "cilj" };
+}
+
+/**
+ * Kaj vemo o enem postanku: zamuda, pričakovana ura in beseda, od kod je.
+ *
+ * Pravila iz `oznake.md`: „izmerjeno“ samo, kadar je feed vrednost potrdil po
+ * prehodu (odloči strežnik, `stats.potrjen_prehod`), sicer „zadnji podatek“.
+ * Neskladna vrednost je ocena, ne „izmerjena“ ničla pod vlakom, ki zamuja pol
+ * ure. Naprej ima prednost živa napoved LPP (pri mestnem LPP je naša zgodovina
+ * iz napovedi), nato naša ocena, nato zgodovina („običajno“, ni napoved za ta
+ * dan), sicer vozni red.
+ */
+function vrednostNaPostanku(s) {
+  const cur = state.current;
   const schedIso = s.sched_dep || s.sched_arr;
-
-  let d = null;
-  let kdaj = null;
-  // Beseda gre NAD stevilko, ne pod cas: "+9 min" brez nje je videti kot
-  // meritev, in prav ta postanek je edini, ki ga potnik dejansko prebere.
-  let znak = "ocena";
-  let odkod = "";
-  const zivo = passed ? null : zivaNapoved(s);
-  const tihoS2 = state.run && state.run.tiho_s != null ? state.run.tiho_s : null;
-  // Vrednost, ki jo ta blok izracuna, si zapomnimo za budilko. Ne zato, da bi
-  // bilo manj kode, ampak zato, da je stevilka ena sama: `/api/train/{no}/run`
-  // vrne `zamuda: null` za vsak se nedosezen postanek -- torej ravno za
-  // potnikovega -- in budilka je zato racunala z niclo, medtem ko je dva
-  // prsta visje pisalo "+5 min". Izmerjeno na LPV 2268, 9. 9. 2026: prikaz
-  // 17:24, napoved budilke 17:19.
-  const tihoTu = tihoS2 != null && tihoS2 > TIHO_S;
-  if (passed) {
-    d = stopDelay(s);
-    kdaj = stopActualIso(s);
-    // "Vlak je tu ze bil" je trditev o DOGODKU in jo smemo izreci samo, kadar
-    // jo feed potrdi -- torej kadar je vrednost osvezil PO trenutku, ko trdi
-    // prehod. Pri zeleznici se to zgodi v 0,4 % primerov (avtobusi 68 %), zato
-    // je bila ta trditev skoraj vedno sklep iz ure. Dvakrat v dveh dneh je
-    // poslala potnika s perona, s katerega vlak se ni odpeljal.
-    // Odlocitev je strezenikova (`stats.potrjen_prehod`), tu se samo bere.
-    const potrjen = s.zamuda && s.zamuda.vrsta === "izmerjeno";
-    znak = potrjen ? "izmerjeno" : "zadnji podatek";
-    odkod = potrjen
-      ? `${vehicleNoun()} je tu že bil`
-      : `po zadnjem podatku bi bil tu ob ${hhmm(kdaj)}`
-        + (tihoTu ? " — od takrat ni novic" : "");
-  } else if (zivo) {
-    // Prevoznikova ziva napoved iz lege vozila. Pri mestnem LPP je to edina
-    // stevilka, ki ne stoji na napovedi o napovedi -- glej `zivaNapoved()`.
-    d = zivo.s;
-    kdaj = schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso;
-    znak = "v živo";
-    odkod = s.eta_min != null
-      ? `LPP pravi čez ${s.eta_min} min` : "LPP, iz lege vozila";
-  } else if (f) {
-    d = f.predicted_delay_s;
-    kdaj = schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso;
-    odkod = f.n_samples > 0 ? `mediana ${pluralRuns(f.n_samples)}` : "prenos trenutne zamude";
-  } else if (s.typical) {
-    // Voznja se ni zacela: napovedi ni, zgodovina pa je. "?" je bil tu tudi
-    // takrat, ko je iskalnik za isto voznjo pisal "obicajno 0 min, 16 voznj"
-    // -- ista stevilka, dva prikaza, en brez nje.
-    d = s.typical.median_s;
-    kdaj = schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso;
-    znak = "običajno";
-    // Izhodisca feed ne poroca (0 od 716 voznj), zato tam mediana pripada
-    // NASLEDNJI postaji. Prepis je posten samo, ce je povedan.
-    odkod = s.typical.od_seq
-      ? `mediana ${pluralRuns(s.typical.n)}, merjeno na postaji ${s.typical.od_ime}`
-      : `mediana ${pluralRuns(s.typical.n)} · ${Math.round(s.typical.on_time_share * 100)} % v 5 min`;
-  } else {
-    kdaj = schedIso;
-    znak = "vozni red";
-    odkod = "ocene še ni";
+  const ura = (d) => (schedIso && d != null ? pricakovanaUra(schedIso, d) : schedIso);
+  if (cur && s.stop_seq <= cur.stop_seq && !jeNeskladen(s)) {
+    const d = stopDelay(s);
+    const potrjen = !!(s.zamuda && s.zamuda.vrsta === "izmerjeno");
+    return { mimo: true, d, z: stopZamuda(s), kdaj: ura(d) || stopActualIso(s),
+             znak: potrjen ? "izmerjeno" : "zadnji podatek" };
   }
-  // Tu, in samo tu, se odloci, katero zamudo potnik pri svojem postanku vidi.
-  // Budilka bere prav to -- glej opombo zgoraj.
-  state.tvojaZamudaS = d != null ? Math.round(d) : null;
-  state.tvojZnak = znak;
-  state.tvojPostanek = s.stop_seq;
-  const color = delayColor(d);
-  const sched = hhmm(schedIso);
-  const cas = hhmm(kdaj);
+  const zivo = zivaNapoved(s);
+  if (zivo) return { mimo: false, d: zivo.s, z: zivo, kdaj: ura(zivo.s), znak: "v živo" };
+  const f = (state.forecast || []).find((x) => x.stop_seq === s.stop_seq);
+  if (f) return { mimo: false, d: f.predicted_delay_s, z: null, kdaj: ura(f.predicted_delay_s), znak: "ocena", f };
+  if (s.typical) {
+    return { mimo: false, d: s.typical.median_s, z: null, kdaj: ura(s.typical.median_s),
+             znak: "običajno", t: s.typical };
+  }
+  return { mimo: false, d: null, z: null, kdaj: schedIso, znak: "vozni red" };
+}
 
+// Ura je mimo, prehoda pa nihče ni potrdil: nekaj minut je vozilo res „zdaj“
+// tam, potem bi beseda lagala (IC 503 brez ene meritve je ob 23.45 kazal
+// „zdaj“ za 12.28). Meja kot na tabli, `stats.NEPOTRJEN_ODHOD_S`.
+const NEPOTRJEN_MIN = 20;
+
+/** Koliko še do pričakovane ure. Računa se ob vsakem izrisu (na 15 s), ker
+ *  ura teče tudi, ko novih podatkov ni. */
+function odstevanje(v, kaj) {
+  if (v.mimo) return { beseda: kaj === "cilj" ? "na cilju" : "mimo" };
+  const min = Math.round((new Date(v.kdaj).getTime() - Date.now()) / 60000);
+  if (min <= -NEPOTRJEN_MIN) return { beseda: state.current ? "ni potrditve" : "ni podatkov" };
+  if (min <= 0) return { beseda: "zdaj" };
+  if (min < 60) return { n: String(min), enota: "min" };
+  return { n: `${Math.floor(min / 60)} h`, enota: min % 60 ? `${min % 60} min` : "" };
+}
+
+// Vrh okna se izračuna enkrat, rišeta ga dva: velika oblika in kartica na
+// zemljevidu avtobusa. Budilka bere isto številko (`budZamuda`): dve številki
+// za isti postanek sta se že razšli (LPV 2268, 9. 9. 2026: prikaz 17:24,
+// budilka 17:19).
+function vrhOkna() {
+  const { s, kaj } = ciljOkna();
+  const v = vrednostNaPostanku(s);
+  state.tvojaZamudaS = v.d != null ? Math.round(v.d) : null;
+  state.tvojZnak = v.znak;
+  state.tvojPostanek = s.stop_seq;
+  return { s, kaj, v, o: odstevanje(v, kaj) };
+}
+
+const OBLIKA_ODST = '<svg class="ov-oblika" viewBox="0 0 88 88" aria-hidden="true"><path d="M44.0 1.2L46.8 1.8L49.4 3.4L51.7 5.1L54.1 6.2L56.8 6.4L59.7 6.1L62.7 6.1L65.4 6.9L67.5 8.8L69.0 11.5L70.2 14.2L71.7 16.3L73.8 17.8L76.5 19.0L79.2 20.5L81.1 22.6L81.9 25.3L81.9 28.3L81.6 31.2L81.8 33.9L82.9 36.3L84.6 38.6L86.2 41.2L86.8 44.0L86.2 46.8L84.6 49.4L82.9 51.7L81.8 54.1L81.6 56.8L81.9 59.7L81.9 62.7L81.1 65.4L79.2 67.5L76.5 69.0L73.8 70.2L71.7 71.7L70.2 73.8L69.0 76.5L67.5 79.2L65.4 81.1L62.7 81.9L59.7 81.9L56.8 81.6L54.1 81.8L51.7 82.9L49.4 84.6L46.8 86.2L44.0 86.8L41.2 86.2L38.6 84.6L36.3 82.9L33.9 81.8L31.2 81.6L28.3 81.9L25.3 81.9L22.6 81.1L20.5 79.2L19.0 76.5L17.8 73.8L16.3 71.7L14.2 70.2L11.5 69.0L8.8 67.5L6.9 65.4L6.1 62.7L6.1 59.7L6.4 56.8L6.2 54.1L5.1 51.7L3.4 49.4L1.8 46.8L1.2 44.0L1.8 41.2L3.4 38.6L5.1 36.3L6.2 33.9L6.4 31.2L6.1 28.3L6.1 25.3L6.9 22.6L8.8 20.5L11.5 19.0L14.2 17.8L16.3 16.3L17.8 14.2L19.0 11.5L20.5 8.8L22.6 6.9L25.3 6.1L28.3 6.1L31.2 6.4L33.9 6.2L36.3 5.1L38.6 3.4L41.2 1.8Z"/></svg>';
+const SVG_PIN = '<svg class="ov-pin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></svg>';
+const SVG_TIR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3 6 21M16 3l2 18M7.5 8h9M7 13h10M6.5 18h11"/></svg>';
+const SVG_URA = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>';
+const SVG_VLAK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"/></svg>';
+const SVG_BUS = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="15" rx="2.6"/><path d="M3.5 10.5h17M6.5 18.6v2.4M17.5 18.6v2.4"/></svg>';
+const svgVozila = () => (isBus(state.mode) ? SVG_BUS : SVG_VLAK);
+
+// Žeton zamude na vrhu: polna barva razreda (`oznake.md`), beseda iz
+// `delayText` („3 min prej“, ne „-3“). Najtemnejši razred dobi svetlo
+// besedilo, sicer ne doseže kontrasta. „Običajno“ je zgodovina, ne napoved za
+// danes -- črtkan obris namesto polne barve, beseda zraven.
+function zamudaCipHtml(v) {
+  if (jeNadomestni()) return '<span class="ov-zam je-vr">po voznem redu</span>';
+  if (v.d == null) return "";
+  const z = v.z || v.d;
+  const obicajno = v.znak === "običajno";
+  const temna = v.z ? v.z.razred === "nad-15" : delayMin(v.d) > 15;
+  // Ničla je beseda, kot v seznamu in v stavku pod vrhom: „0 min“ je uganka.
+  return `<span class="ov-zam${obicajno ? " je-obicajno" : ""}${temna ? " je-temna" : ""}"
+    style="--z:${delayColor(z)}">${escapeHtml(delayMin(z) === 0 ? "točno" : delayText(z))}</span>`;
+}
+
+// Beseda, od kod je številka. Brez nje je „+9 min“ videti kot meritev, prav
+// pri postanku, ki ga potnik dejansko prebere.
+function vrstaHtml(znak) {
+  if (jeNadomestni()) return "";
+  if (znak === "v živo") return '<span class="ov-vrsta je-zivo"><i aria-hidden="true"></i>v živo</span>';
+  return `<span class="ov-vrsta${znak === "ocena" ? " je-ocena" : znak === "običajno" ? " je-obicajno" : ""}">${
+    escapeHtml(znak)}</span>`;
+}
+
+// Tir s table SŽ ob imenu postaje; sprememba z besedo (`oznake.md`, „Tir“).
+function tirCipHtml(s) {
+  if (!s.tir) return "";
+  return `<span class="ov-tir${s.tir_prej ? " je-spremenjen" : ""}">${SVG_TIR}tir ${escapeHtml(s.tir)}${
+    s.tir_prej ? ` · prej ${escapeHtml(s.tir_prej)}` : ""}</span>`;
+}
+
+// Vreme na postanku z vrha ob uri, ko bo vozilo tam (`/weather`: model za
+// celico 8 x 8 km, napoved, zato črtkan rob): ikona in temperatura, od
+// „zahtevnih“ razmer beseda (`oznake.md`, „Semafor razmer“). Za prevoženi
+// postanek ga ni -- tam je odgovor že zamuda. Kdor čaka zunaj, ve, ali vzame
+// dežnik; kdor čaka zamudo, vidi, kakšno je vreme ob njej (vreme kot vzrok
+// zamude čaka zajem, `CLAUDE.md`).
+function vremeHtml(s, v) {
+  const w = state.weather.get(s.stop_seq);
+  if (!w || w.temp_c == null || v.mimo) return "";
+  const glasno = w.severity_label === "zahtevne" || w.severity_label === "hude";
+  return `<span class="ov-vreme${glasno ? " je-glasno" : ""}" title="${escapeHtml(`napoved · ${severityTitle(w)}`)}"${
+    glasno ? ` style="--sev:${severityColor(w.severity_label)}"` : ""}>${weatherIconHtml(w, 15)}${
+    Math.round(w.temp_c)}°${glasno ? ` · ${escapeHtml(w.severity_label)}` : ""}</span>`;
+}
+
+// Kar je na vrhu, se ob novi številki za trenutek dvigne (`je-novo`):
+// osveževanje se sicer ne vidi (David, 24. 10. 2026). Odštevanje ne šteje --
+// to teče samo od sebe.
+function podpisVrha(vrh) {
+  const { s, v } = vrh;
+  return [s.stop_seq, hhmm(v.kdaj), v.d == null ? "" : delayMin(v.d), v.znak].join("|");
+}
+
+function oznakaCilja(kaj, v) {
+  return kaj === "tvoj" ? "Pri tebi" : kaj === "odhod" ? "Odhod" : v.mimo ? "Na cilju" : "Cilj";
+}
+
+function odstevanjeHtml(o) {
+  return o.beseda ? `<span class="ov-odst-beseda">${o.beseda}</span>`
+    : `<span class="ov-odst-cez">čez</span><span class="ov-odst-n">${o.n}</span>`
+      + (o.enota ? `<span class="ov-odst-e">${o.enota}</span>` : "");
+}
+
+function odstevanjeBesedilo(o) {
+  return o.beseda || `čez ${o.n}${o.enota ? ` ${o.enota}` : ""}`;
+}
+
+function heroHtml(vrh, novo) {
+  const { s, kaj, v, o } = vrh;
+  const run = state.run;
+  const sched = hhmm(s.sched_dep || s.sched_arr);
+  const cas = hhmm(v.kdaj);
+  const vrstice = [];
+  // Zgornja meja ob zapori ali vlaku pred njim (`zapore.dodatek`): ocena
+  // ostane, ker večina vlakov tam ne izgubi nič -- a lahko pride tudi tako pozno.
+  const dod = !v.mimo && v.d != null && run.dodatek ? run.dodatek[s.stop_seq] : null;
+  if (dod) {
+    vrstice.push(`<p class="ov-dod">lahko tudi do ${hhmm(pricakovanaUra(s.sched_dep || s.sched_arr, v.d + dod))}
+      (${escapeHtml(delayText(v.d + dod))})</p>`);
+  }
+  // Dve resnici: nepotrjena številka in bistveno drugačna novejša beseda.
+  if (v.mimo && v.znak === "zadnji podatek") {
+    const n = novejsaBeseda(s, run.stops);
+    // Ime postaje v oklepaj, ne v stavek: sklanjati se ga ne da splošno.
+    if (n) {
+      vrstice.push(`<p class="ov-op">novejša beseda o vožnji: <strong>${escapeHtml(delayText(n.zamuda))}</strong>
+        (${escapeHtml(lepoIme(n.name))}, ${hhmm(new Date(n.feed_ts * 1000).toISOString())})</p>`);
+    }
+  }
+  const potnik = potnikPostanekText(s.potniki);
+  if (potnik) vrstice.push(`<p class="ov-op">${escapeHtml(potnik)}</p>`);
+  if (s.nadomestni_postanek) vrstice.push(`<p class="ov-op">${nadomestniPostanekHtml(s.nadomestni_postanek)}</p>`);
   return `
-    <div class="yours">
-      <div class="yours-label">Pri tebi — ${escapeHtml(s.name)}</div>
-      <div class="yours-line">
-        <span class="yours-time" style="color:${color}">${cas}</span>
-        ${cas !== sched ? `<span class="yours-sched">${sched}</span>` : ""}
-        <span class="yours-delay-box">
-          <span class="yours-kind">${escapeHtml(znak)}</span>
-          ${d != null ? `<span class="yours-delay" style="color:${color}">${delayText(d)}</span>` : ""}
-        </span>
+    <div class="ov-vrh">
+      <div class="ov-odst${o.beseda ? " je-beseda" : ""}" role="img" aria-label="${escapeHtml(odstevanjeBesedilo(o))}">
+        ${OBLIKA_ODST}${odstevanjeHtml(o)}
       </div>
-      <div class="yours-tag">${escapeHtml(odkod)}</div>
-      ${(() => {
-        // Zgornja meja ob zapori ali vlaku pred njim: ocena ostane, ker večina
-        // vlakov tam ne izgubi nič -- a lahko pride tudi tako pozno.
-        const dod = !passed && d != null && state.run && state.run.dodatek
-          ? state.run.dodatek[s.stop_seq] : null;
-        if (!dod || !schedIso) return "";
-        const do_ = pricakovanaUra(schedIso, d + dod);
-        return `<div class="yours-do">lahko tudi do ${hhmm(do_)} (${escapeHtml(delayText(d + dod))})</div>`;
-      })()}
-      ${s.potniki ? `<div class="yours-potnik">${escapeHtml(potnikPostanekText(s.potniki))}</div>` : ""}
-      ${(() => {
-        // Samo pri nepotrjeni številki: kadar je potrjena, ni česa razkrivati.
-        if (!passed || (s.zamuda && s.zamuda.vrsta === "izmerjeno")) return "";
-        const n = novejsaBeseda(s, stops);
-        if (!n) return "";
-        // Ime postaje v oklepaj, ne v stavek: sklanjati se ga ne da splošno
-        // ("za Ljubljana" je narobe, "za Bavarski dvor" pa ne bi bilo).
-        return `<div class="yours-razlika">novejša beseda o vožnji:
-          <strong>${escapeHtml(delayText(n.zamuda))}</strong>
-          (${escapeHtml(n.name)}, ${hhmm(new Date(n.feed_ts * 1000).toISOString())})</div>`;
-      })()}
-      ${budilkaGumbHtml(s, passed)}
+      <div class="ov-info">
+        <div class="ov-kje">${SVG_PIN}<span>${oznakaCilja(kaj, v)}</span><b>${escapeHtml(lepoIme(s.name))}</b></div>
+        <div class="ov-ura${novo ? " je-novo" : ""}"><span class="ov-ura-cas">${cas}</span>${zamudaCipHtml(v)}</div>
+        <div class="ov-cipi">${tirCipHtml(s)}${vrstaHtml(v.znak)}${cas !== sched
+          ? `<span class="ov-vr">vozni red <s>${sched}</s></span>` : ""}${vremeHtml(s, v)}</div>
+      </div>
+    </div>
+    ${vrstice.join("")}`;
+}
+
+// Isti vrh, stisnjen na zemljevid avtobusa (osnutek E): odštevanje, postanek,
+// ura, žeton. Desni spodnji kot ostane prost za navedbo vira (i).
+function kartaOdstHtml(vrh, novo) {
+  const { s, kaj, v, o } = vrh;
+  const sched = hhmm(s.sched_dep || s.sched_arr);
+  const cas = hhmm(v.kdaj);
+  return `
+    <div class="ov-ko-n">${odstevanjeHtml(o)}</div>
+    <div class="ov-ko-info">
+      <span class="ov-ko-kje">${SVG_PIN}${kaj === "tvoj" ? "" : `${oznakaCilja(kaj, v)} · `}${escapeHtml(lepoIme(s.name))}</span>
+      <span class="ov-ko-ura">${cas}${cas !== sched ? ` <s>${sched}</s>` : ""}${vremeHtml(s, v)}</span>
+    </div>
+    <div class="ov-ko-desno${novo ? " je-novo" : ""}">${zamudaCipHtml(v)}${vrstaHtml(v.znak)}</div>`;
+}
+
+// ---------- kje je vozilo zdaj ----------
+
+// V stavku cela beseda („+27 min“, „2 min prej“, „točno“); kratka je za stolpec.
+const zamudaVStavku = (z) => (z == null ? ""
+  : ` · <b class="ov-zt" style="color:${delayColor(z)}">${escapeHtml(delayMin(z) === 0 ? "točno" : delayText(z))}</b>`);
+
+// Kadar je poročilo potnikov na vozilu verodostojno (eden, ki se pelje, ali
+// dva, ki se ujemata; `deljenje.stanje`), je izmerjeno zdaj in ima prednost
+// pred feedom (David, 25. 9. 2026, za enega 11. 10.). SŽ pove višjo zamudo od
+// zadnje prevožene postaje, kadar vlak stoji ali izgublja med postajama -- ta
+// je trenutna (LPV 2417 16. 10. 2026).
+function stanjeKjeHtml() {
+  const run = state.run;
+  const cur = state.current;
+  // Nadomestni prevoz: feed zanje ne poroča nikoli (0 meritev v 56 vožnjah),
+  // zato „ne poroča“, ne „še ni“ (`strani.md`).
+  if (jeNadomestni()) return "<span>za nadomestni prevoz feed <strong>ne poroča zamud</strong> — velja vozni red</span>";
+  const pp = run.potniki;
+  if (pp && pp.verodostojno && pp.lat != null) {
+    return `<span><span class="ov-potnik">po poročilu ${pp.n > 1 ? "potnikov" : "potnika"}</span>
+      ${escapeHtml(potnikiKjeText(pp))}${pp.stoji ? ` · ${stojiMin(pp)}` : ""} ${zamudaVStavku(pp.zamuda)}</span>`;
+  }
+  const sz = cur && run.trenutna;
+  if (sz) {
+    return `<span><span class="ov-tiho">po podatkih SŽ ob ${hhmm(new Date(sz.ts * 1000).toISOString())}</span>${
+      sz.proti ? ` proti postaji <b>${escapeHtml(sz.proti)}</b>` : ""} ${zamudaVStavku(sz.zamuda)}</span>`;
+  }
+  if (cur) {
+    // Ista razlika kot pri postanku: „izmerjeno“ samo, kadar je feed vrednost
+    // potrdil PO prehodu, sicer zadnji podatek s te postaje.
+    const potrjen = !!(cur.zamuda && cur.zamuda.vrsta === "izmerjeno");
+    return `<span><span class="ov-tiho">${potrjen ? "izmerjeno" : "zadnji podatek"}</span>
+      <b>${escapeHtml(lepoIme(cur.name))}</b> <span class="ov-tiho">${hhmm(stopActualIso(cur))}</span>
+      ${zamudaVStavku(stopZamuda(cur) || stopDelay(cur))}</span>`;
+  }
+  // Vožnja se še ni začela: pri avtobusu je lahko vozilo na prejšnji vožnji.
+  const veriga = vehicleChainHtml();
+  if (veriga || odhodPrvega()) return veriga;
+  return `<span class="ov-tiho">${notStartedText()}</span>`;
+}
+
+// Starost, ki teče sama (`.age-live` v common.js), od trenutka po uri te
+// naprave. Brez naslova `ageHtml`, ta govori o GPS.
+function zivaStarost(odMs) {
+  const t = Date.now();
+  return `<span class="age-live" data-base="${Math.max(0, (t - odMs) / 1000)}" data-since="${t}">${
+    ageText(Math.max(0, (t - odMs) / 1000), t)}</span>`;
+}
+
+const SVG_BREZ_ZVEZE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0"/><path d="M12 19h.01M3 3l18 18"/></svg>';
+
+// Kako svež je, kar okno kaže. Šteje NOVICA o vožnji (`zadnja_beseda`), ne
+// ura domnevnega prehoda: prva pove, kdaj smo nazadnje kaj izvedeli. Starost
+// teče sama; okno vpraša na 10 s, zato „novica pred 8 s“ pove tudi, da se
+// stran osvežuje. Brez zveze to pove in od kdaj so podatki na zaslonu.
+function svezinaHtml() {
+  const run = state.run;
+  const cur = state.current;
+  if (state.brezZveze) {
+    return `<span class="ov-staro">${SVG_BREZ_ZVEZE}brez zveze · podatki od ${
+      hhmm(new Date(state.odziv).toISOString())}</span>`;
+  }
+  if (!cur || jeNadomestni()) return "";
+  const pp = run.potniki;
+  if (pp && pp.verodostojno && pp.lat != null && state.potnikOb) {
+    return `<span class="ov-tiho"><span class="ov-potnik">potnik</span> pred ${zivaStarost(state.potnikOb)}</span>`;
+  }
+  if (run.tiho_s != null && run.tiho_s > TIHO_S) {
+    return `<span class="ov-staro">${SVG_URA}${escapeHtml(trajanje(run.tiho_s))} brez novic</span>`;
+  }
+  return state.novicaOb ? `<span class="ov-tiho">novica pred ${zivaStarost(state.novicaOb)}</span>` : "";
+}
+
+// ---------- trak vožnje ----------
+//
+// Od izhodišča do cilja, vozilo in tvoja postaja na njem (osnutek E za vlak:
+// „zemljevida ne rabim, je itak samo tir“). Merilo je vozni red, ne število
+// postaj: dolg skok brez postanka je dolg. Vlak lege nima -- med zadnjo
+// prevoženo in naslednjo postajo stoji po uri, nikoli čisto na njiju. Prevoženo
+// je polna črta, naprej črtkana, ker je ocena.
+const TRAK_ROB = 0.22;
+
+// Kje je vozilo po poročilu potnika (`deljenje.stanje`): na postaji ali med
+// dvema, v razmerju zračnih razdalj -- trak ni zemljevid, merilo je ura.
+function legaPotnikaNaTraku(pp, stops, x) {
+  const i = stops.findIndex((s) => s.stop_seq === pp.stop_seq);
+  if (i < 0) return null;
+  const a = stops[i];
+  const b = stops[i + 1];
+  if (pp.pri || !b || a.lat == null || b.lat == null) return x(a);
+  const da = razdaljaM([a.lat, a.lon], [pp.lat, pp.lon]);
+  const db = razdaljaM([pp.lat, pp.lon], [b.lat, b.lon]);
+  return x(a) + (da + db > 0 ? da / (da + db) : 0.5) * (x(b) - x(a));
+}
+
+function trakHtml() {
+  const stops = state.run.stops;
+  if (stops.length < 2) return "";
+  const t = (s) => new Date(s.sched_dep || s.sched_arr).getTime();
+  const t0 = t(stops[0]);
+  const t1 = t(stops[stops.length - 1]);
+  if (!(t1 > t0)) return "";
+  const x = (s) => Math.min(1, Math.max(0, (t(s) - t0) / (t1 - t0)));
+  const pct = (f) => `${(f * 100).toFixed(1)}%`;
+  const cur = state.current;
+  const pp = state.run.potniki;
+  const izPotnika = !!(pp && pp.verodostojno && pp.lat != null);
+  let xv = izPotnika ? legaPotnikaNaTraku(pp, stops, x) : null;
+  if (xv == null && cur) {
+    const i = stops.indexOf(cur);
+    const nasl = stops[i + 1];
+    if (!nasl) xv = 1;
+    else {
+      const od = new Date(vrednostNaPostanku(cur).kdaj).getTime();
+      const pride = new Date(vrednostNaPostanku(nasl).kdaj).getTime();
+      const del = pride > od ? (Date.now() - od) / (pride - od) : 0.5;
+      xv = x(cur) + Math.min(0.85, Math.max(0.15, del)) * (x(nasl) - x(cur));
+    }
+  }
+  const tvoj = yourStop(stops);
+  const xt = tvoj ? x(tvoj) : null;
+  const prvi = stops[0];
+  const zadnji = stops[stops.length - 1];
+  const ime = (s, razred, slog) => `<span class="ov-trak-ime ${razred}"${slog ? ` style="${slog}"` : ""}>
+      <b>${escapeHtml(lepoIme(s.name))}</b><span>${hhmm(vrednostNaPostanku(s).kdaj)}</span></span>`;
+  const tvojNaRobu = tvoj && (tvoj === prvi || tvoj === zadnji);
+  return `<div class="ov-trak" aria-hidden="true">
+      <div class="ov-trak-crta">
+        <span class="ov-trak-za" style="width:${pct(xv == null ? 0 : xv)}"></span>
+        <span class="ov-trak-konec je-zacetek"></span><span class="ov-trak-konec je-cilj"></span>
+        ${xt != null ? `<span class="ov-trak-tvoj" style="left:${pct(xt)}"></span>` : ""}
+        ${xv != null ? `<span class="ov-trak-vozilo${izPotnika ? " je-potnik" : ""}" style="left:${pct(xv)}">${svgVozila()}</span>` : ""}
+      </div>
+      <div class="ov-trak-imena">
+        ${ime(prvi, `je-levo${tvoj === prvi ? " je-tvoj" : ""}`)}
+        ${tvoj && !tvojNaRobu && xt > TRAK_ROB && xt < 1 - TRAK_ROB ? ime(tvoj, "je-tvoj je-sredina", `left:${pct(xt)}`) : ""}
+        ${ime(zadnji, `je-desno${tvoj === zadnji ? " je-tvoj" : ""}`)}
+      </div>
     </div>`;
 }
 
 // ---------- budilka ----------
 //
 // Samo v aplikaciji (`MOST`): v brskalniku gumba ni, ker nativnega alarma ni.
-// Sedi v bloku "Pri tebi", ker je tam ze vse, kar budilka rabi -- ta voznja,
-// ta postanek in njegova voznoredna ura.
+// Gumb je prvi v skupini dejanj in meri na postanek z vrha okna (`ciljOkna`):
+// tvojo postajo, pred odhodom izhodišče, sicer cilj -- zvoni pred prihodom.
 
 const BUD_KLJUC = "kajros:budilka";
 const BUD_MINUT = [10, 15, 25, 40];
@@ -568,8 +600,16 @@ function budilkeZaPostanek(s) {
   }
 }
 
-function budilkaGumbHtml(s, passed) {
-  if (!MOST) return "";
+const budGumb = document.getElementById("pomoc-bud");
+const SVG_ZVONEC = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
+
+function posodobiBudilko() {
+  if (!budGumb) return;
+  if (!MOST || !state.run) {
+    budGumb.hidden = true;
+    return;
+  }
+  const { s } = ciljOkna();
   // **Za postanek, ki je mimo, budilke ni.** Vozilo je tu že bilo; alarm bi
   // zazvonil takoj in v prazno. Preizkušeno: nastavljena na LPP 19I štiri
   // minute po odhodu je zazvonila v isti sekundi.
@@ -577,18 +617,15 @@ function budilkaGumbHtml(s, passed) {
   // Ponavljajoča je izjema: ta ne meri na današnjo vožnjo, ampak na jutrišnjo,
   // in prav zato jo nastaviš, ko na peronu ugotoviš, da bi jo rabil.
   const obstoj = budilkeZaPostanek(s)[0];
-  if (passed && !obstoj) return "";
-  const oznaka = obstoj
-    ? `budilka ob ${hhmm(new Date(obstoj.zvoni_ob_ms).toISOString())}`
-    : "budilka";
-  return `<button type="button" class="bud-gumb${obstoj ? " is-on" : ""}"
-      data-budilka="${s.stop_seq}">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <path d="M12 3a6 6 0 0 0-6 6v4l-1.5 3h15L18 13V9a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0"/>
-      </svg>
-      <span>${escapeHtml(oznaka)}</span>
-    </button>`;
+  if (vrednostNaPostanku(s).mimo && !obstoj) {
+    budGumb.hidden = true;
+    return;
+  }
+  budGumb.hidden = false;
+  budGumb.dataset.budilka = String(s.stop_seq);
+  budGumb.classList.toggle("is-on", !!obstoj);
+  budGumb.innerHTML = `${SVG_ZVONEC}<span class="pomoc-ime">${obstoj
+    ? `ob ${hhmm(new Date(obstoj.zvoni_ob_ms).toISOString())}` : "Budilka"}</span>`;
 }
 
 function budDneviHtml(dnevi) {
@@ -954,56 +991,25 @@ function minLabel(sec) {
 }
 
 function vehicleChainHtml() {
-  const c = state.chain;
-  if (!c || (!c.prev && !c.next)) return "";
-  const started = state.current != null;
-  const prev = c.prev;
-  const parts = [];
-
+  const prev = state.chain && state.chain.prev;
   // Prejsnjo voznjo kazemo samo, dokler ta se ni zacela -- potem je vozilo tu
   // in "kje je" ni vec vprasanje.
-  if (prev && !started) {
-    const gps = prev.gps;
-    // "pri" sme veljati samo za nekaj sto metrov. Dlje povemo razdaljo, in
-    // sicer zracno -- vozilo je lahko onstran reke in cestna pot je daljsa.
-    const ime = gps && (gps.at_stop || gps.near_stop);
-    const dalec = gps && !gps.at_stop && gps.near_m != null && gps.near_m > 500;
-    const kje = !gps ? null
-      : !ime ? "lega znana"
-      : dalec ? `zdaj ${(gps.near_m / 1000).toFixed(1)} km od
-                 <strong>${escapeHtml(ime)}</strong> (zračno)`
-              : `zdaj pri postajališču <strong>${escapeHtml(ime)}</strong>`;
-    const zam = prev.delay_s != null
-      ? `<span style="color:${delayColor(prev.delay_s)}">${delayText(prev.delay_s)}</span>`
-        + `<span class="adv-only"> (izmerjeno v ${escapeHtml(prev.delay_stop || "?")})</span>`
-      : null;
-    parts.push(`
-      <div class="chain-line">
-        <span class="chain-tag">vozilo</span>
-        <span>${kje ? kje + " · " : ""}konča vožnjo
-          <a href="${chainLink(prev)}">${escapeHtml(prev.train_no)}</a>
-          ${prev.headsign ? escapeHtml(lepoIme(prev.headsign)) : ""}${zam ? ", zamuja " + zam : ""}</span>
-      </div>
-      ${prev.layover_s != null ? `<div class="chain-sub">vmes ${minLabel(prev.layover_s)} postanka —
-        zamuda prejšnje vožnje <strong>ni</strong> napoved za tvojo, vozilo jo med
-        postankom večinoma nadoknadi</div>` : ""}`);
-  }
-
-  const napredne = parts.length === 0;      // ostane samo "nato", ki je adv-only
-  if (c.next) {
-    parts.push(`
-      <div class="chain-line adv-only">
-        <span class="chain-tag">nato</span>
-        <span>isto vozilo nadaljuje kot
-          <a href="${chainLink(c.next)}">${escapeHtml(c.next.train_no)}</a>
-          ${c.next.headsign ? escapeHtml(lepoIme(c.next.headsign)) : ""}</span>
-      </div>`);
-  }
-  // Okvir mora izginiti skupaj s svojo vsebino. Kadar je edina vrstica
-  // `adv-only`, je v preprostem pogledu ostal prazen obrobljen pravokotnik --
-  // skatla brez ničesar v njej je videti kot napaka programa.
-  if (!parts.length) return "";
-  return `<div class="chain${napredne ? " adv-only" : ""}">${parts.join("")}</div>`;
+  if (!prev || state.current != null) return "";
+  const gps = prev.gps;
+  // "pri" sme veljati samo za nekaj sto metrov. Dlje povemo razdaljo, in
+  // sicer zracno -- vozilo je lahko onstran reke in cestna pot je daljsa.
+  const ime = gps && (gps.at_stop || gps.near_stop);
+  const dalec = gps && !gps.at_stop && gps.near_m != null && gps.near_m > 500;
+  const kje = !gps ? null
+    : !ime ? "lega znana"
+    : dalec ? `zdaj ${(gps.near_m / 1000).toFixed(1).replace(".", ",")} km od
+               <strong>${escapeHtml(lepoIme(ime))}</strong> (zračno)`
+            : `zdaj pri postajališču <strong>${escapeHtml(lepoIme(ime))}</strong>`;
+  // Zamude prejšnje vožnje ne kažemo: z njo je bil prikaz videti kot napoved
+  // za to vožnjo, ta pa jo med postankom večinoma nadoknadi (glej zgoraj) --
+  // in razlaga zraven je bila tri vrstice besedila.
+  return `<span class="chain"><span class="chain-tag">vozilo</span>
+      ${kje ? `${kje} · ` : ""}še na <a href="${chainLink(prev)}">prejšnji vožnji</a></span>`;
 }
 
 async function loadChain() {
@@ -1015,18 +1021,6 @@ async function loadChain() {
     state.chain = r && (r.prev || r.next) ? r : null;
   } catch (err) {
     state.chain = null;
-  }
-}
-
-async function loadReport() {
-  // Zadnje porocilo prevoznika o tej voznji: koliko bo zamujal ob prihodu na
-  // naslednje prometno mesto, ki pogosto ni voznoredni postanek.
-  try {
-    const r = await fetch(`/api/train/${ENC}/reports${DATE_Q}`).then((x) => (x.ok ? x.json() : null));
-    const list = (r && r.reports) || [];
-    state.report = list.length ? list[list.length - 1] : null;
-  } catch (err) {
-    state.report = null;
   }
 }
 
@@ -1050,111 +1044,168 @@ function veljavnostHtml(a) {
 
 /** Koliko jih velja DANES in koliko šele pozneje.
  *
- * Golo „— 7“ potnik bere kot sedem ovir danes. Izmerjeno 4. 9. 2026 na
+ * Golo „7“ potnik bere kot sedem ovir danes. Izmerjeno 4. 9. 2026 na
  * LPV 2250: sedem obvestil, od tega se jih je pet začelo šele 7.–19. 9.
- * Razčlenitev je v naslovu, ker škatla ni odprta, kadar jih je več kot dve —
- * torej natanko takrat, ko je razlika največja.
  */
 function stevecOvir(list) {
   const zdaj = Date.now();
   const pozneje = list.filter((a) => a.start_ts && a.start_ts * 1000 > zdaj).length;
-  if (!pozneje) return `— ${list.length}`;
   const danes = list.length - pozneje;
-  return danes
-    ? `— ${danes} zdaj, ${pozneje} pozneje`
-    : `— ${pozneje}, vse šele pozneje`;
+  return { danes, pozneje };
 }
 
+// Ovire so gumb v skupini dejanj (osnutek E): število na gumbu, seznam v
+// razdelku pod skupino. Edini vir odgovora, ZAKAJ vlak zamuja -- vse drugo v
+// bazi pove le koliko.
+const pomocEl = document.getElementById("pomoc");
+const ovireGumb = document.getElementById("pomoc-ovire");
+const ovireEl = document.getElementById("train-alerts");
+const SVG_OVIRA = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+
 async function loadAlerts() {
-  // Edini vir odgovora, ZAKAJ vlak zamuja. Vse drugo v bazi pove le koliko.
-  const box = document.getElementById("train-alerts");
+  let list = [];
   try {
-    const list = await fetch(`/api/train/${ENC}/alerts`).then((r) => (r.ok ? r.json() : []));
-    if (!list.length) { box.innerHTML = ""; return; }
-    box.innerHTML = `<details class="alert-box"${list.length <= 2 ? " open" : ""}>
-      <summary class="alert-head">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
-        </svg>
-        Obvestila o ovirah na tej poti
-        <span class="alert-count">${stevecOvir(list)}</span>
-      </summary>
-      <div class="alert-list">${list.map((a) => `
-        <div class="alert-item">
-          <strong>${escapeHtml(alertTitle(a.header))}</strong>
-          <div class="alert-meta">${veljavnostHtml(a)}${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
-          ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}</div>
-          <div class="alert-body adv-only">${escapeHtml((a.description || "").slice(0, 400))}</div>
-        </div>`).join("")}</div>
-    </details>`;
+    list = await fetch(`/api/train/${ENC}/alerts`).then((r) => (r.ok ? r.json() : []));
   } catch (err) {
-    box.innerHTML = "";
+    list = [];
+  }
+  if (!list.length) {
+    ovireGumb.hidden = true;
+    ovireEl.innerHTML = "";
+    return;
+  }
+  const { danes, pozneje } = stevecOvir(list);
+  ovireGumb.innerHTML = `${SVG_OVIRA}<span class="pomoc-ime">${danes
+    ? `${danes} ${sklon(danes, "ovira")}` : `${pozneje} pozneje`}</span>`;
+  ovireGumb.setAttribute("aria-label", `Ovire na progi: ${danes} zdaj, ${pozneje} pozneje`);
+  ovireGumb.hidden = false;
+  ovireEl.innerHTML = `
+    <div class="ov-ovire-glava">Ovire na progi <span>${danes} zdaj${pozneje ? `, ${pozneje} pozneje` : ""}</span></div>
+    <div class="alert-list">${list.map((a) => `
+      <div class="alert-item">
+        <strong>${escapeHtml(alertTitle(a.header))}</strong>
+        <div class="alert-meta">${veljavnostHtml(a)}${escapeHtml(a.effect_label || "")}${a.cause_label ? ` · ${escapeHtml(a.cause_label)}` : ""}
+        ${a.url ? ` · <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">obvestilo SŽ</a>` : ""}</div>
+      </div>`).join("")}</div>
+    <a class="ov-ovire-vse" href="/app/ovire">vse ovire</a>`;
+}
+
+ovireGumb.addEventListener("click", () => {
+  pomocEl.dataset.odprto = pomocEl.dataset.odprto === "ovire" ? "" : "ovire";
+  pomocEl.dispatchEvent(new Event("pomoc"));
+});
+pomocEl.addEventListener("pomoc", () => {
+  const odprto = pomocEl.dataset.odprto === "ovire";
+  ovireEl.hidden = !odprto;
+  ovireGumb.setAttribute("aria-expanded", String(odprto));
+});
+
+// Povezana skupina (M3): zunanja gumba sta zaobljena, notranji le malo. Kateri
+// so vidni, se menja (budilka samo v aplikaciji, deljenje samo, ko vožnja
+// vozi, ovire samo z ovirami), zato robove postavi vidnost, ne predloga.
+function uredSkupino() {
+  const vidni = [...pomocEl.querySelectorAll(".pomoc-gumb")].filter((g) => !g.hidden);
+  vidni.forEach((g, i) => {
+    g.classList.toggle("je-prvi", i === 0);
+    g.classList.toggle("je-zadnji", i === vidni.length - 1);
+  });
+}
+new MutationObserver(uredSkupino).observe(pomocEl.querySelector(".pomoc-vrsta"),
+  { attributes: true, attributeFilter: ["hidden"], subtree: true });
+uredSkupino();
+
+// Glava: oznaka in kam vožnja pelje. Vlak ima vrsto in številko že s
+// strežnika („LPV“ · „2002“), podnaslov je relacija. Avtobus: oznaka, kot je
+// na vozilu („LPP 25“; medkrajevni prevoznik, šifre linije na avtobusu ni),
+// naslov smer, podnaslov cela pot. Nadomestni prevoz se pove z besedo v
+// naslovu -- kdor pride s povezave, mora takoj vedeti, da čaka avtobus.
+function renderGlava(run) {
+  const znacka = document.getElementById("ov-znacka");
+  const ime = document.getElementById("ov-ime");
+  const stops = run.stops || [];
+  const prvi = stops[0];
+  const zadnji = stops[stops.length - 1];
+  if (run.network === "avtobus") {
+    znacka.textContent = imeVoznje(run);
+    znacka.className = "ov-znacka je-bus";
+    znacka.style.setProperty("--prevoznik", AGENCY_INK[String(run.agency)] || LINE_INK);
+    znacka.hidden = false;
+    const cilj = ciljVoznje(run.headsign);
+    ime.textContent = cilj ? `→ ${lepoIme(cilj)}` : "";
+    headsignEl.textContent = lepoIme(run.headsign || "");
+  } else {
+    if (isBus(run.mode)) {
+      znacka.textContent = "nadomestni prevoz";
+      znacka.className = "ov-znacka je-nadomestni";
+      znacka.hidden = false;
+      ime.textContent = TRAIN_NO;
+    }
+    headsignEl.textContent = prvi && zadnji
+      ? `${lepoIme(prvi.name)} → ${lepoIme(zadnji.name)}` : lepoIme(run.headsign || "");
   }
 }
 
 async function loadRun() {
   try {
-    // Vse tri hkrati: `/run` je prej čakal, da se končata poročilo in veriga
-    // (~120 ms na arwenu). Poročila prevoznika so samo pri vlakih (0 za
-    // avtobusne linije), veriga vozila (`block_id`) samo pri avtobusih (SŽ je
-    // nimajo) -- prej sta šli obe vedno, vsako odprtje dvakrat (presoja
-    // 18. 10. 2026).
-    const [, , izid] = await Promise.all([
-      OMREZJE === "zeleznica" ? loadReport() : null,
-      OMREZJE === "avtobus" ? loadChain() : null,
+    // Hkrati: veriga vozila (`block_id`) je samo pri avtobusih (SŽ je nimajo)
+    // in samo pred odhodom -- potem je vozilo na tej vožnji in prejšnja ni več
+    // vprašanje (`vehicleChainHtml`); z osvežitvijo na 10 s bi bila to vsakič
+    // ena zahteva zastonj.
+    const [, izid] = await Promise.all([
+      OMREZJE === "avtobus" && !state.current ? loadChain() : null,
       fetchRunAndForecast(TRAIN_NO, URL_DATE, URL_TRIP),
     ]);
     const { run, forecast, current } = izid;
-    // Nadomestni prevoz mora biti viden v naslovu, ne sele v vrstici postaj:
-    // kdor pride sem s povezave, mora takoj vedeti, da caka avtobus.
     state.mode = run.mode;
     state.network = run.network || "zeleznica";
     setVehicleNoun(vehicleNoun());     // besedo o postanku pise common.js
     state.agency = run.agency || null;
-    if (isBus(run.mode)) {
-      document.getElementById("train-mode").innerHTML = lineBadgeHtml(run);
-      // Oznaka linije nosi številko ("LPP 25"); gola številka pred njo je
-      // bila ista stvar dvakrat ("25 LPP 25") v glavi, ki je na telefonu tesna.
-      // Nadomestni prevoz obdrži številko -- njegova oznaka je beseda.
-      if (run.network === "avtobus") {
-        // Medkrajevni: oznaka pove prevoznika, namesto šifre linije, ki je na
-        // avtobusu ni, stoji cilj -- „Arriva → Bohinj Ukanc“.
-        const koda = document.querySelector(".train-head-code");
-        const cilj = jeMedkrajevni(run) ? ciljVoznje(run.headsign) : "";
-        if (cilj) {
-          koda.textContent = `→ ${cilj}`;
-          koda.classList.add("je-cilj");
-        } else {
-          koda.hidden = true;
-        }
-      }
-    }
     applyNetworkWording();
     // Smer iz te vožnje. Prej iz `/api/live` po številki linije: pri mestni
     // liniji je bila prva najdena vožnja pogosto v nasprotni smeri (LPP 14
     // Bokalce → Savlje je imela v glavi „Savlje – Bokalce“, 18. 10. 2026).
-    if (run.headsign) headsignEl.textContent = lepoIme(run.headsign);
+    renderGlava(run);
     state.run = run;
     state.forecast = forecast;
     state.current = current;
-    renderRunHead();
+    // Kdaj je bila zadnja novica, po uri te naprave: starost pod vrhom tako
+    // teče naprej tudi med osvežitvama in ob prerisu ne skoči nazaj.
+    const zdaj = Date.now();
+    state.novicaOb = run.tiho_s != null ? zdaj - run.tiho_s * 1000 : null;
+    state.potnikOb = run.potniki && run.potniki.starost_s != null
+      ? zdaj - run.potniki.starost_s * 1000 : null;
+    state.brezZveze = null;
+    state.odziv = zdaj;
+    renderRunHead(true);
     renderTimeline();
-    renderProfile();
-    loadPosition();     // ziv zemljevid: GPS, sicer lega vsaj dveh potnikov
+    loadPosition();     // lega avtobusa: GPS, sicer potnik na njem
+    // Zemljevid avtobusa nastane ob prvem odgovoru, nato vsak odgovor
+    // prestavi prevoženo, vozilo s prejšnje vožnje in pilulo.
+    if (OMREZJE === "avtobus") pripraviKarto().then((ok) => { if (ok) posodobiKarto(); });
   } catch (err) {
+    // Vožnja je že na zaslonu: neuspela osvežitev (predor, slab signal,
+    // strežnik se ravno posodablja) je ne pobriše -- okno pove, da je brez
+    // zveze in od kdaj so podatki. Z osvežitvijo na 10 s bi sicer vsak
+    // predor pustil prazno stran.
+    if (state.run && !(err && err.status === 404)) {
+      if (!state.brezZveze) console.warn("osvežitev vožnje ni uspela", err);
+      state.brezZveze = state.brezZveze || Date.now();
+      renderRunHead();
+      return;
+    }
     console.error("vožnje ni bilo mogoče naložiti", err);
     runHeadEl.innerHTML = "";
+    // Brez odgovora (ni omrežja) ni isto kot odgovor „ni podatkov“: zanka
+    // čez 10 s poskusi znova in stran se napolni sama.
     runTimelineEl.innerHTML = err && err.status === 404
       ? `<div class="empty-state">${vehicleNoun()} s to številko ne obstaja —
          morda je povezava zastarela ali pa je številka z drugega omrežja</div>`
-      : '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>';
-    refreshFeedDot();   // zahteva ni uspela -- naj pika pove, kaj ve
+      : err && err.status
+        ? '<div class="empty-state">za to vožnjo na ta dan ni podatkov</div>'
+        : '<div class="empty-state">ni zveze s strežnikom — poskušam znova …</div>';
   }
 }
 
-// Glava okna: postanek potnika, trenutna zamuda in veriga vozila. Svoja
-// funkcija, ker jo prerisujeta dva vira (vozjna in vreme) in mora biti obakrat
-// enaka -- dva neodvisna izrisa sta se ze razsla.
 // ---------- pošlji vožnjo ----------
 // Kdor nekoga čaka z vlaka, mu pošlje povezavo. Predogled v Messengerju ali
 // WhatsAppu pove stanje ob pošiljanju (`api._stanje_za_predogled`), besedilo
@@ -1173,14 +1224,11 @@ function besediloZaPoslati() {
     hhmm(stopActualIso(cur))})`;
 }
 
+// Gumb je ikona; potrdilo („kopirano“) je oblaček pod njim, 2,5 s.
 function potrdiPoslano(beseda) {
-  const napis = posljiEl.querySelector("span");
-  napis.textContent = beseda;
+  posljiEl.dataset.potrdilo = beseda;
   posljiEl.classList.add("je-poslano");
-  setTimeout(() => {
-    napis.textContent = "Pošlji";
-    posljiEl.classList.remove("je-poslano");
-  }, 2500);
+  setTimeout(() => posljiEl.classList.remove("je-poslano"), 2500);
 }
 
 posljiEl.addEventListener("click", async () => {
@@ -1247,20 +1295,34 @@ function posodobiZasedenost() {
   if (nova) zasEl.dispatchEvent(new Event("zas-voznja"));
 }
 
-function renderRunHead() {
+// `nova` = izris ob novem odgovoru (ne ob tiktakanju odštevanja): samo takrat
+// se sprememba na vrhu pokaže.
+function renderRunHead(nova) {
   const run = state.run;
   if (!run) return;
   posljiEl.hidden = false;
   posodobiDeli();
   posodobiZasedenost();
-  // Dokler voznja ni zacela, je "kje je vozilo" edini pravi odgovor in gre
-  // nad prazen okvir trenutne zamude; potem je vozilo tu in gre pod.
-  const veriga = vehicleChainHtml();
-  const cur = state.current;
-  runHeadEl.innerHTML = yourStopHtml(run.stops, state.forecast, cur)
-    + (cur ? runHeadHtml(cur) + veriga : veriga + runHeadHtml(cur));
+  const vrh = vrhOkna();
+  const podpis = podpisVrha(vrh);
+  const novo = !!(nova && state.vrh && state.vrh !== podpis);
+  if (nova) state.vrh = podpis;
+  runHeadEl.innerHTML = heroHtml(vrh, novo);
+  kartaOdstEl.innerHTML = kartaOdstHtml(vrh, novo);
+  trakEl.innerHTML = trakHtml();
+  // Na cilju vse pove vrh; „8 h brez novic“ pod njim bi bil alarm brez razloga.
+  const naCilju = state.current === run.stops[run.stops.length - 1];
+  stanjeKjeEl.parentElement.hidden = naCilju;
+  stanjeKjeEl.innerHTML = naCilju ? "" : stanjeKjeHtml();
+  stanjeSvezEl.innerHTML = naCilju ? "" : svezinaHtml();
+  posodobiBudilko();
   document.getElementById("train-opozorila").innerHTML = opozorilaHtml(run.opozorila);
 }
+
+// Odštevanje in lega vlaka na traku tečeta tudi, ko novih podatkov ni.
+setInterval(() => {
+  if (state.run && document.visibilityState !== "hidden") renderRunHead();
+}, 15000);
 
 // Zapora tira ali vlak pred njim, ki je izgubil čas (`zapore.py`). Odprto, ne
 // zloženo kot obvestila SŽ: velja za to vožnjo danes, ne za progo na splošno.
@@ -1278,11 +1340,150 @@ function opozorilaHtml(list) {
     </div>`;
 }
 
-// Casovnica se med pogledoma razlikuje, zato je svoja funkcija: preklop je
-// mora prerisati, ne le odkriti skritih elementov.
-function renderTimeline() {
+// ---------- postanki na črti ----------
+//
+// Osnutek E (ikone in črta iz B): debela črta, prevoženo polno in sivo, naprej
+// črtkano -- ocena, ne meritev --, vozilo med zadnjo prevoženo in naslednjo
+// postajo. Prevožene so zložene (odgovor na drugo vprašanje, „kako je bilo“),
+// razen zadnje, ki pove, od kod je številka. Brez ločilne vrstice „naprej po
+// progi — ocena“: to pove črtkana črta in beseda na vrhu.
+
+// Žeton ničle je beseda, kot na Mojih poteh: „0“ brez enote je uganka.
+const zamudaKratka = (z) => (delayMin(z) === 0 ? "točno" : delayText(z, true));
+
+function cipHtml(z, razred) {
+  return `<span class="ov-p-zam ${razred}" style="--z:${delayColor(z)}">${escapeHtml(zamudaKratka(z))}</span>`;
+}
+
+const casHtml = (cas, sched) => `<span class="ov-p-cas"><b>${cas}</b>${cas !== sched ? `<s>${sched}</s>` : ""}</span>`;
+
+// Dolg postanek pred potnikom: na čem ocena stoji. Model računa, da bo vlak
+// postanek skrajšal; koliko ta vlak tam res stoji, kadar zamuja, pove zgodovina
+// (`typical_dwell_s`). Kratko, ker je v vrstici.
+function postanekVoznegaReda(s) {
+  if (!s.sched_dwell_s || s.sched_dwell_s < DWELL_SHOW_S) return "";
+  const red = Math.round(s.sched_dwell_s / 60);
+  return s.typical_dwell_s == null ? `postanek ${red} min`
+    : `postanek ${red} min · z zamudo običajno ${Math.round(s.typical_dwell_s / 60)}`;
+}
+
+function vrsticaHtml(s, o) {
   const run = state.run;
-  if (!run) return;
+  const schedIso = s.sched_dep || s.sched_arr;
+  const sched = hhmm(schedIso);
+  const opombe = [];
+  if (s.tir) opombe.push(tirHtml(s.tir, s.tir_prej));
+  let cas;
+  let cip = "";
+  if (o.mimo) {
+    // Prikazana ura = vozni red + zaokrožena minuta žetona (`pricakovanaUra`).
+    if (stopActualIso(s) && !jeNeskladen(s)) {
+      const d = stopDelay(s);
+      cas = casHtml(hhmm(d != null && schedIso ? pricakovanaUra(schedIso, d) : stopActualIso(s)), sched);
+      cip = cipHtml(stopZamuda(s) || d, "je-meritev");
+      const split = dwellSplit(s);
+      if (split) opombe.push(escapeHtml(dwellNoteHtml(split)));
+    } else {
+      // „Brez meritve“ in „podatek si nasprotuje“ nista isto: prvo pomeni, da
+      // ni prišlo nič, drugo, da je prišlo nemogoče.
+      cas = casHtml(sched, sched);
+      opombe.push(jeNeskladen(s) ? "ura si nasprotuje" : "brez meritve");
+    }
+  } else {
+    const v = vrednostNaPostanku(s);
+    cas = casHtml(hhmm(v.kdaj), sched);
+    if (v.d != null && !jeNadomestni()) {
+      cip = cipHtml(v.z || v.d, v.znak === "običajno" ? "je-obicajno"
+        : v.znak === "v živo" ? "je-zivo" : "je-ocena");
+    }
+    // Kadar prevoznik napove več od naše ocene, je njegova številka skoraj
+    // točna (MAE 0,21 min proti 2,66) -- povej, da je njegova. Enkrat, kjer se
+    // začne (`seznamHtml`): pri mestnem LPP je to sicer vsaka vrstica.
+    if (o.napovedPrevoznika) opombe.push("napoved prevoznika");
+    const dwell = postanekVoznegaReda(s);
+    if (dwell) opombe.push(dwell);
+    const dod = v.d != null && run.dodatek ? run.dodatek[s.stop_seq] : null;
+    if (dod) opombe.push(`<span class="ov-p-do">lahko do ${escapeHtml(delayLabel(v.d + dod))}</span>`);
+    // Razmere naprej samo, kadar so zahtevne ali hude: mirno vreme v vsaki
+    // vrstici je šum ob številki, zaradi katere je človek tu.
+    const w = state.weather.get(s.stop_seq);
+    if (w && (w.severity_label === "zahtevne" || w.severity_label === "hude")) opombe.push(stopWeatherHtml(w, true));
+  }
+  const potnik = potnikPostanekText(s.potniki);
+  if (potnik) opombe.push(escapeHtml(potnik));
+  return `<div class="ov-p${o.mimo ? " je-mimo" : ""}${o.tvoj ? " je-tvoj" : ""}">
+      <span class="ov-p-crta" data-gor="${o.gor}" data-dol="${o.dol}"><i class="ov-p-pika"></i></span>
+      <span class="ov-p-ime"><span class="ov-p-naziv">${escapeHtml(lepoIme(s.name))}</span>${
+        opombe.length ? `<span class="ov-p-op">${opombe.join(" · ")}</span>` : ""}${
+        s.nadomestni_postanek ? nadomestniPostanekHtml(s.nadomestni_postanek) : ""}</span>
+      ${cas}
+      ${cip || '<span class="ov-p-zam je-prazno"></span>'}
+    </div>`;
+}
+
+// Vozilo na črti: med zadnjo prevoženo in naslednjo. Kje točno, pove potnik
+// na vozilu ali SŽ („proti postaji“); sicer samo, kam pelje.
+function voziloVrsticaHtml(nasl) {
+  const run = state.run;
+  const pp = run.potniki;
+  const bus = isBus(state.mode) && state.network === "avtobus";
+  // Lega od potnika v barvi deljenja (indigo), kot povsod, kjer jo kažemo.
+  const izPotnika = !!(pp && pp.verodostojno && pp.lat != null && potnikiKjeText(pp));
+  const kje = izPotnika ? potnikiKjeText(pp)
+    : run.trenutna && run.trenutna.proti ? `proti postaji ${run.trenutna.proti}`
+    : `proti ${bus ? "postajališču" : "postaji"} ${lepoIme(nasl.name)}`;
+  return `<div class="ov-p ov-vozilo${izPotnika ? " je-potnik" : ""}">
+      <span class="ov-p-crta" data-gor="za" data-dol="naprej"><i class="ov-vozilo-ikona">${svgVozila()}</i></span>
+      <span class="ov-vozilo-kje">${escapeHtml(kje)}${izPotnika ? " · po poročilu potnika" : ""}</span>
+    </div>`;
+}
+
+// „10 prevoženih“: postaja je ženskega spola, postajališče srednjega.
+function prevozenihBesedilo(n) {
+  const obl = state.network === "avtobus"
+    ? ["prevoženo", "prevoženi", "prevožena", "prevoženih"]
+    : ["prevožena", "prevoženi", "prevožene", "prevoženih"];
+  const m = n % 100;
+  return `${n} ${m === 1 ? obl[0] : m === 2 ? obl[1] : m === 3 || m === 4 ? obl[2] : obl[3]}`;
+}
+
+const SVG_NAVZDOL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+function seznamHtml() {
+  const stops = state.run.stops;
+  const cur = state.current;
+  const tvoj = yourStop(stops);
+  const curSeq = cur ? cur.stop_seq : null;
+  const prevozene = curSeq == null ? [] : stops.filter((s) => s.stop_seq < curSeq);
+  const vidne = [...(state.prevozene ? prevozene : []),
+                 ...stops.filter((s) => curSeq == null || s.stop_seq >= curSeq)];
+  const jeZa = (s) => curSeq != null && s.stop_seq <= curSeq;
+  const vrstice = [];
+  let odPrevoznika = false;
+  vidne.forEach((s, i) => {
+    const nasl = vidne[i + 1];
+    const gor = i > 0 || s !== stops[0] ? (jeZa(s) ? "za" : "naprej") : "nic";
+    const dol = !nasl ? "nic" : jeZa(nasl) || s.stop_seq === curSeq ? "za" : "naprej";
+    const f = jeZa(s) ? null : vrednostNaPostanku(s).f;
+    const op = !!(f && f.from_operator);
+    vrstice.push(vrsticaHtml(s, { gor, dol, mimo: jeZa(s), tvoj: s === tvoj, napovedPrevoznika: op && !odPrevoznika }));
+    odPrevoznika = op;
+    if (s.stop_seq === curSeq && nasl) vrstice.push(voziloVrsticaHtml(nasl));
+  });
+  const naslov = state.network === "avtobus" ? "Postajališča" : "Postanki";
+  const gumb = prevozene.length
+    ? `<button type="button" class="ov-prevozene" data-prevozene aria-expanded="${state.prevozene}">${
+      state.prevozene ? "skrij prevožene" : prevozenihBesedilo(prevozene.length)}${SVG_NAVZDOL}</button>` : "";
+  return `<div class="ov-p-glava"><h2 class="ov-p-naslov">${naslov}</h2>${gumb}</div>
+    <div class="ov-seznam">${vrstice.join("")}</div>`;
+}
+
+runTimelineEl.addEventListener("click", (ev) => {
+  if (!ev.target.closest("[data-prevozene]")) return;
+  state.prevozene = !state.prevozene;
+  renderTimeline();
+});
+
 // Navedba vira mora povedati, CIGAV podatek je na zaslonu -- doslej je pisalo
 // "IJPP prek NAP" tudi pod mestnim LPP, ki v IJPP-ju sploh ni. Vozni red
 // mestnih linij je LPP-jev lastni GTFS, zivi prihodi pa pridejo z
@@ -1300,117 +1501,15 @@ function viriHtml(run) {
   return `LPP (avl.lpp.si), obdelava DERP${zivo}`;
 }
 
-  const yours = yourStop(run.stops);
-  runTimelineEl.innerHTML =
-    runTimelineHtml(run.stops, state.forecast, state.weather, {
-      run,
-      aheadOnly: !document.body.classList.contains("is-advanced"),
-      highlight: yours ? yours.stop_seq : null,
-    }) +
-    vozovnicaHtml(run) +
-    // Vira sta navedena tu in ne v opombi nad casovnico: navedba je pogoj
-    // rabe (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
-    `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} postaj
+function renderTimeline() {
+  const run = state.run;
+  if (!run) return;
+  // Vira sta navedena tu in ne v opombi nad postanki: navedba je pogoj rabe
+  // (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
+  runTimelineEl.innerHTML = seznamHtml() + vozovnicaHtml(run)
+    + `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} ${sklon(run.stops.length, "postanek")}
       · ${viriHtml(run)} · vreme Open-Meteo (CC BY 4.0)</div>`;
 }
-
-// ---------- zgodovina: stevilke ----------
-
-function tileHtml(label, value, sub, color) {
-  return `
-    <div class="tile">
-      <div class="tile-label">${escapeHtml(label)}</div>
-      <div class="tile-value"${color ? ` style="color:${color}"` : ""}>${value}</div>
-      <div class="tile-sub">${escapeHtml(sub || "")}</div>
-    </div>
-  `;
-}
-
-function renderTiles(h) {
-  const n = h.runs_observed || 0;
-  const s = h.summary || {};
-  if (!n) {
-    document.getElementById("hist-tiles").innerHTML =
-      '<div class="empty-state">za to pot še ni nobene zajete vožnje</div>';
-    return;
-  }
-  // Pri eni sami voznji mediana ni mediana -- povej, kaj stevilka v resnici je.
-  const medLabel = n === 1 ? "Končna zamuda" : "Mediana končne zamude";
-  const tiles = [
-    tileHtml(medLabel, delayText(s.median_final_s, true), pluralRuns(n), delayColor(s.median_final_s)),
-    tileHtml("Najslabša vožnja", delayText(s.worst_final_s, true), "končna zamuda", delayColor(s.worst_final_s)),
-    tileHtml("Delež v 5 min", `${Math.round((s.on_time_share || 0) * 100)} %`,
-             "končna zamuda do 5 min"),
-  ];
-  // Prag 5: pod tem p90 ni percentil, ampak druga najvisja vrednost.
-  //
-  // Pri majhnem vzorcu p90 in "najslabsa" po zaokrozevanju na minute pogosto
-  // pokazeta ISTO stevilko -- izmerjeno 4. 9. 2026 na zeleznici: 40 % pri
-  // 3-4 voznjah, 23 % pri 5-9, 17 % pri 10-14, 0 % nad 15. To ni napaka, ki
-  // bi jo bilo treba skriti: `_pct` interpolira in vrednosti se res zblizata,
-  // oznaki pa povesta, kaj je kaj. Cela sekcija je poleg tega `adv-only`.
-  if (n >= 5) {
-    tiles.splice(2, 0, tileHtml("p90", delayText(s.p90_final_s, true), "9 od 10 voženj do tega",
-                                delayColor(s.p90_final_s)));
-  }
-  document.getElementById("hist-tiles").innerHTML = tiles.join("");
-}
-
-// ---------- skupno: tarca za misko cez vso visino ----------
-
-// Pika s polmerom 4,5 px je pretezka tarca -- na 29 postajah je zadetek
-// loterija. Vsaka postaja dobi nevidno obmocje cez vso visino grafa.
-function addHoverBands(svg, xs, top, height, seqs, onHover) {
-  if (xs.length < 2) return;
-  const step = (xs[xs.length - 1] - xs[0]) / (xs.length - 1);
-  xs.forEach((cx, i) => {
-    const band = svgEl("rect", {
-      x: cx - step / 2, y: top, width: step, height,
-      fill: seqs[i] === hoverSeq ? "rgba(255,255,255,0.035)" : "transparent",
-    });
-    band.addEventListener("mousemove", (ev) => {
-      if (hoverSeq !== seqs[i]) {
-        hoverSeq = seqs[i];
-        redrawers.forEach((f) => f());
-      }
-      onHover(i, ev);
-    });
-    band.addEventListener("mouseleave", () => {
-      hideTip();
-    });
-    svg.appendChild(band);
-  });
-}
-
-function crosshair(svg, x, top, bottom) {
-  svg.appendChild(svgEl("line", {
-    x1: x, x2: x, y1: top, y2: bottom,
-    stroke: "#3d434f", "stroke-width": 1, "stroke-dasharray": "3 3",
-  }));
-}
-
-function weatherTipRows(w) {
-  if (!w || w.temp_c == null) return "";
-  const head = w.severity == null ? "" :
-    `<div class="tt-row"><span>razmere</span><b style="color:${severityColor(w.severity_label)}">${w.severity}/10 ${escapeHtml(w.severity_label)}</b></div>`;
-  // Indeks brez razclenitve je crna skatla -- iz cesa je sestavljen, mora biti vidno.
-  const parts = (w.severity_parts || []).map((x) =>
-    `<div class="tt-row is-part"><span>${escapeHtml(x.what)}</span><b>+${x.points}</b></div>`).join("");
-  const raw = (w.snowfall_cm || 0) > 0
-    ? `<div class="tt-row"><span>sneg</span><b>${num(w.snowfall_cm)} cm</b></div>`
-    : `<div class="tt-row"><span>padavine</span><b>${num(w.precip_mm)} mm/h</b></div>`;
-  return head + parts + `<div class="tt-split"></div>` + raw +
-    `<div class="tt-row"><span>temperatura</span><b>${num(w.temp_c)} °C</b></div>` +
-    `<div class="tt-row"><span>sunki vetra</span><b>${num(w.wind_gust_kmh, 0)} km/h</b></div>`;
-}
-
-// ---------- graf 1: zamuda po VSEH postajah poti ----------
-
-const KIND = {
-  measured: { label: "izmerjeno" },
-  estimate: { label: "ocena (prenos zamude)" },
-  none: { label: "brez podatka" },
-};
 
 // Nakup vozovnice je pri SŽ na `eshop.sz.si`. Relacije v naslov ni mogoce
 // podati: obrazec trgovine je POST z internimi ID-ji postaj, GET parametri se
@@ -1427,458 +1526,16 @@ function vozovnicaHtml(run) {
   return ticketLinkHtml();
 }
 
-function profilePoints() {
-  // Vse postaje poti, ne samo tiste z meritvijo -- graf mora pokazati celo pot.
-  const stops = state.run.stops;
-  const cur = lastMeasured(state.run);
-  const fc = new Map((state.forecast || []).map((f) => [f.stop_seq, f]));
-  const past = state.past || new Map();
-
-  return stops.map((s) => {
-    const p = {
-      seq: s.stop_seq, name: s.name,
-      past: past.get(s.stop_seq) || null,
-      wx: state.weather.get(s.stop_seq) || null,
-    };
-    if (cur && s.stop_seq <= cur.stop_seq) {
-      if (stopActualIso(s)) {
-        p.kind = "measured";
-        p.value = stopDelay(s);
-        // Kadar vlak ne odide takrat, ko pride (voznoredno krizanje), sta to
-        // dve razlicni stevilki. Brez prihodne je padec videti, kot da se je
-        // zgodil na odseku -- zgodil pa se je NA postaji.
-        const split = dwellSplit(s);
-        p.arrival = split ? split.arr : null;
-        p.dwell = split;
-      } else { p.kind = "none"; p.value = null; }
-    } else {
-      // Naprej po progi vedno nasa ocena, tudi ce feed ze ima vrednost:
-      // izmerjeno je prevoznikova napoved za postanke naprej precej slabsa
-      // od prenosa trenutne zamude (backtest.py). Njegovo stevilko obdrzimo
-      // v oknu ob dotiku, da ni skrita.
-      const f = fc.get(s.stop_seq);
-      p.kind = f ? "estimate" : "none";
-      p.value = f ? f.predicted_delay_s : null;
-      p.samples = f ? f.n_samples : 0;
-      p.feedSaid = stopDelay(s);
-      // Rezerva, ki jo model porabi prav na tej postaji: ocena za prihod je
-      // za toliko visja od ocene za odhod. Brez tega je padec videti, kot da
-      // se je zgodil na odseku -- enako kot pri meritvah.
-      p.arrival = f && f.slack_here_s ? f.predicted_delay_s + f.slack_here_s : null;
-      p.slackHere = f ? f.slack_here_s || 0 : 0;
-    }
-    return p;
-  });
-}
-
-function stopTipHtml(p) {
-  const rows = [];
-  if (p.value != null) {
-    rows.push(`<div class="tt-row"><span>${KIND[p.kind].label}</span><b>${delayText(p.value)}</b></div>`);
-    if (p.kind === "estimate") {
-      rows.push(`<div class="tt-note">${p.samples > 0
-        ? `mediana ${escapeHtml(pluralRuns(p.samples))}`
-        : "le prenos trenutne zamude, brez zgodovine"}</div>`);
-      if (p.feedSaid != null) {
-        rows.push(`<div class="tt-row is-part"><span>prevoznik napoveduje</span><b>${delayText(p.feedSaid)}</b></div>`);
-      }
-    }
-  } else {
-    rows.push('<div class="tt-row"><span>zamuda</span><b>—</b></div>');
-  }
-  if (p.past) {
-    rows.push(`<div class="tt-row"><span>povprečje preteklih</span><b>${delayText(p.past.mean_s)}</b></div>`);
-    rows.push(`<div class="tt-note">${escapeHtml(pluralRuns(p.past.n))}</div>`);
-  }
-  const wxRows = weatherTipRows(p.wx);
-  return `<div class="tt-title">${escapeHtml(p.name)}</div>${rows.join("")}` +
-    (wxRows ? `<div class="tt-split"></div>${wxRows}` : "");
-}
-
-// Vreme ni svoj pogled: v isti sliki lezi pod zamudo, ker vprasanje ni "kaksno
-// je vreme", ampak "je zamuda tam, kjer je bilo vreme hudo".
-//
-// Lestvici sta dve in namenoma nista pomesani. Validator palete pove, zakaj:
-// rumena razmer (#d9b33c) proti svetli oranzni zamud (#f2a87e) je pri deutanu
-// ΔE 5,5 -- premalo, ce bi bili v istem registru. Zato zamuda ostane crta s
-// pikami zgoraj, razmere pa so stolpci v locenem pasu pod grafom, in vsak
-// stolpec od stopnje 4 naprej nosi svojo stevilko: barva sama nikoli ne odloca.
-const SEV_STRIP_H = 38;
-const SEV_GAP = 18;
-
-// Koliko pik mora biti med prihodom in odhodom, da poleg navpicnice narisemo
-// se PRAZEN KROGEC prihoda. Krogec meri v premeru 10 pik, polna pika odhoda 11
-// -- pri manjsem razmiku se prekrijeta, navpicnica med njima izgine pod njima
-// in videti je kot dva nepovezana krogca. Navpicnica se v takem primeru risze
-// vseeno: enominutni padec je resnicen podatek in kot stopnica ob piki je
-// viden, kot par krogcev pa ne.
-const MIN_SPLIT_PX = 15;
-
-//: Koliko prostora rabi ena postaja, da je krivulja se krivulja in ne crta.
-const MIN_STOP_PX = 30;
-
-function drawProfile(w, pts) {
-  const hasWx = pts.some((p) => p.wx && p.wx.severity != null);
-  // Desni rob mora nositi zadnjo tocko, njeno oznako, njen stolpec razmer in
-  // napis nad pasom. Pri 16 px je bilo vse to na robu okvirja in odrezano.
-  const M = { t: 26, r: 46, b: 34, l: 46 };
-  const ih = 200;
-  const stripTop = M.t + ih + SEV_GAP;
-  const stripBot = stripTop + SEV_STRIP_H;
-  const bottom = hasWx ? stripBot : M.t + ih;
-  const H = bottom + M.b;
-  const iw = Math.max(40, w - M.l - M.r);
-  const svg = svgEl("svg", { width: w, height: H, role: "img" });
-
-  const vals = [];
-  for (const p of pts) {
-    if (p.value != null) vals.push(p.value);
-    if (p.past && p.past.mean_s != null) vals.push(p.past.mean_s);
-  }
-  const maxV = Math.max(60, ...vals);
-  const minV = Math.min(0, ...vals);
-  const yTop = Math.ceil(maxV / 60 / 5) * 5 * 60 || 300;
-  const yBot = Math.floor(minV / 60 / 5) * 5 * 60;
-  const span = yTop - yBot || 300;
-  const x = (i) => M.l + (pts.length === 1 ? iw / 2 : (i * iw) / (pts.length - 1));
-  const y = (v) => M.t + ih - ((v - yBot) / span) * ih;
-
-  const ticks = 5;
-  for (let i = 0; i <= ticks; i += 1) {
-    const v = yBot + (span / ticks) * i;
-    svg.appendChild(svgEl("line", {
-      x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v),
-      stroke: Math.abs(v) < 1 ? INK_AXIS : INK_GRID, "stroke-width": 1,
-    }));
-    svg.appendChild(svgEl("text", {
-      x: M.l - 8, y: y(v) + 4, "text-anchor": "end",
-      fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Mono', monospace",
-    }, `${Math.round(v / 60)}`));
-  }
-  svg.appendChild(svgEl("text", {
-    x: M.l - 8, y: M.t - 11, "text-anchor": "end",
-    fill: INK_AXIS, "font-size": 9, "font-family": "'IBM Plex Sans', sans-serif",
-  }, "min"));
-
-  const hoverIdx = pts.findIndex((p) => p.seq === hoverSeq);
-  if (hoverIdx >= 0) crosshair(svg, x(hoverIdx), M.t, bottom);
-
-  // povprecje preteklih voznj -- referenca v ozadju, brez markerjev
-  const pastPts = pts.map((p, i) => (p.past && p.past.mean_s != null ? [i, p.past.mean_s] : null));
-  let segment = [];
-  for (const item of [...pastPts, null]) {
-    if (item) { segment.push(`${x(item[0])},${y(item[1])}`); continue; }
-    if (segment.length > 1) {
-      svg.appendChild(svgEl("polyline", {
-        points: segment.join(" "), fill: "none", stroke: PAST_COLOR, "stroke-width": 1.5,
-        "stroke-dasharray": "5 4", "stroke-linejoin": "round",
-      }));
-    }
-    segment = [];
-  }
-
-  // tekoca voznja -- polna crta skozi meritve, crtkana skozi ocene
-  for (let i = 0; i < pts.length - 1; i += 1) {
-    const a = pts[i];
-    const b = pts[i + 1];
-    if (a.value == null || b.value == null) continue;
-    const guessed = a.kind !== "measured" || b.kind !== "measured";
-    // Odsek se konca pri PRIHODNI zamudi naslednje postaje, ne pri odhodni:
-    // kar se zgodi med postajama, je voznja, kar se zgodi na postaji, je
-    // postanek. Padec potem narise navpicnica spodaj, tam, kjer se je res
-    // zgodil.
-    // Odsek se konca pri PRIHODNI vrednosti -- kar se zgodi med postajama, je
-    // voznja. Padec potem nariše navpicnica na postaji, tudi ce je majhen.
-    const konec = b.arrival != null ? b.arrival : b.value;
-    svg.appendChild(svgEl("line", {
-      x1: x(i), y1: y(a.value), x2: x(i + 1), y2: y(konec),
-      stroke: guessed ? ESTIMATE_COLOR : INK_LINE, "stroke-width": 2,
-      "stroke-dasharray": guessed ? "4 4" : null, "stroke-linecap": "round",
-    }));
-  }
-
-  // Sprememba zamude NA postaji: navpicnica od prihoda do odhoda in prazen
-  // krogec pri prihodu. Redko (3 % postankov), a prav to je vprasanje, ki ga
-  // graf sicer pusti odprto -- "kako je zamuda padla za osem minut naenkrat".
-  pts.forEach((p, i) => {
-    if (p.arrival == null || p.value == null) return;
-    const ocena = p.kind === "estimate";
-    const barva = ocena ? ESTIMATE_COLOR : delayColor(p.arrival);
-    svg.appendChild(svgEl("line", {
-      x1: x(i), y1: y(p.arrival), x2: x(i), y2: y(p.value),
-      stroke: barva, "stroke-width": 2, "stroke-linecap": "round",
-      "stroke-dasharray": ocena ? "4 4" : null,
-    }));
-    // Krogec prihoda samo, kadar je zanj prostor; sicer je navpicnica stopnica
-    // ob piki odhoda in se bere sama.
-    if (Math.abs(y(p.arrival) - y(p.value)) >= MIN_SPLIT_PX) {
-      svg.appendChild(svgEl("circle", {
-        cx: x(i), cy: y(p.arrival), r: 4,
-        fill: SURFACE, stroke: barva, "stroke-width": 2,
-      }));
-    }
-  });
-
-  pts.forEach((p, i) => {
-    if (p.value == null) return;
-    const filled = p.kind !== "estimate";
-    const on = p.seq === hoverSeq;
-    svg.appendChild(svgEl("circle", {
-      cx: x(i), cy: y(p.value), r: on ? 7 : 4.5,
-      fill: filled ? (p.kind === "measured" ? delayColor(p.value) : ESTIMATE_COLOR) : SURFACE,
-      stroke: on ? "#e7eaf0" : (filled ? SURFACE : ESTIMATE_COLOR), "stroke-width": 2,
-    }));
-  });
-
-  // neposredne oznake samo tam, kjer nekaj povedo: vrh in cilj
-  const withVal = pts.map((p, i) => [p, i]).filter(([p]) => p.value != null);
-  if (withVal.length) {
-    const maxIdx = withVal.reduce((best, cur) => (cur[0].value > best[0].value ? cur : best))[1];
-    const lastIdx = withVal[withVal.length - 1][1];
-    new Set([maxIdx, lastIdx]).forEach((i) => {
-      svg.appendChild(svgEl("text", {
-        x: x(i), y: y(pts[i].value) - 10,
-        "text-anchor": i === pts.length - 1 ? "end" : "middle",
-        fill: "#e7eaf0", "font-size": 11, "font-weight": 600,
-        "font-family": "'IBM Plex Mono', monospace",
-      }, delayLabel(pts[i].value)));
-    });
-  }
-
-  if (hasWx) drawSeverityStrip(svg, pts, x, iw, M.l, stripTop, stripBot);
-
-  drawStopAxis(svg, pts, x, iw, H);
-
-  addHoverBands(svg, pts.map((_, i) => x(i)), M.t - 6, bottom - M.t + 12,
-                pts.map((p) => p.seq),
-                (i, ev) => showTip(stopTipHtml(pts[i]), ev));
-  return svg;
-}
-
-// Na osi so doslej stali samo zacetek in konec. Pri 25 postajah to pomeni,
-// da bralec vidi skok zamude, ne more pa povedati, KJE se je zgodil -- prav
-// to pa je vprasanje. Vmesne oznake postavimo tako gosto, kot dopusca sirina.
-const AXIS_LABEL_PX = 74;
-
-function drawStopAxis(svg, pts, x, iw, H) {
-  const y = H - 12;
-  const put = (i, anchor) => {
-    const name = pts[i].name.length > 14 ? `${pts[i].name.slice(0, 13)}…` : pts[i].name;
-    svg.appendChild(svgEl("text", {
-      x: x(i), y, "text-anchor": anchor,
-      fill: pts[i].seq === hoverSeq ? "#e7eaf0" : INK_AXIS,
-      "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
-    }, name));
-  };
-  put(0, "start");
-  if (pts.length > 1) put(pts.length - 1, "end");
-
-  const fits = Math.floor(iw / AXIS_LABEL_PX);
-  if (fits < 3 || pts.length < 4) return;
-  const step = Math.ceil((pts.length - 1) / fits);
-  for (let i = step; i < pts.length - 1; i += step) {
-    // Ob krajiscih ne podvajaj -- oznaki bi se prekrivali.
-    if (x(i) - x(0) < AXIS_LABEL_PX || x(pts.length - 1) - x(i) < AXIS_LABEL_PX) continue;
-    put(i, "middle");
-  }
-}
-
-
-function drawSeverityStrip(svg, pts, x, iw, left, top, bot) {
-  svg.appendChild(svgEl("line", {
-    x1: left, x2: left + iw, y1: bot, y2: bot, stroke: INK_AXIS, "stroke-width": 1,
-  }));
-  svg.appendChild(svgEl("text", {
-    x: left + iw, y: top - 5, "text-anchor": "end", fill: INK_AXIS, "font-size": 9,
-    "font-family": "'IBM Plex Sans', sans-serif",
-  }, `razmere ob ${vehicleNoun() === "vlak" ? "vlaku" : "vozilu"}, 0–10`));
-
-  const step = pts.length > 1 ? iw / (pts.length - 1) : iw;
-  const bw = Math.max(2, Math.min(18, step * 0.62));
-  const worst = pts.reduce((a, b) =>
-    ((b.wx && b.wx.severity != null && (!a || b.wx.severity > a.wx.severity)) ? b : a), null);
-
-  pts.forEach((p, i) => {
-    if (!p.wx || p.wx.severity == null) return;
-    const h = Math.max(1.5, (p.wx.severity / 10) * (bot - top));
-    const on = p.seq === hoverSeq;
-    // Prvi in zadnji stolpec bi pol sirine molela cez os; drzimo ju znotraj.
-    const bx = Math.min(Math.max(x(i) - bw / 2, left), left + iw - bw);
-    svg.appendChild(svgEl("rect", {
-      x: bx, y: bot - h, width: bw, height: h, rx: 2,
-      fill: severityColor(p.wx.severity_label),
-      stroke: on ? "#e7eaf0" : "none", "stroke-width": on ? 1.5 : 0,
-    }));
-    // Stevilka na vseh, ki nekaj pomenijo -- ce se ne prilegajo vse, vsaj najhujsa.
-    const fits = step >= 17;
-    if (p.wx.severity >= 4 && (fits || p === worst)) {
-      svg.appendChild(svgEl("text", {
-        x: x(i), y: bot - h - 4, "text-anchor": "middle",
-        fill: "#9aa3b0", "font-size": 9, "font-family": "'IBM Plex Mono', monospace",
-      }, String(p.wx.severity)));
-    }
-  });
-}
-
-function profileLegendHtml(pts) {
-  const kinds = new Set(pts.filter((p) => p.value != null).map((p) => p.kind));
-  const items = [];
-  if (kinds.has("measured")) {
-    items.push(`<span class="lg"><span class="lg-ramp"></span>izmerjeno (odtenek = velikost zamude)</span>`);
-  }
-  if (kinds.has("eta")) {
-    items.push(`<span class="lg"><span class="lg-dot" style="background:${ESTIMATE_COLOR}"></span>napoved prevoznika</span>`);
-  }
-  if (kinds.has("estimate")) {
-    items.push(`<span class="lg"><span class="lg-dot is-hollow" style="border-color:${ESTIMATE_COLOR}"></span>ocena (mediana te poti)</span>`);
-  }
-  if (pts.some((p) => p.arrival != null)) {
-    items.push('<span class="lg"><span class="lg-dot is-hollow" style="border-color:#9aa3b0"></span>'
-      + 'prihod (kjer se zamuda spremeni na postaji)</span>');
-  }
-  if (pts.some((p) => p.past)) {
-    items.push(`<span class="lg"><span class="lg-dash" style="border-color:${PAST_COLOR}"></span>povprečje preteklih voženj</span>`);
-  }
-  if (pts.some((p) => p.wx && p.wx.severity != null)) {
-    items.push('<span class="lg-break"></span><span class="lg is-cap">stolpci spodaj</span>');
-    for (const lab of SEVERITY_ORDER) {
-      items.push(`<span class="lg"><span class="lg-swatch" style="background:${SEVERITY_STYLE[lab]}"></span>${lab}</span>`);
-    }
-  }
-  return items.join("");
-}
-
-// Ena poved. Kar je bilo tu prej -- iz cesa je stopnja sestavljena, kako
-// velika je celica modela -- se vidi ob dotiku stolpca; napisano dvakrat je
-// bilo dvakrat prebrano nikoli.
-const WEATHER_NOTE =
-  "Razmere 0–10 opisujejo vreme, <strong>niso napoved zamude</strong>.";
-
-function renderProfile() {
-  const sub = document.getElementById("profile-sub");
-  const el = document.getElementById("profile-chart");
-  const legend = document.getElementById("profile-legend");
-  const note = document.getElementById("weather-note");
-  if (!state.run) return;
-
-  const pts = profilePoints();
-  // Dovolj je, da ima tocke ena od obeh krivulj: pred odhodom je tekoca prazna,
-  // pretekla pa ze pove, kje ta vlak obicajno izgubi cas.
-  const nNow = pts.filter((p) => p.value != null).length;
-  const nPast = pts.filter((p) => p.past && p.past.mean_s != null).length;
-  if (Math.max(nNow, nPast) < 2) {
-    sub.textContent = "";
-    legend.innerHTML = "";
-    note.hidden = true;
-    el.innerHTML = '<div class="empty-state">premalo točk za profil</div>';
-    return;
-  }
-
-  const withWx = pts.filter((p) => p.wx && p.wx.severity != null);
-  const worst = withWx.length ? withWx.reduce((a, b) => (b.wx.severity > a.wx.severity ? b : a)) : null;
-  sub.textContent = (state.pastRuns
-    ? `celotna pot, ${pts.length} postaj · povprečje iz ${pluralRuns(state.pastRuns)} pred današnjo`
-    : `celotna pot, ${pts.length} postaj · preteklih voženj za primerjavo še ni`)
-    + (worst ? ` · najhujše razmere ${worst.wx.severity}/10 na postaji ${worst.name}` : "")
-    + " · miška kjerkoli nad stolpcem postaje";
-  legend.innerHTML = profileLegendHtml(pts);
-  note.innerHTML = WEATHER_NOTE;
-  note.hidden = !withWx.length;
-  // Na telefonu je 29 postaj na 390 px deset pik na postajo -- krivulja je
-  // stisnjena v crto in na osi sta samo zacetek in konec. Graf zato dobi
-  // najmanjso sirino na postajo in se, kadar je ozko, VODORAVNO PREMIKA
-  // (`.fig-body` ima `overflow-x: auto`). Bolje je drseti kot ne videti.
-  mountChart(el, (w) => drawProfile(Math.max(w, MIN_STOP_PX * pts.length + 92), pts));
-  el.classList.toggle("is-wide", el.clientWidth < MIN_STOP_PX * pts.length + 92);
-}
-
-// ---------- graf 2: koncna zamuda po dnevih ----------
-
-//: Koliko dni je v sirini okvirja. Starejsi so levo in do njih se podrsa.
-const VIDNIH_DNI = 15;
-
-// Doslej je graf stisnil v sirino vse dneve, kar jih je slo noter (7 px na
-// stolpec): na telefonu 40 stolpcev, med katerimi se dneva ni dalo razlociti
-// ne s prstom ne z ocmi, in datum le pod vsakim petim. Zdaj je v okvirju
-// petnajst dni, ostali so levo -- isti dogovor kot pri profilu postaj: bolje
-// drseti kot ne videti. Os stoji posebej, da ob drsenju ne odide z grafom.
-function drawRuns(w, runs) {
-  const H = 190;
-  const M = { t: 14, r: 12, b: 30, l: 40 };
-  const vidno = Math.max(40, w - M.l - M.r);
-  const ih = H - M.t - M.b;
-  const step = vidno / Math.min(VIDNIH_DNI, runs.length);
-  const iw = step * runs.length;
-
-  const ticks = niceTicks(Math.max(60, ...runs.map((r) => r.final_delay_s)), 5);
-  const yMax = ticks.top;
-  const y = (v) => M.t + ih - (v / yMax) * ih;
-  const bw = Math.min(32, step - 2); // 2px reze med stolpci
-
-  const os = svgEl("svg", { width: M.l, height: H, "aria-hidden": "true" });
-  const svg = svgEl("svg", { width: iw + M.r, height: H, role: "img" });
-  for (const v of ticks.values) {
-    svg.appendChild(svgEl("line", {
-      x1: 0, x2: iw, y1: y(v), y2: y(v),
-      stroke: v === 0 ? INK_AXIS : INK_GRID, "stroke-width": 1,
-    }));
-    os.appendChild(svgEl("text", {
-      x: M.l - 8, y: y(v) + 4, "text-anchor": "end",
-      fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Mono', monospace",
-    }, `${Math.round(v / 60)}`));
-  }
-
-  runs.forEach((r, i) => {
-    const cx = step * i + step / 2;
-    const h = Math.max(2, M.t + ih - y(r.final_delay_s));
-    const rect = svgEl("rect", {
-      x: cx - bw / 2, y: y(r.final_delay_s), width: bw, height: h,
-      rx: 4, fill: delayColor(r.final_delay_s),
-    });
-    rect.addEventListener("mousemove", (ev) => showTip(
-      `<div class="tt-title">${escapeHtml(r.service_date)}</div>` +
-      `<div class="tt-row"><span>končna</span><b>${delayText(r.final_delay_s)}</b></div>` +
-      `<div class="tt-row"><span>največja med potjo</span><b>${delayText(r.max_delay_s)}</b></div>` +
-      `<div class="tt-note">${r.stops_observed} postaj z meritvijo</div>`, ev));
-    rect.addEventListener("mouseleave", hideTip);
-    svg.appendChild(rect);
-
-  });
-
-  // Datumi pod stolpci: toliko, kolikor jih gre brez prekrivanja. Vsak
-  // datum rabi ~34 px; kadar jih je vec, pisemo vsakega k-tega, steto OD
-  // DESNE -- zadnji je "danes" in je edini, ki ga clovek zagotovo isce.
-  const naK = Math.max(1, Math.ceil(34 / step));
-  runs.forEach((r, i) => {
-    if ((runs.length - 1 - i) % naK !== 0) return;
-    svg.appendChild(svgEl("text", {
-      x: step * i + step / 2, y: H - 10, "text-anchor": "middle",
-      fill: INK_AXIS, "font-size": 10, "font-family": "'IBM Plex Sans', sans-serif",
-    }, dayLabel(r.service_date)));
-  });
-
-  const drsnik = document.createElement("div");
-  drsnik.className = "runs-drsnik";
-  drsnik.appendChild(svg);
-  const ovoj = document.createElement("div");
-  ovoj.className = "runs-ovoj";
-  ovoj.append(os, drsnik);
-  // Odpre se pri zadnjih dneh: vprasanje je "kako je bilo zadnje case".
-  requestAnimationFrame(() => { drsnik.scrollLeft = drsnik.scrollWidth; });
-  return ovoj;
-}
-
 // ---------- zemljevid ene voznje ----------
 // "Kje je zdaj" je pri avtobusu prvo vprasanje in nanj zna odgovoriti samo
-// GPS. Vlaki lege nimajo, zato zanje tega okvira ni -- prazen bi obljubljal
-// podatek, ki ne obstaja.
+// GPS, zato ima avtobus zemljevid na vrhu okna, z lego ali brez nje (osnutek
+// E). Vlak ga nima: tir ne gre drugam, kje je vlak, pove trak.
 //
 // Zemljevid je MapLibre sam, kot veliki zemljevid in obe strani poti
-// (`pot_karta.js`): od blizu se kamera nagne in stavbe se dvignejo. Leaflet
-// kamere ne zna nagniti, zato je okno voznje doslej ostalo ravno.
+// (`pot_karta.js`): od blizu se kamera nagne in stavbe se dvignejo.
 //
-// Knjiznica in njen slog se naložita SELE, ko je lega res na voljo: sicer bi
-// vsako okno vlaka vleklo 300 kB, ki jih ne bo nikoli uporabilo.
+// Knjiznica in njen slog se naložita samo v oknu avtobusa: okno vlaka ne
+// vleče 300 kB, ki jih ne bo nikoli uporabilo.
 
 let slogMapLibre = null;
 
@@ -1900,29 +1557,26 @@ function naloziSlogMapLibre() {
   return slogMapLibre;
 }
 
-// Lega in trasa avtobusa gresta na pot ob odprtju, vzporedno z `/run`. Prej so
-// lega, knjižnica in trasa čakale druga na drugo za `/run`: vozilo je prišlo na
-// zemljevid 0,5-0,8 s za postanki (arwen, presoja 18. 10. 2026). Knjižnica se
-// še vedno naloži šele, ko lega res obstaja.
+// Trasa avtobusa in njegova lega gresta na pot ob odprtju, vzporedno z `/run`.
+// Prej so lega, knjižnica in trasa čakale druga na drugo za `/run`: vozilo je
+// prišlo na zemljevid 0,5-0,8 s za postanki (arwen, presoja 18. 10. 2026).
+// Avtobus ima zemljevid vedno (osnutek E), zato gre knjižnica na pot takoj,
+// ne šele z lego.
 //
-// Obljuba trase stoji od začetka, ne šele ob odgovoru o legi: zanka lege isti
-// odgovor zna prebrati prej, zemljevid je tedaj traso vprašal še enkrat
-// (dvojna zahteva ob prvem odprtju, arwen 19. 10. 2026). Vrne `null`, kadar
-// lege ni -- trase tedaj nihče ne rabi.
+// Obljuba trase stoji od začetka: zanka lege isti odgovor zna prebrati prej,
+// zemljevid je tedaj traso vprašal še enkrat (dvojna zahteva ob prvem odprtju,
+// arwen 19. 10. 2026).
 const zgodaj = { lega: null, trasa: null };
-if (OMREZJE === "avtobus" && URL_TRIP && !URL_DATE) {
-  zgodaj.lega = fetch(`/api/vehicles?trip=${encodeURIComponent(URL_TRIP)}`);
-  zgodaj.trasa = zgodaj.lega.then((r) => r.clone().json()).then((list) => {
-    if (!list || !list.length) return null;
-    naloziSlogMapLibre();
-    pkNaloziMapLibre();
-    return fetch(`/api/trip/${encodeURIComponent(URL_TRIP)}/shape`);
-  }).catch(() => null);          // lego vpraša zanka sama
+if (OMREZJE === "avtobus" && URL_TRIP) {
+  naloziSlogMapLibre();
+  pkNaloziMapLibre();
+  zgodaj.trasa = fetch(`/api/trip/${encodeURIComponent(URL_TRIP)}/shape`).catch(() => null);
+  if (!URL_DATE) zgodaj.lega = fetch(`/api/vehicles?trip=${encodeURIComponent(URL_TRIP)}`);
 }
 
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
                  postaje: null, v: null, since: 0, loc: null, nastaja: null,
-                 avto3d: null, lega: null, vir: null, vlak: false };
+                 avto3d: null, lega: null, vir: null, veriga: null, prvaLega: null };
 
 // ---------- ocena lege med dvema meritvama ----------
 // Pravilo in meritve so v common.js (`ocenaNaTrasi`): isto oceno ima veliki
@@ -1936,18 +1590,16 @@ function polVozila(v) {
   const z = runMap.map.getZoom();
   return !run3D()
     ? 12 * (40075016.686 * Math.cos(v.lat * Math.PI / 180)) / (512 * 2 ** z)
-    : runMap.vlak ? (VLAK_DOLZINA_M / 2) * vlakPovecava(z)
-      : (avtoDolzina(modelVozila(v)) / 2) * avtoPovecava(z);
+    : (avtoDolzina(modelVozila(v)) / 2) * avtoPovecava(z);
 }
 
 // Ista oblika in ista barva kot na velikem zemljevidu: avtobus v barvi
-// prevoznika, vlak oranzen. Do 4. 10. 2026 je bilo vozilo tu svetlo modro
-// (`ESTIMATE_COLOR`, "tu meritve ni") -- odkar je Arriva na velikem
-// zemljevidu modra, se je LPP bral kot Arriva. Da vozilo stoji na OCENI lege
-// in ne na meritvi, zdaj povesta prosojnost in crtkan svetel obris; meritev
-// je rdeca pika. Pod crtkanim obrisom je temen, da se loci od podlage.
+// prevoznika. Do 4. 10. 2026 je bilo vozilo tu svetlo modro (`ESTIMATE_COLOR`,
+// "tu meritve ni") -- odkar je Arriva na velikem zemljevidu modra, se je LPP
+// bral kot Arriva. Da vozilo stoji na OCENI lege in ne na meritvi, zdaj
+// povesta prosojnost in crtkan svetel obris; meritev je rdeca pika. Pod
+// crtkanim obrisom je temen, da se loci od podlage.
 function inkVozila(v) {
-  if (runMap.vlak) return TRAIN_INK;
   const ag = v && v.agency === "lpp" ? "1118" : v && v.agency;
   return AGENCY_INK[ag] || BUS_INK;
 }
@@ -1960,17 +1612,6 @@ function busSvg(moving, ink) {
       ${obrisOcene(telo)}
       <path d="M9.4 5.9 Q12 4.8 14.6 5.9 L14.6 7.5 Q12 6.8 9.4 7.5 Z"
             fill="#e9f4ff" fill-opacity="0.9"/>
-    </svg>`;
-}
-
-function vlakSvg(moving, ink) {
-  const s = 30;
-  const telo = 'x="7" y="2" width="10" height="20" rx="3.4"';
-  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">
-      <rect ${telo} fill="${ink}" fill-opacity="${moving ? 0.55 : 0.32}"/>
-      ${obrisOcene(telo)}
-      <path d="M9.2 5.5 Q12 4.5 14.8 5.5 L14.8 7.8 Q12 6.9 9.2 7.8 Z"
-            fill="#0f1115" fill-opacity="0.6"/>
     </svg>`;
 }
 
@@ -2022,10 +1663,16 @@ function runImeNaDotik() {
 // ki mora ostati nad traso.
 const RUN_POD = "k-voznja-obroba";
 
-async function ustvariRunMap(v) {
+// Pot naprej v barvi omrežja, kot črta postankov pod zemljevidom (osnutek E;
+// pri avtobusu zelena). Prej oranžna kot izbrano vozilo na velikem zemljevidu
+// -- tam jo loči od drugih poti, tu je pot ena sama.
+const barvaPoti = () => getComputedStyle(document.body).getPropertyValue("--accent-lit").trim()
+  || IZBRANA_INK;
+
+async function ustvariRunMap() {
   const wrap = document.getElementById("run-map-wrap");
   const el = document.getElementById("run-map");
-  // Trasa po cesti oziroma progi gre na pot pred knjižnico, ne za njo.
+  // Trasa po cesti gre na pot pred knjižnico, ne za njo.
   const zacetaTrasa = state.run.trip_id === URL_TRIP ? zgodaj.trasa : null;
   zgodaj.trasa = null;
   const trasaP = Promise.resolve(zacetaTrasa)
@@ -2039,26 +1686,38 @@ async function ustvariRunMap(v) {
   // Zemljevid je ELEMENT na strani, ne stran, zato geste, ki bi ukradle
   // pomikanje strani, tu ne veljajo: en prst in kolesce pomikata stran, dva
   // prsta in Ctrl + kolesce zemljevid. Vlecenje z misko strani ne pomika in
-  // ostane zemljevidu. Brez dodatnih imen: okvir meri 260 px in gleda eno
-  // vozilo; imena ulic so v podlagi sami.
-  const k = await pkUstvari(el, { sredisce: [v.lat, v.lon], zoom: 14,
-                                  dodatnaImena: false, sodelovanje: true });
-  if (!k) {
-    // Brez WebGL2 zemljevida ni -- enako kot na velikem. Hitrost in starost
-    // lege sta v glavi okvirja in ostaneta.
-    el.innerHTML = '<div class="ni-zemljevida">Ta brskalnik zemljevida ne zna narisati.</div>';
-    return false;
-  }
+  // ostane zemljevidu. Brez dodatnih imen: okvir gleda eno vožnjo, imena ulic
+  // so v podlagi sami. Prvi pogled postavi `zacetniPogled`.
+  const prvi = state.run.stops.find((s) => s.lat != null);
+  const v = runMap.v;
+  const sredisce = v ? [v.lat, v.lon] : prvi ? [prvi.lat, prvi.lon] : [46.05, 14.51];
+  const k = await pkUstvari(el, { sredisce, zoom: 14, dodatnaImena: false, sodelovanje: true });
+  if (!k) return false;
   const { map, ml } = k;
   runMap.map = map;
   runMap.ml = ml;
-  map.addControl(new ml.NavigationControl({ visualizePitch: true }), "top-right");
+  // Mali zemljevid se ne vrti: sever, ki ga dva prsta nehote zasučeta, je v
+  // okvirju ene vožnje samo zmeda, kompasa za vrnitev pa osnutek nima.
+  map.dragRotate.disable();
+  map.touchZoomRotate.disableRotation();
+  // Gumba + in − samo pod miško: na telefonu približujeta dva prsta (osnutek E
+  // ima ob zemljevidu le „čez celo stran“ in „moja lega“).
+  if (matchMedia("(pointer: fine)").matches) {
+    map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
+    wrap.classList.add("ima-povecavo");
+  }
   // Navedba vira je v okvirju 260 px odprta pokrila spodnjo osmino, cez traso.
   // Zlozena ostane gumb (i), kot je na drugih zemljevidih po prvem premiku.
-  el.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+  const navedba = el.querySelector(".maplibregl-ctrl-attrib");
+  navedba?.classList.remove("maplibregl-compact-show");
+  // Gumb (i) gre zgoraj desno nad naše gumbe: spodaj leži odštevanje čez vso
+  // širino (osnutek E) -- ob njem je bilo na 360 px ime postanka odrezano.
+  // Navedba mora ostati vidna, je pogoj rabe podlage.
+  const desnoZgoraj = el.querySelector(".maplibregl-ctrl-top-right");
+  if (navedba && desnoZgoraj) desnoZgoraj.prepend(navedba);
 
-  // Trasa po cesti oziroma progi. Kadar je ni, ostane crta skozi
-  // postajalisca -- ta ni pot in mora biti videti drugace (crtkano).
+  // Trasa po cesti. Kadar je ni, ostane crta skozi postajalisca -- ta ni pot
+  // in mora biti videti drugace (crtkano).
   const trasa = await trasaP;
   // `trasa` je seznam KOSOV, ne tock: uvoz jo razreze tam, kjer je v GTFS
   // razmik nad kilometer. Pogoj `trasa.length > 1` je bil napisan se za
@@ -2083,68 +1742,67 @@ async function ustvariRunMap(v) {
     map.addSource(id, { type: "geojson", data: RUN_PRAZNO });
   }
   const okroglo = { "line-join": "round", "line-cap": "round" };
-  // Trasa na tleh: od blizu široka kot cesta oz. tir (`sirinaM`), pod
-  // stavbami -- nad njimi je bila v nagibu narisana čez hišo, za katero leži
-  // ulica. Pike in vozilo ostanejo nad stavbami (`RUN_POD`).
+  // Trasa na tleh: od blizu široka kot cesta (`sirinaM`), pod stavbami -- nad
+  // njimi je bila v nagibu narisana čez hišo, za katero leži ulica. Pike in
+  // vozilo ostanejo nad stavbami (`RUN_POD`).
   const naTleh = map.getLayer("stavbe-3d") ? "stavbe-3d" : RUN_POD;
-  const m = runMap.vlak ? 3.2 : 6.5;
+  const pot = barvaPoti();
   map.addLayer({ id: "run-trasa-obroba", type: "line", source: "run-trasa", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "trasa"],
-                 paint: { "line-color": "#0f1115", "line-width": sirinaM(m + 1.2, [[10, 6], [15, 6]]),
+                 paint: { "line-color": "#0f1115", "line-width": sirinaM(7.7, [[10, 6], [15, 6]]),
                           "line-opacity": 0.85 } },
                naTleh);
-  // Kot izbrano vozilo na velikem zemljevidu: pot pred vozilom oranžna
-  // (`IZBRANA_INK`), prevožena siva (`narisiRunTraso`, 4. 10. 2026; prej vsa
-  // zelena).
+  // Prevoženo sivo (`narisiRunTraso`), naprej v barvi omrežja.
   const za = ["==", ["get", "del"], "za"];
   map.addLayer({ id: "run-trasa", type: "line", source: "run-trasa", layout: okroglo,
                  filter: ["==", ["get", "vrsta"], "trasa"],
-                 paint: { "line-color": ["case", za, ZA_INK, IZBRANA_INK],
-                          "line-width": sirinaM(m, [[10, 3], [15, 3]]),
+                 paint: { "line-color": ["case", za, ZA_INK, pot],
+                          "line-width": sirinaM(6.5, [[10, 3], [15, 3]]),
                           "line-opacity": ["case", za, 0.55, 0.95] } },
                naTleh);
   map.addLayer({ id: "run-skozi", type: "line", source: "run-trasa",
                  filter: ["==", ["get", "vrsta"], "skozi"],
-                 paint: { "line-color": IZBRANA_INK, "line-width": 2.5, "line-opacity": 0.7,
+                 paint: { "line-color": pot, "line-width": 2.5, "line-opacity": 0.7,
                           "line-dasharray": [2, 2] } },
                naTleh);
   // Pike so bile nekoc neme tocke na zemljevidu. Ime ob dotiku je edini
   // nacin, da se izve, katera postaja to je -- trajne oznake bi na mestni
-  // liniji zakrile progo pod sabo.
-  // Pri avtobusu od blizu nadstrešek ali znak namesto pike, kot na velikem
-  // zemljevidu (`slojiPostajalisc`); pika ostane nevidna, ker jo zadene prst.
-  const pika = runMap.vlak ? 1 : PIKA_POD_3D;
+  // liniji zakrile progo pod sabo. Kot na črti pod zemljevidom: naprej obroč
+  // v barvi poti, prevoženo sivo. Od blizu nadstrešek ali znak namesto pike,
+  // kot na velikem zemljevidu (`slojiPostajalisc`); pika ostane nevidna, ker
+  // jo zadene prst.
+  const mimo = ["==", ["get", "mimo"], 1];
   map.addLayer({ id: "run-postaje", type: "circle", source: "run-postaje",
-                 paint: { "circle-radius": 3.6, "circle-color": IZBRANA_INK,
-                          "circle-opacity": pika, "circle-stroke-opacity": pika,
-                          "circle-stroke-color": "#0f1115", "circle-stroke-width": 1.4,
+                 paint: { "circle-radius": ["case", mimo, 3.4, 4.2],
+                          "circle-color": ["case", mimo, ZA_INK, "#0f1115"],
+                          "circle-stroke-color": ["case", mimo, "#0f1115", pot],
+                          "circle-stroke-width": ["case", mimo, 1.4, 2.4],
+                          "circle-opacity": PIKA_POD_3D, "circle-stroke-opacity": PIKA_POD_3D,
                           "circle-pitch-alignment": "map" } },
                RUN_POD);
-  if (!runMap.vlak) {
-    slojiPostajalisc(map, { vir: "run-postaje", nadstresek: "run-nadstresek",
-                            postaja: "run-postaje-avtobusne", znak: "run-postaje-znak" });
-  }
+  slojiPostajalisc(map, { vir: "run-postaje", nadstresek: "run-nadstresek",
+                          postaja: "run-postaje-avtobusne", znak: "run-postaje-znak" });
   // Postaja, na kateri stoji potnik, mora biti vidna -- brez nje je to
-  // zemljevid o vozilu in ne o njegovi poti. Zato z imenom, trajno. Bela, ker
-  // je pot oranžna in bi se oranžna pika na njej izgubila.
+  // zemljevid o vozilu in ne o njegovi poti. Zato z imenom, trajno: bela z
+  // obročem v barvi poti, kot v osnutku.
   map.addLayer({ id: "run-tvoja", type: "circle", source: "run-tvoja",
-                 paint: { "circle-radius": 6, "circle-color": "#f4f6fa",
-                          "circle-stroke-color": "#0f1115", "circle-stroke-width": 2,
+                 paint: { "circle-radius": 7, "circle-color": "#f4f6fa",
+                          "circle-stroke-color": pot, "circle-stroke-width": 3,
                           "circle-pitch-alignment": "map" } },
                RUN_POD);
   map.addLayer({ id: "run-tvoja-ime", type: "symbol", source: "run-tvoja",
                  layout: { "text-field": ["get", "ime"], "text-font": ["Noto Sans Bold"],
-                           "text-size": 12, "text-anchor": "left", "text-offset": [0.9, 0],
+                           "text-size": 13, "text-anchor": "left", "text-offset": [1.1, 0],
                            "text-allow-overlap": true },
                  paint: { "text-color": "#f4f6fa", "text-halo-color": "#0f1115",
                           "text-halo-width": 1.6 } },
                RUN_POD);
   // Zadnja RESNICNA meritev je edina trdna tocka na tem zemljevidu, zato je
-  // polna in vidna -- ne bleda. Rdeca s svetlim obrocem, ki jo loci od
-  // oranzne poti pod njo (prej zelene). Rdeca ni iz nobene
-  // lestvice -- ne iz zamud in ne iz razmer -- zato tu ne more pomeniti
-  // nicesar drugega. Rise se VEDNO: kadar vozilo stoji, jo oblika vozila
-  // pokrije. Plast je zadnja med nasimi, da je 3 px siroka trasa ne prereze.
+  // polna in vidna -- ne bleda. Rdeca s svetlim obrocem, ki jo loci od poti
+  // pod njo. Rdeca ni iz nobene lestvice -- ne iz zamud in ne iz razmer --
+  // zato tu ne more pomeniti nicesar drugega. Rise se VEDNO: kadar vozilo
+  // stoji, jo oblika vozila pokrije. Plast je zadnja med nasimi, da je 3 px
+  // siroka trasa ne prereze.
   map.addLayer({ id: "run-gps", type: "circle", source: "run-gps",
                  paint: { "circle-radius": 5.5, "circle-color": MERITEV_INK,
                           "circle-stroke-color": "#e7eaf0", "circle-stroke-width": 2,
@@ -2154,25 +1812,28 @@ async function ustvariRunMap(v) {
   // Od blizu model v 3D, kot na velikem zemljevidu: zemljevid se tu nagne
   // enako, ploska ikona pa je med dvignjenimi stavbami ostala ploska. Model
   // je v barvah prevoznika, kot na velikem zemljevidu (do 4. 10. 2026 v barvi
-  // ocene); da stoji na oceni, pove podnapis "ocenjeno iz lege pred ...".
-  runMap.avto3d = runMap.vlak
-    ? plast3D({ id: "run-vlak-3d", modeli: vlakModeli(TRAIN_INK),
-                vidna: run3D, povecava: vlakPovecava })
-    : avtobusi3D({ id: "run-avtobus-3d", inki: { ...AGENCY_INK, drugi: BUS_INK },
-                   vidna: run3D, povecava: avtoPovecava });
+  // ocene); da stoji na oceni, pove podnapis „ocena · GPS pred …“.
+  runMap.avto3d = avtobusi3D({ id: "run-avtobus-3d", inki: { ...AGENCY_INK, drugi: BUS_INK },
+                               vidna: run3D, povecava: avtoPovecava });
   map.addLayer(runMap.avto3d.plast, RUN_POD);
   map.on("zoom", () => postavi3D());
 
   runVir("run-trasa", crte);
-  runVir("run-postaje", tockePostajalisc(postaje).features);
   runMap.postajeOdBlizu = postaje;
-  if (!runMap.vlak) {
-    postaviRunNadstreske();
-    map.on("zoomend", postaviRunNadstreske);
-  }
+  postaviRunNadstreske();
+  map.on("zoomend", postaviRunNadstreske);
   const yours = yourStop(state.run.stops);
   if (yours && yours.lat != null) {
-    runVir("run-tvoja", [pkTocka([yours.lat, yours.lon], { ime: yours.name })]);
+    runVir("run-tvoja", [pkTocka([yours.lat, yours.lon], { ime: lepoIme(yours.name) })]);
+    // Ime na tisti strani pike, kjer je prostor: ob desnem robu levo od nje.
+    // Ob robu okvirja je bilo odrezano („no Šiška“).
+    const stran = () => {
+      const levo = map.project([yours.lon, yours.lat]).x > el.clientWidth / 2;
+      map.setLayoutProperty("run-tvoja-ime", "text-anchor", levo ? "right" : "left");
+      map.setLayoutProperty("run-tvoja-ime", "text-offset", [levo ? -1.1 : 1.1, 0]);
+    };
+    map.on("moveend", stran);
+    stran();
   }
   runImeNaDotik();
   return true;
@@ -2194,9 +1855,10 @@ function postaviRunNadstreske() {
     .flatMap((s) => nadstresekKosi(s, k)));
 }
 
-// Pot pred vozilom oranžna, prevožena siva -- kot izbrano vozilo na velikem
-// zemljevidu. Razrez je pri oceni lege. Osveži se ob novih podatkih in ko
-// ocena odpelje za 30 m, ne vsako sekundo: `setData` na telefonu ni zastonj.
+// Pot pred vozilom v barvi omrežja, prevožena siva. Razrez je pri oceni lege,
+// brez lege pri zadnji meritvi (`posodobiKarto`). Osveži se ob novih podatkih
+// in ko ocena odpelje za 30 m, ne vsako sekundo: `setData` na telefonu ni
+// zastonj.
 const RAZREZ_M = 30;
 
 function narisiRunTraso(vzdolz) {
@@ -2237,44 +1899,127 @@ function postavi3D(lega) {
 }
 
 const modelVozila = (v) => {
-  if (runMap.vlak) return vlakModel({ mode: state.mode, train_no: state.run && state.run.train_no });
   const ag = v.agency === "lpp" ? "1118" : v.agency;
   return AGENCY_INK[ag] ? ag : "drugi";
 };
-// Garnitura FLIRT, najpogostejša na progi: trije vozovi po ~20 m.
-const VLAK_DOLZINA_M = 60;
+
+// ---------- zemljevid avtobusa: vedno ----------
+//
+// Osnutek E (David, 24. 10. 2026: „zmenila sva se, da mora biti zemljevid“):
+// avtobus ima zemljevid na vrhu okna tudi brez lege -- pot vožnje,
+// postajališča in tvoje. Vozilo pride nanj, ko je lega; pred odhodom vozilo s
+// prejšnje vožnje, kadar ima GPS. Brez WebGL2 ostaneta odštevanje in trak.
+// Vlak zemljevida nima („je itak samo tir“): kje je, pove trak.
+
+function pripraviKarto() {
+  if (runMap.nastaja) return runMap.nastaja;
+  // Razred pred nastankom, da MapLibre okvir izmeri v pravi višini.
+  document.body.classList.add("ima-karto");
+  runMap.nastaja = ustvariRunMap().then(async (ok) => {
+    if (!ok) {
+      document.body.classList.remove("ima-karto");
+      document.getElementById("run-map-wrap").hidden = true;
+      return false;
+    }
+    initFullscreen();
+    initLocate();
+    initOsvezi();
+    // Prvi pogled počaka prvi odgovor o legi (največ 1,5 s): pot cele
+    // vožnje, ki se po pol sekunde zamenja z vozilom, je skok pod prstom.
+    await Promise.race([runMap.prvaLega || Promise.resolve(),
+                        new Promise((ok2) => setTimeout(ok2, 1500))]);
+    zacetniPogled();
+    posodobiKarto();
+    return true;
+  }).catch((err) => {
+    console.error("zemljevida ni bilo mogoče narisati", err);
+    document.body.classList.remove("ima-karto");
+    document.getElementById("run-map-wrap").hidden = true;
+    return false;
+  });
+  return runMap.nastaja;
+}
+
+// Prvi pogled: vozilo in tvoje postajališče, kadar sta, sicer vozilo s
+// prejšnje vožnje in izhodišče, sicer vsa pot. Potem se pogled ne premika sam
+// (`zemljevid.md`), razen ko vozilo uide iz okvira. Spodaj je prostor za
+// odštevanje, zgoraj za pilulo in gumbe.
+const POGLED_ODMIK = { top: 64, bottom: 116, left: 28, right: 64 };
+
+function zacetniPogled() {
+  const stops = state.run.stops.filter((s) => s.lat != null);
+  const tvoj = yourStop(state.run.stops);
+  const tocke = [];
+  const prev = !state.current && state.chain && state.chain.prev;
+  if (runMap.v) tocke.push([runMap.v.lat, runMap.v.lon]);
+  else if (prev && prev.gps && prev.gps.lat != null) {
+    tocke.push([prev.gps.lat, prev.gps.lon]);
+    if (stops.length) tocke.push([stops[0].lat, stops[0].lon]);
+  }
+  if (tvoj && tvoj.lat != null && !vrednostNaPostanku(tvoj).mimo) tocke.push([tvoj.lat, tvoj.lon]);
+  pkPrilagodi(runMap.map, tocke.length ? tocke : stops.map((s) => [s.lat, s.lon]),
+              { padding: POGLED_ODMIK, animate: false });
+}
+
+// Kar se spremeni z odgovorom o vožnji: prevožena postajališča, pot za
+// vozilom, kadar lege ni (do zadnje meritve), vozilo s prejšnje vožnje in
+// pilula. Z lego pot reže ocena lege (`postaviVozilo`).
+function posodobiKarto() {
+  if (!runMap.map || !state.run) return;
+  const cur = state.current;
+  const postaje = runMap.postajeOdBlizu || [];
+  const tocke = tockePostajalisc(postaje).features;
+  tocke.forEach((f, i) => {
+    f.properties.mimo = cur && postaje[i].stop_seq <= cur.stop_seq ? 1 : 0;
+  });
+  runVir("run-postaje", tocke);
+  if (!runMap.v) {
+    let vzdolz = null;
+    if (cur && cur.lat != null && runMap.trasa) {
+      const p = projekcijaNaTraso(runMap.trasa, runMap.cums, cur.lat, cur.lon);
+      if (p.odmik <= POSTAJA_OB_TRASI_M) vzdolz = p.vzdolz;
+    }
+    narisiRunTraso(vzdolz);
+  }
+  postaviVoziloVerige();
+  posodobiPilulo();
+}
+
+// Avtobus, ki še ni odpeljal, je pogosto na prejšnji vožnji (`block_id`,
+// `vehicleChainHtml`): kje je zdaj, pove njegov GPS. Okrogla značka, ne
+// oblika vozila na tej poti -- tu še ne vozi.
+function postaviVoziloVerige() {
+  const prev = !state.current && !runMap.v && state.chain && state.chain.prev;
+  const gps = prev && prev.gps;
+  if (!gps || gps.lat == null) {
+    if (runMap.veriga) runMap.veriga.remove();
+    runMap.veriga = null;
+    return;
+  }
+  if (!runMap.veriga) {
+    const el = document.createElement("div");
+    el.className = "ov-veriga-vozilo";
+    el.innerHTML = SVG_BUS;
+    runMap.veriga = new runMap.ml.Marker({ element: el }).setLngLat([gps.lon, gps.lat])
+      .addTo(runMap.map);
+  }
+  runMap.veriga.setLngLat([gps.lon, gps.lat]);
+  runMap.veriga.getElement().title = `vozilo zdaj tu · konča vožnjo ${prev.train_no}`;
+}
 
 async function drawRunMap(v) {
   runMap.v = v;
   runMap.since = Date.now();
-  runMap.vlak = !isBus(state.mode);
-  // Okvir, ki so ga zastarela poročila skrila, se vrne; MapLibre skritega
-  // okvira ne meri, zato po prikazu znova.
-  const wrap = document.getElementById("run-map-wrap");
-  if (wrap.hidden && runMap.map) {
-    wrap.hidden = false;
-    requestAnimationFrame(() => runMap.map.resize());
-  }
-  // `trip` pove zemljevidu, katero vozilo je človek gledal: plast prevoznika
-  // je lahko ugasnjena in brez tega avtobusa na legi, kamor ga pelje, ni.
-  document.getElementById("run-map-full").href =
-    `/app/map?lat=${v.lat.toFixed(5)}&lon=${v.lon.toFixed(5)}&z=15`
-    + `&trip=${encodeURIComponent(v.trip_id)}`;
-
+  if (runMap.veriga) runMap.veriga.remove();
+  runMap.veriga = null;
   // Lega pride vsakih nekaj sekund, zemljevid pa nastaja dlje (knjiznica,
-  // slog, trasa). Brez skupne obljube bi druga lega naredila drugi zemljevid.
-  const prvic = !runMap.nastaja;
-  if (prvic) runMap.nastaja = ustvariRunMap(v);
-  if (!(await runMap.nastaja)) {
+  // slog, trasa). Skupna obljuba: druga lega ne naredi drugega zemljevida.
+  if (!(await pripraviKarto())) {
+    // Brez WebGL2: odštevanje in trak ostaneta, starost lege pod njima.
     podnapis(v, 0);
     return;
   }
-  postaviVozilo(prvic, true);
-  if (prvic) {
-    initFullscreen();
-    initLocate();
-    initOsvezi();
-  }
+  postaviVozilo(false, true);
 }
 
 // `nova` loci osvezitev PODATKOV od sekundnega premika pike. Podnapis se sme
@@ -2305,16 +2050,11 @@ function postaviVozilo(prvic, nova) {
   const el = runMap.marker.getElement();
   if (el.dataset.vozi !== String(moving)) {
     el.dataset.vozi = String(moving);
-    el.innerHTML = runMap.vlak ? vlakSvg(moving, inkVozila(v)) : busSvg(moving, inkVozila(v));
+    el.innerHTML = busSvg(moving, inkVozila(v));
   }
   // Izmerjena lega se spremeni samo z novim odgovorom; `setData` vsako
   // sekundo bi MapLibre silil, da vir na telefonu predeluje brez razloga.
-  if (nova) {
-    runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: meritevIme() })]);
-    document.getElementById("run-map-key-meritev").textContent = meritevIme();
-  }
-  const kljuc = document.querySelector(".run-map-key .key-bus");
-  if (kljuc) kljuc.style.backgroundColor = inkVozila(v);
+  if (nova) runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: meritevIme() })]);
   postavi3D(lega);
   if (lega.vzdolz != null && (nova || runMap.razrez == null
       || Math.abs(lega.vzdolz - runMap.razrez) > RAZREZ_M)) {
@@ -2328,7 +2068,7 @@ function postaviVozilo(prvic, nova) {
   }
 
   // Vozilo se premika, torej se razdalja spreminja tudi brez novega dotika.
-  if (runMap.loc) razdaljaDoMene(runMap.loc);
+  posodobiPilulo();
 
   if (nova) podnapis(v, odmik);
 }
@@ -2336,16 +2076,18 @@ function postaviVozilo(prvic, nova) {
 const meritevIme = () => (runMap.vir === "potniki" ? "zadnje poročilo potnikov"
   : "zadnja izmerjena lega");
 
-// Hitrost in starost lege veljata tudi brez zemljevida (brskalnik brez WebGL2).
-// Lega od potnikov to pove, preden pove karkoli drugega: ni prevoznikova.
+const SVG_GPS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>';
+
+// Pod zemljevidom desno: od kod je lega in kako stara (osnutek E: „GPS pred
+// 40 s“). Ocena lege pove to z besedo -- legende pod zemljevidom ni več, na
+// sliki jo loči oblika (prosojno, črtkan obris; meritev je rdeča pika).
+// Velja tudi brez zemljevida (brskalnik brez WebGL2).
 function podnapis(v, odmik) {
-  const moving = (v.speed_kmh || 0) >= 3;
-  document.getElementById("run-map-sub").innerHTML =
-    (runMap.vir === "potniki"
-      ? `${escapeHtml(potnikov(v.potnikov))} ${deliGlagol(v.potnikov)} lego · ` : "")
-    + (v.speed_kmh == null ? "" : `${moving ? `${v.speed_kmh} km/h` : "stoji"} · `)
-    + (odmik > OCENA_VIDNA_M ? `ocenjeno iz lege pred ${ageHtml(v.age_s)}`
-                  : `lega stara ${ageHtml(v.age_s)}`);
+  const n = v.potnikov || 1;
+  const vir = runMap.vir === "potniki"
+    ? `<span class="ov-potnik">${n === 1 ? "potnik" : escapeHtml(potnikov(n))}</span>` : "GPS";
+  document.getElementById("run-map-sub").innerHTML = `${SVG_GPS}<span>${
+    odmik > OCENA_VIDNA_M ? "ocena · " : ""}${vir} pred ${ageHtml(v.age_s)}</span>`;
 }
 
 // Med dvema meritvama pika drsi naprej. To ni okras: vozilo se v 30 s pri
@@ -2404,8 +2146,8 @@ function izracunajRazdaljo(loc) {
   if (!el) return;
   const v = runMap.v;
   if (!v || !runMap.trasa) {
-    el.innerHTML = '<span class="slabo">Za to vožnjo trase ni, zato razdalje '
-      + 'po poti ni mogoče izmeriti.</span>';
+    el.innerHTML = `<span class="slabo">${!v ? "Vozilo lege še nima, zato razdalje ni mogoče izmeriti."
+      : "Za to vožnjo trase ni, zato razdalje po poti ni mogoče izmeriti."}</span>`;
     el.hidden = false;
     return;
   }
@@ -2434,8 +2176,40 @@ function izracunajRazdaljo(loc) {
   // "je 1,5 km pred tvojo lego" se bere dvoumno -- lahko kot "ze mimo tebe".
   // Zato povemo, koliko POTI mu ostane, in loceno, ce je ze mimo.
   el.innerHTML = d <= 0
-    ? `Do tebe ima še <strong>${razdaljaText(-d)}</strong> poti.`
-    : `Tvojo lego je že prevozil — <strong>${razdaljaText(d)}</strong> naprej po poti.`;
+    ? `${svgVozila()}<span>še <strong>${razdaljaText(-d)}</strong> do tebe</span>`
+    : `${svgVozila()}<span>že mimo tebe · <strong>${razdaljaText(d)}</strong> naprej</span>`;
+  el.hidden = false;
+}
+
+// Brez tvoje lege je „do mene“ tvoje postajališče (`postaja` v naslovu, s
+// table): koliko poti ima vozilo še do njega. Isti račun po trasi in ista
+// ocenjena lega kot zgoraj; daleč od trase ali za vozilom se ne pove nič.
+const POSTAJA_OB_TRASI_M = 150;
+
+function razdaljaDoPostaje() {
+  const el = document.getElementById("run-map-me-line");
+  const tvoj = state.run && yourStop(state.run.stops);
+  if (!el || runMap.loc) return;
+  // Brez trase ali postajališča pilula izgine -- sicer bi obstala beseda izpred
+  // lege („lege vozila ni“) ob vozilu, ki je že na zemljevidu.
+  if (!runMap.v || !runMap.trasa || !tvoj || tvoj.lat == null || vrednostNaPostanku(tvoj).mimo) {
+    el.hidden = true;
+    return;
+  }
+  const v = runMap.v;
+  if (projekcijaNaTraso(runMap.trasa, runMap.cums, v.lat, v.lon).odmik > NA_TRASI_M) {
+    el.hidden = true;
+    return;
+  }
+  const { kje } = ocenjenaLega(v, v.age_s + (Date.now() - runMap.since) / 1000);
+  const vozilo = projekcijaNaTraso(runMap.trasa, runMap.cums, kje[0], kje[1]);
+  const postaja = projekcijaNaTraso(runMap.trasa, runMap.cums, tvoj.lat, tvoj.lon);
+  const d = postaja.vzdolz - vozilo.vzdolz;
+  if (postaja.odmik > POSTAJA_OB_TRASI_M || d < 0) {
+    el.hidden = true;
+    return;
+  }
+  el.innerHTML = `${svgVozila()}<span>še <strong>${razdaljaText(d)}</strong> do postajališča</span>`;
   el.hidden = false;
 }
 
@@ -2449,6 +2223,38 @@ function razdaljaDoMene(loc) {
   if (el && !runMap.legaGumb && el.querySelector(".slabo")) el.hidden = true;
 }
 
+// Pilula zgoraj levo: koliko poti ima vozilo še do tebe ali do tvojega
+// postajališča. Brez lege vozila pove, zakaj ga na zemljevidu ni -- prazen
+// zemljevid brez besede je videti kot okvara.
+function posodobiPilulo() {
+  const el = document.getElementById("run-map-me-line");
+  if (!el || !state.run) return;
+  if (runMap.v) {
+    if (runMap.loc) razdaljaDoMene(runMap.loc);
+    else razdaljaDoPostaje();
+    return;
+  }
+  // Odgovor na dotik gumba „moja lega“ ostane, dokler vozila ni.
+  if (runMap.legaGumb && el.querySelector(".slabo")) return;
+  const t = pilulaBrezVozila();
+  el.innerHTML = t;
+  el.hidden = !t;
+}
+
+function pilulaBrezVozila() {
+  const run = state.run;
+  const stops = run.stops;
+  if (state.current && state.current === stops[stops.length - 1]) return "";
+  const prev = !state.current && state.chain && state.chain.prev;
+  if (prev && prev.gps && prev.gps.lat != null) {
+    return `${svgVozila()}<span>še na prejšnji vožnji</span>`;
+  }
+  const odhod = odhodPrvega();
+  if (odhod) return `${svgVozila()}<span>odpelje ob <strong>${hhmm(odhod)}</strong></span>`;
+  if (run.service_date !== todayIso()) return "";
+  return `${svgVozila()}<span class="slabo">lege vozila ni</span>`;
+}
+
 function initLocate() {
   const btn = document.getElementById("run-map-me");
   if (!btn) return;
@@ -2459,8 +2265,7 @@ function initLocate() {
   LEGA.poslusaj((l) => {
     runMap.loc = l;
     pkJaz(runMap.map, l);
-    if (l) razdaljaDoMene(l);
-    else document.getElementById("run-map-me-line").hidden = true;
+    posodobiPilulo();
   });
   btn.addEventListener("click", async () => {
     runMap.legaGumb = true;
@@ -2474,7 +2279,7 @@ function initLocate() {
       if (runMap.marker) {
         const ll = runMap.marker.getLngLat();
         pkPrilagodi(runMap.map, [[loc.lat, loc.lon], [ll.lat, ll.lng]],
-                    { padding: 40, maxZoom: 16 });
+                    { padding: POGLED_ODMIK, maxZoom: 16 });
       } else {
         runMap.map.easeTo({ center: [loc.lon, loc.lat], zoom: 15 - PK_LZ });
       }
@@ -2499,8 +2304,12 @@ function initOsvezi() {
   btn.hidden = false;
   pripniOsvezi(btn, [
     () => (runMap.poll ? runMap.poll.zdaj() : Promise.resolve()),
-    () => loadRun(),
-    () => refreshFeedDot(),
+    // `loadRun` napake ne vrže (stran ostane, pove „brez zveze“); gumb jo
+    // mora povedati sam.
+    async () => {
+      await (oknoPoll ? oknoPoll.zdaj() : loadRun());
+      if (state.brezZveze) throw new Error("brez zveze");
+    },
   ]);
   btn.title = "Osveži zdaj";
   btn.setAttribute("aria-label", "Osveži zdaj");
@@ -2522,46 +2331,54 @@ function initFullscreen() {
 
 function loadPosition() {
   const trip = (state.run && state.run.trip_id) || URL_TRIP;
-  if (!trip || !state.run) return;
+  // Lego ima samo avtobus (GPS ali potnik na njem); vlak in nadomestni
+  // prevoz zemljevida nimata, kje je vlak s potnikom, pove trak.
+  if (!trip || !state.run || OMREZJE !== "avtobus") return;
   // Lega obstaja samo za tekoci dan; za ogled preteklega dne je vprasanje
   // "kje je zdaj" brez pomena.
   if (state.run.service_date !== todayIso()) return;
   // Prej se je lega nalozila ENKRAT in nikoli vec: kdor je okno pustil odprto,
   // je gledal, kje je bil avtobus ob odprtju strani. Prav tu je vprasanje
   // "kje je zdaj" najbolj neposredno, zato se osvezuje v koraku s strezbo:
-  // ritem pove streznik (`X-Osvezi-Cez`) -- GPS na 10 s, potniki na 5 s,
-  // vlak brez potnikov na 30 s.
+  // ritem pove streznik (`X-Osvezi-Cez`) -- GPS na 10 s, potniki na 5 s.
   // **Ena zanka na vožnjo, ne ena na osvežitev.** `loadPosition` se klice iz
-  // `loadRun`, ta pa tece vsakih 30 s -- brez te varovalke je stran po desetih
+  // `loadRun`, ta pa tece vsakih 10 s -- brez te varovalke je stran po desetih
   // minutah imela dvajset vzporednih poizvedb po legi, vsaka na ~10 s.
   if (runMap.pollTrip === trip) return;
   if (runMap.poll) runMap.poll.stop();
   runMap.pollTrip = trip;
   const prva = trip === URL_TRIP ? zgodaj.lega : null;
   zgodaj.lega = null;
+  let prvaOk;
+  runMap.prvaLega = new Promise((ok) => { prvaOk = ok; });
   runMap.poll = pollVehicles(`/api/vehicles?trip=${encodeURIComponent(trip)}`, (list) => {
     const v = list[0];
     if (v) {
       runMap.vir = v.vir === "potniki" ? "potniki" : "gps";
       drawRunMap(v);
     } else if (runMap.vir === "potniki") {
-      skrijRunMap();
+      skrijVozilo();
     }
+    prvaOk();
   }, prva);
 }
 
-// Vozilo brez GPS (vlak, ~10 % avtobusov) ima lego samo od potnikov na njem,
-// in to le, kadar se ujemata vsaj dva (`api._vozilo_po_potnikih`). Med
-// poročili drsi po trasi: izmerjeno 1. 10. 2026 na 273 točkah treh deljenj na
-// vlakih, napaka po 30 s mediana 31 m proti 244 m za piko na zadnjem
-// poročilu, po 60 s 61 m proti 482 m (z `POSTANEK_VLAK_S`). Ko se poročila
-// postarajo ali razidejo, okvir izgine: vlak na legi izpred petih minut bi
-// trdil, da je tam. GPS avtobusa pa ostane na zadnji legi, kot je bil.
-function skrijRunMap() {
+// Vozilo brez GPS (~10 % avtobusov) ima lego samo od potnikov na njem, in to
+// le, kadar je poročilo verodostojno (`api._vozilo_po_potnikih`). Med
+// poročili drsi po trasi: izmerjeno 1. 10. 2026 na 273 točkah treh deljenj,
+// napaka po 30 s mediana 31 m proti 244 m za piko na zadnjem poročilu. Ko se
+// poročila postarajo ali razidejo, vozilo izgine z zemljevida (zemljevid
+// ostane): vozilo na legi izpred petih minut bi trdilo, da je tam. GPS
+// avtobusa pa ostane na zadnji legi, kot je bil.
+function skrijVozilo() {
   runMap.vir = null;
   runMap.v = null;
-  setMapMax(false);
-  document.getElementById("run-map-wrap").hidden = true;
+  if (runMap.marker) runMap.marker.remove();
+  runMap.marker = null;
+  if (runMap.avto3d) runMap.avto3d.nastavi([]);
+  runVir("run-gps", []);
+  document.getElementById("run-map-sub").innerHTML = "";
+  posodobiKarto();
 }
 
 // ---------- vreme ----------
@@ -2579,104 +2396,18 @@ async function loadWeather() {
     if (state.run) {
       renderRunHead();
       renderTimeline();
-      renderProfile();
     }
   } catch (err) {
     console.error("vremena ni bilo mogoče naložiti", err);
   }
 }
 
-// ---------- zgodovina ----------
-
-async function loadHistory() {
-  let h;
-  const today = state.run ? state.run.service_date : null;
-  try {
-    // `trip` je nujen, ne okrasen: brez njega zgodovina zdruzi vse voznje te
-    // stevilke in pri avtobusu pomesa obe smeri pod isto zaporedno stevilko.
-    const q = (today ? `&exclude_date=${encodeURIComponent(today)}` : "")
-      + ((state.run && state.run.trip_id) || URL_TRIP
-          ? `&trip=${encodeURIComponent((state.run && state.run.trip_id) || URL_TRIP)}` : "");
-    h = await fetch(`/api/train/${ENC}/history?days=90${q}`).then(jsonOk);
-  } catch (err) {
-    console.error("zgodovine ni bilo mogoče naložiti", err);
-    return;
-  }
-
-  state.pastRuns = h.runs_observed || 0;
-  state.past = new Map((h.by_stop || []).map((b) => [b.stop_seq, b]));
-
-  const first = h.runs && h.runs.length ? h.runs[0].service_date : null;
-  document.getElementById("hist-note").innerHTML = state.pastRuns
-    ? `Zajetih ${escapeHtml(pluralRuns(state.pastRuns))} pred današnjo${first ? `, od ${escapeHtml(first)}` : ""}.` +
-      (state.pastRuns < 10 ? " <strong>Premalo za porazdelitev</strong> — številke spodaj opisujejo teh nekaj voženj, ne značilnega dne." : "")
-    : "Pred današnjo vožnjo za to pot še ni zajete nobene druge.";
-
-  renderTiles(h);
-  renderProfile();
-
-  const runs = (h.runs || []).filter((r) => r.final_delay_s != null);
-  const runsSub = document.getElementById("runs-sub");
-  const runsEl = document.getElementById("runs-chart");
-  if (runs.length >= 3) {
-    runsSub.textContent = runs.length > VIDNIH_DNI
-      ? `ena vožnja = en stolpec · ${runs.length} zajetih, starejše levo`
-      : "ena vožnja = en stolpec";
-    mountChart(runsEl, (w) => drawRuns(w, runs));
-  } else if (runs.length) {
-    // Pod tremi voznjami stolpci ne povedo nic vec kot seznam -- in namigujejo
-    // na trend, ki ga ni.
-    runsSub.textContent = "premalo voženj za graf — naštete so vse";
-    runsEl.innerHTML = runs.map((r) => `
-      <div class="run-row">
-        <span class="run-date">${escapeHtml(r.service_date)}</span>
-        <span class="run-meta">${r.stops_observed} postaj z meritvijo</span>
-        <span class="run-value" style="color:${delayColor(r.final_delay_s)}">${delayText(r.final_delay_s, true)}</span>
-      </div>`).join("");
-  } else {
-    runsSub.textContent = "";
-    runsEl.innerHTML = '<div class="empty-state">ni druge zajete vožnje</div>';
-  }
-}
-
-// ---------- ura ----------
-
-function tickClock() {
-  const fmt = new Intl.DateTimeFormat("sl-SI", {
-    timeZone: "Europe/Ljubljana", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-  });
-  document.getElementById("clock").textContent = fmt.format(new Date());
-}
-
-tickClock();
-setInterval(tickClock, 1000);
-// Prvi klic opravi `pollWhileVisible` sam, takoj. Ročni klic pred njim je
-// vsako zahtevo podvojil (health 2-4-krat ob odprtju, presoja 18. 10. 2026).
-pollWhileVisible(refreshFeedDot, 30000);
-
-// Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja -- zato sele
-// za njo.
-
-initMode(() => {
-  renderTimeline();     // preprosto kaze samo naprej, napredno vso pot
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => redrawers.forEach((f) => f()), 60);
-});
-
 loadWeather();
 // Ovire so samo pri železnici (tudi nadomestni prevoz je `zeleznica`).
 if (OMREZJE === "zeleznica") loadAlerts();
 
-// Zgodovina rabi datum tekoce voznje, da ga izpusti iz povprecja ("zajetih N
-// PRED danasnjo"), zato sele za prvim `loadRun`. Vzporeden zagon bi danasnjo
-// voznjo stel v svoje lastno povprecje. Ena zanka: prej je `loadRun` tekel
-// dvakrat hkrati (zanka ga sproži takoj, in še ročni klic), z njim vse
-// njegove zahteve -- polovica dela strežnika za okno vožnje.
-let zgodovinaTece = false;
-pollWhileVisible(async () => {
-  await loadRun();
-  if (!zgodovinaTece) {
-    zgodovinaTece = true;
-    pollWhileVisible(loadHistory, HIST_POLL_MS);
-  }
-}, RUN_POLL_MS);
+// Ena zanka: prej je `loadRun` tekel dvakrat hkrati (zanka ga sproži takoj, in
+// še ročni klic), z njim vse njegove zahteve -- polovica dela strežnika za
+// okno vožnje. Ura in pika živosti v glavi sta šli z osnutkom E: svežino pove
+// vrstica pod vrhom (`svezinaHtml`), izpad zajema obvestilo na vrhu.
+oknoPoll = pollWhileVisible(loadRun, ritemOkna);
