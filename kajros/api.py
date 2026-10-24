@@ -1118,10 +1118,6 @@ def bus_page(request: Request):
         "section": "Avtobusi",
         "page_title": "Vozni red avtobusov in zamude v živo — kajros",
         "page_desc": "Iskalnik avtobusnih povezav po Sloveniji: vozni red, odhodi s postajališča in zamude avtobusov v živo, tudi mestni LPP.",
-        "from_ph": "izhodiščno postajališče",
-        "to_ph": "ciljno postajališče",
-        "stop_label": "Postajališče",
-        "stop_ph": "npr. Bavarski dvor",
     })
 
 
@@ -3175,13 +3171,17 @@ def api_connections(
             notices = alerts.for_stops(conn, [r[0] for r in conn.execute(
                 "SELECT stop_id FROM station WHERE name IN (?, ?)", (a, b))])
         meje = _znano_do(conn, network)
+        # Brez neposredne vožnje je ta pogosto s postajališča čez cesto, ki ima
+        # drugo ime (`journey.blizu_z_zvezo`); iskalnik po imenu ga ne vidi.
+        blizu = (journey.blizu_z_zvezo(conn, a, b, date, network, zacetek)
+                 if not cel_dan else None)
         # Brez zveze s prestopi je pot morda peš do drugega postajališča ali čez
         # obe omrežji: prazen izid pokaže povezavo na pot od vrat do vrat.
         if not rows and not legs:
             meje["lega"] = {"od": journey.lega_postaje(conn, a),
                             "do": journey.lega_postaje(conn, b)}
     return {"from": a, "to": b, "date": date, "network": network, **meje,
-            "connections": rows, "transfers": legs, "alerts": notices}
+            "connections": rows, "transfers": legs, "alerts": notices, "blizu": blizu}
 
 
 def _oznaci_obvoze_zvez(conn, rows: list[dict], zdaj: datetime) -> None:

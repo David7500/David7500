@@ -253,6 +253,56 @@ def test_prekratek_prestop_se_ne_ponudi(conn):
     assert all(t["train1"] != "LP 2" for t in legs)
 
 
+def _krog_cez_cesto(conn):
+    """Konzorcij vozi samo proti jugu, druga stran ceste je Pošta (~110 m).
+    LPP 6 do Dolgega mosta in nazaj mimo Pošte do Bavarskega dvora."""
+    conn.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)", [
+        ("KO", "Konzorcij", 46.0511, 14.5029),
+        ("PO", "Pošta", 46.0520, 14.5035),
+        ("BD", "Bavarski dvor", 46.0566, 14.5057),
+        ("DM", "Dolgi most", 46.0300, 14.4700),
+    ])
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('j6','r6','6','Dolgi most','S1')")
+    _sched(conn, "j6", [(1, "KO", None, 28800), (2, "DM", 30000, None)])
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+                 "VALUES('s6','r6','6','Črnuče','S1')")
+    _sched(conn, "s6", [(1, "DM", None, 30600), (2, "PO", 31800, 31800), (3, "BD", 32000, None)])
+    conn.commit()
+
+
+def test_prestop_do_konca_linije_in_nazaj_se_ne_ponudi(conn):
+    # 24. 10. 2026: Konzorcij -> Bavarski dvor osem takih „zvez“ (52 min za
+    # 600 m), namesto postajališča čez cesto.
+    _krog_cez_cesto(conn)
+    legs = journey.transfers(conn, "Konzorcij", "Bavarski dvor", "2026-08-31", direct=[])
+    assert legs == []
+    assert journey.plan(conn, "Konzorcij", "Bavarski dvor", "2026-08-31") == []
+
+
+def test_postajalisce_cez_cesto_z_neposredno_voznjo(conn):
+    _krog_cez_cesto(conn)
+    b = journey.blizu_z_zvezo(conn, "Konzorcij", "Bavarski dvor", "2026-08-31")
+    assert b == {"ime": "Pošta", "metrov": 110, "kje": "od"}
+    # Ko vožnja s Pošte že odpelje, predloga ni.
+    assert journey.blizu_z_zvezo(conn, "Konzorcij", "Bavarski dvor", "2026-08-31",
+                                 earliest_s=31900) is None
+
+
+def test_postajalisce_ob_cilju_z_neposredno_voznjo(conn):
+    # Obratno: z Dolgega mosta na Konzorcij (ki vozi samo proti jugu) ne pelje
+    # nič, do Pošte 110 m od njega pa.
+    _krog_cez_cesto(conn)
+    b = journey.blizu_z_zvezo(conn, "Dolgi most", "Konzorcij", "2026-08-31")
+    assert b == {"ime": "Pošta", "metrov": 110, "kje": "do"}
+
+
+def test_noga_prestopa_nosi_prevoznika(conn):
+    # Brez prevoznika je prikaz pisal „6 › 6“ namesto „LPP 6 › LPP 6“.
+    legs = journey.transfers(conn, "Ajdovščina", "Celje", "2026-08-31", direct=[])
+    assert legs and {"agency", "network", "mode"} <= set(legs[0]["legs"][0])
+
+
 # ---------------------------------------------------------------- običajna zamuda
 
 def test_obicajna_zamuda_rabi_dovolj_voznj(conn):

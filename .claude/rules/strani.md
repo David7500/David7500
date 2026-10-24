@@ -122,10 +122,14 @@ Izbrana pot ostane, dokler je ne končaš ali ne poteče — čez zaprto aplikac
 
 ## Iskalnik zvez in tabla (`connections.*`)
 
-* **Predlogi poti po omrežju**: avtobusnih šest = najpogostejše relacije po številu voženj (preverjene z `resolve_station()`). `popularChipsHtml()` + `wirePopularChips()` skupno.
-* **Najbližja postaja = tih žeton nad shranjenimi** („Najbližje: Drama · 76 m“), ko je lega dovoljena in polje prazno (Od–do: Od; tabla: postaja). Dotik vpiše Od ali odpre tablo. `/api/stations/near?limit=1` po omrežju. Meja 2 km (`NAJBLIZJE_DO_M`; 95,8 % od 435 044 naslovov OSM do postajališča, 37,7 % do železniške postaje), lega ≤ 100 m (pri 100 m drugo ime v 6,1 %, pri 200 m 12,3 %). Ena natančna lega, nato GPS ugasne.
-* Pod iskalnikom samo žetoni + (vlaki) povezava na ovire. Dnevne kartice ni (avtobusi „+839 min“ ob 00:03). Število ovir iz `/api/health` le, če je pregled še na zaslonu.
-* **Dva seznama**: `kajros:fav` (zvezdica) in `kajros:recent` (šest zadnjih), oba v žetonih pod iskalnikom, **ločena po omrežju**.
+Osnutek E (David, 24. 10. 2026): iskanje iz A, zadetki iz B — vse vrstice enake, naslednja le obarvana (prva „ne sme biti tako drugačna“).
+
+* **En obrazec**: Od + neobvezni Kam. Brez Kam tabla odhodov s postaje Od, s Kam zveze. Zavihkov ni; prihodi in „od ure“ samo prek naslova (`?kind=prihodi&ob=08:00`). Dan = Danes · Jutri · koledar (eno polje `#date`, JS ga prestavi k gumbu, ki odpre `showPicker`).
+* **Ura in zamuda skupaj** (David: „ni jasno, kaj je vozni red in kaj zamuda“): „čez N min“ (do 3 h), krepka ura = kdaj res pelje, „vozni red“ s prečrtano uro ob razliki, žeton z enoto. Žeton ima obliko postankov okna vožnje (`.zt`: meritev nevtralno, ocena tonsko, živo s piko, običajno črtkano). Zveza: **„vozni red 17:16 → 17:25“ vedno z urama** — prečrtano le ob živi zamudi; sama beseda je velike ure pustila nejasne. Ure iz „običajno“ ne računamo (zgodovina ni napoved).
+* **Predlogi poti po omrežju**, samo dokler ni shranjenih: avtobusnih šest = najpogostejše relacije po številu voženj (preverjene z `resolve_station()`), `popularChipsHtml()`.
+* **Najbližja postaja** (lega dovoljena, Od prazen): brez shranjenih kartica z obema stranema ceste in prvim odhodom z vsake (dotik odpre tablo s to stranjo), s shranjenimi tih žeton „Najbližje: Drama · 76 m“. Brez dovoljenja gumb „Najbližje postajališče“ — okno dovoljenja samo na dotik. `/api/stations/near?limit=1` po omrežju. Meja 2 km (`NAJBLIZJE_DO_M`; 95,8 % od 435 044 naslovov OSM do postajališča, 37,7 % do železniške postaje), lega ≤ 100 m (pri 100 m drugo ime v 6,1 %, pri 200 m 12,3 %). Ena natančna lega, nato GPS ugasne.
+* Pri vlakih še povezava na ovire. Dnevne kartice ni (avtobusi „+839 min“ ob 00:03). Število ovir iz `/api/svezina` le, če je pregled še na zaslonu.
+* **Shranjeno** (`kajros:fav`, zvezdica) = vrstice z naslednjim odhodom (`odhodiPoti` v common.js, isto kot Moje poti na domači), osvežitev 60 s; zvezdica v vrstici odstrani v dveh dotikih („odstrani?“). `kajros:recent` (šest zadnjih) samo v predlogih praznega polja. Oba **ločena po omrežju**.
 * Okno vožnje isto za vlak in avtobus; besedo izbere iz `network`. Več voženj na liniji → `?trip=<id>`.
 * **Preklop preprosto/napredno je zastarel** (David, 23. 10. 2026): vstopna stran in okno vožnje ga nimata; ima ga še `/app/ovire` (`is-advanced` na `<body>` odkrije `adv-only`).
 * **Pot pove, s čim greš**: `/app` → `/app/train` (308); `/app/train/{no}` za avtobus preusmeri po `trip.network` (307).
@@ -143,17 +147,18 @@ Izbrana pot ostane, dokler je ne končaš ali ne poteče — čez zaprto aplikac
 * **Omrežji ločeni na pogled**: segmentni preklop `Vlaki | Avtobusi`, `body.net-avtobus` prestavi `--accent` na zeleno.
 * **Eno ime v naslovu, en pomen**: ura table = `ob`, ne `from` (`from` = izhodišče iskanja; deljena tabla je pisala „08:00“ v polje OD). `/api/departures` ostane `from`.
 * **‹ in pilula vodita na zadnje iskanje** (`common.zapomniIskanje`, sessionStorage; `history.back()`, kadar s naše strani). Pilula na iskalniku = gola pot. Pot: `kajros:pot-imena`.
-* **Iskanje sproži samo gumb** (izjema: poizvedba iz naslova).
-* **Po iskanju obrazec skrčen v vrstico** (`zlozi()`): le lastno iskanje ali naslov, **nikoli osvežitev**. 404 in preklop zavihka odpreta. Imena se prelomijo, ne odrežejo.
+* **Iskanje sproži gumb ali sprememba dneva** (David, 24. 10. 2026: Danes/Jutri/koledar išče takoj, `poDnevu`; brez Od samo izbere) in poizvedba iz naslova. Izbira postaje ne.
+* **Po iskanju obrazec skrčen v vrstico** (`zlozi()`, `.pz`): le lastno iskanje ali naslov, **nikoli osvežitev**. 404 odpre. Imena se prelomijo, ne odrežejo. Na tabli „Kam?“ (fokus v Kam), pri zvezah zamenjava; pod vrstico zvez dan. **Namizje (≥ 900 px) ne skrči**: z odgovorom dva stolpca, obrazec levo, vrstica nad odgovorom.
+* **Tabla po vrsti ali po linijah** (samo avtobus, privzeto po vrsti, `kajros:tabla-razvrstitev`): po linijah ena vrstica na linijo, cilj in stran ceste, „nato čez 24 in 46 min“.
 * **Osvežitev zvez je tiha** (30 s): ponovi vprašanje na zaslonu, pozen odgovor ne prepiše novejšega (`zvezeSt`), odprt seznam in škatla ovir ostaneta.
-* **Avtobusna tabla ima stran ceste** (89 % prometa na imenih z ≥ 2 postajališčema). Gumbi „obe · → Tobačna · → Vič Glince“ = **naslednja postaja**, brez sklanjanja.
+* **Avtobusna tabla ima stran ceste** (89 % prometa na imenih z ≥ 2 postajališčema). Povezani segmenti „Obe · → Tobačna · → Vič Glince“ = **naslednja postaja**, brez sklanjanja.
   * Računa strežnik (`journey.smeri_postaje`; meji 60° in 250 m). „Proti centru“ kot oznaka zavrnjeno (22. 9.).
   * **Mestni LPP: dodatek „v center“ / „iz centra“** ob naslednji postaji (David, 22. 10. 2026: „kot so navajeni“). Ne računamo ga: LPP-jeva koda postajališča (`station.koda`, uvoz iz `stop_code`), liha = proti centru. **Ne v središču** (`SREDISCE_M` 800 m od Kongresnega trga): tam koda smeri ne pove (do 0,5 km 47 %, 0,5–0,8 km 63 % ujemanja po prometu; Bavarski dvor 600012 pelje na Ajdovščino), 0,8–1,5 km 100 %, dlje 95 %. Kode v nasprotju = brez dodatka. Tabla (`.smer-center`) in pristajalna.
   * **Filtrira strežnik** (meja 150 vrstic); preklop takojšen iz cele table, nato prava. Osvežitev tiha (`searchBoard(push, tiho)`).
-  * Izbira po pravem imenu (`kajros:smer`), ključ = katerikoli `stop_id` smeri; neznan se tiho pozabi.
-  * Zavihek „Tabla“, ne „Smer“.
-* **Današnja tabla po pričakovani uri**: odpeljane pod „pokaži N prejšnjih“, nepotrjen nad naslednjo, poudarjena prva po pričakovani uri, vozni red prečrtan. Drug dan po voznem redu. Pristajalna enako (`pristanek._po_pricakovani`, `pristanek.ura_odhoda`). API in widget voznoredno.
+  * Izbira po pravem imenu (`kajros:smer`, `smerIzSpomina` v common.js), ključ = katerikoli `stop_id` smeri; neznan se tiho pozabi.
+* **Današnja tabla po pričakovani uri**: odpeljane pod gumbom „N prejšnjih“ (v vrstici z razvrstitvijo), nepotrjen nad naslednjo, poudarjena prva po pričakovani uri, vozni red prečrtan. Drug dan po voznem redu. Pristajalna enako (`pristanek._po_pricakovani`, `pristanek.ura_odhoda`). API in widget voznoredno.
 * **Prestop nad neposredne, kadar prej pripelje** (le danes): „Z enim prestopom — prej na cilju“ prvi.
+* **Postajališče čez cesto** (`blizu` v `/api/connections`, `blizuHtml`): brez neposredne vožnje modra kartica nad odgovorom („Postajališče **Pošta** je 60 m stran in od tam pelje“ / „… je 60 m od cilja in tja pelje“) z gumbom, ki zamenja Od ali Kam in išče. Mestno postajališče ima pogosto drugo ime za vsako smer (Konzorcij samo proti jugu); iskalnik veže po imenu in hoje ne pozna.
 * **Tabla združi sezonske različice** po fizičnem odhodu (številka, minuta, smer); obdrži izmerjeno, nato katerokoli vrednost.
 * **Okno vožnje se da poslati** („Pošlji“): stavek „RG 318 …: zamuja 23 min (zadnji podatek s postaje Trbovlje ob 07:10)“, povezava brez `postaja`; brez Web Share kopira („kopirano“ 2,5 s). Predogled nosi stanje ob pošiljanju (`api._stanje_za_predogled`, vedno „zadnji podatek“, z uro). Mestna linija brez `trip` stanja nima.
 * **Vozovnica: `eshop.sz.si` brez relacije**, samo železnica (z nadomestnim). Relacije ni mogoče podati (POST z internimi ID-ji; `potniski.sz.si/vozni-redi-results/` relacije v trgovino ne prenese) — povezava pove „relacijo vpišeš tam“.

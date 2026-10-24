@@ -648,10 +648,9 @@ body:not(.is-advanced) .adv-only { display: none !important; }
 }
 
 /* ---------- zloženo vprašanje ----------
- * Iskalnik zvez in Najhitrejša pot: na telefonu se obrazec po iskanju skrči v
- * to vrstico, dotik jo odpre. Kdaj je vidna, odloči stran (`.zlozeno` v
- * connections.css in pot.css); tu samo, kako je videti -- ena vrstica, dve
- * strani, en videz. */
+ * Najhitrejša pot: na telefonu se obrazec po iskanju skrči v to vrstico,
+ * dotik jo odpre. Kdaj je vidna, odloči `.zlozeno` v pot.css. Iskalnik zvez
+ * ima od osnutka E (24. 10. 2026) svojo vrstico (`.pz` v connections.css). */
 
 .povzetek { display: none; gap: 8px; align-items: stretch; }
 .povzetek-uredi {

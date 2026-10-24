@@ -167,7 +167,6 @@ const ODHODOV = 2;
 // podatka se ne more biti in beseda je sum (isto kot `pot.BREZ_PODATKA_PRED_S`).
 const BREZ_PODATKA_PRED_MS = 30 * 60000;
 const OSVEZI_POTI_MS = 60000;
-const SMER_KLJUC = "kajros:smer";
 
 function beri(kljuc) {
   try {
@@ -175,15 +174,6 @@ function beri(kljuc) {
     return Array.isArray(all) ? all.filter((x) => x && x.net) : [];
   } catch (err) {
     return [];
-  }
-}
-
-/** Stran ceste, ki si jo potnik na tabli izbral (iskalnik, `kajros:smer`). */
-function smerTable(postaja) {
-  try {
-    return (JSON.parse(localStorage.getItem(SMER_KLJUC) || "{}") || {})[postaja] || null;
-  } catch (e) {
-    return null;
   }
 }
 
@@ -227,38 +217,6 @@ function mojePoti() {
     if (poti.length >= NAJVEC_POTI) break;
   }
   return poti;
-}
-
-/** Odhodi poti v enotni obliki, ne glede na to, ali je zveza A-B ali tabla.
- *  Brez `datum` velja danes. */
-async function odhodiPoti(f, datum) {
-  const network = f.net === "avtobus" ? "avtobus" : "zeleznica";
-  if (f.kind === "board") {
-    const q = new URLSearchParams({ station: f.station, kind: f.dir || "odhodi", network });
-    if (datum) q.set("date", datum);
-    const smer = smerTable(f.station);
-    if (smer) q.set("smer", smer);
-    const d = await fetch(`/api/departures?${q}`).then(jsonOk);
-    // Po obvozu LPP tu ne ustavi (`ne_ustavi`): ni odhod.
-    return (d.board || []).filter((r) => !r.ne_ustavi).map((r) => ({
-      ura: r.sched, pricakovano: r.expected, zamuda: r.zamuda, nepotrjen_do: r.nepotrjen_do,
-      kam: lepoIme(r.towards), nadomestni: isBus(r.mode) && r.network === "zeleznica",
-    }));
-  }
-  const q = new URLSearchParams({ from: f.from, to: f.to, network, with_transfers: "false" });
-  if (datum) q.set("date", datum);
-  const d = await fetch(`/api/connections?${q}`).then(jsonOk);
-  return (d.connections || []).filter((c) => !c.ne_ustavi).map((c) => ({
-    ura: c.sched_dep, pricakovano: c.expected_dep, zamuda: c.zamuda, nepotrjen_do: c.nepotrjen_do,
-    kam: null, nadomestni: isBus(c.mode) && c.network === "zeleznica",
-  }));
-}
-
-// Mimo je sele, ko je minil PRICAKOVANI odhod; nepotrjen odhod (vlak, o
-// katerem feed molci) ostane do `nepotrjen_do`, isto kot v iskalniku.
-function naslednjiOdhodi(odhodi, zdaj) {
-  return odhodi.filter((o) => new Date(o.pricakovano || o.ura).getTime() >= zdaj
-    || (o.nepotrjen_do && zdaj <= new Date(o.nepotrjen_do).getTime())).slice(0, ODHODOV);
 }
 
 function zamudaPoti(o, zdaj) {
@@ -306,7 +264,7 @@ function osveziOdhode(poti) {
     let ima = false;
     try {
       const zdaj = Date.now();
-      const danes = naslednjiOdhodi(await odhodiPoti(f), zdaj);
+      const danes = naslednjiOdhodi(await odhodiPoti(f), zdaj, ODHODOV);
       if (danes.length) {
         html = odhodiHtml(danes, zdaj, false);
         ima = true;

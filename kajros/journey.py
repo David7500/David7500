@@ -969,6 +969,31 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
 
 # ---------------------------------------------------------------- prestopi
 
+# Kar je bliže, je za pešca isti kraj: druga stran ceste ali sosednje
+# postajališče (4 min hoje). Mestno postajališče ima pogosto drugo ime za vsako
+# smer -- Konzorcij vozi samo proti jugu, v drugo smer stoji Pošta 120 m stran.
+BLIZU_M = 300
+
+
+def _blizu(conn: sqlite3.Connection, stop_ids: set[str], m: int = BLIZU_M) -> dict[str, int]:
+    """`{stop_id: metrov}` za postajališča do `m` od katerega koli iz
+    `stop_ids`, vključno z njimi (0 m)."""
+    out = {sid: 0 for sid in stop_ids}
+    for sid in stop_ids:
+        r = conn.execute("SELECT lat, lon FROM station WHERE stop_id = ?", (sid,)).fetchone()
+        if not r or r["lat"] is None or r["lon"] is None:
+            continue
+        dlat = m / 111_000
+        dlon = m / (111_000 * max(math.cos(math.radians(r["lat"])), 0.1))
+        for s in conn.execute(
+                "SELECT stop_id, lat, lon FROM station WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+                (r["lat"] - dlat, r["lat"] + dlat, r["lon"] - dlon, r["lon"] + dlon)):
+            d = round(geo.haversine(r["lat"], r["lon"], s["lat"], s["lon"]))
+            if d <= m and d < out.get(s["stop_id"], m + 1):
+                out[s["stop_id"]] = d
+    return out
+
+
 def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
               service_date: str, network: str | None, min_gap: int, max_gap: int,
               earliest: int) -> list[dict]:
@@ -994,6 +1019,7 @@ def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
         return omr is None or omr.get(tid) == network
 
     a_ids, b_ids = _stop_ids_of(conn, from_name), _stop_ids_of(conn, to_name)
+    blizu_a, blizu_b = set(_blizu(conn, a_ids)), set(_blizu(conn, b_ids))
     # Vožnje skozi cilj: trip -> [(stop_seq, prihod)]. Prihod je
     # COALESCE(arr, dep) -- `by_trip` ga nosi na mestu 2.
     na_b: dict[str, list] = {}
@@ -1013,9 +1039,16 @@ def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
         for a_dep, t1, a_seq in at_stop.get(sid, ()):
             if a_dep < earliest or not v_omrezju(t1):
                 continue
+            mimo_cilja = False
             for x1_seq, x1_sid, x1_arr, _d in by_trip[t1]:
                 if x1_seq <= a_seq or x1_arr is None:
                     continue
+                # Vožnja tu do cilja (BLIZU_M) ne pride bližje: kdor se pelje
+                # naprej in nato nazaj, se vozi v krogu. Ta postanek je še
+                # lahko prestop, naslednji ne več.
+                if mimo_cilja:
+                    break
+                mimo_cilja = x1_sid in blizu_b
                 ev = at_stop.get(x1_sid)
                 if not ev:
                     continue
@@ -1036,6 +1069,14 @@ def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
                         if any(s0 < x2_seq and s0sid in a_ids and d0 is not None
                                and d0 >= a_dep for s0, s0sid, _a0, d0 in by_trip[t2]):
                             continue
+                        # Druga vožnja pelje nazaj mimo izhodišča (BLIZU_M):
+                        # do konca linije in nazaj. Konzorcij -> Bavarski dvor
+                        # je 24. 10. 2026 ponudil osem takih (LPP 6 do Dolgega
+                        # mosta, 23 min čakanja, LPP 6 nazaj -- 52 min za 600 m),
+                        # namesto druge strani ceste. Tisto pove `blizu_z_zvezo()`.
+                        if any(x2_seq < s0 < b_seq and s0sid in blizu_a
+                               for s0, s0sid, _a0, _d0 in by_trip[t2]):
+                            continue
                         out.append({"trip1": t1, "trip2": t2, "a_seq": a_seq,
                                     "dep_s": a_dep, "x1_seq": x1_seq, "x_arr_s": x1_arr,
                                     "x2_seq": x2_seq, "x_dep_s": x2_dep, "b_seq": b_seq,
@@ -1044,7 +1085,7 @@ def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
         return out
     tripi = sorted({d["trip1"] for d in out} | {d["trip2"] for d in out})
     opis = {r["trip_id"]: r for r in conn.execute(
-        f"SELECT trip_id, train_no, headsign FROM trip WHERE trip_id IN "
+        f"SELECT trip_id, train_no, headsign, mode, network, agency FROM trip WHERE trip_id IN "
         f"({','.join('?' * len(tripi))})", tripi)}
     postaje = sorted({d["_via"] for d in out})
     imena = {r["stop_id"]: r["name"] for r in conn.execute(
@@ -1054,7 +1095,9 @@ def _prestopi(conn: sqlite3.Connection, from_name: str, to_name: str,
         t1, t2 = opis[d["trip1"]], opis[d["trip2"]]
         d.update(train1=t1["train_no"], headsign1=t1["headsign"],
                  train2=t2["train_no"], headsign2=t2["headsign"],
-                 via=imena.get(d.pop("_via")))
+                 via=imena.get(d.pop("_via")),
+                 _vrsta1={k: t1[k] for k in ("mode", "network", "agency")},
+                 _vrsta2={k: t2[k] for k in ("mode", "network", "agency")})
     return out
 
 
@@ -1176,17 +1219,66 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
         # in prikaz je cakanje racunal iz njiju -- pri enem prestopu je zato
         # pisalo "prestop na postaji Zidani Most · NaN min". Dve poti, ki
         # vracata isto stvar, morata vracati enake kljuce.
+        # Prevoznik in vrsta tudi tu, kot pri `plan()`: brez njiju je prikaz
+        # namesto „LPP 6 › LPP 6“ pisal „6 › 6“.
         d["legs"] = [
             {"train_no": d["train1"], "headsign": d["headsign1"],
              "trip_id": d["trip1"], "from": from_name, "to": d["via"],
              "dep": d["sched_dep"], "arr": d["via_arr"],
-             "dep_s": d["dep_s"], "arr_s": d["x_arr_s"]},
+             "dep_s": d["dep_s"], "arr_s": d["x_arr_s"], **d.pop("_vrsta1")},
             {"train_no": d["train2"], "headsign": d["headsign2"],
              "trip_id": d["trip2"], "from": d["via"], "to": to_name,
              "dep": d["via_dep"], "arr": d["sched_arr"],
-             "dep_s": d["x_dep_s"], "arr_s": d["arr_s"]},
+             "dep_s": d["x_dep_s"], "arr_s": d["arr_s"], **d.pop("_vrsta2")},
         ]
     return out
+
+
+def blizu_z_zvezo(conn: sqlite3.Connection, from_name: str, to_name: str,
+                  service_date: str, network: str | None = None,
+                  earliest_s: int = 0) -> dict | None:
+    """Najbližje postajališče z drugim imenom do `BLIZU_M` od izhodišča, od
+    koder pelje neposredna vožnja do cilja (`kje = "od"`), sicer do `BLIZU_M`
+    od cilja, do katerega pelje neposredna z izhodišča (`kje = "do"`):
+    `{ime, metrov, kje}`. Samo vožnje od `earliest_s`.
+
+    Iskalnik postajališča veže po imenu in hoje ne pozna. Ko neposredne vožnje
+    ni, je odgovor pogosto čez cesto: Konzorcij vozi samo proti jugu, s Pošte
+    (60–120 m) do Bavarskega dvora pelje 312 voženj na dan (24. 10. 2026).
+    Isto na cilju: vožnja, ki gre mimo cilja do konca linije in nazaj
+    (`_prestopi`), se ne ponudi -- izstop 300 m prej se.
+    """
+    by_trip, at_stop = _timetable_for_day(
+        conn, service_date, "zeleznica" if network == "zeleznica" else None)
+    if not by_trip:
+        return None
+    omr = _omrezja_voznj(conn) if network == "avtobus" else None
+    a_ids, b_ids = _stop_ids_of(conn, from_name), _stop_ids_of(conn, to_name)
+
+    def pelje(od: set[str], do: set[str]) -> bool:
+        for sid in od:
+            for dep, tid, seq in at_stop.get(sid, ()):
+                if dep < earliest_s or (omr is not None and omr.get(tid) != network):
+                    continue
+                if any(st[0] > seq and st[1] in do for st in by_trip[tid]):
+                    return True
+        return False
+
+    for kje, okolica in (("od", a_ids), ("do", b_ids)):
+        blizu = {sid: m for sid, m in _blizu(conn, okolica).items()
+                 if sid not in a_ids and sid not in b_ids}
+        if not blizu:
+            continue
+        imena = {r["stop_id"]: r["name"] for r in conn.execute(
+            f"SELECT stop_id, name FROM station WHERE stop_id IN ({','.join('?' * len(blizu))})",
+            list(blizu))}
+        for sid, m in sorted(blizu.items(), key=lambda x: x[1]):
+            ime = imena.get(sid)
+            if not ime or ime in (from_name, to_name):
+                continue
+            if pelje({sid}, b_ids) if kje == "od" else pelje(a_ids, {sid}):
+                return {"ime": ime, "metrov": int(round(m, -1)) or 10, "kje": kje}
+    return None
 
 
 # Koliko minut mora ostati, da zvezo se imenujemo "drzi". Pod tem je ujeti
@@ -1516,8 +1608,31 @@ def plan(conn: sqlite3.Connection, from_name: str, to_name: str,
     legs.reverse()
     if len(legs) <= 2:
         return []                # to zna ze `transfers()`, in bolje
+    if _v_krogu(conn, legs, by_trip, starts, targets):
+        return []
 
     return [_build_itinerary(conn, legs, service_date, by_trip)]
+
+
+def _v_krogu(conn: sqlite3.Connection, legs: list[tuple], by_trip: dict,
+             starts: set[str], targets: set[str]) -> bool:
+    """Ali pot pelje nazaj mimo izhodišča ali naprej mimo cilja (`BLIZU_M`).
+
+    Isto pravilo kot v `_prestopi()`: taka pot je vožnja v krogu, pešec bi
+    šel na drugo stran ceste. Najzgodnejši prihod je tu en sam odgovor, zato
+    ga zavržemo celega.
+    """
+    blizu_a, blizu_b = set(_blizu(conn, starts)), set(_blizu(conn, targets))
+    zadnja = len(legs) - 1
+    for i, (trip_id, _board, bseq, _alight, aseq) in enumerate(legs):
+        for seq, sid, _arr, _dep in by_trip[trip_id]:
+            if not bseq < seq < aseq:
+                continue
+            if i > 0 and sid in blizu_a:
+                return True
+            if i < zadnja and sid in blizu_b:
+                return True
+    return False
 
 
 def _build_itinerary(conn: sqlite3.Connection, legs: list[tuple],

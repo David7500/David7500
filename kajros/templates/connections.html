@@ -9,6 +9,7 @@
 {% from "_znak.html" import znak %}
 {% from "_vec.html" import gumb as vec_gumb, list as vec_list %}
 {% from "_obvestila.html" import mesto as obvestila_mesto %}
+{% set bus = network == "avtobus" %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/ikone/icon-180.png">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -18,11 +19,8 @@
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('connections.css') }}">
-  {%- if deli %}
-  <link rel="stylesheet" href="{{ s('deli.css') }}">
-  {%- endif %}
 </head>
-<body class="conn-page net-{{ network | default('zeleznica') }}" data-network="{{ network | default('zeleznica') }}">
+<body class="conn-page iskalnik net-{{ network | default('zeleznica') }}" data-network="{{ network | default('zeleznica') }}">
 
   <header class="topbar">
     <a class="brand" href="/">
@@ -45,176 +43,158 @@
 
     {{ obvestila_mesto(network | default('zeleznica')) }}
 
-    <!-- Dva vprašanja, ne dva obrazca: "od kod do kam" in "kaj gre s te postaje".
-         Drugo je pogostejše in ga aplikacija doslej ni znala odgovoriti. -->
-    <div class="tabs" role="tablist">
-      <button type="button" class="tab is-on" data-tab="ab" role="tab" aria-selected="true">Od–do</button>
-      <button type="button" class="tab" data-tab="board" role="tab" aria-selected="false">Odhodi s postaje</button>
-    </div>
-
-    {# Na telefonu je obrazec cel zaslon: po iskanju se skrči v to vrstico, da
-       je odgovor nad pregibom, dotik nanjo ga spet odpre. Namizje ima obrazec
-       v eni vrstici in vrstice ne pokaže nikoli (CSS). #}
-    <div class="povzetek" id="povzetek">
-      <button type="button" class="povzetek-uredi" id="povzetek-uredi">
-        <span class="povzetek-pot" id="povzetek-pot"></span>
-        <span class="povzetek-dan" id="povzetek-dan"></span>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-        </svg>
-      </button>
-      <button type="button" class="povzetek-swap" id="povzetek-swap"
-              title="zamenjaj postaji" aria-label="zamenjaj postaji">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
-        </svg>
-      </button>
-    </div>
-
-    <form id="search-ab" class="search-card">
-      <div class="field station-field">
-        <label for="from">Od</label>
-        <input id="from" name="from" placeholder="{{ from_ph | default('izhodiščna postaja') }}" autocomplete="off"
-               autocapitalize="off" spellcheck="false" required>
-        <button type="button" class="field-clear" data-clear="from"
-                tabindex="-1" aria-label="izbriši izhodišče" hidden>&times;</button>
-        <ul class="suggest" id="suggest-from" role="listbox" hidden></ul>
-      </div>
-      <button type="button" id="swap" class="swap" title="zamenjaj postaji" aria-label="zamenjaj postaji">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
-        </svg>
-      </button>
-      <div class="field station-field">
-        <label for="to">Do</label>
-        <input id="to" name="to" placeholder="{{ to_ph | default('ciljna postaja') }}" autocomplete="off"
-               autocapitalize="off" spellcheck="false" required>
-        <button type="button" class="field-clear" data-clear="to"
-                tabindex="-1" aria-label="izbriši cilj" hidden>&times;</button>
-        <ul class="suggest" id="suggest-to" role="listbox" hidden></ul>
-      </div>
-      {# Jutri je daleč najpogostejši "ne danes" -- vožnja zjutraj se načrtuje
-         zvečer. Prek koledarja so to trije dotiki, tu je en. #}
-      <div class="field field-date">
-        <label for="date">Dan</label>
-        <div class="date-row">
-          <input id="date" name="date" type="date">
-          <span class="day-nav">
-            <button type="button" class="day-step" data-day-for="date" data-step="-1"
-                    aria-label="dan nazaj" title="dan nazaj">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6"></path>
+    {#- Osnutek E (David 24. 10. 2026): eno vprašanje namesto dveh zavihkov.
+        Od je postaja, Kam ni obvezen -- brez cilja odgovor je tabla odhodov,
+        s ciljem so zveze. Na telefonu se obrazec po iskanju skrči v vrstico
+        (`.pz`), na namizju ostane v levem stolpcu. #}
+    <div class="isk-stolpci">
+      <div class="isk-levo">
+        <form id="iskanje" class="isk-obrazec" autocomplete="off">
+          <div class="isk-polja">
+            <div class="isk-polje station-field">
+              <svg class="isk-ik" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                {% if bus %}<path d="M12 21v-9"></path><rect x="6.5" y="3" width="11" height="9" rx="2.5"></rect>
+                {% else %}<rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>{% endif %}
+              </svg>
+              <span class="isk-vnos">
+                <label for="from">Od</label>
+                <input id="from" name="from" placeholder="{{ 'postajališče' if bus else 'postaja' }}"
+                       autocapitalize="off" spellcheck="false" enterkeyhint="next">
+              </span>
+              <button type="button" class="field-clear" data-clear="from"
+                      tabindex="-1" aria-label="izbriši izhodišče" hidden>&times;</button>
+              <ul class="suggest" id="suggest-from" role="listbox" hidden></ul>
+            </div>
+            <div class="isk-polje station-field">
+              <svg class="isk-ik" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5.5 21V4"></path><path d="M5.5 4.5h11l-2.2 4 2.2 4h-11"></path>
+              </svg>
+              <span class="isk-vnos">
+                <label for="to">Kam</label>
+                <input id="to" name="to" placeholder="neobvezno"
+                       autocapitalize="off" spellcheck="false" enterkeyhint="search">
+              </span>
+              <button type="button" class="field-clear" data-clear="to"
+                      tabindex="-1" aria-label="izbriši cilj" hidden>&times;</button>
+              <ul class="suggest" id="suggest-to" role="listbox" hidden></ul>
+            </div>
+            <button type="button" id="swap" class="isk-zamenjaj" title="zamenjaj Od in Kam" aria-label="zamenjaj Od in Kam">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
               </svg>
             </button>
-            <button type="button" class="day-step" data-day-for="date" data-step="1"
-                    aria-label="dan naprej" title="dan naprej">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M9 6l6 6-6 6"></path>
-              </svg>
+          </div>
+          <div class="isk-vrsta">
+            {#- Jutri je daleč najpogostejši „ne danes“ -- vožnja zjutraj se
+                načrtuje zvečer. Drug dan prek koledarja telefona. #}
+            <div class="dan" role="group" aria-label="Dan">
+              <button type="button" class="dan-g" data-dan="danes" aria-pressed="true">
+                <svg class="dan-kljukica" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Danes
+              </button>
+              <button type="button" class="dan-g" data-dan="jutri" aria-pressed="false">
+                <svg class="dan-kljukica" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Jutri
+              </button>
+              <span class="dan-kol">
+                <button type="button" class="dan-g" data-dan="drug" aria-pressed="false" aria-label="izberi dan">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg>
+                  <span class="dan-napis"></span>
+                </button>
+                <input id="date" name="date" type="date" tabindex="-1" aria-hidden="true">
+              </span>
+            </div>
+            <button type="submit" class="isk-poisci go">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                   stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+              Poišči
+            </button>
+          </div>
+        </form>
+
+        {#- Najbližja postaja (`connections.js`, „najbližja postaja“): kartica
+            z obema stranema ceste, kadar je lega dovoljena in Od prazen. #}
+        <div id="najblizje" class="najblizje" hidden></div>
+        <section id="moje" class="moje" aria-labelledby="moje-naslov" hidden>
+          <h2 id="moje-naslov" class="isk-naslov">Shranjeno</h2>
+          <div id="recents" class="moje-seznam"></div>
+        </section>
+        <div id="pregled" class="pregled"></div>
+      </div>
+
+      <div class="isk-desno">
+        {#- Vprašanje na zaslonu, skrčeno v vrstico: dotik ga odpre. Na
+            namizju stoji nad odgovorom, ker je obrazec že levo. #}
+        <div class="pz" id="povzetek">
+          <button type="button" class="pz-uredi" id="povzetek-uredi">
+            <svg class="pz-ik" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <g class="pz-ik-tabla">{% if bus %}<path d="M12 21v-9"></path><rect x="6.5" y="3" width="11" height="9" rx="2.5"></rect>
+                {% else %}<rect x="6" y="3" width="12" height="14" rx="3"></rect><path d="M6 10h12M9 21l-2 2M15 21l2 2M9.5 20h5"></path>{% endif %}</g>
+              <g class="pz-ik-zveza"><circle cx="5" cy="12" r="2.2"></circle><path d="M8.5 12h11M15.5 8l4 4-4 4"></path></g>
+            </svg>
+            <span class="pz-besedilo">
+              <span class="pz-pot" id="povzetek-pot"></span>
+              <span class="pz-dan" id="povzetek-dan"></span>
+            </span>
+          </button>
+          <button type="button" class="pz-kam" id="povzetek-kam" hidden>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 21V4"></path><path d="M5.5 4.5h11l-2.2 4 2.2 4h-11"></path></svg>
+            Kam?
+          </button>
+          <button type="button" class="pz-gumb pz-zvezda" id="fav-toggle" aria-pressed="false" hidden>
+            <svg width="21" height="21" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"
+                 stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path></svg>
+          </button>
+          <button type="button" class="pz-gumb pz-zamenjaj" id="povzetek-swap" title="v drugo smer" aria-label="v drugo smer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M7 4v13M7 4L4 7M7 4l3 3M17 20V7M17 20l3-3M17 20l-3-3"></path>
+            </svg>
+          </button>
+        </div>
+
+        {#- Dan pod skrčeno vrstico zvez (osnutek E3): drug dan brez odpiranja
+            obrazca. Polje za datum je eno; `connections.js` ga prestavi k
+            gumbu, ki odpre koledar. #}
+        <div class="dan pz-dnevi" role="group" aria-label="Dan">
+          <button type="button" class="dan-g" data-dan="danes" aria-pressed="true">
+            <svg class="dan-kljukica" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Danes
+          </button>
+          <button type="button" class="dan-g" data-dan="jutri" aria-pressed="false">
+            <svg class="dan-kljukica" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Jutri
+          </button>
+          <span class="dan-kol">
+            <button type="button" class="dan-g" data-dan="drug" aria-pressed="false" aria-label="izberi dan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg>
+              <span class="dan-napis"></span>
             </button>
           </span>
         </div>
-      </div>
-      <button type="submit" class="btn go">Poišči</button>
-    </form>
 
-    <form id="search-board" class="search-card" hidden>
-      <div class="field station-field">
-        <label for="station">{{ stop_label | default("Postaja") }}</label>
-        <input id="station" name="station" placeholder="{{ stop_ph | default('npr. Ljubljana') }}" autocomplete="off"
-               autocapitalize="off" spellcheck="false" required>
-        <button type="button" class="field-clear" data-clear="station"
-                tabindex="-1" aria-label="izbriši postajo" hidden>&times;</button>
-        <ul class="suggest" id="suggest-station" role="listbox" hidden></ul>
+        <div id="alerts" aria-live="polite"></div>
+        <!-- Rezultati se zamenjajo brez ponovnega nalaganja strani; bralnik
+             zaslona mora izvedeti, da je odgovor tu. `polite`, ker ni nujno. -->
+        <div id="result-head" class="za-bralnik" aria-live="polite"></div>
+        <div id="predlog-shrani" class="predlog-shrani" role="status" hidden></div>
+        <div id="results" class="results"></div>
+        {# Vozovnica pod rezultati: najprej "ali kaj pelje", sele nato "kupi". #}
+        <div id="vozovnica"></div>
       </div>
-      <div class="field field-date">
-        <label for="board-date">Dan</label>
-        <div class="date-row">
-          <input id="board-date" name="date" type="date">
-          <span class="day-nav">
-            <button type="button" class="day-step" data-day-for="board-date" data-step="-1"
-                    aria-label="dan nazaj" title="dan nazaj">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6"></path>
-              </svg>
-            </button>
-            <button type="button" class="day-step" data-day-for="board-date" data-step="1"
-                    aria-label="dan naprej" title="dan naprej">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M9 6l6 6-6 6"></path>
-              </svg>
-            </button>
-          </span>
-        </div>
-      </div>
-      <div class="field field-time">
-        <label for="board-time">Od ure</label>
-        <input id="board-time" name="from" type="time" placeholder="zdaj">
-      </div>
-      {# Dve moznosti nista spustni seznam: ta se na telefonu odpre cez pol
-         zaslona in zahteva dva dotika za preklop, ki ga pove ena beseda.
-         Skrito polje ostane, da se `$("board-kind").value` bere kot prej.
-         „Tabla“ in ne „Smer“: smer je od 22. 9. 2026 stran ceste nad
-         rezultati, in dve izbiri z istim imenom na enem zaslonu sta uganka. #}
-      <div class="field field-kind">
-        <span class="field-label">Tabla</span>
-        <div class="seg" id="board-kind-seg" role="group" aria-label="Tabla">
-          <button type="button" data-kind="odhodi" aria-pressed="true">odhodi</button>
-          <button type="button" data-kind="prihodi" aria-pressed="false">prihodi</button>
-        </div>
-        <input type="hidden" id="board-kind" name="kind" value="odhodi">
-      </div>
-      <button type="submit" class="btn go">Pokaži</button>
-      <button type="button" id="near-me" class="btn btn-quiet near-me"
-              title="poišči postajališča v bližini">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
-          <circle cx="12" cy="12" r="8"></circle>
-        </svg>
-        v bližini
-      </button>
-    </form>
-
-    {#- Najbližja postaja, kadar je lega dovoljena in polje prazno
-        (`connections.js`, „najbližja postaja“). #}
-    <div id="najblizje" class="najblizje" hidden></div>
-    <div id="recents" class="recents"></div>
-
-    {#- Deljenje lege tudi tu, ne samo na domači strani: sem pride, kdor ima
-        shranjeno svojo pot, in prav tu je, ko sede na vlak ali avtobus
-        (David, 25. 9. 2026). Zaprto je ena vrstica, da ne odrine rezultatov. #}
-    {%- if deli %}
-    <section class="deli deli-kompakt" id="deli" data-omrezje="{{ network | default('zeleznica') }}"
-             aria-label="Deli lego vozila" aria-live="polite"></section>
-    {%- endif %}
-
-    <div id="alerts" aria-live="polite"></div>
-    <!-- Rezultati se zamenjajo brez ponovnega nalaganja strani; bralnik
-         zaslona mora izvedeti, da je odgovor tu. `polite`, ker ni nujno. -->
-    <div class="result-bar">
-      <div id="result-head" class="result-head" aria-live="polite"></div>
-      <button type="button" id="fav-toggle" class="fav-toggle" aria-pressed="false" hidden></button>
     </div>
-    <div id="predlog-shrani" class="predlog-shrani" role="status" hidden></div>
-    <div id="results" class="results"></div>
-    {# Vozovnica pod rezultati: najprej "ali kaj pelje", sele nato "kupi". #}
-    <div id="vozovnica"></div>
 
   </main>
 
   <script src="{{ s('common.js') }}"></script>
   <script src="{{ s('connections.js') }}"></script>
-  {%- if deli %}
-  <script src="{{ s('deli.js') }}"></script>
-  {%- endif %}
   {{ vec_list() }}
 </body>
 </html>

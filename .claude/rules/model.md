@@ -47,6 +47,7 @@ Ob zapori enega tira izguba ≥ 5 min pri 16 % prehodov (sicer 4 %), za vlakom z
 
 * **Do trije.** `journey.transfers()` en prestop v SQL; brez zadetka `journey.plan()` (dnevni vozni red v pomnilniku, do štirih nog). 80 parov: brez odgovora 36 % → 4 %. 28 ms železnica, 60 ms avtobus.
 * Pragi po omrežju (`journey.TRANSFER_LIMITS`): železnica 6–120 min, avtobus 3–30.
+* **Prestop ne vozi v krogu** (`journey.BLIZU_M` 300 m): odpade, kadar druga vožnja pelje nazaj mimo izhodišča ali prva naprej mimo cilja (`_prestopi`; `plan()` prek `_v_krogu`). Konzorcij → Bavarski dvor jih je imel 8 (LPP 6 do Dolgega mosta in nazaj, 52 min za 600 m). 200 mestnih parov do 2,5 km (24. 10. 2026): prestopov 350 → 283, 9 parov ostane brez — vseh 9 dobi `blizu_z_zvezo()` (postajališče z drugim imenom do 300 m od izhodišča ali cilja z neposredno vožnjo; `blizu` v `/api/connections`).
 * **Prestop upošteva OBA vozila**: `wait = načrtovano + zamuda2 − zamuda1`; izpis „drugi +N min“. **Zaokroži enkrat, potem računaj.**
 * Za prestop je nevarna **podcenitev** prvega vozila (obratno od vstopa).
 * **Tveganje prestopa** (`pot.pripni_tveganje`, `docs/MERITVE.md` „Ali prestop drži“): vnaprej zgodovina ISTEGA prestopa (oba isti dan, prihodna zamuda prvega, odhodna drugega, z izhodišča nikoli negativna), skrčena proti `PRESTOP_IZHODISCE` z 2 dnevoma (Brier 0,098; razred sam 0,152; razred pod najnižjim izmerjenim dobi najnižjega). Vlak na izhodišču ne poroča: dan, ko je vozil (meritev na naslednjem postanku), = 0.

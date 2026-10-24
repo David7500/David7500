@@ -1,5 +1,6 @@
-/* Vstopna stran: iskalnik povezav in odhodna tabla.
- * Podlaga (barve, glava, žetoni) je v base.css.
+/* Vstopna stran vlakov in avtobusov (osnutek E, 24. 10. 2026) in stran ovir.
+ * Podlaga (barve, glava, žetoni) je v base.css. Telefon najprej; od 900 px
+ * obrazec levo in odgovor desno.
  */
 
 .conn-page { display: flex; flex-direction: column; min-height: 100vh; }
@@ -10,86 +11,125 @@
   margin: 0 auto;
   padding: 22px 18px 40px;
   flex-grow: 1;
+  box-sizing: border-box;
 }
 
-/* ---------- zavihka vprašanja ---------- */
+/* Besedilo na poudarku (gumb „Poišči“, oznaka vožnje, odštevanje). */
+.iskalnik { --na-poudarku: #14161a; }
+.iskalnik.net-avtobus { --na-poudarku: #0c2016; }
 
-.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.iskalnik .conn-main { max-width: 600px; padding: 6px 16px 40px; }
 
-.tab {
+.sp { flex: 1 1 auto; }
+
+.isk-naslov {
+  margin: 0; padding: 0 4px 10px;
+  font: 600 15px/1.3 var(--sans); color: var(--accent-lit);
+}
+
+/* ---------- obrazec ----------
+ * Od in Kam sta eno vprašanje: dve zapolnjeni polji, stisnjeni skupaj, z
+ * gumbom za zamenjavo na šivu. Kam ni obvezen -- brez njega je odgovor tabla. */
+
+.isk-obrazec { display: flex; flex-direction: column; gap: 10px; }
+.isk-polja { position: relative; display: flex; flex-direction: column; gap: 3px; }
+
+.isk-polje {
   position: relative;
-  background: none;
-  border: none;
-  color: var(--ink-dim);
-  font: 500 14px/1 var(--sans);
-  padding: 14px 14px;
+  display: flex; align-items: center; gap: 14px;
+  height: 60px; padding: 0 64px 0 16px;
+  background: var(--m-visoka);
+  border-radius: 6px;
+}
+.isk-polje:first-child { border-radius: 20px 20px 6px 6px; }
+.isk-polje:nth-child(2) { border-radius: 6px 6px 20px 20px; }
+.isk-polje:focus-within { box-shadow: inset 0 0 0 2px var(--accent-lit); }
+.isk-ik { flex: none; color: var(--ink-dim); }
+
+.isk-vnos { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.isk-vnos label { font: 500 12px/1.2 var(--sans); color: var(--ink-dim); }
+.isk-vnos input {
+  width: 100%; padding: 0; border: 0; outline: none;
+  background: transparent; color: var(--ink);
+  font: 400 16px/1.3 var(--sans);
+}
+.isk-vnos input::placeholder { color: var(--ink-mute); }
+
+/* Gumb za brisanje vnosa: na telefonu je popravek imena postaje sicer sedem
+   pritiskov vračalke. */
+.field-clear {
+  flex: none;
+  width: 36px; height: 36px; margin-right: -8px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; border-radius: 50%;
+  color: var(--ink-faint);
+  font: 400 22px/1 var(--sans);
   cursor: pointer;
 }
-@media (hover: hover) { .tab:hover { color: var(--ink); } }
-.tab.is-on { color: var(--accent-lit); }
-.tab.is-on::after {
-  content: ""; position: absolute; left: 10px; right: 10px; bottom: 0;
-  height: 3px; border-radius: 3px 3px 0 0; background: var(--accent-lit);
+@media (hover: hover) { .field-clear:hover { color: var(--ink); } }
+
+.isk-zamenjaj {
+  position: absolute; right: 12px; top: 39px; z-index: 2;
+  width: 44px; height: 44px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 3px solid var(--bg); border-radius: 50%;
+  background: var(--m-najvisja); color: var(--ink);
+  cursor: pointer;
 }
 
-/* ---------- iskalna kartica ---------- */
+.isk-vrsta { display: flex; align-items: center; gap: 8px; }
 
-.search-card {
-  display: flex;
-  align-items: flex-end;
-  /* **Ovij, ne prelij.** Odhodna tabla ima šest elementov v vrsti in odkar
-     ima postaja spodnjo mejo širine, se vrstica ne more več skrčiti pod njo —
-     brez ovijanja je zadnji gumb („v bližini“) molel čez zaobljeni rob
-     kartice. Ovijanje je edino, kar zdrži tudi jutri, ko pride sedmi element
-     ali daljša beseda. */
-  flex-wrap: wrap;
-  gap: 12px;
-  background: var(--bg-raised);
-  border-radius: 28px;
-  padding: 18px 16px;
+.isk-poisci {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px;
+  height: 48px; padding: 0 22px 0 18px;
+  border: 0; border-radius: 24px;
+  background: var(--accent-lit); color: var(--na-poudarku);
+  font: 600 15px/1 var(--sans);
+  cursor: pointer;
+}
+.go:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------- dan ----------
+ * Danes · Jutri · koledar kot povezana skupina. Izbrani gumb nosi kljukico;
+ * drug dan pokaže datum ob koledarju. */
+
+.dan { display: flex; gap: 2px; }
+.dan-g {
+  height: 40px; padding: 0 14px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; border-radius: 6px;
+  background: var(--m-visoka); color: var(--ink);
+  font: 500 14px/1 var(--sans); white-space: nowrap;
+  cursor: pointer;
+}
+.dan > .dan-g:first-child { border-radius: 20px 6px 6px 20px; }
+.dan-kol { position: relative; display: flex; }
+.dan-kol .dan-g { min-width: 44px; padding: 0 11px; border-radius: 6px 20px 20px 6px; }
+.dan-g[aria-pressed="true"] {
+  background: var(--m-sek); color: var(--m-na-sek);
+  font-weight: 600; padding-left: 10px;
+}
+.dan-kol .dan-g[aria-pressed="true"] { padding-left: 11px; }
+.dan-g:not([aria-pressed="true"]) .dan-kljukica { display: none; }
+.dan-napis:empty { display: none; }
+/* Polje za datum je samo izbirnik: vidno ne sme biti, upodobljeno pa mora
+   biti, sicer `showPicker()` ne dela. */
+#date {
+  position: absolute; left: 0; bottom: 0;
+  width: 1px; height: 1px; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
 }
 
-.field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 0; min-width: 0; }
-/* 210 px, kot pravi `strani.md`: datum konca pri ~105 px, puscici zasedeta
-   68 px levo od koledarskega gumbka, ta je 28 px od roba. Pri 180 px je
-   "dan nazaj" lezal pod datumom in ga ni bilo videti (namizje, 5. 10. 2026).
-   Polju za postajo vzame 30 px, vrstica pa se ovije, kadar zmanjka prostora. */
-.field-date { flex: 0 0 210px; }
-.field-kind { flex: 0 0 168px; }
-.field-time { flex: 0 0 118px; }
-
-.field label, .field-label {
-  font: 500 12.5px/1 var(--sans); color: var(--ink-dim);
-}
-
-
-.field input, .field select {
-  background: var(--m-visoka);
-  border: 2px solid transparent;
-  border-radius: var(--r);
-  min-height: 48px;
-  padding: 11px 12px;
-  color: var(--ink);
-  font: 400 16px/1.2 var(--sans);
-  min-width: 0;
-  width: 100%;
-}
-.field input:focus, .field select:focus { outline: none; border-color: var(--accent-lit); }
-.field input::placeholder { color: var(--ink-faint); }
-/* Ikona koledarja je z `color-scheme: dark` (base.css) bela; prej je bila
-   crna in jo je obracal `invert`. Prosojnost jo spravi na sivo ostalih ikon. */
-.field input[type="date"]::-webkit-calendar-picker-indicator,
-.field input[type="time"]::-webkit-calendar-picker-indicator { opacity: .65; cursor: pointer; }
+/* Dan pod skrčeno vrstico zvez -- samo na telefonu, na namizju je obrazec
+   levo že ves čas odprt. */
+.pz-dnevi { display: none; margin-top: 12px; }
+.pz-dnevi .dan-g { height: 36px; }
 
 /* ---------- samodopolnjevanje postaj ----------
  * Lasten seznam namesto <datalist>: ta se ravna po brskalniku, ujema se samo
  * na zacetku niza in ne zna prezreti sumnikov. "sentjur" mora najti Šentjur.
  */
-
-/* Postaja se ne sme skrciti pod berljivo: ob rasti polja za datum je na
-   tabli ostalo "Ljublj". `.field` ima `min-width: 0`, kar dovoli poljubno
-   ozko polje -- tu ga vrnemo na spodnjo mejo. */
-.station-field { position: relative; min-width: 124px; }
 
 .suggest {
   position: absolute;
@@ -98,39 +138,22 @@
   z-index: 30;
   margin: 0; padding: 4px;
   list-style: none;
-  background: var(--bg-raised);
-  border: 1px solid var(--line-firm);
+  background: var(--m-najvisja);
   border-radius: var(--r);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
   max-height: 264px;
   overflow-y: auto;
 }
 .suggest li {
-  padding: 8px 9px;
+  padding: 11px 12px;
   border-radius: var(--r-sm);
-  font: 400 13.5px/1.3 var(--sans);
+  font: 400 15px/1.3 var(--sans);
   color: var(--ink-dim);
   cursor: pointer;
 }
 .suggest li.is-active { background: var(--line-firm); color: var(--ink); }
 @media (hover: hover) { .suggest li:hover { background: var(--line-firm); color: var(--ink); } }
 .suggest li mark { background: none; color: var(--accent-lit); font-weight: 600; }
-
-/* Gumb za brisanje vnosa. Sidran na DNO polja, ne na vrh: nad vnosnim
- * poljem je oznaka in ta ni povsod enako visoka. */
-.field-clear {
-  position: absolute;
-  right: 1px; bottom: 1px;
-  width: 34px; height: 34px;
-  display: flex; align-items: center; justify-content: center;
-  background: none; border: 0; border-radius: var(--r);
-  color: var(--ink-faint);
-  font: 400 20px/1 var(--sans);
-  cursor: pointer;
-}
-@media (hover: hover) { .field-clear:hover { color: var(--ink); } }
-/* Besedilo se ne sme skriti pod gumb. */
-.station-field input { padding-right: 34px; }
 
 /* Postaja iz prejsnjega iskanja -- lociti se mora od zadetka iskanja, sicer
  * je videti, kot da smo ze nekaj nasli, preden je clovek karkoli natipkal. */
@@ -142,260 +165,101 @@
   font-size: 11px;
 }
 
-/* Najbližja postaja (`connections.js`): tih predlog nad shranjenimi potmi.
-   Brez obrobe poudarka -- shranjeno je izbral človek, tega ne. */
-.najblizje { margin-top: 12px; }
-.najblizje-zeton {
-  display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
-  color: var(--ink-dim);
+/* ---------- najbližje ----------
+ * Modra = ti (ikona lege). Brez shranjenih poti kartica z obema stranema
+ * ceste, s shranjenimi tih žeton. */
+
+.najblizje { margin-top: 22px; }
+.najblizje svg:first-child { flex: none; color: #5c9bff; }
+.nb-glava {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 0 4px 10px; border: 0; background: none;
+  color: var(--ink); text-align: left; cursor: pointer;
 }
-.najblizje-zeton svg { flex-shrink: 0; color: #2f7fff; }
-.najblizje-zeton span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.najblizje-zeton b { color: var(--ink); font-weight: 600; }
-.najblizje:not([hidden]) + .recents { margin-top: 8px; }
+.nb-glava b { font: 600 16px/1.3 var(--sans); }
+.nb-glava span { font: 400 13px/1.3 var(--sans); color: var(--ink-dim); }
 
-/* Shranjene in nedavne poti: pod iskalnikom, kjer so vedno pri roki. */
-.recents { margin-top: 12px; }
-.recents:empty { display: none; }
-.recents .fav-chip { color: var(--ink);
-  border-color: color-mix(in srgb, var(--accent) 27%, transparent); }
+.nb-strani { display: flex; flex-direction: column; gap: 3px; }
+.nb-stran {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "ime desno" "pod desno";
+  align-items: center; column-gap: 12px; row-gap: 2px;
+  min-height: 62px; padding: 8px 10px 8px 16px;
+  border: 0; border-radius: 6px;
+  background: var(--m-visoka); color: var(--ink);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.nb-stran:first-child { border-radius: 20px 20px 6px 6px; }
+.nb-stran:last-child { border-radius: 6px 6px 20px 20px; }
+.nb-stran:only-child { border-radius: 20px; }
+.nb-ime { grid-area: ime; font: 600 15.5px/1.3 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-pod { grid-area: pod; font: 400 13px/1.3 var(--sans); color: var(--ink-dim); }
+.nb-desno { grid-area: desno; display: flex; align-items: center; gap: 10px; color: var(--ink-dim); }
+.nb-desno b { font: 600 18px/1 var(--sans); color: var(--ink); white-space: nowrap; }
 
-.swap {
-  flex-shrink: 0;
-  width: 34px; height: 34px;
-  margin-bottom: 2px;
+.nb-vprasaj {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  height: 36px; padding: 0 14px 0 10px;
+  border: 1px solid var(--line-firm); border-radius: var(--r-sm);
+  background: transparent; color: var(--ink);
+  font: 500 14px/1 var(--sans); white-space: nowrap;
+  cursor: pointer;
+}
+.nb-vprasaj b { font-weight: 600; }
+.nb-vprasaj span { color: var(--ink-dim); }
+.nb-napaka { margin: 0; font: 400 13px/1.4 var(--sans); color: var(--ink-dim); }
+
+/* ---------- shranjeno ----------
+ * Shranjena pot je vrstica z naslednjim odhodom: kdaj res pelje, ura z voznim
+ * redom in žeton. Zvezdica je svoj gumb (odstrani v dveh dotikih). */
+
+.moje { margin-top: 22px; }
+.moje-seznam { display: flex; flex-direction: column; gap: 3px; }
+.mp {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  background: var(--m-visoka); border-radius: 6px;
+}
+.mp:first-child { border-radius: 20px 20px 6px 6px; }
+.mp:last-child { border-radius: 6px 6px 20px 20px; }
+.mp:only-child { border-radius: 20px; }
+.mp-zvezda {
+  min-width: 46px; padding: 0 0 0 6px;
   display: flex; align-items: center; justify-content: center;
-  background: none; border: 1px solid var(--line-firm); border-radius: var(--r);
-  color: var(--ink-mute); cursor: pointer;
+  border: 0; border-radius: inherit; background: none;
+  color: var(--accent-lit); cursor: pointer;
 }
-@media (hover: hover) { .swap:hover { color: var(--ink); border-color: #3d434f; } }
-
-.go { flex-shrink: 0; margin-bottom: 2px; }
-
-/* Zloženo vprašanje (`.povzetek`) je v base.css, ker ga ima tudi Najhitrejša
-   pot; kdaj je vidno, je spodaj pri telefonu. */
-
-/* ---------- glava rezultatov ---------- */
-
-.result-head {
-  padding: 20px 2px 8px;
-  font: 400 12px/1.5 var(--sans); color: var(--ink-mute);
-  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+.mp-zvezda svg { fill: currentColor; }
+.mp-zvezda.je-potrdi { padding: 0 6px 0 12px; color: var(--sev-bad); font: 600 12.5px/1 var(--sans); }
+.mp-odpri {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; column-gap: 12px; row-gap: 7px;
+  padding: 12px 14px 12px 6px;
+  border: 0; border-radius: inherit; background: none;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
 }
-.result-head strong { color: var(--ink); font-weight: 600; }
-
-.results { display: flex; flex-direction: column; }
-
-/* ---------- vrstica povezave ----------
- * Vrstni red branja potnika: kdaj odpelje -> ali zamuja -> kdaj pripelje ->
- * kateri vlak. Zato je ura prva in najvecja, pricakovani cas pod njo v barvi
- * zamude, stevilka vlaka sele nato.
- */
-
-.conn-row {
-  display: grid;
-  grid-template-columns: 132px 1fr auto;
-  gap: 4px 16px;
-  align-items: center;
-  padding: 13px 12px;
-  border-bottom: 1px solid var(--line-soft);
-  text-decoration: none;
-  color: inherit;
-}
-@media (hover: hover) { .conn-row:hover { background: var(--bg-raised); } }
-.conn-row.is-gone { opacity: 0.4; }
-/* Odhod, ki ga je ura pretekla, nihce pa ga ni potrdil: verjetno mimo, a ne
-   gotovo. Zato manj od zive vrstice in bolj od odpeljane -- in beseda. */
-.conn-row.is-unconfirmed,
-.board-row.is-unconfirmed { opacity: 0.72; }
-.nepotrjen { color: var(--ink-dim); }
-/* Poročilo potnika je opažanje, ne sklep iz ure -- zato poudarjeno, ne sivo. */
-.potnik { color: var(--accent-lit); }
-/* Zapora tira, vlak pred njim: "bodi pozoren", rumena semaforja kot ovire. */
-.opozorilo { color: var(--sev-hard); }
-.conn-do { font: 500 11px/1.4 var(--sans); color: var(--sev-hard); text-align: right; margin-top: 2px; }
-
-/* Naslednja vozjna je tista, ki jo clovek isce -- dobi rob, ne le vrstni red. */
-.conn-row.is-next {
-  background: color-mix(in srgb, var(--m-sek) 55%, var(--bg));
-  border-radius: var(--r-lg);
-  border-bottom-color: transparent;
+.mp-ime { font: 600 15.5px/1.3 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-ime span { font-weight: 500; color: var(--ink-dim); }
+.mp-cez { font: 600 18px/1 var(--sans); white-space: nowrap; }
+.mp-cez.je-tiho { font: 500 13.5px/1.2 var(--sans); color: var(--ink-dim); }
+.mp-l2 {
+  grid-column: 1 / 3; min-height: 24px;
+  display: flex; align-items: center; gap: 7px;
+  font: 400 13px/1.3 var(--sans); color: var(--ink-dim);
+  white-space: nowrap; overflow: hidden;
 }
 
-.conn-times { grid-column: 1; }
-.conn-clock { display: flex; align-items: baseline; gap: 5px; }
-.conn-dep, .conn-arr { font: 600 17px/1.1 var(--mono); color: var(--ink); }
-.conn-dash { color: var(--ink-ghost); }
-/* Ko vlak zamuja, je voznoredna ura precrtana in pricakovana pod njo --
-   potnik ravna po pricakovani, a mora videti, od cesa odstopa. */
-.conn-row.has-delay .conn-dep,
-.conn-row.has-delay .conn-arr { font-size: 14px; color: var(--ink-mute); text-decoration: line-through; }
-.conn-expected {
-  display: flex; align-items: baseline; gap: 5px;
-  font: 600 17px/1.15 var(--mono);
-  margin-top: 2px;
+/* „čez 4 min“: številka nosi odgovor, besedi sta drobni. */
+.mp-cez small, .nb-desno small, .od-cez small {
+  font: 500 12.5px/1 var(--sans); color: var(--ink-dim);
 }
+.mp-cez small:first-child, .nb-desno small:first-child, .od-cez small:first-child { margin-right: 4px; }
 
-.conn-train { grid-column: 2; min-width: 0; }
-.conn-no { font: 600 13.5px/1.3 var(--sans); color: var(--ink); }
-.conn-headsign {
-  font: 400 11.5px/1.4 var(--sans); color: var(--ink-mute); margin-top: 2px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* ---------- vstopni pregled ---------- */
 
-.conn-delay { grid-column: 3; text-align: right; }
-.conn-where { font: 400 10px/1.4 var(--sans); color: var(--ink-faint); margin-top: 4px; }
-
-/* Podnožje vrstice: trajanje, postanki, od kod je meritev. Drugi register --
-   to je kontekst, ne odgovor. */
-.conn-meta {
-  grid-column: 1 / -1;
-  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-  font: 400 11px/1.5 var(--sans); color: var(--ink-faint);
-  margin-top: 2px;
-}
-
-.countdown {
-  font: 600 11px/1.4 var(--sans);
-  color: var(--accent-lit);
-}
-
-/* ---------- prestop ---------- */
-
-
-
-.legs {
-  grid-column: 1 / -1;
-  margin-top: 7px;
-  display: flex; flex-direction: column; gap: 5px;
-  border-left: 2px solid var(--line);
-  padding-left: 11px;
-}
-.leg {
-  display: flex; gap: 9px; align-items: baseline;
-  font: 400 11.5px/1.4 var(--sans); color: var(--ink-dim);
-}
-.leg-time { font: 400 11.5px/1.4 var(--mono); color: var(--ink-mute); flex-shrink: 0; }
-.leg-train { font-weight: 600; color: var(--ink); flex-shrink: 0; }
-.leg-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.leg-wait { font: 400 11px/1.4 var(--sans); color: var(--sev-hard); }
-/* Vrstica prestopa se sme prelomiti: tira pod njo sta vredna vec kot ena vrstica. */
-.leg.is-prestop { flex-wrap: wrap; row-gap: 3px; }
-.leg-tiri { white-space: nowrap; color: var(--ink-mute); }
-
-/* ---------- odhodna tabla ----------
- * Tabla je enovrsticna in gostejsa od povezav: clovek jo bere kot seznam,
- * ne kot izbiro med potovanji.
- */
-
-.board-row {
-  display: grid;
-  grid-template-columns: 96px 1fr auto;
-  gap: 3px 14px;
-  align-items: center;
-  padding: 11px 12px;
-  border-bottom: 1px solid var(--line-soft);
-  text-decoration: none;
-  color: inherit;
-}
-@media (hover: hover) { .board-row:hover { background: var(--bg-raised); } }
-.board-row.is-gone { opacity: 0.4; }
-/* Obvoz: vozilo tu ne ustavi. Ostane vidno (kam je šel avtobus), a ni odhod. */
-.board-row.is-obvoz, .conn-row.is-obvoz { opacity: 0.55; }
-.board-row.is-obvoz .board-time, .conn-row.is-obvoz .conn-dep { text-decoration: line-through; }
-.chip-obvoz { background: #2e2811; color: #f2d36b; font: 500 11px/1.5 var(--sans); }
-.board-row.is-next {
-  background: color-mix(in srgb, var(--m-sek) 55%, var(--bg));
-  border-radius: var(--r-lg);
-  border-bottom-color: transparent;
-}
-
-.board-time { font: 600 17px/1.1 var(--mono); color: var(--ink); }
-.board-row.has-delay .board-time { font-size: 13.5px; color: var(--ink-mute); text-decoration: line-through; }
-.board-expected { font: 600 17px/1.15 var(--mono); margin-top: 2px; }
-.board-towards {
-  font: 500 14px/1.35 var(--sans); color: var(--ink);
-  display: flex; align-items: center; gap: 7px; min-width: 0;
-}
-.board-towards > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-train { font: 400 11.5px/1.4 var(--sans); color: var(--ink-mute); margin-top: 2px; }
-.board-meta { grid-column: 1 / -1; font: 400 11px/1.5 var(--sans); color: var(--ink-faint); }
-
-/* ---------- podnožje ---------- */
-
-.page-foot {
-  margin-top: 34px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-soft);
-  font: 400 11px/1.6 var(--sans);
-  color: var(--ink-faint);
-}
-
-/* ---------- telefon ---------- */
-
-@media (max-width: 720px) {
-  .conn-main { padding: 16px 12px 32px; }
-
-  /* Obrazec se zlozi v stolpec. Gumb za zamenjavo mora ostati MED poljema,
-     sicer je "zamenjaj postaji" pod gumbom Poisci in nihce ne ugane, kaj menja. */
-  .search-card { flex-wrap: wrap; gap: 10px; }
-  .field { flex: 1 1 100%; order: 2; }
-  .station-field:first-of-type { order: 1; }
-  .swap {
-    order: 1;
-    flex: 1 1 100%;
-    max-width: 34px;
-    margin: -2px auto;
-  }
-  /* **Dan dobi svojo vrstico.** Pri polovični širini se dve puščici in
-     koledarski gumbek prekrivajo z datumom -- na tabli, kjer je poleg še
-     "Od ure", je bilo to najbolj vidno. Smer in ura si vrstico delita naprej;
-     v njiju ni ničesar, kar bi rabilo prostor. */
-  .field-date { flex: 1 1 100%; order: 3; }
-  .field-kind, .field-time { flex: 1 1 calc(50% - 5px); order: 3; }
-  .go { flex: 1 1 100%; margin-bottom: 0; order: 4; }
-  /* Brez tega ima gumb privzeti `order: 0` in se na telefonu postavi NAD
-     polje za postajo -- prvo, kar clovek vidi, je bliznja postaja namesto
-     iskalnika. */
-  .near-me { flex: 1 1 100%; order: 5; justify-content: center; }
-
-  /* Po iskanju obrazec preda mesto vrstici z vprašanjem (`zlozi()`): odgovor
-     se začne ~300 pik nižje, nad pregibom so trije odhodi namesto pol enega. */
-  .zlozeno .search-card { display: none; }
-  .zlozeno .povzetek { display: flex; }
-
-  .conn-row { grid-template-columns: 1fr auto; gap: 3px 12px; }
-  .conn-times { grid-column: 1; }
-  .conn-delay { grid-column: 2; grid-row: 1; text-align: right; align-self: start; }
-  .conn-train { grid-column: 1 / -1; }
-  .board-row { grid-template-columns: 1fr auto; }
-  .board-row > :first-child { grid-column: 1; }
-  .board-row > :nth-child(2) { grid-column: 1; }
-  .board-row .conn-delay { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
-
-  /* Ponujene pogoste relacije so na namizju priročne, na telefonu pa šest
-     žetonov zasede tri vrstice in potisne odgovor pod pregib. Shranjene poti
-     (`#recents`) ostanejo -- tiste je izbral človek sam in jih je malo.
-
-     Dva razreda in ne eden: `.chips { display: flex }` stoji NIŽE v datoteki
-     in ima ob enem razredu isto težo, zato bi zmagal po vrstnem redu. Prvi
-     poskus je bil `.chips-top` in žetoni so na telefonu ostali vidni. */
-  .chips.chips-top { display: none; }
-}
-
-@media (max-width: 480px) {
-  /* Ura v glavi pozre prostor, ki ga rabita znamka in preklop pogleda.
-     Pika o zivosti feeda ostane -- ta nosi informacijo, ura je okras. */
-  .clock { display: none; }
-  .divider { display: none; }
-}
-
-/* ---------- vstopni pregled ----------
- * Prva stran brez vpisane poizvedbe je bila prazen obrazec. Zdaj ima žetone
- * pogostih poti in pri vlakih povezavo na ovire.
- */
-
-.overview { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+.pregled { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
+.pregled:empty { display: none; }
+.pregled .isk-naslov { padding-bottom: 2px; }
 
 .ov-link {
   display: flex; align-items: center; gap: 10px;
@@ -406,51 +270,349 @@
   font: 500 13.5px/1.4 var(--sans); color: #f2d36b;
   text-decoration: none;
 }
+.ov-link span { flex: 1 1 auto; }
 @media (hover: hover) { .ov-link:hover { background: #3f3510; } }
 
-.chips { display: flex; flex-wrap: wrap; gap: 7px; }
-/* Pogoste relacije stojijo tik pod obrazcem: so vhodni pripomocek in ne
-   zanimivost, na telefonu pa je vsak odstavek nad njimi ovira. */
-.chips-top { margin-bottom: 18px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .route-chip {
-  background: var(--m-visoka);
-  border: 1px solid transparent;
-  border-radius: var(--r-pilula);
-  min-height: 36px;
-  padding: 8px 14px;
+  min-height: 36px; padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--line-firm);
+  border-radius: var(--r-sm);
   color: var(--ink);
   font: 500 13.5px/1.3 var(--sans);
   cursor: pointer;
 }
-@media (hover: hover) { .route-chip:hover { color: var(--ink); border-color: var(--accent); } }
+@media (hover: hover) { .route-chip:hover { border-color: var(--accent); } }
 
-/* Shranjena pot in njen krizec sta en predmet: krizec se ne sme odlomiti v
-   naslednjo vrstico stran od imena, ki mu pripada. */
-.chip-wrap { display: inline-flex; align-items: stretch; }
-.chip-wrap .route-chip {
-  border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none;
+/* ---------- skrčeno vprašanje ----------
+ * Po iskanju se obrazec na telefonu skrči v to vrstico; dotik nanjo ga odpre.
+ * Na namizju stoji nad odgovorom (obrazec je levo). Ikona pove, ali je
+ * odgovor tabla ali zveze. */
+
+.pz {
+  display: none; align-items: center; gap: 6px;
+  min-height: 58px; padding: 0 6px 0 18px;
+  border-radius: 29px; background: var(--m-visoka);
 }
-.chip-del {
+.pz-uredi {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 0; border: 0; background: transparent;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.pz-ik { flex: none; color: var(--accent-lit); }
+.pz-ik-tabla { display: none; }
+.pz-tabla .pz-ik-tabla { display: inline; }
+.pz-tabla .pz-ik-zveza { display: none; }
+.pz-besedilo { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+/* Imena se prelomijo, ne odrežejo: odrez iz „Ljubljana Tivoli → Maribor
+   Studenci“ je bil pri 360 pikah isto kot Ljubljana in Maribor. */
+.pz-pot { font: 600 16px/1.3 var(--sans); overflow-wrap: anywhere; }
+.pz-ime { display: inline-block; max-width: 100%; }
+.pz-pus { margin: 0 6px; color: var(--ink-dim); }
+.pz-dan { font: 400 13px/1.3 var(--sans); color: var(--ink-dim); }
+.pz-kam {
+  flex: none;
+  display: flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 12px 0 10px;
+  border: 0; border-radius: 18px;
+  background: var(--m-najvisja); color: var(--ink);
+  font: 500 13.5px/1 var(--sans); cursor: pointer;
+}
+.pz-gumb {
+  flex: none;
+  width: 44px; height: 44px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: transparent;
+  color: var(--ink); cursor: pointer;
+}
+.pz-zamenjaj { background: var(--m-najvisja); }
+.pz-zvezda svg { fill: none; }
+.pz-zvezda[aria-pressed="true"] { color: var(--accent-lit); }
+.pz-zvezda[aria-pressed="true"] svg { fill: currentColor; }
+/* Zavrnjeno shranjevanje pove razlog v vrstici, kjer je bil klik. */
+.pz-zvezda.is-refused { color: var(--sev-bad); }
+
+/* ---------- odgovor ---------- */
+
+#alerts:not(:empty) { margin-top: 12px; }
+.results { margin-top: 14px; }
+.results:empty { display: none; }
+#vozovnica:not(:empty) { margin-top: 14px; }
+
+/* Ponudba ob ponovljenem iskanju (`predlagajShranjevanje`): tiha vrstica nad
+   rezultati, ne okno čez njih. */
+.predlog-shrani {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  margin-top: 12px; padding: 8px 12px; border-radius: var(--r);
   background: var(--m-visoka);
-  border: 1px solid transparent;
-  border-left: 1px solid var(--line-firm);
-  border-radius: 0 100px 100px 0;
-  padding: 0 10px 1px;
+  font: 400 13px/1.4 var(--sans); color: var(--ink-dim);
+}
+.predlog-shrani button {
+  font: inherit; min-height: 32px; padding: 0 10px; border-radius: var(--r-sm); cursor: pointer;
+  background: none; border: 1px solid var(--line-firm); color: var(--ink);
+}
+.predlog-shrani .predlog-ne { border-color: transparent; color: var(--ink-mute); }
+
+/* Postajališče čez cesto z neposredno vožnjo (`blizuHtml`): obvestilo
+   kajrosa, tonsko modro, z dejanjem. */
+.blizu {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  margin-bottom: 12px; padding: 14px 16px; border-radius: var(--r-lg);
+  background: var(--m-info); color: var(--m-na-info);
+  font: 400 14px/1.45 var(--sans);
+}
+.blizu p { margin: 0; }
+.blizu b { font-weight: 600; }
+.blizu-g {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 16px 0 10px;
+  border: 0; border-radius: var(--r-pilula);
+  background: var(--m-na-info); color: var(--m-info);
+  font: 600 14px/1.2 var(--sans); text-align: left; cursor: pointer;
+}
+
+/* Prazno okno ponudi dejanje, ne nasveta. */
+.empty-act { margin-top: 12px; }
+
+/* ---------- odhod: ura in zamuda skupaj ----------
+ * David 24. 10. 2026: „ni jasno, kaj je vozni red in kaj zamuda“. Odgovor je
+ * povsod isti: krepka ura = kdaj res pelje, „vozni red“ s prečrtano uro, kadar
+ * se razlikujeta, žeton z enoto. Žeton ima obliko postankov v oknu vožnje
+ * (`.ov-p-zam` v train.css): meritev nevtralno, ocena tonsko, živo s piko,
+ * običajno črtkano. */
+
+.oz {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 7px; border-radius: var(--r-sm);
+  background: var(--accent-lit); color: var(--na-poudarku);
+  font: 700 13px/1 var(--sans); white-space: nowrap;
+}
+/* Nadomestni prevoz SŽ: avtobus na železniški strani, vijolično kot povsod. */
+.oz-nad { background: #3b2a4f; color: #e3cff7; }
+
+.ura-vr { font: 400 13px/1.3 var(--sans); color: var(--ink-dim); white-space: nowrap; }
+.ura-vr b { margin-right: 4px; font: 600 14.5px/1 var(--sans); color: var(--ink); }
+.ura-vr s { color: var(--ink-mute); }
+
+.zt {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: var(--r-pilula);
+  font: 600 12.5px/1.15 var(--sans); white-space: nowrap;
+}
+.zt.je-meritev { background: var(--line-firm); color: #c9ced8; }
+.zt.je-ocena, .zt.je-zivo { background: color-mix(in srgb, var(--z) 18%, transparent); color: var(--z); }
+.zt.je-zivo::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: #4db97f;
+}
+.zt.je-obicajno {
+  padding: 1.5px 6.5px; color: var(--z);
+  border: 1.5px dashed color-mix(in srgb, var(--z) 70%, transparent);
+}
+.zt.je-vr { background: var(--line-firm); color: var(--ink-dim); font-weight: 500; }
+.zt.je-obvoz { background: #2e2811; color: #f2d36b; font-weight: 500; }
+.zt.je-prestop { background: color-mix(in srgb, var(--z) 16%, transparent); color: var(--z); }
+.zt-op { font: 400 12.5px/1.3 var(--sans); color: var(--ink-dim); white-space: nowrap; }
+/* Zapora tira, vlak pred njim: meja, ne zamuda -- rumeno kot ovire. */
+.zt-do { font: 500 12.5px/1.3 var(--sans); color: var(--sev-hard); white-space: nowrap; }
+
+/* Dodatne vrstice pod odhodom. */
+.od-op { display: flex; flex-direction: column; gap: 3px; font: 400 12.5px/1.45 var(--sans); color: var(--ink-dim); }
+/* Odhod, ki ga je ura pretekla, nihče pa ga ni potrdil. */
+.nepotrjen { color: var(--ink-dim); }
+/* Poročilo potnika je opažanje, ne sklep iz ure -- zato poudarjeno. */
+.potnik { color: var(--accent-lit); }
+.opozorilo { color: var(--sev-hard); }
+
+/* ---------- zveze Od–do ----------
+ * Kartica s trakom od odhoda do prihoda, ista črta kot postanki v oknu
+ * vožnje. Naslednja je obarvana, sicer enaka ostalim (David: prva ne sme
+ * biti „tako drugačna“). */
+
+.zk-seznam { display: flex; flex-direction: column; gap: 10px; }
+.zk-seznam + .zk-seznam { margin-top: 10px; }
+.zk-seznam .isk-naslov { padding: 8px 4px 0; }
+.zk {
+  --zk-tiho: var(--ink-dim);
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; border-radius: 24px;
+  background: var(--m-visoka); color: var(--ink);
+  text-decoration: none;
+}
+.zk.je-naslednja {
+  --zk-tiho: color-mix(in srgb, var(--m-na-kont) 70%, var(--m-kont));
+  background: var(--m-kont); color: var(--m-na-kont);
+}
+.zk.je-mimo { opacity: 0.5; }
+.zk.je-nepotrjen { opacity: 0.72; }
+.zk.je-obvoz { opacity: 0.6; }
+.zk.je-obvoz .zk-trak b { text-decoration: line-through; }
+
+.zk-gl { display: flex; align-items: center; gap: 8px; min-width: 0; font: 600 14px/1.3 var(--sans); }
+.zk-gl .od-cilj { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zk-cez { flex: none; font: 500 13.5px/1 var(--sans); color: var(--zk-tiho); white-space: nowrap; }
+.je-naslednja .zk-cez {
+  padding: 6px 12px; border-radius: var(--r-pilula);
+  background: var(--accent-lit); color: var(--na-poudarku);
+  font: 600 14px/1 var(--sans);
+}
+.je-naslednja .oz { background: var(--m-na-kont); color: var(--m-kont); }
+.zk-noge { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.zk-pus { color: var(--zk-tiho); }
+
+.zk-trak {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end; column-gap: 12px;
+}
+.zk-trak b { font: 600 24px/1 var(--sans); }
+.zk-crta { position: relative; height: 30px; }
+.zk-crta i { position: absolute; left: 4px; right: 4px; top: 22px; height: 4px; border-radius: 2px; background: var(--accent-lit); }
+.zk-crta::before, .zk-crta::after { content: ""; position: absolute; box-sizing: border-box; border-radius: 50%; }
+.zk-crta::before { left: -2px; top: 18px; width: 12px; height: 12px; background: var(--accent-lit); }
+.zk-crta::after {
+  right: -2px; top: 17px; width: 14px; height: 14px;
+  border: 3px solid var(--accent-lit); background: var(--m-visoka);
+}
+.je-naslednja .zk-crta i, .je-naslednja .zk-crta::before { background: var(--m-na-kont); }
+.je-naslednja .zk-crta::after { border-color: var(--m-na-kont); background: var(--m-kont); }
+.zk-crta em {
+  position: absolute; left: 0; right: 0; top: 0;
+  font: 400 12px/1.3 var(--sans); font-style: normal; text-align: center;
+  color: var(--zk-tiho); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.zk-imena {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: -4px;
+  font: 400 12.5px/1.3 var(--sans); color: var(--zk-tiho);
+}
+.zk-imena span:last-child { text-align: right; }
+.zk-vr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.zk .ura-vr, .zk .zt-op, .zk .od-op { color: var(--zk-tiho); }
+.je-naslednja .zt.je-meritev, .je-naslednja .zt.je-vr { background: var(--bg); }
+
+/* Noge zveze s prestopom. Ime in kraj se prelomita, tir ostane skupaj. */
+.legs { display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px solid var(--line-firm); }
+.leg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font: 400 12.5px/1.4 var(--sans); color: var(--ink-dim); }
+.leg-time { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.leg-train { font-weight: 600; color: var(--ink); }
+.leg.is-prestop { padding-left: 12px; }
+.leg-wait { font-weight: 500; }
+.leg-tiri { white-space: nowrap; }
+.leg-note { color: var(--ink-faint); }
+
+/* ---------- tabla ---------- */
+
+/* Stran ceste: povezani segmenti, ime naslednje postaje in pri mestnem LPP
+   „v center“ / „iz centra“ pod njim. */
+.smeri { display: flex; gap: 3px; margin-bottom: 12px; }
+.smer-chip {
+  flex: 1 1 0; min-width: 0;
+  min-height: 56px; padding: 6px 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 0; border-radius: 8px;
+  background: var(--m-visoka); color: var(--ink);
+  font: 600 14px/1.15 var(--sans); cursor: pointer;
+}
+.smer-chip.je-obe { flex: 0 0 64px; }
+.smer-chip:first-child { border-radius: 28px 8px 8px 28px; }
+.smer-chip:last-child { border-radius: 8px 28px 28px 8px; }
+.smer-chip[aria-pressed="true"] { background: var(--m-sek); color: var(--m-na-sek); }
+.smer-ime { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.smer-center { font: 500 12px/1.2 var(--sans); color: var(--ink-dim); }
+.smer-chip[aria-pressed="true"] .smer-center { color: color-mix(in srgb, var(--m-na-sek) 75%, var(--m-sek)); }
+
+/* Prejšnji odhodi in razvrstitev v eni vrstici nad tablo. */
+.od-kontrole { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0 0 10px 4px; }
+.past-head {
+  display: flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0; border: 0; background: transparent;
+  color: var(--ink-dim); font: 500 13.5px/1 var(--sans); cursor: pointer;
+}
+.past-head svg { transition: transform 0.15s; }
+.past-head[aria-expanded="true"] svg { transform: rotate(180deg); }
+.past-list { margin-bottom: 10px; }
+.past-list > * { opacity: 0.55; }
+
+.razv { display: flex; gap: 2px; }
+.razv-g {
+  height: 32px; padding: 0 12px;
+  border: 0; border-radius: 4px;
+  background: var(--m-visoka); color: var(--ink);
+  font: 500 13px/1 var(--sans); white-space: nowrap; cursor: pointer;
+}
+.razv-g:first-child { border-radius: 16px 4px 4px 16px; }
+.razv-g:last-child { border-radius: 4px 16px 16px 4px; }
+.razv-g[aria-pressed="true"] { background: var(--m-sek); color: var(--m-na-sek); font-weight: 600; }
+
+.od-seznam { display: flex; flex-direction: column; gap: 3px; }
+.od {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 11px 14px; border-radius: 6px;
+  background: var(--m-visoka); color: var(--ink);
+  text-decoration: none;
+}
+.od:first-child { border-radius: 22px 22px 6px 6px; }
+.od:last-child { border-radius: 6px 6px 22px 22px; }
+.od:only-child { border-radius: 22px; }
+.od.je-naslednja { background: var(--m-kont); color: var(--m-na-kont); }
+.od.je-naslednja .oz { background: var(--m-na-kont); color: var(--m-kont); }
+.od.je-naslednja .ura-vr, .od.je-naslednja .od-cez small, .od.je-naslednja .zt-op, .od.je-naslednja .od-op,
+.od.je-naslednja .od-nato { color: color-mix(in srgb, var(--m-na-kont) 70%, var(--m-kont)); }
+.od.je-naslednja .ura-vr b { color: var(--m-na-kont); }
+.od.je-naslednja .zt.je-meritev, .od.je-naslednja .zt.je-vr { background: var(--bg); }
+.od.je-mimo { opacity: 0.5; }
+.od.je-nepotrjen { opacity: 0.72; }
+/* Obvoz: vozilo tu ne ustavi. Ostane vidno (kam je šel avtobus), a ni odhod. */
+.od.je-obvoz { opacity: 0.6; }
+.od.je-obvoz .ura-vr b { text-decoration: line-through; }
+
+.od-gl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.od-cilj { min-width: 0; font: 600 16px/1.3 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.od-cez { flex: none; font: 600 19px/1 var(--sans); white-space: nowrap; }
+.od-ura { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.od-nato { font: 400 12.5px/1.3 var(--sans); color: var(--ink-dim); }
+
+/* ---------- telefon: obrazec skrčen ---------- */
+
+@media (max-width: 899px) {
+  .zlozeno .isk-levo { display: none; }
+  .zlozeno .pz { display: flex; }
+  .zlozeno:not(.pz-tabla) .pz-dnevi { display: flex; }
+  .isk-desno { margin-top: 0; }
+  .ima-izid:not(.zlozeno) .isk-desno { margin-top: 22px; }
+}
+
+@media (max-width: 380px) {
+  .dan-g { padding: 0 11px; }
+  .isk-poisci { padding: 0 18px 0 14px; }
+}
+
+/* ---------- namizje ----------
+ * Brez odgovora en stolpec na sredini; z odgovorom obrazec, shranjeno in
+ * najbližje levo, vprašanje in odgovor desno. Obrazec se tu ne skrči. */
+
+@media (min-width: 900px) {
+  .iskalnik.ima-izid .conn-main { max-width: 1240px; }
+  .ima-izid .isk-stolpci {
+    display: grid; grid-template-columns: 380px minmax(0, 1fr);
+    gap: 40px; align-items: start;
+  }
+  .ima-izid .pz { display: flex; }
+  .isk-desno { max-width: 760px; }
+  .zk-seznam, .past-list.zk-seznam { gap: 12px; }
+}
+
+/* ---------- podnožje ---------- */
+
+.page-foot {
+  margin-top: 34px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font: 400 11px/1.6 var(--sans);
   color: var(--ink-faint);
-  font: 400 14px/1 var(--sans);
-  cursor: pointer;
 }
-@media (hover: hover) { .chip-del:hover { color: var(--sev-bad); border-color: var(--sev-bad); } }
-
-/* Zavrnjeno shranjevanje: pove razlog na gumbu, kjer je bil klik, in ne v
-   pogovornem oknu, ki ga je treba se zapreti. */
-.fav-toggle.is-refused {
-  color: var(--sev-bad);
-  border-color: color-mix(in srgb, var(--sev-bad) 45%, transparent);
-}
-
-/* Polje z dnevom in njegovi puščici sta v `base.css`: odkar ju ima tudi
-   Najhitrejša pot, sta skupna in ne last te strani. */
 
 /* ---------- stran z ovirami ---------- */
 
@@ -545,108 +707,6 @@
 }
 .alert-card-foot code { font-family: var(--mono); }
 
-/* Že odpeljane vožnje: dosegljive, a ne pred odgovorom. Kdor preverja, ali je
- * zamudil vlak, jih rabi; kdor išče naslednjega, jih ne. */
-.past-box { border-bottom: 1px solid var(--line-soft); }
-.past-head {
-  list-style: none;
-  cursor: pointer;
-  padding: 10px 12px;
-  font: 400 12px/1.4 var(--sans);
-  color: var(--ink-mute);
-  user-select: none;
-}
-.past-head::-webkit-details-marker { display: none; }
-.past-head::before { content: "▸ "; color: var(--ink-ghost); }
-.past-box[open] .past-head::before { content: "▾ "; }
-@media (hover: hover) { .past-head:hover { color: var(--ink); } }
-
-/* Zveza, ki je ne drži, ni povezava. Barva je semafor razmer, ne lestvica
- * zamud: vprašanje ni "koliko", ampak "ali gre". Zraven vedno tudi minute. */
-.transfer-badge {
-  display: inline-block;
-  font: 600 11px/1.5 var(--sans);
-  border: 1px solid;
-  border-radius: 4px;
-  padding: 2px 7px;
-  white-space: nowrap;
-}
-.leg-note { font: 400 11px/1.4 var(--sans); color: var(--ink-faint); }
-
-/* Postajališča v bližini. Za mestni avtobus je to najpogostejši način, kako
- * človek najde postajo: imena ne ve, ve pa, kje stoji. */
-.near-me { flex-shrink: 0; margin-bottom: 2px; display: inline-flex; align-items: center; gap: 6px; }
-
-.near-list { display: flex; flex-direction: column; }
-.near-row {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
-  width: 100%;
-  padding: 12px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--line-soft);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-@media (hover: hover) { .near-row:hover { background: var(--bg-raised); } }
-.near-name { font: 500 14px/1.3 var(--sans); color: var(--ink); }
-.near-dist { font: 400 12px/1.3 var(--mono); color: var(--ink-mute); white-space: nowrap; }
-
-/* Shranjene poti. Potnik vozi isto pot vsak dan; zadnje iskanje smo si
- * zapomnili že prej, a eno samo — kdor ima službo in tečaj, ima dve. */
-.result-bar { display: flex; align-items: baseline; gap: 12px; }
-.result-bar .result-head { flex: 1 1 auto; }
-
-/* Ponudba ob ponovljenem iskanju (`predlagajShranjevanje`): tiha vrstica nad
-   rezultati, ne okno čez njih. */
-.predlog-shrani {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-  margin: 0 0 10px; padding: 8px 12px; border-radius: 10px;
-  background: var(--bg-raised); border: 1px solid var(--line);
-  font-size: 13px; color: var(--ink-dim);
-}
-.predlog-shrani[hidden] { display: none; }
-.predlog-shrani button {
-  font: inherit; min-height: 32px; padding: 0 10px; border-radius: 7px; cursor: pointer;
-  background: none; border: 1px solid var(--line-firm); color: var(--ink);
-}
-.predlog-shrani .predlog-ne { border-color: transparent; color: var(--ink-mute); }
-
-.fav-toggle {
-  flex-shrink: 0;
-  background: none;
-  border: 1px solid var(--line-firm);
-  border-radius: var(--r);
-  padding: 5px 10px;
-  color: var(--ink-mute);
-  font: 500 11.5px/1 var(--sans);
-  cursor: pointer;
-  white-space: nowrap;
-}
-@media (hover: hover) { .fav-toggle:hover { color: var(--ink); border-color: #3d434f; } }
-.fav-toggle[aria-pressed="true"] { color: var(--accent-lit);
-  border-color: color-mix(in srgb, var(--accent) 33%, transparent); }
-
-/* Smer na postajaliscu: stran ceste, izbrana po naslednji postaji. Nad
-   tablo in ne v obrazcu, ker jo pozna sele odgovor -- in ker se preklaplja
-   brez novega iskanja. */
-.smeri {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
-  padding: 2px 2px 12px;
-}
-.smeri-label { margin-right: 3px; }
-.smer-center { color: var(--ink-mute); }
-.smer-chip[aria-pressed="true"] {
-  color: var(--ink);
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-raised));
-}
-
-/* Prazno okno ponudi dejanje, ne nasveta. */
-.empty-act { margin-top: 12px; }
-
 /* Ovira, ki se še ni začela. Stran ovir jih je doslej sploh ni pokazala —
    izmerjeno 4. 9. 2026: 16 veljavnih proti 32 napovedanim, najbližja
    naslednji dan. */
@@ -655,9 +715,6 @@
   border-color: color-mix(in srgb, var(--sev-hard) 35%, transparent);
 }
 
-/* Gumb med iskanjem ne sme sprejeti drugega klika -- dve zahtevi hkrati sta
-   dva odgovora in zadnji ni nujno tisti, ki ga je človek naročil. */
-.go:disabled { opacity: 0.55; cursor: default; }
 
 /* Iskalnik, ovire, statistika: orodna vrstica na dnu (base.css) ne sme
    pokriti zadnje vrstice table. */

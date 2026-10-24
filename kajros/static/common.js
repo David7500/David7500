@@ -1220,6 +1220,64 @@ function razvrstiTablo(list, nowMs) {
   };
 }
 
+// ---------- odhodi shranjene poti ----------
+//
+// Shranjena pot (`kajros:fav`) z naslednjim odhodom stoji na dveh mestih: na
+// domači strani (Moje poti) in v iskalniku (Shranjeno). Ena koda, sicer bi
+// isti odhod na eni strani veljal za odpeljanega, na drugi ne.
+
+const SMER_KLJUC = "kajros:smer";
+
+/** Stran ceste, ki jo je potnik na tabli postajališča izbral (iskalnik). */
+function smerIzSpomina(postaja) {
+  try {
+    return (JSON.parse(localStorage.getItem(SMER_KLJUC) || "{}") || {})[postaja] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Odhodi poti v enotni obliki, ne glede na to, ali je zveza A-B ali tabla.
+ *  Brez `datum` velja danes. `vir` je vrstica strežnika (oznaka vožnje, vrsta
+ *  številke), `smer` ime izbrane strani ceste. */
+async function odhodiPoti(f, datum) {
+  const network = f.net === "avtobus" ? "avtobus" : "zeleznica";
+  if (f.kind === "board") {
+    const q = new URLSearchParams({ station: f.station, kind: f.dir || "odhodi", network });
+    if (datum) q.set("date", datum);
+    const smer = smerIzSpomina(f.station);
+    if (smer) q.set("smer", smer);
+    const d = await fetch(`/api/departures?${q}`).then(jsonOk);
+    const izbrana = (d.smeri || []).find((s) => s.kljuc === d.smer);
+    const imeSmeri = izbrana ? (izbrana.naslednje || []).join(" · ") : null;
+    // Po obvozu LPP tu ne ustavi (`ne_ustavi`), odpovedana ne vozi: ni odhod.
+    return (d.board || []).filter((r) => !r.ne_ustavi && !r.odpovedano).map((r) => ({
+      ura: r.sched, pricakovano: r.expected, zamuda: r.zamuda, nepotrjen_do: r.nepotrjen_do,
+      kam: lepoIme(r.towards), nadomestni: isBus(r.mode) && r.network === "zeleznica",
+      obicajno: r.typical, smer: imeSmeri, vir: r,
+    }));
+  }
+  const q = new URLSearchParams({ from: f.from, to: f.to, network, with_transfers: "false" });
+  if (datum) q.set("date", datum);
+  const d = await fetch(`/api/connections?${q}`).then(jsonOk);
+  return (d.connections || []).filter((c) => !c.ne_ustavi).map((c) => ({
+    ura: c.sched_dep, pricakovano: c.expected_dep, zamuda: c.zamuda, nepotrjen_do: c.nepotrjen_do,
+    kam: null, nadomestni: isBus(c.mode) && c.network === "zeleznica",
+    obicajno: c.typical_arr || c.typical_dep, smer: null, vir: c,
+  }));
+}
+
+// Mimo je sele, ko je minil PRICAKOVANI odhod; nepotrjen odhod (vlak, o
+// katerem feed molci) ostane do `nepotrjen_do`, isto kot na tabli. Vrstni red
+// po pričakovani uri, kot tabla (`razvrstiTablo`): API vrne voznoredno, in
+// LPP 14 z +49 min ni naslednji, ko LPP 13 pelje čez dve minuti.
+function naslednjiOdhodi(odhodi, zdaj, koliko) {
+  const kdaj = (o) => new Date(o.pricakovano || o.ura).getTime();
+  return odhodi.filter((o) => kdaj(o) >= zdaj
+    || (o.nepotrjen_do && zdaj <= new Date(o.nepotrjen_do).getTime()))
+    .sort((a, b) => kdaj(a) - kdaj(b)).slice(0, koliko);
+}
+
 /** Kje lahko vlak naprej po progi izgubi čas (`zapore.py`).
  *
  * Ni napoved: ob zapori tira je mediana izgube 0 -- kateri vlak bo čakal na
