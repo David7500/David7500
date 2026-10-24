@@ -1576,7 +1576,7 @@ if (OMREZJE === "avtobus" && URL_TRIP) {
 
 const runMap = { map: null, ml: null, marker: null, trasa: null, cums: null,
                  postaje: null, v: null, since: 0, loc: null, nastaja: null,
-                 avto3d: null, lega: null, vir: null, veriga: null, prvaLega: null };
+                 avto3d: null, lega: null, vir: null, veriga: null, prvaLega: null, sledi: true };
 
 // ---------- ocena lege med dvema meritvama ----------
 // Pravilo in meritve so v common.js (`ocenaNaTrasi`): isto oceno ima veliki
@@ -1700,6 +1700,7 @@ async function ustvariRunMap() {
   // okvirju ene vožnje samo zmeda, kompasa za vrnitev pa osnutek nima.
   map.dragRotate.disable();
   map.touchZoomRotate.disableRotation();
+  map.on("dragstart", () => { runMap.sledi = false; });
   // Gumba + in − samo pod miško: na telefonu približujeta dva prsta (osnutek E
   // ima ob zemljevidu le „čez celo stran“ in „moja lega“).
   if (matchMedia("(pointer: fine)").matches) {
@@ -2019,7 +2020,7 @@ async function drawRunMap(v) {
     podnapis(v, 0);
     return;
   }
-  postaviVozilo(false, true);
+  postaviVozilo(true);
 }
 
 // `nova` loci osvezitev PODATKOV od sekundnega premika pike. Podnapis se sme
@@ -2027,7 +2028,7 @@ async function drawRunMap(v) {
 // izhodisce, zato ga je sekundno prepisovanje ponastavljalo na izvorno
 // vrednost -- stevilka je stala, sekundna zanka v common.js jo je vmes
 // povecala, naslednji izris pa povozil. Videti je bilo kot utripanje.
-function postaviVozilo(prvic, nova) {
+function postaviVozilo(nova) {
   const v = runMap.v;
   if (!v || !runMap.map) return;
   const moving = (v.speed_kmh || 0) >= 3;
@@ -2061,16 +2062,31 @@ function postaviVozilo(prvic, nova) {
     narisiRunTraso(lega.vzdolz);
   }
 
-  // Pogled premaknemo samo, kadar vozilo uide iz okvira -- sicer bi ga
-  // sekundno osvezevanje trgalo izpod prsta.
-  if (prvic || !runMap.map.getBounds().contains([kje[1], kje[0]])) {
-    runMap.map.panTo([kje[1], kje[0]], { duration: prvic ? 0 : 500 });
-  }
+  if (runMap.sledi) drziVozilo(kje);
 
   // Vozilo se premika, torej se razdalja spreminja tudi brez novega dotika.
   posodobiPilulo();
 
   if (nova) podnapis(v, odmik);
+}
+
+// Pogled gre za vozilom, dokler ga človek ne povleče (kot izbrani avtobus na
+// velikem zemljevidu, `drziVSliki`), in to samo, ko vozilo uide iz vidnega
+// dela okvira: čez rob ali pod kartico odštevanja -- tam je ocena lege
+// izginila, okvir pa jo je še štel za vidno. Sicer ga sekundni premik ne
+// premika, da ga ne trga izpod prsta.
+function drziVozilo(kje) {
+  const { map } = runMap;
+  if (map.isMoving()) return;
+  // Velikost iz platna, ne iz postavitve: ta bi se vsako sekundo preračunala.
+  const k = map.getCanvas(), r = map.getPixelRatio();
+  const w = k.width / r, h = k.height / r;
+  const p = map.project([kje[1], kje[0]]);
+  const dno = p.y > h / 2 && kartaOdstEl.offsetHeight ? kartaOdstEl.offsetTop : h;
+  if (p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= dno) return;
+  const o = POGLED_ODMIK;
+  map.panBy([p.x - (o.left + (w - o.left - o.right) / 2), p.y - (o.top + (h - o.top - o.bottom) / 2)],
+            { duration: 500 });
 }
 
 const meritevIme = () => (runMap.vir === "potniki" ? "zadnje poročilo potnikov"
@@ -2095,7 +2111,7 @@ function podnapis(v, odmik) {
 // je clovek odprl to stran.
 setInterval(() => {
   if (document.visibilityState === "hidden") return;
-  if (runMap.marker) postaviVozilo(false, false);
+  if (runMap.marker) postaviVozilo(false);
 }, 1000);
 
 // Zemljevid cez celo STRAN, ne cez cel zaslon. Fullscreen API vzame ves
