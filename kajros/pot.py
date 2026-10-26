@@ -191,9 +191,7 @@ def _vozje(conn: sqlite3.Connection, service_date: str) -> dict[str, dict]:
     avtobusu 3), ostalo pa prikaz. Ker je to statika, se prebere enkrat na dan
     in ne enkrat na iskanje: 12 963 voženj je nekaj megabajtov.
     """
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     kljuc = (kje, service_date, stamp)
     if stamp and (v := _VOZJE_CACHE.get(kljuc)) is not None:
@@ -562,9 +560,7 @@ def _prihodi(conn: sqlite3.Connection, service_date: str) -> dict[str, list]:
     sprašuje "kaj odpelje od tu po tej uri", ampak "kaj pripelje sem pred to
     uro". Prvi postanek vožnje ni prihod -- tam nihče ne izstopi.
     """
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     kljuc = (kje, service_date, stamp)
     if stamp and (v := _PRIHODI_CACHE.get(kljuc)) is not None:

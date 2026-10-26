@@ -654,10 +654,13 @@ function busCardHtml(v) {
   // Zamuda in kraj morata biti iz istega vira: "+15 min" brez postaje, kjer
   // je bila izmerjena, je stevilka brez pomena, ce je vozilo od takrat ze
   // dalec naprej.
-  // Brez `trip_id` je vožnja, ki je vozni red ne pozna (LPP ob zapori): ni
-  // ure, od katere bi merili zamudo, in ne strani, ki bi jo lahko odprli.
+  // Brez `trip_id` je vožnja, ki je vozni red ne pozna in je zajem ni mogel
+  // pripeti na objavljeno (`zive.py`): ni ure, od katere bi merili zamudo, in
+  // ne strani, ki bi jo lahko odprli. Kam pelje, pove napoved LPP.
   const rows = !v.trip_id
-    ? [["zamuda", "vožnje ni v voznem redu"]]
+    ? [["zamuda", "ni znana · vožnja mimo voznega reda"],
+       ...(v.naslednja ? [["naslednja", `${escapeHtml(v.naslednja)} ob ${
+         hhmm(v.naslednja_ts * 1000)} · napoved LPP`]] : [])]
     : v.delay_s == null
     ? [["zamuda", "ni meritve"]]
     : [["zamuda", delayText(v.delay_s), delayColor(v.delay_s)],

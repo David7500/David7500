@@ -55,7 +55,9 @@ def _baza():
     return c
 
 
-def _feed(*voznje, vozilo_na=None):
+def _feed(*voznje, vozilo_na=None, brez_ure=()):
+    """Vožnje z napovedjo za postajališče B; tiste v `brez_ure` še niso
+    začele (LPP-jevo mesto brez časa)."""
     f = gtfs_realtime_pb2.FeedMessage()
     f.header.gtfs_realtime_version = "2.0"
     f.header.timestamp = int(ZDAJ.timestamp())
@@ -64,6 +66,11 @@ def _feed(*voznje, vozilo_na=None):
         e.trip_update.trip.trip_id = tid
         e.trip_update.trip.route_id = "R1"
         e.trip_update.trip.start_date = DAN.replace("-", "")
+        u = e.trip_update.stop_time_update.add(stop_sequence=2, stop_id="B")
+        if tid in brez_ure:
+            u.arrival.delay = 0
+        else:
+            u.arrival.time = int(ZDAJ.timestamp()) + 600
     if vozilo_na:
         e = f.entity.add(id="v")
         e.vehicle.trip.trip_id = vozilo_na
@@ -91,6 +98,15 @@ def test_zajem_steje_neznane_po_liniji_in_vozila_ohrani():
     assert [(x["train_no"], x["headsign"], x["vehicle_id"]) for x in v] == [
         ("1", "STANEŽIČE P+R - DOLGI MOST P+R", "bus-7")]
     assert c.execute("SELECT COUNT(*) FROM vehicle_now").fetchone()[0] == 0
+
+
+def test_voznja_ki_se_ni_zacela_ne_steje():
+    """Neznana vožnja brez napovedi čaka na par (`zive`): ni napaka vira."""
+    c = _baza()
+    neznane = ["D|nova1|VZOREC1", "D|nova2|VZOREC1", "D|nova3|VZOREC1"]
+    izid = collector.ingest(c, _feed(ZNANA, *neznane, brez_ure=neznane[1:]), vir="lpp")
+    assert izid["neznanih"] == 1
+    assert izid["proge"] == {"R1": [1, 2]}
 
 
 def test_lpp_premakne_kljuc_predpomnilnika_leg(monkeypatch):

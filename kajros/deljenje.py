@@ -578,7 +578,7 @@ def _preveri_znacko(conn: sqlite3.Connection) -> None:
         return
     # Pripenjanje (`pripni.py`) teče po uvozu in traso pod istim id-jem
     # zamenja s pripeto.
-    znacka = f'{db.get_meta(conn, "gtfs_imported_at")}|{db.get_meta(conn, "pripeto_at")}'
+    znacka = f'{db.znacka_reda(conn)}|{db.get_meta(conn, "pripeto_at")}'
     with _pp_zaklep:
         _pp_preverjeno = time.monotonic()
         if znacka != _pp_znacka:

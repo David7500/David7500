@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, iz_lege, stats, viri
+from . import config, db, iz_lege, stats, viri, zive
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -54,6 +54,10 @@ def fetch(url: str, conn: sqlite3.Connection, etag_key: str, vir: str | None = N
 # s 427 MB ubil.
 _STATIC_CACHE: dict[tuple, object] = {}
 _NI = object()
+#: Vožnja iz feeda je živa vožnja LPP, pripeta na objavljeno, ali prestavljena
+#: na živ vzorec (`zive.py`): feed šteje postanke po živem vzorcu, naš vozni
+#: red po svoje -- postanke preslika po postajališču, ne po številki.
+PO_POSTAJALISCU = object()
 
 
 def _cached(conn: sqlite3.Connection, name: str, extra, build):
@@ -444,12 +448,20 @@ def odpovedane(zdaj: float | None = None) -> frozenset:
     return frozenset(out)
 
 
-def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
-    """Zapiše spremembe zamud. Vrne števce za log."""
+def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
+           pari: dict[str, str] | None = None, dvojniki=frozenset()) -> dict:
+    """Zapiše spremembe zamud. Vrne števce za log.
+
+    `pari` = žive vožnje mestnega LPP, pripete na objavljene (`zive.razresi`):
+    njihova zamuda gre pod objavljeno, postanki po postajališču. `dvojniki`
+    ponavljajo vožnjo, ki jo že imamo: ne pišejo se in ne štejejo.
+    """
     now = datetime.now(TZ)
     windows = _rail_trip_windows(conn)
     valid = _service_dates(conn, now)
     zamenjave = _zamenjave(conn)
+    pari = pari or {}
+    prestavljene = zive.popravljeni(conn) if vir == "lpp" else {}
     agencije = _agencije(conn) if vir == "ijpp" else {}
     # Vožnje, katerih zamudo ta hip računamo iz leg NAP (`iz_lege.nap_vodi`).
     nap_prevzel: set[str] = set()
@@ -458,15 +470,24 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     sz_prevzel = 0
 
     def nas_id(tid):
-        """Pod katerim id-jem vožnjo vodimo: pod njenim ali pod naslednico."""
+        """Pod katerim id-jem vožnjo vodimo: pod njenim, pod naslednico ali pod
+        objavljeno, na katero je živa pripeta; drugo je preslikava postankov.
+        Prestavljena naslednica gre po postajališču: številke zamenjave so
+        objavljene, iz časa pred popravkom."""
         if tid in windows:
-            return tid, None
+            return tid, (PO_POSTAJALISCU if tid in prestavljene else None)
         z = zamenjave.get(tid)
-        return z if z and z[0] in windows else (None, None)
+        if z and z[0] in windows:
+            return (z[0], PO_POSTAJALISCU) if z[0] in prestavljene else z
+        p = pari.get(tid)
+        return (p, PO_POSTAJALISCU) if p in windows else (None, None)
 
+    nasi = {e.trip_update.trip.trip_id: nas_id(e.trip_update.trip.trip_id)
+            for e in feed.entity if e.HasField("trip_update")}
     # Vozni red postankov rabimo, kadar feed da absolutni cas namesto zamude.
-    sched = _sched_times(conn, {nas_id(e.trip_update.trip.trip_id)[0]
-                                for e in feed.entity} - {None})
+    sched = _sched_times(conn, {t for t, _ in nasi.values()} - {None})
+    # Naši postanki s postajališči, za preslikavo po postajališču.
+    nasi_postanki = zive.postanki(conn, {t for t, z in nasi.values() if z is PO_POSTAJALISCU})
     # Pri mestnem LPP je `delay` le mesto za vožnjo brez napovedi (`_delay_of`).
     beri_delay = vir != "lpp"
     feed_ts = feed.header.timestamp or int(time.time())
@@ -488,6 +509,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
     # ni videl nihče, dokler potnik ni čakal na avtobus.
     neznanih = 0
     zamenjanih = 0
+    pripetih = 0
     v_feedu: set[str] = set()
     # Po progah, ker LPP včasih ne izgubi vožnje, ampak linijo: 2. 10. 2026
     # je bilo 38 od 44 voženj linije 1 neznanih, liniji 11 in 27 pa 3 in 4.
@@ -498,8 +520,16 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
         if not entity.HasField("trip_update"):
             continue            # LPP v isti feed da tudi lege in obvestila
         tu = entity.trip_update
-        trip_id, zamenjava = nas_id(tu.trip.trip_id)
-        if vir == "lpp":
+        if tu.trip.trip_id in dvojniki:
+            continue
+        trip_id, zamenjava = nasi[tu.trip.trip_id]
+        # Mestni LPP šteje samo vožnje z napovedjo: neznana, ki še ni začela,
+        # čaka na par (`zive.razresi` jo pripne po načrtu ali ob prvi
+        # napovedi). 26. 10. 2026 jih je bilo v feedu 5 od 13 voženj linije
+        # 27 brez para, vse brez vozila in ure -- linija bi bila „mimo
+        # voznega reda“ in tabla bi zavrgla zamude sparjenih.
+        steje = vir != "lpp" or any(zive._cas(s) is not None for s in tu.stop_time_update)
+        if vir == "lpp" and steje:
             stevec = proge.setdefault(tu.trip.route_id, [0, 0])
             stevec[0] += trip_id is None
             stevec[1] += 1
@@ -508,10 +538,11 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
             # TransitClock ima star vozni red. Isto vozilo NAP vodi pod novo
             # (14. 10. 2026 v dveh vzorcih vseh 15 voženj Nomaga in Arrive)
             # -- izgube ni, rumena vrstica pa je bila stalna.
-            if not iz_lege.nap_vodi(agencije.get(tu.trip.trip_id)):
+            if steje and not iz_lege.nap_vodi(agencije.get(tu.trip.trip_id)):
                 neznanih += 1
             continue
-        zamenjanih += zamenjava is not None
+        zamenjanih += trip_id == zamenjave.get(tu.trip.trip_id, (None,))[0]
+        pripetih += trip_id == pari.get(tu.trip.trip_id) and trip_id != tu.trip.trip_id
         trips_seen += 1
         if tu.trip.schedule_relationship == ODPOVEDANA:
             d = tu.trip.start_date
@@ -538,13 +569,26 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
 
         if tu.trip.schedule_relationship != 0:
             non_scheduled += 1
+        if zamenjava is PO_POSTAJALISCU:
+            mapa = zive.preslikaj(nasi_postanki.get(trip_id, []),
+                                  [(s.stop_sequence, s.stop_id, zive._cas(s))
+                                   for s in tu.stop_time_update],
+                                  stats.polnoc(service_date))
 
         ts = tu.timestamp or feed_ts
         for stu in tu.stop_time_update:
             if stu.schedule_relationship != 0:
                 non_scheduled += 1
             seq = stu.stop_sequence
-            if zamenjava is None:
+            if zamenjava is PO_POSTAJALISCU:
+                seq = mapa.get(seq)
+                if seq is None:
+                    continue    # postanka naša vožnja nima
+                arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date,
+                                beri_delay)
+                dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date,
+                                beri_delay)
+            elif zamenjava is None:
                 arr = _delay_of(stu, "arrival", sched.get((trip_id, seq)), service_date,
                                 beri_delay)
                 dep = _delay_of(stu, "departure", sched.get((trip_id, seq)), service_date,
@@ -623,7 +667,8 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp") -> dict:
             "nap_prevzel": len(nap_prevzel), "sz_prevzel": sz_prevzel,
             "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
-            "neznanih": neznanih, "zamenjanih": zamenjanih, "proge": proge}
+            "neznanih": neznanih, "zamenjanih": zamenjanih, "pripetih": pripetih,
+            "proge": proge}
 
 
 def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
@@ -734,14 +779,16 @@ def _lpp_vzorci(conn: sqlite3.Connection) -> dict[str, dict]:
 
 
 def _zapisi_brez_voznje(conn: sqlite3.Connection, proge: dict[str, list[int]],
-                        vozila: list[dict]) -> None:
+                        vozila: list[dict], brez_para: dict[str, dict] | None = None) -> None:
     """Linije in vozila mestnega LPP, ki vozijo mimo voznega reda, za prikaz.
 
     LPP vožnje izda pod id-ji, ki jih objavljeni vozni red nima (1. 10. 2026
     17 % voženj šestih linij, 2. 10. ob kolesarskem prvenstvu linija 1).
-    Zamude se jim ne da izračunati -- ni ure, od katere bi jo merili -- zato
-    v `run` ne gredo. Tabla zanje vpraša LPP (`lpp.na_tablo`), zemljevid pa
-    jih nariše brez zamude.
+    Kar se da, pripne `zive.razresi`; tistim brez para se zamude ne da
+    izračunati -- ni ure, od katere bi jo merili -- zato v `run` ne gredo.
+    Tabla zanje vpraša LPP (`lpp.na_tablo`), tudi na postajališčih, ki jih ima
+    samo živa vožnja (`postaje`); zemljevid jih nariše brez zamude, z
+    naslednjim postankom po napovedi feeda.
     """
     vzorci = _lpp_vzorci(conn)
     linija = {v["route_id"]: v["train_no"] for v in vzorci.values()}
@@ -752,14 +799,35 @@ def _zapisi_brez_voznje(conn: sqlite3.Connection, proge: dict[str, list[int]],
             stevec = linije.setdefault(ime, [0, 0])
             stevec[0] += n
             stevec[1] += vseh
+    brez_para = brez_para or {}
+    postaje: dict[str, set[str]] = {}
+    for z in brez_para.values():
+        ime = linija.get(z["route"])
+        if ime is not None:
+            postaje.setdefault(ime, set()).update(p[1] for p in z["postanki"])
     zdaj = int(time.time())
-    db.set_meta(conn, "lpp_linije_brez_voznje",
-                json.dumps({"ts": zdaj, "linije": linije}, sort_keys=True))
+    db.set_meta(conn, "lpp_linije_brez_voznje", json.dumps(
+        {"ts": zdaj, "linije": linije,
+         "postaje": {k: sorted(v) for k, v in postaje.items()}}, sort_keys=True))
+    naslednji = {}
+    for v in vozila:
+        z = brez_para.get(v["trip_id"])
+        n = zive.naslednji(z, v["seen_ts"]) if z else None
+        if n is not None:
+            naslednji[v["trip_id"]] = n
+    imena = dict(conn.execute(
+        f"SELECT stop_id, name FROM station WHERE stop_id IN "
+        f"({','.join('?' * len(naslednji))})", [n[0] for n in naslednji.values()]).fetchall()
+    ) if naslednji else {}
     out = []
     for v in vozila:
-        p = vzorci.get(v.pop("trip_id").split("|")[-1])
+        tid = v.pop("trip_id")
+        p = vzorci.get(tid.split("|")[-1])
         if p is not None:
-            out.append({**v, "train_no": p["train_no"], "headsign": p["headsign"]})
+            n = naslednji.get(tid)
+            out.append({**v, "train_no": p["train_no"], "headsign": p["headsign"],
+                        "naslednja": imena.get(n[0]) if n else None,
+                        "naslednja_ts": n[1] if n else None})
     db.set_meta(conn, "lpp_vozila_brez_voznje",
                 json.dumps({"ts": zdaj, "vozila": out}, ensure_ascii=False))
     conn.commit()
@@ -788,11 +856,18 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
         iz_lege.feed_nespremenjen("lpp")
         conn.commit()
         return {"trips": 0, "vehicles": 0, "unchanged": True}
-    izid = ingest(conn, feed, vir="lpp")
+    # Žive vožnje brez voznega reda najprej pripnemo na objavljene: zajem
+    # spodaj potem njihove zamude in lege piše pod objavljene.
+    zv = zive.razresi(conn, feed)
+    izid = ingest(conn, feed, vir="lpp", pari=zv["pari"], dvojniki=zv["dvojniki"])
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
     brez_voznje: list[dict] = []
-    lege = ingest_positions(conn, feed, brez_voznje)
-    _zapisi_brez_voznje(conn, izid.pop("proge"), brez_voznje)
+    lege = ingest_positions(conn, feed, brez_voznje, zv["pari"])
+    _zapisi_brez_voznje(conn, izid.pop("proge"),
+                        [v for v in brez_voznje if v["trip_id"] not in zv["dvojniki"]],
+                        zv["brez_para"])
+    db.set_meta(conn, "lpp_zive", json.dumps(
+        {**zv["stevci"], "ts": int(time.time()), "soglasje": zive.soglasje()}, sort_keys=True))
     # Ključ predpomnilnika `/api/vehicles`, kot ga premakneta `poll_positions`
     # in NAP. Brez tega so nove lege mestnega LPP čakale na naslednji premik
     # ključa: na razvojnem računalniku 0,61--0,75 s (19. 10. 2026, n = 10),
@@ -805,9 +880,11 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     # zajem v smeti. Zdruzena so v `alerts.ingest_lpp()`, ker jih feed poslje
     # na vozjno in ne na dogodek.
     from . import alerts as _alerts
-    obv = _alerts.ingest_lpp(conn, feed)
+    obv = _alerts.ingest_lpp(conn, feed, zv["pari"])
     return {**izid, "vehicles": lege.get("vehicles", 0),
-            "obvestil": obv.get("obvestil", 0)}
+            "obvestil": obv.get("obvestil", 0),
+            "popravljenih": zv["stevci"]["popravljenih"],
+            "vrnjenih": zv["stevci"]["vrnjenih"]}
 
 
 def run_forever(conn: sqlite3.Connection, interval: int | None = None) -> None:
@@ -912,7 +989,8 @@ POSITION_FRESH_S = 180
 
 
 def ingest_positions(conn: sqlite3.Connection, feed,
-                     brez_voznje: list[dict] | None = None) -> dict:
+                     brez_voznje: list[dict] | None = None,
+                     pari: dict[str, str] | None = None) -> dict:
     """Zapiše trenutno lego vozil.
 
     Feed `vehicle_positions` nosi **samo avtobuse** -- vlakov v njem ni. Za
@@ -924,10 +1002,26 @@ def ingest_positions(conn: sqlite3.Connection, feed,
 
     Vozila na vožnjah, ki jih vozni red ne pozna, gredo v `brez_voznje`, če
     je dan: v `vehicle_now` ne smejo, ker tam vse teče prek `JOIN trip`.
+    Vozilo žive vožnje LPP, pripete na objavljeno (`pari`, `zive.razresi`),
+    gre pod objavljeno; pri njej in pri prestavljeni vožnji je postanek po
+    postajališču.
     """
     known = {r["trip_id"] for r in conn.execute("SELECT trip_id FROM trip")}
     windows = _rail_trip_windows(conn)
     zamenjave = _zamenjave(conn)
+    pari = {t: p for t, p in (pari or {}).items() if p in windows}
+    # Pripete in prestavljene vožnje (`zive.py`) dobijo postanek po
+    # postajališču: feed jih šteje po živem vzorcu.
+    prestavljene = zive.popravljeni(conn)
+    cilji = set(pari.values())
+    for e in feed.entity:
+        if e.HasField("vehicle"):
+            t = e.vehicle.trip.trip_id
+            t = zamenjave[t][0] if t not in windows and t in zamenjave else t
+            if t in prestavljene:
+                cilji.add(t)
+    po_postajaliscu = {t: [] for t in cilji}
+    po_postajaliscu.update(zive.postanki(conn, cilji))
     seen_at = int(time.time())
     written = 0
 
@@ -940,6 +1034,12 @@ def ingest_positions(conn: sqlite3.Connection, feed,
         z = zamenjave.get(trip_id) if trip_id not in windows else None
         if z is not None:
             trip_id = z[0]
+        elif trip_id not in windows and trip_id in pari:
+            trip_id = pari[trip_id]
+        if trip_id in po_postajaliscu:
+            stop_seq = next((seq for seq, sid, _ in po_postajaliscu[trip_id]
+                             if sid == v.stop_id), None) if v.stop_id else None
+        elif z is not None:
             p = z[1].get(stop_seq)
             stop_seq = p[0] if p else None
         if not v.HasField("position"):

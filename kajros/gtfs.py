@@ -15,7 +15,7 @@ import requests
 
 from zoneinfo import ZoneInfo
 
-from . import config, db, geo, viri
+from . import config, db, geo, viri, zive
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -883,6 +883,14 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         nove = _vozje_za(conn, set(trips) - stari_ids, od_dne,
                          {v["kljuc"] for v in izginule.values()}) if izginule else {}
         zamenjanih = _zapisi_zamenjave(conn, izginule, nove)
+        # Objava je spet po svoje: kjer LPP vozi drug vzorec, kot ga objavi
+        # (`zive.py`), se popravek za dneve od včeraj naredi znova. Napaka v
+        # popravku ne sme ustaviti uvoza -- sparjene vožnje zajem prestavi
+        # znova ob naslednjem branju.
+        try:
+            popravljenih = zive.uporabi_popravke(conn)
+        except Exception as exc:
+            popravljenih = f"napaka: {exc}"
         # S pasom, tako kot vse drugo v projektu: brez njega je to cas stroja,
         # ki se od `config.TIMEZONE` lahko razlikuje.
         db.set_meta(conn, "gtfs_imported_at",
@@ -896,6 +904,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         # Koliko izginulih voznj ima naslednico pod novim id-jem. Feed v zivo
         # jih zna se naprej nositi pod starim; zajem ju poveze sam.
         "trips_zamenjanih": zamenjanih,
+        # Objavljene vožnje mestnega LPP, prestavljene na vzorec, ki ga LPP
+        # res vozi (`zive.uporabi_popravke`).
+        "trips_popravljenih": popravljenih,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "trips_lpp": lpp_trips,

@@ -32,7 +32,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, donacije, hoja, journey, lpp, markdown,
                nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot, pripni, pristanek,
-               server, stats, stik, tiri, viri, zamude_sz, zapore, zasedenost, zdravje)
+               server, stats, stik, tiri, viri, zamude_sz, zapore, zasedenost, zdravje, zive)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -1294,7 +1294,7 @@ def _kazalo(network: str) -> dict:
     ker se nabor naslovov spremeni z njim; številke v njem se osvežijo z
     dnevnim opravilom in četrturna varovalka jih ujame.
     """
-    return _predpomni(f"pristanek:{network}", _znacka("gtfs_imported_at"), 900,
+    return _predpomni(f"pristanek:{network}", _znacka(*db.KLJUCI_REDA), 900,
                       lambda: _conn_klic(lambda c: pristanek.kazalo(c, network)))
 
 
@@ -1545,6 +1545,9 @@ def api_health():
             for vir, kljuc in (("ijpp", "rt_neznanih"), ("lpp", "lpp_rt_neznanih"))
             if (v := db.get_meta(conn, kljuc))
         }
+        # Kar je od njih pri LPP pripeto na objavljene (`zive.py`): neznane
+        # zgoraj so samo tiste brez para.
+        out["lpp_zive"] = zive.pregled(conn)
         # Ali se po voznem redu sploh kaj vozi: ponoči feed molči, ker molči
         # promet, in to ni okvara (`zdravje.ocena`). Sveže, ker je od tega
         # odvisna barva, ne predpomnjeno število.
@@ -1744,7 +1747,7 @@ def api_stations(network: str = NETWORK_Q, request: Request = None):
     # Predpomnimo ze SERIALIZIRAN JSON, ne seznama slovarjev: sama poizvedba
     # je manjsi del cene, vecino poje pretvorba 9 791 postaj v niz. Zato
     # `Response`, ne navadna vrnitev -- FastAPI bi jo sicer serializiral znova.
-    kljuc, znacka = f"stations:{network}", _znacka("gtfs_imported_at", "pripeto_at")
+    kljuc, znacka = f"stations:{network}", _znacka(*db.KLJUCI_REDA, "pripeto_at")
     telo = _predpomni(
         kljuc, znacka, STATIKA_S,
         lambda: json.dumps(_conn_klic(lambda c: stats.stations(c, network)),
@@ -1769,7 +1772,7 @@ def api_station_index(network: str = NETWORK_ISKANJE_Q,
     kazalo se naloži enkrat in išče se v brskalniku, tako kot pri iskalniku zvez.
     """
     net = None if network == "vse" else network
-    kljuc, znacka = f"stations-index:{network}:{int(koordinate)}", _znacka("gtfs_imported_at")
+    kljuc, znacka = f"stations-index:{network}:{int(koordinate)}", _znacka(*db.KLJUCI_REDA)
     telo = _predpomni(
         kljuc, znacka, STATIKA_S,
         lambda: json.dumps(
@@ -1928,7 +1931,8 @@ def api_departures(
         if network == "avtobus" and now_s is not None and not from_time:
             lpp_izpad = lpp.derp_molci(conn, now.timestamp())
             rows, mimo = lpp.na_tablo(conn, rows, now, kind == "odhodi", exact,
-                                      vse=lpp_izpad)
+                                      vse=lpp_izpad,
+                                      stop_ids=set(izbrana["stop_ids"]) if izbrana else None)
             for r in rows:
                 r.setdefault("smer", smer_od.get(r["stop_id"]))
         if network == "avtobus" and now_s is not None:
@@ -2009,7 +2013,7 @@ def api_zapore(dan: str | None = Query(None, description="YYYY-MM-DD; privzeto d
     d = date.fromisoformat(_check_date(dan) or zdaj.date().isoformat())
     if abs((d - zdaj.date()).days) > ZAPORE_DNI:
         raise HTTPException(400, f"dan mora biti v {ZAPORE_DNI} dneh od danes")
-    zap = _predpomni(f"zapore:{d}", _znacka("alerts_etag", "gtfs_imported_at", "pripeto_at"),
+    zap = _predpomni(f"zapore:{d}", _znacka("alerts_etag", *db.KLJUCI_REDA, "pripeto_at"),
                      300, lambda: _conn_klic(lambda c: zapore.karta(c, d)))
 
     def lastnosti(p, okna):
@@ -2475,7 +2479,7 @@ def _shapes_live_rows(now: int):
 def api_network(elementary_only: bool = True, request: Request = None):
     """Geometrija prog z dolžino odseka v km. Za risanje zemljevida."""
     # Cista statika: spremeni se samo ob uvozu voznega reda.
-    kljuc, znacka = f"geojson:{elementary_only}", _znacka("gtfs_imported_at", "pripeto_at")
+    kljuc, znacka = f"geojson:{elementary_only}", _znacka(*db.KLJUCI_REDA, "pripeto_at")
     telo = _predpomni(
         kljuc, znacka, STATIKA_S,
         lambda: json.dumps(_conn_klic(lambda c: stats.network_geojson(c, elementary_only)),

@@ -85,6 +85,15 @@ LPP_ZAMUDE = LPP_ENABLED and LPP_ZIVO and okolje("LPP_ZAMUDE", "1") != "0"
 LPP_ZAMUDE_SECONDS = int(okolje("LPP_ZAMUDE_SECONDS", "120"))
 LPP_POSTAJ_KORAK = int(okolje("LPP_POSTAJ_KORAK", "12"))
 
+# **Žive vožnje mestnega LPP brez objavljenega voznega reda** (`zive.py`):
+# pripne jih na objavljene z istim načrtom in, kadar LPP vozi drug vzorec,
+# objavljene prestavi nanj. 26. 10. 2026 bi bila sicer linija 27 ves teden
+# brez zamud in na tabli mimo kolodvora. `KAJROS_ZIVE=0` ugasne vse;
+# `KAJROS_ZIVE_POPRAVKI=0` samo prestavljanje (z `kajros zive --razveljavi`
+# se objava vrne takoj, ne šele ob naslednjem uvozu).
+ZIVE = okolje("ZIVE", "1") != "0"
+ZIVE_POPRAVKI = ZIVE and okolje("ZIVE_POPRAVKI", "1") != "0"
+
 # **Lege avtobusov IJPP naravnost z NAP** (`nap.py`, SIRI-VM): izvirnik leg,
 # ki jih derp.si le pretvori. Rabi prijavo (`deploy/nap.sh`); brez nje nit
 # čaka in ne dela nič. Na 10 s, kot lege z derp.si (`POSITION_SECONDS`).

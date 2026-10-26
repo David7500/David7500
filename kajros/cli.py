@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
                journey, naslovi, ocena, odkloni, peroni, pot, prehod, pripni, stats, tiri,
-               weather, zamude_lpp, zamude_sz)
+               weather, zamude_lpp, zamude_sz, zive)
 
 
 def cmd_init(args):
@@ -295,6 +295,18 @@ def cmd_zamenjave(args):
     # bi ji spremenil dnevnik.
     stara = sqlite3.connect(f"file:{Path(args.stara).resolve()}?mode=ro", uri=True)
     print(json.dumps(gtfs.zamenjave_iz(conn, stara), indent=2, ensure_ascii=False))
+
+
+def cmd_zive(args):
+    """Žive vožnje LPP brez voznega reda: pari in prestavljeni vzorci."""
+    conn = db.connect()
+    db.init(conn)
+    if args.razveljavi:
+        n = zive.razveljavi(conn, None if args.razveljavi == "vse" else args.razveljavi)
+        print(f"objava vrnjena {n} vožnjam; dnevi brez prestavljanja do konca dneva: "
+              f"{', '.join(sorted(zive.razveljavljeni_dnevi(conn)))}")
+        return
+    print(json.dumps(zive.pregled(conn), indent=2, ensure_ascii=False))
 
 
 def cmd_primerjava(args):
@@ -614,6 +626,13 @@ def main(argv=None):
                        help="povezi voznje z novimi id-ji; stari vozni red vzame iz kopije baze")
     a.add_argument("stara", help="starejsa baza (razpakirana varnostna kopija izpred uvoza)")
     a.set_defaults(func=cmd_zamenjave)
+
+    a = sub.add_parser("zive", help="zive voznje LPP brez voznega reda: pari in popravki vzorcev")
+    a.add_argument("--razveljavi", metavar="DAN",
+                   help="vrni objavljene postanke prestavljenim voznjam dne DAN (ali 'vse') "
+                        "in ta dan ne prestavljaj vec; meritve na postankih, ki jih objava "
+                        "nima, gredo z njimi")
+    a.set_defaults(func=cmd_zive)
 
     a = sub.add_parser("primerjava",
                        help="zasloni LPP proti derp.si, z najvecjimi razhajanji")

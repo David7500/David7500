@@ -92,7 +92,7 @@ def _odseki_prometa(conn: sqlite3.Connection, dan: str, omr: str, vsaj_s: int,
                     najmanj: int) -> list[tuple[int, int]]:
     """Odseki časa (od epohe), ko po voznem redu vozi vsaj `najmanj` voženj
     omrežja, vsaka vsaj `vsaj_s` (kot `vozi_zdaj`): včerajšnje in današnje."""
-    uvoz = db.get_meta(conn, "gtfs_imported_at")
+    uvoz = db.znacka_reda(conn)
     kljuc = (dan, omr, vsaj_s, najmanj, uvoz)
     if kljuc in _ODSEKI:
         return _ODSEKI[kljuc]
@@ -1717,7 +1717,7 @@ def _vozni_red_zveze(conn: sqlite3.Connection, a: str, b: str, day: str,
     Vlak lahko isto postajo obišče dvakrat (obrat) -- obdrži najzgodnejši
     odhod. Vrne kopije: klicatelj vrstice dopolni.
     """
-    stamp = db.get_meta(conn, "gtfs_imported_at")
+    stamp = db.znacka_reda(conn)
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     kljuc = (kje, stamp, a, b, day, network)
     vrstice = _ZVEZE_RED.get(kljuc) if stamp and kje else None
@@ -1924,9 +1924,7 @@ def znano_do(conn: sqlite3.Connection, network: str | None = None,
     prazen odgovor, ki je videti kot „ta dan nič ne vozi" -- v resnici pa
     vozni red še ni objavljen. Razlika je za potnika bistvena.
     """
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     where = conn.execute("PRAGMA database_list").fetchone()["file"]
     key = (where, network, agency, stamp)
     if stamp and key in _HORIZON_CACHE:
@@ -1943,9 +1941,7 @@ def znano_do(conn: sqlite3.Connection, network: str | None = None,
 
 def last_sched_s(conn: sqlite3.Connection, network: str | None) -> int | None:
     """Najpoznejša voznoredna sekunda tega omrežja (zna čez 86400)."""
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     where = conn.execute("PRAGMA database_list").fetchone()["file"]
     key = (where, network, stamp)
     # Brez žiga ne predpomnimo -- sveža ali testna baza se lahko spremeni

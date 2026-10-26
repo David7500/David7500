@@ -34,7 +34,7 @@ from datetime import datetime
 
 import requests
 
-from . import config, db, geo, stats, viri
+from . import config, db, geo, stats, viri, zive
 from .naslovi import fold
 
 _URL = "https://data.lpp.si/api/route/arrivals-on-route"
@@ -79,12 +79,6 @@ def _http():
 # mediana razlike je 0,0 m, 704 od 714 pod 5 m -- 25 m je zato ohlapno dovolj
 # in vseeno prevec tesno, da bi zamenjalo dve sosednji postajalisci.
 _UJEMANJE_M = 25
-
-
-def _vzorec(trip_id: str) -> str | None:
-    """Tretja komponenta našega trojnega id-ja je njihov `trip-id`."""
-    deli = trip_id.split("|")
-    return deli[2] if len(deli) == 3 else None
 
 
 def _beri_vzorec(vzorec: str) -> None:
@@ -144,7 +138,8 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
     """
     if not config.LPP_ZIVO or not vehicle_id:
         return None
-    vzorec = _vzorec(trip_id)
+    # Prestavljena vožnja (`zive.popravi`) je pri LPP pod vzorcem, ki ga vozi.
+    vzorec = zive.vzorec_lpp(conn, trip_id)
     if not vzorec:
         return None
     podatki = _prinesi(vzorec)
@@ -207,6 +202,11 @@ BREZ_VOZNJE_DELEZ = 0.2
 #: Starejši podatek zajema ne velja: feed se je morda vmes popravil.
 BREZ_VOZNJE_SVEZE_S = 600
 
+#: Kako daleč naprej LPP-jev zaslon kaže vse prihode: 26. 10. 2026 na 16
+#: postajališčih največ 60 min, gosta linija 6 vsak prihod. Pet minut manj,
+#: da prihod na robu, ki ga zaslon še ne kaže, ne izgine s table.
+OBZORJE_S = 55 * 60
+
 #: derp.si bere mestni LPP na 30 s. Kadar pet minut ne odgovori, tabla vse
 #: linije LPP vzame z LPP-jevega zaslona: 8. 10. 2026 je bil od 16:00 mrtev,
 #: data.lpp.si pa je odgovarjal.
@@ -237,6 +237,20 @@ def linije_brez_voznje(conn: sqlite3.Connection, zdaj: float) -> set[str]:
         return set()
     return {ime for ime, (n, vseh) in (zapis.get("linije") or {}).items()
             if je_brez_voznje(n, vseh)}
+
+
+def postaje_brez_voznje(conn: sqlite3.Connection, zdaj: float) -> dict[str, set[str]]:
+    """Linija -> postajališča, na katerih ustavljajo njene žive vožnje brez
+    voznega reda (`collector._zapisi_brez_voznje`), za linije mimo voznega
+    reda. Objava jih lahko nima: 26. 10. 2026 je 27 vozila prek Navja."""
+    try:
+        zapis = json.loads(db.get_meta(conn, "lpp_linije_brez_voznje") or "{}")
+    except ValueError:
+        return {}
+    if zdaj - (zapis.get("ts") or 0) > BREZ_VOZNJE_SVEZE_S:
+        return {}
+    linije = linije_brez_voznje(conn, zdaj)
+    return {ime: set(s) for ime, s in (zapis.get("postaje") or {}).items() if ime in linije}
 
 
 def derp_molci(conn: sqlite3.Connection, zdaj: float) -> bool:
@@ -406,29 +420,49 @@ def vrstice_prihodov(prihodi: list[dict], stop_id: str, linije: set[str],
 
 
 def na_tablo(conn: sqlite3.Connection, rows: list[dict], zdaj: datetime,
-             odhodi: bool, postaja: str, vse: bool = False) -> tuple[list[dict], list[str]]:
+             odhodi: bool, postaja: str, vse: bool = False,
+             stop_ids: set[str] | None = None) -> tuple[list[dict], list[str]]:
     """Današnjo tablo za linije, ki vozijo mimo voznega reda, napolni z LPP.
     Z `vse` (derp.si molči, `derp_molci`) za vse linije LPP na tabli.
+    `stop_ids` = izbrana stran ceste, sicer vsa postajališča tega imena.
 
     Vrne (vrstice, zamenjane linije). Ob kakršni koli napaki vira tabla
     ostane, kot je -- vozni red je slabši odgovor, a ni prazen.
 
-    Vrstice voznega reda teh linij gredo ven le do zadnjega LPP-jevega
-    prihoda: dlje LPP ne napove, in vozni red je za tisti čas edino, kar
-    imamo -- na Tivoliju 2. 10. ob 15h se je z LPP-jevim ujemal do minute,
-    1. 10. na liniji 14 pa le v 47 od 66 odhodov.
+    LPP-jev zaslon kaže vse prihode v naslednji uri (26. 10. 2026: linija 6
+    na 10 min šest prihodov od 3 do 56 min, nobena postaja čez 60 min). Zato
+    vrstice voznega reda teh linij gredo ven do zadnjega LPP-jevega prihoda
+    in vsaj `OBZORJE_S` -- tudi kadar LPP linije tu sploh ne kaže: objavljena
+    trasa je lahko druga (26. 10. 27 mimo Kolodvora, kjer je ni bilo). Dlje
+    je vozni red edino, kar imamo -- na Tivoliju 2. 10. ob 15h se je z
+    LPP-jevim ujemal do minute, 1. 10. na liniji 14 pa le v 47 od 66 odhodov.
+    Linija, ki je vozni red tu nima, živa vožnja pa tu ustavi (Navje),
+    pride na tablo z LPP-jevega zaslona (`postaje_brez_voznje`).
     """
     if not config.LPP_ZIVO:
         return rows, []
     na_tabli = {r["train_no"] for r in rows if r.get("agency") == "lpp"}
-    linije = na_tabli if vse else linije_brez_voznje(conn, zdaj.timestamp()) & na_tabli
+    dodane: set[str] = set()
+    if vse:
+        linije = set(na_tabli)
+    else:
+        linije = linije_brez_voznje(conn, zdaj.timestamp())
+        tu = stop_ids if stop_ids is not None else {r[0] for r in conn.execute(
+            "SELECT stop_id FROM station WHERE name = ?", (postaja,))}
+        dodane = {ime for ime, sids in postaje_brez_voznje(conn, zdaj.timestamp()).items()
+                  if ime in linije and ime not in na_tabli and sids & tu}
+        linije = (linije & na_tabli) | dodane
     if not linije:
         return rows, []
-    sids = sorted({r["stop_id"] for r in rows
-                   if r.get("agency") == "lpp" and r["train_no"] in linije})
+    sids = {r["stop_id"] for r in rows
+            if r.get("agency") == "lpp" and r["train_no"] in linije}
+    if dodane:
+        sids |= {s for ime, ss in postaje_brez_voznje(conn, zdaj.timestamp()).items()
+                 if ime in dodane for s in ss & tu}
     postaje = _postaje_lpp()
     if not postaje or not sids:
         return rows, []
+    sids = sorted(sids)
     nasa = [dict(r) for r in conn.execute(
         f"SELECT stop_id, lat, lon FROM station WHERE stop_id IN ({','.join('?' * len(sids))}) "
         "AND lat IS NOT NULL", sids)]
@@ -456,9 +490,17 @@ def na_tablo(conn: sqlite3.Connection, rows: list[dict], zdaj: datetime,
     meja: dict[str, int] = {}
     for r in novi:
         meja[r["train_no"]] = max(meja.get(r["train_no"], 0), kdaj(r))
-    if not meja:
-        return rows, []
+    # Zaslon, ki smo ga prebrali, pove tudi, česa naslednjo uro ni.
+    prebrane = set(kode.values())
+    obzorje = int(zdaj.timestamp()) + OBZORJE_S
+
+    def do(r):
+        m = meja.get(r["train_no"])
+        if r["stop_id"] in prebrane:
+            return max(m or 0, obzorje)
+        return m
+
     ostane = [r for r in rows
-              if not (r.get("agency") == "lpp" and r["train_no"] in meja
-                      and kdaj(r) <= meja[r["train_no"]])]
-    return ostane + novi, sorted(meja)
+              if not (r.get("agency") == "lpp" and r["train_no"] in linije
+                      and (m := do(r)) is not None and kdaj(r) <= m)]
+    return ostane + novi, sorted(linije)

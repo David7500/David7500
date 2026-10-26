@@ -13,6 +13,7 @@ paths:
   - "kajros/nap.py"
   - "kajros/zamude_lpp.py"
   - "kajros/zdravje.py"
+  - "kajros/zive.py"
 ---
 
 # Kaj feed pošlje in kje laže
@@ -69,11 +70,33 @@ Mestnih linij **v IJPP ni** (le primestne 40–84). Vozni red `avl.lpp.si/transi
 * Kakovost: mediana 0, p95 +7, p99 +23, nad 2 h nič (IJPP 2 541 vrstic nad 4 h).
 * `trip_id` = trojni UUID (`service|?|trip`), 1 : 1 z `avl.lpp.si`, ne z NAP. Okno uvoza osem dni (mesec = 62 989 voženj).
 * **Koda postajališča** (`stop_code`, 600011) → `station.koda` ob uvozu (od 22. 10. 2026; IJPP brez). Migracija pozabi `lpp_etag`, da jo naslednja osvežitev napolni. Rabi jo smer table („v center“, `strani.md`). Poti z `trip_id` iz zahteve: meja `stats.TRIP_NAJDALJSI` (200).
-* **1 : 1 ni zagotovljeno.** 1. 10. 2026 17 % voženj z UUID-jem, ki ga ni v nobenem voznem redu; para ni (ugibanje). LPP vozi **drug vozni red**, kot ga objavi (linija 14: 78 odhodov proti 66 v GTFS). Ob zaprti liniji (2. 10.) `ingest` šteje neznane **po progi**, `meta.lpp_linije_brez_voznje` in `meta.lpp_vozila_brez_voznje`; v `run`/`vehicle_now` nič; tablo napolni `lpp.na_tablo` (`strezba.md`).
+* **1 : 1 ni zagotovljeno.** 1. 10. 2026 17 % voženj z UUID-jem, ki ga ni v nobenem voznem redu; 26. 10. vsa 27 po drugi trasi. Kar se da, pripne `zive.py` (spodaj). LPP vozi **drug vozni red**, kot ga objavi (linija 14: 78 odhodov proti 66 v GTFS). Neznane brez para `ingest` šteje **po progi**, samo z napovedjo, `meta.lpp_linije_brez_voznje` (s postajališči) in `meta.lpp_vozila_brez_voznje`; v `run`/`vehicle_now` nič; tablo napolni `lpp.na_tablo` (`strezba.md`).
 * **Imena postajališč**: 12 % VELIKE ČRKE. `gtfs._poenoti_imena()` zlije le zapise **na istem mestu** (500 m, tudi prek tretjega), ne vse skupine istega imena („Celje“/„Čelje“ 112 km; daljni „Trnovo“ je do 19. 10. ustavil zlivanje).
 * **Pošilja samo postanke PRED vozilom** → v `run` pri LPP **nikoli meritve**, le zadnja napoved pred prehodom (mediana 42 s pred). Kakovost napovedi pri LPP = napoved proti napovedi.
 * **Obvoz je po vožnji** (`stop_id` + `trip`, nikoli `route_id`; maraton 17. 10.: 2 808 parov). V `alert_entity`, `alerts.ne_ustavi` za tablo, zveze, pot. **Isti naslov za nov dogodek** — obdobje se ob vsakem branju prepiše (`alerts.zapisi`). Primestni (1118): `lpp.obvozi_zaslonov` (`type` 3). Odpoved (CANCELED) pri LPP obstaja: `collector.odpovedane`, v pomnilniku 5 min.
 * **Obvoz se konča tako, da izgine iz feeda** — `end_ts` ostane v prihodnosti (2 od 4 „veljavnih“). `meta.lpp_obvestila_prebrana`; `for_stops()` kaže obvoz le, če viden ≤ 10 min pred zadnjim branjem (`OBVOZ_REZERVA_S`).
+
+## Žive vožnje LPP brez voznega reda (`zive.py`)
+
+Id = `dan|vožnja|vzorec`: dan in vzorec poznamo, vožnje ne. 26. 10. 2026 linija 27 (14 od 15 v feedu) po Vilharjevi (Navje), objava mimo kolodvora (Kolodvor, Friškovec).
+
+* **Par živa → objavljena** (`ziva_voznja`): zamuda, lega, obvoz gredo pod objavljeno, postanki **po postajališču** (`preslikaj`), ne po številki. **Brez para ni zamude, napačen par je zamuda druge vožnje.** Dokaz:
+  * **načrt**: zaslon LPP (vrsta 1) za vozilo žive kaže uro objavljene na istem postajališču ± 90 s (13 od 13 načrtov 38–40 s za objavo). Ko vozi, mora napoved dati zamudo −10 … +90 min (linija 1: načrt za vozilovo vožnjo 64 min pozneje). Pred odhodom najzgodnejša in prosta prejšnja ne sme obstajati (linija SŽ: načrt za 17:55, vozilo čakalo na 17:15).
+  * **ura**: napoved na skupnih postajališčih −4 … +10 min od ene, nobena druga v −4 … +20 min; po vrsti začetka. Gosta linija ostane brez para (1: 12 od 23, 6: 10 od 20).
+  * Ponovitev 26. 10. (215 branj feeda, 796 zaslonov, znane vožnje preimenovane): 252 parov, 0 napačnih; ura proti načrtu 143 : 0 (`soglasje`, `/admin`).
+* **Zasedena ni na voljo**: objavljena z napovedjo ali vozilom pod svojim id-jem ali z drugo živo. Vnos brez obojega ne šteje (linija SŽ: objavljeno je feed nosil uro brez ure in vozila, vozilo pa je vozilo pod drugim id-jem ob njenih urah). Par pade, ko objavljena dobi napoved ali vozilo pod svojim id-jem ali je uvoz nima več.
+* **Dvojnik** (`_dvojnik`): živa, ki se najbolje ujame z zasedeno in od njene napovedi ne odstopa > 5 min, se preskoči, ne šteje in ni na zemljevidu (linija 2: brez vozila, zadnjih šest postankov, 0–5 min pred objavljeno).
+* **Šteje se le z napovedjo**: nezačeta neznana čaka na par (27: 5 od 13 brez ure bi linijo vrgla „mimo voznega reda“).
+* **Popravek vzorca** (`popravi`, `popravek_vzorca`): sparjena z drugim vzorcem → objavljena dobi postanke vzorca svoje žive; ob ≥ 2 sparjenih brez nasprotnega dokaza še vse objavljene tega dne, proge in vzorca brez para in meritev (27: 117 voženj). **Ure in številke skupnih postankov ostanejo** (meritve, zgodovina drugih dni, `zamenjava`), novi na prosto številko vmes, ura po voznih časih vzorca, na minuto. Predloga: najdaljša vožnja vzorca drug dan, sicer živa z vsemi postanki.
+  * **Meritve** = `run` ali `obs` (dnevnik hrani tudi ničle, ki jih `run` ni sprejel; `repair` bi jih vrnil po objavljenih številkah). Vožnja z meritvami se ne prestavi -- razen sparjene (meritve po postajališču, na skupnih postankih) in ob uvozu.
+  * **Nasprotni dokaz** = LPP ta dan vozi tudi objavo -- par z istim vzorcem, objavljena pod svojim id-jem z napovedjo ali **z meritvami** (v feedu je le, dokler vozi) -- ali še drug živ vzorec. Tedaj samo sparjene; prestavljene po skupini se **vrnejo** (`_vrni`, konec obvoza). Vrne se tudi prestavljena pod svojim id-jem z napovedjo na postajališču samo iz objave in sparjena, prestavljena na drug vzorec, kot ga vozi njena živa (naslednje branje jo prestavi prav).
+  * Vrnitev pobriše meritve na postankih, kjer ima objava drugo postajališče: pod objavljeno številko bi kazale drug kraj. Samodejna jih nima (po skupini brez meritev; sparjena na tujem vzorcu jih ima le na skupnih).
+  * Feed pod id-jem prestavljene ali pod starim id-jem (`zamenjava`) prestavljene naslednice: postanki po postajališču, ne po številki.
+  * **Ostane**: zgodovina na novem postanku (Navje pod številko Kolodvora) je zgodovina izpuščenega -- druga dneva iste vožnje in `prednik` vežeta po številki. 26. 10.: 0 vrstic `prednik` in `zamenjava` za 117 prestavljenih; drugi dnevi 27 tega tedna so prestavljeni enako.
+  * Uvoz: `uporabi_popravke` na isti vožnji ali naslednici (`zamenjava`), s shranjeno predlogo (`prestavljen`), tudi z meritvami. Napaka v njem uvoza ne ustavi.
+  * Značka `meta.vozni_red_popravljen` je v `db.znacka_reda` → predpomnilniki voznega reda; strežnik po popravku ogreje pot.
+* Izklop `KAJROS_ZIVE=0` (vse), `KAJROS_ZIVE_POPRAVKI=0` (popravki). `kajros zive --razveljavi DAN|vse` vrne objavo in ta dan ustavi prestavljanje (`meta.zive_razveljavljeno`, vidi ga tudi strežnik).
+* `razresi` 25–45 ms na branje pri ~90 neznanih (preimenovanje); prej 120–150 ms (kazalo postajališč, neuspeli popravek se ne ponavlja, `CROSS JOIN`: brez statistike nove tabele 19 ms namesto 0,3).
 
 ## Nov vozni red, stari id-ji v feedu
 

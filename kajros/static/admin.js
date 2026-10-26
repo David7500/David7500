@@ -545,6 +545,24 @@ function ujemanje(p) {
     : `${st(100 * p.v_minuti / p.parov)} % v minuti od ${st(p.parov)} · nad 5 min ${st(p.nad_5_min)}`;
 }
 
+/** Žive vožnje LPP brez voznega reda (`zive.py`): koliko jih je v feedu in
+ *  kako so pripete. „Ura proti načrtu“ meri, ali je par po uri zanesljiv. */
+function ziveOpis(zv) {
+  if (!zv || zv.zivih == null || !(zv.zivih || Object.keys(zv.pari_danes || {}).length)) return null;
+  const p = zv.pari_danes || {};
+  const [enako, drugace] = zv.soglasje || [0, 0];
+  return `v feedu ${st(zv.zivih)} · pripetih ${st(zv.sparjenih)} · brez para ${st(zv.brez_para)}`
+    + (zv.dvojnikov ? ` · dvojnikov ${st(zv.dvojnikov)}` : "")
+    + ` · danes po načrtu ${st(p.nacrt || 0)}, po uri ${st(p.ura || 0)}`
+    + (enako + drugace ? ` · ura proti načrtu ${st(enako)} enako, ${st(drugace)} drugače` : "");
+}
+
+function popravkiOpis(zv) {
+  const p = (zv || {}).popravki || [];
+  return p.length ? p.map((x) => `${x.linija} ${+x.dan.slice(8)}. ${+x.dan.slice(5, 7)}.: `
+    + `${st(x.voznj)} voženj → ${x.smer}`).join(" · ") : null;
+}
+
 /** Vrstice, ki jih pozna samo ta vir: števci iz `/api/health`. */
 function podrobnostiVira(kljuc, d) {
   const z = d.zdravje || {};
@@ -556,6 +574,8 @@ function podrobnostiVira(kljuc, d) {
     dodaj("vozila brez zamude", brezZamude(z));
   } else if (kljuc === "derp_lpp") {
     dodaj("vožnje brez voznega reda", nez("lpp"));
+    dodaj("žive vožnje, pripete", ziveOpis(z.lpp_zive));
+    dodaj("prestavljene na živ vzorec", popravkiOpis(z.lpp_zive));
   } else if (kljuc === "ovire_sz") {
     dodaj("ovir zdaj", st(z.alerts_active));
     const os = z.ovire_sz;

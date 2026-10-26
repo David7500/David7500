@@ -21,7 +21,7 @@ import threading
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, geo
+from . import config, db, geo
 from .naslovi import fold as _fold
 from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _operator_is_stale, _slack_ahead,
                     _with_operator, dwell_at, last_measured, odhod_z_izhodisca, opis_zamude,
@@ -132,9 +132,7 @@ _PROMET_MAX = 4
 
 def _promet(conn: sqlite3.Connection, network: str | None) -> dict[str, int]:
     """`{stop_id: stevilo postankov}` za dano omrezje."""
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     where = conn.execute("PRAGMA database_list").fetchone()["file"]
     key = (where, network, stamp)
     if stamp and key in _PROMET:
@@ -164,9 +162,7 @@ _IMENA_POSTAJ: dict[tuple, tuple[list, dict]] = {}
 
 def _imena_postaj(conn: sqlite3.Connection) -> tuple[list[tuple[str, dict]], dict[str, str]]:
     """[(zloženo ime, postaja)] in {ime: zloženo ime}."""
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     kljuc = (kje, stamp)
     zapis = _IMENA_POSTAJ.get(kljuc) if stamp and kje else None
@@ -466,9 +462,7 @@ def smeri_postaje(conn: sqlite3.Connection, ime: str,
     Vozni red in ne dan: stran ceste se med dnevi ne spremeni, promet pa
     samo razvrsti smeri in izbere oznako. Predpomnjeno do uvoza GTFS.
     """
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     where = conn.execute("PRAGMA database_list").fetchone()["file"]
     key = (where, network, stamp)
     po_imenu = _SMERI.get(key) if stamp else None
@@ -638,9 +632,7 @@ _TABLA_RED_MAX = 60
 def _tabla_vozni_red(conn: sqlite3.Connection, station: str, day: str,
                      network: str | None) -> tuple[list[str], list[tuple], list[int]]:
     """Stolpci, vrstice po uri in ure (za `bisect`) voznega reda table."""
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     kje = conn.execute("PRAGMA database_list").fetchone()["file"]
     kljuc = (kje, stamp, station, day, network)
     zapis = _TABLA_RED.get(kljuc) if stamp and kje else None
@@ -1106,9 +1098,7 @@ _OMREZJA: dict[tuple, dict[str, str]] = {}
 
 def _omrezja_voznj(conn: sqlite3.Connection) -> dict[str, str]:
     """`{trip_id: omrezje}`, predpomnjeno do uvoza voznega reda."""
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     where = conn.execute("PRAGMA database_list").fetchone()["file"]
     key = (where, stamp)
     if stamp and key in _OMREZJA:
@@ -1397,8 +1387,8 @@ class VozniRedPrevelik(RuntimeError):
 
 
 # Dnevni vozni red v pomnilniku, da ga ne beremo znova ob vsakem iskanju.
-# Veljaven je, dokler se ne spremeni GTFS uvoz -- `gtfs_imported_at` je zig,
-# ki se ob uvozu premakne, in s tem pade cel predpomnilnik. Hranimo najvec
+# Veljaven je, dokler se ne spremeni vozni red -- `db.znacka_reda` je zig,
+# ki se ob uvozu in popravku vzorca premakne, in s tem pade cel predpomnilnik. Hranimo najvec
 # nekaj dni; vec jih naenkrat nihce ne gleda.
 _TT_CACHE: dict[tuple, tuple] = {}
 _TT_LOCKS: dict[tuple, threading.Lock] = {}
@@ -1425,9 +1415,7 @@ def _timetable_for_day(conn: sqlite3.Connection, service_date: str,
     # Kljuc mora vsebovati TUDI bazo. Sicer si dve bazi z istim zigom delita
     # predpomnilnik -- v testih se je to takoj pokazalo, ker vsak test dobi
     # svojo bazo v pomnilniku in vse imajo zig prazen.
-    stamp = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    stamp = stamp["value"] if stamp else None
+    stamp = db.znacka_reda(conn)
     where = conn.execute("PRAGMA database_list").fetchone()["file"]
     key = (where, service_date, network, stamp)
     # Brez ziga ne predpomnimo: to je sveza ali testna baza, kjer se vsebina

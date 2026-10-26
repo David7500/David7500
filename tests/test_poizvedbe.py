@@ -2308,11 +2308,11 @@ def test_zivi_lpp_star_odgovor_steje_od_branja(conn, monkeypatch):
     assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {1: 0, 2: 3, 4: 8}
 
 
-def test_zivi_lpp_vzorec_je_tretja_komponenta():
+def test_zivi_lpp_vzorec_je_tretja_komponenta(conn):
     """Njihov `trip-id` je tretji del našega trojnega id-ja; drugod ga ni."""
-    from kajros import lpp
-    assert lpp._vzorec("a|b|c") == "c"
-    assert lpp._vzorec("navaden_id") is None
+    from kajros import zive
+    assert zive.vzorec_lpp(conn, "a|b|c") == "c"
+    assert zive.vzorec_lpp(conn, "navaden_id") is None
 
 
 # ---------------------------------------------------------------- predpomnilnik

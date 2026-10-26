@@ -200,6 +200,46 @@ CREATE TABLE IF NOT EXISTS prednik (
 );
 CREATE INDEX IF NOT EXISTS prednik_postanek ON prednik(nova, novi_seq);
 
+-- Vožnja mestnega LPP, ki jo feed v živo nosi pod id-jem, ki ga objavljeni
+-- vozni red nima, pripeta na objavljeno vožnjo z istim načrtom (`zive.py`).
+-- 26. 10. 2026 je feed nosil 14 od 15 voženj linije 27 pod id-ji, ki jih ni
+-- bilo nikjer; ure so bile ure objavljenih voženj do minute (13 od 13 načrtov
+-- z LPP-jevih zaslonov). Zamuda gre pod objavljeno vožnjo, kot da bi feed
+-- nosil njen id. Ena naša vožnja ima največ eno živo -- sicer bi dve vozili
+-- pisali v isto.
+CREATE TABLE IF NOT EXISTS ziva_voznja (
+    ziva         TEXT PRIMARY KEY,   -- trip_id iz feeda
+    nasa         TEXT NOT NULL,      -- naša vožnja
+    service_date TEXT NOT NULL,
+    nacin        TEXT NOT NULL,      -- 'nacrt' (LPP-jev zaslon) ali 'ura' (napoved)
+    zamik_s      INTEGER,            -- napoved minus naš vozni red ob paru
+    ts           INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ziva_voznja_nasa ON ziva_voznja(nasa);
+
+-- Objavljena vožnja, ki jo je zajem prestavil na vzorec, ki ga LPP res vozi
+-- (`zive.popravi`). 26. 10. 2026 je objava linijo 27 peljala mimo kolodvora
+-- (Kolodvor, Friškovec), avtobusi in LPP-jevi zasloni pa po Vilharjevi
+-- (Navje). Hrani objavljene postanke, traso in smer -- za razveljavitev --,
+-- prestavljene -- uvoz objavljeni vozni red spet zapiše po svoje in popravek
+-- za dneve v oknu naredi znova, tudi kadar vzorca ni nikjer drugje -- in
+-- koliko sparjenih voženj je to pokazalo.
+CREATE TABLE IF NOT EXISTS popravek_vzorca (
+    trip_id      TEXT PRIMARY KEY,
+    service_date TEXT NOT NULL,
+    route_id     TEXT NOT NULL,
+    objavljen    TEXT NOT NULL,     -- vzorec v objavljenem voznem redu
+    ziv          TEXT NOT NULL,     -- vzorec, ki ga LPP vozi
+    dokazov      INTEGER NOT NULL,
+    ts           INTEGER NOT NULL,
+    shape_id     TEXT,
+    headsign     TEXT,
+    postanki     TEXT NOT NULL,     -- JSON [[stop_seq, stop_id, arr_s, dep_s], ...]
+    prestavljen  TEXT NOT NULL      -- JSON {"postanki": [...], "shape_id", "headsign"}
+);
+CREATE INDEX IF NOT EXISTS popravek_vzorca_dan
+    ON popravek_vzorca(service_date, route_id, objavljen);
+
 -- ---------- zajem (iz GTFS-RT) ----------
 
 -- Dnevnik sprememb. Nova vrstica samo, kadar se zamuda dejansko spremeni.
@@ -591,18 +631,37 @@ def cache_key(conn: sqlite3.Connection) -> tuple | None:
     v pomnilniku in vse imajo zig prazen. Brez ziga vrne None: to je sveza
     ali testna baza, ki se lahko spremeni pod nami, ne da bi nam kdo povedal.
     """
-    row = conn.execute(
-        "SELECT value FROM meta WHERE key = 'gtfs_imported_at'").fetchone()
-    if not row or not row[0]:
+    znacka = znacka_reda(conn)
+    if znacka is None:
         return None
     where = conn.execute("PRAGMA database_list").fetchone()[2]
-    return (where, row[0])
+    return (where, znacka)
 
 
-def fill_trip_window(conn: sqlite3.Connection) -> int:
+#: Ključi `meta`, od katerih je odvisno vse, kar se izračuna iz voznega reda:
+#: uvoz in popravki vzorcev med uvozoma (`zive.popravi`). Predpomnilnik na
+#: samem uvozu bi po popravku do naslednjega jutra kazal linijo 27 mimo
+#: kolodvora.
+KLJUCI_REDA = ("gtfs_imported_at", "vozni_red_popravljen")
+
+
+def znacka_reda(conn: sqlite3.Connection) -> str | None:
+    """Značka voznega reda za predpomnilnike, ali None brez uvoza (sveža ali
+    testna baza, ki se lahko spremeni pod nami)."""
+    vr = dict(conn.execute(
+        f"SELECT key, value FROM meta WHERE key IN ({','.join('?' * len(KLJUCI_REDA))})",
+        KLJUCI_REDA).fetchall())
+    if not vr.get("gtfs_imported_at"):
+        return None
+    return "|".join(vr.get(k) or "" for k in KLJUCI_REDA)
+
+
+def fill_trip_window(conn: sqlite3.Connection, trip_ids: list[str] | None = None) -> int:
     """Zapolni `trip.start_s` / `end_s` / `first_seq` / `last_seq` iz `sched`.
 
     Klicano ob uvozu GTFS in ob migraciji obstojece baze. Idempotentno.
+    `trip_ids` zameji na te vožnje (popravek vzorca, `zive.popravi`): vseh
+    60 000 voženj za eno linijo bi bilo zaman.
 
     `first_seq` in `last_seq` sta tu iz istega razloga kot okvir: odhodna
     tabla ju je racunala kot `MIN/MAX(stop_seq) GROUP BY trip_id` cez vseh
@@ -615,7 +674,7 @@ def fill_trip_window(conn: sqlite3.Connection) -> int:
     znacki (tudi okna voznj v zajemu) bi do restarta drzali staro sliko, zajem
     pa bi nove id-je zavrgel.
     """
-    conn.execute("""
+    sql = """
         UPDATE trip SET
             start_s = (SELECT MIN(COALESCE(s.dep_s, s.arr_s)) FROM sched s
                        WHERE s.trip_id = trip.trip_id),
@@ -625,7 +684,13 @@ def fill_trip_window(conn: sqlite3.Connection) -> int:
                          WHERE s.trip_id = trip.trip_id),
             last_seq  = (SELECT MAX(s.stop_seq) FROM sched s
                          WHERE s.trip_id = trip.trip_id)
-    """)
+    """
+    if trip_ids is None:
+        conn.execute(sql)
+    else:
+        for i in range(0, len(trip_ids), 500):
+            kos = trip_ids[i:i + 500]
+            conn.execute(sql + f" WHERE trip_id IN ({','.join('?' * len(kos))})", kos)
     return conn.execute("SELECT COUNT(*) FROM trip WHERE start_s IS NOT NULL").fetchone()[0]
 
 

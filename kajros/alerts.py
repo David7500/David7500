@@ -78,7 +78,7 @@ def _kind(alert_id: str) -> str:
     return "drugo"
 
 
-def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
+def ingest_lpp(conn: sqlite3.Connection, feed, pari: dict[str, str] | None = None) -> dict:
     """Obvestila mestnega LPP. **Feed jih poslje na vozjno, ne na dogodek.**
 
     Izmerjeno 7. 9. 2026: 181 obvestil, od tega **dve razlicni** -- „Postaja
@@ -102,7 +102,11 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
     za maraton 16. 10. 15:00 – 18. 10. 23:59. Zapis je obdržal prvo obdobje
     in tabla je od 15:00 skrila obvoz na treh zaprtih postajališčih Slovenske
     (Pošta, Ajdovščina, Konzorcij), Čerinovo pa od 12. 10. (feed: do 30. 10.).
+
+    Živa vožnja, pripeta na objavljeno (`pari`, `zive.razresi`), ima obvoz pod
+    objavljeno: tabla in iskalnik poznata samo njo.
     """
+    pari = pari or {}
     seen_at = int(time.time())
     skupine: dict[tuple, dict] = {}
     for entity in feed.entity:
@@ -122,7 +126,8 @@ def ingest_lpp(conn: sqlite3.Connection, feed) -> dict:
         s["n"] += 1
         for e in a.informed_entity:
             if e.stop_id:
-                s["pari"].add((e.trip.trip_id if e.HasField("trip") else "", e.stop_id))
+                tid = e.trip.trip_id if e.HasField("trip") else ""
+                s["pari"].add((pari.get(tid, tid), e.stop_id))
         if a.active_period:
             p = a.active_period[0]
             if p.start:

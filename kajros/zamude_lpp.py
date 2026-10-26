@@ -50,7 +50,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, iz_lege, lpp, stats, viri, zdravje
+from . import collector, config, db, iz_lege, lpp, stats, viri, zdravje, zive
 
 _URL = "https://data.lpp.si/api/station/arrival"
 
@@ -122,8 +122,10 @@ def vozni_red(conn: sqlite3.Connection, dnevi: tuple[str, str],
                 teze[tuple(p[1] for p in postanki)] += 1
         izbrane = izberi({k: list(k) for k in teze}, teze, korak)
         po_postaji: dict[tuple[str, str], list] = defaultdict(list)
+        # Prestavljena vožnja (`zive.popravi`) je pri LPP pod vzorcem, ki ga vozi.
+        prestavljene = zive.popravljeni(conn)
         for tid, po_dnevih in poti.items():
-            v = _vzorec(tid)
+            v = prestavljene.get(tid) or _vzorec(tid)
             for dan, postanki in po_dnevih.items():
                 for seq, sid, kdaj, zadnji in postanki:
                     if sid in izbrane:
@@ -196,6 +198,12 @@ def razberi(odgovori: list[tuple[str, float, list]], kode: dict[str, str],
         sid = kode[koda]
         for p in prihodi:
             st["prihodov"] += 1
+            if (p.get("type") == 1 and not p.get("depot") and p.get("vehicle_id")
+                    and p.get("trip_id") and p.get("eta_min") is not None):
+                # Načrt za vozilo naslednje vožnje: z njim `zive` pripne živo
+                # vožnjo brez voznega reda na objavljeno z isto uro.
+                zive.zabelezi_nacrt(p["vehicle_id"], p["trip_id"], sid,
+                                    ts + 60 * int(p["eta_min"]), ts)
             if p.get("depot") or p.get("type") not in ZIVE:
                 continue
             st["zivih"] += 1

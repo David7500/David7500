@@ -502,6 +502,13 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 if info.get("changed"):
                     _log(f"LPP: {info['trips']} voženj, {info['changed']} sprememb, "
                          f"{info.get('vehicles', 0)} leg")
+                if info.get("popravljenih") or info.get("vrnjenih"):
+                    # Vozni red se je spremenil (`zive.popravi`, `zive._vrni`):
+                    # pot od vrat do vrat bi ga sicer hladnega bral prvi
+                    # iskalec (15 s).
+                    _log(f"LPP: {info['popravljenih']} voženj prestavljenih na "
+                         f"vzorec, ki ga LPP vozi, {info['vrnjenih']} vrnjenih na objavo")
+                    threading.Thread(target=_ogrej_pot, daemon=True).start()
             except Exception as exc:
                 conn.rollback()
                 _log(f"zajem LPP ni uspel: {exc}")
