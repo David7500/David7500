@@ -2984,3 +2984,5 @@ Ponovitev 215 branj feeda (15:44–18:06) in 796 branj zaslonov na kopiji baze, 
 **Na razvojnem strežniku** po zagonu ob 17:24: prvo branje 4 pari po napovedi in 60 prestavljenih voženj, pot ogreta v 5,3 s; po 6 min obe smeri (58 + 59), `lpp_rt_neznanih` 0/196, na zemljevidu 7 vozil 27 z zamudo.
 
 **Cena `razresi`** pri ~90 neznanih vožnjah (ponovitev s preimenovanjem): 25–45 ms na branje; prva različica 120–150 ms. Kazalo postajališč za primerljive vožnje (`Counter`), neuspeli popravek se ne ponavlja do novega uvoza, `CROSS JOIN` pri novih tabelah: brez statistike je SQLite pri `JOIN trip` bral vso tabelo `trip` (19 ms namesto 0,3; tudi pregled v `/api/health` 21 ms namesto 0,3).
+
+**Objava na arwen 26. 10. ob 22:15.** Prvo branje 2 para po napovedi, po en prestavljen v vsaki smeri (za skupinski popravek premalo parov ob tej uri). Ob 22:17 `lpp_rt_neznanih` 3/114: vožnje 27, ki so bile tik pred koncem, so imele za tekmico objavljeno vožnjo pred njimi, ki je ob zagonu ni nosila nobena živa (zamik +14 min, v oknu tekmic) -- ob hladnem zagonu dvoumno, para ni. Ob 22:25 0/92, brez napak v dnevniku.
