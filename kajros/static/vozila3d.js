@@ -248,6 +248,9 @@ function avtoModeli(inki, enotna = null) {
     // fotografij, zato nevtralni pasovi; streha v barvi legende.
     marprom: avtoMedkrajevni({ streha: streha("marprom"), srednjaVrata: true,
       pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
+    // Mestni Kranj: kot Marprom, barv vozil ne poznamo.
+    kranj: avtoMedkrajevni({ streha: streha("kranj"), srednjaVrata: true,
+      pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
     drugi: avtoMedkrajevni({ streha: streha("drugi"),
       pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
   };

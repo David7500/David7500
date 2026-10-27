@@ -118,6 +118,32 @@ MARPROM_API = okolje("MARPROM_API", "https://vozniredi.marprom.si/OBA")
 # Lege na 10 s kot pri NAP in derp.si; Marprom jih osveži na ~5 s.
 MARPROM_SECONDS = int(okolje("MARPROM_SECONDS", "10"))
 
+# --- mestni Kranj (MOK) ------------------------------------------------------
+#
+# Vozni red uradni: Mestna občina Kranj ga objavi prek sistema Ridango, mesec
+# naprej, osvežen vsak dan ob 3:00. Lege so v živo samo prek derp.si
+# (`sources/kranj`), ki posreduje Ridangov GTFS-RT: id-ji voženj v njem so
+# Ridangovi (`0D3o9RWfWG_154963`) in jih ima samo uradni zip -- 27. 10. 2026
+# 3 od 3 in 3 od 3 v dveh branjih. Zamudo merimo iz leg sami, kot pri
+# Marpromu. Izklop `KAJROS_KRANJ=0`.
+KRANJ = okolje("KRANJ", "1") != "0"
+KRANJ_GTFS_URL = okolje("KRANJ_GTFS_URL",
+                        "https://kranj-avl-prod.ridango.cloud/data/gtfs/v2/gtfs.zip")
+KRANJ_RT_URL = okolje("KRANJ_RT_URL", "https://rt.gtfs.derp.si/sources/kranj/vehicle_positions")
+KRANJ_SECONDS = int(okolje("KRANJ_SECONDS", "10"))
+
+# --- mestni Murska Sobota (linije 1 in 2, AP MS) -------------------------------
+#
+# V GTFS IJPP (DUJPP in DERP) jih ni, v uradnem NeTEx (DUJPP prek NAP) pa so;
+# DERP jih iz NeTEx izlušči v svoj zip (`extract_moms_gtfs`, vsak dan). Id-ji
+# so NeTEx-ovi, isti kot v SIRI z NAP: 27. 10. 2026 so bila vsa 4 vozila, ki
+# jih je NAP javil brez vožnje, na teh linijah. Lege in zamude zato teče prek
+# `nap.py` brez nove niti. Izklop `KAJROS_MS=0`.
+MS = okolje("MS", "1") != "0"
+MS_GTFS_URL = okolje("MS_GTFS_URL",
+                     "https://gitlab.com/api/v4/projects/derp-si%2Fgtfs-generators"
+                     "/packages/generic/extract_moms_gtfs/latest/moms_gtfs.zip")
+
 # **Lege avtobusov IJPP naravnost z NAP** (`nap.py`, SIRI-VM): izvirnik leg,
 # ki jih derp.si le pretvori. Rabi prijavo (`deploy/nap.sh`); brez nje nit
 # čaka in ne dela nič. Na 10 s, kot lege z derp.si (`POSITION_SECONDS`).

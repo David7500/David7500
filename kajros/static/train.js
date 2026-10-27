@@ -1497,6 +1497,9 @@ function viriHtml(run) {
   if (run.agency === "marprom") {
     return "vozni red in lege vozil Marprom (vozniredi.marprom.si), zamude iz leg";
   }
+  if (run.agency === "kranj") {
+    return "vozni red Mestne občine Kranj (Ridango), lege prek DERP, zamude iz leg";
+  }
   if (run.agency !== "lpp") {
     return "IJPP prek NAP (CC BY-SA 4.0), obdelava DERP";
   }

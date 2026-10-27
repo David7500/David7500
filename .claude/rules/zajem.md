@@ -91,6 +91,13 @@ V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila,
 * Nova vožnja istega vozila pobriše lego stare iz `vehicle_now` (dvojnik do konca svežine).
 * Samo strežnik (nit `kajros-marprom`); malina ne. Izklop `KAJROS_MARPROM=0`.
 
+## Mestna Kranj in Murska Sobota (`kranj.py`, `gtfs.mestni_viri`)
+
+* **Isti uvoz kot Marprom** (`MestniVir`: naslovi, predpona, prevoznik, `praznih`): prvi zip, ki pokrije teden, sicer zadnji sprejeti; `meta.<ključ>_vozni_red` z `do` (zdravje: vrstica `vozni_red_<ključ>`).
+* **Kranj**: zip MOK (Ridango, mesec naprej), id-ji `kr-`, prevoznik `kranj`. Oznaka = „PROGA N“ ali družina po id-ju (4010 → 1, 4077 → 7; 4000 Kranvaj). Lege: Ridangov GTFS-RT prek derp.si (edina javna pot; id-ji so Ridangovi, zato isti sistem). Zamuda iz leg. Ob nedeljah ne vozi (`praznih=3`).
+* **Murska Sobota, linije 1 in 2**: niso v GTFS IJPP, so v NeTEx; zip DERP `extract_moms_gtfs`. **Vožnje in postajališča brez predpone** (`surovi`): NAP jih javi z id-ji NeTEx (27. 10. vsa 4 „brez vožnje“ v NAP). Lege in zamude prek `nap.py`, prevoznik 1121; postajališče IJPP ostane, vožnja IJPP se ne podvoji.
+* Celje (FIWARE s ključem, živo pri tretjem), Koper, Novo mesto, Velenje, Nova Gorica, Ptuj …: ni uradnega javnega vira v živo — ne.
+
 ## Žive vožnje LPP brez voznega reda (`zive.py`)
 
 Id = `dan|vožnja|vzorec`: dan in vzorec poznamo, vožnje ne. 26. 10. 2026 linija 27 (14 od 15 v feedu) po Vilharjevi (Navje), objava mimo kolodvora (Kolodvor, Friškovec).

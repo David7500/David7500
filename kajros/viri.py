@@ -194,6 +194,16 @@ def vsi() -> tuple[Vir, ...]:
             "vozni red Marproma se ne ujema z vožnjami (vrstica „vozni red "
             "Marprom“, `kajros update`).",
             preveri=f"{config.MARPROM_API}/GetLines"),
+        Vir("kranj", "Kranj · lege vozil", "zivo",
+            "Lege mestnih avtobusov Kranja (MOK) z vožnjo; zamuda iz leg.",
+            "edini vir mestnega Kranja v živo; Ridangov GTFS-RT, ki ga javno "
+            "posreduje le derp.si",
+            config.KRANJ_RT_URL, "MOK prek Ridanga, posreduje DERP (derp.si)", "ni navedena",
+            f"vsakih {config.KRANJ_SECONDS} s", "kajros-kranj", config.KRANJ, ("kranj",),
+            "derp.si ne odgovarja: počakaj -- kranjski mestni avtobusi so medtem "
+            "po voznem redu. „vozila brez vožnje“ visoko: id-ji v feedu se ne "
+            "ujemajo z voznim redom MOK (vrstica „vozni red Kranj“, `kajros update`).",
+            preveri=config.KRANJ_RT_URL),
         Vir("zamude_lpp", "LPP · zasloni postajališč", "izvirniki",
             "Prihodi z LPP-jevih zaslonov na ~75 postajališčih, pripeti na vožnje.",
             "rezerva za mestni LPP, kadar ga derp.si nima; sicer primerjava",
@@ -261,6 +271,23 @@ def vsi() -> tuple[Vir, ...]:
             "(vrstica „vozni red Marprom“).",
             preveri=config.MARPROM_GTFS_URLS[1] if len(config.MARPROM_GTFS_URLS) > 1 else None,
             prag_napak=1),
+        Vir("gtfs_kranj", "vozni red Kranj", "statika",
+            "Vozni red mestnih prog Kranja (MOK), mesec naprej.",
+            "edini vir voznega reda mestnega Kranja",
+            config.KRANJ_GTFS_URL, "Mestna občina Kranj (Ridango)", "ni navedena",
+            vozni_red, "kajros-collector", config.KRANJ, ("vozni_red_kranj",),
+            "Zip ne pokrije tedna ali ne odgovarja: ostane zadnji sprejeti, dokler "
+            "pokrije dneve. Ročno `kajros update`.",
+            preveri=config.KRANJ_GTFS_URL, prag_napak=1),
+        Vir("gtfs_ms", "vozni red Murska Sobota (mestni)", "statika",
+            "Mestni liniji 1 in 2 v Murski Soboti (AP MS), ki ju GTFS IJPP nima.",
+            "edini vir voznega reda mestnih linij Murske Sobote; lege in zamude "
+            "iz NAP",
+            config.MS_GTFS_URL, "DUJPP (NeTEx prek NAP), izluščil DERP (gitlab)",
+            "CC BY-SA 4.0", vozni_red, "kajros-collector", config.MS, ("vozni_red_ms",),
+            "Zip ne pokrije tedna ali ne odgovarja: ostane zadnji sprejeti. Ročno "
+            "`kajros update`.",
+            preveri=config.MS_GTFS_URL, prag_napak=1),
         Vir("promet_fcd", "NAP · promet na cestah (FCD)", "analiza",
             "Čas vožnje po odsekih cest, kjer je ta hip gneča; za primerjavo "
             "vlak proti avtu po urah.",

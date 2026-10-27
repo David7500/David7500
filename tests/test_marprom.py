@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from kajros import config, db, gtfs, iz_lege, marprom, prehod, stats, zdravje
+from kajros import collector, config, db, gtfs, iz_lege, marprom, prehod, stats, zdravje
 
 DAN = "2026-10-27"                                   # torek
 POLNOC = stats.polnoc(DAN)
@@ -83,6 +83,7 @@ def _cist_spomin():
     marprom._vozila.clear()
     marprom._primerjave.clear()
     marprom._po_voznem_redu[:] = [0.0, 0]
+    collector._STATIC_CACHE.clear()
     iz_lege._v_feedu.clear()
     iz_lege._prvic = None
     prehod._sledi.clear()
@@ -96,7 +97,7 @@ def baza(tmp_path):
     db.init(c)
     mp = tmp_path / "marprom_gtfs.zip"
     mp.write_bytes(_mp_zip(SOLSKI))
-    gtfs.import_static(c, _ijpp_zip(tmp_path / "ijpp.zip"), marprom_zip=mp)
+    gtfs.import_static(c, _ijpp_zip(tmp_path / "ijpp.zip"), mestni={"marprom": mp})
     c.commit()
     return c
 
@@ -126,12 +127,14 @@ def test_pokritost_zavrne_poletni_zip_in_vzame_solskega(tmp_path):
                                 "8727,0,0,0,0,0,1,1,20260707,20261231\n"))
     pk = gtfs.pokritost(poletni, DAN)
     assert pk == [0, 0, 0, 0, 0, 0, 0]    # vožnje so le v storitvi 8860
-    assert not gtfs.sprejmi_marprom(pk)
+    assert not gtfs.sprejmi(pk)
     solski = tmp_path / "solski.zip"
     solski.write_bytes(_mp_zip(SOLSKI))
     pk = gtfs.pokritost(solski, DAN)
-    assert pk == [2, 2, 2, 2, 0, 0, 2] and not gtfs.sprejmi_marprom(pk)
-    assert gtfs.sprejmi_marprom([2, 2, 2, 2, 2, 0, 2]), "en prazen dan sme biti"
+    assert pk == [2, 2, 2, 2, 0, 0, 2] and not gtfs.sprejmi(pk)
+    assert gtfs.sprejmi([2, 2, 2, 2, 2, 0, 2]), "en prazen dan sme biti"
+    assert gtfs.sprejmi(pk, praznih=3), "Kranj ob nedeljah ne vozi"
+    assert not gtfs.sprejmi([0] * 7, praznih=7), "prazen zip ni vozni red"
 
 
 class _Odgovor:
@@ -161,20 +164,24 @@ def test_download_vzame_prvega_ki_pokrije_in_obdrzi_sprejetega(tmp_path, monkeyp
     monkeypatch.setattr(gtfs.requests, "get", lambda url, **kw: _Odgovor(odgovori[url]))
     c = db.connect(":memory:")
     db.init(c)
+    vir = next(v for v in gtfs.mestni_viri() if v.kljuc == "marprom")
 
-    pot = gtfs.download_marprom(c)
+    pot = gtfs.download_mestni(c, vir)
     assert pot == tmp_path / "marprom_gtfs.zip" and pot.read_bytes() == dobri
-    pregled = json.loads(db.get_meta(c, "marprom_vozni_red"))["viri"]
-    assert [v["sprejet"] for v in pregled] == [False, True]
-    assert gtfs.download_marprom(c) is None, "nespremenjen"
+    meta = json.loads(db.get_meta(c, "marprom_vozni_red"))
+    assert [v["sprejet"] for v in meta["viri"]] == [False, True]
+    assert meta["do"] == (danes + timedelta(days=200)).isoformat()
+    assert gtfs.download_mestni(c, vir) is None, "nespremenjen"
 
     odgovori["http://kopija/gtfs.zip"] = stari
-    assert gtfs.download_marprom(c) is None
-    assert gtfs.zadnji_marprom().read_bytes() == dobri
+    assert gtfs.download_mestni(c, vir) is None
+    assert gtfs.zadnji_mestni(vir).read_bytes() == dobri
+    assert json.loads(db.get_meta(c, "marprom_vozni_red"))["do"] == meta["do"], \
+        "velja zadnji sprejeti"
     assert not list(tmp_path.glob("*.tmp"))
 
     odgovori["https://uradni/gtfs.zip"] = dobri
-    assert gtfs.download_marprom(c, force=True) == pot
+    assert gtfs.download_mestni(c, vir, force=True) == pot
     assert [v["sprejet"] for v in json.loads(
         db.get_meta(c, "marprom_vozni_red"))["viri"]] == [True, False]
 
@@ -286,9 +293,9 @@ def test_korak_preklopi_in_ne_pusti_dvojnika_na_zemljevidu(baza):
 def test_zdravje_marprom():
     vozi = {"zeleznica": 5, "avtobus": 50}
 
-    def ocena(mm, mv=None, vr=None):
-        z = {"vozi_zdaj": vozi, "marprom": mm, "marprom_vozni_red": mv,
-             "vozni_red": vr or {}}
+    def ocena(mm, mv=None):
+        z = {"vozi_zdaj": vozi, "marprom": mm,
+             "mestni_vozni_red": {"marprom": mv} if mv else {}}
         return zdravje.ocena(z, {}, ZDAJ)
 
     assert "marprom" not in ocena(None)
@@ -301,13 +308,16 @@ def test_zdravje_marprom():
     assert ocena({"ts": ZDAJ - 1000, "napaka_ts": ZDAJ - 1000})["marprom"][0] == zdravje.SLABA
 
     # Uradni zip ne pokrije tedna: rumeno, potnik ne izgubi nič.
+    do = (date.fromtimestamp(ZDAJ) + timedelta(days=200)).isoformat()
     mv = {"viri": [{"url": "u", "pokrito": [0, 0, 0, 0, 3, 3, 0], "sprejet": False},
-                   {"url": "k", "pokrito": [9] * 7, "sprejet": True}]}
-    vr = {"marprom": (date.fromtimestamp(ZDAJ) + timedelta(days=200)).isoformat()}
-    raz, razlog = ocena(dobro, mv, vr)["vozni_red_marprom"]
+                   {"url": "k", "pokrito": [9] * 7, "sprejet": True}], "do": do}
+    raz, razlog = ocena(dobro, mv)["vozni_red_marprom"]
     assert raz == zdravje.MLACNA and "5 od 7 dni" in razlog and "kopija" in razlog
-    assert ocena(dobro, {"viri": [{**mv["viri"][0], "sprejet": True}]}, vr)[
+    assert ocena(dobro, {"viri": [{**mv["viri"][0], "sprejet": True}], "do": do})[
         "vozni_red_marprom"][0] == zdravje.DOBRA
+    # Vozni red, ki ga uvoz res vzame, se izteče: rdeče dva dni prej.
+    kmalu = (date.fromtimestamp(ZDAJ) + timedelta(days=1)).isoformat()
+    assert ocena(dobro, {**mv, "do": kmalu})["vozni_red_marprom"][0] == zdravje.SLABA
 
 
 def test_manjkajoci_vir_osvezi_ob_zagonu(monkeypatch):
@@ -317,11 +327,14 @@ def test_manjkajoci_vir_osvezi_ob_zagonu(monkeypatch):
     db.init(c)
     monkeypatch.setattr(config, "LPP_ENABLED", True)
     monkeypatch.setattr(config, "MARPROM", True)
-    assert server.manjkajoci_viri(c) == ["lpp", "marprom"]
+    monkeypatch.setattr(config, "KRANJ", False)
+    monkeypatch.setattr(config, "MS", True)
+    assert server.manjkajoci_viri(c) == ["lpp", "marprom", "ms"]
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network) "
               "VALUES('mp-1', 'mp-73', 'P7', 'mp-8860', 'bus', 'marprom', 'avtobus')")
-    assert server.manjkajoci_viri(c) == ["lpp"]
+    assert server.manjkajoci_viri(c) == ["lpp", "ms"]
     monkeypatch.setattr(config, "LPP_ENABLED", False)
+    monkeypatch.setattr(config, "MS", False)
     assert server.manjkajoci_viri(c) == []
 
 

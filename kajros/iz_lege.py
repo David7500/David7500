@@ -100,8 +100,8 @@ _sz_ts = 0.0
 #: 30 s; dve minuti so štiri zgrešena branja, prebijanje izziva traja do 90 s.
 SZ_VODI_S = 120
 #: Prevozniki, katerih zamud ne nosi noben feed: vir je lega sama (Marprom,
-#: `marprom.py`). Vožnja „ne v feedu“ pri njih ni napaka vira.
-SAMO_IZ_LEGE = frozenset({"marprom"})
+#: Kranj -- `marprom.py`, `kranj.py`). Vožnja „ne v feedu“ pri njih ni napaka vira.
+SAMO_IZ_LEGE = frozenset({"marprom", "kranj"})
 
 
 def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp") -> None:

@@ -30,9 +30,10 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (alerts, collector, config, db, deljenje, donacije, hoja, journey, lpp, markdown,
-               nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot, pripni, pristanek,
-               server, stats, stik, tiri, viri, zamude_sz, zapore, zasedenost, zdravje, zive)
+from . import (alerts, collector, config, db, deljenje, donacije, gtfs, hoja, journey, lpp,
+               markdown, nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot,
+               pripni, pristanek, server, stats, stik, tiri, viri, zamude_sz, zapore,
+               zasedenost, zdravje, zive)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -1591,12 +1592,16 @@ def api_health():
         # Lege IJPP z NAP (`nap.py`) in njihovo ujemanje z derp.si.
         nm = db.get_meta(conn, "nap") if config.NAP else None
         out["nap"] = json.loads(nm) if nm else None
-        # Mestni Marprom (`marprom.py`): vozila, pripeta na vožnje, primerjava
-        # naše zamude z Marpromovo; in kateri vozni red je sprejet (`gtfs`).
-        mm = db.get_meta(conn, "marprom") if config.MARPROM else None
-        out["marprom"] = json.loads(mm) if mm else None
-        mv = db.get_meta(conn, "marprom_vozni_red") if config.MARPROM else None
-        out["marprom_vozni_red"] = json.loads(mv) if mv else None
+        # Mestna vira v živo (`marprom.py`, `kranj.py`): vozila, pripeta na
+        # vožnje, pri Marpromu primerjava naše zamude z njegovo.
+        for kljuc, vklop in (("marprom", config.MARPROM), ("kranj", config.KRANJ)):
+            mm = db.get_meta(conn, kljuc) if vklop else None
+            out[kljuc] = json.loads(mm) if mm else None
+        # Mestni vozni redi: kateri naslov je sprejet in do kdaj velja
+        # (`gtfs.download_mestni`).
+        out["mestni_vozni_red"] = {
+            vir.kljuc: json.loads(mv) for vir in gtfs.mestni_viri()
+            if (mv := db.get_meta(conn, f"{vir.kljuc}_vozni_red"))}
         # Lege izven trase (`iz_lege`, tabela `odklon`): kje vozila trase ne
         # vozijo. Število zadnjih 24 h, razčlenitev po odsekih `kajros odkloni`.
         n, vozenj = conn.execute(
@@ -1665,7 +1670,6 @@ def _health_stevci(conn):
         "zeleznica": stats.znano_do(conn, "zeleznica"),
         "avtobus": stats.znano_do(conn, "avtobus"),
         "lpp": stats.znano_do(conn, "avtobus", "lpp") if config.LPP_ENABLED else None,
-        "marprom": stats.znano_do(conn, "avtobus", "marprom") if config.MARPROM else None,
     }
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0

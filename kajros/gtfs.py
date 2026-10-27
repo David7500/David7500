@@ -4,12 +4,15 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import sqlite3
 import statistics
 import zipfile
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Callable
 
 import requests
 
@@ -191,7 +194,10 @@ def beri_lpp(zip_path: Path, dni: int, danes: str | None = None) -> dict:
             "sched": sched_rows, "days": dnevi, "shapes": shapes}
 
 
-# --- mestni Marprom iz drugega vira (glej `config.MARPROM`) ------------------
+# --- mestni prevozniki iz drugih virov (Marprom, Kranj, Murska Sobota) -------
+#
+# V IJPP jih ni. Vsak ima svoj zip; uvoz jih prilije IJPP-ju kot LPP. Kaj je
+# kateri in od kod: `mestni_viri()`, `.claude/rules/zajem.md`.
 
 #: Predpona vseh id-jev Marproma. Njegovi id-ji so števila kot IJPP-jevi
 #: (vožnje 96 321–115 394, postajališča 1–651, storitve 8 726–8 862) in bi se
@@ -201,12 +207,64 @@ MP = "mp-"
 #: Prevoznik v `trip.agency`. Besedni kot `lpp`: Marpromov GTFS id je „3“.
 MARPROM_AGENCIJA = "marprom"
 
-#: Koliko dni od danes mora zip pokriti, da ga vzamemo -- in koliko izmed njih
-#: sme biti brez vožnje (praznik, ki ga Marprom ne vozi).
-POKRITOST_DNI, POKRITOST_PRAZNIH = 7, 1
+#: Mestni Kranj (MOK): id-ji Ridanga, prevoznik besedni.
+KR, KRANJ_AGENCIJA = "kr-", "kranj"
+
+#: Koliko dni od danes mora zip pokriti, da ga vzamemo.
+POKRITOST_DNI = 7
 
 #: Ime, ki ga ima drugje postajališče dlje od tega, dobi kraj v oklepaju.
 RAZLOCI_IME_M = 5000
+
+
+def _kranj_oznaka(r: dict) -> str:
+    """Številka proge, kot jo pozna potnik: „PROGA 1: …“ -> 1.
+
+    Zip ima v `route_short_name` šifre (4012). Proge brez številke v imenu
+    (4010 „Kranj kolodvor - … - Prebačevo“, 4077) so po id-ju iste družine:
+    vse s številko se ujemajo z drugo in tretjo števko (4012 -> 1, 4110 -> 11,
+    4153 -> 15). 4000 je Kranvaj.
+    """
+    m = re.match(r"\s*PROGA\s+(\d+)", r.get("route_long_name") or "", re.I)
+    if m:
+        return m.group(1)
+    rid = (r.get("route_id") or "").strip()
+    if len(rid) == 4 and rid.isdigit() and rid[0] == "4" and int(rid[1:3]) > 0:
+        return str(int(rid[1:3]))
+    return (r.get("route_long_name") or rid).strip().capitalize()
+
+
+@dataclass(frozen=True)
+class MestniVir:
+    kljuc: str
+    #: Kraj v oklepaju, kadar je isto ime drugje (`RAZLOCI_IME_M`).
+    kraj: str
+    #: Prvi, ki pokrije teden, zmaga; prvi je izvirnik, ostali kopije.
+    urls: tuple[str, ...]
+    predpona: str
+    agencija: str
+    #: Koliko dni tedna sme biti brez vožnje: Kranj ob nedeljah ne vozi in
+    #: 31. 10. ne, Murska Sobota ob nedeljah ne.
+    praznih: int = 1
+    #: Vožnje in postajališča z id-ji IJPP (NeTEx): NAP lege javi s temi id-ji,
+    #: zato brez predpone, in postajališče, ki ga IJPP že ima, ostane njegovo.
+    surovi: bool = False
+    oznaka: Callable[[dict], str] | None = None
+
+
+def mestni_viri() -> tuple[MestniVir, ...]:
+    """Vklopljeni mestni viri. Ob klicu: nastavitve se berejo iz okolja."""
+    out = []
+    if config.MARPROM and config.MARPROM_GTFS_URLS:
+        out.append(MestniVir("marprom", "Maribor", config.MARPROM_GTFS_URLS, MP,
+                             MARPROM_AGENCIJA))
+    if config.KRANJ:
+        out.append(MestniVir("kranj", "Kranj", (config.KRANJ_GTFS_URL,), KR,
+                             KRANJ_AGENCIJA, praznih=3, oznaka=_kranj_oznaka))
+    if config.MS:
+        out.append(MestniVir("ms", "Murska Sobota", (config.MS_GTFS_URL,), "ms-",
+                             "1121", praznih=2, surovi=True))
+    return tuple(out)
 
 
 def pokritost(zip_path: Path, danes: str | None = None,
@@ -227,28 +285,36 @@ def pokritost(zip_path: Path, danes: str | None = None,
     return out
 
 
-def sprejmi_marprom(pokrito: list[int]) -> bool:
-    return sum(1 for n in pokrito if n == 0) <= POKRITOST_PRAZNIH
+def sprejmi(pokrito: list[int], praznih: int = 1) -> bool:
+    return sum(1 for n in pokrito if n == 0) <= praznih and any(pokrito)
 
 
-def download_marprom(conn: sqlite3.Connection, force: bool = False) -> Path | None:
-    """Prvi zip iz `config.MARPROM_GTFS_URLS`, ki pokrije naslednji teden.
+def _branje(kljuc: str):
+    # Ključi dobesedno: `test_vsak_klic_na_tuj_streznik_je_v_registru`.
+    return {"gtfs_marprom": lambda: viri.branje("gtfs_marprom"),
+            "gtfs_marprom_kopija": lambda: viri.branje("gtfs_marprom_kopija"),
+            "gtfs_kranj": lambda: viri.branje("gtfs_kranj"),
+            "gtfs_ms": lambda: viri.branje("gtfs_ms")}[kljuc]()
+
+
+def download_mestni(conn: sqlite3.Connection, vir: MestniVir,
+                    force: bool = False) -> Path | None:
+    """Prvi zip iz `vir.urls`, ki pokrije naslednji teden.
 
     Vrne pot, kadar se je sprejeti zip spremenil (ali `force`), sicer None.
     Kadar ne pokrije noben, ostane zadnji sprejeti: brez tega bi uvoz ob
-    zastarelem uradnem zipu Maribor izbrisal. Izid po viru v
-    `meta.marprom_vozni_red` za `/admin` in zdravje.
+    zastarelem uradnem zipu mesto izbrisal (Marprom od 5. 10. 2026). Izid po
+    viru v `meta.<ključ>_vozni_red` za `/admin` in zdravje.
     """
-    target = config.DATA_DIR / "marprom_gtfs.zip"
+    target = config.DATA_DIR / f"{vir.kljuc}_gtfs.zip"
     target.parent.mkdir(parents=True, exist_ok=True)
     pregled, izbran = [], None
-    for i, url in enumerate(config.MARPROM_GTFS_URLS):
-        kljuc = "gtfs_marprom" if i == 0 else "gtfs_marprom_kopija"
-        tmp = target.with_name(f"marprom_gtfs.{i}.tmp")
+    for i, url in enumerate(vir.urls):
+        kljuc = f"gtfs_{vir.kljuc}" if i == 0 else f"gtfs_{vir.kljuc}_kopija"
+        tmp = target.with_name(f"{vir.kljuc}_gtfs.{i}.tmp")
         zapis = {"url": url}
         try:
-            with (viri.branje("gtfs_marprom") if i == 0
-                  else viri.branje("gtfs_marprom_kopija")) as b:
+            with _branje(kljuc) as b:
                 resp = requests.get(url, headers={"User-Agent": config.USER_AGENT},
                                     timeout=120, stream=True)
                 b.http = resp.status_code
@@ -261,14 +327,19 @@ def download_marprom(conn: sqlite3.Connection, force: bool = False) -> Path | No
             tmp.unlink(missing_ok=True)
         finally:
             viri.shrani(conn, kljuc)
-        zapis["sprejet"] = izbran is None and "pokrito" in zapis and sprejmi_marprom(zapis["pokrito"])
+        zapis["sprejet"] = (izbran is None and "pokrito" in zapis
+                            and sprejmi(zapis["pokrito"], vir.praznih))
         if zapis["sprejet"]:
             izbran = tmp
         else:
             tmp.unlink(missing_ok=True)
         pregled.append(zapis)
-    db.set_meta(conn, "marprom_vozni_red", json.dumps(
-        {"ts": int(datetime.now(TZ).timestamp()), "viri": pregled}, ensure_ascii=False))
+    # Do kdaj velja zip, ki ga uvoz res vzame -- sprejeti ali zadnji na disku.
+    do = next((z["do"] for z in pregled if z["sprejet"]), None) if izbran else (
+        _zadnji_dan(target) if target.exists() else None)
+    db.set_meta(conn, f"{vir.kljuc}_vozni_red", json.dumps(
+        {"ts": int(datetime.now(TZ).timestamp()), "viri": pregled, "do": do},
+        ensure_ascii=False))
     conn.commit()
     if izbran is None:
         return None
@@ -279,10 +350,20 @@ def download_marprom(conn: sqlite3.Connection, force: bool = False) -> Path | No
     return target
 
 
-def zadnji_marprom() -> Path | None:
-    """Zadnji sprejeti zip Marproma ali None, če ga še ni bilo."""
-    p = config.DATA_DIR / "marprom_gtfs.zip"
+def zadnji_mestni(vir: MestniVir) -> Path | None:
+    """Zadnji sprejeti zip vira ali None, če ga še ni bilo."""
+    p = config.DATA_DIR / f"{vir.kljuc}_gtfs.zip"
     return p if p.exists() else None
+
+
+def prenesi_mestne(conn: sqlite3.Connection, force: bool = False) -> tuple[dict, bool]:
+    """Vsi mestni viri: {ključ: zip za uvoz} in ali se je kateri spremenil."""
+    zipi, spremenjen = {}, False
+    for vir in mestni_viri():
+        nov = download_mestni(conn, vir, force)
+        spremenjen |= nov is not None
+        zipi[vir.kljuc] = nov or zadnji_mestni(vir)
+    return zipi, spremenjen
 
 
 def _zadnji_dan(zip_path: Path) -> str | None:
@@ -293,52 +374,64 @@ def _zadnji_dan(zip_path: Path) -> str | None:
     return max(vsi) if vsi else None
 
 
-def beri_marprom(zip_path: Path, drugi: dict | None = None) -> dict:
-    """Marpromov zip v obliki `beri_lpp`, z id-ji s predpono `MP`.
+def beri_mestni(zip_path: Path, vir: MestniVir, drugi: dict | None = None,
+                drugi_trips: dict | None = None) -> dict:
+    """Mestni zip v obliki `beri_lpp`.
+
+    Id-ji dobijo `vir.predpona`, razen pri `vir.surovi` vožnje in
+    postajališča (NAP jih javi z id-ji IJPP); tam postajališče, ki ga IJPP že
+    ima, ostane njegovo, vožnja, ki jo IJPP že ima, pa se izpusti.
 
     `drugi` so postajališča drugih virov: ime, ki ga drugje nosi postajališče
-    dlje od `RAZLOCI_IME_M`, dobi „ (Maribor)“. Aplikacija teče po imenu --
+    dlje od `RAZLOCI_IME_M`, dobi kraj v oklepaju. Aplikacija teče po imenu --
     brez tega bi bila mariborska „Kavčičeva“ in ljubljanska ena postaja z
-    eno tablo (edini tak par, 27. 10. 2026).
+    eno tablo (edini tak par pri Marpromu, 27. 10. 2026).
     """
     from .journey import _fold
 
+    pp = vir.predpona
+    idv = (lambda x: x) if vir.surovi else (lambda x: pp + x)
+    drugi = drugi or {}
+    drugi_trips = drugi_trips or {}
     with zipfile.ZipFile(zip_path) as zf:
-        routes = {MP + r["route_id"]: {**r, "route_id": MP + r["route_id"],
-                                       "agency_id": MARPROM_AGENCIJA}
-                  for r in _rows(zf, "routes.txt")}
+        routes = {}
+        for r in _rows(zf, "routes.txt"):
+            kratko = vir.oznaka(r) if vir.oznaka else r["route_short_name"]
+            routes[pp + r["route_id"]] = {**r, "route_id": pp + r["route_id"],
+                                          "agency_id": vir.agencija,
+                                          "route_short_name": kratko}
         trips = {}
         for t in _rows(zf, "trips.txt"):
-            if MP + t["route_id"] not in routes:
+            if pp + t["route_id"] not in routes or idv(t["trip_id"]) in drugi_trips:
                 continue
-            trips[MP + t["trip_id"]] = {
-                **t, "trip_id": MP + t["trip_id"], "route_id": MP + t["route_id"],
-                "service_id": MP + t["service_id"],
-                "shape_id": MP + t["shape_id"] if t.get("shape_id") else "",
-                # Verige vozil Marprom ne objavi.
-                "block_id": ""}
+            trips[idv(t["trip_id"])] = {
+                **t, "trip_id": idv(t["trip_id"]), "route_id": pp + t["route_id"],
+                "service_id": pp + t["service_id"],
+                "shape_id": pp + t["shape_id"] if t.get("shape_id") else "",
+                "block_id": pp + t["block_id"] if t.get("block_id") else ""}
         sched_rows, used = [], set()
         for st in _rows(zf, "stop_times.txt"):
-            tid = MP + st["trip_id"]
+            tid = idv(st["trip_id"])
             if tid not in trips:
                 continue
-            used.add(MP + st["stop_id"])
-            sched_rows.append((tid, int(st["stop_sequence"]), MP + st["stop_id"],
+            used.add(idv(st["stop_id"]))
+            sched_rows.append((tid, int(st["stop_sequence"]), idv(st["stop_id"]),
                                _to_seconds(st["arrival_time"]),
                                _to_seconds(st["departure_time"])))
         stops = {
-            MP + s["stop_id"]: {"stop_id": MP + s["stop_id"], "name": s["stop_name"].strip(),
+            idv(s["stop_id"]): {"stop_id": idv(s["stop_id"]), "name": s["stop_name"].strip(),
                                 "lat": float(s["stop_lat"]), "lon": float(s["stop_lon"])}
-            for s in _rows(zf, "stops.txt") if MP + s["stop_id"] in used}
+            for s in _rows(zf, "stops.txt")
+            if idv(s["stop_id"]) in used and idv(s["stop_id"]) not in drugi}
         po_obliki: dict[str, list] = defaultdict(list)
         want = {t["shape_id"] for t in trips.values() if t["shape_id"]}
         if want and "shapes.txt" in set(zf.namelist()):
             for r in _rows(zf, "shapes.txt"):
-                if MP + r["shape_id"] in want:
-                    po_obliki[MP + r["shape_id"]].append(
+                if pp + r["shape_id"] in want:
+                    po_obliki[pp + r["shape_id"]].append(
                         (int(r["shape_pt_sequence"]),
                          (float(r["shape_pt_lat"]), float(r["shape_pt_lon"]))))
-        days = _service_days(zf, {t["service_id"][len(MP):] for t in trips.values()})
+        days = _service_days(zf, {t["service_id"][len(pp):] for t in trips.values()})
     shapes = {}
     for sid, pts in po_obliki.items():
         kosi = _razrezi_traso([p for _, p in sorted(pts)])
@@ -353,9 +446,9 @@ def beri_marprom(zip_path: Path, drugi: dict | None = None) -> dict:
             tuji = po_imenu.get(_fold(s["name"]))
             if tuji and min(geo.haversine(s["lat"], s["lon"], t["lat"], t["lon"])
                             for t in tuji) > RAZLOCI_IME_M:
-                s["name"] = f"{s['name']} (Maribor)"
+                s["name"] = f"{s['name']} ({vir.kraj})"
     return {"stops": stops, "trips": trips, "routes": routes, "sched": sched_rows,
-            "days": {MP + sid: ds for sid, ds in days.items()}, "shapes": shapes}
+            "days": {pp + sid: ds for sid, ds in days.items()}, "shapes": shapes}
 
 
 def _razrezi_traso(pts: list) -> list:
@@ -837,15 +930,15 @@ def zamenjave_iz(conn: sqlite3.Connection, stara: sqlite3.Connection) -> dict:
 
 
 def import_static(conn: sqlite3.Connection, zip_path: Path,
-                  lpp_zip: Path | None = None, marprom_zip: Path | None = None) -> dict:
+                  lpp_zip: Path | None = None, mestni: dict | None = None) -> dict:
     """Uvozi železniški del GTFS zipa (in nadomestne prevoze SŽ).
 
     Statične tabele se v celoti zamenjajo -- zajem (`obs`, `run`) ostane.
 
-    `lpp_zip` in `marprom_zip` prilijeta mestna prevoza iz **drugih** virov.
-    Zliti morata biti tu in ne v svojem klicu: spodnji `DELETE FROM` pobrise
-    vse staticne tabele, zato bi locen uvoz drugega vira vsakic pobrisal
-    prvega.
+    `lpp_zip` in `mestni` ({ključ vira: zip}, `mestni_viri()`) prilijejo
+    mestne prevoze iz **drugih** virov. Zliti morajo biti tu in ne v svojem
+    klicu: spodnji `DELETE FROM` pobrise vse staticne tabele, zato bi locen
+    uvoz drugega vira vsakic pobrisal prvega.
     """
     with zipfile.ZipFile(zip_path) as zf:
         wanted_types = {config.RAIL_ROUTE_TYPE}
@@ -973,10 +1066,12 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         shapes.update(mesto["shapes"])
         lpp_trips = len(mesto["trips"])
 
-    # --- mestni Marprom iz drugega vira -----------------------------------
-    marprom_trips = 0
-    if marprom_zip is not None:
-        mb = beri_marprom(marprom_zip, stops)
+    # --- mestni prevozniki iz drugih virov (Marprom, Kranj, Murska Sobota) --
+    mestnih = {}
+    for vir in mestni_viri():
+        if not (mestni or {}).get(vir.kljuc):
+            continue
+        mb = beri_mestni(mestni[vir.kljuc], vir, stops, trips)
         stops.update(mb["stops"])
         routes.update(mb["routes"])
         trips.update(mb["trips"])
@@ -984,7 +1079,7 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         for sid, ds in mb["days"].items():
             days[sid].update(ds)
         shapes.update(mb["shapes"])
-        marprom_trips = len(mb["trips"])
+        mestnih[vir.kljuc] = len(mb["trips"])
 
     imen_poenotenih = _poenoti_imena(stops)
 
@@ -1100,7 +1195,7 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "trips_lpp": lpp_trips,
-        "trips_marprom": marprom_trips,
+        "trips_mestni": mestnih,
         # Koliko postajalisc je dobilo drugo ime, ker je isto mesto v feedih
         # zapisano dvakrat. Ce je to veliko, se je nekaj spremenilo pri viru.
         "imen_poenotenih": imen_poenotenih,

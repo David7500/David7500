@@ -588,6 +588,7 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
    morajo tam tudi, sicer legenda laze. */
 .layer-key-lpp::before,
 .layer-key-marprom::before,
+.layer-key-kranj::before,
 .layer-key-arriva::before,
 .layer-key-nomago::before,
 .layer-key-apms::before {
@@ -595,6 +596,7 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
 }
 .layer-key-lpp::before    { background: #4db97f; }
 .layer-key-marprom::before { background: #4db97f; }
+.layer-key-kranj::before  { background: #4db97f; }
 .layer-key-arriva::before { background: #6fb8ff; }
 .layer-key-nomago::before { background: #9d7ae0; }
 .layer-key-apms::before   { background: #c9a227; }

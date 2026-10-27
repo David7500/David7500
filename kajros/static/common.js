@@ -764,8 +764,9 @@ const AGENCY = {
   "1121": "AP MS",
   // Mestni LPP je drug vir z besednim `agency_id` (glej `config.LPP_*`).
   "lpp": "LPP",
-  // Mestni Maribor, prav tako svoj vir (`marprom.py`).
+  // Mestni Maribor in Kranj, vsak svoj vir (`marprom.py`, `kranj.py`).
   "marprom": "Marprom",
+  "kranj": "Kranj",
 };
 
 // ---------- ime vožnje, kot ga vidi potnik ----------
@@ -861,10 +862,12 @@ const AGENCY_INK = {
   "1123": "#6fb8ff",   // Arriva
   "1119": "#9d7ae0",   // Nomago
   "1121": "#c9a227",   // AP Murska Sobota
-  // Marprom v zeleni mestnega LPP: oba sta mestna in se na zemljevidu ne
-  // srečata (Maribor, Ljubljana), zato barva ne more pomeniti napačnega
-  // prevoznika -- peta barva bi pri barvni slepoti trčila z obstoječimi.
+  // Marprom in Kranj v zeleni mestnega LPP: vsi so mestni in se na
+  // zemljevidu ne srečajo (Maribor, Kranj, Ljubljana), zato barva ne more
+  // pomeniti napačnega prevoznika -- peta barva bi pri barvni slepoti
+  // trčila z obstoječimi. Loči ju ime na kartici in vrstica v legendi.
   "marprom": "#4db97f",
+  "kranj": "#4db97f",
 };
 
 // Pot izbranega vozila in vozila v oknu vožnje je v barvi kajrosa (oranžna

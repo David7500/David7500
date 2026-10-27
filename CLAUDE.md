@@ -37,6 +37,8 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Zamude mestnega LPP, drugi vir | zasloni LPP `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
 | Mestni Marprom (Maribor), lege in vožnje | `vozniredi.marprom.si/OBA/` (izvirnik, brez ključa); zamuda iz leg | 10 s |
 | Vozni red Marproma | `vozniredi.marprom.si/gtfs/gtfs.zip`, ko ne pokrije tedna kopija `gtfs.derp.si` | ~1×/dan |
+| Mestni Kranj: vozni red / lege | MOK prek Ridanga (`kranj-avl-prod.ridango.cloud`) / Ridangov GTFS-RT prek derp.si | ~1×/dan / 10 s |
+| Mestni Murska Sobota (linije 1, 2) | NeTEx (DUJPP prek NAP), zip DERP `extract_moms_gtfs`; lege NAP | ~1×/dan |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
 | Promet na cestah, za vlak/avto — **še brez prikaza** | NAP FCD NCUP `b2b.fcd.datexii33.status` + potovalni časi AC DARS, `promet.sqlite` | 1 min |
 | Tir vlaka | tabla postaje potniski.sz.si, Chrome | ~10 min/postajo |
@@ -92,6 +94,7 @@ kajros/
   zamude_lpp.py  zamude mestnega LPP z zaslonov LPP, svoja nit; vozilo -> vožnja prek derp.si
   nap.py         lege IJPP z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
   marprom.py     mestni Maribor z Marpromovega API-ja, svoja nit: vožnja po njegovih prihodih, zamuda iz leg
+  kranj.py       mestni Kranj: lege Ridanga prek derp.si, svoja nit, zamuda iz leg
   promet.py      promet na cestah z NAP (FCD, AC), svoja nit in `promet.sqlite`
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   stik.py        sporočila obiskovalcev; obvestila.py skrbnik potnikom (z rokom); donacije.py Ko-fi brez imena
