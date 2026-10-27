@@ -3029,7 +3029,7 @@ Povod: obiskovalec prek `/stik` (27. 10. ob 10:23): „kot za LPP še za Marprom
 | Kranjska Gora | Turizem Kranjska Gora | 34 | 0 | potekel 27. 9. 2026 |
 | Dolina Soče | Turizem Dolina Soče | 48 | 0 | potekel 28. 9. 2025 |
 
-Tolmin, Bovec, Kobarid, Koper, Celje, Novo mesto, Velenje, Ptuj: 403 (takega nabora ni). **Id-ji voženj so zaporedne številke** (0, 1, 10 …), lege NAP pa nosijo id IJPP (`ijpp`, 440 vozil ob 16:35): pripeti jih ni mogoče, pri Murski Soboti pa so id-ji NeTEx isti kot IJPP. Zato samo vozni red, brez lege in zamude — v kajros ne, dokler ni žive poti.
+Tolmin, Bovec, Kobarid, Koper, Celje, Novo mesto, Velenje, Ptuj: 403 (takega nabora ni). **Id-ji voženj so zaporedne številke** (0, 1, 10 …), lege NAP pa nosijo id IJPP (`ijpp`, 440 vozil ob 16:35): pripeti jih ni mogoče, pri Murski Soboti pa so id-ji NeTEx isti kot IJPP. Zato samo vozni red, brez lege in zamude — v kajros ne, dokler ni žive poti. **Tudi vzdrževanje ni zanesljivo**: Dolina Soče potekla pred letom, Kranjska Gora 27. 9., Brežice veljajo do 31. 10., pri Jesenicah ima IJPP 14 od 36 voženj enakih, 22 drugače (katera različica velja, ni mogoče preveriti), Nova Gorica „do 2030“ brez znaka osvežitve. Brez žive poti napake ne bi videli; David 27. 10.: „če niso zanesljivi viri, ni dobro“.
 
 **27. 10. 2026.** Do 05:01 skupinski popravek 58 + 58 voženj 27 (obe smeri). Uvoz ob 12:11 (sprožila ga je objava Marproma) je prinesel zip LPP, ki ima 27 že po Vilharjevi (117 voženj čez Navje in Viadukt, nobena čez Kolodvor ali Friškovec): popravkov ni več treba, `popravek_vzorca` prazen, neznanih LPP 0/225 -- pravilno. 27 ta dan 63 voženj in 1 713 meritev v `run`; 1 605 jutranjih je pod id-ji izpred uvoza (nagrobniki brez `sched`), z naslednicami prek `zamenjava`.
 
