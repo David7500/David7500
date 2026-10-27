@@ -143,6 +143,8 @@ PREVOZNIKI = {
     "arriva": ("1123",),
     "nomago": ("1119",),
     "apms": ("1121",),
+    "marprom": ("marprom",),
+    "kranj": ("kranj",),
 }
 
 

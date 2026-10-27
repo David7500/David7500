@@ -1349,7 +1349,7 @@ function zadetek3D(p) {
 
 function busTooltipHtml(v) {
   return `<div class="train-label-line">`
-    + `<span class="train-label-code" style="color:${busInk(v)}">`
+    + `<span class="train-label-code" style="color:${inkZaBesedilo(busInk(v))}">`
     + `${escapeHtml(imeVoznje(v))}</span>`
     + `<span class="train-label-more">${escapeHtml(lepoIme(v.headsign))}</span></div>`
     + `<div class="train-label-more">`
@@ -1368,7 +1368,7 @@ function avtobusTocka(v, l, ocena = false) {
       kljuc: busKey(v), ag: busGroup(v), mesto: MESTNI.has(v.agency),
       smer: l.smer,
       ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3, ocena),
-      st: busGroup(v) === "1118" || v.agency === "marprom" || v.agency === "kranj" ? v.train_no : "",
+      st: busGroup(v) !== "drugi" && !jeMedkrajevni(v) ? v.train_no : "",
     },
   };
 }

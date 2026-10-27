@@ -1128,7 +1128,9 @@ function renderGlava(run) {
   if (run.network === "avtobus") {
     znacka.textContent = imeVoznje(run);
     znacka.className = "ov-znacka je-bus";
-    znacka.style.setProperty("--prevoznik", AGENCY_INK[String(run.agency)] || LINE_INK);
+    const ink = AGENCY_INK[String(run.agency)] || LINE_INK;
+    znacka.style.setProperty("--prevoznik", ink);
+    znacka.style.setProperty("--prevoznik-tekst", besediloNaInk(ink));
     znacka.hidden = false;
     const cilj = ciljVoznje(run.headsign);
     ime.textContent = cilj ? `→ ${lepoIme(cilj)}` : "";

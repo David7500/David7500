@@ -42,7 +42,8 @@ body.okno { display: block; height: auto; min-height: 100%; overflow: visible; }
 }
 .ov-znacka.je-bus {
   padding: 5px 8px; border-radius: 8px;
-  background: var(--prevoznik, #4db97f); color: #0c2016; font: 700 13px/1 var(--sans);
+  background: var(--prevoznik, #4db97f); color: var(--prevoznik-tekst, #0c2016);
+  font: 700 13px/1 var(--sans);
 }
 .ov-znacka.je-nadomestni { background: #b48ad826; color: #d8c2ef; }
 .ov-ime {

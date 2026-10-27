@@ -42,6 +42,16 @@ def test_kranj_oznaka_iz_proge():
     assert o({"route_id": "4000", "route_long_name": "KRANVAJ"}) == "Kranvaj"
 
 
+def test_kranj_smer_s_ciljem_na_koncu():
+    """V `trip_headsign` je ime proge; prikaz cilj bere za zadnjim „ - “."""
+    s = gtfs._kranj_smer
+    assert s("PROGA 1: Kranj kolodvor-Qlandia-Prebačevo") == "Kranj kolodvor - Qlandia - Prebačevo"
+    assert s("Kranj kolodvor - Plinarna - Planina -  Hrastje - Prebačevo") == \
+        "Kranj kolodvor - Plinarna - Planina - Hrastje - Prebačevo"
+    assert s("PROGA 1") == "PROGA 1"
+    assert s("") == ""
+
+
 def _zip(pot, datoteke: dict[str, str]):
     with zipfile.ZipFile(pot, "w") as zf:
         for ime, vsebina in datoteke.items():

@@ -155,8 +155,11 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
 | Arriva | `#6fb8ff` | modra |
 | Nomago | `#9d7ae0` | vijolična |
 | AP Murska Sobota | `#c9a227` | zlata |
+| Marprom | `#d71920` | rdeča (vozila in marprom.si) |
+| Kranj | `#eeeacc` | topla bela (vozila brez enotne barve) |
 
-Najslabši deutan/protan ΔE 9,6, tritan 4,8. Barva nikoli sama — loči oblika in ime.
+Najslabši deutan/protan ΔE 9,6, tritan 4,8; Marprom in Kranj od ostalih ≥ 16, Marprom proti „nad 15 min“ 5,5. Barva nikoli sama — loči oblika in ime. Marpromova rdeča ima na podlagi 3,6 : 1: drobno besedilo `inkZaBesedilo()`, značka z barvo prevoznika `besediloNaInk()` (`common.js`).
+* **Model po prevozniku**: LPP zgibni, Arriva/Nomago/AP MS medkrajevni visokopodni, Marprom in Kranj `avtoMestni` (nizkopodni, troje vrat; Marprom rdeče čelo in streha, Kranj baterije na strehi, zadaj brez motorja).
 
 * **LPP dva `agency_id` (1118, `lpp`), ena vrstica** (`agencyKey()`); statistika loči (`stats.AGENCY_NAMES`).
 * „Drugi prevozniki“ obvezna (nov prevoznik bi tiho izginil), skrita pri 0. `.layer[hidden] { display: none; }` (flex povozi `[hidden]`).

@@ -247,13 +247,15 @@ def brez_podatkov(vrsta: str, vozi: int, zadnji_ts: int | None, zdaj: int) -> di
 
 
 def _zadnji_podatek(conn: sqlite3.Connection, skupina: str, danes) -> int | None:
-    """Zadnji `feed_ts` v `run`: `zeleznica`, `avtobus` (brez mestnega LPP) ali `lpp`."""
+    """Zadnji `feed_ts` v `run`: `zeleznica`, `avtobus` (brez mestnih LPP,
+    Marproma in Kranja, `stats.vozi_zdaj`) ali `lpp`."""
     if skupina != "zeleznica":
         # Nazaj po `run_feed_ts`: avtobusov je v `run` večina, prva vrstica je
         # skoraj vedno prava. Na arwenu 8. 10. 2026 pod 10 ms, vlakovna
         # ista poizvedba pa 1,8 s -- zato vlaki po svoji poti spodaj.
         pogoj = ("t.agency = 'lpp'" if skupina == "lpp"
-                 else "t.network = 'avtobus' AND t.agency IS NOT 'lpp'")
+                 else "t.network = 'avtobus' "
+                      "AND COALESCE(t.agency, '') NOT IN ('lpp', 'marprom', 'kranj')")
         r = conn.execute(
             "SELECT r.feed_ts FROM run r CROSS JOIN trip t ON t.trip_id = r.trip_id "
             f"WHERE {pogoj} ORDER BY r.feed_ts DESC LIMIT 1").fetchone()

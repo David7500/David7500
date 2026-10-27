@@ -595,8 +595,8 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
   content: ""; width: 9px; height: 9px; border-radius: 2px;
 }
 .layer-key-lpp::before    { background: #4db97f; }
-.layer-key-marprom::before { background: #4db97f; }
-.layer-key-kranj::before  { background: #4db97f; }
+.layer-key-marprom::before { background: #d71920; }
+.layer-key-kranj::before  { background: #eeeacc; }
 .layer-key-arriva::before { background: #6fb8ff; }
 .layer-key-nomago::before { background: #9d7ae0; }
 .layer-key-apms::before   { background: #c9a227; }

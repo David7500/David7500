@@ -779,8 +779,11 @@ const AGENCY = {
 // številki. Iskanje po šifri na zemljevidu dela naprej (`vehText`).
 const SIFRA_LINIJE = new Set(["1123", "1119", "1121"]);
 
+// Mestni liniji Murske Sobote vozi AP MS, a imata pravo številko (1, 2), ki
+// je na avtobusu; šifra registra ima vedno črko (M2011).
 function jeMedkrajevni(row) {
-  return row.network === "avtobus" && SIFRA_LINIJE.has(String(row.agency));
+  return row.network === "avtobus" && SIFRA_LINIJE.has(String(row.agency))
+    && !/^\d+$/.test(String(row.train_no || ""));
 }
 
 /** Kam pelje: zadnji kos „A - B“. Krožna („Novo mesto - Obrh - Novo mesto“,
@@ -862,13 +865,46 @@ const AGENCY_INK = {
   "1123": "#6fb8ff",   // Arriva
   "1119": "#9d7ae0",   // Nomago
   "1121": "#c9a227",   // AP Murska Sobota
-  // Marprom in Kranj v zeleni mestnega LPP: vsi so mestni in se na
-  // zemljevidu ne srečajo (Maribor, Kranj, Ljubljana), zato barva ne more
-  // pomeniti napačnega prevoznika -- peta barva bi pri barvni slepoti
-  // trčila z obstoječimi. Loči ju ime na kartici in vrstica v legendi.
-  "marprom": "#4db97f",
-  "kranj": "#4db97f",
+  // Marprom rdeč kot njegova vozila (fotografije na Wikimedia Commons,
+  // 2024–2025) in stran (marprom.si, #d71920). Kranj topla bela: MOK-ova
+  // vozila enotne barve nimajo (podobe znanih Kranjčanov), kranjska rdeča
+  // pa je že Marpromova. Obe se od vseh ostalih ločita tudi pri barvni
+  // slepoti; najslabše Marprom proti „nad 15 min“, ΔE 5,5 (preveri_paleto.py).
+  "marprom": "#d71920",
+  "kranj": "#eeeacc",
 };
+
+// Relativna svetlost po WCAG 2.1, kot `relative_luminance` v
+// scripts/preveri_paleto.py.
+function svetlostBarve(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin((n >> 16) / 255) + 0.7152 * lin(((n >> 8) & 255) / 255)
+    + 0.0722 * lin((n & 255) / 255);
+}
+const kontrastBarv = (a, b) => {
+  const [x, y] = [svetlostBarve(a) + 0.05, svetlostBarve(b) + 0.05];
+  return Math.max(x, y) / Math.min(x, y);
+};
+
+// Besedilo na znački v barvi prevoznika: temno, kjer je belo slabše.
+// Marpromova rdeča s temnim doseže le 3,2 : 1, z belim 5,2 : 1.
+const besediloNaInk = (hex) =>
+  (kontrastBarv(hex, "#ffffff") > kontrastBarv(hex, "#0c2016") ? "#ffffff" : "#0c2016");
+
+// Barva prevoznika kot drobno besedilo na temni kartici: Marpromova rdeča
+// ima tam 3,4 : 1, za drobni zapis je prag 4,5. Posvetli jo proti beli,
+// dokler ga ne doseže; ostale ostanejo, kot so.
+function inkZaBesedilo(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const rgb = [n >> 16, (n >> 8) & 255, n & 255];
+  for (let i = 0; i <= 20; i += 1) {
+    const m = `#${rgb.map((c) => Math.round(c + ((255 - c) * i) / 20)
+      .toString(16).padStart(2, "0")).join("")}`;
+    if (kontrastBarv(m, "#16181c") >= 4.5) return m;
+  }
+  return "#ffffff";
+}
 
 // Pot izbranega vozila in vozila v oknu vožnje je v barvi kajrosa (oranžna
 // znaka), ne v barvi vozila: v barvi prevoznika se je med enako obarvanimi
@@ -882,7 +918,8 @@ const ZA_INK = "#8b95a4";
 // Zadnja IZMERJENA lega vozila, ki je narisano na oceni (okno vožnje,
 // izbrani avtobus na velikem zemljevidu): rdeča pika s svetlim obročem.
 // Rdeča ni iz nobene lestvice (ne zamud, ne razmer), tu ne more pomeniti
-// drugega.
+// drugega. Marpromova rdeča je temnejša (pri barvni slepoti ΔE 16), vozilo
+// pa od pike loči še oblika.
 const MERITEV_INK = "#ff4d5e";
 // Vozilo na OCENI lege: prosojno telo (nariše ga zemljevid sam) s črtkanim
 // svetlim obrisom čez temnega, ki ga loči od podlage. Meritev od ocene loči

@@ -55,6 +55,8 @@ OPERATERJI = [
     ("Arriva", "#6fb8ff"),
     ("Nomago", "#9d7ae0"),
     ("AP MS", "#c9a227"),
+    ("Marprom", "#d71920"),
+    ("Kranj", "#eeeacc"),
 ]
 
 # Pot izbranega vozila na zemljevidu (`IZBRANA_INK` v common.js): oranžna

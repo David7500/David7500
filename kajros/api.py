@@ -576,8 +576,8 @@ def llms():
         f"- [Zasebnost]({b}/zasebnost): obiska ne beležimo po osebah.\n\n"
         "## Podatki\n\n"
         "Vozni redi in zamude: odprti podatki javnega potniškega prometa "
-        "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP in Marprom iz njunih "
-        "odprtih virov, "
+        "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP, Marprom in Kranj iz "
+        "njihovih odprtih virov, "
         "zamude in tiri vlakov s strani Slovenskih železnic, "
         "vreme Open-Meteo. Navedba vira je pogoj rabe.\n\n"
         "## Neobvezno\n\n"
@@ -1119,7 +1119,7 @@ def bus_page(request: Request):
         "here": "avtobusi", "network": "avtobus",
         "section": "Avtobusi",
         "page_title": "Vozni red avtobusov in zamude v živo — kajros",
-        "page_desc": "Iskalnik avtobusnih povezav po Sloveniji: vozni red, odhodi s postajališča in zamude avtobusov v živo, tudi mestni LPP in Marprom.",
+        "page_desc": "Iskalnik avtobusnih povezav po Sloveniji: vozni red, odhodi s postajališča in zamude avtobusov v živo, tudi mestni LPP, Marprom (Maribor), Kranj in Murska Sobota.",
     })
 
 

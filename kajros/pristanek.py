@@ -654,6 +654,10 @@ def cilj_voznje(headsign: str | None) -> str:
 def ime_voznje(row: dict, s_ciljem: bool = False) -> str:
     """„LPP 25“, „Arriva“ / „Arriva → Bohinj Ukanc“, „IC 503“ -- kot na avtobusu."""
     kdo = _SIFRA_LINIJE.get(str(row.get("agency")))
+    # Mestni liniji Murske Sobote (AP MS 1, 2) imata pravo številko; šifra
+    # registra ima vedno črko (M2011).
+    if row.get("network") == "avtobus" and kdo and str(row.get("train_no", "")).isdigit():
+        return f"{kdo} {row['train_no']}"
     if row.get("network") == "avtobus" and kdo:
         cilj = cilj_voznje(row.get("headsign")) if s_ciljem else ""
         return f"{kdo} → {cilj}" if cilj else kdo

@@ -298,6 +298,17 @@ def test_izbrani_prevozniki(conn):
     assert not any(n["vrsta"] == "voznja" for p in r["predlogi"] for n in p["noge"])
 
 
+def test_vsak_prevoznik_ima_gumb():
+    """Prevoznik brez ključa v `PREVOZNIKI` ostane v iskanju tudi potniku, ki
+    je izbral samo vlak (Marprom in Kranj do 27. 10. 2026)."""
+    import re
+    from pathlib import Path
+    pokriti = {a for agencije in pot.PREVOZNIKI.values() for a in agencije}
+    assert set(stats.AGENCY_NAMES) <= pokriti
+    html = (Path(pot.__file__).parent / "templates" / "pot.html").read_text()
+    assert set(re.findall(r'data-prevoznik="([^"]+)"', html)) == set(pot.PREVOZNIKI)
+
+
 # ---------------------------------------------------------------- pot po korakih
 
 def test_razberi_noge_prenese_dvopicje_v_id():

@@ -298,6 +298,10 @@ def test_ime_voznje_kot_na_avtobusu():
     assert pristanek.ime_voznje(arriva, s_ciljem=True) == "Arriva → Bohinj Ukanc"
     assert pristanek.ime_voznje({"network": "avtobus", "agency": "1118", "train_no": "25"}) == "LPP 25"
     assert pristanek.ime_voznje({"network": "avtobus", "agency": "lpp", "train_no": "6"}) == "LPP 6"
+    # Mestni liniji Murske Sobote vozi AP MS s pravo številko.
+    assert pristanek.ime_voznje({"network": "avtobus", "agency": "1121", "train_no": "2",
+                                 "headsign": "BTC trgovina"}, s_ciljem=True) == "AP MS 2"
+    assert pristanek.ime_voznje({"network": "avtobus", "agency": "marprom", "train_no": "G1"}) == "Marprom G1"
     assert pristanek.ime_voznje({"network": "zeleznica", "agency": "1161", "train_no": "BUS 51206"}) == "BUS 51206"
     assert pristanek.ime_voznje({"network": "zeleznica", "agency": "1161", "train_no": "IC 503"}) == "IC 503"
 

@@ -64,7 +64,9 @@ def vozi_zdaj(conn: sqlite3.Connection, zdaj: float | None = None,
     prometni dan, ker nočni vlaki segajo čez polnoč (`end_s` > 86400).
 
     `lpp_posebej`: mestni LPP pod ključem `lpp`, ne med avtobusi -- ima svoj
-    drugi vir (`zamude_lpp`) in molči drugače kot medkrajevni.
+    drugi vir (`zamude_lpp`) in molči drugače kot medkrajevni. Marprom in
+    Kranj pod `mestni`: vsak ima svoj vir, ki medkrajevnega molka ne sme
+    prikriti.
     """
     zdaj = time.time() if zdaj is None else zdaj
     danes = datetime.fromtimestamp(zdaj, TZ).date()
@@ -73,11 +75,13 @@ def vozi_zdaj(conn: sqlite3.Connection, zdaj: float | None = None,
         dan = (danes + timedelta(days=o)).isoformat()
         t = zdaj - polnoc(dan)
         for r in conn.execute(
-            "SELECT CASE WHEN ? AND t.agency = 'lpp' THEN 'lpp' ELSE t.network END, "
+            "SELECT CASE WHEN ? AND t.agency = 'lpp' THEN 'lpp' "
+            "            WHEN ? AND t.agency IN ('marprom', 'kranj') THEN 'mestni' "
+            "            ELSE t.network END, "
             "       COUNT(*) FROM trip t "
             "JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
             "WHERE t.start_s <= ? AND t.end_s >= ? GROUP BY 1",
-            (lpp_posebej, dan, t - vsaj_s, t)):
+            (lpp_posebej, lpp_posebej, dan, t - vsaj_s, t)):
             out[r[0]] = out.get(r[0], 0) + r[1]
     return out
 

@@ -234,6 +234,19 @@ def _kranj_oznaka(r: dict) -> str:
     return (r.get("route_long_name") or rid).strip().capitalize()
 
 
+def _kranj_smer(napis: str) -> str:
+    """Smer, kot jo bere `ciljVoznje`: „PROGA 1: Kranj kolodvor-Qlandia-Prebačevo“
+    -> „Kranj kolodvor - Qlandia - Prebačevo“ (cilj Prebačevo; krožna
+    „Globus-Planina-Stražišče-Globus“ -> „Stražišče in nazaj“).
+
+    Zip ima v `trip_headsign` ime proge: številka je že v oznaki, vezaji brez
+    presledkov pa za prikaz niso ločila.
+    """
+    s = re.sub(r"^\s*PROGA\s+\d+\s*:?\s*", "", napis or "", flags=re.I)
+    s = " - ".join(d.strip() for d in s.split("-") if d.strip())
+    return s or (napis or "").strip()
+
+
 @dataclass(frozen=True)
 class MestniVir:
     kljuc: str
@@ -250,6 +263,8 @@ class MestniVir:
     #: zato brez predpone, in postajališče, ki ga IJPP že ima, ostane njegovo.
     surovi: bool = False
     oznaka: Callable[[dict], str] | None = None
+    #: Smer vožnje iz `trip_headsign`, kadar zip tam nima cilja.
+    smer: Callable[[str], str] | None = None
 
 
 def mestni_viri() -> tuple[MestniVir, ...]:
@@ -260,7 +275,8 @@ def mestni_viri() -> tuple[MestniVir, ...]:
                              MARPROM_AGENCIJA))
     if config.KRANJ:
         out.append(MestniVir("kranj", "Kranj", (config.KRANJ_GTFS_URL,), KR,
-                             KRANJ_AGENCIJA, praznih=3, oznaka=_kranj_oznaka))
+                             KRANJ_AGENCIJA, praznih=3, oznaka=_kranj_oznaka,
+                             smer=_kranj_smer))
     if config.MS:
         out.append(MestniVir("ms", "Murska Sobota", (config.MS_GTFS_URL,), "ms-",
                              "1121", praznih=2, surovi=True))
@@ -407,6 +423,8 @@ def beri_mestni(zip_path: Path, vir: MestniVir, drugi: dict | None = None,
             trips[idv(t["trip_id"])] = {
                 **t, "trip_id": idv(t["trip_id"]), "route_id": pp + t["route_id"],
                 "service_id": pp + t["service_id"],
+                "trip_headsign": (vir.smer(t.get("trip_headsign") or "") if vir.smer
+                                  else t.get("trip_headsign")),
                 "shape_id": pp + t["shape_id"] if t.get("shape_id") else "",
                 "block_id": pp + t["block_id"] if t.get("block_id") else ""}
         sched_rows, used = [], set()

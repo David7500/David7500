@@ -19,6 +19,13 @@
 // njegov model zgibni mestni; ostali trije vozijo predvsem medkrajevne
 // linije z visokopodnimi vozili (Arriva je kupila 45 in nato 22
 // Mercedes-Benz Intouro, arriva.si).
+// Mestna Marprom in Kranj imata nizkopodni 12-metrski model (`avtoMestni`).
+// Marprom je bel z rdečim čelom, krilom in streho, kot Mercedes-Benz Connecto
+// in Iveco Crossway na fotografijah z Wikimedia Commons (2024, 2025); rdeča
+// #d71920 je z marprom.si. Kranj je MAN Lion's City E (MOK ima osem
+// električnih od 16 mestnih, Žurnal24): baterije na strehi, zadaj brez
+// motorja. Vozila nosijo podobe znanih Kranjčanov in enotne barve nimajo,
+// zato bela karoserija in barva legende na strehi.
 //
 // Streha nosi barvo prevoznika z legende (`AGENCY_INK` v common.js):
 // od zgoraj je streha edino, kar se vidi, in brez tega bi bili Nomagov in
@@ -175,10 +182,12 @@ function avtoCelo(v, x1, o) {
   }
 }
 
-function avtoRep(v, x0, o) {
+function avtoRep(v, x0, o, motor = true) {
   const W = o.sirina / 2;
-  // Zadaj je motor: steklo samo zgoraj.
-  avtoKvader(v, x0 - 0.03, x0 + 0.02, -W, W, o.pasovi[0][0], o.steklo[0] + 0.7, AVTO_BELA);
+  // Zadaj je motor: steklo samo zgoraj. Električni ga nima, zadnje steklo
+  // je nizko kot stransko.
+  avtoKvader(v, x0 - 0.03, x0 + 0.02, -W, W, o.pasovi[0][0],
+             o.steklo[0] + (motor ? 0.7 : 0), AVTO_BELA);
   for (const s of [-1, 1]) {
     avtoKvader(v, x0 - 0.05, x0, s > 0 ? W - 0.3 : -W + 0.05, s > 0 ? W - 0.05 : -W + 0.3,
                0.6, 1.3, AVTO_ZADAJ);
@@ -226,6 +235,32 @@ function avtoMedkrajevni(barve, visina = 3.25) {
   return v;
 }
 
+// Mestni avtobus z nizkim podom, 12 m: steklo nižje kot pri medkrajevnem,
+// troje vrat -- pred prednjo osjo, med osema in za zadnjo. `lak` pobarva
+// čelo pod steklom in vso streho (Marprom); `baterije` so paketi na strehi
+// električnega, ki zadaj nima motorja (Kranj).
+function avtoMestni(barve, { visina = 3.05, baterije = false } = {}) {
+  const v = [];
+  const o = {
+    sirina: 2.55, visina, steklo: [1.05, visina - 0.3], celo: 0.8, razmik: 1.45,
+    osi: [3.3, -2.6],
+    vrata: [[4.95, 1.2], [0.4, 1.2], [-4.4, 1.2]],
+    pasovi: barve.pasovi,
+  };
+  avtoOdsek(v, -6.0, 6.0, o);
+  if (barve.lak) {
+    // Za las širše od karoserije, da se ploskvi ne prekrivata.
+    const W = o.sirina / 2 + 0.01;
+    avtoKvader(v, 5.55, 6.01, -W, W, 0.3, o.celo, barve.lak);
+    avtoKvader(v, -6.0, 6.0, -W, W, visina, visina + 0.03, barve.lak);
+  }
+  avtoCelo(v, 6.0, o);
+  avtoRep(v, -6.0, o, !baterije);
+  if (baterije) avtoStreha(v, -4.2, 3.6, o, 2.1, 0.36, barve.streha);
+  else avtoStreha(v, 0.6, 4.0, o, 1.8, 0.3, barve.streha);
+  return v;
+}
+
 // Kljuc je skupina iz `busGroup()` v dashboard.js.
 //
 // `enotna` pobarva vse, kar je sicer barva prevoznika (pasove in streho), z
@@ -244,13 +279,10 @@ function avtoModeli(inki, enotna = null) {
       pasovi: pasovi([[0.35, 0.9, "#004899"], [0.9, 1.0, "#fbb900"], [1.0, 1.45, B]]) }, 3.45),
     "1121": avtoMedkrajevni({ streha: streha("1121"), srednjaVrata: true,
       pasovi: pasovi([[0.35, 0.8, "#00a7e7"], [0.8, 0.9, "#0077be"], [0.9, 1.0, B], [1.0, 1.3, B]]) }, 3.2),
-    // Mestni Marprom, 12 m s srednjimi vrati. Barv vozil ne poznamo s
-    // fotografij, zato nevtralni pasovi; streha v barvi legende.
-    marprom: avtoMedkrajevni({ streha: streha("marprom"), srednjaVrata: true,
-      pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
-    // Mestni Kranj: kot Marprom, barv vozil ne poznamo.
-    kranj: avtoMedkrajevni({ streha: streha("kranj"), srednjaVrata: true,
-      pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
+    marprom: avtoMestni({ streha: streha("marprom"), lak: enotna || "#d71920",
+      pasovi: pasovi([[0.3, 0.55, "#d71920"], [0.55, 1.0, B], [1.0, 1.05, B]]) }),
+    kranj: avtoMestni({ streha: streha("kranj"),
+      pasovi: pasovi([[0.3, 1.0, B], [1.0, 1.05, B]]) }, { visina: 3.1, baterije: true }),
     drugi: avtoMedkrajevni({ streha: streha("drugi"),
       pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
   };
