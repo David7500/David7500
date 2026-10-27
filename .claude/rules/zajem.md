@@ -97,6 +97,7 @@ V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila,
 * **Kranj**: zip MOK (Ridango, mesec naprej), id-ji `kr-`, prevoznik `kranj`. Oznaka = „PROGA N“ ali družina po id-ju (4010 → 1, 4077 → 7; 4000 Kranvaj). `trip_headsign` je ime proge („PROGA 1: Kranj kolodvor-Qlandia-Prebačevo“, 47 različnih) → `gtfs._kranj_smer` („Kranj kolodvor - Qlandia - Prebačevo“), da `ciljVoznje` najde cilj. Lege: Ridangov GTFS-RT prek derp.si (edina javna pot; id-ji so Ridangovi, zato isti sistem). Zamuda iz leg. Ob nedeljah ne vozi (`praznih=3`).
 * **Murska Sobota, linije 1 in 2**: niso v GTFS IJPP, so v NeTEx; zip DERP `extract_moms_gtfs`. **Vožnje in postajališča brez predpone** (`surovi`): NAP jih javi z id-ji NeTEx (27. 10. vsa 4 „brez vožnje“ v NAP). Lege in zamude prek `nap.py`, prevoznik 1121; postajališče IJPP ostane, vožnja IJPP se ne podvoji. Ime „AP MS 1“ s številko na zemljevidu: `train_no` samo iz števk ima med prevozniki s šifro registra le mestni MS (`jeMedkrajevni`, `pristanek.ime_voznje`).
 * Celje (FIWARE s ključem, živo pri tretjem), Koper, Novo mesto, Velenje, Nova Gorica, Ptuj …: ni uradnega javnega vira v živo — ne.
+* **Občinski GTFS z NAP** (Nova Gorica, Jesenice, Brežice, Bohinj; Kranjska Gora in Dolina Soče potekla): id-ji voženj zaporedne številke, lege NAP nosijo id IJPP → pripeti jih ni mogoče, samo vozni red — ne (`docs/MERITVE.md`, 27. 10. 2026).
 
 ## Žive vožnje LPP brez voznega reda (`zive.py`)
 

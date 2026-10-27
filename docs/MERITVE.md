@@ -3018,6 +3018,19 @@ Povod: obiskovalec prek `/stik` (27. 10. ob 10:23): „kot za LPP še za Marprom
 | Celje (Celebus) | DERP iz platforme FIWARE občine, s ključem (`centralka-proxy.derp.si`) | `rt.gtfs.ijpp.prometko.si` (tretji) | ne |
 | Koper, Novo mesto, Velenje, Nova Gorica, Ptuj, Postojna, Krško, Brežice, Sevnica | ročni GTFS DERP (`gtfs.derp.si/*_manual.zip`); NAP ima uradne občinske za Novo Gorico, Brežice, Jesenice, Kranjsko Goro, Bohinj, Dolino Soče | ni | samo vozni red |
 
+**Občinski GTFS na NAP, izmerjeno 27. 10. 2026** (`b2b.nap.si/data/b2b.gtfs.<občina>`, prijava NAP, CC BY-SA 4.0):
+
+| občina | prevoznik v zipu | voženj | voženj na dan od 27. 10. (7 dni) | velja do |
+|---|---|---|---|---|
+| Nova Gorica | Nomago | 271 | 21, 19, 21, 19, 0, 0, 19 | 31. 12. 2030 |
+| Jesenice | „Ariva“ | 36 | 20, 20, 20, 20, 20, 0, 20 | 31. 12. 2026 |
+| Brežice | Nomago | 35 | 35, 35, 35, 35, 14, 0, 0 | 31. 10. 2026 |
+| Bohinj | Turizem Bohinj | 20 | 16, 16, 16, 16, 16, 16, 4 | 31. 12. 2026 |
+| Kranjska Gora | Turizem Kranjska Gora | 34 | 0 | potekel 27. 9. 2026 |
+| Dolina Soče | Turizem Dolina Soče | 48 | 0 | potekel 28. 9. 2025 |
+
+Tolmin, Bovec, Kobarid, Koper, Celje, Novo mesto, Velenje, Ptuj: 403 (takega nabora ni). **Id-ji voženj so zaporedne številke** (0, 1, 10 …), lege NAP pa nosijo id IJPP (`ijpp`, 440 vozil ob 16:35): pripeti jih ni mogoče, pri Murski Soboti pa so id-ji NeTEx isti kot IJPP. Zato samo vozni red, brez lege in zamude — v kajros ne, dokler ni žive poti.
+
 **27. 10. 2026.** Do 05:01 skupinski popravek 58 + 58 voženj 27 (obe smeri). Uvoz ob 12:11 (sprožila ga je objava Marproma) je prinesel zip LPP, ki ima 27 že po Vilharjevi (117 voženj čez Navje in Viadukt, nobena čez Kolodvor ali Friškovec): popravkov ni več treba, `popravek_vzorca` prazen, neznanih LPP 0/225 -- pravilno. 27 ta dan 63 voženj in 1 713 meritev v `run`; 1 605 jutranjih je pod id-ji izpred uvoza (nagrobniki brez `sched`), z naslednicami prek `zamenjava`.
 
 **Objava na arwen 27. 10. 2026** (2c9934e, 9725793). Uvoz ob zagonu (Marproma v bazi ni bilo) 12:06–12:11, 2 064 voženj Marproma; isti uvoz je pobral svež zip LPP, kjer je 27 že po Vilharjevi (117 voženj čez Navje in Viadukt), zato `popravek_vzorca` prazen. Ob 12:23: 33 vozil, 31 pripetih, 2 brez vožnje; primerjava ob razrešitvi n = 14, mediana +34 s, absolutna 42 s, v 90 s 85,7 %; „vozila brez zamude“ Marprom 0 od 6 (ob 12:14, takoj po uvozu, 3 od 6: vožnje, ujete sredi poti, še brez prvega prehoda). Vrstica „vozni red Marprom“ rumena (uradni zip 5 od 7 dni brez voženj, velja kopija), kot mora biti.
