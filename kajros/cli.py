@@ -33,8 +33,12 @@ def cmd_update(args):
         lpp = config.DATA_DIR / "lpp_gtfs.zip"
         if not lpp.exists():
             lpp = None
+    # Marprom: zadnji sprejeti zip ostane na disku (`download_marprom`), tudi
+    # kadar noben vir ne pokrije tedna -- uvoz brez njega bi Maribor izbrisal.
+    mp_nov = gtfs.download_marprom(conn, force=args.force) if config.MARPROM else None
+    mp = mp_nov or gtfs.zadnji_marprom() if config.MARPROM else None
     if path is None:
-        if lpp is None:
+        if lpp is None and mp_nov is None:
             print("vozni red nespremenjen (HTTP 304) -- uvoz preskocen")
             return
         # LPP se je spremenil, IJPP ne -- uvoziti je treba oba, ker uvoz
@@ -44,7 +48,7 @@ def cmd_update(args):
             path = gtfs.download(conn, force=True)
     print(f"prenesen {path} ({path.stat().st_size / 1e6:.1f} MB), uvazam ...")
     try:
-        izid = gtfs.import_static(conn, path, lpp_zip=lpp)
+        izid = gtfs.import_static(conn, path, lpp_zip=lpp, marprom_zip=mp)
     except gtfs.UvozZavrnjen as exc:
         # Zadnja vrstica izpisa gre v dnevnik strežnika (`refresh_timetable`).
         print(f"uvoz zavrnjen: {exc}")

@@ -2986,3 +2986,34 @@ Ponovitev 215 branj feeda (15:44–18:06) in 796 branj zaslonov na kopiji baze, 
 **Cena `razresi`** pri ~90 neznanih vožnjah (ponovitev s preimenovanjem): 25–45 ms na branje; prva različica 120–150 ms. Kazalo postajališč za primerljive vožnje (`Counter`), neuspeli popravek se ne ponavlja do novega uvoza, `CROSS JOIN` pri novih tabelah: brez statistike je SQLite pri `JOIN trip` bral vso tabelo `trip` (19 ms namesto 0,3; tudi pregled v `/api/health` 21 ms namesto 0,3).
 
 **Objava na arwen 26. 10. ob 22:15.** Prvo branje 2 para po napovedi, po en prestavljen v vsaki smeri (za skupinski popravek premalo parov ob tej uri). Ob 22:17 `lpp_rt_neznanih` 3/114: vožnje 27, ki so bile tik pred koncem, so imele za tekmico objavljeno vožnjo pred njimi, ki je ob zagonu ni nosila nobena živa (zamik +14 min, v oknu tekmic) -- ob hladnem zagonu dvoumno, para ni. Ob 22:25 0/92, brez napak v dnevniku.
+
+## Mestni Marprom (Maribor) in drugi mestni prevozniki (27. 10. 2026)
+
+Povod: obiskovalec prek `/stik` (27. 10. ob 10:23): „kot za LPP še za Marprom — kje so mestni avtobusi“.
+
+**Mariborskih mestnih linij v IJPP ni**: nobena vožnja z vsemi postanki v Mariboru (lokalna baza; Kranj 18, Koper 87, Celje 42 takih voženj Arrive ali Nomaga).
+
+**Marprom ima izvirnik sam, odprt in brez ključa**, na `vozniredi.marprom.si` (IIS, isti stroj kot `info.marprom.si`):
+
+* `OBA/GetActiveDeviceDetails` — vozila: `DeviceId`, `BusCode` (številka na avtobusu), `LineId` = GTFS `route_id`, `RouteId` = GTFS `shape_id` (36 od 36), `Lat`/`Lon` (5 decimalk), `NextStopPointId` = GTFS `stop_id`, `LKStopPointId`, `ETA`, `Predicted`, `DirectionDescription`. Ure lege ni. 150 branj po 10 s (25 min): 0 napak, odziv mediana 0,58 s, p95 1,27 s, ~32 vozil ob 11-ih (teden jesenskih počitnic).
+* `Predicted: 1` = lega ni živa: 880 od 1 000 parov zaporednih vzorcev brez premika (pri `Predicted: 0` 1 009 od 3 678); trije avtobusi 460 s na istem mestu 85–343 m od postajališča, `ETA` je tekel naprej; `LKStopPointId` takrat manjka.
+* `OBA/GetArrivalsForStopPoint?StopPointId=` — do 10 prihodov: `ArrivalTime` (ura po voznem redu, HH:MM), `ETAMin`, `DelayMin` (cele minute), `BusCode`; odhodi z izhodišča brez napovedi nimajo `ETAMin` in `DelayMin`.
+* `OBA/GetAllStopPoints` (651, z `StopID` = skupina; 456 od 456 postajališč voznega reda na isti koordinati), `OBA/GetLines` (19 linij, barve, 63 variant).
+* `marprom-proxy.derp.si` je samo posrednik do istega strežnika (isti ETag zipa).
+
+**Vozni red: uradni zip je od 5. 10. 2026 star.** `vozniredi.marprom.si/gtfs/gtfs.zip` (`Last-Modified` 5. 10., datoteke iz 7. 7.): storitve 8726–8729, delavniki do 31. 8., sobote in nedelje do 31. 12. — pokritost tedna od 27. 10. = 0, 0, 0, 0, 324, 324, 0 voženj; živa vozila v njem 0 zadetkov. Šolski vozni red, ki ga Marprom vozi (storitve 8859–8862, 1. 9. 2026–24. 6. 2027, 2 064 voženj, izvoz Marproma 25. 9.), je le še kopija `gtfs.derp.si/marprom_official.zip` (pokritost 1 136 na delavnik, 328 ob koncu tedna). Isti id-ji kot živi API. Kontakt v `feed_info`: marprom.transit@gmail.com.
+
+**Vozilo → vožnja iz Marpromovih prihodov**: ura, ki jo Marprom za vozilo (`BusCode`) pričakuje na naslednjem postajališču, z linijo in varianto da natanko eno vožnjo: prvi preizkus 32 od 36 (3 brez prihoda, 1 pred končno). Pred končno na avtobusni postaji je naslednje 457 („Mlinska ulica 2“), vozni red pa vožnjo konča na 192 — ista skupina 5480; s skupino 30 od 31 vozil. OnTrack (ki vožnjo sklepa iz lege) se je pri 28 od 28 skupnih ujel.
+
+**Zamuda iz leg** (prehod brez trase, kot pri NAP): 6 min na začasni bazi 59 prehodov na 19 vožnjah, 20 min 71 prehodov. Primerjava ob istem trenutku: naša minus Marpromova `DelayMin` mediana +39 s, absolutna 59 s (n = 19; ponovitev n = 15, mediana +39 s, razpon −81 … +79) — `DelayMin` je v celih minutah; naša minus OnTrack +14,5 s, absolutna 29 s (n = 18). Pregled ob razrešitvi je najprej kazal +130 s: vozila pred končno so se razreševala ob vsakem branju (457 ni na vožnji) in primerjava je bila samo njihova — popravljeno (skupina tudi v `potrebuje`).
+
+**derp.si `sources/marprom`** = DERP `gtfs-rt-aggregator` (`providers/marprom.js`): pretvornik istega API-ja (`derp-si/marprom-rt`: vožnja po prihodih, zamuda = `DelayMin`, en postanek) in OnTrack (`ontrack.baguette.pirnet.si`, „Multi-agency GTFS/GTFS-RT backend with trip matching and delay estimation“: vožnjo in zamudo sklepa iz lege, `method: inferred`). Dva posrednika — beremo izvirnik.
+
+### Drugi mestni prevozniki
+
+| mesto | vozni red | živo | ocena |
+|---|---|---|---|
+| Kranj (MOK) | uradni, `kranj-avl-prod.ridango.cloud/data/gtfs/v2/gtfs.zip` (Ridango, mesec naprej, osvežen dnevno ob 3:00; proge 4000–4153 „PROGA 1 …“) | samo derp.si `sources/kranj` (GTFS-RT Ridango, izvor ni javen): ob 11:20 3 vozila, po voznem redu 6 | izvor živega ni preverljiv, pokritost pol — ne |
+| Murska Sobota (linije 1, 2) | v DERP-ovem IJPP ni (tudi ne v `dujpp.si/gtfs/dujpp-ijpp.zip`, 0 od 56); DERP jih izlušči iz NeTEx (NAP) | lege AP MS so na NAP, vožnje pa pod id-ji NeTEx | uradna pot obstaja (NeTEx + SIRI z NAP), a rabi uvoz NeTEx |
+| Celje (Celebus) | DERP iz platforme FIWARE občine, s ključem (`centralka-proxy.derp.si`) | `rt.gtfs.ijpp.prometko.si` (tretji) | ne |
+| Koper, Novo mesto, Velenje, Nova Gorica, Ptuj, Postojna, Krško, Brežice, Sevnica | ročni GTFS DERP (`gtfs.derp.si/*_manual.zip`); NAP ima uradne občinske za Novo Gorico, Brežice, Jesenice, Kranjsko Goro, Bohinj, Dolino Soče | ni | samo vozni red |

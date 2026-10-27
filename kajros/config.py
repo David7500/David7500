@@ -94,6 +94,30 @@ LPP_POSTAJ_KORAK = int(okolje("LPP_POSTAJ_KORAK", "12"))
 ZIVE = okolje("ZIVE", "1") != "0"
 ZIVE_POPRAVKI = ZIVE and okolje("ZIVE_POPRAVKI", "1") != "0"
 
+# --- mestni Marprom (Maribor): drug vir, ker ga v IJPP ni --------------------
+#
+# Mariborskih mestnih linij v IJPP ni (izmerjeno 27. 10. 2026: nobena vožnja
+# z vsemi postanki v Mariboru). Marprom ima oboje sam, brez ključa, na
+# strežniku `vozniredi.marprom.si`: vozni red GTFS in živi API `OBA/`
+# (vozila z linijo, varianto in naslednjim postajališčem; prihodi na
+# postajališču z uro po voznem redu in zamudo). Id-ji obeh so isti sistem:
+# 456 od 456 postajališč na istem mestu, varianta vozila = `shape_id`.
+#
+# **Uradni zip je od 5. 10. 2026 star** (poletni vozni red, delavniki do
+# 31. 8.; živa vozila v njem 0 zadetkov). Šolski vozni red, ki ga Marprom vozi
+# (izvoz Marproma 25. 9., velja do 24. 6. 2027), ima le še kopija DERP. Zato
+# seznam: prvi, ki pokrije vse dni naslednjega tedna (`gtfs.pokritost`),
+# zmaga; noben -- ostane zadnji sprejeti. Uradni je prvi in ko ga Marprom
+# popravi, prevzame sam. Izklop `KAJROS_MARPROM=0`.
+MARPROM = okolje("MARPROM", "1") != "0"
+MARPROM_GTFS_URLS = tuple(u.strip() for u in (okolje(
+    "MARPROM_GTFS_URLS",
+    "https://vozniredi.marprom.si/gtfs/gtfs.zip,http://gtfs.derp.si/marprom_official.zip",
+) or "").split(",") if u.strip())
+MARPROM_API = okolje("MARPROM_API", "https://vozniredi.marprom.si/OBA")
+# Lege na 10 s kot pri NAP in derp.si; Marprom jih osveži na ~5 s.
+MARPROM_SECONDS = int(okolje("MARPROM_SECONDS", "10"))
+
 # **Lege avtobusov IJPP naravnost z NAP** (`nap.py`, SIRI-VM): izvirnik leg,
 # ki jih derp.si le pretvori. Rabi prijavo (`deploy/nap.sh`); brez nje nit
 # čaka in ne dela nič. Na 10 s, kot lege z derp.si (`POSITION_SECONDS`).

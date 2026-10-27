@@ -191,6 +191,201 @@ def beri_lpp(zip_path: Path, dni: int, danes: str | None = None) -> dict:
             "sched": sched_rows, "days": dnevi, "shapes": shapes}
 
 
+# --- mestni Marprom iz drugega vira (glej `config.MARPROM`) ------------------
+
+#: Predpona vseh id-jev Marproma. Njegovi id-ji so števila kot IJPP-jevi
+#: (vožnje 96 321–115 394, postajališča 1–651, storitve 8 726–8 862) in bi se
+#: lahko ujeli: ista `service_id` bi vožnji IJPP dala Marpromove dneve.
+MP = "mp-"
+
+#: Prevoznik v `trip.agency`. Besedni kot `lpp`: Marpromov GTFS id je „3“.
+MARPROM_AGENCIJA = "marprom"
+
+#: Koliko dni od danes mora zip pokriti, da ga vzamemo -- in koliko izmed njih
+#: sme biti brez vožnje (praznik, ki ga Marprom ne vozi).
+POKRITOST_DNI, POKRITOST_PRAZNIH = 7, 1
+
+#: Ime, ki ga ima drugje postajališče dlje od tega, dobi kraj v oklepaju.
+RAZLOCI_IME_M = 5000
+
+
+def pokritost(zip_path: Path, danes: str | None = None,
+              dni: int = POKRITOST_DNI) -> list[int]:
+    """Število voženj za vsak dan od `danes` naprej.
+
+    Tako se pozna Marpromov zip od 5. 10. 2026: sobote in nedelje so, med
+    tednom nič -- poletni vozni red, ki je za delavnike veljal do 31. 8.
+    """
+    danes = date.fromisoformat(danes or datetime.now(TZ).date().isoformat())
+    with zipfile.ZipFile(zip_path) as zf:
+        po_storitvi = Counter(t["service_id"] for t in _rows(zf, "trips.txt"))
+        dnevi = _service_days(zf, set(po_storitvi))
+    out = []
+    for i in range(dni):
+        d = (danes + timedelta(days=i)).isoformat()
+        out.append(sum(n for sid, n in po_storitvi.items() if d in dnevi.get(sid, ())))
+    return out
+
+
+def sprejmi_marprom(pokrito: list[int]) -> bool:
+    return sum(1 for n in pokrito if n == 0) <= POKRITOST_PRAZNIH
+
+
+def download_marprom(conn: sqlite3.Connection, force: bool = False) -> Path | None:
+    """Prvi zip iz `config.MARPROM_GTFS_URLS`, ki pokrije naslednji teden.
+
+    Vrne pot, kadar se je sprejeti zip spremenil (ali `force`), sicer None.
+    Kadar ne pokrije noben, ostane zadnji sprejeti: brez tega bi uvoz ob
+    zastarelem uradnem zipu Maribor izbrisal. Izid po viru v
+    `meta.marprom_vozni_red` za `/admin` in zdravje.
+    """
+    target = config.DATA_DIR / "marprom_gtfs.zip"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    pregled, izbran = [], None
+    for i, url in enumerate(config.MARPROM_GTFS_URLS):
+        kljuc = "gtfs_marprom" if i == 0 else "gtfs_marprom_kopija"
+        tmp = target.with_name(f"marprom_gtfs.{i}.tmp")
+        zapis = {"url": url}
+        try:
+            with (viri.branje("gtfs_marprom") if i == 0
+                  else viri.branje("gtfs_marprom_kopija")) as b:
+                resp = requests.get(url, headers={"User-Agent": config.USER_AGENT},
+                                    timeout=120, stream=True)
+                b.http = resp.status_code
+                resp.raise_for_status()
+                b.bajtov = _shrani(resp, tmp)
+            zapis["pokrito"] = pokritost(tmp)
+            zapis["do"] = _zadnji_dan(tmp)
+        except Exception as exc:        # noqa: BLE001 -- vir ni naš, drugi ostane
+            zapis["napaka"] = str(exc)[:200]
+            tmp.unlink(missing_ok=True)
+        finally:
+            viri.shrani(conn, kljuc)
+        zapis["sprejet"] = izbran is None and "pokrito" in zapis and sprejmi_marprom(zapis["pokrito"])
+        if zapis["sprejet"]:
+            izbran = tmp
+        else:
+            tmp.unlink(missing_ok=True)
+        pregled.append(zapis)
+    db.set_meta(conn, "marprom_vozni_red", json.dumps(
+        {"ts": int(datetime.now(TZ).timestamp()), "viri": pregled}, ensure_ascii=False))
+    conn.commit()
+    if izbran is None:
+        return None
+    if not force and target.exists() and target.read_bytes() == izbran.read_bytes():
+        izbran.unlink()
+        return None
+    izbran.replace(target)
+    return target
+
+
+def zadnji_marprom() -> Path | None:
+    """Zadnji sprejeti zip Marproma ali None, če ga še ni bilo."""
+    p = config.DATA_DIR / "marprom_gtfs.zip"
+    return p if p.exists() else None
+
+
+def _zadnji_dan(zip_path: Path) -> str | None:
+    """Zadnji dan z vožnjo v zipu (ISO), za opozorilo, ko se vozni red izteka."""
+    with zipfile.ZipFile(zip_path) as zf:
+        dnevi = _service_days(zf, {t["service_id"] for t in _rows(zf, "trips.txt")})
+    vsi = [d for ds in dnevi.values() for d in ds]
+    return max(vsi) if vsi else None
+
+
+def beri_marprom(zip_path: Path, drugi: dict | None = None) -> dict:
+    """Marpromov zip v obliki `beri_lpp`, z id-ji s predpono `MP`.
+
+    `drugi` so postajališča drugih virov: ime, ki ga drugje nosi postajališče
+    dlje od `RAZLOCI_IME_M`, dobi „ (Maribor)“. Aplikacija teče po imenu --
+    brez tega bi bila mariborska „Kavčičeva“ in ljubljanska ena postaja z
+    eno tablo (edini tak par, 27. 10. 2026).
+    """
+    from .journey import _fold
+
+    with zipfile.ZipFile(zip_path) as zf:
+        routes = {MP + r["route_id"]: {**r, "route_id": MP + r["route_id"],
+                                       "agency_id": MARPROM_AGENCIJA}
+                  for r in _rows(zf, "routes.txt")}
+        trips = {}
+        for t in _rows(zf, "trips.txt"):
+            if MP + t["route_id"] not in routes:
+                continue
+            trips[MP + t["trip_id"]] = {
+                **t, "trip_id": MP + t["trip_id"], "route_id": MP + t["route_id"],
+                "service_id": MP + t["service_id"],
+                "shape_id": MP + t["shape_id"] if t.get("shape_id") else "",
+                # Verige vozil Marprom ne objavi.
+                "block_id": ""}
+        sched_rows, used = [], set()
+        for st in _rows(zf, "stop_times.txt"):
+            tid = MP + st["trip_id"]
+            if tid not in trips:
+                continue
+            used.add(MP + st["stop_id"])
+            sched_rows.append((tid, int(st["stop_sequence"]), MP + st["stop_id"],
+                               _to_seconds(st["arrival_time"]),
+                               _to_seconds(st["departure_time"])))
+        stops = {
+            MP + s["stop_id"]: {"stop_id": MP + s["stop_id"], "name": s["stop_name"].strip(),
+                                "lat": float(s["stop_lat"]), "lon": float(s["stop_lon"])}
+            for s in _rows(zf, "stops.txt") if MP + s["stop_id"] in used}
+        po_obliki: dict[str, list] = defaultdict(list)
+        want = {t["shape_id"] for t in trips.values() if t["shape_id"]}
+        if want and "shapes.txt" in set(zf.namelist()):
+            for r in _rows(zf, "shapes.txt"):
+                if MP + r["shape_id"] in want:
+                    po_obliki[MP + r["shape_id"]].append(
+                        (int(r["shape_pt_sequence"]),
+                         (float(r["shape_pt_lat"]), float(r["shape_pt_lon"]))))
+        days = _service_days(zf, {t["service_id"][len(MP):] for t in trips.values()})
+    shapes = {}
+    for sid, pts in po_obliki.items():
+        kosi = _razrezi_traso([p for _, p in sorted(pts)])
+        if kosi:
+            shapes[sid] = kosi
+
+    if drugi:
+        po_imenu: dict[str, list] = defaultdict(list)
+        for s in drugi.values():
+            po_imenu[_fold(s["name"])].append(s)
+        for s in stops.values():
+            tuji = po_imenu.get(_fold(s["name"]))
+            if tuji and min(geo.haversine(s["lat"], s["lon"], t["lat"], t["lon"])
+                            for t in tuji) > RAZLOCI_IME_M:
+                s["name"] = f"{s['name']} (Maribor)"
+    return {"stops": stops, "trips": trips, "routes": routes, "sched": sched_rows,
+            "days": {MP + sid: ds for sid, ds in days.items()}, "shapes": shapes}
+
+
+def _razrezi_traso(pts: list) -> list:
+    """Trasa na kose, kjer je pretrgana, vsak kos poenostavljen.
+
+    Trasa je lahko PRETRGANA. V zajetem GTFS je 2 185 razmikov od 4,85
+    milijona (0,045 %) daljsih od kilometra, pri 193 oblikah; najdaljsi je
+    40 km. Ravna crta cez pol Slovenije je trditev, da vozilo tam vozi, in ta
+    ni resnicna -- zato traso razrezemo na kose in vsakega narisemo posebej.
+
+    Meja je izmerjena in ne izbrana na oko: surove tocke so 17 m narazen
+    (mediana), 105 m pri 99 % in 514 m pri 99,9 %, nato pa skocijo na 22,8 km.
+    Med 0,5 in 20 km ni nicesar.
+
+    ~10 m je pod locljivostjo prikaza; iz 4,85 M tock ostane pol milijona,
+    torej 10 MB namesto 107.
+    """
+    if len(pts) < 2:
+        return []
+    kosi, tekoci = [], [pts[0]]
+    for a, b in zip(pts, pts[1:]):
+        if geo.haversine(a[0], a[1], b[0], b[1]) > SHAPE_BREAK_M:
+            kosi.append(tekoci)
+            tekoci = [b]
+        else:
+            tekoci.append(b)
+    kosi.append(tekoci)
+    return [geo.simplify(k) for k in kosi if len(k) >= 2]
+
+
 def _service_days(zf: zipfile.ZipFile, service_ids: set[str]):
     """Razširi calendar.txt + calendar_dates.txt v konkretne datume."""
     days: dict[str, set[str]] = defaultdict(set)
@@ -642,14 +837,15 @@ def zamenjave_iz(conn: sqlite3.Connection, stara: sqlite3.Connection) -> dict:
 
 
 def import_static(conn: sqlite3.Connection, zip_path: Path,
-                  lpp_zip: Path | None = None) -> dict:
+                  lpp_zip: Path | None = None, marprom_zip: Path | None = None) -> dict:
     """Uvozi železniški del GTFS zipa (in nadomestne prevoze SŽ).
 
     Statične tabele se v celoti zamenjajo -- zajem (`obs`, `run`) ostane.
 
-    `lpp_zip` prilije mestni LPP iz **drugega** vira. Zliti mora biti tu in ne
-    v svojem klicu: spodnji `DELETE FROM` pobrise vse staticne tabele, zato bi
-    locen uvoz drugega vira vsakic pobrisal prvega.
+    `lpp_zip` in `marprom_zip` prilijeta mestna prevoza iz **drugih** virov.
+    Zliti morata biti tu in ne v svojem klicu: spodnji `DELETE FROM` pobrise
+    vse staticne tabele, zato bi locen uvoz drugega vira vsakic pobrisal
+    prvega.
     """
     with zipfile.ZipFile(zip_path) as zf:
         wanted_types = {config.RAIL_ROUTE_TYPE}
@@ -724,28 +920,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         shapes: dict[str, list] = {}
 
         def _shrani(sid, pts):
-            if sid not in want_shapes or len(pts) < 2:
+            if sid not in want_shapes:
                 return
-            # Trasa je lahko PRETRGANA. V zajetem GTFS je 2 185 razmikov od
-            # 4,85 milijona (0,045 %) daljsih od kilometra, pri 193 oblikah;
-            # najdaljsi je 40 km. Ravna crta cez pol Slovenije je trditev,
-            # da vozilo tam vozi, in ta ni resnicna -- zato traso razrezemo
-            # na kose in vsakega narisemo posebej.
-            #
-            # Meja je izmerjena in ne izbrana na oko: surove tocke so 17 m
-            # narazen (mediana), 105 m pri 99 % in 514 m pri 99,9 %, nato pa
-            # skocijo na 22,8 km. Med 0,5 in 20 km ni nicesar.
-            kosi, tekoci = [], [pts[0]]
-            for a, b in zip(pts, pts[1:]):
-                if geo.haversine(a[0], a[1], b[0], b[1]) > SHAPE_BREAK_M:
-                    kosi.append(tekoci)
-                    tekoci = [b]
-                else:
-                    tekoci.append(b)
-            kosi.append(tekoci)
-            # ~10 m je pod locljivostjo prikaza; iz 4,85 M tock ostane
-            # pol milijona, torej 10 MB namesto 107.
-            out = [geo.simplify(k) for k in kosi if len(k) >= 2]
+            out = _razrezi_traso(pts)
             if out:
                 shapes[sid] = out
 
@@ -795,6 +972,19 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
             days[sid].update(ds)
         shapes.update(mesto["shapes"])
         lpp_trips = len(mesto["trips"])
+
+    # --- mestni Marprom iz drugega vira -----------------------------------
+    marprom_trips = 0
+    if marprom_zip is not None:
+        mb = beri_marprom(marprom_zip, stops)
+        stops.update(mb["stops"])
+        routes.update(mb["routes"])
+        trips.update(mb["trips"])
+        sched_rows.extend(mb["sched"])
+        for sid, ds in mb["days"].items():
+            days[sid].update(ds)
+        shapes.update(mb["shapes"])
+        marprom_trips = len(mb["trips"])
 
     imen_poenotenih = _poenoti_imena(stops)
 
@@ -910,6 +1100,7 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         "trips": len(trips), "trips_rail": len(rail_trips),
         "trips_bus": len(trips) - len(rail_trips),
         "trips_lpp": lpp_trips,
+        "trips_marprom": marprom_trips,
         # Koliko postajalisc je dobilo drugo ime, ker je isto mesto v feedih
         # zapisano dvakrat. Ce je to veliko, se je nekaj spremenilo pri viru.
         "imen_poenotenih": imen_poenotenih,

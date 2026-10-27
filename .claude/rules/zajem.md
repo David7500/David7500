@@ -76,6 +76,21 @@ Mestnih linij **v IJPP ni** (le primestne 40–84). Vozni red `avl.lpp.si/transi
 * **Obvoz je po vožnji** (`stop_id` + `trip`, nikoli `route_id`; maraton 17. 10.: 2 808 parov). V `alert_entity`, `alerts.ne_ustavi` za tablo, zveze, pot. **Isti naslov za nov dogodek** — obdobje se ob vsakem branju prepiše (`alerts.zapisi`). Primestni (1118): `lpp.obvozi_zaslonov` (`type` 3). Odpoved (CANCELED) pri LPP obstaja: `collector.odpovedane`, v pomnilniku 5 min.
 * **Obvoz se konča tako, da izgine iz feeda** — `end_ts` ostane v prihodnosti (2 od 4 „veljavnih“). `meta.lpp_obvestila_prebrana`; `for_stops()` kaže obvoz le, če viden ≤ 10 min pred zadnjim branjem (`OBVOZ_REZERVA_S`).
 
+## Mestni Marprom (`marprom.py`, `gtfs.download_marprom`)
+
+V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila, prihodi, postajališča) in `/gtfs/gtfs.zip`. derp.si `sources/marprom` = dva posrednika (OnTrack sklepa vožnjo iz lege) — ne.
+
+* **Vozni red s seznama** (`config.MARPROM_GTFS_URLS`): prvi, ki pokrije 7 dni od danes (največ en prazen, `gtfs.pokritost`), zmaga; noben → ostane zadnji sprejeti `marprom_gtfs.zip` (uvoz brez njega bi Maribor izbrisal). **Uradni od 5. 10. 2026 star** (delavniki do 31. 8.: 0, 0, 0, 0, 324, 324, 0) → kopija `gtfs.derp.si/marprom_official.zip` (Marpromov izvoz 25. 9.). `meta.marprom_vozni_red`, rumena vrstica „vozni red Marprom“.
+* **Id-ji s predpono `mp-`** (vožnja, proga, storitev, postajališče, trasa): števila kot IJPP — ista `service_id` bi dala tuje dneve. `trip.agency = 'marprom'`.
+* **Ime, ki je drugje > 5 km**, dobi „ (Maribor)“ (`RAZLOCI_IME_M`; aplikacija teče po imenu). 27. 10.: samo „Kavčičeva“ (LPP, 136 km).
+* **Vozilo → vožnja = Marpromova ura na naslednjem postajališču** (`ArrivalTime` za `BusCode` iz `GetArrivalsForStopPoint`) + linija (`LineId` = `route_id`) + varianta (`RouteId` = `shape_id`): natanko ena. Brez sklepanja iz lege. Prihodi samo ob novi vožnji, menjavi variante, za koncem in na 10 min (`PREVERI_S`); največ 8 branj na obhod. Vožnja z drugim vozilom ni na voljo.
+* **Naslednje, ki ga vožnja nima → postajališče iste skupine** (`StopID`; pred končno 457 → 192). Tudi v `potrebuje`, sicer razrešitev vsako branje.
+* **`Predicted: 1` = lega ni živa** (88 % brez premika, do 460 s): `seen_ts` = zadnji premik (po 3 min z zemljevida), ne v prehod. Živa: ura odgovora.
+* **Zamuda samo iz leg** (`iz_lege.opazuj`, prehod brez trase). `DelayMin` je primerjava (`meta.marprom.primerjava`): naša − Marpromova mediana +39 s (cele minute), proti OnTrack +14,5 s. `iz_lege.SAMO_IZ_LEGE`: „ne v feedu“ pri Marpromu ni napaka.
+* Vozila brez vožnje → `meta.marprom_vozila_brez_voznje` → zemljevid („vožnje ne poznamo“, linija, smer, naslednje po Marpromu).
+* Nova vožnja istega vozila pobriše lego stare iz `vehicle_now` (dvojnik do konca svežine).
+* Samo strežnik (nit `kajros-marprom`); malina ne. Izklop `KAJROS_MARPROM=0`.
+
 ## Žive vožnje LPP brez voznega reda (`zive.py`)
 
 Id = `dan|vožnja|vzorec`: dan in vzorec poznamo, vožnje ne. 26. 10. 2026 linija 27 (14 od 15 v feedu) po Vilharjevi (Navje), objava mimo kolodvora (Kolodvor, Friškovec).

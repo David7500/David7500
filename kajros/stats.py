@@ -1003,6 +1003,7 @@ AGENCY_NAMES = {
     "1118": "LPP primestni",
     # Drug vir, besedni `agency_id` -- glej `config.LPP_*`.
     "lpp": "LPP mestni",
+    "marprom": "Marprom",
 }
 
 

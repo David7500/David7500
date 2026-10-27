@@ -66,11 +66,11 @@ MIN_RAZDALJA_M = {"zeleznica": 3000, "avtobus": 6000}
 #: številka edini razlog, da stran obstaja.
 MIN_MERITEV = 30
 
-#: Mestni LPP v kazalu relacij ne sodi. Njegove „relacije" so postajališče do
-#: postajališča znotraj mesta in nihče ne vpraša „kdaj mi pelje z Bavarskega
-#: dvora na Ajdovščino" -- vpraša za linijo ali za postajališče. Mestna
-#: postajališča **svojo stran imajo**, relacije ne.
-BREZ_AGENCIJE = "lpp"
+#: Mestni LPP in Marprom v kazalu relacij ne sodita. Njune „relacije" so
+#: postajališče do postajališča znotraj mesta in nihče ne vpraša „kdaj mi
+#: pelje z Bavarskega dvora na Ajdovščino" -- vpraša za linijo ali za
+#: postajališče. Mestna postajališča **svojo stran imajo**, relacije ne.
+BREZ_AGENCIJE = ("lpp", "marprom")
 
 #: Koliko odhodov se izpiše na eni strani. Medvode → Ljubljana Šentvid jih ima
 #: 108 na dan in stran je bila 43 kB naštevanja -- tabela, ki je nihče ne
@@ -101,7 +101,7 @@ WITH p AS (
   FROM sched s
   JOIN station st ON st.stop_id = s.stop_id
   JOIN trip t ON t.trip_id = s.trip_id
-  WHERE t.network = :net AND (:brez IS NULL OR t.agency <> :brez)
+  WHERE t.network = :net AND (:brez IS NULL OR t.agency NOT IN (:brez, :brez2))
 )
 SELECT a.name AS od, b.name AS cilj, COUNT(*) AS vozenj
 FROM p a
@@ -118,7 +118,7 @@ SELECT st.name AS ime, COUNT(*) AS n
 FROM sched s
 JOIN station st ON st.stop_id = s.stop_id
 JOIN trip t ON t.trip_id = s.trip_id
-WHERE t.network = :net AND (:brez IS NULL OR t.agency <> :brez)
+WHERE t.network = :net AND (:brez IS NULL OR t.agency NOT IN (:brez, :brez2))
 GROUP BY st.name
 """
 
@@ -132,7 +132,7 @@ WITH p AS (
   FROM sched s
   JOIN station st ON st.stop_id = s.stop_id
   JOIN trip t ON t.trip_id = s.trip_id
-  WHERE t.network = :net AND (:brez IS NULL OR t.agency <> :brez)
+  WHERE t.network = :net AND (:brez IS NULL OR t.agency NOT IN (:brez, :brez2))
 )
 INSERT INTO _par (od, cilj, trip_id, od_seq, cilj_seq)
 SELECT i.od, i.cilj, a.trip_id, a.stop_seq, MIN(b.stop_seq)
@@ -259,8 +259,8 @@ def zgradi(conn: sqlite3.Connection, days: int = 90,
     """
     network = network or "zeleznica"
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
-    brez = BREZ_AGENCIJE if network == "avtobus" else None
-    par = {"net": network, "brez": brez, "since": since}
+    brez = BREZ_AGENCIJE if network == "avtobus" else (None, None)
+    par = {"net": network, "brez": brez[0], "brez2": brez[1], "since": since}
 
     lege = {d["n"]: (d["lat"], d["lon"])
             for d in journey.station_index(conn, network, True)}
@@ -658,6 +658,8 @@ def ime_voznje(row: dict, s_ciljem: bool = False) -> str:
         return f"{kdo} → {cilj}" if cilj else kdo
     if row.get("network") == "avtobus" and str(row.get("agency")) in ("1118", "lpp"):
         return f"LPP {row['train_no']}"
+    if row.get("network") == "avtobus" and row.get("agency") == "marprom":
+        return f"Marprom {row['train_no']}"
     return row["train_no"]
 
 

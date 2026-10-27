@@ -67,6 +67,12 @@ NAP_STOJI_S = 900
 #: dva dni pred koncem je okvara (jutri ali pojutrišnjem ni voženj).
 VOZNI_RED_RUMENO_DNI, VOZNI_RED_RDECE_DNI = 7, 2
 
+#: Nit Marproma piše na 10 s; pet minut tišine ni več zamujeno branje.
+MARPROM_STOJI_S = 300
+#: Vozila brez vožnje pri Marpromu: rumeno od toliko vozil in deleža. 27. 10.
+#: 2026 ob 11:00 4 od 36 (3 brez prihoda, 1 brez ure v voznem redu).
+MARPROM_BREZ, MARPROM_BREZ_DELEZ = 5, 0.3
+
 
 def _rss() -> int | None:
     """Pomnilnik procesa v bajtih (Linux). Malina in arwen imata ga malo."""
@@ -301,6 +307,29 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
         else:
             out["nap"] = (DOBRA, "")
 
+    # Mestni Marprom (`marprom.py`). Rumeno, ko Marprom ne odgovarja (drugega
+    # vira ni) ali ko velik del vozil ostane brez vožnje -- vozni red se z
+    # njegovimi vožnjami ne ujema; rdeče samo, ko stoji nit.
+    mm = z.get("marprom")
+    if mm:
+        po_vr = mm.get("po_voznem_redu") or 0
+        vozil, brez = mm.get("vozil") or 0, mm.get("brez_voznje") or 0
+        if zdaj - (mm.get("ts") or 0) > MARPROM_STOJI_S:
+            napaka = mm.get("napaka_ts") or 0
+            out["marprom"] = (
+                (MLACNA, f"Marprom ne odgovarja od pred {_min(zdaj - (mm.get('ts') or 0))}")
+                if zdaj - napaka <= MARPROM_STOJI_S
+                else (SLABA, f"nit Marproma ne piše od pred {_min(zdaj - (mm.get('ts') or 0))}"))
+        elif po_vr < MIN_VOZENJ and not vozil:
+            out["marprom"] = ("", "")
+        elif not vozil:
+            out["marprom"] = (MLACNA, f"Marprom ne javi nobenega vozila, po voznem redu "
+                                      f"jih vozi {po_vr}")
+        elif brez >= MARPROM_BREZ and brez >= MARPROM_BREZ_DELEZ * vozil:
+            out["marprom"] = (MLACNA, f"vozila brez vožnje: {brez} od {vozil}")
+        else:
+            out["marprom"] = (DOBRA, "")
+
     # Vozni red, ki se konča. Uvoz ob 4:20 premakne okno LPP vsak dan za dan
     # naprej (`config.LPP_DAYS`); če ne teče, mestne linije čez teden dni
     # izginejo z vseh strani brez ene same napake v dnevniku -- tako je bilo
@@ -311,7 +340,8 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
         for kljuc, deli, rumeno in (
                 ("vozni_red", (("zeleznica", "vlakov"), ("avtobus", "avtobusov")),
                  VOZNI_RED_RUMENO_DNI),
-                ("vozni_red_lpp", (("lpp", "mestnega LPP"),), config.LPP_DAYS - 2)):
+                ("vozni_red_lpp", (("lpp", "mestnega LPP"),), config.LPP_DAYS - 2),
+                ("vozni_red_marprom", (("marprom", "Marproma"),), VOZNI_RED_RUMENO_DNI)):
             slabi, mlacni = [], []
             for omr, ime in deli:
                 if not vr.get(omr):
@@ -325,6 +355,19 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
             if any(vr.get(omr) for omr, _ in deli):
                 out[kljuc] = ((SLABA, ", ".join(slabi)) if slabi
                               else (MLACNA, ", ".join(mlacni)) if mlacni else (DOBRA, ""))
+
+    # Uradni vozni red Marproma, ki ne pokrije tedna: uvoz vzame kopijo
+    # (`gtfs.download_marprom`). Potnik ne izgubi nič, dokler kopija velja --
+    # rumeno, da ve skrbnik, ki lahko piše Marpromu.
+    mv = z.get("marprom_vozni_red") or {}
+    uradni = (mv.get("viri") or [None])[0]
+    if uradni and not uradni.get("sprejet") and out.get("vozni_red_marprom", ("",))[0] != SLABA:
+        zakaj = (uradni["napaka"] if uradni.get("napaka") else
+                 f"{sum(1 for n in uradni.get('pokrito') or () if not n)} od "
+                 f"{len(uradni.get('pokrito') or ())} dni brez voženj")
+        drugi = [v for v in mv.get("viri") or () if v.get("sprejet")]
+        out["vozni_red_marprom"] = (MLACNA, f"uradni zip ne pokrije tedna ({zakaj}); "
+                                    + ("velja kopija" if drugi else "ostane zadnji sprejeti"))
 
     # Nit, ki je umrla, ne vstane do ponovnega zagona: izjema mimo `except`
     # v zanki ali napaka ob zagonu. Vir je bil tedaj viden le posredno („ne
@@ -388,6 +431,8 @@ IMENA = {
     "nap": "NAP · lege SIRI",
     "vozni_red": "vozni red IJPP",
     "vozni_red_lpp": "vozni red LPP",
+    "marprom": "Marprom · vozila",
+    "vozni_red_marprom": "vozni red Marprom",
     "disk": "disk",
     "wal": "WAL",
 }
@@ -425,6 +470,7 @@ _POSTA: dict[str, tuple[str, int]] = {
     "zamude_sz": ("Nit zemljevida SŽ ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     "zamude_lpp": ("Nit LPP-jevih zaslonov ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     "nap": ("Nit NAP ne zapiše niti napake -- obstala je. " + _RESTART, 600),
+    "marprom": ("Nit Marproma ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     # Straža prikaza proti SŽ: vlakov, ki jih SŽ riše po voznem redu, ne šteje
     # (`zamude_sz.skladnost`), zato pol ure rdečega pomeni napako pri nas --
     # potnik vidi napačno zamudo in to popravi samo koda.
@@ -441,7 +487,7 @@ _NIT = ("Nit je umrla in ne vstane do ponovnega zagona. " + _RESTART, 600)
 #: okvara mimo, zato ne pošlje ne „stoji“ ne „spet dela“: obstala nit ob
 #: 23:50 bi sicer ob 0:35 dobila „spet dela“ in ob 4:00 znova „stoji“.
 _PO_VOZNEM_REDU = frozenset({"feed", "zeleznica", "avtobus", "zamude_sz", "zamude_lpp", "nap",
-                             "skladnost_sz"})
+                             "marprom", "skladnost_sz"})
 
 #: Vožnje IJPP brez voznega reda gredo v pošto šele, ko jih je veliko:
 #: 22. 9. 2026 (nov vozni red, stari id-ji v feedu) 16 od 662 = 2,4 %,
@@ -486,7 +532,8 @@ def posta(z: dict, m: dict, ocena: dict[str, tuple[str, str]],
             out[k] = None
 
     # Vozni red, ki se konča: uvoz ne teče ali vir nima novega.
-    for k, vir in (("vozni_red", "gtfs_ijpp"), ("vozni_red_lpp", "gtfs_lpp")):
+    for k, vir in (("vozni_red", "gtfs_ijpp"), ("vozni_red_lpp", "gtfs_lpp"),
+                   ("vozni_red_marprom", "gtfs_marprom")):
         raz, razlog = ocena.get(k, ("", ""))
         if raz == SLABA:
             out[k] = Okvara(razlog, viri.po_kljucu()[vir].ukrep)

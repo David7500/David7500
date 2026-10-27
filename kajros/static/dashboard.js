@@ -657,7 +657,12 @@ function busCardHtml(v) {
   // Brez `trip_id` je vožnja, ki je vozni red ne pozna in je zajem ni mogel
   // pripeti na objavljeno (`zive.py`): ni ure, od katere bi merili zamudo, in
   // ne strani, ki bi jo lahko odprli. Kam pelje, pove napoved LPP.
-  const rows = !v.trip_id
+  // Marprom: vožnje iz njegovih prihodov ni bilo mogoče določiti
+  // (`marprom.razresi`); kam pelje, pove Marprom brez ure.
+  const rows = !v.trip_id && v.agency === "marprom"
+    ? [["zamuda", "ni znana · vožnje ne poznamo"],
+       ...(v.naslednja ? [["naslednja", escapeHtml(v.naslednja)]] : [])]
+    : !v.trip_id
     ? [["zamuda", "ni znana · vožnja mimo voznega reda"],
        ...(v.naslednja ? [["naslednja", `${escapeHtml(v.naslednja)} ob ${
          hhmm(v.naslednja_ts * 1000)} · napoved LPP`]] : [])]
@@ -1134,6 +1139,8 @@ const agencyKey = (v) => (v && v.agency === "lpp" ? "1118" : v && v.agency);
 // Plast avtobusa: prevoznik s svojim stikalom ali "drugi".
 const busGroup = (v) => (AGENCY_INK[agencyKey(v)] ? agencyKey(v) : "drugi");
 const busInk = (v) => AGENCY_INK[agencyKey(v)] || BUS_INK;
+// Mestni prevozniki: od bliže (`MESTNI_OD`) in s številko linije ob vozilu.
+const MESTNI = new Set(["lpp", "marprom"]);
 const busKey = (v) => v.trip_id
   || (v.vehicle_id ? `v:${v.vehicle_id}` : `${v.train_no}:${v.lat},${v.lon}`);
 
@@ -1358,10 +1365,10 @@ function avtobusTocka(v, l, ocena = false) {
     type: "Feature",
     geometry: { type: "Point", coordinates: [l.lon, l.lat] },
     properties: {
-      kljuc: busKey(v), ag: busGroup(v), mesto: v.agency === "lpp",
+      kljuc: busKey(v), ag: busGroup(v), mesto: MESTNI.has(v.agency),
       smer: l.smer,
       ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3, ocena),
-      st: busGroup(v) === "1118" ? v.train_no : "",
+      st: busGroup(v) === "1118" || v.agency === "marprom" ? v.train_no : "",
     },
   };
 }
@@ -2215,6 +2222,7 @@ const NADSTRESEK_SLOJI = ["tla", "steber", "stena", "streha"].map((d) => `k-nads
 const LAYERS = [
   { id: "lay-train", key: "train", def: true },
   { id: "lay-lpp", key: "avtobus-lpp", def: true, ag: "1118" },
+  { id: "lay-marprom", key: "avtobus-marprom", def: true, ag: "marprom" },
   { id: "lay-arriva", key: "avtobus-arriva", def: true, ag: "1123" },
   { id: "lay-nomago", key: "avtobus-nomago", def: true, ag: "1119" },
   { id: "lay-apms", key: "avtobus-apms", def: true, ag: "1121" },
@@ -2747,9 +2755,9 @@ function onVehicles(list) {
   }
   // Stevec na prevoznika. Vrstica "drugi" se pokaze samo, ce kdo tam res je --
   // sicer je prazna izbira, ki nicesar ne pojasni.
-  const poAgenciji = { "1118": 0, "1123": 0, "1119": 0, "1121": 0, drugi: 0 };
+  const poAgenciji = { "1118": 0, marprom: 0, "1123": 0, "1119": 0, "1121": 0, drugi: 0 };
   for (const v of liveBuses) poAgenciji[busGroup(v)] += 1;
-  const stevec = { "n-lpp": "1118", "n-arriva": "1123",
+  const stevec = { "n-lpp": "1118", "n-marprom": "marprom", "n-arriva": "1123",
                    "n-nomago": "1119", "n-apms": "1121" };
   for (const [id, ag] of Object.entries(stevec)) {
     const el = document.getElementById(id);

@@ -17,8 +17,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, nap, obisk,
-               ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
+from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, marprom,
+               nap, obisk, ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
                weather, zamude_lpp, zamude_sz, zasedenost)
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -228,9 +228,10 @@ def bootstrap() -> None:
     _log("voznega reda ni -- prenašam GTFS")
     path = gtfs.download(conn, force=True)
     lpp = gtfs.download_lpp(conn, force=True) if config.LPP_ENABLED else None
+    mp = gtfs.download_marprom(conn, force=True) if config.MARPROM else None
     if path:
         _log(f"uvažam {path.stat().st_size / 1e6:.0f} MB ...")
-        _log(f"uvoženo: {gtfs.import_static(conn, path, lpp_zip=lpp)}")
+        _log(f"uvoženo: {gtfs.import_static(conn, path, lpp_zip=lpp, marprom_zip=mp)}")
         path.unlink(missing_ok=True)      # 41 MB ne rabimo obdržati
         if lpp:
             lpp.unlink(missing_ok=True)
@@ -267,7 +268,9 @@ def refresh_timetable(conn, mode: str) -> None:
 
     path = gtfs.download(conn)
     lpp = gtfs.download_lpp(conn) if config.LPP_ENABLED else None
-    if path is None and lpp is None:
+    mp_nov = gtfs.download_marprom(conn) if config.MARPROM else None
+    mp = mp_nov or gtfs.zadnji_marprom() if config.MARPROM else None
+    if path is None and lpp is None and mp_nov is None:
         _log("vozni red nespremenjen")
         return
     if path is None:
@@ -277,7 +280,7 @@ def refresh_timetable(conn, mode: str) -> None:
     if lpp is None and config.LPP_ENABLED:
         kandidat = config.DATA_DIR / "lpp_gtfs.zip"
         lpp = kandidat if kandidat.exists() else None
-    _log(f"nov vozni red: {gtfs.import_static(conn, path, lpp_zip=lpp)}")
+    _log(f"nov vozni red: {gtfs.import_static(conn, path, lpp_zip=lpp, marprom_zip=mp)}")
     path.unlink(missing_ok=True)
     if lpp:
         lpp.unlink(missing_ok=True)
@@ -380,6 +383,16 @@ def _zazeni_nap() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=nap.teci, args=(_stop, _log), daemon=True,
                            name="kajros-nap")
+    nit.start()
+    return nit
+
+
+def _zazeni_marprom() -> threading.Thread | None:
+    """Mestni Marprom z Marpromovega API-ja, v svoji niti (glej `marprom.py`)."""
+    if not config.MARPROM:
+        return None
+    nit = threading.Thread(target=marprom.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-marprom")
     nit.start()
     return nit
 
@@ -767,12 +780,13 @@ async def lifespan(app):
         ovire_nit = _zazeni_ovire_sz()
         lpp_nit = _zazeni_zamude_lpp()
         nap_nit = _zazeni_nap()
+        marprom_nit = _zazeni_marprom()
         promet_nit = _zazeni_promet()
         _zazeni_opozorila()
         threading.Thread(target=_ogrej_vozila, daemon=True,
                          name="kajros-vozila").start()
     else:
-        peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = promet_nit = None
+        peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = marprom_nit = promet_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -790,6 +804,8 @@ async def lifespan(app):
             lpp_nit.join(timeout=5)
         if nap_nit:
             nap_nit.join(timeout=5)
+        if marprom_nit:
+            marprom_nit.join(timeout=5)
         if promet_nit:
             promet_nit.join(timeout=5)
         if obisk_nit:

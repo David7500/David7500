@@ -180,6 +180,20 @@ def vsi() -> tuple[Vir, ...]:
             f"vsakih {config.OVIRE_SZ_SECONDS // 60} min", "kajros-ovire-sz",
             config.OVIRE_SZ, (), brskalnik_ukrep,
             preveri=brskalnik.ZACETNA, preveri_ok=(403,)),
+        Vir("marprom", "Marprom · vozila in prihodi", "izvirniki",
+            "Lege mestnih avtobusov Marproma (Maribor) in ura po voznem redu, ki "
+            "jo Marprom za vozilo pričakuje na naslednjem postajališču; iz nje "
+            "vožnja, zamuda iz leg.",
+            "edini vir mestnega Maribora v živo; derp.si ga ima le prek dveh "
+            "posrednikov",
+            f"{config.MARPROM_API}/GetActiveDeviceDetails", "Marprom (vozniredi.marprom.si)",
+            "ni navedena", f"vsakih {config.MARPROM_SECONDS} s, prihodi ob novi vožnji",
+            "kajros-marprom", config.MARPROM, ("marprom",),
+            "Marprom ne odgovarja: počakaj, drugega vira ni -- mariborski mestni "
+            "avtobusi so medtem po voznem redu. „vozila brez vožnje“ visoko: "
+            "vozni red Marproma se ne ujema z vožnjami (vrstica „vozni red "
+            "Marprom“, `kajros update`).",
+            preveri=f"{config.MARPROM_API}/GetLines"),
         Vir("zamude_lpp", "LPP · zasloni postajališč", "izvirniki",
             "Prihodi z LPP-jevih zaslonov na ~75 postajališčih, pripeti na vožnje.",
             "rezerva za mestni LPP, kadar ga derp.si nima; sicer primerjava",
@@ -224,6 +238,29 @@ def vsi() -> tuple[Vir, ...]:
             "nobeni strani. Na arwenu `journalctl -u kajros` okoli 4:20; ročno "
             "`kajros update`.",
             preveri=config.LPP_GTFS_URL, prag_napak=1),
+        Vir("gtfs_marprom", "vozni red Marprom", "statika",
+            "Vozni red mestnih linij Marproma (zip, 0,5 MB), uradni.",
+            "glavni vir voznega reda Maribora, kadar pokrije naslednji teden; "
+            "sicer kopija spodaj",
+            config.MARPROM_GTFS_URLS[0] if config.MARPROM_GTFS_URLS else "",
+            "Marprom (vozniredi.marprom.si)", "ni navedena", vozni_red,
+            "kajros-collector", config.MARPROM, ("vozni_red_marprom",),
+            "Uradni zip ne pokrije tedna (od 5. 10. 2026 poletni, delavniki do "
+            "31. 8.): uvoz vzame kopijo, vrstica je rumena. Pisati Marpromu "
+            "(feed_info: marprom.transit@gmail.com). Ročno `kajros update`.",
+            preveri=config.MARPROM_GTFS_URLS[0] if config.MARPROM_GTFS_URLS else None,
+            prag_napak=1),
+        Vir("gtfs_marprom_kopija", "vozni red Marprom · kopija", "statika",
+            "Marpromov izvoz šolskega voznega reda (25. 9. 2026), ki ga uradni "
+            "naslov nima več.",
+            "rezerva, kadar uradni zip ne pokrije naslednjega tedna",
+            config.MARPROM_GTFS_URLS[1] if len(config.MARPROM_GTFS_URLS) > 1 else "",
+            "Marprom, kopija DERP (gtfs.derp.si)", "ni navedena", vozni_red,
+            "kajros-collector", config.MARPROM and len(config.MARPROM_GTFS_URLS) > 1, (),
+            "Kopija ne odgovarja: ostane zadnji sprejeti zip, dokler pokrije dneve "
+            "(vrstica „vozni red Marprom“).",
+            preveri=config.MARPROM_GTFS_URLS[1] if len(config.MARPROM_GTFS_URLS) > 1 else None,
+            prag_napak=1),
         Vir("promet_fcd", "NAP · promet na cestah (FCD)", "analiza",
             "Čas vožnje po odsekih cest, kjer je ta hip gneča; za primerjavo "
             "vlak proti avtu po urah.",

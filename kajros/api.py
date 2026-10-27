@@ -575,7 +575,8 @@ def llms():
         f"- [Zasebnost]({b}/zasebnost): obiska ne beležimo po osebah.\n\n"
         "## Podatki\n\n"
         "Vozni redi in zamude: odprti podatki javnega potniškega prometa "
-        "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP iz odprtih virov LPP, "
+        "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP in Marprom iz njunih "
+        "odprtih virov, "
         "zamude in tiri vlakov s strani Slovenskih železnic, "
         "vreme Open-Meteo. Navedba vira je pogoj rabe.\n\n"
         "## Neobvezno\n\n"
@@ -1117,7 +1118,7 @@ def bus_page(request: Request):
         "here": "avtobusi", "network": "avtobus",
         "section": "Avtobusi",
         "page_title": "Vozni red avtobusov in zamude v živo — kajros",
-        "page_desc": "Iskalnik avtobusnih povezav po Sloveniji: vozni red, odhodi s postajališča in zamude avtobusov v živo, tudi mestni LPP.",
+        "page_desc": "Iskalnik avtobusnih povezav po Sloveniji: vozni red, odhodi s postajališča in zamude avtobusov v živo, tudi mestni LPP in Marprom.",
     })
 
 
@@ -1590,6 +1591,12 @@ def api_health():
         # Lege IJPP z NAP (`nap.py`) in njihovo ujemanje z derp.si.
         nm = db.get_meta(conn, "nap") if config.NAP else None
         out["nap"] = json.loads(nm) if nm else None
+        # Mestni Marprom (`marprom.py`): vozila, pripeta na vožnje, primerjava
+        # naše zamude z Marpromovo; in kateri vozni red je sprejet (`gtfs`).
+        mm = db.get_meta(conn, "marprom") if config.MARPROM else None
+        out["marprom"] = json.loads(mm) if mm else None
+        mv = db.get_meta(conn, "marprom_vozni_red") if config.MARPROM else None
+        out["marprom_vozni_red"] = json.loads(mv) if mv else None
         # Lege izven trase (`iz_lege`, tabela `odklon`): kje vozila trase ne
         # vozijo. Število zadnjih 24 h, razčlenitev po odsekih `kajros odkloni`.
         n, vozenj = conn.execute(
@@ -1658,6 +1665,7 @@ def _health_stevci(conn):
         "zeleznica": stats.znano_do(conn, "zeleznica"),
         "avtobus": stats.znano_do(conn, "avtobus"),
         "lpp": stats.znano_do(conn, "avtobus", "lpp") if config.LPP_ENABLED else None,
+        "marprom": stats.znano_do(conn, "avtobus", "marprom") if config.MARPROM else None,
     }
     path = Path(config.DB_PATH)
     out["db_bytes"] = path.stat().st_size if path.exists() else 0
@@ -2237,20 +2245,25 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
 
 
 def _vozila_brez_voznje(conn, now: int) -> list[dict]:
-    """Avtobusi LPP na vožnjah, ki jih vozni red ne pozna.
+    """Mestni avtobusi na vožnjah, ki jih vozni red ne pozna (LPP) ali jim
+    vožnje ni bilo mogoče določiti (Marprom, `marprom.korak`).
 
     Linija in smer sta iz vzorca proge, zamude ni (`collector._zapisi_brez_voznje`).
     Brez tega je 2. 10. 2026 z zemljevida izginilo 15 od 16 vozil linije 1.
     """
-    try:
-        zapis = json.loads(db.get_meta(conn, "lpp_vozila_brez_voznje") or "{}")
-    except ValueError:
-        return []
-    return [{**v, "trip_id": None, "service_date": None, "mode": "bus", "agency": "lpp",
-             "network": "avtobus", "delay_s": None, "last_stop": None, "measured_seq": None,
-             "speed_kmh": round(v["speed_ms"] * 3.6) if v.get("speed_ms") is not None else None}
-            for v in zapis.get("vozila") or []
-            if v.get("seen_ts", 0) >= now - collector.POSITION_FRESH_S]
+    out = []
+    for kljuc, agency in (("lpp_vozila_brez_voznje", "lpp"),
+                          ("marprom_vozila_brez_voznje", "marprom")):
+        try:
+            zapis = json.loads(db.get_meta(conn, kljuc) or "{}")
+        except ValueError:
+            continue
+        out += [{**v, "trip_id": None, "service_date": None, "mode": "bus", "agency": agency,
+                 "network": "avtobus", "delay_s": None, "last_stop": None, "measured_seq": None,
+                 "speed_kmh": round(v["speed_ms"] * 3.6) if v.get("speed_ms") is not None else None}
+                for v in zapis.get("vozila") or []
+                if v.get("seen_ts", 0) >= now - collector.POSITION_FRESH_S]
+    return out
 
 
 #: Kako pogosto okno vožnje vpraša po vozilu, ki lege nima ne od GPS ne od

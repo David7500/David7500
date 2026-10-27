@@ -244,6 +244,10 @@ function avtoModeli(inki, enotna = null) {
       pasovi: pasovi([[0.35, 0.9, "#004899"], [0.9, 1.0, "#fbb900"], [1.0, 1.45, B]]) }, 3.45),
     "1121": avtoMedkrajevni({ streha: streha("1121"), srednjaVrata: true,
       pasovi: pasovi([[0.35, 0.8, "#00a7e7"], [0.8, 0.9, "#0077be"], [0.9, 1.0, B], [1.0, 1.3, B]]) }, 3.2),
+    // Mestni Marprom, 12 m s srednjimi vrati. Barv vozil ne poznamo s
+    // fotografij, zato nevtralni pasovi; streha v barvi legende.
+    marprom: avtoMedkrajevni({ streha: streha("marprom"), srednjaVrata: true,
+      pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
     drugi: avtoMedkrajevni({ streha: streha("drugi"),
       pasovi: pasovi([[0.35, 0.8, "#8a939e"], [0.8, 1.0, B], [1.0, 1.35, B]]) }),
   };

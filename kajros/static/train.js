@@ -1494,6 +1494,9 @@ function viriHtml(run) {
   if (run.network === "zeleznica" && !isBus(run.mode)) {
     return "vozni red IJPP prek NAP (CC BY-SA 4.0), zamude in tir SŽ";
   }
+  if (run.agency === "marprom") {
+    return "vozni red in lege vozil Marprom (vozniredi.marprom.si), zamude iz leg";
+  }
   if (run.agency !== "lpp") {
     return "IJPP prek NAP (CC BY-SA 4.0), obdelava DERP";
   }

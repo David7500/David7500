@@ -14,7 +14,7 @@ Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik pogosto že teče na 800
 
 **Pred „končano“: `./scripts/preveri.sh`** — testi, odzivi strani, konzola brskalnika, **pyflakes**, **skladnost številk**, paleta; z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q`. `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
-Avtobusi: `KAJROS_AGENCIES=1118,1119,1121,1123`, brez tega v bazi samo SŽ. **Mestni LPP = drug vir** (`KAJROS_LPP`, privzeto vklopljen): občinski, v IJPP ga ni. Podrobno `.claude/rules/zajem.md`.
+Avtobusi: `KAJROS_AGENCIES=1118,1119,1121,1123`, brez tega v bazi samo SŽ. **Mestni LPP in Marprom = svoja vira** (`KAJROS_LPP`, `KAJROS_MARPROM`, privzeto vklopljena): občinska, v IJPP ju ni. Podrobno `.claude/rules/zajem.md`.
 
 **Strežnik posluša na vseh vmesnikih** (`KAJROS_HOST`, privzeto `0.0.0.0`): telefon = glavna preizkusna naprava. To **ni** odpiranje vrat na usmerjevalniku — API brez avtentikacije, samo domače omrežje. Samo ta računalnik: `KAJROS_HOST=127.0.0.1 ./scripts/dev-restart.sh`.
 
@@ -35,6 +35,8 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Vreme | `open-meteo.com` (ima arhiv) | dnevno |
 | Zamude vlakov — **vodijo** (derp.si isto, prek posrednika) | zemljevid potniski.sz.si, `admin-ajax.php?action=aktivni_vlaki`, Chrome | 5 s (SŽ preračuna na 15) |
 | Zamude mestnega LPP, drugi vir | zasloni LPP `data.lpp.si/api/station/arrival`, ~75–100 postajališč | 2 min |
+| Mestni Marprom (Maribor), lege in vožnje | `vozniredi.marprom.si/OBA/` (izvirnik, brez ključa); zamuda iz leg | 10 s |
+| Vozni red Marproma | `vozniredi.marprom.si/gtfs/gtfs.zip`, ko ne pokrije tedna kopija `gtfs.derp.si` | ~1×/dan |
 | Lege avtobusov IJPP, izvirnik | NAP SIRI-VM `b2b.nap.si/data/b2b.siri.api` (prijava `deploy/nap.sh`) | 10 s |
 | Promet na cestah, za vlak/avto — **še brez prikaza** | NAP FCD NCUP `b2b.fcd.datexii33.status` + potovalni časi AC DARS, `promet.sqlite` | 1 min |
 | Tir vlaka | tabla postaje potniski.sz.si, Chrome | ~10 min/postajo |
@@ -89,6 +91,7 @@ kajros/
   ovire_sz.py    ovire s strani SŽ, svoja nit; vodi slovenske, derp.si le ob molku
   zamude_lpp.py  zamude mestnega LPP z zaslonov LPP, svoja nit; vozilo -> vožnja prek derp.si
   nap.py         lege IJPP z NAP (SIRI-VM), svoja nit; vodi lege in zamude medkrajevnih
+  marprom.py     mestni Maribor z Marpromovega API-ja, svoja nit: vožnja po njegovih prihodih, zamuda iz leg
   promet.py      promet na cestah z NAP (FCD, AC), svoja nit in `promet.sqlite`
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   stik.py        sporočila obiskovalcev; obvestila.py skrbnik potnikom (z rokom); donacije.py Ko-fi brez imena

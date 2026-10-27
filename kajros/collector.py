@@ -737,7 +737,8 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
         # Pri prevoznikih, ki jih vodi NAP, je vir zamud lega sama: vozilo z
         # lego v njem je.
         stevec[0] += (iz_lege.brez_feeda(r["trip_id"], zdaj.timestamp())
-                      and not iz_lege.nap_vodi(r["agency"], zdaj.timestamp()))
+                      and not iz_lege.nap_vodi(r["agency"], zdaj.timestamp())
+                      and r["agency"] not in iz_lege.SAMO_IZ_LEGE)
         stevec[1] += not r["ima"]
         stevec[2] += 1
     return out
