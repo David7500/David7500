@@ -418,6 +418,46 @@ def _zazeni_opozorila() -> None:
                      name="kajros-opozorila").start()
 
 
+#: Po zagonu toliko počakamo z dopolnitvijo voznega reda: najprej zajem.
+DOPOLNI_PO_S = 120
+
+
+def manjkajoci_viri(conn) -> list[str]:
+    """Mestni vir, ki je vklopljen, v bazi pa nima nobene vožnje.
+
+    Tako je ob prvem zagonu z novim virom (Marprom, 27. 10. 2026): do
+    osvežitve ob 4.20 naslednji dan bi bili mariborski avtobusi na
+    zemljevidu brez vožnje in brez zamude, na tabli jih ne bi bilo.
+    """
+    out = []
+    for vklop, agency in ((config.LPP_ENABLED, "lpp"), (config.MARPROM, "marprom")):
+        if vklop and not conn.execute(
+                "SELECT 1 FROM trip WHERE agency = ? LIMIT 1", (agency,)).fetchone():
+            out.append(agency)
+    return out
+
+
+def _dopolni_v_ozadju(refresh_mode: str, manjka: list[str]) -> None:
+    """Osvežitev voznega reda v svoji niti, ne v zajemni zanki: podnevi ta
+    traja več minut (27. 10. 2026: 4,5 min ob 4.20) in zajem derp.si bi toliko
+    stal. Ista pot kot vsak dan ob 4.20 (`refresh_timetable`)."""
+    def delo():
+        if _stop.wait(DOPOLNI_PO_S):
+            return
+        _log(f"vozni red brez {', '.join(manjka)} -- osvežujem zdaj, ne ob {config.okolje('REFRESH_HOUR', '4')}.20")
+        conn = db.connect()
+        try:
+            refresh_timetable(conn, refresh_mode)
+        except Exception as exc:          # noqa: BLE001 -- jutri ob 4.20 znova
+            conn.rollback()
+            _log(f"dopolnitev voznega reda ni uspela: {exc}")
+        finally:
+            conn.close()
+        if _strezemo:
+            _pripni_v_ozadju()
+    threading.Thread(target=delo, daemon=True, name="kajros-dopolni").start()
+
+
 def _next_at(hour: int, minute: int) -> datetime:
     when = datetime.now(TZ).replace(hour=hour, minute=minute, second=0, microsecond=0)
     return when + timedelta(days=1) if when <= datetime.now(TZ) else when
@@ -440,6 +480,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     next_refresh = None
     if refresh_mode != "off" and refresh_hour >= 0:
         next_refresh = _next_at(refresh_hour, 20)
+        if manjka := manjkajoci_viri(conn):
+            _dopolni_v_ozadju(refresh_mode, manjka)
     # Vreme se dopolnjuje za nazaj, ne sproti -- arhiv je na voljo sele naslednji
     # dan, zato vsakic pobere zadnje tri dni in s tem povozi vcerajsnjo napoved
     # z arhivsko vrednostjo.

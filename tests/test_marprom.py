@@ -308,3 +308,28 @@ def test_zdravje_marprom():
     assert raz == zdravje.MLACNA and "5 od 7 dni" in razlog and "kopija" in razlog
     assert ocena(dobro, {"viri": [{**mv["viri"][0], "sprejet": True}]}, vr)[
         "vozni_red_marprom"][0] == zdravje.DOBRA
+
+
+def test_manjkajoci_vir_osvezi_ob_zagonu(monkeypatch):
+    """Nov vir brez voženj v bazi: osvežitev ob zagonu, ne šele ob 4.20."""
+    from kajros import server
+    c = db.connect(":memory:")
+    db.init(c)
+    monkeypatch.setattr(config, "LPP_ENABLED", True)
+    monkeypatch.setattr(config, "MARPROM", True)
+    assert server.manjkajoci_viri(c) == ["lpp", "marprom"]
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network) "
+              "VALUES('mp-1', 'mp-73', 'P7', 'mp-8860', 'bus', 'marprom', 'avtobus')")
+    assert server.manjkajoci_viri(c) == ["lpp"]
+    monkeypatch.setattr(config, "LPP_ENABLED", False)
+    assert server.manjkajoci_viri(c) == []
+
+
+def test_brez_voznega_reda_ne_bere_prihodov():
+    """Pred prvim uvozom je vsako branje prihodov zaman: vozila gredo na
+    zemljevid brez vožnje, Marpromov strežnik ne dobi zahtev."""
+    c = db.connect(":memory:")
+    db.init(c)
+    klici = []
+    st = marprom.korak(c, [_v()], ZDAJ, lambda p: klici.append(p) or [])
+    assert klici == [] and st["brez"] == {"ni_voznega_reda": 1} and st["brez_voznje"] == 1

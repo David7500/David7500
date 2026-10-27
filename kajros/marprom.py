@@ -325,10 +325,14 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
 
     # Vožnje določimo najprej vozilom, ki jo potrebujejo; prihode beremo po
     # postajališču, enkrat za vsa vozila, ki jih tam čakajo.
+    # Brez Marpromovega voznega reda za danes je vsako branje prihodov zaman
+    # (prvi zagon pred uvozom: 31 vozil, branje na vozilo vsako minuto).
     cakajo: dict[str, list[dict]] = {}
+    if not idx:
+        st["brez"]["ni_voznega_reda"] = len(vozila)
     for v in vozila:
         s = _vozila.setdefault(v["naprava"], Vozilo())
-        if potrebuje(s, v, zdaj, postanki, okna, sosedi) and v["naslednja"]:
+        if idx and potrebuje(s, v, zdaj, postanki, okna, sosedi) and v["naslednja"]:
             cakajo.setdefault(v["naslednja"], []).append(v)
     for postaja in list(cakajo)[:KLICEV_NA_OBHOD]:
         try:
