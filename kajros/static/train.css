@@ -452,6 +452,9 @@ body.ima-karto .ov-karta-odst {
     max-width: 1068px; padding: 16px 24px var(--orodna-prostor);
   }
   .ov-zdaj { position: sticky; top: 12px; flex: none; width: 420px; }
+  /* Lepljiv stolpec je svoj stacking context: z-index razširjenega zemljevida
+     ne seže iz njega in pike postankov desno (z-index 1) so ležale čez. */
+  .ov-zdaj:has(.run-map-wrap.is-max) { z-index: 1200; }
   .ov-pot { flex: 1 1 auto; min-width: 0; max-width: 560px; margin-top: 6px; }
 }
 
