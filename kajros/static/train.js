@@ -327,12 +327,13 @@ function zamudaCipHtml(v) {
 }
 
 // Beseda, od kod je številka. Brez nje je „+9 min“ videti kot meritev, prav
-// pri postanku, ki ga potnik dejansko prebere.
+// pri postanku, ki ga potnik dejansko prebere. Naša napoved besede nima: ura
+// naprej je napoved sama po sebi, „ocena“ pa se je brala kot gumb za
+// ocenjevanje (David, 28. 10. 2026). Beseda ostane izjemam.
 function vrstaHtml(znak) {
-  if (jeNadomestni()) return "";
+  if (jeNadomestni() || znak === "ocena") return "";
   if (znak === "v živo") return '<span class="ov-vrsta je-zivo"><i aria-hidden="true"></i>v živo</span>';
-  return `<span class="ov-vrsta${znak === "ocena" ? " je-ocena" : znak === "običajno" ? " je-obicajno" : ""}">${
-    escapeHtml(znak)}</span>`;
+  return `<span class="ov-vrsta${znak === "običajno" ? " je-obicajno" : ""}">${escapeHtml(znak)}</span>`;
 }
 
 // Tir s table SŽ ob imenu postaje; sprememba z besedo (`oznake.md`, „Tir“).
@@ -379,6 +380,9 @@ function odstevanjeBesedilo(o) {
   return o.beseda || `čez ${o.n}${o.enota ? ` ${o.enota}` : ""}`;
 }
 
+// Žeton zamude stoji ob prečrtanem voznem redu, ne ob veliki uri: „11:32
+// +21 min“ se je bralo kot seštevek (David, 28. 10. 2026). Ob voznem redu je
+// račun pravi: 11:11 + 21 min = 11:32.
 function heroHtml(vrh, novo) {
   const { s, kaj, v, o } = vrh;
   const run = state.run;
@@ -411,9 +415,10 @@ function heroHtml(vrh, novo) {
       </div>
       <div class="ov-info">
         <div class="ov-kje">${SVG_PIN}<span>${oznakaCilja(kaj, v)}</span><b>${escapeHtml(lepoIme(s.name))}</b></div>
-        <div class="ov-ura${novo ? " je-novo" : ""}"><span class="ov-ura-cas">${cas}</span>${zamudaCipHtml(v)}</div>
-        <div class="ov-cipi">${tirCipHtml(s)}${vrstaHtml(v.znak)}${cas !== sched
-          ? `<span class="ov-vr">vozni red <s>${sched}</s></span>` : ""}${vremeHtml(s, v)}</div>
+        <div class="ov-ura${novo ? " je-novo" : ""}"><span class="ov-ura-cas">${cas}</span>
+          <span class="ov-razlika">${cas !== sched ? `<span class="ov-vr">vozni red <s>${sched}</s></span>` : ""}${
+            zamudaCipHtml(v)}</span></div>
+        <div class="ov-cipi">${tirCipHtml(s)}${vrstaHtml(v.znak)}${vremeHtml(s, v)}</div>
       </div>
     </div>
     ${vrstice.join("")}`;
