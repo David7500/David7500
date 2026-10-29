@@ -13,7 +13,7 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_vec.html" import list as vec_list %}
-{% from "_stat.html" import glava, trak, stolpci, noga %}
+{% from "_stat.html" import glava, trak, stolpci, noga, razlaga %}
 {% from "_stat_relacija.html" import relacija as relacija_k %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
@@ -75,9 +75,9 @@
     {% set p = sz.potniki if sz and sz.potniki else none %}
     {% if p and p.n >= min_prehodov %}
     <section class="st-k st-ton">
-      <h2>Ko zemljevid SŽ pokaže, da je vlak odpeljal …</h2>
-      <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je vlak še stal vsaj 2 minuti</span></div>
-      <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }} odhodov ({{ p.od | dan }}–{{ p.do | dan }}).{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je na zemljevidu odpeljal {{ (p.najhujsi[0].prej_s / 60) | round | int }} min, preden je res.{% endif %}</p>
+      <h2>Vlak na zemljevidu SŽ odpelje, preden res odpelje</h2>
+      <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je bil vlak še na postaji vsaj 2 minuti, ko ga je uradni zemljevid že kazal na poti</span></div>
+      <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }} odhodov ({{ p.od | dan }}–{{ p.do | dan }}).{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je stal še {{ p.najhujsi[0].stal_min }} min.{% endif %}</p>
       <a class="st-naprej" href="/statistika/sz">Kaj še kažejo podatki SŽ ›</a>
     </section>
     {% endif %}
@@ -106,6 +106,8 @@
     </section>
     {% endif %}
     </div>
+
+    {{ razlaga() }}
 
     {{ noga() }}
   </main>

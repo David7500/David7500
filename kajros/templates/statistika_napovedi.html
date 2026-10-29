@@ -85,7 +85,14 @@
     {% endif %}
     </div>
 
-    <p class="st-noga">Merimo sami, vsak dan: kar bi aplikacija pokazala, se shrani, resnica se dopiše, ko vozilo postajo prevozi. Izračunano {{ izracunano | ura_dneva }}.</p>
+    <section class="st-k st-razlaga">
+      <h2>Kako merimo</h2>
+      <p><b>Pogled</b>: kaj bi aplikacija pokazala za postajo, do katere ima vlak še {{ horizont_vlak }} minut (avtobus {{ horizont_bus }}). Zapišemo ga za vsako postajo vsake vožnje, pri avtobusih vsake pete; ko vozilo postajo prevozi, dopišemo, kaj se je zgodilo.</p>
+      <p><b>Povprečna napaka</b>: za koliko minut je bila številka mimo, v katerokoli smer. <b>V minuti od resnice</b>: delež pogledov, kjer je zgrešila največ za minuto.</p>
+      <p><b>Kajros</b>: naša napoved. <b>Trenutna zamuda</b>: koliko vozilo zamuja zdaj, enako za vse postaje naprej; to pokaže zemljevid SŽ. Katere strani kažejo kaj, piše na strani <a href="/primerjava">Primerjava</a>. <b>Vozni red</b>: kot da zamude ni. <b>Prevoznik</b>: zamuda, ki jo prevoznik objavi za postajo naprej (le avtobusi).</p>
+      <p>Vsi načini so merjeni na istih pogledih, zato se dajo primerjati. Preračunamo jih vsako noč ob 3.30, zadnjič {{ izracunano | ura_dneva }}.</p>
+    </section>
+
     {{ noga() }}
   </main>
   {{ vec_list() }}

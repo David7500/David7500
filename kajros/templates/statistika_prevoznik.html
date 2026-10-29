@@ -14,7 +14,7 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_vec.html" import list as vec_list %}
-{% from "_stat.html" import glava, trak, stolpci, noga %}
+{% from "_stat.html" import glava, trak, stolpci, noga, razlaga %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
@@ -111,6 +111,8 @@
     </section>
     {% endif %}
     </div>
+
+    {{ razlaga() }}
 
     {{ noga() }}
   </main>

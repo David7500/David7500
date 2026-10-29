@@ -24,12 +24,13 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import threading
 import time
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, db, ocena, pristanek, stats
+from . import config, db, journey, ocena, pristanek, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -895,7 +896,7 @@ def stran_prevozniki(conn: sqlite3.Connection) -> dict:
     """`/statistika/prevozniki`: primerljivi po deležu v 5 min, ostali pod črto."""
     vsi, glava = vsi_prevozniki(conn)
     do = glava.get("do")
-    return {**glava,
+    return {**glava, "min_vozenj": MIN_VOZENJ_PRIMERJAVA, "min_dni": MIN_DNI_PRIMERJAVA,
             "primerljivi": sorted((x for x in vsi if do and primerljiv(x, do)),
                                   key=lambda x: -x["cilj"]["v5min"]),
             "premalo": [x for x in vsi if x["skupina"] != "nadomestni" and x["cilj"].get("n")
@@ -1017,6 +1018,11 @@ def stran_voznja(conn: sqlite3.Connection, pot: str) -> dict | None:
 #: Odsek pride na seznam „vozni red ne drži“ z vsaj toliko vožnjami v oknu.
 MIN_VOZENJ_ODSEK = 100
 
+#: Potnikov odhod iz GPS je trenutek, ko je vlak 200 m za postajo
+#: (`deljenje.NA_POSTAJI_M`); speljevanje do tja traja 20--30 s. Toliko
+#: štejemo v korist SŽ: „prezgodaj“ je šele, kar ostane po tem zamiku.
+POTNIK_ZAMIK_S = 30
+
 #: Prehodov potnikov je malo (61 v mesecu, 30. 9.–29. 10. 2026), a vsak je
 #: opažanje, ne sklep. Kartica pride od toliko naprej.
 MIN_PREHODOV = 20
@@ -1080,7 +1086,7 @@ def sz(conn: sqlite3.Connection, days: int, network: str,
         if dan < od_sz:
             potniki += x.get("potniki", [])
     n = v["postankov"]
-    prej = sorted(p["prej_s"] for p in potniki)
+    prej = sorted(p["prej_s"] - POTNIK_ZAMIK_S for p in potniki)
     # En primer na vožnjo: LPV 2423 je zaostal na dveh postajah zapored.
     najhujsi: dict[tuple, dict] = {}
     for p in potniki:
@@ -1115,7 +1121,9 @@ def sz(conn: sqlite3.Connection, days: int, network: str,
             "prej10": delez(sum(x >= 600 for x in prej), len(prej)),
             "kasneje1": sum(x <= -60 for x in prej),
             "mediana_min": round(stats._pct(prej, 0.5) / 60, 1) if prej else None,
-            "najhujsi": sorted(najhujsi.values(), key=lambda p: -p["prej_s"])[:3],
+            "najhujsi": [{**p, "stal_min": round((p["prej_s"] - POTNIK_ZAMIK_S) / 60)}
+                         for p in sorted(najhujsi.values(), key=lambda p: -p["prej_s"])[:3]],
+            "zamik_s": POTNIK_ZAMIK_S,
         },
         "odseki": _odseki(conn, od, do)[:6],
         "nadomestni": {"nacrt": sum(x["nacrt"] or 0 for x in nadomestni),
@@ -1254,18 +1262,78 @@ def stran_relacije(conn: sqlite3.Connection) -> dict:
     p = stats.summary_get(conn, "stat_relacije", "zeleznica")
     kartice = []
     for r in p.get("relacije", []):
-        moznosti = []
-        if r.get("avto"):
-            moznosti.append({"kaj": "avto", "t": r["avto"]["trajanje"], "x": r["avto"]})
-        for kaj in ("avtobus", "vlak"):
-            x = r.get(kaj)
-            if x and x["n"] >= MIN_VZOREC:
-                moznosti.append({"kaj": kaj, "t": x["trajanje"] or x["trajanje_vr"], "x": x})
+        moznosti = _moznosti(r, MIN_VZOREC)
         if len(moznosti) >= 2:
-            moznosti.sort(key=lambda m: m["t"])
-            najvec = max(m["t"] for m in moznosti) or 1
-            for m in moznosti:
-                m["sirina"] = round(m["t"] / najvec * 100)
             kartice.append({"od": r["od"], "do": r["do"], "moznosti": moznosti})
     return {"od": p.get("od"), "do": p.get("do"), "izracunano": p.get("computed_at"),
             "kartice": kartice}
+
+
+def _moznosti(r: dict, min_n: int) -> list[dict]:
+    """Avto, avtobus in vlak enega para po trajanju, najhitrejši prvi."""
+    moznosti = []
+    if r.get("avto"):
+        moznosti.append({"kaj": "avto", "t": r["avto"]["trajanje"], "x": r["avto"]})
+    for kaj in ("avtobus", "vlak"):
+        x = r.get(kaj)
+        if x and x["n"] >= min_n:
+            moznosti.append({"kaj": kaj, "t": x["trajanje"] or x["trajanje_vr"], "x": x,
+                             "pot": r.get("pot_" + kaj)})
+    moznosti.sort(key=lambda m: m["t"])
+    najvec = max((m["t"] for m in moznosti), default=0) or 1
+    for m in moznosti:
+        m["sirina"] = round(m["t"] / najvec * 100)
+    return moznosti
+
+
+#: Iskanje poljubnega para (David, 29. 10. 2026: „za čisto vsako relacijo,
+#: tudi male“). Parov postankov iste vožnje je za nočni izračun preveč, en
+#: par pa je poizvedba po kazalih (~10 ms): ob zahtevi, v predpomnilniku do
+#: konca okna. Pod `MIN_ISKANJE` vožnjami številke ne pokažemo, pod
+#: `MIN_VZOREC` jo pokažemo z opozorilom -- mala relacija ima malo voženj.
+MIN_ISKANJE = 10
+ISKANJE_NAJVEC = 500
+_iskanja: dict[tuple, dict] = {}
+_iskanja_zaklep = threading.Lock()
+
+
+def iskanje_relacije(conn: sqlite3.Connection, od_vnos: str, do_vnos: str,
+                     danes: date | None = None) -> dict:
+    """Vpisana para imen -> možnosti kot na `/statistika/relacije`.
+
+    Ime se razreši po omrežju (vlak „Ljubljana“, avtobus „Ljubljana AP“).
+    Avto le, kjer je par v `RELACIJE` (odsek avtoceste DARS).
+    """
+    od, do = _okno(danes)
+    imena = {net: (journey.resolve_station(conn, od_vnos, net),
+                   journey.resolve_station(conn, do_vnos, net))
+             for net in ("zeleznica", "avtobus")}
+    kljuc = (imena["zeleznica"], imena["avtobus"], do)
+    with _iskanja_zaklep:
+        r = _iskanja.get(kljuc)
+    if r is None:
+        r = {}
+        for net, kaj in (("zeleznica", "vlak"), ("avtobus", "avtobus")):
+            a, b = imena[net]
+            if a and b and a != b:
+                r[kaj] = _par(conn, net, a, b, od, do)
+                r["pot_" + kaj] = f"{a} – {b}"
+        for vlak_od, vlak_do, bus_od, bus_do, ac in RELACIJE:
+            for smer, (a, b, ba, bb) in enumerate(((vlak_od, vlak_do, bus_od, bus_do),
+                                                    (vlak_do, vlak_od, bus_do, bus_od))):
+                if ac and (imena["zeleznica"] == (a, b) or imena["avtobus"] == (ba, bb)):
+                    r["avto"] = _avto(ac[smer], od, do)
+        with _iskanja_zaklep:
+            if len(_iskanja) >= ISKANJE_NAJVEC:
+                _iskanja.pop(next(iter(_iskanja)))
+            _iskanja[kljuc] = r
+    glavna = next((imena[n] for n in ("zeleznica", "avtobus") if all(imena[n])),
+                  (od_vnos, do_vnos))
+    return {"od": glavna[0], "do": glavna[1], "moznosti": _moznosti(r, MIN_ISKANJE),
+            "malo": {kaj: r[kaj]["n"] for kaj in ("vlak", "avtobus")
+                     if r.get(kaj) and r[kaj]["n"] < MIN_ISKANJE},
+            "neznano": [v for i, v in enumerate((od_vnos, do_vnos))
+                        if not imena["zeleznica"][i] and not imena["avtobus"][i]],
+            "ista": glavna[0] == glavna[1], "okno_od": od, "okno_do": do,
+            "omrezje": "zeleznica" if all(imena["zeleznica"]) else "avtobus",
+            "min_vzorec": MIN_VZOREC}

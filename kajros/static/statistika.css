@@ -101,8 +101,63 @@
 .st-noga { margin: 22px 0 32px; font: 400 12px/1.5 var(--sans); color: var(--ink-mute); }
 .st-noga a { color: var(--ink-dim); }
 
+/* Razlaga številk (za novinarja): pod karticami, čez vso širino. */
+.st-razlaga { margin-top: 18px; }
+/* Na širokem zaslonu vrstica razlage ne sme čez ~80 znakov: berljivost. */
+.st-razlaga p, .st-predlogi li, .st-siroka > p { max-width: 80ch; }
+.st-razlaga p b { color: var(--ink); font-weight: 600; }
+
+/* Predlogi SŽ: številčen seznam z odebeljenim začetkom. */
+.st-predlogi { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px;
+               font: 400 14px/1.5 var(--sans); color: var(--ink-dim); }
+.st-predlogi b { color: var(--ink); font-weight: 600; }
+
+/* Tabela za računalnik (prevozniki). Na telefonu jo nadomesti seznam. */
+.st-tabela-ovoj { display: none; }
+.st-tabela { width: 100%; border-collapse: collapse; font: 400 14px/1.35 var(--sans); color: var(--ink); }
+.st-tabela th { font: 500 12.5px/1.3 var(--sans); color: var(--ink-mute); text-align: right;
+                padding: 8px 10px; border-bottom: 1px solid var(--line-firm); vertical-align: bottom; }
+.st-tabela td { padding: 10px; text-align: right; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 13.5px; }
+.st-tabela th:first-child, .st-tabela td:first-child { text-align: left; font-family: var(--sans); }
+.st-tabela td:first-child a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.st-tabela td .st-trak { display: inline-block; width: 72px; height: 8px; vertical-align: middle; margin-right: 8px; }
+.st-tabela tr.pod-crto td { color: var(--ink-mute); }
+@media (hover: hover) { .st-tabela td:first-child a:hover { text-decoration: underline; } }
+
+/* Namizje (David, 29. 10. 2026: „novinarji gledajo iz računalnikov“): širša
+   stran, kartice v stolpcih, kar je pregled čez vse (razlaga, tabela,
+   predlogi) čez vso širino; stolpci po dnevih višji. */
+/* Naslov skupine kartic v mreži: razmik da mreža. */
+.st-kartice > .st-glava { margin: 6px 0 -4px; }
+
+/* Iskanje relacije: polja zapolnjena (M3), na širokem v eni vrsti. */
+.st-iskanje .polja { display: grid; gap: 10px; }
+.st-iskanje label { display: grid; gap: 6px; font: 500 13px/1.2 var(--sans); color: var(--ink-dim); }
+.st-iskanje input {
+  height: 48px; padding: 0 14px; border: 0; border-radius: var(--r-sm);
+  background: var(--m-najvisja); color: var(--ink); font: 400 16px var(--sans);
+}
+.st-iskanje input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.st-iskanje button {
+  height: 48px; padding: 0 24px; border: 0; border-radius: var(--r-pilula);
+  background: var(--m-kont); color: var(--m-na-kont); font: 600 15px var(--sans);
+}
+@media (min-width: 600px) {
+  .st-iskanje .polja { grid-template-columns: 1fr 1fr auto; align-items: end; }
+}
+
 @media (min-width: 900px) {
-  .st-kartice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .st { max-width: 1240px; }
+  .st h1 { font-size: 36px; }
+  .st-glava { font-size: 15px; max-width: 80ch; }
+  .st-kartice { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+                align-items: start; gap: 18px; }
+  .st-siroka { grid-column: 1 / -1; }
+  .st-siroka p { max-width: 90ch; }
+  .st-stolpci, .st-dnevi { height: 72px; }
+  .st-ure { height: 64px; }
+  .st-tabela-ovoj { display: block; overflow-x: auto; }
+  .st-samo-telefon { display: none; }
 }
 
 /* Vlak po dnevih: stolpec = končna zamuda tistega dne v barvi razreda

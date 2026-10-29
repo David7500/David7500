@@ -222,10 +222,10 @@ def test_zamuda_z_besedo_ne_z_minusom():
     assert statistika.odstotek(58.5) == "59 %"      # floor(x + 0.5), ne bančno
 
 
-def _zahteva(pot: str):
+def _zahteva(pot: str, poizvedba: bytes = b""):
     from starlette.requests import Request
     return Request({"type": "http", "method": "GET", "path": pot, "raw_path": pot.encode(),
-                    "query_string": b"", "headers": [(b"host", b"kajros.app")],
+                    "query_string": poizvedba, "headers": [(b"host", b"kajros.app")],
                     "scheme": "https", "server": ("kajros.app", 443)})
 
 
@@ -314,7 +314,7 @@ def test_stran_sz_se_izrise(strani, monkeypatch):
     monkeypatch.setattr(statistika, "MIN_PREHODOV", 0)
     odgovor = strani.statistika_sz(_zahteva("/statistika/sz"))
     assert odgovor.status_code == 200
-    assert "Kaj kažejo podatki SŽ" in odgovor.body.decode()
+    assert "Uradni podatki SŽ in resnica" in odgovor.body.decode()
 
 
 def test_relacija_vlak_trajanje_in_tocnost():
@@ -327,6 +327,22 @@ def test_relacija_vlak_trajanje_in_tocnost():
     assert p["v5min"] == 50.0
     assert statistika._par(c, "zeleznica", "Celje", "Ajdovščina", od, do) is None   # obratna smer ne vozi
     assert statistika.relacije(c, 90, "avtobus")["runs"] == 0
+
+
+def test_iskanje_poljubne_relacije(strani, monkeypatch):
+    """Vpisano ime se razreši kot v iskalniku; odgovor ni za iskalnike."""
+    monkeypatch.setattr(statistika, "MIN_ISKANJE", 1)
+    statistika._iskanja.clear()
+    html = strani.statistika_relacije(
+        _zahteva("/statistika/relacije", "od=ajdov&do=Celje".encode())).body.decode()
+    assert "Ajdovščina → Celje" in html and "noindex" in html
+    assert "Ajdovščina – Celje" in html           # pot, po kateri so vožnje štete
+    nazaj = statistika.iskanje_relacije(strani._conn(), "Celje", "Ajdovščina", _danes())
+    assert nazaj["moznosti"] == []                 # obratna smer ne vozi
+    neznano = strani.statistika_relacije(
+        _zahteva("/statistika/relacije", "od=xqzzy&do=Celje".encode())).body.decode()
+    assert "Tega imena ne najdem" in neznano and "„xqzzy“" in neznano
+    statistika._iskanja.clear()
 
 
 def test_stran_relacij_se_izrise(strani):

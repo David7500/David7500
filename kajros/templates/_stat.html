@@ -28,3 +28,15 @@
 {% macro noga() -%}
     <p class="st-noga">Številke so naše meritve, ne uradne: vsaka vožnja z živim podatkom, zamuda na zadnji postaji, kjer jo je vir še poročal. Vir: NAP, SŽ, LPP, Marprom, Ridango (CC BY-SA 4.0). <a href="/statistika/napovedi">Kako merimo napovedi</a> · <a href="/primerjava">Kje še preveriti zamude</a></p>
 {%- endmacro %}
+
+{#- Kaj pomenijo številke: ista razlaga na vseh straneh (novinar primerja). -#}
+{% macro razlaga(min_vozenj=None, min_dni=None) -%}
+    <section class="st-k st-razlaga">
+      <h2>Kaj pomenijo številke</h2>
+      <p><b>V 5 min na cilju</b>: delež voženj, ki so na zadnjo postajo, kjer jih je vir še poročal, prišle z zamudo največ 5 minut (zaokroženo na minuto; prej in točno štejeta). Enota je vožnja na dan, ne postanek.</p>
+      <p><b>Polovica zamudi vsaj</b> je mediana zamude na cilju, <b>vsaka deseta vsaj</b> 90. percentil. <b>Nad 15 min</b>: delež voženj z več kot 15 minutami zamude. <b>Običajno</b> ob vožnji ali postaji je mediana.</p>
+      <p><b>Odpelje vsaj 2 min prej</b>: delež vmesnih postankov, kjer je vozilo odpeljalo vsaj 2 minuti pred voznim redom (večinoma iz GPS vozila; na postajališču brez potnikov avtobus pelje mimo). <b>Voženj v živo</b>: delež voženj po voznem redu, o katerih je vir povedal vsaj eno zamudo.</p>
+      <p><b>Napoved</b>: kaj je aplikacija pokazala 25 minut pred vlakom (15 pred avtobusom) in kaj se je zgodilo, povprečna napaka v minutah; vsi načini na istih pogledih.</p>
+      <p>{% if min_vozenj %}Prevoznik pride v primerjavo z vsaj {{ min_vozenj | stevilo }} vožnjami in {{ min_dni }} dnevi zajema v zadnjih 30 dneh. {% endif %}Vse so naše meritve, ne uradne številke prevoznikov. Preračunamo jih vsako noč ob 3.30 iz zamud, ki jih zajemamo ves dan; stran jih le prebere.</p>
+    </section>
+{%- endmacro %}

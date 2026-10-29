@@ -1036,11 +1036,19 @@ def statistika_sz(request: Request):
 
 @app.get("/statistika/relacije", response_class=HTMLResponse, include_in_schema=False)
 def statistika_relacije(request: Request):
-    """Vlak, avtobus ali avto na istih parih (`statistika.stran_relacije`)."""
+    """Vlak, avtobus ali avto na istih parih (`statistika.stran_relacije`).
+
+    Z `?od=&do=` še poljuben par (`statistika.iskanje_relacije`, ob zahtevi
+    in predpomnjeno); tak odgovor je `noindex`, v zemljevidu strani ga ni.
+    """
+    vnos = {k: request.query_params.get(k, "").strip()[:80] for k in ("od", "do")}
     with _conn() as conn:
         p = statistika.stran_relacije(conn)
+        iskanje = (statistika.iskanje_relacije(conn, vnos["od"], vnos["do"])
+                   if vnos["od"] and vnos["do"] else None)
     opis = "Ljubljana–Maribor, Koper, Celje, Kranj, Jesenice: koliko traja vlak, avtobus in avto z zamudo vred in kako točno pridejo."
-    return templates.TemplateResponse(request, "statistika_relacije.html", {**p, "opis": opis})
+    return templates.TemplateResponse(request, "statistika_relacije.html",
+                                      {**p, "opis": opis, "vnos": vnos, "iskanje": iskanje})
 
 
 def _stran_voznje(request: Request, pot: str):

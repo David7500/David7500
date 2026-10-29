@@ -12,7 +12,7 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_vec.html" import list as vec_list %}
-{% from "_stat.html" import glava, noga %}
+{% from "_stat.html" import glava, noga, razlaga %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
@@ -25,7 +25,34 @@
     <h1>Kdo vozi točno?</h1>
     <p class="st-glava">Delež voženj, ki pridejo na cilj v 5 minutah · zadnjih 30 dni, do {{ do | dan }}</p>
 
-    <ul class="st-seznam">
+    {#- Računalnik: tabela z vsemi stolpci (novinar primerja vrstice); telefon: seznam. -#}
+    <div class="st-tabela-ovoj">
+      <table class="st-tabela">
+        <thead><tr>
+          <th>prevoznik</th><th>v 5 min na cilju</th><th>polovica zamudi vsaj</th>
+          <th>vsaka deseta vsaj</th><th>nad 15 min</th><th>odpelje vsaj 2 min prej</th>
+          <th>voženj v živo</th><th>napoved: kajros / prevoznik</th><th>voženj</th>
+        </tr></thead>
+        <tbody>
+          {% for x in primerljivi + premalo %}
+          {% set c = x.cilj %}{% set n = x.napoved %}
+          <tr{% if x in premalo %} class="pod-crto"{% endif %}>
+            <td><a href="/statistika/prevoznik/{{ x.slug }}">{{ x.ime }}{% if x.network == "zeleznica" %} (vlaki){% endif %}</a>{% if x in premalo %}<br><span class="st-drobno">še premalo{% if x.zajem_od %}, od {{ x.zajem_od | dan }}{% endif %}</span>{% endif %}</td>
+            <td><span class="st-trak"><i class="{{ 'vlak' if x.network == 'zeleznica' else 'bus' }}" style="width:{{ c.v5min }}%"></i></span>{{ c.v5min | odstotek }}</td>
+            <td>{{ c.mediana_min | zamuda_min }}</td>
+            <td>{{ c.p90_min | zamuda_min }}</td>
+            <td>{{ c.nad15 | odstotek }}</td>
+            <td>{% if x.network == "zeleznica" %}—{% else %}{{ x.prezgodaj.prej2 | odstotek }}{% endif %}</td>
+            <td>{{ x.pokritost | odstotek if x.pokritost is not none else "—" }}</td>
+            <td>{% if n.parno.prevoznik.n and n.parno.prevoznik.n >= 0.2 * (n.vse.nasa.n or 1) %}{{ n.parno.nasa.mae_min | decimalno }} / {{ n.parno.prevoznik.mae_min | decimalno }}{% elif n.vse.nasa.n %}{{ n.vse.nasa.mae_min | decimalno }} / —{% else %}—{% endif %}</td>
+            <td>{{ c.n | stevilo }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="st-seznam st-samo-telefon">
       {% for x in primerljivi %}
       <li><a href="/statistika/prevoznik/{{ x.slug }}">
         <span class="ime">{{ x.ime }}{% if x.network == "zeleznica" %} (vlaki){% endif %}</span>
@@ -36,8 +63,8 @@
     </ul>
 
     {% if premalo %}
-    <h2 class="st-glava" style="margin-top:22px">Še premalo za primerjavo</h2>
-    <ul class="st-seznam">
+    <h2 class="st-glava st-samo-telefon" style="margin-top:22px">Še premalo za primerjavo</h2>
+    <ul class="st-seznam st-samo-telefon">
       {% for x in premalo %}
       <li><a href="/statistika/prevoznik/{{ x.slug }}">
         <span class="ime">{{ x.ime }}</span>
@@ -47,6 +74,8 @@
       {% endfor %}
     </ul>
     {% endif %}
+
+    {{ razlaga(min_vozenj, min_dni) }}
 
     {{ noga() }}
   </main>
