@@ -1,0 +1,87 @@
+{#
+  /statistika/sz -- kaj kažejo uradni podatki SŽ in kaj je res. Javno in
+  poimensko, samo dejstva z vzorcem in obdobjem (David, 29. 10. 2026), brez
+  posmeha. Vir `statistika.sz` (nočni povzetek `stat_sz`).
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Zemljevid SŽ: vlak odpelje, preden odpelje — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, trak, noga %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page">
+  <main class="home st">
+    {{ glava(nazaj=True) }}
+    <h1>Kaj kažejo podatki SŽ</h1>
+    <p class="st-glava">Zemljevid vlakov SŽ, ki ga beremo vsakih 5 sekund, proti temu, kar se je zgodilo · {{ od | dan }}–{{ do | dan }}</p>
+
+    <div class="st-kartice">
+    {% set p = potniki %}
+    {% if p.n >= min_prehodov %}
+    <section class="st-k st-ton">
+      <h2>Ko zemljevid SŽ pokaže, da je vlak odpeljal …</h2>
+      <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je vlak še stal vsaj 2 minuti</span></div>
+      <p>Primerjava z GPS potnikov, ki so na vlaku delili lego: {{ p.n | stevilo }} odhodov s postaje na {{ p.voznj }} vožnjah, {{ p.od | dan }}–{{ p.do | dan }}. Zemljevid je vlak premaknil s postaje običajno {{ p.mediana_min | decimalno }} min prezgodaj; vsaj 10 min prezgodaj pri {{ p.prej10 | odstotek }}.{% if p.kasneje1 %} Pozneje kot res {{ p.kasneje1 }}-krat.{% else %} Pozneje kot res nikoli.{% endif %}</p>
+      {% for x in p.najhujsi %}
+      <p>{{ x.st }}, {{ x.dan | dan }}, {{ x.postaja }}: na zemljevidu odpeljal {{ (x.prej_s / 60) | round | int }} min, preden je res.</p>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% set c = popravki %}
+    {% if c.postankov >= min_vzorec %}
+    <section class="st-k">
+      <h2>Zamuda, ki se pokaže pozneje</h2>
+      <div class="st-velika"><b class="st-vlak-b">{{ c.dvig2 | odstotek }}</b><span>postankov SŽ pozneje dvigne zamudo za vsaj 2 min</span></div>
+      <p>Ko vlak stoji, ga zemljevid kaže na poti, zamudo pa dviguje minuto za minuto. Za vsaj 10 min pri {{ c.dvig10 | odstotek }} postankov{% if c.mediana_min %}, popravek je običajno {{ c.mediana_min | minute }}{% endif %}.</p>
+      {% if izhodisca.n >= min_vzorec %}<p>Na začetni postaji: {{ izhodisca.lazno | odstotek }} odhodov zemljevid pokaže kot točne, vlak pa še vsaj 2 min stoji.</p>{% endif %}
+      <div class="st-drobno">{{ c.postankov | stevilo }} postankov, brez končnih</div>
+    </section>
+    {% endif %}
+
+    {% if odseki %}
+    <section class="st-k">
+      <h2>Kje vozni red ne drži</h2>
+      <div class="st-drobno">delež voženj, ki na odseku izgubijo vsaj 2 min, zadnjih 30 dni</div>
+      <ul class="st-seznam">
+        {% for o in odseki %}
+        <li><div class="vr"><span class="ime">{{ o.od }} → {{ o.do }}</span><span class="pc">{{ o.izguba2 | odstotek }}</span><span class="drobno">{{ o.n | stevilo }} voženj · običajno {{ o.mediana_min | zamuda_min }}</span></div></li>
+        {% endfor %}
+      </ul>
+      <p>Zakaj (dela na progi, en tir, čakanje na križanje), podatki ne povedo.</p>
+    </section>
+    {% endif %}
+
+    {% if nadomestni.nacrt %}
+    <section class="st-k">
+      <h2>Nadomestni avtobusi</h2>
+      <div class="st-velika"><b>{{ nadomestni.z_meritvijo | stevilo }}</b><span>od {{ nadomestni.nacrt | stevilo }} voženj z zamudo v živo</span></div>
+      <p>SŽ za nadomestne avtobuse zamud ne objavlja; kjer ustavijo, je le v PDF na njihovi strani. Velja vozni red.</p>
+    </section>
+    {% endif %}
+
+    {% if napoved.nasa.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>Napovedi SŽ nima</h2>
+      <p>SŽ je napoved za postajo naprej objavila pri {{ napoved.delez_prevoznika | decimalno }} % pogledov; sicer kaže le trenutno zamudo. Prenesena naprej zgreši povprečno za {{ napoved.prenos.mae_min | decimalno }} min, kajros za {{ napoved.nasa.mae_min | decimalno }}.</p>
+      <a class="st-naprej" href="/statistika/napovedi">Kako merimo ›</a>
+    </section>
+    {% endif %}
+    </div>
+
+    <p class="st-noga">Zemljevid vlakov SŽ (potniski.sz.si) beremo vsakih 5 s, SŽ ga preračuna na 15 s. Odhod, ki ga pokaže, je sklep iz voznega reda in zadnje zamude; resnico prinese GPS potnika na vlaku. Izračunano {{ izracunano | ura_dneva }}.</p>
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>

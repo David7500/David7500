@@ -29,7 +29,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, ocena, pristanek, stats
+from . import config, db, ocena, pristanek, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -61,6 +61,15 @@ LINIJSKI = frozenset({"lpp", "1118", "marprom", "kranj"})
 #: deležu pogledov. SŽ jo ima pri 0,5 % (429 od 87 055): to ni napoved, ki bi
 #: jo potnik videl, in primerjava na tem izrezu bi bila anekdota.
 MIN_DELEZ_PREVOZNIKA = 0.2
+
+#: Od tega dne vodi naš bralec zemljevida SŽ (`zamude_sz`); prej so zamude
+#: vlakov prihajale prek posrednikov z zamikom in serija popravkov v `obs`
+#: ni opis zemljevida SŽ.
+SZ_VODI_OD = "2026-10-11"
+
+#: Različica dnevnih agregatov. Ob novi vrsti ali spremembi pomena jo povečaj:
+#: `dopolni` takrat izračuna vse dni znova, kolikor viri še segajo.
+STAT_DAN_VERZIJA = 2
 
 #: Meje histograma zamude v minutah; kar je zunaj, gre v robni razred. Strop
 #: `stats.MAX_REALNA_ZAMUDA_S` (3 h) je zgoraj že pri branju.
@@ -280,6 +289,71 @@ def _dan_prevozniki(conn: sqlite3.Connection, dan: str) -> dict[str, dict]:
     return out
 
 
+# ---------------------------------------------------------------- SŽ po dnevu
+
+def _dan_sz(conn: sqlite3.Connection, dan: str) -> dict | None:
+    """Kako zemljevid SŽ pokaže odhod in kako ga pozneje popravi, en dan.
+
+    Vrstica zemljevida SŽ nosi naslednjo postajo in odhodno zamudo zadnje
+    prevožene (`zamude_sz`). Prvi zapis postanka v `obs` je trenutek, ko je
+    zemljevid vlak premaknil čez postajo; če se njegova zamuda nato dvigne,
+    je SŽ odhod pozneje popravil -- vmes je vlak kazal na poti, ko je stal
+    (MERITVE 29. 10. 2026: mediana popravek/trajanje 0,88 -- minuto na minuto).
+    Resnica, kjer je: prehod potnika (`deljenje_prehod`, GPS telefona).
+    """
+    if dan < SZ_VODI_OD:
+        return None
+    vrste = conn.execute("""
+        SELECT o.trip_id, o.stop_seq, o.observed_at, COALESCE(o.delay_dep, o.delay_arr),
+               t.first_seq, t.last_seq, t.train_no
+        FROM obs o JOIN trip t ON t.trip_id = o.trip_id
+        WHERE o.service_date = ? AND t.network = 'zeleznica' AND t.mode != 'bus'
+          AND COALESCE(o.delay_dep, o.delay_arr) IS NOT NULL
+        ORDER BY o.trip_id, o.stop_seq, o.observed_at""", (dan,)).fetchall()
+    if not vrste:
+        return None
+    serije: dict[tuple, list] = defaultdict(list)
+    meja: dict[str, tuple] = {}
+    for trip, seq, ts, d, prvi, zadnji, no in vrste:
+        serije[(trip, seq)].append((ts, d))
+        meja[trip] = (prvi, zadnji, no)
+    v = {"postankov": 0, "dvig1": 0, "dvig2": 0, "dvig5": 0, "dvig10": 0, "dvig_hist": Counter(),
+         "izhodisc": 0, "izhodisce_lazno": 0, "potniki": []}
+    for (trip, seq), sr in serije.items():
+        prvi, zadnji, _ = meja[trip]
+        if seq == zadnji:
+            continue    # cilj: SŽ zamudo ob prihodu ponastavi, prva šteje (`zamude_sz`)
+        dvig = sr[-1][1] - sr[0][1]
+        v["postankov"] += 1
+        for prag, k in ((60, "dvig1"), (120, "dvig2"), (300, "dvig5"), (600, "dvig10")):
+            v[k] += dvig >= prag
+        if dvig >= 60:
+            v["dvig_hist"][min(stats._minute(dvig), HIST_DO)] += 1
+        if seq == prvi:
+            v["izhodisc"] += 1
+            v["izhodisce_lazno"] += sr[0][1] <= 30 and sr[-1][1] >= 120
+    # Tabelo deljenja ustvari `deljenje.init` ob zagonu strežnika; `kajros
+    # summarize` na golem stroju je nima.
+    ima_deljenje = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                                "AND name = 'deljenje_prehod'").fetchone()
+    for trip, seq, odhod, dep_s, ime in [] if not ima_deljenje else conn.execute("""
+            SELECT d.trip_id, d.stop_seq, d.odhod_ts, s.dep_s, st.name
+            FROM deljenje_prehod d JOIN trip t ON t.trip_id = d.trip_id
+            JOIN sched s ON s.trip_id = d.trip_id AND s.stop_seq = d.stop_seq
+            JOIN station st ON st.stop_id = s.stop_id
+            WHERE d.service_date = ? AND t.network = 'zeleznica' AND t.mode != 'bus'
+              AND d.odhod_ts IS NOT NULL AND s.dep_s IS NOT NULL""", (dan,)):
+        sr = serije.get((trip, seq))
+        if not sr:
+            continue
+        v["potniki"].append({"st": meja[trip][2], "postaja": ime, "dan": dan,
+                             # > 0: zemljevid je vlak pokazal na poti, preden je odpeljal
+                             "prej_s": odhod - sr[0][0],
+                             "zamuda_s": odhod - (stats.polnoc(dan) + dep_s)})
+    v["dvig_hist"] = {str(m): c for m, c in sorted(v["dvig_hist"].items())}
+    return v
+
+
 # ---------------------------------------------------------------- dopolnjevanje
 
 def _vir_od(conn: sqlite3.Connection) -> str | None:
@@ -299,6 +373,10 @@ def dopolni(conn: sqlite3.Connection, danes: date | None = None,
     if od is None:
         return []
     zdaj = int(time.time())
+    # Nova različica (nova vrsta, spremenjen pomen) = vsi dnevi znova -- a
+    # brez brisanja: vrsta, katere vir je že obrezan (senca po 30 dneh),
+    # obdrži staro vrstico (`_zapisi_dan`).
+    znova = db.get_meta(conn, "stat_dan_verzija") != str(STAT_DAN_VERZIJA)
     obstojece = {d: ob for d, ob in conn.execute(
         "SELECT dan, MIN(izracunano) FROM stat_dan GROUP BY dan")}
     dnevi = []
@@ -306,26 +384,45 @@ def dopolni(conn: sqlite3.Connection, danes: date | None = None,
     while d <= vceraj:
         dan = d.isoformat()
         nedavno = (vceraj - d).days < prepisi
-        if dan not in obstojece or (nedavno and zdaj - obstojece[dan] > SVEZE_S):
+        if znova or dan not in obstojece or (nedavno and zdaj - obstojece[dan] > SVEZE_S):
             dnevi.append(dan)
         d += timedelta(days=1)
     if not dnevi:
         return []
     napovedi = _dnevi_napovedi(conn, dnevi)
     for dan in dnevi:
-        vrstice = [(dan, "napoved", k, json.dumps(v, separators=(",", ":")), zdaj)
-                   for k, v in napovedi.get(dan, {}).items()]
-        vrstice += [(dan, "prevoznik", k, json.dumps(v, separators=(",", ":")), zdaj)
-                    for k, v in _dan_prevozniki(conn, dan).items()]
-        # Prazen dan dobi vrstico, sicer bi se vsako noč računal znova.
-        if not vrstice:
-            vrstice = [(dan, "prazno", "", "{}", zdaj)]
-        conn.execute("DELETE FROM stat_dan WHERE dan = ?", (dan,))
-        conn.executemany(
-            "INSERT INTO stat_dan (dan, vrsta, kljuc, podatki, izracunano) "
-            "VALUES (?, ?, ?, ?, ?)", vrstice)
+        sz = _dan_sz(conn, dan)
+        _zapisi_dan(conn, dan, zdaj, {
+            "napoved": napovedi.get(dan, {}),
+            "prevoznik": _dan_prevozniki(conn, dan),
+            "sz": {"zeleznica|1161": sz} if sz is not None else {},
+        })
+    if znova:
+        db.set_meta(conn, "stat_dan_verzija", str(STAT_DAN_VERZIJA))
         conn.commit()
     return dnevi
+
+
+def _zapisi_dan(conn: sqlite3.Connection, dan: str, zdaj: int,
+                po_vrsti: dict[str, dict]) -> None:
+    """Zamenja vrste dneva, ki jih vir še ima; prazne pusti pri miru.
+
+    Senca živi 30 dni: ponoven izračun starega dne vrne prazno `napoved`, in
+    brisanje bi za vedno izgubilo, kar se je shranilo, dokler je vir bil.
+    """
+    for vrsta, vrstice in po_vrsti.items():
+        if not vrstice:
+            continue
+        conn.execute("DELETE FROM stat_dan WHERE dan = ? AND vrsta = ?", (dan, vrsta))
+        conn.executemany(
+            "INSERT INTO stat_dan (dan, vrsta, kljuc, podatki, izracunano) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [(dan, vrsta, k, json.dumps(v, separators=(",", ":")), zdaj)
+             for k, v in vrstice.items()])
+    # Dan brez vsega dobi oznako, sicer bi se vsako noč računal znova.
+    conn.execute("INSERT OR REPLACE INTO stat_dan (dan, vrsta, kljuc, podatki, izracunano) "
+                 "VALUES (?, 'oznaka', '', '{}', ?)", (dan, zdaj))
+    conn.commit()
 
 
 def _beri(conn: sqlite3.Connection, vrsta: str, od: str, do: str,
@@ -722,7 +819,7 @@ def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
         dan = (vrstica[0] or "")[:10] or None
         if not poti:
             poti += [(p, dan) for p in ("/statistika", "/statistika/napovedi",
-                                        "/statistika/prevozniki")]
+                                        "/statistika/prevozniki", "/statistika/sz")]
         for x in json.loads(vrstica[1]).get("prevozniki", []):
             if x["skupina"] != "nadomestni" and x["cilj"].get("n"):
                 poti.append((f"/statistika/prevoznik/{pristanek.slug(x['ime'])}", dan))
@@ -779,6 +876,7 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
     nap = stats.summary_get(conn, "stat_napovedi", "zeleznica")
     return {
         **glava,
+        "sz": stats.summary_get(conn, "stat_sz", "zeleznica"),
         "vlak": vlak, "vlak_dnevi": spark(vlak["po_dnevih"]) if vlak else [],
         "bus": iz_histograma(hist), "bus_prevoznikov": len(busi),
         "lestvica": lestvica, "premalo": premalo,
@@ -786,7 +884,7 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
         "napoved": nap["skupaj"]["na_poti"]["vse"],
         "napoved_od": nap.get("od"), "napoved_do": nap.get("do"),
         "horizont_min": nap.get("horizont_min"),
-        "min_vzorec": MIN_VZOREC,
+        "min_vzorec": MIN_VZOREC, "min_prehodov": MIN_PREHODOV,
     }
 
 
@@ -799,6 +897,12 @@ def stran_prevozniki(conn: sqlite3.Connection) -> dict:
                                   key=lambda x: -x["cilj"]["v5min"]),
             "premalo": [x for x in vsi if x["skupina"] != "nadomestni" and x["cilj"].get("n")
                         and not (do and primerljiv(x, do))]}
+
+
+def stran_sz(conn: sqlite3.Connection) -> dict:
+    """`/statistika/sz`: nočni povzetek in čas izračuna."""
+    p = stats.summary_get(conn, "stat_sz", "zeleznica")
+    return {**p, "izracunano": p.get("computed_at")}
 
 
 def stran_napovedi(conn: sqlite3.Connection) -> dict:
@@ -903,3 +1007,112 @@ def stran_voznja(conn: sqlite3.Connection, pot: str) -> dict | None:
         or max(d["mediana_min"] for d in po_dnevu) - min(d["mediana_min"] for d in po_dnevu) >= 2))
     out["po_dnevu"] = po_dnevu if razlika else []
     return out
+
+
+# ---------------------------------------------------------------- okno: SŽ
+
+#: Odsek pride na seznam „vozni red ne drži“ z vsaj toliko vožnjami v oknu.
+MIN_VOZENJ_ODSEK = 100
+
+#: Prehodov potnikov je malo (61 v mesecu, 30. 9.–29. 10. 2026), a vsak je
+#: opažanje, ne sklep. Kartica pride od toliko naprej.
+MIN_PREHODOV = 20
+
+
+def _odseki(conn: sqlite3.Connection, od: str, do: str) -> list[dict]:
+    """Odseki, kjer vlak redno izgubi čas: prirast zamude od odhoda z X do
+    prihoda na naslednji postanek Y (MERITVE 29. 10. 2026, „Odseki, kjer
+    vozni red ne drži“). Vzroka (dela, enotirnost) podatki ne povedo."""
+    prirast: dict[tuple, list] = defaultdict(list)
+    prej = None
+    for trip, dan, seq, za, zd, ime in conn.execute("""
+            SELECT r.trip_id, r.service_date, r.stop_seq, r.delay_arr, r.delay_dep, st.name
+            FROM run r JOIN trip t ON t.trip_id = r.trip_id
+            JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq
+            JOIN station st ON st.stop_id = s.stop_id
+            WHERE t.network = 'zeleznica' AND t.mode != 'bus'
+              AND r.service_date BETWEEN ? AND ?
+            ORDER BY r.trip_id, r.service_date, r.stop_seq""", (od, do)):
+        if prej and prej[0] == trip and prej[1] == dan and prej[2] == seq - 1:
+            z_od = prej[3]
+            z_do = za if za is not None else zd
+            if z_od is not None and z_do is not None and abs(z_do - z_od) < 3600:
+                prirast[(prej[4], ime)].append(z_do - z_od)
+        prej = (trip, dan, seq, zd if zd is not None else za, ime)
+    out = []
+    for (a, b), v in prirast.items():
+        if len(v) >= MIN_VOZENJ_ODSEK:
+            out.append({"od": a, "do": b, "n": len(v),
+                        "izguba2": round(sum(x >= 120 for x in v) / len(v) * 100, 1),
+                        "mediana_min": stats._pct([stats._minute(x) for x in v], 0.5)})
+    out.sort(key=lambda x: (-x["izguba2"], -x["n"]))
+    return out
+
+
+def sz(conn: sqlite3.Connection, days: int, network: str,
+       danes: date | None = None) -> dict:
+    """Stran `/statistika/sz`: kaj kaže zemljevid SŽ in kaj je res.
+
+    Samo za železnico; avtobusno okno je prazno (`SUMMARY_BUILDERS` kliče
+    vsako vrsto za obe omrežji).
+    """
+    if network != "zeleznica":
+        return {"days": [], "runs": 0}
+    dopolni(conn, danes)
+    od, do = _okno(danes)
+    od_sz = max(od, SZ_VODI_OD)
+    v = {"postankov": 0, "dvig1": 0, "dvig2": 0, "dvig5": 0, "dvig10": 0,
+         "izhodisc": 0, "izhodisce_lazno": 0}
+    hist: Counter = Counter()
+    potniki = []
+    dnevi = []
+    for dan, _, x in _beri(conn, "sz", od_sz, do, "zeleznica"):
+        dnevi.append(dan)
+        for k in v:
+            v[k] += x.get(k, 0)
+        hist.update({int(m): c for m, c in x.get("dvig_hist", {}).items()})
+        potniki += x.get("potniki", [])
+    # Prehodi potnikov so redki (61 v mesecu): okno zanje je vsa zgodovina.
+    for dan, _, x in _beri(conn, "sz", SZ_VODI_OD, od_sz, "zeleznica"):
+        if dan < od_sz:
+            potniki += x.get("potniki", [])
+    n = v["postankov"]
+    prej = sorted(p["prej_s"] for p in potniki)
+    nadomestni = [x for _, k, x in _beri(conn, "prevoznik", od, do, "zeleznica")
+                  if k == "zeleznica|1161|nadomestni"]
+    napoved = _prazna_napoved()
+    for _, k, x in _beri(conn, "napoved", od, do, "zeleznica"):
+        if k == "zeleznica|1161|na_poti":
+            for blok, modeli in napoved.items():
+                for model, vsote in modeli.items():
+                    _sestej(vsote, x.get(blok, {}).get(model, {}))
+    vse_n = napoved["vse"]["nasa"]["n"]
+
+    def delez(a: int, b: int) -> float | None:
+        return round(a / b * 100, 1) if b else None
+
+    return {
+        "od": od_sz, "do": do, "days": dnevi, "runs": n,
+        "popravki": {"postankov": n, **{k: delez(v[k], n) for k in ("dvig1", "dvig2", "dvig5", "dvig10")},
+                     "mediana_min": pristanek._kvantil(sorted(hist), hist, sum(hist.values()), 0.5)
+                     if hist else None},
+        "izhodisca": {"n": v["izhodisc"], "lazno": delez(v["izhodisce_lazno"], v["izhodisc"])},
+        "potniki": {
+            "n": len(prej), "voznj": len({(p["st"], p["dan"]) for p in potniki}),
+            "od": min((p["dan"] for p in potniki), default=None),
+            "do": max((p["dan"] for p in potniki), default=None),
+            "prej2": delez(sum(x >= 120 for x in prej), len(prej)),
+            "prej5": delez(sum(x >= 300 for x in prej), len(prej)),
+            "prej10": delez(sum(x >= 600 for x in prej), len(prej)),
+            "kasneje1": sum(x <= -60 for x in prej),
+            "mediana_min": round(stats._pct(prej, 0.5) / 60, 1) if prej else None,
+            "najhujsi": sorted(potniki, key=lambda p: -p["prej_s"])[:3],
+        },
+        "odseki": _odseki(conn, od, do)[:6],
+        "nadomestni": {"nacrt": sum(x["nacrt"] or 0 for x in nadomestni),
+                       "z_meritvijo": sum(x["z_meritvijo"] for x in nadomestni)},
+        "napoved": {"delez_prevoznika": delez(napoved["parno"]["prevoznik"]["n"], vse_n),
+                    "nasa": meritve(napoved["vse"]["nasa"]),
+                    "prenos": meritve(napoved["vse"]["prenos"])},
+        "min_vzorec": MIN_VZOREC, "min_prehodov": MIN_PREHODOV,
+    }

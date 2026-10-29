@@ -286,3 +286,32 @@ def test_stran_vlaka_in_preusmeritev(strani):
     assert api.statistika_vlak(_zahteva("/statistika/vlak/LP 1"), "LP 1").status_code == 301
     with pytest.raises(HTTPException):
         api.statistika_vlak(_zahteva("/statistika/vlak/lp-9"), "lp-9")
+
+
+def test_sz_odhod_prezgodaj_in_popravek():
+    """Zemljevid SŽ premakne LP 2 čez Branik ob voznem redu z zamudo 0, nato
+    jo dvigne na 10 min; potnik z GPS je odpeljal 5 min po prvem zapisu."""
+    from kajros import deljenje
+    c = _baza(dnevi_nazaj=(1,))
+    deljenje.init(c)
+    dan = (_danes() - timedelta(days=1)).isoformat()
+    prvic = stats.polnoc(dan) + 29460            # voznoredni odhod z Branika
+    c.executemany("INSERT INTO obs(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+                  " feed_ts, observed_at) VALUES('v2', ?, 2, NULL, ?, ?, ?)",
+                  [(dan, 0, prvic, prvic), (dan, 600, prvic + 600, prvic + 600)])
+    c.execute("INSERT INTO deljenje_prehod(deljenje, trip_id, service_date, stop_seq,"
+              " prihod_ts, odhod_ts) VALUES(1, 'v2', ?, 2, NULL, ?)", (dan, prvic + 300))
+    c.commit()
+    p = statistika.sz(c, 90, "zeleznica", danes=_danes())
+    assert p["popravki"]["postankov"] == 1
+    assert p["popravki"]["dvig10"] == 100.0
+    assert p["potniki"]["n"] == 1 and p["potniki"]["prej2"] == 100.0
+    assert p["potniki"]["najhujsi"][0]["prej_s"] == 300
+    assert statistika.sz(c, 90, "avtobus", danes=_danes())["runs"] == 0
+
+
+def test_stran_sz_se_izrise(strani, monkeypatch):
+    monkeypatch.setattr(statistika, "MIN_PREHODOV", 0)
+    odgovor = strani.statistika_sz(_zahteva("/statistika/sz"))
+    assert odgovor.status_code == 200
+    assert "Kaj kažejo podatki SŽ" in odgovor.body.decode()

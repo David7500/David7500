@@ -517,7 +517,7 @@ CREATE TABLE IF NOT EXISTS povzetek (
 -- viri se (`napoved` 30 dni, `lega` 14), in brez tega trenda čez mesec ni.
 CREATE TABLE IF NOT EXISTS stat_dan (
     dan         TEXT NOT NULL,      -- prometni dan
-    vrsta       TEXT NOT NULL,      -- napoved | prevoznik | prazno
+    vrsta       TEXT NOT NULL,      -- napoved | prevoznik | sz | oznaka (dan izračunan)
     kljuc       TEXT NOT NULL,      -- omrežje|prevoznik|skupina
     podatki     TEXT NOT NULL,      -- JSON seštevljivih vsot
     izracunano  INTEGER NOT NULL,   -- epoha izračuna

@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 PORT="${KAJROS_PORT:-8001}"
 BASE="http://127.0.0.1:$PORT"
-STRANI=(/ /app/train /app/bus /app/pot /app/pot/podrobno /app/map /app/ovire /statistika /statistika/napovedi /statistika/prevozniki /statistika/prevoznik/sz /stik /zasebnost /o-nas /primerjava /donacije /android /postaje /postajalisca)
+STRANI=(/ /app/train /app/bus /app/pot /app/pot/podrobno /app/map /app/ovire /statistika /statistika/napovedi /statistika/prevozniki /statistika/prevoznik/sz /statistika/sz /stik /zasebnost /o-nas /primerjava /donacije /android /postaje /postajalisca)
 NAPAKE=0
 
 echo "== testi"

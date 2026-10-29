@@ -1021,6 +1021,19 @@ def statistika_prevoznik(request: Request, ime: str):
     return templates.TemplateResponse(request, "statistika_prevoznik.html", {**p, "opis": opis})
 
 
+@app.get("/statistika/sz", response_class=HTMLResponse, include_in_schema=False)
+def statistika_sz(request: Request):
+    """Kaj kažejo uradni podatki SŽ in kaj je res (`statistika.stran_sz`)."""
+    with _conn() as conn:
+        p = statistika.stran_sz(conn)
+    pr = p.get("potniki") or {}
+    opis = ((f"Ob {pr['n']} odhodih s potnikom na vlaku je zemljevid SŽ pri "
+             f"{statistika.odstotek(pr['prej2'])} pokazal odhod vsaj 2 minuti prezgodaj. "
+             if pr.get("n") else "")
+            + "Kdaj SŽ zamudo popravi, kje vozni red ne drži, nadomestni avtobusi.")
+    return templates.TemplateResponse(request, "statistika_sz.html", {**p, "opis": opis})
+
+
 def _stran_voznje(request: Request, pot: str):
     with _conn() as conn:
         p = statistika.stran_voznja(conn, pot)

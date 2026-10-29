@@ -2440,6 +2440,12 @@ def _stat_prevozniki(conn, days, network):
     return statistika.prevozniki(conn, days, network)
 
 
+def _stat_sz(conn, days, network):
+    """Stran `/statistika/sz`. Uvoz pozen iz istega razloga."""
+    from . import statistika
+    return statistika.sz(conn, days, network)
+
+
 SUMMARY_BUILDERS = {
     "network_stats": lambda conn, days, network: {
         "rows": network_stats(conn, days, network)},
@@ -2455,6 +2461,7 @@ SUMMARY_BUILDERS = {
     # preživijo obrez sence in leg), nato iz njega seštejeta okno.
     "stat_napovedi": _stat_napovedi,
     "stat_prevozniki": _stat_prevozniki,
+    "stat_sz": _stat_sz,
 }
 
 # Katera okna vzdrzujemo. Sirse okno ni drazje od ozjega toliko, kolikor je
