@@ -336,8 +336,9 @@ večje delo · **ne** = podatka ni.
    561 voženj): „Ljubljana“ se za avtobus razreši v „Ljubljana AP“, kamor
    LPP ne pelje (s Polja linije 11, 11B, 20Z, 24, 25, 27: Bavarski dvor 973
    voženj v voznem redu, Ajdovščina 735, Konzorcij 340, Ljubljana AP 0).
-   Tipkarske napake se ne popravijo: ime je podniz brez šumnikov in velikih
-   črk (`journey.search_stations`), „Ljubljna“ da „Tega imena ne najdem“
-   brez predloga; stran nima JS, zato ne seznama imen.
+   Tipkarska napaka: ime je podniz brez šumnikov in velikih črk
+   (`journey.search_stations`), „Ljubljna“ ne najde ničesar. Od 29. 10.
+   stran ponudi do tri podobna imena (`journey.podobna_imena`, `difflib`
+   0,75, 1–5 ms na 5 798 imenih) s povezavo na popravljen par.
 5. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
    točnost odhodov na `/postaja/{ime}`.

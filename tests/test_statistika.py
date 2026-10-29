@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from kajros import db, ocena, statistika, stats
+from kajros import db, journey, ocena, statistika, stats
 
 
 def _danes():
@@ -370,6 +370,21 @@ def test_iskanje_poljubne_relacije(strani, monkeypatch):
     neznano = strani.statistika_relacije(
         _zahteva("/statistika/relacije", "od=xqzzy&do=Celje".encode())).body.decode()
     assert "Tega imena ne najdem" in neznano and "„xqzzy“" in neznano
+    statistika._iskanja.clear()
+
+
+def test_tipkarska_napaka_dobi_predlog(strani):
+    """Podniz izpuščene črke ne odpusti; predlog je povezava na popravljen par."""
+    statistika._iskanja.clear()
+    html = strani.statistika_relacije(
+        _zahteva("/statistika/relacije", "od=Ajdovscna&do=Celje".encode())).body.decode()
+    assert "Tega imena ne najdem" in html and "Poskusi z imenom kraja" not in html
+    assert "Namesto „Ajdovscna“ morda" in html and ">Ajdovščina</a>?" in html
+    assert "od=Ajdov%C5%A1%C4%8Dina&amp;do=Celje#rezultat" in html
+    obe = statistika.iskanje_relacije(strani._conn(), "Ajdovscna", "Celjee", _danes())
+    assert [(x["od"], x["do"]) for p in obe["predlogi"] for x in p["imena"]][:1] == [
+        ("Ajdovščina", "Celje")]                     # en dotik popravi obe polji
+    assert journey.podobna_imena(strani._conn(), "xqzzy") == []
     statistika._iskanja.clear()
 
 

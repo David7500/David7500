@@ -1363,11 +1363,35 @@ def iskanje_relacije(conn: sqlite3.Connection, od_vnos: str, do_vnos: str,
             _iskanja[kljuc] = r
     glavna = next((imena[n] for n in ("zeleznica", "avtobus") if all(imena[n])),
                   (od_vnos, do_vnos))
+    vnosa = (od_vnos, do_vnos)
+    neznana = [i for i in (0, 1) if not imena["zeleznica"][i] and not imena["avtobus"][i]]
     return {"od": glavna[0], "do": glavna[1], "moznosti": _moznosti(r, MIN_ISKANJE),
             "malo": {kaj: r[kaj]["n"] for kaj in ("vlak", "avtobus")
                      if r.get(kaj) and r[kaj]["n"] < MIN_ISKANJE},
-            "neznano": [v for i, v in enumerate((od_vnos, do_vnos))
-                        if not imena["zeleznica"][i] and not imena["avtobus"][i]],
+            "neznano": [vnosa[i] for i in neznana],
+            "predlogi": _predlogi(conn, vnosa, neznana),
             "ista": glavna[0] == glavna[1], "okno_od": od, "okno_do": do,
             "omrezje": "zeleznica" if all(imena["zeleznica"]) else "avtobus",
             "min_vzorec": MIN_VZOREC}
+
+
+def _predlogi(conn: sqlite3.Connection, vnosa: tuple[str, str],
+              neznana: list[int]) -> list[dict]:
+    """Za vsako neznano ime podobna imena s povezavo na popravljen par.
+
+    Je neznano tudi drugo polje, povezava popravi še tega z njegovim prvim
+    predlogom: en dotik do odgovora, ne dva.
+    """
+    podobna = {i: journey.podobna_imena(conn, vnosa[i]) for i in neznana}
+    out = []
+    for i, imena in podobna.items():
+        par = list(vnosa)
+        if podobna.get(1 - i):
+            par[1 - i] = podobna[1 - i][0]
+        povezave = []
+        for ime in imena:
+            par[i] = ime
+            povezave.append({"ime": ime, "od": par[0], "do": par[1]})
+        if povezave:
+            out.append({"vnos": vnosa[i], "imena": povezave})
+    return out

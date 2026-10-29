@@ -41,7 +41,8 @@
     <section class="st-k st-siroka" id="rezultat">
       {% if i.neznano %}
       <h2>Tega imena ne najdem</h2>
-      <p>{% for v in i.neznano %}„{{ v }}“{{ " in " if not loop.last }}{% endfor %}: ni med postajami in postajališči. Poskusi z imenom kraja.</p>
+      <p>{% for v in i.neznano %}„{{ v }}“{{ " in " if not loop.last }}{% endfor %}: ni med postajami in postajališči.{% if not i.predlogi %} Poskusi z imenom kraja.{% endif %}</p>
+      {% for p in i.predlogi %}<p>Namesto „{{ p.vnos }}“ morda {% for x in p.imena %}<a href="/statistika/relacije?{{ {'od': x.od, 'do': x.do} | urlencode }}#rezultat">{{ x.ime }}</a>{{ ", " if loop.revindex > 2 else (" ali " if loop.revindex == 2 else "") }}{% endfor %}?</p>{% endfor %}
       {% elif i.ista %}
       <h2>{{ i.od }}</h2>
       <p>Od in do sta isti kraj.</p>

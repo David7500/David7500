@@ -15,6 +15,7 @@ Trije odgovori:
 from __future__ import annotations
 
 import bisect
+import difflib
 import math
 import sqlite3
 import threading
@@ -311,6 +312,30 @@ def resolve_station(conn: sqlite3.Connection, name: str,
         return exact["name"]
     hits = search_stations(conn, name, limit=1, network=network)
     return hits[0]["name"] if hits else None
+
+
+#: Najmanjša podobnost (`difflib`, 0–1) za predlog ob tipkarski napaki. Pri
+#: 0,8 „Ptju“ ne najde Ptuja; 0,75 doda kakšno daljno ime („Mribor“:
+#: Maribor, Maribox, ŽP Maribor), ki ne škodi. 5 798 imen, 1–5 ms.
+PODOBNOST_PREDLOGA = 0.75
+
+
+def podobna_imena(conn: sqlite3.Connection, vnos: str, limit: int = 3) -> list[str]:
+    """Imena postaj, najbolj podobna vpisanemu, najbližje prvo.
+
+    Za tipkarsko napako, ko `search_stations` ne najde ničesar: podniz brez
+    šumnikov odpusti velike črke, izpuščene ali zamenjane črke („Ljubljna“)
+    pa ne.
+    """
+    needle = _fold(vnos.strip())
+    if not needle:
+        return []
+    vse, _ = _imena_postaj(conn)
+    po_zlozenem: dict[str, str] = {}
+    for zlozeno, r in vse:
+        po_zlozenem.setdefault(zlozeno, r["name"])
+    return [po_zlozenem[z] for z in
+            difflib.get_close_matches(needle, po_zlozenem, limit, PODOBNOST_PREDLOGA)]
 
 
 def nearby_stations(conn: sqlite3.Connection, lat: float, lon: float,
