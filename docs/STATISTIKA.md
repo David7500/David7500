@@ -251,15 +251,23 @@ večje delo · **ne** = podatka ni.
   (`RELACIJE`: šest parov, obe smeri; vlak/avtobus `_par`, avto `_avto` iz
   `promet.ac` — kjer `promet.sqlite` ni, avto izpade).
 
+* 29. 10. 2026 ~20.00: **faze 1–5 preverjene s številkami z arwena** (d5a8b7e),
+  `preveri.sh` zelen, 1 083 testov. Okno relacij prepisano (411 s → 0,2 s).
+  Na kopiji arwena: dopolnitev vseh dni s SŽ 9,5 min. Lokalna baza ima
+  uvožene povzetke in `stat_voznja` s kopije (za ogled na localhost:8001).
+  SŽ (11.–28. 10.): 51 odhodov s potnikom, 75 % vsaj 2 min prezgodaj,
+  20,4 % postankov pozneje dvignjenih za ≥ 2 min, nadomestni 0 od 1 316.
+
 ## Naslednji koraki
 
-1. Objava vsega skupaj na koncu (`git push arwen`); ob zagonu se `stat_dan`
-   dopolni sam (~8 min na arwenu, v nočni niti), `stat_voznja` z njim.
-4. **Faza 5, relacije**: `/statistika/relacije` — vlak, avtobus, avto na
-   istih parih (LJ–MB, LJ–KP, LJ–Jesenice, LJ–Kranj, LJ–Celje, LJ–NM):
-   vozni red + izmerjena zamuda na obeh koncih (`docs/statistika-delo/
-   skripte/vlak_bus.py`), avto iz `promet.ac` po uri (samo arwen ima
-   `promet.sqlite`; brez nje kartica avta izpade). Pošten odgovor zdaj:
-   na avtocesti je avto ob vsaki uri hitrejši; kratke poti z gnečo šele s
-   preslikavo FCD (OpenLR, `~/nap-vzorci` na arwenu).
+1. **David pogleda faze 3–5** na localhost:8001 (`/statistika/vlak/ic-503`,
+   `/statistika/linija/arriva/a6343`, `/statistika/sz`, `/statistika/relacije`).
+2. **Objava vsega skupaj** (`git push arwen claude/slovenske-zeleznice-api-ql84hf`):
+   ob zagonu brez `stat_prevozniki` se nočni izračun sproži takoj (`stat_dan`
+   vsi dnevi ~10 min, prevozniki avtobusi ~1 min). Malina statistike ne
+   računa (`KAJROS_SUMMARIES`). Po objavi preveri kajros.app/statistika in
+   pobriši na arwenu `/var/tmp/kajros-stat.sqlite`, `promet-stat.sqlite`,
+   `kajros-dev*`, `stat_*.json`, `*.py`.
+3. Po objavi: `docs/statistika-delo/` vključi (najdbe so v MERITVE in tu) in
+   pobriši.
 5. **Faza 6**: mesečno poročilo, nadomestila (≥ 60 min), postaje.
