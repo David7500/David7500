@@ -1140,20 +1140,27 @@ def _par(conn: sqlite3.Connection, network: str, od: str, cilj: str,
          od_dan: str, do_dan: str) -> dict | None:
     """Vožnje, ki ustavijo na `od` in nato na `cilj`: trajanje po voznem redu,
     dejansko (vozni red + zamuda na obeh koncih) in zamuda na cilju."""
+    # Najprej pari postankov iz voznega reda (kazali po imenu in `stop_id`),
+    # nato `run` po ključu vožnje. Brez tega reda je planer začel pri `run`
+    # po dnevu: 411 s za šest parov na arwenu (29. 10. 2026).
     vrste = conn.execute(f"""
-        SELECT r2.service_date, s1.dep_s, COALESCE(r1.delay_dep, r1.delay_arr),
-               s2.arr_s, COALESCE(r2.delay_arr, r2.delay_dep), t.agency
-        FROM trip t
-        JOIN sched s1 ON s1.trip_id = t.trip_id
-        JOIN station a ON a.stop_id = s1.stop_id AND a.name = :od
-        JOIN sched s2 ON s2.trip_id = t.trip_id AND s2.stop_seq > s1.stop_seq
-        JOIN station b ON b.stop_id = s2.stop_id AND b.name = :cilj
-        JOIN run r2 ON r2.trip_id = t.trip_id AND r2.stop_seq = s2.stop_seq
-        LEFT JOIN run r1 ON r1.trip_id = t.trip_id AND r1.stop_seq = s1.stop_seq
+        WITH par AS MATERIALIZED (
+            SELECT s1.trip_id, s1.stop_seq AS q1, s1.dep_s, s2.stop_seq AS q2,
+                   s2.arr_s, t.agency
+            FROM station a JOIN sched s1 ON s1.stop_id = a.stop_id
+            JOIN sched s2 ON s2.trip_id = s1.trip_id AND s2.stop_seq > s1.stop_seq
+            JOIN station b ON b.stop_id = s2.stop_id AND b.name = :cilj
+            JOIN trip t ON t.trip_id = s1.trip_id
+            WHERE a.name = :od AND t.network = :net
+              AND (t.network = 'avtobus' OR t.mode != 'bus'))
+        SELECT r2.service_date, p.dep_s, COALESCE(r1.delay_dep, r1.delay_arr),
+               p.arr_s, COALESCE(r2.delay_arr, r2.delay_dep), p.agency
+        FROM par p
+        JOIN run r2 ON r2.trip_id = p.trip_id AND r2.stop_seq = p.q2
+                   AND r2.service_date BETWEEN :od_dan AND :do_dan
+        LEFT JOIN run r1 ON r1.trip_id = p.trip_id AND r1.stop_seq = p.q1
                         AND r1.service_date = r2.service_date
-        WHERE t.network = :net AND (t.network = 'avtobus' OR t.mode != 'bus')
-          AND r2.service_date BETWEEN :od_dan AND :do_dan
-          AND COALESCE(r2.delay_arr, r2.delay_dep) IS NOT NULL
+        WHERE COALESCE(r2.delay_arr, r2.delay_dep) IS NOT NULL
           AND ABS(COALESCE(r2.delay_arr, r2.delay_dep)) <= {stats.MAX_REALNA_ZAMUDA_S}""",
         {"od": od, "cilj": cilj, "net": network, "od_dan": od_dan, "do_dan": do_dan}).fetchall()
     if not vrste:
