@@ -1521,7 +1521,8 @@ function renderTimeline() {
   // (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
   runTimelineEl.innerHTML = seznamHtml() + vozovnicaHtml(run)
     + `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} ${sklon(run.stops.length, "postanek")}
-      · ${viriHtml(run)} · vreme Open-Meteo (CC BY 4.0)</div>`;
+      · ${viriHtml(run)} · vreme Open-Meteo (CC BY 4.0)${run.statistika
+        ? ` · <a href="${escapeHtml(run.statistika)}">kako točno vozi ›</a>` : ""}</div>`;
 }
 
 // Nakup vozovnice je pri SŽ na `eshop.sz.si`. Relacije v naslov ni mogoce

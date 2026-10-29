@@ -2782,8 +2782,15 @@ def api_run(train_no: str, date: str | None = None,
             # Zgornja meja zamude po postankih naprej; ocena ostane.
             dodatek = {s["stop_seq"]: d for s in rows
                        if (d := zapore.dodatek(opozorila, s["stop_seq"])) >= 60}
+        # Stran statistike te vožnje, če jo nočni izračun ima (vozila je v
+        # zadnjih 30 dneh); okno nanjo pokaže v nogi -- zgodovina dni ni v
+        # oknu, ampak tam (`zemljevid.md`).
+        pot_stat = statistika.pot_voznje(ident.get("network") or "zeleznica",
+                                         ident.get("agency") or "", train_no)
+        if not conn.execute("SELECT 1 FROM stat_voznja WHERE pot = ?", (pot_stat,)).fetchone():
+            pot_stat = None
         return {"train_no": train_no, "service_date": date, "trip_id": razresen,
-                **ident, "last_measured_seq": meja_seq,
+                **ident, "last_measured_seq": meja_seq, "statistika": pot_stat,
                 "zadnja_beseda": zadnja,
                 "tiho_s": (int(zdaj.timestamp()) - zadnja) if zadnja else None,
                 "trenutna": trenutna,
