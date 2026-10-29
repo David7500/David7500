@@ -36,6 +36,10 @@
 }
 .st-k h2 { margin: 0; font: 600 15px/1.3 var(--sans); color: var(--ink); }
 .st-k p { margin: 0; font: 400 14px/1.45 var(--sans); color: var(--ink-dim); }
+/* Prilepljen naslov brez presledkov (80 znakov) bi sicer razširil kartico čez zaslon. */
+.st-k h2, .st-k p { overflow-wrap: anywhere; }
+/* Dva seznama v kartici: na telefonu drug pod drugim, z razmikom med njima. */
+.st-dva { display: grid; gap: 16px; }
 .st-k.st-ton { background: var(--m-kont); }
 .st-k.st-ton h2, .st-k.st-ton p, .st-k.st-ton .st-velika span,
 .st-k.st-ton a { color: var(--m-na-kont); }

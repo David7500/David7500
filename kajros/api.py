@@ -1046,9 +1046,24 @@ def statistika_relacije(request: Request):
         p = statistika.stran_relacije(conn)
         iskanje = (statistika.iskanje_relacije(conn, vnos["od"], vnos["do"])
                    if vnos["od"] and vnos["do"] else None)
+    naslov = "Vlak, avtobus ali avto: koliko traja in kako točno — kajros"
     opis = "Ljubljana–Maribor, Koper, Celje, Kranj, Jesenice: koliko traja vlak, avtobus in avto z zamudo vred in kako točno pridejo."
+    if iskanje and not iskanje["neznano"] and not iskanje["ista"]:
+        # Zavihek, zgodovina in poslana povezava naj povedo, kateri par je to.
+        par = f"{iskanje['od']} → {iskanje['do']}"
+        naslov = f"{par}: vlak ali avtobus, koliko traja — kajros"
+        deli = [f"{_IME_MOZNOSTI[m['kaj']]} {math.floor(m['t'] + 0.5)} min"
+                + ("" if m["kaj"] == "avto"
+                   else f", na cilju v 5 min {statistika.odstotek(m['x']['v5min'])}")
+                for m in iskanje["moznosti"]]
+        opis = (f"{par}, zadnjih 30 dni: " + "; ".join(deli) + "." if deli else
+                f"{par}: v zadnjih 30 dneh ni bilo vožnje brez prestopa, ki bi jo zajeli.")
     return templates.TemplateResponse(request, "statistika_relacije.html",
-                                      {**p, "opis": opis, "vnos": vnos, "iskanje": iskanje})
+                                      {**p, "naslov": naslov, "opis": opis, "vnos": vnos,
+                                       "iskanje": iskanje})
+
+
+_IME_MOZNOSTI = {"vlak": "vlak", "avtobus": "avtobus", "avto": "avto po avtocesti"}
 
 
 def _stran_voznje(request: Request, pot: str):
@@ -1059,9 +1074,16 @@ def _stran_voznje(request: Request, pot: str):
     v = p["v"]
     ime = v["st"] if v["network"] == "zeleznica" else f"{v['ime']} {v['st']}"
     c = v["cilj"]
-    opis = (f"{ime}: v zadnjih 30 dneh je {statistika.odstotek(c['v5min'])} voženj prišlo "
-            f"na cilj v 5 minutah, polovica z zamudo do {statistika.minute(c['mediana_min'])}. "
-            + ("Kje vlak nabere zamudo in ob katerih dneh." if v["network"] == "zeleznica"
+    vlak = v["network"] == "zeleznica"
+    # Vlak šteje dneve (ena vožnja na dan), linija vožnje -- kot kartica.
+    polovica = ("polovico dni" if vlak else "polovica") + (
+        " točno ali prej" if c["mediana_min"] <= 0
+        else f" z zamudo do {statistika.minute(c['mediana_min'])}")
+    opis = ((f"{ime} je v zadnjih 30 dneh {statistika.odstotek(c['v5min'])} dni prišel "
+             if vlak else
+             f"{ime}: v zadnjih 30 dneh je {statistika.odstotek(c['v5min'])} voženj prišlo ")
+            + f"na cilj v 5 minutah, {polovica}. "
+            + ("Kje vlak nabere zamudo in ob katerih dneh." if vlak
                else "Kateri odhod je najbolj točen."))
     return templates.TemplateResponse(request, "statistika_voznja.html",
                                       {**p, "ime": ime, "opis": opis})

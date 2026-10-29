@@ -35,7 +35,7 @@
       <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "vlakov" if vlak else "voženj" }} pride na cilj v 5 minutah</span></div>
       <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, vsaka deseta vsaj {{ c.p90_min | minute }}; {{ c.nad15 | odstotek }} več kot 15 min.</p>
       {{ stolpci(dnevi, "" if vlak else "bus") }}
-      <div class="st-drobno">delež v 5 min po dnevih, zadnjih 90 · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ c.n | stevilo }}&nbsp;{{ (c.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} v 30 dneh</div>
+      <div class="st-drobno">delež v 5 min po dnevih, zadnjih 90 dni · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ c.n | stevilo }}&nbsp;{{ (c.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} v 30 dneh</div>
       {% if not primerljiv %}<p>Zajema je še premalo za primerjavo z drugimi prevozniki.</p>{% endif %}
     </section>
     {% if vlak and c.nad60_n is defined %}

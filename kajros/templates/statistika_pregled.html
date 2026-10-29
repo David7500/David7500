@@ -93,9 +93,6 @@
       {% for x in prezgodaj %}
       {{ trak(x.ime, x.prezgodaj.prej2 / najvec * 100, x.prezgodaj.prej2 | odstotek, "prej") }}
       {% endfor %}
-      {% if vlak_prezgodaj and vlak_prezgodaj.prej2 is not none %}
-      {{ trak("vlaki SŽ", vlak_prezgodaj.prej2 / najvec * 100, vlak_prezgodaj.prej2 | odstotek, "prej") }}
-      {% endif %}
       <p>Na postajališče pridi 2 minuti prej.</p>
       <a class="st-naprej" href="/statistika/prevozniki">Po prevoznikih ›</a>
     </section>

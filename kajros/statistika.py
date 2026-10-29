@@ -591,8 +591,11 @@ def _lestvica(koncne: list[tuple], network: str) -> dict:
         # Pri istem deležu je točnejša tista, ki pride bliže voznemu redu
         # (ne prej: −5 min na cilju je rezerva voznega reda, ne točnost).
         vrste.sort(key=lambda x: (-x["v5min"], abs(x["mediana_min"]), -x["n"]))
-        out[agency] = {"najboljse": vrste[:LESTVICA_N],
-                       "najslabse": list(reversed(vrste[-LESTVICA_N:])),
+        # Vsak seznam največ polovico: Kranj ima 8 linij, pet in pet bi dve
+        # pokazalo med najbolj in hkrati med najmanj točnimi.
+        n = min(LESTVICA_N, len(vrste) // 2)
+        out[agency] = {"najboljse": vrste[:n],
+                       "najslabse": list(reversed(vrste[len(vrste) - n:])),
                        "vseh": len(vrste)}
     return out
 
@@ -808,6 +811,14 @@ def primerljiv(x: dict, do: str) -> bool:
             and _dni_zajema(x, do) >= MIN_DNI_PRIMERJAVA)
 
 
+def malo_voznje(network: str, n: int) -> bool:
+    """Premalo za trditev na strani vožnje: opozorilo ob številki in
+    `noindex` (Kranj 11: „100 %“ na 5 vožnjah). Vlak šteje dneve -- ena
+    vožnja na dan, okno jih ima 30 --, zato prag lestvice, linija vožnje.
+    Isto pravilo v SQL zemljevida strani (`poti_za_iskalnik`)."""
+    return n < (MIN_DNI_LESTVICA if network == "zeleznica" else MIN_VZOREC)
+
+
 def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
     """Strani statistike za zemljevid strani, z dnem izračuna.
 
@@ -830,12 +841,15 @@ def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
             if x["skupina"] != "nadomestni" and x["cilj"].get("n"):
                 poti.append((f"/statistika/prevoznik/{pristanek.slug(x['ime'])}", dan))
         # Vlaki in mestne linije; medkrajevnih šifer je na tisoče in jih ne
-        # išče nihče (A6343) -- dosegljive ostanejo, `noindex`.
+        # išče nihče (A6343) -- dosegljive ostanejo, `noindex`. Prav tako
+        # vožnje z malo meritvami (`malo_voznje`).
         mestni = ",".join("?" * len(LINIJSKI))
         poti += [(pot, dan) for (pot,) in conn.execute(
             f"SELECT pot FROM stat_voznja WHERE network = ? "
-            f"AND (network = 'zeleznica' OR agency IN ({mestni})) ORDER BY pot",
-            (net, *sorted(LINIJSKI)))]
+            f"AND (network = 'zeleznica' OR agency IN ({mestni})) "
+            f"AND json_extract(podatki, '$.cilj.n') >= "
+            f"CASE network WHEN 'zeleznica' THEN ? ELSE ? END ORDER BY pot",
+            (net, *sorted(LINIJSKI), MIN_DNI_LESTVICA, MIN_VZOREC))]
     return poti
 
 
@@ -902,7 +916,7 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
         "bus": iz_histograma(hist), "bus_prevoznikov": len(busi),
         "bus_dnevi": spark(_skupaj_po_dnevih(busi)),
         "lestvica": lestvica, "premalo": premalo,
-        "prezgodaj": prej[:3], "vlak_prezgodaj": vlak["prezgodaj"] if vlak else None,
+        "prezgodaj": prej[:3],
         "napoved": nap["skupaj"]["na_poti"]["vse"],
         "napoved_od": nap.get("od"), "napoved_do": nap.get("do"),
         "horizont_min": nap.get("horizont_min"),
@@ -993,9 +1007,11 @@ def stran_voznja(conn: sqlite3.Connection, pot: str) -> dict | None:
         return None
     v = json.loads(r[0])
     od, do = _okno()
+    malo = malo_voznje(v["network"], v["cilj"].get("n") or 0)
     out = {"v": v, "od": od, "do": do, "min_vzorec": MIN_VZOREC,
            "izracunano": datetime.fromtimestamp(r[1], TZ).isoformat(timespec="seconds"),
-           "indeksiraj": v["network"] == "zeleznica" or v["linija"]}
+           "malo": malo,
+           "indeksiraj": (v["network"] == "zeleznica" or v["linija"]) and not malo}
     dnevi = v["dnevi"][-3 * OKNO_DNI:]
     na_dan = sum(d["n"] for d in dnevi) / len(dnevi) if dnevi else 0
     # Malo voženj na dan (vlak, medkrajevna šifra): stolpec = mediana zamude

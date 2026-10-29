@@ -27,8 +27,12 @@
       <div class="st-vr"><span class="ime">{{ ime }}</span><span class="st-trak"><i class="{{ razred }}" style="width:{{ [[sirina, 1] | max, 100] | min }}%"></i></span><span class="num">{{ vrednost }}</span></div>
 {%- endmacro %}
 
+{#- Vrednosti stolpcev so v `title`, ki ga dotik in bralnik ne pokažeta:
+    povzetek grafa gre v `aria-label` (sivi dnevi brez vzorca ne štejejo). -#}
 {% macro stolpci(dnevi, razred="") -%}
-      <div class="st-stolpci {{ razred }}" aria-hidden="true">
+{%- set polni = dnevi | rejectattr("malo") | rejectattr("v5", "none") | list -%}
+{%- if polni %}{% set slab = polni | min(attribute="v5") %}{% set dober = polni | max(attribute="v5") %}{% endif -%}
+      <div class="st-stolpci {{ razred }}" role="img" aria-label="Delež voženj v 5 min po dnevih{% if dnevi %}, {{ dnevi[0].dan | dan }}–{{ dnevi[-1].dan | dan }}{% endif %}{% if not polni %}{% elif slab.v5 | odstotek == dober.v5 | odstotek %}: vsak dan {{ slab.v5 | odstotek }}{% else %}: najmanj {{ slab.dan | dan }} ({{ slab.v5 | odstotek }}), največ {{ dober.dan | dan }} ({{ dober.v5 | odstotek }}){% endif %}">
         {%- for d in dnevi %}<i{% if d.malo %} class="malo"{% endif %} style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.v5 | odstotek if d.v5 is not none else 'brez podatka' }} v 5 min, {{ d.n }}&nbsp;{{ (d.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}"></i>{% endfor -%}
       </div>
 {%- endmacro %}

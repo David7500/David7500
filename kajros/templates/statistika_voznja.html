@@ -31,11 +31,13 @@
     {% set c = v.cilj %}
     <section class="st-k st-dvojna">
       <h2>Kako točno pride?</h2>
-      <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "dni" if vlak else "voženj" }} na cilj v 5 minutah</span></div>
-      <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}{% if c.p90_min and c.p90_min > 0 %}, vsaka deseta vsaj {{ c.p90_min | minute }}{% endif %}. {{ c.n | stevilo }}&nbsp;{{ (c.n or 0) | stevnik("dan", "dneva", "dnevi", "dni") if vlak else (c.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.</p>
+      <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "dni je prišel" if vlak else "voženj" }} na cilj v 5 minutah</span></div>
+      <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}{% if c.p90_min and c.p90_min > 0 %}, vsaka deseta vsaj {{ c.p90_min | minute }}{% endif %}. {{ c.n | stevilo }}&nbsp;{{ (c.n or 0) | stevnik("dan", "dneva", "dnevi", "dni") if vlak else (c.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.{% if malo %} Še malo {{ "dni" if vlak else "voženj" }} z meritvijo, številka je groba.{% endif %}</p>
       {% if vlak and c.nad60_n %}<p>{{ c.nad60_n }}&#8209;krat vsaj 60 min pozno{% if c.nad120_n %}, od tega {{ c.nad120_n }}&#8209;krat vsaj 120{% endif %}: takrat SŽ vrne četrtino cene vozovnice, od 120 min polovico.</p>{% endif %}
       {% if dnevi_zamuda %}
-      <div class="st-dnevi" aria-hidden="true">
+      {% set z_zamudo = dnevi | rejectattr("mediana_min", "none") | list %}
+      {% if z_zamudo %}{% set slab = z_zamudo | max(attribute="mediana_min") %}{% set dober = z_zamudo | min(attribute="mediana_min") %}{% endif %}
+      <div class="st-dnevi" role="img" aria-label="{{ 'Zamuda' if vlak else 'Mediana zamude' }} na cilju po dnevih{% if z_zamudo %}, {{ dnevi[0].dan | dan }}–{{ dnevi[-1].dan | dan }}{% endif %}{% if not z_zamudo %}{% elif slab.mediana_min | zamuda_min == dober.mediana_min | zamuda_min %}: vsak dan {{ slab.mediana_min | zamuda_min }}{% else %}: največja {{ slab.dan | dan }} ({{ slab.mediana_min | zamuda_min }}), najmanjša {{ dober.dan | dan }} ({{ dober.mediana_min | zamuda_min }}){% endif %}">
         {%- for d in dnevi %}<i class="r-{{ d.razred }}" style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.mediana_min | zamuda_min }}"></i>{% endfor -%}
       </div>
       <div class="st-drobno">{{ "zamuda" if vlak else "mediana zamude" }} na cilju po dnevih, {{ (dnevi | length or 0) | stevnik("zadnji", "zadnja", "zadnji", "zadnjih") }} {{ dnevi | length }}&nbsp;{{ (dnevi | length or 0) | stevnik("dan", "dneva", "dnevi", "dni") }} z meritvijo</div>
@@ -68,7 +70,8 @@
         {% endfor %}
       </div>
       {% set zadnja = postaje[-1] %}
-      <p>Vsak deseti dan je na {{ zadnja.ime }} prišel z zamudo vsaj {{ zadnja.p90 | besedilo }}.</p>
+      {% if zadnja.p90 and zadnja.p90.min > 0 %}<p>Vsak deseti dan je na {{ zadnja.ime }} prišel z zamudo vsaj {{ zadnja.p90 | besedilo }}.</p>
+      {% else %}<p>Vsaj devet dni od desetih je na {{ zadnja.ime }} prišel točno.</p>{% endif %}
     </section>
     {% endif %}
 

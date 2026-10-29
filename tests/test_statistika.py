@@ -189,6 +189,20 @@ def test_lestvica_samo_z_dovolj_dnevi(monkeypatch):
     assert all(x["st"] != "BUS 3" for x in lest["najboljse"] + lest["najslabse"])
 
 
+@pytest.mark.parametrize("linij", [1, 2, 3, 8, 9, 30])
+def test_lestvica_ne_pokaze_iste_linije_na_obeh_seznamih(monkeypatch, linij):
+    """Kranj (MOK) ima 8 linij: pet najbolj in pet najmanj točnih je dve
+    pokazalo na obeh seznamih."""
+    monkeypatch.setattr(statistika, "MIN_DNI_LESTVICA", 1)
+    koncne = [("kranj", str(i), "Planina", None, "2026-10-01", i * 60) for i in range(linij)]
+    lest = statistika._lestvica(koncne, "avtobus")["kranj"]
+    najbolj = {x["st"] for x in lest["najboljse"]}
+    najmanj = {x["st"] for x in lest["najslabse"]}
+    assert not najbolj & najmanj
+    assert len(najbolj) == len(najmanj) == min(statistika.LESTVICA_N, linij // 2)
+    assert lest["vseh"] == linij
+
+
 def test_povzetek_gre_skozi_summary_build():
     """Okni sta v `SUMMARY_BUILDERS`: nočni izračun in API ju dobita sama."""
     c = _baza()
@@ -286,6 +300,20 @@ def test_stran_vlaka_in_preusmeritev(strani):
     assert api.statistika_vlak(_zahteva("/statistika/vlak/LP 1"), "LP 1").status_code == 301
     with pytest.raises(HTTPException):
         api.statistika_vlak(_zahteva("/statistika/vlak/lp-9"), "lp-9")
+
+
+def test_malo_meritev_opozori_in_ni_v_zemljevidu_strani(strani, monkeypatch):
+    """Kranj 11 je kazal „100 %“ na 5 vožnjah, brez opozorila in v iskalniku.
+    Stran in zemljevid strani odločata po istem pravilu (`malo_voznje`)."""
+    api = strani
+    stats.summary_build(api._conn(), "stat_prevozniki", "zeleznica", 90)
+    for prag, malo in ((1, False), (5, True)):          # LP 1 ima 3 dni
+        monkeypatch.setattr(statistika, "MIN_DNI_LESTVICA", prag)
+        html = api.statistika_vlak(_zahteva("/statistika/vlak/lp-1"), "lp-1").body.decode()
+        poti = [p for p, _ in statistika.poti_za_iskalnik(api._conn())]
+        assert ('name="robots"' in html) is malo
+        assert ("številka je groba" in html) is malo
+        assert ("/statistika/vlak/lp-1" in poti) is not malo
 
 
 def test_sz_odhod_prezgodaj_in_popravek():
