@@ -158,6 +158,9 @@ večje delo · **ne** = podatka ni.
 * Stran SŽ **javna, poimenska**, samo dejstva z vzorcem in datumom.
 * Vrstni red: **pregled, napovedi, prevozniki**; nato vlak/linija, SŽ,
   relacije, mesečno poročilo.
+* Smer strani: **A · Odgovori** (David, 29. 10. 2026 ~16.45): kartice z
+  vprašanjem potnika in eno veliko številko, pod njo trak ali stolpci, vsaka
+  vodi na podstran; podstrani v istem slogu.
 * Postopek (moj): najprej nočni izračun in API (od designa neodvisno), nato
   osnutki strani s pravimi številkami, David izbere, nato predloge.
 
@@ -217,23 +220,27 @@ večje delo · **ne** = podatka ni.
   uvrstitve s trakom), podstran Napovedi v slogu A. Številke prave (kopija
   arwena do 28. 10.). Čaka Davidovo izbiro.
 
+* 29. 10. 2026 ~17.30: **strani faze 1 narejene** (commit 81a393e, ni objavljeno):
+  `/statistika` (pregled A), `/statistika/napovedi`, `/statistika/prevozniki`,
+  `/statistika/prevoznik/{slug}`; meni Več, zemljevid strani, `obisk._STRANI`,
+  `preveri.sh` (zeleno), 1 078 testov. Posnetki `posnetki/statistika/`. Lokalno
+  so povzetki uvoženi s kopije arwena (vlakov lokalna baza od 7. 10. nima).
+  Čaka Davidov ogled na localhost:8001/statistika.
+
 ## Naslednji koraki
 
-1. **Faza 1, zaledje** (od designa neodvisno):
-   * `db.py`: tabela `stat_dan(dan, vrsta, kljuc, podatki JSON, izracunano)`,
-     PK (dan, vrsta, kljuc), brez obreza.
-   * `kajros/statistika.py`: dnevni agregati za včeraj (+ dopolnitev nazaj):
-     `napoved` po (omrežje, prevoznik, na poti / pred odhodom) — vsote za
-     MAE, ±1, ±3, odklon, precenitev ≥ 5 min; prevoznik parno (le vrstice z
-     `operator_s`). `prevoznik` po dnevu: načrtovanih, z meritvijo, z lego,
-     histogram zamude na cilju po zaokroženi minuti (seštevljiv → mediana,
-     p90, v 5 min za katero koli okno), po uri prihoda, prezgodnji odhodi.
-   * Okna v `povzetek` (nove `kind`, `SUMMARY_VERSION` 6): `stat_napovedi`,
-     `stat_prevozniki`, `stat_pregled`; nočno v `server._povzetki`.
-   * API `GET /api/statistika/{pregled,napovedi,prevozniki}`; testi.
-   * Preveri na kopiji baze z arwena (čas izračuna, številke proti
-     MERITVE 29. 10.).
-2. Osnutki strani s pravimi številkami (platno, slog E), David izbere.
-3. Predloge `/statistika`, `/statistika/napovedi`, `/statistika/prevozniki`,
-   `/statistika/prevoznik/{ime}`; sitemap; posnetki 430/1850 px; preveri.sh.
-4. Nato vlak/linija, SŽ, relacije, mesečno poročilo.
+1. David pogleda faze 1 → popravki → objava (`git push arwen`), ob zagonu se
+   `stat_dan` dopolni sam (~8 min na arwenu, v nočni niti).
+2. **Faza 3, vlak/linija**: `/statistika/vlak/{št}`, `/statistika/linija/{prevoznik}/{št}`:
+   koledar dni, kje na progi zamudo nabere (po postajah), ure, dan v tednu,
+   najhujši dnevi z vzrokom, povezava iz okna vožnje in z lestvice. Zgodovina
+   ene vožnje (krivulja in končna zamuda po dnevih) je v gitu do 24. 10.
+   (`strani.md`). Ob tem `/app/statistika` → 301 na `/statistika`, stara
+   predloga, JS in CSS ven.
+3. **Faza 4, SŽ**: nočni izračun popravkov odhoda iz `obs` (90 dni) v
+   `stat_dan` (vrsta `sz`), prehodi potnikov proti zemljevidu SŽ, odseki, kjer
+   vozni red ne drži, nadomestni brez podatka, lažni padci; stran
+   `/statistika/sz`, kartica na pregledu (rjava, osnutek A).
+4. **Faza 5, relacije**: vlak/avtobus/avto (AC iz `promet.sqlite` po urah),
+   kateri odhod izbrati; FCD preslikava pozneje.
+5. **Faza 6**: mesečno poročilo, nadomestila (≥ 60 min), postaje.

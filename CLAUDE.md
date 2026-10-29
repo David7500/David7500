@@ -87,6 +87,7 @@ kajros/
   zive.py        vožnje LPP pod id-ji brez voznega reda: par z objavljeno, objava na vzorec, ki ga LPP vozi
   backtest.py    merjenje napovedi z izpuščanjem enega dne
   ocena.py       senčno merjenje: kaj je prikaz trdil 25 min prej in kaj je bilo
+  statistika.py  strani statistike: dnevni agregati (`stat_dan`, ne obrezuje se) in nočna okna
   brskalnik.py   Chrome za potniski.sz.si (CDP na localhostu, Xvfb): edina pot mimo Cloudflara
   peroni.py      tir vlaka s table SŽ, svoja nit; star ali manjkajoč se ne pokaže
   zamude_sz.py   zamude vlakov z zemljevida SŽ, svoja nit; vodi, derp.si le ob molku
@@ -112,7 +113,7 @@ android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vi
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavi `service_day('S1','2026-08-31')`, test dan računa (`_pred`); ko se ujameta: `UNIQUE constraint failed` (31. 8. 2026 pet rdečih). Računani vstavki zato `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`.
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `stat_dan` (dnevni agregati statistike, ne obrezuje se) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`.
 
 ## Omrežji: `network` ni `mode`
 
@@ -140,7 +141,8 @@ Pri avtobusih, hitro pozabljeno:
 | `/app/map` | živi zemljevid — **edini skupni pogled** obeh omrežij |
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi, nadomestni prevozi (samo železnica) |
-| `/app/statistika[/bus]` | **umaknjena** 19. 9. 2026: dela, brez povezave, ni v sitemapu, `noindex` |
+| `/statistika` · `/statistika/napovedi` · `/statistika/prevozniki` · `/statistika/prevoznik/{ime}` | statistika (od 29. 10. 2026, `docs/STATISTIKA.md`): točnost, napovedi proti uradnim, prevozniki; izris na strežniku |
+| `/app/statistika[/bus]` | **umaknjena** 19. 9. 2026: dela, brez povezave, ni v sitemapu, `noindex`; zamenja jo `/statistika` |
 | `/vlak/{od}/{cilj}` · `/avtobus/…` | **pristajalna relacije**: odhodi danes, izmerjena zamuda, izris na strežniku |
 | `/postaja/{ime}` · `/postajalisce/{ime}` | pristajalna postaje |
 | `/postaje` · `/postajalisca` | kazalo — edina pot do pristajalnih poleg zemljevida strani |

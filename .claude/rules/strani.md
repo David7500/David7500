@@ -16,6 +16,18 @@ paths:
 ---
 # Strani in kaj je na njih
 
+## `/statistika*` — strani statistike (od 29. 10. 2026)
+
+Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (David): kartica = vprašanje potnika, ena velika številka, trak ali stolpci, povezava naprej. Izris na strežniku, brez JS (`templates/statistika_*.html`, `_stat.html`, `statistika.css`); številke samo iz nočnih povzetkov (`stat_napovedi`, `stat_prevozniki`).
+* **Kartica brez vzorca izpade** (`statistika.MIN_VZOREC` 30), ne kaže šuma. Dan z manj vožnjami v stolpcih sivo nizek: izpad zajema ni slab dan.
+* **Primerjava prevoznikov** le z ≥ 1 000 vožnjami in ≥ 14 dnevi zajema v oknu (`primerljiv`); ostali „še premalo“ (Marprom, Kranj od 27. 10.).
+* **Lestvica**: mestni in LPP primestni po liniji (`LINIJSKI`), ostali po šifri **in uri odhoda** (A6343 = več odhodov na dan). Enak delež loči |mediana| (−5 min na cilju je rezerva, ne točnost).
+* **Prevoznikova napoved** samo, kjer jo je objavil pri ≥ 20 % pogledov (`MIN_DELEZ_PREVOZNIKA`); SŽ 0,5 % → „skoraj ne objavlja“.
+* Zamuda v vrstici **z besedo**: „5,5 min prej“, „točno“ (`statistika.zamuda_min`); „v 5 min“ vedno s pragom.
+* Konkurenca **po metodi, brez imen** („trenutna zamuda, prenesena naprej“); imena le na `/primerjava`.
+* Barvi omrežij trdo v `.st` (`--st-vlak`, `--st-bus`): pregled kaže oboje, `body.net-avtobus` bi prebarval vse.
+* V zemljevidu strani iz **shranjenih** povzetkov (`poti_za_iskalnik`), v meniju Več.
+
 ## `/app/statistika` (umaknjena 19. 9. 2026, `noindex`, dela)
 
 Odgovarja na „kdaj se splača potovati“. Pravila, če se vrne:
