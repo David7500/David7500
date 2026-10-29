@@ -1,0 +1,41 @@
+{#
+  /statistika/relacije -- vlak, avtobus ali avto na istih parih. Pošten
+  odgovor na „kdaj je javni prevoz hitrejši od avta“: na avtocesti nikoli;
+  kratke poti z gnečo pridejo s preslikavo prometa (FCD). `stran_relacije`.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Vlak, avtobus ali avto: koliko traja in kako točno — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, noga %}
+{% from "_stat_relacija.html" import relacija %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page">
+  <main class="home st">
+    {{ glava(nazaj=True) }}
+    <h1>Vlak, avtobus ali avto?</h1>
+    <p class="st-glava">Koliko traja vožnja z zamudo vred in kako točno pride · zadnjih 30 dni, do {{ do | dan }}</p>
+    <div class="st-kartice">
+    {% for k in kartice %}
+    <section class="st-k">
+      <h2>{{ k.od }} → {{ k.do }}</h2>
+      {{ relacija(k) }}
+    </section>
+    {% endfor %}
+    </div>
+    <p class="st-noga">Avto: potovalni čas DARS po avtocesti (prek NAP), od priključka do priključka, delavniki — do središča mesta in parkirišča prištej svoje. Vlak in avtobus: postaja–postaja. Kdaj je javni prevoz hitrejši na kratkih poteh z gnečo, bomo povedali, ko bo preslikan promet na mestnih cestah. Izračunano {{ izracunano | ura_dneva }}.</p>
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>

@@ -315,3 +315,21 @@ def test_stran_sz_se_izrise(strani, monkeypatch):
     odgovor = strani.statistika_sz(_zahteva("/statistika/sz"))
     assert odgovor.status_code == 200
     assert "Kaj kažejo podatki SŽ" in odgovor.body.decode()
+
+
+def test_relacija_vlak_trajanje_in_tocnost():
+    """Ajdovščina → Celje: vozni red 20 min, LP 1 +2 min, LP 2 +20 min."""
+    c = _baza(dnevi_nazaj=(1,))
+    od, do = statistika._okno(_danes())
+    p = statistika._par(c, "zeleznica", "Ajdovščina", "Celje", od, do)
+    assert p["n"] == 2
+    assert p["trajanje_vr"] == 20.0
+    assert p["v5min"] == 50.0
+    assert statistika._par(c, "zeleznica", "Celje", "Ajdovščina", od, do) is None   # obratna smer ne vozi
+    assert statistika.relacije(c, 90, "avtobus")["runs"] == 0
+
+
+def test_stran_relacij_se_izrise(strani):
+    odgovor = strani.statistika_relacije(_zahteva("/statistika/relacije"))
+    assert odgovor.status_code == 200
+    assert "Vlak, avtobus ali avto?" in odgovor.body.decode()

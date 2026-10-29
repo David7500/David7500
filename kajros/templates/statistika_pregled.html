@@ -14,6 +14,7 @@
 {% include "_meta.html" %}
 {% from "_vec.html" import list as vec_list %}
 {% from "_stat.html" import glava, trak, stolpci, noga %}
+{% from "_stat_relacija.html" import relacija as relacija_k %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
@@ -78,6 +79,14 @@
       <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je vlak še stal vsaj 2 minuti</span></div>
       <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }} odhodov, {{ p.od | dan }}–{{ p.do | dan }}.{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je na zemljevidu odpeljal {{ (p.najhujsi[0].prej_s / 60) | round | int }} min, preden je res.{% endif %}</p>
       <a class="st-naprej" href="/statistika/sz">Kaj še kažejo podatki SŽ ›</a>
+    </section>
+    {% endif %}
+
+    {% if relacija %}
+    <section class="st-k">
+      <h2>{{ relacija.od }} → {{ relacija.do }}: vlak, avtobus ali avto?</h2>
+      {{ relacija_k(relacija) }}
+      <a class="st-naprej" href="/statistika/relacije">Druge relacije ›</a>
     </section>
     {% endif %}
 

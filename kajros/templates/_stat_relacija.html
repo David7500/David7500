@@ -1,0 +1,13 @@
+{#- Ena relacija: možnosti po trajanju, najhitrejša prva (`statistika.stran_relacije`). -#}
+{% macro relacija(k) -%}
+      <ul class="st-seznam">
+        {% for m in k.moznosti %}
+        <li><div class="vr">
+          <span class="ime">{% if m.kaj == "avto" %}Avto po avtocesti{% elif m.kaj == "avtobus" %}Avtobus{% if m.x.prevozniki %} ({{ m.x.prevozniki | join(", ") }}){% endif %}{% else %}Vlak{% endif %}</span>
+          <span class="pc">{{ m.t | round | int }} min</span>
+          <span class="drobno">{% if m.kaj == "avto" %}od priključka do priključka · ob {{ m.x.konica_ura }}h {{ m.x.konica | round | int }} min, vsak deseti dan nad {{ m.x.konica_p90 | round | int }}{% else %}{{ "z zamudo" if m.x.trajanje else "po voznem redu" }} · na cilju v 5 min {{ m.x.v5min | odstotek }} · {{ m.x.n | stevilo }} voženj{% endif %}</span>
+          <span class="st-trak" style="grid-column: 1 / -1"><i class="{{ 'siv' if m.kaj == 'avto' else ('bus' if m.kaj == 'avtobus' else 'vlak') }}" style="width:{{ m.sirina }}%"></i></span>
+        </div></li>
+        {% endfor %}
+      </ul>
+{%- endmacro %}

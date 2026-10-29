@@ -1034,6 +1034,15 @@ def statistika_sz(request: Request):
     return templates.TemplateResponse(request, "statistika_sz.html", {**p, "opis": opis})
 
 
+@app.get("/statistika/relacije", response_class=HTMLResponse, include_in_schema=False)
+def statistika_relacije(request: Request):
+    """Vlak, avtobus ali avto na istih parih (`statistika.stran_relacije`)."""
+    with _conn() as conn:
+        p = statistika.stran_relacije(conn)
+    opis = "Ljubljana–Maribor, Koper, Celje, Kranj, Jesenice: koliko traja vlak, avtobus in avto z zamudo vred in kako točno pridejo."
+    return templates.TemplateResponse(request, "statistika_relacije.html", {**p, "opis": opis})
+
+
 def _stran_voznje(request: Request, pot: str):
     with _conn() as conn:
         p = statistika.stran_voznja(conn, pot)

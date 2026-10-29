@@ -819,7 +819,8 @@ def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
         dan = (vrstica[0] or "")[:10] or None
         if not poti:
             poti += [(p, dan) for p in ("/statistika", "/statistika/napovedi",
-                                        "/statistika/prevozniki", "/statistika/sz")]
+                                        "/statistika/prevozniki", "/statistika/sz",
+                                        "/statistika/relacije")]
         for x in json.loads(vrstica[1]).get("prevozniki", []):
             if x["skupina"] != "nadomestni" and x["cilj"].get("n"):
                 poti.append((f"/statistika/prevoznik/{pristanek.slug(x['ime'])}", dan))
@@ -874,9 +875,11 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
                    and x["prezgodaj"].get("prej2") is not None),
                   key=lambda x: -x["prezgodaj"]["prej2"])
     nap = stats.summary_get(conn, "stat_napovedi", "zeleznica")
+    rel = stran_relacije(conn)["kartice"]
     return {
         **glava,
         "sz": stats.summary_get(conn, "stat_sz", "zeleznica"),
+        "relacija": rel[0] if rel else None,
         "vlak": vlak, "vlak_dnevi": spark(vlak["po_dnevih"]) if vlak else [],
         "bus": iz_histograma(hist), "bus_prevoznikov": len(busi),
         "lestvica": lestvica, "premalo": premalo,
@@ -1116,3 +1119,140 @@ def sz(conn: sqlite3.Connection, days: int, network: str,
                     "prenos": meritve(napoved["vse"]["prenos"])},
         "min_vzorec": MIN_VZOREC, "min_prehodov": MIN_PREHODOV,
     }
+
+
+# ---------------------------------------------------------------- okno: relacije
+
+#: Pari, ki jih ljudje iščejo (MERITVE „Iskalniki“: vlak ljubljana koper,
+#: maribor, celje, kranj) in kjer vozita vlak in avtobus. Zadnji: odsek
+#: avtoceste DARS (`promet.ac`, od priključka do priključka) tja in nazaj.
+RELACIJE = (
+    ("Ljubljana", "Maribor", "Ljubljana AP", "Maribor AP", ("LJ - MB", "MB - LJ")),
+    ("Ljubljana", "Koper", "Ljubljana AP", "Koper", ("LJ - KP", "KP - LJ")),
+    ("Ljubljana", "Jesenice", "Ljubljana AP", "Jesenice", ("LJ - Karavanke", "Karavanke - LJ")),
+    ("Ljubljana", "Celje", "Ljubljana AP", "Celje AP", None),
+    ("Ljubljana", "Kranj", "Ljubljana AP", "Kranj AP", None),
+    ("Ljubljana", "Novo mesto", "Ljubljana AP", "Novo mesto", None),
+)
+
+
+def _par(conn: sqlite3.Connection, network: str, od: str, cilj: str,
+         od_dan: str, do_dan: str) -> dict | None:
+    """Vožnje, ki ustavijo na `od` in nato na `cilj`: trajanje po voznem redu,
+    dejansko (vozni red + zamuda na obeh koncih) in zamuda na cilju."""
+    vrste = conn.execute(f"""
+        SELECT r2.service_date, s1.dep_s, COALESCE(r1.delay_dep, r1.delay_arr),
+               s2.arr_s, COALESCE(r2.delay_arr, r2.delay_dep), t.agency
+        FROM trip t
+        JOIN sched s1 ON s1.trip_id = t.trip_id
+        JOIN station a ON a.stop_id = s1.stop_id AND a.name = :od
+        JOIN sched s2 ON s2.trip_id = t.trip_id AND s2.stop_seq > s1.stop_seq
+        JOIN station b ON b.stop_id = s2.stop_id AND b.name = :cilj
+        JOIN run r2 ON r2.trip_id = t.trip_id AND r2.stop_seq = s2.stop_seq
+        LEFT JOIN run r1 ON r1.trip_id = t.trip_id AND r1.stop_seq = s1.stop_seq
+                        AND r1.service_date = r2.service_date
+        WHERE t.network = :net AND (t.network = 'avtobus' OR t.mode != 'bus')
+          AND r2.service_date BETWEEN :od_dan AND :do_dan
+          AND COALESCE(r2.delay_arr, r2.delay_dep) IS NOT NULL
+          AND ABS(COALESCE(r2.delay_arr, r2.delay_dep)) <= {stats.MAX_REALNA_ZAMUDA_S}""",
+        {"od": od, "cilj": cilj, "net": network, "od_dan": od_dan, "do_dan": do_dan}).fetchall()
+    if not vrste:
+        return None
+    vr = [(arr - dep) / 60 for _, dep, _, arr, _, _ in vrste if dep is not None and arr is not None]
+    dej = [((arr + z2) - (dep + z1)) / 60 for _, dep, z1, arr, z2, _ in vrste
+           if dep is not None and arr is not None and z1 is not None]
+    zam = [z2 for *_, z2, _ in vrste]
+    return {
+        "n": len(vrste),
+        "prevozniki": [stats.AGENCY_NAMES.get(a, a) for a, _ in
+                       Counter(v[5] for v in vrste).most_common(2)],
+        "trajanje_vr": stats._pct(vr, 0.5),
+        "trajanje": stats._pct(dej, 0.5) if len(dej) >= MIN_VZOREC else None,
+        "v5min": round(sum(stats._je_pravocasna(z) for z in zam) / len(zam) * 100, 1),
+        "mediana_min": stats._pct([stats._minute(z) for z in zam], 0.5),
+    }
+
+
+def _avto(relacija: str, od_dan: str, do_dan: str) -> dict | None:
+    """Avto po avtocesti iz `promet.sqlite` (DARS prek NAP), delavniki.
+
+    Baza je samo na stroju, ki promet zajema (arwen); drugje kartica avta
+    izpade, ne pokaže ničle.
+    """
+    if not config.PROMET_DB.exists():
+        return None
+    od_ts = int(datetime.fromisoformat(od_dan).replace(tzinfo=TZ).timestamp())
+    do_ts = int((datetime.fromisoformat(do_dan) + timedelta(days=1)).replace(tzinfo=TZ).timestamp())
+    try:
+        pc = sqlite3.connect(f"file:{config.PROMET_DB}?mode=ro", uri=True)
+        vrste = pc.execute("SELECT ts, cas_s FROM ac WHERE relacija = ? AND ts BETWEEN ? AND ? "
+                           "AND cas_s IS NOT NULL", (relacija, od_ts, do_ts)).fetchall()
+        pc.close()
+    except sqlite3.Error:
+        return None
+    po_uri: dict[int, list] = defaultdict(list)
+    for ts, cas in vrste:
+        d = datetime.fromtimestamp(ts, TZ)
+        if d.weekday() < 5:
+            po_uri[d.hour].append(cas / 60)
+    vse = [x for v in po_uri.values() for x in v]
+    if len(vse) < MIN_VZOREC:
+        return None
+    ure = {h: stats._pct(v, 0.5) for h, v in po_uri.items() if len(v) >= 10}
+    najhujsa = max(ure, key=ure.get)
+    return {"n": len(vse), "trajanje": stats._pct(vse, 0.5),
+            "konica_ura": najhujsa, "konica": ure[najhujsa],
+            "konica_p90": stats._pct(po_uri[najhujsa], 0.9)}
+
+
+def relacije(conn: sqlite3.Connection, days: int, network: str,
+             danes: date | None = None) -> dict:
+    """Stran `/statistika/relacije`: vlak, avtobus in avto na istih parih.
+
+    Avto je odsek avtoceste od priključka do priključka (brez mesta in
+    parkiranja) -- stran to pove. Samo za železnico (en izračun za oboje).
+    """
+    if network != "zeleznica":
+        return {"days": [], "runs": 0}
+    od, do = _okno(danes)
+    out = []
+    for vlak_od, vlak_do, bus_od, bus_do, ac in RELACIJE:
+        for smer in (0, 1):
+            a, b = (vlak_od, vlak_do) if smer == 0 else (vlak_do, vlak_od)
+            ba, bb = (bus_od, bus_do) if smer == 0 else (bus_do, bus_od)
+            out.append({
+                "od": a, "do": b,
+                "vlak": _par(conn, "zeleznica", a, b, od, do),
+                "avtobus": _par(conn, "avtobus", ba, bb, od, do),
+                "avto": _avto(ac[smer], od, do) if ac else None,
+            })
+    return {"od": od, "do": do, "days": [do], "runs": sum((r["vlak"] or {}).get("n", 0) for r in out),
+            "relacije": out, "min_vzorec": MIN_VZOREC}
+
+
+
+def stran_relacije(conn: sqlite3.Connection) -> dict:
+    """`/statistika/relacije`: na vsak par možnosti po trajanju, najhitrejša prva.
+
+    Vlak in avtobus le z vsaj `MIN_VZOREC` vožnjami; trajanje je dejansko
+    (vozni red + zamuda), kjer je odhod izmerjen pri dovolj vožnjah, sicer
+    vozni red -- stran pove, katero.
+    """
+    p = stats.summary_get(conn, "stat_relacije", "zeleznica")
+    kartice = []
+    for r in p.get("relacije", []):
+        moznosti = []
+        if r.get("avto"):
+            moznosti.append({"kaj": "avto", "t": r["avto"]["trajanje"], "x": r["avto"]})
+        for kaj in ("avtobus", "vlak"):
+            x = r.get(kaj)
+            if x and x["n"] >= MIN_VZOREC:
+                moznosti.append({"kaj": kaj, "t": x["trajanje"] or x["trajanje_vr"], "x": x})
+        if len(moznosti) >= 2:
+            moznosti.sort(key=lambda m: m["t"])
+            najvec = max(m["t"] for m in moznosti) or 1
+            for m in moznosti:
+                m["sirina"] = round(m["t"] / najvec * 100)
+            kartice.append({"od": r["od"], "do": r["do"], "moznosti": moznosti})
+    return {"od": p.get("od"), "do": p.get("do"), "izracunano": p.get("computed_at"),
+            "kartice": kartice}
