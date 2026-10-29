@@ -246,6 +246,11 @@ večje delo · **ne** = podatka ni.
   `stat_dan` ima različico (`STAT_DAN_VERZIJA` 2, meta `stat_dan_verzija`):
   nova vrsta = vsi dnevi znova, vrste z obrezanim virom ostanejo.
 
+* 29. 10. 2026 ~19.30: **faza 5 narejena** (03d8077, ni objavljeno):
+  `/statistika/relacije` + kartica LJ → MB na pregledu; okno `stat_relacije`
+  (`RELACIJE`: šest parov, obe smeri; vlak/avtobus `_par`, avto `_avto` iz
+  `promet.ac` — kjer `promet.sqlite` ni, avto izpade).
+
 ## Naslednji koraki
 
 1. Objava vsega skupaj na koncu (`git push arwen`); ob zagonu se `stat_dan`
