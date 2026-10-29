@@ -230,16 +230,19 @@ večje delo · **ne** = podatka ni.
   so povzetki uvoženi s kopije arwena (vlakov lokalna baza od 7. 10. nima).
   Čaka Davidov ogled na localhost:8001/statistika.
 
+* 29. 10. 2026 ~18.30: **faza 3 narejena** (7b54895, b1dccb3, ed61ad5, ni
+  objavljeno): `/statistika/vlak/{slug}` in `/statistika/linija/{prevoznik}/{slug}`
+  iz `stat_voznja` (nočni izračun prevoznikov zdaj bere končne zamude 90 dni
+  in piše lestvico + 2 295 strani; avtobusi 66 s na arwenu), profil po
+  postajah iz `stats.history` v zahtevi, odhodi pri medkrajevni šifri, dnevi
+  v tednu le ob razliki. Okno vožnje ima v nogi „kako točno vozi ›“
+  (`statistika` v `/api/train/{no}/run`). `/app/statistika` → 301, stara
+  predloga in JS izbrisana (nova `statistika.css` je povozila staro).
+
 ## Naslednji koraki
 
 1. Objava vsega skupaj na koncu (`git push arwen`); ob zagonu se `stat_dan`
-   dopolni sam (~8 min na arwenu, v nočni niti).
-2. **Faza 3, vlak/linija**: `/statistika/vlak/{št}`, `/statistika/linija/{prevoznik}/{št}`:
-   koledar dni, kje na progi zamudo nabere (po postajah), ure, dan v tednu,
-   najhujši dnevi z vzrokom, povezava iz okna vožnje in z lestvice. Zgodovina
-   ene vožnje (krivulja in končna zamuda po dnevih) je v gitu do 24. 10.
-   (`strani.md`). Ob tem `/app/statistika` → 301 na `/statistika`, stara
-   predloga, JS in CSS ven.
+   dopolni sam (~8 min na arwenu, v nočni niti), `stat_voznja` z njim.
 3. **Faza 4, SŽ**: nočni izračun popravkov odhoda iz `obs` (90 dni) v
    `stat_dan` (vrsta `sz`), prehodi potnikov proti zemljevidu SŽ, odseki, kjer
    vozni red ne drži, nadomestni brez podatka, lažni padci; stran
