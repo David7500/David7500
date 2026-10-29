@@ -3090,3 +3090,13 @@ Za stran SŽ. Prirast zamude od odhoda z X do prihoda na naslednji postanek Y, `
 ## Prezgodnji odhodi po prevozniku (29. 10. 2026)
 
 Vmesni postanki (brez izhodišča in cilja), `run`, 15.–28. 10. 2026, odhod vsaj 1,5 min / 2,5 min pred voznim redom (`skripte/prezgodaj.py`): LPP primestni 14,5 / 9,9 % (219 326 postankov), Marprom 10,9 / 5,3 % (25 964), Arriva 6,6 / 3,6 % (704 018), Nomago 6,1 / 3,1 % (640 461), mestni LPP 4,6 / 2,0 % (49 077), Kranj 4,2 / 1,5 %, AP MS 3,3 / 1,2 %, SŽ 0 / 0 % (75 610). Pazi: avtobusni odhod z vmesnega postanka je večinoma prehod iz GPS, ne potrjen postanek; na postajališču brez potnikov avtobus ne ustavi, voznoredni časi manjših postajališč so pogosto preračunani. Na strani kot „lahko odpelje prej“, ne kot kršitev.
+
+## Obrnjene trase v voznem redu LPP: ocena lege drsi nazaj (29. 10. 2026)
+
+Sporočilo potnika (29. 10. ob 11:30): pri LPP 8 se lega premika v eno smer, ocena v drugo. Vzrok je v objavljenem GTFS LPP (`avl.lpp.si`, zip z 28. 10. 07:49, enako že v zipu s 27. 10.): trasa vzorca BRNČIČEVA – GAMELJNE (`499e2950…_0`) teče od Gameljn proti Brnčičevi, tako kot trasa nasprotne smeri. Postanki vožnje gredo po njej nazaj v 15 od 15 zaporednih parov. `ocenaNaTrasi` premika oceno vedno v smeri točk trase, zato gre ocena proti Brnčičevi, GPS pa proti Gameljnam. Obrnjeni so tudi smer ikone (`smerNaOceni`), razrez poti na prevoženo in naprej ter razdalja „do tebe po poti“.
+
+* Vse trase v bazi arwena (3 477, ena vožnja na traso): obrnjene so samo tri, vse mestni LPP (od 109): 8 BRNČIČEVA – GAMELJNE (0 parov naprej / 15 nazaj), 28 ČRNUČE – GAMELJNE (0/12), 18L LITOSTROJSKA – ZOO – KOLODVOR (0/12). Arrivini A2101 (zanka) in A8396 (Koper – Dvori) imata vrstni red mešan (23/24, 6/11); to ni obrat.
+* V živo 29. 10. ob 20:55, 2,5 min: dve vozili linije 8 proti Gameljnam se po svoji trasi pomikata nazaj (4 894 → 3 774 m, 17 787 → 16 894 m), tri proti Brnčičevi naprej.
+* Od kdaj: `pripeto` (pripete trase po vsebini, od 2. 10. 2026) nima nobene pravilno obrnjene različice teh tras. Napaka v viru torej obstaja vsaj od 2. 10.; vidna je, odkar ocena drsi po trasi.
+* Komentar pri `smerNaOceni` (meritev 25. 9.) že omenja vozila, ki „po svoji trasi peljejo nazaj (12D, 69)“. Danes 12D in 69 nista obrnjeni.
+* Uvoz smeri trase ne preverja. `tuje_trase` šteje vožnje s prvim postankom več kot 2 km od začetka trase, zavrne pa šele prevoznika, pri katerem je takih več kot polovica.
