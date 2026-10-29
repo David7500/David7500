@@ -806,6 +806,63 @@ def tuje_trase(trips: dict, routes: dict, seq_by_trip: dict, stops: dict,
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 
+#: Delež zaporednih parov postankov, ki gredo po trasi nazaj, od katerega je
+#: trasa zapisana obratno. Izmerjeno 29. 10. 2026 na 3 477 trasah: obrnjene
+#: (LPP 8, 28, 18L) 0 parov naprej in 12-15 nazaj; Arrivina zanka 23 : 24 in
+#: trasa s krakom tja in nazaj 6 : 11 nista obrnjeni, le pomešani.
+OBRAT_DELEZ = 0.9
+
+
+def _obrni_trase(shapes: dict, trips: dict, sched_rows: list, stops: dict) -> int:
+    """Obrne trase, po katerih vožnje peljejo od konca proti začetku. Vrne koliko.
+
+    LPP je traso smeri Brnčičeva - Gameljne (linija 8) zapisal od Gameljn
+    proti Brnčičevi (zip 27. in 28. 10. 2026, v predpomnilniku pripetih tras
+    od 2. 10. nobene prave). Ocena lege drsi po točkah trase naprej, zato je
+    šla proti Brnčičevi, GPS pa proti Gameljnam; narobe so bili tudi smer
+    ikone, prevoženi del poti in razdalja do potnika. Popravek je tu, ker
+    traso bere vsak od njih.
+
+    Odloči najdaljša vožnja trase. Najprej poceni: prvi postanek je bliže
+    koncu trase, zadnji začetku. Šele takrat projekcija vseh postankov --
+    zanka in krak tja in nazaj imata konca skupaj, vrstni red pa pomešan.
+    """
+    dolzina = Counter(r[0] for r in sched_rows)
+    najdaljsa: dict[str, str] = {}
+    for tid, t in trips.items():
+        sid = t.get("shape_id")
+        if sid in shapes and (sid not in najdaljsa or dolzina[tid] > dolzina[najdaljsa[sid]]):
+            najdaljsa[sid] = tid
+    izbrane = set(najdaljsa.values())
+    postanki: dict[str, list] = defaultdict(list)
+    for tid, seq, stop_id, *_ in sched_rows:
+        if tid in izbrane and stop_id in stops:
+            postanki[tid].append((seq, stops[stop_id]))
+
+    obrnjenih = 0
+    for sid, tid in najdaljsa.items():
+        tocke = [s for _, s in sorted(postanki[tid], key=lambda p: p[0])]
+        if len(tocke) < 3:
+            continue
+        kosi = shapes[sid]
+        (za, zo), (ka, ko) = kosi[0][0], kosi[-1][-1]
+        prvi, zadnji = tocke[0], tocke[-1]
+        if not (geo.haversine(prvi["lat"], prvi["lon"], ka, ko)
+                < geo.haversine(prvi["lat"], prvi["lon"], za, zo)
+                and geo.haversine(zadnji["lat"], zadnji["lon"], za, zo)
+                < geo.haversine(zadnji["lat"], zadnji["lon"], ka, ko)):
+            continue
+        vse = [p for kos in kosi for p in kos]
+        cums = geo.cumulative(vse)
+        vzdolz = [geo.project(vse, cums, s["lat"], s["lon"])[0] for s in tocke]
+        naprej = sum(b > a for a, b in zip(vzdolz, vzdolz[1:]))
+        nazaj = sum(b < a for a, b in zip(vzdolz, vzdolz[1:]))
+        if nazaj >= 2 and nazaj >= OBRAT_DELEZ * (naprej + nazaj):
+            shapes[sid] = [kos[::-1] for kos in reversed(kosi)]
+            obrnjenih += 1
+    return obrnjenih
+
+
 def _z_voznim_redom(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in conn.execute(
         "SELECT trip_id FROM trip WHERE start_s IS NOT NULL")}
@@ -1100,6 +1157,7 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         mestnih[vir.kljuc] = len(mb["trips"])
 
     imen_poenotenih = _poenoti_imena(stops)
+    tras_obrnjenih = _obrni_trase(shapes, trips, sched_rows, stops)
 
     with conn:
         # Voznja, ki ima MERITVE, mora prezivati uvoz tudi takrat, ko je nov
@@ -1217,6 +1275,8 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         # Koliko postajalisc je dobilo drugo ime, ker je isto mesto v feedih
         # zapisano dvakrat. Ce je to veliko, se je nekaj spremenilo pri viru.
         "imen_poenotenih": imen_poenotenih,
+        # Trase, ki jih je vir zapisal od konca proti začetku (`_obrni_trase`).
+        "tras_obrnjenih": tras_obrnjenih,
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),
         "trips_blocked": sum(1 for t in trips.values() if t.get("block_id")),
     }

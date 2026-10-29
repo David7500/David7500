@@ -3099,4 +3099,5 @@ Sporočilo potnika (29. 10. ob 11:30): pri LPP 8 se lega premika v eno smer, oce
 * V živo 29. 10. ob 20:55, 2,5 min: dve vozili linije 8 proti Gameljnam se po svoji trasi pomikata nazaj (4 894 → 3 774 m, 17 787 → 16 894 m), tri proti Brnčičevi naprej.
 * Od kdaj: `pripeto` (pripete trase po vsebini, od 2. 10. 2026) nima nobene pravilno obrnjene različice teh tras. Napaka v viru torej obstaja vsaj od 2. 10.; vidna je, odkar ocena drsi po trasi.
 * Komentar pri `smerNaOceni` (meritev 25. 9.) že omenja vozila, ki „po svoji trasi peljejo nazaj (12D, 69)“. Danes 12D in 69 nista obrnjeni.
-* Uvoz smeri trase ne preverja. `tuje_trase` šteje vožnje s prvim postankom več kot 2 km od začetka trase, zavrne pa šele prevoznika, pri katerem je takih več kot polovica.
+* Uvoz smeri trase ni preverjal. `tuje_trase` šteje vožnje s prvim postankom več kot 2 km od začetka trase, zavrne pa šele prevoznika, pri katerem je takih več kot polovica.
+* **Popravek** (`gtfs._obrni_trase`, ob uvozu): na lokalni bazi (3 456 tras, 944 925 vrstic voznega reda) obrne natanko te tri, v 0,19 s. Pripenjanje po vsebini jih ob naslednjem uvozu pripne znova.

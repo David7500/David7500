@@ -54,6 +54,28 @@ def test_poenoti_imena_zdruzi_le_isto_mesto():
     assert stops["c1"]["name"] == "AMZS"        # brez para ostane, kot je
 
 
+def test_obrni_trase_le_obrnjeno():
+    """LPP je traso linije 8 proti Gameljnam zapisal od Gameljn proti
+    Brnčičevi; ocena lege je zato drsela nazaj (29. 10. 2026). Obrne se samo
+    trasa, po kateri gredo postanki nazaj, z vrstnim redom kosov vred --
+    pomešana (zanka, krak tja in nazaj) ostane."""
+    def crta(od, do):
+        return [(46.100 + i * 0.001, 14.50) for i in range(od, do + 1)]
+    stops = {f"s{i}": {"lat": 46.100 + i * 0.004, "lon": 14.50} for i in range(1, 6)}
+    shapes = {"naprej": [crta(0, 24)], "nazaj": [crta(0, 12), crta(13, 24)],
+              "pomesana": [crta(0, 24)]}
+    trips = {"a": {"shape_id": "naprej"}, "b": {"shape_id": "nazaj"},
+             "c": {"shape_id": "pomesana"}}
+    vrstni_red = {"a": [1, 2, 3, 4, 5], "b": [5, 4, 3, 2, 1], "c": [5, 2, 4, 3, 1]}
+    sched = [(tid, seq, f"s{i}", 0, 0)
+             for tid, red in vrstni_red.items() for seq, i in enumerate(red, 1)]
+
+    assert gtfs._obrni_trase(shapes, trips, sched, stops) == 1
+    assert shapes["naprej"] == [crta(0, 24)]
+    assert shapes["nazaj"] == [crta(13, 24)[::-1], crta(0, 12)[::-1]]
+    assert shapes["pomesana"] == [crta(0, 24)]
+
+
 def test_poenoti_imena_po_mestu_ne_po_vsej_skupini():
     """„TRNOVO" je 112 m od ljubljanskega „Trnovo", a „Trnovo" je tudi pri
     Novi Gorici. Do 19. 10. 2026 je daljni par ustavil zlivanje bližnjega."""
