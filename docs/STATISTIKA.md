@@ -152,7 +152,16 @@ večje delo · **ne** = podatka ni.
 * Vreme kot dejavnik (pozneje, ob prvem snegu preveri vzorec).
 * Zasedenost po urah (pozneje, 28 poročil).
 
-## Odprte odločitve za Davida
+## Odločitve (David, 29. 10. 2026)
+
+* Konkurenca **po metodi, brez imen**; imena ostanejo na `/primerjava`.
+* Stran SŽ **javna, poimenska**, samo dejstva z vzorcem in datumom.
+* Vrstni red: **pregled, napovedi, prevozniki**; nato vlak/linija, SŽ,
+  relacije, mesečno poročilo.
+* Postopek (moj): najprej nočni izračun in API (od designa neodvisno), nato
+  osnutki strani s pravimi številkami, David izbere, nato predloge.
+
+## Predlogi pred odločitvijo (zgodovina)
 
 * Konkurenca: predlagam **po metodi, brez imen** („trenutna zamuda naprej —
   tako kaže zemljevid SŽ“, „samo vozni red“); imena ostanejo na `/primerjava`
@@ -193,8 +202,38 @@ večje delo · **ne** = podatka ni.
   `sz_manjka.py`, `vlak_avto.py`, `vlak_bus.py`, `ac.py`, `odseki.py`,
   `prezgodaj.py`. Številke v `docs/MERITVE.md` (razdelki 29. 10. 2026).
 
+* 29. 10. 2026 popoldne: **zaledje faze 1 narejeno** (commit 44a2fd4):
+  `kajros/statistika.py`, tabela `stat_dan`, kinda `stat_napovedi` in
+  `stat_prevozniki` v `SUMMARY_BUILDERS`, ob zagonu brez njiju nočni izračun
+  takoj, API `/api/statistika/napovedi` in `/api/statistika/prevozniki`,
+  `tests/test_statistika.py` (12). Na kopiji arwena: dopolnitev 69 dni 477 s,
+  okna 0,1–36 s. Ni še objavljeno. Lestvica: vlakov 596, Arriva 478, Nomago
+  885 voženj z ≥ 10 dnevi. Delež voženj z lego NI na strani (`lega` = le NAP).
+
+* 29. 10. 2026 ~16.40: **osnutki na platnu** https://claude.ai/artifact/4T7UpCgyisqYxNenSvrP12
+  (vir v scratchpadu `statistika-osnutki/project/`, sicer Artifact `read`):
+  A Odgovori (kartice z vprašanjem in eno številko), B Poročilo (naslovna
+  poved, tabela, seznami), C Lestvice (zavihki Prevozniki/Vlaki/Linije,
+  uvrstitve s trakom), podstran Napovedi v slogu A. Številke prave (kopija
+  arwena do 28. 10.). Čaka Davidovo izbiro.
+
 ## Naslednji koraki
 
-1. Vključi najdbe bralcev, predlog Davidu, odločitve.
-2. Osnutki v slogu E (pregled + ena podstran), David izbere.
-3. Izvedba po delih, vsak del: nočni izračun, API, stran, test, posnetek.
+1. **Faza 1, zaledje** (od designa neodvisno):
+   * `db.py`: tabela `stat_dan(dan, vrsta, kljuc, podatki JSON, izracunano)`,
+     PK (dan, vrsta, kljuc), brez obreza.
+   * `kajros/statistika.py`: dnevni agregati za včeraj (+ dopolnitev nazaj):
+     `napoved` po (omrežje, prevoznik, na poti / pred odhodom) — vsote za
+     MAE, ±1, ±3, odklon, precenitev ≥ 5 min; prevoznik parno (le vrstice z
+     `operator_s`). `prevoznik` po dnevu: načrtovanih, z meritvijo, z lego,
+     histogram zamude na cilju po zaokroženi minuti (seštevljiv → mediana,
+     p90, v 5 min za katero koli okno), po uri prihoda, prezgodnji odhodi.
+   * Okna v `povzetek` (nove `kind`, `SUMMARY_VERSION` 6): `stat_napovedi`,
+     `stat_prevozniki`, `stat_pregled`; nočno v `server._povzetki`.
+   * API `GET /api/statistika/{pregled,napovedi,prevozniki}`; testi.
+   * Preveri na kopiji baze z arwena (čas izračuna, številke proti
+     MERITVE 29. 10.).
+2. Osnutki strani s pravimi številkami (platno, slog E), David izbere.
+3. Predloge `/statistika`, `/statistika/napovedi`, `/statistika/prevozniki`,
+   `/statistika/prevoznik/{ime}`; sitemap; posnetki 430/1850 px; preveri.sh.
+4. Nato vlak/linija, SŽ, relacije, mesečno poročilo.
