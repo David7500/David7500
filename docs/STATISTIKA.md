@@ -239,14 +239,22 @@ večje delo · **ne** = podatka ni.
   (`statistika` v `/api/train/{no}/run`). `/app/statistika` → 301, stara
   predloga in JS izbrisana (nova `statistika.css` je povozila staro).
 
+* 29. 10. 2026 ~19.00: **faza 4 narejena** (efe4bf5, ni objavljeno):
+  `/statistika/sz` + rjava kartica na pregledu; `stat_dan` vrsta `sz` (od
+  `SZ_VODI_OD` 11. 10.), okno `stat_sz` (popravki odhoda, lažno točna
+  izhodišča, prehodi potnikov, odseki, nadomestni, delež napovedi SŽ).
+  `stat_dan` ima različico (`STAT_DAN_VERZIJA` 2, meta `stat_dan_verzija`):
+  nova vrsta = vsi dnevi znova, vrste z obrezanim virom ostanejo.
+
 ## Naslednji koraki
 
 1. Objava vsega skupaj na koncu (`git push arwen`); ob zagonu se `stat_dan`
    dopolni sam (~8 min na arwenu, v nočni niti), `stat_voznja` z njim.
-3. **Faza 4, SŽ**: nočni izračun popravkov odhoda iz `obs` (90 dni) v
-   `stat_dan` (vrsta `sz`), prehodi potnikov proti zemljevidu SŽ, odseki, kjer
-   vozni red ne drži, nadomestni brez podatka, lažni padci; stran
-   `/statistika/sz`, kartica na pregledu (rjava, osnutek A).
-4. **Faza 5, relacije**: vlak/avtobus/avto (AC iz `promet.sqlite` po urah),
-   kateri odhod izbrati; FCD preslikava pozneje.
+4. **Faza 5, relacije**: `/statistika/relacije` — vlak, avtobus, avto na
+   istih parih (LJ–MB, LJ–KP, LJ–Jesenice, LJ–Kranj, LJ–Celje, LJ–NM):
+   vozni red + izmerjena zamuda na obeh koncih (`docs/statistika-delo/
+   skripte/vlak_bus.py`), avto iz `promet.ac` po uri (samo arwen ima
+   `promet.sqlite`; brez nje kartica avta izpade). Pošten odgovor zdaj:
+   na avtocesti je avto ob vsaki uri hitrejši; kratke poti z gnečo šele s
+   preslikavo FCD (OpenLR, `~/nap-vzorci` na arwenu).
 5. **Faza 6**: mesečno poročilo, nadomestila (≥ 60 min), postaje.
