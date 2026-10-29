@@ -209,3 +209,65 @@ def test_pokritost_od_prvega_dne_zajema():
     vlak = next(x for x in p["prevozniki"] if x["skupina"] == "vlak")
     assert vlak["pokritost"] == 100.0
     assert vlak["zajem_od"] == (_danes() - timedelta(days=1)).isoformat()
+
+
+# ---------------------------------------------------------------- strani
+
+def test_zamuda_z_besedo_ne_z_minusom():
+    """`oznake.md`: minus je uganka -- „5,5 min prej“, ničla je „točno“."""
+    assert statistika.zamuda_min(-5.5) == "5,5 min prej"
+    assert statistika.zamuda_min(0) == "točno"
+    assert statistika.zamuda_min(22.5) == "+22,5 min"
+    assert statistika.zamuda_min(4.0) == "+4 min"
+    assert statistika.odstotek(58.5) == "59 %"      # floor(x + 0.5), ne bančno
+
+
+def _zahteva(pot: str):
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "GET", "path": pot, "raw_path": pot.encode(),
+                    "query_string": b"", "headers": [(b"host", b"kajros.app")],
+                    "scheme": "https", "server": ("kajros.app", 443)})
+
+
+@pytest.fixture()
+def strani(monkeypatch):
+    """Majhna baza, meje vzorca na ena: izrišejo se vse kartice, tudi tiste,
+    ki bi jih sicer skril premajhen vzorec -- napaka v predlogi pade tu."""
+    from kajros import api
+    c = _baza(dnevi_nazaj=(1, 2, 3))
+    monkeypatch.setattr(api, "_conn", lambda: c)
+    for ime in ("MIN_VZOREC", "MIN_VOZENJ_PRIMERJAVA", "MIN_DNI_PRIMERJAVA", "MIN_DNI_LESTVICA"):
+        monkeypatch.setattr(statistika, ime, 1)
+    return api
+
+
+def test_strani_statistike_se_izrisejo(strani):
+    api = strani
+    for pot, klic in (("/statistika", lambda r: api.statistika_pregled(r)),
+                      ("/statistika/napovedi", lambda r: api.statistika_napovedi(r)),
+                      ("/statistika/prevozniki", lambda r: api.statistika_prevozniki(r)),
+                      ("/statistika/prevoznik/sz", lambda r: api.statistika_prevoznik(r, "sz"))):
+        odgovor = klic(_zahteva(pot))
+        assert odgovor.status_code == 200, pot
+        html = odgovor.body.decode()
+        assert "st-k" in html or "st-seznam" in html, pot
+    sz = api.statistika_prevoznik(_zahteva("/statistika/prevoznik/sz"), "sz").body.decode()
+    assert "50 %" in sz                       # LP 1 v 5 min, LP 2 ne
+    assert "Nadomestni avtobusi SŽ" in sz          # feed zanje ne poroča
+
+
+def test_neznan_prevoznik_je_404(strani):
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as e:
+        strani.statistika_prevoznik(_zahteva("/statistika/prevoznik/x"), "x")
+    assert e.value.status_code == 404
+
+
+def test_zemljevid_strani_bere_samo_shranjeno():
+    """Brez povzetka strani statistike ni v zemljevidu in nič se ne računa;
+    s povzetkom so tam pregled, napovedi, prevozniki in vsak prevoznik."""
+    c = _baza()
+    assert statistika.poti_za_iskalnik(c) == []
+    stats.summary_build(c, "stat_prevozniki", "zeleznica", 90)
+    poti = [p for p, _ in statistika.poti_za_iskalnik(c)]
+    assert "/statistika" in poti and "/statistika/prevoznik/sz" in poti

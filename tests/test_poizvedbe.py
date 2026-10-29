@@ -2717,12 +2717,13 @@ def test_strani_nimajo_noge():
         assert "_noga.html" not in p.read_text(), p.name
 
 
-def test_statistika_ni_v_zemljevidu_strani():
-    """Umaknjena stran ne sme biti ponujena iskalniku, če je ne vidi niti
-    obiskovalec."""
+def test_umaknjena_statistika_ni_v_zemljevidu_strani():
+    """Umaknjena `/app/statistika` ne sme biti ponujena iskalniku, če je ne
+    vidi niti obiskovalec. Nove strani `/statistika*` gredo v zemljevid iz
+    povzetkov (`statistika.poti_za_iskalnik`)."""
     from kajros.api import _SITEMAP
 
-    assert not [p for p in _SITEMAP if "statistika" in p]
+    assert not [p for p in _SITEMAP if p.startswith("/app/statistika")]
 
 
 def test_odtis_statike_sledi_popravku(tmp_path, monkeypatch):

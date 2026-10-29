@@ -22,6 +22,7 @@ Okna (`napovedi`, `prevozniki`) gredo v `povzetek` prek
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import time
 from collections import Counter, defaultdict
@@ -51,6 +52,15 @@ MIN_VZOREC = 30
 #: je delež v 5 min še grob, a red velikosti drži (`stats.MIN_RUNS_FOR_GROUP`).
 MIN_DNI_LESTVICA = 10
 LESTVICA_N = 5
+
+#: Prevozniki, pri katerih je `train_no` linija (mestni promet in LPP
+#: primestni), ne ena vožnja: na lestvici je enota linija.
+LINIJSKI = frozenset({"lpp", "1118", "marprom", "kranj"})
+
+#: Prevoznikova napoved se pokaže le, kadar jo je objavil vsaj pri tolikšnem
+#: deležu pogledov. SŽ jo ima pri 0,5 % (429 od 87 055): to ni napoved, ki bi
+#: jo potnik videl, in primerjava na tem izrezu bi bila anekdota.
+MIN_DELEZ_PREVOZNIKA = 0.2
 
 #: Meje histograma zamude v minutah; kar je zunaj, gre v robni razred. Strop
 #: `stats.MAX_REALNA_ZAMUDA_S` (3 h) je zgoraj že pri branju.
@@ -440,17 +450,21 @@ def _lestvica(conn: sqlite3.Connection, network: str, od: str, do: str) -> dict:
             {"od": od, "do": do, "net": network}):
         if d is None or abs(d) > stats.MAX_REALNA_ZAMUDA_S or not no:
             continue
-        k = (agency, no)
+        # Medkrajevna šifra (A6343) je lahko več odhodov na dan (84 v 30
+        # dneh): vožnja je šele šifra + ura odhoda. Mestna linija ostane cela.
+        k = (agency, no, None if agency in LINIJSKI else start)
         po[k].append(d)
         smer[k][(cilj or "", start)] += 1
 
     po_prevozniku: dict[str, list] = defaultdict(list)
-    for (agency, no), vals in po.items():
+    for k, vals in po.items():
+        agency, no, _ = k
         if len(vals) < MIN_DNI_LESTVICA:
             continue
-        (cilj, start), _ = smer[(agency, no)].most_common(1)[0]
+        (cilj, start), _ = smer[k].most_common(1)[0]
         po_prevozniku[agency].append({
             "st": no, "cilj": cilj, "start_s": start, "n": len(vals),
+            "linija": agency in LINIJSKI,
             "v5min": round(sum(stats._je_pravocasna(v) for v in vals) / len(vals) * 100, 1),
             "mediana_min": stats._pct([stats._minute(v) for v in vals], 0.5),
         })
@@ -458,7 +472,9 @@ def _lestvica(conn: sqlite3.Connection, network: str, od: str, do: str) -> dict:
     for agency, vrste in po_prevozniku.items():
         # Enak delež loči mediana, nato vzorec: pri istem deležu je zanesljivejša
         # številka tista z več dnevi.
-        vrste.sort(key=lambda x: (-x["v5min"], x["mediana_min"], -x["n"]))
+        # Pri istem deležu je točnejša tista, ki pride bliže voznemu redu
+        # (ne prej: −5 min na cilju je rezerva voznega reda, ne točnost).
+        vrste.sort(key=lambda x: (-x["v5min"], abs(x["mediana_min"]), -x["n"]))
         out[agency] = {"najboljse": vrste[:LESTVICA_N],
                        "najslabse": list(reversed(vrste[-LESTVICA_N:])),
                        "vseh": len(vrste)}
@@ -519,7 +535,10 @@ def prevozniki(conn: sqlite3.Connection, days: int, network: str,
                           if sum(nacrt) else None),
             "nacrt": sum(nacrt) if nacrt else None,
             "zajem_od": next((dan for dan, v in dnevi if v["z_meritvijo"]), None),
-            "cilj": iz_histograma(hist),
+            # Surovi histogram gre zraven: pregled sešteje avtobuse vseh
+            # prevoznikov v eno porazdelitev (mediana iz median ne gre).
+            "cilj": {**iz_histograma(hist),
+                     "hist": {str(m): c for m, c in sorted(hist.items())}},
             "po_urah": {h: {"n": n, "v5min": round(ok / n * 100, 1)}
                         for h, (n, ok) in sorted(ure.items(), key=lambda x: int(x[0])) if n},
             "prezgodaj": {"vmesnih": vmesnih, **{
@@ -543,3 +562,200 @@ def prevozniki(conn: sqlite3.Connection, days: int, network: str,
         "min_vzorec": MIN_VZOREC,
         "min_dni_lestvica": MIN_DNI_LESTVICA,
     }
+
+
+# ---------------------------------------------------------------- strani
+
+def odstotek(x: float | None) -> str:
+    """58.2 -> „58 %“: cel odstotek z nedeljivim presledkom, zaokrožen
+    `floor(x + 0.5)` kot vse drugo (`oznake.md`)."""
+    return "" if x is None else f"{math.floor(x + 0.5)}\u00a0%"
+
+
+def decimalno(x: float | None, mest: int = 1) -> str:
+    """2.58 -> „2,6“. Pika je angleška."""
+    return "" if x is None else f"{x:.{mest}f}".replace(".", ",")
+
+
+def minute(x: float | None) -> str:
+    """Mediana v minutah za stavek: 4.0 -> „4 min“, 2.5 -> „2,5 min“."""
+    if x is None:
+        return ""
+    return (f"{int(x)}" if float(x).is_integer() else decimalno(x)) + "\u00a0min"
+
+
+def zamuda_min(x: float | None) -> str:
+    """Mediana zamude za vrstico: „+22,5 min“, „5,5 min prej“, „točno“.
+
+    Beseda namesto minusa (`oznake.md`: minus je uganka), na pol minute kot
+    `stats._pct` vrne mediano.
+    """
+    if x is None:
+        return ""
+    if x == 0:
+        return "točno"
+    st = f"{int(abs(x))}" if float(x).is_integer() else decimalno(abs(x))
+    return f"{st}\u00a0min prej" if x < 0 else f"+{st}\u00a0min"
+
+
+def ura_vr(t_s: int | None) -> str:
+    """Voznoredne sekunde -> „06:35“ (od poldneva minus 12 h, kot GTFS)."""
+    return "" if t_s is None else f"{(t_s // 3600) % 24:02d}:{(t_s % 3600) // 60:02d}"
+
+
+#: Prevoznik pride v primerjavo šele s toliko vožnjami in toliko dnevi zajema
+#: v oknu. Manjši so omenjeni posebej („še premalo“): sicer bi lestvica dva
+#: dneva Marproma postavila ob mesec Arrive.
+MIN_VOZENJ_PRIMERJAVA = 1000
+MIN_DNI_PRIMERJAVA = 14
+
+
+def _dni_zajema(x: dict, do: str) -> int:
+    if not x.get("zajem_od"):
+        return 0
+    return min(OKNO_DNI, (date.fromisoformat(do) - date.fromisoformat(x["zajem_od"])).days + 1)
+
+
+def primerljiv(x: dict, do: str) -> bool:
+    return (x["skupina"] != "nadomestni"
+            and x["cilj"].get("n", 0) >= MIN_VOZENJ_PRIMERJAVA
+            and _dni_zajema(x, do) >= MIN_DNI_PRIMERJAVA)
+
+
+def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
+    """Strani statistike za zemljevid strani, z dnem izračuna.
+
+    Bere samo shranjene povzetke, nikoli ne računa: zemljevid strani mora
+    odgovoriti takoj, in strani brez povzetka še ni smiselno ponujati.
+    """
+    poti: list[tuple[str, str | None]] = []
+    for net in stats.SUMMARY_NETWORKS:
+        vrstica = conn.execute(
+            "SELECT computed_at, payload FROM povzetek "
+            "WHERE kind = 'stat_prevozniki' AND network = ? AND days = 90", (net,)).fetchone()
+        if vrstica is None:
+            continue
+        dan = (vrstica[0] or "")[:10] or None
+        if not poti:
+            poti += [(p, dan) for p in ("/statistika", "/statistika/napovedi",
+                                        "/statistika/prevozniki")]
+        for x in json.loads(vrstica[1]).get("prevozniki", []):
+            if x["skupina"] != "nadomestni" and x["cilj"].get("n"):
+                poti.append((f"/statistika/prevoznik/{pristanek.slug(x['ime'])}", dan))
+    return poti
+
+
+def vsi_prevozniki(conn: sqlite3.Connection) -> tuple[list[dict], dict]:
+    """Prevozniki obeh omrežij iz nočnih povzetkov, s potjo strani."""
+    out, glava = [], {}
+    for net in stats.SUMMARY_NETWORKS:
+        p = stats.summary_get(conn, "stat_prevozniki", net)
+        glava = {"od": p["od"], "do": p["do"], "izracunano": p.get("computed_at")}
+        for x in p["prevozniki"]:
+            out.append({**x, "network": net, "slug": pristanek.slug(x["ime"]),
+                        "dni_zajema": _dni_zajema(x, p["do"])})
+    return out, glava
+
+
+def spark(dnevi: list[dict], dni: int = OKNO_DNI) -> list[dict]:
+    """Stolpci po dnevih: višina = delež v 5 min; dan z malo vožnjami sivo,
+    nizek -- izpad zajema ni slab dan (7.–10. 10. 2026 vlaki brez vira)."""
+    out = []
+    for d in dnevi[-dni:]:
+        n = d.get("n") or 0
+        malo = n < MIN_VZOREC
+        out.append({"dan": d["dan"], "n": n, "v5": d.get("v5min"), "malo": malo,
+                    "visina": 4 if malo or d.get("v5min") is None else max(4, round(d["v5min"]))})
+    return out
+
+
+def stran_pregled(conn: sqlite3.Connection) -> dict:
+    """Vse, kar pokaže `/statistika`: eno vprašanje, ena številka na kartico."""
+    vsi, glava = vsi_prevozniki(conn)
+    do = glava.get("do")
+    vlak = next((x for x in vsi if x["kljuc"] == "zeleznica|1161|vlak"), None)
+    busi = [x for x in vsi if x["network"] == "avtobus"]
+    hist: Counter = Counter()
+    for x in busi:
+        hist.update({int(m): c for m, c in x["cilj"].get("hist", {}).items()})
+    lestvica = sorted((x for x in vsi if do and primerljiv(x, do)),
+                      key=lambda x: -x["cilj"]["v5min"])
+    premalo = [x for x in vsi if x["skupina"] != "nadomestni" and x["cilj"].get("n")
+               and not (do and primerljiv(x, do))]
+    prej = sorted((x for x in busi if do and primerljiv(x, do)
+                   and x["prezgodaj"].get("prej2") is not None),
+                  key=lambda x: -x["prezgodaj"]["prej2"])
+    nap = stats.summary_get(conn, "stat_napovedi", "zeleznica")
+    return {
+        **glava,
+        "vlak": vlak, "vlak_dnevi": spark(vlak["po_dnevih"]) if vlak else [],
+        "bus": iz_histograma(hist), "bus_prevoznikov": len(busi),
+        "lestvica": lestvica, "premalo": premalo,
+        "prezgodaj": prej[:3], "vlak_prezgodaj": vlak["prezgodaj"] if vlak else None,
+        "napoved": nap["skupaj"]["na_poti"]["vse"],
+        "napoved_od": nap.get("od"), "napoved_do": nap.get("do"),
+        "horizont_min": nap.get("horizont_min"),
+        "min_vzorec": MIN_VZOREC,
+    }
+
+
+def stran_prevozniki(conn: sqlite3.Connection) -> dict:
+    """`/statistika/prevozniki`: primerljivi po deležu v 5 min, ostali pod črto."""
+    vsi, glava = vsi_prevozniki(conn)
+    do = glava.get("do")
+    return {**glava,
+            "primerljivi": sorted((x for x in vsi if do and primerljiv(x, do)),
+                                  key=lambda x: -x["cilj"]["v5min"]),
+            "premalo": [x for x in vsi if x["skupina"] != "nadomestni" and x["cilj"].get("n")
+                        and not (do and primerljiv(x, do))]}
+
+
+def stran_napovedi(conn: sqlite3.Connection) -> dict:
+    """`/statistika/napovedi`: vlaki na poti in pred odhodom, avtobusi parno."""
+    vlaki = stats.summary_get(conn, "stat_napovedi", "zeleznica")
+    busi = stats.summary_get(conn, "stat_napovedi", "avtobus")
+    parno = []
+    for agency, sk in busi["po_prevozniku"].items():
+        p = sk["na_poti"]["parno"]
+        if p["prevoznik"]["n"] >= MIN_VZOREC:
+            parno.append({"ime": busi["imena"].get(agency, agency),
+                          "nasa": p["nasa"], "prevoznik": p["prevoznik"]})
+    parno.sort(key=lambda x: x["prevoznik"]["mae_min"] - x["nasa"]["mae_min"], reverse=True)
+    tedni = [t for t in vlaki["po_tednih"] if t["nasa"]["n"] >= MIN_VZOREC]
+    najvec = max([t["prenos"]["mae_min"] for t in tedni] + [t["nasa"]["mae_min"] for t in tedni] + [0.01])
+    return {
+        "od": vlaki["od"], "do": vlaki["do"], "izracunano": vlaki.get("computed_at"),
+        "vlaki": vlaki["skupaj"], "horizont_vlak": vlaki["horizont_min"],
+        "horizont_bus": busi["horizont_min"], "parno": parno,
+        "tedni": [{**t, "visina_nasa": round(t["nasa"]["mae_min"] / najvec * 100),
+                   "visina_prenos": round(t["prenos"]["mae_min"] / najvec * 100)}
+                  for t in tedni[-8:]],
+        "min_vzorec": MIN_VZOREC,
+    }
+
+
+def stran_prevoznik(conn: sqlite3.Connection, slug: str) -> dict | None:
+    """`/statistika/prevoznik/{slug}`; nadomestni prevoz SŽ gre k SŽ kot opomba."""
+    vsi, glava = vsi_prevozniki(conn)
+    izbrani = [x for x in vsi if x["slug"] == slug]
+    glavni = next((x for x in izbrani if x["skupina"] != "nadomestni"), None)
+    if glavni is None:
+        return None
+    nadomestni = next((x for x in izbrani if x["skupina"] == "nadomestni"), None)
+    ure = [{"ura": int(h), **v} for h, v in glavni["po_urah"].items()
+           if v["n"] >= MIN_VZOREC]
+    # Stolpec = delež z zamudo nad 5 min, merilo postavi najslabša ura.
+    najvec = max((100 - u["v5min"] for u in ure), default=0) or 1
+    for u in ure:
+        u["visina"] = max(4, round((100 - u["v5min"]) / najvec * 100))
+    nap = glavni["napoved"]
+    vse_n = nap["vse"]["nasa"].get("n", 0)
+    return {**glava, "p": glavni, "nadomestni": nadomestni,
+            "dnevi": spark(glavni["po_dnevih"], 90),
+            "ure": ure,
+            "napove_sam": bool(vse_n) and nap["parno"]["prevoznik"].get("n", 0) >= max(
+                MIN_VZOREC, MIN_DELEZ_PREVOZNIKA * vse_n),
+            "delez_prevoznika": (round(nap["parno"]["prevoznik"].get("n", 0) / vse_n * 100, 1)
+                                 if vse_n else None),
+            "primerljiv": bool(glava.get("do")) and primerljiv(glavni, glava["do"]),
+            "min_vzorec": MIN_VZOREC, "min_dni_lestvica": MIN_DNI_LESTVICA}

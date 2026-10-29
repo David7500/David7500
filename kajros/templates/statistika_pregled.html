@@ -1,0 +1,95 @@
+{#
+  /statistika -- pregled, slog A „Odgovori“ (David, 29. 10. 2026): vsaka
+  kartica je vprašanje potnika z eno številko in vodi na podstran. Izris na
+  strežniku, brez JS; številke iz nočnih povzetkov (`statistika.stran_pregled`).
+  Kartica brez dovolj vzorca izpade, ne pokaže šuma.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Koliko zamujajo vlaki in avtobusi — statistika — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, trak, stolpci, noga %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page">
+  <main class="home st">
+    {{ glava() }}
+    <h1>Statistika</h1>
+    <p class="st-glava">Zadnjih 30 dni, do {{ do | dan }} · izračunano {{ izracunano | ura_dneva }}</p>
+
+    <div class="st-kartice">
+    {% if vlak and vlak.cilj.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>Koliko zamujajo vlaki?</h2>
+      <div class="st-velika"><b class="st-vlak-b">{{ vlak.cilj.v5min | odstotek }}</b><span>vlakov pride na cilj v 5 minutah</span></div>
+      <p>{% if vlak.cilj.mediana_min > 0 %}Polovica zamudi vsaj {{ vlak.cilj.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, {{ vlak.cilj.nad15 | odstotek }} več kot 15 min.</p>
+      {{ stolpci(vlak_dnevi) }}
+      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ vlak.cilj.n | stevilo }} voženj</div>
+      <a class="st-naprej" href="/statistika/prevoznik/{{ vlak.slug }}">Po urah in vlakih ›</a>
+    </section>
+    {% endif %}
+
+    {% if bus.n and bus.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>In avtobusi?</h2>
+      <div class="st-velika"><b class="st-bus-b">{{ bus.v5min | odstotek }}</b><span>avtobusov pride na cilj v 5 minutah</span></div>
+      <p>Mestni in medkrajevni skupaj: {{ bus.n | stevilo }} voženj pri {{ bus_prevoznikov }} prevoznikih. {% if bus.mediana_min > 0 %}Polovica zamudi vsaj {{ bus.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, {{ bus.nad15 | odstotek }} več kot 15 min.</p>
+    </section>
+    {% endif %}
+
+    {% if lestvica %}
+    <section class="st-k">
+      <h2>Kdo vozi najbolj točno?</h2>
+      <div class="st-drobno">delež voženj, ki pridejo v 5 min</div>
+      {% for x in lestvica %}
+      {{ trak(x.ime ~ (" (vlaki)" if x.network == "zeleznica" else ""), x.cilj.v5min, x.cilj.v5min | odstotek, "vlak" if x.network == "zeleznica" else "bus") }}
+      {% endfor %}
+      {% if premalo %}<div class="st-drobno">Še premalo za primerjavo: {% for x in premalo %}{{ x.ime }} ({{ x.cilj.n | stevilo }} voženj{% if x.zajem_od %}, od {{ x.zajem_od | dan }}{% endif %}){{ ", " if not loop.last }}{% endfor %}.</div>{% endif %}
+      <a class="st-naprej" href="/statistika/prevozniki">Vsi prevozniki ›</a>
+    </section>
+    {% endif %}
+
+    {% if napoved.nasa.n >= min_vzorec %}
+    {% set najvec = napoved.vozni_red.mae_min or 1 %}
+    <section class="st-k">
+      <h2>So naše napovedi kaj vredne?</h2>
+      <p>{{ horizont_min }} minut pred vlakom smo v povprečju zgrešili za</p>
+      {{ trak("kajros", napoved.nasa.mae_min / najvec * 100, napoved.nasa.mae_min | decimalno, "vlak") }}
+      {{ trak("trenutna zamuda", napoved.prenos.mae_min / najvec * 100, napoved.prenos.mae_min | decimalno, "siv") }}
+      {{ trak("vozni red", 100, napoved.vozni_red.mae_min | decimalno, "temen") }}
+      <div class="st-drobno">minut · {{ napoved.nasa.n | stevilo }} pogledov · „trenutna zamuda“ = zamuda z zemljevida SŽ, prenesena na vse postaje naprej</div>
+      <a class="st-naprej" href="/statistika/napovedi">Kako merimo ›</a>
+    </section>
+    {% endif %}
+
+    {% if prezgodaj %}
+    {% set najvec = prezgodaj[0].prezgodaj.prej2 or 1 %}
+    <section class="st-k">
+      <h2>Avtobus lahko odpelje prej</h2>
+      <p>Delež postankov, kjer je vozilo odpeljalo vsaj 2 min pred voznim redom:</p>
+      {% for x in prezgodaj %}
+      {{ trak(x.ime, x.prezgodaj.prej2 / najvec * 100, x.prezgodaj.prej2 | odstotek, "prej") }}
+      {% endfor %}
+      {% if vlak_prezgodaj and vlak_prezgodaj.prej2 is not none %}
+      {{ trak("vlaki SŽ", vlak_prezgodaj.prej2 / najvec * 100, vlak_prezgodaj.prej2 | odstotek, "prej") }}
+      {% endif %}
+      <p>Na postajališče pridi 2 minuti prej.</p>
+      <a class="st-naprej" href="/statistika/prevozniki">Po prevoznikih ›</a>
+    </section>
+    {% endif %}
+    </div>
+
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>

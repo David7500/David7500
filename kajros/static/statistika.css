@@ -1,193 +1,106 @@
-/* Stran "kdaj se splača potovati".
+/* Strani statistike (`/statistika*`), slog A „Odgovori“ (David, 29. 10. 2026):
+ * kartica = vprašanje potnika in ena velika številka, pod njo trak ali
+ * stolpci, spodaj povezava naprej. Izris na strežniku, brez JS: širina traku
+ * in višina stolpca prideta v `style`.
  *
- * Vodoravni stolpci in nič drugega: vsaka vrstica je ena ura, en dan ali ena
- * vrsta vlaka, dolžina je mediana zamude, barva pa isti ordinalni ramp kot
- * povsod (`--d-*`). Grafične knjižnice ni -- odvisnosti so pri tem projektu
- * draga stvar, `<div>` s širino v odstotkih pa naredi isto.
+ * Omrežji imata vsako svojo barvo tudi na isti strani -- pregled kaže oboje,
+ * zato barva ne more priti iz `body.net-avtobus` (ta prestavi `--accent`
+ * za vso stran). Vrednosti sta isti kot poudarka obeh omrežij v base.css;
+ * izjema od „zeleno samo skozi --accent“ kot legenda omrežij na zemljevidu
+ * (`oznake.md`).
  */
 
-.stat-main { max-width: 760px; }
-
-/* ---------- glava: ena poved, ki jo je vredno odnesti ---------- */
-
-.stat-glava {
-  display: grid;
-  gap: 10px;
-  margin: 16px 0 22px;
+.st {
+  --st-vlak: #e07b45; --st-vlak-lit: #f0934f;
+  --st-bus: #3fa96f;  --st-bus-lit: #4db97f;
+  max-width: 720px;
 }
 
-.stat-poved {
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 14px 16px;
-  font-size: 15px;
-  line-height: 1.5;
+.st h1 { margin: 22px 0 4px; font: 700 30px/1.15 var(--sans); color: var(--ink); }
+.st-glava { margin: 0 0 16px; font: 400 14px/1.45 var(--sans); color: var(--ink-dim); }
+.st-nazaj { display: inline-block; margin-top: 14px; font: 500 14px var(--sans);
+            color: var(--accent-lit); text-decoration: none; }
+
+.st-kartice { display: flex; flex-direction: column; gap: 14px; }
+.st-k {
+  background: var(--m-visoka); border-radius: var(--r-lg);
+  padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 10px;
 }
-.stat-poved strong { color: var(--accent-lit); font-weight: 600; }
-.stat-poved .stat-slabo { color: var(--d-big); }
+.st-k h2 { margin: 0; font: 600 15px/1.3 var(--sans); color: var(--ink); }
+.st-k p { margin: 0; font: 400 14px/1.45 var(--sans); color: var(--ink-dim); }
+.st-k.st-ton { background: var(--m-kont); }
+.st-k.st-ton h2, .st-k.st-ton p, .st-k.st-ton .st-velika span,
+.st-k.st-ton a { color: var(--m-na-kont); }
 
-.stat-obseg {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  font-size: 12px;
-  color: var(--ink-mute);
+.st-velika { display: flex; align-items: baseline; gap: 12px; }
+.st-velika b { font: 700 44px/1 var(--sans); white-space: nowrap; }
+.st-velika span { font: 400 14px/1.4 var(--sans); color: var(--ink-dim); }
+.st-vlak-b { color: var(--st-vlak-lit); }
+.st-bus-b { color: var(--st-bus-lit); }
+
+.st-drobno { font: 400 12px/1.45 var(--sans); color: var(--ink-mute); }
+.st-k a.st-naprej { font: 600 14px var(--sans); color: var(--accent-lit); text-decoration: none; }
+@media (hover: hover) { .st-k a.st-naprej:hover { text-decoration: underline; } }
+
+/* Vrstica s trakom: ime, trak, številka. Ime se skrči, število ostane --
+   enako kot pri stari statistiki (`strani.md`: vzorec vedno viden). */
+.st-vr { display: flex; align-items: center; gap: 10px; font: 400 14px/1.3 var(--sans); color: var(--ink); }
+.st-vr .ime { flex: 0 1 128px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-trak { flex: 1 1 auto; height: 10px; background: var(--m-najvisja); border-radius: var(--r-pilula); overflow: hidden; }
+.st-trak i { display: block; height: 100%; border-radius: inherit; background: var(--ink-faint); }
+.st-trak i.vlak { background: var(--st-vlak); }
+.st-trak i.bus { background: var(--st-bus); }
+.st-trak i.siv { background: var(--d-ontime); }
+.st-trak i.temen { background: var(--ink-ghost); }
+.st-trak i.prej { background: var(--d-small); }
+.st-vr .st { width: auto; }
+.st-vr .num { flex: none; width: 48px; text-align: right; font: 500 13px var(--mono); color: var(--ink); }
+
+/* Stolpci po dnevih. Višina = delež v 5 min; dan z malo vožnjami je sivo
+   nizek, ker izpad zajema ni slab dan. */
+.st-stolpci { display: flex; align-items: flex-end; gap: 2px; height: 40px; }
+.st-stolpci i { flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0; background: var(--st-vlak); }
+.st-stolpci.bus i { background: var(--st-bus); }
+.st-stolpci i.malo { background: var(--line-firm); }
+
+/* Ure dneva: višje = več voženj z zamudo nad 5 min. Prozornost na
+   posnetku 29. 10. ni ločila ur (60 in 97 % sta bila videti enako). */
+.st-ure { display: flex; align-items: flex-end; gap: 2px; height: 48px; }
+.st-ure i { flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0; background: var(--st-vlak); }
+.st-ure.bus i { background: var(--st-bus); }
+.st-ure-os { display: flex; justify-content: space-between; }
+
+/* Mi proti prevozniku: tabela dveh stolpcev številk. */
+.st-par { display: grid; grid-template-columns: 1fr 64px 72px; gap: 6px 10px; align-items: center;
+          font: 400 14px/1.3 var(--sans); color: var(--ink); }
+.st-par .h { font-size: 12px; color: var(--ink-mute); text-align: right; }
+.st-par .v { font: 500 14px var(--mono); text-align: right; }
+.st-par .v.nasa { color: var(--st-bus-lit); }
+
+/* Tedni: dva stolpca na teden (mi, prenos). */
+.st-tedni { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px;
+            align-items: end; height: 110px; }
+.st-tedni div { display: flex; gap: 3px; align-items: flex-end; height: 100%; }
+.st-tedni i { flex: 1; border-radius: 3px 3px 0 0; }
+.st-tedni i.nasa { background: var(--st-vlak); }
+.st-tedni i.prenos { background: var(--d-ontime); }
+.st-tedni-os { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; text-align: center; }
+
+/* Seznam (prevozniki, lestvica vožnje). */
+.st-seznam { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.st-seznam a, .st-seznam .vr {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline;
+  padding: 12px 14px; background: var(--bg-raised); border-radius: var(--r);
+  text-decoration: none; color: var(--ink);
 }
-.stat-obseg b { color: var(--ink-dim); font-weight: 500; font-variant-numeric: tabular-nums; }
+.st-seznam .ime { font: 600 15px/1.3 var(--sans); }
+.st-seznam .pc { font: 600 16px var(--mono); text-align: right; }
+.st-seznam .drobno { grid-column: 1 / -1; font: 400 12px/1.45 var(--sans); color: var(--ink-mute); }
+@media (hover: hover) { .st-seznam a:hover { background: var(--bg-hover); } }
 
-/* ---------- bloki ---------- */
+.st-noga { margin: 22px 0 32px; font: 400 12px/1.5 var(--sans); color: var(--ink-mute); }
+.st-noga a { color: var(--ink-dim); }
 
-.stat-blok { margin: 26px 0; }
-.stat-blok h2 {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0 0 2px;
-  color: var(--ink);
-}
-.stat-pod {
-  margin: 0 0 12px;
-  font-size: 12.5px;
-  color: var(--ink-mute);
-}
-.stat-pod.stat-tanko { color: var(--sev-hard); }
-
-/* ---------- vrstice ---------- */
-
-.stat-vrstice { display: grid; gap: 3px; }
-/* Širina stolpca z imenom je spremenljivka, ker imena niso enako dolga:
-   ure so „07:00", dnevi „ponedeljek", prevozniki pa „AP Murska Sobota" in
-   „LPP primestni". Doslej je bila fiksna in je rezala — na zaslonu je pisalo
-   „LPP prim…", kar je za statistiko, ki loči mestni od primestnega, ravno
-   tista beseda, ki manjka. */
-.stat-vrstice { --oznaka: 4.6em; }
-.stat-vrstice.dolge-oznake { --oznaka: 8.4em; }
-
-.stat-vrsta {
-  display: grid;
-  grid-template-columns: var(--oznaka, 4.6em) 1fr auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 3px 0;
-}
-
-.stat-ime {
-  font-size: 12.5px;
-  color: var(--ink-dim);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.stat-vrsta.je-najboljsa .stat-ime,
-.stat-vrsta.je-najslabsa .stat-ime { color: var(--ink); font-weight: 600; }
-
-/* Tir stolpca je viden tudi pri ničli -- brez njega vrstica z majhno zamudo
-   izgleda kot manjkajoč podatek, ne kot dobra novica. */
-.stat-tir {
-  position: relative;
-  height: 16px;
-  background: var(--line-soft);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.stat-stolpec {
-  height: 100%;
-  border-radius: 3px;
-  min-width: 2px;
-  transition: width .25s ease;
-}
-
-.stat-vrednost {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-dim);
-  font-variant-numeric: tabular-nums;
-  min-width: 4.2em;
-  text-align: right;
-}
-.stat-vrsta.je-tanka .stat-vrednost,
-.stat-vrsta.je-tanka .stat-ime { color: var(--ink-ghost); }
-/* Vrstica s premajhnim vzorcem se ne skriva -- podatek je -- ampak se umakne,
-   da je ne bereš kot ugotovitev. */
-.stat-vrsta.je-tanka .stat-stolpec { opacity: .38; }
-
-/* Vrstica, ki presega merilo, mora to povedati; drugače je videti kot da je
-   enaka najdaljši. */
-.stat-vrsta.gre-cez .stat-tir::after {
-  content: "›";
-  position: absolute;
-  right: 3px; top: 50%; transform: translateY(-50%);
-  font: 600 13px/1 var(--mono);
-  color: var(--bg);
-}
-
-/* Število meritev za vrstico. Brez njega je "sreda je najhujša" trditev brez
-   vzorca -- in ravno to je pri dvanajstih dneh zajema najlažje narobe brati. */
-.stat-n {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-ghost);
-  min-width: 3.4em;
-  text-align: right;
-}
-
-.stat-legenda {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: 10px;
-  font-size: 11.5px;
-  color: var(--ink-mute);
-}
-.stat-legenda span { display: inline-flex; align-items: center; gap: 5px; }
-.stat-legenda i {
-  width: 10px; height: 10px; border-radius: 2px; display: inline-block;
-}
-
-/* Število meritev ostane tudi na telefonu. Prvi poskus ga je tam skril, ker
-   je "širina dragocenejša" -- a telefon je glavna naprava in prav tam bi
-   "sreda je najhujša" ostala brez vzorca. Namesto tega se skrči ime. */
-@media (max-width: 430px) {
-  .stat-vrstice { --oznaka: 3.9em; }
-  .stat-vrstice.dolge-oznake { --oznaka: 7.6em; }
-  .stat-vrsta { grid-template-columns: var(--oznaka, 3.9em) 1fr auto auto; gap: 7px; }
-  .stat-vrednost { min-width: 3.8em; font-size: 11.5px; }
-  .stat-n { min-width: 2.8em; font-size: 10.5px; }
-}
-
-
-/* ---------- lestvica voženj ---------- */
-
-.stat-lestvica { display: grid; gap: 2px; }
-
-.stat-voznja {
-  display: grid;
-  grid-template-columns: 5.4em 1fr auto;
-  align-items: baseline;
-  gap: 10px;
-  padding: 7px 9px;
-  border-radius: var(--r-sm);
-  background: var(--bg-panel);
-  border: 1px solid var(--line-soft);
-  color: inherit;
-  text-decoration: none;
-}
-@media (hover: hover) { .stat-voznja:hover { background: var(--bg-hover); border-color: var(--line-firm); } }
-
-.stat-voznja-st {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--accent-lit);
-}
-.stat-voznja-ob {
-  font-size: 11.5px;
-  color: var(--ink-mute);
-}
-.stat-voznja-z {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+@media (min-width: 900px) {
+  .st-kartice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 }

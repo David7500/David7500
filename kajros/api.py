@@ -32,8 +32,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, donacije, gtfs, hoja, journey, lpp,
                markdown, nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot,
-               pripni, pristanek, server, stats, stik, tiri, viri, zamude_sz, zapore,
-               zasedenost, zdravje, zive)
+               pripni, pristanek, server, statistika, stats, stik, tiri, viri, zamude_sz,
+               zapore, zasedenost, zdravje, zive)
 from .server import lifespan
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -375,6 +375,11 @@ templates.env.globals["pot_postaje"] = pristanek.pot_postaje
 templates.env.globals["pot_vozje"] = pristanek.pot_vozje
 templates.env.filters["ime_voznje"] = pristanek.ime_voznje
 templates.env.filters["lepo_ime"] = pristanek.lepo_ime
+templates.env.filters["odstotek"] = statistika.odstotek
+templates.env.filters["decimalno"] = statistika.decimalno
+templates.env.filters["minute"] = statistika.minute
+templates.env.filters["ura_vr"] = statistika.ura_vr
+templates.env.filters["zamuda_min"] = statistika.zamuda_min
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
 templates.env.globals["baza"] = config.BASE_URL
@@ -480,6 +485,8 @@ def _sitemap_poti() -> list[tuple[str, str | None]]:
                  for r in kaz["relacije"]]
         poti += [(pristanek.pot_postaje(network, p["ime"]), dan)
                  for p in kaz["postaje"]]
+    with _conn() as conn:
+        poti += statistika.poti_za_iskalnik(conn)
     return poti
 
 
@@ -951,6 +958,65 @@ def o_nas(request: Request):
     return templates.TemplateResponse(
         request, "o_nas.html",
         {"stik": config.STIK, "obrazec": config.STIK_OBRAZEC})
+
+
+@app.get("/statistika", response_class=HTMLResponse, include_in_schema=False)
+def statistika_pregled(request: Request):
+    """Pregled statistike (slog A „Odgovori“, `statistika.stran_pregled`).
+
+    Izris na strežniku iz nočnih povzetkov, kot pristajalne strani: kdor
+    vpraša iskalnik „koliko zamujajo vlaki“, dobi odgovor v prvem odgovoru.
+    """
+    with _conn() as conn:
+        p = statistika.stran_pregled(conn)
+    deli = []
+    if p["vlak"] and p["vlak"]["cilj"].get("n"):
+        deli.append(f"{statistika.odstotek(p['vlak']['cilj']['v5min'])} vlakov")
+    if p["bus"].get("n"):
+        deli.append(f"{statistika.odstotek(p['bus']['v5min'])} avtobusov")
+    opis = ((f"V zadnjih 30 dneh je {' in '.join(deli)} prišlo na cilj v 5 minutah. "
+             if deli else "")
+            + "Točnost prevoznikov, napovedi zamud in prezgodnji odhodi — naše meritve.")
+    return templates.TemplateResponse(request, "statistika_pregled.html", {**p, "opis": opis})
+
+
+@app.get("/statistika/napovedi", response_class=HTMLResponse, include_in_schema=False)
+def statistika_napovedi(request: Request):
+    """Kako dobre so napovedi, ki jih je potnik videl (`statistika.stran_napovedi`)."""
+    with _conn() as conn:
+        p = statistika.stran_napovedi(conn)
+    v = p["vlaki"]["na_poti"]["vse"]
+    opis = ("Koliko so zgrešile napovedi zamud vlakov in avtobusov, ki jih je potnik "
+            "videl pred odhodom"
+            + (f": {p['horizont_vlak']} min pred vlakom povprečno "
+               f"{statistika.decimalno(v['nasa']['mae_min'])} min, trenutna zamuda "
+               f"{statistika.decimalno(v['prenos']['mae_min'])} min." if v["nasa"]["n"] else "."))
+    return templates.TemplateResponse(request, "statistika_napovedi.html", {**p, "opis": opis})
+
+
+@app.get("/statistika/prevozniki", response_class=HTMLResponse, include_in_schema=False)
+def statistika_prevozniki(request: Request):
+    """Vsi prevozniki po točnosti (`statistika.stran_prevozniki`)."""
+    with _conn() as conn:
+        p = statistika.stran_prevozniki(conn)
+    opis = ("Delež voženj, ki pridejo na cilj v 5 minutah: "
+            + ", ".join(f"{x['ime']} {statistika.odstotek(x['cilj']['v5min'])}"
+                        for x in p["primerljivi"]) + ".")
+    return templates.TemplateResponse(request, "statistika_prevozniki.html", {**p, "opis": opis})
+
+
+@app.get("/statistika/prevoznik/{ime}", response_class=HTMLResponse, include_in_schema=False)
+def statistika_prevoznik(request: Request, ime: str):
+    """En prevoznik (`statistika.stran_prevoznik`); ime je `pristanek.slug`."""
+    with _conn() as conn:
+        p = statistika.stran_prevoznik(conn, ime)
+    if p is None:
+        raise HTTPException(404, "tega prevoznika ne poznam")
+    c = p["p"]["cilj"]
+    opis = (f"{p['p']['ime']}: v zadnjih 30 dneh je {statistika.odstotek(c['v5min'])} voženj "
+            f"prišlo na cilj v 5 minutah. Točnost po urah, napovedi in vožnje, ki "
+            f"najbolj zamujajo." if c.get("n") else f"{p['p']['ime']}: točnost voženj.")
+    return templates.TemplateResponse(request, "statistika_prevoznik.html", {**p, "opis": opis})
 
 
 @app.get("/primerjava", response_class=HTMLResponse, include_in_schema=False)

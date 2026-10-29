@@ -1,0 +1,30 @@
+{#
+  Gradniki strani statistike (slog A, `statistika.css`). Širine in višine
+  pridejo iz strežnika v `style`: stran se bere brez JS.
+#}
+{% from "_znak.html" import znak %}
+{% from "_vec.html" import gumb as vec_gumb %}
+{% macro glava(nazaj=None) -%}
+    <div class="home-vrh">
+      <a class="home-brand" href="/" style="text-decoration:none">
+        {{ znak() }}
+        <span>kajros</span>
+      </a>
+      {{ vec_gumb() }}
+    </div>
+    {% if nazaj %}<a class="st-nazaj" href="/statistika">‹ Statistika</a>{% endif %}
+{%- endmacro %}
+
+{% macro trak(ime, sirina, vrednost, razred="") -%}
+      <div class="st-vr"><span class="ime">{{ ime }}</span><span class="st-trak"><i class="{{ razred }}" style="width:{{ [[sirina, 1] | max, 100] | min }}%"></i></span><span class="num">{{ vrednost }}</span></div>
+{%- endmacro %}
+
+{% macro stolpci(dnevi, razred="") -%}
+      <div class="st-stolpci {{ razred }}" aria-hidden="true">
+        {%- for d in dnevi %}<i{% if d.malo %} class="malo"{% endif %} style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.v5 | odstotek if d.v5 is not none else 'brez podatka' }} v 5 min, {{ d.n }} voženj"></i>{% endfor -%}
+      </div>
+{%- endmacro %}
+
+{% macro noga() -%}
+    <p class="st-noga">Številke so naše meritve, ne uradne: vsaka vožnja z živim podatkom, zamuda na zadnji postaji, kjer jo je vir še poročal. Vir: NAP, SŽ, LPP, Marprom, Ridango (CC BY-SA 4.0). <a href="/statistika/napovedi">Kako merimo napovedi</a> · <a href="/primerjava">Kje še preveriti zamude</a></p>
+{%- endmacro %}

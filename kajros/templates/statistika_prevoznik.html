@@ -1,0 +1,119 @@
+{#
+  /statistika/prevoznik/{ime} -- en prevoznik: točnost, ure, napoved,
+  prezgodnji odhodi, pokritost, najbolj in najmanj točne vožnje ali linije.
+  Pri SŽ je nadomestni prevoz opomba (feed zanj ne poroča). Vir
+  `statistika.stran_prevoznik`.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set vlak = p.network == "zeleznica" %}
+  {% set og_title = "Koliko zamuja " ~ p.ime ~ ": točnost po urah in vožnjah — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, trak, stolpci, noga %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page{% if not vlak %} net-avtobus{% endif %}">
+  <main class="home st">
+    {{ glava(nazaj=True) }}
+    <h1>{{ p.ime }}</h1>
+    <p class="st-glava">Zadnjih 30 dni, do {{ do | dan }}{% if p.zajem_od and p.dni_zajema < 30 %} · zajem od {{ p.zajem_od | dan }}{% endif %} · izračunano {{ izracunano | ura_dneva }}</p>
+
+    <div class="st-kartice">
+    {% set c = p.cilj %}
+    {% if c.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>Kako točno pride?</h2>
+      <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "vlakov" if vlak else "voženj" }} pride na cilj v 5 minutah</span></div>
+      <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, vsaka deseta vsaj {{ c.p90_min | minute }}; {{ c.nad15 | odstotek }} več kot 15 min.</p>
+      {{ stolpci(dnevi, "" if vlak else "bus") }}
+      <div class="st-drobno">delež v 5 min po dnevih, zadnjih 90 · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ c.n | stevilo }} voženj v 30 dneh</div>
+      {% if not primerljiv %}<p>Zajema je še premalo za primerjavo z drugimi prevozniki.</p>{% endif %}
+    </section>
+    {% else %}
+    <section class="st-k"><h2>Premalo podatkov</h2><p>V zadnjih 30 dneh ima živ podatek manj kot {{ min_vzorec }} voženj.</p></section>
+    {% endif %}
+
+    {% if ure | length >= 4 %}
+    {% set naj = ure | sort(attribute="v5min") %}
+    <section class="st-k">
+      <h2>Ob kateri uri zamuja?</h2>
+      <div class="st-ure {{ '' if vlak else 'bus' }}" aria-hidden="true">
+        {%- for u in ure %}<i style="height:{{ u.visina }}%" title="{{ u.ura }}h: {{ u.v5min | odstotek }} v 5 min, {{ u.n }} voženj"></i>{% endfor -%}
+      </div>
+      <div class="st-ure-os st-drobno"><span>{{ ure[0].ura }}h</span><span>{{ ure[-1].ura }}h</span></div>
+      <p>Najbolj točno ob {{ naj[-1].ura }}h ({{ naj[-1].v5min | odstotek }} v 5 min), najmanj ob {{ naj[0].ura }}h ({{ naj[0].v5min | odstotek }}).</p>
+      <div class="st-drobno">po uri prihoda na zadnjo postajo · višje = več voženj z zamudo nad 5 min · le ure z vsaj {{ min_vzorec }} vožnjami</div>
+    </section>
+    {% endif %}
+
+    {% set n = p.napoved %}
+    {% if napove_sam %}
+    <section class="st-k">
+      <h2>Kako dobro napove sam?</h2>
+      <div class="st-drobno">povprečna napaka v minutah, {{ "25" if vlak else "15" }} min pred prihodom, kjer je prevoznik napoved objavil</div>
+      {% set najvec = [n.parno.prevoznik.mae_min, n.parno.nasa.mae_min, 0.1] | max %}
+      {{ trak("kajros", n.parno.nasa.mae_min / najvec * 100, n.parno.nasa.mae_min | decimalno, "vlak" if vlak else "bus") }}
+      {{ trak(p.ime, n.parno.prevoznik.mae_min / najvec * 100, n.parno.prevoznik.mae_min | decimalno, "siv") }}
+      <div class="st-drobno">{{ n.parno.prevoznik.n | stevilo }} pogledov</div>
+    </section>
+    {% elif n.vse.nasa.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>Kako dobro napovemo?</h2>
+      <p>{{ p.ime }} svoje napovedi {% if delez_prevoznika %}skoraj ne objavlja (pri {{ delez_prevoznika | decimalno }} % pogledov){% else %}ne objavlja{% endif %}. Kajros je {{ "25" if vlak else "15" }} min prej zgrešil povprečno za {{ n.vse.nasa.mae_min | decimalno }} min, trenutna zamuda za {{ n.vse.prenos.mae_min | decimalno }}.</p>
+      <div class="st-drobno">{{ n.vse.nasa.n | stevilo }} pogledov</div>
+    </section>
+    {% endif %}
+
+    {% if p.prezgodaj.vmesnih >= min_vzorec and not vlak %}
+    <section class="st-k">
+      <h2>Odpelje prej?</h2>
+      <div class="st-velika"><b>{{ p.prezgodaj.prej2 | odstotek }}</b><span>postankov vsaj 2 min pred voznim redom</span></div>
+      <p>Vsaj minuto prej pri {{ p.prezgodaj.prej1 | odstotek }}. Na postajališče pridi 2 minuti prej.</p>
+      <div class="st-drobno">vmesni postanki, {{ p.prezgodaj.vmesnih | stevilo }} · odhod večinoma iz GPS vozila</div>
+    </section>
+    {% endif %}
+
+    {% if p.pokritost is not none %}
+    <section class="st-k">
+      <h2>Koliko voženj vidimo v živo?</h2>
+      <div class="st-velika"><b>{{ p.pokritost | odstotek }}</b><span>voženj po voznem redu ima živ podatek</span></div>
+      {% if nadomestni and nadomestni.nacrt %}<p>Nadomestni avtobusi SŽ: {{ nadomestni.pokritost | odstotek }} od {{ nadomestni.nacrt | stevilo }} voženj — SŽ zanje zamud ne objavlja, velja vozni red.</p>{% endif %}
+    </section>
+    {% endif %}
+
+    {% if p.lestvica and p.lestvica.vseh >= 2 %}
+    {% set linije = p.lestvica.najboljse and p.lestvica.najboljse[0].linija %}
+    {% set enota = "vlaki" if vlak else ("linije" if linije else "vožnje") %}
+    {% set pridevnik = "točni" if vlak else "točne" %}
+    <section class="st-k">
+      <h2>Najbolj {{ pridevnik }} {{ enota }}</h2>
+      <ul class="st-seznam">
+        {% for x in p.lestvica.najboljse %}
+        <li><a href="{{ '/app/train/' if vlak else '/app/bus/' }}{{ x.st | urlencode }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
+        {% endfor %}
+      </ul>
+      <h2>Najmanj {{ pridevnik }} {{ enota }}</h2>
+      <ul class="st-seznam">
+        {% for x in p.lestvica.najslabse %}
+        <li><a href="{{ '/app/train/' if vlak else '/app/bus/' }}{{ x.st | urlencode }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
+        {% endfor %}
+      </ul>
+      <div class="st-drobno">od {{ p.lestvica.vseh | stevilo }} z vsaj {{ min_dni_lestvica }} vožnjami v 30 dneh · običajno = mediana zamude na cilju</div>
+    </section>
+    {% endif %}
+    </div>
+
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>

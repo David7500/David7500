@@ -1,0 +1,93 @@
+{#
+  /statistika/napovedi -- kako dobre so napovedi, ki jih je potnik videl.
+  Vsi modeli na ISTIH pogledih (parno, `ocena.py`); konkurenca po metodi, brez
+  imen (David, 29. 10. 2026): imena drugih so na /primerjava, po njihovih
+  besedah. Številke iz `statistika.stran_napovedi`.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Kako točne so napovedi zamud vlakov in avtobusov — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, trak, noga %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page">
+  <main class="home st">
+    {{ glava(nazaj=True) }}
+    <h1>Kako dobre so napovedi?</h1>
+    <p class="st-glava">Kar je aplikacija pokazala {{ horizont_vlak }} minut pred vlakom ({{ horizont_bus }} pred avtobusom), proti temu, kar se je zgodilo. Vsi na istih pogledih, {{ od | dan }}–{{ do | dan }}</p>
+
+    <div class="st-kartice">
+    {% set v = vlaki.na_poti.vse %}
+    {% if v.nasa.n >= min_vzorec %}
+    {% set najvec = v.vozni_red.mae_min or 1 %}
+    <section class="st-k">
+      <h2>Vlaki na poti</h2>
+      <div class="st-drobno">povprečna napaka v minutah</div>
+      {{ trak("kajros", v.nasa.mae_min / najvec * 100, v.nasa.mae_min | decimalno, "vlak") }}
+      {{ trak("trenutna zamuda", v.prenos.mae_min / najvec * 100, v.prenos.mae_min | decimalno, "siv") }}
+      {{ trak("vozni red", 100, v.vozni_red.mae_min | decimalno, "temen") }}
+      <p>V minuti od resnice: kajros {{ v.nasa.v1min | odstotek }}, trenutna zamuda {{ v.prenos.v1min | odstotek }}, vozni red {{ v.vozni_red.v1min | odstotek }}.</p>
+      <div class="st-drobno">{{ v.nasa.n | stevilo }} pogledov · „trenutna zamuda“ = zamuda z zemljevida SŽ, prenesena na vse postaje naprej. Svoje napovedi SŽ ne objavlja.</div>
+    </section>
+    {% endif %}
+
+    {% if parno %}
+    <section class="st-k">
+      <h2>Avtobusi: mi proti prevozniku</h2>
+      <div class="st-drobno">povprečna napaka v minutah, kjer je prevoznik napoved objavil</div>
+      <div class="st-par">
+        <span></span><span class="h">kajros</span><span class="h">prevoznik</span>
+        {% for x in parno %}
+        <span>{{ x.ime }}</span><span class="v nasa">{{ x.nasa.mae_min | decimalno }}</span><span class="v">{{ x.prevoznik.mae_min | decimalno }}</span>
+        {% endfor %}
+      </div>
+      <div class="st-drobno">{{ parno | map(attribute="prevoznik.n") | min | stevilo }}–{{ parno | map(attribute="prevoznik.n") | max | stevilo }} pogledov na prevoznika</div>
+    </section>
+    {% endif %}
+
+    {% if tedni | length >= 2 %}
+    <section class="st-k">
+      <h2>Se izboljšujemo?</h2>
+      <div class="st-tedni" aria-hidden="true">
+        {%- for t in tedni %}<div><i class="nasa" style="height:{{ t.visina_nasa }}%"></i><i class="prenos" style="height:{{ t.visina_prenos }}%"></i></div>{% endfor -%}
+      </div>
+      <div class="st-tedni-os st-drobno">{% for t in tedni %}<span>{{ t.od | dan }}</span>{% endfor %}</div>
+      <div class="st-drobno">povprečna napaka po tednih · oranžno kajros, sivo trenutna zamuda</div>
+      <p>Vlaki na poti po tednih, kajros proti trenutni zamudi: {% for t in tedni %}{{ t.nasa.mae_min | decimalno }} proti {{ t.prenos.mae_min | decimalno }}{{ ", " if not loop.last else " min." }}{% endfor %}</p>
+    </section>
+    {% endif %}
+
+    {% if v.nasa.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>V katero smer zgrešimo?</h2>
+      <p>{% if v.nasa.odklon_min < 0 %}Kajros zamudo povprečno podceni za {{ (-v.nasa.odklon_min) | decimalno }} min{% else %}Kajros zamudo povprečno preceni za {{ v.nasa.odklon_min | decimalno }} min{% endif %}{% if v.prenos.odklon_min < 0 %}, trenutna zamuda jo podceni za {{ (-v.prenos.odklon_min) | decimalno }} min: zamuda med vožnjo raste{% endif %}.</p>
+      <p>Bolj nevarna je obratna napaka: da napovemo več zamude, kot je je, in vlak odpelje pred nosom. Za več kot 5 min smo jo precenili pri {{ v.nasa.precenjenih | decimalno }} % pogledov.</p>
+    </section>
+    {% endif %}
+
+    {% set p = vlaki.pred_odhodom.vse %}
+    {% if p.nasa.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>Preden vlak odpelje z začetne postaje</h2>
+      <p>Takrat meritve še ni: kajros pokaže, koliko ta vlak običajno zamuja. Povprečna napaka {{ p.nasa.mae_min | decimalno }} min, vozni red {{ p.vozni_red.mae_min | decimalno }}. V minuti od resnice kajros {{ p.nasa.v1min | odstotek }}, vozni red {{ p.vozni_red.v1min | odstotek }}.</p>
+      <div class="st-drobno">{{ p.nasa.n | stevilo }} pogledov</div>
+    </section>
+    {% endif %}
+    </div>
+
+    <p class="st-noga">Merimo sami, vsak dan: kar bi aplikacija pokazala, se shrani, resnica se dopiše, ko vozilo postajo prevozi. Izračunano {{ izracunano | ura_dneva }}.</p>
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>

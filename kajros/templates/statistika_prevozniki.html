@@ -1,0 +1,55 @@
+{#
+  /statistika/prevozniki -- vsi prevozniki na eni strani, najbolj točen prvi.
+  Kdor ima premalo zajema (Marprom in Kranj od 27. 10. 2026), stoji pod
+  črto: lestvica ne primerja dveh dni z mesecem. `statistika.vsi_prevozniki`.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Točnost prevoznikov: SŽ, Arriva, Nomago, LPP — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, noga %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page">
+  <main class="home st">
+    {{ glava(nazaj=True) }}
+    <h1>Kdo vozi točno?</h1>
+    <p class="st-glava">Delež voženj, ki pridejo na cilj v 5 minutah · zadnjih 30 dni, do {{ do | dan }}</p>
+
+    <ul class="st-seznam">
+      {% for x in primerljivi %}
+      <li><a href="/statistika/prevoznik/{{ x.slug }}">
+        <span class="ime">{{ x.ime }}{% if x.network == "zeleznica" %} (vlaki){% endif %}</span>
+        <span class="pc">{{ x.cilj.v5min | odstotek }}</span>
+        <span class="drobno">{{ x.cilj.n | stevilo }} voženj · polovica zamudi vsaj {{ x.cilj.mediana_min | minute }} · {{ x.cilj.nad15 | odstotek }} nad 15 min{% if x.prezgodaj.prej2 %} · {{ x.prezgodaj.prej2 | odstotek }} postankov vsaj 2 min prej{% endif %}</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+
+    {% if premalo %}
+    <h2 class="st-glava" style="margin-top:22px">Še premalo za primerjavo</h2>
+    <ul class="st-seznam">
+      {% for x in premalo %}
+      <li><a href="/statistika/prevoznik/{{ x.slug }}">
+        <span class="ime">{{ x.ime }}</span>
+        <span class="pc">{{ x.cilj.v5min | odstotek }}</span>
+        <span class="drobno">{{ x.cilj.n | stevilo }} voženj{% if x.zajem_od %} od {{ x.zajem_od | dan }}{% endif %}</span>
+      </a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>

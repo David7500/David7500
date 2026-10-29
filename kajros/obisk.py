@@ -448,7 +448,7 @@ def prenos(pot: str, metoda: str, koda: int, obmocje: str) -> str | None:
 #: zahteve. Kot stran je bila 2. 10. 2026 271 „ogledov“ od 1528.
 _STRANI = ("/vlak/", "/avtobus/", "/postaja/", "/postajalisce/", "/postaje",
            "/postajalisca", "/o-nas", "/primerjava", "/stik", "/zasebnost",
-           "/android", "/donacije")
+           "/android", "/donacije", "/statistika")
 
 
 #: Klik na „Podari“ gre prek naše poti, ki preusmeri na Ko-fi: drugače ne bi
