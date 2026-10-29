@@ -3036,3 +3036,55 @@ Tolmin, Bovec, Kobarid, Koper, Celje, Novo mesto, Velenje, Ptuj: 403 (takega nab
 **Objava na arwen 27. 10. 2026** (2c9934e, 9725793). Uvoz ob zagonu (Marproma v bazi ni bilo) 12:06–12:11, 2 064 voženj Marproma; isti uvoz je pobral svež zip LPP, kjer je 27 že po Vilharjevi (117 voženj čez Navje in Viadukt), zato `popravek_vzorca` prazen. Ob 12:23: 33 vozil, 31 pripetih, 2 brez vožnje; primerjava ob razrešitvi n = 14, mediana +34 s, absolutna 42 s, v 90 s 85,7 %; „vozila brez zamude“ Marprom 0 od 6 (ob 12:14, takoj po uvozu, 3 od 6: vožnje, ujete sredi poti, še brez prvega prehoda). Vrstica „vozni red Marprom“ rumena (uradni zip 5 od 7 dni brez voženj, velja kopija), kot mora biti.
 
 **Kranj in Murska Sobota na arwen 27. 10. 2026** (13b2c87). Uvoz ob zagonu: Marprom 2 064, Kranj 446, MS 56 voženj. Kmalu po uvozu: Kranj 5 od 5 vozil na vožnjah uradnega zipa (po voznem redu 7, dve Kranvaj brez lege); MS 4 vozila NAP na mestnih linijah v `vehicle_now` (prej „brez vožnje“); Marprom 35 od 36. Vozni redi: Marprom kopija do 20. 6. 2027, Kranj uradni do 30. 11. 2026 (mesec naprej, dnevno), MS do 31. 12. 2027.
+
+## SŽ pokaže vlak kot odpeljan, preden odpelje (29. 10. 2026)
+
+Vprašanje za statistiko (David): uradna aplikacija SŽ kaže, da je vlak že odpeljal, v resnici pa še čaka na prejšnji postaji ali vmes. Merjeno na kopiji baze z arwena (`obs` z zemljevida SŽ, ki vodi od 11. 10. 2026; skripta v predaji `docs/STATISTIKA.md`).
+
+**Resnica = prehod potnika** (`deljenje_prehod`, GPS telefona na vlaku): 61 odhodov s postaje na 22 vožnjah (30. 9.–29. 10. 2026), kjer ima zemljevid SŽ serijo za isti postanek. Zemljevid je vlak premaknil na odsek za postajo (`Vrsta` 1, `Postaja` = naslednja) **prej, kot je vlak res odpeljal: mediana 2,7 min, p25 9,0 min**. Vsaj 2 min prezgodaj pri 40 od 61 (66 %), vsaj 5 min pri 24 (39 %), vsaj 10 min pri 14 (23 %); pozneje od resnice za vsaj minuto en sam. Skrajni primeri: LPV 2423 17. 10. zemljevid ob voznem redu z zamudo 0, odpeljal +66 min; LPV 2924 12. 10. 0 proti +57; LPV 2417 20. 10. 0 proti +33.
+
+**Vzorec po vseh vožnjah** (109 383 postankov, 11.–29. 10. 2026, brez cilja in nadomestnih): SŽ je odhodno zamudo postanka, ki ga je že kazal kot prevoženega, pozneje dvignil za vsaj 2 min pri 20,2 %, za vsaj 5 min pri 10,5 %, za vsaj 10 min pri 4,6 %. Mediana popravka 5,0 min, zamuda raste skoraj minuto na minuto (mediana popravek/trajanje 0,88): vlak stoji, zemljevid ga kaže na poti. Na izhodišču (8 889 odhodov): prva zamuda ≤ 0,5 min, končna ≥ 2 min pri 17,8 % — SŽ pokaže točen odhod vlaka, ki še stoji. Zmanjšanje za ≥ 2 min le 658-krat.
+
+Sklep: zemljevid SŽ odhod sklepa iz voznega reda in zadnje zamude, ne iz dogodka; ko vlak stoji, zamudo zvišuje sproti. Uradna aplikacija SŽ po Davidovem opažanju kaže isto; ali bere isti vir, ni preverjeno. Za stran SŽ uporabno kot izmerjeno, z vzorcem in obdobjem. Pasti: prehodi potnikov so iz 27 deljenj (pristranski izbor voženj), prehod iz GPS ima napako ~pol minute.
+
+## Senca po prevoznikih: naša, prevoznikova, prenos, vozni red (29. 10. 2026)
+
+Za stran o napovedih. `napoved` na kopiji baze z arwena, 29. 9.–29. 10. 2026, resnica `|actual_s| < 3 h`. Vlak 25 min, avtobus 15 min pred voznim redom. MAE v minutah; „±1“ = delež v minuti od resnice. Prenos = trenutna zamuda za vse naprej (tako kaže zemljevid SŽ in po pregledu 19. 9. zamudil.si). Pri vlakih prevoznikove napovedi skoraj ni (429 od 89 452), uradno je torej prenos.
+
+| skupina | n | MAE naš | MAE prevoznik | MAE prenos | MAE vozni red | ±1 naš / prenos / VR | ±3 naš / prenos |
+|---|---|---|---|---|---|---|---|
+| vlaki na poti | 89 452 | 2,58 | — | 3,39 | 7,28 | 54 / 47 / 31 % | 78 / 69 % |
+| vlaki na poti, zamuda ob pogledu ≥ 5 min | 32 301 | 3,18 | — | 4,26 | 14,01 | 42 / 34 / 2 % | 72 / 59 % |
+| vlaki pred odhodom z izhodišča | 66 718 | 1,71 | — | 1,98 | 1,98 | 72 / 75 / 75 % | 84 / 83 % |
+| LPP mestni na poti (prevoznik ima napoved) | 146 373 | 1,93 | 2,04 | 2,39 | 3,67 | 40 / 34 / 22 % | 84 / 76 % |
+| Arriva (1123), kjer ima prevoznik napoved | 68 614 | 2,31 | 3,86 | 4,49 | 5,24 | 41 / 27 / 25 % | 83 / 62 % |
+| Nomago (1119), isto | 63 822 | 1,94 | 2,80 | 3,20 | 3,77 | 42 / 28 / 25 % | 85 / 67 % |
+| LPP primestni (1118), isto | 49 940 | 1,88 | 3,74 | 3,84 | 5,43 | 41 / 22 / 15 % | 84 / 57 % |
+| AP Murska Sobota (1121), isto | 7 754 | 1,81 | 2,82 | 3,31 | 3,16 | 52 / 38 / 37 % | 92 / 82 % |
+| Marprom na poti (napovedi prevoznika ni) | 2 306 | 1,95 | — | 2,15 | 2,47 | 38 / 32 / 27 % | 80 / 75 % |
+
+Pristranskost (naš − res): vlaki na poti −0,68 min, prenos −2,56 (prenos zamudo podceni, ker raste). Pred odhodom z izhodišča je naš pri ±1 slabši (72 proti 75 %), pri MAE boljši — mešanica dveh napak, za stran povej obe. Po tednih (vlaki na poti, 39.–43. teden) naš MAE 2,24–2,84, vedno pod prenosom (2,92–3,96).
+
+## Vlak, avtobus, avto na isti relaciji (29. 10. 2026)
+
+Za stran relacij. Kopija baze z arwena, delavniki 11.–28. 10. 2026. Vlak in avtobus: `run` + `sched`, postaja–postaja, „dejansko“ = vozni red + izmerjena zamuda na obeh koncih. Avto: `promet.ac` (DARS prek NAP, odsek AC od priključka do priključka, ne od središča), mediana po uri odhoda. Skripte v `docs/statistika-delo/skripte/` (`vlak_avto.py`, `vlak_bus.py`).
+
+| relacija | vlak: vozni red / dejansko / v 5 min na cilju | avtobus | avto (AC) |
+|---|---|---|---|
+| LJ → Kranj | 33 / 34 min / 63 % (249) | Arriva 37 / 42 min / 36 % (229) | — |
+| Kranj → LJ | 32 / 32 min / 29 %, mediana zamude 8 min (233) | Arriva 37 / 40 min / 35 % (452) | — |
+| LJ → Maribor | 136 / 142 min / 21 %, mediana 12 min (94) | Arriva 110 min / 68 %, mediana 0,6 (31) | 70–75 min |
+| LJ → Celje | 86 / 89 min / 19 %, mediana 10,5 (162) | Nomago 3 vožnje | — |
+| LJ → Koper | ~170 min | — | 63–65 min |
+| LJ → Jesenice | 60–90 min po uri | — | 37–40 min (do Karavank) |
+| LJ → Dobova | 132–151 min | — | 59–63 min (do Obrežja) |
+
+Na avtocestnih koridorjih je avto ~2× hitrejši ob vsaki uri; vlak ga ne ujame niti ob p90 avta (MB→LJ ob 7h p90 102 min, vlak mediana 132–158). LJ–MB je avtobus hitrejši in točnejši od vlaka. Odhodna zamuda na LJ AP je izmerjena redko (10 od 229), zato avtobusni „dejansko“ ni zanesljiv; zamuda na cilju je. Vprašanje „kdaj je JP hitrejši od avta“ ostane odprto za kratke dnevne poti z gnečo (obvoznica ob 15h mediana 30 min, prosto 18, p90 58) — rabi FCD po odseku, ki še ni preslikan na cesto.
+
+## Odseki, kjer vozni red ne drži (29. 10. 2026)
+
+Za stran SŽ. Prirast zamude od odhoda z X do prihoda na naslednji postanek Y, `run`, 11.–28. 10. 2026, odsekov z vsaj 100 vožnjami 425 (`docs/statistika-delo/skripte/odseki.py`). Vlak izgubi vsaj 2 min pri: Brestanica → Blanca 84 % (322), Zidani Most → Hrastnik 72 % (416), Radohova vas → Šentvid pri Stični 65 %, mediana +4 min (147), Blanca → Sevnica 65 % (324), Libna → Krško 61 % (308), Ljubljana Polje → Ljubljana Zalog 55 % (378), Jesenice → Lesce-Bled 54 %, mediana +3 (124), Laze → Ljubljana Zalog 52 % (355). Rezerva (vlak pridobi ≥ 1 min): Otovec → Črnomelj 61 %, Hudajužna → Grahovo 51 %, Radeče → Zidani Most 45 %. Vzrok (dela na progi, enotirnost, prepust) iz podatkov ni razviden — na strani povej samo, kje in koliko.
+
+## Prezgodnji odhodi po prevozniku (29. 10. 2026)
+
+Vmesni postanki (brez izhodišča in cilja), `run`, 15.–28. 10. 2026, odhod vsaj 1,5 min / 2,5 min pred voznim redom (`skripte/prezgodaj.py`): LPP primestni 14,5 / 9,9 % (219 326 postankov), Marprom 10,9 / 5,3 % (25 964), Arriva 6,6 / 3,6 % (704 018), Nomago 6,1 / 3,1 % (640 461), mestni LPP 4,6 / 2,0 % (49 077), Kranj 4,2 / 1,5 %, AP MS 3,3 / 1,2 %, SŽ 0 / 0 % (75 610). Pazi: avtobusni odhod z vmesnega postanka je večinoma prehod iz GPS, ne potrjen postanek; na postajališču brez potnikov avtobus ne ustavi, voznoredni časi manjših postajališč so pogosto preračunani. Na strani kot „lahko odpelje prej“, ne kot kršitev.
