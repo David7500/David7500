@@ -320,5 +320,18 @@ večje delo · **ne** = podatka ni.
    (7.–9. 10. brez zajema), stran vrzeli ne omeni; `/statistika/prevoznik/SZ`
    vrne 404 (vlak z veliko začetnico preusmeri 301); `/statistika/` vrne 307
    (FastAPI), ne 301.
-4. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
+4. **Relacije, Davidova vprašanja** (29. 10. 2026 pozno, neodločeno):
+   kartica Ljubljana ↔ Jesenice nima avtobusa, ker ima `RELACIJE` avtobusno
+   ime „Jesenice“ (železniška postaja, brez avtobusnih voženj); avtobusi
+   ustavijo na „Jesenice občina“ (347 voženj v voznem redu) in „Jesenice ŽP“
+   (344), iskanje najde 253 oz. 230 voženj z meritvijo (Arriva). Avto: DARS
+   objavi deset relacij (LJ–MB, LJ–KP, LJ–Karavanke, LJ–MP Obrežje, oba
+   kroga obvoznice; obe smeri, `promet.ac` od 14. 10.). Celje, Kranj in Novo
+   mesto so sredi daljših, delnega časa DARS ne da — kartica avto izpusti
+   brez besede. Parov postaj z neposredno vožnjo je za vlak 8 795 (arwen),
+   za avtobus 244 232 (lokalna baza, 41 954 voženj): zato izbran seznam in
+   iskanje ob zahtevi. Ptuj → Ljubljana „0 % v 5 min“ je resnično: IC 503 in
+   MV 246 (po 25 voženj, najmanj +18 in +14 min), RG 1641/1643 (4 + 4),
+   okno 29. 9.–28. 10.
+5. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
    točnost odhodov na `/postaja/{ime}`.
