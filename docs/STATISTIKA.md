@@ -164,6 +164,15 @@ večje delo · **ne** = podatka ni.
 * Faza 1 na localhostu: David „pogledal sem in je dobro, a nadaljuj naprej in
   objaviva potem vse naenkrat“ (29. 10. ~17.40) — **objava šele na koncu, vse
   skupaj**.
+* **Povratna informacija po fazah 1–5** (David, 29. 10. 2026 ~20.10):
+  „Nadaljuj s fazami, če so še. Izboljšaj preglednost na desktopu (ne rabi
+  biti kot pri telefonu — novinarji ponavadi gledajo iz računalnikov).
+  Preglej, ali so prikazani podatki dobro razloženi. Kako se podatki
+  posodabljajo? (ne statično, ne ob vsaki zahtevi). Pri relacijah iskalnik za
+  čisto vsako relacijo, tudi male (presodi, ali je preveč). Stran SŽ drugače,
+  bolj razumljivo: kaj je ‚zemljevid‘? kako točni so podatki potnikov z GPS?
+  ročno napiši pripombe, kaj bi se dalo pri SŽ izboljšati.“ Vrstni red (moj):
+  SŽ → namizje + razlage na vseh straneh → iskalnik relacij → faza 6.
 * Postopek (moj): najprej nočni izračun in API (od designa neodvisno), nato
   osnutki strani s pravimi številkami, David izbere, nato predloge.
 
