@@ -287,43 +287,36 @@ večje delo · **ne** = podatka ni.
   visoke kartice, dolgi seznami čez vso širino v stolpcih, zavihki med
   stranmi, ploščice za dneve in odhode, stolpci avtobusov na pregledu.
   Funkcionalni pregled (en agent, sonnet): 856 naslovov 200, brez puščanja,
-  številke skladne, telefon brez vodoravnega drsnika; najdbe spodaj, podrobno
+  številke skladne, telefon brez vodoravnega drsnika; najdbe v
   `docs/statistika-delo/pregled-funkcij.md`. Ustavljeno pri 96 % 5-urnega okna.
+
+* 29. 10. 2026 pozno: **najdbe pregleda popravljene** (29bff36, 4b09437,
+  102e25d, ni objavljeno): števniki prek `stevnik`; lestvica prevoznika
+  največ polovica linij na seznam (Kranj 8 je dve kazal na obeh);
+  prezgodnji odhodi vlakov povsod „—“ (vir pod nič ne poroča); stran
+  vožnje z malo meritvami (`malo_voznje`: vlak < 10 dni, linija < 30
+  voženj) z opozorilom, `noindex`, ni v zemljevidu strani — lokalno 80
+  vlakov in 7 od 95 mestnih linij; stolpci po dnevih z `aria-label`;
+  besedilo pri točnih vlakih, naslov iskanja relacije = par. `preveri.sh`
+  zelen, 1 092 testov.
 
 ## Naslednji koraki
 
-0. **Popravi najdbe pregleda** (najhujše prve):
-   1. (narejeno, filter `stevnik` z `&nbsp;`) Števniki: `{{ n | stevilo }} voženj/pogledov/odhodov/dni` vedno rodilnik
-      množine („4 voženj“ na 405 straneh linij, „3 voženj“, „zadnjih 2 dni“).
-      Uporabi filter `stevnik` (`pristanek.py:671`, v `api.py:370`) povsod v
-      `statistika_*.html` in `_stat.html` (tudi `title` stolpcev).
-   2. Lestvica prevoznika z manj kot 10 linijami (Kranj 8): ista linija v
-      „najbolj“ in „najmanj“ (`statistika.py` ~594) — najslabše brez najboljših.
-   3. Prezgodnji odhodi SŽ: pregled kaže „0 %“, tabela „—“; vlak po feedu
-      nikoli ne odpelje prej (zemljevid odhod sklepa) — povsod „—“ z
-      razlago ali vrstico izpusti.
-   4. Grafi brez besedila (samo `title`): dodaj `role="img"` + `aria-label`
-      s povzetkom ali skrit seznam.
-   5. Linija z malo vožnjami (Kranj 11: 5 voženj „100 %“) brez opozorila in
-      indeksirana: opozorilo pod `MIN_VZOREC`, `noindex`.
-   6. Telefon: `.st-dva` brez razmika pod 900 px (naslov „Najmanj“ se dotika
-      seznama); dolga beseda v iskanju uide iz kartice (`overflow-wrap:
-      anywhere`); naslov strani iskanja = par; „z zamudo vsaj 0 min“ pri
-      točnih vlakih → „točno“; nedeljiv presledek „1-krat“, „48 voženj“.
-1. **Po objavi preveri številke SŽ**: kopija z arwena (izračun pred
+1. **Objava vsega skupaj** (`git push arwen claude/slovenske-zeleznice-api-ql84hf`),
+   ko David reče: ob zagonu brez `stat_prevozniki` se nočni izračun sproži
+   takoj (`stat_dan` vsi dnevi ~10 min, prevozniki avtobusi ~1 min). Malina
+   statistike ne računa (`KAJROS_SUMMARIES`). Po objavi preveri
+   kajros.app/statistika in podstrani; na arwenu pobriši
+   `/var/tmp/kajros-stat.sqlite`, `promet-stat.sqlite`, `kajros-dev*`,
+   `stat_*.json`, `*.py`.
+2. **Po objavi preveri številke SŽ**: kopija z arwena (izračun pred
    `POTNIK_ZAMIK_S`) je dala 51 odhodov in 75 % ≥ 2 min, MERITVE pravi 61 in
    66 % (drugo okno). Z zamikom 30 s mora delež pasti; uskladi MERITVE.
-2. **Objava vsega skupaj** (`git push arwen claude/slovenske-zeleznice-api-ql84hf`):
-   ob zagonu brez `stat_prevozniki` se nočni izračun sproži takoj (`stat_dan`
-   vsi dnevi ~10 min, prevozniki avtobusi ~1 min). Malina statistike ne
-   računa (`KAJROS_SUMMARIES`). Po objavi preveri kajros.app/statistika in
-   pobriši na arwenu `/var/tmp/kajros-stat.sqlite`, `promet-stat.sqlite`,
-   `kajros-dev*`, `stat_*.json`, `*.py`.
 3. Po objavi: `docs/statistika-delo/` vključi (najdbe so v MERITVE in tu) in
    pobriši.
-5. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
+4. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
    točnost odhodov na `/postaja/{ime}`.
-6. **Odprto vprašanje Davidu**: iskanje relacije s prestopom (planer
+5. **Odprto vprašanje Davidu**: iskanje relacije s prestopom (planer
    `journey.plan` + zgodovina istega prestopa iz `pot.pripni_tveganje`:
    najpogostejša zveza, trajanje z zamudami, delež dni, ko je prestop
    zdržal). Večji korak; čaka odločitev.

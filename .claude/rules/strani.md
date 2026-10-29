@@ -21,7 +21,10 @@ paths:
 Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (David): kartica = vprašanje potnika, ena velika številka, trak ali stolpci, povezava naprej. Izris na strežniku, brez JS (`templates/statistika_*.html`, `_stat.html`, `statistika.css`); številke samo iz nočnih povzetkov (`stat_napovedi`, `stat_prevozniki`).
 * **Kartica brez vzorca izpade** (`statistika.MIN_VZOREC` 30), ne kaže šuma. Dan z manj vožnjami v stolpcih sivo nizek: izpad zajema ni slab dan.
 * **Primerjava prevoznikov** le z ≥ 1 000 vožnjami in ≥ 14 dnevi zajema v oknu (`primerljiv`); ostali „še premalo“ (Marprom, Kranj od 27. 10.).
-* **Lestvica**: mestni in LPP primestni po liniji (`LINIJSKI`), ostali po šifri **in uri odhoda** (A6343 = več odhodov na dan). Enak delež loči |mediana| (−5 min na cilju je rezerva, ne točnost).
+* **Lestvica**: mestni in LPP primestni po liniji (`LINIJSKI`), ostali po šifri **in uri odhoda** (A6343 = več odhodov na dan). Enak delež loči |mediana| (−5 min na cilju je rezerva, ne točnost). Vsak seznam največ polovica vrstic (Kranj 8 linij je dve kazal na obeh).
+* **Prezgodnji odhod vlaka povsod „—“**: podatki SŽ pod nič ne poročajo, „0 %“ bi bila pohvala brez meritve.
+* **Stran vožnje z malo meritvami** (`malo_voznje`: vlak < 10 dni, ker šteje dneve in okno jih ima 30; linija < 30 voženj): opozorilo „številka je groba“, `noindex`, ni v zemljevidu strani — isto pravilo v SQL `poti_za_iskalnik`.
+* **Graf brez povzetka v besedilu ima `role="img"` + `aria-label`** (najslabši in najboljši dan): `title` dotik in bralnik ne pokažeta.
 * **Prevoznikova napoved** samo, kjer jo je objavil pri ≥ 20 % pogledov (`MIN_DELEZ_PREVOZNIKA`); SŽ 0,5 % → „skoraj ne objavlja“.
 * Zamuda v vrstici **z besedo**: „5,5 min prej“, „točno“ (`statistika.zamuda_min`); „v 5 min“ vedno s pragom.
 * Konkurenca **po metodi, brez imen** („trenutna zamuda, prenesena naprej“); imena le na `/primerjava`.
