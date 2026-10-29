@@ -283,8 +283,33 @@ večje delo · **ne** = podatka ni.
   `stat_voznja`; strani le berejo (6–35 ms). V zahtevi se računa samo profil
   vlaka po postajah (`stats.history`) in iskanje relacije.
 
+* 29. 10. 2026 ~22.30: **namizje brez lukenj** (56c2904): vrste flex, enako
+  visoke kartice, dolgi seznami čez vso širino v stolpcih, zavihki med
+  stranmi, ploščice za dneve in odhode, stolpci avtobusov na pregledu.
+  Funkcionalni pregled (en agent, sonnet): 856 naslovov 200, brez puščanja,
+  številke skladne, telefon brez vodoravnega drsnika; najdbe spodaj, podrobno
+  `docs/statistika-delo/pregled-funkcij.md`. Ustavljeno pri 96 % 5-urnega okna.
+
 ## Naslednji koraki
 
+0. **Popravi najdbe pregleda** (najhujše prve):
+   1. Števniki: `{{ n | stevilo }} voženj/pogledov/odhodov/dni` vedno rodilnik
+      množine („4 voženj“ na 405 straneh linij, „3 voženj“, „zadnjih 2 dni“).
+      Uporabi filter `stevnik` (`pristanek.py:671`, v `api.py:370`) povsod v
+      `statistika_*.html` in `_stat.html` (tudi `title` stolpcev).
+   2. Lestvica prevoznika z manj kot 10 linijami (Kranj 8): ista linija v
+      „najbolj“ in „najmanj“ (`statistika.py` ~594) — najslabše brez najboljših.
+   3. Prezgodnji odhodi SŽ: pregled kaže „0 %“, tabela „—“; vlak po feedu
+      nikoli ne odpelje prej (zemljevid odhod sklepa) — povsod „—“ z
+      razlago ali vrstico izpusti.
+   4. Grafi brez besedila (samo `title`): dodaj `role="img"` + `aria-label`
+      s povzetkom ali skrit seznam.
+   5. Linija z malo vožnjami (Kranj 11: 5 voženj „100 %“) brez opozorila in
+      indeksirana: opozorilo pod `MIN_VZOREC`, `noindex`.
+   6. Telefon: `.st-dva` brez razmika pod 900 px (naslov „Najmanj“ se dotika
+      seznama); dolga beseda v iskanju uide iz kartice (`overflow-wrap:
+      anywhere`); naslov strani iskanja = par; „z zamudo vsaj 0 min“ pri
+      točnih vlakih → „točno“; nedeljiv presledek „1-krat“, „48 voženj“.
 1. **Po objavi preveri številke SŽ**: kopija z arwena (izračun pred
    `POTNIK_ZAMIK_S`) je dala 51 odhodov in 75 % ≥ 2 min, MERITVE pravi 61 in
    66 % (drugo okno). Z zamikom 30 s mora delež pasti; uskladi MERITVE.
