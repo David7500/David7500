@@ -33,6 +33,7 @@
       <h2>Kako točno pride?</h2>
       <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "dni" if vlak else "voženj" }} na cilj v 5 minutah</span></div>
       <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}{% if c.p90_min and c.p90_min > 0 %}, vsaka deseta vsaj {{ c.p90_min | minute }}{% endif %}. {{ c.n | stevilo }} {{ "dni" if vlak else "voženj" }}.</p>
+      {% if vlak and c.nad60_n %}<p>{{ c.nad60_n }}-krat vsaj 60 min pozno{% if c.nad120_n %}, od tega {{ c.nad120_n }}-krat vsaj 120{% endif %}: takrat SŽ vrne četrtino cene vozovnice, od 120 min polovico.</p>{% endif %}
       {% if dnevi_zamuda %}
       <div class="st-dnevi" aria-hidden="true">
         {%- for d in dnevi %}<i class="r-{{ d.razred }}" style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.mediana_min | zamuda_min }}"></i>{% endfor -%}

@@ -515,6 +515,10 @@ def iz_histograma(hist: dict) -> dict:
         "p90_min": pristanek._kvantil(minute, h, n, 0.9),
         "v5min": round(v5 / n * 100, 1),
         "nad15": round(nad15 / n * 100, 1),
+        # Prag nadomestila SŽ: 60-119 min četrtina cene, od 120 polovica.
+        "nad60": round(sum(c for m, c in h.items() if m >= 60) / n * 100, 1),
+        "nad60_n": sum(c for m, c in h.items() if m >= 60),
+        "nad120_n": sum(c for m, c in h.items() if m >= 120),
         "razredi": {k: round(razredi[k] / n * 100, 1)
                     for k in ("tocno", "1-5", "5-15", "nad-15")},
     }

@@ -38,6 +38,14 @@
       <div class="st-drobno">delež v 5 min po dnevih, zadnjih 90 · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ c.n | stevilo }} voženj v 30 dneh</div>
       {% if not primerljiv %}<p>Zajema je še premalo za primerjavo z drugimi prevozniki.</p>{% endif %}
     </section>
+    {% if vlak and c.nad60_n is defined %}
+    <section class="st-k">
+      <h2>Kdaj SŽ vrne del cene vozovnice?</h2>
+      <div class="st-velika"><b class="st-vlak-b">{{ c.nad60_n | stevilo }}</b><span>voženj je prišlo na cilj vsaj 60 min pozno ({{ c.nad60 | odstotek }})</span></div>
+      <p>Pri zamudi 60–119 minut SŽ potniku vrne četrtino cene vozovnice, od 120 minut polovico ({{ c.nad120_n | stevilo }} voženj), razen če je bila zamuda znana že ob nakupu. Zahtevek odda potnik sam: <a href="https://www.gov.si/teme/pravice-potnikov-v-zelezniskem-prometu/">pravice potnikov</a>.</p>
+      <div class="st-drobno">zamuda na končni postaji; kdor izstopi prej, ima lahko manj</div>
+    </section>
+    {% endif %}
     {% else %}
     <section class="st-k"><h2>Premalo podatkov</h2><p>V zadnjih 30 dneh ima živ podatek manj kot {{ min_vzorec }} voženj.</p></section>
     {% endif %}

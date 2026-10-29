@@ -349,3 +349,10 @@ def test_stran_relacij_se_izrise(strani):
     odgovor = strani.statistika_relacije(_zahteva("/statistika/relacije"))
     assert odgovor.status_code == 200
     assert "Vlak, avtobus ali avto?" in odgovor.body.decode()
+
+
+def test_prag_nadomestila_iz_histograma():
+    """SŽ vrne četrtino cene od 60 min, polovico od 120 (minuta je zaokrožena)."""
+    c = statistika.iz_histograma({"0": 2, "59": 1, "60": 1, "130": 1})
+    assert (c["nad60_n"], c["nad120_n"], c["nad60"]) == (2, 1, 40.0)
+
