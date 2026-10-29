@@ -35,19 +35,19 @@
       <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "vlakov" if vlak else "voženj" }} pride na cilj v 5 minutah</span></div>
       <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, vsaka deseta vsaj {{ c.p90_min | minute }}; {{ c.nad15 | odstotek }} več kot 15 min.</p>
       {{ stolpci(dnevi, "" if vlak else "bus") }}
-      <div class="st-drobno">delež v 5 min po dnevih, zadnjih 90 · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ c.n | stevilo }} voženj v 30 dneh</div>
+      <div class="st-drobno">delež v 5 min po dnevih, zadnjih 90 · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ c.n | stevilo }}&nbsp;{{ (c.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} v 30 dneh</div>
       {% if not primerljiv %}<p>Zajema je še premalo za primerjavo z drugimi prevozniki.</p>{% endif %}
     </section>
     {% if vlak and c.nad60_n is defined %}
     <section class="st-k">
       <h2>Kdaj SŽ vrne del cene vozovnice?</h2>
       <div class="st-velika"><b class="st-vlak-b">{{ c.nad60_n | stevilo }}</b><span>voženj je prišlo na cilj vsaj 60 min pozno ({{ c.nad60 | odstotek }})</span></div>
-      <p>Pri zamudi 60–119 minut SŽ potniku vrne četrtino cene vozovnice, od 120 minut polovico ({{ c.nad120_n | stevilo }} voženj), razen če je bila zamuda znana že ob nakupu. Zahtevek odda potnik sam: <a href="https://www.gov.si/teme/pravice-potnikov-v-zelezniskem-prometu/">pravice potnikov</a>.</p>
+      <p>Pri zamudi 60–119 minut SŽ potniku vrne četrtino cene vozovnice, od 120 minut polovico ({{ c.nad120_n | stevilo }}&nbsp;{{ (c.nad120_n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}), razen če je bila zamuda znana že ob nakupu. Zahtevek odda potnik sam: <a href="https://www.gov.si/teme/pravice-potnikov-v-zelezniskem-prometu/">pravice potnikov</a>.</p>
       <div class="st-drobno">zamuda na končni postaji; kdor izstopi prej, ima lahko manj</div>
     </section>
     {% endif %}
     {% else %}
-    <section class="st-k"><h2>Premalo podatkov</h2><p>V zadnjih 30 dneh ima živ podatek manj kot {{ min_vzorec }} voženj.</p></section>
+    <section class="st-k"><h2>Premalo podatkov</h2><p>V zadnjih 30 dneh ima živ podatek manj kot {{ min_vzorec }}&nbsp;{{ (min_vzorec or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.</p></section>
     {% endif %}
 
     {% if ure | length >= 4 %}
@@ -55,7 +55,7 @@
     <section class="st-k">
       <h2>Ob kateri uri zamuja?</h2>
       <div class="st-ure {{ '' if vlak else 'bus' }}" aria-hidden="true">
-        {%- for u in ure %}<i style="height:{{ u.visina }}%" title="{{ u.ura }}h: {{ u.v5min | odstotek }} v 5 min, {{ u.n }} voženj"></i>{% endfor -%}
+        {%- for u in ure %}<i style="height:{{ u.visina }}%" title="{{ u.ura }}h: {{ u.v5min | odstotek }} v 5 min, {{ u.n }}&nbsp;{{ (u.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}"></i>{% endfor -%}
       </div>
       <div class="st-ure-os st-drobno"><span>{{ ure[0].ura }}h</span><span>{{ ure[-1].ura }}h</span></div>
       <p>Najbolj točno ob {{ naj[-1].ura }}h ({{ naj[-1].v5min | odstotek }} v 5 min), najmanj ob {{ naj[0].ura }}h ({{ naj[0].v5min | odstotek }}).</p>
@@ -71,7 +71,7 @@
       {% set najvec = [n.parno.prevoznik.mae_min, n.parno.nasa.mae_min, 0.1] | max %}
       {{ trak("kajros", n.parno.nasa.mae_min / najvec * 100, n.parno.nasa.mae_min | decimalno, "vlak" if vlak else "bus") }}
       {{ trak(p.ime, n.parno.prevoznik.mae_min / najvec * 100, n.parno.prevoznik.mae_min | decimalno, "siv") }}
-      <div class="st-drobno">{{ n.parno.prevoznik.n | stevilo }} pogledov</div>
+      <div class="st-drobno">{{ n.parno.prevoznik.n | stevilo }}&nbsp;{{ (n.parno.prevoznik.n or 0) | stevnik("pogled", "pogleda", "pogledi", "pogledov") }}</div>
     </section>
     {% elif n.vse.nasa.n >= min_vzorec %}
     {% set najvec = [n.vse.vozni_red.mae_min or 0, n.vse.prenos.mae_min or 0, n.vse.nasa.mae_min or 0, 0.1] | max %}
@@ -82,7 +82,7 @@
       {{ trak("trenutna zamuda", n.vse.prenos.mae_min / najvec * 100, n.vse.prenos.mae_min | decimalno, "siv") }}
       {% if n.vse.vozni_red.mae_min %}{{ trak("vozni red", n.vse.vozni_red.mae_min / najvec * 100, n.vse.vozni_red.mae_min | decimalno, "temen") }}{% endif %}
       <p>{{ p.ime }} svoje napovedi {% if delez_prevoznika %}skoraj ne objavlja (pri {{ delez_prevoznika | decimalno }} % pogledov){% else %}ne objavlja{% endif %}.</p>
-      <div class="st-drobno">{{ n.vse.nasa.n | stevilo }} pogledov</div>
+      <div class="st-drobno">{{ n.vse.nasa.n | stevilo }}&nbsp;{{ (n.vse.nasa.n or 0) | stevnik("pogled", "pogleda", "pogledi", "pogledov") }}</div>
     </section>
     {% endif %}
 
@@ -99,7 +99,7 @@
     <section class="st-k">
       <h2>Koliko voženj vidimo v živo?</h2>
       <div class="st-velika"><b>{{ p.pokritost | odstotek }}</b><span>voženj po voznem redu ima živ podatek</span></div>
-      {% if nadomestni and nadomestni.nacrt %}<p>Nadomestni avtobusi SŽ: {{ nadomestni.pokritost | odstotek }} od {{ nadomestni.nacrt | stevilo }} voženj — SŽ zanje zamud ne objavlja, velja vozni red.</p>{% endif %}
+      {% if nadomestni and nadomestni.nacrt %}<p>Nadomestni avtobusi SŽ: {{ nadomestni.pokritost | odstotek }} od {{ nadomestni.nacrt | stevilo }}&nbsp;{{ (nadomestni.nacrt or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} — SŽ zanje zamud ne objavlja, velja vozni red.</p>{% endif %}
     </section>
     {% endif %}
 
@@ -113,7 +113,7 @@
       <h2>Najbolj {{ pridevnik }} {{ enota }}</h2>
       <ul class="st-seznam">
         {% for x in p.lestvica.najboljse %}
-        <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
+        <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }}&nbsp;{{ (x.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
         {% endfor %}
       </ul>
       </div>
@@ -121,7 +121,7 @@
       <h2>Najmanj {{ pridevnik }} {{ enota }}</h2>
       <ul class="st-seznam">
         {% for x in p.lestvica.najslabse %}
-        <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
+        <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }}&nbsp;{{ (x.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
         {% endfor %}
       </ul>
       </div>

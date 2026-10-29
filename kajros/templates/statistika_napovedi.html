@@ -37,7 +37,7 @@
       {{ trak("trenutna zamuda", v.prenos.mae_min / najvec * 100, v.prenos.mae_min | decimalno, "siv") }}
       {{ trak("vozni red", 100, v.vozni_red.mae_min | decimalno, "temen") }}
       <p>V minuti od resnice: kajros {{ v.nasa.v1min | odstotek }}, trenutna zamuda {{ v.prenos.v1min | odstotek }}, vozni red {{ v.vozni_red.v1min | odstotek }}.</p>
-      <div class="st-drobno">{{ v.nasa.n | stevilo }} pogledov · „trenutna zamuda“ = zamuda z zemljevida SŽ, prenesena na vse postaje naprej. Svoje napovedi SŽ ne objavlja.</div>
+      <div class="st-drobno">{{ v.nasa.n | stevilo }}&nbsp;{{ (v.nasa.n or 0) | stevnik("pogled", "pogleda", "pogledi", "pogledov") }} · „trenutna zamuda“ = zamuda z zemljevida SŽ, prenesena na vse postaje naprej. Svoje napovedi SŽ ne objavlja.</div>
     </section>
     {% endif %}
 
@@ -51,7 +51,7 @@
         <span>{{ x.ime }}</span><span class="v nasa">{{ x.nasa.mae_min | decimalno }}</span><span class="v">{{ x.prevoznik.mae_min | decimalno }}</span>
         {% endfor %}
       </div>
-      <div class="st-drobno">{{ parno | map(attribute="prevoznik.n") | min | stevilo }}–{{ parno | map(attribute="prevoznik.n") | max | stevilo }} pogledov na prevoznika</div>
+      <div class="st-drobno">{{ parno | map(attribute="prevoznik.n") | min | stevilo }}–{{ parno | map(attribute="prevoznik.n") | max | stevilo }}&nbsp;{{ (parno | map(attribute="prevoznik.n") | max or 0) | stevnik("pogled", "pogleda", "pogledi", "pogledov") }} na prevoznika</div>
     </section>
     {% endif %}
 
@@ -80,7 +80,7 @@
     <section class="st-k">
       <h2>Preden vlak odpelje z začetne postaje</h2>
       <p>Takrat meritve še ni: kajros pokaže, koliko ta vlak običajno zamuja. Povprečna napaka {{ p.nasa.mae_min | decimalno }} min, vozni red {{ p.vozni_red.mae_min | decimalno }}. V minuti od resnice kajros {{ p.nasa.v1min | odstotek }}, vozni red {{ p.vozni_red.v1min | odstotek }}.</p>
-      <div class="st-drobno">{{ p.nasa.n | stevilo }} pogledov</div>
+      <div class="st-drobno">{{ p.nasa.n | stevilo }}&nbsp;{{ (p.nasa.n or 0) | stevnik("pogled", "pogleda", "pogledi", "pogledov") }}</div>
     </section>
     {% endif %}
     </div>

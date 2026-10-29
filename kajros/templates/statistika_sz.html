@@ -39,7 +39,7 @@
     <section class="st-k st-ton st-dvojna">
       <h2>Vlak na zemljevidu odpelje, preden res odpelje</h2>
       <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je bil vlak še na postaji vsaj 2 minuti, ko ga je zemljevid SŽ že kazal na poti</span></div>
-      <p>{{ p.n | stevilo }} odhodov s postaje na {{ p.voznj }} vožnjah s potnikom ({{ p.od | dan }}–{{ p.do | dan }}). Običajno je zemljevid pokazal odhod {{ p.mediana_min | decimalno }} min prezgodaj, pri {{ p.prej10 | odstotek }} vsaj 10 min. {% if p.kasneje1 %}Pozneje kot res {{ p.kasneje1 }}-krat.{% else %}Pozneje kot res nikoli.{% endif %}</p>
+      <p>{{ p.n | stevilo }}&nbsp;{{ (p.n or 0) | stevnik("odhod", "odhoda", "odhodi", "odhodov") }} s postaje na {{ p.voznj }} vožnjah s potnikom ({{ p.od | dan }}–{{ p.do | dan }}). Običajno je zemljevid pokazal odhod {{ p.mediana_min | decimalno }} min prezgodaj, pri {{ p.prej10 | odstotek }} vsaj 10 min. {% if p.kasneje1 %}Pozneje kot res {{ p.kasneje1 }}&#8209;krat.{% else %}Pozneje kot res nikoli.{% endif %}</p>
       <ul class="st-seznam">
         {% for x in p.najhujsi %}
         <li><div class="vr"><span class="ime">{{ x.st }} · {{ x.postaja }}</span><span class="pc">{{ x.stal_min }} min</span><span class="drobno">{{ x.dan | dan }}: na zemljevidu odpeljal, vlak pa je stal še toliko časa</span></div></li>
@@ -54,8 +54,8 @@
       <h2>Zakaj: odhod je sklep iz ure</h2>
       <p>Zemljevid premakne vlak čez postajo, ko po voznem redu in zadnji zamudi mora odpeljati — ne, ko odpelje. Če vlak še stoji (čaka na križanje, signal, zamujeno zvezo), ga zemljevid kaže na poti, zamudo pa nato dviguje minuto za minuto. Potnik na naslednji postaji vidi, da vlak prihaja, a ta še ni odpeljal s prejšnje.</p>
       <div class="st-velika"><b class="st-vlak-b">{{ c.dvig2 | odstotek }}</b><span>postankov SŽ pozneje dvigne zamudo za vsaj 2 min</span></div>
-      <p>Za vsaj 10 min pri {{ c.dvig10 | odstotek }} postankov{% if c.mediana_min %}; popravek je običajno {{ c.mediana_min | minute }}{% endif %}.{% if izhodisca.n >= min_vzorec %} Na začetni postaji zemljevid pokaže točen odhod pri {{ izhodisca.lazno | odstotek }} odhodov, ko vlak stoji še vsaj 2 min.{% endif %}</p>
-      <div class="st-drobno">{{ c.postankov | stevilo }} postankov vseh vlakov, brez končnih postaj</div>
+      <p>Za vsaj 10 min pri {{ c.dvig10 | odstotek }}&nbsp;{{ (c.dvig10 | odstotek or 0) | stevnik("postanek", "postanka", "postanki", "postankov") }}{% if c.mediana_min %}; popravek je običajno {{ c.mediana_min | minute }}{% endif %}.{% if izhodisca.n >= min_vzorec %} Na začetni postaji zemljevid pokaže točen odhod pri {{ izhodisca.lazno | odstotek }}&nbsp;{{ (izhodisca.lazno | odstotek or 0) | stevnik("odhod", "odhoda", "odhodi", "odhodov") }}, ko vlak stoji še vsaj 2 min.{% endif %}</p>
+      <div class="st-drobno">{{ c.postankov | stevilo }}&nbsp;{{ (c.postankov or 0) | stevnik("postanek", "postanka", "postanki", "postankov") }} vseh vlakov, brez končnih postaj</div>
     </section>
     {% endif %}
 
@@ -65,7 +65,7 @@
       <div class="st-drobno">delež voženj, ki na odseku izgubijo vsaj 2 min, zadnjih 30 dni</div>
       <ul class="st-seznam">
         {% for o in odseki %}
-        <li><div class="vr"><span class="ime">{{ o.od }} → {{ o.do }}</span><span class="pc">{{ o.izguba2 | odstotek }}</span><span class="drobno">{{ o.n | stevilo }} voženj · običajno {{ o.mediana_min | zamuda_min }}</span></div></li>
+        <li><div class="vr"><span class="ime">{{ o.od }} → {{ o.do }}</span><span class="pc">{{ o.izguba2 | odstotek }}</span><span class="drobno">{{ o.n | stevilo }}&nbsp;{{ (o.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} · običajno {{ o.mediana_min | zamuda_min }}</span></div></li>
         {% endfor %}
       </ul>
       <p>Zakaj (dela na progi, en tir, čakanje na križanje), podatki ne povedo.</p>
@@ -75,7 +75,7 @@
     {% if nadomestni.nacrt %}
     <section class="st-k">
       <h2>Nadomestni avtobusi</h2>
-      <div class="st-velika"><b>{{ nadomestni.z_meritvijo | stevilo }}</b><span>od {{ nadomestni.nacrt | stevilo }} voženj z zamudo v živo</span></div>
+      <div class="st-velika"><b>{{ nadomestni.z_meritvijo | stevilo }}</b><span>od {{ nadomestni.nacrt | stevilo }}&nbsp;{{ (nadomestni.nacrt or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} z zamudo v živo</span></div>
       <p>SŽ za nadomestne avtobuse zamud ne objavlja; kje ustavijo, je le v PDF na njihovi strani. Velja vozni red.</p>
     </section>
     {% endif %}

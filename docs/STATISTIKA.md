@@ -293,7 +293,7 @@ večje delo · **ne** = podatka ni.
 ## Naslednji koraki
 
 0. **Popravi najdbe pregleda** (najhujše prve):
-   1. Števniki: `{{ n | stevilo }} voženj/pogledov/odhodov/dni` vedno rodilnik
+   1. (narejeno, filter `stevnik` z `&nbsp;`) Števniki: `{{ n | stevilo }} voženj/pogledov/odhodov/dni` vedno rodilnik
       množine („4 voženj“ na 405 straneh linij, „3 voženj“, „zadnjih 2 dni“).
       Uporabi filter `stevnik` (`pristanek.py:671`, v `api.py:370`) povsod v
       `statistika_*.html` in `_stat.html` (tudi `title` stolpcev).

@@ -34,7 +34,7 @@
       <div class="st-velika"><b class="st-vlak-b">{{ vlak.cilj.v5min | odstotek }}</b><span>vlakov pride na cilj v 5 minutah</span></div>
       <p>{% if vlak.cilj.mediana_min > 0 %}Polovica zamudi vsaj {{ vlak.cilj.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, {{ vlak.cilj.nad15 | odstotek }} več kot 15 min.</p>
       {{ stolpci(vlak_dnevi) }}
-      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ vlak.cilj.n | stevilo }} voženj</div>
+      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ vlak.cilj.n | stevilo }}&nbsp;{{ (vlak.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}</div>
       <a class="st-naprej" href="/statistika/prevoznik/{{ vlak.slug }}">Po urah in vlakih ›</a>
     </section>
     {% endif %}
@@ -45,7 +45,7 @@
       <div class="st-velika"><b class="st-bus-b">{{ bus.v5min | odstotek }}</b><span>avtobusov pride na cilj v 5 minutah</span></div>
       <p>Mestni in medkrajevni skupaj, {{ bus_prevoznikov }} prevoznikov. {% if bus.mediana_min > 0 %}Polovica zamudi vsaj {{ bus.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, {{ bus.nad15 | odstotek }} več kot 15 min.</p>
       {% if bus_dnevi %}{{ stolpci(bus_dnevi, "bus") }}
-      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ bus.n | stevilo }} voženj</div>{% endif %}
+      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ bus.n | stevilo }}&nbsp;{{ (bus.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}</div>{% endif %}
       <a class="st-naprej" href="/statistika/prevozniki">Po prevoznikih ›</a>
     </section>
     {% endif %}
@@ -57,7 +57,7 @@
       {% for x in lestvica %}
       {{ trak(x.ime ~ (" (vlaki)" if x.network == "zeleznica" else ""), x.cilj.v5min, x.cilj.v5min | odstotek, "vlak" if x.network == "zeleznica" else "bus") }}
       {% endfor %}
-      {% if premalo %}<div class="st-drobno">Še premalo za primerjavo: {% for x in premalo %}{{ x.ime }} ({{ x.cilj.n | stevilo }} voženj{% if x.zajem_od %}, od {{ x.zajem_od | dan }}{% endif %}){{ ", " if not loop.last }}{% endfor %}.</div>{% endif %}
+      {% if premalo %}<div class="st-drobno">Še premalo za primerjavo: {% for x in premalo %}{{ x.ime }} ({{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}{% if x.zajem_od %}, od {{ x.zajem_od | dan }}{% endif %}){{ ", " if not loop.last }}{% endfor %}.</div>{% endif %}
       <a class="st-naprej" href="/statistika/prevozniki">Vsi prevozniki ›</a>
     </section>
     {% endif %}
@@ -70,7 +70,7 @@
       {{ trak("kajros", napoved.nasa.mae_min / najvec * 100, napoved.nasa.mae_min | decimalno, "vlak") }}
       {{ trak("trenutna zamuda", napoved.prenos.mae_min / najvec * 100, napoved.prenos.mae_min | decimalno, "siv") }}
       {{ trak("vozni red", 100, napoved.vozni_red.mae_min | decimalno, "temen") }}
-      <div class="st-drobno">minut · {{ napoved.nasa.n | stevilo }} pogledov · „trenutna zamuda“ = zamuda z zemljevida SŽ, prenesena na vse postaje naprej</div>
+      <div class="st-drobno">minut · {{ napoved.nasa.n | stevilo }}&nbsp;{{ (napoved.nasa.n or 0) | stevnik("pogled", "pogleda", "pogledi", "pogledov") }} · „trenutna zamuda“ = zamuda z zemljevida SŽ, prenesena na vse postaje naprej</div>
       <a class="st-naprej" href="/statistika/napovedi">Kako merimo ›</a>
     </section>
     {% endif %}
@@ -80,7 +80,7 @@
     <section class="st-k st-ton">
       <h2>Vlak na zemljevidu SŽ odpelje, preden res odpelje</h2>
       <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je bil vlak še na postaji vsaj 2 minuti, ko ga je uradni zemljevid že kazal na poti</span></div>
-      <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }} odhodov ({{ p.od | dan }}–{{ p.do | dan }}).{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je stal še {{ p.najhujsi[0].stal_min }} min.{% endif %}</p>
+      <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }}&nbsp;{{ (p.n or 0) | stevnik("odhod", "odhoda", "odhodi", "odhodov") }} ({{ p.od | dan }}–{{ p.do | dan }}).{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je stal še {{ p.najhujsi[0].stal_min }} min.{% endif %}</p>
       <a class="st-naprej" href="/statistika/sz">Kaj še kažejo podatki SŽ ›</a>
     </section>
     {% endif %}

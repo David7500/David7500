@@ -29,7 +29,7 @@
 
 {% macro stolpci(dnevi, razred="") -%}
       <div class="st-stolpci {{ razred }}" aria-hidden="true">
-        {%- for d in dnevi %}<i{% if d.malo %} class="malo"{% endif %} style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.v5 | odstotek if d.v5 is not none else 'brez podatka' }} v 5 min, {{ d.n }} voženj"></i>{% endfor -%}
+        {%- for d in dnevi %}<i{% if d.malo %} class="malo"{% endif %} style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.v5 | odstotek if d.v5 is not none else 'brez podatka' }} v 5 min, {{ d.n }}&nbsp;{{ (d.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}"></i>{% endfor -%}
       </div>
 {%- endmacro %}
 
