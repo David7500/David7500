@@ -3045,6 +3045,8 @@ Vprašanje za statistiko (David): uradna aplikacija SŽ kaže, da je vlak že od
 
 **Vzorec po vseh vožnjah** (109 383 postankov, 11.–29. 10. 2026, brez cilja in nadomestnih): SŽ je odhodno zamudo postanka, ki ga je že kazal kot prevoženega, pozneje dvignil za vsaj 2 min pri 20,2 %, za vsaj 5 min pri 10,5 %, za vsaj 10 min pri 4,6 %. Mediana popravka 5,0 min, zamuda raste skoraj minuto na minuto (mediana popravek/trajanje 0,88): vlak stoji, zemljevid ga kaže na poti. Na izhodišču (8 889 odhodov): prva zamuda ≤ 0,5 min, končna ≥ 2 min pri 17,8 % — SŽ pokaže točen odhod vlaka, ki še stoji. Zmanjšanje za ≥ 2 min le 658-krat.
 
+**Na strani `/statistika/sz` (objava 29. 10. 2026, živa baza arwena, 11.–28. 10.)**: 51 odhodov s potnikom (okno do včeraj, od `SZ_VODI_OD`), vsaj 2 min prezgodaj **59 %**. Stran šteje 30 s v korist SŽ (`statistika.POTNIK_ZAMIK_S`: napaka prehoda iz GPS); brez zamika je isto okno dalo 75 %. Številki 61 in 66 % zgoraj sta drugo okno (od 30. 9., do 29. 10.) in brez zamika.
+
 Sklep: zemljevid SŽ odhod sklepa iz voznega reda in zadnje zamude, ne iz dogodka; ko vlak stoji, zamudo zvišuje sproti. Uradna aplikacija SŽ po Davidovem opažanju kaže isto; ali bere isti vir, ni preverjeno. Za stran SŽ uporabno kot izmerjeno, z vzorcem in obdobjem. Pasti: prehodi potnikov so iz 27 deljenj (pristranski izbor voženj), prehod iz GPS ima napako ~pol minute.
 
 ## Senca po prevoznikih: naša, prevoznikova, prenos, vozni red (29. 10. 2026)
@@ -3067,7 +3069,7 @@ Pristranskost (naš − res): vlaki na poti −0,68 min, prenos −2,56 (prenos 
 
 ## Vlak, avtobus, avto na isti relaciji (29. 10. 2026)
 
-Za stran relacij. Kopija baze z arwena, delavniki 11.–28. 10. 2026. Vlak in avtobus: `run` + `sched`, postaja–postaja, „dejansko“ = vozni red + izmerjena zamuda na obeh koncih. Avto: `promet.ac` (DARS prek NAP, odsek AC od priključka do priključka, ne od središča), mediana po uri odhoda. Skripte v `docs/statistika-delo/skripte/` (`vlak_avto.py`, `vlak_bus.py`).
+Za stran relacij. Kopija baze z arwena, delavniki 11.–28. 10. 2026. Vlak in avtobus: `run` + `sched`, postaja–postaja, „dejansko“ = vozni red + izmerjena zamuda na obeh koncih. Avto: `promet.ac` (DARS prek NAP, odsek AC od priključka do priključka, ne od središča), mediana po uri odhoda. Skripte v commitu 6ae95af, `docs/statistika-delo/skripte/` (`vlak_avto.py`, `vlak_bus.py`).
 
 | relacija | vlak: vozni red / dejansko / v 5 min na cilju | avtobus | avto (AC) |
 |---|---|---|---|
@@ -3083,7 +3085,7 @@ Na avtocestnih koridorjih je avto ~2× hitrejši ob vsaki uri; vlak ga ne ujame 
 
 ## Odseki, kjer vozni red ne drži (29. 10. 2026)
 
-Za stran SŽ. Prirast zamude od odhoda z X do prihoda na naslednji postanek Y, `run`, 11.–28. 10. 2026, odsekov z vsaj 100 vožnjami 425 (`docs/statistika-delo/skripte/odseki.py`). Vlak izgubi vsaj 2 min pri: Brestanica → Blanca 84 % (322), Zidani Most → Hrastnik 72 % (416), Radohova vas → Šentvid pri Stični 65 %, mediana +4 min (147), Blanca → Sevnica 65 % (324), Libna → Krško 61 % (308), Ljubljana Polje → Ljubljana Zalog 55 % (378), Jesenice → Lesce-Bled 54 %, mediana +3 (124), Laze → Ljubljana Zalog 52 % (355). Rezerva (vlak pridobi ≥ 1 min): Otovec → Črnomelj 61 %, Hudajužna → Grahovo 51 %, Radeče → Zidani Most 45 %. Vzrok (dela na progi, enotirnost, prepust) iz podatkov ni razviden — na strani povej samo, kje in koliko.
+Za stran SŽ. Prirast zamude od odhoda z X do prihoda na naslednji postanek Y, `run`, 11.–28. 10. 2026, odsekov z vsaj 100 vožnjami 425 (`git show 6ae95af:docs/statistika-delo/skripte/odseki.py`). Vlak izgubi vsaj 2 min pri: Brestanica → Blanca 84 % (322), Zidani Most → Hrastnik 72 % (416), Radohova vas → Šentvid pri Stični 65 %, mediana +4 min (147), Blanca → Sevnica 65 % (324), Libna → Krško 61 % (308), Ljubljana Polje → Ljubljana Zalog 55 % (378), Jesenice → Lesce-Bled 54 %, mediana +3 (124), Laze → Ljubljana Zalog 52 % (355). Rezerva (vlak pridobi ≥ 1 min): Otovec → Črnomelj 61 %, Hudajužna → Grahovo 51 %, Radeče → Zidani Most 45 %. Vzrok (dela na progi, enotirnost, prepust) iz podatkov ni razviden — na strani povej samo, kje in koliko.
 
 ## Prezgodnji odhodi po prevozniku (29. 10. 2026)
 

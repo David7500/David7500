@@ -214,13 +214,12 @@ večje delo · **ne** = podatka ni.
 
 ## Stanje
 
-* 29. 10. 2026: popis (dva bralca: `docs/statistika-delo/meritve.md`,
-  `docs/statistika-delo/koda.md` — začasno, po vključitvi v načrt pobriši),
-  meritve izvedljivosti na kopiji baze z arwena (`/var/tmp/kajros-stat.sqlite`,
-  `/var/tmp/promet-stat.sqlite`; po koncu pobriši). Merilne skripte v
-  `docs/statistika-delo/skripte/` (tečejo na arwenu nad kopijo): `pregled.py`, `sz_odhod.py`, `senca.py`, `prevozniki.py`,
-  `sz_manjka.py`, `vlak_avto.py`, `vlak_bus.py`, `ac.py`, `odseki.py`,
-  `prezgodaj.py`. Številke v `docs/MERITVE.md` (razdelki 29. 10. 2026).
+* 29. 10. 2026: popis (dva bralca, vključeno v načrt) in meritve
+  izvedljivosti na kopiji baze z arwena. Merilne skripte so v gitu v commitu
+  6ae95af (`git show 6ae95af:docs/statistika-delo/skripte/sz_odhod.py`;
+  še `pregled.py`, `senca.py`, `prevozniki.py`, `sz_manjka.py`,
+  `vlak_avto.py`, `vlak_bus.py`, `ac.py`, `odseki.py`, `prezgodaj.py`),
+  tečejo nad kopijo. Številke v `docs/MERITVE.md` (razdelki 29. 10. 2026).
 
 * 29. 10. 2026 popoldne: **zaledje faze 1 narejeno** (commit 44a2fd4):
   `kajros/statistika.py`, tabela `stat_dan`, kinda `stat_napovedi` in
@@ -292,8 +291,8 @@ večje delo · **ne** = podatka ni.
   visoke kartice, dolgi seznami čez vso širino v stolpcih, zavihki med
   stranmi, ploščice za dneve in odhode, stolpci avtobusov na pregledu.
   Funkcionalni pregled (en agent, sonnet): 856 naslovov 200, brez puščanja,
-  številke skladne, telefon brez vodoravnega drsnika; najdbe v
-  `docs/statistika-delo/pregled-funkcij.md`. Ustavljeno pri 96 % 5-urnega okna.
+  številke skladne, telefon brez vodoravnega drsnika; najdbe popravljene
+  (spodaj). Ustavljeno pri 96 % 5-urnega okna.
 
 * 29. 10. 2026 pozno: **najdbe pregleda popravljene** (29bff36, 4b09437,
   102e25d, ni objavljeno): števniki prek `stevnik`; lestvica prevoznika
@@ -317,7 +316,9 @@ večje delo · **ne** = podatka ni.
 2. **Po objavi preveri številke SŽ**: kopija z arwena (izračun pred
    `POTNIK_ZAMIK_S`) je dala 51 odhodov in 75 % ≥ 2 min, MERITVE pravi 61 in
    66 % (drugo okno). Z zamikom 30 s mora delež pasti; uskladi MERITVE.
-3. Po objavi: `docs/statistika-delo/` vključi (najdbe so v MERITVE in tu) in
-   pobriši.
+3. Drobno iz pregleda, neodločeno: napovedi vlakov imajo 27 od 30 dni
+   (7.–9. 10. brez zajema), stran vrzeli ne omeni; `/statistika/prevoznik/SZ`
+   vrne 404 (vlak z veliko začetnico preusmeri 301); `/statistika/` vrne 307
+   (FastAPI), ne 301.
 4. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
    točnost odhodov na `/postaja/{ime}`.
