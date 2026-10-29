@@ -21,7 +21,7 @@ Dva zajema = dva vira, namenoma: arwen se zapira, malina ne. Ne združuj.
 git push arwen claude/slovenske-zeleznice-api-ql84hf
 ```
 
-`~/kajros` na arwenu = repozitorij z `receive.denyCurrentBranch = updateInstead`; `post-receive` (povezava na `deploy/post-receive`) požene `deploy/posodobi.sh` (izpiše commit, prepiše v `/opt/kajros`, `systemctl restart` z `NOPASSWD`, počaka na `/api/health`). Izpis pride nazaj. **Objavi se samo odjavljena veja**, druge se le shranijo. Baza `/var/lib/kajros`. Enkratna nastavitev: `ssh david@192.168.1.46 'bash -s' < deploy/arwen-git.sh` (po prvem potisku še enkrat za kavelj).
+`~/kajros` na arwenu = repozitorij z `receive.denyCurrentBranch = updateInstead`; `post-receive` (povezava na `deploy/post-receive`) požene `deploy/posodobi.sh` (izpiše commit, prepiše v `/opt/kajros`, `systemctl restart` z `NOPASSWD`, počaka na `/api/health`). Izpis pride nazaj. **Objavi se samo odjavljena veja**, druge se le shranijo. Baza `/var/lib/kajros`. **Nova vrsta povzetka**: do konca izračuna ob zagonu strani, ki jo berejo, visijo (`stats.summary_get` čaka `_SUMMARY_LOCK`), Cloudflare po 125 s vrne 524; ostalo spletišče normalno (statistika 29. 10. 2026: 16 min). Po potisku počakaj na 200, preden trdiš, da dela. Enkratna nastavitev: `ssh david@192.168.1.46 'bash -s' < deploy/arwen-git.sh` (po prvem potisku še enkrat za kavelj).
 
 **Česar potisk ne prinese** (enkrat ali redko na arwenu):
 * **OSRM in tiri**: `ssh david@192.168.1.46 'cd ~/kajros && deploy/osrm.sh'` — peš `:5000`, avtobus `:5001`, tir `:5002`, `/var/lib/kajros/tiri.json`; nato `sudo systemctl restart kajros.service` (brez gesla). **Slike ne vleci mimo skripte** (podatki vezani na različico; vleče le `znova`).
