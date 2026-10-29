@@ -77,7 +77,7 @@
     <section class="st-k st-ton">
       <h2>Ko zemljevid SŽ pokaže, da je vlak odpeljal …</h2>
       <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je vlak še stal vsaj 2 minuti</span></div>
-      <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }} odhodov, {{ p.od | dan }}–{{ p.do | dan }}.{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je na zemljevidu odpeljal {{ (p.najhujsi[0].prej_s / 60) | round | int }} min, preden je res.{% endif %}</p>
+      <p>Primerjava z GPS potnikov na vlaku: {{ p.n | stevilo }} odhodov ({{ p.od | dan }}–{{ p.do | dan }}).{% if p.najhujsi %} Najhujše: {{ p.najhujsi[0].st }} je na zemljevidu odpeljal {{ (p.najhujsi[0].prej_s / 60) | round | int }} min, preden je res.{% endif %}</p>
       <a class="st-naprej" href="/statistika/sz">Kaj še kažejo podatki SŽ ›</a>
     </section>
     {% endif %}

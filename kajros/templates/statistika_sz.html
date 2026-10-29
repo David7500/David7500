@@ -31,7 +31,7 @@
     <section class="st-k st-ton">
       <h2>Ko zemljevid SŽ pokaže, da je vlak odpeljal …</h2>
       <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je vlak še stal vsaj 2 minuti</span></div>
-      <p>Primerjava z GPS potnikov, ki so na vlaku delili lego: {{ p.n | stevilo }} odhodov s postaje na {{ p.voznj }} vožnjah, {{ p.od | dan }}–{{ p.do | dan }}. Zemljevid je vlak premaknil s postaje običajno {{ p.mediana_min | decimalno }} min prezgodaj; vsaj 10 min prezgodaj pri {{ p.prej10 | odstotek }}.{% if p.kasneje1 %} Pozneje kot res {{ p.kasneje1 }}-krat.{% else %} Pozneje kot res nikoli.{% endif %}</p>
+      <p>Primerjava z GPS potnikov, ki so na vlaku delili lego: {{ p.n | stevilo }} odhodov s postaje na {{ p.voznj }} vožnjah ({{ p.od | dan }}–{{ p.do | dan }}). Zemljevid je vlak premaknil s postaje običajno {{ p.mediana_min | decimalno }} min prezgodaj; vsaj 10 min prezgodaj pri {{ p.prej10 | odstotek }}.{% if p.kasneje1 %} Pozneje kot res {{ p.kasneje1 }}-krat.{% else %} Pozneje kot res nikoli.{% endif %}</p>
       {% for x in p.najhujsi %}
       <p>{{ x.st }}, {{ x.dan | dan }}, {{ x.postaja }}: na zemljevidu odpeljal {{ (x.prej_s / 60) | round | int }} min, preden je res.</p>
       {% endfor %}

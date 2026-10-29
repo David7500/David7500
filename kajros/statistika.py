@@ -1081,6 +1081,12 @@ def sz(conn: sqlite3.Connection, days: int, network: str,
             potniki += x.get("potniki", [])
     n = v["postankov"]
     prej = sorted(p["prej_s"] for p in potniki)
+    # En primer na vožnjo: LPV 2423 je zaostal na dveh postajah zapored.
+    najhujsi: dict[tuple, dict] = {}
+    for p in potniki:
+        k = (p["st"], p["dan"])
+        if k not in najhujsi or p["prej_s"] > najhujsi[k]["prej_s"]:
+            najhujsi[k] = p
     nadomestni = [x for _, k, x in _beri(conn, "prevoznik", od, do, "zeleznica")
                   if k == "zeleznica|1161|nadomestni"]
     napoved = _prazna_napoved()
@@ -1109,7 +1115,7 @@ def sz(conn: sqlite3.Connection, days: int, network: str,
             "prej10": delez(sum(x >= 600 for x in prej), len(prej)),
             "kasneje1": sum(x <= -60 for x in prej),
             "mediana_min": round(stats._pct(prej, 0.5) / 60, 1) if prej else None,
-            "najhujsi": sorted(potniki, key=lambda p: -p["prej_s"])[:3],
+            "najhujsi": sorted(najhujsi.values(), key=lambda p: -p["prej_s"])[:3],
         },
         "odseki": _odseki(conn, od, do)[:6],
         "nadomestni": {"nacrt": sum(x["nacrt"] or 0 for x in nadomestni),
