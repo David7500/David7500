@@ -332,6 +332,12 @@ večje delo · **ne** = podatka ni.
    za avtobus 244 232 (lokalna baza, 41 954 voženj): zato izbran seznam in
    iskanje ob zahtevi. Ptuj → Ljubljana „0 % v 5 min“ je resnično: IC 503 in
    MV 246 (po 25 voženj, najmanj +18 in +14 min), RG 1641/1643 (4 + 4),
-   okno 29. 9.–28. 10.
+   okno 29. 9.–28. 10. Polje → Ljubljana da samo vlak (Ljubljana Polje,
+   561 voženj): „Ljubljana“ se za avtobus razreši v „Ljubljana AP“, kamor
+   LPP ne pelje (s Polja linije 11, 11B, 20Z, 24, 25, 27: Bavarski dvor 973
+   voženj v voznem redu, Ajdovščina 735, Konzorcij 340, Ljubljana AP 0).
+   Tipkarske napake se ne popravijo: ime je podniz brez šumnikov in velikih
+   črk (`journey.search_stations`), „Ljubljna“ da „Tega imena ne najdem“
+   brez predloga; stran nima JS, zato ne seznama imen.
 5. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
    točnost odhodov na `/postaja/{ime}`.
