@@ -175,6 +175,11 @@ večje delo · **ne** = podatka ni.
   SŽ → namizje + razlage na vseh straneh → iskalnik relacij → faza 6.
 * Postopek (moj): najprej nočni izračun in API (od designa neodvisno), nato
   osnutki strani s pravimi številkami, David izbere, nato predloge.
+* **Iskanje relacije samo brez prestopov** (David, 29. 10. 2026 pozno:
+  „Brez prestopov“). Za prestope je iskalnik povezav (`/app/train`,
+  `/app/pot`); stran relacij nanj kaže, kadar neposredne vožnje ni.
+* **Objava zdaj, vse skupaj** (David, 29. 10. 2026 pozno, po zaprtih
+  najdbah pregleda).
 
 ## Predlogi pred odločitvijo (zgodovina)
 
@@ -316,7 +321,3 @@ večje delo · **ne** = podatka ni.
    pobriši.
 4. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
    točnost odhodov na `/postaja/{ime}`.
-5. **Odprto vprašanje Davidu**: iskanje relacije s prestopom (planer
-   `journey.plan` + zgodovina istega prestopa iz `pot.pripni_tveganje`:
-   najpogostejša zveza, trajanje z zamudami, delež dni, ko je prestop
-   zdržal). Večji korak; čaka odločitev.
