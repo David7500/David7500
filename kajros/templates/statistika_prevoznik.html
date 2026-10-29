@@ -23,14 +23,14 @@
 </head>
 <body class="home-page{% if not vlak %} net-avtobus{% endif %}">
   <main class="home st">
-    {{ glava(nazaj=True) }}
+    {{ glava("prevozniki") }}
     <h1>{{ p.ime }}</h1>
     <p class="st-glava">Zadnjih 30 dni, do {{ do | dan }}{% if p.zajem_od and p.dni_zajema < 30 %} · zajem od {{ p.zajem_od | dan }}{% endif %} · izračunano {{ izracunano | ura_dneva }}</p>
 
     <div class="st-kartice">
     {% set c = p.cilj %}
     {% if c.n >= min_vzorec %}
-    <section class="st-k">
+    <section class="st-k st-dvojna">
       <h2>Kako točno pride?</h2>
       <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "vlakov" if vlak else "voženj" }} pride na cilj v 5 minutah</span></div>
       <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, vsaka deseta vsaj {{ c.p90_min | minute }}; {{ c.nad15 | odstotek }} več kot 15 min.</p>
@@ -74,9 +74,14 @@
       <div class="st-drobno">{{ n.parno.prevoznik.n | stevilo }} pogledov</div>
     </section>
     {% elif n.vse.nasa.n >= min_vzorec %}
+    {% set najvec = [n.vse.vozni_red.mae_min or 0, n.vse.prenos.mae_min or 0, n.vse.nasa.mae_min or 0, 0.1] | max %}
     <section class="st-k">
       <h2>Kako dobro napovemo?</h2>
-      <p>{{ p.ime }} svoje napovedi {% if delez_prevoznika %}skoraj ne objavlja (pri {{ delez_prevoznika | decimalno }} % pogledov){% else %}ne objavlja{% endif %}. Kajros je {{ "25" if vlak else "15" }} min prej zgrešil povprečno za {{ n.vse.nasa.mae_min | decimalno }} min, trenutna zamuda za {{ n.vse.prenos.mae_min | decimalno }}.</p>
+      <div class="st-drobno">povprečna napaka v minutah, {{ "25" if vlak else "15" }} min pred prihodom</div>
+      {{ trak("kajros", n.vse.nasa.mae_min / najvec * 100, n.vse.nasa.mae_min | decimalno, "vlak" if vlak else "bus") }}
+      {{ trak("trenutna zamuda", n.vse.prenos.mae_min / najvec * 100, n.vse.prenos.mae_min | decimalno, "siv") }}
+      {% if n.vse.vozni_red.mae_min %}{{ trak("vozni red", n.vse.vozni_red.mae_min / najvec * 100, n.vse.vozni_red.mae_min | decimalno, "temen") }}{% endif %}
+      <p>{{ p.ime }} svoje napovedi {% if delez_prevoznika %}skoraj ne objavlja (pri {{ delez_prevoznika | decimalno }} % pogledov){% else %}ne objavlja{% endif %}.</p>
       <div class="st-drobno">{{ n.vse.nasa.n | stevilo }} pogledov</div>
     </section>
     {% endif %}
@@ -102,19 +107,25 @@
     {% set linije = p.lestvica.najboljse and p.lestvica.najboljse[0].linija %}
     {% set enota = "vlaki" if vlak else ("linije" if linije else "vožnje") %}
     {% set pridevnik = "točni" if vlak else "točne" %}
-    <section class="st-k">
+    <section class="st-k st-siroka">
+      <div class="st-dva">
+      <div>
       <h2>Najbolj {{ pridevnik }} {{ enota }}</h2>
       <ul class="st-seznam">
         {% for x in p.lestvica.najboljse %}
         <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
         {% endfor %}
       </ul>
+      </div>
+      <div>
       <h2>Najmanj {{ pridevnik }} {{ enota }}</h2>
       <ul class="st-seznam">
         {% for x in p.lestvica.najslabse %}
         <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
         {% endfor %}
       </ul>
+      </div>
+      </div>
       <div class="st-drobno">od {{ p.lestvica.vseh | stevilo }} z vsaj {{ min_dni_lestvica }} vožnjami v 30 dneh · običajno = mediana zamude na cilju</div>
     </section>
     {% endif %}

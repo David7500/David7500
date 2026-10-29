@@ -23,12 +23,12 @@
 </head>
 <body class="home-page">
   <main class="home st">
-    {{ glava(nazaj=True) }}
+    {{ glava("sz") }}
     <h1>Uradni podatki SŽ in resnica</h1>
     <p class="st-glava">Kaj pokažejo zamude, ki jih objavlja SŽ, in kaj se je zgodilo · {{ od | dan }}–{{ do | dan }} · izračunano {{ izracunano | ura_dneva }}</p>
 
     <div class="st-kartice">
-    <section class="st-k st-siroka">
+    <section class="st-k st-siroka st-stolpca">
       <h2>Od kod so uradne zamude</h2>
       <p>SŽ zamude vlakov v živo objavlja na <b>zemljevidu vlakov</b> na strani potniski.sz.si. Za vsak vlak na poti pove, proti kateri postaji pelje in koliko zamuja. Lega vlaka na njem ni iz GPS: SŽ jo izračuna iz voznega reda in zamude. Iz istih podatkov SŽ dobivajo zamude vlakov tudi druge strani, med njimi kajros. Beremo ga vsakih 5 sekund (SŽ ga preračuna na 15).</p>
       <p>Kdaj je vlak res odpeljal, vemo od potnikov, ki v aplikaciji kajros delijo lego: telefon na vlaku pošlje GPS vsakih 3–5 sekund, običajno na 4 m natančno. Odhod zaznamo, ko je vlak 200 m za postajo, to je 20–30 s po speljevanju — zato pri vsakem odhodu {{ potniki.zamik_s }} s štejemo v korist SŽ.</p>
@@ -36,7 +36,7 @@
 
     {% set p = potniki %}
     {% if p.n >= min_prehodov %}
-    <section class="st-k st-ton">
+    <section class="st-k st-ton st-dvojna">
       <h2>Vlak na zemljevidu odpelje, preden res odpelje</h2>
       <div class="st-velika"><b>{{ p.prej2 | odstotek }}</b><span>odhodov je bil vlak še na postaji vsaj 2 minuti, ko ga je zemljevid SŽ že kazal na poti</span></div>
       <p>{{ p.n | stevilo }} odhodov s postaje na {{ p.voznj }} vožnjah s potnikom ({{ p.od | dan }}–{{ p.do | dan }}). Običajno je zemljevid pokazal odhod {{ p.mediana_min | decimalno }} min prezgodaj, pri {{ p.prej10 | odstotek }} vsaj 10 min. {% if p.kasneje1 %}Pozneje kot res {{ p.kasneje1 }}-krat.{% else %}Pozneje kot res nikoli.{% endif %}</p>
@@ -60,7 +60,7 @@
     {% endif %}
 
     {% if odseki %}
-    <section class="st-k">
+    <section class="st-k st-siroka">
       <h2>Kje vozni red ne drži</h2>
       <div class="st-drobno">delež voženj, ki na odseku izgubijo vsaj 2 min, zadnjih 30 dni</div>
       <ul class="st-seznam">

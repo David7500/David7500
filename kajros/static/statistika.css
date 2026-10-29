@@ -18,8 +18,16 @@
 
 .st h1 { margin: 22px 0 4px; font: 700 30px/1.15 var(--sans); color: var(--ink); }
 .st-glava { margin: 0 0 16px; font: 400 14px/1.45 var(--sans); color: var(--ink-dim); }
-.st-nazaj { display: inline-block; margin-top: 14px; font: 500 14px var(--sans);
-            color: var(--accent-lit); text-decoration: none; }
+/* Zavihki strani statistike; izbrano = tonska sekundarna (segmentni gumb). */
+.st-meni { display: flex; gap: 8px; margin-top: 14px; overflow-x: auto; scrollbar-width: none; }
+.st-meni::-webkit-scrollbar { display: none; }
+.st-meni a {
+  flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
+  border-radius: var(--r-pilula); background: var(--m-visoka); color: var(--ink-dim);
+  font: 500 14px var(--sans); text-decoration: none;
+}
+.st-meni a[aria-current="page"] { background: var(--m-sek); color: var(--m-na-sek); }
+@media (hover: hover) { .st-meni a:hover { color: var(--ink); } }
 
 .st-kartice { display: flex; flex-direction: column; gap: 14px; }
 .st-k {
@@ -39,7 +47,9 @@
 .st-bus-b { color: var(--st-bus-lit); }
 
 .st-drobno { font: 400 12px/1.45 var(--sans); color: var(--ink-mute); }
-.st-k a.st-naprej { font: 600 14px var(--sans); color: var(--accent-lit); text-decoration: none; }
+/* Povezava naprej na dnu kartice: v vrsti enako visokih kartic so vse v isti višini. */
+.st-k a.st-naprej { margin-top: auto; align-self: flex-start; font: 600 14px var(--sans);
+                    color: var(--accent-lit); text-decoration: none; }
 @media (hover: hover) { .st-k a.st-naprej:hover { text-decoration: underline; } }
 
 /* Vrstica s trakom: ime, trak, številka. Ime se skrči, število ostane --
@@ -124,9 +134,6 @@
 .st-tabela tr.pod-crto td { color: var(--ink-mute); }
 @media (hover: hover) { .st-tabela td:first-child a:hover { text-decoration: underline; } }
 
-/* Namizje (David, 29. 10. 2026: „novinarji gledajo iz računalnikov“): širša
-   stran, kartice v stolpcih, kar je pregled čez vse (razlaga, tabela,
-   predlogi) čez vso širino; stolpci po dnevih višji. */
 /* Naslov skupine kartic v mreži: razmik da mreža. */
 .st-kartice > .st-glava { margin: 6px 0 -4px; }
 
@@ -146,20 +153,6 @@
   .st-iskanje .polja { grid-template-columns: 1fr 1fr auto; align-items: end; }
 }
 
-@media (min-width: 900px) {
-  .st { max-width: 1240px; }
-  .st h1 { font-size: 36px; }
-  .st-glava { font-size: 15px; max-width: 80ch; }
-  .st-kartice { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-                align-items: start; gap: 18px; }
-  .st-siroka { grid-column: 1 / -1; }
-  .st-siroka p { max-width: 90ch; }
-  .st-stolpci, .st-dnevi { height: 72px; }
-  .st-ure { height: 64px; }
-  .st-tabela-ovoj { display: block; overflow-x: auto; }
-  .st-samo-telefon { display: none; }
-}
-
 /* Vlak po dnevih: stolpec = končna zamuda tistega dne v barvi razreda
    (`--d-*`, ista lestvica kot žetoni); točen dan nizek in siv. */
 .st-dnevi { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
@@ -175,3 +168,55 @@
 /* Postaje vzdolž proge: ime, trak mediane, mediana in p90 pod njo. */
 .st-postaje { display: flex; flex-direction: column; gap: 6px; }
 .st-postaje .st-vr .ime { flex-basis: 140px; }
+
+/* Ploščice: odhodi in dnevi v tednu; na telefonu dve v vrsti, na računalniku
+   kolikor jih gre (dnevi v tednu v eni ali dveh vrstah). */
+.st-ploscice { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px;
+               grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.st-ploscice li { display: grid; gap: 2px; padding: 10px 12px; background: var(--bg-raised); border-radius: var(--r); }
+.st-ploscice .vrh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.st-ploscice b { font: 600 15px/1.3 var(--sans); color: var(--ink); }
+.st-ploscice .pc { font: 600 15px var(--mono); color: var(--ink); white-space: nowrap; }
+.st-ploscice .drobno { font: 400 12px/1.4 var(--sans); color: var(--ink-mute); }
+
+/* Namizje (David, 29. 10. 2026: „novinarji gledajo iz računalnikov“, „luknje
+   vmes“): kartice v vrstah, ki se raztegnejo do konca vrste in so v vrsti
+   enako visoke -- mreža s fiksnimi stolpci je pod nizkimi karticami puščala
+   praznino, zadnja kartica pa je stala sama. Dolgi seznami gredo čez vso
+   širino v stolpcih, besedilo v dveh stolpcih. Na koncu datoteke, da ga
+   splošna pravila ne povozijo. */
+@media (min-width: 900px) {
+  .st { max-width: 1240px; }
+  .st h1 { font-size: 36px; }
+  .st-glava { font-size: 15px; max-width: 80ch; }
+  .st-kartice { flex-flow: row wrap; gap: 20px; }
+  .st-kartice > * { flex: 1 1 340px; min-width: 0; }
+  .st-kartice > .st-dvojna { flex: 2 1 560px; }
+  .st-kartice > .st-siroka, .st-kartice > .st-glava { flex-basis: 100%; }
+  .st-kartice > .st-glava { margin: 8px 0 -6px; }
+  .st-k { padding: 22px 24px 20px; gap: 12px; }
+  .st-k h2 { font-size: 16px; }
+  .st-velika b { font-size: 52px; }
+  .st-velika span { font-size: 15px; }
+  .st-stolpci, .st-dnevi { height: 80px; }
+  .st-ure { height: 72px; }
+  /* auto-fit: tri možnosti relacije zapolnijo vrsto, šest odsekov da 2 × 3. */
+  .st-siroka .st-seznam { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .st-dvojna .st-seznam { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .st-dva { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; }
+  .st-dva > div { display: flex; flex-direction: column; gap: 10px; }
+  .st-dva .st-seznam { display: flex; }
+  .st-odhodi { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  /* Besedilo v dveh stolpcih: kartica ni več flex, razmike dajo robovi. */
+  .st-razlaga, .st-stolpca { display: block; columns: 2; column-gap: 48px; }
+  .st-razlaga h2, .st-stolpca h2 { column-span: all; margin-bottom: 12px; }
+  .st-razlaga p, .st-stolpca p { break-inside: avoid; margin-bottom: 12px; max-width: none; }
+  .st-predlogi { display: block; columns: 2; column-gap: 56px; }
+  .st-predlogi li { break-inside: avoid; margin-bottom: 12px; max-width: none; }
+  .st-siroka .st-postaje { display: block; columns: 2; column-gap: 48px; }
+  .st-siroka .st-postaje .st-vr { break-inside: avoid; margin-bottom: 7px; }
+  .st-siroka .st-postaje .st-vr .ime { flex-basis: 160px; }
+  .st-tabela-ovoj { display: block; overflow-x: auto; }
+  .st-samo-telefon { display: none; }
+}
+

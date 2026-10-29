@@ -863,6 +863,19 @@ def spark(dnevi: list[dict], dni: int = OKNO_DNI) -> list[dict]:
     return out
 
 
+def _skupaj_po_dnevih(prevozniki: list[dict]) -> list[dict]:
+    """Delež v 5 min po dnevih za več prevoznikov skupaj: iz vsot voženj, ne
+    kot povprečje deležev (LPP ima desetkrat več voženj kot AP MS)."""
+    n: Counter = Counter()
+    ok: Counter = Counter()
+    for x in prevozniki:
+        for d in x["po_dnevih"]:
+            if d.get("n") and d.get("v5min") is not None:
+                n[d["dan"]] += d["n"]
+                ok[d["dan"]] += d["n"] * d["v5min"] / 100
+    return [{"dan": dan, "n": n[dan], "v5min": round(ok[dan] / n[dan] * 100, 1)} for dan in sorted(n)]
+
+
 def stran_pregled(conn: sqlite3.Connection) -> dict:
     """Vse, kar pokaže `/statistika`: eno vprašanje, ena številka na kartico."""
     vsi, glava = vsi_prevozniki(conn)
@@ -887,6 +900,7 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
         "relacija": rel[0] if rel else None,
         "vlak": vlak, "vlak_dnevi": spark(vlak["po_dnevih"]) if vlak else [],
         "bus": iz_histograma(hist), "bus_prevoznikov": len(busi),
+        "bus_dnevi": spark(_skupaj_po_dnevih(busi)),
         "lestvica": lestvica, "premalo": premalo,
         "prezgodaj": prej[:3], "vlak_prezgodaj": vlak["prezgodaj"] if vlak else None,
         "napoved": nap["skupaj"]["na_poti"]["vse"],

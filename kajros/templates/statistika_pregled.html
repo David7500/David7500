@@ -23,7 +23,7 @@
 </head>
 <body class="home-page">
   <main class="home st">
-    {{ glava() }}
+    {{ glava("pregled") }}
     <h1>Statistika</h1>
     <p class="st-glava">Zadnjih 30 dni, do {{ do | dan }} · izračunano {{ izracunano | ura_dneva }}</p>
 
@@ -43,7 +43,10 @@
     <section class="st-k">
       <h2>In avtobusi?</h2>
       <div class="st-velika"><b class="st-bus-b">{{ bus.v5min | odstotek }}</b><span>avtobusov pride na cilj v 5 minutah</span></div>
-      <p>Mestni in medkrajevni skupaj: {{ bus.n | stevilo }} voženj pri {{ bus_prevoznikov }} prevoznikih. {% if bus.mediana_min > 0 %}Polovica zamudi vsaj {{ bus.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, {{ bus.nad15 | odstotek }} več kot 15 min.</p>
+      <p>Mestni in medkrajevni skupaj, {{ bus_prevoznikov }} prevoznikov. {% if bus.mediana_min > 0 %}Polovica zamudi vsaj {{ bus.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}, {{ bus.nad15 | odstotek }} več kot 15 min.</p>
+      {% if bus_dnevi %}{{ stolpci(bus_dnevi, "bus") }}
+      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ bus.n | stevilo }} voženj</div>{% endif %}
+      <a class="st-naprej" href="/statistika/prevozniki">Po prevoznikih ›</a>
     </section>
     {% endif %}
 
@@ -82,14 +85,6 @@
     </section>
     {% endif %}
 
-    {% if relacija %}
-    <section class="st-k">
-      <h2>{{ relacija.od }} → {{ relacija.do }}: vlak, avtobus ali avto?</h2>
-      {{ relacija_k(relacija) }}
-      <a class="st-naprej" href="/statistika/relacije">Druge relacije ›</a>
-    </section>
-    {% endif %}
-
     {% if prezgodaj %}
     {% set najvec = prezgodaj[0].prezgodaj.prej2 or 1 %}
     <section class="st-k">
@@ -105,6 +100,14 @@
       <a class="st-naprej" href="/statistika/prevozniki">Po prevoznikih ›</a>
     </section>
     {% endif %}
+    {% if relacija %}
+    <section class="st-k st-siroka">
+      <h2>{{ relacija.od }} → {{ relacija.do }}: vlak, avtobus ali avto?</h2>
+      {{ relacija_k(relacija) }}
+      <a class="st-naprej" href="/statistika/relacije">Druge relacije ›</a>
+    </section>
+    {% endif %}
+
     </div>
 
     {{ razlaga() }}

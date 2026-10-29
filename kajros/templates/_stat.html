@@ -4,7 +4,9 @@
 #}
 {% from "_znak.html" import znak %}
 {% from "_vec.html" import gumb as vec_gumb %}
-{% macro glava(nazaj=None) -%}
+{#- Zavihki: novinar na računalniku skače med stranmi; na telefonu vrsta
+    žetonov, ki se drsi sama zase (stran ne dobi vodoravnega drsnika). -#}
+{% macro glava(izbrano=None) -%}
     <div class="home-vrh">
       <a class="home-brand" href="/" style="text-decoration:none">
         {{ znak() }}
@@ -12,7 +14,13 @@
       </a>
       {{ vec_gumb() }}
     </div>
-    {% if nazaj %}<a class="st-nazaj" href="/statistika">‹ Statistika</a>{% endif %}
+    <nav class="st-meni" aria-label="Strani statistike">
+      {%- for pot, ime, kljuc in (("/statistika", "Pregled", "pregled"), ("/statistika/napovedi", "Napovedi", "napovedi"),
+                                  ("/statistika/prevozniki", "Prevozniki", "prevozniki"), ("/statistika/sz", "Podatki SŽ", "sz"),
+                                  ("/statistika/relacije", "Relacije", "relacije")) %}
+      <a href="{{ pot }}"{% if kljuc == izbrano %} aria-current="page"{% endif %}>{{ ime }}</a>
+      {%- endfor %}
+    </nav>
 {%- endmacro %}
 
 {% macro trak(ime, sirina, vrednost, razred="") -%}

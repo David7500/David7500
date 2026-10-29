@@ -23,13 +23,13 @@
 </head>
 <body class="home-page{% if not vlak %} net-avtobus{% endif %}">
   <main class="home st">
-    {{ glava(nazaj=True) }}
+    {{ glava("prevozniki") }}
     <h1>{{ ime }}</h1>
     <p class="st-glava">{% if v.cilji %}{% for c in v.cilji %}{{ c | lepo_ime }}{{ " · " if not loop.last }}{% endfor %} · {% endif %}<a href="/statistika/prevoznik/{{ v.ime | slug }}">{{ v.ime }}</a> · zadnjih 30 dni, do {{ do | dan }}</p>
 
     <div class="st-kartice">
     {% set c = v.cilj %}
-    <section class="st-k">
+    <section class="st-k st-dvojna">
       <h2>Kako točno pride?</h2>
       <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "dni" if vlak else "voženj" }} na cilj v 5 minutah</span></div>
       <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}{% if c.p90_min and c.p90_min > 0 %}, vsaka deseta vsaj {{ c.p90_min | minute }}{% endif %}. {{ c.n | stevilo }} {{ "dni" if vlak else "voženj" }}.</p>
@@ -46,8 +46,20 @@
       <a class="st-naprej" href="{{ '/app/train/' if vlak else '/app/bus/' }}{{ v.st | urlencode }}">V živo ›</a>
     </section>
 
-    {% if vlak and postaje %}
+    {% if po_dnevu %}
     <section class="st-k">
+      <h2>Ob katerih dneh?</h2>
+      <div class="st-drobno">delež voženj v 5 min na cilju po dnevu v tednu, zadnjih 90 dni</div>
+      <ul class="st-ploscice">
+        {% for d in po_dnevu %}
+        <li><span class="vrh"><b>{{ d.ime }}</b><span class="pc">{{ d.v5min | odstotek }}</span></span><span class="drobno">običajno {{ d.mediana_min | zamuda_min }}<br>{{ d.n | stevilo }} voženj</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if vlak and postaje %}
+    <section class="st-k st-siroka">
       <h2>Kje nabere zamudo?</h2>
       <div class="st-drobno">običajna zamuda ob odhodu s postaje (mediana), zadnjih 30 dni</div>
       <div class="st-postaje">
@@ -61,28 +73,17 @@
     {% endif %}
 
     {% if v.po_odhodih | length >= 2 %}
-    <section class="st-k">
+    <section class="st-k st-siroka">
       <h2>Kateri odhod izbrati?</h2>
       <div class="st-drobno">delež voženj v 5 min na cilju, po uri odhoda z začetne postaje</div>
-      <ul class="st-seznam">
+      <ul class="st-ploscice st-odhodi">
         {% for o in v.po_odhodih %}
-        <li><div class="vr"><span class="ime">{{ o.start_s | ura_vr }}{% if o.cilj %} · {{ o.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ o.v5min | odstotek }}</span><span class="drobno">običajno {{ o.mediana_min | zamuda_min }} · {{ o.n | stevilo }} voženj</span></div></li>
+        <li><span class="vrh"><b>{{ o.start_s | ura_vr }}</b><span class="pc">{{ o.v5min | odstotek }}</span></span><span class="drobno">{% if o.cilj %}{{ o.cilj | lepo_ime }}<br>{% endif %}običajno {{ o.mediana_min | zamuda_min }} · {{ o.n | stevilo }} voženj</span></li>
         {% endfor %}
       </ul>
     </section>
     {% endif %}
 
-    {% if po_dnevu %}
-    <section class="st-k">
-      <h2>Ob katerih dneh?</h2>
-      <ul class="st-seznam">
-        {% for d in po_dnevu %}
-        <li><div class="vr"><span class="ime">{{ d.ime }}</span><span class="pc">{{ d.v5min | odstotek }}</span><span class="drobno">v 5 min · običajno {{ d.mediana_min | zamuda_min }} · {{ d.n | stevilo }} voženj</span></div></li>
-        {% endfor %}
-      </ul>
-      <div class="st-drobno">zadnjih 90 dni</div>
-    </section>
-    {% endif %}
     </div>
 
     {{ razlaga() }}
