@@ -456,8 +456,9 @@ def favicon():
 # Strani, ki naj bodo v iskalniku. Naštete so ročno in to je namerno: poti z
 # vzorcem (`/app/train/{no}`) jih je ~20 000 in v zemljevidu strani nimajo kaj
 # iskati -- vsaka je ena vožnja enega dne.
-# `/app/statistika` ni na seznamu (umaknjena 19. 9. 2026): stran dela, a ni
-# povezana od nikoder, dokler ne bo prenovljena -- iskalnik je ne sme najti,
+# `/app/statistika` ni na seznamu: od 29. 10. 2026 preusmeri na `/statistika`,
+# katere strani gredo v zemljevid iz povzetkov (`statistika.poti_za_iskalnik`);
+# pred tem je bila umaknjena (19. 9. 2026) in iskalnik je ni smel najti,
 # če je ne more niti obiskovalec.
 _SITEMAP = ["/", "/app/train", "/app/bus", "/app/pot", "/app/map",
             "/app/ovire", "/postaje", "/postajalisca",
@@ -1248,24 +1249,12 @@ def alerts_page(request: Request):
     return templates.TemplateResponse(request, "alerts.html", {"here": "ovire"})
 
 
-@app.get("/app/statistika", response_class=HTMLResponse)
-@app.get("/app/statistika/{omrezje}", response_class=HTMLResponse)
-def stats_page(request: Request, omrezje: str = "vlak"):
-    """Kdaj se splaca potovati: zamuda po uri, dnevu in vrsti.
-
-    Ime poti je slovensko in ne "stats", ker je naslov tudi besedilo -- kdor
-    ga deli naprej, deli poved. Omrezje je v poti iz istega razloga kot pri
-    oknu voznje: `/app/statistika` brez pripone bi bila vlakovna samo po
-    dogovoru in iz naslova to ne bi bilo vidno.
-    """
-    # Pripona, ki je ne poznamo, ni vlakovna stran: `/app/statistika/karkoli`
-    # je doslej tiho vrnil zeleznico, kar je v nasprotju z razlogom, zakaj je
-    # omrezje sploh v poti -- da je iz naslova vidno, kaj gledas.
-    if omrezje not in ("vlak", "bus"):
-        raise HTTPException(404, f"omrežja {omrezje!r} ne poznam")
-    network = "avtobus" if omrezje == "bus" else "zeleznica"
-    return templates.TemplateResponse(request, "statistika.html",
-                                      {"here": "statistika", "network": network})
+@app.get("/app/statistika", include_in_schema=False)
+@app.get("/app/statistika/{omrezje}", include_in_schema=False)
+def stats_page(omrezje: str | None = None):
+    """Stara stran „Kdaj potovati“ (umaknjena 19. 9. 2026) je zamenjana s
+    `/statistika` (29. 10. 2026); stari naslovi gredo tja, da zaznamek dela."""
+    return RedirectResponse("/statistika", status_code=301)
 
 
 def _stanje_za_predogled(conn, train_no: str, trip: str | None, datum: str | None) -> str | None:
@@ -2913,8 +2902,8 @@ def api_vehicle_chain(train_no: str, date: str | None = None,
     return {"train_no": train_no, "service_date": date, **chain}
 
 
-# Stran `/app/statistika` je odstranjena, ker jo bomo preuredili -- ta dva
-# endpointa in dnevni povzetek za njima pa ostaneta. To NI spregledan mrtev
+# Stran `/app/statistika` je od 29. 10. 2026 preusmerjena na `/statistika`, ki
+# teh dveh ne bere -- endpointa in dnevni povzetek za njima pa ostaneta. To NI spregledan mrtev
 # kod: razrez je izmerjen, pokrit s testi in se enkrat na dan ze racuna
 # (`KAJROS_MAINT_HOUR`); brisati ga zato, da bi ga cez teden dni pisali znova,
 # bi bilo drazje od tega komentarja. Kdor ju cez cas najde brez odjemalca in

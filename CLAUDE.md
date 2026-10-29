@@ -142,7 +142,7 @@ Pri avtobusih, hitro pozabljeno:
 | `/app/train/{no}` · `/app/bus/{no}` | okno ene vožnje |
 | `/app/ovire` | dela na progi, nadomestni prevozi (samo železnica) |
 | `/statistika` · `/statistika/napovedi` · `/statistika/prevozniki` · `/statistika/prevoznik/{ime}` | statistika (od 29. 10. 2026, `docs/STATISTIKA.md`): točnost, napovedi proti uradnim, prevozniki; izris na strežniku |
-| `/app/statistika[/bus]` | **umaknjena** 19. 9. 2026: dela, brez povezave, ni v sitemapu, `noindex`; zamenja jo `/statistika` |
+| `/statistika/vlak/{št}` · `/statistika/linija/{prevoznik}/{št}` | ena vožnja ali linija (`stat_voznja`); `/app/statistika[/bus]` → 301 na `/statistika` |
 | `/vlak/{od}/{cilj}` · `/avtobus/…` | **pristajalna relacije**: odhodi danes, izmerjena zamuda, izris na strežniku |
 | `/postaja/{ime}` · `/postajalisce/{ime}` | pristajalna postaje |
 | `/postaje` · `/postajalisca` | kazalo — edina pot do pristajalnih poleg zemljevida strani |

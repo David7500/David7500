@@ -28,17 +28,14 @@ Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (D
 * Barvi omrežij trdo v `.st` (`--st-vlak`, `--st-bus`): pregled kaže oboje, `body.net-avtobus` bi prebarval vse.
 * V zemljevidu strani iz **shranjenih** povzetkov (`poti_za_iskalnik`), v meniju Več.
 
-## `/app/statistika` (umaknjena 19. 9. 2026, `noindex`, dela)
+## `/app/statistika` → 301 na `/statistika` (29. 10. 2026)
 
-Odgovarja na „kdaj se splača potovati“. Pravila, če se vrne:
-* **Merilo stolpcev postavijo samo vrstice z dovolj vzorca** (`MIN_VZOREC`, 30), pri urah tudi z dovolj prometa (`poPrometu`); presežek odrezan na 100 % z `›`. Pri vrstah vlaka ne (EN 2 % prometa, a resnična ugotovitev).
-* Število meritev ostane vidno tudi na telefonu — skrči se ime, ne vzorec.
+Stara „Kdaj potovati“ (umaknjena 19. 9.) je zamenjana; predloga in JS izbrisana (git). Pravila z nje, ki veljajo naprej:
+* Merilo stolpcev postavijo samo vrstice z dovolj vzorca; število meritev ostane vidno tudi na telefonu — skrči se ime, ne vzorec.
 * **Ure po POSTANKU, ne po odhodu vožnje** (`by_stop_hour`; ob 04:00 po odhodu 4 min, po postanku 0).
-* Naslov primerja samo ure z rednim prometom (`DELEZ_PROMETA`, 25 % najprometnejše ure; prelom čist 34 → 4,9 %).
-* Blok po dnevu v tednu pod štirimi ponovitvami to napiše s številko.
-* **Lestvica najhujših nosi sidro** („Čez vse vožnje je mediana …“; železnica 3 min, p90 20, 60 % v 5 min). Polja `median_s`, `p90_s`, `on_time_share` v `breakdowns()`.
+* **Lestvica najhujših nosi sidro** (mediana čez vse vožnje).
 * **Ob spremembi polj povečaj `stats.SUMMARY_VERSION`** — `povzetek` velja 36 h, sicer streže staro obliko.
-* **Grafi: vanilla JS, ročni SVG z lastnim tooltipom**, brez knjižnice. Zgodovina ene vožnje (krivulja zamude s pasom razmer v istem grafu, končna zamuda po dnevih — 15 dni, drsi) je bila v oknu vožnje do 24. 10. 2026; vrne se sem (git).
+* Grafi brez knjižnice; na `/statistika*` iz strežnika (širina/višina v `style`).
 
 ## Domača stran je razcepišče
 
