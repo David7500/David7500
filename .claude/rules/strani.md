@@ -27,6 +27,10 @@ Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (D
 * Konkurenca **po metodi, brez imen** („trenutna zamuda, prenesena naprej“); imena le na `/primerjava`.
 * Barvi omrežij trdo v `.st` (`--st-vlak`, `--st-bus`): pregled kaže oboje, `body.net-avtobus` bi prebarval vse.
 * V zemljevidu strani iz **shranjenih** povzetkov (`poti_za_iskalnik`), v meniju Več.
+* **Vlak/linija** (`/statistika/vlak/{slug}`, `/statistika/linija/{prevoznik}/{slug}`) iz `stat_voznja`; pri malo vožnjah na dan stolpec = mediana zamude v barvi razreda (`r-…`), ne delež. Dnevi v tednu le ob razliki (≥ 10 točk ali ≥ 2 min). Medkrajevne šifre `noindex`. Okno vožnje kaže nanje v nogi (`statistika` v `/run`).
+* **SŽ** (`/statistika/sz`): samo od `SZ_VODI_OD` (11. 10. 2026, naš bralec zemljevida); prehodi potnikov čez vso zgodovino (redki), kartica od `MIN_PREHODOV` 20. Vzroka odseka („dela, en tir“) ne trdimo.
+* **Relacije**: avto = odsek avtoceste od priključka do priključka (stran to pove); brez `promet.sqlite` izpade, ne ničla.
+* **`stat_dan` ima različico** (`STAT_DAN_VERZIJA`): nova vrsta ali pomen → povečaj; vsi dnevi znova, vrste z obrezanim virom (senca 30 dni) ostanejo.
 
 ## `/app/statistika` → 301 na `/statistika` (29. 10. 2026)
 
