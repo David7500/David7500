@@ -380,6 +380,7 @@ templates.env.filters["decimalno"] = statistika.decimalno
 templates.env.filters["minute"] = statistika.minute
 templates.env.filters["ura_vr"] = statistika.ura_vr
 templates.env.filters["zamuda_min"] = statistika.zamuda_min
+templates.env.filters["slug"] = pristanek.slug
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
 templates.env.globals["baza"] = config.BASE_URL
@@ -1017,6 +1018,42 @@ def statistika_prevoznik(request: Request, ime: str):
             f"prišlo na cilj v 5 minutah. Točnost po urah, napovedi in vožnje, ki "
             f"najbolj zamujajo." if c.get("n") else f"{p['p']['ime']}: točnost voženj.")
     return templates.TemplateResponse(request, "statistika_prevoznik.html", {**p, "opis": opis})
+
+
+def _stran_voznje(request: Request, pot: str):
+    with _conn() as conn:
+        p = statistika.stran_voznja(conn, pot)
+    if p is None:
+        raise HTTPException(404, "za to vožnjo statistike ni (v zadnjih 30 dneh ni vozila)")
+    v = p["v"]
+    ime = v["st"] if v["network"] == "zeleznica" else f"{v['ime']} {v['st']}"
+    c = v["cilj"]
+    opis = (f"{ime}: v zadnjih 30 dneh je {statistika.odstotek(c['v5min'])} voženj prišlo "
+            f"na cilj v 5 minutah, polovica z zamudo do {statistika.minute(c['mediana_min'])}. "
+            + ("Kje vlak nabere zamudo in ob katerih dneh." if v["network"] == "zeleznica"
+               else "Kateri odhod je najbolj točen."))
+    return templates.TemplateResponse(request, "statistika_voznja.html",
+                                      {**p, "ime": ime, "opis": opis})
+
+
+@app.get("/statistika/vlak/{st}", response_class=HTMLResponse, include_in_schema=False)
+def statistika_vlak(request: Request, st: str):
+    """En vlak (`statistika.stran_voznja`). Naslov je `pristanek.slug`
+    številke; „LPV 2010“ ali „LPV%202010“ gre s 301 na `lpv-2010`."""
+    if st != pristanek.slug(st):
+        return RedirectResponse(f"/statistika/vlak/{pristanek.slug(st)}", status_code=301)
+    return _stran_voznje(request, f"/statistika/vlak/{st}")
+
+
+@app.get("/statistika/linija/{prevoznik}/{st}", response_class=HTMLResponse,
+         include_in_schema=False)
+def statistika_linija(request: Request, prevoznik: str, st: str):
+    """Avtobusna linija ali medkrajevna šifra z vsemi odhodi."""
+    if st != pristanek.slug(st) or prevoznik != pristanek.slug(prevoznik):
+        return RedirectResponse(
+            f"/statistika/linija/{pristanek.slug(prevoznik)}/{pristanek.slug(st)}",
+            status_code=301)
+    return _stran_voznje(request, f"/statistika/linija/{prevoznik}/{st}")
 
 
 @app.get("/primerjava", response_class=HTMLResponse, include_in_schema=False)

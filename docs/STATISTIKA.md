@@ -161,6 +161,9 @@ večje delo · **ne** = podatka ni.
 * Smer strani: **A · Odgovori** (David, 29. 10. 2026 ~16.45): kartice z
   vprašanjem potnika in eno veliko številko, pod njo trak ali stolpci, vsaka
   vodi na podstran; podstrani v istem slogu.
+* Faza 1 na localhostu: David „pogledal sem in je dobro, a nadaljuj naprej in
+  objaviva potem vse naenkrat“ (29. 10. ~17.40) — **objava šele na koncu, vse
+  skupaj**.
 * Postopek (moj): najprej nočni izračun in API (od designa neodvisno), nato
   osnutki strani s pravimi številkami, David izbere, nato predloge.
 
@@ -229,8 +232,8 @@ večje delo · **ne** = podatka ni.
 
 ## Naslednji koraki
 
-1. David pogleda faze 1 → popravki → objava (`git push arwen`), ob zagonu se
-   `stat_dan` dopolni sam (~8 min na arwenu, v nočni niti).
+1. Objava vsega skupaj na koncu (`git push arwen`); ob zagonu se `stat_dan`
+   dopolni sam (~8 min na arwenu, v nočni niti).
 2. **Faza 3, vlak/linija**: `/statistika/vlak/{št}`, `/statistika/linija/{prevoznik}/{št}`:
    koledar dni, kje na progi zamudo nabere (po postajah), ure, dan v tednu,
    najhujši dnevi z vzrokom, povezava iz okna vožnje in z lestvice. Zgodovina

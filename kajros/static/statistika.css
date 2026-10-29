@@ -54,7 +54,7 @@
 .st-trak i.temen { background: var(--ink-ghost); }
 .st-trak i.prej { background: var(--d-small); }
 .st-vr .st { width: auto; }
-.st-vr .num { flex: none; width: 48px; text-align: right; font: 500 13px var(--mono); color: var(--ink); }
+.st-vr .num { flex: none; min-width: 48px; white-space: nowrap; text-align: right; font: 500 13px var(--mono); color: var(--ink); }
 
 /* Stolpci po dnevih. Višina = delež v 5 min; dan z malo vožnjami je sivo
    nizek, ker izpad zajema ni slab dan. */
@@ -104,3 +104,19 @@
 @media (min-width: 900px) {
   .st-kartice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 }
+
+/* Vlak po dnevih: stolpec = končna zamuda tistega dne v barvi razreda
+   (`--d-*`, ista lestvica kot žetoni); točen dan nizek in siv. */
+.st-dnevi { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+.st-dnevi i { flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0; background: var(--d-ontime); }
+.st-dnevi i.r-1-5 { background: var(--d-small); }
+.st-dnevi i.r-5-15 { background: var(--d-mid); }
+.st-dnevi i.r-nad-15 { background: var(--d-big); }
+.st-trak i.r-tocno { background: var(--d-ontime); }
+.st-trak i.r-1-5 { background: var(--d-small); }
+.st-trak i.r-5-15 { background: var(--d-mid); }
+.st-trak i.r-nad-15 { background: var(--d-big); }
+
+/* Postaje vzdolž proge: ime, trak mediane, mediana in p90 pod njo. */
+.st-postaje { display: flex; flex-direction: column; gap: 6px; }
+.st-postaje .st-vr .ime { flex-basis: 140px; }

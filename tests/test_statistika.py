@@ -271,3 +271,18 @@ def test_zemljevid_strani_bere_samo_shranjeno():
     stats.summary_build(c, "stat_prevozniki", "zeleznica", 90)
     poti = [p for p, _ in statistika.poti_za_iskalnik(c)]
     assert "/statistika" in poti and "/statistika/prevoznik/sz" in poti
+
+
+def test_stran_vlaka_in_preusmeritev(strani):
+    """Stran vlaka nastane ob nočnem izračunu prevoznikov; „LP 1“ v naslovu
+    gre s 301 na `lp-1`, neznan vlak je 404."""
+    from fastapi import HTTPException
+    api = strani
+    stats.summary_build(api._conn(), "stat_prevozniki", "zeleznica", 90)
+    odgovor = api.statistika_vlak(_zahteva("/statistika/vlak/lp-1"), "lp-1")
+    assert odgovor.status_code == 200
+    html = odgovor.body.decode()
+    assert "LP 1" in html and "Kje nabere zamudo" in html
+    assert api.statistika_vlak(_zahteva("/statistika/vlak/LP 1"), "LP 1").status_code == 301
+    with pytest.raises(HTTPException):
+        api.statistika_vlak(_zahteva("/statistika/vlak/lp-9"), "lp-9")

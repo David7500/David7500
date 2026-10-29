@@ -98,13 +98,13 @@
       <h2>Najbolj {{ pridevnik }} {{ enota }}</h2>
       <ul class="st-seznam">
         {% for x in p.lestvica.najboljse %}
-        <li><a href="{{ '/app/train/' if vlak else '/app/bus/' }}{{ x.st | urlencode }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
+        <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
         {% endfor %}
       </ul>
       <h2>Najmanj {{ pridevnik }} {{ enota }}</h2>
       <ul class="st-seznam">
         {% for x in p.lestvica.najslabse %}
-        <li><a href="{{ '/app/train/' if vlak else '/app/bus/' }}{{ x.st | urlencode }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
+        <li><a href="{{ x.pot }}"><span class="ime">{{ x.st }}{% if x.cilj %} · {{ x.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ x.v5min | odstotek }}</span><span class="drobno">{{ x.n | stevilo }} voženj{% if x.start_s is not none and not x.linija %} · odhod ob {{ x.start_s | ura_vr }}{% endif %} · običajno {{ x.mediana_min | zamuda_min }}</span></a></li>
         {% endfor %}
       </ul>
       <div class="st-drobno">od {{ p.lestvica.vseh | stevilo }} z vsaj {{ min_dni_lestvica }} vožnjami v 30 dneh · običajno = mediana zamude na cilju</div>

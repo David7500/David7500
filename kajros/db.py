@@ -523,6 +523,19 @@ CREATE TABLE IF NOT EXISTS stat_dan (
     izracunano  INTEGER NOT NULL,   -- epoha izračuna
     PRIMARY KEY (dan, vrsta, kljuc)
 );
+
+-- Statistika ene vožnje ali linije (`statistika._voznje`): stran
+-- `/statistika/vlak/…` in `/statistika/linija/…` bere eno vrstico po poti.
+-- Ponoči se prepiše cela za omrežje; vir je `run`, ki se ne obreže.
+CREATE TABLE IF NOT EXISTS stat_voznja (
+    pot         TEXT PRIMARY KEY,   -- /statistika/vlak/lpv-2010
+    network     TEXT NOT NULL,
+    agency      TEXT NOT NULL,
+    st          TEXT NOT NULL,      -- train_no: vlak, linija ali šifra
+    podatki     TEXT NOT NULL,      -- JSON
+    izracunano  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS stat_voznja_omrezje ON stat_voznja(network);
 """
 
 

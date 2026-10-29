@@ -422,23 +422,29 @@ def iz_histograma(hist: dict) -> dict:
     }
 
 
-def _lestvica(conn: sqlite3.Connection, network: str, od: str, do: str) -> dict:
-    """Najbolj in najmanj točne vožnje ali linije po prevozniku, v oknu.
+def pot_voznje(network: str, agency: str, st: str) -> str:
+    """Naslov strani ene vožnje ali linije. Prevoznik je v poti pri avtobusih,
+    ker ima ista številka linije pri dveh prevoznikih dva pomena (LPP 6)."""
+    if network == "zeleznica":
+        return f"/statistika/vlak/{pristanek.slug(st)}"
+    return (f"/statistika/linija/{pristanek.slug(stats.AGENCY_NAMES.get(agency, agency))}"
+            f"/{pristanek.slug(st)}")
 
-    Ključ je `train_no`: pri vlaku in medkrajevnem avtobusu ena vožnja čez
-    dneve (LPV 2010, A6346), pri mestnem prometu linija (LPP 6). Enota je
-    vožnja-dan, kot povsod v statistiki (`breakdowns`): sicer bi vožnja s
-    tridesetimi postanki glasovala tridesetkrat.
+
+def _koncne(conn: sqlite3.Connection, network: str, od: str, do: str) -> list[tuple]:
+    """Končna zamuda vsake vožnje v oknu: (prevoznik, št., cilj, odhod, dan, d).
+
+    Ena poizvedba za lestvico in strani voženj. Končna = zadnji opaženi
+    postanek, kot povsod (`stats.LAST_STOP_SQL`). Nadomestni prevoz SŽ ni
+    vlak; brez meritev itak ne bi prišel noter.
     """
-    po: dict[tuple, list] = defaultdict(list)
-    smer: dict[tuple, Counter] = defaultdict(Counter)
-    for agency, no, cilj, start, d in conn.execute(f"""
+    return [r for r in conn.execute(f"""
             WITH mx AS (
                 SELECT r.trip_id, r.service_date, MAX(r.stop_seq) AS stop_seq
                 FROM run r JOIN trip t ON t.trip_id = r.trip_id
                 WHERE r.service_date BETWEEN :od AND :do AND t.network = :net
                 GROUP BY r.trip_id, r.service_date)
-            SELECT t.agency, t.train_no, t.headsign, t.start_s,
+            SELECT t.agency, t.train_no, t.headsign, t.start_s, mx.service_date,
                    COALESCE(r.delay_dep, r.delay_arr)
             FROM mx JOIN run r ON r.trip_id = mx.trip_id
                               AND r.service_date = mx.service_date
@@ -447,11 +453,21 @@ def _lestvica(conn: sqlite3.Connection, network: str, od: str, do: str) -> dict:
             WHERE (t.mode != 'bus' OR t.network = 'avtobus')
               AND COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL
               AND ABS(COALESCE(r.delay_dep, r.delay_arr)) <= {stats.MAX_REALNA_ZAMUDA_S}""",
-            {"od": od, "do": do, "net": network}):
-        if d is None or abs(d) > stats.MAX_REALNA_ZAMUDA_S or not no:
-            continue
-        # Medkrajevna šifra (A6343) je lahko več odhodov na dan (84 v 30
-        # dneh): vožnja je šele šifra + ura odhoda. Mestna linija ostane cela.
+            {"od": od, "do": do, "net": network}) if r[1]]
+
+
+def _lestvica(koncne: list[tuple], network: str) -> dict:
+    """Najbolj in najmanj točne vožnje ali linije po prevozniku, v oknu.
+
+    Ključ je `train_no`: pri vlaku ena vožnja čez dneve (LPV 2010), pri
+    mestnem prometu linija (LPP 6). Medkrajevna šifra (A6343) je lahko več
+    odhodov na dan (84 v 30 dneh): tam je vožnja šele šifra + ura odhoda.
+    Enota je vožnja-dan, kot povsod v statistiki (`breakdowns`): sicer bi
+    vožnja s tridesetimi postanki glasovala tridesetkrat.
+    """
+    po: dict[tuple, list] = defaultdict(list)
+    smer: dict[tuple, Counter] = defaultdict(Counter)
+    for agency, no, cilj, start, _dan, d in koncne:
         k = (agency, no, None if agency in LINIJSKI else start)
         po[k].append(d)
         smer[k][(cilj or "", start)] += 1
@@ -464,14 +480,12 @@ def _lestvica(conn: sqlite3.Connection, network: str, od: str, do: str) -> dict:
         (cilj, start), _ = smer[k].most_common(1)[0]
         po_prevozniku[agency].append({
             "st": no, "cilj": cilj, "start_s": start, "n": len(vals),
-            "linija": agency in LINIJSKI,
+            "linija": agency in LINIJSKI, "pot": pot_voznje(network, agency, no),
             "v5min": round(sum(stats._je_pravocasna(v) for v in vals) / len(vals) * 100, 1),
             "mediana_min": stats._pct([stats._minute(v) for v in vals], 0.5),
         })
     out = {}
     for agency, vrste in po_prevozniku.items():
-        # Enak delež loči mediana, nato vzorec: pri istem deležu je zanesljivejša
-        # številka tista z več dnevi.
         # Pri istem deležu je točnejša tista, ki pride bliže voznemu redu
         # (ne prej: −5 min na cilju je rezerva voznega reda, ne točnost).
         vrste.sort(key=lambda x: (-x["v5min"], abs(x["mediana_min"]), -x["n"]))
@@ -479,6 +493,74 @@ def _lestvica(conn: sqlite3.Connection, network: str, od: str, do: str) -> dict:
                        "najslabse": list(reversed(vrste[-LESTVICA_N:])),
                        "vseh": len(vrste)}
     return out
+
+
+def _razrez(minute_po: dict) -> list[dict]:
+    """`{ključ: [minute]}` -> vrstice z n, deležem v 5 min in mediano."""
+    out = []
+    for k, mins in minute_po.items():
+        if mins:
+            out.append({"k": k, "n": len(mins),
+                        "v5min": round(sum(m <= stats.ON_TIME_MIN for m in mins) / len(mins) * 100, 1),
+                        "mediana_min": stats._pct(mins, 0.5)})
+    return out
+
+
+def _voznje(koncne: list[tuple], network: str, od: str) -> dict[str, dict]:
+    """Stran vsake vožnje ali linije, ki je v zadnjih `OKNO_DNI` vozila.
+
+    Številke za 30 dni, potek po dnevih in dnevi v tednu za vse okno (90).
+    """
+    po: dict[tuple, list] = defaultdict(list)
+    for agency, no, cilj, start, dan, d in koncne:
+        po[(agency, no)].append((dan, stats._minute(d), start, cilj or ""))
+    out = {}
+    for (agency, no), vrste in po.items():
+        v30 = [v for v in vrste if v[0] >= od]
+        if len(v30) < 3:
+            continue
+        hist = Counter(min(max(m, HIST_OD), HIST_DO) for _, m, _, _ in v30)
+        po_dnevih: dict[str, list] = defaultdict(list)
+        po_tednu: dict[int, list] = defaultdict(list)
+        for dan, m, _, _ in vrste:
+            po_dnevih[dan].append(m)
+            po_tednu[date.fromisoformat(dan).weekday()].append(m)
+        po_odhodih: dict[int, list] = defaultdict(list)
+        cilj_odhoda: dict[int, Counter] = defaultdict(Counter)
+        for _, m, start, cilj in v30:
+            if start is not None:
+                po_odhodih[start].append(m)
+                cilj_odhoda[start][cilj] += 1
+        odhodi = []
+        for x in _razrez(po_odhodih):
+            start = x.pop("k")
+            odhodi.append({**x, "start_s": start,
+                           "cilj": cilj_odhoda[start].most_common(1)[0][0]})
+        pot = pot_voznje(network, agency, no)
+        out[pot] = {
+            "pot": pot, "network": network, "agency": agency, "st": no,
+            "ime": stats.AGENCY_NAMES.get(agency, agency),
+            "linija": agency in LINIJSKI,
+            "cilji": [c for c, _ in Counter(v[3] for v in v30).most_common(2)],
+            "cilj": iz_histograma(hist),
+            "dnevi": sorted(({"dan": x.pop("k"), **x} for x in _razrez(po_dnevih)),
+                            key=lambda x: x["dan"]),
+            "po_odhodih": sorted((o for o in odhodi if o["n"] >= 3), key=lambda x: x["start_s"]),
+            "po_dnevu": sorted(({"dan": x.pop("k"), **x} for x in _razrez(po_tednu)),
+                               key=lambda x: x["dan"]),
+        }
+    return out
+
+
+def _zapisi_voznje(conn: sqlite3.Connection, network: str, voznje: dict[str, dict]) -> None:
+    zdaj = int(time.time())
+    conn.execute("DELETE FROM stat_voznja WHERE network = ?", (network,))
+    conn.executemany(
+        "INSERT OR REPLACE INTO stat_voznja (pot, network, agency, st, podatki, izracunano) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        [(pot, network, v["agency"], v["st"], json.dumps(v, separators=(",", ":")), zdaj)
+         for pot, v in voznje.items()])
+    conn.commit()
 
 
 def prevozniki(conn: sqlite3.Connection, days: int, network: str,
@@ -550,7 +632,9 @@ def prevozniki(conn: sqlite3.Connection, days: int, network: str,
             "napoved": {"vse": {m: meritve(s) for m, s in nap["vse"].items()},
                         "parno": {m: meritve(s) for m, s in nap["parno"].items()}},
         })
-    lestvica = _lestvica(conn, network, od, do)
+    koncne = _koncne(conn, network, od_dolgo, do)
+    lestvica = _lestvica([r for r in koncne if r[4] >= od], network)
+    _zapisi_voznje(conn, network, _voznje(koncne, network, od))
     for p in out:
         if p["skupina"] != "nadomestni":
             p["lestvica"] = lestvica.get(p["agency"])
@@ -642,6 +726,13 @@ def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
         for x in json.loads(vrstica[1]).get("prevozniki", []):
             if x["skupina"] != "nadomestni" and x["cilj"].get("n"):
                 poti.append((f"/statistika/prevoznik/{pristanek.slug(x['ime'])}", dan))
+        # Vlaki in mestne linije; medkrajevnih šifer je na tisoče in jih ne
+        # išče nihče (A6343) -- dosegljive ostanejo, `noindex`.
+        mestni = ",".join("?" * len(LINIJSKI))
+        poti += [(pot, dan) for (pot,) in conn.execute(
+            f"SELECT pot FROM stat_voznja WHERE network = ? "
+            f"AND (network = 'zeleznica' OR agency IN ({mestni})) ORDER BY pot",
+            (net, *sorted(LINIJSKI)))]
     return poti
 
 
@@ -759,3 +850,56 @@ def stran_prevoznik(conn: sqlite3.Connection, slug: str) -> dict | None:
                                  if vse_n else None),
             "primerljiv": bool(glava.get("do")) and primerljiv(glavni, glava["do"]),
             "min_vzorec": MIN_VZOREC, "min_dni_lestvica": MIN_DNI_LESTVICA}
+
+
+DNEVI_TEDNA = ("ponedeljek", "torek", "sreda", "četrtek", "petek", "sobota", "nedelja")
+
+
+def stran_voznja(conn: sqlite3.Connection, pot: str) -> dict | None:
+    """`/statistika/vlak/…` in `/statistika/linija/…`: ena vrstica `stat_voznja`.
+
+    Pri vlaku še profil po postajah (`stats.history`, ista zgodovina kot okno
+    vožnje): en vlak je ~600 vrstic `run`, to gre v zahtevi.
+    """
+    r = conn.execute("SELECT podatki, izracunano FROM stat_voznja WHERE pot = ?",
+                     (pot,)).fetchone()
+    if r is None:
+        return None
+    v = json.loads(r[0])
+    od, do = _okno()
+    out = {"v": v, "od": od, "do": do, "min_vzorec": MIN_VZOREC,
+           "izracunano": datetime.fromtimestamp(r[1], TZ).isoformat(timespec="seconds"),
+           "indeksiraj": v["network"] == "zeleznica" or v["linija"]}
+    dnevi = v["dnevi"][-3 * OKNO_DNI:]
+    na_dan = sum(d["n"] for d in dnevi) / len(dnevi) if dnevi else 0
+    # Malo voženj na dan (vlak, medkrajevna šifra): stolpec = mediana zamude
+    # tistega dne v barvi razreda; delež v 5 min treh voženj je 0, 33 ali
+    # 100 % in pove manj. Merilo postavi slabši od 15 min in p90, da en
+    # izreden dan ne splošči vseh. Mestna linija s sto vožnjami: delež.
+    out["dnevi_zamuda"] = na_dan <= 10
+    if out["dnevi_zamuda"]:
+        meja = max(15, v["cilj"].get("p90_min") or 0)
+        out["dnevi"] = [{**d, "razred": stats._KLJUC_RAZREDA[stats._razred_zamude(round(d["mediana_min"] * 60))],
+                         "visina": max(4, round(min(max(d["mediana_min"], 0), meja) / meja * 100))}
+                        for d in dnevi]
+    else:
+        out["dnevi"] = spark(dnevi, 3 * OKNO_DNI)
+    if v["network"] == "zeleznica":
+        trip = stats.resolve_trip(conn, v["st"])
+        h = stats.history(conn, v["st"], days=OKNO_DNI, trip_id=trip)
+        postaje = [p for p in h["by_stop"] if p["n"] >= 3 and p["name"]]
+        najvec = max([p["p90_s"] for p in postaje] + [300])
+        out["postaje"] = [{
+            "ime": p["name"], "n": p["n"],
+            "mediana": stats.opis_zamude(round(p["median_s"])),
+            "p90": stats.opis_zamude(round(p["p90_s"])),
+            "sirina": max(0, p["median_s"]) / najvec * 100,
+        } for p in postaje]
+    po_dnevu = [{**d, "ime": DNEVI_TEDNA[d["dan"]]} for d in v["po_dnevu"] if d["n"] >= 4]
+    # Dneve pokaži le, kadar se razlikujejo: sedem vrstic „0 %“ (IC 503) ali
+    # sedemkrat isto ne pove ničesar, kar ne bi že povedala prva kartica.
+    razlika = (len(po_dnevu) >= 5 and (
+        max(d["v5min"] for d in po_dnevu) - min(d["v5min"] for d in po_dnevu) >= 10
+        or max(d["mediana_min"] for d in po_dnevu) - min(d["mediana_min"] for d in po_dnevu) >= 2))
+    out["po_dnevu"] = po_dnevu if razlika else []
+    return out

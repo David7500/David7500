@@ -1,0 +1,91 @@
+{#
+  /statistika/vlak/{št} in /statistika/linija/{prevoznik}/{št} -- ena vožnja
+  ali linija: kako točno pride, pri vlaku kje na progi zamudo nabere, pri
+  avtobusu kateri odhod je najbolj točen. `statistika.stran_voznja`.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set vlak = v.network == "zeleznica" %}
+  {% set og_title = "Koliko zamuja " ~ ime ~ " — statistika — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, trak, stolpci, noga %}
+  {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page{% if not vlak %} net-avtobus{% endif %}">
+  <main class="home st">
+    {{ glava(nazaj=True) }}
+    <h1>{{ ime }}</h1>
+    <p class="st-glava">{% if v.cilji %}{% for c in v.cilji %}{{ c | lepo_ime }}{{ " · " if not loop.last }}{% endfor %} · {% endif %}<a href="/statistika/prevoznik/{{ v.ime | slug }}">{{ v.ime }}</a> · zadnjih 30 dni, do {{ do | dan }}</p>
+
+    <div class="st-kartice">
+    {% set c = v.cilj %}
+    <section class="st-k">
+      <h2>Kako točno pride?</h2>
+      <div class="st-velika"><b class="{{ 'st-vlak-b' if vlak else 'st-bus-b' }}">{{ c.v5min | odstotek }}</b><span>{{ "dni" if vlak else "voženj" }} na cilj v 5 minutah</span></div>
+      <p>{% if c.mediana_min > 0 %}Polovica zamudi vsaj {{ c.mediana_min | minute }}{% else %}Polovica pride točno ali prej{% endif %}{% if c.p90_min and c.p90_min > 0 %}, vsaka deseta vsaj {{ c.p90_min | minute }}{% endif %}. {{ c.n | stevilo }} {{ "dni" if vlak else "voženj" }}.</p>
+      {% if dnevi_zamuda %}
+      <div class="st-dnevi" aria-hidden="true">
+        {%- for d in dnevi %}<i class="r-{{ d.razred }}" style="height:{{ d.visina }}%" title="{{ d.dan | dan }}: {{ d.mediana_min | zamuda_min }}"></i>{% endfor -%}
+      </div>
+      <div class="st-drobno">{{ "zamuda" if vlak else "mediana zamude" }} na cilju po dnevih, zadnjih {{ dnevi | length }} dni z meritvijo</div>
+      {% else %}
+      {{ stolpci(dnevi, "bus") }}
+      <div class="st-drobno">delež v 5 min po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami</div>
+      {% endif %}
+      <a class="st-naprej" href="{{ '/app/train/' if vlak else '/app/bus/' }}{{ v.st | urlencode }}">V živo ›</a>
+    </section>
+
+    {% if vlak and postaje %}
+    <section class="st-k">
+      <h2>Kje nabere zamudo?</h2>
+      <div class="st-drobno">običajna zamuda ob odhodu s postaje (mediana), zadnjih 30 dni</div>
+      <div class="st-postaje">
+        {% for p in postaje %}
+        {{ trak(p.ime, p.sirina, p.mediana | besedilo, "r-" ~ p.mediana.razred) }}
+        {% endfor %}
+      </div>
+      {% set zadnja = postaje[-1] %}
+      <p>Vsak deseti dan je na {{ zadnja.ime }} prišel z zamudo vsaj {{ zadnja.p90 | besedilo }}.</p>
+    </section>
+    {% endif %}
+
+    {% if v.po_odhodih | length >= 2 %}
+    <section class="st-k">
+      <h2>Kateri odhod izbrati?</h2>
+      <div class="st-drobno">delež voženj v 5 min na cilju, po uri odhoda z začetne postaje</div>
+      <ul class="st-seznam">
+        {% for o in v.po_odhodih %}
+        <li><div class="vr"><span class="ime">{{ o.start_s | ura_vr }}{% if o.cilj %} · {{ o.cilj | lepo_ime }}{% endif %}</span><span class="pc">{{ o.v5min | odstotek }}</span><span class="drobno">običajno {{ o.mediana_min | zamuda_min }} · {{ o.n | stevilo }} voženj</span></div></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if po_dnevu %}
+    <section class="st-k">
+      <h2>Ob katerih dneh?</h2>
+      <ul class="st-seznam">
+        {% for d in po_dnevu %}
+        <li><div class="vr"><span class="ime">{{ d.ime }}</span><span class="pc">{{ d.v5min | odstotek }}</span><span class="drobno">v 5 min · običajno {{ d.mediana_min | zamuda_min }} · {{ d.n | stevilo }} voženj</span></div></li>
+        {% endfor %}
+      </ul>
+      <div class="st-drobno">zadnjih 90 dni</div>
+    </section>
+    {% endif %}
+    </div>
+
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>
