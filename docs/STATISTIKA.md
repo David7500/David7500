@@ -267,10 +267,27 @@ večje delo · **ne** = podatka ni.
   SŽ (11.–28. 10.): 51 odhodov s potnikom, 75 % vsaj 2 min prezgodaj,
   20,4 % postankov pozneje dvignjenih za ≥ 2 min, nadomestni 0 od 1 316.
 
+* 29. 10. 2026 ~21.00: **Davidove pripombe po fazah 1–5 narejene** (3264d4b,
+  a556f0b, ni objavljeno): namizje (mreža do 1240 px, tabela prevoznikov),
+  ista razlaga številk na vseh straneh (`_stat.razlaga`), na napovedih „Kako
+  merimo“; stran SŽ na novo (kaj je zemljevid vlakov, GPS potnikov 3–5 s
+  ~4 m, 30 s v korist SŽ — `POTNIK_ZAMIK_S`, „Kaj bi SŽ lahko izboljšal“);
+  **iskanje relacije** `?od=&do=` (ob zahtevi, `_par` ~10 ms, predpomnilnik
+  do konca okna, `noindex`; samo vožnje brez prestopa); faza 6 deloma:
+  **prag nadomestila** (60/120 min, kartica SŽ in vrstica vlaka).
+  Lokalni povzetki z arwena so bili starejši od kode: `stat_sz` in
+  `stat_prevozniki` sem dopolnil na roke (samo lokalno, za ogled).
+* Kako se številke osvežujejo (odgovor Davidu): vsako noč ob 3.30
+  (`KAJROS_MAINT_HOUR`, nit `kajros-povzetki`) `stat_dan` za nove dni in
+  zadnje 3 dni znova, nato okna v `povzetek` in strani voženj v
+  `stat_voznja`; strani le berejo (6–35 ms). V zahtevi se računa samo profil
+  vlaka po postajah (`stats.history`) in iskanje relacije.
+
 ## Naslednji koraki
 
-1. **David pogleda faze 3–5** na localhost:8001 (`/statistika/vlak/ic-503`,
-   `/statistika/linija/arriva/a6343`, `/statistika/sz`, `/statistika/relacije`).
+1. **Po objavi preveri številke SŽ**: kopija z arwena (izračun pred
+   `POTNIK_ZAMIK_S`) je dala 51 odhodov in 75 % ≥ 2 min, MERITVE pravi 61 in
+   66 % (drugo okno). Z zamikom 30 s mora delež pasti; uskladi MERITVE.
 2. **Objava vsega skupaj** (`git push arwen claude/slovenske-zeleznice-api-ql84hf`):
    ob zagonu brez `stat_prevozniki` se nočni izračun sproži takoj (`stat_dan`
    vsi dnevi ~10 min, prevozniki avtobusi ~1 min). Malina statistike ne
@@ -279,4 +296,9 @@ večje delo · **ne** = podatka ni.
    `kajros-dev*`, `stat_*.json`, `*.py`.
 3. Po objavi: `docs/statistika-delo/` vključi (najdbe so v MERITVE in tu) in
    pobriši.
-5. **Faza 6**: mesečno poročilo, nadomestila (≥ 60 min), postaje.
+5. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
+   točnost odhodov na `/postaja/{ime}`.
+6. **Odprto vprašanje Davidu**: iskanje relacije s prestopom (planer
+   `journey.plan` + zgodovina istega prestopa iz `pot.pripni_tveganje`:
+   najpogostejša zveza, trajanje z zamudami, delež dni, ko je prestop
+   zdržal). Večji korak; čaka odločitev.
