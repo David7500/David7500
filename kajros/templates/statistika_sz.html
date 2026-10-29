@@ -54,7 +54,7 @@
       <h2>Zakaj: odhod je sklep iz ure</h2>
       <p>Zemljevid premakne vlak čez postajo, ko po voznem redu in zadnji zamudi mora odpeljati — ne, ko odpelje. Če vlak še stoji (čaka na križanje, signal, zamujeno zvezo), ga zemljevid kaže na poti, zamudo pa nato dviguje minuto za minuto. Potnik na naslednji postaji vidi, da vlak prihaja, a ta še ni odpeljal s prejšnje.</p>
       <div class="st-velika"><b class="st-vlak-b">{{ c.dvig2 | odstotek }}</b><span>postankov SŽ pozneje dvigne zamudo za vsaj 2 min</span></div>
-      <p>Za vsaj 10 min pri {{ c.dvig10 | odstotek }}&nbsp;{{ (c.dvig10 | odstotek or 0) | stevnik("postanek", "postanka", "postanki", "postankov") }}{% if c.mediana_min %}; popravek je običajno {{ c.mediana_min | minute }}{% endif %}.{% if izhodisca.n >= min_vzorec %} Na začetni postaji zemljevid pokaže točen odhod pri {{ izhodisca.lazno | odstotek }}&nbsp;{{ (izhodisca.lazno | odstotek or 0) | stevnik("odhod", "odhoda", "odhodi", "odhodov") }}, ko vlak stoji še vsaj 2 min.{% endif %}</p>
+      <p>Za vsaj 10 min pri {{ c.dvig10 | odstotek }} postankov{% if c.mediana_min %}; popravek je običajno {{ c.mediana_min | minute }}{% endif %}.{% if izhodisca.n >= min_vzorec %} Na začetni postaji zemljevid pokaže točen odhod pri {{ izhodisca.lazno | odstotek }} odhodov, ko vlak stoji še vsaj 2 min.{% endif %}</p>
       <div class="st-drobno">{{ c.postankov | stevilo }}&nbsp;{{ (c.postankov or 0) | stevnik("postanek", "postanka", "postanki", "postankov") }} vseh vlakov, brez končnih postaj</div>
     </section>
     {% endif %}

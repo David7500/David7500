@@ -57,7 +57,7 @@
       <li><a href="/statistika/prevoznik/{{ x.slug }}">
         <span class="ime">{{ x.ime }}{% if x.network == "zeleznica" %} (vlaki){% endif %}</span>
         <span class="pc">{{ x.cilj.v5min | odstotek }}</span>
-        <span class="drobno">{{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} · polovica zamudi vsaj {{ x.cilj.mediana_min | minute }} · {{ x.cilj.nad15 | odstotek }} nad 15 min{% if x.prezgodaj.prej2 %} · {{ x.prezgodaj.prej2 | odstotek }}&nbsp;{{ (x.prezgodaj.prej2 | odstotek or 0) | stevnik("postanek", "postanka", "postanki", "postankov") }} vsaj 2 min prej{% endif %}</span>
+        <span class="drobno">{{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} · polovica zamudi vsaj {{ x.cilj.mediana_min | minute }} · {{ x.cilj.nad15 | odstotek }} nad 15 min{% if x.prezgodaj.prej2 %} · {{ x.prezgodaj.prej2 | odstotek }} postankov vsaj 2 min prej{% endif %}</span>
       </a></li>
       {% endfor %}
     </ul>
