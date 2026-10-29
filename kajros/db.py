@@ -512,6 +512,17 @@ CREATE TABLE IF NOT EXISTS povzetek (
     payload     TEXT NOT NULL,      -- JSON odgovora
     PRIMARY KEY (kind, network, days)
 );
+
+-- Dnevni agregati za strani statistike (`statistika.py`). NE obrezuje se:
+-- viri se (`napoved` 30 dni, `lega` 14), in brez tega trenda čez mesec ni.
+CREATE TABLE IF NOT EXISTS stat_dan (
+    dan         TEXT NOT NULL,      -- prometni dan
+    vrsta       TEXT NOT NULL,      -- napoved | prevoznik | prazno
+    kljuc       TEXT NOT NULL,      -- omrežje|prevoznik|skupina
+    podatki     TEXT NOT NULL,      -- JSON seštevljivih vsot
+    izracunano  INTEGER NOT NULL,   -- epoha izračuna
+    PRIMARY KEY (dan, vrsta, kljuc)
+);
 """
 
 

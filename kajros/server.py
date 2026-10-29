@@ -508,8 +508,12 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Ce povzetkov se ni (prva namestitev, nova sirina okna), jih zgradi ob
     # prvem obhodu -- sicer bi racun placal prvi obiskovalec strani, in pri
     # letu zajema je to 34 sekund cakanja.
+    # Isto ob novi vrsti povzetka: strani statistike (`stat_*`) bi sicer prvi
+    # obiskovalec čakal minute, da se `stat_dan` dopolni za vse dni nazaj.
     if (next_maint and summaries
-            and not conn.execute("SELECT 1 FROM povzetek LIMIT 1").fetchone()):
+            and (not conn.execute("SELECT 1 FROM povzetek LIMIT 1").fetchone()
+                 or not conn.execute("SELECT 1 FROM povzetek "
+                                     "WHERE kind = 'stat_prevozniki' LIMIT 1").fetchone())):
         next_maint = datetime.now(TZ)
 
     # Zamude in lege imata SVOJ ritem, ker se feeda ne spreminjata enako:

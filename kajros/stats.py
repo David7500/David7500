@@ -2428,6 +2428,18 @@ def _napake_sence(conn, days, network):
     return ocena.porazdelitev_napak(conn, days, network)
 
 
+def _stat_napovedi(conn, days, network):
+    """Stran `/statistika/napovedi`. Uvoz pozen: `statistika` bere `stats`."""
+    from . import statistika
+    return statistika.napovedi(conn, days, network)
+
+
+def _stat_prevozniki(conn, days, network):
+    """Stran `/statistika/prevozniki`. Uvoz pozen iz istega razloga."""
+    from . import statistika
+    return statistika.prevozniki(conn, days, network)
+
+
 SUMMARY_BUILDERS = {
     "network_stats": lambda conn, days, network: {
         "rows": network_stats(conn, days, network)},
@@ -2439,6 +2451,10 @@ SUMMARY_BUILDERS = {
     # Napaka prikaza 15-25 min prej (senca, 30 dni): iz nje pot od vrat do
     # vrat pove, ali prestop drži, ko sta vozili na poti (`pot.verjetnost_zdaj`).
     "napake_sence": _napake_sence,
+    # Strani statistike: najprej dopolnita `stat_dan` (dnevni agregati, ki
+    # preživijo obrez sence in leg), nato iz njega seštejeta okno.
+    "stat_napovedi": _stat_napovedi,
+    "stat_prevozniki": _stat_prevozniki,
 }
 
 # Katera okna vzdrzujemo. Sirse okno ni drazje od ozjega toliko, kolikor je

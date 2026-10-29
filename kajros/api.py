@@ -2840,6 +2840,24 @@ def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
         return stats.summary_get(conn, "network_stats", network, days)
 
 
+@app.get("/api/statistika/napovedi")
+def api_statistika_napovedi():
+    """Kako dobre so bile napovedi, ki jih je potnik videl: naša, prevoznikova,
+    prenos trenutne zamude, vozni red (`statistika.napovedi`, nočni povzetek)."""
+    with _conn() as conn:
+        return {net: stats.summary_get(conn, "stat_napovedi", net)
+                for net in stats.SUMMARY_NETWORKS}
+
+
+@app.get("/api/statistika/prevozniki")
+def api_statistika_prevozniki():
+    """Točnost, pokritost in prezgodnji odhodi po prevozniku
+    (`statistika.prevozniki`, nočni povzetek)."""
+    with _conn() as conn:
+        return {net: stats.summary_get(conn, "stat_prevozniki", net)
+                for net in stats.SUMMARY_NETWORKS}
+
+
 # Vlak ostane na seznamu se toliko sekund po voznorednem (z zamudo popravljenem)
 # prihodu na cilj -- da ne izgine iz zemljevida v isti sekundi, ko pripelje.
 _LIVE_GRACE_S = 300
