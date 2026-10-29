@@ -29,7 +29,10 @@ Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (D
 * V zemljevidu strani iz **shranjenih** povzetkov (`poti_za_iskalnik`), v meniju Več.
 * **Vlak/linija** (`/statistika/vlak/{slug}`, `/statistika/linija/{prevoznik}/{slug}`) iz `stat_voznja`; pri malo vožnjah na dan stolpec = mediana zamude v barvi razreda (`r-…`), ne delež. Dnevi v tednu le ob razliki (≥ 10 točk ali ≥ 2 min). Medkrajevne šifre `noindex`. Okno vožnje kaže nanje v nogi (`statistika` v `/run`).
 * **SŽ** (`/statistika/sz`): samo od `SZ_VODI_OD` (11. 10. 2026, naš bralec zemljevida); prehodi potnikov čez vso zgodovino (redki), kartica od `MIN_PREHODOV` 20. Vzroka odseka („dela, en tir“) ne trdimo.
-* **Relacije**: avto = odsek avtoceste od priključka do priključka (stran to pove); brez `promet.sqlite` izpade, ne ničla.
+* **Relacije**: avto = odsek avtoceste od priključka do priključka (stran to pove); brez `promet.sqlite` izpade, ne ničla. Poljuben par `?od=&do=` ob zahtevi (`iskanje_relacije`, ~10 ms, predpomnilnik do konca okna, `noindex`), samo brez prestopa; pod 10 vožnjami brez številke.
+* **Namizje ≥ 900 px** (David: „luknje vmes“): vrste flex, ki se raztegnejo, kartice v vrsti enako visoke — ne mreža s fiksnimi stolpci (praznina pod nizkimi). Širino da razred: `st-dvojna` (graf), `st-siroka` (dolg seznam v stolpcih, besedilo). Razlaga in predlogi v dveh stolpcih (`columns`, kartica `display: block`). Namizni del na koncu `statistika.css`.
+* Zavihki strani (`glava(izbrano)`) namesto povezave nazaj; nova podstran dobi zavihek ali `izbrano` starša.
+* Prag nadomestila SŽ v besedilu (60–119 min četrtina, od 120 polovica; vir gov.si, SŽ): zamuda na končni postaji, ne potnikova.
 * **`stat_dan` ima različico** (`STAT_DAN_VERZIJA`): nova vrsta ali pomen → povečaj; vsi dnevi znova, vrste z obrezanim virom (senca 30 dni) ostanejo.
 
 ## `/app/statistika` → 301 na `/statistika` (29. 10. 2026)
