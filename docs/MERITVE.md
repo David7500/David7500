@@ -3102,3 +3102,21 @@ Sporočilo potnika (29. 10. ob 11:30): pri LPP 8 se lega premika v eno smer, oce
 * Uvoz smeri trase ni preverjal. `tuje_trase` šteje vožnje s prvim postankom več kot 2 km od začetka trase, zavrne pa šele prevoznika, pri katerem je takih več kot polovica.
 * **Drugi** (29. 10. zvečer): brezavta.si (OTP društva DERP) ima iste podatke LPP (isti id-ji), a OTP obrnjeno traso zavrže in nariše ravne črte med postajališči (8 proti Gameljnam 40 točk za 40 postankov, 28 in 18L 13 za 13): smer prava, pot čez hiše. LPP-jev API (`data.lpp.si/api/route/routes?shape=1`) ima isto obrnjeno geometrijo — napaka je v LPP-jevih osnovnih podatkih, zanesljivejšega vira ni.
 * **Popravek** (`gtfs._obrni_trase`, ob uvozu): na lokalni bazi (3 456 tras, 944 925 vrstic voznega reda) obrne natanko te tri, v 0,19 s. Pripenjanje po vsebini jih ob naslednjem uvozu pripne znova.
+
+## Avtobus po končani vožnji: gleda stran od poti (30. 10. 2026)
+
+Tretji vzrok z istim videzom kot obrnjena trasa. LPP 9 (`LJ LPP-812`, vožnja 10.34–10.49 Bavarski dvor → Barje P+R) je na zemljevidu gledal proti severu, pot pred njim pa je šla proti jugu. **Model ima prav**, narobe je vožnja.
+
+* Po končni feed obdrži staro vožnjo, vozilo pa že pelje nazaj: 11.06 lega 46,02913 smer 15°, 11.08 46,03057 smer 8° in 26 km/h, 11.09 46,03318 smer 350° (severno od predzadnjega postanka). Po trasi 9 380 m → 9 021 m od 9 720 m; smer trase 190°.
+* `pripni.na_cesto` zaradi razlike nad 60° vrne None, zato je risba na GPS in v smeri GPS (`legaIzmerjena`). Pot naprej pa se reže po bližini brez smeri (`naTrasi`).
+* **Zamuda na kartici je izmišljena.** Od 10.59 je zamuda na končni vsako branje enaka `feed_ts` minus vozni red (+591 s ob 10.59, +1161 s ob 11.08): feed prihoda ni zaznal in napoveduje „zdaj“. Zadnja vrednost pred rastjo +9:51, na kartici +17 in raste. `last_measured` jo vzame, ker je čas napovedi že mimo.
+* **Ni redko, je ena linija.** Rep na končni (zamuda = `feed_ts` minus vozni red) z rastjo nad 2 min na arwenu 29.–30. 10.: LPP 9 proti Barju **76 od 85 voženj, mediana +17 min**; vse ostale linije LPP 13 od 2 689. Drugi prevozniki v 20.–29. 10.: 1118 29 od 8 516, Arriva 4 od 30 150, nič pri Nomagu, 1121, Marpromu in Kranju.
+* Vozilo LPP 9 stoji 248–260 m od postajališča Barje P+R iz voznega reda (46,0291–46,0293), obrnjeno proti severu, tudi pri naslednji vožnji. Verjetno zato prihoda ni: domneva, ni izmerjena.
+* Povratna vožnja se pozna z zamikom: vožnja proti Barju v feedu do 11.14,22, povratna (vozni red 11.06) šele od 11.15,28, ko je vozilo že 1,6 km od končne. Ni popravljeno; vozila na povratni vožnji ne pripisujemo sami.
+* **Začetek repa ni splošen popravek.** Proti zaslonom LPP na zadnjem postanku (1 235 voženj brez LPP 9) je odmik nad 2 min pri zadnji vrednosti 75-krat, pri začetku repa 126-krat: vozilo v koloni zamudo res nabira. Za LPP 9 zasloni ne pomagajo (5 od 85).
+
+**Popravek.** `collector.ura_na_koncni` (samo vir LPP): rast na končni velja, kadar je vozilo po GPS končni vsaj 20 m bližje kot kdaj prej na tem repu; `run` zato obstane, `obs` obdrži vse. `api._voznja_koncana`: izmerjena končna in GPS nad 120° proti trasi ali nad 300 m od nje = `koncana` v `/api/vehicles`; pot vsa prevožena, ocena ne drsi, kartica „vožnja končana“. V živo 3 od 639 vozil (LPP 9, Arriva A5220, Nomago N0113). Na živem repu LPP 9 surovo +888 s, po pravilu +590 s.
+
+**Vzorec v živo** (razvojna baza, 30. 10. 11.14–11.59, 66 repov, pravilo simulirano): zavrnitev pri 6, v nobenem se vozilo končni ni bližalo. LPP 9 trije: surovo +1398, +1539, +832 s, po pravilu +590, +733, +42 s, vozilo na koncu 1 227, 1 302, 252 m od končne. Linija 6 dva (82→103 m, 128→186 m), linija 24 eden (stoji 13 m od končne). Neodvisne resnice o prihodu ni: da je zavrnjena rast lažna, kaže samo GPS.
+
+Zapisanih vrednosti v `run` in `stat_dan` popravek ne spremeni: statistika LPP 9 proti Barju ostane do tega dne previsoka.
