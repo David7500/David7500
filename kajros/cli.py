@@ -11,6 +11,7 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
+from . import opazovano
 from . import straza
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
                journey, naslovi, ocena, odkloni, peroni, pot, prehod, pripni, stats, tiri,
@@ -295,6 +296,15 @@ def cmd_straza(args):
         print(straza.izpis(dan_b, b))
         print()
         print(straza.izpis_primerjave(ime_a, ime_b, straza.primerjaj(vrstice, b)))
+
+
+def cmd_opazovano(args):
+    conn = _straza_baza(args.baza)
+    if args.racunaj:
+        if args.baza:
+            opazovano.senca(conn)
+        print("dni:", len(opazovano.dopolni(conn)))
+    print(opazovano.izpis(conn, args.vsa))
 
 
 def cmd_repair(args):
@@ -657,6 +667,13 @@ def main(argv=None):
                    help="primerjaj z drugo bazo, npr. ponovljen dan z drugo različico zajema")
     a.add_argument("--racunaj", action="store_true", help="izračunaj znova, ne beri shranjenega")
     a.set_defaults(func=cmd_straza)
+
+    a = sub.add_parser("opazovano", help="kje vozila zadnje čase ne ustavijo, senca")
+    a.add_argument("--baza", help="beri to bazo samo za branje")
+    a.add_argument("--vsa", action="store_true", help="tudi zaprte vrstice")
+    a.add_argument("--racunaj", action="store_true",
+                   help="izračunaj neobdelane dni; z --baza samo v spominu")
+    a.set_defaults(func=cmd_opazovano)
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)

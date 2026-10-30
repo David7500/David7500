@@ -186,6 +186,25 @@ def _vozila(conn: sqlite3.Connection, dan: str, agencije: dict[str, str]) -> dic
     return dict(out)
 
 
+def _opazovano(conn: sqlite3.Connection, dan: str) -> dict[str, dict]:
+    """{prevoznik: odprtih na koncu dne, novih, zaprtih}. Prazno, dokler dan ni
+    obdelan: `opazovano.dopolni` teče pred stražo, a ima svoj poskus."""
+    if not _ima_tabelo(conn, "opazovano_dan") or not conn.execute(
+            "SELECT 1 FROM opazovano_dan WHERE dan = ?", (dan,)).fetchone():
+        return {}
+    od = stats.polnoc(dan) + ZACETEK_DNE_S
+    do = od + 24 * 3600
+    out: dict[str, dict] = defaultdict(lambda: {"odprtih": 0, "novih": 0, "zaprtih": 0})
+    for prevoznik, odprto, zaprto in conn.execute(
+            "SELECT prevoznik, odprto_ts, zaprto_ts FROM opazovano WHERE odprto_ts < ? "
+            "AND (zaprto_ts IS NULL OR zaprto_ts >= ?)", (do, od)):
+        v = out[prevoznik]
+        v["odprtih"] += zaprto is None or zaprto >= do
+        v["novih"] += odprto >= od
+        v["zaprtih"] += zaprto is not None and zaprto < do
+    return dict(out)
+
+
 def merila_dneva(conn: sqlite3.Connection, dan: str, osnova=None) -> dict[str, dict]:
     """Merila za en prometni dan, po prevozniku. Samo bere."""
     agencije, postankov = osnova or _osnova(conn)
@@ -216,6 +235,8 @@ def merila_dneva(conn: sqlite3.Connection, dan: str, osnova=None) -> dict[str, d
                 "SELECT prevoznik, ime, n FROM straza_stevec WHERE dan = ?", (dan,)):
             stevci[prevoznik][ime] = n
 
+    opazovano = _opazovano(conn, dan)
+
     out = {}
     for a in set(nacrt) | set(lega) | set(opazeno) | set(z_meritvijo) | set(vozila) | set(stevci):
         n = nacrt.get(a, set())
@@ -239,6 +260,7 @@ def merila_dneva(conn: sqlite3.Connection, dan: str, osnova=None) -> dict[str, d
             "rep_voznje": rep.get(a, {}).get("voznje", 0),
             "rep_nad": rep.get(a, {}).get("nad", 0),
             "stevci": stevci.get(a, {}),
+            "opazovano": opazovano.get(a),
         }
     return out
 
@@ -477,13 +499,15 @@ def izpis(dan: str, vrstice: dict[str, dict]) -> str:
     """Tabela za terminal, prevozniki po abecedi."""
     glava = (f"{'prevoznik':10} {'načrt':>6} {'z lego':>6} {'%':>6} {'meritev':>7} "
              f"{'postankov':>9} {'% prehod':>8} {'vozil z/brez':>12} {'rep>2min':>10} "
-             f"{'trase':>5} {'slabe':>5} {'delavnik do':>11} {'sobota do':>11} {'nedelja do':>11}")
+             f"{'trase':>5} {'slabe':>5} {'delavnik do':>11} {'sobota do':>11} {'nedelja do':>11} "
+             f"{'ne ustavi odpr/nov/zapr':>23}")
     out = [f"straža {dan}", glava]
     for a in sorted(vrstice):
         v = vrstice[a]
         z, brez = _vozila_vsota(v, "z"), _vozila_vsota(v, "brez")
         slabe = None if v.get("trase") is None else (
             _trasa(v, "premalo_tock") + _trasa(v, "dalec_od_postaje"))
+        o = v.get("opazovano")
         out.append(
             f"{a:10} {_st(v.get('nacrt')):>6} {_st(v.get('z_lego')):>6} "
             f"{_st(_delez(v.get('z_lego'), v.get('nacrt'))):>6} {_st(v.get('z_meritvijo')):>7} "
@@ -492,7 +516,8 @@ def izpis(dan: str, vrstice: dict[str, dict]) -> str:
             f"{(f'{z}/{brez}' if v.get('vozila') else '–'):>12} "
             f"{str(v.get('rep_nad', 0)) + '/' + str(v.get('rep_voznje', 0)):>10} "
             f"{_st(_trasa(v, 'tras')):>5} {_st(slabe):>5} "
-            f"{_st(_do(v, 'delavnik')):>11} {_st(_do(v, 'sobota')):>11} {_st(_do(v, 'nedelja')):>11}")
+            f"{_st(_do(v, 'delavnik')):>11} {_st(_do(v, 'sobota')):>11} {_st(_do(v, 'nedelja')):>11} "
+            f"{(f'''{o['odprtih']}/{o['novih']}/{o['zaprtih']}''' if o else '–'):>23}")
     return "\n".join(out)
 
 

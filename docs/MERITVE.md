@@ -3228,3 +3228,33 @@ Na izmerjenih primerih (111 parov): **pravi 61 (55 %), napačna 2 (2 %), dvoumna
 * Odmik 100–250 m (Naklo, Prežihova): pravilo namenoma molči, pravi vzrok je vzporedna cesta ali odcep.
 * Zunanje potrditve imam za Focheva (Večer) in za Naklo (OSM geometrija); pri ostalih je dokaz OSM + lega; obvestila prevoznikov v dveh iskanjih (Ormož, Naklo) niso nič našla, za Postojno, Orešje in Mladinska – Vrbanska iskanja niso bila narejena.
 * `dmin` temelji na tetivi med legami (20 s, 10 s pri Marpromu); pri odmiku pod ~50 m je napaka tetive primerljiva s prostorom ukrepa.
+
+## Opazovano, del 2: tabela v senci (30. 10. 2026)
+
+`kajros/opazovano.py` na arwenu, branje `mode=ro`, stanje v ločeni datoteki, `lega` in `gps_prehod` 17.–29. 10. (13 dni; prvi dan je obrezan). Pravilo isto kot zgoraj (10 dokazov, ≥250 m, ≥24 h), ključ nov: prevoznik, `train_no`, `headsign`, `stop_id`. `headsign` je smer, ker `trip` smeri nima; `train_no` namesto `route_id` (1119: 953 proti 1 309).
+
+**Hitrost.** 13 dni 27,9 s (`nice -n 19`), delavnik 3 s, sobota 0,5 s, neodvisen dokaz 111 vrstic 0,96 s. Hitro, ker dan bere sled le tam, kjer lahko kaj spremeni: 1 239 od 9 560 voženj (29. 10.). Poizvedba v drugi niti istega procesa, namesto zajema: sama mediana 0,03 ms, največ 0,2 ms (2 368 poizvedb); med računom mediana 0,06 ms, p99 0,21 ms, največ 23,9 ms (12 754 poizvedb). Tudi po 13 dneh hkrati (prvi nočni račun) zajem ne stoji. Stanje je majhno: 374 vrstic, `tocke` največ 749 znakov.
+
+**Rezultat.** 111 vrstic na 84 ključih (ujemanje s prejšnjimi 111 pari je naključje): 63 odprtih 29. 10., 48 zaprtih (47 prehod, 1 bliže od praga), še 263 nizov pod pragom. Prehod katerekoli različice linije zdaj zapre, zato je odprtih manj kot po `shape_id` (97).
+
+| prevoznik | odprtih | pravi | neznan | napačen | dvoumen | **za prikaz** | novih / zaprtih 29. 10. |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1119 | 28 | 12 | 16 | 0 | 0 | **12** | 7 / 0 |
+| 1123 | 33 | 22 | 8 | 2 | 1 | **28** | 6 / 2 |
+| marprom | 2 | 2 | 0 | 0 | 0 | **2** | 0 / 0 |
+| skupaj | 63 | 36 | 24 | 2 | 1 | **42** | 13 / 2 |
+
+**Znani primeri.** Focheva odprta 28. 10. ob 12.16 (`mp-168`, 316 m) in 12.28 (`mp-169`, 328 m), oznaka `pravi` (OSM isto ime; drugih linij na tem `stop_id` ni). Enako kot prej, na minuto. Ormož bolnica odprta od 20. 10., 403–409 m, `neznan` z `osm_blizu`. Ponikve/Dobrepolju `napacen`, Naklo A6231 `dvoumen`. Vrbanska: nobene vrstice, tudi niza ne, zapora se začne 3. 11. in **ni preizkušena**. G3 Meljska po zasnovi ne odpre (24 h).
+
+**Kaj je dovolj za prikaz: `pravi` ali `neznan` z `osm_blizu`.** Na 46 prejšnjih neznanih parih (`shape_id`):
+
+| kaj se zgodi | parov | prevoznik |
+|---|---:|---|
+| nov ključ jih ne odpre | 9 | 1119 6, 1123 3 |
+| samo zaprti, 29. 10. ni več odprtih | 9 | 1119 9 |
+| odprti, brez dokaza: pravilo za prikaz jih izloči | 18 | 1119 16, 1123 2 |
+| odprti z `osm_blizu`: ostanejo | 10 | 1123, vsi Ormož bolnica |
+
+Izpade **36 od 46**, polovica že s ključem, polovica s pravilom za prikaz. Pri trenutno odprtih neznanih je `osm_blizu` pri 1119 0 od 16, pri 1123 6 od 8, in vseh šest je Ormož, ki je ročno preverjen pravi primer. To je en kraj, zato `osm_blizu` kot dokaz ni izmerjen, le skladen. Za prikaz ostane 42 od 63.
+
+**Česa še ne vemo.** Oznaka ni resnica: 36 `pravi` ni ročno preverjenih, razen Focheve, Naklega in Postojne SŠC. 27 od 111 vrstic je ponovno odprtje istega ključa (Naklo A6227, Zavrh pri Galiciji N0173): redek prehod zapre, naslednji niz spet odpre, prikaz bi utripal. Vzrok ni raziskan (napačen pripis vožnje ali res občasen postanek). Posnetek OSM je iz 30. 10. in se ne osvežuje sam.

@@ -44,6 +44,7 @@ SŽ + IJPP → NAP (b2b.nap.si, CC BY-SA 4.0) → DERP gtfs-generators → GTFS 
 | Tir vlaka | tabla postaje potniski.sz.si, Chrome | ~10 min/postajo |
 | Ovire — **vodijo** (angleške in ob molku `.../service_alerts`) | stanje v prometu potniski.sz.si (`var roadworks`), Chrome | 5 min |
 | Kje ustavi nadomestni avtobus | seznam potniski.sz.si, posnetek v gitu (`scripts/nadomestna_postajalisca.py`) | ročno ob spremembi |
+| Avtobusna postajališča OSM, za `opazovano.py` | Overpass, posnetek v gitu (`scripts/osm_postajalisca.py`, ODbL) | ročno |
 
 SŽ nimajo javnega API-ja; `potniski.sz.si` je za Cloudflarom, ki od 7. 10. 2026 spusti le Chrome z oknom → Chrome pod Xvfb (`brskalnik.py`, namestitev `deploy/brskalnik.sh`); stari SOAP mrtev. Zip = **ves** slovenski javni potniški promet (pet agencij); `config.RAIL_AGENCY_ID` jih edini loči. **Vsak vir opisan enkrat, v `kajros/viri.py`** (naslov, ritem, izvor, licenca, ukrep ob izpadu); vsak klic na tuj strežnik gre skozi `viri.branje()`, sicer ga /admin ne vidi (`test_vsak_klic_na_tuj_streznik_je_v_registru`).
 
@@ -103,6 +104,7 @@ kajros/
   zdravje.py     kdaj je zajem zdrav (barve v /admin), kaj gre v pošto (`posta`: samo poseg); opozorila.py pošlje
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   zasedenost.py  kako polno je vozilo po poročilih potnikov
+  opazovano.py   kje vozila zadnje čase ne ustavijo, iz leg in prehodov, za vse enako; senca, prikaz še ne bere
   indexnow.py    iskalnikom (Bing ...) pošlje seznam strani; Google ne
   server.py      lifespan: bootstrap + zajem v ozadnji niti; cli.py ukazna vrstica
   api.py         FastAPI: /api/* + strani /app*; markdown.py stran za agente (`Accept: text/markdown`)
@@ -113,7 +115,7 @@ android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vi
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavi `service_day('S1','2026-08-31')`, test dan računa (`_pred`); ko se ujameta: `UNIQUE constraint failed` (31. 8. 2026 pet rdečih). Računani vstavki zato `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `stat_dan` (dnevni agregati statistike, ne obrezuje se) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`.
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `stat_dan` (dnevni agregati statistike, ne obrezuje se) · `opazovano` + `opazovano_dan` (senca, ne obrezuje se) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`.
 
 ## Omrežji: `network` ni `mode`
 

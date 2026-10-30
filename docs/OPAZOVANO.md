@@ -1,6 +1,6 @@
 # Opazovano: sistem za vse avtobuse
 
-Stanje 30. 10. 2026: del 1 (straža) narejen, deli 2–4 so načrt. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“.
+Stanje 30. 10. 2026: del 1 (straža) narejen, del 2 (tabela) teče v senci, prikaz je ne bere; deli 3–4 so načrt. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“.
 
 ## Zakaj
 
@@ -66,6 +66,10 @@ Skupaj 71 od 9 581 parov brez prehoda (0,7 %).
 **Ni še dokazano, da 0 prehodov pomeni „ne ustavi“.** Pravi primer je Ljubljanska – Focheva (104 + 102, potrjeno v časopisu). Ormož bolnica (40), Naklo (32) in Postojna SŠC (17) so morda odmik postajališča, kjer vozilo vozi mimo in ga prehod ne zazna. Zato najprej senca: razlika med „vozilo je prišlo blizu“ in „ni ga bilo“, ročno preverjeni primeri, šele nato prag. Prehodi na zaporo Meljske (G3, 29. 10.: 5 od 37) so dober preizkus za občasen obvoz, zapora Vrbanske 3.–26. 11. (P7) pa za začetek in konec v živo.
 
 **Mestni LPP v `gps_prehod` ni** (1118: samo 30 parov pod pragom). Zanj ostaja RT in zasloni; v tabelo se zapiše kot drug vir dokaza, da prikaz bere eno mesto.
+
+**Narejeno v senci** (`kajros/opazovano.py`, `tests/test_opazovano.py`, ukaz `kajros opazovano [--vsa] [--racunaj] [--baza POT]`): tabeli `opazovano` (ključ prevoznik, `train_no`, `headsign`, `stop_id`; niz dokazov ene vrstice) in `opazovano_dan` (meja, dan se obdela enkrat, v istem commitu); nočni `opazovano.dopolni` v `server._povzetki` pred stražo, svoj poskus; `kajros straza` po prevozniku pokaže odprte, nove in zaprte. Pravilo in meritve: `docs/MERITVE.md`, „Opazovano, del 2: tabela v senci“.
+
+**Predlog za prikaz** (`opazovano.dovolj_za_prikaz`, nihče je še ne kliče): odprta vrstica, ki je `pravi` (OSM isto ime v 60 m ali druge linije na istem `stop_id`, ob poti vozila ni istega imena) ali `neznan` z `osm_blizu` (katerokoli OSM postajališče v 60 m). Od 63 odprtih na 29. 10. je to 42: 1119 12 od 28, 1123 28 od 33, marprom 2 od 2. Napačen in dvoumen ne, dokler potnik ne dobi napotka, kje vozilo ustavi.
 
 ### 3. En prikaz
 

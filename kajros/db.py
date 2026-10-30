@@ -10,6 +10,49 @@ from pathlib import Path
 
 from . import config
 
+#: Posebej od `SCHEMA`: `opazovano.senca` isti zapis naredi v `temp` na bazi z `mode=ro`.
+OPAZOVANO = """
+-- Kje vozila zadnje čase ne ustavijo (`opazovano.py`, `docs/OPAZOVANO.md`). Niz
+-- dokazov ene vrstice: `niz` (še ne odprto), `ne_ustavi`, `zaprto` (zgodovina, ne
+-- obrezuje se). Niz, ki ni odprl, se ob pretrganju zbriše.
+CREATE TABLE IF NOT EXISTS opazovano (
+    prevoznik  TEXT NOT NULL,
+    linija     TEXT NOT NULL,       -- trip.train_no: stabilna čez uvoze, trip_id in shape_id nista
+    smer       TEXT NOT NULL,       -- trip.headsign
+    stop_id    TEXT NOT NULL,
+    prvi_ts    INTEGER NOT NULL,    -- prvi dokaz v nizu
+    zadnji_ts  INTEGER NOT NULL,
+    dokazov    INTEGER NOT NULL,
+    stanje     TEXT NOT NULL,
+    odprto_ts  INTEGER,
+    zaprto_ts  INTEGER,
+    vzrok      TEXT,                -- prehod | blizu | zastarelo
+    dmin_m     INTEGER NOT NULL,    -- mediana zadnjih dokazov
+    lat        REAL NOT NULL,       -- mediana najbližje točke vozila
+    lon        REAL NOT NULL,
+    tocke      TEXT NOT NULL,       -- JSON [[dmin, lat, lon], ...], zadnjih 30
+    -- Neodvisen dokaz o koordinati, ne iz sledi te vožnje; NULL = ni preverjeno.
+    osm_ime    INTEGER,             -- OSM postajališče istega imena v 60 m
+    osm_blizu  INTEGER,             -- katerokoli OSM postajališče v 60 m
+    osm_ob_poti INTEGER,            -- istoimensko v 60 m od poti vozila
+    druge_obkrozenih INTEGER,       -- druge linije in smeri na istem stop_id, 14 dni
+    druge_prehodov   INTEGER,
+    oznaka     TEXT,                -- pravi | napacen | dvoumen | neznan
+    preverjeno_ts INTEGER,
+    PRIMARY KEY (prevoznik, linija, smer, stop_id, prvi_ts)
+);
+-- Meja obdelave: dan je tu = njegovi dogodki so v `opazovano`.
+CREATE TABLE IF NOT EXISTS opazovano_dan (
+    dan        TEXT PRIMARY KEY,
+    izracunano INTEGER NOT NULL,
+    voznje     INTEGER NOT NULL,
+    brez_sched INTEGER NOT NULL,
+    sledi      INTEGER NOT NULL,
+    dokazov    INTEGER NOT NULL,
+    ms         INTEGER NOT NULL
+);
+"""
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
@@ -563,7 +606,7 @@ CREATE TABLE IF NOT EXISTS stat_voznja (
     izracunano  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS stat_voznja_omrezje ON stat_voznja(network);
-"""
+""" + OPAZOVANO
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:

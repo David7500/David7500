@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import opazovano
 from . import straza
 from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, kranj,
                marprom, nap, obisk, ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
@@ -327,6 +328,13 @@ def _povzetki() -> None:
     except Exception as exc:              # statistika ni kriticna za zajem
         conn.rollback()
         _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
+    # Svoj poskus, pred stražo: njena vrstica pove odprte po prevozniku.
+    try:
+        dnevi = opazovano.dopolni(conn)
+        _log(f"opazovano: {len(dnevi)} dni")
+    except Exception as exc:              # noqa: BLE001 -- isto kot zgoraj
+        conn.rollback()
+        _log(f"opazovanega ni bilo mogoče izračunati: {exc}")
     # Svoj poskus: izpad povzetkov ne sme vzeti dneva straži, `lega` izgine po 14 dneh.
     try:
         dnevi = straza.dopolni(conn)
