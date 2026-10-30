@@ -1609,7 +1609,8 @@ const ZA_SABO_M = 15;
 // po eno za vsak vlak s potnikom.
 function ocenaNaTrasi(tr, v, starostS) {
   const izmerjena = { kje: [v.lat, v.lon], vzdolz: null };
-  if (!tr.trasa || !v.speed_ms || v.speed_ms < 1) return izmerjena;
+  // `koncana`: vozilo pelje stran od končne, po trasi bi drselo nasproti njemu.
+  if (!tr.trasa || !v.speed_ms || v.speed_ms < 1 || v.koncana) return izmerjena;
   const { vzdolz, odmik } = projekcijaNaTraso(tr.trasa, tr.cums, v.lat, v.lon);
   if (odmik > OCENA_MAX_ODMIK_M) return izmerjena;
 

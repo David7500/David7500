@@ -668,7 +668,8 @@ function busCardHtml(v) {
          hhmm(v.naslednja_ts * 1000)} · napoved LPP`]] : [])]
     : v.delay_s == null
     ? [["zamuda", "ni meritve"]]
-    : [["zamuda", delayText(v.delay_s), delayColor(v.delay_s)],
+    : [...(v.koncana ? [["stanje", "vožnja končana"]] : []),
+       ["zamuda", delayText(v.delay_s), delayColor(v.delay_s)],
        ["zadnja meritev", escapeHtml(v.last_stop || "—")]];
   return vehCardHtml({
     no: imeVoznje(v), badge: "", headsign: v.headsign,
@@ -2528,7 +2529,9 @@ function narisiTraso() {
   let k = lega && naTrasi(izbrana.kosi, lega[0], lega[1], izbrana.along);
   if (k && k.d > NA_TRASI_M) k = null;
   if (k) izbrana.along = k.along;
-  const [za, naprej] = razrezi(izbrana.kosi, k);
+  // Končana vožnja nima poti naprej, kjer koli je vozilo (`koncana`, /api/vehicles).
+  const [za, naprej] = izbrana.v && izbrana.v.koncana
+    ? [izbrana.kosi, []] : razrezi(izbrana.kosi, k);
   const lastnosti = { barva: izbrana.barva };
   nastaviVir("k-trasa", { type: "FeatureCollection", features: [
     kosiVCrto(za, { ...lastnosti, del: "za" }),

@@ -47,6 +47,7 @@ paths:
 * **Trasa od prvega do zadnjega postanka** (`pripni.do_postaj`): odreže ali podaljša po cesti (OSRM `/route`); začetek > 150 m 165 → 27. **Konca da najdaljša vožnja trase**: skrajšana bi traso odrezala na svojem postanku (30. 10. 2026: 59 tras, LPP 18 brez 12 od 30 postankov).
 * **Vožnja brez trase = pot po cesti skozi postajališča** (`pripni.brez_trase`; LPP devet linij, 10 455 od 60 526 voženj): 97 % dolžine v 20 m od prevoznikove.
 * **Kartica vozila prosojna, vleka glave premakne, – skrči** (`omogociPremik`): poslušalci na zunanjem elementu (MapLibre `setHTML` ustvari vsebino znova), premik v `--px`/`--py`.
+* **Končana vožnja** (`koncana` v `/api/vehicles`, `api._voznja_koncana`): izmerjena končna in GPS nad 120° proti trasi ali nad 300 m od nje. Feed LPP vozilo drži na stari vožnji, ko že pelje nazaj (LPP 9: 8 min). Pot vsa prevožena, ocena ne drsi, kartica „vožnja končana“. Model po GPS ima prav.
 * **Avtobus na cesti** (`cesta` v `/api/vehicles`, `pripni.na_cesto`): na pripeti trasi, 1,9 m desno, kadar GPS ≤ 15 m in smer v 60° (69,6 % vozečih). **Ni ocena lege** — ista meritev, mediana 4,2 m; `lat`/`lon` ostaneta.
 * **Vlak v 3D na tiru**: `_na_postaji` na pripeto traso; s tirom s table in številko v OSM (`tiri.py`, `${DATA_DIR}/tiri.json`, `na_postaji.tir`) na tisti tir. Sicer drug ob drugem (`VLAK_TIR_M`).
 * Pike postaj od z15 do z18 rastejo na dvojno, `circle-pitch-alignment: map`.

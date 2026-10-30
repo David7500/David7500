@@ -2071,9 +2071,11 @@ function postaviVozilo(nova) {
   // sekundo bi MapLibre silil, da vir na telefonu predeluje brez razloga.
   if (nova) runVir("run-gps", [pkTocka([v.lat, v.lon], { ime: meritevIme() })]);
   postavi3D(lega);
-  if (lega.vzdolz != null && (nova || runMap.razrez == null
-      || Math.abs(lega.vzdolz - runMap.razrez) > RAZREZ_M)) {
-    narisiRunTraso(lega.vzdolz);
+  // Končana vožnja je vsa prevožena, kjer koli je vozilo (`koncana`, /api/vehicles).
+  const razrez = v.koncana && runMap.cums ? runMap.cums[runMap.cums.length - 1] : lega.vzdolz;
+  if (razrez != null && (nova || runMap.razrez == null
+      || Math.abs(razrez - runMap.razrez) > RAZREZ_M)) {
+    narisiRunTraso(razrez);
   }
 
   if (runMap.sledi) drziVozilo(kje);
