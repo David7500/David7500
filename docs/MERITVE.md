@@ -3138,3 +3138,93 @@ Povod: posnetek zemljevida, G2 (`mp-103540`, vozilo 517) ob 11:10 stoji do 380 m
 **Od 1. 1. 2027 delavnikov ni v nobenem viru.** Kopija: `calendar_dates` storitvama 8860 in 8861 odvzame vse delavnike do 24. 6. 2027, ostaneta sobota in nedelja do 19. oz. 20. 6. Uradni zip: delavniki do 31. 8. 2026, konec tedna do 27. 12. 2026. `meta.marprom_vozni_red.do` zato kaže 2027-06-20 in zdravje ne opozori na rok. Od 29. 12. okno 7 dni nima več dovolj voženj (dva prazna dneva), zato uvoz obdrži zadnji sprejeti zip, torej isto kopijo. Prvi običajni delavnik brez voženj: ponedeljek, 4. 1. 2027.
 
 **G3 nima črte.** Trase `mp-7439`–`7442`, `7478`, `7479` imajo 2 točki (krožne, `geo.simplify`): 78 voženj na delavnik. Popravek v 3c2a25e, velja po uvozu. Splošni načrt: `docs/OPAZOVANO.md`.
+
+
+## Opazovano, del 2: ali „0 prehodov“ pomeni „ne ustavi“ (30. 10. 2026)
+
+Meritev na arwenu, samo branje, `lega` in `gps_prehod` 16.–29. 10. (14 polnih dni). Skripte in vrstni red: `docs/opazovano-skripte/` (k5 razlika številk, k6 značilke, k7 mirovanje, k8 hitrost, k9 G3, k10 Naklo, `osm.py`/`osm_geom.py`/`slo_stops.py` Overpass, `sim.py` pravilo, `oznaci.py` oznake in pragovi). Pred vključitvijo v glavno vejo jih zbriši.
+
+**Povzetek.** 0 prehodov **ni** dokaz „ne ustavi“. Od 77 parov jih ima zanesljiv dokaz, da je vozilo ≥250 m stran, samo 20; 23 jih vozilo obide za 100–250 m (to je odmik, ne obvoz), pri 34 dokaza ni (luknja v sledi ali rob vožnje). Pravilo na vožnjah, ne na dnevih, z razdaljo ≥250 m in vrzeljo v sledi ≤40 s je na 14 dneh odprlo 111 parov: 61 potrjenih, 2 napačna, 2 dvoumna, 46 neznanih. Sprejemljivo za prikaz „zadnje vožnje tu niso ustavile“, ne za trditev „zaprto“.
+
+### Razlika 71 : 77
+
+Isti vzorec (pari `shape_id`, `stop_id`, prevoznik z vsaj 10 vožnjami 28.–29. 10.), dve definiciji imenovalca (`k5.py`):
+
+| definicija | parov | brez prehoda | 1119 / 1123 / 1121 / marprom |
+|---|---:|---:|---|
+| brez izhodišča **in cilja** (prejšnja številka) | 9 581 | **71** | 33 / 34 / 1 / 3 |
+| brez izhodišča, s ciljem (predaja) | 10 173 | **77** | 36 / 35 / 1 / 5 |
+| brez izhodišča, brez dopolnjenih prehodov | 10 173 | 78 | |
+| vožnje z vsaj 3 prehodi, brez izh. in cilja | 9 514 | 53 | |
+
+Razlika je natanko **6 parov, ki nimajo prehoda samo na končnem postanku** (592 končnih parov v imenovalcu). Prehod na cilju je drugačen (prihod, ne odhod), zato velja 71. 
+
+### Delitev 77 parov (28.–29. 10.)
+
+Predajna delitev po mediani razdalje obkroženih voženj ostane: 18 brez obkrožene, 15 pri 100–150 m, 8 pri 150–250, 7 pri 250–500, 29 nad 500. **Luknje v sledi** (`lega` ima vrzel nad 120 s znotraj obkroženega dela) jo popravijo: na kandidatih (554 parov, 14 dni) ima luknjo 3 964 od 11 651 obkroženih voženj (34 %). Z vožnjami brez luknje in z vrzeljo ≤40 s (mediana vrzeli 20 s):
+
+| razred | parov |
+|---|---:|
+| zanesljivo ≥250 m stran (7 pri 250–500, 13 nad 500) | **20** |
+| 150–250 m | 8 |
+| 100–150 m | 15 |
+| premalo zanesljivih voženj (<3): 16 od „nad 500“ in 18 „brez obkrožene“ | **34** |
+
+Od 18 „brez obkrožene“: 8 na predzadnjem ali zadnjem postanku, 3 na drugem (vozilo začne, izhodišča ne merimo), 7 v sredini. Zato P18 Mladinska – Vrbanska **ni** obvoz: `mp-655` je 2. postanek od 27, `mp-432` je cilj (95 in 96 voženj, nobena z `pred`/`po`); ostalih 25 oz. 23 postankov proge ima prehode pri ~95 %.
+
+Orešje/Bizeljsko: 396 od 398 obkroženih voženj ima luknjo (mediana 420 s), nobene zanesljive. Lega tu ne pokriva proge, o ustavljanju ni dokaza; vozila sicer vozijo (sosednja postajališča Malus, Rajterič, cerkev 22–41 prehodov).
+
+### Ročna preverba sumljivih
+
+Viri: `lega`, OSM (Overpass: slovenska postajališča z enim poizvedkom, 7 118 vozlišč; ceste z geometrijo en poizvedek na primer), iskanje obvestil.
+
+* **Naklo/Kr.** (`1127783`, `1127782`): **ni napaka koordinate in ni napaka prehoda, vozila vozijo po drugi cesti.** (1) Koordinata GTFS in OSM se ujemata: dve postajališči „Naklo/Kr.“ 12 in 47 m od nje, obe ob `primary 411` (9 m). (2) Najbližja točka vozila je 113 m (smer `…783`, 1 154 zanesljivih voženj, 29 prehodov = 2,5 %) oz. 129 m (`…782`, 1 286 voženj, 33 prehodov); mediana ni naključna okoli praga 100 m, ampak stalna, in 120 od 120 vzorčenih voženj da 123 m. (3) Sosednji postanki (−3…+3, 120 voženj): mediana 4–9 m, 94–100 % pod 60 m, Naklo 0 %. Sled torej ni zamaknjena. (4) Overpass geometrija: točka vozila je **9 m od `Cesta na Okroglo` (residential)** in 120 m od `primary 411`; postajališče je 9 m od 411 in 120 m od Ceste na Okroglo. Obe smeri vozita po isti cesti, obe postajališči sta na isti strani. (5) Hitrost ob najbližji točki: najmanj ≤10 km/h pri 49 % voženj (smer `…783`, 311) in 29 % (`…782`, 406), kontrola (3 000 prehodov pod 60 m) 48 %: vozila tam verjetno upočasnijo/ustavijo, torej postajališče na 411 ni tam, kjer vozilo ustavlja. Prejšnja domneva (napaka koordinate ali prehoda) je napačna v obeh točkah; obvoz tudi ni (zapora), ampak stalna drugačna pot. Druga skupina: 154 (smer `…783`, trase `2502`, `2490`, `2103`, `2123`, `2391`, `2588`, `2589`, `2492`) oz. 126 voženj (`…782`, trase `167`, `168`, `171`, `172`, `174`) pelje 440–520 m stran mimo „Naklo/Kr. vas“ (203–240 m od točke) in postajališče Naklo/Kr. izpusti; to pravilo odpre (pri `…783` kot „dvoumen“). Obvestila: dve iskanji, nič.
+* **Ormož bolnica** (`1165205`, `1165204`, 15 parov): 365 zanesljivih voženj, **0 prehodov tudi pri vseh drugih trasah** (326 in 329 voženj skupaj). Vozila gredo 402–409 m SZ (46,41034 16,13749), pri hitrosti ob najbližji točki 44,6 km/h (0 od 279 pod 10 km/h). OSM: dve neimenovani postajališči 42 in 75 m od koordinate (`tertiary` Ptujska cesta), nobenega v 350 m od točke vozila. Vozilo postajališča res ne obišče; vzrok (preusmeritev, ukinitev) ni znan; obvestilo ni najdeno. Pravilo ga odpre (14 od 15 parov pri 250 m, 4 pri 400 m, mediana 402–409 m je na meji).
+* **Postojna SŠC** (`1128743`, trasa 977): 60 zanesljivih voženj, 1 prehod (26. 10.), mediana 290 m. OSM „Šolski center“ 7 m od koordinate; vozilo gre po glavni ulici (Knjižnica 105, Primorka 117, Zdravstveni dom 160 m od točke vozila) in v ulico s šolo ne zavije. Verjeten pravi „ne ustavi“ za to traso; en prehod 26. 10. (2 v vseh 90 vožnjah) pravilo zapre.
+* **Prežihova ulica** (Murska Sobota, `1122443`): 17 voženj, 0 prehodov (23 voženj vseh tras), 144 m; vozilo je na trasi (4 m), postajališče tudi (5 m): obide ~144 m dolg odcep. OSM „1 ~ Prežihova ulica“ 14 m od koordinate; 53 % voženj ≤10 km/h. 100–250 m = odmik: pravilo ga **ne** odpre.
+* **Orešje/Bizeljsko**: glej zgoraj, ni dokaza (lega). **P18**: rob vožnje, ne obvoz.
+* **Ljubljanska – Focheva** (G2): 130 in 127 zanesljivih voženj, 315 in 328 m, hitrost ob točki ≤10 km/h pri 83 in 94 %: vozila stojijo na nadomestnem postajališču Betnavska – Focheva. Potrjeno z Večerom 24. 9. 2026.
+
+### Pravilo na vseh dnevih (`sim.py`, `oznaci.py`)
+
+Dokaz = obkrožena vožnja (prehod pred in za postankom), brez luknje, vrzel ≤40 s, najbližja točka `dmin`. **Odpre:** vsaj N zaporednih dokazov brez prehoda, vsi `dmin ≥ DMIN`, med prvim in zadnjim vsaj SPAN. **Zapre:** prvi prehod pri paru, ali dokaz z `dmin < DMIN`. **Pozabi:** zadnji dokaz starejši od 7 dni. Isti prag za vse prevoznike.
+
+Oznake odprtih parov (neodvisne od leg): **pravi** = koordinata potrjena (OSM postajališče istega imena v 60 m ALI druge trase istega `stop_id` obiščejo ≥20 % obkroženih voženj) in ob poti vozila ni postajališča istega imena; **napačen** = istoimensko postajališče ob poti vozila, koordinata ni potrjena; **dvoumen** = oboje (vozilo ustavi pri istoimenskem postajališču drugje); **neznan** = koordinata ni potrjena z ničimer. Kalibracija OSM: pri postankih, ki jih vozila obiščejo (kontrola, 600 parov), je 66 % (1119), 85 % (1123) postajališč z OSM v 60 m, a samo 19 % in 44 % z istim imenom; zato je „neznan“ tudi nepopolnost OSM, ne le sum. Pri 1119 je med kandidati samo 22 % koordinat z OSM v 60 m (kontrola 66 %): tu so zero-prehodi pogosteje napaka koordinate kot obvoz.
+
+| N | DMIN | SPAN | parov (stop_id) | pravi | napačen | dvoumen | neznan | odprtih 29. 10. | pozneje zaprtih s prehodom |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3 | 250 | 0 | 161 (96) | 91 | 4 | 5 | 61 | 132 | 46 |
+| 5 | 250 | 2 h | 149 (89) | 83 | 3 | 5 | 58 | 124 | 39 |
+| **10** | **250** | **24 h** | **111** | **61** | **2** | **2** | **46** | **97** | **22** |
+| 10 | 250 | 72 h | 109 (68) | 59 | 2 | 2 | 46 | 90 | 22 |
+| 5 | 400 | 2 h | 113 (69) | 60 | 2 | 3 | 48 | 85 | 35 |
+| 10 | 400 | 72 h | 84 (57) | 45 | 2 | 2 | 35 | 66 | 21 |
+| 20 | 400 | 72 h | 32 (29) | 14 | 2 | 1 | 15 | 21 | 11 |
+| 5 | 150 | 2 h | 228 (110) | 133 | 6 | 5 | 84 | 192 | 44 |
+
+* DMIN 400 ali več **zgreši Focheva** (315 in 328 m): zato 250. DMIN 150 doda 79 parov in 3 napačne.
+* Napačna sta dva (Ponikve/Dobrepolju, 1123): zamenjani istoimenski postajališči (vozilo ustavi 746 m stran pri drugem „Ponikve/Dobrepolju“). „Ne ustavi tu“ drži, potnik pa rabi napotek. Nobenega primera, kjer bi vozilo ustavilo pri samem postajališču, pravilo pa reče „ne ustavi“, ni v 61 + 2 + 2 označenih. To **ni** dokaz, da jih ni med 46 neznanimi.
+* Koliko dni: z N ≥ 10 in SPAN 24 h se par odpre v prvem dnevu s 24 h dokazov; Focheva (G2) 28. 10. ob 12.16 in 12.28 (dokazi od 27. 10. 12.15). Marprom ima v tej meritvi samo 27.–29. 10.: po zamenjavi zipa 27. 10. se `trip_id` starih voženj ne ujemajo (`if t not in tr`), zato `shape_id` ne drži zgodovine čez uvoz. Kjer ključ ni (`shape_id`, `stop_id`), ampak (prevoznik, linija, `stop_id`), tega problema ni.
+* Kdaj se zapre: 22 od 111 parov je zaprl prehod, mediana 166 h (7 dni) po odprtju, najhitreje 49 h. Vzorec: ena vožnja v zadnjih dneh pri postajališču, kjer je vsa ostala daleč (Boldraž K 26. in 28. 10. po 1, drugače 2 km). Ni raziskano, ali je to druga vožnja pod napačnim pripisom ali pravi prehod.
+* **G3 Meljska 29. 10.** (`mp-7478`, 38 voženj; 27. 10. 23/24, 28. 10. 38/38, 29. 10. **5/38**, 30. 10. 14/15 prehodov): na dan zapore je 31 od 38 voženj zanesljivo brez prehoda z dmin 343–397 m, prehodi so šele od 18.9 h. Pravilo (N=5, 250 m, 2 h) odpre Kraljeviča Marka 7.27 in Meljska – trgovina 7.36 in zapre ob prvem prehodu 18.51 / 18.53 (11 h 24 min). **Prlek ujame ne**: obvoz gre mimo na 131–141 m. S strogim pravilom (24 h) **ne ujame nobenega** od treh, ker je zapora enodnevna. Oboje je po zasnovi.
+* **Zapora Vrbanske od 3. 11.** (P7) še ni nastopila: ni preizkušena. **LPP in Marprom pred 27. 10.** nimata preizkusa.
+
+### Predlog pravila `ne_ustavi` iz leg
+
+1. **Dokaz**: obkrožena vožnja brez luknje (vrzel ≤40 s), `dmin` vsaj 250 m. Prehod ali dokaz pod 250 m pretrga niz.
+2. **Odpre** (trditev „zadnje vožnje tu niso ustavile“): vsaj **10** zaporednih dokazov, med prvim in zadnjim vsaj **24 h**.
+3. **Zapre**: prvi prehod pri tem paru; stanje se pozabi 7 dni po zadnjem dokazu.
+4. **Ključ**: (prevoznik, linija, smer, `stop_id`), ne `shape_id`.
+5. **Brez posebnih pogojev po prevozniku.** Pri 1119 je delež neznanih večji (31 od 48, pri 1123 15 od 61); to je lastnost podatkov (OSM, koordinate), ne pogoj v kodi.
+6. **Krajše opozorilo** (N=5, SPAN 2 h) je primerno samo kot besedilo „danes tu ni ustavljalo“ (G3), ne kot trditev: 149 parov, 39 pozneje zaprtih, 3 napačni.
+
+Na izmerjenih primerih (111 parov): **pravi 61 (55 %), napačna 2 (2 %), dvoumna 2 (2 %), neznanih 46 (41 %)**.
+
+### Česa pravilo ne pokrije
+
+* **Mestni LPP**: v `gps_prehod` ga ni (1118 samo 30 parov); zanj ostajata RT in zaslonski vir.
+* Enodnevne in kratke zapore (G3): samo z N = 5 / 2 h, z zamudo ≥2 h in brez Prlek.
+* Postajališča z luknjami v sledi (Orešje/Bizeljsko), robni postanki (2., predzadnji, zadnji).
+* Odmik 100–250 m (Naklo, Prežihova): pravilo namenoma molči, pravi vzrok je vzporedna cesta ali odcep.
+* Zunanje potrditve imam za Focheva (Večer) in za Naklo (OSM geometrija); pri ostalih je dokaz OSM + lega; obvestila prevoznikov v dveh iskanjih (Ormož, Naklo) niso nič našla, za Postojno, Orešje in Mladinska – Vrbanska iskanja niso bila narejena.
+* `dmin` temelji na tetivi med legami (20 s, 10 s pri Marpromu); pri odmiku pod ~50 m je napaka tetive primerljiva s prostorom ukrepa.
