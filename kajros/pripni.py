@@ -50,7 +50,7 @@ import requests
 from . import config, geo
 
 #: Povečaj, kadar se spremeni postopek: vse trase se pripnejo znova.
-RAZLICICA = 1
+RAZLICICA = 2
 
 #: Kos, ki se od surove trase kjerkoli oddalji za več, ostane surov. Surove
 #: trase so od OSM v p99 15 m (IJPP) oziroma 7,5 m (SŽ v Ljubljani); 35 m je
@@ -75,10 +75,10 @@ POENOSTAVI = 2e-5
 #: Zapis v predpomnilniku, ki ga 30 dni ni rabila nobena trasa, gre.
 HRANI_S = 30 * 86400
 
-#: Povečaj, kadar se spremeni `do_postaj`: trase se pripnejo znova, a samo
-#: tiste, ki jih konca zadenejo, gredo na OSRM -- druge so v predpomnilniku
-#: pod nespremenjenim ključem.
-KONCI_RAZLICICA = 1
+#: Povečaj, kadar se spremeni `do_postaj` ali izbor vožnje, ki da konca:
+#: trase se pripnejo znova, a samo tiste, ki jih konca zadenejo, gredo na
+#: OSRM -- druge so v predpomnilniku pod nespremenjenim ključem.
+KONCI_RAZLICICA = 2
 
 #: Trasa, ki se začne ali konča dlje od tega od prvega oziroma zadnjega
 #: postanka svoje vožnje, se na postanku odreže ali do njega podaljša.
@@ -484,10 +484,15 @@ def pripni(conn: sqlite3.Connection, log=print) -> dict:
 
     zdaj = int(time.time())
     t0 = time.monotonic()
+    # Konca trase da najdaljša vožnja: skrajšana vozi samo del iste trase in bi
+    # jo `do_postaj` odrezal na svojem postanku. Prej poljubna vožnja: 59 tras
+    # brez začetka ali konca do 3 km, LPP 18 (obvoz) brez prvih 12 od 30
+    # postankov, ker je bila izbrana ta, ki začne pri Slovenija avtu (30. 10. 2026).
     delo = conn.execute(
         "SELECT sh.shape_id, sh.points, t.mode, t.agency, t.trip_id "
-        "FROM shape sh JOIN trip t ON t.trip_id = "
-        "     (SELECT trip_id FROM trip WHERE shape_id = sh.shape_id LIMIT 1) "
+        "FROM shape sh JOIN (SELECT shape_id, trip_id, mode, agency, "
+        "                           MAX(COALESCE(last_seq - first_seq, -1)) "
+        "                    FROM trip GROUP BY shape_id) t USING (shape_id) "
         "WHERE sh.osm IS NULL AND sh.shape_id NOT LIKE ?", (IZ_POSTAJALISC + "%",)).fetchall()
     for i, (shape_id, points, mode, agency, trip_id) in enumerate(delo):
         profil = "tir" if mode == "vlak" else "avtobus"

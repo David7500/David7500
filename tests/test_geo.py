@@ -133,6 +133,12 @@ def test_simplify_ne_spremeni_kratkega_seznama():
     assert geo.simplify([LJ]) == [LJ]
 
 
+def test_simplify_ne_stisne_krozne_trase():
+    """Ptuj AP - Grajenščak - Ptuj AP: konca sta ista točka, črta pa je."""
+    tocke = [[46.0, 14.0], [46.0, 14.1], [46.1, 14.1], [46.1, 14.0], [46.0, 14.0]]
+    assert geo.simplify(tocke, eps=1e-4) == tocke
+
+
 def test_simplify_ohrani_krajisci():
     """Karkoli vrže ven, prve in zadnje točke ne sme -- sicer trasa odplava."""
     tocke = [(46.0 + math.sin(i / 3) / 200, 14.0 + i / 100) for i in range(60)]

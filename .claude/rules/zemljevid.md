@@ -44,7 +44,7 @@ paths:
 * Črte na tleh pod stavbami (`naTleh` = `stavbe-3d`), pike in vozila nad.
 * Naša proga od Leafletovega z16 bledi, pri z17,5 izgine (podlaga riše vsak tir).
 * **Klik na vozilo pobarva pot** (`izberi` → `drawStops` → `narisiTraso`): naprej **`IZBRANA_INK` `#f0934f`**, prevoženo `ZA_INK`. Trase vseh (`k-vse-trase`) v barvi prevoznika, ob izbiri bledijo na 0,15 (proti AP MS ΔE 3,3 — loči širina in bledenje). Vozilo > 300 m od trase ima vso pot pred sabo. Krožna linija: odsek najbližji prejšnji legi. Pot gre s kartico. Postaja z več vlaki: pot ob dotiku kartice (`data-trip`).
-* **Trasa od prvega do zadnjega postanka** (`pripni.do_postaj`): odreže ali podaljša po cesti (OSRM `/route`); začetek > 150 m 165 → 27.
+* **Trasa od prvega do zadnjega postanka** (`pripni.do_postaj`): odreže ali podaljša po cesti (OSRM `/route`); začetek > 150 m 165 → 27. **Konca da najdaljša vožnja trase**: skrajšana bi traso odrezala na svojem postanku (30. 10. 2026: 59 tras, LPP 18 brez 12 od 30 postankov).
 * **Vožnja brez trase = pot po cesti skozi postajališča** (`pripni.brez_trase`; LPP devet linij, 10 455 od 60 526 voženj): 97 % dolžine v 20 m od prevoznikove.
 * **Kartica vozila prosojna, vleka glave premakne, – skrči** (`omogociPremik`): poslušalci na zunanjem elementu (MapLibre `setHTML` ustvari vsebino znova), premik v `--px`/`--py`.
 * **Avtobus na cesti** (`cesta` v `/api/vehicles`, `pripni.na_cesto`): na pripeti trasi, 1,9 m desno, kadar GPS ≤ 15 m in smer v 60° (69,6 % vozečih). **Ni ocena lege** — ista meritev, mediana 4,2 m; `lat`/`lon` ostaneta.

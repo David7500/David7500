@@ -61,10 +61,13 @@ def simplify(points, eps: float = 1e-4):
     y1, x1 = points[0]
     y2, x2 = points[-1]
     dmax, idx = 0.0, 0
-    den = math.hypot(x2 - x1, y2 - y1) or 1.0
+    den = math.hypot(x2 - x1, y2 - y1)
     for i in range(1, len(points) - 1):
         y, x = points[i]
-        d = abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / den
+        # Krožna trasa: konca sta ista točka in premice skozi njiju ni. Prej je
+        # bila razdalja vedno 0 in od 86 tras sta ostali dve enaki točki.
+        d = (abs((x2 - x1) * (y1 - y) - (x1 - x) * (y2 - y1)) / den
+             if den else math.hypot(x - x1, y - y1))
         if d > dmax:
             dmax, idx = d, i
     if dmax > eps:

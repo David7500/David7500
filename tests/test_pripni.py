@@ -243,6 +243,31 @@ def test_pripni_doda_pot_do_postaje(monkeypatch):
     assert poti == []
 
 
+def test_skrajsana_voznja_ne_odreze_trase(monkeypatch):
+    """Vožnja, ki začne sredi trase, si jo deli z dolgo. Konca da dolga, sicer
+    je trasa ostala brez začetka (LPP 18, obvoz, 30. 10. 2026)."""
+    c = _baza()
+    c.execute("UPDATE trip SET first_seq = 1, last_seq = 2")
+    c.execute("UPDATE shape SET points = ?",
+              (json.dumps([[[46.05, 14.500 + i * 0.002] for i in range(11)]]),))
+    c.execute("INSERT INTO station(stop_id, name, lat, lon) VALUES('P3', 'Sredina', 46.05, 14.510)")
+    c.execute("UPDATE station SET lon = 14.500 WHERE stop_id = 'P1'")
+    c.execute("UPDATE station SET lon = 14.520 WHERE stop_id = 'P2'")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network, "
+              "shape_id, first_seq, last_seq) "
+              "SELECT 'T2', route_id, train_no, service_id, mode, agency, network, shape_id, 1, 3 "
+              "FROM trip WHERE trip_id = 'T1'")
+    for trip, seq, stop in (("T1", 1, "P3"), ("T1", 2, "P2"),
+                            ("T2", 1, "P1"), ("T2", 2, "P3"), ("T2", 3, "P2")):
+        c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                  "VALUES(?, ?, ?, 0, 0)", (trip, seq, stop))
+    _osrm(monkeypatch, [])
+    pripni.pripni(c, log=lambda *_: None)
+    osm = json.loads(c.execute("SELECT osm FROM shape").fetchone()[0])
+    assert osm[0][0][1] == 14.500
+    assert osm[0][-1][1] == 14.520
+
+
 def test_voznja_brez_trase_dobi_pot_skozi_postajalisca(monkeypatch):
     """LPP za devet linij trase nima; dobijo pot po cesti, enkrat na zaporedje
     postajališč, in drugič iz predpomnilnika."""
