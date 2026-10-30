@@ -3102,6 +3102,8 @@ Sporočilo potnika (29. 10. ob 11:30): pri LPP 8 se lega premika v eno smer, oce
 * Uvoz smeri trase ni preverjal. `tuje_trase` šteje vožnje s prvim postankom več kot 2 km od začetka trase, zavrne pa šele prevoznika, pri katerem je takih več kot polovica.
 * **Drugi** (29. 10. zvečer): brezavta.si (OTP društva DERP) ima iste podatke LPP (isti id-ji), a OTP obrnjeno traso zavrže in nariše ravne črte med postajališči (8 proti Gameljnam 40 točk za 40 postankov, 28 in 18L 13 za 13): smer prava, pot čez hiše. LPP-jev API (`data.lpp.si/api/route/routes?shape=1`) ima isto obrnjeno geometrijo — napaka je v LPP-jevih osnovnih podatkih, zanesljivejšega vira ni.
 * **Popravek** (`gtfs._obrni_trase`, ob uvozu): na lokalni bazi (3 456 tras, 944 925 vrstic voznega reda) obrne natanko te tri, v 0,19 s. Pripenjanje po vsebini jih ob naslednjem uvozu pripne znova.
+* **Preverjeno 30. 10.**: uvoz na arwenu ob 04:24 `tras_obrnjenih: 3`; osem pregledanih tras linij 8, 28 in 18L (od 11), surovih in pripetih, ima postanke po vrsti (0 parov nazaj). Pet živih vozil linije 8 ob 10:54 se ujema z GPS (razlika do 26°).
+* **Drug vzrok z istim videzom, ni popravljen**: `common.projekcijaNaTraso` izbere najbližji odsek ne glede na smer. Kjer trasa isto cesto prevozi v obe smeri, lega pade na nasprotni krak in ocena drsi nazaj. Med 80 vozečimi vozili LPP s smerjo in lego v 40 m od trase (30. 10. ob 10:58) so bila 3 proti trasi: 52 in 25 z drugim krakom v pravi smeri, 9 brez njega (verjetno vozilo, pripisano napačni vožnji, ni preverjeno). 178 od 350 tras LPP ima več kot 200 m takih odsekov (središči do 40 m narazen); največ 84, 44, 60.
 
 ## Avtobus po končani vožnji: gleda stran od poti (30. 10. 2026)
 
@@ -3120,3 +3122,19 @@ Tretji vzrok z istim videzom kot obrnjena trasa. LPP 9 (`LJ LPP-812`, vožnja 10
 **Vzorec v živo** (razvojna baza, 30. 10. 11.14–11.59, 66 repov, pravilo simulirano): zavrnitev pri 6, v nobenem se vozilo končni ni bližalo. LPP 9 trije: surovo +1398, +1539, +832 s, po pravilu +590, +733, +42 s, vozilo na koncu 1 227, 1 302, 252 m od končne. Linija 6 dva (82→103 m, 128→186 m), linija 24 eden (stoji 13 m od končne). Neodvisne resnice o prihodu ni: da je zavrnjena rast lažna, kaže samo GPS.
 
 Zapisanih vrednosti v `run` in `stat_dan` popravek ne spremeni: statistika LPP 9 proti Barju ostane do tega dne previsoka.
+
+## Marprom: obvoz G2, vozila brez vožnje, vozni red 2027 (30. 10. 2026)
+
+Povod: posnetek zemljevida, G2 (`mp-103540`, vozilo 517) ob 11:10 stoji do 380 m od oranžne črte.
+
+**Obvoz je pravi, črta ni.** Ljubljanska ulica je od 28. 9. do konca 2026 popolnoma zaprta od Ulice Pariške komune do Rapočeve (Večer, 24. 9. 2026): G2 vozi po Betnavski in Metelkovi, postajališči „Ljubljanska – Focheva“ ne delujeta, nadomestni „Betnavska – Focheva“ (P11). Lege se ujemajo: 28.–29. 10. je G2 na Ljubljanska – Focheva 0 prehodov od 214 voženj, na sosednjih 48–50 od ~50 na smer. Zip (izvoz 25. 9.) in Marpromovi prihodi (`GetArrivalsForStopPoint` 168, 169) tam G2 še vedno kažeta, zato ga kažemo tudi mi.
+
+**Prehodi po postajališču zaznajo obvoz.** G3 smer `mp-7478` 29. 10.: Kraljeviča Marka, Meljska – trgovina, Prlek po 5 od 37, Marprom je za ta dan objavil zaporo Meljske. Čez 412 parov linija–postajališče (28.–29. 10.) sta pod 30 % samo dva: G2 Focheva in P18 Mladinska – Vrbanska (0 od 63, ni razčiščeno).
+
+**Vozila brez vožnje: voznih redov ne manjka, manjka pripis.** V 14 vzorcih na 30 s (30. 10., 11:20–11:27) 45 od 460 lege vozil brez vožnje (G1 16 od 31, G6 14 od 56, P18 9 od 37, G5 6 od 28). Pri 34 od 45 ima prihod za to linijo na naslednjem postajališču drug avtobus, navadno mrtev (`Predicted: 1`, G1 bus 500 z `DelayMin` 33, nato 46), zato živi za njim prihoda nima (`ni_prihoda`). Pri 11 od 45 ima vozilo prihod, med njimi P18: dva avtobusa z isto uro. Vzorec je kratek. Preteklih vozil brez vožnje ne hranimo, zato ni znano, koliko od 110 voženj brez lege je res vozilo (28. 10. 1 012, 29. 10. 1 026 od 1 136 z lego; G5 22 oz. 35 od 75).
+
+**Zip je cel do konca leta.** 456 od 456 postajališč z urami, 19 od 19 linij `GetLines`, 60 od 60 današnjih variant v API-ju. V API-ju tri variante P10 (7597, 7599, 7600), ki jih zip nima; v vzorcu nanje ni bilo vozila. 195 od 651 postajališč API-ja ni v zipu, a nobena linija `GetLines` ni brez voženj.
+
+**Od 1. 1. 2027 delavnikov ni v nobenem viru.** Kopija: `calendar_dates` storitvama 8860 in 8861 odvzame vse delavnike do 24. 6. 2027, ostaneta sobota in nedelja do 19. oz. 20. 6. Uradni zip: delavniki do 31. 8. 2026, konec tedna do 27. 12. 2026. `meta.marprom_vozni_red.do` zato kaže 2027-06-20 in zdravje ne opozori na rok. Od 29. 12. okno 7 dni nima več dovolj voženj (dva prazna dneva), zato uvoz obdrži zadnji sprejeti zip, torej isto kopijo. Prvi običajni delavnik brez voženj: ponedeljek, 4. 1. 2027.
+
+**G3 nima črte.** Trase `mp-7439`–`7442`, `7478`, `7479` imajo 2 točki (krožne, `geo.simplify`): 78 voženj na delavnik. Popravek v 3c2a25e, velja po uvozu. Splošni načrt: `docs/OPAZOVANO.md`.
