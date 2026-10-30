@@ -142,3 +142,123 @@
   color: var(--ink); border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
+
+/* ---------- namizje ----------
+ *
+ * Skupni pas kot `/statistika`, da rob vsebine pri prehodu med stranmi ostane
+ * na mestu. Glavni del levo, povezave naprej v stranski plošči (M3 „supporting
+ * pane“). Isti kosi kot na telefonu, v obliki povezane skupine kot Moje poti
+ * in tabla v iskalniku: tonske vrstice, razmik 3, okrogli so vogali skupine.
+ *
+ * Vrste `auto auto 1fr`: plošča je čez vse tri, njen presežek vzame zadnja. Pri
+ * samih `auto` bi višja plošča razmaknila uvod, meritev in odhode (luknje). */
+@media (min-width: 900px) {
+  .pristanek { max-width: 1240px; }
+  .pristanek h2 { margin-top: 36px; }
+
+  .pr-stolpci {
+    display: grid; column-gap: 32px;
+    grid-template-columns: minmax(0, 1fr) clamp(290px, 31%, 380px);
+    grid-template-rows: auto auto 1fr;
+  }
+  .pr-uvod, .pr-meritev, .pr-odhodi { grid-column: 1; }
+  .pr-uvod .obvestila { margin-top: 12px; }
+  /* Pri dolgi tabli ostane plošča na zaslonu. `overflow-x: hidden` iz base.css
+     naredi iz `body` drsni vsebnik, ki sam ne drsi, in `sticky` ne prime. */
+  html:has(.pristanek), body:has(.pristanek) { overflow-x: clip; }
+  .pr-naprej { grid-column: 2; grid-row: 1 / -1; align-self: start; position: sticky; top: 20px; }
+  /* Naslov plošče na osnovni črti `h1`: rob h1 28 + 0,95 njegove pisave - 20,5
+     (osnovna črta tega naslova); pri 1850 px izmerjeno 174 proti 174. */
+  .pr-naprej h2, .pr-stolpci:not(:has(.pr-naprej)) .pr-meritev h2 {
+    margin-top: calc(7.5px + .95 * clamp(30px, 3.4vw, 36px));
+  }
+
+  /* Povezava k iskanju v vrsti z naslovom tabele: spodaj je ob dolgi tabli pod
+     robom zaslona, v HTML pa ostane za tabelo. */
+  .pr-odhodi { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; }
+  .pr-odhodi > * { grid-column: 1 / -1; }
+  .pr-odhodi > h2 { grid-column: 1; align-self: baseline; }
+  .pr-odhodi > p:last-child { grid-column: 2; grid-row: 1; align-self: baseline; margin: 0; font-size: 15px; }
+  /* Nič v naslednjih treh urah: to pove že uvod, naslov bi visel nad praznim. */
+  .pr-odhodi:not(:has(.odhodi, .smeri)) > h2 { display: none; }
+  .pr-odhodi:not(:has(.odhodi, .smeri)) > p:last-child { grid-column: 1 / -1; margin-top: 20px; }
+
+  /* Mestno postajališče brez povezav naprej: stran plošče ne izgubi, vanjo gre
+     meritev. Tabla čez ves pas (1196 px) bi se težko brala od ure do zamude. */
+  .pr-stolpci:not(:has(.pr-naprej)) { grid-template-rows: auto 1fr; }
+  .pr-stolpci:not(:has(.pr-naprej)) .pr-meritev {
+    grid-column: 2; grid-row: 1 / -1; align-self: start; position: sticky; top: 20px;
+  }
+  .pr-stolpci:not(:has(.pr-naprej)) .stevila { grid-template-columns: minmax(0, 1fr); }
+  .pr-stolpci:not(:has(.pr-naprej, .pr-meritev)) { grid-template-columns: minmax(0, 1fr); }
+
+  /* Skupina: notranji vogali 8, zunanje zaokroži ovoj. */
+  .stevila {
+    gap: 3px; margin: 14px 0 12px; background: none; border: 0; border-radius: var(--r-lg);
+  }
+  .stevilo { padding: 18px 20px 16px; border-radius: var(--r-sm); background: var(--m-visoka); }
+  /* Pri 900 px je okvir širok 179 px: „+10 min“ mora ostati v eni vrsti. */
+  .stevilo b { font-size: clamp(24px, 2.7vw, 34px); }
+  .stevilo span { margin-top: 8px; font-size: 14px; color: var(--ink-dim); }
+  /* Pod okvirjem je opomba k njemu: rob 30 iz `besedilo.css` je za konec strani. */
+  .stevila + .drobno, .odhodi + .drobno { margin: 12px 0 0; }
+
+  /* Tabla je tabela zaradi iskalnika in bralnika, oko pa vidi vrstice table. */
+  .odhodi { border-collapse: separate; border-spacing: 0 3px; margin: 10px 0 8px; }
+  .odhodi th {
+    padding: 0 clamp(8px, 1vw, 14px) 5px; border: 0;
+    font: 500 14px/1.2 var(--sans); color: var(--ink-mute);
+  }
+  .odhodi th.zam { font-family: var(--sans); }
+  .odhodi td {
+    padding: 13px clamp(8px, 1vw, 14px); border: 0; background: var(--m-visoka); font-size: 15px;
+  }
+  .odhodi th:first-child, .odhodi td:first-child { padding-left: 20px; }
+  .odhodi th:last-child, .odhodi td:last-child { padding-right: 20px; }
+  .odhodi td:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+  .odhodi td:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+  .odhodi tbody tr:first-child td:first-child { border-top-left-radius: var(--r-lg); }
+  .odhodi tbody tr:first-child td:last-child { border-top-right-radius: var(--r-lg); }
+  .odhodi tbody tr:last-child td:first-child { border-bottom-left-radius: var(--r-lg); }
+  .odhodi tbody tr:last-child td:last-child { border-bottom-right-radius: var(--r-lg); }
+  /* Ure so par in vrsta se bere po njiju: ozka stolpca, prostor dobi ime. */
+  .odhodi .t { width: 1%; font-size: 16px; }
+  /* Vozni red ob uri, ne nad njo: tu je prostora dovolj, vrstice ostanejo enako
+     visoke, ura, ki velja, pa poravnana v stolpcu, kot na tabli v iskalniku. */
+  .odhodi .t-par { display: inline-flex; flex-direction: row-reverse; align-items: baseline; gap: 10px; }
+  .odhodi .vozni-red { font-size: 13px; color: var(--ink-mute); }
+  .odhodi .zam { font-size: 14.5px; }
+  .odhodi .obicajno { color: var(--ink-mute); }
+  .odhodi a { display: block; }
+
+  .pristanek .povezave {
+    display: grid; gap: 3px; margin: 12px 0 0; padding: 0; border-radius: var(--r-lg); overflow: hidden;
+  }
+  .povezave a {
+    align-items: baseline; padding: 12px 18px; border: 0; border-radius: var(--r-sm);
+    background: var(--m-visoka); font-size: 15px;
+  }
+  .povezave a:focus-visible { outline-offset: -2px; }
+  .povezave .drobec { flex: none; font-size: 13px; color: var(--ink-dim); }
+  @media (hover: hover) { .povezave a:hover { background: var(--m-najvisja); } }
+
+  /* Kazalo: seznama sta otroka `main` (v plošči nista). Ena tonska površina čez
+     vse stolpce: krajši zadnji stolpec na njej ni luknja. */
+  .pristanek > .povezave {
+    display: block; columns: 3 300px; column-gap: 32px; padding: 8px;
+    border-radius: var(--r-lg); background: var(--m-visoka);
+  }
+  .pristanek > .povezave li { break-inside: avoid; }
+  .pristanek > .povezave a { padding: 10px 12px; }
+
+  .pristanek .kazalo {
+    columns: 5 170px; column-gap: 28px; margin: 12px 0 0; padding: 20px 20px 14px;
+    border-radius: var(--r-lg); background: var(--m-visoka);
+  }
+  .kazalo li { margin-bottom: 9px; }
+  .kazalo a { font-size: 15px; }
+
+  .smeri { gap: 8px; margin: 12px 0 6px; }
+  .smeri-label { font-size: 14px; }
+  .smeri a { padding: 8px 14px; font-size: 14px; }
+}

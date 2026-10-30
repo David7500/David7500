@@ -442,20 +442,74 @@ body.ima-karto .ov-karta-odst {
 .stop-sev { font: 600 11px/1 var(--sans); }
 
 /* ---------- namizje: dva stolpca ----------
- * Levo, kar velja zdaj (lepljivo), desno postanki. Flex, ne grid: seznam je
- * visok in bi vrstice mreže raztegnil. */
-@media (min-width: 1000px) {
-  /* Glava v isti širini kot stolpca (420 + 40 + 560 + rob), puščica nad levim. */
-  .okno .topbar.ov-glava { max-width: 1068px; margin: 0 auto; padding: 10px 12px 0; }
-  .ov-telo {
-    display: flex; align-items: flex-start; gap: 40px;
-    max-width: 1068px; padding: 16px 24px var(--orodna-prostor);
+ * Levo, kar velja zdaj (lepljivo), desno postanki, v skupnem pasu kot
+ * `/statistika` in iskalnik: rob vsebine in ⋮ se pri prehodu med stranmi ne
+ * premakneta. Stolpca enako široka: desni ostane blizu potrjenih 560 px, levi
+ * dobi več zemljevida. Flex, ne grid: seznam je visok in bi vrstice mreže
+ * raztegnil. */
+@media (min-width: 900px) {
+  /* Glava ni več lepljiva (to je levi stolpec) in ne sme čez rob: `.vec-gumb` ima
+     odmik -8 px, telefonski odmik glave 4 px je dal preliv 904 > 900. */
+  .okno .topbar.ov-glava {
+    position: static; box-sizing: border-box; width: 100%; max-width: 1240px;
+    margin: 0 auto; padding: 4px 22px 0; align-items: flex-start;
   }
-  .ov-zdaj { position: sticky; top: 12px; flex: none; width: 420px; }
+  /* Puščica, prva vrstica naslova in ⋮ v črti y = 28 kot glava drugih strani. */
+  .ov-naslov { margin-top: 9px; }
+  /* Konica puščice na robu pasu: 48 px veliko polje ima ikono na sredini. */
+  .okno .back-link { margin-left: -18px; }
+  .ov-telo {
+    display: flex; align-items: flex-start; gap: 32px;
+    max-width: 1240px; padding: 15px 22px var(--orodna-prostor);
+  }
+  /* Odprte ovire so lahko višje od okna: lepljiv stolpec bi njihov konec skril
+     do konca strani, spodnji del pa orodna vrstica. Zato drsi sam zase; 84 px
+     je vrh stolpca pod glavo, preden se stran premakne. Drsenje reže tudi
+     vodoravno: odmik 16 px pusti prostor vozilu na koncu traku (sega čez rob). */
+  .ov-zdaj {
+    position: sticky; top: 12px; flex: 1 1 0; min-width: 0; margin: 0 -16px; padding: 0 16px;
+    max-height: calc(100vh - 84px - var(--orodna-prostor)); overflow-y: auto; scrollbar-width: thin;
+  }
   /* Lepljiv stolpec je svoj stacking context: z-index razširjenega zemljevida
      ne seže iz njega in pike postankov desno (z-index 1) so ležale čez. */
   .ov-zdaj:has(.run-map-wrap.is-max) { z-index: 1200; }
-  .ov-pot { flex: 1 1 auto; min-width: 0; max-width: 560px; margin-top: 6px; }
+  .ov-pot { flex: 1 1 0; min-width: 0; margin-top: 6px; }
+  /* Neznana vožnja: levo ni česa pokazati in stavek bi visel sredi strani. */
+  .ov-zdaj:has(#run-head:empty) { display: none; }
+  .ov-pot .empty-state { padding: 10px 0; font-size: 15px; color: var(--ink-dim); }
+  /* Čim višji, a svežina in dejanja pod njim (120 px) ostanejo nad orodno
+     vrstico; v ozkem stolpcu ne višji od širokega. */
+  .run-map { height: clamp(260px, min(calc(100vh - 84px - 120px - var(--orodna-prostor)), 44vw), 480px); }
+
+  /* Iste sestavine, stopnjo večje: telefonskih 10,5–12,5 px pri pogledu z
+     mize ni brati. Odštevanje in ura ostaneta najmočnejša na strani. */
+  .ov-ime { font-size: 26px; }
+  .ov-smer { font-size: 15px; }
+  .ov-znacka { font-size: 13px; }
+  .ov-znacka.je-bus { font-size: 14px; }
+  .ov-odst { width: 152px; height: 152px; }
+  .ov-odst-cez { font-size: 13px; }
+  .ov-odst-n { font-size: 60px; }
+  .ov-odst-e { font-size: 15px; }
+  .ov-odst-beseda { max-width: 116px; font-size: 25px; }
+  .ov-ko-n .ov-odst-n { font-size: 44px; }
+  .ov-kje { font-size: 14px; }
+  /* V stolpcu 412 px (900 px) je ime končne postaje odrezano; lomi se v dve vrsti. */
+  .ov-ko-kje { white-space: normal; }
+  .ov-kje b { font-size: 16px; }
+  .ov-ura-cas { font-size: 44px; }
+  .ov-razlika, .ov-cipi, .ov-vreme, .ov-vrsta { font-size: 13.5px; }
+  .ov-ko-ura, .ov-stanje, .ov-namig, .ov-dod, .ov-op { font-size: 14px; }
+  .ov-trak-imena { height: 40px; font-size: 14px; }
+  .okno .pomoc-gumb { font-size: 14px; }
+  .okno .alert-head, .ov-ovire-vse, .okno .alert-item, .okno .alert-desc { font-size: 14px; }
+  .okno .alert-meta { font-size: 12.5px; }
+  .ov-ovire-glava { font-size: 15px; }
+  .ov-p-naslov { font-size: 16px; }
+  .ov-prevozene, .ov-vozilo-kje { font-size: 14px; }
+  .ov-p-op, .ov-p-cas s { font-size: 13px; }
+  #run-timeline > .detail-foot { font-size: 13px; color: var(--ink-mute); }
+  .ov-pot .ticket-note { font-size: 13px; }
 }
 
 /* ---------- budilka ----------

@@ -243,3 +243,119 @@ a.d-pov-poslji { display: inline-flex; align-items: center; text-decoration: non
 
 /* Orodna vrstica na dnu (base.css) ne sme pokriti zadnje vrstice strani. */
 .domov { padding-bottom: var(--orodna-prostor); }
+
+/* ---------- namizje ----------
+ *
+ * Isti kosi kot na telefonu, razporejeni za širok zaslon: glavno podokno
+ * (naslov, iskanje, tvoje poti) in stransko (oblike, podpora), kot M3
+ * „supporting pane“. Stolpca sta neodvisna: Deli lego se v stranskem razpre
+ * brez luknje v glavnem. Pas in odmik kot `/statistika`, da rob vsebine pri
+ * prehodu med stranmi ostane na mestu. Razredi `.d-*` in `.bud-*` so samo tu;
+ * skupno z besedilnimi stranmi je na koncu bloka. */
+@media (min-width: 900px) {
+  .domov {
+    --d-naslov: clamp(32px, 3.2vw, 44px);
+    --d-oblika: clamp(88px, 8.1vw, 104px);
+    display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 32px;
+    max-width: 1240px; padding-left: 22px; padding-right: 22px;
+  }
+  /* Glava kot na vseh straneh (`.topbar`): višina 56, znak 30, ime 18 px; večji
+     znak s telefona bi pri prehodu poskočil. Razmik pod njo raste z višino okna,
+     ne z vsebino: kartice se naložijo pozneje in naslov ne sme poskočiti. */
+  .d-glava {
+    grid-column: 1 / -1; height: 56px; padding: 0; gap: 10px; font-size: 18px;
+    margin-bottom: clamp(8px, calc((100vh - 760px) / 2.2), 124px);
+  }
+  .d-glava > svg { width: 30px; height: 30px; }
+
+  .d-glavno { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-content: start; }
+  .d-glavno > * { margin: 0; }
+  .d-geslo {
+    margin: 0 0 4px; max-width: 24ch; text-wrap: balance;
+    font: 700 var(--d-naslov)/1.12 var(--sans); color: var(--ink);
+  }
+
+  .d-bud { grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; padding: 20px 20px 20px 24px; }
+  .bud-vrsta { grid-column: 1 / -1; }
+  .bud-ura { font-size: 46px; }
+  .bud-nad, .bud-vse { font-size: 14px; }
+  .bud-kaj { font-size: 16px; }
+  .bud-vse { align-self: end; }
+
+  .d-isci { height: 72px; gap: 16px; padding: 0 10px 0 26px; border-radius: 36px; }
+  .d-isci > svg { width: 26px; height: 26px; }
+  .d-isci-besedilo { font-size: 19px; }
+  .d-isci-gumb { width: 52px; height: 52px; }
+  @media (hover: hover) { .d-isci:hover, .d-pot:hover { background: var(--m-najvisja); } }
+
+  .d-moje { margin-top: 12px; }
+  .d-nasl { margin: 0 0 12px; font-size: 16px; }
+  .d-pot { align-content: start; padding: 16px 18px 16px 20px; }
+  .d-pot-glava { font-size: 16px; }
+  .d-pot-ura { font-size: 22px; }
+  .d-pot-o + .d-pot-o .d-pot-ura { font-size: 17px; }
+  /* Dolg cilj gre v novo vrsto, ne v ozek stolpec ob uri. */
+  .d-pot-o { flex-wrap: wrap; row-gap: 2px; }
+  .d-pot-zam, .d-pot-cez, .d-pot-kam, .d-pot-nic { font-size: 14px; }
+  .d-poti-prazno, .d-povabilo, .d-podpora { padding: 18px 20px; font-size: 15px; }
+  .d-pov-nasl { font-size: 16px; }
+  .d-pov-poslji, .d-pov-ne { font-size: 15px; }
+  @media (hover: hover) { .d-pov-poslji:hover, .bud-vse:hover { filter: brightness(1.2); } .d-pov-ne:hover, .d-pod-zapri:hover { color: var(--ink); } }
+
+  /* Stolpca sta poravnana: oblike zavzamejo višino naslova in iskanja, podpora
+     se začne v vrsti prve kartice levo (razmik 60 = do naslova „Moje poti“ 32
+     + naslov 28) in raste do dna levega stolpca. */
+  .d-stransko { display: flex; flex-direction: column; gap: 60px; }
+  .d-oblike {
+    margin: 0; align-content: center;
+    min-height: calc(2 * 1.12 * var(--d-naslov) + 24px + 72px);
+  }
+  .d-obl-slika, .d-obl-oblika { width: var(--d-oblika); height: var(--d-oblika); }
+  .d-obl-slika > svg:not(.d-obl-oblika) { width: 34px; height: 34px; }
+  .d-obl-ime { font-size: 15px; }
+  .d-obl-pod { font-size: 13px; }
+  @media (hover: hover) { .d-obl:hover .d-obl-oblika { filter: brightness(1.2); } }
+  /* Meja, da ob šestih poteh levo ne nastane prazna kartica; `min-content`,
+     da je meja ne stisne pod vsebino. Do 1200 px je namig levo v dveh
+     vrsticah, zato tu višja kot spodaj. */
+  .d-podpora {
+    display: flex; flex-direction: column; flex: 1 1 auto;
+    min-height: min-content; max-height: 252px; margin: 0;
+  }
+  .d-podpora .d-pov-gumbi { margin-top: auto; padding-top: 12px; }
+
+  /* Od 1200 px je kartica poti dovolj široka za uro, zamudo, cilj in „čez“ v
+     eni vrsti: poti v dveh stolpcih. Skupina ostane povezana: okrogli so vogali
+     skupine, ne prve in zadnje kartice. Liha zadnja gre čez vso vrsto, sicer
+     ostane luknja. */
+  @media (min-width: 1200px) {
+    .d-poti { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .d-pot:first-child:not(:last-child) { border-top-right-radius: 8px; }
+    .d-pot:nth-child(2) { border-top-right-radius: 24px; }
+    .d-pot:nth-child(even):last-child { border-bottom-left-radius: 8px; }
+    .d-pot:nth-child(odd):nth-last-child(2) { border-bottom-left-radius: 24px; }
+    .d-pot:nth-child(odd):last-child { grid-column: 1 / -1; }
+    .d-podpora { max-height: 210px; }
+  }
+
+  /* Skupno z besedilnimi, pristajalnimi in statistiko. Glava na istem mestu kot na
+     straneh aplikacije (znak y = 13, ⋮ y = 4, ista pisava): telefonskih 64 px nad
+     njo in Plex Mono sta se pri vsakem prehodu videla kot skok za 60 px. */
+  .home { padding-top: 4px; }
+  .home-brand { min-height: 48px; font: 600 18px/1 var(--sans); letter-spacing: -.01em; }
+
+  /* Napaka in brez omrežja nimata `.besedilo` (`/brez-omrezja` iz service workerja
+     ima samo ta slog), stolpec in pisava pa naj bosta ista; poti naprej kot
+     povezave na pristajalnih. */
+  .home:has(.napaka-koda) { max-width: 720px; }
+  .napaka-koda { margin-top: 28px; font-size: 64px; }
+  .home-lead { margin-top: 24px; font-size: 32px; max-width: 26ch; text-wrap: balance; }
+  .home-more { gap: 3px; border-radius: var(--r-lg); overflow: hidden; }
+  .more-link, .more-link:last-child {
+    padding: 14px 20px; border: 0; border-radius: var(--r-sm); background: var(--m-visoka);
+  }
+  .more-link:focus-visible { outline-offset: -2px; }
+  .more-link strong { font-size: 16px; }
+  .more-link span { font-size: 14.5px; color: var(--ink-dim); }
+  @media (hover: hover) { .more-link:hover { background: var(--m-najvisja); } }
+}

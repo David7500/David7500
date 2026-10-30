@@ -192,35 +192,67 @@
 @media (min-width: 900px) {
   .st { max-width: 1240px; }
   .st h1 { font-size: 36px; }
-  .st-glava { font-size: 15px; max-width: 80ch; }
+  .st-glava { font-size: 15px; max-width: 72ch; }
   .st-kartice { flex-flow: row wrap; gap: 20px; }
   .st-kartice > * { flex: 1 1 340px; min-width: 0; }
   .st-kartice > .st-dvojna { flex: 2 1 560px; }
   .st-kartice > .st-siroka, .st-kartice > .st-glava { flex-basis: 100%; }
-  .st-kartice > .st-glava { margin: 8px 0 -6px; }
+  /* Napis nad skupino kartic: z mejo širine je flex-basis 100 % padel na 80ch in
+     prva kartica je stala v isti vrsti, vmes luknja. */
+  .st-kartice > .st-glava { margin: 8px 0 -6px; max-width: none; }
   .st-k { padding: 22px 24px 20px; gap: 12px; }
-  .st-k h2 { font-size: 16px; }
+  .st-k h2 { font-size: 17px; }
+  /* Besedilo stopnjo višje kot na telefonu; kartica čez vso širino ga ne sme
+     raztegniti čez berljivo vrstico. */
+  .st-k p { font-size: 15px; max-width: 72ch; }
   .st-velika b { font-size: 52px; }
   .st-velika span { font-size: 15px; }
+  .st-vr, .st-par, .st-predlogi { font-size: 15px; }
+  .st-vr .ime { flex-basis: 136px; }
+  .st-vr .num { font-size: 14px; }
+  .st-par .h, .st-drobno, .st-seznam .drobno, .st-ploscice .drobno, .st-noga { font-size: 13px; }
+  .st-drobno { max-width: 72ch; }
+  .st-par .v { font-size: 15px; }
+  .st-noga { max-width: 72ch; }
   .st-stolpci, .st-dnevi { height: 80px; }
   .st-ure { height: 72px; }
   /* auto-fit: tri možnosti relacije zapolnijo vrsto, šest odsekov da 2 × 3. */
   .st-siroka .st-seznam { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .st-dvojna .st-seznam { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  /* Ploščice v vrsti mreže enako visoke, tudi kadar se ime sosedu prelomi. */
+  .st-siroka .st-seznam > li { display: grid; }
+  .st-siroka .st-seznam .vr, .st-siroka .st-seznam a { align-content: start; }
   .st-dva { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; }
   .st-dva > div { display: flex; flex-direction: column; gap: 10px; }
   .st-dva .st-seznam { display: flex; }
-  .st-odhodi { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  /* Ploščice v vrsti, ki se raztegne, kot kartice: mreža auto-fill je v zadnji
+     vrsti puščala luknjo (nedelja sama pri 900 px, 20:07 pri 1000). Odstotek
+     pri široki kartici razdeli sedem dni 4 + 3 in šest 4 + 2, ne 5 + 1. */
+  .st-ploscice { display: flex; flex-wrap: wrap; }
+  .st-ploscice li { flex: 1 1 max(140px, 23%); min-width: 0; }
+  .st-odhodi li { flex-basis: 190px; }
+  /* Vsi stolpci sivi (vsak dan manj voženj od praga): ostane višina telefona,
+     pri 80 px je bila to prazna lisa čez vso kartico. */
+  .st-stolpci:not(:has(i:not(.malo))) { height: 40px; }
   /* Besedilo v dveh stolpcih: kartica ni več flex, razmike dajo robovi. */
   .st-razlaga, .st-stolpca { display: block; columns: 2; column-gap: 48px; }
   .st-razlaga h2, .st-stolpca h2 { column-span: all; margin-bottom: 12px; }
   .st-razlaga p, .st-stolpca p { break-inside: avoid; margin-bottom: 12px; max-width: none; }
+  /* Velika številka začne drugi stolpec, nad njo samo razlaga. */
+  .st-stolpca .st-velika { break-before: column; break-inside: avoid; margin-bottom: 12px; }
   .st-predlogi { display: block; columns: 2; column-gap: 56px; }
   .st-predlogi li { break-inside: avoid; margin-bottom: 12px; max-width: none; }
   .st-siroka .st-postaje { display: block; columns: 2; column-gap: 48px; }
   .st-siroka .st-postaje .st-vr { break-inside: avoid; margin-bottom: 7px; }
   .st-siroka .st-postaje .st-vr .ime { flex-basis: 160px; }
   .st-tabela-ovoj { display: block; overflow-x: auto; }
+  /* Vrstica ostane ena: pri 900 px sta se ime ter trak s številko lomila v dve
+     vrsti, zdaj se lomijo le glave. Prvi in zadnji stolpec na robu pasu,
+     poravnana z naslovom. */
+  .st-tabela { font-size: 15px; }
+  .st-tabela th { font-size: 13px; }
+  .st-tabela td { font-size: 14px; white-space: nowrap; }
+  .st-tabela th:first-child, .st-tabela td:first-child { padding-left: 0; }
+  .st-tabela th:last-child, .st-tabela td:last-child { padding-right: 0; }
   .st-samo-telefon { display: none; }
 }
 

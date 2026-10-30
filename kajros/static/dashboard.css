@@ -670,3 +670,23 @@ body.brez-zemljevida .sidebar, body.brez-zemljevida .sheet-toggle { display: non
   color: #9aa3b0; font: 500 11.5px/1 'IBM Plex Sans', system-ui, sans-serif;
 }
 @media (hover: hover) { .post-odpri:hover { color: var(--ink); border-color: var(--accent-lit); } }
+
+/* ---------- namizje ----------
+ * Plošča je bila brez drsenja: pri oknu 640 px (prenosnik) sta zadnji plasti in
+ * opomba ostali pod robom, nedosegljivi. Telefon ima spodnji list. */
+@media (min-width: 900px) {
+  .sidebar { overflow-y: auto; scrollbar-width: thin; background: var(--bg); }
+  /* Glava kot na `/app/pot` (`base.css`): prehod med stranema z zemljevidom je
+     znak premaknil za 2 px in ime pomanjšal na 15 px. Ta slog nalagata tudi domača
+     in okno vožnje: oba imata svojo glavo, zato `:has(.brand)`. */
+  .topbar:has(.brand) { padding: 0 16px; background: var(--bg); border-bottom: 0; }
+  .brand { gap: 10px; }
+  .brand-name { font-size: 18px; color: var(--ink); }
+  .sidebar-note, .label-note { font-size: 12.5px; }
+  /* Rob plošče pod znakom v glavi, kot na `/app/pot`. */
+  .find, .layers, .sidebar-note { padding-inline: 16px; }
+}
+/* Orodna vrstica je na sredini okna; do 1020 px sega čez ploščo (320 px). */
+@media (min-width: 900px) and (max-width: 1019px) {
+  .sidebar { padding-bottom: var(--orodna-prostor); }
+}

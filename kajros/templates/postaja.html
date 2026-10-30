@@ -41,111 +41,123 @@
       {{ vec_gumb() }}
     </div>
 
-    {{ obvestila_izrisana(network) }}
+    {#- Ovoji kot na relaciji (konec `pristanek.css`). Mestno postajališče pogosto
+        nima povezav naprej: takrat gre v stransko ploščo meritev. -#}
+    <div class="pr-stolpci">
+      <div class="pr-uvod">
+        {{ obvestila_izrisana(network) }}
 
-    <h1>{{ beseda }} {{ ime }}</h1>
+        <h1>{{ beseda }} {{ ime }}</h1>
 
-    <p class="vodilo">
-      {% if odhodi %}
-        {% set n = odhodi | length %}
-        {#- Vseh je več, kot jih stran pokaže: pove obe števili. Prej „več kot
-            24“ pri 115 vožnjah. -#}
-        {% if vseh > n %}
-        V naslednjih treh urah {{ vseh | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
-        <b>{{ vseh }}</b> {{ vseh | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}, tu {{ n | stevnik("je prva", "sta prvi", "so prve", "je prvih") }} {{ n }}.
-        {% else %}
-        V naslednjih treh urah {{ n | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
-        <b>{{ n }}</b>
-        {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.
-        {% endif %}
-        {#- Ime smeri se lahko konča s piko („… obr.“): druge ne dodamo. -#}
-        {% set smer_prve = (odhodi[0].towards | lepo_ime) if odhodi[0].towards else "" %}
-        Prva ob {{ odhodi[0].ura }}{% if smer_prve %}, smer {{ smer_prve }}{% endif %}{{ "" if smer_prve.endswith(".") else "." }}
-      {% else %}
-        V naslednjih treh urah od tu ne pelje nič.
-        <a href="{{ iskalnik }}">Poglej drug dan ali uro.</a>
-      {% endif %}
-    </p>
-
-    {% if zapis and zapis.meritev >= min_meritev %}
-    <h2>Koliko se tu čaka</h2>
-    <div class="stevila">
-      <div class="stevilo">
-        <b class="z-{{ zapis.zamuda.razred }}">{{ zapis.zamuda | besedilo }}</b>
-        <span>običajna zamuda na tem postanku</span>
-      </div>
-      <div class="stevilo">
-        <b>{{ (zapis.tocnih * 100) | round | int }} %</b>
-        <span>jih pride v petih minutah</span>
-      </div>
-      <div class="stevilo">
-        <b>+{{ zapis.p90_min | round | int }} min</b>
-        <span>vsaka deseta je slabša od tega</span>
-      </div>
-    </div>
-    <p class="drobno">
-      Izmerjeno na {{ zapis.meritev | stevilo }} postankih od {{ od_dneva }} do {{ do_dneva }}
-      Preračunano {{ izracunano | ura_dneva }}.
-    </p>
-    {% endif %}
-
-    <h2>Naslednji odhodi</h2>
-    {#- Stran ceste: mestno postajališče je dvoje, tabla pa je kazala oboje
-        skupaj. Povezava in ne gumb, ker stran nima JS. Imen se ne sklanja. -#}
-    {% if smeri %}
-    <nav class="smeri" aria-label="Smer vožnje s postajališča">
-      <span class="smeri-label">Smer</span>
-      <a href="?" {% if not smer %}aria-current="true"{% endif %}>obe</a>
-      {% for d in smeri %}
-      <a href="?smer={{ d.kljuc | urlencode }}" {% if smer == d.kljuc %}aria-current="true"{% endif %}>→ {{ d.naslednje | join(" · ") }}
-        {%- if d.center %} <span class="smer-center">{{ d.center }}</span>{% endif %}</a>
-      {% endfor %}
-    </nav>
-    {% endif %}
-    {% if obvoz %}
-    <p class="obvoz">Obvoz: tu ta hip ne ustavijo {{ obvoz | join(", ") }} — teh odhodov spodaj ni.</p>
-    {% endif %}
-    {% if odhodi %}
-    <table class="odhodi">
-      <thead>
-        <tr>
-          <th>Odhod</th>
-          <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
-          <th>Proti</th>
-          <th class="zam">Zamuda</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for o in odhodi %}
-        <tr>
-          <td class="t">{% if o.vozni_red %}<s class="vozni-red">{{ o.vozni_red }}</s><span class="z-{{ o.zamuda.razred }}">{{ o.ura }}</span>{% else %}{{ o.ura }}{% endif %}</td>
-          <td><a href="{{ pot_vozje(network, o.train_no, o.trip_id) }}">{{ o | ime_voznje }}</a></td>
-          <td class="kam">{{ o.towards | lepo_ime }}</td>
-          {% if o.zamuda %}
-          <td class="zam z-{{ o.zamuda.razred }}">{{ o.zamuda | besedilo }}</td>
-          {% elif o.obicajno %}
-          <td class="zam obicajno">običajno {{ o.obicajno | besedilo }}</td>
+        <p class="vodilo">
+          {% if odhodi %}
+            {% set n = odhodi | length %}
+            {#- Vseh je več, kot jih stran pokaže: pove obe števili. Prej „več kot
+                24“ pri 115 vožnjah. -#}
+            {% if vseh > n %}
+            V naslednjih treh urah {{ vseh | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
+            <b>{{ vseh }}</b> {{ vseh | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}, tu {{ n | stevnik("je prva", "sta prvi", "so prve", "je prvih") }} {{ n }}.
+            {% else %}
+            V naslednjih treh urah {{ n | stevnik("odpelje", "odpeljeta", "odpeljejo", "odpelje") }}
+            <b>{{ n }}</b>
+            {{ n | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.
+            {% endif %}
+            {#- Ime smeri se lahko konča s piko („… obr.“): druge ne dodamo. -#}
+            {% set smer_prve = (odhodi[0].towards | lepo_ime) if odhodi[0].towards else "" %}
+            Prva ob {{ odhodi[0].ura }}{% if smer_prve %}, smer {{ smer_prve }}{% endif %}{{ "" if smer_prve.endswith(".") else "." }}
           {% else %}
-          <td class="zam">—</td>
+            V naslednjih treh urah od tu ne pelje nič.
+            <a href="{{ iskalnik }}">Poglej drug dan ali uro.</a>
           {% endif %}
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}
+        </p>
+      </div>
 
-    <p><a href="{{ iskalnik }}">Cela odhodna tabla in iskanje povezav →</a></p>
+      {% if zapis and zapis.meritev >= min_meritev %}
+      <div class="pr-meritev">
+        <h2>Koliko se tu čaka</h2>
+        <div class="stevila">
+          <div class="stevilo">
+            <b class="z-{{ zapis.zamuda.razred }}">{{ zapis.zamuda | besedilo }}</b>
+            <span>običajna zamuda na tem postanku</span>
+          </div>
+          <div class="stevilo">
+            <b>{{ (zapis.tocnih * 100) | round | int }} %</b>
+            <span>jih pride v petih minutah</span>
+          </div>
+          <div class="stevilo">
+            <b>+{{ zapis.p90_min | round | int }} min</b>
+            <span>vsaka deseta je slabša od tega</span>
+          </div>
+        </div>
+        <p class="drobno">
+          Izmerjeno na {{ zapis.meritev | stevilo }} postankih od {{ od_dneva }} do {{ do_dneva }}
+          Preračunano {{ izracunano | ura_dneva }}.
+        </p>
+      </div>
+      {% endif %}
 
-    {% if naprej %}
-    <h2>Kam se od tu največ pelje</h2>
-    <ul class="povezave">
-      {% for r in naprej %}
-      <li><a href="{{ pot_relacije(network, r.od, r.cilj) }}">
-        <span>{{ "Avtobus" if network == "avtobus" else "Vlak" }} {{ r.od }} → {{ r.cilj }}</span>
-        <span class="drobec">{{ r.km | km }}</span></a></li>
-      {% endfor %}
-    </ul>
-    {% endif %}
+      <div class="pr-odhodi">
+        <h2>Naslednji odhodi</h2>
+        {#- Stran ceste: mestno postajališče je dvoje, tabla pa je kazala oboje
+            skupaj. Povezava in ne gumb, ker stran nima JS. Imen se ne sklanja. -#}
+        {% if smeri %}
+        <nav class="smeri" aria-label="Smer vožnje s postajališča">
+          <span class="smeri-label">Smer</span>
+          <a href="?" {% if not smer %}aria-current="true"{% endif %}>obe</a>
+          {% for d in smeri %}
+          <a href="?smer={{ d.kljuc | urlencode }}" {% if smer == d.kljuc %}aria-current="true"{% endif %}>→ {{ d.naslednje | join(" · ") }}
+            {%- if d.center %} <span class="smer-center">{{ d.center }}</span>{% endif %}</a>
+          {% endfor %}
+        </nav>
+        {% endif %}
+        {% if obvoz %}
+        <p class="obvoz">Obvoz: tu ta hip ne ustavijo {{ obvoz | join(", ") }} — teh odhodov spodaj ni.</p>
+        {% endif %}
+        {% if odhodi %}
+        <table class="odhodi">
+          <thead>
+            <tr>
+              <th>Odhod</th>
+              <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
+              <th>Proti</th>
+              <th class="zam">Zamuda</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for o in odhodi %}
+            <tr>
+              <td class="t">{% if o.vozni_red %}<span class="t-par"><s class="vozni-red">{{ o.vozni_red }}</s><span class="z-{{ o.zamuda.razred }}">{{ o.ura }}</span></span>{% else %}{{ o.ura }}{% endif %}</td>
+              <td><a href="{{ pot_vozje(network, o.train_no, o.trip_id) }}">{{ o | ime_voznje }}</a></td>
+              <td class="kam">{{ o.towards | lepo_ime }}</td>
+              {% if o.zamuda %}
+              <td class="zam z-{{ o.zamuda.razred }}">{{ o.zamuda | besedilo }}</td>
+              {% elif o.obicajno %}
+              <td class="zam obicajno">običajno {{ o.obicajno | besedilo }}</td>
+              {% else %}
+              <td class="zam">—</td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+
+        <p><a href="{{ iskalnik }}">Cela odhodna tabla in iskanje povezav →</a></p>
+      </div>
+
+      {% if naprej %}
+      <aside class="pr-naprej">
+        <h2>Kam se od tu največ pelje</h2>
+        <ul class="povezave">
+          {% for r in naprej %}
+          <li><a href="{{ pot_relacije(network, r.od, r.cilj) }}">
+            <span>{{ "Avtobus" if network == "avtobus" else "Vlak" }} {{ r.od }} → {{ r.cilj }}</span>
+            <span class="drobec">{{ r.km | km }}</span></a></li>
+          {% endfor %}
+        </ul>
+      </aside>
+      {% endif %}
+    </div>
 
   </main>
 

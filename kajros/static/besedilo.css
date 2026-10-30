@@ -132,3 +132,47 @@
   font-size: 15px; color: #14161a; text-decoration: none;
 }
 .don-prek { font: 400 13px var(--sans); color: var(--ink-mute); }
+
+/* ---------- namizje ----------
+ *
+ * Besedilna stran ostane stolpec za branje: širina `.besedilo` in mera 68ch
+ * se ne spremenita, ker je dolga vrstica slabša od praznih robov. Raste samo
+ * pisava, naslov kot na `/statistika`. Pristajalne (`pristanek.css`) to
+ * podedujejo in dodajo svoj pas. */
+@media (min-width: 900px) {
+  /* Znak je na `/statistika` bel; v `.besedilo` bi ga `a` obarval kot povezavo
+     v besedilu in ob prehodu med stranmi bi menjal barvo. */
+  .besedilo .home-brand { color: var(--ink); }
+
+  /* Pri 900 px ima pristajalna za naslov 544 px: „Avtobus Ljubljana AP → Maribor AP“
+     pri 36 px ne gre več v eno vrsto. */
+  .besedilo h1 { margin-top: 28px; font: 700 clamp(30px, 3.4vw, 36px)/1.15 var(--sans); text-wrap: balance; }
+  .besedilo h2 { margin: 40px 0 12px; font-size: 20px; }
+  .besedilo p, .besedilo li { font-size: 16px; text-wrap: pretty; }
+  .besedilo .vodilo { margin-top: 18px; font-size: 18px; line-height: 1.6; }
+  /* Seznam takoj pod vodilom (`/android`): ta nima spodnjega roba. */
+  .besedilo .vodilo + ul { margin-top: 20px; }
+  .besedilo li { margin-bottom: 10px; }
+  .besedilo code { font-size: 14px; }
+  .besedilo .drobno { font-size: 14px; color: var(--ink-mute); }
+  /* Opomba v koraku (`/android`) sodi h koraku: rob 30 je za konec strani. */
+  .besedilo li > .drobno { margin: 8px 0 4px; }
+
+  .stik-obrazec { margin-top: 28px; }
+  .stik-oznaka { margin-bottom: 8px; font-size: 14.5px; }
+  /* Polje kot v iskalniku in na poti: zapolnjeno, brez obrobe, fokus 2 px. */
+  .stik-polje { padding: 12px 16px; background: var(--m-visoka); border-color: transparent; font-size: 16px; }
+  .stik-polje:focus { box-shadow: 0 0 0 1px var(--accent); }
+  .stik-polje::placeholder { color: var(--ink-mute); }
+  .stik-anonimno { font-size: 15px; }
+  .stik-gumb, .besedilo .prenos-gumb, .besedilo .don-gumb {
+    min-height: 48px; padding: 14px 28px; font-size: 15px;
+  }
+  .don-prek { font-size: 14px; }
+
+  /* Podlago in okroglino da `home.css` (ista kartica kot na domači). */
+  .besedilo .pod-cilj { margin-top: 24px; padding: 20px 24px; }
+  .besedilo .pod-namen { font-size: 17px; }
+  .besedilo .pod-cilj .pod-trak { height: 10px; margin: 14px 0 10px; border-radius: 5px; }
+  .besedilo .pod-cilj .pod-trak > span { border-radius: 5px; }
+}

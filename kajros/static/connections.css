@@ -1,6 +1,6 @@
 /* Vstopna stran vlakov in avtobusov (osnutek E, 24. 10. 2026) in stran ovir.
- * Podlaga (barve, glava, žetoni) je v base.css. Telefon najprej; od 900 px
- * obrazec levo in odgovor desno.
+ * Podlaga (barve, glava, žetoni) je v base.css. Telefon najprej; namizje
+ * (od 900 px) je en blok na koncu datoteke.
  */
 
 .conn-page { display: flex; flex-direction: column; min-height: 100vh; }
@@ -591,21 +591,6 @@
   .isk-poisci { padding: 0 18px 0 14px; }
 }
 
-/* ---------- namizje ----------
- * Brez odgovora en stolpec na sredini; z odgovorom obrazec, shranjeno in
- * najbližje levo, vprašanje in odgovor desno. Obrazec se tu ne skrči. */
-
-@media (min-width: 900px) {
-  .iskalnik.ima-izid .conn-main { max-width: 1240px; }
-  .ima-izid .isk-stolpci {
-    display: grid; grid-template-columns: 380px minmax(0, 1fr);
-    gap: 40px; align-items: start;
-  }
-  .ima-izid .pz { display: flex; }
-  .isk-desno { max-width: 760px; }
-  .zk-seznam, .past-list.zk-seznam { gap: 12px; }
-}
-
 /* ---------- podnožje ---------- */
 
 .page-foot {
@@ -706,3 +691,187 @@
 /* Iskalnik, ovire, statistika: orodna vrstica na dnu (base.css) ne sme
    pokriti zadnje vrstice table. */
 .conn-page { padding-bottom: var(--orodna-prostor); }
+
+/* ---------- namizje ----------
+ * Isti pas kot statistika (`.st`): 1240 px z odmikom 22, da rob vsebine pri
+ * prehodu med stranmi ostane na mestu (pri 1850 px x 327 in 1523). Iste
+ * komponente kot na telefonu, razporejene za širok zaslon. */
+
+@media (min-width: 900px) {
+  /* Glava v pasu, ne v kotih zaslona: znak nad levim robom vsebine, ⋮ nad
+     desnim. Podlaga glave je barva strani, zato ji ni treba čez vso širino. */
+  .conn-page .topbar {
+    box-sizing: border-box; width: 100%; max-width: 1240px;
+    margin: 0 auto; padding: 0 22px;
+  }
+  /* Ime strani pove orodna vrstica. Bilo je samo pri avtobusih (vlaki ga nimajo),
+     zato se je glava med iskalnikoma razlikovala. Ovire imajo pravi naslov. */
+  .conn-page .brand + .divider, .conn-page .page-name { display: none; }
+  .conn-page .top-link.top-ovire { font-size: 13px; }
+  .conn-page .clock { font-size: 13px; }
+  /* Na avtobusih ovir ni: ločilo bi ostalo samo pred uro. */
+  .net-avtobus .orodna + .divider { display: none; }
+  .conn-main, .iskalnik .conn-main { max-width: 1240px; padding: 10px 22px 40px; }
+  /* Sporočilo je edino v stolpcu: na robu stolpca in dovolj svetlo za branje. */
+  .conn-main .empty-state { max-width: 72ch; padding: 20px 0; font-size: 15px; color: var(--ink-dim); }
+  /* Miška: plast v barvi besedila, šibkejša od pritiska (`base.css`, „dotik“). */
+  @media (hover: hover) { a.od:hover:not(:active), a.zk:hover:not(:active), .mp-odpri:hover:not(:active), .nb-stran:hover:not(:active), .dan-g:hover:not(:active), .razv-g:hover:not(:active), .smer-chip:hover:not(:active), .pz-gumb:hover:not(:active) { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor 8%, transparent); } }
+
+  /* Levi rob naslovov brez telefonskega odmika: na širokem so poravnani z
+     robom kartic, razlika štirih pik bi se videla. */
+  .isk-naslov, .zk-seznam .isk-naslov { padding-left: 0; font-size: 16px; }
+  .nb-glava { padding-left: 0; }
+  .od-kontrole { margin-left: 0; }
+
+  /* Obrazec je v obeh stanjih na istem mestu in iste širine, da se ob iskanju
+     ne premakne; desno je odgovor. Tretjina pasu kot prvi stolpec statistike. */
+  .isk-stolpci {
+    display: grid; grid-template-columns: clamp(340px, 31.8%, 380px) minmax(0, 1fr);
+    column-gap: 28px; align-items: start;
+  }
+  .ima-izid .pz { display: flex; }
+  .isk-vnos label { font-size: 13px; }
+  /* Razlaga pri nadomestnem je za ozek stolpec predolga: odrezana „zamud za nad“. */
+  .mp-l2 { flex-wrap: wrap; row-gap: 4px; }
+
+  /* Brez odgovora gredo dodatki (najbližje, shranjeno, ovire, pogosto) v desni
+     stolpec, kjer se pozneje pokaže odgovor: `display: contents` jih brez JS in
+     brez spremembe predloge naredi za predmete mreže. Zadnja vrsta 1fr vzame
+     višino obrazca nase, sicer bi se vrste z dodatki razmaknile. */
+  .iskalnik:not(.ima-izid) .isk-stolpci { grid-template-rows: repeat(4, auto) 1fr; row-gap: 22px; }
+  .iskalnik:not(.ima-izid) .isk-levo { display: contents; }
+  .iskalnik:not(.ima-izid) .isk-obrazec { grid-column: 1; grid-row: 1 / -1; }
+  .iskalnik:not(.ima-izid) .najblizje,
+  .iskalnik:not(.ima-izid) .moje,
+  .iskalnik:not(.ima-izid) .pregled,
+  .iskalnik:not(.ima-izid) .isk-desno { grid-column: 2; margin-top: 0; }
+  /* Gumb za najbližjo je dejanje obrazca: stoji pod njim, ne na vrhu odgovora
+     (kartica z obema stranema ceste je vsebina in ostane desno). Isti predel
+     mreže kot obrazec, odmik = višina obrazca 181 + razmik 22. */
+  .iskalnik:not(.ima-izid) .najblizje:has(> .nb-vprasaj) { grid-area: 1 / 1 / -1 / 2; margin-top: 203px; }
+  .iskalnik:not(.ima-izid) .ov-link { margin-bottom: 10px; }
+  /* „Od in Kam sta ista postaja“ je odgovor na iskanje, ne dodatek pod predlogi. */
+  .iskalnik:not(.ima-izid) .isk-desno:has(> #results > .empty-state) { grid-row: 1; }
+  .route-chip { font-size: 14px; }
+  .ov-link { font-size: 14px; }
+
+  /* Dolga tabla bi levo pustila prazen stolpec: obrazec in shranjeno gredo s
+     pomikom. Samo na dovolj visokem oknu, sicer spodnji del stolpca (osem
+     shranjenih poti) ne bi bil dosegljiv do konca table. `clip` namesto `hidden`
+     iz `base.css`: z njim je telo vsebnik za pomik in lepljivo se ne prime. */
+  @media (min-height: 700px) {
+    .iskalnik { overflow-x: clip; }
+    .ima-izid .isk-levo { position: sticky; top: 16px; }
+  }
+
+  /* Odgovor: drobno besedilo s telefona (12-12,5 px) je na zaslonu dlje od oči. */
+  .pz-pot { font-size: 17px; }
+  .pz-dan { font-size: 14px; }
+  .ticket-note { font-size: 13px; }
+  .zk-seznam, .past-list.zk-seznam { gap: 12px; }
+  .zk { padding: 16px 20px; }
+  .zk-gl { font-size: 15px; }
+  .zk-cez { font-size: 14px; }
+  .zk-trak b { font-size: 26px; }
+  .zk-crta em { font-size: 13px; }
+  .zk-imena { font-size: 13.5px; }
+  .ura-vr { font-size: 14px; }
+  .ura-vr b { font-size: 15px; }
+  .zt, .zt-op, .zt-do, .smer-center { font-size: 13px; }
+  .mp-cez small, .nb-desno small, .od-cez small { font-size: 13px; }
+  .od-op, .od-nato { font-size: 13.5px; }
+  .leg { font-size: 13.5px; }
+  .conn-main .nadomestni-postanek, .note-partial { font-size: 13.5px; }
+  .conn-main .tir { font-size: 12px; }
+  /* Škatla ovir na poti (`base.css`): opisi imajo do 900 znakov in se tu berejo,
+     zato velikost in dolžina vrstice za branje. */
+  .conn-main .alert-head { font-size: 14px; }
+  .conn-main .alert-list { gap: 14px; margin-top: 12px; }
+  .conn-main .alert-item, .conn-main .alert-desc { font-size: 14px; line-height: 1.55; }
+  .conn-main .alert-desc { max-width: 72ch; }
+  .conn-main .alert-meta { font-size: 12.5px; }
+
+  /* Od 1200 px je desni stolpec dovolj širok za razporeditev, ki je telefon ne
+     more imeti. */
+  @media (min-width: 1200px) {
+    /* Prazno stanje: strani ceste druga ob drugi, shranjene poti po dve v vrsti
+       (flex: liha zadnja se raztegne, luknje ni). Ob odgovoru so levo, ozko. */
+    .iskalnik:not(.ima-izid) .nb-strani { flex-direction: row; }
+    .iskalnik:not(.ima-izid) .nb-stran { flex: 1 1 0; min-width: 0; }
+    .iskalnik:not(.ima-izid) .nb-stran:first-child { border-radius: 20px 6px 6px 20px; }
+    .iskalnik:not(.ima-izid) .nb-stran:last-child { border-radius: 6px 20px 20px 6px; }
+    .iskalnik:not(.ima-izid) .nb-stran:only-child { border-radius: 20px; }
+    .iskalnik:not(.ima-izid) .nb-ime { white-space: normal; }
+    .iskalnik:not(.ima-izid) .moje-seznam { flex-flow: row wrap; gap: 8px; }
+    .iskalnik:not(.ima-izid) .mp { flex: 1 1 370px; min-width: 0; border-radius: 20px; }
+    .iskalnik:not(.ima-izid) .mp-zvezda { min-width: 40px; }
+    .iskalnik:not(.ima-izid) .mp-odpri { padding-right: 12px; }
+
+    /* Tabla: ena vrstica na odhod in stolpci, poravnani čez vso tablo (subgrid),
+       kot na tabli na postaji. Dve vrstici bi pustili praznino sredi vsake, 150
+       odhodov Bavarskega dvora pa je 2 400 px daljših. Prvi stolpec ima spodnjo
+       mejo, da sta seznam prejšnjih in glavni seznam poravnana: na vlakih mora
+       vanj iti „nadomestni“. */
+    .od-seznam {
+      --od-oznaka: 76px;
+      display: grid; row-gap: 3px; column-gap: 12px;
+      grid-template-columns: minmax(var(--od-oznaka), max-content) minmax(0, 1fr) max-content
+        minmax(150px, max-content) minmax(128px, max-content) minmax(84px, max-content);
+    }
+    .net-zeleznica .od-seznam { --od-oznaka: 106px; }
+    .od {
+      display: grid; grid-column: 1 / -1; grid-template-columns: subgrid;
+      gap: 4px 12px; align-items: center;
+      box-sizing: border-box; min-height: 52px; padding: 8px 16px;
+    }
+    .od-gl, .od-ura { display: contents; }
+    .od .sp { display: none; }
+    .od .oz { grid-area: 1 / 1; justify-self: start; }
+    .od .od-cilj { grid-area: 1 / 2; white-space: normal; }
+    .od .tir { grid-area: 1 / 3; justify-self: start; margin: 0; }
+    /* Spremenjen tir je trikrat daljši: v stolpcu bi vzel prostor ciljem vseh vrstic. */
+    .od .tir.is-changed { grid-area: 2 / 2 / auto / 5; }
+    .od-gl:has(.tir.is-changed) ~ .od-op { grid-row: 3; }
+    /* Ura je vedno prva, ne glede na to, ali zamuja: stolpec se bere navzdol. */
+    .od .ura-vr { grid-area: 1 / 4; display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; }
+    .od .ura-vr b { order: -1; }
+    .od .zt, .od .sp + .zt-op { grid-area: 1 / 5; justify-self: start; }
+    .od .od-cez { grid-area: 1 / 6; justify-self: end; }
+    /* Kar ni ura in žeton, gre pod vrstico: razlaga pod žeton, opombe pod cilj. */
+    .od .zt + .zt-op, .od .zt-do { grid-area: 2 / 5 / auto / -1; align-self: start; }
+    .od .zt + .zt-op ~ .zt-do { grid-row: 3; }
+    /* Živi prihod LPP: žeton („po načrtu“, 73 px) in „po LPP“ sta kratka in gresta
+       v isti stolpec, sicer bi bile te vrstice po nepotrebnem višje od ostalih. */
+    .net-avtobus .od .zt.je-vr + .zt-op { grid-area: 1 / 5; align-self: center; margin-left: 80px; }
+    .od .od-op { grid-area: 2 / 2 / auto / 5; }
+    .od .od-nato { grid-column: 2 / -1; }
+  }
+
+  /* Ovire: kartice v dveh stolpcih, po vrsticah, ker je seznam razvrščen po
+     pomembnosti. Mreža brez fiksne višine: kartici v vrsti sta enako visoki. */
+  .ovire-h1 {
+    position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal;
+    margin: 14px 0 4px; font: 700 36px/1.15 var(--sans); color: var(--ink);
+  }
+  .lead { max-width: 72ch; margin: 0 0 22px; font-size: 15px; line-height: 1.55; }
+  .stran-ovire .conn-main {
+    display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
+    column-gap: 20px; align-items: center;
+  }
+  .stran-ovire .conn-main > * { grid-column: 1 / -1; }
+  .stran-ovire .conn-main > .ovire-isci { grid-column: 1; }
+  .stran-ovire .conn-main > .ovire-stevec { grid-column: 2; margin: 0; font-size: 14px; }
+  .ovire-seznam { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 22px; }
+  .ovire-seznam > .empty-state { grid-column: 1 / -1; }
+  /* Liha zadnja kartica čez vso širino: sicer je na koncu seznama luknja. */
+  .ovira:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .ovira { padding: 22px 24px 20px; gap: 12px; }
+  .ovira-naslov { font-size: 17px; }
+  .ovira-opis { max-width: 72ch; font-size: 15px; line-height: 1.55; }
+  /* Vlaki in noga na dno: v vrsti enako visokih kartic stojijo poravnano. */
+  .ovira-vlaki, .ovira-noga { margin-top: auto; }
+  .ovira-vlaki ~ .ovira-noga { margin-top: 0; }
+  .ovira-noga, .ovira-vlak, .ovira-vrsta { font-size: 13px; }
+  .ovira-kdaj { font-size: 14px; }
+  .page-foot { font-size: 13px; }
+}

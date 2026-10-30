@@ -50,7 +50,8 @@
 
     {% set c = popravki %}
     {% if c.postankov >= min_vzorec %}
-    <section class="st-k">
+    {#- Brez kartice potnikov stoji sama v vrsti: na namizju dva stolpca besedila. -#}
+    <section class="st-k{% if p.n < min_prehodov %} st-siroka st-stolpca{% endif %}">
       <h2>Zakaj: odhod je sklep iz ure</h2>
       <p>Zemljevid premakne vlak čez postajo, ko po voznem redu in zadnji zamudi mora odpeljati — ne, ko odpelje. Če vlak še stoji (čaka na križanje, signal, zamujeno zvezo), ga zemljevid kaže na poti, zamudo pa nato dviguje minuto za minuto. Potnik na naslednji postaji vidi, da vlak prihaja, a ta še ni odpeljal s prejšnje.</p>
       <div class="st-velika"><b class="st-vlak-b">{{ c.dvig2 | odstotek }}</b><span>postankov SŽ pozneje dvigne zamudo za vsaj 2 min</span></div>

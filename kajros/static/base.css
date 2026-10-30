@@ -185,6 +185,13 @@ button, summary, [role="button"], [role="switch"], [role="tab"] {
   @view-transition { navigation: none; }
 }
 
+/* Klasičen drsnik vzame 15 px: stran brez njega (prazen iskalnik) je imela rob
+   vsebine 7,5 px desno od strani z njim (statistika). Zemljevidi niso na seznamu:
+   ne drsijo in na desni bi ostal prazen trak. */
+@media (min-width: 900px) {
+  html:has(> body.home-page, > body.conn-page, > body.okno) { scrollbar-gutter: stable; }
+}
+
 /* Visina glave. Bila je trdo zapisana v `.topbar` in hkrati ugibana kot
    `var(--topbar-h, 48px)` drugje -- torej stiri piksle narazen, in zemljevid
    "cez celo stran" je bil za toliko predolg. Ena vrednost, eno mesto. */
@@ -738,6 +745,31 @@ button.top-link {
   .vec::backdrop { background: rgb(0 0 0 / 0.55); }
   @media (prefers-reduced-motion: reduce) { .vec { transition: none; } }
 }
+/* Z miško je list z dna daleč od gumba (pri 1850 px cel zaslon): isti kosi se
+   odprejo pod ⋮, desno na robu vsebine. Brskalnik brez sidranja obdrži list. */
+@media (min-width: 900px) {
+  @supports selector(:popover-open) and (anchor-name: --x) {
+    .vec-gumb { anchor-name: --vec-gumb; }
+    .vec {
+      position-anchor: --vec-gumb;
+      inset: anchor(bottom) anchor(right) auto auto; margin: 4px 8px 0 0;
+      width: 380px; max-height: calc(100dvh - 72px);
+      padding: 20px 16px 16px; border-radius: var(--r-lg);
+      box-shadow: 0 8px 28px rgb(0 0 0 / .5);
+      opacity: 0; transform: translateY(-8px);
+      transition: transform .16s cubic-bezier(.2, 0, 0, 1), opacity .16s, overlay .16s allow-discrete, display .16s allow-discrete;
+    }
+    .vec:popover-open { opacity: 1; transform: none; }
+    @starting-style { .vec:popover-open { opacity: 0; transform: translateY(-8px); } }
+    .vec::backdrop { background: rgb(0 0 0 / .35); }
+    .vec-rocaj { display: none; }
+    .vec-vir { font-size: 13px; }
+    .vec-poti a { border-radius: var(--r); }
+    /* Miška: plast v barvi besedila, šibkejša od pritiska (razdelek „dotik“). */
+    @media (hover: hover) { .vec-poti a:hover, .vec-gumbi a:hover, .vec-gumb:hover { box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor 8%, transparent); } }
+    @media (prefers-reduced-motion: reduce) { .vec { transition: none; } }
+  }
+}
 @media print { .vec, .vec-gumb { display: none; } }
 
 /* ---------- orodna vrstica ----------
@@ -870,6 +902,10 @@ html.tipkovnica .na-poti-trak { display: none; }
 .obv-besedilo {
   margin: 3px 0 0; font: 500 14px/1.45 var(--sans);
   white-space: pre-line; overflow-wrap: anywhere;
+}
+@media (min-width: 900px) {
+  .obv-glava { font-size: 13px; }
+  .obv-besedilo { font-size: 15px; }
 }
 /* 44 px: gumb je na telefonu cilj za palec, ne okras v kotu. */
 .obv-zapri {

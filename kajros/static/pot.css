@@ -791,3 +791,9 @@ body.na-poti[data-korak="pred"] .vod-znak { background: var(--m-najvisja); }
 .zacni-pot { margin-left: auto; color: #14161a; background: var(--accent-lit); border-color: var(--accent-lit);
              font-weight: 600; }
 @media (hover: hover) { .zacni-pot:hover { color: #14161a; filter: brightness(1.06); } }
+
+/* Orodna vrstica je na sredini okna; do 1220 px sega čez ploščo (420 px) in je
+   pokrila konec seznama, ki se ni dalo več odviti izpod nje. */
+@media (min-width: 900px) and (max-width: 1219px) {
+  .pot-panel { padding-bottom: var(--orodna-prostor); }
+}

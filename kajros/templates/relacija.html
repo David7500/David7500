@@ -47,111 +47,126 @@
       {{ vec_gumb() }}
     </div>
 
-    {{ obvestila_izrisana(network) }}
+    {#- Ovoji so za namizje (konec `pristanek.css`): glavni del levo, povezave v
+        stranski plošči desno. Na telefonu nimajo sloga: robovi vsebine se sesedejo
+        skoznje in stran teče, kot da jih ni. -#}
+    <div class="pr-stolpci">
+      <div class="pr-uvod">
+        {{ obvestila_izrisana(network) }}
 
-    <h1>{{ vozilo }} {{ od }} → {{ cilj }}</h1>
+        <h1>{{ vozilo }} {{ od }} → {{ cilj }}</h1>
 
-    <p class="vodilo">
-      {% if zveze %}
-        {% set n = vseh %}
-        Danes {{ n | stevnik("pelje", "peljeta", "peljejo", "pelje") }}
-        <b>{{ n }}</b>
-        {{ n | stevnik("neposredna vožnja", "neposredni vožnji",
-                       "neposredne vožnje", "neposrednih voženj") }}.
-        {% if najkrajse %}Najhitrejša je na poti {{ najkrajse | trajanje }}.{% endif %}
-      {% else %}
-        Danes neposredne vožnje ni.
-        <a href="{{ iskalnik }}">Poglej s prestopom.</a>
-      {% endif %}
-    </p>
-
-    {% if zapis and zapis.meritev >= min_meritev %}
-    <h2>Koliko zamuja</h2>
-    <div class="stevila">
-      <div class="stevilo">
-        <b class="z-{{ zapis.zamuda.razred }}">{{ zapis.zamuda | besedilo }}</b>
-        <span>običajna zamuda ob prihodu</span>
-      </div>
-      <div class="stevilo">
-        <b>{{ (zapis.tocnih * 100) | round | int }} %</b>
-        <span>jih pride v petih minutah</span>
-      </div>
-      <div class="stevilo">
-        <b>+{{ zapis.p90_min | round | int }} min</b>
-        <span>vsaka deseta je slabša od tega</span>
-      </div>
-    </div>
-    <p class="drobno">
-      Izmerjeno na {{ zapis.meritev | stevilo }} vožnjah od {{ od_dneva }} do {{ do_dneva }}
-      Preračunano {{ izracunano | ura_dneva }}.
-    </p>
-    {% elif zapis %}
-    <p class="drobno">
-      Te relacije še nismo izmerili dovolj — {{ zapis.meritev | stevilo }}
-      {{ "vožnja" if zapis.meritev == 1 else "voženj" }} je premalo, da bi
-      povedali, koliko običajno zamuja.
-    </p>
-    {% endif %}
-
-    <h2>{{ "Naslednji odhodi" if odslej else "Odhodi danes" }}</h2>
-    {% if zveze %}
-    <table class="odhodi">
-      <thead>
-        <tr>
-          <th>Odhod</th>
-          <th>Prihod</th>
-          <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
-          <th class="skrij-ozko">Traja</th>
-          <th class="zam">{{ "Zamuda ob prihodu" if ob_prihodu else "Zamuda" }}</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for z in zveze %}
-        <tr>
-          <td class="t">{{ z.sched_dep | ura }}</td>
-          <td class="t">{{ z.sched_arr | ura }}</td>
-          <td class="kam"><a href="{{ pot_vozje(network, z.train_no, z.trip_id) }}">{{ z | ime_voznje }}</a></td>
-          <td class="skrij-ozko">{{ z.duration_s | trajanje }}</td>
-          {% set zam = z.zamuda_prihod if ob_prihodu else z.zamuda %}
-          {% if zam %}
-          {#- Ocena je za vožnjo, ki je še na poti: brez besede bi se brala
-              kot izmerjen prihod. -#}
-          <td class="zam z-{{ zam.razred }}">{% if ob_prihodu and zam.vrsta == "ocena" %}<span class="obicajno">na poti</span> {% endif %}{{ zam | besedilo }}</td>
-          {% elif z.obicajno %}
-          <td class="zam obicajno">običajno {{ z.obicajno | besedilo }}</td>
+        <p class="vodilo">
+          {% if zveze %}
+            {% set n = vseh %}
+            Danes {{ n | stevnik("pelje", "peljeta", "peljejo", "pelje") }}
+            <b>{{ n }}</b>
+            {{ n | stevnik("neposredna vožnja", "neposredni vožnji",
+                           "neposredne vožnje", "neposrednih voženj") }}.
+            {% if najkrajse %}Najhitrejša je na poti {{ najkrajse | trajanje }}.{% endif %}
           {% else %}
-          <td class="zam">—</td>
+            Danes neposredne vožnje ni.
+            <a href="{{ iskalnik }}">Poglej s prestopom.</a>
           {% endif %}
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% if vseh > zveze | length %}
-    <p class="drobno">Prikazanih je {{ zveze | length }} od {{ vseh }} današnjih.</p>
-    {% endif %}
-    {% endif %}
+        </p>
+      </div>
 
-    <p><a href="{{ iskalnik }}">Poišči povezavo za drug dan ali uro →</a></p>
-
-    <h2>Naprej</h2>
-    <ul class="povezave">
-      {% if obratno %}
-      <li><a href="{{ pot_relacije(network, cilj, od) }}">
-        <span>{{ vozilo }} {{ cilj }} → {{ od }}</span>
-        <span class="drobec">v drugo smer</span></a></li>
+      {% if zapis %}
+      <div class="pr-meritev">
+        {% if zapis and zapis.meritev >= min_meritev %}
+        <h2>Koliko zamuja</h2>
+        <div class="stevila">
+          <div class="stevilo">
+            <b class="z-{{ zapis.zamuda.razred }}">{{ zapis.zamuda | besedilo }}</b>
+            <span>običajna zamuda ob prihodu</span>
+          </div>
+          <div class="stevilo">
+            <b>{{ (zapis.tocnih * 100) | round | int }} %</b>
+            <span>jih pride v petih minutah</span>
+          </div>
+          <div class="stevilo">
+            <b>+{{ zapis.p90_min | round | int }} min</b>
+            <span>vsaka deseta je slabša od tega</span>
+          </div>
+        </div>
+        <p class="drobno">
+          Izmerjeno na {{ zapis.meritev | stevilo }} vožnjah od {{ od_dneva }} do {{ do_dneva }}
+          Preračunano {{ izracunano | ura_dneva }}.
+        </p>
+        {% elif zapis %}
+        <p class="drobno">
+          Te relacije še nismo izmerili dovolj — {{ zapis.meritev | stevilo }}
+          {{ "vožnja" if zapis.meritev == 1 else "voženj" }} je premalo, da bi
+          povedali, koliko običajno zamuja.
+        </p>
+        {% endif %}
+      </div>
       {% endif %}
-      <li><a href="{{ pot_postaje(network, od) }}">
-        <span>Vsi odhodi {{ "s postajališča" if network == "avtobus" else "s postaje" }} {{ od }}</span>
-        <span class="drobec">odhodna tabla</span></a></li>
-      <li><a href="{{ pot_postaje(network, cilj) }}">
-        <span>Vsi odhodi {{ "s postajališča" if network == "avtobus" else "s postaje" }} {{ cilj }}</span>
-        <span class="drobec">odhodna tabla</span></a></li>
-      {% for r in naprej %}
-      <li><a href="{{ pot_relacije(network, r.od, r.cilj) }}">
-        <span>{{ vozilo }} {{ r.od }} → {{ r.cilj }}</span>
-        <span class="drobec">{{ r.km | km }}</span></a></li>
-      {% endfor %}
-    </ul>
+
+      <div class="pr-odhodi">
+        <h2>{{ "Naslednji odhodi" if odslej else "Odhodi danes" }}</h2>
+        {% if zveze %}
+        <table class="odhodi">
+          <thead>
+            <tr>
+              <th>Odhod</th>
+              <th>Prihod</th>
+              <th>{{ "Avtobus" if network == "avtobus" else "Vlak" }}</th>
+              <th class="skrij-ozko">Traja</th>
+              <th class="zam">{{ "Zamuda ob prihodu" if ob_prihodu else "Zamuda" }}</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for z in zveze %}
+            <tr>
+              <td class="t">{{ z.sched_dep | ura }}</td>
+              <td class="t">{{ z.sched_arr | ura }}</td>
+              <td class="kam"><a href="{{ pot_vozje(network, z.train_no, z.trip_id) }}">{{ z | ime_voznje }}</a></td>
+              <td class="skrij-ozko">{{ z.duration_s | trajanje }}</td>
+              {% set zam = z.zamuda_prihod if ob_prihodu else z.zamuda %}
+              {% if zam %}
+              {#- Ocena je za vožnjo, ki je še na poti: brez besede bi se brala
+                  kot izmerjen prihod. -#}
+              <td class="zam z-{{ zam.razred }}">{% if ob_prihodu and zam.vrsta == "ocena" %}<span class="obicajno">na poti</span> {% endif %}{{ zam | besedilo }}</td>
+              {% elif z.obicajno %}
+              <td class="zam obicajno">običajno {{ z.obicajno | besedilo }}</td>
+              {% else %}
+              <td class="zam">—</td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% if vseh > zveze | length %}
+        <p class="drobno">Prikazanih je {{ zveze | length }} od {{ vseh }} današnjih.</p>
+        {% endif %}
+        {% endif %}
+
+        <p><a href="{{ iskalnik }}">Poišči povezavo za drug dan ali uro →</a></p>
+      </div>
+
+      <aside class="pr-naprej">
+        <h2>Naprej</h2>
+        <ul class="povezave">
+          {% if obratno %}
+          <li><a href="{{ pot_relacije(network, cilj, od) }}">
+            <span>{{ vozilo }} {{ cilj }} → {{ od }}</span>
+            <span class="drobec">v drugo smer</span></a></li>
+          {% endif %}
+          <li><a href="{{ pot_postaje(network, od) }}">
+            <span>Vsi odhodi {{ "s postajališča" if network == "avtobus" else "s postaje" }} {{ od }}</span>
+            <span class="drobec">odhodna tabla</span></a></li>
+          <li><a href="{{ pot_postaje(network, cilj) }}">
+            <span>Vsi odhodi {{ "s postajališča" if network == "avtobus" else "s postaje" }} {{ cilj }}</span>
+            <span class="drobec">odhodna tabla</span></a></li>
+          {% for r in naprej %}
+          <li><a href="{{ pot_relacije(network, r.od, r.cilj) }}">
+            <span>{{ vozilo }} {{ r.od }} → {{ r.cilj }}</span>
+            <span class="drobec">{{ r.km | km }}</span></a></li>
+          {% endfor %}
+        </ul>
+      </aside>
+    </div>
 
   </main>
 

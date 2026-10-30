@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('connections.css') }}">
 </head>
-<body class="conn-page">
+<body class="conn-page stran-ovire">
 
   <header class="topbar">
     <a class="brand" href="/">
@@ -35,6 +35,9 @@
 
   <main class="conn-main">
     {{ obvestila_mesto("zeleznica") }}
+    {#- Naslov je na telefonu samo za bralnik zaslona (ime je v glavi, pod 560 px
+        ga ni), na namizju pa nosi stran: hierarhija kot na statistiki. #}
+    <h1 class="za-bralnik ovire-h1">Ovire na progah</h1>
     <p class="lead">
       Obvestila prevoznika o delih na progi, nadomestnih prevozih in združenih
       garniturah. To je edini vir odgovora, <strong>zakaj</strong> vlak zamuja —
