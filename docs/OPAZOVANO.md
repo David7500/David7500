@@ -1,6 +1,7 @@
 # Opazovano: sistem za vse avtobuse
 
-Stanje 30. 10. 2026: del 1 (straža) narejen, del 2 (tabela) teče v senci, prikaz je ne bere; deli 3–4 so načrt. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“.
+Stanje 30. 10. 2026: del 1 (straža) in tabela iz dela 2 tečeta na arwenu, tabela v senci. Del 4 izmerjen v senci, ni priklopljen. Del 3 (prikaz) ni začet. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“ in naprej.
+
 
 ## Zakaj
 
@@ -81,6 +82,21 @@ Skupaj 71 od 9 581 parov brez prehoda (0,7 %).
 
 Skupna funkcija namesto logike po viru, in samo z dokazom: napačen par je zamuda druge vožnje (`zive.py`). Prvi primer je Marprom: mrtvo vozilo (`Predicted: 1`) zasede prihod linije, živo za njim vožnje ne dobi (34 od 45 v 7-minutnem vzorcu). Kandidat: najbližja prosta vožnja iste variante na naslednjem postajališču. Preverba v senci: pri vozilih, kjer pripis poznamo, mora dati isto vožnjo.
 
+**Narejeno, samo v senci** (`kajros/pripis.py`, `tests/test_pripis.py`, `scripts/pripis_senca.py`): vir da varianto ali linijo, naslednje postajališče in čas. Par je samo, če vozilo na varianti napreduje (`Napredek`) in je v oknu −4 … +10 min ena prosta vožnja, v −4 … +30 min pa nobena druga. V `run` ne piše, noben vir je ne kliče. Meritve: `docs/MERITVE.md`, „Pripis vozila na vožnjo: senca“.
+
+| prevoznik | vzorcev | pravih | napačnih | napačnih od predlogov | skritih 25 % drugih vozil |
+|---|---:|---:|---:|---:|---:|
+| marprom, prihodi, 30. 10. 15:41–19:41, skrito | 7 621 + 36 spornih | 7 621 | 0 (36, če sporne štejemo za napačne) | 0 % (0,47 %) | – |
+| marprom, vozila brez vožnje, potrjeno | 162 | 162 | 0 | 0 % (95-odstotna meja ~1,8 %) | – |
+| marprom, `lega` 29. 10. | 13 566 | 10 372 | 3 | 0,03 % | 0,01 % |
+| kranj, `lega` 29. 10. | 2 193 | 1 749 | 3 | 0,17 % | 0,62 % |
+| 1119 (Nomago), `lega` 29. 10. | 106 026 | 58 504 | 24 | 0,04 % | 0,21 % |
+| 1121 (AP MS), `lega` 29. 10. | 17 646 | 9 128 | 1 | 0,01 % | 0,02 % |
+| 1123 (Arriva), `lega` 29. 10. | 115 092 | 61 670 | 0 | 0 % | 0,15 % |
+| 1118 (primestni LPP) | 892 | ni meritve | – | `gps_prehod` ne nastaja, brez vrat napreduje 3–7 % | – |
+
+Par bi danes rabil samo Marprom: NAP vožnjo pove vedno (`brez_voznje` 0), Kranj ima 1 vozilo od 5 brez vožnje in ne pove variante. Noben pogoj po prevozniku: kdor varianto ima in vožnje nima, kliče isto funkcijo.
+
 ## Vrstni red
 
 1. Del 1, brez spremembe prikaza. Brez tega drugih korakov ni mogoče primerjati.
@@ -90,19 +106,11 @@ Skupna funkcija namesto logike po viru, in samo z dokazom: napačen par je zamud
 
 Vsak korak v svojem commitu, s številkami pred in po, za vse prevoznike.
 
-## Kdo kaj (30. 10. 2026)
+## Odprto
 
-| seja | delo | zapis |
-|---|---|---|
-| sztrack-77 | prikaz na namizju. Ne moti je. | CSS, predloge, `common.js`, `dashboard.js`, `train.js` |
-| sztrack-06 [03308a] | trase: odrezane in krožne, ponovno pripenjanje | `pripni.py`, `geo.py` (`3c2a25e`) |
-| sztrack-06 [a4652c] | zadnja zamuda na končni, vzorčenje v živo | `collector.py`, `api.py`, `test_koncana_voznja.py` |
-| sztrack-b1 | del 1, straža po prevoznikih | svoj worktree, nov modul |
-| sztrack-c0 | del 2, samo meritev 71 parov | svoj worktree, brez `kajros/` |
-| sztrack-3d | rezerva, del 4 šele po delu 1 | |
-| sztrack-7b | usklajevanje, vključitev | ta dokument |
-
-Pravila za vse: objavlja samo David ali seja z njegovim izrecnim „objavi“. Nova dela v worktreeju, ne v skupni kopiji. Pri 90 % 5h okna predaja in stop, ostanek je za prikaz. Brez subagentov.
+* Pripis: priklop samo za Marprom, najprej brez zamude, po ponovitvi meritve na jutranji konici in ob koncu tedna (vzorec je en petek popoldne).
+* `marprom.razresi` je 3 vozilom v 4 h dal vožnjo 31–90 min naprej, obvisi do `PREVERI_S`. Vzrok ni dokazan.
+* Prikaz tabele: ponovna odprtja istega ključa (27 od 111 vrstic), ročna preverba `pravi`, Vrbanska od 3. 11., navedba OSM na javni strani.
 
 ## Kaj ni del tega
 

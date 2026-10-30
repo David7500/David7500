@@ -3258,3 +3258,34 @@ Na izmerjenih primerih (111 parov): **pravi 61 (55 %), napačna 2 (2 %), dvoumna
 Izpade **36 od 46**, polovica že s ključem, polovica s pravilom za prikaz. Pri trenutno odprtih neznanih je `osm_blizu` pri 1119 0 od 16, pri 1123 6 od 8, in vseh šest je Ormož, ki je ročno preverjen pravi primer. To je en kraj, zato `osm_blizu` kot dokaz ni izmerjen, le skladen. Za prikaz ostane 42 od 63.
 
 **Česa še ne vemo.** Oznaka ni resnica: 36 `pravi` ni ročno preverjenih, razen Focheve, Naklega in Postojne SŠC. 27 od 111 vrstic je ponovno odprtje istega ključa (Naklo A6227, Zavrh pri Galiciji N0173): redek prehod zapre, naslednji niz spet odpre, prikaz bi utripal. Vzrok ni raziskan (napačen pripis vožnje ali res občasen postanek). Posnetek OSM je iz 30. 10. in se ne osvežuje sam.
+
+## Pripis vozila na vožnjo: senca (30. 10. 2026)
+
+Povod: 34 od 45 vozil Marproma brez vožnje v 7-minutnem vzorcu (`docs/OPAZOVANO.md`, del 4). Vse ponovljivo s `scripts/pripis_senca.py`; v `run` ni šlo nič.
+
+**Vzorec ponovljen čez 4 ure**: 30. 10. 15:41–19:41, petek, 480 krogov po 30 s, 1 + 7 branj na krog, ponovitev s pravima `marprom.potrebuje` in `razresi`. **Pogostost je bila precenjena**: živa vozila brez vožnje po 20 min ogrevanja 374 od 11 033 vzorcev (3,4 %), ne 45 od 460 (9,8 %), po urah 16 h 174, 17 h 144, 18 h 46, 19 h 63 (z vozili brez poskusa; 20 vozil od 46). Vzrok potrjen: `ni_prihoda` 359 od 374. API da **en prihod na linijo in postajališče**; ko ga zaseda drug avtobus, ga ima (89 parov vozilo–postajališče) 54-krat mrtev, 32-krat živ, 3-krat avtobus, ki ga na seznamu ni. Mrtvih vozil brez vožnje je še 446 vzorcev; te par ne zanima, ker lega ni živa.
+
+**Pravilo**: vozilo mora na varianti napredovati (naslednje postajališče se je že spremenilo), v oknu −4 … +10 min od časa na naslednjem postajališču mora biti ena prosta vožnja, v −4 … +30 min nobena druga. Prosta = je ni imelo in je nima nobeno drugo vozilo. Okni sta določeni pred vzorcem, po zgledu `zive.py`; vrata napredovanja po prvih 40 min (dve vozili z vožnjo 74 in 90 min naprej). `ETA` iz API-ja ni pomagala (prvih 80 krogov, še brez vrat: 5 % več pravih, 12 % več napačnih), zato je ni.
+
+**Marprom, kjer pripis poznamo** (skrijemo lastno vožnjo, po ogrevanju, le žive): 7 621 pravih, **0 napačnih**, brez para 2 192 (`miruje` 1 024, `ni_prosta` 1 013, `vec` 155); 754 vzorcev izločenih, ker je bila vožnja v ponovitvi zastarela (prihode tistega postajališča beremo na ~2,5 min, na strežniku na 10 s).
+
+**Sporno, 39 vzorcev, 3 vozila, 36 s predlogom.** Marpromov prihod je dal vožnjo 31–90 min naprej (bus 148, 16:02, varianta 7531, postajališče 341: vožnja ob 17:30; bus 142, 16:15: −74 min; bus 179, 17:56: −31 min, brez predloga), pri 148 in 142 je predlog vožnja ±1 min. Vozili 148 in 142 sta v ±10 min prevozili 8,0 in 12,4 km po trasi, zato sta napačna verjetno prihod in današnji `razresi`, ne predlog: domnevno prihod za naslednji krog, ko je vozilo že za postajališčem. Ni dokazano. Če jih štejemo kot napačne predloge: 36 od 7 657 (0,47 %). Popravljeno ni: `razresi` nima meje za uro daleč naprej, vožnja obvisi do `PREVERI_S` (10 min).
+
+**Vozila brez vožnje, skupina, ki jo par rešuje**: 374 vzorcev, 220 predlogov (59 %), 15 od 20 vozil. Marpromov kasnejši prihod iste variante v 30 min potrdil 157, prejšnji 5, nepreverjenih 58, **napačnih 0**. Moč je majhna: 0 od 162 da 95-odstotno mejo ~1,8 %, vzorci istega vozila pa niso neodvisni.
+
+**Straža**, ista merila kot `kajros straza` (`straza.primerjaj`), le Marprom, vzorec 4 ur: `% vzorcev vozil z vožnjo` 92,4 -> 94,0, poslabšano nihče. Drugih prevoznikov par ne doseže, zato razlike nimajo: NAP `brez_voznje` 0 (meta, 30. 10. 15:40), Kranj 1 od 5 brez variante.
+
+**Simulacija iz `lega`, vsi viri** (arwen, 28. in 29. 10., vzorec na 2 min, vozilu skrijemo vožnjo; naslednje postajališče po prehodih prave vožnje, zato idealno): 29. 10., napačnih od predlogov pri 0 % / 25 % / 100 % skritih drugih vozil:
+
+| prevoznik | n | pravih (0 %) | napačnih (0 %) | 0 % | 25 % | 100 % |
+|---|---:|---:|---:|---:|---:|---:|
+| marprom | 13 566 | 10 372 (76,5 %) | 3 | 0,03 % | 0,01 % | 0 % |
+| kranj | 2 193 | 1 749 (79,8 %) | 3 | 0,17 % | 0,62 % | 0,64 % |
+| 1119 | 106 026 | 58 504 (55,2 %) | 24 | 0,04 % | 0,21 % | 0,38 % |
+| 1121 | 17 646 | 9 128 (51,7 %) | 1 | 0,01 % | 0,02 % | 0,02 % |
+| 1123 | 115 092 | 61 670 (53,6 %) | 0 | 0 % | 0,15 % | 0,39 % |
+
+28. 10. isti red velikosti (marprom 0 / 0 / 0 %, 1119 0,02 / 0,15 / 0,39 %, 1123 0,05 / 0,25 / 0,51 %). Kranj 28. 10. ni meritve: v koledarju `service_day` tega dne ni. **1118 ni izmerjen**: `gps_prehod` tam ne nastaja, zato vrata zavrnejo vse; brez vrat 3,2–7,3 % napačnih na 799 in 892 vzorcih, le 38 % voženj 1118 ima lego. Brez vrat napredovanja so napake drugih do 4-krat višje (1123 28. 10.: 0,15 % proti 0,05 %, pri 100 % skritih 1,90 % proti 0,51 %).
+
+**Priporočilo**: priklop samo tam, kjer vir vožnje ne pove in varianto ima (danes samo Marprom), in najprej brez zamude: lega in vožnja na zemljevidu. Zamuda iz leg šele po ponovitvi na jutranji konici in ob koncu tedna; vzorec je en petek popoldne.
+

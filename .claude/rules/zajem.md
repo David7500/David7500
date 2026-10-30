@@ -87,6 +87,7 @@ V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila,
 * **Vozilo → vožnja = Marpromova ura na naslednjem postajališču** (`ArrivalTime` za `BusCode` iz `GetArrivalsForStopPoint`) + linija (`LineId` = `route_id`) + varianta (`RouteId` = `shape_id`): natanko ena. Brez sklepanja iz lege. Prihodi samo ob novi vožnji, menjavi variante, za koncem in na 10 min (`PREVERI_S`); največ 8 branj na obhod. Vožnja z drugim vozilom ni na voljo.
 * **Naslednje, ki ga vožnja nima → postajališče iste skupine** (`StopID`; pred končno 457 → 192). Tudi v `potrebuje`, sicer razrešitev vsako branje.
 * **`Predicted: 1` = lega ni živa** (88 % brez premika, do 460 s): `seen_ts` = zadnji premik (po 3 min z zemljevida), ne v prehod. Živa: ura odgovora.
+* **API Marproma da en prihod na linijo in postajališče**: živi za drugim avtobusom dobi `ni_prihoda` (359 od 374 vozil brez vožnje, 30. 10. 2026; 3,4 % živih vzorcev). Skupni predlog `pripis.py`: v senci, 0 napačnih od 7 621 + 162, noben vir ga ne kliče. Prihod zna kazati vožnjo 31–90 min naprej (3 vozila v 4 h), `razresi` tega ne ustavi.
 * **Zamuda samo iz leg** (`iz_lege.opazuj`, prehod brez trase). `DelayMin` je primerjava (`meta.marprom.primerjava`): naša − Marpromova mediana +39 s (cele minute), proti OnTrack +14,5 s. `iz_lege.SAMO_IZ_LEGE`: „ne v feedu“ pri Marpromu ni napaka.
 * Vozila brez vožnje → `meta.marprom_vozila_brez_voznje` → zemljevid („vožnje ne poznamo“, linija, smer, naslednje po Marpromu).
 * Nova vožnja istega vozila pobriše lego stare iz `vehicle_now` (dvojnik do konca svežine).
