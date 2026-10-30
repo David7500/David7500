@@ -1,6 +1,6 @@
 # Opazovano: sistem za vse avtobuse
 
-Stanje 30. 10. 2026: načrt, nič od tega ni narejeno. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“.
+Stanje 30. 10. 2026: del 1 (straža) narejen, deli 2–4 so načrt. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“.
 
 ## Zakaj
 
@@ -27,6 +27,25 @@ Dnevna vrstica po prevozniku, ki se ne obrezuje:
 * vozni red po dnevih v tednu: prvi delavnik, sobota in nedelja brez voženj, po vsakem viru. `do` danes kaže zadnji datum katerekoli storitve: pri Marpromu 20. 6. 2027, delavnikov pa ni od 1. 1. 2027.
 
 Odgovor na „to vpliva na druge buse“: vsaka sprememba zajema se ponovi na istih posnetih dneh (`lega`, način `ponovi_dan.py`) in primerja s to vrstico za vse prevoznike. Sprememba, ki enega izboljša in drugega poslabša, je vidna pred objavo. Pri Marpromu je izhodišče že znano: 1 012 in 1 026 od 1 136 voženj z lego (28. in 29. 10.).
+
+**Narejeno** (`kajros/straza.py`, `tests/test_straza.py`, ukaz `kajros straza`): tabele `straza_dan` (po prevozniku, ne obrezuje se), `straza_opazeno` (vozilo + vožnja, 14 dni), `straza_stevec`; vir pove samo `straza.vzorec(vir, vozilo, trip_id)` na vhodu (derp, lpp, nap, kranj, marprom); nočni `straza.dopolni` v `server._povzetki`. `kajros straza --baza A --proti-baza B --dan D` primerja dve bazi in izpiše, koga je sprememba poslabšala. Pri `trip.agency` je prevoznik po viru (`lpp`, `marprom`, `kranj`, IJPP id-ji); `1161` = vlaki SŽ.
+
+**Izhodišče**, arwen, 29. 10. 2026 (celoten dan, branje `mode=ro`, 5 s za dan, 23 s za vozni red in trase):
+
+| prevoznik | vožnje (načrt) | z lego | z meritvijo | postankov s prehodom | rep na končni nad 2 min, 20.–30. 10. | slabe trase / tras | delavnik do | sobota do | nedelja do |
+|---|---:|---:|---:|---:|---:|---:|---|---|---|
+| 1118 | 1 608 | 612 (38,1 %) | 1 038 | 0 % | 32 / 9 185 | 15 / 252 | 31. 12. 2027 | 25. 12. 2027 | 26. 12. 2027 |
+| 1119 | 3 990 | 3 838 (96,2 %) | 3 791 | 88,7 % | 0 / 28 606 | 28 / 1 345 | 31. 12. 2027 | 25. 12. 2027 | 26. 12. 2027 |
+| 1121 | 720 | 709 (98,5 %) | 656 | 87,3 % | 0 / 4 497 | 6 / 195 | 31. 12. 2027 | 25. 12. 2027 | 26. 12. 2027 |
+| 1123 | 4 091 | 3 993 (97,6 %) | 3 953 | 91,2 % | 4 / 32 536 | 40 / 1 120 | 31. 12. 2027 | 25. 12. 2027 | 26. 12. 2027 |
+| 1161 (SŽ) | 616 | – | 568 | 0 % | 272 / 4 903 | 3 / 279 | 11. 12. 2026 | 12. 12. 2026 | 6. 12. 2026 |
+| kranj | 159 | 154 | 153 | 91,9 % | 0 / 316 | 1 / 54 | 30. 11. 2026 | 28. 11. 2026 | ni |
+| lpp (mestni) | 2 227 | – | 2 152 | 0 % | 105 / 3 347 (le 29.–30.) | 0 / 111, 56 voženj brez trase | 6. 11. 2026 | 7. 11. 2026 | 1. 11. 2026 |
+| marprom | 1 136 | 1 026 (90,3 %) | 1 006 | 84,1 % | 0 / 1 715 | 6 / 145 | **31. 12. 2026** | 19. 6. 2027 | 20. 6. 2027 |
+
+„–“ = ne vemo (vira za nazaj leg ni hranil; `straza_opazeno` šteje od prvega zagona), ne 0 %. `prehod` je 0 % tam, kjer `gps_prehod` ne nastaja (mestni LPP, 1118, SŽ). Marprom po vrsti dne pokaže, česar `do` ne: delavnikov od 1. 1. 2027 ni, sobote in nedelje so do junija. Marprom z lego 28. 10. 1 012, 29. 10. 1 026 od 1 136 (kot prej). Merilo `rep na končni` je iz `obs` (surov feed, ne popravljen `run`): 1118 32 od 9 185 in Arriva (1123) 4 od 32 536 sta enaka prejšnji meritvi (31/8 936 in 4/31 633; drugi interval); mestni LPP 105 od 3 347, od tega linija 9 90 od 202 (`ed39350`: 76 od 85 samo smer Barje, ostalo 13 od 2 689). **Novo: SŽ 272 od 4 903 (5,5 %)**: pri vlakih rep doslej ni bil merjen; ni preverjeno, ali je ura ali vlak res stoji pred postajo.
+
+Trase: oblika `shape.points`/`osm` je seznam kosov `[[[lat,lon],...]]` pri vseh 3 505 trasah; slabe = manj kot 2 različni točki ali postajališče dlje od 200 m od črte.
 
 ### 2. Tabela opazovanega
 

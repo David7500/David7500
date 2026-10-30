@@ -41,7 +41,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, iz_lege, prehod, stats, viri
+from . import collector, config, db, geo, iz_lege, prehod, stats, straza, viri
 
 TZ = collector.TZ
 
@@ -228,18 +228,22 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
             tid = zamenjave[tid][0]
         if tid not in okna:
             st["brez_voznje"] += 1
+            straza.vzorec("nap", v["vozilo"], None, zdaj)
             continue
         dan = collector.resolve_service_date(tid, okna[tid], dnevi.get(tid), zdaj_dt)
         if dan is None:
             st["brez_dneva"] += 1
+            straza.vzorec("nap", v["vozilo"], None, zdaj)
             continue
         if stats.polnoc(dan) + okna[tid][0] - zdaj > PREZGODAJ_S:
             st["prezgodaj"] += 1
+            straza.vzorec("nap", v["vozilo"], None, zdaj)
             continue
         if nacin.get(tid) != "bus":
             st["vlakov"] += 1
             continue
         st["pripetih"] += 1
+        straza.vzorec("nap", v["vozilo"], tid, zdaj)
         out.append({**v, "trip_id": tid, "dan": dan, "agency": agencije.get(tid)})
     return out, st
 

@@ -48,7 +48,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, gtfs, iz_lege, stats, viri
+from . import collector, config, db, geo, gtfs, iz_lege, stats, straza, viri
 
 TZ = collector.TZ
 MP = gtfs.MP
@@ -383,6 +383,7 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
         vozilo_id = f"marprom-{v['naprava']}"
         if s.trip_id is None:
             if v["linija"]:
+                straza.vzorec("marprom", vozilo_id, None, zdaj)
                 brez_voznje.append({
                     "vehicle_id": vozilo_id, "lat": v["lat"], "lon": v["lon"],
                     "bearing": s.smer, "seen_ts": ts,
@@ -392,6 +393,7 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
                     "naslednja_id": v["naslednja"] or None})
             continue
         st["pripetih"] += 1
+        straza.vzorec("marprom", vozilo_id, s.trip_id, zdaj)
         conn.execute(
             "INSERT INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon, bearing,"
             "                        speed_ms, vehicle_id) VALUES(?,?,?,?,?,?,?,?) "

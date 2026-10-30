@@ -22,7 +22,7 @@ from typing import Callable
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import collector, config, db, gtfs, iz_lege, stats, viri
+from . import collector, config, db, gtfs, iz_lege, stats, straza, viri
 
 TZ = collector.TZ
 KR = gtfs.KR
@@ -65,16 +65,19 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float) -> dict:
         if zdaj - v["ts"] > collector.POSITION_FRESH_S:
             st["starih"] += 1
             continue
+        vozilo_id = f"kranj-{v['vozilo']}"
         tid = KR + v["trip"] if v["trip"] else None
         if tid not in okna:
             st["brez_voznje"] += 1
+            straza.vzorec("kranj", vozilo_id, None, zdaj)
             continue
         dan = _dan(tid, v["dan"], okna[tid], dnevi, zdaj)
         if dan is None:
             st["brez_voznje"] += 1
+            straza.vzorec("kranj", vozilo_id, None, zdaj)
             continue
         st["pripetih"] += 1
-        vozilo_id = f"kranj-{v['vozilo']}"
+        straza.vzorec("kranj", vozilo_id, tid, zdaj)
         conn.execute(
             "INSERT INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon, bearing,"
             "                        speed_ms, vehicle_id) VALUES(?,?,?,?,?,?,?,?) "

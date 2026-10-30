@@ -11,6 +11,7 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
+from . import straza
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
                journey, naslovi, ocena, odkloni, peroni, pot, prehod, pripni, stats, tiri,
                weather, zamude_lpp, zamude_sz, zive)
@@ -269,6 +270,31 @@ def cmd_seed(args):
     omr = None if args.network == "vse" else args.network
     print(json.dumps(db.build_seed(conn, Path(args.out), omr),
                      indent=2, ensure_ascii=False))
+
+
+def _straza_baza(pot):
+    if pot is None:
+        conn = db.connect()
+        db.init(conn)
+        return conn
+    conn = sqlite3.connect(f"file:{pot}?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def cmd_straza(args):
+    conn = _straza_baza(args.baza)
+    dan, vrstice = straza.beri(conn, args.dan, args.racunaj)
+    print(straza.izpis(dan, vrstice))
+    if args.proti or args.proti_baza:
+        druga = _straza_baza(args.proti_baza) if args.proti_baza else conn
+        dan_b, b = straza.beri(druga, args.proti or dan, args.racunaj)
+        ime_a = f"{args.baza or 'baza'} {dan}"
+        ime_b = f"{args.proti_baza or args.baza or 'baza'} {dan_b}"
+        print()
+        print(straza.izpis(dan_b, b))
+        print()
+        print(straza.izpis_primerjave(ime_a, ime_b, straza.primerjaj(vrstice, b)))
 
 
 def cmd_repair(args):
@@ -622,6 +648,15 @@ def main(argv=None):
     a.add_argument("--network", default="zeleznica",
                    help="katero omrezje naj bo v semenu; 'vse' za vsa")
     a.set_defaults(func=cmd_seed)
+
+    a = sub.add_parser("straza", help="dnevna vrstica po prevozniku; primerja dva dneva ali bazi")
+    a.add_argument("--dan", help="prometni dan; privzeto zadnji shranjeni")
+    a.add_argument("--proti", metavar="DAN", help="primerjaj z drugim dnem")
+    a.add_argument("--baza", help="beri to bazo samo za branje")
+    a.add_argument("--proti-baza", metavar="POT",
+                   help="primerjaj z drugo bazo, npr. ponovljen dan z drugo različico zajema")
+    a.add_argument("--racunaj", action="store_true", help="izračunaj znova, ne beri shranjenega")
+    a.set_defaults(func=cmd_straza)
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)

@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS edge (
 -- torej to edini vir.
 CREATE TABLE IF NOT EXISTS shape (
     shape_id TEXT PRIMARY KEY,
-    points   TEXT NOT NULL,     -- JSON [[lat,lon], ...], 5 decimalk (~1 m)
+    points   TEXT NOT NULL,     -- JSON seznam kosov [[[lat,lon], ...], ...], 5 decimalk (~1 m)
     -- Ista trasa, pripeta na ceste oz. tire OSM (`pripni.py`), za prikaz.
     -- NULL, dokler ni pripeta; prikaz takrat riše `points`.
     osm      TEXT
@@ -523,6 +523,33 @@ CREATE TABLE IF NOT EXISTS stat_dan (
     izracunano  INTEGER NOT NULL,   -- epoha izračuna
     PRIMARY KEY (dan, vrsta, kljuc)
 );
+
+-- Straža po prevoznikih (`straza.py`, `docs/OPAZOVANO.md`). `straza_dan` se ne
+-- obrezuje; `stanje` (vozni red, trase) samo za dan izračuna, za nazaj ga ni.
+CREATE TABLE IF NOT EXISTS straza_dan (
+    dan         TEXT NOT NULL,      -- prometni dan
+    prevoznik   TEXT NOT NULL,      -- trip.agency, za vozila brez vožnje vir
+    merila      TEXT NOT NULL,      -- JSON
+    stanje      TEXT,               -- JSON
+    izracunano  INTEGER NOT NULL,
+    PRIMARY KEY (dan, prevoznik)
+);
+-- Katero vozilo je vir videl in na kateri vožnji; '' = brez vožnje. 14 dni.
+CREATE TABLE IF NOT EXISTS straza_opazeno (
+    dan      TEXT NOT NULL,
+    vir      TEXT NOT NULL,
+    vozilo   TEXT NOT NULL,
+    trip_id  TEXT NOT NULL,
+    vzorcev  INTEGER NOT NULL,
+    PRIMARY KEY (dan, vir, vozilo, trip_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS straza_stevec (
+    dan       TEXT NOT NULL,
+    prevoznik TEXT NOT NULL,
+    ime       TEXT NOT NULL,
+    n         INTEGER NOT NULL,
+    PRIMARY KEY (dan, prevoznik, ime)
+) WITHOUT ROWID;
 
 -- Statistika ene vožnje ali linije (`statistika._voznje`): stran
 -- `/statistika/vlak/…` in `/statistika/linija/…` bere eno vrstico po poti.

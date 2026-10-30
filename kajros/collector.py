@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, geo, iz_lege, stats, viri, zive
+from . import config, db, geo, iz_lege, stats, straza, viri, zive
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -700,6 +700,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
             if vir == "lpp" and ura_na_koncni(conn, trip_id, service_date, seq, prev,
                                               sched.get((trip_id, seq)), arr, ts):
                 ure_na_koncni += 1
+                straza.stevec(conn, service_date, trip_id, "ure_na_koncni")
                 continue
 
             conn.execute(
@@ -916,7 +917,7 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     izid = ingest(conn, feed, vir="lpp", pari=zv["pari"], dvojniki=zv["dvojniki"])
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
     brez_voznje: list[dict] = []
-    lege = ingest_positions(conn, feed, brez_voznje, zv["pari"])
+    lege = ingest_positions(conn, feed, brez_voznje, zv["pari"], vir="lpp")
     _zapisi_brez_voznje(conn, izid.pop("proge"),
                         [v for v in brez_voznje if v["trip_id"] not in zv["dvojniki"]],
                         zv["brez_para"])
@@ -1044,7 +1045,7 @@ POSITION_FRESH_S = 180
 
 def ingest_positions(conn: sqlite3.Connection, feed,
                      brez_voznje: list[dict] | None = None,
-                     pari: dict[str, str] | None = None) -> dict:
+                     pari: dict[str, str] | None = None, vir: str = "derp") -> dict:
     """Zapiše trenutno lego vozil.
 
     Feed `vehicle_positions` nosi **samo avtobuse** -- vlakov v njem ni. Za
@@ -1099,6 +1100,7 @@ def ingest_positions(conn: sqlite3.Connection, feed,
         if not v.HasField("position"):
             continue
         if trip_id not in known:
+            straza.vzorec(vir, v.vehicle.id, None, seen_at)
             if brez_voznje is not None and trip_id:
                 brez_voznje.append({
                     "trip_id": trip_id, "vehicle_id": v.vehicle.id or None,
@@ -1127,6 +1129,7 @@ def ingest_positions(conn: sqlite3.Connection, feed,
              stop_seq, v.current_status,
              v.vehicle.id or None, v.vehicle.license_plate or None),
         )
+        straza.vzorec(vir, v.vehicle.id, trip_id, seen_at)
         written += 1
 
     # Stare lege pobrisi -- tabela naj ostane "zdaj", ne smetisce.

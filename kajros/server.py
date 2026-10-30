@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import sys
+import sqlite3
 import threading
 import time
 from collections import deque
@@ -17,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import straza
 from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, kranj,
                marprom, nap, obisk, ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
                weather, zamude_lpp, zamude_sz, zasedenost)
@@ -325,6 +327,13 @@ def _povzetki() -> None:
     except Exception as exc:              # statistika ni kriticna za zajem
         conn.rollback()
         _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
+    # Svoj poskus: izpad povzetkov ne sme vzeti dneva straži, `lega` izgine po 14 dneh.
+    try:
+        dnevi = straza.dopolni(conn)
+        _log(f"straža: {len(dnevi)} dni")
+    except Exception as exc:              # noqa: BLE001 -- isto kot zgoraj
+        conn.rollback()
+        _log(f"straže ni bilo mogoče izračunati: {exc}")
     finally:
         conn.close()
 
@@ -634,6 +643,12 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 conn.rollback()
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
             viri.shrani(conn, "vreme")        # bere enkrat na dan: preživi zagon
+
+        try:
+            straza.izprazni(conn)
+        except sqlite3.Error as exc:        # opazovanje ne sme ustaviti zajema
+            conn.rollback()
+            _log(f"straže ni bilo mogoče zapisati: {exc}")
 
         # Nocno vzdrzevanje: obrez dnevnika in razrezi statistike. Prej je bilo
         # oboje priklopljeno na vremensko opravilo in z `KAJROS_WEATHER=0` ni teklo
