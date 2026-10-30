@@ -2334,24 +2334,50 @@ def _znacka(*kljuci: str) -> tuple:
         return tuple(db.get_meta(conn, k) for k in kljuci)
 
 
+#: Vožnja s prevoženo končno je končana, če vozilo pelje proti trasi ali je
+#: daleč od nje. Do 120° je še ovinek ali zanka na končni; 300 m = `NA_TRASI_M`.
+KONCANA_KOT = 120.0
+KONCANA_ODMIK_M = 300.0
+
+
+def _voznja_koncana(d: dict, trasa) -> bool:
+    """Vozilo je končno že prevozilo, feed pa ga drži na stari vožnji.
+
+    LPP 9 proti Barju: vožnja 10.34-10.49 v feedu do 11.14, vozilo od 11.06 že
+    pelje nazaj, 1,6 km od končne. Pot naprej in ocena po trasi bi kazali
+    nasproti vozilu (30. 10. 2026, `docs/MERITVE.md`).
+    """
+    if trasa is None or d["measured_seq"] is None or d["measured_seq"] != d["last_seq"]:
+        return False
+    along, odmik = trasa.projiciraj(d["lat"], d["lon"], najvec_m=KONCANA_ODMIK_M)
+    if odmik > KONCANA_ODMIK_M:
+        return True
+    smer = trasa.smer(along, 15)
+    if smer is None or d["bearing"] is None:
+        return False
+    return abs((d["bearing"] - smer + 180) % 360 - 180) > KONCANA_KOT
+
+
 def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     """Vsa vozila z GPS, brez `age_s`. Ta je odvisen od trenutka in se doda
     ob strezbi -- sicer bi predpomnjen odgovor lagal o starosti lege."""
     now = int(zdaj.timestamp())
     now_s = journey.now_seconds(zdaj)
     rows = conn.execute(
-        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign, t.network, t.shape_id "
+        "SELECT v.*, t.train_no, t.mode, t.agency, t.headsign, t.network, t.shape_id, "
+        "       t.last_seq "
         "FROM vehicle_now v JOIN trip t USING (trip_id) "
         "WHERE v.seen_ts >= ? ORDER BY t.train_no",
         (now - collector.POSITION_FRESH_S,),
     ).fetchall()
     out = [dict(r) for r in rows]
+    trase = {}
     for d in out:
         d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
         # Lega za risbo: na pripeti trasi, desni pas, smer ceste (`pripni.py`).
         # GPS je od osi ceste v mediani 3,8 m in zemljevid od blizu ga je
         # risal ob cesti ali čeznjo. Meritev ostane v `lat`/`lon`.
-        trasa = deljenje.trasa(conn, d.pop("shape_id"))
+        trasa = trase[d["trip_id"]] = deljenje.trasa(conn, d.pop("shape_id"))
         if trasa is not None:
             cesta = pripni.na_cesto(trasa, d["lat"], d["lon"], d["bearing"])
             if cesta is not None:
@@ -2381,6 +2407,9 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
         d["delay_s"] = stats.trenutna_zamuda(m)
         d["last_stop"] = m["name"] if m else None
         d["measured_seq"] = m["stop_seq"] if m else None
+        if _voznja_koncana(d, trase[d["trip_id"]]):
+            d["koncana"] = True
+        del d["last_seq"]
     out += _vozila_brez_voznje(conn, now)
     # Lega v float32 iz baze nosi 15 števk: 0,1 m in 0,1° zadoščata, odgovor
     # gre vsakemu zemljevidu na 10 s (600 vozil ~46 kB stisnjeno; zaokroženo

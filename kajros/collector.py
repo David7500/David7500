@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, iz_lege, stats, viri, zive
+from . import config, db, geo, iz_lege, stats, viri, zive
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -311,6 +311,52 @@ def undoes_passing(prev, sched_row, service_date, arr, dep, ts) -> bool:
     return (t0 + old) < ts - PASSED_MARGIN_S and (t0 + new) > ts
 
 
+#: `|voznored + zamuda - feed_ts|`, pod katero je napoved prihoda "zdaj".
+URA_NA_KONCNI_S = 45
+#: Za toliko se mora vozilo približati končni, da rast zamude velja.
+BLIZE_KONCNI_M = 20
+#: Lega, starejša od tega, ni dokaz, kje vozilo je: takrat ostane feed.
+LEGA_ZA_KONCNO_S = 180
+_najblizje_koncni: dict[tuple[str, str], float] = {}
+
+
+def ura_na_koncni(conn, trip_id: str, service_date: str, seq: int, prev,
+                  sched_row, arr, ts) -> bool:
+    """Ali je rast zamude na končni samo ura, ker se vozilo končni ne bliža?
+
+    Mestni LPP prihoda na končno včasih ne zazna in od tam napoveduje prihod
+    "zdaj": zamuda raste minuto na minuto, tudi ko vozilo stoji na končni ali
+    pelje nazaj. LPP 9 proti Barju 76 od 85 voženj (mediana +17 min), ostale
+    linije 13 od 2 689 (arwen, 29.-30. 10. 2026). Vseh repov ne smemo zavreči:
+    začetek repa je proti zaslonom LPP slabši od zadnje vrednosti (126 proti 75
+    od 1 235 voženj nad 2 min), ker vozilo v koloni zamudo res nabira. Zato
+    odloči GPS: rast velja, kadar je vozilo končni bližje kot kdaj prej na tem
+    repu. Ob vnovičnem zagonu velja prvo branje. Brez sveže lege ostane feed.
+    """
+    if prev is None or prev["delay_arr"] is None or arr is None or arr <= prev["delay_arr"]:
+        return False
+    t_s = _cas_zamude(sched_row, "arrival") if sched_row is not None else None
+    if t_s is None or abs(stats.polnoc(service_date) + t_s + arr - ts) > URA_NA_KONCNI_S:
+        return False
+    r = conn.execute(
+        "SELECT v.lat, v.lon, v.seen_ts, st.lat AS k_lat, st.lon AS k_lon "
+        "FROM trip t JOIN vehicle_now v USING (trip_id) "
+        "JOIN sched s ON s.trip_id = t.trip_id AND s.stop_seq = t.last_seq "
+        "JOIN station st ON st.stop_id = s.stop_id "
+        "WHERE t.trip_id = ? AND t.last_seq = ?", (trip_id, seq)).fetchone()
+    if r is None or r["seen_ts"] < ts - LEGA_ZA_KONCNO_S:
+        return False
+    razdalja = geo.haversine(r["lat"], r["lon"], r["k_lat"], r["k_lon"])
+    kljuc = (trip_id, service_date)
+    naj = _najblizje_koncni.get(kljuc)
+    if naj is not None and naj - razdalja < BLIZE_KONCNI_M:
+        return True
+    if len(_najblizje_koncni) > 5000:
+        _najblizje_koncni.clear()
+    _najblizje_koncni[kljuc] = razdalja
+    return False
+
+
 def is_forecast(prev, sched_row, service_date) -> bool:
     """Ali je bila zapisana vrednost NAPOVED -- objavljena, preden bi vozilo
     lahko bilo tam?
@@ -497,6 +543,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
     trips_seen = 0
     skipped = 0
     blips = 0
+    ure_na_koncni = 0
     smoothed = 0
     # GTFS-RT zna povedati, da je voznja odpovedana (`schedule_relationship`),
     # a SZ tega polja ne uporablja -- odpovedi sporocajo z besedilom obvestila
@@ -650,6 +697,11 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
                 unpassed += 1
                 continue
 
+            if vir == "lpp" and ura_na_koncni(conn, trip_id, service_date, seq, prev,
+                                              sched.get((trip_id, seq)), arr, ts):
+                ure_na_koncni += 1
+                continue
+
             conn.execute(
                 "INSERT INTO run(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts) "
                 "VALUES(?,?,?,?,?,?) "
@@ -665,7 +717,8 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
     iz_lege.izpusti(nap_prevzel)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "nap_prevzel": len(nap_prevzel), "sz_prevzel": sz_prevzel,
-            "blips": blips, "unpassed": unpassed, "smoothed": smoothed,
+            "blips": blips, "unpassed": unpassed, "ure_na_koncni": ure_na_koncni,
+            "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
             "neznanih": neznanih, "zamenjanih": zamenjanih, "pripetih": pripetih,
             "proge": proge}
