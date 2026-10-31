@@ -3412,3 +3412,14 @@ zapored v istem koraku enkrat: senca 30. 10. ob 7:12, 7:14, 7:16. Do tega dne se
 je napaka zamud ali LPP po 5 min kazala kot „derp.si ne odgovarja“ (zapis
 branja razveljavljen), zdaj kot `zajem_napake` (rumeno, od treh zapored oranžno).
 
+Uvoz voznega reda ob 4:20 (`KAJROS_REFRESH=subprocess`, zanka čaka podproces),
+17.–31. 10. 2026: zadnji zapis zanke pred uvozom 4:19:34–4:20:06, konec uvoza
+4:24:05–4:25:01 (17. 10. 4:27:25), prvi zapis po njem 3–23 s pozneje -- zanka
+stoji 4 min 05 s do 5 min 01 s, 17. 10. 7 min 25 s. 30. 10. (delavnik) ob
+4:20–4:23 mestni LPP 0 zapisov `run` na minuto (prej 4–24, nato 9), primestni
+0 tri minute; tedaj vozi 11 mestnih, 3 primestne LPP, 20 vlakov in 28 drugih
+avtobusov. Zaklep: druge niti dobijo „database is locked“ ob 4:24:02–4:24:15
+(čakale 30 s, torej pisanje uvoza drži bazo od ≤ 4:23:3x do konca, ≥ 45–80 s):
+zemljevid SŽ vsako noč 20.–31. 10., NAP od 22. 10., Kranj 28.–31. 10., peroni
+in obisk občasno; lege NAP 30. 10. ob 4:23 71 na minuto namesto ~165.
+

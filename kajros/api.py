@@ -1727,6 +1727,11 @@ def api_health():
         # Izjema v naši obdelavi po koraku zanke (`collector.zapisi_korak`):
         # do 31. 10. 2026 se je kazala kot „derp.si ne odgovarja“.
         out["zajem_napake"] = json.loads(db.get_meta(conn, "zajem_napake") or "{}")
+        # Srčni utrip glavne zanke in uvoz voznega reda, ki jo ustavi
+        # (`server.refresh_timetable`): zanka, ki čaka, ni molk derp.si.
+        if v := db.get_meta(conn, "zanka_ts"):
+            out["zanka_ts"] = int(v)
+        out["uvoz"] = json.loads(db.get_meta(conn, "uvoz") or "{}")
         # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
         # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
         # pregledu nikomur nič ne pove.

@@ -251,6 +251,34 @@ def refresh_timetable(conn, mode: str) -> None:
     """
     if mode == "off":
         return
+    # Med uvozom zanka zajema čaka (podproces ali isti proces), zdravje pa je
+    # to kazalo kot „derp.si ne odgovarja“: 17.--31. 10. 2026 vsako noč
+    # 4 min 05 s do 5 min 01 s, 17. 10. 7 min 25 s (`zdravje`, vrstica `zanka`).
+    _zapisi_uvoz(conn, {"od": int(time.time()), "do": None})
+    try:
+        _uvozi(conn, mode)
+    finally:
+        _zapisi_uvoz(conn, {**_beri_uvoz(conn), "do": int(time.time())})
+
+
+def _beri_uvoz(conn) -> dict:
+    try:
+        return json.loads(db.get_meta(conn, "uvoz") or "{}")
+    except ValueError:
+        return {}
+
+
+def _zapisi_uvoz(conn, uvoz: dict) -> None:
+    """`meta.uvoz` za zdravje; ločena transakcija, napaka uvoza ne sme pasti
+    zaradi pregleda."""
+    try:
+        db.set_meta(conn, "uvoz", json.dumps(uvoz, ensure_ascii=False, sort_keys=True))
+        conn.commit()
+    except sqlite3.Error:
+        conn.rollback()
+
+
+def _uvozi(conn, mode: str) -> None:
     if mode == "subprocess":
         # Lasten naslovni prostor: ob koncu se ves pomnilnik vrne sistemu.
         proc = subprocess.run(
@@ -554,8 +582,18 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # ker ga za tem posnetkom ni mogoče prepisati. Glej `zamude_sz.teci()`.
     # Nato `collector.zapisi_korak`: izjema v naši obdelavi ni molk vira
     # (vrstica zdravja `zajem_napake`, ne „derp.si ne odgovarja“).
+    utrip = 0.0
     while not _stop.is_set():
         started = time.monotonic()
+        # Srčni utrip zanke (`meta.zanka_ts`, vrstica zdravja `zanka`): zanka,
+        # ki čaka uvoz ali obtiči v koraku, ni molk vira.
+        if started >= utrip:
+            utrip = started + interval
+            try:
+                db.set_meta(conn, "zanka_ts", str(int(time.time())))
+                conn.commit()
+            except sqlite3.Error:
+                conn.rollback()
         if started >= next_trips:
             next_trips = started + interval
             try:

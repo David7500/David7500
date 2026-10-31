@@ -423,6 +423,54 @@ def test_napaka_nase_kode_ni_molk_vira():
     assert zdravje.ocena(z, m, T + 30)["zajem_napake"] == (zdravje.DOBRA, "")
 
 
+def test_uvoz_voznega_reda_ni_molk_derp():
+    """Uvoz ob 4:20 ustavi glavno zanko (17.--31. 10. 2026 4--5 min, 17. 10.
+    7,4 min): zdravje pove uvoz, ne „derp.si ne odgovarja“. Zanka, ki brez
+    uvoza ne tiktaka, je obstala (rdeče); obhod s štirimi časovnimi mejami
+    derp.si (do 4 min) to še ni."""
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 20, "avtobus": 40}
+    z["derp_prebran"] = {"ijpp": T - 6 * 60, "lpp": T - 6 * 60}
+    z["derp_vsebina"] = {"ijpp": T - 11 * 60, "lpp": T - 11 * 60}
+    z["zanka_ts"] = T - 20
+    z["uvoz"] = {"od": T - 3600, "do": T - 3300}
+    o = zdravje.ocena(z, STROJ, T)
+    assert o["zanka"] == (zdravje.DOBRA, "") and "ne odgovarja" in o["derp_ijpp"][1]
+
+    z["zanka_ts"], z["uvoz"] = T - 5 * 60, {"od": T - 6 * 60, "do": None}
+    o = zdravje.ocena(z, STROJ, T)
+    assert o["zanka"][0] == zdravje.MLACNA and "uvoz voznega reda teče 6 min" in o["zanka"][1]
+    assert o["derp_ijpp"] == ("", "") and o["derp_lpp"] == ("", "")
+    assert _posta(z) == {}
+    z["uvoz"]["od"] = T - 16 * 60
+    assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.ORANZNA
+    assert set(_posta(z)) == {"zanka"} and not _posta(z)["zanka"].nujno
+
+    z["uvoz"] = {"od": T - 3600, "do": T - 3300}                # brez uvoza
+    assert zdravje.ocena(z, STROJ, T)["zanka"] == (zdravje.DOBRA, "")
+    z["zanka_ts"] = T - 11 * 60
+    assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.SLABA
+    assert set(_posta(z)) == {"zanka"} and _posta(z)["zanka"].nujno
+
+
+def test_uvoz_zapise_zacetek_in_konec(monkeypatch):
+    """`meta.uvoz` ve, da uvoz teče, in ga zapre tudi ob napaki."""
+    import pytest
+    from kajros import db, server
+
+    c = db.connect(":memory:")
+    db.init(c)
+
+    def pade(conn, mode):
+        assert json.loads(db.get_meta(conn, "uvoz"))["do"] is None
+        raise RuntimeError("zip ni zip")
+    monkeypatch.setattr(server, "_uvozi", pade)
+    with pytest.raises(RuntimeError):
+        server.refresh_timetable(c, "subprocess")
+    uv = json.loads(db.get_meta(c, "uvoz"))
+    assert uv["od"] <= uv["do"]
+
+
 def test_zavrnjena_prijava_nap_v_posti_po_uri():
     z = _zdravo()
     z["nap"] = {"ts": T - 20 * 60, "http": 401, "napaka_ts": T - 60}

@@ -277,6 +277,8 @@ Vsaka nit svojo povezavo, vsak `except` okoli pisanja najprej razveljavi. Sicer 
 
 * **Izjema v naši obdelavi ≠ molk vira** (`collector.zapisi_korak`, `meta.zajem_napake`). `rollback` razveljavi tudi zapis branja (`rt_fetched`) → do 31. 10. 2026 „derp.si ne odgovarja“. Napako branja označi `viri.branje` (`viri.iz_vira`), ta ne šteje; po koraku zanke (`zamude`, `lege`, `lpp`, `obvestila`, `ocena`) zadnja napaka, kje (datoteka:vrstica ← klicatelj), od kdaj, koliko zapored. Vrstica `zajem_napake`: rumeno, od 3 zapored oranžno. Odgovor derp.si v zdravju iz dnevnika virov (`uspeh_ts`), vsebina se med napako ne ocenjuje. 17.–31. 10. na arwenu 22× „database is locked“ (busy 30 s) + 1 `KeyError`, tri zapored enkrat (senca 30. 10. 7:12–7:16).
 
+* **Uvoz voznega reda ustavi glavno zanko** (`KAJROS_REFRESH=subprocess` čaka podproces v niti zanke): 17.–31. 10. 2026 4 min 05 s – 5 min 01 s (17. 10. 7 min 25 s), zamude in lege derp.si, obvestila, senca. Uvoz piše v eni transakciji (`gtfs.import_static`), zadnjih ≥ 45–80 s zaklenjeno: zemljevid SŽ, NAP, Kranj, peroni vsako noč „database is locked“ enkrat. Zato uvoz NI vzporeden (odločitev Davidova, `docs/VIRI-PRESOJA.md` točka 5). Zdravje: `meta.zanka_ts` (utrip na `POLL_SECONDS`), `meta.uvoz` (`od`, `do`); vrstica `zanka` med uvozom rumeno (od 15 min oranžno), brez uvoza 10 min tiho rdeče; `derp_*` se takrat ne ocenjujejo.
+
 ## Vodilni vir vodi samo, kadar kaj da (31. 10. 2026)
 
 * **NAP vodi medkrajevne** (`iz_lege.nap_prebran`) šele, ko odgovor pripne vsaj eno vozilo; **zemljevid SŽ vlake** (`iz_lege.sz_prebran`), ko ima vlak, ki ga pripnemo. Prazen ali nepripet odgovor 200 je prej utišal derp.si — nobene zamude nikjer. Nov vodilni vir: isto pravilo.

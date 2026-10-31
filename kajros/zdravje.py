@@ -134,6 +134,17 @@ KORAKI = {"zamude": "zamude IJPP", "lege": "lege IJPP", "lpp": "mestni LPP",
           "obvestila": "obvestila IJPP", "ocena": "senčno merjenje"}
 DERP_KORAK = {"ijpp": ("zamude", "derp_zamude"), "lpp": ("lpp", "derp_lpp")}
 
+#: Glavna zanka zajema (`meta.zanka_ts`, na `POLL_SECONDS`): utrip, starejši od
+#: `ZANKA_CAKA_S`, med uvozom voznega reda pomeni, da zanka čaka uvoz (17.--31.
+#: 10. 2026 4 min 05 s do 5 min 01 s, 17. 10. 7 min 25 s); brez uvoza je zanka
+#: obstala šele po `ZANKA_STOJI_S` -- obhod, v katerem vsi štirje klici derp.si
+#: dosežejo časovno mejo (60 s), traja do 4 min in je molk vira, ne zanke.
+ZANKA_CAKA_S = 90
+ZANKA_STOJI_S = 600
+#: Uvoz, ki teče dvakrat dlje od najdaljšega izmerjenega, se ne bo končal sam
+#: (časovna meja podprocesa je 30 min, toliko bi čakala zanka).
+UVOZ_ORANZNO_S = 15 * 60
+
 #: Ure dneva, ko gre oranžna pošta: ni nujna, ponoči ne zvoni.
 DAN_OD_H, DAN_DO_H = 7, 22
 
@@ -401,6 +412,19 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
     # lahko trajna sprememba, o kateri je treba odločiti.
     # Odgovor z vsebino, ki je ista že `DERP_ZAMRZNJEN_S`, je isto kot molk:
     # zajem takrat vožnje izpusti in zamude pišejo rezerve (`iz_lege`).
+    # Glavna zanka, ki čaka uvoz voznega reda ali obstane, derp.si ne bere:
+    # njegovih vrstic takrat ni mogoče oceniti, resnico pove vrstica `zanka`.
+    zt, uv = z.get("zanka_ts"), z.get("uvoz") or {}
+    uvoz_s = zdaj - uv["od"] if uv.get("od") and not uv.get("do") else None
+    caka = zt is not None and zdaj - zt > (ZANKA_CAKA_S if uvoz_s is not None else ZANKA_STOJI_S)
+    if zt is not None:
+        out["zanka"] = (
+            (DOBRA, "") if not caka
+            else ((ORANZNA if uvoz_s >= UVOZ_ORANZNO_S else MLACNA),
+                  f"uvoz voznega reda teče {_min(uvoz_s)}, zanka zajema čaka "
+                  f"(zamude in lege derp.si, obvestila)") if uvoz_s is not None
+            else (SLABA, f"zanka zajema stoji od pred {_min(zdaj - zt)}"))
+
     # Izjema v naši obdelavi (`zajem_napake` spodaj) razveljavi zapis branja:
     # odgovor vira zato vzamemo iz dnevnika virov, vsebine pa takrat ne vemo.
     dp = z.get("derp_prebran")
@@ -409,6 +433,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
             if v.get("zapored") and zdaj - (v.get("ts") or 0) <= KODA_POZABI_S}
     if dp is not None and not (vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ):
         for vir, ts in sorted(dp.items()):
+            if caka:
+                out[f"derp_{vir}"] = ("", "")
+                continue
             korak, kljuc = DERP_KORAK.get(vir, ("", ""))
             molk = zdaj - max(ts, ((m.get("viri") or {}).get(kljuc) or {}).get("uspeh_ts") or 0)
             star = zdaj - dv[vir] if vir in dv and korak not in pade else 0
@@ -658,6 +685,7 @@ IMENA = {
     "opazovano": "opazovano · nočni račun",
     "fantomi": "avtobusi · zamuda raste z uro",
     "zajem_napake": "zajem · naša obdelava",
+    "zanka": "zajem · glavna zanka",
     "disk": "disk",
     "wal": "WAL",
 }
@@ -704,6 +732,8 @@ _POSTA: dict[str, tuple[str, int]] = {
     "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzameta `promet.sqlite` "
              "in varnostne kopije.", 600),
     "wal": ("Prepis WAL v bazo ne teče -- kdo drži star posnetek. " + _RESTART, 600),
+    "zanka": ("Glavna zanka zajema (derp.si, obvestila, senca) ne tiktaka, nit pa živi -- "
+              "obtičala je v koraku. " + _RESTART, 600),
 }
 _NIT = ("Nit je umrla in ne vstane do ponovnega zagona. " + _RESTART, 600)
 
@@ -728,6 +758,8 @@ _ORANZNO: dict[str, tuple[str, int]] = {
                   "derp.si trajna (gitlab.com/derp-si), in se odloči za drug vir.", 600),
     "derp_lpp": ("Rezerva so LPP-jevi zasloni; brez podatkov je primestni LPP. Preveri, ali "
                  "je sprememba pri derp.si trajna (gitlab.com/derp-si).", 600),
+    "zanka": ("Uvoz voznega reda teče predolgo in drži glavno zanko zajema (časovna meja "
+              "podprocesa 30 min). Na arwenu `pgrep -af 'kajros.cli update'`. " + CLAUDE, 0),
     "zajem_napake": ("Vir odgovarja, pade naša obdelava: vrstica pove korak, izjemo in kje "
                      "v kodi (datoteka:vrstica ← klicatelj). " + CLAUDE, 600),
 }
