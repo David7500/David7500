@@ -144,6 +144,9 @@ ZANKA_STOJI_S = 600
 #: Uvoz, ki teče dvakrat dlje od najdaljšega izmerjenega, se ne bo končal sam
 #: (časovna meja podprocesa je 30 min, toliko bi čakala zanka).
 UVOZ_ORANZNO_S = 15 * 60
+#: Začetek brez konca, starejši od dvojne časovne meje podprocesa, je uvoz,
+#: ki ga je prekinil ponovni zagon -- ne teče več.
+UVOZ_NAJDLJE_S = 2 * 1800
 
 #: Nočni uvoz in opravila (`meta.uvoz`, `meta.nocno`): ena neuspela noč je
 #: lahko vir (zavrnjen zip 28. 9. 2026 se je popravil sam), dve zapored ne.
@@ -428,7 +431,8 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
     # Glavna zanka, ki čaka uvoz voznega reda ali obstane, derp.si ne bere:
     # njegovih vrstic takrat ni mogoče oceniti, resnico pove vrstica `zanka`.
     zt, uv = z.get("zanka_ts"), z.get("uvoz") or {}
-    uvoz_s = zdaj - uv["od"] if uv.get("od") and not uv.get("do") else None
+    uvoz_s = (zdaj - uv["od"] if uv.get("od") and not uv.get("do")
+              and zdaj - uv["od"] <= UVOZ_NAJDLJE_S else None)
     caka = zt is not None and zdaj - zt > (ZANKA_CAKA_S if uvoz_s is not None else ZANKA_STOJI_S)
     if zt is not None:
         out["zanka"] = (

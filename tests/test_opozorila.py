@@ -450,6 +450,8 @@ def test_uvoz_voznega_reda_ni_molk_derp():
     assert zdravje.ocena(z, STROJ, T)["zanka"] == (zdravje.DOBRA, "")
     z["zanka_ts"] = T - 11 * 60
     assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.SLABA
+    z["uvoz"] = {"od": T - 9 * 3600, "do": None}                # prekinjen z zagonom
+    assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.SLABA
     assert set(_posta(z)) == {"zanka"} and _posta(z)["zanka"].nujno
 
 
