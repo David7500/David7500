@@ -138,6 +138,8 @@ def test_zip_brez_vlakov_ne_izbrise_voznega_reda(tmp_path):
     # Pravi nov vozni red: druge vožnje, isti prevoznik.
     izid = gtfs.import_static(c, _zip(tmp_path / "nov.zip", ["v2", "v3"]), lpp_zip=None)
     assert izid["trips_rail"] == 2
+    # Vožnje z voznim redom po prevozniku pred in po uvozu (zdravje `nocno`).
+    assert izid["prevozniki"] == {"1161": [1, 2]}
 
 
 def test_zip_s_tujimi_trasami_se_zavrne(tmp_path):

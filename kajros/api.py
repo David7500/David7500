@@ -1731,7 +1731,12 @@ def api_health():
         # (`server.refresh_timetable`): zanka, ki čaka, ni molk derp.si.
         if v := db.get_meta(conn, "zanka_ts"):
             out["zanka_ts"] = int(v)
-        out["uvoz"] = json.loads(db.get_meta(conn, "uvoz") or "{}")
+        out["uvoz"] = uv = json.loads(db.get_meta(conn, "uvoz") or "{}")
+        if uv.get("prevozniki"):                    # po imenu, kot `lega_brez_zamude`
+            uv["prevozniki"] = {stats.AGENCY_NAMES.get(ag, ag): v
+                                for ag, v in uv["prevozniki"].items()}
+        # Nočna opravila po opravilu (`collector.zapisi_korak`, zapored = noči).
+        out["nocno"] = json.loads(db.get_meta(conn, "nocno") or "{}")
         # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
         # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
         # pregledu nikomur nič ne pove.

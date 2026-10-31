@@ -1182,6 +1182,9 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
 
     imen_poenotenih = _poenoti_imena(stops)
     tras_obrnjenih = _obrni_trase(shapes, trips, sched_rows, stops)
+    # Vožnje z voznim redom po prevozniku pred uvozom in po njem: padec, ki ga
+    # `izginuli_prevozniki` ne ustavi (meja je nič), pokaže zdravje (`uvoz`).
+    staro = _vozenj_po_prevozniku(conn)
 
     with conn:
         # Voznja, ki ima MERITVE, mora prezivati uvoz tudi takrat, ko je nov
@@ -1265,6 +1268,7 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         )
         # Voznoredni okvir voznje se da izracunati sele, ko je `sched` poln.
         db.fill_trip_window(conn)
+        novo = _vozenj_po_prevozniku(conn)
         nove = _vozje_za(conn, set(trips) - stari_ids, od_dne,
                          {v["kljuc"] for v in izginule.values()}) if izginule else {}
         zamenjanih = _zapisi_zamenjave(conn, izginule, nove)
@@ -1303,4 +1307,11 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
         "tras_obrnjenih": tras_obrnjenih,
         "stop_times": len(sched_rows), "service_days": sum(len(d) for d in days.values()),
         "trips_blocked": sum(1 for t in trips.values() if t.get("block_id")),
+        "prevozniki": {ag: [staro.get(ag, 0), novo.get(ag, 0)] for ag in sorted(staro | novo)},
     }
+
+
+def _vozenj_po_prevozniku(conn: sqlite3.Connection) -> dict[str, int]:
+    """Vožnje z voznim redom (nagrobniki brez `sched` ne štejejo) po prevozniku."""
+    return dict(conn.execute("SELECT agency, COUNT(*) FROM trip "
+                             "WHERE first_seq IS NOT NULL GROUP BY agency").fetchall())

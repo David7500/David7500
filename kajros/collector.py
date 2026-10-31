@@ -56,9 +56,10 @@ def _kje(exc: BaseException) -> str:
 
 
 def zapisi_korak(conn: sqlite3.Connection, korak: str, exc: BaseException | None = None,
-                 zdaj: float | None = None) -> None:
+                 zdaj: float | None = None, kljuc: str = "zajem_napake") -> None:
     """Izid koraka zanke zajema v `meta.zajem_napake`: zadnja napaka NAŠE
-    obdelave, kdaj, kje, koliko zapored. `exc` None = korak je uspel.
+    obdelave, kdaj, kje, koliko zapored. `exc` None = korak je uspel. Nočna
+    opravila isto v `meta.nocno` (`kljuc`), zapored = noči zapored.
 
     Do 31. 10. 2026 se je izjema v obdelavi feeda kazala kot „derp.si ne
     odgovarja“: `rollback` je razveljavil tudi zapis branja (`rt_fetched`).
@@ -68,7 +69,7 @@ def zapisi_korak(conn: sqlite3.Connection, korak: str, exc: BaseException | None
     if exc is not None and viri.iz_vira(exc):
         return
     try:
-        vsi = json.loads(db.get_meta(conn, "zajem_napake") or "{}")
+        vsi = json.loads(db.get_meta(conn, kljuc) or "{}")
         prej = vsi.get(korak) or {}
         if exc is None and not prej.get("zapored"):
             return
@@ -80,7 +81,7 @@ def zapisi_korak(conn: sqlite3.Connection, korak: str, exc: BaseException | None
             vsi[korak] = {"napaka": f"{type(exc).__name__}: {exc}"[:300], "kje": _kje(exc),
                           "ts": zdaj, "od": prej.get("od", zdaj) if n else zdaj,
                           "zapored": n + 1}
-        db.set_meta(conn, "zajem_napake", json.dumps(vsi, ensure_ascii=False, sort_keys=True))
+        db.set_meta(conn, kljuc, json.dumps(vsi, ensure_ascii=False, sort_keys=True))
         conn.commit()
     except sqlite3.Error:            # zaklenjena baza: niz zapiše naslednji izid
         conn.rollback()

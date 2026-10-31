@@ -145,6 +145,19 @@ ZANKA_STOJI_S = 600
 #: (časovna meja podprocesa je 30 min, toliko bi čakala zanka).
 UVOZ_ORANZNO_S = 15 * 60
 
+#: Nočni uvoz in opravila (`meta.uvoz`, `meta.nocno`): ena neuspela noč je
+#: lahko vir (zavrnjen zip 28. 9. 2026 se je popravil sam), dve zapored ne.
+#: 1.--31. 10. 2026 ni padlo nobeno: uvoz 31/31 noči koda 0, povzetki 32,
+#: obrez 31, vreme 31.
+NOCNO_ORANZNO = 2
+#: Niz, ki se toliko ne ponovi, ne velja: opravilo morda ne teče več.
+NOCNO_POZABI_S = 3 * 86400
+#: Prevoznik, ki mu uvoz vzame toliko voženj, ni nihanje okna: 18.--31. 10.
+#: 2026 mestni LPP 18 467--21 162 (okno osmih dni), Kranj 446 -> 309 (konec
+#: meseca v zipu MOK), IJPP brez spremembe. Meja nič (`gtfs.izginuli_prevozniki`)
+#: zavrne zip; LPP v IJPP je od 30. 8. do 28. 9. padel za 82 % in tega ni videl nihče.
+PADEC_PREVOZNIKA, PADEC_NAJMANJ = 0.4, 50
+
 #: Ure dneva, ko gre oranžna pošta: ni nujna, ponoči ne zvoni.
 DAN_OD_H, DAN_DO_H = 7, 22
 
@@ -460,6 +473,29 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
                        f"{v.get('napaka')} ({v.get('kje') or '?'})" for k, v in sorted(zn.items())))
             if zn else (DOBRA, ""))
 
+    # Nočni uvoz voznega reda in nočna opravila: izid je bil do 31. 10. 2026
+    # samo v dnevniku. Rumeno ena neuspela noč, oranžno dve zapored ali
+    # prevoznik, ki mu je uvoz vzel več kot `PADEC_PREVOZNIKA` voženj.
+    uv, nocno = z.get("uvoz") or {}, z.get("nocno")
+    if uv.get("izid") or nocno is not None:
+        slabe, noci = [], 0
+        if uv.get("izid") in ("zavrnjen", "napaka"):
+            noci = uv.get("neuspelih") or 1
+            slabe.append(f"uvoz voznega reda {uv['izid']} ({_ura(uv.get('do') or zdaj)}, "
+                         f"{noci}. noč): {uv.get('razlog')}")
+        for k, v in sorted((nocno or {}).items()):
+            if v.get("zapored") and zdaj - (v.get("ts") or 0) <= NOCNO_POZABI_S:
+                noci = max(noci, v["zapored"])
+                slabe.append(f"{k}: {v['zapored']}. noč, {v.get('napaka')} ({v.get('kje') or '?'})")
+        padci = [f"{ag} {st} → {nov}"
+                 for ag, (st, nov) in sorted((uv.get("prevozniki") or {}).items())
+                 if uv.get("izid") == "ok" and st >= PADEC_NAJMANJ
+                 and nov < (1 - PADEC_PREVOZNIKA) * st]
+        if padci:
+            slabe.append("uvoz je vzel vožnje: " + ", ".join(padci))
+        out["nocno"] = (((ORANZNA if noci >= NOCNO_ORANZNO or padci else MLACNA), "; ".join(slabe))
+                        if slabe else (DOBRA, ""))
+
     # Mestni LPP z LPP-jevih zaslonov (`zamude_lpp`), kot zemljevid SŽ zgoraj:
     # rdeče, kadar stoji nit, rumeno, kadar ne odgovarja vir.
     zl = z.get("zamude_lpp")
@@ -686,6 +722,7 @@ IMENA = {
     "fantomi": "avtobusi · zamuda raste z uro",
     "zajem_napake": "zajem · naša obdelava",
     "zanka": "zajem · glavna zanka",
+    "nocno": "nočni uvoz in opravila",
     "disk": "disk",
     "wal": "WAL",
 }
@@ -758,6 +795,9 @@ _ORANZNO: dict[str, tuple[str, int]] = {
                   "derp.si trajna (gitlab.com/derp-si), in se odloči za drug vir.", 600),
     "derp_lpp": ("Rezerva so LPP-jevi zasloni; brez podatkov je primestni LPP. Preveri, ali "
                  "je sprememba pri derp.si trajna (gitlab.com/derp-si).", 600),
+    "nocno": ("Nočni uvoz ali opravilo ne uspe drugo noč zapored ali je uvoz prevozniku vzel "
+              "veliko voženj. Vrstica pove, kaj in zakaj; zavrnjen zip: zajem.md, „Nov vozni "
+              "red“. " + CLAUDE, 0),
     "zanka": ("Uvoz voznega reda teče predolgo in drži glavno zanko zajema (časovna meja "
               "podprocesa 30 min). Na arwenu `pgrep -af 'kajros.cli update'`. " + CLAUDE, 0),
     "zajem_napake": ("Vir odgovarja, pade naša obdelava: vrstica pove korak, izjemo in kje "

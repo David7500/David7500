@@ -279,6 +279,8 @@ Vsaka nit svojo povezavo, vsak `except` okoli pisanja najprej razveljavi. Sicer 
 
 * **Uvoz voznega reda ustavi glavno zanko** (`KAJROS_REFRESH=subprocess` čaka podproces v niti zanke): 17.–31. 10. 2026 4 min 05 s – 5 min 01 s (17. 10. 7 min 25 s), zamude in lege derp.si, obvestila, senca. Uvoz piše v eni transakciji (`gtfs.import_static`), zadnjih ≥ 45–80 s zaklenjeno: zemljevid SŽ, NAP, Kranj, peroni vsako noč „database is locked“ enkrat. Zato uvoz NI vzporeden (odločitev Davidova, `docs/VIRI-PRESOJA.md` točka 5). Zdravje: `meta.zanka_ts` (utrip na `POLL_SECONDS`), `meta.uvoz` (`od`, `do`); vrstica `zanka` med uvozom rumeno (od 15 min oranžno), brez uvoza 10 min tiho rdeče; `derp_*` se takrat ne ocenjujejo.
 
+* **Izid uvoza in nočnih opravil v `meta`, ne le v dnevniku**: `meta.uvoz` (`izid` ok / nespremenjen / zavrnjen / napaka, `razlog`, `prevozniki` = vožnje z voznim redom staro → novo iz `gtfs.import_static`, `neuspelih` noči zapored); `meta.nocno` po opravilu (obrez, obrez_sence, povzetki, opazovano, straza, vreme; `collector.zapisi_korak(..., kljuc="nocno")`). Vrstica `nocno`: rumeno ena neuspela noč, oranžno dve ali prevoznik −40 % (≥ 50 voženj). 18.–31. 10. 2026 nihanje: mestni LPP 18 467–21 162 (okno 8 dni), Kranj 446 → 309 (konec meseca v zipu MOK); 1.–31. 10. ni padla nobena noč.
+
 ## Vodilni vir vodi samo, kadar kaj da (31. 10. 2026)
 
 * **NAP vodi medkrajevne** (`iz_lege.nap_prebran`) šele, ko odgovor pripne vsaj eno vozilo; **zemljevid SŽ vlake** (`iz_lege.sz_prebran`), ko ima vlak, ki ga pripnemo. Prazen ali nepripet odgovor 200 je prej utišal derp.si — nobene zamude nikjer. Nov vodilni vir: isto pravilo.

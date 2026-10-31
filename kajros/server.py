@@ -254,11 +254,23 @@ def refresh_timetable(conn, mode: str) -> None:
     # Med uvozom zanka zajema čaka (podproces ali isti proces), zdravje pa je
     # to kazalo kot „derp.si ne odgovarja“: 17.--31. 10. 2026 vsako noč
     # 4 min 05 s do 5 min 01 s, 17. 10. 7 min 25 s (`zdravje`, vrstica `zanka`).
-    _zapisi_uvoz(conn, {"od": int(time.time()), "do": None})
+    # Izid (`izid`, `razlog`, vožnje po prevozniku staro -> novo, neuspelih noči
+    # zapored) je bil do 31. 10. 2026 samo v dnevniku: zavrnjen zip (28. 9. 2026
+    # brez vlakov) ali padec prevoznika je videl le, kdor je dnevnik bral.
+    prej = _beri_uvoz(conn)
+    zacetek = int(time.time())
+    _zapisi_uvoz(conn, {**prej, "od": zacetek, "do": None})
+    izid = {"izid": "napaka", "razlog": "uvoz se ni končal"}
     try:
-        _uvozi(conn, mode)
+        izid = _uvozi(conn, mode)
+    except Exception as exc:
+        izid = {"izid": "zavrnjen" if isinstance(exc, gtfs.UvozZavrnjen) else "napaka",
+                "razlog": str(exc)[:300] or type(exc).__name__}
+        raise
     finally:
-        _zapisi_uvoz(conn, {**_beri_uvoz(conn), "do": int(time.time())})
+        slabo = izid["izid"] in ("zavrnjen", "napaka")
+        _zapisi_uvoz(conn, {"od": zacetek, "do": int(time.time()), **izid,
+                            "neuspelih": (prej.get("neuspelih") or 0) + 1 if slabo else 0})
 
 
 def _beri_uvoz(conn) -> dict:
@@ -278,7 +290,8 @@ def _zapisi_uvoz(conn, uvoz: dict) -> None:
         conn.rollback()
 
 
-def _uvozi(conn, mode: str) -> None:
+def _uvozi(conn, mode: str) -> dict:
+    """Uvoz sam; vrne izid za `meta.uvoz`."""
     if mode == "subprocess":
         # Lasten naslovni prostor: ob koncu se ves pomnilnik vrne sistemu.
         proc = subprocess.run(
@@ -289,20 +302,30 @@ def _uvozi(conn, mode: str) -> None:
         # 10. do 17. 10. 2026 vse, kar je dnevnik povedal o uvozu.
         izpis = proc.stdout.strip()
         zadnje = izpis.splitlines()[-1] if izpis else proc.stderr.strip()[-300:]
+        uvoz = None
         if izpis.endswith("}") and "{" in izpis:
             try:
-                zadnje = json.dumps(json.loads(izpis[izpis.index("{"):]), ensure_ascii=False)
+                uvoz = json.loads(izpis[izpis.index("{"):])
+                zadnje = json.dumps(uvoz, ensure_ascii=False)
             except ValueError:
                 pass
         _log(f"osvežitev (podproces, koda {proc.returncode}): {zadnje[:500]}")
-        return
+        if proc.returncode == 0:
+            return ({"izid": "ok", "prevozniki": uvoz.get("prevozniki") or {}} if uvoz
+                    else {"izid": "nespremenjen"} if "nespremenjen" in izpis
+                    else {"izid": "napaka", "razlog": zadnje[:300]})
+        # Podproces izpiše zavrnitev in konča s kodo 1 (`cli.cmd_update`);
+        # vse drugo je izjema, zadnja vrstica napake je njen opis.
+        napaka = proc.stderr.strip().splitlines()[-1:] or [zadnje]
+        return ({"izid": "zavrnjen", "razlog": zadnje[:300]} if "uvoz zavrnjen" in zadnje
+                else {"izid": "napaka", "razlog": f"koda {proc.returncode}: {napaka[0][:300]}"})
 
     path = gtfs.download(conn)
     lpp = gtfs.download_lpp(conn) if config.LPP_ENABLED else None
     mestni, mestni_nov = gtfs.prenesi_mestne(conn)
     if path is None and lpp is None and not mestni_nov:
         _log("vozni red nespremenjen")
-        return
+        return {"izid": "nespremenjen"}
     if path is None:
         path = config.DATA_DIR / "ijpp_gtfs.zip"
         if not path.exists():
@@ -310,10 +333,12 @@ def _uvozi(conn, mode: str) -> None:
     if lpp is None and config.LPP_ENABLED:
         kandidat = config.DATA_DIR / "lpp_gtfs.zip"
         lpp = kandidat if kandidat.exists() else None
-    _log(f"nov vozni red: {gtfs.import_static(conn, path, lpp_zip=lpp, mestni=mestni)}")
+    uvoz = gtfs.import_static(conn, path, lpp_zip=lpp, mestni=mestni)
+    _log(f"nov vozni red: {uvoz}")
     path.unlink(missing_ok=True)
     if lpp:
         lpp.unlink(missing_ok=True)
+    return {"izid": "ok", "prevozniki": uvoz.get("prevozniki") or {}}
 
 
 def _obisk_worker() -> None:
@@ -348,28 +373,36 @@ def _povzetki() -> None:
     `povzetek`; pri WAL zajem medtem pise naprej.
     """
     conn = db.connect()
+    # Izid vsakega računa gre v `meta.nocno` (`collector.zapisi_korak`): do
+    # 31. 10. 2026 je bil le v dnevniku.
     try:
         done = stats.refresh_summaries(conn)
         worst = max((d["took_ms"] for d in done), default=0)
         _log(f"povzetki osveženi: {len(done)} razrezov, "
              f"najdlje {worst / 1000:.1f} s")
+        collector.zapisi_korak(conn, "povzetki", kljuc="nocno")
     except Exception as exc:              # statistika ni kriticna za zajem
         conn.rollback()
         _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
+        collector.zapisi_korak(conn, "povzetki", exc, kljuc="nocno")
     # Svoj poskus, pred stražo: njena vrstica pove odprte po prevozniku.
     try:
         dnevi = opazovano.dopolni(conn)
         _log(f"opazovano: {len(dnevi)} dni")
+        collector.zapisi_korak(conn, "opazovano", kljuc="nocno")
     except Exception as exc:              # noqa: BLE001 -- isto kot zgoraj
         conn.rollback()
         _log(f"opazovanega ni bilo mogoče izračunati: {exc}")
+        collector.zapisi_korak(conn, "opazovano", exc, kljuc="nocno")
     # Svoj poskus: izpad povzetkov ne sme vzeti dneva straži, `lega` izgine po 14 dneh.
     try:
         dnevi = straza.dopolni(conn)
         _log(f"straža: {len(dnevi)} dni")
+        collector.zapisi_korak(conn, "straza", kljuc="nocno")
     except Exception as exc:              # noqa: BLE001 -- isto kot zgoraj
         conn.rollback()
         _log(f"straže ni bilo mogoče izračunati: {exc}")
+        collector.zapisi_korak(conn, "straza", exc, kljuc="nocno")
     finally:
         conn.close()
 
@@ -697,9 +730,11 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             try:
                 info = weather.backfill(conn, days=3)
                 _log(f"vreme: {info['rows']} vrstic za {info['cells']} celic")
+                collector.zapisi_korak(conn, "vreme", kljuc="nocno")
             except Exception as exc:      # vreme ni kriticno -- zajem tece naprej
                 conn.rollback()
                 _log(f"vremena ni bilo mogoče dopolniti: {exc}")
+                collector.zapisi_korak(conn, "vreme", exc, kljuc="nocno")
             viri.shrani(conn, "vreme")        # bere enkrat na dan: preživi zagon
 
         try:
@@ -722,17 +757,21 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                 if info["rail_deleted"] or info["bus_deleted"]:
                     _log(f"dnevnik obrezan: {info['rail_deleted']} železniških, "
                          f"{info['bus_deleted']} avtobusnih vrstic")
+                collector.zapisi_korak(conn, "obrez", kljuc="nocno")
             except Exception as exc:
                 conn.rollback()
                 _log(f"dnevnika ni bilo mogoče obrezati: {exc}")
+                collector.zapisi_korak(conn, "obrez", exc, kljuc="nocno")
 
             try:
                 n = ocena.prune(conn)
                 if n:
                     _log(f"merjenje napovedi obrezano: {n} vrstic")
+                collector.zapisi_korak(conn, "obrez_sence", kljuc="nocno")
             except Exception as exc:
                 conn.rollback()
                 _log(f"merjenja napovedi ni bilo mogoče obrezati: {exc}")
+                collector.zapisi_korak(conn, "obrez_sence", exc, kljuc="nocno")
 
             # Samo na strezniku: tabel obiska na malini ni, ker tam ni komu
             # streci in jih `obisk.init()` nikoli ne naredi.
@@ -769,6 +808,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             if summaries:
                 if povzetki_nit is not None and povzetki_nit.is_alive():
                     _log("povzetki od včeraj še tečejo, danes preskočeni")
+                    collector.zapisi_korak(conn, "povzetki", RuntimeError(
+                        "povzetki od včeraj še tečejo, danes preskočeni"), kljuc="nocno")
                 else:
                     povzetki_nit = threading.Thread(
                         target=_povzetki, daemon=True, name="kajros-povzetki")

@@ -3423,3 +3423,11 @@ avtobusov. Zaklep: druge niti dobijo „database is locked“ ob 4:24:02–4:24:
 zemljevid SŽ vsako noč 20.–31. 10., NAP od 22. 10., Kranj 28.–31. 10., peroni
 in obisk občasno; lege NAP 30. 10. ob 4:23 71 na minuto namesto ~165.
 
+Nočni uvoz in opravila, 1.–31. 10. 2026 (dnevnik arwena): uvoz vsako noč
+(18.–31. 10. koda 0 16 od 16, prej izpis brez kode), povzetki 32, obrez dnevnika
+31, merjenje napovedi obrezano 28 (noči brez vrstic ne izpiše), vreme 31 --
+nobena napaka, nobena zavrnitev. Vožnje po omrežju iz izida uvoza 18.–31. 10.:
+vlaki 726 vsak dan, avtobusi 39 119–44 645, mestni LPP 18 467–21 162 (okno
+osmih dni), Kranj 446 → 309 (31. 10., konec meseca v zipu MOK). Meja padca
+40 % je torej nad vsem, kar okna dajo sama.
+

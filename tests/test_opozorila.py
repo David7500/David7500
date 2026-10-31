@@ -471,6 +471,52 @@ def test_uvoz_zapise_zacetek_in_konec(monkeypatch):
     assert uv["od"] <= uv["do"]
 
 
+def test_nocni_uvoz_in_opravila(monkeypatch):
+    """Izid nočnega uvoza in opravil je bil samo v dnevniku. Rumeno ena
+    neuspela noč, oranžno dve zapored ali padec prevoznika nad 40 %."""
+    from kajros import db, gtfs, server
+
+    c = db.connect(":memory:")
+    db.init(c)
+
+    def zavrni(conn, mode):
+        raise gtfs.UvozZavrnjen("zip nima nobene vožnje prevoznika 1161")
+    monkeypatch.setattr(server, "_uvozi", zavrni)
+    for _ in range(2):
+        try:
+            server.refresh_timetable(c, "subprocess")
+        except gtfs.UvozZavrnjen:
+            pass
+        uv = json.loads(db.get_meta(c, "uvoz"))
+        z = {**_zdravo(), "uvoz": uv, "nocno": {}}
+        o = zdravje.ocena(z, STROJ, T)["nocno"]
+        assert "uvoz voznega reda zavrnjen" in o[1] and "1161" in o[1]
+        assert o[0] == (zdravje.MLACNA if uv["neuspelih"] == 1 else zdravje.ORANZNA)
+    assert uv["neuspelih"] == 2 and set(_posta(z)) == {"nocno"}
+
+    monkeypatch.setattr(server, "_uvozi", lambda conn, mode: {
+        "izid": "ok", "prevozniki": {"kranj": [446, 309], "1123": [9593, 9600]}})
+    server.refresh_timetable(c, "subprocess")
+    uv = json.loads(db.get_meta(c, "uvoz"))
+    assert uv["neuspelih"] == 0 and uv["izid"] == "ok"
+    z = {**_zdravo(), "uvoz": uv, "nocno": {}}
+    assert zdravje.ocena(z, STROJ, T)["nocno"] == (zdravje.DOBRA, "")   # konec meseca MOK
+    z["uvoz"]["prevozniki"]["1123"] = [9593, 5000]
+    o = zdravje.ocena(z, STROJ, T)["nocno"]
+    assert o[0] == zdravje.ORANZNA and "1123 9593 → 5000" in o[1]
+
+    # Opravila: noči zapored; star niz (opravilo ne teče več) odpade.
+    z["uvoz"]["prevozniki"]["1123"] = [9593, 9600]
+    z["nocno"] = {"povzetki": {"zapored": 1, "ts": T - 3600, "napaka": "OperationalError: x",
+                               "kje": "stats.py:1 refresh_summaries"}}
+    o = zdravje.ocena(z, STROJ, T)["nocno"]
+    assert o[0] == zdravje.MLACNA and "povzetki: 1. noč" in o[1]
+    z["nocno"]["povzetki"]["zapored"] = 2
+    assert zdravje.ocena(z, STROJ, T)["nocno"][0] == zdravje.ORANZNA
+    z["nocno"]["povzetki"]["ts"] = T - 4 * 86400
+    assert zdravje.ocena(z, STROJ, T)["nocno"] == (zdravje.DOBRA, "")
+
+
 def test_zavrnjena_prijava_nap_v_posti_po_uri():
     z = _zdravo()
     z["nap"] = {"ts": T - 20 * 60, "http": 401, "napaka_ts": T - 60}
