@@ -225,7 +225,7 @@ def presodi(izidi: list[tuple], zdaj: int) -> tuple[str, list | None] | None:
       postajališče prej delovalo (začetek zapore).
     * `ne_ustavi` z vožnjami: nekatere vožnje stalno pridejo, ostale nikoli
       (A6227 Naklo: samo prva zjutraj, ista trasa, isti postanki).
-    * `redko`: pridejo tu in tam (N0173 Galicija 7 od 80, N6217 Podroteja). Vožnja je
+    * `redko`: pridejo tu in tam (N0173 Galicija 7 proti 80, N6217 Podroteja 6 od 172). Vožnja je
       lahko „po potrebi“; da je ni, ne moremo trditi, da redko ustavi, pa lahko.
     * None: premalo dokazov, predolgo nič ali postajališče spet deluje.
     """

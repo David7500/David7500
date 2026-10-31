@@ -3318,7 +3318,7 @@ Dokaz je tudi strožji: vozilo mora prevoziti vsaj pol postankov vožnje (N6217 
 | ključev z vrstico | 131 | 129 |
 | ključev z več epizodami | **22** | **0** |
 | odprtih | 105 | 112 (`ne_ustavi` 88, `redko` 24) |
-| za prikaz | 63 po starem pravilu | **74** na 30 imenih (59 `ne_ustavi`, 15 `redko`), 481 parov vožnja–postajališče |
+| za prikaz | 73 po starem pravilu | **74** na 30 imenih (59 `ne_ustavi`, 15 `redko`), 481 parov vožnja–postajališče |
 
 Hitrost: 13 dni 30 s (`nice -n 19`), delavnik 2,4 s, 34 903 izidov (5 671 dokazov, 1 189 ključev). Branje sledi je pred prvim pisanjem, zajem ne čaka. `za_prikaz` prvič 41 ms, nato 0,12 ms; na minuto preveri današnje prehode.
 
