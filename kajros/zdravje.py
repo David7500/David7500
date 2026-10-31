@@ -122,6 +122,18 @@ NEZNANE_LPP_VELIKO, NEZNANE_LPP_DELEZ = 5, 0.10
 #: (odhod 30--120 min pozno, zapora, izpad interneta; 14.--17. 10. 2026).
 BREZ_ZAMUDE_ORANZNO_S = 90 * 60
 
+#: Izjema v naši obdelavi (`collector.zapisi_korak`): ena ali dve zapored sta
+#: lahko zaklenjena baza (17.--31. 10. 2026 na arwenu 22 „database is locked“,
+#: vse posamič razen treh zapored v senčnem merjenju 30. 10. ob 7:12--7:16);
+#: tri zapored je koda, ki pade vsakič -- popravi jo le seja s Claude.
+KODA_ORANZNO = 3
+#: Niz, ki se toliko ne ponovi, ne velja: korak morda ne teče več.
+KODA_POZABI_S = 3600
+#: Koraki zanke in vir, čigar branje obdelajo (`derp_*` spodaj).
+KORAKI = {"zamude": "zamude IJPP", "lege": "lege IJPP", "lpp": "mestni LPP",
+          "obvestila": "obvestila IJPP", "ocena": "senčno merjenje"}
+DERP_KORAK = {"ijpp": ("zamude", "derp_zamude"), "lpp": ("lpp", "derp_lpp")}
+
 #: Ure dneva, ko gre oranžna pošta: ni nujna, ponoči ne zvoni.
 DAN_OD_H, DAN_DO_H = 7, 22
 
@@ -389,12 +401,17 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
     # lahko trajna sprememba, o kateri je treba odločiti.
     # Odgovor z vsebino, ki je ista že `DERP_ZAMRZNJEN_S`, je isto kot molk:
     # zajem takrat vožnje izpusti in zamude pišejo rezerve (`iz_lege`).
+    # Izjema v naši obdelavi (`zajem_napake` spodaj) razveljavi zapis branja:
+    # odgovor vira zato vzamemo iz dnevnika virov, vsebine pa takrat ne vemo.
     dp = z.get("derp_prebran")
     dv = z.get("derp_vsebina") or {}
+    pade = {k for k, v in (z.get("zajem_napake") or {}).items()
+            if v.get("zapored") and zdaj - (v.get("ts") or 0) <= KODA_POZABI_S}
     if dp is not None and not (vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ):
         for vir, ts in sorted(dp.items()):
-            molk = zdaj - ts
-            star = zdaj - dv[vir] if vir in dv else 0
+            korak, kljuc = DERP_KORAK.get(vir, ("", ""))
+            molk = zdaj - max(ts, ((m.get("viri") or {}).get(kljuc) or {}).get("uspeh_ts") or 0)
+            star = zdaj - dv[vir] if vir in dv and korak not in pade else 0
             if molk > DERP_MOLCI_S:
                 out[f"derp_{vir}"] = ((ORANZNA if molk >= DERP_ORANZNO_S else MLACNA),
                                       f"derp.si ({vir.upper()}) ne odgovarja od pred {_min(molk)}")
@@ -404,6 +421,17 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
                                       f"spremenila od pred {_min(star)}; zamude pišejo rezerve")
             else:
                 out[f"derp_{vir}"] = (DOBRA, "")
+
+    # Izjema v NAŠI obdelavi po koraku zanke (`collector.zapisi_korak`), ne v
+    # branju vira. Rumeno, dokler je lahko zaklenjena baza, oranžno od
+    # `KODA_ORANZNO` zapored: vir odgovarja, pade naša koda.
+    zn = {k: v for k, v in (z.get("zajem_napake") or {}).items() if k in pade}
+    if z.get("zajem_napake") is not None:
+        out["zajem_napake"] = (
+            ((ORANZNA if any(v["zapored"] >= KODA_ORANZNO for v in zn.values()) else MLACNA),
+             "; ".join(f"{KORAKI.get(k, k)}: {v['zapored']}× zapored od {_ura(v['od'])}, "
+                       f"{v.get('napaka')} ({v.get('kje') or '?'})" for k, v in sorted(zn.items())))
+            if zn else (DOBRA, ""))
 
     # Mestni LPP z LPP-jevih zaslonov (`zamude_lpp`), kot zemljevid SŽ zgoraj:
     # rdeče, kadar stoji nit, rumeno, kadar ne odgovarja vir.
@@ -629,6 +657,7 @@ IMENA = {
     "vozni_red_ms": "vozni red MS (mestni)",
     "opazovano": "opazovano · nočni račun",
     "fantomi": "avtobusi · zamuda raste z uro",
+    "zajem_napake": "zajem · naša obdelava",
     "disk": "disk",
     "wal": "WAL",
 }
@@ -699,6 +728,8 @@ _ORANZNO: dict[str, tuple[str, int]] = {
                   "derp.si trajna (gitlab.com/derp-si), in se odloči za drug vir.", 600),
     "derp_lpp": ("Rezerva so LPP-jevi zasloni; brez podatkov je primestni LPP. Preveri, ali "
                  "je sprememba pri derp.si trajna (gitlab.com/derp-si).", 600),
+    "zajem_napake": ("Vir odgovarja, pade naša obdelava: vrstica pove korak, izjemo in kje "
+                     "v kodi (datoteka:vrstica ← klicatelj). " + CLAUDE, 600),
 }
 
 #: Vrstice, ki ponoči (nič ne vozi) nimajo ocene. Takrat pošta ne ve, ali je

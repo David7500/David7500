@@ -452,8 +452,17 @@ def branje(kljuc: str | None):
     except Exception as exc:
         _zapisi(kljuc, False, round((time.monotonic() - t) * 1000), b,
                 opis_napake(exc), _http(exc))
+        # Oznaka za zanko zajema (`iz_vira`): napaka branja je molk vira,
+        # vse drugo je naša koda (`collector.zapisi_korak`).
+        exc.kajros_vir = kljuc
         raise
     _zapisi(kljuc, True, round((time.monotonic() - t) * 1000), b)
+
+
+def iz_vira(exc: BaseException) -> str | None:
+    """Ključ vira, pri branju katerega je izjema nastala (`branje`); None,
+    kadar je nastala v naši obdelavi."""
+    return getattr(exc, "kajros_vir", None)
 
 
 def caka(kljuc: str, razlog: str | None, zdaj: float | None = None) -> None:

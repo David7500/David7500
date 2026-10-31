@@ -1724,6 +1724,9 @@ def api_health():
             vir: int(v) for vir, kljuc in (("ijpp", "rt_vsebina"), ("lpp", "lpp_rt_vsebina"))
             if (v := db.get_meta(conn, kljuc))
         }
+        # Izjema v naši obdelavi po koraku zanke (`collector.zapisi_korak`):
+        # do 31. 10. 2026 se je kazala kot „derp.si ne odgovarja“.
+        out["zajem_napake"] = json.loads(db.get_meta(conn, "zajem_napake") or "{}")
         # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
         # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
         # pregledu nikomur nič ne pove.

@@ -44,7 +44,7 @@ Rdeča črka = potnik vidi napačno ali nič, zdravje tega ne pove.
 6. **Nepripeti vlaki zemljevida SŽ**: derp.si utišan za vse vlake, tudi za nepripete. `sz_vodi` po vlaku (derp.si piše, kar zemljevid v 120 s ni pripel).
 7. **Zamrznjen zemljevid SŽ z odštevanjem**: straža zamrznitve gleda odtis, ki se spremeni zaradi odštevanja. Drug odtis iz (številka, Vrsta, Postaja, Zamuda_cas).
 8. **Izid uvoza in nočnih opravil samo v dnevniku**: `meta.uvoz` (ok/zavrnjen/napaka, vožnje po prevozniku staro → novo) in `meta.nocno`; rumeno ena neuspela noč, oranžno dve ali padec prevoznika > 40 %.
-9. **Izjema v naši obdelavi feeda** se kaže kot „derp.si ne odgovarja“ (zapis branja se razveljavi z `rollback`): `meta.zajem_napake` po koraku, oranžno po treh zapored.
+9. ~~**Izjema v naši obdelavi feeda**~~ — narejeno 31. 10. zvečer: `meta.zajem_napake` po koraku zanke (napaka, kje v kodi, od kdaj, koliko zapored), napaka branja vira ne šteje (`viri.iz_vira`); vrstica `zajem_napake` rumeno, od treh zapored oranžno; odgovor derp.si iz dnevnika virov (`zajem.md`, „Izjema v naši obdelavi ≠ molk vira“).
 10. Manjše (rumeno): Marprom/Kranj zamrznjen vir zelen (`marprom.py` žigosa z našo uro); primerjava derp.si : zasloni LPP slepa nad 10 min; data.lpp.si prazen brez barve; ovire, ki jih vir ne nosi več, ostanejo do `end_ts`; tabla postaje SŽ, ki se ne razbere, je „0 vlakov“; splošni vir brez meje starosti; ovire brez vezi; vreme z `null`.
 
 Vsaka točka: najprej izmeri na produkciji (samo branje), nato popravek s preizkusom, nato vrstica zdravja po stopnjah zgoraj.

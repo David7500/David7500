@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+import traceback
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
@@ -44,6 +46,44 @@ def fetch(url: str, conn: sqlite3.Connection, etag_key: str, vir: str | None = N
     if resp.headers.get("ETag"):
         db.set_meta(conn, etag_key, resp.headers["ETag"])
     return feed
+
+
+def _kje(exc: BaseException) -> str:
+    """Kje v naši kodi je padlo: zadnji trije okvirji paketa, najgloblji prvi."""
+    nasi = [f for f in traceback.extract_tb(exc.__traceback__)
+            if Path(f.filename).parent.name == "kajros"]
+    return " ← ".join(f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in reversed(nasi[-3:]))
+
+
+def zapisi_korak(conn: sqlite3.Connection, korak: str, exc: BaseException | None = None,
+                 zdaj: float | None = None) -> None:
+    """Izid koraka zanke zajema v `meta.zajem_napake`: zadnja napaka NAŠE
+    obdelave, kdaj, kje, koliko zapored. `exc` None = korak je uspel.
+
+    Do 31. 10. 2026 se je izjema v obdelavi feeda kazala kot „derp.si ne
+    odgovarja“: `rollback` je razveljavil tudi zapis branja (`rt_fetched`).
+    Napaka pri branju vira (`viri.iz_vira`) tu ne šteje -- to je molk vira in
+    ga kaže njegova vrstica. Piše samo ob napaki in ob prvem uspehu po njej.
+    """
+    if exc is not None and viri.iz_vira(exc):
+        return
+    try:
+        vsi = json.loads(db.get_meta(conn, "zajem_napake") or "{}")
+        prej = vsi.get(korak) or {}
+        if exc is None and not prej.get("zapored"):
+            return
+        zdaj = int(time.time() if zdaj is None else zdaj)
+        if exc is None:
+            vsi[korak] = {**prej, "zapored": 0, "uspeh_ts": zdaj}
+        else:
+            n = prej.get("zapored") or 0
+            vsi[korak] = {"napaka": f"{type(exc).__name__}: {exc}"[:300], "kje": _kje(exc),
+                          "ts": zdaj, "od": prej.get("od", zdaj) if n else zdaj,
+                          "zapored": n + 1}
+        db.set_meta(conn, "zajem_napake", json.dumps(vsi, ensure_ascii=False, sort_keys=True))
+        conn.commit()
+    except sqlite3.Error:            # zaklenjena baza: niz zapiše naslednji izid
+        conn.rollback()
 
 
 # Vozni red se med dvema uvozoma GTFS ne spremeni, zajem pa tece vsakih 30 s.

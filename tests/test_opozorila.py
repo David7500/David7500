@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import json
+
 from kajros import opozorila, zdravje
 from kajros.opozorila import KONEC_S, ZAMIK_S
 
@@ -367,6 +369,58 @@ def test_zamrznjen_derp_kot_molk():
     assert _posta(z) == {}
     z["derp_vsebina"]["lpp"] = T - 7 * 3600
     assert set(_posta(z)) == {"derp_lpp"} and not _posta(z)["derp_lpp"].nujno
+
+
+def test_napaka_nase_kode_ni_molk_vira():
+    """Izjema v naši obdelavi feeda: derp.si je odgovoril, `rollback` pa je
+    razveljavil zapis branja -- do 31. 10. 2026 „derp.si ne odgovarja“.
+    Napaka branja vira niza ne podaljša; tri zapored je koda (oranžno)."""
+    import requests
+    from kajros import collector, db, viri
+
+    c = db.connect(":memory:")
+    db.init(c)
+
+    def pade(exc):
+        try:
+            raise exc
+        except Exception as e:      # noqa: BLE001 -- preizkus vzame, kar zanka
+            return e
+
+    collector.zapisi_korak(c, "zamude")                       # uspeh brez niza: nič
+    assert db.get_meta(c, "zajem_napake") is None
+    for i in range(2):
+        collector.zapisi_korak(c, "zamude", pade(KeyError("trip_id")), zdaj=T - 60 + 30 * i)
+    vira = pade(requests.ReadTimeout("derp.si"))
+    vira.kajros_vir = "derp_zamude"                            # kot `viri.branje`
+    assert viri.iz_vira(vira) == "derp_zamude"
+    collector.zapisi_korak(c, "zamude", vira, zdaj=T - 20)
+    zn = json.loads(db.get_meta(c, "zajem_napake"))
+    assert zn["zamude"]["zapored"] == 2 and zn["zamude"]["od"] == T - 60
+    assert "KeyError" in zn["zamude"]["napaka"] and "test_opozorila.py" not in zn["zamude"]["kje"]
+
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
+    z["derp_prebran"] = {"ijpp": T - 20 * 60, "lpp": T - 30}  # zapis branja razveljavljen
+    z["derp_vsebina"] = {"ijpp": T - 20 * 60, "lpp": T - 30}
+    z["zajem_napake"] = zn
+    m = {**STROJ, "viri": {"derp_zamude": {"uspeh_ts": T - 20, "zaporednih": 0}}}
+    o = zdravje.ocena(z, m, T)
+    assert o["derp_ijpp"] == (zdravje.DOBRA, "")
+    assert o["zajem_napake"][0] == zdravje.MLACNA and "zamude IJPP: 2×" in o["zajem_napake"][1]
+    assert _posta(z, m) == {}
+    # Brez dnevnika virov (drug proces) ostane star zapis branja: molk.
+    assert zdravje.ocena(z, STROJ, T)["derp_ijpp"][0] == zdravje.MLACNA
+
+    collector.zapisi_korak(c, "zamude", pade(KeyError("trip_id")), zdaj=T)
+    z["zajem_napake"] = json.loads(db.get_meta(c, "zajem_napake"))
+    assert zdravje.ocena(z, m, T)["zajem_napake"][0] == zdravje.ORANZNA
+    assert set(_posta(z, m)) == {"zajem_napake"} and not _posta(z, m)["zajem_napake"].nujno
+
+    collector.zapisi_korak(c, "zamude", zdaj=T + 30)            # uspeh konča niz
+    z["zajem_napake"] = json.loads(db.get_meta(c, "zajem_napake"))
+    assert z["zajem_napake"]["zamude"]["zapored"] == 0
+    assert zdravje.ocena(z, m, T + 30)["zajem_napake"] == (zdravje.DOBRA, "")
 
 
 def test_zavrnjena_prijava_nap_v_posti_po_uri():

@@ -275,6 +275,8 @@ Za „kdaj je vlak hitrejši od avta“. Ista prijava, nit `kajros-promet`, vsak
 
 Vsaka nit svojo povezavo, vsak `except` okoli pisanja najprej razveljavi. Sicer zamrznjen posnetek → vsako pisanje „database is locked“ (SQLITE_BUSY_SNAPSHOT) za vedno (1. 10. 2026: nit stala 4,3 h, WAL 5,4 GB). `journal_size_limit` 64 MB v `db.connect()`. Preizkus `test_nit_po_zaklenjeni_bazi_ne_obstane`.
 
+* **Izjema v naši obdelavi ≠ molk vira** (`collector.zapisi_korak`, `meta.zajem_napake`). `rollback` razveljavi tudi zapis branja (`rt_fetched`) → do 31. 10. 2026 „derp.si ne odgovarja“. Napako branja označi `viri.branje` (`viri.iz_vira`), ta ne šteje; po koraku zanke (`zamude`, `lege`, `lpp`, `obvestila`, `ocena`) zadnja napaka, kje (datoteka:vrstica ← klicatelj), od kdaj, koliko zapored. Vrstica `zajem_napake`: rumeno, od 3 zapored oranžno. Odgovor derp.si v zdravju iz dnevnika virov (`uspeh_ts`), vsebina se med napako ne ocenjuje. 17.–31. 10. na arwenu 22× „database is locked“ (busy 30 s) + 1 `KeyError`, tri zapored enkrat (senca 30. 10. 7:12–7:16).
+
 ## Vodilni vir vodi samo, kadar kaj da (31. 10. 2026)
 
 * **NAP vodi medkrajevne** (`iz_lege.nap_prebran`) šele, ko odgovor pripne vsaj eno vozilo; **zemljevid SŽ vlake** (`iz_lege.sz_prebran`), ko ima vlak, ki ga pripnemo. Prazen ali nepripet odgovor 200 je prej utišal derp.si — nobene zamude nikjer. Nov vodilni vir: isto pravilo.

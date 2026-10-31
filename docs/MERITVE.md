@@ -3400,3 +3400,15 @@ Pet minut pred odhodom, delež prikazov, ko je trditev prava:
 * LPP 25 (1118) in mestni LPP: zgodovine leg ni, ponovitev ni mogoča. Pravilo je
   isto za vse vire (bližina končne ne potrebuje `gps_prehod`); preveri teden po
   objavi (`KOLEDAR.md`).
+
+## Zanka zajema: napake naše kode, uvoz, noč (31. 10. 2026)
+
+Dnevnik arwena 17.–31. 10. 2026, napake korakov glavne zanke (`server._worker`):
+141 vrstic. Vir (derp.si: časovna meja, 502/504, prekinjena povezava): 118.
+Naša koda: 23 -- 22× „database is locked“ (busy timeout 30 s: druga nit je
+držala pisanje dlje; senčno merjenje 17, lege 2, zamude 2, LPP 1) in 1×
+`KeyError` v predpomnilniku voznega reda (17. 10. ob 4:27, med uvozom). Tri
+zapored v istem koraku enkrat: senca 30. 10. ob 7:12, 7:14, 7:16. Do tega dne se
+je napaka zamud ali LPP po 5 min kazala kot „derp.si ne odgovarja“ (zapis
+branja razveljavljen), zdaj kot `zajem_napake` (rumeno, od treh zapored oranžno).
+

@@ -552,12 +552,15 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # pusti transakcijo odprto, prvo branje v njej zamrzne posnetek in vsako
     # nadaljnje pisanje vrne „database is locked“ -- za vedno, WAL pa raste,
     # ker ga za tem posnetkom ni mogoče prepisati. Glej `zamude_sz.teci()`.
+    # Nato `collector.zapisi_korak`: izjema v naši obdelavi ni molk vira
+    # (vrstica zdravja `zajem_napake`, ne „derp.si ne odgovarja“).
     while not _stop.is_set():
         started = time.monotonic()
         if started >= next_trips:
             next_trips = started + interval
             try:
                 info = collector.poll_once(conn)
+                collector.zapisi_korak(conn, "zamude")
                 if info.get("changed"):
                     _log(f"zajem: {info['trips']} vlakov, {info['changed']} sprememb")
                 # Ogrejemo po VSAKEM uspesnem zajemu, ne le ob spremembi:
@@ -573,14 +576,17 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:        # feed občasno resetira povezavo
                 conn.rollback()
                 _log(f"zajem ni uspel: {exc}")
+                collector.zapisi_korak(conn, "zamude", exc)
 
         if started >= next_positions:
             next_positions = started + position_interval
             try:
                 collector.poll_positions(conn)
+                collector.zapisi_korak(conn, "lege")
             except Exception as exc:      # lega ni kriticna za zajem zamud
                 conn.rollback()
                 _log(f"lege vozil ni bilo mogoče pobrati: {exc}")
+                collector.zapisi_korak(conn, "lege", exc)
 
         # Mestni LPP je drug vir in en sam feed za zamude, lege in obvestila.
         # Hodi po ritmu zamud, ne leg: zamuda je tisto, kar merimo.
@@ -588,6 +594,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             next_lpp = started + interval
             try:
                 info = collector.poll_lpp(conn)
+                collector.zapisi_korak(conn, "lpp")
                 if info.get("changed"):
                     _log(f"LPP: {info['trips']} voženj, {info['changed']} sprememb, "
                          f"{info.get('vehicles', 0)} leg")
@@ -601,17 +608,20 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             except Exception as exc:
                 conn.rollback()
                 _log(f"zajem LPP ni uspel: {exc}")
+                collector.zapisi_korak(conn, "lpp", exc)
 
         if started >= next_ocena:
             next_ocena = started + config.OCENA_SECONDS
             try:
                 info = ocena.tick(conn)
+                collector.zapisi_korak(conn, "ocena")
                 if info["zapisanih"] or info["resenih"]:
                     _log(f"ocena: {info['zapisanih']} novih napovedi, "
                          f"{info['resenih']} razrešenih")
             except Exception as exc:      # merjenje ni kriticno za zajem
                 conn.rollback()
                 _log(f"ocene napovedi ni bilo mogoče posneti: {exc}")
+                collector.zapisi_korak(conn, "ocena", exc)
 
         if started >= next_health:
             next_health = started + 300
@@ -625,12 +635,14 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             next_alerts = started + alert_interval
             try:
                 info = alerts.poll_once(conn)
+                collector.zapisi_korak(conn, "obvestila")
                 if info.get("changed"):
                     _log(f"obvestila: {info['alerts']} zapisov, "
                          f"{info['changed']} novih poročil o zamudi")
             except Exception as exc:      # obvestila niso kriticna za zajem
                 conn.rollback()
                 _log(f"obvestil ni bilo mogoče pobrati: {exc}")
+                collector.zapisi_korak(conn, "obvestila", exc)
 
         if next_refresh and datetime.now(TZ) >= next_refresh:
             next_refresh += timedelta(days=1)
