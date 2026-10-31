@@ -414,7 +414,6 @@
 }
 .zt.je-vr { background: var(--line-firm); color: var(--ink-dim); font-weight: 500; }
 .zt.je-obvoz { background: #2e2811; color: #f2d36b; font-weight: 500; }
-.zt-op.je-opazovano { color: #f2d36b; }
 .zt.je-prestop { background: color-mix(in srgb, var(--z) 16%, transparent); color: var(--z); }
 .zt-op { font: 400 12.5px/1.3 var(--sans); color: var(--ink-dim); white-space: nowrap; }
 /* Zapora tira, vlak pred njim: meja, ne zamuda -- rumeno kot ovire. */
@@ -565,6 +564,8 @@
 .od.je-naslednja .zt.je-meritev, .od.je-naslednja .zt.je-vr { background: var(--bg); }
 .od.je-mimo { opacity: 0.5; }
 .od.je-nepotrjen { opacity: 0.72; }
+/* Za `.zk .zt-op` in `.od.je-naslednja .zt-op`: enaka teža, zato tu. */
+.zk .zt-op.je-opazovano, .od .zt-op.je-opazovano { color: #f2d36b; }
 /* Obvoz: vozilo tu ne ustavi. Ostane vidno (kam je šel avtobus), a ni odhod. */
 .od.je-obvoz { opacity: 0.6; }
 .od.je-obvoz .ura-vr b { text-decoration: line-through; }
