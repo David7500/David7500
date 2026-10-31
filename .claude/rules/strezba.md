@@ -69,6 +69,7 @@ Na `/api/departures`, `/api/connections`, `/api/train/{no}/run`, `/api/live` (`s
 * Njihov `trip_id` = vzorec, ne vožnja; vozilo izbere `vehicle_id`.
 * Lega mora biti sveža (`collector.POSITION_FRESH_S`).
 * Postanki se spajajo po koordinati.
+* **Za vozilom ni napovedi te vožnje** (`lpp.eta_po_postankih`): prevoženo postajališče ima prihod NASLEDNJEGA obiska (naslednja vožnja vzorca); vozilo je pred postankom z najmanjšim eta, kar je pred njim, ne dobi številke. 31. 10. 2026 LPP 2 brez meje: izhodišče +92 „v živo“, ocena +92 na 16 postankih.
 * **Linija mimo voznega reda** (`lpp.na_tablo`): ≥ 3 in ≥ 20 % neznanih voženj z napovedjo (pripete in dvojniki ne štejejo, `zajem.md`) → tabla „zdaj“ za to linijo iz `station/arrival` do zadnjega LPP-jevega prihoda in vsaj `OBZORJE_S` (55 min), kjer je bil zaslon prebran: zaslon kaže vse prihode do 60 min, česar ni, ne pride (26. 10. 27 po objavi na Kolodvoru, ki ga ni vozila). Linijo, ki je vozni red tu nima, živa brez para pa tu ustavi (`postaje_brez_voznje`, 27 na Navju), doda z zaslona; `stop_ids` = izbrana stran ceste. Vrstica brez `trip_id` in zamude, z `lpp_vrsta`; odgovor `mimo_voznega_reda`. Ob napaki vozni red. Postajališče → koda LPP po koordinati (25 m).
 * **Vozilo žive brez para** na zemljevidu: „ni znana · vožnja mimo voznega reda“ in naslednji postanek po napovedi feeda („napoved LPP“).
 * **derp.si 5 min tiho** (`lpp.derp_molci`, po `meta.lpp_rt_fetched`): vse linije LPP z zaslona, `lpp_izpad`, stran napiše „Zamud mestnih avtobusov LPP ta hip ne dobivamo. Prihode kažemo, kot jih napove LPP.“

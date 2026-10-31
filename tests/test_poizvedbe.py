@@ -2280,6 +2280,29 @@ def test_zivi_lpp_ob_izpadu_vira_molci(conn, monkeypatch):
     assert lpp.eta_po_postankih(conn, "a|b|c", "V1") is None
 
 
+def test_zivi_lpp_za_vozilom_ni_napovedi(conn, monkeypatch):
+    """Prevoženo postajališče ima pri LPP prihod NASLEDNJEGA obiska vozila.
+
+    LPP 2, 31. 10. 2026: vozilo pri postanku 21, Zelena jama (postanek 1)
+    z eta 53 min = naslednja vožnja vzorca. Pripisano tej vožnji je dalo
+    +92 „v živo“ na izhodišču, ki ga je vozilo prevozilo pol ure prej.
+    """
+    from kajros import lpp
+    _lpp_voznja(conn)
+    odgovor = [
+        {"name": "ZALOG", "latitude": 46.0628, "longitude": 14.6033,
+         "arrivals": [{"vehicle_id": "V1", "eta_min": 50}]},
+        {"name": "Silos", "latitude": 46.0640, "longitude": 14.5900,
+         "arrivals": [{"vehicle_id": "V1", "eta_min": 53}]},
+        {"name": "Polje", "latitude": 46.0650, "longitude": 14.5800,
+         "arrivals": [{"vehicle_id": "V1", "eta_min": 1}]},
+        {"name": "Nove Fužine", "latitude": 46.0660, "longitude": 14.5700,
+         "arrivals": [{"vehicle_id": "V1", "eta_min": 4}]},
+    ]
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: odgovor)
+    assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {3: 1, 4: 4}
+
+
 class _PocasenLpp:
     """`requests.Session` namesto data.lpp.si: odgovori po `zakasnitev` s."""
 

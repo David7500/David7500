@@ -174,7 +174,20 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
             # velja PRVI prihod, ker je to tisti, ki potnika zanima.
             out.setdefault(naj["stop_seq"],
                            max(0, min(a["eta_min"] for a in prihodi) - starost))
-    return out or None
+    if not out:
+        return None
+    # **Za vozilom ta vožnja napovedi nima.** Postajališče, ki ga je vozilo že
+    # prevozilo, ima pri LPP prihod njegovega NASLEDNJEGA obiska -- naslednje
+    # vožnje istega vzorca, cel obrat linije pozneje. Pripisan postanku te
+    # vožnje je postal zamuda za ves obrat: LPP 2 Zelena jama (20:48),
+    # 31. 10. 2026 ob 21:26 z vozilom pri Tovornem kolodvoru (postanek 21),
+    # je kazal Zelena jama +92, Friškovec in Kolodvor +90 „v živo“, ocena
+    # naprej od +92 pa še 16 postankov, ure so padle s 22:48 na 21:25. Meje
+    # meritve tam ni bilo (derp.si vožnje ne nosi), zato je `api._lpp_zivo`
+    # ni mogel upoštevati. Vozilo je pred postankom z najmanjšim eta (pri
+    # enakem prvi): vse pred njim je za to vožnjo prevoženo.
+    zacetek = min(out, key=lambda seq: (out[seq], seq))
+    return {seq: m for seq, m in out.items() if seq >= zacetek}
 
 
 # ---------------------------------------------------------------------------
