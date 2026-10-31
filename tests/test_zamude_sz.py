@@ -405,9 +405,15 @@ def test_korak_zapise_kdaj_se_je_zemljevid_nazadnje_spremenil():
     assert (s["vlakov"], s["zapisanih"], s["spremenjeno_ts"]) == (1, 1, int(ZDAJ))
     s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 30)
     assert s["spremenjeno_ts"] == int(ZDAJ), "isti odgovor"
+    # Drug odgovor, a SŽ o vlaku ne pove nič novega (polje, ki teče z uro):
+    # zemljevid se ni spremenil -- zamrznjen SŽ bi se sicer skril.
     zamude_sz._odtis = "b"
-    assert zamude_sz.korak(c, [VRSTICA], ZDAJ + 60)["spremenjeno_ts"] == int(ZDAJ + 60)
+    s = zamude_sz.korak(c, [{**VRSTICA, "Predviden_prihod": 6}], ZDAJ + 60)
+    assert s["spremenjeno_ts"] == int(ZDAJ)
     assert json.loads(db.get_meta(c, "zamude_sz"))["ts"] == int(ZDAJ + 60)
+    zamude_sz._odtis = "c"
+    s = zamude_sz.korak(c, [{**VRSTICA, "Zamuda_cas": 51}], ZDAJ + 75)
+    assert s["spremenjeno_ts"] == int(ZDAJ + 75)
 
 
 def test_nespremenjen_odgovor_ne_premakne_casa_podatka():

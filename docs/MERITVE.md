@@ -3442,3 +3442,13 @@ pripel 19; ostali trije brez meritve (EN 415 vozi 6–9 h, v feedu brez zamude;
 LP 4218 z ničlo na 2. postanku, na zemljevidu ga ni; LPV 2278 z napovedjo,
 na zemljevidu pred odhodom, pripet ob 20:43).
 
+Odtis zemljevida SŽ, 31. 10. 2026 ob 20:52–20:57 (drug Chrome na arwenu, 60
+odgovorov na 5 s, 26 vlakov, brez napak): cel odgovor se je spremenil 19-krat,
+jedro (številka, Vrsta, Postaja, Zamuda_cas) 9-krat na 15–60 s; 10 sprememb je
+bilo le v poljih, ki tečejo z uro. Spremenjena polja po parih vlakov:
+Koordinate 373, Predviden_prihod 126, Odhod 20, St_postaje 14, Postaja 14,
+Zamuda_cas 9, St 4, Vrsta 3. Presledki dogodkov jedra iz `sz_zamuda` (nov
+postanek) in `obs` (sprememba zamude) ob ≥ 3 vlakih po voznem redu: mediana
+16–29 s, najdlje 7 min 00 s (28. in 29. 10. ob 23:53), 8 min 15 s (30. 10. ob
+23:52), 4 min 30 s (31. 10. ob 3:49).
+

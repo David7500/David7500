@@ -482,6 +482,14 @@ def _get() -> list[dict]:
         return vrstice
 
 
+def odtis_jedra(vrstice: list[dict]) -> str:
+    """Odtis iz (številka, Vrsta, Postaja, Zamuda_cas) vseh vlakov."""
+    jedro = sorted((str(r.get("St_vlaka")), str(r.get("Vrsta")), str(r.get("Postaja")),
+                    str(r.get("Zamuda_cas"))) for r in vrstice)
+    return hashlib.blake2s(json.dumps(jedro, ensure_ascii=False).encode(),
+                           digest_size=8).hexdigest()
+
+
 def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
           nespremenjeno: bool = False) -> dict:
     """En odgovor zemljevida: pripni, zapiši, povzemi v `meta` za pregled.
@@ -507,9 +515,12 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
     stevci.update(zapisi(conn, pripete, zdaj))
     _osvezi_trenutne(pripete, prihodnje, zdaj)
     stevci["skladnost"] = skladnost(conn, pripete, zdaj)
-    odtis = _odtis or ""
-    stevci["odtis"] = odtis
-    stevci["spremenjeno_ts"] = (prej.get("spremenjeno_ts") if prej.get("odtis") == odtis
+    stevci["odtis"] = _odtis or ""
+    # Straža zamrznitve (`zdravje`, „se ne spreminja“) gleda jedro, ne cel
+    # odgovor: ta se spremeni tudi, kadar SŽ ne pove nič novega (polja, ki
+    # tečejo z uro). Jedro = kar o vlaku ve SŽ.
+    stevci["jedro"] = jedro = odtis_jedra(vrstice)
+    stevci["spremenjeno_ts"] = (prej.get("spremenjeno_ts") if prej.get("jedro") == jedro
                                 else None) or int(zdaj)
     stevci["ts"] = int(zdaj)
     db.set_meta(conn, "zamude_sz", json.dumps(stevci, sort_keys=True))
