@@ -1249,7 +1249,7 @@ posljiEl.addEventListener("click", async () => {
 });
 
 // ---------- deli, kje je ----------
-// Gumb „Deli, kje je“ v vrstici Pomagaj drugim (`deli.js`). Okno vožnje vožnjo
+// Gumb „Deli lego“ v skupini dejanj (`deli.js`). Okno vožnje vožnjo
 // pozna, zato potnik ne izbira med kandidati. Samo, ko vožnja vozi ali
 // odpelje v 30 min (odločil David 11. 10. 2026): kdor gleda jutrišnji vlak
 // ali tistega, ki je že na cilju, z njim nima kaj početi.

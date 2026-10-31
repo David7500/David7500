@@ -260,7 +260,7 @@ def _zadnjic(conn):
 
 
 def test_zadnjic_isti_odhod_z_nasvetom(conn):
-    """Eno poročilo „polno“ 12 min pred odhodom: dovolj za „pridi 15 min prej“."""
+    """Eno poročilo „polno“ 12 min pred odhodom: dovolj za „pridi vsaj 15 min prej“."""
     _zgodovina(conn, "m1620", PETKI[:1], 4)
     z = _zadnjic(conn)
     assert (z["datum"], z["dan"], z["stopnja"]) == (PETKI[0], "pet", 4)
@@ -417,19 +417,33 @@ def test_opomba_skozi_nabiralnik_do_objave(conn):
     assert zasedenost.pregled(conn, "m1620", teden, "Ljubljana AP", _ob(teden, "15:00"))["opombe"] == []
 
 
+def _objavljena_opomba(conn, trip, datum, besedilo):
+    zdaj = _ob(datum, "16:30")
+    tekst, kontekst = zasedenost.preveri_opombo(conn, trip, datum, "Ljubljana AP", besedilo, zdaj)
+    id_ = conn.execute("INSERT INTO sporocilo(prispelo, email, besedilo, opomba) VALUES(?, '', ?, ?)",
+                       (f"{datum}T16:30:00+02:00", tekst, kontekst)).lastrowid
+    assert zasedenost.objavi(conn, id_, zdaj)
+
+
 def test_opomba_o_tem_odhodu_pred_novejso_o_podobnem(conn):
     """Prva je na vrhu okna: o tem odhodu, sicer najnovejša; drug odhod pove svojo uro."""
     for trip, datum, besedilo in (("m1620", PETKI[2], "Ta odhod, starejša."),
                                   ("m1620", PETKI[1], "Ta odhod, novejša."),
                                   ("a1530", PETKI[0], "Podoben odhod.")):
-        zdaj = _ob(datum, "16:30")
-        tekst, kontekst = zasedenost.preveri_opombo(conn, trip, datum, "Ljubljana AP", besedilo, zdaj)
-        id_ = conn.execute("INSERT INTO sporocilo(prispelo, email, besedilo, opomba) VALUES(?, '', ?, ?)",
-                           (f"{datum}T16:30:00+02:00", tekst, kontekst)).lastrowid
-        assert zasedenost.objavi(conn, id_, zdaj)
+        _objavljena_opomba(conn, trip, datum, besedilo)
     op = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))["opombe"]
     assert [o["besedilo"] for o in op] == ["Ta odhod, novejša.", "Ta odhod, starejša.", "Podoben odhod."]
     assert op[0]["isti_odhod"] and not op[2]["isti_odhod"] and op[2]["ura"] == "15:30"
+
+
+def test_strop_opomb_ne_izrine_opombe_o_tem_odhodu(conn):
+    """Toliko novejših o podobnem, kot je stropa: starejša o tem odhodu je še vedno prva."""
+    _objavljena_opomba(conn, "m1620", PETKI[1], "Ta odhod.")
+    for i in range(zasedenost.NAJVEC_OPOMB):
+        _objavljena_opomba(conn, "a1530", PETKI[0], f"Podoben odhod {i}.")
+    op = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))["opombe"]
+    assert [o["besedilo"] for o in op] == ["Ta odhod.", "Podoben odhod 4.", "Podoben odhod 3.",
+                                           "Podoben odhod 2.", "Podoben odhod 1."]
 
 
 def test_opombe_imajo_svoj_strop(conn, monkeypatch):

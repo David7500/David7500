@@ -828,8 +828,9 @@ def api_zasedenost(trip: str = Query(..., max_length=stats.TRIP_NAJDALJSI),
 
     Današnja poročila tega odhoda, prejšnji odhod v isto smer (je danes koga
     pustil zunaj, je pravkar odpeljal), povzetek zadnjih osmih tednov z vzorcem
-    in objavljeni komentarji. Vožnja brez zbiranja (mestni LPP) vrne
-    `vklopljeno: false`. Žeton je za komentar skozi `POST /stik`.
+    ali zadnje poročilo in objavljeni komentarji. Neznana vožnja ali vožnja, ki
+    ta dan ne vozi, vrne `vklopljeno: false`. Žeton je za komentar skozi
+    `POST /stik`.
     """
     if not config.ZASEDENOST:
         raise HTTPException(status_code=404)

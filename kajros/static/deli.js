@@ -110,7 +110,7 @@
   //: Od kod je potnik zacel (`deljenje.VIRI`), za lijak v pregledu.
   const VIR = OKNO ? "okno" : KOMPAKT ? "iskalnik" : "domov";
 
-  // Okno voznje: gumb je v vrstici "Pomagaj drugim" ob gumbu zasedenosti
+  // Okno voznje: gumb je v skupini dejanj ob gumbu zasedenosti
   // (`#pomoc`, David 23. 10. 2026), kartica je razdelek pod njo in se odpre
   // na dotik. Kateri razdelek je odprt, nosi vrstica (`data-odprto`): odprt je
   // samo eden, drugi modul ob dogodku `pomoc` zapre svojega.

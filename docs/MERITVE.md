@@ -2863,9 +2863,9 @@ Vozita AP Murska Sobota (M2123, M2119, M2125, M2129, 98 min) in Arriva (A2527, 1
 
 **Razdelek na dnu ni videl nihče (23. 10. 2026).** Poročil od objave (21. 10. zvečer): 21. 10. 5 (deloma preizkus), 22. 10. 1, 23. 10. 6 do 16:00; v oknih voženj (`/app/bus/…`, `/app/train/…`) hkrati 255, 293 in 197 ljudi na dan. Opomb 0. Odtlej gumb „Kako polno?“ v vrstici ob „Deli, kje je“, pod trenutno zamudo (`zasedenost.md`). Po tednu primerjaj poročila na dan.
 
-## Deljenje na mestnem LPP, smer centra, lastna lega (22. 10. 2026)
-
 **„Običajno“ in „pridi N min prej“ nista obveljala še nikjer (31. 10. 2026).** Baza na arwenu: 34 poročil v 11 dneh od 21. 10. (16 avtobus, 18 vlak): prazno 11, pol polno 13, skoraj polno 7, polno 0, vrsta zunaj 3. Na eni postaji največ 4 (Radovljica); povzetek rabi 5 odhodov na postaji, zato ga ni mogel dobiti nihče. Nasvet rabi „polno“ pred odhodom v 3 dneh: vsa tri polna poročila so z 21. 10. in vsa po odhodu (17, 27 in 39 min). Isti odhod v več dneh samo dva (LPV 2404 trikrat, LP 3165 dvakrat). Gumb v vrstici poročil ni dvignil: 24.–31. 10. 19 poročil v 8 dneh, 2,4 na dan, prej 1–6. Odtlej vrstica nad gumbom kaže tudi zadnje poročilo („Zadnjič …“); pri koliko odhodih, ni izmerjeno (`posnetki/zasedenost/takoj/pokritost.py`, teče na arwenu).
+
+## Deljenje na mestnem LPP, smer centra, lastna lega (22. 10. 2026)
 
 **Deljenja na mestnem LPP ni bilo nikoli.** Lijak 21. 10.: `zavrnjen:neznana` 8, začetkov 8 (vse vlaki in medkrajevni). V tabeli `deljenje` 128 vrstic, vse s `trip_id` dolžine 6; mestni LPP ima trojni UUID (110 znakov, 107 228 od 107 228 voženj), strežnik ga je rezal na 64. Meja zdaj `stats.TRIP_NAJDALJSI` (200), ista kot zasedenost.
 

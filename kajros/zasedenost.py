@@ -71,16 +71,16 @@ VSEH_NA_DAN = 2000
 #: „Običajno“: poročila zadnjih osmih tednov, odhodi ±90 min od tega.
 TEDNOV = 8
 PAS_S = 90 * 60
-#: Pod tem povzetka ni, so samo poročila z datumi -- majhnega vzorca ne
-#: skrijemo, a ga tudi ne napihnemo v „običajno“. Šteje odhod na dan (ne
+#: Pod tem povzetka ni, je samo zadnje poročilo (`_zadnjic`) -- majhnega vzorca
+#: ne skrijemo, a ga tudi ne napihnemo v „običajno“. Šteje odhod na dan (ne
 #: poročilo), in vsaj `NAJMANJ_DNI` različnih dni: pet ljudi na enem
 #: avtobusu ali en človek s petimi id-ji naprave ni „običajno“.
 NAJMANJ = 5
 NAJMANJ_DNI = 3
-#: „Poln je bil že N min pred odhodom“ šele iz toliko različnih dni.
+#: „Pridi vsaj N min prej“ iz navade (`_obicajno`) šele iz toliko različnih dni.
 PREJ_DNI = 3
 #: Nasvet iz enega samega poročila (`_zadnjic`) le do pol ure: en potnik, ki je
-#: 55 min prej videl prejšnji avtobus na peronu, ne sme reči „pridi 55 min prej“.
+#: 55 min prej videl prejšnji avtobus na peronu, ne sme reči „pridi vsaj 55 min prej“.
 ZADNJIC_PREJ_S = 30 * 60
 NAJVEC_OPOMB = 5
 #: Komentar o vrsti na peronu po pol leta ne velja več (vozni red, šola).
@@ -408,7 +408,7 @@ def sprejmi(conn: sqlite3.Connection, podatki: dict, kljuc: str,
         if staro:
             id_ = prej[0]
             # `prejeto` je čas, ko je potnik vozilo prvič videl polno: iz njega
-            # je „poln je bil že N min pred odhodom“.
+            # je „pridi vsaj N min prej“.
             conn.execute(
                 "UPDATE zasedenost SET stopnja = ?, spremenjeno = ?,"
                 "       prejeto = CASE WHEN ? >= ? AND stopnja < ? THEN ? ELSE prejeto END"
@@ -443,7 +443,7 @@ def _odhod_dne(r: dict) -> tuple:
 
 
 def _nasvet_min(minute: float) -> int:
-    """„Pridi N min prej“: navzgor na pet minut, najmanj pet."""
+    """„Pridi vsaj N min prej“: navzgor na pet minut, najmanj pet."""
     return max(5, math.ceil(minute / 5) * 5)
 
 
@@ -638,10 +638,10 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
             opombe.append({"id": r["id"], "datum": r["datum"], "dan": _dan(r["datum"]),
                            "postaja": r["postaja"], "ura": _ura(r["t_s"]),
                            "isti_odhod": isti_odhod, "besedilo": r["besedilo"]})
-        if len(opombe) >= NAJVEC_OPOMB:
-            break
-    # Prva je na vrhu okna: o tem odhodu pred novejšo o podobnem.
+    # Prva je na vrhu okna: o tem odhodu pred novejšo o podobnem. Strop šele po
+    # razvrstitvi, sicer novejše o podobnih izrinejo tisto o tem odhodu.
     opombe.sort(key=lambda o: not o["isti_odhod"])
+    del opombe[NAJVEC_OPOMB:]
 
     return {"vklopljeno": True, "postaja": postaja, "odhod": _ura(t_s),
             "odhod_ts": stats.polnoc(datum) + t_s, "okno": [PRED_S, PO_S, ZUNAJ_PRED_S],
