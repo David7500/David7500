@@ -528,6 +528,26 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
     return stevci
 
 
+#: Zemljevid, čigar jedro (`odtis_jedra`) se ob vlakih toliko časa ne spremeni,
+#: ne vodi več (`vodi`): derp.si bere isti zemljevid prek `api.modra.ninja` in
+#: ima ob zamrznjenem NAŠEM branju (Chrome, Cloudflare) svežega. Najdaljši zdrav
+#: presledek jedra ob ≥ 3 vlakih 28.--31. 10. 2026: 8 min 15 s. = `zdravje.SZ_ZAMRZNJEN_S`.
+ZAMRZNJEN_S = 600
+
+
+def vodi(s: dict, zdaj: float) -> bool:
+    """Ali odgovor zemljevida sme voditi vlake (derp.si jih takrat ne piše,
+    `iz_lege.sz_vodi`). Samo, kadar ima vlak, ki ga pripnemo -- prazen (`null`)
+    ob vlakih je prej utišal derp.si za vse vlake, nobena zamuda vlaka nikjer
+    (presoja 31. 10. 2026; ponoči je prazen po pravici) -- in dokler se jedro
+    spreminja: zamrznjen zemljevid je kot molk (isto pravilo kot
+    `iz_lege.FEED_ZAMRZNJEN_S` za derp.si)."""
+    vlakov = s.get("vlakov", 0)
+    if vlakov <= s.get("nepripetih", 0):
+        return False
+    return vlakov < 3 or zdaj - (s.get("spremenjeno_ts") or zdaj) <= ZAMRZNJEN_S
+
+
 #: Nepripeti vlaki, ki so danes že v dnevniku (`teci`).
 _javljeni: dict[date, set[str]] = {}
 
@@ -544,11 +564,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                 prej = _odtis
                 vrstice = _get()
                 s = korak(conn, vrstice, zdaj, nespremenjeno=prej is not None and _odtis == prej)
-                # Zemljevid vodi (derp.si vlakov ne piše, `iz_lege.sz_vodi`) samo,
-                # kadar ima vlak, ki ga pripnemo. Prazen (`null`) ob vlakih je
-                # prej utišal derp.si za vse vlake -- nobena zamuda vlaka nikjer
-                # (presoja 31. 10. 2026). Ponoči je prazen po pravici.
-                if s.get("vlakov", 0) > s.get("nepripetih", 0):
+                if vodi(s, zdaj):
                     iz_lege.sz_prebran(zdaj)
                 # Enkrat na vlak in dan v dnevnik: koliko jih piše derp.si
                 # (`iz_lege.sz_vodi_vlak`), se čez teden prešteje iz dnevnika.

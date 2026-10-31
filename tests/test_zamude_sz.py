@@ -572,3 +572,18 @@ def test_prazen_zemljevid_ne_utisa_derp(tmp_path, monkeypatch):
         monkeypatch.setattr(zamude_sz, "korak", korak)
         zamude_sz.teci(stop, lambda _: None)
         assert iz_lege.sz_vodi() is vodi, izid
+
+
+def test_zamrznjen_zemljevid_ne_vodi():
+    """Zemljevid vodi vlake le, dokler kaj da: pripet vlak in jedro, ki se
+    spreminja. Zamrznjen je kot molk -- derp.si spet piše (`vodi`)."""
+    from kajros import zdravje
+    assert zamude_sz.ZAMRZNJEN_S == zdravje.SZ_ZAMRZNJEN_S
+    zdaj = 1_800_000_000
+    s = {"vlakov": 20, "nepripetih": 2, "spremenjeno_ts": zdaj - 60}
+    assert zamude_sz.vodi(s, zdaj)
+    s["spremenjeno_ts"] = zdaj - zamude_sz.ZAMRZNJEN_S - 1
+    assert not zamude_sz.vodi(s, zdaj)
+    assert not zamude_sz.vodi({"vlakov": 3, "nepripetih": 3, "spremenjeno_ts": zdaj}, zdaj)
+    # Ponoči en ali dva vlaka lahko dolgo stojita: to ni zamrznitev.
+    assert zamude_sz.vodi({"vlakov": 2, "nepripetih": 0, "spremenjeno_ts": zdaj - 3600}, zdaj)
