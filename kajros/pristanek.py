@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from . import alerts, config, geo, journey, stats
+from . import alerts, config, geo, journey, opazovano, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -472,9 +472,22 @@ def relacija(conn: sqlite3.Connection, kaz: dict, od: str, cilj: str,
     # Vlak z 20 min zamude je pet minut po voznem redu se vedno naslednji
     # odhod, zato velja poznejsa od obeh ur.
     zdaj = datetime.now(TZ)
+    # Kar tam po obvozu ali po legah ne ustavi, ni zveza; stran pove, kaj je šlo ven.
+    obvoz: list[str] = []
+    ni_ustavljal: list[str] = []
+    redko: list[str] = []
+    if network == "avtobus" and datum == zdaj.date().isoformat():
+        alerts.oznaci_zveze(conn, zveze, zdaj.timestamp())
+        obvoz = alerts.razvrsti_linije(z["train_no"] for z in zveze
+                                       if z.get("ne_ustavi") and not z.get("opazovano"))
+        ni_ustavljal = sorted({ime_voznje(z, True) for z in zveze
+                               if z.get("ne_ustavi") and z.get("opazovano")})
+        redko = sorted({ime_voznje(z, True) for z in zveze if z.get("opazovano") == "redko"})
+        zveze = [z for z in zveze if not z.get("ne_ustavi")]
     odslej = [z for z in zveze if _se_ni_odpeljal(z["sched_dep"], z["expected_dep"], zdaj)]
     prikaz = odslej or zveze
     return {
+        "obvoz": obvoz, "ni_ustavljal": ni_ustavljal, "redko": redko,
         # Zvečer so na strani same odpeljane vožnje in zanje šteje prihod na
         # cilj (`zamuda_prihod`), ne odhod -- isto kot naslov „običajno ob
         # prihodu“ nad tabelo.
@@ -533,6 +546,15 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
                    or ("", o["stop_id"]) in ne]
             obvoz = alerts.razvrsti_linije(o["train_no"] for o in ven)
             odhodi = [o for o in odhodi if o not in ven]
+    # Kjer obvestila ni, povedo lege (`opazovano.py`): trditev o zadnjih dneh.
+    ni_ustavljal: list[str] = []
+    redko: list[str] = []
+    if network == "avtobus" and odhodi:
+        opaz = opazovano.za_prikaz(conn, zdaj.timestamp())
+        vrsta = {id(o): (opaz.get((o.get("trip_id"), o["stop_id"])) or {}).get("vrsta") for o in odhodi}
+        ni_ustavljal = sorted({ime_voznje(o, True) for o in odhodi if vrsta[id(o)] == "ne_ustavi"})
+        redko = sorted({ime_voznje(o, True) for o in odhodi if vrsta[id(o)] == "redko"})
+        odhodi = [o for o in odhodi if vrsta[id(o)] != "ne_ustavi"]
     _dopolni_obicajno(odhodi, "typical")
     for o in odhodi:
         o["ura"], o["vozni_red"] = ura_odhoda(o)
@@ -545,7 +567,7 @@ def postaja(conn: sqlite3.Connection, kaz: dict, ime: str, network: str,
             conn, ime, datum, now_s, now_s + 180 * 60, network,
             set(izbrana["stop_ids"]) if izbrana else None))
             if len(odhodi) > NAJVEC_ODHODOV else len(odhodi)),
-        "obvoz": obvoz,
+        "obvoz": obvoz, "ni_ustavljal": ni_ustavljal, "redko": redko,
         "naprej": sosednje(kaz, ime),
         "izracunano": kaz.get("computed_at"),
         "indeksiraj": zapis is not None,

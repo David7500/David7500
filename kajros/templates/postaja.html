@@ -113,6 +113,12 @@
         {% if obvoz %}
         <p class="obvoz">Obvoz: tu ta hip ne ustavijo {{ obvoz | join(", ") }} — teh odhodov spodaj ni.</p>
         {% endif %}
+        {% if ni_ustavljal %}
+        <p class="obvoz">Zadnje dni tu niso ustavljali: {{ ni_ustavljal | join(", ") }} — teh odhodov spodaj ni.</p>
+        {% endif %}
+        {% if redko %}
+        <p class="obvoz">Zadnje dni tu redko ustavljajo: {{ redko | join(", ") }}.</p>
+        {% endif %}
         {% if odhodi %}
         <table class="odhodi">
           <thead>

@@ -19,6 +19,7 @@ združujemo -- shranimo jezik in prikaz izbere svojega.
 from __future__ import annotations
 
 import hashlib
+import json
 
 import re
 import sqlite3
@@ -26,7 +27,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from . import config, db, iz_lege
+from . import config, db, iz_lege, opazovano
 from .collector import fetch, resolve_service_date, _rail_trip_windows, _service_dates
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -198,6 +199,63 @@ def ne_ustavi(conn: sqlite3.Connection, stop_ids=None,
         sql += f" AND e.stop_id IN ({','.join('?' * len(ids))})"
         args += ids
     return {(r[0], r[1]) for r in conn.execute(sql, args)}
+
+
+def ne_ustavi_vsi(conn: sqlite3.Connection, zdaj: float | None = None) -> set[tuple[str, str]]:
+    """Kar ne ustavi po obvestilu (`ne_ustavi`) in po legah (`opazovano`): en nabor
+    za iskalnik poti."""
+    return ne_ustavi(conn, None, zdaj) | opazovano.ne_ustavi(conn, zdaj)
+
+
+def oznaci_zveze(conn: sqlite3.Connection, rows: list[dict], zdaj: float,
+                 drug_dan: bool = False) -> None:
+    """Zveze, katerih vožnja na izhodišču (`od`) ali cilju (`do`) ne ustavi:
+    `ne_ustavi`; `opazovano` pove, da ve to samo iz leg, ne iz obvestila. Isto
+    pravilo kot na tabli (`api._oznaci_obvoze`). Za `drug_dan` obvoza ne vemo, lege
+    pa povedo le, kaj je bilo zadnje dni: samo beseda."""
+    ne = set() if drug_dan else ne_ustavi(conn, None, zdaj)
+    opaz = opazovano.za_prikaz(conn, zdaj)
+    if not rows or not (ne or opaz):
+        return
+    pari = sorted({(r["trip_id"], r[k]) for r in rows for k in ("from_seq", "to_seq")})
+    stop = {}
+    for i in range(0, len(pari), 400):
+        kos = pari[i:i + 400]
+        for t, q, sid in conn.execute(
+                "SELECT trip_id, stop_seq, stop_id FROM sched WHERE (trip_id, stop_seq) IN "
+                f"(VALUES {','.join(['(?, ?)'] * len(kos))})", [x for p in kos for x in p]):
+            stop[(t, q)] = sid
+    for r in rows:
+        for kje, k in (("od", "from_seq"), ("do", "to_seq")):
+            sid = stop.get((r["trip_id"], r[k]))
+            if not sid:
+                continue
+            o = opaz.get((r["trip_id"], sid))
+            if (r["trip_id"], sid) in ne or ("", sid) in ne or (
+                    o and o["vrsta"] == "ne_ustavi" and not drug_dan):
+                r["ne_ustavi"] = kje
+                if o:
+                    r["opazovano"], r["opazovano_kje"] = o["vrsta"], kje
+                break
+            if o:
+                r["opazovano"], r["opazovano_kje"] = o["vrsta"], kje
+
+
+def brez_zaprtih_prestopov(conn: sqlite3.Connection, prestopi: list[dict], zdaj: float) -> list[dict]:
+    """Predlogi s prestopom, kjer vsaka noga vstopi in izstopi, kjer vožnja ustavi.
+    Noga pozna postajališče po imenu: aplikacija teče po imenu (`CLAUDE.md`)."""
+    ne = ne_ustavi_vsi(conn, zdaj)
+    if not ne or not prestopi:
+        return prestopi
+    ime = dict(conn.execute("SELECT stop_id, name FROM station WHERE stop_id IN "
+                            "(SELECT value FROM json_each(?))",
+                            (json.dumps(sorted({s for _, s in ne})),)).fetchall())
+    zaprto = {(t, ime.get(s)) for t, s in ne}
+    vsem = {ime.get(s) for t, s in ne if not t}
+
+    def gre(n: dict) -> bool:
+        return not any((n.get("trip_id"), x) in zaprto or x in vsem for x in (n["from"], n["to"]))
+    return [p for p in prestopi if all(gre(n) for n in p["legs"])]
 
 
 def razvrsti_linije(linije) -> list[str]:

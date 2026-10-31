@@ -668,7 +668,7 @@ def main(argv=None):
     a.add_argument("--racunaj", action="store_true", help="izračunaj znova, ne beri shranjenega")
     a.set_defaults(func=cmd_straza)
 
-    a = sub.add_parser("opazovano", help="kje vozila zadnje čase ne ustavijo, senca")
+    a = sub.add_parser("opazovano", help="kje vozila zadnje čase ne ustavijo: izid nočnega računa")
     a.add_argument("--baza", help="beri to bazo samo za branje")
     a.add_argument("--vsa", action="store_true", help="tudi zaprte vrstice")
     a.add_argument("--racunaj", action="store_true",

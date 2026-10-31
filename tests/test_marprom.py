@@ -339,6 +339,15 @@ def test_zdravje_marprom():
     assert raz == zdravje.MLACNA and "del voznih redov se konča" in razlog
 
 
+def test_zdravje_opazovano():
+    danes = date.fromtimestamp(ZDAJ)
+    ocena = lambda dan: zdravje.ocena({"vozi_zdaj": {}, "opazovano_dan": dan}, {}, ZDAJ).get("opazovano")
+    assert ocena(None) is None
+    assert ocena((danes - timedelta(days=2)).isoformat())[0] == zdravje.DOBRA
+    raz, razlog = ocena((danes - timedelta(days=4)).isoformat())
+    assert raz == zdravje.MLACNA and "4 dni" in razlog
+
+
 def test_manjkajoci_vir_osvezi_ob_zagonu(monkeypatch):
     """Nov vir brez voženj v bazi: osvežitev ob zagonu, ne šele ob 4.20."""
     from kajros import server

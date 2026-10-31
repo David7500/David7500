@@ -85,6 +85,10 @@ LPP_ZAMUDE = LPP_ENABLED and LPP_ZIVO and okolje("LPP_ZAMUDE", "1") != "0"
 LPP_ZAMUDE_SECONDS = int(okolje("LPP_ZAMUDE_SECONDS", "120"))
 LPP_POSTAJ_KORAK = int(okolje("LPP_POSTAJ_KORAK", "12"))
 
+# Kje vozila zadnje dni ne ustavijo (`opazovano.py`): tabla, zveze, pot, pristajalne,
+# trasa. `=0` ugasne prikaz, nočni račun teče naprej.
+OPAZOVANO_PRIKAZ = okolje("OPAZOVANO_PRIKAZ", "1") != "0"
+
 # **Žive vožnje mestnega LPP brez objavljenega voznega reda** (`zive.py`):
 # pripne jih na objavljene z istim načrtom in, kadar LPP vozi drug vzorec,
 # objavljene prestavi nanj. 26. 10. 2026 bi bila sicer linija 27 ves teden

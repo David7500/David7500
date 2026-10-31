@@ -1066,9 +1066,9 @@ def _voznje_dneva(conn: sqlite3.Connection, izhodisca: dict[str, int],
     zamik = zamiki(conn, service_date, now_s)
     ven = izlocene(conn, service_date, prevozniki)
     # Obvoz LPP velja zdaj (`alerts.ne_ustavi`), po vožnji: 17. 10. 2026 ob
-    # maratonu bi pot ponudila vstop na zaprti Slovenski (Konzorcij, Pošta).
-    # Za drug dan ga ne vemo; vožnje drugega dne imajo druge id-je.
-    obvozi = obvozi_po_postaji(alerts.ne_ustavi(conn)) if now_s is not None else None
+    # maratonu bi pot ponudila vstop na zaprti Slovenski (Konzorcij, Pošta). Isto
+    # po legah: G2 od septembra ne pride na Focheva. Za drug dan ga ne vemo.
+    obvozi = obvozi_po_postaji(alerts.ne_ustavi_vsi(conn)) if now_s is not None else None
     # Odpovedana vožnja (feed: CANCELED) ne vozi -- ni ne vstopa ne izstopa.
     ven = ven | {t for t, d in collector.odpovedane() if d == service_date}
     naprej = partial(_naprej, ne_ustavi=obvozi)

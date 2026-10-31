@@ -105,6 +105,15 @@
 
       <div class="pr-odhodi">
         <h2>{{ "Naslednji odhodi" if odslej else "Odhodi danes" }}</h2>
+        {% if obvoz %}
+        <p class="obvoz">Obvoz: na tej relaciji ta hip ne ustavijo {{ obvoz | join(", ") }} — teh odhodov spodaj ni.</p>
+        {% endif %}
+        {% if ni_ustavljal %}
+        <p class="obvoz">Zadnje dni na tej relaciji niso ustavljali: {{ ni_ustavljal | join(", ") }} — teh odhodov spodaj ni.</p>
+        {% endif %}
+        {% if redko %}
+        <p class="obvoz">Zadnje dni na tej relaciji redko ustavljajo: {{ redko | join(", ") }}.</p>
+        {% endif %}
         {% if zveze %}
         <table class="odhodi">
           <thead>

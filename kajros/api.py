@@ -31,6 +31,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, donacije, gtfs, hoja, journey, lpp,
+               opazovano,
                markdown, nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot,
                pripni, pristanek, server, statistika, stats, stik, tiri, viri, zamude_sz,
                zapore, zasedenost, zdravje, zive)
@@ -588,7 +589,8 @@ def llms():
         "(IJPP prek NAP, CC BY-SA 4.0), mestni LPP, Marprom in Kranj iz "
         "njihovih odprtih virov, "
         "zamude in tiri vlakov s strani Slovenskih železnic, "
-        "vreme Open-Meteo. Navedba vira je pogoj rabe.\n\n"
+        "vreme Open-Meteo, postajališča za primerjavo OpenStreetMap (ODbL). "
+        "Navedba vira je pogoj rabe.\n\n"
         "## Neobvezno\n\n"
         f"- [Zemljevid strani]({b}/sitemap.xml)\n",
         media_type="text/plain; charset=utf-8")
@@ -1746,6 +1748,8 @@ def api_health():
         out["mestni_vozni_red"] = {
             vir.kljuc: json.loads(mv) for vir in gtfs.mestni_viri()
             if (mv := db.get_meta(conn, f"{vir.kljuc}_vozni_red"))}
+        # Nočni račun, ki ga prikaz bere (`opazovano.py`): rumeno, ko stoji.
+        out["opazovano_dan"] = conn.execute("SELECT MAX(dan) FROM opazovano_dan").fetchone()[0]
         # Lege izven trase (`iz_lege`, tabela `odklon`): kje vozila trase ne
         # vozijo. Število zadnjih 24 h, razčlenitev po odsekih `kajros odkloni`.
         n, vozenj = conn.execute(
@@ -1971,6 +1975,15 @@ def _znano_do(conn, network: str) -> dict:
     return out
 
 
+def _na_postankih(conn, trip_id: str | None, rows: list[dict]) -> None:
+    """Postanki, kjer vozila te vožnje zadnje dni ne ustavijo (`opazovano.py`)."""
+    na = opazovano.za_voznjo(conn, trip_id)
+    for s in rows:
+        o = na.get(s.get("stop_seq"))
+        if o:
+            s["opazovano"] = {k: o[k] for k in ("vrsta", "dokazov", "prislo", "dmin_m")}
+
+
 def _oznaci_obvoze(conn, rows: list[dict], zdaj: datetime, zasloni: bool = True) -> int:
     """Vrstice table, kjer vožnja po obvozu LPP tu ne ustavi: `ne_ustavi`.
 
@@ -2010,6 +2023,14 @@ def _oznaci_obvoze(conn, rows: list[dict], zdaj: datetime, zasloni: bool = True)
                 # Že označena vrstica (RT) je isto vozilo, ki ga kaže zaslon.
                 r["ne_ustavi"] = True
                 po_lpp[k] -= 1
+    # Kjer obvestila ni, povedo lege (`opazovano.py`), za vse prevoznike isto.
+    opaz = opazovano.za_prikaz(conn, zdaj.timestamp())
+    for r in rows:
+        o = opaz.get((r.get("trip_id"), r.get("stop_id")))
+        if o:
+            r["opazovano"] = o["vrsta"]
+            if o["vrsta"] == "ne_ustavi":
+                r["ne_ustavi"] = True
     return sum(1 for r in rows if r.get("ne_ustavi"))
 
 
@@ -2095,6 +2116,12 @@ def api_departures(
             # Obvoz velja zdaj: za izbrano uro zvečer ga zaslon ne pozna, RT pa
             # po vožnji -- ta del velja tudi tam.
             _oznaci_obvoze(conn, rows, now, zasloni=not from_time)
+        elif network == "avtobus" and date > now.date().isoformat():
+            # Za jutri ne vemo, a trditev o zadnjih dneh drži: beseda, ne prečrtano.
+            opaz = opazovano.za_prikaz(conn, now.timestamp())
+            for r in rows:
+                if o := opaz.get((r.get("trip_id"), r.get("stop_id"))):
+                    r["opazovano"] = o["vrsta"]
         if network == "zeleznica":
             # Tir s table SZ (`peroni.py`). Kadar ga ni ali je star, ga ni.
             peroni.dopolni(conn, rows, lambda r: (r["train_no"], exact, r["sched"]))
@@ -2609,11 +2636,17 @@ def api_shape(trip_id: str):
             "SELECT COALESCE(sh.osm, sh.points) AS points, sh.osm IS NOT NULL AS osm "
             "FROM trip t JOIN shape sh USING (shape_id) "
             "WHERE t.trip_id = ?", (trip_id,)).fetchone()
-    if not row:
-        raise HTTPException(404, "za to vožnjo trase ni")
+        if not row:
+            raise HTTPException(404, "za to vožnjo trase ni")
+        # Kjer vozila res vozijo drugje (`opazovano.py`), črta gre za njimi: vozilo
+        # ni videti, kot da je zašlo. Objavljeni odsek ostane `po_voznem_redu`.
+        obvozi = [(o["pot"], *o["lega"]) for o in opazovano.za_voznjo(conn, trip_id).values()
+                  if o["pot"]]
+    kosi, objavljeni = opazovano.trasa_po_obvozih(json.loads(row["points"]), obvozi)
     # `osm`: trasa je pripeta na ceste oz. tire OSM (`pripni.py`) in se s
     # podlago ujema; brez tega je surova iz GTFS, od ceste do ~15 m.
-    return {"trip_id": trip_id, "points": json.loads(row["points"]), "osm": bool(row["osm"])}
+    return {"trip_id": trip_id, "points": kosi, "osm": bool(row["osm"]),
+            "po_voznem_redu": objavljeni}
 
 
 @app.get("/api/shapes/live")
@@ -2684,6 +2717,7 @@ def api_train(train_no: str, trip: str | None = None):
     ni številka vožnje in brez njega dobiš poljubno od 217 voženj."""
     with _conn() as conn:
         rows = stats.timetable(conn, train_no, datetime.now(TZ).date().isoformat(), trip)
+        _na_postankih(conn, trip, rows)
         if not rows:
             raise HTTPException(404, f"vlak {train_no} ne obstaja")
         return {"train_no": train_no, "trip_id": trip,
@@ -2761,6 +2795,9 @@ def api_run(train_no: str, date: str | None = None,
         rows = stats.run_detail(conn, train_no, date, razresen)
         if not rows:
             raise HTTPException(404, f"vožnje {train_no} ne poznam")
+        # Za nazaj ni smiselno: tam šteje, kaj je vozilo tisti dan res naredilo.
+        if date >= datetime.now(TZ).date().isoformat():
+            _na_postankih(conn, razresen, rows)
         ident = stats.trip_identity(conn, train_no, razresen)
         # Mejo med meritvijo in napovedjo pove STREZNIK, ne odjemalec.
         # `common.lastMeasured()` jo je racunal sam -- isto pravilo v dveh
@@ -3383,10 +3420,13 @@ def api_connections(
         if network == "zeleznica":
             notices = alerts.for_trains(conn, nos, mentions=[a, b])
         else:
-            # Obvoz LPP na izhodišču ali cilju (`alerts.ne_ustavi`): zveza, ki
-            # tam ne ustavi, ni zveza; obvestili obeh postajališč nad njimi.
+            # Obvoz LPP ali lege na izhodišču ali cilju (`alerts.oznaci_zveze`):
+            # zveza, ki tam ne ustavi, ni zveza; obvestili obeh postajališč nad njimi.
             if is_today:
-                _oznaci_obvoze_zvez(conn, rows, now)
+                alerts.oznaci_zveze(conn, rows, now.timestamp())
+                legs = alerts.brez_zaprtih_prestopov(conn, legs, now.timestamp())
+            elif date > now.date().isoformat():
+                alerts.oznaci_zveze(conn, rows, now.timestamp(), drug_dan=True)
             notices = alerts.for_stops(conn, [r[0] for r in conn.execute(
                 "SELECT stop_id FROM station WHERE name IN (?, ?)", (a, b))])
         meje = _znano_do(conn, network)
@@ -3401,28 +3441,6 @@ def api_connections(
                             "do": journey.lega_postaje(conn, b)}
     return {"from": a, "to": b, "date": date, "network": network, **meje,
             "connections": rows, "transfers": legs, "alerts": notices, "blizu": blizu}
-
-
-def _oznaci_obvoze_zvez(conn, rows: list[dict], zdaj: datetime) -> None:
-    """Zveze, katerih vožnja po obvozu LPP ne ustavi na izhodišču (`od`) ali
-    cilju (`do`): `ne_ustavi`. Isto pravilo kot na tabli (`_oznaci_obvoze`)."""
-    ne = alerts.ne_ustavi(conn, None, zdaj.timestamp())
-    if not ne or not rows:
-        return
-    pari = sorted({(r["trip_id"], r[k]) for r in rows for k in ("from_seq", "to_seq")})
-    stop = {}
-    for i in range(0, len(pari), 400):
-        kos = pari[i:i + 400]
-        for t, q, sid in conn.execute(
-                "SELECT trip_id, stop_seq, stop_id FROM sched WHERE (trip_id, stop_seq) IN "
-                f"(VALUES {','.join(['(?, ?)'] * len(kos))})", [x for p in kos for x in p]):
-            stop[(t, q)] = sid
-    for r in rows:
-        for kje, k in (("od", "from_seq"), ("do", "to_seq")):
-            sid = stop.get((r["trip_id"], r[k]))
-            if sid and ((r["trip_id"], sid) in ne or ("", sid) in ne):
-                r["ne_ustavi"] = kje
-                break
 
 
 def _live(network: str | None = None) -> list[dict]:

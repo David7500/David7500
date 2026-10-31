@@ -12,36 +12,56 @@ from . import config
 
 #: Posebej od `SCHEMA`: `opazovano.senca` isti zapis naredi v `temp` na bazi z `mode=ro`.
 OPAZOVANO = """
--- Kje vozila zadnje čase ne ustavijo (`opazovano.py`, `docs/OPAZOVANO.md`). Niz
--- dokazov ene vrstice: `niz` (še ne odprto), `ne_ustavi`, `zaprto` (zgodovina, ne
--- obrezuje se). Niz, ki ni odprl, se ob pretrganju zbriše.
-CREATE TABLE IF NOT EXISTS opazovano (
+-- Kje vozila zadnje čase ne ustavijo (`opazovano.py`, `docs/OPAZOVANO.md`). Izid vsake
+-- vožnje na postanku ključa z dokazom, `opazovano.OKNO_DNI` nazaj; iz njih stanje.
+CREATE TABLE IF NOT EXISTS opazovano_izid (
     prevoznik  TEXT NOT NULL,
     linija     TEXT NOT NULL,       -- trip.train_no: stabilna čez uvoze, trip_id in shape_id nista
     smer       TEXT NOT NULL,       -- trip.headsign
     stop_id    TEXT NOT NULL,
-    prvi_ts    INTEGER NOT NULL,    -- prvi dokaz v nizu
+    dan        TEXT NOT NULL,
+    start_s    INTEGER NOT NULL,    -- katera vožnja ključa, čez uvoze
+    mimo       INTEGER NOT NULL,    -- 1 = dokaz, 0 = vozilo je prišlo
+    ts         INTEGER NOT NULL,
+    dmin_m     INTEGER,             -- NULL pri prehodu
+    lat        REAL,
+    lon        REAL,
+    trip_id    TEXT NOT NULL,
+    od_ts      INTEGER,             -- obkrožena vožnja: prehod pred postankom in za njim
+    do_ts      INTEGER,
+    PRIMARY KEY (prevoznik, linija, smer, stop_id, dan, start_s)
+) WITHOUT ROWID;
+-- Epizoda ključa: `ne_ustavi`, `redko` (lahko se menjata) ali `zaprto` (zgodovina, ne
+-- obrezuje se).
+CREATE TABLE IF NOT EXISTS opazovano (
+    prevoznik  TEXT NOT NULL,
+    linija     TEXT NOT NULL,
+    smer       TEXT NOT NULL,
+    stop_id    TEXT NOT NULL,
+    prvi_ts    INTEGER NOT NULL,    -- prvi dokaz v oknu ob odprtju
     zadnji_ts  INTEGER NOT NULL,
-    dokazov    INTEGER NOT NULL,
+    dokazov    INTEGER NOT NULL,    -- v oknu
+    prislo     INTEGER NOT NULL,    -- v oknu
     stanje     TEXT NOT NULL,
+    voznje     TEXT,                -- JSON `start_s`, na katere se stanje nanaša; NULL = vse
     odprto_ts  INTEGER,
     zaprto_ts  INTEGER,
-    vzrok      TEXT,                -- prehod | blizu | zastarelo
+    vzrok      TEXT,                -- prehod | zastarelo
     dmin_m     INTEGER NOT NULL,    -- mediana zadnjih dokazov
     lat        REAL NOT NULL,       -- mediana najbližje točke vozila
     lon        REAL NOT NULL,
-    tocke      TEXT NOT NULL,       -- JSON [[dmin, lat, lon], ...], zadnjih 30
     -- Neodvisen dokaz o koordinati, ne iz sledi te vožnje; NULL = ni preverjeno.
     osm_ime    INTEGER,             -- OSM postajališče istega imena v 60 m
-    osm_blizu  INTEGER,             -- katerokoli OSM postajališče v 60 m
+    osm_blizu  INTEGER,             -- OSM postajališče brez imena v 60 m
     osm_ob_poti INTEGER,            -- istoimensko v 60 m od poti vozila
     druge_obkrozenih INTEGER,       -- druge linije in smeri na istem stop_id, 14 dni
     druge_prehodov   INTEGER,
     oznaka     TEXT,                -- pravi | napacen | dvoumen | neznan
     preverjeno_ts INTEGER,
+    pot        TEXT,                -- JSON [[lat, lon], ...]: kje vozilo vozi namesto objavljenega
     PRIMARY KEY (prevoznik, linija, smer, stop_id, prvi_ts)
 );
--- Meja obdelave: dan je tu = njegovi dogodki so v `opazovano`.
+-- Meja obdelave: dan je tu = njegovi izidi so v `opazovano_izid`.
 CREATE TABLE IF NOT EXISTS opazovano_dan (
     dan        TEXT PRIMARY KEY,
     izracunano INTEGER NOT NULL,
@@ -49,7 +69,8 @@ CREATE TABLE IF NOT EXISTS opazovano_dan (
     brez_sched INTEGER NOT NULL,
     sledi      INTEGER NOT NULL,
     dokazov    INTEGER NOT NULL,
-    ms         INTEGER NOT NULL
+    ms         INTEGER NOT NULL,
+    koncano    INTEGER              -- nočni račun gotov: značka prikaza
 );
 """
 
@@ -701,6 +722,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if stolpci and "koda" not in stolpci:
         conn.execute("ALTER TABLE station ADD COLUMN koda TEXT")
         conn.execute("DELETE FROM meta WHERE key IN ('lpp_etag', 'lpp_last_modified')")
+        conn.commit()
+    # Opazovano od 31. 10. 2026 računa stanje iz izidov, ne iz niza. Staro je bila
+    # senca brez bralca: `opazovano.dopolni` izračuna znova iz `lega`, 14 dni nazaj.
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(opazovano)")}
+    if stolpci and "prislo" not in stolpci:
+        conn.execute("DROP TABLE opazovano")
+        conn.execute("DROP TABLE IF EXISTS opazovano_dan")
         conn.commit()
     # Rabil ga je `PREDNIKI_SQL`, ki od 21. 10. 2026 bere `prednik`.
     conn.execute("DROP INDEX IF EXISTS zamenjava_novi")

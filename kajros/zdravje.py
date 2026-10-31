@@ -66,6 +66,8 @@ NAP_STOJI_S = 900
 #: Vozni red IJPP sega mesece naprej; teden pred koncem je čas, da se ve,
 #: dva dni pred koncem je okvara (jutri ali pojutrišnjem ni voženj).
 VOZNI_RED_RUMENO_DNI, VOZNI_RED_RDECE_DNI = 7, 2
+#: Včerajšnji dan se obdela ponoči; dva dni nazaj je ena izpadla noč.
+OPAZOVANO_NAJVEC_DNI = 2
 
 #: Niti mestnih virov (Marprom, Kranj) pišeta na 10 s; pet minut tišine ni
 #: več zamujeno branje.
@@ -388,6 +390,13 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
         elif mv.get("do"):
             out[vrstica] = (DOBRA, "")
 
+    # Prikaz bere nočni račun (`opazovano.py`). Stare trditve po tednu odpadejo same,
+    # skrbnik naj izve prej. Samo rumeno: potnik ne dobi napačnega, le zastarelo.
+    if z.get("opazovano_dan"):
+        dni = (danes - date.fromisoformat(z["opazovano_dan"])).days
+        out["opazovano"] = ((MLACNA, f"nočni račun stoji, zadnji dan {dni} dni nazaj")
+                            if dni > OPAZOVANO_NAJVEC_DNI else (DOBRA, ""))
+
     # Nit, ki je umrla, ne vstane do ponovnega zagona: izjema mimo `except`
     # v zanki ali napaka ob zagonu. Vir je bil tedaj viden le posredno („ne
     # piše“), tir s table SŽ pa sploh ne.
@@ -455,6 +464,7 @@ IMENA = {
     "vozni_red_marprom": "vozni red Marprom",
     "vozni_red_kranj": "vozni red Kranj",
     "vozni_red_ms": "vozni red MS (mestni)",
+    "opazovano": "opazovano · nočni račun",
     "disk": "disk",
     "wal": "WAL",
 }
