@@ -185,6 +185,8 @@ Malina (`david@192.168.1.166`) = **merodajen zajem**, ves čas, vsi prevozniki. 
 
 ## Kje je zapisano ostalo
 
+**Zdravje zajema v `/admin`: rumeno = samo, oranžno = `/preveri-vire` (skill), rdeče = takoj** (`kajros/zdravje.py`). Odprte luknje virov po prednosti: [docs/VIRI-PRESOJA.md](docs/VIRI-PRESOJA.md).
+
 `.claude/rules/` — naloži se ob dotiku datotek (`paths:`); razrez **po datotekah, ki znanje rabijo**, ne po temah: `zajem` (feed, varovalke, viri), `strezba` (API, predpomnilnik, obisk), `model` (napoved, prestopi, senca), `oznake` (beseda in barva zamude, slog), `zemljevid`, `strani`, `objava` (stroji, deploy), `android`, `deljenje`, `zasedenost`. Zapis v pravila: telegrafsko, pravilo + razlog + številka, brez zgodovine.
 
 Stanje (koliko zajetega, poraba, hitrost) = [docs/MERITVE.md](docs/MERITVE.md). Daljše: [HANDOVER.md](HANDOVER.md), [docs/APLIKACIJA.md](docs/APLIKACIJA.md), [design/README.md](design/README.md).

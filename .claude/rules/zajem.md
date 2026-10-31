@@ -274,13 +274,20 @@ Za „kdaj je vlak hitrejši od avta“. Ista prijava, nit `kajros-promet`, vsak
 
 Vsaka nit svojo povezavo, vsak `except` okoli pisanja najprej razveljavi. Sicer zamrznjen posnetek → vsako pisanje „database is locked“ (SQLITE_BUSY_SNAPSHOT) za vedno (1. 10. 2026: nit stala 4,3 h, WAL 5,4 GB). `journal_size_limit` 64 MB v `db.connect()`. Preizkus `test_nit_po_zaklenjeni_bazi_ne_obstane`.
 
+## Vodilni vir vodi samo, kadar kaj da (31. 10. 2026)
+
+* **NAP vodi medkrajevne** (`iz_lege.nap_prebran`) šele, ko odgovor pripne vsaj eno vozilo; **zemljevid SŽ vlake** (`iz_lege.sz_prebran`), ko ima vlak, ki ga pripnemo. Prazen ali nepripet odgovor 200 je prej utišal derp.si — nobene zamude nikjer. Nov vodilni vir: isto pravilo.
+* **Ura namesto zamude** (`collector.ura_namesto_zamude`): feed vozilo drži na vožnji, ki je ne vozi (garaža), zamuda raste z uro (LPP 2 +66 min, 31. 10.). Pravilo: prvi napovedani postanek, ne končna, nagib ≥ 0,8 neprekinjeno 15 min. **V senci** (`KAJROS_DRSI=senca`): šteje, `/admin` vrstica `fantomi` s povezavami; `vodi` ne piše in pobriše med drsenjem zapisano. Ponovitev 28.–31. 10.: 29, 37, 2, 1 zadetek — odločitev po tednu (`docs/VIRI-PRESOJA.md`).
+* **Dvojniki v objavi LPP** (enake ure, proga, vzorec, blok; praznik 31. 10. 75 skupin): ena storitev — `zive._dvojcki`, par dobi prvi prost ali zaseden.
+
 ## Nov vir: `viri.vsi()` in `viri.branje()`
 
 Vir opisan enkrat v `viri.vsi()` (naslov, izvor, licenca, ritem, nit, ključi zdravja, ukrep ob izpadu, naslov za preverjanje). Klic na tuj strežnik: `with viri.branje("<ključ>") as b:`. `test_vsak_klic_na_tuj_streznik_je_v_registru`.
 
 * „Ne odgovarja“ šele ob `prag_napak` zaporednih (3; dnevni 1).
-* Vir brez svojega pravila v `zdravje.ocena()`: rumeno (`vir:<ključ>`), nikoli rdeče. Vir s pravilom splošnega nima.
+* Vir brez svojega pravila v `zdravje.ocena()`: rumeno (`vir:<ključ>`), po 2 h (dnevni po 2 dneh) oranžno, nikoli rdeče. Vir s pravilom splošnega nima.
+* **Stopnje** (`zdravje.py`): rumeno = popravi se samo, oranžno = rabi sejo s Claude (`/preveri-vire`, pošta podnevi), rdeče = takoj. Nova vrstica dobi stopnjo po tem merilu in preizkus v `tests/test_opozorila.py`; trajanje šteje `zdravje.Sled`.
 * Mrtva nit rdeča (`nit:<ime>`), kadar je zajem zagnan (`viri.zajem_zagnan`).
-* Vozni red, ki se konča: IJPP rumeno teden prej, rdeče dva dni prej; LPP rumeno, ko okno < `LPP_DAYS − 2`.
+* Vozni red, ki se konča: IJPP oranžno teden prej, rdeče dva dni prej; LPP oranžno, ko okno < `LPP_DAYS − 2`.
 * Podproces (`KAJROS_REFRESH=subprocess`): `viri.shrani()` v `meta.vir:<ključ>`.
 * `derp` razdeljen na `derp_ijpp` in `derp_lpp`.
