@@ -82,6 +82,7 @@ Mestnih linij **v IJPP ni** (le primestne 40–84). Vozni red `avl.lpp.si/transi
 V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila, prihodi, postajališča) in `/gtfs/gtfs.zip`. derp.si `sources/marprom` = dva posrednika (OnTrack sklepa vožnjo iz lege) — ne.
 
 * **Vozni red s seznama** (`config.MARPROM_GTFS_URLS`): prvi, ki pokrije 7 dni od danes (največ en prazen, `gtfs.pokritost`), zmaga; noben → ostane zadnji sprejeti `marprom_gtfs.zip` (uvoz brez njega bi Maribor izbrisal). **Uradni od 5. 10. 2026 star** (delavniki do 31. 8.: 0, 0, 0, 0, 324, 324, 0) → kopija `gtfs.derp.si/marprom_official.zip` (Marpromov izvoz 25. 9.). `meta.marprom_vozni_red`, rumena vrstica „vozni red Marprom“.
+* **`do` ni rok**: kopija `do` 20. 6. 2027, delavniki do 31. 12. 2026 (prvi brez voženj 4. 1. 2027). Zdravje bere `rok` (`gtfs.rok`, konec prve vrste dne), rdeče in pošta dva dni prej.
 * **Id-ji s predpono `mp-`** (vožnja, proga, storitev, postajališče, trasa): števila kot IJPP — ista `service_id` bi dala tuje dneve. `trip.agency = 'marprom'`.
 * **Ime, ki je drugje > 5 km**, dobi „ (Maribor)“ (`RAZLOCI_IME_M`; aplikacija teče po imenu). 27. 10.: samo „Kavčičeva“ (LPP, 136 km).
 * **Vozilo → vožnja = Marpromova ura na naslednjem postajališču** (`ArrivalTime` za `BusCode` iz `GetArrivalsForStopPoint`) + linija (`LineId` = `route_id`) + varianta (`RouteId` = `shape_id`): natanko ena. Brez sklepanja iz lege. Prihodi samo ob novi vožnji, menjavi variante, za koncem in na 10 min (`PREVERI_S`); največ 8 branj na obhod. Vožnja z drugim vozilom ni na voljo.
@@ -92,6 +93,17 @@ V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila,
 * Vozila brez vožnje → `meta.marprom_vozila_brez_voznje` → zemljevid („vožnje ne poznamo“, linija, smer, naslednje po Marpromu).
 * Nova vožnja istega vozila pobriše lego stare iz `vehicle_now` (dvojnik do konca svežine).
 * Samo strežnik (nit `kajros-marprom`); malina ne. Izklop `KAJROS_MARPROM=0`.
+
+## Opazovano: kje vozila ne ustavijo (`opazovano.py`)
+
+Nočni račun iz `lega` in `gps_prehod`, po dnevih, za vse prevoznike isto (`docs/OPAZOVANO.md`). Mestnega LPP ni (`gps_prehod` tam ne nastaja).
+
+* **Izid po vožnji** (`opazovano_izid`, ključ + `start_s`, 21 dni), ne niz: 22 od 131 ključev je niz odpiral znova. A6227 Naklo: vožnja ob 5.50 pride, ostalih 11 nikoli, ista trasa. `start_s`, ker `trip_id` zamenja uvoz.
+* **Dokaz**: obkrožena vožnja, brez luknje v sledi, ≥ 250 m, vozilo prevozilo ≥ pol postankov.
+* **`presodi` = edino pravilo**: `ne_ustavi` (10 dokazov, 24 h; nekatere vožnje so lahko izjema), `redko` (pridejo tu in tam), nič (≥ 5 od zadnjih 10 pride).
+* **Dve obliki v resnici**: druga cesta (Focheva, Polica po avtocesti) in krak, ki ga vozilo izpusti (Artiče; prehoda pred in za ob isti uri).
+* Neodvisen dokaz `oznaka`: OSM isto ime ali druge linije; OSM z drugim imenom **ni** potrditev. Brez tega prikaz vrstice ne vidi.
+* Stara tabela je senca brez bralca: migracija jo zbriše, `dopolni` izračuna znova iz `lega`.
 
 ## Mestna Kranj in Murska Sobota (`kranj.py`, `gtfs.mestni_viri`)
 

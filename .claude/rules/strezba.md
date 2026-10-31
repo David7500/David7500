@@ -75,6 +75,16 @@ Na `/api/departures`, `/api/connections`, `/api/train/{no}/run`, `/api/live` (`s
 * **Obvoz in odpoved** (`api._oznaci_obvoze`): `ne_ustavi` (`alerts.ne_ustavi`; primestne po zaslonu), `odpovedano` (`collector.odpovedane`). Prečrtano, „naslednja“ prva, ki ustavi; Moje poti ne štejejo; iskalnik `ne_ustavi`: `od` | `do`; pot tam ne vstopi; pristajalna izpusti. Molk zaslona minuto (`lpp._zasloni_molcijo_do`).
 * Izklop `KAJROS_LPP_ZIVO=0`.
 
+## Kje vozila ne ustavijo: prikaz (`opazovano.za_prikaz`)
+
+* **Edino, kar prikaz bere**; `ne_ustavi`, `za_voznjo` iz njega. Predpomnjeno na znački reda in `opazovano_dan.koncano`, prvič 41 ms, nato 0,12 ms. Izklop `KAJROS_OPAZOVANO_PRIKAZ=0`.
+* Vožnje se iz ključa izberejo ob branju (`trip_id` zamenja uvoz, `start_s` ostane).
+* **`ne_ustavi` = ista pot kot obvoz LPP** (tabla, `alerts.oznaci_zveze`, `alerts.brez_zaprtih_prestopov`, `alerts.ne_ustavi_vsi` za pot, pristajalni), z `opazovano` za besedo. **`redko` ni `ne_ustavi`**: odhod ostane, opomba.
+* Beseda „zadnje dni tu ni ustavljal“, nikoli „zaprto“: vemo samo iz leg.
+* **Današnji prehod takoj omili** v `redko` (`_danes`, na `OSVEZI_S`), trditev po `POZABI_S` odpade, če nočni račun stoji (`zdravje`: `opazovano`).
+* Drug dan samo beseda, nič prečrtanega; za nazaj nič (`_na_postankih`).
+* `limit` (widget): `ne_ustavi` v `/api/connections` je niz „od“/„do“, Android ga bere z `optBoolean`, zato strežnik vrstico vzame ven.
+
 ## Štetje obiska (`obisk.py`) in `/admin`
 
 * **IP se ne shrani nikoli**: `blake2s(sol dneva ‖ IP ‖ UA)`, sol zavržena ob polnoči. Mesečnih unikatov ni — stran to pove.

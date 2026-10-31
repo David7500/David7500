@@ -3425,6 +3425,10 @@ def api_connections(
             if is_today:
                 alerts.oznaci_zveze(conn, rows, now.timestamp())
                 legs = alerts.brez_zaprtih_prestopov(conn, legs, now.timestamp())
+                # Widget (`limit`) bere `ne_ustavi` kot resnico, tu pa je „od“ ali „do“:
+                # vrstice, ki je ne zna prečrtati, naj ne dobi.
+                if limit:
+                    rows = [r for r in rows if not r.get("ne_ustavi")]
             elif date > now.date().isoformat():
                 alerts.oznaci_zveze(conn, rows, now.timestamp(), drug_dan=True)
             notices = alerts.for_stops(conn, [r[0] for r in conn.execute(

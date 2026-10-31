@@ -1,6 +1,6 @@
 # Opazovano: sistem za vse avtobuse
 
-Stanje 30. 10. 2026: del 1 (straža) in tabela iz dela 2 tečeta na arwenu, tabela v senci. Del 4 izmerjen v senci, ni priklopljen. Del 3 (prikaz) ni začet. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“ in naprej.
+Stanje 31. 10. 2026: del 1 (straža) teče na arwenu. Del 2 predelan na izide po vožnjah, del 3 (prikaz in črta na zemljevidu) narejen, oboje za stikalom `KAJROS_OPAZOVANO_PRIKAZ`. Del 4 izmerjen v senci, ni priklopljen. Meritve: `docs/MERITVE.md`, „Marprom: obvoz G2“ in naprej, zadnje „Opazovano, del 3“.
 
 
 ## Zakaj
@@ -70,13 +70,29 @@ Skupaj 71 od 9 581 parov brez prehoda (0,7 %).
 
 **Narejeno v senci** (`kajros/opazovano.py`, `tests/test_opazovano.py`, ukaz `kajros opazovano [--vsa] [--racunaj] [--baza POT]`): tabeli `opazovano` (ključ prevoznik, `train_no`, `headsign`, `stop_id`; niz dokazov ene vrstice) in `opazovano_dan` (meja, dan se obdela enkrat, v istem commitu); nočni `opazovano.dopolni` v `server._povzetki` pred stražo, svoj poskus; `kajros straza` po prevozniku pokaže odprte, nove in zaprte. Pravilo in meritve: `docs/MERITVE.md`, „Opazovano, del 2: tabela v senci“.
 
-**Predlog za prikaz** (`opazovano.dovolj_za_prikaz`, nihče je še ne kliče): odprta vrstica, ki je `pravi` (OSM isto ime v 60 m ali druge linije na istem `stop_id`, ob poti vozila ni istega imena) ali `neznan` z `osm_blizu` (katerokoli OSM postajališče v 60 m). Od 63 odprtih na 29. 10. je to 42: 1119 12 od 28, 1123 28 od 33, marprom 2 od 2. Napačen in dvoumen ne, dokler potnik ne dobi napotka, kje vozilo ustavi.
+**Predelano 31. 10. 2026** (`docs/MERITVE.md`, „Opazovano, del 3“). Niz, ki ga en prehod pretrga, je 22 od 131 ključev odpiral znova: vožnje iste linije se obnašajo različno. Zdaj: izid vsake vožnje v `opazovano_izid` (21 dni), stanje iz okna v `opazovano.presodi`: `ne_ustavi` (po potrebi samo za nekatere vožnje), `redko` ali nič. Na istih 13 dneh 0 ključev z več epizodami.
+
+**Za prikaz** (`opazovano.dovolj_za_prikaz`): odprta vrstica, ki je `pravi` (OSM isto ime v 60 m ali druge linije na istem `stop_id`, ob poti vozila ni istega imena) ali `neznan` z `osm_blizu` (OSM postajališče brez imena v 60 m). 74 od 112 odprtih. Napačen in dvoumen ne, dokler potnik ne dobi napotka, kje vozilo ustavi.
 
 ### 3. En prikaz
 
 * Tabla, zveze, pristajalne strani: `api._oznaci_obvoze` že nastavi `ne_ustavi` za LPP. Tabela iz 2. dela je dodaten vir, brez nove veje v prikazu.
 * Zemljevid: črta, kjer vozila res vozijo, iz `lega` na obvozu; objavljena ostane vidna kot „po voznem redu“. Vozilo ne sme biti videti, kot da je zašlo.
 * Besedilo: dokler je dokaz samo iz leg, „zadnje dni tu ni ustavljal“, ne trditev, da je zaprto.
+
+**Narejeno 31. 10. 2026.** Prikaz bere samo `opazovano.za_prikaz` (ali `ne_ustavi`, `za_voznjo`):
+
+| kje | `ne_ustavi` | `redko` |
+|---|---|---|
+| tabla (`api._oznaci_obvoze`) | prečrtano, „zadnje dni tu ni ustavljal“, ni naslednja | odhod ostane, opomba „zadnje dni tu redko ustavlja“ |
+| zveze (`alerts.oznaci_zveze`) | isto, „na cilju“ pri izstopu | opomba |
+| prestopi (`alerts.brez_zaprtih_prestopov`), pot (`alerts.ne_ustavi_vsi`) | tu ne vstopi in ne izstopi | ostane |
+| pristajalni strani | ni v tabeli, stavek nad njo | stavek nad njo |
+| okno vožnje | opomba pri postanku in na kartici, razdalja | opomba, „2 od 77 voženj“ |
+| `/api/trip/{id}/shape`, oba zemljevida | pot vozil v `points`, objavljeno v `po_voznem_redu` (črtkano, napis), postajališče rumeno | nič |
+| drug dan (jutri) | samo beseda | samo beseda |
+
+Prvi današnji prehod `ne_ustavi` takoj omili v `redko` (preverja se na minuto). Če nočni račun stoji, trditve po 7 dneh odpadejo same; v zdravju rumeno po 2 dneh (`opazovano`).
 
 ### 4. Pripis vozila na vožnjo
 
@@ -110,10 +126,12 @@ Vsak korak v svojem commitu, s številkami pred in po, za vse prevoznike.
 
 * Pripis: priklop samo za Marprom, najprej brez zamude, po ponovitvi meritve na jutranji konici in ob koncu tedna (vzorec je en petek popoldne).
 * `marprom.razresi` je 3 vozilom v 4 h dal vožnjo 31–90 min naprej, obvisi do `PREVERI_S`. Vzrok ni dokazan.
-* Prikaz tabele: ponovna odprtja istega ključa (27 od 111 vrstic), ročna preverba `pravi`, Vrbanska od 3. 11., navedba OSM na javni strani.
+* Vrbanska od 3. 11. (P7): prvi preizkus v živo, po zasnovi vidno 5. 11. ob 3.30. Preveri, ali se odpre, in kako hitro se zapre 26. 11.
+* Krak „po potrebi“ (Artiče, Medribnik, Zavrh): iz leg ni mogoče vedeti, ali vozilo pride, če kdo čaka. Besedilo tega ne trdi; če potnik sporoči drugače, je to dokaz, da pravilo tu ne velja.
+* Začetek zapore se pozna z dnevom zamude, ker je račun nočni. Računati sproti bi skrajšalo zamudo za največ dan.
+* Posnetek OSM (`scripts/osm_postajalisca.py`) se ne osvežuje sam.
 
 ## Kaj ni del tega
 
 * Trase krožnih in odrezanih: popravljeno v 3c2a25e (druga seja), velja po uvozu in ponovnem pripenjanju.
 * Delavniki Marproma 2027: rabi nov zip. Del 1 mora rok pokazati, pisanje Marpromu je Davidova odločitev.
-* Pozor pri `api.py`, `collector.py`, `dashboard.js`: 30. 10. jih ureja druga seja. Delo v worktreeju (spomin `socasne-seje`).
