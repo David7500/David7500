@@ -4,6 +4,8 @@ Zajem in analiza **zamud slovenskega javnega prevoza** iz odprtih podatkov. Ime 
 
 Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
+**Koledar: [KOLEDAR.md](KOLEDAR.md).** „Poglej koledar“ = skill `koledar`: naredi zapadlo, izid vpiši, dodaj nove roke. **Vsaka seja in vsak agent** (David, 31. 10. 2026): naloga za pozneje — z datumom ali pogojem (meritev čez teden, praznik, rok vira, Davidovo dejanje, odločitev po senci) — gre takoj v „Na vrsti“ v `KOLEDAR.md` (datum z dnevom, kdo, kaj in zakaj, kako, podrobnosti), ne samo v odgovor, predajo ali commit. Agent, ki sam ne sme pisati, rok vrne v izidu, da ga vpiše glavna seja.
+
 ## Zagon
 
 ```bash

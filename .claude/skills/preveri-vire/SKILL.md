@@ -26,7 +26,7 @@ Rumena, ki ne mine, postane oranžna (meje v `zdravje.py`, trajanje šteje `Sled
 3. **Presodi, kdo laže.** Vir (napačen ali zamrznjen podatek), naša koda ali resnica na cesti (zastoj, obvoz, odpoved). Povezave v pasu vrstice odprejo vozilo na zemljevidu (`/app/map?trip=…` ali `?vozilo=…`): poglej, kje vozilo res je.
 4. **Meri, preden spremeniš pravilo.** Na več dneh in za vse prevoznike, ne samo za tistega, ki je prižgal vrstico (`sistem-ne-krpanje`). Hevristika, ki bi brisala ali skrivala podatke, gre najprej v senco (primer `KAJROS_DRSI`).
 5. **Popravi** v kodi, dodaj preizkus, poženi `./scripts/preveri.sh`.
-6. **Zapiši sproti.** Številke v `docs/MERITVE.md`, pravilo v `.claude/rules/zajem.md`, razlog v commit, odprto in narejeno v `docs/VIRI-PRESOJA.md`.
+6. **Zapiši sproti.** Številke v `docs/MERITVE.md`, pravilo v `.claude/rules/zajem.md`, razlog v commit, odprto in narejeno v `docs/VIRI-PRESOJA.md`. Vse, kar mora počakati (teden podatkov, praznik, rok vira, Davidova odločitev), takoj kot vnos v `KOLEDAR.md`.
 7. **Objava.** `git push arwen <veja>` in počakaj na 200 (`.claude/rules/objava.md`). Za malino pripravi ukaz Davidu.
 
 ## Recepti po vrstici
