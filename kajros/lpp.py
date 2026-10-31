@@ -34,7 +34,7 @@ from datetime import datetime
 
 import requests
 
-from . import config, db, geo, stats, viri, zive
+from . import config, db, geo, iz_lege, stats, viri, zive
 from .naslovi import fold
 
 _URL = "https://data.lpp.si/api/route/arrivals-on-route"
@@ -254,12 +254,15 @@ def postaje_brez_voznje(conn: sqlite3.Connection, zdaj: float) -> dict[str, set[
 
 
 def derp_molci(conn: sqlite3.Connection, zdaj: float) -> bool:
-    """Ali derp.si mestnega LPP že `DERP_MOLCI_S` ni dal. Brez zapisa ne
-    vemo nič -- in tedaj tabla ostane, kakršna je."""
+    """Ali derp.si mestnega LPP že `DERP_MOLCI_S` ni dal -- ali daje vsebino,
+    ki se `iz_lege.FEED_ZAMRZNJEN_S` ni spremenila (zamude na tabli bi bile
+    stare). Brez zapisa ne vemo nič -- in tedaj tabla ostane, kakršna je."""
     if not config.LPP_ENABLED:
         return False
     ts = db.get_meta(conn, "lpp_rt_fetched")
-    return ts is not None and zdaj - int(ts) > DERP_MOLCI_S
+    vsebina = db.get_meta(conn, "lpp_rt_vsebina")
+    return ((ts is not None and zdaj - int(ts) > DERP_MOLCI_S)
+            or (vsebina is not None and zdaj - int(vsebina) > iz_lege.FEED_ZAMRZNJEN_S))
 
 
 def _get(url: str, params: dict | None, timeout: float) -> list | dict | None:

@@ -203,6 +203,12 @@ def test_tabla_ob_molku_derp_vzame_vse_linije(monkeypatch):
     assert not lpp.derp_molci(c, ZDAJ)
     db.set_meta(c, "lpp_rt_fetched", str(int(ZDAJ) - lpp.DERP_MOLCI_S - 1))
     assert lpp.derp_molci(c, ZDAJ)
+    # Odgovarja, a vsebina je zamrznjena: zamude na tabli bi bile stare.
+    db.set_meta(c, "lpp_rt_fetched", str(int(ZDAJ) - 30))
+    db.set_meta(c, "lpp_rt_vsebina", str(int(ZDAJ) - 120))
+    assert not lpp.derp_molci(c, ZDAJ)
+    db.set_meta(c, "lpp_rt_vsebina", str(int(ZDAJ) - iz_lege.FEED_ZAMRZNJEN_S - 1))
+    assert lpp.derp_molci(c, ZDAJ)
 
     monkeypatch.setattr(lpp, "_postaje_lpp", lambda: [
         {"ref_id": "600101", "latitude": 46.05, "longitude": 14.49}])

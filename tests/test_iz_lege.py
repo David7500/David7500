@@ -28,14 +28,14 @@ def _cist_spomin(monkeypatch):
     # prehod brez trase preizkuša tests/test_prehod.py.
     monkeypatch.setattr(config, "PREHOD_GPS", "0")
     for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnja, iz_lege._odklon,
-              iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase,
-              prehod._sledi):
+              iz_lege._zadnji_nabor, iz_lege._vsebina, deljenje._predpomnilnik,
+              deljenje._trase, prehod._sledi):
         s.clear()
     iz_lege._prvic = None
     yield
     for s in (iz_lege._v_feedu, iz_lege._sled, iz_lege._zadnja, iz_lege._odklon,
-              iz_lege._zadnji_nabor, deljenje._predpomnilnik, deljenje._trase,
-              prehod._sledi):
+              iz_lege._zadnji_nabor, iz_lege._vsebina, deljenje._predpomnilnik,
+              deljenje._trase, prehod._sledi):
         s.clear()
     iz_lege._prvic = None
 
@@ -215,6 +215,34 @@ def test_nespremenjen_feed_se_nosi_iste_voznje():
     iz_lege.feed_nespremenjen("lpp", zdaj)
     assert not iz_lege.brez_feeda("n", zdaj)
     assert iz_lege.brez_feeda("m", zdaj)          # drug vir ni potrjen
+
+
+def test_zamrznjen_feed_ne_nosi_nicesar():
+    """derp.si, ki streže isto vsebino (304 ali isti odgovor), je prej veljal za
+    zdravega: vožnje so bile „v feedu“ in rezervi sta molčali."""
+    zdaj = time.time()
+    iz_lege.zabelezi_feed(["z"], zdaj, vir="lpp", vsebina_ts=1000)
+    iz_lege.feed_nespremenjen("lpp", zdaj + 300)                    # 304, še normalno
+    assert not iz_lege.brez_feeda("z", zdaj + 300)
+    pozneje = zdaj + iz_lege.FEED_ZAMRZNJEN_S + 1
+    iz_lege.feed_nespremenjen("lpp", pozneje)                      # 304, 10 min isto
+    iz_lege.zabelezi_feed(["z"], pozneje, vir="lpp", vsebina_ts=1000)  # 200, ista vsebina
+    assert iz_lege.brez_feeda("z", pozneje)
+    assert iz_lege.vsebina_spremenjena("lpp") == zdaj
+    iz_lege.zabelezi_feed(["z"], pozneje, vir="lpp", vsebina_ts=1030)  # spet živ
+    assert not iz_lege.brez_feeda("z", pozneje)
+
+
+def test_po_zagonu_tudi_sam_304_zamrzne():
+    """ETag je v bazi, zato je prvi odgovor po zagonu lahko 304 -- tudi tak
+    vir po `FEED_ZAMRZNJEN_S` ne nosi ničesar."""
+    zdaj = time.time()
+    iz_lege.feed_nespremenjen("ijpp", zdaj)
+    assert iz_lege.vsebina_spremenjena("ijpp") == zdaj
+    iz_lege.zabelezi_feed(["y"], zdaj, vir="ijpp")
+    iz_lege.feed_nespremenjen("ijpp", zdaj + iz_lege.FEED_ZAMRZNJEN_S + 1)
+    assert iz_lege.brez_feeda("y", zdaj + iz_lege.FEED_ZAMRZNJEN_S + iz_lege.FEED_POZABI_S)
+    assert not iz_lege.brez_feeda("y", zdaj + iz_lege.FEED_POZABI_S)
 
 
 def test_iz_feeda_samo_za_vozje_ki_jih_feed_zamud_ne_nosi():

@@ -82,6 +82,14 @@ _zagon = time.time()
 #: Vir -> vožnje iz zadnje vsebine feeda. Ob 304 je vsebina ista in te
 #: vožnje so še vedno v njem.
 _zadnji_nabor: dict[str, list[str]] = {}
+#: Vsebina feeda, ki je toliko časa ista, ne nosi več nobene vožnje. derp.si,
+#: ki streže zamrznjeno (304 ali isti odgovor), je prej veljal za zdravega in
+#: utišal rezervi. Normalno se vsebina spremeni vsaj na 4 min (30. 10. 2026:
+#: mestni LPP najdlje 240 s, IJPP 123 s; ob branju stara p99,9 190 s).
+FEED_ZAMRZNJEN_S = 600
+#: Vir -> (najnovejši čas v vsebini, `collector.cas_vsebine`; kdaj se je po
+#: NAŠI uri nazadnje spremenil). Po naši uri, da zamik ure vira ne šteje.
+_vsebina: dict[str, tuple[float, float]] = {}
 #: (trip_id, dan) -> (t_s, along, zadnji zapisani stop_seq, kdaj osveženo)
 _sled: dict[tuple[str, str], tuple[float, float, int, float]] = {}
 #: (trip_id, dan) -> zadnja lega na trasi (ts, lat, lon, along): sidro odklona.
@@ -104,17 +112,35 @@ SZ_VODI_S = 120
 SAMO_IZ_LEGE = frozenset({"marprom", "kranj"})
 
 
-def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp") -> None:
-    """Vožnje, ki jih je feed zamud pravkar nosil. Kliče `collector.ingest`."""
+def zabelezi_feed(trip_ids, zdaj: float | None = None, vir: str = "ijpp",
+                  vsebina_ts: float | None = None) -> None:
+    """Vožnje, ki jih je feed zamud pravkar nosil. Kliče `collector.ingest`.
+
+    `vsebina_ts` je najnovejši čas v vsebini (`collector.cas_vsebine`). Feed,
+    katerega vsebina se `FEED_ZAMRZNJEN_S` ni spremenila, ne nosi ničesar,
+    tudi če odgovarja: vožnje po `FEED_POZABI_S` postanejo „brez feeda“ in
+    zamude pišeta rezervi (`zamude_lpp`, zamuda iz lege).
+    """
     global _prvic
     zdaj = time.time() if zdaj is None else zdaj
     trip_ids = list(trip_ids)
     with _zaklep:
+        if vsebina_ts is not None and _vsebina.get(vir, (None,))[0] != vsebina_ts:
+            _vsebina[vir] = (vsebina_ts, zdaj)
         if _prvic is None:
             _prvic = zdaj
+        _zadnji_nabor[vir] = trip_ids
+        if zdaj - _vsebina.get(vir, (None, zdaj))[1] > FEED_ZAMRZNJEN_S:
+            return
         for t in trip_ids:
             _v_feedu[t] = zdaj
-        _zadnji_nabor[vir] = trip_ids
+
+
+def vsebina_spremenjena(vir: str) -> float | None:
+    """Kdaj (naša ura) se je vsebina vira nazadnje spremenila; za zdravje."""
+    with _zaklep:
+        v = _vsebina.get(vir)
+    return v[1] if v else None
 
 
 def nap_prebran(zdaj: float | None = None) -> None:
@@ -162,13 +188,17 @@ def izpusti(trip_ids) -> None:
 
 
 def feed_nespremenjen(vir: str, zdaj: float | None = None) -> None:
-    """Feed je odgovoril 304: vožnje zadnje vsebine so še v njem.
+    """Feed je odgovoril 304: vožnje zadnje vsebine so še v njem -- dokler
+    vsebina ni starejša od `FEED_ZAMRZNJEN_S`.
 
     Brez tega je nespremenjen feed po `FEED_POZABI_S` veljal za prazen in
     `iz_feeda` bi zamudo iz lege pisal tudi vožnjam, ki jih feed nosi.
     """
+    zdaj = time.time() if zdaj is None else zdaj
     with _zaklep:
         nabor = _zadnji_nabor.get(vir, [])
+        # Po zagonu je lahko prvi odgovor že 304 (ETag je v bazi): od tod šteje.
+        _vsebina.setdefault(vir, (None, zdaj))
     zabelezi_feed(nabor, zdaj, vir)
 
 

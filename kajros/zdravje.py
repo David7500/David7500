@@ -80,6 +80,9 @@ OMREZJE_MOLCI_S = 1200
 
 #: derp.si se bere na 30 s; pet minut brez odgovora je deset zgrešenih branj.
 DERP_MOLCI_S = 300
+#: Vsebina toliko časa ista = zamrznjen vir (`iz_lege.FEED_ZAMRZNJEN_S`, preizkus
+#: ju veže; uvoz bi v nit pošte potegnil zajem).
+DERP_ZAMRZNJEN_S = 600
 #: Rezerve tečejo same; šest ur molka ni več motnja pri njih (8. 10. 2026 je
 #: izpad trajal popoldne), ampak vprašanje, ali vir sploh še obstaja.
 DERP_ORANZNO_S = 6 * 3600
@@ -384,14 +387,23 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
     # rezerve tečejo same (NAP, LPP-jevi zasloni, zemljevid SŽ), brez podatkov
     # ostane le primestni LPP. Oranžno po `DERP_ORANZNO_S`: tako dolg molk je
     # lahko trajna sprememba, o kateri je treba odločiti.
+    # Odgovor z vsebino, ki je ista že `DERP_ZAMRZNJEN_S`, je isto kot molk:
+    # zajem takrat vožnje izpusti in zamude pišejo rezerve (`iz_lege`).
     dp = z.get("derp_prebran")
+    dv = z.get("derp_vsebina") or {}
     if dp is not None and not (vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ):
         for vir, ts in sorted(dp.items()):
             molk = zdaj - ts
-            out[f"derp_{vir}"] = (
-                ((ORANZNA if molk >= DERP_ORANZNO_S else MLACNA),
-                 f"derp.si ({vir.upper()}) ne odgovarja od pred {_min(molk)}")
-                if molk > DERP_MOLCI_S else (DOBRA, ""))
+            star = zdaj - dv[vir] if vir in dv else 0
+            if molk > DERP_MOLCI_S:
+                out[f"derp_{vir}"] = ((ORANZNA if molk >= DERP_ORANZNO_S else MLACNA),
+                                      f"derp.si ({vir.upper()}) ne odgovarja od pred {_min(molk)}")
+            elif star > DERP_ZAMRZNJEN_S:
+                out[f"derp_{vir}"] = ((ORANZNA if star >= DERP_ORANZNO_S else MLACNA),
+                                      f"derp.si ({vir.upper()}) odgovarja, a vsebina se ni "
+                                      f"spremenila od pred {_min(star)}; zamude pišejo rezerve")
+            else:
+                out[f"derp_{vir}"] = (DOBRA, "")
 
     # Mestni LPP z LPP-jevih zaslonov (`zamude_lpp`), kot zemljevid SŽ zgoraj:
     # rdeče, kadar stoji nit, rumeno, kadar ne odgovarja vir.

@@ -352,6 +352,23 @@ def test_derp_v_posti_po_sestih_urah():
     assert set(_posta(z)) == {"derp_ijpp"} and not _posta(z)["derp_ijpp"].nujno
 
 
+def test_zamrznjen_derp_kot_molk():
+    """Odgovor z isto vsebino ni dokaz, da vir dela: zajem vožnje izpusti,
+    zamude pišejo rezerve (rumeno); šest ur je vprašanje za Claude."""
+    from kajros import iz_lege
+    assert zdravje.DERP_ZAMRZNJEN_S == iz_lege.FEED_ZAMRZNJEN_S
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
+    z["derp_prebran"] = {"ijpp": T - 30, "lpp": T - 30}
+    z["derp_vsebina"] = {"ijpp": T - 60, "lpp": T - 15 * 60}
+    o = zdravje.ocena(z, STROJ, T)
+    assert o["derp_ijpp"][0] == zdravje.DOBRA
+    assert o["derp_lpp"][0] == zdravje.MLACNA and "vsebina se ni spremenila" in o["derp_lpp"][1]
+    assert _posta(z) == {}
+    z["derp_vsebina"]["lpp"] = T - 7 * 3600
+    assert set(_posta(z)) == {"derp_lpp"} and not _posta(z)["derp_lpp"].nujno
+
+
 def test_zavrnjena_prijava_nap_v_posti_po_uri():
     z = _zdravo()
     z["nap"] = {"ts": T - 20 * 60, "http": 401, "napaka_ts": T - 60}

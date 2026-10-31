@@ -578,6 +578,15 @@ def _pozabi_drsenje(zdaj: float) -> None:
         FANTOMI.pop(k, None)
 
 
+def cas_vsebine(feed) -> int:
+    """Kdaj je vir vsebino nazadnje spremenil: najnovejši `trip_update.timestamp`,
+    sicer glava. derp.si ga pri obeh virih izpolni (31. 10. 2026: IJPP 89 od
+    94, LPP 100 od 100). Glava sama bi zamrznjeno vsebino s svežim žigom
+    skrila."""
+    return max((e.trip_update.timestamp for e in feed.entity if e.HasField("trip_update")),
+               default=0) or feed.header.timestamp or int(time.time())
+
+
 def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
            pari: dict[str, str] | None = None, dvojniki=frozenset()) -> dict:
     """Zapiše spremembe zamud. Vrne števce za log.
@@ -812,13 +821,14 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
 
     conn.commit()
     _ODPOVEDANE[vir] = (time.time(), frozenset(odpovedano))
-    iz_lege.zabelezi_feed(v_feedu, vir=vir)
+    vsebina_ts = cas_vsebine(feed)
+    iz_lege.zabelezi_feed(v_feedu, vir=vir, vsebina_ts=vsebina_ts)
     iz_lege.izpusti(nap_prevzel)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "nap_prevzel": len(nap_prevzel), "sz_prevzel": sz_prevzel,
             "blips": blips, "unpassed": unpassed, "ure_na_koncni": ure_na_koncni,
             "smoothed": smoothed,
-            "non_scheduled": non_scheduled, "feed_ts": feed_ts,
+            "non_scheduled": non_scheduled, "feed_ts": feed_ts, "vsebina_ts": vsebina_ts,
             "neznanih": neznanih, "zamenjanih": zamenjanih, "pripetih": pripetih,
             "fantomov": fantomov, "proge": proge}
 
@@ -965,6 +975,14 @@ def _zapisi_pokritost(conn: sqlite3.Connection, zdaj: float) -> None:
                                               sort_keys=True))
 
 
+def _zapisi_vsebino(conn: sqlite3.Connection, vir: str) -> None:
+    """Za zdravje: kdaj se je vsebina derp.si nazadnje spremenila. Odgovor sam
+    ni dokaz, da vir dela (`iz_lege.FEED_ZAMRZNJEN_S`)."""
+    ts = iz_lege.vsebina_spremenjena(vir)
+    if ts is not None:
+        db.set_meta(conn, "rt_vsebina" if vir == "ijpp" else "lpp_rt_vsebina", str(int(ts)))
+
+
 def poll_once(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.TRIP_UPDATES_URL, conn, "rt_etag", "derp_zamude")
     # Znacka za predpomnilnik strezbe, po vzoru `positions_fetched`. Pise se
@@ -973,9 +991,11 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     db.set_meta(conn, "rt_fetched", str(int(time.time())))
     if feed is None:
         iz_lege.feed_nespremenjen("ijpp")
+        _zapisi_vsebino(conn, "ijpp")
         conn.commit()
         return {"trips": 0, "changed": 0, "skipped": 0, "unchanged": True}
     izid = ingest(conn, feed)
+    _zapisi_vsebino(conn, "ijpp")
     _zapisi_neznane(conn, "rt_neznanih", izid)
     primeri: dict[str, list[dict]] = {}
     db.set_meta(conn, "lega_brez_zamude",
@@ -1081,12 +1101,14 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     db.set_meta(conn, "lpp_rt_fetched", str(int(time.time())))
     if feed is None:
         iz_lege.feed_nespremenjen("lpp")
+        _zapisi_vsebino(conn, "lpp")
         conn.commit()
         return {"trips": 0, "vehicles": 0, "unchanged": True}
     # Žive vožnje brez voznega reda najprej pripnemo na objavljene: zajem
     # spodaj potem njihove zamude in lege piše pod objavljene.
     zv = zive.razresi(conn, feed)
     izid = ingest(conn, feed, vir="lpp", pari=zv["pari"], dvojniki=zv["dvojniki"])
+    _zapisi_vsebino(conn, "lpp")
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
     _zapisi_fantome(conn)
     brez_voznje: list[dict] = []

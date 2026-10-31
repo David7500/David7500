@@ -1718,6 +1718,12 @@ def api_health():
             vir: int(v) for vir, kljuc in (("ijpp", "rt_fetched"), ("lpp", "lpp_rt_fetched"))
             if (v := db.get_meta(conn, kljuc))
         }
+        # Odgovor ni dokaz, da vir dela: zamrznjena vsebina (304 ali isti
+        # odgovor) je prej veljala za zdravo (`iz_lege.FEED_ZAMRZNJEN_S`).
+        out["derp_vsebina"] = {
+            vir: int(v) for vir, kljuc in (("ijpp", "rt_vsebina"), ("lpp", "lpp_rt_vsebina"))
+            if (v := db.get_meta(conn, kljuc))
+        }
         # In obratno: vozila z lego na vožnji, za katero feed zamud nima nič
         # (`collector.lega_brez_zamude`). Po imenu prevoznika, ker id 1119 v
         # pregledu nikomur nič ne pove.
