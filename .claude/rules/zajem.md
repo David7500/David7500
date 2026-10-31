@@ -58,7 +58,8 @@ Vlak nosi **samo `delay`**; dejanski čas = vozni red + zamuda:
 
 ## Avtobusi
 
-* **Veriga vozila (`block_id`) = edini odgovor, kje je avtobus pred začetkom.** Samo avtobusi, 7 547 od 20 736 voženj (36 %), 1 385 blokov; 0,9 % prekrivanj, mediana postanka 14 min. Isti blok pri več `service_id` → sosed **po obratovalnem dnevu**. Ob 20:22 17 od 25 bližnjih voženj s prejšnjo v bloku, 11 s svežo lego.
+* **Veriga vozila (`block_id`) = edini odgovor, kje je avtobus pred začetkom.** Samo avtobusi: delavnik 17.–30. 10. 2026 ~9 400 od ~11 500 voženj (82 %; Arriva 98 %, Nomago 93 %, AP MS 80 %, LPP primestni 67 %, mestni LPP 14 % po dve vožnji, Marprom 0). Zaporedni vožnji bloka vozi isto vozilo v 95–99 %. Isti blok pri več `service_id` → sosed **po obratovalnem dnevu**.
+* **„Še na prejšnji vožnji“ samo, ko vozilo prejšnjo res še vozi** (`stats._se_vozi`, `vozi` v `/vehicle`; okno `naPrejsnji`): lega sveža kot na zemljevidu (`VEHICLE_STALE_S` = `POSITION_FRESH_S`), končna ni prevožena (`last_measured`), vozilo > 200 m od nje (`VERIGA_NA_CILJU_M`), ta vožnja brez svoje lege. Prej ob vsakem paru: pet minut pred odhodom prav 34–41 %, LPP 25 zvečer ~9 % (vozilo čakalo na izhodišču). Novo 98,8–99,2 %, ujame 96 % pravih (58 793 parov z legami NAP, 17.–30. 10.; `docs/presoja/veriga/v8.py`). Vozilo, ki je prejšnjo končalo, ostane na zemljevidu okna (na izhodišču isto vozilo 96–100 %), brez trditve.
 * **Zamude prejšnje vožnje ne prenašaj.** 195 parov: prenos MAE 4,53, „točno“ 2,29 — slabši od nevednosti; prenese se 11 %. Prejšnja vožnja = **dejstvo o vozilu**, ne napoved.
 * **`bikes_allowed` povsod 0** (ni podatka), `wheelchair_accessible` ga ni — uvoz ne bere.
 

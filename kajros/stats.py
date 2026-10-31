@@ -2577,9 +2577,20 @@ def refresh_summaries(conn: sqlite3.Connection, windows=SUMMARY_WINDOWS,
 
 # ---------------------------------------------------------------- veriga vozila
 
-#: Koliko casa je GPS lega se uporabna. Feed osvezuje na 30 s; cetrt ure
-#: pomeni, da je vozilo od takrat prevozilo kilometre in "je pri X" ne drzi.
-VEHICLE_STALE_S = 15 * 60
+#: Koliko časa je GPS lega prejšnje vožnje še uporabna: toliko kot na
+#: zemljevidu (`collector.POSITION_FRESH_S`; uvoz bi bil krožen, preizkus ju
+#: veže). Prej 15 min: vozilo, ki je feed ob prehodu na naslednjo vožnjo pustil
+#: na končni, je bilo „še na prejšnji vožnji“ četrt ure po koncu (5--9 % pilul
+#: pet minut pred odhodom, 31. 10. 2026).
+VEHICLE_STALE_S = 180
+
+#: Vozilo tako blizu končne prejšnje vožnje je ne vozi več: je tam ali bo čez
+#: nekaj sekund, prihoda pa feed še ni potrdil (NAP ga po GPS zapiše ~2 min po
+#: prihodu, LPP-jev feed na končni prihoda včasih ne zazna). Ponovitev 17.--30.
+#: 10. 2026 na 58 793 parih blokov z legami NAP, pet minut pred odhodom:
+#: trditev prava pri 100 m v 98,1--98,3 %, pri 200 m v 98,8--99,2 %, pri
+#: 300 m v 99,1--99,5 %, a ujame le 92 % pravih (200 m: 96 %).
+VERIGA_NA_CILJU_M = 200
 
 _BLOCK_SQL = """
 SELECT t.trip_id, t.train_no, t.headsign, t.start_s, t.end_s
@@ -2688,6 +2699,35 @@ def _add_live_state(conn: sqlite3.Connection, leg: dict, service_date: str,
             if near:
                 pos["near_stop"], pos["near_m"] = near
         leg["gps"] = pos
+    leg["vozi"] = _se_vozi(conn, leg)
+
+
+def _se_vozi(conn: sqlite3.Connection, leg: dict) -> bool:
+    """Ali vozilo prejšnjo vožnjo ta hip še vozi -- edino, kar dovoli trditev
+    „še na prejšnji vožnji“.
+
+    Blok sam tega ne pove. Okno je trditev pisalo ob vsakem paru in je bilo
+    pet minut pred odhodom prav le v 34--41 % (medkrajevni, 17.--30. 10.
+    2026), pri LPP 25 zvečer v ~9 %: prejšnja je večinoma že končala, vozilo
+    čaka na izhodišču (`docs/presoja/2026-10-31-veriga.md`). Zato le ob sveži
+    legi, dokler končna ni prevožena (`last_measured`) in vozilo ni ob njej
+    (`VERIGA_NA_CILJU_M`): pet minut pred odhodom prav v 98,8--99,2 %, ostalo
+    večinoma drugo vozilo kot v bloku.
+    """
+    gps = leg.get("gps")
+    if gps is None:
+        return False
+    konec = conn.execute(
+        "SELECT t.last_seq, st.lat, st.lon FROM trip t "
+        "LEFT JOIN sched s ON s.trip_id = t.trip_id AND s.stop_seq = t.last_seq "
+        "LEFT JOIN station st ON st.stop_id = s.stop_id "
+        "WHERE t.trip_id = ?", (leg["trip_id"],)).fetchone()
+    if konec is None or konec["last_seq"] is None:
+        return False
+    if leg.get("delay_stop_seq") is not None and leg["delay_stop_seq"] >= konec["last_seq"]:
+        return False
+    return konec["lat"] is None or geo.haversine(
+        gps["lat"], gps["lon"], konec["lat"], konec["lon"]) > VERIGA_NA_CILJU_M
 
 
 def nearest_station(conn: sqlite3.Connection, lat: float, lon: float,

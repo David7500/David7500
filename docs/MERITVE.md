@@ -3367,3 +3367,36 @@ Pravilo „vozilo > 800 m od vseh postankov svoje vožnje“ ob 18:00 ujame le 2
 **„vozila brez zamude: Arriva 1 od 18“ = A8426 Ljubljana AP → Koper (16:45).** Vozilo 1301553: NAP ga je 31. 10. videl 1 488-krat **brez naše vožnje** (`straza_opazeno`), derp.si na vožnjah 432192 in 432202. 30. 10. ga je NAP pripel normalno. Ker NAP vodi Arrivo, derp-ovih zamud ne beremo → brez zamude. `meta.nap` ob 17:30: pripetih 73, `brez_dneva` 13 (vožnja obstaja, a po našem koledarju danes ne vozi). Vozila, ki jih NAP kak čas ni pripel (≥ 100 vzorcev), derp.si pa: 30. 10. 215 (ob 541 pripetih), 31. 10. 135 (ob 170) — vsebuje tudi obrate med vožnjami, zato ni čista mera izgube.
 
 **„uradni zip ne pokrije tedna; velja kopija“** = Marprom, znano (rok 4. 1. 2027, `marprom-obvoz`).
+
+## Veriga vozila: kdaj „še na prejšnji vožnji“ (31. 10. 2026)
+
+Okno vožnje je pred odhodom pisalo „še na prejšnji vožnji“ pri vsaki vožnji s
+predhodnico v bloku. Ponovitev v času (`docs/presoja/veriga/v8.py`, baza na
+arwenu samo za branje): pari blokov 17.–30. 10. 2026 z legami NAP, ob 10, 5 in
+1 min pred odhodom po voznem redu. Resnica: prejšnja ob tem trenutku še vozi
+(prihod na cilj po `gps_prehod.je_cilj`) in to vožnjo vozi isto vozilo
+(prevladujoče v `lega`).
+
+Pet minut pred odhodom, delež prikazov, ko je trditev prava:
+
+| prevoznik | parov | glava prej | pilula prej (lega ≤ 15 min) | novo, 100 m | **novo, 200 m** | 300 m |
+|---|---|---|---|---|---|---|
+| Arriva | 31 607 | 33,7 % | 89,8 % | 98,3 % | **99,2 %** (ujame 95,8 %) | 99,5 % (91,9 %) |
+| Nomago | 24 182 | 34,9 % | 90,3 % | 98,2 % | **98,9 %** (95,7 %) | 99,1 % (91,8 %) |
+| AP MS | 3 004 | 40,9 % | 91,6 % | 98,1 % | **98,8 %** (96,0 %) | 99,2 % (91,8 %) |
+
+* Novo = lega prejšnje sveža kot na zemljevidu (180 s), ta vožnja brez svoje
+  lege, prihod prejšnje na cilj še ni zapisan, vozilo več kot R od končne
+  prejšnje. Brez pogoja o zapisanem prihodu (samo bližina končne, za vire brez
+  `gps_prehod`, npr. LPP) pri 200 m 98,5–98,9 %.
+* Minuto pred odhodom: glava prej 12–17 %, novo pri 200 m 98,3–98,8 % (ujame
+  92–94 %), pri 100 m 95,9–96,9 % (ujame 98–99 %). Izbrano 200 m: napačna trditev
+  je dražja od izpuščene (pilula takrat pove „odpelje ob“, vozilo ostane na
+  zemljevidu).
+* Ostanek napak pri 200 m pet minut pred odhodom: drugo vozilo kot v bloku
+  (Arriva 48, Nomago 63, AP MS 6) in prejšnja že na cilju (37, 23, 8).
+* Vozilo, ki je prejšnjo končalo in stoji do 200 m od izhodišča te, je isto
+  vozilo v 96–100 % (Arriva 99,2 % na 925 primerih pet minut pred odhodom).
+* LPP 25 (1118) in mestni LPP: zgodovine leg ni, ponovitev ni mogoča. Pravilo je
+  isto za vse vire (bližina končne ne potrebuje `gps_prehod`); preveri teden po
+  objavi (`KOLEDAR.md`).

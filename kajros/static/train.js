@@ -997,11 +997,19 @@ function minLabel(sec) {
                  : `${m} min`;
 }
 
+// „Še na prejšnji vožnji“ samo, dokler ta vožnja nima ne meritve ne svoje
+// lege in strežnik pravi, da vozilo prejšnjo res še vozi (`stats._se_vozi`:
+// sveža lega, končna ne prevožena, vozilo ne ob njej). Prej ob vsakem paru v
+// bloku: pet minut pred odhodom prav v 34–41 %, pri LPP 25 zvečer ~9 % --
+// vozilo je večinoma že čakalo na izhodišču (31. 10. 2026).
+function naPrejsnji() {
+  const prev = state.current == null && !runMap.v && state.chain && state.chain.prev;
+  return prev && prev.vozi ? prev : null;
+}
+
 function vehicleChainHtml() {
-  const prev = state.chain && state.chain.prev;
-  // Prejsnjo voznjo kazemo samo, dokler ta se ni zacela -- potem je vozilo tu
-  // in "kje je" ni vec vprasanje.
-  if (!prev || state.current != null) return "";
+  const prev = naPrejsnji();
+  if (!prev) return "";
   const gps = prev.gps;
   // "pri" sme veljati samo za nekaj sto metrov. Dlje povemo razdaljo, in
   // sicer zracno -- vozilo je lahko onstran reke in cestna pot je daljsa.
@@ -2049,7 +2057,11 @@ function postaviVoziloVerige() {
       .addTo(runMap.map);
   }
   runMap.veriga.setLngLat([gps.lon, gps.lat]);
-  runMap.veriga.getElement().title = `vozilo zdaj tu · konča vožnjo ${prev.train_no}`;
+  // Sveža lega vozila velja tudi, ko je prejšnjo že končal: navadno čaka na
+  // izhodišču te (isto vozilo v 96–100 %, 31. 10. 2026).
+  runMap.veriga.getElement().title = prev.vozi
+    ? `vozilo zdaj tu · konča vožnjo ${prev.train_no}`
+    : `vozilo zdaj tu · vožnjo ${prev.train_no} je že končalo`;
 }
 
 async function drawRunMap(v) {
@@ -2307,10 +2319,7 @@ function pilulaBrezVozila() {
   const run = state.run;
   const stops = run.stops;
   if (state.current && state.current === stops[stops.length - 1]) return "";
-  const prev = !state.current && state.chain && state.chain.prev;
-  if (prev && prev.gps && prev.gps.lat != null) {
-    return `${svgVozila()}<span>še na prejšnji vožnji</span>`;
-  }
+  if (naPrejsnji()) return `${svgVozila()}<span>še na prejšnji vožnji</span>`;
   const odhod = odhodPrvega();
   if (odhod) return `${svgVozila()}<span>odpelje ob <strong>${hhmm(odhod)}</strong></span>`;
   if (run.service_date !== todayIso()) return "";

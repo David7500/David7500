@@ -1012,6 +1012,55 @@ def test_vlak_nima_verige(conn):
     assert stats.vehicle_chain(conn, "IC 1", "2026-08-31", "t1") == {}
 
 
+ZDAJ = 1_800_000_000
+
+
+def _lega_prejsnje(conn, lat, lon, seen_ts):
+    conn.execute("INSERT OR REPLACE INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon) "
+                 "VALUES('b1','2026-08-31',?,?,?)", (seen_ts, lat, lon))
+    conn.commit()
+
+
+def _prejsnja(conn, now_s):
+    return stats.vehicle_chain(conn, "LPP 6", "2026-08-31", "b2",
+                               now_ts=ZDAJ, now_s=now_s)["prev"]
+
+
+def test_veriga_vozi_samo_s_svezo_lego_dalec_od_koncne(conn):
+    """„Še na prejšnji vožnji“ le, ko vozilo prejšnjo res še vozi.
+
+    Okno je to pisalo ob vsakem paru v bloku in je bilo pet minut pred
+    odhodom prav v 34--41 %: vozilo je večinoma že čakalo na izhodišču.
+    """
+    _blok(conn)
+    med_voznjo = 8 * 3600 + 20 * 60                     # b1 vozi 08:00-08:30
+    assert _prejsnja(conn, med_voznjo)["vozi"] is False  # brez lege ni trditve
+    _lega_prejsnje(conn, 46.0, 14.4, ZDAJ - 60)          # sredi poti A -> Z
+    assert _prejsnja(conn, med_voznjo)["vozi"] is True
+    _lega_prejsnje(conn, 46.0, 14.4, ZDAJ - 200)         # zemljevid je ne kaže več
+    p = _prejsnja(conn, med_voznjo)
+    assert "gps" not in p and p["vozi"] is False
+    _lega_prejsnje(conn, 46.1012, 15.0, ZDAJ - 60)       # 133 m od končne Z
+    assert _prejsnja(conn, med_voznjo)["vozi"] is False
+
+
+def test_veriga_prevozena_koncna_ni_vec_prejsnja(conn):
+    """Feed vozilo drži na prejšnji tudi, ko je končno že prevozilo in pelje
+    drugam (LPP 9 nazaj proti centru, `api._voznja_koncana`)."""
+    _blok(conn)
+    _lega_prejsnje(conn, 46.0, 14.4, ZDAJ - 30)
+    _meritev(conn, "b1", "2026-08-31", 2, 0)
+    p = _prejsnja(conn, 8 * 3600 + 40 * 60)
+    assert p["delay_stop_seq"] == 2
+    assert p["vozi"] is False
+
+
+def test_lega_verige_velja_kot_na_zemljevidu():
+    """Vozilo, ki ga zemljevid ne kaže več, tudi v verigi ni nikjer."""
+    from kajros import collector
+    assert stats.VEHICLE_STALE_S == collector.POSITION_FRESH_S
+
+
 def test_najblizja_postaja_ima_mejo(conn):
     assert stats.nearest_station(conn, 45.9, 13.9) == ("Ajdovščina", 0)
     # Sredi Madzarske ni slovenskega postajalisca in izmisliti si ga ne smemo.
