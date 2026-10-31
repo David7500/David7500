@@ -3452,3 +3452,15 @@ postanek) in `obs` (sprememba zamude) ob ≥ 3 vlakih po voznem redu: mediana
 16–29 s, najdlje 7 min 00 s (28. in 29. 10. ob 23:53), 8 min 15 s (30. 10. ob
 23:52), 4 min 30 s (31. 10. ob 3:49).
 
+
+## Pregled napovedi vseh živih vozil (31. 10. 2026)
+
+Posnetek produkcije 21:28–21:45 (4 krogi, 466 oken, 358 leg), podrobno
+`docs/presoja/2026-10-31-napovedi.md`. Živa napoved LPP za vozilom (naslednji
+obisk): 14 od 1 292 živih postankov na 2 od 69 oken, do +91 — popravljeno.
+Medkrajevni NAP, `gps_prehod` 28.–30. 10.: zamuda naslednjega prehoda minus
+zadnjega, odsek < 5 min 0,5 % nad 5 min, 15–30 min 12,2 %, ≥ 30 min 45,2 %
+(50 % ≥ 3 min prej); 164–203 voženj na dan. Ocena iz lege (zračno) proti
+prenosu: MAE 7,26 → 4,57 min sredi odseka, 6,43 → 3,36 v zadnjem delu.
+Vlaki proti `sz_zamuda`: 20 od 20, `skladnost` 0 od 967. Vozilo na dveh
+vožnjah po menjavi: 5 v 4 krogih.
