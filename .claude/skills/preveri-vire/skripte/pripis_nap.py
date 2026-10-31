@@ -113,6 +113,7 @@ if pari:
 for kat, seznam in primeri.items():
     print(f"\n{kat} (vozilo, ura, vzrok, NAP, naša, derp, razlog, odmik s, kandidatov):")
     for p in seznam:
-        okna = [f"{t} {okno[t][0] // 3600:02d}:{okno[t][0] % 3600 // 60:02d}" if t in okno else str(t)
-                for t in p[3:6]]
+        # Nagrobnik (vožnja brez `sched`) ima `start_s` NULL.
+        okna = [f"{t} {okno[t][0] // 3600:02d}:{okno[t][0] % 3600 // 60:02d}"
+                if okno.get(t, (None,))[0] is not None else str(t) for t in p[3:6]]
         print("  ", p[:3], "·", " / ".join(okna), "·", p[6:])
