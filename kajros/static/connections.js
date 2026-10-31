@@ -99,10 +99,24 @@ function uraHtml(schedIso, z) {
 // podatka se ne more biti in beseda je sum (isto kot `pot.BREZ_PODATKA_PRED_S`).
 const BREZ_PODATKA_PRED_MS = 30 * 60000;
 
+/** Kjer obvestila ni, povedo lege (`opazovano.py`): trditev o zadnjih dneh, ne o
+ *  zapori -- kaj je narobe, ne vemo. */
+function opazovanoBeseda(vrsta, kje) {
+  const kraj = kje === "do" ? "na cilju" : "tu";
+  return vrsta === "redko" ? `zadnje dni ${kraj} redko ustavlja` : `zadnje dni ${kraj} ni ustavljal`;
+}
+
 /** Desni del vrstice z uro: žeton, ki pove razliko ali zakaj je ni. */
 function zetonVrsticeHtml(o) {
   if (o.odpovedano) return '<span class="zt je-obvoz">odpovedano</span><span class="zt-op">po podatkih prevoznika</span>';
+  if (o.obvoz && o.opazovano) return `<span class="zt je-obvoz">${opazovanoBeseda(o.opazovano, o.obvoz)}</span>`;
   if (o.obvoz) return `<span class="zt je-obvoz">obvoz · ${o.obvoz === "do" ? "na cilju ne ustavi" : "tu ne ustavi"}</span>`;
+  // Redko ustavi: odhod ostane odhod, beseda je ob žetonu.
+  const opomba = o.opazovano ? `<span class="zt-op je-opazovano">${opazovanoBeseda(o.opazovano, o.opazovanoKje)}</span>` : "";
+  return zetonBrezObvoza(o) + opomba;
+}
+
+function zetonBrezObvoza(o) {
   // Ura je LPP-jeva, ne naša: zamude ni, ker ni voznega reda, od katerega bi
   // jo merili. Beseda pove, kako LPP do ure pride (`lpp.VRSTE`).
   if (o.lpp) return `<span class="zt je-vr">${escapeHtml(o.lpp)}</span><span class="zt-op">po LPP</span>`;
@@ -570,7 +584,7 @@ function zvezaHtml(c, nowMs, jeNaslednja, data, prva) {
   const o = {
     zamuda: zam, kind: c.delay_kind, nadomestni: jeNadomestni(c), ura: c.sched_dep, nowMs,
     obicajno: zam ? null : c.typical_arr || c.typical_dep,
-    obvoz: c.ne_ustavi,
+    obvoz: c.ne_ustavi, opazovano: c.opazovano, opazovanoKje: c.opazovano_kje,
   };
   // Vozni red vedno z urama: prečrtan, kadar se razlikuje, sicer neprečrtan.
   // Sama beseda „vozni red“ ob žetonu „običajno +6 min“ ni povedala, ali je
@@ -836,7 +850,7 @@ function odhodHtml(r, nowMs, isNext, date, station, prihodi) {
   const o = {
     zamuda: r.zamuda, kind: r.delay_kind, nadomestni: jeNadomestni(r), ura: r.sched, nowMs,
     obicajno: r.zamuda ? null : r.typical, obvoz: r.ne_ustavi ? "tu" : null,
-    odpovedano: r.odpovedano, lpp: r.lpp_vrsta,
+    odpovedano: r.odpovedano, lpp: r.lpp_vrsta, opazovano: r.opazovano,
   };
   return `
     <${tag} class="od${isNext ? " je-naslednja" : ""}${gone ? " je-mimo" : ""}${morda ? " je-nepotrjen" : ""}${obvoz ? " je-obvoz" : ""}"
@@ -864,7 +878,7 @@ function linijeHtml(ahead, nowMs, date, station, prihodi) {
   // njegov avtobus, „nato čez“ pa sme šteti samo odhode, ki tu ustavijo.
   const skupine = new Map();
   for (const r of ahead) {
-    const stanje = r.odpovedano ? "odpovedano" : r.ne_ustavi ? "obvoz" : "";
+    const stanje = r.odpovedano ? "odpovedano" : r.ne_ustavi ? "obvoz" : r.opazovano || "";
     const k = `${oznakaVoznjeBesedilo(r)}|${r.towards}|${r.smer || ""}|${stanje}`;
     if (!skupine.has(k)) skupine.set(k, []);
     skupine.get(k).push(r);

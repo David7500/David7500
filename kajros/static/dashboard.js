@@ -386,11 +386,20 @@ function dodajSloje() {
                naTleh);
   // Crta skozi postajalisca ni pot po cesti in mora biti videti drugace.
   map.addLayer({ id: "k-trasa-skica", type: "line", source: "k-trasa-skica",
-                 paint: { "line-color": IZBRANA_INK, "line-width": 2.5, "line-opacity": 0.7,
+                 paint: { "line-color": ["case", ["has", "napis"], OVIRA_INK, IZBRANA_INK],
+                          "line-width": 2.5, "line-opacity": 0.7,
                           "line-dasharray": [2, 2] } }, naTleh);
+  map.addLayer({ id: "k-trasa-skica-napis", type: "symbol", source: "k-trasa-skica",
+                 filter: ["has", "napis"],
+                 layout: { "symbol-placement": "line", "text-field": ["get", "napis"],
+                           "text-font": ["Noto Sans Bold"], "text-size": 11 },
+                 paint: { "text-color": OVIRA_INK, "text-halo-color": "#0f1115", "text-halo-width": 1.5 } });
   map.addLayer({ id: "k-trasa-postaje", type: "circle", source: "k-trasa-postaje",
-                 paint: { "circle-radius": polmer(3.6), "circle-color": ["coalesce", ["get", "barva"], IZBRANA_INK],
-                          "circle-stroke-color": "#0f1115", "circle-stroke-width": 1.4,
+                 paint: { "circle-radius": polmer(3.6),
+                          "circle-color": ["case", ["has", "ne_ustavi"], "#0f1115",
+                                           ["coalesce", ["get", "barva"], IZBRANA_INK]],
+                          "circle-stroke-color": ["case", ["has", "ne_ustavi"], OVIRA_INK, "#0f1115"],
+                          "circle-stroke-width": 1.4,
                           "circle-pitch-alignment": "map" } });
   map.addLayer({ id: "k-najdena", type: "circle", source: "k-najdena",
                  paint: { "circle-radius": 9, "circle-color": "#0f1115", "circle-opacity": 0.6,
@@ -2568,10 +2577,16 @@ async function drawStops(trainNo, tripId, vlak = false, barva = IZBRANA_INK) {
   map.setPaintProperty("k-trasa", "line-width", trasaSirina(vlak));
   map.setPaintProperty("k-trasa-obroba", "line-width", trasaSirina(vlak, true));
   let trasa = null;
+  // Vozila vozijo drugje (`opazovano.py`): trasa gre za njimi, objavljeno črtkano.
+  let poVoznemRedu = [];
   if (tripId) {
     try {
       const r = await fetch(`/api/trip/${encodeURIComponent(tripId)}/shape`);
-      if (r.ok) trasa = (await r.json()).points;
+      if (r.ok) {
+        const d = await r.json();
+        trasa = d.points;
+        poVoznemRedu = d.po_voznem_redu || [];
+      }
     } catch (err) {
       /* brez trase narišemo postajališča */
     }
@@ -2583,6 +2598,9 @@ async function drawStops(trainNo, tripId, vlak = false, barva = IZBRANA_INK) {
   if (kosi.length) {
     izbrana.kosi = kosi;
     narisiTraso();
+    nastaviVir("k-trasa-skica", { type: "FeatureCollection", features: poVoznemRedu.map((k) => ({
+      type: "Feature", properties: { napis: "po voznem redu" },
+      geometry: { type: "LineString", coordinates: k.map((t) => [t[1], t[0]]) } })) });
   }
   try {
     const q = tripId ? `?trip=${encodeURIComponent(tripId)}` : "";
@@ -2595,7 +2613,10 @@ async function drawStops(trainNo, tripId, vlak = false, barva = IZBRANA_INK) {
         type: "LineString", coordinates: postaje.map((s) => [s.lon, s.lat]) } });
     }
     const pike = tocke(postaje);
-    for (const f of pike.features) f.properties.barva = barva;
+    pike.features.forEach((f, i) => {
+      f.properties.barva = barva;
+      if (postaje[i].opazovano && postaje[i].opazovano.vrsta === "ne_ustavi") f.properties.ne_ustavi = 1;
+    });
     nastaviVir("k-trasa-postaje", pike);
     // Ocena rabi oboje: brez postankov bi avtobus peljal mimo postajališč.
     if (!vlak && kosi.length) {

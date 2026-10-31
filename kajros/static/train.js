@@ -435,6 +435,8 @@ function kartaOdstHtml(vrh, novo) {
     <div class="ov-ko-info">
       <span class="ov-ko-kje">${SVG_PIN}${kaj === "tvoj" ? "" : `${oznakaCilja(kaj, v)} · `}${escapeHtml(lepoIme(s.name))}</span>
       <span class="ov-ko-ura">${cas}${cas !== sched ? ` <s>${sched}</s>` : ""}${vremeHtml(s, v)}</span>
+      ${s.opazovano ? `<span class="ov-p-do">${s.opazovano.vrsta === "redko"
+        ? "zadnje dni tu redko ustavlja" : "zadnje dni tu ni ustavljal"}</span>` : ""}
     </div>
     <div class="ov-ko-desno${novo ? " je-novo" : ""}">${zamudaCipHtml(v)}${vrstaHtml(v.znak)}</div>`;
 }
@@ -1418,6 +1420,12 @@ function vrsticaHtml(s, o) {
   }
   const potnik = potnikPostanekText(s.potniki);
   if (potnik) opombe.push(escapeHtml(potnik));
+  // Iz leg, ne iz obvestila (`opazovano.py`): s številko, da je jasno, od kod.
+  if (s.opazovano) {
+    opombe.push(`<span class="ov-p-do">${s.opazovano.vrsta === "redko"
+      ? `zadnje dni tu redko ustavlja (${s.opazovano.prislo} od ${s.opazovano.prislo + s.opazovano.dokazov} voženj)`
+      : `zadnje dni tu ni ustavljal, najbližje ${s.opazovano.dmin_m} m stran`}</span>`);
+  }
   return `<div class="ov-p${o.mimo ? " je-mimo" : ""}${o.tvoj ? " je-tvoj" : ""}">
       <span class="ov-p-crta" data-gor="${o.gor}" data-dol="${o.dol}"><i class="ov-p-pika"></i></span>
       <span class="ov-p-ime"><span class="ov-p-naziv">${escapeHtml(lepoIme(s.name))}</span>${
@@ -1521,7 +1529,8 @@ function renderTimeline() {
   // (IJPP CC BY-SA 4.0, Open-Meteo CC BY 4.0), ne razlaga za potnika.
   runTimelineEl.innerHTML = seznamHtml() + vozovnicaHtml(run)
     + `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} ${sklon(run.stops.length, "postanek")}
-      · ${viriHtml(run)} · vreme Open-Meteo (CC BY 4.0)${run.statistika
+      · ${viriHtml(run)}${run.stops.some((s) => s.opazovano)
+        ? ' · kje ni ustavljal: lege vozil in <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ""} · vreme Open-Meteo (CC BY 4.0)${run.statistika
         ? ` · <a href="${escapeHtml(run.statistika)}">kako točno vozi ›</a>` : ""}</div>`;
 }
 
@@ -1692,7 +1701,10 @@ async function ustvariRunMap() {
   const trasaP = Promise.resolve(zacetaTrasa)
     .then((r) => r || fetch(`/api/trip/${encodeURIComponent(state.run.trip_id)}/shape`))
     .then((r) => (r.ok ? r.json() : null))
-    .then((d) => (d ? d.points : null))
+    .then((d) => {
+      runMap.poVoznemRedu = (d && d.po_voznem_redu) || [];
+      return d ? d.points : null;
+    })
     .catch(() => null);           // brez trase narisemo postajalisca
   // MapLibre izmeri okvir ob nastanku; skrit okvir meri 0 x 0.
   wrap.hidden = false;
@@ -1751,7 +1763,7 @@ async function ustvariRunMap() {
   const pts = postaje.map((s) => [s.lat, s.lon]);
   if (runMap.trasa) runMap.postaje = postankiNaTrasi(runMap.trasa, runMap.cums, postaje);
 
-  const crte = kosi.length ? kosi.map((kos) => pkCrta(kos, { vrsta: "trasa" }))
+  const crte = kosi.length ? [...kosi.map((kos) => pkCrta(kos, { vrsta: "trasa" })), ...crtePoVoznemRedu()]
     : pts.length > 1 ? [pkCrta(pts, { vrsta: "skozi" })] : [];
   for (const id of ["run-trasa", "run-postaje", "run-postaje-nadstreski", "run-tvoja", "run-gps"]) {
     map.addSource(id, { type: "geojson", data: RUN_PRAZNO });
@@ -1780,6 +1792,18 @@ async function ustvariRunMap() {
                  paint: { "line-color": pot, "line-width": 2.5, "line-opacity": 0.7,
                           "line-dasharray": [2, 2] } },
                naTleh);
+  // Kjer vozila res vozijo drugje, gre trasa za njimi (`/api/trip/.../shape`),
+  // objavljeni odsek ostane črtkan, z besedo: da je razlika naša trditev, ne napaka.
+  const poRedu = ["==", ["get", "vrsta"], "po-voznem-redu"];
+  map.addLayer({ id: "run-po-voznem-redu", type: "line", source: "run-trasa", filter: poRedu,
+                 paint: { "line-color": OVIRA_INK, "line-width": 2.5, "line-opacity": 0.8,
+                          "line-dasharray": [2, 2] } },
+               naTleh);
+  map.addLayer({ id: "run-po-voznem-redu-napis", type: "symbol", source: "run-trasa", filter: poRedu,
+                 layout: { "symbol-placement": "line", "text-field": "po voznem redu",
+                           "text-font": ["Noto Sans Bold"], "text-size": 11 },
+                 paint: { "text-color": OVIRA_INK, "text-halo-color": "#0f1115", "text-halo-width": 1.5 } },
+               RUN_POD);
   // Pike so bile nekoc neme tocke na zemljevidu. Ime ob dotiku je edini
   // nacin, da se izve, katera postaja to je -- trajne oznake bi na mestni
   // liniji zakrile progo pod sabo. Kot na črti pod zemljevidom: naprej obroč
@@ -1790,7 +1814,8 @@ async function ustvariRunMap() {
   map.addLayer({ id: "run-postaje", type: "circle", source: "run-postaje",
                  paint: { "circle-radius": ["case", mimo, 3.4, 4.2],
                           "circle-color": ["case", mimo, ZA_INK, "#0f1115"],
-                          "circle-stroke-color": ["case", mimo, "#0f1115", pot],
+                          "circle-stroke-color": ["case", ["==", ["get", "ne_ustavi"], 1], OVIRA_INK,
+                                                  mimo, "#0f1115", pot],
                           "circle-stroke-width": ["case", mimo, 1.4, 2.4],
                           "circle-opacity": PIKA_POD_3D, "circle-stroke-opacity": PIKA_POD_3D,
                           "circle-pitch-alignment": "map" } },
@@ -1876,11 +1901,15 @@ function postaviRunNadstreske() {
 // zastonj.
 const RAZREZ_M = 30;
 
+function crtePoVoznemRedu() {
+  return (runMap.poVoznemRedu || []).map((kos) => pkCrta(kos, { vrsta: "po-voznem-redu" }));
+}
+
 function narisiRunTraso(vzdolz) {
   const { kosi, kosIdx, trasa, cums } = runMap;
   if (!kosi || !kosi.length) return;
   runMap.razrez = vzdolz;
-  const crte = [];
+  const crte = crtePoVoznemRedu();
   kosi.forEach((kos, i) => {
     if (i !== kosIdx || vzdolz == null) {
       const del = vzdolz != null && i < kosIdx ? "za" : "naprej";
@@ -1986,6 +2015,7 @@ function posodobiKarto() {
   const tocke = tockePostajalisc(postaje).features;
   tocke.forEach((f, i) => {
     f.properties.mimo = cur && postaje[i].stop_seq <= cur.stop_seq ? 1 : 0;
+    f.properties.ne_ustavi = postaje[i].opazovano && postaje[i].opazovano.vrsta === "ne_ustavi" ? 1 : 0;
   });
   runVir("run-postaje", tocke);
   if (!runMap.v) {

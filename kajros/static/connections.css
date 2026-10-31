@@ -414,6 +414,7 @@
 }
 .zt.je-vr { background: var(--line-firm); color: var(--ink-dim); font-weight: 500; }
 .zt.je-obvoz { background: #2e2811; color: #f2d36b; font-weight: 500; }
+.zt-op.je-opazovano { color: #f2d36b; }
 .zt.je-prestop { background: color-mix(in srgb, var(--z) 16%, transparent); color: var(--z); }
 .zt-op { font: 400 12.5px/1.3 var(--sans); color: var(--ink-dim); white-space: nowrap; }
 /* Zapora tira, vlak pred njim: meja, ne zamuda -- rumeno kot ovire. */
