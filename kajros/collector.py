@@ -742,8 +742,12 @@ def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
 #: -- 10 min brez leg NAP ob 10:25, ki je prava.
 BREZ_ZAMUDE_PO_S = 900
 
+#: Toliko vozil na prevoznika gre v /admin kot povezava na zemljevid.
+PRIMEROV = 8
 
-def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list[int]]:
+
+def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime,
+                     primeri: dict[str, list[dict]] | None = None) -> dict[str, list[int]]:
     """Prevoznik -> [ne v feedu zamud, brez zamude, vozil z lego] na vožnjah,
     ki zdaj vozijo.
 
@@ -768,12 +772,15 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
     desetih epizodah, kar je 20 sporočil, od tretjega postanka 25 minut v
     eni. Čakanje prvega obiska je mediana 2 min, p99 15 min, a na redkih
     postankih ure: Izola -> Ljubljana 70 min (Koper, nato Hajdrihova).
+
+    `primeri` (če je dan) dobi po prevozniku vozila brez zamude, za povezavo
+    iz /admin na zemljevid (`zdravje.primeri`).
     """
     danes = zdaj.date()
     now_s = int(zdaj.timestamp()) - stats.polnoc(danes.isoformat())
     out: dict[str, list[int]] = {}
     for r in conn.execute(
-        "SELECT t.agency, v.trip_id, "
+        "SELECT t.agency, v.trip_id, v.vehicle_id, v.lat, v.lon, t.train_no, t.headsign, "
         "       EXISTS (SELECT 1 FROM run r WHERE r.trip_id = v.trip_id "
         "                AND r.service_date = COALESCE(v.service_date, ?)) AS ima "
         "FROM vehicle_now v JOIN trip t USING (trip_id) "
@@ -795,6 +802,11 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime) -> dict[str, list
                       and r["agency"] not in iz_lege.SAMO_IZ_LEGE)
         stevec[1] += not r["ima"]
         stevec[2] += 1
+        if primeri is not None and not r["ima"]:
+            primeri.setdefault(r["agency"], []).append({
+                "trip_id": r["trip_id"], "vozilo": r["vehicle_id"], "lat": r["lat"],
+                "lon": r["lon"], "oznaka": " ".join(
+                    x for x in (r["train_no"], r["headsign"] and f"→ {r['headsign']}") if x)})
     return out
 
 
@@ -810,8 +822,11 @@ def poll_once(conn: sqlite3.Connection) -> dict:
         return {"trips": 0, "changed": 0, "skipped": 0, "unchanged": True}
     izid = ingest(conn, feed)
     _zapisi_neznane(conn, "rt_neznanih", izid)
+    primeri: dict[str, list[dict]] = {}
     db.set_meta(conn, "lega_brez_zamude",
-                json.dumps(lega_brez_zamude(conn, datetime.now(TZ)), sort_keys=True))
+                json.dumps(lega_brez_zamude(conn, datetime.now(TZ), primeri), sort_keys=True))
+    db.set_meta(conn, "lega_brez_zamude_primeri", json.dumps(
+        {ag: v[:PRIMEROV] for ag, v in primeri.items()}, sort_keys=True))
     conn.commit()
     return izid
 

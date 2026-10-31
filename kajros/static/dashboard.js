@@ -102,6 +102,9 @@ const HAS_START = Number.isFinite(startLat) && Number.isFinite(startLon)
 // prevoznika pa je bila lahko ugasnjena -- avtobusa, po katerega je prisel,
 // tam ni bilo.
 let urlTrip = URLQ.get("trip");
+// Vozilo po id-ju: povezava iz /admin (`zdravje.primeri`) na vozilo, ki
+// prižge opozorilo -- tudi tisto brez naše vožnje (LPP mimo voznega reda).
+let urlVozilo = URLQ.get("vozilo");
 // Vlaki in avtobusi pridejo v ločenih odgovorih; dokler nista oba tu,
 // odsotnost vozila iz naslova ne pomeni, da ga ni.
 const nalozeno = { vlaki: false, avtobusi: false };
@@ -2807,13 +2810,15 @@ function onVehicles(list) {
 // se odpre, da je takoj jasno, katero vozilo je. Enkrat: naslov ga nato
 // izgubi, sicer bi ga osvežitev strani odprla znova, ko ga morda ni več.
 function pokaziVoziloIzNaslova() {
-  if (!urlTrip) return;
-  const v = liveBuses.find((x) => x.trip_id === urlTrip);
-  const vlak = !v && liveTrains.find((x) => x.trip_id === urlTrip);
+  if (!urlTrip && !urlVozilo) return;
+  const v = urlTrip ? liveBuses.find((x) => x.trip_id === urlTrip)
+    : liveBuses.find((x) => x.vehicle_id === urlVozilo);
+  const vlak = !v && urlTrip && liveTrains.find((x) => x.trip_id === urlTrip);
   if (!v && !vlak && !(nalozeno.vlaki && nalozeno.avtobusi)) return;
-  urlTrip = null;
+  urlTrip = urlVozilo = null;
   const q = new URLSearchParams(location.search);
   q.delete("trip");
+  q.delete("vozilo");
   history.replaceState(null, "", `?${q}`);
   if (vlak) {
     const spec = LAYERS.find((s) => s.key === "train");

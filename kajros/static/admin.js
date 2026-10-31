@@ -507,7 +507,10 @@ function uraTs(ts) {
 /** Datum ISO kot „12. 12. 2026“. */
 const datumIso = (s) => { const d = izIso(s); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
 
-const RANG = { "je-slaba": 3, "je-mlacna": 2, "je-dobra": 1, "": 0 };
+// Stopnje (`zdravje.py`): rdeče = takoj, oranžno = za pregled s Claude,
+// rumeno = samo za vedenje. Ista lestvica kot `zdravje.RANG`.
+const RANG = { "je-slaba": 4, "je-oranzna": 3, "je-mlacna": 2, "je-dobra": 1, "": 0 };
+const NEZDRAVO = new Set(["je-slaba", "je-oranzna", "je-mlacna"]);
 
 /** Slovenska množina: mn(2, "branje", "branji", "branja", "branj") -> „2 branji“. */
 function mn(n, ena, dve, tri, pet) {
@@ -706,7 +709,7 @@ function karticaVira(v, d) {
   const p = preverba && preverba.viri && preverba.viri.find((x) => x.kljuc === v.kljuc);
   if (p) h += vrsticaKartice(`preverjeno ob ${uraTs(preverba.ts)}`, p.opis, p.ok ? "je-dobra" : "je-slaba");
   h += `</div>`;
-  if (v.razred === "je-slaba" || v.razred === "je-mlacna" || (dn && dn.zaporednih)) {
+  if (NEZDRAVO.has(v.razred) || (dn && dn.zaporednih)) {
     h += `<p class="adm-vir-ukrep"><b>Kaj storiti.</b> ${escapeHtml(v.ukrep)}</p>`;
   }
   return `${h}${nogaVira(v)}</article>`;
@@ -731,8 +734,33 @@ function skupnoZdravje(d) {
   const stoji = slabih <= 1 ? "nekaj stoji" : slabih === 2 ? "dve stvari stojita"
     : slabih <= 4 ? `${slabih} stvari stojijo` : `${slabih} stvari stoji`;
   if (r.includes("je-slaba")) return ["je-slaba", stoji, razlogi];
+  if (r.includes("je-oranzna")) return ["je-oranzna", "za pregled s Claude", razlogi];
   if (r.includes("je-mlacna")) return ["je-mlacna", "opozorilo", razlogi];
   return ["je-dobra", "vse dela", razlogi];
+}
+
+/** Stopnje v pasu: kaj pomenijo in kaj storiti. Barva ni sama -- vsaka
+ *  skupina ima naslov (rdeča in oranžna sta pri protanu skoraj isti). */
+const SKUPINE_ZDRAVJA = [
+  ["je-slaba", "Stoji — takoj", "pošta takoj; potniki vidijo samodejno obvestilo, ko podatkov ni 20 min"],
+  ["je-oranzna", "Za pregled s Claude", "ne popravi se samo: odpri sejo s Claude in poženi /preveri-vire; pošta podnevi"],
+  ["je-mlacna", "Samo za vedenje", "popravi se samo ali ne škodi; v pošto ne gre"],
+];
+
+/** Vozila, ki vrstico prižgejo: povezave na zemljevid z izbranim vozilom. */
+function primeriHtml(d, k) {
+  const p = (d.primeri || {})[k] || [];
+  return p.length ? `<span class="adm-primeri">${p.map((x) =>
+    `<a href="${escapeHtml(x.pot)}" target="_blank" rel="noopener">${escapeHtml(x.oznaka)} ›</a>`).join("")}</span>` : "";
+}
+
+/** Samodejna obvestila potnikom (`obvestila.samodejna`): ob rdečem skrbnik
+ *  vidi, ali jih potniki že dobijo. */
+function potnikiHtml(d) {
+  const sam = ((d.obvestila || {}).samodejna) || [];
+  return sam.length
+    ? `<p class="adm-pas-prev"><b>Potniki vidijo:</b> ${sam.map((o) => escapeHtml(o.besedilo)).join(" · ")}</p>`
+    : `<p class="adm-pas-prev">Potnikom se samodejno obvestilo pokaže, ko kakšno omrežje 20 min nima podatkov; ta hip ga ni. Ročno ga objaviš v zavihku Obvestila.</p>`;
 }
 
 function pasZdravja(d) {
@@ -744,18 +772,28 @@ function pasZdravja(d) {
     p = `<p class="adm-pas-prev"><b>Preverjeno ob ${uraTs(preverba.ts)}.</b> ${escapeHtml(preverba.sklep)}
       <span class="${preverba.kontrola.ok ? "" : "je-slaba"}">Kontrola: ${escapeHtml(preverba.kontrola.opis)}.</span></p>`;
   }
+  const skupine = SKUPINE_ZDRAVJA.map(([r, naslov, kaj]) => {
+    const vrst = razlogi.filter((x) => x.razred === r);
+    if (!vrst.length) return "";
+    return `<div class="adm-stopnja ${r}"><h3><span class="adm-pika ${r}"></span>${naslov}<span class="adm-stopnja-kaj">${kaj}</span></h3>
+      <ul class="adm-razlogi">${vrst.map((x) => {
+        const ukrep = r !== "je-mlacna" && (d.ukrepi || {})[x.k];
+        return `<li><span><b>${escapeHtml((d.imena || {})[x.k] || x.k)}</b> — ${escapeHtml(x.besedilo)}${
+          (d.v_posti || {})[x.k] ? " <i>· v pošti</i>" : ""}${primeriHtml(d, x.k)}</span>${
+          ukrep ? `<span class="adm-ukrep">Kaj storiti: ${escapeHtml(ukrep)}</span>` : ""}</li>`;
+      }).join("")}</ul></div>`;
+  }).join("");
   return `<section class="adm-plosca s12 adm-pas ${raz}">
     <div class="adm-pas-glava"><span class="adm-pika ${raz}"></span><h2>${escapeHtml(bes[0].toUpperCase() + bes.slice(1))}</h2>
       <button type="button" class="btn adm-gumb" id="preveri-vire" ${preverba && preverba.tece ? "disabled" : ""}>Preveri vire zdaj</button></div>
-    ${razlogi.length ? `<ul class="adm-razlogi">${razlogi.map((x) =>
-      `<li class="${x.razred}"><span class="adm-pika ${x.razred}"></span>${escapeHtml(x.besedilo)}${
-        (d.v_posti || {})[x.k] ? " <b>· v pošti</b>" : ""}</li>`).join("")}</ul>`
+    ${razlogi.length ? skupine
     : `<p class="adm-pod">Vsi viri odgovarjajo, niti tečejo, disk in vozni red sta v redu.</p>`}
+    ${raz === "je-slaba" ? potnikiHtml(d) : ""}
     ${p}
-    <p class="adm-pod">V pošto gre samo, kar rabi tvoj poseg: obstala ali mrtva nit, zajem, ki nič ne zapiše, disk, WAL, vozni red, ki se konča, zavrnjena prijava NAP, dan dolg izpad derp.si (${{
-      tece: "vklopljeno", stoji: "<b class=\"je-slaba\">nit pošte ne teče</b> — ponovni zagon strežnika",
-      ni: "<b>ni nastavljeno</b> — datoteka <code>.opozorila</code>",
-    }[(d.stroj || {}).posta] || "—"}). Ostalo rdeče in rumeno samo tu.</p>
+    <p class="adm-pod">Rdeče gre v pošto takoj, oranžno podnevi (7–22 h) z ukrepom „/preveri-vire“, rumeno samo sem. Rumeno, ki se v dogovorjenem času ne popravi samo, postane oranžno. Pošta: ${{
+      tece: "vklopljena", stoji: "<b class=\"je-slaba\">nit pošte ne teče</b> — ponovni zagon strežnika",
+      ni: "<b>ni nastavljena</b> — datoteka <code>.opozorila</code>",
+    }[(d.stroj || {}).posta] || "—"}.</p>
   </section>`;
 }
 
@@ -906,7 +944,7 @@ function stanje(d) {
       ${ploscica(naj ? `<span class="${msRazred(naj.ms_naj)}">${ms(naj.ms_naj)}</span>` : "—",
         "najpočasneje danes", naj ? escapeHtml(naj.pot) : "")}
       <a class="adm-k adm-k-povezava" href="#viri"><div class="adm-k-v"><span class="adm-k-stanje"><span class="adm-pika ${zR}"></span>${
-        zR === "je-slaba" ? "stoji" : zR === "je-mlacna" ? "opozorilo" : "dela"}</span></div>
+        zR === "je-slaba" ? "stoji" : zR === "je-oranzna" ? "za pregled" : zR === "je-mlacna" ? "opozorilo" : "dela"}</span></div>
         <div class="adm-k-i">zajem in viri →</div><div class="adm-k-d">${escapeHtml(zB)} · feed ${pred(d.zdravje && d.zdravje.last_feed_ts)}</div></a>
     </div>
     ${plosca("s8", "Zadnjih 30 dni", "ljudi na dan · šrafirano: štetja še ni bilo · klik odpre dan",
@@ -1390,10 +1428,10 @@ async function osvezi() {
     const [raz, bes] = skupnoZdravje(zadnji);
     // Značka na zavihku Viri: koliko virov ni zdravih -- rdeča, kadar kaj stoji.
     const nezdravih = ((zadnji.viri || {}).seznam || [])
-      .filter((v) => v.razred === "je-slaba" || v.razred === "je-mlacna").length;
+      .filter((v) => NEZDRAVO.has(v.razred)).length;
     el("viri-znacka").hidden = !nezdravih;
     el("viri-znacka").textContent = nezdravih ? String(nezdravih) : "";
-    el("viri-znacka").className = `adm-znacka ${raz === "je-slaba" ? "je-slaba" : "je-mlacna"}`;
+    el("viri-znacka").className = `adm-znacka ${NEZDRAVO.has(raz) ? raz : "je-mlacna"}`;
     const ura = URA_TS.format(new Date());
     el("osvezeno").innerHTML = `<a href="#viri"><span class="adm-pika ${raz}"></span>${escapeHtml(bes)}</a> · osveženo ${ura}`;
     noga(zadnji);

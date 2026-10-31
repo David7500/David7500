@@ -218,12 +218,16 @@ def test_prijava_iz_okolja_in_datoteke(tmp_path, monkeypatch):
 
 
 def test_zdravje_zavrnjena_prijava_je_rumena_stoječa_nit_rdeča():
+    """Zavrnjena prijava: rumeno, po uri oranžno (novo geslo ali odobritev se
+    ne zgodi samo). Vir brez odgovora rumeno, po dveh urah oranžno."""
     vozi = {"zeleznica": 5, "avtobus": 50}
     ocena = lambda nm: zdravje.ocena({"vozi_zdaj": vozi, "nap": nm}, {}, ZDAJ).get("nap")
     assert ocena(None) is None
-    assert ocena({"http": 401, "napaka_ts": ZDAJ - 30})[0] == zdravje.MLACNA
+    assert ocena({"ts": ZDAJ - 600, "http": 401, "napaka_ts": ZDAJ - 30})[0] == zdravje.MLACNA
+    assert ocena({"ts": ZDAJ - 2 * 3600, "http": 401, "napaka_ts": ZDAJ - 30})[0] == zdravje.ORANZNA
     assert ocena({"ts": ZDAJ - 15})[0] == zdravje.DOBRA
     assert ocena({"ts": ZDAJ - 1000, "napaka_ts": ZDAJ - 20})[0] == zdravje.MLACNA
+    assert ocena({"ts": ZDAJ - 3 * 3600, "napaka_ts": ZDAJ - 20})[0] == zdravje.ORANZNA
     assert ocena({"ts": ZDAJ - 1000, "napaka_ts": ZDAJ - 1000})[0] == zdravje.SLABA
 
 

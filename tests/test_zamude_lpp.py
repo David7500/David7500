@@ -218,8 +218,9 @@ def test_tabla_ob_molku_derp_vzame_vse_linije(monkeypatch):
 
 
 def test_zdravje_derp_in_lpp():
-    """derp.si po viru: rdeče, kadar ne odgovarja, četudi `run` pišejo drugi
-    viri. Nit LPP: rumeno ob napaki vira, rdeče, kadar stoji."""
+    """derp.si po viru: rumeno, kadar ne odgovarja, četudi `run` pišejo drugi
+    viri (rezerve tečejo same), oranžno po šestih urah. Nit LPP: rumeno ob
+    napaki vira, rdeče, kadar stoji."""
     z = {"vozi_zdaj": {"zeleznica": 10, "avtobus": 300},
          "derp_prebran": {"ijpp": ZDAJ - 30, "lpp": ZDAJ - 30},
          "zamude_lpp": {"ts": ZDAJ - 100, "oba": 40, "samo_lpp": 0}}
@@ -228,7 +229,7 @@ def test_zdravje_derp_in_lpp():
     assert o["zamude_lpp"][0] == zdravje.DOBRA
     z["derp_prebran"]["ijpp"] = ZDAJ - 3600
     o = zdravje.ocena(z, {}, ZDAJ)
-    assert o["derp_ijpp"] == (zdravje.SLABA, "derp.si (IJPP) ne odgovarja od pred 60 min")
+    assert o["derp_ijpp"] == (zdravje.MLACNA, "derp.si (IJPP) ne odgovarja od pred 60 min")
     assert o["derp_lpp"][0] == zdravje.DOBRA, "vsak vir svoja vrstica"
     z["zamude_lpp"] = {"ts": ZDAJ - 3600, "napaka_ts": ZDAJ - 60}
     assert zdravje.ocena(z, {}, ZDAJ)["zamude_lpp"][0] == zdravje.MLACNA

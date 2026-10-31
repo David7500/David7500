@@ -168,10 +168,11 @@ def test_vozni_red_ki_se_konca():
                                      "lpp": "2026-10-17"}}, {}, T)
     assert o["vozni_red"][0] == o["vozni_red_lpp"][0] == zdravje.DOBRA
     o = zdravje.ocena({"vozni_red": {"lpp": "2026-10-12"}}, {}, T)
-    assert o["vozni_red_lpp"] == (zdravje.MLACNA, "vozni red mestnega LPP znan le do 12. 10.")
+    # Ne popravi se samo (uvoz ne teče ali vir nima novega): oranžno.
+    assert o["vozni_red_lpp"] == (zdravje.ORANZNA, "vozni red mestnega LPP znan le do 12. 10.")
     o = zdravje.ocena({"vozni_red": {"lpp": "2026-10-10", "zeleznica": "2026-10-14"}}, {}, T)
     assert o["vozni_red_lpp"][0] == zdravje.SLABA
-    assert o["vozni_red"][0] == zdravje.MLACNA
+    assert o["vozni_red"][0] == zdravje.ORANZNA
     o = zdravje.ocena({"vozni_red": {"lpp": "2026-10-05"}}, {}, T)
     assert o["vozni_red_lpp"][1] == "vozni red mestnega LPP se je končal 5. 10."
 

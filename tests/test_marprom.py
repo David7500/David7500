@@ -345,7 +345,8 @@ def test_zdravje_opazovano():
     assert ocena(None) is None
     assert ocena((danes - timedelta(days=2)).isoformat())[0] == zdravje.DOBRA
     raz, razlog = ocena((danes - timedelta(days=4)).isoformat())
-    assert raz == zdravje.MLACNA and "4 dni" in razlog
+    # Nočni račun, ki stoji, se sam ne zažene: oranžno.
+    assert raz == zdravje.ORANZNA and "4 dni" in razlog
 
 
 def test_manjkajoci_vir_osvezi_ob_zagonu(monkeypatch):

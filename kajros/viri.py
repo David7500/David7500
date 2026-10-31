@@ -611,7 +611,8 @@ def zapisano(conn, kljuc: str, zdaj: float) -> int | None:
 
 # --- pregled --------------------------------------------------------------
 
-_RANG = {"je-slaba": 3, "je-mlacna": 2, "je-dobra": 1, "": 0}
+#: Ista lestvica kot `zdravje.RANG` (zdravje uvaža viri, ne obratno).
+_RANG = {"je-slaba": 4, "je-oranzna": 3, "je-mlacna": 2, "je-dobra": 1, "": 0}
 
 
 def pregled(conn, ocena: dict[str, tuple[str, str]], zdaj: float | None = None) -> list[dict]:
@@ -645,7 +646,7 @@ def pregled(conn, ocena: dict[str, tuple[str, str]], zdaj: float | None = None) 
         out.append({
             **asdict(v),
             "razred": razred,
-            "razlogi": [r for raz, r in ocene if r and raz in ("je-slaba", "je-mlacna")],
+            "razlogi": [r for raz, r in ocene if r and raz in ("je-slaba", "je-oranzna", "je-mlacna")],
             "dnevnik": d,
             "zapisano": zapisano(conn, v.kljuc, zdaj) if v.vklopljen else None,
             "nit_tece": (v.nit in zive) if v.nit else None,

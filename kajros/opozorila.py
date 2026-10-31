@@ -1,15 +1,18 @@
-"""Opozorilo skrbniku po pošti, ko je v `/admin` kaj rdeče.
+"""Opozorilo skrbniku po pošti, ko je v `/admin` kaj rdeče ali oranžno.
 
 1. 10. 2026 je nit zemljevida SŽ 4,3 h stala, WAL je rasel na 5,4 GB, opazilo
 pa se je šele, ko je skrbnik odprl pregled. Ob 3:30 nihče ne gleda.
 
-Kaj gre v pošto, odloča `zdravje.posta()`: samo okvara, pri kateri mora
-skrbnik kaj narediti (nit stoji, disk, zajem ne piše, vozni red se konča),
-ne vsaka rdeča vrstica pregleda -- izpad vira z rezervo in kakovost, ki je
-skrbnik ne popravi, ostaneta v /admin. Pošta gre, ko okvara traja (privzeto
+Kaj gre v pošto, odloča `zdravje.posta()` po stopnji: rdeče (nekaj stoji,
+skrbnik mora zdaj) gre takoj, oranžno (ne popravi se samo, rabi sejo s
+Claude) samo podnevi, rumeno nikoli. Pošta gre, ko okvara traja (privzeto
 `ZAMIK_S`; en zgrešen obhod ali ponovni zagon ni okvara), in še enkrat, ko
 je vsaj `KONEC_S` spet v redu. Vmes nič: opozorilo, ki zvoni vsako minuto,
-se neha brati.
+se neha brati. Oranžna, ki postane rdeča, gre znova.
+
+Nit teče tudi brez nastavitev pošte: šteje, kako dolgo traja kaj rumenega
+(`zdravje.SLED`), in to hrani v `meta`, da ponovni zagon trajanja ne začne
+znova -- po njem rumena postane oranžna.
 
 Nastavitve so v `${KAJROS_DATA_DIR}/.opozorila` (vrstice `ime=vrednost`:
 `za`, `od`, `geslo`, `streznik`, `vrata`), iz istega razloga kot
@@ -107,20 +110,22 @@ def korak(stanje: dict, okvare: dict[str, zdravje.Okvara | None], zdaj: float,
 
     `okvare` je `zdravje.posta()`: vrstica -> okvara ali None, kadar se je ta
     hip ne da oceniti (ponoči) -- taka vrstica ne začne ne konča ničesar.
+    Nujna (rdeča) gre takoj po `po_s`, nenujna (oranžna) samo podnevi
+    (`zdravje.podnevi`); oranžna, ki postane rdeča, je nova.
     `vzrok` se pokliče samo, kadar je med novimi okvarami zajem (`ZAJEM`):
     preverjanje virov traja do pol minute in pri polnem disku ne pove nič.
     `rumene` so razlogi rumenih vrstic: v pošti so samo ob novi okvari, za
     vedenje, kaj je bilo ob njej še narobe.
 
-    Stanje je `{ključ: {od, poslano, razlog, dobro_od}}`. Ključ, ki ga ni v
-    sporočilu, ostane, dokler pošta ne uspe -- zato klicatelj stanja ne
-    potrdi, preden pošlje.
+    Stanje je `{ključ: {od, poslano, razlog, nujno, poslano_nujno, dobro_od}}`.
+    Ključ, ki ga ni v sporočilu, ostane, dokler pošta ne uspe -- zato
+    klicatelj stanja ne potrdi, preden pošlje.
     """
     stanje = {k: dict(v) for k, v in stanje.items()}
     slabe = {k: o for k, o in okvare.items() if o is not None}
     for k, o in slabe.items():
         s = stanje.setdefault(k, {"od": zdaj, "poslano": 0})
-        s["razlog"] = o.razlog
+        s["razlog"], s["nujno"] = o.razlog, o.nujno
         s.pop("dobro_od", None)
     for k, s in stanje.items():
         if k in slabe:
@@ -130,8 +135,11 @@ def korak(stanje: dict, okvare: dict[str, zdravje.Okvara | None], zdaj: float,
         else:
             s.setdefault("dobro_od", zdaj)
 
+    podnevi = zdravje.podnevi(zdaj)
     nove = [k for k, s in stanje.items()
-            if k in slabe and not s["poslano"] and zdaj - s["od"] >= slabe[k].po_s]
+            if k in slabe and zdaj - s["od"] >= slabe[k].po_s
+            and (slabe[k].nujno or podnevi)
+            and (not s["poslano"] or slabe[k].nujno and not s.get("poslano_nujno", True))]
     koncane = [k for k, s in stanje.items()
                if "dobro_od" in s and zdaj - s["dobro_od"] >= KONEC_S]
     resene = [k for k in koncane if stanje[k]["poslano"]]
@@ -142,26 +150,34 @@ def korak(stanje: dict, okvare: dict[str, zdravje.Okvara | None], zdaj: float,
     if not nove and not resene:
         return stanje, None, [], []
 
-    se = [k for k, s in stanje.items() if k in slabe and s["poslano"]]
+    nujne = [k for k in nove if slabe[k].nujno]
+    oranzne = [k for k in nove if not slabe[k].nujno]
+    se = [k for k, s in stanje.items() if k in slabe and s["poslano"] and k not in nove]
+
+    def vrstica(k: str) -> str:
+        return (f"• {zdravje.ime(k)}: {stanje[k]['razlog']} (od {_ura(stanje[k]['od'])})\n"
+                f"  Kaj storiti: {slabe[k].ukrep}")
     deli = []
-    if nove:
-        deli.append("Stoji:\n" + "\n".join(
-            f"• {zdravje.ime(k)}: {stanje[k]['razlog']} (od {_ura(stanje[k]['od'])})\n"
-            f"  Kaj storiti: {slabe[k].ukrep}" for k in nove))
+    if nujne:
+        deli.append("Stoji, takoj:\n" + "\n".join(vrstica(k) for k in nujne))
+    if oranzne:
+        deli.append("Za pregled s Claude (ne popravi se samo, ni nujno ta hip):\n"
+                    + "\n".join(vrstica(k) for k in oranzne))
     if resene:
         deli.append("Spet v redu:\n" + "\n".join(
             f"• {zdravje.ime(k)} (stalo {_ura(stanje[k]['od'])}–"
             f"{_ura(stanje[k]['dobro_od'])}, {_trajanje(stanje[k]['dobro_od'] - stanje[k]['od'])}; "
             f"bilo: {stanje[k]['razlog']})" for k in resene))
     if se:
-        deli.append("Še vedno stoji:\n" + "\n".join(
+        deli.append("Še vedno:\n" + "\n".join(
             f"• {zdravje.ime(k)}: {stanje[k]['razlog']} (od {_ura(stanje[k]['od'])})" for k in se))
     if nove and rumene:
         deli.append("Ob tem rumeno (samo za vedenje):\n" + "\n".join(f"• {r}" for r in rumene))
     if vzrok is not None and ZAJEM.intersection(nove):
         deli.append(vzrok())
     deli.append(f"{config.BASE_URL}/admin")
-    zadeva = (f"kajros: stoji -- {stanje[nove[0]]['razlog']}" if nove
+    zadeva = (f"kajros: stoji -- {stanje[nujne[0]]['razlog']}" if nujne
+              else f"kajros: za pregled -- {stanje[oranzne[0]]['razlog']}" if oranzne
               else f"kajros: spet v redu -- {zdravje.ime(resene[0])}")
     return stanje, (zadeva, "\n\n".join(deli) + "\n"), nove, resene
 
@@ -179,6 +195,7 @@ def poslji(n: dict, zadeva: str, telo: str) -> None:
 def _potrdi(stanje: dict, nove: list[str], resene: list[str], zdaj: float) -> dict:
     for k in nove:
         stanje[k]["poslano"] = zdaj
+        stanje[k]["poslano_nujno"] = stanje[k].get("nujno", True)
     for k in resene:
         del stanje[k]
     return stanje
@@ -186,28 +203,34 @@ def _potrdi(stanje: dict, nove: list[str], resene: list[str], zdaj: float) -> di
 
 def teci(stop: threading.Event, log: Callable[[str], None],
          beri_zdravje: Callable[[], dict]) -> None:
-    """Svoja nit: pošta zna viseti 30 s, zajem pa ne sme čakati nanjo."""
+    """Svoja nit: pošta zna viseti 30 s, zajem pa ne sme čakati nanjo.
+
+    Teče tudi brez nastavitev pošte -- šteje trajanje (`zdravje.SLED`)."""
     n = nastavitve()
-    if n is None:
-        return
-    log(f"opozorila po pošti vklopljena (za {n['za']})")
+    if n is not None:
+        log(f"opozorila po pošti vklopljena (za {n['za']})")
     conn = db.connect()
     napak = 0
     try:
         stanje = json.loads(db.get_meta(conn, "opozorila") or "{}")
+        try:
+            zdravje.SLED = zdravje.Sled(json.loads(db.get_meta(conn, "zdravje_sled") or "{}"))
+        except ValueError:
+            pass
         while not stop.wait(OBHOD_S):
             zdaj = time.time()
             try:
                 z, m = beri_zdravje(), zdravje.stroj()
-                ocena = zdravje.ocena(z, m, zdaj)
-                rumene = [r for raz, r in ocena.values() if raz == zdravje.MLACNA and r]
-                novo, sporocilo, nove, resene = korak(
-                    stanje, zdravje.posta(z, m, ocena, zdaj), zdaj, vzrok, rumene)
-                if sporocilo:
-                    poslji(n, *sporocilo)
-                    novo = _potrdi(novo, nove, resene, zdaj)
-                    log(f"opozorilo poslano: {sporocilo[0]}")
-                stanje = novo
+                ocena = zdravje.ocena(z, m, zdaj, zdravje.SLED)
+                if n is not None:
+                    rumene = [r for raz, r in ocena.values() if raz == zdravje.MLACNA and r]
+                    novo, sporocilo, nove, resene = korak(
+                        stanje, zdravje.posta(z, m, ocena, zdaj), zdaj, vzrok, rumene)
+                    if sporocilo:
+                        poslji(n, *sporocilo)
+                        novo = _potrdi(novo, nove, resene, zdaj)
+                        log(f"opozorilo poslano: {sporocilo[0]}")
+                    stanje = novo
                 napak = 0
             except Exception as exc:      # noqa: BLE001 -- nit ne sme umreti
                 napak += 1
@@ -218,6 +241,8 @@ def teci(stop: threading.Event, log: Callable[[str], None],
             # (3:30, 4:25 skoraj vsako noč) -- to ni napaka pošte.
             try:
                 db.set_meta(conn, "opozorila", json.dumps(stanje, sort_keys=True))
+                db.set_meta(conn, "zdravje_sled",
+                            json.dumps(zdravje.SLED.stanje(zdaj), sort_keys=True))
                 conn.commit()
             except Exception:             # noqa: BLE001 -- naslednji obhod zapiše
                 conn.rollback()           # glej `zamude_sz.teci()`

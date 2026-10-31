@@ -437,7 +437,8 @@ def test_zdravje_straze():
     # En vlak, ki je pol ure mimo, ni okvara zajema.
     assert ocena(primerjav=4000, prenizko=110, vlakov=1)[0] == zdravje.MLACNA
     r = ocena(primerjav=4000, prenizko=90, vlakov=12, primeri=["RG 318 (SŽ +18, prikaz +12)"])
-    assert r[0] == zdravje.SLABA and "RG 318" in r[1] and "2.2 %" in r[1]
+    # Napaka je pri nas in jo popravi koda: oranžno (pošta podnevi po pol ure).
+    assert r[0] == zdravje.ORANZNA and "RG 318" in r[1] and "2.2 %" in r[1]
 
 
 def test_nit_po_zaklenjeni_bazi_ne_obstane(tmp_path, monkeypatch):

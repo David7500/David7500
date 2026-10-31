@@ -19,7 +19,7 @@ def _zdravo(zdaj=T):
             "zamude_sz": {"ts": zdaj - 30, "oba": 30, "samo_sz": 0, "samo_derp": 2}}
 
 
-STROJ = {"disk_prostih": 26 * 2**30, "disk_vseh": 234 * 2**30, "wal_bajtov": 64 * 2**20}
+STROJ = {"disk_prostih": 114 * 2**30, "disk_vseh": 234 * 2**30, "wal_bajtov": 64 * 2**20}
 
 
 def _rdece(z, m=STROJ, zdaj=T):
@@ -36,6 +36,10 @@ def test_obstala_nit_sz_je_rdeca_nedosegljiv_vir_pa_rumen():
     z["zamude_sz"] = {"ts": T - 4.3 * 3600, "oba": 2}
     assert _rdece(z) == {"zamude_sz"}
     z["zamude_sz"].update(napaka="500 Server Error", napaka_ts=T - 40)
+    # Vir ne odgovarja: rumeno, dokler je motnja; po `VIR_ORANZNO_S` oranžno --
+    # tako dolg molk je sprememba pri viru (7. 10. 2026 Cloudflare), ne motnja.
+    assert zdravje.ocena(z, STROJ, T)["zamude_sz"][0] == zdravje.ORANZNA
+    z["zamude_sz"]["ts"] = T - 30 * 60
     assert zdravje.ocena(z, STROJ, T)["zamude_sz"][0] == zdravje.MLACNA
 
 
@@ -66,22 +70,35 @@ def test_rumena_vrstica_pove_stevilo_ki_jo_prizge():
     z["lega_brez_zamude"] = {"Nomago": [0, 2, 160], "Arriva": [0, 0, 137], "LPP": [3, 0, 40]}
     raz, besedilo = zdravje.ocena(z, STROJ, T)["lega_brez_zamude"]
     assert raz == zdravje.MLACNA
-    assert besedilo == ("vozila brez zamude: Nomago 2 od 160; "
+    assert besedilo == ("vozila z lego, a brez zamude: Nomago 2 od 160; "
                         "feed zamud jih ne nosi, zamudo meri lega: LPP 3 od 40")
 
 
 def test_wal_in_disk():
     m = {**STROJ, "wal_bajtov": int(5.4 * 2**30)}
     assert _rdece(_zdravo(), m) == {"wal"}
-    m = {**STROJ, "disk_prostih": 20 * 2**30}
-    assert zdravje.ocena(_zdravo(), m, T)["disk"][0] == zdravje.MLACNA
+    for prostih, raz in ((40, zdravje.MLACNA), (26, zdravje.ORANZNA), (15, zdravje.SLABA)):
+        m = {**STROJ, "disk_prostih": prostih * 2**30}
+        assert zdravje.ocena(_zdravo(), m, T)["disk"][0] == raz
 
 
 def test_lpp_brez_voznega_reda_po_deležu():
+    """Mestni LPP vsak dan vozi kaj mimo objave: rumeno. Veliko uro dolgo
+    (1. 10. 2026 17 %) je oranžno -- pripenjanje ne zmore, rabi kodo."""
     z = _zdravo()
     z["rt_neznanih"]["lpp"] = [30, 282]
-    assert _rdece(z) == {"neznane"}
-    assert "LPP 30 od 282" in zdravje.ocena(z, STROJ, T)["neznane"][1]
+    sled = zdravje.Sled()
+    raz, besedilo = zdravje.ocena(z, STROJ, T, sled)["neznane"]
+    assert raz == zdravje.MLACNA and "LPP 30 od 282" in besedilo
+    assert zdravje.ocena(z, STROJ, T + 1800, sled)["neznane"][0] == zdravje.MLACNA
+    assert zdravje.ocena(z, STROJ, T + 3600, sled)["neznane"][0] == zdravje.ORANZNA
+    # 31. 10. 2026 (praznik, dvojniki v objavi): malo, ves dan rumeno.
+    z["rt_neznanih"]["lpp"] = [2, 105]
+    for t in (7200, 4 * 3600, 9 * 3600):
+        assert zdravje.ocena(z, STROJ, T + t, sled)["neznane"][0] == zdravje.MLACNA
+    # Brez sledi (en klic) trajanja ni.
+    z["rt_neznanih"]["lpp"] = [30, 282]
+    assert zdravje.ocena(z, STROJ, T + 9 * 3600)["neznane"][0] == zdravje.MLACNA
 
 
 def test_ponoci_feed_ne_zvoni_podnevi_in_pri_okvari_pa():
@@ -279,8 +296,9 @@ def test_v_posti_samo_kar_rabi_skrbnika():
     z["lega_brez_zamude"] = {"Arriva": [0, 3, 29], "Nomago": [0, 8, 150]}
     z["rt_neznanih"] = {"ijpp": [1, 97], "lpp": [4, 197]}
     z["derp_prebran"] = {"ijpp": T - 45 * 60, "lpp": T - 30}
-    rdece = _rdece(z)
-    assert {"lega_brez_zamude", "neznane", "derp_ijpp"} <= rdece
+    ocena = zdravje.ocena(z, STROJ, T)
+    assert {k for k in ("lega_brez_zamude", "neznane", "derp_ijpp")
+            if ocena[k][0] == zdravje.MLACNA} == {"lega_brez_zamude", "neznane", "derp_ijpp"}
     assert _posta(z) == {}
     # Kar rabi poseg: obstala nit, poln disk, WAL.
     assert set(_posta(z, {**STROJ, "wal_bajtov": 5 * 2**30})) == {"wal"}
@@ -292,9 +310,15 @@ def test_vozila_brez_zamude_v_posti_sele_v_velikem():
     assert "lega_brez_zamude" not in _posta(z)
     z["lega_brez_zamude"] = {"Arriva": [0, 25, 100], "Nomago": [0, 2, 150]}
     o = _posta(z)["lega_brez_zamude"]
-    assert o.razlog == "vozila brez vsake zamude: Arriva 25 od 100" and o.po_s == ZAMIK_S
+    assert o.razlog.startswith("vozila z lego, a brez zamude: Arriva 25 od 100")
+    assert o.po_s == ZAMIK_S and not o.nujno                 # oranžno: podnevi
     z["lega_brez_zamude"] = {"Arriva": [0, 15, 70]}         # 21 %: še resnica na cesti
     assert "lega_brez_zamude" not in _posta(z)
+    # Rumena, ki ne mine poldrugo uro, ni več resnica na cesti.
+    sled = zdravje.Sled()
+    assert zdravje.ocena(z, STROJ, T, sled)["lega_brez_zamude"][0] == zdravje.MLACNA
+    assert (zdravje.ocena(z, STROJ, T + zdravje.BREZ_ZAMUDE_ORANZNO_S, sled)["lega_brez_zamude"][0]
+            == zdravje.ORANZNA)
 
 
 def test_neznane_v_posti_samo_ijpp():
@@ -303,7 +327,8 @@ def test_neznane_v_posti_samo_ijpp():
     z = _zdravo()
     z["rt_neznanih"] = {"ijpp": [16, 662], "lpp": [40, 280]}
     o = _posta(z)["neznane"]
-    assert o.razlog == "vožnje brez voznega reda: IJPP 16 od 662" and o.po_s == 1800
+    assert o.razlog.startswith("vožnje v feedu brez voznega reda: IJPP 16 od 662")
+    assert o.po_s == 1800 and not o.nujno
     z["rt_neznanih"] = {"ijpp": [0, 662], "lpp": [40, 280]}
     assert "neznane" not in _posta(z)
 
@@ -316,13 +341,15 @@ def test_straza_proti_sz_v_posti_po_pol_ure():
     assert o.po_s == 1800 and "RG 318" in o.razlog
 
 
-def test_derp_v_posti_sele_po_dnevu():
+def test_derp_v_posti_po_sestih_urah():
+    """Rezerve tečejo same (rumeno); šest ur molka je vprašanje, ali vir še
+    obstaja -- oranžno, pošta podnevi."""
     z = _zdravo()
     z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
     z["derp_prebran"] = {"ijpp": T - 5 * 3600, "lpp": T - 30}
-    assert "derp_ijpp" in _rdece(z) and _posta(z) == {}
-    z["derp_prebran"]["ijpp"] = T - 25 * 3600
-    assert set(_posta(z)) == {"derp_ijpp"}
+    assert zdravje.ocena(z, STROJ, T)["derp_ijpp"][0] == zdravje.MLACNA and _posta(z) == {}
+    z["derp_prebran"]["ijpp"] = T - 7 * 3600
+    assert set(_posta(z)) == {"derp_ijpp"} and not _posta(z)["derp_ijpp"].nujno
 
 
 def test_zavrnjena_prijava_nap_v_posti_po_uri():
@@ -418,3 +445,75 @@ def test_obrez_dnevnika_po_kosih(monkeypatch):
     assert collector.prune_obs(c, 90, 14, kos=3) == {
         "rail_deleted": 0, "rail_before": izid["rail_before"],
         "bus_deleted": 0, "bus_before": izid["bus_before"]}
+
+
+# --- stopnje: rdeče takoj, oranžno za pregled, rumeno za vedenje (31. 10. 2026)
+
+
+def test_molk_omrezja_je_rdec_ko_potniki_vidijo_obvestilo():
+    """Do 31. 10. 2026 je bil molk vlakov do ure le rumen, pošta po 70 min;
+    potniki pa so obvestilo „ne dobivamo podatkov“ videli že po 20 min."""
+    from kajros import obvestila
+    assert zdravje.OMREZJE_MOLCI_S == obvestila.MOLCI_S
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 20, "avtobus": 300}
+    z["svezina"] = {"zeleznica": T - 19 * 60, "avtobus": T - 30}
+    assert zdravje.ocena(z, STROJ, T)["zeleznica"][0] == zdravje.DOBRA
+    z["svezina"]["zeleznica"] = T - 21 * 60
+    assert zdravje.ocena(z, STROJ, T)["zeleznica"][0] == zdravje.SLABA
+
+
+def test_oranzno_samo_podnevi_rdece_takoj():
+    """Oranžna ni nujna: ponoči počaka do jutra. Rdeča zvoni tudi ponoči."""
+    noc = 1_790_890_000.0                     # 1. 10. 2026 ~23:26
+    assert not zdravje.podnevi(noc) and zdravje.podnevi(T)
+    oranzna = {"skladnost_sz": zdravje.Okvara("x", "y", 600, nujno=False)}
+    stanje, sp, _, _ = opozorila.korak({}, oranzna, noc)
+    stanje, sp, nove, _ = opozorila.korak(stanje, oranzna, noc + 3600)
+    assert sp is None and nove == []
+    jutro = 1_790_917_200.0                   # 2. 10. 2026 7:00
+    stanje, sp, nove, _ = opozorila.korak(stanje, oranzna, jutro)
+    assert nove == ["skladnost_sz"] and sp[0].startswith("kajros: za pregled -- x")
+    assert "Za pregled s Claude" in sp[1]
+    rdeca = {"wal": zdravje.Okvara("w", "z")}
+    stanje2, _, _, _ = opozorila.korak({}, rdeca, noc)
+    _, sp, nove, _ = opozorila.korak(stanje2, rdeca, noc + ZAMIK_S)
+    assert nove == ["wal"] and sp[0].startswith("kajros: stoji -- w")
+
+
+def test_oranzna_ki_postane_rdeca_gre_znova():
+    """Vozni red teden prej oranžen (poslano), dva dni prej rdeč: znova."""
+    o = {"vozni_red": zdravje.Okvara("se konča čez 5 dni", "u", 600, nujno=False)}
+    stanje, _, _, _ = opozorila.korak({}, o, T)
+    stanje, sp, nove, _ = opozorila.korak(stanje, o, T + 600)
+    stanje = opozorila._potrdi(stanje, nove, [], T + 600)
+    _, sp, nove, _ = opozorila.korak(stanje, o, T + 1200)
+    assert sp is None
+    r = {"vozni_red": zdravje.Okvara("se konča jutri", "u", 600)}
+    _, sp, nove, _ = opozorila.korak(stanje, r, T + 86400)
+    assert nove == ["vozni_red"] and sp[0].startswith("kajros: stoji -- se konča jutri")
+
+
+def test_sled_prezivi_zagon_in_pozabi_staro():
+    sled = zdravje.Sled()
+    assert sled.koliko("a", True, T) == 0
+    assert sled.koliko("a", True, T + 600) == 600
+    obnovljena = zdravje.Sled(sled.stanje(T + 600))
+    assert obnovljena.koliko("a", True, T + 900) == 900
+    assert obnovljena.koliko("a", False, T + 960) == 0
+    assert obnovljena.koliko("a", True, T + 1000) == 0
+    # Ključ, ki ga nihče ne vpraša dan dolgo, odpade.
+    assert "a" not in obnovljena.stanje(T + 1000 + 86401)
+
+
+def test_primeri_vozil_so_povezave_na_zemljevid():
+    """David, 31. 10. 2026: ob vrstici povezava na zemljevid z izbranim vozilom."""
+    z = {"lega_brez_zamude_primeri": {"Arriva": [
+            {"trip_id": "432192", "vozilo": "1301553", "lat": 45.754, "lon": 14.048,
+             "oznaka": "A8426 → Ljubljana AP - Koper"}]},
+         "vozila_brez_voznje": {"LPP": [{"vozilo": "d5498517", "lat": 46.048, "lon": 14.5014,
+                                         "oznaka": "LPP 2 → ZELENA JAMA - NOVE JARŠE"}]}}
+    p = zdravje.primeri(z)
+    assert p["lega_brez_zamude"] == [{"oznaka": "Arriva A8426 → Ljubljana AP - Koper",
+                                      "pot": "/app/map?trip=432192&lat=45.75400&lon=14.04800&z=16"}]
+    assert p["neznane"][0]["pot"] == "/app/map?vozilo=d5498517&lat=46.04800&lon=14.50140&z=16"

@@ -1725,6 +1725,27 @@ def api_health():
         out["lega_brez_zamude"] = {
             stats.AGENCY_NAMES.get(ag, ag): n for ag, n in json.loads(lbz).items()
         } if lbz else {}
+        # Katera vozila so to in vozila brez naše vožnje (LPP mimo voznega
+        # reda, Marprom brez prihoda): /admin iz njih naredi povezave na
+        # zemljevid (`zdravje.primeri`). Lege so javne že v `/api/vehicles`.
+        lbp = db.get_meta(conn, "lega_brez_zamude_primeri")
+        out["lega_brez_zamude_primeri"] = {
+            stats.AGENCY_NAMES.get(ag, ag): v for ag, v in json.loads(lbp).items()
+        } if lbp else {}
+        out["vozila_brez_voznje"] = {}
+        for kljuc, ag in (("lpp_vozila_brez_voznje", "LPP"),
+                          ("marprom_vozila_brez_voznje", "Marprom")):
+            try:
+                vozila = json.loads(db.get_meta(conn, kljuc) or "{}").get("vozila") or []
+            except ValueError:
+                continue
+            sveza = int(time.time()) - collector.POSITION_FRESH_S
+            out["vozila_brez_voznje"][ag] = [
+                {"vozilo": v.get("vehicle_id"), "lat": v.get("lat"), "lon": v.get("lon"),
+                 "oznaka": " ".join(x for x in (ag, v.get("train_no"), v.get("headsign")
+                                                and f"→ {v['headsign']}", v.get("naslednja")
+                                                and f"· naslednja {v['naslednja']}") if x)}
+                for v in vozila if v.get("vehicle_id") and v.get("seen_ts", 0) >= sveza]
         # Dva vira zamud vlakov (`zamude_sz`): koliko jih nosi kateri in kako
         # se ujemata. Zapiše jih nit ob vsakem branju zemljevida.
         zsz = db.get_meta(conn, "zamude_sz")
@@ -3971,15 +3992,20 @@ def admin_podatki(request: Request,
             "posta": ("ni" if opozorila.nastavitve() is None
                       else "tece" if "kajros-opozorila" in viri.niti() else "stoji"),
         }
-        # Barve in razlogi iz `zdravje.ocena()`, ne iz prikaza: ista pravila
-        # berejo opozorila po pošti.
-        ocena = zdravje.ocena(out["zdravje"], out["stroj"])
+        # Stopnje in razlogi iz `zdravje.ocena()`, ne iz prikaza: ista pravila
+        # berejo opozorila po pošti. Ista sled trajanja kot nit pošte, sicer bi
+        # bila rumena, ki ne mine, tu rumena, v pošti pa oranžna.
+        ocena = zdravje.ocena(out["zdravje"], out["stroj"], sled=zdravje.SLED)
         out["razredi"] = {k: r for k, (r, _) in ocena.items()}
         out["razlogi"] = {k: razlog for k, (r, razlog) in ocena.items()
-                          if razlog and r in (zdravje.SLABA, zdravje.MLACNA)}
-        # Kar od tega gre v pošto (`zdravje.posta`): rdeče ni nujno ukrep.
-        out["v_posti"] = {k: o.razlog for k, o in zdravje.posta(
-            out["zdravje"], out["stroj"], ocena).items() if o}
+                          if razlog and r in (zdravje.SLABA, zdravje.ORANZNA, zdravje.MLACNA)}
+        out["imena"] = {k: zdravje.ime(k) for k in out["razlogi"]}
+        # Vozila, ki vrstico prižgejo, s povezavo na zemljevid.
+        out["primeri"] = zdravje.primeri(out["zdravje"])
+        # Kar od tega gre v pošto (`zdravje.posta`) in kaj storiti.
+        posta = zdravje.posta(out["zdravje"], out["stroj"], ocena)
+        out["v_posti"] = {k: o.razlog for k, o in posta.items() if o}
+        out["ukrepi"] = {k: o.ukrep for k, o in posta.items() if o}
         out["viri"] = {"skupine": viri.SKUPINE, "seznam": viri.pregled(conn, ocena)}
     # Dnevnik branj je zdaj pri virih; v `stroj` bi bil drugič.
     out["stroj"].pop("viri", None)
