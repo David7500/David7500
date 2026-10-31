@@ -8,7 +8,7 @@ Podrobnosti niso tu, ampak v dokumentu v zadnjem stolpcu. Koledar pove samo kdaj
 
 | kdaj | kdo | kaj in zakaj | kako | podrobnosti |
 |---|---|---|---|---|
-| **ned 1. 11. 2026**, 9–11 h | Claude | **NAP na praznik ne pripne vozil.** 31. 10. je NAP 13 vozil videl brez naše vožnje (`brez_dneva`), derp.si pa jih je pripel. Ker NAP vodi medkrajevne, so bila brez zamude. Jutri je spet praznik, zato je to najboljša priložnost za meritev vzroka. Pogoj: objavljen commit z vzorcem nepripetih (`meta.nap.nepripeti`). | `/preveri-vire`, točka 2 | [docs/VIRI-PRESOJA.md](docs/VIRI-PRESOJA.md) |
+| **ned 1. 11. 2026**, 9–11 h | Claude | **NAP na praznik ne pripne vozil.** 31. 10. je NAP 13 vozil videl brez naše vožnje (`brez_dneva`), derp.si pa jih je pripel. Ker NAP vodi medkrajevne, so bila brez zamude. Jutri je spet praznik, zato je to najboljša priložnost za meritev vzroka. Vzorec nepripetih z vzrokom (`meta.nap.nepripeti`) teče od 31. 10. zvečer (ob objavi `brez_dneva` 4, pripetih 65). | `/preveri-vire`, točka 2 | [docs/VIRI-PRESOJA.md](docs/VIRI-PRESOJA.md) |
 | ned 1. 11. 2026 | Claude | Preveri, da je ponoči prvič tekel nočni račun opazovano (vrstica `opazovano` zelena). Preveri tudi, da je popravek dvojnikov znižal „vožnje brez voznega reda LPP“. | `/preveri-vire` | [docs/OPAZOVANO.md](docs/OPAZOVANO.md) |
 | od ned 1. 11. 2026 | Claude, ko reče David | Statistika, faza 6: oktober je cel, lahko nastane mesečno poročilo. | po dogovoru | [docs/STATISTIKA.md](docs/STATISTIKA.md) |
 | čet 5. 11. 2026, po 3.30 | Claude | Opazovano, prvi preizkus v živo: zapora Vrbanske (Marprom P7, od 3. 11.). Ali se izid odpre? | `kajros opazovano` | [docs/OPAZOVANO.md](docs/OPAZOVANO.md) |
@@ -42,3 +42,4 @@ Teh ni treba gledati na roko. `/admin` jih pokaže oranžno teden prej in rdeče
 | kdaj | kaj | izid |
 |---|---|---|
 | sob 31. 10. 2026 | Presoja virov, tri stopnje opozoril, povezave na vozila, skill `/preveri-vire` | 5bb51c3 … c55fb80, objavljeno; najdbe in odprto v [docs/VIRI-PRESOJA.md](docs/VIRI-PRESOJA.md) |
+| sob 31. 10. 2026 | Meritvi za odprte luknje: nepripeta vozila NAP, pokritost po prevozniku; koledar | da7c301, 2e68fdd, objavljeno; prva vrstica pokritosti: Arriva 27 po voznem redu, 22 z zamudo v 15 min, LPP 31 / 23, vlaki 18 / 16 |
