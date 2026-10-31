@@ -209,6 +209,10 @@ def _nacin(conn: sqlite3.Connection) -> dict[str, str]:
     return collector._cached(conn, "nap_nacin", None, build)
 
 
+#: Toliko nepripetih vozil z vzrokom gre v `meta.nap` (za /preveri-vire).
+NEPRIPETIH = 15
+
+
 def pripni(conn: sqlite3.Connection, vozila: list[dict],
            zdaj: float) -> tuple[list[dict], dict]:
     """Vozilo -> naša vožnja in obratovalni dan. Isti prevod starega id-ja
@@ -221,23 +225,32 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
     nacin = _nacin(conn)
     agencije = collector._agencije(conn)
     st = {"pripetih": 0, "brez_voznje": 0, "brez_dneva": 0, "prezgodaj": 0, "vlakov": 0}
+    # Vzorec nepripetih z vzrokom: 31. 10. 2026 (praznik) je bilo `brez_dneva`
+    # 13 vozil, derp.si jih je pripel -- iz števca ni bilo videti, katera
+    # vožnja in kateri dnevi (`docs/VIRI-PRESOJA.md`, točka 2).
+    nepripeti: list[dict] = []
+
+    def ne(v: dict, tid: str, razlog: str) -> None:
+        st[razlog] += 1
+        straza.vzorec("nap", v["vozilo"], None, zdaj)
+        if len(nepripeti) < NEPRIPETIH:
+            nepripeti.append({"vozilo": v["vozilo"], "voznja": v["ijpp"], "nasa": tid,
+                              "razlog": razlog, "okno": okna.get(tid),
+                              "dnevi": sorted(dnevi.get(tid) or ())[-3:]})
     out = []
     for v in vozila:
         tid = v["ijpp"]
         if tid not in okna and tid in zamenjave:
             tid = zamenjave[tid][0]
         if tid not in okna:
-            st["brez_voznje"] += 1
-            straza.vzorec("nap", v["vozilo"], None, zdaj)
+            ne(v, tid, "brez_voznje")
             continue
         dan = collector.resolve_service_date(tid, okna[tid], dnevi.get(tid), zdaj_dt)
         if dan is None:
-            st["brez_dneva"] += 1
-            straza.vzorec("nap", v["vozilo"], None, zdaj)
+            ne(v, tid, "brez_dneva")
             continue
         if stats.polnoc(dan) + okna[tid][0] - zdaj > PREZGODAJ_S:
-            st["prezgodaj"] += 1
-            straza.vzorec("nap", v["vozilo"], None, zdaj)
+            ne(v, tid, "prezgodaj")
             continue
         if nacin.get(tid) != "bus":
             st["vlakov"] += 1
@@ -245,6 +258,7 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
         st["pripetih"] += 1
         straza.vzorec("nap", v["vozilo"], tid, zdaj)
         out.append({**v, "trip_id": tid, "dan": dan, "agency": agencije.get(tid)})
+    st["nepripeti"] = nepripeti
     return out, st
 
 

@@ -1732,6 +1732,15 @@ def api_health():
         out["lega_brez_zamude_primeri"] = {
             stats.AGENCY_NAMES.get(ag, ag): v for ag, v in json.loads(lbp).items()
         } if lbp else {}
+        # Pokritost po prevozniku (`collector.pokritost`, na 5 min): zaenkrat
+        # samo meritev, meje sledijo iz tedna zgodovine (`docs/VIRI-PRESOJA.md`).
+        try:
+            pk = json.loads(db.get_meta(conn, "pokritost") or "{}")
+        except ValueError:
+            pk = {}
+        out["pokritost"] = {"ts": pk.get("ts"), "po_prevozniku": {
+            stats.AGENCY_NAMES.get(ag, ag): v for ag, v in (pk.get("po_prevozniku") or {}).items()}
+        } if pk else None
         # Vožnje, ki jim zamuda raste z uro (`collector.ura_namesto_zamude`).
         try:
             fa = json.loads(db.get_meta(conn, "fantomi") or "{}")

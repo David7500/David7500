@@ -797,6 +797,15 @@ function pasZdravja(d) {
   </section>`;
 }
 
+/** Pokritost po prevozniku: „Arriva 14/19 (danes 18)“ -- zamuda v 15 min od
+ *  voženj, ki po voznem redu tečejo; v oklepaju z zamudo kadarkoli danes. */
+function pokritostOpis(pk) {
+  if (!pk || !pk.po_prevozniku) return null;
+  return Object.entries(pk.po_prevozniku).filter(([, v]) => v[0] > 0)
+    .map(([ime, v]) => `${ime} ${st(v[2])}/${st(v[0])}${v[3] !== v[2] ? ` (danes ${st(v[3])})` : ""}`)
+    .join(" · ");
+}
+
 /** Izid zajema: ali podatki res pridejo v bazo, ne glede na vir. */
 function vrsticeZajema(d) {
   const z = d.zdravje || {}, r = d.razredi || {}, mreze = z.by_network || {};
@@ -809,6 +818,8 @@ function vrsticeZajema(d) {
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—", r.neznane],
     ["vozila brez zamude", brezZamude(z) || "—", r.lega_brez_zamude],
+    // Meritev brez barve (`collector.pokritost`): zamuda v 15 min / vožnje, ki tečejo.
+    ["pokritost · zamuda v 15 min", pokritostOpis(z.pokritost) || "—"],
     ["vlaki · prikaz proti SŽ", skladnostSz((z.zamude_sz || {}).skladnost) || "—", r.skladnost_sz],
     ["vozil z lego", st(z.vehicles_with_gps)],
     ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`],

@@ -125,7 +125,10 @@ def test_pripni_najde_vožnjo_in_dan_vlaka_in_prezgodnje_ne():
               {"vozilo": "c", "ijpp": "2001", "ts": ZDAJ}, {"vozilo": "d", "ijpp": "9999", "ts": ZDAJ}]
     pripeta, st = nap.pripni(c, vozila, ZDAJ)
     assert [(v["vozilo"], v["trip_id"], v["dan"]) for v in pripeta] == [("a", "1001", DAN)]
+    nepripeti = st.pop("nepripeti")
     assert st == {"pripetih": 1, "brez_voznje": 1, "brez_dneva": 0, "prezgodaj": 1, "vlakov": 1}
+    # Vzrok po vozilu, za /preveri-vire (praznik 31. 10. 2026: brez_dneva 13).
+    assert sorted(n["razlog"] for n in nepripeti) == ["brez_voznje", "prezgodaj"]
 
 
 def test_pripni_prevede_star_id_na_naslednico():

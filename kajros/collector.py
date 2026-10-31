@@ -908,6 +908,63 @@ def lega_brez_zamude(conn: sqlite3.Connection, zdaj: datetime,
     return out
 
 
+#: Pokritost se šteje na toliko (`pokritost`); hrani se `POKRITOST_DNI`.
+POKRITOST_S = 300
+POKRITOST_DNI = 35
+#: Vožnja šteje šele toliko po odhodu (izhodišča zajem ne meri), lega je
+#: sveža toliko, zamuda toliko.
+POKRITOST_PO_ODHODU_S, POKRITOST_LEGA_S, POKRITOST_ZAMUDA_S = 600, 180, 900
+_POKRITOST = [0.0]
+
+
+def pokritost(conn: sqlite3.Connection, zdaj: float) -> dict[str, list[int]]:
+    """Prevoznik -> [voženj po voznem redu, z lego, s svežo zamudo, z zamudo
+    kadarkoli ta dan]. Zadnje zato, ker medkrajevni med daljnimi postanki
+    (Ljubljana -- Koper 74 min) 15 min ne pišejo nič in sveža zamuda podceni.
+
+    Presoja 31. 10. 2026: zdravje je štelo le vožnje, ki jih feed nosi in ne
+    poznamo, ter vozila z lego brez zamude -- izpad celega prevoznika ali
+    pol linij je bil neviden, dokler je kdorkoli drug pisal. Ta števec je
+    neodvisen od vira: kaj bi moralo teči in kaj od tega ima podatek.
+    """
+    dt = datetime.fromtimestamp(zdaj, TZ)
+    out: dict[str, list[int]] = {}
+    for dan in (dt.date().isoformat(), (dt.date() - timedelta(days=1)).isoformat()):
+        # Včerajšnje vožnje po polnoči: ure voznega reda so čez 24 h.
+        sek = int(zdaj) - stats.polnoc(dan)
+        # Od vožnje k dnevu po ključu: obratno (service_day -> trip) brez
+        # kazala po `service_id` 6,5 s na arwenu, tako 80 ms (31. 10. 2026).
+        for r in conn.execute(
+                "SELECT t.agency, COUNT(*), "
+                "  SUM(EXISTS (SELECT 1 FROM vehicle_now v WHERE v.trip_id = t.trip_id "
+                "              AND v.seen_ts >= ?)), "
+                "  SUM(EXISTS (SELECT 1 FROM run r WHERE r.trip_id = t.trip_id "
+                "              AND r.service_date = ? AND r.feed_ts >= ?)), "
+                "  SUM(EXISTS (SELECT 1 FROM run r WHERE r.trip_id = t.trip_id "
+                "              AND r.service_date = ?)) "
+                "FROM trip t WHERE t.first_seq IS NOT NULL AND t.start_s <= ? AND t.end_s >= ? "
+                "  AND EXISTS (SELECT 1 FROM service_day d WHERE d.service_id = t.service_id "
+                "              AND d.date = ?) GROUP BY t.agency",
+                (int(zdaj) - POKRITOST_LEGA_S, dan, int(zdaj) - POKRITOST_ZAMUDA_S, dan,
+                 sek - POKRITOST_PO_ODHODU_S, sek, dan)):
+            v = out.setdefault(r[0] or "?", [0, 0, 0, 0])
+            for i in range(4):
+                v[i] += r[i + 1] or 0
+    return out
+
+
+def _zapisi_pokritost(conn: sqlite3.Connection, zdaj: float) -> None:
+    if zdaj - _POKRITOST[0] < POKRITOST_S:
+        return
+    _POKRITOST[0] = zdaj
+    p = pokritost(conn, zdaj)
+    conn.executemany("INSERT OR REPLACE INTO pokritost(ts, prevoznik, po_vr, z_lego, z_zamudo, "
+                     "z_kdaj) VALUES(?,?,?,?,?,?)", [(int(zdaj), ag, *v) for ag, v in p.items()])
+    conn.execute("DELETE FROM pokritost WHERE ts < ?", (int(zdaj) - POKRITOST_DNI * 86400,))
+    db.set_meta(conn, "pokritost", json.dumps({"ts": int(zdaj), "po_prevozniku": p},
+                                              sort_keys=True))
+
+
 def poll_once(conn: sqlite3.Connection) -> dict:
     feed = fetch(config.TRIP_UPDATES_URL, conn, "rt_etag", "derp_zamude")
     # Znacka za predpomnilnik strezbe, po vzoru `positions_fetched`. Pise se
@@ -926,6 +983,7 @@ def poll_once(conn: sqlite3.Connection) -> dict:
     db.set_meta(conn, "lega_brez_zamude_primeri", json.dumps(
         {ag: v[:PRIMEROV] for ag, v in primeri.items()}, sort_keys=True))
     _zapisi_fantome(conn)
+    _zapisi_pokritost(conn, time.time())
     conn.commit()
     return izid
 

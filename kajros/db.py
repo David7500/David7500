@@ -615,6 +615,20 @@ CREATE TABLE IF NOT EXISTS straza_stevec (
     PRIMARY KEY (dan, prevoznik, ime)
 ) WITHOUT ROWID;
 
+-- Pokritost po prevozniku na 5 min (`collector.pokritost`): koliko voženj,
+-- ki po voznem redu tečejo, ima lego in svežo zamudo. Ena vrstica zdravja
+-- ujame izpad NAP, derp.si, LPP in SŽ hkrati; meje se postavijo iz te
+-- zgodovine (`docs/VIRI-PRESOJA.md`, točka 3). 35 dni.
+CREATE TABLE IF NOT EXISTS pokritost (
+    ts        INTEGER NOT NULL,
+    prevoznik TEXT NOT NULL,
+    po_vr     INTEGER NOT NULL,
+    z_lego    INTEGER NOT NULL,
+    z_zamudo  INTEGER NOT NULL,   -- zamuda v zadnjih 15 min
+    z_kdaj    INTEGER NOT NULL,   -- zamuda kadarkoli ta dan
+    PRIMARY KEY (ts, prevoznik)
+) WITHOUT ROWID;
+
 -- Statistika ene vožnje ali linije (`statistika._voznje`): stran
 -- `/statistika/vlak/…` in `/statistika/linija/…` bere eno vrstico po poti.
 -- Ponoči se prepiše cela za omrežje; vir je `run`, ki se ne obreže.
