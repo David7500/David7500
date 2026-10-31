@@ -177,7 +177,8 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
     Prihodnje so vlaki z odhodom v prihodnosti (`NAJDLJE_NAPREJ_S`), v isti
     obliki kot pripete; v `run` ne gredo, le v trenutno zamudo."""
     pripete, prihodnje = [], []
-    stevci = {"vlakov": 0, "pred_odhodom": 0, "na_cilju": 0, "nepripetih": 0, "prihodnjih": 0}
+    stevci = {"vlakov": 0, "pred_odhodom": 0, "na_cilju": 0, "nepripetih": 0, "prihodnjih": 0,
+              "nepripeti": []}
     for r in vrstice:
         if je_avtobus(r):
             continue
@@ -195,6 +196,9 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
             stevci["prihodnjih"] += 1
         else:
             stevci["nepripetih"] += 1
+            # Številke za derp.si (`iz_lege.sz_vodi_vlak`) in za pregled.
+            if st := stevilka(str(r.get("St_vlaka") or "")):
+                stevci["nepripeti"].append(st)
     return pripete, stevci, prihodnje
 
 
@@ -496,6 +500,10 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
         return prej
     po_stevilki = vozni_red(conn, datetime.fromtimestamp(zdaj, TZ).date())
     pripete, stevci, prihodnje = razberi(vrstice, po_stevilki, zdaj)
+    # Vlak, ki ga zemljevid kaže, mi pa ga ne pripnemo, piše derp.si.
+    st = {v["trip_id"]: k for k, vs in po_stevilki.items() for v in vs}
+    iz_lege.sz_stevilke({st[p[0]] for p in pripete + prihodnje if p[0] in st},
+                        stevci["nepripeti"], zdaj)
     stevci.update(zapisi(conn, pripete, zdaj))
     _osvezi_trenutne(pripete, prihodnje, zdaj)
     stevci["skladnost"] = skladnost(conn, pripete, zdaj)
@@ -507,6 +515,10 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
     db.set_meta(conn, "zamude_sz", json.dumps(stevci, sort_keys=True))
     conn.commit()
     return stevci
+
+
+#: Nepripeti vlaki, ki so danes že v dnevniku (`teci`).
+_javljeni: dict[date, set[str]] = {}
 
 
 def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
@@ -527,6 +539,14 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                 # (presoja 31. 10. 2026). Ponoči je prazen po pravici.
                 if s.get("vlakov", 0) > s.get("nepripetih", 0):
                     iz_lege.sz_prebran(zdaj)
+                # Enkrat na vlak in dan v dnevnik: koliko jih piše derp.si
+                # (`iz_lege.sz_vodi_vlak`), se čez teden prešteje iz dnevnika.
+                dan = datetime.fromtimestamp(zdaj, TZ).date()
+                for st in set(s.get("nepripeti") or ()) - _javljeni.get(dan, set()):
+                    _javljeni.setdefault(dan, set()).add(st)
+                    log(f"zemljevid SŽ kaže vlak {st}, ki ga ne pripnemo -- piše ga derp.si")
+                for d in [d for d in _javljeni if d < dan]:
+                    del _javljeni[d]
                 if napak or prvic:
                     log(f"zemljevid SŽ {'spet ' if napak else ''}odgovarja"
                         f"{f' (po {napak} napakah)' if napak else ''}: {s['vlakov']} vlakov, "

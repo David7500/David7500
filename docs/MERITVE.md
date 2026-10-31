@@ -3431,3 +3431,14 @@ vlaki 726 vsak dan, avtobusi 39 119–44 645, mestni LPP 18 467–21 162 (okno
 osmih dni), Kranj 446 → 309 (31. 10., konec meseca v zipu MOK). Meja padca
 40 % je torej nad vsem, kar okna dajo sama.
 
+Nepripeti vlaki zemljevida SŽ (`sz_zamuda` proti voznemu redu): 29. 10. 568 od
+569 pripetih, 30. 10. 570 od 571 (obakrat ni nikoli pripet LP 4208), pripetih
+šele od 3. postanka naprej 4 na dan; praznik 31. 10. 218 od 233 (EC 39, IC 350,
+IC 526, LP 3228, 3229, 4218, 4292, LPV 2430, 2616, 2658, 2929, 2931, MV 19, RG
+434, 604 -- del jih na praznik ne vozi, del še ni odpeljal). Dnevnik ob
+„spet odgovarja“ 24.–31. 10.: 75 vzorcev, nepripetih 0 (69) ali 1 (6). Feed
+derp.si 31. 10. ob 20:40, trikrat v 80 s: 22 vlakov, zemljevid jih je v 120 s
+pripel 19; ostali trije brez meritve (EN 415 vozi 6–9 h, v feedu brez zamude;
+LP 4218 z ničlo na 2. postanku, na zemljevidu ga ni; LPV 2278 z napovedjo,
+na zemljevidu pred odhodom, pripet ob 20:43).
+

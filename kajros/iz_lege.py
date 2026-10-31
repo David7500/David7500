@@ -179,6 +179,41 @@ def sz_vodi(zdaj: float | None = None) -> bool:
     return zdaj - _sz_ts <= SZ_VODI_S
 
 
+#: Številke vlakov z zadnjega branja zemljevida: pripete (s prihodnjimi) in
+#: tiste, ki jih zemljevid kaže, a jih ne pripnemo (`zamude_sz.korak`).
+_sz_pripete: dict[str, float] = {}
+_sz_nepripete: dict[str, float] = {}
+
+
+def sz_stevilke(pripete, nepripete, zdaj: float | None = None) -> None:
+    """Zemljevid SŽ je pravkar pripel `pripete` in ne pripel `nepripete`."""
+    zdaj = time.time() if zdaj is None else zdaj
+    for st in pripete:
+        _sz_pripete[st] = zdaj
+    for st in nepripete:
+        _sz_nepripete[st] = zdaj
+    for d in (_sz_pripete, _sz_nepripete):
+        for st in [st for st, ts in d.items() if zdaj - ts > 86400]:
+            del d[st]
+
+
+def sz_vodi_vlak(st: str, zdaj: float | None = None) -> bool:
+    """Ali vlak s to številko vodi zemljevid SŽ (derp.si ga ne piše).
+
+    Ne vodi samo vlaka, ki ga zemljevid kaže, a ga v `SZ_VODI_S` nismo pripeli
+    (naš vozni red se z vrstico ne ujema): derp.si ga pripne po svoje, zamuda
+    pa je ista, z zemljevida. Vlaka, ki ga zemljevid ne kaže, derp.si ne pozna
+    bolje -- 31. 10. 2026 ob 20:40 je imel 3 vlake več od zemljevida, nobenega
+    z meritvijo: EN 415 z jutra brez zamude, LP 4218 z ničlo, LPV 2278 pred
+    odhodom (pripet 3 min pozneje).
+    """
+    zdaj = time.time() if zdaj is None else zdaj
+    if not sz_vodi(zdaj):
+        return False
+    return not (zdaj - _sz_nepripete.get(st, 0) <= SZ_VODI_S
+                and zdaj - _sz_pripete.get(st, 0) > SZ_VODI_S)
+
+
 def izpusti(trip_ids) -> None:
     """Feed te vožnje nosi, a jih ne beremo (`nap_vodi`): za `brez_feeda`
     niso v njem, zato jih zamuda iz lege vzame takoj, ne šele čez 5 min."""

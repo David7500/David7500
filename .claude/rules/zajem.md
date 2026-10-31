@@ -209,7 +209,7 @@ Tir ima samo tabla (`/odhodi-in-prihodi-na-postaji/?postaja=<št. SŽ>&datum=<d.
 
 `/wp-admin/admin-ajax.php?action=aktivni_vlaki` (JSON 3–5 kB; brez vlakov `null`) = **izvor vseh zamud vlakov** (derp.si isto prek `api.modra.ninja`). Vlak po **številki** — pokvarjen zip DUJPP ga ne prizadene.
 
-**Vodi** (David: „raje 15 s prej in brez posrednikov“): dokler prebran v `iz_lege.SZ_VODI_S` (120 s), derp.si vlakov (`zeleznica`, `mode != bus`) ne piše (`collector._sz_vlaki`, `sz_prevzel`); nadomestni avtobusi ostanejo derp.si.
+**Vodi** (David: „raje 15 s prej in brez posrednikov“): dokler prebran v `iz_lege.SZ_VODI_S` (120 s), derp.si vlakov (`zeleznica`, `mode != bus`) ne piše (`collector._sz_vlaki`, `sz_prevzel`); nadomestni avtobusi ostanejo derp.si. **Po vlaku** (`iz_lege.sz_vodi_vlak`, od 31. 10. 2026): derp.si piše vlak, ki ga zemljevid kaže, a ga v 120 s ne pripnemo (`meta.zamude_sz.nepripeti`, dnevnik „ki ga ne pripnemo“); vlaka, ki ga zemljevid ne kaže, ne — derp.si ga ne pozna bolje (31. 10. ob 20:40 3 od 22 več od zemljevida, nobeden z meritvijo: EN 415 z jutra brez zamude, LP 4218 ničla, LPV 2278 pred odhodom). Delavnik 29.–30. 10.: nikoli pripet 1 od ~570 (LP 4208), od 3. postanka naprej 4; praznik 31. 10. 15 od 233.
 
 Polje `Vrsta`:
 * **1 vozi**: `Postaja` = naslednja, `Odhod` = vozni red PREJŠNJE + `Zamuda_cas` (preizkus prave vožnje in dneva; brez ujemanja se ne pripne).

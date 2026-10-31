@@ -178,12 +178,14 @@ def _zamenjave(conn: sqlite3.Connection) -> dict[str, tuple[str, dict]]:
     return _cached(conn, "zamenjave", n, build)
 
 
-def _sz_vlaki(conn: sqlite3.Connection) -> frozenset[str]:
-    """Vožnje vlakov SŽ brez nadomestnih avtobusov: te vodi zemljevid SŽ
-    (`iz_lege.sz_vodi`), avtobusov na njem ni."""
+def _sz_vlaki(conn: sqlite3.Connection) -> dict[str, str]:
+    """Vožnje vlakov SŽ brez nadomestnih avtobusov -> številka vlaka: te vodi
+    zemljevid SŽ (`iz_lege.sz_vodi_vlak`), avtobusov na njem ni."""
+    from .peroni import stevilka
+
     def build():
-        return frozenset(r[0] for r in conn.execute(
-            "SELECT trip_id FROM trip WHERE network = 'zeleznica' AND mode != 'bus'"))
+        return {r[0]: stevilka(r[1]) for r in conn.execute(
+            "SELECT trip_id, train_no FROM trip WHERE network = 'zeleznica' AND mode != 'bus'")}
     return _cached(conn, "sz_vlaki", None, build)
 
 
@@ -646,7 +648,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
     # Vožnje, katerih zamudo ta hip računamo iz leg NAP (`iz_lege.nap_vodi`).
     nap_prevzel: set[str] = set()
     # Vlaki, ki jih ta hip piše zemljevid SŽ (`iz_lege.sz_vodi`).
-    sz_vlaki = _sz_vlaki(conn) if vir == "ijpp" and iz_lege.sz_vodi() else frozenset()
+    sz_vlaki = _sz_vlaki(conn) if vir == "ijpp" and iz_lege.sz_vodi() else {}
     sz_prevzel = 0
 
     def nas_id(tid):
@@ -739,7 +741,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
         if iz_lege.nap_vodi(agencije.get(trip_id)):
             nap_prevzel.add(trip_id)
             continue
-        if trip_id in sz_vlaki:
+        if trip_id in sz_vlaki and iz_lege.sz_vodi_vlak(sz_vlaki[trip_id]):
             sz_prevzel += 1
             continue
         v_feedu.add(trip_id)

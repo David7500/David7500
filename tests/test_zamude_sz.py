@@ -115,7 +115,7 @@ def test_avtobus_in_vlak_pred_odhodom_nista_nepripeta():
     pripete, stevci, prihodnje = zamude_sz.razberi(vrstice, _vr(_baza()), ZDAJ)
     assert len(pripete) == 1 and prihodnje == []
     assert stevci == {"vlakov": 2, "pred_odhodom": 1, "na_cilju": 0, "nepripetih": 0,
-                      "prihodnjih": 0}
+                      "prihodnjih": 0, "nepripeti": []}
 
 
 # Ista vožnja 15 s pozneje: SŽ je zamudo z +50 povečal na +65, vlak pa je s
@@ -365,6 +365,28 @@ def test_zajem_derp_vlakov_ne_pise_dokler_vodi_zemljevid():
     iz_lege._sz_ts = 0.0
     assert collector.ingest(c, _feed_zamud("t1", 240))["sz_prevzel"] == 0
     assert c.execute("SELECT delay_dep FROM run").fetchone()[0] == 240
+
+
+def test_derp_pise_vlak_ki_ga_zemljevid_kaze_a_ga_ne_pripnemo():
+    """derp.si (isti zemljevid prek posrednika) piše vlak, ki ga zemljevid kaže,
+    a ga naš vozni red ne pripne; vlaka, ki ga zemljevid ne kaže, ne -- tega
+    derp.si ne pozna bolje (31. 10. 2026: 3 od 22, nobenega z meritvijo)."""
+    import time
+    c = _baza()
+    zdaj = time.time()
+    iz_lege.sz_prebran(zdaj)
+    try:
+        iz_lege.sz_stevilke(set(), ["4203"], zdaj)
+        izid = collector.ingest(c, _feed_zamud("t1", 240))
+        assert izid["sz_prevzel"] == 0
+        assert c.execute("SELECT delay_dep FROM run").fetchone()[0] == 240
+        iz_lege.sz_stevilke({"4203"}, [], zdaj)           # pripet: vodi zemljevid
+        assert collector.ingest(c, _feed_zamud("t1", 300))["sz_prevzel"] == 1
+        assert iz_lege.sz_vodi_vlak("4203", zdaj) and iz_lege.sz_vodi_vlak("9999", zdaj)
+    finally:
+        iz_lege._sz_pripete.clear()
+        iz_lege._sz_nepripete.clear()
+        iz_lege._sz_ts = 0.0
 
 
 def test_nadomestni_avtobus_ostane_derp(monkeypatch):
