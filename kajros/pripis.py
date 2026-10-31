@@ -11,16 +11,21 @@ okoli zdaj je **ena sama prosta vožnja**, širše pa ji nobena druga prosta ne
 tekmuje. Napačen par je zamuda druge vožnje (`zive.py`): kadar dokaza ni, je
 odgovor „brez para“.
 
+Vir, ki naslednjega postajališča ne pove (NAP: samo lega), ga dobi iz lege:
+`na_voznji` postavi vozilo na tetivo med postankoma vožnje in vrne voznoredni
+čas tistega kraja -- ta gre v `predlagaj` namesto časa na naslednjem.
+
 Tu je samo račun: brez baze zajema in brez pisanja. Sence v `run` ne pišemo.
 """
 from __future__ import annotations
 
+import math
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, stats
+from . import config, prehod, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -29,6 +34,12 @@ TZ = ZoneInfo(config.TIMEZONE)
 OKNO_S = (-240, 600)
 #: Druga prosta vožnja v tem oknu pomeni, da časa ne moremo ločiti.
 TEKMEC_S = (-240, 1800)
+#: Vozilo dlje od tetive med zaporednima postankoma te vožnje ne vozi.
+#: Tetiva, ne trasa (kot `prehod.py`): med daljnimi postanki seka ovinke --
+#: lege NAP na svoji vožnji 31. 10. 2026 p50 40 m, p90 611 m, p95 2,6 km. V
+#: ponovitvi sence (`lega`, 10-13 h) 500 m: 7 335 parov, 1 000 m: 7 536,
+#: 2 500 m: 7 776 in 915 `vec`; napačna pri vseh dva, na meji med vožnjama.
+ODMIK_M = 1000
 
 
 @dataclass(frozen=True)
@@ -94,6 +105,29 @@ def predlagaj(kandidati: list[Voznja], zdaj: float, zasedene: set[tuple[str, str
     if sum(tekmec[0] <= zdaj - k.cas <= tekmec[1] for k in proste) > 1:
         return Predlog(None, "vec")
     return Predlog(v_oknu[0])
+
+
+def na_voznji(postanki: list[tuple], lat: float, lon: float, zdaj_s: float,
+              odmik_m: float = ODMIK_M) -> tuple[float, int] | None:
+    """Kje na vožnji je vozilo po legi: (voznoredni čas tega kraja, naslednji
+    postanek) ali None, če je od vseh tetiv dlje kot `odmik_m`.
+
+    `postanki` = [(stop_seq, lat, lon, čas_s)] po vrsti, čas v s od polnoči
+    prometnega dne, kot `zdaj_s`. Med postankoma je čas razdeljen po razdalji.
+    Kjer gre vožnja dvakrat mimo istega kraja (zanka, tja in nazaj), velja
+    odsek, katerega čas je najbližje `zdaj_s`: drugače bi vozilo na prvem
+    prehodu dobilo čas drugega.
+    """
+    kx = math.cos(math.radians(lat)) * prehod._M
+    x, y = lon * kx, lat * prehod._M
+    naj = None
+    for (_, la1, lo1, t1), (seq, la2, lo2, t2) in zip(postanki, postanki[1:]):
+        if t1 is None or t2 is None:
+            continue
+        d, t = prehod._blizina((t1, lo1 * kx, la1 * prehod._M, t2, lo2 * kx, la2 * prehod._M), x, y)
+        if d <= odmik_m and (naj is None or abs(zdaj_s - t) < abs(zdaj_s - naj[0])):
+            naj = (t, seq)
+    return naj
 
 
 def indeks(conn: sqlite3.Connection, zdaj: float,

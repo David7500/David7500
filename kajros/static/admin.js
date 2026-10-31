@@ -600,6 +600,16 @@ function podrobnostiVira(kljuc, d) {
         + (nm.isti_cas ? ` · odmik ${st(nm.odmik_m, 1)} m` : "")
         + ` · NAP novejši za ${st(nm.prednost_s)} s · samo NAP ${st(nm.samo_nap)} · samo derp ${st(nm.samo_derp)}`);
     }
+    const ps = nm.senca;
+    if (ps && ps.racunov != null) {
+      dodaj("senca pripisa · danes", `${st(ps.racunov)} računov · par ${st(ps.par)}`
+        + ` · brez kandidata ${st(ps.brez_kandidata)} · miruje ${st(ps.miruje)}`
+        + ` · ni proste ${st(ps.ni_prosta)} · več ${st(ps.vec)}`
+        + (ps.racunov ? ` · ${st(ps.ms_vsota / ps.racunov, 1)} ms/vozilo` : "")
+        + (ps.napak ? ` · napak ${st(ps.napak)}: ${ps.napaka}` : ""));
+    } else if (ps && ps.napaka) {
+      dodaj("senca pripisa", ps.napaka);
+    }
     const ok = z.odkloni_24h;
     dodaj("izven trase · 24 h", ok ? `${st(ok.odklonov)} odklonov na ${st(ok.vozenj)} vožnjah` : null);
     const g = nm.gps;

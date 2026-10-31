@@ -260,6 +260,10 @@ Pravila:
 * **Zamude medkrajevnih vodi NAP** (`config.NAP_PREVOZNIKI`: 1123, 1119, 1121): feed derp.si te vožnje izpusti (`iz_lege.nap_vodi`, `nap_prevzel`, `iz_lege.izpusti`), zamudo meri `iz_lege.opazuj` iz leg NAP; `iz_lege.iz_feeda` jih preskoči. Dokler prebran v 60 s (`NAP_VODI_S`). Izgubi se derp-ova napoved naprej in odhod z izhodišča.
 * Ujemanje z derp.si (`nap.primerjaj`): ista vožnja 99,5–100 %, odmik 0,1 m, NAP novejši 7–20 s.
 * Cena: 2,7 MB XML, 162 kB gzip; ~1,4 GB/dan. ETag se spremeni vsakič.
+* **Senca pripisa** (`nap.Senca`, od 31. 10. 2026): prijave ne verjamemo, vožnjo izračunamo sami — derp.si je samo primerjava. V senco gre nepripeto vozilo (`brez_voznje`, `brez_dneva`, `prezgodaj`) in pripeto pred začetkom vožnje (`pred_odhodom`) ali > 45 min po koncu (`po_koncu`).
+  * Kandidatke: proga + veriga NAP-ove in zadnje pripete vožnje vozila; NAP-ova tudi na dan, ki ga naš koledar nima (praznik). Kraj = tetiva med postankoma (`pripis.na_voznji`, 1 000 m), čas po razdalji. Kandidatka, po kateri vozilo pelje nazaj (`NAZAJ_S`), ne. Odloči `pripis.predlagaj`; svojih voženj vozilo ne zaseda samo sebi.
+  * Ponovitev na `lega` 31. 10. 10–13 h (vožnja skrita, pol vozil zaseda): 7 536 prav, 2 napačna (meja med vožnjama), 292 = vozilo še na prejšnji, NAP že na naslednji. Tetiva 500 m 7 335, 2 500 m 7 776 in `vec` 915 namesto 561; lege od tetive p50 40 m, p95 2,6 km.
+  * Piše samo `pripis_senca` (14 dni; `derp_voznja` ob istem branju) in `meta.nap.senca`; v `run`, `obs`, `vehicle_now` nič, napaka sence leg ne razveljavi. Enkrat na minuto na vozilo, 1,1 ms na račun (arwen). Merilo `skripte/pripis_nap.py DAN` (`preveri-vire`).
 
 ## Promet na cestah z NAP (`promet.py`)
 

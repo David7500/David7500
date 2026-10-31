@@ -77,3 +77,13 @@ def test_indeks_po_varianti_in_liniji(tmp_path):
     assert idx[("V1", "P1")] == [Voznja("T1", "2026-10-30", 2, zdaj + 60)]
     assert idx[("R1", "P1")] == idx[("V1", "P1")]
     assert pripis.indeks(conn, zdaj, "drug") == {}
+
+
+def test_na_voznji_čas_po_razdalji_in_v_zanki_bližji_čas():
+    postanki = [(1, 46.0, 14.0, 0), (2, 46.0, 14.1, 600), (3, 46.0, 14.0, 1200)]
+    t, seq = pripis.na_voznji(postanki, 46.0, 14.03, 200)
+    assert seq == 2 and abs(t - 180) < 5
+    # Isti kraj tja in nazaj: velja prehod, ki je bližje uri.
+    t, seq = pripis.na_voznji(postanki, 46.0, 14.03, 1000)
+    assert seq == 3 and abs(t - 1020) < 5
+    assert pripis.na_voznji(postanki, 46.05, 14.03, 200) is None     # 5,6 km od tetive

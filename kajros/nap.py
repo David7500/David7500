@@ -36,12 +36,12 @@ import statistics
 import threading
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, iz_lege, prehod, stats, straza, viri
+from . import collector, config, db, geo, iz_lege, prehod, pripis, stats, straza, viri
 
 TZ = collector.TZ
 
@@ -213,11 +213,15 @@ def _nacin(conn: sqlite3.Connection) -> dict[str, str]:
 NEPRIPETIH = 15
 
 
-def pripni(conn: sqlite3.Connection, vozila: list[dict],
-           zdaj: float) -> tuple[list[dict], dict]:
+def pripni(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
+           za_senco: list | None = None) -> tuple[list[dict], dict]:
     """Vozilo -> naša vožnja in obratovalni dan. Isti prevod starega id-ja
     kot pri derp.si (`zamenjava`), isti izbor dneva kot pri vlakih SŽ, ki
-    `start_date` tudi nimajo (`collector.resolve_service_date`)."""
+    `start_date` tudi nimajo (`collector.resolve_service_date`).
+
+    `za_senco` dobi (vozilo, vožnja, vzrok) za vsako nepripeto vozilo in za
+    pripeto na vožnjo, ki se še ni začela ali se je končala pred več kot
+    `PO_KONCU_S` (`Senca`)."""
     okna = collector._rail_trip_windows(conn)
     zdaj_dt = datetime.fromtimestamp(zdaj, TZ)
     dnevi = collector._service_dates(conn, zdaj_dt)
@@ -237,6 +241,8 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
             nepripeti.append({"vozilo": v["vozilo"], "voznja": v["ijpp"], "nasa": tid,
                               "razlog": razlog, "okno": okna.get(tid),
                               "dnevi": sorted(dnevi.get(tid) or ())[-3:]})
+        if za_senco is not None:
+            za_senco.append((v, tid, razlog))
     out = []
     for v in vozila:
         tid = v["ijpp"]
@@ -258,8 +264,211 @@ def pripni(conn: sqlite3.Connection, vozila: list[dict],
         st["pripetih"] += 1
         straza.vzorec("nap", v["vozilo"], tid, zdaj)
         out.append({**v, "trip_id": tid, "dan": dan, "agency": agencije.get(tid)})
+        if za_senco is not None:
+            od_polnoci = zdaj - stats.polnoc(dan)
+            if od_polnoci < okna[tid][0]:
+                za_senco.append((v, tid, "pred_odhodom"))
+            elif od_polnoci - okna[tid][1] > PO_KONCU_S:
+                za_senco.append((v, tid, "po_koncu"))
     st["nepripeti"] = nepripeti
     return out, st
+
+
+#: Pripeto vozilo, čigar vožnja se je po voznem redu končala pred toliko
+#: sekundami, gre v senco: `resolve_service_date` dopusti še 3 h, prijava pa
+#: ni verjetna (vozilo pelje v garažo ali že drugo vožnjo). V senco gre tudi
+#: pripeto na vožnjo, ki se še ni začela: NAP naslednjo javi do 30 min prej
+#: (`PREZGODAJ_S`), vozilo pa še vozi prejšnjo -- ponovitev na `lega` 31. 10.
+#: 2026, 10-13 h: 292 od 7 830 parov v senci je bila prejšnja vožnja.
+PO_KONCU_S = 2700
+#: Senca računa isto vozilo največ enkrat v tem času. Napredek (`pripis`) rabi
+#: dve opazovanji z različnim naslednjim postankom; minuta je dovolj na
+#: medkrajevnih, kjer so postanki 2-5 min narazen, in drži ceno pod NAP-ovim
+#: ritmom (10 s; izmerjeno v `docs/VIRI-PRESOJA.md`, točka 2).
+SENCA_VSAKIH_S = 60
+SENCA_DNI = 14
+#: Kandidatka, na kateri se je vozilo od prejšnjega računa premaknilo nazaj za
+#: toliko voznorednih sekund, ni njegova: vožnja v drugo smer po isti cesti
+#: (končana prejšnja, ki ji vozilo pelje nasproti).
+NAZAJ_S = 30
+
+
+class Senca:
+    """Katero vožnjo bi vozilu, ki ga NAP ne pripne, pripel `pripis.py` iz
+    lege, ure in voznega reda (`docs/VIRI-PRESOJA.md`, točka 2).
+
+    David 31. 10. 2026: sami računamo, ne od posrednika -- derp.si vozilu
+    vožnjo določi sam, mi pa verjamemo `VehicleJourneyRef`, ki je na prazniku
+    za naš koledar napačen ali že naslednja vožnja. Kandidatke: vožnje proge
+    in verige (`block_id`) NAP-ove vožnje in zadnje vožnje, na katero je NAP
+    vozilo pripel, ter NAP-ova vožnja sama tudi na dan, ko je naš koledar
+    nima. Odloči `pripis.predlagaj` (ena prosta v oknu, brez tekmice).
+
+    Piše samo `pripis_senca`: v `run`, `obs`, `vehicle_now` nič. derp-ova
+    vožnja istega vozila ob istem branju je primerjava, ne vir.
+    """
+
+    def __init__(self) -> None:
+        self.napredek = pripis.Napredek()
+        self.racunano: dict[str, float] = {}
+        #: vozilo -> (vožnja, dan), na katero ga je NAP nazadnje pripel
+        self.zadnja: dict[str, tuple[str, str]] = {}
+        #: (vožnja, dan) -> (vozilo, ts): NAP jo je pripel, drugemu ni prosta
+        self.videne: dict[tuple[str, str], tuple[str, float]] = {}
+        #: vozilo -> (vožnja, dan) para v senci
+        self.par: dict[str, tuple[str, str]] = {}
+        #: vozilo -> {(vožnja, dan): voznoredni čas kraja} prejšnjega računa
+        self.kraj: dict[str, dict[tuple[str, str], float]] = {}
+        self.stevci: dict = {}
+        self.obrezano = 0.0
+
+    def opazuj(self, conn: sqlite3.Connection, za_senco: list, pripeta: list[dict],
+               derp: dict | None, zdaj: float) -> dict:
+        """Senca enega odgovora NAP -> števci dneva za `meta.nap`. Commit
+        naredi `korak`, v isti transakciji kot lege (zaklep že drži)."""
+        zacetek = time.perf_counter()
+        for v in pripeta:
+            k = (v["trip_id"], v["dan"])
+            self.zadnja[v["vozilo"]] = k
+            self.videne[k] = (v["vozilo"], zdaj)
+        vidni = {v["vozilo"] for v, _, _ in za_senco}
+        self.napredek.pozabi(vidni)
+        for slovar in (self.par, self.kraj):
+            for k in [k for k in slovar if k not in vidni]:
+                del slovar[k]
+        dan = straza._dan(zdaj)
+        if self.stevci.get("dan") != dan:
+            self.stevci = {"dan": dan, "racunov": 0, "par": 0, "brez_kandidata": 0,
+                           "miruje": 0, "ni_prosta": 0, "vec": 0, "napak": 0,
+                           "ms_vsota": 0.0, "ms_najvec": 0.0}
+        st = self.stevci
+        for v, tid, vzrok in za_senco:
+            if zdaj - self.racunano.get(v["vozilo"], 0.0) < SENCA_VSAKIH_S:
+                continue
+            self.racunano[v["vozilo"]] = zdaj
+            t0 = time.perf_counter()
+            try:
+                vrstica = self._racun(conn, v, tid, vzrok, derp, zdaj, dan)
+                conn.execute("INSERT OR REPLACE INTO pripis_senca(ts, vozilo, dan, vzrok, "
+                             "nap_voznja, nasa_voznja, nas_dan, razlog, zamuda_s, kandidatov, "
+                             "derp_voznja, lat, lon) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", vrstica)
+            except Exception as exc:        # noqa: BLE001 -- senca ne sme ustaviti NAP
+                st["napak"] += 1
+                st["napaka"] = f"{type(exc).__name__}: {exc}"[:200]
+                continue
+            ms = (time.perf_counter() - t0) * 1000
+            st["racunov"] += 1
+            st["par" if not vrstica[7] else vrstica[7]] += 1
+            st["ms_vsota"] = round(st["ms_vsota"] + ms, 1)
+            st["ms_najvec"] = round(max(st["ms_najvec"], ms), 1)
+        if zdaj - self.obrezano > 3600:
+            conn.execute("DELETE FROM pripis_senca WHERE ts < ?", (int(zdaj) - SENCA_DNI * 86400,))
+            self.videne = {k: x for k, x in self.videne.items() if zdaj - x[1] < 86400}
+            self.racunano = {k: t for k, t in self.racunano.items() if zdaj - t < 3600}
+            zivi = vidni | {w for w, _ in self.videne.values()}
+            self.zadnja = {k: x for k, x in self.zadnja.items() if k in zivi}
+            self.obrezano = zdaj
+        return {**st, "vozil": len(za_senco),
+                "ms": round((time.perf_counter() - zacetek) * 1000, 1)}
+
+    def _racun(self, conn: sqlite3.Connection, v: dict, tid: str, vzrok: str,
+               derp: dict | None, zdaj: float, dan: str) -> tuple:
+        okna = collector._rail_trip_windows(conn)
+        dnevi = collector._service_dates(conn, datetime.fromtimestamp(zdaj, TZ))
+        vozilo = v["vozilo"]
+        zadnja = self.zadnja.get(vozilo)
+        danes = datetime.fromtimestamp(zdaj, TZ).date()
+        datumi = [(danes - timedelta(days=1)).isoformat(), danes.isoformat()]
+        prejsnji = self.kraj.get(vozilo, {})
+        kraj: dict[tuple[str, str], float] = {}
+        kand: list[tuple[pripis.Voznja, str]] = []
+        for c, varianta in _sosede(conn, [t for t in (tid, zadnja and zadnja[0]) if t in okna]).items():
+            if c not in okna:
+                continue
+            zac, kon = okna[c]
+            for d in datumi:
+                # NAP-ova vožnja tudi na dan, ko je naš koledar nima: praznik.
+                if d not in dnevi.get(c, ()) and c != tid:
+                    continue
+                polnoc = stats.polnoc(d)
+                if not (polnoc + zac + pripis.OKNO_S[0] <= zdaj <= polnoc + kon + pripis.TEKMEC_S[1]):
+                    continue
+                naj = pripis.na_voznji(_postanki(conn, c), v["lat"], v["lon"], zdaj - polnoc)
+                if naj is None:
+                    continue
+                kraj[(c, d)] = naj[0]
+                if naj[0] < prejsnji.get((c, d), naj[0]) - NAZAJ_S:
+                    continue
+                kand.append((pripis.Voznja(c, d, naj[1], polnoc + naj[0]), varianta))
+        self.kraj[vozilo] = kraj
+        # Svoje vožnje vozilo ne zaseda samo sebi (kot `scripts/pripis_senca.py`):
+        # NAP ga je na prejšnjo pripel, preden jo je končalo. Nasproti vožnji, ki
+        # jo je končalo, vozilo pelje nazaj -- to izloči `NAZAJ_S`.
+        zasedene = {k for k, (w, _) in self.videne.items() if w != vozilo}
+        zasedene |= {k for w, k in self.par.items() if w != vozilo}
+        if kand:
+            naj, varianta = min(kand, key=lambda x: abs(zdaj - x[0].cas))
+            gre = self.napredek.opazi(vozilo, varianta, str(naj.seq))
+            predlog = pripis.predlagaj([k for k, _ in kand], zdaj, zasedene, gre)
+        else:
+            predlog = pripis.Predlog(None, "brez_kandidata")
+        par = predlog.voznja
+        if par is None:
+            self.par.pop(vozilo, None)
+        else:
+            self.par[vozilo] = (par.trip_id, par.dan)
+        return (int(zdaj), vozilo, dan, vzrok, tid, par and par.trip_id, par and par.dan,
+                predlog.razlog, par and round(zdaj - par.cas), len(kand),
+                _derp_voznja(conn, derp, vozilo, okna), v["lat"], v["lon"])
+
+
+def _sosede(conn: sqlite3.Connection, seme: list[str]) -> dict[str, str]:
+    """Vožnje proge in verige (`block_id`) danih -> varianta (trasa ali proga).
+    Proga IJPP je linija v obe smeri ali v eno (Koper-Piran 65800, nazaj
+    65768); veriga poveže smeri, ki jih vozi isto vozilo."""
+    if not seme:
+        return {}
+    q = ",".join("?" * len(seme))
+    rows = conn.execute(f"SELECT route_id, block_id FROM trip WHERE trip_id IN ({q})",
+                        seme).fetchall()
+    out: dict[str, str] = {}
+    for stolpec, vrednosti in (("route_id", {r[0] for r in rows if r[0]}),
+                               ("block_id", {r[1] for r in rows if r[1]})):
+        if vrednosti:
+            for r in conn.execute(
+                    f"SELECT trip_id, COALESCE(shape_id, route_id) FROM trip "
+                    f"WHERE {stolpec} IN ({','.join('?' * len(vrednosti))})", sorted(vrednosti)):
+                out[r[0]] = r[1] or ""
+    return out
+
+
+def _postanki(conn: sqlite3.Connection, trip_id: str) -> list[tuple]:
+    """[(stop_seq, lat, lon, čas_s)] vožnje; predpomnjeno do novega uvoza."""
+    spomin = collector._cached(conn, "nap_senca_postanki", None, dict)
+    if trip_id not in spomin:
+        spomin[trip_id] = conn.execute(
+            "SELECT s.stop_seq, st.lat, st.lon, COALESCE(s.dep_s, s.arr_s) FROM sched s "
+            "JOIN station st USING (stop_id) WHERE s.trip_id = ? ORDER BY s.stop_seq",
+            (trip_id,)).fetchall()
+    return spomin[trip_id]
+
+
+def _derp_voznja(conn: sqlite3.Connection, derp: dict | None, vozilo: str,
+                 okna: dict) -> str | None:
+    """Vožnja vozila po derp.si ob istem branju (po `zamenjava`): NULL = derp.si
+    ni svež, '' = vozila nima."""
+    if derp is None:
+        return None
+    d = derp.get(vozilo)
+    if d is None:
+        return ""
+    t = d[0]
+    if t not in okna:
+        t = collector._zamenjave(conn).get(t, (t,))[0]
+    return t
+
+
+senca = Senca()
 
 
 def primerjaj(vozila: list[dict], derp: dict | None) -> dict:
@@ -336,7 +545,8 @@ def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     vozila, st = razberi(vsebina, zdaj)
     derp = collector.lege_derp(zdaj, DERP_SVEZE_S)
     st.update(primerjaj(vozila, derp))
-    pripeta, s = pripni(conn, vozila, zdaj)
+    za_senco: list = []
+    pripeta, s = pripni(conn, vozila, zdaj, za_senco)
     st.update(s)
     # NAP vodi (derp.si za medkrajevne utihne, `iz_lege.nap_vodi`) samo, kadar
     # res kaj da. Prazen, zamrznjen ali nepripet odgovor 200 je prej vodil in
@@ -345,6 +555,12 @@ def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     if pripeta:
         iz_lege.nap_prebran(zdaj)
     st.update(zapisi(conn, pripeta, derp, zdaj))
+    # Za `zapisi`: zaklep za pisanje že drži, senca ne čaka na bazo. Napaka v
+    # njej ne sme razveljaviti leg (`teci` ob izjemi naredi rollback).
+    try:
+        st["senca"] = senca.opazuj(conn, za_senco, pripeta, derp, zdaj)
+    except Exception as exc:                # noqa: BLE001
+        st["senca"] = {"napaka": f"{type(exc).__name__}: {exc}"[:200]}
     st.update(ts=int(zdaj), bajtov=len(vsebina),
               gps={**prehod.stevci, "nacin": config.PREHOD_GPS})
     db.set_meta(conn, "nap", json.dumps(st, sort_keys=True))

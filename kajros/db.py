@@ -607,6 +607,31 @@ CREATE TABLE IF NOT EXISTS straza_opazeno (
     vzorcev  INTEGER NOT NULL,
     PRIMARY KEY (dan, vir, vozilo, trip_id)
 ) WITHOUT ROWID;
+-- Senca pripisa za NAP (`nap.Senca`, `pripis.py`): vozilo, ki ga NAP ne
+-- pripne (ali ga pripne na vožnjo, ki se še ni začela ali je končana pred
+-- > 45 min), in vožnja, ki bi
+-- mu jo dal `pripis.predlagaj` iz lege, ure in voznega reda. Samo merjenje:
+-- v `run`, `obs`, `vehicle_now` nič. `ts` = čas računa (največ enkrat na
+-- minuto na vozilo), `dan` = prometni dan od 3:00 kot `straza_opazeno`.
+-- `razlog` '' = par, sicer `brez_kandidata`, `miruje`, `ni_prosta`, `vec`.
+-- `derp_voznja` = derp.si ob istem branju (NULL ni svež, '' vozila nima):
+-- primerjava, ne vir. 14 dni.
+CREATE TABLE IF NOT EXISTS pripis_senca (
+    ts          INTEGER NOT NULL,
+    vozilo      TEXT NOT NULL,
+    dan         TEXT NOT NULL,
+    vzrok       TEXT NOT NULL,      -- brez_voznje/brez_dneva/prezgodaj/pred_odhodom/po_koncu
+    nap_voznja  TEXT NOT NULL,      -- po `zamenjava`
+    nasa_voznja TEXT,
+    nas_dan     TEXT,
+    razlog      TEXT NOT NULL,
+    zamuda_s    INTEGER,            -- vozilo od voznega reda predloga
+    kandidatov  INTEGER NOT NULL,   -- vožnje, ob katerih je vozilo zdaj
+    derp_voznja TEXT,
+    lat         REAL NOT NULL,
+    lon         REAL NOT NULL,
+    PRIMARY KEY (ts, vozilo)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS straza_stevec (
     dan       TEXT NOT NULL,
     prevoznik TEXT NOT NULL,

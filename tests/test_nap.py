@@ -56,6 +56,7 @@ def _cist_spomin():
     iz_lege._prvic = None
     iz_lege._nap_ts = 0.0
     collector._LEGE_DERP = (0.0, {})
+    nap.senca = nap.Senca()
     yield
     iz_lege._nap_ts = 0.0
     iz_lege._v_feedu.clear()
@@ -305,3 +306,92 @@ def test_nap_vodi_le_ko_kaj_pripne(monkeypatch):
     assert not iz_lege.nap_vodi("1123", ZDAJ)
     nap.korak(c, _odgovor(_va("950133", 1001, ZDAJ - 20)), ZDAJ)
     assert iz_lege.nap_vodi("1123", ZDAJ)
+
+
+# ------------------------------------------------------------- senca pripisa
+
+def _baza_senca(dan_t1: str = DAN):
+    """A (14,00) -> B (14,10) -> C (14,20) na isti vzporednici, 10 min na
+    odsek. 3001 ob 16:00 A->C, v verigi z 3002 ob 16:50 C->A; 3001 vozi na
+    `dan_t1`, 3002 na DAN."""
+    c = db.connect(":memory:")
+    db.init(c)
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
+                  [("A", "A", 46.0, 14.0), ("B", "B", 46.0, 14.1), ("C", "C", 46.0, 14.2)])
+    for tid, sid, zacetek, postaje in (("3001", "s1", 16 * 3600, "ABC"),
+                                       ("3002", "s2", 16 * 3600 + 3000, "CBA")):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, "
+                  "network, block_id) VALUES(?, 'r', ?, ?, 'bus', '1123', 'avtobus', 'b')",
+                  (tid, tid, sid))
+        c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES(?,?,?,?,?)",
+                      [(tid, i + 1, p, zacetek + 600 * i, zacetek + 600 * i)
+                       for i, p in enumerate(postaje)])
+    c.executemany("INSERT INTO service_day(service_id, date) VALUES(?, ?)",
+                  [("s1", dan_t1), ("s2", DAN)])
+    db.fill_trip_window(c)
+    c.commit()
+    return c
+
+
+def _senca(c):
+    return [tuple(r) for r in c.execute(
+        "SELECT ts, vozilo, vzrok, nap_voznja, nasa_voznja, nas_dan, razlog, zamuda_s "
+        "FROM pripis_senca ORDER BY ts")]
+
+
+def test_senca_pripne_vožnjo_ki_je_naš_koledar_na_praznik_nima():
+    """NAP javi 3001, ki po našem uvozu ta dan ne vozi (`brez_dneva`); vozilo
+    vozi po njeni trasi ob njeni uri -> senca jo pripne na današnji dan. V
+    `vehicle_now`, `run`, `obs` nič."""
+    c = _baza_senca(dan_t1="2026-10-09")
+    t1, t2 = POLNOC + 16 * 3600 + 180, POLNOC + 16 * 3600 + 720
+    nap.korak(c, _odgovor(_va("v1", 3001, t1, lat=46.0, lon=14.03), odgovor=t1), t1)
+    st = nap.korak(c, _odgovor(_va("v1", 3001, t2, lat=46.0, lon=14.12), odgovor=t2), t2)
+    vrste = _senca(c)
+    assert [r[6] for r in vrste] == ["miruje", ""]      # napredek rabi dve opazovanji
+    assert vrste[1][2:6] == ("brez_dneva", "3001", "3001", DAN)
+    assert abs(vrste[1][7]) < 30
+    assert st["senca"]["par"] == 1 and st["senca"]["racunov"] == 2
+    for tabela in ("vehicle_now", "run", "obs"):
+        assert c.execute(f"SELECT COUNT(*) FROM {tabela}").fetchone()[0] == 0
+
+
+def test_senca_vozilo_ki_nap_javi_naslednjo_drži_na_prejšnji_v_verigi():
+    """NAP ob 16:08 javi 3002 (16:50, `prezgodaj`), vozilo pa vozi 3001."""
+    c = _baza_senca()
+    t1, t2 = POLNOC + 16 * 3600 + 480, POLNOC + 16 * 3600 + 720
+    nap.korak(c, _odgovor(_va("v1", 3002, t1, lat=46.0, lon=14.08), odgovor=t1), t1)
+    nap.korak(c, _odgovor(_va("v1", 3002, t2, lat=46.0, lon=14.12), odgovor=t2), t2)
+    assert _senca(c)[-1][2:7] == ("prezgodaj", "3002", "3001", DAN, "")
+
+
+def test_senca_računa_vozilo_enkrat_na_minuto_in_vožnje_drugega_ne_da():
+    c = _baza_senca()
+    t1 = POLNOC + 16 * 3600 + 480
+    for dt in (0, 30):
+        nap.korak(c, _odgovor(_va("v1", 3002, t1 + dt, lat=46.0, lon=14.08), odgovor=t1 + dt), t1 + dt)
+    assert len(_senca(c)) == 1
+    # 3001 ima drugo vozilo (NAP ga je pripel): vozilu v1 ni prosta.
+    t2 = POLNOC + 16 * 3600 + 720
+    nap.korak(c, _odgovor(_va("v1", 3002, t2, lat=46.0, lon=14.12),
+                          _va("v2", 3001, t2, lat=46.0, lon=14.121), odgovor=t2), t2)
+    assert _senca(c)[-1][4:7] == (None, None, "ni_prosta")
+
+
+def test_napaka_sence_ne_ustavi_leg(monkeypatch):
+    c = _baza()
+    def pade(*a, **k):
+        raise RuntimeError("senca")
+    monkeypatch.setattr(nap.senca, "opazuj", pade)
+    st = nap.korak(c, _odgovor(_va("a", 1001, ZDAJ - 5)), ZDAJ)
+    assert st["senca"] == {"napaka": "RuntimeError: senca"}
+    assert [tuple(r) for r in c.execute("SELECT vehicle_id FROM vehicle_now")] == [("a",)]
+
+
+def test_senca_obreže_starejše_od_14_dni():
+    c = _baza_senca()
+    c.execute("INSERT INTO pripis_senca(ts, vozilo, dan, vzrok, nap_voznja, razlog, kandidatov, "
+              "lat, lon) VALUES(?, 'x', '2026-09-20', 'prezgodaj', '1', 'vec', 2, 46, 14)",
+              (int(ZDAJ) - 15 * 86400,))
+    nap.senca.opazuj(c, [], [], None, ZDAJ)
+    assert _senca(c) == []
