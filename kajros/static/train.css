@@ -185,16 +185,30 @@ body.okno { display: block; height: auto; min-height: 100%; overflow: visible; }
 .ov-op { margin: 8px 0 0; font: 400 13px/1.4 var(--sans); color: var(--ink-dim); }
 .ov-op strong { color: var(--ink); font-weight: 600; }
 
-/* Kar o zasedenosti velja za ta odhod (`zasedenost.js`). */
+/* Kar o zasedenosti vemo za ta odhod, brez dotika (`zasedenost.js`). Risba in
+   beseda povesta polnost, barva le opozori: rumeno polno, rdeče danes zunaj
+   ostali ali poln prejšnji. */
 .ov-namig {
-  display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
-  padding: 7px 12px; border-radius: var(--r-pilula);
-  background: var(--m-visoka); font: 400 13px/1.3 var(--sans); color: var(--ink);
+  display: flex; align-items: center; gap: 12px; margin-top: 16px;
+  padding: 10px 16px; border-radius: var(--r-lg);
+  background: var(--m-visoka); font: 400 12.5px/1.35 var(--sans); color: var(--ink-dim);
 }
-.ov-namig b { font-weight: 600; }
+.ov-namig b { display: block; font: 600 15px/1.3 var(--sans); color: var(--ink); }
+.ov-namig svg { flex: none; color: #e7b9ff; }
 .ov-namig.je-rumeno { background: #3a3216; color: #e8c55a; }
 .ov-namig.je-rdece { background: #4a1f22; color: #ffdad6; }
-.ov-namig svg { flex: none; }
+.ov-namig.je-rumeno b, .ov-namig.je-rdece b, .ov-namig.je-rumeno svg, .ov-namig.je-rdece svg { color: inherit; }
+/* Prva opomba potnika pod vrstico, besedilo poravnano z njenim: risba je
+   široka kot risba vozila v `.ov-namig`, razmik in odmik sta ista. */
+.ov-opomba {
+  display: flex; align-items: flex-start; gap: 12px; margin-top: 12px; padding: 0 16px;
+  font: 400 12.5px/1.35 var(--sans); color: var(--ink-dim);
+}
+.ov-opomba svg { flex: none; margin-top: 1px; color: #e7b9ff; }
+.ov-opomba > div { min-width: 0; }
+.ov-opomba p { margin: 0 0 3px; font: 400 14px/1.4 var(--sans); color: var(--ink); overflow-wrap: anywhere; }
+.ov-opomba small { font: inherit; }
+.ov-opomba a { color: inherit; }
 
 /* ---------- trak vožnje (vlak; avtobus, dokler nima zemljevida) ---------- */
 
@@ -500,6 +514,9 @@ body.ima-karto .ov-karta-odst {
   .ov-ura-cas { font-size: 44px; }
   .ov-razlika, .ov-cipi, .ov-vreme, .ov-vrsta { font-size: 13.5px; }
   .ov-ko-ura, .ov-stanje, .ov-namig, .ov-dod, .ov-op { font-size: 14px; }
+  .ov-namig b { font-size: 16px; }
+  .ov-opomba { font-size: 14px; }
+  .ov-opomba p { font-size: 15px; }
   .ov-trak-imena { height: 40px; font-size: 14px; }
   .okno .pomoc-gumb { font-size: 14px; }
   .okno .alert-head, .ov-ovire-vse, .okno .alert-item, .okno .alert-desc { font-size: 14px; }

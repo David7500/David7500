@@ -131,8 +131,9 @@
 .pomoc-vrsta { display: flex; gap: 3px; }
 .pomoc-gumb {
   flex: 1 1 0; min-width: 0; min-height: 62px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  padding: 8px 4px; border: 0; border-radius: 8px; cursor: pointer; text-align: center;
+  /* Od vrha: beseda v dveh vrstah („Javi, kako polno“) ne premakne ikone iz vrste. */
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
+  padding: 12px 4px 8px; border: 0; border-radius: 8px; cursor: pointer; text-align: center;
   background: var(--m-visoka); color: var(--ink); font: 500 12.5px/1.15 var(--sans);
   transition: border-radius .2s ease-out, background-color .2s ease-out;
 }
@@ -150,8 +151,6 @@
 .pomoc-zas { --seg: #e7b9ff; --seg-kont: var(--deli-kont); }
 .pomoc-ovire { --seg: #f2d36b; --seg-kont: #2e2811; }
 .pomoc-gumb[aria-expanded="true"], .pomoc-bud.is-on { background: var(--seg-kont); }
-/* Vrsta zunaj ali poln prejšnji: rdeča, beseda zraven (`zasedenost.js`). */
-.pomoc-zas.je-opozorilo { --seg: #ffb4ab; background: #4a1f22; color: #ffdad6; }
 /* Deljenje teče, tudi ko je razdelek zaprt. */
 .pomoc-zivo {
   display: inline-block; width: 7px; height: 7px; margin-right: 6px; vertical-align: 1px;

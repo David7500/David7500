@@ -68,9 +68,6 @@
       {{ obvestila_mesto(network | default('zeleznica')) }}
       {# Prazen blok je na počasni povezavi videti kot okvara. #}
       <div id="run-head" class="ov-vrh-ovoj" aria-live="polite"><div class="empty-state is-busy">nalagam vožnjo …</div></div>
-      {#- Kar o zasedenosti velja za ta odhod („pridi 15 min prej“), piše
-          `zasedenost.js`; zunaj `#run-head`, ki ga okno vsakih 15 s preriše. #}
-      <div id="zas-namig" class="ov-namig" hidden></div>
       {#- Trak vožnje od izhodišča do cilja: vlak vedno, avtobus samo, kadar
           brskalnik zemljevida ne zna narisati (brez WebGL2). #}
       <div id="ov-trak" class="ov-trak-ovoj"></div>
@@ -112,6 +109,13 @@
         <span id="ov-stanje-kje" class="ov-stanje-kje"></span>
         <span class="ov-stanje-desno"><span id="run-map-sub" class="run-map-sub"></span><span id="ov-stanje-svez"></span></span>
       </div>
+      {#- Kar o zasedenosti vemo za ta odhod („Običajno polno · pridi 15 min
+          prej“) in opomba potnika; piše `zasedenost.js`: ob odštevanju,
+          nad gumbom za javljanje. #}
+      {%- if zasedenost %}
+      <div id="zas-namig" class="ov-namig" hidden></div>
+      <div id="zas-opomba" class="ov-opomba" hidden></div>
+      {%- endif %}
       {#- Skupina dejanj (ikone kot v osnutku B): budilka (samo v aplikaciji),
           deljenje lege, zasedenost, pri vlaku ovire. Dotik odpre svoj razdelek
           pod skupino; odprt je en sam (`data-odprto`). Gumbe rišejo moduli

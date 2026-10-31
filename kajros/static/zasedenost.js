@@ -1,9 +1,8 @@
-// Zasedenost po poročilih potnikov (`zasedenost.py`): gumb „Kako polno?“ v
-// vrstici Pomagaj drugim ob deljenju lege in razdelek pod njo, ki ga gumb odpre
-// (David, 23. 10. 2026; prej razdelek na dnu okna, ki ga ni videl nihče: 1--6
-// poročil na dan ob ~250 ljudeh v oknih voženj). Gumb pove, kar o zasedenosti
-// vemo, tudi zaprt. Potnik javi z enim dotikom; komentar gre skozi `/stik` v
-// nabiralnik in je javen šele, ko ga skrbnik objavi.
+// Zasedenost po poročilih potnikov (`zasedenost.py`). Kar vemo, povesta vrstica
+// in zadnja opomba nad skupino dejanj (`#zas-namig`, `#zas-opomba`), brez dotika
+// (David, 31. 10. 2026: prej „šele ko klikneš“ in kot razporeditev po stopnjah).
+// Gumb „Javi, kako polno“ odpre razdelek pod skupino: potnik javi z enim dotikom;
+// komentar gre skozi `/stik` v nabiralnik in je javen šele, ko ga skrbnik objavi.
 //
 // Vožnjo in privzeto postajo pove okno (`train.js`, `posodobiZasedenost`) z
 // dogodkom `zas-voznja`. Razdelek je svoj element zunaj časovnice, ki jo okno
@@ -28,7 +27,7 @@
     d: null,                // zadnji odgovor `/api/zasedenost`
     oddano: null,           // kar je ta naprava javila za ta odhod
     izbiraPostaje: false,
-    opomba: "", opombaOdprta: false, opombaPoslana: false, opombeOdprte: false,
+    opomba: "", opombaOdprta: false, opombaPoslana: false,
     potrdiNiVzel: false,
     sporocilo: null,
     zaposlen: false,
@@ -85,82 +84,81 @@
 
   const datumKratko = (iso) => `${+iso.slice(8, 10)}. ${+iso.slice(5, 7)}.`;
   const stopnja = (n) => S.d.stopnje[n - 1];
+  // Postaja poročila ali opombe, kadar ni ta, za katero velja okno.
+  const kje = (x, d) => (x.postaja !== d.postaja ? `, ${lepoIme(x.postaja)}` : "");
+  // Dan poročila ali opombe; ura samo, kadar govori o drugem odhodu kot o tem.
+  const kdaj = (x, d) => `${x.dan} ${datumKratko(x.datum)}${x.isti_odhod ? "" : `, odhod ob ${x.ura}`}${kje(x, d)}`;
 
   // ------------------------------------------------------------- gumb
 
-  // Ljudje: „Polno?“, dokler o tem odhodu ne vemo nič.
   const SVG_LJUDJE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
     + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     + '<path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3.5"/>'
     + '<path d="M20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.6a3.5 3.5 0 0 1 0 6.8"/></svg>';
   const velika = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
-  // Gumb v skupini dejanj (osnutek E, platno „Polno? — kaj pokaže gumb“) sam
-  // pove, kar vemo: najprej potnikovo poročilo, nato kar je danes nevarno
-  // (vrsta zunaj, poln prejšnji -- rdeče), nato običajno, nato zadnje današnje.
-  // Ena beseda pod risbo, cel stavek v `title` in za bralnik zaslona.
-  function gumbHtml(d) {
-    const ok = okno(d);
-    const o = d.obicajno;
-    const danesZunaj = d.danes.find((x) => x.stopnja === 5);
-    const zadnje = d.danes[d.danes.length - 1];
-    let n = 0, ime = "Polno?", pod, opozorilo = false;
-    if (S.oddano && !S.oddano.prejsnji) {
-      n = S.oddano.stopnja;
-      ime = `Javil si: ${stopnja(n)}`;
-      pod = `zapisano: ${stopnja(n)}`;
-    } else if (danesZunaj) {
-      n = 5;
-      ime = "Vrsta zunaj";
-      pod = `danes ob ${danesZunaj.ura} vrsta zunaj`;
-      opozorilo = true;
-    } else if (d.prejsnji) {
-      n = d.prejsnji.stopnja;
-      ime = "Prejšnji poln";
-      pod = `prejšnji ob ${d.prejsnji.ura} ${n === 5 ? "poln, vrsta zunaj" : "poln"}`;
-      opozorilo = true;
-    } else if (o) {
-      n = o.mediana;
-      ime = `Običajno ${stopnja(n)}`;
-      pod = `običajno ${stopnja(n)}${o.mediana >= 4 && o.prej ? ` · pridi ${o.prej.nasvet_min} min prej` : ""}`;
-    } else if (zadnje) {
-      n = zadnje.stopnja;
-      ime = velika(stopnja(n));
-      pod = `danes ob ${zadnje.ura} ${stopnja(n)}`;
-    } else {
-      pod = ok.po ? "poročila potnikov" : ok.pred ? `javiš od ${ok.odUra}` : "javi z enim dotikom";
-    }
-    gumb.classList.toggle("je-opozorilo", opozorilo);
-    gumb.title = `Kako polno? ${pod}`;
-    gumb.setAttribute("aria-label", `Kako polno? ${pod}`);
+  // Gumb je samo dejanje: kar vemo, pove vrstica (`namig`).
+  function gumbHtml() {
+    const n = S.oddano && !S.oddano.prejsnji ? S.oddano.stopnja : 0;
+    const ime = n ? `Javljeno: ${stopnja(n)}` : "Javi, kako polno";
     return `${n ? glif(n, 30) : SVG_LJUDJE}<span class="pomoc-ime">${escapeHtml(ime)}</span>`;
   }
 
-  // Kar velja za ta odhod, pod uro na vrhu okna (`#zas-namig`): danes vrsta
-  // zunaj ali poln prejšnji (rdeče), sicer pri običajno polnem „pridi N min
-  // prej“ (rumeno). Današnje poročilo samo pove gumb.
-  const namigEl = document.getElementById("zas-namig");
-  const SVG_NAMIG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
-    + ' stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/>'
-    + '<path d="M12 7.5V12l3 2"/></svg>';
-  function namig(d) {
-    if (!namigEl) return;
-    const o = d && d.vklopljeno ? d.obicajno : null;
-    const danesZunaj = d && d.vklopljeno ? d.danes.find((x) => x.stopnja === 5) : null;
-    let html = "", razred = "";
-    if (danesZunaj) {
-      html = `<b>danes ob ${danesZunaj.ura} vrsta zunaj</b>`;
-      razred = "je-rdece";
-    } else if (d && d.vklopljeno && d.prejsnji) {
-      html = `<b>prejšnji ob ${d.prejsnji.ura} poln</b>${d.prejsnji.stopnja === 5 ? ", vrsta zunaj" : ""}`;
-      razred = "je-rdece";
-    } else if (o && o.mediana >= 4 && o.prej) {
-      html = `<b>pridi ${o.prej.nasvet_min} min prej</b>, običajno ${escapeHtml(stopnja(o.mediana))}`;
-      razred = "je-rumeno";
+  // Kar vemo o tem odhodu: današnje poročilo pred navado, navada pred enim samim
+  // poročilom. Ko je okno oddaje mimo, samo še današnje -- navada o vožnji, ki je
+  // odpeljala, ne pove nič.
+  function znano(d) {
+    const o = d.obicajno, z = d.zadnjic;
+    const danes = d.danes.find((x) => x.stopnja === 5) || d.danes[0];
+    const prej = (o && o.prej) || (z && z.prej);
+    if (danes) {
+      const n = danes.stopnja;
+      return { n, kaj: velika(stopnja(n)), vir: `javljeno ob ${danes.ura}${kje(danes, d)}`,
+               ton: n === 5 ? "je-rdece" : n === 4 ? "je-rumeno" : "", prej: n >= 4 ? prej : null };
     }
-    namigEl.className = `ov-namig ${razred}`;
-    namigEl.innerHTML = html ? `${SVG_NAMIG}<span>${html}</span>` : "";
-    namigEl.hidden = !html;
+    if (okno(d).po) return null;
+    if (d.prejsnji) {
+      return { n: d.prejsnji.stopnja, ton: "je-rdece", prej, vir: `javljeno ob ${d.prejsnji.javljeno}`,
+               kaj: `Prejšnji ob ${d.prejsnji.ura} poln${d.prejsnji.stopnja === 5 ? ", vrsta zunaj" : ""}` };
+    }
+    if (o) {
+      return { n: o.mediana, kaj: `Običajno ${stopnja(o.mediana)}`,
+               vir: `${o.kdaj}, ${o.porocil} ${sklon(o.porocil, "porocilo")} potnikov`,
+               ton: o.mediana >= 4 ? "je-rumeno" : "", prej: o.mediana >= 3 ? o.prej : null };
+    }
+    if (z) {
+      return { n: z.stopnja, kaj: `Zadnjič ${stopnja(z.stopnja)}`, prej: z.prej,
+               vir: `poročilo potnika, ${kdaj(z, d)}`,
+               ton: z.stopnja >= 4 ? "je-rumeno" : "" };
+    }
+    return null;
+  }
+
+  // V prvi vrstici kako polno in kako prej priti, v drugi od kod to vemo.
+  // Nasvet samo pred odhodom s te postaje.
+  const namigEl = document.getElementById("zas-namig");
+  function namig(d) {
+    const k = d && d.vklopljeno ? znano(d) : null;
+    namigEl.hidden = !k;
+    if (!k) return;
+    const prej = Date.now() / 1000 < d.odhod_ts ? k.prej : null;
+    namigEl.className = `ov-namig ${k.ton || (prej ? "je-rumeno" : "")}`;
+    namigEl.innerHTML = `${glif(k.n, 34)}<span><b>${escapeHtml(k.kaj)}${prej ? ` · pridi ${prej.nasvet_min} min prej` : ""}</b>`
+      + `${escapeHtml(k.vir)}</span>`;
+  }
+
+  // Prva objavljena opomba, brez dotika. Besedilo je napisal potnik, zato to
+  // pove in „Prijavi“ ostane ob njem (DSA čl. 16); druge so v razdelku.
+  const opombaEl = document.getElementById("zas-opomba");
+  const SVG_OPOMBA = '<svg width="34" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+  function prvaOpomba(d) {
+    const o = d && d.vklopljeno ? d.opombe[0] : null;
+    opombaEl.hidden = !o;
+    if (!o) return;
+    opombaEl.innerHTML = `${SVG_OPOMBA}<div><p>„${escapeHtml(o.besedilo)}“</p>`
+      + `<small>Opomba potnika · ${escapeHtml(kdaj(o, d))} · <a href="/stik?prijava=${o.id}">Prijavi</a></small></div>`;
   }
 
   // ------------------------------------------------------------ razdelek
@@ -177,52 +175,37 @@
     const izbrana = S.oddano && !S.oddano.prejsnji ? S.oddano.stopnja : 0;
     return `<div class="zas-stopnje" role="group" aria-label="Kako polno je zdaj">${d.stopnje.map((ime, i) => {
       const n = i + 1;
-      const onemogoceno = ok.pred || (n === 5 && ok.zunajPrezgodaj) || S.zaposlen;
+      const onemogoceno = (n === 5 && ok.zunajPrezgodaj) || S.zaposlen;
       return `<button type="button" class="zas-stopnja${n === izbrana ? " je-izbrana" : ""}"
           data-stopnja="${n}" aria-pressed="${n === izbrana}"${onemogoceno ? " disabled" : ""}>
           ${glif(n)}<span>${escapeHtml(ime)}</span></button>`;
     }).join("")}</div>`;
   }
 
-  function obicajnoHtml(o) {
-    const deli = [];
-    for (let n = 5; n >= 1; n--) {
-      const k = o.stopnje[n - 1];
-      if (!k) continue;
-      const besedilo = `${escapeHtml(stopnja(n))} ${k}×`;
-      deli.push(n === o.mediana ? `<b>${besedilo}</b>` : besedilo);
-    }
-    let h = `<p class="zas-pod">Običajno ${escapeHtml(o.kdaj)} med ${o.od} in ${o.do}: ${deli.join(", ")}.`;
-    if (o.prej) {
-      const razpon = o.prej.od_min === o.prej.do_min ? o.prej.do_min : `${o.prej.od_min}–${o.prej.do_min}`;
-      h += ` Poln je bil že ${razpon} min pred odhodom.`;
-    }
-    const obdobje = o.prvi === o.zadnji ? datumKratko(o.prvi) : `${datumKratko(o.prvi)}–${datumKratko(o.zadnji)}`;
-    return `${h} <span class="zas-tiho">${o.porocil} ${sklon(o.porocil, "porocilo")}, ${obdobje}</span></p>`;
-  }
-
   function izrisi() {
     const d = S.d;
     namig(d);
+    prvaOpomba(d);
     if (!d || !d.vklopljeno) {
       el.hidden = gumb.hidden = true;
       return;
     }
     gumb.hidden = false;
-    gumb.innerHTML = gumbHtml(d);
+    gumb.innerHTML = gumbHtml();
     gumb.setAttribute("aria-expanded", String(odprto()));
     el.hidden = !odprto();
     // Potnik piše ali izbira postajo: osvežitev mu ne sme vzeti polja.
     if (el.contains(document.activeElement) && /^(TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
     const ok = okno(d);
-    let h = `<div class="zas-glava"><h2 class="zas-naslov">${ok.po ? "Kako polno je bilo?" : "Kako polno je zdaj?"}</h2>`;
+    const javis = !ok.pred && !ok.po;
+    const naslov = ok.po ? "Javiti ni več mogoče" : ok.pred ? `Javiš lahko od ${ok.odUra}` : "Kako polno je zdaj?";
+    let h = `<div class="zas-glava"><h2 class="zas-naslov">${naslov}</h2>`;
     h += S.izbiraPostaje
       ? `<select class="zas-izbira" aria-label="Postaja">${d.postaje.map((p) =>
           `<option value="${escapeHtml(p.ime)}"${p.ime === d.postaja ? " selected" : ""}>${escapeHtml(lepoIme(p.ime))} · ${p.ura}</option>`).join("")}</select>`
       : `<button type="button" class="zas-postaja" data-akcija="postaja">${escapeHtml(lepoIme(d.postaja))} · <u>spremeni</u></button>`;
     h += "</div>";
-    if (!ok.po) h += stopnjeHtml(d, ok);
-    if (ok.pred) h += `<p class="zas-pod zas-tiho">Javiš lahko od ${ok.odUra} naprej, ko je vozilo na postaji ali na poti.</p>`;
+    if (javis) h += stopnjeHtml(d, ok);
 
     if (S.oddano) {
       const kaj = S.oddano.prejsnji
@@ -236,17 +219,8 @@
       h += `<p class="zas-hvala${S.sporocilo.napaka ? " je-napaka" : ""}">${escapeHtml(S.sporocilo.napaka || S.sporocilo.ok)}</p>`;
     }
 
-    const danes = d.danes.filter((x) => !S.oddano || x.ura !== S.oddano.ura || x.stopnja !== S.oddano.stopnja);
-    if (danes.length) {
-      h += `<p class="zas-pod">Danes javljeno: ${danes.map((x) =>
-        `${x.ura} ${escapeHtml(stopnja(x.stopnja))}${x.postaja !== d.postaja ? ` (${escapeHtml(lepoIme(x.postaja))})` : ""}`).join(" · ")}</p>`;
-    }
-    if (d.obicajno) h += obicajnoHtml(d.obicajno);
-    else if (d.zgodovina.length) {
-      h += `<p class="zas-pod">Ta odhod, ${d.odhod}: ${d.zgodovina.map((z) =>
-        `${z.dan} ${datumKratko(z.datum)} ${escapeHtml(stopnja(z.stopnja))}${z.postaja !== d.postaja ? ` (${escapeHtml(lepoIme(z.postaja))})` : ""}`).join(" · ")}</p>`;
-    } else if (!danes.length && !S.oddano && !ok.po) {
-      h += `<p class="zas-pod zas-tiho">Še nihče ni javil. En dotik pomaga tistim, ki čakajo na naslednjega.</p>`;
+    if (javis && !d.danes.length && !S.oddano) {
+      h += `<p class="zas-pod zas-tiho">Danes še nihče ni javil. En dotik pomaga tistim, ki čakajo na naslednjega.</p>`;
     }
     // Javi tuj odhod, zato dva koraka: povezava se je na telefonu oddala ob
     // dotiku med drsenjem (David, 21. 10. 2026).
@@ -270,18 +244,16 @@
     }
     const dodaj = smeOpombo && !S.opombaOdprta && !S.oddano
       ? `<button type="button" class="zas-povezava" data-akcija="odpri-opombo">Dodaj opombo za druge potnike</button>` : "";
-    // Prazen „Opombe potnikov (0)“ je obljuba brez vsebine: brez opomb samo gumb.
-    if (d.opombe.length) {
-      h += `<details class="zas-opombe"${S.opombeOdprte ? " open" : ""}>
-        <summary>Opombe potnikov (${d.opombe.length})</summary>
-        ${d.opombe.map((o) => `<div class="zas-opomba"><small>${o.dan} ${datumKratko(o.datum)} · ${escapeHtml(lepoIme(o.postaja))}</small>`
-          + `<p>${escapeHtml(o.besedilo)}</p><a class="zas-prijavi" href="/stik?prijava=${o.id}">Prijavi</a></div>`).join("")}
-        ${dodaj}
-      </details>`;
-    } else {
-      h += dodaj;
+    h += dodaj;
+    // Prva je nad skupino dejanj (`prvaOpomba`).
+    const druge = d.opombe.slice(1);
+    if (druge.length) {
+      h += `<p class="zas-pod">Druge opombe</p>${druge.map((o) => `<div class="zas-opomba"><small>${escapeHtml(kdaj(o, d))}</small>`
+        + `<p>${escapeHtml(o.besedilo)}</p><a class="zas-prijavi" href="/stik?prijava=${o.id}">Prijavi</a></div>`).join("")}`;
     }
-    h += `<p class="zas-noga">Kar javiš, objavimo brez imena pod CC BY-SA 4.0. <a href="/zasebnost#zasedenost">Zasebnost</a></p>`;
+    if (javis || smeOpombo) {
+      h += `<p class="zas-noga">Kar javiš, objavimo brez imena pod CC BY-SA 4.0. <a href="/zasebnost#zasedenost">Zasebnost</a></p>`;
+    }
     el.innerHTML = h;
   }
 
@@ -399,10 +371,6 @@
       default: break;
     }
   });
-  // Odprte opombe ostanejo odprte, ko osvežitev razdelek nariše znova.
-  el.addEventListener("toggle", (e) => {
-    if (e.target.classList.contains("zas-opombe")) S.opombeOdprte = e.target.open;
-  }, true);
   el.addEventListener("input", (e) => {
     if (e.target.classList.contains("zas-polje")) S.opomba = e.target.value;
   });
@@ -426,6 +394,8 @@
                          d: null, opomba: "", opombaOdprta: false, izbiraPostaje: false,
                          potrdiNiVzel: false });
       el.hidden = gumb.hidden = true;
+      namig(null);
+      prvaOpomba(null);
     }
     if (!poller) poller = pollWhileVisible(nalozi, OSVEZI_MS);
     else if (nova || premik) poller.zdaj().catch(() => {});

@@ -245,13 +245,68 @@ def test_obicajno_sele_od_petih(conn):
     _zgodovina(conn, "m1620", PETKI[:4], 4)
     p = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))
     assert p["obicajno"] is None
-    assert [z["datum"] for z in p["zgodovina"]] == PETKI[:4]
+    assert p["zadnjic"]["datum"] == PETKI[0]
     _zgodovina(conn, "m1620", PETKI[4:5], 5, ura_porocila="16:11")
     o = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))["obicajno"]
     assert o["kdaj"] == "ob petkih" and o["porocil"] == 5
     assert o["stopnje"] == [0, 0, 0, 4, 1] and o["mediana"] == 4
     # Poln je bil 12 min pred odhodom (poročilo ob 16:08), en petek 9 min.
     assert o["prej"] == {"dni": 5, "od_min": 9, "do_min": 12, "nasvet_min": 15}
+    assert zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))["zadnjic"] is None
+
+
+def _zadnjic(conn):
+    return zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))["zadnjic"]
+
+
+def test_zadnjic_isti_odhod_z_nasvetom(conn):
+    """Eno poročilo „polno“ 12 min pred odhodom: dovolj za „pridi 15 min prej“."""
+    _zgodovina(conn, "m1620", PETKI[:1], 4)
+    z = _zadnjic(conn)
+    assert (z["datum"], z["dan"], z["stopnja"]) == (PETKI[0], "pet", 4)
+    assert z["isti_odhod"] and z["prej"] == {"nasvet_min": 15}
+
+
+def test_zadnjic_javljeno_po_odhodu_brez_nasveta(conn):
+    """Polno, a javljeno po odhodu: kako prej priti, tega ne pove."""
+    _zgodovina(conn, "m1620", PETKI[:1], 4, ura_porocila="16:21")
+    assert _zadnjic(conn)["prej"] is None
+
+
+def test_zadnjic_predolgo_pred_odhodom_brez_nasveta(conn):
+    """Polno 55 min prej je en potnik pri prejšnjem avtobusu, ne nasvet."""
+    _zgodovina(conn, "m1620", PETKI[:1], 4, ura_porocila="15:25")
+    assert _zadnjic(conn)["prej"] is None
+
+
+def test_zadnjic_pol_polno_brez_nasveta(conn):
+    _zgodovina(conn, "m1620", PETKI[:1], 2)
+    z = _zadnjic(conn)
+    assert (z["stopnja"], z["prej"]) == (2, None)
+
+
+def test_zadnjic_z_druge_postaje_brez_nasveta(conn):
+    """Isti odhod, a polno na Stadionu ne pove, kdaj priti na Ljubljana AP."""
+    _zgodovina(conn, "m1620", PETKI[:1], 4, ura_porocila="16:15", postaja="Ljubljana Stadion")
+    z = _zadnjic(conn)
+    assert z["postaja"] == "Ljubljana Stadion" and z["isti_odhod"] and z["prej"] is None
+
+
+def test_zadnjic_primerljiv_samo_isti_tip_dneva(conn):
+    """Drug odhod v isto smer šteje le na isti tip dneva, in pove svojo uro."""
+    _javi(conn, 3, trip="a1530", datum="2026-10-22", ura="15:20")
+    assert _zadnjic(conn) is None
+    _zgodovina(conn, "a1530", PETKI[:1], 2, ura_porocila="15:20")
+    z = _zadnjic(conn)
+    assert (z["datum"], z["ura"], z["stopnja"], z["isti_odhod"]) == (PETKI[0], "15:30", 2, False)
+
+
+def test_zadnjic_isti_odhod_pred_novejsim_primerljivim(conn):
+    """Isti odhod šteje na kateri koli dan, tudi starejši od primerljivega."""
+    _zgodovina(conn, "a1530", PETKI[:1], 2, ura_porocila="15:20")
+    _javi(conn, 1, datum=PETKI[1])
+    z = _zadnjic(conn)
+    assert (z["datum"], z["stopnja"], z["isti_odhod"]) == (PETKI[1], 1, True)
 
 
 def test_obicajno_zdruzi_prevoznike_v_isti_smeri(conn):
@@ -360,6 +415,21 @@ def test_opomba_skozi_nabiralnik_do_objave(conn):
     assert [o["besedilo"] for o in op] == ["Vrsta do konca perona že ob 16:00."]
     assert zasedenost.umakni(conn, id_)
     assert zasedenost.pregled(conn, "m1620", teden, "Ljubljana AP", _ob(teden, "15:00"))["opombe"] == []
+
+
+def test_opomba_o_tem_odhodu_pred_novejso_o_podobnem(conn):
+    """Prva je na vrhu okna: o tem odhodu, sicer najnovejša; drug odhod pove svojo uro."""
+    for trip, datum, besedilo in (("m1620", PETKI[2], "Ta odhod, starejša."),
+                                  ("m1620", PETKI[1], "Ta odhod, novejša."),
+                                  ("a1530", PETKI[0], "Podoben odhod.")):
+        zdaj = _ob(datum, "16:30")
+        tekst, kontekst = zasedenost.preveri_opombo(conn, trip, datum, "Ljubljana AP", besedilo, zdaj)
+        id_ = conn.execute("INSERT INTO sporocilo(prispelo, email, besedilo, opomba) VALUES(?, '', ?, ?)",
+                           (f"{datum}T16:30:00+02:00", tekst, kontekst)).lastrowid
+        assert zasedenost.objavi(conn, id_, zdaj)
+    op = zasedenost.pregled(conn, "m1620", PETEK, "Ljubljana AP", _ob(PETEK, "15:00"))["opombe"]
+    assert [o["besedilo"] for o in op] == ["Ta odhod, novejša.", "Ta odhod, starejša.", "Podoben odhod."]
+    assert op[0]["isti_odhod"] and not op[2]["isti_odhod"] and op[2]["ura"] == "15:30"
 
 
 def test_opombe_imajo_svoj_strop(conn, monkeypatch):

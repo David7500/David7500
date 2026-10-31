@@ -79,7 +79,9 @@ NAJMANJ = 5
 NAJMANJ_DNI = 3
 #: „Poln je bil že N min pred odhodom“ šele iz toliko različnih dni.
 PREJ_DNI = 3
-NAJVEC_ZGODOVINE = 5
+#: Nasvet iz enega samega poročila (`_zadnjic`) le do pol ure: en potnik, ki je
+#: 55 min prej videl prejšnji avtobus na peronu, ne sme reči „pridi 55 min prej“.
+ZADNJIC_PREJ_S = 30 * 60
 NAJVEC_OPOMB = 5
 #: Komentar o vrsti na peronu po pol leta ne velja več (vozni red, šola).
 OPOMBE_DNI = 183
@@ -440,6 +442,11 @@ def _odhod_dne(r: dict) -> tuple:
     return (r["datum"], r["agency"], r["train_no"], r["headsign"], r["start_s"])
 
 
+def _nasvet_min(minute: float) -> int:
+    """„Pridi N min prej“: navzgor na pet minut, najmanj pet."""
+    return max(5, math.ceil(minute / 5) * 5)
+
+
 def _obicajno(vrstice: list[dict], datum: str, t_s: int) -> dict | None:
     """Povzetek po istem dnevu v tednu, sicer po tipu dneva -- z vzorcem."""
     d = date.fromisoformat(datum)
@@ -485,11 +492,41 @@ def _obicajno(vrstice: list[dict], datum: str, t_s: int) -> dict | None:
         # prejšnji avtobus na peronu, ne sme postaviti nasveta.
         zgornja = minute[math.ceil(0.75 * len(minute)) - 1]
         prej = {"dni": len(minute), "od_min": minute[0], "do_min": minute[-1],
-                "nasvet_min": max(5, math.ceil(zgornja / 5) * 5)}
+                "nasvet_min": _nasvet_min(zgornja)}
     return {"kdaj": kdaj, "od": _ura(t_s - PAS_S), "do": _ura(t_s + PAS_S),
             "porocil": len(izbor), "voznj": len(enote), "dni": len(datumi), "prvi": datumi[0],
             "zadnji": datumi[-1], "stopnje": stopnje,
             "mediana": urejene[(len(urejene) - 1) // 2], "prej": prej}
+
+
+def _zadnjic(isti: list[dict], primerljivi: list[dict], datum: str, postaja: str,
+             t_s: int) -> dict | None:
+    """Zadnje poročilo, dokler za „običajno“ ni dovolj poročil.
+
+    Najprej isti odhod, na kateri koli postaji; sicer primerljiv odhod s te
+    postaje, a samo na isti tip dneva -- sobotni vlak ne pove nič o petkovem.
+    Pove, kaj je potnik videl in kdaj, ne kaj je običajno.
+    """
+    tip = tip_dneva(datum)
+    izbor = isti or [r for r in primerljivi if tip_dneva(r["datum"]) == tip]
+    if not izbor:
+        return None
+    zadnji = max(r["datum"] for r in izbor)
+    tega_dne = [r for r in izbor if r["datum"] == zadnji]
+    prvi = min(tega_dne, key=lambda r: (r["postaja"] != postaja, abs(r["t_s"] - t_s)))
+    porocila = [r for r in tega_dne
+                if _odhod_dne(r) == _odhod_dne(prvi) and r["postaja"] == prvi["postaja"]]
+    prej = None
+    # Kdaj je bilo polno, pove samo poročilo s postaje, na kateri potnik čaka.
+    if prvi["postaja"] == postaja:
+        odhod = stats.polnoc(zadnji) + prvi["t_s"]
+        pred = [odhod - r["prejeto"] for r in porocila if r["stopnja"] >= POLNO
+                and 0 < odhod - r["prejeto"] <= ZADNJIC_PREJ_S]
+        if pred:
+            prej = {"nasvet_min": _nasvet_min(max(pred) / 60)}
+    return {"datum": zadnji, "dan": _dan(zadnji), "stopnja": max(r["stopnja"] for r in porocila),
+            "postaja": prvi["postaja"], "ura": _ura(prvi["t_s"]), "isti_odhod": bool(isti),
+            "prej": prej}
 
 
 def _te_ni_vzel(conn: sqlite3.Connection, v: Voznja, datum: str, postaja: str,
@@ -551,16 +588,14 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
         (v.train_no, v.start_s, datum, v.agency, v.headsign))]
 
     od = (d - timedelta(weeks=TEDNOV)).isoformat()
-    zgodovina = [{"datum": r["datum"], "dan": _dan(r["datum"]), "postaja": r["postaja"],
-                  "stopnja": r["stopnja"], "porocil": r["n"]} for r in conn.execute(
-        "SELECT datum, postaja, MAX(stopnja) AS stopnja, COUNT(*) AS n FROM zasedenost"
-        " WHERE train_no = ? AND start_s = ? AND datum >= ? AND datum < ?"
-        "   AND agency = ? AND headsign = ? AND skrito = 0"
-        " GROUP BY datum, postaja ORDER BY datum DESC LIMIT ?",
-        (v.train_no, v.start_s, od, datum, v.agency, v.headsign, NAJVEC_ZGODOVINE))]
+    isti = [dict(r) for r in conn.execute(
+        "SELECT datum, agency, train_no, headsign, start_s, postaja, t_s, stopnja, prejeto"
+        "  FROM zasedenost WHERE train_no = ? AND start_s = ? AND datum >= ? AND datum < ?"
+        "   AND agency = ? AND headsign = ? AND skrito = 0",
+        (v.train_no, v.start_s, od, datum, v.agency, v.headsign))]
 
     vrstice = [dict(r) for r in conn.execute(
-        "SELECT datum, agency, train_no, headsign, start_s, t_s, naprej, stopnja, prejeto"
+        "SELECT datum, agency, train_no, headsign, start_s, postaja, t_s, naprej, stopnja, prejeto"
         "  FROM zasedenost WHERE postaja = ? AND omrezje = ? AND datum >= ? AND datum <= ?"
         "   AND skrito = 0 AND t_s BETWEEN ? AND ?",
         (postaja, v.network, od, datum, t_s - PAS_S, t_s + PAS_S))]
@@ -568,7 +603,9 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
         r["postaje"] = json.loads(r["naprej"])
     v_smer = [r for r in vrstice
               if _primerljiv(v, naprej, r["agency"], r["train_no"], r["postaje"])]
-    obicajno = _obicajno([r for r in v_smer if r["datum"] < datum], datum, t_s)
+    pred_danes = [r for r in v_smer if r["datum"] < datum]
+    obicajno = _obicajno(pred_danes, datum, t_s)
+    zadnjic = None if obicajno else _zadnjic(isti, pred_danes, datum, postaja, t_s)
 
     # Danes poln prejšnji odhod v isto smer: kdor čaka na ta odhod, mora to vedeti.
     prejsnji = None
@@ -599,15 +636,18 @@ def pregled(conn: sqlite3.Connection, trip_id: str, datum: str,
                           and _primerljiv(v, naprej, r["agency"], r["train_no"],
                                           json.loads(r["naprej"]))):
             opombe.append({"id": r["id"], "datum": r["datum"], "dan": _dan(r["datum"]),
-                           "postaja": r["postaja"], "besedilo": r["besedilo"]})
+                           "postaja": r["postaja"], "ura": _ura(r["t_s"]),
+                           "isti_odhod": isti_odhod, "besedilo": r["besedilo"]})
         if len(opombe) >= NAJVEC_OPOMB:
             break
+    # Prva je na vrhu okna: o tem odhodu pred novejšo o podobnem.
+    opombe.sort(key=lambda o: not o["isti_odhod"])
 
     return {"vklopljeno": True, "postaja": postaja, "odhod": _ura(t_s),
             "odhod_ts": stats.polnoc(datum) + t_s, "okno": [PRED_S, PO_S, ZUNAJ_PRED_S],
             "postaje": [{"ime": p, "ura": _ura(s)} for p, s in v.postanki[:-1]],
             "stopnje": STOPNJE, "danes": danes, "prejsnji": prejsnji,
-            "te_ni_vzel": te_ni_vzel, "obicajno": obicajno, "zgodovina": zgodovina,
+            "te_ni_vzel": te_ni_vzel, "obicajno": obicajno, "zadnjic": zadnjic,
             "opombe": opombe, "izracunano": int(t)}
 
 

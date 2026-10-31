@@ -118,7 +118,7 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
   * Neuspela osvežitev stran pusti: „brez zveze · podatki od HH:MM“ (`brezZveze`); prazno stran bi sicer pustil vsak predor.
   * Sprememba na vrhu se dvigne (`je-novo` po `podpisVrha`; ob `prefers-reduced-motion` samo obroč).
 * **Vreme = žeton ob postanku na vrhu** (ikona + °, črtkan = napoved, od „zahtevnih“ beseda); v vrstici postanka samo zahtevne in hude.
-* **Skupina dejanj** (povezani gumbi, ikona nad besedo, robove postavi vidnost — `uredSkupino`): budilka (aplikacija), „Deli lego“, „Polno?“, pri vlaku „N ovir“. Odprt en razdelek (`data-odprto`).
+* **Skupina dejanj** (povezani gumbi, ikona nad besedo, robove postavi vidnost — `uredSkupino`): budilka (aplikacija), „Deli lego“, „Javi, kako polno“, pri vlaku „N ovir“. Kar o zasedenosti vemo, je vrstica nad skupino (`#zas-namig`, `zasedenost.md`). Odprt en razdelek (`data-odprto`).
 * **Postanki na črti**: prevoženi zloženi, vozilo je vrstica med zadnjim in naslednjim, naprej črtkano. Ničla = „točno“, tudi v kartici deljenja.
 * **Okno nima** preklopa preprosto/napredno, krivulje zamude, končnih zamud po dnevih, poročil prevoznika (`/reports`), legende pod zemljevidom in ure v glavi — zgodovina gre v statistiko (`strani.md`).
 * **Geste**: `cooperativeGestures` (namig v `pkUstvari`), razširjen pogled ga ugasne.
