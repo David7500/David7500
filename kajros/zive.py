@@ -336,6 +336,8 @@ def _po_nacrtu(sk: _Skupina, ziva: dict, kandidatke: list[str], zdaj: float) -> 
             if any(od <= sk.voznje[t]["start"] < sk.voznje[prva]["start"] for t in kandidatke):
                 return None
             nasli = {prva}
+    if len(nasli) > 1 and len(_dvojcki(sk, min(nasli), nasli)) == len(nasli):
+        return min(nasli)               # dvojniki v objavi (`_po_uri`)
     return next(iter(nasli)) if len(nasli) == 1 else None
 
 
@@ -358,11 +360,22 @@ def _po_uri(sk: _Skupina, napovedi: dict[str, int], kandidatke: list[str],
                    key=lambda o: _tocke(o[0]))
     if not ocene or not URA_OKNO_S[0] <= ocene[0][0] <= URA_OKNO_S[1]:
         return None
-    if ocene[0][1] not in zasedene and any(
+    # Enaka objavljena vožnja ni tekmica: objava LPP ima na praznik dvojnike
+    # (31. 10. 2026 75 skupin, ista proga, vzorec, ure in blok) -- ena storitev,
+    # vozi jo en avtobus. Je ena zasedena, je živa isti avtobus (`_dvojnik`).
+    dvojcki = _dvojcki(sk, ocene[0][1], (t for _, t in ocene))
+    zasedena = next((t for t in dvojcki if t in zasedene), None)
+    if zasedena is None and any(
             URA_TEKMEC_S[0] <= z <= URA_TEKMEC_S[1]
-            for z, t in ocene[1:] if t not in zasedene):
+            for z, t in ocene[1:] if t not in zasedene and t not in dvojcki):
         return None
-    return ocene[0][1], ocene[0][0]
+    return zasedena or dvojcki[0], ocene[0][0]
+
+
+def _dvojcki(sk: _Skupina, tid: str, kandidatke) -> list[str]:
+    """`tid` in objavljene vožnje z enakimi urami na vseh postankih, urejeno."""
+    ure = sk.voznje[tid]["ure"]
+    return sorted({tid, *(t for t in kandidatke if sk.voznje[t]["ure"] == ure)})
 
 
 def _dvojnik(napovedi: dict[str, int], nase: dict[str, int] | None) -> bool:

@@ -603,3 +603,31 @@ def test_poll_lpp_pripne_in_zapise_pregled(monkeypatch):
     assert p["sparjenih"] == 2 and p["pari_danes"] == {"nacrt": 1, "ura": 1}
     assert [(x["linija"], x["voznj"]) for x in p["popravki"]] == [("27", 3)]
     assert json.loads(db.get_meta(c, "lpp_vozila_brez_voznje"))["vozila"] == []
+
+
+class _Sk:
+    """Skupina brez baze: vožnja -> ure po postajališču, polnoč 0."""
+
+    def __init__(self, voznje):
+        self.polnoc = 0
+        self.voznje = {t: {"start": min(u.values()), "ure": u} for t, u in voznje.items()}
+
+    def zamuda(self, tid, napovedi):
+        ure = self.voznje[tid]["ure"]
+        r = sorted(t - ure[s] for s, t in napovedi.items() if s in ure)
+        return r[len(r) // 2] if r else None
+
+
+def test_dvojnik_v_objavi_ni_tekmec():
+    """31. 10. 2026 (praznik): objava LPP ima enake dvojnike (linija 2: 47
+    skupin). Kandidatka 17:51 je imela dvojnika z isto zamudo in par po uri
+    je bil dvoumen -- živa vožnja brez zamude na tabli."""
+    ure = {"A": 64260, "B": 64380, "C": 64500}
+    sk = _Sk({"x2": dict(ure), "x1": dict(ure), "y": {s: t + 1500 for s, t in ure.items()}})
+    napovedi = {s: t + 160 for s, t in ure.items()}
+    assert zive._po_uri(sk, napovedi, ["x1", "x2", "y"]) == ("x1", 160)
+    # Je dvojnik zaseden (vozi ga avtobus pod svojim id-jem), je živa isti avtobus.
+    assert zive._po_uri(sk, napovedi, ["x1", "x2", "y"], {"x2"}) == ("x2", 160)
+    # Prava tekmica (druga ura) ostane tekmica.
+    sk = _Sk({"x1": dict(ure), "z": {s: t + 120 for s, t in ure.items()}})
+    assert zive._po_uri(sk, napovedi, ["x1", "z"]) is None
