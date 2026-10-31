@@ -3289,3 +3289,54 @@ Povod: 34 od 45 vozil Marproma brez vožnje v 7-minutnem vzorcu (`docs/OPAZOVANO
 
 **Priporočilo**: priklop samo tam, kjer vir vožnje ne pove in varianto ima (danes samo Marprom), in najprej brez zamude: lega in vožnja na zemljevidu. Zamuda iz leg šele po ponovitvi na jutranji konici in ob koncu tedna; vzorec je en petek popoldne.
 
+
+## Opazovano, del 3: izidi namesto niza, prikaz (31. 10. 2026)
+
+Arwen, branje `mode=ro`, stanje v `temp`, `lega` in `gps_prehod` 18.–30. 10. (13 dni). Ponovljivo: `kajros opazovano --baza … --racunaj`.
+
+**Zakaj niz ni bil dober.** Stanje iz niza dokazov, ki ga pretrga en prehod, je 22 od 131 ključev zapiralo in odpiralo znova (55 vrstic; Idrija Likerca in Podroteja petkrat v 13 dneh, N0389 Slamna vas dvakrat). Ponovna odprtja niso bila šum, ampak dve različni stvari, ki ju niz meša. Dan za dnem po vožnjah (P prehod, m mimo):
+
+```
+A6227 Tržič - Kranj AP, Naklo/Kr.   ob 5.50  .PPPPm..PPPmr     ob 7.25  ..mmmm..mmmmm   (11 voženj: 0 od 73)
+A6227 Kranj AP - Tržič, Naklo/Kr.   ob 19.55 .mmmPP..PPPmP     ob 12.55 .mmmmm..mmmmm
+N6217 Idrija, Podroteja             ob 10.25 mmmmPmmmmmPmm     ob 12.25 mmPmmmmmmmmmm   (6 od 172, vedno druga vožnja)
+```
+
+Pri A6227 vožnja ob 5.50 stalno pride, druge nikoli, ista trasa in isti postanki: na ključu niz napačen v obe smeri. Pri N6217 pridejo tu in tam: „ne ustavi“ ne drži, „ustavi“ pa tudi ne. Razlike ne loči ura in ne trasa, le delež po vožnji. Ko se zapora konča, en prehod še ne pove, ali je konec.
+
+**Novo.** Izid vsake vožnje (`opazovano_izid`, ključ + `start_s`, 21 dni) in stanje iz okna (`opazovano.presodi`):
+
+* `ne_ustavi`: vsaj 10 dokazov čez vsaj 24 h in nobenega prihoda, ali na koncu tak niz, pred njim pa je postajališče delovalo (začetek zapore).
+* `ne_ustavi` samo za nekatere vožnje: druge pridejo v vsaj polovici izidov (vsaj 3 izidi).
+* `redko`: pridejo tu in tam.
+* Nič: med zadnjimi 10 izidi vsaj 5 prihodov (spet deluje), ali zadnji izid starejši od 7 dni.
+
+Dokaz je tudi strožji: vozilo mora prevoziti vsaj pol postankov vožnje (N6217 36 %, A8530 38 %), sicer morda ni ta vožnja. OSM z drugim imenom ni več potrditev („Krško Š“ na „Krško - Resa“; ostane samo neimenovan, Ormož).
+
+| | niz (30. 10.) | izidi (31. 10.) |
+|---|---:|---:|
+| ključev z vrstico | 131 | 129 |
+| ključev z več epizodami | **22** | **0** |
+| odprtih | 105 | 112 (`ne_ustavi` 88, `redko` 24) |
+| za prikaz | 63 po starem pravilu | **74** na 30 imenih (59 `ne_ustavi`, 15 `redko`), 481 parov vožnja–postajališče |
+
+Hitrost: 13 dni 30 s (`nice -n 19`), delavnik 2,4 s, 34 903 izidov (5 671 dokazov, 1 189 ključev). Branje sledi je pred prvim pisanjem, zajem ne čaka. `za_prikaz` prvič 41 ms, nato 0,12 ms; na minuto preveri današnje prehode.
+
+**Ročna preverba 30 imen** (ne ogled na kraju: OSM, druge linije na istem postajališču, razdalja vozila od objavljene trase, hitrost ob najbližji točki):
+
+| kaj vozilo naredi | kje | dokaz |
+|---|---|---|
+| vozi po drugi cesti (vozilo ≥ 50 m od objavljene trase, ta gre mimo postajališča) | Focheva, Ormož bolnica, Okroglo, Polica/Kr., Škocjan/Kopru (tudi K), Podgora/Dobrepolju K, Šešče K | Focheva Večer 24. 9.; Polica: med prehodoma 15 km, torej avtocesta; Ormož 0 od 273 tudi druge linije |
+| ne zavije na krak (vozilo na objavljeni trasi, postajališče ≥ 400 m stran, prehoda ob isti uri) | Artiče, Biš, Biš Gomile, Medribnik, Medribnik Kolednik, Reber K, Straža pri Raki, Metlika, Križni Vrh, Cerkno, Marezige Plahuti K, Sv. Maver, Ruše GD in ŠC, Bodešče | druge linije tja pridejo (Artiče 225 od 226, Križni Vrh 100 od 100) ali OSM isto ime na koordinati |
+| Naklo/Kr., Naklo/Kr.vas | 13 + 3 vrstice, 437–468 m | OSM isto ime; A6227 stalna izjema zjutraj in zvečer. Druge linije tam vozijo 113–129 m stran (`MERITVE`, del 2), te pa še dlje |
+
+Nobena vrstica ni v nasprotju z dokazom, zunanjo potrditev pa ima le Focheva. **Krak ostaja odprto vprašanje**: ali gre vozilo na krak „po potrebi“, če kdo čaka, iz leg ni mogoče vedeti. Besedilo zato ne pravi „ne ustavi“, ampak „zadnje dni tu ni ustavljal“.
+
+**Prikaz.** Tabla, zveze, prestopi, pot, pristajalni strani in okno vožnje berejo samo `opazovano.za_prikaz`. `ne_ustavi` gre po isti poti kot obvoz LPP. Pristajalna relacije do zdaj tudi obvoza LPP ni upoštevala. Widget zvez (`limit`) vrstice ne dobi, ker `ne_ustavi` bere kot resnico, tu pa je „od“ ali „do“.
+
+**Zemljevid.** Strežnik pot vozil (sled zadnje vožnje z dokazom, pripeta z OSRM) vstavi namesto objavljenega odseka; črtkano ostane „po voznem redu“. Na kopiji 44 od 46 odsekov; 4 trase imajo lokalno še 2 točki (krožne, 3c2a25e), 2 ostaneta objavljeni (`N0542`, `N0728`, konca nista ob trasi). Sled mora segati 30 s čez oba prehoda: pri legi na 20 s je bila zadnja točka še na obvozu, do 260 m od trase (7 od 50 odsekov).
+
+**Česa še ne vemo.** Zapora Vrbanske od 3. 11. (P7) je prvi preizkus v živo: po zasnovi se odpre 5. 11. ob 3.30 (24 h), konec se pozna z istim dnem. Enodnevna (G3 Meljska) še vedno ne odpre. Posnetek OSM je z 30. 10. in se ne osvežuje sam. Končne postaje ne merimo.
+
+**Marprom, rok voznega reda.** Rumena vrstica „uradni zip ne pokrije tedna (5 od 7 dni brez voženj); velja kopija“ velja od 5. 10. in potnika ne zadeva: 31. 10. uradni [324, 324, 0, 0, 0, 0, 0], kopija [328, 328, 1136, 1136, 1136, 1136, 1136]. Pravi rok je drug: delavniki so v obeh zipih le do 31. 12. 2026, prvi običajni delavnik brez voženj je **ponedeljek, 4. 1. 2027**. `do` je kazal 20. 6. 2027 in zdravje bi molčalo; `gtfs.rok` vzame konec prve vrste dne, rdeče in pošta od 30. 12.
+
