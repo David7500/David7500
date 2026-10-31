@@ -526,6 +526,16 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
         elif mv.get("do"):
             out[vrstica] = (DOBRA, "")
 
+    # Avtobus, ki mu zamuda raste z uro (`collector.ura_namesto_zamude`): feed
+    # ga drži na vožnji, ki je morda ne vozi (31. 10. 2026 LPP 2 +66 min pri
+    # garaži). Do odločitve (`config.DRSI`) samo rumeno, s povezavami -- da
+    # skrbnik pogleda, ali je vozilo res obstalo ali feed laže.
+    fa = z.get("fantomi")
+    if fa is not None:
+        out["fantomi"] = ((MLACNA, f"zamuda raste z uro, vozilo morda ne vozi: "
+                                   f"{fa['n']} voženj ({'v senci' if fa.get('nacin') != 'vodi' else 'ne pišemo'})")
+                          if fa.get("n") else (DOBRA, ""))
+
     # Prikaz bere nočni račun (`opazovano.py`). Stare trditve po tednu odpadejo
     # same; račun, ki stoji, pa se sam ne zažene: oranžno.
     if z.get("opazovano_dan"):
@@ -606,6 +616,7 @@ IMENA = {
     "vozni_red_kranj": "vozni red Kranj",
     "vozni_red_ms": "vozni red MS (mestni)",
     "opazovano": "opazovano · nočni račun",
+    "fantomi": "avtobusi · zamuda raste z uro",
     "disk": "disk",
     "wal": "WAL",
 }
@@ -760,6 +771,9 @@ def primeri(z: dict) -> dict[str, list[dict]]:
            for p in ps]
     if lbz:
         out["lega_brez_zamude"] = lbz[:PRIMEROV]
+    fa = [_primer(p, p.get("prevoznik") or "") for p in (z.get("fantomi") or {}).get("voznje") or []]
+    if fa:
+        out["fantomi"] = fa[:PRIMEROV]
     bv = z.get("vozila_brez_voznje") or {}
     if bv.get("LPP"):
         out["neznane"] = [_primer(p) for p in bv["LPP"][:PRIMEROV]]

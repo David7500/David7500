@@ -494,6 +494,90 @@ def odpovedane(zdaj: float | None = None) -> frozenset:
     return frozenset(out)
 
 
+#: Ko feed vozilo drži na vožnji, ki je ne vozi (garaža, prejšnja vožnja),
+#: napove vsak postanek „zdaj + nekaj“: zamuda raste natanko z uro. 31. 10.
+#: 2026 LPP 2 ob 16:43 na Gornjem trgu +66 min, vozilo je stalo pri garaži,
+#: LPP-jevi zasloni vožnje niso kazali; 28.--30. 10. 15--19 voženj mestnega
+#: LPP na dan nad 40 min, od teh 8--19 z nagibom nad 0,8 (`docs/MERITVE.md`).
+#: Pravilo: zamuda PRVEGA napovedanega postanka (pred vozilom) raste vsaj z
+#: `DRSI_NAGIB` neprekinjeno `DRSI_NAJVEC_S`, postanek se ne zamenja in ni
+#: končna -- na končni LPP prihoda pogosto ne zazna in zamuda raste tudi pri
+#: pravi vožnji (`ura_na_koncni`; po zadnjem postanku 30. 10. 72 zadetkov, 25
+#: pod 20 min). Pravi zastoj 15 min brez premika tudi ustreza -- zato le v
+#: senci (`config.DRSI`), dokler teden meritev ne pove, koliko je katerih.
+DRSI_NAGIB = 0.8
+DRSI_NAJVEC_S = 900
+#: (vožnja, dan) -> [od_ts, zamuda ob od, zadnji_ts, zadnja zamuda, postanek, zavrnjena]
+_DRSI: dict[tuple[str, str], list] = {}
+#: Vožnje, ki jih varovalo ta hip zavrača -> od kdaj drsijo (za /admin).
+FANTOMI: dict[tuple[str, str], float] = {}
+
+
+def ura_namesto_zamude(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
+                       zamuda: int, ts: float) -> bool:
+    """Ali zamuda vožnje že `DRSI_NAJVEC_S` raste z uro (vožnja se ne piše).
+
+    `seq`, `zamuda`: prvi postanek v posodobitvi in njegova zamuda. Nagib je
+    povprečje od začetka drsenja, ne korak: napoved LPP pride v paketih na
+    ~90 s in en korak je lahko pod mejo, ura pa teče naprej. Ob prvem
+    zavrnjenem branju pobriše `run` od začetka drsenja -- pred tem zapisane
+    vrednosti so ista ura namesto zamude; `obs` jih obdrži."""
+    k = (trip_id, dan)
+    p = _DRSI.get(k)
+    if (p is None or p[4] != seq or ts - p[2] > 300 or zamuda < p[3] - 60
+            or ts - p[0] >= 120 and zamuda - p[1] < DRSI_NAGIB * (ts - p[0])):
+        _DRSI[k] = [ts, zamuda, ts, zamuda, seq, False]
+        FANTOMI.pop(k, None)
+        return False
+    if ts > p[2]:
+        p[2], p[3] = ts, zamuda
+    if ts - p[0] < DRSI_NAJVEC_S:
+        return False
+    if not p[5]:
+        p[5] = True
+        FANTOMI[k] = p[0]
+        if config.DRSI == "vodi":
+            conn.execute("DELETE FROM run WHERE trip_id = ? AND service_date = ? AND feed_ts >= ?",
+                         (trip_id, dan, int(p[0])))
+    return config.DRSI == "vodi"
+
+
+def _prva_zamuda(tu, sched, trip_id: str, dan: str, beri_delay: bool) -> tuple[int, int] | None:
+    """Prvi postanek posodobitve z zamudo (prihod, sicer odhod)."""
+    for stu in tu.stop_time_update:
+        vr = sched.get((trip_id, stu.stop_sequence))
+        z = _delay_of(stu, "arrival", vr, dan, beri_delay)
+        if z is None:
+            z = _delay_of(stu, "departure", vr, dan, beri_delay)
+        if z is not None:
+            return stu.stop_sequence, z
+    return None
+
+
+def _zapisi_fantome(conn: sqlite3.Connection) -> None:
+    """Vožnje, ki jim zamuda raste z uro, v `meta` -- /admin jih pokaže s
+    povezavo na zemljevid (`zdravje.primeri`)."""
+    out = []
+    for (t, dan), od in sorted(FANTOMI.items(), key=lambda x: x[1])[:PRIMEROV]:
+        r = conn.execute(
+            "SELECT t.train_no, t.headsign, t.agency, v.vehicle_id, v.lat, v.lon FROM trip t "
+            "LEFT JOIN vehicle_now v ON v.trip_id = t.trip_id AND v.service_date = ? "
+            "WHERE t.trip_id = ?", (dan, t)).fetchone()
+        if r:
+            out.append({"trip_id": t, "od": int(od), "agency": r[2], "vozilo": r[3],
+                        "lat": r[4], "lon": r[5], "oznaka": " ".join(
+                            x for x in (r[0], r[1] and f"→ {r[1]}") if x)})
+    db.set_meta(conn, "fantomi", json.dumps(
+        {"ts": int(time.time()), "n": len(FANTOMI), "nacin": config.DRSI, "voznje": out},
+        sort_keys=True))
+
+
+def _pozabi_drsenje(zdaj: float) -> None:
+    for k in [k for k, p in _DRSI.items() if zdaj - p[2] > 3600]:
+        del _DRSI[k]
+        FANTOMI.pop(k, None)
+
+
 def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
            pari: dict[str, str] | None = None, dvojniki=frozenset()) -> dict:
     """Zapiše spremembe zamud. Vrne števce za log.
@@ -562,6 +646,11 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
     # je bilo 38 od 44 voženj linije 1 neznanih, liniji 11 in 27 pa 3 in 4.
     proge: dict[str, list[int]] = {}
     odpovedano: set[tuple[str, str]] = set()
+    fantomov = 0
+    _pozabi_drsenje(time.time())
+    zadnji_seq: dict[str, int] = {}
+    for t, seq in sched:
+        zadnji_seq[t] = max(seq, zadnji_seq.get(t, seq))
 
     for entity in feed.entity:
         if not entity.HasField("trip_update"):
@@ -623,6 +712,15 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
                                   stats.polnoc(service_date))
 
         ts = tu.timestamp or feed_ts
+        # Avtobus, ki ga feed drži na vožnji, ki je ne vozi (`ura_namesto_zamude`).
+        # Vlakov ne: vodi jih zemljevid SŽ, vlak na postaji pa zamudo nabira res.
+        if (config.DRSI != "0" and zamenjava is None
+                and agencije.get(trip_id) != config.RAIL_AGENCY_ID):
+            prvi = _prva_zamuda(tu, sched, trip_id, service_date, beri_delay)
+            if prvi and prvi[0] != zadnji_seq.get(trip_id) and ura_namesto_zamude(
+                    conn, trip_id, service_date, *prvi, ts):
+                fantomov += 1
+                continue
         for stu in tu.stop_time_update:
             if stu.schedule_relationship != 0:
                 non_scheduled += 1
@@ -722,7 +820,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
             "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts,
             "neznanih": neznanih, "zamenjanih": zamenjanih, "pripetih": pripetih,
-            "proge": proge}
+            "fantomov": fantomov, "proge": proge}
 
 
 def _zapisi_neznane(conn: sqlite3.Connection, kljuc: str, izid: dict) -> None:
@@ -827,6 +925,7 @@ def poll_once(conn: sqlite3.Connection) -> dict:
                 json.dumps(lega_brez_zamude(conn, datetime.now(TZ), primeri), sort_keys=True))
     db.set_meta(conn, "lega_brez_zamude_primeri", json.dumps(
         {ag: v[:PRIMEROV] for ag, v in primeri.items()}, sort_keys=True))
+    _zapisi_fantome(conn)
     conn.commit()
     return izid
 
@@ -931,6 +1030,7 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     zv = zive.razresi(conn, feed)
     izid = ingest(conn, feed, vir="lpp", pari=zv["pari"], dvojniki=zv["dvojniki"])
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
+    _zapisi_fantome(conn)
     brez_voznje: list[dict] = []
     lege = ingest_positions(conn, feed, brez_voznje, zv["pari"], vir="lpp")
     _zapisi_brez_voznje(conn, izid.pop("proge"),

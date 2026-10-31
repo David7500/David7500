@@ -1732,6 +1732,15 @@ def api_health():
         out["lega_brez_zamude_primeri"] = {
             stats.AGENCY_NAMES.get(ag, ag): v for ag, v in json.loads(lbp).items()
         } if lbp else {}
+        # Vožnje, ki jim zamuda raste z uro (`collector.ura_namesto_zamude`).
+        try:
+            fa = json.loads(db.get_meta(conn, "fantomi") or "{}")
+        except ValueError:
+            fa = {}
+        if fa:
+            for v in fa.get("voznje") or []:
+                v["prevoznik"] = stats.AGENCY_NAMES.get(v.get("agency"), v.get("agency"))
+        out["fantomi"] = fa or None
         out["vozila_brez_voznje"] = {}
         for kljuc, ag in (("lpp_vozila_brez_voznje", "LPP"),
                           ("marprom_vozila_brez_voznje", "Marprom")):

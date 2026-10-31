@@ -3342,3 +3342,28 @@ Nobena vrstica ni v nasprotju z dokazom, zunanjo potrditev pa ima le Focheva. **
 
 **Marprom, rok voznega reda.** Rumena vrstica „uradni zip ne pokrije tedna (5 od 7 dni brez voženj); velja kopija“ velja od 5. 10. in potnika ne zadeva: 31. 10. uradni [324, 324, 0, 0, 0, 0, 0], kopija [328, 328, 1136, 1136, 1136, 1136, 1136]. Pravi rok je drug: delavniki so v obeh zipih le do 31. 12. 2026, prvi običajni delavnik brez voženj je **ponedeljek, 4. 1. 2027**. `do` je kazal 20. 6. 2027 in zdravje bi molčalo; `gtfs.rok` vzame konec prve vrste dne, rdeče in pošta od 30. 12.
 
+
+## Viri na praznik in ura namesto zamude (31. 10. 2026)
+
+Pregled opozoril v `/admin` (praznik, sobota). Vse na arwenu, samo branje.
+
+**„vožnje brez voznega reda: LPP 1–2 od 105“ = žive vožnje linije 2 brez para.** Objavljeni vozni red LPP ima za 31. 10. in 1. 11. **75 skupin enakih dvojnikov** (ista proga, vzorec, vse ure postankov; 77 od 81 skupin z istim `block_id`), od tega 47 na liniji 2, 17 na 19B, 10 na N3. Navaden dan 2–5 enakih (30. 10.: 2 od 15 skupin z istim začetkom, 2. 11.: 5 od 23). Par po uri (`zive._po_uri`) je zato dvoumen: kandidatka 17:51 ima dvojnika z isto zamudo +2,7 min → brez para. Vozilo s slike (d5498517) pa ni dvojnik: kandidatka 17:18 vozi pod svojim id-jem, naslednja 17:00 je +12,9 min, zunaj okna −4 … +10. Potnik: vozilo na zemljevidu „zamuda ni znana · vožnja mimo voznega reda“, tabla objavljeno brez zamude.
+
+**Ura namesto zamude (LPP).** Tabla Gornji trg ob 17:30: LPP 2 po voznem redu 16:43 **+66 min**. Vožnja a803be8f (16:25–17:06) v feedu pod svojim id-jem z vozilom 02a84fba, ki je stalo (hitrost 0) pri 46,0768, 14,4878 (garaža); zamude vseh postankov so rasle z uro (16:54 Žale +28, 17:28 +62, 17:30 +65), LPP-jevi zasloni vožnje niso kazali (`lpp_zamuda` 0 vrstic). Vožnje mestnega LPP nad 40 min v `run`:
+
+| dan | voženj | nad 40 min | od tega nagib > 0,8 |
+|---|---|---|---|
+| 28. 10. | 2 120 | 23 | 19 |
+| 29. 10. | 2 152 | 19 | 8 |
+| 30. 10. | 2 111 | 17 | 15 |
+| 31. 10. (do 17:30) | 774 | 3 | 2 |
+
+(p99 prave zamude LPP je +23 min, `zajem.md`.) Te vrednosti gredo tudi v statistiko. Ponovitev varovala (`collector.ura_namesto_zamude`, nagib ≥ 0,8 neprekinjeno 15 min) na `obs`:
+* po **zadnjem** postanku 28.–30. 10.: 2, 1, 72 zadetkov, od tega 2, 1, 25 z največjo zamudo pod 20 min — na končni LPP prihoda ne zazna (`ura_na_koncni`), to so prave vožnje;
+* po **prvem** napovedanem postanku, brez končne: 29, 37, 2, 1 (28.–31. 10.), največje zamude 13–74 min. Dnevi se ne ujemajo z deležem nad 40 min, del so bržkone pravi zastoji. Zato **senca** (`KAJROS_DRSI=senca`): šteje in pokaže v `/admin` s povezavo, ne briše. Odločitev po tednu: zadetke ročno primerjati z lego vozila na zemljevidu.
+
+Pravilo „vozilo > 800 m od vseh postankov svoje vožnje“ ob 18:00 ujame le 2 od 52 vozil LPP, obe z lego 0,0 (brez GPS) — za fantome neuporabno.
+
+**„vozila brez zamude: Arriva 1 od 18“ = A8426 Ljubljana AP → Koper (16:45).** Vozilo 1301553: NAP ga je 31. 10. videl 1 488-krat **brez naše vožnje** (`straza_opazeno`), derp.si na vožnjah 432192 in 432202. 30. 10. ga je NAP pripel normalno. Ker NAP vodi Arrivo, derp-ovih zamud ne beremo → brez zamude. `meta.nap` ob 17:30: pripetih 73, `brez_dneva` 13 (vožnja obstaja, a po našem koledarju danes ne vozi). Vozila, ki jih NAP kak čas ni pripel (≥ 100 vzorcev), derp.si pa: 30. 10. 215 (ob 541 pripetih), 31. 10. 135 (ob 170) — vsebuje tudi obrate med vožnjami, zato ni čista mera izgube.
+
+**„uradni zip ne pokrije tedna; velja kopija“** = Marprom, znano (rok 4. 1. 2027, `marprom-obvoz`).

@@ -239,6 +239,11 @@ ZAMUDA_IZ_LEGE = okolje("ZAMUDA_IZ_LEGE", "1") != "0"
 # 89,7 %), "senca" meri ob iz_lege samo v `gps_prehod`, "0" izklopi -- takrat
 # teče stari način. Ta ostane kot rezerva do 27. 10. 2026; če vodi drži, gre ven.
 PREHOD_GPS = okolje("PREHOD_GPS", "vodi")
+# Avtobus, ki mu zamuda raste z uro (`collector.ura_namesto_zamude`): `senca`
+# (privzeto) samo šteje in pokaže v /admin, `vodi` vožnje ne piše in pobriše,
+# kar je napisala med drsenjem, `0` nič. Senca od 31. 10. 2026: ponovitev na
+# 28.--31. 10. je dala 29, 37, 2 in 1 vožnjo na dan, del bržkone pravi zastoji.
+DRSI = okolje("DRSI", "senca")
 # Sencno merjenje napovedi (`ocena.py`). Tece ob strezniku in samo bere.
 # Razmik 120 s: posnetek se zapise enkrat na postanek (kljuc tabele), zato
 # gostejsi obhod ne da vec vrstic, le vec praznih poizvedb.
