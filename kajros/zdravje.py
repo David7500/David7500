@@ -360,12 +360,14 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
     # Mestni vozni redi (`gtfs.download_mestni`): do kdaj velja zip, ki ga
     # uvoz res vzame, in ali je to izvirnik. Uradni zip Marproma od 5. 10. 2026
     # ne pokrije tedna -- uvoz vzame kopijo, potnik ne izgubi nič; rumeno, da
-    # skrbnik ve, komu pisati.
+    # skrbnik ve, komu pisati. `rok` = kdaj se konča prva vrsta dne: pri kopiji
+    # delavniki 31. 12. 2026, `do` pa šele 20. 6. 2027.
     danes = datetime.fromtimestamp(zdaj, TZ).date()
     for kljuc, mv in (z.get("mestni_vozni_red") or {}).items():
         vrstica, viri_ = f"vozni_red_{kljuc}", mv.get("viri") or []
+        d = None
         if mv.get("do"):
-            d = date.fromisoformat(mv["do"])
+            d = date.fromisoformat(mv.get("rok") or mv["do"])
             dni = (d - danes).days
             if dni < VOZNI_RED_RDECE_DNI:
                 out[vrstica] = (SLABA, f"vozni red {_do(dni, d)}")
@@ -380,7 +382,9 @@ def ocena(z: dict, m: dict, zdaj: float | None = None) -> dict[str, tuple[str, s
                      f"{len(uradni.get('pokrito') or ())} dni brez voženj")
             kopija = any(v.get("sprejet") for v in viri_[1:])
             out[vrstica] = (MLACNA, f"uradni zip ne pokrije tedna ({zakaj}); "
-                            + ("velja kopija" if kopija else "ostane zadnji sprejeti"))
+                            + ("velja kopija" if kopija else "ostane zadnji sprejeti")
+                            + (f", del voznih redov se konča {d.day}. {d.month}."
+                               if d and mv.get("rok") and mv["rok"] != mv["do"] else ""))
         elif mv.get("do"):
             out[vrstica] = (DOBRA, "")
 

@@ -34,10 +34,10 @@ def _mp_zip(koledar: str, voznje=(("101714", "10:50"), ("101715", "11:20"))) -> 
         zf.writestr("routes.txt", "route_id,agency_id,route_short_name,route_long_name,route_type\n"
                                   '73,3,"P7","Kamnica",3\n')
         zf.writestr("trips.txt", "route_id,service_id,trip_id,trip_headsign,shape_id\n"
-                    + "".join(f"73,8860,{t},Avtobusna postaja - Kamnica,6970\n"
-                              for t, _ in voznje))
+                    + "".join(f"73,{(sv or ['8860'])[0]},{t},Avtobusna postaja - Kamnica,6970\n"
+                              for t, _, *sv in voznje))
         vrstice = []
-        for t, ura in voznje:
+        for t, ura, *_ in voznje:
             h, m = map(int, ura.split(":"))
             for seq, (sid, plus) in enumerate((("192", 0), ("91", 6), ("120", 15)), 1):
                 c = f"{h + (m + plus) // 60:02d}:{(m + plus) % 60:02d}:00"
@@ -135,6 +135,20 @@ def test_pokritost_zavrne_poletni_zip_in_vzame_solskega(tmp_path):
     assert gtfs.sprejmi([2, 2, 2, 2, 2, 0, 2]), "en prazen dan sme biti"
     assert gtfs.sprejmi(pk, praznih=3), "Kranj ob nedeljah ne vozi"
     assert not gtfs.sprejmi([0] * 7, praznih=7), "prazen zip ni vozni red"
+
+
+def test_rok_je_konec_prve_vrste_dne(tmp_path):
+    """Kopija Marproma: `do` 20. 6. 2027, delavniki pa do 31. 12. 2026."""
+    z = tmp_path / "kopija.zip"
+    z.write_bytes(_mp_zip("8860,1,1,1,1,1,0,0,20260901,20261231\n"
+                          "8727,0,0,0,0,0,1,1,20260901,20270620\n",
+                          voznje=(("1", "10:50", "8860"), ("2", "10:50", "8727"))))
+    assert gtfs._zadnji_dan(z) == "2027-06-20"
+    assert gtfs.rok(z, DAN) == "2026-12-31"
+    # Po roku ostane rok, dokler je blizu: to je ravno takrat, ko šteje ...
+    assert gtfs.rok(z, "2027-01-04") == "2026-12-31"
+    # ... mesec pozneje je to sezona, velja naslednja vrsta.
+    assert gtfs.rok(z, "2027-03-01") == "2027-06-19"    # zadnja sobota
 
 
 class _Odgovor:
@@ -318,6 +332,11 @@ def test_zdravje_marprom():
     # Vozni red, ki ga uvoz res vzame, se izteče: rdeče dva dni prej.
     kmalu = (date.fromtimestamp(ZDAJ) + timedelta(days=1)).isoformat()
     assert ocena(dobro, {**mv, "do": kmalu})["vozni_red_marprom"][0] == zdravje.SLABA
+    # Delavniki se končajo prej kot sobote: rok šteje, ne `do`.
+    assert ocena(dobro, {**mv, "rok": kmalu})["vozni_red_marprom"][0] == zdravje.SLABA
+    cez_mesec = (date.fromtimestamp(ZDAJ) + timedelta(days=30)).isoformat()
+    raz, razlog = ocena(dobro, {**mv, "rok": cez_mesec})["vozni_red_marprom"]
+    assert raz == zdravje.MLACNA and "del voznih redov se konča" in razlog
 
 
 def test_manjkajoci_vir_osvezi_ob_zagonu(monkeypatch):

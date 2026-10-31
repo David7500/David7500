@@ -212,6 +212,8 @@ KR, KRANJ_AGENCIJA = "kr-", "kranj"
 
 #: Koliko dni od danes mora zip pokriti, da ga vzamemo.
 POKRITOST_DNI = 7
+#: Vrsta dne, ki se je končala pred toliko dnevi, ni več rok, ampak sezona.
+ROK_NAZAJ_DNI = 30
 
 #: Ime, ki ga ima drugje postajališče dlje od tega, dobi kraj v oklepaju.
 RAZLOCI_IME_M = 5000
@@ -301,6 +303,26 @@ def pokritost(zip_path: Path, danes: str | None = None,
     return out
 
 
+def rok(zip_path: Path, danes: str | None = None) -> str | None:
+    """Zadnji dan tiste vrste dne (delavnik, sobota, nedelja), ki se konča prva.
+
+    `_zadnji_dan` čez vse storitve skrije, da delavnikov ni več: kopija Marproma
+    velja do 20. 6. 2027, delavniki pa do 31. 12. 2026, in zdravje ne bi reklo
+    nič do 4. 1. 2027, ko bi Maribor med tednom ostal brez voznega reda. Vrsta,
+    ki se je končala pred več kot `ROK_NAZAJ_DNI`, je sezona, ne rok.
+    """
+    with zipfile.ZipFile(zip_path) as zf:
+        dnevi = _service_days(zf, {t["service_id"] for t in _rows(zf, "trips.txt")})
+    zadnji: dict[int, str] = {}
+    for ds in dnevi.values():
+        for d in ds:
+            vrsta = max(date.fromisoformat(d).weekday(), 4)     # pon-pet = delavnik
+            zadnji[vrsta] = max(zadnji.get(vrsta, d), d)
+    meja = (date.fromisoformat(danes or datetime.now(TZ).date().isoformat())
+            - timedelta(days=ROK_NAZAJ_DNI)).isoformat()
+    return min((d for d in zadnji.values() if d >= meja), default=None)
+
+
 def sprejmi(pokrito: list[int], praznih: int = 1) -> bool:
     return sum(1 for n in pokrito if n == 0) <= praznih and any(pokrito)
 
@@ -338,6 +360,7 @@ def download_mestni(conn: sqlite3.Connection, vir: MestniVir,
                 b.bajtov = _shrani(resp, tmp)
             zapis["pokrito"] = pokritost(tmp)
             zapis["do"] = _zadnji_dan(tmp)
+            zapis["rok"] = rok(tmp)
         except Exception as exc:        # noqa: BLE001 -- vir ni naš, drugi ostane
             zapis["napaka"] = str(exc)[:200]
             tmp.unlink(missing_ok=True)
@@ -351,10 +374,11 @@ def download_mestni(conn: sqlite3.Connection, vir: MestniVir,
             tmp.unlink(missing_ok=True)
         pregled.append(zapis)
     # Do kdaj velja zip, ki ga uvoz res vzame -- sprejeti ali zadnji na disku.
-    do = next((z["do"] for z in pregled if z["sprejet"]), None) if izbran else (
-        _zadnji_dan(target) if target.exists() else None)
+    sprejeti = next((z for z in pregled if z["sprejet"]), None)
+    do, do_rok = (sprejeti["do"], sprejeti["rok"]) if sprejeti else (
+        (_zadnji_dan(target), rok(target)) if target.exists() else (None, None))
     db.set_meta(conn, f"{vir.kljuc}_vozni_red", json.dumps(
-        {"ts": int(datetime.now(TZ).timestamp()), "viri": pregled, "do": do},
+        {"ts": int(datetime.now(TZ).timestamp()), "viri": pregled, "do": do, "rok": do_rok},
         ensure_ascii=False))
     conn.commit()
     if izbran is None:
