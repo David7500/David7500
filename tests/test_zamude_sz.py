@@ -478,7 +478,7 @@ def test_nit_po_zaklenjeni_bazi_ne_obstane(tmp_path, monkeypatch):
         conn.commit()
         uspelih.append(len(klicev))
         stop.set()
-        return {"vlakov": 0, "zapisanih": 0, "nepripetih": 0}
+        return {"vlakov": 3, "zapisanih": 3, "nepripetih": 0}
 
     monkeypatch.setattr(zamude_sz, "korak", korak)
     nit = threading.Thread(target=zamude_sz.teci, args=(stop, lambda _: None))
@@ -521,3 +521,26 @@ def test_brez_vlakov_sz_vrne_null(monkeypatch):
     monkeypatch.setattr(zamude_sz.brskalnik, "zahtevaj", lambda pot: '{"napaka": 1}')
     with pytest.raises(RuntimeError, match="seznama vlakov"):
         zamude_sz._get()
+
+
+def test_prazen_zemljevid_ne_utisa_derp(tmp_path, monkeypatch):
+    """Presoja 31. 10. 2026: `null` ob vlakih po voznem redu je prej veljal za
+    uspešno branje in derp.si vlakov ni pisal -- nobena zamuda vlaka nikjer.
+    Vodi samo zemljevid, ki ima vlak, ki ga pripnemo."""
+    import threading
+    pot = tmp_path / "k.sqlite"
+    pravi = db.connect
+    monkeypatch.setattr(db, "connect", lambda path=None: pravi(pot))
+    for izid, vodi in (({"vlakov": 0, "zapisanih": 0, "nepripetih": 0}, False),
+                       ({"vlakov": 4, "zapisanih": 0, "nepripetih": 4}, False),
+                       ({"vlakov": 4, "zapisanih": 2, "nepripetih": 1}, True)):
+        monkeypatch.setattr(iz_lege, "_sz_ts", 0.0)
+        stop = threading.Event()
+        monkeypatch.setattr(zamude_sz, "_get", lambda: [])
+
+        def korak(conn, vrstice, zdaj, nespremenjeno=False, izid=izid):
+            stop.set()
+            return izid
+        monkeypatch.setattr(zamude_sz, "korak", korak)
+        zamude_sz.teci(stop, lambda _: None)
+        assert iz_lege.sz_vodi() is vodi, izid

@@ -521,7 +521,12 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                 prej = _odtis
                 vrstice = _get()
                 s = korak(conn, vrstice, zdaj, nespremenjeno=prej is not None and _odtis == prej)
-                iz_lege.sz_prebran(zdaj)
+                # Zemljevid vodi (derp.si vlakov ne piše, `iz_lege.sz_vodi`) samo,
+                # kadar ima vlak, ki ga pripnemo. Prazen (`null`) ob vlakih je
+                # prej utišal derp.si za vse vlake -- nobena zamuda vlaka nikjer
+                # (presoja 31. 10. 2026). Ponoči je prazen po pravici.
+                if s.get("vlakov", 0) > s.get("nepripetih", 0):
+                    iz_lege.sz_prebran(zdaj)
                 if napak or prvic:
                     log(f"zemljevid SŽ {'spet ' if napak else ''}odgovarja"
                         f"{f' (po {napak} napakah)' if napak else ''}: {s['vlakov']} vlakov, "

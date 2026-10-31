@@ -289,3 +289,16 @@ def test_prehodna_zavrnitev_prijave_ne_cakaj_deset_minut():
     assert nap.cakaj_po_zavrnitvi(3, 180) == nap.NI_DOSTOPA_CAKAJ_S
     # Brez uspeha v zadnji uri (ali od zagona) je zavrnitev prava.
     assert nap.cakaj_po_zavrnitvi(1, 1e9) == nap.NI_DOSTOPA_CAKAJ_S
+
+
+def test_nap_vodi_le_ko_kaj_pripne(monkeypatch):
+    """Presoja 31. 10. 2026: prazen ali nepripet odgovor 200 je prej vodil in
+    derp.si se za medkrajevne ni vklopil -- vozila brez zamud."""
+    monkeypatch.setattr(iz_lege, "_nap_ts", 0.0)
+    c = _baza()
+    nap.korak(c, _odgovor(), ZDAJ)                                # prazen
+    assert not iz_lege.nap_vodi("1123", ZDAJ)
+    nap.korak(c, _odgovor(_va("950133", 9999, ZDAJ - 20)), ZDAJ)  # vožnje ne poznamo
+    assert not iz_lege.nap_vodi("1123", ZDAJ)
+    nap.korak(c, _odgovor(_va("950133", 1001, ZDAJ - 20)), ZDAJ)
+    assert iz_lege.nap_vodi("1123", ZDAJ)

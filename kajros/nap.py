@@ -320,11 +320,16 @@ def _iz_lege(conn: sqlite3.Connection, v: dict, derp: dict | None, zdaj: float) 
 def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     """En odgovor NAP: razberi, primerjaj, pripni, zapiši, povzemi v `meta`."""
     vozila, st = razberi(vsebina, zdaj)
-    iz_lege.nap_prebran(zdaj)
     derp = collector.lege_derp(zdaj, DERP_SVEZE_S)
     st.update(primerjaj(vozila, derp))
     pripeta, s = pripni(conn, vozila, zdaj)
     st.update(s)
+    # NAP vodi (derp.si za medkrajevne utihne, `iz_lege.nap_vodi`) samo, kadar
+    # res kaj da. Prazen, zamrznjen ali nepripet odgovor 200 je prej vodil in
+    # derp.si se ni vklopil -- medkrajevni brez zamud (presoja 31. 10. 2026).
+    # Ponoči je pripetih nič po pravici; takrat derp.si tudi nima česa dati.
+    if pripeta:
+        iz_lege.nap_prebran(zdaj)
     st.update(zapisi(conn, pripeta, derp, zdaj))
     st.update(ts=int(zdaj), bajtov=len(vsebina),
               gps={**prehod.stevci, "nacin": config.PREHOD_GPS})
