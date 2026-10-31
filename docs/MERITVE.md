@@ -3457,7 +3457,9 @@ postanek) in `obs` (sprememba zamude) ob ≥ 3 vlakih po voznem redu: mediana
 
 Posnetek produkcije 21:28–21:45 (4 krogi, 466 oken, 358 leg), podrobno
 `docs/presoja/2026-10-31-napovedi.md`. Živa napoved LPP za vozilom (naslednji
-obisk): 14 od 1 292 živih postankov na 2 od 69 oken, do +91 — popravljeno.
+obisk): 14 od 1 292 živih postankov na 2 od 69 oken, do +91. Odloča vrsta
+prihoda, ne najmanjši eta (11 od teh 14 je bilo pred vozilom; branje 22:22:
+za vozilom vrsta 1 20 od 20, 0 in 2 nič; samo eno večerno branje, podnevi še ne).
 Medkrajevni NAP, `gps_prehod` 28.–30. 10.: zamuda naslednjega prehoda minus
 zadnjega, odsek < 5 min 0,5 % nad 5 min, 15–30 min 12,2 %, ≥ 30 min 45,2 %
 (50 % ≥ 3 min prej); 164–203 voženj na dan. Ocena iz lege (zračno) proti

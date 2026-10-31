@@ -2303,6 +2303,28 @@ def test_zivi_lpp_za_vozilom_ni_napovedi(conn, monkeypatch):
     assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {3: 1, 4: 4}
 
 
+def test_zivi_lpp_odloci_vrsta_ne_najmanjsi_eta(conn, monkeypatch):
+    """Najmanjši eta ni vedno kraj vozila. LPP 14, 31. 10. 2026: Čerinova je
+    obvoz s stalnim eta 1, vozilo pri postanku 16. Po samem eta je odpadlo
+    11 pravih številk pred vozilom, ostala pa je Čerinova „v živo“."""
+    from kajros import lpp
+    _lpp_voznja(conn)
+    kraji = [("ZALOG", 46.0628, 14.6033), ("Silos", 46.0640, 14.5900),
+             ("Polje", 46.0650, 14.5800), ("Nove Fužine", 46.0660, 14.5700)]
+
+    def odgovor(*prihodi):
+        return [{"name": ime, "latitude": lat, "longitude": lon,
+                 "arrivals": [{"vehicle_id": "V1", "eta_min": eta, "type": vrsta}]}
+                for (ime, lat, lon), (eta, vrsta) in zip(kraji, prihodi)]
+
+    # Za vozilom načrt (naslednji obisk), naprej napoved, na koncu obvoz z eta 1.
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: odgovor((50, 1), (2, 0), (4, 2), (1, 3)))
+    assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {2: 2, 3: 4}
+    # Samo načrt: od najmanjšega naprej, kot pri prevoženem izhodišču.
+    monkeypatch.setattr(lpp, "_prinesi", lambda vzorec: odgovor((60, 1), (5, 1), (7, 1), (9, 1)))
+    assert lpp.eta_po_postankih(conn, "a|b|c", "V1") == {2: 5, 3: 7, 4: 9}
+
+
 class _PocasenLpp:
     """`requests.Session` namesto data.lpp.si: odgovori po `zakasnitev` s."""
 

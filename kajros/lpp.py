@@ -156,9 +156,12 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
         return None
 
     out: dict[int, int] = {}
+    zivi: set[int] = set()
     for postaja in podatki:
+        # Obvoz (vrsta 3) ima stalen eta 1, tudi kjer vozilo sploh ne ustavi:
+        # LPP 14 Čerinova, 31. 10. 2026.
         prihodi = [a for a in postaja.get("arrivals", [])
-                   if a.get("vehicle_id") == vehicle_id]
+                   if a.get("vehicle_id") == vehicle_id and a.get("type") != 3]
         if not prihodi:
             continue
         lat, lon = postaja.get("latitude"), postaja.get("longitude")
@@ -169,11 +172,13 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
             d = geo.haversine(lat, lon, n["lat"], n["lon"])
             if d < najd:
                 najd, naj = d, n
-        if naj is not None:
+        if naj is not None and naj["stop_seq"] not in out:
             # Isto postajalisce je lahko na vozji dvakrat (krozna linija);
             # velja PRVI prihod, ker je to tisti, ki potnika zanima.
-            out.setdefault(naj["stop_seq"],
-                           max(0, min(a["eta_min"] for a in prihodi) - starost))
+            napoved = [a for a in prihodi if a.get("type") in ZIVE]
+            out[naj["stop_seq"]] = max(0, min(a["eta_min"] for a in napoved or prihodi) - starost)
+            if napoved:
+                zivi.add(naj["stop_seq"])
     if not out:
         return None
     # **Za vozilom ta vožnja napovedi nima.** Postajališče, ki ga je vozilo že
@@ -184,8 +189,17 @@ def eta_po_postankih(conn: sqlite3.Connection, trip_id: str,
     # je kazal Zelena jama +92, Friškovec in Kolodvor +90 „v živo“, ocena
     # naprej od +92 pa še 16 postankov, ure so padle s 22:48 na 21:25. Meje
     # meritve tam ni bilo (derp.si vožnje ne nosi), zato je `api._lpp_zivo`
-    # ni mogel upoštevati. Vozilo je pred postankom z najmanjšim eta (pri
-    # enakem prvi): vse pred njim je za to vožnjo prevoženo.
+    # ni mogel upoštevati.
+    #
+    # Naslednji obisk je vrsta 1 (načrt), napoved iz žive lege pa je pred
+    # vozilom (branje 31. 10. 2026 ob 22:22: za vozilom vrsta 1 20 od 20, 0 in
+    # 2 nič), zato odloči vrsta. Samo najmanjši eta ne: na LPP 14 je „lego“
+    # dal obvoz ali končna z eta 1 in 11 od 14 odvzetih postankov je bilo pred
+    # vozilom; 3 od 29 vozil v tistem branju.
+    if zivi:
+        return {seq: m for seq, m in out.items() if seq in zivi}
+    # Samo načrt (vozilo še ni odpeljalo): pred postankom z najmanjšim eta (pri
+    # enakem prvi) je vse za to vožnjo prevoženo.
     zacetek = min(out, key=lambda seq: (out[seq], seq))
     return {seq: m for seq, m in out.items() if seq >= zacetek}
 
@@ -227,6 +241,8 @@ DERP_MOLCI_S = 300
 
 #: Vrste prihoda po dokumentaciji LPP (`data.lpp.si/doc`, polje `type`).
 VRSTE = {0: "napoved", 1: "po načrtu", 2: "prihaja", 3: "obvoz"}
+#: Vrsti, ki sta napoved iz žive lege.
+ZIVE = frozenset({0, 2})
 
 #: Seznam postajališč se spreminja z voznim redom, ne s tablo.
 _POSTAJE_TTL_S = 24 * 3600

@@ -54,8 +54,6 @@ from . import collector, config, db, iz_lege, lpp, stats, viri, zdravje, zive
 
 _URL = "https://data.lpp.si/api/station/arrival"
 
-#: Vrste prihoda, ki so napoved iz žive lege (`lpp.VRSTE`).
-ZIVE = frozenset({0, 2})
 #: Zamuda, pri kateri derp-ova vožnja vozila sploh pride v poštev.
 DERP_OKNO_S = (-600, 3600)
 #: Vozilo je še na derp-ovi vožnji, kadar se LPP-jeva zamuda z zadnjo znano
@@ -204,7 +202,7 @@ def razberi(odgovori: list[tuple[str, float, list]], kode: dict[str, str],
                 # vožnjo brez voznega reda na objavljeno z isto uro.
                 zive.zabelezi_nacrt(p["vehicle_id"], p["trip_id"], sid,
                                     ts + 60 * int(p["eta_min"]), ts)
-            if p.get("depot") or p.get("type") not in ZIVE:
+            if p.get("depot") or p.get("type") not in lpp.ZIVE:
                 continue
             st["zivih"] += 1
             # LPP vozi tudi vožnje, ki jih objavljeni vozni red nima (`zajem.md`).
