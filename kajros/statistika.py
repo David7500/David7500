@@ -942,7 +942,7 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
         "napoved": nap["skupaj"]["na_poti"]["vse"],
         "napoved_od": nap.get("od"), "napoved_do": nap.get("do"),
         "horizont_min": nap.get("horizont_min"),
-        "meseci": seznam_mesecev(conn)[:6],
+        "meseci": seznam_mesecev(conn, 6),
         "min_vzorec": MIN_VZOREC, "min_prehodov": MIN_PREHODOV,
     }
 
@@ -1663,10 +1663,13 @@ def mesec_indeksiraj(p: dict) -> bool:
                for o in p["omrezja"].values())
 
 
-def seznam_mesecev(conn: sqlite3.Connection) -> list[dict]:
-    """Zamrznjeni meseci, najnovejši prvi: kazalo na pregledu in v API-ju."""
+def seznam_mesecev(conn: sqlite3.Connection, najvec: int = -1) -> list[dict]:
+    """Zamrznjeni meseci, najnovejši prvi: kazalo na pregledu in v API-ju.
+    `najvec` omeji branje (JSON enega meseca je ~35 kB, pregled ga bere ob
+    vsakem obisku)."""
     out = []
-    for mesec, podatki in conn.execute("SELECT mesec, podatki FROM stat_mesec ORDER BY mesec DESC"):
+    for mesec, podatki in conn.execute(
+            "SELECT mesec, podatki FROM stat_mesec ORDER BY mesec DESC LIMIT ?", (najvec,)):
         p = json.loads(podatki)
         om = p["omrezja"]
         out.append({
@@ -1688,7 +1691,7 @@ def stran_mesec(conn: sqlite3.Connection, mesec: str) -> dict | None:
     p = zamrznjen_mesec(conn, mesec)
     if p is None:
         return None
-    vsi = sorted(m["mesec"] for m in seznam_mesecev(conn))
+    vsi = [m for (m,) in conn.execute("SELECT mesec FROM stat_mesec ORDER BY mesec")]
     i = vsi.index(mesec)
     zamrznjeno = datetime.fromisoformat(p["zamrznjeno"]) if p.get("zamrznjeno") else None
 
