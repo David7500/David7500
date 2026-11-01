@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS tocke (
     vozilo   TEXT NOT NULL,
     vir      TEXT NOT NULL,
     od_ts    INTEGER NOT NULL,      -- naša ura ob prvem vzorcu kosa
-    do_ts    INTEGER NOT NULL,
+    do_ts    INTEGER NOT NULL,      -- naša ura ob zapisu: ura naprave zna biti leta zadaj
     n        INTEGER NOT NULL,
     vsebina  BLOB NOT NULL,         -- zlib, JSON [[ts, lat, lon, sprotno], ...]
     PRIMARY KEY (vozilo, vir, od_ts)
@@ -430,7 +430,7 @@ def izprazni(conn: sqlite3.Connection, zdaj: float | None = None, vse: bool = Fa
             del _narobe[k]
         for k in [k for k, ts in _zamude_ts.items() if zdaj - ts > POZABI_S]:
             del _zamude_ts[k]
-    vrstice = [(vozilo, vir, od, max(t[0] for t in tocke), len(tocke), _kos(tocke))
+    vrstice = [(vozilo, vir, od, int(zdaj), len(tocke), _kos(tocke))
                for vozilo, vir, od, tocke in kosi]
     conn.executemany("INSERT OR IGNORE INTO telo(odtis, vsebina) VALUES(?,?)", telesa)
     conn.executemany("INSERT OR REPLACE INTO stanje(vozilo, vir, ts, vir_ts, trip_id, dan, razlogi,"

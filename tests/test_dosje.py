@@ -170,6 +170,14 @@ def test_obrez_samo_tock_in_zamud(baza):
     assert baza.execute("SELECT COUNT(*) FROM vozilo_dan").fetchone()[0] >= 1
 
 
+def test_napacna_ura_naprave_ne_pobrise_dokaza(baza):
+    """Obrez gleda našo uro: vozilo z uro leto nazaj je ravno tisto, ki ga iščemo."""
+    _opazi(ts=ZDAJ - 400 * 86400, zdaj=ZDAJ)
+    dosje.izprazni(baza, ZDAJ + 1, vse=True)
+    dosje.obrezi(baza, ZDAJ + 2)
+    assert baza.execute("SELECT COUNT(*) FROM tocke").fetchone()[0] == 1
+
+
 def test_surova_napoved_samo_za_vozilo_z_razlogom_in_na_svoj_razmik(baza):
     feed = pb.FeedMessage()
     for vozilo in ("slabo", "dobro"):
