@@ -395,14 +395,13 @@ def zamude(vir: str, feed, zdaj: float | None = None) -> None:
 # ---------------------------------------------------------------- pisanje
 
 def povezi(path: Path | str | None = None) -> sqlite3.Connection:
-    pot = str(path or config.DOSJE_DB)
-    conn = db.connect(Path(pot))
+    pot = Path(path or config.DOSJE_DB)
+    # Bere tudi skrbnik (skupina, kot glavna baza). Pred prvo povezavo: `-wal` in
+    # `-shm` ob nastanku dobita način baze.
+    pot.touch()
+    os.chmod(pot, 0o664)
+    conn = db.connect(pot)
     conn.executescript(SHEMA)
-    # Bere tudi skrbnik (skupina, kot glavna baza): `-wal` in `-shm` dobita isti način.
-    try:
-        os.chmod(pot, 0o664)
-    except OSError:
-        pass
     return conn
 
 
@@ -482,7 +481,7 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
     """Svoja nit in svoja baza: zajem nikoli ne čaka na disk zaradi dosjeja."""
     try:
         conn = povezi()
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, OSError) as exc:
         # Brez baze ni kam pisati, in vzorci bi rasli brez bralca.
         log(f"dosjeja ni mogoče odpreti: {exc}")
         pocisti()
