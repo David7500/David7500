@@ -134,19 +134,26 @@ KORAKI = {"zamude": "zamude IJPP", "lege": "lege IJPP", "lpp": "mestni LPP",
           "obvestila": "obvestila IJPP", "ocena": "senčno merjenje"}
 DERP_KORAK = {"ijpp": ("zamude", "derp_zamude"), "lpp": ("lpp", "derp_lpp")}
 
-#: Glavna zanka zajema (`meta.zanka_ts`, na `POLL_SECONDS`): utrip, starejši od
-#: `ZANKA_CAKA_S`, med uvozom voznega reda pomeni, da zanka čaka uvoz (17.--31.
-#: 10. 2026 4 min 05 s do 5 min 01 s, 17. 10. 7 min 25 s); brez uvoza je zanka
-#: obstala šele po `ZANKA_STOJI_S` -- obhod, v katerem vsi štirje klici derp.si
+#: Glavna zanka zajema (`meta.zanka_ts`, na `POLL_SECONDS`) je obstala, ko
+#: utripa ni `ZANKA_STOJI_S`: obhod, v katerem vsi štirje klici derp.si
 #: dosežejo časovno mejo (60 s), traja do 4 min in je molk vira, ne zanke.
-ZANKA_CAKA_S = 90
+#: Uvoza voznega reda zanka od 1. 11. 2026 ne čaka (`server.Uvoz`; prej 17.--31.
+#: 10. 2026 4 min 05 s do 5 min 01 s); njegova faza pisanja zaklene bazo
+#: ≥ 45--80 s, vsak zapis zanke počaka do 30 s (busy): utrip zamudi do ~3 min.
 ZANKA_STOJI_S = 600
 #: Uvoz, ki teče dvakrat dlje od najdaljšega izmerjenega, se ne bo končal sam
-#: (časovna meja podprocesa je 30 min, toliko bi čakala zanka).
+#: (podproces ubije časovna meja 30 min, `server.UVOZ_ROK_S`).
 UVOZ_ORANZNO_S = 15 * 60
 #: Začetek brez konca, starejši od dvojne časovne meje podprocesa, je uvoz,
 #: ki ga je prekinil ponovni zagon -- ne teče več.
 UVOZ_NAJDLJE_S = 2 * 1800
+
+
+def uvoz_tece(uv: dict, zdaj: float) -> float | None:
+    """Koliko sekund uvoz voznega reda teče (`meta.uvoz`: začetek brez konca),
+    ali None. Začetek, starejši od `UVOZ_NAJDLJE_S`, ne teče več."""
+    od = uv.get("od")
+    return zdaj - od if od and not uv.get("do") and zdaj - od <= UVOZ_NAJDLJE_S else None
 
 #: Nočni uvoz in opravila (`meta.uvoz`, `meta.nocno`): ena neuspela noč je
 #: lahko vir (zavrnjen zip 28. 9. 2026 se je popravil sam), dve zapored ne.
@@ -428,19 +435,17 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
     # lahko trajna sprememba, o kateri je treba odločiti.
     # Odgovor z vsebino, ki je ista že `DERP_ZAMRZNJEN_S`, je isto kot molk:
     # zajem takrat vožnje izpusti in zamude pišejo rezerve (`iz_lege`).
-    # Glavna zanka, ki čaka uvoz voznega reda ali obstane, derp.si ne bere:
-    # njegovih vrstic takrat ni mogoče oceniti, resnico pove vrstica `zanka`.
-    zt, uv = z.get("zanka_ts"), z.get("uvoz") or {}
-    uvoz_s = (zdaj - uv["od"] if uv.get("od") and not uv.get("do")
-              and zdaj - uv["od"] <= UVOZ_NAJDLJE_S else None)
-    caka = zt is not None and zdaj - zt > (ZANKA_CAKA_S if uvoz_s is not None else ZANKA_STOJI_S)
+    # Glavna zanka, ki obstane, derp.si ne bere: njegovih vrstic takrat ni
+    # mogoče oceniti, resnico pove vrstica `zanka` -- samo po utripu. Med
+    # uvozom zanka utripa in vrstice derp.si se ocenjujejo: zaklep faze pisanja
+    # vzame 1--2 obhoda (≤ ~3 min), pod `DERP_MOLCI_S` in `DERP_ZAMRZNJEN_S`.
+    # `KAJROS_REFRESH=inprocess` (ne teče nikjer) zanko ustavi: nad 10 min je
+    # to rdeče kot vsak drug obstanek.
+    zt = z.get("zanka_ts")
+    stoji = zt is not None and zdaj - zt > ZANKA_STOJI_S
     if zt is not None:
-        out["zanka"] = (
-            (DOBRA, "") if not caka
-            else ((ORANZNA if uvoz_s >= UVOZ_ORANZNO_S else MLACNA),
-                  f"uvoz voznega reda teče {_min(uvoz_s)}, zanka zajema čaka "
-                  f"(zamude in lege derp.si, obvestila)") if uvoz_s is not None
-            else (SLABA, f"zanka zajema stoji od pred {_min(zdaj - zt)}"))
+        out["zanka"] = ((SLABA, f"zanka zajema stoji od pred {_min(zdaj - zt)}") if stoji
+                        else (DOBRA, ""))
 
     # Izjema v naši obdelavi (`zajem_napake` spodaj) razveljavi zapis branja:
     # odgovor vira zato vzamemo iz dnevnika virov, vsebine pa takrat ne vemo.
@@ -450,7 +455,7 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
             if v.get("zapored") and zdaj - (v.get("ts") or 0) <= KODA_POZABI_S}
     if dp is not None and not (vozi is not None and vozi.get("avtobus", 0) < MIN_VOZENJ):
         for vir, ts in sorted(dp.items()):
-            if caka:
+            if stoji:
                 out[f"derp_{vir}"] = ("", "")
                 continue
             korak, kljuc = DERP_KORAK.get(vir, ("", ""))
@@ -479,10 +484,17 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
 
     # Nočni uvoz voznega reda in nočna opravila: izid je bil do 31. 10. 2026
     # samo v dnevniku. Rumeno ena neuspela noč, oranžno dve zapored ali
-    # prevoznik, ki mu je uvoz vzel več kot `PADEC_PREVOZNIKA` voženj.
+    # prevoznik, ki mu je uvoz vzel več kot `PADEC_PREVOZNIKA` voženj. Uvoz,
+    # ki teče `UVOZ_ORANZNO_S`, visi: oranžno (do 31. 10. 2026 v vrstici
+    # `zanka`, ker ga je zanka čakala). Krajši je navaden in nima barve.
     uv, nocno = z.get("uvoz") or {}, z.get("nocno")
-    if uv.get("izid") or nocno is not None:
+    uvoz_s = uvoz_tece(uv, zdaj)
+    visi = uvoz_s is not None and uvoz_s >= UVOZ_ORANZNO_S
+    if uv.get("izid") or nocno is not None or visi:
         slabe, noci = [], 0
+        if visi:
+            slabe.append(f"uvoz voznega reda teče {_min(uvoz_s)} "
+                         f"(podproces ubije časovna meja 30 min)")
         if uv.get("izid") in ("zavrnjen", "napaka"):
             noci = uv.get("neuspelih") or 1
             slabe.append(f"uvoz voznega reda {uv['izid']} ({_ura(uv.get('do') or zdaj)}, "
@@ -497,8 +509,8 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
                  and nov < (1 - PADEC_PREVOZNIKA) * st]
         if padci:
             slabe.append("uvoz je vzel vožnje: " + ", ".join(padci))
-        out["nocno"] = (((ORANZNA if noci >= NOCNO_ORANZNO or padci else MLACNA), "; ".join(slabe))
-                        if slabe else (DOBRA, ""))
+        out["nocno"] = (((ORANZNA if noci >= NOCNO_ORANZNO or padci or visi else MLACNA),
+                         "; ".join(slabe)) if slabe else (DOBRA, ""))
 
     # Mestni LPP z LPP-jevih zaslonov (`zamude_lpp`), kot zemljevid SŽ zgoraj:
     # rdeče, kadar stoji nit, rumeno, kadar ne odgovarja vir.
@@ -801,11 +813,10 @@ _ORANZNO: dict[str, tuple[str, int]] = {
                   "derp.si trajna (gitlab.com/derp-si), in se odloči za drug vir.", 600),
     "derp_lpp": ("Rezerva so LPP-jevi zasloni; brez podatkov je primestni LPP. Preveri, ali "
                  "je sprememba pri derp.si trajna (gitlab.com/derp-si).", 600),
-    "nocno": ("Nočni uvoz ali opravilo ne uspe drugo noč zapored ali je uvoz prevozniku vzel "
-              "veliko voženj. Vrstica pove, kaj in zakaj; zavrnjen zip: zajem.md, „Nov vozni "
-              "red“. " + CLAUDE, 0),
-    "zanka": ("Uvoz voznega reda teče predolgo in drži glavno zanko zajema (časovna meja "
-              "podprocesa 30 min). Na arwenu `pgrep -af 'kajros.cli update'`. " + CLAUDE, 0),
+    "nocno": ("Nočni uvoz ali opravilo ne uspe drugo noč zapored, uvoz teče predolgo (podproces "
+              "ubije časovna meja 30 min; na arwenu `pgrep -af 'kajros.cli update'`) ali je "
+              "uvoz prevozniku vzel veliko voženj. Vrstica pove, kaj in zakaj; zavrnjen zip: "
+              "zajem.md, „Nov vozni red“. " + CLAUDE, 0),
     "zajem_napake": ("Vir odgovarja, pade naša obdelava: vrstica pove korak, izjemo in kje "
                      "v kodi (datoteka:vrstica ← klicatelj). " + CLAUDE, 600),
 }

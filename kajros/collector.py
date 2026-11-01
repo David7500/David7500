@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, geo, iz_lege, stats, straza, viri, zive
+from . import config, db, geo, iz_lege, stats, straza, viri, zdravje, zive
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -64,9 +64,11 @@ def zapisi_korak(conn: sqlite3.Connection, korak: str, exc: BaseException | None
     Do 31. 10. 2026 se je izjema v obdelavi feeda kazala kot „derp.si ne
     odgovarja“: `rollback` je razveljavil tudi zapis branja (`rt_fetched`).
     Napaka pri branju vira (`viri.iz_vira`) tu ne šteje -- to je molk vira in
-    ga kaže njegova vrstica. Piše samo ob napaki in ob prvem uspehu po njej.
+    ga kaže njegova vrstica. Tudi zaklep baze med uvozom voznega reda ne
+    (`_zaklep_uvoza`). Piše samo ob napaki in ob prvem uspehu po njej.
     """
-    if exc is not None and viri.iz_vira(exc):
+    if exc is not None and (viri.iz_vira(exc) or kljuc == "zajem_napake"
+                            and _zaklep_uvoza(conn, exc, zdaj)):
         return
     try:
         vsi = json.loads(db.get_meta(conn, kljuc) or "{}")
@@ -85,6 +87,22 @@ def zapisi_korak(conn: sqlite3.Connection, korak: str, exc: BaseException | None
         conn.commit()
     except sqlite3.Error:            # zaklenjena baza: niz zapiše naslednji izid
         conn.rollback()
+
+
+def _zaklep_uvoza(conn: sqlite3.Connection, exc: BaseException, zdaj: float | None) -> bool:
+    """„database is locked“, medtem ko uvoz voznega reda teče (`meta.uvoz`).
+
+    Uvoz piše v eni transakciji (`gtfs.import_static`, ≥ 45--80 s), vsak zapis
+    zanke čaka 30 s (busy): korak, ki takrat izpade, ni napaka naše obdelave.
+    Od 1. 11. 2026 zanka uvoza ne čaka (`server.Uvoz`) in bi sicer vsako noč
+    nabrala niz -- od treh zapored oranžno s pošto."""
+    if not (isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc)):
+        return False
+    try:
+        uv = json.loads(db.get_meta(conn, "uvoz") or "{}")
+    except (sqlite3.Error, ValueError):
+        return False
+    return zdravje.uvoz_tece(uv, time.time() if zdaj is None else zdaj) is not None
 
 
 # Vozni red se med dvema uvozoma GTFS ne spremeni, zajem pa tece vsakih 30 s.

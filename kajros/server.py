@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import sqlite3
+import tempfile
 import threading
 import time
 from collections import deque
@@ -240,43 +241,171 @@ def bootstrap() -> None:
             lpp.unlink(missing_ok=True)
 
 
+#: Ukaz uvoza v podprocesu (`KAJROS_REFRESH=subprocess`); preizkusi ga
+#: nadomestijo z lažnim procesom.
+UKAZ_UVOZA = [sys.executable, "-m", "kajros.cli", "update"]
+#: Časovna meja podprocesa. Izmerjeno 17.--31. 10. 2026 4 min 05 s do 5 min
+#: 01 s, 17. 10. 7 min 25 s: kar teče pol ure, se samo ne bo končalo.
+UVOZ_ROK_S = 1800
+#: Toliko ima podproces ob ustavitvi strežnika za SIGTERM, preden ga ubijemo:
+#: `lifespan` čaka nit zanke 5 s.
+UVOZ_USTAVI_S = 3
+
+#: Hkrati največ en uvoz. Dopolnitev ob zagonu (`_dopolni_v_ozadju`) in 4.20
+#: v zanki bi sicer prenesla in zapisala isti vozni red dvakrat, z dvojnim
+#: pomnilnikom in dvojnim zaklepom baze.
+_uvoz_zaklep = threading.Lock()
+
+
 def refresh_timetable(conn, mode: str) -> None:
-    """Osveži vozni red. `mode`: off | inprocess | subprocess.
+    """Osveži vozni red in počakaj, da se konča. `mode`: off | inprocess | subprocess.
 
     Uvoz je najdražji trenutek v življenju procesa. Izmerjeno na tem paketu:
     v istem procesu vrh 89 MB (in ostane pri 85 MB, ker Python arene vrne
     operacijskemu sistemu redko), v podprocesu 54 MB poleg 57 MB starša.
     Na stroju s 100 MB torej nobena od obeh ni varna -- zato je privzeto `off`
     in vozni red osvežiš z novo priloženo bazo ali z `kajros update` drugje.
+
+    Čaka samo dopolnitev ob zagonu, v svoji niti (`_dopolni_v_ozadju`): ista
+    koda kot zanka (`Uvoz`), le da izid pogleda vsako sekundo. Zanka zajema
+    podprocesa ne čaka (`_worker`). V istem procesu (`inprocess`) zanka čaka:
+    ta način ne teče nikjer (arwen in malina `subprocess`).
     """
     if mode == "off":
         return
-    # Med uvozom zanka zajema čaka (podproces ali isti proces), zdravje pa je
-    # to kazalo kot „derp.si ne odgovarja“: 17.--31. 10. 2026 vsako noč
-    # 4 min 05 s do 5 min 01 s, 17. 10. 7 min 25 s (`zdravje`, vrstica `zanka`).
-    # Izid (`izid`, `razlog`, vožnje po prevozniku staro -> novo, neuspelih noči
-    # zapored) je bil do 31. 10. 2026 samo v dnevniku: zavrnjen zip (28. 9. 2026
-    # brez vlakov) ali padec prevoznika je videl le, kdor je dnevnik bral.
-    prej = _beri_uvoz(conn)
-    zacetek = int(time.time())
-    _zapisi_uvoz(conn, {**prej, "od": zacetek, "do": None})
+    if mode == "subprocess":
+        uvoz = Uvoz.zacni(conn)
+        while uvoz is not None and uvoz.poglej(conn) is None:
+            if _stop.wait(1):
+                uvoz.ustavi(conn)
+                break
+        return
+    if not _uvoz_zaklep.acquire(blocking=False):
+        _log("uvoz voznega reda že teče -- drugega ne začnem")
+        return
+    prej, zacetek = _uvoz_zacetek(conn)
     izid = {"izid": "napaka", "razlog": "uvoz se ni končal"}
     try:
-        izid = _uvozi(conn, mode)
+        izid = _uvozi(conn)
     except Exception as exc:
         izid = {"izid": "zavrnjen" if isinstance(exc, gtfs.UvozZavrnjen) else "napaka",
                 "razlog": str(exc)[:300] or type(exc).__name__}
         raise
     finally:
-        slabo = izid["izid"] in ("zavrnjen", "napaka")
-        _zapisi_uvoz(conn, {"od": zacetek, "do": int(time.time()), **izid,
-                            "neuspelih": (prej.get("neuspelih") or 0) + 1 if slabo else 0})
+        _uvoz_konec(conn, prej, zacetek, izid)
+        _uvoz_zaklep.release()
+
+
+class Uvoz:
+    """Uvoz voznega reda v podprocesu, ki ga zanka zajema ne čaka.
+
+    Do 1. 11. 2026 ga je zanka čakala (`subprocess.run`): 17.--31. 10. 2026
+    vsako noč 4 min 05 s do 5 min 01 s (17. 10. 7 min 25 s) brez zamud in leg
+    derp.si, obvestil in sence. Zdaj ga zažene (`zacni`) in ob vsakem obhodu
+    pogleda, ali je končan (`poglej`). Bazo zaklene le faza pisanja
+    (`gtfs.import_static`, ena transakcija, ≥ 45--80 s): toliko zanka izgubi
+    1--2 obhoda, kot NAP, zemljevid SŽ, Marprom in Kranj že od začetka.
+
+    Izpis gre v začasni datoteki, ne v cev: v polno cev, ki je nihče ne bere,
+    otrok ne more več pisati in obstane.
+    """
+
+    def __init__(self, prej: dict, zacetek: int):
+        self.prej, self.zacetek = prej, zacetek
+        self._rok = time.monotonic() + UVOZ_ROK_S
+        self._izpis, self._napake = tempfile.TemporaryFile(), tempfile.TemporaryFile()
+        # Lasten naslovni prostor: ob koncu se ves pomnilnik vrne sistemu.
+        self.proc = subprocess.Popen(UKAZ_UVOZA, stdout=self._izpis, stderr=self._napake)
+
+    @classmethod
+    def zacni(cls, conn) -> Uvoz | None:
+        """Zažene uvoz in ne čaka. None, kadar že teče drug ali zagon ne uspe."""
+        if not _uvoz_zaklep.acquire(blocking=False):
+            _log("uvoz voznega reda že teče -- drugega ne začnem")
+            return None
+        prej, zacetek = _uvoz_zacetek(conn)
+        try:
+            return cls(prej, zacetek)
+        except Exception as exc:          # noqa: BLE001 -- zanka teče naprej, jutri znova
+            _log(f"osvežitev voznega reda ni uspela: {exc}")
+            _uvoz_konec(conn, prej, zacetek, {"izid": "napaka", "razlog": str(exc)[:300]})
+            _uvoz_zaklep.release()
+            return None
+
+    def poglej(self, conn) -> dict | None:
+        """Izid za `meta.uvoz`, ko je podproces končan, sicer None -- brez
+        čakanja. Po `UVOZ_ROK_S` ga ubije: napaka."""
+        if self.proc.poll() is None:
+            if time.monotonic() < self._rok:
+                return None
+            self.proc.kill()
+            self.proc.wait()
+            _log(f"osvežitev (podproces) ubita po {UVOZ_ROK_S // 60} min: "
+                 f"{self._zadnje()[:500]}")
+            return self._konec(conn, {"izid": "napaka", "razlog":
+                                      f"časovna meja {UVOZ_ROK_S // 60} min, podproces ubit"})
+        return self._konec(conn, _razberi(self.proc.returncode, _beri(self._izpis),
+                                          _beri(self._napake)))
+
+    def ustavi(self, conn) -> dict:
+        """Ob ustavitvi strežnika: SIGTERM, po `UVOZ_USTAVI_S` SIGKILL, in konec
+        v `meta.uvoz` -- sicer bi uvoz po zdravju „tekel“ še do ure
+        (`zdravje.UVOZ_NAJDLJE_S`). Prekinjeno pisanje SQLite zavrže sam: brez
+        potrditve transakcije ostane stari vozni red."""
+        if self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(UVOZ_USTAVI_S)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+        if self.proc.returncode >= 0:        # končal je sam, tik pred ustavitvijo
+            return self.poglej(conn)
+        _log("osvežitev voznega reda prekinjena ob ustavitvi")
+        return self._konec(conn, {"izid": "napaka", "razlog": "prekinjen ob ustavitvi strežnika"})
+
+    def _zadnje(self) -> str:
+        izpis = _beri(self._izpis).strip()
+        return izpis.splitlines()[-1] if izpis else _beri(self._napake).strip()[-300:]
+
+    def _konec(self, conn, izid: dict) -> dict:
+        _uvoz_konec(conn, self.prej, self.zacetek, izid)
+        self._izpis.close()
+        self._napake.close()
+        _uvoz_zaklep.release()
+        return izid
+
+
+def _beri(datoteka) -> str:
+    datoteka.seek(0)
+    return datoteka.read().decode("utf-8", "replace")
+
+
+def _uvoz_zacetek(conn) -> tuple[dict, int]:
+    """`meta.uvoz` z začetkom brez konca: uvoz teče (zdravje, zaklep baze v
+    `collector.zapisi_korak`).
+
+    Izid (`izid`, `razlog`, vožnje po prevozniku staro -> novo, neuspelih noči
+    zapored) je bil do 31. 10. 2026 samo v dnevniku: zavrnjen zip (28. 9. 2026
+    brez vlakov) ali padec prevoznika je videl le, kdor je dnevnik bral."""
+    prej = _beri_uvoz(conn)
+    zacetek = int(time.time())
+    _zapisi_uvoz(conn, {**prej, "od": zacetek, "do": None})
+    return prej, zacetek
+
+
+def _uvoz_konec(conn, prej: dict, zacetek: int, izid: dict) -> None:
+    slabo = izid["izid"] in ("zavrnjen", "napaka")
+    _zapisi_uvoz(conn, {"od": zacetek, "do": int(time.time()), **izid,
+                        "neuspelih": (prej.get("neuspelih") or 0) + 1 if slabo else 0})
 
 
 def _beri_uvoz(conn) -> dict:
+    """Zadnji `meta.uvoz`; napaka branja ne sme ustaviti uvoza ne zanke, ki ga
+    zažene (`Uvoz.zacni`)."""
     try:
         return json.loads(db.get_meta(conn, "uvoz") or "{}")
-    except ValueError:
+    except (ValueError, sqlite3.Error):
         return {}
 
 
@@ -290,36 +419,34 @@ def _zapisi_uvoz(conn, uvoz: dict) -> None:
         conn.rollback()
 
 
-def _uvozi(conn, mode: str) -> dict:
-    """Uvoz sam; vrne izid za `meta.uvoz`."""
-    if mode == "subprocess":
-        # Lasten naslovni prostor: ob koncu se ves pomnilnik vrne sistemu.
-        proc = subprocess.run(
-            [sys.executable, "-m", "kajros.cli", "update"],
-            capture_output=True, text=True, timeout=1800,
-        )
-        # Izid uvoza je JSON čez več vrstic; zadnja vrstica („}“) je bila od
-        # 10. do 17. 10. 2026 vse, kar je dnevnik povedal o uvozu.
-        izpis = proc.stdout.strip()
-        zadnje = izpis.splitlines()[-1] if izpis else proc.stderr.strip()[-300:]
-        uvoz = None
-        if izpis.endswith("}") and "{" in izpis:
-            try:
-                uvoz = json.loads(izpis[izpis.index("{"):])
-                zadnje = json.dumps(uvoz, ensure_ascii=False)
-            except ValueError:
-                pass
-        _log(f"osvežitev (podproces, koda {proc.returncode}): {zadnje[:500]}")
-        if proc.returncode == 0:
-            return ({"izid": "ok", "prevozniki": uvoz.get("prevozniki") or {}} if uvoz
-                    else {"izid": "nespremenjen"} if "nespremenjen" in izpis
-                    else {"izid": "napaka", "razlog": zadnje[:300]})
-        # Podproces izpiše zavrnitev in konča s kodo 1 (`cli.cmd_update`);
-        # vse drugo je izjema, zadnja vrstica napake je njen opis.
-        napaka = proc.stderr.strip().splitlines()[-1:] or [zadnje]
-        return ({"izid": "zavrnjen", "razlog": zadnje[:300]} if "uvoz zavrnjen" in zadnje
-                else {"izid": "napaka", "razlog": f"koda {proc.returncode}: {napaka[0][:300]}"})
+def _razberi(koda: int, izpis: str, napake: str) -> dict:
+    """Izid podprocesa `kajros update` za `meta.uvoz`: ok / nespremenjen /
+    zavrnjen / napaka. `izpis` in `napake` sta njegov stdout in stderr."""
+    # Izid uvoza je JSON čez več vrstic; zadnja vrstica („}“) je bila od
+    # 10. do 17. 10. 2026 vse, kar je dnevnik povedal o uvozu.
+    izpis, napake = izpis.strip(), napake.strip()
+    zadnje = izpis.splitlines()[-1] if izpis else napake[-300:]
+    uvoz = None
+    if izpis.endswith("}") and "{" in izpis:
+        try:
+            uvoz = json.loads(izpis[izpis.index("{"):])
+            zadnje = json.dumps(uvoz, ensure_ascii=False)
+        except ValueError:
+            pass
+    _log(f"osvežitev (podproces, koda {koda}): {zadnje[:500]}")
+    if koda == 0:
+        return ({"izid": "ok", "prevozniki": uvoz.get("prevozniki") or {}} if uvoz
+                else {"izid": "nespremenjen"} if "nespremenjen" in izpis
+                else {"izid": "napaka", "razlog": zadnje[:300]})
+    # Podproces izpiše zavrnitev in konča s kodo 1 (`cli.cmd_update`);
+    # vse drugo je izjema, zadnja vrstica napake je njen opis.
+    napaka = napake.splitlines()[-1:] or [zadnje]
+    return ({"izid": "zavrnjen", "razlog": zadnje[:300]} if "uvoz zavrnjen" in zadnje
+            else {"izid": "napaka", "razlog": f"koda {koda}: {napaka[0][:300]}"})
 
+
+def _uvozi(conn) -> dict:
+    """Uvoz v istem procesu (`inprocess`); vrne izid za `meta.uvoz`."""
     path = gtfs.download(conn)
     lpp = gtfs.download_lpp(conn) if config.LPP_ENABLED else None
     mestni, mestni_nov = gtfs.prenesi_mestne(conn)
@@ -530,8 +657,8 @@ def manjkajoci_viri(conn) -> list[str]:
 
 def _dopolni_v_ozadju(refresh_mode: str, manjka: list[str]) -> None:
     """Osvežitev voznega reda v svoji niti, ne v zajemni zanki: podnevi ta
-    traja več minut (27. 10. 2026: 4,5 min ob 4.20) in zajem derp.si bi toliko
-    stal. Ista pot kot vsak dan ob 4.20 (`refresh_timetable`)."""
+    traja več minut (27. 10. 2026: 4,5 min ob 4.20). Ista koda kot vsak dan
+    ob 4.20 (`Uvoz`); ta nit konec počaka (`refresh_timetable`)."""
     def delo():
         if _stop.wait(DOPOLNI_PO_S):
             return
@@ -616,10 +743,13 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
     # Nato `collector.zapisi_korak`: izjema v naši obdelavi ni molk vira
     # (vrstica zdravja `zajem_napake`, ne „derp.si ne odgovarja“).
     utrip = 0.0
+    # Uvoz voznega reda v podprocesu, ki ta hip teče (`Uvoz`), ali None.
+    uvoz: Uvoz | None = None
     while not _stop.is_set():
         started = time.monotonic()
         # Srčni utrip zanke (`meta.zanka_ts`, vrstica zdravja `zanka`): zanka,
-        # ki čaka uvoz ali obtiči v koraku, ni molk vira.
+        # ki obtiči v koraku, ni molk vira. Med uvozom utripa naprej; v fazi
+        # pisanja uvoza zapis počaka do 30 s (busy) ali izpade.
         if started >= utrip:
             utrip = started + interval
             try:
@@ -717,11 +847,23 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
 
         if next_refresh and datetime.now(TZ) >= next_refresh:
             next_refresh += timedelta(days=1)
-            try:
-                refresh_timetable(conn, refresh_mode)
-            except Exception as exc:
-                conn.rollback()
-                _log(f"osvežitev voznega reda ni uspela: {exc}")
+            if refresh_mode == "subprocess":
+                # Zanka uvoza ne čaka (`Uvoz`): izid pogleda vsak obhod spodaj.
+                uvoz = uvoz or Uvoz.zacni(conn)
+            else:
+                try:
+                    refresh_timetable(conn, refresh_mode)
+                except Exception as exc:
+                    conn.rollback()
+                    _log(f"osvežitev voznega reda ni uspela: {exc}")
+                if _strezemo:
+                    _pripni_v_ozadju()
+        if uvoz is not None and uvoz.poglej(conn) is not None:
+            uvoz = None
+            # Predpomnilnike voznega reda (`db.znacka_reda`) je razveljavil že
+            # zapis uvoza; pot in zdravje ogrejemo takoj, kot dotlej, ko je
+            # zanka po uvozu zamudila ritem ogrevanja.
+            next_health = 0.0
             if _strezemo:
                 _pripni_v_ozadju()
 
@@ -824,6 +966,12 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         cakaj = min(next_trips, next_positions, next_alerts, next_lpp,
                     next_ocena, next_health) - time.monotonic()
         _stop.wait(max(0.5, min(cakaj, interval)))
+
+    # Ustavitev med uvozom (`lifespan` postavi `_stop`): otrok se konča, uvoz
+    # pa ne „teče“ naprej v `meta.uvoz`. Zanko, ki pade z izjemo (rdeča nit
+    # `kajros-collector`), pokrije meja `zdravje.UVOZ_NAJDLJE_S`.
+    if uvoz is not None:
+        uvoz.ustavi(conn)
 
 
 def _settings() -> dict:

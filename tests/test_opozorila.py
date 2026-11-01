@@ -423,36 +423,39 @@ def test_napaka_nase_kode_ni_molk_vira():
     assert zdravje.ocena(z, m, T + 30)["zajem_napake"] == (zdravje.DOBRA, "")
 
 
-def test_uvoz_voznega_reda_ni_molk_derp():
-    """Uvoz ob 4:20 ustavi glavno zanko (17.--31. 10. 2026 4--5 min, 17. 10.
-    7,4 min): zdravje pove uvoz, ne „derp.si ne odgovarja“. Zanka, ki brez
-    uvoza ne tiktaka, je obstala (rdeče); obhod s štirimi časovnimi mejami
-    derp.si (do 4 min) to še ni."""
-    z = _zdravo()
+def test_uvoz_voznega_reda_ne_ustavi_zanke():
+    """Do 1. 11. 2026 je uvoz ob 4:20 ustavil glavno zanko (17.--31. 10. 4--5
+    min). Zdaj ga zanka ne čaka in med njim utripa: vrstica `zanka` sodi samo
+    po utripu, vrstice derp.si se ocenjujejo -- zaklep faze pisanja (do ~3 min
+    brez zapisa branja) ni molk. Uvoz, ki teče 15 min, visi: oranžno v
+    `nocno`. Zanka brez utripa 10 min je obstala, z uvozom ali brez."""
+    z = {**_zdravo(), "nocno": {}}
     z["vozi_zdaj"] = {"zeleznica": 20, "avtobus": 40}
-    z["derp_prebran"] = {"ijpp": T - 6 * 60, "lpp": T - 6 * 60}
-    z["derp_vsebina"] = {"ijpp": T - 11 * 60, "lpp": T - 11 * 60}
-    z["zanka_ts"] = T - 20
-    z["uvoz"] = {"od": T - 3600, "do": T - 3300}
+    z["derp_prebran"] = {"ijpp": T - 6 * 60, "lpp": T - 3 * 60}
+    z["derp_vsebina"] = {"ijpp": T - 6 * 60, "lpp": T - 7 * 60}
+    z["zanka_ts"], z["uvoz"] = T - 20, {"od": T - 6 * 60, "do": None}
     o = zdravje.ocena(z, STROJ, T)
-    assert o["zanka"] == (zdravje.DOBRA, "") and "ne odgovarja" in o["derp_ijpp"][1]
-
-    z["zanka_ts"], z["uvoz"] = T - 5 * 60, {"od": T - 6 * 60, "do": None}
-    o = zdravje.ocena(z, STROJ, T)
-    assert o["zanka"][0] == zdravje.MLACNA and "uvoz voznega reda teče 6 min" in o["zanka"][1]
-    assert o["derp_ijpp"] == ("", "") and o["derp_lpp"] == ("", "")
+    assert o["zanka"] == (zdravje.DOBRA, "") and o["nocno"] == (zdravje.DOBRA, "")
+    assert "ne odgovarja" in o["derp_ijpp"][1] and o["derp_lpp"] == (zdravje.DOBRA, "")
+    z["derp_prebran"]["ijpp"] = T - 30
     assert _posta(z) == {}
-    z["uvoz"]["od"] = T - 16 * 60
-    assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.ORANZNA
-    assert set(_posta(z)) == {"zanka"} and not _posta(z)["zanka"].nujno
 
-    z["uvoz"] = {"od": T - 3600, "do": T - 3300}                # brez uvoza
-    assert zdravje.ocena(z, STROJ, T)["zanka"] == (zdravje.DOBRA, "")
-    z["zanka_ts"] = T - 11 * 60
-    assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.SLABA
+    z["uvoz"]["od"] = T - 16 * 60
+    o = zdravje.ocena(z, STROJ, T)
+    assert o["zanka"] == (zdravje.DOBRA, "") and o["nocno"][0] == zdravje.ORANZNA
+    assert "uvoz voznega reda teče 16 min" in o["nocno"][1]
+    assert set(_posta(z)) == {"nocno"} and not _posta(z)["nocno"].nujno
+    assert "kajros.cli update" in _posta(z)["nocno"].ukrep
+
+    z["zanka_ts"] = T - 11 * 60                                 # zanka obstala
+    o = zdravje.ocena(z, STROJ, T)
+    assert o["zanka"][0] == zdravje.SLABA and o["derp_ijpp"] == ("", "")
+    assert _posta(z)["zanka"].nujno
     z["uvoz"] = {"od": T - 9 * 3600, "do": None}                # prekinjen z zagonom
-    assert zdravje.ocena(z, STROJ, T)["zanka"][0] == zdravje.SLABA
-    assert set(_posta(z)) == {"zanka"} and _posta(z)["zanka"].nujno
+    o = zdravje.ocena(z, STROJ, T)
+    assert o["zanka"][0] == zdravje.SLABA and o["nocno"] == (zdravje.DOBRA, "")
+    z["zanka_ts"], z["uvoz"] = T - 5 * 60, {"od": T - 3600, "do": T - 3300}
+    assert zdravje.ocena(z, STROJ, T)["zanka"] == (zdravje.DOBRA, "")
 
 
 def test_uvoz_zapise_zacetek_in_konec(monkeypatch):
@@ -463,12 +466,12 @@ def test_uvoz_zapise_zacetek_in_konec(monkeypatch):
     c = db.connect(":memory:")
     db.init(c)
 
-    def pade(conn, mode):
+    def pade(conn):
         assert json.loads(db.get_meta(conn, "uvoz"))["do"] is None
         raise RuntimeError("zip ni zip")
     monkeypatch.setattr(server, "_uvozi", pade)
     with pytest.raises(RuntimeError):
-        server.refresh_timetable(c, "subprocess")
+        server.refresh_timetable(c, "inprocess")
     uv = json.loads(db.get_meta(c, "uvoz"))
     assert uv["od"] <= uv["do"]
 
@@ -481,12 +484,12 @@ def test_nocni_uvoz_in_opravila(monkeypatch):
     c = db.connect(":memory:")
     db.init(c)
 
-    def zavrni(conn, mode):
+    def zavrni(conn):
         raise gtfs.UvozZavrnjen("zip nima nobene vožnje prevoznika 1161")
     monkeypatch.setattr(server, "_uvozi", zavrni)
     for _ in range(2):
         try:
-            server.refresh_timetable(c, "subprocess")
+            server.refresh_timetable(c, "inprocess")
         except gtfs.UvozZavrnjen:
             pass
         uv = json.loads(db.get_meta(c, "uvoz"))
@@ -496,9 +499,9 @@ def test_nocni_uvoz_in_opravila(monkeypatch):
         assert o[0] == (zdravje.MLACNA if uv["neuspelih"] == 1 else zdravje.ORANZNA)
     assert uv["neuspelih"] == 2 and set(_posta(z)) == {"nocno"}
 
-    monkeypatch.setattr(server, "_uvozi", lambda conn, mode: {
+    monkeypatch.setattr(server, "_uvozi", lambda conn: {
         "izid": "ok", "prevozniki": {"kranj": [446, 309], "1123": [9593, 9600]}})
-    server.refresh_timetable(c, "subprocess")
+    server.refresh_timetable(c, "inprocess")
     uv = json.loads(db.get_meta(c, "uvoz"))
     assert uv["neuspelih"] == 0 and uv["izid"] == "ok"
     z = {**_zdravo(), "uvoz": uv, "nocno": {}}
@@ -517,6 +520,176 @@ def test_nocni_uvoz_in_opravila(monkeypatch):
     assert zdravje.ocena(z, STROJ, T)["nocno"][0] == zdravje.ORANZNA
     z["nocno"]["povzetki"]["ts"] = T - 4 * 86400
     assert zdravje.ocena(z, STROJ, T)["nocno"] == (zdravje.DOBRA, "")
+
+
+def _lazni_uvoz(monkeypatch, koda: str):
+    """Podproces uvoza nadomesti lažen: `koda` teče v `python -c`."""
+    import sys
+    from kajros import server
+    monkeypatch.setattr(server, "UKAZ_UVOZA", [sys.executable, "-c", koda])
+
+
+def _pocakaj(uvoz, c, najdlje_s=15):
+    import time
+    konec = time.monotonic() + najdlje_s
+    while (izid := uvoz.poglej(c)) is None:
+        assert time.monotonic() < konec, "lažni uvoz se ni končal"
+        time.sleep(0.05)
+    return izid
+
+
+def test_uvoz_v_podprocesu_zanke_ne_ustavi(monkeypatch):
+    """`Uvoz.poglej` ne čaka: dokler podproces teče, vrne None takoj, zanka
+    gre naprej. Hkrati teče en sam uvoz; ob ustavitvi strežnika se podproces
+    konča, `meta.uvoz` pa ne ostane „teče“."""
+    import time
+    from kajros import db, server
+
+    c = db.connect(":memory:")
+    db.init(c)
+    _lazni_uvoz(monkeypatch, "import time; time.sleep(60)")
+    uvoz = server.Uvoz.zacni(c)
+    try:
+        t = time.monotonic()
+        assert uvoz.poglej(c) is None and uvoz.poglej(c) is None
+        assert time.monotonic() - t < 0.5
+        uv = json.loads(db.get_meta(c, "uvoz"))
+        assert uv["do"] is None and zdravje.uvoz_tece(uv, uv["od"] + 60) == 60
+
+        # Drugi uvoz ne začne: ne v podprocesu ne v istem procesu.
+        assert server.Uvoz.zacni(c) is None
+
+        def drugi(conn):
+            raise AssertionError("drugi uvoz se je začel, čeprav prvi teče")
+        monkeypatch.setattr(server, "_uvozi", drugi)
+        server.refresh_timetable(c, "inprocess")
+        assert json.loads(db.get_meta(c, "uvoz"))["od"] == uv["od"]
+    finally:
+        izid = uvoz.ustavi(c)
+    assert uvoz.proc.returncode < 0 and izid["izid"] == "napaka"
+    uv = json.loads(db.get_meta(c, "uvoz"))
+    assert uv["do"] and "ustavitvi" in uv["razlog"] and uv["neuspelih"] == 1
+    assert zdravje.uvoz_tece(uv, uv["do"]) is None
+    assert not server._uvoz_zaklep.locked()
+
+
+def test_uvoz_v_podprocesu_izid(monkeypatch):
+    """Konec podprocesa razbere iste vrstice kot prej `subprocess.run`: ok
+    (JSON izida z vožnjami po prevozniku), nespremenjen, zavrnjen (koda 1,
+    `cli.cmd_update`), napaka (izjema, zadnja vrstica napake)."""
+    from kajros import db, server
+
+    c = db.connect(":memory:")
+    db.init(c)
+    izid_uvoza = {"trips": 3, "prevozniki": {"1161": [1, 2]}}
+    primeri = [
+        (f"print('prenesen x.zip (41.0 MB), uvazam ...'); print({json.dumps(izid_uvoza, indent=2)!r})",
+         {"izid": "ok", "prevozniki": {"1161": [1, 2]}}, 0),
+        ("print('vozni red nespremenjen (HTTP 304) -- uvoz preskocen')",
+         {"izid": "nespremenjen"}, 0),
+        ("import sys; print('uvoz zavrnjen: zip nima nobene vožnje prevoznika 1161'); sys.exit(1)",
+         {"izid": "zavrnjen", "razlog": "uvoz zavrnjen: zip nima nobene vožnje prevoznika 1161"}, 1),
+        ("raise RuntimeError('zip ni zip')",
+         {"izid": "napaka", "razlog": "koda 1: RuntimeError: zip ni zip"}, 2),
+    ]
+    for koda, pricakovan, neuspelih in primeri:
+        _lazni_uvoz(monkeypatch, koda)
+        izid = _pocakaj(server.Uvoz.zacni(c), c)
+        assert izid == pricakovan
+        uv = json.loads(db.get_meta(c, "uvoz"))
+        assert uv["od"] <= uv["do"] and uv["neuspelih"] == neuspelih
+        assert {k: uv[k] for k in pricakovan} == pricakovan
+    assert not server._uvoz_zaklep.locked()
+
+
+def test_uvoz_v_podprocesu_casovna_meja(monkeypatch):
+    """Podproces, ki teče čez `UVOZ_ROK_S`, `poglej` ubije: izid napaka."""
+    import time
+    from kajros import db, server
+
+    c = db.connect(":memory:")
+    db.init(c)
+    _lazni_uvoz(monkeypatch, "import time; print('prenesen', flush=True); time.sleep(60)")
+    monkeypatch.setattr(server, "UVOZ_ROK_S", 0.3)
+    uvoz = server.Uvoz.zacni(c)
+    time.sleep(0.4)
+    izid = uvoz.poglej(c)
+    assert uvoz.proc.returncode is not None and uvoz.proc.returncode < 0
+    assert izid["izid"] == "napaka" and "časovna meja" in izid["razlog"]
+    assert json.loads(db.get_meta(c, "uvoz"))["neuspelih"] == 1
+    assert not server._uvoz_zaklep.locked()
+
+
+def test_zanka_med_uvozom_bere_naprej(monkeypatch, tmp_path):
+    """Glavna zanka uvoz zažene in bere naprej (prej 4--5 min nič), ob koncu
+    podprocesa zapiše izid v `meta.uvoz`."""
+    import threading
+    import time
+    from datetime import datetime
+    from kajros import collector, config, db, server
+
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "kajros.sqlite")
+    monkeypatch.setattr(config, "LPP_ENABLED", False)
+    monkeypatch.setenv("KAJROS_OCENA", "0")
+    monkeypatch.setattr(server, "manjkajoci_viri", lambda conn: [])
+    monkeypatch.setattr(server, "_next_at", lambda ura, minuta: datetime.now(server.TZ))
+    _lazni_uvoz(monkeypatch, "import time; time.sleep(1.5); "
+                             "print('vozni red nespremenjen (HTTP 304) -- uvoz preskocen')")
+    # Za vsak obhod: ali je bil uvoz takrat v teku (`do` None).
+    obhodi = []
+    monkeypatch.setattr(collector, "poll_once", lambda conn: obhodi.append(
+        json.loads(db.get_meta(conn, "uvoz") or '{"do": 0}')["do"]) or {})
+    c = db.connect(tmp_path / "kajros.sqlite")
+    db.init(c)
+    nit = threading.Thread(target=server._worker, kwargs=dict(
+        interval=0.5, refresh_hour=4, refresh_mode="subprocess", weather_hour=-1,
+        alert_interval=0, maint_hour=-1, summaries=False))
+    nit.start()
+    try:
+        konec = time.monotonic() + 15
+        while not json.loads(db.get_meta(c, "uvoz") or "{}").get("do"):
+            assert time.monotonic() < konec, "zanka ni zapisala konca uvoza"
+            time.sleep(0.1)
+    finally:
+        server._stop.set()
+        nit.join(10)
+        server._stop.clear()
+    assert not nit.is_alive()
+    assert obhodi.count(None) >= 2, obhodi
+    uv = json.loads(db.get_meta(c, "uvoz"))
+    assert uv["izid"] == "nespremenjen" and uv["od"] <= uv["do"]
+    assert int(db.get_meta(c, "zanka_ts")) >= uv["od"]
+
+
+def test_zaklep_med_uvozom_ni_napaka_kode():
+    """„database is locked“ v koraku zanke, medtem ko uvoz voznega reda piše
+    (ena transakcija ≥ 45--80 s, busy 30 s), ne šteje v niz `zajem_napake`:
+    od 1. 11. 2026 zanka uvoza ne čaka, sicer bi bila vsaka noč oranžna.
+    Druga napaka med uvozom šteje, zaklep brez uvoza tudi, nočno opravilo
+    (ni opravljeno) tudi."""
+    import sqlite3
+    from kajros import collector, db
+
+    c = db.connect(":memory:")
+    db.init(c)
+    zaklep = sqlite3.OperationalError("database is locked")
+
+    def uvoz(**uv):
+        db.set_meta(c, "uvoz", json.dumps(uv))
+        c.commit()
+    uvoz(od=T - 120, do=None)
+    for i in range(3):
+        collector.zapisi_korak(c, "zamude", zaklep, zdaj=T + 30 * i)
+    assert db.get_meta(c, "zajem_napake") is None
+    collector.zapisi_korak(c, "lege", sqlite3.OperationalError("no such table: lega"), zdaj=T)
+    collector.zapisi_korak(c, "povzetki", zaklep, zdaj=T, kljuc="nocno")
+    uvoz(od=T - 300, do=T - 10)
+    collector.zapisi_korak(c, "zamude", zaklep, zdaj=T)
+    uvoz(od=T - 9 * 3600, do=None)                              # prekinjen z zagonom
+    collector.zapisi_korak(c, "zamude", zaklep, zdaj=T + 30)
+    zn = json.loads(db.get_meta(c, "zajem_napake"))
+    assert zn["lege"]["zapored"] == 1 and zn["zamude"]["zapored"] == 2
+    assert json.loads(db.get_meta(c, "nocno"))["povzetki"]["zapored"] == 1
 
 
 def test_zavrnjena_prijava_nap_v_posti_po_uri():
