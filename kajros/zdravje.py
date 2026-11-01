@@ -24,7 +24,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from zoneinfo import ZoneInfo
 
 from . import brskalnik, config, viri
@@ -104,6 +104,8 @@ OPAZOVANO_NAJVEC_DNI = 2
 #: Niti mestnih virov (Marprom, Kranj) pišeta na 10 s; pet minut tišine ni
 #: več zamujeno branje.
 MARPROM_STOJI_S = 300
+#: Dosje piše na minuto.
+DOSJE_MOLK_S = 600
 #: Vozila brez vožnje v mestu: rumeno od toliko vozil in deleža. 27. 10.
 #: 2026 ob 11:00 4 od 36 (3 brez prihoda, 1 brez ure v voznem redu).
 MARPROM_BREZ, MARPROM_BREZ_DELEZ = 5, 0.3
@@ -664,6 +666,15 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
         out["opazovano"] = ((ORANZNA, f"nočni račun stoji, zadnji dan {dni} dni nazaj")
                             if dni > OPAZOVANO_NAJVEC_DNI else (DOBRA, ""))
 
+    # Dosje vozil (`dosje.py`) je za diagnozo, potnik ne vidi nič: nikoli rdeče.
+    # Popravi se le z zagonom, zato po urah oranžno; `napak` je na zadnjih branjih.
+    dj = z.get("dosje")
+    if dj:
+        molk = zdaj - (dj.get("ts") or 0)
+        out["dosje"] = (((ORANZNA if molk >= VIR_ORANZNO_S else MLACNA),
+                         f"dosje vozil ne piše od pred {_min(molk)}")
+                        if molk >= DOSJE_MOLK_S else (DOBRA, ""))
+
     # Nit, ki je umrla, ne vstane do ponovnega zagona: izjema mimo `except`
     # v zanki ali napaka ob zagonu. Vir je bil tedaj viden le posredno („ne
     # piše“), tir s table SŽ pa sploh ne.
@@ -737,6 +748,7 @@ IMENA = {
     "vozni_red_kranj": "vozni red Kranj",
     "vozni_red_ms": "vozni red MS (mestni)",
     "opazovano": "opazovano · nočni račun",
+    "dosje": "dosje vozil",
     "fantomi": "avtobusi · zamuda raste z uro",
     "zajem_napake": "zajem · naša obdelava",
     "zanka": "zajem · glavna zanka",
@@ -784,8 +796,8 @@ _POSTA: dict[str, tuple[str, int]] = {
     "nap": ("Nit NAP ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     "marprom": ("Nit Marproma ne zapiše niti napake -- obstala je. " + _RESTART, 600),
     "kranj": ("Nit Kranja ne zapiše niti napake -- obstala je. " + _RESTART, 600),
-    "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzameta `promet.sqlite` "
-             "in varnostne kopije.", 600),
+    "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzamejo `promet.sqlite`, "
+             "`dosje.sqlite` in varnostne kopije.", 600),
     "wal": ("Prepis WAL v bazo ne teče -- kdo drži star posnetek. " + _RESTART, 600),
     "zanka": ("Glavna zanka zajema (derp.si, obvestila, senca) ne tiktaka, nit pa živi -- "
               "obtičala je v koraku. " + _RESTART, 600),
@@ -807,8 +819,8 @@ _ORANZNO: dict[str, tuple[str, int]] = {
     "lega_brez_zamude": ("Iz leg se zamude ne izpeljejo -- kartica NAP v /admin (vozil brez "
                          "vožnje, brez dneva, prehodov), vozila so v povezavah ob vrstici. "
                          + CLAUDE, 600),
-    "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzameta `promet.sqlite` "
-             "in varnostne kopije.", 600),
+    "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzamejo `promet.sqlite`, "
+             "`dosje.sqlite` in varnostne kopije.", 600),
     "derp_ijpp": ("Rezerve tečejo same (NAP, zemljevid SŽ). Preveri, ali je sprememba pri "
                   "derp.si trajna (gitlab.com/derp-si), in se odloči za drug vir.", 600),
     "derp_lpp": ("Rezerva so LPP-jevi zasloni; brez podatkov je primestni LPP. Preveri, ali "
@@ -888,7 +900,10 @@ def _primer(p: dict, prevoznik: str = "") -> dict:
     oznaka = p.get("oznaka") or p.get("trip_id") or p.get("vozilo") or "?"
     if prevoznik and not oznaka.startswith(prevoznik):
         oznaka = f"{prevoznik} {oznaka}"
-    return {"oznaka": oznaka, "pot": "/app/map?" + urlencode(q)}
+    out = {"oznaka": oznaka, "pot": "/app/map?" + urlencode(q)}
+    if p.get("vozilo"):
+        out["dosje"] = "/admin/vozilo/" + quote(str(p["vozilo"]), safe="")
+    return out
 
 
 def primeri(z: dict) -> dict[str, list[dict]]:

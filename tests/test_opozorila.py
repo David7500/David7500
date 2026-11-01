@@ -945,6 +945,6 @@ def test_primeri_vozil_so_povezave_na_zemljevid():
          "vozila_brez_voznje": {"LPP": [{"vozilo": "d5498517", "lat": 46.048, "lon": 14.5014,
                                          "oznaka": "LPP 2 → ZELENA JAMA - NOVE JARŠE"}]}}
     p = zdravje.primeri(z)
-    assert p["lega_brez_zamude"] == [{"oznaka": "Arriva A8426 → Ljubljana AP - Koper",
-                                      "pot": "/app/map?trip=432192&lat=45.75400&lon=14.04800&z=16"}]
+    assert p["lega_brez_zamude"][0]["oznaka"] == "Arriva A8426 → Ljubljana AP - Koper"
+    assert p["lega_brez_zamude"][0]["pot"] == "/app/map?trip=432192&lat=45.75400&lon=14.04800&z=16"
     assert p["neznane"][0]["pot"] == "/app/map?vozilo=d5498517&lat=46.04800&lon=14.50140&z=16"

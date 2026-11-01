@@ -22,7 +22,7 @@ from typing import Callable
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import collector, config, db, gtfs, iz_lege, stats, straza, viri
+from . import collector, config, db, dosje, gtfs, iz_lege, stats, straza, viri
 
 TZ = collector.TZ
 KR = gtfs.KR
@@ -45,6 +45,7 @@ def razberi(vsebina: bytes) -> tuple[list[dict], int]:
             "lat": v.position.latitude, "lon": v.position.longitude,
             "smer": v.position.bearing if v.position.HasField("bearing") else None,
             "hitrost": v.position.speed if v.position.HasField("speed") else None,
+            "vp": v,
         })
     return out, glava
 
@@ -62,22 +63,26 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float) -> dict:
     dnevi = collector._service_dates(conn, datetime.fromtimestamp(zdaj, TZ))
     st = {"vozil": len(vozila), "pripetih": 0, "brez_voznje": 0, "starih": 0, "prehodov": 0}
     for v in vozila:
+        vozilo_id = f"kranj-{v['vozilo']}"
         if zdaj - v["ts"] > collector.POSITION_FRESH_S:
             st["starih"] += 1
+            dosje.opazi_gtfs("kranj", v["vp"], None, None, (), vozilo_id, zdaj)
             continue
-        vozilo_id = f"kranj-{v['vozilo']}"
         tid = KR + v["trip"] if v["trip"] else None
         if tid not in okna:
             st["brez_voznje"] += 1
             straza.vzorec("kranj", vozilo_id, None, zdaj)
+            dosje.opazi_gtfs("kranj", v["vp"], None, None, ("brez_voznje",), vozilo_id, zdaj)
             continue
         dan = _dan(tid, v["dan"], okna[tid], dnevi, zdaj)
         if dan is None:
             st["brez_voznje"] += 1
             straza.vzorec("kranj", vozilo_id, None, zdaj)
+            dosje.opazi_gtfs("kranj", v["vp"], None, None, ("brez_dneva",), vozilo_id, zdaj)
             continue
         st["pripetih"] += 1
         straza.vzorec("kranj", vozilo_id, tid, zdaj)
+        dosje.opazi_gtfs("kranj", v["vp"], tid, dan, (), vozilo_id, zdaj)
         conn.execute(
             "INSERT INTO vehicle_now(trip_id, service_date, seen_ts, lat, lon, bearing,"
             "                        speed_ms, vehicle_id) VALUES(?,?,?,?,?,?,?,?) "
