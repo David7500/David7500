@@ -625,6 +625,8 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
             zakaj = (uradni["napaka"] if uradni.get("napaka") else
                      f"{sum(1 for n in uradni.get('pokrito') or () if not n)} od "
                      f"{len(uradni.get('pokrito') or ())} dni brez voženj")
+            if uradni.get("manj"):
+                zakaj = f"{uradni['manj'][0]} voženj v tednu, zadnji sprejeti {uradni['manj'][1]}"
             kopija = any(v.get("sprejet") for v in viri_[1:])
             out[vrstica] = (MLACNA, f"uradni zip ne pokrije tedna ({zakaj}); "
                             + ("velja kopija" if kopija else "ostane zadnji sprejeti")

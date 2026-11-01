@@ -200,6 +200,44 @@ def test_download_vzame_prvega_ki_pokrije_in_obdrzi_sprejetega(tmp_path, monkeyp
         db.get_meta(c, "marprom_vozni_red"))["viri"]] == [True, False]
 
 
+def test_rok_prezre_vrsto_z_enim_samim_dnem(tmp_path):
+    """Kranj ob nedeljah ne vozi; zip 1. 11. 2026 je imel nedeljske vožnje samo
+    ta dan in zdravje je javilo rok „danes“, čeprav so delavniki do 30. 11."""
+    z = tmp_path / "enkratni.zip"
+    z.write_bytes(_mp_zip("8860,1,1,1,1,1,1,0,20261102,20261130\n9,0,0,0,0,0,0,1,20261101,20261101\n",
+                          (("1", "10:50"), ("2", "11:20", "9"))))
+    assert gtfs.rok(z, "2026-11-01") == "2026-11-28"    # zadnja sobota, ne nedelja
+
+
+def test_zip_pod_polovico_zadnjega_sprejetega_se_ne_sprejme(tmp_path, monkeypatch):
+    """Kranj 1. 11. 2026: 5 prog namesto 23, dni pokritih vse. Sprejet bi Kranju
+    vzel 185 od 217 voženj na delavnik; ostane zadnji sprejeti, zdravje pove."""
+    danes = date.today()
+    od, do = ((danes - timedelta(days=30)).strftime("%Y%m%d"),
+              (danes + timedelta(days=200)).strftime("%Y%m%d"))
+    koledar = f"8860,1,1,1,1,1,1,1,{od},{do}\n"
+    polni = _mp_zip(koledar, tuple((str(i), "10:50") for i in range(10)))
+    skrcen = _mp_zip(koledar, (("1", "10:50"), ("2", "11:20")))
+    polovica = _mp_zip(koledar, tuple((str(i), "10:50") for i in range(5)))
+    odgovori = {"https://uradni/gtfs.zip": polni}
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "MARPROM_GTFS_URLS", tuple(odgovori))
+    monkeypatch.setattr(gtfs.requests, "get", lambda url, **kw: _Odgovor(odgovori[url]))
+    c = db.connect(":memory:")
+    db.init(c)
+    vir = next(v for v in gtfs.mestni_viri() if v.kljuc == "marprom")
+    assert gtfs.download_mestni(c, vir) is not None
+
+    odgovori["https://uradni/gtfs.zip"] = skrcen
+    assert gtfs.download_mestni(c, vir) is None
+    assert gtfs.zadnji_mestni(vir).read_bytes() == polni
+    zapis = json.loads(db.get_meta(c, "marprom_vozni_red"))["viri"][0]
+    assert zapis["sprejet"] is False and zapis["manj"] == [14, 70]
+
+    odgovori["https://uradni/gtfs.zip"] = polovica
+    assert gtfs.download_mestni(c, vir) is not None, "polovica še ni pokvarjen zip"
+
+
 def test_razberi_loci_zive_in_izpusti_lege_izven_slovenije():
     vozila = marprom.razberi({"Vehicles": [
         {"DeviceId": 472, "BusCode": "184", "RouteId": 6970, "LineId": 73, "Lat": 46.567,
@@ -327,6 +365,11 @@ def test_zdravje_marprom():
                    {"url": "k", "pokrito": [9] * 7, "sprejet": True}], "do": do}
     raz, razlog = ocena(dobro, mv)["vozni_red_marprom"]
     assert raz == zdravje.MLACNA and "5 od 7 dni" in razlog and "kopija" in razlog
+    # Zip pod polovico zadnjega sprejetega: rumeno, številki v razlogu.
+    raz, razlog = ocena(dobro, {"viri": [{"url": "u", "pokrito": [33, 32, 32, 32, 32, 32, 9],
+                                          "sprejet": False, "manj": [202, 1155]}], "do": do})[
+        "vozni_red_marprom"]
+    assert raz == zdravje.MLACNA and "202" in razlog and "1155" in razlog
     assert ocena(dobro, {"viri": [{**mv["viri"][0], "sprejet": True}], "do": do})[
         "vozni_red_marprom"][0] == zdravje.DOBRA
     # Vozni red, ki ga uvoz res vzame, se izteče: rdeče dva dni prej.

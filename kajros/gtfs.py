@@ -214,6 +214,10 @@ KR, KRANJ_AGENCIJA = "kr-", "kranj"
 POKRITOST_DNI = 7
 #: Vrsta dne, ki se je končala pred toliko dnevi, ni več rok, ampak sezona.
 ROK_NAZAJ_DNI = 30
+#: Zip, ki za prihodnji teden nosi manj kot ta delež voženj zadnjega sprejetega,
+#: se ne sprejme. Kranj 1. 11. 2026: MOK je čez noč objavil 5 prog namesto 23
+#: (32 voženj na delavnik namesto 217), dni pa je pokril vse.
+NAJMANJ_PROTI_SPREJETEMU = 0.5
 
 #: Ime, ki ga ima drugje postajališče dlje od tega, dobi kraj v oklepaju.
 RAZLOCI_IME_M = 5000
@@ -313,14 +317,18 @@ def rok(zip_path: Path, danes: str | None = None) -> str | None:
     """
     with zipfile.ZipFile(zip_path) as zf:
         dnevi = _service_days(zf, {t["service_id"] for t in _rows(zf, "trips.txt")})
-    zadnji: dict[int, str] = {}
+    po_vrsti: dict[int, set[str]] = {}
     for ds in dnevi.values():
         for d in ds:
-            vrsta = max(date.fromisoformat(d).weekday(), 4)     # pon-pet = delavnik
-            zadnji[vrsta] = max(zadnji.get(vrsta, d), d)
+            # pon-pet = delavnik
+            po_vrsti.setdefault(max(date.fromisoformat(d).weekday(), 4), set()).add(d)
     meja = (date.fromisoformat(danes or datetime.now(TZ).date().isoformat())
             - timedelta(days=ROK_NAZAJ_DNI)).isoformat()
-    return min((d for d in zadnji.values() if d >= meja), default=None)
+    # En sam dan ni vrsta, ampak enkratna vožnja: Kranj ob nedeljah ne vozi, zip
+    # 1. 11. 2026 pa je imel nedeljske vožnje samo ta dan -- „vozni red znan le
+    # do 1. 11.“, rdeče in pošta, čeprav so delavniki do 30. 11.
+    return min((max(ds) for ds in po_vrsti.values() if len(ds) > 1 and max(ds) >= meja),
+               default=None)
 
 
 def sprejmi(pokrito: list[int], praznih: int = 1) -> bool:
@@ -335,18 +343,29 @@ def _branje(kljuc: str):
             "gtfs_ms": lambda: viri.branje("gtfs_ms")}[kljuc]()
 
 
+def _voznje_v_tednu(zip_path: Path) -> int:
+    """Voženj v prihodnjem tednu po zadnjem sprejetem zipu; 0, če ga ni."""
+    try:
+        return sum(pokritost(zip_path)) if zip_path.exists() else 0
+    except Exception:           # noqa: BLE001 -- pokvarjen zip ne sme ustaviti novega
+        return 0
+
+
 def download_mestni(conn: sqlite3.Connection, vir: MestniVir,
                     force: bool = False) -> Path | None:
     """Prvi zip iz `vir.urls`, ki pokrije naslednji teden.
 
     Vrne pot, kadar se je sprejeti zip spremenil (ali `force`), sicer None.
     Kadar ne pokrije noben, ostane zadnji sprejeti: brez tega bi uvoz ob
-    zastarelem uradnem zipu mesto izbrisal (Marprom od 5. 10. 2026). Izid po
+    zastarelem uradnem zipu mesto izbrisal (Marprom od 5. 10. 2026). Ostane tudi,
+    kadar novi nosi pod polovico njegovih voženj (`NAJMANJ_PROTI_SPREJETEMU`);
+    pravo skrčenje sprejme šele ročni izbris zadnjega sprejetega. Izid po
     viru v `meta.<ključ>_vozni_red` za `/admin` in zdravje.
     """
     target = config.DATA_DIR / f"{vir.kljuc}_gtfs.zip"
     target.parent.mkdir(parents=True, exist_ok=True)
     pregled, izbran = [], None
+    prej = _voznje_v_tednu(target)
     for i, url in enumerate(vir.urls):
         kljuc = f"gtfs_{vir.kljuc}" if i == 0 else f"gtfs_{vir.kljuc}_kopija"
         tmp = target.with_name(f"{vir.kljuc}_gtfs.{i}.tmp")
@@ -368,6 +387,8 @@ def download_mestni(conn: sqlite3.Connection, vir: MestniVir,
             viri.shrani(conn, kljuc)
         zapis["sprejet"] = (izbran is None and "pokrito" in zapis
                             and sprejmi(zapis["pokrito"], vir.praznih))
+        if zapis["sprejet"] and sum(zapis["pokrito"]) < NAJMANJ_PROTI_SPREJETEMU * prej:
+            zapis.update(sprejet=False, manj=[sum(zapis["pokrito"]), prej])
         if zapis["sprejet"]:
             izbran = tmp
         else:
