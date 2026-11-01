@@ -67,6 +67,7 @@ class _Pretvornik(HTMLParser):
         self.celice: list[str] | None = None
         self.shranjeni: list[str] = []
         self.glava_vrstice = False
+        self.poudarki: list[tuple[list[str], int]] = []
 
     # -- izpis --------------------------------------------------------
     def _zakljuci(self):
@@ -78,6 +79,20 @@ class _Pretvornik(HTMLParser):
         self.kosi = []
         self.predpona = ""
         self.vrsta = "odstavek"
+
+    def _poudarek(self, znak: str):
+        self.poudarki.append((self.kosi, len(self.kosi)))
+        self.kosi.append(znak)
+
+    def _konec_poudarka(self, znak: str):
+        """Prazen poudarek (`<i style="width:40%"></i>` v stolpcu grafa) ni
+        besedilo: brez tega je iz grafa nastala vrstica zvezdic."""
+        if self.poudarki:
+            seznam, i = self.poudarki.pop()
+            if seznam is self.kosi and not "".join(self.kosi[i + 1:]).strip():
+                del self.kosi[i:]
+                return
+        self.kosi.append(znak)
 
     def _presledek(self):
         if self.kosi and not self.kosi[-1].endswith(" "):
@@ -117,9 +132,9 @@ class _Pretvornik(HTMLParser):
             else:
                 self.povezave.append(None)
         elif tag in ("b", "strong"):
-            self.kosi.append("**")
+            self._poudarek("**")
         elif tag in ("i", "em"):
-            self.kosi.append("*")
+            self._poudarek("*")
         elif tag == "span":
             self._presledek()
         elif tag == "br":
@@ -149,9 +164,9 @@ class _Pretvornik(HTMLParser):
             if cilj:
                 self.kosi.append(f"]({cilj})")
         elif tag in ("b", "strong"):
-            self.kosi.append("**")
+            self._konec_poudarka("**")
         elif tag in ("i", "em"):
-            self.kosi.append("*")
+            self._konec_poudarka("*")
         elif tag == "span":
             self._presledek()
 

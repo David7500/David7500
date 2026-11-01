@@ -20,6 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import opazovano
+from . import statistika
 from . import straza
 from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, kranj,
                marprom, nap, obisk, ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
@@ -523,6 +524,19 @@ def _povzetki() -> None:
         conn.rollback()
         _log(f"povzetkov ni bilo mogoče osvežiti: {exc}")
         collector.zapisi_korak(conn, "povzetki", exc, kljuc="nocno")
+    # Zaključen mesec se zamrzne iz dnevnih agregatov (`stat_dan`), ki so ravnokar
+    # dopolnjeni; drugi dan po koncu meseca ali kadar koli pozneje, ob objavi
+    # kode, ko je mesec že za nami. Idempotentno, svoj poskus: izpad povzetkov
+    # ne sme vzeti meseca (zamrznitev sama `dopolni` ponovi).
+    try:
+        meseci = statistika.zamrzni_mesece(conn)
+        if meseci:
+            _log(f"mesečno poročilo zamrznjeno: {', '.join(meseci)}")
+        collector.zapisi_korak(conn, "mesecno_porocilo", kljuc="nocno")
+    except Exception as exc:              # noqa: BLE001 -- isto kot zgoraj
+        conn.rollback()
+        _log(f"mesečnega poročila ni bilo mogoče zamrzniti: {exc}")
+        collector.zapisi_korak(conn, "mesecno_porocilo", exc, kljuc="nocno")
     # Svoj poskus, pred stražo: njena vrstica pove odprte po prevozniku.
     try:
         dnevi = opazovano.dopolni(conn)

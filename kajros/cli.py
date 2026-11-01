@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import opazovano
+from . import statistika
 from . import straza
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
                journey, naslovi, ocena, odkloni, peroni, pot, prehod, pripni, stats, tiri,
@@ -263,6 +264,33 @@ def cmd_summarize(args):
     for row in stats.refresh_summaries(conn, windows=(args.days,)):
         print(f"{row['network']:>10s}  {row['kind']:<14s} {args.days:>4d} dni  "
               f"{row['runs'] or 0:>8,} voženj  {row['took_ms']:>7d} ms")
+
+
+def cmd_mesec(args):
+    """Zamrzni zaključene mesece statistike in izpiši zamrznjene.
+
+    Ponoči to opravi strežnik (`server._povzetki`); tu je za ročni zagon, ko je
+    koda objavljena po koncu meseca, in za pogled, kaj je že zamrznjeno.
+    """
+    conn = db.connect()
+    db.init(conn)
+    try:
+        novi = statistika.zamrzni_mesece(conn, mesec=args.mesec)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    for mesec in novi:
+        print(f"zamrznjeno {mesec}")
+    if not novi:
+        print("nič novega za zamrzniti")
+    for m in statistika.seznam_mesecev(conn):
+        print(f"{m['mesec']}  {m['zamrznjeno']}  vlaki {m['vlaki']['n'] or 0:>7,} voženj "
+              f"{m['vlaki']['v5min'] if m['vlaki']['v5min'] is not None else '-':>5} % v 5 min  "
+              f"avtobusi {m['avtobusi']['n'] or 0:>8,} voženj "
+              f"{m['avtobusi']['v5min'] if m['avtobusi']['v5min'] is not None else '-':>5} % v 5 min"
+              f"{'' if m['indeksiraj'] else '  (noindex)'}")
+    for m in statistika.seznam_mesecev(conn):
+        for napaka in statistika.skladnost_meseca(conn, m["mesec"]):
+            print(f"!! {m['mesec']}: {napaka}")
 
 
 def cmd_seed(args):
@@ -650,6 +678,10 @@ def main(argv=None):
     a = sub.add_parser("summarize", help="znova izracunaj dnevne razreze statistike")
     a.add_argument("--days", type=int, default=90, help="sirina okna (privzeto 90)")
     a.set_defaults(func=cmd_summarize)
+
+    a = sub.add_parser("mesec", help="zamrzni zaključene mesece statistike (mesečno poročilo)")
+    a.add_argument("mesec", nargs="?", help="samo ta mesec, oblika 2026-10 (privzeto vsi zaključeni)")
+    a.set_defaults(func=cmd_mesec)
 
     a = sub.add_parser("seed", help="zgradi prilozeno bazo za namestitev (samo vozni red)")
     a.add_argument("--out", default="seed/kajros.sqlite")

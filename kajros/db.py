@@ -666,6 +666,15 @@ CREATE TABLE IF NOT EXISTS stat_voznja (
     izracunano  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS stat_voznja_omrezje ON stat_voznja(network);
+
+-- Mesečno poročilo (`statistika.zamrzni_mesece`): zapisano enkrat, ko je mesec
+-- zaključen, in nikoli več preračunano -- stran `/statistika/2026-10` mora
+-- tudi čez leto reči isto kot ob objavi. NE obrezuje se.
+CREATE TABLE IF NOT EXISTS stat_mesec (
+    mesec       TEXT PRIMARY KEY,   -- 2026-10
+    podatki     TEXT NOT NULL,      -- JSON poročila (`statistika.mesecno_porocilo`)
+    zamrznjeno  INTEGER NOT NULL    -- epoha zamrznitve
+);
 """ + OPAZOVANO
 
 

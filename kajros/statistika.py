@@ -18,11 +18,16 @@ pogledu (`ocena.ZASTARA_S`). Zadnji dnevi se zato vsako noč prepišejo
 
 Okna (`napovedi`, `prevozniki`) gredo v `povzetek` prek
 `stats.SUMMARY_BUILDERS`, ponoči v `server._povzetki`; strani jih samo berejo.
+
+**Mesečno poročilo** (`mesecno_porocilo`, zamrznitev `zamrzni_mesece`): isti
+dnevni agregati, seštevek koledarskega meseca, po zaključku meseca enkrat
+zapisan v `stat_mesec` in nikoli več preračunan.
 """
 from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 import threading
 import time
@@ -668,6 +673,70 @@ def _zapisi_voznje(conn: sqlite3.Connection, network: str, voznje: dict[str, dic
     conn.commit()
 
 
+def _prevoznik_v_oknu(kljuc: str, dnevi: list[tuple[str, dict]], od: str,
+                      napoved: list[tuple[str, str, dict]], network: str) -> dict | None:
+    """Številke enega prevoznika v oknu, ki se začne z `od`.
+
+    `dnevi` so VSI dnevi tega ključa do konca okna (`zajem_od` je prvi dan
+    zajema kadar koli, ne prvi dan okna), `napoved` vrstice sence okna. Isto
+    računa okno zadnjih 30 dni (`prevozniki`) in mesečno poročilo
+    (`mesecno_porocilo`): dve poti do iste številke bi bili dve resnici.
+    """
+    _, agency, skupina = kljuc.split("|")
+    v_oknu = [v for dan, v in dnevi if dan >= od]
+    if not v_oknu:
+        return None
+    hist: Counter = Counter()
+    ure: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    for v in v_oknu:
+        hist.update({int(m): c for m, c in v["hist"].items()})
+        for h, (n, ok) in v["ure"].items():
+            ure[h][0] += n
+            ure[h][1] += ok
+    # Pokritost od prvega dne z meritvijo: vozni red Marproma (zajem od
+    # 27. 10. 2026) sega v začetek meseca, in dnevi pred zajemom niso
+    # vožnje brez podatka, ampak dnevi, ko vira še nismo brali.
+    # Nikoli izmerjen (nadomestni prevoz SŽ: feed zanj ne poroča) pa je 0 %
+    # čez vse dni, ne „neznano“.
+    prvi = next((i for i, v in enumerate(v_oknu) if v["z_meritvijo"]), 0)
+    znan = [v for v in v_oknu[prvi:] if v["nacrt"] is not None]
+    nacrt = [v["nacrt"] for v in znan]
+    z_meritvijo_kjer_nacrt = [v["z_meritvijo"] for v in znan]
+    vmesnih = sum(v["vmesnih"] for v in v_oknu)
+    nap = _prazna_napoved()
+    for _, k, v in napoved:
+        if k == f"{network}|{agency}|na_poti" and skupina != "nadomestni":
+            for blok, modeli in nap.items():
+                for model, vsote in modeli.items():
+                    _sestej(vsote, v.get(blok, {}).get(model, {}))
+    return {
+        "kljuc": kljuc, "agency": agency, "skupina": skupina,
+        "ime": stats.AGENCY_NAMES.get(agency, agency),
+        "dni": len(v_oknu),
+        "voznje": sum(v["z_meritvijo"] for v in v_oknu),
+        # Pokritost samo na dneh, ko je načrt znan -- sicer bi delila
+        # vožnje vseh dni z načrtom nekaterih.
+        "pokritost": (round(sum(z_meritvijo_kjer_nacrt) / sum(nacrt) * 100, 1)
+                      if sum(nacrt) else None),
+        "nacrt": sum(nacrt) if nacrt else None,
+        "zajem_od": next((dan for dan, v in dnevi if v["z_meritvijo"]), None),
+        # Surovi histogram gre zraven: pregled sešteje avtobuse vseh
+        # prevoznikov v eno porazdelitev (mediana iz median ne gre).
+        "cilj": {**iz_histograma(hist),
+                 "hist": {str(m): c for m, c in sorted(hist.items())}},
+        "po_urah": {h: {"n": n, "v5min": round(ok / n * 100, 1)}
+                    for h, (n, ok) in sorted(ure.items(), key=lambda x: int(x[0])) if n},
+        "prezgodaj": {"vmesnih": vmesnih, **{
+            k: (round(sum(v[k] for v in v_oknu) / vmesnih * 100, 1) if vmesnih else None)
+            for k in ("prej1", "prej2", "prej3")}},
+        "po_dnevih": [{"dan": dan, **{k: x for k, x in iz_histograma(v["hist"]).items()
+                                     if k in ("n", "v5min", "mediana_min")}}
+                      for dan, v in dnevi],
+        "napoved": {"vse": {m: meritve(s) for m, s in nap["vse"].items()},
+                    "parno": {m: meritve(s) for m, s in nap["parno"].items()}},
+    }
+
+
 def prevozniki(conn: sqlite3.Connection, days: int, network: str,
                danes: date | None = None) -> dict:
     """Stran prevoznikov: točnost, pokritost, prezgodnji odhodi, napoved.
@@ -680,63 +749,12 @@ def prevozniki(conn: sqlite3.Connection, days: int, network: str,
     vrstice = _beri(conn, "prevoznik", od_dolgo, do, network)
     napoved = _beri(conn, "napoved", od, do, network)
 
-    kljuci = sorted({k for _, k, _ in vrstice})
     out = []
-    for kljuc in kljuci:
-        _, agency, skupina = kljuc.split("|")
-        dnevi = [(dan, v) for dan, k, v in vrstice if k == kljuc]
-        v_oknu = [v for dan, v in dnevi if dan >= od]
-        if not v_oknu:
-            continue
-        hist: Counter = Counter()
-        ure: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-        for v in v_oknu:
-            hist.update({int(m): c for m, c in v["hist"].items()})
-            for h, (n, ok) in v["ure"].items():
-                ure[h][0] += n
-                ure[h][1] += ok
-        # Pokritost od prvega dne z meritvijo: vozni red Marproma (zajem od
-        # 27. 10. 2026) sega v začetek meseca, in dnevi pred zajemom niso
-        # vožnje brez podatka, ampak dnevi, ko vira še nismo brali.
-        # Nikoli izmerjen (nadomestni prevoz SŽ: feed zanj ne poroča) pa je 0 %
-        # čez vse dni, ne „neznano“.
-        prvi = next((i for i, v in enumerate(v_oknu) if v["z_meritvijo"]), 0)
-        znan = [v for v in v_oknu[prvi:] if v["nacrt"] is not None]
-        nacrt = [v["nacrt"] for v in znan]
-        z_meritvijo_kjer_nacrt = [v["z_meritvijo"] for v in znan]
-        vmesnih = sum(v["vmesnih"] for v in v_oknu)
-        nap = _prazna_napoved()
-        for _, k, v in napoved:
-            if k == f"{network}|{agency}|na_poti" and skupina != "nadomestni":
-                for blok, modeli in nap.items():
-                    for model, vsote in modeli.items():
-                        _sestej(vsote, v.get(blok, {}).get(model, {}))
-        out.append({
-            "kljuc": kljuc, "agency": agency, "skupina": skupina,
-            "ime": stats.AGENCY_NAMES.get(agency, agency),
-            "dni": len(v_oknu),
-            "voznje": sum(v["z_meritvijo"] for v in v_oknu),
-            # Pokritost samo na dneh, ko je načrt znan -- sicer bi delila
-            # vožnje vseh dni z načrtom nekaterih.
-            "pokritost": (round(sum(z_meritvijo_kjer_nacrt) / sum(nacrt) * 100, 1)
-                          if sum(nacrt) else None),
-            "nacrt": sum(nacrt) if nacrt else None,
-            "zajem_od": next((dan for dan, v in dnevi if v["z_meritvijo"]), None),
-            # Surovi histogram gre zraven: pregled sešteje avtobuse vseh
-            # prevoznikov v eno porazdelitev (mediana iz median ne gre).
-            "cilj": {**iz_histograma(hist),
-                     "hist": {str(m): c for m, c in sorted(hist.items())}},
-            "po_urah": {h: {"n": n, "v5min": round(ok / n * 100, 1)}
-                        for h, (n, ok) in sorted(ure.items(), key=lambda x: int(x[0])) if n},
-            "prezgodaj": {"vmesnih": vmesnih, **{
-                k: (round(sum(v[k] for v in v_oknu) / vmesnih * 100, 1) if vmesnih else None)
-                for k in ("prej1", "prej2", "prej3")}},
-            "po_dnevih": [{"dan": dan, **{k: x for k, x in iz_histograma(v["hist"]).items()
-                                         if k in ("n", "v5min", "mediana_min")}}
-                          for dan, v in dnevi],
-            "napoved": {"vse": {m: meritve(s) for m, s in nap["vse"].items()},
-                        "parno": {m: meritve(s) for m, s in nap["parno"].items()}},
-        })
+    for kljuc in sorted({k for _, k, _ in vrstice}):
+        p = _prevoznik_v_oknu(kljuc, [(dan, v) for dan, k, v in vrstice if k == kljuc],
+                              od, napoved, network)
+        if p is not None:
+            out.append(p)
     koncne = _koncne(conn, network, od_dolgo, do)
     lestvica = _lestvica([r for r in koncne if r[4] >= od], network)
     _zapisi_voznje(conn, network, _voznje(koncne, network, od))
@@ -850,6 +868,10 @@ def poti_za_iskalnik(conn: sqlite3.Connection) -> list[tuple[str, str | None]]:
             f"AND json_extract(podatki, '$.cilj.n') >= "
             f"CASE network WHEN 'zeleznica' THEN ? ELSE ? END ORDER BY pot",
             (net, *sorted(LINIJSKI), MIN_DNI_LESTVICA, MIN_VZOREC))]
+    # Mesečna poročila: zamrznjena in z dovolj vzorca (`mesec_indeksiraj`);
+    # dan spremembe je dan zamrznitve, ker se potem ne spremeni nič.
+    poti += [(f"/statistika/{m['mesec']}", (m["zamrznjeno"] or "")[:10] or None)
+             for m in seznam_mesecev(conn) if m["indeksiraj"]]
     return poti
 
 
@@ -920,6 +942,7 @@ def stran_pregled(conn: sqlite3.Connection) -> dict:
         "napoved": nap["skupaj"]["na_poti"]["vse"],
         "napoved_od": nap.get("od"), "napoved_do": nap.get("do"),
         "horizont_min": nap.get("horizont_min"),
+        "meseci": seznam_mesecev(conn)[:6],
         "min_vzorec": MIN_VZOREC, "min_prehodov": MIN_PREHODOV,
     }
 
@@ -1395,3 +1418,371 @@ def _predlogi(conn: sqlite3.Connection, vnosa: tuple[str, str],
         if povezave:
             out.append({"vnos": vnosa[i], "imena": povezave})
     return out
+
+
+# ---------------------------------------------------------------- mesečno poročilo
+
+#: Mesec je zaključen, ko je od njegovega zadnjega dne minilo toliko dni.
+#: Avtobusi zadnjega dne vozijo do 09:48 naslednjega (`stats.se_vozi_vceraj`),
+#: `dopolni` pa dan prepiše še dve noči (`PREPISI_DNI`): dva dni po koncu
+#: meseca ima `stat_dan` zadnjega dne vse, kar bo kdaj imel.
+MESEC_ZAKLJUCEN_PO_DNEH = 2
+
+#: Dan velja za dan z zajemom, ko je do cilja izmerjena vsaj ta del načrtovanih
+#: voženj. 7.–10. 10. 2026 so imeli vlaki 2, 1, 1 in 13 meritev od ~600
+#: (zemljevid SŽ ni bil dosegljiv), najslabši navaden dan 0,38 (LPP primestni).
+#: Absolutni prag (`MIN_VZOREC`) ne gre: AP Murska Sobota ima ob sobotah 28 voženj.
+ZAJEM_DNEVA_MIN = 0.1
+
+#: Oblika zamrznjenega poročila. Stari meseci ostanejo v stari obliki, zato jo
+#: ob spremembi polj povečaj in naj stran stare bere ali zavrne.
+STAT_MESEC_VERZIJA = 1
+
+#: Katera skupina `stat_dan` je „omrežje“ na strani: nadomestni prevoz SŽ je
+#: avtobus po vozilu, a vlak po prometu, in feed zanj ne poroča (`_skupina`).
+_SKUPINA_OMREZJA = {"zeleznica": "vlak", "avtobus": "avtobus"}
+
+_MESECI = ("januar", "februar", "marec", "april", "maj", "junij", "julij",
+           "avgust", "september", "oktober", "november", "december")
+
+
+def je_mesec(mesec: str) -> bool:
+    """`2026-10`; naslov strani in API ne sprejmeta nič drugega."""
+    return re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", mesec or "") is not None
+
+
+def meje_meseca(mesec: str) -> tuple[str, str]:
+    """`2026-10` -> (`2026-10-01`, `2026-10-31`)."""
+    leto, m = int(mesec[:4]), int(mesec[5:7])
+    zadnji = date(leto + (m == 12), m % 12 + 1, 1) - timedelta(days=1)
+    return date(leto, m, 1).isoformat(), zadnji.isoformat()
+
+
+def ime_meseca(mesec: str) -> str:
+    """`2026-10` -> „oktober 2026“."""
+    return f"{_MESECI[int(mesec[5:7]) - 1]} {mesec[:4]}"
+
+
+def obsegi_dni(dnevi: list[str]) -> str:
+    """Dnevi v obsege, kot jih bere človek: 7.–10. 10., 31. 10."""
+    if not dnevi:
+        return ""
+    skupine: list[list[date]] = []
+    for d in sorted(date.fromisoformat(x) for x in dnevi):
+        if skupine and (d - skupine[-1][-1]).days == 1:
+            skupine[-1].append(d)
+        else:
+            skupine.append([d])
+    deli = []
+    for s in skupine:
+        a, b = s[0], s[-1]
+        if a == b:
+            deli.append(f"{a.day}. {a.month}.")
+        elif a.month == b.month:
+            deli.append(f"{a.day}.–{b.day}. {a.month}.")
+        else:
+            deli.append(f"{a.day}. {a.month}.–{b.day}. {b.month}.")
+    return ", ".join(deli)
+
+
+def dan_z_zajemom(v: dict) -> bool:
+    """Ali je zajem ta dan sploh deloval: vrstica `prevoznik` ali vsota vrstic."""
+    n = v.get("s_ciljem") or 0
+    nacrt = v.get("nacrt")
+    return n > 0 and (not nacrt or n >= ZAJEM_DNEVA_MIN * nacrt)
+
+
+def _zajem_meseca(dnevi: list[tuple[str, bool, bool]], od: str) -> dict:
+    """Kdaj se je zajem začel in kateri dnevi meseca so izpadli.
+
+    `dnevi` = (dan, ima vrstico z načrtom ali meritvijo, zajem je deloval),
+    urejeni, od začetka zgodovine do konca meseca. Dan brez vrstice je dan brez
+    vožnje (Kranj ob nedeljah), ne izpad. Dnevi pred prvim z zajemom so dnevi,
+    ko vira še nismo brali (Marprom do 27. 10. 2026): to je začetek, ne vrzel.
+    """
+    prvi = next((dan for dan, _, ok in dnevi if ok), None)
+    v_obdobju = [(dan, ok) for dan, ima, ok in dnevi
+                 if ima and prvi is not None and dan >= max(od, prvi)]
+    brez = [dan for dan, ok in v_obdobju if not ok]
+    return {"zajem_zacet": prvi if prvi is not None and prvi > od else None,
+            "dni_zajema": len(v_obdobju) - len(brez), "dnevi_brez": brez}
+
+
+def _skupaj_dni(vrstice: list[tuple[str, str, dict]], skupina: str) -> list[dict]:
+    """Ključi ene skupine po dnevih: porazdelitev iz VSOTE histogramov (delež
+    iz deležev bi LPP-ju dal enako težo kot AP Murski Soboti)."""
+    po_dnevih: dict[str, dict] = {}
+    for dan, kljuc, v in vrstice:
+        if not kljuc.endswith("|" + skupina):
+            continue
+        d = po_dnevih.setdefault(dan, {"hist": Counter(), "s_ciljem": 0, "nacrt": 0,
+                                       "nacrt_znan": True})
+        d["hist"].update({int(m): c for m, c in v["hist"].items()})
+        d["s_ciljem"] += v["s_ciljem"]
+        if v["nacrt"] is None:
+            d["nacrt_znan"] = False
+        else:
+            d["nacrt"] += v["nacrt"]
+    out = []
+    for dan in sorted(po_dnevih):
+        d = po_dnevih[dan]
+        r = iz_histograma(d["hist"])
+        out.append({"dan": dan, "n": r["n"], "v5min": r.get("v5min"),
+                    "mediana_min": r.get("mediana_min"),
+                    "ok": dan_z_zajemom({"s_ciljem": d["s_ciljem"],
+                                         "nacrt": d["nacrt"] if d["nacrt_znan"] else None})})
+    return out
+
+
+def mesecno_porocilo(conn: sqlite3.Connection, mesec: str) -> dict | None:
+    """Številke za koledarski mesec iz `stat_dan`. Samo računa; zapis in
+    zamrznitev sta v `zamrzni_mesec`.
+
+    Vsaka številka gre skozi iste funkcije kot okno zadnjih 30 dni
+    (`_prevoznik_v_oknu`, `iz_histograma`): poročilo in `/statistika` za isto
+    obdobje morata reči isto. Zajem se bere iz podatkov -- kdaj se je prevoznik
+    začel meriti, kateri dnevi so izpadli --, ne iz seznama v kodi.
+    """
+    od, do = meje_meseca(mesec)
+    prevozniki: list[dict] = []
+    omrezja: dict[str, dict] = {}
+    for net, skupina in _SKUPINA_OMREZJA.items():
+        vrstice = _beri(conn, "prevoznik", "0000-00-00", do, net)
+        for kljuc in sorted({k for _, k, _ in vrstice}):
+            dnevi = [(dan, v) for dan, k, v in vrstice if k == kljuc]
+            p = _prevoznik_v_oknu(kljuc, dnevi, od, [], net)
+            if p is None:
+                continue
+            for k in ("po_urah", "prezgodaj", "napoved"):     # ni del poročila
+                del p[k]
+            p.update(network=net, slug=pristanek.slug(p["ime"]),
+                     po_dnevih=[d for d in p["po_dnevih"] if d["dan"] >= od],
+                     **_zajem_meseca([(dan, True, dan_z_zajemom(v)) for dan, v in dnevi], od))
+            prevozniki.append(p)
+        dnevi_om = _skupaj_dni(vrstice, skupina)
+        hist: Counter = Counter()
+        izbrani = [p for p in prevozniki if p["network"] == net and p["skupina"] == skupina]
+        for p in izbrani:
+            hist.update({int(m): c for m, c in p["cilj"].get("hist", {}).items()})
+        omrezja[net] = {
+            "prevoznikov": sum(1 for p in izbrani if p["cilj"].get("n")),
+            "cilj": {**iz_histograma(hist), "hist": {str(m): c for m, c in sorted(hist.items())}},
+            "dnevi": [{k: d[k] for k in ("dan", "n", "v5min", "mediana_min")}
+                      for d in dnevi_om if d["dan"] >= od],
+            **_zajem_meseca([(d["dan"], True, d["ok"]) for d in dnevi_om], od)}
+    if not any(p["cilj"].get("n") for p in prevozniki):
+        return None
+    return {"v": STAT_MESEC_VERZIJA, "mesec": mesec, "od": od, "do": do,
+            "dni": (date.fromisoformat(do) - date.fromisoformat(od)).days + 1,
+            "omrezja": omrezja, "prevozniki": prevozniki}
+
+
+def zaprti_meseci(conn: sqlite3.Connection, danes: date | None = None) -> list[str]:
+    """Meseci z dnevnimi agregati, ki so zaključeni (`MESEC_ZAKLJUCEN_PO_DNEH`)."""
+    danes = danes or datetime.now(TZ).date()
+    return [m for (m,) in conn.execute(
+        "SELECT DISTINCT substr(dan, 1, 7) FROM stat_dan WHERE vrsta = 'prevoznik' ORDER BY 1")
+        if date.fromisoformat(meje_meseca(m)[1]) + timedelta(days=MESEC_ZAKLJUCEN_PO_DNEH) <= danes]
+
+
+def zamrzni_mesec(conn: sqlite3.Connection, mesec: str, zdaj: float | None = None) -> dict | None:
+    """Zapiši poročilo meseca, če ga še ni; vrne ga, če je nastalo zdaj.
+
+    Zamrznjen mesec se NE preračuna: stran `/statistika/2026-10` je tisto, na
+    kar se sklicujeta novinar in iskalnik, in številka z naslovom meseca ne
+    sme čez leto postati druga. `INSERT OR IGNORE` varuje tudi pred drugim
+    procesom (nočno opravilo in ročni `kajros mesec` hkrati).
+    """
+    if conn.execute("SELECT 1 FROM stat_mesec WHERE mesec = ?", (mesec,)).fetchone():
+        return None
+    p = mesecno_porocilo(conn, mesec)
+    if p is None:
+        return None
+    ts = int(time.time() if zdaj is None else zdaj)
+    p["zamrznjeno"] = datetime.fromtimestamp(ts, TZ).isoformat(timespec="seconds")
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO stat_mesec (mesec, podatki, zamrznjeno) VALUES (?, ?, ?)",
+        (mesec, json.dumps(p, separators=(",", ":"), ensure_ascii=False), ts))
+    conn.commit()
+    return p if cur.rowcount else None
+
+
+def zamrzni_mesece(conn: sqlite3.Connection, danes: date | None = None,
+                   mesec: str | None = None) -> list[str]:
+    """Zamrzni vsak zaključen mesec, ki ima dnevne agregate in še ni zamrznjen.
+
+    Idempotentno: kdor je zamrznjen, ostane; mesec, ki se zaključi, ko strežnik
+    stoji ali ko se koda objavi pozneje, se zamrzne ob prvem klicu po koncu
+    (ponoči `server._povzetki`, ročno `kajros mesec`). Najprej `dopolni`:
+    brez njega bi mesec zamrznili iz dni, ki jih nočno opravilo še ni
+    prepisalo, ko je bil dan prezgodaj sklenjen.
+    """
+    danes = danes or datetime.now(TZ).date()
+    dopolni(conn, danes)
+    zaprti = zaprti_meseci(conn, danes)
+    if mesec is not None:
+        if not je_mesec(mesec):
+            raise ValueError(f"„{mesec}“ ni mesec (oblika 2026-10)")
+        if mesec not in zaprti:
+            rok = date.fromisoformat(meje_meseca(mesec)[1]) + timedelta(days=MESEC_ZAKLJUCEN_PO_DNEH)
+            raise ValueError(
+                f"{mesec} še ni zaključen ali nima dnevnih agregatov "
+                f"(zamrzne se od {rok.day}. {rok.month}. {rok.year})")
+        zaprti = [mesec]
+    return [m for m in zaprti if zamrzni_mesec(conn, m) is not None]
+
+
+def razredi_cela(cilj: dict) -> dict[str, int]:
+    """Razredi zamude v celih odstotkih, ki dajo 100 in katerih „točno“ +
+    „1–5 min“ je izpisani delež v 5 min.
+
+    Vsak razred posebej zaokrožen bi bralcu, ki sešteje, dal 99 ali 101 --
+    ista past kot „delež točnih proti vsoti razredov“ (`preveri_skladnost.py`).
+    V 5 min in nad 15 min kažejo druge strani že zaokrožena, zato ju obdrži;
+    „točno“ je zaokroženo samo, „1–5 min“ ostanek do deleža v 5 min,
+    „5–15 min“ ostanek do 100.
+    """
+    v5 = math.floor(cilj["v5min"] + 0.5)
+    nad15 = min(math.floor(cilj["nad15"] + 0.5), 100 - v5)
+    tocno = min(math.floor(cilj["razredi"]["tocno"] + 0.5), v5)
+    return {"tocno": tocno, "1-5": v5 - tocno, "5-15": 100 - v5 - nad15, "nad-15": nad15}
+
+
+def primerljiv_mesec(x: dict) -> bool:
+    """Isto pravilo kot `primerljiv`, le da dneve zajema šteje v mesecu."""
+    return (x["skupina"] != "nadomestni"
+            and x["cilj"].get("n", 0) >= MIN_VOZENJ_PRIMERJAVA
+            and x["dni_zajema"] >= MIN_DNI_PRIMERJAVA)
+
+
+def mesec_indeksiraj(p: dict) -> bool:
+    """Poročilo je za iskalnik, kadar ima vsaj eno omrežje dovolj vzorca in
+    dni zajema: mesec s tremi dnevi zajema (avgust 2026) je še dosegljiv,
+    a `noindex` in ni v zemljevidu strani."""
+    return any(o["cilj"].get("n", 0) >= MIN_VZOREC and o["dni_zajema"] >= MIN_DNI_PRIMERJAVA
+               for o in p["omrezja"].values())
+
+
+def seznam_mesecev(conn: sqlite3.Connection) -> list[dict]:
+    """Zamrznjeni meseci, najnovejši prvi: kazalo na pregledu in v API-ju."""
+    out = []
+    for mesec, podatki in conn.execute("SELECT mesec, podatki FROM stat_mesec ORDER BY mesec DESC"):
+        p = json.loads(podatki)
+        om = p["omrezja"]
+        out.append({
+            "mesec": mesec, "ime": ime_meseca(mesec), "zamrznjeno": p.get("zamrznjeno"),
+            "indeksiraj": mesec_indeksiraj(p),
+            "vlaki": {k: om.get("zeleznica", {}).get("cilj", {}).get(k) for k in ("n", "v5min")},
+            "avtobusi": {k: om.get("avtobus", {}).get("cilj", {}).get(k) for k in ("n", "v5min")}})
+    return out
+
+
+def zamrznjen_mesec(conn: sqlite3.Connection, mesec: str) -> dict | None:
+    """Shranjeno poročilo, kakršno je bilo ob zamrznitvi; API ga vrne kot je."""
+    r = conn.execute("SELECT podatki FROM stat_mesec WHERE mesec = ?", (mesec,)).fetchone()
+    return None if r is None else json.loads(r[0])
+
+
+def stran_mesec(conn: sqlite3.Connection, mesec: str) -> dict | None:
+    """`/statistika/2026-10`: zamrznjeno poročilo, pripravljeno za izris."""
+    p = zamrznjen_mesec(conn, mesec)
+    if p is None:
+        return None
+    vsi = sorted(m["mesec"] for m in seznam_mesecev(conn))
+    i = vsi.index(mesec)
+    zamrznjeno = datetime.fromisoformat(p["zamrznjeno"]) if p.get("zamrznjeno") else None
+
+    def prikaz(x: dict) -> dict:
+        return {**x, "naslov": x["ime"] + (" (vlaki)" if x["network"] == "zeleznica" else ""),
+                "r": razredi_cela(x["cilj"])}
+
+    z_meritvami = [prikaz(x) for x in p["prevozniki"]
+                   if x["skupina"] != "nadomestni" and x["cilj"].get("n")]
+
+    def vlak_prej(x: dict) -> bool:
+        return x["network"] != "zeleznica"
+
+    omrezja = {net: {**o, "r": razredi_cela(o["cilj"]) if o["cilj"].get("n") else None,
+                     "stolpci": spark(o["dnevi"], p["dni"])}
+               for net, o in p["omrezja"].items()}
+    return {
+        "p": p, "mesec": mesec, "ime": ime_meseca(mesec), "omrezja": omrezja,
+        "primerljivi": sorted((x for x in z_meritvami if primerljiv_mesec(x)),
+                              key=lambda x: (vlak_prej(x), -x["cilj"]["v5min"], x["ime"])),
+        "premalo": sorted((x for x in z_meritvami if not primerljiv_mesec(x)),
+                          key=lambda x: (vlak_prej(x), -x["cilj"]["n"])),
+        "nadomestni": next((x for x in p["prevozniki"] if x["skupina"] == "nadomestni"), None),
+        "izjeme": [x for x in z_meritvami if x["zajem_zacet"] or x["dnevi_brez"]],
+        "zamrznjeno": p.get("zamrznjeno"),
+        "zamrznjeno_dan": (f"{zamrznjeno.day}. {zamrznjeno.month}. {zamrznjeno.year}"
+                           if zamrznjeno else None),
+        "prejsnji": vsi[i - 1] if i else None,
+        "naslednji": vsi[i + 1] if i + 1 < len(vsi) else None,
+        "indeksiraj": mesec_indeksiraj(p),
+        "min_vzorec": MIN_VZOREC, "min_vozenj": MIN_VOZENJ_PRIMERJAVA, "min_dni": MIN_DNI_PRIMERJAVA,
+    }
+
+
+def skladnost_meseca(conn: sqlite3.Connection, mesec: str) -> list[str]:
+    """Zamrznjeno poročilo proti samemu sebi, dnevnim vrsticam in oknu.
+
+    Prazen seznam = vse prav (`scripts/preveri_skladnost.py`, test). Tri stvari,
+    ki bi na zaslonu pokazale dve različni številki za isto stvar:
+
+    * razredi: vsota 100 in „točno“ + „1–5 min“ = delež v 5 min (3 280 voženj
+      4. 9. 2026 je bilo sivih in oranžnih hkrati);
+    * mesec = vsota dni: število voženj je vsota `s_ciljem` v `stat_dan`,
+      prešteto neodvisno (SQL), omrežje = vsota prevoznikov;
+    * poročilo = okno: iste dnevne vrstice skozi iste funkcije kot
+      `/statistika` dajo isto, kar je zamrznjeno (razhajanje: dnevi so se
+      od zamrznitve spremenili, npr. po novi različici `stat_dan`).
+    """
+    p = zamrznjen_mesec(conn, mesec)
+    if p is None:
+        return [f"{mesec} ni zamrznjen"]
+    od, do = meje_meseca(mesec)
+    napake: list[str] = []
+
+    def razredi(ime: str, c: dict) -> None:
+        if not c.get("n"):
+            return
+        r = c["razredi"]
+        if abs(sum(r.values()) - 100) > 0.25:
+            napake.append(f"{ime}: razredi dajo {sum(r.values()):.1f} %")
+        if abs(r["tocno"] + r["1-5"] - c["v5min"]) > 0.11:
+            napake.append(f"{ime}: točno + 1–5 min = {r['tocno'] + r['1-5']:.1f} %, "
+                          f"v 5 min {c['v5min']} %")
+        if r["nad-15"] != c["nad15"]:
+            napake.append(f"{ime}: nad 15 min {c['nad15']} %, razred {r['nad-15']} %")
+        if c.get("hist") and sum(c["hist"].values()) != c["n"]:
+            napake.append(f"{ime}: histogram {sum(c['hist'].values())} voženj, n = {c['n']}")
+        cela = razredi_cela(c)
+        if sum(cela.values()) != 100 or cela["tocno"] + cela["1-5"] != math.floor(c["v5min"] + 0.5):
+            napake.append(f"{ime}: cela števila razredov {cela} se ne ujemajo z deležem v 5 min")
+
+    for x in p["prevozniki"]:
+        razredi(x["ime"] + ("/" + x["skupina"] if x["skupina"] != "avtobus" else ""), x["cilj"])
+        n_dni = conn.execute(
+            "SELECT COALESCE(SUM(json_extract(podatki, '$.s_ciljem')), 0) FROM stat_dan "
+            "WHERE vrsta = 'prevoznik' AND kljuc = ? AND dan BETWEEN ? AND ?",
+            (x["kljuc"], od, do)).fetchone()[0]
+        if n_dni != x["cilj"].get("n", 0):
+            napake.append(f"{x['kljuc']}: poročilo {x['cilj'].get('n', 0)} voženj, "
+                          f"dnevne vrstice {n_dni}")
+    for net, o in p["omrezja"].items():
+        razredi(net, o["cilj"])
+        vsota = sum(x["cilj"].get("n", 0) for x in p["prevozniki"]
+                    if x["network"] == net and x["skupina"] == _SKUPINA_OMREZJA[net])
+        if vsota != o["cilj"].get("n", 0):
+            napake.append(f"{net}: omrežje {o['cilj'].get('n', 0)} voženj, prevozniki {vsota}")
+    ponovno = mesecno_porocilo(conn, mesec)
+    if ponovno is not None:
+        zdaj = {x["kljuc"]: x["cilj"] for x in ponovno["prevozniki"]}
+        for x in p["prevozniki"]:
+            c = zdaj.get(x["kljuc"], {})
+            if (c.get("n"), c.get("v5min")) != (x["cilj"].get("n"), x["cilj"].get("v5min")):
+                napake.append(
+                    f"{x['kljuc']}: zamrznjeno {x['cilj'].get('n')} voženj in "
+                    f"{x['cilj'].get('v5min')} % v 5 min, dnevne vrstice zdaj "
+                    f"{c.get('n')} in {c.get('v5min')} %")
+    return napake

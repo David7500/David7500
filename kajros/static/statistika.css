@@ -136,6 +136,9 @@
 .st-tabela td:first-child a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .st-tabela td .st-trak { display: inline-block; width: 72px; height: 8px; vertical-align: middle; margin-right: 8px; }
 .st-tabela tr.pod-crto td { color: var(--ink-mute); }
+/* Stolpec z besedo (zajem v mesecu): ne v tipkopisu in ne desno poravnan. */
+.st-tabela th.besedilo, .st-tabela td.besedilo { text-align: left; font-family: var(--sans);
+  font-size: 13px; color: var(--ink-dim); white-space: normal; padding-left: 18px; }
 @media (hover: hover) { .st-tabela td:first-child a:hover { text-decoration: underline; } }
 
 /* Naslov skupine kartic v mreži: razmik da mreža. */
@@ -182,6 +185,25 @@
 .st-ploscice b { font: 600 15px/1.3 var(--sans); color: var(--ink); }
 .st-ploscice .pc { font: 600 15px var(--mono); color: var(--ink); white-space: nowrap; }
 .st-ploscice .drobno { font: 400 12px/1.4 var(--sans); color: var(--ink-mute); }
+
+/* Mesečno poročilo: razredi zamude v enem traku (širina odseka = delež
+   voženj; barve razredov so že zgoraj, `.st-trak i.r-…`) in legenda z
+   besedo in številom -- barva sama ne pove nič. */
+.st-razredi { display: flex; flex: none; width: 100%; height: 14px; }
+.st-razredi i { flex: none; border-radius: 0; }
+.st-seznam .st-razredi { grid-column: 1 / -1; margin: 6px 0 2px; height: 10px; }
+.st-legenda { display: flex; flex-wrap: wrap; gap: 4px 16px; font: 400 13px/1.4 var(--sans); color: var(--ink-dim); }
+.st-legenda span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.st-legenda i { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--d-ontime); }
+.st-legenda i.r-1-5 { background: var(--d-small); }
+.st-legenda i.r-5-15 { background: var(--d-mid); }
+.st-legenda i.r-nad-15 { background: var(--d-big); }
+.st-podnaslov { margin: 14px 0 0; font: 600 14px/1.3 var(--sans); color: var(--ink); }
+/* Drugi meseci: povezave levo in desno, v sredini nazaj na živo okno. */
+.st-mesec-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px;
+                margin: 22px 0 0; font: 500 14px var(--sans); }
+.st-mesec-nav a { color: var(--accent-lit); text-decoration: none; }
+@media (hover: hover) { .st-mesec-nav a:hover { text-decoration: underline; } }
 
 /* Namizje (David, 29. 10. 2026: „novinarji gledajo iz računalnikov“, „luknje
    vmes“): kartice v vrstah, ki se raztegnejo do konca vrste in so v vrsti
@@ -254,5 +276,9 @@
   .st-tabela th:first-child, .st-tabela td:first-child { padding-left: 0; }
   .st-tabela th:last-child, .st-tabela td:last-child { padding-right: 0; }
   .st-samo-telefon { display: none; }
+  /* Seznam v široki kartici (`.st-siroka .st-seznam` je mreža): pravilo zgoraj
+     ima manjšo specifičnost in ga mreža povozi, telefonski seznam pa bi stal
+     pod tabelo. */
+  .st-k .st-samo-telefon { display: none; }
 }
 

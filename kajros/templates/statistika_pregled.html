@@ -97,6 +97,15 @@
       <a class="st-naprej" href="/statistika/prevozniki">Po prevoznikih ›</a>
     </section>
     {% endif %}
+    {% if meseci %}
+    {% set m = meseci[0] %}
+    <section class="st-k">
+      <h2>Kakšen je bil {{ m.ime }}?</h2>
+      <p>Zamrznjeno poročilo za cel mesec{% if m.vlaki.n and m.vlaki.n >= min_vzorec %}: {{ m.vlaki.v5min | odstotek }} vlakov{% endif %}{% if m.avtobusi.n and m.avtobusi.n >= min_vzorec %}{{ " in " if m.vlaki.n and m.vlaki.n >= min_vzorec else ": " }}{{ m.avtobusi.v5min | odstotek }} avtobusov{% endif %}{% if (m.vlaki.n and m.vlaki.n >= min_vzorec) or (m.avtobusi.n and m.avtobusi.n >= min_vzorec) %} na cilju v 5 minutah{% endif %}. Številke se ne spreminjajo.</p>
+      <a class="st-naprej" href="/statistika/{{ m.mesec }}">Poročilo za {{ m.ime }} ›</a>
+      {% if meseci | length > 1 %}<div class="st-drobno">Starejša poročila: {% for x in meseci[1:] %}<a href="/statistika/{{ x.mesec }}">{{ x.ime }}</a>{{ ", " if not loop.last }}{% endfor %}</div>{% endif %}
+    </section>
+    {% endif %}
     {% if relacija %}
     <section class="st-k st-siroka">
       <h2>{{ relacija.od }} → {{ relacija.do }}: vlak, avtobus ali avto?</h2>

@@ -381,6 +381,8 @@ templates.env.filters["decimalno"] = statistika.decimalno
 templates.env.filters["minute"] = statistika.minute
 templates.env.filters["ura_vr"] = statistika.ura_vr
 templates.env.filters["zamuda_min"] = statistika.zamuda_min
+templates.env.filters["obsegi_dni"] = statistika.obsegi_dni
+templates.env.filters["ime_meseca"] = statistika.ime_meseca
 templates.env.filters["slug"] = pristanek.slug
 # Absolutni naslov za `_meta.html`. Značke za predogled ga morajo nositi;
 # relativnega Signal, WhatsApp in Slack ne razrešijo.
@@ -1110,6 +1112,25 @@ def statistika_linija(request: Request, prevoznik: str, st: str):
             f"/statistika/linija/{pristanek.slug(prevoznik)}/{pristanek.slug(st)}",
             status_code=301)
     return _stran_voznje(request, f"/statistika/linija/{prevoznik}/{st}")
+
+
+@app.get("/statistika/{mesec}", response_class=HTMLResponse, include_in_schema=False)
+def statistika_mesec(request: Request, mesec: str):
+    """Mesečno poročilo (`statistika.stran_mesec`): zamrznjene številke
+    zaključenega meseca, naslov `2026-10`. Kar ni mesec ali še ni zamrznjeno,
+    je 404. Pot je za fiksnimi (`napovedi`, `sz` …), ki imajo prednost."""
+    with _conn() as conn:
+        p = statistika.stran_mesec(conn, mesec) if statistika.je_mesec(mesec) else None
+    if p is None:
+        raise HTTPException(404, "tega meseca še nimamo (poročilo nastane po koncu meseca)")
+    deli = [f"{statistika.odstotek(o['cilj']['v5min'])} {ime}"
+            for net, ime in (("zeleznica", "vlakov"), ("avtobus", "avtobusov"))
+            if (o := p["omrezja"].get(net)) and o["cilj"].get("n", 0) >= p["min_vzorec"]]
+    opis = (f"{p['ime'].capitalize()}: " + (" in ".join(deli) + " je prišlo na cilj v 5 minutah. "
+                                           if deli else "")
+            + "Točnost po prevoznikih, razredi zamude in koliko voženj stoji za vsako številko. "
+              "Zamrznjeno poročilo, se ne spreminja.")
+    return templates.TemplateResponse(request, "statistika_mesec.html", {**p, "opis": opis})
 
 
 @app.get("/primerjava", response_class=HTMLResponse, include_in_schema=False)
@@ -3132,6 +3153,24 @@ def api_statistika_prevozniki():
     with _conn() as conn:
         return {net: stats.summary_get(conn, "stat_prevozniki", net)
                 for net in stats.SUMMARY_NETWORKS}
+
+
+@app.get("/api/statistika/meseci")
+def api_statistika_meseci():
+    """Zamrznjena mesečna poročila, najnovejše prvo (`statistika.seznam_mesecev`)."""
+    with _conn() as conn:
+        return {"meseci": statistika.seznam_mesecev(conn)}
+
+
+@app.get("/api/statistika/mesec/{mesec}")
+def api_statistika_mesec(mesec: str):
+    """Mesečno poročilo, kakršno je bilo ob zamrznitvi: po omrežju in
+    prevozniku porazdelitev zamude, vzorec in dnevi zajema. Se ne preračuna."""
+    with _conn() as conn:
+        p = statistika.zamrznjen_mesec(conn, mesec) if statistika.je_mesec(mesec) else None
+    if p is None:
+        raise HTTPException(404, "tega meseca še nimamo")
+    return p
 
 
 # Vlak ostane na seznamu se toliko sekund po voznorednem (z zamudo popravljenem)

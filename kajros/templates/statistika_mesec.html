@@ -1,0 +1,147 @@
+{#
+  /statistika/2026-10 -- mesečno poročilo (faza 6, docs/STATISTIKA.md):
+  zamrznjene številke zaključenega meseca po omrežju in prevozniku. Izris na
+  strežniku, brez JS; številke iz `stat_mesec` (`statistika.stran_mesec`).
+  Pokritost je iz podatkov: kdor je zajet le del meseca (Marprom in Kranj od
+  27. 10. 2026) stoji pod črto „še premalo“ in ne tekmuje z mesecem drugega.
+  Pod mejo vzorca ali dni zajema `noindex`.
+#}
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% set og_title = "Točnost vlakov in avtobusov, " ~ ime ~ " — kajros" %}
+  {% set og_desc = opis %}
+{% include "_meta.html" %}
+  {% if not indeksiraj %}<meta name="robots" content="noindex, follow">{% endif %}
+{% from "_vec.html" import list as vec_list %}
+{% from "_stat.html" import glava, stolpci, noga, razlaga, razredi, legenda %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ s('pisave.css') }}">
+  <link rel="stylesheet" href="{{ s('base.css') }}">
+  <link rel="stylesheet" href="{{ s('home.css') }}">
+  <link rel="stylesheet" href="{{ s('statistika.css') }}">
+</head>
+<body class="home-page">
+  {#- Kdaj je prevoznik zajet: iz podatkov (`statistika._zajem_meseca`), ne iz seznama v kodi. -#}
+  {% macro zajem(o, kratko=False) -%}
+    {%- if not kratko %}zajem {% endif -%}
+    {%- if o.zajem_zacet %}od {{ o.zajem_zacet | dan }}{% if o.dnevi_brez %}, brez {{ o.dnevi_brez | obsegi_dni }}{% endif %}
+    {%- elif o.dnevi_brez %}{{ o.dni_zajema }} od {{ o.dni_zajema + (o.dnevi_brez | length) }} dni, brez {{ o.dnevi_brez | obsegi_dni }}
+    {%- else %}cel mesec{% endif -%}
+  {%- endmacro %}
+  <main class="home st">
+    {{ glava("pregled") }}
+    <h1>{{ ime | capitalize }}</h1>
+    <p class="st-glava">Mesečno poročilo o točnosti · {{ p.od | dan }}–{{ p.do | dan }} {{ mesec[:4] }}{% if zamrznjeno_dan %} · zamrznjeno {{ zamrznjeno_dan }}: številke se ne spreminjajo{% endif %}</p>
+
+    <div class="st-kartice">
+    {% set v = omrezja.get("zeleznica") %}
+    {% if v and v.r and v.cilj.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>Koliko so zamujali vlaki?</h2>
+      <div class="st-velika"><b class="st-vlak-b">{{ v.cilj.v5min | odstotek }}</b><span>vlakov je prišlo na cilj v 5 minutah</span></div>
+      {{ razredi(v.r) }}
+      {{ legenda(v.r) }}
+      <p>{% if v.cilj.mediana_min > 0 %}Polovica je zamudila vsaj {{ v.cilj.mediana_min | minute }}{% else %}Polovica je prišla točno ali prej{% endif %}, vsaka deseta vsaj {{ v.cilj.p90_min | minute }}. Na {{ v.cilj.n | stevilo }}&nbsp;vožnjah{% if v.cilj.nad60_n %}, {{ v.cilj.nad60_n | stevilo }} jih je zamudilo vsaj uro{% endif %}.</p>
+      {{ stolpci(v.stolpci) }}
+      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ zajem(v) }}</div>
+      {% if nadomestni and nadomestni.nacrt and not nadomestni.voznje %}<div class="st-drobno">Brez nadomestnih avtobusov SŽ: zamud ne objavljajo (za {{ nadomestni.nacrt | stevilo }}&nbsp;načrtovanih voženj nimamo nobenega podatka).</div>{% endif %}
+    </section>
+    {% endif %}
+
+    {% set b = omrezja.get("avtobus") %}
+    {% if b and b.r and b.cilj.n >= min_vzorec %}
+    <section class="st-k">
+      <h2>In avtobusi?</h2>
+      <div class="st-velika"><b class="st-bus-b">{{ b.cilj.v5min | odstotek }}</b><span>avtobusov je prišlo na cilj v 5 minutah</span></div>
+      {{ razredi(b.r) }}
+      {{ legenda(b.r) }}
+      <p>Mestni in medkrajevni skupaj, {{ b.prevoznikov }}&nbsp;{{ b.prevoznikov | stevnik("prevoznik", "prevoznika", "prevozniki", "prevoznikov") }}. {% if b.cilj.mediana_min > 0 %}Polovica je zamudila vsaj {{ b.cilj.mediana_min | minute }}{% else %}Polovica je prišla točno ali prej{% endif %}, vsaka deseta vsaj {{ b.cilj.p90_min | minute }}. Na {{ b.cilj.n | stevilo }}&nbsp;vožnjah{% if b.cilj.nad60_n %}, {{ b.cilj.nad60_n | stevilo }} jih je zamudilo vsaj uro{% endif %}.</p>
+      {{ stolpci(b.stolpci, "bus") }}
+      <div class="st-drobno">po dnevih · sivo: dan z manj kot {{ min_vzorec }} vožnjami · {{ zajem(b) }}{% if izjeme | selectattr("network", "equalto", "avtobus") | selectattr("zajem_zacet") | list %} · v skupni številki so tudi prevozniki, ki jih merimo šele del meseca (spodaj){% endif %}</div>
+    </section>
+    {% endif %}
+
+    <section class="st-k st-siroka">
+      <h2>Kateri prevoznik je vozil najbolj točno?</h2>
+      <p>Delež voženj, ki so prišle na cilj v 5 minutah. V primerjavi so prevozniki z vsaj {{ min_vozenj | stevilo }}&nbsp;vožnjami in {{ min_dni }} dnevi zajema v mesecu; ostali so spodaj, ker bi bila primerjava krivična.</p>
+
+      {#- Računalnik: tabela z vsemi razredi (novinar primerja vrstice); telefon: seznam. -#}
+      <div class="st-tabela-ovoj">
+        <table class="st-tabela">
+          <thead><tr>
+            <th>prevoznik</th><th>v 5 min na cilju</th><th>točno ali prej</th><th>1–5 min</th>
+            <th>5–15 min</th><th>nad 15 min</th><th>polovica zamudi vsaj</th><th>voženj</th><th class="besedilo">zajem v mesecu</th>
+          </tr></thead>
+          <tbody>
+            {% for x in primerljivi + premalo %}
+            <tr{% if x in premalo %} class="pod-crto"{% endif %}>
+              <td>{{ x.naslov }}{% if x in premalo %}<br><span class="st-drobno">še premalo za primerjavo</span>{% endif %}</td>
+              <td><span class="st-trak" aria-hidden="true"><i class="{{ 'vlak' if x.network == 'zeleznica' else 'bus' }}" style="width:{{ x.cilj.v5min }}%"></i></span>{{ x.cilj.v5min | odstotek }}</td>
+              <td>{{ x.r.tocno }}&nbsp;%</td>
+              <td>{{ x.r["1-5"] }}&nbsp;%</td>
+              <td>{{ x.r["5-15"] }}&nbsp;%</td>
+              <td>{{ x.r["nad-15"] }}&nbsp;%</td>
+              <td>{{ x.cilj.mediana_min | zamuda_min }}</td>
+              <td>{{ x.cilj.n | stevilo }}</td>
+              <td class="besedilo">{{ zajem(x, true) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <ul class="st-seznam st-samo-telefon">
+        {% for x in primerljivi %}
+        <li><div class="vr">
+          <span class="ime">{{ x.naslov }}</span>
+          <span class="pc">{{ x.cilj.v5min | odstotek }}</span>
+          {{ razredi(x.r) }}
+          <span class="drobno">{{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} · točno ali prej {{ x.r.tocno }}&nbsp;% · 1–5 min {{ x.r["1-5"] }}&nbsp;% · 5–15 min {{ x.r["5-15"] }}&nbsp;% · nad 15 min {{ x.r["nad-15"] }}&nbsp;% · {{ zajem(x) }}</span>
+        </div></li>
+        {% endfor %}
+      </ul>
+
+      {% if premalo %}
+      <h3 class="st-podnaslov st-samo-telefon">Še premalo za primerjavo</h3>
+      <ul class="st-seznam st-samo-telefon">
+        {% for x in premalo %}
+        <li><div class="vr">
+          <span class="ime">{{ x.naslov }}</span>
+          <span class="pc">{{ x.cilj.v5min | odstotek }}</span>
+          {{ razredi(x.r) }}
+          <span class="drobno">{{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }} · točno ali prej {{ x.r.tocno }}&nbsp;% · 1–5 min {{ x.r["1-5"] }}&nbsp;% · 5–15 min {{ x.r["5-15"] }}&nbsp;% · nad 15 min {{ x.r["nad-15"] }}&nbsp;% · {{ zajem(x) }}</span>
+        </div></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+
+    {% if izjeme or (v and v.dnevi_brez) %}
+    <section class="st-k st-siroka">
+      <h2>Česa ta mesec ne zajemamo vse dni</h2>
+      <ul class="st-predlogi">
+        {% if v and v.dnevi_brez %}<li><b>Vlaki</b>: zajema ni bilo {{ v.dnevi_brez | obsegi_dni }} (manj kot desetina voženj z meritvijo). Številke so iz preostalih {{ v.dni_zajema }}&nbsp;dni.</li>{% endif %}
+        {% for x in izjeme if x.network != "zeleznica" %}
+        <li><b>{{ x.naslov }}</b>: {{ zajem(x) }}, {{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.{% if x in premalo %} Premalo za primerjavo z drugimi.{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+    </div>
+
+    <nav class="st-mesec-nav" aria-label="Drugi meseci">
+      {% if prejsnji %}<a href="/statistika/{{ prejsnji }}">‹ {{ prejsnji | ime_meseca }}</a>{% endif %}
+      <a href="/statistika">Zadnjih 30 dni</a>
+      {% if naslednji %}<a href="/statistika/{{ naslednji }}">{{ naslednji | ime_meseca }} ›</a>{% endif %}
+    </nav>
+
+    {{ razlaga(min_vozenj, min_dni, mesec) }}
+
+    {{ noga() }}
+  </main>
+  {{ vec_list() }}
+</body>
+</html>
