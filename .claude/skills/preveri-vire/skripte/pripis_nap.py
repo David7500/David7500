@@ -10,14 +10,18 @@ ni začela ali je končana > 45 min), ob enem računu (največ enkrat na minuto)
 * NAP sam: ali je vozilo isti dan kdaj pripel na našo vožnjo
   (`straza_opazeno`, vir 'nap') in kdaj (`lega`: prej / pozneje kot senca).
 
-Zagon (samo branje): scp na arwen, nato
-  ssh david@192.168.1.46 '/opt/kajros/.venv/bin/python -I /tmp/pripis_nap.py 2026-11-01'
+Zagon (samo branje, na stroju ne ostane nič):
+  ssh david@192.168.1.46 '/opt/kajros/.venv/bin/python -I - 2026-11-01' < pripis_nap.py
 """
 import argparse
 import collections
 import functools
+import os
 import sqlite3
 import time
+
+os.environ["TZ"] = "Europe/Ljubljana"
+time.tzset()
 
 ap = argparse.ArgumentParser()
 ap.add_argument("dan")
@@ -69,12 +73,13 @@ def lega_nap(vozilo, trip, dan, ts):
     return "pozneje" if r[1] > ts else "prej"
 
 
-izid = collections.Counter()           # (vzrok, prevoznik, kategorija) -> vrstic
+izid = collections.Counter()           # (vzrok, prevoznik, kategorija) -> vrstic; vsaka vrstica natanko enkrat
+izid_nap = collections.Counter()       # pari še po NAP-u: druga os, ne sešteva se s prvo
 vozila = collections.defaultdict(set)
 razlogi = collections.Counter()
 primeri = collections.defaultdict(list)
 for ts, voz, vzrok, nap_t, nasa, nas_dan, razlog, zam, kand, derp in vrstice:
-    prev = agencija.get(nasa or nap_t, "?")
+    prev = agencija.get(nasa or nap_t) or "?"
     if nasa:
         if derp is None:
             kat = "par · derp ni bral"
@@ -86,7 +91,7 @@ for ts, voz, vzrok, nap_t, nasa, nas_dan, razlog, zam, kand, derp in vrstice:
             kat = "par · derp drugo"
         nap_kat = ("NAP isti dan, lega " + lega_nap(voz, nasa, nas_dan, ts)
                    if (voz, nasa) in nap_dan else "NAP nikoli")
-        izid[(vzrok, prev, nap_kat)] += 1
+        izid_nap[(vzrok, prev, nap_kat)] += 1
     else:
         razlogi[(vzrok, razlog)] += 1
         if derp:
@@ -104,10 +109,14 @@ print(f"{a.dan}: {len(vrstice)} računov, {len({v[1] for v in vrstice})} vozil, 
 print(f"{'vzrok':13} {'prev':5} {'kategorija':34} {'vrstic':>7} {'vozil':>6}")
 for k in sorted(izid):
     print(f"{k[0]:13} {k[1]:5} {k[2]:34} {izid[k]:7} {len(vozila[k]) if k in vozila else '':>6}")
+print(f"vsota kategorij {sum(izid.values())} = računov {len(vrstice)}")
+print("\npari še po NAP-u (ista vrstica kot zgoraj, druga os):")
+for k in sorted(izid_nap):
+    print(f"{k[0]:13} {k[1]:5} {k[2]:34} {izid_nap[k]:7}")
 print("brez para po razlogu:", dict(sorted(razlogi.items())))
 pari = [v for v in vrstice if v[4]]
 if pari:
-    z = sorted(v[7] for v in pari)
+    z = sorted(v[7] for v in pari if v[7] is not None) or [0]
     print(f"par: {len(pari)} vrstic, odmik od voznega reda p10 {z[len(z) // 10]} s, "
           f"mediana {z[len(z) // 2]} s, p90 {z[9 * len(z) // 10]} s")
 for kat, seznam in primeri.items():

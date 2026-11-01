@@ -1,31 +1,55 @@
 """Odločitev o priklopu pripisa NAP iz `pripis_senca` (samo branje). Dopolnilo k `pripis_nap.py`.
 
-Enota = niz: (vozilo, naša vožnja, dan) zaporednih parov, ne vrstica (vrstice istega vozila niso neodvisne).
-Vsak niz dobi natanko eno oznako; napačni in nepotrjeni se izpišejo vsi, ne prvih šest.
+Enota = par (vozilo, naša vožnja, dan), ne vrstica in ne niz: `vec` vmes niz razbije in napihne vzorec.
+Vsak par dobi natanko eno oznako; vsote se preverijo. Ocena velja za senco z vrati premika
+(`PREMIK_*`), ker priklop brez njih ne pride v poštev. „Napačen“ pomeni dokazano napačen: resnice na
+produkciji ni, zato pravilo ne more trditi „brez napačnih“, samo zgornjo mejo iz velikosti vzorca.
 
-Argumenti: DAN [--baza POT] [--od URA] [--do URA] [--seznam N]
-Zagon: scp na arwen, nato ssh david@192.168.1.46 '/opt/kajros/.venv/bin/python -I /tmp/pripis_odlocitev.py 2026-11-01'
+Argumenti: DAN ali OD..DO (skupen vzorec) [--baza POT] [--od URA] [--do URA] [--seznam N]
+Zagon (samo branje, na stroju ne ostane nič):
+  ssh david@192.168.1.46 '/opt/kajros/.venv/bin/python -I - 2026-11-01' < pripis_odlocitev.py
 """
 import argparse
 import collections
+import functools
 import math
-import sqlite3
 import os
+import sqlite3
 import time
 
 os.environ["TZ"] = "Europe/Ljubljana"
 time.tzset()
 
 ap = argparse.ArgumentParser()
-ap.add_argument("dan")
+ap.add_argument("dan", help="DAN ali OD..DO (skupen vzorec čez dneve)")
 ap.add_argument("--baza", default="/var/lib/kajros/kajros.sqlite")
 ap.add_argument("--od", type=float, default=0.0, help="samo vrstice od te ure (lokalno)")
 ap.add_argument("--do", type=float, default=24.0)
 ap.add_argument("--seznam", type=int, default=40)
 ap.add_argument("--stoji-m", type=float, default=150.0)
 a = ap.parse_args()
+dan_od, dan_do = (a.dan.split("..") + [a.dan])[:2]
 conn = sqlite3.connect(f"file:{a.baza}?mode=ro", uri=True)
-OBSEG = ("brez_dneva", "prezgodaj")     # koledar: napačen dan, vožnja daleč naprej; pred_odhodom, po_koncu, brez_voznje se ne priklopijo
+if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'pripis_senca'").fetchone():
+    raise SystemExit("tabele pripis_senca ni: senca še ni objavljena na tej bazi")
+
+#: Koledar: neverjetna prijava = napačen dan ali vožnja daleč naprej. Drugi vzroki se ne priklopijo.
+OBSEG = ("brez_dneva", "prezgodaj")
+MIN_PAROV, MIN_VOZIL = 30, 10
+NAJVEC_NEPOTRJENIH = 0.10
+#: Krajši napačen par (vrstica ~ minuta) je meja med vožnjama: se izpiše, ne odloča.
+MIN_VRSTIC_NAPAKE = 3
+#: Vrata premika: par samo vozilu, ki se je v zadnjih PREMIK_S premaknilo za PREMIK_M. `Napredek` tega
+#: ne zagotovi: stoječe vozilo preide iz `miruje` v par, ko se najbližja kandidatka zamenja.
+PREMIK_S, PREMIK_M = 300, 150.0
+
+V = collections.namedtuple("V", "ts voz vzrok nap nasa nd razlog zam derp lat lon dan")
+vrst = [V(*r) for r in conn.execute(
+    "SELECT ts, vozilo, vzrok, nap_voznja, nasa_voznja, nas_dan, razlog, zamuda_s, derp_voznja, lat, lon, dan "
+    "FROM pripis_senca WHERE dan BETWEEN ? AND ? ORDER BY vozilo, ts", (dan_od, dan_do))]
+if not vrst:
+    print(f"{a.dan}: v pripis_senca ni vrstic")
+    raise SystemExit(0)
 
 
 def razd(la1, lo1, la2, lo2):
@@ -36,149 +60,240 @@ def ura(ts):
     return time.strftime("%H:%M", time.localtime(ts))
 
 
-okno = {r[0]: (r[1], r[2]) for r in conn.execute(
-    "SELECT trip_id, start_s, end_s FROM trip WHERE start_s IS NOT NULL")}
+def v_oknu(ts):
+    h = time.localtime(ts)
+    return a.od <= h.tm_hour + h.tm_min / 60 < a.do
+
+
+T = {r[0]: r[1:] for r in conn.execute("SELECT trip_id, route_id, start_s, end_s FROM trip")}
 
 
 def oknos(t):
-    if t in okno:
-        z, k = okno[t]
-        return f"{t} {z // 3600:02d}:{z % 3600 // 60:02d}-{k // 3600:02d}:{k % 3600 // 60:02d}"
+    x = T.get(t)
+    if x and x[1] is not None and x[2] is not None:
+        return f"{t} {x[1] // 3600:02d}:{x[1] % 3600 // 60:02d}-{x[2] // 3600:02d}:{x[2] % 3600 // 60:02d}"
     return f"{t} (ni voznega reda)"
 
 
-vrst = conn.execute(
-    "SELECT ts, vozilo, vzrok, nap_voznja, nasa_voznja, nas_dan, razlog, zamuda_s, derp_voznja, lat, lon "
-    "FROM pripis_senca WHERE dan = ? ORDER BY vozilo, ts", (a.dan,)).fetchall()
-if not vrst:
-    print(f"{a.dan}: v pripis_senca ni vrstic")
-    raise SystemExit(0)
+@functools.lru_cache(maxsize=None)
+def konci(t):
+    """(prvi, zadnji) postanek vožnje; (None, None) pri nagrobniku."""
+    r = conn.execute("SELECT st.lat, st.lon FROM sched s JOIN station st USING (stop_id) "
+                     "WHERE s.trip_id = ? ORDER BY s.stop_seq", (t,)).fetchall()
+    return (r[0], r[-1]) if r else (None, None)
 
 
-def v_oknu(ts):
-    h = time.localtime(ts)
-    u = h.tm_hour + h.tm_min / 60
-    return a.od <= u < a.do
+def blizu(v, tocka, m):
+    return bool(tocka) and tocka[0] is not None and razd(v.lat, v.lon, tocka[0], tocka[1]) <= m
+
+
+@functools.lru_cache(maxsize=None)
+def na_koledarju(t, dan):
+    return conn.execute("SELECT 1 FROM trip t JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
+                        "WHERE t.trip_id = ?", (dan, t)).fetchone() is not None
+
+
+@functools.lru_cache(maxsize=None)
+def dvojcki(t, dan):
+    """Vožnje na koledarju tega dne z isto progo, odhodom in prihodom: delavniški dvojček prazniške."""
+    x = T.get(t)
+    if not x or x[1] is None:
+        return frozenset()
+    return frozenset(r[0] for r in conn.execute(
+        "SELECT t.trip_id FROM trip t JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
+        "WHERE t.route_id = ? AND t.start_s = ? AND t.end_s = ? AND t.trip_id != ?", (dan, x[0], x[1], x[2], t)))
+
+
+def predhodnica(nasa, nap):
+    """Naša vožnja se konča, kjer se NAP-ova začne, in ne pozneje: NAP naslednjo prijavi, vozilo vozi prejšnjo."""
+    x, y = T.get(nasa), T.get(nap)
+    if not x or not y or x[2] is None or y[1] is None or not -300 <= y[1] - x[2] <= 7200:
+        return False
+    k, z = konci(nasa)[1], konci(nap)[0]
+    return bool(k and z) and k[0] is not None and z[0] is not None and razd(k[0], k[1], z[0], z[1]) <= 500
 
 
 po_vozilu = collections.defaultdict(list)
+kje = {}
 for r in vrst:
-    po_vozilu[r[1]].append(r)
-nizi = []
-for voz, vs in po_vozilu.items():
-    tek = None
-    for r in vs:
-        if r[4] is None or not v_oknu(r[0]):
-            continue
-        if tek and tek["nasa"] == r[4] and tek["nd"] == r[5] and r[0] - tek["vr"][-1][0] <= 200:
-            tek["vr"].append(r)
-        else:
-            tek = {"voz": voz, "nasa": r[4], "nd": r[5], "vr": [r]}
-            nizi.append(tek)
+    kje[(r.ts, r.voz)] = len(po_vozilu[r.voz])
+    po_vozilu[r.voz].append(r)
 
 
-def cilj(t):
-    return conn.execute("SELECT st.lat, st.lon FROM sched s JOIN station st USING (stop_id) "
-                        "WHERE s.trip_id = ? ORDER BY s.stop_seq DESC LIMIT 1", (t,)).fetchone()
+def premik(r):
+    """Največja razdalja od lege istega vozila v zadnjih PREMIK_S."""
+    vs, i, naj = po_vozilu[r.voz], kje[(r.ts, r.voz)], 0.0
+    while i >= 0 and r.ts - vs[i].ts <= PREMIK_S:
+        naj = max(naj, razd(r.lat, r.lon, vs[i].lat, vs[i].lon))
+        i -= 1
+    return naj
+
+
+izbrane = [r for r in vrst if v_oknu(r.ts)]
+pari = {}
+for r in izbrane:
+    if r.nasa is not None:
+        pari.setdefault((r.voz, r.nasa, r.nd), {"voz": r.voz, "nasa": r.nasa, "nd": r.nd, "vr": []})["vr"].append(r)
+pari = list(pari.values())
+
+
+def oznaci(n):
+    vs, nasa, nd, voz = n["vr"], n["nasa"], n["nd"], n["voz"]
+    t1, t2 = vs[0].ts, vs[-1].ts
+    okol = [r for r in po_vozilu[voz] if t1 - 130 <= r.ts <= t2 + 130]
+    n["md"] = max(razd(okol[0].lat, okol[0].lon, r.lat, r.lon) for r in okol)
+    stoji = n["md"] < a.stoji_m and okol[-1].ts - okol[0].ts >= 120
+    n["kraj"] = 0 if any(r.zam is None for r in vs) else (t2 - vs[-1].zam) - (t1 - vs[0].zam)
+    vv = n["vrata"] = [r for r in vs if premik(r) >= PREMIK_M]
+    dt = vv[-1].ts - vv[0].ts if vv else 0
+    dk = (vv[-1].ts - (vv[-1].zam or 0)) - (vv[0].ts - (vv[0].zam or 0)) if vv else 0
+    # Vrstice brez vozila (NULL) se ne štejejo kot drugo vozilo: lahko je isto vozilo iz drugega vira.
+    drugi = conn.execute("SELECT COUNT(DISTINCT vozilo) FROM lega WHERE service_date = ? AND trip_id = ? "
+                         "AND vozilo != ? AND ts BETWEEN ? AND ?", (nd, nasa, voz, t1 - 600, t2 + 600)).fetchone()[0]
+    n["brez_vozila"] = conn.execute("SELECT COUNT(*) FROM lega WHERE service_date = ? AND trip_id = ? "
+                                    "AND vozilo IS NULL AND ts BETWEEN ? AND ?", (nd, nasa, t1 - 600, t2 + 600)).fetchone()[0]
+    isti = conn.execute("SELECT COUNT(*) FROM lega WHERE service_date = ? AND trip_id = ? AND vozilo = ?",
+                        (nd, nasa, voz)).fetchone()[0]
+    prvi, zadnji = konci(nasa)
+    napi = {(r.nap, r.nd) for r in vs}
+    enako = all(r.nap == nasa for r in vs)
+    dvojcek = any(nasa in dvojcki(x, d) for x, d in napi)
+    if drugi:
+        return "NAROBE drugo vozilo na vožnji"
+    if stoji:
+        if blizu(vs[-1], zadnji, 200) and isti:
+            return "stoji na končni svoje vožnje"
+        if (enako or dvojcek) and blizu(vs[0], prvi, 300):
+            return "stoji pred NAP-ovo vožnjo"
+        return "NAROBE stoji"
+    if n["kraj"] < -60:
+        return "NAROBE vozi nazaj"
+    # Vožnja, ki je koledar ta dan nima: table gredo po koledarju, take zamude potnik ne bi videl.
+    if not na_koledarju(nasa, nd):
+        return "mimo koledarja (ne šteje, ne priklopi)"
+    if enako:
+        return "NAP-ov id, vozi"
+    if isti:
+        return "potrjen: NAP ga je imel na njej"
+    if dvojcek:
+        return "potrjen: dvojček NAP-ove vožnje"
+    if any(predhodnica(nasa, x) for x, _ in napi):
+        return "potrjen: prejšnja pred NAP-ovo"
+    if any(r.derp == nasa for r in vs):
+        return "potrjen: derp ima isto, NAP ne"
+    # derp.si vožnjo določi sam: tretja vožnja, ne NAP-ova in ne naša, je edini neodvisen ugovor.
+    if any(r.derp and r.derp not in (nasa, r.nap) for r in vs):
+        return "NEPOTRJEN: derp ima tretjo vožnjo"
+    # Isti dokaz, iz katerega je par nastal, zato ne potrditev: samo loči dolgo sled od kratke.
+    if dt >= 540 and 0.5 * dt <= dk <= 1.5 * dt:
+        return "skladen: sled 9+ min po voznem redu, brez potrditve"
+    return "NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi)"
 
 
 ozn = collections.Counter()
-po_oznaki = collections.defaultdict(list)
-for n in nizi:
-    vs = n["vr"]
-    t1, t2 = vs[0][0], vs[-1][0]
-    okol = [r for r in po_vozilu[n["voz"]] if t1 - 130 <= r[0] <= t2 + 130]
-    span = okol[-1][0] - okol[0][0]
-    md = max(razd(okol[0][9], okol[0][10], r[9], r[10]) for r in okol)
-    stoji = md < a.stoji_m and span >= 120
-    kraj = (vs[-1][0] - vs[-1][7]) - (vs[0][0] - vs[0][7])
-    drugi = conn.execute("SELECT COUNT(DISTINCT vozilo) FROM lega WHERE service_date = ? AND trip_id = ? "
-                         "AND vozilo != ? AND ts BETWEEN ? AND ?",
-                         (n["nd"], n["nasa"], n["voz"], t1 - 600, t2 + 600)).fetchone()[0]
-    isti = conn.execute("SELECT COUNT(*) FROM lega WHERE service_date = ? AND trip_id = ? AND vozilo = ?",
-                        (n["nd"], n["nasa"], n["voz"])).fetchone()[0]
-    ci = cilj(n["nasa"])
-    na_koncu = bool(ci) and razd(vs[-1][9], vs[-1][10], ci[0], ci[1]) <= 200
-    enako = all(r[3] == n["nasa"] for r in vs)
-    derp_isto = any(r[8] == n["nasa"] for r in vs)
-    if drugi:
-        o = "NAROBE drugo vozilo na vožnji"
-    elif stoji and na_koncu and isti:
-        o = "stoji na končni svoje vožnje"
-    elif stoji and enako:
-        o = "stoji pred NAP-ovo vožnjo"
-    elif stoji:
-        o = "NAROBE stoji"
-    elif kraj < -60:
-        o = "NAROBE vozi nazaj"
-    elif enako and not isti:
-        o = "NAP-ov id, vozi (mimo koledarja)"
-    elif enako:
-        o = "NAP-ov id, vozi"
-    elif isti:
-        o = "potrjen: NAP ga je imel na njej"
-    elif derp_isto:
-        o = "potrjen: derp ima isto, NAP ne"
-    else:
-        o = "NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi)"
-    n["o"] = o
-    n["md"] = round(md)
-    n["kraj"] = round(kraj)
-    n["vzrok"] = vs[0][2]
-    obs = "obseg" if n["vzrok"] in OBSEG else "zunaj"
-    ozn[(obs, o)] += 1
-    ozn[("vrstic", obs, o)] += len(vs)
-    po_oznaki[o].append(n)
-print(f"{a.dan}: {len(vrst)} vrstic, {len(po_vozilu)} vozil, {len(nizi)} nizov parov")
-print(f"{'':6} {'oznaka':58} {'nizov':>6} {'vrstic':>7}")
-for obs in ("obseg", "zunaj"):
-    for (x, o), m in sorted(((k, v) for k, v in ozn.items() if len(k) == 2 and k[0] == obs), key=lambda z: z[0][1]):
-        print(f"{obs:6} {o:58} {m:6} {ozn[('vrstic', obs, o)]:7}")
-vsi = [n for n in nizi if n["vzrok"] in OBSEG]
-nar = [n for n in vsi if n["o"].startswith("NAROBE")]
-nep = [n for n in vsi if n["o"].startswith("NEPOTRJEN")]
-print(f"\nobseg (neverjetna prijava {OBSEG}): {len(vsi)} nizov, {len({n['voz'] for n in vsi})} vozil, "
-      f"napačnih {len(nar)}, nepotrjenih {len(nep)}")
-bd = collections.Counter()
-for voz, vs in po_vozilu.items():
-    for r in vs:
-        if r[2] == "brez_dneva":
-            bd[(r[6] or "par")] += 1
-print("brez_dneva, računi po izidu:", dict(sorted(bd.items())))
-# Zakaj brez_dneva: koledar res nima ali je okno daleč; dvojček (ista proga, odhod, prihod) na koledarju da razlog vec.
+for n in pari:
+    n["o"] = oznaci(n)
+    n["obseg"] = any(r.vzrok in OBSEG for r in n["vr"])
+    k = ("obseg" if n["obseg"] else "zunaj", n["o"])
+    ozn[k + ("parov",)] += 1
+    ozn[k + ("vrstic",)] += len(n["vr"])
+    ozn[k + ("vrata",)] += len(n["vrata"])
+
+s_parom = sum(r.nasa is not None for r in izbrane)
+print(f"{a.dan}: {len(izbrane)} vrstic v oknu, {len({r.voz for r in izbrane})} vozil, {len(pari)} parov, "
+      f"{s_parom} vrstic s parom + {len(izbrane) - s_parom} brez para")
+if sum(len(n["vr"]) for n in pari) != s_parom or sum(v for k, v in ozn.items() if k[2] == "vrstic") != s_parom:
+    raise SystemExit("NAPAKA: oznake se ne seštejejo v vrstice s parom")
+print(f"{'':6} {'oznaka':58} {'parov':>6} {'vrstic':>7} {'vrata':>6}")
+for k in sorted(k for k in ozn if k[2] == "parov"):
+    print(f"{k[0]:6} {k[1]:58} {ozn[k]:6} {ozn[k[:2] + ('vrstic',)]:7} {ozn[k[:2] + ('vrata',)]:6}")
+
+vsi = [n for n in pari if n["obseg"]]
+mimo = [n for n in vsi if n["o"].startswith("mimo")]
+ocena = [n for n in vsi if n["vrata"] and n not in mimo]
+vozil = len({n["voz"] for n in ocena})
+slabi = [n for n in ocena if n["o"].startswith("NAROBE")]
+nar = [n for n in slabi if len(n["vrata"]) >= MIN_VRSTIC_NAPAKE]
+meja = [n for n in slabi if len(n["vrata"]) < MIN_VRSTIC_NAPAKE]
+vrata_ods = [n for n in vsi if not n["vrata"] and n["o"].startswith("NAROBE")]
+nep = [n for n in ocena if n["o"].startswith("NEPOTRJEN")]
+vr_ocena = sum(len(n["vrata"]) for n in ocena)
+vr_nep = sum(len(n["vrata"]) for n in nep)
+print(f"\nobseg {OBSEG}: {len(vsi)} parov; skozi vrata {len(ocena)} parov, {vozil} vozil; napačnih {len(nar)}, "
+      f"meja (< {MIN_VRSTIC_NAPAKE} vrstice) {len(meja)}, nepotrjenih {len(nep)} ({vr_nep} od {vr_ocena} vrstic), "
+      f"mimo koledarja {len(mimo)}, napačnih, ki jih vrata odstranijo {len(vrata_ods)}")
+kr = collections.Counter()
+for r in izbrane:
+    if r.vzrok in OBSEG:
+        k = r.razlog or "par"
+        if k == "vec" and not na_koledarju(r.nap, r.dan) and dvojcki(r.nap, r.dan):
+            k = "vec, dvojček NAP-ove na koledarju"
+        kr[("premika" if premik(r) >= PREMIK_M else "stoji", k)] += 1
+print("obseg, vrstice po izidu:", {f"{x[0]} · {x[1]}": v for x, v in sorted(kr.items())})
 vz = collections.Counter()
-for voz, t in {(r[1], r[3]) for r in vrst if r[2] == "brez_dneva"}:
-    x = conn.execute("SELECT route_id, start_s, end_s, EXISTS(SELECT 1 FROM service_day sd WHERE sd.service_id = t.service_id "
-                     "AND sd.date = ?) FROM trip t WHERE trip_id = ?", (a.dan, t)).fetchone()
+for voz, t, d in {(r.voz, r.nap, r.dan) for r in izbrane if r.vzrok == "brez_dneva"}:
+    x = T.get(t)
     if x is None or x[1] is None:
         vz["vožnje ni ali nagrobnik"] += 1
-    elif x[3]:
+    elif na_koledarju(t, d):
         vz["koledar ima, okno daleč"] += 1
     else:
-        dv = conn.execute("SELECT COUNT(*) FROM trip t JOIN service_day sd ON sd.service_id = t.service_id AND sd.date = ? "
-                          "WHERE t.route_id = ? AND t.start_s = ? AND t.end_s = ? AND t.trip_id != ?",
-                          (a.dan, x[0], x[1], x[2], t)).fetchone()[0]
-        vz["koledar nima, dvojček na koledarju" if dv else "koledar nima, brez dvojčka"] += 1
+        vz["koledar nima, dvojček na koledarju" if dvojcki(t, d) else "koledar nima, brez dvojčka"] += 1
 print("brez_dneva, (vozilo, NAP-ova vožnja):", dict(sorted(vz.items())))
-if vsi:
-    print(f"zgornja meja 95 %, če je napačnih 0: {100 * 3 / len(vsi):.1f} % nizov")
-dovolj = len(vsi) >= 30 and len({n['voz'] for n in vsi}) >= 10
+print("lege brez vozila na parih v obsegu:", sum(bool(n["brez_vozila"]) for n in vsi))
+if ocena:
+    print(f"zgornja meja 95 %, če je napačnih 0: {100 * 3 / len(ocena):.1f} % parov")
 if nar:
-    izid = "NE: napačen niz v obsegu; senca do 7. 11."
-elif not dovolj:
-    izid = "NE DANES: premalo nizov (rabimo >= 30 nizov z >= 10 vozil); senca do 7. 11."
-elif nep:
-    izid = f"PREGLED: {len(nep)} nepotrjenih nizov po enega na zemljevidu; brez napačnega odloči David"
+    izid = f"NE: {len(nar)} dokazano napačnih parov v obsegu; preglej vsakega, senca do 7. 11."
+elif len(ocena) < MIN_PAROV or vozil < MIN_VOZIL:
+    izid = (f"NE DANES: {len(ocena)} parov z {vozil} vozil (rabimo >= {MIN_PAROV} z >= {MIN_VOZIL}); senca do 7. 11., "
+            f"nato skupen vzorec {dan_od}..2026-11-07")
+elif vr_nep > NAJVEC_NEPOTRJENIH * vr_ocena:
+    izid = f"NE DANES: nepotrjenih {vr_nep} od {vr_ocena} vrstic (največ {NAJVEC_NEPOTRJENIH:.0%}); senca do 7. 11."
 else:
-    izid = "GO: na odobritev Davidu"
+    izid = "GO: predlog Davidu; priklop z vrati premika in preizkusi, po odobritvi"
 print("ODLOČITEV:", izid)
-for naslov, seznam in (("NAROBE v obsegu", nar), ("NEPOTRJENI v obsegu", nep),
-                       ("NAROBE zunaj obsega", [n for n in nizi if n not in vsi and n["o"].startswith("NAROBE")])):
-    if seznam:
-        print(f"\n{naslov} ({len(seznam)}):")
-        korak = max(1, len(seznam) // max(1, a.seznam))  # enakomerno po dnevu, ne prvih N
-        for n in sorted(seznam, key=lambda x: x["vr"][0][0])[::korak][:a.seznam]:
-            v0 = n["vr"][0]
-            print(f"  {n['voz']:10} {ura(v0[0])}-{ura(n['vr'][-1][0])} {n['vzrok']:12} vrstic {len(n['vr']):3} "
-                  f"premik {n['md']:5} m kraj {n['kraj']:+5} s · NAP {oknos(v0[3])} · naša {oknos(n['nasa'])} · "
-                  f"derp {v0[8]!r} · {n['o']} · {v0[9]:.5f},{v0[10]:.5f}")
+
+
+def izpisi(naslov, seznam):
+    if not seznam:
+        return
+    print(f"\n{naslov} ({len(seznam)}):")
+    korak = max(1, len(seznam) // max(1, a.seznam))     # enakomerno po dnevu, ne prvih N
+    for n in sorted(seznam, key=lambda x: x["vr"][0].ts)[::korak][:a.seznam]:
+        v0 = n["vr"][0]
+        print(f"  {n['voz']:10} {ura(v0.ts)}-{ura(n['vr'][-1].ts)} {v0.vzrok:12} vrstic {len(n['vr']):3} vrata {len(n['vrata']):3} "
+              f"premik {round(n['md']):5} m kraj {round(n['kraj']):+5} s · NAP {oknos(v0.nap)} · naša {oknos(n['nasa'])} · "
+              f"derp {v0.derp!r} · {n['o']} · {v0.lat:.5f},{v0.lon:.5f}")
+
+
+izpisi("NAPAČNI v obsegu", nar)
+izpisi("MEJA v obsegu", meja)
+izpisi("NEPOTRJENI v obsegu", nep)
+izpisi("MIMO KOLEDARJA v obsegu", mimo)
+izpisi("NAROBE, ki jih vrata odstranijo", vrata_ods)
+izpisi("NAROBE zunaj obsega", [n for n in pari if not n["obseg"] and n["o"].startswith("NAROBE")])
+
+# Samo simulacija (`dan_sim.py`): oznaka proti znani resnici. Na produkciji te tabele ni.
+if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'sim_resnica'").fetchone():
+    res = {(r[0], r[1]): r[2:] for r in conn.execute("SELECT ts, vozilo, kaj, zadnja, nasl FROM sim_resnica")}
+
+    def resnica(r):
+        kaj, zad, nasl = res[(r.ts, r.voz)]
+        if kaj == "vozi" and r.nasa == zad:
+            return "PRAV vozi"
+        if kaj == "stoji" and r.nasa == zad:
+            return "stoji na koncu"
+        if nasl == r.nasa:
+            return "stoji, naslednja" if kaj == "stoji" else "vozi prejšnjo, par naslednja"
+        return "NAROBE parkira" if kaj == "parkira" else "NAROBE tuja"
+
+    tab, vr = collections.Counter(), collections.Counter()
+    for n in pari:
+        for r in n["vr"]:
+            tab[("obseg" if n["obseg"] else "zunaj", n["o"][:34], resnica(r))] += 1
+            vr[(resnica(r), "skozi" if premik(r) >= PREMIK_M else "odpade")] += 1
+    print("\nresnica simulacije, vrstice po oznaki:")
+    for k, v in sorted(tab.items()):
+        print(f"  {k[0]:6} {k[1]:35} {k[2]:30} {v:6}")
+    print("vrata:", sorted(vr.items()))
