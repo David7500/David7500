@@ -23,6 +23,7 @@ Rumena, ki ne mine, postane oranžna (meje v `zdravje.py`, trajanje šteje `Sled
 2. **Vzrok vsake oranžne in rdeče vrstice** (in nove rumene). Recepti so spodaj. Baza samo za branje:
    `ssh david@192.168.1.46 'sqlite3 -readonly "file:/var/lib/kajros/kajros.sqlite?mode=ro" "…"'`.
    Daljša analiza: skripto iz `skripte/` prepiši v `/tmp` na arwenu (`scp`) in jo poženi z `/opt/kajros/.venv/bin/python` (baza `mode=ro`). V bazo na arwenu ne piši nikoli.
+   **Vozilo iz vrstice najprej v dosje**: `./scripts/admin.sh vozilo <id>` (vse, kar so viri rekli, vožnje, razlogi, lege, senca) in `./scripts/admin.sh vozila [dan]` (vsa vozila dneva z razlogom). Na arwenu `--surovo` in `--tocke`: `ssh david@192.168.1.46 'cd /opt/kajros && KAJROS_DATA_DIR=/var/lib/kajros .venv/bin/python -m kajros.cli vozilo <id> --surovo'`. Od 1. 11. 2026 13.43; za starejše dneve le `straza_opazeno` in `lega`.
 3. **Presodi, kdo laže.** Vir (napačen ali zamrznjen podatek), naša koda ali resnica na cesti (zastoj, obvoz, odpoved). Povezave v pasu vrstice odprejo vozilo na zemljevidu (`/app/map?trip=…` ali `?vozilo=…`): poglej, kje vozilo res je.
 4. **Meri, preden spremeniš pravilo.** Na več dneh in za vse prevoznike, ne samo za tistega, ki je prižgal vrstico (`sistem-ne-krpanje`). Hevristika, ki bi brisala ali skrivala podatke, gre najprej v senco (primer `KAJROS_DRSI`).
 5. **Popravi** v kodi, dodaj preizkus, poženi `./scripts/preveri.sh`.
@@ -35,7 +36,7 @@ Rumena, ki ne mine, postane oranžna (meje v `zdravje.py`, trajanje šteje `Sled
 |---|---|
 | `neznane` IJPP | nov vozni red s starimi id-ji: `kajros update`, nato `kajros zamenjave` (zajem.md, „Nov vozni red, stari id-ji“) |
 | `neznane` LPP | `skripte/lpp_neznane.py` (žive vožnje proti objavi: zamik, zasedena kandidatka, par), `skripte/lpp_dvojniki.py DAN…` (enaki dvojniki v objavi) |
-| `lega_brez_zamude` | `skripte/brez_zamude.py` (katera vozila, sled v `obs`, `gps_prehod`, `lega`); nato `straza_opazeno` za vozilo: kaj je rekel NAP (`vir='nap'`, prazen `trip_id` = ni pripel) in kaj derp.si. Kartica NAP v /admin: `brez_dneva`, `brez_voznje`, `pripetih`, „senca pripisa“; katero vožnjo bi vozilu dal `pripis.py` proti derp.si in NAP-u: `skripte/pripis_nap.py DAN` |
+| `lega_brez_zamude` | dosje vozila (povezava „dosje“ ob vozilu); `skripte/brez_zamude.py` (katera vozila, sled v `obs`, `gps_prehod`, `lega`); nato `straza_opazeno` za vozilo: kaj je rekel NAP (`vir='nap'`, prazen `trip_id` = ni pripel) in kaj derp.si. Kartica NAP v /admin: `brez_dneva`, `brez_voznje`, `pripetih`, „senca pripisa“; katero vožnjo bi vozilu dal `pripis.py` proti derp.si in NAP-u: `skripte/pripis_nap.py DAN` |
 | `fantomi` (zamuda raste z uro) | `skripte/fantom.py DAN [x]` in `skripte/fantom_ponovitev.py DAN…`; vozila na zemljevidu prek povezav. Odločitev `KAJROS_DRSI=senca` → `vodi` |
 | vir ne odgovarja (`derp_*`, `nap`, `zamude_sz`, `zamude_lpp`, `marprom`, `kranj`, `vir:*`) | gumb „Preveri vire zdaj“ v /admin (`viri.preveri`), kartica vira (zadnja napaka, HTTP), `journalctl -u kajros.service` na arwenu |
 | nit ne piše, `nit:*` | rdeče: ponovni zagon, nato vzrok v dnevniku (izjema mimo `except`, zaklenjena baza: `zajem.md`, „Napaka pisanja“) |

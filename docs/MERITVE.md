@@ -3494,3 +3494,20 @@ najnižja navadna 0,38 (LPP primestni 28. 9.), AP MS ob sobotah 0,53, izpad
 vlakov 0,00–0,05 → prag izpada `ZAJEM_DNEVA_MIN` = 0,1. Mestni Murska Sobota
 (linije 1, 2, od 27. 10.) je v `stat_dan` v ključu 1121 skupaj z AP MS.
 
+## Dosje vozila (1. 11. 2026)
+
+`kajros/dosje.py`, pravila `.claude/rules/zajem.md`. Nedelja in praznik, arwen, prvih 6 min po objavi (13.43–13.49), 228 vozil, 69 z razlogom.
+
+| vir | vzorcev | zlib B na vzorec | vrstic `stanje` / vozil |
+|---|---|---|---|
+| derp.si IJPP | 1 765 | 15,0 | 129 / 116 |
+| NAP | 2 293 | 21,2 | 176 / 137 |
+| mestni LPP | 302 | 52,6 | 58 / 53 |
+| Marprom | 210 | 18,7 | 11 / 9 |
+| zemljevid SŽ | 396 | 31,3 | 28 / 24 |
+
+* **Ocena za delavnik, ne meritev** (vzorci `straza_opazeno` 30. 10.: derp.si 688 k, NAP 667 k, LPP 68 k, Marprom 65 k; SŽ ~110 k): točke ~32 MB na dan + vrstice kosov ~10 MB; `stanje` in `telo` nekaj MB. Leto točk ~15 GB, prostih 115 GB. Prva prava številka 2. 11., odločitev o `TOCKE_DNI` 7. 11. (`KOLEDAR.md`).
+* **Cena v niti vira** (mediana, 15 ponovitev, isti odgovor): `nap.razberi` 39,4 → 51,2 ms pri 132 vozilih (90 µs na vozilo, zunaj zaklepa baze); `nap._v_dosje` 1,9 ms; `opazi_gtfs` 3,95 ms na 113 vozil (35 µs). `izprazni` 24 ms za 291 kosov in 295 vrstic `stanje`, v svoji niti.
+* **Surov TripUpdate** ima vehicle.id pri 113 od 188 voženj IJPP in 51 od 112 LPP: za druge napovedi vira v dosjeju ni. Mediana 200 B na zapis.
+* Kar se je pokazalo v prvih minutah in prej ni pustilo sledi: 1302136 `RecordedAtTime` 3. 11. (`razberi` ga izpusti, zdaj `ura_naprej`); 1300676 NAP brez `VehicleJourneyRef`, derp.si na vožnji, ki je ne poznamo.
+

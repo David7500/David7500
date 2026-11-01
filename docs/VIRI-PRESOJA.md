@@ -32,6 +32,10 @@ Začeto 31. 10. 2026 (David: „zajem virov je steber aplikacije, to more delati
 | e38d511 | `collector.ura_namesto_zamude` v senci (`KAJROS_DRSI=senca`), vrstica `fantomi` s povezavami |
 | 04d6693 | dvojniki v objavi LPP niso tekmici za par |
 
+## Dosje vozil (narejeno 1. 11. 2026, 7a493af)
+
+Za vsako vozilo vse, kar so viri rekli in kaj smo naredili: `kajros/dosje.py`, `.claude/rules/zajem.md`. Točka 2 spodaj in vsaka naslednja vrstica z vozili se začne tam: `./scripts/admin.sh vozilo <id>`. Odprto: pravi prikaz v `/admin` namesto besedila, razlogi `zapisi` pri vlakih (`nazaj`, `nicel`), zasloni LPP kot vir; `KOLEDAR.md`, 7. 11.
+
 ## Odprto, po prednosti
 
 Rdeča črka = potnik vidi napačno ali nič, zdravje tega ne pove.

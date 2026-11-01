@@ -278,6 +278,19 @@ Za „kdaj je vlak hitrejši od avta“. Ista prijava, nit `kajros-promet`, vsak
 * FCD je **datoteka gzip** brez `Content-Encoding` — `razberi_fcd` razpakira sam.
 * **Razbor v svojem procesu** (`promet._Razbor`, `spawn`): v niti je držal GIL (tabla 520–610 ms namesto 22).
 
+## Dosje vozila (`dosje.py`, od 1. 11. 2026)
+
+David: „za vsa vozila, s katerimi je kaj narobe, shranjuj vse; na koncu za vsako vozilo vedeti vse“. Številke: `docs/MERITVE.md`, „Dosje vozila“.
+
+* **Vsak vzorec vsakega vozila iz vsakega vira**, ne samo „slabih“: kaj je narobe, se pokaže pozneje. `razlogi` so oznaka v dnevniku, ne sito. Izjema `zamude` (surov TripUpdate): samo vozila z razlogom, na 5 min, 35 dni.
+* **`stanje`** = nova vrstica ob spremembi vožnje, dneva, razlogov ali telesa; **`telo`** = kar vir pove in se sproti ne spreminja, po vsebini; **`tocke`** = kosi 5 min (zlib), 365 dni. `stanje`, `telo`, `vozilo_dan`, `oznaka` se ne obrezujejo.
+* **Izpuščen vzorec gre v dosje z razlogom** (`nap._odpadel`, `kranj.korak`): izpuščeno vozilo je ravno tisto, s katerim je kaj narobe. 1302136: `RecordedAtTime` 3. 11., 1. 11. 2026. Nov vir ali nov izpust: `dosje.opazi` / `opazi_gtfs` na vhodu.
+* **Polje, ki se spreminja sproti, gre v `sprotno`, ne v ključ**, sicer je vsak vzorec nova vrstica `stanje` (zemljevid SŽ: `St` je vrstni red v odgovoru).
+* `stara_lega`, `ura_naprej`, `miruje` računa `_opazi` za vse vire enako; vir pove le, kar ve sam. Vlak = `vlak-<številka>`, Marprom in Kranj s predpono kot v `vehicle_now`.
+* **Zajem ne čaka**: `opazi` v pomnilnik, piše nit `kajros-dosje` v svojo bazo; napaka ne doseže vira (`dosje.varno`). Brez `vklopi` (malina, preizkusi, ukazna vrstica) prazen klic, sicer medpomnilnik raste brez bralca. Izklop `KAJROS_DOSJE=0`.
+* Branje: `kajros vozilo <id|tablica>` (`--dan`, `--surovo`, `--tocke`), `kajros vozila`, `/admin/vozilo/<id>`, `/admin/vozila` (besedilo, za žetonom), `scripts/admin.sh vozilo <id>`; povezava „dosje“ ob vozilih v vrstici zdravja. Poročilo doda iz glavne baze lege, prehode, `run`, senco, stražo, `vehicle_now`.
+* Vrstica `dosje`: rumeno 10 min brez zapisa, oranžno po 2 h, nikoli rdeče (potnik ne vidi nič).
+
 ## Napaka pisanja: najprej `conn.rollback()`
 
 Vsaka nit svojo povezavo, vsak `except` okoli pisanja najprej razveljavi. Sicer zamrznjen posnetek → vsako pisanje „database is locked“ (SQLITE_BUSY_SNAPSHOT) za vedno (1. 10. 2026: nit stala 4,3 h, WAL 5,4 GB). `journal_size_limit` 64 MB v `db.connect()`. Preizkus `test_nit_po_zaklenjeni_bazi_ne_obstane`.
