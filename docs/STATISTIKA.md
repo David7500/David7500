@@ -341,7 +341,10 @@ večje delo · **ne** = podatka ni.
   * **Ni ločeno**: mestni Murska Sobota (linije 1, 2, od 27. 10.) je v ključu
     1121 skupaj z AP MS; `stat_dan` ju ne loči, zato stran ne more reči „od
     27. 10.“ za del tega prevoznika. Za to bi `_dan_prevozniki` moral dati
-    mestnim linijam svoj ključ (nova različica `STAT_DAN_VERZIJA`).
+    mestnim linijam svoj ključ (nova različica `STAT_DAN_VERZIJA`). Za oktober
+    ostane tako (odločitev 1. 11.): linije vozi AP MS, zato ime na strani drži,
+    na arwenu je mestnih 133 od 14 460 voženj s ključem 1121 (0,9 %). November
+    bo imel ~40 mestnih na delavnik, zato odločitev 1. 12. pred zamrznitvijo.
 
 ## Naslednji koraki
 
