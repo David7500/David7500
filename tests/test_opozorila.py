@@ -620,9 +620,11 @@ def test_uvoz_v_podprocesu_casovna_meja(monkeypatch):
     assert not server._uvoz_zaklep.locked()
 
 
-def test_zanka_med_uvozom_bere_naprej(monkeypatch, tmp_path):
-    """Glavna zanka uvoz zažene in bere naprej (prej 4--5 min nič), ob koncu
-    podprocesa zapiše izid v `meta.uvoz`."""
+def _zanka_z_uvozom(monkeypatch, tmp_path, koda: str, dokler) -> tuple[list, object]:
+    """Glavna zanka v niti z lažnim uvozom (`koda`), ki se začne takoj; teče,
+    dokler `dokler(meta.uvoz)` ne velja, nato se ustavi kot ob ustavitvi
+    strežnika. Vrne, ali je bil uvoz v teku ob vsakem obhodu (`do` None), in
+    povezavo na bazo."""
     import threading
     import time
     from datetime import datetime
@@ -633,32 +635,59 @@ def test_zanka_med_uvozom_bere_naprej(monkeypatch, tmp_path):
     monkeypatch.setenv("KAJROS_OCENA", "0")
     monkeypatch.setattr(server, "manjkajoci_viri", lambda conn: [])
     monkeypatch.setattr(server, "_next_at", lambda ura, minuta: datetime.now(server.TZ))
-    _lazni_uvoz(monkeypatch, "import time; time.sleep(1.5); "
-                             "print('vozni red nespremenjen (HTTP 304) -- uvoz preskocen')")
-    # Za vsak obhod: ali je bil uvoz takrat v teku (`do` None).
+    _lazni_uvoz(monkeypatch, koda)
     obhodi = []
     monkeypatch.setattr(collector, "poll_once", lambda conn: obhodi.append(
         json.loads(db.get_meta(conn, "uvoz") or '{"do": 0}')["do"]) or {})
     c = db.connect(tmp_path / "kajros.sqlite")
     db.init(c)
-    nit = threading.Thread(target=server._worker, kwargs=dict(
+    # Demon: zanka, ki se ne ustavi, ne sme zadržati konca preizkusov.
+    nit = threading.Thread(target=server._worker, daemon=True, kwargs=dict(
         interval=0.5, refresh_hour=4, refresh_mode="subprocess", weather_hour=-1,
         alert_interval=0, maint_hour=-1, summaries=False))
     nit.start()
     try:
         konec = time.monotonic() + 15
-        while not json.loads(db.get_meta(c, "uvoz") or "{}").get("do"):
-            assert time.monotonic() < konec, "zanka ni zapisala konca uvoza"
+        while not dokler(json.loads(db.get_meta(c, "uvoz") or "{}")):
+            assert time.monotonic() < konec, "zanka ni prišla do pričakovanega stanja uvoza"
             time.sleep(0.1)
     finally:
         server._stop.set()
         nit.join(10)
         server._stop.clear()
-    assert not nit.is_alive()
+    assert not nit.is_alive() and not server._uvoz_zaklep.locked()
+    return obhodi, c
+
+
+def test_zanka_med_uvozom_bere_naprej(monkeypatch, tmp_path):
+    """Glavna zanka uvoz zažene in bere naprej (prej 4--5 min nič), ob koncu
+    podprocesa zapiše izid v `meta.uvoz`."""
+    from kajros import db
+    obhodi, c = _zanka_z_uvozom(
+        monkeypatch, tmp_path, "import time; time.sleep(1.5); "
+        "print('vozni red nespremenjen (HTTP 304) -- uvoz preskocen')",
+        lambda uv: uv.get("do"))
     assert obhodi.count(None) >= 2, obhodi
     uv = json.loads(db.get_meta(c, "uvoz"))
     assert uv["izid"] == "nespremenjen" and uv["od"] <= uv["do"]
     assert int(db.get_meta(c, "zanka_ts")) >= uv["od"]
+
+
+def test_ustavitev_streznika_med_uvozom(monkeypatch, tmp_path):
+    """Ustavitev med uvozom (`_stop`, kot v `lifespan`): podproces se konča,
+    `meta.uvoz` ne ostane „teče“ (prej do ure, `zdravje.UVOZ_NAJDLJE_S`)."""
+    import os
+    import pytest
+    from kajros import db
+    pid = tmp_path / "pid"
+    obhodi, c = _zanka_z_uvozom(
+        monkeypatch, tmp_path, f"import os, time; open({str(pid)!r}, 'w').write("
+        "str(os.getpid())); time.sleep(60)",
+        lambda uv: uv.get("od") and pid.exists() and pid.read_text())
+    uv = json.loads(db.get_meta(c, "uvoz"))
+    assert uv["do"] and uv["izid"] == "napaka" and "ustavitvi" in uv["razlog"]
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid.read_text()), 0)
 
 
 def test_zaklep_med_uvozom_ni_napaka_kode():
