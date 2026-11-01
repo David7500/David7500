@@ -171,6 +171,11 @@ PROMET_AC_URL = okolje("PROMET_AC_URL",
 PROMET_SECONDS = int(okolje("PROMET_SECONDS", "60"))
 PROMET_DB = Path(okolje("PROMET_DB", DATA_DIR / "promet.sqlite"))
 
+# **Dosje vozila** (`dosje.py`): vse, kar viri o vozilu povedo, in kaj smo iz
+# tega naredili. Svoja baza, svoja nit. Teče samo s strežnikom; izklop `KAJROS_DOSJE=0`.
+DOSJE = okolje("DOSJE", "1") != "0"
+DOSJE_DB = Path(okolje("DOSJE_DB", DATA_DIR / "dosje.sqlite"))
+
 # **Brskalnik za potniski.sz.si** (`brskalnik.py`). Stran je za Cloudflarom,
 # ki od 7. 10. 2026 spusti samo Chrome z oknom; na strežniku ga dobi
 # navidezni zaslon Xvfb. Prazno = poišči sam (`google-chrome-stable`,

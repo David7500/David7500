@@ -41,7 +41,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, iz_lege, prehod, pripis, stats, straza, viri
+from . import collector, config, db, dosje, geo, iz_lege, prehod, pripis, stats, straza, viri
 
 TZ = collector.TZ
 
@@ -152,11 +152,36 @@ def _cas(s: str | None) -> float | None:
     return (d if d.tzinfo else d.replace(tzinfo=TZ)).timestamp()
 
 
-def razberi(vsebina: bytes, zdaj: float) -> tuple[list[dict], dict]:
+def _za_dosje(va, mvj) -> dict:
+    """Kar NAP o vozilu pove, za `dosje`: ključ in telo se sproti ne spreminjata."""
+    stalno, deli = {}, []
+    for e in mvj if mvj is not None else ():
+        ime = _lokalno(e.tag)
+        if ime == "JourneyParts":
+            deli = [x.text for x in e.iter() if _lokalno(x.tag) == "JourneyPartRef"]
+        elif ime not in ("VehicleLocation", "Bearing"):
+            stalno[ime] = e.text
+    return {"kljuc": (tuple(stalno.items()), len(deli), deli[:1], deli[-1:]),
+            "telo": {**stalno, "JourneyParts": deli},
+            "sprotno": {"posneto": _besedilo(va, "RecordedAtTime"),
+                        "velja_do": _besedilo(va, "ValidUntilTime"),
+                        "smer": _besedilo(mvj, "Bearing")}}
+
+
+def _odpadel(s: dict | None, vozilo: str | None, ts: float | None, lat: float | None,
+             lon: float | None, razlog: str, zdaj: float) -> None:
+    """Vzorec, ki ga `razberi` izpusti, je ravno vozilo, s katerim je kaj narobe."""
+    if s is not None:
+        dosje.opazi("nap", vozilo, ts, lat, lon, razlogi=(razlog,), kljuc=s["kljuc"],
+                    telo=s["telo"], sprotno=s["sprotno"], zdaj=zdaj)
+
+
+def razberi(vsebina: bytes, zdaj: float, surovo: dict | None = None) -> tuple[list[dict], dict]:
     """Odgovor SIRI -> [vozilo], števci.
 
     Vozilo: `vozilo`, `ijpp` (trip_id po pretvorbi), `ts`, `lat`, `lon`,
     `smer`, `nacin`. Brez lege ali s časom zunaj meja se izpusti in šteje.
+    `surovo` (če je dan) dobi po vozilu, kar NAP pove zanj (`_za_dosje`).
     """
     koren = ET.fromstring(vsebina)
     dostava = next((e for e in koren.iter() if _lokalno(e.tag) == "ServiceDelivery"), koren)
@@ -169,6 +194,8 @@ def razberi(vsebina: bytes, zdaj: float) -> tuple[list[dict], dict]:
             continue
         st["vozil"] += 1
         mvj = _otrok(va, "MonitoredVehicleJourney")
+        s = _za_dosje(va, mvj) if surovo is not None else None
+        popravljen = False
         vozilo = _besedilo(mvj, "VehicleRef")
         ts = _cas(_besedilo(va, "RecordedAtTime"))
         try:
@@ -178,20 +205,27 @@ def razberi(vsebina: bytes, zdaj: float) -> tuple[list[dict], dict]:
             lat = lon = None
         if lat is None or ts is None or not vozilo:
             st["brez_lege"] += 1
+            _odpadel(s, vozilo, ts, lat, lon, "brez_lege", zdaj)
             continue
         if abs(ts - odgovor - URA_NAPREJ_S) <= URA_TOLERANCA_S:
             ts -= URA_NAPREJ_S
             st["popravljenih"] += 1
+            popravljen = True
         if ts - odgovor > NAJVEC_NAPREJ_S:
             st["naprej"] += 1
+            _odpadel(s, vozilo, ts, lat, lon, "ura_naprej", zdaj)
             continue
         if odgovor - ts > collector.POSITION_FRESH_S:
             st["starih"] += 1
+            _odpadel(s, vozilo, ts, lat, lon, "stara_lega", zdaj)
             continue
         ijpp = ijpp_id(_besedilo(mvj, "VehicleJourneyRef"))
         if ijpp is None:
             st["brez_id"] += 1
+            _odpadel(s, vozilo, ts, lat, lon, "brez_id", zdaj)
             continue
+        if s is not None:
+            surovo[vozilo] = {**s, "popravljen": popravljen}
         try:
             smer = float(_besedilo(mvj, "Bearing") or "")
         except ValueError:
@@ -510,6 +544,7 @@ def zapisi(conn: sqlite3.Connection, pripeta: list[dict], derp: dict | None,
         # (`prehod.vodja`), dokler se javlja -- sicer ikona skače med njima.
         vodi = prehod.vodja(v["trip_id"], v["dan"])
         if vodi and vodi[0] != v["vozilo"] and v["ts"] - vodi[1] <= prehod.RAZMIK_S:
+            dosje.oznaci(v["vozilo"], "drugo_vozilo_vodi", zdaj)
             prehodov += _iz_lege(conn, v, derp, zdaj)
             continue
         conn.execute(
@@ -540,9 +575,35 @@ def _iz_lege(conn: sqlite3.Connection, v: dict, derp: dict | None, zdaj: float) 
     return 0
 
 
+def _v_dosje(vozila: list[dict], pripeta: list[dict], za_senco: list, surovo: dict,
+             derp: dict | None, zdaj: float) -> None:
+    """Vsako vozilo iz odgovora, s tem, kaj je NAP rekel in kaj smo naredili."""
+    razlogi: dict[str, list[str]] = {}
+    for v, _, razlog in za_senco:
+        razlogi.setdefault(v["vozilo"], []).append(razlog)
+    nase = {v["vozilo"]: v for v in pripeta}
+    for v in vozila:
+        s = surovo.get(v["vozilo"])
+        if s is None:
+            continue
+        p = nase.get(v["vozilo"])
+        r = list(razlogi.get(v["vozilo"], ()))
+        if p is None and not r:
+            r.append("ni_avtobus")          # `pripni`: vožnja ni avtobusna
+        if s["popravljen"]:
+            r.append("ura_popravljena")
+        d = derp.get(v["vozilo"]) if derp else None
+        if d is not None and d[0] != v["ijpp"]:
+            r.append("vira_razlicna")
+        dosje.opazi("nap", v["vozilo"], v["ts"], v["lat"], v["lon"],
+                    trip_id=p["trip_id"] if p else None, dan=p["dan"] if p else None, razlogi=r,
+                    kljuc=s["kljuc"], telo=s["telo"], sprotno=s["sprotno"], zdaj=zdaj)
+
+
 def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     """En odgovor NAP: razberi, primerjaj, pripni, zapiši, povzemi v `meta`."""
-    vozila, st = razberi(vsebina, zdaj)
+    surovo: dict | None = {} if dosje.vklopljen() else None
+    vozila, st = razberi(vsebina, zdaj, surovo)
     derp = collector.lege_derp(zdaj, DERP_SVEZE_S)
     st.update(primerjaj(vozila, derp))
     za_senco: list = []
@@ -555,6 +616,8 @@ def korak(conn: sqlite3.Connection, vsebina: bytes, zdaj: float) -> dict:
     if pripeta:
         iz_lege.nap_prebran(zdaj)
     st.update(zapisi(conn, pripeta, derp, zdaj))
+    if surovo is not None:
+        dosje.varno(_v_dosje, vozila, pripeta, za_senco, surovo, derp, zdaj)
     # Za `zapisi`: zaklep za pisanje že drži, senca ne čaka na bazo. Napaka v
     # njej ne sme razveljaviti leg (`teci` ob izjemi naredi rollback).
     try:

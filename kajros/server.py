@@ -19,6 +19,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import opazovano
+from . import dosje
 from . import straza
 from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, kranj,
                marprom, nap, obisk, ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
@@ -480,6 +481,17 @@ def _zazeni_kranj() -> threading.Thread | None:
         return None
     nit = threading.Thread(target=kranj.teci, args=(_stop, _log), daemon=True,
                            name="kajros-kranj")
+    nit.start()
+    return nit
+
+
+def _zazeni_dosje() -> threading.Thread | None:
+    """Dosje vozil: svoja nit in baza. Pred viri, da je prvi vzorec že v njem."""
+    if not config.DOSJE:
+        return None
+    dosje.vklopi()
+    nit = threading.Thread(target=dosje.teci, args=(_stop, _log), daemon=True,
+                           name="kajros-dosje")
     nit.start()
     return nit
 
@@ -948,6 +960,7 @@ async def lifespan(app):
         thread.start()
         viri.zajem_zagnan = True
         _log(_describe(settings))
+        dosje_nit = _zazeni_dosje()
         peroni_nit = _zazeni_perone()
         sz_nit = _zazeni_zamude_sz()
         ovire_nit = _zazeni_ovire_sz()
@@ -961,7 +974,7 @@ async def lifespan(app):
                          name="kajros-vozila").start()
     else:
         peroni_nit = sz_nit = ovire_nit = lpp_nit = nap_nit = marprom_nit = kranj_nit = None
-        promet_nit = None
+        promet_nit = dosje_nit = None
         _log("zajem izklopljen (KAJROS_COLLECTOR=0)")
     try:
         yield
@@ -969,6 +982,8 @@ async def lifespan(app):
         _stop.set()
         if thread:
             thread.join(timeout=5)
+        if dosje_nit:
+            dosje_nit.join(timeout=5)
         if peroni_nit:
             peroni_nit.join(timeout=5)
         if sz_nit:

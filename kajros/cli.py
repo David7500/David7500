@@ -11,6 +11,7 @@ import time
 from datetime import date, timedelta
 from pathlib import Path
 
+from . import dosje
 from . import opazovano
 from . import straza
 from . import (alerts, backtest, brskalnik, config, collector, db, gtfs, hoja,
@@ -325,6 +326,14 @@ def cmd_repair(args):
             "prilij bazo s stroja, ki ima starejsi vozni red "
             "(`kajros merge`) -- ta vrne tudi voznje z meritvami")
     print(json.dumps(izid, indent=2, ensure_ascii=False))
+
+
+def cmd_vozilo(args):
+    print(dosje.porocilo(args.vozilo, args.dan, args.tocke, args.surovo))
+
+
+def cmd_vozila(args):
+    print(dosje.seznam(args.dan, args.razlog))
 
 
 def cmd_zamenjave(args):
@@ -667,6 +676,18 @@ def main(argv=None):
                    help="primerjaj z drugo bazo, npr. ponovljen dan z drugo različico zajema")
     a.add_argument("--racunaj", action="store_true", help="izračunaj znova, ne beri shranjenega")
     a.set_defaults(func=cmd_straza)
+
+    a = sub.add_parser("vozilo", help="dosje vozila: vse, kar viri povedo in kaj smo naredili")
+    a.add_argument("vozilo", help="id, tablica ali številka (vlak-2010, marprom-472)")
+    a.add_argument("--dan", help="prometni dan YYYY-MM-DD, privzeto zadnji")
+    a.add_argument("--tocke", action="store_true", help="vsak vzorec")
+    a.add_argument("--surovo", action="store_true", help="telo vira in cela napoved")
+    a.set_defaults(func=cmd_vozilo)
+
+    a = sub.add_parser("vozila", help="vozila dneva, s katerimi je bilo kaj narobe")
+    a.add_argument("--dan", help="prometni dan YYYY-MM-DD, privzeto zadnji")
+    a.add_argument("--razlog", help="samo ta razlog")
+    a.set_defaults(func=cmd_vozila)
 
     a = sub.add_parser("opazovano", help="kje vozila zadnje čase ne ustavijo: izid nočnega računa")
     a.add_argument("--baza", help="beri to bazo samo za branje")

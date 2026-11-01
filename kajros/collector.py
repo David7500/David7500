@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 import requests
 from google.transit import gtfs_realtime_pb2
 
-from . import config, db, geo, iz_lege, stats, straza, viri, zive
+from . import config, db, dosje, geo, iz_lege, stats, straza, viri, zive
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -607,6 +607,7 @@ def _zapisi_fantome(conn: sqlite3.Connection) -> None:
             "LEFT JOIN vehicle_now v ON v.trip_id = t.trip_id AND v.service_date = ? "
             "WHERE t.trip_id = ?", (dan, t)).fetchone()
         if r:
+            dosje.oznaci(r[3], "zamuda_raste")
             out.append({"trip_id": t, "od": int(od), "agency": r[2], "vozilo": r[3],
                         "lat": r[4], "lon": r[5], "oznaka": " ".join(
                             x for x in (r[0], r[1] and f"→ {r[1]}") if x)})
@@ -1045,6 +1046,10 @@ def poll_once(conn: sqlite3.Connection) -> dict:
                 json.dumps(lega_brez_zamude(conn, datetime.now(TZ), primeri), sort_keys=True))
     db.set_meta(conn, "lega_brez_zamude_primeri", json.dumps(
         {ag: v[:PRIMEROV] for ag, v in primeri.items()}, sort_keys=True))
+    for vozila in primeri.values():
+        for v in vozila:
+            dosje.oznaci(v["vozilo"], "brez_zamude")
+    dosje.zamude("derp", feed)
     _zapisi_fantome(conn)
     _zapisi_pokritost(conn, time.time())
     conn.commit()
@@ -1151,6 +1156,7 @@ def poll_lpp(conn: sqlite3.Connection) -> dict:
     # spodaj potem njihove zamude in lege piše pod objavljene.
     zv = zive.razresi(conn, feed)
     izid = ingest(conn, feed, vir="lpp", pari=zv["pari"], dvojniki=zv["dvojniki"])
+    dosje.zamude("lpp", feed)
     _zapisi_vsebino(conn, "lpp")
     _zapisi_neznane(conn, "lpp_rt_neznanih", izid)
     _zapisi_fantome(conn)
@@ -1336,9 +1342,12 @@ def ingest_positions(conn: sqlite3.Connection, feed,
             p = z[1].get(stop_seq)
             stop_seq = p[0] if p else None
         if not v.HasField("position"):
+            if entity.HasField("vehicle"):
+                dosje.opazi_gtfs(vir, v, None, None, ("brez_lege",))
             continue
         if trip_id not in known:
             straza.vzorec(vir, v.vehicle.id, None, seen_at)
+            dosje.opazi_gtfs(vir, v, None, None, ("brez_voznje",))
             if brez_voznje is not None and trip_id:
                 brez_voznje.append({
                     "trip_id": trip_id, "vehicle_id": v.vehicle.id or None,
@@ -1368,6 +1377,7 @@ def ingest_positions(conn: sqlite3.Connection, feed,
              v.vehicle.id or None, v.vehicle.license_plate or None),
         )
         straza.vzorec(vir, v.vehicle.id, trip_id, seen_at)
+        dosje.opazi_gtfs(vir, v, trip_id, day or None)
         written += 1
 
     # Stare lege pobrisi -- tabela naj ostane "zdaj", ne smetisce.

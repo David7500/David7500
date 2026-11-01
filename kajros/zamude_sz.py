@@ -45,7 +45,7 @@ from datetime import date, datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from . import brskalnik, collector, config, db, iz_lege, stats, viri
+from . import brskalnik, collector, config, db, dosje, iz_lege, stats, viri
 from .peroni import _kljuc_imena, stevilka
 
 TZ = ZoneInfo(config.TIMEZONE)
@@ -490,6 +490,39 @@ def odtis_jedra(vrstice: list[dict]) -> str:
                            digest_size=8).hexdigest()
 
 
+#: Kar zemljevid o vlaku pove sproti; drugo gre v telo dosjeja. `St` = vrstni red.
+_SPROTNO = frozenset({"St", "Postaja", "St_postaje", "Odhod", "Koordinate", "Vrsta",
+                      "Zamuda_cas", "Predviden_prihod"})
+
+
+def _v_dosje(vrstice: list[dict], st: dict[str, str], pripete: list[tuple],
+             prihodnje: list[tuple], zdaj: float) -> None:
+    """Vsak vlak z zemljevida v `dosje`, kot `vlak-<številka>`: lastnega id-ja
+    vlak nima, voznega pa v dnevu en sam."""
+    if not dosje.vklopljen():
+        return
+    pri = {st[p[0]]: p for p in pripete if p[0] in st}
+    pre = {st[p[0]] for p in prihodnje if p[0] in st}
+    for r in vrstice:
+        surova = str(r.get("St_vlaka") or "")
+        n = stevilka(surova) or surova
+        p = pri.get(n)
+        razlogi = []
+        if p is None and n in pre:
+            razlogi.append("odhod_v_prihodnosti")
+        elif p is None and r.get("Vrsta") != 0 and not je_avtobus(r):
+            razlogi.append("nepripet")
+        try:
+            lon, lat = (float(x) for x in str(r.get("Koordinate") or "").split(","))
+        except ValueError:
+            lon = lat = None
+        stalno = {k: v for k, v in r.items() if k not in _SPROTNO}
+        dosje.opazi("sz", n and f"vlak-{n}", None, lat, lon,
+                    trip_id=p[0] if p else None, dan=p[1] if p else None, razlogi=razlogi,
+                    kljuc=tuple(sorted(stalno.items())), telo=stalno,
+                    sprotno={k: r[k] for k in _SPROTNO if k in r}, zdaj=zdaj)
+
+
 def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
           nespremenjeno: bool = False) -> dict:
     """En odgovor zemljevida: pripni, zapiši, povzemi v `meta` za pregled.
@@ -512,6 +545,7 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
     st = {v["trip_id"]: k for k, vs in po_stevilki.items() for v in vs}
     iz_lege.sz_stevilke({st[p[0]] for p in pripete + prihodnje if p[0] in st},
                         stevci["nepripeti"], zdaj)
+    dosje.varno(_v_dosje, vrstice, st, pripete, prihodnje, zdaj)
     stevci.update(zapisi(conn, pripete, zdaj))
     _osvezi_trenutne(pripete, prihodnje, zdaj)
     stevci["skladnost"] = skladnost(conn, pripete, zdaj)

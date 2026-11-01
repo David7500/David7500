@@ -24,13 +24,13 @@ from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
-                               RedirectResponse, Response)
+                               PlainTextResponse, RedirectResponse, Response)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (alerts, collector, config, db, deljenje, donacije, gtfs, hoja, journey, lpp,
+from . import (alerts, collector, config, db, deljenje, donacije, dosje, gtfs, hoja, journey, lpp,
                koledar, opazovano,
                markdown, nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot,
                pripni, pristanek, server, statistika, stats, stik, tiri, viri, zamude_sz,
@@ -1797,6 +1797,8 @@ def api_health():
         # Lege IJPP z NAP (`nap.py`) in njihovo ujemanje z derp.si.
         nm = db.get_meta(conn, "nap") if config.NAP else None
         out["nap"] = json.loads(nm) if nm else None
+        dj = db.get_meta(conn, "dosje") if config.DOSJE else None
+        out["dosje"] = json.loads(dj) if dj else None
         # Mestna vira v živo (`marprom.py`, `kranj.py`): vozila, pripeta na
         # vožnje, pri Marpromu primerjava naše zamude z njegovo.
         for kljuc, vklop in (("marprom", config.MARPROM), ("kranj", config.KRANJ)):
@@ -3961,6 +3963,24 @@ def admin_page(request: Request):
         secure=(request.headers.get("x-forwarded-proto") == "https"
                 or request.url.scheme == "https"))
     return odgovor
+
+
+@app.get(f"{ADMIN_POT}/vozila", include_in_schema=False)
+def admin_vozila(request: Request,
+                 dan: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                 razlog: str | None = Query(None, max_length=40)):
+    """Vozila dneva, s katerimi je bilo kaj narobe (`dosje.seznam`), besedilo."""
+    _preveri_admina(request)
+    return PlainTextResponse(dosje.seznam(dan, razlog))
+
+
+@app.get(f"{ADMIN_POT}/vozilo/{{vozilo}}", include_in_schema=False)
+def admin_vozilo(request: Request, vozilo: str,
+                 dan: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                 tocke: bool = False, surovo: bool = False):
+    """Vse o vozilu (`dosje.porocilo`), besedilo."""
+    _preveri_admina(request)
+    return PlainTextResponse(dosje.porocilo(vozilo, dan, tocke, surovo))
 
 
 @app.get(f"{ADMIN_POT}/podatki", include_in_schema=False)

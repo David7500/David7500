@@ -48,7 +48,7 @@ from typing import Callable
 
 import requests
 
-from . import collector, config, db, geo, gtfs, iz_lege, stats, straza, viri
+from . import collector, config, db, dosje, geo, gtfs, iz_lege, stats, straza, viri
 
 TZ = collector.TZ
 MP = gtfs.MP
@@ -95,6 +95,8 @@ class Vozilo:
     hitrost: float | None = None
     #: Kdaj je bilo vozilo nazadnje v odgovoru (za hitrost).
     videno_ts: float = 0.0
+    #: Zakaj zadnjič ni bilo vožnje (`razresi`), za dosje.
+    zakaj: str | None = None
 
 
 _vozila: dict[str, Vozilo] = {}
@@ -118,6 +120,7 @@ def razberi(odgovor: dict) -> list[dict]:
             "naslednja": str(x.get("NextStopPointId") or ""),
             "lat": lat, "lon": lon, "zivo": not x.get("Predicted"),
             "smer_opis": " ".join(str(x.get("DirectionDescription") or "").split()),
+            "surovo": x,
         })
     return out
 
@@ -350,6 +353,7 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
                 if s.trip_id:
                     _odstrani(conn, s, v["naprava"])
                 s.trip_id = s.dan = None
+                s.zakaj = zakaj
                 st["brez"][zakaj] = st["brez"].get(zakaj, 0) + 1
                 continue
             trip_id, dan, seq = najdena
@@ -381,6 +385,7 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
         # zadnjega premika -- prikaz to pove in jo po 3 min skrije.
         ts = int(zdaj if v["zivo"] else s.lega_ts)
         vozilo_id = f"marprom-{v['naprava']}"
+        dosje.varno(_v_dosje, v, s, ts, vozilo_id, zdaj)
         if s.trip_id is None:
             if v["linija"]:
                 straza.vzorec("marprom", vozilo_id, None, zdaj)
@@ -420,6 +425,28 @@ def _odstrani(conn: sqlite3.Connection, s: Vozilo, naprava: str) -> None:
     do konca svežine -- avtobus bi bil narisan dvakrat."""
     conn.execute("DELETE FROM vehicle_now WHERE trip_id = ? AND vehicle_id = ?",
                  (s.trip_id, f"marprom-{naprava}"))
+
+
+#: Kar Marprom o vozilu pove sproti; drugo gre v telo dosjeja.
+_SPROTNO = frozenset({"Lat", "Lon", "NextStopPointId", "LKStopPointId", "ETA", "Predicted"})
+
+
+def _v_dosje(v: dict, s: Vozilo, ts: int, vozilo_id: str, zdaj: float) -> None:
+    """Vzorec v `dosje`, z vsem, kar je Marprom poslal."""
+    if not dosje.vklopljen():
+        return
+    x = v["surovo"]
+    stalno = {k: y for k, y in x.items() if k not in _SPROTNO}
+    razlogi = []
+    if s.trip_id is None:
+        razlogi += ["brez_voznje"] + ([s.zakaj] if s.zakaj else [])
+    if not v["zivo"]:
+        razlogi.append("ni_ziva")
+    if not v["linija"]:
+        razlogi.append("brez_linije")
+    dosje.opazi("marprom", vozilo_id, ts, v["lat"], v["lon"], trip_id=s.trip_id, dan=s.dan,
+                razlogi=razlogi, kljuc=tuple(sorted(stalno.items())), telo=stalno,
+                sprotno={k: x[k] for k in _SPROTNO if k in x}, oznaka=v["bus"] or None, zdaj=zdaj)
 
 
 def _zapisi_brez_voznje(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
