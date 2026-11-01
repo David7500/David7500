@@ -388,3 +388,74 @@ def test_ukaz_mesec_zamrzne_in_odkloni_nezakljucen(tmp_path, monkeypatch, capsys
     with pytest.raises(SystemExit) as e:
         cli.cmd_mesec(argparse.Namespace(mesec="2099-01"))
     assert "še ni zaključen" in str(e.value)
+
+
+# ---------------------------------------------------------------- najdbe pregleda
+
+def test_nova_razlicica_stat_dan_ne_postavi_straze_v_rdece_za_vedno(baza, monkeypatch):
+    """Zamrznjen mesec ostane tudi ob novi različici `stat_dan`, ki po načrtu
+    prepiše vse dni (`strani.md`). Primerjava z dnevi takrat ne more več držati
+    in je popraviti ni mogoče; brez tega `preveri.sh` pade pri vsaki objavi."""
+    c, _ = baza
+    statistika.zamrzni_mesece(c, KONEC)
+    _vstavi(c, "2026-09-10", "zeleznica|1161|vlak", _vrstica(Counter({0: 5}), 100))
+    c.execute("UPDATE stat_dan SET kljuc = 'avtobus|1121-mestni|avtobus' WHERE kljuc = 'avtobus|1123|avtobus'")
+    assert statistika.skladnost_meseca(c, MESEC)            # ista različica: razhajanje je napaka
+    monkeypatch.setattr(statistika, "STAT_DAN_VERZIJA", statistika.STAT_DAN_VERZIJA + 1)
+    assert statistika.skladnost_meseca(c, MESEC) == []
+    # Notranja skladnost zamrznjenega se preverja naprej.
+    p = statistika.zamrznjen_mesec(c, MESEC)
+    p["omrezja"]["avtobus"]["cilj"]["razredi"]["tocno"] += 3
+    c.execute("UPDATE stat_mesec SET podatki = ? WHERE mesec = ?", (json.dumps(p), MESEC))
+    assert any("razredi dajo" in n for n in statistika.skladnost_meseca(c, MESEC))
+
+
+def test_zamrznitev_vzame_dneve_po_dopolnitvi(baza, monkeypatch):
+    """Zadnji dan je ob prvem izračunu prezgodaj sklenjen (avtobusi vozijo do
+    09:48 naslednjega dne): zamrzne se tisto, kar `dopolni` prepiše tik pred tem."""
+    c, _ = baza
+
+    def dopolni(conn, danes):
+        _vstavi(conn, "2026-09-30", "avtobus|1123|avtobus", _vrstica(Counter({0: 1000}), 60))
+        conn.commit()
+
+    monkeypatch.setattr(statistika, "dopolni", dopolni)
+    assert statistika.zamrzni_mesece(c, KONEC) == [MESEC]
+    po = {x["kljuc"]: x for x in statistika.zamrznjen_mesec(c, MESEC)["prevozniki"]}
+    assert po["avtobus|1123|avtobus"]["cilj"]["n"] == 29 * 60 + 1000
+
+
+def test_napacen_mesec_ne_sproži_računa(baza, monkeypatch):
+    """Tipkarska napaka v ukazu na arwenu ne sme najprej prepisati zadnjih dni."""
+    c, _ = baza
+    klici = []
+    monkeypatch.setattr(statistika, "dopolni", lambda *a: klici.append(a))
+    with pytest.raises(ValueError):
+        statistika.zamrzni_mesece(c, KONEC, mesec="2026-1O")
+    assert klici == []
+
+
+def test_razdelek_izjem_ni_prazen_kadar_so_samo_vlaki(monkeypatch):
+    """Začetek zajema vlakov je na njihovi kartici; sam ne sme narediti
+    naslova nad praznim seznamom."""
+    c = db.connect(":memory:")
+    db.init(c)
+    rnd = random.Random(3)
+    for d in range(15, 31):
+        _vstavi(c, f"{MESEC}-{d:02d}", "zeleznica|1161|vlak", _vrstica(_hist(rnd, 50), 50))
+    c.commit()
+    statistika.zamrzni_mesece(c, KONEC)
+    monkeypatch.setattr(api, "_conn", lambda: c)
+    html = api.statistika_mesec(_zahteva("/statistika/" + MESEC), MESEC).body.decode()
+    assert "Česa ta mesec" not in html and "zajem od 15. 9." in html
+
+
+def test_izpad_ne_trdi_da_so_stevilke_samo_iz_drugih_dni(baza, monkeypatch):
+    """7.–10. 10. 2026 je bilo 17 meritev in so v 13 271 vožnjah: „iz preostalih
+    27 dni“ ne bi bilo res, bralec pa lahko sešteje dneve."""
+    c, _ = baza
+    statistika.zamrzni_mesece(c, KONEC)
+    monkeypatch.setattr(api, "_conn", lambda: c)
+    html = api.statistika_mesec(_zahteva("/statistika/" + MESEC), MESEC).body.decode()
+    assert "Številke so iz preostalih" not in html
+    assert "zajema ni bilo 5.–6. 9." in html and "preostalih 28" in html

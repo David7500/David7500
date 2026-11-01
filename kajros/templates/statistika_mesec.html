@@ -123,8 +123,8 @@
     <section class="st-k st-siroka">
       <h2>Česa ta mesec ne zajemamo vse dni</h2>
       <ul class="st-predlogi">
-        {% if v and v.dnevi_brez %}<li><b>Vlaki</b>: zajema ni bilo {{ v.dnevi_brez | obsegi_dni }} (manj kot desetina voženj z meritvijo). Številke so iz preostalih {{ v.dni_zajema }}&nbsp;dni.</li>{% endif %}
-        {% for x in izjeme if x.network != "zeleznica" %}
+        {% if v and v.dnevi_brez %}<li><b>Vlaki</b>: zajema ni bilo {{ v.dnevi_brez | obsegi_dni }} (manj kot desetina voženj z meritvijo). Skoraj vse vožnje v številkah so iz preostalih {{ v.dni_zajema }}&nbsp;dni.</li>{% endif %}
+        {% for x in izjeme %}
         <li><b>{{ x.naslov }}</b>: {{ zajem(x) }}, {{ x.cilj.n | stevilo }}&nbsp;{{ (x.cilj.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}.{% if x in premalo %} Premalo za primerjavo z drugimi.{% endif %}</li>
         {% endfor %}
       </ul>

@@ -322,7 +322,9 @@ večje delo · **ne** = podatka ni.
     ki ga kličeta okno in poročilo; september (30 dni) se na testu ujema z
     oknom `/statistika` do zadnje številke. `skladnost_meseca` (test in
     `preveri_skladnost.py`): razredi dajo 100, mesec = vsota `stat_dan`,
-    omrežje = vsota prevoznikov, poročilo = ponovni izračun iz dni.
+    omrežje = vsota prevoznikov, poročilo = ponovni izračun iz dni. Primerjava z
+    dnevi velja le pri različici `stat_dan`, iz katere je mesec zamrznjen
+    (`stat_dan_verzija` v JSON): nova prepiše vse dni, mesec pa ostane.
   * **Pokritost iz podatkov** (`_zajem_meseca`, `dan_z_zajemom`): dan velja za
     dan z zajemom, ko je vsaj `ZAJEM_DNEVA_MIN` (10 %) načrtovanih voženj
     izmerjenih do cilja. Izmerjeno na `stat_dan` z arwena (sep.–okt.): navadni
@@ -379,7 +381,8 @@ večje delo · **ne** = podatka ni.
    0,75, 1–5 ms na 5 798 imenih) s povezavo na popravljen par.
 5. **Faza 6, ostanek**: točnost odhodov na `/postaja/{ime}`. Mesečno poročilo
    je narejeno (glej Stanje); ob objavi 2. 11. ga na arwenu zamrzne
-   `./venv/bin/python -m kajros.cli mesec 2026-10` (ali nočni korak 3. 11. ob
-   3.30), nato preveri `/statistika/2026-10`, `scripts/preveri_skladnost.py` in
+   `cd /opt/kajros && KAJROS_DATA_DIR=/var/lib/kajros .venv/bin/python -m kajros.cli mesec 2026-10`
+   (brez `KAJROS_DATA_DIR` odpre prazno bazo v `data/` in reče „še ni zaključen“;
+   ali nočni korak 3. 11. ob 3.30), nato preveri `/statistika/2026-10`, `scripts/preveri_skladnost.py` in
    sitemap. Zamrznjenega meseca ne preračunavaj; napako v zamrznjenem popravi
    z izrecnim `DELETE FROM stat_mesec WHERE mesec = …` in novo zamrznitvijo.
