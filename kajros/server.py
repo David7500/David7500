@@ -884,14 +884,23 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
                     _log(f"osvežitev voznega reda ni uspela: {exc}")
                 if _strezemo:
                     _pripni_v_ozadju()
-        if uvoz is not None and uvoz.poglej(conn) is not None:
-            uvoz = None
-            # Predpomnilnike voznega reda (`db.znacka_reda`) je razveljavil že
-            # zapis uvoza; pot in zdravje ogrejemo takoj, kot dotlej, ko je
-            # zanka po uvozu zamudila ritem ogrevanja.
-            next_health = 0.0
-            if _strezemo:
-                _pripni_v_ozadju()
+        if uvoz is not None:
+            # Izjema tu ne sme ustaviti zajema: zanka je nenadomestljiva, uvoz
+            # se ponovi naslednjo noč. Poskusi znova v naslednjem obhodu.
+            try:
+                izid = uvoz.poglej(conn)
+            except Exception as exc:
+                conn.rollback()
+                izid = None
+                _log(f"pogled na uvoz ni uspel: {exc}")
+            if izid is not None:
+                uvoz = None
+                # Predpomnilnike voznega reda (`db.znacka_reda`) je razveljavil že
+                # zapis uvoza; pot in zdravje ogrejemo takoj, kot dotlej, ko je
+                # zanka po uvozu zamudila ritem ogrevanja.
+                next_health = 0.0
+                if _strezemo:
+                    _pripni_v_ozadju()
 
         if next_weather and datetime.now(TZ) >= next_weather:
             next_weather += timedelta(days=1)

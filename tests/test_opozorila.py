@@ -673,6 +673,27 @@ def test_zanka_med_uvozom_bere_naprej(monkeypatch, tmp_path):
     assert int(db.get_meta(c, "zanka_ts")) >= uv["od"]
 
 
+def test_izjema_pri_pogledu_na_uvoz_ne_ustavi_zanke(monkeypatch, tmp_path):
+    """Zajem je nenadomestljiv: izjema v `poglej` ne ubije zanke, naslednji
+    obhod pogleda znova in uvoz se konča kot sicer."""
+    from kajros import db, server
+    pravi = server.Uvoz.poglej
+    padci = []
+
+    def poglej(self, conn):
+        if not padci:
+            padci.append(1)
+            raise OSError("preizkus")
+        return pravi(self, conn)
+
+    monkeypatch.setattr(server.Uvoz, "poglej", poglej)
+    _, c = _zanka_z_uvozom(
+        monkeypatch, tmp_path, "print('vozni red nespremenjen (HTTP 304) -- uvoz preskocen')",
+        lambda uv: uv.get("do"))
+    assert padci
+    assert json.loads(db.get_meta(c, "uvoz"))["izid"] == "nespremenjen"
+
+
 def test_ustavitev_streznika_med_uvozom(monkeypatch, tmp_path):
     """Ustavitev med uvozom (`_stop`, kot v `lifespan`): podproces se konča,
     `meta.uvoz` ne ostane „teče“ (prej do ure, `zdravje.UVOZ_NAJDLJE_S`)."""
