@@ -2,11 +2,12 @@
 
 // Pregled za skrbnika: kdo je bil na strani in ali stroj dela.
 //
-// Zavihki -- Stanje, Viri, Zgodovina, Sporočila, Obvestila, Deljenje. Vsi
-// razen zadnjega berejo en endpoint, `/admin/podatki?od=&do=`. Brez meja vrne
+// Zavihki -- Stanje, Viri, Zgodovina, Sporočila, Obvestila, Deljenje, Koledar.
+// Prvih pet bere en endpoint, `/admin/podatki?od=&do=`. Brez meja vrne
 // današnji dan; odgovor vedno nosi še `danes`, `zadnjih30`, zdravje, vire in
 // sporočila, zato vsi rabijo en klic, Zgodovina pa enega več za izbrano
-// obdobje. Deljenje ima svoj endpoint in ritem (`admin_deljenje.js`).
+// obdobje. Deljenje ima svoj endpoint in ritem (`admin_deljenje.js`), Koledar
+// svojega (`/admin/koledar`, spodaj).
 //
 // Kar je na tej strani najlažje narobe prebrati, je vsota dnevnih
 // obiskovalcev. Sol se vsak dan zavrže (glej `obisk.py`), zato ista oseba v
@@ -1303,6 +1304,36 @@ function obvestilaRisi(v, d) {
       <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p></article>`).join("");
 }
 
+// ------------------------------------------------------------------ koledar
+
+let koledarHtml = null;     // kar je zdaj na zaslonu; enaka vsebina strani ne preriše
+
+/** `KOLEDAR.md`, izrisan na strežniku (`koledar.py`). Svoj endpoint in ne del
+ *  `/admin/podatki`: tisti nosi vse zavihke vsako minuto, koledar pa rabi
+ *  samo ta. Datoteka se bere ob vsaki zahtevi, zato je viden tudi vnos, ki ga
+ *  je seja dodala, odkar je zavihek odprt. Enake vsebine ne vstavimo znova:
+ *  minutno osveževanje bi sicer skrbniku sredi branja vrnilo vodoravno drsenje
+ *  tabele na začetek. */
+async function koledarRisi(v) {
+  if (!el("koledar")) v.innerHTML = prazno("nalagam …");
+  try {
+    const r = await fetch("/admin/koledar", { credentials: "same-origin" });
+    if (!r.ok) throw new Error(r.status === 403 ? "Napačen žeton." : `strežnik: ${r.status}`);
+    const d = await r.json();
+    // Med čakanjem je skrbnik lahko odšel na drug zavihek.
+    if (preberiNaslov() !== "koledar") return;
+    const vir = d.spremenjeno
+      ? `<p class="adm-kol-vir">KOLEDAR.md · spremenjen ${escapeHtml(uraTs(d.spremenjeno))}</p>` : "";
+    const html = `<div id="koledar">${vir}${d.html}</div>`;
+    if (el("koledar") && html === koledarHtml) return;
+    v.innerHTML = koledarHtml = html;
+  } catch (e) {
+    if (preberiNaslov() === "koledar" && !el("koledar")) {
+      v.innerHTML = prazno(`Koledarja ni bilo mogoče naložiti — ${e.message}`);
+    }
+  }
+}
+
 // ------------------------------------------------------------------ noga
 
 function noga(d) {
@@ -1326,7 +1357,7 @@ function noga(d) {
 /** `#zgodovina/teden/2026-09-14` -- stanje je v naslovu, da ga ohrani osvežitev. */
 function preberiNaslov() {
   const [zav, v, d] = location.hash.slice(1).split("/");
-  const zavihek = ["stanje", "viri", "zgodovina", "sporocila", "obvestila", "deljenje"].includes(zav) ? zav : "stanje";
+  const zavihek = ["stanje", "viri", "zgodovina", "sporocila", "obvestila", "deljenje", "koledar"].includes(zav) ? zav : "stanje";
   if (zavihek === "zgodovina") {
     izbor = {
       vrsta: OBDOBJA[v] ? v : "dan",
@@ -1354,6 +1385,7 @@ function risi() {
   if (zavihek === "deljenje") { deljenjeOdpri(v); return; }
   deljenjeZapri();
   if (zavihek === "obvestila") { obvestilaRisi(v, zadnji); return; }
+  if (zavihek === "koledar") { koledarRisi(v); return; }
   if (zavihek === "sporocila") v.innerHTML = sporocila(zadnji);
   else if (zavihek === "viri") v.innerHTML = viriZavihek(zadnji);
   else if (zavihek === "zgodovina") v.innerHTML = zgodovina();
@@ -1470,6 +1502,11 @@ addEventListener("hashchange", async () => {
   }
   risi();
 });
+
+// Koledar ne rabi pregleda: odprt takoj se izriše, ne šele ko odgovori
+// `/admin/podatki` -- in tudi, ko ta odpove, ravno takrat pa so v koledarju
+// ukrepi („Vedno“).
+if (location.hash.startsWith("#koledar")) koledarRisi(el("vsebina"));
 
 // `pollWhileVisible` prvič sproži takoj, zato tu ni ločenega klica. Minuta je
 // ritem, v katerem se števci sploh zapišejo v bazo -- pogosteje ni česa videti,

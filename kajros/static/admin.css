@@ -434,6 +434,41 @@ a.adm-k-povezava:hover { border-color: var(--line-firm); background: var(--bg-ra
 .adm-znacka.je-mlacna { background: var(--sev-hard); color: var(--bg); }
 .adm-znacka.je-oranzna { background: var(--sev-oranzna); color: var(--bg); }
 
+/* ---------- koledar ----------
+ * `KOLEDAR.md`, izrisan na strežniku (`koledar.py`): plošča na razdelek kot pri
+ * drugih zavihkih. Tabela je v svojem okviru (`.adm-ovoj-t`), ki se na telefonu
+ * drsi sam, stran pa ne. `.adm-t` je za številke v eni vrstici; tu je besedilo,
+ * ki se prelomi, in najmanjša širina po številu stolpcev (`--st`), da stolpci
+ * ne postanejo ozki kot stolpec črk. */
+
+.adm-kol { display: flex; flex-direction: column; gap: 14px; }
+.adm-kol-vir { margin: 0 0 12px; font: 12px var(--mono); color: var(--ink-faint); }
+.adm-kol h3 { margin: 14px 0 4px; font: 600 13px var(--sans); color: var(--ink); }
+.adm-kol p, .adm-kol ul { margin: 8px 0 0; max-width: 900px; font-size: 13.5px; line-height: 1.6; color: var(--ink-dim); }
+.adm-kol ul { padding-left: 20px; }
+.adm-kol li + li { margin-top: 4px; }
+.adm-kol strong { font-weight: 600; color: var(--ink); }
+.adm-kol code { font: 12px var(--mono); color: var(--ink); overflow-wrap: break-word; }
+.adm-kol a { color: var(--accent-lit); }
+.adm-kol pre {
+  margin: 10px 0 0; padding: 10px 12px; overflow-x: auto; border-radius: var(--r);
+  background: var(--bg-raised); font: 12px/1.5 var(--mono); color: var(--ink-dim);
+}
+.adm-kol hr { border: 0; border-top: 1px solid var(--line-soft); margin: 14px 0; }
+.adm-kol .adm-ovoj-t { margin-top: 10px; }
+
+.adm-t.adm-kol-t { min-width: calc(var(--st, 3) * 110px); }
+.adm-t.adm-kol-t th { white-space: normal; vertical-align: bottom; }
+.adm-t.adm-kol-t td {
+  white-space: normal; vertical-align: top; padding: 9px 10px;
+  font-size: 13px; line-height: 1.55;
+}
+.adm-t.adm-kol-t th:first-child, .adm-t.adm-kol-t td:first-child { min-width: 8.5em; }
+.adm-t.adm-kol-t .dolg { min-width: 18em; }
+/* Rok je danes ali je mimo: rahlo, da stoji ob strani, ne da vpije. */
+.adm-t.adm-kol-t tr.je-zapadlo td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.adm-t.adm-kol-t tr.je-zapadlo td:first-child strong { color: var(--accent-lit); }
+
 /* ---------- viri ----------
  * Kartica na vir: kaj je in kaj daje zgoraj, stanje v vrsticah, od kod in
  * pod katero licenco v nogi. Rdeča ali rumena kartica ima obrobo v barvi

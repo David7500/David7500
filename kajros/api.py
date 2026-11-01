@@ -31,7 +31,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (alerts, collector, config, db, deljenje, donacije, gtfs, hoja, journey, lpp,
-               opazovano,
+               koledar, opazovano,
                markdown, nadomestni, naslovi, obisk, obvestila, opozorila, peroni, pot,
                pripni, pristanek, server, statistika, stats, stik, tiri, viri, zamude_sz,
                zapore, zasedenost, zdravje, zive)
@@ -4089,6 +4089,19 @@ def admin_deljenje(request: Request,
         # pri `stik.init()` v `admin_podatki`.
         deljenje.init(conn)
         return {"vklopljeno": config.DELI, **deljenje.pregled(conn, dan=dan, izbrano=izbrano)}
+
+
+@app.get(f"{ADMIN_POT}/koledar", include_in_schema=False)
+def admin_koledar(request: Request):
+    """Zavihek „Koledar“: `KOLEDAR.md` iz korena repozitorija, izrisan v HTML.
+
+    Datoteka se prebere ob vsaki zahtevi (`koledar.py`), zato je vedno
+    zadnja različica. Svoj endpoint in ne del `/admin/podatki`: tisti nosi
+    vse zavihke vsako minuto, koledar pa rabi samo ta. Samo GET in isti
+    žeton kot ostalo: pisalnih poti je šest.
+    """
+    _preveri_admina(request)
+    return koledar.pregled(datetime.now(TZ).date())
 
 
 @app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)

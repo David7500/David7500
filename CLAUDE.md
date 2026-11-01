@@ -103,6 +103,7 @@ kajros/
   obisk.py       števci obiska brez IP; sol dneva, praznjenje v svoji niti
   stik.py        sporočila obiskovalcev; obvestila.py skrbnik potnikom (z rokom); donacije.py Ko-fi brez imena
   viri.py        register virov + dnevnik branj: zavihek Viri v /admin, preverjanje
+  koledar.py     KOLEDAR.md v /admin (zavihek Koledar): lasten izris Markdowna, pot ob kodi
   zdravje.py     kdaj je zajem zdrav (barve v /admin), kaj gre v pošto (`posta`: samo poseg); opozorila.py pošlje
   deljenje.py    potnik na vozilu deli lego: kandidati, točke, prehodi, soglasje
   zasedenost.py  kako polno je vozilo po poročilih potnikov
@@ -155,7 +156,7 @@ Pri avtobusih, hitro pozabljeno:
 | `/o-nas` | zgodba v 3D, kaj je tu, od kod podatki; edina besedilna stran z JS (vir `o-nas/`) |
 | `/primerjava` | druge strani za zamude po njihovih besedah, z datumom pregleda |
 | `/donacije` | za kaj gre denar, trak cilja (`config.CILJ`, ista kartica na `/`), gumb `ko-fi.com/kajros`; `KAJROS_DONACIJE=` skrije vse |
-| `/admin` | **skrbnik**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege, obvestila |
+| `/admin` | **skrbnik**: obisk, napake, odzivni čas, zdravje zajema, deljenje lege, obvestila, koledar |
 
 **Pristajalne strani so za iskalnik in brez JS**: „vlak ljubljana koper“ → odgovor v odgovoru strežnika. Katere nastanejo: `kajros/pristanek.py`; v zemljevidu strani vrh po teži (promet izhodišča × promet cilja), ostalo `noindex`. Kaj ljudje iščejo: `docs/MERITVE.md` („Iskalniki“).
 

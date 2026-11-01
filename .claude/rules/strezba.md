@@ -103,6 +103,7 @@ Na `/api/departures`, `/api/connections`, `/api/train/{no}/run`, `/api/live` (`s
 * `/admin/podatki?od=&do=` (+ `danes`, `zadnjih30`, zdravje, sporočila). Primerjava `obisk.prejsnje_obdobje()` (mesec s prejšnjim mesecem). Nad dnem „obiskov“, ne „ljudi“. Oblika A iz `design/admin/`.
 * **Zavihek Viri**: kartica na vir iz `viri.pregled()` (vloga, ritem, zadnji odgovor, zadnja napaka, nit, „čaka“, licenca, „Kaj storiti“); `razlogi`; gumb **Preveri vire zdaj** (`GET /admin/viri/preveri`, ne piše). „Zajem“, „Stroj“, „Dnevnik“ (`server.DNEVNIK`, 150 vrstic). **Živa nit vira ne pobarva**; le ustavljena (rdeče).
 * **Deljenje** svoj endpoint `/admin/deljenje`, na 10 s; `risi()` ga ob osvežitvi pusti. `deljenje.md`.
+* **Koledar** (`koledar.py`, `GET /admin/koledar` → `{html, spremenjeno}`): `KOLEDAR.md` ob kodi, prebran ob vsaki zahtevi. Izris lasten: vse skozi `html.escape`, `href` samo `http(s)`, pot v repozitoriju = koda. Vrstice razdelka `koledar.NA_VRSTI` z datumom danes ali prej dobijo `je-zapadlo`; preimenovan razdelek barvanje tiho izklopi (`test_pravi_koledar_se_izrise`). **Na arwenu je datoteka z zadnjega potiska**: `posodobi.sh` prepiše celo drevo, `ProtectHome` domače mape ne vidi (`test_objava_prenese_koledar`).
 
 ## Kar stran dolguje javnosti
 
