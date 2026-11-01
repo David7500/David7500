@@ -177,6 +177,38 @@ def test_meritev_med_branjem_nagrobnikov_ne_osiroti(tmp_path):
                      "WHERE t.trip_id IS NULL").fetchone()[0] == 0
 
 
+def test_meritev_ki_caka_zaklep_uvoza_ne_osiroti(tmp_path):
+    """Nit vožnjo izbere pred pisanjem (okna iz voznega reda), uvoz medtem piše.
+    Njen zapis čaka zaklep (busy 30 s) in gre skozi po potrditvi uvoza: vožnje
+    takrat ni več, nagrobnika tudi ne, ker meritev še ni imela. Tako teče
+    `iz_lege.iz_feeda` v glavni zanki in niti NAP, Marprom, Kranj."""
+    import sqlite3
+    import threading
+    import time
+    from kajros import db, iz_lege
+    pot = tmp_path / "kajros.sqlite"
+    c = db.connect(pot)
+    db.init(c)
+    gtfs.import_static(c, _zip(tmp_path / "prej.zip", ["v1", "v2"]), lpp_zip=None)
+    uvoz = sqlite3.connect(pot, timeout=5)
+    uvoz.execute("BEGIN IMMEDIATE")
+    uvoz.execute("DELETE FROM trip WHERE trip_id = 'v1'")
+
+    def zanka():
+        z = db.connect(pot)
+        iz_lege.zapisi_meritev(z, "v1", "2026-09-28", 1, None, 60, 1)     # je izginila
+        iz_lege.zapisi_meritev(z, "v2", "2026-09-28", 1, None, 60, 1)
+        z.commit()
+        z.close()
+    nit = threading.Thread(target=zanka)
+    nit.start()
+    time.sleep(0.3)                                                  # nit čaka zaklep
+    uvoz.commit()
+    nit.join(10)
+    assert [r[0] for r in c.execute("SELECT trip_id FROM run")] == ["v2"]
+    assert c.execute("SELECT COUNT(*) FROM obs WHERE trip_id = 'v1'").fetchone()[0] == 0
+
+
 def test_zip_s_tujimi_trasami_se_zavrne(tmp_path):
     """28. 9. 2026 so bile v zipu DUJPP trase pomešane pri 74-100 % voženj
     vsakega avtobusnega prevoznika. Trasa, ki se začne pri prvem postanku

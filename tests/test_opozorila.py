@@ -690,6 +690,47 @@ def test_ustavitev_streznika_med_uvozom(monkeypatch, tmp_path):
         os.kill(int(pid.read_text()), 0)
 
 
+def test_zagon_zapre_prekinjen_uvoz(monkeypatch, tmp_path):
+    """Ustavitev, ki ne pride do `Uvoz.ustavi` (zanka čaka zaklep dlje od 5 s
+    `lifespan`, izpad): začetek brez konca ostane v `meta.uvoz`. Zanka po zagonu
+    ne sme kazati uvoza, ki visi -- 15 min pozneje oranžno s pošto, do 1 h."""
+    import threading
+    import time
+    from kajros import config, db, server
+
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "kajros.sqlite")
+    monkeypatch.setattr(config, "LPP_ENABLED", False)
+    monkeypatch.setenv("KAJROS_OCENA", "0")
+    monkeypatch.setattr(server, "manjkajoci_viri", lambda conn: [])
+    monkeypatch.setattr(server.collector, "poll_once", lambda conn: {})
+    c = db.connect(tmp_path / "kajros.sqlite")
+    db.init(c)
+    od = int(time.time()) - 16 * 60
+    db.set_meta(c, "uvoz", json.dumps({"od": od, "do": None, "izid": "ok", "neuspelih": 0}))
+    c.commit()
+    z = {**_zdravo(), "uvoz": json.loads(db.get_meta(c, "uvoz")), "nocno": {}}
+    assert zdravje.ocena(z, STROJ, time.time())["nocno"][0] == zdravje.ORANZNA
+
+    nit = threading.Thread(target=server._worker, daemon=True, kwargs=dict(
+        interval=0.5, refresh_hour=-1, refresh_mode="subprocess", weather_hour=-1,
+        alert_interval=0, maint_hour=-1, summaries=False))
+    nit.start()
+    try:
+        konec = time.monotonic() + 10
+        while json.loads(db.get_meta(c, "uvoz"))["do"] is None:
+            assert time.monotonic() < konec, "zagon ni zaprl prekinjenega uvoza"
+            time.sleep(0.05)
+    finally:
+        server._stop.set()
+        nit.join(10)
+        server._stop.clear()
+    uv = json.loads(db.get_meta(c, "uvoz"))
+    assert uv["od"] == od and uv["izid"] == "napaka" and "zagonom" in uv["razlog"]
+    assert uv["neuspelih"] == 1 and zdravje.uvoz_tece(uv, time.time()) is None
+    z["uvoz"] = uv
+    assert zdravje.ocena(z, STROJ, time.time())["nocno"][0] == zdravje.MLACNA
+
+
 def test_zaklep_med_uvozom_ni_napaka_kode():
     """„database is locked“ v koraku zanke, medtem ko uvoz voznega reda piše
     (ena transakcija ≥ 45--80 s, busy 30 s), ne šteje v niz `zajem_napake`:

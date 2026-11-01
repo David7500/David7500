@@ -1727,8 +1727,8 @@ def api_health():
         # Izjema v naši obdelavi po koraku zanke (`collector.zapisi_korak`):
         # do 31. 10. 2026 se je kazala kot „derp.si ne odgovarja“.
         out["zajem_napake"] = json.loads(db.get_meta(conn, "zajem_napake") or "{}")
-        # Srčni utrip glavne zanke in uvoz voznega reda, ki jo ustavi
-        # (`server.refresh_timetable`): zanka, ki čaka, ni molk derp.si.
+        # Srčni utrip glavne zanke (zanka, ki obstane, ni molk derp.si) in
+        # uvoz voznega reda, ki teče ob njej (`server.Uvoz`).
         if v := db.get_meta(conn, "zanka_ts"):
             out["zanka_ts"] = int(v)
         out["uvoz"] = uv = json.loads(db.get_meta(conn, "uvoz") or "{}")

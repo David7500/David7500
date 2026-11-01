@@ -416,6 +416,15 @@ def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
 
     Isto pot uporablja `zamude_sz`, ki pove eno samo od obeh zamud postanka
     (odhod na poti, prihod na cilju); z `ohrani` druga v `run` ostane."""
+    # Klicatelji (zanka prek `iz_feeda`, NAP, Marprom, Kranj, zemljevid SŽ,
+    # zasloni LPP) vožnjo izberejo iz voznega reda PRED pisanjem. Uvoz medtem
+    # piše: njihov zapis čaka do 30 s (busy), po potrditvi uvoza pa bi meritev
+    # dobila vožnja, ki je ni več -- nagrobnik ima le tista z meritvami. Zato
+    # najprej pisalni zaklep, nato pogled na vožnjo, v istem posnetku.
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    if not conn.execute("SELECT 1 FROM trip WHERE trip_id = ?", (trip_id,)).fetchone():
+        return
     last = conn.execute(
         "SELECT delay_arr, delay_dep FROM obs WHERE trip_id=? AND service_date=? "
         "AND stop_seq=? ORDER BY feed_ts DESC LIMIT 1", (trip_id, dan, seq)).fetchone()

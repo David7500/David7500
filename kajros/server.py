@@ -349,9 +349,8 @@ class Uvoz:
 
     def ustavi(self, conn) -> dict:
         """Ob ustavitvi strežnika: SIGTERM, po `UVOZ_USTAVI_S` SIGKILL, in konec
-        v `meta.uvoz` -- sicer bi uvoz po zdravju „tekel“ še do ure
-        (`zdravje.UVOZ_NAJDLJE_S`). Prekinjeno pisanje SQLite zavrže sam: brez
-        potrditve transakcije ostane stari vozni red."""
+        v `meta.uvoz`, da uvoz po zdravju ne „teče“ naprej. Prekinjeno pisanje
+        SQLite zavrže sam: brez potrditve transakcije ostane stari vozni red."""
         if self.proc.poll() is None:
             self.proc.terminate()
             try:
@@ -398,6 +397,18 @@ def _uvoz_konec(conn, prej: dict, zacetek: int, izid: dict) -> None:
     slabo = izid["izid"] in ("zavrnjen", "napaka")
     _zapisi_uvoz(conn, {"od": zacetek, "do": int(time.time()), **izid,
                         "neuspelih": (prej.get("neuspelih") or 0) + 1 if slabo else 0})
+
+
+def _zapri_prekinjen_uvoz(conn) -> None:
+    """Ob zagonu ta proces uvoza še nima: začetek brez konca je ostal od
+    prejšnjega. `Uvoz.ustavi` ni prišel do zapisa, kadar zanka ob ustavitvi čaka
+    zaklep ali vir dlje od 5 s (`lifespan`), ali proces ni imel ustavitve. Sicer
+    bi po 15 min „visel“ (`zdravje.UVOZ_ORANZNO_S`): oranžno s pošto, do 1 h."""
+    uv = _beri_uvoz(conn)
+    if uv.get("od") and not uv.get("do"):
+        _log("osvežitev voznega reda je prekinil ponovni zagon")
+        _uvoz_konec(conn, uv, uv["od"], {"izid": "napaka",
+                                         "razlog": "prekinjen z zagonom strežnika"})
 
 
 def _beri_uvoz(conn) -> dict:
@@ -687,6 +698,7 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             position_interval: int = config.POSITION_SECONDS) -> None:
     conn = db.connect()
     db.init(conn)
+    _zapri_prekinjen_uvoz(conn)
     # Sencno merjenje napovedi. Samo bere `run` in `sched` in pise v svojo
     # tabelo -- na zajem ne vpliva, zato tece v isti niti in ne v svoji.
     ocena.init(conn)
@@ -968,7 +980,8 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
         _stop.wait(max(0.5, min(cakaj, interval)))
 
     # Ustavitev med uvozom (`lifespan` postavi `_stop`): otrok se konča, uvoz
-    # pa ne „teče“ naprej v `meta.uvoz`. Zanko, ki pade z izjemo (rdeča nit
+    # pa ne „teče“ naprej v `meta.uvoz`. Kar sem ne pride, zapre naslednji
+    # zagon (`_zapri_prekinjen_uvoz`); zanko, ki pade z izjemo (rdeča nit
     # `kajros-collector`), pokrije meja `zdravje.UVOZ_NAJDLJE_S`.
     if uvoz is not None:
         uvoz.ustavi(conn)
