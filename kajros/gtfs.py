@@ -1208,6 +1208,13 @@ def import_static(conn: sqlite3.Connection, zip_path: Path,
     staro = _vozenj_po_prevozniku(conn)
 
     with conn:
+        # Pisanje se začne PRED branjem nagrobnikov: med njim in `DELETE` spodaj
+        # (1--3 s) bi meritev druge niti (NAP, zemljevid SŽ, Marprom, Kranj, od
+        # 1. 11. 2026 tudi glavna zanka, `server.Uvoz`) dobila vožnja, ki je
+        # med nagrobniki ni -- osirotela meritev. Sicer se `BEGIN` zgodi šele
+        # ob prvem `DELETE`.
+        if not conn.in_transaction:
+            conn.execute("BEGIN IMMEDIATE")
         # Voznja, ki ima MERITVE, mora prezivati uvoz tudi takrat, ko je nov
         # vozni red nima. Brez tega jo `DELETE FROM trip` osiroti: `run` in
         # `obs` ostaneta, a vsaka poizvedba gre skozi `JOIN trip` (omrezje je

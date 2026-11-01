@@ -142,6 +142,41 @@ def test_zip_brez_vlakov_ne_izbrise_voznega_reda(tmp_path):
     assert izid["prevozniki"] == {"1161": [1, 2]}
 
 
+def test_meritev_med_branjem_nagrobnikov_ne_osiroti(tmp_path):
+    """Uvoz prebere vožnje z meritvami (nagrobnike), nato jih `DELETE FROM
+    trip` pobriše in vrne. Meritev, ki jo druga nit zapiše vmes, bi ostala brez
+    vožnje -- vsaka poizvedba gre skozi `JOIN trip`. Od 1. 11. 2026 med uvozom
+    piše tudi glavna zanka (`server.Uvoz`), zato pisanje začne pred branjem."""
+    import sqlite3
+    from kajros import db
+    pot = tmp_path / "kajros.sqlite"
+    c = db.connect(pot)
+    db.init(c)
+    gtfs.import_static(c, _zip(tmp_path / "prej.zip", ["v1"]), lpp_zip=None)
+    druga = sqlite3.connect(pot, timeout=0)
+    zapisanih = []
+
+    def vmes(sql):
+        if "EXISTS (SELECT 1 FROM run r" not in sql:
+            return
+        try:
+            with druga:
+                druga.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, "
+                              "feed_ts) VALUES('v1', '2026-09-28', 1, 60, 1)")
+            zapisanih.append(1)
+        except sqlite3.OperationalError:            # database is locked: uvoz piše
+            pass
+    c.set_trace_callback(vmes)
+    gtfs.import_static(c, _zip(tmp_path / "nov.zip", ["v2"]), lpp_zip=None)
+    c.set_trace_callback(None)
+    druga.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_dep, feed_ts) "
+                  "VALUES('v2', '2026-09-28', 1, 60, 1)")         # po uvozu spet gre
+    druga.commit()
+    assert zapisanih == []
+    assert c.execute("SELECT COUNT(*) FROM run r LEFT JOIN trip t USING (trip_id) "
+                     "WHERE t.trip_id IS NULL").fetchone()[0] == 0
+
+
 def test_zip_s_tujimi_trasami_se_zavrne(tmp_path):
     """28. 9. 2026 so bile v zipu DUJPP trase pomešane pri 74-100 % voženj
     vsakega avtobusnega prevoznika. Trasa, ki se začne pri prvem postanku
