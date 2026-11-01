@@ -894,7 +894,10 @@ PRIMEROV = 6
 
 def _primer(p: dict, prevoznik: str = "") -> dict:
     """Ena povezava: oznaka in pot na zemljevid z izbranim vozilom."""
-    q = {"trip": p["trip_id"]} if p.get("trip_id") else {"vozilo": p["vozilo"]}
+    # Oboje: vozilo je lahko že na naslednji vožnji (fantom, 1. 11. 2026: LPP
+    # 19B 39 min po tem, ko je stara vožnja izgubila lego), zemljevid ga najde
+    # po id-ju.
+    q = {k: p[i] for k, i in (("trip", "trip_id"), ("vozilo", "vozilo")) if p.get(i)}
     if p.get("lat") is not None and p.get("lon") is not None:
         q.update(lat=f"{p['lat']:.5f}", lon=f"{p['lon']:.5f}", z="16")
     oznaka = p.get("oznaka") or p.get("trip_id") or p.get("vozilo") or "?"
@@ -903,6 +906,11 @@ def _primer(p: dict, prevoznik: str = "") -> dict:
     out = {"oznaka": oznaka, "pot": "/app/map?" + urlencode(q)}
     if p.get("vozilo"):
         out["dosje"] = "/admin/vozilo/" + quote(str(p["vozilo"]), safe="")
+    # Vožnja brez sveže lege na zemljevidu ni vidna; okno jo pokaže vseeno.
+    if p.get("train_no") and p.get("trip_id"):
+        okno = "/app/bus/" if p.get("network") == "avtobus" else "/app/train/"
+        out["okno"] = (okno + quote(str(p["train_no"]), safe="")
+                       + "?" + urlencode({"trip": p["trip_id"]}))
     return out
 
 

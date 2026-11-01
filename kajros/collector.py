@@ -620,14 +620,18 @@ def _zapisi_fantome(conn: sqlite3.Connection) -> None:
     povezavo na zemljevid (`zdravje.primeri`)."""
     out = []
     for (t, dan), od in sorted(FANTOMI.items(), key=lambda x: x[1])[:PRIMEROV]:
+        # LPP v `vehicle_now` nima dneva: brez COALESCE fantom LPP nikoli ni
+        # dobil vozila in povezava iz /admin ni imela česa pokazati.
         r = conn.execute(
-            "SELECT t.train_no, t.headsign, t.agency, v.vehicle_id, v.lat, v.lon FROM trip t "
-            "LEFT JOIN vehicle_now v ON v.trip_id = t.trip_id AND v.service_date = ? "
-            "WHERE t.trip_id = ?", (dan, t)).fetchone()
+            "SELECT t.train_no, t.headsign, t.agency, v.vehicle_id, v.lat, v.lon, t.network "
+            "FROM trip t LEFT JOIN vehicle_now v ON v.trip_id = t.trip_id "
+            "  AND COALESCE(v.service_date, ?) = ? "
+            "WHERE t.trip_id = ? ORDER BY v.seen_ts DESC", (dan, dan, t)).fetchone()
         if r:
             dosje.oznaci(r[3], "zamuda_raste")
             out.append({"trip_id": t, "od": int(od), "agency": r[2], "vozilo": r[3],
-                        "lat": r[4], "lon": r[5], "oznaka": " ".join(
+                        "lat": r[4], "lon": r[5], "train_no": r[0], "network": r[6],
+                        "oznaka": " ".join(
                             x for x in (r[0], r[1] and f"→ {r[1]}") if x)})
     db.set_meta(conn, "fantomi", json.dumps(
         {"ts": int(time.time()), "n": len(FANTOMI), "nacin": config.DRSI, "voznje": out},

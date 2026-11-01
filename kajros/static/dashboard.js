@@ -83,9 +83,11 @@ const NAGIB_NAJVEC = 60;
 
 const vklop = {};              // kljuc plasti iz LAYERS -> prizgana
 
+const nagib3D = (z) => NAGIB_NAJVEC * Math.max(0, Math.min(1, (z - NAGIB_OD) / NAGIB_CEZ));
+
 function nagib(z) {
   if (!vklop["3d"]) return 0;
-  return NAGIB_NAJVEC * Math.max(0, Math.min(1, (z - NAGIB_OD) / NAGIB_CEZ));
+  return nagib3D(z);
 }
 
 // Lego zemljevida hranimo v naslovu: brez tega je "poglej, kje stoji" nemogoce
@@ -1227,6 +1229,7 @@ const OZNAKA_OD = 14;          // Leafletov zoom
 // Od blizu je avtobus model v 3D (`vozila3d.js`), od dalec ikona. Meja in
 // velikost modela sta tam, ker ju rabi tudi okno voznje.
 const AVTOBUS_3D_OD = AVTO_3D_OD;
+const OZNAKE_3D = ["k-avtobusi-st", "k-avtobus-izbran-st"];
 let avtobusi3d = null;
 let vozila3d = [];             // kar plast 3D ta hip rise, za dotik
 
@@ -1314,6 +1317,30 @@ async function dodajAvtobuse() {
     povecava: povecava3D,
   });
   map.addLayer(avtobusi3d.plast);
+  // Plast ikon se od `AVTOBUS_3D_OD` umakne modelu in z njo je šla številka:
+  // od blizu se avtobusa nista več ločila. Zato svoja plast nad modelom, na
+  // strehi. Nagib in povečava sta odvisna samo od približka, zato gre višina
+  // strehe v tabelo; zemljepisna širina Slovenije je tu dovolj natančna.
+  const mpp = (z) => (40075016.686 * Math.cos((46 * Math.PI) / 180)) / (512 * 2 ** z);
+  const naStrehi = [15, 16, 17, 18, 19].flatMap((z) => [z, ["literal", [0,
+    -((3.4 * povecava3D(z)) / mpp(z)) * Math.sin((nagib3D(z) * Math.PI) / 180)]]]);
+  ["k-avtobusi", "k-avtobus-izbran"].forEach((vir, i) => map.addLayer({
+    id: OZNAKE_3D[i], type: "symbol", source: vir, minzoom: AVTOBUS_3D_OD,
+    layout: {
+      "text-field": ["get", "st"],
+      "text-font": ["Noto Sans Bold"],
+      "text-size": ["interpolate", ["linear"], ["zoom"], 15, 13, 18, 17],
+      // Številka je tu edino, kar loči vozila: ostane tudi v gneči.
+      "text-allow-overlap": true,
+      "text-ignore-placement": true,
+    },
+    paint: {
+      "text-color": "#e7eaf0",
+      "text-halo-color": "#0f1115",
+      "text-halo-width": 2,
+      "text-translate": ["interpolate", ["linear"], ["zoom"], ...naStrehi],
+    },
+  }));
   uveljavi();
 }
 
@@ -2276,6 +2303,7 @@ function uveljavi() {
   if (map.getLayer("k-avtobusi")) {
     filtrirajAvtobuse();
     for (const id of AVTOBUSNI) map.setLayerZoomRange(id, 0, vklop["3d"] ? AVTOBUS_3D_OD : 24);
+    for (const id of OZNAKE_3D) vidnost(id, vklop["3d"]);
     for (const id of ["k-izbrano", "k-izbrano-sij"]) {
       map.setPaintProperty(id, "circle-radius", obrocIzbranega(vklop["3d"]));
     }
@@ -2297,6 +2325,8 @@ function filtrirajAvtobuse() {
   const izbran = izbrana && !izbrana.vlak ? izbrana.trip : "";
   map.setFilter("k-avtobusi", ["all", vidni, ["!=", ["get", "kljuc"], izbran]]);
   map.setFilter("k-avtobus-izbran", vidni);
+  map.setFilter("k-avtobusi-st", ["all", vidni, ["!=", ["get", "kljuc"], izbran]]);
+  map.setFilter("k-avtobus-izbran-st", vidni);
 }
 
 // `zapomni` samo ob človekovi izbiri: kar je stran nastavila sama (privzetek,
@@ -2811,8 +2841,9 @@ function onVehicles(list) {
 // izgubi, sicer bi ga osvežitev strani odprla znova, ko ga morda ni več.
 function pokaziVoziloIzNaslova() {
   if (!urlTrip && !urlVozilo) return;
-  const v = urlTrip ? liveBuses.find((x) => x.trip_id === urlTrip)
-    : liveBuses.find((x) => x.vehicle_id === urlVozilo);
+  // Vožnja prej kot vozilo; vozilo je medtem lahko že na naslednji vožnji.
+  const v = (urlTrip && liveBuses.find((x) => x.trip_id === urlTrip))
+    || (urlVozilo && liveBuses.find((x) => x.vehicle_id === urlVozilo));
   const vlak = !v && urlTrip && liveTrains.find((x) => x.trip_id === urlTrip);
   if (!v && !vlak && !(nalozeno.vlaki && nalozeno.avtobusi)) return;
   urlTrip = urlVozilo = null;
@@ -2830,9 +2861,20 @@ function pokaziVoziloIzNaslova() {
     izberi(vlak, true);
     return;
   }
-  if (!v || v.lat == null) return;
+  // Povezava brez odziva je videti kot pokvarjena (/admin, 1. 11. 2026).
+  if (!v || v.lat == null) {
+    pokaziIme({ geometry: { coordinates: map.getCenter().toArray() },
+                properties: { ime: "Tega vozila zdaj ni na zemljevidu: nima sveže lege." } });
+    return;
+  }
   const spec = LAYERS.find((s) => s.ag === busGroup(v));
   if (spec && !vklop[spec.key]) setLayer(spec, true);
+  // Naslov nima lege ali ima staro; kartica zunaj slike ni odprta kartica.
+  const l = legaIzmerjena(v);
+  const dovolj = OZNAKA_OD - LZ;
+  if (!map.getBounds().contains([l.lon, l.lat]) || map.getZoom() < dovolj) {
+    map.jumpTo({ center: [l.lon, l.lat], zoom: Math.max(map.getZoom(), dovolj) });
+  }
   odpriKartico(v);
   izberi(v, false);
 }

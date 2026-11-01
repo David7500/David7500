@@ -763,6 +763,7 @@ function primeriHtml(d, k) {
   const p = (d.primeri || {})[k] || [];
   return p.length ? `<span class="adm-primeri">${p.map((x) =>
     `<a href="${escapeHtml(x.pot)}" target="_blank" rel="noopener">${escapeHtml(x.oznaka)} ›</a>${
+      x.okno ? `<a href="${escapeHtml(x.okno)}" target="_blank" rel="noopener">vožnja ›</a>` : ""}${
       x.dosje ? `<a href="${escapeHtml(x.dosje)}" target="_blank" rel="noopener">dosje ›</a>` : ""}`).join("")}</span>` : "";
 }
 

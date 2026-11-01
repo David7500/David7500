@@ -53,6 +53,10 @@ paths:
 * **Vlak v 3D na tiru**: `_na_postaji` na pripeto traso; s tirom s table in številko v OSM (`tiri.py`, `${DATA_DIR}/tiri.json`, `na_postaji.tir`) na tisti tir. Sicer drug ob drugem (`VLAK_TIR_M`).
 * Pike postaj od z15 do z18 rastejo na dvojno, `circle-pitch-alignment: map`.
 
+## Vozilo iz naslova
+
+`?trip=` in/ali `?vozilo=` (`pokaziVoziloIzNaslova`): najprej vožnja, sicer vozilo (lahko je že na naslednji). Vozilo zunaj slike: pogled gre tja, lat/lon povezave je lahko star. Ni ga: napis 5 s, ne tišina (fantom LPP 19B, 1. 11. 2026).
+
 ## Pogled se ne premika sam
 
 Od prvega izrisa: **pogled iz naslova** (`lat`/`lon`/`z`), sicer **zadnji na napravi** (`kajros:map-pogled`, `moveend`), sicer **okvir Slovenije** (`bounds`). Nobenega `fitBounds` po prihodu vozil. Izjema: izbrani avtobus na oceni (spodaj).
@@ -69,7 +73,7 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
 * **Vlaki DOM, avtobusi plast** (1 530 v konici). Avtobus v nagibu `icon-pitch-alignment: viewport`.
 * Stavbe pod napisi.
 * Cena nagiba ~ploščica na obzorju (OpenFreeMap do z14); cena = risanje stavb.
-* **Ikona avtobusa od zgoraj**: svetlo vetrobransko spredaj, enodelno telo. Od Leafletovega z14 številka linije ob LPP (`OZNAKA_OD`, `text-optional`); medkrajevni brez (šifra ni na vozilu). Izbrano: tanek oranžen obroč s sijem (`k-izbrano`, `k-izbrano-sij`, `obrocIzbranega`).
+* **Ikona avtobusa od zgoraj**: svetlo vetrobransko spredaj, enodelno telo. Od Leafletovega z14 številka linije ob LPP (`OZNAKA_OD`, `text-optional`); medkrajevni brez (šifra ni na vozilu). Od `AVTOBUS_3D_OD` na strehi modela (`OZNAKE_3D`, svoji plasti, vedno vidna): s plastjo ikon je izginila in vozil se ni dalo ločiti. Izbrano: tanek oranžen obroč s sijem (`k-izbrano`, `k-izbrano-sij`, `obrocIzbranega`).
 * **Od Leafletovega z16 avtobusi 3D modeli** (`vozila3d.js`): LPP zgibni 18 m, ostali 12 m, barve prevoznika, **streha v barvi legende**.
 * **Goli WebGL2 v plasti po meri, ne three.js** (172 kB za nekaj škatel). Instanciranje; lega kot odmik od izhodišča v Sloveniji (float32 bi trepetal).
 * Model večji od resničnega (`povecava3D`); v plast le vozila v sliki (`posodobi3D`). Dotik išče sam (`zadetek3D`).

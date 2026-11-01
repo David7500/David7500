@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 
-from kajros import opozorila, zdravje
+from kajros import collector, db, opozorila, zdravje
 from kajros.opozorila import KONEC_S, ZAMIK_S
 
 T = 1_790_834_000.0          # 1. 10. 2026 ~7:53
@@ -946,5 +946,29 @@ def test_primeri_vozil_so_povezave_na_zemljevid():
                                          "oznaka": "LPP 2 → ZELENA JAMA - NOVE JARŠE"}]}}
     p = zdravje.primeri(z)
     assert p["lega_brez_zamude"][0]["oznaka"] == "Arriva A8426 → Ljubljana AP - Koper"
-    assert p["lega_brez_zamude"][0]["pot"] == "/app/map?trip=432192&lat=45.75400&lon=14.04800&z=16"
+    assert p["lega_brez_zamude"][0]["pot"] == "/app/map?trip=432192&vozilo=1301553&lat=45.75400&lon=14.04800&z=16"
     assert p["neznane"][0]["pot"] == "/app/map?vozilo=d5498517&lat=46.04800&lon=14.50140&z=16"
+
+
+def test_fantom_brez_sveze_lege_ima_pot_do_voznje():
+    """1. 11. 2026: fantom LPP 19B je imel samo `trip`, zemljevid ni pokazal ničesar."""
+    z = {"fantomi": {"voznje": [{"trip_id": "a|b", "vozilo": None, "lat": None, "lon": None,
+                                 "train_no": "19B", "network": "avtobus", "prevoznik": "LPP",
+                                 "oznaka": "19B → JEZERO"}]}}
+    p = zdravje.primeri(z)["fantomi"][0]
+    assert p["pot"] == "/app/map?trip=a%7Cb"
+    assert p["okno"] == "/app/bus/19B?trip=a%7Cb"
+
+
+def test_fantom_lpp_najde_vozilo_brez_dneva(tmp_path, monkeypatch):
+    """LPP v `vehicle_now` nima `service_date`."""
+    conn = db.connect(tmp_path / "t.sqlite")
+    db.init(conn)
+    conn.execute("INSERT INTO trip (trip_id, route_id, service_id, train_no, network, agency) "
+                 "VALUES ('a|b', 'r', 's', '19B', 'avtobus', 'lpp')")
+    conn.execute("INSERT INTO vehicle_now (trip_id, service_date, seen_ts, lat, lon, vehicle_id) "
+                 "VALUES ('a|b', NULL, 1, 46.0, 14.5, 'V1')")
+    monkeypatch.setattr(collector, "FANTOMI", {("a|b", "2026-11-01"): 100.0})
+    collector._zapisi_fantome(conn)
+    v = json.loads(db.get_meta(conn, "fantomi"))["voznje"][0]
+    assert (v["vozilo"], v["train_no"], v["network"]) == ("V1", "19B", "avtobus")
