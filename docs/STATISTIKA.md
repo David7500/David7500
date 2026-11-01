@@ -144,8 +144,8 @@ večje delo · **ne** = podatka ni.
 
 * Pregled `/statistika`: ta mesec po omrežju, naše napovedi v enem stavku,
   lestvice, vstopi v 1–5, čas izračuna (zdaj).
-* Mesečno poročilo `/statistika/2026-10`: za deljenje in iskalnike (zdaj, ko
-  je mesec zaključen).
+* Mesečno poročilo `/statistika/2026-10`: za deljenje in iskalnike (**narejeno
+  1. 11. 2026**, glej Stanje).
 * Nadomestila: vožnje z zamudo ≥ 60 min (pravice potnikov) — štetje in
   opozorilo na strani vlaka (zdaj; cen ni).
 * Točnost odhodov s postaje na pristajalni `/postaja/{ime}` (zdaj).
@@ -209,7 +209,8 @@ večje delo · **ne** = podatka ni.
   za namig ob dotiku. Brez knjižnic.
 * **Nočno delo samo, kjer je baza cela** (arwen); malina brez vlakov ne
   računa statistike vlakov (stikalo kot `KAJROS_…`).
-* **Mesečno poročilo** zamrzne 1. v mesecu (`stat_mesec`), se ne preračuna.
+* **Mesečno poročilo** zamrzne nočno opravilo (ali `kajros mesec`) dva dni po koncu
+  meseca (`stat_mesec`), se ne preračuna.
 * **API** `/api/statistika/…` (GET, odprto); stran `noindex` pod vzorcem.
 
 ## Stanje
@@ -304,6 +305,42 @@ večje delo · **ne** = podatka ni.
   besedilo pri točnih vlakih, naslov iskanja relacije = par. `preveri.sh`
   zelen, 1 092 testov.
 
+* 1. 11. 2026: **mesečno poročilo narejeno** (faza 6, prvi del, ni objavljeno):
+  `/statistika/{mesec}` (`2026-10`), `/api/statistika/mesec/{mesec}` in
+  `/api/statistika/meseci`, tabela `stat_mesec` (en JSON na mesec),
+  `statistika.zamrzni_mesece` (nočni korak `mesecno_porocilo` v
+  `server._povzetki`, ročno `kajros mesec [2026-10]`), kartica „Kakšen je bil
+  oktober 2026?“ na pregledu, zemljevid strani samo za mesece z dovolj vzorca.
+  * **Zamrznitev**: mesec je zaključen, ko je od zadnjega dne minilo 2 dni
+    (`MESEC_ZAKLJUCEN_PO_DNEH`: avtobusi zadnjega dne vozijo do 09:48
+    naslednjega, `dopolni` dan prepiše še dve noči); ob klicu najprej
+    `dopolni`. Idempotentno (`INSERT OR IGNORE`), brez preračuna: kdor je
+    zamrznjen, ostane, tudi ob novi različici `stat_dan`. Vsak zaključen mesec
+    z agregati: ob prvem zagonu na arwenu se zamrznejo tudi avgust (vlaki od
+    21. 8., avtobusi od 29. 8.: `noindex`, ni v zemljevidu strani) in september.
+  * **Iste številke kot okno**: telo zanke `prevozniki()` je `_prevoznik_v_oknu`,
+    ki ga kličeta okno in poročilo; september (30 dni) se na testu ujema z
+    oknom `/statistika` do zadnje številke. `skladnost_meseca` (test in
+    `preveri_skladnost.py`): razredi dajo 100, mesec = vsota `stat_dan`,
+    omrežje = vsota prevoznikov, poročilo = ponovni izračun iz dni.
+  * **Pokritost iz podatkov** (`_zajem_meseca`, `dan_z_zajemom`): dan velja za
+    dan z zajemom, ko je vsaj `ZAJEM_DNEVA_MIN` (10 %) načrtovanih voženj
+    izmerjenih do cilja. Izmerjeno na `stat_dan` z arwena (sep.–okt.): navadni
+    dnevi 0,38 (LPP primestni, 28. 9.) do 1,0, sobota AP MS 0,53, izpad vlakov
+    7.–10. 10. 0,00–0,05; absolutni prag ne gre (AP MS ima ob sobotah 28 voženj).
+    Začetek zajema (Marprom in Kranj od 27. 10.) ni vrzel; dan brez vrstice je
+    dan brez voženj. Prevoznik je v primerjavi z ≥ 1 000 vožnjami in ≥ 14 dnevi
+    zajema v mesecu, ostali „še premalo“.
+  * **Oktober 2026** (`stat_dan` z arwena, 1. 11.): vlaki 58,4 % v 5 min na
+    13 271 vožnjah (27 od 31 dni), avtobusi 76,7 % na 284 869; prevozniki v
+    `docs/MERITVE.md`. Poročilo ne vsebuje napovedi (sence): do zamrznitve se
+    zadnji dnevi sence še dopisujejo, za potnika je to drugo vprašanje
+    (`/statistika/napovedi`).
+  * **Ni ločeno**: mestni Murska Sobota (linije 1, 2, od 27. 10.) je v ključu
+    1121 skupaj z AP MS; `stat_dan` ju ne loči, zato stran ne more reči „od
+    27. 10.“ za del tega prevoznika. Za to bi `_dan_prevozniki` moral dati
+    mestnim linijam svoj ključ (nova različica `STAT_DAN_VERZIJA`).
+
 ## Naslednji koraki
 
 1. **Objava vsega skupaj** (`git push arwen claude/slovenske-zeleznice-api-ql84hf`),
@@ -340,5 +377,9 @@ večje delo · **ne** = podatka ni.
    (`journey.search_stations`), „Ljubljna“ ne najde ničesar. Od 29. 10.
    stran ponudi do tri podobna imena (`journey.podobna_imena`, `difflib`
    0,75, 1–5 ms na 5 798 imenih) s povezavo na popravljen par.
-5. **Faza 6, ostanek**: mesečno poročilo (ko je oktober cel, od 1. 11.),
-   točnost odhodov na `/postaja/{ime}`.
+5. **Faza 6, ostanek**: točnost odhodov na `/postaja/{ime}`. Mesečno poročilo
+   je narejeno (glej Stanje); ob objavi 2. 11. ga na arwenu zamrzne
+   `./venv/bin/python -m kajros.cli mesec 2026-10` (ali nočni korak 3. 11. ob
+   3.30), nato preveri `/statistika/2026-10`, `scripts/preveri_skladnost.py` in
+   sitemap. Zamrznjenega meseca ne preračunavaj; napako v zamrznjenem popravi
+   z izrecnim `DELETE FROM stat_mesec WHERE mesec = …` in novo zamrznitvijo.

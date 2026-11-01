@@ -31,6 +31,12 @@ for vzorec in "/vlak/" "/postaja/"; do
   [ -n "$najden" ] && STRANI+=("$najden")
 done
 
+# Mesečno poročilo ima naslov po zamrznjenem mesecu: na bazi brez zamrznjenega
+# je 404 pravilen odgovor in strani ne štejemo za napako.
+mesec=$(curl -s --max-time 10 "$BASE/api/statistika/meseci" \
+  | grep -o '"mesec":"[0-9-]*"' | head -1 | sed -e 's|"mesec":"||' -e 's|"||')
+[ -n "$mesec" ] && STRANI+=("/statistika/$mesec")
+
 echo "== strani"
 mkdir -p posnetki
 for pot in "${STRANI[@]}"; do

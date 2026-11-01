@@ -9,6 +9,7 @@ Tu ostanejo, da jih ne bi bilo treba iskati znova.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -16,9 +17,9 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, ".")
-from kajros import db, pristanek, stats            # noqa: E402
+from kajros import db, pristanek, statistika, stats   # noqa: E402
 
-BASE = "http://127.0.0.1:8001"
+BASE = f"http://127.0.0.1:{os.environ.get('KAJROS_PORT', '8001')}"
 napake: list[str] = []
 
 
@@ -251,6 +252,24 @@ def zemljevid_brez_404():
     return None if not slabi else f"{len(slabi)} brez strani: {', '.join(slabi[:5])}"
 
 
+def mesecna_porocila():
+    """Zamrznjeno mesečno poročilo mora reči isto kot dnevne vrstice in okno.
+
+    Stran `/statistika/2026-10` se po zamrznitvi ne preračuna, zato se napaka
+    ne bi nikoli popravila sama. Preveri: razredi dajo 100 in „točno“ + „1–5
+    min“ je delež v 5 min, število voženj je vsota dnevnih vrstic
+    (`stat_dan`, prešteto neodvisno), omrežje je vsota prevoznikov in iste
+    dnevne vrstice skozi iste funkcije kot `/statistika` dajo zamrznjeno
+    številko (`statistika.skladnost_meseca`). Brez zamrznjenega meseca ni kaj
+    preverjati.
+    """
+    conn = db.connect()
+    slabe = []
+    for (mesec,) in conn.execute("SELECT mesec FROM stat_mesec ORDER BY mesec").fetchall():
+        slabe += [f"{mesec}: {n}" for n in statistika.skladnost_meseca(conn, mesec)]
+    return "; ".join(slabe[:3]) + (f" (+{len(slabe) - 3})" if len(slabe) > 3 else "") or None
+
+
 for opis, fn in (
     ("brez osirotelih meritev", brez_sirot),
     ("delež točnih = vsota razredov", vsota_razredov),
@@ -261,6 +280,7 @@ for opis, fn in (
     ("tabla in okno vožnje ista številka", tabla_in_okno_isto),
     ("ura ob zamudi = vozni red + žeton", ura_in_znacka),
     ("zemljevid strani brez 404", zemljevid_brez_404),
+    ("mesečna poročila skladna z dnevi", mesecna_porocila),
 ):
     preveri(opis, fn)
 

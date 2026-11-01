@@ -37,6 +37,7 @@ Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (D
 * Zavihki strani (`glava(izbrano)`) namesto povezave nazaj; nova podstran dobi zavihek ali `izbrano` starša.
 * Prag nadomestila SŽ v besedilu (60–119 min četrtina, od 120 polovica; vir gov.si, SŽ): zamuda na končni postaji, ne potnikova.
 * **`stat_dan` ima različico** (`STAT_DAN_VERZIJA`): nova vrsta ali pomen → povečaj; vsi dnevi znova, vrste z obrezanim virom (senca 30 dni) ostanejo.
+* **Mesečno poročilo** (`/statistika/{mesec}`, `stat_mesec`, `statistika.zamrzni_mesece`): zamrzne se dva dni po koncu meseca (`MESEC_ZAKLJUCEN_PO_DNEH`) in se **ne preračuna** — popravek = izrecen `DELETE` in nova zamrznitev, ne tih izračun. Številke gredo skozi `_prevoznik_v_oknu` kot okno 30 dni (september ima 30 dni: poročilo = `/statistika`). Razredi v celih odstotkih, ki dajo 100 (`razredi_cela`); pokritost iz podatkov (`_zajem_meseca`: začetek zajema ni vrzel, dan z < 10 % načrtovanih voženj z meritvijo je izpad), nikoli iz seznama v kodi. `noindex` in brez zemljevida strani, ko nobeno omrežje nima ≥ 30 voženj in ≥ 14 dni zajema (`mesec_indeksiraj`). Poročilo nima napovedi (sence se dopisuje do 36 h po pogledu). Trak ali stolpec brez besedila je okras: `aria-hidden`, številke v besedilu ob njem (pretvornik v Markdown preskoči prazen poudarek).
 
 ## `/app/statistika` → 301 na `/statistika` (29. 10. 2026)
 

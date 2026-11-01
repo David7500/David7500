@@ -3468,3 +3468,29 @@ zadnjega, odsek < 5 min 0,5 % nad 5 min, 15–30 min 12,2 %, ≥ 30 min 45,2 %
 prenosu: MAE 7,26 → 4,57 min sredi odseka, 6,43 → 3,36 v zadnjem delu.
 Vlaki proti `sz_zamuda`: 20 od 20, `skladnost` 0 od 967. Vozilo na dveh
 vožnjah po menjavi: 5 v 4 krogih.
+
+
+## Mesečno poročilo, oktober 2026 (1. 11. 2026)
+
+Iz `stat_dan` (vrsta `prevoznik`) z arwena, samo branje; `statistika.mesecno_porocilo`,
+isti `iz_histograma` kot okno 30 dni. Vlaki 7.–10. 10. brez zajema (2, 1, 1 in 13
+meritev od ~600 načrtovanih), zato 27 od 31 dni.
+
+| | voženj | v 5 min | zajem |
+|---|---|---|---|
+| SŽ vlaki | 13 271 | 58,4 % (točno ali prej 34,0, 1–5 min 24,4, 5–15 min 25,6, nad 15 min 15,9; mediana +4, p90 +21; 79 voženj ≥ 60 min) | 27 od 31 dni |
+| avtobusi skupaj | 284 869 | 76,7 % (38,4 / 38,3 / 17,5 / 5,8; mediana +2, p90 +11; 1 076 ≥ 60 min) | cel mesec |
+| AP Murska Sobota | 14 448 | 89,0 % | cel mesec |
+| Nomago | 87 634 | 82,5 % | cel mesec |
+| Arriva | 93 976 | 76,1 % | cel mesec |
+| LPP mestni | 59 778 | 70,5 % | cel mesec |
+| LPP primestni | 24 709 | 64,1 % | cel mesec |
+| Marprom | 3 796 | 88,0 % | od 27. 10. (5 dni), pod črto |
+| Kranj (MOK) | 528 | 83,9 % | od 27. 10., 31. 10. 9 od 166 voženj, pod črto |
+| nadomestni SŽ | 0 od 1 324 načrtovanih | — | feed ne poroča |
+
+Pokritost dneva (izmerjenih do cilja proti načrtovanim, september–oktober):
+najnižja navadna 0,38 (LPP primestni 28. 9.), AP MS ob sobotah 0,53, izpad
+vlakov 0,00–0,05 → prag izpada `ZAJEM_DNEVA_MIN` = 0,1. Mestni Murska Sobota
+(linije 1, 2, od 27. 10.) je v `stat_dan` v ključu 1121 skupaj z AP MS.
+
