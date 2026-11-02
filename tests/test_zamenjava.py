@@ -154,6 +154,14 @@ def test_postanek_brez_para_se_izpusti_in_neznana_vozja_steje():
     assert collector.ingest(c, _feed("x9", _stu(1, delay=60)))["neznanih"] == 1
 
 
+def test_tuji_odsek_mednarodnega_vlaka_ni_neznan():
+    """derp.si od 31. 10. 2026 v feed IJPP doda vlake iz HAFAS (`INTL-…`), ki
+    jih zip nima: 2. 11. 4–30 na branje, oranžna vrstica in pošta brez izgube."""
+    c = _baza()
+    izid = collector.ingest(c, _feed("INTL-667600e68518cf4d", _stu(1, delay=60)))
+    assert (izid["neznanih"], izid["trips"]) == (0, 0)
+
+
 def test_stara_vozja_prevoznika_nap_ni_neznana(monkeypatch):
     """derp.si nosi staro vožnjo (nagrobnik brez voznega reda), ker ima star
     vozni red; zamude prevoznika vodi NAP pod novo. Ni izgube, ne šteje se."""

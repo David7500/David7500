@@ -748,8 +748,12 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
             # Staro vožnjo prevoznika, ki ga vodi NAP, derp.si še nosi: njegov
             # TransitClock ima star vozni red. Isto vozilo NAP vodi pod novo
             # (14. 10. 2026 v dveh vzorcih vseh 15 voženj Nomaga in Arrive)
-            # -- izgube ni, rumena vrstica pa je bila stalna.
-            if steje and not iz_lege.nap_vodi(agencije.get(tu.trip.trip_id)):
+            # -- izgube ni, rumena vrstica pa je bila stalna. Tuji odsek
+            # mednarodnega vlaka (`INTL-…`) derp.si od 31. 10. 2026 jemlje iz
+            # HAFAS mimo zipa IJPP; slovenski del istega vlaka je pod svojo
+            # vožnjo (2. 11.: 29 od 30 z enim našim postankom, mejno postajo).
+            if (steje and not tu.trip.trip_id.startswith("INTL-")
+                    and not iz_lege.nap_vodi(agencije.get(tu.trip.trip_id))):
                 neznanih += 1
             continue
         zamenjanih += trip_id == zamenjave.get(tu.trip.trip_id, (None,))[0]
