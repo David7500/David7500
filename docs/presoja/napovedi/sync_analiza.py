@@ -1,6 +1,7 @@
 """Analiza sinhronega kroga. Rabi: python sync_analiza.py <sync.json> <imenik_posnetka>"""
 import glob
 import json
+import math
 import os
 import sys
 import urllib.parse
@@ -117,21 +118,50 @@ for t in d["table"]:
         st["tabla brez odgovora"] += 1
         continue
     vrst = [r for r in tabla.get("board", []) if r.get("trip_id") == t["trip_id"]]
+    vrst = [r for r in vrst if r.get("stop_seq") == t["seq"]] or vrst
     s = next((s for s in run["stops"] if s["stop_seq"] == t["seq"]), None)
+    meja = run.get("last_measured_seq")
     if not vrst:
-        st["tabla nima vožnje"] += 1
-        primeri["i_tabla"].append(("ni na tabli", run["train_no"], t["postanek"], A.povezava(run)))
+        # Med zahtevama za tablo in okno prevožen postanek ni neskladje, končna na
+        # tabli odhodov tudi ne.
+        st["tabla nima vožnje" + (" (medtem prevožen)" if meja is not None and meja >= t["seq"]
+                                  else " (končna)" if t["seq"] == run["stops"][-1]["stop_seq"]
+                                  else "")] += 1
+        primeri["i_tabla"].append(("ni na tabli", run["train_no"], t["postanek"], t["seq"], meja,
+                                   A.povezava(run)))
+        continue
+    if "predict" not in t:  # izhod sync.py pred 2. 11.: okna za mejo ni mogoče sestaviti
+        st["tabla brez napovedi okna"] += 1
         continue
     r = vrst[0]
     st["tabla primerjav"] += 1
-    zt = (r.get("zamuda") or {})
-    zo = zam(s) or {}
-    if zt.get("s") != zo.get("s") or zt.get("vrsta") != zo.get("vrsta"):
-        st["tabla drugače"] += 1
-        primeri["i_tabla"].append((run["train_no"], t["postanek"], zt.get("min"), zt.get("vrsta"),
-                                   zo.get("min"), zo.get("vrsta"),
-                                   {k: r.get(k) for k in ("typical", "napoved", "ocena") if r.get(k)},
-                                   A.povezava(run)))
+    # Kar okno pokaže (train.js `vrednostNaPostanku`): za mejo živo, sicer
+    # napoved odjemalca (/predict), sicer običajno; do meje izmerjeno.
+    z = zam(s) or {}
+    f = next((x for x in ((t.get("predict") or {}).get("forecast") or [])
+              if x["stop_seq"] == t["seq"]), None)
+    if meja is not None and t["seq"] <= meja and z.get("vrsta") != "neskladno":
+        do, znak = z.get("s"), "mimo"
+    elif z.get("vrsta") == "živo":
+        do, znak = z["s"], "živo"
+    elif f:
+        do, znak = f["predicted_delay_s"], "ocena"
+    elif s and s.get("typical"):
+        do, znak = s["typical"]["median_s"], "običajno"
+    else:
+        do, znak = None, "vozni red"
+    zt = dict(r.get("zamuda") or {})
+    if not zt and r.get("typical"):  # tabla brez zamude nosi običajno, kot okno
+        zt = {"min": math.floor(r["typical"]["median_s"] / 60 + 0.5), "vrsta": "običajno"}
+    mo = None if do is None else math.floor(do / 60 + 0.5)  # kot strežnik (oznake.md)
+    mt = zt.get("min")
+    st[f"tabla vrsta {zt.get('vrsta')} / okno {znak}"] += 1
+    if mt != mo:
+        st["tabla drugače (minuta)"] += 1
+        if mt is None or mo is None or abs(mt - mo) >= 2:
+            st["tabla drugače ≥ 2 min ali le ena stran"] += 1
+        primeri["i_tabla"].append((run["train_no"], t["postanek"], mt, zt.get("vrsta"), mo, znak,
+                                   round(t["t"] - (r.get("feed_ts") or t["t"])), A.povezava(run)))
 print(json.dumps(dict(sorted(st.items())), ensure_ascii=False, indent=0))
 for k, v in primeri.items():
     print("==", k, len(v))
