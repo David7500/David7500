@@ -1616,6 +1616,54 @@ def test_senca_posname_postanek_samo_enkrat(conn):
     assert (drugi["made_ts"], drugi["horizon_s"]) == (prvi["made_ts"], prvi["horizon_s"])
 
 
+def test_senca_resi_tudi_ko_drugi_pise(tmp_path):
+    """Zapis med odprtim branjem iste povezave SQLite ob tujem zaklepu zavrne
+    takoj, ne da bi čakal `timeout`: 17. 10.–2. 11. 2026 je tako na arwenu
+    padlo 20 obhodov sence, vsi sredi zanke v `resolve`. Branje `run` ima tu
+    dve vrstici, zato je ob prvem zapisu še odprto."""
+    import threading
+    pot = tmp_path / "k.sqlite"
+    c = db.connect(pot)
+    db.init(c)
+    ocena.init(c)
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
+                  [("A", "Ajdovščina", 45.9, 13.9), ("Z", "Zidani Most", 46.1, 15.0),
+                   ("C", "Celje", 46.2, 15.3)])
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('S1', '2026-08-31')")
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id) "
+              "VALUES('t1','r1','IC 1','A - C','S1')")
+    _sched(c, "t1", [(1, "A", None, 28800), (2, "Z", 32400, 32700), (3, "C", 36000, None)])
+    for seq, d in ((2, 600), (3, 300)):
+        c.execute("INSERT INTO napoved(trip_id, service_date, stop_seq, network, made_ts,"
+                  " horizon_s) VALUES('t1', '2026-08-31', ?, 'zeleznica', ?, 1500)",
+                  (seq, int(_ob(34500).timestamp())))
+        c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep,"
+                  " feed_ts) VALUES('t1', '2026-08-31', ?, ?, ?, 4102444800)", (seq, d, d))
+    c.commit()
+
+    drzi, spusti = threading.Event(), threading.Event()
+
+    def drug_pisec():
+        w = db.connect(pot)
+        w.execute("BEGIN IMMEDIATE")
+        drzi.set()
+        spusti.wait(5)
+        w.commit()
+        w.close()
+
+    nit = threading.Thread(target=drug_pisec)
+    nit.start()
+    assert drzi.wait(5)
+    threading.Timer(0.3, spusti.set).start()
+    try:
+        assert ocena.resolve(c, _ob(36600))["resenih"] == 2
+    finally:
+        spusti.set()
+        nit.join()
+    assert [r[0] for r in c.execute(
+        "SELECT actual_s FROM napoved ORDER BY stop_seq")] == [600, 300]
+
+
 def test_povzetek_stare_oblike_se_ne_postreze(conn):
     """Stara OBLIKA je enako neuporabna kot star podatek, le tišja.
 

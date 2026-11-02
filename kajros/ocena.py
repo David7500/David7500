@@ -143,12 +143,17 @@ def _v_vzorcu(trip_id: str, network: str) -> bool:
 def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
     """Posname, kaj bi prikaz povedal potniku, ki gleda ta hip.
 
-    Vrne stevce, ne vrstic -- zapisuje v `napoved`.
+    Vrne stevce, ne vrstic -- zapisuje v `napoved`. Piše šele na koncu: prvi
+    INSERT odpre zaklep za pisanje in `predict` za vse vožnje ga je pod njim
+    držal 0,7 s na obhod (arwen, 2. 11. 2026, 243 vrstic), zajem in NAP sta
+    medtem čakala.
     """
     now = now or datetime.now(TZ)
     made_ts = int(now.timestamp())
     zapisano = brez_meritve = 0
     pogledanih = 0
+    pred_odhodom: list[tuple] = []
+    na_poti: list[tuple] = []
 
     for day, now_s in _dnevi(now):
         # Kandidati so tudi voznje, ki se sele zacnejo -- pogled 15 min pred
@@ -210,14 +215,10 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                         obicajno = round(o["median_s"]) if o else None
                         z, _ = stats.pred_odhodom(obicajno, feed.get(seq), network,
                                                   po_id[trip_id]["agency"])
-                        cur = conn.execute(
-                            "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
-                            " network, made_ts, horizon_s, ours_s, ours_own_s, ours_samples,"
-                            " operator_s) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        pred_odhodom.append(
                             (trip_id, day, seq, network, made_ts, t["t_s"] - now_s,
                              z if z is not None else obicajno, obicajno,
                              o["n"] if o else None, feed.get(seq)))
-                        zapisano += cur.rowcount
                         pogledanih += 1
                     continue
 
@@ -232,20 +233,26 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                 for t in seznam:
                     seq = t["stop_seq"]
                     p = napoved.get(seq)
-                    cur = conn.execute(
-                        "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
-                        " network, made_ts, horizon_s, current_s, from_seq, ours_s,"
-                        " ours_own_s, ours_samples, operator_s, carry_s)"
-                        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    na_poti.append(
                         (trip_id, day, seq, network, made_ts, t["t_s"] - now_s,
                          trenutna, zadnji["stop_seq"],
                          p["predicted_delay_s"] if p else None,
                          p["own_delay_s"] if p else None,
                          p["n_samples"] if p else None,
                          feed.get(seq), trenutna))
-                    zapisano += cur.rowcount
                     pogledanih += 1
 
+    if pred_odhodom:
+        zapisano += conn.executemany(
+            "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
+            " network, made_ts, horizon_s, ours_s, ours_own_s, ours_samples,"
+            " operator_s) VALUES(?,?,?,?,?,?,?,?,?,?)", pred_odhodom).rowcount
+    if na_poti:
+        zapisano += conn.executemany(
+            "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
+            " network, made_ts, horizon_s, current_s, from_seq, ours_s,"
+            " ours_own_s, ours_samples, operator_s, carry_s)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
     conn.commit()
     return {"pogledanih": pogledanih, "zapisanih": zapisano,
             "brez_meritve": brez_meritve}
@@ -259,10 +266,16 @@ def resolve(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
     Meja „prevozil“ je ista kot v prikazu (`stats.last_measured`), ne golo
     „obstaja vrstica v `run`“: feed za še nedosežen postanek objavi vrednost,
     ki ni meritev, in prav ta razlika je tisto, kar tu merimo.
+
+    Najprej vse prebere, nato piše. Zapis med odprtim branjem iste povezave
+    SQLite ob tujem zaklepu zavrne takoj („database is locked“), brez čakanja
+    `timeout`: 17. 10.–2. 11. 2026 20 takih obhodov na arwenu, vsi sredi te
+    zanke, nobeden med uvozom.
     """
     now = now or datetime.now(TZ)
-    resene = 0
     cakajo = 0
+    ts = int(now.timestamp())
+    resitve: list[tuple] = []
 
     for day, now_s in _dnevi(now):
         vrstice = conn.execute(
@@ -281,27 +294,24 @@ def resolve(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
         po_voznji: dict[str, list[int]] = {}
         for r in prevozeni:
             po_voznji.setdefault(r["trip_id"], []).append(r["stop_seq"])
-        ts = int(now.timestamp())
         for trip_id, seqs in po_voznji.items():
             for row in conn.execute(
                     "SELECT stop_seq, COALESCE(delay_dep, delay_arr) AS d FROM run "
                     f"WHERE service_date = ? AND trip_id = ? AND stop_seq IN "
-                    f"({','.join('?' * len(seqs))})", (day, trip_id, *seqs)):
-                if row["d"] is None:
-                    continue
-                conn.execute(
-                    "UPDATE napoved SET actual_s = ?, resolved_ts = ? "
-                    "WHERE trip_id = ? AND service_date = ? AND stop_seq = ?",
-                    (row["d"], ts, trip_id, day, row["stop_seq"]))
-                resene += 1
+                    f"({','.join('?' * len(seqs))})", (day, trip_id, *seqs)).fetchall():
+                if row["d"] is not None:
+                    resitve.append((row["d"], ts, trip_id, day, row["stop_seq"]))
 
+    conn.executemany(
+        "UPDATE napoved SET actual_s = ?, resolved_ts = ? "
+        "WHERE trip_id = ? AND service_date = ? AND stop_seq = ?", resitve)
     # Vrstice, ki jih ni resil nihce: vozilo je izginilo iz feeda. Brisemo jih,
     # sicer bi jih `resolve` prebiral vsak obhod do konca casa.
-    meja = int(now.timestamp()) - ZASTARA_S
+    meja = ts - ZASTARA_S
     opuscene = conn.execute(
         "DELETE FROM napoved WHERE actual_s IS NULL AND made_ts < ?", (meja,)).rowcount
     conn.commit()
-    return {"resenih": resene, "cakajo": cakajo, "opuscenih": opuscene}
+    return {"resenih": len(resitve), "cakajo": cakajo, "opuscenih": opuscene}
 
 
 def prune(conn: sqlite3.Connection, days: int | None = None) -> int:
