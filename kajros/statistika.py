@@ -222,10 +222,16 @@ def _dan_prevozniki(conn: sqlite3.Connection, dan: str) -> dict[str, dict]:
         "SELECT 1 FROM lega WHERE service_date = ? LIMIT 1", (dan,)).fetchone() is not None
     for net in stats.SUMMARY_NETWORKS:
         # Omrežje v poizvedbi, ne za njo (CLAUDE.md: 1,7 s proti 6 ms).
+        # Načrt = vožnje z voznim redom. Nagrobnik (vožnja z meritvami, ki je
+        # nov zip nima) obdrži `service_id`, nov zip pa isto ime storitve rabi
+        # za druge dni: 2. 11. 2026 LPP primestni 400 takih v 1 614, Kranj ob
+        # sobotah 165 v 235.
         for agency, mode, k in conn.execute(
                 "SELECT t.agency, t.mode, COUNT(*) FROM trip t "
                 "JOIN service_day d ON d.service_id = t.service_id "
-                "WHERE d.date = ? AND t.network = ? GROUP BY 1, 2", (dan, net)):
+                "WHERE d.date = ? AND t.network = ? "
+                "AND EXISTS (SELECT 1 FROM sched s WHERE s.trip_id = t.trip_id) "
+                "GROUP BY 1, 2", (dan, net)):
             g(net, agency, mode)["nacrt"] += k
         for agency, mode, k in conn.execute(
                 "SELECT t.agency, t.mode, COUNT(DISTINCT r.trip_id) FROM run r "

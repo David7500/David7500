@@ -209,9 +209,12 @@ def merila_dneva(conn: sqlite3.Connection, dan: str, osnova=None) -> dict[str, d
     """Merila za en prometni dan, po prevozniku. Samo bere."""
     agencije, postankov = osnova or _osnova(conn)
     nacrt: dict[str, set] = defaultdict(set)
+    # Brez nagrobnikov (`statistika._dan_prevozniki`): LPP primestni 2. 11.
+    # 2026 bi imel 400 „načrtovanih“ voženj, ki jih ni.
     for trip_id, agency in conn.execute(
             "SELECT t.trip_id, t.agency FROM trip t "
-            "JOIN service_day d ON d.service_id = t.service_id WHERE d.date = ?", (dan,)):
+            "JOIN service_day d ON d.service_id = t.service_id WHERE d.date = ? "
+            "AND EXISTS (SELECT 1 FROM sched s WHERE s.trip_id = t.trip_id)", (dan,)):
         nacrt[agency or "?"].add(trip_id)
     lega = _po_prevozniku((r[0] for r in conn.execute(
         "SELECT DISTINCT trip_id FROM lega WHERE service_date = ?", (dan,))), agencije)
@@ -283,7 +286,8 @@ def vozni_red(conn: sqlite3.Connection, od: date) -> dict[str, dict]:
     for agency, dan, n in conn.execute(
             "SELECT t.agency, d.date, COUNT(*) FROM trip t "
             "JOIN service_day d ON d.service_id = t.service_id "
-            "WHERE d.date >= ? GROUP BY 1, 2", (od.isoformat(),)):
+            "WHERE d.date >= ? AND EXISTS (SELECT 1 FROM sched s WHERE s.trip_id = t.trip_id) "
+            "GROUP BY 1, 2", (od.isoformat(),)):
         po_dnevih[agency or "?"][dan] = n
     out = {}
     for a, dnevi in po_dnevih.items():

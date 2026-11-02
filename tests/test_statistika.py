@@ -146,6 +146,20 @@ def test_prevozniki_pokritost_tocnost_in_nadomestni_posebej():
     assert po["nadomestni"]["pokritost"] == 0.0
 
 
+def test_nagrobnik_ni_v_nacrtu():
+    """Vožnja z meritvami, ki je nov zip nima, ostane brez `sched` in z istim
+    `service_id`; nov zip isto storitev rabi za druge dni. 2. 11. 2026 je LPP
+    primestni tako imel 400 „načrtovanih“ voženj v 1 614, ki jih ni bilo."""
+    c = _baza()
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, headsign, service_id,"
+              " mode, network, agency) VALUES('v9', 'rv9', 'LP 9', 'Celje', 'S1',"
+              " 'vlak', 'zeleznica', '1161')")
+    c.commit()
+    p = statistika.prevozniki(c, 90, "zeleznica", danes=_danes())
+    vlak = next(x for x in p["prevozniki"] if x["skupina"] == "vlak")
+    assert (vlak["nacrt"], vlak["pokritost"]) == (2, 100.0)
+
+
 def test_nacrt_neznan_ko_je_izmerjenih_vec_kot_nacrtovanih():
     """Mestni LPP: uvoz pobriše vožnje preteklih dni, meritve ostanejo. To ni
     150-odstotna pokritost, ampak neznan načrt."""

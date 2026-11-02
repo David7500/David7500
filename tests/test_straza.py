@@ -68,6 +68,16 @@ def test_merila_so_ista_za_vse_prevoznike(conn):
     assert (m["A"]["postankov"], m["A"]["s_prehodom"]) == (6, 2)
 
 
+def test_nagrobnik_ni_v_nacrtu(conn):
+    """Vožnja brez `sched` (nov zip je nima, meritve jo držijo v bazi) z
+    `service_id`, ki ga nov zip rabi za ta dan, ni načrtovana vožnja."""
+    _vozni(conn, "a1", "A")
+    conn.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, network, "
+                 "agency) VALUES('a0', 'r', 'a0', 'S1', 'bus', 'avtobus', 'A')")
+    assert straza.merila_dneva(conn, D)["A"]["nacrt"] == 1
+    assert straza.vozni_red(conn, date.fromisoformat(D))["A"]["delavnik"]["voznje"] == 1
+
+
 def test_brez_leg_je_neznano_ne_nic(conn):
     """Za nazaj vir leg ni hranil: 0 % bi bilo poslabšanje, ki ga ni."""
     _vozni(conn, "a1", "A")
@@ -221,6 +231,8 @@ def test_beri_brez_tabel_deluje_na_kopiji_samo_za_branje(conn, tmp_path):
     c.execute("INSERT INTO service_day VALUES('S1', ?)", (D,))
     c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, network, agency) "
               "VALUES('a1','r','a1','S1','bus','avtobus','A')")
+    c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+              "VALUES('a1', 1, 'P0', 28800, 28800)")
     c.commit()
     c.close()
     ro = sqlite3.connect(f"file:{pot}?mode=ro", uri=True)
