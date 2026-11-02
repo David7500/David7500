@@ -3406,7 +3406,8 @@ Pet minut pred odhodom, delež prikazov, ko je trditev prava:
 Dnevnik arwena 17.–31. 10. 2026, napake korakov glavne zanke (`server._worker`):
 141 vrstic. Vir (derp.si: časovna meja, 502/504, prekinjena povezava): 118.
 Naša koda: 23 -- 22× „database is locked“ (busy timeout 30 s: druga nit je
-držala pisanje dlje; senčno merjenje 17, lege 2, zamude 2, LPP 1) in 1×
+držala pisanje dlje; senčno merjenje 17, lege 2, zamude 2, LPP 1; senca ni
+čakala, 2. 11. spodaj) in 1×
 `KeyError` v predpomnilniku voznega reda (17. 10. ob 4:27, med uvozom). Tri
 zapored v istem koraku enkrat: senca 30. 10. ob 7:12, 7:14, 7:16. Do tega dne se
 je napaka zamud ali LPP po 5 min kazala kot „derp.si ne odgovarja“ (zapis
@@ -3510,4 +3511,23 @@ vlakov 0,00–0,05 → prag izpada `ZAJEM_DNEVA_MIN` = 0,1. Mestni Murska Sobota
 * **Cena v niti vira** (mediana, 15 ponovitev, isti odgovor): `nap.razberi` 39,4 → 51,2 ms pri 132 vozilih (90 µs na vozilo, zunaj zaklepa baze); `nap._v_dosje` 1,9 ms; `opazi_gtfs` 3,95 ms na 113 vozil (35 µs). `izprazni` 24 ms za 291 kosov in 295 vrstic `stanje`, v svoji niti.
 * **Surov TripUpdate** ima vehicle.id pri 113 od 188 voženj IJPP in 51 od 112 LPP: za druge napovedi vira v dosjeju ni. Mediana 200 B na zapis.
 * Kar se je pokazalo v prvih minutah in prej ni pustilo sledi: 1302136 `RecordedAtTime` 3. 11. (`razberi` ga izpusti, zdaj `ura_naprej`); 1300676 NAP brez `VehicleJourneyRef`, derp.si na vožnji, ki je ne poznamo.
+* Prvi delavnik, 2. 11. ob 10.56 (od 1. 11. 13.42): `dosje.sqlite` 68,8 MB, 3 159 125 vzorcev, 2 690 vozil, 97 390 kosov točk, 31 121 vrstic `stanje`.
+
+## Zaklep baze podnevi, prva noč vzporednega uvoza, načrt brez nagrobnikov (2. 11. 2026)
+
+**„database is locked“ v senci ocene ni bilo čakanje.** Dnevnik arwena 17. 10.–2. 11.: 101 vrstica, 48 med uvozom (4.20–4.30, pričakovano), 53 drugje. Od teh 20 v `ocena`, vse posamič (nobena druga nit v isti sekundi); ostalih 33 v skupinah ob dogodkih pred 31. 10. (17. 10. ob 3.30 obrez v eni transakciji, 27. 10. ob 12.10 in 12.42, 30. 10. 11.22–11.33). Od 31. 10. podnevi samo ocena: 31. 10. ob 7.26, 1. 11. ob 13.01, 2. 11. ob 7.13 in 9.01. Neuspeli obhod se konča ob isti sekundi kot uspešni (9.01.07 proti :08), torej ni čakal 30 s. Vzrok: `resolve` je pisal med branjem kurzorja iste povezave. SQLite povezavi z odprto bralno transakcijo ne da čakati na zaklep (`busy_timeout` velja le brez nje) in ob tujem pisanju takoj vrne SQLITE_BUSY. Ponovljeno lokalno (SQLite 3.46.1; arwen 3.45.1): zapis med kurzorjem pade v 0,00 s, po `fetchall` počaka in uspe v 1,83 s. Pade samo, kadar ima branje vožnje vsaj dve vrstici (Pythonov kurzor po zadnji vrstici branje že zapre), zato redko. Zapis z 31. 10. zgoraj („busy timeout 30 s“) za senco ne velja.
+
+**Koliko ocena drži zaklep** (arwen, 2. 11. ob 11.10, povezava samo za branje, pisanja le šteta): `snapshot` 2,5 s, od prvega INSERT do commita 0,7 s (243 vrstic; `predict` za vse vožnje je tekel pod zaklepom); `resolve` 1,05 s, pod zaklepom 0,35 s (48 zapisov). Popravek: oba najprej računata in pišeta v eni kratki transakciji na koncu.
+
+**Senca NAP v delavniški konici** (`pripis_senca`, 2. 11., računov na odgovor NAP na 10 s): 7 h povprečno 31,6, največ 161; 8 h 55,1 / 274; 9 h 61,0 / 348. 3,42 ms na račun (86 988 računov, 297 s do 10.56). Merilo iz koledarja `vozil` × ms na račun = 362 × 3,42 ms = 1,24 s, pod mejo 2 s. Računi so poravnani na minuto (`SENCA_VSAKIH_S`): enkrat na minuto odgovor s ~350 računi drži zaklep ~1,2 s. Podnevnih „database is locked“ ni povzročil NAP (zgoraj), zato senca ostane za `zapisi`.
+
+**Prva noč vzporednega uvoza** (objava 1. 11. popoldne): 4.20.00–4.24.24, izid ok, 38 zamenjanih voženj. Pisanje uvoza je držalo bazo ~4.23.20–4.24.20: lege, zemljevid SŽ, Kranj in NAP so po 30 s čakanja padli ob 4.23.50–4.23.57 in bili spet zapisani ob 4.24.20. Utrip zanke: najdaljša luknja 74 s (4.23.06 → 4.24.20), prej 4 min 05 s do 5 min 01 s. `zajem_napake` brez zaklepa, `nocno` prazen; avgust, september in oktober zamrznjeni ob 3.39.45.
+
+**Načrt dneva je štel nagrobnike.** Nagrobnik (vožnja z meritvami, ki je nov zip nima, brez `sched`) obdrži `service_id`, nov zip pa isto ime storitve rabi za druge dni; `statistika._dan_prevozniki` in `straza` sta ga štela med načrtovane. 2. 11.: LPP primestni 1 614 načrtovanih, od tega 400 brez voznega reda (nobena z meritvijo ta dan, 199 z naslednico v `zamenjava`); Nomago 28 od 4 004; Kranj v soboto 7. 11. 165 od 235. Pokritost LPP primestnega bi bila za četrtino prenizka (1 214 pravih). Popravek: načrt so vožnje s `sched` (poizvedba za dan na arwenu 0,49 s). Zamrznjeni oktober ostane: `skladnost_meseca` primerja število voženj do cilja in delež v 5 min, ne načrta.
+
+**Kranj 31. 10. je bil praznik, ne izpad.** `lega` Kranja: delavnik 27.–30. 10. 9–12 vozil in 140–154 voženj; 31. 10. in 1. 11. eno vozilo (8.53–17.41), 9 in 10 voženj. Zip MOK praznika ne pozna (sobota, 166 voženj), zato poročilo oktobra piše „brez 31. 10.“. MOK je 2. 11. ob 4.00 objavil nov zip (343 040 B): delavnik 257 voženj na 27 progah, sobota 70, do 30. 11.; uvoz ob 4.20 ga je sprejel, vrstica `vozni_red_kranj` zelena.
+
+**Neznane IJPP so bili tuji odseki mednarodnih vlakov.** Vrstica `neznane` oranžna od 1. 11. ob 13.20 (pošta ob 13.50), 2. 11. ob 10.56 IJPP 17 od 575. Vse neznane imajo `trip_id` `INTL-<hash>` in progo `INTL-ROUTE-…-FOREIGN` (SŽ, HŽPP, MÁV, DB): derp.si (gtfs-generators, 31. 10. zvečer „SŽ international trains from HAFAS“) jih jemlje iz HAFAS mimo zipa IJPP. Branje ob 11.06 30 od 646, ob 11.08 6 od 610, sedem branj na 20 s 6–17; v 8 min 31 različnih. 29 od 30 ima en sam naš postanek (mejna postaja: Dobova, Šentilj, Jesenice, Hodoš, Sežana …), ostali so tuji (AT 76, HR 52, HU 46, DE 10). Številčnih neznanih 0 od 616 in 0 od 604; zip na gitlabu (2. 11. ob 2.04) je isti, kot ga je vzel uvoz ob 4.20, `kajros update` ne bi pomagal. Izjema `INTL-SZ-415-SI` (Maribor 8.59 → Dobova 11.25, štirje naši postanki) ni bila na zemljevidu SŽ. Popravek: `INTL-…` se ne šteje.
+
+**Ura namesto zamude (senca), 2. 11. ob 10.56**: dva zadetka, oba prava zamuda na izhodišču, ne fantom. LPP primestni 47 proti Vrhniki (482758): po voznem redu 10.00, prvi postanek z meritvijo ob 10.42 z +37 min, nato vseh 20 postankov z +37–39 min do 11.15. Mestni LPP „SŽ“ (LJ LPP-162): na Kolodvoru stal 10.37–10.56, nato vozil do Šiške (11.07). Z `KAJROS_DRSI=vodi` bi se taka vožnja med čakanjem ne pisala (`run` pobrisan od začetka drsenja): prikaz za avtobus z 37 min zamude bi imel le vozni red ali običajno zamudo.
 
