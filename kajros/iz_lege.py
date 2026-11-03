@@ -149,6 +149,17 @@ def nap_prebran(zdaj: float | None = None) -> None:
     _nap_ts = time.time() if zdaj is None else zdaj
 
 
+def nap_zaklenjen(zdaj: float | None = None) -> None:
+    """Nit NAP ni mogla zapisati, ker bazo drži drug pisec (uvoz voznega reda
+    60--90 s, `gtfs.import_static`). Vir ni obmolknil: NAP, ki je vodil, vodi
+    naprej. Sicer je derp.si 3. 11. 2026 ob koncu zaklepa za en obhod prevzel
+    medkrajevne in prepisal 98 meritev NAP na 15 vožnjah (17 za > 5 min, do
+    1 753 s): med zaklepom piše samo prihodnje, za njim tudi izmerjene."""
+    zdaj = time.time() if zdaj is None else zdaj
+    if zdaj - _nap_ts <= NAP_VODI_S:
+        nap_prebran(zdaj)
+
+
 def nap_vodi(agency: str | None, zdaj: float | None = None) -> bool:
     """Ali zamude tega prevoznika ta hip računamo iz leg NAP, ne iz derp.si.
 

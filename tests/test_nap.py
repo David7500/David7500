@@ -6,6 +6,9 @@ in kdaj NAP piše.
 from __future__ import annotations
 
 import json
+import sqlite3
+import threading
+import time
 from datetime import datetime
 
 import pytest
@@ -293,6 +296,36 @@ def test_prehodna_zavrnitev_prijave_ne_cakaj_deset_minut():
     assert nap.cakaj_po_zavrnitvi(3, 180) == nap.NI_DOSTOPA_CAKAJ_S
     # Brez uspeha v zadnji uri (ali od zagona) je zavrnitev prava.
     assert nap.cakaj_po_zavrnitvi(1, 1e9) == nap.NI_DOSTOPA_CAKAJ_S
+
+
+def test_zaklenjena_baza_ni_molk_nap():
+    """3. 11. 2026: uvoz je bazo držal ~80 s, NAP je molčal > `NAP_VODI_S` in
+    derp.si je ob koncu zaklepa prepisal 98 meritev NAP."""
+    iz_lege.nap_prebran(ZDAJ)
+    iz_lege.nap_zaklenjen(ZDAJ + 40)                     # zapis čakal 30 s, padel
+    assert iz_lege.nap_vodi("1123", ZDAJ + 90)            # konec zaklepa: še NAP
+    assert not iz_lege.nap_vodi("1123", ZDAJ + 101)
+    iz_lege.nap_zaklenjen(ZDAJ + 200)                    # NAP, ki ne vodi, ne obudi
+    assert not iz_lege.nap_vodi("1123", ZDAJ + 201)
+
+
+def test_nit_nap_po_zaklenjeni_bazi_vodi_naprej(monkeypatch, tmp_path):
+    stop = threading.Event()
+    pot, poveži = tmp_path / "kajros.sqlite", db.connect
+    db.init(poveži(pot))
+
+    def korak(conn, vsebina, zdaj):
+        stop.set()
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(db, "connect", lambda: poveži(pot))
+    monkeypatch.setattr(nap, "prijava", lambda: ("a", "b"))
+    monkeypatch.setattr(nap, "beri", lambda seja, p: b"")
+    monkeypatch.setattr(nap, "korak", korak)
+    iz_lege.nap_prebran(time.time() - 50)
+    nap.teci(stop, lambda s: None)
+    assert iz_lege.nap_vodi("1123", time.time() + 30)
+    assert "napaka" not in json.loads(db.get_meta(poveži(pot), "nap") or "{}")
 
 
 def test_nap_vodi_le_ko_kaj_pripne(monkeypatch):

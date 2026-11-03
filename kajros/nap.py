@@ -685,13 +685,18 @@ def teci(stop: threading.Event, log: Callable[[str], None]) -> None:
                 if http:
                     zavrnjenih += 1
                     cakaj = cakaj_po_zavrnitvi(zavrnjenih, time.time() - uspeh_ts)
-                try:
-                    s = json.loads(db.get_meta(conn, "nap") or "{}")
-                    s.update(napaka=str(exc)[:200], napaka_ts=int(time.time()), http=http)
-                    db.set_meta(conn, "nap", json.dumps(s, sort_keys=True))
-                    conn.commit()
-                except sqlite3.Error:
-                    conn.rollback()
+                if isinstance(exc, sqlite3.OperationalError) and "locked" in str(exc):
+                    # Bazo drži drug pisec, vir odgovarja. Zapis napake v
+                    # `meta` bi na isti zaklep čakal še 30 s.
+                    iz_lege.nap_zaklenjen()
+                else:
+                    try:
+                        s = json.loads(db.get_meta(conn, "nap") or "{}")
+                        s.update(napaka=str(exc)[:200], napaka_ts=int(time.time()), http=http)
+                        db.set_meta(conn, "nap", json.dumps(s, sort_keys=True))
+                        conn.commit()
+                    except sqlite3.Error:
+                        conn.rollback()
             stop.wait(max(1.0, cakaj - (time.time() - zacetek)))
     finally:
         conn.close()

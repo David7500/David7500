@@ -260,7 +260,7 @@ Pravila:
 * Čas naprej za uro (±3 min) se popravi. Vožnja čez > 30 min gre ven.
 * **NAP nima**: vlakov, mestnega in primestnega LPP (`LJLPP…`) — primestni ob izpadu derp.si brez lege.
 * **Piše** `vehicle_now` za vsa pripeta vozila, zmaga novejši `seen_ts`; premakne `positions_fetched`.
-* **Zamude medkrajevnih vodi NAP** (`config.NAP_PREVOZNIKI`: 1123, 1119, 1121): feed derp.si te vožnje izpusti (`iz_lege.nap_vodi`, `nap_prevzel`, `iz_lege.izpusti`), zamudo meri `iz_lege.opazuj` iz leg NAP; `iz_lege.iz_feeda` jih preskoči. Dokler prebran v 60 s (`NAP_VODI_S`). Izgubi se derp-ova napoved naprej in odhod z izhodišča.
+* **Zamude medkrajevnih vodi NAP** (`config.NAP_PREVOZNIKI`: 1123, 1119, 1121): feed derp.si te vožnje izpusti (`iz_lege.nap_vodi`, `nap_prevzel`, `iz_lege.izpusti`), zamudo meri `iz_lege.opazuj` iz leg NAP; `iz_lege.iz_feeda` jih preskoči. Dokler prebran v 60 s (`NAP_VODI_S`). Izgubi se derp-ova napoved naprej in odhod z izhodišča. **Zaklenjena baza ni molk** (`iz_lege.nap_zaklenjen`, od 3. 11. 2026): uvoz drži bazo 60–90 s, NAP ne more zapisati; prej je derp.si ob koncu zaklepa za en obhod prevzel in prepisal izmerjene postanke (98 meritev NAP, 17 za > 5 min, `undoes_passing` jih ne ščiti, NAP piše samo odhod). Štetje: `prevzem_derp.py` (skill `preveri-vire`).
 * Ujemanje z derp.si (`nap.primerjaj`): ista vožnja 99,5–100 %, odmik 0,1 m, NAP novejši 7–20 s.
 * Cena: 2,7 MB XML, 162 kB gzip; ~1,4 GB/dan. ETag se spremeni vsakič.
 * **Senca pripisa** (`nap.Senca`, od 31. 10. 2026): prijave ne verjamemo, vožnjo izračunamo sami — derp.si je samo primerjava. V senco gre nepripeto vozilo (`brez_voznje`, `brez_dneva`, `prezgodaj`) in pripeto pred začetkom vožnje (`pred_odhodom`) ali > 45 min po koncu (`po_koncu`).
