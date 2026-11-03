@@ -185,7 +185,7 @@ Ne bo, ker podatka ni: cene, sestava vlaka. **Zasedenost** od 21. 10. 2026 iz po
 
 Arwen (`david@192.168.1.46`) = **edini zajem in strežnik** `kajros.app`. **Maline od 3. 11. 2026 v projektu ni** (David): na njej nič ne preverjaj, ne nameščaj, ne vleci; njene skripte (`potegni.sh`, `deploy/install-rpi.sh` …) gredo ven 6. 11. (`KOLEDAR.md`). Ta računalnik = razvoj; podatki za analizo = kopija z arwena (`VACUUM INTO`). Podrobno `.claude/rules/objava.md`, [DEPLOY.md](DEPLOY.md).
 
-**Objava = `git push arwen <veja>`** — kavelj na arwenu požene `deploy/posodobi.sh`, izpis se vrne.
+**Objava = `git push arwen <veja>`** — kavelj na arwenu požene `deploy/posodobi.sh`, izpis se vrne. **Objavlja Claude sam** po zelenem `preveri.sh` (David 3. 11. 2026; dovoljenje `Bash(git push arwen:*)` v `.claude/settings.local.json`).
 
 ## Kje je zapisano ostalo
 
