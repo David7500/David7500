@@ -21,7 +21,8 @@ description: Ko David napiše „poglej koledar“ ali vpraša, kaj je na vrsti 
 
 ## Pravila
 
-* Zapadli vnos ni razlog za veliko delo brez vprašanja. Če vnos zahteva odločitev (vklop varovala, nova meja, pismo), najprej pokaži meritev in predlog, nato odloči David.
+* Zapadli vnos ni razlog za veliko delo v isti seji: večje delo postane nov vnos z datumom (nova seja).
+* Tehnično odločitev (popravek, meja, vklop varovala) sprejme Claude po meritvi in jo zapiše z razlogom (David 1. in 3. 11. 2026: „sam se odločaš, bolj poznaš kot jaz“). Davidu ostane, kar je njegovo: pismo, prijava, denar, sporočilo v njegovem imenu.
 * Koledar ni seznam idej. Vnos ima datum ali pogoj, ki ga sproži, sicer ne sodi vanj.
 * Vpisuje vsaka seja in vsak agent, ko se pri delu pokaže naloga za pozneje (`CLAUDE.md`). Agent brez pravice pisanja rok vrne v izidu.
 * Ob vsakem vnosu v „Opravljeno“ preveri, da so številke in odločitve tudi v trajnem zapisu (`docs/MERITVE.md`, commit, `.claude/rules/`). Koledar je kazalo, ne arhiv.

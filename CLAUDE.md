@@ -183,9 +183,9 @@ Ne bo, ker podatka ni: cene, sestava vlaka. **Zasedenost** od 21. 10. 2026 iz po
 
 ## Objava
 
-Malina (`david@192.168.1.166`) = **merodajen zajem**, ves čas, vsi prevozniki. Ta računalnik = razvoj; baza se **vleče z maline** (`./scripts/potegni.sh`), nikoli obratno. **Vlakov malina od 7. 10. 2026 nima** (Chrome na Pi Zero W ne teče) — zajema jih samo arwen. Podrobno `.claude/rules/objava.md`, [DEPLOY.md](DEPLOY.md).
+Arwen (`david@192.168.1.46`) = **edini zajem in strežnik** `kajros.app`. **Maline od 3. 11. 2026 v projektu ni** (David): na njej nič ne preverjaj, ne nameščaj, ne vleci; njene skripte (`potegni.sh`, `deploy/install-rpi.sh` …) gredo ven 6. 11. (`KOLEDAR.md`). Ta računalnik = razvoj; podatki za analizo = kopija z arwena (`VACUUM INTO`). Podrobno `.claude/rules/objava.md`, [DEPLOY.md](DEPLOY.md).
 
-**Objava = `git push arwen <veja>`** — kavelj na arwenu požene `deploy/posodobi.sh`, izpis se vrne. **Na malini deploy požene uporabnik** (sudo z geslom): pripravi ukaz in mu ga daj.
+**Objava = `git push arwen <veja>`** — kavelj na arwenu požene `deploy/posodobi.sh`, izpis se vrne.
 
 ## Kje je zapisano ostalo
 

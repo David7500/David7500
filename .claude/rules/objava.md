@@ -7,6 +7,8 @@ paths:
 
 ## Trije stroji
 
+**Malina od 3. 11. 2026 ni več del projekta** (David). Spodnje o malini je ostanek do pospravka 6. 11. (`KOLEDAR.md`): ne preverjaj, ne nameščaj, ne predlagaj.
+
 | stroj | naslov | vloga |
 |---|---|---|
 | malina (`raspberrypi`, Pi Zero W) | `192.168.1.166` | zajem ves čas, **varovalo**, brez vlakov |
