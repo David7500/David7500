@@ -32,7 +32,8 @@ Razlogi. Vir pove, kar ve sam; drugo je isti račun za vse:
 * `brez_lege`, `brez_voznje`, `brez_dneva`, `prezgodaj`, `pred_odhodom`,
   `po_koncu`, `brez_id`, `ura_popravljena`, `ni_avtobus`, `vira_razlicna`,
   `drugo_vozilo_vodi`: pripenjanje NAP in derp.si (`nap.py`, `collector.py`).
-* `ni_ziva`, `brez_linije` in vzrok `razresi` (`ni_prihoda` ...): `marprom.py`.
+* `ni_ziva`, `brez_linije`, `obdrzana`, `izpodrinjena` in vzrok `razresi`
+  (`ni_prihoda` ...): `marprom.py`.
 * `nepripet`, `odhod_v_prihodnosti`: `zamude_sz.py`; vlak je „vlak-<številka>“.
 * `brez_zamude` (`collector.lega_brez_zamude`), `zamuda_raste`
   (`collector.ura_namesto_zamude`): `oznaci`, velja `OZNAKA_S`.

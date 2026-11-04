@@ -56,6 +56,19 @@ MP = gtfs.MP
 TIMEOUT_S = (5, 15)
 #: Pripisana vožnja se po tem času preveri znova: napačna se ne vleče do konca.
 PREVERI_S = 600
+#: `potrebuje`: vožnja je mimo (nova, menjava variante, za koncem) ali je samo
+#: čas za preverjanje. Samo pri preverjanju odgovor brez prihoda vožnje ne vzame.
+NOVA, PREVERI = "nova", "preveri"
+#: Odgovor `razresi`, ki o pripeti vožnji nič ne pove. API da en prihod na
+#: linijo, zato ga vozilo za drugim avtobusom nima; 1.--4. 11. 2026 je od 377
+#: takih izpadov sredi vožnje vozilo v 364 vozilo isto vožnjo naprej (1 663 min
+#: brez lege in zamude), v 13 je naslednje postajališče vožnjo zapustilo, kar
+#: `potrebuje` opazi samo. Ura, ki je vozni red nima: 18 od 19.
+BREZ_DOKAZA = frozenset({"ni_prihoda", "ni_v_voznem_redu"})
+#: Vožnje, ki je po voznem redu končana toliko časa, preverjanje brez prihoda ne
+#: obdrži: od 17 izpadov po +5 min se nobeno vozilo ni vrnilo na isto vožnjo,
+#: stoji na končni (brez meje bi jo imelo še do `PO_KONCU_S`).
+OBDRZI_PO_KONCU_S = 300
 #: Vozilo, ki mu vožnje ni bilo mogoče določiti, se vpraša znova čez toliko.
 ZNOVA_S = 60
 #: Največ toliko branj prihodov na obhod. Ob zagonu ~35 vozil: pet obhodov,
@@ -97,6 +110,9 @@ class Vozilo:
     videno_ts: float = 0.0
     #: Zakaj zadnjič ni bilo vožnje (`razresi`), za dosje.
     zakaj: str | None = None
+    #: Preverjanje vožnje ni potrdilo in je ni ovrglo (`BREZ_DOKAZA`). Drugo
+    #: vozilo, ki mu Marprom to vožnjo pokaže, jo prevzame.
+    obdrzana: bool = False
 
 
 _vozila: dict[str, Vozilo] = {}
@@ -183,8 +199,9 @@ def _proge(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def potrebuje(s: Vozilo, v: dict, zdaj: float, postanki: dict, okna: dict,
-              sosedi: dict[str, list[str]] | None = None) -> bool:
-    """Ali vozilu vožnjo določimo (znova). Premakne `s.seq` naprej.
+              sosedi: dict[str, list[str]] | None = None) -> str | None:
+    """Ali vozilu vožnjo določimo (znova): `NOVA`, `PREVERI` ali None.
+    Premakne `s.seq` naprej.
 
     Naslednje postajališče, ki ga vožnja nima, se išče še v skupini: pred
     končno na avtobusni postaji (457 za 192) je bilo sicer vsako branje
@@ -192,9 +209,9 @@ def potrebuje(s: Vozilo, v: dict, zdaj: float, postanki: dict, okna: dict,
     Marpromovo zamudo samo vozila pred končno (mediana +130 s namesto +39).
     """
     if s.trip_id is None:
-        return zdaj - s.poskus_ts >= ZNOVA_S
+        return NOVA if zdaj - s.poskus_ts >= ZNOVA_S else None
     if (v["linija"], v["varianta"]) != (s.linija, s.varianta):
-        return True
+        return NOVA
     na_voznji = postanki.get(s.trip_id, {})
     seqs = None
     for postaja in [v["naslednja"], *(sosedi or {}).get(v["naslednja"], ())]:
@@ -204,12 +221,19 @@ def potrebuje(s: Vozilo, v: dict, zdaj: float, postanki: dict, okna: dict,
     naprej = [q for q in seqs or () if q >= s.seq]
     if not naprej:
         # Naslednjega postajališča vožnja nima ali je za njim: nova vožnja.
-        return True
+        return NOVA
     s.seq = naprej[0]
     okno = okna.get(s.trip_id)
     if okno and zdaj > stats.polnoc(s.dan) + okno[1] + PO_KONCU_S:
-        return True
-    return zdaj - s.razreseno_ts >= PREVERI_S
+        return NOVA
+    return PREVERI if zdaj - s.razreseno_ts >= PREVERI_S else None
+
+
+def obdrzi(s: Vozilo, zakaj: str, okna: dict, zdaj: float) -> bool:
+    """Ali vozilo po preverjanju brez vožnje obdrži, kar ima (`BREZ_DOKAZA`)."""
+    okno = okna.get(s.trip_id)
+    return (zakaj in BREZ_DOKAZA and okno is not None
+            and zdaj <= stats.polnoc(s.dan) + okno[1] + OBDRZI_PO_KONCU_S)
 
 
 def razresi(v: dict, prihodi: list[dict], idx: dict, zasedene: dict[tuple, str],
@@ -324,44 +348,53 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
     vidni = {v["naprava"] for v in vozila}
     for k in [k for k in _vozila if k not in vidni]:
         del _vozila[k]
-    zasedene = {(s.trip_id, s.dan): k for k, s in _vozila.items() if s.trip_id}
+    zasedene = {(s.trip_id, s.dan): k for k, s in _vozila.items()
+                if s.trip_id and not s.obdrzana}
 
     # Vožnje določimo najprej vozilom, ki jo potrebujejo; prihode beremo po
     # postajališču, enkrat za vsa vozila, ki jih tam čakajo.
     # Brez Marpromovega voznega reda za danes je vsako branje prihodov zaman
     # (prvi zagon pred uvozom: 31 vozil, branje na vozilo vsako minuto).
-    cakajo: dict[str, list[dict]] = {}
+    cakajo: dict[str, list[tuple[dict, str]]] = {}
     if not idx:
         st["brez"]["ni_voznega_reda"] = len(vozila)
     for v in vozila:
         s = _vozila.setdefault(v["naprava"], Vozilo())
-        if idx and potrebuje(s, v, zdaj, postanki, okna, sosedi) and v["naslednja"]:
-            cakajo.setdefault(v["naslednja"], []).append(v)
+        zakaj = potrebuje(s, v, zdaj, postanki, okna, sosedi) if idx else None
+        if zakaj and v["naslednja"]:
+            cakajo.setdefault(v["naslednja"], []).append((v, zakaj))
     for postaja in list(cakajo)[:KLICEV_NA_OBHOD]:
         try:
             prihodi = prihodi_za(postaja)
         except Exception:               # noqa: BLE001 -- poskusimo naslednji obhod
             continue
         st["klicev"] += 1
-        for v in cakajo[postaja]:
+        for v, namen in cakajo[postaja]:
             s = _vozila[v["naprava"]]
             s.poskus_ts = zdaj
             if s.trip_id:
                 zasedene.pop((s.trip_id, s.dan), None)
             najdena, zakaj, p = razresi(v, prihodi, idx, zasedene, sosedi)
             if najdena is None:
-                if s.trip_id:
-                    _odstrani(conn, s, v["naprava"])
-                s.trip_id = s.dan = None
-                s.zakaj = zakaj
+                if s.trip_id and namen == PREVERI and obdrzi(s, zakaj, okna, zdaj):
+                    # Znova čez minuto, ne čez 10: naslednje postajališče ima
+                    # svoj prihod, in vrsta za drugim avtobusom se razpusti.
+                    s.obdrzana, s.zakaj = True, zakaj
+                    s.razreseno_ts = zdaj - PREVERI_S + ZNOVA_S
+                    continue
+                _izpusti(conn, s, v["naprava"], zakaj)
                 st["brez"][zakaj] = st["brez"].get(zakaj, 0) + 1
                 continue
             trip_id, dan, seq = najdena
             if s.trip_id and (s.trip_id, s.dan) != (trip_id, dan):
                 st["preklopov"] += 1
                 _odstrani(conn, s, v["naprava"])
+            for k, o in _vozila.items():
+                if o is not s and o.obdrzana and (o.trip_id, o.dan) == (trip_id, dan):
+                    _izpusti(conn, o, k, "izpodrinjena")
             s.trip_id, s.dan, s.seq = trip_id, dan, seq
             s.linija, s.varianta, s.razreseno_ts = v["linija"], v["varianta"], zdaj
+            s.obdrzana = False
             zasedene[(trip_id, dan)] = v["naprava"]
             nasa = _zadnja_nasa(conn, trip_id, dan, zdaj)
             if nasa is not None and isinstance(p.get("DelayMin"), (int, float)):
@@ -416,6 +449,7 @@ def korak(conn: sqlite3.Connection, vozila: list[dict], zdaj: float,
                                              v["lon"], vozilo_id)
     _zapisi_brez_voznje(conn, brez_voznje, zdaj, postajalisca)
     st["brez_voznje"] = len(brez_voznje)
+    st["obdrzanih"] = sum(s.obdrzana for s in _vozila.values())
     st["primerjava"] = primerjava()
     return st
 
@@ -425,6 +459,15 @@ def _odstrani(conn: sqlite3.Connection, s: Vozilo, naprava: str) -> None:
     do konca svežine -- avtobus bi bil narisan dvakrat."""
     conn.execute("DELETE FROM vehicle_now WHERE trip_id = ? AND vehicle_id = ?",
                  (s.trip_id, f"marprom-{naprava}"))
+
+
+def _izpusti(conn: sqlite3.Connection, s: Vozilo, naprava: str, zakaj: str) -> None:
+    """Vozilo ostane brez vožnje; `zakaj` gre v dosje."""
+    if s.trip_id:
+        _odstrani(conn, s, naprava)
+    s.trip_id = s.dan = None
+    s.obdrzana = False
+    s.zakaj = zakaj
 
 
 #: Kar Marprom o vozilu pove sproti; drugo gre v telo dosjeja.
@@ -440,6 +483,8 @@ def _v_dosje(v: dict, s: Vozilo, ts: int, vozilo_id: str, zdaj: float) -> None:
     razlogi = []
     if s.trip_id is None:
         razlogi += ["brez_voznje"] + ([s.zakaj] if s.zakaj else [])
+    elif s.obdrzana:
+        razlogi += ["obdrzana", s.zakaj]
     if not v["zivo"]:
         razlogi.append("ni_ziva")
     if not v["linija"]:

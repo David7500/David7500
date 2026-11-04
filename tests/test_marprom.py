@@ -282,22 +282,22 @@ def test_potrebuje_ob_novi_voznji_in_ob_preverjanju(baza):
     postanki = marprom._postanki(baza)
     okna = {"mp-101714": (10 * 3600 + 50 * 60, 11 * 3600 + 5 * 60)}
     s = marprom.Vozilo()
-    assert marprom.potrebuje(s, _v(), ZDAJ, postanki, okna)          # nova
+    assert marprom.potrebuje(s, _v(), ZDAJ, postanki, okna) == marprom.NOVA
     s = marprom.Vozilo("mp-101714", DAN, "73", "6970", seq=2, razreseno_ts=ZDAJ)
     assert not marprom.potrebuje(s, _v(naslednja="120"), ZDAJ + 60, postanki, okna)
     assert s.seq == 3
     # Nazaj na izhodišče: začela se je nova vožnja iste variante.
-    assert marprom.potrebuje(s, _v(naslednja="192"), ZDAJ + 120, postanki, okna)
+    assert marprom.potrebuje(s, _v(naslednja="192"), ZDAJ + 120, postanki, okna) == marprom.NOVA
     # Pred končno: naslednjega (kot 457 na avtobusni postaji) vožnja nima, ima
     # pa drugega iz iste skupine -- ista vožnja, ne nova razrešitev vsako branje.
     s.seq = 2
     assert not marprom.potrebuje(s, _v(naslednja="777"), ZDAJ, postanki, okna, {"777": ["120"]})
     assert s.seq == 3
     s.seq = 2
-    assert marprom.potrebuje(s, {**_v(), "varianta": "6971"}, ZDAJ, postanki, okna)
-    assert marprom.potrebuje(s, _v(), ZDAJ + marprom.PREVERI_S, postanki, okna)
+    assert marprom.potrebuje(s, {**_v(), "varianta": "6971"}, ZDAJ, postanki, okna) == marprom.NOVA
+    assert marprom.potrebuje(s, _v(), ZDAJ + marprom.PREVERI_S, postanki, okna) == marprom.PREVERI
     assert marprom.potrebuje(s, _v(), POLNOC + okna["mp-101714"][1] + marprom.PO_KONCU_S + 1,
-                             postanki, okna)
+                             postanki, okna) == marprom.NOVA
 
 
 def test_korak_pripne_zapise_lego_in_vozila_brez_voznje(baza):
@@ -340,6 +340,88 @@ def test_korak_preklopi_in_ne_pusti_dvojnika_na_zemljevidu(baza):
     st = marprom.korak(baza, [_v(naslednja="192")], ZDAJ + 20 * 60, lambda p: p2)
     assert st["preklopov"] == 1
     assert [r[0] for r in baza.execute("SELECT trip_id FROM vehicle_now")] == ["mp-101715"]
+
+
+PRIHOD = [{"LineId": 73, "BusCode": "184", "ArrivalTime": "10:56", "ETAMin": 1}]
+
+
+def _pripni(baza, **v):
+    marprom.korak(baza, [_v(**v)], ZDAJ, lambda p: PRIHOD)
+    return marprom._vozila[v.get("naprava", "472")]
+
+
+@pytest.mark.parametrize("prihodi", [[], [{**PRIHOD[0], "ArrivalTime": "10:57"}]],
+                         ids=["ni_prihoda", "ni_v_voznem_redu"])
+def test_preverjanje_brez_dokaza_ne_vzame_voznje(baza, prihodi):
+    """API da en prihod na linijo: vozilo za drugim avtobusom ga nima, vožnjo
+    pa vozi naprej. 1.--2. 11. 2026 je tako 88-krat ostalo brez lege in zamude
+    na isti vožnji, ob 12.42 hkrati 25 od 37 vozil."""
+    s = _pripni(baza)
+    klici = []
+
+    def prihodi_za(p):
+        klici.append(p)
+        return prihodi
+
+    st = marprom.korak(baza, [_v()], ZDAJ + marprom.PREVERI_S, prihodi_za)
+    assert (st["pripetih"], st["brez"], st["obdrzanih"]) == (1, {}, 1)
+    assert s.obdrzana and s.trip_id == "mp-101714"
+    assert baza.execute("SELECT trip_id FROM vehicle_now").fetchone()[0] == "mp-101714"
+    # Znova čez minuto, ne vsak obhod.
+    marprom.korak(baza, [_v()], ZDAJ + marprom.PREVERI_S + 10, prihodi_za)
+    assert len(klici) == 1
+    marprom.korak(baza, [_v()], ZDAJ + marprom.PREVERI_S + marprom.ZNOVA_S, prihodi_za)
+    assert len(klici) == 2
+    # Prihod se vrne: vožnja je spet potrjena.
+    st = marprom.korak(baza, [_v()], ZDAJ + marprom.PREVERI_S + 2 * marprom.ZNOVA_S,
+                       lambda p: PRIHOD)
+    assert st["obdrzanih"] == 0 and not s.obdrzana and s.trip_id == "mp-101714"
+
+
+def test_preverjanje_vzame_voznjo_ko_je_dokaz_ali_je_mimo(baza):
+    """Obdrži samo, kar odgovor pusti odprto: druga vožnja s tem vozilom, novo
+    postajališče zunaj vožnje in končana vožnja gredo kot prej."""
+    s = _pripni(baza)
+    # Marprom vozilu kaže vožnjo, ki jo ima drugo vozilo, ki ni obdržano.
+    marprom._vozila["999"] = marprom.Vozilo("mp-101714", DAN, "73", "6970", seq=2)
+    s.trip_id, s.seq = "mp-101715", 1
+    st = marprom.korak(baza, [_v(), _v(naprava="999", bus="9")], ZDAJ + marprom.PREVERI_S,
+                       lambda p: PRIHOD)
+    assert st["brez"].get("zasedena") == 1 and s.trip_id is None
+
+    # Naslednje postajališče je za vozilom: nova vožnja, prihoda ni.
+    marprom._vozila.clear()
+    s = _pripni(baza)
+    s.seq = 3
+    st = marprom.korak(baza, [_v()], ZDAJ + 60, lambda p: [])
+    assert st["brez"] == {"ni_prihoda": 1} and s.trip_id is None
+    assert baza.execute("SELECT COUNT(*) FROM vehicle_now WHERE vehicle_id = 'marprom-472'"
+                        ).fetchone()[0] == 0
+
+    # Po voznem redu končana (11:05) + 5 min: stoji na končni.
+    marprom._vozila.clear()
+    s = _pripni(baza)
+    konec = POLNOC + 11 * 3600 + 5 * 60
+    st = marprom.korak(baza, [_v()], konec + marprom.OBDRZI_PO_KONCU_S, lambda p: [])
+    assert st["obdrzanih"] == 1
+    s.obdrzana, s.razreseno_ts = False, 0.0
+    st = marprom.korak(baza, [_v()], konec + marprom.OBDRZI_PO_KONCU_S + 1, lambda p: [])
+    assert st["brez"] == {"ni_prihoda": 1} and s.trip_id is None
+
+
+def test_vozilo_s_prihodom_prevzame_obdrzano_voznjo(baza):
+    """Obdržana vožnja ni dokaz: vozilo, ki mu jo Marprom pokaže, jo dobi, sicer
+    bi stalo na „zasedena“, dokler prvo ne zapusti vožnje."""
+    s = _pripni(baza)
+    marprom.korak(baza, [_v()], ZDAJ + marprom.PREVERI_S, lambda p: [])
+    assert s.obdrzana
+    drugi = _v(naprava="9", bus="5", lat=46.5600, lon=15.6500)
+    prihodi = [{**PRIHOD[0], "BusCode": "5"}]
+    st = marprom.korak(baza, [_v(), drugi], ZDAJ + marprom.PREVERI_S + 5, lambda p: prihodi)
+    assert st["pripetih"] == 1 and st["obdrzanih"] == 0 and st["preklopov"] == 0
+    assert s.trip_id is None and s.zakaj == "izpodrinjena"
+    assert marprom._vozila["9"].trip_id == "mp-101714"
+    assert [r[0] for r in baza.execute("SELECT vehicle_id FROM vehicle_now")] == ["marprom-9"]
 
 
 def test_zdravje_marprom():

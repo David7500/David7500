@@ -3541,3 +3541,23 @@ vlakov 0,00–0,05 → prag izpada `ZAJEM_DNEVA_MIN` = 0,1. Mestni Murska Sobota
 **Meja obtiči po luknji v legah** (`prehod.NAPREJ = 8`): vožnje NAP s prehodi, katerih zadnji prehod ni cilj, vozilo pa je pozneje v 100 m postanka več kot osem za njim (`docs/presoja/napovedi/obtici.py`). 2. 11.: 26 od 8 454 (0,31 %; Nomago 23, Arriva 3), pred tem luknja v legah 300–3 367 s; še 2 brez luknje (osem postankov zapored nezaznanih, Arriva). Vsaka ostane brez meritve do cilja: skupaj 568 postankov, mediana 19,5 na vožnjo; vozilo pošilja lego še mediana 50 min (p90 71, največ 87), meja pa stoji. 27.–30. 10.: 17, 18, 22, 22 (0,24–0,31 % ocenljivih; ~1 400 voženj na dan brez `sched` je nagrobnikov po uvozu 2. 11.). **Šest od 26 je ista luknja**: Nomago N0253 in N0804 (Celje AP ↔ Cmereška Gorca), Loka pri Žusmu–Javorje pri Slivnici, devet postankov v ~6 min brez lege (300–380 s), obe smeri, dve vozili (1300994, 1301070) — kraj brez signala, ne naprava. Za primerjavo: 898 voženj na dan (10,6 %) konča brez cilja, ker vozilo utihne (671 brez samega cilja) — tega iskanje po trasi ne popravi.
 
 **Tretji prepis 31. 10.** (3. 11. ob 3.32.25) po zamrznitvi oktobra (2. 11. ob 3.39.45): `skladnost_meseca` za avgust, september in oktober brez napake. Dva dni (`MESEC_ZAKLJUCEN_PO_DNEH`) zadoščata.
+
+## Tretja noč uvoza, Marprom ob preverjanju, vozilo na dveh vožnjah (4. 11. 2026)
+
+**Tretja noč uvoza, prvič s popravkom 6ce68dc.** Uvoz 4.20.06–4.24.40, izid ok. Zaklep (največja luknja v `obs`) 49 s, 4.23.24–4.24.13; prejšnje noči 68, 63 in 82 s. NAP: ena napaka ob 4.24.04, „spet odgovarja“ 4.24.21. `prevzem_derp.py`: izbruha derp.si za prevoznike NAP ni (minuta 4.24: 18 zapisov 1119/1121/1123, 3. 11. 812 v eni sekundi). Točka 14 zaprta za zaklepe do minute; odprto ostane, če NAP podnevi molči dlje od minute (`docs/VIRI-PRESOJA.md`).
+
+**Marprom: preverjanje vozilu vzame pravo vožnjo.** Dosje `stanje`, 1. 11. 13.43–4. 11. 21.30 (3,3 dni), vzorec vožnja → brez → vožnja: 925 izpadov. Na isto vožnjo 432 (mediana 70 s, p90 200 s, 790 min), na drugo 493. Od teh 493 je 327 pravih menjav (naslednje postajališče stare vožnje nima), 18 pred koncem stare, 76 dolgih izpadov ≥ 30 min (noč, konec izmene), 67 sredi stare z novo šele po njenem koncu (vozilo je staro vozilo naprej brez nas), 5 prekrivanj (ena od vožnji napačna). Ponovljeni vzorec prvega dne: 89 / 77, kot v koledarju (88 / 77).
+
+Kaj je vozilo naredilo med izpadom sredi vožnje (naslednje postajališče je na vožnji, ne zadnji dve), po `NextStopPointId` iz `tocke`:
+
+| razlog | ostalo na vožnji | zapustilo | izgubljeno, ostalo |
+|---|---|---|---|
+| `ni_prihoda` | 364 | 13 | 1 663 min |
+| `ni_v_voznem_redu` | 18 | 1 | 32 min |
+| `zasedena` | 3 | 0 | 30 min |
+
+13 „zapustilo“ `potrebuje` opazi samo (naslednje postajališče ni na vožnji ali gre nazaj), zato jih popravek ne zadrži. Po koncu vožnje po voznem redu: do +5 min 8 na isto in 25 na drugo, po +5 min 0 od 17 na isto: meja `OBDRZI_PO_KONCU_S`. Popravek: glej `zajem.md`, „Mestni Marprom“. `zasedena` ostane, ker je to dokaz o drugi vožnji. Vozil na vožnji brez `ni_prihoda` (`-`, 25 izpadov, 8 min): vozilo je izpadlo iz odgovora, ni vredno kode.
+
+**Vozilo na dveh vožnjah po menjavi.** `api._novejsa_lega`: zemljevid in `_lpp_zivo` vzameta novejšo lego istega `vehicle_id`; enaka ura ostane obema. Pet primerov v 358 legah (31. 10.), do 3 min.
+
+**Mestni LPP brez `trip_update`: senca ni vredna kode.** Pregled 31. 10. je našel 15 oken v 4 krogih. 2.–4. 11. dosje `brez_zamude`: 4–8 vozil od ~175 na dan, 693–1 851 od ~235 000 vzorcev (0,3–0,8 %). `pokritost` 4. 11. ob 7., 12. in 16. uri: z lego 92, 61, 83, s svežo zamudo 92, 62, 83; 31. 10. ob 21. uri 24 in 24. Zamuda iz lege za LPP bi rabila svojo nit in sled za manj kot odstotek vzorcev; vrstica `lega_brez_zamude` ostane straža.
