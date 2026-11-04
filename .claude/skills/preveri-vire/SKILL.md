@@ -41,6 +41,7 @@ Rumena, ki ne mine, postane oranžna (meje v `zdravje.py`, trajanje šteje `Sled
 | vir ne odgovarja (`derp_*`, `nap`, `zamude_sz`, `zamude_lpp`, `marprom`, `kranj`, `vir:*`) | gumb „Preveri vire zdaj“ v /admin (`viri.preveri`), kartica vira (zadnja napaka, HTTP), `journalctl -u kajros.service` na arwenu |
 | nit ne piše, `nit:*` | rdeče: ponovni zagon, nato vzrok v dnevniku (izjema mimo `except`, zaklenjena baza: `zajem.md`, „Napaka pisanja“) |
 | `vozni_red*` | ukrep vira `gtfs_*` v `kajros/viri.py`; mestni zipi: `gtfs.mestni_viri` |
+| `marprom` (vozila brez vožnje) | `skripte/marprom_izpadi.py OD DO` (izpadi po razlogu, prave menjave), `skripte/marprom_sredi.py OD DO` (ali je vozilo vožnjo vozilo naprej); dosje `obdrzana`, `izpodrinjena` |
 | `nocno`, uvoz ob 4.20 | `meta.uvoz`, dnevnik 4.15–4.35; `skripte/prevzem_derp.py DAN [OD MINUT]` (ali je derp.si med zaklepom prepisal meritve NAP, `docs/VIRI-PRESOJA.md` točka 14) |
 | `skladnost_sz` | primeri vlakov so v vrstici; `zajem.md`, „Straža“ |
 
