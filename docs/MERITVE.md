@@ -3564,7 +3564,7 @@ Kaj je vozilo naredilo med izpadom sredi vožnje (naslednje postajališče je na
 
 ## Dolgi odseki: zamuda iz lege, ponovitev (4. 11. 2026)
 
-`docs/presoja/dolg_odsek/ponovitev.py` na arwenu, `lega` in `gps_prehod` 21. 10.–3. 11., lega na minuto, projekcija na traso, resnica = zamuda na naslednjem prehodu, izpuščen dan. Starejši dnevi so tanki (~2 700 vzorcev na delavnik, 2. in 3. 11. ~19 000): ~1 400 voženj z uvoza 2. 11. nima več `sched` ne para po šifri, med njimi večina dolgih.
+`docs/presoja/dolg_odsek/ponovitev.py` na arwenu, `lega` in `gps_prehod` 21. 10.–3. 11., lega na minuto, projekcija na traso, resnica = zamuda na naslednjem prehodu, izpuščen dan. Dnevi do 1. 11. so tanki (~2 700 vzorcev na delavnik, 2. in 3. 11. ~19 000): 1 436 voženj z veljavnostjo do 1. 11. (Arriva 938, Nomago 479, AP MS 19) nima več `sched`, med njimi je večina dolgih.
 
 | | n | MAE prenos | MAE razdalja | MAE profil | v 2 min |
 |---|---|---|---|---|---|
@@ -3579,3 +3579,4 @@ Po deležu odseka je profil enakomeren (MAE 1,74 na začetku, 1,19–1,35 naprej
 
 Nočni račun enega dne na arwenu 20 s (2,3 s seznam 1 743 voženj z dolgim odsekom), 124 odsekov. Senca v `ocena.snapshot` od 4. 11.; prikaz nespremenjen.
 
+**Zgodovina se pretrga na meji veljavnosti.** 3. 11. je med 8 450 vožnjami NAP s prehodi 274 novih (3,2 %; Nomago 171, Arriva 103) brez vezi na staro: ne lastne zgodovine ne `prednik`; 245 ima nagrobnik z isto šifro in smerjo. Kandidat za vzrok, ne potrjen: `gtfs.povezi_zamenjave` hoče skupen dan, `_vozje_za` izloči vožnjo brez dni od danes naprej, staro pa novi zip vrže šele, ko se ji veljavnost izteče. Vsaka taka vožnja začne z ničle in si opomore v tednih. Isti primer bi bila menjava SŽ 13. 12. (stari do 12. 12., novi od 13. 12.), tam za vse vlake (`KOLEDAR.md`).

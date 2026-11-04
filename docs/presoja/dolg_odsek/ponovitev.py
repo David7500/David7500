@@ -7,8 +7,7 @@ lege med njima, na minuto, jih projicira na traso in primerja napoved zamude na 
   razdalja zdaj minus vozni red, razporejen po razdalji po trasi
   profil   zdaj + običajni ostanek časa od te točke do j: mediana drugih dni istega
            odseka (ime k, ime j, dolžina po trasi na 500 m), koš 5 % odseka; samo
-           z vsaj tremi drugimi dnevi. Stara vožnja brez `sched` (nagrobnik) vzame
-           traso naslednice z isto šifro in uro odhoda.
+           z vsaj tremi drugimi dnevi. Vožnje brez `sched` (nagrobniki) izpadejo.
 
 Izid po deležu odseka, dolžini, prevozniku; surovo v CSV za nadaljnjo analizo.
 
@@ -47,37 +46,13 @@ def odsek_prehodov(dan):
     return po
 
 
-#: (prevoznik, šifra) -> vožnje z voznim redom: stara vožnja brez `sched` (uvoz
-#: 2. 11. je zamenjal ~1 400 voženj brez para v `zamenjava`) vzame traso naslednice.
-ZIVE = collections.defaultdict(list)
-for r in conn.execute("SELECT t.trip_id, t.agency, t.train_no, t.start_s FROM trip t "
-                      "WHERE t.agency IN ('1119','1121','1123') "
-                      "AND EXISTS (SELECT 1 FROM sched s WHERE s.trip_id = t.trip_id)"):
-    ZIVE[(r["agency"], r["train_no"])].append((r["trip_id"], r["start_s"]))
-STARE = {r["trip_id"]: r for r in conn.execute(
-    "SELECT t.trip_id, t.agency, t.train_no, t.start_s FROM trip t "
-    "WHERE t.agency IN ('1119','1121','1123') "
-    "AND NOT EXISTS (SELECT 1 FROM sched s WHERE s.trip_id = t.trip_id)")}
-
-
-def postanki(tid):
-    """Vožnja in stop_seq -> postanek; nagrobnik prek iste šifre in ure odhoda."""
-    s = STARE.get(tid)
-    if s is not None:
-        kandidati = [x for x, st in ZIVE.get((s["agency"], s["train_no"]), ()) if st == s["start_s"]]
-        if not kandidati:
-            return None, {}
-        tid = kandidati[0]
-    v = deljenje.voznja(conn, tid)
-    return (v, {p["stop_seq"]: p for p in v.postanki}) if v is not None else (None, {})
-
-
 zapisi = []
 for dan in DNI:
     for (tid, ag), rr in odsek_prehodov(dan).items():
-        v, idx = postanki(tid)
-        if v is None:
+        v = deljenje.voznja(conn, tid)
+        if v is None:                       # nagrobnik: `sched` ni več
             continue
+        idx = {p["stop_seq"]: p for p in v.postanki}
         for a, b in zip(rr, rr[1:]):
             pa, pb = idx.get(a["stop_seq"]), idx.get(b["stop_seq"])
             if pa is None or pb is None:
