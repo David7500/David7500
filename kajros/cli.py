@@ -214,6 +214,14 @@ def cmd_ocena(args):
         blok(net.upper(), x)
     for ime, x in r["po_zamudi"].items():
         blok(f"ZAMUDA OB POGLEDU {ime}", x)
+    for vir, x in r.get("iz_lege", {}).items():
+        if x["iz_lege"]["n"]:
+            print(f"\nDOLG ODSEK, zamuda iz lege ({vir}), iste vrstice, senca `odsek.py`")
+            print(f"{'model':24s}{'MAE':>10}{'v 5 min':>10}"
+                  f"{'podcenj.':>10}{'precenj.':>10}{'odklon':>10}{'strošek':>10}{'n':>8}")
+            for ime, kljuc in (("naša ocena", "nasa"), ("iz lege", "iz_lege"),
+                               ("prenos zamude", "prenos")):
+                print(_vrstica_modela(ime, x[kljuc]))
 
     # Pogledi, ko vozilo se ni nikjer izmerjeno. Beležijo se od 19. 9. 2026.
     for net, x in r.get("pred_odhodom", {}).items():

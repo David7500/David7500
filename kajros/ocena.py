@@ -38,7 +38,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import config, stats
+from . import config, odsek, stats
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS napoved (
     carry_s      INTEGER,            -- referenca: prenos trenutne zamude
     actual_s     INTEGER,            -- resnica, dopisana kasneje
     resolved_ts  INTEGER,
+    lega_s       INTEGER,            -- senca `odsek.py`: zamuda na naslednjem postanku iz lege
+    ours_lega_s  INTEGER,            -- kar bi pokazal prikaz, če bi veljala lega
+    lega_vir     TEXT,               -- profil ali razdalja
     PRIMARY KEY (trip_id, service_date, stop_seq)
 );
 CREATE INDEX IF NOT EXISTS napoved_nerazrezena
@@ -85,6 +88,11 @@ CREATE INDEX IF NOT EXISTS napoved_nerazrezena
 
 def init(conn: sqlite3.Connection) -> None:
     conn.executescript(SHEMA)
+    stolpci = {r[1] for r in conn.execute("PRAGMA table_info(napoved)")}
+    if "lega_s" not in stolpci:
+        conn.execute("ALTER TABLE napoved ADD COLUMN lega_s INTEGER")
+        conn.execute("ALTER TABLE napoved ADD COLUMN ours_lega_s INTEGER")
+        conn.execute("ALTER TABLE napoved ADD COLUMN lega_vir TEXT")
     conn.commit()
 
 
@@ -230,6 +238,18 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                     conn, po_id[trip_id]["train_no"], zadnji["stop_seq"], trenutna,
                     exclude_date=day, service_date=day, trip_id=trip_id)}
 
+                # Senca: kaj bi prikaz rekel, če bi na dolgem odseku veljala lega.
+                # Izhodišče je naslednji postanek, ne zadnji prevoženi: ocena že
+                # vsebuje rezervo tega odseka, `predict` bi jo štel še enkrat.
+                lega = (odsek.ocena(conn, trip_id, day, zadnji["stop_seq"], made_ts)
+                        if network == "avtobus" else None)
+                iz_lege = {}
+                if lega:
+                    iz_lege = {x["stop_seq"]: x["predicted_delay_s"] for x in stats.predict(
+                        conn, po_id[trip_id]["train_no"], lega["seq"], lega["zamuda_s"],
+                        exclude_date=day, service_date=day, trip_id=trip_id)}
+                    iz_lege[lega["seq"]] = lega["zamuda_s"]
+
                 for t in seznam:
                     seq = t["stop_seq"]
                     p = napoved.get(seq)
@@ -239,7 +259,9 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                          p["predicted_delay_s"] if p else None,
                          p["own_delay_s"] if p else None,
                          p["n_samples"] if p else None,
-                         feed.get(seq), trenutna))
+                         feed.get(seq), trenutna,
+                         lega["zamuda_s"] if lega else None, iz_lege.get(seq),
+                         lega["vir"] if lega else None))
                     pogledanih += 1
 
     if pred_odhodom:
@@ -251,8 +273,9 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
         zapisano += conn.executemany(
             "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
             " network, made_ts, horizon_s, current_s, from_seq, ours_s,"
-            " ours_own_s, ours_samples, operator_s, carry_s)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
+            " ours_own_s, ours_samples, operator_s, carry_s,"
+            " lega_s, ours_lega_s, lega_vir)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
     conn.commit()
     return {"pogledanih": pogledanih, "zapisanih": zapisano,
             "brez_meritve": brez_meritve}
@@ -498,6 +521,15 @@ def report(conn: sqlite3.Connection, days: int = 30,
         if del_:
             razrezi[ime] = rez(del_)
     izid["po_zamudi"] = razrezi
+
+    # Senca `odsek.py`: isto merilo na istih vrsticah, po viru ocene.
+    def lega_rez(rows: list[sqlite3.Row]) -> dict:
+        parne = [r for r in rows if None not in (r["ours_s"], r["ours_lega_s"], r["carry_s"])]
+        return {k: _meritve([(r[stolpec], r["actual_s"]) for r in parne], "avtobus")
+                for k, stolpec in (("nasa", "ours_s"), ("iz_lege", "ours_lega_s"),
+                                   ("prenos", "carry_s"))}
+    izid["iz_lege"] = {vir: lega_rez([r for r in vrstice if r["lega_vir"] == vir])
+                       for vir in ("profil", "razdalja")}
 
     cakajo = conn.execute(
         "SELECT COUNT(*) FROM napoved WHERE actual_s IS NULL").fetchone()[0]

@@ -103,6 +103,14 @@ Na `KAJROS_OCENA_SECONDS` (120 s) v `napoved`: kaj bi prikaz povedal **25 min pr
 * **Nevarna smer = PRECENITEV** (vozilo odpelje pred nosom; 2 318 zamujenih po `_strosek`, nobeden iz podcenitve).
 * `OCENA_KEEP_DAYS` 30.
 
+## Dolg odsek: zamuda iz lege (`odsek.py`, senca od 4. 11. 2026)
+
+Odsek NAP ≥ 15 min po voznem redu: okno kaže zadnjo meritev, avtobus pa porabi rezervo. Ocena zamude na **naslednjem** postanku, `ocena.snapshot` jo piše v `lega_s`, `ours_lega_s`, `lega_vir`; prikaz je ne bere.
+* **Profil** (`odsek_profil`, nočno iz `lega` + `gps_prehod`): zdaj + običajni ostanek do prehoda, odsek = ime, ime, dolžina po trasi na 500 m, koš 5 %, ≥ 3 dni. Na `ponovitev.py` MAE 3,27 → 1,35, v 2 min 38 → 83 % (29 098 vzorcev, izpuščen dan).
+* **Razdalja** (vozni red po razdalji) le brez profila in od 30 % odseka: pod tem slabša od prenosa, odklon od +2 do −2 min (mesto, avtocesta).
+* **Izhodišče za naprej = naslednji postanek**, ne zadnji prevoženi: ocena že vsebuje rezervo odseka, `predict` iz `k` bi jo štel dvakrat.
+* Merili: `kajros ocena` (blok DOLG ODSEK, iste vrstice), zgodovina `docs/presoja/dolg_odsek/ponovitev.py`; `kajros backtest` leg ne vidi. Odločitev v `KOLEDAR.md`.
+
 ## Iskanje postaj
 
 `journey.search_stations()` razvršča po `(razred, -promet, ime)`: točno ime (0), vse ostalo (1). Ločevanje začetka imena je dajalo „Polje (Tolmin)“ (2 vožnji) pred „Kranj Zlato Polje“ (586). Ločevanje ostane le pri izboru kandidatov (`CANDIDATE_CAP` 300). **Postanke istega imena seštej PRED razvrščanjem.**

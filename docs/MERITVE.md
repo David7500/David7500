@@ -3561,3 +3561,21 @@ Kaj je vozilo naredilo med izpadom sredi vožnje (naslednje postajališče je na
 **Vozilo na dveh vožnjah po menjavi.** `api._novejsa_lega`: zemljevid in `_lpp_zivo` vzameta novejšo lego istega `vehicle_id`; enaka ura ostane obema. Pet primerov v 358 legah (31. 10.), do 3 min.
 
 **Mestni LPP brez `trip_update`: senca ni vredna kode.** Pregled 31. 10. je našel 15 oken v 4 krogih. 2.–4. 11. dosje `brez_zamude`: 4–8 vozil od ~175 na dan, 693–1 851 od ~235 000 vzorcev (0,3–0,8 %). `pokritost` 4. 11. ob 7., 12. in 16. uri: z lego 92, 61, 83, s svežo zamudo 92, 62, 83; 31. 10. ob 21. uri 24 in 24. Zamuda iz lege za LPP bi rabila svojo nit in sled za manj kot odstotek vzorcev; vrstica `lega_brez_zamude` ostane straža.
+
+## Dolgi odseki: zamuda iz lege, ponovitev (4. 11. 2026)
+
+`docs/presoja/dolg_odsek/ponovitev.py` na arwenu, `lega` in `gps_prehod` 21. 10.–3. 11., lega na minuto, projekcija na traso, resnica = zamuda na naslednjem prehodu, izpuščen dan. Starejši dnevi so tanki (~2 700 vzorcev na delavnik, 2. in 3. 11. ~19 000): ~1 400 voženj z uvoza 2. 11. nima več `sched` ne para po šifri, med njimi večina dolgih.
+
+| | n | MAE prenos | MAE razdalja | MAE profil | v 2 min |
+|---|---|---|---|---|---|
+| vse | 62 228 | 4,08 | 3,09 | | 36 → 49 % (razdalja) |
+| kjer je profil (≥ 3 drugi dnevi) | 29 098 | 3,27 | | 1,35 | 38 → 83 % |
+| odsek 15–20 min | 16 716 | 2,46 | | 0,88 | 52 → 91 % |
+| odsek 20–30 min | 8 285 | 4,15 | | 1,30 | 13 → 86 % |
+| odsek 30–45 min | 1 150 | 5,37 | | 2,79 | 36 → 66 % |
+| odsek ≥ 45 min | 2 947 | 4,57 | | 3,62 | 35 → 38 % |
+
+Po deležu odseka je profil enakomeren (MAE 1,74 na začetku, 1,19–1,35 naprej), razdalja ima odklon +1,9 na začetku in −1,8 pri koncu in je pod 30 % odseka slabša od prenosa (4,08 proti 3,82). Po urah profil 1,19–1,37, zvečer 1,91, odklon −0,09 do −0,48 min. AP MS je edini brez koristi (4,08 → 4,32, n 649). Naklon resnice na razliko profil − prenos 0,76–0,88: krčenje bi dalo malo, ne delam ga.
+
+Nočni račun enega dne na arwenu 20 s (2,3 s seznam 1 743 voženj z dolgim odsekom), 124 odsekov. Senca v `ocena.snapshot` od 4. 11.; prikaz nespremenjen.
+

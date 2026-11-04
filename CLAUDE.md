@@ -73,6 +73,7 @@ kajros/
   gtfs.py        pogojni prenos zipa, uvoz voznega reda
   collector.py   poll zamud in leg, obratovalni dan, varovalke pred smetmi
   iz_lege.py     zamuda iz lege na trasi, kjer feed zamud vožnje nima
+  odsek.py       zamuda na dolgem odseku iz lege in profila ostanka časa; senca, prikaz je ne bere
   prehod.py      prehod postanka iz GPS brez trase; odkloni.py kje vozila ne vozijo po trasi
   alerts.py      ovire (SZ-OVIRA); poročila o zamudi piše zemljevid SŽ (`zamude_sz`)
   zapore.py      zapora tira iz besedila ovir, vlak pred tabo: opozorilo, ne napoved
@@ -119,7 +120,7 @@ android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vi
 
 **Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavi `service_day('S1','2026-08-31')`, test dan računa (`_pred`); ko se ujameta: `UNIQUE constraint failed` (31. 8. 2026 pet rdečih). Računani vstavki zato `INSERT OR IGNORE`.
 
-Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `stat_dan` (dnevni agregati statistike, ne obrezuje se) · `opazovano` + `opazovano_dan` (ne obrezuje se) + `opazovano_izid` (21 dni) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`. `dosje.sqlite`: `tocke` + `stanje` + `telo` + `zamude` + `vozilo_dan` + `oznaka`.
+Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `stat_dan` (dnevni agregati statistike, ne obrezuje se) · `odsek_profil` (28 dni) · `opazovano` + `opazovano_dan` (ne obrezuje se) + `opazovano_izid` (21 dni) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`. `dosje.sqlite`: `tocke` + `stanje` + `telo` + `zamude` + `vozilo_dan` + `oznaka`.
 
 ## Omrežji: `network` ni `mode`
 

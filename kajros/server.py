@@ -20,6 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import opazovano
+from . import odsek
 from . import dosje
 from . import statistika
 from . import straza
@@ -547,6 +548,15 @@ def _povzetki() -> None:
         conn.rollback()
         _log(f"opazovanega ni bilo mogoče izračunati: {exc}")
         collector.zapisi_korak(conn, "opazovano", exc, kljuc="nocno")
+    # Svoj poskus, isti razlog kot straža spodaj: `lega` izgine po 14 dneh.
+    try:
+        dnevi = odsek.dopolni(conn)
+        _log(f"profil dolgih odsekov: {len(dnevi)} dni")
+        collector.zapisi_korak(conn, "odsek", kljuc="nocno")
+    except Exception as exc:              # noqa: BLE001 -- isto kot zgoraj
+        conn.rollback()
+        _log(f"profila dolgih odsekov ni bilo mogoče izračunati: {exc}")
+        collector.zapisi_korak(conn, "odsek", exc, kljuc="nocno")
     # Svoj poskus: izpad povzetkov ne sme vzeti dneva straži, `lega` izgine po 14 dneh.
     try:
         dnevi = straza.dopolni(conn)

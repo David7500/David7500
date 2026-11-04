@@ -505,6 +505,19 @@ CREATE TABLE IF NOT EXISTS gps_prehod (
     PRIMARY KEY (service_date, trip_id, stop_seq)
 ) WITHOUT ROWID;
 
+-- Običajni ostanek časa do naslednjega postanka na dolgih odsekih (`odsek.py`),
+-- po dnevu. `dolzina` po trasi na 500 m: ista imena po drugi cesti so drug odsek.
+CREATE TABLE IF NOT EXISTS odsek_profil (
+    od_ime    TEXT NOT NULL,
+    do_ime    TEXT NOT NULL,
+    dolzina   INTEGER NOT NULL,
+    kos       INTEGER NOT NULL,
+    dan       TEXT NOT NULL,
+    ostanek_s INTEGER NOT NULL,
+    n         INTEGER NOT NULL,
+    PRIMARY KEY (od_ime, do_ime, dolzina, kos, dan)
+) WITHOUT ROWID;
+
 -- Obvestila skrbnika potnikom (`obvestila.py`). Vsako ima rok; umaknjeno
 -- dobi rok v preteklosti in ostane, da se ve, kaj je bilo recenega.
 -- `omrezje` NULL = obe omrezji.
