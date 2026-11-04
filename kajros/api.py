@@ -2467,6 +2467,22 @@ def _voznja_koncana(d: dict, trasa) -> bool:
     return abs((d["bearing"] - smer + 180) % 360 - 180) > KONCANA_KOT
 
 
+def _novejsa_lega(vrstice: list[dict]) -> list[dict]:
+    """Vozilo na dveh vožnjah: velja novejša lega.
+
+    `vehicle_now` je po vožnji: ob menjavi ostane vrstica končane sveža še do
+    `POSITION_FRESH_S` in isti avtobus je bil narisan dvakrat, s kartico končane
+    vožnje (LPP 20Z 101 s, Arriva A6290 -> A6320 88 s; 31. 10. 2026 pet primerov
+    v 358 legah). Enaka ura ostane obema: to ni menjava.
+    """
+    zadnja: dict[str, int] = {}
+    for d in vrstice:
+        if d["vehicle_id"]:
+            zadnja[d["vehicle_id"]] = max(zadnja.get(d["vehicle_id"], 0), d["seen_ts"])
+    return [d for d in vrstice
+            if not d["vehicle_id"] or d["seen_ts"] >= zadnja[d["vehicle_id"]]]
+
+
 def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
     """Vsa vozila z GPS, brez `age_s`. Ta je odvisen od trenutka in se doda
     ob strezbi -- sicer bi predpomnjen odgovor lagal o starosti lege."""
@@ -2479,7 +2495,7 @@ def _vehicles_rows(conn, zdaj: datetime) -> list[dict]:
         "WHERE v.seen_ts >= ? ORDER BY t.train_no",
         (now - collector.POSITION_FRESH_S,),
     ).fetchall()
-    out = [dict(r) for r in rows]
+    out = _novejsa_lega([dict(r) for r in rows])
     trase = {}
     for d in out:
         d["speed_kmh"] = round(d["speed_ms"] * 3.6) if d["speed_ms"] is not None else None
@@ -2826,8 +2842,12 @@ def _lpp_zivo(conn, trip_id: str | None, rows: list[dict], service_date: str,
     # eta pripada NASLEDNJEMU obhodu istega vzorca in bi na zaslon prinesla
     # ure z druge voznje. Ujeto pri preizkusu: meja postanek 37, eta za
     # postanek 1.
+    # Vozilo, ki ima novejšo lego na drugi vožnji, te ne vozi več: isto kot
+    # zemljevid (`_novejsa_lega`), sicer je končana dobila ure naslednje.
     v = conn.execute(
-        "SELECT vehicle_id FROM vehicle_now WHERE trip_id = ? AND seen_ts >= ?",
+        "SELECT v.vehicle_id FROM vehicle_now v WHERE v.trip_id = ? AND v.seen_ts >= ? "
+        "AND NOT EXISTS (SELECT 1 FROM vehicle_now n WHERE n.vehicle_id = v.vehicle_id "
+        "                AND n.seen_ts > v.seen_ts)",
         (trip_id, int(zdaj.timestamp()) - collector.POSITION_FRESH_S)).fetchone()
     if not v or not v["vehicle_id"]:
         return None

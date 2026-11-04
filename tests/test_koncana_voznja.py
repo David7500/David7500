@@ -145,3 +145,33 @@ def test_ni_koncana_pred_koncno_ali_brez_podatka():
     assert not api._voznja_koncana(_vozilo(measured_seq=None), JUG)
     assert not api._voznja_koncana(_vozilo(bearing=None), JUG)
     assert not api._voznja_koncana(_vozilo(), None)
+
+
+def test_vozilo_na_dveh_voznjah_velja_novejsa_lega():
+    """Ob menjavi ostane vrstica končane vožnje sveža še do `POSITION_FRESH_S`:
+    isti avtobus bi bil narisan dvakrat. Enaka ura ni menjava."""
+    vrstice = [{"trip_id": "stara", "vehicle_id": "V", "seen_ts": 100},
+               {"trip_id": "nova", "vehicle_id": "V", "seen_ts": 150},
+               {"trip_id": "brez", "vehicle_id": None, "seen_ts": 90},
+               {"trip_id": "a", "vehicle_id": "W", "seen_ts": 90},
+               {"trip_id": "b", "vehicle_id": "W", "seen_ts": 90}]
+    assert [d["trip_id"] for d in api._novejsa_lega(vrstice)] == ["nova", "brez", "a", "b"]
+
+
+def test_koncana_voznja_ne_dobi_ur_naslednje(monkeypatch):
+    """Eta LPP gre po vozilu: vozilo, ki že vozi naslednjo vožnjo, končani
+    prinese njene ure."""
+    c = _baza()
+    zdaj = datetime(2026, 10, 30, 10, 45, tzinfo=stats.TZ)
+    ts = int(zdaj.timestamp())
+    c.execute("INSERT INTO vehicle_now(trip_id, seen_ts, lat, lon, vehicle_id) "
+              "VALUES(?,?,0,0,'V')", (TRIP, ts - 90))
+    c.execute("INSERT INTO vehicle_now(trip_id, seen_ts, lat, lon, vehicle_id) "
+              "VALUES('naslednja',?,0,0,'V')", (ts - 5,))
+    monkeypatch.setattr(api.lpp, "eta_po_postankih", lambda *a: {2: 4})
+    vrstice = [{"stop_seq": 2, "sched_arr": zdaj.isoformat(), "sched_dep": None}]
+    assert api._lpp_zivo(c, TRIP, vrstice, DAN, 1, zdaj) is None
+    assert "zamuda" not in vrstice[0]
+    c.execute("DELETE FROM vehicle_now WHERE trip_id = 'naslednja'")
+    assert api._lpp_zivo(c, TRIP, vrstice, DAN, 1, zdaj) == "LPP"
+    assert vrstice[0]["eta_min"] == 4
