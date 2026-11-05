@@ -3580,3 +3580,61 @@ Po deležu odseka je profil enakomeren (MAE 1,74 na začetku, 1,19–1,35 naprej
 Nočni račun enega dne na arwenu 20 s (2,3 s seznam 1 743 voženj z dolgim odsekom), 124 odsekov. Senca v `ocena.snapshot` od 4. 11.; prikaz nespremenjen.
 
 **Zgodovina se pretrga na meji veljavnosti.** 3. 11. je med 8 450 vožnjami NAP s prehodi 274 novih (3,2 %; Nomago 171, Arriva 103) brez vezi na staro: ne lastne zgodovine ne `prednik`; 245 ima nagrobnik z isto šifro in smerjo. Kandidat za vzrok, ne potrjen: `gtfs.povezi_zamenjave` hoče skupen dan, `_vozje_za` izloči vožnjo brez dni od danes naprej, staro pa novi zip vrže šele, ko se ji veljavnost izteče. Vsaka taka vožnja začne z ničle in si opomore v tednih. Isti primer bi bila menjava SŽ 13. 12. (stari do 12. 12., novi od 13. 12.), tam za vse vlake (`KOLEDAR.md`).
+
+## Opazovano: prvi preizkus v živo, zapora Vrbanske (5. 11. 2026)
+
+Izid se je odprl, kot je zasnovano: nočni račun 5. 11. ob 3.41, šest vrstic P7 `ne_ustavi`, `pravi`, s potjo vozil. Zapora se v podatkih začne 3. 11. med 14.03 (zadnji prehod Mitnice) in 14.46 (prvi dokaz), trditev pride 37 h pozneje. Zajela pa je le tretjino: 75 od 220 parov vožnja–postanek na delavnik.
+
+Resnica iz prehodov, ne iz pravila: prehodi / vožnje po voznem redu, vse smeri P7.
+
+| postanek | smer | 2. 11. | 4. 11. | 5. 11. | najbližja točka 4.–5. 11. | odprto 5. 11. |
+|---|---|---|---|---|---|---|
+| Gosposvetska – Kosarjeva `mp-93` | ven | 22/22 | 0/22 | 2/22 | 102–121 m | ne |
+| Mitnica `mp-393` | ven | 22/22 | 0/22 | 0/22 | 411–465 m | da |
+| Kamniški drevored `mp-396` | ven | 22/22 | 0/22 | 0/22 | 569–580 m | da |
+| Kamnica – hipodrom `mp-106` | ven | 22/22 | 0/22 | 0/22 | 556–576 m | da |
+| Kamnica – šola `mp-111` | ven | 21/22 | 0/22 | 0/22 | 153–173 m | ne |
+| Kamnica – šola `mp-112` | nazaj | 21/22 | 0/22 | 0/22 | 280–311 m | da |
+| Kamnica – hipodrom `mp-105` | nazaj | 21/22 | 0/22 | 0/22 | 574–592 m | da |
+| Kamniški drevored `mp-395` | nazaj | 21/22 | 0/22 | 0/22 | 576–590 m | da |
+| Mitnica `mp-394` | nazaj | 21/22 | 0/22 | 0/22 | 215–452 m | ne |
+| Gosposvetska – Kosarjeva `mp-92` | nazaj | 21/22 | 0/22 | 3/22 | 89–169 m | ne |
+
+Ostali postanki P7 so pri 18–22 od 22, vožnje torej vozijo in lega je dobra. Kamnica `mp-110` ostane obiskana (nazaj 11–12 od 14). Uradnega obvestila Marproma spletno iskanje ni našlo, zato je to, kar je zaprto, izmerjeno, ne prebrano.
+
+Vzroki so trije in ločeni:
+
+1. **Siva cona, popravljeno.** Izid „prišlo“ je veljal za vsako najbližjo točko pod `PRAG_M` (250 m), prehod pa zahteva 100 m (`prehod.POLMER_M`). Pri `mp-394` je obvoz na robu praga (mediana ~250 m), izidi se mešajo, ≥ 5 od zadnjih 10 „pride“ in stanje se ne odpre, čeprav prehoda od 3. 11. ni. Isto je razgradilo Focheva: tri vožnje 4. 11. ob 11.30–13.10 na 208–223 m (sicer 303–337 m) so po ~320 dokazih dale `redko`, ne `ne_ustavi`, in bi to ostalo do 25. 11.: `prej` ima zdaj večino dokazov, pot začetka zapore je zaprta, stari prihodi pa ostanejo v oknu. Potnik je spet videl odhode, črta obvoza je izginila.
+2. **Obvoz bliže od praga, ostane.** `mp-92`, `mp-93` (~110–123 m) in `mp-111` (~161 m). Vozilo pelje blok stran, lahko je tam začasno postajališče; 250 m je zavestna meja (Prlek na G3, 131 m). Trditve ne gradimo na tem.
+3. **Različice smeri, odprto.** Vožnje `Kamnica` (8 + 8) in `Rošpoh` (1 + 2), 19 od 44 voženj P7 na delavnik, nimajo svojih izidov: Kamnica je končna za zaporo, prehod končne je tudi prej redek (2–3 od 8), zato vožnja ni obkrožena; ključ ima smer, zato se stanje `Morski jarek` nanje ne prenese. Od 3. 11. popoldne imajo na teh postankih 0 prehodov. Stran Mitnice zato reče „teh odhodov spodaj ni“ in spodaj pokaže P7 proti Kamnici.
+
+**Popravek sive cone.** `opazovano.BLIZU_M` = `prehod.POLMER_M`: `_osvezi` bere prihod brez prehoda le do 100 m, izid med 100 in 250 m ostane zapisan in stanja ne premakne. Izidov 46 510 na 1 409 ključih: 37 906 prehodov, 54 pod 100 m, 1 028 med 100 in 250 m, 7 522 nad 250 m. Ponovitev `presodi` na vseh izidih okna spremeni 6 ključev, vsi v isto smer:
+
+| ključ | prej | zdaj | dokazov | prehodov | sivih | prikaz |
+|---|---|---|---|---|---|---|
+| G2 Focheva `mp-168` | `redko` | `ne_ustavi` | 319 | 0 | 2 | da, `pravi` |
+| G2 Focheva `mp-169` | `redko` | `ne_ustavi` | 325 | 0 | 1 | da, `pravi` |
+| A6393 Naklo/Kr. | `redko` | `ne_ustavi` | 25 | 0 | 1 | da, `pravi` (A6227 na istem postajališču je že `ne_ustavi`) |
+| A2285 Ormož bolnica | `redko` | `ne_ustavi` | 221 | 0 | 2 | da, ročno preverjen primer |
+| N0793 Nova Cerkev/Dobrni | nič | `redko` | 13 | 5 | 37 | ne, brez OSM |
+| A8516 Kazlje | zaprto | `ne_ustavi` | 10 | 0 | 7 | ne, brez OSM |
+
+Novih dokazov pravilo ne ustvari, samo vzame prihode, ki to niso bili, zato je ponovitev popolna. `mp-394` ima 12 dokazov do 5. 11. in se po računu odpre 6. 11. Preverba 6. 11. je v `KOLEDAR.md`.
+
+**Sorodne vožnje, meritev za naslednji korak.** Od 110 vrstic za prikaz jih ima 25 vožnje iste linije z drugo smerjo in istima sosednjima postankoma. Te se obnašajo različno: 10 vrstic ima prehode pri 44–100 % sorodnih voženj (krak tja in nazaj, A2221, A8398, N0655), 3 pri 2–5 %, 12 pri nič (šest je P7). Prenos stanja na sorodne zato ne sme biti brezpogojen, račun pa čez vse vrstice traja 30 s, zato sodi v nočni račun, ne v `_pari`.
+
+## Dolgi odseki: prvi nočni račun in prvi dan sence (5. 11. 2026)
+
+Nočni račun 3.41.15–3.42.52: 97 s za 14 dni, napak ni, vrstica `nocno` zelena, `odsek_do` = 4. 11. `odsek_profil` 10 423 vrstic, 22. 10.–4. 11.: 21. 10. je `lega` že zbrisala. Dnevi do 1. 11. so tanki (10–668 vrstic), 2.–4. 11. ~2 000. Odsekov 144, profil velja na 132 (2 146 košev z ≥ 3 dnevi).
+
+Senca piše od prvega računa naprej: 5. 11. do 21.00 je 410 vrstic `profil` in 18 `razdalja`, 417 razrešenih. Ocena teče na vsaki peti vožnji (`OCENA_BUS_VZOREC`), zato ~420 vrstic na delavnik, do 11. 11. okoli 2 500; razreza po AP MS in odsekih ≥ 45 min to morda ne bo neslo.
+
+| 400 vrstic, 95 voženj, blok DOLG ODSEK | MAE | v 2 min | podcenj. | precenj. | odklon | strošek |
+|---|---|---|---|---|---|---|
+| naša ocena | 1,97 | 68,5 % | 5,8 % | 5,2 % | −0,10 | 7,32 |
+| iz lege | 2,16 | 70,5 % | 10,0 % | 2,2 % | −0,68 | 6,66 |
+| prenos zamude | 4,64 | 25,0 % | 21,0 % | 13,2 % | −0,78 | 11,34 |
+
+En dan ni odločitev (11. 11.), kaže pa, da je referenca naša ocena, ne prenos: `ponovitev.py` je 3,27 → 1,35 primerjal s prenosom, naša ocena pa rezervo odseka že pozna. Iz lege je bližje trenutku, a podcenjuje dvakrat pogosteje.
+
+Cena na arwenu, `ocena.snapshot` na bazi samo za branje ob 21.10 (122 pogledanih, 26 klicev `odsek.ocena`): 1,55 s z odsekom, 1,50 s brez, prvi klic po zagonu 404 ms, nato ~0. Vrstica `zanka` zelena, od objave 4. 11. nobene „ocene napovedi ni bilo mogoče posneti“, „database is locked“ samo 5-krat ob uvozu 4.24.

@@ -15,9 +15,10 @@ from kajros import db, opazovano, stats, straza
 ZACETEK = date(2026, 10, 1)
 #: Postanek brez prehoda je `seq` 3, postajališče P2.
 LAT, LON = 46.0, 14.02
-#: Vozilo tako daleč od P2 (stopinje širine): 1,1 km in 150 m.
+#: Vozilo tako daleč od P2 (stopinje širine): 1,1 km, 150 m (siva cona) in 67 m.
 DALEC = 0.01
-BLIZU = 0.00135
+SIVO = 0.00135
+BLIZU = 0.0006
 
 
 def _dan(i: int) -> str:
@@ -140,6 +141,27 @@ def test_blizu_steje_kot_prislo(conn):
     _racunaj(conn, 2)
     v, = _vrstice(conn)
     assert v["stanje"] == "redko" and v["prislo"] == 1
+
+
+def test_siva_cona_stanja_ne_premakne(conn):
+    """Focheva: ena vožnja na 212 m po 319 dokazih ni prihod. Izid ostane zapisan."""
+    _dokazi(conn)
+    _voznja(conn, _dan(2), 8, odmik=SIVO)
+    _racunaj(conn, 2)
+    v, = _vrstice(conn)
+    assert v["stanje"] == "ne_ustavi" and v["prislo"] == 0 and v["dokazov"] == 10
+    assert (8 * 3600, 0) in _izidi(conn)
+
+
+def test_siva_cona_ne_ustavi_odpiranja(conn):
+    """Mitnica: obvoz pelje 215--280 m stran, izidi se mešajo, prehoda pa ni."""
+    for dan in (0, 1):
+        for i in range(10):
+            _voznja(conn, _dan(dan), 7 + i / 2, trip_id=f"T{i}",
+                    odmik=DALEC if i % 2 else SIVO)
+    _racunaj(conn, 1)
+    v, = _vrstice(conn)
+    assert v["stanje"] == "ne_ustavi" and v["dokazov"] == 10 and v["prislo"] == 0
 
 
 def test_vozilo_z_manj_kot_pol_postankov_ne_dokaze(conn):

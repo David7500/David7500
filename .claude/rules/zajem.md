@@ -102,6 +102,7 @@ Nočni račun iz `lega` in `gps_prehod`, po dnevih, za vse prevoznike isto (`doc
 
 * **Izid po vožnji** (`opazovano_izid`, ključ + `start_s`, 21 dni), ne niz: 22 od 131 ključev je niz odpiral znova. A6227 Naklo: vožnja ob 5.50 pride, ostalih 11 nikoli, ista trasa. `start_s`, ker `trip_id` zamenja uvoz.
 * **Dokaz**: obkrožena vožnja, brez luknje v sledi, ≥ 250 m, vozilo prevozilo ≥ pol postankov.
+* **Prihod**: prehod ali < 100 m (`BLIZU_M` = `prehod.POLMER_M`). 100–250 m = siva cona: izid zapisan, stanja ne premakne. Kot prihod so tri vožnje na ~210 m spremenile Focheva v `redko` po ~320 dokazih, Mitnica `mp-394` se ni odprla (5. 11. 2026).
 * **`presodi` = edino pravilo**: `ne_ustavi` (10 dokazov, 24 h; nekatere vožnje so lahko izjema), `redko` (pridejo tu in tam), nič (≥ 5 od zadnjih 10 pride).
 * **Dve obliki v resnici**: druga cesta (Focheva, Polica po avtocesti) in krak, ki ga vozilo izpusti (Artiče; prehoda pred in za ob isti uri).
 * Neodvisen dokaz `oznaka`: OSM isto ime ali druge linije; OSM z drugim imenom **ni** potrditev. Brez tega prikaz vrstice ne vidi.

@@ -10,7 +10,8 @@ Vsako noč, po dnevih (`docs/MERITVE.md`, „Opazovano, del 3“):
 * **Izid** vožnje na postanku (`opazovano_izid`): `mimo` = obkrožena vožnja (prehod
   pred postankom in za njim) brez prehoda, v sledi ni luknje, najbližja točka vsaj
   `PRAG_M` od postajališča, vozilo pa je prevozilo vsaj `DELEZ_POSTANKOV` postankov;
-  `prišlo` = prehod ali najbližja točka bliže od `PRAG_M`; drugače nič.
+  `prišlo` = prehod ali najbližja točka bliže od `PRAG_M`; drugače nič. Stanje bere
+  prihod brez prehoda le do `BLIZU_M`: siva cona do `PRAG_M` ostane zapisana, ne šteje.
 * **Stanje** ključa (`presodi`) iz izidov zadnjih `OKNO_DNI`, ne iz niza, ki ga en
   prehod pretrga: niz je 22 od 131 ključev odpiral in zapiral znova (Idrija Likerca
   petkrat v 13 dneh), en sam prehod pa ni povedal, ali postajališče spet deluje.
@@ -39,11 +40,15 @@ from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
-from . import config, db, geo, pripni, stats
+from . import config, db, geo, prehod, pripni, stats
 from .naslovi import fold
 from .straza import TZ, ZACETEK_DNE_S
 
 PRAG_M = 250            # DMIN 400 zgreši Focheva (315 in 328 m), 150 doda 3 napačne
+#: Do sem je vozilo pri postajališču tudi brez prehoda. Med tem in `PRAG_M` ne ve nihče:
+#: obvoz zgolj pelje blizu. Kot prihod so tri vožnje na 208--223 m (4. 11. 2026) Focheva
+#: po ~320 dokazih spremenile v `redko`, Mitnica (obvoz 215--280 m) pa se ni odprla.
+BLIZU_M = prehod.POLMER_M
 #: Vozilo, ki je prevozilo manj postankov vožnje, je ne vozi po objavljenem ali pa
 #: ni ta vožnja (N6217: 36 %): o enem postanku tako ne pove nič.
 DELEZ_POSTANKOV = 0.5
@@ -268,7 +273,8 @@ def _osvezi(conn: sqlite3.Connection, kljuci: set, zdaj: int) -> None:
     for k in kljuci | odprte.keys():
         vse = conn.execute(
             "SELECT ts, start_s, mimo, dmin_m, lat, lon FROM opazovano_izid WHERE prevoznik = ? "
-            "AND linija = ? AND smer = ? AND stop_id = ? ORDER BY ts", k).fetchall()
+            "AND linija = ? AND smer = ? AND stop_id = ? "
+            "AND (mimo = 1 OR dmin_m IS NULL OR dmin_m < ?) ORDER BY ts", (*k, BLIZU_M)).fetchall()
         s = presodi([tuple(x[:3]) for x in vse], zdaj) if vse else None
         prvi = odprte.get(k)
         if s is None:

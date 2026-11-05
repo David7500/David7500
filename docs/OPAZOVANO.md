@@ -126,7 +126,9 @@ Vsak korak v svojem commitu, s številkami pred in po, za vse prevoznike.
 
 * Pripis: priklop samo za Marprom, najprej brez zamude, po ponovitvi meritve na jutranji konici in ob koncu tedna (vzorec je en petek popoldne).
 * `marprom.razresi` je 3 vozilom v 4 h dal vožnjo 31–90 min naprej, obvisi do `PREVERI_S`. Vzrok ni dokazan.
-* Vrbanska od 3. 11. (P7): prvi preizkus v živo, po zasnovi vidno 5. 11. ob 3.30. Preveri, ali se odpre, in kako hitro se zapre 26. 11.
+* Vrbanska od 3. 11. (P7): odprlo se je 5. 11. ob 3.41, 37 h po začetku, 6 od 10 postankov in tretjina parov (`docs/MERITVE.md`, „prvi preizkus v živo“). Kako hitro se zapre, pove 26. 11.
+* Ista zapora, druga smer iste linije (P7 `Kamnica`, `Rošpoh`): vožnja s končno za zaporo ni obkrožena, ključ ima smer, zato stanje nanje ne pride. Prenos samo z vrati (brez prehoda od začetka), račun ponoči. Rok v `KOLEDAR.md`.
+* Obvoz, ki pelje bliže od `PRAG_M` (Gosposvetska – Kosarjeva 110 m, Prlek 131 m): ne trdimo, lahko je tam začasno postajališče.
 * Krak „po potrebi“ (Artiče, Medribnik, Zavrh): iz leg ni mogoče vedeti, ali vozilo pride, če kdo čaka. Besedilo tega ne trdi; če potnik sporoči drugače, je to dokaz, da pravilo tu ne velja.
 * Začetek zapore se pozna z dnevom zamude, ker je račun nočni. Računati sproti bi skrajšalo zamudo za največ dan.
 * Posnetek OSM (`scripts/osm_postajalisca.py`) se ne osvežuje sam.
