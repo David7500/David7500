@@ -3616,10 +3616,10 @@ Vzroki so trije in ločeni:
 | G2 Focheva `mp-169` | `redko` | `ne_ustavi` | 325 | 0 | 1 | da, `pravi` |
 | A6393 Naklo/Kr. | `redko` | `ne_ustavi` | 25 | 0 | 1 | da, `pravi` (A6227 na istem postajališču je že `ne_ustavi`) |
 | A2285 Ormož bolnica | `redko` | `ne_ustavi` | 221 | 0 | 2 | da, ročno preverjen primer |
-| N0793 Nova Cerkev/Dobrni | nič | `redko` | 13 | 5 | 37 | ne, brez OSM |
+| N0793 Nova Cerkev/Dobrni | nič | `redko` | 13 | 5 | 37 | da, `pravi` po drugih linijah; odhod ostane, opomba drži (5 od 55) |
 | A8516 Kazlje | zaprto | `ne_ustavi` | 10 | 0 | 7 | ne, brez OSM |
 
-Novih dokazov pravilo ne ustvari, samo vzame prihode, ki to niso bili, zato je ponovitev popolna. `mp-394` ima 12 dokazov do 5. 11. in se po računu odpre 6. 11. Preverba 6. 11. je v `KOLEDAR.md`.
+Novih dokazov pravilo ne ustvari, samo vzame prihode, ki to niso bili, zato je ponovitev popolna. Ista koda v senci na arwenu do 5. 11. da Focheva `ne_ustavi` (358 in 369 dokazov, 0 prihodov). `mp-394` ima do 5. 11. 9 dokazov (2, 3, 4 na dan, ostalo je sivo), rabi 10: odpre se v računu 7. 11. Preverba je v `KOLEDAR.md`.
 
 **Sorodne vožnje, meritev za naslednji korak.** Od 110 vrstic za prikaz jih ima 25 vožnje iste linije z drugo smerjo in istima sosednjima postankoma. Te se obnašajo različno: 10 vrstic ima prehode pri 44–100 % sorodnih voženj (krak tja in nazaj, A2221, A8398, N0655), 3 pri 2–5 %, 12 pri nič (šest je P7). Prenos stanja na sorodne zato ne sme biti brezpogojen, račun pa čez vse vrstice traja 30 s, zato sodi v nočni račun, ne v `_pari`.
 
