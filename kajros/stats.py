@@ -1639,6 +1639,44 @@ def _omejen_ostanek(ostanek: float, current_delay_s: int,
     return max(-meja, min(meja, ostanek))
 
 
+#: Varna napoved (6. 11. 2026, `docs/presoja/vlaki-prenova/modeli.md`): kvantil
+#: 0,25 ostanka namesto mediane, razred skrčen proti vsem dnevem z utežjo
+#: n/(n+N0_VARNA). Precenjenih 0,3 % proti 1,5 %, strošek 7,12 proti 7,30, MAE
+#: 2,23 proti 2,05. V prikazu je ni: čaka na senco (`napoved.varna_s`).
+KVANTIL_VARNE = 0.25
+N0_VARNA = 4
+
+
+def kvantil(urejen: list, q: float) -> float:
+    """Kvantil z linearno interpolacijo na urejenem seznamu."""
+    if len(urejen) == 1:
+        return urejen[0]
+    x = q * (len(urejen) - 1)
+    lo = int(x)
+    hi = min(lo + 1, len(urejen) - 1)
+    return urejen[lo] + (urejen[hi] - urejen[lo]) * (x - lo)
+
+
+def varni_ostanek(raz: list, sku: list, d_od: int, network: str | None,
+                  omeji_s: int | None = None, omeji_delez: float | None = None,
+                  q: float = KVANTIL_VARNE) -> int | None:
+    """Ostanek varne napovedi iz ostankov razreda (`raz`) in vseh (`sku`).
+
+    ENA funkcija za `backtest._varna_q` in `predict`: kar merimo, mora biti
+    kar strežemo (isti prag, ista meja ostanka). None = brez zgodovine, ostane
+    samo rezerva voznega reda.
+    """
+    if not sku:
+        return None
+    qs = kvantil(sorted(sku), q)
+    if raz:
+        n = len(raz)
+        qs = (n * kvantil(sorted(raz), q) + N0_VARNA * qs) / (n + N0_VARNA)
+    if (len(raz) or len(sku)) >= OSTANEK_BREZ_MEJE_DNI.get(network, math.inf):
+        return round(qs)
+    return round(_omejen_ostanek(qs, d_od, omeji_s, omeji_delez))
+
+
 def odhod_z_izhodisca(delay_s: int, stop_seq: int, izhodisce: int | None) -> int:
     """Prezgodnji odhod z izhodišča ni odhod: šteje kot točen.
 
@@ -1756,18 +1794,35 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
         for dan, m in meritve.items():
             ohranjeni = ocisti_dan(m, dwell, dan)[0]
             by_day[dan] = {seq: d for seq, d in by_day[dan].items() if seq in ohranjeni}
+    pari_spomin: dict[tuple, tuple[list, list]] = {}
+
+    def razredi(seq: int, od: int, d_od: int, rezerva: int):
+        """Ostanki (podobni razred, vsi) -- skupni nasi in varni napovedi."""
+        k = (seq, od, d_od, rezerva)
+        if k not in pari_spomin:
+            pari = [(day[od], day[seq] - _after_slack(day[od], rezerva))
+                    for day in by_day.values()
+                    if od in day and seq in day]
+            razred = delay_bucket(d_od)
+            pari_spomin[k] = ([r for d0, r in pari if delay_bucket(d0) == razred],
+                              [r for _, r in pari])
+        return pari_spomin[k]
+
+    def varna(seq: int, rezerva: int) -> int:
+        """Varna napoved od zadnjega izmerjenega postanka (prevoznika ne
+        jemlje, sidro se ne premika): rezerva + `varni_ostanek`."""
+        podobni, vsi = razredi(seq, stop_seq, current_delay_s, rezerva)
+        o = varni_ostanek(podobni, vsi, current_delay_s, network, omeji_s, omeji_delez)
+        return _after_slack(current_delay_s, rezerva) + (o or 0)
+
     def model(seq: int, od: int, d_od: int, rezerva: int):
         """Rezerva + historicni ostanek od postanka `od` z zamudo `d_od` do `seq`."""
         osnova = _after_slack(d_od, rezerva)
         # Ostanek: kar se je zgodilo POLEG rezerve -- zamude, ki nastanejo, in
         # rezerva, ki je v resnici ni bilo. Loceno po razredu zamude, ker
         # postanek vlaku z 11 minutami vzame dve, tocnemu pa nic.
-        pari = [(day[od], day[seq] - _after_slack(day[od], rezerva))
-                for day in by_day.values()
-                if od in day and seq in day]
-        razred = delay_bucket(d_od)
-        podobni = [r for d0, r in pari if delay_bucket(d0) == razred]
-        ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else [r for _, r in pari]
+        podobni, vsi = razredi(seq, od, d_od, rezerva)
+        ostanki = podobni if len(podobni) >= MIN_PREDICT_SAMPLES else vsi
         # Mediana iz enega dneva ni mediana, zato meja (`_omejen_ostanek`) --
         # a pri avtobusih samo, dokler dni ni dovolj (`OSTANEK_BREZ_MEJE_DNI`).
         ostanek = statistics.median(ostanki) if ostanki else 0
@@ -1818,6 +1873,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             "from_operator": prevoznik is not None and prevoznik > nasa,
             "od_prevoznika": names[sidro] if sidro != stop_seq else None,
             "predicted_delay_s": napoved,
+            # Senca (`ocena.snapshot`); prikaz je ne bere. Samo železnica.
+            "varna_delay_s": varna(seq, slack) if network == "zeleznica" else None,
             "p90_delay_s": (max(napoved, _with_operator(osnova + round(_pct(ostanki, 0.9)),
                                                         prevoznik, network, agency))
                             if ostanki else None),

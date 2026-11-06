@@ -103,6 +103,12 @@ Na `KAJROS_OCENA_SECONDS` (120 s) v `napoved`: kaj bi prikaz povedal **25 min pr
 * **Nevarna smer = PRECENITEV** (vozilo odpelje pred nosom; 2 318 zamujenih po `_strosek`, nobeden iz podcenitve).
 * `OCENA_KEEP_DAYS` 30.
 
+## Varna napoved v senci (`stats.varni_ostanek`, od 6. 11. 2026)
+
+`predict` vrne poleg `predicted_delay_s` še `varna_delay_s`, `ocena.snapshot` jo piše v `napoved.varna_s`, `kajros ocena` jo kaže kot „varna (senca)“. Kvantil 0,25 skrčenega ostanka (n0 = 4), prevoznika ne jemlje, sidro se ne premakne, samo železnica (avtobus None); pred odhodom = 0 (vozni red). Backtest (`varna_q 0,25`) in `predict` kličeta **isto funkcijo** (prag, meja ostanka). Backtest: precenj. 0,3 % proti 1,5 %, strošek 7,12 proti 7,30, MAE 2,23 proti 2,05 (`docs/presoja/vlaki-prenova/modeli.md`).
+* **Merilo za prikaz**: na senci precenj. IN strošek nižja od naše ocene, MAE ne slabši od prenosa. Prikaz je ne bere, dokler ni izpolnjeno.
+* Stare vrstice `varna_s` NULL se ne štejejo; `n` v vrstici pove, na koliko.
+
 ## Dolg odsek: zamuda iz lege (`odsek.py`, senca od 4. 11. 2026)
 
 Odsek NAP ≥ 15 min po voznem redu: okno kaže zadnjo meritev, avtobus pa porabi rezervo. Ocena zamude na **naslednjem** postanku, `ocena.snapshot` jo piše v `lega_s`, `ours_lega_s`, `lega_vir`; prikaz je ne bere.

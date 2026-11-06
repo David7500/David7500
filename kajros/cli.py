@@ -206,7 +206,8 @@ def cmd_ocena(args):
               " dobro uro.")
         return
 
-    modeli = (("naša ocena", "nasa"), ("naša brez prevoznika", "nasa_brez_prevoznika"),
+    modeli = (("naša ocena", "nasa"), ("varna (senca)", "varna"),
+              ("naša brez prevoznika", "nasa_brez_prevoznika"),
               ("prevoznik", "prevoznik"), ("prenos zamude", "prenos"))
 
     def blok(naslov, x):
@@ -249,8 +250,8 @@ def cmd_ocena(args):
               f" (brez običajnega {x['brez_obicajnega']} %)")
         print(f"{'model':24s}{'MAE':>10}{'v 5 min':>10}"
               f"{'podcenj.':>10}{'precenj.':>10}{'odklon':>10}{'strošek':>10}{'n':>8}")
-        for ime, kljuc in (("prikaz", "prikaz"), ("običajno", "obicajno"),
-                           ("vozni red", "vozni_red")):
+        for ime, kljuc in (("prikaz", "prikaz"), ("varna (senca)", "varna"),
+                           ("običajno", "obicajno"), ("vozni red", "vozni_red")):
             print(_vrstica_modela(ime, x[kljuc]))
         print("  kjer ima prevoznik vrednost:")
         for ime, kljuc in (("prikaz", "prikaz_kjer_prevoznik"), ("prevoznik", "prevoznik")):

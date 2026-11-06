@@ -559,8 +559,8 @@ MODELS = {
 # tistega dne, je izid isti (`test_varni_modeli_izpuscajo_dan`).
 
 #: Utez krcenja razreda proti vsem dnem: n/(n+n0). Izmerjeno v modeli.md.
+#: Za varno napoved je n0 v `stats.N0_VARNA`.
 N0_SKRCEN = (2, 4)
-N0_VARNA = 4
 
 
 class _Ostanki:
@@ -596,16 +596,6 @@ def _zdaj(t):
 
 def _brez_dne(seznam, dan):
     return [o for d, o in seznam if d != dan] if seznam else []
-
-
-def _kvantil(urejen: list, q: float) -> float:
-    """Kvantil z linearno interpolacijo na urejenem seznamu."""
-    if len(urejen) == 1:
-        return urejen[0]
-    x = q * (len(urejen) - 1)
-    lo = int(x)
-    hi = min(lo + 1, len(urejen) - 1)
-    return urejen[lo] + (urejen[hi] - urejen[lo]) * (x - lo)
 
 
 def _model_ostanka(odlocitev):
@@ -658,13 +648,9 @@ def _varna_min(t, d_i, osnova, raz, sku):
 
 def _varna_q(q):
     def odlocitev(t, d_i, osnova, raz, sku):
-        if not sku:
-            return osnova
-        qs = _kvantil(sorted(sku), q)
-        if raz:
-            n = len(raz)
-            qs = (n * _kvantil(sorted(raz), q) + N0_VARNA * qs) / (n + N0_VARNA)
-        return osnova + _s_mejo(t, d_i, qs, len(raz) or len(sku))
+        # Ista funkcija kot v `stats.predict` (senca `napoved.varna_s`).
+        o = stats.varni_ostanek(raz, sku, d_i, t["network"], q=q)
+        return osnova if o is None else osnova + o
     return odlocitev
 
 

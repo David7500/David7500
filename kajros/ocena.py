@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS napoved (
     lega_s       INTEGER,            -- senca `odsek.py`: zamuda na naslednjem postanku iz lege
     ours_lega_s  INTEGER,            -- kar bi pokazal prikaz, če bi veljala lega
     lega_vir     TEXT,               -- profil ali razdalja
+    varna_s      INTEGER,            -- senca varne napovedi (`stats.varni_ostanek`), samo železnica
     PRIMARY KEY (trip_id, service_date, stop_seq)
 );
 CREATE INDEX IF NOT EXISTS napoved_nerazrezena
@@ -93,6 +94,8 @@ def init(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE napoved ADD COLUMN lega_s INTEGER")
         conn.execute("ALTER TABLE napoved ADD COLUMN ours_lega_s INTEGER")
         conn.execute("ALTER TABLE napoved ADD COLUMN lega_vir TEXT")
+    if "varna_s" not in stolpci:
+        conn.execute("ALTER TABLE napoved ADD COLUMN varna_s INTEGER")
     conn.commit()
 
 
@@ -223,10 +226,13 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                         obicajno = round(o["median_s"]) if o else None
                         z, _ = stats.pred_odhodom(obicajno, feed.get(seq), network,
                                                   po_id[trip_id]["agency"])
+                        # Varna pred odhodom = vozni red (0): ni meritve, iz
+                        # katere bi ostanek računali. Samo železnica.
                         pred_odhodom.append(
                             (trip_id, day, seq, network, made_ts, t["t_s"] - now_s,
                              z if z is not None else obicajno, obicajno,
-                             o["n"] if o else None, feed.get(seq)))
+                             o["n"] if o else None, feed.get(seq),
+                             0 if network == "zeleznica" else None))
                         pogledanih += 1
                     continue
 
@@ -261,21 +267,22 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                          p["n_samples"] if p else None,
                          feed.get(seq), trenutna,
                          lega["zamuda_s"] if lega else None, iz_lege.get(seq),
-                         lega["vir"] if lega else None))
+                         lega["vir"] if lega else None,
+                         p.get("varna_delay_s") if p else None))
                     pogledanih += 1
 
     if pred_odhodom:
         zapisano += conn.executemany(
             "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
             " network, made_ts, horizon_s, ours_s, ours_own_s, ours_samples,"
-            " operator_s) VALUES(?,?,?,?,?,?,?,?,?,?)", pred_odhodom).rowcount
+            " operator_s, varna_s) VALUES(?,?,?,?,?,?,?,?,?,?,?)", pred_odhodom).rowcount
     if na_poti:
         zapisano += conn.executemany(
             "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
             " network, made_ts, horizon_s, current_s, from_seq, ours_s,"
             " ours_own_s, ours_samples, operator_s, carry_s,"
-            " lega_s, ours_lega_s, lega_vir)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
+            " lega_s, ours_lega_s, lega_vir, varna_s)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
     conn.commit()
     return {"pogledanih": pogledanih, "zapisanih": zapisano,
             "brez_meritve": brez_meritve}
@@ -476,6 +483,10 @@ def report(conn: sqlite3.Connection, days: int = 30,
                                    if r["operator_s"] is not None], omrezje),
             "prenos": _meritve([(r["carry_s"], r["actual_s"]) for r in rows
                                 if r["carry_s"] is not None], omrezje),
+            # Varna napoved (senca, samo železnica; stare vrstice NULL se ne
+            # štejejo -- `n` pove, na koliko jih je).
+            "varna": _meritve([(r["varna_s"], r["actual_s"]) for r in rows
+                               if r["varna_s"] is not None], omrezje),
             # Nasa vrednost BREZ pravila "prevoznik ve vec" (`_with_operator`).
             # Pravilo je izmerjeno na zgodovini; tu se vidi, ali drzi tudi v
             # potnikovem oknu, kjer je horizont krajsi.
@@ -498,6 +509,8 @@ def report(conn: sqlite3.Connection, days: int = 30,
                                       omrezje),
                 "prenos": _meritve([(r["carry_s"], r["actual_s"]) for r in parne
                                     if r["carry_s"] is not None], omrezje),
+                "varna": _meritve([(r["varna_s"], r["actual_s"]) for r in parne
+                                   if r["varna_s"] is not None], omrezje),
             },
         }
 
@@ -551,6 +564,8 @@ def report(conn: sqlite3.Connection, days: int = 30,
             "prikaz": _meritve([(r["ours_s"], r["actual_s"]) for r in parne], omrezje),
             "obicajno": _meritve([(r["ours_own_s"], r["actual_s"]) for r in parne], omrezje),
             "vozni_red": _meritve([(0, r["actual_s"]) for r in parne], omrezje),
+            "varna": _meritve([(r["varna_s"], r["actual_s"]) for r in parne
+                               if r["varna_s"] is not None], omrezje),
             # Prevoznik le tam, kjer ga ima; prikaz zraven na istih vrsticah.
             "prikaz_kjer_prevoznik": _meritve([(r["ours_s"], r["actual_s"]) for r in s_prev], omrezje),
             "prevoznik": _meritve([(r["operator_s"], r["actual_s"]) for r in s_prev], omrezje),
