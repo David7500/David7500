@@ -358,20 +358,78 @@ def run_detail(conn: sqlite3.Connection, train_no: str, service_date: str,
             d["dwell_samples"] = t["n_samples"]
         d["sched_arr"] = _abs_time(service_date, r["arr_s"])
         d["sched_dep"] = _abs_time(service_date, r["dep_s"])
+        out.append(d)
+    vlak = conn.execute("SELECT mode FROM trip WHERE trip_id = ?", (trip_id,)).fetchone()
+    if vlak and vlak[0] == "vlak":
+        uskladi_ure(out)
+    for d in out:
         # Feed nosi samo zamudo -- dejanski cas je vozni red + zamuda.
-        d["actual_arr"] = _abs_time(service_date, (r["arr_s"] or 0) + r["delay_arr"]) \
-            if r["arr_s"] is not None and r["delay_arr"] is not None else None
-        d["actual_dep"] = _abs_time(service_date, (r["dep_s"] or 0) + r["delay_dep"]) \
-            if r["dep_s"] is not None and r["delay_dep"] is not None else None
+        d["actual_arr"] = _abs_time(service_date, (d["arr_s"] or 0) + d["delay_arr"]) \
+            if d["arr_s"] is not None and d["delay_arr"] is not None else None
+        d["actual_dep"] = _abs_time(service_date, (d["dep_s"] or 0) + d["delay_dep"]) \
+            if d["dep_s"] is not None and d["delay_dep"] is not None else None
         # `COALESCE(delay_dep, delay_arr)` in NE obratno -- `departure.delay`
         # je izpolnjen pri vseh prevoznikih, `arrival.delay` ne. To pravilo je
         # bilo doslej zapisano tudi v `common.stopDelay()`; drugi odjemalec bi
         # ga moral uganiti tretjic. Vrsta se doda spodaj, ko je znana meja.
         d["zamuda"] = opis_zamude(
-            r["delay_dep"] if r["delay_dep"] is not None else r["delay_arr"])
-        out.append(d)
+            d["delay_dep"] if d["delay_dep"] is not None else d["delay_arr"])
     oznaci_neskladne(out)
     return out
+
+
+#: Koliko zamude sme vlak nadoknaditi na poti do naslednjega znanega postanka,
+#: preden je prejšnja vrednost nemogoča (`uskladi_ure`): desetina voznega časa,
+#: najmanj minuta (ločljivost zemljevida SŽ).
+USKLADI_DELEZ = 0.1
+USKLADI_NAJMANJ_S = 60
+
+
+def uskladi_ure(rows: list[dict]) -> None:
+    """Vlak: nobena ura ne gre nazaj. Kjer si nasprotujeta, popusti PREJŠNJI
+    postanek, toliko kot je nujno; spremenjen dobi `uskladeno`.
+
+    Zemljevid SŽ zamudo med dvema registracijama nosi po uri: vmesni postanek
+    dobi staro zamudo, naslednja registracija jo popravi (presoja RG 318:
+    Kresnice = Jevnica = Laze v 49 od 71 dni). Ko je popravek navzdol večji, kot
+    ga vlak na poti zmore, je prejšnji postanek napačen: od 1. 11. do 6. 11.
+    2026 po popravilu zgodovine 3,4 % voženj-dni z uro nazaj ≥ 2 min in 1,8 %
+    s prihodom po odhodu. Novejša beseda je naslednji postanek, zato prejšnji
+    dobi največ zamudo naslednjega + kar se da nadoknaditi na poti
+    (`USKLADI_DELEZ` voznega časa, najmanj `USKLADI_NAJMANJ_S`), prihod pa
+    največ odhod. LPV 2206 6. 11.: Zagorje +15, Sava +3 (8 min vožnje) ->
+    Zagorje +4, vlak je odpeljal +3. Pri avtobusih ostane `oznaci_neskladne`
+    (večina odloči), ker tam nasprotje pogosto povzroči napoved na koncu.
+
+    Samo prikaz: `run` ostane, kot je vir rekel, zato se ob kasnejšem popravku
+    uskladitev sama umakne. Spreminja `rows` na mestu.
+    """
+    nasl = None                  # (voznoredni čas, zamuda) naslednjega znanega dogodka
+
+    def meja(t):
+        if nasl is None or t is None:
+            return None
+        nadoknadi = int(max(0, nasl[0] - t) * USKLADI_DELEZ) // 60 * 60
+        return nasl[1] + max(USKLADI_NAJMANJ_S, nadoknadi)
+
+    for d in reversed(rows):
+        arr_s, dep_s = d.get("arr_s"), d.get("dep_s")
+        da, dd = d.get("delay_arr"), d.get("delay_dep")
+        nda, ndd = da, dd
+        m = meja(dep_s)
+        if ndd is not None and m is not None and ndd > m:
+            ndd = m
+        if nda is not None and arr_s is not None:
+            zg = ndd + (dep_s - arr_s) if ndd is not None and dep_s is not None else meja(arr_s)
+            if zg is not None and nda > zg:
+                nda = zg
+        if (nda, ndd) != (da, dd):
+            d["delay_arr"], d["delay_dep"] = nda, ndd
+            d["uskladeno"] = True
+        if nda is not None and arr_s is not None:
+            nasl = (arr_s, nda)
+        elif ndd is not None and dep_s is not None:
+            nasl = (dep_s, ndd)
 
 
 def _najboljsa_veriga(ure: list[int], teze: list[int]) -> set[int]:
