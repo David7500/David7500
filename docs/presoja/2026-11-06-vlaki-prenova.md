@@ -143,10 +143,13 @@ Po popravilu, od 1. 11.: ura nazaj ≥ 2 min 3,4 % voženj-dni (prej 6,9 %), „
 
 Merjenje modelov ([vlaki-prenova/modeli.md](vlaki-prenova/modeli.md), ce84159, še ni objavljeno): čiščenje zgodovine sedanjega modela ne spremeni (MAE 2,05, strošek 7,30). Sedanji model je torej NATANČNA, skrčenje razreda ne pomaga. VARNA je `varna_q` (rezerva + kvantil 0,25): precenj. 0,3 % proti 1,5 %, strošek 7,12 proti 7,30, MAE 2,23 (prenos 3,01). `varna_strosek` ni varna: nižji strošek je le zamik +1,9 min. Pred odhodom odvisnost od vlaka A komaj pomaga (MAE 5,91 → 5,62, resnica je približek), zato je varna pred odhodom vozni red.
 
-Teče: varna v `predict` in v senci (`napoved.varna_s`), prikaz nespremenjen. Odločitev o prikazu 9. 11. (`KOLEDAR.md`).
+**a04d16d varna v senci** (objava 6. 11. ob 15.27): `predict` vrne `varna_delay_s` (ena funkcija z backtestom, `stats.varni_ostanek`), senca piše `napoved.varna_s`, `kajros ocena` ima vrstico „varna (senca)“. Prvi posnetek ob 15.29: 31 vrstic vlakov, vse z `varna_s`, nobena nad našo oceno; 13 pred odhodom (varna = vozni red). Prikaz nespremenjen. Odločitev o prikazu 9. 11. (`KOLEDAR.md`).
+
+Straža `dosled_vlaki` 6. 11. ob 15.29: 8 od 388 voženj (2,1 %, rumeno), večinoma jutranje pred objavo.
 
 Odprto:
 
 * **„Stal X min“ je lahko napačno pripisan.** SŽ zamudo dviguje, ko je `Postaja` že naslednja, zato povečanje pade v odhod prejšnjega postanka, čeprav je vlak morda obstal na progi. Pravo mesto da tabela zamud SŽ (prometno mesto). Do takrat bi okno lahko reklo „med X in Y izgubil N min“.
 * Usklajena pot iz registracij (točka 2), tabela zamud SŽ v senci, HAFAS teden, odvisnosti v modelu, zahteva po ZJI: roki v `KOLEDAR.md`.
+* Varna ni nujno ≤ natančna (skrčen kvantil razreda lahko preseže mediano majhnega razreda); pred prikazom `min(varna, natančna)`.
 * `ocisti_dan` je pripravljen, v `predict` ni vklopljen (ne spremeni MAE); zgodovina predhodnikov (`_dnevi_prednikov`) ni čiščena.
