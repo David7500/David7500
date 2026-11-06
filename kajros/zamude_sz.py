@@ -638,7 +638,10 @@ _ZEMLJEVID_ODHOD = (
 _ZEMLJEVID_CILJ = (
     "SELECT r.trip_id, r.stop_seq FROM run r JOIN trip t ON t.trip_id = r.trip_id "
     "WHERE r.service_date = ? AND t.network = 'zeleznica' AND t.mode = 'vlak' "
-    "  AND r.stop_seq = t.last_seq AND r.delay_arr IS NOT NULL AND r.delay_dep IS NULL "
+    "  AND r.stop_seq = t.last_seq AND r.delay_arr IS NOT NULL "
+    # Tudi odhod, ki se od prihoda razlikuje: na cilju je to ostanek napovedi
+    # derp.si (LPV 2206 6. 11. 2026: prihod +1, odhod +15).
+    "  AND (r.delay_dep IS NULL OR r.delay_dep != r.delay_arr) "
     "  AND EXISTS (SELECT 1 FROM obs o WHERE o.trip_id = r.trip_id "
     "              AND o.service_date = r.service_date AND o.stop_seq = r.stop_seq "
     "              AND o.delay_arr IS NOT NULL AND o.delay_dep IS NULL)")
