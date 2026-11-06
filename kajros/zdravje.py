@@ -70,6 +70,14 @@ SZ_ZAMRZNJEN_S = 600
 SKLADNOST_RDECE, SKLADNOST_RUMENO = 0.01, 0.003
 SKLADNOST_NAJMANJ = 300
 
+#: Straža doslednosti `run` za vlake (`zamude_sz.dosled`): delež današnjih
+#: voženj z uro nazaj ali prihodom po odhodu >= 2 min. 1.--6. 11. 2026 je bila
+#: ura nazaj pri 6,9 % voženj-dni, „stal >= 10 min“ pri 25,4 % (do 31. 10.
+#: 1,3 % in 2,0 %), ker prihod ni bil iz istega vira kot odhod. Pod
+#: `DOSLED_NAJMANJ` voženj (zjutraj, ponoči) ne sodimo.
+DOSLED_RDECE, DOSLED_RUMENO = 0.05, 0.01
+DOSLED_NAJMANJ = 50
+
 #: Toliko voženj po voznem redu mora teči, da je molk feeda okvara.
 MIN_VOZENJ = 3
 
@@ -254,6 +262,13 @@ def _ura(ts: float) -> str:
     return datetime.fromtimestamp(ts, TZ).strftime("%H:%M")
 
 
+def _dosled(dv: dict) -> str:
+    return (f"{dv.get('nedoslednih', 0)} od {dv.get('voznj', 0)} voženj "
+            f"({100 * dv.get('nedoslednih', 0) / max(dv.get('voznj', 0), 1):.1f} %): ura nazaj "
+            f"{dv.get('ura_nazaj', 0)}, prihod po odhodu {dv.get('prihod_po_odhodu', 0)}: "
+            + ", ".join(dv.get("primeri") or []))
+
+
 def _skladnost(sk: dict, n: int, mimo: int) -> str:
     return (f"prikaz se s SŽ ne ujema pri {100 * mimo / n:.1f} % primerjav "
             f"({mimo} od {n}, {sk.get('vlakov', 0)} vlakov, prenizko {sk.get('prenizko', 0)}, "
@@ -427,6 +442,19 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
             out["skladnost_sz"] = (MLACNA, _skladnost(sk, n, mimo))
         else:
             out["skladnost_sz"] = (DOBRA, "")
+
+    # Doslednost `run` za vlake: ura ne gre nazaj, prihod ni po odhodu. Rdeče
+    # pri 5 %: vsaka dvajseta vožnja kaže nemogoč potek, napaka je v zajemu
+    # (pošta po pol ure, `_POSTA`); rumeno od 1 %.
+    dv = z.get("dosled_vlaki") or {}
+    nv = dv.get("voznj") or 0
+    if nv < DOSLED_NAJMANJ:
+        out["dosled_vlaki"] = ("", "")
+    else:
+        delez = (dv.get("nedoslednih") or 0) / nv
+        out["dosled_vlaki"] = ((SLABA, _dosled(dv)) if delez >= DOSLED_RDECE
+                               else (MLACNA, _dosled(dv)) if delez >= DOSLED_RUMENO
+                               else (DOBRA, ""))
 
     # derp.si po viru. 8. 10. 2026 je od 16:00 zavračal povezave; vrstici
     # zgoraj sta ostali zeleni, kolikor sta `zamude_lpp` in `zamude_sz` pisala
@@ -736,6 +764,7 @@ IMENA = {
     "lega_brez_zamude": "vozila brez zamude",
     "zamude_sz": "zemljevid SŽ",
     "skladnost_sz": "vlaki · prikaz proti SŽ",
+    "dosled_vlaki": "vlaki · doslednost časov",
     "derp_ijpp": "derp.si · IJPP",
     "derp_lpp": "derp.si · mestni LPP",
     "zamude_lpp": "LPP · zasloni postajališč",
@@ -799,6 +828,10 @@ _POSTA: dict[str, tuple[str, int]] = {
     "disk": ("Na arwenu `df -h /var/lib/kajros`; največ prostora vzamejo `promet.sqlite`, "
              "`dosje.sqlite` in varnostne kopije.", 600),
     "wal": ("Prepis WAL v bazo ne teče -- kdo drži star posnetek. " + _RESTART, 600),
+    "dosled_vlaki": ("Vsaka dvajseta današnja vožnja vlaka ima v `run` uro nazaj ali prihod po "
+                     "odhodu (primeri so v vrstici). Napaka je pri nas: zapis zemljevida SŽ ali "
+                     "napoved derp.si v `run` (`zamude_sz.zapisi`, `collector.napoved_vlaka`); "
+                     "stare vrstice popravi `kajros popravi-vlake`. " + CLAUDE, 1800),
     "zanka": ("Glavna zanka zajema (derp.si, obvestila, senca) ne tiktaka, nit pa živi -- "
               "obtičala je v koraku. " + _RESTART, 600),
 }
@@ -837,7 +870,7 @@ _ORANZNO: dict[str, tuple[str, int]] = {
 #: okvara mimo, zato ne pošlje ne „stoji“ ne „spet dela“: obstala nit ob
 #: 23:50 bi sicer ob 0:35 dobila „spet dela“ in ob 4:00 znova „stoji“.
 _PO_VOZNEM_REDU = frozenset({"feed", "zeleznica", "avtobus", "zamude_sz", "zamude_lpp", "nap",
-                             "marprom", "kranj", "skladnost_sz"})
+                             "marprom", "kranj", "skladnost_sz", "dosled_vlaki"})
 
 #: Vozila brez vsake zamude: oranžno takoj šele, ko izpeljava zamud iz leg
 #: odpove za velik del prevoznika. Ponovitev 14.–17. 10. 2026 po minutah: pri

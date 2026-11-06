@@ -486,6 +486,77 @@ def skladnost(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> di
             "od_ts": int(_skladnost[0][0])}
 
 
+#: Ura nazaj in prihod po odhodu: od te razlike naprej je vožnja nedosledna
+#: (zamuda je v minutah, dve minuti sta že dva koraka).
+DOSLED_PRAG_S = 120
+#: Primerov (številk vlakov) v vrstici zdravja.
+DOSLED_PRIMEROV = 5
+
+_DOSLED_SQL = (
+    "SELECT r.trip_id, t.train_no, r.stop_seq, t.first_seq, t.last_seq, "
+    "       r.delay_arr, r.delay_dep, s.arr_s, s.dep_s "
+    "FROM run r JOIN trip t ON t.trip_id = r.trip_id "
+    "JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+    "WHERE r.service_date = ? AND t.network = 'zeleznica' AND t.mode = 'vlak' "
+    "ORDER BY r.trip_id, r.stop_seq")
+
+
+def dosled(conn: sqlite3.Connection, dan: str) -> dict:
+    """Doslednost `run` za vlake dneva: koliko voženj ima uro nazaj ali prihod
+    po odhodu (straža `zdravje` „dosled_vlaki“).
+
+    * **Ura nazaj**: čas postanka (vozni red + `COALESCE(delay_dep, delay_arr)`;
+      na cilju prihod) je za >= `DOSLED_PRAG_S` večji od časa naslednjega
+      izmerjenega postanka. Izhodišče se ne šteje (feed ga pošlje kot smet).
+    * **Prihod po odhodu**: na istem vmesnem postanku je prihod (vozni red +
+      `delay_arr`) za >= `DOSLED_PRAG_S` za odhodom (vozni red + `delay_dep`).
+
+    Zakaj: 1.--6. 11. 2026 je bila ura nazaj pri 6,9 % voženj-dni (prej 1,3 %)
+    in „stal >= 10 min“ pri postanku <= 2 min pri 25,4 % (prej 2,0 %), ker je
+    zemljevid pisal samo odhod, prihod pa je ostal napoved derp.si; nobena
+    vrstica zdravja tega ni videla. Računa se po `run_date`, omrežje v
+    poizvedbi; šteje vožnje z >= 2 izmerjenima postankoma.
+    """
+    po_voznjah: dict[str, list] = defaultdict(list)
+    ime: dict[str, str] = {}
+    for r in conn.execute(_DOSLED_SQL, (dan,)):
+        po_voznjah[r["trip_id"]].append(r)
+        ime[r["trip_id"]] = r["train_no"]
+    voznj = 0
+    nazaj: set[str] = set()
+    po_odhodu: set[str] = set()
+    for tid, vrstice in po_voznjah.items():
+        if len(vrstice) < 2:
+            continue
+        voznj += 1
+        prej = None
+        for r in vrstice:
+            seq = r["stop_seq"]
+            if seq == r["first_seq"]:
+                continue
+            arr_t = r["arr_s"] if r["arr_s"] is not None else r["dep_s"]
+            dep_t = r["dep_s"] if r["dep_s"] is not None else r["arr_s"]
+            cilj = seq == r["last_seq"]
+            d_arr, d_dep = r["delay_arr"], r["delay_dep"]
+            if not cilj and d_arr is not None and d_dep is not None and (
+                    arr_t + d_arr) - (dep_t + d_dep) >= DOSLED_PRAG_S:
+                po_odhodu.add(tid)
+            if cilj:
+                d, t0 = (d_arr if d_arr is not None else d_dep), arr_t
+            else:
+                d, t0 = (d_dep if d_dep is not None else d_arr), dep_t
+            if d is None or t0 is None:
+                continue
+            kdaj = t0 + d
+            if prej is not None and prej - kdaj >= DOSLED_PRAG_S:
+                nazaj.add(tid)
+            prej = kdaj
+    slabe = nazaj | po_odhodu
+    return {"dan": dan, "voznj": voznj, "ura_nazaj": len(nazaj),
+            "prihod_po_odhodu": len(po_odhodu), "nedoslednih": len(slabe),
+            "primeri": sorted(ime[t] for t in slabe)[:DOSLED_PRIMEROV], "ts": int(time.time())}
+
+
 #: Odtis zadnjega odgovora: nespremenjen zemljevid je v /admin opomba, dolgo
 #: nespremenjen ob vlakih na poti pa opozorilo (`zdravje.ocena`).
 _odtis: str | None = None
@@ -620,8 +691,18 @@ def vodi(s: dict, zdaj: float) -> bool:
 
 #: Od kdaj vodi zemljevid SŽ vlake (`popravi_vlake`).
 POPRAVI_OD = "2026-10-10"
+#: Do kdaj velja podpis zapisa zemljevida `delay_arr IS NULL AND delay_dep IS NOT
+#: NULL` (`obs.observed_at`, 6. 11. 2026 ob 14:45:35, objava `zapisi` s prvim
+#: zapisom prihod = odhod). Pozneje zemljevid ob prvem zapisu postanka piše
+#: OBA polja, zato je zapis s samim odhodom osvežitev: njegova vrednost je
+#: lahko poznejša zamuda (zamuda se je med postankom spremenila) in bi prihod
+#: pokvarila. Postanek, katerega prvi zapis zemljevida je po meji, se preskoči.
+POPRAVI_DO_TS = 1793972735
 #: Razlika, od katere prihod v `run` popravimo: minuta je ločljivost zamude.
 POPRAVI_PRAG_S = 60
+#: Zapis „nazaj“ je zastarel, če je naslednji zapis na kasnejšem postanku nižji
+#: za več kot rezerva postankov vmes in toliko (kot `skladnost`).
+ZASTAREL_PRAG_S = 120
 
 _ZEMLJEVID_ODHOD = (
     "SELECT r.trip_id, r.stop_seq, r.delay_arr, o.delay_dep FROM run r "
@@ -630,10 +711,10 @@ _ZEMLJEVID_ODHOD = (
     "          AND o.stop_seq = r.stop_seq "
     "WHERE r.service_date = ? AND t.network = 'zeleznica' AND t.mode = 'vlak' "
     "  AND r.stop_seq != t.last_seq AND r.delay_arr IS NOT NULL "
-    "  AND o.delay_arr IS NULL AND o.delay_dep IS NOT NULL "
+    "  AND o.delay_arr IS NULL AND o.delay_dep IS NOT NULL AND o.observed_at < ? "
     "  AND o.feed_ts = (SELECT MIN(o2.feed_ts) FROM obs o2 "
     "                   WHERE o2.trip_id = o.trip_id AND o2.service_date = o.service_date "
-    "                     AND o2.stop_seq = o.stop_seq "
+    "                     AND o2.stop_seq = o.stop_seq AND o2.observed_at < ? "
     "                     AND o2.delay_arr IS NULL AND o2.delay_dep IS NOT NULL)")
 _ZEMLJEVID_CILJ = (
     "SELECT r.trip_id, r.stop_seq FROM run r JOIN trip t ON t.trip_id = r.trip_id "
@@ -644,32 +725,91 @@ _ZEMLJEVID_CILJ = (
     "  AND (r.delay_dep IS NULL OR r.delay_dep != r.delay_arr) "
     "  AND EXISTS (SELECT 1 FROM obs o WHERE o.trip_id = r.trip_id "
     "              AND o.service_date = r.service_date AND o.stop_seq = r.stop_seq "
-    "              AND o.delay_arr IS NOT NULL AND o.delay_dep IS NULL)")
+    "              AND o.delay_arr IS NOT NULL AND o.delay_dep IS NULL AND o.observed_at < ?)")
+#: Zapisi zemljevida (podpis zgoraj, pred mejo) vlakov dneva po času.
+_ZEMLJEVID_ZAPISI = (
+    "SELECT o.trip_id, o.stop_seq, o.delay_dep FROM (SELECT DISTINCT r.trip_id FROM run r "
+    "  JOIN trip t ON t.trip_id = r.trip_id WHERE r.service_date = ? "
+    "  AND t.network = 'zeleznica' AND t.mode = 'vlak') v "
+    "JOIN obs o ON o.trip_id = v.trip_id AND o.service_date = ? "
+    "WHERE o.delay_arr IS NULL AND o.delay_dep IS NOT NULL AND o.observed_at < ? "
+    "ORDER BY o.trip_id, o.feed_ts, o.stop_seq")
+
+
+def zastareli_visji(zapisi: list[tuple[int, int]], rezerva) -> list[tuple[int, int, int]]:
+    """Zapisi zemljevida ene vožnje po času [(stop_seq, zamuda_s)] -> zastareli
+    [(stop_seq, zamuda_s, zadnja_prejsnja_vrednost)].
+
+    Zapis (k, v) je „nazaj“, kadar je bil pred njim zapisan postanek > k. Zastarel
+    je, kadar je PRVI naslednji zapis na postanku j > k nižji od v za več kot
+    `rezerva(k, j)` (dolgi postanki vmes) + `ZASTAREL_PRAG_S`. Pri pravem „vlak
+    stoji, SŽ dviguje zamudo“ dobijo naslednji postanki >= v - rezerva, zato se
+    ne sproži. Tretji člen je zadnja vrednost zemljevida za k pred zapisom
+    (None, če je ni).
+
+    Zakaj: zastarel odgovor zemljevida (en odgovor, 15 s) je pred popravkom
+    `potrdi` šel skozi pravilo „nazaj z večjo zamudo velja“. LPV 2206 6. 11.
+    2026: Hrastnik (postanek 2) ob 07:57:18 in Zagorje (4) ob 08:07:48 +15 min
+    (900 s), prava +2 in +3 (120 in 180 s).
+    """
+    out = []
+    najvec = 0
+    for i, (k, v) in enumerate(zapisi):
+        nazaj = najvec > k
+        najvec = max(najvec, k)
+        if not nazaj:
+            continue
+        naslednji = next(((j, w) for j, w in zapisi[i + 1:] if j > k), None)
+        if naslednji is None or naslednji[1] >= v - rezerva(k, naslednji[0]) - ZASTAREL_PRAG_S:
+            continue
+        prej = next((u for q, u in reversed(zapisi[:i]) if q == k), None)
+        out.append((k, v, prej))
+    return out
 
 
 def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool = False) -> dict:
-    """Prihod v `run` iz napovedi derp.si zamenja z izmerjenim iz zemljevida.
+    """Prihod v `run` iz napovedi derp.si zamenja z izmerjenim iz zemljevida in
+    odpravi zastarele višje zapise.
 
     Zemljevid je pisal samo odhod (`zapisi` do 6. 11. 2026), prihod je ostal
     napoved derp.si (od 1. 11. 2026 671 postankov „stal >= 10 min“ pri postanku
     <= 2 min, prihod 0 v 664). Zapis zemljevida v `obs` se pozna po
-    `delay_arr IS NULL AND delay_dep IS NOT NULL` (derp.si piše vedno oba).
-    Pravilo: `run.delay_arr` = `delay_dep` NAJZGODNEJŠEGA takega zapisa
-    postanka (prva vrednost zemljevida je prihodna), če se razlikuje za
-    >= `POPRAVI_PRAG_S`; na cilju z zapisom zemljevida (prihod brez odhoda)
-    `delay_dep` = `delay_arr`. Brez `zapisi` samo šteje. Po dnevih, vsak v svoji
-    transakciji (kot `kajros prune`): dolg zapis ne zaklene zajema.
+    `delay_arr IS NULL AND delay_dep IS NOT NULL` (derp.si piše vedno oba) --
+    samo pred `POPRAVI_DO_TS`. Pravilo: `run.delay_arr` = `delay_dep`
+    NAJZGODNEJŠEGA takega zapisa postanka (prva vrednost zemljevida je
+    prihodna), če se razlikuje za >= `POPRAVI_PRAG_S`; na cilju z zapisom
+    zemljevida (prihod brez odhoda) `delay_dep` = `delay_arr`.
 
-    Vrne števila po dnevih: postankov in voženj-dni.
+    **Zastareli višji zapisi** (`zastareli_visji`): če je `run.delay_dep`
+    takega postanka še enak zapisani vrednosti, dobi zadnjo vrednost zemljevida
+    za ta postanek pred njo (brez nje ostane).
+
+    Brez `zapisi` samo šteje. Po dnevih, vsak v svoji transakciji (kot
+    `kajros prune`): dolg zapis ne zaklene zajema. Vrne števila po dnevih:
+    postankov in voženj-dni.
     """
     dnevi = [r[0] for r in conn.execute(
         "SELECT DISTINCT service_date FROM run WHERE service_date >= ? ORDER BY 1", (od,))]
-    izid: dict = {"dnevi": {}, "postankov": 0, "voznj": 0, "cilj_postankov": 0, "zapisano": zapisi}
+    izid: dict = {"dnevi": {}, "postankov": 0, "voznj": 0, "cilj_postankov": 0,
+                  "zastarelih": 0, "zastarelih_voznj": 0, "zapisano": zapisi}
     for dan in dnevi:
-        pot = [(t, q, d) for t, q, a, d in conn.execute(_ZEMLJEVID_ODHOD, (dan,))
-               if abs(a - d) >= POPRAVI_PRAG_S]
-        cilj = [(t, q) for t, q in conn.execute(_ZEMLJEVID_CILJ, (dan,))]
-        if not pot and not cilj:
+        pot = [(t, q, d) for t, q, a, d in conn.execute(
+            _ZEMLJEVID_ODHOD, (dan, POPRAVI_DO_TS, POPRAVI_DO_TS)) if abs(a - d) >= POPRAVI_PRAG_S]
+        cilj = [(t, q) for t, q in conn.execute(_ZEMLJEVID_CILJ, (dan, POPRAVI_DO_TS))]
+        po_voznjah: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        for t, q, d in conn.execute(_ZEMLJEVID_ZAPISI, (dan, dan, POPRAVI_DO_TS)):
+            po_voznjah[t].append((q, d))
+        rezerve = stats._slack_ahead(conn, list(po_voznjah))
+        stalo = {(t, q): d for t, q, d in conn.execute(
+            "SELECT trip_id, stop_seq, delay_dep FROM run WHERE service_date = ?", (dan,))}
+        zastareli = []
+        for t, zap in po_voznjah.items():
+            r = rezerve.get(t, ())
+            for k, v, prej in zastareli_visji(
+                    zap, lambda k, j, r=r: sum(x for q, x in r if k < q <= j)):
+                if prej is not None and stalo.get((t, k)) == v:
+                    zastareli.append((t, k, prej))
+        if not pot and not cilj and not zastareli:
             continue
         if zapisi:
             with conn:
@@ -678,14 +818,21 @@ def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool =
                     "AND stop_seq = ?", [(d, t, dan, q) for t, q, d in pot])
                 conn.executemany(
                     "UPDATE run SET delay_dep = delay_arr WHERE trip_id = ? "
-                    "AND service_date = ? AND stop_seq = ? AND delay_dep IS NULL",
+                    "AND service_date = ? AND stop_seq = ? "
+                    "AND (delay_dep IS NULL OR delay_dep != delay_arr)",
                     [(t, dan, q) for t, q in cilj])
+                conn.executemany(
+                    "UPDATE run SET delay_dep = ? WHERE trip_id = ? AND service_date = ? "
+                    "AND stop_seq = ?", [(d, t, dan, q) for t, q, d in zastareli])
         voznje = {t for t, *_ in pot} | {t for t, _ in cilj}
         izid["dnevi"][dan] = {"postankov": len(pot), "cilj_postankov": len(cilj),
-                              "voznj": len(voznje)}
+                              "voznj": len(voznje), "zastarelih": len(zastareli),
+                              "zastarelih_voznj": len({t for t, *_ in zastareli})}
         izid["postankov"] += len(pot)
         izid["cilj_postankov"] += len(cilj)
         izid["voznj"] += len(voznje)
+        izid["zastarelih"] += len(zastareli)
+        izid["zastarelih_voznj"] += len({t for t, *_ in zastareli})
     return izid
 
 

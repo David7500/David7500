@@ -743,7 +743,7 @@ def test_popravi_vlake_prihod_iz_zemljevida():
     _run(c, "t1", 19, 0, 600)
     # Cilj: prihod z zemljevida brez odhoda.
     _obs(c, "t1", 22, 420, None, 400)
-    _run(c, "t1", 22, 420, None)
+    _run(c, "t1", 22, 420, 900)
     # Nadomestni avtobus se ne dotakne.
     _obs(c, "b1", 1, None, 300, 200)
     _run(c, "b1", 1, 0, 300)
@@ -751,7 +751,8 @@ def test_popravi_vlake_prihod_iz_zemljevida():
 
     izid = zamude_sz.popravi_vlake(c, "2026-09-01")
     assert (izid["postankov"], izid["cilj_postankov"], izid["voznj"]) == (1, 1, 1)
-    assert izid["dnevi"] == {DAN: {"postankov": 1, "cilj_postankov": 1, "voznj": 1}}
+    assert izid["dnevi"][DAN] == {"postankov": 1, "cilj_postankov": 1, "voznj": 1,
+                                  "zastarelih": 0, "zastarelih_voznj": 0}
     assert c.execute("SELECT delay_arr FROM run WHERE trip_id = 't1' AND stop_seq = 20"
                      ).fetchone()[0] == 0, "brez --zapisi se ne spremeni nič"
     assert zamude_sz.popravi_vlake(c, "2026-09-16")["postankov"] == 0, "dnevi od --od"
@@ -777,3 +778,159 @@ def test_ukaz_popravi_vlake(monkeypatch, capsys):
     cli.main(["popravi-vlake", "--od", "2026-09-01"])
     izpis = capsys.readouterr().out
     assert '"postankov": 0' in izpis and "samo štetje" in izpis
+
+
+def test_popravi_vlake_samo_pred_mejo():
+    """Po objavi (6. 11. 2026 14:45:35) zemljevid ob prvem zapisu piše OBA polja,
+    zato je zapis s samim odhodom osvežitev in bi prihod pokvaril. Preskoči se
+    postanek, katerega prvi zapis zemljevida je po meji; zapis po meji ne šteje
+    za prvega."""
+    c = _baza()
+    do = zamude_sz.POPRAVI_DO_TS
+    # 20: prvi zapis zemljevida po meji (pred njim samo derp.si).
+    _obs(c, "t1", 20, 0, 0, 100)
+    _obs(c, "t1", 20, None, 900, do + 60)
+    _run(c, "t1", 20, 0, 900)
+    # 21: prvi zapis pred mejo, osvežitev po meji; šteje prvi.
+    _obs(c, "t1", 21, None, 300, do - 60)
+    _obs(c, "t1", 21, None, 1200, do + 60)
+    _run(c, "t1", 21, 0, 1200)
+    # Cilj: zapis zemljevida po meji ne dokazuje nič.
+    _obs(c, "t1", 22, 420, None, do + 60)
+    _run(c, "t1", 22, 420, 900)
+    c.commit()
+    izid = zamude_sz.popravi_vlake(c, "2026-09-01", zapisi=True)
+    assert (izid["postankov"], izid["cilj_postankov"]) == (1, 0)
+    vrstice = {q: (a, d) for q, a, d in c.execute(
+        "SELECT stop_seq, delay_arr, delay_dep FROM run WHERE trip_id = 't1'")}
+    assert vrstice == {20: (0, 900), 21: (300, 1200), 22: (420, 900)}
+
+
+def _baza_lpv():
+    """LPV 2206 6. 11. 2026 (skrajšano): Zidani Most - Hrastnik - Trbovlje -
+    Zagorje - Sava - Litija - Ljubljana, postanki brez dolgega zadrževanja."""
+    c = db.connect(":memory:")
+    db.init(c)
+    ime = ["Zidani Most", "Hrastnik", "Trbovlje", "Zagorje", "Sava", "Litija", "Ljubljana"]
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,?,?)",
+                  [(f"S{i}", n, 46.0 + i / 10, 15.0) for i, n in enumerate(ime, 1)])
+    for tid in ("lpv", "ok", "dolg"):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, "
+                  "network) VALUES(?, 'r', ?, 's1', 'vlak', '1161', 'zeleznica')",
+                  (tid, "LPV 2206" if tid == "lpv" else tid))
+        for i in range(1, 8):
+            prihod = _ura(7, 30) + 300 * i
+            zadrzi = 1500 if tid == "dolg" and i == 3 else 0       # 25 min križanja
+            c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                      "VALUES(?,?,?,?,?)", (tid, i, f"S{i}", prihod, prihod + zadrzi))
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('s1', ?)", (DAN,))
+    db.fill_trip_window(c)
+    c.commit()
+    return c
+
+
+def test_popravi_vlake_zastareli_visji_zapisi():
+    """LPV 2206 6. 11. 2026: Hrastnik (postanek 2) ob 07:57:18 in Zagorje (4)
+    ob 08:07:48 sta ostala z odhodom 900 iz zastarelega odgovora, prava sta
+    bila 120 in 180. Zapis je „nazaj“ (pred njim je zapisan višji postanek) in
+    zastarel, ker je prvi naslednji zapis na kasnejšem postanku nižji za več
+    kot rezerva + 120 s."""
+    c = _baza_lpv()
+    ob = lambda h, m, s: int(POLNOC + _ura(h, m) + s)       # noqa: E731
+    zapisi = [(ob(7, 45, 49), 2, 120), (ob(7, 50, 0), 3, 120), (ob(7, 52, 0), 4, 180),
+              (ob(7, 55, 0), 5, 180), (ob(7, 57, 18), 2, 900),     # zastarel
+              (ob(7, 58, 30), 5, 180), (ob(8, 3, 0), 6, 60),
+              (ob(8, 7, 48), 4, 900),                              # zastarel
+              (ob(8, 8, 30), 6, 60)]
+    for t, q, d in zapisi:
+        _obs(c, "lpv", q, None, d, t)
+    for q, d in ((2, 900), (3, 120), (4, 900), (5, 180), (6, 60)):
+        _run(c, "lpv", q, d, d)
+    # Vlak, ki res stoji in mu SŽ dviguje zamudo: naslednji postanki >= v.
+    for t, q, d in ((ob(7, 50, 0), 3, 120), (ob(7, 52, 0), 2, 600), (ob(7, 55, 0), 4, 600)):
+        _obs(c, "ok", q, None, d, t)
+    _run(c, "ok", 2, 600, 600)
+    # Dolg postanek vmes (rezerva 1380 s): padec 900 -> 180 ga pojasni.
+    for t, q, d in ((ob(7, 50, 0), 4, 120), (ob(7, 52, 0), 2, 900), (ob(7, 55, 0), 4, 180)):
+        _obs(c, "dolg", q, None, d, t)
+    _run(c, "dolg", 2, 900, 900)
+    c.commit()
+
+    izid = zamude_sz.popravi_vlake(c, "2026-09-01")
+    assert (izid["zastarelih"], izid["zastarelih_voznj"]) == (2, 1)
+    assert izid["dnevi"][DAN]["zastarelih"] == 2
+    assert c.execute("SELECT delay_dep FROM run WHERE trip_id = 'lpv' AND stop_seq = 2"
+                     ).fetchone()[0] == 900, "brez --zapisi se ne spremeni nič"
+
+    zamude_sz.popravi_vlake(c, "2026-09-01", zapisi=True)
+    dep = {(t, q): d for t, q, d in c.execute("SELECT trip_id, stop_seq, delay_dep FROM run")}
+    assert (dep[("lpv", 2)], dep[("lpv", 4)]) == (120, 180)
+    assert (dep[("lpv", 3)], dep[("lpv", 5)], dep[("lpv", 6)]) == (120, 180, 60)
+    assert dep[("ok", 2)] == 600 and dep[("dolg", 2)] == 900
+    # Idempotentno; run, ki je od zapisa že drugačen, se ne dotakne.
+    assert zamude_sz.popravi_vlake(c, "2026-09-01")["zastarelih"] == 0
+
+
+def _tri_voznje(c):
+    """Kopija t1 kot t3, t4 in t5 (isti vozni red, ista postaja 20 = izhodišče)."""
+    for tid in ("t3", "t4", "t5"):
+        c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, "
+                  "network) VALUES(?, 'r', ?, 's1', 'vlak', '1161', 'zeleznica')",
+                  (tid, f"LP {tid}"))
+        c.execute("INSERT INTO sched SELECT ?, stop_seq, stop_id, arr_s, dep_s "
+                  "FROM sched WHERE trip_id = 't1'", (tid,))
+    db.fill_trip_window(c)
+
+
+def test_dosled_vlakov_ura_nazaj_in_prihod_po_odhodu():
+    """1.--6. 11. 2026: ura nazaj pri 6,9 % voženj-dni, „stal >= 10 min“ pri
+    25,4 %: zemljevid je pisal samo odhod, prihod je ostal napoved derp.si."""
+    c = _baza()
+    _tri_voznje(c)
+    # t1: dosledna; na izhodišču prihod/odhod ne šteje.
+    _run(c, "t1", 20, 0, 3000)
+    _run(c, "t1", 21, 0, 0)
+    _run(c, "t1", 22, 60, None)
+    # t3: odhod s Solkana +15 min, prihod v Novo Gorico točen: 10 min nazaj.
+    _run(c, "t3", 21, 900, 900)
+    _run(c, "t3", 22, 0, None)
+    # t4: prihod v Solkan 5 min po odhodu.
+    _run(c, "t4", 21, 300, 0)
+    _run(c, "t4", 22, 300, None)
+    # t5: samo en izmerjen postanek -- ne šteje.
+    _run(c, "t5", 21, 900, 900)
+    # Nadomestni avtobus tudi ne.
+    c.execute("UPDATE trip SET mode = 'bus' WHERE trip_id = 't2'")
+    _run(c, "t2", 21, 900, 0)
+    _run(c, "t2", 22, 0, None)
+    c.commit()
+    d = zamude_sz.dosled(c, DAN)
+    assert (d["voznj"], d["ura_nazaj"], d["prihod_po_odhodu"], d["nedoslednih"]) == (3, 1, 1, 2)
+    assert d["primeri"] == ["LP t3", "LP t4"]
+    assert zamude_sz.dosled(c, "2026-09-16")["voznj"] == 0
+
+
+def _dosled(voznj, nedoslednih):
+    return {"dosled_vlaki": {"voznj": voznj, "nedoslednih": nedoslednih, "ura_nazaj": nedoslednih,
+                              "prihod_po_odhodu": 0, "primeri": ["LPV 2206"]}}
+
+
+def test_zdravje_doslednosti_vlakov():
+    """Rumeno od 1 %, rdeče od 5 % ob >= 50 vožnjah; pošta po pol ure samo ob
+    rdečem."""
+    from tests.test_opozorila import _posta, _zdravo
+    z = _zdravo()
+    z["vozi_zdaj"] = {"zeleznica": 30, "avtobus": 300}
+
+    def ocena(voznj, slabih):
+        return zdravje.ocena({**z, **_dosled(voznj, slabih)}, {}, ZDAJ)["dosled_vlaki"]
+
+    assert ocena(49, 40)[0] == "", "premalo voženj za oceno"
+    assert ocena(300, 2)[0] == zdravje.DOBRA
+    assert ocena(300, 3)[0] == zdravje.MLACNA
+    assert ocena(300, 14)[0] == zdravje.MLACNA
+    r = ocena(300, 15)
+    assert r[0] == zdravje.SLABA and "LPV 2206" in r[1] and "5.0 %" in r[1]
+    assert "dosled_vlaki" not in _posta({**z, **_dosled(300, 3)})
+    o = _posta({**z, **_dosled(300, 15)})["dosled_vlaki"]
+    assert o.po_s == 1800 and o.nujno and "popravi-vlake" in o.ukrep

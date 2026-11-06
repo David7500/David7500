@@ -665,6 +665,13 @@ function skladnostSz(sk) {
       + ` · ${(sk.primeri || []).join(", ")}` : "");
 }
 
+function dosledVlaki(dv) {
+  if (!dv || !dv.voznj) return null;
+  return `${st(dv.voznj)} voženj · nedoslednih ${st(dv.nedoslednih)}`
+    + (dv.nedoslednih ? ` (${st(100 * dv.nedoslednih / dv.voznj, 1)} %, ura nazaj ${st(dv.ura_nazaj)}, `
+      + `prihod po odhodu ${st(dv.prihod_po_odhodu)}) · ${(dv.primeri || []).join(", ")}` : "");
+}
+
 /** Kratko stanje vira za seznam na zavihku Stanje. */
 function kratkoVira(v) {
   const dn = v.dnevnik;
@@ -834,6 +841,7 @@ function vrsticeZajema(d) {
     // Meritev brez barve (`collector.pokritost`): zamuda v 15 min / vožnje, ki tečejo.
     ["pokritost · zamuda v 15 min", pokritostOpis(z.pokritost) || "—"],
     ["vlaki · prikaz proti SŽ", skladnostSz((z.zamude_sz || {}).skladnost) || "—", r.skladnost_sz],
+    ["vlaki · doslednost časov", dosledVlaki(z.dosled_vlaki) || "—", r.dosled_vlaki],
     ["vozil z lego", st(z.vehicles_with_gps)],
     ["vlakov / meritev", `${st(zel.trips)} / ${st(zel.runs)}`],
     ["avtobusov / meritev", `${st(bus.trips)} / ${st(bus.runs)}`],

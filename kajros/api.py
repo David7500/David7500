@@ -1808,6 +1808,11 @@ def api_health():
         # se ujemata. Zapiše jih nit ob vsakem branju zemljevida.
         zsz = db.get_meta(conn, "zamude_sz")
         out["zamude_sz"] = json.loads(zsz) if zsz else None
+        # Doslednost `run` za današnje vlake (`zamude_sz.dosled`), minuto
+        # predpomnjeno: en prehod čez ~5 000 vrstic.
+        dan = datetime.now(TZ).date().isoformat()
+        out["dosled_vlaki"] = _predpomni(
+            "dosled_vlaki", dan, 60, lambda: _conn_klic(lambda c: zamude_sz.dosled(c, dan)))
         # Ovire s strani SŽ (`ovire_sz`): koliko jih je na strani in koliko
         # brez vlaka, na katerega bi se dale pripeti.
         ov = db.get_meta(conn, "ovire_sz") if config.OVIRE_SZ else None
