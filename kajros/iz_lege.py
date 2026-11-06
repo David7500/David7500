@@ -178,6 +178,23 @@ def sz_prebran(zdaj: float | None = None) -> None:
     _sz_ts = time.time() if zdaj is None else zdaj
 
 
+def sz_pricakuj(zdaj: float | None = None) -> None:
+    """Ob zagonu zemljevidu SŽ dá `SZ_VODI_S` priložnosti, preden derp.si prevzame.
+
+    Brez tega je `_sz_ts` ob zagonu 0, `sz_vodi()` neresnična in prvi poll
+    derp.si (`collector.ingest`) zapiše VSE vlake z napovedjo za vse postanke,
+    še preden se Chrome prebije prek Cloudflara (3--7 s) in zemljevid prvič
+    odgovori. Izbruhi ob vsaki objavi: 1. 11. ob 13.43, 2. 11. ob 12.05,
+    3. 11. ob 18.12, 4. 11. ob 8.12 in 21.47, 5. 11. ob 16.20 in 21.25, 6. 11.
+    ob 7.38 (122 vlakov, LPV 2206 +15 na vseh 12 postankih). Samo kjer nit
+    zemljevida teče; kjer je ni (`KAJROS_SZ_ZAMUDE=0`, malina), derp.si piše
+    vlake kot prej. Če zemljevid v `SZ_VODI_S` ne odgovori, prevzame derp.si.
+    """
+    global _sz_ts
+    if config.SZ_ZAMUDE:
+        _sz_ts = time.time() if zdaj is None else zdaj
+
+
 def sz_vodi(zdaj: float | None = None) -> bool:
     """Ali zamude vlakov ta hip piše zemljevid SŽ, ne feed derp.si.
 

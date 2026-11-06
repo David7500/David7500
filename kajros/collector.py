@@ -441,6 +441,29 @@ def is_forecast(prev, sched_row, service_date) -> bool:
     return t0 is not None and (t0 + d) > prev["feed_ts"]
 
 
+#: Toliko pred `ts` se vrednost postanka še šteje za izmerjeno (`napoved_vlaka`):
+#: ločljivost zamude je minuta.
+NAPOVED_VLAKA_S = 60
+
+
+def napoved_vlaka(sched_row, service_date, arr, dep, ts) -> bool:
+    """Ali vrednost vlaka postavlja postanek v prihodnost (voznoredni čas +
+    zamuda > `ts` + `NAPOVED_VLAKA_S`) -- to je napoved, ne meritev.
+
+    Vlak SŽ pošilja napoved za vse postanke naprej; drseče okno je pri njem
+    široko, zato je v `run` obtičala vrsta, ki jo je kasneje popravil kdo
+    drug. MV 247 6. 11. 2026 ob 7.49: 0/0 na vseh 16 postankih, odhod ob 9.15.
+    Od 1. 11. ima 671 postankov „stal >= 10 min“ pri postanku <= 2 min, v 664
+    je prihod natanko 0 -- napoved derp.si za vlak, ki še ni odpeljal. Napoved
+    ostane v `obs` (dnevnik, ki ga bere `kajros backtest --operator`); `run`
+    dobi vrednost, ko je čas mimo. Za razliko od `is_forecast` ne gleda prejšnjega
+    zapisa: velja že za prvo vrednost, ki ji pripada postanek v prihodnosti.
+    """
+    d = dep if dep is not None else arr
+    t0 = _sched_abs(service_date, sched_row)
+    return d is not None and t0 is not None and t0 + d > ts + NAPOVED_VLAKA_S
+
+
 def is_zero_blip(prev, last, arr, dep, sched_row=None, service_date=None) -> bool:
     """Ali je to prehodna nicla, ki jo feed vrine med dve pravi vrednosti?
 
@@ -670,9 +693,12 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
     agencije = _agencije(conn) if vir == "ijpp" else {}
     # Vožnje, katerih zamudo ta hip računamo iz leg NAP (`iz_lege.nap_vodi`).
     nap_prevzel: set[str] = set()
+    # Vlaki (ne nadomestni avtobusi): njihova napoved ne sme v `run`.
+    vlaki = _sz_vlaki(conn) if vir == "ijpp" else {}
     # Vlaki, ki jih ta hip piše zemljevid SŽ (`iz_lege.sz_vodi`).
-    sz_vlaki = _sz_vlaki(conn) if vir == "ijpp" and iz_lege.sz_vodi() else {}
+    sz_vlaki = vlaki if iz_lege.sz_vodi() else {}
     sz_prevzel = 0
+    napovedi_vlakov = 0
 
     def nas_id(tid):
         """Pod katerim id-jem vožnjo vodimo: pod njenim, pod naslednico ali pod
@@ -859,6 +885,11 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
             else:
                 smoothed += 1
 
+            if trip_id in vlaki and napoved_vlaka(sched.get((trip_id, seq)), service_date,
+                                                  arr, dep, ts):
+                napovedi_vlakov += 1
+                continue            # napoved: v `obs`, v `run` ne
+
             if is_zero_blip(prev, last, arr, dep,
                             sched.get((trip_id, seq)), service_date):
                 # Dnevnik obdrzi vse, `run` pa ne prevzame vrednosti, dokler je
@@ -896,6 +927,7 @@ def ingest(conn: sqlite3.Connection, feed, vir: str = "ijpp",
     iz_lege.izpusti(nap_prevzel)
     return {"trips": trips_seen, "changed": changed, "skipped": skipped,
             "nap_prevzel": len(nap_prevzel), "sz_prevzel": sz_prevzel,
+            "napovedi_vlakov": napovedi_vlakov,
             "blips": blips, "unpassed": unpassed, "ure_na_koncni": ure_na_koncni,
             "smoothed": smoothed,
             "non_scheduled": non_scheduled, "feed_ts": feed_ts, "vsebina_ts": vsebina_ts,

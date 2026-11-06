@@ -24,7 +24,7 @@ from . import odsek
 from . import dosje
 from . import statistika
 from . import straza
-from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, kranj,
+from . import (alerts, brskalnik, collector, config, db, deljenje, donacije, gtfs, iz_lege, kranj,
                marprom, nap, obisk, ocena, opozorila, ovire_sz, peroni, pripni, promet, stats, stik, viri,
                weather, zamude_lpp, zamude_sz, zasedenost)
 
@@ -732,6 +732,9 @@ def _worker(interval: int, refresh_hour: int, refresh_mode: str,
             weather_hour: int, alert_interval: int, maint_hour: int,
             summaries: bool = True,
             position_interval: int = config.POSITION_SECONDS) -> None:
+    # Pred prvim pollom derp.si: zemljevid SŽ vodi vlake od zagona
+    # (`iz_lege.sz_pricakuj`), sicer prvi poll zapiše napoved za vse vlake.
+    iz_lege.sz_pricakuj()
     conn = db.connect()
     db.init(conn)
     _zapri_prekinjen_uvoz(conn)

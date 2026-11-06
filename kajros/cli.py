@@ -364,6 +364,15 @@ def cmd_repair(args):
     print(json.dumps(izid, indent=2, ensure_ascii=False))
 
 
+def cmd_popravi_vlake(args):
+    conn = db.connect()
+    db.init(conn)
+    izid = zamude_sz.popravi_vlake(conn, args.od, args.zapisi)
+    print(json.dumps(izid, indent=2, ensure_ascii=False))
+    if not args.zapisi:
+        print("samo štetje; zapis: --zapisi")
+
+
 def cmd_vozilo(args):
     print(dosje.porocilo(args.vozilo, args.dan, args.tocke, args.surovo))
 
@@ -738,6 +747,12 @@ def main(argv=None):
 
     a = sub.add_parser("repair", help="znova zgradi `run` iz dnevnika `obs`")
     a.set_defaults(func=cmd_repair)
+
+    a = sub.add_parser("popravi-vlake",
+                       help="prihod vlakov v `run` iz napovedi derp.si zamenja z zemljevidom SŽ")
+    a.add_argument("--od", default=zamude_sz.POPRAVI_OD, help="YYYY-MM-DD (privzeto %(default)s)")
+    a.add_argument("--zapisi", action="store_true", help="zapiši (privzeto samo štetje)")
+    a.set_defaults(func=cmd_popravi_vlake)
 
     a = sub.add_parser("zamenjave",
                        help="povezi voznje z novimi id-ji; stari vozni red vzame iz kopije baze")

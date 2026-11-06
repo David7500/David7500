@@ -202,64 +202,97 @@ def razberi(vrstice: list[dict], po_stevilki: dict[str, list[dict]],
     return pripete, stevci, prihodnje
 
 
-#: Vožnje, ki so v zadnjem spremenjenem odgovoru po zamudi pokazale ničlo
-#: (`zapisi`, tretje varovalo). Druga ničla zapored jo potrdi.
-_nicle: set[tuple[str, str]] = set()
+#: Stanje vsakega vlaka v zadnjem SPREMENJENEM odgovoru: (trip_id, dan) ->
+#: (stop_seq, zamuda_s, je_prihod). Nespremenjenih `korak` ne obdela, zato je to
+#: "prejšnji spremenjen odgovor" (`potrdi`).
+_prejsnji: dict[tuple[str, str], tuple[int, int, bool]] = {}
+
+
+def potrdi(conn: sqlite3.Connection, pripete: list[tuple],
+           prihodnje: list[tuple]) -> tuple[list[tuple], list[tuple], set[tuple[str, str]]]:
+    """Stanje vlaka z zemljevida velja šele, ko ga potrdi naslednji spremenjen
+    odgovor: (pripete, prihodnje, nepotrjeni (trip_id, dan)).
+
+    **Stanje** = `(stop_seq, zamuda, je_prihod)` pripete vrstice. Velja, kadar
+    je enako stanju vlaka v prejšnjem spremenjenem odgovoru ali zadnjemu
+    zapisanemu (`sz_zamuda`: osvežitev, vlak stoji ali vozi enako). Kandidat,
+    ki ga naslednji spremenjen odgovor ne ponovi, odpade: A, B, A zapiše
+    samo A. Isto za vlake z odhodom v prihodnosti (trenutna zamuda).
+
+    Zakaj: SŽ za en odgovor (15 s) vrne zastarelo stanje, in to ne le ničlo.
+    1.--6. 11. 2026 na 3 190 voženj-dneh (dosje, vsak vzorec) se je vrednost za
+    en odgovor spremenila in takoj vrnila 10 689-krat na ničlo (vlak „po
+    voznem redu“), 202-krat na višjo zamudo in 6-krat na nižjo neničelno.
+    Višje je prepustilo pravilo „nazaj z večjo zamudo velja“: LPV 2206 6. 11.
+    ob 07:57:18 in 08:07:48 +15 namesto +2/+3 (Hrastnik, Zagorje), s poročilom
+    v `delay_report`. Ničle je prej ujel poseben `_nicle` (16. 10. 2026: del
+    vlakov je SŽ za en odgovor narisal po voznem redu, 7 od 59 ob 14:28:52;
+    LP 3234 iz +21 na 0; 11.--16. 10. so ničle zadele 611 od 1 444 voženj z
+    zamudo); višjih ni nič. Cena: nova vrednost zamuja en spremenjen odgovor
+    (15 s). Pravila „nazaj“, „prvi prihod“ in ponastavitev (`zapisi`) veljajo
+    za potrjena stanja.
+
+    Dosje (`_v_dosje`) dobi vse surovo; to sito je samo za `run`, `sz_zamuda`,
+    poročilo in trenutno zamudo.
+    """
+    global _prejsnji
+    zdaj_stanja = {(p[0], p[1]): (p[2], p[3], p[4]) for p in (*pripete, *prihodnje)}
+    zapisana = {}
+    for k in zdaj_stanja:
+        if k in _prejsnji and _prejsnji[k] == zdaj_stanja[k]:
+            continue
+        r = conn.execute(
+            "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
+            "ORDER BY zadnjic_ts DESC, stop_seq DESC LIMIT 1", k).fetchone()
+        zapisana[k] = tuple(r) if r else None
+    nepotrjeni = {k for k, st in zdaj_stanja.items()
+                  if _prejsnji.get(k) != st and zapisana.get(k) != st[:2]}
+    _prejsnji = zdaj_stanja
+
+    def drzi(vrstice):
+        return [p for p in vrstice if (p[0], p[1]) not in nepotrjeni]
+    return drzi(pripete), drzi(prihodnje), nepotrjeni
 
 
 def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
-    """Pripete zamude v `sz_zamuda`, `run` in `obs` (in `delay_report`).
+    """Potrjene zamude (`potrdi`) v `sz_zamuda`, `run` in `obs` (in `delay_report`).
 
-    Tri varovala, vsa izmerjena na zemljevidu:
+    Dve varovali, obe izmerjeni na zemljevidu:
 
     * **Vlak ne gre nazaj z isto ali manjšo zamudo.** Zemljevid je vozni
       red plus trenutna zamuda, ne sled: vlak, ki zamudo nabira, gre naprej,
       ko poteče stara zamuda, in skoči nazaj, ko SŽ zamudo poveča (RG 615 16.
       10. 2026: „naslednja Šentjur“ / „naslednja Celje“ izmenoma, +3, +5, +8).
       Nazaj z isto zamudo je nihanje in se ne zapiše; z večjo je zvišana
-      zamuda in velja. Do 16. 10. se ni zapisalo nobeno „nazaj“ (LPV 2616 10.
-      10.: „naslednja Ljubljana Tivoli, +9“ po odhodu iz Ljubljane s +0) --
-      in vlak, ki ga je SŽ najprej risal po voznem redu, je ostal točen:
-      LPV 2907 16. 10. 10 min +0 namesto +7. Na 13 min zemljevida je bila
-      prikazana zamuda prenizka za 3 min ali več 63-krat od 2 453, zdaj
-      enkrat. Cena: postanek zadaj dobi trenutno zamudo, ne odhodne.
+      zamuda in velja (ko jo je potrdil še en odgovor). Do 16. 10. se ni
+      zapisalo nobeno „nazaj“ (LPV 2616 10. 10.: „naslednja Ljubljana Tivoli,
+      +9“ po odhodu iz Ljubljane s +0) -- in vlak, ki ga je SŽ najprej risal po
+      voznem redu, je ostal točen: LPV 2907 16. 10. 10 min +0 namesto +7. Na
+      13 min zemljevida je bila prikazana zamuda prenizka za 3 min ali več
+      63-krat od 2 453, zdaj enkrat. Cena: postanek zadaj dobi trenutno
+      zamudo, ne odhodne.
     * **Na cilju šteje prvi prihod** (glava modula), in ničla po zamudi nad
       `PONASTAVITEV_S` ni prihod, ampak ponastavitev. Razen kadar je SŽ vlak
       po prihodu spet pokazal na progi: takrat je bil prihod prezgoden.
-    * **Ničla po zamudi velja šele, ko jo potrdi naslednji odgovor.** SŽ na
-      vsake 3--4 min za en odgovor (15 s) del vlakov pokaže po voznem redu:
-      zamuda 0, postaja in lega tam, kjer bi vlak bil, če bi bil točen. 16.
-      10. 2026 ob 14:28:52 sedem od 59 vlakov, LP 3234 iz +21 pred Ivančno
-      Gorico na 0 pred Žalno; 15 s pozneje spet +21. Takšen odgovor je vlak
-      prestavil naprej, prvo varovalo (takrat še brez izjeme za večjo
-      zamudo) pa je nato prave vrstice zavračalo kot vožnjo nazaj -- dokler
-      ga ni pravi vlak dohitel in ga naslednja ničla spet prestavila. RG 318 je tako 16. 10. od Zidanega Mosta (6:32) do
-      Ljubljane Polje (7:48) pisal +0, vozil pa +12 do +18. Od 11. do 16.
-      10. 2026 so ničle zadele 611 od 1 444 voženj z zamudo. Velja za vsako
-      zamudo, ne le veliko: tudi +3 bi vlak prestavil 3 min naprej. Cena je
-      15 s zakasnitve pravega okrevanja na 0. „Po zamudi“ pomeni po zadnji
-      besedi SŽ o vlaku, ne po postanku najdlje naprej (glej spodaj).
+
+    **Prihod in odhod iz istega vira.** Zemljevid pove eno zamudo. Prvi zapis
+    za postanek (v `sz_zamuda` ga še ni) nastavi prihod IN odhod, ker zemljevid
+    postanek preklopi ob prihodu po uri, torej je prva vrednost prihodna;
+    vsak naslednji samo odhod. Prej je prihod ostal napoved derp.si: od 1. 11.
+    671 postankov „stal >= 10 min“ pri postanku <= 2 min, prihod 0 v 664.
+    Na cilju sta prihod in odhod enaka.
     """
     ts = int(zdaj)
-    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0, "nicel": 0}
-    nicle = set()
+    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0}
     for trip_id, dan, seq, zamuda, je_prihod in pripete:
         zadnji = conn.execute(
             "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
             "ORDER BY stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
-        # Ničlo primerjamo z ZADNJO besedo SŽ, ne s postankom najdlje naprej:
-        # ta je po ničli, ki je prišla skozi, sam ničla, in vsaka naslednja
-        # bi šla mimo kot „ničla po ničli“. Tako je bilo po prvem popravku
-        # 16. 10. 2026 pri vlakih, ki so ničlo naprej že imeli: LPV 2504 je
-        # +0 dobil ob 14:40, 14:47 in 14:51, SŽ pa je vmes kazal +16 do +18.
+        # Ponastavitev na cilju primerja z ZADNJO besedo SŽ, ne s postankom
+        # najdlje naprej (ta je po sprejeti ničli sam ničla).
         prejsnja = conn.execute(
             "SELECT delay_s, stop_seq FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
             "ORDER BY zadnjic_ts DESC, stop_seq DESC LIMIT 1", (trip_id, dan)).fetchone()
-        if (not je_prihod and zamuda == 0 and prejsnja and prejsnja[0] > 0
-                and (trip_id, dan) not in _nicle):
-            nicle.add((trip_id, dan))
-            izid["nicel"] += 1
-            continue
         if zadnji and seq < zadnji[0] and zamuda <= zadnji[1]:
             izid["nazaj"] += 1
             continue
@@ -275,8 +308,11 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
             if zamuda == 0 and (prejsnja[0] if prejsnja else zadnji[1]) > PONASTAVITEV_S:
                 izid["ponastavljenih"] += 1
                 continue
-        iz_lege.zapisi_meritev(conn, trip_id, dan, seq, zamuda if je_prihod else None,
-                               None if je_prihod else zamuda, ts, ohrani=True)
+        prvi = conn.execute(
+            "SELECT 1 FROM sz_zamuda WHERE trip_id = ? AND service_date = ? AND stop_seq = ?",
+            (trip_id, dan, seq)).fetchone() is None
+        iz_lege.zapisi_meritev(conn, trip_id, dan, seq, zamuda if (je_prihod or prvi) else None,
+                               zamuda, ts, ohrani=True)
         conn.execute(
             "INSERT INTO sz_zamuda(trip_id, service_date, stop_seq, delay_s, "
             "                      prvic_ts, zadnjic_ts, v_run) VALUES(?,?,?,?,?,?,1) "
@@ -287,8 +323,6 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         if not je_prihod:
             izid["porocil"] += porocilo(conn, trip_id, dan, seq, zamuda, ts)
     conn.commit()
-    _nicle.clear()
-    _nicle.update(nicle)
     return izid
 
 
@@ -338,19 +372,18 @@ _trenutne: dict[tuple[str, str], tuple[int, int, int]] = {}
 SVEZA_TRENUTNA_S = 60
 
 
-def _osvezi_trenutne(pripete: list[tuple], prihodnje: list[tuple], zdaj: float) -> None:
+def _osvezi_trenutne(pripete: list[tuple], prihodnje: list[tuple], zdaj: float,
+                     nepotrjeni: frozenset | set = frozenset()) -> None:
+    """Trenutna zamuda iz potrjenih stanj (`potrdi`); pri nepotrjenem vlaku
+    velja, kar je SŽ rekel prej (in ob izteku `SVEZA_TRENUTNA_S` ne velja)."""
     global _trenutne
     novo = {}
     for trip_id, dan, seq, zamuda, je_prihod in (*pripete, *prihodnje):
-        k = (trip_id, dan)
-        if je_prihod:
-            continue
-        if k in _nicle:
-            # Nepotrjena ničla (`zapisi`): velja, kar je SŽ rekel prej.
-            if k in _trenutne:
-                novo[k] = _trenutne[k]
-            continue
-        novo[k] = (zamuda, int(zdaj), seq)
+        if not je_prihod:
+            novo[(trip_id, dan)] = (zamuda, int(zdaj), seq)
+    for k in nepotrjeni:
+        if k in _trenutne:
+            novo[k] = _trenutne[k]
     _trenutne = novo
 
 
@@ -400,7 +433,7 @@ def skladnost(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> di
     ustaljene, po_dnevih = {}, defaultdict(dict)
     for trip_id, dan, seq, zamuda, je_prihod in pripete:
         k = (trip_id, dan)
-        if je_prihod or k in _nicle:
+        if je_prihod:
             continue
         prej = _ustaljene.get(k)
         ustaljene[k] = prej if prej and prej[0] == zamuda else (zamuda, zdaj)
@@ -546,8 +579,11 @@ def korak(conn: sqlite3.Connection, vrstice: list[dict], zdaj: float,
     iz_lege.sz_stevilke({st[p[0]] for p in pripete + prihodnje if p[0] in st},
                         stevci["nepripeti"], zdaj)
     dosje.varno(_v_dosje, vrstice, st, pripete, prihodnje, zdaj)
+    # Dosje je dobil vse surovo; naprej samo potrjena stanja.
+    pripete, prihodnje, nepotrjeni = potrdi(conn, pripete, prihodnje)
+    stevci["nepotrjenih"] = len(nepotrjeni)
     stevci.update(zapisi(conn, pripete, zdaj))
-    _osvezi_trenutne(pripete, prihodnje, zdaj)
+    _osvezi_trenutne(pripete, prihodnje, zdaj, nepotrjeni)
     stevci["skladnost"] = skladnost(conn, pripete, zdaj)
     stevci["odtis"] = _odtis or ""
     # Straža zamrznitve (`zdravje`, „se ne spreminja“) gleda jedro, ne cel
@@ -580,6 +616,74 @@ def vodi(s: dict, zdaj: float) -> bool:
     if vlakov <= s.get("nepripetih", 0):
         return False
     return vlakov < 3 or zdaj - (s.get("spremenjeno_ts") or zdaj) <= ZAMRZNJEN_S
+
+
+#: Od kdaj vodi zemljevid SŽ vlake (`popravi_vlake`).
+POPRAVI_OD = "2026-10-10"
+#: Razlika, od katere prihod v `run` popravimo: minuta je ločljivost zamude.
+POPRAVI_PRAG_S = 60
+
+_ZEMLJEVID_ODHOD = (
+    "SELECT r.trip_id, r.stop_seq, r.delay_arr, o.delay_dep FROM run r "
+    "JOIN trip t ON t.trip_id = r.trip_id "
+    "JOIN obs o ON o.trip_id = r.trip_id AND o.service_date = r.service_date "
+    "          AND o.stop_seq = r.stop_seq "
+    "WHERE r.service_date = ? AND t.network = 'zeleznica' AND t.mode = 'vlak' "
+    "  AND r.stop_seq != t.last_seq AND r.delay_arr IS NOT NULL "
+    "  AND o.delay_arr IS NULL AND o.delay_dep IS NOT NULL "
+    "  AND o.feed_ts = (SELECT MIN(o2.feed_ts) FROM obs o2 "
+    "                   WHERE o2.trip_id = o.trip_id AND o2.service_date = o.service_date "
+    "                     AND o2.stop_seq = o.stop_seq "
+    "                     AND o2.delay_arr IS NULL AND o2.delay_dep IS NOT NULL)")
+_ZEMLJEVID_CILJ = (
+    "SELECT r.trip_id, r.stop_seq FROM run r JOIN trip t ON t.trip_id = r.trip_id "
+    "WHERE r.service_date = ? AND t.network = 'zeleznica' AND t.mode = 'vlak' "
+    "  AND r.stop_seq = t.last_seq AND r.delay_arr IS NOT NULL AND r.delay_dep IS NULL "
+    "  AND EXISTS (SELECT 1 FROM obs o WHERE o.trip_id = r.trip_id "
+    "              AND o.service_date = r.service_date AND o.stop_seq = r.stop_seq "
+    "              AND o.delay_arr IS NOT NULL AND o.delay_dep IS NULL)")
+
+
+def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool = False) -> dict:
+    """Prihod v `run` iz napovedi derp.si zamenja z izmerjenim iz zemljevida.
+
+    Zemljevid je pisal samo odhod (`zapisi` do 6. 11. 2026), prihod je ostal
+    napoved derp.si (od 1. 11. 2026 671 postankov „stal >= 10 min“ pri postanku
+    <= 2 min, prihod 0 v 664). Zapis zemljevida v `obs` se pozna po
+    `delay_arr IS NULL AND delay_dep IS NOT NULL` (derp.si piše vedno oba).
+    Pravilo: `run.delay_arr` = `delay_dep` NAJZGODNEJŠEGA takega zapisa
+    postanka (prva vrednost zemljevida je prihodna), če se razlikuje za
+    >= `POPRAVI_PRAG_S`; na cilju z zapisom zemljevida (prihod brez odhoda)
+    `delay_dep` = `delay_arr`. Brez `zapisi` samo šteje. Po dnevih, vsak v svoji
+    transakciji (kot `kajros prune`): dolg zapis ne zaklene zajema.
+
+    Vrne števila po dnevih: postankov in voženj-dni.
+    """
+    dnevi = [r[0] for r in conn.execute(
+        "SELECT DISTINCT service_date FROM run WHERE service_date >= ? ORDER BY 1", (od,))]
+    izid: dict = {"dnevi": {}, "postankov": 0, "voznj": 0, "cilj_postankov": 0, "zapisano": zapisi}
+    for dan in dnevi:
+        pot = [(t, q, d) for t, q, a, d in conn.execute(_ZEMLJEVID_ODHOD, (dan,))
+               if abs(a - d) >= POPRAVI_PRAG_S]
+        cilj = [(t, q) for t, q in conn.execute(_ZEMLJEVID_CILJ, (dan,))]
+        if not pot and not cilj:
+            continue
+        if zapisi:
+            with conn:
+                conn.executemany(
+                    "UPDATE run SET delay_arr = ? WHERE trip_id = ? AND service_date = ? "
+                    "AND stop_seq = ?", [(d, t, dan, q) for t, q, d in pot])
+                conn.executemany(
+                    "UPDATE run SET delay_dep = delay_arr WHERE trip_id = ? "
+                    "AND service_date = ? AND stop_seq = ? AND delay_dep IS NULL",
+                    [(t, dan, q) for t, q in cilj])
+        voznje = {t for t, *_ in pot} | {t for t, _ in cilj}
+        izid["dnevi"][dan] = {"postankov": len(pot), "cilj_postankov": len(cilj),
+                              "voznj": len(voznje)}
+        izid["postankov"] += len(pot)
+        izid["cilj_postankov"] += len(cilj)
+        izid["voznj"] += len(voznje)
+    return izid
 
 
 #: Nepripeti vlaki, ki so danes že v dnevniku (`teci`).

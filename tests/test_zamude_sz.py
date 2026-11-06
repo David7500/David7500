@@ -27,7 +27,7 @@ def _pozabi():
     iz_lege._prvic = None
     iz_lege._sz_ts = 0.0
     zamude_sz._odtis = None
-    zamude_sz._nicle.clear()
+    zamude_sz._prejsnji = {}
     zamude_sz._trenutne = {}
     zamude_sz._ustaljene = {}
     zamude_sz._skladnost.clear()
@@ -76,6 +76,23 @@ ZDAJ = POLNOC + _ura(8, 56)
 
 def _vr(c):
     return zamude_sz.vozni_red(c, date.fromisoformat(DAN))
+
+
+def _dvakrat(c, vrstice, zdaj):
+    """Isto stanje v dveh zaporednih spremenjenih odgovorih: potrjeno
+    (`zamude_sz.potrdi`). Vrne števce drugega."""
+    zamude_sz._odtis = f"{zdaj}a"
+    zamude_sz.korak(c, vrstice, zdaj)
+    zamude_sz._odtis = f"{zdaj}b"
+    return zamude_sz.korak(c, vrstice, zdaj)
+
+
+def _odgovor(c, pripete, zdaj, prihodnje=()):
+    """En spremenjen odgovor na ravni stanj: potrdi in zapiši potrjeno."""
+    p, _, nepotrjeni = zamude_sz.potrdi(c, list(pripete), list(prihodnje))
+    izid = zamude_sz.zapisi(c, p, zdaj)
+    izid["nepotrjenih"] = len(nepotrjeni)
+    return izid
 
 
 def test_zamuda_gre_na_zadnji_prevozeni_postanek():
@@ -127,10 +144,8 @@ def test_odhod_v_prihodnosti_ni_prevozen_postanek_je_trenutna_zamuda():
     """Postanek, s katerega je vlak že odpeljal, ne sme postati neprevožen:
     +65 na Plavah bi pomenilo odhod ob 09:01. Zamuda vlaka zdaj pa je +65."""
     c = _baza()
-    zamude_sz._odtis = "a"
-    zamude_sz.korak(c, [VRSTICA], ZDAJ)
-    zamude_sz._odtis = "b"
-    s = zamude_sz.korak(c, [POVECANA], ZDAJ + 15)
+    _dvakrat(c, [VRSTICA], ZDAJ)
+    s = _dvakrat(c, [POVECANA], ZDAJ + 15)
     assert (s["zapisanih"], s["prihodnjih"], s["nepripetih"]) == (0, 1, 0)
     assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 20").fetchone()[0] == 3000
     lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ + 15 - POLNOC))["t1"]
@@ -145,16 +160,14 @@ def test_trenutna_zamuda_samo_navzgor():
     """Nižja zamuda SŽ od meje ne velja (prevoznik šteje samo navzgor), ničla
     po zamudi, ki je SŽ še ni potrdil, pa trenutne zamude ne izbriše."""
     c = _baza()
-    zamude_sz._odtis = "a"
-    zamude_sz.korak(c, [VRSTICA], ZDAJ)
+    _dvakrat(c, [VRSTICA], ZDAJ)
     zamude_sz._trenutne[("t1", DAN)] = (2000, int(ZDAJ), 20)
     lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ - POLNOC))["t1"]
     assert "trenutna_s" not in lm and lm["sz_ts"] == int(ZDAJ)
-    zamude_sz._odtis = "b"
-    zamude_sz.korak(c, [POVECANA], ZDAJ + 15)
+    _dvakrat(c, [POVECANA], ZDAJ + 15)
     zamude_sz._odtis = "c"
     nicla = {**VRSTICA, "Postaja": "Nova Gorica", "Odhod": "08:07", "Zamuda_cas": 0}
-    assert zamude_sz.korak(c, [nicla], ZDAJ + 30)["nicel"] == 1
+    assert zamude_sz.korak(c, [nicla], ZDAJ + 30)["nepotrjenih"] == 1
     assert zamude_sz.trenutne(DAN, ["t1"], ZDAJ + 30)["t1"]["s"] == 3900
 
 
@@ -175,21 +188,21 @@ def test_straza_vidi_prikaz_ki_ne_drzi():
     """16. 10. 2026: vir je odgovarjal, zdravje zeleno, prikaz pri 611 od 1 444
     voženj z zamudo prenizek. Straža primerja ustaljeno zamudo SŽ z mejo."""
     c = _baza()
-    for i in range(10):
+    for i in range(11):         # prvi odgovor je nepotrjen: straža ga ne šteje
         zamude_sz._odtis = str(i)
         s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 15 * i)["skladnost"]
     assert (s["primerjav"], s["prenizko"], s["previsoko"]) == (2, 0, 0), "ustaljena šele po 2 min"
     # Meja zaostane za SŽ (kot ob zaskočki): straža to vidi.
     c.execute("UPDATE run SET delay_dep = 600")
     zamude_sz._odtis = "x"
-    s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 150)["skladnost"]
+    s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 165)["skladnost"]
     assert (s["primerjav"], s["prenizko"], s["vlakov"]) == (3, 0, 0), "korak je vrstico spet zapisal"
     c.execute("UPDATE run SET delay_dep = 600")
-    s = zamude_sz.skladnost(c, zamude_sz.razberi([VRSTICA], _vr(c), ZDAJ + 165)[0], ZDAJ + 165)
+    s = zamude_sz.skladnost(c, zamude_sz.razberi([VRSTICA], _vr(c), ZDAJ + 180)[0], ZDAJ + 180)
     assert (s["primerjav"], s["prenizko"], s["vlakov"]) == (4, 1, 1)
     assert s["primeri"] == ["LP 4203 (SŽ +50, prikaz +10)"]
     # Okno je pol ure.
-    s = zamude_sz.skladnost(c, [], ZDAJ + 165 + zamude_sz.SKLADNOST_OKNO_S - 10)
+    s = zamude_sz.skladnost(c, [], ZDAJ + 180 + zamude_sz.SKLADNOST_OKNO_S - 10)
     assert s["primerjav"] == 1
 
 
@@ -209,17 +222,24 @@ def test_straza_ne_steje_vlaka_ki_ga_sz_rise_po_voznem_redu():
     assert (s["primerjav"], s["previsoko"]) == (1, 1)
 
 
-def test_zapis_v_run_ohrani_prihod():
-    """Zemljevid pove le odhod; prihod, ki je v `run` od prej, ostane."""
+def test_prvi_zapis_nastavi_prihod_in_odhod_naslednji_samo_odhod():
+    """Zemljevid pove eno zamudo. Prvi zapis postanka (v `sz_zamuda` ga še ni)
+    nastavi prihod IN odhod -- zemljevid postanek preklopi ob prihodu, torej je
+    prva vrednost prihodna -- in povozi napoved derp.si; naslednji samo odhod.
+    Od 1. 11. 2026 671 postankov „stal >= 10 min“ pri postanku <= 2 min, v 664
+    prihod 0 (napoved derp.si)."""
     c = _baza()
     c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
-              "VALUES('t1', ?, 20, 2900, NULL, ?)", (DAN, ZDAJ - 300))
+              "VALUES('t1', ?, 20, 0, 0, ?)", (DAN, ZDAJ - 300))
     izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ)
-    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1, "nicel": 0}
+    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1}
     assert c.execute("SELECT delay_arr, delay_dep, feed_ts FROM run WHERE stop_seq = 20"
-                     ).fetchone()[:] == (2900, 3000, int(ZDAJ))
-    assert c.execute("SELECT delay_s, v_run FROM sz_zamuda").fetchone()[:] == (3000, 1)
-    assert c.execute("SELECT COUNT(*) FROM obs").fetchone()[0] == 1
+                     ).fetchone()[:] == (3000, 3000, int(ZDAJ))
+    assert c.execute("SELECT delay_arr, delay_dep FROM obs").fetchone()[:] == (3000, 3000)
+    zamude_sz.zapisi(c, [("t1", DAN, 20, 3120, False)], ZDAJ + 30)
+    assert c.execute("SELECT delay_arr, delay_dep FROM run WHERE stop_seq = 20"
+                     ).fetchone()[:] == (3000, 3120)
+    assert c.execute("SELECT delay_s, v_run FROM sz_zamuda").fetchone()[:] == (3120, 1)
 
 
 def test_vlak_ne_gre_nazaj_z_manjso_zamudo():
@@ -250,39 +270,77 @@ def test_nazaj_z_vecjo_zamudo_je_zvisana_zamuda():
     assert (lm["stop_seq"], lm["delay_s"]) == (20, 420)
 
 
+def test_zastarel_odgovor_ne_spremeni_vlaka():
+    """Vzorec A, B, A (1.--6. 11. 2026 na 3 190 voženj-dneh: 10 689 ničel, 202
+    višjih, 6 nižjih za en odgovor). LPV 2206 6. 11.: +15 namesto +2/+3, ob
+    07:57:18 in 08:07:48; po starem pravilu „nazaj z večjo zamudo velja“ in s
+    poročilom v `delay_report`."""
+    c = _baza()
+    pravo, zastarelo = ("t1", DAN, 20, 120, False), ("t1", DAN, 20, 900, False)
+    assert _odgovor(c, [pravo], ZDAJ)["nepotrjenih"] == 1       # prvo stanje vlaka čaka
+    assert _odgovor(c, [pravo], ZDAJ + 15)["zapisanih"] == 1
+    izid = _odgovor(c, [zastarelo], ZDAJ + 30)
+    assert (izid["nepotrjenih"], izid["zapisanih"]) == (1, 0)
+    assert _odgovor(c, [pravo], ZDAJ + 45)["zapisanih"] == 1    # enako zadnjemu zapisanemu
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 20").fetchone()[0] == 120
+    assert c.execute("SELECT COUNT(*) FROM delay_report").fetchone()[0] == 0
+    assert c.execute("SELECT COUNT(*) FROM obs WHERE delay_dep = 900").fetchone()[0] == 0
+    # Prava sprememba je v dveh odgovorih zapored potrjena.
+    assert _odgovor(c, [zastarelo], ZDAJ + 60)["zapisanih"] == 0
+    assert _odgovor(c, [zastarelo], ZDAJ + 75)["zapisanih"] == 1
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 20").fetchone()[0] == 900
+    assert c.execute("SELECT COUNT(*) FROM delay_report").fetchone()[0] == 1
+
+
 def test_nicla_po_zamudi_velja_sele_potrjena():
     """16. 10. 2026: SŽ na vsake 3--4 min za en odgovor del vlakov pokaže po
-    voznem redu, z zamudo 0 in postajo naprej. Sprejet tak odgovor je vlak
-    prestavil naprej in prvo varovalo je nato zavračalo prave vrstice (RG
-    318: +0 od Zidanega Mosta do Ljubljane Polje, v resnici +12 do +18)."""
+    voznem redu, z zamudo 0 in postajo naprej (RG 318: +0 od Zidanega Mosta do
+    Ljubljane Polje, v resnici +12 do +18). Ničla je posebnost splošnega
+    pravila: stanje velja šele, ko ga potrdi naslednji spremenjen odgovor."""
     c = _baza()
-    zamude_sz.zapisi(c, [("t1", DAN, 20, 1260, False)], ZDAJ)
-    izid = zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ + 15)
-    assert (izid["nicel"], izid["zapisanih"]) == (1, 0)
+    _odgovor(c, [("t1", DAN, 20, 1260, False)], ZDAJ)
+    _odgovor(c, [("t1", DAN, 20, 1260, False)], ZDAJ + 5)
+    izid = _odgovor(c, [("t1", DAN, 21, 0, False)], ZDAJ + 15)
+    assert (izid["nepotrjenih"], izid["zapisanih"]) == (1, 0)
     # Naslednji odgovor je spet pravi: vlak ni šel naprej ne nazaj.
-    izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 1260, False)], ZDAJ + 30)
-    assert (izid["nazaj"], izid["zapisanih"]) == (0, 1)
+    izid = _odgovor(c, [("t1", DAN, 20, 1260, False)], ZDAJ + 30)
+    assert (izid["nazaj"], izid["zapisanih"], izid["nepotrjenih"]) == (0, 1, 0)
     assert c.execute("SELECT MAX(stop_seq) FROM run").fetchone()[0] == 20
     # Dve ničli zapored pa sta okrevanje, ne napaka.
-    zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ + 45)
-    assert zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ + 60)["zapisanih"] == 1
+    _odgovor(c, [("t1", DAN, 21, 0, False)], ZDAJ + 45)
+    assert _odgovor(c, [("t1", DAN, 21, 0, False)], ZDAJ + 60)["zapisanih"] == 1
     assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 21").fetchone()[0] == 0
-    # Ničla po ničli pa ne čaka.
-    c2 = _baza()
-    zamude_sz.zapisi(c2, [("t1", DAN, 20, 0, False)], ZDAJ)
-    assert zamude_sz.zapisi(c2, [("t1", DAN, 21, 0, False)], ZDAJ + 15)["zapisanih"] == 1
 
 
-def test_nicla_naprej_ne_odpre_vrat_naslednji():
-    """Po prvem popravku 16. 10. 2026: vlak, ki je ničlo naprej že imel (od
-    prej ali potrjeno), je vsako naslednjo ničlo spustil skozi, ker je bil
-    postanek najdlje naprej ničla. LPV 2504 +0 ob 14:40, 14:47 in 14:51, SŽ
-    vmes +16 do +18. Šteje zadnja beseda SŽ, ne postanek najdlje naprej."""
+def test_kandidat_ki_ga_naslednji_odgovor_ne_ponovi_odpade():
+    """Vlak, ki ga naslednji spremenjen odgovor ne kaže, ne potrdi nič; A, B, C
+    ne zapiše ničesar razen A."""
     c = _baza()
-    zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ)            # ničla od prej
-    zamude_sz.zapisi(c, [("t1", DAN, 20, 1080, False)], ZDAJ + 15)    # SŽ spet +18
-    izid = zamude_sz.zapisi(c, [("t1", DAN, 22, 0, False)], ZDAJ + 30)
-    assert (izid["nicel"], izid["zapisanih"]) == (1, 0)
+    a, b, k = ("t1", DAN, 20, 120, False), ("t1", DAN, 20, 900, False), ("t1", DAN, 20, 600, False)
+    _odgovor(c, [a], ZDAJ)
+    _odgovor(c, [a], ZDAJ + 15)
+    assert _odgovor(c, [b], ZDAJ + 30)["nepotrjenih"] == 1
+    assert _odgovor(c, [], ZDAJ + 45)["nepotrjenih"] == 0          # vlaka ni v odgovoru
+    assert _odgovor(c, [b], ZDAJ + 60)["zapisanih"] == 0           # b ni bil v prejšnjem
+    assert _odgovor(c, [k], ZDAJ + 75)["zapisanih"] == 0
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 20").fetchone()[0] == 120
+
+
+def test_nepotrjena_zamuda_ne_pride_v_trenutno_zamudo():
+    """Isto za vlak z odhodom v prihodnosti (trenutna zamuda): zastarel odgovor
+    je ne postavi, potrjen jo."""
+    c = _baza()
+    _dvakrat(c, [VRSTICA], ZDAJ)
+    _dvakrat(c, [POVECANA], ZDAJ + 15)
+    assert zamude_sz.trenutne(DAN, ["t1"], ZDAJ + 15)["t1"]["s"] == 3900
+    zamude_sz._odtis = "x"
+    zastarelo = {**VRSTICA, "Odhod": "09:59", "Zamuda_cas": 123}
+    s = zamude_sz.korak(c, [zastarelo], ZDAJ + 30)
+    assert (s["nepotrjenih"], s["prihodnjih"]) == (1, 1)
+    assert zamude_sz.trenutne(DAN, ["t1"], ZDAJ + 30)["t1"]["s"] == 3900
+    zamude_sz._odtis = "y"
+    zamude_sz.korak(c, [zastarelo], ZDAJ + 45)
+    assert zamude_sz.trenutne(DAN, ["t1"], ZDAJ + 45)["t1"]["s"] == 7380
 
 
 def test_na_cilju_velja_prvi_prihod_nicla_po_zamudi_ni_prihod():
@@ -292,7 +350,7 @@ def test_na_cilju_velja_prvi_prihod_nicla_po_zamudi_ni_prihod():
     assert zamude_sz.zapisi(c, [("t1", DAN, 22, 420, True)], ZDAJ + 30)["zapisanih"] == 1
     assert zamude_sz.zapisi(c, [("t1", DAN, 22, 0, True)], ZDAJ + 150)["zapisanih"] == 0
     assert c.execute("SELECT delay_arr, delay_dep FROM run WHERE stop_seq = 22"
-                     ).fetchone()[:] == (420, None)
+                     ).fetchone()[:] == (420, 420)
     # Ponastavitev, ki je prvi prihod, ki ga vidimo (zamudili smo pravega).
     zamude_sz.zapisi(c, [("t2", DAN, 21, 480, False)], ZDAJ)
     assert zamude_sz.zapisi(c, [("t2", DAN, 22, 0, True)], ZDAJ + 150)["ponastavljenih"] == 1
@@ -402,7 +460,7 @@ def test_korak_zapise_kdaj_se_je_zemljevid_nazadnje_spremenil():
     c = _baza()
     zamude_sz._odtis = "a"
     s = zamude_sz.korak(c, [VRSTICA], ZDAJ)
-    assert (s["vlakov"], s["zapisanih"], s["spremenjeno_ts"]) == (1, 1, int(ZDAJ))
+    assert (s["vlakov"], s["nepotrjenih"], s["spremenjeno_ts"]) == (1, 1, int(ZDAJ))
     s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 30)
     assert s["spremenjeno_ts"] == int(ZDAJ), "isti odgovor"
     # Drug odgovor, a SŽ o vlaku ne pove nič novega (polje, ki teče z uro):
@@ -420,8 +478,7 @@ def test_nespremenjen_odgovor_ne_premakne_casa_podatka():
     """Branje na 5 s, SŽ preračuna na 15: isti odgovor samo potrdi, da vir
     živi -- vrednosti ostanejo s časom, ko jih je SŽ prvič povedal."""
     c = _baza()
-    zamude_sz._odtis = "a"
-    zamude_sz.korak(c, [VRSTICA], ZDAJ)
+    _dvakrat(c, [VRSTICA], ZDAJ)
     feed_ts = c.execute("SELECT feed_ts FROM obs").fetchall()
     sz = c.execute("SELECT zadnjic_ts FROM sz_zamuda").fetchall()
     s = zamude_sz.korak(c, [VRSTICA], ZDAJ + 5, nespremenjeno=True)
@@ -587,3 +644,136 @@ def test_zamrznjen_zemljevid_ne_vodi():
     assert not zamude_sz.vodi({"vlakov": 3, "nepripetih": 3, "spremenjeno_ts": zdaj}, zdaj)
     # Ponoči en ali dva vlaka lahko dolgo stojita: to ni zamrznitev.
     assert zamude_sz.vodi({"vlakov": 2, "nepripetih": 0, "spremenjeno_ts": zdaj - 3600}, zdaj)
+
+
+def _feed_z_uro(trip_id, zamuda, ts):
+    f = _feed_zamud(trip_id, zamuda)
+    f.header.timestamp = int(ts)
+    f.entity[0].trip_update.timestamp = int(ts)
+    return f
+
+
+def test_zemljevid_vodi_od_zagona(monkeypatch):
+    """Ob zagonu je `_sz_ts` 0 in prvi poll derp.si je zapisal VSE vlake z
+    napovedjo za vse postanke (6. 11. 2026 ob 7.38 122 vlakov, LPV 2206 +15 na
+    vseh 12 postankih). Zdaj zemljevid dobi `SZ_VODI_S` priložnosti."""
+    c = _baza()
+    monkeypatch.setattr(iz_lege.config, "SZ_ZAMUDE", True)
+    assert not iz_lege.sz_vodi()
+    iz_lege.sz_pricakuj()
+    assert iz_lege.sz_vodi()
+    izid = collector.ingest(c, _feed_zamud("t1", 240))
+    assert izid["sz_prevzel"] == 1
+    assert c.execute("SELECT COUNT(*) FROM run").fetchone()[0] == 0
+    # Zemljevid v SZ_VODI_S ne odgovori: derp.si prevzame kot doslej.
+    iz_lege._sz_ts -= iz_lege.SZ_VODI_S + 1
+    assert collector.ingest(c, _feed_zamud("t1", 240))["sz_prevzel"] == 0
+    assert c.execute("SELECT delay_dep FROM run").fetchone()[0] == 240
+
+
+def test_brez_niti_zemljevida_derp_pise_kot_prej(monkeypatch):
+    """Namestitev brez zemljevida (`KAJROS_SZ_ZAMUDE=0`, malina) ne čaka."""
+    monkeypatch.setattr(iz_lege.config, "SZ_ZAMUDE", False)
+    iz_lege.sz_pricakuj()
+    assert not iz_lege.sz_vodi()
+    assert collector.ingest(_baza(), _feed_zamud("t1", 240))["sz_prevzel"] == 0
+
+
+def test_napoved_vlaka_gre_v_obs_ne_v_run():
+    """MV 247 6. 11. 2026 ob 7.49: 0/0 na vseh 16 postankih, odhod ob 9.15. Od
+    1. 11. 671 postankov „stal >= 10 min“ pri postanku <= 2 min, v 664 prihod
+    natanko 0. Vrednost, ki postanek postavlja v prihodnost, je napoved: v `obs`
+    (backtest operaterja), v `run` ne."""
+    c = _baza()
+    # Solkan (21) odhod 08:07, feed ob 07:30 pove +0: postanek je čez 37 min.
+    izid = collector.ingest(c, _feed_z_uro("t1", 0, POLNOC + _ura(7, 30)))
+    assert izid["napovedi_vlakov"] == 1
+    assert c.execute("SELECT COUNT(*) FROM run").fetchone()[0] == 0
+    assert c.execute("SELECT delay_dep FROM obs").fetchone()[0] == 0
+    # Ista vrednost, ko je postanek mimo (ali ob njem, v minuti): meritev.
+    izid = collector.ingest(c, _feed_z_uro("t1", 0, POLNOC + _ura(8, 7) - 30))
+    assert izid["napovedi_vlakov"] == 0
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 21").fetchone()[0] == 0
+    # Zamuda premakne postanek v prihodnost: +10 min ob 08:10 je napoved.
+    izid = collector.ingest(c, _feed_z_uro("t1", 600, POLNOC + _ura(8, 10)))
+    assert izid["napovedi_vlakov"] == 1
+    assert c.execute("SELECT delay_dep FROM run WHERE stop_seq = 21").fetchone()[0] == 0
+
+
+def test_napoved_nadomestnega_avtobusa_ostane_v_run():
+    """Pravilo je za vlake: nadomestni avtobus (`mode = 'bus'`, omrežje
+    zeleznica) piše derp.si kot doslej."""
+    c = _baza()
+    c.execute("UPDATE trip SET mode = 'bus' WHERE trip_id = 't1'")
+    c.commit()
+    izid = collector.ingest(c, _feed_z_uro("t1", 0, POLNOC + _ura(7, 30)))
+    assert izid["napovedi_vlakov"] == 0
+    assert c.execute("SELECT COUNT(*) FROM run").fetchone()[0] == 1
+
+
+def _obs(c, t, seq, arr, dep, ts, dan=DAN):
+    c.execute("INSERT INTO obs(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts, "
+              "observed_at) VALUES(?,?,?,?,?,?,?)", (t, dan, seq, arr, dep, ts, ts))
+
+
+def _run(c, t, seq, arr, dep, dan=DAN):
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
+              "VALUES(?,?,?,?,?,?)", (t, dan, seq, arr, dep, 1))
+
+
+def test_popravi_vlake_prihod_iz_zemljevida():
+    """Prihod v `run` iz napovedi derp.si dobi najzgodnejšo vrednost zemljevida
+    (zapis `delay_arr IS NULL AND delay_dep IS NOT NULL`), če se razlikuje za
+    >= 60 s; cilj z zapisom zemljevida dobi odhod = prihod."""
+    c = _baza()
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network) "
+              "VALUES('b1', 'r', 'BUS 1', 's1', 'bus', '1161', 'zeleznica')")
+    c.execute("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) VALUES('b1',1,'P',1,1)")
+    db.fill_trip_window(c)
+    # Postanek 20: derp.si napoved 0/0, zemljevid +5 in pozneje +9 -> prvi šteje.
+    _obs(c, "t1", 20, 0, 0, 100)
+    _obs(c, "t1", 20, None, 300, 200)
+    _obs(c, "t1", 20, None, 540, 300)
+    _run(c, "t1", 20, 0, 540)
+    # Postanek 21: razlika 30 s, pod mejo.
+    _obs(c, "t1", 21, None, 30, 200)
+    _run(c, "t1", 21, 0, 30)
+    # Postanek 19 nima zapisa zemljevida (derp.si piše oba).
+    _obs(c, "t1", 19, 0, 600, 100)
+    _run(c, "t1", 19, 0, 600)
+    # Cilj: prihod z zemljevida brez odhoda.
+    _obs(c, "t1", 22, 420, None, 400)
+    _run(c, "t1", 22, 420, None)
+    # Nadomestni avtobus se ne dotakne.
+    _obs(c, "b1", 1, None, 300, 200)
+    _run(c, "b1", 1, 0, 300)
+    c.commit()
+
+    izid = zamude_sz.popravi_vlake(c, "2026-09-01")
+    assert (izid["postankov"], izid["cilj_postankov"], izid["voznj"]) == (1, 1, 1)
+    assert izid["dnevi"] == {DAN: {"postankov": 1, "cilj_postankov": 1, "voznj": 1}}
+    assert c.execute("SELECT delay_arr FROM run WHERE trip_id = 't1' AND stop_seq = 20"
+                     ).fetchone()[0] == 0, "brez --zapisi se ne spremeni nič"
+    assert zamude_sz.popravi_vlake(c, "2026-09-16")["postankov"] == 0, "dnevi od --od"
+
+    izid = zamude_sz.popravi_vlake(c, "2026-09-01", zapisi=True)
+    assert izid["postankov"] == 1 and izid["zapisano"]
+    vrstice = {(t, q): (a, d) for t, q, a, d in c.execute(
+        "SELECT trip_id, stop_seq, delay_arr, delay_dep FROM run")}
+    assert vrstice[("t1", 20)] == (300, 540)
+    assert vrstice[("t1", 21)] == (0, 30)
+    assert vrstice[("t1", 19)] == (0, 600)
+    assert vrstice[("t1", 22)] == (420, 420)
+    assert vrstice[("b1", 1)] == (0, 300)
+    # Idempotentno.
+    assert zamude_sz.popravi_vlake(c, "2026-09-01")["postankov"] == 0
+
+
+def test_ukaz_popravi_vlake(monkeypatch, capsys):
+    from kajros import cli
+    c = _baza()
+    monkeypatch.setattr(cli.db, "connect", lambda *a, **k: c)
+    monkeypatch.setattr(cli.db, "init", lambda conn: None)
+    cli.main(["popravi-vlake", "--od", "2026-09-01"])
+    izpis = capsys.readouterr().out
+    assert '"postankov": 0' in izpis and "samo štetje" in izpis
