@@ -97,6 +97,15 @@ class GlavnaDejavnost : Activity() {
     /** Dovoljenje za lego zahteva sistem asinhrono; stran medtem caka na odgovor. */
     private var cakajocaLega: Pair<String, GeolocationPermissions.Callback>? = null
 
+    /** Prva lega za stran; ven gre samo na našo stran, kot vse pri legi. */
+    val hitraLega by lazy {
+        HitraLega(this) { zapis ->
+            if (Nastavitve.jeNas(web.url, Nastavitve.naslov(this))) {
+                web.evaluateJavascript("window.kajrosPopravek && window.kajrosPopravek($zapis)", null)
+            }
+        }
+    }
+
     /** Kdaj je „Vklopi“ vprašal sistem: odgovor brez okna pride takoj ([Lega.BREZ_OKNA_MS]). */
     private var legaVprasanaMs = 0L
 
@@ -530,6 +539,7 @@ class GlavnaDejavnost : Activity() {
 
     override fun onPause() {
         super.onPause()
+        hitraLega.ustavi()
         legaObOdhodu = DeljenjeStoritev.smeLego(this)
     }
 

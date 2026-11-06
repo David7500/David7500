@@ -216,15 +216,19 @@ class WidgetBudilke : AppWidgetProvider() {
 
             // ---------- velikosti ----------
 
-            /** Brez budilk widget ne sme biti prazen pravokotnik: pove, da ni okvara, in kje se nastavi. */
+            /**
+             * Brez budilk widget ne sme biti prazen pravokotnik: pove, da ni
+             * okvara, in kje se nastavi. `_prazen`: stikalo zadnje budilke sicer
+             * ostane (`res/values/postavitve.xml`).
+             */
             private fun prazno(vel: Velikost): RemoteViews {
                 val v = when (vel) {
-                    Velikost.MINI -> RemoteViews(c.packageName, R.layout.w_mini).apply {
+                    Velikost.MINI -> RemoteViews(c.packageName, R.layout.w_mini_prazen).apply {
                         setTextViewText(R.id.nad, c.getString(R.string.widget_budilke_glava))
                         setTextViewText(R.id.glavno, "—")
                         setTextColor(R.id.glavno, c.getColor(R.color.ink_dim))
                     }
-                    Velikost.PAS -> RemoteViews(c.packageName, R.layout.w_pas).apply {
+                    Velikost.PAS -> RemoteViews(c.packageName, R.layout.w_pas_prazen).apply {
                         setTextViewText(R.id.glavno, c.getString(R.string.widget_budilke_prazno))
                         setTextViewText(R.id.nad, c.getString(R.string.widget_budilke_kako))
                     }
@@ -239,6 +243,7 @@ class WidgetBudilke : AppWidgetProvider() {
                     }).apply {
                         setViewVisibility(R.id.bud_prazno, View.VISIBLE)
                         VRSTICA.forEach { setViewVisibility(it, View.GONE) }
+                        setViewVisibility(R.id.bud_vec, View.GONE)
                         setViewVisibility(R.id.seznam, View.GONE)
                         setTextViewText(R.id.bud_naslednja, "")
                     }
@@ -303,6 +308,7 @@ class WidgetBudilke : AppWidgetProvider() {
                 val v = RemoteViews(c.packageName, R.layout.w_budilke_seznam)
                 naSeznam(v)
                 v.setViewVisibility(R.id.bud_prazno, View.GONE)
+                v.setViewVisibility(R.id.seznam, View.VISIBLE)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     val s = RemoteViews.RemoteCollectionItems.Builder()
                         .setHasStableIds(true).setViewTypeCount(1)

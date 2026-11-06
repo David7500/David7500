@@ -98,6 +98,9 @@ class Widget : AppWidgetProvider() {
 
         private const val IZRISI = "app.kajros.ODSTEVANJE_IZRISI"
 
+        /** Velikost `glavno` v `w_odstevanje_srednji`; [Risba.stevilka] jo sme zmanjsati. */
+        private const val VELIKA_SP = 38f
+
         /** Prerise vse widgete. Klice se od povsod, kjer se budilke spremenijo. */
         fun osvezi(c: Context) {
             val am = AppWidgetManager.getInstance(c) ?: return
@@ -165,17 +168,21 @@ class Widget : AppWidgetProvider() {
         /**
          * Brez budilke ni kam peljati in ostane domaca stran. Siva podlaga:
          * rjava kartica brez budilke bi obljubljala nekaj, cesar ni.
+         *
+         * `_prazen`, ne ista postavitev: glej `res/values/postavitve.xml`.
          */
         private fun brezBudilke(c: Context, vel: Velikost): RemoteViews {
             val v = when (vel) {
-                Velikost.MINI -> RemoteViews(c.packageName, R.layout.w_mini).apply {
+                Velikost.MINI -> RemoteViews(c.packageName, R.layout.w_mini_prazen).apply {
                     setTextViewText(R.id.nad, c.getString(R.string.ime))
                     setTextViewText(R.id.glavno, "—")
                     setTextColor(R.id.glavno, c.getColor(R.color.ink_dim))
                     setTextViewText(R.id.pod, c.getString(R.string.widget_brez))
                     setTextViewTextSize(R.id.pod, TypedValue.COMPLEX_UNIT_SP, 11f)
+                    // Na 70 dp odmiki žetona prelomijo „ni budilke“ v „ni“.
+                    setViewPadding(R.id.pod, 0, 0, 0, 0)
                 }
-                Velikost.PAS -> RemoteViews(c.packageName, R.layout.w_pas).apply {
+                Velikost.PAS -> RemoteViews(c.packageName, R.layout.w_pas_prazen).apply {
                     setTextViewText(R.id.glavno, c.getString(R.string.widget_brez_naslov))
                     setTextViewText(R.id.nad, c.getString(R.string.widget_brez_kako))
                 }
@@ -273,9 +280,11 @@ class Widget : AppWidgetProvider() {
                     else -> {
                         val napis = Izris.danUra(c, izid.odhodMs, zdaj)
                         v.setTextViewText(R.id.glavno, napis)
-                        // Samo daljsi napis ("jutri 06:57") gre manjsi; ura sama ostane velika.
-                        if (napis.length > 5) manjsa?.let {
-                            v.setTextViewTextSize(R.id.glavno, TypedValue.COMPLEX_UNIT_SP, it)
+                        // Samo daljsi napis ("jutri 06:57") gre manjsi; ura sama ostane
+                        // velika, tudi kadar je bil pred njo daljsi (`reapply`).
+                        manjsa?.let {
+                            v.setTextViewTextSize(R.id.glavno, TypedValue.COMPLEX_UNIT_SP,
+                                if (napis.length > 5) it else VELIKA_SP)
                         }
                     }
                 }
@@ -412,6 +421,9 @@ class Widget : AppWidgetProvider() {
                 stevilka(v, null, samoUra = true)
                 val dan = Izris.dan(c, izid.odhodMs, zdaj)
                 if (!zetonPove && dan != c.getString(R.string.widget_danes)) {
+                    // Ista vrstica je bila lahko zeton ali skrita (`reapply`).
+                    v.setViewVisibility(R.id.pod, View.VISIBLE)
+                    v.setInt(R.id.pod, "setBackgroundResource", 0)
                     v.setTextViewText(R.id.pod, dan)
                     v.setTextColor(R.id.pod, t.drugotna)
                 } else {

@@ -115,7 +115,7 @@ class SledenjeTest {
         // vlak po zadnjem podatku se tri minute dalec.
         val b = odzvonjena(300, ob(7, 29))
         assertTrue(b.sledenjeOb(ob(7, 33)) != null)
-        assertEquals(ob(7, 36) + Ura.SLEDENJE_ZA_MS, b.konecSledenjaMs())
+        assertEquals(ob(7, 36) + Ura.SLEDENJE_VLAK_MS, b.konecSledenjaMs())
     }
 
     @Test
@@ -125,7 +125,7 @@ class SledenjeTest {
         val b = odzvonjena(300, ob(7, 25))
         assertEquals(ob(7, 31), b.izracun(ob(7, 30)).odhodMs)
         assertTrue(b.sledenjeOb(ob(7, 34)) != null)
-        assertEquals(null, b.sledenjeOb(ob(7, 37, 31)))
+        assertEquals(null, b.sledenjeOb(ob(7, 46, 1)))
     }
 
     @Test
@@ -134,17 +134,18 @@ class SledenjeTest {
         // preklopiti na "zdaj", in to zna samo ob izrisu.
         val b = odzvonjena(300, ob(7, 35))
         assertEquals(ob(7, 36), b.sledenjeOb(ob(7, 35, 10)))
-        // Po odhodu je naslednja budnica konec sledenja, ne nov korak cez njega.
-        assertEquals(ob(7, 37, 30), b.sledenjeOb(ob(7, 36, 10)))
+        // Po odhodu navaden korak, zadnja budnica pa ne cez konec sledenja.
+        assertEquals(ob(7, 38, 10), b.sledenjeOb(ob(7, 36, 10)))
+        assertEquals(ob(7, 46), b.sledenjeOb(ob(7, 45)))
     }
 
     @Test
     fun `enkratna je opravljena s koncem sledenja, ne prej`() {
         val b = odzvonjena(300, ob(7, 29))
-        assertEquals(false, b.opravljena(ob(7, 37, 29)))
-        assertTrue(b.opravljena(ob(7, 37, 30)))
+        assertEquals(false, b.opravljena(ob(7, 45, 59)))
+        assertTrue(b.opravljena(ob(7, 46)))
         // Ugasnjena in neodzvonjena gre ob istem trenutku.
-        assertTrue(b.copy(odzvonjeno = false, ugasnjena = true).opravljena(ob(7, 37, 30)))
+        assertTrue(b.copy(odzvonjeno = false, ugasnjena = true).opravljena(ob(7, 46)))
     }
 
     @Test
@@ -157,7 +158,37 @@ class SledenjeTest {
     @Test
     fun `prezgoden avtobus ne podaljsa sledenja cez vozni red`() {
         val b = odzvonjena(-120, ob(7, 25)).copy(omrezje = "avtobus")
-        assertEquals(ob(7, 31) + Ura.SLEDENJE_ZA_MS, b.konecSledenjaMs())
+        assertEquals(ob(7, 31) + Ura.SLEDENJE_BUS_MS, b.konecSledenjaMs())
+    }
+
+    @Test
+    fun `stevec na nicli ni odhod, sledenje caka na potrditev`() {
+        // 5. 11. 2026: feed novo zamudo pogosto javi sele, ko bi vlak ze moral
+        // biti tam. Ob 7:40 (cetrt minute po nicli) se vedno sprasujemo.
+        val b = odzvonjena(300, ob(7, 39))
+        assertTrue(b.izracun(ob(7, 40)).odhodMs < ob(7, 40))
+        assertTrue(b.sledenjeOb(ob(7, 40)) != null)
+        assertEquals(ob(7, 46), b.konecSledenjaMs())
+    }
+
+    @Test
+    fun `potrjen odhod konca sledenje`() {
+        val b = odzvonjena(300, ob(7, 39)).copy(potrjeno = true)
+        assertEquals(ob(7, 36) + Ura.SLEDENJE_POTRJENO_MS, b.konecSledenjaMs())
+        assertEquals(null, b.sledenjeOb(ob(7, 38)))
+        assertTrue(b.opravljena(ob(7, 38)))
+    }
+
+    @Test
+    fun `nova zamuda po nicli prestavi konec sledenja`() {
+        val prej = odzvonjena(300, ob(7, 39)).konecSledenjaMs()
+        assertEquals(prej + 7 * 60_000L, odzvonjena(720, ob(7, 39)).konecSledenjaMs())
+    }
+
+    @Test
+    fun `potrditev gre s ponovitvijo stran`() {
+        val b = odzvonjena(300, ob(7, 39)).copy(potrjeno = true, dnevi = Ponovitev.VSI)
+        assertEquals(false, b.prestavljena(ob(7, 50)).potrjeno)
     }
 
     @Test

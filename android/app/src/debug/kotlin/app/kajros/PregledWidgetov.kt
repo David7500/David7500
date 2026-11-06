@@ -9,6 +9,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.SizeF
 import android.util.TypedValue
 import android.view.ViewGroup
@@ -62,6 +64,7 @@ class PregledWidgetov : Activity() {
         intent.getStringExtra("tapeta")?.let { tapeta(it == "svetla") }
         val kaj = intent.getStringExtra("kaj") ?: "tabla"
         if (kaj == "zivo") { zivo(); return }
+        if (kaj == "prehod") { prehod(); return }
         val stanje = intent.getStringExtra("stanje")?.toIntOrNull() ?: 0
         val svetlo = intent.getStringExtra("ozadje") == "svetlo"
         val zdaj = System.currentTimeMillis()
@@ -144,8 +147,37 @@ class PregledWidgetov : Activity() {
         WallpaperManager.getInstance(this).setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM)
     }
 
+    /**
+     * Budilka odide, medtem ko widget odšteva: launcher isto postavitev samo
+     * popravi (`reapply`), zato se vidi samo na pravih widgetih. Po 8 s je
+     * seznam prazen; stikala, rjave podlage in števca takrat ne sme biti več.
+     */
+    private fun prehod() {
+        val zdaj = System.currentTimeMillis()
+        Shramba.zapisi(this, listOf(budilka("p1", "RG 434", "Ljubljana", "Ljubljana Polje",
+            minuta(zdaj) + 20 * 60_000L, zamudaS = 0, zamudaObMs = zdaj, odzvonjeno = true)))
+        vezi(listOf(
+            Triple(Widget::class.java, 70, 70),
+            Triple(WidgetBudilke::class.java, 70, 70),
+            Triple(Widget::class.java, 110, 40),
+            Triple(WidgetBudilke::class.java, 110, 40),
+            Triple(WidgetBudilke::class.java, 130, 130),
+        ))
+        Handler(Looper.getMainLooper()).postDelayed({
+            Shramba.zapisi(this, emptyList())
+            Widgeti.osvezi(this)
+        }, 8000)
+    }
+
     /** Pravi widgeti, vezani na lastnega gostitelja: osvežitve pridejo od ponudnikov. */
-    private fun zivo() {
+    private fun zivo() = vezi(listOf(
+        Triple(WidgetTabla::class.java, 276, 220),
+        Triple(WidgetTabla::class.java, 276, 220),
+        Triple(Widget::class.java, 276, 102),
+        Triple(WidgetBudilke::class.java, 276, 220),
+    ))
+
+    private fun vezi(widgeti: List<Triple<Class<*>, Int, Int>>) {
         val am = AppWidgetManager.getInstance(this)
         val h = AppWidgetHost(this, 4747)
         // Ostanki prejšnjega zagona (ubit proces ne pokliče `onDestroy`).
@@ -158,12 +190,7 @@ class PregledWidgetov : Activity() {
         }
         val vsi = am.getInstalledProvidersForPackage(packageName, null)
         var relacija = false
-        for ((razred, s, v) in listOf(
-            Triple(WidgetTabla::class.java, 276, 220),
-            Triple(WidgetTabla::class.java, 276, 220),
-            Triple(Widget::class.java, 276, 102),
-            Triple(WidgetBudilke::class.java, 276, 220),
-        )) {
+        for ((razred, s, v) in widgeti) {
             val info = vsi.first { it.provider.className == razred.name }
             val id = h.allocateAppWidgetId()
             if (!am.bindAppWidgetIdIfAllowed(id, info.provider)) {

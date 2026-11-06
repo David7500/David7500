@@ -148,7 +148,7 @@ class Sprozilec : BroadcastReceiver() {
         // `Ura` sama presodi, kdaj je prestara.
         if (vozi.zamudaS == null) {
             return b.copy(tripId = vozi.tripId ?: b.tripId, stikObMs = zdaj,
-                tir = vozi.tir ?: b.tir)
+                tir = vozi.tir ?: b.tir, potrjeno = vozi.potrjen)
         }
         return b.copy(
             zamudaS = vozi.zamudaS,
@@ -156,6 +156,7 @@ class Sprozilec : BroadcastReceiver() {
             stikObMs = zdaj,
             tripId = vozi.tripId ?: b.tripId,
             tir = vozi.tir ?: b.tir,
+            potrjeno = vozi.potrjen,
         )
     }
 

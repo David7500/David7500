@@ -55,8 +55,20 @@ object Ura {
     /** Po zvonjenju: kako pogosto osvezimo zamudo, da widget odsteva prav. */
     const val SLEDENJE_KORAK_MS = 2 * 60_000L
 
-    /** Toliko po odhodu se sledenje konca in ponavljajoca gre na naslednji dan. */
-    const val SLEDENJE_ZA_MS = 90_000L
+    /**
+     * Toliko po pricakovanem odhodu se sledenje konca, kadar odhoda ni potrdil
+     * nihce, in ponavljajoca gre na naslednji dan. Stevec na nicli ni odhod:
+     * novo zamudo feed pogosto javi sele takrat, ko bi vozilo ze moralo biti
+     * tam. Izmerjeno 2.-4. 11. 2026 (zadnja znana zamuda ob nicli proti koncni,
+     * vlaki 19 612 postankov, avtobusi 11 954): pozneje kot pol minute po nicli
+     * vlaki 23,5 %, avtobusi 32,3 %; P95 8 min in 3,4 min. Do 5. 11. je bilo
+     * 90 s za oba.
+     */
+    const val SLEDENJE_VLAK_MS = 10 * 60_000L
+    const val SLEDENJE_BUS_MS = 5 * 60_000L
+
+    /** Kadar je strežnik odhod potrdil, je vozilo šlo: samo še zadnja osvežitev. */
+    const val SLEDENJE_POTRJENO_MS = 90_000L
 
     /**
      * Po zvonjenju zamuda velja **dve zgreseni osvezitvi** sledenja, isto

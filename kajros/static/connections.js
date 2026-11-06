@@ -76,16 +76,22 @@ function vrstaZetona(kind) {
   return "je-ocena";
 }
 
-/** Žeton zamude z enoto: „+2 min“, „3 min prej“, „točno“ (`oznake.md`). */
+/** „+2 min“, „3 min prej“, „točno“; beseda „min“ zase, da jo sme ozka vrstica
+ *  skriti (`.zt-min`, shranjene poti). */
+function zamudaZetona(z) {
+  return delayMin(z) === 0 ? "točno"
+    : escapeHtml(delayText(z)).replace(" min", '<span class="zt-min"> min</span>');
+}
+
+/** Žeton zamude z enoto (`oznake.md`). */
 function zetonHtml(z, kind) {
-  return `<span class="zt ${vrstaZetona(kind)}" style="--z:${delayColor(z)}">${
-    escapeHtml(delayMin(z) === 0 ? "točno" : delayText(z))}</span>`;
+  return `<span class="zt ${vrstaZetona(kind)}" style="--z:${delayColor(z)}">${zamudaZetona(z)}</span>`;
 }
 
 /** Zgodovina, ne napoved za danes: „običajno +4 min“, črtkano. */
 function obicajnoHtml(t) {
   return `<span class="zt je-obicajno" style="--z:${delayColor(t.median_s)}">${SVG_ZGODOVINA}običajno ${
-    escapeHtml(delayMin(t.median_s) === 0 ? "točno" : delayText(t.median_s))}</span>`;
+    zamudaZetona(t.median_s)}</span>`;
 }
 
 /** „11:42 vozni red ~~11:45~~“; brez številke ali ob ničli „vozni red 11:45“. */
@@ -1846,8 +1852,13 @@ $("fav-toggle").addEventListener("click", favToggle);
 const NAJBLIZJE_DO_M = 2000;
 // Aplikacija stran pusti odprto ure: predlog od doma ni predlog v službi.
 const NAJBLIZJE_STARO_MS = 5 * 60000;
+//: Toliko po prvi natančni legi GPS še teče, da se ustali.
+const NAJBLIZJE_USTALI_MS = 10000;
+//: Manjši premik predloga ne spremeni: GPS na mestu pleše.
+const NAJBLIZJE_PREMIK_M = 50;
 
-const najblizje = { postaja: null, tabla: null, ts: 0, odjava: null, rok: null, stanje: null };
+const najblizje = { postaja: null, tabla: null, ts: 0, odjava: null, rok: null, stanje: null,
+                    pribl: false, kje: null, tek: 0 };
 
 function razdaljaBesedilo(m) {
   return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace(".", ",")} km`;
@@ -1882,7 +1893,7 @@ function izrisiNajblizje() {
   // žeton (osnutek E2), kartica z obema stranema ceste je za prazno stran (E1).
   if (favLoad().length) {
     el.innerHTML = `<button type="button" class="nb-vprasaj" data-smer="">${SVG_TI}Najbližje: <b>${
-      escapeHtml(p.name)}</b> <span>· ${razdaljaBesedilo(p.meters)}</span></button>`;
+      escapeHtml(p.name)}</b> <span>· ${najblizje.pribl ? "približno" : razdaljaBesedilo(p.meters)}</span></button>`;
     el.hidden = false;
     return;
   }
@@ -1901,7 +1912,7 @@ function izrisiNajblizje() {
     vrstice = deli.join("");
   }
   el.innerHTML = `<button type="button" class="nb-glava" data-smer="">${SVG_TI}<b>${escapeHtml(p.name)}</b>
-      <span>${razdaljaBesedilo(p.meters)} od tebe</span></button>
+      <span>${najblizje.pribl ? "približno " : ""}${razdaljaBesedilo(p.meters)} od tebe</span></button>
     ${vrstice ? `<div class="nb-strani">${vrstice}</div>` : ""}`;
   el.hidden = false;
 }
@@ -1912,17 +1923,35 @@ function koncajNajblizje() {
 }
 
 async function obLegiNajblizje(l) {
-  if (!l || l.acc > LEGA_DOVOLJ_M) return;
-  // Ena natančna lega je dovolj: tabla ni zemljevid in GPS ugasne.
-  koncajNajblizje();
+  if (!l || l.acc > LEGA_PRIBLIZNO_M) return;
+  const natancna = l.acc <= LEGA_DOVOLJ_M;
+  const prej = najblizje.kje;
+  const prejNatancna = !!prej && prej.acc <= LEGA_DOVOLJ_M;
+  if (prejNatancna && !natancna) return;
+  // Tabla ni zemljevid in GPS ugasne, a ne ob prvi natančni: ta je ob prižigu
+  // lahko še stara (prijava 5. 11. 2026), zato še malo gledamo, kam se ustali.
+  if (natancna && !prejNatancna) {
+    clearTimeout(najblizje.rok);
+    najblizje.rok = setTimeout(koncajNajblizje, NAJBLIZJE_USTALI_MS);
+  }
+  // Znova vprašamo, ko je lega občutno boljša ali drugje, ne ob vsakem popravku.
+  if (prej && l.acc > prej.acc * 0.7 && !(natancna && !prejNatancna)
+      && razdaljaM([l.lat, l.lon], [prej.lat, prej.lon]) < NAJBLIZJE_PREMIK_M) return;
+  najblizje.kje = l;
+  const moj = ++najblizje.tek;
   try {
     const list = await fetch(
       `/api/stations/near?lat=${l.lat}&lon=${l.lon}&network=${NETWORK}&limit=1`).then(jsonOk);
-    najblizje.postaja = list[0] && list[0].meters <= NAJBLIZJE_DO_M ? list[0] : null;
-    najblizje.ts = Date.now();
-    najblizje.tabla = null;
+    if (moj !== najblizje.tek) return;      // novejša lega je medtem že vprašala
+    const nova = list[0] && list[0].meters <= NAJBLIZJE_DO_M ? list[0] : null;
+    const ista = najblizje.postaja && nova && najblizje.postaja.name === nova.name;
+    najblizje.postaja = nova;
+    najblizje.pribl = !natancna;
+    // Približen predlog ne velja za svežega: naslednja vrnitev išče znova.
+    najblizje.ts = natancna ? Date.now() : 0;
+    if (!ista) najblizje.tabla = null;
     izrisiNajblizje();
-    if (najblizje.postaja) osveziNajblizje();
+    if (najblizje.postaja && !ista) osveziNajblizje();
   } catch (err) {
     /* predlog je postranski; brez njega ostane polje */
   }
@@ -1943,6 +1972,12 @@ async function osveziNajblizje() {
 
 function poisciNajblizje() {
   if (najblizje.odjava || Date.now() - najblizje.ts < NAJBLIZJE_STARO_MS) return;
+  // Predlog od prej ni več tvoj; GPS zna rabiti pol minute (prijava 5. 11. 2026).
+  najblizje.kje = null;
+  if (najblizje.postaja) {
+    najblizje.postaja = najblizje.tabla = null;
+    izrisiNajblizje();
+  }
   najblizje.odjava = LEGA.poslusaj(obLegiNajblizje);
   // GPS, ki v pol minute ne pove dovolj natančno, ne sveti naprej za predlog.
   najblizje.rok = setTimeout(koncajNajblizje, LEGA_ROK_MS);

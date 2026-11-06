@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ista postavitev pod drugim imenom, za widget brez budilke. Launcher ob
+         osvežitvi isto postavitev samo popravi (`RemoteViews.reapply`), in
+         česar nova slika ne nastavi, ostane od prejšnje: stikalo, rjava podlaga,
+         žeton in tekoči `stevec`, ki je šel čez ničlo in štel naprej, dokler
+         widgeta ni kdo znova narisal. Drugo ime vsili novo postavitev. -->
+    <item name="w_mini_prazen" type="layout">@layout/w_mini</item>
+    <item name="w_pas_prazen" type="layout">@layout/w_pas</item>
+</resources>

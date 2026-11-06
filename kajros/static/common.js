@@ -1980,9 +1980,73 @@ const LEGA_ROK_MS = 25000;
 //: Ko je lega natancnejsa od tega, je ni treba izboljsevati. GPS v mestu se
 //: ustali okoli 10-30 m; prva groba lega iz baznih postaj zna biti 1-2 km.
 const LEGA_DOVOLJ_M = 100;
+//: Groba lega, ki je za predlog („približno“) še uporabna, za pešpot pa ne.
+const LEGA_PRIBLIZNO_M = 500;
+//: Starejša lega ni tvoja, tudi približno ne: telefon jo ob prižigu lege vrne
+//: prvo (zadnja znana, lahko od včeraj), in je videti kot sveža.
+const LEGA_NAJSTAREJSA_MS = 5 * 60000;
+//: Stara lega je toliko manj natančna, kolikor si medtem lahko prehodil
+//: (5 km/h, `hoja.KMH`). Vsa pravila o natančnosti tako veljajo tudi za starost.
+const HOJA_M_S = 5 / 3.6;
+
+const natancnostZdaj = (l) => l.izmerjena + Math.max(0, Date.now() - l.ts) / 1000 * HOJA_M_S;
+
+/** Lega iz meritve; `null`, kadar je prestara, da bi še povedala, kje si. */
+function novaLega(lat, lon, acc, ts, dodatki) {
+  const l = { lat, lon, izmerjena: acc, ts: Math.min(ts, Date.now()), ...dodatki };
+  if (Date.now() - l.ts > LEGA_NAJSTAREJSA_MS) return null;
+  return { ...l, acc: natancnostZdaj(l) };
+}
+
+// Prva lega iz aplikacije (`HitraLega.kt`, most 8): zadnja znana vseh virov in
+// omrežna, ki ju WebView ne da. Eno sledenje za vse, ki lego ta hip čakajo.
+const hitraLega = (() => {
+  const prijavljeni = new Set();
+  const naVoljo = () => MOST && MOST.razlicica() >= 8;
+  if (naVoljo()) {
+    window.kajrosPopravek = (z) => {
+      const l = novaLega(z.lat, z.lon, z.acc, Date.now() - z.starost_ms, { hitra: true });
+      if (l) for (const cb of prijavljeni) cb(l);
+    };
+  }
+  return (cb) => {
+    if (!naVoljo()) return () => {};
+    if (!prijavljeni.size) MOST.legaZacni();
+    prijavljeni.add(cb);
+    return () => {
+      prijavljeni.delete(cb);
+      if (!prijavljeni.size) MOST.legaUstavi();
+    };
+  };
+})();
+
+/**
+ * Tok leg: `watchPosition` in prva lega iz aplikacije. Vrne ustavitev.
+ *
+ * `maximumAge: 0` starih leg ne ustavi: Chromium novemu poslušalcu najprej
+ * izroči zadnjo, ki jo pozna, tudi če je od včeraj. To je bila prijava 5. 11.
+ * 2026 („predlaga postaje v bližini stare lokacije“). Pove jo samo
+ * `timestamp`. Žig, ki je napredoval, je živ, tudi kadar ura telefona prehiteva
+ * uro satelitov: brez tega bi taki telefon zavrgel vsako lego.
+ */
+function virLege(naLego, naNapako, moznosti, dodatki) {
+  let zig = null;
+  const id = navigator.geolocation.watchPosition((p) => {
+    const ts = zig !== null && p.timestamp > zig ? Date.now() : p.timestamp;
+    zig = p.timestamp;
+    const l = novaLega(p.coords.latitude, p.coords.longitude, p.coords.accuracy, ts,
+                       dodatki && dodatki(p));
+    if (l) naLego(l);
+  }, naNapako, moznosti);
+  const hitra = hitraLega(naLego);
+  return () => {
+    navigator.geolocation.clearWatch(id);
+    hitra();
+  };
+}
 
 function locateMe(opts) {
-  const { rok = LEGA_ROK_MS, dovolj = LEGA_DOVOLJ_M, napredek } = opts || {};
+  const { rok = LEGA_ROK_MS, dovolj = LEGA_DOVOLJ_M, napredek, signal } = opts || {};
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       return reject(new Error("Brskalnik ne pozna lokacije."));
@@ -1996,7 +2060,7 @@ function locateMe(opts) {
         + "Odpri kajros.app."));
     }
 
-    let id = null;
+    let ustavi = null;
     let koncano = false;
     let najboljsa = null;
 
@@ -2004,7 +2068,7 @@ function locateMe(opts) {
       if (koncano) return;
       koncano = true;
       clearTimeout(cas);
-      if (id !== null) navigator.geolocation.clearWatch(id);
+      if (ustavi) ustavi();
       if (najboljsa) return resolve(najboljsa);   // groba lega je boljsa od nobene
       reject(napaka || new Error("Lokacije ni bilo mogoče dobiti."));
     };
@@ -2013,10 +2077,8 @@ function locateMe(opts) {
       `GPS se ni odzval v ${Math.round(rok / 1000)} s. Pod streho pogosto ne `
       + "dobi signala — poskusi zunaj ali izberi kraj na zemljevidu.")), rok);
 
-    id = navigator.geolocation.watchPosition(
-      (p) => {
-        const l = { lat: p.coords.latitude, lon: p.coords.longitude,
-                    acc: p.coords.accuracy };
+    ustavi = virLege(
+      (l) => {
         if (!najboljsa || l.acc < najboljsa.acc) najboljsa = l;
         if (napredek) napredek(l);
         // Prvi fix je lahko iz bazne postaje in gresi za kilometer; pocakamo
@@ -2031,6 +2093,8 @@ function locateMe(opts) {
       // prvi klik pokaze, kje si bil, ne kje si. Ujeto v zivo.
       { enableHighAccuracy: true, timeout: rok, maximumAge: 0 },
     );
+    if (koncano) ustavi();
+    if (signal) signal.addEventListener("abort", () => konec(null));
   });
 }
 
@@ -2057,7 +2121,7 @@ const LEGA = (() => {
   let branje = null;
   let dovoljenje = null;            // `PermissionStatus` brskalnika
   let potrjeno = false;
-  let id = null;
+  let ustaviVir = null;
   let zadnja = null;
   let cakaIzid = null;              // `vklopi()` v aplikaciji čaka na `kajrosLega`
 
@@ -2112,17 +2176,23 @@ const LEGA = (() => {
   }
 
   function zazeni() {
-    if (id !== null || !narocniki.size || document.visibilityState === "hidden" || !sme()) return;
+    if (ustaviVir || !narocniki.size || document.visibilityState === "hidden" || !sme()) return;
     // `maximumAge: 0` iz istega razloga kot v `locateMe`. Roka ni: sledenje
     // čaka, kolikor je treba, in o izteku nima komu poročati.
-    id = navigator.geolocation.watchPosition(obPopravku, obNapaki,
-      { enableHighAccuracy: true, maximumAge: 0 });
+    //
+    // Smer in hitrost sta za vodenje po pešpoti: GPS smer gibanja pozna samo
+    // med hojo, kompas telefona pa tudi na mestu. Na mestu je `heading` po
+    // specifikaciji `NaN`, ne `null` -- in `??` na NaN ne pade na kompas.
+    ustaviVir = virLege(sporoci, obNapaki, { enableHighAccuracy: true, maximumAge: 0 }, (p) => ({
+      smer: Number.isFinite(p.coords.heading) ? p.coords.heading : null,
+      hitrost: p.coords.speed,
+    }));
   }
 
   function ustavi() {
-    if (id === null) return;
-    navigator.geolocation.clearWatch(id);
-    id = null;
+    if (!ustaviVir) return;
+    ustaviVir();
+    ustaviVir = null;
   }
 
   function pozabi() {
@@ -2132,21 +2202,17 @@ const LEGA = (() => {
     for (const cb of narocniki) cb(null);
   }
 
-  // Vsaka lega, tudi iz `locateMe`, je dokaz, da dovoljenje je.
+  // Vsaka lega, tudi iz `locateMe`, je dokaz, da dovoljenje je. Starejša ne
+  // prepiše novejše; omrežna ne prepiše GPS, dokler je ta boljši -- GPS pa
+  // povozi vse: nova lega z 20 m je več vredna od pravkar stare z 10 m.
   function sporoci(l) {
     potrjeno = true;
-    zadnja = { ...l, ts: Date.now() };
+    if (zadnja && (l.ts < zadnja.ts || (l.hitra && natancnostZdaj(zadnja) <= l.acc))) return;
+    zadnja = l;
     for (const cb of narocniki) cb(zadnja);
   }
 
-  function obPopravku(p) {
-    // Smer in hitrost sta za vodenje po pešpoti: GPS smer gibanja pozna samo
-    // med hojo, kompas telefona pa tudi na mestu. Na mestu je `heading` po
-    // specifikaciji `NaN`, ne `null` -- in `??` na NaN ne pade na kompas.
-    sporoci({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy,
-              smer: Number.isFinite(p.coords.heading) ? p.coords.heading : null,
-              hitrost: p.coords.speed });
-  }
+  const pomladi = (l) => l && { ...l, acc: natancnostZdaj(l) };
 
   // Brez signala sledenje teče naprej in molči: vzrok pove gumb lege
   // (`locateMe`). Zavrnjeno dovoljenje ga ustavi.
@@ -2184,7 +2250,7 @@ const LEGA = (() => {
       narocniki.add(cb);
       // Zadnjo lego dobi takoj za prijavo, ko ima klicatelj odjavo že v rokah.
       const z = zadnja;
-      if (z) queueMicrotask(() => { if (narocniki.has(cb) && zadnja === z) cb(z); });
+      if (z) queueMicrotask(() => { if (narocniki.has(cb) && zadnja === z) cb(pomladi(z)); });
       if (stanje === null) osvezi();
       else zazeni();
       return () => {
@@ -2194,7 +2260,8 @@ const LEGA = (() => {
     },
     obStanju(cb) { opazovalci.add(cb); },
     stanje: osvezi,
-    get zadnja() { return zadnja; },
+    /** Zadnja znana lega, z natančnostjo, kakršna je ta hip. */
+    get zadnja() { return pomladi(zadnja); },
     sporoci,
     /** Gumb lege je lego dobil: dovoljenje je zdaj gotovo dano. */
     potrdi() {
@@ -2213,7 +2280,11 @@ const LEGA = (() => {
       // groba lega brez GPS: odgovor pride takoj, ne čez pol minute.
       return new Promise((ok) => {
         navigator.geolocation.getCurrentPosition(
-          (p) => { obPopravku(p); ok({ stanje: "dano" }); },
+          (p) => {
+            const l = novaLega(p.coords.latitude, p.coords.longitude, p.coords.accuracy, p.timestamp);
+            if (l) sporoci(l);
+            ok({ stanje: "dano" });
+          },
           (e) => ok({ stanje: e.code === 1 ? "zavrnjeno" : "dano" }),
           { enableHighAccuracy: false, maximumAge: Infinity, timeout: LEGA_ROK_MS });
       }).then((izid) => {
@@ -2243,9 +2314,37 @@ async function poisciMe(opts) {
     return z;
   }
   const napredek = opts && opts.napredek;
-  const loc = await locateMe({ ...opts, napredek: (l) => { LEGA.sporoci(l); if (napredek) napredek(l); } });
+  const dovolj = (opts && opts.dovolj) || LEGA_DOVOLJ_M;
+  // Gumb in sledenje strani gledata isti GPS: kdor prvi pove dovolj natančno,
+  // ta odgovori. Drugi poslušalec v WebView zna dolgo ne dobiti ničesar.
+  const ac = new AbortController();
+  let odjava = () => {};
+  const izSledenja = new Promise((ok) => {
+    odjava = LEGA.poslusaj((l) => {
+      if (!l || ac.signal.aborted) return;
+      if (napredek) napredek(l);
+      if (l.acc <= dovolj) ok(l);
+    });
+  });
+  const izGumba = locateMe({ ...opts, signal: ac.signal, napredek: (l) => {
+    if (ac.signal.aborted) return;
+    LEGA.sporoci(l);   // gre tudi k `izSledenja`, ki pokliče `napredek`
+  } });
+  let loc = null;
+  try {
+    loc = await Promise.race([izGumba, izSledenja]);
+  } catch (err) {
+    // GPS se ni oglasil, sledenje pa morda ima boljše kot nič. Zavrnjeno
+    // dovoljenje ga pobriše (`obNapaki`), zato to ne skrije zavrnitve.
+    if (!LEGA.zadnja) throw err;
+  } finally {
+    ac.abort();
+    odjava();
+    izGumba.catch(() => {});
+  }
+  const nazadnje = LEGA.zadnja;
   LEGA.potrdi();
-  return loc;
+  return !loc || (nazadnje && nazadnje.acc < loc.acc) ? nazadnje : loc;
 }
 
 /** „Vklopi“ na kartici domače strani; vrne `{stanje, nastavitve}`. */

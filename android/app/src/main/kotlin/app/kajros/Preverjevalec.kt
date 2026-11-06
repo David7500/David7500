@@ -46,8 +46,14 @@ object Preverjevalec {
         object BrezZveze : Odgovor()
         /** Tabla je odgovorila in te vožnje danes ni na njej. */
         object NeVozi : Odgovor()
-        /** Vožnja obstaja; zamuda je lahko tudi neznana. */
-        data class Vozi(val zamudaS: Int?, val tripId: String?, val tir: String? = null) : Odgovor()
+        /**
+         * Vožnja obstaja; zamuda je lahko tudi neznana. [potrjen]: vozilo je
+         * postanek že zapustilo (`zamuda.vrsta` „izmerjeno“, `oznake.md`).
+         */
+        data class Vozi(
+            val zamudaS: Int?, val tripId: String?, val tir: String? = null,
+            val potrjen: Boolean = false,
+        ) : Odgovor()
     }
 
     fun preveri(c: Context, b: Budilka): Odgovor {
@@ -77,7 +83,8 @@ object Preverjevalec {
                 val z = r.optJSONObject("zamuda")
                 val zamuda = if (z == null || z.isNull("s")) null else z.getInt("s")
                 return Odgovor.Vozi(zamuda, r.optString("trip_id").ifBlank { null },
-                    if (r.isNull("tir")) null else r.optString("tir").ifBlank { null })
+                    if (r.isNull("tir")) null else r.optString("tir").ifBlank { null },
+                    z?.optString("vrsta") == "izmerjeno")
             }
             Odgovor.NeVozi
         } catch (e: org.json.JSONException) {

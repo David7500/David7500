@@ -48,6 +48,8 @@ data class Budilka(
      * Brez njega widget ne pove ničesar o tiru -- ne ugiba.
      */
     val tir: String? = null,
+    /** Tabla je odhod potrdila (`zamuda.vrsta` izmerjeno): vozilo je šlo. */
+    val potrjeno: Boolean = false,
 ) {
     val vlak: Boolean get() = omrezje == "zeleznica"
     val ponavljajoca: Boolean get() = Ponovitev.jePonavljajoca(dnevi)
@@ -76,6 +78,7 @@ data class Budilka(
             odzvonjeno = false,
             odlozenoDoMs = 0,
             tir = null,
+            potrjeno = false,
         )
     }
 
@@ -114,9 +117,16 @@ data class Budilka(
      *
      * Pri vlaku negativna zamuda ne steje (pred voznim redom ne odpelje), pri
      * avtobusu pa konca tudi ne premakne naprej -- `maxOf` z voznim redom.
+     *
+     * Do potrditve odhoda sledimo dlje ([Ura.SLEDENJE_VLAK_MS]): vsaka nova
+     * zamuda v tem casu konec prestavi in stevec tece spet.
      */
     fun konecSledenjaMs(): Long =
-        maxOf(voznoredniMs, voznoredniMs + (zamudaS ?: 0) * 1000L) + Ura.SLEDENJE_ZA_MS
+        maxOf(voznoredniMs, voznoredniMs + (zamudaS ?: 0) * 1000L) + when {
+            potrjeno -> Ura.SLEDENJE_POTRJENO_MS
+            vlak -> Ura.SLEDENJE_VLAK_MS
+            else -> Ura.SLEDENJE_BUS_MS
+        }
 
     /**
      * Enkratna budilka je opravljena, ko je mimo konec sledenja: vozilo je po
@@ -180,6 +190,7 @@ data class Budilka(
         put("zvoni_ob_ms", zvoniObMs); put("odzvonjeno", odzvonjeno)
         put("odlozeno_do_ms", odlozenoDoMs)
         put("tir", tir ?: JSONObject.NULL)
+        put("potrjeno", potrjeno)
     }
 
     companion object {
@@ -209,6 +220,7 @@ data class Budilka(
                 odzvonjeno = o.optBoolean("odzvonjeno"),
                 odlozenoDoMs = o.optLong("odlozeno_do_ms"),
                 tir = if (o.isNull("tir")) null else o.optString("tir").ifBlank { null },
+                potrjeno = o.optBoolean("potrjeno"),
             )
         }
     }

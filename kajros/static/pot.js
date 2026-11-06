@@ -190,7 +190,8 @@ function postavi(kaj, tocka, premakni = true) {
   oznaciArm();
   oznaciZvezde();
   // Kadar je odgovor že na zaslonu, nov kraj pomeni novo vprašanje.
-  if (S.izidi && S.od && S.do) isci();
+  // Med iskanjem ne: to je lega, ki jo je iskanje samo počakalo (`isciPot`).
+  if (S.izidi && S.od && S.do && !gumbIsci.disabled) isci();
 }
 
 function oznaciArm() {
@@ -566,13 +567,16 @@ function risiJaz(loc) {
 // premakne: na pot gre, ko je znan tudi cilj.
 let odKodCaka = false;
 
+// `ts`: točka je tvoja lega iz tega ogleda, ne kraj -- „Poišči“ jo osveži.
+const tockaLege = (loc) => ({ lat: loc.lat, lon: loc.lon, ime: "moja lega", ts: loc.ts, acc: loc.acc });
+
 function odKodIzLege(loc) {
   if (!odKodCaka || loc.acc > LEGA_DOVOLJ_M) return;
   odKodCaka = false;
   const polje = $("#q-od");
   if (S.od || polje.value.trim()) return;
   // `sam`: zemljevid, ki nastane šele za lego, ga ne gre iskat (`pkUstvari` spodaj).
-  postavi("od", { lat: loc.lat, lon: loc.lon, ime: "moja lega", sam: true }, false);
+  postavi("od", { ...tockaLege(loc), sam: true }, false);
   // Kdor je polje ravno odprl, z vnosom napis zamenja, ne dopiše.
   if (document.activeElement === polje) polje.select();
 }
@@ -617,9 +621,13 @@ document.querySelectorAll(".tocka").forEach((el) => {
 /** Lega v polje `kaj`. Napredek in napaka ob polju; `true`, ko je lega tam.
  *  Gumb lego vpiše sam, zato samodejni vpis ob tem ugasne. */
 let legaTece = null;
+let legaZa = null;
+let legaPoiskana = false;     // „Poišči“ je med iskanjem vzel, kar je bilo znano
 async function legaV(kaj) {
   odKodCaka = false;
   if (legaTece) return legaTece;
+  legaZa = kaj;
+  legaPoiskana = false;
   const polje = $(`#q-${kaj}`);
   const vrstica = polje.closest(".tocka-vrstica");
   vrstica.classList.add("je-lega");
@@ -635,12 +643,12 @@ async function legaV(kaj) {
       const loc = await poisciMe({
         napredek: (l) => povejOb(kaj, `Iščem tvojo lego … zaenkrat na ${Math.round(l.acc)} m natančno.`, "isce"),
       });
-      povejOb(kaj, loc.acc > 200
-        ? `Lega je natančna na ${Math.round(loc.acc)} m — po potrebi popravi na zemljevidu.` : "");
-      postavi(kaj, { lat: loc.lat, lon: loc.lon, ime: "moja lega" });
+      if (legaPoiskana) return true;
+      povejLego(kaj, loc);
+      postavi(kaj, tockaLege(loc));
       return true;
     } catch (e) {
-      povejOb(kaj, e.message, "napaka");
+      if (!legaPoiskana) povejOb(kaj, e.message, "napaka");
       return false;
     } finally {
       vrstica.classList.remove("je-lega");
@@ -649,6 +657,56 @@ async function legaV(kaj) {
     }
   })();
   return legaTece;
+}
+
+function povejLego(kaj, loc) {
+  povejOb(kaj, loc.acc > 200
+    ? `Lega je natančna na ${Math.round(loc.acc)} m — po potrebi popravi na zemljevidu.` : "");
+}
+
+// Toliko „Poišči“ počaka na boljšo lego, kadar ima samo grobo. GPS, ki se je
+// ravno ujel, se v teh sekundah ustali, dlje pa človek ne čaka na gumb.
+const LEGA_POCAKAJ_MS = 3000;
+
+/**
+ * „Poišči“ vzame lego, kakršna je ob pritisku (David, 5. 11. 2026): prvi
+ * popravek zna zgrešiti za sto metrov, GPS pa se med vnosom cilja ustali.
+ * Tekoče iskanje lege ne zadržuje gumba, če je kaj znanega.
+ */
+async function osveziMojoLego() {
+  if (legaTece) {
+    const z = LEGA.zadnja;
+    if (!z || z.acc > LEGA_DOVOLJ_M) {
+      povej("Čakam na tvojo lego …", "isce");
+      await Promise.race([legaTece, new Promise((ok) => setTimeout(ok, LEGA_POCAKAJ_MS))]);
+      povej("Iščem pot …", "isce");
+    }
+    const nazadnje = LEGA.zadnja;
+    if (legaTece && nazadnje && nazadnje.acc <= LEGA_PRIBLIZNO_M) {
+      legaPoiskana = true;
+      povejLego(legaZa, nazadnje);
+      S[legaZa] = tockaLege(nazadnje);
+      zapomniIme(S[legaZa]);
+      $(`#q-${legaZa}`).value = napisTocke(S[legaZa]);
+      narisiTocke(false);
+      oznaciZvezde();
+    }
+  }
+  for (const kaj of ["od", "do"]) {
+    const t = S[kaj];
+    if (!t || !t.ts) continue;
+    const z = LEGA.zadnja;
+    if (z && z.ts > t.ts) {
+      S[kaj] = { ...t, ...tockaLege(z) };
+      zapomniIme(S[kaj]);
+      narisiTocke(false);
+    } else if (!legaTece && Date.now() - t.ts > LEGA_STARA_MS) {
+      // Stran je stala v ozadju in sledenje lego pozabilo (`obVrnitvi`).
+      povej("Čakam na tvojo lego …", "isce");
+      await legaV(kaj);
+      povej("Iščem pot …", "isce");
+    }
+  }
 }
 
 // ---------------------------------------------------------------- zemljevid na veliko
@@ -1305,12 +1363,15 @@ async function isci(skrci = false) {
 }
 
 async function isciPot(skrci) {
-  let [a, b] = await Promise.all([razresi("od"), razresi("do")]);
   // Prazno „Od kod“ ob dovoljeni legi je tvoja lega: „Poišči“ jo počaka in to
   // pove ob polju, ne nekje spodaj (prijava 22. 10. 2026).
-  if (!a && !$("#q-od").value.trim() && await stanjeLege() === "dano") {
+  const brezOd = () => !$("#q-od").value.trim();
+  if (brezOd() && !legaTece && await stanjeLege() === "dano") legaV("od");
+  await osveziMojoLego();
+  let [a, b] = await Promise.all([razresi("od"), razresi("do")]);
+  if (!a && brezOd() && legaTece) {
     povej("Čakam na tvojo lego …", "isce");
-    a = await legaV("od");
+    a = await legaTece;
     if (a) povej("Iščem pot …", "isce");
   }
   if (!a || !b) {
@@ -1328,6 +1389,7 @@ async function isciPot(skrci) {
   }
   povejOb("od", "");
   povejOb("do", "");
+  for (const kaj of ["od", "do"]) if (S[kaj].ts) povejLego(kaj, S[kaj]);
   if (S.kdaj === "do" && !$("#tam").value) {
     razlozi();
     povej("Vpiši uro, do katere moraš biti tam.", "napaka");

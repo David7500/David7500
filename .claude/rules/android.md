@@ -26,6 +26,7 @@ Povezava zunaj izvora gre v brskalnik, lego dobi le izvor, most (`window.Kajros`
 WebView si dovoljenje zapomni sam (`AwGeolocationPermissions … = true`), sistemsko „samo tokrat“ pa poteče → `onGeolocationPermissionsShowPrompt` ni več poklican, lega mrtva za vedno (tri dni tihe okvare). Ob zagonu `GeolocationPermissions.getInstance().clearAll()`; resnica = Androidovo dovoljenje.
 * **Most 7 (1.14)**: `dovoljenja().lega` = natančna ali približna (`DeljenjeStoritev.smeLego`); po njej stran lego prižge sama. `onGeolocationPermissionsShowPrompt` odobri tudi samo približno (prej okno ob vsakem klicu). V WebView `navigator.permissions` ni (WebView 124) — resnica je most.
 * `Most.zahtevajLego()` → `vklopiLego()`: vedno najprej sistem; odgovor brez okna (< `Lega.BREZ_OKNA_MS` 1 s, izmerjeno 72 in 51 ms) = trajna zavrnitev → nastavitve aplikacije + Toast. Izid `kajrosLega(stanje, nastavitve)`, tudi ob `onResume` po spremembi.
+* **Most 8 (1.16)**: `legaZacni()`/`legaUstavi()` → `HitraLega.kt`: zadnja znana lega **vseh** ponudnikov in sprotna `network`/`fused` (2 s), na stran kot `kajrosPopravek({lat, lon, acc, starost_ms})` (starost iz `elapsedRealtimeNanos`). GPS ostane WebView-u (dva poslušalca = dvojna baterija). Teče, dokler kdo na strani lego čaka (`hitraLega` v `common.js`), vedno ustavljena ob `onPause`. Razgooglan telefon `network`/`fused` nima — tam pride samo zadnja znana.
 * Most ≤ 6: stran lege ne prižge sama, kartice ni.
 
 ## Razdeljevanje (12. 9. 2026)
@@ -108,7 +109,7 @@ Vse za budilko **shranjeno lokalno** (voznoredna ura). Aritmetika v `Ura.kt`, č
   * Drsi vse razen „Odpri Kajros“; opozorilo o dovoljenjih na vrhu.
   * Stikalo M3 brez AndroidX: `Switch` z `android:thumb`/`track` (`stikalo_*.xml`), `thumbTint`/`trackTint` (`res/color/`).
   * Odstrani vpraša. Okna `TemaOkna` 28 dp. `napaka` `#ffb4ab` (`sev_bad` na rjavi 2,3 : 1).
-  * **Enkratna budilka odide s koncem sledenja** (`Budilka.opravljena`: odhod po zadnji zamudi + 90 s ali poznejši odlog); `Shramba.pocisti` ob `vseZnova` razen zvoneče; `Most.seznam()` in `WidgetBudilke` opravljene preskočita.
+  * **Enkratna budilka odide s koncem sledenja** (`Budilka.opravljena`: konec sledenja ali poznejši odlog); `Shramba.pocisti` ob `vseZnova` razen zvoneče; `Most.seznam()` in `WidgetBudilke` opravljene preskočita.
   * Odprt seznam se osveži na 30 s.
   * **Ponavljajoča ne zazvoni takoj** (`Ponovitev.prva`): v preteklosti → naslednja iz nabora. **Enkratna zvoni takoj** in list to pove („zvoni **takoj** — 19:01 je že mimo“). Dan izbere `Most.napoved()` po računu `nastavi()`, **brez zamude**.
   * Dnevnik v izdaji: dolg pritisk na „Budilke“, gumb „Kopiraj“. `Dnevnik.kt` 120 vrstic, nikamor ne gre; gumb in naslov strežnika samo v razvojni.
@@ -155,6 +156,7 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
 * Budnica na 2 min (`setExactAndAllowWhileIdle`) osvežuje zamudo; 90 s po odhodu `vseZnova` prestavi ponavljajočo.
 * Po zvonjenju zamuda velja dve osvežitvi (4 min 15 s): `Ura.izracunaj(sledenje = odzvonjeno)`.
 * **Do kdaj odštevati** = sveža zamuda (brez nje do voznega reda). **Do kdaj slediti** = `Budilka.konecSledenjaMs()` po zadnji znani zamudi. Ena budnica na sam odhod (`SledenjeTest`).
+* **Števec na ničli ni odhod**: feed novo zamudo pogosto javi šele, ko bi vozilo že moralo biti tam. Sledenje do potrjenega odhoda (`zamuda.vrsta` „izmerjeno“ → `Budilka.potrjeno`) + 90 s, sicer vlak 10 min, avtobus 5 min (`Ura.SLEDENJE_*`); widget vmes piše „zdaj“, nova zamuda števec spet požene. Izmerjeno 2.–4. 11. 2026: pozneje kot 30 s po ničli vlaki 23,5 % (n = 19 612), avtobusi 32,3 % (11 954); P95 8 in 3,4 min. Do 5. 11. 90 s za oba.
 
 ### Ponavljanje
 
@@ -180,6 +182,7 @@ Prototip `design/budilka/`: vozilo pripelje, potegneš ga k sebi, budilka utihne
   * `minResize` 40 dp povsod; prej 180 → widget ni šel pod 3×2.
 * **Pregled brez telefona**: `src/debug/…/PregledWidgetov.kt` (samo razvojni APK), vse velikosti z vzorci: `adb shell am start -n app.kajros/.PregledWidgetov -e kaj odstevanje|budilke|tabla|bliznjica|iskanje -e stanje N`. `-e kaj zivo` veže prave widgete (prej `adb shell appwidget grantbind --package app.kajros`), `-e tapeta svetla|temna` za videz brez podlage. Pod 12 pregled widgete veže sam: velikost je samo v `OPTION_APPWIDGET_*` vezanega widgeta. Posnetki v `posnetki/widgeti/`.
   * Android 9 = AVD `kajros28` (`emulator -avd kajros28 -port 5556 …`, `adb -s emulator-5556`); slika `system-images;android-28;default;x86_64`.
+* **Prazen widget ima svojo postavitev** (`w_mini_prazen`, `w_pas_prazen`, `res/values/postavitve.xml`): launcher isto postavitev ob osvežitvi samo popravi (`reapply`) in ostane, česar nova slika ne nastavi — stikalo, rjava podlaga in `Chronometer`, ki šteje čez ničlo naprej (prijava 5. 11. 2026, ponovljeno na emulatorju 15: `-e kaj prehod` v pregledu). Kar ena veja nastavi (vidnost, podlaga, velikost pisave), mora druga postaviti nazaj.
 * **RemoteViews ne zna `<View>`**: razmik = `<FrameLayout>`; z `<View>` „Couldn't add widget“.
 * **Samodejna velikost** (`autoSizeTextType`): z omejeno širino in višino zanesljiva; pri `wrap_content` samo zmanjša, širina se meri po `textSize` — **brez `textSize` je številka 14 sp**. `setTextViewTextSize` jo izklopi.
 * **Odštevanje šteje zadnjo uro** (do 23. 10. dve: „1:05:31“ se ob žetonu na 2×1 in 2×2 ne izide); prej ura odhoda („16:57“, „jutri 06:57“, `Izris.danUra` po koledarju).

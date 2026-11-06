@@ -397,6 +397,17 @@ Tabla s ciljem (relacija, `/api/connections` z novima `od` in `limit`): Bavarski
 
 Bližnjica (šest dejanj, z imenom in brez) in iskalna vrstica ter tabla z imenom („Domov“): preverjeno na emulatorju 15 in 9 v vseh velikostih pregleda, na temnem in svetlem ozadju zaslona; ime pod obliko se izpiše celo v stolpcu 57 dp, v ležeči vrstici (51 dp) ga ni.
 
+## Budilka po zvonjenju: števec na ničli ni odhod (5. 11. 2026)
+
+Prijava: widget je po zvonjenju štel v nedogled. Vprašanje za mejo: koliko po trenutku, ko števec po zadnji znani zamudi doseže nič, vozilo s postanka res odpelje (končna zamuda v `run`). Arwen, 2.–4. 11. 2026, vmesni postanki, avtobusi vzorec 1/40 voženj.
+
+| omrežje | postankov | pozneje kot 30 s | P50 | P90 | P95 | P99 |
+|---|---|---|---|---|---|---|
+| vlaki | 19 612 | 23,5 % | 0 s | 3 min | 8 min | 25 min |
+| avtobusi | 11 954 | 32,3 % | 2 s | 2 min | 3,4 min | 15 min |
+
+Do 5. 11. je sledenje nehalo 90 s po ničli. Zdaj do potrjenega odhoda + 90 s, sicer vlak 10 min, avtobus 5 min (`android.md`).
+
 ## Rezerva budilke: koliko prej naj zazvoni (6. 9. 2026)
 
 David: *„Uporabnik pa ne sme zamuditi, raje kej rezerve, če ni zihr."* Koliko rezerve = vprašanje s številko. Vir: senca (`napoved`, 63 843 razrešenih vrstic): `ours_s` = kar bi prikaz **takrat** povedal, `actual_s` = resnica. Napaka budilke = `ours_s − actual_s` — pozitivna = obljubili večjo zamudo, kot je bila, budilka bi zvonila **prepozno**.

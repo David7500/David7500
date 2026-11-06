@@ -42,9 +42,11 @@ class Most(
      * 6: sistemski izbirnik za `navigator.share` (`poslji()`).
      * 7: lastna lega (`dovoljenja()` pove `lega`, `zahtevajLego()`, izid na
      *    strani `kajrosLega(stanje, nastavitve)`).
+     * 8: prva lega pred GPS (`legaZacni()`, `legaUstavi()`, lege pridejo na
+     *    stran kot `kajrosPopravek(lega)`).
      */
     @JavascriptInterface
-    fun razlicica(): Int = if (nas()) 7 else 0
+    fun razlicica(): Int = if (nas()) 8 else 0
 
     /** Vrne id nove budilke ali prazen niz. */
     @JavascriptInterface
@@ -327,6 +329,19 @@ class Most(
     fun zahtevajLego() {
         if (!nas()) return
         glavna.post { (dejavnost as? GlavnaDejavnost)?.vklopiLego() }
+    }
+
+    /** Zadnja znana in omrežna lega, dokler stran rabi lego ([HitraLega]). */
+    @JavascriptInterface
+    fun legaZacni() {
+        if (!nas()) return
+        glavna.post { (dejavnost as? GlavnaDejavnost)?.hitraLega?.zacni() }
+    }
+
+    @JavascriptInterface
+    fun legaUstavi() {
+        if (!nas()) return
+        glavna.post { (dejavnost as? GlavnaDejavnost)?.hitraLega?.ustavi() }
     }
 
     /**
