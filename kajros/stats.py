@@ -432,14 +432,20 @@ def uskladi_ure(rows: list[dict]) -> None:
             nasl = (dep_s, ndd)
 
 
-def _najboljsa_veriga(ure: list[int], teze: list[int]) -> set[int]:
-    """Indeksi nepadajočega podzaporedja z največjo skupno težo."""
+def _najboljsa_veriga(ure: list[int], teze: list[int],
+                      skladna=None) -> set[int]:
+    """Indeksi nepadajočega podzaporedja z največjo skupno težo.
+
+    `skladna(j, i)` (j pred i) zamenja pogoj `ure[j] <= ure[i]`: ista veriga
+    služi tudi za fiziko zamude (`ocisti_dan`), kjer pogoj ni ura.
+    """
     n = len(ure)
     naj = list(teze)
     prej = [-1] * n
     for i in range(n):
         for j in range(i):
-            if ure[j] <= ure[i] and naj[j] + teze[i] > naj[i]:
+            ok = skladna(j, i) if skladna else ure[j] <= ure[i]
+            if ok and naj[j] + teze[i] > naj[i]:
                 naj[i] = naj[j] + teze[i]
                 prej[i] = j
     out: set[int] = set()
@@ -1291,6 +1297,69 @@ def _after_slack(delay_s: int, slack_s: int) -> int:
     return delay_s - min(max(delay_s, 0), slack_s)
 
 
+#: Koliko sekund pred pričakovanim prihodom (vozni red + zamuda) je zapis
+#: `run` še lahko meritev. Starejši je nepotrjena napoved feeda (`ocisti_dan`).
+NEPOTRJEN_PRED_PRIHODOM_S = 120
+
+#: Toleranca fizike zamude med dvema izmerjenima postankoma (zaokroževanje
+#: na minuto, dve minuti meritve); glej `ocisti_dan`.
+FIZIKA_TOLERANCA_S = 120
+
+
+#: Od kdaj je `run.feed_ts` naš čas branja (zemljevid SŽ vodi). Prej je to
+#: časovni žig derp.si, ki se ne premakne, dokler se vožnja ne spremeni:
+#: pravilo (a) bi na arwenu 1. 9.–9. 10. zadelo 75 % postankov (158 508 od
+#: 211 301), večinoma lažno.
+FEED_TS_NAS_OD = "2026-10-10"
+
+
+def ocisti_dan(postanki: dict[int, tuple[int, int | None, int | None]],
+               rezerva: dict[int, int], dan: str
+               ) -> tuple[set[int], set[int], set[int]]:
+    """Kateri izmerjeni postanki ene vožnje v enem dnevu so res meritve.
+
+    Ena funkcija za učenje: `backtest._delays_by_day` in zgodovina v `predict`
+    morata čistiti enako, sicer bi merili en model in uporabljali drugega.
+
+    `postanki`: stop_seq -> (zamuda, `run.feed_ts`, voznoredni prihod v
+    sekundah od polnoči dne `dan` ali None). `rezerva`: stop_seq -> presežek
+    voznorednega postanka nad `MIN_DWELL_S` za VSE postanke vožnje, tudi
+    neizmerjene. Vrne (ohranjeni, odstranjeni po (a), odstranjeni po (b)).
+
+    (a) Postanek, katerega zadnji zapis je starejši od prihoda + zamude
+    − 120 s, je nepotrjena napoved, ne meritev: feed postanke, mimo katerih
+    je vozilo šlo, neha pošiljati, zadnji zapis pa ostane na uri, ko je bil
+    še napoved. Brez voznorednega prihoda ne moremo presoditi: ostane. Velja
+    le za dneve od `FEED_TS_NAS_OD`; prej `feed_ts` ni naš čas.
+
+    (b) Fizika: zamuda med izmerjenima postankoma a < b ne more pasti za več
+    kot rezerva postankov a+1..b (vsota presežkov) in toleranco. Z
+    u_k = d_k + vsota rezerve do k je pogoj u_a <= u_b + toleranca. Ostane
+    najdaljša veriga postankov, ki si ne nasprotujejo (kot
+    `oznaci_neskladne`, le da je pogoj fizika, ne ura); ostali so osamelci
+    (V in Λ). Zamuda lahko narašča poljubno, zato V in Λ ne zlomita verige
+    po obeh straneh: majhna vrednost med dvema velikima je odstranjena,
+    ker zamuda ne more pasti 20 min in se vrniti.
+    """
+    polnoc_s = polnoc(dan)
+    nepotrjeni = {
+        seq for seq, (d, ts, prihod) in postanki.items()
+        if dan >= FEED_TS_NAS_OD and ts is not None and prihod is not None
+        and ts < polnoc_s + prihod + d - NEPOTRJEN_PRED_PRIHODOM_S}
+    ostali = sorted(set(postanki) - nepotrjeni)
+    if len(ostali) < 2:
+        return set(ostali), nepotrjeni, set()
+    vsota, tek = {}, 0
+    for seq in sorted(set(rezerva) | set(ostali)):
+        tek += rezerva.get(seq, 0)
+        vsota[seq] = tek
+    u = [postanki[seq][0] + vsota[seq] for seq in ostali]
+    veriga = _najboljsa_veriga(
+        u, [1] * len(u), lambda j, i: u[j] <= u[i] + FIZIKA_TOLERANCA_S)
+    ohranjeni = {ostali[k] for k in veriga}
+    return ohranjeni, nepotrjeni, set(ostali) - ohranjeni
+
+
 #: Od kod naprej je postanek vreden razlage. Pod tem je vsak postanek eno- ali
 #: dvominuten in "obicajno stoji 1 min" ni podatek, ampak sum.
 DWELL_WORTH_SHOWING_S = 300
@@ -1598,7 +1667,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             service_date: str | None = None,
             trip_id: str | None = None,
             omeji_s: int | None = None,
-            omeji_delez: float | None = None) -> list[dict]:
+            omeji_delez: float | None = None,
+            ocisti: bool = False) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
 
     Osnovni model: zamuda se prenaša naprej, popravljena za historično mediano
@@ -1627,7 +1697,8 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     # LPP ima za vsak dan svoj `trip_id` in model zanj brez tega ni nikoli
     # imel niti enega preteklega dne.
     rows = conn.execute(
-        f"SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d "
+        f"SELECT r.service_date, r.stop_seq, COALESCE(r.delay_dep, r.delay_arr) AS d, "
+        f"       r.feed_ts AS ts "
         f"FROM trip t JOIN run r ON r.trip_id = t.trip_id "
         f"WHERE {db.voznja_sql('t') + ' = ?' if trip_id else 't.train_no = ?'} "
         f"  AND r.service_date >= ? AND d IS NOT NULL "
@@ -1673,6 +1744,18 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     dwell_i = next((( t["dep_s"] or 0) - (t["arr_s"] or 0) for t in stops
                     if t["stop_seq"] == stop_seq
                     and t["arr_s"] is not None and t["dep_s"] is not None), 0)
+    if ocisti:
+        # Priprava, ne vklop (`ocisti=False` je privzeto): ista funkcija kot
+        # v `backtest._delays_by_day`, da bo meritev veljala za strezeno.
+        # Zgodovina predhodnikov (`_dnevi_prednikov`) feed_ts nima in ostane.
+        prihod = {t["stop_seq"]: t["arr_s"] for t in stops}
+        meritve: dict[str, dict] = {}
+        for r in rows:
+            meritve.setdefault(r["service_date"], {})[r["stop_seq"]] = (
+                r["d"], r["ts"], prihod.get(r["stop_seq"]))
+        for dan, m in meritve.items():
+            ohranjeni = ocisti_dan(m, dwell, dan)[0]
+            by_day[dan] = {seq: d for seq, d in by_day[dan].items() if seq in ohranjeni}
     def model(seq: int, od: int, d_od: int, rezerva: int):
         """Rezerva + historicni ostanek od postanka `od` z zamudo `d_od` do `seq`."""
         osnova = _after_slack(d_od, rezerva)

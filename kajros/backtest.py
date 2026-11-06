@@ -26,9 +26,10 @@ from __future__ import annotations
 import math
 import sqlite3
 import statistics
+import zlib
 from collections import defaultdict
 
-from . import db, stats
+from . import db, ocena, stats
 
 # Nalog s premikom cez vec kot toliko postankov ne sestavljamo: cez pol proge
 # je "napoved" bolj opis voznega reda kot napoved.
@@ -44,7 +45,8 @@ NETWORK = "zeleznica"
 
 
 def _delays_by_day(conn: sqlite3.Connection, network: str = NETWORK,
-                   od: str = "") -> dict[tuple[str, str], dict[int, int]]:
+                   od: str = "", ocisti: bool = False
+                   ) -> dict[tuple[str, str], dict[int, int]]:
     """(voznja, dan) -> {stop_seq: zamuda}. Iz `run`, torej zadnje znano stanje.
 
     Kljuc je `trip_id`, ne `train_no`. Pri zeleznici je to isto -- 0 od 663
@@ -60,7 +62,14 @@ def _delays_by_day(conn: sqlite3.Connection, network: str = NETWORK,
     en model in uporabljali drugega. Velja tudi za resnico: vrednost nad tremi
     urami je feedova zamenjava prometnega dne, ne zamuda, ki bi jo lahko
     kdo napovedal (od 29. 9. 2026; železnica takih vrstic nima).
+
+    `ocisti`: samo postanki, ki jih `stats.ocisti_dan` priznava kot meritve
+    (isto pravilo kot v `stats.predict(ocisti=True)`).
     """
+    if ocisti:
+        enote, ok = ocisti_enote(conn, network, od)[:2]
+        return {k: {seq: v[0] for seq, v in m.items() if seq in ok[k]}
+                for k, m in enote.items() if ok[k]}
     rows = conn.execute(
         f"SELECT {db.voznja_sql('t')} AS train_no, r.service_date, r.stop_seq, "
         "       COALESCE(r.delay_dep, r.delay_arr) AS d "
@@ -74,6 +83,49 @@ def _delays_by_day(conn: sqlite3.Connection, network: str = NETWORK,
     for r in rows:
         out[(r["train_no"], r["service_date"])][r["stop_seq"]] = r["d"]
     return out
+
+
+def _enote_dni(conn: sqlite3.Connection, network: str = NETWORK, od: str = ""
+               ) -> dict[tuple[str, str], dict[int, tuple[int, int, int | None]]]:
+    """(voznja, dan) -> {stop_seq: (zamuda, feed_ts, voznoredni prihod)}.
+
+    Isti stolpci in omejitve kot `_delays_by_day`, le z zapisom `run.feed_ts`
+    in prihodom iz voznega reda tiste vozne, ki je zapis napisala.
+    """
+    rows = conn.execute(
+        f"SELECT {db.voznja_sql('t')} AS train_no, r.service_date, r.stop_seq, "
+        "       COALESCE(r.delay_dep, r.delay_arr) AS d, r.feed_ts AS ts, "
+        "       s.arr_s AS prihod "
+        "FROM run r JOIN trip t USING (trip_id) "
+        "LEFT JOIN sched s ON s.trip_id = r.trip_id AND s.stop_seq = r.stop_seq "
+        "WHERE d IS NOT NULL AND t.network = ? AND r.service_date >= ? "
+        f"  AND ABS(d) <= {stats.MAX_REALNA_ZAMUDA_S} "
+        "ORDER BY 1, r.service_date, r.stop_seq",
+        (network, od),
+    )
+    out: dict[tuple[str, str], dict] = defaultdict(dict)
+    for r in rows:
+        out[(r["train_no"], r["service_date"])][r["stop_seq"]] = (
+            r["d"], r["ts"], r["prihod"])
+    return out
+
+
+def ocisti_enote(conn: sqlite3.Connection, network: str = NETWORK, od: str = ""):
+    """Za vsako (voznja, dan) kateri postanki so meritve (`stats.ocisti_dan`).
+
+    Vrne (enote, ok, odstranjeno): `ok[k]` = ohranjeni stop_seq, `odstranjeno[k]`
+    = (stevilo po (a), stevilo po (b)).
+    """
+    enote = _enote_dni(conn, network, od)
+    w = _dwells(conn, network)
+    rez = {v: {seq: max(0, x - MIN_DWELL_S) for seq, x in d.items()}
+           for v, d in w.items()}
+    ok, odstranjeno = {}, {}
+    for (voznja, dan), m in enote.items():
+        ohranjeni, a, b = stats.ocisti_dan(m, rez.get(voznja, {}), dan)
+        ok[(voznja, dan)] = ohranjeni
+        odstranjeno[(voznja, dan)] = (len(a), len(b))
+    return enote, ok, odstranjeno
 
 
 def _stop_ids(conn: sqlite3.Connection, network: str = NETWORK) -> dict[tuple[str, int], str]:
@@ -111,13 +163,22 @@ def _dwells(conn: sqlite3.Connection, network: str = NETWORK) -> dict[str, dict[
 
 
 def build_tasks(conn: sqlite3.Connection, network: str = NETWORK,
-                od: str = "") -> list[dict]:
+                od: str = "", oznaci: bool = False) -> list[dict]:
     """Vse naloge (voznja, dan, i, j, zamuda_i, zamuda_j), od dneva `od` naprej.
 
     `od` ni okras: avtobusi imajo 18. 9. 2026 v 21 dneh ~24 milijonov nalog,
     kar v slovarjih ne gre v pomnilnik.
+
+    `oznaci`: naloge ostanejo vse, vsaka pa dobi `ok` -- oba postanka sta
+    preziveli `stats.ocisti_dan`. Tako se modeli ucijo z ciscenjem ali brez,
+    ocenjujejo pa na isti mnozici.
     """
-    by_day = _delays_by_day(conn, network, od)
+    if oznaci:
+        enote, oks, _ = ocisti_enote(conn, network, od)
+        by_day = {k: {seq: v[0] for seq, v in m.items()} for k, m in enote.items()}
+        del enote
+    else:
+        by_day, oks = _delays_by_day(conn, network, od), None
     stops = _stop_ids(conn, network)
     dwells = _dwells(conn, network)
     # Izhodisce voznje -- za pravilo `stats.odhod_z_izhodisca`.
@@ -141,13 +202,17 @@ def build_tasks(conn: sqlite3.Connection, network: str = NETWORK,
                 w = dwells.get(train_no, {})
                 slack = sum(max(0, v - MIN_DWELL_S)
                             for k, v in w.items() if i < k <= j)     # rezerva
-                tasks.append({
+                naloga = {
                     "train_no": train_no, "day": day,
                     "i": i, "j": j, "horizon": j - i,
                     "d_i": delays[i], "d_j": delays[j],
                     "seg": (si, sj), "slack": slack, "network": network,
                     "izhodisce": i == izhodisce.get(train_no),
-                })
+                }
+                if oks is not None:
+                    ok = oks[(train_no, day)]
+                    naloga["ok"] = i in ok and j in ok
+                tasks.append(naloga)
     return tasks
 
 
@@ -482,6 +547,313 @@ MODELS = {
     "rezerva+razred, brez meje": model_fizika_razred_brez_meje,
     "rezerva+razred (do 19. 9.)": model_fizika_razred_meja_vedno,
 }
+
+
+# ---------------------------------------------------------------- natancne in varne napovedi
+#
+# 6. 11. 2026 (docs/presoja/vlaki-prenova/modeli.md). Modeli spodaj imajo isti
+# vmesnik (`factory(train_tasks)` -> `predict(t)`), a so zgrajeni tako, da
+# `predict` IZPUSTI vrstice dneva `t["day"]`: tabele se zgradijo enkrat iz vseh
+# nalog, izpuscanje dneva pa poteka ob napovedi. Pri milijonih nalog bi sicer
+# ucenje vsakega modela za vsak dan trajalo ure. Ce factory dobi naloge brez
+# tistega dne, je izid isti (`test_varni_modeli_izpuscajo_dan`).
+
+#: Utez krcenja razreda proti vsem dnem: n/(n+n0). Izmerjeno v modeli.md.
+N0_SKRCEN = (2, 4)
+N0_VARNA = 4
+
+
+class _Ostanki:
+    """Ostanki po kljucih, z dnevom, da ga lahko izpustimo ob napovedi."""
+
+    def __init__(self, train_tasks):
+        self.razred = defaultdict(list)
+        self.skupno = defaultdict(list)
+        for t in train_tasks:
+            d_i = _zdaj(t)
+            o = t["d_j"] - stats._after_slack(d_i, t["slack"])
+            k = (t["train_no"], t["i"], t["j"])
+            self.razred[k + (_bucket(d_i),)].append((t["day"], o))
+            self.skupno[k].append((t["day"], o))
+
+
+_SPOMIN: dict = {}
+
+
+def _ostanki(train_tasks) -> _Ostanki:
+    """Tabele ostankov, zgrajene enkrat za isti seznam nalog."""
+    k = id(train_tasks)
+    if _SPOMIN.get("k") != k or _SPOMIN.get("n") != len(train_tasks):
+        _SPOMIN.clear()
+        _SPOMIN.update(k=k, n=len(train_tasks), v=_Ostanki(train_tasks))
+    return _SPOMIN["v"]
+
+
+def _zdaj(t):
+    """Prezgodnji odhod z izhodisca ni odhod (`stats.odhod_z_izhodisca`)."""
+    return max(t["d_i"], 0) if t.get("izhodisce") else t["d_i"]
+
+
+def _brez_dne(seznam, dan):
+    return [o for d, o in seznam if d != dan] if seznam else []
+
+
+def _kvantil(urejen: list, q: float) -> float:
+    """Kvantil z linearno interpolacijo na urejenem seznamu."""
+    if len(urejen) == 1:
+        return urejen[0]
+    x = q * (len(urejen) - 1)
+    lo = int(x)
+    hi = min(lo + 1, len(urejen) - 1)
+    return urejen[lo] + (urejen[hi] - urejen[lo]) * (x - lo)
+
+
+def _model_ostanka(odlocitev):
+    """Ogrodje: rezerva voznega reda + odlocitev o ostanku iz zgodovine tega
+    vlaka (razred zamude in vsi dnevi, brez dneva naloge)."""
+    def tovarna(train_tasks):
+        ost = _ostanki(train_tasks)
+
+        def predict(t):
+            d_i = _zdaj(t)
+            osnova = stats._after_slack(d_i, t["slack"])
+            k = (t["train_no"], t["i"], t["j"])
+            raz = _brez_dne(ost.razred.get(k + (_bucket(d_i),)), t["day"])
+            sku = _brez_dne(ost.skupno.get(k), t["day"])
+            return odlocitev(t, d_i, osnova, raz, sku)
+        return predict
+    return tovarna
+
+
+def _s_mejo(t, d_i, ostanek: float, n: int) -> int:
+    """Isti dve pravili kot `model_fizika_razred` in `stats.predict`."""
+    if n >= stats.OSTANEK_BREZ_MEJE_DNI.get(t["network"], math.inf):
+        return round(ostanek)
+    return round(stats._omejen_ostanek(ostanek, d_i))
+
+
+def _sedanji(t, d_i, osnova, raz, sku):
+    ost = raz if len(raz) >= MIN_SAMPLES else sku
+    if not ost:
+        return osnova
+    return osnova + _s_mejo(t, d_i, statistics.median(ost), len(ost))
+
+
+def _skrcen(n0):
+    def odlocitev(t, d_i, osnova, raz, sku):
+        if not sku:
+            return osnova
+        m = statistics.median(sku)
+        if raz:
+            n = len(raz)
+            m = (n * statistics.median(raz) + n0 * m) / (n + n0)
+        return osnova + _s_mejo(t, d_i, m, len(raz) or len(sku))
+    return odlocitev
+
+
+def _varna_min(t, d_i, osnova, raz, sku):
+    """Nikoli vec od prenosa zamude: vlak, ki zamuja, je najpozneje tam, kjer je."""
+    return min(_sedanji(t, d_i, osnova, raz, sku), t["d_i"])
+
+
+def _varna_q(q):
+    def odlocitev(t, d_i, osnova, raz, sku):
+        if not sku:
+            return osnova
+        qs = _kvantil(sorted(sku), q)
+        if raz:
+            n = len(raz)
+            qs = (n * _kvantil(sorted(raz), q) + N0_VARNA * qs) / (n + N0_VARNA)
+        return osnova + _s_mejo(t, d_i, qs, len(raz) or len(sku))
+    return odlocitev
+
+
+def _varna_strosek(t, d_i, osnova, raz, sku, rezerva_s=None):
+    """Ostanek, ki da na empiricni porazdelitvi najmanjsi pricakovani strosek
+    potnika (`ocena.strosek_para`): potnik pride `POTNIKOVA_REZERVA_S` pred
+    prikazano uro. Kandidati so ostanki + rezerva (pri njem je cakanje prav
+    nic), strosek pa vsota presezkov nad njim + razmik za tiste pod njim.
+    """
+    ost = raz if len(raz) >= MIN_SAMPLES else sku
+    if not ost:
+        return osnova
+    ost = sorted(ost)
+    n = len(ost)
+    h = ocena.RAZMIK_S["zeleznica"]
+    pripon = [0] * (n + 1)
+    for k in range(n - 1, -1, -1):
+        pripon[k] = pripon[k + 1] + ost[k]
+    naj_m, naj_c = 0, None
+    for m in range(n):
+        if m and ost[m] == ost[m - 1]:
+            continue
+        c = pripon[m] - (n - m) * ost[m] + h * m
+        if naj_c is None or c < naj_c:
+            naj_m, naj_c = m, c
+    r = ocena.POTNIKOVA_REZERVA_S if rezerva_s is None else rezerva_s
+    return osnova + _s_mejo(t, d_i, ost[naj_m] + r, n)
+
+
+def _varna_strosek_brez_rezerve(t, d_i, osnova, raz, sku):
+    """Isto kot `_varna_strosek`, a brez zamika za potnikovo rezervo: napoved
+    je sam ostanek, ki da najmanjsi strosek, ce bi potnik prisel tocno ob
+    prikazani uri. Locuje pravo izboljsavo od zamika navzgor."""
+    return _varna_strosek(t, d_i, osnova, raz, sku, rezerva_s=0)
+
+
+#: ime -> (tovarna, ucenje). Brez ucenja (prenos, rezerva sama) ciscenje ne
+#: spremeni nicesar, zato je vrstica ena.
+MODELI_VARNI = {
+    "prenos": (model_prenos, False),
+    "fizika": (model_fizika, False),
+    "fizika_razred (sedanji)": (_model_ostanka(_sedanji), True),
+    **{f"fizika_razred_skrcen n0={n0}": (_model_ostanka(_skrcen(n0)), True)
+       for n0 in N0_SKRCEN},
+    "varna_min": (_model_ostanka(_varna_min), True),
+    "varna_q 0,10": (_model_ostanka(_varna_q(0.10)), True),
+    "varna_q 0,25": (_model_ostanka(_varna_q(0.25)), True),
+    "varna_strosek": (_model_ostanka(_varna_strosek), True),
+    "varna_strosek brez zamika": (_model_ostanka(_varna_strosek_brez_rezerve), True),
+}
+
+#: Obdobji vira zamud (docs/presoja/2026-11-06-napoved-skok.md): derp.si do
+#: 9. 10., zemljevid SŽ od 17. 10.; vmes prehod.
+OBDOBJA = {
+    "do 9. 10.": lambda dan: dan < "2026-10-10",
+    "od 17. 10.": lambda dan: dan >= "2026-10-17",
+    "vse": lambda dan: True,
+}
+
+
+def _vzorec_enote(train_no: str, dan: str, vzorec: int) -> bool:
+    """Deterministicen izbor cele enote (voznja, dan), da zveznost ostane
+    znotraj vozne."""
+    return vzorec <= 1 or zlib.crc32(f"{train_no}|{dan}".encode()) % vzorec == 0
+
+
+def metrike_napovedi(pari: list[tuple[float, float]]) -> dict:
+    """MAE, v 5 min, podcenj./precenj. (> 5 min) in strosek za (napoved, resnica)."""
+    if not pari:
+        return {"n": 0}
+    n = len(pari)
+    r = ocena.POTNIKOVA_REZERVA_S
+    h = ocena.RAZMIK_S["zeleznica"]
+    return {
+        "n": n,
+        "mae_min": round(sum(abs(a - b) for a, b in pari) / n / 60, 2),
+        "v5min": round(sum(1 for a, b in pari if abs(a - b) <= 300) / n * 100, 1),
+        "podcenj": round(sum(1 for a, b in pari if a < b - r) / n * 100, 1),
+        "precenj": round(sum(1 for a, b in pari if a > b + r) / n * 100, 1),
+        "strosek_min": round(
+            sum(ocena.strosek_para(a, b, h) for a, b in pari) / n / 60, 2),
+        # Predznacen odklon: strosek se da znizati z zamikom navzgor, ker
+        # potnik pride `POTNIKOVA_REZERVA_S` pred prikazano uro. Odklon pove,
+        # koliko od izboljsave je zamik in koliko boljsa napoved.
+        "odklon_min": round(sum(a - b for a, b in pari) / n / 60, 2),
+    }
+
+
+def zveznost(razlike: list[float]) -> dict:
+    """Povprecna |napoved(i+1 -> j) - napoved(i -> j)| in delez > 5 min.
+
+    Razlike so zbrane za isti cilj j in zaporedni izhodisci istega dne, ki se
+    po zamudi razlikujeta za najvec 60 s (RG 318: Laze -> Zalog skok 10 min
+    pri isti zamudi).
+    """
+    if not razlike:
+        return {"n_par": 0}
+    n = len(razlike)
+    return {"n_par": n,
+            "zvez_min": round(sum(razlike) / n / 60, 2),
+            "zvez_skok": round(sum(1 for x in razlike if x > 300) / n * 100, 1)}
+
+
+def pari_zveznosti(test: list[dict]) -> list[tuple[int, int, str]]:
+    """Pari indeksov nalog (i -> j, i2 -> j) za isti cilj j, kjer sta i in i2
+    zaporedna izmerjena postanka iste vozne in se zamuda razlikuje za <= 60 s."""
+    po_i: dict[tuple, dict[int, int]] = defaultdict(dict)
+    for k, t in enumerate(test):
+        po_i[(t["train_no"], t["day"], t["i"])][t["j"]] = k
+    izmerjeni: dict[tuple, list[int]] = defaultdict(list)
+    for (voznja, dan, i) in po_i:
+        izmerjeni[(voznja, dan)].append(i)
+    out = []
+    for (voznja, dan), seqs in izmerjeni.items():
+        seqs.sort()
+        for a, b in zip(seqs, seqs[1:]):
+            ka, kb = po_i[(voznja, dan, a)], po_i[(voznja, dan, b)]
+            d_a = test[next(iter(ka.values()))]["d_i"]
+            d_b = test[next(iter(kb.values()))]["d_i"]
+            if abs(d_b - d_a) > 60:
+                continue
+            for j, k1 in ka.items():
+                k2 = kb.get(j)
+                if k2 is not None:
+                    out.append((k1, k2, dan))
+    return out
+
+
+def porocilo_ciscenja(conn: sqlite3.Connection, network: str = NETWORK,
+                      od: str = "") -> dict:
+    """Koliko postankov in voženj-dni odstrani vsako pravilo `stats.ocisti_dan`,
+    po obdobjih (`OBDOBJA`): {obdobje: {postankov, a, b, voznj_dni, v_a, v_b, v_vsaj}}.
+    """
+    _, ok, odstranjeno = ocisti_enote(conn, network, od)
+    enote = _enote_dni(conn, network, od)
+    izid = {}
+    for obdobje, pogoj in OBDOBJA.items():
+        r = dict(postankov=0, a=0, b=0, voznj_dni=0, v_a=0, v_b=0, v_vsaj=0)
+        for (voznja, dan), m in enote.items():
+            if not pogoj(dan):
+                continue
+            a, b = odstranjeno[(voznja, dan)]
+            r["postankov"] += len(m)
+            r["a"] += a
+            r["b"] += b
+            r["voznj_dni"] += 1
+            r["v_a"] += a > 0
+            r["v_b"] += b > 0
+            r["v_vsaj"] += (a + b) > 0
+        izid[obdobje] = r
+    return izid
+
+
+def evaluate_varne(conn: sqlite3.Connection, od: str = "", vzorec: int = 1,
+                   modeli: list[str] | None = None,
+                   network: str = NETWORK) -> dict:
+    """Natancne in varne napovedi, z ciscenjem ucnih dni in brez.
+
+    Ocenjevanje je vedno na nalogah, kjer oba postanka preziveta ciscenje
+    (`ok`), sicer bi primerjali razliko vzorcev. Izpuscanje dneva poteka v
+    `predict`; `vzorec` n pomeni vsako n-to enoto (voznja, dan) za ocenjevanje
+    (ucenje vedno iz vseh). Vrne {obdobje: {ime: metrike}}; imena z dodatkom
+    ", cisto" so uceni iz ociscenih dni.
+    """
+    vsi = build_tasks(conn, network, od, oznaci=True)
+    cisti = [t for t in vsi if t["ok"]]
+    test = [t for t in cisti if _vzorec_enote(t["train_no"], t["day"], vzorec)]
+    izbrani = {k: v for k, v in MODELI_VARNI.items() if not modeli or k in modeli}
+    napovedi: dict[str, list[float]] = {}
+    for cisto in (False, True):
+        ucna = cisti if cisto else vsi
+        for ime, (tovarna, uci) in izbrani.items():
+            if cisto and not uci:
+                continue
+            predict = tovarna(ucna)
+            napovedi[ime + (", cisto" if cisto else "")] = [predict(t) for t in test]
+        _SPOMIN.clear()
+
+    pari = pari_zveznosti(test)
+    izid = {}
+    for obdobje, pogoj in OBDOBJA.items():
+        zadetki = [k for k, t in enumerate(test) if pogoj(t["day"])]
+        pari_o = [(a, b) for a, b, d in pari if pogoj(d)]
+        izid[obdobje] = {}
+        for oznaka, pred in napovedi.items():
+            m = metrike_napovedi([(pred[k], test[k]["d_j"]) for k in zadetki])
+            m.update(zveznost([abs(pred[b] - pred[a]) for a, b in pari_o]))
+            izid[obdobje][oznaka] = m
+    return izid
 
 
 # ---------------------------------------------------------------- ocenjevanje

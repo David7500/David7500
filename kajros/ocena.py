@@ -371,6 +371,14 @@ RAZMIK_S = {"zeleznica": 87 * 60, "avtobus": 40 * 60}
 POTNIKOVA_REZERVA_S = 5 * 60
 
 
+def strosek_para(napoved: float, resnica: float, razmik_s: int) -> float:
+    """Izguba potnika v sekundah za eno napoved: čakanje razlike ali, če mu
+    vozilo odpelje pred nosom, `razmik_s` do naslednjega. Skupno z backtestom
+    (`backtest`), da merita isto."""
+    prihod = napoved - POTNIKOVA_REZERVA_S
+    return (resnica - prihod) if prihod <= resnica else razmik_s
+
+
 def _strosek(vals: list[tuple[int, int]], omrezje: str | None) -> float | None:
     """Povprečna izguba potnika v minutah.
 
@@ -384,8 +392,7 @@ def _strosek(vals: list[tuple[int, int]], omrezje: str | None) -> float | None:
     h = RAZMIK_S[omrezje]
     skupaj = 0
     for napoved, resnica in vals:
-        prihod = napoved - POTNIKOVA_REZERVA_S
-        skupaj += (resnica - prihod) if prihod <= resnica else h
+        skupaj += strosek_para(napoved, resnica, h)
     return round(skupaj / len(vals) / 60, 2)
 
 

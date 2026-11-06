@@ -124,6 +124,26 @@ def cmd_backtest(args):
     if args.day_offset:
         res = backtest.evaluate_day_offset(conn)
         print(f"nalog: {res['tasks']}\n")
+    elif args.varne:
+        od = ((date.today() - timedelta(days=args.dni)).isoformat()
+              if args.dni else "")
+        c = backtest.porocilo_ciscenja(conn, args.network, od)
+        print("čiščenje (postankov / odstranjenih (a) nepotrjenih / (b) fizika):")
+        for ob, r in c.items():
+            print(f"  {ob:12s} {r['postankov']:>9d} {r['a']:>8d} {r['b']:>8d}"
+                  f"   voznj-dni {r['voznj_dni']:>7d}  (a) {r['v_a']:>6d}  (b) {r['v_b']:>6d}")
+        izid = backtest.evaluate_varne(
+            conn, od=od, vzorec=args.vzorec, network=args.network,
+            modeli=args.modeli.split(";") if args.modeli else None)
+        for ob, modeli in izid.items():
+            print(f"\n{ob}")
+            print(f"{'model':36s}{'n':>9}{'MAE':>7}{'v5':>7}{'pod':>6}{'pre':>6}"
+                  f"{'strosek':>9}{'odklon':>8}{'zvez':>7}{'skok':>7}")
+            for ime, m in modeli.items():
+                print(f"{ime:36s}{m['n']:>9d}{m['mae_min']:>7.2f}{m['v5min']:>7.1f}"
+                      f"{m['podcenj']:>6.1f}{m['precenj']:>6.1f}{m['strosek_min']:>9.2f}"
+                      f"{m['odklon_min']:>8.2f}{m.get('zvez_min', 0):>7.2f}{m.get('zvez_skok', 0):>7.1f}")
+        return
     elif args.operator:
         res = backtest.evaluate_operator(conn)
         if not res.get("tasks"):
@@ -664,6 +684,11 @@ def main(argv=None):
                    help="primerjaj prevoznikovo napoved s prenosom zamude")
     a.add_argument("--day-offset", action="store_true",
                    help="ali stanje mreze na ta dan izboljsa napoved (ne izboljsa)")
+    a.add_argument("--varne", action="store_true",
+                   help="natancne in varne napovedi, ciscenje ucne zgodovine, "
+                        "zveznost (docs/presoja/vlaki-prenova/modeli.md)")
+    a.add_argument("--vzorec", type=int, default=1,
+                   help="--varne: ocenjuj vsako n-to enoto (voznja, dan); ucenje iz vseh")
     a.add_argument("--by-horizon", action="store_true", help="razclenjeno po oddaljenosti")
     a.add_argument("--network", default=backtest.NETWORK,
                    choices=("zeleznica", "avtobus"),
