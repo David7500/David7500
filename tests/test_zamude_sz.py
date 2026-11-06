@@ -752,7 +752,7 @@ def test_popravi_vlake_prihod_iz_zemljevida():
     izid = zamude_sz.popravi_vlake(c, "2026-09-01")
     assert (izid["postankov"], izid["cilj_postankov"], izid["voznj"]) == (1, 1, 1)
     assert izid["dnevi"][DAN] == {"postankov": 1, "cilj_postankov": 1, "voznj": 1,
-                                  "zastarelih": 0, "zastarelih_voznj": 0}
+                                  "zastarelih": 0, "zastarelih_voznj": 0, "napovedi": 0}
     assert c.execute("SELECT delay_arr FROM run WHERE trip_id = 't1' AND stop_seq = 20"
                      ).fetchone()[0] == 0, "brez --zapisi se ne spremeni nič"
     assert zamude_sz.popravi_vlake(c, "2026-09-16")["postankov"] == 0, "dnevi od --od"
@@ -934,3 +934,24 @@ def test_zdravje_doslednosti_vlakov():
     assert "dosled_vlaki" not in _posta({**z, **_dosled(300, 3)})
     o = _posta({**z, **_dosled(300, 15)})["dosled_vlaki"]
     assert o.po_s == 1800 and o.nujno and "popravi-vlake" in o.ukrep
+
+
+def test_popravi_vlake_nepotrjena_napoved_gre_iz_run():
+    """LPV 2206 6. 11. 2026: derp.si je ob zagonu ob 07:37:37 zapisal Zidani
+    Most +15 (vozni red 07:35), vlak je odpeljal +2 in tega postanka nihče ni
+    prepisal. Vrstica, zapisana pred voznim redom + zamudo − 2 min, gre iz
+    `run`; izmerjena ostane. Pred 10. 10. (`feed_ts` derp.si) se ne dotakne."""
+    c = _baza()
+    dan = "2026-11-06"
+    pol = int(stats.polnoc(dan))
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
+              "VALUES('t1', ?, 20, 900, 900, ?)", (dan, pol + _ura(7, 37) + 37))
+    c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
+              "VALUES('t1', ?, 21, 120, 120, ?)", (dan, pol + _ura(8, 9) + 30))
+    _run(c, "t1", 20, 900, 900)          # DAN = 15. 9.: obdobje derp.si
+    c.commit()
+    izid = zamude_sz.popravi_vlake(c, "2026-09-01")
+    assert izid["napovedi"] == 1
+    zamude_sz.popravi_vlake(c, "2026-09-01", zapisi=True)
+    ostale = {(d, q) for d, q in c.execute("SELECT service_date, stop_seq FROM run")}
+    assert ostale == {(dan, 21), (DAN, 20)}
