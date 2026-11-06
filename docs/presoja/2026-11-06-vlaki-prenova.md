@@ -131,9 +131,22 @@ Javne dejanske ure prehodov nima nihče. Zemljevid SŽ (`aktivni_vlaki`) je edin
 | zamudil.si | isti viri kot mi + sestava vlaka s potniski.sz.si | sestavo poiskati v orodjih za razvijalce v Chromu |
 | SŽ-PP poročilo o kakovosti 2024 | zamudne minute na 100 km: 2023 5,8; 2024 6,7 | za primerjavo s statistiko |
 
-## Stanje
+## Stanje (6. 11. 2026 zvečer)
 
-* 6. 11.: najdbe zgoraj, načrt, raziskava virov (točka 6), odvisnosti (točka 4, prvo merjenje).
-* 6. 11. teče v worktreejih: (a) zajem, točka 1 (štirje popravki + `kajros popravi-vlake`); (b) merjenje modelov, točka 3 (`vlaki-prenova/modeli.md`: čiščenje zgodovine, varna in natančna, strošek in zveznost v backtestu).
-* Naslednje po (a): pregled razlike, `preveri.sh`, objava, `kajros popravi-vlake --zapisi` na arwenu, štetje „stal ≥ 10 min“ in „ura nazaj“ za dan po objavi.
-* Odprto za naslednje seje: usklajena pot (točka 2) s tabelo zamud SŽ kot virom registracij; varna in natančna v `predict` in senci (po izidu b); tabela odvisnosti in raba pred odhodom; straža doslednosti (točka 5); HAFAS teden v senci.
+Objavljeno na arwen:
+
+* **88ec114 zajem**: zemljevid SŽ vodi od zagona (`iz_lege.sz_pricakuj`), napoved vlaka ne gre v `run` (`collector.napoved_vlaka`), prvi zapis postanka nastavi prihod in odhod, vsako stanje zemljevida potrdi naslednji spremenjen odgovor (`zamude_sz.potrdi`, `nepotrjenih` v `meta.zamude_sz`). Preverjeno ob objavi ob 14.45: derp.si ob zagonu ni zapisal nič, LP 4224 je dobil prihod = odhod ob prihodu po uri.
+* **4426ec2, 6a84a68 popravilo** `kajros popravi-vlake` (meja `POPRAVI_DO_TS`, zastareli višji zapisi, nepotrjene napovedi) in straža `dosled_vlaki` v zdravju (rumeno od 1 %, rdeče od 5 %). Pognano na arwenu z Davidovim dovoljenjem: 3 975 vmesnih prihodov, 11 185 ciljev, 175 zastarelih višjih odhodov, 297 nepotrjenih napovedi.
+* **603b659 okno**: `stats.uskladi_ure` pri vlaku: prejšnji postanek popusti naslednjemu, največ za zamudo naslednjega + desetino voznega časa (najmanj minuto). Samo prikaz, `run` ostane. LPV 2206 6. 11. je zdaj dosleden od Hrastnika (+2) do Ljubljane (+1).
+
+Po popravilu, od 1. 11.: ura nazaj ≥ 2 min 3,4 % voženj-dni (prej 6,9 %), „stal ≥ 10 min“ na postanku ≤ 2 min 5,1 % (prej 25,4 %), prihod po odhodu 1,8 %. Ostanek je semantika zemljevida (spodaj), okno ga uskladi.
+
+Merjenje modelov ([vlaki-prenova/modeli.md](vlaki-prenova/modeli.md), ce84159, še ni objavljeno): čiščenje zgodovine sedanjega modela ne spremeni (MAE 2,05, strošek 7,30). Sedanji model je torej NATANČNA, skrčenje razreda ne pomaga. VARNA je `varna_q` (rezerva + kvantil 0,25): precenj. 0,3 % proti 1,5 %, strošek 7,12 proti 7,30, MAE 2,23 (prenos 3,01). `varna_strosek` ni varna: nižji strošek je le zamik +1,9 min. Pred odhodom odvisnost od vlaka A komaj pomaga (MAE 5,91 → 5,62, resnica je približek), zato je varna pred odhodom vozni red.
+
+Teče: varna v `predict` in v senci (`napoved.varna_s`), prikaz nespremenjen. Odločitev o prikazu 9. 11. (`KOLEDAR.md`).
+
+Odprto:
+
+* **„Stal X min“ je lahko napačno pripisan.** SŽ zamudo dviguje, ko je `Postaja` že naslednja, zato povečanje pade v odhod prejšnjega postanka, čeprav je vlak morda obstal na progi. Pravo mesto da tabela zamud SŽ (prometno mesto). Do takrat bi okno lahko reklo „med X in Y izgubil N min“.
+* Usklajena pot iz registracij (točka 2), tabela zamud SŽ v senci, HAFAS teden, odvisnosti v modelu, zahteva po ZJI: roki v `KOLEDAR.md`.
+* `ocisti_dan` je pripravljen, v `predict` ni vklopljen (ne spremeni MAE); zgodovina predhodnikov (`_dnevi_prednikov`) ni čiščena.
