@@ -18,19 +18,20 @@ paths:
 
 ## `/statistika*` — strani statistike (od 29. 10. 2026)
 
-Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (David): kartica = vprašanje potnika, ena velika številka, trak ali stolpci, povezava naprej. Izris na strežniku, brez JS (`templates/statistika_*.html`, `_stat.html`, `statistika.css`); številke samo iz nočnih povzetkov (`stat_napovedi`, `stat_prevozniki`).
+Načrt, odločitve in stanje: `docs/STATISTIKA.md`. Slog **A „Odgovori“** (David): kartica = vprašanje potnika, ena velika številka, trak ali stolpci, povezava naprej. Izris na strežniku (`templates/statistika_*.html`, `_stat.html`, `statistika.css`); številke samo iz nočnih povzetkov (`stat_napovedi`, `stat_prevozniki`).
+* **Graf z odčitkom** (makro `graf`, od 6. 11. 2026): stolpec nosi `data-o`, izbran (dotik = `:focus` prek `tabindex="-1"`, miška) se izpiše v vrstici nad grafom, brez izbire `namig` (obdobje). Izpis je CSS, dela brez JS; `statistika.js` doda le poteg in najbližji stolpec (tanek ali nizek je pod prstom težko zadeti). Izbira = fokus, ne razred: izpis je en sam. `title` ne (dotik ga ne pokaže).
 * **Kartica brez vzorca izpade** (`statistika.MIN_VZOREC` 30), ne kaže šuma. Dan z manj vožnjami v stolpcih sivo nizek: izpad zajema ni slab dan.
 * **Primerjava prevoznikov** le z ≥ 1 000 vožnjami in ≥ 14 dnevi zajema v oknu (`primerljiv`); ostali „še premalo“ (Marprom, Kranj od 27. 10.).
 * **Lestvica**: mestni in LPP primestni po liniji (`LINIJSKI`), ostali po šifri **in uri odhoda** (A6343 = več odhodov na dan). Enak delež loči |mediana| (−5 min na cilju je rezerva, ne točnost). Vsak seznam največ polovica vrstic (Kranj 8 linij je dve kazal na obeh).
 * **Prezgodnji odhod vlaka povsod „—“**: podatki SŽ pod nič ne poročajo, „0 %“ bi bila pohvala brez meritve.
 * **Stran vožnje z malo meritvami** (`malo_voznje`: vlak < 10 dni, ker šteje dneve in okno jih ima 30; linija < 30 voženj): opozorilo „številka je groba“, `noindex`, ni v zemljevidu strani — isto pravilo v SQL `poti_za_iskalnik`.
-* **Graf brez povzetka v besedilu ima `role="img"` + `aria-label`** (najslabši in najboljši dan): `title` dotik in bralnik ne pokažeta.
+* **Graf brez povzetka v besedilu ima `role="img"` + `aria-label`** (najslabši in najboljši dan).
 * **Prevoznikova napoved** samo, kjer jo je objavil pri ≥ 20 % pogledov (`MIN_DELEZ_PREVOZNIKA`); SŽ 0,5 % → „skoraj ne objavlja“.
 * Zamuda v vrstici **z besedo**: „5,5 min prej“, „točno“ (`statistika.zamuda_min`); „v 5 min“ vedno s pragom.
 * Konkurenca **po metodi, brez imen** („trenutna zamuda, prenesena naprej“); imena le na `/primerjava`.
 * Barvi omrežij trdo v `.st` (`--st-vlak`, `--st-bus`): pregled kaže oboje, `body.net-avtobus` bi prebarval vse.
 * V zemljevidu strani iz **shranjenih** povzetkov (`poti_za_iskalnik`), v meniju Več.
-* **Vlak/linija** (`/statistika/vlak/{slug}`, `/statistika/linija/{prevoznik}/{slug}`) iz `stat_voznja`; pri malo vožnjah na dan stolpec = mediana zamude v barvi razreda (`r-…`), ne delež. Dnevi v tednu le ob razliki (≥ 10 točk ali ≥ 2 min). Medkrajevne šifre `noindex`. Okno vožnje kaže nanje v nogi (`statistika` v `/run`).
+* **Vlak/linija** (`/statistika/vlak/{slug}`, `/statistika/linija/{prevoznik}/{slug}`) iz `stat_voznja`; pri malo vožnjah na dan stolpec = mediana zamude v barvi razreda (`r-…`), ne delež. Dnevi v tednu le ob razliki (≥ 10 točk ali ≥ 2 min). Medkrajevne šifre `noindex`. Okno vožnje: gumb „Kako točno vozi“ v skupini dejanj (`#pomoc-stat`, `statistika` v `/run`); v nogi ga nihče ni našel.
 * **SŽ** (`/statistika/sz`): samo od `SZ_VODI_OD` (11. 10. 2026, naš bralec zemljevida); prehodi potnikov čez vso zgodovino (redki), kartica od `MIN_PREHODOV` 20. Vzroka odseka („dela, en tir“) ne trdimo.
 * **Relacije**: avto = odsek avtoceste od priključka do priključka (stran to pove); brez `promet.sqlite` izpade, ne ničla. Poljuben par `?od=&do=` ob zahtevi (`iskanje_relacije`, ~10 ms, predpomnilnik do konca okna, `noindex`), samo brez prestopa; pod 10 vožnjami brez številke. Neznano ime: do tri podobna (`journey.podobna_imena`, `difflib`) s povezavo na popravljen par — podniz tipkarske napake ne odpusti.
 * **Namizje ≥ 900 px** (David: „luknje vmes“): vrste flex, ki se raztegnejo, kartice v vrsti enako visoke — ne mreža s fiksnimi stolpci (praznina pod nizkimi). Širino da razred: `st-dvojna` (graf), `st-siroka` (dolg seznam v stolpcih, besedilo). Razlaga in predlogi v dveh stolpcih (`columns`, kartica `display: block`). Namizni del na koncu `statistika.css`.
@@ -171,6 +172,8 @@ Osnutek E (David, 24. 10. 2026): iskanje iz A, zadetki iz B — vse vrstice enak
 * **Iskanje sproži gumb ali sprememba dneva** (David, 24. 10. 2026: Danes/Jutri/koledar išče takoj, `poDnevu`; brez Od samo izbere) in poizvedba iz naslova. Izbira postaje ne.
 * **Po iskanju obrazec skrčen v vrstico** (`zlozi()`, `.pz`): le lastno iskanje ali naslov, **nikoli osvežitev**. 404 odpre. Imena se prelomijo, ne odrežejo. Na tabli „Kam?“ (fokus v Kam), pri zvezah zamenjava; pod vrstico zvez dan. **Namizje (≥ 900 px) ne skrči**: z odgovorom dva stolpca, obrazec levo, vrstica nad odgovorom.
 * **Tabla po vrsti ali po linijah** (samo avtobus, privzeto po vrsti, `kajros:tabla-razvrstitev`): po linijah ena vrstica na linijo, cilj in stran ceste, „nato čez 24 in 46 min“.
+* **Zveza s prestopi odpre celo pot** (`/app/pot/podrobno`, `journey.dopolni_pot` → `pot` v `/api/connections`; prej okno prve vožnje, druge ni bilo). Podrobna stran: „‹ nazaj na zveze“ = `history.back()`. Neposredna ostane okno vožnje.
+* **Škatla ovir zaprta tudi pri enem obvestilu** (David, 6. 11. 2026: odprta je zasedla zaslon nad zvezami); zaprta ima naslove v eni vrstici (`.alert-povzetek`).
 * **Osvežitev zvez je tiha** (30 s): ponovi vprašanje na zaslonu, pozen odgovor ne prepiše novejšega (`zvezeSt`), odprt seznam in škatla ovir ostaneta.
 * **Avtobusna tabla ima stran ceste** (89 % prometa na imenih z ≥ 2 postajališčema). Povezani segmenti „Obe · → Tobačna · → Vič Glince“ = **naslednja postaja**, brez sklanjanja.
   * Računa strežnik (`journey.smeri_postaje`; meji 60° in 250 m). „Proti centru“ kot oznaka zavrnjeno (22. 9.).

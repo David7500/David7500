@@ -14,12 +14,13 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_vec.html" import list as vec_list %}
-{% from "_stat.html" import glava, trak, stolpci, noga, razlaga %}
+{% from "_stat.html" import glava, trak, stolpci, graf, noga, razlaga %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('home.css') }}">
   <link rel="stylesheet" href="{{ s('statistika.css') }}">
+  <script src="{{ s('statistika.js') }}" defer></script>
 </head>
 <body class="home-page{% if not vlak %} net-avtobus{% endif %}">
   <main class="home st">
@@ -54,9 +55,11 @@
     {% set naj = ure | sort(attribute="v5min") %}
     <section class="st-k">
       <h2>Ob kateri uri zamuja?</h2>
+      {%- call graf("izberi uro") %}
       <div class="st-ure {{ '' if vlak else 'bus' }}" aria-hidden="true">
-        {%- for u in ure %}<i style="height:{{ u.visina }}%" title="{{ u.ura }}h: {{ u.v5min | odstotek }} v 5 min, {{ u.n }}&nbsp;{{ (u.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}"></i>{% endfor -%}
+        {%- for u in ure %}<i style="height:{{ u.visina }}%" tabindex="-1" data-o="{{ u.ura }}h: {{ u.v5min | odstotek }} v 5 min · {{ u.n | stevilo }}&nbsp;{{ (u.n or 0) | stevnik("vožnja", "vožnji", "vožnje", "voženj") }}"></i>{% endfor -%}
       </div>
+      {%- endcall %}
       <div class="st-ure-os st-drobno"><span>{{ ure[0].ura }}h</span><span>{{ ure[-1].ura }}h</span></div>
       <p>Najbolj točno ob {{ naj[-1].ura }}h ({{ naj[-1].v5min | odstotek }} v 5 min), najmanj ob {{ naj[0].ura }}h ({{ naj[0].v5min | odstotek }}).</p>
       <div class="st-drobno">po uri prihoda na zadnjo postajo · višje = več voženj z zamudo nad 5 min · le ure z vsaj {{ min_vzorec }} vožnjami</div>

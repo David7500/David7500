@@ -1727,13 +1727,22 @@ function nazajUrl() {
 // ga vrne celega, z imeni krajev in mestom na seznamu. Prej je bila nova
 // navigacija: zgodovina je rasla, sistemski nazaj je vodil spet sem (zanka
 // seznam ↔ podrobnosti), polja pa so imela koordinate (presoja 18. 10. 2026).
-$("#nazaj").addEventListener("click", (ev) => {
-  let sSeznama = false;
+// Isto s strani zvez (iskalnik vlakov in avtobusov): dotik zveze s prestopi
+// odpre to stran (`journey.dopolni_pot`), nazaj pa gre na zveze, ne na pot od
+// vrat do vrat z istima postajama.
+const PRISEL_S = (() => {
   try {
     const r = document.referrer && new URL(document.referrer);
-    sSeznama = !!r && r.origin === location.origin && r.pathname === "/app/pot";
+    if (!r || r.origin !== location.origin) return null;
+    if (r.pathname === "/app/pot") return "pot";
+    if (r.pathname === "/app/train" || r.pathname === "/app/bus") return "zveze";
   } catch (e) { /* neveljaven referrer: ni naša stran */ }
-  if (sSeznama && history.length > 1) {
+  return null;
+})();
+if (PRISEL_S === "zveze") $("#nazaj").textContent = "‹ nazaj na zveze";
+
+$("#nazaj").addEventListener("click", (ev) => {
+  if (PRISEL_S && history.length > 1) {
     ev.preventDefault();
     history.back();
   }

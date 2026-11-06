@@ -139,6 +139,7 @@ Service worker (`api.sw()` iz `templates/sw.js`), registracija v `common.js` sam
 * **`api._SW_STRANI` samo strani brez česarkoli iz baze.**
 * Različica = odtis lupine, predlog in statike (`_odtis_aplikacije()`), ne ročna številka.
 * `/brez-omrezja` namerno brez zadnjih zamud.
+* **Brez zveze v strani** (`common.js` „brez zveze“, `base.css`): `html.brez-zveze` posivi zaslon (`backdrop-filter` plast 1040, ne `filter` na vsebini — ta bi bil okvir za `fixed`), pas na vrhu `#ffdad6` na `#4a1f22` z uro zadnjega odgovora, ob vrnitvi 2,5 s zeleno. Znaka: `offline` ali dve neuspeli zahtevi na naš izvor zapored (WebView `onLine` ne nastavlja; 502/504/52x = Cloudflare brez strežnika); `AbortError` ne šteje. Stran, ki to ureja sama: `<body data-zveza="sama">` (pot podrobno).
 * Headless z `--virtual-time-budget` delavca ne požene — preizkus brez njega.
 
 ## Ovire na oknu vožnje

@@ -13,12 +13,13 @@
   {% set og_desc = opis %}
 {% include "_meta.html" %}
 {% from "_vec.html" import list as vec_list %}
-{% from "_stat.html" import glava, trak, noga %}
+{% from "_stat.html" import glava, trak, graf, noga %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ s('pisave.css') }}">
   <link rel="stylesheet" href="{{ s('base.css') }}">
   <link rel="stylesheet" href="{{ s('home.css') }}">
   <link rel="stylesheet" href="{{ s('statistika.css') }}">
+  <script src="{{ s('statistika.js') }}" defer></script>
 </head>
 <body class="home-page">
   <main class="home st">
@@ -58,9 +59,11 @@
     {% if tedni | length >= 2 %}
     <section class="st-k">
       <h2>Se izboljšujemo?</h2>
+      {%- call graf("izberi teden") %}
       <div class="st-tedni" aria-hidden="true">
-        {%- for t in tedni %}<div><i class="nasa" style="height:{{ t.visina_nasa }}%"></i><i class="prenos" style="height:{{ t.visina_prenos }}%"></i></div>{% endfor -%}
+        {%- for t in tedni %}<div tabindex="-1" data-o="teden od {{ t.od | dan }}: kajros {{ t.nasa.mae_min | decimalno }} min, trenutna zamuda {{ t.prenos.mae_min | decimalno }} min"><i class="nasa" style="height:{{ t.visina_nasa }}%"></i><i class="prenos" style="height:{{ t.visina_prenos }}%"></i></div>{% endfor -%}
       </div>
+      {%- endcall %}
       <div class="st-tedni-os st-drobno">{% for t in tedni %}<span>{{ t.od | dan }}</span>{% endfor %}</div>
       <div class="st-drobno">povprečna napaka po tednih · oranžno kajros, sivo trenutna zamuda</div>
       <p>Vlaki na poti po tednih, kajros proti trenutni zamudi: {% for t in tedni %}{{ t.nasa.mae_min | decimalno }} proti {{ t.prenos.mae_min | decimalno }}{{ ", " if not loop.last else " min." }}{% endfor %}</p>

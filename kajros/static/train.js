@@ -1538,8 +1538,27 @@ function renderTimeline() {
   runTimelineEl.innerHTML = seznamHtml() + vozovnicaHtml(run)
     + `<div class="detail-foot">${escapeHtml(run.service_date)} · ${run.stops.length} ${sklon(run.stops.length, "postanek")}
       · ${viriHtml(run)}${run.stops.some((s) => s.opazovano)
-        ? ' · kje ni ustavljal: lege vozil in <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ""} · vreme Open-Meteo (CC BY 4.0)${run.statistika
-        ? ` · <a href="${escapeHtml(run.statistika)}">kako točno vozi ›</a>` : ""}</div>`;
+        ? ' · kje ni ustavljal: lege vozil in <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' : ""} · vreme Open-Meteo (CC BY 4.0)</div>`;
+  posodobiStatistiko(run);
+}
+
+// Kako točno ta vožnja vozi (`/statistika/vlak/…`, `/statistika/linija/…`):
+// gumb v skupini dejanj. Prej povezava v nogi med viri, kjer je ni nihče
+// našel (David, 6. 11. 2026). Strežnik pot pošlje le, če jo nočni izračun ima.
+const statGumb = document.getElementById("pomoc-stat");
+const SVG_STAT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16M7 16v-3M12 16V7M17 16v-6"/></svg>';
+
+function posodobiStatistiko(run) {
+  if (!statGumb) return;
+  if (!run.statistika) {
+    statGumb.hidden = true;
+    return;
+  }
+  if (statGumb.getAttribute("href") !== run.statistika) {
+    statGumb.href = run.statistika;
+    statGumb.innerHTML = `${SVG_STAT}<span class="pomoc-ime">Kako točno vozi</span>`;
+  }
+  statGumb.hidden = false;
 }
 
 // Nakup vozovnice je pri SŽ na `eshop.sz.si`. Relacije v naslov ni mogoce

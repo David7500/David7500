@@ -608,6 +608,136 @@ function jsonOk(r) {
   return r.json();
 }
 
+// ---------- brez zveze ----------
+//
+// Brez omrežja je bil na strani en stavek („Nalaganje ni uspelo.“) sredi
+// starih številk, ki so bile videti kot sveže (David, 6. 11. 2026: „more biti
+// bolj vidno“). Zdaj zaslon posivi, na vrhu je pas, ki pove, od kdaj se
+// številke ne osvežujejo. Siva namerno: zamuda, ki je ne moremo osvežiti, ni
+// podatek o zdaj (isti razlog kot `/brez-omrezja`).
+//
+// Dva znaka. `navigator.onLine` pove brskalnik (WebView aplikacije ga ne
+// nastavlja zanesljivo), zato štejejo tudi zahteve na naš strežnik: dve
+// neuspeli zapored brez uspešne vmes pomenita, da ga ne dosežemo, tudi ko
+// telefon misli, da omrežje ima (padel tunel, predor z eno črtico signala).
+// Ena sama ne -- posamezna zahteva sme spodleteti. Prekinjena (`AbortError`)
+// ni neuspeh: iskanje staro zahtevo prekine samo. Odgovor Cloudflara brez
+// strežnika za njim (502, 504, 52x, 530) je isto kot brez odgovora.
+//
+// Strani, ki brez zveze ravnajo same (pot, na kateri si: koraki ostanejo
+// pravi, opomba pove starost zamud), nosijo `<body data-zveza="sama">`.
+const ZVEZA = { napak: 0, zadnjiOk: null, brez: false, poskus: null, skrij: null };
+const ZVEZA_NAPAK = 2;
+// Ko pas visi, a stran sama ne sprašuje (pot brez osveževanja), strežnik
+// vprašamo sami -- sicer bi pas ostal tudi po vrnitvi zveze.
+const ZVEZA_POSKUS_MS = 15000;
+
+(() => {
+  const izvorni = window.fetch;
+  if (!izvorni) return;
+  const nas = (vir) => {
+    try {
+      const url = new URL(vir instanceof Request ? vir.url : String(vir), location.href);
+      return url.origin === location.origin;
+    } catch (e) {
+      return false;
+    }
+  };
+  window.fetch = function (vir, ...ostalo) {
+    const p = izvorni.call(this, vir, ...ostalo);
+    if (!nas(vir)) return p;
+    return p.then((r) => {
+      if (r.status === 502 || r.status === 504 || r.status >= 520) zvezaNapaka();
+      else zvezaOk();
+      return r;
+    }, (err) => {
+      if (!err || err.name !== "AbortError") zvezaNapaka();
+      throw err;
+    });
+  };
+})();
+
+function zvezaOk() {
+  ZVEZA.napak = 0;
+  ZVEZA.zadnjiOk = Date.now();
+  if (ZVEZA.brez) pokaziZvezo(false);
+}
+
+function zvezaNapaka() {
+  ZVEZA.napak += 1;
+  if (navigator.onLine === false || ZVEZA.napak >= ZVEZA_NAPAK) pokaziZvezo(true);
+}
+
+const SVG_PAS_BREZ = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 5.2-2.8M19 12.9a10 10 0 0 0-2.4-1.7M1.4 9a15 15 0 0 1 4.3-2.6M22.6 9A15 15 0 0 0 10.7 5M12 20h.01"/></svg>';
+const SVG_PAS_OK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+function zvezaPas() {
+  let pas = document.getElementById("zveza-pas");
+  if (!pas && document.body) {
+    pas = document.createElement("div");
+    pas.id = "zveza-pas";
+    pas.className = "zveza-pas";
+    pas.setAttribute("role", "status");
+    pas.hidden = true;
+    document.body.append(pas);
+  }
+  return pas;
+}
+
+function zvezaBesedilo() {
+  const pas = zvezaPas();
+  if (!pas) return;
+  const naslov = navigator.onLine === false ? "Ni povezave" : "Strežnik ne odgovarja";
+  let kdaj = "Zamud ta hip ne moremo osvežiti.";
+  if (ZVEZA.zadnjiOk) {
+    const min = Math.floor((Date.now() - ZVEZA.zadnjiOk) / 60000);
+    kdaj = `Številke so od ${hhmm(ZVEZA.zadnjiOk)}${min >= 1 ? `, izpred ${min} min` : ""} — lahko so stare.`;
+  }
+  pas.innerHTML = `${SVG_PAS_BREZ}<span><b>${naslov}</b>${kdaj} Ko se zveza vrne, se osvežijo same.</span>`;
+}
+
+function pokaziZvezo(brez) {
+  if (document.body && document.body.dataset.zveza === "sama") return;
+  const pas = zvezaPas();
+  if (!pas) return;
+  if (brez) {
+    zvezaBesedilo();
+    if (ZVEZA.brez) return;
+    ZVEZA.brez = true;
+    clearTimeout(ZVEZA.skrij);
+    pas.classList.remove("je-nazaj");
+    pas.hidden = false;
+    document.documentElement.classList.add("brez-zveze");
+    ZVEZA.poskus = setInterval(() => {
+      if (document.hidden) return;
+      zvezaBesedilo();
+      fetch("/api/svezina", { cache: "no-store" }).catch(() => { /* pas ostane */ });
+    }, ZVEZA_POSKUS_MS);
+    return;
+  }
+  if (!ZVEZA.brez) return;
+  ZVEZA.brez = false;
+  clearInterval(ZVEZA.poskus);
+  document.documentElement.classList.remove("brez-zveze");
+  // Kratka potrditev, da se številke spet osvežujejo; nato pas izgine.
+  pas.classList.add("je-nazaj");
+  pas.innerHTML = `${SVG_PAS_OK}<span><b>Spet povezano</b>Številke se osvežujejo.</span>`;
+  ZVEZA.skrij = setTimeout(() => {
+    if (!ZVEZA.brez) pas.hidden = true;
+  }, 2500);
+}
+
+addEventListener("offline", () => pokaziZvezo(true));
+// Brskalnik reče „spet na omrežju“, preden strežnik odgovori: pas gre šele ob
+// prvem odgovoru. Strani z `pollWhileVisible` ob tem dogodku vprašajo same.
+addEventListener("online", () => {
+  if (ZVEZA.brez) fetch("/api/svezina", { cache: "no-store" }).catch(() => {});
+});
+if (navigator.onLine === false) {
+  if (document.body) pokaziZvezo(true);
+  else document.addEventListener("DOMContentLoaded", () => pokaziZvezo(true));
+}
+
 // ---------- pika o zivosti ----------
 // Pika je doslej kazala, ali je ODGOVOR prisel, ne ali so PODATKI sveži.
 // Če zajem odmre, API pa tece naprej, bi ostala zelena in bi trdila nekaj,

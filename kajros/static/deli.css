@@ -150,6 +150,8 @@
 .pomoc-deli { --seg: #b9c3ff; --seg-kont: var(--deli-kont); }
 .pomoc-zas { --seg: #e7b9ff; --seg-kont: var(--deli-kont); }
 .pomoc-ovire { --seg: #f2d36b; --seg-kont: #2e2811; }
+/* Statistika je povezava na drugo stran, ne razdelek: brez odprtega stanja. */
+.pomoc-stat { --seg: var(--accent-lit); text-decoration: none; }
 .pomoc-gumb[aria-expanded="true"], .pomoc-bud.is-on { background: var(--seg-kont); }
 /* Deljenje teče, tudi ko je razdelek zaprt. */
 .pomoc-zivo {

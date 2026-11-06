@@ -117,7 +117,7 @@
       <div id="zas-opomba" class="ov-opomba" hidden></div>
       {%- endif %}
       {#- Skupina dejanj (ikone kot v osnutku B): budilka (samo v aplikaciji),
-          deljenje lege, zasedenost, pri vlaku ovire. Dotik odpre svoj razdelek
+          deljenje lege, zasedenost, pri vlaku ovire, statistika. Dotik odpre svoj razdelek
           pod skupino; odprt je en sam (`data-odprto`). Gumbe rišejo moduli
           (`deli.js`, `zasedenost.js`, `train.js`). #}
       <div class="pomoc" id="pomoc">
@@ -130,6 +130,9 @@
           <button type="button" class="pomoc-gumb pomoc-zas" id="pomoc-zas" aria-controls="zasedenost" aria-expanded="false" hidden></button>
           {%- endif %}
           <button type="button" class="pomoc-gumb pomoc-ovire" id="pomoc-ovire" aria-controls="train-alerts" aria-expanded="false" hidden></button>
+          {#- Statistika te vožnje (`/statistika/vlak/…`): povezava, ne razdelek.
+              Prej le v nogi pod postanki, kjer je ni nihče našel. #}
+          <a class="pomoc-gumb pomoc-stat" id="pomoc-stat" hidden></a>
         </div>
         {%- if deli %}
         <section class="deli deli-okno" id="deli" aria-live="polite" hidden></section>

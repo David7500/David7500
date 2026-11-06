@@ -445,13 +445,19 @@ function alertsHtml(list, note) {
       </div>
     </div>`;
   }).join("");
-  return `<details class="alert-box"${list.length <= 2 ? " open" : ""}>
+  // Zaprta tudi pri enem obvestilu: odprto obvestilo SŽ je zasedlo cel
+  // zaslon nad zvezami (David, 6. 11. 2026), zaradi katerih je človek prišel.
+  // Zaprta pove dovolj, da se ve, ali jo odpreti -- naslove v eni vrstici.
+  const naslovi = list.map((a) => alertTitle(a.header)).join(" · ");
+  return `<details class="alert-box">
     <summary class="alert-head">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
         <path d="M12 9v5M12 17.5v.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path>
       </svg>
       ${escapeHtml(note)}
       <span class="alert-count">${list.length} ${sklonOvir(list.length)}</span>
+      <svg class="alert-pus" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+      <span class="alert-povzetek">${escapeHtml(naslovi)}</span>
     </summary>
     <div class="alert-list">${items}</div>
   </details>`;
@@ -665,6 +671,22 @@ function prestopZamudaHtml(voznja, s) {
   return `<span class="leg-note">${escapeHtml(imeVoznje(voznja))}: ${delayText(s)}</span>`;
 }
 
+/** Kam vodi dotik zveze s prestopi: na celo pot (`/app/pot/podrobno`), ne v
+ *  okno prve vožnje -- tam druge ni bilo in jo je bilo treba iskati znova
+ *  (David, 6. 11. 2026). Podrobna stran ima obe vožnji z zamudami, prestop,
+ *  zemljevid, „Začni pot“ in z vsake vožnje povezavo na njeno okno. Brez
+ *  `pot` (star strežnik) ostane okno prve vožnje. */
+function prestopHref(t, data) {
+  if (!t.pot) return journeyHref(t.train1, data.date, t.trip1, data.from);
+  const q = new URLSearchParams({
+    noge: t.pot.noge, od_lat: t.pot.od[0], od_lon: t.pot.od[1],
+    do_lat: t.pot.do[0], do_lon: t.pot.do[1],
+  });
+  // Dan vožnje, ne dan vprašanja: ponoči je to lahko včerajšnji prometni dan.
+  if (data.date && data.date !== todayIso()) q.set("date", data.date);
+  return `/app/pot/podrobno?${q}`;
+}
+
 /** Zveza s prestopom: ista kartica, trak od prvega odhoda do prihoda,
  *  pod njim noge. */
 function prestopHtml(t, nowMs, data) {
@@ -700,7 +722,7 @@ function prestopHtml(t, nowMs, data) {
        <span class="zt-op">najkrajše čakanje ${planned} min</span>`;
   const cez = nowMs ? cezBesedilo(new Date(t.sched_dep).getTime(), nowMs) : "";
   return `
-    <a class="zk je-prestop" href="${journeyHref(t.train1, data.date, t.trip1, data.from)}">
+    <a class="zk je-prestop" href="${escapeHtml(prestopHref(t, data))}">
       <span class="zk-gl"><span class="zk-noge">${t.legs.map((l) => oznakaHtml(l)).join('<span class="zk-pus">›</span>')}</span>${
         tirHtml(t.legs[0].tir, t.legs[0].tir_prej)}<span class="sp"></span>${cez ? `<span class="zk-cez">${cez}</span>` : ""}</span>
       <span class="zk-trak"><b>${hhmm(t.sched_dep)}</b><span class="zk-crta"><i></i><em>prek ${

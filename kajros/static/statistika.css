@@ -77,6 +77,29 @@
 .st-stolpci.bus i { background: var(--st-bus); }
 .st-stolpci i.malo { background: var(--line-firm); }
 
+/* Graf z odčitkom (`_stat.html`, `graf`; `statistika.js`): vrstica nad
+   stolpci kaže izbrani stolpec, brez izbire namig (obdobje). Izbira = fokus
+   (dotik, poteg) ali miška; ostali stolpci potemnijo, barva izbranega ostane
+   barva njegovega razreda. Izpis je `::after` izbranega stolpca, postavljen
+   na vrh `.st-graf` -- stolpci in njihova vrsta niso postavljeni
+   (`position`), sicer bi bil izpis v stolpcu. */
+.st-graf { position: relative; padding-top: 22px; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
+.st-graf::before, .st-graf [data-o]::after {
+  position: absolute; top: 0; left: 0; right: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 400 12.5px/18px var(--sans); color: var(--ink-mute);
+}
+.st-graf::before { content: attr(data-namig); }
+.st-graf [data-o] { outline: none; cursor: pointer; transition: opacity .12s ease-out; }
+.st-graf [data-o]::after { content: attr(data-o); display: none; font-weight: 500; color: var(--ink); }
+.st-graf [data-o]:focus::after { display: block; }
+.st-graf:has([data-o]:focus)::before { visibility: hidden; }
+.st-graf:has([data-o]:focus) [data-o]:not(:focus) { opacity: .4; }
+@media (hover: hover) { .st-graf:not(:has([data-o]:focus)) [data-o]:hover::after { display: block; } }
+@media (hover: hover) { .st-graf:has([data-o]:hover)::before { visibility: hidden; } }
+@media (hover: hover) { .st-graf:not(:has([data-o]:focus)):has([data-o]:hover) [data-o]:not(:hover) { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .st-graf [data-o] { transition: none; } }
+
 /* Ure dneva: višje = več voženj z zamudo nad 5 min. Prozornost na
    posnetku 29. 10. ni ločila ur (60 in 97 % sta bila videti enako). */
 .st-ure { display: flex; align-items: flex-end; gap: 2px; height: 48px; }

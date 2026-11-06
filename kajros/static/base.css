@@ -359,6 +359,35 @@ button.top-link {
 /* Povezava v praznem izidu je edini korak naprej: v poudarku, ne siva. */
 .empty-state a { color: var(--accent); }
 
+/* ---------- brez zveze (`common.js`, „brez zveze“) ----------
+ * Brez zveze zaslon posivi: zamude na njem so stare in ne smejo biti videti
+ * kot sveže. Siva je plast nad vsem (`backdrop-filter`), ne `filter` na
+ * vsebini -- ta bi postal okvir za vse `position: fixed` pod njim (orodna
+ * vrstica, plošče). Prstu je prozorna: staro se da brati in drsati. Pas je
+ * nad sivo, v tonski rdeči opozorila „prestop ne drži“; ob vrnitvi za hip
+ * zelen, kot „zanesljivo“ (`oznake.md`). Modalni sloji (≥ 1100) ostanejo
+ * nad obema. */
+html.brez-zveze body::after {
+  content: ""; position: fixed; inset: 0; z-index: 1040; pointer-events: none;
+  -webkit-backdrop-filter: grayscale(1) brightness(0.7);
+  backdrop-filter: grayscale(1) brightness(0.7);
+}
+.zveza-pas {
+  position: fixed; z-index: 1050; left: 50%; transform: translateX(-50%);
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  width: min(560px, calc(100vw - 24px));
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+  border-radius: var(--r-lg); background: #4a1f22; color: #ffdad6;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+  font: 400 13.5px/1.4 var(--sans);
+  animation: zveza-pas .2s ease-out;
+}
+.zveza-pas > svg { flex-shrink: 0; margin-top: 1px; }
+.zveza-pas b { display: block; font: 600 15px/1.35 var(--sans); }
+.zveza-pas.je-nazaj { background: #1c3324; color: #7fd39a; }
+@keyframes zveza-pas { from { opacity: 0; transform: translate(-50%, -8px); } }
+@media (prefers-reduced-motion: reduce) { .zveza-pas { animation: none; } }
+
 /* ---------- obvestila o ovirah ----------
  * Svoja barva, ne lestvica zamud: ovira ni "velika zamuda", ampak drugo
  * dejstvo. Modra je rezervirana za "meritve ni", zato tu nastopi rumena
@@ -381,6 +410,17 @@ button.top-link {
 }
 .alert-head::-webkit-details-marker { display: none; }
 .alert-head .alert-count { color: var(--ink-mute); font-weight: 400; }
+/* Zaprta škatla: puščica desno, pod glavo naslovi v eni vrstici. Odprta
+   pokaže obvestila cela, vrstica z naslovi bi jih ponovila. */
+.alert-head:has(.alert-povzetek) { flex-wrap: wrap; }
+.alert-pus { margin-left: auto; flex-shrink: 0; color: var(--ink-mute); transition: transform .2s ease-out; }
+.alert-box[open] .alert-pus { transform: rotate(180deg); }
+.alert-povzetek {
+  flex: 1 0 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 400; color: var(--ink-dim);
+}
+.alert-box[open] .alert-povzetek { display: none; }
+@media (prefers-reduced-motion: reduce) { .alert-pus { transition: none; } }
 .alert-list { margin: 9px 0 2px; display: flex; flex-direction: column; gap: 9px; }
 .alert-item { font: 400 12px/1.5 var(--sans); color: var(--ink-dim); }
 .alert-item strong { color: var(--ink); font-weight: 600; display: block; }

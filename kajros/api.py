@@ -361,9 +361,21 @@ def _dan(iso: str | None) -> str:
     return f"{d.day}. {d.month}."
 
 
+_DNEVI_KRATKO = ("pon", "tor", "sre", "čet", "pet", "sob", "ned")
+
+
+def _dan_t(iso: str | None) -> str:
+    """„2026-08-21" -> „pet 21. 8.": odčitek stolpca v grafu statistike, kjer
+    se slab dan pogosto pojasni z dnem v tednu."""
+    if not iso:
+        return ""
+    return f"{_DNEVI_KRATKO[date.fromisoformat(iso).weekday()]} {_dan(iso)}"
+
+
 templates.env.filters["ura"] = _ura
 templates.env.filters["ura_dneva"] = _ura_dneva
 templates.env.filters["dan"] = _dan
+templates.env.filters["dan_t"] = _dan_t
 # Trajanje in besedilo zamude sta PRAVILO, ne oblikovanje, zato prideta iz
 # modula in ne nastaneta v predlogi -- ista razlaga kot pri `opis_zamude()`.
 templates.env.filters["trajanje"] = pristanek.trajanje
@@ -3558,6 +3570,9 @@ def api_connections(
                 alerts.oznaci_zveze(conn, rows, now.timestamp(), drug_dan=True)
             notices = alerts.for_stops(conn, [r[0] for r in conn.execute(
                 "SELECT stop_id FROM station WHERE name IN (?, ?)", (a, b))])
+        # Dotik zveze s prestopi odpre celo pot, ne le prve vožnje. Widget je ne odpira.
+        if not limit:
+            journey.dopolni_pot(conn, legs)
         meje = _znano_do(conn, network)
         # Brez neposredne vožnje je ta pogosto s postajališča čez cesto, ki ima
         # drugo ime (`journey.blizu_z_zvezo`); iskalnik po imenu ga ne vidi.

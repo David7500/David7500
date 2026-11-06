@@ -303,6 +303,17 @@ def test_noga_prestopa_nosi_prevoznika(conn):
     assert legs and {"agency", "network", "mode"} <= set(legs[0]["legs"][0])
 
 
+def test_zveza_s_prestopom_nosi_celo_pot(conn):
+    # Dotik zveze odpre `/app/pot/podrobno`: noge in kraja morata biti tisti,
+    # ki jih ta stran razume (`pot.razberi_noge`), od vstopa do izstopa.
+    from kajros import pot
+    legs = journey.transfers(conn, "Ajdovščina", "Celje", "2026-08-31", direct=[])
+    journey.dopolni_pot(conn, legs)
+    z = next(t for t in legs if t["trip1"] == "t2")
+    assert pot.razberi_noge(z["pot"]["noge"]) == [("t2", 1, 2), ("t3", 1, 2)]
+    assert z["pot"]["od"] == [45.9, 13.9] and z["pot"]["do"] == [46.2, 15.3]
+
+
 # ---------------------------------------------------------------- običajna zamuda
 
 def test_obicajna_zamuda_rabi_dovolj_voznj(conn):

@@ -1239,10 +1239,12 @@ def transfers(conn: sqlite3.Connection, from_name: str, to_name: str,
         d["legs"] = [
             {"train_no": d["train1"], "headsign": d["headsign1"],
              "trip_id": d["trip1"], "from": from_name, "to": d["via"],
+             "od_seq": d["a_seq"], "do_seq": d["x1_seq"],
              "dep": d["sched_dep"], "arr": d["via_arr"],
              "dep_s": d["dep_s"], "arr_s": d["x_arr_s"], **d.pop("_vrsta1")},
             {"train_no": d["train2"], "headsign": d["headsign2"],
              "trip_id": d["trip2"], "from": d["via"], "to": to_name,
+             "od_seq": d["x2_seq"], "do_seq": d["b_seq"],
              "dep": d["via_dep"], "arr": d["sched_arr"],
              "dep_s": d["x_dep_s"], "arr_s": d["arr_s"], **d.pop("_vrsta2")},
         ]
@@ -1667,6 +1669,7 @@ def _build_itinerary(conn: sqlite3.Connection, legs: list[tuple],
             "train_no": t["train_no"], "trip_id": trip_id, "headsign": t["headsign"],
             "mode": t["mode"], "network": t["network"], "agency": t["agency"],
             "from": names.get(board, board), "to": names.get(alight, alight),
+            "od_seq": bseq, "do_seq": aseq,
             "dep": _abs_time(service_date, stops[bseq][3]),
             "arr": _abs_time(service_date, stops[aseq][2]),
             "dep_s": stops[bseq][3], "arr_s": stops[aseq][2],
@@ -1687,3 +1690,39 @@ def _build_itinerary(conn: sqlite3.Connection, legs: list[tuple],
         "transfer": {"wait_s": min(waits) if waits else 0,
                      "status": "brez podatka", "source": None},
     }
+
+
+def dopolni_pot(conn: sqlite3.Connection, zveze: list[dict]) -> None:
+    """Zvezi s prestopi doda `pot`: kar rabi podrobna stran poti
+    (`/app/pot/podrobno`) -- noge kot `trip:od_seq:do_seq` in lego prvega
+    vstopa in zadnjega izstopa.
+
+    Dotik zveze je odprl okno PRVE vožnje in drugo je bilo treba iskati
+    znova (David, 6. 11. 2026). Podrobna stran ima celo pot: obe vožnji z
+    zamudami, prestop, zemljevid in „Začni pot“. Kraja sta postaji sami,
+    zato hoje na začetku in koncu ni.
+    """
+    konci = [(z["legs"][0]["trip_id"], z["legs"][0].get("od_seq")) for z in zveze if z.get("legs")]
+    konci += [(z["legs"][-1]["trip_id"], z["legs"][-1].get("do_seq")) for z in zveze if z.get("legs")]
+    konci = [k for k in set(konci) if k[1] is not None]
+    if not konci:
+        return
+    lega = {}
+    # Po kosih: SQLite ima mejo spremenljivk, zvez z več prestopi je malo.
+    for i in range(0, len(konci), 200):
+        kos = konci[i:i + 200]
+        pogoj = " OR ".join("(s.trip_id = ? AND s.stop_seq = ?)" for _ in kos)
+        for r in conn.execute(
+                f"SELECT s.trip_id, s.stop_seq, st.lat, st.lon FROM sched s "
+                f"JOIN station st ON st.stop_id = s.stop_id WHERE {pogoj}",
+                [x for k in kos for x in k]):
+            lega[(r["trip_id"], r["stop_seq"])] = [round(r["lat"], 5), round(r["lon"], 5)]
+    for z in zveze:
+        noge = z.get("legs") or []
+        if not noge or any(n.get("od_seq") is None or n.get("do_seq") is None for n in noge):
+            continue
+        od = lega.get((noge[0]["trip_id"], noge[0]["od_seq"]))
+        do = lega.get((noge[-1]["trip_id"], noge[-1]["do_seq"]))
+        if od and do:
+            z["pot"] = {"noge": ";".join(f"{n['trip_id']}:{n['od_seq']}:{n['do_seq']}" for n in noge),
+                        "od": od, "do": do}
