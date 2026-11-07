@@ -136,6 +136,16 @@ def _ujema(dan: str, t_s: int | None, zamuda_min: int, odhod_min: int,
     return zdaj - kdaj
 
 
+#: Ime postaje z zemljevida (ključ `_kljuc_imena`) -> ime v voznem redu IJPP,
+#: kjer se razlikujeta. Samo za zemljevid: tabla SŽ (`peroni`) piše polno ime.
+#: „Slivnica“ = „Spodnja Slivnica“ (station 1120963, edina od 266 postaj vlakov
+#: s tem imenom, 32 vlakov LP 4491--4537 Kočevske proge): brez tega 143 od 153
+#: epizod nepripetih vlakov 1.--7. 11. 2026 (dosje), postanek pred Slivnico
+#: (Grosuplje, Čušperk) brez meritve v 124 od 143. Vsa druga imena `Postaja` v
+#: tednu (254) se ujamejo, razen „Rodik“ (vlaka brez naše vožnje).
+IMENA_ZEMLJEVIDA = {"slivnica": "spodnja slivnica"}
+
+
 def pripni(vrstica: dict, voznje: list[dict], zdaj: float,
            naprej_s: int = 0) -> tuple | None:
     """Vrstica zemljevida -> (trip_id, dan, stop_seq, zamuda_s, je_prihod) ali None.
@@ -154,6 +164,7 @@ def pripni(vrstica: dict, voznje: list[dict], zdaj: float,
     naslednja = _kljuc_imena(vrstica.get("Postaja") or "")
     if vrsta == 1 and not naslednja:
         return None
+    naslednje = {naslednja, IMENA_ZEMLJEVIDA.get(naslednja, naslednja)}
     najboljsa, razmik = None, None
     for v in voznje:
         p = v["postanki"]
@@ -162,7 +173,7 @@ def pripni(vrstica: dict, voznje: list[dict], zdaj: float,
             kandidati = [(seq, arr if arr is not None else dep)]
         else:
             kandidati = [(p[i - 1][0], p[i - 1][3] if p[i - 1][3] is not None else p[i - 1][2])
-                         for i in range(1, len(p)) if p[i][1] == naslednja]
+                         for i in range(1, len(p)) if p[i][1] in naslednje]
         for seq, t_s in kandidati:
             r = _ujema(v["dan"], t_s, zamuda, odhod, zdaj, naprej_s)
             if r is not None and (razmik is None or abs(r) < abs(razmik)):

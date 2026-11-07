@@ -218,6 +218,7 @@ Tir ima samo tabla (`/odhodi-in-prihodi-na-postaji/?postaja=<št. SŽ>&datum=<d.
 
 Polje `Vrsta`:
 * **1 vozi**: `Postaja` = naslednja, `Odhod` = vozni red PREJŠNJE + `Zamuda_cas` (preizkus prave vožnje in dneva; brez ujemanja se ne pripne).
+  * **Ime `Postaja` ≠ ime v voznem redu**: „Slivnica“ = „Spodnja Slivnica“ (`zamude_sz.IMENA_ZEMLJEVIDA`, od 7. 11. 2026; edina od 266 postaj vlakov s tem imenom). Prej 143 od 153 epizod nepripetih vlakov 1.–7. 11. (Kočevska proga LP 4491–4537, 21 na delavnik), postanek pred njo brez meritve v 124 od 143. `peroni._kljuc_imena` ostane (tabla SŽ piše polno ime).
 * **0 stoji na izhodišču**: ni meritev.
 * **2 na cilju**: `Odhod` = dejanski prihod. Čez 1–2 min SŽ ponastavi na 0 — velja prvi prihod; ničla po > 3 min = ponastavitev (`PONASTAVITEV_S`).
 

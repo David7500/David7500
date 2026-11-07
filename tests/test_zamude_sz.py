@@ -109,6 +109,36 @@ def test_neujemanje_odhoda_ne_pripne():
     assert zamude_sz.pripni({**VRSTICA, "Odhod": "08:30"}, _vr(_baza())["4203"], ZDAJ) is None
 
 
+def test_slivnica_z_zemljevida_je_spodnja_slivnica():
+    """Zemljevid piše „Slivnica“, vozni red IJPP „Spodnja Slivnica“ (station
+    1120963, edina postaja vlakov s tem imenom, 32 vlakov LP 4491--4537). Brez
+    preslikave je bil vlak med Grosupljem in Slivnico nepripet: 143 od 153
+    epizod nepripetih v tednu 1.--7. 11. 2026, Grosuplje oz. Čušperk brez
+    meritve v 124 od 143. LP 4501 6. 11.: „Slivnica, Odhod 04:38, +0“."""
+    dan = "2026-11-06"
+    c = db.connect(":memory:")
+    db.init(c)
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,45.9,14.6)",
+                  [("L", "Ljubljana"), ("G", "Grosuplje"), ("SS", "Spodnja Slivnica"),
+                   ("C", "Čušperk")])
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network) "
+              "VALUES('453667', 'r', 'LP 4501', 's1', 'vlak', '1161', 'zeleznica')")
+    c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                  "VALUES('453667',?,?,?,?)",
+                  [(1, "L", _ura(4, 16), _ura(4, 16)), (2, "G", _ura(4, 37), _ura(4, 38)),
+                   (3, "SS", _ura(4, 41), _ura(4, 41)), (4, "C", _ura(4, 48), _ura(4, 48))])
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('s1', ?)", (dan,))
+    db.fill_trip_window(c)
+    c.commit()
+    vrstica = {"St_vlaka": "4501", "Vrsta": 1, "Postaja": "Slivnica", "Odhod": "04:38",
+               "Zamuda_cas": 0}
+    zdaj = stats.polnoc(dan) + _ura(4, 38) + 40
+    pripete, stevci, _ = zamude_sz.razberi(
+        [vrstica], zamude_sz.vozni_red(c, date.fromisoformat(dan)), zdaj)
+    assert pripete == [("453667", dan, 2, 0, False)]
+    assert stevci["nepripetih"] == 0
+
+
 def test_pred_odhodom_in_brez_postaje_ni_meritve():
     """Na izhodišču ni prevoženega postanka; `Vrsta` 0 pomeni, da vlak še stoji
     -- `Odhod` je tedaj vozni red, ne meritev."""
