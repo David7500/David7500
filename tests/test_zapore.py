@@ -299,3 +299,24 @@ def test_nadomestni_avtobus_ne_dobi_zapore_tira(conn):
     zapore.dopolni(conn, [vlak, bus], DAN, "stop_seq", "stop_seq", ob)
     assert vlak.get("opozorila")
     assert "opozorila" not in bus
+
+
+@pytest.mark.parametrize("trenutna_s, opozori", [(6 * 3600, False), (300, True)])
+def test_zapora_po_trenutni_zamudi_sz(conn, monkeypatch, trenutna_s, opozori):
+    """Okno, tabla in iskalnik nesejo zamudo naprej od trenutne zamude SŽ
+    (`stats.trenutna_zamuda`), opozorilo o zapori pa je vzelo zadnji
+    prevoženi postanek: vlak +0 na A, SŽ +6 h, zaporo B - C (7.00 - 13.30)
+    prevozi po 14.00, opozorilo pa je ostalo. +5 min jo prevozi v oknu."""
+    from kajros import api, config
+    meja = {"t1": {"stop_seq": 1, "delay_s": 0, "trenutna_s": trenutna_s,
+                   "trenutna_seq": 1, "sz_ts": _ts(7 * 3600)}}
+    monkeypatch.setattr(stats, "last_measured", lambda *a, **k: meja)
+    vrstica = {"trip_id": "t1", "network": "zeleznica", "stop_seq": 4}
+    zapore.dopolni(conn, [vrstica], DAN, "stop_seq", "stop_seq",
+                   datetime.fromtimestamp(_ts(7 * 3600), zapore.TZ))
+    assert ("opozorila" in vrstica) is opozori
+    # Okno vožnje: ista vožnja, isti odgovor kot tabla.
+    monkeypatch.setattr(api, "_conn", lambda: conn)
+    monkeypatch.setattr(config, "DELI", False)
+    okno = api.api_run("LP 1", date=DAN, trip="t1")
+    assert any(o["vrsta"] == "zapora" for o in okno["opozorila"]) is opozori

@@ -234,6 +234,14 @@ def test_brez_zetona_isto_kot_ostali_admin(monkeypatch, pot):
     assert e.value.status_code == 404
 
 
+def test_ne_ascii_zeton_je_napacen_ne_500(monkeypatch):
+    """`hmac.compare_digest` nad nizom z ne-ASCII znakom vrže TypeError."""
+    monkeypatch.setattr(config, "ADMIN_TOKEN", "pravi")
+    with pytest.raises(HTTPException) as e:
+        api.admin_koledar(_zahteva("k=ž".encode()))
+    assert e.value.status_code == 403
+
+
 def test_pot_je_samo_get_in_ni_v_shemi():
     poti = [r for r in api.app.routes if getattr(r, "path", None) == "/admin/koledar"]
     assert len(poti) == 1

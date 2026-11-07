@@ -2958,6 +2958,28 @@ def test_telo_obrazca_je_omejeno_tudi_brez_content_length():
     assert e.value.status_code == 413
 
 
+def test_prekinjena_zahteva_ni_500():
+    """Odjemalec, ki med pošiljanjem izgine: `ClientDisconnect` je bil edini
+    500 dneva 5. 11. 2026 (`POST /api/deli`, 1 od 3 703 zahtev)."""
+    import asyncio
+
+    from fastapi import HTTPException
+    from starlette.requests import Request
+
+    from kajros import api
+
+    it = iter([{"type": "http.request", "body": b"email=a", "more_body": True},
+               {"type": "http.disconnect"}])
+
+    async def receive():
+        return next(it)
+    zahteva = Request({"type": "http", "method": "POST", "headers": [],
+                       "path": "/api/deli"}, receive)
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(api._preberi_telo(zahteva))
+    assert e.value.status_code == 400
+
+
 # ---------------------------------------------------------------- nepotrjen odhod
 
 def _polnoc(dan: str) -> int:

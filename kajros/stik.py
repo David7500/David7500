@@ -122,9 +122,11 @@ def _preveri_zeton(dano: str, zdaj: float | None = None) -> None:
     izdan, _, podpis = (dano or "").partition(".")
     if not podpis or not izdan.isdigit():
         raise Zavrnjeno("Obrazec ni veljaven. Osveži stran in poskusi znova.")
-    if not hmac.compare_digest(podpis,
+    # Bajti, ne niza: ne-ASCII znak v nizu (`1.ž`) vrže TypeError, 500
+    # namesto zavrnitve na javni poti (pregled 5. 11. 2026).
+    if not hmac.compare_digest(podpis.encode(),
                                hmac.new(_SKRIVNOST, izdan.encode(),
-                                        "sha256").hexdigest()[:32]):
+                                        "sha256").hexdigest()[:32].encode()):
         raise Zavrnjeno("Obrazec ni veljaven. Osveži stran in poskusi znova.")
     starost = t_zdaj - int(izdan)
     if starost < NAJHITREJE_S:

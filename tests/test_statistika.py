@@ -413,3 +413,22 @@ def test_prag_nadomestila_iz_histograma():
     c = statistika.iz_histograma({"0": 2, "59": 1, "60": 1, "130": 1})
     assert (c["nad60_n"], c["nad120_n"], c["nad60"]) == (2, 1, 40.0)
 
+
+
+def test_avto_brez_ure_z_dovolj_vzorci(tmp_path, monkeypatch):
+    """Dovolj vzorcev (`MIN_VZOREC`), a nobena ura nima 10: `max()` na
+    praznem je podrl ves nočni račun povzetkov avtobusov."""
+    import sqlite3
+
+    from kajros import config
+    pot = tmp_path / "promet.sqlite"
+    c = sqlite3.connect(pot)
+    c.execute("CREATE TABLE ac(relacija TEXT, ts INTEGER, cas_s INTEGER, prosto_s INTEGER)")
+    pon = datetime(2026, 11, 2, tzinfo=statistika.TZ)
+    c.executemany("INSERT INTO ac VALUES('LJ-KP', ?, 3600, NULL)",
+                  [(int((pon + timedelta(hours=7 + h, minutes=m)).timestamp()),)
+                   for h in range(6) for m in range(0, 60, 10)])
+    c.commit()
+    c.close()
+    monkeypatch.setattr(config, "PROMET_DB", pot)
+    assert statistika._avto("LJ-KP", "2026-11-02", "2026-11-03") is None

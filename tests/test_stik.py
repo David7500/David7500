@@ -110,7 +110,7 @@ def test_potekel_zeton(conn):
 
 
 @pytest.mark.parametrize("z", ["", "brez-pike", "123.ponaredek",
-                               "nicla.0" * 4])
+                               "nicla.0" * 4, "1.ž"])
 def test_ponarejen_zeton(conn, z):
     with pytest.raises(stik.Zavrnjeno):
         _poslji(conn, zeton_iz_obrazca=z)

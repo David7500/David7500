@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import ClientDisconnect
 
 from . import (alerts, collector, config, db, deljenje, donacije, dosje, gtfs, hoja, journey, lpp,
                koledar, opazovano,
@@ -773,10 +774,15 @@ async def _preberi_telo(request: Request) -> str:
     if int(request.headers.get("content-length") or 0) > NAJVEC_TELA:
         raise HTTPException(413, "Sporočilo je predolgo.")
     telo = bytearray()
-    async for kos in request.stream():
-        telo += kos
-        if len(telo) > NAJVEC_TELA:
-            raise HTTPException(413, "Sporočilo je predolgo.")
+    try:
+        async for kos in request.stream():
+            telo += kos
+            if len(telo) > NAJVEC_TELA:
+                raise HTTPException(413, "Sporočilo je predolgo.")
+    except ClientDisconnect:
+        # Odjemalec je med pošiljanjem izginil; brez tega 500 v števcih
+        # (5. 11. 2026 edini 500 dneva, `POST /api/deli`).
+        raise HTTPException(400, "Zahteva je bila prekinjena.")
     return telo.decode("utf-8", "replace")
 
 
@@ -3013,9 +3019,13 @@ def api_run(train_no: str, date: str | None = None,
         if (ident["network"] == "zeleznica" and ident["mode"] != "bus" and razresen
                 and date >= zdaj.date().isoformat()):
             zac = next((s for s in rows if s["stop_seq"] == meja_seq), None)
+            # Od trenutne zamude SŽ, kot glava okna in tabla
+            # (`stats.trenutna_zamuda`). `max`, ker `_potniki_v_okno` mejo
+            # lahko premakne, trenutna zamuda pa velja samo navzgor.
+            zamuda_zac = max((zac["zamuda"] or {}).get("s") or 0 if zac else 0,
+                             (meja or {}).get("trenutna_s") or 0)
             opozorila = zapore.za_voznjo(
-                conn, razresen, date, meja_seq, None,
-                (zac["zamuda"] or {}).get("s") or 0 if zac else 0, int(zdaj.timestamp()))
+                conn, razresen, date, meja_seq, None, zamuda_zac, int(zdaj.timestamp()))
             # Zgornja meja zamude po postankih naprej; ocena ostane.
             dodatek = {s["stop_seq"]: d for s in rows
                        if (d := zapore.dodatek(opozorila, s["stop_seq"])) >= 60}
@@ -4016,7 +4026,9 @@ def _preveri_admina(request: Request) -> str:
     dano = request.query_params.get("k") or request.cookies.get(ADMIN_PISKOTEK)
     if not dano:
         raise HTTPException(status_code=404)
-    if not hmac.compare_digest(dano, config.ADMIN_TOKEN):
+    # Bajti, ne niza: `compare_digest` nad nizom z ne-ASCII znakom vrže
+    # TypeError, to je 500 namesto 403 (`k=ž`, pregled 5. 11. 2026).
+    if not hmac.compare_digest(dano.encode(), config.ADMIN_TOKEN.encode()):
         raise HTTPException(status_code=403, detail="Napačen žeton.")
     return dano
 

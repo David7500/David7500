@@ -508,8 +508,10 @@ def dopolni(conn: sqlite3.Connection, rows: list[dict], dan: str, do: str,
             lm = meje.get(r["trip_id"])
             if lm and lm["stop_seq"] >= r[do]:
                 continue
+            # Trenutna zamuda SŽ, ne zadnji postanek: tabla od nje nese
+            # zamudo naprej, opozorilo mora isto (pregled 5. 11. 2026).
             o = za_voznjo(conn, r["trip_id"], d, lm["stop_seq"] if lm else None, r[do],
-                          (lm["delay_s"] or 0) if lm else 0, ts)
+                          (stats.trenutna_zamuda(lm) or 0) if lm else 0, ts)
             if not o:
                 continue
             r["opozorila"] = o

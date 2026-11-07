@@ -1283,6 +1283,10 @@ def _avto(relacija: str, od_dan: str, do_dan: str) -> dict | None:
     if len(vse) < MIN_VZOREC:
         return None
     ure = {h: stats._pct(v, 0.5) for h, v in po_uri.items() if len(v) >= 10}
+    # Dovolj vzorcev, a razpršenih po urah: brez tega `max()` na praznem
+    # podre ves nočni račun povzetkov avtobusov (pregled 5. 11. 2026).
+    if not ure:
+        return None
     najhujsa = max(ure, key=ure.get)
     return {"n": len(vse), "trajanje": stats._pct(vse, 0.5),
             "konica_ura": najhujsa, "konica": ure[najhujsa],
