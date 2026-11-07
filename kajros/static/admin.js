@@ -838,8 +838,9 @@ function vrsticeZajema(d) {
     ["vožnje brez voznega reda",
       nez.length ? nez.map(([vir, [n, vseh]]) => `${vir.toUpperCase()} ${st(n)} od ${st(vseh)}`).join(" · ") : "—", r.neznane],
     ["vozila brez zamude", brezZamude(z) || "—", r.lega_brez_zamude],
-    // Meritev brez barve (`collector.pokritost`): zamuda v 15 min / vožnje, ki tečejo.
-    ["pokritost · zamuda v 15 min", pokritostOpis(z.pokritost) || "—"],
+    // `collector.pokritost`: zamuda v 15 min / vožnje, ki tečejo. Barva po
+    // `zdravje.ocena` (lega ali zamuda danes pod polovico običajnega), samo tu.
+    ["pokritost · zamuda v 15 min", pokritostOpis(z.pokritost) || "—", r.pokritost],
     ["vlaki · prikaz proti SŽ", skladnostSz((z.zamude_sz || {}).skladnost) || "—", r.skladnost_sz],
     ["vlaki · doslednost časov", dosledVlaki(z.dosled_vlaki) || "—", r.dosled_vlaki],
     ["vozil z lego", st(z.vehicles_with_gps)],

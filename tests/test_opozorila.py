@@ -972,3 +972,67 @@ def test_fantom_lpp_najde_vozilo_brez_dneva(tmp_path, monkeypatch):
     collector._zapisi_fantome(conn)
     v = json.loads(db.get_meta(conn, "fantomi"))["voznje"][0]
     assert (v["vozilo"], v["train_no"], v["network"]) == ("V1", "19B", "avtobus")
+
+
+def _pokritost(po, ts=T):
+    z = _zdravo(ts)
+    z["pokritost"] = {"ts": ts - 60, "po_prevozniku": po}
+    return z
+
+
+def _pokritost_cez(po, trajanje, sled=None):
+    """Isto stanje pokritosti od T do T + trajanje, ocena vsako minuto."""
+    sled = sled or zdravje.Sled()
+    for t in range(0, int(trajanje) + 1, 60):
+        o = zdravje.ocena(_pokritost(po, T + t), STROJ, T + t, sled)
+    return o
+
+
+def test_pokritost_pod_polovico_izhodisca_rumeno_nato_oranzno():
+    """Meje iz tedna 31. 10.–7. 11. 2026 (docs/presoja/2026-11-07-koledar/
+    drsi-pokritost.md): LPP primestni 2. 11. 136 min brez leg, 20–29 voženj."""
+    izpad = {"LPP primestni": [25, 0, 22, 24], "Arriva": [80, 77, 75, 76]}
+    assert zdravje.ocena(_pokritost(izpad), STROJ, T, zdravje.Sled())["pokritost"][0] \
+        == zdravje.DOBRA
+    assert _pokritost_cez(izpad, 540)["pokritost"][0] == zdravje.DOBRA
+    r, razlog = _pokritost_cez(izpad, 600)["pokritost"]
+    assert r == zdravje.MLACNA and "LPP primestni" in razlog and "lega 0 od 25" in razlog
+    assert "Arriva" not in razlog
+    assert _pokritost_cez(izpad, 1200)["pokritost"][0] == zdravje.ORANZNA
+    # Zamuda danes pod mejo pri medkrajevnem (AP MS 0,84 -> meja 0,42).
+    ms = {"AP Murska Sobota": [10, 9, 2, 4]}
+    assert _pokritost_cez(ms, 600)["pokritost"][0] == zdravje.MLACNA
+
+
+def test_pokritost_nad_mejo_in_malo_vozenj_ni_opozorila():
+    # Kranj izhodišče 0,67, meja 0,335: 3 od 6 je nad njo.
+    nad = {"Kranj (MOK)": [6, 3, 3, 3], "LPP primestni": [25, 11, 20, 20]}
+    assert _pokritost_cez(nad, 1800)["pokritost"][0] == zdravje.DOBRA
+    # Pod 5 voženj po voznem redu se ne ocenjuje (Kranj na praznik 1. 11.: 3–6).
+    malo = {"Kranj (MOK)": [4, 0, 0, 0], "Marprom": [4, 0, 0, 0]}
+    assert _pokritost_cez(malo, 1800)["pokritost"][0] == zdravje.DOBRA
+
+
+def test_pokritost_sz_brez_lege_ne_steje():
+    """Vlak lege nima (vse < 0,1); šteje samo sveža zamuda."""
+    assert _pokritost_cez({"SŽ": [27, 0, 26, 27]}, 1800)["pokritost"][0] == zdravje.DOBRA
+    assert _pokritost_cez({"SŽ": [27, 0, 5, 27]}, 1800)["pokritost"][0] == zdravje.ORANZNA
+
+
+def test_pokritost_stara_meta_se_preskoci():
+    sled = zdravje.Sled()
+    izpad = {"LPP primestni": [25, 0, 22, 24]}
+    _pokritost_cez(izpad, 1200, sled)
+    z = _pokritost(izpad, T + 1260)
+    z["pokritost"]["ts"] = T + 1260 - 16 * 60
+    assert "pokritost" not in zdravje.ocena(z, STROJ, T + 1260, sled)
+    # Ko je meta spet sveža, trajanje začne znova (vmes ni znano).
+    assert zdravje.ocena(_pokritost(izpad, T + 1320), STROJ, T + 1320,
+                         sled)["pokritost"][0] == zdravje.DOBRA
+
+
+def test_pokritost_ni_v_posti():
+    """Pošta samo, ko mora David posredovati (`zdravje.posta`); pokritost je za /admin."""
+    o = _pokritost_cez({"LPP primestni": [25, 0, 22, 24]}, 1800)
+    assert o["pokritost"][0] == zdravje.ORANZNA
+    assert "pokritost" not in zdravje.posta(_pokritost({}), STROJ, o, T + 1800)

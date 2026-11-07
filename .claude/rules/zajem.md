@@ -331,6 +331,7 @@ Vir opisan enkrat v `viri.vsi()` (naslov, izvor, licenca, ritem, nit, ključi zd
 * Vir brez svojega pravila v `zdravje.ocena()`: rumeno (`vir:<ključ>`), po 2 h (dnevni po 2 dneh) oranžno, nikoli rdeče. Vir s pravilom splošnega nima.
 * **Stopnje** (`zdravje.py`): rumeno = popravi se samo, oranžno = rabi sejo s Claude (`/preveri-vire`, pošta podnevi), rdeče = takoj. Nova vrstica dobi stopnjo po tem merilu in preizkus v `tests/test_opozorila.py`; trajanje šteje `zdravje.Sled`.
 * Mrtva nit rdeča (`nit:<ime>`), kadar je zajem zagnan (`viri.zajem_zagnan`).
+* **Vrstica `pokritost`** (`zdravje.POKRITOST_IZHODISCE`): ≥ 5 voženj po voznem redu, lega ali zamuda danes (SŽ: zamuda v 15 min, lege ni) pod 0,5 × izhodišče prevoznika; rumeno od 10 min, oranžno od 20 min, meta > 15 min = ni ocene. **Nikoli v pošto** (`_SAMO_ADMIN`). Teden 31. 10.–7. 11. 2026: 4 oranžne, 2 na praznik.
 * Vozni red, ki se konča: IJPP oranžno teden prej, rdeče dva dni prej; LPP oranžno, ko okno < `LPP_DAYS − 2`.
 * Podproces (`KAJROS_REFRESH=subprocess`): `viri.shrani()` v `meta.vir:<ključ>`.
 * `derp` razdeljen na `derp_ijpp` in `derp_lpp`.

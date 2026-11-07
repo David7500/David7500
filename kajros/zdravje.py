@@ -114,6 +114,27 @@ OPAZOVANO_NAJVEC_DNI = 2
 MARPROM_STOJI_S = 300
 #: Dosje piše na minuto.
 DOSJE_MOLK_S = 600
+#: Pokritost po prevozniku: (mera, indeks v [po_vr, z_lego, z_zamudo, z_kdaj],
+#: izhodišče = mediana razmerja v tednu 31. 10.–7. 11. 2026, arwen, 1 652
+#: vzorcev; docs/presoja/2026-11-07-koledar/drsi-pokritost.md). Medkrajevni:
+#: zamuda danes, ne v 15 min -- med daljnimi postanki 15 min ne pišejo nič
+#: (AP MS pod 0,5 v 178 od 1 251 vzorcev, zamuda danes v 22). Vlak lege nima.
+POKRITOST_IZHODISCE: dict[str, tuple[tuple[str, int, float], ...]] = {
+    "LPP primestni": (("lega", 1, 0.84), ("zamuda danes", 3, 0.89)),
+    "Nomago": (("lega", 1, 0.94), ("zamuda danes", 3, 0.94)),
+    "AP Murska Sobota": (("lega", 1, 0.88), ("zamuda danes", 3, 0.84)),
+    "Arriva": (("lega", 1, 0.96), ("zamuda danes", 3, 0.94)),
+    "SŽ": (("zamuda", 2, 0.94),),
+    "Kranj (MOK)": (("lega", 1, 0.67), ("zamuda danes", 3, 0.67)),
+    "LPP mestni": (("lega", 1, 0.97), ("zamuda danes", 3, 0.97)),
+    "Marprom": (("lega", 1, 0.90), ("zamuda danes", 3, 0.90)),
+}
+#: Pod polovico izhodišča ob >= 5 vožnjah po voznem redu, rumeno od 10 min,
+#: oranžno od 20 min. Na tednu 4 oranžne, obe na delavnik pravi (LPP
+#: primestni 2. 11. 136 min brez leg, Marprom 5. 11. 21 min); pri 3 vožnjah
+#: 6 (Kranj ves praznik 1. 11.), pri 8 3. Meta starejša od 15 min = ne vemo.
+POKRITOST_NAJMANJ, POKRITOST_DELEZ = 5, 0.5
+POKRITOST_RUMENO_S, POKRITOST_ORANZNO_S, POKRITOST_STARA_S = 600, 1200, 900
 #: Vozila brez vožnje v mestu: rumeno od toliko vozil in deleža. 27. 10.
 #: 2026 ob 11:00 4 od 36 (3 brez prihoda, 1 brez ure v voznem redu).
 MARPROM_BREZ, MARPROM_BREZ_DELEZ = 5, 0.3
@@ -694,6 +715,30 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
         out["opazovano"] = ((ORANZNA, f"nočni račun stoji, zadnji dan {dni} dni nazaj")
                             if dni > OPAZOVANO_NAJVEC_DNI else (DOBRA, ""))
 
+    # Pokritost po prevozniku (`collector.pokritost`, na 5 min): koliko voženj
+    # po voznem redu ima lego oz. zamudo. Izpad celega prevoznika je bil prej
+    # neviden, dokler je pisal kdorkoli drug. Samo /admin (`_SAMO_ADMIN`).
+    pk = z.get("pokritost")
+    if pk is not None:
+        sveza = zdaj - (pk.get("ts") or 0) <= POKRITOST_STARA_S
+        po = pk.get("po_prevozniku") or {}
+        pod: list[tuple[float, str]] = []
+        for prevoznik, meje in POKRITOST_IZHODISCE.items():
+            v = po.get(prevoznik)
+            for mera, i, izh in meje:
+                # Stara meta: vmes ni znano, trajanje začne znova.
+                pogoj = bool(sveza and v and v[0] >= POKRITOST_NAJMANJ
+                             and v[i] / v[0] < POKRITOST_DELEZ * izh)
+                traja = sled.koliko(f"pokritost:{prevoznik}:{mera}", pogoj, zdaj)
+                if pogoj and traja >= POKRITOST_RUMENO_S:
+                    pod.append((traja, f"{prevoznik} {mera} {v[i]} od {v[0]} "
+                                       f"(običajno {izh:.2f}) {_min(traja)}"))
+        if sveza:
+            najdlje = max((t for t, _ in pod), default=0)
+            out["pokritost"] = (((ORANZNA if najdlje >= POKRITOST_ORANZNO_S else MLACNA),
+                                 "pod polovico običajnega: " + "; ".join(r for _, r in pod))
+                                if pod else (DOBRA, ""))
+
     # Dosje vozil (`dosje.py`) je za diagnozo, potnik ne vidi nič: nikoli rdeče.
     # Popravi se le z zagonom, zato po urah oranžno; `napak` je na zadnjih branjih.
     dj = z.get("dosje")
@@ -778,6 +823,7 @@ IMENA = {
     "vozni_red_ms": "vozni red MS (mestni)",
     "opazovano": "opazovano · nočni račun",
     "dosje": "dosje vozil",
+    "pokritost": "pokritost po prevozniku",
     "fantomi": "avtobusi · zamuda raste z uro",
     "zajem_napake": "zajem · naša obdelava",
     "zanka": "zajem · glavna zanka",
@@ -866,6 +912,11 @@ _ORANZNO: dict[str, tuple[str, int]] = {
                      "v kodi (datoteka:vrstica ← klicatelj). " + CLAUDE, 600),
 }
 
+#: Vrstice samo za /admin, nikoli v pošto, tudi oranžne: pošta je za poseg
+#: (`posta`), pokritost pa je na tednu 2 od 4 oranžnih imela na praznik, kjer
+#: posega ni bilo (drsi-pokritost.md). Do meritve v živo samo pogled.
+_SAMO_ADMIN = frozenset({"pokritost"})
+
 #: Vrstice, ki ponoči (nič ne vozi) nimajo ocene. Takrat pošta ne ve, ali je
 #: okvara mimo, zato ne pošlje ne „stoji“ ne „spet dela“: obstala nit ob
 #: 23:50 bi sicer ob 0:35 dobila „spet dela“ in ob 4:00 znova „stoji“.
@@ -899,6 +950,8 @@ def posta(z: dict, m: dict, ocena: dict[str, tuple[str, str]],
     ukrepi = {f"vozni_red_{k}": f"gtfs_{k}" for k in z.get("mestni_vozni_red") or {}}
     ukrepi.update(vozni_red="gtfs_ijpp", vozni_red_lpp="gtfs_lpp", nap="nap")
     for k, (raz, razlog) in ocena.items():
+        if k in _SAMO_ADMIN:
+            continue
         if raz == SLABA:
             ukrep, po_s = (_POSTA.get(k) or (_NIT if k.startswith("nit:") else None)
                            or (viri.po_kljucu()[ukrepi[k]].ukrep if k in ukrepi else None,
