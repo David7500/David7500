@@ -1411,7 +1411,7 @@ function risiVozilo(n) {
   }
   const el = NP.voziloOznaka.getElement();
   el.title = imeVoznje(n);
-  el.innerHTML = voziloSvg(30, (v.speed_kmh || 0) >= 3,
+  el.innerHTML = voziloSvg(30,
     vlak ? TRAIN_INK : AGENCY_INK[agencijaModela(n)] || BUS_INK, { vlak });
   NP.voziloOznaka.setLngLat([v.lon, v.lat]).setRotation(v.bearing || 0);
   postaviVozilo3D();

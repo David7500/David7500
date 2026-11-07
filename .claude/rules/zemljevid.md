@@ -96,6 +96,7 @@ Od Leafletovega **z15** nagib, pri **z17,5** 60°; stavbe rastejo do `render_hei
 * **Na oceni vozilo gleda po trasi**: smer = tetiva od repa do čela **narisanega** vozila (`smerNaOceni`); 324 parov: mediana 5,6° → 2,4°.
 * Samo LPP (mestni in 1118) — Arriva, Nomago, AP MS hitrosti ne pošiljajo, stojijo na meritvi s smerjo iz feeda.
 * **Meritev od ocene loči oblika, ne barva**: vozilo v barvi prevoznika, na oceni **prosojno s črtkanim obrisom**; zadnja izmerjena lega **rdeča** pika s svetlim obročem (`bringToFront()`), vedno narisana. Pot razreže ocena (`narisiRunTraso`, osveži na 30 m premika): naprej `--accent-lit`, prevoženo `ZA_INK`. Barve v `common.js` (`AGENCY_INK`, `ZA_INK`, `MERITEV_INK`). Legende ni — oceno pove podnapis.
+  * **Hitrost videza ne spremeni** (7. 11. 2026): vozilo na meritvi vedno polne barve, prosojen samo obris ocene. Prej pol prosojno pod 3 km/h — brez legende, medkrajevni hitrosti ne pošiljajo (97 od 181 avtobusov, vsi „stoječi“). „stoji“ / „N km/h“ / „brez hitrosti“ ostane v besedilu kartice.
 * **Na velikem zemljevidu ne za vsa vozila** — 80 ocen = 80 izmišljenih leg.
 * **Izjema: izbrani avtobus s `speed_ms`** (19. 10. 2026): mestni LPP po 60 s stoji 374 m → ocena 106 m (n=165), po 120 s 677 → 198. Ista koda kot okno (`ocenaNaTrasi`, `smerNaOceni`, `polAvtobusa`).
   * Brez novih zahtev (trasa iz `drawStops`, lega iz `/api/vehicles`).

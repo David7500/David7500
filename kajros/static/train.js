@@ -1654,11 +1654,13 @@ function inkVozila(v) {
   return AGENCY_INK[ag] || BUS_INK;
 }
 
-function busSvg(moving, ink) {
+// Prosojnost je ista kot pri oceni na velikem zemljevidu (`voziloSvg`) in ni
+// odvisna od hitrosti: medkrajevni je ne pošiljajo (7. 11. 2026).
+function busSvg(ink) {
   const s = 30;
   const telo = 'x="7.5" y="2.5" width="9" height="19" rx="3.2"';
   return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">
-      <rect ${telo} fill="${ink}" fill-opacity="${moving ? 0.55 : 0.32}"/>
+      <rect ${telo} fill="${ink}" fill-opacity="0.55"/>
       ${obrisOcene(telo)}
       <path d="M9.4 5.9 Q12 4.8 14.6 5.9 L14.6 7.5 Q12 6.8 9.4 7.5 Z"
             fill="#e9f4ff" fill-opacity="0.9"/>
@@ -2106,7 +2108,6 @@ async function drawRunMap(v) {
 function postaviVozilo(nova) {
   const v = runMap.v;
   if (!v || !runMap.map) return;
-  const moving = (v.speed_kmh || 0) >= 3;
   const starost = v.age_s + (Date.now() - runMap.since) / 1000;
   const lega = ocenjenaLega(v, starost);
   lega.smer = smerNaOceni(runMap, v, lega, polVozila(v));
@@ -2124,9 +2125,10 @@ function postaviVozilo(nova) {
   }
   runMap.marker.setLngLat([kje[1], kje[0]]).setRotation(lega.smer);
   const el = runMap.marker.getElement();
-  if (el.dataset.vozi !== String(moving)) {
-    el.dataset.vozi = String(moving);
-    el.innerHTML = busSvg(moving, inkVozila(v));
+  const ink = inkVozila(v);
+  if (el.dataset.ink !== ink) {
+    el.dataset.ink = ink;
+    el.innerHTML = busSvg(ink);
   }
   // Izmerjena lega se spremeni samo z novim odgovorom; `setData` vsako
   // sekundo bi MapLibre silil, da vir na telefonu predeluje brez razloga.

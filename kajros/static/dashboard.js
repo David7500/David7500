@@ -1207,8 +1207,9 @@ function obrocIzbranega(z3d) {
     AVTO_3D_OD + 3, 85];
 }
 
-const busIkona = (ink, moving, ocena = false) =>
-  `bus-${ink.slice(1)}-${ocena ? "ocena" : moving ? "vozi" : "stoji"}`;
+// Slika na barvo in na to, ali je vozilo na oceni; hitrost videza ne
+// spremeni (`voziloSvg`).
+const busIkona = (ink, ocena = false) => `bus-${ink.slice(1)}${ocena ? "-ocena" : ""}`;
 
 // Velikost ikone v px pri Leafletovem zoomu, kot jo nariše plast (`icon-size`).
 function ikonaPx(z) {
@@ -1236,16 +1237,15 @@ let vozila3d = [];             // kar plast 3D ta hip rise, za dotik
 const povecava3D = avtoPovecava;
 const vidni3D = () => !!avtobusi3d && vklop["3d"] && map.getZoom() >= AVTOBUS_3D_OD;
 
-// Slike avtobusov za plast: ena na barvo in stanje (vozi / stoji / na oceni).
+// Slike avtobusov za plast: dve na barvo (meritev, ocena lege).
 async function dodajAvtobuse() {
   const barve = [...new Set([BUS_INK, ...Object.values(AGENCY_INK)])];
-  const stanja = [[true, false], [false, false], [true, true]];
-  await Promise.all(barve.flatMap((ink) => stanja.map(async ([moving, ocena]) => {
+  await Promise.all(barve.flatMap((ink) => [false, true].map(async (ocena) => {
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${
-      encodeURIComponent(voziloSvg(BUS_SLIKA * 2, moving, ink, { ocena }))}`;
+      encodeURIComponent(voziloSvg(BUS_SLIKA * 2, ink, { ocena }))}`;
     await img.decode();
-    map.addImage(busIkona(ink, moving, ocena), img, { pixelRatio: 2 });
+    map.addImage(busIkona(ink, ocena), img, { pixelRatio: 2 });
   })));
   // Izbrano vozilo ima obroč v barvi izbrane poti: med dvajsetimi enakimi
   // ikonami na cesti sicer ni jasno, čigava je oranžna pot. Tanek obroč s
@@ -1407,7 +1407,7 @@ function avtobusTocka(v, l, ocena = false) {
     properties: {
       kljuc: busKey(v), ag: busGroup(v), mesto: MESTNI.has(v.agency),
       smer: l.smer,
-      ikona: busIkona(busInk(v), (v.speed_kmh || 0) >= 3, ocena),
+      ikona: busIkona(busInk(v), ocena),
       st: busGroup(v) !== "drugi" && !jeMedkrajevni(v) ? v.train_no : "",
     },
   };

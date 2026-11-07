@@ -53,8 +53,12 @@ const avtoDolzina = (model) => (model === "1118" ? 18 : 12);
 // Vozilo na oceni lege je prosojno s črtkanim svetlim obrisom, kot v oknu
 // vožnje (`obrisOcene`): meritev od ocene loči oblika. Vlak (pot od vrat do
 // vrat) je daljši, s temnim steklom kot v oknu vožnje.
-function voziloSvg(size, moving, ink, { ocena = false, vlak = false } = {}) {
-  const o = ocena ? 0.55 : moving ? 1 : 0.5;
+// Hitrost videza ne spremeni (7. 11. 2026): prosojnost je pomenila „stoji“
+// (< 3 km/h), legende ni imela, Arriva, Nomago in AP MS pa hitrosti sploh ne
+// pošiljajo -- 7. 11. ob 10.19 je bilo 97 od 181 avtobusov brez nje, vsi
+// narisani kot stoječi. Prosojen je samo obris ocene, ki res nekaj trdi.
+function voziloSvg(size, ink, { ocena = false, vlak = false } = {}) {
+  const o = ocena ? 0.55 : 1;
   const telo = vlak ? 'x="7" y="2" width="10" height="20" rx="3.4"'
     : 'x="7.5" y="2.5" width="9" height="19" rx="3.2"';
   const kolesa = vlak ? "" : `
