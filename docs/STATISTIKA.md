@@ -207,8 +207,7 @@ večje delo · **ne** = podatka ni.
   `api.py` po vzoru pristajalnih, predloge `templates/statistika*.html`.
 * **Grafi** iz strežnika kot vgrajen SVG (brez JS berljivo, iskalnik), JS le
   za namig ob dotiku. Brez knjižnic.
-* **Nočno delo samo, kjer je baza cela** (arwen); malina brez vlakov ne
-  računa statistike vlakov (stikalo kot `KAJROS_…`).
+* **Nočno delo samo, kjer je baza cela** (arwen).
 * **Mesečno poročilo** zamrzne nočno opravilo (ali `kajros mesec`) dva dni po koncu
   meseca (`stat_mesec`), se ne preračuna.
 * **API** `/api/statistika/…` (GET, odprto); stran `noindex` pod vzorcem.
@@ -350,8 +349,7 @@ večje delo · **ne** = podatka ni.
 
 1. **Objava vsega skupaj** (`git push arwen claude/slovenske-zeleznice-api-ql84hf`),
    ko David reče: ob zagonu brez `stat_prevozniki` se nočni izračun sproži
-   takoj (`stat_dan` vsi dnevi ~10 min, prevozniki avtobusi ~1 min). Malina
-   statistike ne računa (`KAJROS_SUMMARIES`). Po objavi preveri
+   takoj (`stat_dan` vsi dnevi ~10 min, prevozniki avtobusi ~1 min). Po objavi preveri
    kajros.app/statistika in podstrani; na arwenu pobriši
    `/var/tmp/kajros-stat.sqlite`, `promet-stat.sqlite`, `kajros-dev*`,
    `stat_*.json`, `*.py`.

@@ -89,7 +89,7 @@ Odvisnosti v `requirements.txt` je pet, naj tako ostane; razvojne v `requirement
 
 ## Objava
 
-Ciljni gostitelj: Raspberry Pi doma. Podrobnosti v [DEPLOY.md](DEPLOY.md), navodila za delo na projektu v [CLAUDE.md](CLAUDE.md).
+Gostitelj: prenosnik doma (arwen). Podrobnosti v [DEPLOY.md](DEPLOY.md), navodila za delo na projektu v [CLAUDE.md](CLAUDE.md).
 
 **API nima avtentikacije — vrat na usmerjevalniku ne odpiraj.**
 

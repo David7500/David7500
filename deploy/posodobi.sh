@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Vsakdanja posodobitev streznika. BREZ gesla -- glej `deploy/brez-sudo.sh`.
 #
-# Namenoma NI `install-rpi.sh`: ta je namestitev (apt, uporabnik, enote,
-# uvoz voznega reda) in rabi root. Tu gre samo za novo kodo, kar je 99 %
+# Samo nova koda (brez apt, uporabnika in enot, ki rabijo root), kar je 99 %
 # primerov. Ce se je spremenila shema baze, jo `db.init()` ob zagonu migrira
 # sam -- restart je torej dovolj.
 set -euo pipefail

@@ -1,112 +1,34 @@
 # Objava
 
-**Postavitev od 4. 9. 2026 trojna**, vsak stroj svoja naloga:
+**Postavitev od 3. 11. 2026 dvojna** (malina ni več del projekta):
 
 | stroj | naslov | naloga |
 |---|---|---|
-| prenosnik `arwen` | `192.168.1.46` | **streže** `kajros.app`, zajema sam |
-| malina (Pi Zero W) | `192.168.1.166` | zajem, teče ves čas, **varovalo** |
-| ta računalnik | — | razvoj |
-
-Zakaj oboje zajema: prikaz mora biti živ, poteg pa star toliko kot zadnji poteg. Ko prenosnik nekaj časa ne teče, vrzel zapolni `deploy/zapolni-vrzel.sh` (bere z maline, nikoli ne piše nanjo). Malina ostane prižgana: prenosnik se zapira in seli, ona ne.
+| prenosnik `arwen` | `192.168.1.46` | **streže** `kajros.app` in je **edini zajem** |
+| ta računalnik | — | razvoj; podatki za analizo = kopija z arwena (`.claude/rules/objava.md`, „Kopija baze za razvoj“) |
 
 **Posodobitev prenosnika = `git push arwen`** (od 17. 9. 2026). Potisk posodobi delovno drevo v `~/kajros`, kavelj `post-receive` požene `deploy/posodobi.sh`, ta prepiše kodo v `/opt/kajros`, znova zažene in počaka na `/api/health`. Izpis pride nazaj na razvojni računalnik → neuspela objava vidna tam, kjer si jo sprožil. **Gesla ne rabi**: restart = eden od štirih ukazov z `NOPASSWD`, nastavi jih `deploy/brez-sudo.sh`.
 
 Enkratna nastavitev: `deploy/arwen-git.sh` (po cevi: `ssh david@192.168.1.46 'bash -s' < deploy/arwen-git.sh`) in na razvojnem računalniku `git remote add arwen david@192.168.1.46:kajros`.
 
-Prej kodo prinašal `rsync`, **mimo gita**: delovno drevo na strežniku novejše od svojega HEAD, katera različica teče, ugotovljivo le po datotekah. `posodobi.sh` še vedno mogoče pognati ročno (`~/kajros/deploy/posodobi.sh ~/kajros`), rabiš za ponovno namestitev istega commita.
+`posodobi.sh` mogoče pognati tudi ročno (`~/kajros/deploy/posodobi.sh ~/kajros`), rabiš za ponovno namestitev istega commita.
 
-**Vlaki rabijo Chrome na arwenu** (od 10. 10. 2026). Zamude vlakov in tire beremo naravnost s potniski.sz.si, ki je za Cloudflarom in spusti le Chrome z oknom; na strežniku mu okno da Xvfb. Enkrat, s sudo: `ssh -t david@192.168.1.46 'sudo bash ~/kajros/deploy/brskalnik.sh'` -- namesti `xvfb` in `google-chrome-stable` (Googlov paket, posodablja ga `apt upgrade`), preizkusi branje v istem peskovniku kot storitev in znova zažene strežnik. Brez tega `/admin` pri zemljevidu SŽ piše „ni Chroma“, vlake pa piše derp.si, kolikor jih ima. Malina (Pi Zero W) Chroma ne more poganjati: tam vlakov ni.
+**Vlaki rabijo Chrome na arwenu** (od 10. 10. 2026). Zamude vlakov in tire beremo naravnost s potniski.sz.si, ki je za Cloudflarom in spusti le Chrome z oknom; na strežniku mu okno da Xvfb. Enkrat, s sudo: `ssh -t david@192.168.1.46 'sudo bash ~/kajros/deploy/brskalnik.sh'` -- namesti `xvfb` in `google-chrome-stable` (Googlov paket, posodablja ga `apt upgrade`), preizkusi branje v istem peskovniku kot storitev in znova zažene strežnik. Brez tega `/admin` pri zemljevidu SŽ piše „ni Chroma“, vlake pa piše derp.si, kolikor jih ima.
 
-Starejši `~/posodobi.sh` **odstranjen 12. 9. 2026**: posodabljal prek `install-rpi.sh`, zato zahteval sudo geslo, ki ga v seji brez terminala ni mogoče vpisati. Podrobnosti in past z `/tmp` na malini: `.claude/rules/objava.md`.
+Za majhne gostitelje, ki sprejmejo zip, velja poglavje »Paket za gostitelja« naprej.
 
-Spodaj namestitev na Raspberry Pi; za majhne gostitelje, ki sprejmejo zip, velja poglavje »Paket za gostitelja« naprej.
+## Kako teče na arwenu
 
-## Raspberry Pi
-
-> ### Enkratno: prva namestitev po preimenovanju v Kajros
->
-> Malina teče staro kodo pod imenom `sztrack`, dokler tega
-> ne pogeneš. Zajem medtem **ne trpi** — `potegni.sh` staro pot sam najde.
->
-> Vir že prenesen v `~/kajros-src` (3. 9. 2026). Manjka samo korak s sudom:
->
-> ```bash
-> ssh david@192.168.1.166
-> sudo KAJROS_MODE=zajem KAJROS_SRC=/home/david/kajros-src \
->      KAJROS_AGENCIES=1118,1119,1121,1123 \
->      bash /home/david/kajros-src/deploy/install-rpi.sh
-> ```
->
-> Enota ima **`KAJROS_OCENA=0`**: senčno merjenje teče v isti zanki kot zajem
-> in bi na Pi Zero W vzelo ~14 s vsakih 120 (izmerjeno), kar bi zamaknilo
-> zajem. Malina ima eno nalogo.
->
-> Naredi: preseli `/var/lib/sztrack/sz.sqlite` (z `-wal` in `-shm`) v
-> `/var/lib/kajros/kajros.sqlite`, ugasne in onemogoči `sztrack-zajem`,
-> postavi `kajros-zajem`. Selitev preizkušena v peskovniku, na sami malini
-> **ne** — zato po zagonu preveri:
->
-> ```bash
-> systemctl is-active kajros-zajem          # active
-> sqlite3 /var/lib/kajros/kajros.sqlite 'SELECT COUNT(*) FROM run'
-> ```
->
-> Če se kaj zalomi: stara baza ni izbrisana, ampak premaknjena — nazaj z
-> `mv /var/lib/kajros/kajros.sqlite /var/lib/sztrack/sz.sqlite` in
-> `systemctl enable --now sztrack-zajem`.
->
-> Ta odstavek odstrani, ko bo opravljeno.
-
-
-Pi boljši od brezplačnih gostiteljev iz enega razloga: zajem mora teči **neprekinjeno**, ker zgodovine zamud ni mogoče dobiti za nazaj. Brezplačni paketi zaspijo, zavržejo disk ali zahtevajo ročno podaljševanje. Pi nič od tega.
-
-### Namestitev
-
-```bash
-sudo bash deploy/install-rpi.sh
-```
-
-Skripta idempotentna — za posodobitev poženeš znova. Naredi:
-
-* sistemskega uporabnika `kajros` brez lupine,
-* kodo v `/opt/kajros`, podatke v `/var/lib/kajros`,
-* virtualno okolje in odvisnosti,
-* priloženo bazo voznega reda, **če je še ni** (obstoječe nikoli ne povozi),
-* storitev `kajros.service` in dnevno varnostno kopijo `kajros-backup.timer`.
-
-Po namestitvi:
-
-```bash
-curl -s http://localhost:8000/api/health
-journalctl -u kajros -f
-```
-
-Iz domačega omrežja dosegljiv na `http://<ip-pija>:8000/docs`.
-
-### Kaj je na Pi drugače
+Enota `kajros.service` (`deploy/kajros.service`), koda v `/opt/kajros`, podatki v `/var/lib/kajros`, sistemski uporabnik `kajros`.
 
 **Vozni red se osvežuje sam.** V `kajros.service` `KAJROS_REFRESH=subprocess` — uvoz teče v podprocesu, ki po koncu ves pomnilnik vrne sistemu (vrh 54 MB). Na Pelli izklopljeno zaradi 100 MB omejitve.
 
 **Ura mora biti točna.** Obratovalni dan vožnje se ugotavlja z ujemanjem voznorednega okna s trenutnim časom → `systemd-timesyncd` naj teče. Časovni pas sistema ni pomemben — koda povsod uporablja `Europe/Ljubljana`.
 
-**Zapisovanje majhno.** Piše se samo ob spremembi zamude, nekaj tisoč vrstic na dan; za SD kartico zanemarljivo. USB SSD je vseeno boljše mesto — nastavi `KAJROS_DATA_DIR` nanj v enoti storitve.
-
 **Varnostne kopije** vsak dan ob 2:40 v `/var/lib/kajros/backup/` prek `VACUUM INTO` (`deploy/varnostna-kopija-baze.sh`), stisnjene z `gzip -1`. `VACUUM INTO` je ena bralna transakcija: posnetek je dosleden, zajem piše naprej. `sqlite3 .backup` se je ob vsakem zapisu druge povezave začel znova in se na arwenu 1.–17. 10. 2026 vrtel do 58 min (46 min procesorja). Prvi `VACUUM INTO` 17. 10.: baza 4,9 GB, kopija 4,0 GB, stisnjena 789 MB, 226 s in 2 min procesorja; obnova preizkušena (`PRAGMA quick_check` ok). Ob 2:40, ker ob 3:30 tečeta obrez dnevnika in nočni povzetki. Hranijo se **tri**, ne štirinajst: z vsemi prevozniki baza zraste ~3,4 GB na leto, štirinajst polnih kopij bi zapolnilo kartico. Če ni prostega vsaj toliko, kolikor je baza, in še 2 GB, se kopija preskoči in to zapiše v dnevnik — poln disk ustavi tudi zajem, kopija je le kratkoročna varovalka.
 
-**Dolgoročni arhiv = računalnik**, ki bazo potegne dol (`kajros merge`), ne Pi. Kartice odpovedo.
+**Zajema se samo tisto, česar kasneje ni mogoče dobiti**: zamude in obvestila. Vreme ima arhiv za nazaj, statistika je izpeljanka `run`. Zgodovine zamud ni od nikoder dobiti nazaj, zato je arwen edini zajem in kopija baze (zgoraj) edina varovalka.
 
-## Samo zajem, brez strežnika
-
-Kadar naj stroj le polni bazo — da lahko računalnik ugasneš — se namesti `kajros-zajem.service` namesto strežnika:
-
-```bash
-sudo KAJROS_MODE=zajem KAJROS_AGENCIES=1118,1123,1119,1121 bash deploy/install-rpi.sh
-```
-
-Zajema se **samo tisto, česar kasneje ni mogoče dobiti**: zamude in obvestila. Vreme ima arhiv za nazaj, statistika je izpeljanka `run` — oboje se izračuna tam, kjer je baza. Lege vozil ni: je samo "zdaj", ne hrani se.
-
-`KAJROS_AGENCIES` se zapiše v enoto, ob spremembi sproži ponovni uvoz voznega reda (`--force`; brez tega bi ETag rekel "nespremenjeno"). Uvoz **zamenja samo statične tabele** — `obs` in `run` ostaneta.
 
 ### Prenos zajema s prejšnjega gostitelja
 
@@ -123,9 +45,6 @@ sudo -u kajros /opt/kajros/.venv/bin/python -m kajros.cli merge ~/sz-pella.sqlit
 
 Varno tudi, če sta bazi nekaj časa tekli vzporedno: meritve ključene po `(trip_id, service_date, stop_seq, feed_ts)`, podvojene se tiho zavržejo, v `run` obvelja zapis z novejšim `feed_ts`. Ponovni zagon istega ukaza doda 0 vrstic.
 
-### Dostop od zunaj
-
-Za zajem ni potreben — Pi sam kliče ven. Ko bo frontend rabil API z interneta, najmanj dela s Tailscalom (zasebno omrežje, brez odpiranja vrat) ali Cloudflare Tunnelom (javno, samodejni HTTPS, brez javnega IP-ja). Vrat na usmerjevalniku ne odpiraj — API nima avtentikacije.
 
 ## Paket za gostitelja
 

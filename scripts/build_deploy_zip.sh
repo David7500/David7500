@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sestavi paket za namestitev na malino (ali kateri koli Debian stroj).
+# Sestavi zip za gostitelja, ki sprejme zip (glej DEPLOY.md, "Paket za gostitelja").
 # Zažene se iz korena repozitorija.
 #
 #   ./scripts/build_deploy_zip.sh [izhod.zip]
@@ -22,7 +22,3 @@ git archive --format=zip -o "$OUT" HEAD
 printf '\n%s  (%s, %s datotek, HEAD=%s)\n' \
     "$OUT" "$(du -h "$OUT" | cut -f1)" "$(unzip -l "$OUT" | tail -1 | awk '{print $2}')" \
     "$(git rev-parse --short HEAD)"
-echo
-echo "Namestitev na malini (počakaj, poženi sam -- sudo rabi geslo):"
-echo "  unzip -q -o ~/$(basename "$OUT") -d ~/kajros-src && \\"
-echo "  sudo KAJROS_MODE=zajem KAJROS_SRC=~/kajros-src bash ~/kajros-src/deploy/install-rpi.sh"

@@ -94,7 +94,7 @@ V IJPP ga ni. Izvirnik odprt, brez ključa: `vozniredi.marprom.si/OBA/` (vozila,
 * **Zamuda samo iz leg** (`iz_lege.opazuj`, prehod brez trase). `DelayMin` je primerjava (`meta.marprom.primerjava`): naša − Marpromova mediana +39 s (cele minute), proti OnTrack +14,5 s. `iz_lege.SAMO_IZ_LEGE`: „ne v feedu“ pri Marpromu ni napaka.
 * Vozila brez vožnje → `meta.marprom_vozila_brez_voznje` → zemljevid („vožnje ne poznamo“, linija, smer, naslednje po Marpromu).
 * Nova vožnja istega vozila pobriše lego stare iz `vehicle_now` (dvojnik do konca svežine).
-* Samo strežnik (nit `kajros-marprom`); malina ne. Izklop `KAJROS_MARPROM=0`.
+* Samo strežnik (nit `kajros-marprom`). Izklop `KAJROS_MARPROM=0`.
 
 ## Opazovano: kje vozila ne ustavijo (`opazovano.py`)
 
@@ -165,7 +165,7 @@ Id = `dan|vožnja|vzorec`: dan in vzorec poznamo, vožnje ne. 26. 10. 2026 linij
 
 ## Zamuda iz lege in prehod brez trase
 
-* **Kar feed zamud izpušča, izmerimo iz lege.** Rezerva (`KAJROS_PREHOD_GPS=0`): `iz_lege.py` — lega na traso, prehod med legama ≤ 60 s narazen, zapis v `run`/`obs` kot iz feeda s časom lege po prehodu; s feedom 92 % na minuto. Izhodišča ne meri. Samo s strežnikom (malina `KAJROS_POSITIONS=0`), izklop `KAJROS_ZAMUDA_IZ_LEGE=0`. Vožnja, ki jo feed v 5 min omeni, gre mimo; 304 = vožnje ostanejo „v feedu“ (`iz_lege.feed_nespremenjen`).
+* **Kar feed zamud izpušča, izmerimo iz lege.** Rezerva (`KAJROS_PREHOD_GPS=0`): `iz_lege.py` — lega na traso, prehod med legama ≤ 60 s narazen, zapis v `run`/`obs` kot iz feeda s časom lege po prehodu; s feedom 92 % na minuto. Izhodišča ne meri. Samo s strežnikom, izklop `KAJROS_ZAMUDA_IZ_LEGE=0`. Vožnja, ki jo feed v 5 min omeni, gre mimo; 304 = vožnje ostanejo „v feedu“ (`iz_lege.feed_nespremenjen`).
 * **Kjer vozilo ne vozi po trasi, prehoda ni** (3 % vmesnih postankov). **Varoval ne rahljaj** (mediana 83 s proti 29 s) — popravi se trasa. Stari način beleži `odklon` in `vrsta = 'preskok'` (projekcija skoči čez zanko > 30 m/s); `kajros odkloni` po odsekih.
 * **Prehod brez trase** (`prehod.py`, vodi od 13. 10. 2026): obisk = vozilo v 100 m; čas = odhod (zadnji trenutek v 50 m), na cilju prihod. Postanki po vrsti, med naslednjimi osmimi; obisk s preskokom velja šele, ko se konča skladen kasnejši. Prvi obisk in skok > 20 min čakata; prvi brez preskoka velja sam po 15 min (`POTRDI_PRVI_S`; pri 10 štiri napake, pri 15 nič), razen pod −120 s. Prvi dan: 96,9 % vmesnih proti 89,7 %, mediana 7 s, p90 44 s, cilj 84 % proti 39 %. `KAJROS_PREHOD_GPS`: `vodi` (privzeto) / `senca` / `0` (rezerva **do 27. 10. 2026, nato ven**, če vodi drži). Z `vodi` se odklonov ne beleži. Lege v `lega` 14 dni, sled se ob zagonu obnovi.
 * **Sled je po vozilu** (`lega.vozilo`): NAP pod isto vožnjo javi dve vozili (~0,5 % voženj). Velja vozilo z največ prehodi (`prehod._izberi`). Prevzame tudi vozilo, ki nadaljuje za zadnjim postankom vodje, ko vodja `CILJ_S` molči (Nomago menja avtobus na poti). **Ne prevzame**, če je na ≥ 2 skupnih postankih `DRUGA_S` (10 min) dlje od voznega reda (NAP prijavi naslednjo vožnjo). Vodja ostane `OKNO_POZNEJE_S` po zadnji legi. Zemljevid kaže vodjo (`prehod.vodja`, `nap.zapisi`). `kajros prehodi` smiseln le do 13. 10.
@@ -194,7 +194,7 @@ Od 7. 10. 2026 Cloudflare zavrača brezglave; beremo s Chromom (10. 10.):
 * **CDP po cevi ali `--remote-debugging-port=0` NE gre** — Chrome postavi `navigator.webdriver = true`. Lastna vrata → `false`: `_prosta_vrata()`, lasten WebSocket (`_Ws`, brez odvisnosti).
 * Piškotek občasno zavrnjen (403): ponovno nalaganje (7 s), zahteva enkrat znova; drugi izziv zapored ugasne Chrome.
 * Cena: Chrome ~400–560 MB PSS, Xvfb 75 MB. Zagon ob prvi zahtevi, vsakih 6 h znova (`NAJDLJE_ZIVI_S`). Po neuspelem zagonu 5 min pavze; po `net::ERR_…` le 30 s (`PO_NAPAKI_OMREZJA_S`).
-* Teče na arwenu (`deploy/brskalnik.sh`: Google Chrome — AppArmor dovoli peskovnik — in Xvfb). **Malina ne more** (armv6). Razvoj brez Xvfb odpre okno. Preizkus: `kajros brskalnik`. Stanje v `/admin` → Stroj.
+* Teče na arwenu (`deploy/brskalnik.sh`: Google Chrome — AppArmor dovoli peskovnik — in Xvfb). Razvoj brez Xvfb odpre okno. Preizkus: `kajros brskalnik`. Stanje v `/admin` → Stroj.
 * Izpis napak: `${KAJROS_DATA_DIR}/sz-brskalnik-{chrome,xvfb}.log`, ob izhodu s kodo kopija `…-napaka.log`. `_preberi_zaslon` bere do konca vrstice (Xvfb številko in `\n` zapiše posebej; prej „Missing X server“ 6 od 43 zagonov).
 
 ## Tir s table SŽ (`peroni.py`)
@@ -293,7 +293,7 @@ David: „za vsa vozila, s katerimi je kaj narobe, shranjuj vse; na koncu za vsa
 * **Izpuščen vzorec gre v dosje z razlogom** (`nap._odpadel`, `kranj.korak`): izpuščeno vozilo je ravno tisto, s katerim je kaj narobe. 1302136: `RecordedAtTime` 3. 11., 1. 11. 2026. Nov vir ali nov izpust: `dosje.opazi` / `opazi_gtfs` na vhodu.
 * **Polje, ki se spreminja sproti, gre v `sprotno`, ne v ključ**, sicer je vsak vzorec nova vrstica `stanje` (zemljevid SŽ: `St` je vrstni red v odgovoru).
 * `stara_lega`, `ura_naprej`, `miruje` računa `_opazi` za vse vire enako; vir pove le, kar ve sam. Vlak = `vlak-<številka>`, Marprom in Kranj s predpono kot v `vehicle_now`.
-* **Zajem ne čaka**: `opazi` v pomnilnik, piše nit `kajros-dosje` v svojo bazo; napaka ne doseže vira (`dosje.varno`). Brez `vklopi` (malina, preizkusi, ukazna vrstica) prazen klic, sicer medpomnilnik raste brez bralca. Izklop `KAJROS_DOSJE=0`.
+* **Zajem ne čaka**: `opazi` v pomnilnik, piše nit `kajros-dosje` v svojo bazo; napaka ne doseže vira (`dosje.varno`). Brez `vklopi` (preizkusi, ukazna vrstica) prazen klic, sicer medpomnilnik raste brez bralca. Izklop `KAJROS_DOSJE=0`.
 * Branje: `kajros vozilo <id|tablica>` (`--dan`, `--surovo`, `--tocke`), `kajros vozila`, `/admin/vozilo/<id>`, `/admin/vozila` (besedilo, za žetonom), `scripts/admin.sh vozilo <id>`; povezava „dosje“ ob vozilih v vrstici zdravja. Poročilo doda iz glavne baze lege, prehode, `run`, senco, stražo, `vehicle_now`.
 * Vrstica `dosje`: rumeno 10 min brez zapisa, oranžno po 2 h, nikoli rdeče (potnik ne vidi nič).
 

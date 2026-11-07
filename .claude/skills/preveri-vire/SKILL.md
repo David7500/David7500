@@ -28,7 +28,7 @@ Rumena, ki ne mine, postane oranžna (meje v `zdravje.py`, trajanje šteje `Sled
 4. **Meri, preden spremeniš pravilo.** Na več dneh in za vse prevoznike, ne samo za tistega, ki je prižgal vrstico (`sistem-ne-krpanje`). Hevristika, ki bi brisala ali skrivala podatke, gre najprej v senco (primer `KAJROS_DRSI`).
 5. **Popravi** v kodi, dodaj preizkus, poženi `./scripts/preveri.sh`.
 6. **Zapiši sproti.** Številke v `docs/MERITVE.md`, pravilo v `.claude/rules/zajem.md`, razlog v commit, odprto in narejeno v `docs/VIRI-PRESOJA.md`. Vse, kar mora počakati (teden podatkov, praznik, rok vira, Davidova odločitev), takoj kot vnos v `KOLEDAR.md`.
-7. **Objava.** `git push arwen <veja>` in počakaj na 200 (`.claude/rules/objava.md`). Za malino pripravi ukaz Davidu.
+7. **Objava.** `git push arwen <veja>` in počakaj na 200 (`.claude/rules/objava.md`).
 
 ## Recepti po vrstici
 

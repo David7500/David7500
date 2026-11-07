@@ -98,38 +98,9 @@ Stanje **4. 9. 2026** (prejšnje vrednosti z 29. 8., premaknile so se — števi
 
 ## Objava
 
-**Raspberry Pi** (`david@192.168.1.166`) = **Pi Zero W**: armv6, 427 MB pomnilnika, 426 MB swapa, eno počasno jedro, 20 GB prostega na kartici.
+Strežnik in zajem sta na arwenu (`david@192.168.1.46`, `git push arwen`); malina od 3. 11. 2026 ni več del projekta. Postopek objave in kopije baze za razvoj: `.claude/rules/objava.md`, [DEPLOY.md](DEPLOY.md).
 
-Od 29. 8. 2026 teče **`kajros-zajem.service`** — zajem brez strežnika, **vsi prevozniki** (`KAJROS_AGENCIES=1118,1123,1119,1121`). Namen: malina ima celo bazo za aplikacijo, razvojni računalnik lahko ugasneš; obdeluje tisti, ki bazo potegne dol.
-
-Izmerjeno po prehodu: **34 MB RSS**, obremenitev 0,40, 20 003 avtobusnih voženj v voznem redu poleg 733 vlakov, ~34 avtobusnih meritev na minuto. Obremenitev enaka kot prej pri samih vlakih: feed = drseče okno, naenkrat ~150 voženj ne glede na velikost voznega reda.
-
-Vodilo: **zajema se samo, česar kasneje ni mogoče dobiti.** Zamude in obvestila da; vreme ne (Open-Meteo ima arhiv za nazaj), statistika ne (izpeljanka `run`), lega vozil ne (samo „zdaj", se ne hrani).
-
-Namestitev:
-
-```bash
-sudo KAJROS_MODE=zajem KAJROS_AGENCIES=1118,1123,1119,1121 bash ~/kajros-src/deploy/install-rpi.sh
-```
-
-Skripta sama ugotovi, da leži v izvornem drevesu, in vzame kodo od tam — na GitHubu teh commitov ni. Ob spremembi `KAJROS_AGENCIES` sproži ponovni uvoz voznega reda z `--force`; zamenja samo statične tabele, `obs` in `run` ostaneta (preverjeno: 9 dni in 46 085 meritev je prehod preživelo).
-
-Paket zgradi `./scripts/build_deploy_zip.sh` (`git archive HEAD`), prekopiraj z `scp` v `~/`, nato `unzip -o ~/kajros-deploy.zip -d ~/kajros-src`.
-
-Zajem zamud z maline se prilije brez sudo, baza berljiva za vse:
-
-```bash
-ssh david@192.168.1.166 'sqlite3 /var/lib/kajros/kajros.sqlite ".backup /tmp/kajros.sqlite"'
-scp david@192.168.1.166:/tmp/kajros.sqlite /tmp/sz-malina.sqlite
-./venv/bin/python -m kajros.cli merge /tmp/sz-malina.sqlite
-./venv/bin/python -m kajros.cli repair    # malina nima varovala za ničle
-```
-
-Namestitev/posodobitev mora pognati uporabnik sam (sudo rabi geslo):
-
-```bash
-sudo bash deploy/install-rpi.sh && sudo systemctl restart kajros.service
-```
+Vodilo: **zajema se samo, česar kasneje ni mogoče dobiti.** Zamude in obvestila da; vreme ne (Open-Meteo ima arhiv za nazaj), statistika ne (izpeljanka `run`).
 
 **Pella = slepa ulica** — zajem je delal, javni API pa vračal Cloudflare 526 na vseh poteh, ker njihov edge ne vzpostavi TLS do izvora.
 
@@ -160,6 +131,5 @@ Pri (2) se je pokazala razlika v izpisu, ne napaka: **vožnja z več kot šestur
 ## Odprto
 
 * **Dostop od zunaj — odločeno: samo Cloudflare.** Domena `kajros.app` registrirana 3. 9. 2026. Tailscale Funnel odpade: zna samo `*.ts.net`; isti imenovani tunel zmore tudi ssh prek brskalnika (za Accessom), drugo orodje ni potrebno. Čaka na prestavitev imenskih strežnikov na Cloudflarove. **Vrat na usmerjevalniku ne odpiraj: API nima avtentikacije** — je pa samo za branje (v `api.py` ni poti razen `GET`).
-* **Malina.** Smiselno `KAJROS_AGENCIES=1118` (SŽ + LPP, vrh 86 MB); vseh agencij Pi Zero W s 427 MB ne prenese (vrh 217 MB). Na tem prenosniku tečejo vse.
 * **Napoved bo boljša šele z več zajema.** Kar se je dalo iztisniti iz devetih dni, iztisnjeno in izmerjeno. Naslednji korak rabi mesece, ne trikov. Prvi merljiv premik že tu: pri **avtobusih** je model `združen` boljši od sedanjega (2,85 proti 2,98 MAE), ker ima zdaj zgodovino 77 % voženj namesto 11 %. Zamenjava čaka na dva tedna sence, ne na trik.
 * **Vzročnost vremena.** Vreme se zaenkrat samo *pokaže ob* zamudi. Trditve o vzroku počakajo na 2–3 mesece zajema, kot dogovorjeno.

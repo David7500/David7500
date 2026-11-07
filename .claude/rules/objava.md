@@ -3,19 +3,16 @@ paths:
   - "deploy/**"
   - "scripts/**"
 ---
-# Objava in malina
+# Objava
 
-## Trije stroji
+## Dva stroja
 
-**Malina od 3. 11. 2026 ni več del projekta** (David). Spodnje o malini je ostanek do pospravka 6. 11. (`KOLEDAR.md`): ne preverjaj, ne nameščaj, ne predlagaj.
+**Malina od 3. 11. 2026 ni več del projekta** (David); skripte in navodila zanjo so šli ven 7. 11. Ne preverjaj, ne nameščaj, ne vleci.
 
 | stroj | naslov | vloga |
 |---|---|---|
-| malina (`raspberrypi`, Pi Zero W) | `192.168.1.166` | zajem ves čas, **varovalo**, brez vlakov |
-| arwen (prenosnik, x86_64) | `192.168.1.46` | **strežnik `kajros.app`** (port 8000, cloudflared) + svoj zajem, edini z vlaki |
+| arwen (prenosnik, x86_64) | `192.168.1.46` | **strežnik `kajros.app`** (port 8000, cloudflared) + **edini zajem** |
 | ta računalnik | — | razvoj |
-
-Dva zajema = dva vira, namenoma: arwen se zapira, malina ne. Ne združuj.
 
 ## Objava na arwen = `git push`
 
@@ -31,27 +28,25 @@ git push arwen claude/slovenske-zeleznice-api-ql84hf
 * **Kazalo naslovov** (`naslovi.sqlite`, 51 MB): `ssh david@192.168.1.46 'cd ~/kajros && deploy/naslovi.sh'` (docker brez sudota).
 * Prijava NAP `deploy/nap.sh`, žeton Ko-fi `deploy/kofi.sh`, žeton admin `deploy/zeton.sh`.
 
-**Ne spreminjaj, kako se stroj vede do lastnika**: `HandleLidSwitch` ostane privzet (David pazi pokrov; vrzel zapolni malina). Kar namestitev spremeni zunaj sebe, mora biti našteto: paketi (`python3-venv`, `python3-pip`, `sqlite3`, `git`), uporabnik `kajros`, enote v `/etc/systemd/system/`.
+**Ne spreminjaj, kako se stroj vede do lastnika**: `HandleLidSwitch` ostane privzet (David pazi pokrov). Kar namestitev spremeni zunaj sebe, mora biti našteto: paketi (`python3-venv`, `python3-pip`, `sqlite3`, `git`), uporabnik `kajros`, enote v `/etc/systemd/system/`.
 
-## Malina
+## Kopija baze za razvoj
 
-* **Deploy požene David** (`sudo` z geslom; `NOPASSWD` le za `/usr/bin/tee /sys/class/leds/…`). `sudo -n true` lahko uspe zaradi `timestamp_type=global` po njegovem ukazu — ne poskušaj sam. Pripravi ukaz.
-* Namestitev: `sudo bash deploy/install-rpi.sh && sudo systemctl restart kajros.service` (idempotentna). **Nikoli brez `KAJROS_SRC`** — privzeto klonira z GitHuba, kjer naših commitov ni → malina nazaduje. Drevo najprej z `rsync` v `~/kajros-koda`.
-* **Malina streže samo zajem** — deploy predlagaj le ob spremembi zajema: `git diff --name-only <zadnje> -- kajros/collector.py kajros/gtfs.py kajros/alerts.py kajros/db.py`.
-* Enota `kajros-zajem.service` (`kajros.service` = `disabled`, hkrati ne smeta teči). `KAJROS_AGENCIES=1118,1119,1121,1123`, mestni LPP vklopljen.
-* **`KAJROS_OCENA=0`**: `ocena.tick()` v zajemni zanki bi na malini vzel ~14 s od 120. Senca se polni samo na arwenu.
-* Zmogljivost izmerjena na njej: 427 MB RAM + 426 MB swapa; zajem 38 MB RSS, uvoz ~216 MB v podprocesu.
-* **Poizvedb na malini ne poganjaj** (`COUNT(*)` čez `run` > 120 s) — analiza na kopiji. **Pred `.backup` ustavi pisca** (sicer se začne znova).
-* Domača mapa: `~/kajros-koda`, `~/kajros-zgodovina`. `deploy/pospravi-malino.sh` za stare enote.
+Za razvoj in analizo (backtest, senca, modeli) kopija z arwena; v `data/` je ne prilivaj, če ne rabiš (skupna razvojna baza). Postopek (~3 min za `VACUUM INTO`, scp ~8 min za 3 GB):
 
-## Vleka baze
+1. Na arwenu iz bralnega pogleda, nizka prednost, v ozadju (preizkušeno 7. 11. 2026 na majhni bazi): `echo "VACUUM INTO '/var/tmp/kajros-analiza.sqlite';" | ssh david@192.168.1.46 'cat > /var/tmp/vi.sql'`, nato `ssh david@192.168.1.46 'setsid nohup sh -c "nice -n 19 ionice -c3 sqlite3 "file:/var/lib/kajros/kajros.sqlite?mode=ro" < /var/tmp/vi.sql" > /var/tmp/vi.log 2>&1 &'`.
+2. Ko je `sqlite3` v `ps` izginil in je `vi.log` prazen: `scp david@192.168.1.46:/var/tmp/kajros-analiza.sqlite <scratchpad>/`.
+3. **Na arwenu pobriši** `/var/tmp/kajros-analiza.sqlite`, `vi.sql`, `vi.log` (disk je skupen z zajemom).
 
-* **Razvoj: `./scripts/potegni.sh`** — `backup()` (WAL!), prenos, `PRAGMA quick_check`, `merge`, `repair`. Smer ena: z maline sem. Idempotentno (`obs` ključen po `(trip_id, service_date, stop_seq, feed_ts)`).
-* **Arwen: `deploy/zapolni-vrzel.sh`**, ne `potegni.sh` (`/opt/kajros/.venv/bin/python`, `sudo -u kajros`). Rabi ključ arwen → malina: `ssh-keygen -t ed25519` in `ssh-copy-id david@192.168.1.166` naredi David.
+* **`.backup` ne dela**: zajem piše vsakih 30 s, kopija se začne znova. `VACUUM INTO` je ena bralna transakcija.
+* Samo železnica (268 MB namesto 4,3 GB): v KOPIJI na arwenu `DELETE` vrstic `obs`/`run`/`sched`/`trip`, ki niso `network='zeleznica'`, in `napoved` z drugim omrežjem, `VACUUM`, šele nato scp.
+* Scratchpad je v `/tmp` = tmpfs 16 GB: drži eno kopijo. `pkill -f` ujame tudi lastno lupino.
+* **Težke poizvedbe na produkcijski bazi ne poganjaj** (`COUNT(*)` čez `run` je drag): najprej izvleci vrstice v `/var/tmp/….sqlite` na arwenu. Nikoli pisanja v `/var/lib/kajros/kajros.sqlite`.
+* Prilitje kopije v drugo bazo: `./venv/bin/python -m kajros.cli merge <kopija>` in `repair` (`obs` ključen po `(trip_id, service_date, stop_seq, feed_ts)`, idempotentno).
 
-## Varnostna kopija zgodovine
+## Zgodovina kode
 
-`./scripts/varnostna-kopija.sh`: `git bundle` na malino, pet zadnjih; obnovitev `git clone kajros-YYYYMMDD-HHMM.bundle kajros` (preizkušeno). Arwen ima vso zgodovino. Ključ za GitHub obstaja (`push --dry-run` dela), a **ne potiskaj brez vprašanja** — koda zaprta.
+Arwen `~/kajros` ima ob vsakem `git push arwen` vso zgodovino (901 commitov, 7. 11. 2026): to je druga kopija poleg razvojnega diska. Ključ za GitHub obstaja (`push --dry-run` dela), a **ne potiskaj brez vprašanja** — koda zaprta.
 
 ## Dostop od zunaj: samo Cloudflare
 

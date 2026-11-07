@@ -14,14 +14,11 @@ WorkingDirectory=/opt/kajros
 Environment=KAJROS_DATA_DIR=/var/lib/kajros
 Environment=PORT=8000
 Environment=KAJROS_POLL_SECONDS=30
-# Na Pi je dovolj pomnilnika, da vozni red osvežuje sam.
+# Strežnik ima dovolj pomnilnika, da vozni red osvežuje sam.
 # Uvoz teče v podprocesu, da se pomnilnik po njem vrne sistemu.
 Environment=KAJROS_REFRESH=subprocess
 Environment=KAJROS_REFRESH_HOUR=4
 # Avtobusi. Prazno = samo vlaki (in nadomestni prevozi SŽ).
-# Ta enota je na malini ONEMOGOČENA -- tam teče samo `kajros-zajem.service`.
-# Če jo kdo prižge, naj ve, da hkrati z zajemom ne smeta teči: pisali bi v
-# isto bazo in se prepirali za feed (`install-rpi.sh` drugo zato ugasne).
 Environment=KAJROS_AGENCIES=1118,1119,1121,1123
 # Žetona za `/admin` tu NI in namenoma ne bo: v git ne sme, enoto v /etc pa
 # sme pisati samo root, posodobitev strežnika pa je brez sudota. Bere se iz

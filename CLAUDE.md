@@ -114,7 +114,7 @@ kajros/
   server.py      lifespan: bootstrap + zajem v ozadnji niti; cli.py ukazna vrstica
   api.py         FastAPI: /api/* + strani /app*; markdown.py stran za agente (`Accept: text/markdown`)
   templates/ · static/   predloge; base.css (barvni žetoni) + common.js + po ena .js/.css na stran
-tests/           pytest · scripts/ dev-restart.sh, preveri.sh, potegni.sh, preveri_paleto.py
+tests/           pytest · scripts/ dev-restart.sh, preveri.sh, preveri_paleto.py
 android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vir 3D /o-nas, gradi.sh → static/o-nas/o3.js
 ```
 
@@ -184,7 +184,7 @@ Ne bo, ker podatka ni: cene, sestava vlaka. **Zasedenost** od 21. 10. 2026 iz po
 
 ## Objava
 
-Arwen (`david@192.168.1.46`) = **edini zajem in strežnik** `kajros.app`. **Maline od 3. 11. 2026 v projektu ni** (David): na njej nič ne preverjaj, ne nameščaj, ne vleci; njene skripte (`potegni.sh`, `deploy/install-rpi.sh` …) gredo ven 6. 11. (`KOLEDAR.md`). Ta računalnik = razvoj; podatki za analizo = kopija z arwena (`VACUUM INTO`). Podrobno `.claude/rules/objava.md`, [DEPLOY.md](DEPLOY.md).
+Arwen (`david@192.168.1.46`) = **edini zajem in strežnik** `kajros.app`. **Maline od 3. 11. 2026 v projektu ni** (David): na njej nič ne preverjaj, ne nameščaj, ne vleci. Ta računalnik = razvoj; podatki za analizo = kopija z arwena (`VACUUM INTO`). Podrobno `.claude/rules/objava.md`, [DEPLOY.md](DEPLOY.md).
 
 **Objava = `git push arwen <veja>`** — kavelj na arwenu požene `deploy/posodobi.sh`, izpis se vrne. **Objavlja Claude sam** po zelenem `preveri.sh` (David 3. 11. 2026; dovoljenje `Bash(git push arwen:*)` v `.claude/settings.local.json`).
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ENKRATNA nastavitev: po njej posodobitev streznika ne rabi vec gesla.
 #
-# Doslej je vsaka posodobitev sla skozi `install-rpi.sh` z rootom, ker je
+# Doslej je vsaka posodobitev sla skozi namestitveno skripto z rootom, ker je
 # `/opt/kajros` pripadal uporabniku `kajros` in je bilo treba restartati
 # storitev. Oboje se da odpraviti, ne da bi kdorkoli dobil root.
 #
 # Kaj naredi:
 #   1. `david` dobi lastnistvo kode (`/opt/kajros`) -- rsync brez sudota.
 #   2. `david` gre v skupino `kajros` in podatkovni imenik postane skupinsko
-#      pisljiv -- `merge`, `repair` in `zapolni-vrzel.sh` brez `sudo -u`.
+#      pisljiv -- `merge` in `repair` brez `sudo -u`.
 #   3. sudoers dovoli TOCNO stiri ukaze systemctl brez gesla, nic drugega.
 #
 # Kaj to pomeni za varnost, pošteno povedano: `david` (in kdorkoli ima njegov

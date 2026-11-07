@@ -46,7 +46,7 @@ Sheme, ki gredo ven, naštete (`http`, `https`, `mailto`, `tel`, `sms`, `geo`). 
 
 Privzeto `https://kajros.app`. Menja se **z dolgim pritiskom na ikono aplikacije → Nastavi naslov**, ker stran zavzame ves zaslon, za nativni gumb ni mesta. Isti gumb na zaslonu, ki se pokaže, ko strežnika ni.
 
-Nešifrirani naslovi dovoljeni samo za naprave v `app/src/main/res/xml/omrezje.xml` (prenosnik, malina, localhost). Nov naslov v domačem omrežju zahteva vrstico tam in novo gradnjo — namerno dražje od `cleartextTrafficPermitted="true"` čez vse.
+Nešifrirani naslovi dovoljeni samo za naprave v `app/src/main/res/xml/omrezje.xml` (prenosnik, localhost). Nov naslov v domačem omrežju zahteva vrstico tam in novo gradnjo — namerno dražje od `cleartextTrafficPermitted="true"` čez vse.
 
 **Lastna lega v aplikaciji dela**, prek `http://192.168…` v brskalniku ne: `https://kajros.app` v WebView **je** varen kontekst.
 

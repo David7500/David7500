@@ -38,7 +38,7 @@ Zajem (kaj feed pove in kje laže): `zajem.md`; tu strežba.
 * **Sveže po predpomnilniku**: `age_s` pri legah.
 * `/api/vehicles` na `positions_fetched`. **Ključ premakne vsak, ki lege zapiše**: `poll_positions`, NAP, `poll_lpp`. Cena: `X-Osvezi-Cez` šteje 10 s od zadnjega premika.
 * **Značka = to, od česar je odgovor res odvisen** (vezava na `positions_fetched` je predpomnilnik razbila vsakih 10 s; drago na `rt_fetched`, števci sveže: 1,3 s → 4–42 ms).
-* **Ogrevanje** (`server._ogrej_zive`, po vsakem uspešnem zajemu): **skozi ENDPOINT, ne notranjo funkcijo** (`api._live()` je delo zavrgel). Samo, kar strani vprašajo (`network=zeleznica`). **Na malini ne** (`server._strezemo`, postavi ga samo `lifespan`).
+* **Ogrevanje** (`server._ogrej_zive`, po vsakem uspešnem zajemu): **skozi ENDPOINT, ne notranjo funkcijo** (`api._live()` je delo zavrgel). Samo, kar strani vprašajo (`network=zeleznica`). **Brez strežnika ne** (`server._strezemo`, postavi ga samo `lifespan`).
 * Statika na znački uvoza (`/api/stations*`, `/api/network.geojson`): `STATIKA_S` in `v_ozadju`; `_ogrej_pot` ogreje VSE ključe.
 * **Vozni red v zahtevi samo iz predpomnilnika**: `stats._vozni_red_zveze`, `journey._tabla_vozni_red`, zložena imena, `stats._TIPICNO_PREJ`. Lege računa nit `kajros-vozila` po premiku `positions_fetched` (le, če je kdo vprašal v 2 min).
 * Pika živosti bere `/api/svezina`, ne `/api/health`.
