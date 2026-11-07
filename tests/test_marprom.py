@@ -300,6 +300,24 @@ def test_potrebuje_ob_novi_voznji_in_ob_preverjanju(baza):
                              postanki, okna) == marprom.NOVA
 
 
+def test_potrebuje_korak_nazaj():
+    """Marprom `NextStopPointId` skoči eno postajališče nazaj (5.–6. 11. 2026
+    139 od 144 izpadov, vseh 139 korak 1); vozilo ostane na isti vožnji.
+    Korak 2 ali več nazaj ostane nova vožnja (korak 3+: 81 na drugo, 5 isto)."""
+    mp = marprom.MP
+    postanki = {"mp-1": {mp + str(i): [i] for i in range(1, 7)}}
+    s = marprom.Vozilo("mp-1", DAN, "73", "6970", seq=5, razreseno_ts=ZDAJ)
+    v = {**_v(), "naslednja": "4"}
+    assert marprom.potrebuje(s, v, ZDAJ + 60, postanki, {}) is None
+    assert s.seq == 5
+    # Po PREVERI_S od razrešitve vseeno preverjanje, kot sicer.
+    assert marprom.potrebuje(s, v, ZDAJ + marprom.PREVERI_S, postanki, {}) == marprom.PREVERI
+    assert s.seq == 5
+    # Korak 3 nazaj: nova vožnja.
+    assert marprom.potrebuje(s, {**_v(), "naslednja": "2"}, ZDAJ + 60,
+                             postanki, {}) == marprom.NOVA
+
+
 def test_korak_pripne_zapise_lego_in_vozila_brez_voznje(baza):
     """Pripeto vozilo gre v `vehicle_now`; vozilo brez vožnje v pregled za
     zemljevid z imenom naslednjega postajališča. Mrtva lega (`Predicted`)
@@ -389,11 +407,12 @@ def test_preverjanje_vzame_voznjo_ko_je_dokaz_ali_je_mimo(baza):
                        lambda p: PRIHOD)
     assert st["brez"].get("zasedena") == 1 and s.trip_id is None
 
-    # Naslednje postajališče je za vozilom: nova vožnja, prihoda ni.
+    # Naslednje postajališče je dva postanka za vozilom: nova vožnja, prihoda
+    # ni (en postanek nazaj ostane ista, `test_potrebuje_korak_nazaj`).
     marprom._vozila.clear()
     s = _pripni(baza)
     s.seq = 3
-    st = marprom.korak(baza, [_v()], ZDAJ + 60, lambda p: [])
+    st = marprom.korak(baza, [_v(naslednja="192")], ZDAJ + 60, lambda p: [])
     assert st["brez"] == {"ni_prihoda": 1} and s.trip_id is None
     assert baza.execute("SELECT COUNT(*) FROM vehicle_now WHERE vehicle_id = 'marprom-472'"
                         ).fetchone()[0] == 0

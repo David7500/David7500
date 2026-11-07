@@ -219,10 +219,18 @@ def potrebuje(s: Vozilo, v: dict, zdaj: float, postanki: dict, okna: dict,
         if seqs:
             break
     naprej = [q for q in seqs or () if q >= s.seq]
-    if not naprej:
-        # Naslednjega postajališča vožnja nima ali je za njim: nova vožnja.
-        return NOVA
-    s.seq = naprej[0]
+    if naprej:
+        s.seq = naprej[0]
+    else:
+        # Natanko en postanek nazaj = Marpromov `NextStopPointId` za hip
+        # skoči nazaj, ne nova vožnja: 5.–6. 11. 2026 139 od 144 izpadov
+        # sredi vožnje (209 min, 31 vozil), od 401 takih v tednu 398 nazaj na
+        # isto. `s.seq` ostane. Korak 2 ali več je menjava (korak 3+: 81 na
+        # drugo, 5 na isto), prav tako postajališče, ki ga vožnja nima.
+        prej = max((q for qs in na_voznji.values() for q in qs if q < s.seq),
+                   default=None)
+        if prej is None or prej not in (seqs or ()):
+            return NOVA
     okno = okna.get(s.trip_id)
     if okno and zdaj > stats.polnoc(s.dan) + okno[1] + PO_KONCU_S:
         return NOVA
