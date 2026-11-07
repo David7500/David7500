@@ -29,7 +29,7 @@ from .stats import (se_vozi_vceraj, _abs_time, _after_slack, estimate_at, _opera
                     pred_odhodom,
                     stanje_postankov, trenutna_zamuda, typical_at_stops, nepotrjen_do,
                     ura_z_zamudo, zadnji_potrjeni,
-                    IZMERJENO, MAX_REALNA_ZAMUDA_S, NEPOTRJEN_ODHOD_S, ZADNJI_PODATEK)
+                    IZMERJENO, PO_SZ, MAX_REALNA_ZAMUDA_S, NEPOTRJEN_ODHOD_S, ZADNJI_PODATEK)
 
 TZ = ZoneInfo(config.TIMEZONE)
 
@@ -845,6 +845,18 @@ def board(conn: sqlite3.Connection, station: str, service_date: str,
             # `stats.potrjen_prehod()`.
             d["delay_kind"] = (IZMERJENO if (d["trip_id"], d["stop_seq"]) in potrjeni
                                else ZADNJI_PODATEK)
+            # Postanek na meji je prevožen po uri, ne po opažanju. Kadar SŽ
+            # zamudo dviguje in je njegov odhod s TE postaje še pred nami
+            # (`zamude_sz.trenutne`, `trenutna_seq`), velja SŽ: z `run`
+            # (+50, odhod 8.46) je tabla vrstico ob 8.56 skrila, SŽ pa je
+            # kazal odhod ob 8.58. Dosje 2.–6. 11. 2026: 10 takih epizod na
+            # 3 247 voženj-dneh, naslednji postanek je bil bližje SŽ v 9.
+            # Napaka v drugo smer je cenejša: vlak, ki je odpeljal po uri iz
+            # `run`, je bil za potnika ob tej uri tako ali tako zamujen.
+            tren = lm.get("trenutna_s")
+            if (kind == "odhodi" and lm.get("trenutna_seq") == d["stop_seq"]
+                    and tren is not None and tren > (d["delay_s"] or 0)):
+                d["delay_s"], d["delay_from"], d["delay_kind"] = tren, None, PO_SZ
         elif lm:
             # Vozilo je se pred to postajo. Prenesemo njegovo trenutno zamudo
             # naprej -- merjeno je to bistveno bolje od feedove napovedi

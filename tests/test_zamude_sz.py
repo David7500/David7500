@@ -955,3 +955,28 @@ def test_popravi_vlake_nepotrjena_napoved_gre_iz_run():
     zamude_sz.popravi_vlake(c, "2026-09-01", zapisi=True)
     ostale = {(d, q) for d, q in c.execute("SELECT service_date, stop_seq FROM run")}
     assert ostale == {(dan, 21), (DAN, 20)}
+
+
+def test_tabla_na_meji_vzame_dvig_sz_z_odhodom_s_te_postaje():
+    """Pregled 5. 11. 2026, točka 6: `run` +50 na Plavah, SŽ +65 z odhodom s
+    Plav ob 09:01. Tabla na Plavah je kazala +50 in vrstico skrila, ko je ura
+    iz `run` minila, čeprav je SŽ vlak še imel pred odhodom."""
+    from kajros import journey
+    c = _baza()
+    _dvakrat(c, [VRSTICA], ZDAJ)
+
+    def plave(ts):
+        vrste = journey.board(c, "Plave(Železniški)", DAN, int(ts - POLNOC) - 3 * 3600,
+                              window_min=360, network="zeleznica", now_s=int(ts - POLNOC))
+        return next(d for d in vrste if d["trip_id"] == "t1")
+
+    pred = plave(ZDAJ)
+    assert pred["delay_s"] == 3000 and pred["delay_kind"] != stats.PO_SZ
+    _dvakrat(c, [POVECANA], ZDAJ + 15)
+    po = plave(ZDAJ + 15)
+    assert (po["delay_s"], po["delay_kind"], po["delay_from"]) == (3900, stats.PO_SZ, None)
+    # Prihodna tabla ostane: vlak je na Plave po uri že prišel.
+    prih = journey.board(c, "Plave(Železniški)", DAN, int(ZDAJ + 15 - POLNOC) - 3 * 3600,
+                         window_min=360, kind="prihodi", network="zeleznica",
+                         now_s=int(ZDAJ + 15 - POLNOC))
+    assert all(d["delay_kind"] != stats.PO_SZ for d in prih)
