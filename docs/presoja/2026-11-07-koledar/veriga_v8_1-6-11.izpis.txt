@@ -1,0 +1,117 @@
+
+Nomago T-10 min: parov 12037, trditev prava pri 6173 (51 %)
+  glava zdaj                 kaže 100.0 %  prav  51.3 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  53.3 %  prav  94.2 %  ujame  97.9 % pravih
+  novo R=0                   kaže  50.7 %  prav  98.3 %  ujame  97.1 % pravih
+  novo R=100                 kaže  50.3 %  prav  98.8 %  ujame  96.9 % pravih
+  novo R=200                 kaže  49.7 %  prav  99.1 %  ujame  96.0 % pravih
+  novo R=300                 kaže  48.9 %  prav  99.1 %  ujame  94.5 % pravih
+  novo R=500                 kaže  46.9 %  prav  99.1 %  ujame  90.5 % pravih
+  brez zapisa cilja, R=200   kaže  49.9 %  prav  98.7 %  ujame  96.0 % pravih
+  napaka R=200: prejsnja ze na cilju 1
+  napaka R=200: drugo vozilo 53
+  čaka na izhodišču (≤ 200 m, končala): 141, isto vozilo 95.0 %
+
+Nomago T-5 min: parov 12037, trditev prava pri 4427 (37 %)
+  glava zdaj                 kaže 100.0 %  prav  36.8 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  40.1 %  prav  90.7 %  ujame  98.9 % pravih
+  novo R=0                   kaže  37.2 %  prav  97.0 %  ujame  98.1 % pravih
+  novo R=100                 kaže  36.5 %  prav  98.5 %  ujame  97.7 % pravih
+  novo R=200                 kaže  35.3 %  prav  99.1 %  ujame  95.2 % pravih
+  novo R=300                 kaže  33.8 %  prav  99.3 %  ujame  91.2 % pravih
+  novo R=500                 kaže  30.7 %  prav  99.3 %  ujame  82.9 % pravih
+  brez zapisa cilja, R=200   kaže  35.5 %  prav  98.5 %  ujame  95.2 % pravih
+  napaka R=200: prejsnja ze na cilju 10
+  napaka R=200: drugo vozilo 27
+  čaka na izhodišču (≤ 200 m, končala): 263, isto vozilo 97.7 %
+
+Nomago T-1 min: parov 12037, trditev prava pri 2251 (19 %)
+  glava zdaj                 kaže 100.0 %  prav  18.7 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  22.2 %  prav  83.3 %  ujame  98.9 % pravih
+  novo R=0                   kaže  19.6 %  prav  93.9 %  ujame  98.4 % pravih
+  novo R=100                 kaže  18.9 %  prav  96.6 %  ujame  97.6 % pravih
+  novo R=200                 kaže  17.6 %  prav  98.6 %  ujame  92.7 % pravih
+  novo R=300                 kaže  15.8 %  prav  99.2 %  ujame  84.0 % pravih
+  novo R=500                 kaže  13.1 %  prav  99.3 %  ujame  69.4 % pravih
+  brez zapisa cilja, R=200   kaže  17.9 %  prav  96.8 %  ujame  92.7 % pravih
+  napaka R=200: prejsnja ze na cilju 17
+  napaka R=200: drugo vozilo 13
+  čaka na izhodišču (≤ 200 m, končala): 313, isto vozilo 98.7 %
+
+AP MS T-10 min: parov 1477, trditev prava pri 888 (60 %)
+  glava zdaj                 kaže 100.0 %  prav  60.1 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  61.7 %  prav  96.9 %  ujame  99.4 % pravih
+  novo R=0                   kaže  60.5 %  prav  98.7 %  ujame  99.3 % pravih
+  novo R=100                 kaže  60.4 %  prav  98.8 %  ujame  99.2 % pravih
+  novo R=200                 kaže  59.9 %  prav  99.0 %  ujame  98.5 % pravih
+  novo R=300                 kaže  59.2 %  prav  99.1 %  ujame  97.5 % pravih
+  novo R=500                 kaže  57.2 %  prav  99.1 %  ujame  94.3 % pravih
+  brez zapisa cilja, R=200   kaže  59.9 %  prav  99.0 %  ujame  98.5 % pravih
+  napaka R=200: prejsnja ze na cilju 1
+  napaka R=200: drugo vozilo 8
+  čaka na izhodišču (≤ 200 m, končala): 6, isto vozilo 100.0 %
+
+AP MS T-5 min: parov 1477, trditev prava pri 577 (39 %)
+  glava zdaj                 kaže 100.0 %  prav  39.1 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  43.3 %  prav  90.0 %  ujame  99.8 % pravih
+  novo R=0                   kaže  40.3 %  prav  96.5 %  ujame  99.5 % pravih
+  novo R=100                 kaže  39.7 %  prav  97.3 %  ujame  99.0 % pravih
+  novo R=200                 kaže  38.1 %  prav  98.0 %  ujame  95.5 % pravih
+  novo R=300                 kaže  35.5 %  prav  99.0 %  ujame  90.1 % pravih
+  novo R=500                 kaže  31.9 %  prav  99.2 %  ujame  80.9 % pravih
+  brez zapisa cilja, R=200   kaže  38.1 %  prav  98.0 %  ujame  95.5 % pravih
+  napaka R=200: prejsnja ze na cilju 6
+  napaka R=200: drugo vozilo 5
+  čaka na izhodišču (≤ 200 m, končala): 40, isto vozilo 95.0 %
+
+AP MS T-1 min: parov 1477, trditev prava pri 158 (11 %)
+  glava zdaj                 kaže 100.0 %  prav  10.7 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  13.3 %  prav  80.6 %  ujame 100.0 % pravih
+  novo R=0                   kaže  11.5 %  prav  92.9 %  ujame 100.0 % pravih
+  novo R=100                 kaže  11.3 %  prav  94.6 %  ujame 100.0 % pravih
+  novo R=200                 kaže  10.6 %  prav  96.2 %  ujame  94.9 % pravih
+  novo R=300                 kaže   9.7 %  prav  99.3 %  ujame  90.5 % pravih
+  novo R=500                 kaže   8.0 %  prav  99.2 %  ujame  74.1 % pravih
+  brez zapisa cilja, R=200   kaže  10.6 %  prav  95.5 %  ujame  94.9 % pravih
+  napaka R=200: prejsnja ze na cilju 4
+  napaka R=200: drugo vozilo 2
+  čaka na izhodišču (≤ 200 m, končala): 25, isto vozilo 100.0 %
+
+Arriva T-10 min: parov 15165, trditev prava pri 7472 (49 %)
+  glava zdaj                 kaže 100.0 %  prav  49.3 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  51.6 %  prav  94.4 %  ujame  98.9 % pravih
+  novo R=0                   kaže  49.5 %  prav  98.2 %  ujame  98.7 % pravih
+  novo R=100                 kaže  49.1 %  prav  99.0 %  ujame  98.6 % pravih
+  novo R=200                 kaže  48.4 %  prav  99.3 %  ujame  97.5 % pravih
+  novo R=300                 kaže  47.8 %  prav  99.4 %  ujame  96.4 % pravih
+  novo R=500                 kaže  45.9 %  prav  99.4 %  ujame  92.6 % pravih
+  brez zapisa cilja, R=200   kaže  48.5 %  prav  99.0 %  ujame  97.5 % pravih
+  napaka R=200: prejsnja ze na cilju 9
+  napaka R=200: drugo vozilo 43
+  čaka na izhodišču (≤ 200 m, končala): 272, isto vozilo 99.3 %
+
+Arriva T-5 min: parov 15165, trditev prava pri 5451 (36 %)
+  glava zdaj                 kaže 100.0 %  prav  35.9 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  39.7 %  prav  89.9 %  ujame  99.4 % pravih
+  novo R=0                   kaže  37.0 %  prav  96.4 %  ujame  99.2 % pravih
+  novo R=100                 kaže  36.2 %  prav  98.0 %  ujame  98.8 % pravih
+  novo R=200                 kaže  34.9 %  prav  99.1 %  ujame  96.3 % pravih
+  novo R=300                 kaže  33.4 %  prav  99.3 %  ujame  92.4 % pravih
+  novo R=500                 kaže  30.4 %  prav  99.5 %  ujame  84.1 % pravih
+  brez zapisa cilja, R=200   kaže  35.1 %  prav  98.8 %  ujame  96.3 % pravih
+  napaka R=200: prejsnja ze na cilju 20
+  napaka R=200: drugo vozilo 26
+  čaka na izhodišču (≤ 200 m, končala): 449, isto vozilo 100.0 %
+
+Arriva T-1 min: parov 15165, trditev prava pri 2444 (16 %)
+  glava zdaj                 kaže 100.0 %  prav  16.1 %  ujame 100.0 % pravih
+  pilula zdaj                kaže  19.8 %  prav  81.1 %  ujame  99.5 % pravih
+  novo R=0                   kaže  17.2 %  prav  92.9 %  ujame  99.3 % pravih
+  novo R=100                 kaže  16.4 %  prav  96.9 %  ujame  98.6 % pravih
+  novo R=200                 kaže  15.1 %  prav  98.8 %  ujame  92.8 % pravih
+  novo R=300                 kaže  14.1 %  prav  99.4 %  ujame  86.9 % pravih
+  novo R=500                 kaže  11.8 %  prav  99.7 %  ujame  72.9 % pravih
+  brez zapisa cilja, R=200   kaže  15.2 %  prav  98.3 %  ujame  92.8 % pravih
+  napaka R=200: prejsnja ze na cilju 21
+  napaka R=200: drugo vozilo 7
+  čaka na izhodišču (≤ 200 m, končala): 456, isto vozilo 99.1 %

@@ -1,0 +1,24 @@
+LPP 25      T- 1 min: parov   232, trditev prava pri  12 %; novo kaže    26 ( 11 %) prav  76.9 % | napak: ze na cilju 2, drugo vozilo 4
+              + brez zapisanega prihoda v feedu: kaže    13 (  6 %) prav  84.6 % | napak: ze na cilju 1, drugo vozilo 1
+LPP 25      T- 5 min: parov   232, trditev prava pri  24 %; novo kaže    52 ( 22 %) prav  92.3 % | napak: ze na cilju 2, drugo vozilo 2
+              + brez zapisanega prihoda v feedu: kaže    45 ( 19 %) prav  95.6 % | napak: ze na cilju 1, drugo vozilo 1
+LPP 25      T-10 min: parov   231, trditev prava pri  53 %; novo kaže   122 ( 53 %) prav  94.3 % | napak: ze na cilju 1, drugo vozilo 6
+              + brez zapisanega prihoda v feedu: kaže   111 ( 48 %) prav  95.5 % | napak: ze na cilju 1, drugo vozilo 4
+LPP mestni  T- 1 min: parov   148, trditev prava pri  93 %; novo kaže   122 ( 82 %) prav 100.0 % | napak: ze na cilju 0, drugo vozilo 0
+              + brez zapisanega prihoda v feedu: kaže    99 ( 67 %) prav 100.0 % | napak: ze na cilju 0, drugo vozilo 0
+LPP mestni  T- 5 min: parov   148, trditev prava pri 100 %; novo kaže   147 ( 99 %) prav 100.0 % | napak: ze na cilju 0, drugo vozilo 0
+              + brez zapisanega prihoda v feedu: kaže   146 ( 99 %) prav 100.0 % | napak: ze na cilju 0, drugo vozilo 0
+LPP mestni  T-10 min: parov   148, trditev prava pri 100 %; novo kaže   147 ( 99 %) prav 100.0 % | napak: ze na cilju 0, drugo vozilo 0
+              + brez zapisanega prihoda v feedu: kaže   146 ( 99 %) prav 100.0 % | napak: ze na cilju 0, drugo vozilo 0
+LPP prim    T- 1 min: parov  2904, trditev prava pri  27 %; novo kaže   588 ( 20 %) prav  68.2 % | napak: ze na cilju 118, drugo vozilo 69
+              + brez zapisanega prihoda v feedu: kaže   307 ( 11 %) prav  84.4 % | napak: ze na cilju 2, drugo vozilo 46
+LPP prim    T- 5 min: parov  2903, trditev prava pri  40 %; novo kaže   992 ( 34 %) prav  83.1 % | napak: ze na cilju 92, drugo vozilo 76
+              + brez zapisanega prihoda v feedu: kaže   731 ( 25 %) prav  90.4 % | napak: ze na cilju 4, drugo vozilo 66
+LPP prim    T-10 min: parov  2898, trditev prava pri  59 %; novo kaže  1589 ( 55 %) prav  90.1 % | napak: ze na cilju 62, drugo vozilo 96
+              + brez zapisanega prihoda v feedu: kaže  1392 ( 48 %) prav  94.0 % | napak: ze na cilju 2, drugo vozilo 82
+
+LPP prim T-5, po obdobju (kaže, prav): {}
+  dan: kaže 603 prav 89.2 %
+  zvečer: kaže 128 prav 96.1 %
+  linije z največ napakami: [(('dan', '47'), 55, 20), (('dan', '3G'), 43, 11), (('dan', '51'), 33, 10), (('dan', '3B'), 31, 9), (('dan', '78'), 5, 5), (('dan', '60'), 18, 5), (('zvečer', '47'), 13, 4), (('dan', '25'), 37, 2)]
+  drugo vozilo: n 66 razmik konec prejšnje -> začetek te (min), mediana 6 p90 20
