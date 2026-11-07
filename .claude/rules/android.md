@@ -43,7 +43,8 @@ WebView si dovoljenje zapomni sam (`AwGeolocationPermissions … = true`), siste
 * **Posodobitev javi aplikacija sama** (`Posodobitev.kt`, enkrat na dan `/api/android/razlicica`):
   * Nič se ne prenese samo; sistemski „Posodobi“ = potnikov drugi klik.
   * **Namesti aplikacija, ne brskalnik** (od 1.6, `Namestitev.kt`): sistemski namestitveni program ob vsaki namestitvi postavi `USE_FULL_SCREEN_INTENT` na `deny`; seja `PackageInstaller` (`SessionParams.setPermissionState`, Android 14+) ga ohrani (`allow`, `installerPackageName=app.kajros`). Vsota SHA-256 iz odgovora pred `commit`.
-  * Najprej `canRequestPackageInstalls()` (`REQUEST_INSTALL_PACKAGES`), ob `onResume` namestitev brez drugega klika.
+  * Najprej `canRequestPackageInstalls()` (`REQUEST_INSTALL_PACKAGES`), ob `onResume` namestitev brez drugega klika. **Ne dela** (28. 10. 2026, emulator Android 15, 1.13, 2 od 2): ob `onResume` po vklopu vrne `false`, čeprav `appops` že pravi `allow` (5 s po vklopu) → „Brez dovoljenja …“; gumb „Odpri nastavitve“ nato namesti brez nastavitev.
+  * Po uspešni posodobitvi sistem aplikacijo ustavi in je ne odpre znova (emulator: launcher, `MY_PACKAGE_REPLACED` pride, zaslona ni) — potnik vidi „nič se ni zgodilo“.
   * Namešča zaslon „O aplikaciji“ (`AplikacijaDejavnost`, od 1.12) z `Namestitev.Stanje` (odstotek, potrditev, napaka v slovenščini) in gumbom naprej. Okno za potrditev odpre sprejemnik, gumb „Odpri okno za potrditev“ znova (zagon iz ozadja sme biti zavrnjen; namera v `Stanje.Potrdi`). Ob neuspehu stara pot: stran v brskalniku.
   * Različica vidna v meniju Več (`Most.oAplikaciji()`, most 5) in na zaslonu. „Preveri znova“ mimo dnevne meje; dan šteje šele **odgovor**.
   * Do 1.5 vrstica odpre `/android?iz=aplikacija` — stran tam pove „posodabljaš, budilke ostanejo“ in opozorila brskalnika in Play Protecta.
