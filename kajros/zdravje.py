@@ -119,15 +119,18 @@ DOSJE_MOLK_S = 600
 #: vzorcev; docs/presoja/2026-11-07-koledar/drsi-pokritost.md). Medkrajevni:
 #: zamuda danes, ne v 15 min -- med daljnimi postanki 15 min ne pišejo nič
 #: (AP MS pod 0,5 v 178 od 1 251 vzorcev, zamuda danes v 22). Vlak lege nima.
+#: Ključ je `trip.agency`, kot ga piše `collector.pokritost` (GROUP BY
+#: t.agency), ime v razlogu iz `stats.AGENCY_NAMES`. Z imeni kot ključi bi bila
+#: vrstica v živo vedno zelena (pregled 7. 11. 2026: preizkusi so rabili imena).
 POKRITOST_IZHODISCE: dict[str, tuple[tuple[str, int, float], ...]] = {
-    "LPP primestni": (("lega", 1, 0.84), ("zamuda danes", 3, 0.89)),
-    "Nomago": (("lega", 1, 0.94), ("zamuda danes", 3, 0.94)),
-    "AP Murska Sobota": (("lega", 1, 0.88), ("zamuda danes", 3, 0.84)),
-    "Arriva": (("lega", 1, 0.96), ("zamuda danes", 3, 0.94)),
-    "SŽ": (("zamuda", 2, 0.94),),
-    "Kranj (MOK)": (("lega", 1, 0.67), ("zamuda danes", 3, 0.67)),
-    "LPP mestni": (("lega", 1, 0.97), ("zamuda danes", 3, 0.97)),
-    "Marprom": (("lega", 1, 0.90), ("zamuda danes", 3, 0.90)),
+    "1118": (("lega", 1, 0.84), ("zamuda danes", 3, 0.89)),   # LPP primestni
+    "1119": (("lega", 1, 0.94), ("zamuda danes", 3, 0.94)),   # Nomago
+    "1121": (("lega", 1, 0.88), ("zamuda danes", 3, 0.84)),   # AP Murska Sobota
+    "1123": (("lega", 1, 0.96), ("zamuda danes", 3, 0.94)),   # Arriva
+    "1161": (("zamuda", 2, 0.94),),                           # SŽ
+    "kranj": (("lega", 1, 0.67), ("zamuda danes", 3, 0.67)),
+    "lpp": (("lega", 1, 0.97), ("zamuda danes", 3, 0.97)),    # LPP mestni
+    "marprom": (("lega", 1, 0.90), ("zamuda danes", 3, 0.90)),
 }
 #: Pod polovico izhodišča ob >= 5 vožnjah po voznem redu, rumeno od 10 min,
 #: oranžno od 20 min. Na tednu 4 oranžne, obe na delavnik pravi (LPP
@@ -723,6 +726,7 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
         sveza = zdaj - (pk.get("ts") or 0) <= POKRITOST_STARA_S
         po = pk.get("po_prevozniku") or {}
         pod: list[tuple[float, str]] = []
+        from .stats import AGENCY_NAMES  # stats je težak, zdravje rabi tudi pošta
         for prevoznik, meje in POKRITOST_IZHODISCE.items():
             v = po.get(prevoznik)
             for mera, i, izh in meje:
@@ -731,7 +735,7 @@ def ocena(z: dict, m: dict, zdaj: float | None = None,
                              and v[i] / v[0] < POKRITOST_DELEZ * izh)
                 traja = sled.koliko(f"pokritost:{prevoznik}:{mera}", pogoj, zdaj)
                 if pogoj and traja >= POKRITOST_RUMENO_S:
-                    pod.append((traja, f"{prevoznik} {mera} {v[i]} od {v[0]} "
+                    pod.append((traja, f"{AGENCY_NAMES.get(prevoznik, prevoznik)} {mera} {v[i]} od {v[0]} "
                                        f"(običajno {izh:.2f}) {_min(traja)}"))
         if sveza:
             najdlje = max((t for t, _ in pod), default=0)
