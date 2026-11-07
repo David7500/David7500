@@ -207,6 +207,27 @@ def test_ista_zamuda_kot_iskalnik_zvez(conn, monkeypatch):
     assert noga["zamuda"]["s"] == zveze[0]["zamuda"]["s"]
     assert noga["zamuda"]["vrsta"] == zveze[0]["zamuda"]["vrsta"]
 
+    # Postanek na meji z dvigom SŽ (odhod s TE postaje še pred nami): tabla
+    # vzame trenutno zamudo SŽ (c284527), iskalnik in pot isto. Pregled
+    # 7. 11. 2026: 0,28 % voženj-dni sta tabla in iskalnik sicer povedala
+    # različno.
+    from kajros import journey, zamude_sz
+    monkeypatch.setattr(zamude_sz, "trenutne", lambda dan, out, ts: {
+        "t1": {"s": 840, "seq": 1, "ts": ts}} if "t1" in out else {})
+    zdaj = 8 * 3600 + 900                           # po uri iz run (8.14) odpeljal
+    db.fill_trip_window(conn)                       # first_seq za tablo
+    tabla = next(d for d in journey.board(conn, "Blizu", D, zdaj - 3600, window_min=180,
+                                          network="zeleznica", now_s=zdaj)
+                 if d["trip_id"] == "t1")
+    assert (tabla["delay_s"], tabla["delay_kind"]) == (840, stats.PO_SZ)
+    zveze = stats.connections(conn, "Blizu", "Cilj", D, now_s=zdaj)
+    assert (zveze[0]["delay_s"], zveze[0]["delay_kind"]) == (840, stats.PO_SZ)
+    assert zveze[0]["delay_at"] is None
+    r = pot.isci(conn, OD, DO, D, 8 * 3600, now_s=zdaj)
+    noga = next(n for n in r["predlogi"][0]["noge"] if n["vrsta"] == "voznja")
+    assert noga["zamuda"]["s"] == zveze[0]["zamuda"]["s"]
+    assert noga["zamuda"]["vrsta"] == zveze[0]["zamuda"]["vrsta"]
+
 
 def test_prestop_uposteva_zamudo_obeh_vozenj(conn, monkeypatch):
     """Preostanek prestopa je načrtovani čas plus zamuda drugega minus prvega.

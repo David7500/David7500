@@ -42,6 +42,7 @@ Ob zapori enega tira izguba ≥ 5 min pri 16 % prehodov (sicer 4 %), za vlakom z
 ## Ena odločitev za potnikov postanek
 
 `stats.zamuda_na_postanku()` odloči **izmerjena / ocena / napoved prevoznika** in od kod; rabita jo `stats.connections()` in `pot.pripni_zamude()`. Isto pravilo na dveh mestih = tiha napaka. `test_ista_zamuda_kot_iskalnik_zvez`.
+* **Postanek na meji z dvigom SŽ** (`trenutna_seq` = ta postanek, `trenutna_s` višja): odhod = `trenutna_s`, `PO_SZ`, brez `delay_at` — tabla (`journey.board`) in `zamuda_na_postanku` enako; prihod ne. Prej 0,28 % voženj-dni tabla ≠ iskalnik.
 
 ## Prestopi
 

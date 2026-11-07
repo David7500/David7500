@@ -2320,8 +2320,18 @@ def zamuda_na_postanku(conn: sqlite3.Connection, *, train_no: str,
     # Kaj potnik res rabi: zamudo na SVOJI postaji, ce je ze izmerjena;
     # sicer zadnjo znano zamudo in kje je bila izmerjena.
     if lm and lm["stop_seq"] >= stop_seq:
+        # Postanek na meji, SŽ zamudo dviguje in je odhod s TE postaje še
+        # pred nami: velja SŽ, kot na odhodni tabli (`journey.board`,
+        # c284527). Brez tega sta tabla in iskalnik pri 0,28 % voženj-dni
+        # (pregled 7. 11. 2026) povedala različno. Prihod ne: po uri je
+        # vlak na postajo že prišel.
+        tren = lm.get("trenutna_s")
+        vrednost = feed_delay_s if feed_delay_s is not None else lm["delay_s"]
+        if (not prihod and lm.get("trenutna_seq") == stop_seq
+                and tren is not None and tren > (vrednost or 0)):
+            return {"delay_s": tren, "delay_at": None, "delay_kind": PO_SZ}
         return {
-            "delay_s": feed_delay_s if feed_delay_s is not None else lm["delay_s"],
+            "delay_s": vrednost,
             "delay_at": ime_postaje if feed_delay_s is not None else lm["name"],
             "delay_kind": IZMERJENO if potrjen else ZADNJI_PODATEK,
         }
