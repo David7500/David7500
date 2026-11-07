@@ -804,6 +804,82 @@ def zastareli_visji(zapisi: list[tuple[int, int]], rezerva) -> list[tuple[int, i
     return out
 
 
+#: Od katerega dne `popravi_vlake` prekliče postanke za skokom nazaj: dan objave
+#: `POPRAVI_DO_TS`, od tedaj prvi zapis zemljevida piše tudi prihod.
+PREKLIC_OD = "2026-11-06"
+#: Zapis zemljevida v `obs` = `observed_at - feed_ts` pod tem (`feed_ts` je naš
+#: čas branja): zemljevid p50 1 s (n = 5 395), derp.si p50 45 s (n = 1 387),
+#: 6. 11. 2026. Pred `POPRAVI_DO_TS` podpis `_ZEMLJEVID_ZAPISI`.
+ZEMLJEVID_ZAMIK_S = 5
+
+_DNEVNIK_ZEMLJEVIDA = (
+    "SELECT o.trip_id, o.stop_seq, o.delay_dep, o.feed_ts, o.observed_at FROM obs o "
+    "JOIN trip t ON t.trip_id = o.trip_id "
+    "WHERE o.service_date = ? AND t.network = 'zeleznica' AND t.mode = 'vlak' "
+    "  AND o.trip_id IN (SELECT trip_id FROM sz_zamuda WHERE service_date = ?) "
+    "ORDER BY o.trip_id, o.feed_ts, o.stop_seq")
+
+
+def preklici_skoke(zapisi: list[tuple[int, int]],
+                   zadnji: int | None) -> tuple[dict[int, tuple[int, int]], set[int]]:
+    """Zapisi zemljevida ene vožnje po času [(stop_seq, zamuda_s)] -> (stanje
+    {stop_seq: (prihod, odhod)}, preklicani postanki) po pravilih `zapisi`:
+    nazaj z isto ali manjšo zamudo odpade, z večjo prekliče postanke od skoka
+    naprej, prvi zapis postanka je prihod in odhod, cilj (`zadnji`) oboje."""
+    st: dict[int, tuple[int, int]] = {}
+    preklicani: set[int] = set()
+    for k, v in zapisi:
+        if st and k < (m := max(st)):
+            if v <= st[m][1]:
+                continue
+            for q in [q for q in st if q >= k]:
+                del st[q]
+                preklicani.add(q)
+        st[k] = (v, v) if k not in st or k == zadnji else (st[k][0], v)
+    return st, preklicani
+
+
+def _skoki_nazaj(conn: sqlite3.Connection, dan: str) -> tuple[list[tuple], list[tuple]]:
+    """Kar je stara `zapisi` (88ec114 do preklica) pustila za skokom nazaj:
+    (prihodi [(trip_id, stop_seq, prihod)], brisani [(trip_id, stop_seq)]).
+
+    Zaporedje zapisov po objavi iz `obs` (`ZEMLJEVID_ZAMIK_S`); prvi zapis
+    postanka, ki v `obs` ni šel (enak zadnji vrstici, `worth_logging`), iz
+    `sz_zamuda.prvic_ts` z vrednostjo te vrstice. Samo postanki, ki jih je
+    pravilo preklicalo in se v `run` razlikujejo: ponovitev je idempotentna."""
+    dnevnik: dict[str, list[tuple]] = defaultdict(list)
+    for t, q, d, fts, oa in conn.execute(_DNEVNIK_ZEMLJEVIDA, (dan, dan)):
+        dnevnik[t].append((q, d, fts, oa))
+    prvic: dict[str, dict[int, int]] = defaultdict(dict)
+    for t, q, p in conn.execute("SELECT trip_id, stop_seq, prvic_ts FROM sz_zamuda "
+                                "WHERE service_date = ? AND prvic_ts >= ?", (dan, POPRAVI_DO_TS)):
+        prvic[t][q] = p
+    zadnji = dict(conn.execute("SELECT trip_id, last_seq FROM trip WHERE trip_id IN "
+                               "(SELECT trip_id FROM sz_zamuda WHERE service_date = ?)",
+                               (dan,)).fetchall())
+    v_run = {(t, q): a for t, q, a in conn.execute(
+        "SELECT trip_id, stop_seq, delay_arr FROM run WHERE service_date = ? AND trip_id IN "
+        "(SELECT trip_id FROM sz_zamuda WHERE service_date = ?)", (dan, dan))}
+    prihodi, brisani = [], []
+    for t, vrste in dnevnik.items():
+        zap = [(fts, q, d) for q, d, fts, oa in vrste
+               if oa >= POPRAVI_DO_TS and oa - fts < ZEMLJEVID_ZAMIK_S and d is not None]
+        for q, p in prvic.get(t, {}).items():
+            if not any(k == q and abs(fts - p) <= 1 for fts, k, _ in zap):
+                pred = [d for k, d, fts, _ in vrste if k == q and fts <= p and d is not None]
+                if pred:
+                    zap.append((p, q, pred[-1]))
+        stanje, preklicani = preklici_skoke([(q, d) for _, q, d in sorted(zap)], zadnji.get(t))
+        for q in sorted(preklicani):
+            if (t, q) not in v_run:
+                continue
+            if q not in stanje:
+                brisani.append((t, q))
+            elif v_run[(t, q)] is None or abs(v_run[(t, q)] - stanje[q][0]) >= POPRAVI_PRAG_S:
+                prihodi.append((t, q, stanje[q][0]))
+    return prihodi, brisani
+
+
 #: Od kdaj je `run.feed_ts` vlakov naš čas branja (zemljevid SŽ vodi od 10. 10.
 #: 2026). Prej je bil časovni žig derp.si, ki se ne premakne, dokler se vožnja
 #: ne spremeni: pravilo „napoved“ spodaj bi tam zadelo 158 508 od 211 301
@@ -843,6 +919,12 @@ def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool =
     `run` (v `obs` ostane). LPV 2206 6. 11. 2026: Zidani Most +15 iz 07:37:37,
     vlak je odpeljal +2; 10. 10.--6. 11. 297 takih vrstic, 32 na izhodišču.
 
+    **Skoki nazaj po objavi** (od `PREKLIC_OD`, `_skoki_nazaj`): zapisi
+    zemljevida dneva znova po pravilu `zapisi` -- nazaj z večjo zamudo
+    prekliče postanke od skoka naprej. Preklicani in znova doseženi dobi
+    prihod iz prvega zapisa po skoku, nikoli znova doseženi gre iz `run` in
+    `sz_zamuda` (v `obs` ostane). LPV 2401 7. 11. 2026: prihod 4--7 0 -> +9.
+
     Brez `zapisi` samo šteje. Po dnevih, vsak v svoji transakciji (kot
     `kajros prune`): dolg zapis ne zaklene zajema. Vrne števila po dnevih:
     postankov in voženj-dni.
@@ -850,7 +932,9 @@ def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool =
     dnevi = [r[0] for r in conn.execute(
         "SELECT DISTINCT service_date FROM run WHERE service_date >= ? ORDER BY 1", (od,))]
     izid: dict = {"dnevi": {}, "postankov": 0, "voznj": 0, "cilj_postankov": 0,
-                  "zastarelih": 0, "zastarelih_voznj": 0, "napovedi": 0, "zapisano": zapisi}
+                  "zastarelih": 0, "zastarelih_voznj": 0, "napovedi": 0,
+                  "preklic_prihodov": 0, "preklic_postankov": 0, "preklic_voznj": 0,
+                  "zapisano": zapisi}
     for dan in dnevi:
         pot = [(t, q, d) for t, q, a, d in conn.execute(
             _ZEMLJEVID_ODHOD, (dan, POPRAVI_DO_TS, POPRAVI_DO_TS)) if abs(a - d) >= POPRAVI_PRAG_S]
@@ -871,7 +955,8 @@ def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool =
         napovedi = (conn.execute(_NAPOVEDI, (dan, POPRAVI_DO_TS, int(stats.polnoc(dan)),
                                              NAPOVED_TOLERANCA_S)).fetchall()
                     if dan >= NAPOVED_OD else [])
-        if not pot and not cilj and not zastareli and not napovedi:
+        prihodi, brisani = _skoki_nazaj(conn, dan) if dan >= PREKLIC_OD else ([], [])
+        if not pot and not cilj and not zastareli and not napovedi and not prihodi and not brisani:
             continue
         if zapisi:
             with conn:
@@ -889,17 +974,28 @@ def popravi_vlake(conn: sqlite3.Connection, od: str = POPRAVI_OD, zapisi: bool =
                 conn.executemany(
                     "DELETE FROM run WHERE trip_id = ? AND service_date = ? AND stop_seq = ?",
                     [(t, dan, q) for t, q in napovedi])
+                conn.executemany(
+                    "UPDATE run SET delay_arr = ? WHERE trip_id = ? AND service_date = ? "
+                    "AND stop_seq = ?", [(a, t, dan, q) for t, q, a in prihodi])
+                for tabela in ("run", "sz_zamuda"):
+                    conn.executemany(
+                        f"DELETE FROM {tabela} WHERE trip_id = ? AND service_date = ? "
+                        "AND stop_seq = ?", [(t, dan, q) for t, q in brisani])
         voznje = {t for t, *_ in pot} | {t for t, _ in cilj}
         izid["dnevi"][dan] = {"postankov": len(pot), "cilj_postankov": len(cilj),
                               "voznj": len(voznje), "zastarelih": len(zastareli),
                               "zastarelih_voznj": len({t for t, *_ in zastareli}),
-                              "napovedi": len(napovedi)}
+                              "napovedi": len(napovedi),
+                              "preklic_prihodov": len(prihodi), "preklic_postankov": len(brisani),
+                              "preklic_voznj": len({t for t, *_ in prihodi} | {t for t, _ in brisani})}
         izid["postankov"] += len(pot)
         izid["cilj_postankov"] += len(cilj)
         izid["voznj"] += len(voznje)
         izid["zastarelih"] += len(zastareli)
         izid["zastarelih_voznj"] += len({t for t, *_ in zastareli})
         izid["napovedi"] += len(napovedi)
+        for k in ("preklic_prihodov", "preklic_postankov", "preklic_voznj"):
+            izid[k] += izid["dnevi"][dan][k]
     return izid
 
 

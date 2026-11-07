@@ -376,6 +376,54 @@ def test_skok_nazaj_z_vecjo_zamudo_preklice_neprevozene_postanke():
                      "AND delay_dep = 0 AND feed_ts > ?", (P_2401 + _ura(4, 0),)).fetchone()[0] == 3
 
 
+def test_popravi_vlake_preklice_skoke_nazaj_po_objavi(monkeypatch):
+    """Zgodovina od objave 88ec114 (6. 11. 2026 14.45) do popravka: LPV 2401
+    7. 11., kot je na arwenu (`obs`, `sz_zamuda`, `run` stare kode). Prihod
+    4--7 je 0 iz izmišljenega prvega zapisa, odhod +9 po skoku nazaj ob 04.47."""
+    c = _lpv2401()
+    for seq in range(1, 10):                    # derp.si ob 02.54, zamik 60 s
+        c.execute("INSERT INTO obs VALUES('t2401', ?, ?, 0, 0, ?, ?)",
+                  (DAN_2401, seq, P_2401 + _ura(2, 53), P_2401 + _ura(2, 54)))
+    prvic = {1: (4, 24, 19), 2: (4, 27, 16), 3: (4, 32, 16), 4: (4, 36, 16), 5: (4, 39, 16),
+             6: (4, 43, 16), 7: (4, 46, 16), 8: (4, 58, 16)}
+    for seq, (h, m, s) in prvic.items():
+        z = 540 if seq >= 4 else 0
+        c.execute("INSERT INTO sz_zamuda VALUES('t2401', ?, ?, ?, ?, ?, 1)",
+                  (DAN_2401, seq, z, P_2401 + _ura(h, m) + s, P_2401 + _ura(5, 0)))
+        c.execute("INSERT INTO run VALUES('t2401', ?, ?, ?, ?, ?)",
+                  (DAN_2401, seq, 540 if seq == 8 else 0, z, P_2401 + _ura(5, 0)))
+    # Zapisi zemljevida v dnevniku (zamik 1 s): osvežitve 0, skok, prvi zapis 8.
+    for seq, arr, dep, (h, m, s) in [
+            (1, None, 0, (4, 24, 31)), (2, None, 0, (4, 27, 31)), (3, None, 0, (4, 32, 31)),
+            (4, None, 0, (4, 36, 31)), (5, None, 0, (4, 39, 31)), (6, None, 0, (4, 43, 31)),
+            (7, None, 0, (4, 46, 31)), (4, None, 540, (4, 47, 16)), (5, None, 540, (4, 48, 16)),
+            (6, None, 540, (4, 52, 21)), (7, None, 540, (4, 55, 16)), (8, 540, 540, (4, 58, 16)),
+            (8, None, 540, (4, 58, 31))]:
+        ts = P_2401 + _ura(h, m) + s
+        c.execute("INSERT INTO obs VALUES('t2401', ?, ?, ?, ?, ?, ?)",
+                  (DAN_2401, seq, arr, dep, ts, ts + 1))
+    c.commit()
+    izid = zamude_sz.popravi_vlake(c, "2026-11-06")
+    assert (izid["preklic_prihodov"], izid["preklic_postankov"]) == (4, 0)
+    assert c.execute("SELECT COUNT(*) FROM run WHERE delay_arr = 540").fetchone()[0] == 1
+    zamude_sz.popravi_vlake(c, "2026-11-06", zapisi=True)
+    assert [tuple(r) for r in c.execute(
+        "SELECT stop_seq, delay_arr, delay_dep FROM run ORDER BY 1")] == [
+        (1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 540, 540), (5, 540, 540), (6, 540, 540),
+        (7, 540, 540), (8, 540, 540)]
+    assert zamude_sz.popravi_vlake(c, "2026-11-06")["preklic_prihodov"] == 0
+    # Kar je nova koda zapisala sama, se ponovi enako: nič za popravit.
+    c2 = _lpv2401()
+    ura = [0]                                   # zemljevid: observed_at = čas branja
+    monkeypatch.setattr(iz_lege.time, "time", lambda: ura[0])
+    for seq, zamuda, (h, m, s) in [(4, 0, (4, 36, 16)), (5, 0, (4, 39, 16)), (6, 0, (4, 43, 16)),
+                                   (4, 540, (4, 47, 16)), (5, 540, (4, 48, 16))]:
+        ura[0] = P_2401 + _ura(h, m) + s
+        zamude_sz.zapisi(c2, [("t2401", DAN_2401, seq, zamuda, False)], ura[0])
+    izid = zamude_sz.popravi_vlake(c2, "2026-11-06")
+    assert (izid["preklic_prihodov"], izid["preklic_postankov"]) == (0, 0)
+
+
 def test_zastarel_odgovor_ne_spremeni_vlaka():
     """Vzorec A, B, A (1.--6. 11. 2026 na 3 190 voženj-dneh: 10 689 ničel, 202
     višjih, 6 nižjih za en odgovor). LPV 2206 6. 11.: +15 namesto +2/+3, ob
@@ -858,7 +906,9 @@ def test_popravi_vlake_prihod_iz_zemljevida():
     izid = zamude_sz.popravi_vlake(c, "2026-09-01")
     assert (izid["postankov"], izid["cilj_postankov"], izid["voznj"]) == (1, 1, 1)
     assert izid["dnevi"][DAN] == {"postankov": 1, "cilj_postankov": 1, "voznj": 1,
-                                  "zastarelih": 0, "zastarelih_voznj": 0, "napovedi": 0}
+                                  "zastarelih": 0, "zastarelih_voznj": 0, "napovedi": 0,
+                                  "preklic_prihodov": 0, "preklic_postankov": 0,
+                                  "preklic_voznj": 0}
     assert c.execute("SELECT delay_arr FROM run WHERE trip_id = 't1' AND stop_seq = 20"
                      ).fetchone()[0] == 0, "brez --zapisi se ne spremeni nič"
     assert zamude_sz.popravi_vlake(c, "2026-09-16")["postankov"] == 0, "dnevi od --od"
