@@ -264,7 +264,8 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
       ko poteče stara zamuda, in skoči nazaj, ko SŽ zamudo poveča (RG 615 16.
       10. 2026: „naslednja Šentjur“ / „naslednja Celje“ izmenoma, +3, +5, +8).
       Nazaj z isto zamudo je nihanje in se ne zapiše; z večjo je zvišana
-      zamuda in velja (ko jo je potrdil še en odgovor). Do 16. 10. se ni
+      zamuda in velja (ko jo je potrdil še en odgovor), postanki za
+      njim pa niso bili prevoženi in gredo iz `run` (`preklicanih`). Do 16. 10. se ni
       zapisalo nobeno „nazaj“ (LPV 2616 10. 10.: „naslednja Ljubljana Tivoli,
       +9“ po odhodu iz Ljubljane s +0) -- in vlak, ki ga je SŽ najprej risal po
       voznem redu, je ostal točen: LPV 2907 16. 10. 10 min +0 namesto +7. Na
@@ -283,7 +284,7 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
     Na cilju sta prihod in odhod enaka.
     """
     ts = int(zdaj)
-    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0}
+    izid = {"zapisanih": 0, "nazaj": 0, "ponastavljenih": 0, "porocil": 0, "preklicanih": 0}
     for trip_id, dan, seq, zamuda, je_prihod in pripete:
         zadnji = conn.execute(
             "SELECT stop_seq, delay_s FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
@@ -296,6 +297,26 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         if zadnji and seq < zadnji[0] and zamuda <= zadnji[1]:
             izid["nazaj"] += 1
             continue
+        if zadnji and seq < zadnji[0]:
+            # Nazaj z večjo zamudo: postankov za `seq` vlak ni prevozil, SŽ ga
+            # je tja narisal po voznem redu ali z nižjo zamudo. Njihov prvi
+            # zapis je postal prihod in ga poznejši ne popravi, zato gredo iz
+            # `run` in `sz_zamuda` (tudi `seq`): naslednji zapis je spet prvi,
+            # prihod = odhod. `obs` ostane, zemljevid jih je res kazal.
+            # LPV 2401 7. 11. 2026: 4--7 po voznem redu 0 od 04.36 do 04.46, ob
+            # 04.47 nazaj na 4 s +9 -> prihod 0, odhod +9. Po objavi 88ec114 6.
+            # 11. tak skok pri 73 od 78 voženj-dni s kršitvijo, ura nazaj 54 od
+            # 242 (22,3 %); ponovitev s tem pravilom 5 (2,1 %), stal >= 10 min
+            # 46 -> 4, nikoli znova doseženi 3 od 4 039 postankov.
+            if not conn.in_transaction:
+                conn.execute("BEGIN IMMEDIATE")
+            izid["preklicanih"] += conn.execute(
+                "DELETE FROM run WHERE trip_id = ? AND service_date = ? AND stop_seq > ? "
+                "AND stop_seq IN (SELECT stop_seq FROM sz_zamuda WHERE trip_id = ? "
+                "                 AND service_date = ? AND stop_seq > ?)",
+                (trip_id, dan, seq, trip_id, dan, seq)).rowcount
+            conn.execute("DELETE FROM sz_zamuda WHERE trip_id = ? AND service_date = ? "
+                         "AND stop_seq >= ?", (trip_id, dan, seq))
         if je_prihod and zadnji:
             # Prihod je že zapisan, kadar je bil zadnja beseda SŽ o vlaku. Če
             # ga je SŽ potem spet pokazal pred ciljem (z večjo zamudo -- to
@@ -311,8 +332,13 @@ def zapisi(conn: sqlite3.Connection, pripete: list[tuple], zdaj: float) -> dict:
         prvi = conn.execute(
             "SELECT 1 FROM sz_zamuda WHERE trip_id = ? AND service_date = ? AND stop_seq = ?",
             (trip_id, dan, seq)).fetchone() is None
+        # Prvi zapis (prihod) gre v dnevnik vedno, tudi kadar je enak zadnji
+        # vrstici `obs`: brez tega dnevnik ne vidi prihoda ne skoka nazaj na
+        # postanek z isto vrednostjo, zgodovine iz njega ni mogoče ponoviti.
+        # LPV 2401 7. 11. 2026: derp.si ob 02.54 0/0 na vseh 17 postankih,
+        # prvi zapisi zemljevida 04.24--04.46 v `obs` niso šli.
         iz_lege.zapisi_meritev(conn, trip_id, dan, seq, zamuda if (je_prihod or prvi) else None,
-                               zamuda, ts, ohrani=True)
+                               zamuda, ts, ohrani=True, v_dnevnik=prvi)
         conn.execute(
             "INSERT INTO sz_zamuda(trip_id, service_date, stop_seq, delay_s, "
             "                      prvic_ts, zadnjic_ts, v_run) VALUES(?,?,?,?,?,?,1) "

@@ -232,7 +232,8 @@ def test_prvi_zapis_nastavi_prihod_in_odhod_naslednji_samo_odhod():
     c.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
               "VALUES('t1', ?, 20, 0, 0, ?)", (DAN, ZDAJ - 300))
     izid = zamude_sz.zapisi(c, [("t1", DAN, 20, 3000, False)], ZDAJ)
-    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1}
+    assert izid == {"zapisanih": 1, "nazaj": 0, "ponastavljenih": 0, "porocil": 1,
+                    "preklicanih": 0}
     assert c.execute("SELECT delay_arr, delay_dep, feed_ts FROM run WHERE stop_seq = 20"
                      ).fetchone()[:] == (3000, 3000, int(ZDAJ))
     assert c.execute("SELECT delay_arr, delay_dep FROM obs").fetchone()[:] == (3000, 3000)
@@ -261,13 +262,88 @@ def test_nazaj_z_vecjo_zamudo_je_zvisana_zamuda():
     postaje naprej), nato s +7 nazaj na izhodišču. Staro varovalo je +7
     zavračalo 10 min, prikaz je kazal točen vlak. Na 13 min zemljevida je bila
     prikazana zamuda za 3 min ali več prenizka 63-krat, s tem pravilom enkrat.
-    Starejša vrstica naprej ostane, a `last_measured` je ne šteje za prevoženo,
-    ker je novejša od nje na postanku pred njo."""
+    Vrstica naprej gre iz `run`: vlak tja ni prišel (7. 11. 2026: skok nazaj
+    z večjo zamudo pri 73 od 78 voženj-dni s kršitvijo)."""
     c = _baza()
     zamude_sz.zapisi(c, [("t1", DAN, 21, 0, False)], ZDAJ)
     assert zamude_sz.zapisi(c, [("t1", DAN, 20, 420, False)], ZDAJ + 30)["zapisanih"] == 1
     lm = stats.last_measured(c, DAN, ["t1"], int(ZDAJ + 30 - POLNOC))["t1"]
     assert (lm["stop_seq"], lm["delay_s"]) == (20, 420)
+
+
+DAN_2401 = "2026-11-07"
+P_2401 = stats.polnoc(DAN_2401)
+
+
+def _lpv2401():
+    """LPV 2401 Jesenice - Ljubljana 7. 11. 2026, prvih devet postankov (do Kranja)."""
+    c = db.connect(":memory:")
+    db.init(c)
+    postaje = [("Jesenice", 4, 24, 4, 24), ("Slovenski Javornik", 4, 27, 4, 28),
+               ("Žirovnica", 4, 32, 4, 33), ("Lesce-Bled", 4, 36, 4, 37),
+               ("Radovljica", 4, 39, 4, 40), ("Globoko", 4, 43, 4, 44),
+               ("Otoče", 4, 46, 4, 46), ("Podnart", 4, 49, 4, 50), ("Kranj", 4, 58, 4, 59)]
+    c.executemany("INSERT INTO station(stop_id, name, lat, lon) VALUES(?,?,46.3,14.1)",
+                  [(f"s{i}", ime) for i, (ime, *_) in enumerate(postaje, 1)])
+    c.execute("INSERT INTO trip(trip_id, route_id, train_no, service_id, mode, agency, network) "
+              "VALUES('t2401', 'r', 'LPV 2401', 's1', 'vlak', '1161', 'zeleznica')")
+    c.executemany("INSERT INTO sched(trip_id, stop_seq, stop_id, arr_s, dep_s) "
+                  "VALUES('t2401',?,?,?,?)",
+                  [(i, f"s{i}", _ura(ah, am), _ura(dh, dm))
+                   for i, (_, ah, am, dh, dm) in enumerate(postaje, 1)])
+    c.execute("INSERT INTO service_day(service_id, date) VALUES('s1', ?)", (DAN_2401,))
+    db.fill_trip_window(c)
+    c.commit()
+    return c
+
+
+def test_skok_nazaj_z_vecjo_zamudo_preklice_neprevozene_postanke():
+    """LPV 2401 7. 11. 2026 (arwen, `obs` in `sz_zamuda`): zemljevid je vlak od
+    04.36 do 04.46 risal po voznem redu (postanki 4--7, zamuda 0), ob 04.47 ga
+    je s +9 vrnil na postanek 4 in nato peljal po voznem redu + 9. Prvi zapis
+    postankov 5--7 je bil izmišljen, a je postal prihod 0, poznejši je popravil
+    le odhod: „stal 10 min“ na postankih po minuto in ura nazaj. Po objavi
+    88ec114 6. 11. je imelo tak skok 73 od 78 voženj-dni s kršitvijo.
+
+    Postanki za skokom niso bili prevoženi: iz `run` in `sz_zamuda` gredo,
+    naslednji zapis je spet prvi (prihod = odhod). Dnevnik ostane, kot je bilo,
+    in vidi vsak prvi zapis, tudi kadar je enak napovedi derp.si (ob 02.54 0/0
+    na vseh postankih)."""
+    c = _lpv2401()
+    for seq in range(1, 10):                    # napoved derp.si ponoči, samo v obs
+        c.execute("INSERT INTO obs VALUES('t2401', ?, ?, 0, 0, ?, ?)",
+                  (DAN_2401, seq, P_2401 + _ura(2, 53), P_2401 + _ura(2, 54)))
+    zaporedje = [(1, 0, (4, 24, 19)), (2, 0, (4, 27, 16)), (3, 0, (4, 32, 16)),
+                 (4, 0, (4, 36, 16)), (5, 0, (4, 39, 16)), (6, 0, (4, 43, 16)),
+                 (7, 0, (4, 46, 16)), (4, 540, (4, 47, 16)), (5, 540, (4, 48, 16)),
+                 (6, 540, (4, 52, 21)), (7, 540, (4, 55, 16)), (8, 540, (4, 58, 16))]
+    izidi = {}
+    for seq, zamuda, (h, m, s) in zaporedje:
+        izidi[(seq, zamuda)] = zamude_sz.zapisi(
+            c, [("t2401", DAN_2401, seq, zamuda, False)], P_2401 + _ura(h, m) + s)
+        if (seq, zamuda) == (4, 540):
+            # Ob skoku: 5--7 niso bili prevoženi, 4 ima prihod = odhod +9.
+            assert [tuple(r) for r in c.execute(
+                "SELECT stop_seq, delay_arr, delay_dep FROM run "
+                "WHERE stop_seq >= 4 ORDER BY 1").fetchall()] == [(4, 540, 540)]
+            assert [r[0] for r in c.execute(
+                "SELECT stop_seq FROM sz_zamuda ORDER BY 1")] == [1, 2, 3, 4]
+            lm = stats.last_measured(c, DAN_2401, ["t2401"],
+                                     _ura(4, 47) + 30)["t2401"]
+            assert (lm["stop_seq"], lm["delay_s"]) == (4, 540)
+    assert izidi[(4, 540)]["preklicanih"] == 3
+    assert [tuple(r) for r in c.execute(
+            "SELECT stop_seq, delay_arr, delay_dep FROM run ORDER BY 1")] == [
+        (1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 540, 540), (5, 540, 540), (6, 540, 540),
+        (7, 540, 540), (8, 540, 540)]
+    # Dnevnik: napoved derp.si, prvi zapis zemljevida (0, enak napovedi), skok.
+    assert [tuple(r) for r in c.execute(
+            "SELECT delay_arr, delay_dep, feed_ts - ? FROM obs WHERE stop_seq = 4 "
+            "ORDER BY feed_ts", (P_2401,))] == [
+        (0, 0, _ura(2, 53)), (0, 0, _ura(4, 36) + 16), (540, 540, _ura(4, 47) + 16)]
+    # Izmišljeni zapisi ostanejo v dnevniku: zemljevid jih je res kazal.
+    assert c.execute("SELECT COUNT(*) FROM obs WHERE stop_seq BETWEEN 5 AND 7 "
+                     "AND delay_dep = 0 AND feed_ts > ?", (P_2401 + _ura(4, 0),)).fetchone()[0] == 3
 
 
 def test_zastarel_odgovor_ne_spremeni_vlaka():

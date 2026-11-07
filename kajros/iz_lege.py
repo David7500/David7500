@@ -438,12 +438,14 @@ def zapisi_odklon(conn: sqlite3.Connection, kljuc: tuple[str, str],
 
 
 def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
-            arr: int | None, dep: int | None, ts: int, ohrani: bool = False) -> None:
+            arr: int | None, dep: int | None, ts: int, ohrani: bool = False,
+            v_dnevnik: bool = False) -> None:
     """Isto kot zapis iz feeda v `collector.ingest`, brez varoval za feedove
     napake (ničla, odpoklic prehoda) -- prehod iz lege je opažen, ne sporočen.
 
     Isto pot uporablja `zamude_sz`, ki pove eno samo od obeh zamud postanka
-    (odhod na poti, prihod na cilju); z `ohrani` druga v `run` ostane."""
+    (odhod na poti, prihod na cilju); z `ohrani` druga v `run` ostane.
+    `v_dnevnik`: v `obs` tudi brez spremembe (prvi zapis zemljevida)."""
     # Klicatelji (zanka prek `iz_feeda`, NAP, Marprom, Kranj, zemljevid SŽ,
     # zasloni LPP) vožnjo izberejo iz voznega reda PRED pisanjem. Uvoz medtem
     # piše: njihov zapis čaka do 30 s (busy), po potrditvi uvoza pa bi meritev
@@ -456,7 +458,7 @@ def zapisi_meritev(conn: sqlite3.Connection, trip_id: str, dan: str, seq: int,
     last = conn.execute(
         "SELECT delay_arr, delay_dep FROM obs WHERE trip_id=? AND service_date=? "
         "AND stop_seq=? ORDER BY feed_ts DESC LIMIT 1", (trip_id, dan, seq)).fetchone()
-    if collector.worth_logging(last, arr, dep):
+    if v_dnevnik or collector.worth_logging(last, arr, dep):
         conn.execute(
             "INSERT OR IGNORE INTO obs"
             "(trip_id,service_date,stop_seq,delay_arr,delay_dep,feed_ts,observed_at) "
