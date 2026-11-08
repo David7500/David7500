@@ -377,16 +377,31 @@ def test_senca_pripne_vožnjo_ki_je_naš_koledar_na_praznik_nima():
     vozi po njeni trasi ob njeni uri -> senca jo pripne na današnji dan. V
     `vehicle_now`, `run`, `obs` nič."""
     c = _baza_senca(dan_t1="2026-10-09")
-    t1, t2 = POLNOC + 16 * 3600 + 180, POLNOC + 16 * 3600 + 720
-    nap.korak(c, _odgovor(_va("v1", 3001, t1, lat=46.0, lon=14.03), odgovor=t1), t1)
+    t1, t2 = POLNOC + 16 * 3600 + 480, POLNOC + 16 * 3600 + 720
+    nap.korak(c, _odgovor(_va("v1", 3001, t1, lat=46.0, lon=14.08), odgovor=t1), t1)
     st = nap.korak(c, _odgovor(_va("v1", 3001, t2, lat=46.0, lon=14.12), odgovor=t2), t2)
     vrste = _senca(c)
-    assert [r[6] for r in vrste] == ["miruje", ""]      # napredek rabi dve opazovanji
+    # Napredek rabi dve opazovanji, vrata smeri premik naprej od 2-5 min nazaj.
+    assert [r[6] for r in vrste] == ["miruje", ""]
     assert vrste[1][2:6] == ("brez_dneva", "3001", "3001", DAN)
     assert abs(vrste[1][7]) < 30
     assert st["senca"]["par"] == 1 and st["senca"]["racunov"] == 2
     for tabela in ("vehicle_now", "run", "obs"):
         assert c.execute(f"SELECT COUNT(*) FROM {tabela}").fetchone()[0] == 0
+
+
+def test_senca_vozilo_ki_se_obrne_vrata_smeri_izpustijo():
+    """Vozilo pripelje čez B in se počasi vrača proti A: kraj na 3001 pada
+    11 s na minuto, pod `NAZAJ_S`, napredek pa ostane (naslednji postanek se
+    je na varianti že spremenil). Brez vrat smeri bi ostalo na 3001."""
+    c = _baza_senca(dan_t1="2026-10-09")
+    t0 = POLNOC + 16 * 3600 + 480
+    lege = [(t0, 14.08), (t0 + 180, 14.11)] + [(t0 + 180 + 60 * k, 14.11 - 0.003 * k)
+                                               for k in range(1, 5)]
+    for ts, lon in lege:
+        nap.korak(c, _odgovor(_va("v1", 3001, ts, lat=46.0, lon=lon), odgovor=ts), ts)
+    assert [r[6] for r in _senca(c)] == ["miruje", "", "", "", "smer", "smer"]
+    assert nap.senca.stevci["smer"] == 2
 
 
 def test_senca_vozilo_ki_nap_javi_naslednjo_drži_na_prejšnji_v_verigi():

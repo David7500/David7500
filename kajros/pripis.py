@@ -40,6 +40,17 @@ TEKMEC_S = (-240, 1800)
 #: ponovitvi sence (`lega`, 10-13 h) 500 m: 7 335 parov, 1 000 m: 7 536,
 #: 2 500 m: 7 776 in 915 `vec`; napačna pri vseh dva, na meji med vožnjama.
 ODMIK_M = 1000
+#: Vrata smeri: vožnja pride v poštev šele, ko se je vozilo po njej
+#: premaknilo naprej -- kraj na njej (`na_voznji`, voznoredni čas) se je od
+#: opazovanja vsaj `SMER_NAJMANJ_S` in največ `SMER_S` nazaj premaknil naprej
+#: za vsaj `SMER_DELEZ` pretečenega časa. Tetiva smeri ne pozna: vozilo na
+#: povratni vožnji po isti cesti je blizu obeh smeri. 1.-7. 11. 2026 je bilo
+#: v senci NAP 35 od 40 izpisanih napačnih parov vozilo, ki je peljalo proti
+#: naši vožnji (kraj -61 ... -314 s), en račun na minuto pa ga z `NAZAJ_S` ni
+#: ujel, ker je kraj padal počasi ali je kandidatka šele prišla v okno.
+SMER_S = 300
+SMER_NAJMANJ_S = 120
+SMER_DELEZ = 0.3
 
 
 @dataclass(frozen=True)
@@ -54,7 +65,7 @@ class Voznja:
 @dataclass(frozen=True)
 class Predlog:
     voznja: Voznja | None
-    #: "" kadar je par; sicer zakaj ne: `miruje`, `ni_prosta`, `vec`.
+    #: "" kadar je par; sicer zakaj ne: `miruje`, `ni_prosta`, `vec`, `smer`.
     razlog: str = ""
 
 
@@ -91,10 +102,14 @@ def kandidati(idx: dict[tuple[str, str], list[Voznja]], kljuc: str,
 
 def predlagaj(kandidati: list[Voznja], zdaj: float, zasedene: set[tuple[str, str]],
               napreduje: bool = True, okno: tuple[int, int] = OKNO_S,
-              tekmec: tuple[int, int] = TEKMEC_S) -> Predlog:
+              tekmec: tuple[int, int] = TEKMEC_S,
+              naprej: set[tuple[str, str]] | None = None) -> Predlog:
     """Vožnje iste variante na naslednjem postajališču vozila -> par ali nič.
 
     `zasedene` = (trip_id, dan), ki jih drugo vozilo ima ali jih je že odpeljalo.
+    `naprej` = (trip_id, dan), po katerih vozilo dokazano pelje naprej (vrata
+    smeri, `naprej()`); par je lahko samo taka, sicer `smer`. Tekmice ostanejo
+    vse: vrata par le odvzamejo, nikoli ne dodajo.
     """
     if not napreduje:
         return Predlog(None, "miruje")
@@ -104,6 +119,8 @@ def predlagaj(kandidati: list[Voznja], zdaj: float, zasedene: set[tuple[str, str
         return Predlog(None, "ni_prosta")
     if sum(tekmec[0] <= zdaj - k.cas <= tekmec[1] for k in proste) > 1:
         return Predlog(None, "vec")
+    if naprej is not None and (v_oknu[0].trip_id, v_oknu[0].dan) not in naprej:
+        return Predlog(None, "smer")
     return Predlog(v_oknu[0])
 
 
@@ -128,6 +145,22 @@ def na_voznji(postanki: list[tuple], lat: float, lon: float, zdaj_s: float,
         if d <= odmik_m and (naj is None or abs(zdaj_s - t) < abs(zdaj_s - naj[0])):
             naj = (t, seq)
     return naj
+
+
+def naprej(zgodovina: list[tuple[float, float]], zdaj: float, kraj: float,
+           najmanj_s: float = SMER_NAJMANJ_S, najvec_s: float = SMER_S,
+           delez: float = SMER_DELEZ) -> bool:
+    """Ali vozilo po vožnji pelje naprej (vrata smeri).
+
+    `zgodovina` = [(ts, kraj)] prejšnjih opazovanj vozila na tej vožnji po
+    vrsti, `kraj` = voznoredni čas kraja zdaj (`na_voznji`). Primerja se z
+    najstarejšim opazovanjem v oknu: brez njega dokaza ni (prvi dve minuti na
+    novi kandidatki), vozilo, ki stoji ali pelje nasproti, ne gre skozi.
+    """
+    for ts, k in zgodovina:
+        if najmanj_s <= zdaj - ts <= najvec_s:
+            return kraj - k >= delez * (zdaj - ts)
+    return False
 
 
 def indeks(conn: sqlite3.Connection, zdaj: float,

@@ -87,3 +87,27 @@ def test_na_voznji_čas_po_razdalji_in_v_zanki_bližji_čas():
     t, seq = pripis.na_voznji(postanki, 46.0, 14.03, 1000)
     assert seq == 3 and abs(t - 1020) < 5
     assert pripis.na_voznji(postanki, 46.05, 14.03, 200) is None     # 5,6 km od tetive
+
+
+def test_vrata_smeri_rabijo_premik_naprej_od_opazovanja_dve_do_pet_minut_nazaj():
+    zdaj = 10_000.0
+    assert pripis.naprej([], zdaj, 500) is False, "brez zgodovine ni dokaza"
+    assert pripis.naprej([(zdaj - 60, 440)], zdaj, 500) is False, "minuta je premalo"
+    assert pripis.naprej([(zdaj - 180, 320)], zdaj, 500) is True
+    # Stoji ali pelje nasproti (kraj pada): ne.
+    assert pripis.naprej([(zdaj - 180, 495)], zdaj, 500) is False
+    assert pripis.naprej([(zdaj - 180, 560)], zdaj, 500) is False
+    # Starejše od pet minut ne šteje; velja najstarejše v oknu.
+    assert pripis.naprej([(zdaj - 400, 0), (zdaj - 240, 560), (zdaj - 120, 400)], zdaj, 500) is False
+    assert pripis.naprej([(zdaj - 400, 900), (zdaj - 240, 300)], zdaj, 500) is True
+
+
+def test_par_samo_po_vozni_po_kateri_vozilo_pelje_naprej():
+    kand = [_v("T1", -3), _v("T2", 40)]
+    p = predlagaj(kand, ZDAJ, set(), naprej=set())
+    assert p.voznja is None and p.razlog == "smer"
+    p = predlagaj(kand, ZDAJ, set(), naprej={("T1", "2026-10-30")})
+    assert p.voznja.trip_id == "T1"
+    # Vrata para ne dodajo: tekmica ostane tekmica, tudi če po njej ne pelje.
+    p = predlagaj([_v("T1", -3), _v("T2", -9)], ZDAJ, set(), naprej={("T1", "2026-10-30")})
+    assert p.razlog == "vec"

@@ -606,6 +606,7 @@ function podrobnostiVira(kljuc, d) {
       dodaj("senca pripisa · danes", `${st(ps.racunov)} računov · par ${st(ps.par)}`
         + ` · brez kandidata ${st(ps.brez_kandidata)} · miruje ${st(ps.miruje)}`
         + ` · ni proste ${st(ps.ni_prosta)} · več ${st(ps.vec)}`
+        + (ps.smer != null ? ` · ne naprej ${st(ps.smer)}` : "")
         + (ps.racunov ? ` · ${st(ps.ms_vsota / ps.racunov, 1)} ms/vozilo` : "")
         + (ps.napak ? ` · napak ${st(ps.napak)}: ${ps.napaka}` : ""));
     } else if (ps && ps.napaka) {

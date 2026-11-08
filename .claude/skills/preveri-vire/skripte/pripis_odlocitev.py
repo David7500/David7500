@@ -6,8 +6,16 @@ Vsak par dobi natanko eno oznako; vsote se preverijo. Ocena velja za senco z vra
 produkciji ni, zato pravilo ne more trditi „brez napačnih“, samo zgornjo mejo iz velikosti vzorca.
 
 Argumenti: DAN ali OD..DO (skupen vzorec) [--baza POT] [--od URA] [--do URA] [--seznam N]
+[--smer] [--koda POT]
 Zagon (samo branje, na stroju ne ostane nič):
   ssh david@192.168.1.46 '/opt/kajros/.venv/bin/python -I - 2026-11-01' < pripis_odlocitev.py
+
+`--smer` (od 8. 11. 2026): vrata smeri kot `nap.Senca` -- vrstica gre skozi vrata, kadar
+`pripis.naprej` potrdi premik naprej po naši vožnji iz leg istega vozila 2-5 min prej
+(`pripis.na_voznji` na teh legah, samo kjer bi bila vožnja v oknu sence). Koda iz `--koda`
+(privzeto /opt/kajros; za neobjavljeno kodo kopija paketa `kajros`). Doda drugo merilo,
+neodvisno od preteklih leg: pot vozila v naslednjih 15 min po prvi vrstici skozi vrata
+(`pot` spodaj).
 """
 import argparse
 import collections
@@ -27,6 +35,10 @@ ap.add_argument("--od", type=float, default=0.0, help="samo vrstice od te ure (l
 ap.add_argument("--do", type=float, default=24.0)
 ap.add_argument("--seznam", type=int, default=40)
 ap.add_argument("--stoji-m", type=float, default=150.0)
+ap.add_argument("--smer", action="store_true", help="vrata smeri (pripis.naprej) in drugo merilo")
+ap.add_argument("--koda", default="/opt/kajros", help="imenik s paketom kajros za --smer")
+ap.add_argument("--konec", type=float, default=None,
+                help="z --smer: vrstica s krajem v zadnjih KONEC s vožnje ne gre skozi vrata (poskus)")
 a = ap.parse_args()
 dan_od, dan_do = (a.dan.split("..") + [a.dan])[:2]
 conn = sqlite3.connect(f"file:{a.baza}?mode=ro", uri=True)
@@ -129,6 +141,88 @@ def premik(r):
     return naj
 
 
+if a.smer:
+    import sys
+    sys.path.insert(0, a.koda)
+    from kajros import pripis as P  # noqa: E402
+    from kajros import stats as S  # noqa: E402
+
+    @functools.lru_cache(maxsize=None)
+    def postanki(t):
+        return conn.execute("SELECT s.stop_seq, st.lat, st.lon, COALESCE(s.dep_s, s.arr_s) FROM sched s "
+                            "JOIN station st USING (stop_id) WHERE s.trip_id = ? ORDER BY s.stop_seq",
+                            (t,)).fetchall()
+
+    @functools.lru_cache(maxsize=None)
+    def polnoc(d):
+        return S.polnoc(d)
+
+    def kraj(r, t, d):
+        """Voznoredni čas kraja vozila na vožnji (t, d), kot ga računa senca, ali None, kadar
+        vožnja ob r.ts ne bi bila kandidatka (zunaj okna sence) ali je vozilo dlje od tetive."""
+        x = T.get(t)
+        if not x or x[1] is None or x[2] is None:
+            return None
+        p0 = polnoc(d)
+        if not p0 + x[1] + P.OKNO_S[0] <= r.ts <= p0 + x[2] + P.TEKMEC_S[1]:
+            return None
+        naj = P.na_voznji(postanki(t), r.lat, r.lon, r.ts - p0)
+        return None if naj is None else naj[0]
+
+    def smer_ok(r):
+        """`nap.Senca`: zgodovina (ts, kraj) iz računov v zadnjih SMER_S, nato `pripis.naprej`."""
+        vs, i = po_vozilu[r.voz], kje[(r.ts, r.voz)]
+        zgo = []
+        j = i - 1
+        while j >= 0 and r.ts - vs[j].ts <= P.SMER_S:
+            k = kraj(vs[j], r.nasa, r.nd)
+            if k is not None:
+                zgo.append((vs[j].ts, k))
+            j -= 1
+        zgo.reverse()
+        k = kraj(r, r.nasa, r.nd)
+        if k is not None and a.konec is not None and k >= T[r.nasa][2] - a.konec:
+            return False
+        return k is not None and P.naprej(zgo, r.ts, k)
+
+    def pot(n):
+        """Drugo merilo, neodvisno od leg pred parom: vozilo v naslednjih POT_S po prvi vrstici
+        skozi vrata. Ob vsaki svoji vrstici (tudi brez para) mora biti na naši vožnji s
+        podobno zamudo kot ob prvi (POT_ZAMUDA_S), kraj ne sme pasti za več kot POT_NAZAJ_S.
+        `po poti` = vsaj POT_VRSTIC takih; `NAROBE po poti` = kraj pade ali vozilo zapusti
+        vožnjo (tri zapored brez kraja) pred koncem; sicer `premalo leg`."""
+        v0 = n["vrata"][0]
+        x = T.get(n["nasa"])
+        p0 = polnoc(n["nd"])
+        konec = p0 + x[2] + v0.zam if x and x[2] is not None and v0.zam is not None else v0.ts + POT_S
+        k0 = kraj(v0, n["nasa"], n["nd"])
+        if k0 is None or v0.zam is None:
+            return "premalo leg"
+        dobrih, brez, naj_kraj = 0, 0, k0
+        for r in po_vozilu[n["voz"]][kje[(v0.ts, v0.voz)] + 1:]:
+            if r.ts - v0.ts > POT_S or r.ts > konec:
+                break
+            k = kraj(r, n["nasa"], n["nd"])
+            if k is None:
+                if naj_kraj >= x[2] - POT_NAZAJ_S:
+                    break                       # na cilju: vožnja končana, vozilo gre naprej
+                brez += 1
+                if brez >= 3:
+                    return "NAROBE po poti: zapusti vožnjo"
+                continue
+            brez = 0
+            naj_kraj = max(naj_kraj, k)
+            if k < naj_kraj - POT_NAZAJ_S:
+                return "NAROBE po poti: kraj pade"
+            if abs((r.ts - p0 - k) - v0.zam) <= POT_ZAMUDA_S:
+                dobrih += 1
+        return "po poti" if dobrih >= POT_VRSTIC else "premalo leg"
+
+
+#: Drugo merilo (`pot`): 15 min po prvi vrstici skozi vrata, zamuda v 5 min od prve,
+#: kraj ne pade za več kot 2 min, vsaj pet vrstic (računi so na minuto).
+POT_S, POT_ZAMUDA_S, POT_NAZAJ_S, POT_VRSTIC = 900, 300, 120, 5
+
 izbrane = [r for r in vrst if v_oknu(r.ts)]
 pari = {}
 for r in izbrane:
@@ -144,7 +238,7 @@ def oznaci(n):
     n["md"] = max(razd(okol[0].lat, okol[0].lon, r.lat, r.lon) for r in okol)
     stoji = n["md"] < a.stoji_m and okol[-1].ts - okol[0].ts >= 120
     n["kraj"] = 0 if any(r.zam is None for r in vs) else (t2 - vs[-1].zam) - (t1 - vs[0].zam)
-    vv = n["vrata"] = [r for r in vs if premik(r) >= PREMIK_M]
+    vv = n["vrata"] = [r for r in vs if premik(r) >= PREMIK_M and (not a.smer or smer_ok(r))]
     dt = vv[-1].ts - vv[0].ts if vv else 0
     dk = (vv[-1].ts - (vv[-1].zam or 0)) - (vv[0].ts - (vv[0].zam or 0)) if vv else 0
     # Vrstice brez vozila (NULL) se ne štejejo kot drugo vozilo: lahko je isto vozilo iz drugega vira.
@@ -193,6 +287,7 @@ def oznaci(n):
 ozn = collections.Counter()
 for n in pari:
     n["o"] = oznaci(n)
+    n["pot"] = pot(n) if a.smer and n["vrata"] else ""
     n["obseg"] = any(r.vzrok in OBSEG for r in n["vr"])
     k = ("obseg" if n["obseg"] else "zunaj", n["o"])
     ozn[k + ("parov",)] += 1
@@ -241,10 +336,18 @@ for voz, t, d in {(r.voz, r.nap, r.dan) for r in izbrane if r.vzrok == "brez_dne
         vz["koledar nima, dvojček na koledarju" if dvojcki(t, d) else "koledar nima, brez dvojčka"] += 1
 print("brez_dneva, (vozilo, NAP-ova vožnja):", dict(sorted(vz.items())))
 print("lege brez vozila na parih v obsegu:", sum(bool(n["brez_vozila"]) for n in vsi))
+if a.smer:
+    pt = collections.Counter((n["pot"], "NAROBE" if n["o"].startswith("NAROBE") else
+                              "NEPOTRJEN" if n["o"].startswith("NEPOTRJEN") else "drugo") for n in ocena)
+    print("drugo merilo (pot 15 min), pari skozi vrata po (pot, oznaka):",
+          {f"{k[0]} · {k[1]}": v for k, v in sorted(pt.items())})
 if ocena:
     print(f"zgornja meja 95 %, če je napačnih 0: {100 * 3 / len(ocena):.1f} % parov")
+nar_pot = [n for n in ocena if n.get("pot", "").startswith("NAROBE")]
 if nar:
     izid = f"NE: {len(nar)} dokazano napačnih parov v obsegu; preglej vsakega, senca do 7. 11."
+elif nar_pot:
+    izid = f"NE: {len(nar_pot)} parov napačnih po drugem merilu (pot); preglej vsakega"
 elif len(ocena) < MIN_PAROV or vozil < MIN_VOZIL:
     izid = (f"NE DANES: {len(ocena)} parov z {vozil} vozil (rabimo >= {MIN_PAROV} z >= {MIN_VOZIL}); senca do 7. 11., "
             f"nato skupen vzorec {dan_od}..2026-11-07")
@@ -264,10 +367,11 @@ def izpisi(naslov, seznam):
         v0 = n["vr"][0]
         print(f"  {n['voz']:10} {ura(v0.ts)}-{ura(n['vr'][-1].ts)} {v0.vzrok:12} vrstic {len(n['vr']):3} vrata {len(n['vrata']):3} "
               f"premik {round(n['md']):5} m kraj {round(n['kraj']):+5} s · NAP {oknos(v0.nap)} · naša {oknos(n['nasa'])} · "
-              f"derp {v0.derp!r} · {n['o']} · {v0.lat:.5f},{v0.lon:.5f}")
+              f"derp {v0.derp!r} · {n['o']}{' · ' + n['pot'] if n.get('pot') else ''} · {v0.lat:.5f},{v0.lon:.5f}")
 
 
 izpisi("NAPAČNI v obsegu", nar)
+izpisi("NAPAČNI po drugem merilu (pot)", nar_pot)
 izpisi("MEJA v obsegu", meja)
 izpisi("NEPOTRJENI v obsegu", nep)
 izpisi("MIMO KOLEDARJA v obsegu", mimo)

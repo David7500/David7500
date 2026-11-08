@@ -351,8 +351,9 @@ class Senca:
         self.videne: dict[tuple[str, str], tuple[str, float]] = {}
         #: vozilo -> (vožnja, dan) para v senci
         self.par: dict[str, tuple[str, str]] = {}
-        #: vozilo -> {(vožnja, dan): voznoredni čas kraja} prejšnjega računa
-        self.kraj: dict[str, dict[tuple[str, str], float]] = {}
+        #: vozilo -> {(vožnja, dan): [(ts, voznoredni čas kraja)]} računov v
+        #: zadnjih `pripis.SMER_S`: `NAZAJ_S` gleda zadnjega, vrata smeri vse
+        self.kraj: dict[str, dict[tuple[str, str], list[tuple[float, float]]]] = {}
         self.stevci: dict = {}
         self.obrezano = 0.0
 
@@ -373,7 +374,7 @@ class Senca:
         dan = straza._dan(zdaj)
         if self.stevci.get("dan") != dan:
             self.stevci = {"dan": dan, "racunov": 0, "par": 0, "brez_kandidata": 0,
-                           "miruje": 0, "ni_prosta": 0, "vec": 0, "napak": 0,
+                           "miruje": 0, "ni_prosta": 0, "vec": 0, "smer": 0, "napak": 0,
                            "ms_vsota": 0.0, "ms_najvec": 0.0}
         st = self.stevci
         for v, tid, vzrok in za_senco:
@@ -414,8 +415,9 @@ class Senca:
         danes = datetime.fromtimestamp(zdaj, TZ).date()
         datumi = [(danes - timedelta(days=1)).isoformat(), danes.isoformat()]
         prejsnji = self.kraj.get(vozilo, {})
-        kraj: dict[tuple[str, str], float] = {}
+        kraj: dict[tuple[str, str], list[tuple[float, float]]] = {}
         kand: list[tuple[pripis.Voznja, str]] = []
+        naprej: set[tuple[str, str]] = set()
         for c, varianta in _sosede(conn, [t for t in (tid, zadnja and zadnja[0]) if t in okna]).items():
             if c not in okna:
                 continue
@@ -430,9 +432,12 @@ class Senca:
                 naj = pripis.na_voznji(_postanki(conn, c), v["lat"], v["lon"], zdaj - polnoc)
                 if naj is None:
                     continue
-                kraj[(c, d)] = naj[0]
-                if naj[0] < prejsnji.get((c, d), naj[0]) - NAZAJ_S:
+                zgo = [x for x in prejsnji.get((c, d), ()) if zdaj - x[0] <= pripis.SMER_S]
+                kraj[(c, d)] = zgo + [(zdaj, naj[0])]
+                if zgo and naj[0] < zgo[-1][1] - NAZAJ_S:
                     continue
+                if pripis.naprej(zgo, zdaj, naj[0]):
+                    naprej.add((c, d))
                 kand.append((pripis.Voznja(c, d, naj[1], polnoc + naj[0]), varianta))
         self.kraj[vozilo] = kraj
         # Svoje vožnje vozilo ne zaseda samo sebi (kot `scripts/pripis_senca.py`):
@@ -443,7 +448,8 @@ class Senca:
         if kand:
             naj, varianta = min(kand, key=lambda x: abs(zdaj - x[0].cas))
             gre = self.napredek.opazi(vozilo, varianta, str(naj.seq))
-            predlog = pripis.predlagaj([k for k, _ in kand], zdaj, zasedene, gre)
+            predlog = pripis.predlagaj([k for k, _ in kand], zdaj, zasedene, gre,
+                                       naprej=naprej)
         else:
             predlog = pripis.Predlog(None, "brez_kandidata")
         par = predlog.voznja

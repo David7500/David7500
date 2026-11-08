@@ -626,7 +626,8 @@ CREATE TABLE IF NOT EXISTS straza_opazeno (
 -- mu jo dal `pripis.predlagaj` iz lege, ure in voznega reda. Samo merjenje:
 -- v `run`, `obs`, `vehicle_now` nič. `ts` = čas računa (največ enkrat na
 -- minuto na vozilo), `dan` = prometni dan od 3:00 kot `straza_opazeno`.
--- `razlog` '' = par, sicer `brez_kandidata`, `miruje`, `ni_prosta`, `vec`.
+-- `razlog` '' = par, sicer `brez_kandidata`, `miruje`, `ni_prosta`, `vec`,
+-- `smer` (od 8. 11. 2026: edina prosta, a vozilo po njej ne pelje naprej).
 -- `derp_voznja` = derp.si ob istem branju (NULL ni svež, '' vozila nima):
 -- primerjava, ne vir. 14 dni.
 CREATE TABLE IF NOT EXISTS pripis_senca (
