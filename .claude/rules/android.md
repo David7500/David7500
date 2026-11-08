@@ -15,7 +15,7 @@ Nativni ovoj z WebView na `kajros.app`. Vmesnik **en sam — spletni**; nativno 
 | GeckoView | most do JS moreč; `addJavascriptInterface` = ena vrstica |
 | service worker | „nič ne pokaže“ → nedosegljiv strežnik pokrije **nativni zaslon napake**. Izjema od 2. 10. 2026: strani orodne vrstice iz predpomnilnika, ob 5xx Cloudflara lupina brez podatkov |
 
-Razdeljevanje **s strani** `kajros.app/android`, brez trgovine.
+Razdeljevanje **s strani** `kajros.app/android`; od novembra 2026 tudi **Play** (spodaj).
 
 ## Meja zaupanja = `Nastavitve.izvor()`
 
@@ -30,6 +30,8 @@ WebView si dovoljenje zapomni sam (`AwGeolocationPermissions … = true`), siste
 * Most ≤ 6: stran lege ne prižge sama, kartice ni.
 
 ## Razdeljevanje (12. 9. 2026)
+
+**8. 11. 2026, David: aplikacija gre v Play**, stran ostane drugi kanal. Gradnja za Play: `targetSdk` 36, AAB, brez samoposodobitve, `REQUEST_INSTALL_PACKAGES` in `USE_EXACT_ALARM`; podpisni ključ = obstoječi, naložen pred prvim nalaganjem (sicer namestitve s strani nikoli ne dobijo posodobitve iz Playa). Vse ovire z viri: `docs/presoja/2026-11-08-nativna/NACRT.md`, faza 0.
 
 | trgovina | ovira |
 |---|---|

@@ -200,6 +200,6 @@ Stanje (koliko zajetega, poraba, hitrost) = [docs/MERITVE.md](docs/MERITVE.md). 
 
 * **Vrat na usmerjevalniku ne odpiraj**: `kajros.app` gre prek imenovanega Cloudflarovega tunela z arwena (`objava.md`).
 * Ločen model napovedi za avtobuse, ko bo meritev dovolj.
-* **Koda zaprta** (3. 9. 2026): zasebni repozitorij, brez licence = vse pravice pridržane. **Endpointi odprti** — API sme brati vsak. Podatki CC BY-SA 4.0, navedba vira = pogoj rabe; `seed/kajros.sqlite` je izpeljanka. Zato Android ni v F-Droid/IzzyOnDroid (prosta licenca) ne v Play (25 $, 12 preizkuševalcev): razdeljuje se **s strani** (`/android`, `android.md`).
+* **Koda zaprta** (3. 9. 2026): zasebni repozitorij, brez licence = vse pravice pridržane. **Endpointi odprti** — API sme brati vsak. Podatki CC BY-SA 4.0, navedba vira = pogoj rabe; `seed/kajros.sqlite` je izpeljanka. Zato Android ni v F-Droid/IzzyOnDroid (prosta licenca). **V Play gre od novembra 2026** (David 8. 11.), stran (`/android`, `android.md`) ostane drugi kanal; ovire in načrt nativne aplikacije: `docs/presoja/2026-11-08-nativna/NACRT.md`.
 * **Iskalniki in AI: koraki z Davidovo prijavo** (Search Console, Bing, Cloudflare, objave) v `docs/ISKALNIKI-NALOGE.md`.
 * **Delovni imenik še `sztrack`.** Preimenovanje prekine tekočo sejo in poti; ločeno: `mv ~/Dokumenti/Projekti/{sztrack,kajros}`.
