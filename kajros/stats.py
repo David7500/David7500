@@ -836,11 +836,19 @@ def opis_zamude(v: int | None, vrsta: str | None = None) -> dict | None:
 
 MAX_REALNA_ZAMUDA_S = 3 * 3600
 
-LAST_STOP_SQL = f"""
+#: Omrežje v `mx` je zapisano po omrežju (koledar 8. 11. 2026, kopija arwena
+#: brez `sqlite_stat1` kot produkcija, `network_stats` 90 dni, vrstice enake):
+#: železnica golo -- začne pri indeksu `trip_network` (791 voženj), 24,4 ->
+#: 1,4 s; avtobusi `+t.network` -- pregled `run` po ključu, ker je skok v `run`
+#: za vsako od 167 639 voženj dražji (golo 40,3 -> 51,0 s). Prej je
+#: `(:network IS NULL OR ...)` obema dal pregled `run`.
+_LAST_STOP_OMREZJE = {"zeleznica": "t.network = :network",
+                      "avtobus": "+t.network = :network"}
+LAST_STOP_SQL = {omrezje: f"""
 WITH mx AS (
     SELECT r.trip_id, r.service_date, MAX(r.stop_seq) AS stop_seq
     FROM trip t JOIN run r ON r.trip_id = t.trip_id
-    WHERE (:network IS NULL OR t.network = :network) AND r.service_date >= :since
+    WHERE {pogoj} AND r.service_date >= :since
     GROUP BY r.trip_id, r.service_date
 ),
 last AS (
@@ -852,7 +860,7 @@ last AS (
     WHERE COALESCE(r.delay_dep, r.delay_arr) IS NOT NULL
       AND ABS(COALESCE(r.delay_dep, r.delay_arr)) <= {MAX_REALNA_ZAMUDA_S}
 )
-"""
+""" for omrezje, pogoj in _LAST_STOP_OMREZJE.items()}
 
 
 # Koliko zajetih voznj mora imeti vozjna, da sme na lestvico.
@@ -860,10 +868,10 @@ MIN_RUNS_FOR_RANK = 5
 
 
 def network_stats(conn: sqlite3.Connection, days: int = 90,
-                  network: str | None = "zeleznica") -> list[dict]:
+                  network: str = "zeleznica") -> list[dict]:
     """Lestvica voženj po zamudi na koncu poti."""
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
-    rows = conn.execute(LAST_STOP_SQL + "SELECT t.train_no, l.service_date, l.d "
+    rows = conn.execute(LAST_STOP_SQL[network] + "SELECT t.train_no, l.service_date, l.d "
                         "FROM last l JOIN trip t USING (trip_id)",
                         {"network": network, "since": since}).fetchall()
     grouped: dict[str, list[int]] = {}
@@ -1083,7 +1091,7 @@ MIN_RUNS_FOR_GROUP = 10
 
 
 def breakdowns(conn: sqlite3.Connection, days: int = 90,
-               network: str | None = "zeleznica") -> dict:
+               network: str = "zeleznica") -> dict:
     """Končne zamude, razrezane po vrsti vlaka, uri odhoda in dnevu v tednu.
 
     Enota je **ena vožnja**, ne en postanek: sicer bi vlak s tridesetimi
@@ -1095,7 +1103,7 @@ def breakdowns(conn: sqlite3.Connection, days: int = 90,
     """
     since = (datetime.now(TZ).date() - timedelta(days=days)).isoformat()
     rows = conn.execute(
-        LAST_STOP_SQL +
+        LAST_STOP_SQL[network] +
         "SELECT t.train_no, t.mode, t.network, t.agency, l.service_date, l.d "
         "FROM last l JOIN trip t USING (trip_id)",
         {"network": network, "since": since},

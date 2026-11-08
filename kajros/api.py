@@ -3258,7 +3258,11 @@ WITH t AS (
     -- Omrezje omejimo TU, ne sele v Pythonu: z LPP v bazi je vrstic vec kot
     -- petkrat toliko in okenske funkcije spodaj tecejo cez vse. Na tem
     -- prenosniku 190 ms proti 90 ms, na Pi Zero bi bila razlika sekunde.
-    WHERE (:network IS NULL OR tn.network = :network)
+    -- Golo, ne `(:network IS NULL OR ...)`: začne pri indeksu `trip_running`
+    -- (omrežje, začetek). Kopija arwena 8. 11. 2026, petek 6. 11.: železnica
+    -- ob 8 h 211 -> 66 ms, ob 17 h 267 -> 115 ms, ponoči 339 -> 195 ms;
+    -- avtobusi 1,84 -> 1,57 s in 3,14 -> 2,78 s; vrstice enake.
+    WHERE tn.network = :network
       -- Vozjne, ki se po voznem redu zdaj lahko vozijo. Brez tega
       -- gre skozi okenske funkcije spodaj cel dan -- pri vseh
       -- prevoznikih 135 000 vrstic za 735 vozil. Okvir je zato
@@ -3381,7 +3385,7 @@ ORDER BY p.delay_s DESC
 
 
 def _live_rows(conn, service_date: str, now_s: int,
-               network: str | None = None, overnight_only: bool = False) -> list[dict]:
+               network: str = "zeleznica", overnight_only: bool = False) -> list[dict]:
     """Vlaki, ki na dani prometni dan ob `now_s` (sekunde od polnoci tega dne)
     dejansko vozijo. Zadnja znana postaja je zadnja, katere cas je ze minil --
     ne zadnja, o kateri feed porocá: feed poslje napoved tudi za naslednjo
@@ -3597,7 +3601,7 @@ def api_connections(
             "connections": rows, "transfers": legs, "alerts": notices, "blizu": blizu}
 
 
-def _live(network: str | None = None) -> list[dict]:
+def _live(network: str = "zeleznica") -> list[dict]:
     """Vlaki, ki so zdaj na progi, z zadnjo izmerjeno zamudo.
 
     Ni isto kot "vse, kar je danes v feedu": vozila, ki so vozila zjutraj,
