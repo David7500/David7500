@@ -1,6 +1,12 @@
-# Nativna aplikacija za Android — načrt (osnutek za posvet)
+# Nativna aplikacija za Android — načrt
 
-8. 11. 2026. Podlaga: [raziskava.md](raziskava.md) (pravila Playa in nativni sklad, uradni viri), [splet.md](splet.md) (popis spletnih zaslonov), meritve na arwenu (`obiskovalec.aplikacija`), pregled kode `android/`. Nič še ni narejeno; David je rekel „najprej posvet“.
+8. 11. 2026. Podlaga: [raziskava.md](raziskava.md) (pravila Playa in nativni sklad, uradni viri), [splet.md](splet.md) (popis spletnih zaslonov), meritve na arwenu (`obiskovalec.aplikacija`), pregled kode `android/`. Posvet z Davidom končan isti dan; odločitve spodaj veljajo pred vsem ostalim v tem zapisu.
+
+## Odločeno 8. 11. 2026 (David)
+
+* **Računa za Play še ni.** David ga odpre v novi seji (predaja na koncu). Osebni račun, odprt po 13. 11. 2023, mora pred produkcijo imeti zaprti preizkus z vsaj 12 preizkuševalci 14 dni zapored, nato je pregled do 7 dni. Produkcija bo torej najprej v začetku decembra.
+* **Vse priporočeno je sprejeto:** lasten podpisni ključ, nastavljen ob ustvarjanju aplikacije; donacije v kanalu `play` skrite; končno stanje = nativno vse, kar potnik dela vsak dan, vsebinske strani spletne; sklad in načela kot spodaj.
+* **Potek, spremenjen po posvetu.** 14 dni teče od vpisa preizkuševalcev, ne od gradnje. Zato najprej Play 2.0 (faza 0, 1.–2. dan) in nalaganje v zaprti preizkus, da čas začne teči. Od 3. dne nativno: temelji, domača, tabla. Nativne gradnje gredo sproti na isti zaprti preizkus. V produkcijo gre različica, ki je dobra ob koncu preizkusa; lahko je že nativna 3.0.
 
 ## Na kratko
 
@@ -8,7 +14,7 @@
 2. **Nativna = Kotlin + Jetpack Compose + Material 3 Expressive.** Nativno je vse, kar potnik dela vsak dan. Vsebinske strani (statistika, o nas, zasebnost, stik) ostanejo spletne v okvirju aplikacije, kot pri večini velikih aplikacij.
 3. **Najpomembnejša odločitev je pogodba s strežnikom, ne orodje za zaslone.** Strežnik pove, kaj se pokaže (beseda in razred zamude, ime vožnje, meja meritev/napoved), aplikacija samo razporedi. Razlog je izmerjen: 1.–8. 11. je bilo 26 % dni uporabe aplikacije na različici 1.10 ali starejši, čeprav aplikacija sama ponuja posodobitev. Logika, ki živi v aplikaciji, v teh telefonih ostane stara mesece.
 4. **Vrstni red:** temelji (pogodba API, lupina, tema, selitev shranjenega) → domača, iskalnik povezav in odhodna tabla → okno vožnje → ovire, zasedenost, spremljanje vožnje v obvestilu → zemljevid → pot od vrat do vrat.
-5. **Ocena, ne meritev:** jedro (3.0) v produkciji 6–8 tednov po začetku; zemljevid in pot še 5–7 tednov. Medtem je 2.0 v produkciji, nativno raste na preizkusnem kanalu Playa.
+5. **Ocena, ne meritev:** jedro (3.0) 6–8 tednov po začetku; zemljevid in pot še 5–7 tednov. 2.0 odpre zaprti preizkus, nativna raste na istem kanalu (glej Odločeno).
 
 ## Kje smo
 
@@ -127,12 +133,25 @@ Prepis naenkrat; iOS; potisk prek FCM; Googlova analitika ali knjižnica za poso
 * **Stari telefoni na stari različici:** pogodbeni testi in najnižja podprta različica.
 * **MapLibre Native** je lahko prevelik ali prepočasen za šibke telefone: izmeriti v temeljih, preden se zavežem.
 
-## Za Davida
+## Vprašanja posveta in Davidovi odgovori (8. 11. 2026)
 
-Samo, kar je njegovo:
+1. **Stanje Playa?** Računa še ni.
+2. **Podpisni ključ:** lasten, ob ustvarjanju aplikacije („Provide a copy of your app signing key“), pred prvim nalaganjem. Sprejeto; datoteko PEPK pripravi Claude.
+3. **Donacije v Playu:** skrite. Sprejeto.
+4. **Prednost:** Play 2.0 najprej, nato takoj nativno, nativne gradnje na isti zaprti preizkus. Sprejeto (glej Odločeno).
+5. **Končno stanje:** nativno vse, kar potnik dela vsak dan, vsebinske strani spletne. Sprejeto.
 
-1. **Stanje Playa:** osebni ali organizacijski račun, kdaj odprt, ali zaprti preizkus že teče in z koliko preizkuševalci?
-2. **Podpisni ključ:** ob ustvarjanju aplikacije v konzoli „Provide a copy of your app signing key“, pred prvim nalaganjem. Datoteko PEPK pripravim.
-3. **Donacije v Playu:** skrijem (priporočam) ali tvegamo z izjemo za napitnino?
-4. **Prednost:** temelje (pogodba API) predlagam takoj po 2.0, ker koristijo tudi spletu; nativne zaslone od okna vožnje naprej, ko se prenova vlakov umiri. Ali raje vse takoj ali vse po prenovi?
-5. **Končno stanje:** ali je „nativno vse, kar potnik dela vsak dan, vsebinske strani spletne“ to, kar misliš s „tapravo“ aplikacijo?
+## Predaja: seja za račun Google Play
+
+**Davidovo (njegova prijava, ne agent):**
+
+1. Razvijalski račun v Play Console, osebni, 25 $: preverjanje identitete z osebnim dokumentom, telefon in e-pošta. Preverjanje lahko traja nekaj dni, zato prvo.
+2. Ob prijavi preveriti (iz splošnega znanja, ne iz raziskave):
+   * ali Google zahteva dostop do telefona Android z aplikacijo Play Console; Volla je brez Googlovih storitev, morda bo treba drug telefon;
+   * javni kontaktni e-naslov v vpisu trgovine je obvezen. To je v nasprotju z odločitvijo „naslova za stik ne objavljamo“ (stik samo prek `/stik`). Odloči David, najverjetneje poseben naslov samo za Play;
+   * ime razvijalca naj bo „Kajros“, ne osebno ime (obiskovalcem odgovarjamo brez imena); preveriti, kaj osebni račun pokaže javno;
+   * EU (DSA): izjava, ali je razvijalec trgovec. Kajros ne prodaja ničesar; kaj pomenijo donacije, preveriti ob izjavi.
+3. Ustvari aplikacijo (`app.kajros`, ime npr. „Kajros: vlaki in avtobusi“) in **takoj nastavi podpisni ključ**, preden kar koli naloži.
+4. Zbere vsaj 12 preizkuševalcev z računom Google: obvestilo potnikom v aplikaciji (`/admin`, obvestila), skupine na FB. Šteje 14 dni zapored; kdor se izpiše, začne znova.
+
+**Claudovo (ne rabi računa, lahko vzporedno):** faza 0 (gradnja 2.0, besedila deklaracij, vpisa in Data safety, `/zasebnost`, datoteka PEPK). Roki v `KOLEDAR.md`.
