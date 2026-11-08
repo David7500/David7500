@@ -1,0 +1,25 @@
+== skladnost (voženj-dni z run; delež)
+_ 2026-11-07 pred 87 {'stal_postankov': '1 (1.1 %)', 'stal>=10': '1 (1.1 %)', 'prihod_po_odhodu': '1 (1.1 %)'}
+a 2026-11-07 po objavi 150 {'stal_postankov': '1 (0.7 %)', 'prihod_po_odhodu': '4 (2.7 %)', 'stal>=10': '1 (0.7 %)', 'ura_nazaj': '3 (2.0 %)'}
+a 2026-11-08 po objavi 116 {'stal_postankov': '2 (1.7 %)', 'stal>=10': '2 (1.7 %)', 'prihod_po_odhodu': '2 (1.7 %)'}
+a' 2026-11-07 čez objavo 17 {'stal_postankov': '1 (5.9 %)', 'stal>=10': '1 (5.9 %)', 'ura_nazaj': '1 (5.9 %)'}
+== kršitve (samo vožnje-dni v celoti po objavi)
+a 2026-11-08 po objavi stal>=10 ICS 11 453025 2026-11-08 [(4, 360, 1080, '07:59:45')]
+a 2026-11-07 po objavi prihod_po_odhodu EC 115 453036 2026-11-07 [3]
+a 2026-11-07 po objavi stal>=10 EN 414 453054 2026-11-07 [(2, 300, 840, '21:17:45')]
+a 2026-11-07 po objavi ura_nazaj LPV 2419 453209 2026-11-07 [(7, 420, 420, '16:13:48', 8, 0, 0, '16:31:49'), (7, 420, 420, '16:13:48', 8, 0, 0, '16:31:49')]
+a 2026-11-07 po objavi prihod_po_odhodu LPV 2423 453212 2026-11-07 [16]
+a 2026-11-08 po objavi prihod_po_odhodu LP 3291 453454 2026-11-08 [12]
+a 2026-11-08 po objavi stal>=10 ICS 17 453722 2026-11-08 [(2, 0, 540, '11:40:47')]
+a 2026-11-07 po objavi ura_nazaj LP 4219 456518 2026-11-07 [(11, 540, 540, '20:36:32', 12, 180, 360, '20:43:50')]
+a 2026-11-07 po objavi ura_nazaj LP 4291 456521 2026-11-07 [(23, 780, 780, '20:11:47', 25, 300, 300, '20:27:47'), (24, 780, 780, '20:15:47', 25, 300, 300, '20:27:47'), (24, 780, 780, '20:15:47', 25, 300, 300, '20:27:47')]
+a 2026-11-07 po objavi prihod_po_odhodu LP 4291 456521 2026-11-07 [12]
+a 2026-11-07 po objavi prihod_po_odhodu IC 502 462146 2026-11-07 [10]
+a 2026-11-08 po objavi prihod_po_odhodu EC 78 465924 2026-11-08 [3, 7]
+== kršitve po vrsti zaporedja zemljevida
+{'brez_skoka': 5, 'skok_nazaj_visja': 6}
+{'brez_skoka': ['ICS 11 2026-11-08', 'EC 115 2026-11-07', 'EN 414 2026-11-07', 'ICS 17 2026-11-08', 'EC 78 2026-11-08'], 'skok_nazaj_visja': ['LPV 2419 2026-11-07', 'LPV 2423 2026-11-07', 'LP 3291 2026-11-08', 'LP 4219 2026-11-07', 'LP 4291 2026-11-07', 'IC 502 2026-11-07']}
+== nepotrjeni in preklicani (sz_zamuda, run)
+sz_zamuda vrstic, voženj-dni: (4674, 370)
+obs po objavi po viru: {'zemljevid': 7780, 'derp': 407}
+derp (zamik >= 5 s) po uri: [('11-07 11', 6), ('11-07 14', 5), ('11-07 15', 8), ('11-07 16', 5), ('11-07 17', 3), ('11-07 18', 2), ('11-07 19', 2), ('11-07 23', 15), ('11-08 01', 23), ('11-08 02', 138), ('11-08 03', 185), ('11-08 04', 1), ('11-08 06', 3), ('11-08 08', 5), ('11-08 09', 4), ('11-08 10', 1), ('11-08 11', 1)]

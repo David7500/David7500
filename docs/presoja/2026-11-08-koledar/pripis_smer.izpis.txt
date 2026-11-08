@@ -1,0 +1,263 @@
+2026-11-01..2026-11-08: 1008584 vrstic v oknu, 1185 vozil, 6810 parov, 29914 vrstic s parom + 978670 brez para
+       oznaka                                                      parov  vrstic  vrata
+obseg  NAROBE drugo vozilo na vožnji                                 160     397     22
+obseg  NAROBE stoji                                                  101     519      4
+obseg  NAROBE vozi nazaj                                              59     281     42
+obseg  NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi)        12      51     24
+obseg  mimo koledarja (ne šteje, ne priklopi)                         35     491      0
+obseg  potrjen: NAP ga je imel na njej                               785    3966   1261
+obseg  potrjen: prejšnja pred NAP-ovo                                 13     209    152
+obseg  skladen: sled 9+ min po voznem redu, brez potrditve            13     330    278
+obseg  stoji na končni svoje vožnje                                  738    4350     36
+zunaj  NAP-ov id, vozi                                               517    1223     20
+zunaj  NAROBE drugo vozilo na vožnji                                 126     427     35
+zunaj  NAROBE stoji                                                  181     714      9
+zunaj  NAROBE vozi nazaj                                              13      51      3
+zunaj  NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi)        14      81     47
+zunaj  mimo koledarja (ne šteje, ne priklopi)                         12      66      0
+zunaj  potrjen: NAP ga je imel na njej                               616    3506    982
+zunaj  potrjen: prejšnja pred NAP-ovo                                  9      62     35
+zunaj  skladen: sled 9+ min po voznem redu, brez potrditve            17     343    305
+zunaj  stoji na končni svoje vožnje                                 1231    6235     33
+zunaj  stoji pred NAP-ovo vožnjo                                    2158    6612      0
+
+obseg ('brez_dneva', 'prezgodaj'): 1916 parov; skozi vrata 418 parov, 223 vozil; napačnih 10, meja (< 3 vrstice) 25, nepotrjenih 7 (24 od 1819 vrstic), mimo koledarja 35, napačnih, ki jih vrata odstranijo 285
+obseg, vrstice po izidu: {'premika · brez_kandidata': 36658, 'premika · miruje': 28303, 'premika · ni_prosta': 11044, 'premika · par': 3107, 'premika · vec': 478, 'stoji · brez_kandidata': 130070, 'stoji · miruje': 188734, 'stoji · ni_prosta': 64530, 'stoji · par': 6099, 'stoji · vec': 603}
+brez_dneva, (vozilo, NAP-ova vožnja): {'koledar ima, okno daleč': 9079, 'koledar nima, brez dvojčka': 11, 'vožnje ni ali nagrobnik': 156}
+lege brez vozila na parih v obsegu: 0
+drugo merilo (pot 15 min), pari skozi vrata po (pot, oznaka): {'NAROBE po poti: kraj pade · NAROBE': 10, 'NAROBE po poti: kraj pade · NEPOTRJEN': 2, 'NAROBE po poti: kraj pade · drugo': 8, 'NAROBE po poti: zapusti vožnjo · drugo': 2, 'po poti · NAROBE': 6, 'po poti · NEPOTRJEN': 4, 'po poti · drugo': 48, 'premalo leg · NAROBE': 19, 'premalo leg · NEPOTRJEN': 1, 'premalo leg · drugo': 318}
+zgornja meja 95 %, če je napačnih 0: 0.7 % parov
+ODLOČITEV: NE: 10 dokazano napačnih parov v obsegu; preglej vsakega, senca do 7. 11.
+
+NAPAČNI v obsegu (10):
+  1300859    06:02-06:11 brez_dneva   vrstic   8 vrata   3 premik   638 m kraj  -123 s · NAP 469648 06:50-07:55 · naša 469633 05:40-06:05 · derp '' · NAROBE vozi nazaj · premalo leg · 46.21356,15.39414
+  1302076    08:23-08:26 brez_dneva   vrstic   4 vrata   4 premik  1085 m kraj    +0 s · NAP 487353 09:20-09:59 · naša 487352 08:20-08:59 · derp '487382' · NAROBE drugo vozilo na vožnji · po poti · 46.07267,14.48688
+  1300859    06:01-06:11 brez_dneva   vrstic   9 vrata   3 premik   680 m kraj  -121 s · NAP 469648 06:50-07:55 · naša 469633 05:40-06:05 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.21358,15.39457
+  1302076    08:22-08:31 brez_dneva   vrstic   9 vrata   7 premik  2474 m kraj  +248 s · NAP 487353 09:20-09:59 · naša 487352 08:20-08:59 · derp '' · NAROBE drugo vozilo na vožnji · po poti · 46.05833,14.49975
+  1301450    09:53-10:07 brez_dneva   vrstic   3 vrata   3 premik  4572 m kraj  +539 s · NAP 390458 10:55-11:27 · naša 390471 09:50-10:22 · derp '' · NAROBE drugo vozilo na vožnji · po poti · 45.71383,14.47100
+  1300272    15:24-15:32 prezgodaj    vrstic   6 vrata   3 premik  1282 m kraj  -120 s · NAP 435158 16:00-17:06 · naša 435152 14:25-15:31 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56036,15.65686
+  1300272    18:09-18:17 brez_dneva   vrstic   7 vrata   3 premik  1280 m kraj  -120 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · premalo leg · 46.55844,15.65587
+  1302100    09:49-09:56 brez_dneva   vrstic   6 vrata   3 premik  1351 m kraj  -243 s · NAP 480690 13:10-13:52 · naša 480712 09:10-09:52 · derp '' · NAROBE vozi nazaj · premalo leg · 46.16719,14.30640
+  1300594    14:57-15:15 brez_dneva   vrstic   4 vrata   3 premik  3074 m kraj  +899 s · NAP 445325 16:55-18:19 · naša 445359 14:50-15:18 · derp '' · NAROBE drugo vozilo na vožnji · NAROBE po poti: kraj pade · 45.50304,13.70636
+  1301638    08:15-08:20 brez_dneva   vrstic   4 vrata   3 premik  1253 m kraj  -263 s · NAP 409476 09:05-09:50 · naša 462963 07:30-08:19 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.55874,15.65487
+
+NAPAČNI po drugem merilu (pot) (22):
+  1300272    11:39-11:47 brez_dneva   vrstic   7 vrata   2 premik  1117 m kraj  -120 s · NAP 435157 13:15-14:21 · naša 435151 10:40-11:46 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.55648,15.66052
+  1300272    18:11-18:17 brez_dneva   vrstic   6 vrata   2 premik  1280 m kraj  -161 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56037,15.65635
+  1300841    19:23-20:16 brez_dneva   vrstic  32 vrata  22 premik 31716 m kraj +2876 s · NAP 486266 20:15-21:07 · naša 486264 19:15-20:07 · derp '' · potrjen: prejšnja pred NAP-ovo · NAROBE po poti: zapusti vožnjo · 45.79516,14.34258
+  1300233    20:07-20:11 brez_dneva   vrstic   5 vrata   5 premik  1279 m kraj  +117 s · NAP 443389 21:15-21:48 · naša 462937 19:25-20:14 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.56040,15.65631
+  1300859    06:01-06:11 brez_dneva   vrstic   9 vrata   3 premik   680 m kraj  -121 s · NAP 469648 06:50-07:55 · naša 469633 05:40-06:05 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.21358,15.39457
+  1300272    18:12-18:17 brez_dneva   vrstic   4 vrata   2 premik  1297 m kraj  -292 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56023,15.65564
+  1300233    20:07-20:09 brez_dneva   vrstic   2 vrata   2 premik  1237 m kraj  +112 s · NAP 443389 21:15-21:48 · naša 462937 19:25-20:14 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.55647,15.66040
+  1301808    08:59-09:02 brez_dneva   vrstic   3 vrata   1 premik  1609 m kraj  +120 s · NAP 486587 12:15-12:42 · naša 486597 08:40-09:08 · derp '' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · NAROBE po poti: kraj pade · 45.94981,15.48704
+  1301591    09:14-09:16 brez_dneva   vrstic   3 vrata   3 premik  1178 m kraj   +75 s · NAP 467987 12:30-13:18 · naša 462929 08:30-09:19 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.56074,15.65595
+  1301219    11:40-13:54 brez_dneva   vrstic  32 vrata  18 premik 66971 m kraj +7621 s · NAP 485938 05:30-07:42 · naša 486094 11:30-13:45 · derp '485938' · potrjen: NAP ga je imel na njej · NAROBE po poti: zapusti vožnjo · 46.05267,14.49759
+  1300272    15:24-15:32 prezgodaj    vrstic   6 vrata   3 premik  1282 m kraj  -120 s · NAP 435158 16:00-17:06 · naša 435152 14:25-15:31 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56036,15.65686
+  1301638    17:12-17:16 brez_dneva   vrstic   4 vrata   4 premik  1292 m kraj  +360 s · NAP 411345 18:35-19:01 · naša 462935 16:30-17:19 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.55868,15.65578
+  1300234    11:13-11:17 brez_dneva   vrstic   4 vrata   3 premik  1319 m kraj  +318 s · NAP 462967 12:30-13:25 · naša 462931 10:30-11:19 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.56008,15.65623
+  1300272    11:39-11:47 brez_dneva   vrstic   7 vrata   2 premik  1257 m kraj  -119 s · NAP 435157 13:15-14:21 · naša 435151 10:40-11:46 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.55926,15.65612
+  1300272    18:09-18:17 brez_dneva   vrstic   5 vrata   2 premik  1287 m kraj  -120 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56063,15.65647
+  1300233    20:07-20:11 brez_dneva   vrstic   4 vrata   2 premik  1312 m kraj  +113 s · NAP 443389 21:15-21:48 · naša 462937 19:25-20:14 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.55877,15.65579
+  1300284    10:02-10:05 brez_dneva   vrstic   4 vrata   1 premik  1087 m kraj    +0 s · NAP 477891 13:15-13:50 · naša 468660 10:00-11:19 · derp '' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · NAROBE po poti: kraj pade · 46.65888,16.16515
+  1300234    11:12-11:16 brez_dneva   vrstic   4 vrata   3 premik  1222 m kraj  +133 s · NAP 462967 12:30-13:25 · naša 462931 10:30-11:19 · derp '' · potrjen: NAP ga je imel na njej · NAROBE po poti: kraj pade · 46.56014,15.65661
+  1300594    14:57-15:15 brez_dneva   vrstic   4 vrata   3 premik  3074 m kraj  +899 s · NAP 445325 16:55-18:19 · naša 445359 14:50-15:18 · derp '' · NAROBE drugo vozilo na vožnji · NAROBE po poti: kraj pade · 45.50304,13.70636
+  1301301    07:26-07:32 prezgodaj    vrstic   5 vrata   1 premik  1817 m kraj  -180 s · NAP 401412 08:00-08:24 · naša 474920 06:30-07:28 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 45.95832,15.49090
+  1301638    08:15-08:20 brez_dneva   vrstic   4 vrata   3 premik  1253 m kraj  -263 s · NAP 409476 09:05-09:50 · naša 462963 07:30-08:19 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.55874,15.65487
+  1301559    09:46-11:49 brez_dneva   vrstic  13 vrata  12 premik 94448 m kraj +6834 s · NAP 487865 04:30-06:34 · naša 487871 09:40-11:44 · derp '487865' · skladen: sled 9+ min po voznem redu, brez potrditve · NAROBE po poti: kraj pade · 45.51404,13.58931
+
+MEJA v obsegu (25):
+  1300967    06:37-06:41 prezgodaj    vrstic   4 vrata   1 premik   536 m kraj  -114 s · NAP 461721 07:10-07:36 · naša 479282 05:45-06:42 · derp '' · NAROBE vozi nazaj · premalo leg · 46.23199,15.26562
+  1301997    09:53-10:00 brez_dneva   vrstic   7 vrata   1 premik   949 m kraj   -61 s · NAP 487967 12:10-13:32 · naša 486982 09:20-09:54 · derp '' · NAROBE vozi nazaj · premalo leg · 46.05815,14.51369
+  1300272    11:39-11:47 brez_dneva   vrstic   7 vrata   2 premik  1117 m kraj  -120 s · NAP 435157 13:15-14:21 · naša 435151 10:40-11:46 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.55648,15.66052
+  1301222    11:41-11:43 prezgodaj    vrstic   2 vrata   1 premik   644 m kraj   +81 s · NAP 486125 12:15-13:21 · naša 486392 10:15-11:44 · derp '' · NAROBE drugo vozilo na vožnji · premalo leg · 46.05467,14.51100
+  1301397    12:15-12:23 brez_dneva   vrstic   7 vrata   1 premik   790 m kraj  -180 s · NAP 473893 14:35-16:22 · naša 442406 11:30-12:17 · derp '' · NAROBE vozi nazaj · premalo leg · 45.95533,13.64645
+  1300272    18:11-18:17 brez_dneva   vrstic   6 vrata   2 premik  1280 m kraj  -161 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56037,15.65635
+  1302076    08:24-08:24 brez_dneva   vrstic   1 vrata   1 premik  1039 m kraj    +0 s · NAP 487353 09:20-09:59 · naša 487352 08:20-08:59 · derp '' · NAROBE drugo vozilo na vožnji · po poti · 46.06967,14.48969
+  1300848    08:58-09:05 brez_dneva   vrstic   7 vrata   1 premik   702 m kraj  -124 s · NAP 474931 10:30-11:15 · naša 473870 08:00-08:59 · derp '' · NAROBE vozi nazaj · premalo leg · 45.95761,13.64848
+  1301313    10:30-10:35 brez_dneva   vrstic   4 vrata   1 premik  2023 m kraj  -119 s · NAP 470267 12:25-13:35 · naša 470234 09:15-10:31 · derp '' · NAROBE vozi nazaj · premalo leg · 45.80203,15.16063
+  1300657    10:39-10:40 brez_dneva   vrstic   2 vrata   1 premik    16 m kraj    +0 s · NAP 371964 14:55-15:22 · naša 437450 10:00-10:40 · derp '' · NAROBE stoji · premalo leg · 46.04741,14.10783
+  1300272    18:12-18:17 brez_dneva   vrstic   4 vrata   2 premik  1297 m kraj  -292 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56023,15.65564
+  1300251    18:34-18:37 brez_dneva   vrstic   4 vrata   1 premik     0 m kraj    +1 s · NAP 435275 19:30-20:15 · naša 435272 17:50-18:35 · derp '' · NAROBE stoji · premalo leg · 46.34266,15.99273
+  1300859    06:02-06:11 brez_dneva   vrstic   7 vrata   1 premik   653 m kraj  -170 s · NAP 469648 06:50-07:55 · naša 469633 05:40-06:05 · derp '' · NAROBE vozi nazaj · premalo leg · 46.21472,15.39213
+  1301830    07:32-07:37 brez_dneva   vrstic   5 vrata   1 premik   809 m kraj  -119 s · NAP 486175 14:30-15:13 · naša 471018 06:50-07:33 · derp '' · NAROBE vozi nazaj · premalo leg · 45.95808,13.64857
+  1301313    10:29-10:38 brez_dneva   vrstic   8 vrata   1 premik  1764 m kraj  -116 s · NAP 470267 12:25-13:35 · naša 470234 09:15-10:31 · derp '' · NAROBE vozi nazaj · premalo leg · 45.80191,15.16085
+  1300251    18:34-18:35 brez_dneva   vrstic   2 vrata   2 premik     7 m kraj    +1 s · NAP 435275 19:30-20:15 · naša 435272 17:50-18:35 · derp '' · NAROBE stoji · premalo leg · 46.34279,15.99271
+  1301226    08:00-08:05 brez_dneva   vrstic   5 vrata   1 premik  1267 m kraj  -104 s · NAP 487680 11:40-12:50 · naša 480106 07:25-08:01 · derp '' · NAROBE vozi nazaj · premalo leg · 45.80196,15.15966
+  1301313    10:30-10:38 brez_dneva   vrstic   7 vrata   1 premik  1295 m kraj   -98 s · NAP 470267 12:25-13:35 · naša 470234 09:15-10:31 · derp '' · NAROBE vozi nazaj · premalo leg · 45.80183,15.16258
+  1300272    11:39-11:47 brez_dneva   vrstic   7 vrata   2 premik  1257 m kraj  -119 s · NAP 435157 13:15-14:21 · naša 435151 10:40-11:46 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.55926,15.65612
+  1300836    12:14-12:19 brez_dneva   vrstic   4 vrata   1 premik  1900 m kraj  -204 s · NAP 481259 13:15-14:25 · naša 443217 11:30-12:15 · derp '' · NAROBE vozi nazaj · premalo leg · 46.51396,15.08160
+  1301355    17:34-17:34 brez_dneva   vrstic   1 vrata   1 premik   372 m kraj    +0 s · NAP 425302 18:35-18:58 · naša 425300 17:35-17:58 · derp '' · NAROBE drugo vozilo na vožnji · po poti · 46.13375,14.99491
+  1300272    18:09-18:17 brez_dneva   vrstic   5 vrata   2 premik  1287 m kraj  -120 s · NAP 431677 19:30-20:25 · naša 435154 17:10-18:16 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 46.56063,15.65647
+  1300243    12:08-12:10 prezgodaj    vrstic   3 vrata   2 premik  5642 m kraj  +217 s · NAP 477620 12:45-13:03 · naša 477631 12:05-12:19 · derp '' · NAROBE drugo vozilo na vožnji · po poti · 46.27407,14.32280
+  1301301    07:26-07:32 prezgodaj    vrstic   5 vrata   1 premik  1817 m kraj  -180 s · NAP 401412 08:00-08:24 · naša 474920 06:30-07:28 · derp '' · NAROBE vozi nazaj · NAROBE po poti: kraj pade · 45.95832,15.49090
+  1302001    08:31-08:37 brez_dneva   vrstic   6 vrata   2 premik  1938 m kraj  -199 s · NAP 485441 11:15-12:06 · naša 485417 07:40-08:32 · derp '' · NAROBE vozi nazaj · premalo leg · 46.22296,14.61250
+
+NEPOTRJENI v obsegu (7):
+  1301815    09:26-09:47 brez_dneva   vrstic  19 vrata   5 premik  3294 m kraj  +480 s · NAP 477778 12:30-13:18 · naša 477775 09:30-10:18 · derp '' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · po poti · 45.80188,15.16087
+  1301808    08:59-09:02 brez_dneva   vrstic   3 vrata   1 premik  1609 m kraj  +120 s · NAP 486587 12:15-12:42 · naša 486597 08:40-09:08 · derp '' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · NAROBE po poti: kraj pade · 45.94981,15.48704
+  1301943    12:01-12:12 brez_dneva   vrstic   6 vrata   5 premik  3113 m kraj  +284 s · NAP 487519 14:55-17:00 · naša 487478 11:55-14:05 · derp '' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · po poti · 46.05766,14.50854
+  1301658    15:44-15:47 brez_dneva   vrstic   3 vrata   3 premik  5136 m kraj  +120 s · NAP 429267 11:00-11:43 · naša 429282 15:45-16:16 · derp '429267' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · po poti · 45.54474,13.82833
+  1300284    10:02-10:05 brez_dneva   vrstic   4 vrata   1 premik  1087 m kraj    +0 s · NAP 477891 13:15-13:50 · naša 468660 10:00-11:19 · derp '' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · NAROBE po poti: kraj pade · 46.65888,16.16515
+  1301658    15:45-15:49 brez_dneva   vrstic   5 vrata   5 premik  6025 m kraj  +300 s · NAP 429267 11:00-11:43 · naša 429282 15:45-16:16 · derp '429267' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · po poti · 45.54481,13.82843
+  1301559    17:31-17:34 brez_dneva   vrstic   4 vrata   4 premik  1967 m kraj   +87 s · NAP 488002 07:30-08:59 · naša 488026 16:10-17:39 · derp '488002' · NEPOTRJEN (premika se, drugače od NAP, nihče ne potrdi) · premalo leg · 46.05306,14.49822
+
+MIMO KOLEDARJA v obsegu (35):
+  1302017    09:23-09:32 prezgodaj    vrstic   9 vrata   0 premik  1107 m kraj    -1 s · NAP 475272 (ni voznega reda) · naša 475327 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05796,14.51569
+  1302046    09:54-10:03 brez_dneva   vrstic   6 vrata   0 premik  2105 m kraj    +0 s · NAP 456021 (ni voznega reda) · naša 455943 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.22538,14.61363
+  1302014    10:11-10:20 brez_dneva   vrstic   9 vrata   0 premik  3317 m kraj  +114 s · NAP 471969 (ni voznega reda) · naša 471969 (ni voznega reda) · derp '471969' · mimo koledarja (ne šteje, ne priklopi) · 46.37117,14.10709
+  1302086    10:22-10:23 brez_dneva   vrstic   2 vrata   0 premik  1449 m kraj    +0 s · NAP 463740 12:25-12:43 · naša 476358 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.24877,14.35736
+  1301152    10:28-10:34 brez_dneva   vrstic   5 vrata   0 premik  1217 m kraj   -54 s · NAP 470706 12:00-12:30 · naša 451875 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 45.57141,15.19322
+  1302000    10:35-11:55 brez_dneva   vrstic  19 vrata   0 premik 83851 m kraj +5035 s · NAP 479386 (ni voznega reda) · naša 479386 (ni voznega reda) · derp '479386' · mimo koledarja (ne šteje, ne priklopi) · 45.54099,13.73590
+  1301996    10:56-11:00 brez_dneva   vrstic   2 vrata   0 premik  1960 m kraj    +0 s · NAP 449280 (ni voznega reda) · naša 449255 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.22084,14.60592
+  1301885    11:12-12:05 brez_dneva   vrstic  16 vrata   0 premik 59267 m kraj +3419 s · NAP 479366 (ni voznega reda) · naša 479366 (ni voznega reda) · derp '479366' · mimo koledarja (ne šteje, ne priklopi) · 45.53858,13.73770
+  1301941    11:20-11:34 brez_dneva   vrstic   7 vrata   0 premik  8492 m kraj  +569 s · NAP 471998 (ni voznega reda) · naša 471998 (ni voznega reda) · derp '471998' · mimo koledarja (ne šteje, ne priklopi) · 46.05770,14.50833
+  1301847    11:56-13:09 pred_odhodom vrstic   8 vrata   0 premik 58390 m kraj +3992 s · NAP 459722 (ni voznega reda) · naša 459722 (ni voznega reda) · derp '459722' · mimo koledarja (ne šteje, ne priklopi) · 46.05815,14.51539
+  1302014    12:32-12:44 brez_dneva   vrstic  12 vrata   0 premik  8405 m kraj  +549 s · NAP 472000 (ni voznega reda) · naša 472000 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05758,14.50834
+  1302076    12:41-14:54 po_koncu     vrstic  79 vrata   0 premik 57925 m kraj +7446 s · NAP 477583 (ni voznega reda) · naša 477588 (ni voznega reda) · derp '477583' · mimo koledarja (ne šteje, ne priklopi) · 46.27885,13.82999
+  1301969    12:41-12:50 brez_dneva   vrstic   9 vrata   0 premik  2806 m kraj   +92 s · NAP 471972 (ni voznega reda) · naša 471972 (ni voznega reda) · derp '471972' · mimo koledarja (ne šteje, ne priklopi) · 46.37115,14.10711
+  1301221    13:11-14:53 pred_odhodom vrstic  15 vrata   0 premik 54048 m kraj +5340 s · NAP 465835 (ni voznega reda) · naša 465835 (ni voznega reda) · derp '465835' · mimo koledarja (ne šteje, ne priklopi) · 45.63689,14.86125
+  1300877    13:42-13:42 brez_dneva   vrstic   1 vrata   0 premik   866 m kraj    +0 s · NAP 459729 (ni voznega reda) · naša 428548 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05841,14.52096
+  1302000    14:11-14:14 brez_dneva   vrstic   4 vrata   0 premik  2507 m kraj    +0 s · NAP 479387 (ni voznega reda) · naša 479402 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 45.53677,13.66062
+  1301557    14:51-15:06 brez_dneva   vrstic  15 vrata   0 premik  7364 m kraj  +832 s · NAP 479411 (ni voznega reda) · naša 479411 (ni voznega reda) · derp '479411' · mimo koledarja (ne šteje, ne priklopi) · 45.53906,13.66728
+  1302014    15:11-15:20 brez_dneva   vrstic   9 vrata   0 premik  3244 m kraj   +96 s · NAP 471976 (ni voznega reda) · naša 471976 (ni voznega reda) · derp '471976' · mimo koledarja (ne šteje, ne priklopi) · 46.37122,14.10725
+  1301969    15:18-15:29 brez_dneva   vrstic  11 vrata   0 premik  7800 m kraj  +553 s · NAP 472003 (ni voznega reda) · naša 472003 (ni voznega reda) · derp '472003' · mimo koledarja (ne šteje, ne priklopi) · 46.05769,14.50633
+  1301557    15:25-15:43 brez_dneva   vrstic  17 vrata   0 premik 10034 m kraj  +696 s · NAP 479410 (ni voznega reda) · naša 479410 (ni voznega reda) · derp '479410' · mimo koledarja (ne šteje, ne priklopi) · 45.51858,13.60451
+  1302076    15:50-16:26 brez_dneva   vrstic  31 vrata   0 premik 23892 m kraj +1980 s · NAP 454496 (ni voznega reda) · naša 476375 (ni voznega reda) · derp '454496' · mimo koledarja (ne šteje, ne priklopi) · 46.05771,14.50628
+  1301969    16:30-16:35 brez_dneva   vrstic   5 vrata   0 premik  2857 m kraj   +40 s · NAP 471977 (ni voznega reda) · naša 471977 (ni voznega reda) · derp '471977' · mimo koledarja (ne šteje, ne priklopi) · 46.37118,14.10728
+  1301457    16:42-16:51 prezgodaj    vrstic   9 vrata   0 premik   193 m kraj    +0 s · NAP 406567 (ni voznega reda) · naša 465816 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05821,14.51566
+  1301557    17:04-17:15 brez_dneva   vrstic  11 vrata   0 premik  5719 m kraj  +742 s · NAP 479412 (ni voznega reda) · naša 479412 (ni voznega reda) · derp '479412' · mimo koledarja (ne šteje, ne priklopi) · 45.53073,13.65085
+  1302014    17:18-17:30 brez_dneva   vrstic  12 vrata   0 premik  5791 m kraj  +547 s · NAP 472008 (ni voznega reda) · naša 472008 (ni voznega reda) · derp '472008' · mimo koledarja (ne šteje, ne priklopi) · 46.05760,14.50646
+  1301891    17:28-17:38 brez_dneva   vrstic  11 vrata   0 premik   383 m kraj    +0 s · NAP 432201 (ni voznega reda) · naša 432209 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05792,14.51633
+  1301557    17:55-18:05 brez_dneva   vrstic  11 vrata   0 premik  6060 m kraj  +176 s · NAP 479407 (ni voznega reda) · naša 479407 (ni voznega reda) · derp '479407' · mimo koledarja (ne šteje, ne priklopi) · 45.54341,13.72896
+  1302014    18:15-18:19 brez_dneva   vrstic   5 vrata   0 premik   811 m kraj    +7 s · NAP 471983 (ni voznega reda) · naša 471983 (ni voznega reda) · derp '471983' · mimo koledarja (ne šteje, ne priklopi) · 46.37124,14.10718
+  1301969    18:33-18:46 brez_dneva   vrstic  13 vrata   0 premik  8684 m kraj  +568 s · NAP 472015 (ni voznega reda) · naša 472015 (ni voznega reda) · derp '472015' · mimo koledarja (ne šteje, ne priklopi) · 46.05779,14.50698
+  1300593    19:05-20:34 brez_dneva   vrstic  13 vrata   0 premik 87035 m kraj +5260 s · NAP 479403 (ni voznega reda) · naša 479403 (ni voznega reda) · derp '479403' · mimo koledarja (ne šteje, ne priklopi) · 46.05773,14.50659
+  1301289    19:09-19:14 brez_dneva   vrstic   5 vrata   0 premik   622 m kraj    +0 s · NAP 399744 (ni voznega reda) · naša 399737 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.00631,14.02767
+  1301969    19:31-20:50 brez_dneva   vrstic  73 vrata   0 premik 46864 m kraj +4560 s · NAP 477557 (ni voznega reda) · naša 477557 (ni voznega reda) · derp '477557' · mimo koledarja (ne šteje, ne priklopi) · 46.36974,14.11159
+  1301168    20:40-20:49 brez_dneva   vrstic  10 vrata   0 premik   232 m kraj    -2 s · NAP 451873 (ni voznega reda) · naša 451869 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05819,14.51376
+  1301457    20:43-20:52 prezgodaj    vrstic  10 vrata   0 premik   159 m kraj    +5 s · NAP 406533 (ni voznega reda) · naša 465817 (ni voznega reda) · derp '' · mimo koledarja (ne šteje, ne priklopi) · 46.05782,14.51425
+  1301969    21:06-22:01 brez_dneva   vrstic  17 vrata   0 premik 46845 m kraj +3298 s · NAP 472021 (ni voznega reda) · naša 472021 (ni voznega reda) · derp '472021' · mimo koledarja (ne šteje, ne priklopi) · 46.05774,14.50825
+
+NAROBE, ki jih vrata odstranijo (285):
+  1301231    09:43-09:53 prezgodaj    vrstic  10 vrata   0 premik   113 m kraj    +0 s · NAP 406517 (ni voznega reda) · naša 465825 (ni voznega reda) · derp '' · NAROBE stoji · 46.05823,14.51545
+  1302053    13:40-13:42 brez_dneva   vrstic   3 vrata   0 premik    83 m kraj  +113 s · NAP 474752 (ni voznega reda) · naša 475228 (ni voznega reda) · derp '' · NAROBE stoji · 46.05792,14.51521
+  1302089    16:30-16:36 prezgodaj    vrstic   6 vrata   0 premik    17 m kraj    -1 s · NAP 471981 (ni voznega reda) · naša 430265 (ni voznega reda) · derp '' · NAROBE stoji · 46.37118,14.10700
+  1300158    18:01-18:05 brez_dneva   vrstic   5 vrata   0 premik    30 m kraj    +0 s · NAP 457197 (ni voznega reda) · naša 455970 (ni voznega reda) · derp '' · NAROBE stoji · 46.22526,14.61344
+  1301188    05:56-05:56 prezgodaj    vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 479429 06:35-07:01 · naša 479428 05:45-06:11 · derp '' · NAROBE stoji · 45.80205,15.16030
+  1300158    07:41-07:45 brez_dneva   vrstic   2 vrata   0 premik    25 m kraj   +56 s · NAP 485275 08:45-09:28 · naša 485008 07:45-08:39 · derp '' · NAROBE drugo vozilo na vožnji · 46.22527,14.61315
+  1301427    08:47-08:55 brez_dneva   vrstic   7 vrata   0 premik   484 m kraj   -96 s · NAP 461604 11:10-11:53 · naša 484696 07:10-08:48 · derp '484696' · NAROBE vozi nazaj · 46.23281,15.26867
+  1301111    09:12-09:12 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 469799 10:55-11:43 · naša 448958 08:50-09:05 · derp '' · NAROBE stoji · 46.23275,15.26841
+  1302096    10:27-10:27 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 464587 11:30-11:41 · naša 464583 10:30-10:41 · derp '' · NAROBE drugo vozilo na vožnji · 46.17444,14.29490
+  1300958    10:43-10:43 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 454438 11:30-11:57 · naša 418105 10:25-10:37 · derp '' · NAROBE stoji · 46.30254,14.83133
+  1300860    10:57-11:01 brez_dneva   vrstic   3 vrata   0 premik    53 m kraj  +120 s · NAP 481212 13:15-13:45 · naša 479484 11:00-11:39 · derp '' · NAROBE drugo vozilo na vožnji · 46.35890,15.11769
+  1301290    11:22-11:25 prezgodaj    vrstic   4 vrata   0 premik     0 m kraj    +0 s · NAP 359293 12:05-13:01 · naša 398337 11:25-11:43 · derp '' · NAROBE drugo vozilo na vožnji · 46.00118,14.02555
+  1300650    12:16-12:16 brez_dneva   vrstic   1 vrata   0 premik    18 m kraj    +0 s · NAP 471727 13:25-14:04 · naša 471721 11:30-12:09 · derp '' · NAROBE stoji · 45.77263,14.20043
+  1300416    12:37-12:48 brez_dneva   vrstic  11 vrata   0 premik     9 m kraj    +0 s · NAP 468663 15:25-16:44 · naša 468657 11:20-12:39 · derp '' · NAROBE stoji · 46.65889,16.16484
+  1301589    14:36-14:36 prezgodaj    vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 435932 15:20-15:53 · naša 435931 14:40-15:13 · derp '' · NAROBE drugo vozilo na vožnji · 45.53836,13.73822
+  1300648    15:49-15:49 prezgodaj    vrstic   1 vrata   0 premik     5 m kraj    +0 s · NAP 388490 16:20-16:43 · naša 479147 15:50-16:19 · derp '' · NAROBE drugo vozilo na vožnji · 46.27481,13.95896
+  1301651    18:56-19:00 brez_dneva   vrstic   5 vrata   0 premik     4 m kraj    +0 s · NAP 369618 20:00-20:20 · naša 369641 19:00-19:28 · derp '' · NAROBE stoji · 45.50722,13.79911
+  1301889    05:27-05:27 prezgodaj    vrstic   1 vrata   0 premik     3 m kraj    +0 s · NAP 487917 06:10-08:15 · naša 485286 05:30-06:26 · derp '' · NAROBE drugo vozilo na vožnji · 46.06130,14.52678
+  1302045    08:26-08:27 brez_dneva   vrstic   2 vrata   0 premik    34 m kraj    +0 s · NAP 485365 09:15-10:11 · naša 485364 08:30-09:26 · derp '' · NAROBE drugo vozilo na vožnji · 46.22530,14.61357
+  1300598    09:20-09:23 brez_dneva   vrstic   3 vrata   0 premik   483 m kraj    +0 s · NAP 451916 14:33-14:52 · naša 451937 09:20-09:45 · derp '' · NAROBE drugo vozilo na vožnji · 46.24573,14.35443
+  1300907    10:22-10:24 brez_dneva   vrstic   3 vrata   0 premik     0 m kraj   +61 s · NAP 479818 12:40-13:15 · naša 479811 10:20-10:55 · derp '' · NAROBE drugo vozilo na vožnji · 46.17169,15.05279
+  1302072    11:18-11:24 brez_dneva   vrstic   7 vrata   0 premik     0 m kraj    +0 s · NAP 477499 12:15-12:39 · naša 477497 11:15-11:39 · derp '' · NAROBE drugo vozilo na vožnji · 46.17454,14.28985
+  1302096    12:02-12:05 brez_dneva   vrstic   4 vrata   0 premik    25 m kraj    +0 s · NAP 380844 13:40-14:09 · naša 464650 11:45-11:57 · derp '' · NAROBE stoji · 46.17447,14.29480
+  1301365    12:23-12:24 prezgodaj    vrstic   2 vrata   0 premik    63 m kraj    +0 s · NAP 469699 13:05-13:37 · naša 439302 11:55-12:18 · derp '' · NAROBE stoji · 46.13431,14.99347
+  1302096    12:42-12:42 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 380844 13:40-14:09 · naša 464592 12:45-12:56 · derp '' · NAROBE drugo vozilo na vožnji · 46.17447,14.29480
+  1302121    13:27-13:28 brez_dneva   vrstic   2 vrata   0 premik     0 m kraj    +0 s · NAP 477622 14:30-14:48 · naša 477632 13:15-13:27 · derp '' · NAROBE stoji · 46.24240,14.35534
+  1301974    14:46-14:47 prezgodaj    vrstic   2 vrata   0 premik     7 m kraj    +0 s · NAP 479138 15:20-15:50 · naša 479145 14:50-15:19 · derp '' · NAROBE drugo vozilo na vožnji · 46.27494,13.95891
+  1300648    15:49-15:49 prezgodaj    vrstic   1 vrata   0 premik     6 m kraj    +0 s · NAP 388490 16:20-16:43 · naša 479147 15:50-16:19 · derp '' · NAROBE drugo vozilo na vožnji · 46.27469,13.95889
+  1302074    18:28-18:28 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 464680 19:45-19:57 · naša 464615 18:30-18:41 · derp '' · NAROBE drugo vozilo na vožnji · 46.16705,14.30622
+  1300967    06:37-06:45 prezgodaj    vrstic   8 vrata   0 premik   127 m kraj    +0 s · NAP 461721 07:10-07:36 · naša 479282 05:45-06:42 · derp '' · NAROBE stoji · 46.23268,15.26814
+  1301134    08:26-08:27 prezgodaj    vrstic   2 vrata   0 premik     6 m kraj    +0 s · NAP 478612 09:00-09:23 · naša 478611 08:30-08:53 · derp '' · NAROBE drugo vozilo na vožnji · 46.13382,14.99332
+  1301848    09:30-09:33 brez_dneva   vrstic   4 vrata   0 premik     0 m kraj    +0 s · NAP 478313 11:40-13:37 · naša 441942 09:27-10:03 · derp '' · NAROBE drugo vozilo na vožnji · 46.47843,14.85296
+  1300861    10:13-10:19 brez_dneva   vrstic   5 vrata   0 premik  1887 m kraj  -180 s · NAP 460950 12:00-12:41 · naša 481244 09:05-10:15 · derp '' · NAROBE vozi nazaj · 46.51118,15.08242
+  1301363    10:37-10:38 brez_dneva   vrstic   2 vrata   0 premik     6 m kraj    +0 s · NAP 425285 12:05-12:28 · naša 425314 10:41-10:58 · derp '' · NAROBE drugo vozilo na vožnji · 46.13398,14.99325
+  1301361    10:57-11:00 prezgodaj    vrstic   3 vrata   0 premik     0 m kraj    +0 s · NAP 479759 11:41-12:16 · naša 479757 11:01-11:36 · derp '' · NAROBE drugo vozilo na vožnji · 46.15081,15.08573
+  1300907    11:43-11:43 brez_dneva   vrstic   1 vrata   0 premik     7 m kraj    +0 s · NAP 479818 12:40-13:15 · naša 479815 11:40-12:15 · derp '' · NAROBE drugo vozilo na vožnji · 46.17165,15.05280
+  1300650    12:17-12:17 brez_dneva   vrstic   1 vrata   0 premik    29 m kraj    +0 s · NAP 471727 13:25-14:04 · naša 471721 11:30-12:09 · derp '' · NAROBE stoji · 45.77103,14.20133
+  1300625    12:21-12:21 prezgodaj    vrstic   1 vrata   0 premik    53 m kraj    +0 s · NAP 486955 13:05-13:38 · naša 485185 11:20-12:13 · derp '' · NAROBE stoji · 46.05749,14.51802
+  1300446    12:56-12:56 brez_dneva   vrstic   1 vrata   0 premik     4 m kraj    +0 s · NAP 446514 13:45-14:22 · naša 451579 13:00-13:35 · derp '' · NAROBE drugo vozilo na vožnji · 46.42130,15.87696
+  1301659    13:36-13:38 brez_dneva   vrstic   3 vrata   0 premik     4 m kraj    +0 s · NAP 451574 09:20-09:55 · naša 451581 13:40-14:15 · derp '451574' · NAROBE drugo vozilo na vožnji · 46.42097,15.87674
+  1301896    14:05-14:14 prezgodaj    vrstic  10 vrata   0 premik    15 m kraj    -1 s · NAP 487500 14:40-16:47 · naša 487478 11:55-14:05 · derp '' · NAROBE stoji · 46.27950,13.82983
+  1301974    15:49-15:49 prezgodaj    vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 388490 16:20-16:43 · naša 479147 15:50-16:19 · derp '' · NAROBE drugo vozilo na vožnji · 46.27488,13.95890
+  1302074    18:58-18:58 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 464680 19:45-19:57 · naša 464616 19:00-19:11 · derp '' · NAROBE drugo vozilo na vožnji · 46.16711,14.30664
+  1301121    21:58-21:59 prezgodaj    vrstic   2 vrata   0 premik     4 m kraj    +0 s · NAP 478571 22:30-22:53 · naša 478569 21:55-22:24 · derp '' · NAROBE drugo vozilo na vožnji · 46.17147,15.05333
+  1302100    07:43-07:43 prezgodaj    vrstic   1 vrata   0 premik     6 m kraj    +0 s · NAP 480684 08:15-08:57 · naša 464572 07:45-07:56 · derp '' · NAROBE drugo vozilo na vožnji · 46.16708,14.30640
+  1300445    08:28-08:34 brez_dneva   vrstic   4 vrata   0 premik  1273 m kraj  -156 s · NAP 473268 10:20-11:08 · naša 468393 08:00-08:30 · derp '' · NAROBE vozi nazaj · 46.56034,15.65626
+  1300287    09:16-09:21 brez_dneva   vrstic   5 vrata   0 premik     8 m kraj    +0 s · NAP 479109 10:50-11:04 · naša 479118 09:00-09:13 · derp '' · NAROBE stoji · 46.61891,16.32075
+  1301379    10:21-10:23 prezgodaj    vrstic   3 vrata   0 premik    12 m kraj    +3 s · NAP 331446 11:00-11:24 · naša 398336 10:25-10:43 · derp '' · NAROBE drugo vozilo na vožnji · 46.00118,14.02555
+  1300413    10:46-10:49 prezgodaj    vrstic   4 vrata   0 premik     3 m kraj    +0 s · NAP 476695 11:20-11:57 · naša 477877 10:45-11:20 · derp '' · NAROBE drugo vozilo na vožnji · 46.51818,16.19764
+  1301290    11:21-11:27 prezgodaj    vrstic   6 vrata   0 premik     6 m kraj  +229 s · NAP 359293 12:05-13:01 · naša 398337 11:25-11:43 · derp '' · NAROBE drugo vozilo na vožnji · 46.00117,14.02565
+  1302096    12:03-12:05 brez_dneva   vrstic   3 vrata   0 premik     0 m kraj    +0 s · NAP 380844 13:40-14:09 · naša 464650 11:45-11:57 · derp '' · NAROBE stoji · 46.17450,14.29482
+  1300425    12:39-12:48 brez_dneva   vrstic  10 vrata   0 premik    26 m kraj    +0 s · NAP 468663 15:25-16:44 · naša 468657 11:20-12:39 · derp '' · NAROBE stoji · 46.65895,16.16473
+  1302096    12:57-12:57 prezgodaj    vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 380844 13:40-14:09 · naša 464593 13:00-13:11 · derp '' · NAROBE drugo vozilo na vožnji · 46.17450,14.29482
+  1300848    14:57-14:58 prezgodaj    vrstic   2 vrata   0 premik    15 m kraj    +0 s · NAP 474929 15:30-16:27 · naša 332398 15:00-16:03 · derp '' · NAROBE drugo vozilo na vožnji · 45.95562,13.64651
+  1301133    15:42-15:43 brez_dneva   vrstic   2 vrata   0 premik    13 m kraj    +1 s · NAP 479775 17:01-17:36 · naša 479825 15:00-15:35 · derp '' · NAROBE stoji · 46.15084,15.08570
+  1301079    19:40-19:41 brez_dneva   vrstic   2 vrata   0 premik     0 m kraj    +0 s · NAP 478783 22:10-23:15 · naša 478789 19:40-20:45 · derp '' · NAROBE drugo vozilo na vožnji · 46.61308,15.21895
+  1300457    21:36-21:36 brez_dneva   vrstic   1 vrata   0 premik    13 m kraj    +0 s · NAP 465789 22:35-22:59 · naša 465790 21:35-21:59 · derp '' · NAROBE drugo vozilo na vožnji · 46.39055,15.57827
+  1302051    08:16-08:17 prezgodaj    vrstic   2 vrata   0 premik     1 m kraj    +0 s · NAP 485181 09:00-09:53 · naša 485179 08:20-09:13 · derp '' · NAROBE drugo vozilo na vožnji · 46.13512,14.74273
+  1301451    08:58-09:06 prezgodaj    vrstic   6 vrata   0 premik  1020 m kraj  -120 s · NAP 466156 09:40-10:20 · naša 323565 08:00-08:59 · derp '' · NAROBE vozi nazaj · 45.56611,14.24207
+  1302025    09:26-09:26 brez_dneva   vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 463738 10:25-10:43 · naša 463735 09:25-09:43 · derp '' · NAROBE stoji · 46.24585,14.35416
+
+NAROBE zunaj obsega (320):
+  1302053    09:25-09:37 pred_odhodom vrstic  12 vrata   0 premik    43 m kraj  +120 s · NAP 475192 (ni voznega reda) · naša 475220 (ni voznega reda) · derp '475192' · NAROBE stoji · 46.05818,14.51459
+  1302017    10:39-10:45 pred_odhodom vrstic   6 vrata   0 premik     4 m kraj    +0 s · NAP 475334 (ni voznega reda) · naša 475272 (ni voznega reda) · derp '475334' · NAROBE stoji · 46.08839,14.73398
+  1301957    12:56-12:59 pred_odhodom vrstic   4 vrata   0 premik     4 m kraj    +0 s · NAP 477566 (ni voznega reda) · naša 477566 (ni voznega reda) · derp '477566' · NAROBE stoji · 46.05804,14.51414
+  1300610    14:52-14:54 pred_odhodom vrstic   3 vrata   0 premik    53 m kraj   +54 s · NAP 468043 (ni voznega reda) · naša 457106 (ni voznega reda) · derp '468043' · NAROBE stoji · 46.22508,14.61387
+  1301888    16:43-16:50 pred_odhodom vrstic   8 vrata   0 premik     3 m kraj    +0 s · NAP 471979 (ni voznega reda) · naša 472004 (ni voznega reda) · derp '471979' · NAROBE stoji · 46.37114,14.10700
+  1300156    17:56-17:57 pred_odhodom vrstic   2 vrata   0 premik    18 m kraj    -1 s · NAP 456039 (ni voznega reda) · naša 456039 (ni voznega reda) · derp '456039' · NAROBE stoji · 46.22525,14.61335
+  1300158    18:56-18:56 pred_odhodom vrstic   1 vrata   0 premik    29 m kraj    +0 s · NAP 457197 (ni voznega reda) · naša 457197 (ni voznega reda) · derp '457197' · NAROBE stoji · 46.22528,14.61349
+  1302128    05:21-05:21 pred_odhodom vrstic   1 vrata   0 premik     3 m kraj    +0 s · NAP 409516 05:50-06:34 · naša 472982 04:30-05:14 · derp '409516' · NAROBE stoji · 46.39091,15.57705
+  1300620    05:46-05:49 pred_odhodom vrstic   4 vrata   0 premik     0 m kraj    +1 s · NAP 484912 05:50-07:01 · naša 484912 05:50-07:01 · derp '484912' · NAROBE stoji · 46.04760,14.10948
+  1301131    07:16-07:17 pred_odhodom vrstic   2 vrata   0 premik     2 m kraj    -1 s · NAP 479802 07:20-07:55 · naša 479744 06:41-07:16 · derp '479802' · NAROBE stoji · 46.17168,15.05305
+  1301982    09:30-09:34 pred_odhodom vrstic   4 vrata   0 premik  1704 m kraj  -119 s · NAP 412778 10:00-10:45 · naša 478082 08:51-09:31 · derp '412778' · NAROBE vozi nazaj · 46.37680,14.05700
+  1301361    10:57-11:00 po_koncu     vrstic   4 vrata   0 premik     0 m kraj    +0 s · NAP 479752 09:21-09:56 · naša 479757 11:01-11:36 · derp '479752' · NAROBE drugo vozilo na vožnji · 46.15078,15.08580
+  1301361    11:38-11:40 po_koncu     vrstic   3 vrata   0 premik     5 m kraj    +0 s · NAP 479752 09:21-09:56 · naša 479759 11:41-12:16 · derp '479752' · NAROBE stoji · 46.15083,15.08582
+  1301283    12:57-12:59 pred_odhodom vrstic   3 vrata   0 premik    27 m kraj    +0 s · NAP 479675 13:00-13:30 · naša 479675 13:00-13:30 · derp '479675' · NAROBE stoji · 46.12635,13.98537
+  1302027    14:39-14:40 pred_odhodom vrstic   2 vrata   0 premik     2 m kraj    +0 s · NAP 464662 14:45-14:57 · naša 464661 14:30-14:42 · derp '464662' · NAROBE drugo vozilo na vožnji · 46.16833,14.34068
+  1301369    15:15-15:22 pred_odhodom vrstic   8 vrata   0 premik     6 m kraj    +0 s · NAP 469903 15:40-16:25 · naša 469913 15:10-15:56 · derp '469903' · NAROBE drugo vozilo na vožnji · 46.23275,15.26810
+  1301359    16:37-16:38 pred_odhodom vrstic   2 vrata   0 premik     4 m kraj    +0 s · NAP 479775 17:01-17:36 · naša 479774 16:41-17:16 · derp '479775' · NAROBE drugo vozilo na vožnji · 46.15089,15.08577
+  1301891    18:40-18:41 pred_odhodom vrstic   2 vrata   0 premik     0 m kraj    +0 s · NAP 488234 19:10-19:46 · naša 488230 18:40-19:16 · derp '488234' · NAROBE drugo vozilo na vožnji · 46.16712,14.30624
+  1300902    20:27-20:29 pred_odhodom vrstic   3 vrata   0 premik     2 m kraj    +0 s · NAP 478784 20:30-21:35 · naša 478784 20:30-21:35 · derp '478784' · NAROBE stoji · 46.61338,15.23280
+  1301121    22:26-22:29 pred_odhodom vrstic   4 vrata   0 premik    13 m kraj    +0 s · NAP 478571 22:30-22:53 · naša 478571 22:30-22:53 · derp '478571' · NAROBE stoji · 46.17150,15.05340
+  1300657    06:16-06:19 pred_odhodom vrstic   3 vrata   0 premik     7 m kraj    +0 s · NAP 484914 06:20-07:31 · naša 484914 06:20-07:31 · derp '484914' · NAROBE stoji · 46.04769,14.10943
+  1301131    07:16-07:17 pred_odhodom vrstic   2 vrata   0 premik     0 m kraj    +0 s · NAP 479802 07:20-07:55 · naša 479744 06:41-07:16 · derp '479802' · NAROBE stoji · 46.17169,15.05304
+  1301927    08:06-08:08 pred_odhodom vrstic   3 vrata   0 premik    21 m kraj    -2 s · NAP 481128 08:10-08:35 · naša 481128 08:10-08:35 · derp '481128' · NAROBE drugo vozilo na vožnji · 46.24579,14.35407
+  1300893    09:47-09:55 pred_odhodom vrstic   8 vrata   0 premik    40 m kraj  +114 s · NAP 470262 10:00-11:11 · naša 456933 09:15-09:50 · derp '470262' · NAROBE stoji · 45.90775,15.60049
+  1301119    10:46-10:46 pred_odhodom vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 471676 10:50-11:02 · naša 471693 10:35-10:48 · derp '471676' · NAROBE stoji · 46.04288,14.84351
+  1302096    11:11-11:13 pred_odhodom vrstic   2 vrata   0 premik     0 m kraj    +0 s · NAP 464587 11:30-11:41 · naša 464586 11:15-11:26 · derp '464587' · NAROBE drugo vozilo na vožnji · 46.17447,14.29485
+  1301283    12:57-12:58 pred_odhodom vrstic   2 vrata   0 premik   101 m kraj    -5 s · NAP 479675 13:00-13:30 · naša 479675 13:00-13:30 · derp '479675' · NAROBE stoji · 46.12631,13.98539
+  1302033    13:57-13:58 pred_odhodom vrstic   2 vrata   0 premik  1691 m kraj    -1 s · NAP 455751 14:10-14:33 · naša 455749 14:00-14:23 · derp '455751' · NAROBE drugo vozilo na vožnji · 46.16327,14.31994
+  1301369    15:16-15:16 pred_odhodom vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 469903 15:40-16:25 · naša 469913 15:10-15:56 · derp '469903' · NAROBE drugo vozilo na vožnji · 46.23270,15.26818
+  1301930    17:56-18:05 pred_odhodom vrstic   9 vrata   0 premik   477 m kraj    +0 s · NAP 477243 18:25-18:49 · naša 477216 17:55-18:18 · derp '477243' · NAROBE drugo vozilo na vožnji · 46.24738,14.35457
+  1300902    20:27-20:29 pred_odhodom vrstic   3 vrata   0 premik    95 m kraj    +1 s · NAP 478784 20:30-21:35 · naša 478784 20:30-21:35 · derp '478784' · NAROBE stoji · 46.61336,15.23275
+  1301998    05:26-05:29 pred_odhodom vrstic   3 vrata   0 premik     0 m kraj    -1 s · NAP 487026 05:30-06:24 · naša 487026 05:30-06:24 · derp '487026' · NAROBE stoji · 46.06073,14.83522
+  1300646    06:16-06:19 pred_odhodom vrstic   3 vrata   0 premik     0 m kraj    +1 s · NAP 484914 06:20-07:31 · naša 484914 06:20-07:31 · derp '484914' · NAROBE stoji · 46.04772,14.10944
+  1000502    08:02-08:03 po_koncu     vrstic   2 vrata   0 premik  1136 m kraj    +0 s · NAP 451467 06:25-06:56 · naša 451468 08:00-08:32 · derp '451467' · NAROBE drugo vozilo na vožnji · 45.56843,15.19208
+  1300597    09:56-09:59 pred_odhodom vrstic   3 vrata   0 premik    22 m kraj    +1 s · NAP 427828 10:20-11:07 · naša 427827 10:00-10:47 · derp '427828' · NAROBE drugo vozilo na vožnji · 45.52464,13.56716
+  1301953    12:13-12:13 pred_odhodom vrstic   1 vrata   0 premik     0 m kraj    +0 s · NAP 464591 12:30-12:41 · naša 464590 12:15-12:26 · derp '464591' · NAROBE drugo vozilo na vožnji · 46.16704,14.30655
+  1301589    13:56-14:05 pred_odhodom vrstic   7 vrata   0 premik    13 m kraj  +117 s · NAP 427841 14:10-14:57 · naša 427840 14:00-14:47 · derp '427841' · NAROBE drugo vozilo na vožnji · 45.52455,13.56712
+  1302059    14:41-14:54 pred_odhodom vrstic   4 vrata   0 premik    16 m kraj  +116 s · NAP 485038 15:00-15:54 · naša 485034 14:45-15:45 · derp '485038' · NAROBE drugo vozilo na vožnji · 46.22527,14.61323
+  1302098    15:19-15:19 pred_odhodom vrstic   1 vrata   0 premik     3 m kraj    +0 s · NAP 451933 15:25-15:52 · naša 451927 14:55-15:20 · derp '451933' · NAROBE stoji · 46.24702,14.35461
+  1301900    16:22-16:25 pred_odhodom vrstic   4 vrata   0 premik     0 m kraj    +0 s · NAP 485093 16:30-17:23 · naša 485118 15:30-16:23 · derp '485093' · NAROBE stoji · 46.05816,14.51540
+  1300855    17:16-17:18 pred_odhodom vrstic   2 vrata   0 premik    14 m kraj    +0 s · NAP 443588 17:20-17:58 · naša 443588 17:20-17:58 · derp '443588' · NAROBE stoji · 46.54253,14.90360
+  1300902    20:27-20:29 pred_odhodom vrstic   3 vrata   0 premik     5 m kraj    +0 s · NAP 478784 20:30-21:35 · naša 478784 20:30-21:35 · derp '478784' · NAROBE stoji · 46.61342,15.23273
+  1301927    05:51-05:52 pred_odhodom vrstic   2 vrata   0 premik   757 m kraj    +0 s · NAP 487379 05:55-06:34 · naša 487379 05:55-06:34 · derp '487379' · NAROBE drugo vozilo na vožnji · 46.24881,14.35705
+  1300963    07:24-07:29 pred_odhodom vrstic   6 vrata   0 premik     9 m kraj    +0 s · NAP 480636 07:47-08:00 · naša 480967 07:05-07:20 · derp '480636' · NAROBE stoji · 46.54444,14.93010
+  1300597    09:56-10:01 pred_odhodom vrstic   5 vrata   0 premik     8 m kraj  +115 s · NAP 427828 10:20-11:07 · naša 427827 10:00-10:47 · derp '427828' · NAROBE drugo vozilo na vožnji · 45.52448,13.56704
+  1301358    11:52-11:56 pred_odhodom vrstic   5 vrata   0 premik   140 m kraj  +120 s · NAP 479760 12:01-12:36 · naša 479814 11:20-11:55 · derp '479760' · NAROBE stoji · 46.15091,15.08578
+  1301133    12:55-12:56 pred_odhodom vrstic   2 vrata   0 premik    26 m kraj    +0 s · NAP 479763 13:01-13:36 · naša 479817 12:20-12:55 · derp '479763' · NAROBE stoji · 46.15094,15.08572
+  1301859    13:43-13:44 pred_odhodom vrstic   2 vrata   0 premik   109 m kraj   +25 s · NAP 484634 13:45-15:34 · naša 484634 13:45-15:34 · derp '484634' · NAROBE stoji · 46.23817,15.26357
+  1301589    14:06-14:09 pred_odhodom vrstic   4 vrata   0 premik     0 m kraj    +0 s · NAP 427841 14:10-14:57 · naša 427841 14:10-14:57 · derp '427841' · NAROBE drugo vozilo na vožnji · 45.52461,13.56719
+  1302098    15:50-15:51 pred_odhodom vrstic   2 vrata   0 premik     6 m kraj    +1 s · NAP 451928 15:53-16:18 · naša 451933 15:25-15:52 · derp '451928' · NAROBE stoji · 46.23105,14.28511
+  1301552    17:06-17:06 po_koncu     vrstic   1 vrata   0 premik     9 m kraj    +0 s · NAP 445285 14:40-15:54 · naša 445323 17:10-18:35 · derp '445285' · NAROBE drugo vozilo na vožnji · 45.53830,13.73757
+  1301929    19:16-19:26 po_koncu     vrstic  10 vrata   0 premik    14 m kraj   +60 s · NAP 443961 17:55-18:22 · naša 443962 18:55-19:22 · derp '443961' · NAROBE drugo vozilo na vožnji · 46.24420,14.37336
+  1301131    21:54-21:56 pred_odhodom vrstic   3 vrata   0 premik   149 m kraj    +0 s · NAP 479789 22:01-22:35 · naša 479844 21:20-21:55 · derp '479789' · NAROBE stoji · 46.15091,15.08580
+  1301927    05:51-05:54 pred_odhodom vrstic   2 vrata   0 premik   425 m kraj    +0 s · NAP 487379 05:55-06:34 · naša 487379 05:55-06:34 · derp '487379' · NAROBE drugo vozilo na vožnji · 46.24891,14.35461
+  1301276    06:40-06:40 pred_odhodom vrstic   1 vrata   1 premik     5 m kraj    +0 s · NAP 474003 06:45-07:19 · naša 474008 06:10-06:44 · derp '474003' · NAROBE stoji · premalo leg · 46.06191,13.89007
+  1300648    07:36-07:36 pred_odhodom vrstic   1 vrata   0 premik     3 m kraj    +0 s · NAP 478075 07:45-08:17 · naša 478072 07:40-08:15 · derp '478075' · NAROBE drugo vozilo na vožnji · 46.27470,13.95893
+  1300597    09:56-09:58 pred_odhodom vrstic   3 vrata   0 premik     3 m kraj    +0 s · NAP 427828 10:20-11:07 · naša 427827 10:00-10:47 · derp '427828' · NAROBE drugo vozilo na vožnji · 45.52447,13.56715
+  1301123    11:07-11:10 pred_odhodom vrstic   4 vrata   0 premik     0 m kraj    +0 s · NAP 469900 11:30-12:15 · naša 469899 11:10-11:56 · derp '469900' · NAROBE drugo vozilo na vožnji · 46.23245,15.26851
+  1301625    13:19-13:19 pred_odhodom vrstic   1 vrata   0 premik     4 m kraj    +0 s · NAP 435930 13:20-13:53 · naša 435930 13:20-13:53 · derp '435930' · NAROBE stoji · 45.54780,13.74212
+  1301984    14:20-14:22 pred_odhodom vrstic   3 vrata   0 premik     0 m kraj    -1 s · NAP 487003 14:50-15:24 · naša 486999 14:20-14:54 · derp '487003' · NAROBE drugo vozilo na vožnji · 46.08835,14.73382
