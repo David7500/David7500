@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, quote, quote_plus, urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Path as ParametrPoti
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -412,6 +413,15 @@ def _conn():
     return db.connect()
 
 
+#: Leta, za katera datum v zahtevi sploh sprejmemo. Zunaj njih voznega reda
+#: ni, računanje z dnevi pa na robu koledarja (leto 1, leto 9999) pade.
+_DATUM_OD, _DATUM_DO = 2000, 2100
+
+#: Zgornja meja celih števil iz zahteve, ki gredo v SQLite: večje od 2^63
+#: tam pade („Python int too large to convert to SQLite INTEGER“, 500).
+_INT_NAJVEC = 2**31 - 1
+
+
 def _check_date(value: str | None) -> str | None:
     """Datum mora biti YYYY-MM-DD ali nič.
 
@@ -422,9 +432,14 @@ def _check_date(value: str | None) -> str | None:
     if value is None:
         return None
     try:
-        return date.fromisoformat(value).isoformat()
+        dan = date.fromisoformat(value)
     except ValueError:
         raise HTTPException(400, f"datum {value!r} ni oblike YYYY-MM-DD") from None
+    # Veljaven, a nesmiseln datum: `0001-01-01` je v odhodni tabli padel na
+    # „dan prej“ (OverflowError, 500; meglica 9. 11. 2026).
+    if not _DATUM_OD <= dan.year <= _DATUM_DO:
+        raise HTTPException(400, f"datum {value!r} je zunaj razpona {_DATUM_OD}–{_DATUM_DO}")
+    return dan.isoformat()
 
 
 @app.get("/")
@@ -722,7 +737,8 @@ def _stik_vklopljen() -> None:
 
 
 @app.get("/stik", response_class=HTMLResponse, include_in_schema=False)
-def stik_stran(request: Request, poslano: int = 0, prijava: int | None = Query(None, ge=1)):
+def stik_stran(request: Request, poslano: int = Query(0, ge=0, le=1),
+               prijava: int | None = Query(None, ge=1, le=_INT_NAJVEC)):
     """Obrazec za sporočilo. Žeton v njem nosi čas izdaje (glej `stik.py`).
 
     `prijava` je gumb „Prijavi“ pri objavljeni opombi potnika (DSA, čl. 16):
@@ -3121,7 +3137,8 @@ def api_run_weather(train_no: str, date: str | None = None, trip: str | None = N
 
 
 @app.get("/api/train/{train_no}/predict")
-def api_predict(train_no: str, stop_seq: int, delay_s: int,
+def api_predict(train_no: str, stop_seq: int = Query(..., ge=0, le=10_000),
+                delay_s: int = Query(..., ge=-86_400, le=86_400),
                 days: int = Query(90, ge=1, le=3650),
                 exclude_date: str | None = None, trip: str | None = None):
     """Napoved zamude naprej po progi, glede na trenutno zamudo.
@@ -3166,27 +3183,39 @@ def api_vehicle_chain(train_no: str, date: str | None = None,
 # (`KAJROS_MAINT_HOUR`); brisati ga zato, da bi ga cez teden dni pisali znova,
 # bi bilo drazje od tega komentarja. Kdor ju cez cas najde brez odjemalca in
 # nove strani ni, naj ju odstrani.
+def _okno_povzetka(days: int) -> int:
+    """Razrez čez zgodovino samo za okno, ki ga nočno opravilo že izračuna.
+
+    Do 9. 11. 2026 je vsak `days` od 1 do 3650 sprožil račun čez ves `run` v
+    zahtevi in ga shranil v `povzetek`, `fresh=1` pa ga je računal še mimo
+    ključavnice, poljubno mnogokrat hkrati. Na razvojni bazi je en tak klic
+    za avtobuse trajal 7–30 s in pot od vrat do vrat ob njem 21 s namesto
+    0,2 s; odjemalca nima nobeden. Javna pot ne sme imeti ročice, ki strežnik
+    ustavi z enim naslovom.
+    """
+    if days not in stats.SUMMARY_WINDOWS:
+        okna = ", ".join(str(d) for d in stats.SUMMARY_WINDOWS)
+        raise HTTPException(400, f"razrez je na voljo samo za days = {okna}")
+    return days
+
+
 @app.get("/api/stats/breakdowns")
-def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
-                   fresh: bool = False):
+def api_breakdowns(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
     """Končne zamude po vrsti vlaka, uri odhoda, dnevu v tednu in dnevu.
 
-    Postrezeno iz dnevnega povzetka. `fresh=1` obide predpomnilnik -- pri letu
-    zajema je to nekaj sekund, zato ni privzeto.
+    Postreženo iz dnevnega povzetka, samo za okna, ki jih računa nočno
+    opravilo (`_okno_povzetka`).
     """
+    days = _okno_povzetka(days)
     with _conn() as conn:
-        if fresh:
-            return stats.summary_build(conn, "breakdowns", network, days)
         return stats.summary_get(conn, "breakdowns", network, days)
 
 
 @app.get("/api/stats")
-def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q,
-              fresh: bool = False):
+def api_stats(days: int = Query(90, ge=1, le=3650), network: str = NETWORK_Q):
     """Lestvica voženj po zamudi ob koncu poti (iz dnevnega povzetka)."""
+    days = _okno_povzetka(days)
     with _conn() as conn:
-        if fresh:
-            return stats.summary_build(conn, "network_stats", network, days)
         return stats.summary_get(conn, "network_stats", network, days)
 
 
@@ -3893,7 +3922,7 @@ def api_pot_podrobno(
     date: str | None = None,
     kmh: float = Query(hoja.KMH, ge=3, le=25),
     geometrija: bool = Query(True, description="0 = samo zamude, brez pešpoti"),
-    rok: int | None = Query(None, ge=0, description="biti tam do (sekunde epoch): "
+    rok: int | None = Query(None, ge=0, le=2**33, description="biti tam do (sekunde epoch): "
                                                     "zanesljivost šteje tudi prihod do roka"),
 ):
     """Ena pot, razložena: kod hodiš in kje izstopiš.
@@ -4224,7 +4253,7 @@ def admin_koledar(request: Request):
 
 
 @app.post(f"{ADMIN_POT}/sporocila/{{id_}}", include_in_schema=False)
-async def admin_sporocilo(request: Request, id_: int):
+async def admin_sporocilo(request: Request, id_: int = ParametrPoti(..., ge=1, le=_INT_NAJVEC)):
     """Označi sporočilo za prebrano ali ga izbriši; komentar k vožnji objavi ali umakni.
 
     Dejanja so na **isti poti** in ne vsako na svoji: pisalne poti so

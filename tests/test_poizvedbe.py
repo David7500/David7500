@@ -3234,3 +3234,62 @@ def test_nocna_voznja_pred_odhodom_je_vcerajsnja(conn):
     # Ko se včerajšnje okno izteče (z rezervo treh ur), ostane današnji dan.
     pozneje = datetime(2026, 9, 2, 3, 40, tzinfo=ZoneInfo("Europe/Ljubljana"))
     assert api._active_service_date(conn, "LPP 6", pozneje, "noc18") == danes
+
+
+# ------------------------------------------------- meje parametrov (meglica)
+# Vse troje je 9. 11. 2026 našla meglica (`scripts/meglica.py`): 17 237 zahtev
+# GET z grdimi vrednostmi, trije odgovori 500 in dva brez odgovora v 30 s.
+
+def test_cela_stevila_iz_zahteve_imajo_obe_meji():
+    """Število iz zahteve brez zgornje meje pride do SQLite in tam pade:
+    `stop_seq=99999999999999999999` je dal „Python int too large to convert
+    to SQLite INTEGER“ in 500. Velja za vsako pot, tudi za tisto, ki jo kdo
+    doda jutri."""
+    import typing
+    from kajros import api
+
+    brez = []
+    for r in api.app.routes:
+        d = getattr(r, "dependant", None)
+        if d is None:
+            continue
+        for p in list(d.query_params) + list(d.path_params):
+            vrste = typing.get_args(p.field_info.annotation) or (p.field_info.annotation,)
+            if int not in vrste and float not in vrste:
+                continue
+            meje = {type(m).__name__ for m in p.field_info.metadata}
+            if not ({"Ge", "Gt"} & meje and {"Le", "Lt"} & meje):
+                brez.append(f"{r.path} {p.name}")
+    assert brez == [], "parameter brez spodnje ali zgornje meje (Query(ge=, le=))"
+
+
+@pytest.mark.parametrize("datum", ["0001-01-01", "1999-12-31", "2101-01-01", "9999-12-31"])
+def test_datum_zunaj_razpona_je_400(datum):
+    """Veljaven datum, ki ne more imeti voznega reda: odhodna tabla je za
+    `0001-01-01` računala dan prej in padla z OverflowError (500)."""
+    from fastapi import HTTPException
+    from kajros import api
+
+    with pytest.raises(HTTPException) as e:
+        api._check_date(datum)
+    assert e.value.status_code == 400
+    assert api._check_date("2026-11-09") == "2026-11-09"
+
+
+def test_razrez_cez_zgodovino_se_ne_racuna_na_zahtevo():
+    """Javna pot ne sme sprožiti računa čez ves `run`: samo okna nočnega
+    opravila, brez `fresh`. Prej je vsak `days` računal v zahtevi in pisal v
+    `povzetek`, `fresh=1` pa mimo ključavnice."""
+    import inspect
+    from fastapi import HTTPException
+    from kajros import api
+
+    for pot in (api.api_stats, api.api_breakdowns):
+        assert "fresh" not in inspect.signature(pot).parameters
+        for days in (1, 7, 89, 3650):
+            assert days not in stats.SUMMARY_WINDOWS
+            with pytest.raises(HTTPException) as e:
+                pot(days=days, network="avtobus")
+            assert e.value.status_code == 400
+    for days in stats.SUMMARY_WINDOWS:
+        assert api._okno_povzetka(days) == days
