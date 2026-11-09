@@ -42,3 +42,10 @@ manj, ker okvir začetka in konca zoži vožnje že v indeksu.
   Nočni `network_stats` železnice prihrani okoli 23 s; `breakdowns` ima isti `mx`, posebej ni
   merjen (preverba: `povzetek.took_ms` po prvi noči).
 * Pravilo v `CLAUDE.md` dopolnjeno: golo, razen kjer poizvedba začne bolje drugje.
+
+## Prva noč po objavi (9. 11. 2026)
+
+`povzetek.took_ms` na arwenu, račun ob 3.30: `network_stats` železnica 24,8 → **1,9 s**,
+`breakdowns` železnica 31,3 → **7,5 s** (ni dosegel 1,5 s; posebej ni bil merjen, štirikrat
+hitreje je dovolj). Avtobusi: `network_stats` 50,4 → 50,4 s, `breakdowns` 161,4 → 165,5 s
+(+2,5 %, ena noč, v šumu). Avtobusi niso zrasli, ukrepa ni.
