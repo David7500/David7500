@@ -3678,3 +3678,12 @@ Predelava po RG 318 (`docs/presoja/2026-11-09-napoved/zapis.md`, tam tabele in p
 * Sedanja vrednost `run` se od `napoved.actual_s` (zapisan ob razrešitvi) razlikuje pri 20 247 od 91 822 vrstic sence (22 %): popravilo zgodovine in poznejši zapisi zemljevida. `kajros ocena` meri proti zapisani.
 * `predict` za 40 najdaljših vlakov 9. 11. (30 postankov naprej): 2,3 ms, z novim modelom do konca vožnje 22,5 ms.
 
+## Časovni stroj: preizkusi pod lažno uro (9. 11. 2026)
+
+Vseh 1 430 preizkusov pod libfaketime (`LD_PRELOAD`, ponaredi tudi SQLite `date('now')`) na 62 trenutkih: vsaka ura dneva, vsak dan tedna, konec leta, oba premika ure 2027, 29. 2. 2028, do 2031. Na pravo uro je bilo vse zeleno. Orodje: `scripts/casovni_stroj.sh` (`--vse` 37 trenutkov, ~2,5 min), kratek nabor štirih teče v `preveri.sh` (+18 s).
+
+* **Bomba 26. 11. 2026**: `test_statistika_ne_steje_mestnih_avtobusov` je imel pet trdih avgustovskih datumov, `network_stats` gleda 90 dni, lestvica rabi pet voženj. 25. 11. zeleno, 26. 11. rdeče: `preveri.sh` bi ustavil objave na dan konca zapore Vrbanske.
+* **Vsako noč med polnočjo in 7.06** sta padla dva preizkusa v `test_prehod.py` (12 od 12 nočnih zagonov): `sled.osvezeno` je žigosala prava ura, `pospravi` pa je dobil uro preizkusa (11.06), razlika nad `OKNO_POZNEJE_S` je pozabila vodjo. Modul ima zdaj v preizkusih svojo uro.
+* **Prvih ~15 min po polnoči** `test_uvoz_popravek_naredi_znova`: voznoredne sekunde preizkusa so negativne, `zive.nov_vozni_red` pa je na minuto zaokroževal z `int()`, ki reže proti ničli. Navje je ob prvi prestavitvi dobilo −180 s, po uvozu z drugo predlogo −120 s. Zdaj `math.floor`; za čase ≥ 0 je izid enak.
+* **Tekma z nitjo** v `test_predpomnilnik_v_ozadju_postrezi_staro_in_osvezi`: 8 od 42 zagonov s štirimi vzporednimi. Preizkus je čakal na klic, ne na shranjeno vrednost.
+* Po popravkih 37 od 37 trenutkov zelenih. Premik ure in konec leta v preizkusih ne najdeta nič; to ne pove, da ju koda prenese, samo da ju noben preizkus ne zadene narobe.

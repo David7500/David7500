@@ -44,6 +44,7 @@ na Kolodvoru.
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import statistics
 import threading
@@ -703,7 +704,9 @@ def nov_vozni_red(objava: list[tuple], predloga: list[tuple],
         else:
             delez = (k - k1) / (k2 - k1)
         # Na minuto, kot objava; `+ 0.5` in ne `round()` (bančno zaokroževanje).
-        t = int((t1 + min(1.0, max(0.0, delez)) * (t2 - t1)) / 60 + 0.5) * 60
+        # `floor` in ne `int`: `int` reže proti ničli in bi uro pred polnočjo
+        # obratovalnega dne (negativne sekunde) zaokrožil v drugo smer.
+        t = math.floor((t1 + min(1.0, max(0.0, delez)) * (t2 - t1)) / 60 + 0.5) * 60
         out.append((stevilke[k], sid, t, t))
     return out
 

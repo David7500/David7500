@@ -483,15 +483,14 @@ def test_statistika_ne_steje_mestnih_avtobusov(conn):
     spremenilo v delež točnih avtobusov.
     """
     _add_bus(conn)
-    # Lestvica ima prag `MIN_RUNS_FOR_RANK`, zato pet dni. Datumi so trdi; v
-    # `service_day` se ne vstavlja nic, zato trka z vrstico iz priprave ni.
-    for trip, day, d in (("t1", "2026-08-31", 600), ("b1", "2026-08-31", 60),
-                         ("t1", "2026-08-30", 600), ("b1", "2026-08-30", 60),
-                         ("t1", "2026-08-29", 600), ("b1", "2026-08-29", 60),
-                         ("t1", "2026-08-28", 600), ("b1", "2026-08-28", 60),
-                         ("t1", "2026-08-27", 600), ("b1", "2026-08-27", 60)):
-        conn.execute("INSERT INTO run(trip_id, service_date, stop_seq, delay_arr, delay_dep, feed_ts) "
-                     "VALUES(?,?,2,?,?,4102444800)", (trip, day, d, d))
+    # Lestvica ima prag `MIN_RUNS_FOR_RANK`, zato pet dni. Datumi so računani:
+    # `network_stats` gleda zadnjih 90 dni in trdi avgustovski bi preizkus
+    # podrli 26. 11. 2026 (ujeto pod lažno uro 9. 11.). V `service_day` se ne
+    # vstavlja nič, zato trka z vrstico iz priprave ni.
+    for dni in range(1, 6):
+        for trip, d in (("t1", 600), ("b1", 60)):
+            conn.execute("INSERT OR IGNORE INTO run(trip_id, service_date, stop_seq, delay_arr, "
+                         "delay_dep, feed_ts) VALUES(?,?,2,?,?,4102444800)", (trip, _pred(dni), d, d))
     conn.commit()
 
     assert {r["train_no"] for r in stats.network_stats(conn, network="zeleznica")} == {"IC 1"}
@@ -2496,8 +2495,11 @@ def test_predpomnilnik_v_ozadju_postrezi_staro_in_osvezi():
 
     # drugi klic vrne STARO vrednost, novo pa izracuna v ozadju
     assert api._predpomni(kljuc, None, 0.05, izracun, v_ozadju=True) == "vrednost-1"
-    for _ in range(50):                             # pocakaj na nit
-        if len(klici) > 1:
+    # Čaka se na shranjeno vrednost, ne na klic: nit vrednost shrani šele po
+    # vrnitvi iz `izracun`, vmes je bil preizkus pod obremenitvijo rdeč
+    # (8 od 42 zagonov s štirimi vzporednimi, 9. 11. 2026).
+    for _ in range(100):
+        if api._ODGOVORI[kljuc][1] == "vrednost-2":
             break
         _t.sleep(0.02)
     assert len(klici) == 2, "osvežitev v ozadju se ni zgodila"

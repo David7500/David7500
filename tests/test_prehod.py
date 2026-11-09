@@ -9,7 +9,6 @@ zamudo. Lega točno na postanku pomeni najbližjo točko; odhod je ~6 s za njo
 """
 from __future__ import annotations
 
-import time
 from datetime import date, timedelta
 
 import pytest
@@ -20,8 +19,22 @@ DAN = date.today().isoformat()
 POLNOC = stats.polnoc(DAN)
 
 
+class _Ura:
+    """Ura modula `prehod` med preizkusom: ob 10.50 današnjega dne.
+
+    Lege v preizkusih so ob 10.00–11.10 današnjega dne, `sled.osvezeno` pa je
+    žigosala prava ura. Med polnočjo in 7.06 je bil zato `pospravi(POLNOC +
+    40000)` več kot `OKNO_POZNEJE_S` za osvežitvijo in je vodjo pozabil: dva
+    preizkusa sta bila vsako noč rdeča (ujeto pod lažno uro 9. 11. 2026)."""
+
+    @staticmethod
+    def time() -> float:
+        return POLNOC + 39000.0
+
+
 @pytest.fixture(autouse=True)
-def _cist_spomin():
+def _cist_spomin(monkeypatch):
+    monkeypatch.setattr(prehod, "time", _Ura)
     prehod._sledi.clear()
     prehod._vodje.clear()
     yield
@@ -288,7 +301,7 @@ def test_naslednja_vozja_pod_isto_stevilko_ne_povozi_prve():
             zapisano[p[0]] = p[1]
     prej = dict(zapisano)
     assert len(prej) >= 2 and all(50 <= z <= 70 for z in prej.values()), prej
-    prehod.pospravi(c, time.time() + prehod.POZABI_S + 1)
+    prehod.pospravi(c, _Ura.time() + prehod.POZABI_S + 1)
     assert ("n", DAN, "prvo") not in prehod._sledi
     for t, lat, lon in drugo:
         for p in prehod.lega(c, "n", DAN, int(POLNOC + t), lat, lon, "drugo"):

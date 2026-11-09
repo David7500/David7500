@@ -16,6 +16,14 @@ NAPAKE=0
 echo "== testi"
 if ./venv/bin/python -m pytest -q 2>&1 | tail -3; then :; else NAPAKE=$((NAPAKE+1)); fi
 
+# Isti preizkusi pod lažno uro: nocoj po polnoči, ob treh, čez 30 in 90 dni.
+# Trd datum v preizkusu tako pade mesec pred dnem, ko bi ustavil objavo
+# (~18 s; brez libfaketime se preskoči). KAJROS_BREZ_STROJA=1 ga izpusti.
+if [ -z "${KAJROS_BREZ_STROJA:-}" ]; then
+  echo "== testi pod lažno uro"
+  if ./scripts/casovni_stroj.sh; then :; else NAPAKE=$((NAPAKE+1)); fi
+fi
+
 if ! curl -s -o /dev/null --max-time 5 "$BASE/api/health"; then
   echo "!! strežnik na $PORT ne teče -- poženi ./scripts/dev-restart.sh"
   exit 1

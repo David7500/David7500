@@ -14,7 +14,7 @@ Veja: `claude/slovenske-zeleznice-api-ql84hf` · remote `David7500/David7500`
 
 Venv = `venv/` (Python 3.14), **ne** `.venv`. Strežnik pogosto že teče na 8001 — `pgrep -af uvicorn` pred zagonom drugega. CLI: `./venv/bin/python -m kajros.cli <ukaz>` (seznam: `--help`).
 
-**Pred „končano“: `./scripts/preveri.sh`** — testi, odzivi strani, konzola brskalnika, **pyflakes**, **skladnost številk**, paleta; z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q`. `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
+**Pred „končano“: `./scripts/preveri.sh`** — testi, **testi pod lažno uro** (`scripts/casovni_stroj.sh`: nocoj po polnoči, čez 30 in 90 dni; `--vse` še premik ure in konec leta), odzivi strani, konzola brskalnika, **pyflakes**, **skladnost številk**, paleta; z izhodno kodo. Sami testi: `./venv/bin/python -m pytest -q`. `scripts/preveri_skladnost.py` straži napake, ki so si nasprotovale na zaslonu: osirotele meritve, vsota razredov proti deležu točnih, razred po zaokroženi minuti, hitrost `/api/health`, beseda namesto minusa pri prestopu.
 
 Avtobusi: `KAJROS_AGENCIES=1118,1119,1121,1123`, brez tega v bazi samo SŽ. **Mestni LPP in Marprom = svoja vira** (`KAJROS_LPP`, `KAJROS_MARPROM`, privzeto vklopljena): občinska, v IJPP ju ni. Podrobno `.claude/rules/zajem.md`.
 
@@ -118,7 +118,7 @@ tests/           pytest · scripts/ dev-restart.sh, preveri.sh, preveri_paleto.p
 android/         ovoj z WebView (Kotlin), orodja v ~/kajros-android · o-nas/ vir 3D /o-nas, gradi.sh → static/o-nas/o3.js
 ```
 
-**Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavi `service_day('S1','2026-08-31')`, test dan računa (`_pred`); ko se ujameta: `UNIQUE constraint failed` (31. 8. 2026 pet rdečih). Računani vstavki zato `INSERT OR IGNORE`.
+**Trd datum v pripravi + računan datum v testu = bomba.** Priprava vstavi `service_day('S1','2026-08-31')`, test dan računa (`_pred`); ko se ujameta: `UNIQUE constraint failed` (31. 8. 2026 pet rdečih). Računani vstavki zato `INSERT OR IGNORE`. **Trd datum ob oknu v kodi** („zadnjih 90 dni“) je druga bomba: zelen, dokler datum ne zdrsne iz okna (9. 11. 2026 ujet preizkus z rokom 26. 11.). Datume računaj (`_pred`), uro modula v preizkusu zamenjaj, ne mešaj prave z lažno.
 
 Tabele: `station`, `edge`, `trip`, `sched`, `service_day`, `shape` (statika; `shape.osm`/`edge.osm` = pripeta, `pripeto` = predpomnilnik po vsebini) · `obs` (dnevnik sprememb), `run` (zadnje stanje na postanek) · `vehicle_now` · `weather` · `alert` + `alert_entity` · `delay_report` · `povzetek` · `napoved` · `deljenje` + `deljenje_tocka` + `deljenje_prehod` · `peron` + `peron_postaja` · `sz_zamuda` + `lpp_zamuda` (drugi vir, za primerjavo z derp.si) · `ziva_voznja` + `popravek_vzorca` (`zive.py`) · `odklon` · `lega` + `gps_prehod` (lege 14 dni) · `obvestilo` · `donacija` · `zasedenost` + `opomba` · `stat_dan` (dnevni agregati statistike, ne obrezuje se) · `odsek_profil` (28 dni) · `opazovano` + `opazovano_dan` (ne obrezuje se) + `opazovano_izid` (21 dni) · `obisk_pot` + `obisk_razrez` + `obiskovalec` + `obisk_odziv` · `sporocilo` (zadnjih pet samo strežni stroj). `promet.sqlite`: `fcd` (dnevnik po odseku, `NULL` = spet prosto) + `fcd_zdaj` + `fcd_odsek` · `obhod` · `ac`. `dosje.sqlite`: `tocke` + `stanje` + `telo` + `zamude` + `vozilo_dan` + `oznaka`.
 
