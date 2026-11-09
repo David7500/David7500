@@ -197,6 +197,35 @@ a.d-pov-poslji { display: inline-flex; align-items: center; text-decoration: non
 .pod-trak > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 .pod-stevilka { margin: 0; color: var(--ink-dim); }
 .pod-stevilka b { color: var(--ink); font-weight: 600; }
+/* Napredek namena, ko je cilj dosežen (`donacije._koraki`): navpičen niz
+   pik, črta med njimi v poudarku do zadnjega opravljenega. Pika stoji na
+   sredini prve vrstice imena (`0.725em` = pol višine vrstice 1,45), da dolgo
+   ime na telefonu lahko gre v drugo vrsto. */
+.pod-hvala { margin: 2px 0 10px; }
+.pod-koraki { list-style: none; margin: 0; padding: 0; }
+.pod-koraki > .pod-k {
+  position: relative; display: flex; align-items: baseline; gap: 12px;
+  /* Ista vrstica tudi na `/donacije`, kjer `.besedilo li` da 1,7 in rob. */
+  margin: 0; padding: 3px 0 3px 24px; max-width: none; line-height: 1.45;
+}
+.pod-k::before {
+  content: ""; position: absolute; left: 2px; top: calc(0.725em - 2px);
+  width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--ink-faint);
+}
+.pod-k:not(:last-child)::after {
+  content: ""; position: absolute; left: 6px; width: 2px;
+  top: calc(0.725em + 10px); bottom: calc(-0.725em + 4px);
+  border-radius: 1px; background: var(--m-visoka);
+}
+.pod-k-opravljeno::before { border-color: var(--accent); background: var(--accent); }
+.pod-k-opravljeno:not(:last-child)::after { background: var(--accent); }
+.pod-k-zdaj::before { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.pod-k-opravljeno .pod-k-ime { color: var(--ink); }
+.pod-k-zdaj .pod-k-ime { color: var(--ink); font-weight: 600; }
+.pod-koraki > .pod-k-pozneje { color: var(--ink-faint); }
+.pod-k-kdaj { margin-left: auto; font-size: 13px; color: var(--ink-faint); white-space: nowrap; }
+.pod-k-zdaj .pod-k-kdaj { color: var(--accent); font-weight: 500; }
 .besedilo .pod-cilj { margin: 20px 0 8px; padding: 14px 16px 16px; border-radius: 24px; background: var(--bg-raised); }
 .besedilo .pod-cilj p { margin: 0; }
 .besedilo .pod-namen { font: 600 15px/1.3 var(--sans); color: var(--ink); }

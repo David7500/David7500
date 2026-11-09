@@ -484,6 +484,13 @@ const PODPORA_KLJUC = "kajros:podpora";
 const evri = (centi) => (centi / 100).toLocaleString("sl-SI",
   { minimumFractionDigits: centi % 100 ? 2 : 0, maximumFractionDigits: 2 });
 
+// Ista oblika kot seznam na `/donacije` (Jinja): besedo za desni rob da
+// strežnik (`donacije._koraki`).
+const koraki = (ks) => `<ol class="pod-koraki">${ks.map((k) => `
+  <li class="pod-k pod-k-${k.stanje}"${k.stanje === "zdaj" ? ' aria-current="step"' : ""}>
+    <span class="pod-k-ime">${escapeHtml(k.ime)}</span><span class="pod-k-kdaj">${escapeHtml(k.kdaj)}</span></li>`).join("")}
+</ol>`;
+
 async function izrisiPodporo() {
   const el = document.getElementById("podpora");
   if (!el) return;
@@ -498,15 +505,22 @@ async function izrisiPodporo() {
   try {
     if (localStorage.getItem(PODPORA_KLJUC) === c.kljuc) return;
   } catch (e) { /* zasebno okno: kartica se pokaže */ }
-  const delez = Math.min(100, (100 * c.zbrano_centov) / c.cilj_centov);
-  el.innerHTML = `
+  const glava = (zapri) => `
     <div class="d-pod-glava">
       <p class="d-pov-nasl">${escapeHtml(c.namen)}</p>
-      <button type="button" class="d-pod-zapri" aria-label="Skrij do novega cilja">
+      <button type="button" class="d-pod-zapri" aria-label="${zapri}">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
-    </div>
+    </div>`;
+  const delez = Math.min(100, (100 * c.zbrano_centov) / c.cilj_centov);
+  // Cilj dosežen (9. 11. 2026): prošnje ni več, kartica piše napredek namena.
+  // Gumba Podpri tu ni; `/donacije` ostane v meniju. Napis nosi znesek
+  // cilja, ne vsoto (David 9. 11. 2026: „zbrali ste 30 €, ne 34“).
+  if (c.koraki && c.koraki.length) el.innerHTML = `${glava("Skrij do naslednjega koraka")}
+    <p class="pod-hvala">Zbrali ste ${evri(c.cilj_centov)} €. Hvala!</p>
+    ${koraki(c.koraki)}`;
+  else el.innerHTML = `${glava("Skrij do novega cilja")}
     <div class="pod-trak" role="progressbar" aria-label="Zbrano" aria-valuemin="0"
       aria-valuemax="${c.cilj_centov / 100}" aria-valuenow="${c.zbrano_centov / 100}"><span style="width:${delez.toFixed(1)}%"></span></div>
     <p class="pod-stevilka"><b>${evri(c.zbrano_centov)} €</b> od ${evri(c.cilj_centov)} €${

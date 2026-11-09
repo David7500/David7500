@@ -69,6 +69,7 @@ Stara „Kdaj potovati“ (umaknjena 19. 9.) je zamenjana; predloga in JS izbris
 * **Budilka, Zemljevid, Deli lego = ikone v oblikah** (cvet, detelja, zvezda; `r = R(1 + a·cos nθ)`), rjava, modrozelena, indigo, s podnapisom. Pritisk posvetli obliko.
 * **Deli lego**: `deli.js` vrne HTML oblike v fazi `miruje`, sicer razpre kartico na **začetek** vrstice (`je-odprt` → `flex-basis: 100%; order: -1`). Nov zaslon kartico pripelje na zaslon (`naZaslon`), `scroll-padding-bottom` nad orodno vrstico.
 * **Podpora = kartica cilja pod oblikami** („7 € od 30 €“, gumb na `/donacije`). `config.CILJ`, vsota iz `/api/podpora` (`donacije.cilj()`), ne iz HTML (domačo streže service worker). ✕ do novega cilja (`kajros:podpora`). Pred Playem: `android.md` („Podpora v Playu“).
+  * **Dosežen cilj → napredek namena** (od 9. 11. 2026): `CILJ["koraki"]`, napis „Zbrali ste 30 €“ = znesek cilja, ne vsota (David), korak z datumom opravljen, prvi brez datuma „zdaj“. Brez gumba Podpri (David: „odmakniti“); `/donacije` ostane v meniju in kaže isti seznam. Vsak opravljen korak Playa = commit z datumom in objava; ✕ velja do naslednjega koraka (`kljuc` šteje opravljene).
 * **Plavajoča orodna vrstica** (`_orodna.html`) na straneh aplikacije, ne na besedilnih in pristajalnih.
 
 `home.css` rabijo tudi napaka, stik, zasebnost, `/android`, `/brez-omrezja` (`.home`, `.home-brand`, `.home-lead`, `.more-link`) — preveri tudi tam.

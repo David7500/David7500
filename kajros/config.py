@@ -357,9 +357,24 @@ DONACIJE = okolje("DONACIJE", "https://ko-fi.com/kajros").strip()
 #
 # 30 €: 25 $ stane račun razvijalca v Googlu Play, ostalo gre za razvoj
 # aplikacije (odločil David 20. 10. 2026).
+#
+# `koraki`: ko je cilj dosežen, kartica namesto traku pokaže, kako daleč je
+# namen (cilj dosežen 9. 11. 2026, 34 €). Korak z datumom je opravljen, prvi
+# brez datuma je „zdaj“; tretje polje je namig za korak, ki še ni na vrsti.
+# Napredek = commit z datumom pri koraku. Davidovega računa pri Googlu
+# med koraki ni (David 9. 11. 2026). Kartica, ki jo je obiskovalec
+# zaprl, se ob vsakem novem opravljenem koraku vrne (`donacije.cilj`).
 CILJ = {"namen": "Kajros v Googlu Play", "evrov": 30, "od": "2026-10-20",
         "prej_centov": 700,
-        "zakaj": "račun razvijalca v Googlu Play stane 25 $, ostalo gre v razvoj aplikacije"}
+        "zakaj": "račun razvijalca v Googlu Play stane 25 $, ostalo gre v razvoj aplikacije",
+        "koraki": [
+            ("Denar za račun razvijalca", "2026-11-09", None),
+            ("Aplikacija po pravilih Googla", None, None),
+            # Osebni račun po 13. 11. 2023: 12 preizkuševalcev 14 dni zapored.
+            ("Dva tedna preizkusa", None, None),
+            ("Googlov pregled", None, "do 7 dni"),
+            ("Objava v Googlu Play", None, "predvidoma decembra"),
+        ]}
 
 # Aplikacija za Android: podpisan APK in `razlicica.json`, ki ju naredi
 # `android/objavi.sh`. Trgovin ni -- glavni F-Droid zahteva prosto licenco,

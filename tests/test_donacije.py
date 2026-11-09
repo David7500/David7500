@@ -193,6 +193,23 @@ def test_cilj_steje_evre_od_dneva_cilja_in_prej_zbrano(conn, monkeypatch):
     assert c["kljuc"] == "2026-10-20/30"
 
 
+def test_dosezen_cilj_pokaze_korake_namena(conn, monkeypatch):
+    """Pod ciljem trak, nad njim napredek: prvi korak brez datuma je „zdaj“,
+    namig šele za njim. Zaprta kartica se vrne ob novem opravljenem koraku."""
+    koraki = [("Denar", "2026-11-09", None), ("Račun", None, None),
+              ("Pregled", None, "do 7 dni"), ("Objava", None, None)]
+    monkeypatch.setattr(donacije.config, "DONACIJE", "https://ko-fi.com/x")
+    monkeypatch.setattr(donacije.config, "CILJ", {
+        "namen": "N", "zakaj": "z", "evrov": 30, "od": "2026-10-20",
+        "prej_centov": 2500, "koraki": koraki})
+    assert donacije.cilj(conn)["koraki"] == [], "do cilja manjka 5 €: še trak"
+    _sprejmi(conn, kofi_transaction_id="a", amount="9.00")
+    c = donacije.cilj(conn)
+    assert [(k["stanje"], k["kdaj"]) for k in c["koraki"]] == [
+        ("opravljeno", "9. 11."), ("zdaj", "zdaj"), ("pozneje", "do 7 dni"), ("pozneje", "")]
+    assert c["kljuc"] == "2026-10-20/30/1"
+
+
 def test_brez_naslova_za_donacije_ni_cilja(conn, monkeypatch):
     """`KAJROS_DONACIJE=` skrije vse -- tudi kartico, ki bi vodila nikamor."""
     monkeypatch.setattr(donacije.config, "DONACIJE", "")

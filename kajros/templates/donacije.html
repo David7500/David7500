@@ -32,7 +32,20 @@
       <a href="/o-nas">ena oseba</a> v prostem času.
     </p>
 
-    {%- if cilj %}
+    {%- if cilj and cilj.koraki %}
+    {#- Cilj dosežen: namesto traku napredek namena, kot kartica na domači
+        (`home.js`, `koraki`). #}
+    <div class="pod-cilj">
+      <p class="pod-namen">{{ cilj.namen }}</p>
+      <p class="pod-hvala">Zbrali ste {{ evri(cilj.cilj_centov) }} €. Hvala!</p>
+      <ol class="pod-koraki">
+        {%- for k in cilj.koraki %}
+        <li class="pod-k pod-k-{{ k.stanje }}"{% if k.stanje == "zdaj" %} aria-current="step"{% endif %}>
+          <span class="pod-k-ime">{{ k.ime }}</span><span class="pod-k-kdaj">{{ k.kdaj }}</span></li>
+        {%- endfor %}
+      </ol>
+    </div>
+    {%- elif cilj %}
     {%- set delez = [100 * cilj.zbrano_centov / cilj.cilj_centov, 100] | min %}
     <div class="pod-cilj">
       <p class="pod-namen">{{ cilj.namen }}</p>
@@ -46,8 +59,13 @@
 
     <h2>Kam gre denar</h2>
     <p>
+      {%- if cilj and cilj.koraki %} Za račun razvijalca v Googlu Play je zbrano.
+      Kar pride zdaj, gre v razvoj aplikacije in v boljši strežnik, da stran
+      ostane hitra, ko jo odpre več ljudi.
+      {%- else %}
       {%- if cilj %} Zdaj zbiramo {{ evri(cilj.cilj_centov) }} €: {{ cilj.zakaj }}.{% endif %}
       Potem v boljši strežnik, da stran ostane hitra, ko jo odpre več ljudi.
+      {%- endif %}
     </p>
 
     {#- Ime ponudnika je izpisano, ker gumb pelje s strani: kdor klikne, mora

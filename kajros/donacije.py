@@ -205,7 +205,30 @@ def cilj(conn: sqlite3.Connection) -> dict | None:
     (vsota,) = conn.execute(
         "SELECT COALESCE(SUM(centi), 0) FROM donacija "
         "WHERE preizkus = 0 AND valuta = 'EUR' AND placano >= ?", (od,)).fetchone()
+    zbrano = c["prej_centov"] + vsota
+    koraki = _koraki(c.get("koraki") or []) if zbrano >= c["evrov"] * 100 else []
+    opravljenih = sum(k["stanje"] == "opravljeno" for k in koraki)
     return {"namen": c["namen"], "zakaj": c["zakaj"], "cilj_centov": c["evrov"] * 100,
-            "zbrano_centov": c["prej_centov"] + vsota,
-            # Kartica, ki jo je obiskovalec zaprl, se vrne šele ob novem cilju.
-            "kljuc": f"{c['od']}/{c['evrov']}"}
+            "zbrano_centov": zbrano, "koraki": koraki,
+            # Kartica, ki jo je obiskovalec zaprl, se vrne ob novem cilju in
+            # ob vsakem novem opravljenem koraku, ne prej.
+            "kljuc": f"{c['od']}/{c['evrov']}" + (f"/{opravljenih}" if koraki else "")}
+
+
+def _koraki(koraki: list) -> list[dict]:
+    """Koraki namena z besedo za desni rob: datum, „zdaj“ ali namig.
+
+    Besedo sestavi strežnik, da sta kartica (`home.js`) in `/donacije`
+    (Jinja) enaki brez dveh izvedb oblikovanja datuma.
+    """
+    out, zdaj = [], False
+    for ime, opravljeno, namig in koraki:
+        if opravljeno:
+            d = datetime.fromisoformat(opravljeno)
+            out.append({"ime": ime, "stanje": "opravljeno", "kdaj": f"{d.day}. {d.month}."})
+        elif not zdaj:
+            zdaj = True
+            out.append({"ime": ime, "stanje": "zdaj", "kdaj": "zdaj"})
+        else:
+            out.append({"ime": ime, "stanje": "pozneje", "kdaj": namig or ""})
+    return out

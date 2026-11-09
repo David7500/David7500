@@ -114,6 +114,7 @@
    besedilnih straneh; vrstni red tu nekaj pomeni, zato `ol`. */
 .besedilo ol { margin: 0 0 12px; padding-left: 20px; }
 .besedilo ol li { margin-bottom: 6px; }
+.besedilo .pod-koraki { margin: 0; padding: 0; }
 
 /* Gumb je povezava, zato mu je treba vrniti to, kar `a` v besedilu ima:
    podčrtaj in barvo povezave bi tu brala kot besedilo, ne kot dejanje. */
