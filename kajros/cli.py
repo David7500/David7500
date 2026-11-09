@@ -207,6 +207,7 @@ def cmd_ocena(args):
         return
 
     modeli = (("naša ocena", "nasa"), ("varna (senca)", "varna"),
+              ("podobni (senca)", "podobni"), ("podobni varna (senca)", "podobni_varna"),
               ("naša brez prevoznika", "nasa_brez_prevoznika"),
               ("prevoznik", "prevoznik"), ("prenos zamude", "prenos"))
 

@@ -110,6 +110,18 @@ Na `KAJROS_OCENA_SECONDS` (120 s) v `napoved`: kaj bi prikaz povedal **25 min pr
 * **Merilo za prikaz**: na senci precenj. IN strošek nižja od naše ocene, MAE ne slabši od prenosa. Prikaz je ne bere, dokler ni izpolnjeno.
 * Stare vrstice `varna_s` NULL se ne štejejo; `n` v vrstici pove, na koliko.
 
+## Podobni dnevi + veriga (`stats.mesanice_naprej`, senca od 9. 11. 2026)
+
+`predict(podobni_do=seq)` vrne `podobni_delay_s` (mediana) in `podobni_varna_s` (kvantil 0,30, `KVANTIL_VARNE_PODOBNI`); `ocena.snapshot` piše `napoved.podobni_s`, `podobni_varna_s`, `kajros ocena` vrstici „podobni (senca)“. Prikaz ne bere, samo železnica. Zapis: `docs/presoja/2026-11-09-napoved/zapis.md`.
+* **Utež dneva namesto razreda**: starost (razpolovna doba 21 dni) × jedro podobnosti zamude (h = 90 s + 0,25·|d|). Mešanica neposrednih dni i → j in **verige** korakov med postanki (teža 4 dni). Varna in natančna iz iste porazdelitve → varna nikoli nad natančno.
+* **Meri z učenjem samo iz preteklih dni** (`modeli2.py`), ne z izpuščanjem dneva: to da modelu prihodnje dni novega režima (razred 2,20 namesto 2,30) in skrije ceno mešanja režimov vira.
+* Zgodovina 17. 10.–9. 11. (168 303 nalog; MAE / precenj. / strošek / vožnje-dni s skokom > 5 min): razred 2,30 / 2,16 % / 7,82 / 16,0 %; podobni mediana 2,16 / 1,63 / 7,30 / 6,1; `varna_q 0,25` 2,36 / 0,47 / 7,19 / 8,7; podobni 0,30 2,22 / 0,34 / 6,96 / 3,1. Senca, ponovitev (`senca2.py`, 91 822 vrstic): prikaz 3,14 / 2,20 / 8,63; podobni 0,30 3,21 / 0,38 / 7,95.
+* Največ prinese **starost** (2,29 → 2,17; 7 dni preveč precenjuje). Veriga sama manj natančna, kot predhodnik prepolovi skoke. Meja ostanka ostane (brez nje precenj. 2,75 %). Parametri ploski — ne uglašuj.
+* **Zveznost meri po vožnjah-dneh**, ne po parih: 0,95 % parov = 16 % voženj, kjer potnik vidi skok.
+* Uči se iz očiščene zgodovine (`ocisti_dan`): povprečja ne spremeni, osamelec „V“ pa ni več „podoben dan“ (RG 318).
+* Backtest `--varne --modeli 'podobni;podobni varna'` kliče isto funkcijo, ~2,5 ms na izhodišče → `--vzorec`.
+* Pred prikazom hitrost: cela vožnja (30 postankov) 2,3 → 22,5 ms; tabla in iskalnik naj dasta `podobni_do` = potnikov postanek.
+
 ## Dolg odsek: zamuda iz lege (`odsek.py`, senca od 4. 11. 2026)
 
 Odsek NAP ≥ 15 min po voznem redu: okno kaže zadnjo meritev, avtobus pa porabi rezervo. Ocena zamude na **naslednjem** postanku, `ocena.snapshot` jo piše v `lega_s`, `ours_lega_s`, `lega_vir`; prikaz je ne bere.

@@ -1685,6 +1685,198 @@ def varni_ostanek(raz: list, sku: list, d_od: int, network: str | None,
     return round(_omejen_ostanek(qs, d_od, omeji_s, omeji_delez))
 
 
+# ------------------------------------------------ podobni dnevi + veriga
+#
+# Model »podobni dnevi + veriga« (9. 11. 2026, v senci: `napoved.podobni_s` in
+# `podobni_varna_s`; docs/presoja/2026-11-09-napoved/zapis.md). Odgovor na
+# RG 318 (napoved skoči za 10 min, ker je razred dobil tretji dan):
+#
+# * Namesto razreda zamude s pragom treh dni dobi vsak pretekli dan UTEŽ:
+#   več, kolikor bliže je bil vlak na izhodiščnem postanku današnji zamudi
+#   (jedro), in več, kolikor novejši je (razpolovna doba). Dan, ki pride ali
+#   odpade, napoved premakne malo, ne za deset minut.
+# * Starost: zgodovina ima režime (derp.si do 10. 10., zemljevid SŽ od
+#   17. 10., popravki zajema 6.–7. 11.), ostanek »Laze → Ljubljana« je bil v
+#   starem −2 min, v novem +8. Brez uteži starosti model meša oba.
+# * Veriga: zamuda po korakih med postanki (vsak korak se uči iz vseh dni,
+#   ko sta oba postanka izmerjena, ne samo iz dni s podobno zamudo na
+#   izhodišču) da porazdelitev, ki je med sosednjima izhodiščema skladna.
+#   Sama je manj natančna, kot predhodnik neposrednim dnem pa prepolovi skoke.
+# * Natančna je mediana mešanice, varna njen kvantil 0,30: iz iste
+#   porazdelitve, zato varna nikoli ni nad natančno.
+#
+# Izmerjeno z učenjem samo iz preteklih dni (kot produkcija), 17. 10.–9. 11.:
+#
+#   zgodovina (168 303 nalog)   MAE    precenj.  strošek  vožnje s skokom > 5 min
+#   razred (v prikazu)          2,30   2,16 %    7,82     16,0 %
+#   varna_q 0,25                2,36   0,47 %    7,19      8,7 %
+#   podobni, mediana            2,16   1,63 %    7,30      6,1 %
+#   podobni, kvantil 0,30       2,22   0,34 %    6,96      3,1 %
+#
+#   kar je videl potnik (91 822 vrstic sence, ponovitev)
+#   prikaz                      3,14   2,20 %    8,63
+#   varna_q 0,25                3,33   0,52 %    8,17
+#   podobni, mediana            3,01   1,67 %    8,11
+#   podobni, kvantil 0,30       3,21   0,38 %    7,95
+#
+# Parametri so ploski (predhodnik 1,5–6, širina jedra ×0,6–1,6: MAE ±0,01);
+# razpolovna doba 14–30 dni (7 preveč precenjuje, brez nje MAE 2,29).
+
+#: Razpolovna doba uteži dneva v zgodovini.
+POLOVICA_STAROSTI_DNI = 21
+#: Širina jedra podobnosti zamude: h = H0 + HK x |zamuda|. Pri +2 min je
+#: »podoben« dan z ±2 min, pri +30 min z ±9 min.
+JEDRO_H0_S = 90
+JEDRO_HK = 0.25
+#: Teža vseh dni (ne glede na zamudo) v enem koraku verige, v »dnevih«.
+N0_KORAK = 3.0
+#: Teža verige proti neposrednim podobnim dnem, v »dnevih«.
+UTEZ_VERIGE = 4.0
+#: Mreža porazdelitve v verigi; zemljevid SŽ zamudo objavlja v minutah.
+MREZA_VERIGE_S = 60
+#: Kvantil varne napovedi iz mešanice.
+KVANTIL_VARNE_PODOBNI = 0.30
+
+
+def utezen_kvantil(pari: list[tuple[float, float]], q: float) -> float | None:
+    """Kvantil uteženega vzorca [(vrednost, utež)], linearno med sredinami
+    uteži. Zvezen v utežeh in vrednostih; None, če teže ni."""
+    pari = sorted(pari)
+    skupaj = sum(w for _, w in pari)
+    if skupaj <= 0:
+        return None
+    cilj, tek = q * skupaj, 0.0
+    prej_v = prej_p = None
+    for v, w in pari:
+        p = tek + w / 2
+        if p >= cilj:
+            if prej_v is None or p == prej_p:
+                return v
+            return prej_v + (v - prej_v) * (cilj - prej_p) / (p - prej_p)
+        prej_v, prej_p = v, p
+        tek += w
+    return prej_v
+
+
+def _utezi_podobnih(vzorci: list[tuple[int, float, int]], d: int,
+                    n0: float) -> list[tuple[float, float]]:
+    """[(zamuda takrat, vrednost, starost v dneh)] -> [(vrednost, utež)].
+
+    Utež = starost × (jedro podobnosti z zamudo `d` + delež predhodnika
+    `n0`, ki ga dobijo vsi dnevi ne glede na zamudo).
+    """
+    h = JEDRO_H0_S + JEDRO_HK * abs(d)
+    stari = [0.5 ** (st / POLOVICA_STAROSTI_DNI) for _, _, st in vzorci]
+    vsota = sum(stari)
+    if vsota <= 0:
+        return []
+    out = []
+    for (d0, v, _), a in zip(vzorci, stari):
+        x = (d - d0) / h
+        out.append((v, a * (math.exp(-0.5 * x * x) + n0 / vsota)))
+    return out
+
+
+def _ostanki_dni(H: list[tuple[int, dict[int, int]]], a: int, b: int,
+                 rezerva: int) -> list[tuple[int, int, int]]:
+    """Dnevi z meritvijo na a in b: (zamuda na a, ostanek do b, starost)."""
+    return [(g[a], g[b] - _after_slack(g[a], rezerva), st)
+            for st, g in H if a in g and b in g]
+
+
+def _korak_verige(P: dict[int, float], H: list, a: int, b: int,
+                  rezerva: int) -> dict[int, float]:
+    """Porazdelitev zamude na b iz porazdelitve na a (en člen verige).
+
+    Z manj kot tremi dnevi korak samo porabi rezervo. Zamuda ne gre pod nič
+    (ali pod izhodiščno, če je ta že negativna): ostanek dneva z veliko
+    zamudo bi točnemu vlaku sicer pripisal prehitevanje.
+    """
+    vz = _ostanki_dni(H, a, b, rezerva)
+    Q: dict[int, float] = {}
+    if len(vz) < MIN_PREDICT_SAMPLES:
+        for v, p in P.items():
+            k = _after_slack(v, rezerva)
+            Q[k] = Q.get(k, 0.0) + p
+        return Q
+    for v, p in P.items():
+        osnova, dno = _after_slack(v, rezerva), min(v, 0)
+        u = _utezi_podobnih(vz, v, N0_KORAK)
+        skupaj = sum(w for _, w in u)
+        for o, w in u:
+            k = round(max(osnova + o, dno) / MREZA_VERIGE_S) * MREZA_VERIGE_S
+            Q[k] = Q.get(k, 0.0) + p * w / skupaj
+    if len(Q) > 60:
+        Q = {v: p for v, p in Q.items() if p >= 0.002}
+        skupaj = sum(Q.values())
+        Q = {v: p / skupaj for v, p in Q.items()}
+    return Q
+
+
+def mesanice_naprej(H: list[tuple[int, dict[int, int]]], rezerve: dict[int, int],
+                    postanki: list[int], i: int, d: int, cilji: list[int]
+                    ) -> dict[int, tuple[int, list[tuple[float, float]]]]:
+    """Porazdelitev zamude na postankih `cilji` za vlak, ki ima na `i` zamudo `d`.
+
+    ENA funkcija za `predict` in `backtest` (`podobni`): kar merimo, mora biti
+    kar strežemo. `H` = [(starost v dneh, {stop_seq: zamuda})] te vožnje,
+    `rezerve` = presežek voznorednega postanka nad `MIN_DWELL_S` po postankih,
+    `postanki` = vsi postanki vožnje po vrsti. Vrne {j: (osnova, mešanica)}:
+    osnova je zamuda po porabljeni rezervi, mešanica [(zamuda, utež)] so
+    neposredni podobni dnevi in veriga s težo `UTEZ_VERIGE`; številko da
+    `iz_mesanice`.
+
+    Hrbtenica verige so postanki, izmerjeni v vsaj polovici dni; cilj zunaj
+    nje je stranska veja od zadnjega člena pred njim.
+    """
+    if not cilji:
+        return {}
+    cilji = sorted(cilji)
+
+    def rezerva(a: int, b: int) -> int:
+        return sum(rezerve.get(k, 0) for k in postanki if a < k <= b)
+
+    stej: dict[int, int] = {}
+    for _, g in H:
+        for s in g:
+            stej[s] = stej.get(s, 0) + 1
+    hrbet = [s for s in postanki
+             if i < s <= cilji[-1] and stej.get(s, 0) * 2 >= len(H)] if H else []
+    je_cilj = set(cilji)
+    por: dict[int, dict[int, float]] = {}
+    P, pos = {d: 1.0}, i
+    for s in hrbet:
+        for j in cilji:
+            if pos < j < s:
+                por[j] = _korak_verige(P, H, pos, j, rezerva(pos, j))
+        P, pos = _korak_verige(P, H, pos, s, rezerva(pos, s)), s
+        if s in je_cilj:
+            por[s] = P
+    for j in cilji:
+        if j > pos:
+            por[j] = _korak_verige(P, H, pos, j, rezerva(pos, j))
+    out = {}
+    for j in cilji:
+        r = rezerva(i, j)
+        osnova = _after_slack(d, r)
+        mes = [(osnova + o, w)
+               for o, w in _utezi_podobnih(_ostanki_dni(H, i, j, r), d, 0.0)]
+        mes += [(v, p * UTEZ_VERIGE) for v, p in por[j].items()]
+        out[j] = (osnova, mes)
+    return out
+
+
+def iz_mesanice(osnova: int, mesanica: list[tuple[float, float]], d: int,
+                q: float) -> int:
+    """Napoved iz mešanice `mesanice_naprej`: kvantil `q` (0,5 natančna,
+    `KVANTIL_VARNE_PODOBNI` varna), ostanek omejen kot pri razredu
+    (`_omejen_ostanek`: brez meje precenjenih 2,75 % namesto 2,14 %)."""
+    v = utezen_kvantil(mesanica, q)
+    if v is None:
+        return osnova
+    return max(osnova + round(_omejen_ostanek(v - osnova, d)), min(d, 0))
+
+
 def odhod_z_izhodisca(delay_s: int, stop_seq: int, izhodisce: int | None) -> int:
     """Prezgodnji odhod z izhodišča ni odhod: šteje kot točen.
 
@@ -1714,8 +1906,14 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             trip_id: str | None = None,
             omeji_s: int | None = None,
             omeji_delez: float | None = None,
-            ocisti: bool = False) -> list[dict]:
+            ocisti: bool = False,
+            podobni_do: int | None = None) -> list[dict]:
     """Napoved zamude na nadaljnjih postajah.
+
+    `podobni_do`: do katerega postanka naj se izračuna še model »podobni
+    dnevi + veriga« (`podobni_delay_s`, `podobni_varna_s`; samo železnica).
+    None = ne računaj: prikaz ga ne bere, senca (`ocena.snapshot`) ga rabi
+    samo v potnikovem oknu.
 
     Osnovni model: zamuda se prenaša naprej, popravljena za historično mediano
     spremembe zamude na tem odseku pri tej vožnji. Enostavno, a je pri vlakih
@@ -1790,18 +1988,43 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
     dwell_i = next((( t["dep_s"] or 0) - (t["arr_s"] or 0) for t in stops
                     if t["stop_seq"] == stop_seq
                     and t["arr_s"] is not None and t["dep_s"] is not None), 0)
-    if ocisti:
-        # Priprava, ne vklop (`ocisti=False` je privzeto): ista funkcija kot
-        # v `backtest._delays_by_day`, da bo meritev veljala za strezeno.
-        # Zgodovina predhodnikov (`_dnevi_prednikov`) feed_ts nima in ostane.
+    def ociscena() -> dict[str, dict[int, int]]:
+        """Zgodovina brez postankov, ki jih `ocisti_dan` ne prizna za meritve:
+        ista funkcija kot v `backtest._delays_by_day`, da meritev velja za
+        streženo. Zgodovina predhodnikov (`_dnevi_prednikov`) feed_ts nima in
+        ostane."""
         prihod = {t["stop_seq"]: t["arr_s"] for t in stops}
         meritve: dict[str, dict] = {}
         for r in rows:
             meritve.setdefault(r["service_date"], {})[r["stop_seq"]] = (
                 r["d"], r["ts"], prihod.get(r["stop_seq"]))
+        cista = dict(by_day)
         for dan, m in meritve.items():
             ohranjeni = ocisti_dan(m, dwell, dan)[0]
-            by_day[dan] = {seq: d for seq, d in by_day[dan].items() if seq in ohranjeni}
+            cista[dan] = {seq: d for seq, d in by_day[dan].items() if seq in ohranjeni}
+        return cista
+
+    if ocisti:
+        # Za razred priprava, ne vklop (`ocisti=False` je privzeto, MAE se ne
+        # spremeni); model »podobni« spodaj se vedno uči iz očiščene.
+        by_day = ociscena()
+    podobni: dict[int, tuple[int, int]] = {}
+    if podobni_do is not None and network == "zeleznica":
+        # Starost dneva glede na prikazani dan (pri ogledu preteklega dne so
+        # poznejši dnevi enako daleč kot zgodnejši).
+        danes = (date.fromisoformat(service_date or exclude_date)
+                 if service_date or exclude_date else datetime.now(TZ).date())
+        # Očiščena zgodovina: povprečja ne spremeni (MAE 2,15 proti 2,16),
+        # a osamelec »V« (RG 318: Laze 240 med 1200 in 1500) sicer postane
+        # »podoben dan« vlaku, ki ima danes res majhno zamudo.
+        H = [(abs((danes - date.fromisoformat(dan)).days), v)
+             for dan, v in (by_day if ocisti else ociscena()).items()]
+        vsi = sorted(names)
+        mes = mesanice_naprej(H, dwell, vsi, stop_seq, current_delay_s,
+                              [s for s in vsi if stop_seq < s <= podobni_do])
+        podobni = {j: (iz_mesanice(o, m, current_delay_s, 0.5),
+                       iz_mesanice(o, m, current_delay_s, KVANTIL_VARNE_PODOBNI))
+                   for j, (o, m) in mes.items()}
     pari_spomin: dict[tuple, tuple[list, list]] = {}
 
     def razredi(seq: int, od: int, d_od: int, rezerva: int):
@@ -1883,6 +2106,9 @@ def predict(conn: sqlite3.Connection, train_no: str, stop_seq: int,
             "predicted_delay_s": napoved,
             # Senca (`ocena.snapshot`); prikaz je ne bere. Samo železnica.
             "varna_delay_s": varna(seq, slack) if network == "zeleznica" else None,
+            # Senca modela »podobni dnevi + veriga«: (natančna, varna) ali None.
+            "podobni_delay_s": podobni[seq][0] if seq in podobni else None,
+            "podobni_varna_s": podobni[seq][1] if seq in podobni else None,
             "p90_delay_s": (max(napoved, _with_operator(osnova + round(_pct(ostanki, 0.9)),
                                                         prevoznik, network, agency))
                             if ostanki else None),

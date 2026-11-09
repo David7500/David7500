@@ -28,6 +28,7 @@ import sqlite3
 import statistics
 import zlib
 from collections import defaultdict
+from datetime import date
 
 from . import db, ocena, stats
 
@@ -687,6 +688,67 @@ def _varna_strosek_brez_rezerve(t, d_i, osnova, raz, sku):
     return _varna_strosek(t, d_i, osnova, raz, sku, rezerva_s=0)
 
 
+def _dopolni_rezervo(c: dict[int, int], t: dict) -> bool:
+    """Kumulativno rezervo `c` dopolni iz naloge; False, če še ne gre."""
+    if t["i"] in c:
+        c.setdefault(t["j"], c[t["i"]] + t["slack"])
+    elif t["j"] in c:
+        c[t["i"]] = c[t["j"]] - t["slack"]
+    else:
+        return False
+    return True
+
+
+def _model_podobni(q: float):
+    """»Podobni dnevi + veriga« (`stats.mesanice_naprej`), ista funkcija kot v
+    `stats.predict`. Dnevi vožnje so sestavljeni iz učnih nalog, dan naloge je
+    izpuščen, starost je razdalja v dneh. Veriga se izračuna enkrat na
+    izhodišče (naloge so urejene po vožnji, dnevu in izhodišču).
+
+    Rezerva po postankih je sestavljena iz nalog (vsota med i in j): veriga
+    stopa samo po izmerjenih postankih, zato je to natanko rezerva voznega
+    reda med njimi.
+
+    Počasnejši od razreda (okoli 2,5 ms na izhodišče): na celi bazi `--vzorec`.
+    """
+    def tovarna(train_tasks):
+        dnevi: dict[str, dict[str, dict[int, int]]] = defaultdict(dict)
+        kum: dict[str, dict[int, int]] = defaultdict(dict)   # kumulativna rezerva
+        cakajo = []
+        for t in train_tasks:
+            g = dnevi[t["train_no"]].setdefault(t["day"], {})
+            g[t["i"]], g[t["j"]] = _zdaj(t), t["d_j"]
+            c = kum[t["train_no"]]
+            if not c:
+                c[t["i"]] = 0
+            if not _dopolni_rezervo(c, t):
+                cakajo.append(t)
+        for _ in range(3):           # dnevi, ki se začnejo pred znanimi postanki
+            cakajo = [t for t in cakajo if not _dopolni_rezervo(kum[t["train_no"]], t)]
+        vozni_red = {}
+        for voznja, c in kum.items():
+            postanki = sorted(c)
+            vozni_red[voznja] = (
+                {b: c[b] - c[a] for a, b in zip(postanki, postanki[1:])}, postanki)
+        zadnji: dict = {}
+
+        def predict(t):
+            k = (t["train_no"], t["day"], t["i"])
+            d_i = _zdaj(t)
+            if zadnji.get("k") != k:
+                d0 = date.fromisoformat(t["day"]).toordinal()
+                H = [(abs(d0 - date.fromisoformat(dan).toordinal()), g)
+                     for dan, g in dnevi[t["train_no"]].items() if dan != t["day"]]
+                rezerve, postanki = vozni_red[t["train_no"]]
+                cilji = [s for s in postanki if t["i"] < s <= t["i"] + MAX_HORIZON]
+                zadnji.update(k=k, v=stats.mesanice_naprej(
+                    H, rezerve, postanki, t["i"], d_i, cilji))
+            osnova, mes = zadnji["v"][t["j"]]
+            return stats.iz_mesanice(osnova, mes, d_i, q)
+        return predict
+    return tovarna
+
+
 #: ime -> (tovarna, ucenje). Brez ucenja (prenos, rezerva sama) ciscenje ne
 #: spremeni nicesar, zato je vrstica ena.
 MODELI_VARNI = {
@@ -700,6 +762,8 @@ MODELI_VARNI = {
     "varna_q 0,25": (_model_ostanka(_varna_q(0.25)), True),
     "varna_strosek": (_model_ostanka(_varna_strosek), True),
     "varna_strosek brez zamika": (_model_ostanka(_varna_strosek_brez_rezerve), True),
+    "podobni": (_model_podobni(0.5), True),
+    "podobni varna": (_model_podobni(stats.KVANTIL_VARNE_PODOBNI), True),
 }
 
 #: Obdobji vira zamud (docs/presoja/2026-11-06-napoved-skok.md): derp.si do

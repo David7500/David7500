@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS napoved (
     ours_lega_s  INTEGER,            -- kar bi pokazal prikaz, če bi veljala lega
     lega_vir     TEXT,               -- profil ali razdalja
     varna_s      INTEGER,            -- senca varne napovedi (`stats.varni_ostanek`), samo železnica
+    podobni_s    INTEGER,            -- senca »podobni dnevi + veriga« (`stats.mesanice_naprej`), mediana
+    podobni_varna_s INTEGER,         -- isto, kvantil `stats.KVANTIL_VARNE_PODOBNI`
     PRIMARY KEY (trip_id, service_date, stop_seq)
 );
 CREATE INDEX IF NOT EXISTS napoved_nerazrezena
@@ -96,6 +98,9 @@ def init(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE napoved ADD COLUMN lega_vir TEXT")
     if "varna_s" not in stolpci:
         conn.execute("ALTER TABLE napoved ADD COLUMN varna_s INTEGER")
+    for stolpec in ("podobni_s", "podobni_varna_s"):
+        if stolpec not in stolpci:
+            conn.execute(f"ALTER TABLE napoved ADD COLUMN {stolpec} INTEGER")
     conn.commit()
 
 
@@ -240,9 +245,11 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                 trenutna = stats.trenutna_zamuda(zadnji) or 0
                 # `predict` enkrat na voznjo, ne enkrat na postanek: vrne vse
                 # postanke naprej in klic je isti.
+                # `podobni_do`: senčni model samo do zadnjega postanka v oknu.
                 napoved = {x["stop_seq"]: x for x in stats.predict(
                     conn, po_id[trip_id]["train_no"], zadnji["stop_seq"], trenutna,
-                    exclude_date=day, service_date=day, trip_id=trip_id)}
+                    exclude_date=day, service_date=day, trip_id=trip_id,
+                    podobni_do=max(seqs))}
 
                 # Senca: kaj bi prikaz rekel, če bi na dolgem odseku veljala lega.
                 # Izhodišče je naslednji postanek, ne zadnji prevoženi: ocena že
@@ -268,7 +275,9 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
                          feed.get(seq), trenutna,
                          lega["zamuda_s"] if lega else None, iz_lege.get(seq),
                          lega["vir"] if lega else None,
-                         p.get("varna_delay_s") if p else None))
+                         p.get("varna_delay_s") if p else None,
+                         p.get("podobni_delay_s") if p else None,
+                         p.get("podobni_varna_s") if p else None))
                     pogledanih += 1
 
     if pred_odhodom:
@@ -281,8 +290,8 @@ def snapshot(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
             "INSERT OR IGNORE INTO napoved(trip_id, service_date, stop_seq,"
             " network, made_ts, horizon_s, current_s, from_seq, ours_s,"
             " ours_own_s, ours_samples, operator_s, carry_s,"
-            " lega_s, ours_lega_s, lega_vir, varna_s)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
+            " lega_s, ours_lega_s, lega_vir, varna_s, podobni_s, podobni_varna_s)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", na_poti).rowcount
     conn.commit()
     return {"pogledanih": pogledanih, "zapisanih": zapisano,
             "brez_meritve": brez_meritve}
@@ -487,6 +496,11 @@ def report(conn: sqlite3.Connection, days: int = 30,
             # štejejo -- `n` pove, na koliko jih je).
             "varna": _meritve([(r["varna_s"], r["actual_s"]) for r in rows
                                if r["varna_s"] is not None], omrezje),
+            # Senca »podobni dnevi + veriga« (od 9. 11. 2026, samo železnica).
+            "podobni": _meritve([(r["podobni_s"], r["actual_s"]) for r in rows
+                                 if r["podobni_s"] is not None], omrezje),
+            "podobni_varna": _meritve([(r["podobni_varna_s"], r["actual_s"]) for r in rows
+                                       if r["podobni_varna_s"] is not None], omrezje),
             # Nasa vrednost BREZ pravila "prevoznik ve vec" (`_with_operator`).
             # Pravilo je izmerjeno na zgodovini; tu se vidi, ali drzi tudi v
             # potnikovem oknu, kjer je horizont krajsi.
@@ -511,6 +525,11 @@ def report(conn: sqlite3.Connection, days: int = 30,
                                     if r["carry_s"] is not None], omrezje),
                 "varna": _meritve([(r["varna_s"], r["actual_s"]) for r in parne
                                    if r["varna_s"] is not None], omrezje),
+                "podobni": _meritve([(r["podobni_s"], r["actual_s"]) for r in parne
+                                     if r["podobni_s"] is not None], omrezje),
+                "podobni_varna": _meritve(
+                    [(r["podobni_varna_s"], r["actual_s"]) for r in parne
+                     if r["podobni_varna_s"] is not None], omrezje),
             },
         }
 
