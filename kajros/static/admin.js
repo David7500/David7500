@@ -1132,7 +1132,7 @@ function sporocila(d) {
         <button type="button" class="adm-sp-gumb adm-sp-brisi" data-brisi="1">izbriši</button>
       </header>
       ${v.opomba ? `<p class="adm-sp-opomba">opomba k vožnji ${escapeHtml(v.opomba.oznaka)}, ${escapeHtml(v.opomba.datum)}
-        · ${v.objavljeno ? `<b>objavljena, št. ${v.opomba_id}</b>` : "ni objavljena"} · brez imen in osebnih podatkov, sicer ne objavi</p>` : ""}
+        · ${v.objavljeno ? `<b>objavljena, št. ${v.opomba_id}</b>` : "umaknjena"} · objavi se sama; z imenom ali osebnim podatkom jo umakni</p>` : ""}
       <p class="adm-sp-telo">${escapeHtml(v.besedilo)}</p>
     </article>`).join("")}</div>`;
   return `${h}</section>`;

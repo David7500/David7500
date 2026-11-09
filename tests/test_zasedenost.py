@@ -491,6 +491,26 @@ def test_api_pregled_in_mestni_lpp(conn, monkeypatch):
     assert api.api_zasedenost("lpp", PETEK, None)["vklopljeno"] is True
 
 
+@pytest.mark.parametrize("vaba,javna", [("", True), ("robot", False)])
+def test_opomba_je_javna_ob_oddaji(conn, monkeypatch, vaba, javna):
+    """Skrbnik ne potrjuje več (David 9. 11. 2026); robot v vabi ne objavi nič."""
+    import time
+    from types import SimpleNamespace
+    from kajros import api, config
+    monkeypatch.setattr(config, "ZASEDENOST", True)
+    monkeypatch.setattr(api, "_conn", lambda: conn)
+    monkeypatch.setattr(time, "time", lambda: _ob(PETEK, "16:30"))
+    polja = {"opomba_trip": "m1620", "opomba_datum": PETEK, "opomba_postaja": "Ljubljana AP",
+             "besedilo": "Vrsta do konca perona.", "zeton": stik.zeton(_ob(PETEK, "16:29")),
+             "naslov": vaba}
+    r = api._stik_opomba(SimpleNamespace(headers={}), polja.get)
+    assert json.loads(r.body) == {"poslano": True}
+    teden = date(2026, 10, 30).isoformat()
+    conn.execute("INSERT OR IGNORE INTO service_day(service_id, date) VALUES('S', ?)", (teden,))
+    op = zasedenost.pregled(conn, "m1620", teden, "Ljubljana AP", _ob(teden, "15:00"))["opombe"]
+    assert [o["besedilo"] for o in op] == (["Vrsta do konca perona."] if javna else [])
+
+
 def test_skrbnik_objavi_in_brisanje_umakne(conn, monkeypatch):
     from kajros import api
     monkeypatch.setattr(api, "_conn", lambda: conn)

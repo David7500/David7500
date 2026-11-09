@@ -24,9 +24,12 @@ odhoda bi se razsula. Za povzetek („običajno“) se poročila na isti postaji
 združijo čez odhode in prevoznike v isti smeri (`_ista_smer`), ker ima en
 odhod premalo poročil.
 
-Komentar ne gre skozi to pot, ampak skozi `POST /stik` v nabiralnik; javen je
-šele, ko ga skrbnik objavi (`objavi`). Kdor objavlja uporabniško besedilo,
-mora osebne podatke v njem najti pred objavo (SEU, Russmedia, C-492/23).
+Komentar ne gre skozi to pot, ampak skozi `POST /stik` v nabiralnik, in je
+javen takoj (`objavi`). Do 9. 11. 2026 ga je skrbnik potrdil pred objavo
+(SEU, Russmedia, C-492/23: osebne podatke najti pred objavo); David je to
+opustil, ker je objavil vseh 11 opomb od 26. 10. do 9. 11. Pred objavo zdaj
+ostane samo `_PREPOVEDANO`, po njej pregled vsake tri dni (skill `opombe`)
+in gumb „Prijavi“.
 """
 from __future__ import annotations
 
@@ -658,7 +661,7 @@ def preveri_opombo(conn: sqlite3.Connection, trip_id: str, datum: str, postaja: 
     """Pospravi komentar in sestavi, h kateri vožnji sodi. Vrne (besedilo, JSON).
 
     Komentar gre v nabiralnik (`stik.sprejmi`), z vožnjo v stolpcu `opomba`,
-    da ga skrbnik vidi v kontekstu in ga lahko objavi (`objavi`).
+    da ga skrbnik ob pregledu vidi v kontekstu in ga lahko umakne (`umakni`).
     """
     t = zdaj if zdaj is not None else time.time()
     besedilo = " ".join((besedilo or "").split())
@@ -688,7 +691,10 @@ def preveri_opombo(conn: sqlite3.Connection, trip_id: str, datum: str, postaja: 
 
 
 def objavi(conn: sqlite3.Connection, sporocilo_id: int, zdaj: float | None = None) -> bool:
-    """Komentar iz nabiralnika postane javen. Vrne, ali je bil komentar."""
+    """Komentar iz nabiralnika postane javen. Vrne, ali je bil komentar.
+
+    Ob oddaji (`api._stik_opomba`) in ko skrbnik umaknjenega vrne.
+    """
     r = conn.execute("SELECT besedilo, opomba FROM sporocilo WHERE id = ?",
                      (sporocilo_id,)).fetchone()
     if not r or not r["opomba"]:

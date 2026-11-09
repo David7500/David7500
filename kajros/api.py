@@ -815,11 +815,12 @@ def _stik_sprejmi(request: Request, polja: dict):
 
 
 def _stik_opomba(request: Request, p) -> JSONResponse:
-    """Komentar k vožnji iz okna vožnje (`zasedenost.js`): v nabiralnik, ne javno.
+    """Komentar k vožnji iz okna vožnje (`zasedenost.js`): v nabiralnik in javno.
 
     Ista pot in iste varovalke kot sporočilo (`stik.sprejmi`), le odgovor je
-    JSON, ker obrazec ni stran: okno vožnje ostane, kjer je. Javen je komentar
-    šele, ko ga skrbnik objavi.
+    JSON, ker obrazec ni stran: okno vožnje ostane, kjer je. Komentar je javen
+    takoj (David, 9. 11. 2026: potrjevanje vsakega je bilo delo brez koristi);
+    skrbnik ga pregleda pozneje in ga po potrebi umakne (skill `opombe`).
     """
     if not config.ZASEDENOST:
         raise HTTPException(status_code=404)
@@ -827,7 +828,7 @@ def _stik_opomba(request: Request, p) -> JSONResponse:
         try:
             besedilo, kontekst = zasedenost.preveri_opombo(
                 conn, p("opomba_trip"), p("opomba_datum"), p("opomba_postaja"), p("besedilo"))
-            stik.sprejmi(
+            id_ = stik.sprejmi(
                 conn, email="", besedilo=besedilo, anonimno=True,
                 zeton_iz_obrazca=p("zeton"), vaba=p("naslov"),
                 kljuc=stik.kljuc_posiljatelja(request.headers),
@@ -837,6 +838,9 @@ def _stik_opomba(request: Request, p) -> JSONResponse:
                 meje=(zasedenost.OPOMBA_NAJKRAJSE, zasedenost.OPOMBA_NAJDALJSE))
         except (stik.Zavrnjeno, zasedenost.Zavrnjeno) as e:
             return JSONResponse({"napaka": str(e)}, status_code=getattr(e, "status", 400))
+        # 0 = ujet v vabo: robot dobi isti odgovor, objave pa ni.
+        if id_:
+            zasedenost.objavi(conn, id_)
     return JSONResponse({"poslano": True})
 
 

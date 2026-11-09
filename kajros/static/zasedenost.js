@@ -2,7 +2,7 @@
 // in ena opomba nad skupino dejanj (`#zas-namig`, `#zas-opomba`), brez dotika
 // (David, 31. 10. 2026: prej „šele ko klikneš“ in kot razporeditev po stopnjah).
 // Gumb „Javi, kako polno“ odpre razdelek pod skupino: potnik javi z enim dotikom;
-// komentar gre skozi `/stik` v nabiralnik in je javen šele, ko ga skrbnik objavi.
+// komentar gre skozi `/stik` v nabiralnik in je javen takoj; skrbnik ga pregleda pozneje.
 //
 // Vožnjo in privzeto postajo pove okno (`train.js`, `posodobiZasedenost`) z
 // dogodkom `zas-voznja`. Razdelek je svoj element zunaj časovnice, ki jo okno
@@ -247,7 +247,7 @@
     if (smeOpombo && (S.opombaOdprta || S.oddano || ok.po)) {
       h += `<textarea class="zas-polje" maxlength="280" aria-label="Opomba za druge potnike"
           placeholder="Opomba za druge potnike (neobvezno): kje je bila vrsta, je prišel še en ${OMREZJE === "avtobus" ? "avtobus" : "vlak"} …">${escapeHtml(S.opomba)}</textarea>
-        <div class="zas-vrsta"><span class="zas-tiho">Brez imen. Pokaže se, ko jo pregledamo.</span>
+        <div class="zas-vrsta"><span class="zas-tiho">Brez imen. Vidijo jo vsi.</span>
         <button type="button" class="zas-gumb" data-akcija="opomba"${S.zaposlen ? " disabled" : ""}>Pošlji</button></div>`;
     }
     if (smeOpombo && !S.opombaOdprta && !S.oddano && !ok.po) {
@@ -346,7 +346,7 @@
       S.opomba = "";
       S.opombaOdprta = false;
       S.opombaPoslana = true;
-      S.sporocilo = { ok: "Hvala. Opomba se pokaže, ko jo pregledamo." };
+      S.sporocilo = { ok: "Hvala. Opomba je objavljena." };
     });
   }
 

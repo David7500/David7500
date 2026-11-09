@@ -216,7 +216,7 @@ def sprejmi(conn: sqlite3.Connection, *, email: str, besedilo: str,
     """Preveri vse varovalke in shrani. Vrne `id` sporočila.
 
     `opomba` je komentar k vožnji (`zasedenost.preveri_opombo`): gre skozi iste
-    varovalke in v isti nabiralnik, javen pa je šele, ko ga skrbnik objavi.
+    varovalke in v isti nabiralnik; javen postane v `api._stik_opomba`.
 
     Vrstni red ni poljuben: **najprej poceni preverbe brez baze**, šele nato
     poizvedba za dnevni strop. Robot, ki tolče po obrazcu, tako ne povzroči
